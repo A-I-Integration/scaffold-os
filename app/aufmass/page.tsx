@@ -1,10 +1,12 @@
 'use client';
 
-import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 
 export default function HomePage() {
-  const router = useRouter();
+  
+  const go = () => {
+    window.location.href = '/aufmass';
+  };
 
   return (
     <div className="min-h-screen bg-slate-900 text-white">
@@ -17,7 +19,7 @@ export default function HomePage() {
             <span className="text-xl font-bold tracking-tight">SCAFFOLD<span className="text-orange-500">OS</span></span>
           </div>
           <button 
-            onClick={() => router.push('/aufmass')}
+            onClick={go}
             className="bg-orange-600 hover:bg-orange-700 text-white font-semibold px-5 py-2 rounded-lg text-sm transition"
           >
             Jetzt starten
@@ -40,7 +42,7 @@ export default function HomePage() {
         </p>
         <div className="flex flex-col sm:flex-row gap-4 justify-center">
           <button 
-            onClick={() => router.push('/aufmass')}
+            onClick={go}
             className="bg-orange-600 hover:bg-orange-700 text-white font-bold py-4 px-8 rounded-xl text-lg transition shadow-lg shadow-orange-600/20"
           >
             🚀 Kostenlos starten
@@ -107,7 +109,7 @@ export default function HomePage() {
               Erstelle jetzt dein erstes digitales Aufmaß – kostenlos und ohne Anmeldung.
             </p>
             <button 
-              onClick={() => router.push('/aufmass')}
+              onClick={go}
               className="bg-white text-orange-700 hover:bg-orange-50 font-bold py-4 px-10 rounded-xl text-lg transition shadow-xl"
             >
               🚀 Jetzt starten
@@ -121,13 +123,11 @@ export default function HomePage() {
         <div className="max-w-6xl mx-auto px-6">
           <div className="flex flex-col md:flex-row justify-between items-center gap-6">
             
-            {/* Logo links */}
             <div className="flex items-center gap-2">
               <span className="text-xl">🏗️</span>
               <span className="font-bold">SCAFFOLD<span className="text-orange-500">OS</span></span>
             </div>
 
-            {/* Powered by AI Integration */}
             <div className="flex items-center gap-3 bg-slate-800/50 rounded-full px-5 py-2 border border-slate-700">
               <span className="text-slate-400 text-sm">Powered by</span>
               <div className="flex items-center gap-2">
@@ -142,7 +142,6 @@ export default function HomePage() {
               </div>
             </div>
 
-            {/* Rechts */}
             <div className="text-slate-500 text-sm">
               © 2026 Scaffold OS
             </div>
