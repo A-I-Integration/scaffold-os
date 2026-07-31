@@ -203,7 +203,7 @@ export default function PlanungPage() {
           <button onClick={() => router.push('/aufmass/schritt6')} className="flex-1 bg-slate-700 hover:bg-slate-600 text-white font-semibold py-3 px-4 rounded-lg transition">
             ← Zurück
           </button>
-          <button onClick={() => alert('Stückliste kommt als Nächstes!')} className="flex-1 bg-orange-600 hover:bg-orange-700 text-white font-semibold py-3 px-4 rounded-lg transition">
+          <button onClick={() => router.push('/stueckliste')} className="flex-1 bg-orange-600 hover:bg-orange-700 text-white font-semibold py-3 px-4 rounded-lg transition">
             Zur Stückliste →
           </button>
         </div>
