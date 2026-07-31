@@ -13,7 +13,6 @@ export default function Schritt3Page() {
     feldlange: '3.0',
     belag: 'holz',
     gelander: true,
-    stahlboden: false,
     diagonale: true,
     fahrbar: false,
     boden: 'beton',
@@ -58,8 +57,7 @@ export default function Schritt3Page() {
     }
     
     localStorage.setItem('scaffold_step3', JSON.stringify(form));
-    alert('✅ Schritt 3 gespeichert! (Schritt 4 kommt als Nächstes)');
-    // router.push('/aufmass/schritt4');
+    router.push('/aufmass/schritt4');
   }
 
   function zurueck() {
