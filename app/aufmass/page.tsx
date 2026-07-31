@@ -15,8 +15,6 @@ export default function AufmassPage() {
     lidar: false,
   });
 
-  const [gespeichert, setGespeichert] = useState(false);
-
   const gewerkListe = ['Maler', 'WDVS/Fassade', 'Fenster', 'Dach', 'Putz', 'Sonstiges'];
 
   function toggleGewerk(g: string) {
@@ -37,19 +35,25 @@ export default function AufmassPage() {
   }
 
   function handleWeiter() {
+    console.log('🔴 BUTTON GEKLICKT!');
+    
     if (!form.name.trim() || !form.adresse.trim()) {
       alert('Bitte fülle Name und Adresse aus!');
+      console.log('❌ Validierung fehlgeschlagen: Name oder Adresse leer');
       return;
     }
     if (form.gewerke.length === 0) {
       alert('Bitte wähle mindestens ein Gewerk aus!');
+      console.log('❌ Validierung fehlgeschlagen: Kein Gewerk gewählt');
       return;
     }
     
-    // Optional: Daten in localStorage zwischenspeichern
+    console.log('✅ Validierung OK, speichere Daten...');
     localStorage.setItem('scaffold_step1', JSON.stringify(form));
     
+    console.log('🚀 Navigiere zu /aufmass/schritt2...');
     router.push('/aufmass/schritt2');
+    console.log('✅ router.push() aufgerufen!');
   }
 
   return (
