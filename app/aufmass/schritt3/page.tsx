@@ -5,7 +5,6 @@ import { useRouter } from 'next/navigation';
 
 export default function Schritt3Page() {
   const router = useRouter();
-  
   const [step1Data, setStep1Data] = useState<any>(null);
   
   const [form, setForm] = useState({
@@ -45,7 +44,6 @@ export default function Schritt3Page() {
   useEffect(() => {
     const saved = localStorage.getItem('scaffold_step1');
     if (saved) setStep1Data(JSON.parse(saved));
-    
     const saved3 = localStorage.getItem('scaffold_step3');
     if (saved3) setForm(JSON.parse(saved3));
   }, []);
@@ -55,7 +53,6 @@ export default function Schritt3Page() {
       alert('Bitte wähle einen Gerüsttyp aus!');
       return;
     }
-    
     localStorage.setItem('scaffold_step3', JSON.stringify(form));
     router.push('/aufmass/schritt4');
   }
@@ -81,7 +78,6 @@ export default function Schritt3Page() {
 
         <div className="bg-slate-800 rounded-xl p-6 space-y-6">
 
-          {/* Gerüsttyp */}
           <div>
             <label className="block text-sm font-medium mb-3 text-slate-300">Gerüsttyp *</label>
             <div className="grid grid-cols-1 gap-3">
@@ -105,13 +101,12 @@ export default function Schritt3Page() {
             </div>
           </div>
 
-          {/* Feldlänge */}
           <div>
             <label className="block text-sm font-medium mb-2 text-slate-300">Standard-Feldlänge (m)</label>
             <select 
               value={form.feldlange}
               onChange={(e) => setForm({...form, feldlange: e.target.value})}
-              className="w-full bg-slate-700 border border-slate-600 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-orange-500"
+              className="w-full bg-slate-700 border border-slate-600 rounded-lg px-4 py-2 text-white"
             >
               <option value="2.5">2,50 m</option>
               <option value="3.0">3,00 m (Standard)</option>
@@ -120,7 +115,6 @@ export default function Schritt3Page() {
             </select>
           </div>
 
-          {/* Belag */}
           <div>
             <label className="block text-sm font-medium mb-3 text-slate-300">Belagtyp</label>
             <div className="grid grid-cols-2 gap-3">
@@ -131,7 +125,7 @@ export default function Schritt3Page() {
                   className={`p-3 rounded-lg border text-left transition ${
                     form.belag === b.id
                       ? 'bg-orange-600/20 border-orange-500 text-orange-300'
-                      : 'bg-slate-700 border-slate-600 text-slate-300 hover:border-slate-500'
+                      : 'bg-slate-700 border-slate-600 text-slate-300'
                   }`}
                 >
                   <div className="font-semibold text-sm">{b.name}</div>
@@ -141,88 +135,39 @@ export default function Schritt3Page() {
             </div>
           </div>
 
-          {/* Optionen */}
           <div className="space-y-3">
-            <button
-              onClick={() => setForm({...form, gelander: !form.gelander})}
-              className={`w-full p-3 rounded-lg border text-left transition flex items-center gap-3 ${
-                form.gelander
-                  ? 'bg-orange-600/20 border-orange-500 text-orange-300'
-                  : 'bg-slate-700 border-slate-600 text-slate-300'
-              }`}
-            >
+            <button onClick={() => setForm({...form, gelander: !form.gelander})}
+              className={`w-full p-3 rounded-lg border text-left transition flex items-center gap-3 ${form.gelander ? 'bg-orange-600/20 border-orange-500 text-orange-300' : 'bg-slate-700 border-slate-600'}`}>
               <span className="text-xl">🛡️</span>
-              <div>
-                <div className="font-semibold text-sm">Geländer & Brüstung</div>
-                <div className="text-xs opacity-70">DIN EN 12811-1 vorgeschrieben</div>
-              </div>
+              <div><div className="font-semibold text-sm">Geländer & Brüstung</div><div className="text-xs opacity-70">DIN EN 12811-1 vorgeschrieben</div></div>
             </button>
-
-            <button
-              onClick={() => setForm({...form, diagonale: !form.diagonale})}
-              className={`w-full p-3 rounded-lg border text-left transition flex items-center gap-3 ${
-                form.diagonale
-                  ? 'bg-orange-600/20 border-orange-500 text-orange-300'
-                  : 'bg-slate-700 border-slate-600 text-slate-300'
-              }`}
-            >
+            <button onClick={() => setForm({...form, diagonale: !form.diagonale})}
+              className={`w-full p-3 rounded-lg border text-left transition flex items-center gap-3 ${form.diagonale ? 'bg-orange-600/20 border-orange-500 text-orange-300' : 'bg-slate-700 border-slate-600'}`}>
               <span className="text-xl">📐</span>
-              <div>
-                <div className="font-semibold text-sm">Diagonale Aussteifung</div>
-                <div className="text-xs opacity-70">Empfohlen ab 6 m Höhe</div>
-              </div>
+              <div><div className="font-semibold text-sm">Diagonale Aussteifung</div><div className="text-xs opacity-70">Empfohlen ab 6 m Höhe</div></div>
             </button>
-
-            <button
-              onClick={() => setForm({...form, fahrbar: !form.fahrbar})}
-              className={`w-full p-3 rounded-lg border text-left transition flex items-center gap-3 ${
-                form.fahrbar
-                  ? 'bg-orange-600/20 border-orange-500 text-orange-300'
-                  : 'bg-slate-700 border-slate-600 text-slate-300'
-              }`}
-            >
+            <button onClick={() => setForm({...form, fahrbar: !form.fahrbar})}
+              className={`w-full p-3 rounded-lg border text-left transition flex items-center gap-3 ${form.fahrbar ? 'bg-orange-600/20 border-orange-500 text-orange-300' : 'bg-slate-700 border-slate-600'}`}>
               <span className="text-xl">🛞</span>
-              <div>
-                <div className="font-semibold text-sm">Fahrbar / Rollbar</div>
-                <div className="text-xs opacity-70">Rollen unter den Standardfüßen</div>
-              </div>
+              <div><div className="font-semibold text-sm">Fahrbar / Rollbar</div><div className="text-xs opacity-70">Rollen unter den Standardfüßen</div></div>
             </button>
           </div>
 
-          {/* Bodenverhältnisse */}
           <div>
             <label className="block text-sm font-medium mb-3 text-slate-300">Bodenverhältnisse</label>
             <div className="grid grid-cols-2 gap-3">
               {bodenTypen.map(b => (
-                <button
-                  key={b.id}
-                  onClick={() => setForm({...form, boden: b.id})}
-                  className={`p-3 rounded-lg border text-left transition ${
-                    form.boden === b.id
-                      ? 'bg-orange-600/20 border-orange-500 text-orange-300'
-                      : 'bg-slate-700 border-slate-600 text-slate-300 hover:border-slate-500'
-                  }`}
-                >
+                <button key={b.id} onClick={() => setForm({...form, boden: b.id})}
+                  className={`p-3 rounded-lg border text-left transition ${form.boden === b.id ? 'bg-orange-600/20 border-orange-500 text-orange-300' : 'bg-slate-700 border-slate-600'}`}>
                   {b.name}
                 </button>
               ))}
             </div>
           </div>
 
-          {/* Buttons */}
           <div className="flex gap-3 pt-4">
-            <button 
-              onClick={zurueck}
-              className="flex-1 bg-slate-700 hover:bg-slate-600 text-white font-semibold py-3 px-4 rounded-lg transition"
-            >
-              ← Zurück
-            </button>
-            <button 
-              onClick={handleWeiter}
-              className="flex-1 bg-orange-600 hover:bg-orange-700 text-white font-semibold py-3 px-4 rounded-lg transition"
-            >
-              Weiter →
-            </button>
+            <button onClick={zurueck} className="flex-1 bg-slate-700 hover:bg-slate-600 text-white font-semibold py-3 px-4 rounded-lg">← Zurück</button>
+            <button onClick={handleWeiter} className="flex-1 bg-orange-600 hover:bg-orange-700 text-white font-semibold py-3 px-4 rounded-lg">Weiter →</button>
           </div>
 
         </div>
