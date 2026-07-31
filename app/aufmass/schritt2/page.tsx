@@ -24,6 +24,11 @@ export default function Schritt2Page() {
     if (saved) {
       setStep1Data(JSON.parse(saved));
     }
+    
+    const saved2 = localStorage.getItem('scaffold_step2');
+    if (saved2) {
+      setForm(JSON.parse(saved2));
+    }
   }, []);
 
   function toggleHindernis(h: string) {
@@ -42,8 +47,7 @@ export default function Schritt2Page() {
     }
     
     localStorage.setItem('scaffold_step2', JSON.stringify(form));
-    alert('✅ Schritt 2 gespeichert! (Hier kommt später Schritt 3)');
-    // router.push('/aufmass/schritt3');
+    router.push('/aufmass/schritt3');
   }
 
   function zurueck() {
