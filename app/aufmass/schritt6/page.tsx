@@ -34,6 +34,8 @@ export default function Schritt6Page() {
 
   const geruestTypen: any = { fassade: 'Fassadengerüst', fahr: 'Fahrgerüst', trag: 'Traggerüst', dach: 'Dachgerüst', raum: 'Raumgerüst', haenge: 'Hängegerüst' };
   const belagTypen: any = { holz: 'Holzbelag', alu: 'Alu-Belag', stahl: 'Stahlroste', gitter: 'Gitterträger' };
+  const fassaden: any = { Klinker: 'Klinker', WDVS: 'WDVS', Beton: 'Beton', Naturstein: 'Naturstein', Glas: 'Glas', Holz: 'Holz', Putz: 'Putz', Denkmalschutz: 'Denkmalschutz' };
+  const untergruende: any = { beton: 'Beton / Estrich', asphalt: 'Asphalt', pflaster: 'Pflaster', erdreich: 'Erdreich / Rasen', schotter: 'Schotter', kies: 'Kies' };
 
   return (
     <div className="min-h-screen bg-slate-900 text-white p-6">
@@ -56,20 +58,25 @@ export default function Schritt6Page() {
 
           {/* Schritt 2 */}
           <div className="bg-slate-800 rounded-xl p-5">
-            <div className="text-orange-400 text-xs font-bold uppercase tracking-wider mb-2">Schritt 2 – Abmessungen</div>
+            <div className="text-orange-400 text-xs font-bold uppercase tracking-wider mb-2">Schritt 2 – Gebäude & Abmessungen</div>
             <div className="grid grid-cols-2 gap-2 text-sm">
               <div><span className="text-slate-400">Länge:</span> {s2.laenge} m</div>
               <div><span className="text-slate-400">Höhe:</span> {s2.hoehe} m</div>
               <div><span className="text-slate-400">Breite:</span> {s2.breite || '–'} m</div>
               <div><span className="text-slate-400">Traufhöhe:</span> {s2.traufhoehe || '–'} m</div>
+              <div><span className="text-slate-400">Dachform:</span> {s2.dachform || '–'}</div>
+              <div><span className="text-slate-400">Dachüberstand:</span> {s2.dachueberstand || '–'} m</div>
+              <div className="col-span-2"><span className="text-slate-400">Fassade:</span> {s2.fassade || '–'}</div>
               <div className="col-span-2"><span className="text-slate-400">Hindernisse:</span> {s2.hindernisse?.join(', ') || 'Keine'}</div>
-              <div className="col-span-2"><span className="text-slate-400">Durchfahrt:</span> {s2.durchfahrt ? 'Ja' : 'Nein'}</div>
+              <div><span className="text-slate-400">Garagen:</span> {s2.garagen ? 'Ja' : 'Nein'}</div>
+              <div><span className="text-slate-400">Fluchtwege:</span> {s2.fluchtwege ? 'Ja' : 'Nein'}</div>
+              <div><span className="text-slate-400">Durchfahrt:</span> {s2.durchfahrt ? 'Ja' : 'Nein'}</div>
             </div>
           </div>
 
           {/* Schritt 3 */}
           <div className="bg-slate-800 rounded-xl p-5">
-            <div className="text-orange-400 text-xs font-bold uppercase tracking-wider mb-2">Schritt 3 – Gerüsttyp</div>
+            <div className="text-orange-400 text-xs font-bold uppercase tracking-wider mb-2">Schritt 3 – Gerüsttyp & Aufbau</div>
             <div className="grid grid-cols-2 gap-2 text-sm">
               <div><span className="text-slate-400">Typ:</span> {geruestTypen[s3.geruesttyp] || '–'}</div>
               <div><span className="text-slate-400">Feldlänge:</span> {s3.feldlange} m</div>
@@ -83,19 +90,37 @@ export default function Schritt6Page() {
 
           {/* Schritt 4 */}
           <div className="bg-slate-800 rounded-xl p-5">
-            <div className="text-orange-400 text-xs font-bold uppercase tracking-wider mb-2">Schritt 4 – Sicherheit</div>
+            <div className="text-orange-400 text-xs font-bold uppercase tracking-wider mb-2">Schritt 4 – Sicherheit & Umgebung</div>
             <div className="grid grid-cols-2 gap-2 text-sm">
               <div><span className="text-slate-400">Ankerung:</span> {s4.ankerung}</div>
               <div><span className="text-slate-400">Ankerabstand:</span> {s4.ankerAbstand} m</div>
               <div><span className="text-slate-400">Windzone:</span> {s4.windzone}</div>
+              <div><span className="text-slate-400">Untergrund:</span> {untergruende[s4.untergrund] || s4.untergrund}</div>
+              <div><span className="text-slate-400">Tragfähigkeit:</span> {s4.tragfaehigkeit}</div>
               <div className="col-span-2"><span className="text-slate-400">Gefahren:</span> {s4.gefahren?.join(', ') || 'Keine'}</div>
               {s4.notiz && <div className="col-span-2 text-slate-300 italic">„{s4.notiz}"</div>}
+            </div>
+            <div className="mt-2 text-xs text-slate-500">
+              {s4.gefaelle && '• Gefälle vorhanden '}
+              {s4.unterkellert && '• Unterkellert '}
+              {s4.lichtschaechte && '• Lichtschächte '}
+              {s4.lastverteilplatten && '• Lastverteilplatten '}
+              {s4.freileitungen && '• Freileitungen '}
+              {s4.stromleitungen && '• Stromleitungen '}
+              {s4.baeume && '• Bäume '}
+              {s4.nachbargrundstueck && '• Nachbargrundstück '}
+              {s4.oeffentlicherVerkehrsraum && '• Öffentlicher Raum '}
+              {s4.halteverbot && '• Halteverbot '}
+              {s4.sondernutzung && '• Sondernutzung '}
+              {s4.lagerflaeche && '• Lagerfläche '}
+              {s4.lkwZufahrt && '• LKW-Zufahrt '}
+              {s4.kranErforderlich && '• Kran '}
             </div>
           </div>
 
           {/* Schritt 5 */}
           <div className="bg-slate-800 rounded-xl p-5">
-            <div className="text-orange-400 text-xs font-bold uppercase tracking-wider mb-2">Schritt 5 – Material</div>
+            <div className="text-orange-400 text-xs font-bold uppercase tracking-wider mb-2">Schritt 5 – Material & Termine</div>
             <div className="grid grid-cols-2 gap-2 text-sm">
               <div><span className="text-slate-400">Bühnen:</span> {s5.arbeitsbuehnen || '–'} Stk</div>
               <div><span className="text-slate-400">Rahmen:</span> {s5.rahmen || '–'} Stk</div>
@@ -106,11 +131,22 @@ export default function Schritt6Page() {
             </div>
           </div>
 
+          {/* KI-Planung Button */}
+          <button 
+            onClick={() => router.push('/planung')}
+            className="w-full bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white font-bold py-4 px-6 rounded-xl transition flex items-center justify-center gap-3 text-lg"
+          >
+            <span>🤖</span>
+            <span>Zur KI-Planung</span>
+            <span className="text-sm font-normal opacity-80">Automatische Prüfung & Empfehlungen</span>
+          </button>
+
           {/* Buttons */}
-          <div className="flex gap-3 pt-4">
+          <div className="flex gap-3 pt-2">
             <button onClick={() => router.push('/aufmass/schritt5')} className="flex-1 bg-slate-700 hover:bg-slate-600 text-white font-semibold py-3 px-4 rounded-lg">← Zurück</button>
             <button onClick={exportPDF} className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-4 rounded-lg">📄 PDF Export</button>
           </div>
+          
           <button onClick={neuesProjekt} className="w-full bg-green-600 hover:bg-green-700 text-white font-semibold py-3 px-4 rounded-lg">
             🆕 Neues Projekt starten
           </button>

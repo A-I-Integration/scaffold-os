@@ -8,6 +8,7 @@ export default function Schritt4Page() {
   const [step1Data, setStep1Data] = useState<any>(null);
 
   const [form, setForm] = useState({
+    // Bestehend
     ankerung: 'fassade',
     ankerAbstand: '2.0',
     schutzdach: false,
@@ -15,6 +16,24 @@ export default function Schritt4Page() {
     windzone: '2',
     gefahren: [] as string[],
     notiz: '',
+    // Neu: Untergrund
+    untergrund: 'beton',
+    gefaelle: false,
+    tragfaehigkeit: 'normal',
+    unterkellert: false,
+    lichtschaechte: false,
+    lastverteilplatten: false,
+    // Neu: Umgebung
+    freileitungen: false,
+    stromleitungen: false,
+    baeume: false,
+    nachbargrundstueck: false,
+    oeffentlicherVerkehrsraum: false,
+    halteverbot: false,
+    sondernutzung: false,
+    lagerflaeche: false,
+    lkwZufahrt: true,
+    kranErforderlich: false,
   });
 
   const gefahrenListe = ['Hochspannung', 'Bahnstrecke', 'Öffentlicher Weg', 'Nachbargrundstück', 'Glasfassade', 'Denkmalschutz'];
@@ -48,7 +67,7 @@ export default function Schritt4Page() {
     <div className="min-h-screen bg-slate-900 text-white p-6">
       <div className="max-w-2xl mx-auto">
         <button onClick={zurueck} className="text-slate-400 hover:text-white text-sm mb-2">← Zurück</button>
-        <h1 className="text-3xl font-bold mb-2">🛡️ Sicherheit & Zusatz</h1>
+        <h1 className="text-3xl font-bold mb-2">🛡️ Sicherheit & Umgebung</h1>
         <p className="text-slate-400 mb-2">Baustelle: Schritt 4 von 6</p>
         {step1Data && (
           <div className="bg-slate-800/50 rounded-lg p-3 mb-6 text-sm text-slate-400">
@@ -65,7 +84,7 @@ export default function Schritt4Page() {
               {[
                 { id: 'fassade', name: 'Fassadenanker', desc: 'Standard' },
                 { id: 'duesen', name: 'Düsenanker', desc: 'Betonwand' },
-                { id: 'dach', name: 'Dachanker', desc: 'Schragdach' },
+                { id: 'dach', name: 'Dachanker', desc: 'Schrägdach' },
                 { id: 'gewicht', name: 'Gewichtsanker', desc: 'Ohne Bohren' },
               ].map(a => (
                 <button key={a.id} onClick={() => setForm({...form, ankerung: a.id})}
@@ -89,7 +108,84 @@ export default function Schritt4Page() {
             </select>
           </div>
 
-          {/* Optionen */}
+          {/* Untergrund */}
+          <div>
+            <label className="block text-sm font-medium mb-3 text-slate-300">Untergrund</label>
+            <div className="grid grid-cols-2 gap-3 mb-3">
+              {[
+                { id: 'beton', name: 'Beton / Estrich' },
+                { id: 'asphalt', name: 'Asphalt' },
+                { id: 'pflaster', name: 'Pflaster' },
+                { id: 'erdreich', name: 'Erdreich / Rasen' },
+                { id: 'schotter', name: 'Schotter' },
+                { id: 'kies', name: 'Kies' },
+              ].map(u => (
+                <button key={u.id} onClick={() => setForm({...form, untergrund: u.id})}
+                  className={`p-3 rounded-lg border text-sm transition ${form.untergrund === u.id ? 'bg-orange-600/20 border-orange-500 text-orange-300' : 'bg-slate-700 border-slate-600 text-slate-300'}`}>
+                  {u.name}
+                </button>
+              ))}
+            </div>
+            <div className="space-y-2">
+              {[
+                { key: 'gefaelle', label: 'Gefälle vorhanden', icon: '📐' },
+                { key: 'unterkellert', label: 'Unterkellerte Bereiche', icon: '🏠' },
+                { key: 'lichtschaechte', label: 'Lichtschächte', icon: '💡' },
+                { key: 'lastverteilplatten', label: 'Lastverteilplatten erforderlich', icon: '⬜' },
+              ].map((item: any) => (
+                <button key={item.key} onClick={() => setForm({...form, [item.key]: !(form as any)[item.key]})}
+                  className={`w-full p-3 rounded-lg border text-left transition flex items-center gap-3 ${(form as any)[item.key] ? 'bg-orange-600/20 border-orange-500 text-orange-300' : 'bg-slate-700 border-slate-600'}`}>
+                  <span>{item.icon}</span>
+                  <span className="text-sm font-medium">{item.label}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Tragfähigkeit */}
+          <div>
+            <label className="block text-sm font-medium mb-2 text-slate-300">Tragfähigkeit Untergrund</label>
+            <div className="grid grid-cols-3 gap-3">
+              {[
+                { id: 'hoch', name: 'Hoch', desc: 'Beton, Asphalt' },
+                { id: 'normal', name: 'Normal', desc: 'Pflaster, Kies' },
+                { id: 'gering', name: 'Gering', desc: 'Erdreich, Rasen' },
+              ].map(t => (
+                <button key={t.id} onClick={() => setForm({...form, tragfaehigkeit: t.id})}
+                  className={`p-3 rounded-lg border text-center transition ${form.tragfaehigkeit === t.id ? 'bg-orange-600/20 border-orange-500 text-orange-300' : 'bg-slate-700 border-slate-600 text-slate-300'}`}>
+                  <div className="font-semibold text-sm">{t.name}</div>
+                  <div className="text-xs opacity-70">{t.desc}</div>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Umgebung */}
+          <div>
+            <label className="block text-sm font-medium mb-3 text-slate-300">Umgebung</label>
+            <div className="grid grid-cols-1 gap-2">
+              {[
+                { key: 'freileitungen', label: 'Freileitungen in der Nähe', icon: '⚡' },
+                { key: 'stromleitungen', label: 'Stromleitungen / Kabel', icon: '🔌' },
+                { key: 'baeume', label: 'Bäume / Vegetation', icon: '🌳' },
+                { key: 'nachbargrundstueck', label: 'Nachbargrundstück berühren', icon: '🏘️' },
+                { key: 'oeffentlicherVerkehrsraum', label: 'Öffentlicher Verkehrsraum', icon: '🚶' },
+                { key: 'halteverbot', label: 'Halteverbotszone nötig', icon: '🚫' },
+                { key: 'sondernutzung', label: 'Sondernutzungserlaubnis erforderlich', icon: '📋' },
+                { key: 'lagerflaeche', label: 'Lagerfläche vor Ort', icon: '📦' },
+                { key: 'lkwZufahrt', label: 'LKW-Zufahrt möglich', icon: '🚛' },
+                { key: 'kranErforderlich', label: 'Kran erforderlich', icon: '🏗️' },
+              ].map((item: any) => (
+                <button key={item.key} onClick={() => setForm({...form, [item.key]: !(form as any)[item.key]})}
+                  className={`w-full p-3 rounded-lg border text-left transition flex items-center gap-3 ${(form as any)[item.key] ? 'bg-orange-600/20 border-orange-500 text-orange-300' : 'bg-slate-700 border-slate-600'}`}>
+                  <span className="text-xl">{item.icon}</span>
+                  <span className="text-sm font-medium">{item.label}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Schutzeinrichtungen */}
           <div className="space-y-3">
             <button onClick={() => setForm({...form, schutzdach: !form.schutzdach})}
               className={`w-full p-3 rounded-lg border text-left transition flex items-center gap-3 ${form.schutzdach ? 'bg-orange-600/20 border-orange-500 text-orange-300' : 'bg-slate-700 border-slate-600'}`}>
