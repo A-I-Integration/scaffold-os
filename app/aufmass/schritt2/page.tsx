@@ -1,153 +1,158 @@
 'use client';
 
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { useState } from 'react';
 
 export default function Schritt2Page() {
   const router = useRouter();
+  
+  const [step1Data, setStep1Data] = useState<any>(null);
+  
   const [form, setForm] = useState({
-    untergrund: '',
-    gefaelle: false,
-    lichtschaechte: false,
-    lastverteilung: false,
+    laenge: '',
+    hoehe: '',
+    breite: '',
+    traufhoehe: '',
+    hindernisse: [] as string[],
+    durchfahrt: false,
   });
-  const [gespeichert, setGespeichert] = useState(false);
 
-  const untergrundTypen = [
-    { id: 'asphalt', label: 'Asphalt' },
-    { id: 'beton', label: 'Beton' },
-    { id: 'pflaster', label: 'Pflaster' },
-    { id: 'schotter', label: 'Schotter' },
-    { id: 'rasen', label: 'Rasen / Erde' },
-  ];
+  const hindernisListe = ['Erker', 'Balkon', 'Wintergarten', 'Kamin', 'Gaube', 'Markise'];
+
+  useEffect(() => {
+    const saved = localStorage.getItem('scaffold_step1');
+    if (saved) {
+      setStep1Data(JSON.parse(saved));
+    }
+  }, []);
+
+  function toggleHindernis(h: string) {
+    setForm(prev => ({
+      ...prev,
+      hindernisse: prev.hindernisse.includes(h)
+        ? prev.hindernisse.filter(x => x !== h)
+        : [...prev.hindernisse, h]
+    }));
+  }
 
   function handleWeiter() {
-    if (!form.untergrund) {
-      alert('Bitte wähle einen Untergrundtyp aus!');
+    if (!form.laenge || !form.hoehe) {
+      alert('Bitte gib mindestens Länge und Höhe ein!');
       return;
     }
-    setGespeichert(true);
+    
+    localStorage.setItem('scaffold_step2', JSON.stringify(form));
+    alert('✅ Schritt 2 gespeichert! (Hier kommt später Schritt 3)');
+    // router.push('/aufmass/schritt3');
+  }
+
+  function zurueck() {
+    router.push('/aufmass');
   }
 
   return (
     <div className="min-h-screen bg-slate-900 text-white p-6">
       <div className="max-w-2xl mx-auto">
-        <div className="flex items-center gap-2 mb-2">
-          <span className="text-orange-400 text-sm font-semibold">Schritt 2 von 6</span>
+        <div className="flex items-center gap-3 mb-2">
+          <button onClick={zurueck} className="text-slate-400 hover:text-white text-sm">← Zurück</button>
         </div>
-        <h1 className="text-3xl font-bold mb-2">🌍 Untergrund & Gelände</h1>
-        <p className="text-slate-400 mb-8">Prüfung des Baustellen-Untergrunds für sichere Gerüstfundamente.</p>
+        <h1 className="text-3xl font-bold mb-2">🏢 Gebäude & Abmessungen</h1>
+        <p className="text-slate-400 mb-2">Baustelle: Schritt 2 von 6</p>
+        
+        {step1Data && (
+          <div className="bg-slate-800/50 rounded-lg p-3 mb-6 text-sm text-slate-400">
+            <span className="text-slate-300 font-medium">{step1Data.name}</span> · {step1Data.adresse}
+          </div>
+        )}
 
         <div className="bg-slate-800 rounded-xl p-6 space-y-6">
-          
-          {/* Untergrundtyp */}
+
+          {/* Abmessungen */}
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium mb-2 text-slate-300">Länge (m) *</label>
+              <input 
+                type="number" 
+                value={form.laenge}
+                onChange={(e) => setForm({...form, laenge: e.target.value})}
+                className="w-full bg-slate-700 border border-slate-600 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-orange-500"
+                placeholder="z.B. 18"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium mb-2 text-slate-300">Höhe (m) *</label>
+              <input 
+                type="number" 
+                value={form.hoehe}
+                onChange={(e) => setForm({...form, hoehe: e.target.value})}
+                className="w-full bg-slate-700 border border-slate-600 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-orange-500"
+                placeholder="z.B. 10"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium mb-2 text-slate-300">Breite (m)</label>
+              <input 
+                type="number" 
+                value={form.breite}
+                onChange={(e) => setForm({...form, breite: e.target.value})}
+                className="w-full bg-slate-700 border border-slate-600 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-orange-500"
+                placeholder="z.B. 8"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium mb-2 text-slate-300">Traufhöhe (m)</label>
+              <input 
+                type="number" 
+                value={form.traufhoehe}
+                onChange={(e) => setForm({...form, traufhoehe: e.target.value})}
+                className="w-full bg-slate-700 border border-slate-600 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-orange-500"
+                placeholder="z.B. 8.5"
+              />
+            </div>
+          </div>
+
+          {/* Hindernisse */}
           <div>
-            <label className="block text-sm font-medium mb-3 text-slate-300">Untergrundtyp *</label>
+            <label className="block text-sm font-medium mb-3 text-slate-300">Hindernisse an der Fassade</label>
             <div className="grid grid-cols-2 gap-3">
-              {untergrundTypen.map(u => (
+              {hindernisListe.map(h => (
                 <button
-                  key={u.id}
-                  onClick={() => { setForm({...form, untergrund: u.id}); setGespeichert(false); }}
+                  key={h}
+                  onClick={() => toggleHindernis(h)}
                   className={`p-3 rounded-lg border text-left transition ${
-                    form.untergrund === u.id
+                    form.hindernisse.includes(h)
                       ? 'bg-orange-600/20 border-orange-500 text-orange-300'
                       : 'bg-slate-700 border-slate-600 text-slate-300 hover:border-slate-500'
                   }`}
                 >
-                  <div className="font-semibold text-sm">{u.label}</div>
+                  {h}
                 </button>
               ))}
             </div>
           </div>
 
-          {/* Gefälle */}
+          {/* Durchfahrt */}
           <div>
             <button
-              onClick={() => { setForm({...form, gefaelle: !form.gefaelle}); setGespeichert(false); }}
-              className={`w-full p-3 rounded-lg border text-left transition flex items-center justify-between ${
-                form.gefaelle
+              onClick={() => setForm({...form, durchfahrt: !form.durchfahrt})}
+              className={`w-full p-3 rounded-lg border text-left transition flex items-center gap-3 ${
+                form.durchfahrt
                   ? 'bg-orange-600/20 border-orange-500 text-orange-300'
                   : 'bg-slate-700 border-slate-600 text-slate-300'
               }`}
             >
+              <span className="text-xl">🚗</span>
               <div>
-                <div className="font-semibold text-sm">Gefälle vorhanden</div>
-                <div className="text-xs opacity-70">Hang, Schräge, Neigung</div>
-              </div>
-              <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${
-                form.gefaelle ? 'border-orange-500 bg-orange-500' : 'border-slate-500'
-              }`}>
-                {form.gefaelle && <span className="text-white text-xs">✓</span>}
+                <div className="font-semibold text-sm">Durchfahrt / Eingang freizuhalten</div>
+                <div className="text-xs opacity-70">Gitterträger erforderlich</div>
               </div>
             </button>
           </div>
 
-          {/* Lichtschächte */}
-          <div>
-            <button
-              onClick={() => { setForm({...form, lichtschaechte: !form.lichtschaechte}); setGespeichert(false); }}
-              className={`w-full p-3 rounded-lg border text-left transition flex items-center justify-between ${
-                form.lichtschaechte
-                  ? 'bg-orange-600/20 border-orange-500 text-orange-300'
-                  : 'bg-slate-700 border-slate-600 text-slate-300'
-              }`}
-            >
-              <div>
-                <div className="font-semibold text-sm">Unterkellert / Lichtschächte</div>
-                <div className="text-xs opacity-70">Kellerfenster, Lichtschächte im Bereich</div>
-              </div>
-              <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${
-                form.lichtschaechte ? 'border-orange-500 bg-orange-500' : 'border-slate-500'
-              }`}>
-                {form.lichtschaechte && <span className="text-white text-xs">✓</span>}
-              </div>
-            </button>
-            {form.lichtschaechte && (
-              <div className="mt-2 p-2 bg-yellow-900/30 border border-yellow-600 rounded text-yellow-400 text-sm">
-                ⚠️ Lastverteilung unter allen Gerüstfüßen zwingend erforderlich!
-              </div>
-            )}
-          </div>
-
-          {/* Lastverteilung */}
-          <div>
-            <button
-              onClick={() => { setForm({...form, lastverteilung: !form.lastverteilung}); setGespeichert(false); }}
-              className={`w-full p-3 rounded-lg border text-left transition flex items-center justify-between ${
-                form.lastverteilung
-                  ? 'bg-orange-600/20 border-orange-500 text-orange-300'
-                  : 'bg-slate-700 border-slate-600 text-slate-300'
-              }`}
-            >
-              <div>
-                <div className="font-semibold text-sm">Lastverteilung erforderlich</div>
-                <div className="text-xs opacity-70">Fundamentplatten / Unterlagen nötig</div>
-              </div>
-              <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${
-                form.lastverteilung ? 'border-orange-500 bg-orange-500' : 'border-slate-500'
-              }`}>
-                {form.lastverteilung && <span className="text-white text-xs">✓</span>}
-              </div>
-            </button>
-          </div>
-
-          {/* Ergebnis */}
-          {gespeichert && (
-            <div className="p-4 bg-green-900/30 border border-green-600 rounded-lg">
-              <div className="text-green-400 font-semibold mb-2">✅ Schritt 2 gespeichert</div>
-              <div className="text-sm text-slate-300 space-y-1">
-                <div>Untergrund: <strong>{untergrundTypen.find(u => u.id === form.untergrund)?.label}</strong></div>
-                <div>Gefälle: <strong>{form.gefaelle ? 'Ja' : 'Nein'}</strong></div>
-                <div>Lichtschächte: <strong>{form.lichtschaechte ? 'Ja' : 'Nein'}</strong></div>
-                <div>Lastverteilung: <strong>{form.lastverteilung ? 'Ja' : 'Nein'}</strong></div>
-              </div>
-            </div>
-          )}
-
-          {/* Navigation */}
-          <div className="flex gap-3">
+          {/* Buttons */}
+          <div className="flex gap-3 pt-4">
             <button 
-              onClick={() => router.push('/aufmass')}
+              onClick={zurueck}
               className="flex-1 bg-slate-700 hover:bg-slate-600 text-white font-semibold py-3 px-4 rounded-lg transition"
             >
               ← Zurück
