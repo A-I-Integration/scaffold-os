@@ -1,12 +1,13 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 
 export default function StuecklistePage() {
   const router = useRouter();
   const [data, setData] = useState<any>({});
   const [loading, setLoading] = useState(true);
+  const printRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const d = {
@@ -21,7 +22,6 @@ export default function StuecklistePage() {
 
   const laenge = parseFloat(data.s2?.laenge) || 0;
   const hoehe = parseFloat(data.s2?.hoehe) || 0;
-  const breite = parseFloat(data.s2?.breite) || 0;
   const feldlange = parseFloat(data.s3?.feldlange) || 3.0;
   const ankerAbstand = parseFloat(data.s4?.ankerAbstand) || 2.5;
   const geschossHoehe = 2.0;
@@ -127,13 +127,18 @@ export default function StuecklistePage() {
     },
   ];
 
+  const heute = new Date().toLocaleDateString('de-DE');
+
+  function handlePrint() {
+    window.print();
+  }
+
   if (loading) {
     return (
       <div className="min-h-screen bg-slate-900 text-white flex items-center justify-center">
         <div className="text-center">
           <div className="text-4xl mb-4 animate-pulse">📦</div>
           <div className="text-xl font-semibold">Berechne Material...</div>
-          <div className="text-slate-400 text-sm mt-2">{laenge} m × {hoehe} m = {felder} Felder × {etagen} Etagen</div>
         </div>
       </div>
     );
@@ -141,7 +146,8 @@ export default function StuecklistePage() {
 
   return (
     <div className="min-h-screen bg-slate-900 text-white p-6">
-      <div className="max-w-3xl mx-auto">
+      {/* NORMALE ANSICHT */}
+      <div className="max-w-3xl mx-auto print:hidden">
         <div className="flex items-center gap-3 mb-2">
           <button onClick={() => router.push('/planung')} className="text-slate-400 hover:text-white text-sm">← Zurück zur KI-Planung</button>
         </div>
@@ -209,7 +215,6 @@ export default function StuecklistePage() {
           <ul className="space-y-1 text-xs">
             <li>• Feldlänge: {feldlange} m | Geschosshöhe: {geschossHoehe} m</li>
             <li>• Ankerabstand: {ankerAbstand} m | Windzone: {data.s4?.windzone || '2'}</li>
-            <li>• Gerüsttyp: {data.s3?.geruesttyp || 'nicht gewählt'}</li>
             <li>• Diese Stückliste ist eine Planungshilfe. Die endgültige Mengenermittlung obliegt dem Fachplaner.</li>
           </ul>
         </div>
@@ -218,9 +223,107 @@ export default function StuecklistePage() {
           <button onClick={() => router.push('/planung')} className="flex-1 bg-slate-700 hover:bg-slate-600 text-white font-semibold py-3 px-4 rounded-lg transition">
             ← Zurück
           </button>
-          <button onClick={() => alert('PDF-Export der Stückliste kommt als Nächstes!')} className="flex-1 bg-orange-600 hover:bg-orange-700 text-white font-semibold py-3 px-4 rounded-lg transition">
+          <button onClick={handlePrint} className="flex-1 bg-orange-600 hover:bg-orange-700 text-white font-semibold py-3 px-4 rounded-lg transition">
             📄 PDF Export
           </button>
+        </div>
+      </div>
+
+      {/* PRINT ANSICHT – nur beim Drucken sichtbar */}
+      <div ref={printRef} className="hidden print:block bg-white text-black p-8 max-w-4xl mx-auto">
+        {/* Header */}
+        <div className="border-b-2 border-gray-800 pb-4 mb-6">
+          <div className="flex justify-between items-start">
+            <div>
+              <h1 className="text-3xl font-bold text-gray-900">SCAFFOLD OS</h1>
+              <p className="text-gray-600 text-sm mt-1">Automatische Stückliste & Materialplanung</p>
+            </div>
+            <div className="text-right text-sm text-gray-600">
+              <div className="font-semibold">Datum: {heute}</div>
+              <div>Seite 1 von 1</div>
+            </div>
+          </div>
+        </div>
+
+        {/* Projektinfo */}
+        <div className="bg-gray-100 rounded-lg p-4 mb-6">
+          <h2 className="text-xl font-bold text-gray-900 mb-2">Projektdaten</h2>
+          <div className="grid grid-cols-2 gap-4 text-sm">
+            <div>
+              <div className="text-gray-600">Projekt:</div>
+              <div className="font-semibold text-gray-900">{data.s1?.name || '–'}</div>
+            </div>
+            <div>
+              <div className="text-gray-600">Adresse:</div>
+              <div className="font-semibold text-gray-900">{data.s1?.adresse || '–'}</div>
+            </div>
+            <div>
+              <div className="text-gray-600">Abmessungen:</div>
+              <div className="font-semibold text-gray-900">{laenge} m × {hoehe} m | {flaeche} m²</div>
+            </div>
+            <div>
+              <div className="text-gray-600">Felder × Etagen:</div>
+              <div className="font-semibold text-gray-900">{felder} × {etagen}</div>
+            </div>
+          </div>
+        </div>
+
+        {/* Zusammenfassung */}
+        <div className="grid grid-cols-3 gap-4 mb-6">
+          <div className="border border-gray-300 rounded-lg p-3 text-center">
+            <div className="text-2xl font-bold text-gray-900">{gesamtGewicht.toLocaleString('de-DE')} kg</div>
+            <div className="text-xs text-gray-600 uppercase">Gesamtgewicht</div>
+          </div>
+          <div className="border border-gray-300 rounded-lg p-3 text-center">
+            <div className="text-2xl font-bold text-gray-900">{gesamtVolumen.toFixed(1)} m³</div>
+            <div className="text-xs text-gray-600 uppercase">Ladevolumen</div>
+          </div>
+          <div className="border border-gray-300 rounded-lg p-3 text-center">
+            <div className="text-sm font-bold text-gray-900 leading-tight">{fahrzeug}</div>
+            <div className="text-xs text-gray-600 uppercase">Fahrzeug</div>
+          </div>
+        </div>
+
+        {/* Tabelle */}
+        <table className="w-full border-collapse mb-6">
+          <thead>
+            <tr className="bg-gray-100 border-b-2 border-gray-800">
+              <th className="text-left py-2 px-3 text-sm font-bold text-gray-900">Pos.</th>
+              <th className="text-left py-2 px-3 text-sm font-bold text-gray-900">Bezeichnung</th>
+              <th className="text-right py-2 px-3 text-sm font-bold text-gray-900">Menge</th>
+              <th className="text-right py-2 px-3 text-sm font-bold text-gray-900">Einheit</th>
+              <th className="text-right py-2 px-3 text-sm font-bold text-gray-900">Gewicht (kg)</th>
+            </tr>
+          </thead>
+          <tbody>
+            {categories.flatMap((cat, ci) => [
+              <tr key={`head-${ci}`} className="bg-gray-50">
+                <td colSpan={5} className="py-2 px-3 text-sm font-bold text-gray-700 border-b border-gray-200">
+                  {cat.title}
+                </td>
+              </tr>,
+              ...cat.items.map((item: any, ii: number) => (
+                <tr key={`${ci}-${ii}`} className="border-b border-gray-200">
+                  <td className="py-2 px-3 text-sm text-gray-900">{ci + 1}.{ii + 1}</td>
+                  <td className="py-2 px-3 text-sm text-gray-900">{item.name}</td>
+                  <td className="py-2 px-3 text-sm text-gray-900 text-right font-mono">{item.stk}</td>
+                  <td className="py-2 px-3 text-sm text-gray-600 text-right">Stk</td>
+                  <td className="py-2 px-3 text-sm text-gray-900 text-right font-mono">{item.kg.toLocaleString('de-DE')}</td>
+                </tr>
+              ))
+            ])}
+            <tr className="bg-gray-100 border-t-2 border-gray-800 font-bold">
+              <td colSpan={4} className="py-3 px-3 text-sm text-gray-900 text-right">GESAMT:</td>
+              <td className="py-3 px-3 text-sm text-gray-900 text-right font-mono">{gesamtGewicht.toLocaleString('de-DE')} kg</td>
+            </tr>
+          </tbody>
+        </table>
+
+        {/* Hinweise */}
+        <div className="text-xs text-gray-600 space-y-1 border-t border-gray-300 pt-4">
+          <p><strong>Berechnungsgrundlage:</strong> Feldlänge {feldlange} m, Geschosshöhe {geschossHoehe} m, Ankerabstand {ankerAbstand} m, Windzone {data.s4?.windzone || '2'}</p>
+          <p><strong>Haftungsausschluss:</strong> Diese Stückliste wurde automatisch auf Basis der eingegebenen Aufmaß-Daten erstellt. Die endgültige Mengenermittlung und technische Prüfung obliegt einem qualifizierten Gerüstbau-Fachplaner. Alle Angaben ohne Gewähr.</p>
+          <p className="mt-2 text-gray-400">Erstellt mit SCAFFOLD OS | scaffold-os.vercel.app</p>
         </div>
       </div>
     </div>
