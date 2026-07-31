@@ -16,41 +16,40 @@ export default function PlanungPage() {
       s4: JSON.parse(localStorage.getItem('scaffold_step4') || '{}'),
     };
     setData(d);
-    setTimeout(() => setLoading(false), 800); // KI-Denkeffekt 😄
+    setTimeout(() => setLoading(false), 800);
   }, []);
 
-  // ─── KI REGELWERK ───
   function getLastklasse() {
     const g = data.s1?.gewerke || [];
-    if (g.includes('WDVS/Fassade') || g.includes('Putz')) return { wert: 'LK 3', grund: 'WDVS/Fassade erfordert höhere Nutzlast für Material & Geräte' };
-    if (g.includes('Dach')) return { wert: 'LK 4', grund: 'Dacharbeiten mit Schüttgut und Werkzeug' };
-    if (g.includes('Maler')) return { wert: 'LK 2', grund: 'Malerarbeiten = Personenlast + leichte Materialien' };
-    return { wert: 'LK 2', grund: 'Standard-Personenlast' };
+    if (g.includes('WDVS/Fassade') || g.includes('Putz')) return { wert: 'LK 3', grund: 'WDVS/Fassade erfordert höhere Nutzlast für Material & Geräte', status: 'ok' };
+    if (g.includes('Dach')) return { wert: 'LK 4', grund: 'Dacharbeiten mit Schüttgut und Werkzeug', status: 'ok' };
+    if (g.includes('Maler')) return { wert: 'LK 2', grund: 'Malerarbeiten = Personenlast + leichte Materialien', status: 'ok' };
+    return { wert: 'LK 2', grund: 'Standard-Personenlast', status: 'ok' };
   }
 
   function getBreitenklasse() {
     const h = parseFloat(data.s2?.hoehe) || 0;
     const b = parseFloat(data.s2?.breite) || 0;
-    if (h > 15 || b > 1.5) return { wert: 'Breitenklasse 3 (1,50 m)', grund: 'Große Höhe/Breite erfordert breitere Plattform für sicheres Arbeiten' };
-    if (data.s3?.geruesttyp === 'fahr') return { wert: 'Breitenklasse 2 (1,35 m)', grund: 'Fahrgerüst benötigt ausreichende Plattformbreite' };
-    return { wert: 'Breitenklasse 2 (1,35 m)', grund: 'Standard für Maler- und Fassadenarbeiten' };
+    if (h > 15 || b > 1.5) return { wert: 'Breitenklasse 3 (1,50 m)', grund: 'Große Höhe/Breite erfordert breitere Plattform für sicheres Arbeiten', status: 'ok' };
+    if (data.s3?.geruesttyp === 'fahr') return { wert: 'Breitenklasse 2 (1,35 m)', grund: 'Fahrgerüst benötigt ausreichende Plattformbreite', status: 'ok' };
+    return { wert: 'Breitenklasse 2 (1,35 m)', grund: 'Standard für Maler- und Fassadenarbeiten', status: 'ok' };
   }
 
   function getVerankerung() {
     const f = data.s2?.fassade;
     const h = parseFloat(data.s2?.hoehe) || 0;
-    if (f === 'WDVS' || f === 'Klinker') return { wert: 'Fassadenanker mit Düsenanker', grund: `${f} erfordert bohrfeste Verankerung` };
-    if (f === 'Denkmalschutz') return { wert: 'Gewichtsanker / Rüstanker', grund: 'Denkmalschutz: Keine Bohrungen in der Fassade erlaubt' };
-    if (h > 12) return { wert: 'Verstärkte Ankerung alle 2,0 m', grund: 'Ab 12 m Höhe: Verstärkte Ankerung nach DIN EN 12811' };
-    return { wert: 'Standard-Fassadenanker alle 2,5 m', grund: 'Regelverankerung für normale Bedingungen' };
+    if (f === 'WDVS' || f === 'Klinker') return { wert: 'Fassadenanker mit Düsenanker', grund: `${f} erfordert bohrfeste Verankerung`, status: 'ok' };
+    if (f === 'Denkmalschutz') return { wert: 'Gewichtsanker / Rüstanker', grund: 'Denkmalschutz: Keine Bohrungen in der Fassade erlaubt', status: 'warnung' };
+    if (h > 12) return { wert: 'Verstärkte Ankerung alle 2,0 m', grund: 'Ab 12 m Höhe: Verstärkte Ankerung nach DIN EN 12811', status: 'pflicht' };
+    return { wert: 'Standard-Fassadenanker alle 2,5 m', grund: 'Regelverankerung für normale Bedingungen', status: 'ok' };
   }
 
   function getBelag() {
     const lk = getLastklasse().wert;
-    if (lk === 'LK 4' || lk === 'LK 5') return { wert: 'Stahlroste', grund: 'Hohe Lastklasse erfordert schweren Belag' };
-    if (data.s2?.durchfahrt || data.s3?.belag === 'gitter') return { wert: 'Gitterträger', grund: 'Durchfahrt / Eingang freizuhalten' };
-    if (data.s3?.belag === 'alu') return { wert: 'Alu-Belag', grund: 'Leicht, korrosionsfrei – gewählt im Aufmaß' };
-    return { wert: 'Holzbelag', grund: 'Standard für LK 2–3, kostengünstig' };
+    if (lk === 'LK 4' || lk === 'LK 5') return { wert: 'Stahlroste', grund: 'Hohe Lastklasse erfordert schweren Belag', status: 'ok' };
+    if (data.s2?.durchfahrt || data.s3?.belag === 'gitter') return { wert: 'Gitterträger', grund: 'Durchfahrt / Eingang freizuhalten', status: 'ok' };
+    if (data.s3?.belag === 'alu') return { wert: 'Alu-Belag', grund: 'Leicht, korrosionsfrei – gewählt im Aufmaß', status: 'ok' };
+    return { wert: 'Holzbelag', grund: 'Standard für LK 2–3, kostengünstig', status: 'ok' };
   }
 
   function getDiagonale() {
@@ -118,7 +117,6 @@ export default function PlanungPage() {
   }
 
   const entscheidungen = [
-    { kategorie: 'Gerüsttyp', icon: '🏗️', ...getLastklasse(), detail: data.s3?.geruesttyp ? `Gewählt: ${data.s3.geruesttyp}` : 'Nicht spezifiziert' },
     { kategorie: 'Lastklasse', icon: '⚖️', ...getLastklasse() },
     { kategorie: 'Breitenklasse', icon: '📏', ...getBreitenklasse() },
     { kategorie: 'Belagtyp', icon: '🔲', ...getBelag() },
@@ -158,7 +156,6 @@ export default function PlanungPage() {
           <p className="text-slate-400">Automatische Planung basierend auf Aufmaß-Daten</p>
         </div>
 
-        {/* Projektinfo */}
         {data.s1?.name && (
           <div className="bg-slate-800/50 rounded-lg p-4 mb-6 flex justify-between items-center">
             <div>
@@ -172,7 +169,6 @@ export default function PlanungPage() {
           </div>
         )}
 
-        {/* Entscheidungen */}
         <div className="space-y-3">
           {entscheidungen.map((e, i) => (
             <div key={i} className={`bg-slate-800 rounded-xl p-4 border-l-4 ${
@@ -192,20 +188,17 @@ export default function PlanungPage() {
                   </div>
                   <div className="text-lg font-semibold text-white mb-1">{e.wert}</div>
                   <div className="text-sm text-slate-400">{e.grund}</div>
-                  {e.detail && <div className="text-xs text-slate-500 mt-1">{e.detail}</div>}
                 </div>
               </div>
             </div>
           ))}
         </div>
 
-        {/* Hinweis */}
         <div className="mt-6 bg-slate-800/50 rounded-lg p-4 text-sm text-slate-400">
           <div className="font-semibold text-slate-300 mb-1">⚠️ Rechtlicher Hinweis</div>
           Diese Planung dient als technische Unterstützung. Die endgültige Prüfung und Freigabe obliegt einem qualifizierten Gerüstbau-Fachplaner. Alle Angaben ohne Gewähr.
         </div>
 
-        {/* Buttons */}
         <div className="flex gap-3 mt-6">
           <button onClick={() => router.push('/aufmass/schritt6')} className="flex-1 bg-slate-700 hover:bg-slate-600 text-white font-semibold py-3 px-4 rounded-lg transition">
             ← Zurück
