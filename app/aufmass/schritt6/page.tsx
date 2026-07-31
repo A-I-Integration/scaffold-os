@@ -22,10 +22,6 @@ export default function Schritt6Page() {
     router.push('/aufmass');
   }
 
-  function exportPDF() {
-    alert('📄 PDF-Export wird generiert...\n(Hier kommt später die echte PDF-Funktion)');
-  }
-
   const s1 = data.step1 || {};
   const s2 = data.step2 || {};
   const s3 = data.step3 || {};
@@ -34,7 +30,6 @@ export default function Schritt6Page() {
 
   const geruestTypen: any = { fassade: 'Fassadengerüst', fahr: 'Fahrgerüst', trag: 'Traggerüst', dach: 'Dachgerüst', raum: 'Raumgerüst', haenge: 'Hängegerüst' };
   const belagTypen: any = { holz: 'Holzbelag', alu: 'Alu-Belag', stahl: 'Stahlroste', gitter: 'Gitterträger' };
-  const fassaden: any = { Klinker: 'Klinker', WDVS: 'WDVS', Beton: 'Beton', Naturstein: 'Naturstein', Glas: 'Glas', Holz: 'Holz', Putz: 'Putz', Denkmalschutz: 'Denkmalschutz' };
   const untergruende: any = { beton: 'Beton / Estrich', asphalt: 'Asphalt', pflaster: 'Pflaster', erdreich: 'Erdreich / Rasen', schotter: 'Schotter', kies: 'Kies' };
 
   return (
@@ -131,22 +126,18 @@ export default function Schritt6Page() {
             </div>
           </div>
 
-          {/* KI-Planung Button */}
-          <button 
-            onClick={() => router.push('/planung')}
-            className="w-full bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white font-bold py-4 px-6 rounded-xl transition flex items-center justify-center gap-3 text-lg"
-          >
-            <span>🤖</span>
-            <span>Zur KI-Planung</span>
-            <span className="text-sm font-normal opacity-80">Automatische Prüfung & Empfehlungen</span>
-          </button>
-
           {/* Buttons */}
           <div className="flex gap-3 pt-2">
             <button onClick={() => router.push('/aufmass/schritt5')} className="flex-1 bg-slate-700 hover:bg-slate-600 text-white font-semibold py-3 px-4 rounded-lg">← Zurück</button>
-            <button onClick={exportPDF} className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-4 rounded-lg">📄 PDF Export</button>
+            <button onClick={() => router.push('/planung')} className="flex-1 bg-purple-600 hover:bg-purple-700 text-white font-semibold py-3 px-4 rounded-lg">
+              🤖 KI-Planung
+            </button>
           </div>
-          
+
+          <button onClick={() => router.push('/stueckliste')} className="w-full bg-orange-600 hover:bg-orange-700 text-white font-semibold py-3 px-4 rounded-lg">
+            📄 Zur Stückliste & PDF
+          </button>
+
           <button onClick={neuesProjekt} className="w-full bg-green-600 hover:bg-green-700 text-white font-semibold py-3 px-4 rounded-lg">
             🆕 Neues Projekt starten
           </button>
