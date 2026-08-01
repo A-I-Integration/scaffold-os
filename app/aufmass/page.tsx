@@ -1,13 +1,6 @@
-'use client';
-
 import Image from 'next/image';
 
 export default function HomePage() {
-  
-  const go = () => {
-    window.location.href = '/aufmass';
-  };
-
   return (
     <div className="min-h-screen bg-slate-900 text-white">
       
@@ -18,12 +11,12 @@ export default function HomePage() {
             <span className="text-2xl">🏗️</span>
             <span className="text-xl font-bold tracking-tight">SCAFFOLD<span className="text-orange-500">OS</span></span>
           </div>
-          <button 
-            onClick={go}
+          <a 
+            href="/aufmass"
             className="bg-orange-600 hover:bg-orange-700 text-white font-semibold px-5 py-2 rounded-lg text-sm transition"
           >
             Jetzt starten
-          </button>
+          </a>
         </div>
       </nav>
 
@@ -40,14 +33,12 @@ export default function HomePage() {
           Erstelle in Minuten ein komplettes Gerüstkonzept mit automatischer Stückliste, 
           DIN-konformer Prüfung und professionellem PDF-Export.
         </p>
-        <div className="flex flex-col sm:flex-row gap-4 justify-center">
-          <button 
-            onClick={go}
-            className="bg-orange-600 hover:bg-orange-700 text-white font-bold py-4 px-8 rounded-xl text-lg transition shadow-lg shadow-orange-600/20"
-          >
-            🚀 Kostenlos starten
-          </button>
-        </div>
+        <a 
+          href="/aufmass"
+          className="bg-orange-600 hover:bg-orange-700 text-white font-bold py-4 px-8 rounded-xl text-lg transition shadow-lg shadow-orange-600/20 inline-block"
+        >
+          🚀 Kostenlos starten
+        </a>
       </section>
 
       {/* Stats */}
@@ -83,17 +74,17 @@ export default function HomePage() {
           </div>
           <div className="grid md:grid-cols-3 gap-6">
             {[
-              { icon: '📋', title: 'Digitales Aufmaß', desc: 'Schritt für Schritt durch die Baustellenaufnahme.' },
-              { icon: '🤖', title: 'KI Gerüstplanung', desc: 'Automatische Planung nach DIN EN 12811.' },
-              { icon: '📦', title: 'Stückliste', desc: 'Automatische Materialberechnung mit Fahrzeugempfehlung.' },
-              { icon: '📄', title: 'PDF Export', desc: 'Professionelle Dokumentation zum Versenden.' },
-              { icon: '⚖️', title: 'Lastklassen', desc: 'Automatische Ermittlung nach DIN EN 12811-1.' },
-              { icon: '🛡️', title: 'Sicherheit', desc: 'Prüfung von Windzonen, Ankerung, Schutzdächern.' },
+              { icon: '📋', title: 'Digitales Aufmaß', desc: 'Schritt für Schritt durch die Baustellenaufnahme. Keine Information wird vergessen.' },
+              { icon: '🤖', title: 'KI Gerüstplanung', desc: 'Automatische Planung nach DIN EN 12811. Jede Entscheidung wird begründet.' },
+              { icon: '📦', title: 'Stückliste', desc: 'Automatische Materialberechnung mit Gewicht, Ladevolumen und Fahrzeugempfehlung.' },
+              { icon: '📄', title: 'PDF Export', desc: 'Professionelle PDF-Dokumentation zum Versenden an Lieferanten und Kunden.' },
+              { icon: '⚖️', title: 'Lastklassen', desc: 'Automatische Ermittlung der richtigen Lastklasse nach DIN EN 12811-1.' },
+              { icon: '🛡️', title: 'Sicherheit', desc: 'Prüfung von Windzonen, Ankerung, Schutzdächern und Genehmigungen.' },
             ].map((f, i) => (
               <div key={i} className="bg-slate-800 rounded-xl p-6 border border-slate-700 hover:border-orange-500/50 transition">
                 <div className="text-3xl mb-4">{f.icon}</div>
                 <h3 className="text-lg font-bold mb-2">{f.title}</h3>
-                <p className="text-slate-400 text-sm">{f.desc}</p>
+                <p className="text-slate-400 text-sm leading-relaxed">{f.desc}</p>
               </div>
             ))}
           </div>
@@ -108,12 +99,12 @@ export default function HomePage() {
             <p className="text-orange-100 mb-8 text-lg">
               Erstelle jetzt dein erstes digitales Aufmaß – kostenlos und ohne Anmeldung.
             </p>
-            <button 
-              onClick={go}
-              className="bg-white text-orange-700 hover:bg-orange-50 font-bold py-4 px-10 rounded-xl text-lg transition shadow-xl"
+            <a 
+              href="/aufmass"
+              className="bg-white text-orange-700 hover:bg-orange-50 font-bold py-4 px-10 rounded-xl text-lg transition shadow-xl inline-block"
             >
               🚀 Jetzt starten
-            </button>
+            </a>
           </div>
         </div>
       </section>
