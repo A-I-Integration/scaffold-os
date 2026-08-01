@@ -1,4 +1,49 @@
+'use client';
+
+import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
+import { supabase } from '@/lib/supabase';
+
 export default function HomePage() {
+  const router = useRouter();
+  const [projects, setProjects] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    loadProjects();
+  }, []);
+
+  async function loadProjects() {
+    const { data, error } = await supabase
+      .from('projects')
+      .select('*')
+      .order('created_at', { ascending: false });
+    
+    if (!error && data) {
+      setProjects(data);
+    }
+    setLoading(false);
+  }
+
+  async function deleteProject(id: string) {
+    await supabase.from('projects').delete().eq('id', id);
+    loadProjects();
+  }
+
+  function openProject(project: any) {
+    if (project.data) {
+      Object.entries(project.data).forEach(([key, value]) => {
+        localStorage.setItem(key, JSON.stringify(value));
+      });
+    }
+    router.push('/aufmass');
+  }
+
+  function neuesProjekt() {
+    localStorage.clear();
+    router.push('/aufmass');
+  }
+
   return (
     <div className="min-h-screen bg-slate-900 text-white">
       
@@ -8,104 +53,75 @@ export default function HomePage() {
             <span className="text-2xl">🏗️</span>
             <span className="text-xl font-bold tracking-tight">SCAFFOLD<span className="text-orange-500">OS</span></span>
           </div>
-          <a href="/aufmass" className="bg-orange-600 hover:bg-orange-700 text-white font-semibold px-5 py-2 rounded-lg text-sm transition">
-            Jetzt starten
-          </a>
         </div>
       </nav>
 
-      <section className="max-w-6xl mx-auto px-6 pt-20 pb-16 text-center">
-        <div className="inline-flex items-center gap-2 bg-orange-500/10 border border-orange-500/30 rounded-full px-4 py-1.5 mb-6">
-          <span className="text-orange-400 text-xs font-semibold uppercase tracking-wider">Made for Gerüstbauer</span>
-        </div>
-        <h1 className="text-5xl md:text-6xl font-bold mb-6 leading-tight">
+      <section className="max-w-6xl mx-auto px-6 pt-16 pb-10 text-center">
+        <h1 className="text-4xl md:text-5xl font-bold mb-4">
           Digitales Aufmaß.<br />
           <span className="text-orange-500">KI-gestützte Planung.</span>
         </h1>
-        <p className="text-slate-400 text-lg md:text-xl max-w-2xl mx-auto mb-10">
-          Erstelle in Minuten ein komplettes Gerüstkonzept mit automatischer Stückliste, DIN-konformer Prüfung und professionellem PDF-Export.
+        <p className="text-slate-400 text-lg max-w-2xl mx-auto mb-8">
+          Erstelle in Minuten ein komplettes Gerüstkonzept – gespeichert in der Cloud.
         </p>
-        <a href="/aufmass" className="bg-orange-600 hover:bg-orange-700 text-white font-bold py-4 px-8 rounded-xl text-lg transition shadow-lg shadow-orange-600/20 inline-block">
-          🚀 Kostenlos starten
-        </a>
+        <button 
+          onClick={neuesProjekt}
+          className="bg-orange-600 hover:bg-orange-700 text-white font-bold py-4 px-8 rounded-xl text-lg transition shadow-lg shadow-orange-600/20"
+        >
+          🚀 Neues Projekt starten
+        </button>
       </section>
 
-      <section className="max-w-5xl mx-auto px-6 pb-20">
-        <div className="bg-slate-800 rounded-2xl border border-slate-700 p-8 md:p-12">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-8 text-center">
-            <div>
-              <div className="text-3xl font-bold text-orange-400 mb-1">6</div>
-              <div className="text-slate-400 text-sm">Schritte im Wizard</div>
-            </div>
-            <div>
-              <div className="text-3xl font-bold text-orange-400 mb-1">14</div>
-              <div className="text-slate-400 text-sm">KI-Entscheidungen</div>
-            </div>
-            <div>
-              <div className="text-3xl font-bold text-orange-400 mb-1">100%</div>
-              <div className="text-slate-400 text-sm">DIN EN 12811</div>
-            </div>
-            <div>
-              <div className="text-3xl font-bold text-orange-400 mb-1">PDF</div>
-              <div className="text-slate-400 text-sm">Export sofort</div>
-            </div>
-          </div>
-        </div>
-      </section>
+      <section className="max-w-4xl mx-auto px-6 pb-20">
+        <h2 className="text-2xl font-bold mb-6 flex items-center gap-2">
+          📁 Gespeicherte Projekte
+          {loading && <span className="text-sm font-normal text-slate-500">(laden...)</span>}
+        </h2>
 
-      <section className="bg-slate-800/50 py-20">
-        <div className="max-w-6xl mx-auto px-6">
-          <div className="text-center mb-16">
-            <h2 className="text-3xl md:text-4xl font-bold mb-4">Alles, was du brauchst</h2>
-            <p className="text-slate-400">Spezialisiert auf den Gerüstbau</p>
+        {projects.length === 0 && !loading && (
+          <div className="bg-slate-800 rounded-xl p-8 text-center border border-slate-700">
+            <div className="text-4xl mb-3">📭</div>
+            <p className="text-slate-400">Noch keine Projekte gespeichert.</p>
+            <p className="text-slate-500 text-sm mt-1">Starte dein erstes Aufmaß oben.</p>
           </div>
-          <div className="grid md:grid-cols-3 gap-6">
-            {[
-              { icon: '📋', title: 'Digitales Aufmaß', desc: 'Schritt für Schritt durch die Baustellenaufnahme.' },
-              { icon: '🤖', title: 'KI Gerüstplanung', desc: 'Automatische Planung nach DIN EN 12811.' },
-              { icon: '📦', title: 'Stückliste', desc: 'Automatische Materialberechnung mit Fahrzeugempfehlung.' },
-              { icon: '📄', title: 'PDF Export', desc: 'Professionelle Dokumentation zum Versenden.' },
-              { icon: '⚖️', title: 'Lastklassen', desc: 'Automatische Ermittlung nach DIN EN 12811-1.' },
-              { icon: '🛡️', title: 'Sicherheit', desc: 'Prüfung von Windzonen, Ankerung, Schutzdächern.' },
-            ].map((f, i) => (
-              <div key={i} className="bg-slate-800 rounded-xl p-6 border border-slate-700 hover:border-orange-500/50 transition">
-                <div className="text-3xl mb-4">{f.icon}</div>
-                <h3 className="text-lg font-bold mb-2">{f.title}</h3>
-                <p className="text-slate-400 text-sm leading-relaxed">{f.desc}</p>
+        )}
+
+        <div className="space-y-3">
+          {projects.map((p) => (
+            <div key={p.id} className="bg-slate-800 rounded-xl p-5 border border-slate-700 hover:border-orange-500/50 transition flex justify-between items-center">
+              <div className="flex-1">
+                <div className="text-lg font-semibold text-white">{p.name}</div>
+                <div className="text-slate-400 text-sm">{p.adresse}</div>
+                <div className="text-slate-500 text-xs mt-1">
+                  {new Date(p.created_at).toLocaleDateString('de-DE')}
+                </div>
               </div>
-            ))}
-          </div>
+              <div className="flex gap-2">
+                <button 
+                  onClick={() => openProject(p)}
+                  className="bg-orange-600 hover:bg-orange-700 text-white px-4 py-2 rounded-lg text-sm font-semibold transition"
+                >
+                  Öffnen
+                </button>
+                <button 
+                  onClick={() => deleteProject(p.id)}
+                  className="bg-red-600/20 hover:bg-red-600/40 text-red-400 px-3 py-2 rounded-lg text-sm transition"
+                >
+                  🗑️
+                </button>
+              </div>
+            </div>
+          ))}
         </div>
       </section>
 
-      <section className="py-20">
-        <div className="max-w-4xl mx-auto px-6 text-center">
-          <div className="bg-gradient-to-r from-orange-600 to-orange-700 rounded-2xl p-10 md:p-16">
-            <h2 className="text-3xl md:text-4xl font-bold mb-4">Bereit für dein nächstes Projekt?</h2>
-            <p className="text-orange-100 mb-8 text-lg">
-              Erstelle jetzt dein erstes digitales Aufmaß – kostenlos und ohne Anmeldung.
-            </p>
-            <a href="/aufmass" className="bg-white text-orange-700 hover:bg-orange-50 font-bold py-4 px-10 rounded-xl text-lg transition shadow-xl inline-block">
-              🚀 Jetzt starten
-            </a>
+      <footer className="border-t border-slate-800 py-8">
+        <div className="max-w-6xl mx-auto px-6 text-center text-slate-500 text-sm">
+          <div className="flex items-center justify-center gap-2 mb-2">
+            <span>🏗️</span>
+            <span className="font-bold">SCAFFOLD<span className="text-orange-500">OS</span></span>
           </div>
-        </div>
-      </section>
-
-      <footer className="border-t border-slate-800 py-10">
-        <div className="max-w-6xl mx-auto px-6">
-          <div className="flex flex-col md:flex-row justify-between items-center gap-6">
-            <div className="flex items-center gap-2">
-              <span className="text-xl">🏗️</span>
-              <span className="font-bold">SCAFFOLD<span className="text-orange-500">OS</span></span>
-            </div>
-            <div className="flex items-center gap-3 bg-slate-800/50 rounded-full px-5 py-2 border border-slate-700">
-              <span className="text-slate-400 text-sm">Powered by</span>
-              <img src="/logo-ai.png" alt="AI Integration" width={32} height={32} className="rounded-full" />
-              <span className="text-white font-semibold text-sm">AI Integration</span>
-            </div>
-            <div className="text-slate-500 text-sm">© 2026 Scaffold OS</div>
-          </div>
+          © 2026 Scaffold OS • Powered by AI Integration
         </div>
       </footer>
     </div>
