@@ -1,7 +1,7 @@
 export default function HomePage() {
   return (
     <div className="min-h-screen bg-slate-900 text-white">
-
+      
       <nav className="border-b border-slate-800">
         <div className="max-w-6xl mx-auto px-6 py-4 flex justify-between items-center">
           <div className="flex items-center gap-2">
@@ -61,12 +61,12 @@ export default function HomePage() {
           </div>
           <div className="grid md:grid-cols-3 gap-6">
             {[
-              { icon: "📋", title: "Digitales Aufmaß", desc: "Schritt für Schritt durch die Baustellenaufnahme." },
-              { icon: "🤖", title: "KI Gerüstplanung", desc: "Automatische Planung nach DIN EN 12811." },
-              { icon: "📦", title: "Stückliste", desc: "Automatische Materialberechnung mit Fahrzeugempfehlung." },
-              { icon: "📄", title: "PDF Export", desc: "Professionelle Dokumentation zum Versenden." },
-              { icon: "⚖️", title: "Lastklassen", desc: "Automatische Ermittlung nach DIN EN 12811-1." },
-              { icon: "🛡️", title: "Sicherheit", desc: "Prüfung von Windzonen, Ankerung, Schutzdächern." },
+              { icon: '📋', title: 'Digitales Aufmaß', desc: 'Schritt für Schritt durch die Baustellenaufnahme.' },
+              { icon: '🤖', title: 'KI Gerüstplanung', desc: 'Automatische Planung nach DIN EN 12811.' },
+              { icon: '📦', title: 'Stückliste', desc: 'Automatische Materialberechnung mit Fahrzeugempfehlung.' },
+              { icon: '📄', title: 'PDF Export', desc: 'Professionelle Dokumentation zum Versenden.' },
+              { icon: '⚖️', title: 'Lastklassen', desc: 'Automatische Ermittlung nach DIN EN 12811-1.' },
+              { icon: '🛡️', title: 'Sicherheit', desc: 'Prüfung von Windzonen, Ankerung, Schutzdächern.' },
             ].map((f, i) => (
               <div key={i} className="bg-slate-800 rounded-xl p-6 border border-slate-700 hover:border-orange-500/50 transition">
                 <div className="text-3xl mb-4">{f.icon}</div>
