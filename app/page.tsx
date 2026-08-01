@@ -2,14 +2,27 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { supabase } from '@/lib/supabase';
+import { createClient } from '@/lib/supabase/client';
+// ...
+const supabase = createClient();
 
 export default function HomePage() {
   const router = useRouter();
   const [projects, setProjects] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [user, setUser] = useState<any>(null);
 
   useEffect(() => {
+    // Prüfe Login-Status
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      setUser(user);
+    });
+
+    // Listener für Auth-Änderungen
+    supabase.auth.onAuthStateChange((_event, session) => {
+      setUser(session?.user ?? null);
+    });
+
     loadProjects();
   }, []);
 
@@ -23,6 +36,12 @@ export default function HomePage() {
       setProjects(data);
     }
     setLoading(false);
+  }
+
+  async function logout() {
+    await supabase.auth.signOut();
+    setUser(null);
+    router.push('/');
   }
 
   async function deleteProject(id: string) {
@@ -52,6 +71,23 @@ export default function HomePage() {
           <div className="flex items-center gap-2">
             <span className="text-2xl">🏗️</span>
             <span className="text-xl font-bold tracking-tight">SCAFFOLD<span className="text-orange-500">OS</span></span>
+          </div>
+          <div>
+            {user ? (
+              <div className="flex items-center gap-3">
+                <span className="text-sm text-slate-400">{user.email}</span>
+                <button onClick={logout} className="text-sm text-red-400 hover:text-red-300 transition">
+                  Abmelden
+                </button>
+              </div>
+            ) : (
+              <button 
+                onClick={() => router.push('/login')}
+                className="bg-slate-700 hover:bg-slate-600 text-white px-4 py-2 rounded-lg text-sm transition"
+              >
+                Anmelden
+              </button>
+            )}
           </div>
         </div>
       </nav>
