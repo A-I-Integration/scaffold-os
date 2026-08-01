@@ -21,99 +21,99 @@ export default function PlanungPage() {
 
   function getLastklasse() {
     const g = data.s1?.gewerke || [];
-    if (g.includes('WDVS/Fassade') || g.includes('Putz')) return { wert: 'LK 3', grund: 'WDVS/Fassade erfordert höhere Nutzlast für Material & Geräte', status: 'ok' };
-    if (g.includes('Dach')) return { wert: 'LK 4', grund: 'Dacharbeiten mit Schüttgut und Werkzeug', status: 'ok' };
-    if (g.includes('Maler')) return { wert: 'LK 2', grund: 'Malerarbeiten = Personenlast + leichte Materialien', status: 'ok' };
+    if (g.includes('WDVS/Fassade') || g.includes('Putz')) return { wert: 'LK 3', grund: 'WDVS/Fassade erfordert höhere Nutzlast', status: 'ok' };
+    if (g.includes('Dach')) return { wert: 'LK 4', grund: 'Dacharbeiten mit Schüttgut', status: 'ok' };
+    if (g.includes('Maler')) return { wert: 'LK 2', grund: 'Malerarbeiten = Personenlast', status: 'ok' };
     return { wert: 'LK 2', grund: 'Standard-Personenlast', status: 'ok' };
   }
 
   function getBreitenklasse() {
     const h = parseFloat(data.s2?.hoehe) || 0;
     const b = parseFloat(data.s2?.breite) || 0;
-    if (h > 15 || b > 1.5) return { wert: 'Breitenklasse 3 (1,50 m)', grund: 'Große Höhe/Breite erfordert breitere Plattform für sicheres Arbeiten', status: 'ok' };
-    if (data.s3?.geruesttyp === 'fahr') return { wert: 'Breitenklasse 2 (1,35 m)', grund: 'Fahrgerüst benötigt ausreichende Plattformbreite', status: 'ok' };
-    return { wert: 'Breitenklasse 2 (1,35 m)', grund: 'Standard für Maler- und Fassadenarbeiten', status: 'ok' };
+    if (h > 15 || b > 1.5) return { wert: 'Breitenklasse 3 (1,50 m)', grund: 'Große Höhe/Breite', status: 'ok' };
+    if (data.s3?.geruesttyp === 'fahr') return { wert: 'Breitenklasse 2 (1,35 m)', grund: 'Fahrgerüst', status: 'ok' };
+    return { wert: 'Breitenklasse 2 (1,35 m)', grund: 'Standard', status: 'ok' };
   }
 
   function getVerankerung() {
     const f = data.s2?.fassade;
     const h = parseFloat(data.s2?.hoehe) || 0;
     if (f === 'WDVS' || f === 'Klinker') return { wert: 'Fassadenanker mit Düsenanker', grund: `${f} erfordert bohrfeste Verankerung`, status: 'ok' };
-    if (f === 'Denkmalschutz') return { wert: 'Gewichtsanker / Rüstanker', grund: 'Denkmalschutz: Keine Bohrungen in der Fassade erlaubt', status: 'warnung' };
-    if (h > 12) return { wert: 'Verstärkte Ankerung alle 2,0 m', grund: 'Ab 12 m Höhe: Verstärkte Ankerung nach DIN EN 12811', status: 'pflicht' };
-    return { wert: 'Standard-Fassadenanker alle 2,5 m', grund: 'Regelverankerung für normale Bedingungen', status: 'ok' };
+    if (f === 'Denkmalschutz') return { wert: 'Gewichtsanker', grund: 'Keine Bohrungen erlaubt', status: 'warnung' };
+    if (h > 12) return { wert: 'Verstärkte Ankerung alle 2,0 m', grund: 'Ab 12 m Höhe', status: 'pflicht' };
+    return { wert: 'Standard-Fassadenanker alle 2,5 m', grund: 'Regelverankerung', status: 'ok' };
   }
 
   function getBelag() {
     const lk = getLastklasse().wert;
-    if (lk === 'LK 4' || lk === 'LK 5') return { wert: 'Stahlroste', grund: 'Hohe Lastklasse erfordert schweren Belag', status: 'ok' };
-    if (data.s2?.durchfahrt || data.s3?.belag === 'gitter') return { wert: 'Gitterträger', grund: 'Durchfahrt / Eingang freizuhalten', status: 'ok' };
-    if (data.s3?.belag === 'alu') return { wert: 'Alu-Belag', grund: 'Leicht, korrosionsfrei – gewählt im Aufmaß', status: 'ok' };
-    return { wert: 'Holzbelag', grund: 'Standard für LK 2–3, kostengünstig', status: 'ok' };
+    if (lk === 'LK 4' || lk === 'LK 5') return { wert: 'Stahlroste', grund: 'Hohe Lastklasse', status: 'ok' };
+    if (data.s2?.durchfahrt || data.s3?.belag === 'gitter') return { wert: 'Gitterträger', grund: 'Durchfahrt', status: 'ok' };
+    if (data.s3?.belag === 'alu') return { wert: 'Alu-Belag', grund: 'Leicht, korrosionsfrei', status: 'ok' };
+    return { wert: 'Holzbelag', grund: 'Standard für LK 2–3', status: 'ok' };
   }
 
   function getDiagonale() {
     const h = parseFloat(data.s2?.hoehe) || 0;
-    if (h >= 6) return { wert: 'Zwingend erforderlich', grund: `Höhe ${h} m ≥ 6 m: Diagonale Aussteifung nach DIN EN 12811-1 Pflicht`, status: 'pflicht' };
-    return { wert: 'Empfohlen', grund: 'Unter 6 m: Optional, aber empfohlen für Stabilität', status: 'empfohlen' };
+    if (h >= 6) return { wert: 'Zwingend erforderlich', grund: `Höhe ${h} m ≥ 6 m: Pflicht`, status: 'pflicht' };
+    return { wert: 'Empfohlen', grund: 'Optional, aber empfohlen', status: 'empfohlen' };
   }
 
   function getFangnetz() {
     const h = parseFloat(data.s2?.hoehe) || 0;
     const oeff = data.s4?.oeffentlicherVerkehrsraum;
-    if (h > 10 && oeff) return { wert: 'Zwingend + Fanggerüst', grund: 'Höhe > 10 m + öffentlicher Raum = Fangnetz + Fanggerüst erforderlich', status: 'pflicht' };
-    if (h > 10) return { wert: 'Empfohlen', grund: 'Höhe > 10 m: Fangnetz zum Schutz vor herabfallenden Gegenständen', status: 'empfohlen' };
-    if (oeff) return { wert: 'Empfohlen', grund: 'Öffentlicher Verkehrsraum: Schutz für Fußgänger', status: 'empfohlen' };
-    return { wert: 'Nicht erforderlich', grund: 'Geringe Höhe, kein öffentlicher Raum', status: 'ok' };
+    if (h > 10 && oeff) return { wert: 'Zwingend + Fanggerüst', grund: 'Höhe > 10 m + öffentlicher Raum', status: 'pflicht' };
+    if (h > 10) return { wert: 'Empfohlen', grund: 'Höhe > 10 m', status: 'empfohlen' };
+    if (oeff) return { wert: 'Empfohlen', grund: 'Öffentlicher Verkehrsraum', status: 'empfohlen' };
+    return { wert: 'Nicht erforderlich', grund: 'Geringe Höhe', status: 'ok' };
   }
 
   function getSchutzdach() {
     if (data.s4?.oeffentlicherVerkehrsraum || data.s4?.nachbargrundstueck) 
-      return { wert: 'Zwingend erforderlich', grund: 'Schutz für Fußgänger / Nachbarn vor herabfallenden Gegenständen', status: 'pflicht' };
+      return { wert: 'Zwingend erforderlich', grund: 'Schutz für Fußgänger', status: 'pflicht' };
     if (data.s4?.freileitungen || data.s4?.stromleitungen)
-      return { wert: 'Empfohlen', grund: 'Freileitungen in der Nähe – zusätzlicher Schutz', status: 'empfohlen' };
-    return { wert: 'Optional', grund: 'Kein öffentlicher Raum, keine kritischen Leitungen', status: 'ok' };
+      return { wert: 'Empfohlen', grund: 'Freileitungen', status: 'empfohlen' };
+    return { wert: 'Optional', grund: 'Kein öffentlicher Raum', status: 'ok' };
   }
 
   function getGittertraeger() {
-    if (data.s2?.durchfahrt) return { wert: 'Erforderlich', grund: 'Durchfahrt / Eingang muss frei bleiben', status: 'pflicht' };
+    if (data.s2?.durchfahrt) return { wert: 'Erforderlich', grund: 'Durchfahrt', status: 'pflicht' };
     if (data.s2?.hindernisse?.includes('Wintergarten') || data.s2?.hindernisse?.includes('Erker'))
-      return { wert: 'Empfohlen', grund: 'Hindernisse erfordern flexible Überbrückung', status: 'empfohlen' };
-    return { wert: 'Nicht erforderlich', grund: 'Keine Durchfahrt, keine kritischen Hindernisse', status: 'ok' };
+      return { wert: 'Empfohlen', grund: 'Hindernisse', status: 'empfohlen' };
+    return { wert: 'Nicht erforderlich', grund: 'Keine Durchfahrt', status: 'ok' };
   }
 
   function getTreppenturm() {
     const h = parseFloat(data.s2?.hoehe) || 0;
-    if (h > 8) return { wert: 'Empfohlen', grund: `Höhe ${h} m: Komfortablerer und sichererer Zugang als Leiter`, status: 'empfohlen' };
-    return { wert: 'Leiter ausreichend', grund: 'Bis 8 m: Gerüstleiter nach DIN EN 131 ausreichend', status: 'ok' };
+    if (h > 8) return { wert: 'Empfohlen', grund: `Höhe ${h} m`, status: 'empfohlen' };
+    return { wert: 'Leiter ausreichend', grund: 'Bis 8 m', status: 'ok' };
   }
 
   function getKran() {
-    if (data.s4?.kranErforderlich) return { wert: 'Eingeplant', grund: 'Manuell im Aufmaß markiert', status: 'pflicht' };
+    if (data.s4?.kranErforderlich) return { wert: 'Eingeplant', grund: 'Manuell markiert', status: 'pflicht' };
     const h = parseFloat(data.s2?.hoehe) || 0;
-    if (h > 20) return { wert: 'Empfohlen', grund: 'Ab 20 m Höhe: Materialtransport per Kran effizienter', status: 'empfohlen' };
-    return { wert: 'Nicht erforderlich', grund: 'Höhe und Material manageable per Hand/Hub', status: 'ok' };
+    if (h > 20) return { wert: 'Empfohlen', grund: 'Ab 20 m', status: 'empfohlen' };
+    return { wert: 'Nicht erforderlich', grund: 'Manageable per Hand', status: 'ok' };
   }
 
   function getWindlast() {
     const z = data.s4?.windzone || '2';
-    if (z === '3' || z === '4') return { wert: 'Verstärkte Aussteifung', grund: `Windzone ${z}: Erhöhte Windlast, zusätzliche Diagonalen und Anker empfohlen`, status: 'warnung' };
-    return { wert: 'Standardaussteifung', grund: `Windzone ${z}: Normale Aussteifung ausreichend`, status: 'ok' };
+    if (z === '3' || z === '4') return { wert: 'Verstärkte Aussteifung', grund: `Windzone ${z}`, status: 'warnung' };
+    return { wert: 'Standardaussteifung', grund: `Windzone ${z}`, status: 'ok' };
   }
 
   function getFundament() {
     const u = data.s4?.untergrund;
     const t = data.s4?.tragfaehigkeit;
     if (u === 'erdreich' || u === 'rasen' || t === 'gering') 
-      return { wert: 'Lastverteilplatten + Unterlegplatten', grund: 'Weicher Untergrund erfordert Kraftverteilung', status: 'pflicht' };
-    if (data.s4?.gefaelle) return { wert: 'Ausgleichsfußspindeln', grund: 'Gefälle erfordert verstellbare Füße', status: 'pflicht' };
-    return { wert: 'Standard-Fußplatten', grund: 'Fester Untergrund, keine Besonderheiten', status: 'ok' };
+      return { wert: 'Lastverteilplatten', grund: 'Weicher Untergrund', status: 'pflicht' };
+    if (data.s4?.gefaelle) return { wert: 'Ausgleichsfußspindeln', grund: 'Gefälle', status: 'pflicht' };
+    return { wert: 'Standard-Fußplatten', grund: 'Fester Untergrund', status: 'ok' };
   }
 
   function getSondernutzung() {
     if (data.s4?.sondernutzung || data.s4?.halteverbot)
-      return { wert: 'Beantragung erforderlich', grund: 'Sondernutzungserlaubnis / Halteverbotszone prüfen', status: 'warnung' };
-    return { wert: 'Nicht erforderlich', grund: 'Keine Beantragung nötig', status: 'ok' };
+      return { wert: 'Beantragung erforderlich', grund: 'Sondernutzung', status: 'warnung' };
+    return { wert: 'Nicht erforderlich', grund: 'Keine Beantragung', status: 'ok' };
   }
 
   const entscheidungen = [
@@ -150,7 +150,7 @@ export default function PlanungPage() {
         <div className="flex items-center gap-3 mb-2">
           <button onClick={() => router.push('/aufmass/schritt6')} className="text-slate-400 hover:text-white text-sm">← Zurück zur Zusammenfassung</button>
         </div>
-        
+
         <div className="mb-8">
           <h1 className="text-3xl font-bold mb-2">🤖 KI Gerüstplanung</h1>
           <p className="text-slate-400">Automatische Planung basierend auf Aufmaß-Daten</p>
@@ -196,7 +196,7 @@ export default function PlanungPage() {
 
         <div className="mt-6 bg-slate-800/50 rounded-lg p-4 text-sm text-slate-400">
           <div className="font-semibold text-slate-300 mb-1">⚠️ Rechtlicher Hinweis</div>
-          Diese Planung dient als technische Unterstützung. Die endgültige Prüfung und Freigabe obliegt einem qualifizierten Gerüstbau-Fachplaner. Alle Angaben ohne Gewähr.
+          Diese Planung dient als technische Unterstützung. Die endgültige Prüfung obliegt einem qualifizierten Gerüstbau-Fachplaner.
         </div>
 
         <div className="flex gap-3 mt-6">
