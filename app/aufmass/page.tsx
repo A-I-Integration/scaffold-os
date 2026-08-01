@@ -7,32 +7,25 @@ export default function AufmassPage() {
   const router = useRouter();
   
   const [form, setForm] = useState({
-    // Projekt
     name: '',
     adresse: '',
-    
-    // Ansprechpartner
     ansprechpartnerName: '',
     ansprechpartnerTelefon: '',
     ansprechpartnerEmail: '',
-    
-    // Bauleiter
     bauleiterName: '',
     bauleiterTelefon: '',
     bauleiterEmail: '',
-    
-    // Termine
     projektbeginn: '',
     projektende: '',
     arbeitszeiten: 'Mo–Fr 7:00–17:00',
-    
-    // Gewerke & Dauer
     gewerke: [] as string[],
     dauer: '4',
-    
-    // Dokumentation
     fotos: false,
+    videos: false,
     lidar: false,
+    drohnen: false,
+    grundrisse: false,
+    gps: false,
   });
 
   const gewerkListe = ['Maler', 'WDVS/Fassade', 'Fenster', 'Dach', 'Putz', 'Sonstiges'];
@@ -86,28 +79,20 @@ export default function AufmassPage() {
           {/* Projekt */}
           <div className="border-b border-slate-700 pb-6">
             <h3 className="text-orange-400 text-xs font-bold uppercase tracking-wider mb-4">Projekt</h3>
-            
             <div className="space-y-4">
               <div>
                 <label className="block text-sm font-medium mb-2 text-slate-300">Projektname / Kunde *</label>
-                <input 
-                  type="text" 
-                  value={form.name}
+                <input type="text" value={form.name}
                   onChange={(e) => setForm({...form, name: e.target.value})}
-                  className="w-full bg-slate-700 border border-slate-600 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-orange-500"
-                  placeholder="z.B. Merola"
-                />
+                  className="w-full bg-slate-700 border border-slate-600 rounded-lg px-4 py-2 text-white"
+                  placeholder="z.B. Merola" />
               </div>
-
               <div>
                 <label className="block text-sm font-medium mb-2 text-slate-300">Baustellenadresse *</label>
-                <input 
-                  type="text" 
-                  value={form.adresse}
+                <input type="text" value={form.adresse}
                   onChange={(e) => setForm({...form, adresse: e.target.value})}
-                  className="w-full bg-slate-700 border border-slate-600 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-orange-500"
-                  placeholder="z.B. Bänkstegge 14"
-                />
+                  className="w-full bg-slate-700 border border-slate-600 rounded-lg px-4 py-2 text-white"
+                  placeholder="z.B. Bänkstegge 14" />
               </div>
             </div>
           </div>
@@ -115,38 +100,28 @@ export default function AufmassPage() {
           {/* Ansprechpartner */}
           <div className="border-b border-slate-700 pb-6">
             <h3 className="text-orange-400 text-xs font-bold uppercase tracking-wider mb-4">Ansprechpartner vor Ort</h3>
-            
             <div className="space-y-4">
               <div>
                 <label className="block text-sm font-medium mb-2 text-slate-300">Name</label>
-                <input 
-                  type="text" 
-                  value={form.ansprechpartnerName}
+                <input type="text" value={form.ansprechpartnerName}
                   onChange={(e) => setForm({...form, ansprechpartnerName: e.target.value})}
-                  className="w-full bg-slate-700 border border-slate-600 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-orange-500"
-                  placeholder="z.B. Herr Müller"
-                />
+                  className="w-full bg-slate-700 border border-slate-600 rounded-lg px-4 py-2 text-white"
+                  placeholder="z.B. Herr Müller" />
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium mb-2 text-slate-300">Telefon</label>
-                  <input 
-                    type="tel" 
-                    value={form.ansprechpartnerTelefon}
+                  <input type="tel" value={form.ansprechpartnerTelefon}
                     onChange={(e) => setForm({...form, ansprechpartnerTelefon: e.target.value})}
-                    className="w-full bg-slate-700 border border-slate-600 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-orange-500"
-                    placeholder="z.B. 0171 12345678"
-                  />
+                    className="w-full bg-slate-700 border border-slate-600 rounded-lg px-4 py-2 text-white"
+                    placeholder="0171 12345678" />
                 </div>
                 <div>
                   <label className="block text-sm font-medium mb-2 text-slate-300">E-Mail</label>
-                  <input 
-                    type="email" 
-                    value={form.ansprechpartnerEmail}
+                  <input type="email" value={form.ansprechpartnerEmail}
                     onChange={(e) => setForm({...form, ansprechpartnerEmail: e.target.value})}
-                    className="w-full bg-slate-700 border border-slate-600 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-orange-500"
-                    placeholder="z.B. mueller@firma.de"
-                  />
+                    className="w-full bg-slate-700 border border-slate-600 rounded-lg px-4 py-2 text-white"
+                    placeholder="mueller@firma.de" />
                 </div>
               </div>
             </div>
@@ -155,38 +130,28 @@ export default function AufmassPage() {
           {/* Bauleiter */}
           <div className="border-b border-slate-700 pb-6">
             <h3 className="text-orange-400 text-xs font-bold uppercase tracking-wider mb-4">Bauleiter</h3>
-            
             <div className="space-y-4">
               <div>
                 <label className="block text-sm font-medium mb-2 text-slate-300">Name</label>
-                <input 
-                  type="text" 
-                  value={form.bauleiterName}
+                <input type="text" value={form.bauleiterName}
                   onChange={(e) => setForm({...form, bauleiterName: e.target.value})}
-                  className="w-full bg-slate-700 border border-slate-600 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-orange-500"
-                  placeholder="z.B. Herr Schmidt"
-                />
+                  className="w-full bg-slate-700 border border-slate-600 rounded-lg px-4 py-2 text-white"
+                  placeholder="z.B. Herr Schmidt" />
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium mb-2 text-slate-300">Telefon</label>
-                  <input 
-                    type="tel" 
-                    value={form.bauleiterTelefon}
+                  <input type="tel" value={form.bauleiterTelefon}
                     onChange={(e) => setForm({...form, bauleiterTelefon: e.target.value})}
-                    className="w-full bg-slate-700 border border-slate-600 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-orange-500"
-                    placeholder="z.B. 0152 98765432"
-                  />
+                    className="w-full bg-slate-700 border border-slate-600 rounded-lg px-4 py-2 text-white"
+                    placeholder="0152 98765432" />
                 </div>
                 <div>
                   <label className="block text-sm font-medium mb-2 text-slate-300">E-Mail</label>
-                  <input 
-                    type="email" 
-                    value={form.bauleiterEmail}
+                  <input type="email" value={form.bauleiterEmail}
                     onChange={(e) => setForm({...form, bauleiterEmail: e.target.value})}
-                    className="w-full bg-slate-700 border border-slate-600 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-orange-500"
-                    placeholder="z.B. schmidt@geruestbau.de"
-                  />
+                    className="w-full bg-slate-700 border border-slate-600 rounded-lg px-4 py-2 text-white"
+                    placeholder="schmidt@geruestbau.de" />
                 </div>
               </div>
             </div>
@@ -195,28 +160,20 @@ export default function AufmassPage() {
           {/* Termine */}
           <div className="border-b border-slate-700 pb-6">
             <h3 className="text-orange-400 text-xs font-bold uppercase tracking-wider mb-4">Termine</h3>
-            
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium mb-2 text-slate-300">Projektbeginn</label>
-                <input 
-                  type="date" 
-                  value={form.projektbeginn}
+                <input type="date" value={form.projektbeginn}
                   onChange={(e) => setForm({...form, projektbeginn: e.target.value})}
-                  className="w-full bg-slate-700 border border-slate-600 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-orange-500"
-                />
+                  className="w-full bg-slate-700 border border-slate-600 rounded-lg px-4 py-2 text-white" />
               </div>
               <div>
                 <label className="block text-sm font-medium mb-2 text-slate-300">Projektende</label>
-                <input 
-                  type="date" 
-                  value={form.projektende}
+                <input type="date" value={form.projektende}
                   onChange={(e) => setForm({...form, projektende: e.target.value})}
-                  className="w-full bg-slate-700 border border-slate-600 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-orange-500"
-                />
+                  className="w-full bg-slate-700 border border-slate-600 rounded-lg px-4 py-2 text-white" />
               </div>
             </div>
-            
             {getStandzeit() && (
               <div className="mt-3 bg-blue-900/30 border border-blue-500/50 rounded-lg p-3">
                 <div className="text-blue-400 text-sm">
@@ -224,16 +181,12 @@ export default function AufmassPage() {
                 </div>
               </div>
             )}
-
             <div className="mt-4">
               <label className="block text-sm font-medium mb-2 text-slate-300">Arbeitszeiten auf der Baustelle</label>
-              <input 
-                type="text" 
-                value={form.arbeitszeiten}
+              <input type="text" value={form.arbeitszeiten}
                 onChange={(e) => setForm({...form, arbeitszeiten: e.target.value})}
-                className="w-full bg-slate-700 border border-slate-600 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-orange-500"
-                placeholder="z.B. Mo–Fr 7:00–17:00"
-              />
+                className="w-full bg-slate-700 border border-slate-600 rounded-lg px-4 py-2 text-white"
+                placeholder="z.B. Mo–Fr 7:00–17:00" />
             </div>
           </div>
 
@@ -242,15 +195,8 @@ export default function AufmassPage() {
             <h3 className="text-orange-400 text-xs font-bold uppercase tracking-wider mb-4">Gewerke *</h3>
             <div className="grid grid-cols-2 gap-3">
               {gewerkListe.map(g => (
-                <button
-                  key={g}
-                  onClick={() => toggleGewerk(g)}
-                  className={`p-3 rounded-lg border text-left transition ${
-                    form.gewerke.includes(g)
-                      ? 'bg-orange-600/20 border-orange-500 text-orange-300'
-                      : 'bg-slate-700 border-slate-600 text-slate-300 hover:border-slate-500'
-                  }`}
-                >
+                <button key={g} onClick={() => toggleGewerk(g)}
+                  className={`p-3 rounded-lg border text-left transition ${form.gewerke.includes(g) ? 'bg-orange-600/20 border-orange-500 text-orange-300' : 'bg-slate-700 border-slate-600 text-slate-300'}`}>
                   {g}
                 </button>
               ))}
@@ -258,13 +204,10 @@ export default function AufmassPage() {
           </div>
 
           {/* Dauer */}
-          <div>
+          <div className="border-b border-slate-700 pb-6">
             <label className="block text-sm font-medium mb-2 text-slate-300">Projektdauer (Wochen)</label>
-            <select 
-              value={form.dauer}
-              onChange={(e) => setForm({...form, dauer: e.target.value})}
-              className="w-full bg-slate-700 border border-slate-600 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-orange-500"
-            >
+            <select value={form.dauer} onChange={(e) => setForm({...form, dauer: e.target.value})}
+              className="w-full bg-slate-700 border border-slate-600 rounded-lg px-4 py-2 text-white">
               <option value="1">1 Woche</option>
               <option value="2">2 Wochen</option>
               <option value="3">3 Wochen</option>
@@ -276,54 +219,54 @@ export default function AufmassPage() {
           </div>
 
           {/* Dokumentation */}
-          <div className="grid grid-cols-2 gap-3">
-            <button
-              onClick={() => setForm({...form, fotos: !form.fotos})}
-              className={`p-3 rounded-lg border text-left transition flex items-center gap-3 ${
-                form.fotos
-                  ? 'bg-orange-600/20 border-orange-500 text-orange-300'
-                  : 'bg-slate-700 border-slate-600 text-slate-300'
-              }`}
-            >
-              <span className="text-xl">📷</span>
-              <div>
-                <div className="font-semibold text-sm">Fotos</div>
-                <div className="text-xs opacity-70">Vorher/Nachher</div>
-              </div>
-            </button>
-            <button
-              onClick={() => setForm({...form, lidar: !form.lidar})}
-              className={`p-3 rounded-lg border text-left transition flex items-center gap-3 ${
-                form.lidar
-                  ? 'bg-orange-600/20 border-orange-500 text-orange-300'
-                  : 'bg-slate-700 border-slate-600 text-slate-300'
-              }`}
-            >
-              <span className="text-xl">📐</span>
-              <div>
-                <div className="font-semibold text-sm">LiDAR</div>
-                <div className="text-xs opacity-70">3D-Scan</div>
-              </div>
-            </button>
+          <div>
+            <h3 className="text-orange-400 text-xs font-bold uppercase tracking-wider mb-4">Digitale Erfassung</h3>
+            <div className="grid grid-cols-2 gap-3">
+              <button onClick={() => setForm({...form, fotos: !form.fotos})}
+                className={`p-3 rounded-lg border text-left transition flex items-center gap-3 ${form.fotos ? 'bg-orange-600/20 border-orange-500 text-orange-300' : 'bg-slate-700 border-slate-600'}`}>
+                <span className="text-xl">📷</span>
+                <div><div className="font-semibold text-sm">Fotos</div><div className="text-xs opacity-70">Vorher/Nachher</div></div>
+              </button>
+              <button onClick={() => setForm({...form, videos: !form.videos})}
+                className={`p-3 rounded-lg border text-left transition flex items-center gap-3 ${form.videos ? 'bg-orange-600/20 border-orange-500 text-orange-300' : 'bg-slate-700 border-slate-600'}`}>
+                <span className="text-xl">🎥</span>
+                <div><div className="font-semibold text-sm">Videos</div><div className="text-xs opacity-70">Dokumentation</div></div>
+              </button>
+              <button onClick={() => setForm({...form, lidar: !form.lidar})}
+                className={`p-3 rounded-lg border text-left transition flex items-center gap-3 ${form.lidar ? 'bg-orange-600/20 border-orange-500 text-orange-300' : 'bg-slate-700 border-slate-600'}`}>
+                <span className="text-xl">📐</span>
+                <div><div className="font-semibold text-sm">LiDAR</div><div className="text-xs opacity-70">3D-Scan</div></div>
+              </button>
+              <button onClick={() => setForm({...form, drohnen: !form.drohnen})}
+                className={`p-3 rounded-lg border text-left transition flex items-center gap-3 ${form.drohnen ? 'bg-orange-600/20 border-orange-500 text-orange-300' : 'bg-slate-700 border-slate-600'}`}>
+                <span className="text-xl">🚁</span>
+                <div><div className="font-semibold text-sm">Drohnen</div><div className="text-xs opacity-70">Luftaufnahmen</div></div>
+              </button>
+              <button onClick={() => setForm({...form, grundrisse: !form.grundrisse})}
+                className={`p-3 rounded-lg border text-left transition flex items-center gap-3 ${form.grundrisse ? 'bg-orange-600/20 border-orange-500 text-orange-300' : 'bg-slate-700 border-slate-600'}`}>
+                <span className="text-xl">📐</span>
+                <div><div className="font-semibold text-sm">Grundrisse</div><div className="text-xs opacity-70">Vorhanden</div></div>
+              </button>
+              <button onClick={() => setForm({...form, gps: !form.gps})}
+                className={`p-3 rounded-lg border text-left transition flex items-center gap-3 ${form.gps ? 'bg-orange-600/20 border-orange-500 text-orange-300' : 'bg-slate-700 border-slate-600'}`}>
+                <span className="text-xl">📍</span>
+                <div><div className="font-semibold text-sm">GPS Position</div><div className="text-xs opacity-70">Koordinaten</div></div>
+              </button>
+            </div>
           </div>
 
-          {/* Lastklasse */}
           {form.gewerke.length > 0 && (
             <div className="bg-green-900/30 border border-green-500/50 rounded-lg p-4">
               <div className="flex items-center gap-2 text-green-400 font-semibold">
                 <span>✅</span>
                 <span>Lastklasse {getLastklasse()} (DIN EN 12811-1)</span>
               </div>
-              <p className="text-green-300/70 text-sm mt-1">
-                Automatisch basierend auf Gewerken berechnet
-              </p>
+              <p className="text-green-300/70 text-sm mt-1">Automatisch basierend auf Gewerken berechnet</p>
             </div>
           )}
 
-          <button 
-            onClick={handleWeiter}
-            className="w-full bg-orange-600 hover:bg-orange-700 text-white font-semibold py-3 px-4 rounded-lg transition"
-          >
+          <button onClick={handleWeiter}
+            className="w-full bg-orange-600 hover:bg-orange-700 text-white font-semibold py-3 px-4 rounded-lg transition">
             Weiter →
           </button>
 

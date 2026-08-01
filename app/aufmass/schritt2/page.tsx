@@ -17,6 +17,8 @@ export default function Schritt2Page() {
     fassade: '',
     garagen: false,
     fluchtwege: false,
+    werbeanlagen: false,
+    hauseingaenge: '',
     hindernisse: [] as string[],
     durchfahrt: false,
   });
@@ -69,39 +71,37 @@ export default function Schritt2Page() {
 
         <div className="bg-slate-800 rounded-xl p-6 space-y-6">
 
-          {/* Abmessungen */}
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium mb-2 text-slate-300">Länge (m) *</label>
               <input type="number" value={form.laenge}
-                onChange={e => setForm({...form, laenge: e.target.value})}
+                onChange={(e) => setForm({...form, laenge: e.target.value})}
                 className="w-full bg-slate-700 border border-slate-600 rounded-lg px-4 py-2 text-white"
                 placeholder="z.B. 18" />
             </div>
             <div>
               <label className="block text-sm font-medium mb-2 text-slate-300">Höhe (m) *</label>
               <input type="number" value={form.hoehe}
-                onChange={e => setForm({...form, hoehe: e.target.value})}
+                onChange={(e) => setForm({...form, hoehe: e.target.value})}
                 className="w-full bg-slate-700 border border-slate-600 rounded-lg px-4 py-2 text-white"
                 placeholder="z.B. 10" />
             </div>
             <div>
               <label className="block text-sm font-medium mb-2 text-slate-300">Breite (m)</label>
               <input type="number" value={form.breite}
-                onChange={e => setForm({...form, breite: e.target.value})}
+                onChange={(e) => setForm({...form, breite: e.target.value})}
                 className="w-full bg-slate-700 border border-slate-600 rounded-lg px-4 py-2 text-white"
                 placeholder="z.B. 8" />
             </div>
             <div>
               <label className="block text-sm font-medium mb-2 text-slate-300">Traufhöhe (m)</label>
               <input type="number" value={form.traufhoehe}
-                onChange={e => setForm({...form, traufhoehe: e.target.value})}
+                onChange={(e) => setForm({...form, traufhoehe: e.target.value})}
                 className="w-full bg-slate-700 border border-slate-600 rounded-lg px-4 py-2 text-white"
                 placeholder="z.B. 8.5" />
             </div>
           </div>
 
-          {/* Dachform */}
           <div>
             <label className="block text-sm font-medium mb-3 text-slate-300">Dachform</label>
             <div className="grid grid-cols-3 gap-3">
@@ -114,16 +114,14 @@ export default function Schritt2Page() {
             </div>
           </div>
 
-          {/* Dachüberstand */}
           <div>
             <label className="block text-sm font-medium mb-2 text-slate-300">Dachüberstand (m)</label>
             <input type="number" value={form.dachueberstand}
-              onChange={e => setForm({...form, dachueberstand: e.target.value})}
+              onChange={(e) => setForm({...form, dachueberstand: e.target.value})}
               className="w-full bg-slate-700 border border-slate-600 rounded-lg px-4 py-2 text-white"
               placeholder="z.B. 0.5" />
           </div>
 
-          {/* Fassadenmaterial */}
           <div>
             <label className="block text-sm font-medium mb-3 text-slate-300">Fassadenmaterial</label>
             <div className="grid grid-cols-2 gap-3">
@@ -136,7 +134,6 @@ export default function Schritt2Page() {
             </div>
           </div>
 
-          {/* Hindernisse */}
           <div>
             <label className="block text-sm font-medium mb-3 text-slate-300">Hindernisse an der Fassade</label>
             <div className="grid grid-cols-2 gap-3">
@@ -149,7 +146,6 @@ export default function Schritt2Page() {
             </div>
           </div>
 
-          {/* Toggle-Optionen */}
           <div className="space-y-3">
             <button onClick={() => setForm({...form, garagen: !form.garagen})}
               className={`w-full p-3 rounded-lg border text-left transition flex items-center gap-3 ${form.garagen ? 'bg-orange-600/20 border-orange-500 text-orange-300' : 'bg-slate-700 border-slate-600'}`}>
@@ -163,6 +159,12 @@ export default function Schritt2Page() {
               <div><div className="font-semibold text-sm">Fluchtwege beachten</div></div>
             </button>
 
+            <button onClick={() => setForm({...form, werbeanlagen: !form.werbeanlagen})}
+              className={`w-full p-3 rounded-lg border text-left transition flex items-center gap-3 ${form.werbeanlagen ? 'bg-orange-600/20 border-orange-500 text-orange-300' : 'bg-slate-700 border-slate-600'}`}>
+              <span className="text-xl">📢</span>
+              <div><div className="font-semibold text-sm">Werbeanlagen vorhanden</div><div className="text-xs opacity-70">Müssen berücksichtigt werden</div></div>
+            </button>
+
             <button onClick={() => setForm({...form, durchfahrt: !form.durchfahrt})}
               className={`w-full p-3 rounded-lg border text-left transition flex items-center gap-3 ${form.durchfahrt ? 'bg-orange-600/20 border-orange-500 text-orange-300' : 'bg-slate-700 border-slate-600'}`}>
               <span className="text-xl">🛣️</span>
@@ -170,7 +172,14 @@ export default function Schritt2Page() {
             </button>
           </div>
 
-          {/* Buttons */}
+          <div>
+            <label className="block text-sm font-medium mb-2 text-slate-300">Anzahl Hauseingänge</label>
+            <input type="number" value={form.hauseingaenge}
+              onChange={(e) => setForm({...form, hauseingaenge: e.target.value})}
+              className="w-full bg-slate-700 border border-slate-600 rounded-lg px-4 py-2 text-white"
+              placeholder="z.B. 2" />
+          </div>
+
           <div className="flex gap-3 pt-4">
             <button onClick={zurueck} className="flex-1 bg-slate-700 hover:bg-slate-600 text-white font-semibold py-3 px-4 rounded-lg">← Zurück</button>
             <button onClick={handleWeiter} className="flex-1 bg-orange-600 hover:bg-orange-700 text-white font-semibold py-3 px-4 rounded-lg">Weiter →</button>
