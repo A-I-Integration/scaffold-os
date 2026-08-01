@@ -27,7 +27,6 @@ export default function Schritt6Page() {
 
     const { error } = await supabase.from('projects').insert({
       name: s1.name || 'Unbenannt',
-      adresse: s1.adresse || '',
       data: { s1, s2, s3, s4, s5 },
     });
 
@@ -52,7 +51,6 @@ export default function Schritt6Page() {
 
   const geruestTypen: any = { fassade: 'Fassadengerüst', fahr: 'Fahrgerüst', trag: 'Traggerüst', dach: 'Dachgerüst', raum: 'Raumgerüst', haenge: 'Hängegerüst' };
   const belagTypen: any = { holz: 'Holzbelag', alu: 'Alu-Belag', stahl: 'Stahlroste', gitter: 'Gitterträger' };
-  const untergruende: any = { beton: 'Beton / Estrich', asphalt: 'Asphalt', pflaster: 'Pflaster', erdreich: 'Erdreich / Rasen', schotter: 'Schotter', kies: 'Kies' };
 
   return (
     <div className="min-h-screen bg-slate-900 text-white p-6">
@@ -62,7 +60,6 @@ export default function Schritt6Page() {
 
         <div className="space-y-4">
 
-          {/* Schritt 1 */}
           <div className="bg-slate-800 rounded-xl p-5">
             <div className="text-orange-400 text-xs font-bold uppercase tracking-wider mb-2">Schritt 1 – Projektdaten</div>
             <div className="grid grid-cols-2 gap-2 text-sm">
@@ -73,7 +70,6 @@ export default function Schritt6Page() {
             </div>
           </div>
 
-          {/* Schritt 2 */}
           <div className="bg-slate-800 rounded-xl p-5">
             <div className="text-orange-400 text-xs font-bold uppercase tracking-wider mb-2">Schritt 2 – Gebäude & Abmessungen</div>
             <div className="grid grid-cols-2 gap-2 text-sm">
@@ -85,13 +81,9 @@ export default function Schritt6Page() {
               <div><span className="text-slate-400">Dachüberstand:</span> {s2.dachueberstand || '–'} m</div>
               <div className="col-span-2"><span className="text-slate-400">Fassade:</span> {s2.fassade || '–'}</div>
               <div className="col-span-2"><span className="text-slate-400">Hindernisse:</span> {s2.hindernisse?.join(', ') || 'Keine'}</div>
-              <div><span className="text-slate-400">Garagen:</span> {s2.garagen ? 'Ja' : 'Nein'}</div>
-              <div><span className="text-slate-400">Fluchtwege:</span> {s2.fluchtwege ? 'Ja' : 'Nein'}</div>
-              <div><span className="text-slate-400">Durchfahrt:</span> {s2.durchfahrt ? 'Ja' : 'Nein'}</div>
             </div>
           </div>
 
-          {/* Schritt 3 */}
           <div className="bg-slate-800 rounded-xl p-5">
             <div className="text-orange-400 text-xs font-bold uppercase tracking-wider mb-2">Schritt 3 – Gerüsttyp & Aufbau</div>
             <div className="grid grid-cols-2 gap-2 text-sm">
@@ -99,40 +91,27 @@ export default function Schritt6Page() {
               <div><span className="text-slate-400">Feldlänge:</span> {s3.feldlange} m</div>
               <div><span className="text-slate-400">Belag:</span> {belagTypen[s3.belag] || '–'}</div>
               <div><span className="text-slate-400">Boden:</span> {s3.boden}</div>
-              <div className="col-span-2"><span className="text-slate-400">Optionen:</span> {[
-                s3.gelander && 'Geländer', s3.diagonale && 'Diagonale', s3.fahrbar && 'Fahrbar'
-              ].filter(Boolean).join(', ') || '–'}</div>
             </div>
           </div>
 
-          {/* Schritt 4 */}
           <div className="bg-slate-800 rounded-xl p-5">
             <div className="text-orange-400 text-xs font-bold uppercase tracking-wider mb-2">Schritt 4 – Sicherheit & Umgebung</div>
             <div className="grid grid-cols-2 gap-2 text-sm">
               <div><span className="text-slate-400">Ankerung:</span> {s4.ankerung}</div>
-              <div><span className="text-slate-400">Ankerabstand:</span> {s4.ankerAbstand} m</div>
               <div><span className="text-slate-400">Windzone:</span> {s4.windzone}</div>
-              <div><span className="text-slate-400">Untergrund:</span> {untergruende[s4.untergrund] || s4.untergrund}</div>
-              <div><span className="text-slate-400">Tragfähigkeit:</span> {s4.tragfaehigkeit}</div>
               <div className="col-span-2"><span className="text-slate-400">Gefahren:</span> {s4.gefahren?.join(', ') || 'Keine'}</div>
-              {s4.notiz && <div className="col-span-2 text-slate-300 italic">„{s4.notiz}"</div>}
             </div>
           </div>
 
-          {/* Schritt 5 */}
           <div className="bg-slate-800 rounded-xl p-5">
             <div className="text-orange-400 text-xs font-bold uppercase tracking-wider mb-2">Schritt 5 – Material & Termine</div>
             <div className="grid grid-cols-2 gap-2 text-sm">
               <div><span className="text-slate-400">Bühnen:</span> {s5.arbeitsbuehnen || '–'} Stk</div>
               <div><span className="text-slate-400">Rahmen:</span> {s5.rahmen || '–'} Stk</div>
-              <div><span className="text-slate-400">Diagonalen:</span> {s5.diagonale || '–'} Stk</div>
-              <div><span className="text-slate-400">Treppen:</span> {s5.spindeltreppe || '–'} Stk</div>
               <div><span className="text-slate-400">Lieferung:</span> {s5.liefertermin || '–'}</div>
-              <div><span className="text-slate-400">Abholung:</span> {s5.abholtermin || '–'}</div>
             </div>
           </div>
 
-          {/* Buttons */}
           <button 
             onClick={speichern}
             className="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-4 rounded-lg transition"
@@ -142,9 +121,7 @@ export default function Schritt6Page() {
 
           <div className="flex gap-3 pt-2">
             <button onClick={() => router.push('/aufmass/schritt5')} className="flex-1 bg-slate-700 hover:bg-slate-600 text-white font-semibold py-3 px-4 rounded-lg">← Zurück</button>
-            <button onClick={() => router.push('/planung')} className="flex-1 bg-purple-600 hover:bg-purple-700 text-white font-semibold py-3 px-4 rounded-lg">
-              🤖 KI-Planung
-            </button>
+            <button onClick={() => router.push('/planung')} className="flex-1 bg-purple-600 hover:bg-purple-700 text-white font-semibold py-3 px-4 rounded-lg">🤖 KI-Planung</button>
           </div>
 
           <button onClick={() => router.push('/stueckliste')} className="w-full bg-orange-600 hover:bg-orange-700 text-white font-semibold py-3 px-4 rounded-lg">

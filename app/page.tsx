@@ -91,7 +91,9 @@ export default function HomePage() {
             <div key={p.id} className="bg-slate-800 rounded-xl p-5 border border-slate-700 hover:border-orange-500/50 transition flex justify-between items-center">
               <div className="flex-1">
                 <div className="text-lg font-semibold text-white">{p.name}</div>
-                <div className="text-slate-400 text-sm">{p.adresse}</div>
+                <div className="text-slate-400 text-sm">
+                  {p.data?.s1?.adresse || 'Keine Adresse'}
+                </div>
                 <div className="text-slate-500 text-xs mt-1">
                   {new Date(p.created_at).toLocaleDateString('de-DE')}
                 </div>
