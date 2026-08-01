@@ -1,144 +1,170 @@
-import Image from 'next/image';
+'use client';
 
-export default function HomePage() {
+import { useState } from 'react';
+import { useRouter } from 'next/navigation';
+
+export default function AufmassPage() {
+  const router = useRouter();
+
+  const [form, setForm] = useState({
+    name: '',
+    adresse: '',
+    gewerke: [] as string[],
+    dauer: '4',
+    fotos: false,
+    lidar: false,
+  });
+
+  const gewerkListe = ['Maler', 'WDVS/Fassade', 'Fenster', 'Dach', 'Putz', 'Sonstiges'];
+
+  function toggleGewerk(g: string) {
+    setForm(prev => ({
+      ...prev,
+      gewerke: prev.gewerke.includes(g)
+        ? prev.gewerke.filter(x => x !== g)
+        : [...prev.gewerke, g]
+    }));
+  }
+
+  function getLastklasse() {
+    const gewerke = form.gewerke;
+    if (gewerke.includes('WDVS/Fassade') || gewerke.includes('Putz')) return 'LK 3';
+    if (gewerke.includes('Maler')) return 'LK 2';
+    if (gewerke.includes('Dach')) return 'LK 4';
+    return 'LK 2';
+  }
+
+  function handleWeiter() {
+    if (!form.name.trim() || !form.adresse.trim()) {
+      alert('Bitte fülle Name und Adresse aus!');
+      return;
+    }
+    if (form.gewerke.length === 0) {
+      alert('Bitte wähle mindestens ein Gewerk aus!');
+      return;
+    }
+    localStorage.setItem('scaffold_step1', JSON.stringify(form));
+    router.push('/aufmass/schritt2');
+  }
+
   return (
-    <div className="min-h-screen bg-slate-900 text-white">
-      
-      {/* Navigation */}
-      <nav className="border-b border-slate-800">
-        <div className="max-w-6xl mx-auto px-6 py-4 flex justify-between items-center">
-          <div className="flex items-center gap-2">
-            <span className="text-2xl">🏗️</span>
-            <span className="text-xl font-bold tracking-tight">SCAFFOLD<span className="text-orange-500">OS</span></span>
+    <div className="min-h-screen bg-slate-900 text-white p-6">
+      <div className="max-w-2xl mx-auto">
+        <h1 className="text-3xl font-bold mb-2">📋 Aufmaß – Schritt 1</h1>
+        <p className="text-slate-400 mb-8">Projektdaten & Gewerke</p>
+
+        <div className="bg-slate-800 rounded-xl p-6 space-y-6">
+
+          <div>
+            <label className="block text-sm font-medium mb-2 text-slate-300">Projektname / Kunde *</label>
+            <input 
+              type="text" 
+              value={form.name}
+              onChange={(e) => setForm({...form, name: e.target.value})}
+              className="w-full bg-slate-700 border border-slate-600 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-orange-500"
+              placeholder="z.B. Merola"
+            />
           </div>
-          <a 
-            href="/aufmass"
-            className="bg-orange-600 hover:bg-orange-700 text-white font-semibold px-5 py-2 rounded-lg text-sm transition"
-          >
-            Jetzt starten
-          </a>
-        </div>
-      </nav>
 
-      {/* Hero */}
-      <section className="max-w-6xl mx-auto px-6 pt-20 pb-16 text-center">
-        <div className="inline-flex items-center gap-2 bg-orange-500/10 border border-orange-500/30 rounded-full px-4 py-1.5 mb-6">
-          <span className="text-orange-400 text-xs font-semibold uppercase tracking-wider">Made for Gerüstbauer</span>
-        </div>
-        <h1 className="text-5xl md:text-6xl font-bold mb-6 leading-tight">
-          Digitales Aufmaß.<br />
-          <span className="text-orange-500">KI-gestützte Planung.</span>
-        </h1>
-        <p className="text-slate-400 text-lg md:text-xl max-w-2xl mx-auto mb-10">
-          Erstelle in Minuten ein komplettes Gerüstkonzept mit automatischer Stückliste, 
-          DIN-konformer Prüfung und professionellem PDF-Export.
-        </p>
-        <a 
-          href="/aufmass"
-          className="bg-orange-600 hover:bg-orange-700 text-white font-bold py-4 px-8 rounded-xl text-lg transition shadow-lg shadow-orange-600/20 inline-block"
-        >
-          🚀 Kostenlos starten
-        </a>
-      </section>
+          <div>
+            <label className="block text-sm font-medium mb-2 text-slate-300">Baustellenadresse *</label>
+            <input 
+              type="text" 
+              value={form.adresse}
+              onChange={(e) => setForm({...form, adresse: e.target.value})}
+              className="w-full bg-slate-700 border border-slate-600 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-orange-500"
+              placeholder="z.B. Bänkstegge 14"
+            />
+          </div>
 
-      {/* Stats */}
-      <section className="max-w-5xl mx-auto px-6 pb-20">
-        <div className="bg-slate-800 rounded-2xl border border-slate-700 p-8 md:p-12">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-8 text-center">
-            <div>
-              <div className="text-3xl font-bold text-orange-400 mb-1">6</div>
-              <div className="text-slate-400 text-sm">Schritte im Wizard</div>
-            </div>
-            <div>
-              <div className="text-3xl font-bold text-orange-400 mb-1">14</div>
-              <div className="text-slate-400 text-sm">KI-Entscheidungen</div>
-            </div>
-            <div>
-              <div className="text-3xl font-bold text-orange-400 mb-1">100%</div>
-              <div className="text-slate-400 text-sm">DIN EN 12811</div>
-            </div>
-            <div>
-              <div className="text-3xl font-bold text-orange-400 mb-1">PDF</div>
-              <div className="text-slate-400 text-sm">Export sofort</div>
+          <div>
+            <label className="block text-sm font-medium mb-3 text-slate-300">Gewerke *</label>
+            <div className="grid grid-cols-2 gap-3">
+              {gewerkListe.map(g => (
+                <button
+                  key={g}
+                  onClick={() => toggleGewerk(g)}
+                  className={`p-3 rounded-lg border text-left transition ${
+                    form.gewerke.includes(g)
+                      ? 'bg-orange-600/20 border-orange-500 text-orange-300'
+                      : 'bg-slate-700 border-slate-600 text-slate-300 hover:border-slate-500'
+                  }`}
+                >
+                  {g}
+                </button>
+              ))}
             </div>
           </div>
-        </div>
-      </section>
 
-      {/* Features */}
-      <section className="bg-slate-800/50 py-20">
-        <div className="max-w-6xl mx-auto px-6">
-          <div className="text-center mb-16">
-            <h2 className="text-3xl md:text-4xl font-bold mb-4">Alles, was du brauchst</h2>
-            <p className="text-slate-400">Spezialisiert auf den Gerüstbau</p>
-          </div>
-          <div className="grid md:grid-cols-3 gap-6">
-            {[
-              { icon: '📋', title: 'Digitales Aufmaß', desc: 'Schritt für Schritt durch die Baustellenaufnahme. Keine Information wird vergessen.' },
-              { icon: '🤖', title: 'KI Gerüstplanung', desc: 'Automatische Planung nach DIN EN 12811. Jede Entscheidung wird begründet.' },
-              { icon: '📦', title: 'Stückliste', desc: 'Automatische Materialberechnung mit Gewicht, Ladevolumen und Fahrzeugempfehlung.' },
-              { icon: '📄', title: 'PDF Export', desc: 'Professionelle PDF-Dokumentation zum Versenden an Lieferanten und Kunden.' },
-              { icon: '⚖️', title: 'Lastklassen', desc: 'Automatische Ermittlung der richtigen Lastklasse nach DIN EN 12811-1.' },
-              { icon: '🛡️', title: 'Sicherheit', desc: 'Prüfung von Windzonen, Ankerung, Schutzdächern und Genehmigungen.' },
-            ].map((f, i) => (
-              <div key={i} className="bg-slate-800 rounded-xl p-6 border border-slate-700 hover:border-orange-500/50 transition">
-                <div className="text-3xl mb-4">{f.icon}</div>
-                <h3 className="text-lg font-bold mb-2">{f.title}</h3>
-                <p className="text-slate-400 text-sm leading-relaxed">{f.desc}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* CTA */}
-      <section className="py-20">
-        <div className="max-w-4xl mx-auto px-6 text-center">
-          <div className="bg-gradient-to-r from-orange-600 to-orange-700 rounded-2xl p-10 md:p-16">
-            <h2 className="text-3xl md:text-4xl font-bold mb-4">Bereit für dein nächstes Projekt?</h2>
-            <p className="text-orange-100 mb-8 text-lg">
-              Erstelle jetzt dein erstes digitales Aufmaß – kostenlos und ohne Anmeldung.
-            </p>
-            <a 
-              href="/aufmass"
-              className="bg-white text-orange-700 hover:bg-orange-50 font-bold py-4 px-10 rounded-xl text-lg transition shadow-xl inline-block"
+          <div>
+            <label className="block text-sm font-medium mb-2 text-slate-300">Projektdauer (Wochen)</label>
+            <select 
+              value={form.dauer}
+              onChange={(e) => setForm({...form, dauer: e.target.value})}
+              className="w-full bg-slate-700 border border-slate-600 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-orange-500"
             >
-              🚀 Jetzt starten
-            </a>
+              <option value="1">1 Woche</option>
+              <option value="2">2 Wochen</option>
+              <option value="3">3 Wochen</option>
+              <option value="4">4 Wochen</option>
+              <option value="6">6 Wochen</option>
+              <option value="8">8 Wochen</option>
+              <option value="12">12 Wochen</option>
+            </select>
           </div>
-        </div>
-      </section>
 
-      {/* Footer */}
-      <footer className="border-t border-slate-800 py-10">
-        <div className="max-w-6xl mx-auto px-6">
-          <div className="flex flex-col md:flex-row justify-between items-center gap-6">
-            
-            <div className="flex items-center gap-2">
-              <span className="text-xl">🏗️</span>
-              <span className="font-bold">SCAFFOLD<span className="text-orange-500">OS</span></span>
-            </div>
-
-            <div className="flex items-center gap-3 bg-slate-800/50 rounded-full px-5 py-2 border border-slate-700">
-              <span className="text-slate-400 text-sm">Powered by</span>
-              <div className="flex items-center gap-2">
-                <Image 
-                  src="/logo-ai.png" 
-                  alt="AI Integration" 
-                  width={32} 
-                  height={32} 
-                  className="rounded-full"
-                />
-                <span className="text-white font-semibold text-sm">AI Integration</span>
+          <div className="grid grid-cols-2 gap-3">
+            <button
+              onClick={() => setForm({...form, fotos: !form.fotos})}
+              className={`p-3 rounded-lg border text-left transition flex items-center gap-3 ${
+                form.fotos
+                  ? 'bg-orange-600/20 border-orange-500 text-orange-300'
+                  : 'bg-slate-700 border-slate-600 text-slate-300'
+              }`}
+            >
+              <span className="text-xl">📷</span>
+              <div>
+                <div className="font-semibold text-sm">Fotos</div>
+                <div className="text-xs opacity-70">Vorher/Nachher</div>
               </div>
-            </div>
-
-            <div className="text-slate-500 text-sm">
-              © 2026 Scaffold OS
-            </div>
+            </button>
+            <button
+              onClick={() => setForm({...form, lidar: !form.lidar})}
+              className={`p-3 rounded-lg border text-left transition flex items-center gap-3 ${
+                form.lidar
+                  ? 'bg-orange-600/20 border-orange-500 text-orange-300'
+                  : 'bg-slate-700 border-slate-600 text-slate-300'
+              }`}
+            >
+              <span className="text-xl">📐</span>
+              <div>
+                <div className="font-semibold text-sm">LiDAR</div>
+                <div className="text-xs opacity-70">3D-Scan</div>
+              </div>
+            </button>
           </div>
+
+          {form.gewerke.length > 0 && (
+            <div className="bg-green-900/30 border border-green-500/50 rounded-lg p-4">
+              <div className="flex items-center gap-2 text-green-400 font-semibold">
+                <span>✅</span>
+                <span>Lastklasse {getLastklasse()} (DIN EN 12811-1)</span>
+              </div>
+              <p className="text-green-300/70 text-sm mt-1">
+                Automatisch basierend auf Gewerken berechnet
+              </p>
+            </div>
+          )}
+
+          <button 
+            onClick={handleWeiter}
+            className="w-full bg-orange-600 hover:bg-orange-700 text-white font-semibold py-3 px-4 rounded-lg transition"
+          >
+            Weiter →
+          </button>
+
         </div>
-      </footer>
+      </div>
     </div>
   );
 }

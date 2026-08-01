@@ -1,189 +1,113 @@
-'use client';
-
-import { useState } from 'react';
-
-export default function AufmassPage() {
-  const [form, setForm] = useState({
-    name: '',
-    adresse: '',
-    gewerke: [] as string[],
-    dauer: '4',
-    fotos: false,
-    lidar: false,
-  });
-
-  const [gespeichert, setGespeichert] = useState(false);
-
-  const gewerkListe = [
-    { id: 'maler', label: 'Maler', lastklasse: 2 },
-    { id: 'dachdecker', label: 'Dachdecker', lastklasse: 3 },
-    { id: 'maurer', label: 'Maurer', lastklasse: 4 },
-    { id: 'wdvs', label: 'WDVS / Fassade', lastklasse: 3 },
-    { id: 'naturstein', label: 'Naturstein', lastklasse: 5 },
-  ];
-
-  function toggleGewerk(id: string) {
-    setForm(prev => ({
-      ...prev,
-      gewerke: prev.gewerke.includes(id)
-        ? prev.gewerke.filter(g => g !== id)
-        : [...prev.gewerke, id]
-    }));
-    setGespeichert(false);
-  }
-
-  function handleWeiter() {
-    if (!form.name.trim() || !form.adresse.trim()) {
-      alert('Bitte fülle Name und Adresse aus!');
-      return;
-    }
-    if (form.gewerke.length === 0) {
-      alert('Bitte wähle mindestens ein Gewerk aus!');
-      return;
-    }
-    setGespeichert(true);
-  }
-
-  const maxLastklasse = Math.max(
-    ...form.gewerke.map(g => gewerkListe.find(gl => gl.id === g)?.lastklasse || 0)
-  );
-
+export default function HomePage() {
   return (
-    <div className="min-h-screen bg-slate-900 text-white p-6">
-      <div className="max-w-2xl mx-auto">
-        <h1 className="text-3xl font-bold mb-2">📏 Digitales Aufmaß</h1>
-        <p className="text-slate-400 mb-8">Baustelle: Schritt 1 von 6</p>
+    <div className="min-h-screen bg-slate-900 text-white">
 
-        <div className="bg-slate-800 rounded-xl p-6 space-y-6">
-          
-          {/* Name */}
-          <div>
-            <label className="block text-sm font-medium mb-2 text-slate-300">Name des Ansprechpartners *</label>
-            <input 
-              type="text" 
-              value={form.name}
-              onChange={(e) => { setForm({...form, name: e.target.value}); setGespeichert(false); }}
-              className="w-full bg-slate-700 border border-slate-600 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-orange-500"
-              placeholder="z.B. Herr Müller"
-            />
+      <nav className="border-b border-slate-800">
+        <div className="max-w-6xl mx-auto px-6 py-4 flex justify-between items-center">
+          <div className="flex items-center gap-2">
+            <span className="text-2xl">🏗️</span>
+            <span className="text-xl font-bold tracking-tight">SCAFFOLD<span className="text-orange-500">OS</span></span>
           </div>
-
-          {/* Adresse */}
-          <div>
-            <label className="block text-sm font-medium mb-2 text-slate-300">Adresse der Baustelle *</label>
-            <input 
-              type="text" 
-              value={form.adresse}
-              onChange={(e) => { setForm({...form, adresse: e.target.value}); setGespeichert(false); }}
-              className="w-full bg-slate-700 border border-slate-600 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-orange-500"
-              placeholder="z.B. Lindenstraße 12, 10115 Berlin"
-            />
-          </div>
-
-          {/* Gewerke */}
-          <div>
-            <label className="block text-sm font-medium mb-3 text-slate-300">Gewerke auf dem Gerüst *</label>
-            <div className="grid grid-cols-2 gap-3">
-              {gewerkListe.map(g => (
-                <button
-                  key={g.id}
-                  onClick={() => toggleGewerk(g.id)}
-                  className={`p-3 rounded-lg border text-left transition ${
-                    form.gewerke.includes(g.id)
-                      ? 'bg-orange-600/20 border-orange-500 text-orange-300'
-                      : 'bg-slate-700 border-slate-600 text-slate-300 hover:border-slate-500'
-                  }`}
-                >
-                  <div className="font-semibold text-sm">{g.label}</div>
-                  <div className="text-xs opacity-70">LK {g.lastklasse}</div>
-                </button>
-              ))}
-            </div>
-            {form.gewerke.length > 0 && (
-              <div className="mt-2 text-sm text-orange-400">
-                Mindest-Lastklasse: <strong>LK {maxLastklasse}</strong> (DIN EN 12811-1)
-              </div>
-            )}
-          </div>
-
-          {/* Dauer */}
-          <div>
-            <label className="block text-sm font-medium mb-2 text-slate-300">Nutzungsdauer (Wochen)</label>
-            <select
-              value={form.dauer}
-              onChange={(e) => { setForm({...form, dauer: e.target.value}); setGespeichert(false); }}
-              className="w-full bg-slate-700 border border-slate-600 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-orange-500"
-            >
-              <option value="1">1 Woche</option>
-              <option value="2">2 Wochen</option>
-              <option value="4">4 Wochen</option>
-              <option value="8">8 Wochen</option>
-              <option value="12">12 Wochen</option>
-              <option value="24">24+ Wochen</option>
-            </select>
-          </div>
-
-          {/* Dokumentation */}
-          <div>
-            <label className="block text-sm font-medium mb-3 text-slate-300">Dokumentation</label>
-            <div className="space-y-2">
-              <button
-                onClick={() => setForm({...form, fotos: !form.fotos})}
-                className={`w-full p-3 rounded-lg border text-left transition flex items-center gap-3 ${
-                  form.fotos
-                    ? 'bg-green-600/20 border-green-500 text-green-300'
-                    : 'bg-slate-700 border-slate-600 text-slate-300'
-                }`}
-              >
-                <span className="text-xl">📷</span>
-                <div>
-                  <div className="font-semibold text-sm">Fotos aufgenommen</div>
-                  <div className="text-xs opacity-70">Mindestens 4 Perspektiven</div>
-                </div>
-              </button>
-              <button
-                onClick={() => setForm({...form, lidar: !form.lidar})}
-                className={`w-full p-3 rounded-lg border text-left transition flex items-center gap-3 ${
-                  form.lidar
-                    ? 'bg-green-600/20 border-green-500 text-green-300'
-                    : 'bg-slate-700 border-slate-600 text-slate-300'
-                }`}
-              >
-                <span className="text-xl">📡</span>
-                <div>
-                  <div className="font-semibold text-sm">LiDAR Scan vorhanden</div>
-                  <div className="text-xs opacity-70">iPad Pro / iPhone Pro</div>
-                </div>
-              </button>
-            </div>
-          </div>
-
-          {/* Ergebnis */}
-          {gespeichert && (
-            <div className="p-4 bg-green-900/30 border border-green-600 rounded-lg">
-              <div className="text-green-400 font-semibold mb-2">✅ Schritt 1 gespeichert</div>
-              <div className="text-sm text-slate-300 space-y-1">
-                <div>Ansprechpartner: <strong>{form.name}</strong></div>
-                <div>Adresse: <strong>{form.adresse}</strong></div>
-                <div>Gewerke: <strong>{form.gewerke.map(g => gewerkListe.find(gl => gl.id === g)?.label).join(', ')}</strong></div>
-                <div>Lastklasse: <strong>LK {maxLastklasse}</strong></div>
-                <div>Dauer: <strong>{form.dauer} Wochen</strong></div>
-                <div>Fotos: <strong>{form.fotos ? 'Ja' : 'Nein'}</strong></div>
-                <div>LiDAR: <strong>{form.lidar ? 'Ja' : 'Nein'}</strong></div>
-              </div>
-            </div>
-          )}
-
-          {/* Button */}
-          <button 
-            onClick={handleWeiter}
-            className="w-full bg-orange-600 hover:bg-orange-700 text-white font-semibold py-3 px-4 rounded-lg transition"
-          >
-            Weiter →
-          </button>
-
+          <a href="/aufmass" className="bg-orange-600 hover:bg-orange-700 text-white font-semibold px-5 py-2 rounded-lg text-sm transition">
+            Jetzt starten
+          </a>
         </div>
-      </div>
+      </nav>
+
+      <section className="max-w-6xl mx-auto px-6 pt-20 pb-16 text-center">
+        <div className="inline-flex items-center gap-2 bg-orange-500/10 border border-orange-500/30 rounded-full px-4 py-1.5 mb-6">
+          <span className="text-orange-400 text-xs font-semibold uppercase tracking-wider">Made for Gerüstbauer</span>
+        </div>
+        <h1 className="text-5xl md:text-6xl font-bold mb-6 leading-tight">
+          Digitales Aufmaß.<br />
+          <span className="text-orange-500">KI-gestützte Planung.</span>
+        </h1>
+        <p className="text-slate-400 text-lg md:text-xl max-w-2xl mx-auto mb-10">
+          Erstelle in Minuten ein komplettes Gerüstkonzept mit automatischer Stückliste, DIN-konformer Prüfung und professionellem PDF-Export.
+        </p>
+        <a href="/aufmass" className="bg-orange-600 hover:bg-orange-700 text-white font-bold py-4 px-8 rounded-xl text-lg transition shadow-lg shadow-orange-600/20 inline-block">
+          🚀 Kostenlos starten
+        </a>
+      </section>
+
+      <section className="max-w-5xl mx-auto px-6 pb-20">
+        <div className="bg-slate-800 rounded-2xl border border-slate-700 p-8 md:p-12">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-8 text-center">
+            <div>
+              <div className="text-3xl font-bold text-orange-400 mb-1">6</div>
+              <div className="text-slate-400 text-sm">Schritte im Wizard</div>
+            </div>
+            <div>
+              <div className="text-3xl font-bold text-orange-400 mb-1">14</div>
+              <div className="text-slate-400 text-sm">KI-Entscheidungen</div>
+            </div>
+            <div>
+              <div className="text-3xl font-bold text-orange-400 mb-1">100%</div>
+              <div className="text-slate-400 text-sm">DIN EN 12811</div>
+            </div>
+            <div>
+              <div className="text-3xl font-bold text-orange-400 mb-1">PDF</div>
+              <div className="text-slate-400 text-sm">Export sofort</div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section className="bg-slate-800/50 py-20">
+        <div className="max-w-6xl mx-auto px-6">
+          <div className="text-center mb-16">
+            <h2 className="text-3xl md:text-4xl font-bold mb-4">Alles, was du brauchst</h2>
+            <p className="text-slate-400">Spezialisiert auf den Gerüstbau</p>
+          </div>
+          <div className="grid md:grid-cols-3 gap-6">
+            {[
+              { icon: "📋", title: "Digitales Aufmaß", desc: "Schritt für Schritt durch die Baustellenaufnahme." },
+              { icon: "🤖", title: "KI Gerüstplanung", desc: "Automatische Planung nach DIN EN 12811." },
+              { icon: "📦", title: "Stückliste", desc: "Automatische Materialberechnung mit Fahrzeugempfehlung." },
+              { icon: "📄", title: "PDF Export", desc: "Professionelle Dokumentation zum Versenden." },
+              { icon: "⚖️", title: "Lastklassen", desc: "Automatische Ermittlung nach DIN EN 12811-1." },
+              { icon: "🛡️", title: "Sicherheit", desc: "Prüfung von Windzonen, Ankerung, Schutzdächern." },
+            ].map((f, i) => (
+              <div key={i} className="bg-slate-800 rounded-xl p-6 border border-slate-700 hover:border-orange-500/50 transition">
+                <div className="text-3xl mb-4">{f.icon}</div>
+                <h3 className="text-lg font-bold mb-2">{f.title}</h3>
+                <p className="text-slate-400 text-sm leading-relaxed">{f.desc}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <section className="py-20">
+        <div className="max-w-4xl mx-auto px-6 text-center">
+          <div className="bg-gradient-to-r from-orange-600 to-orange-700 rounded-2xl p-10 md:p-16">
+            <h2 className="text-3xl md:text-4xl font-bold mb-4">Bereit für dein nächstes Projekt?</h2>
+            <p className="text-orange-100 mb-8 text-lg">
+              Erstelle jetzt dein erstes digitales Aufmaß – kostenlos und ohne Anmeldung.
+            </p>
+            <a href="/aufmass" className="bg-white text-orange-700 hover:bg-orange-50 font-bold py-4 px-10 rounded-xl text-lg transition shadow-xl inline-block">
+              🚀 Jetzt starten
+            </a>
+          </div>
+        </div>
+      </section>
+
+      <footer className="border-t border-slate-800 py-10">
+        <div className="max-w-6xl mx-auto px-6">
+          <div className="flex flex-col md:flex-row justify-between items-center gap-6">
+            <div className="flex items-center gap-2">
+              <span className="text-xl">🏗️</span>
+              <span className="font-bold">SCAFFOLD<span className="text-orange-500">OS</span></span>
+            </div>
+            <div className="flex items-center gap-3 bg-slate-800/50 rounded-full px-5 py-2 border border-slate-700">
+              <span className="text-slate-400 text-sm">Powered by</span>
+              <img src="/logo-ai.png" alt="AI Integration" width={32} height={32} className="rounded-full" />
+              <span className="text-white font-semibold text-sm">AI Integration</span>
+            </div>
+            <div className="text-slate-500 text-sm">© 2026 Scaffold OS</div>
+          </div>
+        </div>
+      </footer>
     </div>
   );
 }
