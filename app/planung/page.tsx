@@ -138,7 +138,6 @@ export default function PlanungPage() {
         <div className="text-center">
           <div className="text-4xl mb-4 animate-pulse">🧠</div>
           <div className="text-xl font-semibold">KI analysiert Baustelle...</div>
-          <div className="text-slate-400 text-sm mt-2">DIN EN 12811 • TRBS 2121 • Herstellervorgaben</div>
         </div>
       </div>
     );
@@ -150,7 +149,7 @@ export default function PlanungPage() {
         <div className="flex items-center gap-3 mb-2">
           <button onClick={() => router.push('/aufmass/schritt6')} className="text-slate-400 hover:text-white text-sm">← Zurück zur Zusammenfassung</button>
         </div>
-
+        
         <div className="mb-8">
           <h1 className="text-3xl font-bold mb-2">🤖 KI Gerüstplanung</h1>
           <p className="text-slate-400">Automatische Planung basierend auf Aufmaß-Daten</p>
