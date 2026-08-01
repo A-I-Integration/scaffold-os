@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import { supabase } from '@/lib/supabase';
 
 export default function Schritt6Page() {
   const router = useRouter();
@@ -16,6 +17,27 @@ export default function Schritt6Page() {
       step5: JSON.parse(localStorage.getItem('scaffold_step5') || '{}'),
     });
   }, []);
+
+  async function speichern() {
+    const s1 = data.step1 || {};
+    const s2 = data.step2 || {};
+    const s3 = data.step3 || {};
+    const s4 = data.step4 || {};
+    const s5 = data.step5 || {};
+
+    const { error } = await supabase.from('projects').insert({
+      name: s1.name || 'Unbenannt',
+      adresse: s1.adresse || '',
+      data: { s1, s2, s3, s4, s5 },
+    });
+
+    if (error) {
+      alert('❌ Fehler: ' + error.message);
+    } else {
+      alert('✅ Projekt gespeichert!');
+      router.push('/');
+    }
+  }
 
   function neuesProjekt() {
     localStorage.clear();
@@ -95,22 +117,6 @@ export default function Schritt6Page() {
               <div className="col-span-2"><span className="text-slate-400">Gefahren:</span> {s4.gefahren?.join(', ') || 'Keine'}</div>
               {s4.notiz && <div className="col-span-2 text-slate-300 italic">„{s4.notiz}"</div>}
             </div>
-            <div className="mt-2 text-xs text-slate-500">
-              {s4.gefaelle && '• Gefälle vorhanden '}
-              {s4.unterkellert && '• Unterkellert '}
-              {s4.lichtschaechte && '• Lichtschächte '}
-              {s4.lastverteilplatten && '• Lastverteilplatten '}
-              {s4.freileitungen && '• Freileitungen '}
-              {s4.stromleitungen && '• Stromleitungen '}
-              {s4.baeume && '• Bäume '}
-              {s4.nachbargrundstueck && '• Nachbargrundstück '}
-              {s4.oeffentlicherVerkehrsraum && '• Öffentlicher Raum '}
-              {s4.halteverbot && '• Halteverbot '}
-              {s4.sondernutzung && '• Sondernutzung '}
-              {s4.lagerflaeche && '• Lagerfläche '}
-              {s4.lkwZufahrt && '• LKW-Zufahrt '}
-              {s4.kranErforderlich && '• Kran '}
-            </div>
           </div>
 
           {/* Schritt 5 */}
@@ -127,6 +133,13 @@ export default function Schritt6Page() {
           </div>
 
           {/* Buttons */}
+          <button 
+            onClick={speichern}
+            className="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-4 rounded-lg transition"
+          >
+            💾 In Datenbank speichern
+          </button>
+
           <div className="flex gap-3 pt-2">
             <button onClick={() => router.push('/aufmass/schritt5')} className="flex-1 bg-slate-700 hover:bg-slate-600 text-white font-semibold py-3 px-4 rounded-lg">← Zurück</button>
             <button onClick={() => router.push('/planung')} className="flex-1 bg-purple-600 hover:bg-purple-700 text-white font-semibold py-3 px-4 rounded-lg">
@@ -137,8 +150,8 @@ export default function Schritt6Page() {
           <button onClick={() => router.push('/stueckliste')} className="w-full bg-orange-600 hover:bg-orange-700 text-white font-semibold py-3 px-4 rounded-lg">
             📄 Zur Stückliste & PDF
           </button>
-
-          <button onClick={neuesProjekt} className="w-full bg-green-600 hover:bg-green-700 text-white font-semibold py-3 px-4 rounded-lg">
+          
+          <button onClick={neuesProjekt} className="w-full bg-slate-700 hover:bg-slate-600 text-white font-semibold py-3 px-4 rounded-lg">
             🆕 Neues Projekt starten
           </button>
         </div>
