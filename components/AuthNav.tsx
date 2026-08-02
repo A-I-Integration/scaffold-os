@@ -1,4 +1,5 @@
 'use client';
+
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useState, useEffect } from 'react';
@@ -64,7 +65,8 @@ export default function AuthNav() {
   const isDisponent = profile?.role === 'disponent';
   const isBauleiter = profile?.role === 'bauleiter';
   const canAccessDashboard = isAdmin || isDisponent;
-  const canAccessLager = isAdmin || isDisponent || isBauleiter; // ← Bauleiter darf auch Lager sehen
+  const canAccessLager = isAdmin || isDisponent || isBauleiter;
+  const canAccessPlanung = isAdmin || isDisponent;
 
   const navLinkClass = (path: string) =>
     `px-3 py-2 rounded-md text-sm font-medium transition-colors ${
@@ -108,6 +110,12 @@ export default function AuthNav() {
               {canAccessLager && (
                 <Link href="/lager" className={navLinkClass('/lager')}>
                   Lager
+                </Link>
+              )}
+              
+              {canAccessPlanung && (
+                <Link href="/planung" className={navLinkClass('/planung')}>
+                  Planung
                 </Link>
               )}
               
