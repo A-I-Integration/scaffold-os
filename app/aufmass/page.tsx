@@ -2,10 +2,10 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-
+import { createClient } from '@/lib/supabase/client';
 export default function AufmassPage() {
   const router = useRouter();
-  
+  const supabase = createClient();
   const [form, setForm] = useState({
     name: '',
     adresse: '',

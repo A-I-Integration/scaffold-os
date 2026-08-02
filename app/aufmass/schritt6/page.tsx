@@ -2,11 +2,12 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { supabase } from '@/lib/supabase';
+import { createClient } from '@/lib/supabase/client';
 
 export default function Schritt6Page() {
   const router = useRouter();
   const [data, setData] = useState<any>({});
+  const supabase = createClient();
 
   useEffect(() => {
     setData({

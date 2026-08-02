@@ -1,92 +1,164 @@
-'use client'
+'use client';
 
-import { useEffect, useState } from 'react'
-import { createClient } from '@/lib/supabase/client'
-import { useRouter } from 'next/navigation'
+import Link from 'next/link';
+import { usePathname } from 'next/navigation';
+import { useState, useEffect } from 'react';
+import { createClient } from '@/lib/supabase/client';
+import { useRouter } from 'next/navigation';
+
+interface UserProfile {
+  id: string;
+  role: 'admin' | 'disponent' | 'bauleiter';
+  full_name?: string;
+}
 
 export default function AuthNav() {
-  const [user, setUser] = useState<any>(null)
-  const [profile, setProfile] = useState<any>(null)
-  const router = useRouter()
-  const supabase = createClient()
+  const [user, setUser] = useState<any>(null);
+  const [profile, setProfile] = useState<UserProfile | null>(null);
+  const [loading, setLoading] = useState(true);
+  const pathname = usePathname();
+  const router = useRouter();
+  const supabase = createClient();
 
   useEffect(() => {
-    const getUser = async () => {
-      const { data: { user } } = await supabase.auth.getUser()
-      setUser(user)
+    async function getUser() {
+      const { data: { user } } = await supabase.auth.getUser();
+      setUser(user);
       
       if (user) {
-        const { data: profile } = await supabase
+        const { data: profileData } = await supabase
           .from('profiles')
-          .select('*')
+          .select('id, role, full_name')
           .eq('id', user.id)
-          .single()
-        setProfile(profile)
+          .single();
+        setProfile(profileData);
       }
+      
+      setLoading(false);
     }
-    getUser()
-  }, [])
+    
+    getUser();
+    
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setUser(session?.user ?? null);
+      if (session?.user) {
+        supabase.from('profiles')
+          .select('id, role, full_name')
+          .eq('id', session.user.id)
+          .single()
+          .then(({ data }) => setProfile(data));
+      } else {
+        setProfile(null);
+      }
+    });
+    
+    return () => subscription.unsubscribe();
+  }, []);
 
-  const handleLogout = async () => {
-    await supabase.auth.signOut()
-    router.push('/login')
-    router.refresh()
+  async function handleLogout() {
+    await supabase.auth.signOut();
+    router.push('/login');
+    router.refresh();
   }
 
-  const isAdminOrDisponent = profile?.role === 'admin' || profile?.role === 'disponent'
+  const isAdmin = profile?.role === 'admin';
+  const isDisponent = profile?.role === 'disponent';
+  const isBauleiter = profile?.role === 'bauleiter';
+  const canAccessDashboard = isAdmin || isDisponent;
+  const canAccessLager = isAdmin || isDisponent || isBauleiter; // ← Bauleiter darf auch Lager sehen
 
-  if (!user) return null
+  const navLinkClass = (path: string) =>
+    `px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+      pathname === path
+        ? 'bg-blue-700 text-white'
+        : 'text-gray-300 hover:bg-blue-600 hover:text-white'
+    }`;
+
+  if (loading) {
+    return (
+      <nav className="bg-blue-900 border-b border-blue-800">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex items-center justify-between h-16">
+            <div className="flex items-center">
+              <span className="text-white font-bold text-xl">SCAFFOLD OS</span>
+            </div>
+            <div className="animate-pulse bg-blue-800 h-8 w-32 rounded"></div>
+          </div>
+        </div>
+      </nav>
+    );
+  }
 
   return (
-    <div className="w-full bg-[#1e293b] border-b border-[#334155] px-6 py-3 flex items-center justify-between">
-      <div className="flex items-center gap-4">
-        <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center text-white font-bold text-sm">
-            {profile?.full_name?.charAt(0) || user.email?.charAt(0)}
+    <nav className="bg-blue-900 border-b border-blue-800">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="flex items-center justify-between h-16">
+          {/* Logo & Links */}
+          <div className="flex items-center gap-8">
+            <Link href="/" className="text-white font-bold text-xl tracking-tight">
+              SCAFFOLD OS
+            </Link>
+            
+            <div className="hidden md:flex items-center gap-1">
+              {canAccessDashboard && (
+                <Link href="/dashboard" className={navLinkClass('/dashboard')}>
+                  Dashboard
+                </Link>
+              )}
+              
+              {canAccessLager && (
+                <Link href="/lager" className={navLinkClass('/lager')}>
+                  Lager
+                </Link>
+              )}
+              
+              {isBauleiter && (
+                <Link href="/aufmass" className={navLinkClass('/aufmass')}>
+                  Aufmaß
+                </Link>
+              )}
+            </div>
           </div>
-          <div>
-            <p className="text-white text-sm font-medium">
-              {profile?.full_name || user.email}
-            </p>
-            <p className="text-[#64748b] text-xs capitalize">
-              {profile?.role || 'User'}
-            </p>
+
+          {/* User Section */}
+          <div className="flex items-center gap-4">
+            {user ? (
+              <>
+                <div className="hidden sm:flex items-center gap-2">
+                  <span className="text-blue-200 text-sm">
+                    {profile?.full_name || user.email}
+                  </span>
+                  <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${
+                    isAdmin ? 'bg-red-500 text-white' :
+                    isDisponent ? 'bg-yellow-500 text-black' :
+                    'bg-green-500 text-white'
+                  }`}>
+                    {profile?.role?.toUpperCase() || 'USER'}
+                  </span>
+                </div>
+                <button
+                  onClick={handleLogout}
+                  className="px-3 py-2 rounded-md text-sm font-medium text-gray-300 hover:bg-red-600 hover:text-white transition-colors"
+                >
+                  Logout
+                </button>
+              </>
+            ) : (
+              <div className="flex items-center gap-2">
+                <Link href="/login" className={navLinkClass('/login')}>
+                  Login
+                </Link>
+                <Link
+                  href="/register"
+                  className="px-3 py-2 rounded-md text-sm font-medium bg-blue-600 text-white hover:bg-blue-500 transition-colors"
+                >
+                  Registrieren
+                </Link>
+              </div>
+            )}
           </div>
-        </div>
-        
-        {/* Navigation Links */}
-        <div className="hidden md:flex items-center gap-1 ml-6 border-l border-[#334155] pl-6">
-          <button 
-            onClick={() => router.push('/')}
-            className="text-sm text-[#94a3b8] hover:text-white px-3 py-1.5 rounded-lg hover:bg-[#334155] transition"
-          >
-            Projekte
-          </button>
-          
-          {isAdminOrDisponent && (
-            <button 
-              onClick={() => router.push('/dashboard')}
-              className="text-sm text-[#94a3b8] hover:text-white px-3 py-1.5 rounded-lg hover:bg-[#334155] transition flex items-center gap-1"
-            >
-              <span>📊</span> Dashboard
-            </button>
-          )}
-          
-          <button 
-            onClick={() => router.push('/aufmass')}
-            className="text-sm text-[#94a3b8] hover:text-white px-3 py-1.5 rounded-lg hover:bg-[#334155] transition"
-          >
-            + Aufmaß
-          </button>
         </div>
       </div>
-      
-      <button
-        onClick={handleLogout}
-        className="text-sm text-[#94a3b8] hover:text-white transition px-3 py-1.5 rounded-lg hover:bg-[#334155]"
-      >
-        Abmelden
-      </button>
-    </div>
-  )
+    </nav>
+  );
 }
