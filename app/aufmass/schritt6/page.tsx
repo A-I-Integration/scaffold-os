@@ -643,9 +643,15 @@ export default function Schritt6Page() {
               {kiError && <div className="mt-4 rounded-lg border border-red-500/30 bg-red-500/10 p-4"><p className="text-sm font-medium text-red-300">Fehler: {kiError}</p></div>}
             </div>
 
-            {kiResult && (
+                      {kiResult && (
               <div className="animate-in fade-in slide-in-from-top-4 duration-500">
-                <KIMaterialResult result={kiResult} loading={kiLoading} />
+                <KIMaterialResult 
+                  result={kiResult} 
+                  loading={kiLoading} 
+                  onSaveStueckliste={handleSaveStueckliste}
+                  onGeneratePDF={handlePDF}
+                  onManualEdit={handleManualEdit}
+                />
               </div>
             )}
 

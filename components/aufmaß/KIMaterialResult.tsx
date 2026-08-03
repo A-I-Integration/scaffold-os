@@ -11,9 +11,12 @@ import { KIAnalysis, MaterialItem } from '@/types/scaffold';
 interface Props {
   result: KIAnalysis | null;
   loading?: boolean;
+  onSaveStueckliste?: () => void;
+  onGeneratePDF?: () => void;
+  onManualEdit?: () => void;
 }
 
-export default function KIMaterialResult({ result, loading }: Props) {
+export default function KIMaterialResult({ result, loading, onSaveStueckliste, onGeneratePDF, onManualEdit }: Props) {
   const [expandedCategories, setExpandedCategories] = useState<Set<string>>(
     new Set()
   );
@@ -41,7 +44,6 @@ export default function KIMaterialResult({ result, loading }: Props) {
     setExpandedCategories(next);
   };
 
-  // Material nach Kategorie gruppieren
   const byCategory = result.materialList.reduce(
     (acc, item) => {
       if (!acc[item.category]) acc[item.category] = [];
@@ -322,13 +324,25 @@ export default function KIMaterialResult({ result, loading }: Props) {
 
       {/* --- AKTIONEN --- */}
       <div className="flex flex-col gap-3 sm:flex-row">
-        <button className="flex-1 rounded-lg bg-blue-600 py-3 font-semibold text-white transition-colors hover:bg-blue-500">
+        <button 
+          onClick={onSaveStueckliste}
+          className="flex-1 rounded-lg bg-blue-600 py-3 font-semibold text-white transition-colors hover:bg-blue-500 disabled:opacity-50"
+          disabled={!onSaveStueckliste}
+        >
           📋 Als Stückliste speichern
         </button>
-        <button className="flex-1 rounded-lg bg-orange-600 py-3 font-semibold text-white transition-colors hover:bg-orange-500">
+        <button 
+          onClick={onGeneratePDF}
+          className="flex-1 rounded-lg bg-orange-600 py-3 font-semibold text-white transition-colors hover:bg-orange-500 disabled:opacity-50"
+          disabled={!onGeneratePDF}
+        >
           📄 Angebot als PDF
         </button>
-        <button className="flex-1 rounded-lg bg-slate-700 py-3 font-semibold text-white transition-colors hover:bg-slate-600">
+        <button 
+          onClick={onManualEdit}
+          className="flex-1 rounded-lg bg-slate-700 py-3 font-semibold text-white transition-colors hover:bg-slate-600 disabled:opacity-50"
+          disabled={!onManualEdit}
+        >
           ✏️ Manuell bearbeiten
         </button>
       </div>
