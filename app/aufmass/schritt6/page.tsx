@@ -9,8 +9,6 @@ import KIMaterialResult from '@/components/aufmaß/KIMaterialResult';
 import { KIAnalysis } from '@/types/scaffold';
 import DispositionResult from '@/components/aufmaß/DispositionResult';
 import { DispositionResult as DispositionData } from '@/lib/calculations/disposition';
-import { saveProject } from '@/lib/actions/project';
-import { attachPhotosToProject } from '@/lib/actions/media';
 
 const DigitalTwin = dynamic(() => import('@/components/aufmaß/DigitalTwin'), {
   ssr: false,
@@ -220,36 +218,43 @@ export default function Schritt6Page() {
   async function handleSpeichern() {
     setIsSaving(true);
     try {
-      // 1. Projekt via Server Action speichern (kein Client-DB-Zugriff!)
-      const project = await saveProject({
-        name: s1.name || 'Unbenanntes Projekt',
-        adresse: s1.adresse || '',
-        data: stepData,
-        status: 'active',
+      const response = await fetch('/api/projects', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: s1.name || 'Unbenanntes Projekt',
+          adresse: s1.adresse || '',
+          data: stepData,
+          status: 'active',
+        }),
       });
 
-      // 2. Fotos von Session-ID auf echte Projekt-ID umhängen
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.error || 'Speichern fehlgeschlagen');
+      }
+
       const sessionId = localStorage.getItem('scaffold_session_id');
       if (sessionId) {
         try {
-          await attachPhotosToProject(sessionId, project.id);
+          await fetch('/api/attach-photos', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ sessionId, projectId: result.id }),
+          });
           localStorage.removeItem('scaffold_session_id');
-        } catch (photoErr: any) {
-          // Nicht blockierend – Projekt ist gespeichert
+        } catch (photoErr) {
           console.error('Foto-Verknüpfung fehlgeschlagen:', photoErr);
         }
       }
 
-      // 3. Step 6 persistieren
       localStorage.setItem(
         'scaffold_step6',
         JSON.stringify({ kiResult, savedAt: new Date().toISOString() })
       );
 
-      alert('✅ Projekt gespeichert! ID: ' + project.id);
-      
-      // Optional: Zur Projekt-Detailseite
-      // router.push(`/projekte/${project.id}`);
+      alert('✅ Projekt gespeichert! ID: ' + result.id);
     } catch (err: any) {
       alert('❌ Speichern fehlgeschlagen: ' + err.message);
     } finally {
@@ -266,7 +271,6 @@ export default function Schritt6Page() {
     const doc = new jsPDF();
     const pageWidth = doc.internal.pageSize.getWidth();
 
-    // HEADER
     doc.setFillColor(30, 58, 138);
     doc.rect(0, 0, pageWidth, 35, 'F');
     doc.setTextColor(255, 255, 255);
@@ -278,7 +282,6 @@ export default function Schritt6Page() {
     doc.setFontSize(9);
     doc.text('KI-gestützte Gerüstbau-Kalkulation', pageWidth - 14, 26, { align: 'right' });
 
-    // PROJEKT-DATEN
     let y = 45;
     doc.setFillColor(248, 250, 252);
     doc.rect(14, y, 90, 30, 'F');
@@ -306,7 +309,6 @@ export default function Schritt6Page() {
     doc.text(`Gültig bis: ${new Date(Date.now() + 30 * 86400000).toLocaleDateString('de-DE')}`, 112, y + 20);
     doc.text(`Gerüstklasse: ${kiResult.scaffoldClass || '-'}`, 112, y + 26);
 
-    // RISIKO-AMPEL
     y = 82;
     const riskColor = kiResult.riskLevel === 'red' ? [239, 68, 68] : kiResult.riskLevel === 'yellow' ? [245, 158, 11] : [16, 185, 129];
     doc.setFillColor(riskColor[0], riskColor[1], riskColor[2]);
@@ -317,7 +319,6 @@ export default function Schritt6Page() {
     const riskText = kiResult.riskLevel === 'red' ? 'HOCHES RISIKO' : kiResult.riskLevel === 'yellow' ? 'MITTLERES RISIKO' : 'NIEDRIGES RISIKO';
     doc.text(riskText, pageWidth - 14, y + 1, { align: 'right' });
 
-    // MATERIALLISTE
     y = 95;
     doc.setTextColor(30, 58, 138);
     doc.setFontSize(12);
@@ -364,7 +365,6 @@ export default function Schritt6Page() {
       margin: { left: 14, right: 14 },
     });
 
-    // KOSTENÜBERSICHT
     const finalY = (doc as any).lastAutoTable.finalY + 15;
     doc.setFillColor(248, 250, 252);
     doc.rect(110, finalY, 86, 75, 'F');
@@ -400,7 +400,6 @@ export default function Schritt6Page() {
     doc.setFontSize(8);
     doc.text(`Marge: ${kiResult.margin.toFixed(2)} € (${kiResult.marginPercent}%)`, 116, cy + 12);
 
-    // WARNUNGEN
     if (kiResult.warnings.length > 0 || kiResult.tips.length > 0) {
       let wy = finalY + 8;
       doc.setTextColor(30, 58, 138);
@@ -422,7 +421,6 @@ export default function Schritt6Page() {
       });
     }
 
-    // SEITE 2: AGB & UNTERSCHRIFT
     doc.addPage();
     doc.setTextColor(30, 58, 138);
     doc.setFontSize(12);
