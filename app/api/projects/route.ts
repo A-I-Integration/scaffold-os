@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
 
 export async function POST(req: NextRequest) {
   try {
@@ -10,27 +9,29 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Name und Adresse erforderlich' }, { status: 400 });
     }
 
-    const supabase = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.SUPABASE_SERVICE_ROLE_KEY!
-    );
-
-    const { data: project, error } = await supabase
-      .from('projects')
-      .insert({
+    const response = await fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/rest/v1/projects`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'apikey': process.env.SUPABASE_SERVICE_ROLE_KEY!,
+        'Authorization': `Bearer ${process.env.SUPABASE_SERVICE_ROLE_KEY!}`,
+        'Prefer': 'return=representation',
+      },
+      body: JSON.stringify({
         name,
         adresse,
         data: data || {},
         status: status || 'active',
-      })
-      .select('id')
-      .single();
+      }),
+    });
 
-    if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 });
+    if (!response.ok) {
+      const errorText = await response.text();
+      return NextResponse.json({ error: errorText }, { status: 500 });
     }
 
-    return NextResponse.json({ id: project.id });
+    const result = await response.json();
+    return NextResponse.json({ id: result[0].id });
   } catch (err: any) {
     return NextResponse.json({ error: err.message || 'Unbekannter Fehler' }, { status: 500 });
   }
