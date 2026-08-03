@@ -31,6 +31,9 @@ export default function Schritt6Page() {
   const [dispError, setDispError] = useState<string | null>(null);
   const [show3D, setShow3D] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [savedProjectId, setSavedProjectId] = useState<string | null>(null);
+  const [editMode, setEditMode] = useState(false);
+  const [editedMaterials, setEditedMaterials] = useState<any[]>([]);
 
   useEffect(() => {
     const data: Record<string, any> = {};
@@ -249,6 +252,7 @@ export default function Schritt6Page() {
         }
       }
 
+      setSavedProjectId(result.id);
       localStorage.setItem(
         'scaffold_step6',
         JSON.stringify({ kiResult, savedAt: new Date().toISOString() })
@@ -260,6 +264,65 @@ export default function Schritt6Page() {
     } finally {
       setIsSaving(false);
     }
+  }
+
+  async function handleSaveStueckliste() {
+    if (!kiResult) {
+      alert('Bitte zuerst KI-Berechnung durchführen!');
+      return;
+    }
+    if (!savedProjectId) {
+      alert('Bitte zuerst "Projekt speichern" klicken!');
+      return;
+    }
+    try {
+      const res = await fetch('/api/stueckliste', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          projectId: savedProjectId,
+          materialList: kiResult.materialList,
+        }),
+      });
+      if (!res.ok) throw new Error('Fehler');
+      alert('✅ Stückliste gespeichert!');
+    } catch {
+      alert('❌ Fehler beim Speichern der Stückliste');
+    }
+  }
+
+  function handleManualEdit() {
+    if (!kiResult) {
+      alert('Bitte zuerst KI-Berechnung durchführen!');
+      return;
+    }
+    if (!editMode) {
+      setEditedMaterials(kiResult.materialList.map((item: any) => ({ ...item })));
+    } else {
+      const updated = {
+        ...kiResult,
+        materialList: editedMaterials,
+        totalMaterialCost: editedMaterials.reduce((sum: number, item: any) => sum + (item.totalPrice || 0), 0),
+        totalCost: 0,
+      };
+      updated.totalCost = updated.totalMaterialCost + updated.laborCost + updated.transportCost;
+      updated.suggestedPrice = updated.totalCost * 1.25;
+      updated.margin = updated.suggestedPrice - updated.totalCost;
+      updated.marginPercent = 25;
+      setKiResult(updated);
+    }
+    setEditMode(!editMode);
+  }
+
+  function handleQuantityChange(index: number, newQty: number) {
+    setEditedMaterials((prev) => {
+      const updated = [...prev];
+      const item = { ...updated[index] };
+      item.quantity = Math.max(0, newQty);
+      item.totalPrice = item.quantity * item.unitPrice;
+      updated[index] = item;
+      return updated;
+    });
   }
 
   function handlePDF() {
@@ -534,6 +597,29 @@ export default function Schritt6Page() {
                 {isSaving ? '💾 Wird gespeichert...' : '💾 Projekt speichern'}
               </button>
               <button onClick={handlePDF} className="w-full rounded-lg bg-slate-700 hover:bg-slate-600 py-3 font-semibold text-white transition-colors">📄 PDF erzeugen</button>
+              
+              {kiResult && (
+                <div className="grid grid-cols-3 gap-2 mt-3">
+                  <button 
+                    onClick={handleSaveStueckliste}
+                    className="rounded-lg bg-blue-600 hover:bg-blue-500 py-2 text-xs font-bold text-white transition-colors"
+                  >
+                    💾 Stückliste
+                  </button>
+                  <button 
+                    onClick={handlePDF}
+                    className="rounded-lg bg-red-600 hover:bg-red-500 py-2 text-xs font-bold text-white transition-colors"
+                  >
+                    📄 Angebot PDF
+                  </button>
+                  <button 
+                    onClick={handleManualEdit}
+                    className="rounded-lg bg-orange-600 hover:bg-orange-500 py-2 text-xs font-bold text-white transition-colors"
+                  >
+                    {editMode ? '✅ Fertig' : '✏️ Manuell'}
+                  </button>
+                </div>
+              )}
             </div>
           </div>
 
@@ -560,6 +646,36 @@ export default function Schritt6Page() {
             {kiResult && (
               <div className="animate-in fade-in slide-in-from-top-4 duration-500">
                 <KIMaterialResult result={kiResult} loading={kiLoading} />
+              </div>
+            )}
+
+            {kiResult && editMode && (
+              <div className="bg-slate-800 rounded-xl p-6 border border-yellow-500/30 animate-in fade-in slide-in-from-top-2">
+                <h3 className="text-lg font-bold text-white mb-4">✏️ Materialliste bearbeiten</h3>
+                <div className="space-y-2">
+                  {editedMaterials.map((item, i) => (
+                    <div key={i} className="flex items-center gap-3 bg-slate-700/50 p-3 rounded-lg">
+                      <div className="flex-1">
+                        <p className="text-sm font-medium text-white">{item.name}</p>
+                        <p className="text-xs text-slate-400">{item.articleNumber}</p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <button 
+                          onClick={() => handleQuantityChange(i, item.quantity - 1)}
+                          className="w-8 h-8 rounded bg-slate-600 text-white hover:bg-slate-500"
+                        >-</button>
+                        <span className="w-12 text-center text-white font-bold">{item.quantity}</span>
+                        <button 
+                          onClick={() => handleQuantityChange(i, item.quantity + 1)}
+                          className="w-8 h-8 rounded bg-slate-600 text-white hover:bg-slate-500"
+                        >+</button>
+                      </div>
+                      <div className="w-20 text-right text-sm text-white">
+                        {(item.quantity * item.unitPrice).toFixed(2)} €
+                      </div>
+                    </div>
+                  ))}
+                </div>
               </div>
             )}
 
