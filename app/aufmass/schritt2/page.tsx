@@ -2,11 +2,14 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import KIWarnings from '@/components/aufmaß/KIWarnings';
+import { useKIValidation } from '@/hooks/useKIValidation';
+import { PartialScaffoldInput } from '@/types/scaffold';
 
 export default function Schritt2Page() {
   const router = useRouter();
   const [step1Data, setStep1Data] = useState<any>(null);
-  
+
   const [form, setForm] = useState({
     laenge: '',
     hoehe: '',
@@ -26,6 +29,99 @@ export default function Schritt2Page() {
   const hindernisListe = ['Erker', 'Balkon', 'Wintergarten', 'Kamin', 'Gaube', 'Markise'];
   const dachformen = ['Satteldach', 'Flachdach', 'Pultdach', 'Walmdach', 'Mansarddach', 'Zeltdach'];
   const fassaden = ['Klinker', 'WDVS', 'Beton', 'Naturstein', 'Glas', 'Holz', 'Putz', 'Denkmalschutz'];
+
+  // ==========================================================
+  // KI-MAPPING: Dein Form-State → KI-Engine Format
+  // ==========================================================
+  function mapFormToKIInput(): PartialScaffoldInput {
+    // Fassade mappen
+    const fassadeMap: Record<string, any> = {
+      'Klinker': 'mauerwerk',
+      'WDVS': 'wdvs',
+      'Beton': 'beton',
+      'Naturstein': 'mauerwerk',
+      'Glas': 'glas',
+      'Holz': 'holz',
+      'Putz': 'mauerwerk',
+      'Denkmalschutz': 'denkmal',
+    };
+
+    // Dachform mappen
+    const dachMap: Record<string, any> = {
+      'Satteldach': 'satteldach',
+      'Flachdach': 'flachdach',
+      'Pultdach': 'pultdach',
+      'Walmdach': 'walmdach',
+      'Mansarddach': 'mansardendach',
+      'Zeltdach': 'satteldach',
+    };
+
+    // Hindernisse mappen (deine Strings → KI-Obstacle-Format)
+    const hindernisMap: Record<string, any> = {
+      'Erker': 'erker',
+      'Balkon': 'balkon',
+      'Wintergarten': 'sonstiges',
+      'Kamin': 'schornstein',
+      'Gaube': 'gaube',
+      'Markise': 'sonstiges',
+    };
+
+    const obstacles = form.hindernisse.map(h => ({
+      type: hindernisMap[h] || 'sonstiges',
+      count: 1,
+      notes: h,
+    }));
+
+    // Zusätzliche Hindernisse aus Toggle-Buttons
+    if (form.werbeanlagen) {
+      obstacles.push({ type: 'werbeanlage', count: 1, notes: 'Werbeanlage' });
+    }
+    if (form.garagen) {
+      obstacles.push({ type: 'sonstiges', count: 1, notes: 'Garage/Nebengebäude' });
+    }
+
+    return {
+      lengthM: parseFloat(form.laenge) || 0,
+      heightM: parseFloat(form.hoehe) || 0,
+      widthM: parseFloat(form.breite) || 0,
+      eavesHeightM: parseFloat(form.traufhoehe) || 0,
+      roofForm: dachMap[form.dachform] || 'flachdach',
+      roofOverhangM: parseFloat(form.dachueberstand) || 0,
+      facadeType: fassadeMap[form.fassade] || 'mauerwerk',
+      obstacles,
+      // Defaults für Felder, die erst in späteren Schritten kommen
+      projectDurationDays: 30,
+      scaffoldType: 'rahmen',
+      deckingType: 'stahl',
+      fieldLengthM: 2.07,
+      groundType: 'beton',
+      anchorType: 'fassadenanker',
+      groundCondition: 'beton',
+      hasSlope: false,
+      hasLightShafts: false,
+      hasBasement: false,
+      needsLoadDistribution: false,
+      environment: {
+        hasPowerLines: false,
+        hasVegetation: false,
+        hasNeighborProperty: false,
+        hasPublicTraffic: form.durchfahrt,
+        needsNoParkingZone: false,
+        needsSpecialUse: false,
+        hasStorageArea: false,
+        hasTruckAccess: false,
+        needsCrane: false,
+        needsProtectionRoof: false,
+        needsSafetyNet: false,
+      },
+      windZone: 1,
+      hazards: form.fassade === 'Denkmalschutz' ? ['denkmalschutz'] : [],
+      additionalNotes: form.fluchtwege ? 'Fluchtwege beachten' : '',
+    };
+  }
+
+  // ⭐ KI-VALIDIERUNG: Läuft bei JEDER Form-Änderung automatisch
+  const kiResult = useKIValidation(mapFormToKIInput());
 
   useEffect(() => {
     const saved = localStorage.getItem('scaffold_step1');
@@ -62,7 +158,7 @@ export default function Schritt2Page() {
         <button onClick={zurueck} className="text-slate-400 hover:text-white text-sm mb-2">← Zurück</button>
         <h1 className="text-3xl font-bold mb-2">🏢 Gebäude & Abmessungen</h1>
         <p className="text-slate-400 mb-2">Baustelle: Schritt 2 von 6</p>
-        
+
         {step1Data && (
           <div className="bg-slate-800/50 rounded-lg p-3 mb-6 text-sm text-slate-400">
             <span className="text-slate-300 font-medium">{step1Data.name}</span> · {step1Data.adresse}
@@ -152,7 +248,7 @@ export default function Schritt2Page() {
               <span className="text-xl">🚗</span>
               <div><div className="font-semibold text-sm">Garagen / Nebengebäude vorhanden</div></div>
             </button>
-            
+
             <button onClick={() => setForm({...form, fluchtwege: !form.fluchtwege})}
               className={`w-full p-3 rounded-lg border text-left transition flex items-center gap-3 ${form.fluchtwege ? 'bg-orange-600/20 border-orange-500 text-orange-300' : 'bg-slate-700 border-slate-600'}`}>
               <span className="text-xl">🚪</span>
@@ -179,6 +275,9 @@ export default function Schritt2Page() {
               className="w-full bg-slate-700 border border-slate-600 rounded-lg px-4 py-2 text-white"
               placeholder="z.B. 2" />
           </div>
+
+          {/* ⭐ KI-WARNUNGEN: Erscheinen automatisch bei relevanten Eingaben */}
+          <KIWarnings ruleset={kiResult} />
 
           <div className="flex gap-3 pt-4">
             <button onClick={zurueck} className="flex-1 bg-slate-700 hover:bg-slate-600 text-white font-semibold py-3 px-4 rounded-lg">← Zurück</button>
