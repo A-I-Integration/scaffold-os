@@ -1,26 +1,35 @@
 import { NextResponse } from 'next/server';
-import { Resend } from 'resend';
 
-const resend = new Resend(process.env.RESEND_API_KEY);
+// Resend wird erst bei Bedarf geladen, damit der Build nicht crasht
+let Resend: any;
+try {
+  Resend = require('resend').Resend;
+} catch {
+  // Resend nicht installiert – wird zur Laufzeit abgefangen
+}
 
 export async function POST(req: Request) {
   try {
-    const { to, projectName, projectId, pdfBase64, customerName } = await req.json();
+    const apiKey = process.env.RESEND_API_KEY;
+    if (!apiKey) {
+      return NextResponse.json({ success: false, error: 'RESEND_API_KEY nicht konfiguriert. Bitte in .env.local hinzufügen.' }, { status: 500 });
+    }
+    if (!Resend) {
+      return NextResponse.json({ success: false, error: 'resend-Paket nicht installiert. Bitte "npm install resend" ausführen.' }, { status: 500 });
+    }
 
+    const { to, projectName, projectId, pdfBase64, customerName } = await req.json();
     if (!to || !projectName || !projectId) {
       return NextResponse.json({ error: 'Empfänger, Projektname und Projekt-ID erforderlich' }, { status: 400 });
     }
 
+    const resend = new Resend(apiKey);
     const projectUrl = `${process.env.NEXT_PUBLIC_APP_URL || 'https://scaffold-os.vercel.app'}/aufmass/schritt6?id=${projectId}`;
 
-    // Attachment vorbereiten (falls PDF vorhanden)
     const attachments = [];
     if (pdfBase64) {
       const base64Data = pdfBase64.split(',')[1] || pdfBase64;
-      attachments.push({
-        filename: `Angebot_${projectName.replace(/\s+/g, '_')}.pdf`,
-        content: base64Data,
-      });
+      attachments.push({ filename: `Angebot_${projectName.replace(/\s+/g, '_')}.pdf`, content: base64Data });
     }
 
     const { data, error } = await resend.emails.send({
@@ -48,7 +57,6 @@ export async function POST(req: Request) {
     });
 
     if (error) throw new Error(error.message);
-
     return NextResponse.json({ success: true, id: data?.id });
   } catch (err: any) {
     console.error('[Email API] Fehler:', err);
