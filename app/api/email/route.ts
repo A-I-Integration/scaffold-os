@@ -1,21 +1,13 @@
 import { NextResponse } from 'next/server';
 
-// Resend wird erst bei Bedarf geladen, damit der Build nicht crasht
-let Resend: any;
-try {
-  Resend = require('resend').Resend;
-} catch {
-  // Resend nicht installiert – wird zur Laufzeit abgefangen
-}
-
 export async function POST(req: Request) {
   try {
     const apiKey = process.env.RESEND_API_KEY;
     if (!apiKey) {
-      return NextResponse.json({ success: false, error: 'RESEND_API_KEY nicht konfiguriert. Bitte in .env.local hinzufügen.' }, { status: 500 });
-    }
-    if (!Resend) {
-      return NextResponse.json({ success: false, error: 'resend-Paket nicht installiert. Bitte "npm install resend" ausführen.' }, { status: 500 });
+      return NextResponse.json({ 
+        success: false, 
+        error: 'RESEND_API_KEY nicht konfiguriert. E-Mail-Versand deaktiviert.' 
+      }, { status: 503 });
     }
 
     const { to, projectName, projectId, pdfBase64, customerName } = await req.json();
@@ -23,6 +15,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Empfänger, Projektname und Projekt-ID erforderlich' }, { status: 400 });
     }
 
+    const { Resend } = await import('resend');
     const resend = new Resend(apiKey);
     const projectUrl = `${process.env.NEXT_PUBLIC_APP_URL || 'https://scaffold-os.vercel.app'}/aufmass/schritt6?id=${projectId}`;
 
