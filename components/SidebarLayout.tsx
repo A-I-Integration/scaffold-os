@@ -6,7 +6,7 @@ import { useState, useEffect } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import {
   HardHat, LayoutDashboard, Warehouse, CalendarClock, Truck,
-  KeyRound, Ruler, Navigation, LogOut, Menu, X,
+  KeyRound, Ruler, Navigation, LogOut, Menu, X, Database,
 } from 'lucide-react';
 
 // ============================================================
@@ -38,6 +38,7 @@ const NAV_ITEMS: NavItem[] = [
   { href: '/planung',        label: 'Planung',      icon: CalendarClock,   roles: ['admin', 'disponent', 'bauleiter'] },
   { href: '/touren',         label: 'Touren',       icon: Truck,           roles: ['admin', 'disponent'] },
   { href: '/mitarbeiter',    label: 'Zugänge',      icon: KeyRound,        roles: ['admin', 'disponent'] },
+  { href: '/datenpflege',    label: 'Datenpflege',  icon: Database,        roles: ['admin'] },
   { href: '/meine-touren',   label: 'Meine Touren', icon: Navigation,      roles: ['admin', 'disponent', 'bauleiter', 'mitarbeiter', 'lager'] },
 ];
 
