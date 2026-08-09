@@ -180,12 +180,6 @@ export default function AuthNav() {
                 <Link href="/login" className={navLinkClass('/login')}>
                   Login
                 </Link>
-                <Link
-                  href="/register"
-                  className="px-3 py-2 rounded-md text-sm font-medium bg-blue-600 text-white hover:bg-blue-500 transition-colors"
-                >
-                  Registrieren
-                </Link>
               </div>
             )}
           </div>
