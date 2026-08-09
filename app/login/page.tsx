@@ -135,7 +135,13 @@ export default function LoginPage() {
             </button>
           </form>
 
-          <p className="mt-6 text-center text-sm text-[#64748b]">
+          <p className="mt-4 text-center">
+            <a href="/passwort-vergessen" className="text-amber-400 hover:text-amber-300 text-sm font-medium transition">
+              Passwort vergessen?
+            </a>
+          </p>
+
+          <p className="mt-4 text-center text-sm text-[#64748b]">
             Noch kein Zugang? Deine Geschäftsführung oder Disposition legt ihn unter „Zugänge" für dich an.
           </p>
         </div>
