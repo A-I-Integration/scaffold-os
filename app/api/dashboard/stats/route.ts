@@ -167,6 +167,12 @@ export async function GET() {
         absentEmployees: allEmployees.filter((e: any) => ['sick', 'vacation'].includes(e.status)).length,
         pendingTransports: activeTransports.filter((t: any) => t.status === 'pending').length,
         inTransitTransports: activeTransports.filter((t: any) => t.status === 'in_transit').length,
+        toursToday: upcomingTours.filter((t: any) => t.planned_date === todayStr).length,
+        toursPlanned: upcomingTours.filter((t: any) => t.status === 'planned').length,
+        toursInProgress: upcomingTours.filter((t: any) => t.status === 'in_progress').length,
+        absentToday: absencesToday.length,
+        pendingAbsences: pendingAbsenceRows.length,
+        hoursThisWeek,
       },
       charts: {
         revenueByMonth: revenueChart,
