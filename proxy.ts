@@ -21,6 +21,7 @@ const ROLE_ACCESS: Record<string, string[]> = {
   '/lager':        ['admin', 'disponent', 'bauleiter', 'lager'],
   '/planung':      ['admin', 'disponent', 'bauleiter'],
   '/touren':       ['admin', 'disponent'],
+  '/mitarbeiter':  ['admin', 'disponent'],
   '/meine-touren': ['admin', 'disponent', 'bauleiter', 'mitarbeiter', 'lager'],
   '/fahrer':       ['admin', 'disponent', 'bauleiter', 'mitarbeiter', 'lager'],
 };

@@ -129,6 +129,12 @@ export default function AuthNav() {
                 </Link>
               )}
 
+              {canAccessTouren && (
+                <Link href="/mitarbeiter" className={navLinkClass('/mitarbeiter')}>
+                  Zugänge
+                </Link>
+              )}
+
               {user && (
                 <Link href="/meine-touren" className={navLinkClass('/meine-touren')}>
                   Meine Touren
