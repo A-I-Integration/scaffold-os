@@ -36,8 +36,8 @@ export async function POST(req: Request) {
       return NextResponse.json({ success: false, error: 'Name, Fahrzeug, Fahrer und mindestens ein Transport erforderlich' }, { status: 400 });
     }
 
-    // 1. Transport-Details holen für Adressen
-    const toRes = await fetch(`${url}/rest/v1/transport_orders?id=in.(${transport_order_ids.join(',')})&select=*,to_project:project_id(name,adresse),inventory:inventory_id(name,quantity)`, { headers });
+    // 1. Transport-Details holen für Adressen (echtes Schema: to_project_id → projects)
+    const toRes = await fetch(`${url}/rest/v1/transport_orders?id=in.(${transport_order_ids.join(',')})&select=*,to_project:to_project_id(name,adresse),inventory:inventory_id(name,quantity)`, { headers });
     if (!toRes.ok) throw new Error(await toRes.text());
     const orders = await toRes.json();
 

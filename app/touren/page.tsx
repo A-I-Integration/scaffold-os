@@ -91,6 +91,7 @@ export default function TourenPage() {
       if (toursJson.success) setTours(toursJson.tours || []);
       else setError('Touren: ' + (toursJson.error || 'Fehler'));
       if (transJson.success) setTransports(transJson.transports || []);
+      else setError('Transporte: ' + (transJson.error || 'Fehler'));
       if (vehJson.success) setVehicles(vehJson.vehicles || []);
       if (drvJson.success) setDrivers(drvJson.drivers || []);
     } catch (e: any) {
