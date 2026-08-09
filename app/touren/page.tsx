@@ -1,6 +1,8 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import { getEmployees } from '@/lib/actions/employees';
+import type { EmployeeWithSkills } from '@/types/employees';
 
 // ============================================================
 // SCAFFOLD OS – Touren / Dispo-Cockpit (Disponentin)
@@ -10,7 +12,10 @@ import { useState, useEffect, useCallback } from 'react';
 // ============================================================
 
 interface Vehicle { id: string; name: string; license_plate: string; }
-interface Driver { id: string; name: string; }
+interface Driver {
+  id: string; name: string; employee_id?: string | null;
+  employee?: { id: string; first_name: string; last_name: string } | null;
+}
 interface TransportOrder {
   id: string; quantity: number; status: string; created_at: string;
   to_project?: { name: string; adresse: string } | null;
@@ -54,6 +59,8 @@ export default function TourenPage() {
   const [transports, setTransports] = useState<TransportOrder[]>([]);
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [drivers, setDrivers] = useState<Driver[]>([]);
+  const [employees, setEmployees] = useState<EmployeeWithSkills[]>([]);
+  const [newDriverName, setNewDriverName] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [expandedTour, setExpandedTour] = useState<string | null>(null);
@@ -94,6 +101,7 @@ export default function TourenPage() {
       else setError('Transporte: ' + (transJson.error || 'Fehler'));
       if (vehJson.success) setVehicles(vehJson.vehicles || []);
       if (drvJson.success) setDrivers(drvJson.drivers || []);
+      try { setEmployees(await getEmployees()); } catch { /* Mitarbeiter-Liste optional */ }
     } catch (e: any) {
       setError(e.message);
     }
@@ -149,6 +157,33 @@ export default function TourenPage() {
       loadAll();
     } catch (e: any) { setFMessage('Fehler: ' + e.message); }
     setFSaving(false);
+  }
+
+  // Fahrer ↔ Mitarbeiter verknüpfen (Phase 6)
+  async function linkDriver(driverId: string, employeeId: string) {
+    try {
+      const res = await fetch('/api/drivers', {
+        method: 'PUT', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: driverId, employee_id: employeeId || null }),
+      });
+      const json = await res.json();
+      if (!json.success) throw new Error(json.error);
+      loadAll();
+    } catch (e: any) { setError('Verknüpfung: ' + e.message); }
+  }
+
+  async function createDriver() {
+    if (!newDriverName.trim()) return;
+    try {
+      const res = await fetch('/api/drivers', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: newDriverName.trim() }),
+      });
+      const json = await res.json();
+      if (!json.success) throw new Error(json.error);
+      setNewDriverName('');
+      loadAll();
+    } catch (e: any) { setError('Fahrer anlegen: ' + e.message); }
   }
 
   function exportCSV() {
@@ -327,6 +362,7 @@ export default function TourenPage() {
 
         {/* ═══ TAB: NEUE TOUR ═══ */}
         {tab === 'neu' && (
+          <>
           <div className="grid md:grid-cols-2 gap-6">
             <div className="bg-slate-800 border border-slate-700 rounded-xl p-5 space-y-4">
               <h2 className="font-semibold text-lg">Tour anlegen</h2>
@@ -356,7 +392,7 @@ export default function TourenPage() {
                 <label className="block text-sm text-slate-400 mb-1">Fahrer *</label>
                 <select value={fDriver} onChange={e => setFDriver(e.target.value)} className={inputCls}>
                   <option value="">– wählen –</option>
-                  {drivers.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
+                  {drivers.map(d => <option key={d.id} value={d.id}>{d.name}{d.employee ? ` (${d.employee.first_name} ${d.employee.last_name})` : ''}</option>)}
                 </select>
                 {drivers.length === 0 && <p className="text-xs text-amber-400 mt-1">Keine Fahrer – Phase-4-SQL enthält Beispiel-Datensätze.</p>}
               </div>
@@ -412,6 +448,45 @@ export default function TourenPage() {
               </div>
             </div>
           </div>
+
+          {/* Fahrer ↔ Mitarbeiter verknüpfen (Phase 6) */}
+          <div className="mt-6 bg-slate-800 border border-slate-700 rounded-xl p-5">
+            <h2 className="font-semibold text-lg mb-1">👷 Fahrer ↔ Mitarbeiter verknüpfen</h2>
+            <p className="text-slate-400 text-sm mb-4">
+              Verknüpfte Mitarbeiter sehen in „Meine Touren" automatisch nur ihre eigenen Fahrten.
+            </p>
+            <div className="space-y-3">
+              {drivers.map(d => (
+                <div key={d.id} className="flex flex-col sm:flex-row sm:items-center gap-2">
+                  <span className="font-medium sm:w-48 shrink-0">{d.name}</span>
+                  <select
+                    value={d.employee_id || ''}
+                    onChange={e => linkDriver(d.id, e.target.value)}
+                    className={inputCls}
+                  >
+                    <option value="">– nicht verknüpft –</option>
+                    {employees.map(emp => (
+                      <option key={emp.id} value={emp.id}>{emp.first_name} {emp.last_name}</option>
+                    ))}
+                  </select>
+                  {d.employee && <span className="text-emerald-400 text-sm shrink-0">✅ verknüpft</span>}
+                </div>
+              ))}
+              {drivers.length === 0 && <p className="text-slate-500 text-sm">Keine Fahrer vorhanden.</p>}
+            </div>
+            <div className="mt-5 pt-4 border-t border-slate-700 flex flex-col sm:flex-row gap-2">
+              <input
+                value={newDriverName}
+                onChange={e => setNewDriverName(e.target.value)}
+                placeholder="Neuer Fahrer – Name"
+                className={inputCls}
+              />
+              <button onClick={createDriver} className="shrink-0 bg-slate-700 hover:bg-slate-600 rounded-lg px-4 py-2 text-sm font-semibold transition">
+                + Fahrer anlegen
+              </button>
+            </div>
+          </div>
+          </>
         )}
 
         {/* ═══ TAB: STUNDENAUSWERTUNG ═══ */}

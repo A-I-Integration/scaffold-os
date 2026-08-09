@@ -19,7 +19,7 @@ interface Stop {
 interface Tour {
   id: string; name: string; status: string; planned_date: string; planned_start_time: string | null;
   vehicle?: { name: string; license_plate: string } | null;
-  driver?: { name: string } | null;
+  driver?: { name: string; employee_id?: string | null } | null;
   stops: Stop[];
 }
 interface TimeEntry {
@@ -45,6 +45,8 @@ export default function MeineTourenPage() {
   const [loading, setLoading] = useState(true);
   const [checked, setChecked] = useState<Record<string, boolean>>({});
   const [msg, setMsg] = useState('');
+  const [autoMe, setAutoMe] = useState<{ id: string; name: string } | null>(null);
+  const [showAllHint, setShowAllHint] = useState(false);
 
   // Abwesenheit-Formular
   const [absType, setAbsType] = useState<'sick' | 'vacation'>('sick');
@@ -66,6 +68,21 @@ export default function MeineTourenPage() {
     })();
   }, []);
 
+  // Automatische Erkennung: Ist der Login mit einem Mitarbeiter verknüpft?
+  useEffect(() => {
+    (async () => {
+      try {
+        const res = await fetch('/api/me', { cache: 'no-store' });
+        const json = await res.json();
+        if (json.success && json.employee) {
+          setAutoMe({ id: json.employee.id, name: `${json.employee.first_name} ${json.employee.last_name}` });
+          setMeId(json.employee.id);
+          localStorage.setItem(ME_KEY, json.employee.id);
+        }
+      } catch { /* keine Verknüpfung → Namenswahl bleibt als Fallback */ }
+    })();
+  }, []);
+
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
@@ -76,7 +93,10 @@ export default function MeineTourenPage() {
         const relevant = (json.tours || []).filter((t: Tour) =>
           t.planned_date >= today && t.status !== 'completed' && t.status !== 'cancelled'
         );
-        setTours(relevant);
+        // Persönliche Touren zuerst: Ist mein Mitarbeiter mit dem Fahrer verknüpft?
+        const mine = meId ? relevant.filter((t: Tour) => t.driver?.employee_id === meId) : [];
+        setShowAllHint(meId !== '' && mine.length === 0 && relevant.length > 0);
+        setTours(mine.length > 0 ? mine : relevant);
       }
       if (meId) {
         const er = await fetch(`/api/time-entries?employee_id=${meId}&from=${todayISO()}`, { cache: 'no-store' });
@@ -204,18 +224,36 @@ export default function MeineTourenPage() {
           </p>
         </div>
 
-        {/* Wer bist du? */}
+        {/* Wer bist du? – automatisch erkannt ODER Namenswahl */}
         <div className="bg-slate-800 border border-slate-700 rounded-xl p-4">
-          <label className="block text-sm text-slate-400 mb-1">Wer bist du? (für Zeiterfassung & Abwesenheit)</label>
-          <select value={meId} onChange={e => selectMe(e.target.value)} className={inputCls}>
-            <option value="">– Namen wählen –</option>
-            {employees.map(e => (
-              <option key={e.id} value={e.id}>
-                {e.first_name} {e.last_name}{e.is_available_today ? '' : ' (heute abwesend)'}
-              </option>
-            ))}
-          </select>
+          {autoMe ? (
+            <div className="flex items-center gap-3">
+              <span className="text-2xl">👤</span>
+              <div>
+                <div className="font-semibold">{autoMe.name}</div>
+                <div className="text-slate-400 text-xs">Automatisch erkannt – dein Login ist mit dir verknüpft.</div>
+              </div>
+            </div>
+          ) : (
+            <>
+              <label className="block text-sm text-slate-400 mb-1">Wer bist du? (für Zeiterfassung & Abwesenheit)</label>
+              <select value={meId} onChange={e => selectMe(e.target.value)} className={inputCls}>
+                <option value="">– Namen wählen –</option>
+                {employees.map(e => (
+                  <option key={e.id} value={e.id}>
+                    {e.first_name} {e.last_name}{e.is_available_today ? '' : ' (heute abwesend)'}
+                  </option>
+                ))}
+              </select>
+            </>
+          )}
         </div>
+
+        {showAllHint && (
+          <div className="bg-blue-900/30 border border-blue-700 rounded-xl p-3 text-sm text-blue-200">
+            ℹ️ Für dich ist aktuell keine eigene Tour zugeordnet – du siehst die Übersicht aller Touren.
+          </div>
+        )}
 
         {/* ═══ TOUR DES TAGES ═══ */}
         <section className="bg-slate-800 border border-slate-700 rounded-xl overflow-hidden">
