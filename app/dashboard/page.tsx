@@ -38,6 +38,12 @@ interface Stats {
   absentEmployees: number;
   pendingTransports: number;
   inTransitTransports: number;
+  toursToday: number;
+  toursPlanned: number;
+  toursInProgress: number;
+  absentToday: number;
+  pendingAbsences: number;
+  hoursThisWeek: number;
 }
 
 interface RevenueMonth {
@@ -172,6 +178,22 @@ export default function DashboardPage() {
             <KpiCard label="Gesch. Gewinn" value={formatCurrency(stats.totalEstimatedProfit)} color="text-green-400" />
             <KpiCard label="Ø Marge" value={`${stats.avgMargin}%`} color={stats.avgMargin < 15 ? "text-red-400" : "text-green-400"} />
             <KpiCard label="Lagerwert" value={formatCurrency(stats.inventoryValue)} color="text-blue-400" />
+          </div>
+        )}
+
+        {/* ═══════════════════════════════════════════════════════════ */}
+        {/* BETRIEB HEUTE – Touren, Zeiterfassung, Abwesenheiten */}
+        {stats && (
+          <div className="mb-8">
+            <h2 className="text-lg font-semibold text-gray-300 mb-3">🗓️ Betrieb heute</h2>
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+              <KpiCard label="Touren heute" value={stats.toursToday} color="text-blue-400" />
+              <KpiCard label="Unterwegs" value={stats.toursInProgress} color={stats.toursInProgress > 0 ? "text-amber-400" : "text-gray-400"} />
+              <KpiCard label="Geplante Touren" value={stats.toursPlanned} color="text-purple-400" />
+              <KpiCard label="Stunden (7 Tage)" value={stats.hoursThisWeek.toLocaleString("de-DE")} color="text-emerald-400" />
+              <KpiCard label="Abwesend heute" value={stats.absentToday} color={stats.absentToday > 0 ? "text-red-400" : "text-green-400"} />
+              <KpiCard label="Offene Anträge" value={stats.pendingAbsences} color={stats.pendingAbsences > 0 ? "text-amber-400" : "text-gray-400"} />
+            </div>
           </div>
         )}
 

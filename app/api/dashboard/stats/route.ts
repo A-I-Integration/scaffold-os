@@ -106,6 +106,18 @@ export async function GET() {
     // ─── TRANSPORTE ───
     const activeTransports = await safeFetch('transport_orders?select=*&status=in.(pending,in_transit)');
 
+    // ─── TOUREN, ZEITERFASSUNG, ABWESENHEITEN (Phase 4/5 – robust dank safeFetch) ───
+    const todayStr = now.toISOString().split('T')[0];
+    const weekStart = new Date(now);
+    weekStart.setDate(now.getDate() - 6);
+    const weekStartStr = weekStart.toISOString().split('T')[0];
+
+    const upcomingTours = await safeFetch(`tours?select=id,status,planned_date&planned_date=gte.${todayStr}`);
+    const absencesToday = await safeFetch(`absences?select=id,type&status=eq.approved&start_date=lte.${todayStr}&end_date=gte.${todayStr}`);
+    const pendingAbsenceRows = await safeFetch('absences?select=id&status=eq.pending');
+    const weekEntries = await safeFetch(`time_entries?select=hours&work_date=gte.${weekStartStr}`);
+    const hoursThisWeek = Math.round(weekEntries.reduce((s: number, e: any) => s + (e.hours || 0), 0) * 100) / 100;
+
     // ─── ALERTS ───
     const alerts: any[] = [];
     if (criticalStock.length > 0) {
@@ -114,6 +126,13 @@ export async function GET() {
         title: `${criticalStock.length} Artikel kritisch`,
         message: criticalStock.slice(0, 3).map((i: any) => i.name).join(', ') + (criticalStock.length > 3 ? '...' : ''),
         action: '/lager', actionLabel: 'Lager öffnen',
+      });
+    }
+    if (pendingAbsenceRows.length > 0) {
+      alerts.push({
+        severity: 'warning', icon: '🗓️',
+        title: `${pendingAbsenceRows.length} Abwesenheits-Antrag${pendingAbsenceRows.length === 1 ? '' : 'e'} offen`,
+        message: 'Krank/Urlaub wartet auf Genehmigung', action: '/planung', actionLabel: 'Planung öffnen',
       });
     }
     if (avgMargin > 0 && avgMargin < 15 && activeProjects.length > 0) {
