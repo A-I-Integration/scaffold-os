@@ -26,10 +26,14 @@ const ROLE_ACCESS: Record<string, string[]> = {
   '/fahrer':       ['admin', 'disponent', 'bauleiter', 'mitarbeiter', 'lager'],
 };
 
-// Wohin wird eine Rolle geschickt, wenn sie keinen Zugriff hat?
+// Wohin gehört eine Rolle? (Startbereich + Ziel bei „kein Zugriff")
+// WICHTIG: Das Ziel muss ein Bereich sein, den die Rolle auch
+// wirklich sehen darf – sonst entsteht eine Umleitungs-Schleife!
 function homeFor(role: string): string {
-  if (role === 'mitarbeiter' || role === 'lager') return '/meine-touren';
-  return '/dashboard';
+  if (role === 'admin' || role === 'disponent') return '/dashboard';
+  if (role === 'bauleiter') return '/aufmass/schritt1';
+  if (role === 'lager') return '/lager';
+  return '/meine-touren';
 }
 
 export async function proxy(request: NextRequest) {

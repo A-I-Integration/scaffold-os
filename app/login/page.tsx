@@ -37,7 +37,23 @@ export default function LoginPage() {
       return
     }
 
-    router.push('/')
+    // Rolle holen → direkt in den eigenen Bereich weiterleiten.
+    // Die Rolle steht im Profil – sie wurde beim Anlegen des
+    // Zugangs (durch CEO/Dispo) festgelegt.
+    const { data: { user } } = await supabase.auth.getUser()
+    let target = '/meine-touren'
+    if (user) {
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('role')
+        .eq('id', user.id)
+        .single()
+      const role = profile?.role
+      if (role === 'admin' || role === 'disponent') target = '/dashboard'
+      else if (role === 'bauleiter') target = '/aufmass/schritt1'
+      else if (role === 'lager') target = '/lager'
+    }
+    router.push(target)
     router.refresh()
   }
 
