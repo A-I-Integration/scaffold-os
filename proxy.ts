@@ -5,9 +5,31 @@ import { NextResponse, type NextRequest } from 'next/server';
 // SCAFFOLD OS – Proxy (vormals Middleware)
 // Next.js 16: Die Datei „middleware.ts" heißt jetzt „proxy.ts"
 // und muss im Projekt-ROOT liegen (gleiche Ebene wie app/).
-// Die alte Datei app/middleware.ts wurde von Next 16 nicht mehr
-// ausgeführt – der Login-Schutz war damit inaktiv.
+//
+// Phase 6: Rollen-basierte Seiten-Sperren.
+// Bisher wurde nur geprüft OB eingeloggt – jetzt auch WER.
+// Wer eine Seite direkt per Adresse aufruft, für die seine
+// Rolle nicht freigeschaltet ist, wird auf seinen
+// Startbereich umgeleitet.
 // ============================================================
+
+// Welche Rolle darf welchen Bereich sehen?
+const ROLE_ACCESS: Record<string, string[]> = {
+  '/dashboard':    ['admin', 'disponent'],
+  '/aufmass':      ['admin', 'bauleiter'],
+  '/stueckliste':  ['admin', 'bauleiter'],
+  '/lager':        ['admin', 'disponent', 'bauleiter', 'lager'],
+  '/planung':      ['admin', 'disponent', 'bauleiter'],
+  '/touren':       ['admin', 'disponent'],
+  '/meine-touren': ['admin', 'disponent', 'bauleiter', 'mitarbeiter', 'lager'],
+  '/fahrer':       ['admin', 'disponent', 'bauleiter', 'mitarbeiter', 'lager'],
+};
+
+// Wohin wird eine Rolle geschickt, wenn sie keinen Zugriff hat?
+function homeFor(role: string): string {
+  if (role === 'mitarbeiter' || role === 'lager') return '/meine-touren';
+  return '/dashboard';
+}
 
 export async function proxy(request: NextRequest) {
   let response = NextResponse.next({ request: { headers: request.headers } });
@@ -34,16 +56,36 @@ export async function proxy(request: NextRequest) {
 
   const { data: { user } } = await supabase.auth.getUser();
 
-  const protectedPaths = ['/dashboard', '/aufmass', '/lager', '/planung', '/stueckliste', '/touren', '/meine-touren', '/fahrer'];
-  const isProtected = protectedPaths.some(p => request.nextUrl.pathname.startsWith(p));
-  const isAuthPath = ['/login', '/register'].some(p => request.nextUrl.pathname.startsWith(p));
+  const path = request.nextUrl.pathname;
+  const protectedPaths = Object.keys(ROLE_ACCESS);
+  const isProtected = protectedPaths.some(p => path.startsWith(p));
+  const isAuthPath = ['/login', '/register'].some(p => path.startsWith(p));
 
+  // Nicht eingeloggt → Login
   if (isProtected && !user) {
     return NextResponse.redirect(new URL('/login', request.url));
   }
 
-  if (isAuthPath && user) {
-    return NextResponse.redirect(new URL('/dashboard', request.url));
+  // Eingeloggt → Rolle holen (nur wenn nötig)
+  if (user && (isProtected || isAuthPath)) {
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('role')
+      .eq('id', user.id)
+      .single();
+    // Kein Profil gefunden → restriktivste Rolle annehmen
+    const role = profile?.role || 'mitarbeiter';
+
+    // Auf Login/Register zugreifen obwohl eingeloggt → zum eigenen Startbereich
+    if (isAuthPath) {
+      return NextResponse.redirect(new URL(homeFor(role), request.url));
+    }
+
+    // Rollen-Check: darf diese Rolle diesen Bereich sehen?
+    const allowed = protectedPaths.find(p => path.startsWith(p));
+    if (allowed && !ROLE_ACCESS[allowed].includes(role)) {
+      return NextResponse.redirect(new URL(homeFor(role), request.url));
+    }
   }
 
   return response;

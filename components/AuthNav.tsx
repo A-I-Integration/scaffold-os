@@ -8,7 +8,7 @@ import { useRouter } from 'next/navigation';
 
 interface UserProfile {
   id: string;
-  role: 'admin' | 'disponent' | 'bauleiter';
+  role: 'admin' | 'disponent' | 'bauleiter' | 'mitarbeiter' | 'lager';
   full_name?: string;
 }
 
@@ -64,9 +64,13 @@ export default function AuthNav() {
   const isAdmin = profile?.role === 'admin';
   const isDisponent = profile?.role === 'disponent';
   const isBauleiter = profile?.role === 'bauleiter';
+  const isMitarbeiter = profile?.role === 'mitarbeiter';
+  const isLager = profile?.role === 'lager';
   const canAccessDashboard = isAdmin || isDisponent;
-  const canAccessLager = isAdmin || isDisponent || isBauleiter;
-  const canAccessPlanung = isAdmin || isDisponent;
+  const canAccessLager = isAdmin || isDisponent || isBauleiter || isLager;
+  const canAccessPlanung = isAdmin || isDisponent || isBauleiter;
+  const canAccessTouren = isAdmin || isDisponent;
+  const canAccessAufmass = isAdmin || isBauleiter;
 
   const navLinkClass = (path: string) =>
     `px-3 py-2 rounded-md text-sm font-medium transition-colors ${
@@ -119,7 +123,7 @@ export default function AuthNav() {
                 </Link>
               )}
 
-              {canAccessPlanung && (
+              {canAccessTouren && (
                 <Link href="/touren" className={navLinkClass('/touren')}>
                   Touren
                 </Link>
@@ -131,7 +135,7 @@ export default function AuthNav() {
                 </Link>
               )}
 
-              {isBauleiter && (
+              {canAccessAufmass && (
                 <Link href="/aufmass/schritt1" className={navLinkClass('/aufmass/schritt1')}>
                   Aufmaß
                 </Link>
@@ -150,7 +154,10 @@ export default function AuthNav() {
                   <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${
                     isAdmin ? 'bg-red-500 text-white' :
                     isDisponent ? 'bg-yellow-500 text-black' :
-                    'bg-green-500 text-white'
+                    isBauleiter ? 'bg-green-500 text-white' :
+                    isMitarbeiter ? 'bg-sky-500 text-white' :
+                    isLager ? 'bg-purple-500 text-white' :
+                    'bg-gray-500 text-white'
                   }`}>
                     {profile?.role?.toUpperCase() || 'USER'}
                   </span>
