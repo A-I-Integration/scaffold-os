@@ -118,9 +118,21 @@ export default function AuthNav() {
                   Planung
                 </Link>
               )}
-              
+
+              {canAccessPlanung && (
+                <Link href="/touren" className={navLinkClass('/touren')}>
+                  Touren
+                </Link>
+              )}
+
+              {user && (
+                <Link href="/meine-touren" className={navLinkClass('/meine-touren')}>
+                  Meine Touren
+                </Link>
+              )}
+
               {isBauleiter && (
-                <Link href="/aufmass" className={navLinkClass('/aufmass')}>
+                <Link href="/aufmass/schritt1" className={navLinkClass('/aufmass/schritt1')}>
                   Aufmaß
                 </Link>
               )}

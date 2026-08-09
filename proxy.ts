@@ -1,7 +1,15 @@
 import { createServerClient, type CookieOptions } from '@supabase/ssr';
 import { NextResponse, type NextRequest } from 'next/server';
 
-export async function middleware(request: NextRequest) {
+// ============================================================
+// SCAFFOLD OS – Proxy (vormals Middleware)
+// Next.js 16: Die Datei „middleware.ts" heißt jetzt „proxy.ts"
+// und muss im Projekt-ROOT liegen (gleiche Ebene wie app/).
+// Die alte Datei app/middleware.ts wurde von Next 16 nicht mehr
+// ausgeführt – der Login-Schutz war damit inaktiv.
+// ============================================================
+
+export async function proxy(request: NextRequest) {
   let response = NextResponse.next({ request: { headers: request.headers } });
 
   const supabase = createServerClient(
@@ -26,7 +34,7 @@ export async function middleware(request: NextRequest) {
 
   const { data: { user } } = await supabase.auth.getUser();
 
-  const protectedPaths = ['/dashboard', '/aufmass', '/lager', '/planung', '/stueckliste'];
+  const protectedPaths = ['/dashboard', '/aufmass', '/lager', '/planung', '/stueckliste', '/touren', '/meine-touren', '/fahrer'];
   const isProtected = protectedPaths.some(p => request.nextUrl.pathname.startsWith(p));
   const isAuthPath = ['/login', '/register'].some(p => request.nextUrl.pathname.startsWith(p));
 
