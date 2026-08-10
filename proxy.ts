@@ -21,6 +21,7 @@ const ROLE_ACCESS: Record<string, string[]> = {
   '/lager':        ['admin', 'disponent', 'bauleiter', 'lager'],
   '/prognose':     ['admin', 'disponent', 'lager'],
   '/planung':      ['admin', 'disponent', 'bauleiter'],
+  '/zeiterfassung': ['admin', 'disponent', 'bauleiter'],  // NEU: Monatsübersicht (Nr. 6)
   '/touren':       ['admin', 'disponent'],
   '/mitarbeiter':  ['admin', 'disponent'],
   '/datenpflege':  ['admin'],

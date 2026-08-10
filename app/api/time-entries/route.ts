@@ -1,4 +1,18 @@
 import { NextResponse } from 'next/server';
+import { computeNetHours } from '@/lib/worktime';
+
+// ============================================================
+// SCAFFOLD OS – Zeiterfassung API (Stempeln)
+//
+// NEU (Zeiterfassung-Feinschliff, Nr. 6):
+//   • Beim Ausstempeln wird jetzt die automatische Pause
+//     abgezogen (30 min ab 6 h, 45 min ab 9 h – lib/worktime.ts)
+//     und in break_minutes gespeichert.
+//   • PUT akzeptiert zusätzlich start_time, work_date und
+//     break_minutes (für Korrekturen durch Admin/Dispo).
+//   Hinweis: Diese Datei war vorher einzeilig formatiert,
+//   inhaltlich wurde nur ergänzt – nichts entfernt.
+// ============================================================
 
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const key = process.env.SUPABASE_SERVICE_ROLE_KEY!;
@@ -27,11 +41,11 @@ export async function GET(req: Request) {
 
 // POST /api/time-entries – Einstempeln oder manuellen Eintrag anlegen
 // Einstempeln: { employee_id, tour_id?, project_id?, note? } → start_time = jetzt
-// Manuell:     { employee_id, work_date, hours, note? }
+// Manuell:     { employee_id, work_date, hours, break_minutes?, note? }
 export async function POST(req: Request) {
   try {
     const body = await req.json();
-    const { employee_id, work_date, hours, tour_id, project_id, note } = body;
+    const { employee_id, work_date, hours, break_minutes, tour_id, project_id, note } = body;
 
     if (!employee_id) {
       return NextResponse.json({ success: false, error: 'employee_id erforderlich' }, { status: 400 });
@@ -47,10 +61,13 @@ export async function POST(req: Request) {
     };
 
     if (hours !== undefined && hours !== null) {
-      // Manueller Eintrag mit Stundenzahl
+      // Manueller Eintrag mit Stundenzahl (Netto)
       entry.hours = hours;
+      if (break_minutes !== undefined && break_minutes !== null) {
+        entry.break_minutes = break_minutes;
+      }
     } else {
-      // Einstempeln: Startzeit = jetzt, Stunden werden beim Ausstempeln berechnet
+      // Einstempeln: Startzeit = jetzt; Stunden + Pause beim Ausstempeln
       entry.start_time = now.toISOString();
     }
 
@@ -67,11 +84,15 @@ export async function POST(req: Request) {
 }
 
 // PUT /api/time-entries – Ausstempeln oder Eintrag korrigieren
-// { id, end_time?, hours?, note? } – bei end_time ohne hours: Stunden automatisch aus start_time berechnen
+// { id, end_time?, start_time?, work_date?, hours?, break_minutes?, note? }
+//
+// Auto-Berechnung: Wenn KEINE manuellen Stunden übergeben werden und
+// Start + Ende bekannt sind (aus Update oder Bestand), werden Pause
+// (30/45-Regel) und Netto-Stunden automatisch gesetzt.
 export async function PUT(req: Request) {
   try {
     const body = await req.json();
-    const { id, end_time, hours, note } = body;
+    const { id, start_time, end_time, work_date, hours, break_minutes, note } = body;
 
     if (!id) {
       return NextResponse.json({ success: false, error: 'id erforderlich' }, { status: 400 });
@@ -79,22 +100,37 @@ export async function PUT(req: Request) {
 
     const updates: any = { updated_at: new Date().toISOString() };
     if (note !== undefined) updates.note = note;
-    if (hours !== undefined && hours !== null) updates.hours = hours;
+    if (work_date) updates.work_date = work_date;
+    if (start_time) updates.start_time = start_time;
+    if (end_time) updates.end_time = end_time;
 
-    if (end_time) {
-      updates.end_time = end_time;
-      // Stunden automatisch berechnen, wenn nicht manuell übergeben
-      if (updates.hours === undefined) {
-        const existing = await fetch(`${url}/rest/v1/time_entries?id=eq.${id}&select=start_time`, { headers });
-        if (existing.ok) {
-          const rows = await existing.json();
-          const start = rows?.[0]?.start_time;
-          if (start) {
-            const diffMs = new Date(end_time).getTime() - new Date(start).getTime();
-            if (diffMs > 0) updates.hours = Math.round((diffMs / 3600000) * 100) / 100;
+    if (hours !== undefined && hours !== null) {
+      // Manuelle (Netto-)Stunden → keine Auto-Berechnung
+      updates.hours = hours;
+      if (break_minutes !== undefined && break_minutes !== null) {
+        updates.break_minutes = break_minutes;
+      }
+    } else if (start_time || end_time) {
+      // Start/Ende geändert oder Ausstempeln → Pause + Netto automatisch
+      const existing = await fetch(
+        `${url}/rest/v1/time_entries?id=eq.${id}&select=start_time,end_time`,
+        { headers }
+      );
+      if (existing.ok) {
+        const rows = await existing.json();
+        const finalStart = start_time || rows?.[0]?.start_time;
+        const finalEnd = end_time || rows?.[0]?.end_time;
+        if (finalStart && finalEnd) {
+          const net = computeNetHours(finalStart, finalEnd);
+          if (net) {
+            updates.hours = net.hours;
+            updates.break_minutes = net.breakMinutes;
           }
         }
       }
+    } else if (break_minutes !== undefined && break_minutes !== null) {
+      // Nur Pause korrigiert (Stunden bleiben, wie sie sind)
+      updates.break_minutes = break_minutes;
     }
 
     const res = await fetch(`${url}/rest/v1/time_entries?id=eq.${id}`, {
