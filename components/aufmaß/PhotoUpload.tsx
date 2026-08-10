@@ -44,7 +44,7 @@ export default function PhotoUpload({ sessionId }: Props) {
   const handleDelete = useCallback(async (media: ProjectMedia) => {
     if (!confirm(`"${media.file_name}" löschen?`)) return;
     try {
-      await deleteProjectMediaClient(media.id, media.file_path);
+      await deleteProjectMediaClient(media.id, media.storage_path);
       setPhotos((prev) => prev.filter((p) => p.id !== media.id));
     } catch (err: any) {
       alert(err.message);
@@ -98,10 +98,10 @@ export default function PhotoUpload({ sessionId }: Props) {
           {photos.map((p) => (
             <div key={p.id} className="group relative aspect-square overflow-hidden rounded-lg bg-slate-800">
               <img
-                src={getPublicUrl(p.file_path)}
+                src={getPublicUrl(p.storage_path)}
                 alt={p.file_name}
                 className="h-full w-full object-cover cursor-pointer"
-                onClick={() => setPreview(getPublicUrl(p.file_path))}
+                onClick={() => setPreview(getPublicUrl(p.storage_path))}
               />
               <button
                 onClick={(e) => { e.stopPropagation(); handleDelete(p); }}

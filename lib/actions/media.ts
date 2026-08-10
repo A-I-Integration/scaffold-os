@@ -7,10 +7,10 @@ export interface ProjectMedia {
   project_id: string | null;
   session_id: string | null;
   file_name: string;
-  file_path: string;
+  storage_path: string;
   file_type: string;
-  file_size: number;
-  storage_bucket: string;
+  uploaded_by: string | null;
+  metadata: Record<string, any> | null;
   created_at: string;
 }
 
@@ -41,10 +41,10 @@ export async function uploadProjectMedia(
     .insert({
       session_id: sessionId,
       file_name: file.name,
-      file_path: filePath,
+      storage_path: filePath,
       file_type: file.type,
-      file_size: file.size,
-      storage_bucket: 'project-media',
+      uploaded_by: (await supabase.auth.getUser()).data.user?.id ?? null,
+      metadata: { size: file.size, bucket: 'project-media' },
     })
     .select()
     .single();
@@ -97,7 +97,6 @@ export async function attachPhotosToProject(
     .update({
       project_id: projectId,
       session_id: null,
-      updated_at: new Date().toISOString(),
     })
     .eq('session_id', sessionId)
     .is('project_id', null)

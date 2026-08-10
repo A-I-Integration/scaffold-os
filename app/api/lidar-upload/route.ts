@@ -107,16 +107,17 @@ export async function POST(req: NextRequest) {
 
     if (upErr) return NextResponse.json({ error: upErr.message }, { status: 500 });
 
+    const { data: { user } } = await supabase.auth.getUser();
+
     const { error: dbErr } = await supabase
       .from('project_media')
       .insert({
         session_id: sessionId,
         file_name: file.name,
-        file_path: filePath,
+        storage_path: filePath,
         file_type: `lidar/${ext}`,
-        file_size: file.size,
-        storage_bucket: 'project-media',
-        metadata: measurements,
+        uploaded_by: user?.id ?? null,
+        metadata: { ...measurements, size: file.size, bucket: 'project-media' },
       });
 
     if (dbErr) {

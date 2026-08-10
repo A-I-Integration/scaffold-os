@@ -34,7 +34,7 @@ export async function POST(req: NextRequest) {
     // Fotos der Session holen (nur Bilder, max. 4 für die Analyse)
     const { data: media, error: dbError } = await supabase
       .from('project_media')
-      .select('file_path, file_type')
+      .select('storage_path, file_type')
       .eq('session_id', sessionId)
       .like('file_type', 'image/%')
       .order('created_at', { ascending: true })
@@ -49,7 +49,7 @@ export async function POST(req: NextRequest) {
 
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
     const imageUrls = media.map((m) =>
-      `${supabaseUrl}/storage/v1/object/public/project-media/${m.file_path}`
+      `${supabaseUrl}/storage/v1/object/public/project-media/${m.storage_path}`
     );
 
     const prompt = `Du bist ein erfahrener Gerüstbau-Planer. Analysiere diese Baustellen-Fotos und antworte auf Deutsch, klar und konkret:

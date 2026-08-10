@@ -2,15 +2,18 @@
 
 import { createClient } from '@/lib/supabase/client';
 
+// Spiegelbild der echten Live-Tabelle project_media:
+// id, project_id (text), storage_path, file_name, file_type,
+// created_at, uploaded_by, session_id, metadata (jsonb)
 export interface ProjectMedia {
   id: string;
   project_id: string | null;
   session_id: string | null;
   file_name: string;
-  file_path: string;
+  storage_path: string;
   file_type: string;
-  file_size: number;
-  storage_bucket: string;
+  uploaded_by: string | null;
+  metadata: Record<string, any> | null;
   created_at: string;
 }
 
@@ -25,13 +28,15 @@ export async function uploadProjectMediaClient(
   if (!file.type.startsWith('image/')) throw new Error('Nur Bilder erlaubt');
   if (file.size > 10 * 1024 * 1024) throw new Error('Datei zu groß (max. 10MB)');
 
+  const { data: { user } } = await supabase.auth.getUser();
+
   const fileExt = file.name.split('.').pop()?.toLowerCase() || 'jpg';
   const fileName = `${Date.now()}_${Math.random().toString(36).substring(2, 8)}.${fileExt}`;
-  const filePath = `temp/${sessionId}/${fileName}`;
+  const storagePath = `temp/${sessionId}/${fileName}`;
 
   const { error: uploadError } = await supabase.storage
     .from('project-media')
-    .upload(filePath, file, { contentType: file.type, upsert: false });
+    .upload(storagePath, file, { contentType: file.type, upsert: false });
 
   if (uploadError) throw new Error(`Storage: ${uploadError.message}`);
 
@@ -40,16 +45,16 @@ export async function uploadProjectMediaClient(
     .insert({
       session_id: sessionId,
       file_name: file.name,
-      file_path: filePath,
+      storage_path: storagePath,
       file_type: file.type,
-      file_size: file.size,
-      storage_bucket: 'project-media',
+      uploaded_by: user?.id ?? null,
+      metadata: { size: file.size, bucket: 'project-media' },
     })
     .select()
     .single();
 
   if (dbError) {
-    await supabase.storage.from('project-media').remove([filePath]);
+    await supabase.storage.from('project-media').remove([storagePath]);
     throw new Error(`Datenbank: ${dbError.message}`);
   }
 
@@ -70,10 +75,10 @@ export async function getProjectMediaClient(sessionId: string): Promise<ProjectM
   return (data || []) as ProjectMedia[];
 }
 
-export async function deleteProjectMediaClient(mediaId: string, filePath: string): Promise<void> {
+export async function deleteProjectMediaClient(mediaId: string, storagePath: string): Promise<void> {
   const supabase = createClient();
 
-  await supabase.storage.from('project-media').remove([filePath]);
+  await supabase.storage.from('project-media').remove([storagePath]);
 
   const { error } = await supabase
     .from('project_media')
