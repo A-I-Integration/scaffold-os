@@ -6,6 +6,8 @@
 
 import { createClient } from '@/lib/supabase/server';
 import { revalidatePath } from 'next/cache';
+// NEU (E-Mail-Benachrichtigungen): Versand Fehler brechen die Aktionen nie
+import { notifyAbsenceCreated, notifyAbsenceDecision } from '@/lib/notify';
 import {
   Employee,
   EmployeeWithSkills,
@@ -264,8 +266,14 @@ export async function createAbsence(formData: FormData): Promise<{ success: bool
     created_by: user.id,
   };
 
-  const { error } = await supabase.from('absences').insert(absence);
+  // NEU: .select('id') → wir brauchen die ID für die Mail an Chef/Dispo
+  const { data: inserted, error } = await supabase.from('absences').insert(absence).select('id').single();
   if (error) return { success: false, error: error.message };
+
+  // NEU (E-Mail): Chef/Dispo über den neuen Antrag informieren
+  if (inserted?.id) {
+    try { await notifyAbsenceCreated(inserted.id); } catch (e) { console.error('Mail Antrag:', e); }
+  }
 
   revalidatePath('/planung');
   return { success: true };
@@ -286,6 +294,10 @@ export async function approveAbsence(id: string): Promise<{ success: boolean; er
     .eq('id', id);
 
   if (error) return { success: false, error: error.message };
+
+  // NEU (E-Mail): Mitarbeiter über die Genehmigung informieren
+  try { await notifyAbsenceDecision(id, 'approved'); } catch (e) { console.error('Mail Genehmigung:', e); }
+
   revalidatePath('/planung');
   return { success: true };
 }
@@ -297,6 +309,10 @@ export async function rejectAbsence(id: string): Promise<{ success: boolean; err
 
   const { error } = await supabase.from('absences').update({ status: 'rejected' }).eq('id', id);
   if (error) return { success: false, error: error.message };
+
+  // NEU (E-Mail): Mitarbeiter über die Ablehnung informieren
+  try { await notifyAbsenceDecision(id, 'rejected'); } catch (e) { console.error('Mail Ablehnung:', e); }
+
   revalidatePath('/planung');
   return { success: true };
 }
