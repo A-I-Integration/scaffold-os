@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useCallback, useEffect } from 'react';
-import { uploadProjectMedia, getProjectMedia, deleteProjectMedia, ProjectMedia } from '@/lib/actions/media';
+import { uploadProjectMediaClient, getProjectMediaClient, deleteProjectMediaClient, ProjectMedia } from '@/lib/media-client';
 
 interface Props {
   sessionId: string;
@@ -15,7 +15,7 @@ export default function PhotoUpload({ sessionId }: Props) {
 
   useEffect(() => {
     if (!sessionId) return;
-    getProjectMedia(sessionId)
+    getProjectMediaClient(sessionId)
       .then(setPhotos)
       .catch(console.error)
       .finally(() => setLoading(false));
@@ -31,9 +31,7 @@ export default function PhotoUpload({ sessionId }: Props) {
       if (file.size > 10 * 1024 * 1024) { alert(`${file.name} zu groß (max. 10MB).`); continue; }
 
       try {
-        const fd = new FormData();
-        fd.append('file', file);
-        const result = await uploadProjectMedia(fd, sessionId);
+        const result = await uploadProjectMediaClient(file, sessionId);
         setPhotos((prev) => [result, ...prev]);
       } catch (err: any) {
         alert(`Upload fehlgeschlagen: ${err.message}`);
@@ -46,7 +44,7 @@ export default function PhotoUpload({ sessionId }: Props) {
   const handleDelete = useCallback(async (media: ProjectMedia) => {
     if (!confirm(`"${media.file_name}" löschen?`)) return;
     try {
-      await deleteProjectMedia(media.id, media.file_path);
+      await deleteProjectMediaClient(media.id, media.file_path);
       setPhotos((prev) => prev.filter((p) => p.id !== media.id));
     } catch (err: any) {
       alert(err.message);
