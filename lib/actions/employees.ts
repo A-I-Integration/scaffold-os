@@ -317,6 +317,73 @@ export async function rejectAbsence(id: string): Promise<{ success: boolean; err
   return { success: true };
 }
 
+// ═══ NEU: Abwesenheit BEARBEITEN (Admin/Dispo, nicht nur genehmigen) ═══
+// Bei Status-Wechsel auf approved/rejected geht wie gewohnt eine
+// E-Mail an den Mitarbeiter (lib/notify.ts).
+export async function updateAbsence(id: string, formData: FormData): Promise<{ success: boolean; error?: string }> {
+  const supabase = await createClient();
+  const auth = await checkAdminOrDisponent(supabase);
+  if (!auth.allowed) return { success: false, error: auth.error };
+
+  const start = formData.get('start_date') as string;
+  const end = formData.get('end_date') as string;
+  const type = formData.get('type') as string;
+  const status = formData.get('status') as string;
+  const reason = (formData.get('reason') as string) || null;
+
+  if (!start || !end || !type || !status) {
+    return { success: false, error: 'Von, Bis, Typ und Status sind erforderlich.' };
+  }
+  if (end < start) {
+    return { success: false, error: '„Bis" darf nicht vor „Von" liegen.' };
+  }
+  if (!['vacation', 'sick', 'training', 'other'].includes(type)) {
+    return { success: false, error: 'Ungültiger Typ.' };
+  }
+  if (!['pending', 'approved', 'rejected'].includes(status)) {
+    return { success: false, error: 'Ungültiger Status.' };
+  }
+
+  const updates: any = {
+    start_date: start,
+    end_date: end,
+    type,
+    status,
+    reason,
+    updated_at: new Date().toISOString(),
+  };
+  if (status === 'approved') {
+    updates.approved_by = auth.userId;
+    updates.approved_at = new Date().toISOString();
+  }
+
+  // alten Status holen → Mail nur bei tatsächlichem Wechsel
+  const { data: before } = await supabase.from('absences').select('status').eq('id', id).single();
+
+  const { error } = await supabase.from('absences').update(updates).eq('id', id);
+  if (error) return { success: false, error: error.message };
+
+  if (before?.status !== status && (status === 'approved' || status === 'rejected')) {
+    try { await notifyAbsenceDecision(id, status); } catch (e) { console.error('Mail Entscheidung:', e); }
+  }
+
+  revalidatePath('/planung');
+  return { success: true };
+}
+
+// ═══ NEU: Abwesenheit LÖSCHEN (Admin/Dispo) ═══
+export async function deleteAbsence(id: string): Promise<{ success: boolean; error?: string }> {
+  const supabase = await createClient();
+  const auth = await checkAdminOrDisponent(supabase);
+  if (!auth.allowed) return { success: false, error: auth.error };
+
+  const { error } = await supabase.from('absences').delete().eq('id', id);
+  if (error) return { success: false, error: error.message };
+
+  revalidatePath('/planung');
+  return { success: true };
+}
+
 // ═══════════════════════════════════════════════════════════
 // TOUR PLANS
 // ═══════════════════════════════════════════════════════════

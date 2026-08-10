@@ -13,6 +13,8 @@ import {
   createAbsence,
   approveAbsence,
   rejectAbsence,
+  updateAbsence,
+  deleteAbsence,
   createTourPlan,
   assignEmployeeToTour,
   removeEmployeeFromTour,
@@ -40,6 +42,8 @@ export default function PlanungPage() {
   // Modals
   const [showAddEmployee, setShowAddEmployee] = useState(false);
   const [showAddAbsence, setShowAddAbsence] = useState(false);
+  // NEU: Abwesenheit bearbeiten (Admin/Dispo)
+  const [editAbsence, setEditAbsence] = useState<Absence | null>(null);
   const [showAddTour, setShowAddTour] = useState(false);
   const [showRecommend, setShowRecommend] = useState(false);
   const [showEditEmployee, setShowEditEmployee] = useState(false);
@@ -151,6 +155,29 @@ export default function PlanungPage() {
 
   async function handleRejectAbsence(id: string) {
     const result = await rejectAbsence(id);
+    if (result.success) loadData(); else alert(result.error);
+  }
+
+  // NEU: Abwesenheit speichern (Bearbeiten-Modal)
+  async function handleUpdateAbsence(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    setFormError(null);
+    if (!editAbsence) return;
+    const result = await updateAbsence(editAbsence.id, new FormData(e.currentTarget));
+    if (result.success) {
+      setEditAbsence(null);
+      loadData();
+    } else {
+      setFormError(result.error || 'Fehler beim Speichern');
+    }
+  }
+
+  // NEU: Abwesenheit löschen (mit Sicherheitsabfrage)
+  async function handleDeleteAbsence(abs: Absence) {
+    const name = `${abs.employee?.first_name || ''} ${abs.employee?.last_name || ''}`.trim();
+    const zeitraum = `${new Date(abs.start_date).toLocaleDateString('de-DE')} – ${new Date(abs.end_date).toLocaleDateString('de-DE')}`;
+    if (!window.confirm(`Abwesenheit von ${name} (${zeitraum}) wirklich löschen?`)) return;
+    const result = await deleteAbsence(abs.id);
     if (result.success) loadData(); else alert(result.error);
   }
 
@@ -385,9 +412,12 @@ export default function PlanungPage() {
                         {abs.status === 'pending' && (
                           <>
                             <button onClick={() => handleApproveAbsence(abs.id)} className="text-green-600 text-xs mr-2 hover:underline">Genehmigen</button>
-                            <button onClick={() => handleRejectAbsence(abs.id)} className="text-red-600 text-xs hover:underline">Ablehnen</button>
+                            <button onClick={() => handleRejectAbsence(abs.id)} className="text-red-600 text-xs mr-2 hover:underline">Ablehnen</button>
                           </>
                         )}
+                        {/* NEU: ändern & löschen immer möglich (Admin/Dispo) */}
+                        <button onClick={() => { setEditAbsence(abs); setFormError(null); }} className="text-blue-600 text-xs mr-2 hover:underline">Bearbeiten</button>
+                        <button onClick={() => handleDeleteAbsence(abs)} className="text-red-600 text-xs hover:underline">Löschen</button>
                       </td>
                     </tr>
                   ))}
@@ -567,6 +597,65 @@ export default function PlanungPage() {
               <div><label className="block text-sm font-medium text-gray-700 mb-1">Grund</label><textarea name="reason" rows={2} className="w-full px-3 py-2 border rounded-lg text-sm" /></div>
               <div className="flex justify-end gap-2">
                 <button type="button" onClick={() => setShowAddAbsence(false)} className="px-4 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded-lg">Abbrechen</button>
+                <button type="submit" className="px-4 py-2 text-sm bg-yellow-600 text-white rounded-lg hover:bg-yellow-700">Speichern</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* NEU: EDIT ABSENCE MODAL (Admin/Dispo: ändern statt nur genehmigen) */}
+      {editAbsence && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-xl max-w-md w-full">
+            <div className="px-6 py-4 border-b border-gray-200 flex justify-between">
+              <h3 className="text-lg font-semibold text-gray-900">Abwesenheit bearbeiten</h3>
+              <button onClick={() => setEditAbsence(null)} className="text-gray-400 hover:text-gray-600">✕</button>
+            </div>
+            <form onSubmit={handleUpdateAbsence} className="p-6 space-y-4">
+              {formError && <div className="p-3 bg-red-50 text-red-700 text-sm rounded-lg">{formError}</div>}
+              <p className="text-sm text-gray-600">
+                Mitarbeiter: <strong className="text-gray-900">{editAbsence.employee?.first_name} {editAbsence.employee?.last_name}</strong>
+              </p>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Von *</label>
+                  <input name="start_date" type="date" required defaultValue={editAbsence.start_date} className="w-full px-3 py-2 border rounded-lg text-sm" />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Bis *</label>
+                  <input name="end_date" type="date" required defaultValue={editAbsence.end_date} className="w-full px-3 py-2 border rounded-lg text-sm" />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Typ *</label>
+                  <select name="type" required defaultValue={editAbsence.type} className="w-full px-3 py-2 border rounded-lg text-sm">
+                    <option value="vacation">Urlaub</option>
+                    <option value="sick">Krankheit</option>
+                    <option value="training">Schulung</option>
+                    <option value="other">Sonstiges</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Status *</label>
+                  <select name="status" required defaultValue={editAbsence.status} className="w-full px-3 py-2 border rounded-lg text-sm">
+                    <option value="pending">Ausstehend</option>
+                    <option value="approved">Genehmigt</option>
+                    <option value="rejected">Abgelehnt</option>
+                  </select>
+                </div>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Grund</label>
+                <textarea name="reason" rows={2} defaultValue={editAbsence.reason || ''} className="w-full px-3 py-2 border rounded-lg text-sm" />
+              </div>
+              <p className="text-xs text-gray-500">
+                Wird der Status auf „Genehmigt" oder „Abgelehnt" geändert,
+                bekommt der Mitarbeiter automatisch eine E-Mail.
+              </p>
+              <div className="flex justify-end gap-2">
+                <button type="button" onClick={() => setEditAbsence(null)} className="px-4 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded-lg">Abbrechen</button>
                 <button type="submit" className="px-4 py-2 text-sm bg-yellow-600 text-white rounded-lg hover:bg-yellow-700">Speichern</button>
               </div>
             </form>
