@@ -291,7 +291,10 @@ export default function ZeiterfassungPage() {
     .reduce((s, e) => s + sollFor(e), 0);
 
   return (
-    <div className="p-4 md:p-8 max-w-6xl mx-auto text-white">
+    // FIX: eigener dunkler Hintergrund – der Inhaltsbereich der Sidebar
+    // ist hell (bg-slate-100), weißer Text wäre sonst unsichtbar.
+    <div className="min-h-screen bg-[#0f172a] p-4 md:p-8">
+    <div className="max-w-6xl mx-auto text-white">
       {/* Kopf */}
       <div className="flex flex-wrap items-center gap-3 mb-6">
         <Clock className="w-7 h-7 text-amber-400" />
@@ -420,6 +423,7 @@ export default function ZeiterfassungPage() {
           Beim laufenden Monat zählt das Soll nur bis heute. Pause: {BREAK_RULE_TEXT} (automatisch beim Ausstempeln).
         </p>
       )}
+    </div>
     </div>
   );
 }

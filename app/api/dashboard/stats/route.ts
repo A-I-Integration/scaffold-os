@@ -164,7 +164,12 @@ export async function GET() {
         totalArticles: inventoryItems.length,
         totalEmployees: allEmployees.length,
         activeEmployees: allEmployees.filter((e: any) => e.status === 'active').length,
-        absentEmployees: allEmployees.filter((e: any) => ['sick', 'vacation'].includes(e.status)).length,
+        // FIX (Dashboard-Aufräumen): vorher ['sick','vacation'] – diese
+        // Statuswerte existieren in employees.status gar nicht (immer 0).
+        // Richtig ist 'on_leave' (Urlaub/Krank über längeren Zeitraum).
+        absentEmployees: allEmployees.filter((e: any) => e.status === 'on_leave').length,
+        // NEU: Anzahl Projekte mit Preisdaten (für Hinweis im Dashboard)
+        withValueCount: enrichedProjects.filter((p: any) => p.total_value > 0).length,
         pendingTransports: activeTransports.filter((t: any) => t.status === 'pending').length,
         inTransitTransports: activeTransports.filter((t: any) => t.status === 'in_transit').length,
         toursToday: upcomingTours.filter((t: any) => t.planned_date === todayStr).length,

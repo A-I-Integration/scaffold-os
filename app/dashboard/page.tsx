@@ -2,6 +2,28 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import {
+  RefreshCw, Plus, AlertTriangle, CalendarDays, Euro, Users, Warehouse,
+  CheckCircle2, RotateCcw, Trash2,
+} from "lucide-react";
+
+// ============================================================
+// SCAFFOLD OS – Dashboard (aufgeräumt, 10.08.2026)
+//
+// NEU gegenüber der alten Version:
+// • Gruppierte Abschnitte in sinnvoller Reihenfolge:
+//   Alerts → Betrieb heute → Finanzen → Team & Lager →
+//   Charts → Projekte
+// • KPI-Karten sind anklickbar und springen in den
+//   passenden Bereich (Touren, Planung, Zeiterfassung …)
+// • Einheitliches dunkles Slate-Design (wie die neueren
+//   Seiten Prognose/Zeiterfassung)
+// • Projekte direkt hier abschließen / wieder öffnen /
+//   löschen (Admin + Dispo, Sicherheitsabfrage)
+// • Hinweis, wenn Geldbeträge 0 € sind, weil noch keine
+//   Aufmaß-Preise (Schritt 6) vorliegen
+// Daten kommen weiterhin aus /api/dashboard/stats.
+// ============================================================
 
 interface Project {
   id: string;
@@ -44,30 +66,12 @@ interface Stats {
   absentToday: number;
   pendingAbsences: number;
   hoursThisWeek: number;
+  withValueCount: number;
 }
 
-interface RevenueMonth {
-  month: string;
-  revenue: number;
-  count: number;
-}
-
-interface MarginDist {
-  '0-10%': number;
-  '10-20%': number;
-  '20-30%': number;
-  '30%+': number;
-  'Keine': number;
-}
-
-interface TopProfit {
-  id: string;
-  name: string;
-  revenue: number;
-  profit: number;
-  margin: number;
-}
-
+interface RevenueMonth { month: string; revenue: number; count: number }
+interface MarginDist { '0-10%': number; '10-20%': number; '20-30%': number; '30%+': number; 'Keine': number }
+interface TopProfit { id: string; name: string; revenue: number; profit: number; margin: number }
 interface ChartsData {
   revenueByMonth: RevenueMonth[];
   marginDistribution: MarginDist;
@@ -82,18 +86,16 @@ export default function DashboardPage() {
   const [charts, setCharts] = useState<ChartsData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [busyId, setBusyId] = useState<string | null>(null);
+  const [msg, setMsg] = useState("");
 
   async function loadDashboard() {
-    setLoading(true);
     setError("");
     try {
       const res = await fetch(`/api/dashboard/stats?t=${Date.now()}`, { cache: "no-store" });
       const json = await res.json();
-      console.log("[Dashboard] Response:", json);
-
       if (!res.ok) throw new Error(json.error || `HTTP ${res.status}`);
       if (!json.success) throw new Error(json.error || "API success=false");
-
       setStats(json.stats);
       setProjects(json.recentProjects || []);
       setAlerts(json.alerts || []);
@@ -111,111 +113,197 @@ export default function DashboardPage() {
     return () => clearInterval(interval);
   }, []);
 
-  if (loading && !stats) {
-    return (
-      <div className="min-h-screen bg-gray-950 text-white flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-amber-500 mx-auto mb-4" />
-          <p className="text-gray-400">Dashboard wird geladen...</p>
-        </div>
-      </div>
-    );
+  // ─── NEU: Projekt abschließen / wieder öffnen ───
+  async function setProjectStatus(p: Project, status: 'active' | 'completed') {
+    setBusyId(p.id);
+    setMsg("");
+    try {
+      const res = await fetch('/api/projects', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: p.id, status }),
+      });
+      const json = await res.json();
+      if (!json.success) throw new Error(json.error);
+      setMsg(status === 'completed' ? `✅ „${p.name}" abgeschlossen.` : `✅ „${p.name}" wieder geöffnet.`);
+      await loadDashboard();
+    } catch (e: any) {
+      setMsg('Fehler: ' + e.message);
+    } finally {
+      setBusyId(null);
+    }
   }
 
-  // ─── CHART HELPERS ───
+  // ─── NEU: Projekt löschen (mit Sicherheitsabfrage) ───
+  async function deleteProject(p: Project) {
+    if (!window.confirm(`Projekt „${p.name}" wirklich löschen?\n\nDas kann nicht rückgängig gemacht werden. Falls Touren/Transporte/Zeiten damit verknüpft sind, wird das Löschen verweigert – dann besser abschließen.`)) return;
+    setBusyId(p.id);
+    setMsg("");
+    try {
+      const res = await fetch(`/api/projects?id=${p.id}`, { method: 'DELETE' });
+      const json = await res.json();
+      if (!json.success) throw new Error(json.error);
+      setMsg(`✅ „${p.name}" gelöscht.`);
+      await loadDashboard();
+    } catch (e: any) {
+      setMsg('Fehler: ' + e.message);
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  // ─── CHART HELPERS (unverändert) ───
   function formatCurrency(val: number) {
     if (val >= 1000000) return `${(val / 1000000).toFixed(1)}M €`;
     if (val >= 1000) return `${(val / 1000).toFixed(1)}k €`;
-    return `${val} €`;
+    return `${Math.round(val)} €`;
   }
-
   function formatMonth(m: string) {
     const [y, mo] = m.split('-');
     return `${mo}/${y}`;
   }
 
-  // Max für Chart-Skalierung
   const maxRevenue = charts?.revenueByMonth?.length
     ? Math.max(...charts.revenueByMonth.map(d => d.revenue)) * 1.1
     : 1;
-
   const marginTotal = charts?.marginDistribution
     ? Object.values(charts.marginDistribution).reduce((a, b) => a + b, 0)
     : 1;
 
+  if (loading && !stats) {
+    return (
+      <div className="min-h-screen bg-[#0f172a] text-white flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-amber-500 mx-auto mb-4" />
+          <p className="text-slate-400">Dashboard wird geladen …</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className="min-h-screen bg-gray-950 text-white p-6">
+    <div className="min-h-screen bg-[#0f172a] text-white p-4 md:p-8">
       <div className="max-w-7xl mx-auto">
-        {/* Header */}
-        <div className="flex items-center justify-between mb-8">
+
+        {/* ─── Kopf ─── */}
+        <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
           <div>
-            <h1 className="text-3xl font-bold text-amber-500">SCAFFOLD OS</h1>
-            <p className="text-gray-400 text-sm mt-1">CEO Dashboard – Live-Übersicht</p>
+            <h1 className="text-2xl md:text-3xl font-bold text-amber-400">Dashboard</h1>
+            <p className="text-slate-400 text-sm mt-1">Live-Übersicht · aktualisiert alle 15 s</p>
           </div>
           <div className="flex gap-3">
-            <button onClick={loadDashboard} className="px-4 py-2 bg-gray-800 hover:bg-gray-700 rounded-lg text-sm transition-colors">
-              🔄 Aktualisieren
+            <button onClick={loadDashboard}
+              className="inline-flex items-center gap-1.5 px-4 py-2 bg-[#1e293b] border border-[#334155] hover:border-amber-400 rounded-lg text-sm transition-colors">
+              <RefreshCw className="w-4 h-4" /> Aktualisieren
             </button>
-            <button onClick={() => router.push("/aufmass/schritt1")} className="px-4 py-2 bg-amber-600 hover:bg-amber-500 rounded-lg text-sm font-medium transition-colors">
-              + Neues Aufmaß
+            <button onClick={() => router.push("/aufmass/schritt1")}
+              className="inline-flex items-center gap-1.5 px-4 py-2 bg-amber-500 hover:bg-amber-600 text-slate-900 rounded-lg text-sm font-semibold transition-colors">
+              <Plus className="w-4 h-4" /> Neues Aufmaß
             </button>
           </div>
         </div>
 
         {error && (
           <div className="bg-red-900/30 border border-red-700 rounded-lg p-4 mb-6 text-red-300">
-            ❌ Fehler: {error}
+            Fehler: {error}
+          </div>
+        )}
+        {msg && (
+          <div className={`rounded-lg p-3 text-sm mb-6 ${msg.startsWith('✅') ? 'bg-emerald-900/40 border border-emerald-700 text-emerald-200' : 'bg-red-900/40 border border-red-700 text-red-200'}`}>
+            {msg}
           </div>
         )}
 
-        {/* ═══════════════════════════════════════════════════════════ */}
-        {/* KPI CARDS – ERWEITERT */}
-        {stats && (
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 mb-8">
-            <KpiCard label="Aktive Projekte" value={stats.activeProjectsCount} color="text-amber-400" />
-            <KpiCard label="Gesamtumsatz" value={formatCurrency(stats.totalRevenue)} color="text-emerald-400" />
-            <KpiCard label="Gesch. Kosten" value={formatCurrency(stats.totalEstimatedCosts)} color="text-red-400" />
-            <KpiCard label="Gesch. Gewinn" value={formatCurrency(stats.totalEstimatedProfit)} color="text-green-400" />
-            <KpiCard label="Ø Marge" value={`${stats.avgMargin}%`} color={stats.avgMargin < 15 ? "text-red-400" : "text-green-400"} />
-            <KpiCard label="Lagerwert" value={formatCurrency(stats.inventoryValue)} color="text-blue-400" />
-          </div>
-        )}
-
-        {/* ═══════════════════════════════════════════════════════════ */}
-        {/* BETRIEB HEUTE – Touren, Zeiterfassung, Abwesenheiten */}
-        {stats && (
-          <div className="mb-8">
-            <h2 className="text-lg font-semibold text-gray-300 mb-3">🗓️ Betrieb heute</h2>
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
-              <KpiCard label="Touren heute" value={stats.toursToday} color="text-blue-400" />
-              <KpiCard label="Unterwegs" value={stats.toursInProgress} color={stats.toursInProgress > 0 ? "text-amber-400" : "text-gray-400"} />
-              <KpiCard label="Geplante Touren" value={stats.toursPlanned} color="text-purple-400" />
-              <KpiCard label="Stunden (7 Tage)" value={stats.hoursThisWeek.toLocaleString("de-DE")} color="text-emerald-400" />
-              <KpiCard label="Abwesend heute" value={stats.absentToday} color={stats.absentToday > 0 ? "text-red-400" : "text-green-400"} />
-              <KpiCard label="Offene Anträge" value={stats.pendingAbsences} color={stats.pendingAbsences > 0 ? "text-amber-400" : "text-gray-400"} />
+        {/* ═══ 1) ALERTS – Wichtigstes zuerst ═══ */}
+        {alerts.length > 0 && (
+          <Section icon={<AlertTriangle className="w-5 h-5 text-red-400" />} title="Handlungsbedarf">
+            <div className="space-y-2">
+              {alerts.map((a, i) => (
+                <div key={i} className={`flex items-center justify-between gap-3 p-4 rounded-xl border ${
+                  a.severity === "critical" ? "bg-red-900/20 border-red-700/50" : "bg-yellow-900/20 border-yellow-700/50"
+                }`}>
+                  <div className="flex items-center gap-3 min-w-0">
+                    <span className="text-xl shrink-0">{a.icon}</span>
+                    <div className="min-w-0">
+                      <p className="font-medium text-white">{a.title}</p>
+                      <p className="text-sm text-slate-400 truncate">{a.message}</p>
+                    </div>
+                  </div>
+                  <button onClick={() => router.push(a.action)}
+                    className="shrink-0 px-3 py-1.5 bg-[#1e293b] border border-[#334155] hover:border-amber-400 rounded-lg text-sm transition-colors">
+                    {a.actionLabel}
+                  </button>
+                </div>
+              ))}
             </div>
-          </div>
+          </Section>
         )}
 
-        {/* ═══════════════════════════════════════════════════════════ */}
-        {/* CHARTS ROW */}
+        {/* ═══ 2) BETRIEB HEUTE ═══ */}
+        {stats && (
+          <Section icon={<CalendarDays className="w-5 h-5 text-blue-400" />} title="Betrieb heute">
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+              <KpiCard label="Touren heute" value={stats.toursToday} color="text-blue-400" href="/touren" />
+              <KpiCard label="Unterwegs" value={stats.toursInProgress} color={stats.toursInProgress > 0 ? "text-amber-400" : "text-slate-400"} href="/touren" />
+              <KpiCard label="Geplante Touren" value={stats.toursPlanned} color="text-purple-400" href="/touren" />
+              <KpiCard label="Stunden (7 Tage)" value={stats.hoursThisWeek.toLocaleString("de-DE")} color="text-emerald-400" href="/zeiterfassung" />
+              <KpiCard label="Abwesend heute" value={stats.absentToday} color={stats.absentToday > 0 ? "text-red-400" : "text-green-400"} href="/planung" />
+              <KpiCard label="Offene Anträge" value={stats.pendingAbsences} color={stats.pendingAbsences > 0 ? "text-amber-400" : "text-slate-400"} href="/planung" />
+            </div>
+          </Section>
+        )}
+
+        {/* ═══ 3) FINANZEN ═══ */}
+        {stats && (
+          <Section icon={<Euro className="w-5 h-5 text-emerald-400" />} title="Finanzen">
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+              <KpiCard label="Aktive Projekte" value={stats.activeProjectsCount} color="text-amber-400" href="#projekte" />
+              <KpiCard label="Abgeschlossen" value={stats.completedProjectsCount} color="text-slate-400" href="#projekte" />
+              <KpiCard label="Gesamtumsatz" value={formatCurrency(stats.totalRevenue)} color="text-emerald-400" />
+              <KpiCard label="Gesch. Kosten" value={formatCurrency(stats.totalEstimatedCosts)} color="text-red-400" />
+              <KpiCard label="Gesch. Gewinn" value={formatCurrency(stats.totalEstimatedProfit)} color="text-green-400" />
+              <KpiCard label="Ø Marge" value={`${stats.avgMargin}%`} color={stats.avgMargin < 15 ? "text-red-400" : "text-green-400"} />
+            </div>
+            {stats.withValueCount === 0 && stats.totalProjects > 0 && (
+              <p className="text-xs text-slate-500 mt-3">
+                Umsatz/Kosten/Gewinn/Marge stehen auf 0, weil noch kein Projekt einen
+                KI-Preis aus Aufmaß Schritt 6 hat. Sobald ein Aufmaß komplett
+                durchgerechnet ist, füllen sich diese Werte automatisch.
+              </p>
+            )}
+          </Section>
+        )}
+
+        {/* ═══ 4) TEAM & LAGER ═══ */}
+        {stats && (
+          <Section icon={<Users className="w-5 h-5 text-amber-400" />} title="Team & Lager">
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+              <KpiCard label="Mitarbeiter aktiv" value={stats.activeEmployees} color="text-emerald-400" href="/planung" />
+              <KpiCard label="Langzeit abwesend" value={stats.absentEmployees} color={stats.absentEmployees > 0 ? "text-amber-400" : "text-slate-400"} href="/planung" />
+              <KpiCard label="Lagerwert" value={formatCurrency(stats.inventoryValue)} color="text-blue-400" href="/lager" />
+              <KpiCard label="Artikel kritisch" value={stats.criticalStockCount} color={stats.criticalStockCount > 0 ? "text-red-400" : "text-green-400"} href="/prognose" />
+              <KpiCard label="Transporte offen" value={stats.pendingTransports} color={stats.pendingTransports > 0 ? "text-amber-400" : "text-slate-400"} href="/lager" />
+              <KpiCard label="Unterwegs (Transport)" value={stats.inTransitTransports} color="text-blue-400" href="/lager" />
+            </div>
+          </Section>
+        )}
+
+        {/* ═══ 5) CHARTS ═══ */}
         {charts && (
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-            {/* CHART 1: Umsatz pro Monat */}
-            <div className="bg-gray-900/50 border border-gray-800 rounded-xl p-6">
-              <h3 className="text-lg font-semibold text-gray-300 mb-4">📊 Umsatz pro Monat</h3>
+            {/* Umsatz pro Monat */}
+            <div className="bg-[#1e293b] border border-[#334155] rounded-xl p-6">
+              <h3 className="text-lg font-semibold text-slate-300 mb-4">📊 Umsatz pro Monat</h3>
               {charts.revenueByMonth.length === 0 ? (
-                <p className="text-gray-500 text-sm">Noch keine Umsatzdaten vorhanden.</p>
+                <p className="text-slate-500 text-sm">Noch keine Umsatzdaten – erscheint, sobald ein Aufmaß mit KI-Preis (Schritt 6) fertig ist.</p>
               ) : (
                 <div className="space-y-3">
                   {charts.revenueByMonth.map((d) => (
                     <div key={d.month} className="flex items-center gap-3">
-                      <div className="w-16 text-xs text-gray-500 text-right shrink-0">{formatMonth(d.month)}</div>
-                      <div className="flex-1 h-8 bg-gray-800 rounded overflow-hidden relative">
-                        <div
-                          className="h-full bg-emerald-500/80 rounded transition-all duration-700"
-                          style={{ width: `${Math.max(5, (d.revenue / maxRevenue) * 100)}%` }}
-                        />
+                      <div className="w-16 text-xs text-slate-500 text-right shrink-0">{formatMonth(d.month)}</div>
+                      <div className="flex-1 h-8 bg-slate-800 rounded overflow-hidden relative">
+                        <div className="h-full bg-emerald-500/80 rounded transition-all duration-700"
+                          style={{ width: `${Math.max(5, (d.revenue / maxRevenue) * 100)}%` }} />
                         <span className="absolute inset-0 flex items-center px-2 text-xs font-medium text-white drop-shadow">
                           {formatCurrency(d.revenue)} ({d.count} Proj{d.count === 1 ? 'ekt' : 'ekte'})
                         </span>
@@ -226,11 +314,11 @@ export default function DashboardPage() {
               )}
             </div>
 
-            {/* CHART 2: Margen-Verteilung */}
-            <div className="bg-gray-900/50 border border-gray-800 rounded-xl p-6">
-              <h3 className="text-lg font-semibold text-gray-300 mb-4">📈 Margen-Verteilung</h3>
+            {/* Margen-Verteilung */}
+            <div className="bg-[#1e293b] border border-[#334155] rounded-xl p-6">
+              <h3 className="text-lg font-semibold text-slate-300 mb-4">📈 Margen-Verteilung</h3>
               {marginTotal === 0 ? (
-                <p className="text-gray-500 text-sm">Noch keine Marge-Daten vorhanden.</p>
+                <p className="text-slate-500 text-sm">Noch keine Marge-Daten vorhanden.</p>
               ) : (
                 <div className="space-y-3">
                   {Object.entries(charts.marginDistribution).map(([label, count]) => {
@@ -241,11 +329,11 @@ export default function DashboardPage() {
                       label === '20-30%' ? 'bg-emerald-400' :
                       label === '10-20%' ? 'bg-yellow-500' :
                       label === '0-10%' ? 'bg-red-500' :
-                      'bg-gray-600';
+                      'bg-slate-600';
                     return (
                       <div key={label} className="flex items-center gap-3">
-                        <div className="w-20 text-xs text-gray-500 text-right shrink-0">{label}</div>
-                        <div className="flex-1 h-8 bg-gray-800 rounded overflow-hidden relative">
+                        <div className="w-20 text-xs text-slate-500 text-right shrink-0">{label}</div>
+                        <div className="flex-1 h-8 bg-slate-800 rounded overflow-hidden relative">
                           <div className={`h-full ${barColor}/80 rounded transition-all duration-700`} style={{ width: `${Math.max(5, pct)}%` }} />
                           <span className="absolute inset-0 flex items-center px-2 text-xs font-medium text-white drop-shadow">
                             {count} Projekt{count !== 1 ? 'e' : ''} ({Math.round(pct)}%)
@@ -260,72 +348,43 @@ export default function DashboardPage() {
           </div>
         )}
 
-        {/* ═══════════════════════════════════════════════════════════ */}
-        {/* TOP-PROFIT-PROJEKTE */}
+        {/* Top-Gewinn-Projekte */}
         {charts && charts.topProfitProjects.length > 0 && (
-          <div className="bg-gray-900/50 border border-gray-800 rounded-xl p-6 mb-8">
-            <h3 className="text-lg font-semibold text-gray-300 mb-4">🏆 Top-Gewinn-Projekte</h3>
+          <div className="bg-[#1e293b] border border-[#334155] rounded-xl p-6 mb-8">
+            <h3 className="text-lg font-semibold text-slate-300 mb-4">🏆 Top-Gewinn-Projekte</h3>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
               {charts.topProfitProjects.map((p) => (
-                <div key={p.id} className="bg-gray-800/50 border border-gray-700 rounded-lg p-4 hover:border-amber-500/50 transition-colors cursor-pointer"
+                <div key={p.id}
+                  className="bg-slate-800/50 border border-slate-700 rounded-lg p-4 hover:border-amber-500/50 transition-colors cursor-pointer"
                   onClick={() => router.push(`/aufmass/schritt6?id=${p.id}`)}>
                   <div className="text-sm font-medium text-white truncate">{p.name}</div>
-                  <div className="text-xs text-gray-500 mt-1">Umsatz: {formatCurrency(p.revenue)}</div>
+                  <div className="text-xs text-slate-500 mt-1">Umsatz: {formatCurrency(p.revenue)}</div>
                   <div className="text-lg font-bold text-green-400 mt-2">+{formatCurrency(p.profit)}</div>
-                  <div className="text-xs text-gray-400">Marge: {p.margin}%</div>
+                  <div className="text-xs text-slate-400">Marge: {p.margin}%</div>
                 </div>
               ))}
             </div>
           </div>
         )}
 
-        {/* ═══════════════════════════════════════════════════════════ */}
-        {/* ALERTS */}
-        {alerts.length > 0 && (
-          <div className="mb-8">
-            <h2 className="text-lg font-semibold text-gray-300 mb-3">⚠️ Alerts</h2>
-            <div className="space-y-2">
-              {alerts.map((a, i) => (
-                <div key={i} className={`flex items-center justify-between p-4 rounded-lg border ${
-                  a.severity === "critical" ? "bg-red-900/20 border-red-700/50" : "bg-yellow-900/20 border-yellow-700/50"
-                }`}>
-                  <div className="flex items-center gap-3">
-                    <span className="text-xl">{a.icon}</span>
-                    <div>
-                      <p className="font-medium text-white">{a.title}</p>
-                      <p className="text-sm text-gray-400">{a.message}</p>
-                    </div>
-                  </div>
-                  <button onClick={() => router.push(a.action)} className="px-3 py-1.5 bg-gray-800 hover:bg-gray-700 rounded text-sm transition-colors">
-                    {a.actionLabel}
-                  </button>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* ═══════════════════════════════════════════════════════════ */}
-        {/* PROJEKTE TABELLE */}
-        <div>
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-semibold text-gray-300">
-              📋 Letzte Projekte {projects.length > 0 && `(${projects.length})`}
-            </h2>
-            <span className="text-xs text-gray-500">Auto-Refresh: 15s</span>
-          </div>
+        {/* ═══ 6) PROJEKTE – mit Abschließen / Löschen ═══ */}
+        <div id="projekte">
+          <h2 className="text-lg font-semibold text-slate-300 mb-3 flex items-center gap-2">
+            <Warehouse className="w-5 h-5 text-amber-400" /> Letzte Projekte {projects.length > 0 && `(${projects.length})`}
+          </h2>
 
           {projects.length === 0 ? (
-            <div className="bg-gray-900/50 border border-gray-800 rounded-lg p-8 text-center">
-              <p className="text-gray-500 mb-4">Keine Projekte gefunden.</p>
-              <button onClick={() => router.push("/aufmass/schritt1")} className="px-4 py-2 bg-amber-600 hover:bg-amber-500 rounded-lg text-sm font-medium transition-colors">
+            <div className="bg-[#1e293b] border border-[#334155] rounded-xl p-8 text-center">
+              <p className="text-slate-500 mb-4">Keine Projekte gefunden.</p>
+              <button onClick={() => router.push("/aufmass/schritt1")}
+                className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-slate-900 rounded-lg text-sm font-semibold transition-colors">
                 Erstes Aufmaß anlegen
               </button>
             </div>
           ) : (
-            <div className="bg-gray-900/50 border border-gray-800 rounded-lg overflow-hidden">
-              <table className="w-full text-left">
-                <thead className="bg-gray-800/50 text-gray-400 text-xs uppercase">
+            <div className="bg-[#1e293b] border border-[#334155] rounded-xl overflow-x-auto">
+              <table className="w-full text-left min-w-[720px]">
+                <thead className="bg-slate-800/50 text-slate-400 text-xs uppercase">
                   <tr>
                     <th className="px-4 py-3">Projekt</th>
                     <th className="px-4 py-3">Kunde</th>
@@ -333,13 +392,15 @@ export default function DashboardPage() {
                     <th className="px-4 py-3">Marge</th>
                     <th className="px-4 py-3">Status</th>
                     <th className="px-4 py-3">Update</th>
+                    <th className="px-4 py-3 text-right">Aktionen</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-gray-800">
+                <tbody className="divide-y divide-slate-800">
                   {projects.map((p) => (
-                    <tr key={p.id} className="hover:bg-gray-800/30 transition-colors cursor-pointer" onClick={() => router.push(`/aufmass/schritt6?id=${p.id}`)}>
+                    <tr key={p.id} className="hover:bg-slate-800/30 transition-colors cursor-pointer"
+                      onClick={() => router.push(`/aufmass/schritt6?id=${p.id}`)}>
                       <td className="px-4 py-3 font-medium text-white">{p.name}</td>
-                      <td className="px-4 py-3 text-gray-400">{p.customer}</td>
+                      <td className="px-4 py-3 text-slate-400">{p.customer}</td>
                       <td className="px-4 py-3 text-emerald-400">
                         {p.value > 0 ? `${p.value.toLocaleString("de-DE")} €` : "–"}
                       </td>
@@ -353,20 +414,48 @@ export default function DashboardPage() {
                             {p.margin}%
                           </span>
                         ) : (
-                          <span className="text-gray-600">–</span>
+                          <span className="text-slate-600">–</span>
                         )}
                       </td>
                       <td className="px-4 py-3">
                         <span className={`px-2 py-0.5 rounded text-xs ${
                           p.status === "active" ? "bg-amber-900/50 text-amber-400" :
                           p.status === "completed" ? "bg-green-900/50 text-green-400" :
-                          "bg-gray-800 text-gray-400"
+                          "bg-slate-800 text-slate-400"
                         }`}>
                           {p.status === "active" ? "Aktiv" : p.status === "completed" ? "Abgeschlossen" : p.status}
                         </span>
                       </td>
-                      <td className="px-4 py-3 text-gray-500 text-sm">
+                      <td className="px-4 py-3 text-slate-500 text-sm">
                         {p.daysSinceUpdate === 0 ? "Heute" : `vor ${p.daysSinceUpdate} Tagen`}
+                      </td>
+                      <td className="px-4 py-3 text-right" onClick={(e) => e.stopPropagation()}>
+                        <div className="inline-flex gap-2">
+                          {p.status === "active" ? (
+                            <button
+                              disabled={busyId === p.id}
+                              onClick={() => setProjectStatus(p, 'completed')}
+                              title="Projekt abschließen"
+                              className="inline-flex items-center gap-1 text-xs border border-slate-600 hover:border-emerald-400 text-slate-300 hover:text-emerald-400 px-2.5 py-1.5 rounded-md transition-colors disabled:opacity-40">
+                              <CheckCircle2 className="w-3.5 h-3.5" /> Abschließen
+                            </button>
+                          ) : (
+                            <button
+                              disabled={busyId === p.id}
+                              onClick={() => setProjectStatus(p, 'active')}
+                              title="Projekt wieder öffnen"
+                              className="inline-flex items-center gap-1 text-xs border border-slate-600 hover:border-amber-400 text-slate-300 hover:text-amber-400 px-2.5 py-1.5 rounded-md transition-colors disabled:opacity-40">
+                              <RotateCcw className="w-3.5 h-3.5" /> Öffnen
+                            </button>
+                          )}
+                          <button
+                            disabled={busyId === p.id}
+                            onClick={() => deleteProject(p)}
+                            title="Projekt löschen"
+                            className="inline-flex items-center gap-1 text-xs border border-slate-600 hover:border-red-400 text-slate-300 hover:text-red-400 px-2.5 py-1.5 rounded-md transition-colors disabled:opacity-40">
+                            <Trash2 className="w-3.5 h-3.5" /> Löschen
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -380,10 +469,29 @@ export default function DashboardPage() {
   );
 }
 
-function KpiCard({ label, value, color }: { label: string; value: string | number; color: string }) {
+// ─── Abschnitts-Rahmen ───
+function Section({ icon, title, children }: { icon: React.ReactNode; title: string; children: React.ReactNode }) {
   return (
-    <div className="bg-gray-900/50 border border-gray-800 rounded-lg p-4">
-      <p className="text-gray-500 text-xs uppercase tracking-wide mb-1">{label}</p>
+    <div className="mb-8">
+      <h2 className="text-lg font-semibold text-slate-300 mb-3 flex items-center gap-2">{icon} {title}</h2>
+      {children}
+    </div>
+  );
+}
+
+// ─── KPI-Karte (jetzt optional anklickbar) ───
+function KpiCard({ label, value, color, href }: { label: string; value: string | number; color: string; href?: string }) {
+  const router = useRouter();
+  const clickable = !!href;
+  return (
+    <div
+      onClick={clickable ? () => router.push(href!) : undefined}
+      className={`bg-[#1e293b] border border-[#334155] rounded-xl p-4 transition-colors ${
+        clickable ? 'cursor-pointer hover:border-amber-400/60' : ''
+      }`}
+      title={clickable ? 'Bereich öffnen' : undefined}
+    >
+      <p className="text-slate-500 text-xs uppercase tracking-wide mb-1">{label}</p>
       <p className={`text-xl font-bold ${color}`}>{value}</p>
     </div>
   );
