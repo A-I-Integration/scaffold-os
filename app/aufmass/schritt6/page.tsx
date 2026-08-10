@@ -55,6 +55,13 @@ export default function Schritt6Page() {
         try { data[`step${i}`] = JSON.parse(raw); } catch { data[`step${i}`] = {}; }
       } else { data[`step${i}`] = {}; }
     }
+    // LiDAR-Maße und KI-Foto-Analyse aus Schritt 1 mit ins Projekt übernehmen
+    const lidarRaw = localStorage.getItem('scaffold_lidar_measurements');
+    if (lidarRaw) {
+      try { data.lidarMeasurements = JSON.parse(lidarRaw); } catch { /* ignore */ }
+    }
+    const fotoAnalyse = localStorage.getItem('scaffold_foto_analyse');
+    if (fotoAnalyse) data.fotoAnalyse = fotoAnalyse;
     setStepData(data);
     // Kunden-E-Mail aus Schritt 1 laden
     if (data.step1?.ansprechpartnerEmail) setCustomerEmail(data.step1.ansprechpartnerEmail);
@@ -145,6 +152,9 @@ export default function Schritt6Page() {
         try { await fetch('/api/attach-photos', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sessionId, projectId: result.id }) }); localStorage.removeItem('scaffold_session_id'); } catch (photoErr) { console.error('Foto-Verknüpfung fehlgeschlagen:', photoErr); }
       }
       setSavedProjectId(result.id);
+      // Temporäre Upload-/KI-Daten aufräumen, damit sie nicht ins nächste Projekt rutschen
+      localStorage.removeItem('scaffold_lidar_measurements');
+      localStorage.removeItem('scaffold_foto_analyse');
       localStorage.setItem('scaffold_step6', JSON.stringify({ kiResult, savedAt: new Date().toISOString() }));
       alert('✅ Projekt gespeichert! ID: ' + result.id);
     } catch (err: any) { alert('❌ Speichern fehlgeschlagen: ' + err.message); } finally { setIsSaving(false); }

@@ -9,6 +9,7 @@ import { PartialScaffoldInput } from '@/types/scaffold';
 export default function Schritt2Page() {
   const router = useRouter();
   const [step1Data, setStep1Data] = useState<any>(null);
+  const [lidarUebernommen, setLidarUebernommen] = useState(false);
 
   const [form, setForm] = useState({
     laenge: '',
@@ -128,6 +129,23 @@ export default function Schritt2Page() {
     if (saved) setStep1Data(JSON.parse(saved));
     const saved2 = localStorage.getItem('scaffold_step2');
     if (saved2) setForm(JSON.parse(saved2));
+
+    // LiDAR-Maße aus Schritt 1 übernehmen (nur leere Felder, nichts überschreiben)
+    const lidarRaw = localStorage.getItem('scaffold_lidar_measurements');
+    if (lidarRaw) {
+      try {
+        const m = JSON.parse(lidarRaw);
+        setForm((prev) => ({
+          ...prev,
+          laenge: prev.laenge || (m.lengthM ? m.lengthM.toFixed(2) : ''),
+          breite: prev.breite || (m.widthM ? m.widthM.toFixed(2) : ''),
+          hoehe: prev.hoehe || (m.heightM ? m.heightM.toFixed(2) : ''),
+        }));
+        setLidarUebernommen(true);
+      } catch {
+        // ignore
+      }
+    }
   }, []);
 
   function toggleHindernis(h: string) {
@@ -166,6 +184,12 @@ export default function Schritt2Page() {
         )}
 
         <div className="bg-slate-800 rounded-xl p-6 space-y-6">
+
+          {lidarUebernommen && (
+            <div className="rounded-lg bg-purple-900/20 border border-purple-500/30 p-3 text-sm text-purple-300">
+              📐 Maße wurden aus dem LiDAR-Scan übernommen – bitte prüfen und bei Bedarf anpassen.
+            </div>
+          )}
 
           <div className="grid grid-cols-2 gap-4">
             <div>
