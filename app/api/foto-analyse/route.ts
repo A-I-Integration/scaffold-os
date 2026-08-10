@@ -52,13 +52,22 @@ export async function POST(req: NextRequest) {
       `${supabaseUrl}/storage/v1/object/public/project-media/${m.storage_path}`
     );
 
-    const prompt = `Du bist ein erfahrener Gerüstbau-Planer. Analysiere diese Baustellen-Fotos und antworte auf Deutsch, klar und konkret:
+    const prompt = `Du bist ein erfahrener Gerüstbau-Planer. Analysiere diese Baustellen-Fotos.
 
-1) FASSADE: Was siehst du? (Material, Zustand, Besonderheiten)
-2) HINDERNISSE: Erkannte Hindernisse für ein Gerüst (Fenster, Türen, Erker, Balkone, Durchgänge, Leitungen, Bewuchs, Garagen, Werbeanlagen)
-3) HINWEISE: Was sollte der Bauleiter bei der Gerüstplanung beachten?
+Antworte AUSSCHLIESSLICH als JSON-Objekt mit genau diesen Feldern:
+{
+  "fassade": "<einer dieser Werte: Klinker, WDVS, Beton, Naturstein, Glas, Holz, Putz, Denkmalschutz — oder null wenn nicht erkennbar>",
+  "dachform": "<einer dieser Werte: Satteldach, Flachdach, Pultdach, Walmdach, Mansarddach, Zeltdach — oder null wenn nicht erkennbar>",
+  "hindernisse": ["<Liste aus: Erker, Balkon, Wintergarten, Kamin, Gaube, Markise — nur was wirklich zu sehen ist>"],
+  "hauseingaenge": <Anzahl sichtbarer Hauseingänge als Zahl, oder null>,
+  "garagen": <true/false — Garage oder Nebengebäude sichtbar?>,
+  "werbeanlagen": <true/false — Werbeanlage/Schild an der Fassade?>,
+  "durchfahrt": <true/false — Durchfahrt oder Durchgang im Gebäude sichtbar?>,
+  "zusammenfassung": "<2-3 Sätze: Fassade, Zustand, Besonderheiten>",
+  "hinweise": "<Stichpunkte: Was der Bauleiter bei der Gerüstplanung beachten sollte>"
+}
 
-Halte dich kurz – maximal 200 Wörter. Keine Einleitung, keine Höflichkeiten. Wenn etwas auf den Fotos nicht erkennbar ist, sage es ehrlich.`;
+Regeln: Nur erkennbare Dinge eintragen, im Zweifel null bzw. leere Liste. Keine Maße schätzen. Kein Text außerhalb des JSON.`;
 
     const kiRes = await fetch(`${baseUrl}/chat/completions`, {
       method: 'POST',
@@ -74,6 +83,7 @@ Halte dich kurz – maximal 200 Wörter. Keine Einleitung, keine Höflichkeiten.
         }],
         temperature: 0.3,
         max_tokens: 900,
+        response_format: { type: 'json_object' },
       }),
     });
 
@@ -86,14 +96,28 @@ Halte dich kurz – maximal 200 Wörter. Keine Einleitung, keine Höflichkeiten.
     }
 
     const kiJson = await kiRes.json();
-    const analysis = kiJson.choices?.[0]?.message?.content?.trim();
-    if (!analysis) {
+    const raw = kiJson.choices?.[0]?.message?.content?.trim();
+    if (!raw) {
       return NextResponse.json({ success: false, error: 'KI hat keine Antwort geliefert' }, { status: 502 });
     }
+
+    // Strukturierte Antwort parsen (Fallback: Rohtext als Zusammenfassung)
+    let structured: Record<string, any>;
+    try {
+      structured = JSON.parse(raw);
+    } catch {
+      structured = { zusammenfassung: raw, hinweise: '', hindernisse: [] };
+    }
+
+    const analysis = [
+      structured.zusammenfassung || '',
+      structured.hinweise ? `\nHINWEISE:\n${structured.hinweise}` : '',
+    ].filter(Boolean).join('\n');
 
     return NextResponse.json({
       success: true,
       analysis,
+      structured,
       analyzedCount: media.length,
       model,
     });

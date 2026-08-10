@@ -10,6 +10,7 @@ export default function Schritt2Page() {
   const router = useRouter();
   const [step1Data, setStep1Data] = useState<any>(null);
   const [lidarUebernommen, setLidarUebernommen] = useState(false);
+  const [kiUebernommen, setKiUebernommen] = useState(false);
 
   const [form, setForm] = useState({
     laenge: '',
@@ -146,6 +147,30 @@ export default function Schritt2Page() {
         // ignore
       }
     }
+
+    // KI-Foto-Analyse aus Schritt 1 übernehmen (nur leere Felder / neue Werte)
+    const fotoRaw = localStorage.getItem('scaffold_foto_daten');
+    if (fotoRaw) {
+      try {
+        const k = JSON.parse(fotoRaw);
+        setForm((prev) => ({
+          ...prev,
+          fassade: prev.fassade || (fassaden.includes(k.fassade) ? k.fassade : ''),
+          dachform: prev.dachform || (dachformen.includes(k.dachform) ? k.dachform : ''),
+          hauseingaenge: prev.hauseingaenge || (k.hauseingaenge ? String(k.hauseingaenge) : ''),
+          hindernisse: Array.from(new Set([
+            ...prev.hindernisse,
+            ...(Array.isArray(k.hindernisse) ? k.hindernisse.filter((h: string) => hindernisListe.includes(h)) : []),
+          ])),
+          garagen: prev.garagen || k.garagen === true,
+          werbeanlagen: prev.werbeanlagen || k.werbeanlagen === true,
+          durchfahrt: prev.durchfahrt || k.durchfahrt === true,
+        }));
+        setKiUebernommen(true);
+      } catch {
+        // ignore
+      }
+    }
   }, []);
 
   function toggleHindernis(h: string) {
@@ -188,6 +213,12 @@ export default function Schritt2Page() {
           {lidarUebernommen && (
             <div className="rounded-lg bg-purple-900/20 border border-purple-500/30 p-3 text-sm text-purple-300">
               📐 Maße wurden aus dem LiDAR-Scan übernommen – bitte prüfen und bei Bedarf anpassen.
+            </div>
+          )}
+
+          {kiUebernommen && (
+            <div className="rounded-lg bg-blue-900/20 border border-blue-500/30 p-3 text-sm text-blue-300">
+              🔮 Fassade, Dachform und Hindernisse wurden aus der KI-Foto-Analyse vorbefüllt – bitte prüfen, die KI kann sich irren.
             </div>
           )}
 

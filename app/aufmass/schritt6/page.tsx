@@ -62,6 +62,10 @@ export default function Schritt6Page() {
     }
     const fotoAnalyse = localStorage.getItem('scaffold_foto_analyse');
     if (fotoAnalyse) data.fotoAnalyse = fotoAnalyse;
+    const fotoDatenRaw = localStorage.getItem('scaffold_foto_daten');
+    if (fotoDatenRaw) {
+      try { data.fotoAnalyseStrukturiert = JSON.parse(fotoDatenRaw); } catch { /* ignore */ }
+    }
     setStepData(data);
     // Kunden-E-Mail aus Schritt 1 laden
     if (data.step1?.ansprechpartnerEmail) setCustomerEmail(data.step1.ansprechpartnerEmail);
@@ -155,6 +159,7 @@ export default function Schritt6Page() {
       // Temporäre Upload-/KI-Daten aufräumen, damit sie nicht ins nächste Projekt rutschen
       localStorage.removeItem('scaffold_lidar_measurements');
       localStorage.removeItem('scaffold_foto_analyse');
+      localStorage.removeItem('scaffold_foto_daten');
       localStorage.setItem('scaffold_step6', JSON.stringify({ kiResult, savedAt: new Date().toISOString() }));
       alert('✅ Projekt gespeichert! ID: ' + result.id);
     } catch (err: any) { alert('❌ Speichern fehlgeschlagen: ' + err.message); } finally { setIsSaving(false); }
