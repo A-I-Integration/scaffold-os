@@ -19,6 +19,7 @@ const ROLE_ACCESS: Record<string, string[]> = {
   '/aufmass':      ['admin', 'bauleiter'],
   '/stueckliste':  ['admin', 'bauleiter'],
   '/lager':        ['admin', 'disponent', 'bauleiter', 'lager'],
+  '/prognose':     ['admin', 'disponent', 'lager'],
   '/planung':      ['admin', 'disponent', 'bauleiter'],
   '/touren':       ['admin', 'disponent'],
   '/mitarbeiter':  ['admin', 'disponent'],
