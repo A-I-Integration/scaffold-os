@@ -59,7 +59,7 @@ export default function HomePage() {
                 Jetzt <span className="text-amber-400">Pilotkunde</span> werden
               </h2>
               <p className="mt-2 text-sm text-slate-400">
-                Sichern Sie sich noch bis <strong className="text-slate-200">September</strong> den Einführungspreis.
+                Einführungspreis bis <strong className="text-slate-200">30. September</strong> sichern.
               </p>
 
               {/* Preise */}
@@ -84,10 +84,10 @@ export default function HomePage() {
                 href="/anfrage?art=pilot"
                 className="mt-6 inline-flex items-center gap-2 bg-amber-500 hover:bg-amber-400 text-slate-900 font-black uppercase tracking-wide text-sm px-8 py-3.5 rounded-lg transition-colors shadow-lg shadow-amber-500/25"
               >
-                Als Pilotkunde anmelden
+                Pilotprojekt anfragen
                 <ArrowRight className="w-4 h-4" />
               </Link>
-              <p className="mt-3 text-[11px] text-slate-500">Einfach anmelden – wir melden uns bei Ihnen.</p>
+              <p className="mt-3 text-[11px] text-slate-500">Unverbindlich anfragen – wir melden uns bei Ihnen.</p>
             </div>
           </div>
         </div>
