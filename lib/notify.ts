@@ -22,6 +22,8 @@
 //   NEXT_PUBLIC_APP_URL (für Links in den Mails)
 // ============================================================
 
+import { buildUmdispositionSuggestion } from '@/lib/umdisposition';
+
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const key = process.env.SUPABASE_SERVICE_ROLE_KEY!;
 const headers = { apikey: key, Authorization: `Bearer ${key}` };
@@ -106,6 +108,29 @@ export async function notifyAbsenceCreated(absenceId: string): Promise<void> {
     const zeitraum = `${fmtDate(a.start_date)} – ${fmtDate(a.end_date)}`;
     const link = `${process.env.NEXT_PUBLIC_APP_URL || ''}/planung`;
 
+    // Bei Krankmeldung: KI-Umdisposition direkt mit in die Mail (nie blockierend)
+    let umdispoHtml = '';
+    if (a.type === 'sick') {
+      const heute = new Date().toISOString().slice(0, 10);
+      const zielDatum = a.start_date >= heute ? a.start_date : heute;
+      const v = await buildUmdispositionSuggestion(zielDatum);
+      if (v) {
+        const vorschlaege = v.vorschlaege
+          .map((x) => `<li style="margin: 4px 0;"><strong>${esc(x.tour)}:</strong> ${esc(x.betroffen)} → <strong>${esc(x.ersatz)}</strong> <span style="color:#64748b;">(${esc(x.begruendung)})</span></li>`)
+          .join('');
+        const warnungen = v.warnungen
+          .map((w) => `<li style="margin: 4px 0; color:#b45309;">⚠️ ${esc(w)}</li>`)
+          .join('');
+        umdispoHtml = `
+          <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 16px 0;">
+          <p style="margin: 0 0 8px;"><strong>🔮 KI-Umdisposition (${esc(zielDatum)}):</strong></p>
+          <p style="margin: 0 0 8px; color:#334155;">${esc(v.zusammenfassung)}</p>
+          ${vorschlaege ? `<ul style="margin: 0; padding-left: 18px;">${vorschlaege}</ul>` : ''}
+          ${warnungen ? `<ul style="margin: 8px 0 0; padding-left: 18px;">${warnungen}</ul>` : ''}
+          <p style="margin: 8px 0 0; font-size: 12px; color:#94a3b8;">Vorschlag der KI – die Entscheidung trifft die Disposition.</p>`;
+      }
+    }
+
     await sendMail(
       empfaenger,
       `[SCAFFOLD OS] Neue ${typ}: ${ma} (${zeitraum})`,
@@ -119,7 +144,8 @@ export async function notifyAbsenceCreated(absenceId: string): Promise<void> {
           <a href="${link}" style="display: inline-block; background: #f59e0b; color: #0f172a; padding: 10px 20px; text-decoration: none; border-radius: 6px; font-weight: bold;">
             In Planung öffnen &amp; entscheiden
           </a>
-        </p>`,
+        </p>
+        ${umdispoHtml}`,
         'Diese E-Mail wurde automatisch von SCAFFOLD OS versendet.'
       )
     );

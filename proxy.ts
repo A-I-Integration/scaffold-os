@@ -23,6 +23,7 @@ const ROLE_ACCESS: Record<string, string[]> = {
   '/planung':      ['admin', 'disponent', 'bauleiter'],
   '/zeiterfassung': ['admin', 'disponent', 'bauleiter'],  // NEU: Monatsübersicht (Nr. 6)
   '/touren':       ['admin', 'disponent'],
+  '/routenoptimierung': ['admin', 'disponent'],  // NEU: KI-Tourenplan (Nr. 7)
   '/mitarbeiter':  ['admin', 'disponent'],
   '/datenpflege':  ['admin'],
   '/meine-touren': ['admin', 'disponent', 'bauleiter', 'mitarbeiter', 'lager'],

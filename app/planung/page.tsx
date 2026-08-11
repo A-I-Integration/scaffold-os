@@ -48,6 +48,13 @@ export default function PlanungPage() {
   const [showRecommend, setShowRecommend] = useState(false);
   const [showEditEmployee, setShowEditEmployee] = useState(false);
 
+  // NEU: KI-Umdisposition bei Ausfällen
+  const [showUmdispo, setShowUmdispo] = useState(false);
+  const [umdispoDate, setUmdispoDate] = useState(new Date().toISOString().slice(0, 10));
+  const [umdispoLoading, setUmdispoLoading] = useState(false);
+  const [umdispoResult, setUmdispoResult] = useState<{ zusammenfassung: string; vorschlaege: { tour: string; betroffen: string; ersatz: string; begruendung: string }[]; warnungen: string[] } | null>(null);
+  const [umdispoError, setUmdispoError] = useState<string | null>(null);
+
   // Form
   const [editingEmployee, setEditingEmployee] = useState<EmployeeWithSkills | null>(null);
   const [recommendDate, setRecommendDate] = useState('');
@@ -181,6 +188,28 @@ export default function PlanungPage() {
     if (result.success) loadData(); else alert(result.error);
   }
 
+  // NEU: KI-Umdisposition abrufen
+  async function handleUmdispo() {
+    if (!umdispoDate) return;
+    setUmdispoLoading(true);
+    setUmdispoError(null);
+    setUmdispoResult(null);
+    try {
+      const res = await fetch('/api/umdisposition', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ date: umdispoDate }),
+      });
+      const json = await res.json();
+      if (!res.ok || !json.success) throw new Error(json.error || 'Umdisposition fehlgeschlagen');
+      setUmdispoResult(json);
+    } catch (err: any) {
+      setUmdispoError(err.message);
+    } finally {
+      setUmdispoLoading(false);
+    }
+  }
+
   async function handleCreateTour(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setFormError(null);
@@ -241,6 +270,7 @@ export default function PlanungPage() {
             <div className="flex gap-2">
               <button onClick={() => { setShowAddTour(true); setFormError(null); }} className="px-4 py-2 bg-green-600 text-white text-sm font-medium rounded-lg hover:bg-green-700">+ Tour</button>
               <button onClick={() => { setShowAddAbsence(true); setFormError(null); }} className="px-4 py-2 bg-yellow-600 text-white text-sm font-medium rounded-lg hover:bg-yellow-700">+ Abwesenheit</button>
+              <button onClick={() => { setShowUmdispo(true); setUmdispoResult(null); setUmdispoError(null); }} className="px-4 py-2 bg-purple-600 text-white text-sm font-medium rounded-lg hover:bg-purple-700">🔮 KI-Umdisposition</button>
               <button onClick={() => { setShowAddEmployee(true); setFormError(null); }} className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700">+ Mitarbeiter</button>
             </div>
           </div>
@@ -737,6 +767,63 @@ export default function PlanungPage() {
               <div className="flex justify-end pt-2">
                 <button onClick={() => setShowRecommend(false)} className="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700">Schließen</button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ─── MODAL: KI-UMDISPOSITION ─── */}
+      {showUmdispo && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50" onClick={() => setShowUmdispo(false)}>
+          <div className="bg-white rounded-xl max-w-lg w-full max-h-[85vh] overflow-y-auto p-6" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-lg font-semibold text-gray-900">🔮 KI-Umdisposition bei Ausfällen</h3>
+            <p className="text-sm text-gray-500 mt-1">
+              Die KI prüft, welche Touren von Abwesenheiten betroffen sind, und schlägt Ersatzfahrer vor.
+            </p>
+            <div className="flex items-end gap-2 mt-4">
+              <div className="flex-1">
+                <label className="block text-xs text-gray-500 mb-1">Datum</label>
+                <input
+                  type="date"
+                  value={umdispoDate}
+                  onChange={(e) => setUmdispoDate(e.target.value)}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900"
+                />
+              </div>
+              <button
+                onClick={handleUmdispo}
+                disabled={umdispoLoading}
+                className="px-4 py-2 bg-purple-600 text-white text-sm font-medium rounded-lg hover:bg-purple-700 disabled:opacity-50"
+              >
+                {umdispoLoading ? 'KI prüft...' : 'Vorschlag erstellen'}
+              </button>
+            </div>
+
+            {umdispoError && (
+              <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">❌ {umdispoError}</div>
+            )}
+
+            {umdispoResult && (
+              <div className="mt-4 space-y-3">
+                <p className="text-sm text-gray-700">{umdispoResult.zusammenfassung}</p>
+                {umdispoResult.vorschlaege.map((v, i) => (
+                  <div key={i} className="p-3 rounded-lg border border-purple-200 bg-purple-50">
+                    <div className="font-semibold text-gray-900 text-sm">{v.tour}</div>
+                    <div className="text-sm text-gray-700 mt-1">❌ {v.betroffen} → ✅ <strong>{v.ersatz}</strong></div>
+                    <div className="text-xs text-gray-500 mt-1">{v.begruendung}</div>
+                  </div>
+                ))}
+                {umdispoResult.warnungen.length > 0 && (
+                  <ul className="text-sm text-yellow-700 list-disc list-inside">
+                    {umdispoResult.warnungen.map((w, i) => <li key={i}>{w}</li>)}
+                  </ul>
+                )}
+                <p className="text-xs text-gray-400">Vorschlag der KI – die Entscheidung trifft die Disposition.</p>
+              </div>
+            )}
+
+            <div className="flex justify-end pt-4">
+              <button onClick={() => setShowUmdispo(false)} className="px-4 py-2 text-sm bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300">Schließen</button>
             </div>
           </div>
         </div>

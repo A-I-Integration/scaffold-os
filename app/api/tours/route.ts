@@ -40,6 +40,8 @@ export async function POST(req: Request) {
     const toRes = await fetch(`${url}/rest/v1/transport_orders?id=in.(${transport_order_ids.join(',')})&select=*,to_project:to_project_id(name,adresse),inventory:inventory_id(name,quantity)`, { headers });
     if (!toRes.ok) throw new Error(await toRes.text());
     const orders = await toRes.json();
+    // Reihenfolge aus dem Request übernehmen (KI-optimierte Stopp-Reihenfolge)
+    orders.sort((a: any, b: any) => transport_order_ids.indexOf(a.id) - transport_order_ids.indexOf(b.id));
 
     // 2. Tour erstellen
     const tourRes = await fetch(`${url}/rest/v1/tours`, {
