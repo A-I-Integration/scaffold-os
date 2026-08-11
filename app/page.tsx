@@ -59,11 +59,9 @@ export default function HomePage() {
                 Einführungspreis bis <strong className="text-slate-200">30. September</strong> sichern
               </p>
 
-              {/* Preise */}
-              <p className="mt-6 text-2xl font-black text-white">
-                199 €<span className="text-sm font-medium text-slate-400">/Monat</span>
-                <span className="mx-3 text-slate-600">|</span>
-                499 €<span className="text-sm font-medium text-slate-400">/Monat</span>
+              {/* Preis */}
+              <p className="mt-6 text-3xl font-black text-white">
+                249 €<span className="text-base font-medium text-slate-400">/Monat</span>
               </p>
 
               {/* Geschenk */}
