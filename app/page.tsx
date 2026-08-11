@@ -52,32 +52,27 @@ export default function HomePage() {
         <div className="mt-12 w-full max-w-2xl">
           <div className="rounded-2xl bg-gradient-to-r from-amber-400 via-orange-400 to-amber-400 p-[2px] shadow-2xl shadow-orange-500/20">
             <div className="rounded-2xl bg-slate-900/95 px-8 py-8 text-center">
-              <span className="inline-block rounded-full bg-orange-500/15 border border-orange-400/40 px-4 py-1 text-[11px] font-bold uppercase tracking-widest text-orange-300">
-                🔥 Nur für kurze Zeit
-              </span>
-              <h2 className="mt-4 text-2xl md:text-3xl font-black tracking-tight">
+              <h2 className="text-2xl md:text-3xl font-black tracking-tight">
                 Jetzt <span className="text-amber-400">Pilotkunde</span> werden
               </h2>
               <p className="mt-2 text-sm text-slate-400">
-                Einführungspreis bis <strong className="text-slate-200">30. September</strong> sichern.
+                Einführungspreis bis <strong className="text-slate-200">30. September</strong> sichern
               </p>
 
               {/* Preise */}
-              <div className="mt-6 grid grid-cols-2 gap-4 max-w-md mx-auto">
-                <div className="rounded-xl bg-slate-800/80 border border-slate-700 px-4 py-4">
-                  <p className="text-[11px] uppercase tracking-wide text-slate-400">Kleiner Betrieb</p>
-                  <p className="mt-1 text-2xl font-black text-white">199 €<span className="text-sm font-medium text-slate-400">/Monat</span></p>
-                </div>
-                <div className="rounded-xl bg-slate-800/80 border border-amber-500/40 px-4 py-4">
-                  <p className="text-[11px] uppercase tracking-wide text-slate-400">Großer Betrieb</p>
-                  <p className="mt-1 text-2xl font-black text-amber-400">499 €<span className="text-sm font-medium text-slate-400">/Monat</span></p>
-                </div>
-              </div>
+              <p className="mt-6 text-2xl font-black text-white">
+                199 €<span className="text-sm font-medium text-slate-400">/Monat</span>
+                <span className="mx-3 text-slate-600">|</span>
+                499 €<span className="text-sm font-medium text-slate-400">/Monat</span>
+              </p>
 
               {/* Geschenk */}
-              <div className="mt-4 inline-flex items-center gap-2 rounded-xl bg-emerald-500/10 border border-emerald-400/30 px-4 py-2.5 text-sm font-semibold text-emerald-300">
-                <Gift className="w-4 h-4 shrink-0" />
-                Onboarding + Einrichtung im Wert von <span className="line-through text-slate-400">2.490 €</span> <span className="text-emerald-200 font-black">geschenkt</span>
+              <div className="mt-5">
+                <p className="inline-flex items-center gap-2 text-sm font-bold text-emerald-300">
+                  <Gift className="w-4 h-4 shrink-0" />
+                  Onboarding + Einrichtung inklusive
+                </p>
+                <p className="mt-1 text-xs text-slate-500">Regulärer Wert: 2.490 €</p>
               </div>
 
               <Link
