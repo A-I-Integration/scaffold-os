@@ -84,26 +84,6 @@ export default function LoginPage() {
               <span className="text-slate-300"><strong className="text-white">Zeiterfassung:</strong> Kommen/Gehen stempeln, Krank & Urlaub eintragen – direkt am Handy.</span>
             </li>
           </ul>
-
-          {/* ─── Werbe-Kleber: Pilotkunden-Aktion ─── */}
-          <div className="relative mt-10 max-w-md -rotate-1 rounded-xl bg-gradient-to-br from-amber-300 via-amber-400 to-orange-400 p-6 text-slate-900 shadow-2xl shadow-orange-500/20 border-4 border-dashed border-white/60">
-            {/* Klebeband-Optik oben */}
-            <div className="absolute -top-3 left-1/2 h-6 w-24 -translate-x-1/2 rotate-2 rounded-sm bg-white/70 shadow-sm" />
-            <p className="text-[11px] font-black uppercase tracking-widest text-orange-900">🔥 Nur für kurze Zeit</p>
-            <h3 className="mt-1 text-2xl font-black leading-tight">Jetzt PILOTKUNDE werden!</h3>
-            <div className="mt-3 space-y-1.5 text-sm font-semibold">
-              <p>Aktionspreis: kleiner Betrieb <span className="text-lg font-black">199 €</span>/Monat · großer Betrieb <span className="text-lg font-black">499 €</span>/Monat</p>
-              <p className="rounded-lg bg-white/50 px-3 py-1.5 font-bold">🎁 Onboarding + Einrichtung im Wert von 2.490 € <span className="underline decoration-2">geschenkt!</span></p>
-              <p>Sichere dir noch bis <strong>September</strong> den Einführungspreis.</p>
-            </div>
-            <a
-              href="/anfrage?art=pilot"
-              className="mt-4 block w-full rounded-lg bg-slate-900 py-3 text-center text-sm font-black uppercase tracking-wide text-amber-400 transition hover:bg-slate-800"
-            >
-              Als Pilotkunde anmelden →
-            </a>
-            <p className="mt-2 text-center text-[11px] font-medium text-orange-900">Einfach anmelden – wir melden uns bei dir.</p>
-          </div>
         </div>
 
         {/* ─── Rechte Seite: Login-Karte ─── */}

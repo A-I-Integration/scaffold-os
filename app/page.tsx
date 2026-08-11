@@ -12,9 +12,35 @@ import { HardHat, Building2, Rocket } from 'lucide-react';
 // (öffentlich, legt KEIN Konto an, schickt nur eine E-Mail).
 // ============================================================
 
+// ─── Werbe-Kleber: Pilotkunden-Aktion ───
+function PilotKleber({ className = '' }: { className?: string }) {
+  return (
+    <div className={`relative max-w-xs -rotate-2 rounded-xl bg-gradient-to-br from-amber-300 via-amber-400 to-orange-400 p-5 text-slate-900 shadow-2xl shadow-orange-500/30 border-4 border-dashed border-white/60 ${className}`}>
+      {/* Klebeband-Optik oben */}
+      <div className="absolute -top-3 left-1/2 h-6 w-24 -translate-x-1/2 rotate-2 rounded-sm bg-white/70 shadow-sm" />
+      <p className="text-[11px] font-black uppercase tracking-widest text-orange-900">🔥 Nur für kurze Zeit</p>
+      <h3 className="mt-1 text-xl font-black leading-tight">Jetzt PILOTKUNDE werden!</h3>
+      <div className="mt-3 space-y-1.5 text-sm font-semibold">
+        <p>Aktionspreis: kleiner Betrieb <span className="text-lg font-black">199 €</span>/Monat · großer Betrieb <span className="text-lg font-black">499 €</span>/Monat</p>
+        <p className="rounded-lg bg-white/50 px-3 py-1.5 font-bold">🎁 Onboarding + Einrichtung im Wert von 2.490 € <span className="underline decoration-2">geschenkt!</span></p>
+        <p>Sichern Sie sich noch bis <strong>September</strong> den Einführungspreis.</p>
+      </div>
+      <Link
+        href="/anfrage?art=pilot"
+        className="mt-4 block w-full rounded-lg bg-slate-900 py-3 text-center text-sm font-black uppercase tracking-wide text-amber-400 transition hover:bg-slate-800"
+      >
+        Als Pilotkunde anmelden →
+      </Link>
+      <p className="mt-2 text-center text-[11px] font-medium text-orange-900">Einfach anmelden – wir melden uns bei Ihnen.</p>
+    </div>
+  );
+}
+
 export default function HomePage() {
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 text-white flex flex-col">
+    <div className="relative min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 text-white flex flex-col">
+      {/* Kleber links (Desktop) */}
+      <PilotKleber className="hidden lg:block absolute left-10 top-1/2 -translate-y-1/2 z-10" />
       <div className="flex-1 flex flex-col items-center justify-center px-6">
         <HardHat className="w-20 h-20 text-amber-400 mb-6" />
         <h1 className="text-4xl md:text-5xl font-bold tracking-tight mb-10">SCAFFOLD OS</h1>
@@ -44,6 +70,11 @@ export default function HomePage() {
               Pilotprojekt anfragen
             </Link>
           </div>
+        </div>
+
+        {/* Kleber unter dem Inhalt (Handy/Tablet) */}
+        <div className="lg:hidden mt-12">
+          <PilotKleber />
         </div>
       </div>
       <footer className="pb-6 text-center text-slate-500 text-sm">
