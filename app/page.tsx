@@ -87,6 +87,14 @@ export default function HomePage() {
       </div>
 
       <footer className="pb-6 text-center text-slate-500 text-sm">
+        {/* NEU: Rechtliches (Arbeitsfassungen – werden durch die Anwaltsfassung ersetzt) */}
+        <div className="flex items-center justify-center gap-3 mb-2 text-[13px]">
+          <Link href="/impressum" className="hover:text-amber-400 transition-colors">Impressum</Link>
+          <span className="text-slate-700">·</span>
+          <Link href="/datenschutz" className="hover:text-amber-400 transition-colors">Datenschutz</Link>
+          <span className="text-slate-700">·</span>
+          <Link href="/agb" className="hover:text-amber-400 transition-colors">AGB</Link>
+        </div>
         powered by <span className="font-semibold text-slate-400">AI Integration</span>
       </footer>
 
