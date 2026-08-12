@@ -61,6 +61,68 @@ export async function uploadProjectMediaClient(
   return media as ProjectMedia;
 }
 
+// ─── Grundrisse (NEU: eigener Upload-Pfad, Bilder + PDF) ───
+// Grundrisse landen unter temp/{sessionId}/grundrisse/ und werden so
+// von den Baustellen-Fotos getrennt – die KI-Foto-Analyse bleibt unberührt.
+export async function uploadGrundrissClient(
+  file: File,
+  sessionId: string
+): Promise<ProjectMedia> {
+  const supabase = createClient();
+
+  const isImage = file.type.startsWith('image/');
+  const isPdf = file.type === 'application/pdf';
+  if (!isImage && !isPdf) throw new Error('Nur Bilder (JPG/PNG) oder PDF erlaubt');
+  if (file.size > 15 * 1024 * 1024) throw new Error('Datei zu groß (max. 15MB)');
+
+  const { data: { user } } = await supabase.auth.getUser();
+
+  const fileExt = file.name.split('.').pop()?.toLowerCase() || (isPdf ? 'pdf' : 'jpg');
+  const fileName = `${Date.now()}_${Math.random().toString(36).substring(2, 8)}.${fileExt}`;
+  const storagePath = `temp/${sessionId}/grundrisse/${fileName}`;
+
+  const { error: uploadError } = await supabase.storage
+    .from('project-media')
+    .upload(storagePath, file, { contentType: file.type, upsert: false });
+
+  if (uploadError) throw new Error(`Storage: ${uploadError.message}`);
+
+  const { data: media, error: dbError } = await supabase
+    .from('project_media')
+    .insert({
+      session_id: sessionId,
+      file_name: file.name,
+      storage_path: storagePath,
+      file_type: file.type,
+      uploaded_by: user?.id ?? null,
+      metadata: { size: file.size, bucket: 'project-media', kind: 'grundriss' },
+    })
+    .select()
+    .single();
+
+  if (dbError) {
+    await supabase.storage.from('project-media').remove([storagePath]);
+    throw new Error(`Datenbank: ${dbError.message}`);
+  }
+
+  return media as ProjectMedia;
+}
+
+export async function getGrundrisseClient(sessionId: string): Promise<ProjectMedia[]> {
+  const supabase = createClient();
+
+  const { data, error } = await supabase
+    .from('project_media')
+    .select('*')
+    .eq('session_id', sessionId)
+    .is('project_id', null)
+    .like('storage_path', '%/grundrisse/%')
+    .order('created_at', { ascending: false });
+
+  if (error) throw new Error(`Fehler beim Laden: ${error.message}`);
+  return (data || []) as ProjectMedia[];
+}
+
 export async function getProjectMediaClient(sessionId: string): Promise<ProjectMedia[]> {
   const supabase = createClient();
 
@@ -69,6 +131,7 @@ export async function getProjectMediaClient(sessionId: string): Promise<ProjectM
     .select('*')
     .eq('session_id', sessionId)
     .is('project_id', null)
+    .not('storage_path', 'like', '%/grundrisse/%') // Grundrisse laufen getrennt
     .order('created_at', { ascending: false });
 
   if (error) throw new Error(`Fehler beim Laden: ${error.message}`);

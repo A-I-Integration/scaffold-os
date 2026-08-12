@@ -47,6 +47,31 @@ export default function Schritt6Page() {
   const [pdfBase64, setPdfBase64] = useState<string | null>(null);
   const [customerEmail, setCustomerEmail] = useState('');
 
+  // ═══════════════════════════════════════════════════════════
+  // NEU: Angebot-Anpassungen (Skonto, Mietverlängerung, Nachtrag, Sonderrabatt)
+  // Alle Felder manuell steuerbar – rechnet auf den KI-Verkaufspreis auf.
+  // ═══════════════════════════════════════════════════════════
+  const [anpassungen, setAnpassungen] = useState({
+    skonto: false,
+    miete: { aktiv: false, wochen: '', preisProWoche: '' },
+    nachtrag: { aktiv: false, text: '', betrag: '' },
+    rabatt: { aktiv: false, betrag: '' },
+  });
+
+  // Live-Kalkulation: Basis = KI-Verkaufspreis, dann Zu-/Abschläge
+  function calcAngebot() {
+    const basis = kiResult?.suggestedPrice ?? 0;
+    const mieteBetrag = anpassungen.miete.aktiv
+      ? (parseFloat(anpassungen.miete.wochen) || 0) * (parseFloat(anpassungen.miete.preisProWoche) || 0)
+      : 0;
+    const nachtragBetrag = anpassungen.nachtrag.aktiv ? parseFloat(anpassungen.nachtrag.betrag) || 0 : 0;
+    const rabattBetrag = anpassungen.rabatt.aktiv ? parseFloat(anpassungen.rabatt.betrag) || 0 : 0;
+    const endpreis = Math.max(0, basis + mieteBetrag + nachtragBetrag - rabattBetrag);
+    const skontoBetrag = anpassungen.skonto ? endpreis * 0.02 : 0;
+    return { basis, mieteBetrag, nachtragBetrag, rabattBetrag, endpreis, skontoBetrag };
+  }
+  const eur = (n: number) => n.toFixed(2) + ' €';
+
   useEffect(() => {
     const data: Record<string, any> = {};
     for (let i = 1; i <= 5; i++) {
@@ -65,6 +90,13 @@ export default function Schritt6Page() {
     const fotoDatenRaw = localStorage.getItem('scaffold_foto_daten');
     if (fotoDatenRaw) {
       try { data.fotoAnalyseStrukturiert = JSON.parse(fotoDatenRaw); } catch { /* ignore */ }
+    }
+    // KI-Grundriss-Analyse aus Schritt 1 mit ins Projekt übernehmen
+    const grundrissAnalyse = localStorage.getItem('scaffold_grundriss_analyse');
+    if (grundrissAnalyse) data.grundrissAnalyse = grundrissAnalyse;
+    const grundrissDatenRaw = localStorage.getItem('scaffold_grundriss_daten');
+    if (grundrissDatenRaw) {
+      try { data.grundrissAnalyseStrukturiert = JSON.parse(grundrissDatenRaw); } catch { /* ignore */ }
     }
     setStepData(data);
     // Kunden-E-Mail aus Schritt 1 laden
@@ -148,7 +180,7 @@ export default function Schritt6Page() {
   async function handleSpeichern() {
     setIsSaving(true);
     try {
-      const response = await fetch('/api/projects', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: s1.name || 'Unbenanntes Projekt', adresse: s1.adresse || '', data: stepData, status: 'active' }) });
+      const response = await fetch('/api/projects', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: s1.name || 'Unbenanntes Projekt', adresse: s1.adresse || '', data: { ...stepData, angebotAnpassungen: anpassungen }, status: 'active' }) });
       const result = await response.json();
       if (!response.ok) throw new Error(result.error || 'Speichern fehlgeschlagen');
       const sessionId = localStorage.getItem('scaffold_session_id');
@@ -160,6 +192,8 @@ export default function Schritt6Page() {
       localStorage.removeItem('scaffold_lidar_measurements');
       localStorage.removeItem('scaffold_foto_analyse');
       localStorage.removeItem('scaffold_foto_daten');
+      localStorage.removeItem('scaffold_grundriss_analyse');
+      localStorage.removeItem('scaffold_grundriss_daten');
       localStorage.setItem('scaffold_step6', JSON.stringify({ kiResult, savedAt: new Date().toISOString() }));
       alert('✅ Projekt gespeichert! ID: ' + result.id);
     } catch (err: any) { alert('❌ Speichern fehlgeschlagen: ' + err.message); } finally { setIsSaving(false); }
@@ -224,9 +258,43 @@ export default function Schritt6Page() {
     doc.setDrawColor(203, 213, 225); doc.line(116, cy, 190, cy); cy += 8;
     doc.setTextColor(15, 23, 42); doc.setFont('helvetica', 'bold'); doc.text('GESAMTKOSTEN', 116, cy); doc.text(kiResult.totalCost.toFixed(2) + ' €', 190, cy, { align: 'right' }); cy += 14;
     doc.setFillColor(236, 253, 245); doc.rect(110, cy - 5, 86, 20, 'F'); doc.setTextColor(4, 120, 87); doc.setFontSize(8); doc.text('Empfohlener Verkaufspreis', 116, cy + 2); doc.setFontSize(12); doc.text(kiResult.suggestedPrice.toFixed(2) + ' €', 190, cy + 2, { align: 'right' }); doc.setFontSize(8); doc.text(`Marge: ${kiResult.margin.toFixed(2)} € (${kiResult.marginPercent}%)`, 116, cy + 12);
+    // NEU: Angebot-Anpassungen (Skonto, Mietverlängerung, Nachtrag, Sonderrabatt)
+    const ang = calcAngebot();
+    const hatAnpassungen = anpassungen.skonto || anpassungen.miete.aktiv || anpassungen.nachtrag.aktiv || anpassungen.rabatt.aktiv;
+    if (hatAnpassungen) {
+      cy += 22;
+      if (cy > 235) { doc.addPage(); cy = 30; } // Platz-Sicherung bei langen Materiallisten
+      doc.setTextColor(30, 58, 138); doc.setFontSize(10); doc.setFont('helvetica', 'bold');
+      doc.text('Angebots-Anpassungen', 110, cy); cy += 8;
+      doc.setFontSize(9); doc.setFont('helvetica', 'normal'); doc.setTextColor(71, 85, 105);
+      doc.text('Basispreis (KI-Kalkulation)', 116, cy); doc.text(ang.basis.toFixed(2) + ' €', 190, cy, { align: 'right' }); cy += 9;
+      if (anpassungen.miete.aktiv && ang.mieteBetrag > 0) {
+        doc.text(`Mietverlängerung (${anpassungen.miete.wochen} Wo.)`, 116, cy);
+        doc.text('+' + ang.mieteBetrag.toFixed(2) + ' €', 190, cy, { align: 'right' }); cy += 9;
+      }
+      if (anpassungen.nachtrag.aktiv && ang.nachtragBetrag > 0) {
+        doc.text(`Nachtrag: ${(anpassungen.nachtrag.text || 'gem. Vereinbarung').slice(0, 30)}`, 116, cy);
+        doc.text('+' + ang.nachtragBetrag.toFixed(2) + ' €', 190, cy, { align: 'right' }); cy += 9;
+      }
+      if (anpassungen.rabatt.aktiv && ang.rabattBetrag > 0) {
+        doc.text('Sonderrabatt', 116, cy);
+        doc.text('-' + ang.rabattBetrag.toFixed(2) + ' €', 190, cy, { align: 'right' }); cy += 9;
+      }
+      doc.setDrawColor(203, 213, 225); doc.line(116, cy - 4, 190, cy - 4);
+      doc.setTextColor(15, 23, 42); doc.setFont('helvetica', 'bold'); doc.setFontSize(11);
+      doc.text('ENDPREIS', 116, cy + 4); doc.text(ang.endpreis.toFixed(2) + ' €', 190, cy + 4, { align: 'right' }); cy += 14;
+      if (anpassungen.skonto) {
+        doc.setFont('helvetica', 'normal'); doc.setFontSize(8); doc.setTextColor(4, 120, 87);
+        doc.text('Bei Zahlung innerhalb von 14 Tagen: 2 % Skonto', 116, cy);
+        doc.text('-' + ang.skontoBetrag.toFixed(2) + ' €', 190, cy, { align: 'right' }); cy += 6;
+        doc.setFont('helvetica', 'bold');
+        doc.text('Skonto-Preis', 116, cy); doc.text((ang.endpreis - ang.skontoBetrag).toFixed(2) + ' €', 190, cy, { align: 'right' });
+      }
+    }
     if (kiResult.warnings.length > 0 || kiResult.tips.length > 0) { let wy = finalY + 8; doc.setTextColor(30, 58, 138); doc.setFontSize(10); doc.setFont('helvetica', 'bold'); doc.text('Hinweise & Risiken', 14, wy); wy += 10; kiResult.warnings.forEach((w) => { doc.setTextColor(180, 83, 9); doc.setFontSize(8); doc.text('! ' + w, 14, wy, { maxWidth: 90 }); wy += 14; }); kiResult.tips.forEach((t) => { doc.setTextColor(3, 105, 161); doc.setFontSize(8); doc.text('> ' + t, 14, wy, { maxWidth: 90 }); wy += 14; }); }
     doc.addPage(); doc.setTextColor(30, 58, 138); doc.setFontSize(12); doc.setFont('helvetica', 'bold'); doc.text('Allgemeine Geschäftsbedingungen', 14, 30); doc.setTextColor(71, 85, 105); doc.setFontSize(9); doc.setFont('helvetica', 'normal');
-    const agbText = '1. Das Angebot ist 30 Tage ab Ausstellungsdatum gültig.\n2. Preise verstehen sich zuzüglich der gesetzlichen Mehrwertsteuer.\n3. Liefer- und Leistungszeitpunkt wird individuell vereinbart.\n4. Zahlungsziel: 14 Tage nach Rechnungsstellung.\n5. Gerüstbau erfolgt nach aktuellen Sicherheitsvorschriften (DGUV).\n6. Bei Änderungen der Baustellenverhältnisse behalten wir uns Preisanpassungen vor.';
+    const agbText = '1. Das Angebot ist 30 Tage ab Ausstellungsdatum gültig.\n2. Preise verstehen sich zuzüglich der gesetzlichen Mehrwertsteuer.\n3. Liefer- und Leistungszeitpunkt wird individuell vereinbart.\n4. Zahlungsziel: 14 Tage nach Rechnungsstellung.\n5. Gerüstbau erfolgt nach aktuellen Sicherheitsvorschriften (DGUV).\n6. Bei Änderungen der Baustellenverhältnisse behalten wir uns Preisanpassungen vor.'
+      + (anpassungen.skonto ? '\n7. Bei Zahlung innerhalb von 14 Tagen ab Rechnungsdatum gewähren wir 2 % Skonto auf den Endpreis.' : '');
     doc.text(agbText, 14, 45, { maxWidth: 180, lineHeightFactor: 1.5 });
     doc.setDrawColor(15, 23, 42); doc.line(14, 230, 100, 230); doc.line(110, 230, 196, 230); doc.setTextColor(15, 23, 42); doc.setFontSize(9); doc.text('Ort, Datum', 14, 236); doc.text('Unterschrift Auftraggeber', 14, 242); doc.text('Ort, Datum', 110, 236); doc.text('Unterschrift Auftragnehmer', 110, 242);
     doc.setTextColor(148, 163, 184); doc.setFontSize(7); doc.text('SCAFFOLD OS • KI-gestützte Gerüstbau-Software • Automatisch generiert', pageWidth / 2, 285, { align: 'center' });
@@ -526,6 +594,134 @@ export default function Schritt6Page() {
                 <KIMaterialResult result={kiResult} loading={kiLoading} onSaveStueckliste={handleSaveStueckliste} onGeneratePDF={handlePDF} onManualEdit={handleManualEdit} />
               </div>
             )}
+
+            {/* ═══ NEU: Angebot anpassen (Skonto / Mietverlängerung / Nachtrag / Sonderrabatt) ═══ */}
+            {kiResult && (() => {
+              const a = calcAngebot();
+              const toggleCls = (on: boolean) =>
+                `rounded-lg border px-3 py-1.5 text-xs font-bold transition ${on ? 'bg-amber-500/20 border-amber-500 text-amber-300' : 'bg-slate-700 border-slate-600 text-slate-400 hover:border-slate-500'}`;
+              const inputCls = 'w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-amber-500';
+              return (
+                <div className="bg-slate-800 rounded-xl p-6 border border-amber-500/20 animate-in fade-in slide-in-from-top-2">
+                  <div className="flex items-center gap-3 mb-4">
+                    <span className="text-3xl">💶</span>
+                    <div>
+                      <h3 className="text-xl font-bold text-white">Angebot anpassen</h3>
+                      <p className="text-sm text-slate-400">Skonto, Mietverlängerung, Nachtrag und Sonderrabatt – fließt automatisch ins PDF</p>
+                    </div>
+                  </div>
+
+                  {/* ─── Skonto: 1 Klick ─── */}
+                  <div className="flex items-center justify-between bg-slate-700/40 rounded-lg p-3 mb-3">
+                    <div>
+                      <p className="text-sm font-semibold text-white">2 % Skonto</p>
+                      <p className="text-xs text-slate-400">Wird als Skonto-Klausel und Skonto-Preis im Angebot ausgewiesen</p>
+                    </div>
+                    <button onClick={() => setAnpassungen((p) => ({ ...p, skonto: !p.skonto }))} className={toggleCls(anpassungen.skonto)}>
+                      {anpassungen.skonto ? '✅ Aktiv' : 'Aktivieren'}
+                    </button>
+                  </div>
+
+                  {/* ─── Länger mieten ─── */}
+                  <div className="bg-slate-700/40 rounded-lg p-3 mb-3">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-sm font-semibold text-white">Länger mieten (Option)</p>
+                        <p className="text-xs text-slate-400">Zusatzwochen und Preis pro Woche selbst eintragen</p>
+                      </div>
+                      <button onClick={() => setAnpassungen((p) => ({ ...p, miete: { ...p.miete, aktiv: !p.miete.aktiv } }))} className={toggleCls(anpassungen.miete.aktiv)}>
+                        {anpassungen.miete.aktiv ? '✅ Aktiv' : 'Aktivieren'}
+                      </button>
+                    </div>
+                    {anpassungen.miete.aktiv && (
+                      <div className="grid grid-cols-2 gap-3 mt-3">
+                        <div>
+                          <label className="block text-xs text-slate-400 mb-1">Zusätzliche Wochen</label>
+                          <input type="number" min="0" value={anpassungen.miete.wochen}
+                            onChange={(e) => setAnpassungen((p) => ({ ...p, miete: { ...p.miete, wochen: e.target.value } }))}
+                            placeholder="z. B. 4" className={inputCls} />
+                        </div>
+                        <div>
+                          <label className="block text-xs text-slate-400 mb-1">Preis pro Woche (€)</label>
+                          <input type="number" min="0" step="0.01" value={anpassungen.miete.preisProWoche}
+                            onChange={(e) => setAnpassungen((p) => ({ ...p, miete: { ...p.miete, preisProWoche: e.target.value } }))}
+                            placeholder="z. B. 180" className={inputCls} />
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* ─── Nachtrag ─── */}
+                  <div className="bg-slate-700/40 rounded-lg p-3 mb-3">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-sm font-semibold text-white">Nachtrag</p>
+                        <p className="text-xs text-slate-400">Zusatzleistung mit eigenem Betrag</p>
+                      </div>
+                      <button onClick={() => setAnpassungen((p) => ({ ...p, nachtrag: { ...p.nachtrag, aktiv: !p.nachtrag.aktiv } }))} className={toggleCls(anpassungen.nachtrag.aktiv)}>
+                        {anpassungen.nachtrag.aktiv ? '✅ Aktiv' : 'Aktivieren'}
+                      </button>
+                    </div>
+                    {anpassungen.nachtrag.aktiv && (
+                      <div className="grid grid-cols-3 gap-3 mt-3">
+                        <div className="col-span-2">
+                          <label className="block text-xs text-slate-400 mb-1">Beschreibung</label>
+                          <input type="text" value={anpassungen.nachtrag.text}
+                            onChange={(e) => setAnpassungen((p) => ({ ...p, nachtrag: { ...p.nachtrag, text: e.target.value } }))}
+                            placeholder="z. B. Fangnetz Giebelseite" className={inputCls} />
+                        </div>
+                        <div>
+                          <label className="block text-xs text-slate-400 mb-1">Betrag (€)</label>
+                          <input type="number" min="0" step="0.01" value={anpassungen.nachtrag.betrag}
+                            onChange={(e) => setAnpassungen((p) => ({ ...p, nachtrag: { ...p.nachtrag, betrag: e.target.value } }))}
+                            placeholder="z. B. 250" className={inputCls} />
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* ─── Sonderrabatt ─── */}
+                  <div className="bg-slate-700/40 rounded-lg p-3 mb-4">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-sm font-semibold text-white">Sonderrabatt</p>
+                        <p className="text-xs text-slate-400">Händischer Nachlass in €, wird vom Preis abgezogen</p>
+                      </div>
+                      <button onClick={() => setAnpassungen((p) => ({ ...p, rabatt: { ...p.rabatt, aktiv: !p.rabatt.aktiv } }))} className={toggleCls(anpassungen.rabatt.aktiv)}>
+                        {anpassungen.rabatt.aktiv ? '✅ Aktiv' : 'Aktivieren'}
+                      </button>
+                    </div>
+                    {anpassungen.rabatt.aktiv && (
+                      <div className="mt-3">
+                        <label className="block text-xs text-slate-400 mb-1">Rabatt (€)</label>
+                        <input type="number" min="0" step="0.01" value={anpassungen.rabatt.betrag}
+                          onChange={(e) => setAnpassungen((p) => ({ ...p, rabatt: { ...p.rabatt, betrag: e.target.value } }))}
+                          placeholder="z. B. 500" className={inputCls} />
+                      </div>
+                    )}
+                  </div>
+
+                  {/* ─── Live-Endpreis ─── */}
+                  <div className="rounded-lg bg-slate-900/60 border border-slate-700 p-4 space-y-1.5 text-sm">
+                    <div className="flex justify-between text-slate-400"><span>Basispreis (KI)</span><span className="text-white">{eur(a.basis)}</span></div>
+                    {a.mieteBetrag > 0 && <div className="flex justify-between text-slate-400"><span>+ Mietverlängerung</span><span className="text-white">{eur(a.mieteBetrag)}</span></div>}
+                    {a.nachtragBetrag > 0 && <div className="flex justify-between text-slate-400"><span>+ Nachtrag</span><span className="text-white">{eur(a.nachtragBetrag)}</span></div>}
+                    {a.rabattBetrag > 0 && <div className="flex justify-between text-slate-400"><span>− Sonderrabatt</span><span className="text-red-400">−{eur(a.rabattBetrag)}</span></div>}
+                    <div className="border-t border-slate-700 pt-2 flex justify-between font-bold text-base">
+                      <span className="text-amber-400">Endpreis</span>
+                      <span className="text-amber-400">{eur(a.endpreis)}</span>
+                    </div>
+                    {anpassungen.skonto && (
+                      <div className="flex justify-between text-xs text-emerald-400">
+                        <span>Skonto-Preis (−2 % bei Zahlung in 14 Tagen)</span>
+                        <span>{eur(a.endpreis - a.skontoBetrag)}</span>
+                      </div>
+                    )}
+                    <p className="text-[10px] text-slate-500 pt-1">Alle Angaben netto zzgl. MwSt. Die Anpassungen werden mit dem Projekt gespeichert und ins Angebots-PDF übernommen.</p>
+                  </div>
+                </div>
+              );
+            })()}
 
             {kiResult && editMode && (
               <div className="bg-slate-800 rounded-xl p-6 border border-yellow-500/30 animate-in fade-in slide-in-from-top-2">

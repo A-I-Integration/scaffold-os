@@ -11,6 +11,7 @@ export default function Schritt2Page() {
   const [step1Data, setStep1Data] = useState<any>(null);
   const [lidarUebernommen, setLidarUebernommen] = useState(false);
   const [kiUebernommen, setKiUebernommen] = useState(false);
+  const [grundrissUebernommen, setGrundrissUebernommen] = useState(false);
 
   const [form, setForm] = useState({
     laenge: '',
@@ -148,6 +149,32 @@ export default function Schritt2Page() {
       }
     }
 
+    // KI-Grundriss-Analyse aus Schritt 1 übernehmen (nur leere Felder, nichts überschreiben)
+    const grundrissRaw = localStorage.getItem('scaffold_grundriss_daten');
+    if (grundrissRaw) {
+      try {
+        const g = JSON.parse(grundrissRaw);
+        setForm((prev) => ({
+          ...prev,
+          laenge: prev.laenge || (g.laenge ? String(g.laenge) : ''),
+          breite: prev.breite || (g.breite ? String(g.breite) : ''),
+          hoehe: prev.hoehe || (g.hoehe ? String(g.hoehe) : ''),
+          traufhoehe: prev.traufhoehe || (g.traufhoehe ? String(g.traufhoehe) : ''),
+          dachform: prev.dachform || (dachformen.includes(g.dachform) ? g.dachform : ''),
+          hauseingaenge: prev.hauseingaenge || (g.hauseingaenge ? String(g.hauseingaenge) : ''),
+          hindernisse: Array.from(new Set([
+            ...prev.hindernisse,
+            ...(Array.isArray(g.hindernisse) ? g.hindernisse.filter((h: string) => hindernisListe.includes(h)) : []),
+          ])),
+          garagen: prev.garagen || g.garagen === true,
+          durchfahrt: prev.durchfahrt || g.durchfahrt === true,
+        }));
+        setGrundrissUebernommen(true);
+      } catch {
+        // ignore
+      }
+    }
+
     // KI-Foto-Analyse aus Schritt 1 übernehmen (nur leere Felder / neue Werte)
     const fotoRaw = localStorage.getItem('scaffold_foto_daten');
     if (fotoRaw) {
@@ -213,6 +240,12 @@ export default function Schritt2Page() {
           {lidarUebernommen && (
             <div className="rounded-lg bg-purple-900/20 border border-purple-500/30 p-3 text-sm text-purple-300">
               📐 Maße wurden aus dem LiDAR-Scan übernommen – bitte prüfen und bei Bedarf anpassen.
+            </div>
+          )}
+
+          {grundrissUebernommen && (
+            <div className="rounded-lg bg-teal-900/20 border border-teal-500/30 p-3 text-sm text-teal-300">
+              📋 Werte wurden aus der KI-Grundriss-Analyse übernommen – bitte prüfen und bei Bedarf anpassen.
             </div>
           )}
 

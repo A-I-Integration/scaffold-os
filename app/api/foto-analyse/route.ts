@@ -37,6 +37,7 @@ export async function POST(req: NextRequest) {
       .select('storage_path, file_type')
       .eq('session_id', sessionId)
       .like('file_type', 'image/%')
+      .not('storage_path', 'like', '%/grundrisse/%') // Grundrisse gehören zur Grundriss-KI
       .order('created_at', { ascending: true })
       .limit(4);
 

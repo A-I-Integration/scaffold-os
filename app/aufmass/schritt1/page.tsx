@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import PhotoUpload from '@/components/aufmaß/PhotoUpload';
 import LiDARUpload from '@/components/aufmaß/LiDARUpload';
 import FotoAnalyse from '@/components/aufmaß/FotoAnalyse';
+import GrundrissUpload from '@/components/aufmaß/GrundrissUpload';
 
 export default function Schritt1Page() {
   const router = useRouter();
@@ -408,6 +409,18 @@ export default function Schritt1Page() {
               <p className="text-[11px] text-slate-500 mt-2">
                 ✅ Erkannte Maße werden in Schritt 2 automatisch eingetragen.
               </p>
+            </div>
+          )}
+
+          {/* ─── GRUNDRISS-UPLOAD + KI (nur wenn aktiviert) ─── */}
+          {form.grundrisse && sessionId && (
+            <div className="bg-slate-700/30 rounded-xl p-6 border border-slate-700">
+              <h3 className="text-lg font-bold text-white mb-2">📋 Grundrisse / Baupläne</h3>
+              <p className="text-sm text-slate-400 mb-4">
+                Grundriss als Bild oder PDF hochladen – die KI liest Maße und Gebäudedaten aus
+                und füllt das Aufmaß in Schritt 2 automatisch vor.
+              </p>
+              <GrundrissUpload sessionId={sessionId} />
             </div>
           )}
 
