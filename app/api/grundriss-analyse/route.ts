@@ -100,20 +100,27 @@ export async function POST(req: NextRequest) {
 
 Antworte AUSSCHLIESSLICH als JSON-Objekt mit genau diesen Feldern:
 {
-  "laenge": <Gebäudelänge in Metern als Zahl – NUR wenn im Plan eindeutig vermaßt, sonst null>,
-  "breite": <Gebäudebreite in Metern als Zahl – NUR wenn eindeutig vermaßt, sonst null>,
+  "laenge": <Außenmaß Gebäudelänge in Metern als Zahl – NUR das Gesamt-Außenmaß (Angabe "Hausmaß"/"Außenmaß" oder äußerste Bemaßungskette), sonst null>,
+  "breite": <Außenmaß Gebäudebreite in Metern als Zahl – gleiche Regel wie laenge>,
   "hoehe": <Gebäudehöhe in Metern als Zahl – NUR wenn vermaßt (z. B. Schnitt/Ansicht im Plan), sonst null>,
   "traufhoehe": <Traufhöhe in Metern als Zahl – NUR wenn vermaßt, sonst null>,
+  "geschosse": <Anzahl Geschosse als Zahl, wenn im Plan erkennbar (z. B. "EG + OG" = 2, "3-geschossig" = 3), sonst null>,
   "dachform": "<einer dieser Werte: Satteldach, Flachdach, Pultdach, Walmdach, Mansarddach, Zeltdach — oder null wenn nicht erkennbar>",
   "hauseingaenge": <Anzahl erkennbarer Hauseingänge als Zahl, oder null>,
-  "garagen": <true/false — Garage oder Nebengebäude im Plan?>,
+  "garagen": <true/false — Garage oder Nebengebäude im Plan eingezeichnet oder beschriftet?>,
   "durchfahrt": <true/false — Durchfahrt oder Durchgang im Gebäude?>,
-  "hindernisse": ["<Liste aus: Erker, Balkon, Wintergarten, Kamin, Gaube, Markise — nur was im Plan wirklich eingezeichnet ist>"],
+  "hindernisse": ["<Liste aus: Erker, Balkon, Wintergarten, Kamin, Gaube, Markise — nur was im Plan wirklich eingezeichnet oder beschriftet ist>"],
   "zusammenfassung": "<2-3 Sätze: Gebäudeform, Maße, Besonderheiten>",
   "hinweise": "<Stichpunkte: Was der Bauleiter bei der Gerüstplanung beachten sollte>"
 }
 
-Regeln: Maße NUR übernehmen, wenn sie im Plan explizit als Bemaßung stehen (nicht schätzen!). Im Zweifel null bzw. leere Liste. Kein Text außerhalb des JSON.${ocrText ? `\n\nEXTRAHIERTER PLAN-TEXT (OCR):${ocrText}` : ''}`;
+WICHTIGE REGELN:
+- laenge/breite NUR aus dem Gesamt-Außenmaß des Gebäudes. Steht im Plan "Hausmaß" oder "Außenmaß" (z. B. "Hausmaß: 10,00 × 12,00 m"), ist GENAU dieses Maß zu verwenden.
+- Innenraum-Bemaßungen (Zimmer, Wände, Raumgrößen) NIEMALS als Gebäudemaß verwenden.
+- Bei mehreren Geschoss-Plänen mit gleichem Außenmaß: Außenmaß einmal übernehmen, Geschosse zählen.
+- Maße NUR übernehmen, wenn sie im Plan explizit als Bemaßung stehen (nicht schätzen!). Im Zweifel null bzw. leere Liste.
+- NICHTS erfinden: Keine Garage, keinen Erker o. ä. angeben, wenn nichts davon eingezeichnet oder beschriftet ist.
+- Kein Text außerhalb des JSON.${ocrText ? `\n\nEXTRAHIERTER PLAN-TEXT (OCR):${ocrText}` : ''}`;
 
     const content: any[] = [{ type: 'text', text: prompt }];
     for (const url of imageUrls) {
@@ -152,6 +159,14 @@ Regeln: Maße NUR übernehmen, wenn sie im Plan explizit als Bemaßung stehen (n
       structured = JSON.parse(raw);
     } catch {
       structured = { zusammenfassung: raw, hinweise: '', hindernisse: [] };
+    }
+
+    // Höhe-Schätzung: Grundrisse (Draufsicht) enthalten fast nie die Gebäudehöhe.
+    // Wurden Geschosse erkannt, schätzen wir 3,00 m je Geschoss – getrennt vom
+    // vermaßten Wert als hoehe_geschaetzt, die UI kennzeichnet das als Schätzung.
+    if ((structured.hoehe === null || structured.hoehe === undefined) &&
+        typeof structured.geschosse === 'number' && structured.geschosse >= 1 && structured.geschosse <= 10) {
+      structured.hoehe_geschaetzt = Math.round(structured.geschosse * 3 * 10) / 10;
     }
 
     const analysis = [

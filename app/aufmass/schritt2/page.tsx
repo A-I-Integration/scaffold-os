@@ -12,6 +12,7 @@ export default function Schritt2Page() {
   const [lidarUebernommen, setLidarUebernommen] = useState(false);
   const [kiUebernommen, setKiUebernommen] = useState(false);
   const [grundrissUebernommen, setGrundrissUebernommen] = useState(false);
+  const [hoeheGeschaetzt, setHoeheGeschaetzt] = useState(false);
 
   const [form, setForm] = useState({
     laenge: '',
@@ -149,26 +150,56 @@ export default function Schritt2Page() {
       }
     }
 
-    // KI-Grundriss-Analyse aus Schritt 1 übernehmen (nur leere Felder, nichts überschreiben)
+    // KI-Grundriss-Analyse aus Schritt 1 übernehmen.
+    // Frisch analysiert (Flag aus Schritt 1)? Dann gewinnen die Grundriss-Werte
+    // und ersetzen Alt-Eingaben komplett. Beim späteren Wiederaufruf (Zurück-
+    // Navigation) bleibt es beim alten Verhalten: nur leere Felder füllen.
     const grundrissRaw = localStorage.getItem('scaffold_grundriss_daten');
     if (grundrissRaw) {
       try {
         const g = JSON.parse(grundrissRaw);
-        setForm((prev) => ({
-          ...prev,
-          laenge: prev.laenge || (g.laenge ? String(g.laenge) : ''),
-          breite: prev.breite || (g.breite ? String(g.breite) : ''),
-          hoehe: prev.hoehe || (g.hoehe ? String(g.hoehe) : ''),
-          traufhoehe: prev.traufhoehe || (g.traufhoehe ? String(g.traufhoehe) : ''),
-          dachform: prev.dachform || (dachformen.includes(g.dachform) ? g.dachform : ''),
-          hauseingaenge: prev.hauseingaenge || (g.hauseingaenge ? String(g.hauseingaenge) : ''),
-          hindernisse: Array.from(new Set([
-            ...prev.hindernisse,
-            ...(Array.isArray(g.hindernisse) ? g.hindernisse.filter((h: string) => hindernisListe.includes(h)) : []),
-          ])),
-          garagen: prev.garagen || g.garagen === true,
-          durchfahrt: prev.durchfahrt || g.durchfahrt === true,
-        }));
+        const fresh = localStorage.getItem('scaffold_grundriss_fresh') === '1';
+        const gHoehe = g.hoehe ? String(g.hoehe) : (g.hoehe_geschaetzt ? String(g.hoehe_geschaetzt) : '');
+        if (fresh) {
+          setForm((prev) => ({
+            ...prev,
+            laenge: g.laenge ? String(g.laenge) : prev.laenge,
+            breite: g.breite ? String(g.breite) : prev.breite,
+            hoehe: gHoehe || prev.hoehe,
+            traufhoehe: g.traufhoehe ? String(g.traufhoehe) : prev.traufhoehe,
+            dachform: dachformen.includes(g.dachform) ? g.dachform : prev.dachform,
+            hauseingaenge: g.hauseingaenge ? String(g.hauseingaenge) : prev.hauseingaenge,
+            hindernisse: Array.isArray(g.hindernisse)
+              ? g.hindernisse.filter((h: string) => hindernisListe.includes(h))
+              : prev.hindernisse,
+            garagen: g.garagen === true,
+            durchfahrt: g.durchfahrt === true,
+          }));
+          if (!g.hoehe && g.hoehe_geschaetzt) setHoeheGeschaetzt(true);
+          localStorage.removeItem('scaffold_grundriss_fresh');
+        } else {
+          setForm((prev) => ({
+            ...prev,
+            laenge: prev.laenge || (g.laenge ? String(g.laenge) : ''),
+            breite: prev.breite || (g.breite ? String(g.breite) : ''),
+            hoehe: prev.hoehe || gHoehe,
+            traufhoehe: prev.traufhoehe || (g.traufhoehe ? String(g.traufhoehe) : ''),
+            dachform: prev.dachform || (dachformen.includes(g.dachform) ? g.dachform : ''),
+            hauseingaenge: prev.hauseingaenge || (g.hauseingaenge ? String(g.hauseingaenge) : ''),
+            hindernisse: Array.from(new Set([
+              ...prev.hindernisse,
+              ...(Array.isArray(g.hindernisse) ? g.hindernisse.filter((h: string) => hindernisListe.includes(h)) : []),
+            ])),
+            garagen: prev.garagen || g.garagen === true,
+            durchfahrt: prev.durchfahrt || g.durchfahrt === true,
+          }));
+          // Schätz-Hinweis nur, wenn die Schätzung auch wirklich landet:
+          // weder gespeicherter Stand noch LiDAR haben bereits eine Höhe.
+          let vorhandeneHoehe = '';
+          try { vorhandeneHoehe = JSON.parse(localStorage.getItem('scaffold_step2') || '{}')?.hoehe || ''; } catch { /* ignore */ }
+          try { const lm = JSON.parse(localStorage.getItem('scaffold_lidar_measurements') || '{}'); if (!vorhandeneHoehe && lm.heightM) vorhandeneHoehe = String(lm.heightM); } catch { /* ignore */ }
+          if (!vorhandeneHoehe && !g.hoehe && g.hoehe_geschaetzt) setHoeheGeschaetzt(true);
+        }
         setGrundrissUebernommen(true);
       } catch {
         // ignore
@@ -218,6 +249,18 @@ export default function Schritt2Page() {
     router.push('/aufmass/schritt3');
   }
 
+  // Schnellweg nach KI-Grundriss-Analyse: direkt zur Zusammenfassung/Angebot.
+  // Schritte 3–5 nutzen dann ihre Standardwerte (in Schritt 6 jederzeit änderbar
+  // über Zurück-Navigation).
+  function handleDirektAngebot() {
+    if (!form.laenge || !form.hoehe) {
+      alert('Bitte gib mindestens Länge und Höhe ein!');
+      return;
+    }
+    localStorage.setItem('scaffold_step2', JSON.stringify(form));
+    router.push('/aufmass/schritt6');
+  }
+
   function zurueck() {
     router.push('/aufmass');
   }
@@ -246,6 +289,18 @@ export default function Schritt2Page() {
           {grundrissUebernommen && (
             <div className="rounded-lg bg-teal-900/20 border border-teal-500/30 p-3 text-sm text-teal-300">
               📋 Werte wurden aus der KI-Grundriss-Analyse übernommen – bitte prüfen und bei Bedarf anpassen.
+            </div>
+          )}
+
+          {grundrissUebernommen && hoeheGeschaetzt && (
+            <div className="rounded-lg bg-amber-900/20 border border-amber-500/30 p-3 text-sm text-amber-300">
+              ⚠️ Die Höhe wurde aus der Geschosszahl geschätzt (3,00 m pro Geschoss) – Grundrisse enthalten meist keine Höhenangabe. Bitte prüfen und korrigieren.
+            </div>
+          )}
+
+          {grundrissUebernommen && !form.hoehe && (
+            <div className="rounded-lg bg-amber-900/20 border border-amber-500/30 p-3 text-sm text-amber-300">
+              ⚠️ Die Gebäudehöhe fehlt (im Grundriss nicht vermaßt) – bitte manuell eintragen, sie ist Pflicht für die Berechnung.
             </div>
           )}
 
@@ -371,6 +426,11 @@ export default function Schritt2Page() {
             <button onClick={zurueck} className="flex-1 bg-slate-700 hover:bg-slate-600 text-white font-semibold py-3 px-4 rounded-lg">← Zurück</button>
             <button onClick={handleWeiter} className="flex-1 bg-orange-600 hover:bg-orange-700 text-white font-semibold py-3 px-4 rounded-lg">Weiter →</button>
           </div>
+
+          <button onClick={handleDirektAngebot}
+            className="w-full bg-teal-600/20 hover:bg-teal-600/30 border border-teal-500/50 text-teal-300 font-semibold py-3 px-4 rounded-lg transition">
+            ⚡ Direkt zum Angebot (Schritte 3–5 mit Standardwerten)
+          </button>
 
         </div>
       </div>

@@ -91,6 +91,13 @@ export default function GrundrissUpload({ sessionId }: Props) {
       setStructured(json.structured || null);
       localStorage.setItem('scaffold_grundriss_analyse', json.analysis);
       localStorage.setItem('scaffold_grundriss_daten', JSON.stringify(json.structured || {}));
+      // Neue Analyse = frischer Start: alte Wizard-Eingaben und Vorbefüllungen
+      // (Foto/LiDAR) verwerfen, damit keine Alt-Werte die Grundriss-Werte
+      // blockieren oder vermischen. Schritt 1 (Projekt/Adresse) bleibt erhalten.
+      ['scaffold_step2', 'scaffold_step3', 'scaffold_step4', 'scaffold_step5',
+       'scaffold_foto_daten', 'scaffold_foto_analyse', 'scaffold_lidar_measurements',
+      ].forEach((k) => localStorage.removeItem(k));
+      localStorage.setItem('scaffold_grundriss_fresh', '1');
       if (json.pdfErrors?.length) {
         alert('⚠️ Hinweis: ' + json.pdfErrors.join(' | '));
       }
@@ -106,16 +113,22 @@ export default function GrundrissUpload({ sessionId }: Props) {
 
   if (!sessionId) return <div className="text-yellow-300 text-sm">⚠️ Session-ID fehlt</div>;
 
-  const masse: [string, string][] = structured
-    ? ([
-        ['Länge', structured.laenge],
-        ['Breite', structured.breite],
-        ['Höhe', structured.hoehe],
-        ['Traufhöhe', structured.traufhoehe],
-      ]
-        .filter(([, v]) => v !== null && v !== undefined && v !== '')
-        .map(([k, v]) => [k, `${v} m`] as [string, string]))
-    : [];
+  const masse: [string, string][] = [];
+  if (structured) {
+    const zeilen: [string, any, string][] = [
+      ['Länge', structured.laenge, 'm'],
+      ['Breite', structured.breite, 'm'],
+      ['Höhe', structured.hoehe, 'm'],
+      ['Traufhöhe', structured.traufhoehe, 'm'],
+      ['Höhe (Schätzung)', structured.hoehe == null ? structured.hoehe_geschaetzt : null, 'm'],
+      ['Geschosse', structured.geschosse, ''],
+    ];
+    for (const [k, v, u] of zeilen) {
+      if (v !== null && v !== undefined && v !== '') {
+        masse.push([k, u ? `${v} ${u}` : `${v}`]);
+      }
+    }
+  }
 
   return (
     <div className="space-y-4">
@@ -211,7 +224,7 @@ export default function GrundrissUpload({ sessionId }: Props) {
 
           <p className="text-sm text-slate-200 whitespace-pre-line">{result}</p>
           <p className="text-[10px] text-slate-500 mt-3">
-            ✅ Erkannte Werte werden in Schritt 2 automatisch eingetragen – bitte dort prüfen. Nur im Plan vermaßte Werte werden übernommen, keine Schätzungen.
+            ✅ Erkannte Werte werden in Schritt 2 automatisch eingetragen (alte Eingaben wurden zurückgesetzt). Geschätzte Höhe ist als „Schätzung" markiert – bitte in Schritt 2 prüfen.
           </p>
         </div>
       )}
