@@ -7,46 +7,65 @@ import LiDARUpload from '@/components/aufmaß/LiDARUpload';
 import FotoAnalyse from '@/components/aufmaß/FotoAnalyse';
 import GrundrissUpload from '@/components/aufmaß/GrundrissUpload';
 
+const LEERES_FORM = {
+  // Projekt
+  name: '',
+  adresse: '',
+
+  // Ansprechpartner
+  ansprechpartnerName: '',
+  ansprechpartnerTelefon: '',
+  ansprechpartnerEmail: '',
+
+  // Bauleiter
+  bauleiterName: '',
+  bauleiterTelefon: '',
+  bauleiterEmail: '',
+
+  // Termine
+  projektbeginn: '',
+  projektende: '',
+  arbeitszeiten: 'Mo–Fr 7:00–17:00',
+
+  // Gewerke & Dauer
+  gewerke: [] as string[],
+  dauer: '4',
+
+  // Notizen
+  notizen: '',
+
+  // Digitale Erfassung
+  fotos: false,
+  videos: false,
+  lidar: false,
+  drohnen: false,
+  grundrisse: false,
+  gps: false,
+};
+
+// Alle Wizard-Schlüssel, die ein Aufmaß im Browser ablegt
+const WIZARD_KEYS = [
+  'scaffold_step1',
+  'scaffold_step2',
+  'scaffold_step3',
+  'scaffold_step4',
+  'scaffold_step5',
+  'scaffold_step6',
+  'scaffold_lidar_measurements',
+  'scaffold_foto_daten',
+  'scaffold_foto_analyse',
+  'scaffold_grundriss_daten',
+  'scaffold_grundriss_analyse',
+  'scaffold_grundriss_fresh',
+];
+
 export default function Schritt1Page() {
   const router = useRouter();
 
-  const [form, setForm] = useState({
-    // Projekt
-    name: '',
-    adresse: '',
-
-    // Ansprechpartner
-    ansprechpartnerName: '',
-    ansprechpartnerTelefon: '',
-    ansprechpartnerEmail: '',
-
-    // Bauleiter
-    bauleiterName: '',
-    bauleiterTelefon: '',
-    bauleiterEmail: '',
-
-    // Termine
-    projektbeginn: '',
-    projektende: '',
-    arbeitszeiten: 'Mo–Fr 7:00–17:00',
-
-    // Gewerke & Dauer
-    gewerke: [] as string[],
-    dauer: '4',
-
-    // Notizen
-    notizen: '',
-
-    // Digitale Erfassung
-    fotos: false,
-    videos: false,
-    lidar: false,
-    drohnen: false,
-    grundrisse: false,
-    gps: false,
-  });
+  const [form, setForm] = useState({ ...LEERES_FORM });
 
   const [sessionId, setSessionId] = useState<string>('');
+  const [hatAlteDaten, setHatAlteDaten] = useState(false);
 
   // Session-ID für Uploads
   useEffect(() => {
@@ -61,6 +80,9 @@ export default function Schritt1Page() {
   // Gespeicherte Daten laden
   useEffect(() => {
     const saved = localStorage.getItem('scaffold_step1');
+    // Hinweis anzeigen, wenn irgendwo noch Wizard-Daten liegen
+    const irgendwoDaten = WIZARD_KEYS.some((k) => localStorage.getItem(k) !== null);
+    setHatAlteDaten(irgendwoDaten);
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
@@ -132,6 +154,18 @@ export default function Schritt1Page() {
     setForm((prev) => ({ ...prev, [field]: value }));
   }
 
+  function handleNeuBeginnen() {
+    if (!window.confirm('Wirklich neu beginnen? Alle bisherigen Aufmaß-Eingaben (Schritte 1–6, Fotos, LiDAR, Grundriss) werden gelöscht.')) {
+      return;
+    }
+    WIZARD_KEYS.forEach((k) => localStorage.removeItem(k));
+    const neueSid = 'sess_' + Date.now() + '_' + Math.random().toString(36).substring(2, 9);
+    localStorage.setItem('scaffold_session_id', neueSid);
+    setSessionId(neueSid);
+    setForm({ ...LEERES_FORM });
+    setHatAlteDaten(false);
+  }
+
   function handleWeiter() {
     if (!form.name.trim() || !form.adresse.trim()) {
       alert('Bitte gib mindestens Kunde und Adresse ein!');
@@ -150,6 +184,31 @@ export default function Schritt1Page() {
       <div className="max-w-2xl mx-auto">
         <h1 className="text-3xl font-bold mb-2">📋 Projekt anlegen</h1>
         <p className="text-slate-400 mb-8">Baustelle: Schritt 1 von 6</p>
+
+        {hatAlteDaten && (
+          <div className="mb-6 bg-amber-900/40 border border-amber-500 rounded-xl p-4">
+            <p className="text-amber-200 text-sm font-medium mb-1">
+              ⚠️ Es sind noch Daten eines früheren Aufmaßes gespeichert.
+            </p>
+            <p className="text-amber-300/80 text-xs mb-3">
+              Diese bleiben im Browser erhalten – auch nach Schließen der Seite. Für eine neue Baustelle solltest du neu beginnen, sonst tauchen alte Werte wieder auf.
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setHatAlteDaten(false)}
+                className="flex-1 bg-slate-700 hover:bg-slate-600 text-white text-sm font-medium py-2 px-4 rounded-lg transition"
+              >
+                Fortsetzen (Daten behalten)
+              </button>
+              <button
+                onClick={handleNeuBeginnen}
+                className="flex-1 bg-red-600 hover:bg-red-500 text-white text-sm font-bold py-2 px-4 rounded-lg transition"
+              >
+                🗑️ Neu beginnen (alles löschen)
+              </button>
+            </div>
+          </div>
+        )}
 
         <div className="bg-slate-800 rounded-xl p-6 space-y-8">
 
