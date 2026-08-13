@@ -80,6 +80,13 @@ export default function HomePage() {
                 Pilotprojekt anfragen
                 <ArrowRight className="w-4 h-4" />
               </Link>
+              <Link
+                href="/kaufen"
+                className="mt-3 inline-flex items-center gap-2 border border-amber-500/60 hover:border-amber-400 text-amber-300 hover:text-amber-200 font-bold text-sm px-8 py-3 rounded-lg transition-colors"
+              >
+                Oder direkt abonnieren – 3 Tage kostenlos testen
+                <ArrowRight className="w-4 h-4" />
+              </Link>
               <p className="mt-3 text-[11px] text-slate-500">Unverbindlich anfragen – wir melden uns bei Ihnen.</p>
             </div>
           </div>
