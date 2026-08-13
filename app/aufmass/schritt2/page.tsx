@@ -262,7 +262,7 @@ export default function Schritt2Page() {
   }
 
   function zurueck() {
-    router.push('/aufmass');
+    router.push('/aufmass/schritt1');
   }
 
   return (
