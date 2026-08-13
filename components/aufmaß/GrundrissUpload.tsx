@@ -26,6 +26,7 @@ export default function GrundrissUpload({ sessionId }: Props) {
   const [analyzing, setAnalyzing] = useState(false);
   const [result, setResult] = useState<string | null>(null);
   const [structured, setStructured] = useState<Record<string, any> | null>(null);
+  const [discarded, setDiscarded] = useState<string[]>([]);
 
   // Gespeicherte Ergebnisse wiederherstellen (z. B. nach Zurück-Navigation)
   useEffect(() => {
@@ -89,6 +90,7 @@ export default function GrundrissUpload({ sessionId }: Props) {
 
       setResult(json.analysis);
       setStructured(json.structured || null);
+      setDiscarded(json.verworfen || []);
       localStorage.setItem('scaffold_grundriss_analyse', json.analysis);
       localStorage.setItem('scaffold_grundriss_daten', JSON.stringify(json.structured || {}));
       // Neue Analyse = frischer Start: alte Wizard-Eingaben und Vorbefüllungen
@@ -218,6 +220,15 @@ export default function GrundrissUpload({ sessionId }: Props) {
                 <span key={k} className="rounded-full bg-teal-500/20 border border-teal-500/40 px-3 py-1 text-xs text-teal-200">
                   {k}: <strong>{v}</strong>
                 </span>
+              ))}
+            </div>
+          )}
+
+          {discarded.length > 0 && (
+            <div className="rounded-lg bg-red-900/20 border border-red-500/30 p-3 mb-3">
+              <p className="text-xs text-red-300 font-medium mb-1">⚠️ Nicht belegte / unplausible KI-Werte verworfen:</p>
+              {discarded.map((d, i) => (
+                <p key={i} className="text-xs text-red-200">• {d}</p>
               ))}
             </div>
           )}

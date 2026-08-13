@@ -1,6 +1,69 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 
+// ─── Hilfsfunktionen: Deterministik + Anti-Halluzination ───
+// Grundsatz: Ein Vision-Modell kann bei Bauplänen halluzinieren
+// (Bemaßungsketten summieren, Zahlen raten). Deshalb gilt:
+// 1. Was per Muster eindeutig im Plan-Text steht, gewinnt vor der KI.
+// 2. Jeder KI-Zahlenwert muss im Plan-Text wörtlich belegbar sein,
+//    sonst wird er verworfen (lieber leeres Feld als falsches Angebot).
+
+// Deutsche/englische Zahlenschreibweise sicher parsen ("1.234,56" und "12.5")
+function parsePlanNumber(s: string): number {
+  if (s.includes(',')) return parseFloat(s.replace(/\./g, '').replace(',', '.'));
+  return parseFloat(s);
+}
+
+// Eindeutige Angaben direkt aus dem OCR-Plan-Text ziehen
+function deterministicFromText(text: string): Record<string, number | string> {
+  const found: Record<string, number | string> = {};
+
+  // Gesamt-Außenmaß: "Hausmaß: 10,00 × 12,00 m" / "Außenmaß 10 x 12 m"
+  const hm = text.match(/(?:hausmaß|außenmaß|gebäudemaß|gebäudeabmessung)[^\d]{0,25}(\d{1,3}[.,]\d{1,2})\s*m?\s*[×x]\s*(\d{1,3}[.,]\d{1,2})/i);
+  if (hm) {
+    const a = parsePlanNumber(hm[1]);
+    const b = parsePlanNumber(hm[2]);
+    found.laenge = Math.max(a, b);
+    found.breite = Math.min(a, b);
+  }
+
+  // Traufhöhe: "Traufhöhe 6,50 m" / "Traufe +6,50" / "TH = 6,50"
+  const th = text.match(/traufhöhe[^\d]{0,15}(\d{1,2}[.,]\d{1,2})/i)
+    || text.match(/traufe\s*[=:+]?\s*(\d{1,2}[.,]\d{1,2})/i)
+    || text.match(/(?:^|\s)TH\s*[=:+]\s*(\d{1,2}[.,]\d{1,2})/m);
+  if (th) found.traufhoehe = parsePlanNumber(th[1]);
+
+  // Firsthöhe: "Firsthöhe 8,50 m" / "First +8,50" / "FH = 8,50"
+  const fh = text.match(/firsthöhe[^\d]{0,15}(\d{1,2}[.,]\d{1,2})/i)
+    || text.match(/first\s*[=:+]\s*(\d{1,2}[.,]\d{1,2})/i)
+    || text.match(/(?:^|\s)FH\s*[=:+]\s*(\d{1,2}[.,]\d{1,2})/m);
+  if (fh) found.hoehe = parsePlanNumber(fh[1]);
+
+  // Dachform als Stichwort im Text
+  const dach = text.match(/\b(Satteldach|Flachdach|Pultdach|Walmdach|Mansarddach|Zeltdach)\b/i);
+  if (dach) found.dachform = dach[1][0].toUpperCase() + dach[1].slice(1).toLowerCase();
+
+  return found;
+}
+
+function escapeRegExp(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+// Kommt ein Zahlenwert wörtlich im Plan-Text vor? ("12,00", "12,0", "12")
+// Zahlengrenzen beachten, damit "12" nicht in "120,00" matcht.
+function valueInText(v: number, text: string): boolean {
+  const candidates = new Set<string>();
+  candidates.add(v.toFixed(2).replace('.', ','));
+  candidates.add(v.toFixed(1).replace('.', ','));
+  candidates.add(String(v));
+  if (Number.isInteger(v)) candidates.add(String(v));
+  for (const c of candidates) {
+    if (new RegExp(`(?<![\\d.,])${escapeRegExp(c)}(?![\\d])`).test(text)) return true;
+  }
+  return false;
+}
+
 // ─── POST: KI-Grundriss-Analyse ───
 // Nimmt eine sessionId, holt die hochgeladenen Grundrisse aus
 // project_media (Pfad temp/{sessionId}/grundrisse/) und lässt sie
@@ -110,17 +173,21 @@ Antworte AUSSCHLIESSLICH als JSON-Objekt mit genau diesen Feldern:
   "garagen": <true/false — Garage oder Nebengebäude im Plan eingezeichnet oder beschriftet?>,
   "durchfahrt": <true/false — Durchfahrt oder Durchgang im Gebäude?>,
   "hindernisse": ["<Liste aus: Erker, Balkon, Wintergarten, Kamin, Gaube, Markise — nur was im Plan wirklich eingezeichnet oder beschriftet ist>"],
+  "belege": {
+    "laenge": "<wörtlich zitierte Beschriftung aus dem Plan, z. B. \"Hausmaß: 10,00 × 12,00 m\" — oder null>",
+    "breite": "<ebenso>", "hoehe": "<ebenso>", "traufhoehe": "<ebenso>", "dachform": "<ebenso>"
+  },
   "zusammenfassung": "<2-3 Sätze: Gebäudeform, Maße, Besonderheiten>",
   "hinweise": "<Stichpunkte: Was der Bauleiter bei der Gerüstplanung beachten sollte>"
 }
 
-WICHTIGE REGELN:
-- laenge/breite NUR aus dem Gesamt-Außenmaß des Gebäudes. Steht im Plan "Hausmaß" oder "Außenmaß" (z. B. "Hausmaß: 10,00 × 12,00 m"), ist GENAU dieses Maß zu verwenden.
-- Innenraum-Bemaßungen (Zimmer, Wände, Raumgrößen) NIEMALS als Gebäudemaß verwenden.
-- Bei mehreren Geschoss-Plänen mit gleichem Außenmaß: Außenmaß einmal übernehmen, Geschosse zählen.
-- Maße NUR übernehmen, wenn sie im Plan explizit als Bemaßung stehen (nicht schätzen!). Im Zweifel null bzw. leere Liste.
-- NICHTS erfinden: Keine Garage, keinen Erker o. ä. angeben, wenn nichts davon eingezeichnet oder beschriftet ist.
-- Kein Text außerhalb des JSON.${ocrText ? `\n\nEXTRAHIERTER PLAN-TEXT (OCR):${ocrText}` : ''}`;
+STRENGE REGELN:
+1. JEDER Zahlenwert (laenge, breite, hoehe, traufhoehe) braucht einen Eintrag in "belege": die wörtlich zitierte Bemaßung/Beschriftung, aus der er stammt. Kein Beleg → null.
+2. NIEMALS RECHNEN: keine Addition von Bemaßungsketten, keine Umrechnung, keine Schätzung. Jede Zahl muss EXAKT so im Plan stehen.
+3. laenge/breite = Gesamt-Außenmaß ("Hausmaß"/"Außenmaß" oder äußerste Bemaßungskette). Innenraum-Maße (Zimmer, Wände) NIEMALS.
+4. Bei mehreren Geschoss-Plänen mit gleichem Außenmaß: einmal übernehmen, Geschosse zählen.
+5. Nichts erfinden: Garage/Erker/Dachform nur wenn eingezeichnet oder beschriftet. Im Zweifel null bzw. leere Liste.
+6. Kein Text außerhalb des JSON.${ocrText ? `\n\nEXTRAHIERTER PLAN-TEXT (OCR):${ocrText}` : ''}`;
 
     const content: any[] = [{ type: 'text', text: prompt }];
     for (const url of imageUrls) {
@@ -134,7 +201,7 @@ WICHTIGE REGELN:
         model,
         messages: [{ role: 'user', content }],
         temperature: 0.2,
-        max_tokens: 900,
+        max_tokens: 1400,
         response_format: { type: 'json_object' },
       }),
     });
@@ -161,9 +228,74 @@ WICHTIGE REGELN:
       structured = { zusammenfassung: raw, hinweise: '', hindernisse: [] };
     }
 
-    // Höhe-Schätzung: Grundrisse (Draufsicht) enthalten fast nie die Gebäudehöhe.
-    // Wurden Geschosse erkannt, schätzen wir 3,00 m je Geschoss – getrennt vom
-    // vermaßten Wert als hoehe_geschaetzt, die UI kennzeichnet das als Schätzung.
+    // ─── 1) Deterministische Treffer aus dem Plan-Text schlagen die KI ───
+    if (ocrText) {
+      const det = deterministicFromText(ocrText);
+      for (const [k, v] of Object.entries(det)) structured[k] = v;
+    }
+
+    // ─── 2) Anti-Halluzination + Plausibilität ───
+    const verworfen: string[] = [];
+    const dimLabels: Record<string, string> = { laenge: 'Länge', breite: 'Breite', hoehe: 'Höhe', traufhoehe: 'Traufhöhe' };
+    const dimRanges: Record<string, [number, number]> = { laenge: [2, 80], breite: [2, 80], hoehe: [2, 40], traufhoehe: [2, 30] };
+    for (const key of Object.keys(dimLabels)) {
+      const v = structured[key];
+      if (typeof v !== 'number') {
+        if (v !== null && v !== undefined) structured[key] = null;
+        continue;
+      }
+      const [min, max] = dimRanges[key];
+      if (v < min || v > max) {
+        verworfen.push(`${dimLabels[key]}: ${v} m (unplausibel, erlaubt ${min}–${max} m)`);
+        structured[key] = null;
+        continue;
+      }
+      // Text-Plan: Wert muss wörtlich im extrahierten Plan-Text vorkommen.
+      // Reiner Bild-Plan: Wert braucht einen Beleg aus der KI.
+      if (ocrText) {
+        if (!valueInText(v, ocrText)) {
+          verworfen.push(`${dimLabels[key]}: ${v} m (im Plan-Text nicht belegt)`);
+          structured[key] = null;
+        }
+      } else if (!structured.belege?.[key]) {
+        verworfen.push(`${dimLabels[key]}: ${v} m (kein Plan-Beleg)`);
+        structured[key] = null;
+      }
+    }
+    // Dachform, Hindernisse, Garage, Durchfahrt: bei Text-Plänen muss das
+    // Stichwort ebenfalls im Plan-Text vorkommen, sonst wird es gestrichen.
+    if (ocrText) {
+      if (structured.dachform && !new RegExp(escapeRegExp(String(structured.dachform)), 'i').test(ocrText)) {
+        verworfen.push(`Dachform: ${structured.dachform} (im Plan-Text nicht belegt)`);
+        structured.dachform = null;
+      }
+      if (Array.isArray(structured.hindernisse)) {
+        const belegte = structured.hindernisse.filter((h: any) =>
+          typeof h === 'string' && new RegExp(escapeRegExp(h), 'i').test(ocrText));
+        const gestrichene = structured.hindernisse.filter((h: any) => !belegte.includes(h));
+        if (gestrichene.length) verworfen.push(`Hindernisse ohne Plan-Beleg: ${gestrichene.join(', ')}`);
+        structured.hindernisse = belegte;
+      }
+      if (structured.garagen === true && !/garage|nebengebäude|carport/i.test(ocrText)) {
+        verworfen.push('Garage/Nebengebäude (im Plan-Text nicht belegt)');
+        structured.garagen = false;
+      }
+      if (structured.durchfahrt === true && !/durchfahrt|durchgang/i.test(ocrText)) {
+        verworfen.push('Durchfahrt (im Plan-Text nicht belegt)');
+        structured.durchfahrt = false;
+      }
+    }
+    // First/Gesamthöhe kann nicht unter der Traufhöhe liegen → tauschen
+    if (typeof structured.hoehe === 'number' && typeof structured.traufhoehe === 'number'
+        && structured.traufhoehe > structured.hoehe) {
+      const tmp = structured.hoehe;
+      structured.hoehe = structured.traufhoehe;
+      structured.traufhoehe = tmp;
+    }
+
+    // ─── 3) Höhe-Schätzung: Grundrisse (Draufsicht) enthalten fast nie die
+    // Gebäudehöhe. Wurden Geschosse erkannt, schätzen wir 3,00 m je Geschoss –
+    // getrennt vom vermaßten Wert als hoehe_geschaetzt, die UI kennzeichnet das.
     if ((structured.hoehe === null || structured.hoehe === undefined) &&
         typeof structured.geschosse === 'number' && structured.geschosse >= 1 && structured.geschosse <= 10) {
       structured.hoehe_geschaetzt = Math.round(structured.geschosse * 3 * 10) / 10;
@@ -178,6 +310,7 @@ WICHTIGE REGELN:
       success: true,
       analysis,
       structured,
+      verworfen: verworfen.length ? verworfen : undefined,
       analyzedCount: media.length,
       pdfErrors: pdfErrors.length ? pdfErrors : undefined,
       model,
