@@ -48,7 +48,6 @@ export async function POST(req: NextRequest) {
       mode: 'subscription',
       customer_email: adminEmail,
       line_items: [{ price: priceId, quantity: 1 }],
-      payment_method_types: ['card', 'sepa_debit'],
       subscription_data: {
         trial_period_days: 3,
         metadata: { company_name: companyName, admin_email: adminEmail, admin_name: adminName },
