@@ -55,7 +55,6 @@ export async function POST(req: NextRequest) {
       metadata: { company_name: companyName, admin_email: adminEmail, admin_name: adminName },
       // Firmenname + Rechnungsadresse für die monatliche Rechnung
       billing_address_collection: 'required',
-      customer_update: { name: 'auto', address: 'auto' },
       success_url: `${origin}/kaufen/erfolg?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${origin}/kaufen?abgebrochen=1`,
       locale: 'de',
