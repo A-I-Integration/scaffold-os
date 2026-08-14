@@ -26,7 +26,7 @@ import {
   runSqlOnProject,
   createTenantAdminUser,
 } from './supabase-mgmt';
-import { createVercelProject, addDomainToProject } from './vercel';
+import { createVercelProject, addDomainToProject, triggerInitialDeployment } from './vercel';
 import { KUNDEN_SCHEMA } from './kunden-schema';
 
 export interface TenantRow {
@@ -204,6 +204,13 @@ export async function runProvision(tenantId: string): Promise<TenantRow> {
       await addDomainToProject(t.vercel_project_id!, hostname);
       await patchTenant(tenantId, { subdomain: hostname, provision_step: 'vercel_domain' });
       await note('vercel_domain', `${hostname} eingerichtet (DNS + SSL automatisch).`);
+    }
+
+    // ─── 7b) Erstes Deployment explizit anstoßen ───
+    if (!stepDone('vercel_deploy')) {
+      await triggerInitialDeployment(t.vercel_project_id!, t.slug);
+      await patchTenant(tenantId, { provision_step: 'vercel_deploy' });
+      await note('vercel_deploy', 'Erstes Deployment gestartet.');
     }
 
     // ─── 8) Willkommens-Mail ───

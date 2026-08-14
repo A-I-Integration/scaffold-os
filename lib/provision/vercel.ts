@@ -87,6 +87,32 @@ export async function addDomainToProject(projectId: string, hostname: string): P
   }
 }
 
+// ─── Erstes Deployment explizit starten ───
+// API-anglegte Projekte lösen das erste Deployment nicht immer
+// automatisch aus – ohne diesen Schritt bliebe die Kunden-Seite
+// auf 404 stehen, bis das nächste Mal auf main gepusht wird.
+export async function triggerInitialDeployment(projectId: string, slug: string): Promise<void> {
+  const repo = process.env.VERCEL_GIT_REPO || 'A-I-Integration/scaffold-os';
+  const res = await fetch(`${VERCEL}/v13/deployments${teamQuery()}`, {
+    method: 'POST',
+    headers: vercelHeaders(),
+    body: JSON.stringify({
+      name: `scaffold-os-${slug}`,
+      project: projectId,
+      target: 'production',
+      gitSource: { type: 'github', repo, ref: 'main' },
+    }),
+  });
+  const json: any = await res.json().catch(() => ({}));
+  // 409/400 „deployment already running" ist ok – dann läuft er schon
+  if (!res.ok && res.status !== 409) {
+    const msg = json.error?.message || json.message || JSON.stringify(json);
+    if (!String(msg).includes('already')) {
+      throw new Error(`Erstes Deployment konnte nicht gestartet werden: ${msg}`);
+    }
+  }
+}
+
 // ─── Projekt löschen (Deprovisionierung) ───
 export async function deleteVercelProject(projectId: string): Promise<void> {
   const res = await fetch(`${VERCEL}/v9/projects/${encodeURIComponent(projectId)}${teamQuery()}`, {
