@@ -84,6 +84,22 @@ async function patchTenant(id: string, fields: Record<string, any>): Promise<voi
   if (!res.ok) throw new Error('Registry-Update fehlgeschlagen: ' + (await res.text()));
 }
 
+// Der Storage-Dienst eines frischen Projekts legt seine Tabellen
+// (storage.objects, storage.buckets, …) erst kurz NACH dem Healthy-Status an.
+// Unser Schema enthält Storage-Policies + Bucket → ohne Warten: 42P01.
+async function waitForStorage(ref: string): Promise<void> {
+  const versuche = 5; // ~50 s Budget (Hobby-Grenze beachten), Rest per Resume
+  for (let i = 0; i < versuche; i++) {
+    try {
+      await runSqlOnProject(ref, 'select 1 from storage.objects limit 1');
+      return; // Storage ist da
+    } catch {
+      await new Promise((r) => setTimeout(r, 10000));
+    }
+  }
+  throw new Error('Storage-Dienst des neuen Projekts noch nicht bereit – bitte gleich nochmal „Fortsetzen" klicken.');
+}
+
 // ─── Hauptfunktion: Provisionierung (mit Resume) ───
 export async function runProvision(tenantId: string): Promise<TenantRow> {
   let t = await loadTenant(tenantId);
@@ -140,8 +156,9 @@ export async function runProvision(tenantId: string): Promise<TenantRow> {
       await note('supabase_keys', 'API-Keys gespeichert.');
     }
 
-    // ─── 4) Schema einspielen ───
+    // ─── 4) Schema einspielen (vorher auf Storage-Tabellen warten) ───
     if (!stepDone('schema')) {
+      await waitForStorage(t.supabase_project_ref!);
       await runSqlOnProject(t.supabase_project_ref!, KUNDEN_SCHEMA);
       await patchTenant(tenantId, { provision_step: 'schema' });
       await note('schema', 'DB-Schema eingespielt.');
