@@ -372,6 +372,42 @@ export default function Schritt6Page() {
     }
   }
 
+  // NEU (Phase 13): Rechnung aus angenommenem Angebot erstellen
+  function handleRechnung() {
+    if (!kiResult || !savedProjectId) return;
+    const positions = kiResult.materialList.map((item) => ({
+      bezeichnung: item.name,
+      menge: item.quantity,
+      einheit: item.unit,
+      einzelpreis: item.unitPrice,
+    }));
+    if (kiResult.laborCost > 0) {
+      positions.push({
+        bezeichnung: 'Arbeitsleistung Montage/Demontage',
+        menge: kiResult.estimatedLaborHours,
+        einheit: 'Std.',
+        einzelpreis: kiResult.estimatedLaborHours > 0
+          ? Math.round((kiResult.laborCost / kiResult.estimatedLaborHours) * 100) / 100
+          : 0,
+      });
+    }
+    if (kiResult.transportCost > 0) {
+      positions.push({
+        bezeichnung: 'Transport & Logistik',
+        menge: 1,
+        einheit: 'Pauschale',
+        einzelpreis: kiResult.transportCost,
+      });
+    }
+    sessionStorage.setItem('scaffold_invoice_draft', JSON.stringify({
+      project_id: savedProjectId,
+      customer_name: s1.name || '',
+      customer_address: s1.adresse || '',
+      positions,
+    }));
+    router.push('/rechnungen?neu=1');
+  }
+
   // ═══════════════════════════════════════════════════════════
   // RENDER ZUSAMMENFASSUNG (unverändert)
   // ═══════════════════════════════════════════════════════════
@@ -560,6 +596,15 @@ export default function Schritt6Page() {
                       <img src={signatureData} alt="Unterschrift" className="h-16 mx-auto" />
                     </div>
                   )}
+                </div>
+              )}
+
+              {/* NEU (Phase 13): Rechnung erstellen, sobald Angebot angenommen */}
+              {angebotsStatus === 'angenommen' && savedProjectId && kiResult && (
+                <div className="pt-2 border-t border-slate-700">
+                  <button onClick={handleRechnung} className="w-full rounded-lg bg-amber-500 hover:bg-amber-400 py-3 font-bold text-slate-900 transition-colors">
+                    🧾 Rechnung erstellen
+                  </button>
                 </div>
               )}
 
