@@ -32,6 +32,8 @@ const STATUS_LABEL: Record<string, { text: string; cls: string }> = {
   active:       { text: 'Aktiv',              cls: 'bg-emerald-500/20 text-emerald-300' },
   error:        { text: 'Fehler',             cls: 'bg-red-500/20 text-red-300' },
   cancelled:    { text: 'Gekündigt',          cls: 'bg-slate-500/20 text-slate-400' },
+  past_due:     { text: 'Zahlungsverzug',     cls: 'bg-amber-500/20 text-amber-300' },
+  gesperrt:     { text: 'Gesperrt (pausiert)', cls: 'bg-red-500/20 text-red-300' },
 };
 
 export default function KundenAdminPage() {

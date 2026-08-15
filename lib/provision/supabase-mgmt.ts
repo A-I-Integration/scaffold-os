@@ -157,6 +157,35 @@ export async function createTenantAdminUser(
   return userId;
 }
 
+// ─── Projekt pausieren (Kill-Switch bei Kündigung/Nichtzahlung) ───
+// Pausieren stoppt Datenbank + API der Kundeninstanz komplett.
+// Alles bleibt erhalten – /restore macht die Sperrung rückgängig.
+export async function pauseSupabaseProject(ref: string): Promise<void> {
+  const res = await fetch(`${MGMT}/projects/${ref}/pause`, {
+    method: 'POST',
+    headers: mgmtHeaders(),
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    // Schon pausiert oder Projekt weg → kein harter Fehler
+    if (res.status === 404 || /already|paused/i.test(text)) return;
+    throw new Error(`Supabase-Projekt konnte nicht pausiert werden: ${text}`);
+  }
+}
+
+// ─── Projekt wieder aktivieren (Zahlung eingegangen) ───
+export async function restoreSupabaseProject(ref: string): Promise<void> {
+  const res = await fetch(`${MGMT}/projects/${ref}/restore`, {
+    method: 'POST',
+    headers: mgmtHeaders(),
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    if (res.status === 404 || /already|active|healthy/i.test(text)) return;
+    throw new Error(`Supabase-Projekt konnte nicht reaktiviert werden: ${text}`);
+  }
+}
+
 // ─── Projekt löschen (Deprovisionierung) ───
 export async function deleteSupabaseProject(ref: string): Promise<void> {
   const res = await fetch(`${MGMT}/projects/${ref}`, {

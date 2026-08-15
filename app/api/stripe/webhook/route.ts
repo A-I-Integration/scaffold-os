@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import Stripe from 'stripe';
 import { runProvision } from '@/lib/provision/orchestrate';
+import { pauseSupabaseProject, restoreSupabaseProject } from '@/lib/provision/supabase-mgmt';
 
 // ============================================================
 // SCAFFOLD OS – Stripe: Webhook (NUR Master-Instanz)
@@ -181,12 +182,45 @@ async function aboStatusNachziehen(sub: Stripe.Subscription): Promise<void> {
   const rows = res.ok ? await res.json() : [];
   const tenantId = rows?.[0]?.tenant_id || null;
 
+  // tenant-Datensatz mit Projekt-Ref holen (für Kill-Switch)
+  let projektRef: string | null = null;
+  let tenantStatus = '';
+  if (tenantId) {
+    const tRes = await fetch(
+      `${masterUrl}/rest/v1/tenants?id=eq.${tenantId}&select=status,supabase_project_ref`,
+      { headers }
+    );
+    const tRows = tRes.ok ? await tRes.json() : [];
+    projektRef = tRows?.[0]?.supabase_project_ref || null;
+    tenantStatus = tRows?.[0]?.status || '';
+  }
+
   if (sub.status === 'active') {
     await tenantStatusSetzen(tenantId, 'active', 'Abo aktiv.');
+    // NEU (Sprint 1): War die Instanz gesperrt, wird sie bei Zahlungseingang reaktiviert
+    if (projektRef && tenantStatus === 'gesperrt') {
+      try {
+        await restoreSupabaseProject(projektRef);
+        console.log(`[stripe-webhook] Instanz ${projektRef} reaktiviert (Zahlung eingegangen).`);
+      } catch (err: any) {
+        console.error('[stripe-webhook] Reaktivierung fehlgeschlagen:', err.message);
+      }
+    }
   } else if (sub.status === 'past_due' || sub.status === 'unpaid') {
-    await tenantStatusSetzen(tenantId, 'error', 'Zahlung ausstehend/fehlgeschlagen.');
+    // Mahnphase: Instanz läuft weiter (Stripe versucht die Abbuchung erneut),
+    // aber der Betreiber sieht den Zahlungsverzug in /admin/kunden
+    await tenantStatusSetzen(tenantId, 'past_due', 'Zahlung ausstehend/fehlgeschlagen – Stripe versucht es erneut.');
   } else if (sub.status === 'canceled') {
-    await tenantStatusSetzen(tenantId, 'cancelled', 'Abo gekündigt.');
+    // NEU (Sprint 1): Automatische Sperrung – Instanz wird pausiert, nichts geht verloren
+    await tenantStatusSetzen(tenantId, 'gesperrt', 'Abo beendet – Instanz pausiert (Daten bleiben erhalten).');
+    if (projektRef) {
+      try {
+        await pauseSupabaseProject(projektRef);
+        console.log(`[stripe-webhook] Instanz ${projektRef} pausiert (Abo beendet).`);
+      } catch (err: any) {
+        console.error('[stripe-webhook] Pausieren fehlgeschlagen:', err.message);
+      }
+    }
   }
 }
 
