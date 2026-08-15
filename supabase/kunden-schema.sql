@@ -1701,3 +1701,9 @@ BEGIN
       CHECK (invoice_type IN ('standard', 'abschlag', 'schluss'));
   END IF;
 END $$;
+
+-- ============================================================
+-- PHASE 16: Onboarding-Assistent (identisch zu phase-16-onboarding.sql)
+-- ============================================================
+ALTER TABLE company_settings
+  ADD COLUMN IF NOT EXISTS onboarding_done boolean NOT NULL DEFAULT false;

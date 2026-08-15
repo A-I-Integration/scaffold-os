@@ -71,6 +71,7 @@ export async function POST(req: NextRequest) {
     const allowed = [
       'company_name', 'street', 'zip', 'city', 'phone', 'email', 'website',
       'steuer_nr', 'ust_id', 'bank_name', 'iban', 'bic', 'depot_address',
+      'onboarding_done',
     ];
     const patch: Record<string, any> = { updated_at: new Date().toISOString() };
     for (const f of allowed) {

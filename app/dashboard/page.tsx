@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { createClient } from "@/lib/supabase/client";
 import {
   RefreshCw, Plus, AlertTriangle, CalendarDays, Euro, Users, Warehouse,
   CheckCircle2, RotateCcw, Trash2,
@@ -88,6 +89,7 @@ export default function DashboardPage() {
   const [error, setError] = useState("");
   const [busyId, setBusyId] = useState<string | null>(null);
   const [msg, setMsg] = useState("");
+  const [zeigeOnboarding, setZeigeOnboarding] = useState(false);
 
   async function loadDashboard() {
     setError("");
@@ -110,6 +112,19 @@ export default function DashboardPage() {
   useEffect(() => {
     loadDashboard();
     const interval = setInterval(loadDashboard, 15000);
+    // Onboarding-Banner: nur für Admins, solange Ersteinrichtung offen ist
+    (async () => {
+      try {
+        const supabase = createClient();
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) return;
+        const { data: profil } = await supabase
+          .from('profiles').select('role').eq('id', user.id).single();
+        if (profil?.role !== 'admin') return;
+        const c = await fetch('/api/company', { cache: 'no-store' }).then(r => r.json());
+        if (c?.success && !c.company?.onboarding_done) setZeigeOnboarding(true);
+      } catch { /* still bleiben */ }
+    })();
     return () => clearInterval(interval);
   }, []);
 
@@ -202,6 +217,20 @@ export default function DashboardPage() {
             </button>
           </div>
         </div>
+
+        {/* ─── Onboarding-Hinweis (nur Admin, bis Ersteinrichtung fertig) ─── */}
+        {zeigeOnboarding && (
+          <div className="bg-blue-900/30 border border-blue-700 rounded-lg p-4 mb-6 flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <div className="font-semibold text-blue-200">Ersteinrichtung noch nicht abgeschlossen</div>
+              <div className="text-sm text-blue-300/80">Firmenprofil, Stammdaten und Demo-Daten – der Assistent führt Sie in 3 Schritten durch.</div>
+            </div>
+            <button onClick={() => router.push('/onboarding')}
+              className="px-4 py-2 bg-blue-600 hover:bg-blue-500 rounded-lg text-sm font-semibold transition-colors">
+              Einrichtung starten →
+            </button>
+          </div>
+        )}
 
         {error && (
           <div className="bg-red-900/30 border border-red-700 rounded-lg p-4 mb-6 text-red-300">
