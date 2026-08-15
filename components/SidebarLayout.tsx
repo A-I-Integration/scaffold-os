@@ -7,7 +7,7 @@ import { createClient } from '@/lib/supabase/client';
 import {
   HardHat, LayoutDashboard, Warehouse, CalendarClock, Truck,
   KeyRound, Ruler, Navigation, LogOut, Menu, X, Database, TrendingUp, Timer, Route,
-  FileText, Settings,
+  FileText, Settings, BookOpen,
 } from 'lucide-react';
 
 // ============================================================
@@ -162,6 +162,17 @@ export default function SidebarLayout({ children }: { children: React.ReactNode 
               </span>
             </div>
           )}
+          {/* NEU: Benutzerhandbuch – ganz unten, für alle Rollen */}
+          <a
+            href="/handbuch.pdf"
+            target="_blank"
+            rel="noopener noreferrer"
+            className={`flex items-center gap-2 text-xs text-slate-400 hover:text-amber-400 transition-colors w-full px-2 py-1.5 rounded-lg hover:bg-slate-800 ${!open ? 'justify-center' : ''}`}
+            title="Benutzerhandbuch (PDF)"
+          >
+            <BookOpen className="w-4 h-4 shrink-0" />
+            {open && 'Handbuch'}
+          </a>
           <button
             onClick={handleLogout}
             className={`flex items-center gap-2 text-xs text-slate-400 hover:text-white transition-colors w-full px-2 py-1.5 rounded-lg hover:bg-slate-800 ${!open ? 'justify-center' : ''}`}
