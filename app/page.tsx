@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { HardHat, Building2, Rocket, Gift, ArrowRight } from 'lucide-react';
+import { HardHat, Gift, ArrowRight } from 'lucide-react';
 
 // ============================================================
 // SCAFFOLD OS – Startseite
@@ -44,6 +44,12 @@ export default function HomePage() {
             >
               <Rocket className="w-4 h-4" />
               Pilotprojekt anfragen
+            </Link>
+            <Link
+              href="/kaufen"
+              className="inline-flex items-center justify-center gap-2 bg-amber-500 hover:bg-amber-400 text-slate-900 font-bold px-6 py-2.5 rounded-lg transition-colors"
+            >
+              Jetzt abonnieren – 3 Tage kostenlos
             </Link>
           </div>
         </div>
