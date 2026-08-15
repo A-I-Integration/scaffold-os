@@ -13,7 +13,9 @@
 //   6. vercel_project    Eigenes Vercel-Deployment (Repo verknüpft,
 //                        Env-Vars direkt beim Anlegen gesetzt)
 //   7. vercel_domain     kunde.scaffoldos.de einrichten
-//   8. welcome_mail      Willkommens-Mail via Resend
+//   8. monitoring        UptimeRobot-Monitor (optional)
+//   9. welcome_mail      Willkommens-Mail via Resend
+//  10. smoke_test       Web-App + Datenbank erreichbar? (nur Protokoll)
 //
 // Läuft eine Function in ein Timeout, bleibt der Stand in der
 // Registry erhalten – „Fortsetzen" macht einfach dort weiter.
@@ -28,6 +30,7 @@ import {
 } from './supabase-mgmt';
 import { createVercelProject, addDomainToProject, triggerInitialDeployment } from './vercel';
 import { createUptimeMonitor } from './uptimerobot';
+import { smokeTest } from './smoketest';
 import { KUNDEN_SCHEMA } from './kunden-schema';
 
 export interface TenantRow {
@@ -59,6 +62,7 @@ const STEPS = [
   'vercel_deploy',
   'monitoring',
   'welcome_mail',
+  'smoke_test',
 ] as const;
 
 // ─── Registry-Zugriff (MASTER-Datenbank, REST + Service-Key) ───
@@ -240,6 +244,22 @@ export async function runProvision(tenantId: string): Promise<TenantRow> {
       await sendWelcomeMail(t, hostname, tempPassword);
       await patchTenant(tenantId, { provision_step: 'welcome_mail' });
       await note('welcome_mail', `Willkommens-Mail an ${t.admin_email} gesendet.`);
+    }
+
+    // ─── 9) Smoke-Test: Läuft die neue Instanz wirklich? ───
+    // Nie blockierend – Warnungen landen nur im Protokoll.
+    if (!stepDone('smoke_test')) {
+      try {
+        const erg = await smokeTest(hostname, t.supabase_url!, t.supabase_anon_key!);
+        if (erg.warnungen.length === 0) {
+          await note('smoke_test', `Smoke-Test bestanden: Web-App HTTP ${erg.webapp_status}, Datenbank antwortet.`);
+        } else {
+          for (const w of erg.warnungen) await note('smoke_test', `WARNUNG: ${w}`);
+        }
+      } catch (err: any) {
+        await note('smoke_test', `Smoke-Test übersprungen: ${err.message}`);
+      }
+      await patchTenant(tenantId, { provision_step: 'smoke_test' });
     }
 
     await patchTenant(tenantId, { status: 'active', error_message: null });
