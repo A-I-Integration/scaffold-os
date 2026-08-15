@@ -27,6 +27,7 @@ import {
   createTenantAdminUser,
 } from './supabase-mgmt';
 import { createVercelProject, addDomainToProject, triggerInitialDeployment } from './vercel';
+import { createUptimeMonitor } from './uptimerobot';
 import { KUNDEN_SCHEMA } from './kunden-schema';
 
 export interface TenantRow {
@@ -55,6 +56,8 @@ const STEPS = [
   'admin_user',
   'vercel_project',
   'vercel_domain',
+  'vercel_deploy',
+  'monitoring',
   'welcome_mail',
 ] as const;
 
@@ -211,6 +214,18 @@ export async function runProvision(tenantId: string): Promise<TenantRow> {
       await triggerInitialDeployment(t.vercel_project_id!, t.slug);
       await patchTenant(tenantId, { provision_step: 'vercel_deploy' });
       await note('vercel_deploy', 'Erstes Deployment gestartet.');
+    }
+
+    // ─── 7c) Uptime-Monitor anlegen (Sprint 1, optional) ───
+    if (!stepDone('monitoring')) {
+      try {
+        await createUptimeMonitor(hostname, t.company_name || t.slug);
+        await note('monitoring', `Uptime-Monitor für ${hostname} angelegt.`);
+      } catch (err: any) {
+        // Monitoring ist optional – darf die Einrichtung nie blockieren
+        await note('monitoring', `Monitor-Anlage übersprungen: ${err.message}`);
+      }
+      await patchTenant(tenantId, { provision_step: 'monitoring' });
     }
 
     // ─── 8) Willkommens-Mail ───

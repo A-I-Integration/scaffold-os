@@ -3,6 +3,7 @@ import { createClient } from '@/lib/supabase/server';
 import { runProvision, loadTenant } from '@/lib/provision/orchestrate';
 import { deleteSupabaseProject } from '@/lib/provision/supabase-mgmt';
 import { deleteVercelProject } from '@/lib/provision/vercel';
+import { deleteUptimeMonitor } from '@/lib/provision/uptimerobot';
 
 // ============================================================
 // SCAFFOLD OS – Kunden-Setup-Paket: Provisionierungs-API
@@ -166,6 +167,10 @@ export async function DELETE(req: NextRequest) {
     }
     if (tenant.vercel_project_id) {
       try { await deleteVercelProject(tenant.vercel_project_id); }
+      catch (e: any) { fehler.push(e.message); }
+    }
+    if (tenant.subdomain) {
+      try { await deleteUptimeMonitor(tenant.subdomain); }
       catch (e: any) { fehler.push(e.message); }
     }
 
