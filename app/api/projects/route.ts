@@ -116,22 +116,41 @@ export async function PATCH(req: NextRequest) {
 
   try {
     const body = await req.json();
-    const { id, status } = body;
+    const { id, status, data } = body;
 
     if (!id) {
       return NextResponse.json({ success: false, error: 'id erforderlich' }, { status: 400 });
     }
-    if (!['active', 'completed'].includes(status)) {
+    if (status && !['active', 'completed'].includes(status)) {
       return NextResponse.json(
         { success: false, error: 'Status muss „active" oder „completed" sein.' },
         { status: 400 }
       );
     }
 
+    const patch: Record<string, any> = {};
+    if (status) patch.status = status;
+
+    // NEU (Prio-2-Sprint): data-Merge – z. B. KI-Ergebnis/Angebotsstatus nachträglich sichern.
+    // Bestehende Projektdaten werden gelesen und mit den neuen Feldern gemergt (nichts geht verloren).
+    if (data && typeof data === 'object') {
+      const cur = await fetch(`${url}/rest/v1/projects?id=eq.${id}&select=data`, { headers });
+      if (!cur.ok) throw new Error(await cur.text());
+      const curRows = await cur.json();
+      if (!curRows?.length) {
+        return NextResponse.json({ success: false, error: 'Projekt nicht gefunden.' }, { status: 404 });
+      }
+      patch.data = { ...(curRows[0].data || {}), ...data };
+    }
+
+    if (!Object.keys(patch).length) {
+      return NextResponse.json({ success: false, error: 'Nichts zu ändern (status oder data fehlt).' }, { status: 400 });
+    }
+
     const res = await fetch(`${url}/rest/v1/projects?id=eq.${id}`, {
       method: 'PATCH',
       headers: { ...headers, 'Prefer': 'return=representation' },
-      body: JSON.stringify({ status }),
+      body: JSON.stringify(patch),
     });
     if (!res.ok) throw new Error(await res.text());
 

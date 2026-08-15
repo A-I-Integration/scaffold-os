@@ -70,7 +70,7 @@ export async function POST(req: NextRequest) {
   }
   try {
     const body = await req.json();
-    const { project_id, customer_name, customer_address, positions, tax_rate, invoice_date, due_date, notes } = body;
+    const { project_id, customer_name, customer_address, positions, tax_rate, invoice_date, due_date, notes, invoice_type } = body;
 
     if (!customer_name) {
       return NextResponse.json({ success: false, error: 'Kundenname erforderlich.' }, { status: 400 });
@@ -152,22 +152,36 @@ export async function PATCH(req: NextRequest) {
   }
   try {
     const body = await req.json();
-    const { id, status } = body;
+    const { id, status, reminder_level } = body;
 
     if (!id) {
       return NextResponse.json({ success: false, error: 'id erforderlich' }, { status: 400 });
     }
-    if (!['offen', 'bezahlt', 'ueberfaellig', 'storniert'].includes(status)) {
+    if (status && !['offen', 'bezahlt', 'ueberfaellig', 'storniert'].includes(status)) {
       return NextResponse.json(
         { success: false, error: 'Ungültiger Status.' },
         { status: 400 }
       );
     }
 
+    // NEU (Phase 15): Mahnstufe 0–2 neben Status änderbar
+    const patch: Record<string, any> = { updated_at: new Date().toISOString() };
+    if (status) patch.status = status;
+    if (reminder_level != null) {
+      const rl = Number(reminder_level);
+      if (![0, 1, 2].includes(rl)) {
+        return NextResponse.json({ success: false, error: 'Mahnstufe muss 0, 1 oder 2 sein.' }, { status: 400 });
+      }
+      patch.reminder_level = rl;
+    }
+    if (!status && reminder_level == null) {
+      return NextResponse.json({ success: false, error: 'Nichts zu ändern (status oder reminder_level fehlt).' }, { status: 400 });
+    }
+
     const res = await fetch(`${url}/rest/v1/invoices?id=eq.${id}`, {
       method: 'PATCH',
       headers: { ...headers, 'Prefer': 'return=representation' },
-      body: JSON.stringify({ status, updated_at: new Date().toISOString() }),
+      body: JSON.stringify(patch),
     });
     if (!res.ok) throw new Error(await res.text());
 

@@ -84,9 +84,12 @@ function Schritt6Content() {
         if (!json.success || !json.project) throw new Error(json.error || 'Projekt nicht gefunden');
         const p = json.project;
         const d = p.data || {};
-        const { angebotAnpassungen, ...steps } = d;
+        const { angebotAnpassungen, kiResult: savedKi, angebotsStatus: savedStatus, ...steps } = d;
         setStepData(steps);
         if (angebotAnpassungen) setAnpassungen(angebotAnpassungen);
+        // NEU (Prio-2-Sprint): KI-Ergebnis und Angebotsstatus wiederherstellen
+        if (savedKi) setKiResult(savedKi);
+        if (savedStatus) setAngebotsStatus(savedStatus);
         setSavedProjectId(p.id);
       } catch (err: any) {
         console.error('Projekt-Laden fehlgeschlagen:', err);
@@ -206,7 +209,9 @@ function Schritt6Content() {
   async function handleSpeichern() {
     setIsSaving(true);
     try {
-      const response = await fetch('/api/projects', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: s1.name || 'Unbenanntes Projekt', adresse: s1.adresse || '', data: { ...stepData, angebotAnpassungen: anpassungen }, status: 'active' }) });
+      // NEU (Prio-2-Sprint): KI-Ergebnis und Angebotsstatus mit ins Projekt speichern,
+      // damit sie beim Öffnen aus dem Dashboard wieder da sind
+      const response = await fetch('/api/projects', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: s1.name || 'Unbenanntes Projekt', adresse: s1.adresse || '', data: { ...stepData, angebotAnpassungen: anpassungen, kiResult, angebotsStatus }, status: 'active' }) });
       const result = await response.json();
       if (!response.ok) throw new Error(result.error || 'Speichern fehlgeschlagen');
       const sessionId = localStorage.getItem('scaffold_session_id');
@@ -341,6 +346,18 @@ function Schritt6Content() {
     setAngebotsStatus('erstellt');
   }
 
+  // NEU (Prio-2-Sprint): Angebotsstatus dauerhaft im Projekt sichern
+  async function persistAngebotsStatus(status: string) {
+    if (!savedProjectId) return;
+    try {
+      await fetch('/api/projects', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: savedProjectId, data: { angebotsStatus: status } }),
+      });
+    } catch { /* Status-Speicherung optional, UI bleibt führend */ }
+  }
+
   // NEU: E-Mail senden
   async function handleEmailSend() {
     if (!kiResult || !savedProjectId) { alert('Bitte zuerst KI-Berechnung durchführen und Projekt speichern!'); return; }
@@ -363,6 +380,7 @@ function Schritt6Content() {
       if (!json.success) throw new Error(json.error);
       setEmailStatus('sent');
       setAngebotsStatus('versendet');
+      persistAngebotsStatus('versendet');
       alert('✅ E-Mail erfolgreich versendet!');
     } catch (err: any) {
       setEmailStatus('error');
@@ -389,6 +407,7 @@ function Schritt6Content() {
         if (!res.ok) throw new Error('Fehler beim Speichern');
         alert('✅ Unterschrift gespeichert!');
         setAngebotsStatus('angenommen');
+        persistAngebotsStatus('angenommen');
       } catch (err: any) {
         console.error('Unterschrift speichern fehlgeschlagen:', err);
         alert('⚠️ Unterschrift lokal gespeichert (Server-Fehler)');

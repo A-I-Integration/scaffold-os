@@ -1682,3 +1682,22 @@ CREATE POLICY "company_settings_authenticated_all" ON company_settings
 
 -- ─── Firmen-Snapshot auf Rechnungen (GoBD) ───
 ALTER TABLE invoices ADD COLUMN IF NOT EXISTS company_snapshot jsonb;
+
+
+-- ============================================================
+-- PHASE 15: Produkt-Luecken (identisch zu phase-15-produktluecken.sql)
+-- ============================================================
+
+ALTER TABLE invoices ADD COLUMN IF NOT EXISTS reminder_level int NOT NULL DEFAULT 0;
+ALTER TABLE invoices ADD COLUMN IF NOT EXISTS invoice_type text NOT NULL DEFAULT 'standard';
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint WHERE conname = 'invoices_invoice_type_check'
+  ) THEN
+    ALTER TABLE invoices
+      ADD CONSTRAINT invoices_invoice_type_check
+      CHECK (invoice_type IN ('standard', 'abschlag', 'schluss'));
+  END IF;
+END $$;

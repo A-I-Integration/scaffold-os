@@ -7,7 +7,7 @@ import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { Suspense } from 'react';
 import {
-  FileText, Plus, X, Download, Trash2, Check, Euro,
+  FileText, Plus, X, Download, Trash2, Check, Euro, Mail, AlertTriangle,
 } from 'lucide-react';
 
 // ============================================================
@@ -57,7 +57,16 @@ interface Invoice {
   notes: string | null;
   created_at: string;
   company_snapshot?: any; // Phase 14: Firmendaten zum Ausstellungszeitpunkt (GoBD)
+  reminder_level?: number; // Phase 15: 0 = keine, 1/2 = Mahnung
+  invoice_type?: 'standard' | 'abschlag' | 'schluss'; // Phase 15
 }
+
+// Phase 15: Bezeichnung je Rechnungstyp
+const TYPE_LABEL: Record<string, string> = {
+  standard: 'RECHNUNG',
+  abschlag: 'ABSCHLAGSRECHNUNG',
+  schluss: 'SCHLUSSRECHNUNG',
+};
 
 const fmtEur = (n: number) =>
   n.toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -87,7 +96,7 @@ function generateInvoicePDF(inv: Invoice) {
   // Blauer Kopf wie beim Angebot
   doc.setFillColor(30, 58, 138); doc.rect(0, 0, pageWidth, 35, 'F');
   doc.setTextColor(255, 255, 255); doc.setFontSize(18); doc.setFont('helvetica', 'bold'); doc.text('SCAFFOLD OS', 14, 18);
-  doc.setFontSize(22); doc.text('RECHNUNG', pageWidth - 14, 18, { align: 'right' });
+  doc.setFontSize(22); doc.text(TYPE_LABEL[inv.invoice_type || 'standard'] || 'RECHNUNG', pageWidth - 14, 18, { align: 'right' });
   doc.setFontSize(9); doc.setFont('helvetica', 'normal');
   doc.text('KI-gestützte Gerüstbau-Kalkulation', pageWidth - 14, 26, { align: 'right' });
 
@@ -198,6 +207,50 @@ function generateInvoicePDF(inv: Invoice) {
   return doc;
 }
 
+// ─── Phase 15: Mahnungs-PDF (1. / 2. Mahnung) ───
+function generateMahnungPDF(inv: Invoice, stufe: 1 | 2) {
+  const doc = new jsPDF();
+  const pageWidth = doc.internal.pageSize.getWidth();
+  const cs = inv.company_snapshot || {};
+
+  doc.setFillColor(30, 58, 138); doc.rect(0, 0, pageWidth, 35, 'F');
+  doc.setTextColor(255, 255, 255); doc.setFontSize(18); doc.setFont('helvetica', 'bold'); doc.text('SCAFFOLD OS', 14, 18);
+  doc.setFontSize(22); doc.text(stufe === 1 ? '1. MAHNUNG' : '2. MAHNUNG', pageWidth - 14, 18, { align: 'right' });
+  doc.setFontSize(9); doc.setFont('helvetica', 'normal');
+  doc.text('Zahlungserinnerung', pageWidth - 14, 26, { align: 'right' });
+
+  const senderLine = [cs.company_name, [cs.street, [cs.zip, cs.city].filter(Boolean).join(' ')].filter(Boolean).join(', ')].filter(Boolean).join(' • ');
+  if (senderLine) { doc.setFontSize(7); doc.setTextColor(100, 116, 139); doc.text(senderLine, 14, 40); }
+
+  let y = 50;
+  doc.setFillColor(248, 250, 252); doc.rect(14, y, 90, 30, 'F');
+  doc.setTextColor(71, 85, 105); doc.setFontSize(8); doc.setFont('helvetica', 'bold'); doc.text('EMPFÄNGER', 18, y + 6);
+  doc.setFont('helvetica', 'normal'); doc.setTextColor(15, 23, 42); doc.setFontSize(9);
+  doc.text(inv.customer_name, 18, y + 14);
+  if (inv.customer_address) doc.text(doc.splitTextToSize(inv.customer_address, 80), 18, y + 20);
+
+  doc.setFillColor(248, 250, 252); doc.rect(108, y, 88, 30, 'F');
+  doc.setTextColor(71, 85, 105); doc.setFontSize(8); doc.setFont('helvetica', 'bold'); doc.text('BEZUG', 112, y + 6);
+  doc.setFont('helvetica', 'normal'); doc.setTextColor(15, 23, 42); doc.setFontSize(9);
+  doc.text(`Rechnung: ${inv.invoice_number}`, 112, y + 14);
+  doc.text(`Rechnungsdatum: ${fmtDate(inv.invoice_date)}`, 112, y + 20);
+  doc.text(`Fällig seit: ${fmtDate(inv.due_date)}`, 112, y + 26);
+
+  y = 92;
+  doc.setTextColor(15, 23, 42); doc.setFontSize(10); doc.setFont('helvetica', 'normal');
+  const betrag = fmtEur(Number(inv.gross_amount)) + ' €';
+  const text = stufe === 1
+    ? `Sehr geehrte Damen und Herren,\n\ntrotz Fälligkeit am ${fmtDate(inv.due_date)} konnten wir für die oben genannte Rechnung über ${betrag} noch keinen Zahlungseingang feststellen. Sicher handelt es sich um ein Versehen – wir bitten Sie, den Betrag innerhalb von 7 Tagen unter Angabe der Rechnungsnummer zu überweisen.${cs.iban ? `\n\nBankverbindung: ${cs.bank_name || ''}, IBAN ${cs.iban}${cs.bic ? ', BIC ' + cs.bic : ''}` : ''}\n\nSollten Sie die Zahlung bereits veranlasst haben, betrachten Sie dieses Schreiben als gegenstandslos.\n\nMit freundlichen Grüßen\n${cs.company_name || ''}`
+    : `Sehr geehrte Damen und Herren,\n\ntrotz unserer ersten Mahnung ist die oben genannte Rechnung über ${betrag} weiterhin unbezahlt. Wir fordern Sie hiermit letztmalig auf, den Betrag innerhalb von 7 Tagen zu begleichen.${cs.iban ? `\n\nBankverbindung: ${cs.bank_name || ''}, IBAN ${cs.iban}${cs.bic ? ', BIC ' + cs.bic : ''}` : ''}\n\nAndernfalls sehen wir uns gezwungen, weitere rechtliche Schritte einzuleiten. Bitte beachten Sie, dass ab diesem Zeitpunkt Verzugszinsen gemäß § 288 BGB anfallen.\n\nMit freundlichen Grüßen\n${cs.company_name || ''}`;
+  doc.text(doc.splitTextToSize(text, 180), 14, y);
+
+  doc.setTextColor(148, 163, 184); doc.setFontSize(7);
+  const footer = [cs.company_name, cs.street, [cs.zip, cs.city].filter(Boolean).join(' ')].filter(Boolean).join(' • ');
+  if (footer) doc.text(footer, pageWidth / 2, 285, { align: 'center' });
+
+  return doc;
+}
+
 // ─── DATEV-Buchungsstapel (EXTF-CSV, Formatversion 700) ───
 function buildDatevEXTF(invoices: Invoice[]): string {
   const now = new Date();
@@ -267,6 +320,7 @@ function RechnungenContent() {
     { bezeichnung: '', menge: 1, einheit: 'Stk.', einzelpreis: 0 },
   ]);
   const [taxRate, setTaxRate] = useState(19);
+  const [invoiceType, setInvoiceType] = useState<'standard' | 'abschlag' | 'schluss'>('standard'); // Phase 15
   const [invoiceDate, setInvoiceDate] = useState(new Date().toISOString().slice(0, 10));
   const [dueDate, setDueDate] = useState(
     new Date(Date.now() + 14 * 86400000).toISOString().slice(0, 10)
@@ -392,6 +446,78 @@ function RechnungenContent() {
   function handlePDF(inv: Invoice) {
     const doc = generateInvoicePDF(inv);
     doc.save(`Rechnung_${inv.invoice_number}.pdf`);
+  }
+
+  // Phase 15: Rechnung per E-Mail versenden (PDF im Anhang)
+  async function handleSendMail(inv: Invoice) {
+    const to = prompt(`An welche E-Mail-Adresse soll Rechnung ${inv.invoice_number} gesendet werden?`);
+    if (!to || !to.includes('@')) return;
+    try {
+      const doc = generateInvoicePDF(inv);
+      const pdfBase64 = doc.output('datauristring');
+      const res = await fetch('/api/email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          type: 'rechnung',
+          to,
+          projectName: inv.customer_name,
+          customerName: inv.customer_name,
+          invoiceNumber: inv.invoice_number,
+          grossAmount: Number(inv.gross_amount),
+          dueDate: fmtDate(inv.due_date),
+          pdfBase64,
+        }),
+      });
+      const json = await res.json();
+      if (!json.success) throw new Error(json.error || 'Versand fehlgeschlagen');
+      alert('✅ Rechnung ' + inv.invoice_number + ' an ' + to + ' gesendet!');
+    } catch (err: any) {
+      alert('❌ E-Mail fehlgeschlagen: ' + err.message);
+    }
+  }
+
+  // Phase 15: Mahnung erzeugen (PDF + optional E-Mail), Mahnstufe hochzählen
+  async function handleMahnung(inv: Invoice) {
+    const stufe = ((inv.reminder_level || 0) + 1) as 1 | 2;
+    if (stufe > 2) { alert('Für diese Rechnung wurden bereits 2 Mahnungen erstellt. Nächster Schritt: Inkasso/Anwalt.'); return; }
+    if (!confirm(`${stufe}. Mahnung für Rechnung ${inv.invoice_number} erstellen?`)) return;
+    try {
+      const doc = generateMahnungPDF(inv, stufe);
+      doc.save(`${stufe}_Mahnung_${inv.invoice_number}.pdf`);
+
+      // Optional direkt per E-Mail
+      const to = prompt('Direkt per E-Mail senden? Adresse eingeben – oder Abbrechen für nur PDF:');
+      if (to && to.includes('@')) {
+        const pdfBase64 = doc.output('datauristring');
+        await fetch('/api/email', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            type: 'mahnung',
+            to,
+            projectName: inv.customer_name,
+            customerName: inv.customer_name,
+            invoiceNumber: inv.invoice_number,
+            grossAmount: Number(inv.gross_amount),
+            pdfBase64,
+          }),
+        });
+      }
+
+      // Mahnstufe + Status speichern
+      const res = await fetch('/api/invoices', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: inv.id, status: 'ueberfaellig', reminder_level: stufe }),
+      });
+      const json = await res.json();
+      if (!json.success) throw new Error(json.error);
+      await load();
+      alert(`✅ ${stufe}. Mahnung erstellt und Mahnstufe gespeichert.`);
+    } catch (err: any) {
+      alert('❌ ' + err.message);
+    }
   }
 
   function handleDatevExport() {
@@ -546,6 +672,16 @@ function RechnungenContent() {
 
             <div className="flex flex-wrap items-end justify-between gap-4">
               <div className="flex items-center gap-3">
+                <label className="text-xs text-slate-400">Typ</label>
+                <select
+                  value={invoiceType}
+                  onChange={(e) => setInvoiceType(e.target.value as any)}
+                  className="px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-sm text-white focus:outline-none focus:border-amber-500"
+                >
+                  <option value="standard">Vollrechnung</option>
+                  <option value="abschlag">Abschlagsrechnung</option>
+                  <option value="schluss">Schlussrechnung</option>
+                </select>
                 <label className="text-xs text-slate-400">USt-Satz</label>
                 <select
                   value={taxRate}
@@ -610,7 +746,19 @@ function RechnungenContent() {
                   const effStatus = isOverdue(inv) ? 'ueberfaellig' : inv.status;
                   return (
                     <tr key={inv.id} className="border-b border-slate-700/50 hover:bg-slate-700/30">
-                      <td className="p-4 font-mono text-amber-300">{inv.invoice_number}</td>
+                      <td className="p-4 font-mono text-amber-300">
+                        {inv.invoice_number}
+                        {inv.invoice_type && inv.invoice_type !== 'standard' && (
+                          <span className="ml-2 text-[10px] font-sans px-1.5 py-0.5 rounded bg-blue-500/20 text-blue-300 border border-blue-500/40">
+                            {inv.invoice_type === 'abschlag' ? 'Abschlag' : 'Schluss'}
+                          </span>
+                        )}
+                        {(inv.reminder_level || 0) > 0 && (
+                          <span className="ml-1 text-[10px] font-sans px-1.5 py-0.5 rounded bg-red-500/20 text-red-300 border border-red-500/40">
+                            {inv.reminder_level}. Mahnung
+                          </span>
+                        )}
+                      </td>
                       <td className="p-4 text-white">{inv.customer_name}</td>
                       <td className="p-4 text-slate-300">{fmtDate(inv.invoice_date)}</td>
                       <td className="p-4 text-right text-white">{fmtEur(Number(inv.gross_amount))} €</td>
@@ -636,6 +784,24 @@ function RechnungenContent() {
                           >
                             <Download className="h-4 w-4" />
                           </button>
+                          {inv.status !== 'storniert' && (
+                            <button
+                              onClick={() => handleSendMail(inv)}
+                              title="Rechnung per E-Mail versenden"
+                              className="p-2 rounded-lg bg-blue-600/30 hover:bg-blue-600/50 text-blue-300 transition-colors"
+                            >
+                              <Mail className="h-4 w-4" />
+                            </button>
+                          )}
+                          {(inv.status === 'ueberfaellig' || isOverdue(inv)) && inv.status !== 'storniert' && (
+                            <button
+                              onClick={() => handleMahnung(inv)}
+                              title="Mahnung erstellen (PDF + optional E-Mail)"
+                              className="p-2 rounded-lg bg-amber-600/30 hover:bg-amber-600/50 text-amber-300 transition-colors"
+                            >
+                              <AlertTriangle className="h-4 w-4" />
+                            </button>
+                          )}
                           {inv.status === 'offen' && (
                             <>
                               <button
