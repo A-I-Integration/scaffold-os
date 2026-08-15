@@ -263,7 +263,7 @@ export default function ZeiterfassungPage() {
       if (es.length === 0) continue;
       const pnr = String(emp.id).replace(/-/g, '').slice(0, 8).toUpperCase();
       for (const e of es) {
-        if (e.hours === null) continue; // laufende Einträge nicht exportieren
+        if (!e.hours) continue; // laufende (null) und leere (0 h) Einträge nicht exportieren
         lines.push([
           zq(pnr), zq(emp.last_name || ''), zq(emp.first_name || ''),
           fmtDatev(e.work_date), zahl(e.hours), zq(e.note || ''),
