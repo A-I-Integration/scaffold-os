@@ -32,21 +32,29 @@ interface NavItem {
   roles: RoleKey[];
 }
 
+// Menü-Reihenfolge = Arbeitsablauf eines Gerüstbau-Tags:
+// Verkauf → Planung → Baustelle → Abrechnung → Verwaltung → Hilfe
 const NAV_ITEMS: NavItem[] = [
+  // ── Start ──
   { href: '/dashboard',      label: 'Dashboard',    icon: LayoutDashboard, roles: ['admin', 'disponent'] },
+  // ── 1 · Verkauf ──
   { href: '/aufmass/schritt1', label: 'Aufmaß',     icon: Ruler,           roles: ['admin', 'bauleiter'] },
+  { href: '/rechnungen',     label: 'Rechnungen',   icon: FileText,        roles: ['admin', 'disponent'] },
+  // ── 2 · Planung ──
+  { href: '/planung',        label: 'Planung',      icon: CalendarClock,   roles: ['admin', 'disponent', 'bauleiter'] },
+  { href: '/routenoptimierung', label: 'Routen-KI', icon: Route,           roles: ['admin', 'disponent'] },
   { href: '/lager',          label: 'Lager',        icon: Warehouse,       roles: ['admin', 'disponent', 'bauleiter', 'lager'] },
   { href: '/prognose',       label: 'Prognose',     icon: TrendingUp,      roles: ['admin', 'disponent', 'lager'] },
-  { href: '/planung',        label: 'Planung',      icon: CalendarClock,   roles: ['admin', 'disponent', 'bauleiter'] },
-  { href: '/zeiterfassung',  label: 'Zeiterfassung', icon: Timer,           roles: ['admin', 'disponent', 'bauleiter'] }, // NEU (Nr. 6)
-  { href: '/rechnungen',     label: 'Rechnungen',   icon: FileText,        roles: ['admin', 'disponent'] }, // NEU (Phase 13)
+  // ── 3 · Baustelle ──
   { href: '/touren',         label: 'Touren',       icon: Truck,           roles: ['admin', 'disponent'] },
-  { href: '/routenoptimierung', label: 'Routen-KI', icon: Route,           roles: ['admin', 'disponent'] }, // NEU (Nr. 7)
+  { href: '/meine-touren',   label: 'Meine Touren', icon: Navigation,      roles: ['admin', 'disponent', 'bauleiter', 'mitarbeiter', 'lager'] },
+  { href: '/zeiterfassung',  label: 'Zeiterfassung', icon: Timer,           roles: ['admin', 'disponent', 'bauleiter'] },
+  // ── 4 · Verwaltung ──
   { href: '/mitarbeiter',    label: 'Zugänge',      icon: KeyRound,        roles: ['admin', 'disponent'] },
   { href: '/datenpflege',    label: 'Datenpflege',  icon: Database,        roles: ['admin'] },
-  { href: '/einstellungen',  label: 'Einstellungen', icon: Settings,       roles: ['admin'] }, // NEU (Phase 14)
-  { href: '/meine-touren',   label: 'Meine Touren', icon: Navigation,      roles: ['admin', 'disponent', 'bauleiter', 'mitarbeiter', 'lager'] },
-  { href: '/hilfe',          label: 'Hilfe',        icon: HelpCircle,      roles: ['admin', 'disponent', 'bauleiter', 'mitarbeiter', 'lager'] }, // NEU (Prio-2-Sprint)
+  { href: '/einstellungen',  label: 'Einstellungen', icon: Settings,       roles: ['admin'] },
+  // ── Hilfe ──
+  { href: '/hilfe',          label: 'Hilfe',        icon: HelpCircle,      roles: ['admin', 'disponent', 'bauleiter', 'mitarbeiter', 'lager'] },
 ];
 
 const ROLE_BADGE: Record<string, string> = {
