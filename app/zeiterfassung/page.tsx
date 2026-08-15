@@ -241,6 +241,41 @@ export default function ZeiterfassungPage() {
     a.href = URL.createObjectURL(blob);
     a.download = `zeiterfassung_${month}.csv`;
     a.click();
+  }
+
+  // ─── DATEV-Lohnexport (Stundenerfassungsdaten für den Steuerberater) ───
+  // Pragmatisches Importformat: Personalnummer;Name;Vorname;Datum;Stunden;Bemerkung
+  // – vom Steuerberater in DATEV Lohn und Gehalt importierbar/zuordenbar.
+  // Personalnummer: stabiles Kürzel aus der Mitarbeiter-ID (erste 8 Zeichen),
+  // bis ein echtes Personalnummern-Feld an den Stammdaten eingeführt wird.
+  function exportDatev() {
+    const zq = (s: string) => `"${(s || '').replace(/"/g, '""')}"`;
+    const zahl = (n: number) => String(n).replace('.', ',');
+    const fmtDatev = (d: string) => {
+      const dt = new Date(d + 'T00:00:00');
+      const p = (x: number) => String(x).padStart(2, '0');
+      return `${p(dt.getDate())}.${p(dt.getMonth() + 1)}.${dt.getFullYear()}`;
+    };
+    const lines: string[] = ['Personalnummer;Nachname;Vorname;Datum;Stunden;Bemerkung'];
+
+    for (const emp of employees) {
+      const es = entriesBy[emp.id] || [];
+      if (es.length === 0) continue;
+      const pnr = String(emp.id).replace(/-/g, '').slice(0, 8).toUpperCase();
+      for (const e of es) {
+        if (e.hours === null) continue; // laufende Einträge nicht exportieren
+        lines.push([
+          zq(pnr), zq(emp.last_name || ''), zq(emp.first_name || ''),
+          fmtDatev(e.work_date), zahl(e.hours), zq(e.note || ''),
+        ].join(';'));
+      }
+    }
+
+    const blob = new Blob(['﻿' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `datev_lohn_${month}.csv`;
+    a.click();
     URL.revokeObjectURL(a.href);
   }
 
@@ -312,6 +347,11 @@ export default function ZeiterfassungPage() {
           <button onClick={exportCSV}
             className="inline-flex items-center gap-1.5 border border-slate-600 hover:border-amber-400 text-slate-300 hover:text-amber-400 text-sm px-4 py-2 rounded-lg transition-colors">
             <Download className="w-4 h-4" /> CSV
+          </button>
+          <button onClick={exportDatev}
+            title="Stundenerfassung im DATEV-Importformat (für den Steuerberater)"
+            className="inline-flex items-center gap-1.5 bg-emerald-600/20 hover:bg-emerald-600/30 border border-emerald-600/50 text-emerald-300 text-sm px-4 py-2 rounded-lg transition-colors">
+            <Download className="w-4 h-4" /> DATEV Lohn
           </button>
         </div>
       </div>
