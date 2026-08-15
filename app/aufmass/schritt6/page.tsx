@@ -6,6 +6,7 @@ import dynamic from 'next/dynamic';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import KIMaterialResult from '@/components/aufmaß/KIMaterialResult';
+import KiHinweis from '@/components/KiHinweis';
 import SignaturePad from '@/components/aufmaß/SignaturePad';
 import { KIAnalysis } from '@/types/scaffold';
 import DispositionResult from '@/components/aufmaß/DispositionResult';
@@ -671,6 +672,7 @@ function Schritt6Content() {
                 <div>
                   <h2 className="text-xl font-bold text-white">KI-Materialberechnung</h2>
                   <p className="text-sm text-slate-400">Automatische Stückliste, Kostenkalkulation und Risikoanalyse</p>
+                  <KiHinweis text="KI-gestützte Berechnung (Mistral). Materialliste und Preis sind Vorschläge – bitte fachlich prüfen, bevor das Angebot rausgeht." />
                 </div>
               </div>
               <button onClick={handleKIBerechnung} disabled={kiLoading} className="w-full rounded-lg bg-blue-600 hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed py-4 font-bold text-white transition-colors">

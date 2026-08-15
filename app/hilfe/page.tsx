@@ -102,6 +102,21 @@ const ABSCHNITTE: HilfeAbschnitt[] = [
     ),
   },
   {
+    titel: 'Künstliche Intelligenz in SCAFFOLD OS',
+    inhalt: (
+      <div className="space-y-2">
+        <p>SCAFFOLD OS nutzt KI (Mistral, EU-Anbieter) an fünf Stellen – jeweils mit dem Hinweis „KI-gestützt":</p>
+        <ul className="list-disc list-inside space-y-1">
+          <li><b>KI-Materialberechnung</b> (Aufmaß Schritt 6): Stückliste, Preis, Risiko als <b>Vorschlag</b>.</li>
+          <li><b>Foto- und Grundriss-Analyse</b> (Schritt 1): erkannte Maße/Merkmale vorbefüllen das Aufmaß.</li>
+          <li><b>Routen-KI</b>: schlägt optimale Touren vor – die Disposition entscheidet.</li>
+          <li><b>Lager-Prognose</b>: Einschätzung, was wann knapp wird.</li>
+        </ul>
+        <p><b>Grundsatz:</b> Die KI macht Vorschläge, die fachliche Entscheidung trifft immer ein Mensch. Prüfen Sie KI-Ergebnisse, bevor Angebote rausgehen oder bestellt wird. Die KI analysiert Gebäude und Material – keine Personen, keine Bewertungen von Mitarbeitern.</p>
+      </div>
+    ),
+  },
+  {
     titel: 'Häufige Probleme',
     inhalt: (
       <ul className="list-disc list-inside space-y-1">

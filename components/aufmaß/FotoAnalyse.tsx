@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useCallback, useEffect } from 'react';
+import KiHinweis from '@/components/KiHinweis';
 
 interface Props {
   sessionId: string;
@@ -52,6 +53,7 @@ export default function FotoAnalyse({ sessionId }: Props) {
           <span>🔮 KI-Foto-Analyse starten (Fassade, Hindernisse, Hinweise)</span>
         )}
       </button>
+      <KiHinweis text="KI-gestützte Foto-Analyse – erkannte Merkmale bitte vor Ort gegenprüfen." />
 
       {result && (
         <div className="rounded-lg bg-purple-900/20 border border-purple-500/30 p-4 animate-in fade-in slide-in-from-top-2">

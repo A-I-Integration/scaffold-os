@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import KiHinweis from '@/components/KiHinweis';
 
 interface PlanStopp { projekt: string; aktion: string; transport_order_ids?: string[] }
 interface PlanTour { name: string; fahrzeug: string; fahrer: string; stopps: PlanStopp[]; begruendung?: string }
@@ -146,6 +147,7 @@ export default function RoutenoptimierungPage() {
           <p className="text-sm text-slate-400 mt-1">
             KI-Tourenplan aus offenen Transporten, Baustellen-Beständen, Fahrzeugen und echten Fahrzeiten (OpenStreetMap).
           </p>
+          <KiHinweis text="KI-gestützte Tourenplanung – Vorschlag bitte prüfen. Die Entscheidung trifft die Disposition." />
         </div>
 
         {/* ─── Einstellungen ─── */}

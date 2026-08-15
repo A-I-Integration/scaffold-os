@@ -88,6 +88,13 @@ export default function DatenschutzPage() {
             <p>
               Es werden keine Zeiterfassungs-, Gehalts- oder GPS-Daten an Mistral übermittelt.
             </p>
+            <p>
+              <strong className="text-slate-100">Grundsatz:</strong> Alle KI-Funktionen
+              erstellen ausschließlich Vorschläge, die von einem Menschen geprüft und
+              freigegeben werden. Es finden keine vollautomatisierten Entscheidungen
+              im Sinne von Art. 22 DSGVO statt. Die KI analysiert Gebäude, Material
+              und Abläufe – keine Bewertung oder Überwachung von Personen.
+            </p>
           </Section>
 
           <Section title="6. Weitere Dienstleister">

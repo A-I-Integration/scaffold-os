@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import KiHinweis from '@/components/KiHinweis';
 
 // ============================================================
 // SCAFFOLD OS – Lager-Prognose (Nr. 4)
@@ -88,6 +89,7 @@ export default function PrognosePage() {
           >
             {kiLoading ? '⏳ KI denkt…' : '🤖 KI-Einschätzung'}
           </button>
+          <KiHinweis text="KI-gestützte Einschätzung zum Lagerbestand – bitte vor Bestellungen prüfen." />
         </header>
 
         {error && <div className="bg-red-900/40 border border-red-700 rounded-xl p-4 text-red-200">{error}</div>}

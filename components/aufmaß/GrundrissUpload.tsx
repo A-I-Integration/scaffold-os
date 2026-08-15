@@ -7,6 +7,7 @@ import {
   deleteProjectMediaClient,
   ProjectMedia,
 } from '@/lib/media-client';
+import KiHinweis from '@/components/KiHinweis';
 
 // ============================================================
 // SCAFFOLD OS – Grundriss-Upload + KI-Analyse
@@ -208,6 +209,7 @@ export default function GrundrissUpload({ sessionId }: Props) {
           )}
         </button>
       )}
+      <KiHinweis text="KI-gestützte Grundriss-Analyse – extrahierte Maße bitte nachmessen, bevor sie ins Aufmaß übernommen werden." />
 
       {/* ─── Ergebnis ─── */}
       {result && (
