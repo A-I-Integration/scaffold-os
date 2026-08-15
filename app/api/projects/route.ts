@@ -41,6 +41,36 @@ async function callerRole(): Promise<string | null> {
   }
 }
 
+// ─── GET: Projekte laden (NEU – zum Öffnen aus dem Dashboard) ───
+// ?id=<uuid> → einzelnes Projekt, sonst alle (neueste zuerst)
+export async function GET(req: NextRequest) {
+  const role = await callerRole();
+  if (!role) {
+    return NextResponse.json({ success: false, error: 'Nicht angemeldet.' }, { status: 401 });
+  }
+  try {
+    const { searchParams } = new URL(req.url);
+    const id = searchParams.get('id');
+    const res = await fetch(
+      id
+        ? `${url}/rest/v1/projects?id=eq.${id}&select=*`
+        : `${url}/rest/v1/projects?select=*&order=created_at.desc`,
+      { headers }
+    );
+    if (!res.ok) throw new Error(await res.text());
+    const rows = await res.json();
+    if (id) {
+      if (!rows?.length) {
+        return NextResponse.json({ success: false, error: 'Projekt nicht gefunden.' }, { status: 404 });
+      }
+      return NextResponse.json({ success: true, project: rows[0] });
+    }
+    return NextResponse.json({ success: true, projects: rows });
+  } catch (err: any) {
+    return NextResponse.json({ success: false, error: err.message }, { status: 500 });
+  }
+}
+
 // ─── POST: Projekt anlegen (bestehend, unverändert) ───
 export async function POST(req: NextRequest) {
   try {

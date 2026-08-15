@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
-import { useRouter } from 'next/navigation';
+import { useState, useEffect, useRef, Suspense } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import dynamic from 'next/dynamic';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
@@ -20,8 +20,9 @@ const DigitalTwin = dynamic(() => import('@/components/aufmaß/DigitalTwin'), {
   ),
 });
 
-export default function Schritt6Page() {
+function Schritt6Content() {
   const router = useRouter();
+  const searchParams = useSearchParams();
 
   const [stepData, setStepData] = useState<Record<string, any>>({});
   const [kiResult, setKiResult] = useState<KIAnalysis | null>(null);
@@ -72,7 +73,31 @@ export default function Schritt6Page() {
   }
   const eur = (n: number) => n.toFixed(2) + ' €';
 
+  // NEU: Projekt aus dem Dashboard öffnen (?id=...) → Daten aus der Datenbank laden
   useEffect(() => {
+    const projectId = searchParams.get('id');
+    if (!projectId) return;
+    (async () => {
+      try {
+        const res = await fetch('/api/projects?id=' + projectId);
+        const json = await res.json();
+        if (!json.success || !json.project) throw new Error(json.error || 'Projekt nicht gefunden');
+        const p = json.project;
+        const d = p.data || {};
+        const { angebotAnpassungen, ...steps } = d;
+        setStepData(steps);
+        if (angebotAnpassungen) setAnpassungen(angebotAnpassungen);
+        setSavedProjectId(p.id);
+      } catch (err: any) {
+        console.error('Projekt-Laden fehlgeschlagen:', err);
+        setKiError('Projekt konnte nicht geladen werden: ' + err.message);
+      }
+    })();
+  }, [searchParams]);
+
+  useEffect(() => {
+    // Wenn ein Projekt per ?id= geöffnet wurde, kommen die Daten aus der DB (s. o.)
+    if (searchParams.get('id')) return;
     const data: Record<string, any> = {};
     for (let i = 1; i <= 5; i++) {
       const raw = localStorage.getItem(`scaffold_step${i}`);
@@ -101,6 +126,7 @@ export default function Schritt6Page() {
     setStepData(data);
     // Kunden-E-Mail aus Schritt 1 laden
     if (data.step1?.ansprechpartnerEmail) setCustomerEmail(data.step1.ansprechpartnerEmail);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const s1 = stepData.step1 || {};
@@ -836,5 +862,14 @@ export default function Schritt6Page() {
         </div>
       </div>
     </div>
+  );
+}
+
+// useSearchParams braucht in Next eine Suspense-Grenze (Prerendering)
+export default function Schritt6Page() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-[#0f172a] p-8 text-slate-400">Lade Angebot…</div>}>
+      <Schritt6Content />
+    </Suspense>
   );
 }
