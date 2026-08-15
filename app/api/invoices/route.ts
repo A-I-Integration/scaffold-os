@@ -98,6 +98,20 @@ export async function POST(req: NextRequest) {
     if (!numRes.ok) throw new Error('Rechnungsnummer: ' + (await numRes.text()));
     const invoiceNumber = await numRes.json();
 
+    // Phase 14: Firmen-Snapshot für die Rechnung (GoBD – die Rechnung
+    // muss die zum Ausstellungszeitpunkt gültigen Firmendaten zeigen)
+    let companySnapshot: any = null;
+    try {
+      const cRes = await fetch(
+        `${url}/rest/v1/company_settings?id=eq.00000000-0000-0000-0000-000000000001&select=*`,
+        { headers }
+      );
+      if (cRes.ok) {
+        const cRows = await cRes.json();
+        companySnapshot = cRows?.[0] || null;
+      }
+    } catch { /* Snapshot optional – Rechnung geht auch ohne */ }
+
     const res = await fetch(`${url}/rest/v1/invoices`, {
       method: 'POST',
       headers: { ...headers, 'Prefer': 'return=representation' },
@@ -115,6 +129,7 @@ export async function POST(req: NextRequest) {
         invoice_date: invoice_date || new Date().toISOString().slice(0, 10),
         due_date: due_date || null,
         notes: notes || null,
+        company_snapshot: companySnapshot,
       }),
     });
     if (!res.ok) throw new Error(await res.text());

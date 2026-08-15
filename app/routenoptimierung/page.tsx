@@ -44,8 +44,19 @@ export default function RoutenoptimierungPage() {
   const [umdispoError, setUmdispoError] = useState<string | null>(null);
 
   useEffect(() => {
+    // Phase 14: Depot kommt aus dem Firmenprofil (Einstellungen),
+    // localStorage nur noch als persönlicher Fallback
     const saved = localStorage.getItem('scaffold_depot_address');
     if (saved) setDepot(saved);
+    (async () => {
+      try {
+        const res = await fetch('/api/company');
+        const json = await res.json();
+        if (json.success && json.company?.depot_address) {
+          setDepot((cur) => cur || json.company.depot_address);
+        }
+      } catch { /* optional */ }
+    })();
   }, []);
 
   async function handlePlan() {

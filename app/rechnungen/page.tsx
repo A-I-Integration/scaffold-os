@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useSearchParams } from 'next/navigation';
+import Link from 'next/link';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { Suspense } from 'react';
@@ -55,6 +56,7 @@ interface Invoice {
   due_date: string | null;
   notes: string | null;
   created_at: string;
+  company_snapshot?: any; // Phase 14: Firmendaten zum Ausstellungszeitpunkt (GoBD)
 }
 
 const fmtEur = (n: number) =>
@@ -88,6 +90,14 @@ function generateInvoicePDF(inv: Invoice) {
   doc.setFontSize(22); doc.text('RECHNUNG', pageWidth - 14, 18, { align: 'right' });
   doc.setFontSize(9); doc.setFont('helvetica', 'normal');
   doc.text('KI-gestützte Gerüstbau-Kalkulation', pageWidth - 14, 26, { align: 'right' });
+
+  // Phase 14: Absenderzeile aus dem Firmen-Snapshot (GoBD)
+  const cs = inv.company_snapshot || {};
+  const senderLine = [cs.company_name, [cs.street, [cs.zip, cs.city].filter(Boolean).join(' ')].filter(Boolean).join(', ')].filter(Boolean).join(' • ');
+  if (senderLine) {
+    doc.setFontSize(7); doc.setTextColor(100, 116, 139);
+    doc.text(senderLine, 14, 40);
+  }
 
   let y = 45;
   // Empfänger-Box
@@ -158,20 +168,32 @@ function generateInvoicePDF(inv: Invoice) {
     doc.text('STORNIERT', 14, cy);
   }
 
-  // Zahlungshinweis
+  // Zahlungshinweis (mit Bankdaten, falls im Firmenprofil hinterlegt)
   doc.setFont('helvetica', 'normal'); doc.setFontSize(8); doc.setTextColor(71, 85, 105);
+  const bankLine = cs.iban
+    ? ` an ${cs.bank_name || 'unsere Bank'}, IBAN ${cs.iban}${cs.bic ? ', BIC ' + cs.bic : ''}`
+    : '';
   doc.text(
-    `Bitte überweisen Sie den Rechnungsbetrag bis zum ${fmtDate(inv.due_date)} unter Angabe der Rechnungsnummer ${inv.invoice_number}.`,
-    14, Math.min(cy + 8, 270), { maxWidth: 90 }
+    `Bitte überweisen Sie den Rechnungsbetrag bis zum ${fmtDate(inv.due_date)}${bankLine} unter Angabe der Rechnungsnummer ${inv.invoice_number}.`,
+    14, Math.min(cy + 8, 262), { maxWidth: 120 }
   );
   if (inv.notes) {
     doc.text(doc.splitTextToSize('Hinweis: ' + inv.notes, 90), 14, Math.min(cy + 18, 274));
   }
 
-  // Fußzeile mit Pflichtangaben-Platzhalter
+  // Fußzeile: § 14 UStG Pflichtangaben aus dem Firmenprofil (Phase 14)
   doc.setTextColor(148, 163, 184); doc.setFontSize(7);
-  doc.text('SCAFFOLD OS • KI-gestützte Gerüstbau-Software • Automatisch generiert', pageWidth / 2, 285, { align: 'center' });
-  doc.text('Bitte Fußzeile mit Anschrift, Steuer-Nr./USt-IdNr. und Bankverbindung gemäß § 14 Abs. 4 UStG ergänzen.', pageWidth / 2, 290, { align: 'center' });
+  const footerParts = [
+    [cs.company_name, [cs.street, [cs.zip, cs.city].filter(Boolean).join(' ')].filter(Boolean).join(', ')].filter(Boolean).join(' • '),
+    [cs.phone ? 'Tel. ' + cs.phone : '', cs.email || '', cs.website || ''].filter(Boolean).join(' • '),
+    [cs.steuer_nr ? 'Steuer-Nr. ' + cs.steuer_nr : '', cs.ust_id ? 'USt-IdNr. ' + cs.ust_id : ''].filter(Boolean).join(' • '),
+    [cs.bank_name || '', cs.iban ? 'IBAN ' + cs.iban : '', cs.bic ? 'BIC ' + cs.bic : ''].filter(Boolean).join(' • '),
+  ].filter(Boolean);
+  let fy = 278;
+  footerParts.forEach((line: string) => { doc.text(line, pageWidth / 2, fy, { align: 'center' }); fy += 4; });
+  if (!footerParts.length) {
+    doc.text('Hinweis: Firmenprofil unter Einstellungen ausfüllen – Anschrift, Steuer-Nr./USt-IdNr. und Bank sind Pflicht (§ 14 Abs. 4 UStG).', pageWidth / 2, 285, { align: 'center' });
+  }
 
   return doc;
 }
@@ -225,6 +247,18 @@ function RechnungenContent() {
   const [error, setError] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [companyMissing, setCompanyMissing] = useState(false);
+
+  // Phase 14: Hinweis, wenn das Firmenprofil noch nicht ausgefüllt ist
+  useEffect(() => {
+    (async () => {
+      try {
+        const res = await fetch('/api/company');
+        const json = await res.json();
+        if (json.success) setCompanyMissing(!json.company?.company_name);
+      } catch { /* Banner optional */ }
+    })();
+  }, []);
 
   // Formular-State
   const [customerName, setCustomerName] = useState('');
@@ -379,6 +413,17 @@ function RechnungenContent() {
   return (
     <div className="min-h-screen bg-[#0f172a] p-4 md:p-8">
       <div className="max-w-6xl mx-auto space-y-6">
+        {/* Phase 14: Firmenprofil-Hinweis */}
+        {companyMissing && (
+          <div className="rounded-xl border border-amber-500/40 bg-amber-500/10 p-4 text-sm text-amber-200">
+            <strong>Wichtig:</strong> Noch kein Firmenprofil hinterlegt – ohne Anschrift, Steuer-Nr. und Bankverbindung
+            sind Rechnungen nicht vollständig (§ 14 UStG).{' '}
+            <Link href="/einstellungen" className="underline font-semibold hover:text-amber-100">
+              Jetzt unter Einstellungen ausfüllen →
+            </Link>
+          </div>
+        )}
+
         {/* Kopf */}
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-3">
