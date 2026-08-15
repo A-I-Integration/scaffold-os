@@ -20,7 +20,7 @@ interface Tenant {
   slug: string;
   company_name: string;
   admin_email: string;
-  status: 'provisioning' | 'active' | 'error' | 'cancelled';
+  status: 'provisioning' | 'active' | 'error' | 'cancelled' | 'past_due' | 'gesperrt';
   provision_step: string | null;
   error_message: string | null;
   subdomain: string | null;
@@ -111,6 +111,27 @@ export default function KundenAdminPage() {
         ? { ok: true, text: 'Einrichtung abgeschlossen.' }
         : { ok: false, text: json.error || 'Weiterhin ein Fehler – Details in der Registry (provision_log).' });
       await load();
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  // Als Kunde einloggen (Impersonation): öffnet einmaligen Magic-Link
+  async function impersonate(t: Tenant) {
+    setBusy(true);
+    setMsg(null);
+    try {
+      const res = await fetch('/api/admin/impersonate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tenant_id: t.id }),
+      });
+      const json = await res.json();
+      if (!json.success) throw new Error(json.error);
+      window.open(json.login_url, '_blank', 'noopener');
+      setMsg({ ok: true, text: `Login-Link für ${t.company_name} geöffnet (neuer Tab). Der Zugriff wurde protokolliert.` });
+    } catch (e: any) {
+      setMsg({ ok: false, text: e.message });
     } finally {
       setBusy(false);
     }
@@ -234,6 +255,12 @@ export default function KundenAdminPage() {
                     )}
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
+                    {(t.status === 'active' || t.status === 'past_due') && (
+                      <button onClick={() => impersonate(t)} disabled={busy}
+                        className="text-sm bg-purple-500/20 hover:bg-purple-500/30 text-purple-300 px-3 py-1.5 rounded-lg transition-colors disabled:opacity-50 flex items-center gap-1">
+                        <ExternalLink className="w-3.5 h-3.5" /> Als Kunde einloggen
+                      </button>
+                    )}
                     {t.status === 'error' && (
                       <button onClick={() => resume(t.id)} disabled={busy}
                         className="text-sm bg-blue-500/20 hover:bg-blue-500/30 text-blue-300 px-3 py-1.5 rounded-lg transition-colors disabled:opacity-50">
