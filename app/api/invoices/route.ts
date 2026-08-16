@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
+import { trackImpact } from '@/lib/impact';
 
 // ============================================================
 // SCAFFOLD OS – Rechnungen API (Phase 13: Rechnungsmodul)
@@ -135,6 +136,13 @@ export async function POST(req: NextRequest) {
     if (!res.ok) throw new Error(await res.text());
 
     const rows = await res.json();
+
+    // Phase 17: Impact-Tracking (blockiert nie, Fehler nur geloggt)
+    await trackImpact('rechnung', gross, 'eur', {
+      invoice_number: invoiceNumber,
+      invoice_type: rows[0]?.invoice_type || 'standard',
+    });
+
     return NextResponse.json({ success: true, invoice: rows[0] });
   } catch (err: any) {
     return NextResponse.json({ success: false, error: err.message }, { status: 500 });

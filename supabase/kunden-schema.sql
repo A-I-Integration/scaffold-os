@@ -1707,3 +1707,20 @@ END $$;
 -- ============================================================
 ALTER TABLE company_settings
   ADD COLUMN IF NOT EXISTS onboarding_done boolean NOT NULL DEFAULT false;
+
+-- ============================================================
+-- PHASE 17: Impact-Tracking (identisch zu phase-17-impact.sql)
+-- ============================================================
+CREATE TABLE IF NOT EXISTS impact_events (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  event text NOT NULL,
+  wert numeric,
+  einheit text,
+  meta jsonb DEFAULT '{}'::jsonb,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_impact_events_event ON impact_events (event);
+CREATE INDEX IF NOT EXISTS idx_impact_events_created ON impact_events (created_at);
+
+ALTER TABLE impact_events ENABLE ROW LEVEL SECURITY;

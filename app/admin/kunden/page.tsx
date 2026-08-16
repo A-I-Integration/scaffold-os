@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import Link from 'next/link';
 import { HardHat, Plus, RefreshCw, Trash2, ExternalLink, Loader2, AlertTriangle, CheckCircle2 } from 'lucide-react';
 
 // ============================================================
@@ -160,12 +161,18 @@ export default function KundenAdminPage() {
   return (
     <div className="min-h-screen bg-[#fbfbfd] p-6">
       <div className="max-w-5xl mx-auto">
-        <div className="flex items-center gap-3 mb-8">
-          <HardHat className="w-8 h-8 text-[#e8590c]" />
-          <div>
-            <h1 className="text-2xl font-bold text-[#1d1d1f]">Kunden-Setup</h1>
-            <p className="text-sm text-[#86868b]">Neue Kunden-Installationen automatisiert anlegen</p>
+        <div className="flex flex-wrap items-center justify-between gap-3 mb-8">
+          <div className="flex items-center gap-3">
+            <HardHat className="w-8 h-8 text-[#e8590c]" />
+            <div>
+              <h1 className="text-2xl font-bold text-[#1d1d1f]">Kunden-Setup</h1>
+              <p className="text-sm text-[#86868b]">Neue Kunden-Installationen automatisiert anlegen</p>
+            </div>
           </div>
+          <Link href="/admin/wirkung"
+            className="inline-flex items-center gap-1.5 px-4 py-2 bg-[#e8590c] hover:bg-[#d9480f] text-white rounded-full text-sm font-semibold transition-colors">
+            Pilot-Wirkung →
+          </Link>
         </div>
 
         {msg && (

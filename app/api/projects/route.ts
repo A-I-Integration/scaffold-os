@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
+import { trackImpact } from '@/lib/impact';
 
 // ============================================================
 // SCAFFOLD OS – Projekte API
@@ -158,6 +159,16 @@ export async function PATCH(req: NextRequest) {
     if (!rows?.length) {
       return NextResponse.json({ success: false, error: 'Projekt nicht gefunden.' }, { status: 404 });
     }
+
+    // Phase 17: Impact-Tracking – Abschluss mit Marge erfassen
+    if (status === 'completed') {
+      const p = rows[0];
+      await trackImpact('projekt_abgeschlossen', p.margin_percent ?? null, '%', {
+        projekt_id: p.id,
+        total_value: p.total_value ?? null,
+      });
+    }
+
     return NextResponse.json({ success: true, project: rows[0] });
   } catch (err: any) {
     return NextResponse.json({ success: false, error: err.message }, { status: 500 });
