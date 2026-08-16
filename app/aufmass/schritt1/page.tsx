@@ -37,11 +37,10 @@ const LEERES_FORM = {
 
   // Digitale Erfassung
   fotos: false,
-  videos: false,
   lidar: false,
-  drohnen: false,
   grundrisse: false,
   gps: false,
+  gpsPosition: '',
 };
 
 // Alle Wizard-Schlüssel, die ein Aufmaß im Browser ablegt
@@ -110,11 +109,9 @@ export default function Schritt1Page() {
 
   const erfassungKacheln = [
     { id: 'fotos', label: 'Fotos', icon: '📸' },
-    { id: 'videos', label: 'Videos', icon: '🎥' },
     { id: 'lidar', label: 'LiDAR / 3D', icon: '📐' },
-    { id: 'drohnen', label: 'Drohnen', icon: '🚁' },
     { id: 'grundrisse', label: 'Grundrisse', icon: '📋' },
-    { id: 'gps', label: 'GPS', icon: '📍' },
+    { id: 'gps', label: 'GPS-Standort', icon: '📍' },
   ];
 
   function toggleGewerk(g: string) {
@@ -128,6 +125,25 @@ export default function Schritt1Page() {
 
   function toggleErfassung(id: string) {
     setForm((prev) => ({ ...prev, [id]: !prev[id as keyof typeof prev] }));
+  }
+
+  // GPS-Standort der Baustelle per Browser-Geolocation erfassen
+  const [gpsStatus, setGpsStatus] = useState<'bereit' | 'laedt' | 'fehler'>('bereit');
+  function captureGps() {
+    if (typeof navigator === 'undefined' || !navigator.geolocation) {
+      setGpsStatus('fehler');
+      return;
+    }
+    setGpsStatus('laedt');
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        const { latitude, longitude } = pos.coords;
+        setForm((prev) => ({ ...prev, gpsPosition: `${latitude.toFixed(6)}, ${longitude.toFixed(6)}` }));
+        setGpsStatus('bereit');
+      },
+      () => setGpsStatus('fehler'),
+      { enableHighAccuracy: true, timeout: 15000 }
+    );
   }
 
   function getLastklasse() {
@@ -440,6 +456,50 @@ export default function Schritt1Page() {
               ))}
             </div>
           </div>
+
+          {/* ─── GPS-STANDORT (nur wenn aktiviert) ─── */}
+          {form.gps && (
+            <div className="bg-black/10/30 rounded-xl p-6 border border-black/10">
+              <h3 className="text-lg font-bold text-[#1d1d1f] mb-2">📍 Baustellen-Standort</h3>
+              <p className="text-sm text-[#86868b] mb-4">
+                Erfasst die GPS-Koordinaten der Baustelle – Grundlage für Anfahrtsplanung und Leerfahrt-Reduktion.
+              </p>
+              {form.gpsPosition ? (
+                <div className="flex flex-wrap items-center gap-3">
+                  <span className="text-sm font-mono text-[#1d1d1f] bg-emerald-500/10 border border-emerald-500/40 rounded-lg px-3 py-2">
+                    {form.gpsPosition}
+                  </span>
+                  <a
+                    href={`https://www.openstreetmap.org/?mlat=${form.gpsPosition.split(',')[0].trim()}&mlon=${form.gpsPosition.split(',')[1].trim()}#map=17`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-sm font-medium text-[#e8590c] hover:underline"
+                  >
+                    Auf Karte ansehen ↗
+                  </a>
+                  <button
+                    onClick={() => setForm((prev) => ({ ...prev, gpsPosition: '' }))}
+                    className="text-sm text-[#86868b] hover:text-[#1d1d1f]"
+                  >
+                    Entfernen
+                  </button>
+                </div>
+              ) : (
+                <div className="flex items-center gap-3">
+                  <button
+                    onClick={captureGps}
+                    disabled={gpsStatus === 'laedt'}
+                    className="px-4 py-2.5 rounded-xl bg-[#e8590c] hover:bg-[#d9480f] text-white text-sm font-semibold transition disabled:opacity-50"
+                  >
+                    {gpsStatus === 'laedt' ? 'Erfasse Standort…' : 'Standort erfassen'}
+                  </button>
+                  {gpsStatus === 'fehler' && (
+                    <span className="text-sm text-red-600">Standortzugriff nicht möglich – bitte im Browser erlauben.</span>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
 
           {/* ─── FOTO-UPLOAD (nur wenn aktiviert) ─── */}
           {form.fotos && sessionId && (

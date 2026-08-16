@@ -469,8 +469,10 @@ function Schritt6Content() {
             <div><span className="text-[#86868b]">Gewerk:</span> <span className="text-[#1d1d1f]">{s1.gewerk || '–'}</span></div>
             <div><span className="text-[#86868b]">Dauer:</span> <span className="text-[#1d1d1f]">{s1.dauer || '–'} Tage</span></div>
             {s1.ansprechpartnerName && <div className="col-span-2"><span className="text-[#86868b]">Ansprechpartner:</span> <span className="text-[#1d1d1f]">{s1.ansprechpartnerName} {s1.ansprechpartnerTelefon} {s1.ansprechpartnerEmail}</span></div>}
-            {s1.bauleiterName && <div className="col-span-2"><span className="text-[#86868b]">Bauleiter:</span> <span className="text-[#1d1d1f]">{s1.bauleiterName}</span></div>}
+            {s1.bauleiterName && <div className="col-span-2"><span className="text-[#86868b]">Bauleiter:</span> <span className="text-[#1d1d1f]">{s1.bauleiterName} {s1.bauleiterTelefon} {s1.bauleiterEmail}</span></div>}
             {s1.projektbeginn && <div><span className="text-[#86868b]">Beginn:</span> <span className="text-[#1d1d1f]">{s1.projektbeginn}</span></div>}
+            {s1.arbeitszeiten && <div><span className="text-[#86868b]">Arbeitszeiten:</span> <span className="text-[#1d1d1f]">{s1.arbeitszeiten}</span></div>}
+            {s1.gpsPosition && <div className="col-span-2"><span className="text-[#86868b]">GPS-Standort:</span> <span className="text-[#1d1d1f] font-mono text-xs">{s1.gpsPosition}</span></div>}
             {s1.projektende && <div><span className="text-[#86868b]">Ende:</span> <span className="text-[#1d1d1f]">{s1.projektende}</span></div>}
           </div>
         </div>
