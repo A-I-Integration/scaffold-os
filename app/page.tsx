@@ -60,12 +60,6 @@ export default function HomePage() {
             Jetzt abonnieren – 3 Tage kostenlos
             <ArrowRight className="w-5 h-5" />
           </Link>
-          <Link
-            href="/anfrage?art=pilot"
-            className="text-[#e8590c] hover:underline font-medium text-lg"
-          >
-            Pilotprojekt anfragen →
-          </Link>
         </div>
       </section>
 
