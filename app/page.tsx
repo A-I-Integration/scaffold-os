@@ -1,5 +1,6 @@
 import Link from 'next/link';
-import { HardHat, ArrowRight, Ruler, FileText, Route, Timer, Warehouse, ShieldCheck, Check } from 'lucide-react';
+import { ArrowRight, Ruler, FileText, Route, Timer, Warehouse, ShieldCheck, Check } from 'lucide-react';
+import LandingHeader from '@/components/LandingHeader';
 
 // ============================================================
 // SCAFFOLD OS – Startseite (Design v2 „Apple")
@@ -20,24 +21,8 @@ export default function HomePage() {
   return (
     <div className="min-h-screen bg-[#fbfbfd] text-[#1d1d1f] flex flex-col">
 
-      {/* ─── Navigation ─── */}
-      <header className="sticky top-0 z-40 backdrop-blur-xl bg-white/70 border-b border-black/5">
-        <div className="max-w-6xl mx-auto px-6 h-14 flex items-center justify-between">
-          <span className="flex items-center gap-2 font-semibold tracking-tight">
-            <HardHat className="w-5 h-5 text-[#e8590c]" />
-            SCAFFOLD OS
-          </span>
-          <nav className="flex items-center gap-6 text-sm">
-            <Link href="/login" className="text-[#6e6e73] hover:text-[#1d1d1f] transition-colors">Anmelden</Link>
-            <Link
-              href="/kaufen"
-              className="bg-[#e8590c] hover:bg-[#d9480f] text-white font-medium px-4 py-1.5 rounded-full transition-colors"
-            >
-              3 Tage kostenlos testen
-            </Link>
-          </nav>
-        </div>
-      </header>
+      {/* ─── Navigation (ausgeblendet, sobald eingeloggt – Sidebar hat das Logo) ─── */}
+      <LandingHeader />
 
       {/* ─── Hero ─── */}
       <section className="px-6 pt-20 pb-16 md:pt-28 md:pb-24 text-center">
@@ -57,7 +42,7 @@ export default function HomePage() {
             href="/kaufen"
             className="inline-flex items-center gap-2 bg-[#e8590c] hover:bg-[#d9480f] text-white font-medium text-lg px-8 py-3.5 rounded-full transition-all hover:scale-[1.02] shadow-lg shadow-orange-600/20"
           >
-            Jetzt abonnieren – 3 Tage kostenlos
+            3 Tage kostenlos testen
             <ArrowRight className="w-5 h-5" />
           </Link>
         </div>
@@ -109,8 +94,8 @@ export default function HomePage() {
       </section>
 
       {/* ─── Footer ─── */}
-      <footer className="mt-auto border-t border-black/5 py-8 text-center text-sm text-[#86868b]">
-        <div className="flex items-center justify-center gap-3 mb-3 text-[13px]">
+      <footer className="mt-auto border-t border-black/5 pt-10 pb-16 text-center text-sm text-[#86868b]">
+        <div className="flex items-center justify-center gap-3 mb-4 text-[13px]">
           <Link href="/impressum" className="hover:text-[#1d1d1f] transition-colors">Impressum</Link>
           <span className="text-black/10">·</span>
           <Link href="/datenschutz" className="hover:text-[#1d1d1f] transition-colors">Datenschutz</Link>
