@@ -6,6 +6,7 @@ import PhotoUpload from '@/components/aufmaß/PhotoUpload';
 import LiDARUpload from '@/components/aufmaß/LiDARUpload';
 import FotoAnalyse from '@/components/aufmaß/FotoAnalyse';
 import GrundrissUpload from '@/components/aufmaß/GrundrissUpload';
+import DrohnenUpload from '@/components/aufmaß/DrohnenUpload';
 import SprachNotiz from '@/components/aufmaß/SprachNotiz';
 
 const LEERES_FORM = {
@@ -38,6 +39,7 @@ const LEERES_FORM = {
   // Digitale Erfassung
   fotos: false,
   lidar: false,
+  drohnen: false,
   grundrisse: false,
   gps: false,
   gpsPosition: '',
@@ -110,6 +112,7 @@ export default function Schritt1Page() {
   const erfassungKacheln = [
     { id: 'fotos', label: 'Fotos', icon: '📸' },
     { id: 'lidar', label: 'LiDAR / 3D', icon: '📐' },
+    { id: 'drohnen', label: 'Drohnen', icon: '🚁' },
     { id: 'grundrisse', label: 'Grundrisse', icon: '📋' },
     { id: 'gps', label: 'GPS-Standort', icon: '📍' },
   ];
@@ -531,6 +534,18 @@ export default function Schritt1Page() {
               <p className="text-[11px] text-[#86868b] mt-2">
                 ✅ Erkannte Maße werden in Schritt 2 automatisch eingetragen.
               </p>
+            </div>
+          )}
+
+          {/* ─── DROHNEN-UPLOAD (nur wenn aktiviert) ─── */}
+          {form.drohnen && sessionId && (
+            <div className="bg-black/10/30 rounded-xl p-6 border border-black/10">
+              <h3 className="text-lg font-bold text-[#1d1d1f] mb-2">🚁 Drohnen-Aufnahmen</h3>
+              <p className="text-sm text-[#86868b] mb-4">
+                Luftbilder der Baustelle hochladen – Dachform, Aufbauten und schwer zugängliche
+                Bereiche dokumentieren. Aufnahmen werden mit dem Projekt verknüpft.
+              </p>
+              <DrohnenUpload sessionId={sessionId} />
             </div>
           )}
 

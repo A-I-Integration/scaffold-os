@@ -132,6 +132,67 @@ export async function getProjectMediaClient(sessionId: string): Promise<ProjectM
     .eq('session_id', sessionId)
     .is('project_id', null)
     .not('storage_path', 'like', '%/grundrisse/%') // Grundrisse laufen getrennt
+    .not('storage_path', 'like', '%/drohnen/%') // Drohnen-Aufnahmen laufen getrennt
+    .order('created_at', { ascending: false });
+
+  if (error) throw new Error(`Fehler beim Laden: ${error.message}`);
+  return (data || []) as ProjectMedia[];
+}
+
+// ─── Drohnen-Aufnahmen (NEU: eigener Upload-Pfad, nur Bilder) ───
+// Drohnen-Fotos landen unter temp/{sessionId}/drohnen/ und werden so
+// von den Baustellen-Fotos getrennt – die KI-Foto-Analyse bleibt unberührt.
+export async function uploadDrohneClient(
+  file: File,
+  sessionId: string
+): Promise<ProjectMedia> {
+  const supabase = createClient();
+
+  if (!file.type.startsWith('image/')) throw new Error('Nur Bilder erlaubt (JPG/PNG)');
+  if (file.size > 20 * 1024 * 1024) throw new Error('Datei zu groß (max. 20MB)');
+
+  const { data: { user } } = await supabase.auth.getUser();
+
+  const fileExt = file.name.split('.').pop()?.toLowerCase() || 'jpg';
+  const fileName = `${Date.now()}_${Math.random().toString(36).substring(2, 8)}.${fileExt}`;
+  const storagePath = `temp/${sessionId}/drohnen/${fileName}`;
+
+  const { error: uploadError } = await supabase.storage
+    .from('project-media')
+    .upload(storagePath, file, { contentType: file.type, upsert: false });
+
+  if (uploadError) throw new Error(`Storage: ${uploadError.message}`);
+
+  const { data: media, error: dbError } = await supabase
+    .from('project_media')
+    .insert({
+      session_id: sessionId,
+      file_name: file.name,
+      storage_path: storagePath,
+      file_type: file.type,
+      uploaded_by: user?.id ?? null,
+      metadata: { size: file.size, bucket: 'project-media', kind: 'drohne' },
+    })
+    .select()
+    .single();
+
+  if (dbError) {
+    await supabase.storage.from('project-media').remove([storagePath]);
+    throw new Error(`Datenbank: ${dbError.message}`);
+  }
+
+  return media as ProjectMedia;
+}
+
+export async function getDrohnenClient(sessionId: string): Promise<ProjectMedia[]> {
+  const supabase = createClient();
+
+  const { data, error } = await supabase
+    .from('project_media')
+    .select('*')
+    .eq('session_id', sessionId)
+    .is('project_id', null)
+    .like('storage_path', '%/drohnen/%')
     .order('created_at', { ascending: false });
 
   if (error) throw new Error(`Fehler beim Laden: ${error.message}`);
