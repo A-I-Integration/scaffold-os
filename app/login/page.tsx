@@ -3,14 +3,14 @@
 import { useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
-import { HardHat, Ruler, Truck, Clock } from 'lucide-react'
+import { HardHat, Ruler, Route, Timer } from 'lucide-react'
 
 // ============================================================
-// SCAFFOLD OS – Login
-// Optik-Stufe 1: Demo-Design + kurze Erklärung links.
-// Die Anmelde-Logik ist unverändert (Supabase signInWithPassword).
-// Registrierung ist bewusst entfernt – Zugänge legt CEO/Dispo
-// unter „Zugänge" an.
+// SCAFFOLD OS – Login (Design v2 „Apple")
+// Helle, ruhige Karte auf neutralem Grau. Die Anmelde-Logik ist
+// unverändert (Supabase signInWithPassword + Rollen-Routing).
+// Registrierung bleibt bewusst entfernt – Zugänge legt
+// CEO/Dispo unter „Zugänge" an.
 // ============================================================
 
 export default function LoginPage() {
@@ -38,8 +38,6 @@ export default function LoginPage() {
     }
 
     // Rolle holen → direkt in den eigenen Bereich weiterleiten.
-    // Die Rolle steht im Profil – sie wurde beim Anlegen des
-    // Zugangs (durch CEO/Dispo) festgelegt.
     const { data: { user } } = await supabase.auth.getUser()
     let target = '/meine-touren'
     if (user) {
@@ -58,70 +56,82 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center p-6">
-      <div className="w-full max-w-4xl grid md:grid-cols-2 gap-10 items-center">
+    <div className="min-h-screen bg-[#f5f5f7] flex items-center justify-center p-6">
+      <div className="w-full max-w-4xl grid md:grid-cols-2 gap-12 items-center">
 
-        {/* ─── Linke Seite: Erklärung ─── */}
-        <div className="text-white">
-          <div className="inline-flex items-center gap-3 mb-5">
-            <HardHat className="w-10 h-10 text-amber-400" />
-            <h1 className="text-3xl font-bold tracking-tight">SCAFFOLD OS</h1>
+        {/* ─── Linke Seite: Marke & Nutzen ─── */}
+        <div className="hidden md:block">
+          <div className="inline-flex items-center gap-2.5 mb-6">
+            <HardHat className="w-8 h-8 text-[#e8590c]" strokeWidth={1.5} />
+            <span className="text-2xl font-semibold tracking-tight text-[#1d1d1f]">SCAFFOLD OS</span>
           </div>
-          <p className="text-slate-300 text-lg mb-8">
+          <p className="text-[#1d1d1f] text-2xl font-medium tracking-tight leading-snug mb-10">
             Die digitale Baustellenverwaltung für den Gerüstbau – vom Aufmaß bis zur Abrechnung.
           </p>
-          <ul className="space-y-4 text-sm">
-            <li className="flex items-start gap-3">
-              <Ruler className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
-              <span className="text-slate-300"><strong className="text-white">Aufmaß & Angebot:</strong> Baustelle erfassen, KI erstellt Materialliste und Kalkulation.</span>
+          <ul className="space-y-6">
+            <li className="flex items-start gap-3.5">
+              <Ruler className="w-5 h-5 text-[#e8590c] shrink-0 mt-0.5" strokeWidth={1.5} />
+              <span className="text-[15px] text-[#6e6e73] leading-relaxed">
+                <strong className="text-[#1d1d1f] font-medium">Aufmaß & Angebot:</strong> Baustelle erfassen, KI erstellt Materialliste und Kalkulation.
+              </span>
             </li>
-            <li className="flex items-start gap-3">
-              <Truck className="w-5 h-5 text-blue-400 shrink-0 mt-0.5" />
-              <span className="text-slate-300"><strong className="text-white">Lager & Touren:</strong> Material reservieren, Touren disponieren, Fahrer navigieren digital.</span>
+            <li className="flex items-start gap-3.5">
+              <Route className="w-5 h-5 text-[#e8590c] shrink-0 mt-0.5" strokeWidth={1.5} />
+              <span className="text-[15px] text-[#6e6e73] leading-relaxed">
+                <strong className="text-[#1d1d1f] font-medium">Lager & Touren:</strong> Material reservieren, Touren disponieren, Fahrer navigieren digital.
+              </span>
             </li>
-            <li className="flex items-start gap-3">
-              <Clock className="w-5 h-5 text-emerald-400 shrink-0 mt-0.5" />
-              <span className="text-slate-300"><strong className="text-white">Zeiterfassung:</strong> Kommen/Gehen stempeln, Krank & Urlaub eintragen – direkt am Handy.</span>
+            <li className="flex items-start gap-3.5">
+              <Timer className="w-5 h-5 text-[#e8590c] shrink-0 mt-0.5" strokeWidth={1.5} />
+              <span className="text-[15px] text-[#6e6e73] leading-relaxed">
+                <strong className="text-[#1d1d1f] font-medium">Zeiterfassung:</strong> Kommen/Gehen stempeln, Krank & Urlaub eintragen – direkt am Handy.
+              </span>
             </li>
           </ul>
         </div>
 
         {/* ─── Rechte Seite: Login-Karte ─── */}
-        <div className="w-full p-8 bg-[#1e293b] rounded-2xl border border-[#334155] shadow-2xl">
-          <h2 className="text-xl font-bold text-white mb-1">Anmelden</h2>
-          <p className="text-[#94a3b8] text-sm mb-6">Mit deinem Firmenzugang einloggen.</p>
+        <div className="w-full bg-white rounded-3xl px-8 py-10 md:px-10 shadow-[0_8px_40px_rgba(0,0,0,0.06)] border border-black/[0.04]">
+          {/* Mobile: Marke über der Karte-Inhalt */}
+          <div className="flex md:hidden items-center gap-2 mb-6">
+            <HardHat className="w-6 h-6 text-[#e8590c]" strokeWidth={1.5} />
+            <span className="text-lg font-semibold tracking-tight text-[#1d1d1f]">SCAFFOLD OS</span>
+          </div>
+
+          <h1 className="text-2xl font-semibold tracking-tight text-[#1d1d1f]">Anmelden</h1>
+          <p className="text-[#86868b] text-sm mt-1 mb-8">Mit Ihrem Firmenzugang einloggen.</p>
 
           <form onSubmit={handleLogin} className="space-y-5">
             <div>
-              <label className="block text-sm font-medium text-[#cbd5e1] mb-1.5">
+              <label className="block text-[13px] font-medium text-[#6e6e73] mb-1.5">
                 E-Mail
               </label>
               <input
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="w-full px-4 py-2.5 bg-[#0f172a] border border-[#334155] rounded-lg text-white placeholder-[#475569] focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent transition"
+                className="w-full px-4 py-3 bg-[#f5f5f7] border border-transparent rounded-xl text-[#1d1d1f] placeholder-[#aeaeb2] focus:outline-none focus:bg-white focus:border-[#e8590c]/40 focus:ring-4 focus:ring-[#e8590c]/10 transition"
                 placeholder="name@firma.de"
                 required
               />
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-[#cbd5e1] mb-1.5">
+              <label className="block text-[13px] font-medium text-[#6e6e73] mb-1.5">
                 Passwort
               </label>
               <input
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="w-full px-4 py-2.5 bg-[#0f172a] border border-[#334155] rounded-lg text-white placeholder-[#475569] focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent transition"
+                className="w-full px-4 py-3 bg-[#f5f5f7] border border-transparent rounded-xl text-[#1d1d1f] placeholder-[#aeaeb2] focus:outline-none focus:bg-white focus:border-[#e8590c]/40 focus:ring-4 focus:ring-[#e8590c]/10 transition"
                 placeholder="••••••••"
                 required
               />
             </div>
 
             {error && (
-              <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-lg text-red-400 text-sm">
+              <div className="px-4 py-3 bg-[#fff0f0] border border-[#ffc9c9] rounded-xl text-[#c92a2a] text-sm">
                 {error}
               </div>
             )}
@@ -129,20 +139,20 @@ export default function LoginPage() {
             <button
               type="submit"
               disabled={loading}
-              className="w-full py-2.5 px-4 bg-amber-500 hover:bg-amber-600 text-slate-900 font-semibold rounded-lg transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-amber-500/20"
+              className="w-full py-3 px-4 bg-[#e8590c] hover:bg-[#d9480f] text-white font-medium rounded-full transition-all disabled:opacity-50 disabled:cursor-not-allowed hover:scale-[1.01] active:scale-[0.99]"
             >
-              {loading ? 'Anmelden...' : 'Anmelden'}
+              {loading ? 'Anmelden …' : 'Anmelden'}
             </button>
           </form>
 
-          <p className="mt-4 text-center">
-            <a href="/passwort-vergessen" className="text-amber-400 hover:text-amber-300 text-sm font-medium transition">
+          <p className="mt-5 text-center">
+            <a href="/passwort-vergessen" className="text-[#e8590c] hover:underline text-sm font-medium">
               Passwort vergessen?
             </a>
           </p>
 
-          <p className="mt-4 text-center text-sm text-[#64748b]">
-            Noch kein Zugang? Deine Geschäftsführung oder Disposition legt ihn unter „Zugänge" für dich an.
+          <p className="mt-5 text-center text-[13px] text-[#86868b] leading-relaxed">
+            Noch kein Zugang? Ihre Geschäftsführung oder Disposition legt ihn unter „Zugänge" für Sie an.
           </p>
         </div>
       </div>
