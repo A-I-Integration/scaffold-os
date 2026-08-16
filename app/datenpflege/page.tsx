@@ -168,14 +168,14 @@ export default function DatenpflegePage() {
   }
 
   const rows = data[section.key] || [];
-  const inputCls = 'w-full rounded bg-slate-900 border border-slate-600 px-2 py-1 text-sm text-white focus:border-amber-500 focus:outline-none';
+  const inputCls = 'w-full rounded bg-[#f5f5f7] border border-black/10 px-2 py-1 text-sm text-[#1d1d1f] focus:border-[#e8590c] focus:outline-none';
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 p-4 md:p-8">
+    <div className="min-h-screen bg-[#fbfbfd] text-[#1d1d1f] p-4 md:p-8">
       <div className="max-w-6xl mx-auto space-y-6">
         <header>
           <h1 className="text-2xl md:text-3xl font-bold">🗄️ Datenpflege</h1>
-          <p className="text-slate-400 mt-1">
+          <p className="text-[#86868b] mt-1">
             Alle Daten ansehen, korrigieren und löschen – nur für dich als CEO.
             Ideal, um Testdaten aufzuräumen.
           </p>
@@ -187,8 +187,8 @@ export default function DatenpflegePage() {
             <button
               key={s.key}
               onClick={() => { setSection(s); setEditingId(null); setMsg(''); }}
-              className={`rounded-lg px-4 py-2 text-sm font-medium transition ${
-                section.key === s.key ? 'bg-amber-600 text-white' : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
+              className={`rounded-xl px-4 py-2 text-sm font-medium transition ${
+                section.key === s.key ? 'bg-amber-600 text-[#1d1d1f]' : 'bg-[#f5f5f7] text-[#424245] hover:bg-black/10'
               }`}
             >
               {s.icon} {s.title} ({(data[s.key] || []).length})
@@ -196,18 +196,18 @@ export default function DatenpflegePage() {
           ))}
         </div>
 
-        {error && <div className="bg-red-900/40 border border-red-700 rounded-xl p-4 text-red-200">{error}</div>}
-        {msg && <div className={`rounded-xl p-3 text-sm ${msg.startsWith('✅') ? 'bg-emerald-900/40 border border-emerald-700 text-emerald-200' : 'bg-red-900/40 border border-red-700 text-red-200'}`}>{msg}</div>}
+        {error && <div className="bg-red-900/40 border border-red-200 rounded-xl p-4 text-red-700">{error}</div>}
+        {msg && <div className={`rounded-xl p-3 text-sm ${msg.startsWith('✅') ? 'bg-emerald-50 border border-emerald-200 text-emerald-700' : 'bg-red-50 border border-red-200 text-red-700'}`}>{msg}</div>}
 
-        <section className="bg-slate-900 border border-slate-800 rounded-2xl p-5 overflow-x-auto">
+        <section className="bg-white border border-black/5 rounded-2xl p-5 overflow-x-auto">
           {loading ? (
-            <p className="text-slate-400">Lade…</p>
+            <p className="text-[#86868b]">Lade…</p>
           ) : rows.length === 0 ? (
-            <p className="text-slate-500 text-sm py-4 text-center">Keine Einträge in „{section.title}".</p>
+            <p className="text-[#86868b] text-sm py-4 text-center">Keine Einträge in „{section.title}".</p>
           ) : (
             <table className="w-full text-sm">
               <thead>
-                <tr className="text-left text-slate-400 border-b border-slate-800">
+                <tr className="text-left text-[#86868b] border-b border-black/5">
                   {section.columns.map(c => <th key={c.key} className="py-2 pr-4 whitespace-nowrap">{c.label}</th>)}
                   <th className="py-2 text-right whitespace-nowrap">Aktionen</th>
                 </tr>
@@ -216,7 +216,7 @@ export default function DatenpflegePage() {
                 {rows.map(row => {
                   const isEditing = editingId === row.id;
                   return (
-                    <tr key={row.id} className="border-b border-slate-800/60 align-top">
+                    <tr key={row.id} className="border-b border-black/5/60 align-top">
                       {section.columns.map(col => (
                         <td key={col.key} className="py-2.5 pr-4">
                           {isEditing && col.edit ? (
@@ -237,19 +237,19 @@ export default function DatenpflegePage() {
                       <td className="py-2.5 text-right whitespace-nowrap">
                         {isEditing ? (
                           <>
-                            <button onClick={saveEdit} disabled={busy} className="text-emerald-400 hover:text-emerald-300 font-medium mr-3 disabled:opacity-40">
+                            <button onClick={saveEdit} disabled={busy} className="text-emerald-600 hover:text-emerald-700 font-medium mr-3 disabled:opacity-40">
                               💾 Speichern
                             </button>
-                            <button onClick={() => setEditingId(null)} className="text-slate-400 hover:text-white">
+                            <button onClick={() => setEditingId(null)} className="text-[#86868b] hover:text-[#1d1d1f]">
                               ✖ Abbrechen
                             </button>
                           </>
                         ) : (
                           <>
-                            <button onClick={() => startEdit(row)} disabled={busy} className="text-amber-400 hover:text-amber-300 font-medium mr-3 disabled:opacity-40">
+                            <button onClick={() => startEdit(row)} disabled={busy} className="text-[#e8590c] hover:text-[#e8590c] font-medium mr-3 disabled:opacity-40">
                               ✏️ Bearbeiten
                             </button>
-                            <button onClick={() => remove(row)} disabled={busy} className="text-red-400 hover:text-red-300 font-medium disabled:opacity-40">
+                            <button onClick={() => remove(row)} disabled={busy} className="text-red-600 hover:text-red-700 font-medium disabled:opacity-40">
                               🗑️ Löschen
                             </button>
                           </>
@@ -263,7 +263,7 @@ export default function DatenpflegePage() {
           )}
         </section>
 
-        <p className="text-slate-500 text-xs">
+        <p className="text-[#86868b] text-xs">
           💡 Hinweis: Einträge, die noch woanders benutzt werden (z.B. ein Projekt in einem Transport),
           lassen sich erst löschen, wenn die abhängigen Einträge weg sind – die App sagt dir dann Bescheid.
         </p>

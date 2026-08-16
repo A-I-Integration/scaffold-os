@@ -25,9 +25,9 @@ interface Kpis { critical: number; warning: number; idle: number; totalOrderValu
 
 const AMPEL: Record<string, { label: string; cls: string }> = {
   critical: { label: '🔴 Kritisch', cls: 'bg-red-900/50 text-red-200 border border-red-700' },
-  warning:  { label: '🟡 Knapp',    cls: 'bg-amber-900/50 text-amber-200 border border-amber-700' },
+  warning:  { label: '🟡 Knapp',    cls: 'bg-amber-50 text-amber-800 border border-amber-200' },
   ok:       { label: '🟢 OK',       cls: 'bg-emerald-900/50 text-emerald-200 border border-emerald-700' },
-  idle:     { label: '⚪ Kein Verbrauch', cls: 'bg-slate-800 text-slate-400 border border-slate-700' },
+  idle:     { label: '⚪ Kein Verbrauch', cls: 'bg-[#f5f5f7] text-[#86868b] border border-black/10' },
 };
 
 export default function PrognosePage() {
@@ -73,12 +73,12 @@ export default function PrognosePage() {
   const fmtEuro = (v: number) => v.toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' €';
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 p-4 md:p-8">
+    <div className="min-h-screen bg-[#fbfbfd] text-[#1d1d1f] p-4 md:p-8">
       <div className="max-w-6xl mx-auto space-y-6">
         <header className="flex flex-wrap items-start justify-between gap-4">
           <div>
             <h1 className="text-2xl md:text-3xl font-bold">📈 Lager-Prognose</h1>
-            <p className="text-slate-400 mt-1">
+            <p className="text-[#86868b] mt-1">
               Verbrauchs-basierte Vorhersage aus den gelieferten Transporten der letzten 30 Tage.
             </p>
           </div>
@@ -92,7 +92,7 @@ export default function PrognosePage() {
           <KiHinweis text="KI-gestützte Einschätzung zum Lagerbestand – bitte vor Bestellungen prüfen." />
         </header>
 
-        {error && <div className="bg-red-900/40 border border-red-700 rounded-xl p-4 text-red-200">{error}</div>}
+        {error && <div className="bg-red-900/40 border border-red-200 rounded-xl p-4 text-red-700">{error}</div>}
 
         {/* KI-Ergebnis */}
         {kiText && (
@@ -102,7 +102,7 @@ export default function PrognosePage() {
           </div>
         )}
         {kiError && (
-          <div className="bg-amber-900/30 border border-amber-700 rounded-xl p-4 text-amber-200 text-sm">
+          <div className="bg-orange-50 border border-amber-200 rounded-xl p-4 text-amber-800 text-sm">
             ⚠️ {kiError}
           </div>
         )}
@@ -110,35 +110,35 @@ export default function PrognosePage() {
         {/* KPI-Kacheln */}
         {kpis && (
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            <div className="bg-slate-900 border border-slate-800 rounded-xl p-4">
-              <div className="text-slate-400 text-xs mb-1">Kritische Artikel</div>
-              <div className={`text-2xl font-bold ${kpis.critical > 0 ? 'text-red-400' : 'text-emerald-400'}`}>{kpis.critical}</div>
+            <div className="bg-white border border-black/5 rounded-xl p-4">
+              <div className="text-[#86868b] text-xs mb-1">Kritische Artikel</div>
+              <div className={`text-2xl font-bold ${kpis.critical > 0 ? 'text-red-600' : 'text-emerald-600'}`}>{kpis.critical}</div>
             </div>
-            <div className="bg-slate-900 border border-slate-800 rounded-xl p-4">
-              <div className="text-slate-400 text-xs mb-1">Warnungen</div>
-              <div className={`text-2xl font-bold ${kpis.warning > 0 ? 'text-amber-400' : 'text-emerald-400'}`}>{kpis.warning}</div>
+            <div className="bg-white border border-black/5 rounded-xl p-4">
+              <div className="text-[#86868b] text-xs mb-1">Warnungen</div>
+              <div className={`text-2xl font-bold ${kpis.warning > 0 ? 'text-[#e8590c]' : 'text-emerald-600'}`}>{kpis.warning}</div>
             </div>
-            <div className="bg-slate-900 border border-slate-800 rounded-xl p-4">
-              <div className="text-slate-400 text-xs mb-1">Empfohlener Bestellwert</div>
-              <div className="text-2xl font-bold text-blue-400">{fmtEuro(kpis.totalOrderValue)}</div>
+            <div className="bg-white border border-black/5 rounded-xl p-4">
+              <div className="text-[#86868b] text-xs mb-1">Empfohlener Bestellwert</div>
+              <div className="text-2xl font-bold text-blue-600">{fmtEuro(kpis.totalOrderValue)}</div>
             </div>
-            <div className="bg-slate-900 border border-slate-800 rounded-xl p-4">
-              <div className="text-slate-400 text-xs mb-1">Ohne Bewegung (Kapitalbinder)</div>
-              <div className="text-2xl font-bold text-slate-300">{kpis.idle}</div>
+            <div className="bg-white border border-black/5 rounded-xl p-4">
+              <div className="text-[#86868b] text-xs mb-1">Ohne Bewegung (Kapitalbinder)</div>
+              <div className="text-2xl font-bold text-[#424245]">{kpis.idle}</div>
             </div>
           </div>
         )}
 
         {/* Tabelle */}
-        <section className="bg-slate-900 border border-slate-800 rounded-2xl p-5 overflow-x-auto">
+        <section className="bg-white border border-black/5 rounded-2xl p-5 overflow-x-auto">
           {loading ? (
-            <p className="text-slate-400">Lade…</p>
+            <p className="text-[#86868b]">Lade…</p>
           ) : rows.length === 0 ? (
-            <p className="text-slate-500 text-sm py-4 text-center">Keine aktiven Lager-Artikel gefunden.</p>
+            <p className="text-[#86868b] text-sm py-4 text-center">Keine aktiven Lager-Artikel gefunden.</p>
           ) : (
             <table className="w-full text-sm">
               <thead>
-                <tr className="text-left text-slate-400 border-b border-slate-800">
+                <tr className="text-left text-[#86868b] border-b border-black/5">
                   <th className="py-2 pr-4">Artikel</th>
                   <th className="py-2 pr-4 text-right">Bestand</th>
                   <th className="py-2 pr-4 text-right">Eingeplant</th>
@@ -151,10 +151,10 @@ export default function PrognosePage() {
               </thead>
               <tbody>
                 {rows.map(r => (
-                  <tr key={r.id} className="border-b border-slate-800/60">
+                  <tr key={r.id} className="border-b border-black/5/60">
                     <td className="py-2.5 pr-4 font-medium">{r.name}</td>
                     <td className="py-2.5 pr-4 text-right">{r.quantity} {r.unit}</td>
-                    <td className="py-2.5 pr-4 text-right text-slate-400">
+                    <td className="py-2.5 pr-4 text-right text-[#86868b]">
                       {r.pending_out > 0 ? `−${r.pending_out}` : '–'}
                     </td>
                     <td className="py-2.5 pr-4 text-right">
@@ -162,7 +162,7 @@ export default function PrognosePage() {
                     </td>
                     <td className="py-2.5 pr-4 text-right font-semibold">
                       {r.days_left === null ? '∞' : (
-                        <span className={r.days_left < 7 ? 'text-red-400' : r.days_left < 14 ? 'text-amber-400' : ''}>
+                        <span className={r.days_left < 7 ? 'text-red-600' : r.days_left < 14 ? 'text-amber-600' : ''}>
                           {r.days_left} Tage
                         </span>
                       )}
@@ -172,10 +172,10 @@ export default function PrognosePage() {
                         {AMPEL[r.status].label}
                       </span>
                     </td>
-                    <td className="py-2.5 pr-4 text-right font-semibold text-blue-300">
+                    <td className="py-2.5 pr-4 text-right font-semibold text-blue-700">
                       {r.suggested_order > 0 ? `${r.suggested_order} ${r.unit}` : '–'}
                     </td>
-                    <td className="py-2.5 text-right text-slate-400">
+                    <td className="py-2.5 text-right text-[#86868b]">
                       {r.suggested_order > 0 ? fmtEuro(r.order_value) : '–'}
                     </td>
                   </tr>
@@ -185,7 +185,7 @@ export default function PrognosePage() {
           )}
         </section>
 
-        <p className="text-slate-500 text-xs">
+        <p className="text-[#86868b] text-xs">
           💡 „Eingeplant" = offene/unterwegs Transporte, die den Bestand schon belasten.
           „Reicht noch" = (Bestand − eingeplant) ÷ Ø Tagesverbrauch. Bestellvorschlag füllt auf 30 Tage + Mindestbestand auf.
         </p>

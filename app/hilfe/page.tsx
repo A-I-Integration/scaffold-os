@@ -140,13 +140,13 @@ export default function HilfePage() {
   );
 
   return (
-    <div className="min-h-screen bg-[#0f172a] p-4 md:p-8">
+    <div className="min-h-screen bg-[#fbfbfd] p-4 md:p-8">
       <div className="max-w-3xl mx-auto space-y-6">
         <div className="flex items-center gap-3">
-          <HelpCircle className="h-8 w-8 text-amber-400" />
+          <HelpCircle className="h-8 w-8 text-[#e8590c]" />
           <div>
-            <h1 className="text-2xl font-bold text-white">Hilfe</h1>
-            <p className="text-sm text-slate-400">Anleitungen zu allen Funktionen – direkt in der App</p>
+            <h1 className="text-2xl font-bold text-[#1d1d1f]">Hilfe</h1>
+            <p className="text-sm text-[#86868b]">Anleitungen zu allen Funktionen – direkt in der App</p>
           </div>
         </div>
 
@@ -154,29 +154,29 @@ export default function HilfePage() {
           value={suche}
           onChange={(e) => setSuche(e.target.value)}
           placeholder="Thema suchen (z. B. Rechnung, Mahnung, DATEV …)"
-          className="w-full px-4 py-3 bg-slate-800 border border-slate-600 rounded-xl text-sm text-white placeholder-slate-500 focus:outline-none focus:border-amber-500"
+          className="w-full px-4 py-3 bg-[#f5f5f7] border border-black/10 rounded-xl text-sm text-[#1d1d1f] placeholder-[#86868b] focus:outline-none focus:border-[#e8590c]"
         />
 
         <div className="space-y-2">
           {gefiltert.length === 0 && (
-            <p className="text-slate-400 text-sm">Nichts gefunden – versuchen Sie einen anderen Begriff oder schreiben Sie an info@scaffoldos.de.</p>
+            <p className="text-[#86868b] text-sm">Nichts gefunden – versuchen Sie einen anderen Begriff oder schreiben Sie an info@scaffoldos.de.</p>
           )}
           {gefiltert.map((a) => {
             const idx = ABSCHNITTE.indexOf(a);
             const offen = open === idx;
             return (
-              <div key={a.titel} className="bg-slate-800 rounded-xl border border-blue-500/20 overflow-hidden">
+              <div key={a.titel} className="bg-[#f5f5f7] rounded-xl border border-blue-500/20 overflow-hidden">
                 <button
                   onClick={() => setOpen(offen ? null : idx)}
                   className="w-full flex items-center justify-between px-5 py-4 text-left"
                 >
-                  <span className="font-semibold text-white text-sm">{a.titel}</span>
+                  <span className="font-semibold text-[#1d1d1f] text-sm">{a.titel}</span>
                   {offen
-                    ? <ChevronDown className="h-4 w-4 text-amber-400 shrink-0" />
-                    : <ChevronRight className="h-4 w-4 text-slate-500 shrink-0" />}
+                    ? <ChevronDown className="h-4 w-4 text-[#e8590c] shrink-0" />
+                    : <ChevronRight className="h-4 w-4 text-[#86868b] shrink-0" />}
                 </button>
                 {offen && (
-                  <div className="px-5 pb-4 text-sm text-slate-300">
+                  <div className="px-5 pb-4 text-sm text-[#424245]">
                     {a.inhalt}
                   </div>
                 )}
@@ -185,22 +185,22 @@ export default function HilfePage() {
           })}
         </div>
 
-        <div className="bg-slate-800 rounded-xl border border-blue-500/20 p-5 flex flex-wrap items-center justify-between gap-3">
-          <div className="text-sm text-slate-300">
-            <b className="text-white">Weiterführend:</b> Das komplette Handbuch als PDF – oder direkt Support anfragen.
+        <div className="bg-[#f5f5f7] rounded-xl border border-blue-500/20 p-5 flex flex-wrap items-center justify-between gap-3">
+          <div className="text-sm text-[#424245]">
+            <b className="text-[#1d1d1f]">Weiterführend:</b> Das komplette Handbuch als PDF – oder direkt Support anfragen.
           </div>
           <div className="flex gap-2">
             <a
               href="/handbuch.pdf"
               target="_blank"
               rel="noopener noreferrer"
-              className="flex items-center gap-2 rounded-lg bg-slate-700 hover:bg-slate-600 px-4 py-2 text-sm font-semibold text-white transition-colors"
+              className="flex items-center gap-2 rounded-xl bg-black/10 hover:bg-black/15 px-4 py-2 text-sm font-semibold text-[#1d1d1f] transition-colors"
             >
               <BookOpen className="h-4 w-4" /> Handbuch (PDF)
             </a>
             <a
               href="mailto:info@scaffoldos.de"
-              className="rounded-lg bg-amber-500 hover:bg-amber-400 px-4 py-2 text-sm font-bold text-slate-900 transition-colors"
+              className="rounded-xl bg-[#e8590c] hover:bg-[#d9480f] px-4 py-2 text-sm font-bold text-white transition-colors"
             >
               Support: info@scaffoldos.de
             </a>

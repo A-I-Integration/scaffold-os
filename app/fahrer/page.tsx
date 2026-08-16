@@ -113,8 +113,8 @@ export default function FahrerAppPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-slate-900 text-white flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-amber-500"></div>
+      <div className="min-h-screen bg-white text-[#1d1d1f] flex items-center justify-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#e8590c]"></div>
       </div>
     );
   }
@@ -124,33 +124,33 @@ export default function FahrerAppPage() {
   // ═══════════════════════════════════════════════════════════
   if (!activeTour) {
     return (
-      <div className="min-h-screen bg-slate-900 text-white p-4">
+      <div className="min-h-screen bg-white text-[#1d1d1f] p-4">
         <div className="max-w-md mx-auto">
-          <h1 className="text-2xl font-bold text-amber-500 mb-2">🚛 Fahrer-App</h1>
-          <p className="text-slate-400 text-sm mb-6">Wähle deine aktuelle Tour</p>
+          <h1 className="text-2xl font-bold text-[#e8590c] mb-2">🚛 Fahrer-App</h1>
+          <p className="text-[#86868b] text-sm mb-6">Wähle deine aktuelle Tour</p>
           {tours.length === 0 ? (
-            <div className="bg-slate-800 rounded-xl p-8 text-center">
+            <div className="bg-[#f5f5f7] rounded-xl p-8 text-center">
               <p className="text-4xl mb-3">📭</p>
-              <p className="text-slate-300">Keine aktiven Touren</p>
-              <p className="text-sm text-slate-500 mt-1">Aktualisiert automatisch alle 30 Sekunden</p>
+              <p className="text-[#424245]">Keine aktiven Touren</p>
+              <p className="text-sm text-[#86868b] mt-1">Aktualisiert automatisch alle 30 Sekunden</p>
             </div>
           ) : (
             <div className="space-y-3">
               {tours.map(tour => (
-                <button key={tour.id} onClick={() => setActiveTour(tour)} className="w-full text-left bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-xl p-4 transition-colors">
+                <button key={tour.id} onClick={() => setActiveTour(tour)} className="w-full text-left bg-[#f5f5f7] hover:bg-black/10 border border-black/10 rounded-xl p-4 transition-colors">
                   <div className="flex items-center justify-between mb-1">
-                    <span className="font-bold text-white">{tour.name}</span>
+                    <span className="font-bold text-[#1d1d1f]">{tour.name}</span>
                     <span className={`px-2 py-0.5 rounded text-xs font-bold ${tour.status === 'in_progress' ? 'bg-blue-500 text-white' : 'bg-amber-500 text-amber-950'}`}>
                       {tour.status === 'in_progress' ? '🔴 Unterwegs' : '📋 Geplant'}
                     </span>
                   </div>
-                  <div className="text-sm text-slate-400">{tour.planned_date} {tour.planned_start_time}</div>
-                  <div className="text-xs text-slate-500 mt-1">{tour.vehicle?.name || 'Kein Fahrzeug'} | {tour.stops?.length || 0} Stopps</div>
+                  <div className="text-sm text-[#86868b]">{tour.planned_date} {tour.planned_start_time}</div>
+                  <div className="text-xs text-[#86868b] mt-1">{tour.vehicle?.name || 'Kein Fahrzeug'} | {tour.stops?.length || 0} Stopps</div>
                 </button>
               ))}
             </div>
           )}
-          <button onClick={loadTours} className="w-full mt-4 py-3 bg-slate-700 hover:bg-slate-600 rounded-xl text-sm font-medium transition-colors">🔄 Aktualisieren</button>
+          <button onClick={loadTours} className="w-full mt-4 py-3 bg-black/10 hover:bg-black/15 rounded-xl text-sm font-medium transition-colors">🔄 Aktualisieren</button>
         </div>
       </div>
     );
@@ -164,28 +164,28 @@ export default function FahrerAppPage() {
   const currentStop = pendingStops[0];
 
   return (
-    <div className="min-h-screen bg-slate-900 text-white">
-      <div className="bg-slate-800 border-b border-slate-700 p-4 sticky top-0 z-10">
+    <div className="min-h-screen bg-white text-[#1d1d1f]">
+      <div className="bg-[#f5f5f7] border-b border-black/10 p-4 sticky top-0 z-10">
         <div className="flex items-center justify-between mb-2">
-          <button onClick={() => { stopGPS(); setActiveTour(null); }} className="text-slate-400 text-sm">← Zurück</button>
+          <button onClick={() => { stopGPS(); setActiveTour(null); }} className="text-[#86868b] text-sm">← Zurück</button>
           <span className={`px-2 py-0.5 rounded text-xs font-bold ${activeTour.status === 'in_progress' ? 'bg-blue-500 text-white' : 'bg-amber-500 text-amber-950'}`}>
             {activeTour.status === 'in_progress' ? '🔴 Unterwegs' : '📋 Geplant'}
           </span>
         </div>
-        <h1 className="text-lg font-bold text-white truncate">{activeTour.name}</h1>
-        <div className="text-xs text-slate-400">{activeTour.vehicle?.name || '–'} ({activeTour.vehicle?.license_plate || '–'}) | {completedStops.length}/{activeTour.stops?.length || 0} Stopps</div>
+        <h1 className="text-lg font-bold text-[#1d1d1f] truncate">{activeTour.name}</h1>
+        <div className="text-xs text-[#86868b]">{activeTour.vehicle?.name || '–'} ({activeTour.vehicle?.license_plate || '–'}) | {completedStops.length}/{activeTour.stops?.length || 0} Stopps</div>
       </div>
 
       {gpsEnabled && gpsPosition && (
-        <div className="bg-blue-900/30 border-b border-blue-700/50 px-4 py-2 flex items-center justify-between">
-          <div className="flex items-center gap-2 text-xs text-blue-300">
+        <div className="bg-blue-50 border-b border-blue-200/50 px-4 py-2 flex items-center justify-between">
+          <div className="flex items-center gap-2 text-xs text-blue-700">
             <span className="relative flex h-2 w-2"><span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span><span className="relative inline-flex rounded-full h-2 w-2 bg-blue-500"></span></span>
             GPS aktiv: {gpsPosition.lat.toFixed(5)}, {gpsPosition.lng.toFixed(5)}
           </div>
-          <button onClick={stopGPS} className="text-xs text-blue-400 hover:text-blue-300">Stoppen</button>
+          <button onClick={stopGPS} className="text-xs text-blue-600 hover:text-blue-700">Stoppen</button>
         </div>
       )}
-      {gpsError && <div className="bg-red-900/30 border-b border-red-700/50 px-4 py-2 text-xs text-red-300">{gpsError}</div>}
+      {gpsError && <div className="bg-red-50 border-b border-red-200/50 px-4 py-2 text-xs text-red-700">{gpsError}</div>}
 
       <div className="p-4 max-w-md mx-auto space-y-4">
         {activeTour.status === 'planned' && (
@@ -193,15 +193,15 @@ export default function FahrerAppPage() {
         )}
 
         {currentStop && (
-          <div className="bg-slate-800 border-2 border-amber-500/50 rounded-xl p-5">
+          <div className="bg-[#f5f5f7] border-2 border-[#e8590c]/50 rounded-xl p-5">
             <div className="flex items-center gap-2 mb-3">
               <span className="w-8 h-8 rounded-full bg-amber-500 text-amber-950 flex items-center justify-center font-bold text-sm">{currentStop.stop_order}</span>
-              <div><div className="text-xs text-amber-400 font-bold uppercase tracking-wider">Nächster Stopp</div><div className="text-lg font-bold text-white">{currentStop.address}</div></div>
+              <div><div className="text-xs text-[#e8590c] font-bold uppercase tracking-wider">Nächster Stopp</div><div className="text-lg font-bold text-[#1d1d1f]">{currentStop.address}</div></div>
             </div>
             {currentStop.transport_order && (
-              <div className="bg-slate-700/50 rounded-lg p-3 mb-4">
-                <div className="text-sm text-slate-300">📦 {currentStop.transport_order.inventory?.name || '–'}</div>
-                <div className="text-xs text-slate-400">Menge: {currentStop.transport_order.quantity} Stk</div>
+              <div className="bg-black/10/50 rounded-xl p-3 mb-4">
+                <div className="text-sm text-[#424245]">📦 {currentStop.transport_order.inventory?.name || '–'}</div>
+                <div className="text-xs text-[#86868b]">Menge: {currentStop.transport_order.quantity} Stk</div>
               </div>
             )}
             <div className="grid grid-cols-2 gap-3">
@@ -220,20 +220,20 @@ export default function FahrerAppPage() {
         )}
 
         <div className="space-y-2">
-          <h3 className="text-sm font-bold text-slate-400 uppercase tracking-wider">Stopps</h3>
+          <h3 className="text-sm font-bold text-[#86868b] uppercase tracking-wider">Stopps</h3>
           {activeTour.stops?.map((stop) => (
-            <div key={stop.id} className={`flex items-center gap-3 p-3 rounded-xl border ${stop.status === 'completed' ? 'bg-green-900/20 border-green-700/30' : stop.id === currentStop?.id ? 'bg-amber-900/20 border-amber-700/30' : 'bg-slate-800 border-slate-700'}`}>
-              <span className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold ${stop.status === 'completed' ? 'bg-green-500 text-white' : 'bg-slate-700 text-slate-400'}`}>{stop.stop_order}</span>
+            <div key={stop.id} className={`flex items-center gap-3 p-3 rounded-xl border ${stop.status === 'completed' ? 'bg-emerald-50 border-emerald-200' : stop.id === currentStop?.id ? 'bg-orange-50 border-[#e8590c]/30' : 'bg-[#f5f5f7] border-black/10'}`}>
+              <span className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold ${stop.status === 'completed' ? 'bg-green-500 text-white' : 'bg-black/10 text-[#86868b]'}`}>{stop.stop_order}</span>
               <div className="flex-1 min-w-0">
-                <div className={`text-sm font-medium truncate ${stop.status === 'completed' ? 'text-green-300 line-through' : 'text-white'}`}>{stop.address}</div>
-                {stop.transport_order && <div className="text-xs text-slate-500">{stop.transport_order.inventory?.name || '–'} ({stop.transport_order.quantity} Stk)</div>}
+                <div className={`text-sm font-medium truncate ${stop.status === 'completed' ? 'text-green-300 line-through' : 'text-[#1d1d1f]'}`}>{stop.address}</div>
+                {stop.transport_order && <div className="text-xs text-[#86868b]">{stop.transport_order.inventory?.name || '–'} ({stop.transport_order.quantity} Stk)</div>}
               </div>
               <span className="text-lg">{stop.status === 'completed' ? '✅' : '⏳'}</span>
             </div>
           ))}
         </div>
 
-        <button onClick={() => { stopGPS(); setActiveTour(null); }} className="w-full py-3 bg-slate-700 hover:bg-slate-600 rounded-xl text-sm font-medium transition-colors">← Zurück zur Tour-Auswahl</button>
+        <button onClick={() => { stopGPS(); setActiveTour(null); }} className="w-full py-3 bg-black/10 hover:bg-black/15 rounded-xl text-sm font-medium transition-colors">← Zurück zur Tour-Auswahl</button>
       </div>
     </div>
   );

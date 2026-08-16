@@ -135,7 +135,7 @@ export default function StuecklistePage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-slate-900 text-white flex items-center justify-center">
+      <div className="min-h-screen bg-white text-[#1d1d1f] flex items-center justify-center">
         <div className="text-center">
           <div className="text-4xl mb-4 animate-pulse">📦</div>
           <div className="text-xl font-semibold">Berechne Material...</div>
@@ -145,23 +145,23 @@ export default function StuecklistePage() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-900 text-white p-6">
+    <div className="min-h-screen bg-white text-[#1d1d1f] p-6">
       {/* NORMALE ANSICHT */}
       <div className="max-w-3xl mx-auto print:hidden">
         <div className="flex items-center gap-3 mb-2">
-          <button onClick={() => router.push('/planung')} className="text-slate-400 hover:text-white text-sm">← Zurück zur KI-Planung</button>
+          <button onClick={() => router.push('/planung')} className="text-[#86868b] hover:text-[#1d1d1f] text-sm">← Zurück zur KI-Planung</button>
         </div>
 
         <h1 className="text-3xl font-bold mb-2">📦 Automatische Stückliste</h1>
-        <p className="text-slate-400 mb-6">Berechnet aus Aufmaß-Daten</p>
+        <p className="text-[#86868b] mb-6">Berechnet aus Aufmaß-Daten</p>
 
         {data.s1?.name && (
-          <div className="bg-slate-800/50 rounded-lg p-4 mb-6 flex justify-between items-center">
+          <div className="bg-black/5 rounded-xl p-4 mb-6 flex justify-between items-center">
             <div>
-              <div className="text-slate-300 font-semibold">{data.s1.name}</div>
-              <div className="text-slate-400 text-sm">{data.s1.adresse}</div>
+              <div className="text-[#424245] font-semibold">{data.s1.name}</div>
+              <div className="text-[#86868b] text-sm">{data.s1.adresse}</div>
             </div>
-            <div className="text-right text-sm text-slate-400">
+            <div className="text-right text-sm text-[#86868b]">
               <div>{laenge} m × {hoehe} m</div>
               <div>{felder} Felder × {etagen} Etagen</div>
             </div>
@@ -169,39 +169,39 @@ export default function StuecklistePage() {
         )}
 
         <div className="grid grid-cols-3 gap-4 mb-6">
-          <div className="bg-slate-800 rounded-xl p-4 text-center">
-            <div className="text-2xl font-bold text-orange-400">{gesamtGewicht.toLocaleString('de-DE')}</div>
-            <div className="text-xs text-slate-400 uppercase tracking-wider mt-1">kg Gesamt</div>
+          <div className="bg-[#f5f5f7] rounded-xl p-4 text-center">
+            <div className="text-2xl font-bold text-[#e8590c]">{gesamtGewicht.toLocaleString('de-DE')}</div>
+            <div className="text-xs text-[#86868b] uppercase tracking-wider mt-1">kg Gesamt</div>
           </div>
-          <div className="bg-slate-800 rounded-xl p-4 text-center">
-            <div className="text-2xl font-bold text-blue-400">{gesamtVolumen.toFixed(1)}</div>
-            <div className="text-xs text-slate-400 uppercase tracking-wider mt-1">m³ Ladevolumen</div>
+          <div className="bg-[#f5f5f7] rounded-xl p-4 text-center">
+            <div className="text-2xl font-bold text-blue-600">{gesamtVolumen.toFixed(1)}</div>
+            <div className="text-xs text-[#86868b] uppercase tracking-wider mt-1">m³ Ladevolumen</div>
           </div>
-          <div className="bg-slate-800 rounded-xl p-4 text-center">
-            <div className="text-lg font-bold text-green-400 leading-tight">{flaeche}</div>
-            <div className="text-xs text-slate-400 uppercase tracking-wider mt-1">m² Fläche</div>
+          <div className="bg-[#f5f5f7] rounded-xl p-4 text-center">
+            <div className="text-lg font-bold text-emerald-600 leading-tight">{flaeche}</div>
+            <div className="text-xs text-[#86868b] uppercase tracking-wider mt-1">m² Fläche</div>
           </div>
         </div>
 
-        <div className="bg-blue-900/30 border border-blue-500/50 rounded-lg p-4 mb-6">
-          <div className="text-blue-400 font-semibold text-sm mb-1">🚛 Fahrzeugempfehlung</div>
-          <div className="text-blue-300/80 text-sm">{fahrzeug}</div>
+        <div className="bg-blue-50 border border-blue-500/50 rounded-xl p-4 mb-6">
+          <div className="text-blue-600 font-semibold text-sm mb-1">🚛 Fahrzeugempfehlung</div>
+          <div className="text-blue-700 text-sm">{fahrzeug}</div>
         </div>
 
         <div className="space-y-4 mb-6">
           {categories.map((cat, i) => (
-            <div key={i} className="bg-slate-800 rounded-xl overflow-hidden">
-              <div className="bg-slate-700/50 px-4 py-3 flex items-center gap-2">
+            <div key={i} className="bg-[#f5f5f7] rounded-xl overflow-hidden">
+              <div className="bg-black/10/50 px-4 py-3 flex items-center gap-2">
                 <span className="text-xl">{cat.icon}</span>
-                <span className="font-semibold text-sm uppercase tracking-wider text-slate-300">{cat.title}</span>
+                <span className="font-semibold text-sm uppercase tracking-wider text-[#424245]">{cat.title}</span>
               </div>
-              <div className="divide-y divide-slate-700">
+              <div className="divide-y divide-black/5">
                 {cat.items.map((item: any, j: number) => (
                   <div key={j} className="px-4 py-3 flex justify-between items-center">
-                    <span className="text-slate-300">{item.name}</span>
+                    <span className="text-[#424245]">{item.name}</span>
                     <div className="text-right">
-                      <div className="text-white font-semibold">{item.stk} Stk</div>
-                      <div className="text-xs text-slate-500">{item.kg} kg</div>
+                      <div className="text-[#1d1d1f] font-semibold">{item.stk} Stk</div>
+                      <div className="text-xs text-[#86868b]">{item.kg} kg</div>
                     </div>
                   </div>
                 ))}
@@ -210,8 +210,8 @@ export default function StuecklistePage() {
           ))}
         </div>
 
-        <div className="bg-slate-800/50 rounded-lg p-4 text-sm text-slate-400 mb-6">
-          <div className="font-semibold text-slate-300 mb-1">ℹ️ Berechnungsgrundlage</div>
+        <div className="bg-black/5 rounded-xl p-4 text-sm text-[#86868b] mb-6">
+          <div className="font-semibold text-[#424245] mb-1">ℹ️ Berechnungsgrundlage</div>
           <ul className="space-y-1 text-xs">
             <li>• Feldlänge: {feldlange} m | Geschosshöhe: {geschossHoehe} m</li>
             <li>• Ankerabstand: {ankerAbstand} m | Windzone: {data.s4?.windzone || '2'}</li>
@@ -220,10 +220,10 @@ export default function StuecklistePage() {
         </div>
 
         <div className="flex gap-3">
-          <button onClick={() => router.push('/planung')} className="flex-1 bg-slate-700 hover:bg-slate-600 text-white font-semibold py-3 px-4 rounded-lg transition">
+          <button onClick={() => router.push('/planung')} className="flex-1 bg-black/10 hover:bg-black/15 text-[#1d1d1f] font-semibold py-3 px-4 rounded-xl transition">
             ← Zurück
           </button>
-          <button onClick={handlePrint} className="flex-1 bg-orange-600 hover:bg-orange-700 text-white font-semibold py-3 px-4 rounded-lg transition">
+          <button onClick={handlePrint} className="flex-1 bg-orange-600 hover:bg-orange-700 text-white font-semibold py-3 px-4 rounded-xl transition">
             📄 PDF Export
           </button>
         </div>
@@ -246,7 +246,7 @@ export default function StuecklistePage() {
         </div>
 
         {/* Projektinfo */}
-        <div className="bg-gray-100 rounded-lg p-4 mb-6">
+        <div className="bg-gray-100 rounded-xl p-4 mb-6">
           <h2 className="text-xl font-bold text-gray-900 mb-2">Projektdaten</h2>
           <div className="grid grid-cols-2 gap-4 text-sm">
             <div>
@@ -270,15 +270,15 @@ export default function StuecklistePage() {
 
         {/* Zusammenfassung */}
         <div className="grid grid-cols-3 gap-4 mb-6">
-          <div className="border border-gray-300 rounded-lg p-3 text-center">
+          <div className="border border-gray-300 rounded-xl p-3 text-center">
             <div className="text-2xl font-bold text-gray-900">{gesamtGewicht.toLocaleString('de-DE')} kg</div>
             <div className="text-xs text-gray-600 uppercase">Gesamtgewicht</div>
           </div>
-          <div className="border border-gray-300 rounded-lg p-3 text-center">
+          <div className="border border-gray-300 rounded-xl p-3 text-center">
             <div className="text-2xl font-bold text-gray-900">{gesamtVolumen.toFixed(1)} m³</div>
             <div className="text-xs text-gray-600 uppercase">Ladevolumen</div>
           </div>
-          <div className="border border-gray-300 rounded-lg p-3 text-center">
+          <div className="border border-gray-300 rounded-xl p-3 text-center">
             <div className="text-sm font-bold text-gray-900 leading-tight">{fahrzeug}</div>
             <div className="text-xs text-gray-600 uppercase">Fahrzeug</div>
           </div>

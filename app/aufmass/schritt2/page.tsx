@@ -266,87 +266,87 @@ export default function Schritt2Page() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-900 text-white p-6">
+    <div className="min-h-screen bg-white text-[#1d1d1f] p-6">
       <div className="max-w-2xl mx-auto">
-        <button onClick={zurueck} className="text-slate-400 hover:text-white text-sm mb-2">← Zurück</button>
+        <button onClick={zurueck} className="text-[#86868b] hover:text-[#1d1d1f] text-sm mb-2">← Zurück</button>
         <h1 className="text-3xl font-bold mb-2">🏢 Gebäude & Abmessungen</h1>
-        <p className="text-slate-400 mb-2">Baustelle: Schritt 2 von 6</p>
+        <p className="text-[#86868b] mb-2">Baustelle: Schritt 2 von 6</p>
 
         {step1Data && (
-          <div className="bg-slate-800/50 rounded-lg p-3 mb-6 text-sm text-slate-400">
-            <span className="text-slate-300 font-medium">{step1Data.name}</span> · {step1Data.adresse}
+          <div className="bg-black/5 rounded-xl p-3 mb-6 text-sm text-[#86868b]">
+            <span className="text-[#424245] font-medium">{step1Data.name}</span> · {step1Data.adresse}
           </div>
         )}
 
-        <div className="bg-slate-800 rounded-xl p-6 space-y-6">
+        <div className="bg-[#f5f5f7] rounded-xl p-6 space-y-6">
 
           {lidarUebernommen && (
-            <div className="rounded-lg bg-purple-900/20 border border-purple-500/30 p-3 text-sm text-purple-300">
+            <div className="rounded-xl bg-purple-900/20 border border-purple-500/30 p-3 text-sm text-purple-300">
               📐 Maße wurden aus dem LiDAR-Scan übernommen – bitte prüfen und bei Bedarf anpassen.
             </div>
           )}
 
           {grundrissUebernommen && (
-            <div className="rounded-lg bg-teal-900/20 border border-teal-500/30 p-3 text-sm text-teal-300">
+            <div className="rounded-xl bg-teal-900/20 border border-teal-500/30 p-3 text-sm text-teal-300">
               📋 Werte wurden aus der KI-Grundriss-Analyse übernommen – bitte prüfen und bei Bedarf anpassen.
             </div>
           )}
 
           {grundrissUebernommen && hoeheGeschaetzt && (
-            <div className="rounded-lg bg-amber-900/20 border border-amber-500/30 p-3 text-sm text-amber-300">
+            <div className="rounded-xl bg-orange-50 border border-[#e8590c]/30 p-3 text-sm text-[#e8590c]">
               ⚠️ Die Höhe wurde aus der Geschosszahl geschätzt (3,00 m pro Geschoss) – Grundrisse enthalten meist keine Höhenangabe. Bitte prüfen und korrigieren.
             </div>
           )}
 
           {grundrissUebernommen && !form.hoehe && (
-            <div className="rounded-lg bg-amber-900/20 border border-amber-500/30 p-3 text-sm text-amber-300">
+            <div className="rounded-xl bg-orange-50 border border-[#e8590c]/30 p-3 text-sm text-[#e8590c]">
               ⚠️ Die Gebäudehöhe fehlt (im Grundriss nicht vermaßt) – bitte manuell eintragen, sie ist Pflicht für die Berechnung.
             </div>
           )}
 
           {kiUebernommen && (
-            <div className="rounded-lg bg-blue-900/20 border border-blue-500/30 p-3 text-sm text-blue-300">
+            <div className="rounded-xl bg-blue-900/20 border border-blue-500/30 p-3 text-sm text-blue-700">
               🔮 Fassade, Dachform und Hindernisse wurden aus der KI-Foto-Analyse vorbefüllt – bitte prüfen, die KI kann sich irren.
             </div>
           )}
 
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium mb-2 text-slate-300">Länge (m) *</label>
+              <label className="block text-sm font-medium mb-2 text-[#424245]">Länge (m) *</label>
               <input type="number" value={form.laenge}
                 onChange={(e) => setForm({...form, laenge: e.target.value})}
-                className="w-full bg-slate-700 border border-slate-600 rounded-lg px-4 py-2 text-white"
+                className="w-full bg-black/10 border border-black/10 rounded-xl px-4 py-2 text-[#1d1d1f]"
                 placeholder="z.B. 18" />
             </div>
             <div>
-              <label className="block text-sm font-medium mb-2 text-slate-300">Höhe (m) *</label>
+              <label className="block text-sm font-medium mb-2 text-[#424245]">Höhe (m) *</label>
               <input type="number" value={form.hoehe}
                 onChange={(e) => setForm({...form, hoehe: e.target.value})}
-                className="w-full bg-slate-700 border border-slate-600 rounded-lg px-4 py-2 text-white"
+                className="w-full bg-black/10 border border-black/10 rounded-xl px-4 py-2 text-[#1d1d1f]"
                 placeholder="z.B. 10" />
             </div>
             <div>
-              <label className="block text-sm font-medium mb-2 text-slate-300">Breite (m)</label>
+              <label className="block text-sm font-medium mb-2 text-[#424245]">Breite (m)</label>
               <input type="number" value={form.breite}
                 onChange={(e) => setForm({...form, breite: e.target.value})}
-                className="w-full bg-slate-700 border border-slate-600 rounded-lg px-4 py-2 text-white"
+                className="w-full bg-black/10 border border-black/10 rounded-xl px-4 py-2 text-[#1d1d1f]"
                 placeholder="z.B. 8" />
             </div>
             <div>
-              <label className="block text-sm font-medium mb-2 text-slate-300">Traufhöhe (m)</label>
+              <label className="block text-sm font-medium mb-2 text-[#424245]">Traufhöhe (m)</label>
               <input type="number" value={form.traufhoehe}
                 onChange={(e) => setForm({...form, traufhoehe: e.target.value})}
-                className="w-full bg-slate-700 border border-slate-600 rounded-lg px-4 py-2 text-white"
+                className="w-full bg-black/10 border border-black/10 rounded-xl px-4 py-2 text-[#1d1d1f]"
                 placeholder="z.B. 8.5" />
             </div>
           </div>
 
           <div>
-            <label className="block text-sm font-medium mb-3 text-slate-300">Dachform</label>
+            <label className="block text-sm font-medium mb-3 text-[#424245]">Dachform</label>
             <div className="grid grid-cols-3 gap-3">
               {dachformen.map(d => (
                 <button key={d} onClick={() => setForm({...form, dachform: d})}
-                  className={`p-3 rounded-lg border text-sm transition ${form.dachform === d ? 'bg-orange-600/20 border-orange-500 text-orange-300' : 'bg-slate-700 border-slate-600 text-slate-300'}`}>
+                  className={`p-3 rounded-xl border text-sm transition ${form.dachform === d ? 'bg-[#e8590c]/10 border-[#e8590c] text-[#e8590c]' : 'bg-black/10 border-black/10 text-[#424245]'}`}>
                   {d}
                 </button>
               ))}
@@ -354,19 +354,19 @@ export default function Schritt2Page() {
           </div>
 
           <div>
-            <label className="block text-sm font-medium mb-2 text-slate-300">Dachüberstand (m)</label>
+            <label className="block text-sm font-medium mb-2 text-[#424245]">Dachüberstand (m)</label>
             <input type="number" value={form.dachueberstand}
               onChange={(e) => setForm({...form, dachueberstand: e.target.value})}
-              className="w-full bg-slate-700 border border-slate-600 rounded-lg px-4 py-2 text-white"
+              className="w-full bg-black/10 border border-black/10 rounded-xl px-4 py-2 text-[#1d1d1f]"
               placeholder="z.B. 0.5" />
           </div>
 
           <div>
-            <label className="block text-sm font-medium mb-3 text-slate-300">Fassadenmaterial</label>
+            <label className="block text-sm font-medium mb-3 text-[#424245]">Fassadenmaterial</label>
             <div className="grid grid-cols-2 gap-3">
               {fassaden.map(f => (
                 <button key={f} onClick={() => setForm({...form, fassade: f})}
-                  className={`p-3 rounded-lg border text-sm transition ${form.fassade === f ? 'bg-orange-600/20 border-orange-500 text-orange-300' : 'bg-slate-700 border-slate-600 text-slate-300'}`}>
+                  className={`p-3 rounded-xl border text-sm transition ${form.fassade === f ? 'bg-[#e8590c]/10 border-[#e8590c] text-[#e8590c]' : 'bg-black/10 border-black/10 text-[#424245]'}`}>
                   {f}
                 </button>
               ))}
@@ -374,11 +374,11 @@ export default function Schritt2Page() {
           </div>
 
           <div>
-            <label className="block text-sm font-medium mb-3 text-slate-300">Hindernisse an der Fassade</label>
+            <label className="block text-sm font-medium mb-3 text-[#424245]">Hindernisse an der Fassade</label>
             <div className="grid grid-cols-2 gap-3">
               {hindernisListe.map(h => (
                 <button key={h} onClick={() => toggleHindernis(h)}
-                  className={`p-3 rounded-lg border text-left transition ${form.hindernisse.includes(h) ? 'bg-orange-600/20 border-orange-500 text-orange-300' : 'bg-slate-700 border-slate-600 text-slate-300'}`}>
+                  className={`p-3 rounded-xl border text-left transition ${form.hindernisse.includes(h) ? 'bg-[#e8590c]/10 border-[#e8590c] text-[#e8590c]' : 'bg-black/10 border-black/10 text-[#424245]'}`}>
                   {h}
                 </button>
               ))}
@@ -387,35 +387,35 @@ export default function Schritt2Page() {
 
           <div className="space-y-3">
             <button onClick={() => setForm({...form, garagen: !form.garagen})}
-              className={`w-full p-3 rounded-lg border text-left transition flex items-center gap-3 ${form.garagen ? 'bg-orange-600/20 border-orange-500 text-orange-300' : 'bg-slate-700 border-slate-600'}`}>
+              className={`w-full p-3 rounded-xl border text-left transition flex items-center gap-3 ${form.garagen ? 'bg-[#e8590c]/10 border-[#e8590c] text-[#e8590c]' : 'bg-black/10 border-black/10'}`}>
               <span className="text-xl">🚗</span>
               <div><div className="font-semibold text-sm">Garagen / Nebengebäude vorhanden</div></div>
             </button>
 
             <button onClick={() => setForm({...form, fluchtwege: !form.fluchtwege})}
-              className={`w-full p-3 rounded-lg border text-left transition flex items-center gap-3 ${form.fluchtwege ? 'bg-orange-600/20 border-orange-500 text-orange-300' : 'bg-slate-700 border-slate-600'}`}>
+              className={`w-full p-3 rounded-xl border text-left transition flex items-center gap-3 ${form.fluchtwege ? 'bg-[#e8590c]/10 border-[#e8590c] text-[#e8590c]' : 'bg-black/10 border-black/10'}`}>
               <span className="text-xl">🚪</span>
               <div><div className="font-semibold text-sm">Fluchtwege beachten</div></div>
             </button>
 
             <button onClick={() => setForm({...form, werbeanlagen: !form.werbeanlagen})}
-              className={`w-full p-3 rounded-lg border text-left transition flex items-center gap-3 ${form.werbeanlagen ? 'bg-orange-600/20 border-orange-500 text-orange-300' : 'bg-slate-700 border-slate-600'}`}>
+              className={`w-full p-3 rounded-xl border text-left transition flex items-center gap-3 ${form.werbeanlagen ? 'bg-[#e8590c]/10 border-[#e8590c] text-[#e8590c]' : 'bg-black/10 border-black/10'}`}>
               <span className="text-xl">📢</span>
               <div><div className="font-semibold text-sm">Werbeanlagen vorhanden</div><div className="text-xs opacity-70">Müssen berücksichtigt werden</div></div>
             </button>
 
             <button onClick={() => setForm({...form, durchfahrt: !form.durchfahrt})}
-              className={`w-full p-3 rounded-lg border text-left transition flex items-center gap-3 ${form.durchfahrt ? 'bg-orange-600/20 border-orange-500 text-orange-300' : 'bg-slate-700 border-slate-600'}`}>
+              className={`w-full p-3 rounded-xl border text-left transition flex items-center gap-3 ${form.durchfahrt ? 'bg-[#e8590c]/10 border-[#e8590c] text-[#e8590c]' : 'bg-black/10 border-black/10'}`}>
               <span className="text-xl">🛣️</span>
               <div><div className="font-semibold text-sm">Durchfahrt / Eingang freizuhalten</div><div className="text-xs opacity-70">Gitterträger erforderlich</div></div>
             </button>
           </div>
 
           <div>
-            <label className="block text-sm font-medium mb-2 text-slate-300">Anzahl Hauseingänge</label>
+            <label className="block text-sm font-medium mb-2 text-[#424245]">Anzahl Hauseingänge</label>
             <input type="number" value={form.hauseingaenge}
               onChange={(e) => setForm({...form, hauseingaenge: e.target.value})}
-              className="w-full bg-slate-700 border border-slate-600 rounded-lg px-4 py-2 text-white"
+              className="w-full bg-black/10 border border-black/10 rounded-xl px-4 py-2 text-[#1d1d1f]"
               placeholder="z.B. 2" />
           </div>
 
@@ -423,12 +423,12 @@ export default function Schritt2Page() {
           <KIWarnings ruleset={kiResult} />
 
           <div className="flex gap-3 pt-4">
-            <button onClick={zurueck} className="flex-1 bg-slate-700 hover:bg-slate-600 text-white font-semibold py-3 px-4 rounded-lg">← Zurück</button>
-            <button onClick={handleWeiter} className="flex-1 bg-orange-600 hover:bg-orange-700 text-white font-semibold py-3 px-4 rounded-lg">Weiter →</button>
+            <button onClick={zurueck} className="flex-1 bg-black/10 hover:bg-black/15 text-[#1d1d1f] font-semibold py-3 px-4 rounded-xl">← Zurück</button>
+            <button onClick={handleWeiter} className="flex-1 bg-orange-600 hover:bg-orange-700 text-white font-semibold py-3 px-4 rounded-xl">Weiter →</button>
           </div>
 
           <button onClick={handleDirektAngebot}
-            className="w-full bg-teal-600/20 hover:bg-teal-600/30 border border-teal-500/50 text-teal-300 font-semibold py-3 px-4 rounded-lg transition">
+            className="w-full bg-teal-600/20 hover:bg-teal-600/30 border border-teal-500/50 text-teal-300 font-semibold py-3 px-4 rounded-xl transition">
             ⚡ Direkt zum Angebot (Schritte 3–5 mit Standardwerten)
           </button>
 

@@ -82,10 +82,10 @@ const STATUS_LABEL: Record<string, string> = {
 };
 
 const STATUS_BADGE: Record<string, string> = {
-  offen: 'bg-amber-500/20 text-amber-300 border-amber-500/40',
+  offen: 'bg-amber-500/20 text-[#e8590c] border-amber-500/40',
   bezahlt: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40',
   ueberfaellig: 'bg-red-500/20 text-red-300 border-red-500/40',
-  storniert: 'bg-slate-500/20 text-slate-400 border-slate-500/40',
+  storniert: 'bg-black/5 text-[#86868b] border-black/20/40',
 };
 
 // ─── §14-UStG-Rechnungs-PDF im Angebots-Design ───
@@ -537,11 +537,11 @@ function RechnungenContent() {
     .reduce((s, i) => s + Number(i.gross_amount), 0);
 
   return (
-    <div className="min-h-screen bg-[#0f172a] p-4 md:p-8">
+    <div className="min-h-screen bg-[#fbfbfd] p-4 md:p-8">
       <div className="max-w-6xl mx-auto space-y-6">
         {/* Phase 14: Firmenprofil-Hinweis */}
         {companyMissing && (
-          <div className="rounded-xl border border-amber-500/40 bg-amber-500/10 p-4 text-sm text-amber-200">
+          <div className="rounded-xl border border-[#e8590c]/40 bg-[#e8590c]/10 p-4 text-sm text-amber-800">
             <strong>Wichtig:</strong> Noch kein Firmenprofil hinterlegt – ohne Anschrift, Steuer-Nr. und Bankverbindung
             sind Rechnungen nicht vollständig (§ 14 UStG).{' '}
             <Link href="/einstellungen" className="underline font-semibold hover:text-amber-100">
@@ -553,10 +553,10 @@ function RechnungenContent() {
         {/* Kopf */}
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-3">
-            <FileText className="h-8 w-8 text-amber-400" />
+            <FileText className="h-8 w-8 text-[#e8590c]" />
             <div>
-              <h1 className="text-2xl font-bold text-white">Rechnungen</h1>
-              <p className="text-sm text-slate-400">
+              <h1 className="text-2xl font-bold text-[#1d1d1f]">Rechnungen</h1>
+              <p className="text-sm text-[#86868b]">
                 {invoices.length} Rechnungen · {fmtEur(summeOffen)} € offen
               </p>
             </div>
@@ -564,13 +564,13 @@ function RechnungenContent() {
           <div className="flex gap-2">
             <button
               onClick={handleDatevExport}
-              className="flex items-center gap-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 px-4 py-2 text-sm font-semibold text-white transition-colors"
+              className="flex items-center gap-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 px-4 py-2 text-sm font-semibold text-white transition-colors"
             >
               <Download className="h-4 w-4" /> DATEV-Buchungsstapel
             </button>
             <button
               onClick={() => setShowForm(!showForm)}
-              className="flex items-center gap-2 rounded-lg bg-blue-600 hover:bg-blue-500 px-4 py-2 text-sm font-semibold text-white transition-colors"
+              className="flex items-center gap-2 rounded-xl bg-blue-600 hover:bg-blue-500 px-4 py-2 text-sm font-semibold text-white transition-colors"
             >
               {showForm ? <X className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
               {showForm ? 'Abbrechen' : 'Neue Rechnung'}
@@ -580,43 +580,43 @@ function RechnungenContent() {
 
         {/* Neue Rechnung */}
         {showForm && (
-          <div className="bg-slate-800 rounded-xl p-6 border border-blue-500/20 space-y-4">
-            <h2 className="text-lg font-bold text-white">Neue Rechnung</h2>
+          <div className="bg-[#f5f5f7] rounded-xl p-6 border border-blue-500/20 space-y-4">
+            <h2 className="text-lg font-bold text-[#1d1d1f]">Neue Rechnung</h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label className="block text-xs text-slate-400 mb-1">Kundenname *</label>
+                <label className="block text-xs text-[#86868b] mb-1">Kundenname *</label>
                 <input
                   value={customerName}
                   onChange={(e) => setCustomerName(e.target.value)}
-                  className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-sm text-white focus:outline-none focus:border-amber-500"
+                  className="w-full px-3 py-2 bg-black/10 border border-black/10 rounded-xl text-sm text-[#1d1d1f] focus:outline-none focus:border-[#e8590c]"
                   placeholder="Bauunternehmen Mustermann GmbH"
                 />
               </div>
               <div>
-                <label className="block text-xs text-slate-400 mb-1">Adresse</label>
+                <label className="block text-xs text-[#86868b] mb-1">Adresse</label>
                 <input
                   value={customerAddress}
                   onChange={(e) => setCustomerAddress(e.target.value)}
-                  className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-sm text-white focus:outline-none focus:border-amber-500"
+                  className="w-full px-3 py-2 bg-black/10 border border-black/10 rounded-xl text-sm text-[#1d1d1f] focus:outline-none focus:border-[#e8590c]"
                   placeholder="Musterstraße 1, 12345 Musterstadt"
                 />
               </div>
               <div>
-                <label className="block text-xs text-slate-400 mb-1">Rechnungsdatum</label>
+                <label className="block text-xs text-[#86868b] mb-1">Rechnungsdatum</label>
                 <input
                   type="date"
                   value={invoiceDate}
                   onChange={(e) => setInvoiceDate(e.target.value)}
-                  className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-sm text-white focus:outline-none focus:border-amber-500"
+                  className="w-full px-3 py-2 bg-black/10 border border-black/10 rounded-xl text-sm text-[#1d1d1f] focus:outline-none focus:border-[#e8590c]"
                 />
               </div>
               <div>
-                <label className="block text-xs text-slate-400 mb-1">Zahlbar bis</label>
+                <label className="block text-xs text-[#86868b] mb-1">Zahlbar bis</label>
                 <input
                   type="date"
                   value={dueDate}
                   onChange={(e) => setDueDate(e.target.value)}
-                  className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-sm text-white focus:outline-none focus:border-amber-500"
+                  className="w-full px-3 py-2 bg-black/10 border border-black/10 rounded-xl text-sm text-[#1d1d1f] focus:outline-none focus:border-[#e8590c]"
                 />
               </div>
             </div>
@@ -624,10 +624,10 @@ function RechnungenContent() {
             {/* Positionen */}
             <div>
               <div className="flex items-center justify-between mb-2">
-                <label className="text-xs text-slate-400">Positionen *</label>
+                <label className="text-xs text-[#86868b]">Positionen *</label>
                 <button
                   onClick={() => setPositions([...positions, { bezeichnung: '', menge: 1, einheit: 'Stk.', einzelpreis: 0 }])}
-                  className="text-xs text-blue-400 hover:text-blue-300 flex items-center gap-1"
+                  className="text-xs text-blue-600 hover:text-blue-700 flex items-center gap-1"
                 >
                   <Plus className="h-3 w-3" /> Position hinzufügen
                 </button>
@@ -639,29 +639,29 @@ function RechnungenContent() {
                       value={p.bezeichnung}
                       onChange={(e) => updatePosition(i, 'bezeichnung', e.target.value)}
                       placeholder="Bezeichnung"
-                      className="col-span-5 px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-sm text-white focus:outline-none focus:border-amber-500"
+                      className="col-span-5 px-3 py-2 bg-black/10 border border-black/10 rounded-xl text-sm text-[#1d1d1f] focus:outline-none focus:border-[#e8590c]"
                     />
                     <input
                       value={String(p.menge)}
                       onChange={(e) => updatePosition(i, 'menge', e.target.value)}
                       placeholder="Menge"
-                      className="col-span-2 px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-sm text-white text-right focus:outline-none focus:border-amber-500"
+                      className="col-span-2 px-3 py-2 bg-black/10 border border-black/10 rounded-xl text-sm text-[#1d1d1f] text-right focus:outline-none focus:border-[#e8590c]"
                     />
                     <input
                       value={p.einheit}
                       onChange={(e) => updatePosition(i, 'einheit', e.target.value)}
                       placeholder="Einh."
-                      className="col-span-2 px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-sm text-white focus:outline-none focus:border-amber-500"
+                      className="col-span-2 px-3 py-2 bg-black/10 border border-black/10 rounded-xl text-sm text-[#1d1d1f] focus:outline-none focus:border-[#e8590c]"
                     />
                     <input
                       value={String(p.einzelpreis)}
                       onChange={(e) => updatePosition(i, 'einzelpreis', e.target.value)}
                       placeholder="Einzel €"
-                      className="col-span-2 px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-sm text-white text-right focus:outline-none focus:border-amber-500"
+                      className="col-span-2 px-3 py-2 bg-black/10 border border-black/10 rounded-xl text-sm text-[#1d1d1f] text-right focus:outline-none focus:border-[#e8590c]"
                     />
                     <button
                       onClick={() => setPositions(positions.filter((_, idx) => idx !== i))}
-                      className="col-span-1 text-slate-500 hover:text-red-400 transition-colors"
+                      className="col-span-1 text-[#86868b] hover:text-red-600 transition-colors"
                     >
                       <Trash2 className="h-4 w-4" />
                     </button>
@@ -672,21 +672,21 @@ function RechnungenContent() {
 
             <div className="flex flex-wrap items-end justify-between gap-4">
               <div className="flex items-center gap-3">
-                <label className="text-xs text-slate-400">Typ</label>
+                <label className="text-xs text-[#86868b]">Typ</label>
                 <select
                   value={invoiceType}
                   onChange={(e) => setInvoiceType(e.target.value as any)}
-                  className="px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-sm text-white focus:outline-none focus:border-amber-500"
+                  className="px-3 py-2 bg-black/10 border border-black/10 rounded-xl text-sm text-[#1d1d1f] focus:outline-none focus:border-[#e8590c]"
                 >
                   <option value="standard">Vollrechnung</option>
                   <option value="abschlag">Abschlagsrechnung</option>
                   <option value="schluss">Schlussrechnung</option>
                 </select>
-                <label className="text-xs text-slate-400">USt-Satz</label>
+                <label className="text-xs text-[#86868b]">USt-Satz</label>
                 <select
                   value={taxRate}
                   onChange={(e) => setTaxRate(Number(e.target.value))}
-                  className="px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-sm text-white focus:outline-none focus:border-amber-500"
+                  className="px-3 py-2 bg-black/10 border border-black/10 rounded-xl text-sm text-[#1d1d1f] focus:outline-none focus:border-[#e8590c]"
                 >
                   <option value={19}>19 %</option>
                   <option value={7}>7 %</option>
@@ -696,15 +696,15 @@ function RechnungenContent() {
                   value={notes}
                   onChange={(e) => setNotes(e.target.value)}
                   placeholder="Hinweis (optional)"
-                  className="px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-sm text-white focus:outline-none focus:border-amber-500"
+                  className="px-3 py-2 bg-black/10 border border-black/10 rounded-xl text-sm text-[#1d1d1f] focus:outline-none focus:border-[#e8590c]"
                 />
               </div>
               <div className="text-right">
-                <p className="text-xs text-slate-400">
+                <p className="text-xs text-[#86868b]">
                   Netto {fmtEur(net)} € · USt {fmtEur(tax)} €
                 </p>
-                <p className="text-xl font-bold text-white flex items-center gap-1 justify-end">
-                  <Euro className="h-5 w-5 text-amber-400" /> {fmtEur(net + tax)}
+                <p className="text-xl font-bold text-[#1d1d1f] flex items-center gap-1 justify-end">
+                  <Euro className="h-5 w-5 text-[#e8590c]" /> {fmtEur(net + tax)}
                 </p>
               </div>
             </div>
@@ -712,7 +712,7 @@ function RechnungenContent() {
             <button
               onClick={handleSave}
               disabled={saving}
-              className="w-full rounded-lg bg-amber-500 hover:bg-amber-400 disabled:opacity-50 py-3 font-bold text-slate-900 transition-colors"
+              className="w-full rounded-xl bg-[#e8590c] hover:bg-[#d9480f] disabled:opacity-50 py-3 font-bold text-white transition-colors"
             >
               {saving ? 'Speichert…' : 'Rechnung anlegen (Nummer wird automatisch vergeben)'}
             </button>
@@ -720,19 +720,19 @@ function RechnungenContent() {
         )}
 
         {/* Liste */}
-        <div className="bg-slate-800 rounded-xl border border-blue-500/20 overflow-hidden">
+        <div className="bg-[#f5f5f7] rounded-xl border border-blue-500/20 overflow-hidden">
           {loading ? (
-            <p className="p-6 text-slate-400">Lade Rechnungen…</p>
+            <p className="p-6 text-[#86868b]">Lade Rechnungen…</p>
           ) : error ? (
-            <p className="p-6 text-red-400">Fehler: {error}</p>
+            <p className="p-6 text-red-600">Fehler: {error}</p>
           ) : invoices.length === 0 ? (
-            <p className="p-6 text-slate-400">
+            <p className="p-6 text-[#86868b]">
               Noch keine Rechnungen. Erstelle die erste über „Neue Rechnung" – oder direkt aus einem angenommenen Angebot (Aufmaß → Schritt 6).
             </p>
           ) : (
             <table className="w-full text-sm">
               <thead>
-                <tr className="text-left text-slate-400 border-b border-slate-700">
+                <tr className="text-left text-[#86868b] border-b border-black/10">
                   <th className="p-4">Nummer</th>
                   <th className="p-4">Kunde</th>
                   <th className="p-4">Datum</th>
@@ -745,23 +745,23 @@ function RechnungenContent() {
                 {invoices.map((inv) => {
                   const effStatus = isOverdue(inv) ? 'ueberfaellig' : inv.status;
                   return (
-                    <tr key={inv.id} className="border-b border-slate-700/50 hover:bg-slate-700/30">
-                      <td className="p-4 font-mono text-amber-300">
+                    <tr key={inv.id} className="border-b border-black/10/50 hover:bg-black/10/30">
+                      <td className="p-4 font-mono text-[#e8590c]">
                         {inv.invoice_number}
                         {inv.invoice_type && inv.invoice_type !== 'standard' && (
-                          <span className="ml-2 text-[10px] font-sans px-1.5 py-0.5 rounded bg-blue-500/20 text-blue-300 border border-blue-500/40">
+                          <span className="ml-2 text-[10px] font-sans px-1.5 py-0.5 rounded bg-blue-500/20 text-blue-700 border border-blue-500/40">
                             {inv.invoice_type === 'abschlag' ? 'Abschlag' : 'Schluss'}
                           </span>
                         )}
                         {(inv.reminder_level || 0) > 0 && (
-                          <span className="ml-1 text-[10px] font-sans px-1.5 py-0.5 rounded bg-red-500/20 text-red-300 border border-red-500/40">
+                          <span className="ml-1 text-[10px] font-sans px-1.5 py-0.5 rounded bg-red-500/20 text-red-700 border border-red-500/40">
                             {inv.reminder_level}. Mahnung
                           </span>
                         )}
                       </td>
-                      <td className="p-4 text-white">{inv.customer_name}</td>
-                      <td className="p-4 text-slate-300">{fmtDate(inv.invoice_date)}</td>
-                      <td className="p-4 text-right text-white">{fmtEur(Number(inv.gross_amount))} €</td>
+                      <td className="p-4 text-[#1d1d1f]">{inv.customer_name}</td>
+                      <td className="p-4 text-[#424245]">{fmtDate(inv.invoice_date)}</td>
+                      <td className="p-4 text-right text-[#1d1d1f]">{fmtEur(Number(inv.gross_amount))} €</td>
                       <td className="p-4">
                         <select
                           value={inv.status}
@@ -769,7 +769,7 @@ function RechnungenContent() {
                           className={`px-2 py-1 rounded-full text-xs font-semibold border bg-transparent ${STATUS_BADGE[effStatus]}`}
                         >
                           {Object.entries(STATUS_LABEL).map(([v, l]) => (
-                            <option key={v} value={v} className="bg-slate-800 text-white">
+                            <option key={v} value={v} className="bg-[#f5f5f7] text-[#1d1d1f]">
                               {l}
                             </option>
                           ))}
@@ -780,7 +780,7 @@ function RechnungenContent() {
                           <button
                             onClick={() => handlePDF(inv)}
                             title="Rechnungs-PDF herunterladen"
-                            className="p-2 rounded-lg bg-slate-700 hover:bg-slate-600 text-slate-300 transition-colors"
+                            className="p-2 rounded-xl bg-black/10 hover:bg-black/15 text-[#424245] transition-colors"
                           >
                             <Download className="h-4 w-4" />
                           </button>
@@ -788,7 +788,7 @@ function RechnungenContent() {
                             <button
                               onClick={() => handleSendMail(inv)}
                               title="Rechnung per E-Mail versenden"
-                              className="p-2 rounded-lg bg-blue-600/30 hover:bg-blue-600/50 text-blue-300 transition-colors"
+                              className="p-2 rounded-xl bg-blue-600/30 hover:bg-blue-600/50 text-blue-700 transition-colors"
                             >
                               <Mail className="h-4 w-4" />
                             </button>
@@ -797,7 +797,7 @@ function RechnungenContent() {
                             <button
                               onClick={() => handleMahnung(inv)}
                               title="Mahnung erstellen (PDF + optional E-Mail)"
-                              className="p-2 rounded-lg bg-amber-600/30 hover:bg-amber-600/50 text-amber-300 transition-colors"
+                              className="p-2 rounded-xl bg-amber-600/30 hover:bg-amber-600/50 text-[#e8590c] transition-colors"
                             >
                               <AlertTriangle className="h-4 w-4" />
                             </button>
@@ -807,14 +807,14 @@ function RechnungenContent() {
                               <button
                                 onClick={() => handleStatus(inv, 'bezahlt')}
                                 title="Als bezahlt markieren"
-                                className="p-2 rounded-lg bg-emerald-600/30 hover:bg-emerald-600/50 text-emerald-300 transition-colors"
+                                className="p-2 rounded-xl bg-emerald-600/30 hover:bg-emerald-600/50 text-emerald-700 transition-colors"
                               >
                                 <Check className="h-4 w-4" />
                               </button>
                               <button
                                 onClick={() => handleDelete(inv)}
                                 title="Rechnung löschen"
-                                className="p-2 rounded-lg bg-red-600/30 hover:bg-red-600/50 text-red-300 transition-colors"
+                                className="p-2 rounded-xl bg-red-600/30 hover:bg-red-600/50 text-red-700 transition-colors"
                               >
                                 <Trash2 className="h-4 w-4" />
                               </button>
@@ -830,7 +830,7 @@ function RechnungenContent() {
           )}
         </div>
 
-        <p className="text-xs text-slate-500">
+        <p className="text-xs text-[#86868b]">
           DATEV-Export: Buchungsstapel im EXTF-Format (Formatversion 700, SKR 03, Erlöskonto {DATEV_ERLOESKONTO_19}).
           Berater-/Mandantennummer und Konten bitte vor dem ersten Import mit dem Steuerberater abstimmen.
         </p>
@@ -841,7 +841,7 @@ function RechnungenContent() {
 
 export default function RechnungenPage() {
   return (
-    <Suspense fallback={<div className="min-h-screen bg-[#0f172a] p-8 text-slate-400">Lade…</div>}>
+    <Suspense fallback={<div className="min-h-screen bg-[#fbfbfd] p-8 text-[#86868b]">Lade…</div>}>
       <RechnungenContent />
     </Suspense>
   );

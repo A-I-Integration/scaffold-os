@@ -64,22 +64,22 @@ export default function Schritt4Page() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-900 text-white p-6">
+    <div className="min-h-screen bg-white text-[#1d1d1f] p-6">
       <div className="max-w-2xl mx-auto">
-        <button onClick={zurueck} className="text-slate-400 hover:text-white text-sm mb-2">← Zurück</button>
+        <button onClick={zurueck} className="text-[#86868b] hover:text-[#1d1d1f] text-sm mb-2">← Zurück</button>
         <h1 className="text-3xl font-bold mb-2">🛡️ Sicherheit & Umgebung</h1>
-        <p className="text-slate-400 mb-2">Baustelle: Schritt 4 von 6</p>
+        <p className="text-[#86868b] mb-2">Baustelle: Schritt 4 von 6</p>
         {step1Data && (
-          <div className="bg-slate-800/50 rounded-lg p-3 mb-6 text-sm text-slate-400">
-            <span className="text-slate-300 font-medium">{step1Data.name}</span> · {step1Data.adresse}
+          <div className="bg-black/5 rounded-xl p-3 mb-6 text-sm text-[#86868b]">
+            <span className="text-[#424245] font-medium">{step1Data.name}</span> · {step1Data.adresse}
           </div>
         )}
 
-        <div className="bg-slate-800 rounded-xl p-6 space-y-6">
+        <div className="bg-[#f5f5f7] rounded-xl p-6 space-y-6">
 
           {/* Ankerung */}
           <div>
-            <label className="block text-sm font-medium mb-3 text-slate-300">Ankerung</label>
+            <label className="block text-sm font-medium mb-3 text-[#424245]">Ankerung</label>
             <div className="grid grid-cols-2 gap-3">
               {[
                 { id: 'fassade', name: 'Fassadenanker', desc: 'Standard' },
@@ -88,7 +88,7 @@ export default function Schritt4Page() {
                 { id: 'gewicht', name: 'Gewichtsanker', desc: 'Ohne Bohren' },
               ].map(a => (
                 <button key={a.id} onClick={() => setForm({...form, ankerung: a.id})}
-                  className={`p-3 rounded-lg border text-left transition ${form.ankerung === a.id ? 'bg-orange-600/20 border-orange-500 text-orange-300' : 'bg-slate-700 border-slate-600 text-slate-300'}`}>
+                  className={`p-3 rounded-xl border text-left transition ${form.ankerung === a.id ? 'bg-[#e8590c]/10 border-[#e8590c] text-[#e8590c]' : 'bg-black/10 border-black/10 text-[#424245]'}`}>
                   <div className="font-semibold text-sm">{a.name}</div>
                   <div className="text-xs opacity-70">{a.desc}</div>
                 </button>
@@ -98,9 +98,9 @@ export default function Schritt4Page() {
 
           {/* Ankerabstand */}
           <div>
-            <label className="block text-sm font-medium mb-2 text-slate-300">Ankerabstand (m)</label>
+            <label className="block text-sm font-medium mb-2 text-[#424245]">Ankerabstand (m)</label>
             <select value={form.ankerAbstand} onChange={e => setForm({...form, ankerAbstand: e.target.value})}
-              className="w-full bg-slate-700 border border-slate-600 rounded-lg px-4 py-2 text-white">
+              className="w-full bg-black/10 border border-black/10 rounded-xl px-4 py-2 text-[#1d1d1f]">
               <option value="2.0">2,00 m</option>
               <option value="2.5">2,50 m</option>
               <option value="3.0">3,00 m</option>
@@ -110,7 +110,7 @@ export default function Schritt4Page() {
 
           {/* Untergrund */}
           <div>
-            <label className="block text-sm font-medium mb-3 text-slate-300">Untergrund</label>
+            <label className="block text-sm font-medium mb-3 text-[#424245]">Untergrund</label>
             <div className="grid grid-cols-2 gap-3 mb-3">
               {[
                 { id: 'beton', name: 'Beton / Estrich' },
@@ -121,7 +121,7 @@ export default function Schritt4Page() {
                 { id: 'kies', name: 'Kies' },
               ].map(u => (
                 <button key={u.id} onClick={() => setForm({...form, untergrund: u.id})}
-                  className={`p-3 rounded-lg border text-sm transition ${form.untergrund === u.id ? 'bg-orange-600/20 border-orange-500 text-orange-300' : 'bg-slate-700 border-slate-600 text-slate-300'}`}>
+                  className={`p-3 rounded-xl border text-sm transition ${form.untergrund === u.id ? 'bg-[#e8590c]/10 border-[#e8590c] text-[#e8590c]' : 'bg-black/10 border-black/10 text-[#424245]'}`}>
                   {u.name}
                 </button>
               ))}
@@ -134,7 +134,7 @@ export default function Schritt4Page() {
                 { key: 'lastverteilplatten', label: 'Lastverteilplatten erforderlich', icon: '⬜' },
               ].map((item: any) => (
                 <button key={item.key} onClick={() => setForm({...form, [item.key]: !(form as any)[item.key]})}
-                  className={`w-full p-3 rounded-lg border text-left transition flex items-center gap-3 ${(form as any)[item.key] ? 'bg-orange-600/20 border-orange-500 text-orange-300' : 'bg-slate-700 border-slate-600'}`}>
+                  className={`w-full p-3 rounded-xl border text-left transition flex items-center gap-3 ${(form as any)[item.key] ? 'bg-[#e8590c]/10 border-[#e8590c] text-[#e8590c]' : 'bg-black/10 border-black/10'}`}>
                   <span>{item.icon}</span>
                   <span className="text-sm font-medium">{item.label}</span>
                 </button>
@@ -144,7 +144,7 @@ export default function Schritt4Page() {
 
           {/* Tragfähigkeit */}
           <div>
-            <label className="block text-sm font-medium mb-2 text-slate-300">Tragfähigkeit Untergrund</label>
+            <label className="block text-sm font-medium mb-2 text-[#424245]">Tragfähigkeit Untergrund</label>
             <div className="grid grid-cols-3 gap-3">
               {[
                 { id: 'hoch', name: 'Hoch', desc: 'Beton, Asphalt' },
@@ -152,7 +152,7 @@ export default function Schritt4Page() {
                 { id: 'gering', name: 'Gering', desc: 'Erdreich, Rasen' },
               ].map(t => (
                 <button key={t.id} onClick={() => setForm({...form, tragfaehigkeit: t.id})}
-                  className={`p-3 rounded-lg border text-center transition ${form.tragfaehigkeit === t.id ? 'bg-orange-600/20 border-orange-500 text-orange-300' : 'bg-slate-700 border-slate-600 text-slate-300'}`}>
+                  className={`p-3 rounded-xl border text-center transition ${form.tragfaehigkeit === t.id ? 'bg-[#e8590c]/10 border-[#e8590c] text-[#e8590c]' : 'bg-black/10 border-black/10 text-[#424245]'}`}>
                   <div className="font-semibold text-sm">{t.name}</div>
                   <div className="text-xs opacity-70">{t.desc}</div>
                 </button>
@@ -162,7 +162,7 @@ export default function Schritt4Page() {
 
           {/* Umgebung */}
           <div>
-            <label className="block text-sm font-medium mb-3 text-slate-300">Umgebung</label>
+            <label className="block text-sm font-medium mb-3 text-[#424245]">Umgebung</label>
             <div className="grid grid-cols-1 gap-2">
               {[
                 { key: 'freileitungen', label: 'Freileitungen in der Nähe', icon: '⚡' },
@@ -177,7 +177,7 @@ export default function Schritt4Page() {
                 { key: 'kranErforderlich', label: 'Kran erforderlich', icon: '🏗️' },
               ].map((item: any) => (
                 <button key={item.key} onClick={() => setForm({...form, [item.key]: !(form as any)[item.key]})}
-                  className={`w-full p-3 rounded-lg border text-left transition flex items-center gap-3 ${(form as any)[item.key] ? 'bg-orange-600/20 border-orange-500 text-orange-300' : 'bg-slate-700 border-slate-600'}`}>
+                  className={`w-full p-3 rounded-xl border text-left transition flex items-center gap-3 ${(form as any)[item.key] ? 'bg-[#e8590c]/10 border-[#e8590c] text-[#e8590c]' : 'bg-black/10 border-black/10'}`}>
                   <span className="text-xl">{item.icon}</span>
                   <span className="text-sm font-medium">{item.label}</span>
                 </button>
@@ -188,12 +188,12 @@ export default function Schritt4Page() {
           {/* Schutzeinrichtungen */}
           <div className="space-y-3">
             <button onClick={() => setForm({...form, schutzdach: !form.schutzdach})}
-              className={`w-full p-3 rounded-lg border text-left transition flex items-center gap-3 ${form.schutzdach ? 'bg-orange-600/20 border-orange-500 text-orange-300' : 'bg-slate-700 border-slate-600'}`}>
+              className={`w-full p-3 rounded-xl border text-left transition flex items-center gap-3 ${form.schutzdach ? 'bg-[#e8590c]/10 border-[#e8590c] text-[#e8590c]' : 'bg-black/10 border-black/10'}`}>
               <span className="text-xl">☂️</span>
               <div><div className="font-semibold text-sm">Schutzdach</div><div className="text-xs opacity-70">Für Fußgänger & Nachbarn</div></div>
             </button>
             <button onClick={() => setForm({...form, fangnetz: !form.fangnetz})}
-              className={`w-full p-3 rounded-lg border text-left transition flex items-center gap-3 ${form.fangnetz ? 'bg-orange-600/20 border-orange-500 text-orange-300' : 'bg-slate-700 border-slate-600'}`}>
+              className={`w-full p-3 rounded-xl border text-left transition flex items-center gap-3 ${form.fangnetz ? 'bg-[#e8590c]/10 border-[#e8590c] text-[#e8590c]' : 'bg-black/10 border-black/10'}`}>
               <span className="text-xl">🕸️</span>
               <div><div className="font-semibold text-sm">Fangnetz</div><div className="text-xs opacity-70">Sturzschutz für Material</div></div>
             </button>
@@ -201,11 +201,11 @@ export default function Schritt4Page() {
 
           {/* Windzone */}
           <div>
-            <label className="block text-sm font-medium mb-2 text-slate-300">Windlast-Zone (DIN 1055-4)</label>
+            <label className="block text-sm font-medium mb-2 text-[#424245]">Windlast-Zone (DIN 1055-4)</label>
             <div className="grid grid-cols-4 gap-3">
               {['1','2','3','4'].map(z => (
                 <button key={z} onClick={() => setForm({...form, windzone: z})}
-                  className={`p-3 rounded-lg border text-center transition ${form.windzone === z ? 'bg-orange-600/20 border-orange-500 text-orange-300' : 'bg-slate-700 border-slate-600'}`}>
+                  className={`p-3 rounded-xl border text-center transition ${form.windzone === z ? 'bg-[#e8590c]/10 border-[#e8590c] text-[#e8590c]' : 'bg-black/10 border-black/10'}`}>
                   Zone {z}
                 </button>
               ))}
@@ -214,11 +214,11 @@ export default function Schritt4Page() {
 
           {/* Gefahren */}
           <div>
-            <label className="block text-sm font-medium mb-3 text-slate-300">Besondere Gefahren / Hinweise</label>
+            <label className="block text-sm font-medium mb-3 text-[#424245]">Besondere Gefahren / Hinweise</label>
             <div className="grid grid-cols-2 gap-3">
               {gefahrenListe.map(g => (
                 <button key={g} onClick={() => toggleGefahr(g)}
-                  className={`p-3 rounded-lg border text-left transition ${form.gefahren.includes(g) ? 'bg-red-600/20 border-red-500 text-red-300' : 'bg-slate-700 border-slate-600 text-slate-300'}`}>
+                  className={`p-3 rounded-xl border text-left transition ${form.gefahren.includes(g) ? 'bg-red-600/20 border-red-500 text-red-700' : 'bg-black/10 border-black/10 text-[#424245]'}`}>
                   ⚠️ {g}
                 </button>
               ))}
@@ -227,16 +227,16 @@ export default function Schritt4Page() {
 
           {/* Notiz */}
           <div>
-            <label className="block text-sm font-medium mb-2 text-slate-300">Zusätzliche Hinweise</label>
+            <label className="block text-sm font-medium mb-2 text-[#424245]">Zusätzliche Hinweise</label>
             <textarea value={form.notiz} onChange={e => setForm({...form, notiz: e.target.value})}
-              className="w-full bg-slate-700 border border-slate-600 rounded-lg px-4 py-2 text-white h-24 resize-none"
+              className="w-full bg-black/10 border border-black/10 rounded-xl px-4 py-2 text-[#1d1d1f] h-24 resize-none"
               placeholder="z.B. Anlieferung nur Mo–Fr ab 7 Uhr..." />
           </div>
 
           {/* Buttons */}
           <div className="flex gap-3 pt-4">
-            <button onClick={zurueck} className="flex-1 bg-slate-700 hover:bg-slate-600 text-white font-semibold py-3 px-4 rounded-lg">← Zurück</button>
-            <button onClick={handleWeiter} className="flex-1 bg-orange-600 hover:bg-orange-700 text-white font-semibold py-3 px-4 rounded-lg">Weiter →</button>
+            <button onClick={zurueck} className="flex-1 bg-black/10 hover:bg-black/15 text-[#1d1d1f] font-semibold py-3 px-4 rounded-xl">← Zurück</button>
+            <button onClick={handleWeiter} className="flex-1 bg-orange-600 hover:bg-orange-700 text-white font-semibold py-3 px-4 rounded-xl">Weiter →</button>
           </div>
         </div>
       </div>

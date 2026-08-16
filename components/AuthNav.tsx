@@ -85,7 +85,7 @@ export default function AuthNav() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16">
             <div className="flex items-center">
-              <span className="text-white font-bold text-xl">SCAFFOLD OS</span>
+              <span className="text-[#1d1d1f] font-bold text-xl">SCAFFOLD OS</span>
             </div>
             <div className="animate-pulse bg-blue-800 h-8 w-32 rounded"></div>
           </div>
@@ -100,7 +100,7 @@ export default function AuthNav() {
         <div className="flex items-center justify-between h-16">
           {/* Logo & Links */}
           <div className="flex items-center gap-8">
-            <Link href="/" className="text-white font-bold text-xl tracking-tight">
+            <Link href="/" className="text-[#1d1d1f] font-bold text-xl tracking-tight">
               SCAFFOLD OS
             </Link>
             
@@ -154,7 +154,7 @@ export default function AuthNav() {
             {user ? (
               <>
                 <div className="hidden sm:flex items-center gap-2">
-                  <span className="text-blue-200 text-sm">
+                  <span className="text-blue-800 text-sm">
                     {profile?.full_name || user.email}
                   </span>
                   <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${

@@ -41,7 +41,7 @@ const STATUS_LABEL: Record<string, string> = {
   planned: 'Geplant', in_progress: 'Unterwegs', completed: 'Abgeschlossen', cancelled: 'Abgebrochen',
 };
 const STATUS_CLASS: Record<string, string> = {
-  planned: 'bg-blue-600', in_progress: 'bg-amber-600', completed: 'bg-emerald-600', cancelled: 'bg-slate-600',
+  planned: 'bg-blue-600', in_progress: 'bg-amber-600', completed: 'bg-emerald-600', cancelled: 'bg-black/20',
 };
 const STOP_STATUS_LABEL: Record<string, string> = {
   pending: 'Offen', arrived: 'Angekommen', completed: 'Erledigt', skipped: 'Übersprungen',
@@ -226,63 +226,63 @@ export default function TourenPage() {
   }
   const bundleHint = Object.entries(addrCount).filter(([, n]) => n > 1);
 
-  const inputCls = 'w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-white focus:border-amber-500 focus:outline-none';
+  const inputCls = 'w-full bg-[#f5f5f7] border border-black/10 rounded-lg px-3 py-2 text-[#1d1d1f] focus:border-[#e8590c] focus:outline-none';
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-slate-900 text-white flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-amber-500"></div>
+      <div className="min-h-screen bg-white text-[#1d1d1f] flex items-center justify-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#e8590c]"></div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-slate-900 text-white">
+    <div className="min-h-screen bg-white text-[#1d1d1f]">
       <div className="max-w-6xl mx-auto p-6">
         <div className="flex items-center justify-between mb-6">
           <div>
-            <h1 className="text-3xl font-bold text-amber-500">🗺️ Touren & Disposition</h1>
-            <p className="text-slate-400 text-sm mt-1">Tagesplanung, Tour-Überwachung und Stundenauswertung</p>
+            <h1 className="text-3xl font-bold text-[#e8590c]">🗺️ Touren & Disposition</h1>
+            <p className="text-[#86868b] text-sm mt-1">Tagesplanung, Tour-Überwachung und Stundenauswertung</p>
           </div>
-          <button onClick={loadAll} className="bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-lg px-4 py-2 text-sm transition">
+          <button onClick={loadAll} className="bg-[#f5f5f7] hover:bg-black/10 border border-black/10 rounded-xl px-4 py-2 text-sm transition">
             ↻ Aktualisieren
           </button>
         </div>
 
         {error && (
-          <div className="mb-4 bg-red-900/40 border border-red-700 rounded-lg p-3 text-sm text-red-200">
+          <div className="mb-4 bg-red-900/40 border border-red-200 rounded-xl p-3 text-sm text-red-700">
             {error} – Läuft das Phase-4-SQL in Supabase schon?
           </div>
         )}
 
         {/* KPIs */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-          <div className="bg-slate-800 border border-slate-700 rounded-xl p-4">
+          <div className="bg-[#f5f5f7] border border-black/10 rounded-xl p-4">
             <div className="text-2xl font-bold">{toursToday.length}</div>
-            <div className="text-slate-400 text-sm">Touren heute</div>
+            <div className="text-[#86868b] text-sm">Touren heute</div>
           </div>
-          <div className="bg-slate-800 border border-slate-700 rounded-xl p-4">
-            <div className="text-2xl font-bold text-blue-400">{planned.length}</div>
-            <div className="text-slate-400 text-sm">Geplant</div>
+          <div className="bg-[#f5f5f7] border border-black/10 rounded-xl p-4">
+            <div className="text-2xl font-bold text-blue-600">{planned.length}</div>
+            <div className="text-[#86868b] text-sm">Geplant</div>
           </div>
-          <div className="bg-slate-800 border border-slate-700 rounded-xl p-4">
-            <div className="text-2xl font-bold text-amber-400">{inProgress.length}</div>
-            <div className="text-slate-400 text-sm">Unterwegs</div>
+          <div className="bg-[#f5f5f7] border border-black/10 rounded-xl p-4">
+            <div className="text-2xl font-bold text-[#e8590c]">{inProgress.length}</div>
+            <div className="text-[#86868b] text-sm">Unterwegs</div>
           </div>
-          <div className="bg-slate-800 border border-slate-700 rounded-xl p-4">
-            <div className="text-2xl font-bold text-orange-400">{transports.length}</div>
-            <div className="text-slate-400 text-sm">Offene Transporte</div>
+          <div className="bg-[#f5f5f7] border border-black/10 rounded-xl p-4">
+            <div className="text-2xl font-bold text-[#e8590c]">{transports.length}</div>
+            <div className="text-[#86868b] text-sm">Offene Transporte</div>
           </div>
         </div>
 
         {/* Tabs */}
-        <div className="flex gap-2 mb-6 border-b border-slate-700 pb-0">
+        <div className="flex gap-2 mb-6 border-b border-black/10 pb-0">
           {([['touren', '🚛 Touren'], ['neu', '➕ Neue Tour'], ['stunden', '⏱️ Stundenauswertung']] as [Tab, string][]).map(([key, label]) => (
             <button
               key={key}
               onClick={() => setTab(key)}
               className={`px-4 py-2 rounded-t-lg text-sm font-medium transition ${
-                tab === key ? 'bg-slate-800 text-amber-400 border border-b-0 border-slate-700' : 'text-slate-400 hover:text-white'
+                tab === key ? 'bg-[#f5f5f7] text-[#e8590c] border border-b-0 border-black/10' : 'text-[#86868b] hover:text-[#1d1d1f]'
               }`}
             >
               {label}
@@ -294,60 +294,60 @@ export default function TourenPage() {
         {tab === 'touren' && (
           <div className="space-y-4">
             {tours.length === 0 && (
-              <div className="bg-slate-800 border border-slate-700 rounded-xl p-8 text-center text-slate-400">
+              <div className="bg-[#f5f5f7] border border-black/10 rounded-xl p-8 text-center text-[#86868b]">
                 Noch keine Touren. Lege unter „Neue Tour" die erste an.
               </div>
             )}
             {tours.map(tour => (
-              <div key={tour.id} className="bg-slate-800 border border-slate-700 rounded-xl overflow-hidden">
+              <div key={tour.id} className="bg-[#f5f5f7] border border-black/10 rounded-xl overflow-hidden">
                 <div className="p-4 flex flex-wrap items-center gap-4">
-                  <button onClick={() => setExpandedTour(expandedTour === tour.id ? null : tour.id)} className="text-slate-400 hover:text-white w-6">
+                  <button onClick={() => setExpandedTour(expandedTour === tour.id ? null : tour.id)} className="text-[#86868b] hover:text-[#1d1d1f] w-6">
                     {expandedTour === tour.id ? '▾' : '▸'}
                   </button>
                   <div className="flex-1 min-w-[200px]">
                     <div className="font-semibold">{tour.name}</div>
-                    <div className="text-slate-400 text-sm">
+                    <div className="text-[#86868b] text-sm">
                       {new Date(tour.planned_date + 'T00:00:00').toLocaleDateString('de-DE', { weekday: 'short', day: '2-digit', month: '2-digit' })}
                       {tour.planned_start_time ? ` · ab ${tour.planned_start_time}` : ''}
                       {` · ${tour.stops.length} Stopp${tour.stops.length === 1 ? '' : 's'}`}
                     </div>
                   </div>
-                  <div className="text-sm text-slate-300">
+                  <div className="text-sm text-[#424245]">
                     🚛 {tour.vehicle?.name || '–'} {tour.vehicle?.license_plate ? `(${tour.vehicle.license_plate})` : ''}
-                    <span className="mx-2 text-slate-600">|</span>
+                    <span className="mx-2 text-[#86868b]">|</span>
                     👷 {tour.driver?.name || '–'}
                   </div>
-                  <span className={`px-3 py-1 rounded-full text-xs font-semibold ${STATUS_CLASS[tour.status] || 'bg-slate-600'}`}>
+                  <span className={`px-3 py-1 rounded-full text-xs font-semibold ${STATUS_CLASS[tour.status] || 'bg-black/20'}`}>
                     {STATUS_LABEL[tour.status] || tour.status}
                   </span>
                   <div className="flex gap-2">
                     {tour.status === 'planned' && (
-                      <button onClick={() => setTourStatus(tour, 'in_progress')} className="bg-amber-600 hover:bg-amber-500 rounded-lg px-3 py-1.5 text-sm transition">
+                      <button onClick={() => setTourStatus(tour, 'in_progress')} className="bg-[#e8590c] hover:bg-[#d9480f] text-white rounded-xl px-3 py-1.5 text-sm transition">
                         Starten
                       </button>
                     )}
                     {tour.status === 'in_progress' && (
-                      <button onClick={() => setTourStatus(tour, 'completed')} className="bg-emerald-600 hover:bg-emerald-500 rounded-lg px-3 py-1.5 text-sm transition">
+                      <button onClick={() => setTourStatus(tour, 'completed')} className="bg-emerald-600 hover:bg-emerald-500 rounded-xl px-3 py-1.5 text-sm transition">
                         Abschließen
                       </button>
                     )}
                   </div>
                 </div>
                 {expandedTour === tour.id && (
-                  <div className="border-t border-slate-700 p-4 bg-slate-900/50">
-                    {tour.stops.length === 0 && <div className="text-slate-500 text-sm">Keine Stopps.</div>}
+                  <div className="border-t border-black/10 p-4 bg-white/50">
+                    {tour.stops.length === 0 && <div className="text-[#86868b] text-sm">Keine Stopps.</div>}
                     <ol className="space-y-2">
                       {tour.stops.map(stop => (
                         <li key={stop.id} className="flex items-center gap-3 text-sm">
-                          <span className="w-7 h-7 rounded-full bg-slate-700 flex items-center justify-center text-xs font-bold shrink-0">
+                          <span className="w-7 h-7 rounded-full bg-black/10 flex items-center justify-center text-xs font-bold shrink-0">
                             {stop.stop_order}
                           </span>
                           <span className="flex-1">{stop.address}</span>
-                          <span className="text-slate-400">
+                          <span className="text-[#86868b]">
                             {stop.transport_order?.inventory?.name || ''}
                             {stop.transport_order?.quantity ? ` × ${stop.transport_order.quantity}` : ''}
                           </span>
-                          <span className={`px-2 py-0.5 rounded text-xs ${stop.status === 'completed' ? 'bg-emerald-700' : 'bg-slate-700'}`}>
+                          <span className={`px-2 py-0.5 rounded text-xs ${stop.status === 'completed' ? 'bg-emerald-700' : 'bg-black/10'}`}>
                             {STOP_STATUS_LABEL[stop.status] || stop.status}
                           </span>
                         </li>
@@ -364,62 +364,62 @@ export default function TourenPage() {
         {tab === 'neu' && (
           <>
           <div className="grid md:grid-cols-2 gap-6">
-            <div className="bg-slate-800 border border-slate-700 rounded-xl p-5 space-y-4">
+            <div className="bg-[#f5f5f7] border border-black/10 rounded-xl p-5 space-y-4">
               <h2 className="font-semibold text-lg">Tour anlegen</h2>
               <div>
-                <label className="block text-sm text-slate-400 mb-1">Tour-Name *</label>
+                <label className="block text-sm text-[#86868b] mb-1">Tour-Name *</label>
                 <input value={fName} onChange={e => setFName(e.target.value)} placeholder="z. B. Tour Nord Vormittag" className={inputCls} />
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-sm text-slate-400 mb-1">Datum *</label>
+                  <label className="block text-sm text-[#86868b] mb-1">Datum *</label>
                   <input type="date" value={fDate} onChange={e => setFDate(e.target.value)} className={inputCls} />
                 </div>
                 <div>
-                  <label className="block text-sm text-slate-400 mb-1">Startzeit</label>
+                  <label className="block text-sm text-[#86868b] mb-1">Startzeit</label>
                   <input type="time" value={fTime} onChange={e => setFTime(e.target.value)} className={inputCls} />
                 </div>
               </div>
               <div>
-                <label className="block text-sm text-slate-400 mb-1">Fahrzeug *</label>
+                <label className="block text-sm text-[#86868b] mb-1">Fahrzeug *</label>
                 <select value={fVehicle} onChange={e => setFVehicle(e.target.value)} className={inputCls}>
                   <option value="">– wählen –</option>
                   {vehicles.map(v => <option key={v.id} value={v.id}>{v.name} ({v.license_plate})</option>)}
                 </select>
-                {vehicles.length === 0 && <p className="text-xs text-amber-400 mt-1">Keine Fahrzeuge – Phase-4-SQL ausführen bzw. Fahrzeuge anlegen.</p>}
+                {vehicles.length === 0 && <p className="text-xs text-[#e8590c] mt-1">Keine Fahrzeuge – Phase-4-SQL ausführen bzw. Fahrzeuge anlegen.</p>}
               </div>
               <div>
-                <label className="block text-sm text-slate-400 mb-1">Fahrer *</label>
+                <label className="block text-sm text-[#86868b] mb-1">Fahrer *</label>
                 <select value={fDriver} onChange={e => setFDriver(e.target.value)} className={inputCls}>
                   <option value="">– wählen –</option>
                   {drivers.map(d => <option key={d.id} value={d.id}>{d.name}{d.employee ? ` (${d.employee.first_name} ${d.employee.last_name})` : ''}</option>)}
                 </select>
-                {drivers.length === 0 && <p className="text-xs text-amber-400 mt-1">Keine Fahrer – Phase-4-SQL enthält Beispiel-Datensätze.</p>}
+                {drivers.length === 0 && <p className="text-xs text-[#e8590c] mt-1">Keine Fahrer – Phase-4-SQL enthält Beispiel-Datensätze.</p>}
               </div>
               {fMessage && (
-                <div className={`rounded-lg p-3 text-sm ${fMessage.startsWith('✅') ? 'bg-emerald-900/40 border border-emerald-700 text-emerald-200' : 'bg-red-900/40 border border-red-700 text-red-200'}`}>
+                <div className={`rounded-xl p-3 text-sm ${fMessage.startsWith('✅') ? 'bg-emerald-50 border border-emerald-200 text-emerald-700' : 'bg-red-50 border border-red-200 text-red-700'}`}>
                   {fMessage}
                 </div>
               )}
               <button
                 onClick={createTour}
                 disabled={fSaving}
-                className="w-full bg-amber-600 hover:bg-amber-500 disabled:opacity-50 rounded-lg px-4 py-3 font-semibold transition"
+                className="w-full bg-[#e8590c] hover:bg-[#d9480f] text-white disabled:opacity-50 rounded-xl px-4 py-3 font-semibold transition"
               >
                 {fSaving ? 'Lege an…' : `Tour anlegen (${fSelected.length} Transport${fSelected.length === 1 ? '' : 'e'})`}
               </button>
             </div>
 
-            <div className="bg-slate-800 border border-slate-700 rounded-xl p-5">
+            <div className="bg-[#f5f5f7] border border-black/10 rounded-xl p-5">
               <h2 className="font-semibold text-lg mb-1">Offene Transportaufträge</h2>
-              <p className="text-slate-400 text-sm mb-3">Reihenfolge der Auswahl = Reihenfolge der Stopps.</p>
+              <p className="text-[#86868b] text-sm mb-3">Reihenfolge der Auswahl = Reihenfolge der Stopps.</p>
               {bundleHint.length > 0 && (
-                <div className="mb-3 bg-blue-900/30 border border-blue-700 rounded-lg p-3 text-xs text-blue-200">
+                <div className="mb-3 bg-blue-50 border border-blue-200 rounded-xl p-3 text-xs text-blue-800">
                   💡 <strong>Leerfahrten vermeiden:</strong> {bundleHint.map(([a, n]) => `${n}× ${a}`).join(' · ')} – gleiche Adressen in eine Tour bündeln.
                 </div>
               )}
               {transports.length === 0 && (
-                <div className="text-slate-500 text-sm py-6 text-center">Keine offenen Transportaufträge.</div>
+                <div className="text-[#86868b] text-sm py-6 text-center">Keine offenen Transportaufträge.</div>
               )}
               <div className="space-y-2 max-h-[420px] overflow-y-auto pr-1">
                 {transports.map(t => {
@@ -429,16 +429,16 @@ export default function TourenPage() {
                     <button
                       key={t.id}
                       onClick={() => setFSelected(selected ? fSelected.filter(x => x !== t.id) : [...fSelected, t.id])}
-                      className={`w-full text-left rounded-lg border p-3 transition flex items-center gap-3 ${
-                        selected ? 'border-amber-500 bg-amber-500/10' : 'border-slate-700 bg-slate-900/50 hover:border-slate-500'
+                      className={`w-full text-left rounded-xl border p-3 transition flex items-center gap-3 ${
+                        selected ? 'border-[#e8590c] bg-[#e8590c]/10' : 'border-black/10 bg-white/50 hover:border-black/20'
                       }`}
                     >
-                      <span className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold shrink-0 ${selected ? 'bg-amber-500 text-black' : 'bg-slate-700'}`}>
+                      <span className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold shrink-0 ${selected ? 'bg-amber-500 text-black' : 'bg-black/10'}`}>
                         {selected ? idx + 1 : '·'}
                       </span>
                       <span className="flex-1">
                         <span className="block font-medium">{t.inventory?.name || 'Material'} × {t.quantity}</span>
-                        <span className="block text-slate-400 text-xs">
+                        <span className="block text-[#86868b] text-xs">
                           → {t.to_project?.name || 'Baustelle'}{t.to_project?.adresse ? `, ${t.to_project.adresse}` : ''}
                         </span>
                       </span>
@@ -450,9 +450,9 @@ export default function TourenPage() {
           </div>
 
           {/* Fahrer ↔ Mitarbeiter verknüpfen (Phase 6) */}
-          <div className="mt-6 bg-slate-800 border border-slate-700 rounded-xl p-5">
+          <div className="mt-6 bg-[#f5f5f7] border border-black/10 rounded-xl p-5">
             <h2 className="font-semibold text-lg mb-1">👷 Fahrer ↔ Mitarbeiter verknüpfen</h2>
-            <p className="text-slate-400 text-sm mb-4">
+            <p className="text-[#86868b] text-sm mb-4">
               Verknüpfte Mitarbeiter sehen in „Meine Touren" automatisch nur ihre eigenen Fahrten.
             </p>
             <div className="space-y-3">
@@ -469,19 +469,19 @@ export default function TourenPage() {
                       <option key={emp.id} value={emp.id}>{emp.first_name} {emp.last_name}</option>
                     ))}
                   </select>
-                  {d.employee && <span className="text-emerald-400 text-sm shrink-0">✅ verknüpft</span>}
+                  {d.employee && <span className="text-emerald-600 text-sm shrink-0">✅ verknüpft</span>}
                 </div>
               ))}
-              {drivers.length === 0 && <p className="text-slate-500 text-sm">Keine Fahrer vorhanden.</p>}
+              {drivers.length === 0 && <p className="text-[#86868b] text-sm">Keine Fahrer vorhanden.</p>}
             </div>
-            <div className="mt-5 pt-4 border-t border-slate-700 flex flex-col sm:flex-row gap-2">
+            <div className="mt-5 pt-4 border-t border-black/10 flex flex-col sm:flex-row gap-2">
               <input
                 value={newDriverName}
                 onChange={e => setNewDriverName(e.target.value)}
                 placeholder="Neuer Fahrer – Name"
                 className={inputCls}
               />
-              <button onClick={createDriver} className="shrink-0 bg-slate-700 hover:bg-slate-600 rounded-lg px-4 py-2 text-sm font-semibold transition">
+              <button onClick={createDriver} className="shrink-0 bg-black/10 hover:bg-black/15 rounded-xl px-4 py-2 text-sm font-semibold transition">
                 + Fahrer anlegen
               </button>
             </div>
@@ -492,19 +492,19 @@ export default function TourenPage() {
         {/* ═══ TAB: STUNDENAUSWERTUNG ═══ */}
         {tab === 'stunden' && (
           <div className="space-y-4">
-            <div className="bg-slate-800 border border-slate-700 rounded-xl p-4 flex flex-wrap items-end gap-4">
+            <div className="bg-[#f5f5f7] border border-black/10 rounded-xl p-4 flex flex-wrap items-end gap-4">
               <div>
-                <label className="block text-sm text-slate-400 mb-1">Von</label>
+                <label className="block text-sm text-[#86868b] mb-1">Von</label>
                 <input type="date" value={sFrom} onChange={e => setSFrom(e.target.value)} className={inputCls} />
               </div>
               <div>
-                <label className="block text-sm text-slate-400 mb-1">Bis</label>
+                <label className="block text-sm text-[#86868b] mb-1">Bis</label>
                 <input type="date" value={sTo} onChange={e => setSTo(e.target.value)} className={inputCls} />
               </div>
-              <button onClick={loadEntries} className="bg-slate-700 hover:bg-slate-600 rounded-lg px-4 py-2 text-sm transition">
+              <button onClick={loadEntries} className="bg-black/10 hover:bg-black/15 rounded-xl px-4 py-2 text-sm transition">
                 Laden
               </button>
-              <button onClick={exportCSV} disabled={entries.length === 0} className="bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 rounded-lg px-4 py-2 text-sm font-semibold transition ml-auto">
+              <button onClick={exportCSV} disabled={entries.length === 0} className="bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 rounded-xl px-4 py-2 text-sm font-semibold transition ml-auto">
                 ⬇ CSV-Export
               </button>
             </div>
@@ -512,13 +512,13 @@ export default function TourenPage() {
             {/* Summen je Mitarbeiter */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
               {Object.values(hoursPerEmployee).map(e => (
-                <div key={e.name} className="bg-slate-800 border border-slate-700 rounded-xl p-4">
+                <div key={e.name} className="bg-[#f5f5f7] border border-black/10 rounded-xl p-4">
                   <div className="font-semibold truncate">{e.name}</div>
-                  <div className="text-2xl font-bold text-amber-400">{e.hours.toLocaleString('de-DE')} h</div>
+                  <div className="text-2xl font-bold text-[#e8590c]">{e.hours.toLocaleString('de-DE')} h</div>
                 </div>
               ))}
               {entries.length === 0 && !sLoading && (
-                <div className="col-span-full text-slate-500 text-sm py-4 text-center">
+                <div className="col-span-full text-[#86868b] text-sm py-4 text-center">
                   Keine Einträge im Zeitraum. Zeiterfassung läuft über „Meine Touren" (Kommen/Gehen).
                 </div>
               )}
@@ -526,9 +526,9 @@ export default function TourenPage() {
 
             {/* Einzelnachweis */}
             {entries.length > 0 && (
-              <div className="bg-slate-800 border border-slate-700 rounded-xl overflow-hidden">
+              <div className="bg-[#f5f5f7] border border-black/10 rounded-xl overflow-hidden">
                 <table className="w-full text-sm">
-                  <thead className="bg-slate-900/60 text-slate-400 text-left">
+                  <thead className="bg-white/80 text-[#86868b] text-left">
                     <tr>
                       <th className="px-4 py-2">Datum</th>
                       <th className="px-4 py-2">Mitarbeiter</th>
@@ -540,13 +540,13 @@ export default function TourenPage() {
                   </thead>
                   <tbody>
                     {entries.map(e => (
-                      <tr key={e.id} className="border-t border-slate-700">
+                      <tr key={e.id} className="border-t border-black/10">
                         <td className="px-4 py-2">{new Date(e.work_date + 'T00:00:00').toLocaleDateString('de-DE')}</td>
                         <td className="px-4 py-2">{e.employee ? `${e.employee.first_name} ${e.employee.last_name}` : '–'}</td>
                         <td className="px-4 py-2">{fmtTime(e.start_time)}</td>
                         <td className="px-4 py-2">{fmtTime(e.end_time)}</td>
                         <td className="px-4 py-2 text-right font-semibold">{e.hours !== null ? e.hours.toLocaleString('de-DE') : '–'}</td>
-                        <td className="px-4 py-2 text-slate-400">{e.note || ''}</td>
+                        <td className="px-4 py-2 text-[#86868b]">{e.note || ''}</td>
                       </tr>
                     ))}
                   </tbody>

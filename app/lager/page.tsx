@@ -285,8 +285,8 @@ export default function LagerPage() {
             </div>
             {canManage && (
               <div className="flex gap-2">
-                <button onClick={() => { setShowTransportModal(true); setFormError(null); }} className="px-4 py-2 bg-green-600 text-white text-sm font-medium rounded-lg hover:bg-green-700 transition-colors">+ Transport</button>
-                <button onClick={() => { setShowAddModal(true); setFormError(null); }} className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors">+ Artikel</button>
+                <button onClick={() => { setShowTransportModal(true); setFormError(null); }} className="px-4 py-2 bg-green-600 text-white text-sm font-medium rounded-xl hover:bg-green-700 transition-colors">+ Transport</button>
+                <button onClick={() => { setShowAddModal(true); setFormError(null); }} className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-xl hover:bg-blue-700 transition-colors">+ Artikel</button>
               </div>
             )}
           </div>
@@ -308,8 +308,8 @@ export default function LagerPage() {
 
       {/* Content */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-        {error && <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">{error}</div>}
-        {formSuccess && <div className="mb-4 p-4 bg-green-50 border border-green-200 rounded-lg text-green-700 text-sm">{formSuccess}</div>}
+        {error && <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-xl text-red-700 text-sm">{error}</div>}
+        {formSuccess && <div className="mb-4 p-4 bg-green-50 border border-green-200 rounded-xl text-green-700 text-sm">{formSuccess}</div>}
 
         {/* ═══════════════════════════════════════════════════════════ */}
         {/* ÜBERSICHT */}
@@ -337,9 +337,9 @@ export default function LagerPage() {
                         <div><div className="font-medium text-gray-900">{item.name}</div><div className="text-sm text-gray-500">{item.sku} | {item.category}</div></div>
                         <div className="flex items-center gap-4">
                           <div className="text-right"><div className="text-sm font-medium text-gray-900">{item.quantity} {item.unit}</div><div className="text-xs text-gray-500">Min: {item.min_stock}</div></div>
-                          <span className={`px-2 py-1 rounded-full text-xs font-semibold text-white ${s.color}`}>{s.label}</span>
+                          <span className={`px-2 py-1 rounded-full text-xs font-semibold text-[#1d1d1f] ${s.color}`}>{s.label}</span>
                           {canManage && (
-                            <button onClick={() => { setReorderItem(item); setReorderQty(Math.max(item.reorder_point * 2 - item.quantity, item.min_stock)); setShowReorderModal(true); }} className="px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white text-xs font-bold rounded-lg transition-colors">
+                            <button onClick={() => { setReorderItem(item); setReorderQty(Math.max(item.reorder_point * 2 - item.quantity, item.min_stock)); setShowReorderModal(true); }} className="px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white text-xs font-bold rounded-xl transition-colors">
                               🛒 Bestellen
                             </button>
                           )}
@@ -363,9 +363,9 @@ export default function LagerPage() {
                         <div><div className="font-medium text-gray-900">{item.name}</div><div className="text-sm text-gray-500">{item.sku}</div></div>
                         <div className="flex items-center gap-4">
                           <div className="text-right"><div className="text-sm font-medium text-gray-900">{item.quantity} {item.unit}</div><div className="text-xs text-gray-500">Meldebestand: {item.reorder_point}</div></div>
-                          <span className={`px-2 py-1 rounded-full text-xs font-semibold text-white ${s.color}`}>{s.label}</span>
+                          <span className={`px-2 py-1 rounded-full text-xs font-semibold text-[#1d1d1f] ${s.color}`}>{s.label}</span>
                           {canManage && (
-                            <button onClick={() => { setReorderItem(item); setReorderQty(Math.max(item.reorder_point * 2 - item.quantity, 1)); setShowReorderModal(true); }} className="px-3 py-1.5 bg-yellow-500 hover:bg-yellow-600 text-white text-xs font-bold rounded-lg transition-colors">
+                            <button onClick={() => { setReorderItem(item); setReorderQty(Math.max(item.reorder_point * 2 - item.quantity, 1)); setShowReorderModal(true); }} className="px-3 py-1.5 bg-yellow-500 hover:bg-yellow-600 text-[#1d1d1f] text-xs font-bold rounded-xl transition-colors">
                               🛒 Bestellen
                             </button>
                           )}
@@ -385,16 +385,16 @@ export default function LagerPage() {
           <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
             <div className="p-4 border-b border-gray-200 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
               <div className="flex items-center gap-3 flex-1">
-                <input type="text" placeholder="Suche nach Name, SKU, Barcode..." value={searchTerm} onChange={e => { setSearchTerm(e.target.value); setScannedItem(null); }} className="w-full max-w-md px-4 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none" />
+                <input type="text" placeholder="Suche nach Name, SKU, Barcode..." value={searchTerm} onChange={e => { setSearchTerm(e.target.value); setScannedItem(null); }} className="w-full max-w-md px-4 py-2 border border-gray-300 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 outline-none" />
                 {scannedItem && <span className="px-3 py-1 bg-amber-100 text-amber-700 text-xs font-bold rounded-full">📷 Gescannt: {scannedItem.name}</span>}
               </div>
               <div className="flex gap-2">
                 {canManage && (
                   <>
-                    <button onClick={() => setShowScanner(true)} className="px-4 py-2 bg-purple-100 text-purple-700 text-sm font-medium rounded-lg hover:bg-purple-200 transition-colors flex items-center gap-2">
+                    <button onClick={() => setShowScanner(true)} className="px-4 py-2 bg-purple-100 text-purple-700 text-sm font-medium rounded-xl hover:bg-purple-200 transition-colors flex items-center gap-2">
                       📷 Scan
                     </button>
-                    <button onClick={() => setActiveTab('inventur')} className="px-4 py-2 bg-gray-100 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-200 transition-colors">
+                    <button onClick={() => setActiveTab('inventur')} className="px-4 py-2 bg-gray-100 text-gray-700 text-sm font-medium rounded-xl hover:bg-gray-200 transition-colors">
                       📋 Inventur
                     </button>
                   </>
@@ -421,7 +421,7 @@ export default function LagerPage() {
                     const isHighlighted = scannedItem?.id === item.id;
                     return (
                       <tr key={item.id} className={`hover:bg-gray-50 transition-colors ${isHighlighted ? 'bg-amber-50 ring-1 ring-amber-300' : ''}`}>
-                        <td className="px-6 py-4"><span className={`inline-flex px-2 py-1 rounded-full text-xs font-semibold text-white ${s.color}`}>{s.label}</span></td>
+                        <td className="px-6 py-4"><span className={`inline-flex px-2 py-1 rounded-full text-xs font-semibold text-[#1d1d1f] ${s.color}`}>{s.label}</span></td>
                         <td className="px-6 py-4 font-mono text-xs text-gray-600">{item.sku}<br/>{item.barcode && <span className="text-amber-600">{item.barcode}</span>}</td>
                         <td className="px-6 py-4 font-medium text-gray-900">{item.name}</td>
                         <td className="px-6 py-4 text-gray-600">{item.category}</td>
@@ -455,7 +455,7 @@ export default function LagerPage() {
               <div key={stock.id} className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
                 <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
                   <div><h3 className="font-semibold text-gray-900">{stock.project?.name || 'Baustelle'}</h3><p className="text-sm text-gray-500">{stock.inventory?.name}</p></div>
-                  <span className={`px-2 py-1 rounded-full text-xs font-semibold text-white ${stock.statusColor}`}>{stock.statusLabel}</span>
+                  <span className={`px-2 py-1 rounded-full text-xs font-semibold text-[#1d1d1f] ${stock.statusColor}`}>{stock.statusLabel}</span>
                 </div>
                 <div className="px-6 py-4 grid grid-cols-2 sm:grid-cols-4 gap-4">
                   <div><div className="text-xs text-gray-500">Gesamt</div><div className="text-lg font-semibold text-gray-900">{stock.quantity} {stock.inventory?.unit}</div></div>
@@ -514,7 +514,7 @@ export default function LagerPage() {
             <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
               <h3 className="text-lg font-semibold text-gray-900 mb-4">📋 Inventur-Modus</h3>
               <p className="text-sm text-gray-500 mb-4">Wähle Artikel aus, zähle den tatsächlichen Bestand und buche die Differenz automatisch.</p>
-              <input type="text" placeholder="Artikel suchen..." value={countSearch} onChange={e => setCountSearch(e.target.value)} className="w-full max-w-md px-4 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none mb-4" />
+              <input type="text" placeholder="Artikel suchen..." value={countSearch} onChange={e => setCountSearch(e.target.value)} className="w-full max-w-md px-4 py-2 border border-gray-300 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 outline-none mb-4" />
               <div className="overflow-x-auto">
                 <table className="w-full text-sm text-left">
                   <thead className="bg-gray-50 text-gray-700 font-medium"><tr><th className="px-4 py-3">SKU</th><th className="px-4 py-3">Name</th><th className="px-4 py-3">Buchbestand</th><th className="px-4 py-3">Aktion</th></tr></thead>
@@ -538,14 +538,14 @@ export default function LagerPage() {
                   <h4 className="font-medium text-gray-900 mb-2">Zähl-Übersicht ({countedItems.length} Artikel)</h4>
                   <div className="space-y-2">
                     {countedItems.map(c => (
-                      <div key={c.inventory_id} className="flex items-center justify-between bg-gray-50 p-3 rounded-lg">
+                      <div key={c.inventory_id} className="flex items-center justify-between bg-gray-50 p-3 rounded-xl">
                         <div className="text-sm"><span className="font-medium">{c.name}</span><span className="text-gray-500 ml-2">Buch: {c.book_quantity} → Zähl: {c.counted_quantity}</span></div>
                         <span className={`text-sm font-semibold ${c.difference === 0 ? 'text-green-600' : c.difference > 0 ? 'text-blue-600' : 'text-red-600'}`}>{c.difference === 0 ? '✅ OK' : c.difference > 0 ? `+${c.difference}` : c.difference}</span>
                       </div>
                     ))}
                   </div>
-                  <div className="mt-4"><label className="block text-sm font-medium text-gray-700 mb-1">Inventur-Notiz (optional)</label><input type="text" value={countNotes} onChange={e => setCountNotes(e.target.value)} placeholder="z.B. Jahresinventur 2026" className="w-full max-w-md px-3 py-2 border border-gray-300 rounded-lg text-sm" /></div>
-                  <button onClick={handleSubmitCount} className="mt-4 px-6 py-2 bg-purple-600 text-white text-sm font-medium rounded-lg hover:bg-purple-700 transition-colors">📥 Inventur buchen & Bestand korrigieren</button>
+                  <div className="mt-4"><label className="block text-sm font-medium text-gray-700 mb-1">Inventur-Notiz (optional)</label><input type="text" value={countNotes} onChange={e => setCountNotes(e.target.value)} placeholder="z.B. Jahresinventur 2026" className="w-full max-w-md px-3 py-2 border border-gray-300 rounded-xl text-sm" /></div>
+                  <button onClick={handleSubmitCount} className="mt-4 px-6 py-2 bg-purple-600 text-white text-sm font-medium rounded-xl hover:bg-purple-700 transition-colors">📥 Inventur buchen & Bestand korrigieren</button>
                   {countResult && <p className="mt-2 text-sm text-green-600">{countResult}</p>}
                 </div>
               )}
@@ -568,27 +568,27 @@ export default function LagerPage() {
               <h3 className="text-lg font-semibold text-gray-900">📦 Material reservieren</h3>
               <button onClick={() => setShowReserveModal(false)} className="text-gray-400 hover:text-gray-600">✕</button>
             </div>
-            <div className="mb-4 p-3 bg-gray-50 rounded-lg">
+            <div className="mb-4 p-3 bg-gray-50 rounded-xl">
               <p className="text-sm font-medium text-gray-900">{reserveItem.name}</p>
               <p className="text-xs text-gray-500">Verfügbar: {reserveItem.quantity} {reserveItem.unit}</p>
             </div>
             <form onSubmit={handleReserve} className="space-y-4">
-              {formError && <div className="p-3 bg-red-50 text-red-700 text-sm rounded-lg">{formError}</div>}
+              {formError && <div className="p-3 bg-red-50 text-red-700 text-sm rounded-xl">{formError}</div>}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Projekt (Baustelle) *</label>
-                <select value={reserveProjectId} onChange={e => setReserveProjectId(e.target.value)} required className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm">
+                <select value={reserveProjectId} onChange={e => setReserveProjectId(e.target.value)} required className="w-full px-3 py-2 border border-gray-300 rounded-xl text-sm">
                   <option value="">Bitte wählen</option>
                   {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
                 </select>
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Menge *</label>
-                <input type="number" min="1" max={reserveItem.quantity} value={reserveQty} onChange={e => setReserveQty(parseInt(e.target.value) || 1)} required className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" />
+                <input type="number" min="1" max={reserveItem.quantity} value={reserveQty} onChange={e => setReserveQty(parseInt(e.target.value) || 1)} required className="w-full px-3 py-2 border border-gray-300 rounded-xl text-sm" />
                 <p className="text-xs text-gray-500 mt-1">Maximal {reserveItem.quantity} {reserveItem.unit} verfügbar</p>
               </div>
               <div className="flex justify-end gap-2 pt-2">
-                <button type="button" onClick={() => setShowReserveModal(false)} className="px-4 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded-lg">Abbrechen</button>
-                <button type="submit" className="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700">Reservieren</button>
+                <button type="button" onClick={() => setShowReserveModal(false)} className="px-4 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded-xl">Abbrechen</button>
+                <button type="submit" className="px-4 py-2 text-sm bg-blue-600 text-white rounded-xl hover:bg-blue-700">Reservieren</button>
               </div>
             </form>
           </div>
@@ -603,21 +603,21 @@ export default function LagerPage() {
               <h3 className="text-lg font-semibold text-gray-900">🛒 Nachbestellung auslösen</h3>
               <button onClick={() => setShowReorderModal(false)} className="text-gray-400 hover:text-gray-600">✕</button>
             </div>
-            <div className="mb-4 p-3 bg-red-50 rounded-lg border border-red-200">
+            <div className="mb-4 p-3 bg-red-50 rounded-xl border border-red-200">
               <p className="text-sm font-medium text-red-800">{reorderItem.name}</p>
               <p className="text-xs text-red-600">Aktuell: {reorderItem.quantity} {reorderItem.unit} | Min: {reorderItem.min_stock} | Melde: {reorderItem.reorder_point}</p>
               {reorderItem.supplier && <p className="text-xs text-gray-600 mt-1">Lieferant: {reorderItem.supplier} | Lieferzeit: {reorderItem.supplier_lead_time} Tage</p>}
             </div>
             <form onSubmit={handleReorder} className="space-y-4">
-              {formError && <div className="p-3 bg-red-50 text-red-700 text-sm rounded-lg">{formError}</div>}
+              {formError && <div className="p-3 bg-red-50 text-red-700 text-sm rounded-xl">{formError}</div>}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Bestellmenge *</label>
-                <input type="number" min="1" value={reorderQty} onChange={e => setReorderQty(parseInt(e.target.value) || 1)} required className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" />
+                <input type="number" min="1" value={reorderQty} onChange={e => setReorderQty(parseInt(e.target.value) || 1)} required className="w-full px-3 py-2 border border-gray-300 rounded-xl text-sm" />
                 <p className="text-xs text-gray-500 mt-1">Empfohlen: Mindestens {Math.max(reorderItem.reorder_point * 2 - reorderItem.quantity, reorderItem.min_stock)} {reorderItem.unit}</p>
               </div>
               <div className="flex justify-end gap-2 pt-2">
-                <button type="button" onClick={() => setShowReorderModal(false)} className="px-4 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded-lg">Abbrechen</button>
-                <button type="submit" className="px-4 py-2 text-sm bg-red-600 text-white rounded-lg hover:bg-red-700">🛒 Jetzt bestellen</button>
+                <button type="button" onClick={() => setShowReorderModal(false)} className="px-4 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded-xl">Abbrechen</button>
+                <button type="submit" className="px-4 py-2 text-sm bg-red-600 text-white rounded-xl hover:bg-red-700">🛒 Jetzt bestellen</button>
               </div>
             </form>
           </div>
@@ -630,23 +630,23 @@ export default function LagerPage() {
           <div className="bg-white rounded-xl shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
             <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between"><h3 className="text-lg font-semibold text-gray-900">Neuer Artikel</h3><button onClick={() => setShowAddModal(false)} className="text-gray-400 hover:text-gray-600">✕</button></div>
             <form onSubmit={handleAddItem} className="p-6 space-y-4">
-              {formError && <div className="p-3 bg-red-50 text-red-700 text-sm rounded-lg">{formError}</div>}
+              {formError && <div className="p-3 bg-red-50 text-red-700 text-sm rounded-xl">{formError}</div>}
               <div className="grid grid-cols-2 gap-4">
-                <div><label className="block text-sm font-medium text-gray-700 mb-1">SKU *</label><input name="sku" required className="w-full px-3 py-2 border rounded-lg text-sm" /></div>
-                <div><label className="block text-sm font-medium text-gray-700 mb-1">Name *</label><input name="name" required className="w-full px-3 py-2 border rounded-lg text-sm" /></div>
-                <div><label className="block text-sm font-medium text-gray-700 mb-1">Kategorie *</label><input name="category" required className="w-full px-3 py-2 border rounded-lg text-sm" /></div>
-                <div><label className="block text-sm font-medium text-gray-700 mb-1">Einheit</label><input name="unit" defaultValue="Stk" className="w-full px-3 py-2 border rounded-lg text-sm" /></div>
-                <div><label className="block text-sm font-medium text-gray-700 mb-1">Bestand</label><input name="quantity" type="number" defaultValue="0" className="w-full px-3 py-2 border rounded-lg text-sm" /></div>
-                <div><label className="block text-sm font-medium text-gray-700 mb-1">Mindestbestand</label><input name="min_stock" type="number" defaultValue="10" className="w-full px-3 py-2 border rounded-lg text-sm" /></div>
-                <div><label className="block text-sm font-medium text-gray-700 mb-1">Meldebestand</label><input name="reorder_point" type="number" defaultValue="20" className="w-full px-3 py-2 border rounded-lg text-sm" /></div>
-                <div><label className="block text-sm font-medium text-gray-700 mb-1">Stückpreis (€)</label><input name="unit_price" type="number" step="0.01" defaultValue="0" className="w-full px-3 py-2 border rounded-lg text-sm" /></div>
-                <div><label className="block text-sm font-medium text-gray-700 mb-1">Lieferant</label><input name="supplier" className="w-full px-3 py-2 border rounded-lg text-sm" /></div>
-                <div><label className="block text-sm font-medium text-gray-700 mb-1">Lieferzeit (Tage)</label><input name="supplier_lead_time" type="number" defaultValue="7" className="w-full px-3 py-2 border rounded-lg text-sm" /></div>
-                <div><label className="block text-sm font-medium text-gray-700 mb-1">Lagerplatz</label><input name="location_in_warehouse" className="w-full px-3 py-2 border rounded-lg text-sm" /></div>
-                <div><label className="block text-sm font-medium text-gray-700 mb-1">Barcode</label><input name="barcode" className="w-full px-3 py-2 border rounded-lg text-sm" /></div>
+                <div><label className="block text-sm font-medium text-gray-700 mb-1">SKU *</label><input name="sku" required className="w-full px-3 py-2 border rounded-xl text-sm" /></div>
+                <div><label className="block text-sm font-medium text-gray-700 mb-1">Name *</label><input name="name" required className="w-full px-3 py-2 border rounded-xl text-sm" /></div>
+                <div><label className="block text-sm font-medium text-gray-700 mb-1">Kategorie *</label><input name="category" required className="w-full px-3 py-2 border rounded-xl text-sm" /></div>
+                <div><label className="block text-sm font-medium text-gray-700 mb-1">Einheit</label><input name="unit" defaultValue="Stk" className="w-full px-3 py-2 border rounded-xl text-sm" /></div>
+                <div><label className="block text-sm font-medium text-gray-700 mb-1">Bestand</label><input name="quantity" type="number" defaultValue="0" className="w-full px-3 py-2 border rounded-xl text-sm" /></div>
+                <div><label className="block text-sm font-medium text-gray-700 mb-1">Mindestbestand</label><input name="min_stock" type="number" defaultValue="10" className="w-full px-3 py-2 border rounded-xl text-sm" /></div>
+                <div><label className="block text-sm font-medium text-gray-700 mb-1">Meldebestand</label><input name="reorder_point" type="number" defaultValue="20" className="w-full px-3 py-2 border rounded-xl text-sm" /></div>
+                <div><label className="block text-sm font-medium text-gray-700 mb-1">Stückpreis (€)</label><input name="unit_price" type="number" step="0.01" defaultValue="0" className="w-full px-3 py-2 border rounded-xl text-sm" /></div>
+                <div><label className="block text-sm font-medium text-gray-700 mb-1">Lieferant</label><input name="supplier" className="w-full px-3 py-2 border rounded-xl text-sm" /></div>
+                <div><label className="block text-sm font-medium text-gray-700 mb-1">Lieferzeit (Tage)</label><input name="supplier_lead_time" type="number" defaultValue="7" className="w-full px-3 py-2 border rounded-xl text-sm" /></div>
+                <div><label className="block text-sm font-medium text-gray-700 mb-1">Lagerplatz</label><input name="location_in_warehouse" className="w-full px-3 py-2 border rounded-xl text-sm" /></div>
+                <div><label className="block text-sm font-medium text-gray-700 mb-1">Barcode</label><input name="barcode" className="w-full px-3 py-2 border rounded-xl text-sm" /></div>
               </div>
-              <div><label className="block text-sm font-medium text-gray-700 mb-1">Beschreibung</label><textarea name="description" rows={2} className="w-full px-3 py-2 border rounded-lg text-sm" /></div>
-              <div className="flex justify-end gap-2 pt-2"><button type="button" onClick={() => setShowAddModal(false)} className="px-4 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded-lg">Abbrechen</button><button type="submit" className="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700">Speichern</button></div>
+              <div><label className="block text-sm font-medium text-gray-700 mb-1">Beschreibung</label><textarea name="description" rows={2} className="w-full px-3 py-2 border rounded-xl text-sm" /></div>
+              <div className="flex justify-end gap-2 pt-2"><button type="button" onClick={() => setShowAddModal(false)} className="px-4 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded-xl">Abbrechen</button><button type="submit" className="px-4 py-2 text-sm bg-blue-600 text-white rounded-xl hover:bg-blue-700">Speichern</button></div>
             </form>
           </div>
         </div>
@@ -658,24 +658,24 @@ export default function LagerPage() {
           <div className="bg-white rounded-xl shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
             <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between"><h3 className="text-lg font-semibold text-gray-900">Artikel bearbeiten</h3><button onClick={() => { setShowEditModal(false); setEditingItem(null); }} className="text-gray-400 hover:text-gray-600">✕</button></div>
             <form onSubmit={handleEditItem} className="p-6 space-y-4">
-              {formError && <div className="p-3 bg-red-50 text-red-700 text-sm rounded-lg">{formError}</div>}
+              {formError && <div className="p-3 bg-red-50 text-red-700 text-sm rounded-xl">{formError}</div>}
               <div className="grid grid-cols-2 gap-4">
-                <div><label className="block text-sm font-medium text-gray-700 mb-1">SKU *</label><input name="sku" defaultValue={editingItem.sku} required className="w-full px-3 py-2 border rounded-lg text-sm" /></div>
-                <div><label className="block text-sm font-medium text-gray-700 mb-1">Name *</label><input name="name" defaultValue={editingItem.name} required className="w-full px-3 py-2 border rounded-lg text-sm" /></div>
-                <div><label className="block text-sm font-medium text-gray-700 mb-1">Kategorie *</label><input name="category" defaultValue={editingItem.category} required className="w-full px-3 py-2 border rounded-lg text-sm" /></div>
-                <div><label className="block text-sm font-medium text-gray-700 mb-1">Einheit</label><input name="unit" defaultValue={editingItem.unit} className="w-full px-3 py-2 border rounded-lg text-sm" /></div>
-                <div><label className="block text-sm font-medium text-gray-700 mb-1">Bestand</label><input name="quantity" type="number" defaultValue={editingItem.quantity} className="w-full px-3 py-2 border rounded-lg text-sm" /></div>
-                <div><label className="block text-sm font-medium text-gray-700 mb-1">Mindestbestand</label><input name="min_stock" type="number" defaultValue={editingItem.min_stock} className="w-full px-3 py-2 border rounded-lg text-sm" /></div>
-                <div><label className="block text-sm font-medium text-gray-700 mb-1">Meldebestand</label><input name="reorder_point" type="number" defaultValue={editingItem.reorder_point} className="w-full px-3 py-2 border rounded-lg text-sm" /></div>
-                <div><label className="block text-sm font-medium text-gray-700 mb-1">Stückpreis (€)</label><input name="unit_price" type="number" step="0.01" defaultValue={editingItem.unit_price} className="w-full px-3 py-2 border rounded-lg text-sm" /></div>
-                <div><label className="block text-sm font-medium text-gray-700 mb-1">Lieferant</label><input name="supplier" defaultValue={editingItem.supplier || ''} className="w-full px-3 py-2 border rounded-lg text-sm" /></div>
-                <div><label className="block text-sm font-medium text-gray-700 mb-1">Lieferzeit (Tage)</label><input name="supplier_lead_time" type="number" defaultValue={editingItem.supplier_lead_time} className="w-full px-3 py-2 border rounded-lg text-sm" /></div>
-                <div><label className="block text-sm font-medium text-gray-700 mb-1">Lagerplatz</label><input name="location_in_warehouse" defaultValue={editingItem.location_in_warehouse || ''} className="w-full px-3 py-2 border rounded-lg text-sm" /></div>
-                <div><label className="block text-sm font-medium text-gray-700 mb-1">Barcode</label><input name="barcode" defaultValue={editingItem.barcode || ''} className="w-full px-3 py-2 border rounded-lg text-sm" /></div>
+                <div><label className="block text-sm font-medium text-gray-700 mb-1">SKU *</label><input name="sku" defaultValue={editingItem.sku} required className="w-full px-3 py-2 border rounded-xl text-sm" /></div>
+                <div><label className="block text-sm font-medium text-gray-700 mb-1">Name *</label><input name="name" defaultValue={editingItem.name} required className="w-full px-3 py-2 border rounded-xl text-sm" /></div>
+                <div><label className="block text-sm font-medium text-gray-700 mb-1">Kategorie *</label><input name="category" defaultValue={editingItem.category} required className="w-full px-3 py-2 border rounded-xl text-sm" /></div>
+                <div><label className="block text-sm font-medium text-gray-700 mb-1">Einheit</label><input name="unit" defaultValue={editingItem.unit} className="w-full px-3 py-2 border rounded-xl text-sm" /></div>
+                <div><label className="block text-sm font-medium text-gray-700 mb-1">Bestand</label><input name="quantity" type="number" defaultValue={editingItem.quantity} className="w-full px-3 py-2 border rounded-xl text-sm" /></div>
+                <div><label className="block text-sm font-medium text-gray-700 mb-1">Mindestbestand</label><input name="min_stock" type="number" defaultValue={editingItem.min_stock} className="w-full px-3 py-2 border rounded-xl text-sm" /></div>
+                <div><label className="block text-sm font-medium text-gray-700 mb-1">Meldebestand</label><input name="reorder_point" type="number" defaultValue={editingItem.reorder_point} className="w-full px-3 py-2 border rounded-xl text-sm" /></div>
+                <div><label className="block text-sm font-medium text-gray-700 mb-1">Stückpreis (€)</label><input name="unit_price" type="number" step="0.01" defaultValue={editingItem.unit_price} className="w-full px-3 py-2 border rounded-xl text-sm" /></div>
+                <div><label className="block text-sm font-medium text-gray-700 mb-1">Lieferant</label><input name="supplier" defaultValue={editingItem.supplier || ''} className="w-full px-3 py-2 border rounded-xl text-sm" /></div>
+                <div><label className="block text-sm font-medium text-gray-700 mb-1">Lieferzeit (Tage)</label><input name="supplier_lead_time" type="number" defaultValue={editingItem.supplier_lead_time} className="w-full px-3 py-2 border rounded-xl text-sm" /></div>
+                <div><label className="block text-sm font-medium text-gray-700 mb-1">Lagerplatz</label><input name="location_in_warehouse" defaultValue={editingItem.location_in_warehouse || ''} className="w-full px-3 py-2 border rounded-xl text-sm" /></div>
+                <div><label className="block text-sm font-medium text-gray-700 mb-1">Barcode</label><input name="barcode" defaultValue={editingItem.barcode || ''} className="w-full px-3 py-2 border rounded-xl text-sm" /></div>
               </div>
-              <div><label className="block text-sm font-medium text-gray-700 mb-1">Beschreibung</label><textarea name="description" defaultValue={editingItem.description || ''} rows={2} className="w-full px-3 py-2 border rounded-lg text-sm" /></div>
+              <div><label className="block text-sm font-medium text-gray-700 mb-1">Beschreibung</label><textarea name="description" defaultValue={editingItem.description || ''} rows={2} className="w-full px-3 py-2 border rounded-xl text-sm" /></div>
               <div className="flex items-center gap-2"><input type="checkbox" name="is_active" value="true" defaultChecked={editingItem.is_active} className="rounded" /><label className="text-sm text-gray-700">Aktiv</label></div>
-              <div className="flex justify-end gap-2 pt-2"><button type="button" onClick={() => { setShowEditModal(false); setEditingItem(null); }} className="px-4 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded-lg">Abbrechen</button><button type="submit" className="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700">Speichern</button></div>
+              <div className="flex justify-end gap-2 pt-2"><button type="button" onClick={() => { setShowEditModal(false); setEditingItem(null); }} className="px-4 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded-xl">Abbrechen</button><button type="submit" className="px-4 py-2 text-sm bg-blue-600 text-white rounded-xl hover:bg-blue-700">Speichern</button></div>
             </form>
           </div>
         </div>
@@ -687,9 +687,9 @@ export default function LagerPage() {
           <div className="bg-white rounded-xl shadow-xl max-w-lg w-full">
             <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between"><h3 className="text-lg font-semibold text-gray-900">Artikel zählen: {countedItems[countedItems.length - 1]?.name}</h3><button onClick={() => setShowCountModal(false)} className="text-gray-400 hover:text-gray-600">✕</button></div>
             <div className="p-6 space-y-4">
-              {countedItems.filter(c => !c.difference && c.counted_quantity === c.book_quantity).length === 0 && <div className="p-3 bg-blue-50 text-blue-700 text-sm rounded-lg">Buchbestand: <strong>{countedItems[countedItems.length - 1]?.book_quantity}</strong> Stk</div>}
-              <div><label className="block text-sm font-medium text-gray-700 mb-1">Gezählte Menge</label><input type="number" min="0" autoFocus defaultValue={countedItems[countedItems.length - 1]?.book_quantity} onChange={e => { const last = countedItems[countedItems.length - 1]; if (last) updateCount(last.inventory_id, parseInt(e.target.value) || 0); }} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-lg font-semibold text-center" /></div>
-              <div className="flex justify-end gap-2"><button onClick={() => setShowCountModal(false)} className="px-4 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded-lg">Abbrechen</button><button onClick={() => setShowCountModal(false)} className="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700">Speichern</button></div>
+              {countedItems.filter(c => !c.difference && c.counted_quantity === c.book_quantity).length === 0 && <div className="p-3 bg-blue-50 text-blue-700 text-sm rounded-xl">Buchbestand: <strong>{countedItems[countedItems.length - 1]?.book_quantity}</strong> Stk</div>}
+              <div><label className="block text-sm font-medium text-gray-700 mb-1">Gezählte Menge</label><input type="number" min="0" autoFocus defaultValue={countedItems[countedItems.length - 1]?.book_quantity} onChange={e => { const last = countedItems[countedItems.length - 1]; if (last) updateCount(last.inventory_id, parseInt(e.target.value) || 0); }} className="w-full px-3 py-2 border border-gray-300 rounded-xl text-lg font-semibold text-center" /></div>
+              <div className="flex justify-end gap-2"><button onClick={() => setShowCountModal(false)} className="px-4 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded-xl">Abbrechen</button><button onClick={() => setShowCountModal(false)} className="px-4 py-2 text-sm bg-blue-600 text-white rounded-xl hover:bg-blue-700">Speichern</button></div>
             </div>
           </div>
         </div>
@@ -701,14 +701,14 @@ export default function LagerPage() {
           <div className="bg-white rounded-xl shadow-xl max-w-lg w-full">
             <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between"><h3 className="text-lg font-semibold text-gray-900">Transport anlegen</h3><button onClick={() => setShowTransportModal(false)} className="text-gray-400 hover:text-gray-600">✕</button></div>
             <form onSubmit={handleCreateTransport} className="p-6 space-y-4">
-              {formError && <div className="p-3 bg-red-50 text-red-700 text-sm rounded-lg">{formError}</div>}
-              <div><label className="block text-sm font-medium text-gray-700 mb-1">Artikel *</label><select name="inventory_id" required value={selectedInventoryId} onChange={e => setSelectedInventoryId(e.target.value)} className="w-full px-3 py-2 border rounded-lg text-sm"><option value="">Bitte wählen</option>{inventory.map(item => <option key={item.id} value={item.id}>{item.name} ({item.quantity} {item.unit} verfügbar)</option>)}</select></div>
-              <div><label className="block text-sm font-medium text-gray-700 mb-1">Von (optional, leer = Zentrallager)</label><select name="from_project_id" className="w-full px-3 py-2 border rounded-lg text-sm"><option value="">Zentrallager</option>{projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</select></div>
-              <div><label className="block text-sm font-medium text-gray-700 mb-1">Nach (Baustelle) *</label><select name="to_project_id" required value={selectedToProjectId} onChange={e => setSelectedToProjectId(e.target.value)} className="w-full px-3 py-2 border rounded-lg text-sm"><option value="">Bitte wählen</option>{projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</select></div>
-              <div className="grid grid-cols-2 gap-4"><div><label className="block text-sm font-medium text-gray-700 mb-1">Menge *</label><input name="quantity" type="number" min="1" required value={transportQuantity} onChange={e => setTransportQuantity(parseInt(e.target.value) || 1)} className="w-full px-3 py-2 border rounded-lg text-sm" /></div><div><label className="block text-sm font-medium text-gray-700 mb-1">Priorität</label><select name="priority" defaultValue="normal" className="w-full px-3 py-2 border rounded-lg text-sm"><option value="low">Niedrig</option><option value="normal">Normal</option><option value="high">Hoch</option><option value="urgent">Dringend</option></select></div></div>
-              <div className="grid grid-cols-2 gap-4"><div><label className="block text-sm font-medium text-gray-700 mb-1">Geplantes Datum</label><input name="planned_date" type="date" className="w-full px-3 py-2 border rounded-lg text-sm" /></div><div><label className="block text-sm font-medium text-gray-700 mb-1">Geplante Uhrzeit</label><input name="planned_time" type="time" className="w-full px-3 py-2 border rounded-lg text-sm" /></div></div>
-              <div><label className="block text-sm font-medium text-gray-700 mb-1">Notizen</label><textarea name="notes" rows={2} className="w-full px-3 py-2 border rounded-lg text-sm" /></div>
-              <div className="flex justify-between items-center pt-2"><button type="button" onClick={handleOptimize} className="px-4 py-2 text-sm bg-purple-100 text-purple-700 rounded-lg hover:bg-purple-200">🧠 KI-Optimierung</button><div className="flex gap-2"><button type="button" onClick={() => setShowTransportModal(false)} className="px-4 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded-lg">Abbrechen</button><button type="submit" className="px-4 py-2 text-sm bg-green-600 text-white rounded-lg hover:bg-green-700">Anlegen</button></div></div>
+              {formError && <div className="p-3 bg-red-50 text-red-700 text-sm rounded-xl">{formError}</div>}
+              <div><label className="block text-sm font-medium text-gray-700 mb-1">Artikel *</label><select name="inventory_id" required value={selectedInventoryId} onChange={e => setSelectedInventoryId(e.target.value)} className="w-full px-3 py-2 border rounded-xl text-sm"><option value="">Bitte wählen</option>{inventory.map(item => <option key={item.id} value={item.id}>{item.name} ({item.quantity} {item.unit} verfügbar)</option>)}</select></div>
+              <div><label className="block text-sm font-medium text-gray-700 mb-1">Von (optional, leer = Zentrallager)</label><select name="from_project_id" className="w-full px-3 py-2 border rounded-xl text-sm"><option value="">Zentrallager</option>{projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</select></div>
+              <div><label className="block text-sm font-medium text-gray-700 mb-1">Nach (Baustelle) *</label><select name="to_project_id" required value={selectedToProjectId} onChange={e => setSelectedToProjectId(e.target.value)} className="w-full px-3 py-2 border rounded-xl text-sm"><option value="">Bitte wählen</option>{projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</select></div>
+              <div className="grid grid-cols-2 gap-4"><div><label className="block text-sm font-medium text-gray-700 mb-1">Menge *</label><input name="quantity" type="number" min="1" required value={transportQuantity} onChange={e => setTransportQuantity(parseInt(e.target.value) || 1)} className="w-full px-3 py-2 border rounded-xl text-sm" /></div><div><label className="block text-sm font-medium text-gray-700 mb-1">Priorität</label><select name="priority" defaultValue="normal" className="w-full px-3 py-2 border rounded-xl text-sm"><option value="low">Niedrig</option><option value="normal">Normal</option><option value="high">Hoch</option><option value="urgent">Dringend</option></select></div></div>
+              <div className="grid grid-cols-2 gap-4"><div><label className="block text-sm font-medium text-gray-700 mb-1">Geplantes Datum</label><input name="planned_date" type="date" className="w-full px-3 py-2 border rounded-xl text-sm" /></div><div><label className="block text-sm font-medium text-gray-700 mb-1">Geplante Uhrzeit</label><input name="planned_time" type="time" className="w-full px-3 py-2 border rounded-xl text-sm" /></div></div>
+              <div><label className="block text-sm font-medium text-gray-700 mb-1">Notizen</label><textarea name="notes" rows={2} className="w-full px-3 py-2 border rounded-xl text-sm" /></div>
+              <div className="flex justify-between items-center pt-2"><button type="button" onClick={handleOptimize} className="px-4 py-2 text-sm bg-purple-100 text-purple-700 rounded-xl hover:bg-purple-200">🧠 KI-Optimierung</button><div className="flex gap-2"><button type="button" onClick={() => setShowTransportModal(false)} className="px-4 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded-xl">Abbrechen</button><button type="submit" className="px-4 py-2 text-sm bg-green-600 text-white rounded-xl hover:bg-green-700">Anlegen</button></div></div>
             </form>
           </div>
         </div>
@@ -721,14 +721,14 @@ export default function LagerPage() {
             <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between"><h3 className="text-lg font-semibold text-gray-900">🧠 KI-Transport-Empfehlung</h3><button onClick={() => setShowOptimizeModal(false)} className="text-gray-400 hover:text-gray-600">✕</button></div>
             <div className="p-6 space-y-4">
               {recommendations.length === 0 ? <p className="text-gray-500 text-sm">Keine optimierten Routen gefunden. Direktlieferung aus Zentrallager empfohlen.</p> : recommendations.map((rec, idx) => (
-                <div key={idx} className={`p-4 rounded-lg border ${rec.emptyRunSaved ? 'border-green-300 bg-green-50' : 'border-gray-200 bg-gray-50'}`}>
+                <div key={idx} className={`p-4 rounded-xl border ${rec.emptyRunSaved ? 'border-green-300 bg-green-50' : 'border-gray-200 bg-gray-50'}`}>
                   <div className="flex items-start justify-between">
                     <div><div className="font-semibold text-gray-900">{rec.type === 'site_transfer' ? 'Baustellen-Transfer' : 'Zentrallager-Lieferung'}</div><div className="text-sm text-gray-600 mt-1">Von: <span className="font-medium">{rec.fromLocation}</span></div><div className="text-sm text-gray-600">Menge: <span className="font-medium">{rec.quantity} Stk</span></div><div className="text-sm text-gray-500 mt-2">{rec.reason}</div></div>
                     {rec.emptyRunSaved && <span className="px-2 py-1 bg-green-100 text-green-700 text-xs font-bold rounded-full">⛽ Leerfahrt vermieden</span>}
                   </div>
                 </div>
               ))}
-              <div className="flex justify-end pt-2"><button onClick={() => setShowOptimizeModal(false)} className="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700">Verstanden</button></div>
+              <div className="flex justify-end pt-2"><button onClick={() => setShowOptimizeModal(false)} className="px-4 py-2 text-sm bg-blue-600 text-white rounded-xl hover:bg-blue-700">Verstanden</button></div>
             </div>
           </div>
         </div>

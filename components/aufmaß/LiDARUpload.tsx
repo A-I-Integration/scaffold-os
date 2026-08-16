@@ -56,7 +56,7 @@ export default function LiDARUpload({ sessionId, onMeasurements }: Props) {
         />
         <button
           disabled={uploading}
-          className="w-full rounded-lg border border-dashed border-slate-500 bg-slate-800/50 py-4 text-sm text-slate-300 hover:border-purple-500 hover:bg-slate-800 disabled:opacity-50 transition"
+          className="w-full rounded-xl border border-dashed border-black/20 bg-black/5 py-4 text-sm text-[#424245] hover:border-purple-500 hover:bg-[#f5f5f7] disabled:opacity-50 transition"
         >
           {uploading ? (
             <span className="flex items-center justify-center gap-2">
@@ -67,32 +67,32 @@ export default function LiDARUpload({ sessionId, onMeasurements }: Props) {
             <span>
               <span className="text-lg">📱</span> <span className="font-medium">LiDAR-Scan hochladen</span>
               <br />
-              <span className="text-[11px] text-slate-500">.obj oder .ply aus Polycam / Scaniverse / RoomPlan</span>
+              <span className="text-[11px] text-[#86868b]">.obj oder .ply aus Polycam / Scaniverse / RoomPlan</span>
             </span>
           )}
         </button>
       </div>
 
       {scan && (
-        <div className="rounded-lg bg-purple-900/20 border border-purple-500/30 p-4 animate-in fade-in slide-in-from-top-2">
+        <div className="rounded-xl bg-purple-900/20 border border-purple-500/30 p-4 animate-in fade-in slide-in-from-top-2">
           <p className="text-xs text-purple-300 font-medium mb-3">
-            ✅ Maße extrahiert aus <span className="text-white">{scan.name}</span>
+            ✅ Maße extrahiert aus <span className="text-[#1d1d1f]">{scan.name}</span>
           </p>
           <div className="grid grid-cols-3 gap-2">
-            <div className="rounded bg-slate-800 p-2 text-center">
-              <p className="text-[10px] text-slate-400 uppercase">Länge</p>
-              <p className="text-lg font-bold text-white">{scan.m.lengthM.toFixed(2)} m</p>
+            <div className="rounded bg-[#f5f5f7] p-2 text-center">
+              <p className="text-[10px] text-[#86868b] uppercase">Länge</p>
+              <p className="text-lg font-bold text-[#1d1d1f]">{scan.m.lengthM.toFixed(2)} m</p>
             </div>
-            <div className="rounded bg-slate-800 p-2 text-center">
-              <p className="text-[10px] text-slate-400 uppercase">Breite</p>
-              <p className="text-lg font-bold text-white">{scan.m.widthM.toFixed(2)} m</p>
+            <div className="rounded bg-[#f5f5f7] p-2 text-center">
+              <p className="text-[10px] text-[#86868b] uppercase">Breite</p>
+              <p className="text-lg font-bold text-[#1d1d1f]">{scan.m.widthM.toFixed(2)} m</p>
             </div>
-            <div className="rounded bg-slate-800 p-2 text-center">
-              <p className="text-[10px] text-slate-400 uppercase">Höhe</p>
-              <p className="text-lg font-bold text-white">{scan.m.heightM.toFixed(2)} m</p>
+            <div className="rounded bg-[#f5f5f7] p-2 text-center">
+              <p className="text-[10px] text-[#86868b] uppercase">Höhe</p>
+              <p className="text-lg font-bold text-[#1d1d1f]">{scan.m.heightM.toFixed(2)} m</p>
             </div>
           </div>
-          <p className="text-[10px] text-slate-500 mt-2 text-center">
+          <p className="text-[10px] text-[#86868b] mt-2 text-center">
             {scan.m.vertexCount.toLocaleString()} Vertices · {scan.m.fileType.toUpperCase()}
           </p>
         </div>

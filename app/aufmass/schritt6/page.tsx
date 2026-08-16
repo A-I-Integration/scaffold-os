@@ -15,7 +15,7 @@ import { DispositionResult as DispositionData } from '@/lib/calculations/disposi
 const DigitalTwin = dynamic(() => import('@/components/aufmaß/DigitalTwin'), {
   ssr: false,
   loading: () => (
-    <div className="h-[500px] rounded-xl border border-slate-700 bg-slate-800 flex items-center justify-center">
+    <div className="h-[500px] rounded-xl border border-black/10 bg-[#f5f5f7] flex items-center justify-center">
       <div className="h-10 w-10 animate-spin rounded-full border-4 border-purple-500 border-t-transparent"></div>
     </div>
   ),
@@ -460,53 +460,53 @@ function Schritt6Content() {
   function renderZusammenfassung() {
     return (
       <div className="space-y-4">
-        <div className="rounded-lg bg-slate-700/50 p-4">
-          <p className="text-xs font-bold uppercase tracking-wider text-orange-400 mb-2">Schritt 1 – Projekt</p>
+        <div className="rounded-xl bg-black/10/50 p-4">
+          <p className="text-xs font-bold uppercase tracking-wider text-[#e8590c] mb-2">Schritt 1 – Projekt</p>
           <div className="grid grid-cols-2 gap-2 text-sm">
-            <div><span className="text-slate-400">Kunde:</span> <span className="text-white">{s1.name || '–'}</span></div>
-            <div><span className="text-slate-400">Adresse:</span> <span className="text-white">{s1.adresse || '–'}</span></div>
-            <div><span className="text-slate-400">Gewerk:</span> <span className="text-white">{s1.gewerk || '–'}</span></div>
-            <div><span className="text-slate-400">Dauer:</span> <span className="text-white">{s1.dauer || '–'} Tage</span></div>
-            {s1.ansprechpartnerName && <div className="col-span-2"><span className="text-slate-400">Ansprechpartner:</span> <span className="text-white">{s1.ansprechpartnerName} {s1.ansprechpartnerTelefon} {s1.ansprechpartnerEmail}</span></div>}
-            {s1.bauleiterName && <div className="col-span-2"><span className="text-slate-400">Bauleiter:</span> <span className="text-white">{s1.bauleiterName}</span></div>}
-            {s1.projektbeginn && <div><span className="text-slate-400">Beginn:</span> <span className="text-white">{s1.projektbeginn}</span></div>}
-            {s1.projektende && <div><span className="text-slate-400">Ende:</span> <span className="text-white">{s1.projektende}</span></div>}
+            <div><span className="text-[#86868b]">Kunde:</span> <span className="text-[#1d1d1f]">{s1.name || '–'}</span></div>
+            <div><span className="text-[#86868b]">Adresse:</span> <span className="text-[#1d1d1f]">{s1.adresse || '–'}</span></div>
+            <div><span className="text-[#86868b]">Gewerk:</span> <span className="text-[#1d1d1f]">{s1.gewerk || '–'}</span></div>
+            <div><span className="text-[#86868b]">Dauer:</span> <span className="text-[#1d1d1f]">{s1.dauer || '–'} Tage</span></div>
+            {s1.ansprechpartnerName && <div className="col-span-2"><span className="text-[#86868b]">Ansprechpartner:</span> <span className="text-[#1d1d1f]">{s1.ansprechpartnerName} {s1.ansprechpartnerTelefon} {s1.ansprechpartnerEmail}</span></div>}
+            {s1.bauleiterName && <div className="col-span-2"><span className="text-[#86868b]">Bauleiter:</span> <span className="text-[#1d1d1f]">{s1.bauleiterName}</span></div>}
+            {s1.projektbeginn && <div><span className="text-[#86868b]">Beginn:</span> <span className="text-[#1d1d1f]">{s1.projektbeginn}</span></div>}
+            {s1.projektende && <div><span className="text-[#86868b]">Ende:</span> <span className="text-[#1d1d1f]">{s1.projektende}</span></div>}
           </div>
         </div>
-        <div className="rounded-lg bg-slate-700/50 p-4">
-          <p className="text-xs font-bold uppercase tracking-wider text-orange-400 mb-2">Schritt 2 – Gebäude</p>
+        <div className="rounded-xl bg-black/10/50 p-4">
+          <p className="text-xs font-bold uppercase tracking-wider text-[#e8590c] mb-2">Schritt 2 – Gebäude</p>
           <div className="grid grid-cols-2 gap-2 text-sm">
-            <div><span className="text-slate-400">Länge:</span> <span className="text-white">{s2.laenge || '–'} m</span></div>
-            <div><span className="text-slate-400">Höhe:</span> <span className="text-white">{s2.hoehe || '–'} m</span></div>
-            <div><span className="text-slate-400">Breite:</span> <span className="text-white">{s2.breite || '–'} m</span></div>
-            <div><span className="text-slate-400">Traufhöhe:</span> <span className="text-white">{s2.traufhoehe || '–'} m</span></div>
-            <div><span className="text-slate-400">Dachform:</span> <span className="text-white">{s2.dachform || '–'}</span></div>
-            <div><span className="text-slate-400">Fassade:</span> <span className="text-white">{s2.fassade || '–'}</span></div>
-            <div className="col-span-2"><span className="text-slate-400">Hindernisse:</span> <span className="text-white">{(s2.hindernisse || []).join(', ') || 'Keine'}</span></div>
+            <div><span className="text-[#86868b]">Länge:</span> <span className="text-[#1d1d1f]">{s2.laenge || '–'} m</span></div>
+            <div><span className="text-[#86868b]">Höhe:</span> <span className="text-[#1d1d1f]">{s2.hoehe || '–'} m</span></div>
+            <div><span className="text-[#86868b]">Breite:</span> <span className="text-[#1d1d1f]">{s2.breite || '–'} m</span></div>
+            <div><span className="text-[#86868b]">Traufhöhe:</span> <span className="text-[#1d1d1f]">{s2.traufhoehe || '–'} m</span></div>
+            <div><span className="text-[#86868b]">Dachform:</span> <span className="text-[#1d1d1f]">{s2.dachform || '–'}</span></div>
+            <div><span className="text-[#86868b]">Fassade:</span> <span className="text-[#1d1d1f]">{s2.fassade || '–'}</span></div>
+            <div className="col-span-2"><span className="text-[#86868b]">Hindernisse:</span> <span className="text-[#1d1d1f]">{(s2.hindernisse || []).join(', ') || 'Keine'}</span></div>
           </div>
         </div>
-        <div className="rounded-lg bg-slate-700/50 p-4">
-          <p className="text-xs font-bold uppercase tracking-wider text-orange-400 mb-2">Schritt 3 – Gerüstplanung</p>
+        <div className="rounded-xl bg-black/10/50 p-4">
+          <p className="text-xs font-bold uppercase tracking-wider text-[#e8590c] mb-2">Schritt 3 – Gerüstplanung</p>
           <div className="grid grid-cols-2 gap-2 text-sm">
-            <div><span className="text-slate-400">Gerüsttyp:</span> <span className="text-white">{s3.geruesttyp || '–'}</span></div>
-            <div><span className="text-slate-400">Belag:</span> <span className="text-white">{s3.belag || '–'}</span></div>
-            <div><span className="text-slate-400">Feldlänge:</span> <span className="text-white">{s3.feldlänge || '–'} m</span></div>
-            <div><span className="text-slate-400">Untergrund:</span> <span className="text-white">{s3.untergrund || '–'}</span></div>
+            <div><span className="text-[#86868b]">Gerüsttyp:</span> <span className="text-[#1d1d1f]">{s3.geruesttyp || '–'}</span></div>
+            <div><span className="text-[#86868b]">Belag:</span> <span className="text-[#1d1d1f]">{s3.belag || '–'}</span></div>
+            <div><span className="text-[#86868b]">Feldlänge:</span> <span className="text-[#1d1d1f]">{s3.feldlänge || '–'} m</span></div>
+            <div><span className="text-[#86868b]">Untergrund:</span> <span className="text-[#1d1d1f]">{s3.untergrund || '–'}</span></div>
           </div>
         </div>
-        <div className="rounded-lg bg-slate-700/50 p-4">
-          <p className="text-xs font-bold uppercase tracking-wider text-orange-400 mb-2">Schritt 4 – Sicherheit</p>
+        <div className="rounded-xl bg-black/10/50 p-4">
+          <p className="text-xs font-bold uppercase tracking-wider text-[#e8590c] mb-2">Schritt 4 – Sicherheit</p>
           <div className="grid grid-cols-2 gap-2 text-sm">
-            <div><span className="text-slate-400">Anker:</span> <span className="text-white">{s4.anker || '–'}</span></div>
-            <div><span className="text-slate-400">Windzone:</span> <span className="text-white">{s4.windzone || '–'}</span></div>
-            <div className="col-span-2"><span className="text-slate-400">Gefahren:</span> <span className="text-white">{mapGefahren(s4).join(', ') || 'Keine'}</span></div>
+            <div><span className="text-[#86868b]">Anker:</span> <span className="text-[#1d1d1f]">{s4.anker || '–'}</span></div>
+            <div><span className="text-[#86868b]">Windzone:</span> <span className="text-[#1d1d1f]">{s4.windzone || '–'}</span></div>
+            <div className="col-span-2"><span className="text-[#86868b]">Gefahren:</span> <span className="text-[#1d1d1f]">{mapGefahren(s4).join(', ') || 'Keine'}</span></div>
           </div>
         </div>
-        <div className="rounded-lg bg-slate-700/50 p-4">
-          <p className="text-xs font-bold uppercase tracking-wider text-orange-400 mb-2">Schritt 5 – Material & Termine</p>
+        <div className="rounded-xl bg-black/10/50 p-4">
+          <p className="text-xs font-bold uppercase tracking-wider text-[#e8590c] mb-2">Schritt 5 – Material & Termine</p>
           <div className="grid grid-cols-2 gap-2 text-sm">
-            <div><span className="text-slate-400">Liefertermin:</span> <span className="text-white">{s5.liefertermin || '–'}</span></div>
-            <div><span className="text-slate-400">Abholtermin:</span> <span className="text-white">{s5.abholtermin || '–'}</span></div>
+            <div><span className="text-[#86868b]">Liefertermin:</span> <span className="text-[#1d1d1f]">{s5.liefertermin || '–'}</span></div>
+            <div><span className="text-[#86868b]">Abholtermin:</span> <span className="text-[#1d1d1f]">{s5.abholtermin || '–'}</span></div>
           </div>
         </div>
       </div>
@@ -517,23 +517,23 @@ function Schritt6Content() {
   // RENDER
   // ═══════════════════════════════════════════════════════════
   return (
-    <div className="min-h-screen bg-slate-900 text-white p-6">
+    <div className="min-h-screen bg-white text-[#1d1d1f] p-6">
       <div className="max-w-4xl mx-auto">
-        <button onClick={handleZurueck} className="text-slate-400 hover:text-white text-sm mb-2">← Zurück</button>
+        <button onClick={handleZurueck} className="text-[#86868b] hover:text-[#1d1d1f] text-sm mb-2">← Zurück</button>
         <h1 className="text-3xl font-bold mb-2">📋 Zusammenfassung & KI-Planung</h1>
-        <p className="text-slate-400 mb-6">Baustelle: Schritt 6 von 6</p>
+        <p className="text-[#86868b] mb-6">Baustelle: Schritt 6 von 6</p>
 
         {/* ═══════════════════════════════════════════════════════════ */}
         {/* ANGEBOTSSTATUS-TRACKER */}
         {savedProjectId && (
-          <div className="mb-6 bg-slate-800 rounded-xl border border-slate-700 p-4">
+          <div className="mb-6 bg-[#f5f5f7] rounded-xl border border-black/10 p-4">
             <div className="flex items-center justify-between mb-2">
-              <h3 className="text-sm font-bold text-orange-400 uppercase tracking-wider">Angebotsstatus</h3>
+              <h3 className="text-sm font-bold text-[#e8590c] uppercase tracking-wider">Angebotsstatus</h3>
               <span className={`px-3 py-1 rounded-full text-xs font-bold ${
                 angebotsStatus === 'angenommen' ? 'bg-green-500 text-green-950' :
                 angebotsStatus === 'gelesen' ? 'bg-blue-500 text-blue-950' :
                 angebotsStatus === 'versendet' ? 'bg-amber-500 text-amber-950' :
-                'bg-slate-600 text-slate-300'
+                'bg-black/10 text-[#424245]'
               }`}>
                 {angebotsStatus === 'erstellt' ? '✏️ Erstellt' :
                  angebotsStatus === 'versendet' ? '📧 Versendet' :
@@ -547,13 +547,13 @@ function Schritt6Content() {
                   <div className={`h-2 flex-1 rounded-full ${
                     ['erstellt', 'versendet', 'gelesen', 'angenommen'].indexOf(angebotsStatus) >= i
                       ? status === 'angenommen' ? 'bg-green-500' : 'bg-amber-500'
-                      : 'bg-slate-700'
+                      : 'bg-black/10'
                   }`} />
-                  {i < 3 && <div className="w-2 h-2 rounded-full bg-slate-600" />}
+                  {i < 3 && <div className="w-2 h-2 rounded-full bg-black/20" />}
                 </div>
               ))}
             </div>
-            <div className="flex justify-between mt-1 text-xs text-slate-500">
+            <div className="flex justify-between mt-1 text-xs text-[#86868b]">
               <span>Erstellt</span><span>Versendet</span><span>Gelesen</span><span>Angenommen</span>
             </div>
           </div>
@@ -561,39 +561,39 @@ function Schritt6Content() {
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <div className="lg:col-span-1 space-y-6">
-            <div className="bg-slate-800 rounded-xl p-6">
-              <h2 className="text-lg font-bold text-white mb-4">Projektdaten</h2>
+            <div className="bg-[#f5f5f7] rounded-xl p-6">
+              <h2 className="text-lg font-bold text-[#1d1d1f] mb-4">Projektdaten</h2>
               {renderZusammenfassung()}
             </div>
 
             {/* ═══════════════════════════════════════════════════════════ */}
             {/* AKTIONEN – ERWEITERT */}
-            <div className="bg-slate-800 rounded-xl p-6 space-y-3">
-              <h2 className="text-lg font-bold text-white mb-2">Aktionen</h2>
+            <div className="bg-[#f5f5f7] rounded-xl p-6 space-y-3">
+              <h2 className="text-lg font-bold text-[#1d1d1f] mb-2">Aktionen</h2>
 
-              <button onClick={handleSpeichern} disabled={isSaving} className="w-full rounded-lg bg-slate-700 hover:bg-slate-600 disabled:opacity-50 disabled:cursor-not-allowed py-3 font-semibold text-white transition-colors">
+              <button onClick={handleSpeichern} disabled={isSaving} className="w-full rounded-xl bg-black/10 hover:bg-black/15 disabled:opacity-50 disabled:cursor-not-allowed py-3 font-semibold text-[#1d1d1f] transition-colors">
                 {isSaving ? '💾 Wird gespeichert...' : '💾 Projekt speichern'}
               </button>
 
-              <button onClick={handlePDF} className="w-full rounded-lg bg-slate-700 hover:bg-slate-600 py-3 font-semibold text-white transition-colors">
+              <button onClick={handlePDF} className="w-full rounded-xl bg-black/10 hover:bg-black/15 py-3 font-semibold text-[#1d1d1f] transition-colors">
                 📄 PDF erzeugen & herunterladen
               </button>
 
               {/* NEU: E-Mail */}
               {savedProjectId && kiResult && (
-                <div className="space-y-2 pt-2 border-t border-slate-700">
-                  <label className="block text-xs text-slate-400">E-Mail Kunde</label>
+                <div className="space-y-2 pt-2 border-t border-black/10">
+                  <label className="block text-xs text-[#86868b]">E-Mail Kunde</label>
                   <input
                     type="email"
                     value={customerEmail}
                     onChange={e => setCustomerEmail(e.target.value)}
                     placeholder="kunde@beispiel.de"
-                    className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-sm text-white placeholder-slate-500 focus:outline-none focus:border-amber-500"
+                    className="w-full px-3 py-2 bg-black/10 border border-black/10 rounded-xl text-sm text-[#1d1d1f] placeholder-[#86868b] focus:outline-none focus:border-[#e8590c]"
                   />
                   <button
                     onClick={handleEmailSend}
                     disabled={emailStatus === 'sending' || !customerEmail}
-                    className="w-full rounded-lg bg-blue-600 hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed py-3 font-semibold text-white transition-colors"
+                    className="w-full rounded-xl bg-blue-600 hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed py-3 font-semibold text-white transition-colors"
                   >
                     {emailStatus === 'sending' ? '📧 Wird gesendet...' :
                      emailStatus === 'sent' ? '✅ E-Mail versendet' :
@@ -605,19 +605,19 @@ function Schritt6Content() {
 
               {/* NEU: QR-Code */}
               {savedProjectId && (
-                <div className="pt-2 border-t border-slate-700">
-                  <button onClick={() => setShowQR(!showQR)} className="w-full rounded-lg bg-purple-600 hover:bg-purple-500 py-3 font-semibold text-white transition-colors">
+                <div className="pt-2 border-t border-black/10">
+                  <button onClick={() => setShowQR(!showQR)} className="w-full rounded-xl bg-purple-600 hover:bg-purple-500 py-3 font-semibold text-white transition-colors">
                     {showQR ? '📱 QR-Code ausblenden' : '📱 QR-Code anzeigen'}
                   </button>
                   {showQR && (
-                    <div className="mt-3 bg-white rounded-lg p-4 text-center">
+                    <div className="mt-3 bg-white rounded-xl p-4 text-center">
                       <img
                         src={`/api/qr?projectId=${savedProjectId}&size=200`}
                         alt="QR-Code"
                         className="mx-auto"
                       />
-                      <p className="text-xs text-slate-600 mt-2">Scanne für Projekt-Details</p>
-                      <p className="text-xs text-slate-500">ID: {savedProjectId}</p>
+                      <p className="text-xs text-[#86868b] mt-2">Scanne für Projekt-Details</p>
+                      <p className="text-xs text-[#86868b]">ID: {savedProjectId}</p>
                     </div>
                   )}
                 </div>
@@ -625,8 +625,8 @@ function Schritt6Content() {
 
               {/* NEU: Unterschrift */}
               {savedProjectId && (
-                <div className="pt-2 border-t border-slate-700">
-                  <button onClick={() => setShowSignature(!showSignature)} className="w-full rounded-lg bg-green-600 hover:bg-green-500 py-3 font-semibold text-white transition-colors">
+                <div className="pt-2 border-t border-black/10">
+                  <button onClick={() => setShowSignature(!showSignature)} className="w-full rounded-xl bg-green-600 hover:bg-green-500 py-3 font-semibold text-white transition-colors">
                     {showSignature ? '✍️ Unterschrift schließen' : signatureData ? '✅ Unterschrift vorhanden' : '✍️ Kunden-Unterschrift'}
                   </button>
                   {showSignature && (
@@ -638,7 +638,7 @@ function Schritt6Content() {
                     </div>
                   )}
                   {signatureData && !showSignature && (
-                    <div className="mt-3 bg-white rounded-lg p-2">
+                    <div className="mt-3 bg-white rounded-xl p-2">
                       <img src={signatureData} alt="Unterschrift" className="h-16 mx-auto" />
                     </div>
                   )}
@@ -647,18 +647,18 @@ function Schritt6Content() {
 
               {/* NEU (Phase 13): Rechnung erstellen, sobald Angebot angenommen */}
               {angebotsStatus === 'angenommen' && savedProjectId && kiResult && (
-                <div className="pt-2 border-t border-slate-700">
-                  <button onClick={handleRechnung} className="w-full rounded-lg bg-amber-500 hover:bg-amber-400 py-3 font-bold text-slate-900 transition-colors">
+                <div className="pt-2 border-t border-black/10">
+                  <button onClick={handleRechnung} className="w-full rounded-xl bg-[#e8590c] hover:bg-[#d9480f] py-3 font-bold text-white transition-colors">
                     🧾 Rechnung erstellen
                   </button>
                 </div>
               )}
 
               {kiResult && (
-                <div className="grid grid-cols-3 gap-2 mt-3 pt-2 border-t border-slate-700">
-                  <button onClick={handleSaveStueckliste} className="rounded-lg bg-blue-600 hover:bg-blue-500 py-2 text-xs font-bold text-white transition-colors">💾 Stückliste</button>
-                  <button onClick={handlePDF} className="rounded-lg bg-red-600 hover:bg-red-500 py-2 text-xs font-bold text-white transition-colors">📄 Angebot PDF</button>
-                  <button onClick={handleManualEdit} className="rounded-lg bg-orange-600 hover:bg-orange-500 py-2 text-xs font-bold text-white transition-colors">{editMode ? '✅ Fertig' : '✏️ Manuell'}</button>
+                <div className="grid grid-cols-3 gap-2 mt-3 pt-2 border-t border-black/10">
+                  <button onClick={handleSaveStueckliste} className="rounded-xl bg-blue-600 hover:bg-blue-500 py-2 text-xs font-bold text-white transition-colors">💾 Stückliste</button>
+                  <button onClick={handlePDF} className="rounded-xl bg-red-600 hover:bg-red-500 py-2 text-xs font-bold text-white transition-colors">📄 Angebot PDF</button>
+                  <button onClick={handleManualEdit} className="rounded-xl bg-orange-600 hover:bg-orange-500 py-2 text-xs font-bold text-white transition-colors">{editMode ? '✅ Fertig' : '✏️ Manuell'}</button>
                 </div>
               )}
             </div>
@@ -666,19 +666,19 @@ function Schritt6Content() {
 
           <div className="lg:col-span-2 space-y-6">
             {/* KI-Berechnung (unverändert) */}
-            <div className="bg-slate-800 rounded-xl p-6 border border-blue-500/20">
+            <div className="bg-[#f5f5f7] rounded-xl p-6 border border-blue-500/20">
               <div className="flex items-center gap-3 mb-3">
                 <span className="text-3xl">🤖</span>
                 <div>
-                  <h2 className="text-xl font-bold text-white">KI-Materialberechnung</h2>
-                  <p className="text-sm text-slate-400">Automatische Stückliste, Kostenkalkulation und Risikoanalyse</p>
+                  <h2 className="text-xl font-bold text-[#1d1d1f]">KI-Materialberechnung</h2>
+                  <p className="text-sm text-[#86868b]">Automatische Stückliste, Kostenkalkulation und Risikoanalyse</p>
                   <KiHinweis text="KI-gestützte Berechnung (Mistral). Materialliste und Preis sind Vorschläge – bitte fachlich prüfen, bevor das Angebot rausgeht." />
                 </div>
               </div>
-              <button onClick={handleKIBerechnung} disabled={kiLoading} className="w-full rounded-lg bg-blue-600 hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed py-4 font-bold text-white transition-colors">
+              <button onClick={handleKIBerechnung} disabled={kiLoading} className="w-full rounded-xl bg-blue-600 hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed py-4 font-bold text-white transition-colors">
                 {kiLoading ? <span className="flex items-center justify-center gap-2"><span className="h-5 w-5 animate-spin rounded-full border-2 border-white border-t-transparent"></span>KI berechnet Materialliste...</span> : '🚀 KI Planung starten'}
               </button>
-              {kiError && <div className="mt-4 rounded-lg border border-red-500/30 bg-red-500/10 p-4"><p className="text-sm font-medium text-red-300">Fehler: {kiError}</p></div>}
+              {kiError && <div className="mt-4 rounded-xl border border-red-500/30 bg-red-500/10 p-4"><p className="text-sm font-medium text-red-700">Fehler: {kiError}</p></div>}
             </div>
 
             {kiResult && (
@@ -691,23 +691,23 @@ function Schritt6Content() {
             {kiResult && (() => {
               const a = calcAngebot();
               const toggleCls = (on: boolean) =>
-                `rounded-lg border px-3 py-1.5 text-xs font-bold transition ${on ? 'bg-amber-500/20 border-amber-500 text-amber-300' : 'bg-slate-700 border-slate-600 text-slate-400 hover:border-slate-500'}`;
-              const inputCls = 'w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-amber-500';
+                `rounded-lg border px-3 py-1.5 text-xs font-bold transition ${on ? 'bg-[#e8590c]/10 border-[#e8590c] text-[#e8590c]' : 'bg-[#f5f5f7] border-black/10 text-[#86868b] hover:border-black/20'}`;
+              const inputCls = 'w-full bg-[#f5f5f7] border border-black/10 rounded-lg px-3 py-2 text-sm text-[#1d1d1f] placeholder-[#86868b] focus:outline-none focus:border-[#e8590c]';
               return (
-                <div className="bg-slate-800 rounded-xl p-6 border border-amber-500/20 animate-in fade-in slide-in-from-top-2">
+                <div className="bg-[#f5f5f7] rounded-xl p-6 border border-[#e8590c]/20 animate-in fade-in slide-in-from-top-2">
                   <div className="flex items-center gap-3 mb-4">
                     <span className="text-3xl">💶</span>
                     <div>
-                      <h3 className="text-xl font-bold text-white">Angebot anpassen</h3>
-                      <p className="text-sm text-slate-400">Skonto, Mietverlängerung, Nachtrag und Sonderrabatt – fließt automatisch ins PDF</p>
+                      <h3 className="text-xl font-bold text-[#1d1d1f]">Angebot anpassen</h3>
+                      <p className="text-sm text-[#86868b]">Skonto, Mietverlängerung, Nachtrag und Sonderrabatt – fließt automatisch ins PDF</p>
                     </div>
                   </div>
 
                   {/* ─── Skonto: 1 Klick ─── */}
-                  <div className="flex items-center justify-between bg-slate-700/40 rounded-lg p-3 mb-3">
+                  <div className="flex items-center justify-between bg-black/10/40 rounded-xl p-3 mb-3">
                     <div>
-                      <p className="text-sm font-semibold text-white">2 % Skonto</p>
-                      <p className="text-xs text-slate-400">Wird als Skonto-Klausel und Skonto-Preis im Angebot ausgewiesen</p>
+                      <p className="text-sm font-semibold text-[#1d1d1f]">2 % Skonto</p>
+                      <p className="text-xs text-[#86868b]">Wird als Skonto-Klausel und Skonto-Preis im Angebot ausgewiesen</p>
                     </div>
                     <button onClick={() => setAnpassungen((p) => ({ ...p, skonto: !p.skonto }))} className={toggleCls(anpassungen.skonto)}>
                       {anpassungen.skonto ? '✅ Aktiv' : 'Aktivieren'}
@@ -715,11 +715,11 @@ function Schritt6Content() {
                   </div>
 
                   {/* ─── Länger mieten ─── */}
-                  <div className="bg-slate-700/40 rounded-lg p-3 mb-3">
+                  <div className="bg-black/10/40 rounded-xl p-3 mb-3">
                     <div className="flex items-center justify-between">
                       <div>
-                        <p className="text-sm font-semibold text-white">Länger mieten (Option)</p>
-                        <p className="text-xs text-slate-400">Zusatzwochen und Preis pro Woche selbst eintragen</p>
+                        <p className="text-sm font-semibold text-[#1d1d1f]">Länger mieten (Option)</p>
+                        <p className="text-xs text-[#86868b]">Zusatzwochen und Preis pro Woche selbst eintragen</p>
                       </div>
                       <button onClick={() => setAnpassungen((p) => ({ ...p, miete: { ...p.miete, aktiv: !p.miete.aktiv } }))} className={toggleCls(anpassungen.miete.aktiv)}>
                         {anpassungen.miete.aktiv ? '✅ Aktiv' : 'Aktivieren'}
@@ -728,13 +728,13 @@ function Schritt6Content() {
                     {anpassungen.miete.aktiv && (
                       <div className="grid grid-cols-2 gap-3 mt-3">
                         <div>
-                          <label className="block text-xs text-slate-400 mb-1">Zusätzliche Wochen</label>
+                          <label className="block text-xs text-[#86868b] mb-1">Zusätzliche Wochen</label>
                           <input type="number" min="0" value={anpassungen.miete.wochen}
                             onChange={(e) => setAnpassungen((p) => ({ ...p, miete: { ...p.miete, wochen: e.target.value } }))}
                             placeholder="z. B. 4" className={inputCls} />
                         </div>
                         <div>
-                          <label className="block text-xs text-slate-400 mb-1">Preis pro Woche (€)</label>
+                          <label className="block text-xs text-[#86868b] mb-1">Preis pro Woche (€)</label>
                           <input type="number" min="0" step="0.01" value={anpassungen.miete.preisProWoche}
                             onChange={(e) => setAnpassungen((p) => ({ ...p, miete: { ...p.miete, preisProWoche: e.target.value } }))}
                             placeholder="z. B. 180" className={inputCls} />
@@ -744,11 +744,11 @@ function Schritt6Content() {
                   </div>
 
                   {/* ─── Nachtrag ─── */}
-                  <div className="bg-slate-700/40 rounded-lg p-3 mb-3">
+                  <div className="bg-black/10/40 rounded-xl p-3 mb-3">
                     <div className="flex items-center justify-between">
                       <div>
-                        <p className="text-sm font-semibold text-white">Nachtrag</p>
-                        <p className="text-xs text-slate-400">Zusatzleistung mit eigenem Betrag</p>
+                        <p className="text-sm font-semibold text-[#1d1d1f]">Nachtrag</p>
+                        <p className="text-xs text-[#86868b]">Zusatzleistung mit eigenem Betrag</p>
                       </div>
                       <button onClick={() => setAnpassungen((p) => ({ ...p, nachtrag: { ...p.nachtrag, aktiv: !p.nachtrag.aktiv } }))} className={toggleCls(anpassungen.nachtrag.aktiv)}>
                         {anpassungen.nachtrag.aktiv ? '✅ Aktiv' : 'Aktivieren'}
@@ -757,13 +757,13 @@ function Schritt6Content() {
                     {anpassungen.nachtrag.aktiv && (
                       <div className="grid grid-cols-3 gap-3 mt-3">
                         <div className="col-span-2">
-                          <label className="block text-xs text-slate-400 mb-1">Beschreibung</label>
+                          <label className="block text-xs text-[#86868b] mb-1">Beschreibung</label>
                           <input type="text" value={anpassungen.nachtrag.text}
                             onChange={(e) => setAnpassungen((p) => ({ ...p, nachtrag: { ...p.nachtrag, text: e.target.value } }))}
                             placeholder="z. B. Fangnetz Giebelseite" className={inputCls} />
                         </div>
                         <div>
-                          <label className="block text-xs text-slate-400 mb-1">Betrag (€)</label>
+                          <label className="block text-xs text-[#86868b] mb-1">Betrag (€)</label>
                           <input type="number" min="0" step="0.01" value={anpassungen.nachtrag.betrag}
                             onChange={(e) => setAnpassungen((p) => ({ ...p, nachtrag: { ...p.nachtrag, betrag: e.target.value } }))}
                             placeholder="z. B. 250" className={inputCls} />
@@ -773,11 +773,11 @@ function Schritt6Content() {
                   </div>
 
                   {/* ─── Sonderrabatt ─── */}
-                  <div className="bg-slate-700/40 rounded-lg p-3 mb-4">
+                  <div className="bg-black/10/40 rounded-xl p-3 mb-4">
                     <div className="flex items-center justify-between">
                       <div>
-                        <p className="text-sm font-semibold text-white">Sonderrabatt</p>
-                        <p className="text-xs text-slate-400">Händischer Nachlass in €, wird vom Preis abgezogen</p>
+                        <p className="text-sm font-semibold text-[#1d1d1f]">Sonderrabatt</p>
+                        <p className="text-xs text-[#86868b]">Händischer Nachlass in €, wird vom Preis abgezogen</p>
                       </div>
                       <button onClick={() => setAnpassungen((p) => ({ ...p, rabatt: { ...p.rabatt, aktiv: !p.rabatt.aktiv } }))} className={toggleCls(anpassungen.rabatt.aktiv)}>
                         {anpassungen.rabatt.aktiv ? '✅ Aktiv' : 'Aktivieren'}
@@ -785,7 +785,7 @@ function Schritt6Content() {
                     </div>
                     {anpassungen.rabatt.aktiv && (
                       <div className="mt-3">
-                        <label className="block text-xs text-slate-400 mb-1">Rabatt (€)</label>
+                        <label className="block text-xs text-[#86868b] mb-1">Rabatt (€)</label>
                         <input type="number" min="0" step="0.01" value={anpassungen.rabatt.betrag}
                           onChange={(e) => setAnpassungen((p) => ({ ...p, rabatt: { ...p.rabatt, betrag: e.target.value } }))}
                           placeholder="z. B. 500" className={inputCls} />
@@ -794,43 +794,43 @@ function Schritt6Content() {
                   </div>
 
                   {/* ─── Live-Endpreis ─── */}
-                  <div className="rounded-lg bg-slate-900/60 border border-slate-700 p-4 space-y-1.5 text-sm">
-                    <div className="flex justify-between text-slate-400"><span>Basispreis (KI)</span><span className="text-white">{eur(a.basis)}</span></div>
-                    {a.mieteBetrag > 0 && <div className="flex justify-between text-slate-400"><span>+ Mietverlängerung</span><span className="text-white">{eur(a.mieteBetrag)}</span></div>}
-                    {a.nachtragBetrag > 0 && <div className="flex justify-between text-slate-400"><span>+ Nachtrag</span><span className="text-white">{eur(a.nachtragBetrag)}</span></div>}
-                    {a.rabattBetrag > 0 && <div className="flex justify-between text-slate-400"><span>− Sonderrabatt</span><span className="text-red-400">−{eur(a.rabattBetrag)}</span></div>}
-                    <div className="border-t border-slate-700 pt-2 flex justify-between font-bold text-base">
-                      <span className="text-amber-400">Endpreis</span>
-                      <span className="text-amber-400">{eur(a.endpreis)}</span>
+                  <div className="rounded-xl bg-white/80 border border-black/10 p-4 space-y-1.5 text-sm">
+                    <div className="flex justify-between text-[#86868b]"><span>Basispreis (KI)</span><span className="text-[#1d1d1f]">{eur(a.basis)}</span></div>
+                    {a.mieteBetrag > 0 && <div className="flex justify-between text-[#86868b]"><span>+ Mietverlängerung</span><span className="text-[#1d1d1f]">{eur(a.mieteBetrag)}</span></div>}
+                    {a.nachtragBetrag > 0 && <div className="flex justify-between text-[#86868b]"><span>+ Nachtrag</span><span className="text-[#1d1d1f]">{eur(a.nachtragBetrag)}</span></div>}
+                    {a.rabattBetrag > 0 && <div className="flex justify-between text-[#86868b]"><span>− Sonderrabatt</span><span className="text-red-600">−{eur(a.rabattBetrag)}</span></div>}
+                    <div className="border-t border-black/10 pt-2 flex justify-between font-bold text-base">
+                      <span className="text-[#e8590c]">Endpreis</span>
+                      <span className="text-[#e8590c]">{eur(a.endpreis)}</span>
                     </div>
                     {anpassungen.skonto && (
-                      <div className="flex justify-between text-xs text-emerald-400">
+                      <div className="flex justify-between text-xs text-emerald-600">
                         <span>Skonto-Preis (−2 % bei Zahlung in 14 Tagen)</span>
                         <span>{eur(a.endpreis - a.skontoBetrag)}</span>
                       </div>
                     )}
-                    <p className="text-[10px] text-slate-500 pt-1">Alle Angaben netto zzgl. MwSt. Die Anpassungen werden mit dem Projekt gespeichert und ins Angebots-PDF übernommen.</p>
+                    <p className="text-[10px] text-[#86868b] pt-1">Alle Angaben netto zzgl. MwSt. Die Anpassungen werden mit dem Projekt gespeichert und ins Angebots-PDF übernommen.</p>
                   </div>
                 </div>
               );
             })()}
 
             {kiResult && editMode && (
-              <div className="bg-slate-800 rounded-xl p-6 border border-yellow-500/30 animate-in fade-in slide-in-from-top-2">
-                <h3 className="text-lg font-bold text-white mb-4">✏️ Materialliste bearbeiten</h3>
+              <div className="bg-[#f5f5f7] rounded-xl p-6 border border-yellow-500/30 animate-in fade-in slide-in-from-top-2">
+                <h3 className="text-lg font-bold text-[#1d1d1f] mb-4">✏️ Materialliste bearbeiten</h3>
                 <div className="space-y-2">
                   {editedMaterials.map((item, i) => (
-                    <div key={i} className="flex items-center gap-3 bg-slate-700/50 p-3 rounded-lg">
+                    <div key={i} className="flex items-center gap-3 bg-black/10/50 p-3 rounded-xl">
                       <div className="flex-1">
-                        <p className="text-sm font-medium text-white">{item.name}</p>
-                        <p className="text-xs text-slate-400">{item.articleNumber}</p>
+                        <p className="text-sm font-medium text-[#1d1d1f]">{item.name}</p>
+                        <p className="text-xs text-[#86868b]">{item.articleNumber}</p>
                       </div>
                       <div className="flex items-center gap-2">
-                        <button onClick={() => handleQuantityChange(i, item.quantity - 1)} className="w-8 h-8 rounded bg-slate-600 text-white hover:bg-slate-500">-</button>
-                        <span className="w-12 text-center text-white font-bold">{item.quantity}</span>
-                        <button onClick={() => handleQuantityChange(i, item.quantity + 1)} className="w-8 h-8 rounded bg-slate-600 text-white hover:bg-slate-500">+</button>
+                        <button onClick={() => handleQuantityChange(i, item.quantity - 1)} className="w-8 h-8 rounded bg-black/10 text-[#1d1d1f] hover:bg-black/15">-</button>
+                        <span className="w-12 text-center text-[#1d1d1f] font-bold">{item.quantity}</span>
+                        <button onClick={() => handleQuantityChange(i, item.quantity + 1)} className="w-8 h-8 rounded bg-black/10 text-[#1d1d1f] hover:bg-black/15">+</button>
                       </div>
-                      <div className="w-20 text-right text-sm text-white">{(item.quantity * item.unitPrice).toFixed(2)} €</div>
+                      <div className="w-20 text-right text-sm text-[#1d1d1f]">{(item.quantity * item.unitPrice).toFixed(2)} €</div>
                     </div>
                   ))}
                 </div>
@@ -838,27 +838,27 @@ function Schritt6Content() {
             )}
 
             {!kiResult && !kiLoading && !kiError && (
-              <div className="rounded-xl border border-dashed border-slate-700 bg-slate-800/50 p-8 text-center">
+              <div className="rounded-xl border border-dashed border-black/10 bg-black/5 p-8 text-center">
                 <p className="text-4xl mb-3">📐</p>
-                <p className="text-slate-300 font-medium">Noch keine KI-Berechnung durchgeführt</p>
-                <p className="text-sm text-slate-500 mt-1">Klicke auf "KI Planung starten", um die automatische Materialliste zu erhalten.</p>
+                <p className="text-[#424245] font-medium">Noch keine KI-Berechnung durchgeführt</p>
+                <p className="text-sm text-[#86868b] mt-1">Klicke auf "KI Planung starten", um die automatische Materialliste zu erhalten.</p>
               </div>
             )}
 
             {kiResult && (
               <div className="space-y-6">
-                <div className="bg-slate-800 rounded-xl p-6 border border-emerald-500/20">
+                <div className="bg-[#f5f5f7] rounded-xl p-6 border border-emerald-500/20">
                   <div className="flex items-center gap-3 mb-3">
                     <span className="text-3xl">🚛</span>
                     <div>
-                      <h3 className="text-xl font-bold text-white">KI-Disposition</h3>
-                      <p className="text-sm text-slate-400">Prüfe, ob Material von anderen Baustellen direkt geliefert werden kann</p>
+                      <h3 className="text-xl font-bold text-[#1d1d1f]">KI-Disposition</h3>
+                      <p className="text-sm text-[#86868b]">Prüfe, ob Material von anderen Baustellen direkt geliefert werden kann</p>
                     </div>
                   </div>
-                  <button onClick={handleDisposition} disabled={dispLoading} className="w-full rounded-lg bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 disabled:cursor-not-allowed py-4 font-bold text-white transition-colors">
+                  <button onClick={handleDisposition} disabled={dispLoading} className="w-full rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 disabled:cursor-not-allowed py-4 font-bold text-white transition-colors">
                     {dispLoading ? <span className="flex items-center justify-center gap-2"><span className="h-5 w-5 animate-spin rounded-full border-2 border-white border-t-transparent"></span>Optimiere Routen...</span> : '🚛 Disposition optimieren'}
                   </button>
-                  {dispError && <div className="mt-4 rounded-lg border border-red-500/30 bg-red-500/10 p-4"><p className="text-sm font-medium text-red-300">Fehler: {dispError}</p></div>}
+                  {dispError && <div className="mt-4 rounded-xl border border-red-500/30 bg-red-500/10 p-4"><p className="text-sm font-medium text-red-700">Fehler: {dispError}</p></div>}
                 </div>
                 {dispResult && <div className="animate-in fade-in slide-in-from-top-4 duration-500"><DispositionResult result={dispResult} loading={dispLoading} /></div>}
               </div>
@@ -866,15 +866,15 @@ function Schritt6Content() {
 
             {kiResult && (
               <div className="space-y-6">
-                <div className="bg-slate-800 rounded-xl p-6 border border-purple-500/20">
+                <div className="bg-[#f5f5f7] rounded-xl p-6 border border-purple-500/20">
                   <div className="flex items-center gap-3 mb-3">
                     <span className="text-3xl">🧊</span>
                     <div>
-                      <h3 className="text-xl font-bold text-white">Digitaler Zwilling</h3>
-                      <p className="text-sm text-slate-400">3D-Visualisierung des geplanten Gerüsts</p>
+                      <h3 className="text-xl font-bold text-[#1d1d1f]">Digitaler Zwilling</h3>
+                      <p className="text-sm text-[#86868b]">3D-Visualisierung des geplanten Gerüsts</p>
                     </div>
                   </div>
-                  <button onClick={() => setShow3D(!show3D)} className="w-full rounded-lg bg-purple-600 hover:bg-purple-500 py-3 font-bold text-white transition-colors">{show3D ? '🧊 3D-Ansicht schließen' : '🧊 3D-Ansicht öffnen'}</button>
+                  <button onClick={() => setShow3D(!show3D)} className="w-full rounded-xl bg-purple-600 hover:bg-purple-500 py-3 font-bold text-white transition-colors">{show3D ? '🧊 3D-Ansicht schließen' : '🧊 3D-Ansicht öffnen'}</button>
                 </div>
                 {show3D && <div className="animate-in fade-in slide-in-from-top-4 duration-500"><DigitalTwin lengthM={parseFloat(s2.laenge) || 10} heightM={parseFloat(s2.hoehe) || 8} fieldLengthM={parseFloat(s3.feldlänge) || 2.07} showMeasurements={true} /></div>}
               </div>
@@ -889,7 +889,7 @@ function Schritt6Content() {
 // useSearchParams braucht in Next eine Suspense-Grenze (Prerendering)
 export default function Schritt6Page() {
   return (
-    <Suspense fallback={<div className="min-h-screen bg-[#0f172a] p-8 text-slate-400">Lade Angebot…</div>}>
+    <Suspense fallback={<div className="min-h-screen bg-[#fbfbfd] p-8 text-[#86868b]">Lade Angebot…</div>}>
       <Schritt6Content />
     </Suspense>
   );

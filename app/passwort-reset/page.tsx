@@ -47,18 +47,18 @@ export default function PasswortResetPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center p-6">
-      <div className="w-full max-w-md p-8 bg-[#1e293b] rounded-2xl border border-[#334155] shadow-2xl">
+    <div className="min-h-screen bg-[#fbfbfd] flex items-center justify-center p-6">
+      <div className="w-full max-w-md p-8 bg-white rounded-2xl border border-black/10 shadow-2xl">
         <div className="text-center mb-6">
           <div className="inline-flex items-center gap-2 mb-3">
-            <HardHat className="w-8 h-8 text-amber-400" />
-            <span className="text-xl font-bold text-white tracking-tight">SCAFFOLD OS</span>
+            <HardHat className="w-8 h-8 text-[#e8590c]" />
+            <span className="text-xl font-bold text-[#1d1d1f] tracking-tight">SCAFFOLD OS</span>
           </div>
-          <h1 className="text-lg font-semibold text-white">Neues Passwort setzen</h1>
+          <h1 className="text-lg font-semibold text-[#1d1d1f]">Neues Passwort setzen</h1>
         </div>
 
         {done ? (
-          <div className="p-4 bg-emerald-900/40 border border-emerald-700 rounded-xl text-emerald-200 text-sm text-center">
+          <div className="p-4 bg-emerald-900/40 border border-emerald-200 rounded-xl text-emerald-700 text-sm text-center">
             ✅ Passwort geändert! Du wirst zur Anmeldung weitergeleitet…
           </div>
         ) : (
@@ -69,7 +69,7 @@ export default function PasswortResetPage() {
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="w-full px-4 py-2.5 bg-[#0f172a] border border-[#334155] rounded-lg text-white placeholder-[#475569] focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent transition"
+                className="w-full px-4 py-2.5 bg-[#fbfbfd] border border-black/10 rounded-xl text-[#1d1d1f] placeholder-[#475569] focus:outline-none focus:ring-2 focus:ring-[#e8590c] focus:border-transparent transition"
                 placeholder="mind. 6 Zeichen"
                 required
               />
@@ -80,14 +80,14 @@ export default function PasswortResetPage() {
                 type="password"
                 value={password2}
                 onChange={(e) => setPassword2(e.target.value)}
-                className="w-full px-4 py-2.5 bg-[#0f172a] border border-[#334155] rounded-lg text-white placeholder-[#475569] focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent transition"
+                className="w-full px-4 py-2.5 bg-[#fbfbfd] border border-black/10 rounded-xl text-[#1d1d1f] placeholder-[#475569] focus:outline-none focus:ring-2 focus:ring-[#e8590c] focus:border-transparent transition"
                 placeholder="nochmal eingeben"
                 required
               />
             </div>
 
             {error && (
-              <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-lg text-red-400 text-sm">
+              <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-xl text-red-600 text-sm">
                 {error}
               </div>
             )}
@@ -95,14 +95,14 @@ export default function PasswortResetPage() {
             <button
               type="submit"
               disabled={loading}
-              className="w-full py-2.5 px-4 bg-amber-500 hover:bg-amber-600 text-slate-900 font-semibold rounded-lg transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+              className="w-full py-2.5 px-4 bg-[#e8590c] hover:bg-[#d9480f] text-white font-semibold rounded-xl transition-all disabled:opacity-50 flex items-center justify-center gap-2"
             >
               <KeyRound className="w-4 h-4" />
               {loading ? 'Speichere…' : 'Passwort speichern'}
             </button>
 
             <p className="text-center">
-              <Link href="/login" className="text-[#64748b] hover:text-white text-sm transition">
+              <Link href="/login" className="text-[#64748b] hover:text-[#1d1d1f] text-sm transition">
                 ← Zurück zur Anmeldung
               </Link>
             </p>

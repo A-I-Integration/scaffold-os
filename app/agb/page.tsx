@@ -13,7 +13,7 @@ export const metadata = { title: 'AGB – SCAFFOLD OS' };
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <section>
-      <h2 className="text-lg font-semibold text-amber-400 mb-2">{title}</h2>
+      <h2 className="text-lg font-semibold text-[#e8590c] mb-2">{title}</h2>
       <div className="space-y-3">{children}</div>
     </section>
   );
@@ -21,20 +21,20 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 
 export default function AgbPage() {
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 text-white">
+    <div className="min-h-screen bg-[#fbfbfd] text-[#1d1d1f]">
       <div className="max-w-3xl mx-auto px-6 py-12">
-        <Link href="/" className="inline-flex items-center gap-2 text-slate-400 hover:text-amber-400 text-sm transition-colors mb-10">
+        <Link href="/" className="inline-flex items-center gap-2 text-[#86868b] hover:text-[#e8590c] text-sm transition-colors mb-10">
           <ArrowLeft className="w-4 h-4" /> Zurück zur Startseite
         </Link>
 
         <div className="flex items-center gap-2 mb-8">
-          <HardHat className="w-7 h-7 text-amber-400" />
+          <HardHat className="w-7 h-7 text-[#e8590c]" />
           <span className="text-lg font-bold tracking-tight">SCAFFOLD OS</span>
         </div>
 
         <h1 className="text-3xl font-bold mb-8">Allgemeine Geschäftsbedingungen</h1>
 
-        <div className="space-y-8 text-slate-300 leading-relaxed">
+        <div className="space-y-8 text-[#424245] leading-relaxed">
           <Section title="§ 1 Geltungsbereich">
             <p>
               Diese AGB gelten ausschließlich für Unternehmer im Sinne des § 14 BGB, die
@@ -75,24 +75,42 @@ export default function AgbPage() {
 
           <Section title="§ 4 Preise und Zahlung">
             <p>
-              Standardpreis für kleine Unternehmen: 399 € netto pro Monat. Standardpreis für
-              größere Unternehmen: 499 € netto pro Monat.
+              Das SCAFFOLD-OS-Abonnement kostet 249 € netto pro Monat. Die Abrechnung erfolgt
+              monatlich im Voraus über den Zahlungsdienstleister Stripe (Kreditkarte oder
+              SEPA-Lastschrift). Die erste Abbuchung erfolgt nach Ablauf der Testphase gemäß § 5.
             </p>
             <p>
-              Onboarding: 1.490 € netto. Ein erweitertes Paket in Höhe von zusätzlich
-              2.490 € netto umfasst Onboarding, Lagereinrichtung und Schulung der Mitarbeiter.
+              Optional buchbar: Onboarding 1.490 € netto. Ein erweitertes Paket in Höhe von
+              zusätzlich 2.490 € netto umfasst Onboarding, Lagereinrichtung und Schulung der
+              Mitarbeiter.
             </p>
             <p>
-              Die Abrechnung erfolgt per Rechnung und/oder Stripe. Alle Preise verstehen sich
-              zuzüglich gesetzlicher Umsatzsteuer, soweit diese anfällt.
+              Alle Preise verstehen sich zuzüglich gesetzlicher Umsatzsteuer, soweit diese
+              anfällt. Bei Zahlungsverzug können der Zugang nach Mahnung vorübergehend
+              gesperrt sowie Verzugszinsen in gesetzlicher Höhe berechnet werden.
             </p>
           </Section>
 
-          <Section title="§ 5 Laufzeit und Kündigung">
+          <Section title="§ 5 Testphase, Laufzeit und Kündigung">
             <p>
-              Die Mindestvertragslaufzeit beträgt zwölf Monate. Danach ist der Vertrag monatlich
-              kündbar. Soweit im Einzelvertrag nichts Abweichendes vereinbart ist, gilt eine
-              Kündigungsfrist von 30 Tagen zum Monatsende.
+              Der Vertrag beginnt mit einer kostenlosen Testphase von drei Tagen. Innerhalb der
+              Testphase kann der Vertrag jederzeit ohne Angabe von Gründen beendet werden; es
+              entstehen keine Kosten. Eine Beendigung während der Testphase ist per E-Mail an{' '}
+              <a href="mailto:info@scaffoldos.de" className="text-[#e8590c] hover:text-[#e8590c]">info@scaffoldos.de</a>{' '}
+              oder über den Zahlungsdienstleister möglich.
+            </p>
+            <p>
+              Wird der Vertrag nicht innerhalb der Testphase beendet, verlängert er sich
+              automatisch in ein kostenpflichtiges Abonnement mit einer Mindestvertragslaufzeit
+              von vierundzwanzig (24) Monaten ab Ende der Testphase. Während der
+              Mindestvertragslaufzeit ist eine ordentliche Kündigung ausgeschlossen.
+            </p>
+            <p>
+              Nach Ablauf der Mindestvertragslaufzeit verlängert sich der Vertrag auf
+              unbestimmte Zeit und ist dann monatlich mit einer Frist von 30 Tagen zum
+              Monatsende kündbar. Kündigungen sind in Textform (z. B. per E-Mail an{' '}
+              <a href="mailto:info@scaffoldos.de" className="text-[#e8590c] hover:text-[#e8590c]">info@scaffoldos.de</a>)
+              zu richten.
             </p>
             <p>
               Das Recht zur außerordentlichen Kündigung aus wichtigem Grund bleibt unberührt.
@@ -110,7 +128,7 @@ export default function AgbPage() {
           <Section title="§ 7 Support">
             <p>
               Support: Montag bis Freitag von 08:00 bis 15:00 Uhr über{' '}
-              <a href="mailto:info@scaffoldos.de" className="text-amber-400 hover:text-amber-300">info@scaffoldos.de</a>{' '}
+              <a href="mailto:info@scaffoldos.de" className="text-[#e8590c] hover:text-[#e8590c]">info@scaffoldos.de</a>{' '}
               und 0151 77266265. Eine bestimmte Reaktions- oder Lösungszeit wird nicht
               garantiert, sofern nicht individuell vereinbart.
             </p>

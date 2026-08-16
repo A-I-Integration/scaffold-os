@@ -54,7 +54,7 @@ export default function PhotoUpload({ sessionId }: Props) {
   const getPublicUrl = (path: string) =>
     `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/project-media/${path}`;
 
-  if (!sessionId) return <div className="text-yellow-300 text-sm">⚠️ Session-ID fehlt</div>;
+  if (!sessionId) return <div className="text-amber-700 text-sm">⚠️ Session-ID fehlt</div>;
 
   return (
     <div className="space-y-4">
@@ -70,15 +70,15 @@ export default function PhotoUpload({ sessionId }: Props) {
         />
         <button
           disabled={uploading}
-          className="w-full rounded-lg border-2 border-dashed border-slate-600 bg-slate-800/50 py-6 text-center hover:border-blue-500 hover:bg-slate-800 disabled:opacity-50"
+          className="w-full rounded-xl border-2 border-dashed border-black/10 bg-black/5 py-6 text-center hover:border-blue-500 hover:bg-[#f5f5f7] disabled:opacity-50"
         >
           {uploading ? (
-            <span className="flex items-center justify-center gap-2 text-slate-300">
+            <span className="flex items-center justify-center gap-2 text-[#424245]">
               <span className="h-5 w-5 animate-spin rounded-full border-2 border-blue-500 border-t-transparent" />
               Wird hochgeladen...
             </span>
           ) : (
-            <span className="text-slate-300">
+            <span className="text-[#424245]">
               <span className="text-2xl">📷</span>
               <br />
               <span className="text-sm font-medium">Foto aufnehmen oder auswählen</span>
@@ -92,11 +92,11 @@ export default function PhotoUpload({ sessionId }: Props) {
           <div className="h-6 w-6 animate-spin rounded-full border-2 border-blue-500 border-t-transparent" />
         </div>
       ) : photos.length === 0 ? (
-        <p className="text-center text-sm text-slate-500">Noch keine Fotos</p>
+        <p className="text-center text-sm text-[#86868b]">Noch keine Fotos</p>
       ) : (
         <div className="grid grid-cols-3 gap-2">
           {photos.map((p) => (
-            <div key={p.id} className="group relative aspect-square overflow-hidden rounded-lg bg-slate-800">
+            <div key={p.id} className="group relative aspect-square overflow-hidden rounded-xl bg-[#f5f5f7]">
               <img
                 src={getPublicUrl(p.storage_path)}
                 alt={p.file_name}
@@ -116,8 +116,8 @@ export default function PhotoUpload({ sessionId }: Props) {
 
       {preview && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 p-4" onClick={() => setPreview(null)}>
-          <button className="absolute right-4 top-4 text-white text-2xl">✕</button>
-          <img src={preview} alt="Vorschau" className="max-h-full max-w-full rounded-lg" />
+          <button className="absolute right-4 top-4 text-[#1d1d1f] text-2xl">✕</button>
+          <img src={preview} alt="Vorschau" className="max-h-full max-w-full rounded-xl" />
         </div>
       )}
     </div>

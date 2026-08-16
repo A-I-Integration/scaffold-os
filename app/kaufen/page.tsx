@@ -44,84 +44,84 @@ function KaufenForm() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-900 text-white flex items-center justify-center p-6">
+    <div className="min-h-screen bg-white text-[#1d1d1f] flex items-center justify-center p-6">
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
-          <Link href="/" className="text-slate-500 hover:text-slate-300 text-sm">← Zur Startseite</Link>
+          <Link href="/" className="text-[#86868b] hover:text-[#424245] text-sm">← Zur Startseite</Link>
           <h1 className="text-3xl font-black mt-4">SCAFFOLD OS abonnieren</h1>
-          <p className="text-slate-400 mt-2 text-sm">
-            3 Tage kostenlos testen, danach <span className="text-amber-400 font-bold">249 €/Monat</span>.
+          <p className="text-[#86868b] mt-2 text-sm">
+            3 Tage kostenlos testen, danach <span className="text-[#e8590c] font-bold">249 €/Monat</span>.
             Mindestvertragslaufzeit 24 Monate, danach monatlich kündbar.
           </p>
         </div>
 
         {abgebrochen && (
-          <div className="mb-6 bg-amber-900/40 border border-amber-500 rounded-xl p-4 text-amber-200 text-sm">
+          <div className="mb-6 bg-orange-50 border border-[#e8590c]/40 rounded-xl p-4 text-amber-800 text-sm">
             Der Bezahlvorgang wurde abgebrochen – es wurde nichts abgebucht. Du kannst es hier jederzeit erneut versuchen.
           </div>
         )}
 
-        <form onSubmit={absenden} className="bg-slate-800 rounded-xl p-6 space-y-4">
+        <form onSubmit={absenden} className="bg-[#f5f5f7] rounded-xl p-6 space-y-4">
           <div>
-            <label className="block text-sm font-medium mb-2 text-slate-300">Firma *</label>
+            <label className="block text-sm font-medium mb-2 text-[#424245]">Firma *</label>
             <input
               type="text"
               value={firma}
               onChange={(e) => setFirma(e.target.value)}
               required
-              className="w-full bg-slate-700 border border-slate-600 rounded-lg px-4 py-3 text-white placeholder-slate-500 focus:outline-none focus:border-amber-500 transition"
+              className="w-full bg-black/10 border border-black/10 rounded-xl px-4 py-3 text-[#1d1d1f] placeholder-[#86868b] focus:outline-none focus:border-[#e8590c] transition"
               placeholder="z. B. Musterbau Gerüstbau GmbH"
             />
-            <p className="text-[11px] text-slate-500 mt-1">Daraus entsteht deine Subdomain, z. B. musterbau-gerüstbau.scaffoldos.de</p>
+            <p className="text-[11px] text-[#86868b] mt-1">Daraus entsteht deine Subdomain, z. B. musterbau-gerüstbau.scaffoldos.de</p>
           </div>
           <div>
-            <label className="block text-sm font-medium mb-2 text-slate-300">Dein Name</label>
+            <label className="block text-sm font-medium mb-2 text-[#424245]">Dein Name</label>
             <input
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              className="w-full bg-slate-700 border border-slate-600 rounded-lg px-4 py-3 text-white placeholder-slate-500 focus:outline-none focus:border-amber-500 transition"
+              className="w-full bg-black/10 border border-black/10 rounded-xl px-4 py-3 text-[#1d1d1f] placeholder-[#86868b] focus:outline-none focus:border-[#e8590c] transition"
               placeholder="Max Mustermann"
             />
           </div>
           <div>
-            <label className="block text-sm font-medium mb-2 text-slate-300">E-Mail (wird dein Login) *</label>
+            <label className="block text-sm font-medium mb-2 text-[#424245]">E-Mail (wird dein Login) *</label>
             <input
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
-              className="w-full bg-slate-700 border border-slate-600 rounded-lg px-4 py-3 text-white placeholder-slate-500 focus:outline-none focus:border-amber-500 transition"
+              className="w-full bg-black/10 border border-black/10 rounded-xl px-4 py-3 text-[#1d1d1f] placeholder-[#86868b] focus:outline-none focus:border-[#e8590c] transition"
               placeholder="chef@musterbau.de"
             />
           </div>
 
           {fehler && (
-            <div className="bg-red-900/40 border border-red-500 rounded-lg p-3 text-red-200 text-sm">{fehler}</div>
+            <div className="bg-red-900/40 border border-red-500 rounded-xl p-3 text-red-700 text-sm">{fehler}</div>
           )}
 
           <button
             type="submit"
             disabled={loading}
-            className="w-full bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-slate-900 font-black uppercase tracking-wide py-4 rounded-xl transition"
+            className="w-full bg-[#e8590c] hover:bg-[#d9480f] disabled:opacity-50 text-white font-black uppercase tracking-wide py-4 rounded-xl transition"
           >
             {loading ? 'Weiter zu Stripe…' : 'Jetzt 3 Tage kostenlos testen →'}
           </button>
 
-          <p className="text-[11px] text-slate-500 text-center leading-relaxed">
+          <p className="text-[11px] text-[#86868b] text-center leading-relaxed">
             Sichere Zahlung über Stripe (SEPA-Lastschrift oder Kreditkarte).<br />
             Erste Abbuchung erst nach der 3-tägigen Testphase. Monatliche Rechnung per E-Mail.<br />
             Vertragslaufzeit: 24 Monate, danach monatlich kündbar.<br />
             Mit dem Kauf akzeptierst du unsere{' '}
-            <Link href="/agb" className="underline hover:text-slate-300">AGB</Link> und{' '}
-            <Link href="/datenschutz" className="underline hover:text-slate-300">Datenschutzerklärung</Link>.
+            <Link href="/agb" className="underline hover:text-[#424245]">AGB</Link> und{' '}
+            <Link href="/datenschutz" className="underline hover:text-[#424245]">Datenschutzerklärung</Link>.
           </p>
         </form>
 
-        <p className="text-center text-xs text-slate-500 mt-4">
-          Schon Kunde? <Link href="/login" className="text-amber-400 hover:underline">Zum Login</Link>
+        <p className="text-center text-xs text-[#86868b] mt-4">
+          Schon Kunde? <Link href="/login" className="text-[#e8590c] hover:underline">Zum Login</Link>
           {' · '}
-          <Link href="/abo-verwalten" className="text-amber-400 hover:underline">Abo verwalten</Link>
+          <Link href="/abo-verwalten" className="text-[#e8590c] hover:underline">Abo verwalten</Link>
         </p>
       </div>
     </div>

@@ -9,7 +9,7 @@
 
 export default function KiHinweis({ text }: { text?: string }) {
   return (
-    <p className="text-xs text-slate-500 mt-1 flex items-start gap-1">
+    <p className="text-xs text-[#86868b] mt-1 flex items-start gap-1">
       <span aria-hidden>🤖</span>
       <span>{text || 'KI-gestützt – Ergebnis bitte prüfen. Die fachliche Entscheidung trifft immer ein Mensch.'}</span>
     </p>

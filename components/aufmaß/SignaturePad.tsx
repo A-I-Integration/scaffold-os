@@ -29,12 +29,12 @@ export default function SignaturePad({ onSave, onCancel }: Props) {
   }
 
   return (
-    <div className="bg-slate-800 rounded-xl border border-slate-700 p-6">
-      <h3 className="text-lg font-bold text-white mb-4">✍️ Digitale Unterschrift</h3>
-      <p className="text-sm text-slate-400 mb-4">
+    <div className="bg-[#f5f5f7] rounded-xl border border-black/10 p-6">
+      <h3 className="text-lg font-bold text-[#1d1d1f] mb-4">✍️ Digitale Unterschrift</h3>
+      <p className="text-sm text-[#86868b] mb-4">
         Bitte unterschreiben Sie mit dem Finger oder der Maus. Die Unterschrift wird mit dem Projekt gespeichert.
       </p>
-      <div className="bg-white rounded-lg overflow-hidden" style={{ touchAction: 'none' }}>
+      <div className="bg-white rounded-xl overflow-hidden" style={{ touchAction: 'none' }}>
         <SignatureCanvas
           ref={sigRef}
           penColor="black"
@@ -49,20 +49,20 @@ export default function SignaturePad({ onSave, onCancel }: Props) {
       <div className="flex gap-3 mt-4">
         <button
           onClick={handleClear}
-          className="px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-sm text-white transition-colors"
+          className="px-4 py-2 bg-black/10 hover:bg-black/15 rounded-xl text-sm text-[#1d1d1f] transition-colors"
         >
           🗑️ Löschen
         </button>
         <button
           onClick={onCancel}
-          className="px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-sm text-white transition-colors"
+          className="px-4 py-2 bg-black/10 hover:bg-black/15 rounded-xl text-sm text-[#1d1d1f] transition-colors"
         >
           Abbrechen
         </button>
         <button
           onClick={handleSave}
           disabled={isEmpty}
-          className="px-4 py-2 bg-green-600 hover:bg-green-500 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg text-sm font-bold text-white transition-colors"
+          className="px-4 py-2 bg-green-600 hover:bg-green-500 disabled:opacity-50 disabled:cursor-not-allowed rounded-xl text-sm font-bold text-white transition-colors"
         >
           ✅ Unterschrift speichern
         </button>

@@ -99,33 +99,33 @@ export default function EinstellungenPage() {
   }
 
   return (
-    <div className="min-h-screen bg-[#0f172a] p-4 md:p-8">
+    <div className="min-h-screen bg-[#fbfbfd] p-4 md:p-8">
       <div className="max-w-3xl mx-auto space-y-6">
         <div className="flex items-center gap-3">
-          <Settings className="h-8 w-8 text-amber-400" />
+          <Settings className="h-8 w-8 text-[#e8590c]" />
           <div>
-            <h1 className="text-2xl font-bold text-white">Einstellungen</h1>
-            <p className="text-sm text-slate-400">Firmenprofil – wird auf Rechnungen und bei der Routenplanung benutzt</p>
+            <h1 className="text-2xl font-bold text-[#1d1d1f]">Einstellungen</h1>
+            <p className="text-sm text-[#86868b]">Firmenprofil – wird auf Rechnungen und bei der Routenplanung benutzt</p>
           </div>
         </div>
 
-        <div className="bg-slate-800 rounded-xl p-6 border border-blue-500/20 space-y-4">
+        <div className="bg-[#f5f5f7] rounded-xl p-6 border border-blue-500/20 space-y-4">
           {loading ? (
-            <p className="text-slate-400">Lade Firmenprofil…</p>
+            <p className="text-[#86868b]">Lade Firmenprofil…</p>
           ) : error ? (
-            <p className="text-red-400">Fehler: {error}</p>
+            <p className="text-red-600">Fehler: {error}</p>
           ) : (
             <>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {FIELDS.map((f) => (
                   <div key={f.key} className={f.span ? 'md:col-span-2' : ''}>
-                    <label className="block text-xs text-slate-400 mb-1">{f.label}</label>
+                    <label className="block text-xs text-[#86868b] mb-1">{f.label}</label>
                     <input
                       value={company[f.key]}
                       onChange={(e) => setCompany({ ...company, [f.key]: e.target.value })}
-                      className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-sm text-white focus:outline-none focus:border-amber-500"
+                      className="w-full px-3 py-2 bg-black/10 border border-black/10 rounded-xl text-sm text-[#1d1d1f] focus:outline-none focus:border-[#e8590c]"
                     />
-                    {f.hint && <p className="text-[11px] text-slate-500 mt-1">{f.hint}</p>}
+                    {f.hint && <p className="text-[11px] text-[#86868b] mt-1">{f.hint}</p>}
                   </div>
                 ))}
               </div>
@@ -133,13 +133,13 @@ export default function EinstellungenPage() {
               <button
                 onClick={handleSave}
                 disabled={saving}
-                className="w-full rounded-lg bg-amber-500 hover:bg-amber-400 disabled:opacity-50 py-3 font-bold text-slate-900 transition-colors flex items-center justify-center gap-2"
+                className="w-full rounded-xl bg-[#e8590c] hover:bg-[#d9480f] disabled:opacity-50 py-3 font-bold text-white transition-colors flex items-center justify-center gap-2"
               >
                 <Save className="h-4 w-4" />
                 {saving ? 'Speichert…' : 'Firmenprofil speichern'}
               </button>
 
-              <p className="text-xs text-slate-500">
+              <p className="text-xs text-[#86868b]">
                 Nur Admin kann diese Daten ändern. Bereits erstellte Rechnungen behalten ihre damaligen
                 Firmendaten (gesetzlich vorgeschrieben, GoBD) – neue Rechnungen nutzen automatisch die
                 aktuellen Daten.

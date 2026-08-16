@@ -268,10 +268,10 @@ export default function PlanungPage() {
               <p className="text-sm text-gray-500 mt-1">Personal, Urlaub, Krankheit & Einsatzplanung</p>
             </div>
             <div className="flex gap-2">
-              <button onClick={() => { setShowAddTour(true); setFormError(null); }} className="px-4 py-2 bg-green-600 text-white text-sm font-medium rounded-lg hover:bg-green-700">+ Tour</button>
-              <button onClick={() => { setShowAddAbsence(true); setFormError(null); }} className="px-4 py-2 bg-yellow-600 text-white text-sm font-medium rounded-lg hover:bg-yellow-700">+ Abwesenheit</button>
-              <button onClick={() => { setShowUmdispo(true); setUmdispoResult(null); setUmdispoError(null); }} className="px-4 py-2 bg-purple-600 text-white text-sm font-medium rounded-lg hover:bg-purple-700">🔮 KI-Umdisposition</button>
-              <button onClick={() => { setShowAddEmployee(true); setFormError(null); }} className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700">+ Mitarbeiter</button>
+              <button onClick={() => { setShowAddTour(true); setFormError(null); }} className="px-4 py-2 bg-green-600 text-white text-sm font-medium rounded-xl hover:bg-green-700">+ Tour</button>
+              <button onClick={() => { setShowAddAbsence(true); setFormError(null); }} className="px-4 py-2 bg-yellow-600 text-[#1d1d1f] text-sm font-medium rounded-xl hover:bg-yellow-700">+ Abwesenheit</button>
+              <button onClick={() => { setShowUmdispo(true); setUmdispoResult(null); setUmdispoError(null); }} className="px-4 py-2 bg-purple-600 text-white text-sm font-medium rounded-xl hover:bg-purple-700">🔮 KI-Umdisposition</button>
+              <button onClick={() => { setShowAddEmployee(true); setFormError(null); }} className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-xl hover:bg-blue-700">+ Mitarbeiter</button>
             </div>
           </div>
         </div>
@@ -291,8 +291,8 @@ export default function PlanungPage() {
 
       {/* Content */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-        {error && <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">{error}</div>}
-        {formSuccess && <div className="mb-4 p-4 bg-green-50 border border-green-200 rounded-lg text-green-700 text-sm">{formSuccess}</div>}
+        {error && <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-xl text-red-700 text-sm">{error}</div>}
+        {formSuccess && <div className="mb-4 p-4 bg-green-50 border border-green-200 rounded-xl text-green-700 text-sm">{formSuccess}</div>}
 
         {/* ÜBERSICHT */}
         {activeTab === 'overview' && (
@@ -462,8 +462,8 @@ export default function PlanungPage() {
         {activeTab === 'tours' && (
           <div className="space-y-4">
             <div className="flex gap-2 mb-4">
-              <input type="date" value={recommendDate} onChange={e => setRecommendDate(e.target.value)} className="px-3 py-2 border rounded-lg text-sm" />
-              <button onClick={handleGetRecommendations} className="px-4 py-2 bg-purple-600 text-white text-sm rounded-lg hover:bg-purple-700">🧠 KI-Empfehlung</button>
+              <input type="date" value={recommendDate} onChange={e => setRecommendDate(e.target.value)} className="px-3 py-2 border rounded-xl text-sm" />
+              <button onClick={handleGetRecommendations} className="px-4 py-2 bg-purple-600 text-white text-sm rounded-xl hover:bg-purple-700">🧠 KI-Empfehlung</button>
             </div>
 
             {tours.map(tour => (
@@ -520,29 +520,29 @@ export default function PlanungPage() {
               <button onClick={() => setShowAddEmployee(false)} className="text-gray-400 hover:text-gray-600">✕</button>
             </div>
             <form onSubmit={handleAddEmployee} className="p-6 space-y-4">
-              {formError && <div className="p-3 bg-red-50 text-red-700 text-sm rounded-lg">{formError}</div>}
+              {formError && <div className="p-3 bg-red-50 text-red-700 text-sm rounded-xl">{formError}</div>}
               <div className="grid grid-cols-2 gap-4">
-                <div><label className="block text-sm font-medium text-gray-700 mb-1">Vorname *</label><input name="first_name" required className="w-full px-3 py-2 border rounded-lg text-sm" /></div>
-                <div><label className="block text-sm font-medium text-gray-700 mb-1">Nachname *</label><input name="last_name" required className="w-full px-3 py-2 border rounded-lg text-sm" /></div>
-                <div><label className="block text-sm font-medium text-gray-700 mb-1">E-Mail</label><input name="email" type="email" className="w-full px-3 py-2 border rounded-lg text-sm" /></div>
-                <div><label className="block text-sm font-medium text-gray-700 mb-1">Telefon</label><input name="phone" className="w-full px-3 py-2 border rounded-lg text-sm" /></div>
+                <div><label className="block text-sm font-medium text-gray-700 mb-1">Vorname *</label><input name="first_name" required className="w-full px-3 py-2 border rounded-xl text-sm" /></div>
+                <div><label className="block text-sm font-medium text-gray-700 mb-1">Nachname *</label><input name="last_name" required className="w-full px-3 py-2 border rounded-xl text-sm" /></div>
+                <div><label className="block text-sm font-medium text-gray-700 mb-1">E-Mail</label><input name="email" type="email" className="w-full px-3 py-2 border rounded-xl text-sm" /></div>
+                <div><label className="block text-sm font-medium text-gray-700 mb-1">Telefon</label><input name="phone" className="w-full px-3 py-2 border rounded-xl text-sm" /></div>
                 <div><label className="block text-sm font-medium text-gray-700 mb-1">Rolle</label>
-                  <select name="role" className="w-full px-3 py-2 border rounded-lg text-sm">
+                  <select name="role" className="w-full px-3 py-2 border rounded-xl text-sm">
                     <option value="monteur">Monteur</option>
                     <option value="fahrer">Fahrer</option>
                     <option value="teamleiter">Teamleiter</option>
                     <option value="bauleiter">Bauleiter</option>
                   </select>
                 </div>
-                <div><label className="block text-sm font-medium text-gray-700 mb-1">Wochenstunden</label><input name="weekly_hours" type="number" defaultValue="40" className="w-full px-3 py-2 border rounded-lg text-sm" /></div>
-                <div><label className="block text-sm font-medium text-gray-700 mb-1">Stundensatz (€)</label><input name="hourly_rate" type="number" step="0.01" defaultValue="0" className="w-full px-3 py-2 border rounded-lg text-sm" /></div>
-                <div><label className="block text-sm font-medium text-gray-700 mb-1">Führerschein</label><input name="drivers_license" className="w-full px-3 py-2 border rounded-lg text-sm" /></div>
+                <div><label className="block text-sm font-medium text-gray-700 mb-1">Wochenstunden</label><input name="weekly_hours" type="number" defaultValue="40" className="w-full px-3 py-2 border rounded-xl text-sm" /></div>
+                <div><label className="block text-sm font-medium text-gray-700 mb-1">Stundensatz (€)</label><input name="hourly_rate" type="number" step="0.01" defaultValue="0" className="w-full px-3 py-2 border rounded-xl text-sm" /></div>
+                <div><label className="block text-sm font-medium text-gray-700 mb-1">Führerschein</label><input name="drivers_license" className="w-full px-3 py-2 border rounded-xl text-sm" /></div>
               </div>
-              <div><label className="block text-sm font-medium text-gray-700 mb-1">Adresse</label><input name="home_address" className="w-full px-3 py-2 border rounded-lg text-sm" /></div>
-              <div><label className="block text-sm font-medium text-gray-700 mb-1">Notizen</label><textarea name="notes" rows={2} className="w-full px-3 py-2 border rounded-lg text-sm" /></div>
+              <div><label className="block text-sm font-medium text-gray-700 mb-1">Adresse</label><input name="home_address" className="w-full px-3 py-2 border rounded-xl text-sm" /></div>
+              <div><label className="block text-sm font-medium text-gray-700 mb-1">Notizen</label><textarea name="notes" rows={2} className="w-full px-3 py-2 border rounded-xl text-sm" /></div>
               <div className="flex justify-end gap-2">
-                <button type="button" onClick={() => setShowAddEmployee(false)} className="px-4 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded-lg">Abbrechen</button>
-                <button type="submit" className="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700">Speichern</button>
+                <button type="button" onClick={() => setShowAddEmployee(false)} className="px-4 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded-xl">Abbrechen</button>
+                <button type="submit" className="px-4 py-2 text-sm bg-blue-600 text-white rounded-xl hover:bg-blue-700">Speichern</button>
               </div>
             </form>
           </div>
@@ -558,14 +558,14 @@ export default function PlanungPage() {
               <button onClick={() => { setShowEditEmployee(false); setEditingEmployee(null); }} className="text-gray-400 hover:text-gray-600">✕</button>
             </div>
             <form onSubmit={handleEditEmployee} className="p-6 space-y-4">
-              {formError && <div className="p-3 bg-red-50 text-red-700 text-sm rounded-lg">{formError}</div>}
+              {formError && <div className="p-3 bg-red-50 text-red-700 text-sm rounded-xl">{formError}</div>}
               <div className="grid grid-cols-2 gap-4">
-                <div><label className="block text-sm font-medium text-gray-700 mb-1">Vorname *</label><input name="first_name" defaultValue={editingEmployee.first_name} required className="w-full px-3 py-2 border rounded-lg text-sm" /></div>
-                <div><label className="block text-sm font-medium text-gray-700 mb-1">Nachname *</label><input name="last_name" defaultValue={editingEmployee.last_name} required className="w-full px-3 py-2 border rounded-lg text-sm" /></div>
-                <div><label className="block text-sm font-medium text-gray-700 mb-1">E-Mail</label><input name="email" type="email" defaultValue={editingEmployee.email || ''} className="w-full px-3 py-2 border rounded-lg text-sm" /></div>
-                <div><label className="block text-sm font-medium text-gray-700 mb-1">Telefon</label><input name="phone" defaultValue={editingEmployee.phone || ''} className="w-full px-3 py-2 border rounded-lg text-sm" /></div>
+                <div><label className="block text-sm font-medium text-gray-700 mb-1">Vorname *</label><input name="first_name" defaultValue={editingEmployee.first_name} required className="w-full px-3 py-2 border rounded-xl text-sm" /></div>
+                <div><label className="block text-sm font-medium text-gray-700 mb-1">Nachname *</label><input name="last_name" defaultValue={editingEmployee.last_name} required className="w-full px-3 py-2 border rounded-xl text-sm" /></div>
+                <div><label className="block text-sm font-medium text-gray-700 mb-1">E-Mail</label><input name="email" type="email" defaultValue={editingEmployee.email || ''} className="w-full px-3 py-2 border rounded-xl text-sm" /></div>
+                <div><label className="block text-sm font-medium text-gray-700 mb-1">Telefon</label><input name="phone" defaultValue={editingEmployee.phone || ''} className="w-full px-3 py-2 border rounded-xl text-sm" /></div>
                 <div><label className="block text-sm font-medium text-gray-700 mb-1">Rolle</label>
-                  <select name="role" defaultValue={editingEmployee.role} className="w-full px-3 py-2 border rounded-lg text-sm">
+                  <select name="role" defaultValue={editingEmployee.role} className="w-full px-3 py-2 border rounded-xl text-sm">
                     <option value="monteur">Monteur</option>
                     <option value="fahrer">Fahrer</option>
                     <option value="teamleiter">Teamleiter</option>
@@ -573,21 +573,21 @@ export default function PlanungPage() {
                   </select>
                 </div>
                 <div><label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
-                  <select name="status" defaultValue={editingEmployee.status} className="w-full px-3 py-2 border rounded-lg text-sm">
+                  <select name="status" defaultValue={editingEmployee.status} className="w-full px-3 py-2 border rounded-xl text-sm">
                     <option value="active">Aktiv</option>
                     <option value="inactive">Inaktiv</option>
                     <option value="on_leave">Abwesend</option>
                   </select>
                 </div>
-                <div><label className="block text-sm font-medium text-gray-700 mb-1">Wochenstunden</label><input name="weekly_hours" type="number" defaultValue={editingEmployee.weekly_hours} className="w-full px-3 py-2 border rounded-lg text-sm" /></div>
-                <div><label className="block text-sm font-medium text-gray-700 mb-1">Stundensatz (€)</label><input name="hourly_rate" type="number" step="0.01" defaultValue={editingEmployee.hourly_rate} className="w-full px-3 py-2 border rounded-lg text-sm" /></div>
-                <div><label className="block text-sm font-medium text-gray-700 mb-1">Führerschein</label><input name="drivers_license" defaultValue={editingEmployee.drivers_license || ''} className="w-full px-3 py-2 border rounded-lg text-sm" /></div>
+                <div><label className="block text-sm font-medium text-gray-700 mb-1">Wochenstunden</label><input name="weekly_hours" type="number" defaultValue={editingEmployee.weekly_hours} className="w-full px-3 py-2 border rounded-xl text-sm" /></div>
+                <div><label className="block text-sm font-medium text-gray-700 mb-1">Stundensatz (€)</label><input name="hourly_rate" type="number" step="0.01" defaultValue={editingEmployee.hourly_rate} className="w-full px-3 py-2 border rounded-xl text-sm" /></div>
+                <div><label className="block text-sm font-medium text-gray-700 mb-1">Führerschein</label><input name="drivers_license" defaultValue={editingEmployee.drivers_license || ''} className="w-full px-3 py-2 border rounded-xl text-sm" /></div>
               </div>
-              <div><label className="block text-sm font-medium text-gray-700 mb-1">Adresse</label><input name="home_address" defaultValue={editingEmployee.home_address || ''} className="w-full px-3 py-2 border rounded-lg text-sm" /></div>
-              <div><label className="block text-sm font-medium text-gray-700 mb-1">Notizen</label><textarea name="notes" defaultValue={editingEmployee.notes || ''} rows={2} className="w-full px-3 py-2 border rounded-lg text-sm" /></div>
+              <div><label className="block text-sm font-medium text-gray-700 mb-1">Adresse</label><input name="home_address" defaultValue={editingEmployee.home_address || ''} className="w-full px-3 py-2 border rounded-xl text-sm" /></div>
+              <div><label className="block text-sm font-medium text-gray-700 mb-1">Notizen</label><textarea name="notes" defaultValue={editingEmployee.notes || ''} rows={2} className="w-full px-3 py-2 border rounded-xl text-sm" /></div>
               <div className="flex justify-end gap-2">
-                <button type="button" onClick={() => { setShowEditEmployee(false); setEditingEmployee(null); }} className="px-4 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded-lg">Abbrechen</button>
-                <button type="submit" className="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700">Speichern</button>
+                <button type="button" onClick={() => { setShowEditEmployee(false); setEditingEmployee(null); }} className="px-4 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded-xl">Abbrechen</button>
+                <button type="submit" className="px-4 py-2 text-sm bg-blue-600 text-white rounded-xl hover:bg-blue-700">Speichern</button>
               </div>
             </form>
           </div>
@@ -603,31 +603,31 @@ export default function PlanungPage() {
               <button onClick={() => setShowAddAbsence(false)} className="text-gray-400 hover:text-gray-600">✕</button>
             </div>
             <form onSubmit={handleAddAbsence} className="p-6 space-y-4">
-              {formError && <div className="p-3 bg-red-50 text-red-700 text-sm rounded-lg">{formError}</div>}
+              {formError && <div className="p-3 bg-red-50 text-red-700 text-sm rounded-xl">{formError}</div>}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Mitarbeiter *</label>
-                <select name="employee_id" required className="w-full px-3 py-2 border rounded-lg text-sm">
+                <select name="employee_id" required className="w-full px-3 py-2 border rounded-xl text-sm">
                   <option value="">Bitte wählen</option>
                   {employees.map(e => <option key={e.id} value={e.id}>{e.full_name}</option>)}
                 </select>
               </div>
               <div className="grid grid-cols-2 gap-4">
-                <div><label className="block text-sm font-medium text-gray-700 mb-1">Von *</label><input name="start_date" type="date" required className="w-full px-3 py-2 border rounded-lg text-sm" /></div>
-                <div><label className="block text-sm font-medium text-gray-700 mb-1">Bis *</label><input name="end_date" type="date" required className="w-full px-3 py-2 border rounded-lg text-sm" /></div>
+                <div><label className="block text-sm font-medium text-gray-700 mb-1">Von *</label><input name="start_date" type="date" required className="w-full px-3 py-2 border rounded-xl text-sm" /></div>
+                <div><label className="block text-sm font-medium text-gray-700 mb-1">Bis *</label><input name="end_date" type="date" required className="w-full px-3 py-2 border rounded-xl text-sm" /></div>
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Typ *</label>
-                <select name="type" required className="w-full px-3 py-2 border rounded-lg text-sm">
+                <select name="type" required className="w-full px-3 py-2 border rounded-xl text-sm">
                   <option value="vacation">Urlaub</option>
                   <option value="sick">Krankheit</option>
                   <option value="training">Schulung</option>
                   <option value="other">Sonstiges</option>
                 </select>
               </div>
-              <div><label className="block text-sm font-medium text-gray-700 mb-1">Grund</label><textarea name="reason" rows={2} className="w-full px-3 py-2 border rounded-lg text-sm" /></div>
+              <div><label className="block text-sm font-medium text-gray-700 mb-1">Grund</label><textarea name="reason" rows={2} className="w-full px-3 py-2 border rounded-xl text-sm" /></div>
               <div className="flex justify-end gap-2">
-                <button type="button" onClick={() => setShowAddAbsence(false)} className="px-4 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded-lg">Abbrechen</button>
-                <button type="submit" className="px-4 py-2 text-sm bg-yellow-600 text-white rounded-lg hover:bg-yellow-700">Speichern</button>
+                <button type="button" onClick={() => setShowAddAbsence(false)} className="px-4 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded-xl">Abbrechen</button>
+                <button type="submit" className="px-4 py-2 text-sm bg-yellow-600 text-[#1d1d1f] rounded-xl hover:bg-yellow-700">Speichern</button>
               </div>
             </form>
           </div>
@@ -643,24 +643,24 @@ export default function PlanungPage() {
               <button onClick={() => setEditAbsence(null)} className="text-gray-400 hover:text-gray-600">✕</button>
             </div>
             <form onSubmit={handleUpdateAbsence} className="p-6 space-y-4">
-              {formError && <div className="p-3 bg-red-50 text-red-700 text-sm rounded-lg">{formError}</div>}
+              {formError && <div className="p-3 bg-red-50 text-red-700 text-sm rounded-xl">{formError}</div>}
               <p className="text-sm text-gray-600">
                 Mitarbeiter: <strong className="text-gray-900">{editAbsence.employee?.first_name} {editAbsence.employee?.last_name}</strong>
               </p>
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Von *</label>
-                  <input name="start_date" type="date" required defaultValue={editAbsence.start_date} className="w-full px-3 py-2 border rounded-lg text-sm" />
+                  <input name="start_date" type="date" required defaultValue={editAbsence.start_date} className="w-full px-3 py-2 border rounded-xl text-sm" />
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Bis *</label>
-                  <input name="end_date" type="date" required defaultValue={editAbsence.end_date} className="w-full px-3 py-2 border rounded-lg text-sm" />
+                  <input name="end_date" type="date" required defaultValue={editAbsence.end_date} className="w-full px-3 py-2 border rounded-xl text-sm" />
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Typ *</label>
-                  <select name="type" required defaultValue={editAbsence.type} className="w-full px-3 py-2 border rounded-lg text-sm">
+                  <select name="type" required defaultValue={editAbsence.type} className="w-full px-3 py-2 border rounded-xl text-sm">
                     <option value="vacation">Urlaub</option>
                     <option value="sick">Krankheit</option>
                     <option value="training">Schulung</option>
@@ -669,7 +669,7 @@ export default function PlanungPage() {
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Status *</label>
-                  <select name="status" required defaultValue={editAbsence.status} className="w-full px-3 py-2 border rounded-lg text-sm">
+                  <select name="status" required defaultValue={editAbsence.status} className="w-full px-3 py-2 border rounded-xl text-sm">
                     <option value="pending">Ausstehend</option>
                     <option value="approved">Genehmigt</option>
                     <option value="rejected">Abgelehnt</option>
@@ -678,15 +678,15 @@ export default function PlanungPage() {
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Grund</label>
-                <textarea name="reason" rows={2} defaultValue={editAbsence.reason || ''} className="w-full px-3 py-2 border rounded-lg text-sm" />
+                <textarea name="reason" rows={2} defaultValue={editAbsence.reason || ''} className="w-full px-3 py-2 border rounded-xl text-sm" />
               </div>
               <p className="text-xs text-gray-500">
                 Wird der Status auf „Genehmigt" oder „Abgelehnt" geändert,
                 bekommt der Mitarbeiter automatisch eine E-Mail.
               </p>
               <div className="flex justify-end gap-2">
-                <button type="button" onClick={() => setEditAbsence(null)} className="px-4 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded-lg">Abbrechen</button>
-                <button type="submit" className="px-4 py-2 text-sm bg-yellow-600 text-white rounded-lg hover:bg-yellow-700">Speichern</button>
+                <button type="button" onClick={() => setEditAbsence(null)} className="px-4 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded-xl">Abbrechen</button>
+                <button type="submit" className="px-4 py-2 text-sm bg-yellow-600 text-[#1d1d1f] rounded-xl hover:bg-yellow-700">Speichern</button>
               </div>
             </form>
           </div>
@@ -702,32 +702,32 @@ export default function PlanungPage() {
               <button onClick={() => setShowAddTour(false)} className="text-gray-400 hover:text-gray-600">✕</button>
             </div>
             <form onSubmit={handleCreateTour} className="p-6 space-y-4">
-              {formError && <div className="p-3 bg-red-50 text-red-700 text-sm rounded-lg">{formError}</div>}
+              {formError && <div className="p-3 bg-red-50 text-red-700 text-sm rounded-xl">{formError}</div>}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Projekt</label>
-                <select name="project_id" className="w-full px-3 py-2 border rounded-lg text-sm">
+                <select name="project_id" className="w-full px-3 py-2 border rounded-xl text-sm">
                   <option value="">Kein Projekt</option>
                   {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
                 </select>
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Transportauftrag</label>
-                <select name="transport_order_id" className="w-full px-3 py-2 border rounded-lg text-sm">
+                <select name="transport_order_id" className="w-full px-3 py-2 border rounded-xl text-sm">
                   <option value="">Kein Transport</option>
                   {transports.map(t => <option key={t.id} value={t.id}>{t.id.slice(0,8)}...</option>)}
                 </select>
               </div>
               <div className="grid grid-cols-2 gap-4">
-                <div><label className="block text-sm font-medium text-gray-700 mb-1">Datum *</label><input name="planned_date" type="date" required className="w-full px-3 py-2 border rounded-lg text-sm" /></div>
-                <div><label className="block text-sm font-medium text-gray-700 mb-1">Fahrzeug</label><input name="vehicle_id" placeholder="z.B. K-AB 123" className="w-full px-3 py-2 border rounded-lg text-sm" /></div>
+                <div><label className="block text-sm font-medium text-gray-700 mb-1">Datum *</label><input name="planned_date" type="date" required className="w-full px-3 py-2 border rounded-xl text-sm" /></div>
+                <div><label className="block text-sm font-medium text-gray-700 mb-1">Fahrzeug</label><input name="vehicle_id" placeholder="z.B. K-AB 123" className="w-full px-3 py-2 border rounded-xl text-sm" /></div>
               </div>
               <div className="grid grid-cols-2 gap-4">
-                <div><label className="block text-sm font-medium text-gray-700 mb-1">Start</label><input name="start_time" type="time" className="w-full px-3 py-2 border rounded-lg text-sm" /></div>
-                <div><label className="block text-sm font-medium text-gray-700 mb-1">Ende</label><input name="end_time" type="time" className="w-full px-3 py-2 border rounded-lg text-sm" /></div>
+                <div><label className="block text-sm font-medium text-gray-700 mb-1">Start</label><input name="start_time" type="time" className="w-full px-3 py-2 border rounded-xl text-sm" /></div>
+                <div><label className="block text-sm font-medium text-gray-700 mb-1">Ende</label><input name="end_time" type="time" className="w-full px-3 py-2 border rounded-xl text-sm" /></div>
               </div>
               <div className="flex justify-end gap-2">
-                <button type="button" onClick={() => setShowAddTour(false)} className="px-4 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded-lg">Abbrechen</button>
-                <button type="submit" className="px-4 py-2 text-sm bg-green-600 text-white rounded-lg hover:bg-green-700">Anlegen</button>
+                <button type="button" onClick={() => setShowAddTour(false)} className="px-4 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded-xl">Abbrechen</button>
+                <button type="submit" className="px-4 py-2 text-sm bg-green-600 text-white rounded-xl hover:bg-green-700">Anlegen</button>
               </div>
             </form>
           </div>
@@ -747,7 +747,7 @@ export default function PlanungPage() {
                 <p className="text-gray-500 text-sm">Keine Empfehlungen verfügbar.</p>
               ) : (
                 recommendations.map((rec, idx) => (
-                  <div key={idx} className={`p-4 rounded-lg border ${rec.match_score > 70 ? 'border-green-300 bg-green-50' : rec.match_score > 40 ? 'border-yellow-300 bg-yellow-50' : 'border-gray-200 bg-gray-50'}`}>
+                  <div key={idx} className={`p-4 rounded-xl border ${rec.match_score > 70 ? 'border-green-300 bg-green-50' : rec.match_score > 40 ? 'border-yellow-300 bg-yellow-50' : 'border-gray-200 bg-gray-50'}`}>
                     <div className="flex items-start justify-between">
                       <div>
                         <div className="font-semibold text-gray-900">{rec.employee_name}</div>
@@ -765,7 +765,7 @@ export default function PlanungPage() {
                 ))
               )}
               <div className="flex justify-end pt-2">
-                <button onClick={() => setShowRecommend(false)} className="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700">Schließen</button>
+                <button onClick={() => setShowRecommend(false)} className="px-4 py-2 text-sm bg-blue-600 text-white rounded-xl hover:bg-blue-700">Schließen</button>
               </div>
             </div>
           </div>
@@ -787,27 +787,27 @@ export default function PlanungPage() {
                   type="date"
                   value={umdispoDate}
                   onChange={(e) => setUmdispoDate(e.target.value)}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900"
+                  className="w-full border border-gray-300 rounded-xl px-3 py-2 text-sm text-gray-900"
                 />
               </div>
               <button
                 onClick={handleUmdispo}
                 disabled={umdispoLoading}
-                className="px-4 py-2 bg-purple-600 text-white text-sm font-medium rounded-lg hover:bg-purple-700 disabled:opacity-50"
+                className="px-4 py-2 bg-purple-600 text-white text-sm font-medium rounded-xl hover:bg-purple-700 disabled:opacity-50"
               >
                 {umdispoLoading ? 'KI prüft...' : 'Vorschlag erstellen'}
               </button>
             </div>
 
             {umdispoError && (
-              <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">❌ {umdispoError}</div>
+              <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded-xl text-sm text-red-700">❌ {umdispoError}</div>
             )}
 
             {umdispoResult && (
               <div className="mt-4 space-y-3">
                 <p className="text-sm text-gray-700">{umdispoResult.zusammenfassung}</p>
                 {umdispoResult.vorschlaege.map((v, i) => (
-                  <div key={i} className="p-3 rounded-lg border border-purple-200 bg-purple-50">
+                  <div key={i} className="p-3 rounded-xl border border-purple-200 bg-purple-50">
                     <div className="font-semibold text-gray-900 text-sm">{v.tour}</div>
                     <div className="text-sm text-gray-700 mt-1">❌ {v.betroffen} → ✅ <strong>{v.ersatz}</strong></div>
                     <div className="text-xs text-gray-500 mt-1">{v.begruendung}</div>
@@ -823,7 +823,7 @@ export default function PlanungPage() {
             )}
 
             <div className="flex justify-end pt-4">
-              <button onClick={() => setShowUmdispo(false)} className="px-4 py-2 text-sm bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300">Schließen</button>
+              <button onClick={() => setShowUmdispo(false)} className="px-4 py-2 text-sm bg-gray-200 text-gray-800 rounded-xl hover:bg-gray-300">Schließen</button>
             </div>
           </div>
         </div>

@@ -14,7 +14,7 @@ export const metadata = { title: 'Datenschutzerklärung – SCAFFOLD OS' };
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <section>
-      <h2 className="text-lg font-semibold text-amber-400 mb-2">{title}</h2>
+      <h2 className="text-lg font-semibold text-[#e8590c] mb-2">{title}</h2>
       <div className="space-y-3">{children}</div>
     </section>
   );
@@ -22,27 +22,27 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 
 export default function DatenschutzPage() {
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 text-white">
+    <div className="min-h-screen bg-[#fbfbfd] text-[#1d1d1f]">
       <div className="max-w-3xl mx-auto px-6 py-12">
-        <Link href="/" className="inline-flex items-center gap-2 text-slate-400 hover:text-amber-400 text-sm transition-colors mb-10">
+        <Link href="/" className="inline-flex items-center gap-2 text-[#86868b] hover:text-[#e8590c] text-sm transition-colors mb-10">
           <ArrowLeft className="w-4 h-4" /> Zurück zur Startseite
         </Link>
 
         <div className="flex items-center gap-2 mb-8">
-          <HardHat className="w-7 h-7 text-amber-400" />
+          <HardHat className="w-7 h-7 text-[#e8590c]" />
           <span className="text-lg font-bold tracking-tight">SCAFFOLD OS</span>
         </div>
 
         <h1 className="text-3xl font-bold mb-8">Datenschutzerklärung</h1>
 
-        <div className="space-y-8 text-slate-300 leading-relaxed">
+        <div className="space-y-8 text-[#424245] leading-relaxed">
           <Section title="1. Verantwortlicher">
             <p>
               SCAFFOLD OS UG (haftungsbeschränkt) i. G., Ölbachstr. 48, 48691 Vreden.
               Vertreten durch Michelle Merola.
             </p>
             <p>
-              Kontakt: <a href="mailto:info@scaffoldos.de" className="text-amber-400 hover:text-amber-300">info@scaffoldos.de</a>, Telefon: 0151 77266265.
+              Kontakt: <a href="mailto:info@scaffoldos.de" className="text-[#e8590c] hover:text-[#e8590c]">info@scaffoldos.de</a>, Telefon: 0151 77266265.
             </p>
           </Section>
 
@@ -89,7 +89,7 @@ export default function DatenschutzPage() {
               Es werden keine Zeiterfassungs-, Gehalts- oder GPS-Daten an Mistral übermittelt.
             </p>
             <p>
-              <strong className="text-slate-100">Grundsatz:</strong> Alle KI-Funktionen
+              <strong className="text-[#1d1d1f]">Grundsatz:</strong> Alle KI-Funktionen
               erstellen ausschließlich Vorschläge, die von einem Menschen geprüft und
               freigegeben werden. Es finden keine vollautomatisierten Entscheidungen
               im Sinne von Art. 22 DSGVO statt. Die KI analysiert Gebäude, Material
@@ -99,20 +99,20 @@ export default function DatenschutzPage() {
 
           <Section title="6. Weitere Dienstleister">
             <p>
-              <strong className="text-slate-100">Vercel:</strong> Hosting und Webverkehr
+              <strong className="text-[#1d1d1f]">Vercel:</strong> Hosting und Webverkehr
               einschließlich IP-Adressen (Auftragsverarbeitung).
             </p>
             <p>
-              <strong className="text-slate-100">Supabase:</strong> Datenbank, Authentifizierung
+              <strong className="text-[#1d1d1f]">Supabase:</strong> Datenbank, Authentifizierung
               und Storage; Serverstandort Frankfurt/EU.
             </p>
             <p>
-              <strong className="text-slate-100">Resend:</strong> Versand transaktionaler
+              <strong className="text-[#1d1d1f]">Resend:</strong> Versand transaktionaler
               E-Mails mit Empfängeradressen und Inhalten (Auftragsverarbeitung mit
               EU-Standardvertragsklauseln).
             </p>
             <p>
-              <strong className="text-slate-100">OpenStreetMap/Nominatim/OSRM:</strong>{' '}
+              <strong className="text-[#1d1d1f]">OpenStreetMap/Nominatim/OSRM:</strong>{' '}
               Baustellenadressen werden für Geocoding und Fahrzeit-/Distanzberechnung
               übermittelt.
             </p>

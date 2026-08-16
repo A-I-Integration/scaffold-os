@@ -281,38 +281,38 @@ export default function ZeiterfassungPage() {
 
   // ─── Formular (Korrektur + Nachtragen, gleiche Felder) ───
   function formular(onSave: () => void, datum?: string) {
-    const input = 'bg-[#0f172a] border border-[#334155] rounded-lg px-3 py-2 text-sm text-white w-full focus:outline-none focus:border-amber-400';
+    const input = 'bg-[#f5f5f7] border border-black/10 rounded-lg px-3 py-2 text-sm text-[#1d1d1f] w-full focus:outline-none focus:border-[#e8590c]';
     return (
-      <div className="bg-[#0f172a] border border-amber-500/40 rounded-lg p-3 mt-2 space-y-2">
+      <div className="bg-[#fbfbfd] border border-[#e8590c]/40 rounded-xl p-3 mt-2 space-y-2">
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
           <div>
-            <label className="text-xs text-slate-400">Von</label>
+            <label className="text-xs text-[#86868b]">Von</label>
             <input type="time" value={fVon} onChange={e => setFVon(e.target.value)} className={input} />
           </div>
           <div>
-            <label className="text-xs text-slate-400">Bis</label>
+            <label className="text-xs text-[#86868b]">Bis</label>
             <input type="time" value={fBis} onChange={e => setFBis(e.target.value)} className={input} />
           </div>
           <div>
-            <label className="text-xs text-slate-400">oder Stunden (Netto)</label>
+            <label className="text-xs text-[#86868b]">oder Stunden (Netto)</label>
             <input inputMode="decimal" placeholder="z. B. 7,5" value={fStunden} onChange={e => setFStunden(e.target.value)} className={input} />
           </div>
           <div>
-            <label className="text-xs text-slate-400">Pause (min)</label>
+            <label className="text-xs text-[#86868b]">Pause (min)</label>
             <input inputMode="numeric" placeholder="0" value={fPause} onChange={e => setFPause(e.target.value)} className={input} />
           </div>
         </div>
         <input placeholder="Notiz (optional)" value={fNotiz} onChange={e => setFNotiz(e.target.value)} className={input} />
-        <p className="text-xs text-slate-500">
+        <p className="text-xs text-[#86868b]">
           Von+Bis → Pause automatisch ({BREAK_RULE_TEXT}). Nur Stunden → gilt als Netto.
         </p>
         <div className="flex gap-2">
           <button onClick={onSave} disabled={saving}
-            className="inline-flex items-center gap-1.5 bg-amber-500 hover:bg-amber-600 disabled:opacity-50 text-slate-900 text-sm font-semibold px-4 py-2 rounded-lg transition-colors">
+            className="inline-flex items-center gap-1.5 bg-[#e8590c] hover:bg-[#d9480f] disabled:opacity-50 text-white text-sm font-semibold px-4 py-2 rounded-xl transition-colors">
             <Check className="w-4 h-4" /> {saving ? 'Speichert …' : 'Speichern'}
           </button>
           <button onClick={resetForm}
-            className="inline-flex items-center gap-1.5 border border-slate-600 text-slate-300 text-sm px-4 py-2 rounded-lg hover:border-slate-400 transition-colors">
+            className="inline-flex items-center gap-1.5 border border-black/10 text-[#424245] text-sm px-4 py-2 rounded-xl hover:border-black/20 transition-colors">
             <X className="w-4 h-4" /> Abbrechen
           </button>
         </div>
@@ -328,64 +328,64 @@ export default function ZeiterfassungPage() {
   return (
     // FIX: eigener dunkler Hintergrund – der Inhaltsbereich der Sidebar
     // ist hell (bg-slate-100), weißer Text wäre sonst unsichtbar.
-    <div className="min-h-screen bg-[#0f172a] p-4 md:p-8">
-    <div className="max-w-6xl mx-auto text-white">
+    <div className="min-h-screen bg-[#fbfbfd] p-4 md:p-8">
+    <div className="max-w-6xl mx-auto text-[#1d1d1f]">
       {/* Kopf */}
       <div className="flex flex-wrap items-center gap-3 mb-6">
-        <Clock className="w-7 h-7 text-amber-400" />
+        <Clock className="w-7 h-7 text-[#e8590c]" />
         <h1 className="text-2xl font-bold">Zeiterfassung</h1>
         <div className="flex items-center gap-3 ml-auto">
           <input type="month" value={month} onChange={e => setMonth(e.target.value)}
-            className="bg-[#1e293b] border border-[#334155] rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-amber-400" />
+            className="bg-white border border-black/10 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-[#e8590c]" />
           <select value={employeeFilter} onChange={e => setEmployeeFilter(e.target.value)}
-            className="bg-[#1e293b] border border-[#334155] rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-amber-400">
+            className="bg-white border border-black/10 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-[#e8590c]">
             <option value="">Alle Mitarbeiter</option>
             {employees.map(e => (
               <option key={e.id} value={e.id}>{e.last_name}, {e.first_name}</option>
             ))}
           </select>
           <button onClick={exportCSV}
-            className="inline-flex items-center gap-1.5 border border-slate-600 hover:border-amber-400 text-slate-300 hover:text-amber-400 text-sm px-4 py-2 rounded-lg transition-colors">
+            className="inline-flex items-center gap-1.5 border border-black/10 hover:border-[#e8590c] text-[#424245] hover:text-[#e8590c] text-sm px-4 py-2 rounded-xl transition-colors">
             <Download className="w-4 h-4" /> CSV
           </button>
           <button onClick={exportDatev}
             title="Stundenerfassung im DATEV-Importformat (für den Steuerberater)"
-            className="inline-flex items-center gap-1.5 bg-emerald-600/20 hover:bg-emerald-600/30 border border-emerald-600/50 text-emerald-300 text-sm px-4 py-2 rounded-lg transition-colors">
+            className="inline-flex items-center gap-1.5 bg-emerald-600/20 hover:bg-emerald-600/30 border border-emerald-600/50 text-emerald-700 text-sm px-4 py-2 rounded-xl transition-colors">
             <Download className="w-4 h-4" /> DATEV Lohn
           </button>
         </div>
       </div>
 
       {msg && (
-        <div className={`rounded-lg p-3 text-sm mb-4 ${msg.startsWith('✅') ? 'bg-emerald-900/40 border border-emerald-700 text-emerald-200' : 'bg-red-900/40 border border-red-700 text-red-200'}`}>
+        <div className={`rounded-xl p-3 text-sm mb-4 ${msg.startsWith('✅') ? 'bg-emerald-50 border border-emerald-200 text-emerald-700' : 'bg-red-50 border border-red-200 text-red-700'}`}>
           {msg}
         </div>
       )}
       {error && (
-        <div className="rounded-lg p-3 text-sm mb-4 bg-red-900/40 border border-red-700 text-red-200">{error}</div>
+        <div className="rounded-xl p-3 text-sm mb-4 bg-red-50 border border-red-200 text-red-700">{error}</div>
       )}
 
       {/* Summen-Karten */}
       {!loading && !error && (
         <div className="grid grid-cols-3 gap-3 mb-6">
-          <div className="bg-[#1e293b] border border-[#334155] rounded-xl p-4">
-            <p className="text-xs text-slate-400">Ist-Stunden</p>
-            <p className="text-2xl font-bold text-amber-400">{fmtH(Math.round(gesamtIst * 100) / 100)}</p>
+          <div className="bg-white border border-black/10 rounded-xl p-4">
+            <p className="text-xs text-[#86868b]">Ist-Stunden</p>
+            <p className="text-2xl font-bold text-[#e8590c]">{fmtH(Math.round(gesamtIst * 100) / 100)}</p>
           </div>
-          <div className="bg-[#1e293b] border border-[#334155] rounded-xl p-4">
-            <p className="text-xs text-slate-400">Soll (aktive MA mit Stunden)</p>
+          <div className="bg-white border border-black/10 rounded-xl p-4">
+            <p className="text-xs text-[#86868b]">Soll (aktive MA mit Stunden)</p>
             <p className="text-2xl font-bold">{fmtH(Math.round(gesamtSoll * 100) / 100)}</p>
           </div>
-          <div className="bg-[#1e293b] border border-[#334155] rounded-xl p-4">
-            <p className="text-xs text-slate-400">Differenz</p>
-            <p className={`text-2xl font-bold ${gesamtIst - gesamtSoll >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+          <div className="bg-white border border-black/10 rounded-xl p-4">
+            <p className="text-xs text-[#86868b]">Differenz</p>
+            <p className={`text-2xl font-bold ${gesamtIst - gesamtSoll >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
               {gesamtIst - gesamtSoll >= 0 ? '+' : ''}{fmtH(Math.round((gesamtIst - gesamtSoll) * 100) / 100)}
             </p>
           </div>
         </div>
       )}
 
-      {loading && <p className="text-slate-400">Lade Monatsdaten …</p>}
+      {loading && <p className="text-[#86868b]">Lade Monatsdaten …</p>}
 
       {/* Mitarbeiter-Tabelle */}
       {!loading && !error && employees.map(emp => {
@@ -397,37 +397,37 @@ export default function ZeiterfassungPage() {
         if (employeeFilter === '' && es.length === 0) return null; // ohne Einträge ausblenden (bei „Alle")
 
         return (
-          <div key={emp.id} className="bg-[#1e293b] border border-[#334155] rounded-xl mb-3 overflow-hidden">
+          <div key={emp.id} className="bg-white border border-black/10 rounded-xl mb-3 overflow-hidden">
             <button onClick={() => setOpen(isOpen ? null : emp.id)}
-              className="w-full flex items-center gap-3 px-4 py-3 hover:bg-slate-700/30 transition-colors text-left">
-              {isOpen ? <ChevronDown className="w-4 h-4 text-slate-400" /> : <ChevronRight className="w-4 h-4 text-slate-400" />}
+              className="w-full flex items-center gap-3 px-4 py-3 hover:bg-black/10/30 transition-colors text-left">
+              {isOpen ? <ChevronDown className="w-4 h-4 text-[#86868b]" /> : <ChevronRight className="w-4 h-4 text-[#86868b]" />}
               <span className="font-semibold">{emp.last_name}, {emp.first_name}</span>
-              {emp.status !== 'active' && <span className="text-xs text-slate-500">({emp.status})</span>}
-              <span className="ml-auto text-sm text-slate-400">{s.days} Tage</span>
-              <span className="text-sm text-slate-400 w-28 text-right">Pause {s.pause_minutes} min</span>
-              <span className="text-sm font-semibold text-amber-400 w-20 text-right">{fmtH(s.ist_hours)} h</span>
-              <span className="text-sm text-slate-400 w-20 text-right">/ {fmtH(soll)} h</span>
-              <span className={`text-sm font-semibold w-20 text-right ${diff >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+              {emp.status !== 'active' && <span className="text-xs text-[#86868b]">({emp.status})</span>}
+              <span className="ml-auto text-sm text-[#86868b]">{s.days} Tage</span>
+              <span className="text-sm text-[#86868b] w-28 text-right">Pause {s.pause_minutes} min</span>
+              <span className="text-sm font-semibold text-[#e8590c] w-20 text-right">{fmtH(s.ist_hours)} h</span>
+              <span className="text-sm text-[#86868b] w-20 text-right">/ {fmtH(soll)} h</span>
+              <span className={`text-sm font-semibold w-20 text-right ${diff >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
                 {diff >= 0 ? '+' : ''}{fmtH(diff)}
               </span>
             </button>
 
             {isOpen && (
-              <div className="border-t border-[#334155] px-4 py-3">
-                {es.length === 0 && <p className="text-sm text-slate-500">Keine Einträge in diesem Monat.</p>}
+              <div className="border-t border-black/10 px-4 py-3">
+                {es.length === 0 && <p className="text-sm text-[#86868b]">Keine Einträge in diesem Monat.</p>}
                 {es.map(e => (
-                  <div key={e.id} className="py-2 border-b border-slate-700/50 last:border-0">
+                  <div key={e.id} className="py-2 border-b border-black/10/50 last:border-0">
                     <div className="flex flex-wrap items-center gap-3 text-sm">
-                      <span className="text-slate-400 w-14">{fmtDate(e.work_date)}</span>
+                      <span className="text-[#86868b] w-14">{fmtDate(e.work_date)}</span>
                       <span>{fmtTime(e.start_time)} – {fmtTime(e.end_time)}</span>
-                      <span className="text-slate-400">
+                      <span className="text-[#86868b]">
                         {e.hours !== null ? `${fmtH(e.hours)} h` : 'läuft'}
                         {e.break_minutes ? ` · Pause ${e.break_minutes} min` : ''}
                       </span>
-                      {e.note && <span className="text-slate-500">· {e.note}</span>}
+                      {e.note && <span className="text-[#86868b]">· {e.note}</span>}
                       {canEdit && editId !== e.id && (
                         <button onClick={() => startEdit(e)}
-                          className="ml-auto inline-flex items-center gap-1 text-xs border border-slate-600 hover:border-amber-400 text-slate-300 hover:text-amber-400 px-2.5 py-1 rounded-md transition-colors">
+                          className="ml-auto inline-flex items-center gap-1 text-xs border border-black/10 hover:border-[#e8590c] text-[#424245] hover:text-[#e8590c] px-2.5 py-1 rounded-md transition-colors">
                           <Pencil className="w-3 h-3" /> Bearbeiten
                         </button>
                       )}
@@ -438,16 +438,16 @@ export default function ZeiterfassungPage() {
 
                 {canEdit && addFor !== emp.id && (
                   <button onClick={() => startAdd(emp.id)}
-                    className="mt-3 inline-flex items-center gap-1.5 text-sm border border-slate-600 hover:border-amber-400 text-slate-300 hover:text-amber-400 px-3 py-1.5 rounded-lg transition-colors">
+                    className="mt-3 inline-flex items-center gap-1.5 text-sm border border-black/10 hover:border-[#e8590c] text-[#424245] hover:text-[#e8590c] px-3 py-1.5 rounded-xl transition-colors">
                     <Plus className="w-4 h-4" /> Tag nachtragen
                   </button>
                 )}
                 {canEdit && addFor === emp.id && (
                   <div className="mt-3">
-                    <label className="text-xs text-slate-400">Datum</label>
+                    <label className="text-xs text-[#86868b]">Datum</label>
                     <input type="date" value={aDatum} onChange={e => setADatum(e.target.value)}
                       min={`${month}-01`} max={`${month}-31`}
-                      className="block bg-[#0f172a] border border-[#334155] rounded-lg px-3 py-2 text-sm text-white mb-1 focus:outline-none focus:border-amber-400" />
+                      className="block bg-[#fbfbfd] border border-black/10 rounded-xl px-3 py-2 text-sm text-[#1d1d1f] mb-1 focus:outline-none focus:border-[#e8590c]" />
                     {formular(() => saveAdd(emp.id))}
                   </div>
                 )}
@@ -458,7 +458,7 @@ export default function ZeiterfassungPage() {
       })}
 
       {!loading && !error && (
-        <p className="text-xs text-slate-500 mt-4">
+        <p className="text-xs text-[#86868b] mt-4">
           Soll = Wochenstunden ÷ 5 × Arbeitstage (Mo–Fr, ohne Feiertage).
           Beim laufenden Monat zählt das Soll nur bis heute. Pause: {BREAK_RULE_TEXT} (automatisch beim Ausstempeln).
         </p>

@@ -114,7 +114,7 @@ export default function GrundrissUpload({ sessionId }: Props) {
   const getPublicUrl = (path: string) =>
     `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/project-media/${path}`;
 
-  if (!sessionId) return <div className="text-yellow-300 text-sm">⚠️ Session-ID fehlt</div>;
+  if (!sessionId) return <div className="text-amber-700 text-sm">⚠️ Session-ID fehlt</div>;
 
   const masse: [string, string][] = [];
   if (structured) {
@@ -147,15 +147,15 @@ export default function GrundrissUpload({ sessionId }: Props) {
         />
         <button
           disabled={uploading}
-          className="w-full rounded-lg border-2 border-dashed border-slate-600 bg-slate-800/50 py-6 text-center hover:border-blue-500 hover:bg-slate-800 disabled:opacity-50"
+          className="w-full rounded-xl border-2 border-dashed border-black/10 bg-black/5 py-6 text-center hover:border-blue-500 hover:bg-[#f5f5f7] disabled:opacity-50"
         >
           {uploading ? (
-            <span className="flex items-center justify-center gap-2 text-slate-300">
+            <span className="flex items-center justify-center gap-2 text-[#424245]">
               <span className="h-5 w-5 animate-spin rounded-full border-2 border-blue-500 border-t-transparent" />
               Wird hochgeladen...
             </span>
           ) : (
-            <span className="text-slate-300">
+            <span className="text-[#424245]">
               <span className="text-2xl">📋</span>
               <br />
               <span className="text-sm font-medium">Grundriss auswählen (Bild oder PDF)</span>
@@ -170,17 +170,17 @@ export default function GrundrissUpload({ sessionId }: Props) {
           <div className="h-6 w-6 animate-spin rounded-full border-2 border-blue-500 border-t-transparent" />
         </div>
       ) : files.length === 0 ? (
-        <p className="text-center text-sm text-slate-500">Noch keine Grundrisse</p>
+        <p className="text-center text-sm text-[#86868b]">Noch keine Grundrisse</p>
       ) : (
         <div className="space-y-2">
           {files.map((f) => (
-            <div key={f.id} className="flex items-center gap-3 bg-slate-800 rounded-lg p-2">
+            <div key={f.id} className="flex items-center gap-3 bg-[#f5f5f7] rounded-xl p-2">
               {f.file_type === 'application/pdf' ? (
                 <div className="w-10 h-10 flex items-center justify-center rounded bg-red-500/20 text-lg">📄</div>
               ) : (
                 <img src={getPublicUrl(f.storage_path)} alt={f.file_name} className="w-10 h-10 rounded object-cover" />
               )}
-              <span className="flex-1 text-sm text-slate-300 truncate">{f.file_name}</span>
+              <span className="flex-1 text-sm text-[#424245] truncate">{f.file_name}</span>
               <button
                 onClick={() => handleDelete(f)}
                 className="rounded-full bg-red-500/80 px-2 py-0.5 text-white text-xs"
@@ -197,7 +197,7 @@ export default function GrundrissUpload({ sessionId }: Props) {
         <button
           onClick={handleAnalyze}
           disabled={analyzing}
-          className="w-full rounded-lg border border-teal-500/50 bg-teal-600/20 py-3 text-sm font-medium text-teal-300 hover:bg-teal-600/30 disabled:opacity-50 transition"
+          className="w-full rounded-xl border border-teal-500/50 bg-teal-600/20 py-3 text-sm font-medium text-teal-300 hover:bg-teal-600/30 disabled:opacity-50 transition"
         >
           {analyzing ? (
             <span className="flex items-center justify-center gap-2">
@@ -213,7 +213,7 @@ export default function GrundrissUpload({ sessionId }: Props) {
 
       {/* ─── Ergebnis ─── */}
       {result && (
-        <div className="rounded-lg bg-teal-900/20 border border-teal-500/30 p-4 animate-in fade-in slide-in-from-top-2">
+        <div className="rounded-xl bg-teal-900/20 border border-teal-500/30 p-4 animate-in fade-in slide-in-from-top-2">
           <p className="text-xs text-teal-300 font-medium mb-2">📐 KI-Grundriss-Analyse</p>
 
           {masse.length > 0 && (
@@ -227,16 +227,16 @@ export default function GrundrissUpload({ sessionId }: Props) {
           )}
 
           {discarded.length > 0 && (
-            <div className="rounded-lg bg-red-900/20 border border-red-500/30 p-3 mb-3">
-              <p className="text-xs text-red-300 font-medium mb-1">⚠️ Nicht belegte / unplausible KI-Werte verworfen:</p>
+            <div className="rounded-xl bg-red-900/20 border border-red-500/30 p-3 mb-3">
+              <p className="text-xs text-red-700 font-medium mb-1">⚠️ Nicht belegte / unplausible KI-Werte verworfen:</p>
               {discarded.map((d, i) => (
-                <p key={i} className="text-xs text-red-200">• {d}</p>
+                <p key={i} className="text-xs text-red-700">• {d}</p>
               ))}
             </div>
           )}
 
-          <p className="text-sm text-slate-200 whitespace-pre-line">{result}</p>
-          <p className="text-[10px] text-slate-500 mt-3">
+          <p className="text-sm text-[#1d1d1f] whitespace-pre-line">{result}</p>
+          <p className="text-[10px] text-[#86868b] mt-3">
             ✅ Erkannte Werte werden in Schritt 2 automatisch eingetragen (alte Eingaben wurden zurückgesetzt). Geschätzte Höhe ist als „Schätzung" markiert – bitte in Schritt 2 prüfen.
           </p>
         </div>

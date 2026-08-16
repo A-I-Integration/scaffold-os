@@ -204,39 +204,39 @@ export default function MeineTourenPage() {
     return `https://www.google.com/maps/dir/?api=1&destination=${dest}${waypoints ? `&waypoints=${waypoints}` : ''}&travelmode=driving`;
   }
 
-  const inputCls = 'w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-white focus:border-amber-500 focus:outline-none';
+  const inputCls = 'w-full bg-[#f5f5f7] border border-black/10 rounded-lg px-3 py-2 text-[#1d1d1f] focus:border-[#e8590c] focus:outline-none';
 
   if (loading && tours.length === 0) {
     return (
-      <div className="min-h-screen bg-slate-900 text-white flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-amber-500"></div>
+      <div className="min-h-screen bg-white text-[#1d1d1f] flex items-center justify-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#e8590c]"></div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-slate-900 text-white">
+    <div className="min-h-screen bg-white text-[#1d1d1f]">
       <div className="max-w-2xl mx-auto p-4 space-y-5">
         <div>
-          <h1 className="text-2xl font-bold text-amber-500">👷 Meine Touren</h1>
-          <p className="text-slate-400 text-sm">
+          <h1 className="text-2xl font-bold text-[#e8590c]">👷 Meine Touren</h1>
+          <p className="text-[#86868b] text-sm">
             {new Date().toLocaleDateString('de-DE', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' })}
           </p>
         </div>
 
         {/* Wer bist du? – automatisch erkannt ODER Namenswahl */}
-        <div className="bg-slate-800 border border-slate-700 rounded-xl p-4">
+        <div className="bg-[#f5f5f7] border border-black/10 rounded-xl p-4">
           {autoMe ? (
             <div className="flex items-center gap-3">
               <span className="text-2xl">👤</span>
               <div>
                 <div className="font-semibold">{autoMe.name}</div>
-                <div className="text-slate-400 text-xs">Automatisch erkannt – dein Login ist mit dir verknüpft.</div>
+                <div className="text-[#86868b] text-xs">Automatisch erkannt – dein Login ist mit dir verknüpft.</div>
               </div>
             </div>
           ) : (
             <>
-              <label className="block text-sm text-slate-400 mb-1">Wer bist du? (für Zeiterfassung & Abwesenheit)</label>
+              <label className="block text-sm text-[#86868b] mb-1">Wer bist du? (für Zeiterfassung & Abwesenheit)</label>
               <select value={meId} onChange={e => selectMe(e.target.value)} className={inputCls}>
                 <option value="">– Namen wählen –</option>
                 {employees.map(e => (
@@ -250,14 +250,14 @@ export default function MeineTourenPage() {
         </div>
 
         {showAllHint && (
-          <div className="bg-blue-900/30 border border-blue-700 rounded-xl p-3 text-sm text-blue-200">
+          <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 text-sm text-blue-800">
             ℹ️ Für dich ist aktuell keine eigene Tour zugeordnet – du siehst die Übersicht aller Touren.
           </div>
         )}
 
         {/* ═══ TOUR DES TAGES ═══ */}
-        <section className="bg-slate-800 border border-slate-700 rounded-xl overflow-hidden">
-          <div className="p-4 border-b border-slate-700 flex items-center justify-between">
+        <section className="bg-[#f5f5f7] border border-black/10 rounded-xl overflow-hidden">
+          <div className="p-4 border-b border-black/10 flex items-center justify-between">
             <h2 className="font-semibold">🚛 {myTour ? (myTour.planned_date === todayISO() ? 'Deine Tour heute' : 'Deine nächste Tour') : 'Keine Tour geplant'}</h2>
             {myTour && (
               <span className={`px-2.5 py-1 rounded-full text-xs font-semibold ${
@@ -269,36 +269,36 @@ export default function MeineTourenPage() {
           </div>
           {myTour ? (
             <div className="p-4 space-y-4">
-              <div className="text-sm text-slate-300">
+              <div className="text-sm text-[#424245]">
                 <strong>{myTour.name}</strong>
                 {myTour.planned_start_time ? ` · Start ${myTour.planned_start_time}` : ''}
                 {myTour.vehicle ? ` · 🚛 ${myTour.vehicle.name} (${myTour.vehicle.license_plate})` : ''}
                 {myTour.planned_date !== todayISO() && (
-                  <span className="block text-amber-400 mt-1">
+                  <span className="block text-[#e8590c] mt-1">
                     📅 {new Date(myTour.planned_date + 'T00:00:00').toLocaleDateString('de-DE', { weekday: 'long', day: '2-digit', month: '2-digit' })}
                   </span>
                 )}
               </div>
 
               {/* Stopp-Timeline */}
-              <ol className="relative border-l-2 border-slate-700 ml-3 space-y-4">
+              <ol className="relative border-l-2 border-black/10 ml-3 space-y-4">
                 {myTour.stops.map(stop => (
                   <li key={stop.id} className="ml-5 relative">
                     <span className={`absolute -left-[31px] w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${
-                      stop.status === 'completed' ? 'bg-emerald-600' : 'bg-slate-600'
+                      stop.status === 'completed' ? 'bg-emerald-600' : 'bg-black/20'
                     }`}>
                       {stop.status === 'completed' ? '✓' : stop.stop_order}
                     </span>
                     <div className="font-medium">{stop.address}</div>
                     {stop.transport_order?.inventory?.name && (
-                      <div className="text-slate-400 text-sm">
+                      <div className="text-[#86868b] text-sm">
                         {stop.transport_order.inventory.name} × {stop.transport_order.quantity}
                       </div>
                     )}
                     <a
                       href={`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(stop.address)}&travelmode=driving`}
                       target="_blank" rel="noreferrer"
-                      className="text-amber-400 text-sm hover:underline"
+                      className="text-[#e8590c] text-sm hover:underline"
                     >
                       → Navigation
                     </a>
@@ -309,13 +309,13 @@ export default function MeineTourenPage() {
               <a
                 href={mapsUrl(myTour)}
                 target="_blank" rel="noreferrer"
-                className="block text-center bg-blue-600 hover:bg-blue-500 rounded-lg px-4 py-3 font-semibold transition"
+                className="block text-center bg-blue-600 hover:bg-blue-500 rounded-xl px-4 py-3 font-semibold transition"
               >
                 🧭 Gesamte Route in Google Maps öffnen
               </a>
             </div>
           ) : (
-            <div className="p-6 text-center text-slate-400 text-sm">
+            <div className="p-6 text-center text-[#86868b] text-sm">
               Für dich ist aktuell keine Tour eingeplant. Frage bei der Disposition nach.
             </div>
           )}
@@ -323,7 +323,7 @@ export default function MeineTourenPage() {
 
         {/* ═══ PACKLISTE ═══ */}
         {myTour && packlist.length > 0 && (
-          <section className="bg-slate-800 border border-slate-700 rounded-xl p-4">
+          <section className="bg-[#f5f5f7] border border-black/10 rounded-xl p-4">
             <h2 className="font-semibold mb-3">📦 Packliste</h2>
             <div className="space-y-2">
               {packlist.map(item => {
@@ -333,60 +333,60 @@ export default function MeineTourenPage() {
                   <button
                     key={k}
                     onClick={() => togglePacked(k)}
-                    className={`w-full flex items-center gap-3 rounded-lg border p-3 text-left transition ${
-                      done ? 'border-emerald-600 bg-emerald-900/20' : 'border-slate-700 bg-slate-900/50'
+                    className={`w-full flex items-center gap-3 rounded-xl border p-3 text-left transition ${
+                      done ? 'border-emerald-600 bg-emerald-900/20' : 'border-black/10 bg-white/50'
                     }`}
                   >
                     <span className={`w-6 h-6 rounded-md border-2 flex items-center justify-center shrink-0 ${
-                      done ? 'border-emerald-500 bg-emerald-500 text-black' : 'border-slate-500'
+                      done ? 'border-emerald-500 bg-emerald-500 text-black' : 'border-black/20'
                     }`}>
                       {done ? '✓' : ''}
                     </span>
-                    <span className={`flex-1 ${done ? 'line-through text-slate-500' : ''}`}>{item.name}</span>
+                    <span className={`flex-1 ${done ? 'line-through text-[#86868b]' : ''}`}>{item.name}</span>
                     <span className="font-bold">{item.quantity}×</span>
                   </button>
                 );
               })}
             </div>
-            <p className="text-slate-500 text-xs mt-2">
+            <p className="text-[#86868b] text-xs mt-2">
               {packlist.filter(i => checked[i.name]).length} von {packlist.length} Positionen geladen
             </p>
           </section>
         )}
 
         {/* ═══ ZEITERFASSUNG ═══ */}
-        <section className="bg-slate-800 border border-slate-700 rounded-xl p-4 space-y-3">
+        <section className="bg-[#f5f5f7] border border-black/10 rounded-xl p-4 space-y-3">
           <h2 className="font-semibold">⏱️ Zeiterfassung</h2>
           <div className="grid grid-cols-2 gap-3">
             <button
               onClick={stampIn}
               disabled={!!openEntry || !meId}
-              className="bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 rounded-lg px-4 py-3 font-semibold transition"
+              className="bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 rounded-xl px-4 py-3 font-semibold transition"
             >
               ▶ Kommen
             </button>
             <button
               onClick={stampOut}
               disabled={!openEntry}
-              className="bg-red-600 hover:bg-red-500 disabled:opacity-40 rounded-lg px-4 py-3 font-semibold transition"
+              className="bg-red-600 hover:bg-red-500 disabled:opacity-40 rounded-xl px-4 py-3 font-semibold transition"
             >
               ⏹ Gehen
             </button>
           </div>
           {openEntry && (
-            <div className="bg-emerald-900/30 border border-emerald-700 rounded-lg p-3 text-sm text-emerald-200">
+            <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3 text-sm text-emerald-700">
               Läuft seit {fmtTime(openEntry.start_time)} Uhr
             </div>
           )}
           {msg && (
-            <div className={`rounded-lg p-3 text-sm ${msg.startsWith('✅') ? 'bg-emerald-900/40 border border-emerald-700 text-emerald-200' : 'bg-red-900/40 border border-red-700 text-red-200'}`}>
+            <div className={`rounded-xl p-3 text-sm ${msg.startsWith('✅') ? 'bg-emerald-50 border border-emerald-200 text-emerald-700' : 'bg-red-50 border border-red-200 text-red-700'}`}>
               {msg}
             </div>
           )}
           {entries.length > 0 && (
-            <div className="text-sm text-slate-300 border-t border-slate-700 pt-3">
-              Heute erfasst: <strong className="text-amber-400">{todayHours.toLocaleString('de-DE')} h</strong>
-              <ul className="mt-1 space-y-1 text-slate-400">
+            <div className="text-sm text-[#424245] border-t border-black/10 pt-3">
+              Heute erfasst: <strong className="text-[#e8590c]">{todayHours.toLocaleString('de-DE')} h</strong>
+              <ul className="mt-1 space-y-1 text-[#86868b]">
                 {entries.map(e => (
                   <li key={e.id}>
                     {fmtTime(e.start_time)} – {fmtTime(e.end_time)}
@@ -400,29 +400,29 @@ export default function MeineTourenPage() {
         </section>
 
         {/* ═══ KRANK / URLAUB MELDEN ═══ */}
-        <section className="bg-slate-800 border border-slate-700 rounded-xl p-4 space-y-3">
+        <section className="bg-[#f5f5f7] border border-black/10 rounded-xl p-4 space-y-3">
           <h2 className="font-semibold">🩺 Krank / Urlaub melden</h2>
           <div className="grid grid-cols-2 gap-2">
             <button
               onClick={() => setAbsType('sick')}
-              className={`rounded-lg border px-3 py-2 text-sm transition ${absType === 'sick' ? 'border-red-500 bg-red-900/30' : 'border-slate-700 bg-slate-900/50'}`}
+              className={`rounded-xl border px-3 py-2 text-sm transition ${absType === 'sick' ? 'border-red-500 bg-red-50' : 'border-black/10 bg-white/50'}`}
             >
               🤒 Krank
             </button>
             <button
               onClick={() => setAbsType('vacation')}
-              className={`rounded-lg border px-3 py-2 text-sm transition ${absType === 'vacation' ? 'border-blue-500 bg-blue-900/30' : 'border-slate-700 bg-slate-900/50'}`}
+              className={`rounded-xl border px-3 py-2 text-sm transition ${absType === 'vacation' ? 'border-blue-500 bg-blue-50' : 'border-black/10 bg-white/50'}`}
             >
               🏖️ Urlaub
             </button>
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-sm text-slate-400 mb-1">Von</label>
+              <label className="block text-sm text-[#86868b] mb-1">Von</label>
               <input type="date" value={absFrom} onChange={e => setAbsFrom(e.target.value)} className={inputCls} />
             </div>
             <div>
-              <label className="block text-sm text-slate-400 mb-1">Bis</label>
+              <label className="block text-sm text-[#86868b] mb-1">Bis</label>
               <input type="date" value={absTo} onChange={e => setAbsTo(e.target.value)} className={inputCls} />
             </div>
           </div>
@@ -433,18 +433,18 @@ export default function MeineTourenPage() {
             className={inputCls}
           />
           {absMsg && (
-            <div className={`rounded-lg p-3 text-sm ${absMsg.startsWith('✅') ? 'bg-emerald-900/40 border border-emerald-700 text-emerald-200' : 'bg-red-900/40 border border-red-700 text-red-200'}`}>
+            <div className={`rounded-xl p-3 text-sm ${absMsg.startsWith('✅') ? 'bg-emerald-50 border border-emerald-200 text-emerald-700' : 'bg-red-50 border border-red-200 text-red-700'}`}>
               {absMsg}
             </div>
           )}
           <button
             onClick={submitAbsence}
             disabled={absSaving || !meId}
-            className="w-full bg-amber-600 hover:bg-amber-500 disabled:opacity-40 rounded-lg px-4 py-3 font-semibold transition"
+            className="w-full bg-[#e8590c] hover:bg-[#d9480f] text-white disabled:opacity-40 rounded-xl px-4 py-3 font-semibold transition"
           >
             {absSaving ? 'Sende…' : 'Meldung absenden'}
           </button>
-          <p className="text-slate-500 text-xs">
+          <p className="text-[#86868b] text-xs">
             Die Meldung erscheint sofort in der Planung – die Disposition kann Personal und Fahrten umplanen.
           </p>
         </section>

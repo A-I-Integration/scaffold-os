@@ -263,7 +263,7 @@ export default function DigitalTwin({
   const cameraDistance = Math.max(lengthM, heightM) + 5;
 
   return (
-    <div className="w-full h-[500px] rounded-xl overflow-hidden border border-slate-700 bg-[#0f172a] relative">
+    <div className="w-full h-[500px] rounded-xl overflow-hidden border border-black/10 bg-[#fbfbfd] relative">
       <Canvas
         camera={{ position: [cameraDistance, heightM / 2 + 2, cameraDistance], fov: 50 }}
         shadows
@@ -303,7 +303,7 @@ export default function DigitalTwin({
         />
       </Canvas>
 
-      <div className="absolute bottom-4 left-4 bg-slate-900/80 backdrop-blur rounded-lg px-3 py-2 text-xs text-slate-300 border border-slate-700 pointer-events-none">
+      <div className="absolute bottom-4 left-4 bg-white/80 backdrop-blur rounded-xl px-3 py-2 text-xs text-[#424245] border border-black/10 pointer-events-none">
         <p>🖱️ Links: Drehen | Rechts: Verschieben | Scroll: Zoomen</p>
       </div>
     </div>

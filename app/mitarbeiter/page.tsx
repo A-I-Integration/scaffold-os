@@ -99,24 +99,24 @@ export default function MitarbeiterPage() {
     setSaving(false);
   }
 
-  const inputCls = 'w-full rounded-lg bg-slate-800 border border-slate-700 px-3 py-2 text-white placeholder-slate-500 focus:border-amber-500 focus:outline-none';
+  const inputCls = 'w-full rounded-lg bg-[#f5f5f7] border border-black/10 px-3 py-2 text-[#1d1d1f] placeholder-[#86868b] focus:border-[#e8590c] focus:outline-none';
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 p-4 md:p-8">
+    <div className="min-h-screen bg-[#fbfbfd] text-[#1d1d1f] p-4 md:p-8">
       <div className="max-w-4xl mx-auto space-y-6">
         <header>
           <h1 className="text-2xl md:text-3xl font-bold">👥 Mitarbeiter & Zugänge</h1>
-          <p className="text-slate-400 mt-1">Logins anlegen und Mitarbeiter verknüpfen – nur für CEO und Dispo.</p>
+          <p className="text-[#86868b] mt-1">Logins anlegen und Mitarbeiter verknüpfen – nur für CEO und Dispo.</p>
         </header>
 
-        {error && <div className="bg-red-900/40 border border-red-700 rounded-xl p-4 text-red-200">{error}</div>}
+        {error && <div className="bg-red-900/40 border border-red-200 rounded-xl p-4 text-red-700">{error}</div>}
 
         {/* ─── Formular: Neuer Zugang ─── */}
-        <section className="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-4">
+        <section className="bg-white border border-black/5 rounded-2xl p-5 space-y-4">
           <h2 className="text-lg font-semibold">🔑 Neuen Zugang anlegen</h2>
 
           <div>
-            <label className="block text-sm text-slate-400 mb-1">Bestehenden Mitarbeiter verknüpfen (optional)</label>
+            <label className="block text-sm text-[#86868b] mb-1">Bestehenden Mitarbeiter verknüpfen (optional)</label>
             <select value={linkExisting} onChange={e => setLinkExisting(e.target.value)} className={inputCls}>
               <option value="">– Neuer Mitarbeiter (unten Name eingeben) –</option>
               {unlinked.map(e => (
@@ -128,11 +128,11 @@ export default function MitarbeiterPage() {
           {!linkExisting && (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm text-slate-400 mb-1">Vorname *</label>
+                <label className="block text-sm text-[#86868b] mb-1">Vorname *</label>
                 <input value={firstName} onChange={e => setFirstName(e.target.value)} className={inputCls} placeholder="Max" />
               </div>
               <div>
-                <label className="block text-sm text-slate-400 mb-1">Nachname *</label>
+                <label className="block text-sm text-[#86868b] mb-1">Nachname *</label>
                 <input value={lastName} onChange={e => setLastName(e.target.value)} className={inputCls} placeholder="Mustermann" />
               </div>
             </div>
@@ -140,15 +140,15 @@ export default function MitarbeiterPage() {
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm text-slate-400 mb-1">E-Mail (Login) *</label>
+              <label className="block text-sm text-[#86868b] mb-1">E-Mail (Login) *</label>
               <input type="email" value={email} onChange={e => setEmail(e.target.value)} className={inputCls} placeholder="max@firma.de" />
             </div>
             <div>
-              <label className="block text-sm text-slate-400 mb-1">Passwort *</label>
+              <label className="block text-sm text-[#86868b] mb-1">Passwort *</label>
               <div className="flex gap-2">
                 <input value={password} onChange={e => setPassword(e.target.value)} className={inputCls} placeholder="mind. 6 Zeichen" />
                 <button type="button" onClick={() => setPassword(randomPassword())}
-                  className="shrink-0 rounded-lg bg-slate-700 hover:bg-slate-600 px-3 text-sm transition">
+                  className="shrink-0 rounded-xl bg-black/10 hover:bg-black/15 px-3 text-sm transition">
                   🎲 Vorschlagen
                 </button>
               </div>
@@ -156,34 +156,34 @@ export default function MitarbeiterPage() {
           </div>
 
           <div>
-            <label className="block text-sm text-slate-400 mb-1">Rolle *</label>
+            <label className="block text-sm text-[#86868b] mb-1">Rolle *</label>
             <select value={role} onChange={e => setRole(e.target.value)} className={inputCls}>
               {ROLES.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
             </select>
           </div>
 
           <button onClick={submit} disabled={saving}
-            className="rounded-xl bg-amber-600 hover:bg-amber-500 disabled:opacity-50 px-5 py-2.5 font-semibold transition">
+            className="rounded-xl bg-[#e8590c] hover:bg-[#d9480f] text-white disabled:opacity-50 px-5 py-2.5 font-semibold transition">
             {saving ? '⏳ Lege an…' : '🔑 Zugang anlegen'}
           </button>
 
           {msg && (
-            <div className={`rounded-xl p-4 whitespace-pre-line ${msg.ok ? 'bg-emerald-900/40 border border-emerald-700 text-emerald-200' : 'bg-red-900/40 border border-red-700 text-red-200'}`}>
+            <div className={`rounded-xl p-4 whitespace-pre-line ${msg.ok ? 'bg-emerald-50 border border-emerald-200 text-emerald-700' : 'bg-red-50 border border-red-200 text-red-700'}`}>
               {msg.text}
             </div>
           )}
         </section>
 
         {/* ─── Tabelle: Übersicht ─── */}
-        <section className="bg-slate-900 border border-slate-800 rounded-2xl p-5">
+        <section className="bg-white border border-black/5 rounded-2xl p-5">
           <h2 className="text-lg font-semibold mb-4">📋 Übersicht ({employees.length})</h2>
           {loading ? (
-            <p className="text-slate-400">Lade…</p>
+            <p className="text-[#86868b]">Lade…</p>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="text-left text-slate-400 border-b border-slate-800">
+                  <tr className="text-left text-[#86868b] border-b border-black/5">
                     <th className="py-2 pr-4">Name</th>
                     <th className="py-2 pr-4">E-Mail</th>
                     <th className="py-2 pr-4">Status</th>
@@ -192,18 +192,18 @@ export default function MitarbeiterPage() {
                 </thead>
                 <tbody>
                   {employees.map(e => (
-                    <tr key={e.id} className="border-b border-slate-800/60">
+                    <tr key={e.id} className="border-b border-black/5/60">
                       <td className="py-2.5 pr-4 font-medium">{e.first_name} {e.last_name}</td>
-                      <td className="py-2.5 pr-4 text-slate-400">{e.email || '–'}</td>
+                      <td className="py-2.5 pr-4 text-[#86868b]">{e.email || '–'}</td>
                       <td className="py-2.5 pr-4">
-                        <span className={`px-2 py-0.5 rounded-full text-xs ${e.status === 'active' ? 'bg-emerald-700/50 text-emerald-200' : 'bg-slate-700 text-slate-300'}`}>
+                        <span className={`px-2 py-0.5 rounded-full text-xs ${e.status === 'active' ? 'bg-emerald-700/50 text-emerald-700' : 'bg-black/10 text-[#424245]'}`}>
                           {e.status === 'active' ? 'Aktiv' : e.status}
                         </span>
                       </td>
                       <td className="py-2.5">
                         {e.user_id
-                          ? <span className="text-emerald-400">✅ verknüpft</span>
-                          : <span className="text-slate-500">❌ kein Login</span>}
+                          ? <span className="text-emerald-600">✅ verknüpft</span>
+                          : <span className="text-[#86868b]">❌ kein Login</span>}
                       </td>
                     </tr>
                   ))}

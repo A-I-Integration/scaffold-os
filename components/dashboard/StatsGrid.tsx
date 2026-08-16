@@ -26,7 +26,7 @@ export default function StatsGrid({ stats }: Props) {
       label: 'Aktive Projekte',
       value: stats.activeProjectsCount,
       unit: '',
-      color: 'text-blue-400',
+      color: 'text-blue-600',
       bg: 'bg-blue-500/10',
       border: 'border-blue-500/20',
       icon: '🏗️',
@@ -35,7 +35,7 @@ export default function StatsGrid({ stats }: Props) {
       label: 'Kritische Bestände',
       value: stats.criticalStockCount,
       unit: 'Artikel',
-      color: stats.criticalStockCount > 0 ? 'text-red-400' : 'text-emerald-400',
+      color: stats.criticalStockCount > 0 ? 'text-red-600' : 'text-emerald-600',
       bg: stats.criticalStockCount > 0 ? 'bg-red-500/10' : 'bg-emerald-500/10',
       border: stats.criticalStockCount > 0 ? 'border-red-500/20' : 'border-emerald-500/20',
       icon: stats.criticalStockCount > 0 ? '⚠️' : '✅',
@@ -54,7 +54,7 @@ export default function StatsGrid({ stats }: Props) {
       label: 'Durchschnittsmarge',
       value: stats.avgMargin,
       unit: '%',
-      color: stats.avgMargin < 15 ? 'text-red-400' : stats.avgMargin < 25 ? 'text-amber-400' : 'text-emerald-400',
+      color: stats.avgMargin < 15 ? 'text-red-600' : stats.avgMargin < 25 ? 'text-amber-600' : 'text-emerald-600',
       bg: stats.avgMargin < 15 ? 'bg-red-500/10' : stats.avgMargin < 25 ? 'bg-amber-500/10' : 'bg-emerald-500/10',
       border: stats.avgMargin < 15 ? 'border-red-500/20' : stats.avgMargin < 25 ? 'border-amber-500/20' : 'border-emerald-500/20',
       icon: '📊',
@@ -63,16 +63,16 @@ export default function StatsGrid({ stats }: Props) {
       label: 'Stillstand > 30 Tage',
       value: stats.stalledProjectsCount,
       unit: 'Projekte',
-      color: stats.stalledProjectsCount > 0 ? 'text-red-400' : 'text-slate-400',
-      bg: stats.stalledProjectsCount > 0 ? 'bg-red-500/10' : 'bg-slate-700/30',
-      border: stats.stalledProjectsCount > 0 ? 'border-red-500/20' : 'border-slate-700',
+      color: stats.stalledProjectsCount > 0 ? 'text-red-600' : 'text-[#86868b]',
+      bg: stats.stalledProjectsCount > 0 ? 'bg-red-500/10' : 'bg-black/5',
+      border: stats.stalledProjectsCount > 0 ? 'border-red-500/20' : 'border-black/10',
       icon: '🛑',
     },
     {
       label: 'Abwesende Mitarbeiter',
       value: stats.absentEmployees,
       unit: '',
-      color: stats.absentEmployees > 0 ? 'text-amber-400' : 'text-emerald-400',
+      color: stats.absentEmployees > 0 ? 'text-amber-600' : 'text-emerald-600',
       bg: stats.absentEmployees > 0 ? 'bg-amber-500/10' : 'bg-emerald-500/10',
       border: stats.absentEmployees > 0 ? 'border-amber-500/20' : 'border-emerald-500/20',
       icon: stats.absentEmployees > 0 ? '🤒' : '👥',
@@ -81,16 +81,16 @@ export default function StatsGrid({ stats }: Props) {
       label: 'Ausstehende Transporte',
       value: stats.pendingTransports,
       unit: '',
-      color: stats.pendingTransports > 0 ? 'text-blue-400' : 'text-slate-400',
-      bg: stats.pendingTransports > 0 ? 'bg-blue-500/10' : 'bg-slate-700/30',
-      border: stats.pendingTransports > 0 ? 'border-blue-500/20' : 'border-slate-700',
+      color: stats.pendingTransports > 0 ? 'text-blue-600' : 'text-[#86868b]',
+      bg: stats.pendingTransports > 0 ? 'bg-blue-500/10' : 'bg-black/5',
+      border: stats.pendingTransports > 0 ? 'border-blue-500/20' : 'border-black/10',
       icon: '🚛',
     },
     {
       label: 'Lagerwert',
       value: stats.inventoryValue,
       unit: '€',
-      color: 'text-emerald-400',
+      color: 'text-emerald-600',
       bg: 'bg-emerald-500/10',
       border: 'border-emerald-500/20',
       icon: '📦',
@@ -115,13 +115,13 @@ export default function StatsGrid({ stats }: Props) {
           <div className="flex items-center justify-between mb-2">
             <span className="text-2xl">{card.icon}</span>
             {card.unit && card.unit !== '€' && (
-              <span className="text-xs text-slate-500">{card.unit}</span>
+              <span className="text-xs text-[#86868b]">{card.unit}</span>
             )}
           </div>
           <p className={`text-2xl font-bold ${card.color}`}>
             {formatValue(card.value, card.format)}
           </p>
-          <p className="text-xs text-slate-400 mt-1">{card.label}</p>
+          <p className="text-xs text-[#86868b] mt-1">{card.label}</p>
         </div>
       ))}
     </div>

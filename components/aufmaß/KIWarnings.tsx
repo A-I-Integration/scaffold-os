@@ -20,28 +20,28 @@ export default function KIWarnings({ ruleset, onAutoFix }: Props) {
       border: 'border-red-500/50',
       bg: 'bg-red-500/10',
       icon: '⛔',
-      titleColor: 'text-red-400',
+      titleColor: 'text-red-600',
       textColor: 'text-red-200',
     },
     warning: {
       border: 'border-amber-500/50',
       bg: 'bg-amber-500/10',
       icon: '⚠️',
-      titleColor: 'text-amber-400',
+      titleColor: 'text-amber-600',
       textColor: 'text-amber-200',
     },
     info: {
       border: 'border-blue-500/50',
       bg: 'bg-blue-500/10',
       icon: 'ℹ️',
-      titleColor: 'text-blue-400',
+      titleColor: 'text-blue-600',
       textColor: 'text-blue-200',
     },
     tip: {
       border: 'border-emerald-500/50',
       bg: 'bg-emerald-500/10',
       icon: '💡',
-      titleColor: 'text-emerald-400',
+      titleColor: 'text-emerald-600',
       textColor: 'text-emerald-200',
     },
   };
@@ -49,12 +49,12 @@ export default function KIWarnings({ ruleset, onAutoFix }: Props) {
   return (
     <div className="mt-6 space-y-3">
       {/* Zusammenfassung */}
-      <div className="flex items-center justify-between rounded-lg bg-slate-800 p-4">
+      <div className="flex items-center justify-between rounded-xl bg-[#f5f5f7] p-4">
         <div className="flex items-center gap-3">
           <span className="text-2xl">🤖</span>
           <div>
-            <p className="font-semibold text-white">KI-Analyse</p>
-            <p className="text-sm text-slate-400">
+            <p className="font-semibold text-[#1d1d1f]">KI-Analyse</p>
+            <p className="text-sm text-[#86868b]">
               {ruleset.results.length} Erkenntnis
               {ruleset.results.length !== 1 ? 'se' : ''} gefunden
               {ruleset.hasCritical && ' – Kritische Punkte beachten!'}
@@ -64,7 +64,7 @@ export default function KIWarnings({ ruleset, onAutoFix }: Props) {
         {ruleset.totalCostImpact !== 0 && (
           <div
             className={`text-right ${
-              ruleset.totalCostImpact > 0 ? 'text-red-400' : 'text-emerald-400'
+              ruleset.totalCostImpact > 0 ? 'text-red-600' : 'text-emerald-600'
             }`}
           >
             <p className="text-sm">Kosten-Impact</p>
@@ -86,7 +86,7 @@ export default function KIWarnings({ ruleset, onAutoFix }: Props) {
         return (
           <div
             key={rule.id}
-            className={`rounded-lg border ${config.border} ${config.bg} p-4 transition-all hover:brightness-110`}
+            className={`rounded-xl border ${config.border} ${config.bg} p-4 transition-all hover:brightness-110`}
           >
             <div className="flex items-start gap-3">
               <span className="mt-0.5 text-xl">{config.icon}</span>
@@ -98,7 +98,7 @@ export default function KIWarnings({ ruleset, onAutoFix }: Props) {
                   {rule.costImpact !== undefined && rule.costImpact !== 0 && (
                     <span
                       className={`text-sm font-mono font-bold ${
-                        rule.costImpact > 0 ? 'text-red-400' : 'text-emerald-400'
+                        rule.costImpact > 0 ? 'text-red-600' : 'text-emerald-600'
                       }`}
                     >
                       {rule.costImpact > 0 ? '+' : ''}
@@ -115,16 +115,16 @@ export default function KIWarnings({ ruleset, onAutoFix }: Props) {
                 </p>
 
                 {rule.suggestedAction && (
-                  <div className="mt-2 rounded bg-slate-900/50 p-2">
-                    <p className="text-xs font-semibold text-slate-400">
+                  <div className="mt-2 rounded bg-white/50 p-2">
+                    <p className="text-xs font-semibold text-[#86868b]">
                       Empfohlene Maßnahme:
                     </p>
-                    <p className="text-sm text-white">{rule.suggestedAction}</p>
+                    <p className="text-sm text-[#1d1d1f]">{rule.suggestedAction}</p>
                   </div>
                 )}
 
                 {rule.alternative && (
-                  <p className="mt-1 text-xs text-slate-500">
+                  <p className="mt-1 text-xs text-[#86868b]">
                     Alternative: {rule.alternative}
                   </p>
                 )}
