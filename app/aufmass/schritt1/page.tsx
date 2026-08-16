@@ -6,6 +6,7 @@ import PhotoUpload from '@/components/aufmaß/PhotoUpload';
 import LiDARUpload from '@/components/aufmaß/LiDARUpload';
 import FotoAnalyse from '@/components/aufmaß/FotoAnalyse';
 import GrundrissUpload from '@/components/aufmaß/GrundrissUpload';
+import SprachNotiz from '@/components/aufmaß/SprachNotiz';
 
 const LEERES_FORM = {
   // Projekt
@@ -415,6 +416,8 @@ export default function Schritt1Page() {
               className="w-full bg-black/10 border border-black/10 rounded-xl px-4 py-3 text-[#1d1d1f] placeholder-[#86868b] focus:outline-none focus:border-orange-500 transition resize-none"
               placeholder="Besonderheiten, Zugang, Parken..."
             />
+            {/* NEU (Phase 18): Sprachnotiz – sprechen statt tippen */}
+            <SprachNotiz onText={(t) => handleChange('notizen', (form.notizen ? form.notizen + '\n' : '') + t)} />
           </div>
 
           {/* ─── DIGITALE ERFASSUNG ─── */}

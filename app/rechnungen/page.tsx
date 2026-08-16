@@ -328,6 +328,9 @@ function RechnungenContent() {
   const [notes, setNotes] = useState('');
   const [projectId, setProjectId] = useState<string | null>(null);
 
+  // Phase 18: E-Mail-Öffnungen (Tracking-Pixel)
+  const [opens, setOpens] = useState<Record<string, { anzahl: number; zuletzt: string }>>({});
+
   const load = useCallback(async () => {
     setLoading(true);
     try {
@@ -336,6 +339,21 @@ function RechnungenContent() {
       if (!json.success) throw new Error(json.error || 'Laden fehlgeschlagen');
       setInvoices(json.invoices);
       setError(null);
+
+      // Öffnungen dazuladen (blockiert die Liste nicht)
+      try {
+        const tRes = await fetch('/api/track/status');
+        const tJson = await tRes.json();
+        if (tJson.success) {
+          const map: Record<string, { anzahl: number; zuletzt: string }> = {};
+          for (const o of tJson.opens) {
+            if (!map[o.ref] || o.zuletzt > map[o.ref].zuletzt) {
+              map[o.ref] = { anzahl: (map[o.ref]?.anzahl || 0) + o.anzahl, zuletzt: o.zuletzt };
+            }
+          }
+          setOpens(map);
+        }
+      } catch { /* Tracking optional */ }
     } catch (err: any) {
       setError(err.message);
     } finally {
@@ -756,6 +774,14 @@ function RechnungenContent() {
                         {(inv.reminder_level || 0) > 0 && (
                           <span className="ml-1 text-[10px] font-sans px-1.5 py-0.5 rounded bg-red-500/20 text-red-700 border border-red-500/40">
                             {inv.reminder_level}. Mahnung
+                          </span>
+                        )}
+                        {opens[inv.invoice_number] && (
+                          <span
+                            className="ml-1 text-[10px] font-sans px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-700 border border-emerald-500/40"
+                            title={`E-Mail geöffnet (${opens[inv.invoice_number].anzahl}×, zuletzt ${new Date(opens[inv.invoice_number].zuletzt).toLocaleString('de-DE')})`}
+                          >
+                            👁 Gesehen
                           </span>
                         )}
                       </td>

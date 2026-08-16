@@ -8,6 +8,7 @@ import autoTable from 'jspdf-autotable';
 import KIMaterialResult from '@/components/aufmaß/KIMaterialResult';
 import KiHinweis from '@/components/KiHinweis';
 import SignaturePad from '@/components/aufmaß/SignaturePad';
+import DinCheck from '@/components/aufmaß/DinCheck';
 import { KIAnalysis } from '@/types/scaffold';
 import DispositionResult from '@/components/aufmaß/DispositionResult';
 import { DispositionResult as DispositionData } from '@/lib/calculations/disposition';
@@ -622,6 +623,9 @@ function Schritt6Content() {
                   )}
                 </div>
               )}
+
+              {/* NEU (Phase 18): DIN EN 12811 KI-Check */}
+              <DinCheck projektId={savedProjectId} />
 
               {/* NEU: Unterschrift */}
               {savedProjectId && (

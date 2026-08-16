@@ -70,6 +70,12 @@ export async function POST(req: Request) {
           <p>Wir bitten um Ausgleich des Betrags innerhalb von 7 Tagen. Die Mahnung finden Sie im Anhang.</p>`;
     }
 
+    // Phase 18: Öffnungs-Pixel (1×1, unsichtbar). Referenz: Projekt-ID
+    // bei Angeboten, Rechnungsnummer bei Rechnungen/Mahnungen.
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://scaffold-os.vercel.app';
+    const trackRef = mailType === 'angebot' ? projectId : (invoiceNumber || projectName);
+    const pixel = `<img src="${appUrl}/api/track/open?typ=${mailType}&ref=${encodeURIComponent(trackRef)}" width="1" height="1" alt="" style="display:none" />`;
+
     const { data, error } = await resend.emails.send({
       from: 'SCAFFOLD OS <onboarding@resend.dev>',
       to: [to],
@@ -82,6 +88,7 @@ export async function POST(req: Request) {
             Diese E-Mail wurde automatisch von SCAFFOLD OS versendet.<br>
             Bei Fragen antworten Sie einfach auf diese E-Mail.
           </p>
+          ${pixel}
         </div>
       `,
       attachments: attachments.length > 0 ? attachments : undefined,
