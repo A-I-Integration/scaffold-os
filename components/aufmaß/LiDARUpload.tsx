@@ -9,6 +9,17 @@ interface Fassade {
   genauigkeitCm: number;
 }
 
+interface Ebene extends Fassade {
+  flaecheM2: number;
+}
+
+interface Abstand {
+  von: number;
+  bis: number;
+  abstandM: number;
+  typ: 'ebene_ebene' | 'hindernis';
+}
+
 interface Measurements {
   lengthM: number;
   widthM: number;
@@ -18,7 +29,9 @@ interface Measurements {
   robustVertexCount?: number;
   verticalAxis?: 'x' | 'y' | 'z';
   unitScale?: number;
-  fassade?: (Fassade & { genauigkeitCm: number }) | null;
+  ebenen?: Ebene[];
+  abstaende?: Abstand[];
+  fassade?: Fassade | null;
   nebenfassade?: { breiteM: number; hoeheM: number; punkte: number } | null;
   kalibriert?: boolean;
   referenz?: string;
@@ -89,6 +102,8 @@ export default function LiDARUpload({ sessionId, onMeasurements }: Props) {
       lengthM: scan.m.lengthM * f,
       widthM: scan.m.widthM * f,
       heightM: scan.m.heightM * f,
+      ebenen: scan.m.ebenen?.map((e) => ({ ...e, breiteM: e.breiteM * f, hoeheM: e.hoeheM * f, flaecheM2: e.flaecheM2 * f * f, genauigkeitCm: e.genauigkeitCm * f })),
+      abstaende: scan.m.abstaende?.map((a) => ({ ...a, abstandM: a.abstandM * f })),
       fassade: scan.m.fassade ? { ...scan.m.fassade, breiteM: scan.m.fassade.breiteM * f, hoeheM: scan.m.fassade.hoeheM * f, genauigkeitCm: scan.m.fassade.genauigkeitCm * f } : null,
       nebenfassade: scan.m.nebenfassade ? { ...scan.m.nebenfassade, breiteM: scan.m.nebenfassade.breiteM * f, hoeheM: scan.m.nebenfassade.hoeheM * f } : null,
       kalibriert: true,
@@ -109,7 +124,7 @@ export default function LiDARUpload({ sessionId, onMeasurements }: Props) {
       <div className="relative">
         <input
           type="file"
-          accept=".obj,.ply"
+          accept=".obj,.ply,.las,.glb"
           onChange={handleFile}
           disabled={uploading}
           className="absolute inset-0 h-full w-full cursor-pointer opacity-0 disabled:cursor-not-allowed"
@@ -125,9 +140,9 @@ export default function LiDARUpload({ sessionId, onMeasurements }: Props) {
             </span>
           ) : (
             <span>
-              <span className="text-lg">📱</span> <span className="font-medium">LiDAR-Scan hochladen</span>
+              <span className="text-lg">📱</span> <span className="font-medium">Punktwolke / 3D-Modell hochladen</span>
               <br />
-              <span className="text-[11px] text-[#86868b]">.obj oder .ply (ASCII) aus Polycam / Scaniverse / RoomPlan</span>
+              <span className="text-[11px] text-[#86868b]">Polycam: .ply (ASCII) oder .las als Punktwolke, .glb / .obj als 3D-Modell</span>
             </span>
           )}
         </button>
@@ -140,32 +155,45 @@ export default function LiDARUpload({ sessionId, onMeasurements }: Props) {
             {scan.m.kalibriert && <span className="ml-2 rounded bg-emerald-500/15 border border-emerald-500/40 px-1.5 py-0.5 text-emerald-700">Kalibriert ({scan.m.referenz})</span>}
           </p>
 
-          {/* ── Fassade (RANSAC-Ebene) – das eigentliche Arbeitsergebnis ── */}
-          {scan.m.fassade ? (
+          {/* ── Erkannte Ebenen (RANSAC) – das eigentliche Arbeitsergebnis ── */}
+          {scan.m.ebenen && scan.m.ebenen.length > 0 ? (
             <div>
-              <p className="text-[10px] font-bold uppercase tracking-wider text-[#86868b] mb-1.5">Erkannte Fassade</p>
-              <div className="grid grid-cols-3 gap-2">
-                <div className="rounded bg-[#f5f5f7] p-2 text-center">
-                  <p className="text-[10px] text-[#86868b] uppercase">Breite</p>
-                  <p className="text-lg font-bold text-[#1d1d1f]">{scan.m.fassade.breiteM.toFixed(2)} m</p>
-                </div>
-                <div className="rounded bg-[#f5f5f7] p-2 text-center">
-                  <p className="text-[10px] text-[#86868b] uppercase">Höhe</p>
-                  <p className="text-lg font-bold text-[#1d1d1f]">{scan.m.fassade.hoeheM.toFixed(2)} m</p>
-                </div>
-                <div className="rounded bg-[#f5f5f7] p-2 text-center">
-                  <p className="text-[10px] text-[#86868b] uppercase">Fläche</p>
-                  <p className="text-lg font-bold text-[#e8590c]">{(scan.m.fassade.breiteM * scan.m.fassade.hoeheM).toFixed(1)} m²</p>
-                </div>
-              </div>
-              <p className="text-[10px] text-[#86868b] mt-1.5 text-center">
-                {scan.m.fassade.punkte.toLocaleString()} Punkte auf der Ebene · Streuung ±{scan.m.fassade.genauigkeitCm.toFixed(1)} cm
+              <p className="text-[10px] font-bold uppercase tracking-wider text-[#86868b] mb-1.5">
+                Erkannte Ebenen ({scan.m.ebenen.length})
               </p>
-              {scan.m.nebenfassade && (
-                <p className="text-[11px] text-[#424245] mt-2 text-center">
-                  ➕ Nebenfassade erkannt: {scan.m.nebenfassade.breiteM.toFixed(2)} m × {scan.m.nebenfassade.hoeheM.toFixed(2)} m
-                  ({(scan.m.nebenfassade.breiteM * scan.m.nebenfassade.hoeheM).toFixed(1)} m²)
-                </p>
+              <div className="space-y-2">
+                {scan.m.ebenen.map((eb, i) => (
+                  <div key={i} className="rounded-lg bg-[#f5f5f7] p-2.5">
+                    <div className="flex items-center justify-between">
+                      <p className="text-xs font-semibold text-[#1d1d1f]">
+                        {i === 0 ? '🏠 Hauptfassade' : `🧱 Ebene ${i + 1}`}
+                      </p>
+                      <p className="text-sm font-bold text-[#e8590c]">{eb.flaecheM2.toFixed(1)} m²</p>
+                    </div>
+                    <p className="text-[11px] text-[#424245] mt-0.5">
+                      {eb.breiteM.toFixed(2)} m breit × {eb.hoeheM.toFixed(2)} m hoch
+                      <span className="text-[#86868b]"> · {eb.punkte.toLocaleString()} Punkte · ±{eb.genauigkeitCm.toFixed(1)} cm</span>
+                    </p>
+                  </div>
+                ))}
+              </div>
+
+              {/* ── Abstände ── */}
+              {scan.m.abstaende && scan.m.abstaende.length > 0 && (
+                <div className="mt-3">
+                  <p className="text-[10px] font-bold uppercase tracking-wider text-[#86868b] mb-1.5">Abstände</p>
+                  <div className="space-y-1">
+                    {scan.m.abstaende.map((a, i) => (
+                      <p key={i} className="text-[11px] text-[#424245]">
+                        {a.typ === 'hindernis' ? (
+                          <>⚠️ Nächstes Hindernis vor Hauptfassade: <span className="font-semibold text-[#1d1d1f]">{a.abstandM.toFixed(2)} m</span> (z. B. Baum, Auto – Gerüst-Abstand beachten)</>
+                        ) : (
+                          <>↔️ Ebene {a.von} ↔ Ebene {a.bis}: <span className="font-semibold text-[#1d1d1f]">{a.abstandM.toFixed(2)} m</span> (z. B. gegenüberliegende Fassade)</>
+                        )}
+                      </p>
+                    ))}
+                  </div>
+                </div>
               )}
             </div>
           ) : (
