@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next"
 import { Inter } from "next/font/google"
+import { Analytics } from "@vercel/analytics/next"
 import "./globals.css"
 import SidebarLayout from "@/components/SidebarLayout"
 
@@ -33,6 +34,7 @@ export default function RootLayout({
     <html lang="de">
       <body className={inter.className}>
         <SidebarLayout>{children}</SidebarLayout>
+        <Analytics />
       </body>
     </html>
   )
