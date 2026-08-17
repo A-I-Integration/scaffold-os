@@ -41,8 +41,8 @@ export default function AgbPage() {
               SCAFFOLD OS geschäftlich nutzen.
             </p>
             <p>
-              Vertragspartner ist die SCAFFOLD OS UG (haftungsbeschränkt) i. G., Ölbachstr. 48,
-              48691 Vreden, vertreten durch Michelle Merola.
+              Vertragspartner ist AI Integration, Inhaberin Michelle Merola (Einzelunternehmen),
+              Ölbachstr. 48, 48691 Vreden. SCAFFOLD OS ist ein Produkt von AI Integration.
             </p>
           </Section>
 

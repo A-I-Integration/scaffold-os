@@ -29,15 +29,19 @@ export default function ImpressumPage() {
           <div>
             <h2 className="text-lg font-semibold text-[#e8590c] mb-2">Angaben gemäß § 5 DDG</h2>
             <p>
-              SCAFFOLD OS UG (haftungsbeschränkt) i. G.<br />
+              AI Integration<br />
+              Inhaberin: Michelle Merola (Einzelunternehmen)<br />
               Ölbachstr. 48<br />
               48691 Vreden
+            </p>
+            <p className="mt-2">
+              SCAFFOLD OS ist ein Produkt von AI Integration.
             </p>
           </div>
 
           <div>
-            <h2 className="text-lg font-semibold text-[#e8590c] mb-2">Vertreten durch</h2>
-            <p>Michelle Merola</p>
+            <h2 className="text-lg font-semibold text-[#e8590c] mb-2">Verantwortlich für den Inhalt</h2>
+            <p>Michelle Merola (Anschrift wie oben)</p>
           </div>
 
           <div>
@@ -49,16 +53,15 @@ export default function ImpressumPage() {
           </div>
 
           <div>
-            <h2 className="text-lg font-semibold text-[#e8590c] mb-2">Handelsregister</h2>
+            <h2 className="text-lg font-semibold text-[#e8590c] mb-2">Unternehmensform</h2>
             <p>
-              Die Gesellschaft befindet sich in Gründung. Registergericht und Registernummer
-              werden nach Eintragung ergänzt.
+              AI Integration ist ein Einzelunternehmen (kein Kleingewerbe).
             </p>
           </div>
 
           <div>
             <h2 className="text-lg font-semibold text-[#e8590c] mb-2">Umsatzsteuer-Identifikationsnummer</h2>
-            <p>Beantragt. Die USt-IdNr. wird nach Erteilung ergänzt.</p>
+            <p>Umsatzsteuer-Identifikationsnummer gemäß § 27a UStG: wird ergänzt.</p>
           </div>
         </section>
       </div>
