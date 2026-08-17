@@ -90,6 +90,52 @@ async function tenantStatusSetzen(tenantId: string | null, status: string, msg: 
   console.log(`[stripe-webhook] tenant ${tenantId}: ${msg}`);
 }
 
+// ── NEU: E-Mail an uns, sobald jemand „3 Tage kostenlos testen" startet ──
+async function benachrichtigeNeuenTestzugang(
+  firma: string,
+  name: string | null,
+  email: string
+): Promise<void> {
+  const apiKey = process.env.RESEND_API_KEY;
+  if (!apiKey) return; // kein Key konfiguriert → still auslassen
+
+  const esc = (v: string) =>
+    v.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+
+  const empfaenger = process.env.ANFRAGE_EMPFAENGER || 'info@a-i-integration.de';
+  const trialEnde = new Date(Date.now() + 3 * 24 * 60 * 60 * 1000)
+    .toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' });
+
+  const { Resend } = await import('resend');
+  const resend = new Resend(apiKey);
+
+  await resend.emails.send({
+    from: 'SCAFFOLD OS <onboarding@resend.dev>',
+    to: [empfaenger],
+    replyTo: email,
+    subject: `[SCAFFOLD OS] 🎉 Neuer Testzugang: ${firma}`,
+    html: `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        <h2 style="color: #e8590c; margin-bottom: 4px;">Neuer Testzugang gestartet</h2>
+        <p style="color: #64748b; margin-top: 0;">„3 Tage kostenlos testen" über scaffoldos.de/kaufen</p>
+        <table style="border-collapse: collapse; background: #f8fafc; border-radius: 8px; width: 100%; margin: 16px 0;">
+          <tr><td style="padding: 8px 12px; color: #64748b;">Firma</td><td style="padding: 8px 12px; color: #0f172a;"><b>${esc(firma)}</b></td></tr>
+          <tr><td style="padding: 8px 12px; color: #64748b;">Name</td><td style="padding: 8px 12px; color: #0f172a;">${esc(name || '–')}</td></tr>
+          <tr><td style="padding: 8px 12px; color: #64748b;">E-Mail</td><td style="padding: 8px 12px; color: #0f172a;">${esc(email)}</td></tr>
+          <tr><td style="padding: 8px 12px; color: #64748b;">Testphase endet</td><td style="padding: 8px 12px; color: #0f172a;"><b>${trialEnde}</b></td></tr>
+        </table>
+        <p style="color: #0f172a; background: #fff7ed; border-left: 4px solid #e8590c; padding: 12px; border-radius: 4px;">
+          <b>Tipp:</b> Innerhalb der ersten 24 Stunden kurz durchklingeln – Testzugänge,
+          die persönlich begrüßt werden, werden deutlich häufiger zahlende Kunden.
+        </p>
+        <p style="color: #64748b; font-size: 12px;">
+          Antworten auf diese Mail geht direkt an den Interessenten.
+          Status jederzeit sichtbar unter scaffoldos.de/admin/kunden.
+        </p>
+      </div>`,
+  });
+}
+
 // ── Kauf abgeschlossen: Abo speichern + Kundensystem aufsetzen ──
 async function kaufAbgeschlossen(session: Stripe.Checkout.Session): Promise<void> {
   const meta = session.metadata || {};
@@ -147,6 +193,12 @@ async function kaufAbgeschlossen(session: Stripe.Checkout.Session): Promise<void
     stripe_subscription_id: stripeSubscriptionId,
     tenant_id: tenant.id,
   });
+
+  // 3b) NEU: Benachrichtigung an uns – neuer Testzugang gestartet.
+  //     Fire-and-forget: Ein Fehler hier darf den Webhook niemals brechen.
+  benachrichtigeNeuenTestzugang(companyName, adminName, adminEmail).catch((err) =>
+    console.error('[stripe-webhook] Benachrichtigung fehlgeschlagen:', err?.message)
+  );
 
   // 4) Provisionierung anstoßen (Supabase-Projekt + Vercel + Willkommens-Mail)
   //    Schlägt sie fehl oder läuft in ein Timeout, kann sie in der
