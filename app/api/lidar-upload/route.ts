@@ -306,7 +306,10 @@ function analyzeDistances(
   //    Punkte, die keiner Ebene angehören, entlang der Fassaden-Normalen messen
   if (hits.length > 0) {
     const allInliers = new Set<number>();
-    for (const h of hits) for (const i of h.inlierIdx) allInliers.add(i);
+    for (const h of hits) {
+      const g = (h as PlaneHit & { globalInliers?: Set<number> }).globalInliers || h.inlierIdx;
+      for (const i of g) allInliers.add(i);
+    }
     const h0 = hits[0];
     // Vertikales Fenster der Fassade bestimmen: nur Punkte, die ÜBER dem
     // Bodenbereich liegen (untere 10 % der Wandhöhe) – sonst wird der
@@ -387,16 +390,25 @@ export async function POST(req: NextRequest) {
     // ── 4) Iterative Ebenen-Erkennung (bis zu 3 Fassaden) ──
     const hits: PlaneHit[] = [];
     let rest = pts;
+    // WICHTIG: globale Index-Mappe mitführen – inlierIdx aus Runde n bezieht
+    // sich auf das reduzierte Array, analyzeDistances arbeitet aber auf pts.
+    let restIdx = Array.from({ length: workCount }, (_, i) => i);
     for (let runde = 0; runde < MAX_EBENEN; runde++) {
       const hit = findFacadePlane(rest, vertAxis, unitScale);
       if (!hit) break;
       if (runde > 0 && hit.inlierIdx.size < workCount * 0.05) break; // zu klein = Rauschen
+      (hit as PlaneHit & { globalInliers: Set<number> }).globalInliers =
+        new Set([...hit.inlierIdx].map((i) => restIdx[i]));
       hits.push(hit);
-      const naechste: number[] = [];
+      const naechste: number[] = [], naechsteIdx: number[] = [];
       for (let i = 0; i < rest.length / 3; i++) {
-        if (!hit.inlierIdx.has(i)) naechste.push(rest[i * 3], rest[i * 3 + 1], rest[i * 3 + 2]);
+        if (!hit.inlierIdx.has(i)) {
+          naechste.push(rest[i * 3], rest[i * 3 + 1], rest[i * 3 + 2]);
+          naechsteIdx.push(restIdx[i]);
+        }
       }
       rest = naechste;
+      restIdx = naechsteIdx;
       if (rest.length / 3 < 200) break;
     }
 

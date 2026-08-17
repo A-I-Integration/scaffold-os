@@ -38,8 +38,8 @@ export default function DatenschutzPage() {
         <div className="space-y-8 text-[#424245] leading-relaxed">
           <Section title="1. Verantwortlicher">
             <p>
-              SCAFFOLD OS UG (haftungsbeschränkt) i. G., Ölbachstr. 48, 48691 Vreden.
-              Vertreten durch Michelle Merola.
+              AI Integration, Inhaberin Michelle Merola (Einzelunternehmen),
+              Ölbachstr. 48, 48691 Vreden. SCAFFOLD OS ist ein Produkt von AI Integration.
             </p>
             <p>
               Kontakt: <a href="mailto:info@scaffoldos.de" className="text-[#e8590c] hover:text-[#e8590c]">info@scaffoldos.de</a>, Telefon: 0151 77266265.

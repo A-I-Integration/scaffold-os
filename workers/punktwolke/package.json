@@ -1,0 +1,13 @@
+{
+  "name": "scaffold-punktwolke-worker",
+  "version": "1.0.0",
+  "private": true,
+  "description": "SCAFFOLD OS – Punktwolken-Analyse-Worker (Hetzner/Docker)",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
