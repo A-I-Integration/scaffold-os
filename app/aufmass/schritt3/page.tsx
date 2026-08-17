@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import { GERUEST_SYSTEME, CUSTOM_SYSTEM_ID, findeSystem } from '@/lib/calculations/geruest-systeme';
 
 export default function Schritt3Page() {
   const router = useRouter();
@@ -9,6 +10,8 @@ export default function Schritt3Page() {
   
   const [form, setForm] = useState({
     geruesttyp: '',
+    system: '',          // Gerüstsystem-ID aus geruest-systeme.ts ('' = hersteller-neutral, 'custom' = eigenes)
+    customSystem: '',    // Freitext bei system === 'custom'
     feldlange: '3.0',
     belag: 'holz',
     gelander: true,
@@ -102,16 +105,82 @@ export default function Schritt3Page() {
           </div>
 
           <div>
+            <label className="block text-sm font-medium mb-1 text-[#424245]">Gerüstsystem / Hersteller (optional)</label>
+            <p className="text-xs text-[#86868b] mb-3">Leer lassen = hersteller-neutral rechnen. Bei Auswahl werden Feldlänge & Bauteil-Bezeichnungen ans System angepasst.</p>
+            <div className="grid grid-cols-1 gap-2">
+              {GERUEST_SYSTEME.map(s => (
+                <button
+                  key={s.id}
+                  onClick={() => setForm({
+                    ...form,
+                    system: form.system === s.id ? '' : s.id,
+                    customSystem: form.system === s.id ? form.customSystem : '',
+                    // Standard-Feldlänge des Systems vorschlagen
+                    feldlange: form.system === s.id ? form.feldlange : String(s.standardFeldlangeM),
+                  })}
+                  className={`p-3 rounded-xl border text-left transition flex items-center gap-3 ${
+                    form.system === s.id
+                      ? 'bg-[#e8590c]/10 border-[#e8590c] text-[#e8590c]'
+                      : 'bg-black/10 border-black/10 text-[#424245] hover:border-black/20'
+                  }`}
+                >
+                  <span className="text-xl">{s.bauart === 'modul' ? '🧩' : '🖼️'}</span>
+                  <div className="flex-1">
+                    <div className="font-semibold text-sm">{s.hersteller} {s.systemName}</div>
+                    <div className="text-xs opacity-70">
+                      {s.bauart === 'modul' ? 'Modulsystem' : 'Rahmensystem'} · Raster {s.rasterHoeheM.toFixed(2).replace('.', ',')} m · Felder {s.feldlangenM.map(f => f.toFixed(2).replace('.', ',')).join(' / ')} m
+                    </div>
+                    <div className="text-xs opacity-60">{s.hinweis}</div>
+                  </div>
+                </button>
+              ))}
+              <button
+                onClick={() => setForm({ ...form, system: form.system === CUSTOM_SYSTEM_ID ? '' : CUSTOM_SYSTEM_ID })}
+                className={`p-3 rounded-xl border text-left transition flex items-center gap-3 ${
+                  form.system === CUSTOM_SYSTEM_ID
+                    ? 'bg-[#e8590c]/10 border-[#e8590c] text-[#e8590c]'
+                    : 'bg-black/10 border-black/10 text-[#424245] hover:border-black/20'
+                }`}
+              >
+                <span className="text-xl">✏️</span>
+                <div className="flex-1">
+                  <div className="font-semibold text-sm">Eigenes System / anderer Hersteller</div>
+                  <div className="text-xs opacity-70">Namen frei eintragen – Feldlänge bleibt frei wählbar</div>
+                </div>
+              </button>
+              {form.system === CUSTOM_SYSTEM_ID && (
+                <input
+                  type="text"
+                  value={form.customSystem}
+                  onChange={(e) => setForm({ ...form, customSystem: e.target.value })}
+                  placeholder="z. B. Altrad, Betco, Gebrauchtes Misch-System …"
+                  className="w-full bg-black/10 border border-black/10 rounded-xl px-4 py-2 text-[#1d1d1f]"
+                />
+              )}
+            </div>
+          </div>
+
+          <div>
             <label className="block text-sm font-medium mb-2 text-[#424245]">Standard-Feldlänge (m)</label>
-            <select 
+            <select
               value={form.feldlange}
               onChange={(e) => setForm({...form, feldlange: e.target.value})}
               className="w-full bg-black/10 border border-black/10 rounded-xl px-4 py-2 text-[#1d1d1f]"
             >
-              <option value="2.5">2,50 m</option>
-              <option value="3.0">3,00 m (Standard)</option>
-              <option value="3.5">3,50 m</option>
-              <option value="2.0">2,00 m</option>
+              {(() => {
+                const sys = findeSystem(form.system);
+                const basis = sys ? sys.feldlangenM : [2.0, 2.5, 3.0, 3.5];
+                const werte = [...new Set([...basis.map(String), form.feldlange])].sort((a, b) => parseFloat(a) - parseFloat(b));
+                return werte.map((w) => {
+                  const n = parseFloat(w);
+                  const std = sys && n === sys.standardFeldlangeM;
+                  return (
+                    <option key={w} value={w}>
+                      {n.toFixed(2).replace('.', ',')} m{std ? ' (System-Standard)' : !sys && n === 3.0 ? ' (Standard)' : ''}
+                    </option>
+                  );
+                });
+              })()}
             </select>
           </div>
 

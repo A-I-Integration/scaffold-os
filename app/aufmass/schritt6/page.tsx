@@ -10,6 +10,7 @@ import KiHinweis from '@/components/KiHinweis';
 import SignaturePad from '@/components/aufmaß/SignaturePad';
 import DinCheck from '@/components/aufmaß/DinCheck';
 import { KIAnalysis } from '@/types/scaffold';
+import { systemAnzeigename } from '@/lib/calculations/geruest-systeme';
 import DispositionResult from '@/components/aufmaß/DispositionResult';
 import { DispositionResult as DispositionData } from '@/lib/calculations/disposition';
 
@@ -176,7 +177,8 @@ function Schritt6Content() {
       widthM: parseFloat(s2.breite) || 0, eavesHeightM: parseFloat(s2.traufhoehe) || 0, roofForm: mapDachform(s2.dachform),
       roofOverhangM: parseFloat(s2.dachueberstand) || 0, facadeType: mapFassade(s2.fassade), obstacles: mapHindernisse(s2),
       scaffoldType: (s3.geruesttyp || 'rahmen').toLowerCase(), deckingType: (s3.belag || 'stahl').toLowerCase(),
-      fieldLengthM: parseFloat(s3.feldlänge) || 2.07, groundType: (s3.untergrund || 'beton').toLowerCase(),
+      fieldLengthM: parseFloat(s3.feldlänge || s3.feldlange) || 2.07, groundType: (s3.untergrund || s3.boden || 'beton').toLowerCase(),
+      manufacturer: systemAnzeigename(s3.system, s3.customSystem) || undefined,
       anchorType: (s4.anker || 'fassadenanker').toLowerCase(), groundCondition: (s4.untergrund || 'beton').toLowerCase(),
       hasSlope: s4.gefaelle || false, hasLightShafts: s4.lichtschaechte || false, hasBasement: s4.keller || false,
       needsLoadDistribution: s4.lastverteilplatten || false,
@@ -265,15 +267,19 @@ function Schritt6Content() {
     doc.setFontSize(22); doc.text('ANGEBOT', pageWidth - 14, 18, { align: 'right' });
     doc.setFontSize(9); doc.text('KI-gestützte Gerüstbau-Kalkulation', pageWidth - 14, 26, { align: 'right' });
     let y = 45;
-    doc.setFillColor(248, 250, 252); doc.rect(14, y, 90, 30, 'F');
+    const sysName = systemAnzeigename(s3.system, s3.customSystem);
+    const projBoxH = sysName ? 38 : 30;
+    doc.setFillColor(248, 250, 252); doc.rect(14, y, 90, projBoxH, 'F');
     doc.setTextColor(71, 85, 105); doc.setFontSize(8); doc.setFont('helvetica', 'bold'); doc.text('PROJEKT', 18, y + 6);
     doc.setFont('helvetica', 'normal'); doc.setTextColor(15, 23, 42); doc.setFontSize(9);
-    doc.text(`Kunde: ${s1.name || '-'}`, 18, y + 14); doc.text(`Adresse: ${s1.adresse || '-'}`, 18, y + 20); doc.text(`Gewerk: ${s1.gewerk || '-'}`, 18, y + 26);
+    doc.text(`Kunde: ${s1.name || '-'}`, 18, y + 14); doc.text(`Adresse: ${s1.adresse || '-'}`, 18, y + 20);
+    doc.text(`Gewerk: ${s1.gewerk || '-'}`, 18, y + 26);
+    if (sysName) doc.text(`System: ${sysName}`, 18, y + 32);
     doc.setFillColor(248, 250, 252); doc.rect(108, y, 88, 30, 'F');
     doc.setTextColor(71, 85, 105); doc.setFontSize(8); doc.setFont('helvetica', 'bold'); doc.text('ANGEBOTSDATEN', 112, y + 6);
     doc.setFont('helvetica', 'normal'); doc.setTextColor(15, 23, 42); doc.setFontSize(9);
     doc.text(`Datum: ${new Date().toLocaleDateString('de-DE')}`, 112, y + 14); doc.text(`Gültig bis: ${new Date(Date.now() + 30 * 86400000).toLocaleDateString('de-DE')}`, 112, y + 20); doc.text(`Gerüstklasse: ${kiResult.scaffoldClass || '-'}`, 112, y + 26);
-    y = 82;
+    y = 82 + (projBoxH - 30);
     const riskColor = kiResult.riskLevel === 'red' ? [239, 68, 68] : kiResult.riskLevel === 'yellow' ? [245, 158, 11] : [16, 185, 129];
     doc.setFillColor(riskColor[0], riskColor[1], riskColor[2]); doc.circle(pageWidth - 30, y, 5, 'F');
     doc.setTextColor(riskColor[0], riskColor[1], riskColor[2]); doc.setFontSize(9); doc.setFont('helvetica', 'bold');
@@ -492,9 +498,10 @@ function Schritt6Content() {
           <p className="text-xs font-bold uppercase tracking-wider text-[#e8590c] mb-2">Schritt 3 – Gerüstplanung</p>
           <div className="grid grid-cols-2 gap-2 text-sm">
             <div><span className="text-[#86868b]">Gerüsttyp:</span> <span className="text-[#1d1d1f]">{s3.geruesttyp || '–'}</span></div>
+            <div><span className="text-[#86868b]">System:</span> <span className="text-[#1d1d1f]">{systemAnzeigename(s3.system, s3.customSystem) || 'Hersteller-neutral'}</span></div>
             <div><span className="text-[#86868b]">Belag:</span> <span className="text-[#1d1d1f]">{s3.belag || '–'}</span></div>
-            <div><span className="text-[#86868b]">Feldlänge:</span> <span className="text-[#1d1d1f]">{s3.feldlänge || '–'} m</span></div>
-            <div><span className="text-[#86868b]">Untergrund:</span> <span className="text-[#1d1d1f]">{s3.untergrund || '–'}</span></div>
+            <div><span className="text-[#86868b]">Feldlänge:</span> <span className="text-[#1d1d1f]">{s3.feldlänge || s3.feldlange || '–'} m</span></div>
+            <div><span className="text-[#86868b]">Untergrund:</span> <span className="text-[#1d1d1f]">{s3.untergrund || s3.boden || '–'}</span></div>
           </div>
         </div>
         <div className="rounded-xl bg-black/10/50 p-4">

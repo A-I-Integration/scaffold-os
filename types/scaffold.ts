@@ -138,6 +138,7 @@ export interface ScaffoldInput {
   deckingType: DeckingType;
   fieldLengthM: number;
   groundType: GroundType;
+  manufacturer?: string; // z. B. "Layher Allround (Stahl)" – leer = hersteller-neutral
 
   // Schritt 4
   anchorType: AnchorType;
