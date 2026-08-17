@@ -211,3 +211,66 @@ export async function deleteProjectMediaClient(mediaId: string, storagePath: str
 
   if (error) throw new Error(`Löschen fehlgeschlagen: ${error.message}`);
 }
+
+// ─── Großscans (NEU: Direkt-Upload + Worker-Warteschlange) ───
+// Dateien über dem Vercel-Limit (~4,5MB) gehen direkt vom Browser zu
+// Supabase Storage. Der Punktwolken-Worker (Docker, Hetzner) holt sich
+// Jobs mit status 'queued', rechnet die Analyse und schreibt das Ergebnis
+// in metadata.measurements zurück.
+export async function uploadScanClient(
+  file: File,
+  sessionId: string,
+  ext: string
+): Promise<ProjectMedia> {
+  const supabase = createClient();
+
+  if (file.size > 500 * 1024 * 1024) throw new Error('Datei zu groß (max. 500MB)');
+
+  const { data: { user } } = await supabase.auth.getUser();
+
+  const fileName = `${Date.now()}_${Math.random().toString(36).substring(2, 8)}.${ext}`;
+  const storagePath = `temp/${sessionId}/scans/${fileName}`;
+
+  const { error: uploadError } = await supabase.storage
+    .from('project-media')
+    .upload(storagePath, file, { contentType: 'application/octet-stream', upsert: false });
+
+  if (uploadError) throw new Error(`Storage: ${uploadError.message}`);
+
+  const { data: media, error: dbError } = await supabase
+    .from('project_media')
+    .insert({
+      session_id: sessionId,
+      file_name: file.name,
+      storage_path: storagePath,
+      file_type: `scan/${ext}`,
+      uploaded_by: user?.id ?? null,
+      metadata: { size: file.size, bucket: 'project-media', kind: 'scan', status: 'queued' },
+    })
+    .select()
+    .single();
+
+  if (dbError) {
+    await supabase.storage.from('project-media').remove([storagePath]);
+    throw new Error(`Datenbank: ${dbError.message}`);
+  }
+
+  return media as ProjectMedia;
+}
+
+// Status eines Scan-Jobs lesen (für das Polling im Frontend)
+export async function getScanStatusClient(
+  mediaId: string
+): Promise<{ status: string; measurements?: any; fehler?: string }> {
+  const supabase = createClient();
+
+  const { data, error } = await supabase
+    .from('project_media')
+    .select('metadata')
+    .eq('id', mediaId)
+    .single();
+
+  if (error) throw new Error(`Status-Abfrage fehlgeschlagen: ${error.message}`);
+  const meta = (data?.metadata || {}) as Record<string, any>;
+  return { status: meta.status || 'queued', measurements: meta.measurements, fehler: meta.fehler };
+}

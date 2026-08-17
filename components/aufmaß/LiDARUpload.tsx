@@ -1,6 +1,12 @@
 'use client';
 
 import { useState, useCallback } from 'react';
+import { uploadScanClient, getScanStatusClient } from '@/lib/media-client';
+
+// Ab dieser Größe geht der Scan direkt zu Supabase Storage und wird vom
+// Punktwolken-Worker (Docker) analysiert – umgeht das Vercel-Upload-Limit.
+const WORKER_AB_BYTES = 4 * 1024 * 1024;
+const ERLAUBTE_EXT = ['obj', 'ply', 'las', 'glb'];
 
 interface Fassade {
   breiteM: number;
@@ -58,27 +64,62 @@ export default function LiDARUpload({ sessionId, onMeasurements }: Props) {
   const [refFeld, setRefFeld] = useState<string>('fassadeBreite');
   const [refWert, setRefWert] = useState('');
 
+  // Phase-Anzeige für den Worker-Pfad (große Scans)
+  const [phase, setPhase] = useState<string>('');
+
   const handleFile = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+
+    const ext = file.name.split('.').pop()?.toLowerCase() || '';
+    if (!ERLAUBTE_EXT.includes(ext)) {
+      alert('Nur .ply (ASCII), .las, .obj oder .glb erlaubt.');
+      e.target.value = '';
+      return;
+    }
+
     setUploading(true);
 
     try {
-      const fd = new FormData();
-      fd.append('file', file);
-      fd.append('sessionId', sessionId);
+      if (file.size >= WORKER_AB_BYTES) {
+        // ── Großer Scan: Direkt-Upload + Worker-Analyse ──
+        setPhase(`Lade hoch (${(file.size / 1e6).toFixed(0)} MB, direkt zum Speicher)…`);
+        const media = await uploadScanClient(file, sessionId, ext);
 
-      const res = await fetch('/api/lidar-upload', { method: 'POST', body: fd });
-      const json = await res.json();
+        // Pollen, bis der Worker fertig ist (max. 10 Minuten)
+        const deadline = Date.now() + 10 * 60 * 1000;
+        for (;;) {
+          await new Promise((r) => setTimeout(r, 5000));
+          const st = await getScanStatusClient(media.id);
+          if (st.status === 'done' && st.measurements) {
+            setScan({ m: st.measurements, name: file.name });
+            onMeasurements?.(st.measurements);
+            break;
+          }
+          if (st.status === 'error') throw new Error(st.fehler || 'Analyse fehlgeschlagen');
+          if (Date.now() > deadline) throw new Error('Analyse dauert zu lange – bitte später erneut prüfen.');
+          setPhase(st.status === 'processing' ? 'Analyse läuft auf dem Worker…' : 'In Warteschlange…');
+        }
+      } else {
+        // ── Kleiner Scan: schneller Direktweg über die API ──
+        setPhase('');
+        const fd = new FormData();
+        fd.append('file', file);
+        fd.append('sessionId', sessionId);
 
-      if (!res.ok) throw new Error(json.error || 'Upload fehlgeschlagen');
+        const res = await fetch('/api/lidar-upload', { method: 'POST', body: fd });
+        const json = await res.json();
 
-      setScan({ m: json.measurements, name: json.fileName });
-      onMeasurements?.(json.measurements);
+        if (!res.ok) throw new Error(json.error || 'Upload fehlgeschlagen');
+
+        setScan({ m: json.measurements, name: json.fileName });
+        onMeasurements?.(json.measurements);
+      }
     } catch (err: any) {
-      alert('LiDAR-Fehler: ' + err.message);
+      alert('Scan-Fehler: ' + err.message);
     } finally {
       setUploading(false);
+      setPhase('');
       e.target.value = '';
     }
   }, [sessionId, onMeasurements]);
@@ -136,13 +177,13 @@ export default function LiDARUpload({ sessionId, onMeasurements }: Props) {
           {uploading ? (
             <span className="flex items-center justify-center gap-2">
               <span className="h-4 w-4 animate-spin rounded-full border-2 border-purple-500 border-t-transparent" />
-              Punktwolke wird analysiert (Ausreißer-Filter + Ebenen-Erkennung)…
+              {phase || 'Punktwolke wird analysiert (Ausreißer-Filter + Ebenen-Erkennung)…'}
             </span>
           ) : (
             <span>
               <span className="text-lg">📱</span> <span className="font-medium">Punktwolke / 3D-Modell hochladen</span>
               <br />
-              <span className="text-[11px] text-[#86868b]">Polycam: .ply (ASCII) oder .las als Punktwolke, .glb / .obj als 3D-Modell</span>
+              <span className="text-[11px] text-[#86868b]">Polycam: .ply (ASCII) oder .las als Punktwolke, .glb / .obj als 3D-Modell · Großscans bis 500 MB</span>
             </span>
           )}
         </button>
