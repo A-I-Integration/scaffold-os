@@ -150,13 +150,14 @@ async function kaufAbgeschlossen(session: Stripe.Checkout.Session): Promise<void
     return;
   }
 
-  // 1) Abo-Eintrag anlegen
+  // 1) Abo-Eintrag anlegen (price_id kommt aus der Checkout-Session,
+  //    damit das gebuchte Paket – starter/priority/enterprise – stimmt)
   await upsertSubscription({
     customer_email: adminEmail,
     company_name: companyName,
     stripe_customer_id: stripeCustomerId,
     stripe_subscription_id: stripeSubscriptionId,
-    stripe_price_id: process.env.STRIPE_PRICE_ID || null,
+    stripe_price_id: meta.price_id || process.env.STRIPE_PRICE_ID || null,
     status: 'trialing',
   });
 
