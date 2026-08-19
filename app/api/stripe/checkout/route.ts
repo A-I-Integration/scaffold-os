@@ -83,9 +83,11 @@ export async function POST(req: NextRequest) {
         metadata: { company_name: companyName, admin_email: adminEmail, admin_name: adminName, plan, price_id: priceId },
       },
       metadata: { company_name: companyName, admin_email: adminEmail, admin_name: adminName, plan, price_id: priceId },
-      // Firmenname + Rechnungsadresse für die monatliche Rechnung
+      // Firmenname + Rechnungsadresse für die monatliche Rechnung.
+      // Hinweis: customer_update wird bewusst NICHT gesetzt – Stripe
+      // akzeptiert das nur bei bestehenden Kunden und lehnt sonst die
+      // komplette Session ab („can only be used with customer").
       billing_address_collection: 'required',
-      customer_update: { name: 'auto', address: 'auto' },
       success_url: `${origin}/kaufen/erfolg?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${origin}/kaufen?abgebrochen=1`,
       locale: 'de',
