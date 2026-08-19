@@ -4,16 +4,38 @@ import { useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { Suspense } from 'react';
+import { Check } from 'lucide-react';
 
 // ============================================================
 // SCAFFOLD OS – Kauf-Seite (Abo abschließen)
 //
 // Sammelt Firma/Name/E-Mail und schickt den Kunden zum
 // Stripe-Checkout (SEPA-Lastschrift oder Kreditkarte,
-// 3 Tage kostenlos testen, danach 249 €/Monat,
-// Mindestvertragslaufzeit 24 Monate).
+// 3 Tage kostenlos testen, Mindestvertragslaufzeit 24 Monate).
 // Die eigentliche Zahlung läuft komplett bei Stripe.
+//
+// Das Paket kommt per URL: /kaufen?plan=starter|priority|enterprise
+// (Standard: starter). Die Preis-Zuordnung passiert serverseitig
+// in /api/stripe/checkout über die STRIPE_PRICE_ID_*-Variablen.
 // ============================================================
+
+const PLAENE: Record<string, { name: string; preis: string; features: string[] }> = {
+  starter: {
+    name: 'Starter',
+    preis: '249 €',
+    features: ['1 Admin-/CEO-Zugang', '2 Dispo-Zugänge', 'Bis zu 5 Mitarbeiter', 'Lager bis 10.000 Teile'],
+  },
+  priority: {
+    name: 'Priority',
+    preis: '495 €',
+    features: ['CEO-, Dispo-, Bauleiter- & Lager-Zugänge', 'Bis zu 20 Mitarbeiter', 'Lager bis 20.000 Teile'],
+  },
+  enterprise: {
+    name: 'Enterprise',
+    preis: '749 €',
+    features: ['Alle Rollen unbegrenzt', 'Mitarbeiter unbegrenzt', 'Lager unbegrenzt'],
+  },
+};
 
 function KaufenForm() {
   const [firma, setFirma] = useState('');
@@ -24,6 +46,9 @@ function KaufenForm() {
   const params = useSearchParams();
   const abgebrochen = params.get('abgebrochen') === '1';
 
+  const planId = params.get('plan') || 'starter';
+  const plan = PLAENE[planId] || PLAENE.starter;
+
   async function absenden(e: React.FormEvent) {
     e.preventDefault();
     setLoading(true);
@@ -32,7 +57,7 @@ function KaufenForm() {
       const res = await fetch('/api/stripe/checkout', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ company_name: firma, admin_name: name, admin_email: email }),
+        body: JSON.stringify({ company_name: firma, admin_name: name, admin_email: email, plan: planId }),
       });
       const json = await res.json();
       if (!res.ok || !json.success) throw new Error(json.error || 'Checkout fehlgeschlagen');
@@ -50,8 +75,28 @@ function KaufenForm() {
           <Link href="/" className="text-[#86868b] hover:text-[#424245] text-sm">← Zur Startseite</Link>
           <h1 className="text-3xl font-black mt-4">SCAFFOLD OS abonnieren</h1>
           <p className="text-[#86868b] mt-2 text-sm">
-            3 Tage kostenlos testen, danach <span className="text-[#e8590c] font-bold">249 €/Monat</span>.
+            3 Tage kostenlos testen, danach{' '}
+            <span className="text-[#e8590c] font-bold">{plan.preis}/Monat</span> ({plan.name}).
             Mindestvertragslaufzeit 24 Monate, danach monatlich kündbar.
+          </p>
+        </div>
+
+        {/* Gewähltes Paket */}
+        <div className="mb-6 bg-[#f5f5f7] rounded-xl p-5">
+          <div className="flex items-baseline justify-between">
+            <p className="font-bold text-lg">{plan.name}</p>
+            <p className="text-[#e8590c] font-bold">{plan.preis}<span className="text-[#86868b] font-normal text-sm">/Monat</span></p>
+          </div>
+          <ul className="mt-3 space-y-1.5">
+            {plan.features.map((f) => (
+              <li key={f} className="flex gap-2 text-sm text-[#424245]">
+                <Check className="w-4 h-4 text-[#e8590c] shrink-0 mt-0.5" />
+                {f}
+              </li>
+            ))}
+          </ul>
+          <p className="mt-3 text-xs text-[#86868b]">
+            Anderes Paket? <Link href="/#pakete" className="text-[#e8590c] hover:underline">Zur Paket-Übersicht</Link>
           </p>
         </div>
 
@@ -105,7 +150,7 @@ function KaufenForm() {
             disabled={loading}
             className="w-full bg-[#e8590c] hover:bg-[#d9480f] disabled:opacity-50 text-white font-black uppercase tracking-wide py-4 rounded-xl transition"
           >
-            {loading ? 'Weiter zu Stripe…' : 'Jetzt 3 Tage kostenlos testen →'}
+            {loading ? 'Weiter zu Stripe…' : `Jetzt 3 Tage kostenlos testen →`}
           </button>
 
           <p className="text-[11px] text-[#86868b] text-center leading-relaxed">

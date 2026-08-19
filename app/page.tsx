@@ -1,25 +1,242 @@
 import Link from 'next/link';
-import { ArrowRight, Ruler, FileText, Route, Timer, Warehouse, ShieldCheck, Check } from 'lucide-react';
+import type { Metadata } from 'next';
+import {
+  ArrowRight, Ruler, FileText, Route, Timer, Warehouse, ShieldCheck, Check,
+  Users, Package, Clock, Camera, QrCode, PenLine, MapPin, CalendarCheck,
+  Sparkles, Globe, HardHat,
+} from 'lucide-react';
 import LandingHeader from '@/components/LandingHeader';
 
 // ============================================================
-// SCAFFOLD OS – Startseite (Design v2 „Apple")
+// SCAFFOLD OS – Startseite (Design v2 „Apple", erweitert)
 // Hell, ruhig, großzügig. Marke: Sicherheits-Orange (#E8590C).
-// Inhalt unverändert: Login, Kaufen, Pilot-Anfrage, Rechtliches.
+//
+// Inhalt (Stand: Paket-Relaunch):
+//  Hero mit Produkt-Aufklärung + Login-Link
+//  „Was ist SCAFFOLD OS?" + Prozesskette (7 Schritte)
+//  Zeitersparnis (≥ 2 Stunden/Tag)
+//  3 Kernbereiche: Aufmaß, Mitarbeiter, Lager
+//  Alle Funktionen im Überblick
+//  3 Pakete: Starter 249 € / Priority 495 € / Enterprise 749 €
+//  FAQ (SEO/GEO) + strukturierte Daten (JSON-LD)
 // ============================================================
 
-const FEATURES = [
+export const metadata: Metadata = {
+  title: 'SCAFFOLD OS – Gerüstbau-Software: Aufmaß, Mitarbeiter, Lager & Rechnung in einem System',
+  description:
+    'SCAFFOLD OS ist die komplette Software für Gerüstbau-Betriebe: KI-Aufmaß mit Foto & Drohne, Angebot in Minuten, Disposition, Lager mit Prognose, Touren mit GPS, Zeiterfassung und GoBD-konforme Rechnung. 3 Tage kostenlos testen – ab 249 €/Monat.',
+  keywords: [
+    'Gerüstbau Software', 'Gerüstbau Aufmaß', 'Aufmaß Software Gerüstbau',
+    'Gerüst Kalkulation', 'Gerüstbau Disposition', 'Lagerverwaltung Gerüstbau',
+    'Zeiterfassung Gerüstbau', 'Gerüstbau App', 'DIN 12811', 'Gerüst Angebot erstellen',
+  ],
+  alternates: { canonical: 'https://scaffoldos.de' },
+  openGraph: {
+    title: 'SCAFFOLD OS – Die Software für Gerüstbau-Betriebe',
+    description:
+      'Vom Kundenanruf bis zur Rechnung: Aufmaß mit KI, Mitarbeiter & Zeiterfassung, Lager mit Prognose. 3 Tage kostenlos testen.',
+    url: 'https://scaffoldos.de',
+    siteName: 'SCAFFOLD OS',
+    locale: 'de_DE',
+    type: 'website',
+  },
+};
+
+const PROZESS = [
+  'Aufmaß', 'Angebot', 'Disposition', 'Lager', 'Touren', 'Zeiterfassung', 'Rechnung',
+];
+
+const KERNBEREICHE = [
+  {
+    icon: Ruler,
+    titel: 'Aufmaß',
+    claim: 'Vom Foto zum fertigen Angebot – in Minuten statt Stunden.',
+    punkte: [
+      'Baustelle in 6 geführten Schritten erfassen – am Handy, direkt vor Ort',
+      'Fotos, Drohnen-Upload und GPS-Position automatisch verknüpft',
+      'Punktwolken-Auswertung (3D-Scans) für exakte Maße ohne Nachmessen',
+      'Hersteller-Systeme hinterlegt: Layher, MJ, Plettac, Alfix, Hünnebeck, Rux u. a. – mit echten Systemmaßen',
+      'KI berechnet Materialliste und Kalkulation, DIN-12811-Check inklusive',
+      'Fertiges Angebots-PDF mit QR-Code und digitaler Unterschrift – direkt per E-Mail an den Kunden',
+    ],
+  },
+  {
+    icon: Users,
+    titel: 'Mitarbeiter',
+    claim: 'Jeder Kollege hat seinen Zugang – und du hast den Überblick.',
+    punkte: [
+      'Zugänge mit Rollen: Admin, Disponent, Bauleiter, Mitarbeiter, Lager',
+      'Zeiterfassung per Handy: Kommen/Gehen stempeln, Pausen automatisch nach Arbeitszeitgesetz',
+      'Krank- und Urlaubsmeldungen fließen direkt in die Tagesplanung ein',
+      'Soll-Ist-Vergleich und Überstunden auf einen Blick',
+      'Jeder Monteur sieht nur seine Touren – der Chef sieht alles',
+      'Onboarding-Assistent: Neuer Mitarbeiter ist in 2 Minuten angelegt',
+    ],
+  },
+  {
+    icon: Package,
+    titel: 'Lager',
+    claim: 'Du weißt immer, was wo liegt – bevor Material fehlt.',
+    punkte: [
+      'Alle Bestände digital erfasst – vom Rahmen bis zur Klemme',
+      'Automatische Stückliste aus jedem Aufmaß: Was muss auf den Lkw?',
+      'Reservierung pro Baustelle – kein Material wird doppelt verplant',
+      'Prognose-KI warnt, bevor Bestände knapp werden',
+      'Baustellenbestand (site_stock): Was ist beim Kunden verbaut, was kommt zurück?',
+      'Funktioniert mit bis zu 10.000 / 20.000 / unbegrenzt vielen Teilen – je nach Paket',
+    ],
+  },
+];
+
+const ALLE_FUNKTIONEN = [
   { icon: Ruler, titel: 'Aufmaß & KI-Angebot', text: 'Baustelle in 6 Schritten erfassen – die KI liefert Materialliste, Kalkulation und Angebots-PDF.' },
+  { icon: Camera, titel: 'Foto, Drohne & 3D-Scan', text: 'Fotos am Handy, Drohnen-Upload bis 20 MB, Punktwolken-Auswertung für Großscans.' },
+  { icon: QrCode, titel: 'QR & Unterschrift', text: 'Angebot mit QR-Code und digitaler Unterschrift – der Kunde unterschreibt auf dem Handy.' },
   { icon: Route, titel: 'Touren & Disposition', text: 'Routen-KI plant den Tag, GPS zeigt die Fahrzeuge, Umdisposition bei Krankheit oder Wetter.' },
+  { icon: MapPin, titel: 'Fahrer-Navigation & GPS', text: 'Fahrer navigieren direkt aus der App, die Zentrale sieht jede Position live.' },
+  { icon: Timer, titel: 'Zeiterfassung', text: 'Stempeln am Handy, Pausen-Automatik, Soll-Ist-Vergleich, Überstunden – ohne Zettelwirtschaft.' },
+  { icon: CalendarCheck, titel: 'Planung & Abwesenheiten', text: 'Krank und Urlaub direkt im Plan – Konflikte werden sofort sichtbar.' },
+  { icon: Warehouse, titel: 'Lager & Prognose', text: 'Bestände im Blick, automatische Stückliste, KI warnt, bevor Material knapp wird.' },
   { icon: FileText, titel: 'Rechnungen & DATEV', text: 'GoBD-konforme Rechnungen mit Mahnwesen – Buchungsstapel und Lohndaten direkt für den Steuerberater.' },
-  { icon: Timer, titel: 'Zeiterfassung', text: 'Stempeln am Handy, Soll-Ist-Vergleich, Überstunden – ohne Zettelwirtschaft.' },
-  { icon: Warehouse, titel: 'Lager & Prognose', text: 'Bestände im Blick, automatische Stückliste, KI warnt bevor Material knapp wird.' },
+  { icon: Sparkles, titel: 'KI überall', text: 'Materialberechnung, Routen-Vorschläge, Sprachnotizen, Foto-Analyse – die KI arbeitet im Hintergrund mit.' },
+  { icon: PenLine, titel: 'Digitaler Zwilling', text: 'Jede Baustelle als digitales Modell – Änderungen am Gerüst bleiben dokumentiert.' },
   { icon: ShieldCheck, titel: 'Datenschutz aus Frankfurt', text: 'Eigene Datenbank pro Betrieb, EU-Hosting, DSGVO- und EU-AI-Act-konform.' },
 ];
+
+const PAKETE = [
+  {
+    id: 'starter',
+    name: 'Starter',
+    preis: '249 €',
+    zielgruppe: 'Für kleine Betriebe, die digital starten wollen.',
+    features: [
+      '1 Admin-/CEO-Zugang',
+      '2 Dispo-Zugänge',
+      'Bis zu 5 Mitarbeiter',
+      'Lager bis 10.000 Teile',
+      'Aufmaß mit KI-Angebot & PDF',
+      'Zeiterfassung & Touren',
+    ],
+    hervorgehoben: false,
+  },
+  {
+    id: 'priority',
+    name: 'Priority',
+    preis: '495 €',
+    zielgruppe: 'Für wachsende Betriebe mit mehreren Kolonnen.',
+    features: [
+      'CEO-, Dispo-, Bauleiter- & Lager-Zugänge',
+      'Bis zu 20 Mitarbeiter',
+      'Lager bis 20.000 Teile',
+      'Alle Starter-Funktionen',
+      'Routen-KI & GPS-Tracking',
+      'Lager-Prognose & Reservierung',
+    ],
+    hervorgehoben: true,
+  },
+  {
+    id: 'enterprise',
+    name: 'Enterprise',
+    preis: '749 €',
+    zielgruppe: 'Für große Betriebe – alles ohne Limits.',
+    features: [
+      'Alle Rollen & Zugänge unbegrenzt',
+      'Mitarbeiter unbegrenzt',
+      'Lager unbegrenzt',
+      'Alle Priority-Funktionen',
+      'Punktwolken-Großscans bis 500 MB',
+      'Persönlicher Ansprechpartner',
+    ],
+    hervorgehoben: false,
+  },
+];
+
+const FAQ = [
+  {
+    frage: 'Was ist SCAFFOLD OS?',
+    antwort:
+      'SCAFFOLD OS ist eine Software speziell für Gerüstbau-Betriebe. Sie bildet den kompletten Arbeitsablauf in einem System ab: Aufmaß auf der Baustelle, Angebotserstellung mit KI, Disposition der Monteure, Lagerverwaltung, Tourenplanung mit GPS, Zeiterfassung per Handy und GoBD-konforme Rechnungsstellung. Ohne Installation – die App läuft im Browser auf Handy, Tablet und PC.',
+  },
+  {
+    frage: 'Wie funktioniert das Aufmaß mit SCAFFOLD OS?',
+    antwort:
+      'Der Bauleiter erfasst die Baustelle in 6 geführten Schritten direkt am Handy: Fotos oder Drohnenaufnahmen hochladen, GPS-Position automatisch erfassen, Maße eingeben, Gerüsttyp und Hersteller-System wählen (z. B. Layher, MJ, Plettac – mit echten Systemmaßen), Sicherheitsanforderungen und Extras festlegen. Die KI berechnet daraus Materialliste und Kalkulation und erstellt ein fertiges Angebots-PDF mit DIN-12811-Check, QR-Code und digitaler Unterschrift.',
+  },
+  {
+    frage: 'Was kostet SCAFFOLD OS?',
+    antwort:
+      'Es gibt drei Pakete: Starter für 249 €/Monat (1 Admin, 2 Dispo, bis zu 5 Mitarbeiter, Lager bis 10.000 Teile), Priority für 495 €/Monat (alle Rollen, bis zu 20 Mitarbeiter, Lager bis 20.000 Teile) und Enterprise für 749 €/Monat (alles unbegrenzt). Alle Pakete starten mit 3 kostenlosen Testtagen.',
+  },
+  {
+    frage: 'Kann ich SCAFFOLD OS kostenlos testen?',
+    antwort:
+      'Ja. Jedes Paket beginnt mit einer 3-tägigen Testphase. Du legst Firma, Name und E-Mail fest, hinterlegst eine Zahlungsart (SEPA-Lastschrift oder Kreditkarte über Stripe) und bekommst sofort dein eigenes System unter einer eigenen Adresse (firma.scaffoldos.de). Die erste Abbuchung erfolgt erst nach den 3 Testtagen.',
+  },
+  {
+    frage: 'Wie viel Zeit spare ich mit SCAFFOLD OS?',
+    antwort:
+      'Mindestens 2 Stunden pro Tag. Ein Aufmaß mit Angebot dauert statt 2–3 Stunden nur noch etwa 15 Minuten, weil KI Materialliste, Kalkulation und PDF automatisch erstellen. Hinzu kommen eingesparte Zeiten bei Zettelwirtschaft, Telefonaten zur Tourenabstimmung und handschriftlicher Zeiterfassung.',
+  },
+  {
+    frage: 'Brauche ich IT-Kenntnisse oder eine Installation?',
+    antwort:
+      'Nein. SCAFFOLD OS läuft komplett im Browser – auf dem Handy des Monteurs genauso wie am PC im Büro. Es gibt nichts zu installieren und nichts zu warten. Wer ein Foto per WhatsApp verschicken kann, kann SCAFFOLD OS bedienen. Ein Onboarding-Assistent führt dich in 3 Schritten durch die Einrichtung.',
+  },
+  {
+    frage: 'Wo werden meine Daten gespeichert?',
+    antwort:
+      'Jeder Betrieb bekommt eine eigene, komplett getrennte Datenbank in einem Rechenzentrum in Frankfurt am Main. Das System ist DSGVO- und EU-AI-Act-konform. Deine Daten gehören dir und werden nicht mit anderen Betrieben gemischt.',
+  },
+  {
+    frage: 'Wie kann ich kündigen?',
+    antwort:
+      'Die Mindestvertragslaufzeit beträgt 24 Monate, danach ist das Abo monatlich kündbar. Bei einer Kündigung wird deine Instanz pausiert – deine Daten bleiben erhalten und gehen nicht verloren.',
+  },
+];
+
+const JSONLD = {
+  '@context': 'https://schema.org',
+  '@graph': [
+    {
+      '@type': 'SoftwareApplication',
+      name: 'SCAFFOLD OS',
+      applicationCategory: 'BusinessApplication',
+      operatingSystem: 'Web (Browser, Handy, Tablet, PC)',
+      url: 'https://scaffoldos.de',
+      description:
+        'Komplette Software für Gerüstbau-Betriebe: KI-Aufmaß, Angebot, Disposition, Lager, Touren, Zeiterfassung und Rechnung in einem System.',
+      inLanguage: 'de',
+      offers: [
+        { '@type': 'Offer', name: 'Starter', price: '249', priceCurrency: 'EUR' },
+        { '@type': 'Offer', name: 'Priority', price: '495', priceCurrency: 'EUR' },
+        { '@type': 'Offer', name: 'Enterprise', price: '749', priceCurrency: 'EUR' },
+      ],
+      provider: {
+        '@type': 'Organization',
+        name: 'AI Integration',
+        url: 'https://scaffoldos.de',
+      },
+    },
+    {
+      '@type': 'FAQPage',
+      mainEntity: FAQ.map((f) => ({
+        '@type': 'Question',
+        name: f.frage,
+        acceptedAnswer: { '@type': 'Answer', text: f.antwort },
+      })),
+    },
+  ],
+};
 
 export default function HomePage() {
   return (
     <div className="min-h-screen bg-[#fbfbfd] text-[#1d1d1f] flex flex-col">
+
+      {/* Strukturierte Daten für Google & KI-Suchmaschinen (SEO/GEO) */}
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(JSONLD) }}
+      />
 
       {/* ─── Navigation (ausgeblendet, sobald eingeloggt – Sidebar hat das Logo) ─── */}
       <LandingHeader />
@@ -34,8 +251,9 @@ export default function HomePage() {
           <span className="text-[#86868b]"> Ein System.</span>
         </h1>
         <p className="mt-6 text-lg md:text-xl text-[#6e6e73] max-w-2xl mx-auto leading-relaxed">
-          Aufmaß mit KI, Angebot in Minuten, Touren mit GPS, Zeiterfassung am Handy,
-          GoBD-konforme Abrechnung. Ohne Installation, ohne Zettel, ohne Medienbruch.
+          SCAFFOLD OS ersetzt Zettel, Excel und Telefonkette durch einen durchgehenden
+          digitalen Prozess: Aufmaß mit KI, Angebot in Minuten, Disposition, Lager,
+          Touren mit GPS, Zeiterfassung am Handy und GoBD-konforme Rechnung.
         </p>
         <div className="mt-10 flex flex-col sm:flex-row items-center justify-center gap-4">
           <Link
@@ -45,50 +263,223 @@ export default function HomePage() {
             3 Tage kostenlos testen
             <ArrowRight className="w-5 h-5" />
           </Link>
-        </div>
-      </section>
-
-      {/* ─── Pilotkunden-Aktion ─── */}
-      <section className="px-6 pb-20">
-        <div className="max-w-3xl mx-auto rounded-3xl bg-[#1d1d1f] text-white px-8 py-10 md:px-14 md:py-12 text-center shadow-2xl shadow-black/10">
-          <p className="text-xs font-bold tracking-[0.2em] uppercase text-[#ff922b]">Pilotprogramm 2026</p>
-          <h2 className="mt-3 text-2xl md:text-4xl font-semibold tracking-tight">
-            Einführungspreis sichern – bis 30. September.
-          </h2>
-          <p className="mt-6 text-5xl font-semibold tracking-tight">
-            249 €<span className="text-lg font-normal text-white/60">/Monat</span>
-          </p>
-          <div className="mt-6 flex flex-col items-center gap-1.5 text-sm">
-            <p className="inline-flex items-center gap-2 font-semibold text-[#69db7c]">
-              <Check className="w-4 h-4" /> Onboarding + Einrichtung inklusive
-            </p>
-            <p className="text-white/50 text-xs">Regulärer Wert: 2.490 €</p>
-          </div>
           <Link
-            href="/anfrage?art=pilot"
-            className="mt-8 inline-flex items-center gap-2 bg-white text-[#1d1d1f] hover:bg-white/90 font-semibold px-8 py-3 rounded-full transition-all hover:scale-[1.02]"
+            href="/login"
+            className="inline-flex items-center gap-2 text-[#1d1d1f] font-medium text-lg px-8 py-3.5 rounded-full border border-black/10 hover:bg-black/5 transition-colors"
           >
-            Pilotprojekt anfragen
-            <ArrowRight className="w-4 h-4" />
+            Zum Login
           </Link>
-          <p className="mt-3 text-xs text-white/40">Unverbindlich – wir melden uns bei Ihnen.</p>
+        </div>
+        <p className="mt-6 text-sm text-[#86868b]">
+          Keine Installation · Läuft auf Handy, Tablet & PC · Daten in Frankfurt am Main
+        </p>
+      </section>
+
+      {/* ─── Was ist SCAFFOLD OS? (Aufklärung) ─── */}
+      <section className="px-6 pb-20">
+        <div className="max-w-4xl mx-auto">
+          <h2 className="text-2xl md:text-4xl font-semibold tracking-tight text-center">
+            Was ist SCAFFOLD OS?
+          </h2>
+          <p className="mt-6 text-lg text-[#6e6e73] leading-relaxed text-center max-w-3xl mx-auto">
+            In den meisten Gerüstbau-Betrieben kostet jede Baustelle Stunden an Büroarbeit:
+            Aufmaß per Hand, Angebot in Word, Materialplanung im Kopf, Stundenzettel auf Papier.
+            SCAFFOLD OS verbindet alle Schritte zu einem durchgehenden Prozess –
+            jede Information wird einmal erfasst und steht überall zur Verfügung:
+          </p>
+
+          {/* Prozesskette */}
+          <div className="mt-10 flex flex-wrap items-center justify-center gap-2">
+            {PROZESS.map((schritt, i) => (
+              <span key={schritt} className="flex items-center gap-2">
+                <span className="bg-white border border-black/10 rounded-full px-4 py-2 text-sm font-medium shadow-sm">
+                  {schritt}
+                </span>
+                {i < PROZESS.length - 1 && (
+                  <ArrowRight className="w-4 h-4 text-[#e8590c]" />
+                )}
+              </span>
+            ))}
+          </div>
+
+          {/* Zeitersparnis */}
+          <div className="mt-12 rounded-3xl bg-[#1d1d1f] text-white px-8 py-10 md:px-14 text-center shadow-2xl shadow-black/10">
+            <Clock className="w-8 h-8 text-[#ff922b] mx-auto" strokeWidth={1.5} />
+            <h3 className="mt-4 text-2xl md:text-3xl font-semibold tracking-tight">
+              Mindestens 2 Stunden gespart. Jeden Tag.
+            </h3>
+            <p className="mt-4 text-white/70 leading-relaxed max-w-2xl mx-auto">
+              Ein Aufmaß mit fertigem Angebot dauert statt 2–3 Stunden nur noch etwa
+              15 Minuten. Dazu entfallen Zettelwirtschaft, Abstimmungs-Telefonate und
+              doppelte Dateneingabe. Bei 20 Arbeitstagen im Monat sind das über
+              40 Stunden – eine halbe Arbeitswoche, die dein Team auf der Baustelle
+              statt im Büro verbringt.
+            </p>
+          </div>
         </div>
       </section>
 
-      {/* ─── Funktionen ─── */}
+      {/* ─── 3 Kernbereiche im Detail ─── */}
+      <section className="px-6 pb-24">
+        <div className="max-w-6xl mx-auto">
+          <h2 className="text-2xl md:text-4xl font-semibold tracking-tight text-center">
+            Die drei Säulen.{' '}
+            <span className="text-[#86868b]">Aufmaß, Mitarbeiter, Lager.</span>
+          </h2>
+          <div className="mt-12 grid md:grid-cols-3 gap-6">
+            {KERNBEREICHE.map((bereich) => (
+              <div
+                key={bereich.titel}
+                className="bg-white rounded-3xl border border-black/5 p-8 shadow-sm"
+              >
+                <bereich.icon className="w-8 h-8 text-[#e8590c]" strokeWidth={1.5} />
+                <h3 className="mt-4 text-xl font-semibold tracking-tight">{bereich.titel}</h3>
+                <p className="mt-2 text-[#6e6e73] text-[15px] leading-relaxed">{bereich.claim}</p>
+                <ul className="mt-5 space-y-2.5">
+                  {bereich.punkte.map((punkt) => (
+                    <li key={punkt} className="flex gap-2.5 text-sm text-[#424245] leading-relaxed">
+                      <Check className="w-4 h-4 text-[#e8590c] shrink-0 mt-0.5" />
+                      {punkt}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* ─── Pakete ─── */}
+      <section className="px-6 pb-24" id="pakete">
+        <div className="max-w-6xl mx-auto">
+          <h2 className="text-2xl md:text-4xl font-semibold tracking-tight text-center">
+            Drei Pakete. <span className="text-[#86868b]">Ein klarer Preis pro Monat.</span>
+          </h2>
+          <p className="mt-4 text-center text-[#6e6e73] max-w-2xl mx-auto">
+            Jedes Paket startet mit 3 kostenlosen Testtagen. Zahlung per SEPA-Lastschrift
+            oder Kreditkarte. Mindestvertragslaufzeit 24 Monate, danach monatlich kündbar.
+          </p>
+          <div className="mt-12 grid md:grid-cols-3 gap-6">
+            {PAKETE.map((paket) => (
+              <div
+                key={paket.id}
+                className={`rounded-3xl p-8 flex flex-col ${
+                  paket.hervorgehoben
+                    ? 'bg-[#1d1d1f] text-white shadow-2xl shadow-black/15 md:-translate-y-2'
+                    : 'bg-white border border-black/5 shadow-sm'
+                }`}
+              >
+                {paket.hervorgehoben && (
+                  <p className="text-xs font-bold tracking-[0.2em] uppercase text-[#ff922b] mb-3">
+                    Meistgewählt
+                  </p>
+                )}
+                <h3 className="text-xl font-semibold tracking-tight">{paket.name}</h3>
+                <p className="mt-4 text-4xl font-semibold tracking-tight">
+                  {paket.preis}
+                  <span className={`text-base font-normal ${paket.hervorgehoben ? 'text-white/60' : 'text-[#86868b]'}`}>
+                    /Monat
+                  </span>
+                </p>
+                <p className={`mt-2 text-sm ${paket.hervorgehoben ? 'text-white/60' : 'text-[#86868b]'}`}>
+                  {paket.zielgruppe}
+                </p>
+                <ul className="mt-6 space-y-2.5 flex-1">
+                  {paket.features.map((feature) => (
+                    <li key={feature} className="flex gap-2.5 text-sm leading-relaxed">
+                      <Check className={`w-4 h-4 shrink-0 mt-0.5 ${paket.hervorgehoben ? 'text-[#ff922b]' : 'text-[#e8590c]'}`} />
+                      {feature}
+                    </li>
+                  ))}
+                </ul>
+                <Link
+                  href={`/kaufen?plan=${paket.id}`}
+                  className={`mt-8 inline-flex items-center justify-center gap-2 font-semibold px-6 py-3 rounded-full transition-all hover:scale-[1.02] ${
+                    paket.hervorgehoben
+                      ? 'bg-[#e8590c] hover:bg-[#d9480f] text-white'
+                      : 'bg-black/5 hover:bg-black/10 text-[#1d1d1f]'
+                  }`}
+                >
+                  3 Tage kostenlos testen
+                  <ArrowRight className="w-4 h-4" />
+                </Link>
+              </div>
+            ))}
+          </div>
+          <p className="mt-8 text-center text-sm text-[#86868b]">
+            Alle Preise zzgl. MwSt. · Fragen zu den Paketen?{' '}
+            <Link href="/anfrage" className="text-[#e8590c] hover:underline">Kontakt aufnehmen</Link>
+          </p>
+        </div>
+      </section>
+
+      {/* ─── Alle Funktionen im Überblick ─── */}
       <section className="px-6 pb-24">
         <div className="max-w-6xl mx-auto">
           <h2 className="text-2xl md:text-4xl font-semibold tracking-tight text-center">
             Alles drin. <span className="text-[#86868b]">Nichts doppelt.</span>
           </h2>
           <div className="mt-12 grid sm:grid-cols-2 lg:grid-cols-3 gap-x-10 gap-y-12">
-            {FEATURES.map((f) => (
+            {ALLE_FUNKTIONEN.map((f) => (
               <div key={f.titel}>
                 <f.icon className="w-7 h-7 text-[#e8590c] mb-4" strokeWidth={1.5} />
                 <h3 className="font-semibold text-lg tracking-tight">{f.titel}</h3>
                 <p className="mt-2 text-[#6e6e73] leading-relaxed text-[15px]">{f.text}</p>
               </div>
             ))}
+          </div>
+        </div>
+      </section>
+
+      {/* ─── FAQ (SEO/GEO) ─── */}
+      <section className="px-6 pb-24">
+        <div className="max-w-3xl mx-auto">
+          <h2 className="text-2xl md:text-4xl font-semibold tracking-tight text-center">
+            Häufige Fragen
+          </h2>
+          <div className="mt-10 space-y-4">
+            {FAQ.map((eintrag) => (
+              <details
+                key={eintrag.frage}
+                className="bg-white rounded-2xl border border-black/5 px-6 py-5 shadow-sm group"
+              >
+                <summary className="font-semibold tracking-tight cursor-pointer list-none flex items-center justify-between gap-4">
+                  {eintrag.frage}
+                  <span className="text-[#e8590c] text-xl leading-none transition-transform group-open:rotate-45">+</span>
+                </summary>
+                <p className="mt-3 text-[#6e6e73] leading-relaxed text-[15px]">{eintrag.antwort}</p>
+              </details>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* ─── Abschluss-CTA ─── */}
+      <section className="px-6 pb-24">
+        <div className="max-w-3xl mx-auto text-center">
+          <HardHat className="w-8 h-8 text-[#e8590c] mx-auto" strokeWidth={1.5} />
+          <h2 className="mt-4 text-2xl md:text-4xl font-semibold tracking-tight">
+            In 3 Minuten startklar.
+          </h2>
+          <p className="mt-4 text-lg text-[#6e6e73] leading-relaxed">
+            Paket wählen, Firma eintragen, loslegen. Dein eigenes System unter
+            firma.scaffoldos.de – 3 Tage kostenlos, erste Abbuchung erst nach der Testphase.
+          </p>
+          <div className="mt-8 flex flex-col sm:flex-row items-center justify-center gap-4">
+            <Link
+              href="/kaufen"
+              className="inline-flex items-center gap-2 bg-[#e8590c] hover:bg-[#d9480f] text-white font-medium text-lg px-8 py-3.5 rounded-full transition-all hover:scale-[1.02] shadow-lg shadow-orange-600/20"
+            >
+              Jetzt 3 Tage kostenlos testen
+              <ArrowRight className="w-5 h-5" />
+            </Link>
+            <Link
+              href="/login"
+              className="inline-flex items-center gap-2 text-[#6e6e73] hover:text-[#1d1d1f] font-medium transition-colors"
+            >
+              <Globe className="w-4 h-4" />
+              Bereits Kunde? Zum Login
+            </Link>
           </div>
         </div>
       </section>
