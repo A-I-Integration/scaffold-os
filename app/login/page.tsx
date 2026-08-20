@@ -26,6 +26,24 @@ export default function LoginPage() {
     setLoading(true)
     setError('')
 
+    // Demo-Gate: Nur aktiv, wenn auf dieser Instanz DEMO_LOGIN_EMAIL
+    // gesetzt ist (Demo-Instanz). Sonst antwortet die Route mit
+    // { demo: false } und der Login läuft exakt wie bisher.
+    try {
+      const gate = await fetch('/api/auth/demo-gate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, phase: 'check' }),
+      })
+      if (gate.status === 403) {
+        setError('Dieser Demo-Zugang wurde von diesem Anschluss bereits genutzt. Fordern Sie gern einen persönlichen Testzugang über scaffoldos.de/kaufen an – 3 Tage kostenlos.')
+        setLoading(false)
+        return
+      }
+    } catch {
+      // Gate nicht erreichbar → Login normal versuchen (Demo nie hart blockieren)
+    }
+
     const { error } = await supabase.auth.signInWithPassword({
       email,
       password,
@@ -36,6 +54,14 @@ export default function LoginPage() {
       setLoading(false)
       return
     }
+
+    // Login erfolgreich → IP im Demo-Gate registrieren (fire-and-forget;
+    // auf Nicht-Demo-Instanzen ein No-Op)
+    fetch('/api/auth/demo-gate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, phase: 'register' }),
+    }).catch(() => {})
 
     // Rolle holen → direkt in den eigenen Bereich weiterleiten.
     const { data: { user } } = await supabase.auth.getUser()
