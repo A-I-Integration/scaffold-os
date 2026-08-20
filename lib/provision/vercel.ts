@@ -8,6 +8,8 @@
 //   VERCEL_TEAM_ID    (nur falls das Projekt in einem Team liegt;
 //                      bei persönlichem Account leer lassen)
 //   VERCEL_GIT_REPO   (Standard: A-I-Integration/scaffold-os)
+//   VERCEL_GIT_REPO_ID (numerische GitHub-Repo-ID, z. B. 1318023847;
+//                       ohne sie wird sie pro Lauf per GitHub-API geholt)
 //
 // WICHTIG: Die Env-Vars des Kunden werden DIREKT beim Anlegen
 // des Projekts mitgegeben (environmentVariables). Grund:
@@ -87,12 +89,35 @@ export async function addDomainToProject(projectId: string, hostname: string): P
   }
 }
 
+// ─── GitHub-Repo-ID auflösen ───
+// Die Vercel-Deployments-API (v13) verlangt bei gitSource zwingend die
+// NUMERISCHE GitHub-Repo-ID (repoId) – der „org/name"-String wird mit
+// „gitSource missing required property repoId" abgelehnt.
+// Auflösung: 1) Env-Var VERCEL_GIT_REPO_ID (empfohlen, kein API-Call),
+//            2) GitHub-API (Repo ist öffentlich, kein Token nötig).
+async function repoIdAufloesen(repo: string): Promise<number> {
+  if (process.env.VERCEL_GIT_REPO_ID) return Number(process.env.VERCEL_GIT_REPO_ID);
+  const res = await fetch(`https://api.github.com/repos/${repo}`, {
+    headers: { 'User-Agent': 'scaffold-os-provision', Accept: 'application/vnd.github+json' },
+  });
+  if (!res.ok) {
+    throw new Error(
+      `GitHub-Repo-ID für ${repo} konnte nicht ermittelt werden (HTTP ${res.status}). ` +
+      `Alternativ Env-Var VERCEL_GIT_REPO_ID auf der Master-Instanz setzen.`
+    );
+  }
+  const json: any = await res.json();
+  if (!json.id) throw new Error(`GitHub-Antwort für ${repo} enthielt keine Repo-ID.`);
+  return Number(json.id);
+}
+
 // ─── Erstes Deployment explizit starten ───
 // API-anglegte Projekte lösen das erste Deployment nicht immer
 // automatisch aus – ohne diesen Schritt bliebe die Kunden-Seite
 // auf 404 stehen, bis das nächste Mal auf main gepusht wird.
 export async function triggerInitialDeployment(projectId: string, slug: string): Promise<void> {
   const repo = process.env.VERCEL_GIT_REPO || 'A-I-Integration/scaffold-os';
+  const repoId = await repoIdAufloesen(repo);
   const res = await fetch(`${VERCEL}/v13/deployments${teamQuery()}`, {
     method: 'POST',
     headers: vercelHeaders(),
@@ -100,7 +125,7 @@ export async function triggerInitialDeployment(projectId: string, slug: string):
       name: `scaffold-os-${slug}`,
       project: projectId,
       target: 'production',
-      gitSource: { type: 'github', repo, ref: 'main' },
+      gitSource: { type: 'github', repoId, ref: 'main' },
     }),
   });
   const json: any = await res.json().catch(() => ({}));
