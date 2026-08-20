@@ -1,8 +1,27 @@
 import { NextResponse } from 'next/server';
+import { aktuellerPlan, UPGRADE_HINWEIS } from '@/lib/plan-limits';
 
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const key = process.env.SUPABASE_SERVICE_ROLE_KEY!;
 const headers = { apikey: key, Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' };
+
+// Paket-Lagergrenze: Summe der Bestände (quantity) aller aktiven Artikel.
+// Gibt null zurück, wenn kein Limit gilt oder die Summe nicht lesbar ist
+// (fail-open – kein Kunde wird durch einen Lesefehler blockiert).
+// Gibt eine Fehlermeldung zurück, wenn `delta` das Limit überschreiten würde.
+async function lagerLimitVerletzt(delta: number): Promise<string | null> {
+  const plan = aktuellerPlan();
+  if (!plan || plan.grenzen.maxLagerTeile === null || delta <= 0) return null;
+  const limit = plan.grenzen.maxLagerTeile;
+  const res = await fetch(`${url}/rest/v1/inventory?select=quantity&is_active=eq.true`, { headers });
+  if (!res.ok) return null;
+  const rows: { quantity: number }[] = await res.json();
+  const summe = rows.reduce((s, r) => s + (Number(r.quantity) || 0), 0);
+  if (summe + delta > limit) {
+    return `${plan.grenzen.label}-Paket: Lagerlimit ${limit.toLocaleString('de-DE')} Teile (aktuell ${summe.toLocaleString('de-DE')}). ${UPGRADE_HINWEIS}`;
+  }
+  return null;
+}
 
 // GET /api/inventory
 export async function GET() {
@@ -36,6 +55,10 @@ export async function POST(req: Request) {
       barcode: body.barcode || null,
       is_active: true,
     };
+    const verletzt = await lagerLimitVerletzt(item.quantity);
+    if (verletzt) {
+      return NextResponse.json({ success: false, error: verletzt }, { status: 403 });
+    }
     const res = await fetch(`${url}/rest/v1/inventory`, {
       method: 'POST',
       headers: { ...headers, Prefer: 'return=representation' },
@@ -53,6 +76,18 @@ export async function PUT(req: Request) {
   try {
     const body = await req.json();
     const { id, ...updates } = body;
+    // Lagergrenze auch bei Bestands-Erhöhung prüfen
+    if (updates.quantity !== undefined) {
+      const altRes = await fetch(`${url}/rest/v1/inventory?id=eq.${id}&select=quantity`, { headers });
+      if (altRes.ok) {
+        const alt = (await altRes.json())?.[0];
+        const delta = (parseInt(updates.quantity) || 0) - (Number(alt?.quantity) || 0);
+        const verletzt = await lagerLimitVerletzt(delta);
+        if (verletzt) {
+          return NextResponse.json({ success: false, error: verletzt }, { status: 403 });
+        }
+      }
+    }
     const res = await fetch(`${url}/rest/v1/inventory?id=eq.${id}`, {
       method: 'PATCH',
       headers: { ...headers, Prefer: 'return=representation' },

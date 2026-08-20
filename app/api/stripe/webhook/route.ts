@@ -173,6 +173,9 @@ async function kaufAbgeschlossen(session: Stripe.Checkout.Session): Promise<void
   }
 
   // 3) Registry-Eintrag anlegen (gleiche Felder wie /api/provision)
+  //    plan (starter/priority/enterprise) wird mitgespeichert, damit die
+  //    Provisionierung es als TENANT_PLAN an die Kunden-Instanz durchreicht.
+  const gekaufterPlan = ['starter', 'priority', 'enterprise'].includes(meta.plan) ? meta.plan : null;
   const slug = await freienSlugFinden(slugify(companyName));
   const ins = await fetch(`${masterUrl}/rest/v1/tenants`, {
     method: 'POST',
@@ -183,6 +186,7 @@ async function kaufAbgeschlossen(session: Stripe.Checkout.Session): Promise<void
       admin_email: adminEmail,
       admin_name: adminName,
       status: 'provisioning',
+      ...(gekaufterPlan ? { plan: gekaufterPlan } : {}),
       provision_log: [{ ts: new Date().toISOString(), step: 'stripe', msg: 'Kauf über Stripe Checkout – automatisch angelegt.' }],
     }),
   });
