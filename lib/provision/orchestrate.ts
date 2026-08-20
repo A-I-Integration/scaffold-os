@@ -40,6 +40,7 @@ export interface TenantRow {
   admin_email: string;
   admin_name: string | null;
   status: string;
+  plan: string | null;
   provision_step: string | null;
   provision_log: { ts: string; step: string; msg: string }[];
   supabase_project_ref: string | null;
@@ -199,6 +200,13 @@ export async function runProvision(tenantId: string): Promise<TenantRow> {
         ...(['KI_API_KEY', 'KI_BASE_URL', 'KI_MODEL', 'RESEND_API_KEY']
           .filter((k) => process.env[k])
           .map((k) => ({ key: k, value: process.env[k] as string, secret: true }))),
+        // Gebuchtes Paket durchreichen → die Kunden-Instanz erzwingt
+        // damit die Paket-Grenzen (Logins/Rollen/Lager, lib/plan-limits.ts).
+        // Ältere Pläne (z. B. pilot-249) werden bewusst NICHT gesetzt
+        // → für Bestandskunden ändert sich nichts.
+        ...(['starter', 'priority', 'enterprise'].includes((t.plan || '').toLowerCase())
+          ? [{ key: 'TENANT_PLAN', value: (t.plan as string).toLowerCase(), secret: false }]
+          : []),
       ];
       const projectId = await createVercelProject(t.slug, envVars);
       t = { ...t, vercel_project_id: projectId };

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
+import { aktuellerPlan, UPGRADE_HINWEIS } from '@/lib/plan-limits';
 
 // ============================================================
 // SCAFFOLD OS – Admin-API: Mitarbeiter-Logins verwalten
@@ -80,6 +81,45 @@ export async function POST(req: NextRequest) {
     }
     if (!employee_id && (!first_name || !last_name)) {
       return NextResponse.json({ success: false, error: 'Vor- und Nachname fehlen (oder bestehenden Mitarbeiter wählen)' }, { status: 400 });
+    }
+
+    // ─── Paket-Grenzen prüfen (nur wenn TENANT_PLAN gesetzt ist) ───
+    const plan = aktuellerPlan();
+    if (plan) {
+      const g = plan.grenzen;
+      const label = g.label;
+
+      // 1) Rolle im Paket enthalten?
+      if (g.erlaubteRollen && !g.erlaubteRollen.includes(role)) {
+        return NextResponse.json({
+          success: false,
+          error: `Die Rolle „${role}" ist im ${label}-Paket nicht enthalten. ${UPGRADE_HINWEIS}`,
+        }, { status: 403 });
+      }
+
+      // 2) Gesamtzahl + Rollen-Quoten gegen die aktuelle Belegung prüfen
+      const profRes = await fetch(`${url}/rest/v1/profiles?select=role`, { headers: adminHeaders });
+      if (profRes.ok) {
+        const profile: { role: string }[] = await profRes.json();
+        if (g.maxLogins !== null && profile.length >= g.maxLogins) {
+          return NextResponse.json({
+            success: false,
+            error: `${label}-Paket: maximal ${g.maxLogins} Logins – bereits ${profile.length} angelegt. ${UPGRADE_HINWEIS}`,
+          }, { status: 403 });
+        }
+        const quote = g.rollenQuoten?.[role];
+        if (quote !== undefined) {
+          const inRolle = profile.filter((p) => p.role === role).length;
+          if (inRolle >= quote) {
+            return NextResponse.json({
+              success: false,
+              error: `${label}-Paket: maximal ${quote} Login(s) mit der Rolle „${role}" – bereits belegt. ${UPGRADE_HINWEIS}`,
+            }, { status: 403 });
+          }
+        }
+      }
+      // Ist die Zählung nicht lesbar, wird nicht blockiert (fail-open),
+      // damit kein Kunde durch einen technischen Fehler ausgesperrt wird.
     }
 
     const fullName = employee_id ? '' : `${first_name} ${last_name}`.trim();
