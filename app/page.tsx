@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import LandingHeader from '@/components/LandingHeader';
 import AufmassDemo from '@/components/AufmassDemo';
+import TerminBuchung from '@/components/TerminBuchung';
 
 // ============================================================
 // SCAFFOLD OS – Startseite (Design v2 „Apple", erweitert)
@@ -574,6 +575,28 @@ export default function HomePage() {
           </p>
         </div>
       </section>
+
+      {/* ─── Terminbuchung (nur Master, per NEXT_PUBLIC_TERMIN_BUCHUNG=1) ─── */}
+      {process.env.NEXT_PUBLIC_TERMIN_BUCHUNG === '1' && (
+        <section className="px-6 pb-24" id="termin">
+          <div className="max-w-4xl mx-auto text-center mb-10">
+            <p className="text-sm font-semibold tracking-widest text-[#e8590c] uppercase mb-3">
+              Persönliche Beratung
+            </p>
+            <h2 className="text-2xl md:text-4xl font-semibold tracking-tight">
+              Fragen? Termin machen.{' '}
+              <span className="text-[#86868b]">Direkt im Kalender.</span>
+            </h2>
+            <p className="mt-4 text-lg text-[#6e6e73] leading-relaxed max-w-2xl mx-auto">
+              Wählen Sie Datum und Uhrzeit – wir zeigen Ihnen SCAFFOLD OS live,
+              beantworten Ihre Fragen und rechnen gemeinsam Ihren Fall durch.
+            </p>
+          </div>
+          <div className="max-w-5xl mx-auto">
+            <TerminBuchung />
+          </div>
+        </section>
+      )}
 
       {/* ─── Alle Funktionen im Überblick ─── */}
       <section className="px-6 pb-24">
