@@ -84,6 +84,18 @@ const SECTIONS: Section[] = [
       { key: 'is_active', label: 'Aktiv', render: r => (r.is_active ? '✅' : '❌') },
     ],
   },
+  {
+    key: 'customers', table: 'customers', title: 'Kunden', icon: '🤝',
+    columns: [
+      { key: 'name', label: 'Name/Firma', edit: true },
+      { key: 'contact_person', label: 'Ansprechpartner', edit: true },
+      { key: 'email', label: 'E-Mail', edit: true },
+      { key: 'phone', label: 'Telefon', edit: true },
+      { key: 'zip', label: 'PLZ', edit: true },
+      { key: 'city', label: 'Ort', edit: true },
+      { key: 'is_active', label: 'Aktiv', render: r => (r.is_active ? '✅' : '❌') },
+    ],
+  },
 ];
 
 export default function DatenpflegePage() {

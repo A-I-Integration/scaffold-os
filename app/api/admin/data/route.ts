@@ -28,6 +28,7 @@ const EDITABLE: Record<string, string[]> = {
   tours:            ['name', 'planned_date', 'planned_start_time', 'status'],
   vehicles:         ['name', 'license_plate', 'is_active'],
   drivers:          ['name', 'is_active'],
+  customers:        ['name', 'contact_person', 'email', 'phone', 'street', 'zip', 'city', 'notes', 'is_active'],
 };
 
 // Prüft, ob der Aufrufer admin ist. null = ok, sonst Fehler-Response.
@@ -54,6 +55,14 @@ export async function GET() {
   if (denied) return denied;
 
   try {
+    // customers zuerst separat: Tabelle existiert erst ab Phase 18 –
+    // bei Instanzen ohne Migration darf der Rest trotzdem laden.
+    const customersRes = await fetch(
+      `${url}/rest/v1/customers?select=id,name,contact_person,email,phone,street,zip,city,notes,is_active,created_at&order=name`,
+      { headers }
+    );
+    const customers = customersRes.ok ? await customersRes.json() : [];
+
     const [projects, inventory, transports, tours, vehicles, drivers] = await Promise.all([
       fetch(`${url}/rest/v1/projects?select=id,name,adresse,status,created_at&order=created_at.desc`, { headers }),
       fetch(`${url}/rest/v1/inventory?select=id,name,quantity,unit_price,min_stock,is_active&order=name`, { headers }),
@@ -75,6 +84,7 @@ export async function GET() {
       tours: await tours.json(),
       vehicles: await vehicles.json(),
       drivers: await drivers.json(),
+      customers,
     });
   } catch (err: any) {
     return NextResponse.json({ success: false, error: err.message }, { status: 500 });
