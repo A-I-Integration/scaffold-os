@@ -7,7 +7,6 @@ import {
 } from 'lucide-react';
 import LandingHeader from '@/components/LandingHeader';
 import AufmassDemo from '@/components/AufmassDemo';
-import TerminBuchung from '@/components/TerminBuchung';
 
 // ============================================================
 // SCAFFOLD OS – Startseite (Design v2 „Apple", erweitert)
@@ -576,7 +575,7 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* ─── Terminbuchung (nur Master, per NEXT_PUBLIC_TERMIN_BUCHUNG=1) ─── */}
+      {/* ─── Terminbuchung über Microsoft Bookings (nur Master, per NEXT_PUBLIC_TERMIN_BUCHUNG=1) ─── */}
       {process.env.NEXT_PUBLIC_TERMIN_BUCHUNG === '1' && (
         <section className="px-6 pb-24" id="termin">
           <div className="max-w-4xl mx-auto text-center mb-10">
@@ -592,8 +591,21 @@ export default function HomePage() {
               beantworten Ihre Fragen und rechnen gemeinsam Ihren Fall durch.
             </p>
           </div>
-          <div className="max-w-5xl mx-auto">
-            <TerminBuchung />
+          <div className="max-w-2xl mx-auto text-center bg-[#f5f5f7] rounded-3xl border border-black/5 px-8 py-12">
+            <CalendarCheck className="h-12 w-12 text-[#e8590c] mx-auto mb-5" />
+            <p className="text-lg font-semibold text-[#1d1d1f] mb-1">Kostenlose Erstberatung</p>
+            <p className="text-sm text-[#86868b] mb-8">30 Minuten · Telefon oder Videocall · unverbindlich</p>
+            <a
+              href="https://bookings.cloud.microsoft/book/G6a479b91191146b89ae2cc4218c926ab@scaffoldos.de/?ismsaljsauthenabled=true"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-2 rounded-full bg-[#e8590c] hover:bg-[#d9480f] px-8 py-4 text-lg font-bold text-white transition-colors"
+            >
+              Kostenlosen Termin buchen <ArrowRight className="h-5 w-5" />
+            </a>
+            <p className="mt-6 text-xs text-[#86868b]">
+              Die Buchung läuft über Microsoft Bookings – Sie bekommen sofort eine Bestätigung per E-Mail.
+            </p>
           </div>
         </section>
       )}
