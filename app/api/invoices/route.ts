@@ -131,6 +131,12 @@ export async function POST(req: NextRequest) {
         due_date: due_date || null,
         notes: notes || null,
         company_snapshot: companySnapshot,
+        // Phase 15-Fix: Rechnungstyp wirklich speichern (wurde bisher
+        // zwar aus dem Request gelesen, aber nicht in die Datenbank
+        // geschrieben – jede Rechnung landete als 'standard')
+        invoice_type: ['standard', 'abschlag', 'schluss'].includes(invoice_type)
+          ? invoice_type
+          : 'standard',
       }),
     });
     if (!res.ok) throw new Error(await res.text());

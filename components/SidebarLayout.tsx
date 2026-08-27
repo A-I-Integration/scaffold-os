@@ -7,7 +7,7 @@ import { createClient } from '@/lib/supabase/client';
 import {
   HardHat, LayoutDashboard, Warehouse, CalendarClock, Truck,
   KeyRound, Ruler, Navigation, LogOut, Menu, X, Database, TrendingUp, Timer, Route,
-  FileText, Settings, BookOpen, HelpCircle, Upload, Euro,
+  FileText, Settings, BookOpen, HelpCircle, Upload, Euro, Users,
 } from 'lucide-react';
 
 // ============================================================
@@ -36,6 +36,7 @@ const NAV_ITEMS: NavItem[] = [
   { href: '/aufmass/schritt1', label: 'Aufmaß',     icon: Ruler,           roles: ['admin', 'bauleiter'] },
   { href: '/rechnungen',     label: 'Rechnungen',   icon: FileText,        roles: ['admin', 'disponent'] },
   { href: '/mietabrechnung', label: 'Mietabrechnung', icon: Euro,          roles: ['admin', 'disponent'] },
+  { href: '/kunden',         label: 'Kunden',         icon: Users,         roles: ['admin', 'disponent'] },
   // ── 2 · Planung ──
   { href: '/planung',        label: 'Planung',      icon: CalendarClock,   roles: ['admin', 'disponent', 'bauleiter'] },
   { href: '/routenoptimierung', label: 'Routen-KI', icon: Route,           roles: ['admin', 'disponent'] },
