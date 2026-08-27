@@ -672,6 +672,8 @@ export default function HomePage() {
       {/* ─── Footer ─── */}
       <footer className="mt-auto border-t border-black/5 pt-10 pb-16 text-center text-sm text-[#86868b]">
         <div className="flex items-center justify-center gap-3 mb-4 text-[13px]">
+          <Link href="/wechseln" className="hover:text-[#1d1d1f] transition-colors">Softwarewechsel</Link>
+          <span className="text-black/10">·</span>
           <Link href="/impressum" className="hover:text-[#1d1d1f] transition-colors">Impressum</Link>
           <span className="text-black/10">·</span>
           <Link href="/datenschutz" className="hover:text-[#1d1d1f] transition-colors">Datenschutz</Link>
