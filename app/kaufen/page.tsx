@@ -37,6 +37,13 @@ const PLAENE: Record<string, { name: string; preis: string; features: string[] }
   },
 };
 
+// Vorauszahlung: 36 Monate auf einmal → 5 % Erlass (Abwicklung per Rechnung/Überweisung)
+const VORAUSZAHLUNG: Record<string, { monat: number; gesamt: string; rabatt: string; ersparnis: string }> = {
+  starter: { monat: 249, gesamt: '8.964 €', rabatt: '8.515,80 €', ersparnis: '448,20 €' },
+  priority: { monat: 495, gesamt: '17.820 €', rabatt: '16.929 €', ersparnis: '891 €' },
+  enterprise: { monat: 749, gesamt: '26.964 €', rabatt: '25.615,80 €', ersparnis: '1.348,20 €' },
+};
+
 function KaufenForm() {
   const [firma, setFirma] = useState('');
   const [name, setName] = useState('');
@@ -97,6 +104,29 @@ function KaufenForm() {
           </ul>
           <p className="mt-3 text-xs text-[#86868b]">
             Anderes Paket? <Link href="/#pakete" className="text-[#e8590c] hover:underline">Zur Paket-Übersicht</Link>
+          </p>
+        </div>
+
+        {/* Vorauszahlungs-Angebot: 36 Monate auf einmal → 5 % Erlass */}
+        <div className="mb-6 bg-[#fff4ec] border border-[#e8590c]/30 rounded-xl p-5">
+          <p className="text-sm font-bold text-[#1d1d1f]">
+            Lieber auf einmal zahlen? <span className="text-[#e8590c]">5 % sparen</span>
+          </p>
+          <p className="mt-1.5 text-sm text-[#6e6e73] leading-relaxed">
+            {plan.name} für 36 Monate: statt {VORAUSZAHLUNG[planId]?.gesamt ?? VORAUSZAHLUNG.starter.gesamt} nur{' '}
+            <span className="font-bold text-[#1d1d1f]">{VORAUSZAHLUNG[planId]?.rabatt ?? VORAUSZAHLUNG.starter.rabatt}</span>{' '}
+            (Ersparnis {VORAUSZAHLUNG[planId]?.ersparnis ?? VORAUSZAHLUNG.starter.ersparnis}).
+            Abwicklung per Rechnung und Überweisung statt Stripe-Abo.
+          </p>
+          <p className="mt-2 text-xs text-[#86868b]">
+            Interesse?{' '}
+            <a
+              href={`mailto:info@scaffoldos.de?subject=Vorauszahlung%2036%20Monate%20(${plan.name})`}
+              className="text-[#e8590c] hover:underline font-semibold"
+            >
+              Kurze E-Mail an info@scaffoldos.de
+            </a>{' '}
+            genügt – wir stellen die Rechnung aus.
           </p>
         </div>
 
