@@ -152,13 +152,6 @@ const PAKETE = [
   },
 ];
 
-// Vorauszahlung: 36 Monate auf einmal → 5 % Erlass (Abwicklung per Rechnung/Überweisung)
-const VORAUSZAHLUNG = [
-  { name: 'Starter', monat: 249, gesamt: '8.964 €', rabatt: '8.515,80 €', ersparnis: '448,20 €' },
-  { name: 'Priority', monat: 495, gesamt: '17.820 €', rabatt: '16.929 €', ersparnis: '891 €' },
-  { name: 'Enterprise', monat: 749, gesamt: '26.964 €', rabatt: '25.615,80 €', ersparnis: '1.348,20 €' },
-];
-
 const FAQ = [
   {
     frage: 'Was ist SCAFFOLD OS?',
@@ -575,37 +568,6 @@ export default function HomePage() {
               </div>
             ))}
           </div>
-
-          {/* Vorauszahlungs-Angebot: 36 Monate auf einmal → 5 % Erlass */}
-          <div className="mt-12 rounded-3xl border border-[#e8590c]/30 bg-[#fff4ec] p-8">
-            <p className="text-center text-xs font-bold tracking-[0.2em] uppercase text-[#e8590c]">
-              Spar-Tipp für Entscheider
-            </p>
-            <h3 className="mt-2 text-center text-xl md:text-2xl font-semibold tracking-tight text-[#1d1d1f]">
-              36 Monate im Voraus zahlen – <span className="text-[#e8590c]">5 % sparen</span>
-            </h3>
-            <p className="mt-2 text-center text-sm text-[#6e6e73] max-w-2xl mx-auto">
-              Wer den Vertrag für 36 Monate abschließt und den Gesamtbetrag auf einmal per Rechnung
-              zahlt, erhält 5 % Erlass auf die gesamte Laufzeit.
-            </p>
-            <div className="mt-8 grid md:grid-cols-3 gap-4">
-              {VORAUSZAHLUNG.map((v) => (
-                <div key={v.name} className="rounded-2xl bg-white border border-black/5 p-6 text-center shadow-sm">
-                  <p className="font-semibold text-[#1d1d1f]">{v.name}</p>
-                  <p className="mt-2 text-sm text-[#86868b] line-through">{v.gesamt}</p>
-                  <p className="text-2xl font-semibold tracking-tight text-[#1d1d1f]">{v.rabatt}</p>
-                  <p className="mt-1 text-xs font-semibold text-[#e8590c]">Du sparst {v.ersparnis}</p>
-                </div>
-              ))}
-            </div>
-            <p className="mt-6 text-center text-sm text-[#6e6e73]">
-              Abwicklung bequem per Rechnung und Überweisung –{' '}
-              <Link href="/anfrage" className="text-[#e8590c] hover:underline font-semibold">
-                jetzt Angebot anfordern
-              </Link>
-            </p>
-          </div>
-
           <p className="mt-8 text-center text-sm text-[#86868b]">
             Alle Preise zzgl. MwSt. · Fragen zu den Paketen?{' '}
             <Link href="/anfrage" className="text-[#e8590c] hover:underline">Kontakt aufnehmen</Link>
