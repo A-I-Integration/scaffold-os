@@ -75,9 +75,22 @@ export default function AgbPage() {
 
           <Section title="§ 4 Preise und Zahlung">
             <p>
-              Das SCAFFOLD-OS-Abonnement kostet 249 € netto pro Monat. Die Abrechnung erfolgt
-              monatlich im Voraus über den Zahlungsdienstleister Stripe (Kreditkarte oder
-              SEPA-Lastschrift). Die erste Abbuchung erfolgt nach Ablauf der Testphase gemäß § 5.
+              Das SCAFFOLD-OS-Abonnement wird in drei Paketen angeboten: Starter 249 € netto pro
+              Monat, Priority 495 € netto pro Monat und Enterprise 749 € netto pro Monat. Die
+              Abrechnung erfolgt monatlich im Voraus über den Zahlungsdienstleister Stripe
+              (Kreditkarte oder SEPA-Lastschrift). Die erste Abbuchung erfolgt nach Ablauf der
+              Testphase gemäß § 5.
+            </p>
+            <p>
+              Alternativ kann der Vertrag für eine Laufzeit von sechsunddreißig (36) Monaten mit
+              vollständiger Vorauszahlung abgeschlossen werden. In diesem Fall gewähren wir einen
+              Erlass von fünf Prozent (5 %) auf den Gesamtbetrag der 36 Monate. Die Abwicklung
+              erfolgt per Rechnung und Überweisung; die Bereitstellung des Zugangs erfolgt nach
+              Zahlungseingang. Während der 36-monatigen Laufzeit ist eine ordentliche Kündigung
+              ausgeschlossen; danach verlängert sich der Vertrag auf unbestimmte Zeit und ist
+              monatlich mit einer Frist von 30 Tagen zum Monatsende kündbar. Bei außerordentlicher
+              Kündigung durch den Kunden aus wichtigem Grund, den wir zu vertreten haben, erstatten
+              wir den anteiligen Betrag für die nicht genutzte Restlaufzeit.
             </p>
             <p>
               Optional buchbar: Onboarding 1.490 € netto. Ein erweitertes Paket in Höhe von
@@ -111,6 +124,10 @@ export default function AgbPage() {
               Monatsende kündbar. Kündigungen sind in Textform (z. B. per E-Mail an{' '}
               <a href="mailto:info@scaffoldos.de" className="text-[#e8590c] hover:text-[#e8590c]">info@scaffoldos.de</a>)
               zu richten.
+            </p>
+            <p>
+              Für Verträge mit 36-monatiger Laufzeit und Vorauszahlung gilt § 4 Abs. 2; die Regelungen
+              dieses Paragraphen zur Testphase und zur außerordentlichen Kündigung gelten entsprechend.
             </p>
             <p>
               Das Recht zur außerordentlichen Kündigung aus wichtigem Grund bleibt unberührt.
