@@ -368,9 +368,24 @@ function determineAnchorType(input: ScaffoldInput): {
 
 // --- HAUPTBERECHNUNG ---
 
+// Kalkulations-Grundlagen – kommen aus den Firmeneinstellungen
+// (company_settings.calc_*). Alles optional: Ohne Einstellung gelten
+// die bisherigen Standardwerte (Rückwärtskompatibel).
+export interface CostSettings {
+  hourlyRate?: number;    // Stundensatz €/h (Standard 65)
+  hoursPerSqm?: number;   // Montagestunden pro m² (Standard 2,0)
+  transportPerKg?: number;// Transport €/kg (Standard 0,80)
+  transportMin?: number;  // Transport-Mindestpauschale € (Standard 250)
+  tripFlat?: number;      // Fahrtkosten-Pauschale € pro Baustelle (Standard 0 = aus)
+  permitLow?: number;     // Genehmigung bis 12 m (Standard 250)
+  permitHigh?: number;    // Genehmigung über 12 m (Standard 450)
+  craneDay?: number;      // Kran-Tagessatz (Standard 850)
+}
+
 export function calculateScaffoldMaterial(
   input: ScaffoldInput,
-  articlePrices?: Record<string, Omit<MaterialItem, 'quantity' | 'totalPrice'>>
+  articlePrices?: Record<string, Omit<MaterialItem, 'quantity' | 'totalPrice'>>,
+  costs?: CostSettings
 ): KIAnalysis {
   const warnings: string[] = [];
   const tips: string[] = [];
@@ -514,19 +529,25 @@ export function calculateScaffoldMaterial(
     0
   );
 
-  // Lohn: 2h pro m², 65€/h
-  const estimatedLaborHours = Math.ceil(scaffoldArea * 2.0);
-  const laborCost = estimatedLaborHours * 65;
+  // Lohn: Stunden/m² × Stundensatz – aus den Einstellungen, Standard 2,0 h/m² × 65 €/h
+  const estimatedLaborHours = Math.ceil(scaffoldArea * (costs?.hoursPerSqm ?? 2.0));
+  const laborCost = estimatedLaborHours * (costs?.hourlyRate ?? 65);
 
-  // Transport: 0,80€/kg, Mindestpauschale 250€
-  const transportCost = Math.max(250, Math.ceil(totalWeightKg * 0.8));
+  // Transport: €/kg mit Mindestpauschale – aus den Einstellungen, Standard 0,80 €/kg mind. 250 €
+  const transportCost = Math.max(
+    costs?.transportMin ?? 250,
+    Math.ceil(totalWeightKg * (costs?.transportPerKg ?? 0.8))
+  );
 
-  // Genehmigungen & Sonstiges
-  const permitCost = input.heightM > 12 ? 450 : 250;
-  const craneCost = input.environment.needsCrane ? 850 : 0;
+  // Fahrtkosten-Pauschale (Sprit + Fuhrpark-Nutzung) – nur wenn in den Einstellungen gesetzt
+  const tripCost = costs?.tripFlat && costs.tripFlat > 0 ? costs.tripFlat : 0;
+
+  // Genehmigungen & Sonstiges – aus den Einstellungen
+  const permitCost = input.heightM > 12 ? (costs?.permitHigh ?? 450) : (costs?.permitLow ?? 250);
+  const craneCost = input.environment.needsCrane ? (costs?.craneDay ?? 850) : 0;
 
   const totalCost =
-    totalMaterialCost + laborCost + transportCost + permitCost + craneCost;
+    totalMaterialCost + laborCost + transportCost + tripCost + permitCost + craneCost;
 
   // Preisempfehlung mit 25% Marge
   const suggestedPrice = Math.ceil(totalCost / 0.75);
@@ -580,6 +601,7 @@ export function calculateScaffoldMaterial(
     estimatedLaborHours,
     laborCost: Math.round(laborCost * 100) / 100,
     transportCost: Math.round(transportCost * 100) / 100,
+    tripCost: Math.round(tripCost * 100) / 100,
     totalCost: Math.round(totalCost * 100) / 100,
     suggestedPrice: Math.round(suggestedPrice * 100) / 100,
     margin: Math.round(margin * 100) / 100,

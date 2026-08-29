@@ -176,6 +176,7 @@ export interface KIAnalysis {
   estimatedLaborHours: number;
   laborCost: number;
   transportCost: number;
+  tripCost?: number; // Fahrtkosten-Pauschale (nur wenn in den Einstellungen aktiviert)
   totalCost: number;
   suggestedPrice: number;
   margin: number;
