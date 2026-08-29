@@ -23,9 +23,10 @@ import AufmassDemo from '@/components/AufmassDemo';
 // ============================================================
 
 export const metadata: Metadata = {
-  title: 'SCAFFOLD OS – Gerüstbau-Software: Aufmaß, Mitarbeiter, Lager & Rechnung in einem System',
+  metadataBase: new URL('https://scaffoldos.de'),
+  title: 'Gerüstbau Software: KI-Aufmaß, Lager & Angebote | SCAFFOLD OS',
   description:
-    'SCAFFOLD OS ist die komplette Software für Gerüstbau-Betriebe: KI-Aufmaß mit Foto & Drohne, Angebot in Minuten, Disposition, Lager mit Prognose, Touren mit GPS, Zeiterfassung und GoBD-konforme Rechnung. 3 Tage kostenlos testen – ab 249 €/Monat.',
+    'Die All-in-One Software für Gerüstbauer. KI-Aufmaß, Angebote in Minuten, Touren-GPS & GoBD-Rechnung. Jetzt 3 Tage kostenlos auf Handy & PC testen!',
   keywords: [
     'Gerüstbau Software', 'Gerüstbau Aufmaß', 'Aufmaß Software Gerüstbau',
     'Gerüst Kalkulation', 'Gerüstbau Disposition', 'Lagerverwaltung Gerüstbau',
@@ -33,13 +34,28 @@ export const metadata: Metadata = {
   ],
   alternates: { canonical: 'https://scaffoldos.de' },
   openGraph: {
-    title: 'SCAFFOLD OS – Die Software für Gerüstbau-Betriebe',
+    title: 'Gerüstbau Software: KI-Aufmaß, Lager & Angebote | SCAFFOLD OS',
     description:
-      'Vom Kundenanruf bis zur Rechnung: Aufmaß mit KI, Mitarbeiter & Zeiterfassung, Lager mit Prognose. 3 Tage kostenlos testen.',
+      'Die All-in-One Software für Gerüstbauer. KI-Aufmaß, Angebote in Minuten, Touren-GPS & GoBD-Rechnung. Jetzt 3 Tage kostenlos auf Handy & PC testen!',
     url: 'https://scaffoldos.de',
     siteName: 'SCAFFOLD OS',
     locale: 'de_DE',
     type: 'website',
+    images: [
+      {
+        url: '/og-share.png',
+        width: 1200,
+        height: 630,
+        alt: 'SCAFFOLD OS – Die Software für Gerüstbau-Betriebe',
+      },
+    ],
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'Gerüstbau Software: KI-Aufmaß, Lager & Angebote | SCAFFOLD OS',
+    description:
+      'Die All-in-One Software für Gerüstbauer. KI-Aufmaß, Angebote in Minuten, Touren-GPS & GoBD-Rechnung. Jetzt 3 Tage kostenlos testen!',
+    images: ['/og-share.png'],
   },
 };
 
@@ -199,6 +215,21 @@ const JSONLD = {
   '@context': 'https://schema.org',
   '@graph': [
     {
+      '@type': 'Organization',
+      '@id': 'https://scaffoldos.de/#organization',
+      name: 'AI Integration',
+      url: 'https://scaffoldos.de',
+      logo: 'https://scaffoldos.de/icon-512.png',
+      email: 'info@scaffoldos.de',
+      address: {
+        '@type': 'PostalAddress',
+        streetAddress: 'Ölbachstr. 48',
+        postalCode: '48691',
+        addressLocality: 'Vreden',
+        addressCountry: 'DE',
+      },
+    },
+    {
       '@type': 'SoftwareApplication',
       name: 'SCAFFOLD OS',
       applicationCategory: 'BusinessApplication',
@@ -212,11 +243,7 @@ const JSONLD = {
         { '@type': 'Offer', name: 'Priority', price: '495', priceCurrency: 'EUR' },
         { '@type': 'Offer', name: 'Enterprise', price: '749', priceCurrency: 'EUR' },
       ],
-      provider: {
-        '@type': 'Organization',
-        name: 'AI Integration',
-        url: 'https://scaffoldos.de',
-      },
+      provider: { '@id': 'https://scaffoldos.de/#organization' },
     },
     {
       '@type': 'FAQPage',
@@ -317,7 +344,7 @@ function ScreenshotRahmen({ src, alt }: { src: string; alt: string }) {
         <span className="w-2.5 h-2.5 rounded-full bg-[#28c840]" />
       </div>
       {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img src={src} alt={alt} loading="lazy" className="w-full h-auto block" />
+      <img src={src} alt={alt} width={1440} height={819} loading="lazy" className="w-full h-auto block" />
     </div>
   );
 }
@@ -341,9 +368,12 @@ export default function HomePage() {
           Software für Gerüstbau-Betriebe
         </p>
         <h1 className="text-4xl md:text-6xl font-semibold tracking-tight leading-[1.08] max-w-3xl mx-auto">
-          Vom Kundenanruf bis zur Rechnung.
-          <span className="text-[#86868b]"> Ein System.</span>
+          Die Gerüstbau-Software
+          <span className="text-[#86868b]"> vom Aufmaß bis zur Rechnung.</span>
         </h1>
+        <p className="mt-5 text-xl md:text-2xl font-medium text-[#424245] tracking-tight">
+          Vom Kundenanruf bis zur Rechnung. Ein System.
+        </p>
         <p className="mt-6 text-lg md:text-xl text-[#6e6e73] max-w-2xl mx-auto leading-relaxed">
           SCAFFOLD OS ersetzt Zettel, Excel und Telefonkette durch einen durchgehenden
           digitalen Prozess: Aufmaß mit KI, Angebot in Minuten, Disposition, Lager,
@@ -467,9 +497,9 @@ export default function HomePage() {
           {/* Zeitersparnis */}
           <div className="mt-12 rounded-3xl bg-[#1d1d1f] text-white px-8 py-10 md:px-14 text-center shadow-2xl shadow-black/10">
             <Clock className="w-8 h-8 text-[#ff922b] mx-auto" strokeWidth={1.5} />
-            <h3 className="mt-4 text-2xl md:text-3xl font-semibold tracking-tight">
+            <p className="mt-4 text-2xl md:text-3xl font-semibold tracking-tight">
               Mindestens 2 Stunden gespart. Jeden Tag.
-            </h3>
+            </p>
             <p className="mt-4 text-white/70 leading-relaxed max-w-2xl mx-auto">
               Ein Aufmaß mit fertigem Angebot dauert statt 2–3 Stunden nur noch etwa
               15 Minuten. Dazu entfallen Zettelwirtschaft, Abstimmungs-Telefonate und
@@ -495,7 +525,7 @@ export default function HomePage() {
                 className="bg-white rounded-3xl border border-black/5 p-8 shadow-sm"
               >
                 <bereich.icon className="w-8 h-8 text-[#e8590c]" strokeWidth={1.5} />
-                <h3 className="mt-4 text-xl font-semibold tracking-tight">{bereich.titel}</h3>
+                <p className="mt-4 text-xl font-semibold tracking-tight">{bereich.titel}</p>
                 <p className="mt-2 text-[#6e6e73] text-[15px] leading-relaxed">{bereich.claim}</p>
                 <ul className="mt-5 space-y-2.5">
                   {bereich.punkte.map((punkt) => (
@@ -536,7 +566,7 @@ export default function HomePage() {
                     Meistgewählt
                   </p>
                 )}
-                <h3 className="text-xl font-semibold tracking-tight">{paket.name}</h3>
+                <p className="text-xl font-semibold tracking-tight">{paket.name}</p>
                 <p className="mt-4 text-4xl font-semibold tracking-tight">
                   {paket.preis}
                   <span className={`text-base font-normal ${paket.hervorgehoben ? 'text-white/60' : 'text-[#86868b]'}`}>
@@ -620,7 +650,7 @@ export default function HomePage() {
             {ALLE_FUNKTIONEN.map((f) => (
               <div key={f.titel}>
                 <f.icon className="w-7 h-7 text-[#e8590c] mb-4" strokeWidth={1.5} />
-                <h3 className="font-semibold text-lg tracking-tight">{f.titel}</h3>
+                <p className="font-semibold text-lg tracking-tight">{f.titel}</p>
                 <p className="mt-2 text-[#6e6e73] leading-relaxed text-[15px]">{f.text}</p>
               </div>
             ))}
