@@ -110,7 +110,7 @@ const KERNBEREICHE = [
 ];
 
 const ALLE_FUNKTIONEN = [
-  { icon: Ruler, titel: 'Aufmaß & KI-Angebot', text: 'Baustelle in 6 Schritten erfassen – die KI liefert Materialliste, Kalkulation und Angebots-PDF.' },
+  { icon: Ruler, titel: 'Aufmaß & KI-Angebot', text: (<>Baustelle in 6 Schritten erfassen – die <strong>KI</strong> liefert Materialliste, Kalkulation und Angebots-PDF.</>) },
   { icon: Camera, titel: 'Foto, Drohne & 3D-Scan', text: 'Fotos am Handy, Drohnen-Upload bis 20 MB, Punktwolken-Auswertung für Großscans.' },
   { icon: QrCode, titel: 'QR & Unterschrift', text: 'Angebot mit QR-Code und digitaler Unterschrift – der Kunde unterschreibt auf dem Handy.' },
   { icon: Route, titel: 'Touren & Disposition', text: 'Routen-KI plant den Tag, GPS zeigt die Fahrzeuge, Umdisposition bei Krankheit oder Wetter.' },
@@ -118,7 +118,7 @@ const ALLE_FUNKTIONEN = [
   { icon: Timer, titel: 'Zeiterfassung', text: 'Stempeln am Handy, Pausen-Automatik, Soll-Ist-Vergleich, Überstunden – ohne Zettelwirtschaft.' },
   { icon: CalendarCheck, titel: 'Planung & Abwesenheiten', text: 'Krank und Urlaub direkt im Plan – Konflikte werden sofort sichtbar.' },
   { icon: Warehouse, titel: 'Lager & Prognose', text: 'Bestände im Blick, automatische Stückliste, KI warnt, bevor Material knapp wird.' },
-  { icon: FileText, titel: 'Rechnungen & DATEV', text: 'GoBD-konforme Rechnungen mit Mahnwesen – Buchungsstapel und Lohndaten direkt für den Steuerberater.' },
+  { icon: FileText, titel: 'Rechnungen & DATEV', text: (<><strong>GoBD-konforme Rechnungen</strong> mit Mahnwesen – Buchungsstapel und Lohndaten direkt für den Steuerberater.</>) },
   { icon: Sparkles, titel: 'KI überall', text: 'Materialberechnung, Routen-Vorschläge, Sprachnotizen, Foto-Analyse – die KI arbeitet im Hintergrund mit.' },
   { icon: PenLine, titel: 'Digitaler Zwilling', text: 'Jede Baustelle als digitales Modell – Änderungen am Gerüst bleiben dokumentiert.' },
   { icon: ShieldCheck, titel: 'Datenschutz aus Frankfurt', text: 'Eigene Datenbank pro Betrieb, EU-Hosting, DSGVO- und EU-AI-Act-konform.' },
@@ -380,8 +380,9 @@ export default function HomePage() {
         </p>
         <p className="mt-6 text-lg md:text-xl text-[#6e6e73] max-w-2xl mx-auto leading-relaxed">
           SCAFFOLD OS ersetzt Zettel, Excel und Telefonkette. Ein System für alles:
-          Aufmaß mit KI, Angebot in Minuten, Touren mit GPS, Zeiterfassung und
-          GoBD-Rechnung. Alles läuft im Browser – auf Handy, Tablet und PC.
+          <strong> Aufmaß mit KI</strong>, Angebot in Minuten, Touren mit GPS,
+          Zeiterfassung und <strong>GoBD-Rechnung</strong>. Alles läuft im Browser –
+          auf Handy, Tablet und PC.
         </p>
         <div className="mt-10 flex flex-col sm:flex-row items-center justify-center gap-4">
           <Link
@@ -478,10 +479,10 @@ export default function HomePage() {
             Was ist SCAFFOLD OS?
           </h2>
           <p className="mt-6 text-lg text-[#6e6e73] leading-relaxed text-center max-w-3xl mx-auto">
-            Gerüstbau bedeutet Büroarbeit. Aufmaß per Hand. Angebot in Word.
+            <strong>Gerüstbau</strong> bedeutet Büroarbeit. Aufmaß per Hand. Angebot in Word.
             Stundenzettel auf Papier. SCAFFOLD OS macht Schluss damit. Du erfasst
-            jede Info nur einmal – und hast sie überall: auf der Baustelle, im Büro,
-            unterwegs.
+            jede Info <strong>nur einmal</strong> – und hast sie überall: auf der Baustelle,
+            im Büro, unterwegs.
           </p>
 
           {/* Prozesskette */}
@@ -505,10 +506,10 @@ export default function HomePage() {
               Mindestens 2 Stunden gespart. Jeden Tag.
             </p>
             <p className="mt-4 text-white/70 leading-relaxed max-w-2xl mx-auto">
-              Ein Aufmaß mit fertigem Angebot dauert bei uns etwa 15 Minuten.
+              Ein Aufmaß mit fertigem Angebot dauert bei uns etwa <strong>15 Minuten</strong>.
               Früher waren es 2 bis 3 Stunden. Zettel, Telefonate und doppelte
-              Eingaben fallen weg. Das spart über 40 Stunden im Monat. Dein Team
-              arbeitet auf der Baustelle – nicht im Büro.
+              Eingaben fallen weg. Das spart über <strong>40 Stunden im Monat</strong>.
+              Dein Team arbeitet auf der Baustelle – nicht im Büro.
             </p>
           </div>
         </div>
