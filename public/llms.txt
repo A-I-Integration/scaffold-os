@@ -1,0 +1,32 @@
+# SCAFFOLD OS
+
+> Die All-in-One Branchensoftware für Gerüstbaubetriebe – vom Kundenanruf bis zur Rechnung in einem System.
+
+SCAFFOLD OS ist eine SaaS-Software speziell für Gerüstbau-Betriebe im DACH-Raum. Sie ersetzt Zettel, Excel und Telefonketten durch einen durchgehenden digitalen Prozess. Die App läuft ohne Installation im Browser auf Handy, Tablet und PC. Jeder Betrieb bekommt eine eigene Instanz mit eigener Datenbank (EU-Hosting, Server-Standort Frankfurt am Main, DSGVO-konform).
+
+## Kernfunktionen
+- KI-gestütztes Aufmaß auf der Baustelle (Foto, Drohne, 3D-Scan, Punktwolke)
+- Angebotserstellung in Minuten, kalkuliert nach DIN 12811, als PDF
+- Disposition und Einsatzplanung der Monteure
+- Lagerverwaltung mit Stückliste, Reservierung und KI-Prognose
+- GPS-Tourenplanung mit Routen-KI und Fahrer-App
+- Zeiterfassung per Handy, Export für Lohnbuchhaltung (DATEV)
+- GoBD-konforme Rechnungsstellung mit Abschlags- und Schlussrechnungen, Mahnwesen
+- Kundenverwaltung mit Rechnungsübersicht
+
+## Pakete und Preise
+- Starter: 249 €/Monat (1 Admin, 2 Dispo, bis 5 Mitarbeiter, Lager bis 10.000 Teile)
+- Priority: 495 €/Monat (alle Rollen, bis 20 Mitarbeiter, Lager bis 20.000 Teile, Routen-KI)
+- Enterprise: 749 €/Monat (alles unbegrenzt, Punktwolken-Großscans, persönlicher Ansprechpartner)
+- Alle Pakete: 3 Tage kostenlos testen, Mindestvertragslaufzeit 24 Monate, danach monatlich kündbar
+- Vorauszahlung: 36 Monate auf einmal mit 5 % Erlass (per Rechnung/Überweisung)
+
+## Anbieter
+AI Integration, Ölbachstr. 48, 48691 Vreden, Deutschland. Kontakt: info@scaffoldos.de
+
+## Links
+- Website: https://scaffoldos.de
+- Kostenlos testen: https://scaffoldos.de/kaufen
+- Handbuch (PDF): https://scaffoldos.de/handbuch.pdf
+- Impressum: https://scaffoldos.de/impressum
+- Datenschutz: https://scaffoldos.de/datenschutz
