@@ -211,7 +211,7 @@ const FAQ = [
   {
     frage: 'Wie kann ich kündigen?',
     antwort:
-      'Die Mindestvertragslaufzeit beträgt 24 Monate, danach ist das Abo monatlich kündbar. Bei einer Kündigung wird deine Instanz pausiert – deine Daten bleiben erhalten und gehen nicht verloren.',
+      'Die Mindestvertragslaufzeit beträgt 36 Monate, danach ist das Abo monatlich kündbar. Bei einer Kündigung wird deine Instanz pausiert – deine Daten bleiben erhalten und gehen nicht verloren.',
   },
 ];
 
@@ -553,7 +553,7 @@ export default function HomePage() {
           </h2>
           <p className="mt-4 text-center text-[#6e6e73] max-w-2xl mx-auto">
             Jedes Paket startet mit 3 kostenlosen Testtagen. Du zahlst per
-            SEPA-Lastschrift oder Kreditkarte. Nach 24 Monaten kannst du monatlich kündigen.
+            SEPA-Lastschrift oder Kreditkarte. Nach 36 Monaten kannst du monatlich kündigen.
           </p>
           <div className="mt-12 grid md:grid-cols-3 gap-6">
             {PAKETE.map((paket) => (

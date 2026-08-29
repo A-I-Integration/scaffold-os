@@ -18,7 +18,7 @@ SCAFFOLD OS ist eine SaaS-Software speziell für Gerüstbau-Betriebe im DACH-Rau
 - Starter: 249 €/Monat (1 Admin, 2 Dispo, bis 5 Mitarbeiter, Lager bis 10.000 Teile)
 - Priority: 495 €/Monat (alle Rollen, bis 20 Mitarbeiter, Lager bis 20.000 Teile, Routen-KI)
 - Enterprise: 749 €/Monat (alles unbegrenzt, Punktwolken-Großscans, persönlicher Ansprechpartner)
-- Alle Pakete: 3 Tage kostenlos testen, Mindestvertragslaufzeit 24 Monate, danach monatlich kündbar
+- Alle Pakete: 3 Tage kostenlos testen, Mindestvertragslaufzeit 36 Monate, danach monatlich kündbar
 - Vorauszahlung: 36 Monate auf einmal mit 5 % Erlass (per Rechnung/Überweisung)
 
 ## Anbieter
