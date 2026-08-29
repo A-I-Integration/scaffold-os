@@ -21,6 +21,7 @@ export interface InventoryItem {
   reorder_point: number;
   unit: string;
   unit_price: number;
+  weight_kg?: number; // Gewicht pro Stück (Transport-Kalkulation; Spalte kommt per Migration)
   supplier: string | null;
   supplier_lead_time: number;
   location_in_warehouse: string | null;

@@ -49,6 +49,7 @@ export async function POST(req: Request) {
       reorder_point: parseInt(body.reorder_point) || 20,
       unit: body.unit || 'Stk',
       unit_price: parseFloat(body.unit_price) || 0,
+      weight_kg: parseFloat(body.weight_kg) || 0,
       supplier: body.supplier || null,
       supplier_lead_time: parseInt(body.supplier_lead_time) || 7,
       location_in_warehouse: body.location_in_warehouse || null,

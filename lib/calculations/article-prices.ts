@@ -2,9 +2,12 @@
 // lib/calculations/article-prices.ts
 // Lädt Artikelpreise aus Supabase (inventory-Tabelle)
 // Fallback auf statische Preise, wenn DB leer
+//
+// Wichtig: Das echte Lager-Schema heißt sku / unit_price / is_active
+// (NICHT article_number / deleted – das waren die alten, falschen
+// Spaltennamen, weshalb bisher IMMER der Fallback gegriffen hat).
+// Zugriff per REST + SERVICE_ROLE_KEY (createClient crasht auf Vercel).
 // ============================================================
-
-import { createClient } from '@/lib/supabase/server';
 
 export interface ArticleMaster {
   articleNumber: string;
@@ -48,34 +51,48 @@ const FALLBACK_PRICES: Record<string, ArticleMaster> = {
 
 export async function loadArticlePrices(): Promise<Record<string, ArticleMaster>> {
   try {
-    const supabase = await createClient();
-    
-    // Versuche aus inventory-Tabelle zu laden (dein existierendes Lager)
-    const { data, error } = await supabase
-      .from('inventory')
-      .select('article_number, name, category, unit, unit_price, weight_kg, risk_level, ai_recommendation')
-      .eq('deleted', false)
-      .order('article_number');
-    
-    if (error || !data || data.length === 0) {
+    const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    if (!url || !key) return FALLBACK_PRICES;
+
+    // select=* ist absichtlich defensiv: weight_kg existiert erst nach der
+    // Migration „Kalkulations-Grundlagen" – so läuft es vorher wie nachher.
+    const res = await fetch(`${url}/rest/v1/inventory?is_active=eq.true&select=*`, {
+      headers: { apikey: key, Authorization: `Bearer ${key}` },
+      cache: 'no-store',
+    });
+    if (!res.ok) {
+      console.warn('[ArticlePrices] REST-Fehler:', await res.text());
+      return FALLBACK_PRICES;
+    }
+    const data: any[] = await res.json();
+    if (!data || data.length === 0) {
       console.warn('[ArticlePrices] Keine DB-Daten gefunden, verwende Fallback.');
       return FALLBACK_PRICES;
     }
-    
-    const prices: Record<string, ArticleMaster> = {};
+
+    // Lager-Artikel überschreiben die Fallback-Preise per SKU-Match.
+    // Gewicht: aus weight_kg, sonst Fallback-Gewicht der gleichen SKU,
+    // sonst 10 kg als konservativer Schätzwert für die Transport-Kalkulation.
+    const prices: Record<string, ArticleMaster> = { ...FALLBACK_PRICES };
+    let treffer = 0;
     for (const item of data) {
-      prices[item.article_number] = {
-        articleNumber: item.article_number,
-        name: item.name,
-        category: item.category,
-        unit: item.unit,
-        unitPrice: item.unit_price,
-        weightKg: item.weight_kg,
-        riskLevel: item.risk_level || 'low',
-        aiRecommendation: item.ai_recommendation || '',
+      const sku = (item.sku || '').trim();
+      if (!sku) continue;
+      const fb = FALLBACK_PRICES[sku];
+      prices[sku] = {
+        articleNumber: sku,
+        name: item.name || fb?.name || sku,
+        category: item.category || fb?.category || 'Sonstiges',
+        unit: item.unit || fb?.unit || 'Stk',
+        unitPrice: Number(item.unit_price) > 0 ? Number(item.unit_price) : (fb?.unitPrice ?? 0),
+        weightKg: Number(item.weight_kg) > 0 ? Number(item.weight_kg) : (fb?.weightKg ?? 10),
+        riskLevel: fb?.riskLevel ?? 'low',
+        aiRecommendation: fb?.aiRecommendation ?? '',
       };
+      if (fb) treffer++;
     }
-    
+    console.warn(`[ArticlePrices] ${data.length} Lager-Artikel geladen, ${treffer} System-SKU-Treffer.`);
     return prices;
   } catch (err) {
     console.error('[ArticlePrices] Fehler beim Laden:', err);
