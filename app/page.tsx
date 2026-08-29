@@ -386,10 +386,10 @@ export default function HomePage() {
         </p>
         <div className="mt-10 flex flex-col sm:flex-row items-center justify-center gap-4">
           <Link
-            href="/kaufen"
+            href="/anfrage"
             className="inline-flex items-center gap-2 bg-[#e8590c] hover:bg-[#d9480f] text-white font-medium text-lg px-8 py-3.5 rounded-full transition-all hover:scale-[1.02] shadow-lg shadow-orange-600/20"
           >
-            3 Tage kostenlos testen
+            Angebot anfragen
             <ArrowRight className="w-5 h-5" />
           </Link>
           <Link
