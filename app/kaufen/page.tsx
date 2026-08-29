@@ -11,7 +11,7 @@ import { Check } from 'lucide-react';
 //
 // Sammelt Firma/Name/E-Mail und schickt den Kunden zum
 // Stripe-Checkout (SEPA-Lastschrift oder Kreditkarte,
-// 3 Tage kostenlos testen, Mindestvertragslaufzeit 24 Monate).
+// 3 Tage kostenlos testen, Mindestvertragslaufzeit 36 Monate).
 // Die eigentliche Zahlung läuft komplett bei Stripe.
 //
 // Das Paket kommt per URL: /kaufen?plan=starter|priority|enterprise
@@ -84,7 +84,7 @@ function KaufenForm() {
           <p className="text-[#86868b] mt-2 text-sm">
             3 Tage kostenlos testen, danach{' '}
             <span className="text-[#e8590c] font-bold">{plan.preis}/Monat</span> ({plan.name}).
-            Mindestvertragslaufzeit 24 Monate, danach monatlich kündbar.
+            Mindestvertragslaufzeit 36 Monate, danach monatlich kündbar.
           </p>
         </div>
 
@@ -186,7 +186,7 @@ function KaufenForm() {
           <p className="text-[11px] text-[#86868b] text-center leading-relaxed">
             Sichere Zahlung über Stripe (SEPA-Lastschrift oder Kreditkarte).<br />
             Erste Abbuchung erst nach der 3-tägigen Testphase. Monatliche Rechnung per E-Mail.<br />
-            Vertragslaufzeit: 24 Monate, danach monatlich kündbar.<br />
+            Vertragslaufzeit: 36 Monate, danach monatlich kündbar.<br />
             Mit dem Kauf akzeptierst du unsere{' '}
             <Link href="/agb" className="underline hover:text-[#424245]">AGB</Link> und{' '}
             <Link href="/datenschutz" className="underline hover:text-[#424245]">Datenschutzerklärung</Link>.

@@ -115,7 +115,7 @@ export default function AgbPage() {
             <p>
               Wird der Vertrag nicht innerhalb der Testphase beendet, verlängert er sich
               automatisch in ein kostenpflichtiges Abonnement mit einer Mindestvertragslaufzeit
-              von vierundzwanzig (24) Monaten ab Ende der Testphase. Während der
+              von sechsunddreißig (36) Monaten ab Ende der Testphase. Während der
               Mindestvertragslaufzeit ist eine ordentliche Kündigung ausgeschlossen.
             </p>
             <p>
