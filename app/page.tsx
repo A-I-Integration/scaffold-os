@@ -5,8 +5,12 @@ import {
   Users, Package, Clock, Camera, QrCode, PenLine, MapPin, CalendarCheck,
   Sparkles, Globe, HardHat,
 } from 'lucide-react';
+import dynamic from 'next/dynamic';
 import LandingHeader from '@/components/LandingHeader';
-import AufmassDemo from '@/components/AufmassDemo';
+
+// Aufmaß-Demo wird als eigener JS-Chunk nachgeladen (Code-Splitting) –
+// entlastet die mobile Startladephase, HTML bleibt server-seitig gerendert.
+const AufmassDemo = dynamic(() => import('@/components/AufmassDemo'));
 
 // ============================================================
 // SCAFFOLD OS – Startseite (Design v2 „Apple", erweitert)
@@ -72,9 +76,9 @@ const KERNBEREICHE = [
       'Baustelle in 6 geführten Schritten erfassen – am Handy, direkt vor Ort',
       'Fotos, Drohnen-Upload und GPS-Position automatisch verknüpft',
       'Punktwolken-Auswertung (3D-Scans) für exakte Maße ohne Nachmessen',
-      'Hersteller-Systeme hinterlegt: Layher, MJ, Plettac, Alfix, Hünnebeck, Rux u. a. – mit echten Systemmaßen',
-      'KI berechnet Materialliste und Kalkulation, DIN-12811-Check inklusive',
-      'Fertiges Angebots-PDF mit QR-Code und digitaler Unterschrift – direkt per E-Mail an den Kunden',
+      'Hersteller-Systeme mit echten Maßen: Layher, MJ, Plettac, Alfix u. a.',
+      'KI rechnet Materialliste und Kalkulation, DIN-12811-Check inklusive',
+      'Angebots-PDF mit QR-Code und Unterschrift – direkt per Mail an den Kunden',
     ],
   },
   {
@@ -83,8 +87,8 @@ const KERNBEREICHE = [
     claim: 'Jeder Kollege hat seinen Zugang – und du hast den Überblick.',
     punkte: [
       'Zugänge mit Rollen: Admin, Disponent, Bauleiter, Mitarbeiter, Lager',
-      'Zeiterfassung per Handy: Kommen/Gehen stempeln, Pausen automatisch nach Arbeitszeitgesetz',
-      'Krank- und Urlaubsmeldungen fließen direkt in die Tagesplanung ein',
+      'Zeiterfassung per Handy: stempeln, Pausen laufen automatisch',
+      'Krank und Urlaub landen direkt in der Tagesplanung',
       'Soll-Ist-Vergleich und Überstunden auf einen Blick',
       'Jeder Monteur sieht nur seine Touren – der Chef sieht alles',
       'Onboarding-Assistent: Neuer Mitarbeiter ist in 2 Minuten angelegt',
@@ -99,8 +103,8 @@ const KERNBEREICHE = [
       'Automatische Stückliste aus jedem Aufmaß: Was muss auf den Lkw?',
       'Reservierung pro Baustelle – kein Material wird doppelt verplant',
       'Prognose-KI warnt, bevor Bestände knapp werden',
-      'Baustellenbestand (site_stock): Was ist beim Kunden verbaut, was kommt zurück?',
-      'Funktioniert mit bis zu 10.000 / 20.000 / unbegrenzt vielen Teilen – je nach Paket',
+      'Baustellenbestand im Blick: Was ist verbaut, was kommt zurück?',
+      'Platz für 10.000, 20.000 oder unbegrenzt viele Teile – je nach Paket',
     ],
   },
 ];
@@ -172,27 +176,27 @@ const FAQ = [
   {
     frage: 'Was ist SCAFFOLD OS?',
     antwort:
-      'SCAFFOLD OS ist eine Software speziell für Gerüstbau-Betriebe. Sie bildet den kompletten Arbeitsablauf in einem System ab: Aufmaß auf der Baustelle, Angebotserstellung mit KI, Disposition der Monteure, Lagerverwaltung, Tourenplanung mit GPS, Zeiterfassung per Handy und GoBD-konforme Rechnungsstellung. Ohne Installation – die App läuft im Browser auf Handy, Tablet und PC.',
+      'SCAFFOLD OS ist die Software für Gerüstbau-Betriebe. Sie bildet den kompletten Ablauf ab: Aufmaß, Angebot, Disposition, Lager, Touren, Zeiterfassung und Rechnung. Ohne Installation. Die App läuft im Browser – auf Handy, Tablet und PC.',
   },
   {
     frage: 'Wie funktioniert das Aufmaß mit SCAFFOLD OS?',
     antwort:
-      'Der Bauleiter erfasst die Baustelle in 6 geführten Schritten direkt am Handy: Fotos oder Drohnenaufnahmen hochladen, GPS-Position automatisch erfassen, Maße eingeben, Gerüsttyp und Hersteller-System wählen (z. B. Layher, MJ, Plettac – mit echten Systemmaßen), Sicherheitsanforderungen und Extras festlegen. Die KI berechnet daraus Materialliste und Kalkulation und erstellt ein fertiges Angebots-PDF mit DIN-12811-Check, QR-Code und digitaler Unterschrift.',
+      'Der Bauleiter erfasst die Baustelle direkt am Handy. Sechs geführte Schritte: Fotos hochladen, Maße eingeben, Gerüsttyp wählen. Fertig. Die KI rechnet daraus Material und Preis. Am Ende steht ein fertiges Angebots-PDF – mit QR-Code und Unterschrift auf dem Handy.',
   },
   {
     frage: 'Was kostet SCAFFOLD OS?',
     antwort:
-      'Es gibt drei Pakete: Starter für 249 €/Monat (1 Admin, 2 Dispo, bis zu 5 Mitarbeiter, Lager bis 10.000 Teile), Priority für 495 €/Monat (alle Rollen, bis zu 20 Mitarbeiter, Lager bis 20.000 Teile) und Enterprise für 749 €/Monat (alles unbegrenzt). Alle Pakete starten mit 3 kostenlosen Testtagen.',
+      'Drei Pakete: Starter für 249 € im Monat, Priority für 495 €, Enterprise für 749 €. Starter reicht für bis zu 5 Mitarbeiter, Priority für 20. Enterprise hebt alle Limits auf. Jedes Paket startet mit 3 kostenlosen Testtagen.',
   },
   {
     frage: 'Kann ich SCAFFOLD OS kostenlos testen?',
     antwort:
-      'Ja. Jedes Paket beginnt mit einer 3-tägigen Testphase. Du legst Firma, Name und E-Mail fest, hinterlegst eine Zahlungsart (SEPA-Lastschrift oder Kreditkarte über Stripe) und bekommst sofort dein eigenes System unter einer eigenen Adresse (firma.scaffoldos.de). Die erste Abbuchung erfolgt erst nach den 3 Testtagen.',
+      'Ja. Jedes Paket startet mit 3 Testtagen. Du gibst Firma, Name und E-Mail an. Dann hinterlegst du eine Zahlungsart und bekommst sofort dein eigenes System: firma.scaffoldos.de. Die erste Abbuchung kommt erst nach den 3 Tagen.',
   },
   {
     frage: 'Wie viel Zeit spare ich mit SCAFFOLD OS?',
     antwort:
-      'Mindestens 2 Stunden pro Tag. Ein Aufmaß mit Angebot dauert statt 2–3 Stunden nur noch etwa 15 Minuten, weil KI Materialliste, Kalkulation und PDF automatisch erstellen. Hinzu kommen eingesparte Zeiten bei Zettelwirtschaft, Telefonaten zur Tourenabstimmung und handschriftlicher Zeiterfassung.',
+      'Mindestens 2 Stunden pro Tag. Ein Aufmaß mit Angebot dauert etwa 15 Minuten statt 2 bis 3 Stunden. Auch Zettel, Abstimmungs-Anrufe und handschriftliche Zeiterfassung fallen weg.',
   },
   {
     frage: 'Brauche ich IT-Kenntnisse oder eine Installation?',
@@ -202,7 +206,7 @@ const FAQ = [
   {
     frage: 'Wo werden meine Daten gespeichert?',
     antwort:
-      'Jeder Betrieb bekommt eine eigene, komplett getrennte Datenbank in einem Rechenzentrum in Frankfurt am Main. Das System ist DSGVO- und EU-AI-Act-konform. Deine Daten gehören dir und werden nicht mit anderen Betrieben gemischt.',
+      'Jeder Betrieb bekommt eine eigene Datenbank in Frankfurt am Main. Komplett getrennt von anderen. DSGVO-konform, EU-AI-Act-konform. Deine Daten gehören dir.',
   },
   {
     frage: 'Wie kann ich kündigen?',
@@ -261,7 +265,7 @@ const JSONLD = {
 const BLICKE = [
   {
     titel: 'Der Betrieb auf einen Blick',
-    text: 'Das Dashboard zeigt jeden Morgen, was zählt – ohne dass Sie erst Berichte bauen müssen.',
+    text: 'Das Dashboard zeigt dir jeden Morgen, was zählt. Ganz ohne Berichte.',
     punkte: [
       'Finanzen: aktive Projekte, offene Posten, Gesamtumsatz',
       'Betrieb heute: Touren, unterwegs, geplante Einsätze',
@@ -274,7 +278,7 @@ const BLICKE = [
   },
   {
     titel: 'Aufmaß am Handy – in 6 geführten Schritten',
-    text: 'Vom Kunden bis zum Termin: Das Aufmaß führt Schritt für Schritt durch die Baustellenerfassung – direkt vor Ort, ohne Zettel.',
+    text: 'Das Aufmaß führt dich Schritt für Schritt durch die Baustelle. Direkt vor Ort, ohne Zettel.',
     punkte: [
       'Projekt, Maße und Gerüsttyp strukturiert erfassen',
       'Fotos, LiDAR-/3D-Scan und GPS-Position direkt verknüpft',
@@ -287,7 +291,7 @@ const BLICKE = [
   },
   {
     titel: 'KI-Planung rechnet Material & Kalkulation',
-    text: 'Aus den Maßen wird automatisch eine Materialliste mit Gewicht, Stunden und Preis – inklusive Prüfhinweisen.',
+    text: 'Aus deinen Maßen wird eine Materialliste. Mit Gewicht, Stunden und Preis. Prüfhinweise inklusive.',
     punkte: [
       'Materialberechnung mit Gerüstklasse, Gewicht und Stundensatz',
       'DIN-12811-Hinweise und Sicherheitschecks integriert',
@@ -299,7 +303,7 @@ const BLICKE = [
   },
   {
     titel: 'Angebot in Minuten statt Stunden',
-    text: 'Rabatt, Nachtrag oder längere Miete? Alles per Schalter – der Endpreis aktualisiert sich sofort.',
+    text: 'Rabatt, Nachtrag oder längere Miete? Ein Klick genügt. Der Endpreis aktualisiert sich sofort.',
     punkte: [
       'Anpassungen ohne Taschenrechner: Optionen einfach aktivieren',
       'Basispreis und Endpreis transparent nachvollziehbar',
@@ -311,7 +315,7 @@ const BLICKE = [
   },
   {
     titel: 'Lager mit KI-Prognose',
-    text: 'Das Lager warnt, bevor Material fehlt – und sagt, was sich nicht lohnt nachzukaufen.',
+    text: 'Das Lager warnt, bevor Material fehlt. Und sagt dir, welcher Nachkauf sich lohnt.',
     punkte: [
       'Bestände mit Reservierungen und Verfügbarkeit in Echtzeit',
       'KI-Analyse: Gesamtlage, dringendste Maßnahmen, Kapitalbindung',
@@ -323,7 +327,7 @@ const BLICKE = [
   },
   {
     titel: 'Die Mitarbeiter-App für die Baustelle',
-    text: 'Monteure sehen ihre Touren, stempeln die Zeit und melden sich krank – alles am Handy.',
+    text: 'Monteure sehen ihre Touren, stempeln die Zeit, melden sich krank. Alles am Handy.',
     punkte: [
       'Meine Touren mit Baustellen-Infos und Anfahrt',
       'Zeiterfassung per Knopfdruck – ohne Stundenzettel',
@@ -375,9 +379,9 @@ export default function HomePage() {
           Vom Kundenanruf bis zur Rechnung. Ein System.
         </p>
         <p className="mt-6 text-lg md:text-xl text-[#6e6e73] max-w-2xl mx-auto leading-relaxed">
-          SCAFFOLD OS ersetzt Zettel, Excel und Telefonkette durch einen durchgehenden
-          digitalen Prozess: Aufmaß mit KI, Angebot in Minuten, Disposition, Lager,
-          Touren mit GPS, Zeiterfassung am Handy und GoBD-konforme Rechnung.
+          SCAFFOLD OS ersetzt Zettel, Excel und Telefonkette. Ein System für alles:
+          Aufmaß mit KI, Angebot in Minuten, Touren mit GPS, Zeiterfassung und
+          GoBD-Rechnung. Alles läuft im Browser – auf Handy, Tablet und PC.
         </p>
         <div className="mt-10 flex flex-col sm:flex-row items-center justify-center gap-4">
           <Link
@@ -409,7 +413,7 @@ export default function HomePage() {
             Das Aufmaß zum Durchklicken
           </h2>
           <p className="mt-4 text-lg text-[#6e6e73] leading-relaxed max-w-2xl mx-auto">
-            So fühlt sich SCAFFOLD OS an: Klicken Sie sich durch ein echtes
+            So fühlt sich SCAFFOLD OS an: Klick dich durch ein echtes
             Beispiel-Aufmaß – vom Projekt bis zum fertigen Angebot.
           </p>
         </div>
@@ -474,10 +478,10 @@ export default function HomePage() {
             Was ist SCAFFOLD OS?
           </h2>
           <p className="mt-6 text-lg text-[#6e6e73] leading-relaxed text-center max-w-3xl mx-auto">
-            In den meisten Gerüstbau-Betrieben kostet jede Baustelle Stunden an Büroarbeit:
-            Aufmaß per Hand, Angebot in Word, Materialplanung im Kopf, Stundenzettel auf Papier.
-            SCAFFOLD OS verbindet alle Schritte zu einem durchgehenden Prozess –
-            jede Information wird einmal erfasst und steht überall zur Verfügung:
+            Gerüstbau bedeutet Büroarbeit. Aufmaß per Hand. Angebot in Word.
+            Stundenzettel auf Papier. SCAFFOLD OS macht Schluss damit. Du erfasst
+            jede Info nur einmal – und hast sie überall: auf der Baustelle, im Büro,
+            unterwegs.
           </p>
 
           {/* Prozesskette */}
@@ -501,11 +505,10 @@ export default function HomePage() {
               Mindestens 2 Stunden gespart. Jeden Tag.
             </p>
             <p className="mt-4 text-white/70 leading-relaxed max-w-2xl mx-auto">
-              Ein Aufmaß mit fertigem Angebot dauert statt 2–3 Stunden nur noch etwa
-              15 Minuten. Dazu entfallen Zettelwirtschaft, Abstimmungs-Telefonate und
-              doppelte Dateneingabe. Bei 20 Arbeitstagen im Monat sind das über
-              40 Stunden – eine halbe Arbeitswoche, die dein Team auf der Baustelle
-              statt im Büro verbringt.
+              Ein Aufmaß mit fertigem Angebot dauert bei uns etwa 15 Minuten.
+              Früher waren es 2 bis 3 Stunden. Zettel, Telefonate und doppelte
+              Eingaben fallen weg. Das spart über 40 Stunden im Monat. Dein Team
+              arbeitet auf der Baustelle – nicht im Büro.
             </p>
           </div>
         </div>
@@ -548,8 +551,8 @@ export default function HomePage() {
             Drei Pakete. <span className="text-[#86868b]">Ein klarer Preis pro Monat.</span>
           </h2>
           <p className="mt-4 text-center text-[#6e6e73] max-w-2xl mx-auto">
-            Jedes Paket startet mit 3 kostenlosen Testtagen. Zahlung per SEPA-Lastschrift
-            oder Kreditkarte. Mindestvertragslaufzeit 24 Monate, danach monatlich kündbar.
+            Jedes Paket startet mit 3 kostenlosen Testtagen. Du zahlst per
+            SEPA-Lastschrift oder Kreditkarte. Nach 24 Monaten kannst du monatlich kündigen.
           </p>
           <div className="mt-12 grid md:grid-cols-3 gap-6">
             {PAKETE.map((paket) => (
@@ -617,8 +620,8 @@ export default function HomePage() {
               <span className="text-[#86868b]">Direkt im Kalender.</span>
             </h2>
             <p className="mt-4 text-lg text-[#6e6e73] leading-relaxed max-w-2xl mx-auto">
-              Wählen Sie Datum und Uhrzeit – wir zeigen Ihnen SCAFFOLD OS live,
-              beantworten Ihre Fragen und rechnen gemeinsam Ihren Fall durch.
+              Wähl Datum und Uhrzeit. Wir zeigen dir SCAFFOLD OS live, beantworten
+              deine Fragen und rechnen gemeinsam deinen Fall durch.
             </p>
           </div>
           <div className="max-w-2xl mx-auto text-center bg-[#f5f5f7] rounded-3xl border border-black/5 px-8 py-12">
@@ -634,7 +637,7 @@ export default function HomePage() {
               Kostenlosen Termin buchen <ArrowRight className="h-5 w-5" />
             </a>
             <p className="mt-6 text-xs text-[#86868b]">
-              Die Buchung läuft über Microsoft Bookings – Sie bekommen sofort eine Bestätigung per E-Mail.
+              Die Buchung läuft über Microsoft Bookings – du bekommst sofort eine Bestätigung per E-Mail.
             </p>
           </div>
         </section>
@@ -690,7 +693,8 @@ export default function HomePage() {
           </h2>
           <p className="mt-4 text-lg text-[#6e6e73] leading-relaxed">
             Paket wählen, Firma eintragen, loslegen. Dein eigenes System unter
-            firma.scaffoldos.de – 3 Tage kostenlos, erste Abbuchung erst nach der Testphase.
+            firma.scaffoldos.de. 3 Tage kostenlos. Die erste Abbuchung kommt erst
+            nach der Testphase.
           </p>
           <div className="mt-8 flex flex-col sm:flex-row items-center justify-center gap-4">
             <Link
