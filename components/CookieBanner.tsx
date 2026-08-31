@@ -78,7 +78,7 @@ export default function CookieBanner() {
       {!zeigen && (
         <button
           onClick={() => setZeigen(true)}
-          className="fixed bottom-4 left-4 z-40 text-[12px] text-[#86868b] hover:text-[#1d1d1f] underline underline-offset-2 bg-white/80 backdrop-blur px-2 py-1 rounded-lg"
+          className="fixed bottom-4 right-4 z-40 text-[12px] text-[#86868b] hover:text-[#1d1d1f] underline underline-offset-2 bg-white/80 backdrop-blur px-2 py-1 rounded-lg"
         >
           Cookie-Einstellungen
         </button>
