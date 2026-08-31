@@ -7,7 +7,7 @@ import { createClient } from '@/lib/supabase/client';
 import {
   HardHat, LayoutDashboard, Warehouse, CalendarClock, Truck,
   KeyRound, Ruler, Navigation, LogOut, Menu, X, Database, TrendingUp, Timer, Route,
-  FileText, Settings, BookOpen, HelpCircle, Upload, Euro, Users, Handshake,
+  FileText, Settings, BookOpen, HelpCircle, Upload, Euro, Users, Handshake, ClipboardList,
 } from 'lucide-react';
 
 // ============================================================
@@ -47,6 +47,7 @@ const NAV_ITEMS: NavItem[] = [
   { href: '/touren',         label: 'Touren',       icon: Truck,           roles: ['admin', 'disponent'] },
   { href: '/meine-touren',   label: 'Meine Touren', icon: Navigation,      roles: ['admin', 'disponent', 'bauleiter', 'mitarbeiter', 'lager'] },
   { href: '/zeiterfassung',  label: 'Zeiterfassung', icon: Timer,           roles: ['admin', 'disponent', 'bauleiter'] },
+  { href: '/dokumentation',  label: 'Dokumentation', icon: ClipboardList,   roles: ['admin', 'disponent', 'bauleiter', 'mitarbeiter', 'lager'] },
   // ── 4 · Verwaltung ──
   { href: '/mitarbeiter',    label: 'Zugänge',      icon: KeyRound,        roles: ['admin', 'disponent'] },
   { href: '/datenpflege',    label: 'Datenpflege',  icon: Database,        roles: ['admin'] },
