@@ -365,9 +365,9 @@ export function generateCADModel(
   const levels: ScaffoldLevel[] = []
 
   // Bestimme zu bebauende Seiten
-  const activeSides = building.sides && building.sides.length > 0 ? building.sides : ['front']
+  const activeSides: ('front' | 'back' | 'left' | 'right')[] = building.sides && building.sides.length > 0 ? building.sides : ['front']
 
-  activeSides.forEach((side) => {
+  for (const side of activeSides) {
     // Positionierung je Seite
     let zOffset = 0
     let xOffset = 0
@@ -424,7 +424,7 @@ export function generateCADModel(
           positionX: parseFloat(xPos.toFixed(3)),
           positionY: levelData.bottomY,
           positionZ: parseFloat(zPos.toFixed(3)),
-          side,
+          side: side as 'front' | 'back' | 'left' | 'right',
           levelIndex: levelData.index,
           isCorner
         }
@@ -433,14 +433,14 @@ export function generateCADModel(
       })
 
       levels.push({ id: levelId, index: levelData.index, heightM: levelCalc.levelHeightM, bottomY: levelData.bottomY, topY: levelData.topY, fields: levelFields })
-    })
-  })
+    }
+  }
 
   // Verankerungen (alle Seiten)
   const anchors: ScaffoldAnchor[] = []
   if (building.heightM > 6) {
     const anchorLevels = Math.floor(levelCalc.levelsData.length / 2)
-    activeSides.forEach((side) => {
+    for (const side of activeSides) {
       for (let al = 0; al < anchorLevels; al++) {
         const yAnchor = (al * 2 + 2) * levelCalc.levelHeightM
         const div = side === 'front' || side === 'back' ? fieldDiv : fieldDivWidth
@@ -455,10 +455,10 @@ export function generateCADModel(
           else if (side === 'left') { xPos = -distanceToBuildingM - scaffoldWidthM / 2; zPos = pos - (building.widthM || 0) / 2 }
           else if (side === 'right') { xPos = distanceToBuildingM + building.lengthM + scaffoldWidthM / 2; zPos = pos - (building.widthM || 0) / 2 }
 
-          anchors.push({ id: `anchor-${side}-${al}-${f}`, positionX: xPos, positionY: yAnchor, positionZ: zPos, side, type: 'fassadenanker' })
+          anchors.push({ id: `anchor-${side}-${al}-${f}`, positionX: xPos, positionY: yAnchor, positionZ: zPos, side: side as 'front' | 'back' | 'left' | 'right', type: 'fassadenanker' })
         }
       }
-    })
+    }
   }
 
   const preliminaryModel: CADModel = {
