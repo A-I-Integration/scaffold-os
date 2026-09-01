@@ -44,6 +44,7 @@ export default function CADPage() {
     doorCount: 2,
     balconyCount: 1,
     overhangM: 0.5,
+    sides: ["front"],
     setbackM: 0,
   })
   const [systemId, setSystemId] = useState<string>('layher-allround')
