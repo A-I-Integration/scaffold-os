@@ -2,9 +2,10 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import {
-  Users, Plus, X, Save, Download, Mail, Check, RotateCcw, Search, FileText,
+  Users, Plus, X, Save, Download, Mail, Check, RotateCcw, Search, FileText, Briefcase,
 } from 'lucide-react';
 import { generateInvoicePDF, fmtEur, fmtDate, type Invoice } from '@/lib/invoice-pdf';
+import KundeAuftrag from '@/components/KundeAuftrag';
 
 // ============================================================
 // SCAFFOLD OS – Kunden (Reiter für Admin/CEO + Disposition)
@@ -64,6 +65,7 @@ const nameMatch = (a: string, b: string) =>
 export default function KundenPage() {
   const [kunden, setKunden] = useState<Kunde[]>([]);
   const [invoices, setInvoices] = useState<Invoice[]>([]);
+  const [projects, setProjects] = useState<{ id: string; name: string | null; adresse: string | null; data: any }[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [migrationFehlt, setMigrationFehlt] = useState(false);
@@ -78,9 +80,10 @@ export default function KundenPage() {
     setLoading(true);
     setError(null);
     try {
-      const [kRes, rRes] = await Promise.all([
+      const [kRes, rRes, pRes] = await Promise.all([
         fetch('/api/kunden'),
         fetch('/api/invoices'),
+        fetch('/api/projects'),
       ]);
       const kJson = await kRes.json();
       if (!kJson.success) {
@@ -94,6 +97,8 @@ export default function KundenPage() {
       }
       const rJson = await rRes.json();
       if (rJson.success) setInvoices(rJson.invoices || []);
+      const pJson = await pRes.json();
+      if (pJson.success) setProjects(pJson.projects || []);
     } catch (err: any) {
       setError(err.message);
     } finally {
@@ -177,6 +182,13 @@ export default function KundenPage() {
   const rechnungenVon = (k: Kunde) =>
     invoices.filter((i) => nameMatch(i.customer_name, k.name));
 
+  // ─── Aufträge (Projekte) des Kunden (Phase 20) ───
+  // Gleiche Zuordnung wie bei Rechnungen: über den Namen, weil
+  // "projects" keine feste kunde_id-Spalte hat (Kunde/Projektname
+  // wird im Aufmaß Schritt 1 als ein Feld erfasst).
+  const auftraegeVon = (k: Kunde) =>
+    projects.filter((p) => p.name && nameMatch(p.name, k.name));
+
   function handlePDF(inv: Invoice) {
     const doc = generateInvoicePDF(inv);
     doc.save(`Rechnung_${inv.invoice_number}.pdf`);
@@ -197,6 +209,7 @@ export default function KundenPage() {
         body: JSON.stringify({
           type: 'rechnung',
           to,
+          projectId: inv.project_id || undefined,
           projectName: inv.customer_name,
           customerName: inv.customer_name,
           invoiceNumber: inv.invoice_number,
@@ -420,15 +433,52 @@ export default function KundenPage() {
                   </div>
                 </div>
 
-                {/* Rechnungen des Kunden */}
+                {selected && auftraegeVon(selected).length === 0 && rechnungenVon(selected).length === 0 && (
+                  <p className="px-1 text-sm text-[#86868b]">
+                    Keine Aufträge oder Rechnungen für diesen Kunden gefunden. Hinweis: Die Zuordnung läuft über den
+                    Namen ("Kunde/Projektname" im Aufmaß bzw. "Kundenname" auf der Rechnung) – die Schreibweise muss
+                    exakt mit dem Kundennamen hier übereinstimmen.
+                  </p>
+                )}
+
+                {/* Aufträge des Kunden: je Auftrag Angebot, Rechnungen, Zusatzrechnung,
+                    Fotos, Dokumentation und E-Mail-Verlauf (Phase 20) */}
                 {selected && (() => {
-                  const rechnungen = rechnungenVon(selected);
-                  const offen = offenGesamt(selected);
+                  const auftraege = auftraegeVon(selected);
+                  if (auftraege.length === 0) return null;
+                  return (
+                    <div className="space-y-3">
+                      <h2 className="text-lg font-bold text-[#1d1d1f] flex items-center gap-2 px-1">
+                        <Briefcase className="h-5 w-5 text-[#e8590c]" /> Aufträge ({auftraege.length})
+                      </h2>
+                      {auftraege.map((p) => (
+                        <KundeAuftrag
+                          key={p.id}
+                          project={p as any}
+                          kunde={selected}
+                          invoices={invoices}
+                          onInvoiceCreated={load}
+                        />
+                      ))}
+                    </div>
+                  );
+                })()}
+
+                {/* Rechnungen ohne zuordenbaren Auftrag (z.B. abweichende Schreibweise) */}
+                {selected && (() => {
+                  const auftraege = auftraegeVon(selected);
+                  const rechnungen = rechnungenVon(selected).filter(
+                    (i) => !auftraege.some((p) => p.id === i.project_id)
+                  );
+                  const offen = rechnungen
+                    .filter((i) => i.status === 'offen' || i.status === 'ueberfaellig')
+                    .reduce((s, i) => s + Number(i.gross_amount), 0);
+                  if (rechnungen.length === 0) return null;
                   return (
                     <div className="bg-[#f5f5f7] rounded-xl border border-blue-500/20 overflow-hidden">
                       <div className="px-6 py-4 border-b border-black/10 flex items-center justify-between">
                         <h2 className="text-lg font-bold text-[#1d1d1f] flex items-center gap-2">
-                          <FileText className="h-5 w-5 text-[#e8590c]" /> Rechnungen
+                          <FileText className="h-5 w-5 text-[#e8590c]" /> Weitere Rechnungen (keinem Auftrag zugeordnet)
                         </h2>
                         <p className="text-sm text-[#86868b]">
                           {rechnungen.length} Stück{offen > 0 && (

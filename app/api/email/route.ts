@@ -95,6 +95,33 @@ export async function POST(req: Request) {
     });
 
     if (error) throw new Error(error.message);
+
+    // Phase 20: Versand protokollieren – Fehler hier dürfen den
+    // erfolgreichen Versand nicht rückwirkend als fehlgeschlagen melden.
+    try {
+      const supaUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+      const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
+      await fetch(`${supaUrl}/rest/v1/email_log`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          apikey: serviceKey,
+          Authorization: `Bearer ${serviceKey}`,
+          Prefer: 'return=minimal',
+        },
+        body: JSON.stringify({
+          project_id: mailType === 'angebot' ? (projectId || null) : null,
+          invoice_number: invoiceNumber || null,
+          type: mailType,
+          to_email: to,
+          subject,
+          resend_id: data?.id || null,
+        }),
+      });
+    } catch (logErr) {
+      console.error('[Email API] Protokollierung fehlgeschlagen (ignoriert):', logErr);
+    }
+
     return NextResponse.json({ success: true, id: data?.id });
   } catch (err: any) {
     console.error('[Email API] Fehler:', err);

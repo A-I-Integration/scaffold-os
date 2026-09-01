@@ -280,6 +280,7 @@ function RechnungenContent() {
         body: JSON.stringify({
           type: 'rechnung',
           to,
+          projectId: inv.project_id || undefined,
           projectName: inv.customer_name,
           customerName: inv.customer_name,
           invoiceNumber: inv.invoice_number,
@@ -315,6 +316,7 @@ function RechnungenContent() {
           body: JSON.stringify({
             type: 'mahnung',
             to,
+            projectId: inv.project_id || undefined,
             projectName: inv.customer_name,
             customerName: inv.customer_name,
             invoiceNumber: inv.invoice_number,
