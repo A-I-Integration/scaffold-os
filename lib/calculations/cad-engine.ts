@@ -424,7 +424,7 @@ export function generateCADModel(
           positionX: parseFloat(xPos.toFixed(3)),
           positionY: levelData.bottomY,
           positionZ: parseFloat(zPos.toFixed(3)),
-          side,
+          side: side as 'front' | 'back' | 'left' | 'right',
           levelIndex: levelData.index,
           isCorner
         }
@@ -455,7 +455,7 @@ export function generateCADModel(
           else if (side === 'left') { xPos = -distanceToBuildingM - scaffoldWidthM / 2; zPos = pos - (building.widthM || 0) / 2 }
           else if (side === 'right') { xPos = distanceToBuildingM + building.lengthM + scaffoldWidthM / 2; zPos = pos - (building.widthM || 0) / 2 }
 
-          anchors.push({ id: `anchor-${side}-${al}-${f}`, positionX: xPos, positionY: yAnchor, positionZ: zPos, side, type: 'fassadenanker' })
+          anchors.push({ id: `anchor-${side}-${al}-${f}`, positionX: xPos, positionY: yAnchor, positionZ: zPos, side: side as 'front' | 'back' | 'left' | 'right', type: 'fassadenanker' })
         }
       }
     })
