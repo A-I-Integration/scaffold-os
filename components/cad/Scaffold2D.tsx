@@ -1,1 +1,111 @@
-// ============================================================ // components/cad/Scaffold2D.tsx // SCAFFOLD OS – 2D CAD Zeichnungen (SVG-basiert) // ============================================================ // Zeigt Grundriss, Ansichten und Schnitte als SVG. // Automatische Bemaßung enthalten. // ============================================================ 'use client'; import { useState, useMemo } from 'react'; import { CADModel, Projection2D, generateGrundriss, generateAnsicht } from '@/lib/calculations/cad-engine'; type ViewType = 'grundriss' | 'ansicht-vorne' | 'ansicht-seite' | 'schnitt'; interface Props { model: CADModel; } export default function Scaffold2D({ model }: Props) { const [activeView, setActiveView] = useState<ViewType>('grundriss'); const [showDimensions, setShowDimensions] = useState(true); const [showBuilding, setShowBuilding] = useState(true); const [showScaffold, setShowScaffold] = useState(true); const projection = useMemo(() => { switch (activeView) { case 'grundriss': return generateGrundriss(model); case 'ansicht-vorne': return generateAnsicht(model); case 'ansicht-seite': // Seitenansicht: Gebäudebreite x Höhe return generateAnsicht(model); // TODO: Anpassen case 'schnitt': return generateAnsicht(model); // TODO: Anpassen default: return generateGrundriss(model); } }, [activeView, model]); const { viewBox, elements, dimensions } = projection; const scale = 40; // Pixel pro Meter const svgWidth = viewBox.width * scale; const svgHeight = viewBox.height * scale; const viewButtons: { key: ViewType; label: string }[] = [ { key: 'grundriss', label: 'Grundriss' }, { key: 'ansicht-vorne', label: 'Ansicht vorne' }, { key: 'ansicht-seite', label: 'Ansicht Seite' }, { key: 'schnitt', label: 'Schnitt A-A' }, ]; return ( <div className='w-full h-full flex flex-col'> {/* Toolbar */} <div className='flex items-center justify-between px-4 py-2 bg-white border-b border-black/5'> <div className='flex gap-1'> {viewButtons.map((btn) => ( <button key={btn.key} onClick={() => setActiveView(btn.key)} className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors ${ activeView === btn.key ? 'bg-[#e8590c] text-white' : 'bg-black/5 text-[#424245] hover:bg-black/10' }`} > {btn.label} </button> ))} </div> <div className='flex gap-3'> <label className='flex items-center gap-1.5 text-xs text-[#424245] cursor-pointer'> <input type='checkbox' checked={showBuilding} onChange={(e) => setShowBuilding(e.target.checked)} className='w-3.5 h-3.5 accent-[#e8590c]' /> Gebäude </label> <label className='flex items-center gap-1.5 text-xs text-[#424245] cursor-pointer'> <input type='checkbox' checked={showScaffold} onChange={(e) => setShowScaffold(e.target.checked)} className='w-3.5 h-3.5 accent-[#e8590c]' /> Gerüst </label> <label className='flex items-center gap-1.5 text-xs text-[#424245] cursor-pointer'> <input type='checkbox' checked={showDimensions} onChange={(e) => setShowDimensions(e.target.checked)} className='w-3.5 h-3.5 accent-[#e8590c]' /> Bemaßung </label> </div> </div> {/* SVG Canvas */} <div className='flex-1 bg-[#fbfbfd] overflow-auto p-4'> <svg width={svgWidth} height={svgHeight} viewBox={`${viewBox.minX * scale} ${viewBox.minY * scale} ${viewBox.width * scale} ${viewBox.height * scale}`} className='mx-auto border border-black/5 bg-white rounded-lg shadow-sm' style={{ minWidth: svgWidth, minHeight: svgHeight }} > {/* Raster */} <defs> <pattern id='grid' width={scale} height={scale} patternUnits='userSpaceOnUse'> <path d={`M ${scale} 0 L 0 0 0 ${scale}`} fill='none' stroke='#e2e8f0' strokeWidth='0.5' /> </pattern> </defs> <rect x={viewBox.minX * scale} y={viewBox.minY * scale} width={viewBox.width * scale} height={viewBox.height * scale} fill='url(#grid)' /> {/* Elemente */} {elements.map((el) => { if (!showBuilding && el.id.startsWith('building')) return null; if (!showScaffold && el.id.startsWith('field')) return null; switch (el.type) { case 'rect': return ( <rect key={el.id} x={el.x * scale} y={el.y * scale} width={(el.width || 0) * scale} height={(el.height || 0) * scale} fill={el.fill || 'none'} stroke={el.stroke || '#000'} strokeWidth={(el.strokeWidth || 1) * 1.5} rx={2} /> ); case 'line': return ( <line key={el.id} x1={el.x * scale} y1={el.y * scale} x2={(el.x2 || 0) * scale} y2={(el.y2 || 0) * scale} stroke={el.stroke || '#000'} strokeWidth={(el.strokeWidth || 1) * 1.5} /> ); case 'circle': return ( <circle key={el.id} cx={el.x * scale} cy={el.y * scale} r={(el.r || 0) * scale} fill={el.fill || 'none'} stroke={el.stroke || '#000'} strokeWidth={(el.strokeWidth || 1) * 1.5} /> ); case 'path': return ( <path key={el.id} d={el.d || ''} fill={el.fill || 'none'} stroke={el.stroke || '#000'} strokeWidth={(el.strokeWidth || 1) * 1.5} /> ); case 'text': return ( <text key={el.id} x={el.x * scale} y={el.y * scale} fontSize={12} fill={el.fill || '#000'} textAnchor='middle' > {el.text} </text> ); default: return null; } })} {/* Bemaßungen */} {showDimensions && dimensions.map((dim) => ( <g key={dim.id}> {/* Maßlinie */} <line x1={dim.fromX * scale} y1={dim.fromY * scale} x2={dim.toX * scale} y2={dim.toY * scale} stroke='#f59e0b' strokeWidth={2} strokeDasharray='4,2' /> {/* Maßpfeile */} <polygon points={`${dim.fromX * scale},${dim.fromY * scale} ${dim.fromX * scale - 4},${dim.fromY * scale - 3} ${dim.fromX * scale - 4},${dim.fromY * scale + 3}`} fill='#f59e0b' transform={`rotate(${Math.atan2(dim.toY - dim.fromY, dim.toX - dim.fromX) * 180 / Math.PI} ${dim.fromX * scale} ${dim.fromY * scale})`} /> <polygon points={`${dim.toX * scale},${dim.toY * scale} ${dim.toX * scale + 4},${dim.toY * scale - 3} ${dim.toX * scale + 4},${dim.toY * scale + 3}`} fill='#f59e0b' transform={`rotate(${Math.atan2(dim.toY - dim.fromY, dim.toX - dim.fromX) * 180 / Math.PI} ${dim.toX * scale} ${dim.toY * scale})`} /> {/* Maßtext */} <text x={((dim.fromX + dim.toX) / 2 + (dim.offsetX || 0)) * scale} y={((dim.fromY + dim.toY) / 2 + (dim.offsetY || 0)) * scale} fontSize={11} fill='#f59e0b' fontWeight='bold' textAnchor='middle' dominantBaseline='middle' style={{ textShadow: '0 0 3px white' }} > {dim.value} </text> </g> ))} </svg> </div> </div> ); }
+'use client'
+
+import { useState, useMemo } from 'react'
+import { CADModel, generateGrundriss, generateAnsicht } from '@/lib/calculations/cad-engine'
+
+type ViewType = 'grundriss' | 'ansicht-vorne' | 'ansicht-seite' | 'schnitt'
+
+interface Props {
+  model: CADModel
+}
+
+export default function Scaffold2D({ model }: Props) {
+  const [activeView, setActiveView] = useState<ViewType>('grundriss')
+  const [showDimensions, setShowDimensions] = useState(true)
+  const [showBuilding, setShowBuilding] = useState(true)
+  const [showScaffold, setShowScaffold] = useState(true)
+
+  const projection = useMemo(() => {
+    switch (activeView) {
+      case 'grundriss': return generateGrundriss(model)
+      case 'ansicht-vorne': return generateAnsicht(model)
+      case 'ansicht-seite': return generateAnsicht(model)
+      case 'schnitt': return generateAnsicht(model)
+      default: return generateGrundriss(model)
+    }
+  }, [activeView, model])
+
+  const { viewBox, elements, dimensions } = projection
+  const scale = 40
+  const svgWidth = viewBox.width * scale
+  const svgHeight = viewBox.height * scale
+
+  const viewButtons: { key: ViewType; label: string }[] = [
+    { key: 'grundriss', label: 'Grundriss' },
+    { key: 'ansicht-vorne', label: 'Ansicht vorne' },
+    { key: 'ansicht-seite', label: 'Ansicht Seite' },
+    { key: 'schnitt', label: 'Schnitt A-A' },
+  ]
+
+  return (
+    <div className='w-full h-full flex flex-col'>
+      <div className='flex items-center justify-between px-4 py-2 bg-white border-b border-black/5'>
+        <div className='flex gap-1'>
+          {viewButtons.map((btn) => (
+            <button
+              key={btn.key}
+              onClick={() => setActiveView(btn.key)}
+              className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors ${activeView === btn.key ? 'bg-[#e8590c] text-white' : 'bg-black/5 text-[#424245] hover:bg-black/10'}`}
+            >
+              {btn.label}
+            </button>
+          ))}
+        </div>
+        <div className='flex gap-3'>
+          <label className='flex items-center gap-1.5 text-xs text-[#424245] cursor-pointer'>
+            <input type='checkbox' checked={showBuilding} onChange={(e) => setShowBuilding(e.target.checked)} className='w-3.5 h-3.5 accent-[#e8590c]' />
+            Gebäude
+          </label>
+          <label className='flex items-center gap-1.5 text-xs text-[#424245] cursor-pointer'>
+            <input type='checkbox' checked={showScaffold} onChange={(e) => setShowScaffold(e.target.checked)} className='w-3.5 h-3.5 accent-[#e8590c]' />
+            Gerüst
+          </label>
+          <label className='flex items-center gap-1.5 text-xs text-[#424245] cursor-pointer'>
+            <input type='checkbox' checked={showDimensions} onChange={(e) => setShowDimensions(e.target.checked)} className='w-3.5 h-3.5 accent-[#e8590c]' />
+            Bemaßung
+          </label>
+        </div>
+      </div>
+      <div className='flex-1 bg-[#fbfbfd] overflow-auto p-4'>
+        <svg
+          width={svgWidth}
+          height={svgHeight}
+          viewBox={`${viewBox.minX * scale} ${viewBox.minY * scale} ${viewBox.width * scale} ${viewBox.height * scale}`}
+          className='mx-auto border border-black/5 bg-white rounded-lg shadow-sm'
+          style={{ minWidth: svgWidth, minHeight: svgHeight }}
+        >
+          <defs>
+            <pattern id='grid' width={scale} height={scale} patternUnits='userSpaceOnUse'>
+              <path d={`M ${scale} 0 L 0 0 0 ${scale}`} fill='none' stroke='#e2e8f0' strokeWidth='0.5' />
+            </pattern>
+          </defs>
+          <rect x={viewBox.minX * scale} y={viewBox.minY * scale} width={viewBox.width * scale} height={viewBox.height * scale} fill='url(#grid)' />
+          {elements.map((el) => {
+            if (!showBuilding && el.id.startsWith('building')) return null
+            if (!showScaffold && el.id.startsWith('field')) return null
+            switch (el.type) {
+              case 'rect':
+                return <rect key={el.id} x={el.x * scale} y={el.y * scale} width={(el.width || 0) * scale} height={(el.height || 0) * scale} fill={el.fill || 'none'} stroke={el.stroke || '#000'} strokeWidth={(el.strokeWidth || 1) * 1.5} rx={2} />
+              case 'line':
+                return <line key={el.id} x1={el.x * scale} y1={el.y * scale} x2={(el.x2 || 0) * scale} y2={(el.y2 || 0) * scale} stroke={el.stroke || '#000'} strokeWidth={(el.strokeWidth || 1) * 1.5} />
+              case 'circle':
+                return <circle key={el.id} cx={el.x * scale} cy={el.y * scale} r={(el.r || 0) * scale} fill={el.fill || 'none'} stroke={el.stroke || '#000'} strokeWidth={(el.strokeWidth || 1) * 1.5} />
+              case 'path':
+                return <path key={el.id} d={el.d || ''} fill={el.fill || 'none'} stroke={el.stroke || '#000'} strokeWidth={(el.strokeWidth || 1) * 1.5} />
+              case 'text':
+                return <text key={el.id} x={el.x * scale} y={el.y * scale} fontSize={12} fill={el.fill || '#000'} textAnchor='middle'>{el.text}</text>
+              default:
+                return null
+            }
+          })}
+          {showDimensions && dimensions.map((dim) => (
+            <g key={dim.id}>
+              <line x1={dim.fromX * scale} y1={dim.fromY * scale} x2={dim.toX * scale} y2={dim.toY * scale} stroke='#f59e0b' strokeWidth={2} strokeDasharray='4,2' />
+              <text x={((dim.fromX + dim.toX) / 2 + (dim.offsetX || 0)) * scale} y={((dim.fromY + dim.toY) / 2 + (dim.offsetY || 0)) * scale} fontSize={11} fill='#f59e0b' fontWeight='bold' textAnchor='middle' dominantBaseline='middle' style={{ textShadow: '0 0 3px white' }}>{dim.value}</text>
+            </g>
+          ))}
+        </svg>
+      </div>
+    </div>
+  )
+}
