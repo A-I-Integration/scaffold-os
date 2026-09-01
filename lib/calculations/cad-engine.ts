@@ -433,7 +433,7 @@ export function generateCADModel(
       })
 
       levels.push({ id: levelId, index: levelData.index, heightM: levelCalc.levelHeightM, bottomY: levelData.bottomY, topY: levelData.topY, fields: levelFields })
-    }
+    })
   }
 
   // Verankerungen (alle Seiten)
