@@ -34,6 +34,7 @@ const NAV_ITEMS: NavItem[] = [
   { href: '/dashboard',      label: 'Dashboard',    icon: LayoutDashboard, roles: ['admin', 'disponent'] },
   // ── 1 · Verkauf ──
   { href: '/aufmass/schritt1', label: 'Aufmaß',     icon: Ruler,           roles: ['admin', 'bauleiter'] },
+  { href: '/cad',              label: 'CAD',        icon: Ruler,           roles: ['admin', 'bauleiter'] },
   { href: '/rechnungen',     label: 'Rechnungen',   icon: FileText,        roles: ['admin', 'disponent'] },
   { href: '/mietabrechnung', label: 'Mietabrechnung', icon: Euro,          roles: ['admin', 'disponent'] },
   { href: '/kunden',         label: 'Kunden',         icon: Users,         roles: ['admin', 'disponent'] },
