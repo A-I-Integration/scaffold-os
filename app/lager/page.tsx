@@ -42,6 +42,11 @@ export default function LagerPage() {
   // ─── ROLLEN-STATE ───
   const [userRole, setUserRole] = useState<string | null>(null);
   const canManage = userRole === 'admin' || userRole === 'disponent';
+  // Inventur (Soll/Ist-Zählung) für alle Rollen freigegeben, auf Wunsch –
+  // separat von canManage, damit andere Lager-Aktionen (Artikel anlegen/
+  // bearbeiten, Nachbestellung, Reservierung, Transport) weiterhin nur
+  // admin/disponent vorbehalten bleiben.
+  const canCount = !!userRole;
   const isBauleiter = userRole === 'bauleiter';
 
   // ─── NEU: BARCODE, RESERVIERUNG, NACHBESTELLUNG ───
@@ -301,7 +306,7 @@ export default function LagerPage() {
             <button onClick={() => setActiveTab('warehouse')} className={tabClass('warehouse')}>Zentrallager</button>
             <button onClick={() => setActiveTab('sites')} className={tabClass('sites')}>Baustellen</button>
             <button onClick={() => setActiveTab('transports')} className={tabClass('transports')}>Transporte</button>
-            {canManage && <button onClick={() => setActiveTab('inventur')} className={tabClass('inventur')}>📋 Inventur</button>}
+            {canCount && <button onClick={() => setActiveTab('inventur')} className={tabClass('inventur')}>📋 Inventur</button>}
           </nav>
         </div>
       </div>
@@ -509,7 +514,7 @@ export default function LagerPage() {
 
         {/* ═══════════════════════════════════════════════════════════ */}
         {/* INVENTUR */}
-        {activeTab === 'inventur' && canManage && (
+        {activeTab === 'inventur' && canCount && (
           <div className="space-y-6">
             <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
               <h3 className="text-lg font-semibold text-gray-900 mb-4">📋 Inventur-Modus</h3>
