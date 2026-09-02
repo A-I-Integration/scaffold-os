@@ -1,168 +1,23 @@
 'use client'
 
-import { useState, useMemo, useCallback } from 'react'
-import dynamic from 'next/dynamic'
-import { BuildingParams, CADModel, generateCADModel, generateBillOfMaterials, checkCollisions } from '@/lib/calculations/cad-engine'
-import { checkRules, groupRulesBySeverity } from '@/lib/calculations/cad-rules'
-import { generatePDFHTML, downloadPDF } from '@/lib/export/pdf-export'
-import BuildingForm from '@/components/cad/BuildingForm'
-import BillOfMaterials from '@/components/cad/BillOfMaterials'
-import Scaffold2D from '@/components/cad/Scaffold2D'
-
-const Scaffold3D = dynamic(() => import('@/components/cad/Scaffold3D'), { ssr: false })
-
-type ViewMode = '3d' | '2d'
-
-const COMPONENT_LABELS: Record<string, string> = {
-  frame: 'Rahmen', deck: 'Beläge', railing: 'Geländer', diagonal: 'Diagonalen',
-  footplate: 'Fußplatten', coupling: 'Kupplungen', anchor: 'Anker', console: 'Konsolen',
-  stair: 'Treppen', net: 'Netze', board: 'Bordbretter', protection_roof: 'Schutzdächer',
-  safety_net: 'Fangnetze', load_plate: 'Lastplatten',
-}
-
-// Beispiel-Kunden (später aus Supabase laden)
-const DEMO_CUSTOMERS = [
-  { id: '1', name: 'Mustermann GmbH' },
-  { id: '2', name: 'Bauunternehmen Schmidt' },
-  { id: '3', name: 'Gerüstbau Müller' },
-]
-
 export default function CADPage() {
-  const [viewMode, setViewMode] = useState<ViewMode>('3d')
-  const [building, setBuilding] = useState<BuildingParams>({
-    lengthM: 18.4, widthM: 8.0, heightM: 12.0, eavesHeightM: 10.0, roofHeightM: 2.5,
-    roofForm: 'satteldach', floors: 3, floorHeightsM: [3.0, 3.0, 3.0],
-    windowCount: 8, doorCount: 2, balconyCount: 1, overhangM: 0.5,
-    sides: ['front'], setbackM: 0,
-  })
-  const [systemId, setSystemId] = useState<string>('layher-allround')
-  const [model, setModel] = useState<CADModel | null>(null)
-  const [selectedComponent, setSelectedComponent] = useState<string | null>(null)
-  const [showBuilding, setShowBuilding] = useState(true)
-  const [showScaffold, setShowScaffold] = useState(true)
-  const [showDimensions, setShowDimensions] = useState(true)
-  const [viewAngle, setViewAngle] = useState<'perspective' | 'front' | 'back' | 'left' | 'right' | 'top' | 'bottom'>('perspective')
-  const [visibleTypes, setVisibleTypes] = useState<Record<string, boolean>>({
-    frame: true, deck: true, railing: true, diagonal: true, footplate: true,
-    coupling: true, anchor: true, console: true, stair: true, net: true,
-    board: true, protection_roof: true, safety_net: true, load_plate: true,
-  })
-
-  const generate = useCallback(() => {
-    const newModel = generateCADModel(building, systemId)
-    const collisionWarnings = checkCollisions(newModel)
-    newModel.warnings = [...newModel.warnings, ...collisionWarnings]
-    setModel(newModel)
-    setSelectedComponent(null)
-  }, [building, systemId])
-
-  useMemo(() => { if (!model) generate() }, [generate, model])
-
-  const ruleResults = useMemo(() => {
-    if (!model) return { errors: [], warnings: [], infos: [] }
-    const results = checkRules({
-      building, system: model.system, fieldCount: model.fieldCount,
-      levelCount: model.levelCount, totalHeightM: model.totalHeightM, totalLengthM: model.totalLengthM,
-    })
-    return groupRulesBySeverity(results)
-  }, [model, building])
-
-  const allWarnings = useMemo(() => {
-    const rules = [...ruleResults.errors, ...ruleResults.warnings, ...ruleResults.infos]
-    return [
-      ...rules.map((r) => ({ type: r.rule.severity, message: r.rule.message })),
-      ...(model?.warnings || []).map((w) => ({ type: w.type, message: w.message })),
-    ]
-  }, [ruleResults, model])
-
-  const materials = useMemo(() => (model ? generateBillOfMaterials(model) : []), [model])
-  const totalWeight = useMemo(() => materials.reduce((s, i) => s + i.weightKg * i.quantity, 0), [materials])
-  const totalPrice = useMemo(() => materials.reduce((s, i) => s + i.totalPrice, 0), [materials])
-
-  const toggleType = (type: string) => {
-    setVisibleTypes((prev) => ({ ...prev, [type]: !prev[type] }))
-  }
-
-  const handleExportPDF = useCallback(() => {
-    if (!model) return
-    const html = generatePDFHTML(model, materials, {
-      include3D: true, include2D: true, includeBOM: true, includeChecks: true,
-      companyName: 'Ihr Unternehmen', projectName: 'Gerüstprojekt',
-      date: new Date().toLocaleDateString('de-DE'),
-    })
-    downloadPDF(html, `Gerüstbau-Dokumentation-${new Date().toISOString().split('T')[0]}.html`)
-  }, [model, materials])
-
-  const handleAssignCustomer = useCallback((customerId: string) => {
-    const customer = DEMO_CUSTOMERS.find(c => c.id === customerId)
-    console.log('✅ Projekt zugeordnet zu:', customer?.name)
-    // TODO: Supabase-Update: projekt.kunde_id = customerId
-    alert(`Projekt erfolgreich zugeordnet zu: ${customer?.name}`)
-  }, [])
-
   return (
-    <div className='h-screen flex flex-col bg-[#fbfbfd]'>
-      <div className='bg-white border-b border-black/5 px-4 py-3 flex items-center justify-between'>
-        <div>
-          <h1 className='text-lg font-semibold text-[#1d1d1f]'>Gerüstbau-CAD</h1>
-          <p className='text-xs text-[#86868b]'>
-            {model?.system ? `${model.system.hersteller} ${model.system.systemName}` : 'Kein System'} · {model?.fieldCount} Felder · {model?.levelCount} Lagen · {model?.totalAreaM2.toFixed(1)} m² · {model?.components3D.length || 0} Bauteile
-          </p>
-        </div>
-        <div className='flex items-center gap-2'>
-          <div className='flex bg-black/5 rounded-lg p-0.5'>
-            <button onClick={() => setViewMode('3d')} className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${viewMode === '3d' ? 'bg-white text-[#1d1d1f] shadow-sm' : 'text-[#86868b]'}`}>3D</button>
-            <button onClick={() => setViewMode('2d')} className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${viewMode === '2d' ? 'bg-white text-[#1d1d1f] shadow-sm' : 'text-[#86868b]'}`}>2D</button>
-          </div>
-        </div>
-      </div>
-      <div className='flex-1 flex overflow-hidden'>
-        <div className='w-72 shrink-0'>
-          <BuildingForm building={building} systemId={systemId} onChange={setBuilding} onSystemChange={setSystemId} onGenerate={generate} warnings={allWarnings} />
-        </div>
-        <div className='flex-1 flex flex-col min-w-0'>
-          <div className='flex items-center justify-between px-4 py-2 bg-white/50 border-b border-black/5'>
-            <div className='flex items-center gap-2'>
-              <label className='flex items-center gap-1 text-xs text-[#424245]'><input type='checkbox' checked={showBuilding} onChange={(e) => setShowBuilding(e.target.checked)} className='accent-[#e8590c]' />Gebäude</label>
-              <label className='flex items-center gap-1 text-xs text-[#424245]'><input type='checkbox' checked={showScaffold} onChange={(e) => setShowScaffold(e.target.checked)} className='accent-[#e8590c]' />Gerüst</label>
-              <label className='flex items-center gap-1 text-xs text-[#424245]'><input type='checkbox' checked={showDimensions} onChange={(e) => setShowDimensions(e.target.checked)} className='accent-[#e8590c]' />Bemaßung</label>
-            </div>
-            {viewMode === '3d' && (
-              <select value={viewAngle} onChange={(e) => setViewAngle(e.target.value as any)} className='text-xs border rounded-lg px-2 py-1'>
-                <option value='perspective'>3D Perspektive</option>
-                <option value='front'>Vorderansicht</option>
-                <option value='back'>Rückansicht</option>
-                <option value='left'>Seite links</option>
-                <option value='right'>Seite rechts</option>
-                <option value='top'>Draufsicht</option>
-                <option value='bottom'>Unteransicht</option>
-              </select>
-            )}
-          </div>
-          <div className='flex-1 p-4'>
-            {viewMode === '3d' && model && (
-              <Scaffold3D model={model} showBuilding={showBuilding} showScaffold={showScaffold} showDimensions={showDimensions} selectedComponent={selectedComponent} onSelectComponent={setSelectedComponent} visibleTypes={visibleTypes} viewMode={viewAngle} />
-            )}
-            {viewMode === '2d' && model && <Scaffold2D model={model} />}
-          </div>
-          <div className='px-4 py-2 bg-white/50 border-t border-black/5 flex gap-2 flex-wrap max-h-24 overflow-y-auto'>
-            {Object.entries(visibleTypes).map(([type, visible]) => (
-              <button key={type} onClick={() => toggleType(type)} className={`px-2 py-1 text-[10px] font-medium rounded-full border transition-colors ${visible ? 'bg-blue-50 border-blue-200 text-blue-700' : 'bg-gray-50 border-gray-200 text-gray-400 line-through'}`}>
-                {COMPONENT_LABELS[type] || type}
-              </button>
-            ))}
-          </div>
-        </div>
-        <div className='w-72 shrink-0'>
-          <BillOfMaterials
-            materials={materials}
-            totalWeightKg={totalWeight}
-            totalPrice={totalPrice}
-            onExportPDF={handleExportPDF}
-            customers={DEMO_CUSTOMERS}
-            onAssignCustomer={handleAssignCustomer}
-          />
-        </div>
+    <div className="h-screen flex flex-col items-center justify-center bg-[#fbfbfd] text-center px-4">
+      <div className="bg-white rounded-2xl shadow-sm border border-black/5 p-8 max-w-md">
+        <div className="text-4xl mb-4">🚧</div>
+        <h1 className="text-xl font-semibold text-[#1d1d1f] mb-2">
+          CAD-Funktion wird überarbeitet
+        </h1>
+        <p className="text-sm text-[#86868b] mb-6">
+          Die 3D-Gerüstplanung ist temporär nicht verfügbar. 
+          Wir arbeiten an einer Performance-Optimierung.
+        </p>
+        <a 
+          href="/" 
+          className="inline-block px-4 py-2 bg-[#e8590c] text-white text-sm font-medium rounded-xl hover:bg-[#d14d0b] transition-colors"
+        >
+          Zurück zur Übersicht
+        </a>
       </div>
     </div>
   )
