@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { uploadEventPhotoClient, EventPhoto } from '@/lib/project-events-client';
+import { generatePruefprotokollPDF, type PruefungDetails } from '@/lib/pruefprotokoll-pdf';
 
 // ============================================================
 // SCAFFOLD OS – Projekt-Dokumentation (Phase 18)
@@ -28,6 +29,7 @@ interface ProjectEvent {
   status: 'offen' | 'erledigt';
   employee: EventEmployee | null;
   created_at: string;
+  pruefung_details?: PruefungDetails | null;
 }
 
 const TYPE_LABELS: Record<string, string> = {
@@ -59,6 +61,12 @@ export default function ProjektDokumentation({ projectId, employeeId }: Props) {
   const [uploading, setUploading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+
+  // Prüfprotokoll-Angaben (Phase 24) – nur relevant bei type = pruefung_freigabe
+  const [pruefung, setPruefung] = useState<PruefungDetails>({
+    geruestklasse: '', maengel_festgestellt: false, maengel_text: '', maengel_behoben: false,
+    kennzeichnung_angebracht: false, freigegeben: false, freigegeben_durch: '', nutzungsende_geplant: '',
+  });
 
   // Material-Rückgabe (Phase 23) – schließt die Lücke zwischen
   // Demontage/Rücktransport-Dokumentation und dem Lagerbestand.
@@ -105,8 +113,13 @@ export default function ProjektDokumentation({ projectId, employeeId }: Props) {
 
   async function submit() {
     setMsg(null);
-    if (!text.trim() && pendingPhotos.length === 0) {
+    const istPruefung = type === 'pruefung_freigabe';
+    if (!text.trim() && pendingPhotos.length === 0 && !istPruefung) {
       setMsg({ ok: false, text: 'Bitte Text eingeben oder mindestens ein Foto hinzufügen.' });
+      return;
+    }
+    if (istPruefung && !pruefung.freigegeben_durch?.trim()) {
+      setMsg({ ok: false, text: 'Bitte "Freigegeben durch (Name)" ausfüllen.' });
       return;
     }
     setSaving(true);
@@ -120,12 +133,14 @@ export default function ProjektDokumentation({ projectId, employeeId }: Props) {
           text_note: text.trim() || null,
           photos: pendingPhotos,
           employee_id: employeeId || null,
+          pruefung_details: istPruefung ? pruefung : undefined,
         }),
       });
       const json = await res.json();
       if (!json.success) throw new Error(json.error);
       setText('');
       setPendingPhotos([]);
+      setPruefung({ geruestklasse: '', maengel_festgestellt: false, maengel_text: '', maengel_behoben: false, kennzeichnung_angebracht: false, freigegeben: false, freigegeben_durch: '', nutzungsende_geplant: '' });
       setMsg({ ok: true, text: '✅ Eintrag gespeichert.' });
       load();
     } catch (e: any) {
@@ -190,6 +205,21 @@ export default function ProjektDokumentation({ projectId, employeeId }: Props) {
     setMaterialSaving(false);
   }
 
+  async function downloadPruefprotokoll(ev: ProjectEvent) {
+    try {
+      const [pRes, cRes] = await Promise.all([
+        fetch(`/api/projects?id=${projectId}`).then(r => r.json()),
+        fetch('/api/company').then(r => r.json()),
+      ]);
+      const projekt = pRes.success ? pRes.project : {};
+      const company = cRes.success ? cRes.company : null;
+      const doc = generatePruefprotokollPDF(ev.pruefung_details || {}, projekt, company, ev.created_at, ev.text_note);
+      doc.save(`Pruefprotokoll_${(projekt?.name || 'Projekt').replace(/\s+/g, '_')}_${new Date(ev.created_at).toISOString().slice(0, 10)}.pdf`);
+    } catch (e: any) {
+      alert('❌ PDF konnte nicht erzeugt werden: ' + e.message);
+    }
+  }
+
   const inputCls = 'w-full rounded-lg bg-[#f5f5f7] border border-black/10 px-3 py-2 text-[#1d1d1f] placeholder-[#86868b] focus:border-[#e8590c] focus:outline-none';
 
   if (!projectId) return <div className="text-[#86868b] text-sm">Bitte zuerst ein Projekt wählen.</div>;
@@ -219,6 +249,46 @@ export default function ProjektDokumentation({ projectId, employeeId }: Props) {
             placeholder="Was ist passiert? Was wurde geprüft, geändert, festgestellt..."
           />
         </div>
+
+        {/* ─── Prüfprotokoll-Angaben (Phase 24): nur bei Prüfung/Freigabe ─── */}
+        {type === 'pruefung_freigabe' && (
+          <div className="bg-[#f5f5f7] rounded-xl p-4 space-y-3 border border-black/5">
+            <p className="text-xs font-semibold text-[#1d1d1f]">📋 Angaben für das Prüfprotokoll</p>
+            <input value={pruefung.geruestklasse} onChange={e => setPruefung({ ...pruefung, geruestklasse: e.target.value })} placeholder="Gerüstklasse (z.B. Lastklasse 3, Breitenklasse W06)" className={inputCls} />
+
+            <label className="flex items-center gap-2 text-sm">
+              <input type="checkbox" checked={!!pruefung.maengel_festgestellt} onChange={e => setPruefung({ ...pruefung, maengel_festgestellt: e.target.checked })} />
+              Mängel festgestellt
+            </label>
+            {pruefung.maengel_festgestellt && (
+              <>
+                <input value={pruefung.maengel_text} onChange={e => setPruefung({ ...pruefung, maengel_text: e.target.value })} placeholder="Welche Mängel?" className={inputCls} />
+                <label className="flex items-center gap-2 text-sm">
+                  <input type="checkbox" checked={!!pruefung.maengel_behoben} onChange={e => setPruefung({ ...pruefung, maengel_behoben: e.target.checked })} />
+                  Mängel behoben
+                </label>
+              </>
+            )}
+
+            <label className="flex items-center gap-2 text-sm">
+              <input type="checkbox" checked={!!pruefung.kennzeichnung_angebracht} onChange={e => setPruefung({ ...pruefung, kennzeichnung_angebracht: e.target.checked })} />
+              Kennzeichnungsschild angebracht
+            </label>
+
+            <div>
+              <label className="block text-xs text-[#86868b] mb-1">Geplantes Nutzungsende (optional)</label>
+              <input type="date" value={pruefung.nutzungsende_geplant} onChange={e => setPruefung({ ...pruefung, nutzungsende_geplant: e.target.value })} className={inputCls} />
+            </div>
+
+            <div className="border-t border-black/10 pt-3">
+              <label className="flex items-center gap-2 text-sm font-semibold">
+                <input type="checkbox" checked={!!pruefung.freigegeben} onChange={e => setPruefung({ ...pruefung, freigegeben: e.target.checked })} />
+                Gerüst freigegeben
+              </label>
+              <input value={pruefung.freigegeben_durch} onChange={e => setPruefung({ ...pruefung, freigegeben_durch: e.target.value })} placeholder="Freigegeben durch (Name) *" className={`${inputCls} mt-2`} />
+            </div>
+          </div>
+        )}
 
         <div>
           <label className="block text-sm text-[#86868b] mb-1">Fotos</label>
@@ -297,6 +367,20 @@ export default function ProjektDokumentation({ projectId, employeeId }: Props) {
                   </span>
                 </div>
                 {ev.text_note && <p className="text-sm text-[#424245] mt-2 whitespace-pre-line">{ev.text_note}</p>}
+
+                {ev.type === 'pruefung_freigabe' && ev.pruefung_details && (
+                  <div className="mt-2 flex items-center gap-2 flex-wrap">
+                    <span className={`text-xs px-2 py-0.5 rounded-full ${ev.pruefung_details.freigegeben ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'}`}>
+                      {ev.pruefung_details.freigegeben ? '✓ Freigegeben' : '✗ Nicht freigegeben'}
+                    </span>
+                    {ev.pruefung_details.maengel_festgestellt && (
+                      <span className="text-xs px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">Mängel{ev.pruefung_details.maengel_behoben ? ' (behoben)' : ''}</span>
+                    )}
+                    <button onClick={() => downloadPruefprotokoll(ev)} className="text-xs rounded-lg bg-[#e8590c] hover:bg-[#d9480f] text-white px-3 py-1 font-medium">
+                      📄 Prüfprotokoll-PDF
+                    </button>
+                  </div>
+                )}
                 {ev.photos?.length > 0 && (
                   <div className="mt-2 grid grid-cols-3 sm:grid-cols-4 gap-2">
                     {ev.photos.map(p => (

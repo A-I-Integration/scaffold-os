@@ -60,7 +60,7 @@ export async function GET(req: NextRequest) {
 }
 
 // POST /api/project-events – neues Ereignis anlegen
-// Body: { project_id, type, text_note?, photos?, employee_id?, tour_stop_id? }
+// Body: { project_id, type, text_note?, photos?, employee_id?, tour_stop_id?, pruefung_details? }
 export async function POST(req: NextRequest) {
   const userId = await currentUserId();
   if (!userId) {
@@ -69,7 +69,7 @@ export async function POST(req: NextRequest) {
 
   try {
     const body = await req.json();
-    const { project_id, type, text_note, photos, employee_id, tour_stop_id } = body;
+    const { project_id, type, text_note, photos, employee_id, tour_stop_id, pruefung_details } = body;
 
     if (!project_id) {
       return NextResponse.json({ success: false, error: 'project_id erforderlich' }, { status: 400 });
@@ -77,8 +77,8 @@ export async function POST(req: NextRequest) {
     if (!type || !TYPES.includes(type)) {
       return NextResponse.json({ success: false, error: `type muss einer von ${TYPES.join(', ')} sein.` }, { status: 400 });
     }
-    if (!text_note?.trim() && !(Array.isArray(photos) && photos.length)) {
-      return NextResponse.json({ success: false, error: 'Text oder mindestens ein Foto erforderlich.' }, { status: 400 });
+    if (!text_note?.trim() && !(Array.isArray(photos) && photos.length) && !pruefung_details) {
+      return NextResponse.json({ success: false, error: 'Text, mindestens ein Foto oder Prüfangaben erforderlich.' }, { status: 400 });
     }
 
     const res = await fetch(`${url}/rest/v1/project_events`, {
@@ -91,6 +91,9 @@ export async function POST(req: NextRequest) {
         photos: Array.isArray(photos) ? photos : [],
         employee_id: employee_id || null,
         tour_stop_id: tour_stop_id || null,
+        // Phase 24: strukturierte Prüfprotokoll-Angaben, nur bei
+        // type = pruefung_freigabe sinnvoll befüllt, sonst null.
+        pruefung_details: type === 'pruefung_freigabe' && pruefung_details ? pruefung_details : null,
         created_by: userId,
         status: 'offen',
       }),
@@ -104,7 +107,7 @@ export async function POST(req: NextRequest) {
 }
 
 // PATCH /api/project-events – bearbeiten oder als erledigt markieren
-// Body: { id, status?, text_note?, photos? }
+// Body: { id, status?, text_note?, photos?, pruefung_details? }
 export async function PATCH(req: NextRequest) {
   const userId = await currentUserId();
   if (!userId) {
@@ -113,7 +116,7 @@ export async function PATCH(req: NextRequest) {
 
   try {
     const body = await req.json();
-    const { id, status, text_note, photos } = body;
+    const { id, status, text_note, photos, pruefung_details } = body;
 
     if (!id) {
       return NextResponse.json({ success: false, error: 'id erforderlich' }, { status: 400 });
@@ -126,6 +129,7 @@ export async function PATCH(req: NextRequest) {
     if (status) patch.status = status;
     if (text_note !== undefined) patch.text_note = text_note?.trim() || null;
     if (photos !== undefined) patch.photos = Array.isArray(photos) ? photos : [];
+    if (pruefung_details !== undefined) patch.pruefung_details = pruefung_details;
 
     if (Object.keys(patch).length === 1) {
       return NextResponse.json({ success: false, error: 'Nichts zu ändern.' }, { status: 400 });
