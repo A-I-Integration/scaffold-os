@@ -25,25 +25,38 @@ const headers = {
 
 const WRITE_ROLES = ['admin', 'disponent'];
 
-async function callerRole(): Promise<string | null> {
+async function callerRole(): Promise<{ role: string | null; userId: string | null }> {
   try {
     const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return null;
+    if (!user) return { role: null, userId: null };
     const { data: profile } = await supabase
       .from('profiles')
       .select('role')
       .eq('id', user.id)
       .single();
-    return profile?.role || null;
+    return { role: profile?.role || null, userId: user.id };
   } catch {
-    return null;
+    return { role: null, userId: null };
   }
+}
+
+// Phase 27: Pflicht-Verknüpfung Prüfung/Freigabe → Rechnung.
+// Prüft, ob für dieses Projekt ein Dokumentationseintrag
+// "Prüfung/Freigabe" mit freigegeben = true existiert.
+async function hatFreigabe(projectId: string): Promise<boolean> {
+  const res = await fetch(
+    `${url}/rest/v1/project_events?project_id=eq.${projectId}&type=eq.pruefung_freigabe&select=pruefung_details`,
+    { headers }
+  );
+  if (!res.ok) return false;
+  const rows = await res.json();
+  return rows.some((r: any) => r.pruefung_details?.freigegeben === true);
 }
 
 // ─── GET: alle Rechnungen laden ───
 export async function GET() {
-  const role = await callerRole();
+  const { role } = await callerRole();
   if (!role) {
     return NextResponse.json({ success: false, error: 'Nicht angemeldet.' }, { status: 401 });
   }
@@ -62,7 +75,7 @@ export async function GET() {
 
 // ─── POST: Rechnung anlegen ───
 export async function POST(req: NextRequest) {
-  const role = await callerRole();
+  const { role, userId } = await callerRole();
   if (!role || !WRITE_ROLES.includes(role)) {
     return NextResponse.json(
       { success: false, error: 'Nur Admin und Disposition dürfen Rechnungen anlegen.' },
@@ -71,13 +84,39 @@ export async function POST(req: NextRequest) {
   }
   try {
     const body = await req.json();
-    const { project_id, customer_name, customer_address, positions, tax_rate, invoice_date, due_date, notes, invoice_type, reference_invoice_number } = body;
+    const { project_id, customer_name, customer_address, positions, tax_rate, invoice_date, due_date, notes, invoice_type, reference_invoice_number, override_grund } = body;
 
     if (!customer_name) {
       return NextResponse.json({ success: false, error: 'Kundenname erforderlich.' }, { status: 400 });
     }
     if (!Array.isArray(positions) || positions.length === 0) {
       return NextResponse.json({ success: false, error: 'Mindestens eine Position erforderlich.' }, { status: 400 });
+    }
+
+    // Phase 27: Pflicht-Verknüpfung Prüfung/Freigabe → Rechnung. Gilt für JEDE
+    // Rechnung zu einem Projekt (auch Zusatzrechnung, Mahnung-Auslöser, Gutschrift),
+    // ausnahmslos – außer Admin ODER Disponent überschreibt es bewusst mit Begründung.
+    const OVERRIDE_ROLES = ['admin', 'disponent'];
+    let overrideVerwendet = false;
+    if (project_id) {
+      const freigegeben = await hatFreigabe(project_id);
+      if (!freigegeben) {
+        if (role && OVERRIDE_ROLES.includes(role) && override_grund && String(override_grund).trim()) {
+          overrideVerwendet = true;
+        } else if (role && OVERRIDE_ROLES.includes(role)) {
+          return NextResponse.json({
+            success: false,
+            error: 'Für dieses Projekt liegt keine freigegebene Prüfung/Freigabe vor. Du kannst das mit Begründung überschreiben (override_grund).',
+            code: 'FREIGABE_FEHLT_OVERRIDE_MOEGLICH',
+          }, { status: 409 });
+        } else {
+          return NextResponse.json({
+            success: false,
+            error: 'Für dieses Projekt liegt keine freigegebene Prüfung/Freigabe vor. Bitte zuerst im Dokumentation-Modul dokumentieren, oder Admin/Disposition um eine begründete Überschreibung bitten.',
+            code: 'FREIGABE_FEHLT',
+          }, { status: 409 });
+        }
+      }
     }
 
     const istGutschrift = invoice_type === 'gutschrift';
@@ -152,13 +191,25 @@ export async function POST(req: NextRequest) {
 
     const rows = await res.json();
 
+    // Phase 27: Admin-Überschreibung protokollieren
+    if (overrideVerwendet && rows[0]?.id) {
+      try {
+        await fetch(`${url}/rest/v1/invoice_freigabe_override`, {
+          method: 'POST', headers,
+          body: JSON.stringify({
+            invoice_id: rows[0].id, project_id, admin_id: userId, grund: String(override_grund).trim(),
+          }),
+        });
+      } catch { /* Protokoll-Fehler darf die erfolgreiche Rechnung nicht rückgängig machen */ }
+    }
+
     // Phase 17: Impact-Tracking (blockiert nie, Fehler nur geloggt)
     await trackImpact('rechnung', gross, 'eur', {
       invoice_number: invoiceNumber,
       invoice_type: rows[0]?.invoice_type || 'standard',
     });
 
-    return NextResponse.json({ success: true, invoice: rows[0] });
+    return NextResponse.json({ success: true, invoice: rows[0], override_verwendet: overrideVerwendet });
   } catch (err: any) {
     return NextResponse.json({ success: false, error: err.message }, { status: 500 });
   }
@@ -166,7 +217,7 @@ export async function POST(req: NextRequest) {
 
 // ─── PATCH: Status ändern ───
 export async function PATCH(req: NextRequest) {
-  const role = await callerRole();
+  const { role } = await callerRole();
   if (!role || !WRITE_ROLES.includes(role)) {
     return NextResponse.json(
       { success: false, error: 'Nur Admin und Disposition dürfen Rechnungen ändern.' },
@@ -226,7 +277,7 @@ export async function PATCH(req: NextRequest) {
 
 // ─── DELETE: Rechnung löschen (nur solange „offen") ───
 export async function DELETE(req: NextRequest) {
-  const role = await callerRole();
+  const { role } = await callerRole();
   if (!role || !WRITE_ROLES.includes(role)) {
     return NextResponse.json(
       { success: false, error: 'Nur Admin und Disposition dürfen Rechnungen löschen.' },
