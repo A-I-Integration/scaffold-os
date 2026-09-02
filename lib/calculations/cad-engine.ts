@@ -618,3 +618,290 @@ export function generateAnsicht(model: CADModel): Projection2D {
 
   return { type: 'ansicht', viewBox: { minX: -margin, minY: -margin, width, height }, elements, dimensions }
 }
+
+// ============================================================
+// PHASE 2 ERWEITERUNGEN
+// ============================================================
+
+// --- MANUELLE PLATZIERUNG ---
+export interface ManualPlacement {
+  id: string
+  type: 'anchor' | 'console' | 'stair' | 'net' | 'board' | 'protection_roof' | 'load_plate'
+  positionX: number
+  positionY: number
+  positionZ: number
+  side: 'front' | 'back' | 'left' | 'right'
+  levelIndex: number
+  fieldId?: string
+  notes?: string
+}
+
+export function addManualPlacement(
+  model: CADModel,
+  placement: Omit<ManualPlacement, 'id'>
+): CADModel {
+  const newPlacement: ManualPlacement = {
+    ...placement,
+    id: `manual-${placement.type}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+  }
+
+  // Füge entsprechendes 3D-Bauteil hinzu
+  const component = placementToComponent(newPlacement, model)
+  if (component) {
+    model.components3D.push(component)
+  }
+
+  if (placement.type === 'anchor') {
+    model.anchors.push({
+      id: newPlacement.id,
+      positionX: placement.positionX,
+      positionY: placement.positionY,
+      positionZ: placement.positionZ,
+      side: placement.side,
+      type: 'fassadenanker',
+    })
+  }
+
+  return model
+}
+
+export function removeManualPlacement(model: CADModel, id: string): CADModel {
+  model.components3D = model.components3D.filter(c => c.id !== id && !c.id.startsWith(`manual-${id}`))
+  model.anchors = model.anchors.filter(a => a.id !== id)
+  return model
+}
+
+function placementToComponent(placement: ManualPlacement, model: CADModel): ScaffoldComponent3D | null {
+  const { type, positionX, positionY, positionZ, side } = placement
+
+  switch (type) {
+    case 'anchor':
+      return {
+        id: placement.id,
+        type: 'anchor',
+        articleNumber: 'AN-001',
+        name: 'Fassadenanker (manuell)',
+        position: [positionX, positionY, positionZ],
+        rotation: [0, 0, 0],
+        scale: [0.08, 0.08, 0.3],
+        color: '#10b981',
+      }
+    case 'console':
+      return {
+        id: placement.id,
+        type: 'console',
+        articleNumber: 'KO-001',
+        name: 'Konsole 0,73m (manuell)',
+        position: [positionX, positionY, positionZ],
+        rotation: [0, 0, 0],
+        scale: [0.73, 0.04, 0.3],
+        color: '#f43f5e',
+      }
+    case 'stair':
+      return {
+        id: placement.id,
+        type: 'stair',
+        articleNumber: 'SP-001',
+        name: 'Spindeltreppe (manuell)',
+        position: [positionX, positionY, positionZ],
+        rotation: [0, 0, 0],
+        scale: [0.8, 2.0, 0.8],
+        color: '#84cc16',
+      }
+    case 'net':
+      return {
+        id: placement.id,
+        type: 'net',
+        articleNumber: 'FN-001',
+        name: 'Fangnetz (manuell)',
+        position: [positionX, positionY, positionZ],
+        rotation: [0, 0, 0],
+        scale: [2.07, 1.5, 0.01],
+        color: '#06b6d4',
+      }
+    case 'board':
+      return {
+        id: placement.id,
+        type: 'board',
+        articleNumber: 'BB-001',
+        name: 'Bordbrett (manuell)',
+        position: [positionX, positionY, positionZ],
+        rotation: [0, 0, 0],
+        scale: [2.07, 0.19, 0.02],
+        color: '#d97706',
+      }
+    case 'protection_roof':
+      return {
+        id: placement.id,
+        type: 'protection_roof',
+        articleNumber: 'SD-001',
+        name: 'Schutzdach (manuell)',
+        position: [positionX, positionY, positionZ],
+        rotation: [0.3, 0, 0],
+        scale: [6, 0.1, 2],
+        color: '#f97316',
+      }
+    case 'load_plate':
+      return {
+        id: placement.id,
+        type: 'load_plate',
+        articleNumber: 'LV-001',
+        name: 'Lastverteilplatte (manuell)',
+        position: [positionX, positionY, positionZ],
+        rotation: [0, 0, 0],
+        scale: [0.3, 0.04, 0.3],
+        color: '#78716c',
+      }
+    default:
+      return null
+  }
+}
+
+// --- KOLLISIONSERKENNUNG (ERWEITERT) ---
+export interface CollisionResult {
+  hasCollision: boolean
+  collisions: {
+    componentA: string
+    componentB: string
+    type: 'component-component' | 'component-building' | 'component-ground'
+    distance: number
+  }[]
+}
+
+export function detectCollisions(model: CADModel): CollisionResult {
+  const collisions: CollisionResult['collisions'] = []
+  const comps = model.components3D
+
+  // Bauteil-Bauteil Kollisionen
+  for (let i = 0; i < comps.length; i++) {
+    for (let j = i + 1; j < comps.length; j++) {
+      const a = comps[i]
+      const b = comps[j]
+      const dist = Math.sqrt(
+        Math.pow(a.position[0] - b.position[0], 2) +
+        Math.pow(a.position[1] - b.position[1], 2) +
+        Math.pow(a.position[2] - b.position[2], 2)
+      )
+      const minDist = 0.1 // 10cm Mindestabstand
+      if (dist < minDist && a.id !== b.id) {
+        collisions.push({
+          componentA: a.id,
+          componentB: b.id,
+          type: 'component-component',
+          distance: dist,
+        })
+      }
+    }
+  }
+
+  // Bauteil-Gebäude Kollisionen
+  const building = model.building
+  comps.forEach((comp) => {
+    // Prüfe ob Bauteil INSIDE Gebäude ist (falsche Position)
+    const bx = comp.position[0]
+    const by = comp.position[1]
+    const bz = comp.position[2]
+
+    const insideX = bx >= -building.lengthM / 2 && bx <= building.lengthM / 2
+    const insideY = by >= 0 && by <= building.heightM
+    const insideZ = bz >= -building.widthM / 2 - 0.5 && bz <= building.widthM / 2 + 0.5
+
+    if (insideX && insideY && insideZ && comp.type !== 'anchor') {
+      collisions.push({
+        componentA: comp.id,
+        componentB: 'building',
+        type: 'component-building',
+        distance: 0,
+      })
+    }
+  })
+
+  return {
+    hasCollision: collisions.length > 0,
+    collisions,
+  }
+}
+
+// --- STATISCHE PRÜFUNG (vereinfacht) ---
+export interface StaticCheckResult {
+  passed: boolean
+  checks: {
+    name: string
+    passed: boolean
+    message: string
+    severity: 'error' | 'warning'
+  }[]
+}
+
+export function performStaticChecks(model: CADModel): StaticCheckResult {
+  const checks: StaticCheckResult['checks'] = []
+
+  // 1. Standfestigkeit: Fußplatten pro Feld
+  const footplates = model.components3D.filter(c => c.type === 'footplate').length
+  const fields = model.fieldCount
+  const levels = model.levelCount
+  const expectedFeet = fields * 2 * levels
+  checks.push({
+    name: 'Standfestigkeit',
+    passed: footplates >= fields * 2,
+    message: footplates >= fields * 2
+      ? `✅ ${footplates} Fußplatten für ${fields} Felder ausreichend`
+      : `⚠️ Zu wenig Fußplatten: ${footplates} von mindestens ${fields * 2} erforderlich`,
+    severity: footplates >= fields * 2 ? 'warning' : 'error',
+  })
+
+  // 2. Verankerung bei Höhe > 6m
+  const anchors = model.anchors.length
+  const needsAnchors = model.building.heightM > 6
+  checks.push({
+    name: 'Verankerung',
+    passed: !needsAnchors || anchors > 0,
+    message: !needsAnchors
+      ? `✅ Keine Verankerung nötig bei ${model.building.heightM}m`
+      : anchors > 0
+        ? `✅ ${anchors} Verankerungen bei ${model.building.heightM}m Höhe`
+        : `❌ Verankerung erforderlich ab 6m Höhe (Gebäude: ${model.building.heightM}m)`,
+    severity: !needsAnchors || anchors > 0 ? 'warning' : 'error',
+  })
+
+  // 3. Diagonalen-Anteil
+  const diagonals = model.components3D.filter(c => c.type === 'diagonal').length
+  const frames = model.components3D.filter(c => c.type === 'frame').length / 2
+  const diagonalRatio = frames > 0 ? diagonals / frames : 0
+  checks.push({
+    name: 'Aussteifung',
+    passed: diagonalRatio >= 0.3,
+    message: diagonalRatio >= 0.3
+      ? `✅ Ausreichend Diagonalen (${(diagonalRatio * 100).toFixed(0)}%)`
+      : `⚠️ Zu wenig Diagonalen (${(diagonalRatio * 100).toFixed(0)}%), mindestens 30% empfohlen`,
+    severity: 'warning',
+  })
+
+  // 4. Geländer-Vollständigkeit
+  const decks = model.components3D.filter(c => c.type === 'deck').length
+  const railings = model.components3D.filter(c => c.type === 'railing').length
+  checks.push({
+    name: 'Absturzsicherung',
+    passed: railings >= decks,
+    message: railings >= decks
+      ? `✅ Geländer vollständig (${railings}/${decks})`
+      : `❌ Fehlende Geländer: ${railings}/${decks} Arbeitsbühnen abgedeckt`,
+    severity: railings >= decks ? 'warning' : 'error',
+  })
+
+  // 5. Feldüberschreitung
+  const maxFieldLen = Math.max(...model.fields.map(f => f.lengthM))
+  checks.push({
+    name: 'Feldlänge',
+    passed: maxFieldLen <= 3.07,
+    message: maxFieldLen <= 3.07
+      ? `✅ Maximale Feldlänge ${maxFieldLen.toFixed(2)}m im zulässigen Bereich`
+      : `❌ Feldlänge ${maxFieldLen.toFixed(2)}m überschreitet 3.07m`,
+    severity: 'error',
+  })
+
+  return {
+    passed: checks.every(c => c.passed || c.severity === 'warning'),
+    checks,
+  }
+}
