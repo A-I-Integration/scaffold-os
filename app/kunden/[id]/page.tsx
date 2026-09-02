@@ -20,6 +20,7 @@ import {
   ClipboardList, Image as ImageIcon, FileSignature, User,
 } from 'lucide-react'
 import { generateInvoicePDF, fmtEur, fmtDate, type Invoice } from '@/lib/invoice-pdf'
+import VersionsHistorie from '@/components/VersionsHistorie'
 
 interface Kunde {
   id: string
@@ -440,6 +441,7 @@ export default function KundenDetailPage() {
                     <div><p className="text-[10px] text-[#86868b] uppercase">Risiko</p><p className={ki?.riskLevel === 'red' ? 'text-red-600' : ki?.riskLevel === 'yellow' ? 'text-amber-600' : 'text-emerald-600'}>{ki?.riskLevel === 'red' ? 'Hoch' : ki?.riskLevel === 'yellow' ? 'Mittel' : ki ? 'Niedrig' : '–'}</p></div>
                   </div>
                   {!project.data?.step1 && <p className="text-xs text-[#86868b] mt-3">Für diesen Auftrag liegen noch keine Aufmaß-Detaildaten vor.</p>}
+                  <VersionsHistorie projectId={project.id} onRestored={ladeDaten} />
                 </div>
               )
             })}

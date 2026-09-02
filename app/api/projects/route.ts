@@ -117,7 +117,7 @@ export async function PATCH(req: NextRequest) {
 
   try {
     const body = await req.json();
-    const { id, status, data } = body;
+    const { id, status, data, name, adresse } = body;
 
     if (!id) {
       return NextResponse.json({ success: false, error: 'id erforderlich' }, { status: 400 });
@@ -131,21 +131,42 @@ export async function PATCH(req: NextRequest) {
 
     const patch: Record<string, any> = {};
     if (status) patch.status = status;
+    if (name !== undefined) patch.name = name;
+    if (adresse !== undefined) patch.adresse = adresse;
 
     // NEU (Prio-2-Sprint): data-Merge – z. B. KI-Ergebnis/Angebotsstatus nachträglich sichern.
     // Bestehende Projektdaten werden gelesen und mit den neuen Feldern gemergt (nichts geht verloren).
+    // Phase 25: den bisherigen Stand VOR dem Überschreiben als Version sichern (Aufmaß-Versionierung).
     if (data && typeof data === 'object') {
-      const cur = await fetch(`${url}/rest/v1/projects?id=eq.${id}&select=data`, { headers });
+      const cur = await fetch(`${url}/rest/v1/projects?id=eq.${id}&select=data,name,adresse`, { headers });
       if (!cur.ok) throw new Error(await cur.text());
       const curRows = await cur.json();
       if (!curRows?.length) {
         return NextResponse.json({ success: false, error: 'Projekt nicht gefunden.' }, { status: 404 });
       }
-      patch.data = { ...(curRows[0].data || {}), ...data };
+      const bisher = curRows[0];
+
+      // Nur sichern, wenn es überhaupt schon einen nennenswerten Stand gab
+      // (sonst würde die allererste Zwischenspeicherung schon eine leere
+      // "Version 1" erzeugen).
+      if (bisher.data && Object.keys(bisher.data).length > 0) {
+        const cntRes = await fetch(`${url}/rest/v1/project_versions?project_id=eq.${id}&select=version_number&order=version_number.desc&limit=1`, { headers });
+        const cntRows = cntRes.ok ? await cntRes.json() : [];
+        const naechsteNummer = (cntRows?.[0]?.version_number || 0) + 1;
+        await fetch(`${url}/rest/v1/project_versions`, {
+          method: 'POST', headers,
+          body: JSON.stringify({
+            project_id: id, version_number: naechsteNummer,
+            name: bisher.name, adresse: bisher.adresse, data: bisher.data,
+          }),
+        });
+      }
+
+      patch.data = { ...(bisher.data || {}), ...data };
     }
 
     if (!Object.keys(patch).length) {
-      return NextResponse.json({ success: false, error: 'Nichts zu ändern (status oder data fehlt).' }, { status: 400 });
+      return NextResponse.json({ success: false, error: 'Nichts zu ändern (status, data, name oder adresse fehlt).' }, { status: 400 });
     }
 
     const res = await fetch(`${url}/rest/v1/projects?id=eq.${id}`, {

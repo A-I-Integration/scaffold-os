@@ -215,9 +215,28 @@ function Schritt6Content() {
     try {
       // NEU (Prio-2-Sprint): KI-Ergebnis und Angebotsstatus mit ins Projekt speichern,
       // damit sie beim Öffnen aus dem Dashboard wieder da sind
-      const response = await fetch('/api/projects', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: s1.name || 'Unbenanntes Projekt', adresse: s1.adresse || '', data: { ...stepData, angebotAnpassungen: anpassungen, kiResult, angebotsStatus }, status: 'active' }) });
-      const result = await response.json();
-      if (!response.ok) throw new Error(result.error || 'Speichern fehlgeschlagen');
+      // Phase 25 – WICHTIGER FIX: Bisher wurde hier IMMER POST aufgerufen, auch wenn
+      // das Projekt schon existierte (savedProjectId gesetzt) – dadurch entstand bei
+      // jedem erneuten Speichern ein komplett neues, doppeltes Projekt statt einer
+      // Aktualisierung. Jetzt: existiert savedProjectId schon, wird PATCH verwendet
+      // (aktualisiert das bestehende Projekt UND sichert automatisch eine Version
+      // des bisherigen Stands, siehe /api/projects PATCH).
+      const gespeicherteDaten = { ...stepData, angebotAnpassungen: anpassungen, kiResult, angebotsStatus };
+      let result: any;
+      if (savedProjectId) {
+        const response = await fetch('/api/projects', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id: savedProjectId, name: s1.name || 'Unbenanntes Projekt', adresse: s1.adresse || '', data: gespeicherteDaten }),
+        });
+        const json = await response.json();
+        if (!response.ok || !json.success) throw new Error(json.error || 'Speichern fehlgeschlagen');
+        result = { id: savedProjectId };
+      } else {
+        const response = await fetch('/api/projects', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: s1.name || 'Unbenanntes Projekt', adresse: s1.adresse || '', data: gespeicherteDaten, status: 'active' }) });
+        result = await response.json();
+        if (!response.ok) throw new Error(result.error || 'Speichern fehlgeschlagen');
+      }
       const sessionId = localStorage.getItem('scaffold_session_id');
       if (sessionId) {
         try { await fetch('/api/attach-photos', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sessionId, projectId: result.id }) }); localStorage.removeItem('scaffold_session_id'); } catch (photoErr) { console.error('Foto-Verknüpfung fehlgeschlagen:', photoErr); }
