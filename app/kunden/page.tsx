@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import { useRouter } from 'next/navigation';
 import {
   Users, Plus, X, Save, Download, Mail, Check, RotateCcw, Search, FileText, Briefcase,
 } from 'lucide-react';
@@ -63,6 +64,7 @@ const nameMatch = (a: string, b: string) =>
   a.trim().toLowerCase() === b.trim().toLowerCase();
 
 export default function KundenPage() {
+  const router = useRouter();
   const [kunden, setKunden] = useState<Kunde[]>([]);
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [projects, setProjects] = useState<{ id: string; name: string | null; adresse: string | null; data: any }[]>([]);
@@ -111,18 +113,7 @@ export default function KundenPage() {
   const selected = kunden.find((k) => k.id === selectedId) || null;
 
   function selectKunde(k: Kunde) {
-    setSelectedId(k.id);
-    setNeu(false);
-    setForm({
-      name: k.name || '',
-      contact_person: k.contact_person || '',
-      email: k.email || '',
-      phone: k.phone || '',
-      street: k.street || '',
-      zip: k.zip || '',
-      city: k.city || '',
-      notes: k.notes || '',
-    });
+    router.push(`/kunden/${k.id}`);
   }
 
   function neuAnlegen() {
