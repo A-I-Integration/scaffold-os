@@ -134,7 +134,12 @@ export default function Schritt2Page() {
     const saved = localStorage.getItem('scaffold_step1');
     if (saved) setStep1Data(JSON.parse(saved));
     const saved2 = localStorage.getItem('scaffold_step2');
-    if (saved2) setForm(JSON.parse(saved2));
+    if (saved2) {
+      const geladen = JSON.parse(saved2);
+      // Fix: ältere gespeicherte Aufmaße (vor "mehrere Abschnitte") haben kein
+      // abschnitte-Feld – ohne diesen Fallback stürzt die Seite beim Rendern ab.
+      setForm((prev) => ({ ...prev, ...geladen, abschnitte: Array.isArray(geladen.abschnitte) ? geladen.abschnitte : [] }));
+    }
 
     // LiDAR-Maße aus Schritt 1 übernehmen (nur leere Felder, nichts überschreiben)
     const lidarRaw = localStorage.getItem('scaffold_lidar_measurements');
@@ -349,7 +354,7 @@ export default function Schritt2Page() {
             <p className="text-sm font-medium text-[#424245]">
               Gebäude mit mehreren Höhen oder das um eine Ecke geht? Weitere Abschnitte hinzufügen – Länge/Höhe oben ist „Abschnitt 1".
             </p>
-            {form.abschnitte.map((a, idx) => (
+            {(form.abschnitte || []).map((a, idx) => (
               <div key={idx} className="grid grid-cols-[1fr_auto_auto_auto] gap-2 items-center">
                 <input value={a.bezeichnung}
                   onChange={(e) => { const neu = [...form.abschnitte]; neu[idx] = { ...neu[idx], bezeichnung: e.target.value }; setForm({ ...form, abschnitte: neu }); }}
