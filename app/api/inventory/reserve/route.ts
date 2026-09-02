@@ -42,6 +42,16 @@ export async function POST(req: Request) {
     });
     if (!reserveRes.ok) throw new Error(await reserveRes.text());
 
+    // Lagerbestand wirklich verringern (bisher fehlte das: der Buchbestand
+    // blieb unverändert, wodurch "verfügbar" immer den vollen Bestand zeigte,
+    // auch wenn er längst für andere Projekte reserviert war).
+    const updateRes = await fetch(`${url}/rest/v1/inventory?id=eq.${inventory_id}`, {
+      method: 'PATCH',
+      headers,
+      body: JSON.stringify({ quantity: available - quantity }),
+    });
+    if (!updateRes.ok) throw new Error(await updateRes.text());
+
     // 3. Transaction loggen
     const txRes = await fetch(`${url}/rest/v1/inventory_transactions`, {
       method: 'POST',

@@ -44,6 +44,10 @@ interface Props {
   employeeId?: string | null; // vorausgewählter Mitarbeiter (z.B. aus "Meine Touren")
 }
 
+interface InventoryItem { id: string; name: string; unit: string; quantity: number }
+interface MaterialRow { inventory_id: string; zurueck: string; fehlt_beschaedigt: string; grund: string }
+const LEERE_ZEILE: MaterialRow = { inventory_id: '', zurueck: '', fehlt_beschaedigt: '', grund: '' };
+
 export default function ProjektDokumentation({ projectId, employeeId }: Props) {
   const [events, setEvents] = useState<ProjectEvent[]>([]);
   const [loading, setLoading] = useState(true);
@@ -55,6 +59,14 @@ export default function ProjektDokumentation({ projectId, employeeId }: Props) {
   const [uploading, setUploading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+
+  // Material-Rückgabe (Phase 23) – schließt die Lücke zwischen
+  // Demontage/Rücktransport-Dokumentation und dem Lagerbestand.
+  const [materialOffenId, setMaterialOffenId] = useState<string | null>(null);
+  const [inventoryItems, setInventoryItems] = useState<InventoryItem[]>([]);
+  const [materialRows, setMaterialRows] = useState<MaterialRow[]>([{ ...LEERE_ZEILE }]);
+  const [materialSaving, setMaterialSaving] = useState(false);
+  const [materialMsg, setMaterialMsg] = useState<{ ok: boolean; text: string } | null>(null);
 
   const load = useCallback(async () => {
     if (!projectId) return;
@@ -133,6 +145,49 @@ export default function ProjektDokumentation({ projectId, employeeId }: Props) {
     } catch (e: any) {
       alert(e.message);
     }
+  }
+
+  async function openMaterialForm(eventId: string) {
+    setMaterialMsg(null);
+    setMaterialRows([{ ...LEERE_ZEILE }]);
+    setMaterialOffenId(materialOffenId === eventId ? null : eventId);
+    if (inventoryItems.length === 0) {
+      try {
+        const res = await fetch('/api/inventory');
+        const json = await res.json();
+        if (json.success) setInventoryItems(json.items || []);
+      } catch { /* Lager-Liste optional, Formular geht trotzdem */ }
+    }
+  }
+
+  function updateMaterialRow(idx: number, patch: Partial<MaterialRow>) {
+    setMaterialRows(prev => prev.map((r, i) => (i === idx ? { ...r, ...patch } : r)));
+  }
+
+  async function submitMaterial(eventId: string) {
+    setMaterialMsg(null);
+    const items = materialRows
+      .filter(r => r.inventory_id && (Number(r.zurueck) > 0 || Number(r.fehlt_beschaedigt) > 0))
+      .map(r => ({ inventory_id: r.inventory_id, zurueck: Number(r.zurueck) || 0, fehlt_beschaedigt: Number(r.fehlt_beschaedigt) || 0, grund: r.grund || undefined }));
+    if (items.length === 0) {
+      setMaterialMsg({ ok: false, text: 'Bitte mindestens eine Position mit Menge angeben.' });
+      return;
+    }
+    setMaterialSaving(true);
+    try {
+      const res = await fetch('/api/inventory/return', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ project_id: projectId, event_id: eventId, items }),
+      });
+      const json = await res.json();
+      if (!json.success) throw new Error(json.error);
+      setMaterialMsg({ ok: true, text: '✅ Material gebucht: ' + json.gebucht.map((g: any) => `${g.name} (${g.zurueck > 0 ? '+' + g.zurueck + ' zurück' : ''}${g.zurueck > 0 && g.verlust > 0 ? ', ' : ''}${g.verlust > 0 ? g.verlust + ' fehlt/beschädigt' : ''})`).join('; ') });
+      setMaterialRows([{ ...LEERE_ZEILE }]);
+    } catch (e: any) {
+      setMaterialMsg({ ok: false, text: '❌ ' + e.message });
+    }
+    setMaterialSaving(false);
   }
 
   const inputCls = 'w-full rounded-lg bg-[#f5f5f7] border border-black/10 px-3 py-2 text-[#1d1d1f] placeholder-[#86868b] focus:border-[#e8590c] focus:outline-none';
@@ -258,6 +313,45 @@ export default function ProjektDokumentation({ projectId, employeeId }: Props) {
                   >
                     ✓ Als fertig markieren
                   </button>
+                )}
+
+                {/* Material-Rückgabe: nur bei Demontage/Rücktransport (Phase 23) */}
+                {(ev.type === 'demontage' || ev.type === 'ruecktransport') && (
+                  <div className="mt-3">
+                    <button
+                      onClick={() => openMaterialForm(ev.id)}
+                      className="text-sm rounded-lg bg-blue-600 hover:bg-blue-500 text-white px-3 py-1.5 font-medium transition"
+                    >
+                      📦 Material buchen (zurück / fehlt / beschädigt)
+                    </button>
+
+                    {materialOffenId === ev.id && (
+                      <div className="mt-3 bg-blue-50 border border-blue-200 rounded-xl p-4 space-y-3">
+                        <p className="text-xs text-[#86868b]">Zurückgegebenes Material erhöht den Lagerbestand automatisch. Fehlmengen/Schäden werden nur protokolliert (keine Bestandsänderung, da es beim Reservieren schon abgebucht wurde).</p>
+                        {materialRows.map((row, idx) => (
+                          <div key={idx} className="grid grid-cols-1 sm:grid-cols-5 gap-2 items-center">
+                            <select value={row.inventory_id} onChange={e => updateMaterialRow(idx, { inventory_id: e.target.value })} className={`${inputCls} sm:col-span-2`}>
+                              <option value="">– Artikel wählen –</option>
+                              {inventoryItems.map(it => <option key={it.id} value={it.id}>{it.name} ({it.unit})</option>)}
+                            </select>
+                            <input value={row.zurueck} onChange={e => updateMaterialRow(idx, { zurueck: e.target.value })} placeholder="Menge zurück" className={inputCls} />
+                            <input value={row.fehlt_beschaedigt} onChange={e => updateMaterialRow(idx, { fehlt_beschaedigt: e.target.value })} placeholder="Fehlt/beschädigt" className={inputCls} />
+                            <input value={row.grund} onChange={e => updateMaterialRow(idx, { grund: e.target.value })} placeholder="Grund (optional)" className={inputCls} />
+                          </div>
+                        ))}
+                        <button onClick={() => setMaterialRows(prev => [...prev, { ...LEERE_ZEILE }])} className="text-xs text-blue-700 font-semibold hover:underline">+ weitere Position</button>
+                        <div className="flex gap-2">
+                          <button onClick={() => submitMaterial(ev.id)} disabled={materialSaving} className="rounded-lg bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white px-4 py-2 text-sm font-semibold">
+                            {materialSaving ? 'Bucht…' : 'Buchen'}
+                          </button>
+                          <button onClick={() => setMaterialOffenId(null)} className="rounded-lg bg-black/5 hover:bg-black/10 px-4 py-2 text-sm">Abbrechen</button>
+                        </div>
+                        {materialMsg && (
+                          <div className={`rounded-lg p-3 text-sm ${materialMsg.ok ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'}`}>{materialMsg.text}</div>
+                        )}
+                      </div>
+                    )}
+                  </div>
                 )}
               </li>
             ))}
