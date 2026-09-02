@@ -19,6 +19,9 @@ export default function Schritt2Page() {
     hoehe: '',
     breite: '',
     traufhoehe: '',
+    // NEU: weitere Abschnitte für Gebäude mit unterschiedlichen Höhen
+    // oder die um eine Ecke gehen. Länge/Höhe oben bleiben "Abschnitt 1".
+    abschnitte: [] as { bezeichnung: string; laenge: string; hoehe: string }[],
     dachform: '',
     dachueberstand: '',
     fassade: '',
@@ -339,6 +342,34 @@ export default function Schritt2Page() {
                 className="w-full bg-black/10 border border-black/10 rounded-xl px-4 py-2 text-[#1d1d1f]"
                 placeholder="z.B. 8.5" />
             </div>
+          </div>
+
+          {/* NEU: weitere Abschnitte (unterschiedliche Höhen / ums Eck) */}
+          <div className="rounded-xl bg-black/5 border border-black/10 p-4 space-y-3">
+            <p className="text-sm font-medium text-[#424245]">
+              Gebäude mit mehreren Höhen oder das um eine Ecke geht? Weitere Abschnitte hinzufügen – Länge/Höhe oben ist „Abschnitt 1".
+            </p>
+            {form.abschnitte.map((a, idx) => (
+              <div key={idx} className="grid grid-cols-[1fr_auto_auto_auto] gap-2 items-center">
+                <input value={a.bezeichnung}
+                  onChange={(e) => { const neu = [...form.abschnitte]; neu[idx] = { ...neu[idx], bezeichnung: e.target.value }; setForm({ ...form, abschnitte: neu }); }}
+                  placeholder={`Bezeichnung Abschnitt ${idx + 2}, z.B. "Anbau links"`}
+                  className="bg-black/10 border border-black/10 rounded-xl px-3 py-2 text-sm text-[#1d1d1f]" />
+                <input type="number" value={a.laenge}
+                  onChange={(e) => { const neu = [...form.abschnitte]; neu[idx] = { ...neu[idx], laenge: e.target.value }; setForm({ ...form, abschnitte: neu }); }}
+                  placeholder="Länge m" className="w-24 bg-black/10 border border-black/10 rounded-xl px-3 py-2 text-sm text-[#1d1d1f]" />
+                <input type="number" value={a.hoehe}
+                  onChange={(e) => { const neu = [...form.abschnitte]; neu[idx] = { ...neu[idx], hoehe: e.target.value }; setForm({ ...form, abschnitte: neu }); }}
+                  placeholder="Höhe m" className="w-24 bg-black/10 border border-black/10 rounded-xl px-3 py-2 text-sm text-[#1d1d1f]" />
+                <button type="button" onClick={() => setForm({ ...form, abschnitte: form.abschnitte.filter((_, i) => i !== idx) })}
+                  className="text-red-600 text-sm px-2">✕</button>
+              </div>
+            ))}
+            <button type="button"
+              onClick={() => setForm({ ...form, abschnitte: [...form.abschnitte, { bezeichnung: '', laenge: '', hoehe: '' }] })}
+              className="text-sm text-[#e8590c] font-semibold hover:underline">
+              + Weiteren Abschnitt hinzufügen
+            </button>
           </div>
 
           <div>

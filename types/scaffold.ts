@@ -116,6 +116,14 @@ export type Hazard =
 
 // --- HAUPTEINGABE: Komplettes Aufmaß ---
 
+export interface ScaffoldSection {
+  bezeichnung?: string;
+  lengthM: number;
+  heightM: number;
+  fieldLengthM?: number;   // optional, sonst input.fieldLengthM
+  roofOverhangM?: number;  // optional, sonst input.roofOverhangM
+}
+
 export interface ScaffoldInput {
   // Schritt 1
   customer: string;
@@ -132,6 +140,12 @@ export interface ScaffoldInput {
   roofOverhangM: number;
   facadeType: FacadeType;
   obstacles: Obstacle[];
+  // NEU: mehrere Abschnitte mit unterschiedlicher Länge/Höhe (z.B.
+  // Gebäude mit Anbau, das um eine Ecke geht). Wenn gesetzt und nicht
+  // leer, ersetzt dies lengthM/heightM/roofOverhangM oben für die
+  // Mengenberechnung – die einzelnen Felder bleiben als Fallback für
+  // ältere, einabschnittige Projekte erhalten.
+  sections?: ScaffoldSection[];
 
   // Schritt 3
   scaffoldType: ScaffoldType;
@@ -187,6 +201,10 @@ export interface KIAnalysis {
   scaffoldClass: string;
   requiredAnchorCount: number;
   requiredLoadDistributionPlates: number;
+  // NEU: Aufschlüsselung je Abschnitt, falls mehrere Abschnitte
+  // (unterschiedliche Höhen/ums Eck) eingegeben wurden.
+  sectionBreakdown?: { bezeichnung: string; areaM2: number; fields: number; levels: number }[];
+  totalAreaM2?: number;
 }
 
 // --- KI-REGELN ---
