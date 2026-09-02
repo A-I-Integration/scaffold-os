@@ -20,6 +20,13 @@ const COMPONENT_LABELS: Record<string, string> = {
   safety_net: 'Fangnetze', load_plate: 'Lastplatten',
 }
 
+// Beispiel-Kunden (später aus Supabase laden)
+const DEMO_CUSTOMERS = [
+  { id: '1', name: 'Mustermann GmbH' },
+  { id: '2', name: 'Bauunternehmen Schmidt' },
+  { id: '3', name: 'Gerüstbau Müller' },
+]
+
 export default function CADPage() {
   const [viewMode, setViewMode] = useState<ViewMode>('3d')
   const [building, setBuilding] = useState<BuildingParams>({
@@ -86,6 +93,13 @@ export default function CADPage() {
     downloadPDF(html, `Gerüstbau-Dokumentation-${new Date().toISOString().split('T')[0]}.html`)
   }, [model, materials])
 
+  const handleAssignCustomer = useCallback((customerId: string) => {
+    const customer = DEMO_CUSTOMERS.find(c => c.id === customerId)
+    console.log('✅ Projekt zugeordnet zu:', customer?.name)
+    // TODO: Supabase-Update: projekt.kunde_id = customerId
+    alert(`Projekt erfolgreich zugeordnet zu: ${customer?.name}`)
+  }, [])
+
   return (
     <div className='h-screen flex flex-col bg-[#fbfbfd]'>
       <div className='bg-white border-b border-black/5 px-4 py-3 flex items-center justify-between'>
@@ -140,7 +154,14 @@ export default function CADPage() {
           </div>
         </div>
         <div className='w-72 shrink-0'>
-          <BillOfMaterials materials={materials} totalWeightKg={totalWeight} totalPrice={totalPrice} onExportPDF={handleExportPDF} />
+          <BillOfMaterials
+            materials={materials}
+            totalWeightKg={totalWeight}
+            totalPrice={totalPrice}
+            onExportPDF={handleExportPDF}
+            customers={DEMO_CUSTOMERS}
+            onAssignCustomer={handleAssignCustomer}
+          />
         </div>
       </div>
     </div>

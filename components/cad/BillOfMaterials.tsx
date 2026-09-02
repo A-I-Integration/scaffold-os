@@ -1,5 +1,6 @@
 'use client'
 
+import { useState } from 'react'
 import { MaterialItem } from '@/types/scaffold'
 
 interface Props {
@@ -7,9 +8,12 @@ interface Props {
   totalWeightKg: number
   totalPrice: number
   onExportPDF?: () => void
+  customers?: { id: string; name: string }[]
+  onAssignCustomer?: (customerId: string) => void
 }
 
-export default function BillOfMaterials({ materials, totalWeightKg, totalPrice, onExportPDF }: Props) {
+export default function BillOfMaterials({ materials, totalWeightKg, totalPrice, onExportPDF, customers, onAssignCustomer }: Props) {
+  const [selectedCustomer, setSelectedCustomer] = useState('')
   const grouped = materials.reduce((acc, item) => {
     if (!acc[item.category]) acc[item.category] = []
     acc[item.category].push(item)
@@ -33,6 +37,31 @@ export default function BillOfMaterials({ materials, totalWeightKg, totalPrice, 
             <div className='text-[10px] text-[#86868b] uppercase'>Materialkosten</div>
           </div>
         </div>
+
+        {/* Kunden-Zuordnung */}
+        {customers && customers.length > 0 && onAssignCustomer && (
+          <div className='mb-4 bg-blue-50 rounded-xl p-3 border border-blue-200'>
+            <label className='block text-xs font-medium text-blue-800 mb-1.5'>Kunde zuordnen</label>
+            <select
+              value={selectedCustomer}
+              onChange={(e) => setSelectedCustomer(e.target.value)}
+              className='w-full px-2 py-1.5 text-xs border rounded-lg mb-2'
+            >
+              <option value=''>Kunde wählen...</option>
+              {customers.map((c) => (
+                <option key={c.id} value={c.id}>{c.name}</option>
+              ))}
+            </select>
+            <button
+              onClick={() => selectedCustomer && onAssignCustomer(selectedCustomer)}
+              disabled={!selectedCustomer}
+              className='w-full py-1.5 bg-blue-600 text-white text-xs font-medium rounded-lg hover:bg-blue-700 disabled:bg-gray-300 transition-colors'
+            >
+              💾 Projekt zuordnen
+            </button>
+          </div>
+        )}
+
         <div className='space-y-3'>
           {Object.entries(grouped).map(([category, items]) => (
             <div key={category} className='bg-[#f5f5f7] rounded-xl overflow-hidden'>
@@ -58,8 +87,13 @@ export default function BillOfMaterials({ materials, totalWeightKg, totalPrice, 
         </div>
       </div>
       {onExportPDF && (
-        <div className='p-4 border-t border-black/5'>
-          <button onClick={onExportPDF} className='w-full py-2.5 bg-black/5 text-[#1d1d1f] text-sm font-medium rounded-xl hover:bg-black/10 transition-colors'>📄 PDF Export</button>
+        <div className='p-4 border-t border-black/5 relative' style={{ zIndex: 99999 }}>
+          <button
+            onClick={onExportPDF}
+            className='w-full py-2.5 bg-black/5 text-[#1d1d1f] text-sm font-medium rounded-xl hover:bg-black/10 transition-colors'
+          >
+            📄 PDF Export
+          </button>
         </div>
       )}
     </div>
