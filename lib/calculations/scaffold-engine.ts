@@ -391,56 +391,85 @@ export function calculateScaffoldMaterial(
   const tips: string[] = [];
 
   // 1. BASIS-GEOMETRIE
+  // NEU: Mehrere Abschnitte (unterschiedliche Höhen/ums Eck) möglich.
+  // Ohne "sections" läuft exakt die bisherige Ein-Abschnitt-Rechnung
+  // (rückwärtskompatibel, keine Änderung am Ergebnis für bestehende
+  // Projekte).
   const frameHeight = getFrameHeight(input.scaffoldType);
-  const levels = Math.ceil(input.heightM / frameHeight);
-  const fields = Math.ceil(input.lengthM / input.fieldLengthM);
-  const scaffoldArea = input.lengthM * input.heightM;
+  const abschnitte = input.sections && input.sections.length > 0
+    ? input.sections
+    : [{ lengthM: input.lengthM, heightM: input.heightM, fieldLengthM: input.fieldLengthM, roofOverhangM: input.roofOverhangM, bezeichnung: 'Gerüst' }];
 
-  // 2. RAHMEN
-  const framesPerField = 2;
-  const totalFrames = fields * levels * framesPerField;
-  let frameArticle = 'RA-001';
-  if (input.fieldLengthM >= 2.5) frameArticle = 'RA-002';
-  if (input.fieldLengthM >= 3.0) frameArticle = 'RA-003';
+  // Größte Höhe über alle Abschnitte – maßgeblich für Lastklasse,
+  // Risiko-Einstufung, Genehmigungsgrenze (12 m) und Anker-Typ, da die
+  // strengste Anforderung des höchsten Punkts für das ganze Gerüst gilt.
+  const maxHeightM = Math.max(...abschnitte.map(a => a.heightM));
+  const totalLengthM = abschnitte.reduce((s, a) => s + a.lengthM, 0);
+  const klassifizierungsInput: ScaffoldInput = { ...input, heightM: maxHeightM, lengthM: totalLengthM };
 
-  // 3. ARBEITSBÜHNEN
-  const totalDecks = fields * levels;
-  let deckArticle = 'AB-001';
-  if (input.fieldLengthM >= 2.5) deckArticle = 'AB-002';
-  if (input.fieldLengthM >= 3.0) deckArticle = 'AB-003';
+  let levels = 0, fields = 0, scaffoldArea = 0;
+  let totalFrames = 0, totalDecks = 0, totalDiagonals = 0, totalRailings = 0;
+  let totalCouplings = 0, totalFootPlates = 0, totalConsoles = 0, totalBoards = 0;
+  let sideProtectionArea = 0, safetyNetArea = 0;
+  let frameArticle = 'RA-001', deckArticle = 'AB-001', diagonalArticle = 'DI-001', railingArticle = 'GE-001';
+  const sectionBreakdown: { bezeichnung: string; areaM2: number; fields: number; levels: number }[] = [];
 
-  // 4. DIAGONALEN
-  const totalDiagonals = fields * levels * 2;
-  let diagonalArticle = 'DI-001';
-  if (input.fieldLengthM >= 2.5) diagonalArticle = 'DI-002';
-  if (input.fieldLengthM >= 3.0) diagonalArticle = 'DI-003';
+  for (const a of abschnitte) {
+    const fl = a.fieldLengthM || input.fieldLengthM;
+    const aLevels = Math.ceil(a.heightM / frameHeight);
+    const aFields = Math.ceil(a.lengthM / fl);
+    const aArea = a.lengthM * a.heightM;
+    levels = Math.max(levels, aLevels); // für Anzeige: höchster Abschnitt
+    fields += aFields;
+    scaffoldArea += aArea;
+    sectionBreakdown.push({ bezeichnung: a.bezeichnung || 'Abschnitt', areaM2: Math.round(aArea * 100) / 100, fields: aFields, levels: aLevels });
 
-  // 5. GELÄNDER
-  const totalRailings = fields * levels * 2;
-  let railingArticle = 'GE-001';
-  if (input.fieldLengthM >= 2.5) railingArticle = 'GE-002';
-  if (input.fieldLengthM >= 3.0) railingArticle = 'GE-003';
+    // 2. RAHMEN
+    totalFrames += aFields * aLevels * 2;
+    if (fl >= 2.5) frameArticle = 'RA-002';
+    if (fl >= 3.0) frameArticle = 'RA-003';
 
-  // 6. KUPPLUNGEN
-  const totalCouplings = fields * levels * 4;
+    // 3. ARBEITSBÜHNEN
+    totalDecks += aFields * aLevels;
+    if (fl >= 2.5) deckArticle = 'AB-002';
+    if (fl >= 3.0) deckArticle = 'AB-003';
 
+    // 4. DIAGONALEN
+    totalDiagonals += aFields * aLevels * 2;
+    if (fl >= 2.5) diagonalArticle = 'DI-002';
+    if (fl >= 3.0) diagonalArticle = 'DI-003';
+
+    // 5. GELÄNDER
+    totalRailings += aFields * aLevels * 2;
+    if (fl >= 2.5) railingArticle = 'GE-002';
+    if (fl >= 3.0) railingArticle = 'GE-003';
+
+    // 6. KUPPLUNGEN
+    totalCouplings += aFields * aLevels * 4;
+
+    // 8. KONSOLEN
+    const roofOverhang = a.roofOverhangM ?? input.roofOverhangM;
+    if (roofOverhang > 0.3) {
+      totalConsoles += Math.ceil(aFields * (roofOverhang / 0.73));
+    }
+
+    // 9. BORDBRETTER
+    totalBoards += aFields * aLevels;
+
+    // 13. SEITENSCHUTZ
+    sideProtectionArea += aArea;
+  }
   // 7. FUßPLATTEN
-  const totalFootPlates = totalFrames;
-
-  // 8. KONSOLEN
-  let totalConsoles = 0;
-  if (input.roofOverhangM > 0.3) {
-    totalConsoles = Math.ceil(fields * (input.roofOverhangM / 0.73));
-    warnings.push(
-      `Dachüberstand ${input.roofOverhangM}m erkannt – Konsolen erforderlich`
-    );
+  totalFootPlates = totalFrames;
+  if (totalConsoles > 0) {
+    warnings.push(`Dachüberstand erkannt – Konsolen erforderlich (${totalConsoles} Stk. über alle Abschnitte)`);
+  }
+  if (abschnitte.length > 1) {
+    tips.push(`${abschnitte.length} Abschnitte erfasst (unterschiedliche Höhen/ums Eck) – Gesamtfläche ${Math.round(scaffoldArea)} m².`);
   }
 
-  // 9. BORDBRETTER
-  const totalBoards = fields * levels;
-
-  // 10. ANKER
-  const anchorInfo = determineAnchorType(input);
+  // 10. ANKER (Anker-Typ richtet sich nach der höchsten Höhe im Gerüst)
+  const anchorInfo = determineAnchorType(klassifizierungsInput);
   const totalAnchors = anchorInfo.count;
   if (input.facadeType === 'wdvs') {
     warnings.push(anchorInfo.reason);
@@ -461,9 +490,6 @@ export function calculateScaffoldMaterial(
   // 12. TREPPEN
   const totalStairs = Math.max(1, Math.ceil(levels / 3));
 
-  // 13. SEITENSCHUTZ
-  const sideProtectionArea = input.lengthM * input.heightM;
-
   // 14. SCHUTZDACH
   let protectionRoofCount = 0;
   if (
@@ -471,7 +497,7 @@ export function calculateScaffoldMaterial(
     input.hazards.includes('bahnstrecke') ||
     input.hazards.includes('oeffentlicher_weg')
   ) {
-    protectionRoofCount = Math.max(1, Math.ceil(input.lengthM / 6));
+    protectionRoofCount = Math.max(1, Math.ceil(totalLengthM / 6));
     warnings.push(
       `Schutzdach erforderlich: ${
         input.hazards.includes('bahnstrecke')
@@ -482,8 +508,7 @@ export function calculateScaffoldMaterial(
   }
 
   // 15. FANGNETZ
-  let safetyNetArea = 0;
-  if (input.environment.needsSafetyNet || input.heightM > 12) {
+  if (input.environment.needsSafetyNet || maxHeightM > 12) {
     safetyNetArea = sideProtectionArea * 0.3;
     tips.push('Fangnetz empfohlen bei Höhe > 12m');
   }
@@ -542,8 +567,8 @@ export function calculateScaffoldMaterial(
   // Fahrtkosten-Pauschale (Sprit + Fuhrpark-Nutzung) – nur wenn in den Einstellungen gesetzt
   const tripCost = costs?.tripFlat && costs.tripFlat > 0 ? costs.tripFlat : 0;
 
-  // Genehmigungen & Sonstiges – aus den Einstellungen
-  const permitCost = input.heightM > 12 ? (costs?.permitHigh ?? 450) : (costs?.permitLow ?? 250);
+  // Genehmigungen & Sonstiges – aus den Einstellungen (höchster Abschnitt maßgeblich)
+  const permitCost = maxHeightM > 12 ? (costs?.permitHigh ?? 450) : (costs?.permitLow ?? 250);
   const craneCost = input.environment.needsCrane ? (costs?.craneDay ?? 850) : 0;
 
   const totalCost =
@@ -554,17 +579,17 @@ export function calculateScaffoldMaterial(
   const margin = suggestedPrice - totalCost;
   const marginPercent = Math.round((margin / suggestedPrice) * 100);
 
-  // RISIKO-AMPEL
+  // RISIKO-AMPEL (höchster Abschnitt maßgeblich)
   let riskLevel: 'green' | 'yellow' | 'red' = 'green';
   if (
-    input.heightM > 24 ||
+    maxHeightM > 24 ||
     input.windZone >= 3 ||
     input.hazards.includes('hochspannung') ||
     input.hazards.includes('bahnstrecke')
   ) {
     riskLevel = 'red';
   } else if (
-    input.heightM > 12 ||
+    maxHeightM > 12 ||
     input.facadeType === 'wdvs' ||
     input.facadeType === 'glas' ||
     input.hazards.length > 0
@@ -573,7 +598,7 @@ export function calculateScaffoldMaterial(
   }
 
   // Zusätzliche Warnungen
-  if (input.heightM > 24)
+  if (maxHeightM > 24)
     warnings.push('Fassadenhöhe über 24m – Statik prüfen lassen!');
   if (input.windZone >= 3)
     warnings.push(
@@ -609,8 +634,10 @@ export function calculateScaffoldMaterial(
     riskLevel,
     warnings,
     tips,
-    scaffoldClass: determineScaffoldClass(input),
+    scaffoldClass: determineScaffoldClass(klassifizierungsInput),
     requiredAnchorCount: totalAnchors,
     requiredLoadDistributionPlates: totalLoadPlates,
+    sectionBreakdown: abschnitte.length > 1 ? sectionBreakdown : undefined,
+    totalAreaM2: Math.round(scaffoldArea * 100) / 100,
   };
 }

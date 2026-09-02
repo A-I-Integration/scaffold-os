@@ -171,11 +171,22 @@ function Schritt6Content() {
     return hazards;
   }
   function buildScaffoldInput() {
+    // NEU: Mehrere Abschnitte (unterschiedliche Höhen/ums Eck) aus Schritt 2,
+    // falls vorhanden. Abschnitt 1 = die Haupt-Länge/Höhe oben im Formular.
+    const zusatzAbschnitte = Array.isArray(s2.abschnitte) ? s2.abschnitte : [];
+    const gueltigeZusatzAbschnitte = zusatzAbschnitte
+      .filter((a: any) => parseFloat(a.laenge) > 0 && parseFloat(a.hoehe) > 0)
+      .map((a: any, i: number) => ({ bezeichnung: a.bezeichnung || `Abschnitt ${i + 2}`, lengthM: parseFloat(a.laenge), heightM: parseFloat(a.hoehe) }));
+    const sections = gueltigeZusatzAbschnitte.length > 0
+      ? [{ bezeichnung: 'Abschnitt 1', lengthM: parseFloat(s2.laenge) || 0, heightM: parseFloat(s2.hoehe) || 0 }, ...gueltigeZusatzAbschnitte]
+      : undefined;
+
     return {
       customer: s1.name || '', address: s1.adresse || '', trade: (s1.gewerk || 'allgemein').toLowerCase(),
       projectDurationDays: parseInt(s1.dauer) || 30, lengthM: parseFloat(s2.laenge) || 0, heightM: parseFloat(s2.hoehe) || 0,
       widthM: parseFloat(s2.breite) || 0, eavesHeightM: parseFloat(s2.traufhoehe) || 0, roofForm: mapDachform(s2.dachform),
       roofOverhangM: parseFloat(s2.dachueberstand) || 0, facadeType: mapFassade(s2.fassade), obstacles: mapHindernisse(s2),
+      sections,
       scaffoldType: (s3.geruesttyp || 'rahmen').toLowerCase(), deckingType: (s3.belag || 'stahl').toLowerCase(),
       fieldLengthM: parseFloat(s3.feldlänge || s3.feldlange) || 2.07, groundType: (s3.untergrund || s3.boden || 'beton').toLowerCase(),
       manufacturer: systemAnzeigename(s3.system, s3.customSystem) || undefined,
@@ -715,6 +726,19 @@ function Schritt6Content() {
 
             {kiResult && (
               <div className="animate-in fade-in slide-in-from-top-4 duration-500">
+                {kiResult.sectionBreakdown && kiResult.sectionBreakdown.length > 1 && (
+                  <div className="bg-[#f5f5f7] rounded-xl p-4 mb-4 border border-black/10">
+                    <p className="text-sm font-semibold text-[#1d1d1f] mb-2">📐 Abschnitte ({kiResult.sectionBreakdown.length}, Gesamtfläche {kiResult.totalAreaM2} m²)</p>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      {kiResult.sectionBreakdown.map((s: any, i: number) => (
+                        <div key={i} className="bg-white rounded-lg px-3 py-2 text-xs border border-black/5">
+                          <span className="font-medium text-[#1d1d1f]">{s.bezeichnung}</span>
+                          <span className="text-[#86868b]"> · {s.areaM2} m² · {s.fields} Felder × {s.levels} Ebenen</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
                 <KIMaterialResult result={kiResult} loading={kiLoading} onSaveStueckliste={handleSaveStueckliste} onGeneratePDF={handlePDF} onManualEdit={handleManualEdit} />
               </div>
             )}
