@@ -78,6 +78,11 @@ const DOK_TYPE_LABEL: Record<string, string> = {
   ruecktransport: 'Rücktransport', sonstiges: 'Sonstiges',
 }
 
+// Zeitstempel-Felder wie created_at sind volle ISO-Timestamps (timestamptz),
+// keine reinen Datums-Strings – fmtDate aus invoice-pdf.ts erwartet Letzteres
+// (hängt "T00:00:00" an) und würde hier "Invalid Date" liefern.
+const fmtTimestamp = (d: string | null) => (d ? new Date(d).toLocaleDateString('de-DE') : '–')
+
 const LEER_POSITION = { bezeichnung: '', menge: '1', einheit: 'Stk.', einzelpreis: '' }
 const TABS = ['kunde', 'aufmass', 'medien', 'angebote', 'rechnungen'] as const
 type Tab = typeof TABS[number]
@@ -191,7 +196,7 @@ export default function KundenDetailPage() {
       const res = await fetch('/api/kunden', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: kunde.id, ...kundeForm }),
+        body: JSON.stringify({ id: kunde.id, updates: kundeForm }),
       })
       const json = await res.json()
       if (!json.success) throw new Error(json.error)
@@ -400,7 +405,7 @@ export default function KundenDetailPage() {
               <input value={kundeForm.city || ''} onChange={(e) => setKundeForm({ ...kundeForm, city: e.target.value })} placeholder="Ort" className={inputCls} />
             </div>
             <button onClick={saveKunde} disabled={speichern} className={btnPrimary}>{speichern ? 'Speichert…' : 'Speichern'}</button>
-            <p className="text-[11px] text-[#86868b] pt-2 border-t border-black/5">Kunde seit {fmtDate(kunde.created_at)} · {projects.length} Auftrag/Aufträge · {kundenInvoices.length} Rechnung(en)</p>
+            <p className="text-[11px] text-[#86868b] pt-2 border-t border-black/5">Kunde seit {fmtTimestamp(kunde.created_at)} · {projects.length} Auftrag/Aufträge · {kundenInvoices.length} Rechnung(en)</p>
           </div>
         )}
 
