@@ -1,6 +1,6 @@
 'use client'
 
-// Scaffold3D.tsx – v2.0 Performance-Fix (CTO-Approval)
+// Scaffold3D.tsx – v2.1 Performance-Fix (CTO-Approval)
 //
 // Fixes:
 // 1. useFrame()-Killer entfernt → Matrizen nur einmalig beim Mount setzen
@@ -8,9 +8,11 @@
 // 3. CameraController: useEffect statt useMemo (verhindert Kamera-Reset)
 // 4. OrbitControls: makeDefault hinzugefügt
 // 5. useCallback für Event-Handler (verhindert unnötige Re-Renders)
+// 6. camera-Objekt mit useMemo stabilisiert (verhindert Canvas-Neuinitialisierung)
+// 7. memo() für Scaffold3D und AllScaffoldComponents (verhindert Re-Render bei Parent-Changes)
 // ============================================================
 
-import { useMemo, useState, useRef, useEffect, useCallback } from 'react'
+import { useMemo, useState, useRef, useEffect, useCallback, memo } from 'react'
 import { Canvas, useThree } from '@react-three/fiber'
 import { OrbitControls, Grid, Text } from '@react-three/drei'
 import * as THREE from 'three'
@@ -206,9 +208,9 @@ function InstancedBauteile({
 }
 
 // ═══════════════════════════════════════════════════════════
-// ALLE BAUTEILE (Gruppierung nach Typ)
+// ALLE BAUTEILE (Gruppierung nach Typ) – mit memo()
 // ═══════════════════════════════════════════════════════════
-function AllScaffoldComponents({
+const AllScaffoldComponents = memo(function AllScaffoldComponents({
   components,
   visibleTypes,
   selectedComponent,
@@ -246,7 +248,7 @@ function AllScaffoldComponents({
       ))}
     </group>
   )
-}
+})
 
 // ═══════════════════════════════════════════════════════════
 // GEBÄUDE
@@ -438,9 +440,9 @@ function Scene({
 }
 
 // ═══════════════════════════════════════════════════════════
-// EXPORT: HAUPTKOMPONENTE
+// EXPORT: HAUPTKOMPONENTE – mit memo() und stabilisiertem camera
 // ═══════════════════════════════════════════════════════════
-export default function Scaffold3D({
+function Scaffold3D({
   model,
   showBuilding,
   showScaffold,
@@ -452,15 +454,19 @@ export default function Scaffold3D({
 }: Props) {
   const cameraDistance =
     Math.max(model.building.lengthM, model.building.heightM) * 2 + 8
+
+  // FIX 6: camera-Objekt stabilisieren – verhindert Canvas-Neuinitialisierung
+  const cameraConfig = useMemo(
+    () => ({
+      position: [cameraDistance, cameraDistance * 0.6, cameraDistance] as [number, number, number],
+      fov: 45,
+    }),
+    [cameraDistance]
+  )
+
   return (
     <div className="w-full h-full rounded-xl overflow-hidden border border-black/10 bg-[#f0f4f8] relative">
-      <Canvas
-        shadows
-        camera={{
-          position: [cameraDistance, cameraDistance * 0.6, cameraDistance],
-          fov: 45,
-        }}
-      >
+      <Canvas shadows camera={cameraConfig}>
         <Scene
           model={model}
           showBuilding={showBuilding}
@@ -514,3 +520,5 @@ export default function Scaffold3D({
     </div>
   )
 }
+
+export default memo(Scaffold3D)

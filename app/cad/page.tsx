@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo, useCallback } from 'react'
+import { useState, useMemo, useCallback, useEffect } from 'react'
 import dynamic from 'next/dynamic'
 import { BuildingParams, CADModel, generateCADModel, generateBillOfMaterials, checkCollisions } from '@/lib/calculations/cad-engine'
 import { checkRules, groupRulesBySeverity } from '@/lib/calculations/cad-rules'
@@ -56,7 +56,10 @@ export default function CADPage() {
     setSelectedComponent(null)
   }, [building, systemId])
 
-  useMemo(() => { if (!model) generate() }, [generate, model])
+  // FIX: useEffect statt useMemo für Seiteneffekte (verhindert Endlosschleife & Blocks)
+  useEffect(() => {
+    if (!model) generate()
+  }, [generate, model])
 
   const ruleResults = useMemo(() => {
     if (!model) return { errors: [], warnings: [], infos: [] }
@@ -79,9 +82,9 @@ export default function CADPage() {
   const totalWeight = useMemo(() => materials.reduce((s, i) => s + i.weightKg * i.quantity, 0), [materials])
   const totalPrice = useMemo(() => materials.reduce((s, i) => s + i.totalPrice, 0), [materials])
 
-  const toggleType = (type: string) => {
+  const toggleType = useCallback((type: string) => {
     setVisibleTypes((prev) => ({ ...prev, [type]: !prev[type] }))
-  }
+  }, [])
 
   const handleExportPDF = useCallback(() => {
     if (!model) return
