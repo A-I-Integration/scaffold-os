@@ -92,6 +92,20 @@ export default function CADPage() {
   const totalWeight = useMemo(() => materials.reduce((s, i) => s + i.weightKg * i.quantity, 0), [materials])
   const totalPrice = useMemo(() => materials.reduce((s, i) => s + i.totalPrice, 0), [materials])
 
+  const handleExportPDF = useCallback(() => {
+    if (!model) return
+    const html = generatePDFHTML(model, materials, {
+      include3D: true,
+      include2D: true,
+      includeBOM: true,
+      includeChecks: true,
+      companyName: 'Ihr Unternehmen',
+      projectName: 'Gerüstprojekt',
+      date: new Date().toLocaleDateString('de-DE'),
+    })
+    downloadPDF(html, `Gerüstbau-Dokumentation-${new Date().toISOString().split('T')[0]}.html`)
+  }, [model, materials])
+
   const toggleType = (type: string) => {
     setVisibleTypes((prev) => ({ ...prev, [type]: !prev[type] }))
   }
@@ -148,8 +162,7 @@ export default function CADPage() {
           </div>
         </div>
         <div className='w-72 shrink-0'>
-          <BillOfMaterials materials={materials} totalWeightKg={totalWeight} totalPrice={totalPrice} />
-        </div>
+        <BillOfMaterials materials={materials} totalWeightKg={totalWeight} totalPrice={totalPrice} onExportPDF={handleExportPDF} />
       </div>
     </div>
   )
