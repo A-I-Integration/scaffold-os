@@ -201,3 +201,88 @@ export function getSeverityColor(severity: RuleSeverity): string {
     case 'info': return 'text-blue-600 bg-blue-50 border-blue-200'
   }
 }
+
+// ============================================================
+// PHASE 2: KOLLISIONS-REGELN & STATISCHE PRÜFUNG
+// ============================================================
+
+import { CADModel, detectCollisions, performStaticChecks } from './cad-engine'
+
+export interface Phase2RuleResult {
+  ruleId: string
+  severity: 'error' | 'warning' | 'info'
+  title: string
+  message: string
+  affectedComponents?: string[]
+  autoFixable?: boolean
+}
+
+export function runPhase2Checks(model: CADModel): Phase2RuleResult[] {
+  const results: Phase2RuleResult[] = []
+
+  // Kollisionserkennung
+  const collisions = detectCollisions(model)
+  if (collisions.hasCollision) {
+    collisions.collisions.forEach((col, idx) => {
+      results.push({
+        ruleId: `COL-${idx}`,
+        severity: 'error',
+        title: 'Bauteilkollision',
+        message: col.type === 'component-building'
+          ? `Bauteil ${col.componentA} kollidiert mit Gebäude`
+          : `Bauteil ${col.componentA} kollidiert mit ${col.componentB} (Abstand: ${(col.distance * 100).toFixed(1)}cm)`,
+        affectedComponents: [col.componentA, col.componentB],
+        autoFixable: false,
+      })
+    })
+  }
+
+  // Statische Prüfung
+  const staticCheck = performStaticChecks(model)
+  staticCheck.checks.forEach((check) => {
+    if (!check.passed) {
+      results.push({
+        ruleId: `STAT-${check.name}`,
+        severity: check.severity,
+        title: check.name,
+        message: check.message,
+        autoFixable: check.name === 'Standfestigkeit' || check.name === 'Absturzsicherung',
+      })
+    }
+  })
+
+  // Höhenabhängige Regeln
+  if (model.building.heightM > 12 && model.components3D.filter(c => c.type === 'net').length === 0) {
+    results.push({
+      ruleId: 'SAFETY-NET',
+      severity: 'warning',
+      title: 'Fangnetz fehlt',
+      message: `Bei ${model.building.heightM}m Höhe wird ein Fangnetz empfohlen (vorgeschrieben ab 12m)`,
+      autoFixable: true,
+    })
+  }
+
+  // Konsolen bei Überstand
+  if (model.building.overhangM > 0.5 && model.components3D.filter(c => c.type === 'console').length === 0) {
+    results.push({
+      ruleId: 'CONSOLE-NEEDED',
+      severity: 'warning',
+      title: 'Konsolen erforderlich',
+      message: `Dachüberstand ${model.building.overhangM}m erfordert Konsolen zur Abstützung`,
+      autoFixable: true,
+    })
+  }
+
+  // Treppe bei > 3 Lagen
+  if (model.levelCount > 3 && model.components3D.filter(c => c.type === 'stair').length === 0) {
+    results.push({
+      ruleId: 'STAIR-NEEDED',
+      severity: 'warning',
+      title: 'Treppenzugang fehlt',
+      message: `Bei ${model.levelCount} Lagen ist ein Treppenzugang erforderlich`,
+      autoFixable: true,
+    })
+  }
+
+  return results
+}
