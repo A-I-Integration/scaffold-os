@@ -14,39 +14,19 @@ const Scaffold3D = dynamic(() => import('@/components/cad/Scaffold3D'), { ssr: f
 type ViewMode = '3d' | '2d'
 
 const COMPONENT_LABELS: Record<string, string> = {
-  frame: 'Rahmen',
-  deck: 'Beläge',
-  railing: 'Geländer',
-  diagonal: 'Diagonalen',
-  footplate: 'Fußplatten',
-  coupling: 'Kupplungen',
-  anchor: 'Anker',
-  console: 'Konsolen',
-  stair: 'Treppen',
-  net: 'Netze',
-  board: 'Bordbretter',
-  protection_roof: 'Schutzdächer',
-  safety_net: 'Fangnetze',
-  load_plate: 'Lastplatten',
+  frame: 'Rahmen', deck: 'Beläge', railing: 'Geländer', diagonal: 'Diagonalen',
+  footplate: 'Fußplatten', coupling: 'Kupplungen', anchor: 'Anker', console: 'Konsolen',
+  stair: 'Treppen', net: 'Netze', board: 'Bordbretter', protection_roof: 'Schutzdächer',
+  safety_net: 'Fangnetze', load_plate: 'Lastplatten',
 }
 
 export default function CADPage() {
   const [viewMode, setViewMode] = useState<ViewMode>('3d')
   const [building, setBuilding] = useState<BuildingParams>({
-    lengthM: 18.4,
-    widthM: 8.0,
-    heightM: 12.0,
-    eavesHeightM: 10.0,
-    roofHeightM: 2.5,
-    roofForm: 'satteldach',
-    floors: 3,
-    floorHeightsM: [3.0, 3.0, 3.0],
-    windowCount: 8,
-    doorCount: 2,
-    balconyCount: 1,
-    overhangM: 0.5,
-    sides: ["front"],
-    setbackM: 0,
+    lengthM: 18.4, widthM: 8.0, heightM: 12.0, eavesHeightM: 10.0, roofHeightM: 2.5,
+    roofForm: 'satteldach', floors: 3, floorHeightsM: [3.0, 3.0, 3.0],
+    windowCount: 8, doorCount: 2, balconyCount: 1, overhangM: 0.5,
+    sides: ['front'], setbackM: 0,
   })
   const [systemId, setSystemId] = useState<string>('layher-allround')
   const [model, setModel] = useState<CADModel | null>(null)
@@ -92,23 +72,19 @@ export default function CADPage() {
   const totalWeight = useMemo(() => materials.reduce((s, i) => s + i.weightKg * i.quantity, 0), [materials])
   const totalPrice = useMemo(() => materials.reduce((s, i) => s + i.totalPrice, 0), [materials])
 
-  const handleExportPDF = useCallback(() => {
-    if (!model) return
-    const html = generatePDFHTML(model, materials, {
-      include3D: true,
-      include2D: true,
-      includeBOM: true,
-      includeChecks: true,
-      companyName: 'Ihr Unternehmen',
-      projectName: 'Gerüstprojekt',
-      date: new Date().toLocaleDateString('de-DE'),
-    })
-    downloadPDF(html, `Gerüstbau-Dokumentation-${new Date().toISOString().split('T')[0]}.html`)
-  }, [model, materials])
-
   const toggleType = (type: string) => {
     setVisibleTypes((prev) => ({ ...prev, [type]: !prev[type] }))
   }
+
+  const handleExportPDF = useCallback(() => {
+    if (!model) return
+    const html = generatePDFHTML(model, materials, {
+      include3D: true, include2D: true, includeBOM: true, includeChecks: true,
+      companyName: 'Ihr Unternehmen', projectName: 'Gerüstprojekt',
+      date: new Date().toLocaleDateString('de-DE'),
+    })
+    downloadPDF(html, `Gerüstbau-Dokumentation-${new Date().toISOString().split('T')[0]}.html`)
+  }, [model, materials])
 
   return (
     <div className='h-screen flex flex-col bg-[#fbfbfd]'>
@@ -150,7 +126,9 @@ export default function CADPage() {
             )}
           </div>
           <div className='flex-1 p-4'>
-            {viewMode === '3d' && model && <Scaffold3D model={model} showBuilding={showBuilding} showScaffold={showScaffold} showDimensions={showDimensions} selectedComponent={selectedComponent} onSelectComponent={setSelectedComponent} visibleTypes={visibleTypes} viewMode={viewAngle} />}
+            {viewMode === '3d' && model && (
+              <Scaffold3D model={model} showBuilding={showBuilding} showScaffold={showScaffold} showDimensions={showDimensions} selectedComponent={selectedComponent} onSelectComponent={setSelectedComponent} visibleTypes={visibleTypes} viewMode={viewAngle} />
+            )}
             {viewMode === '2d' && model && <Scaffold2D model={model} />}
           </div>
           <div className='px-4 py-2 bg-white/50 border-t border-black/5 flex gap-2 flex-wrap max-h-24 overflow-y-auto'>
@@ -162,7 +140,8 @@ export default function CADPage() {
           </div>
         </div>
         <div className='w-72 shrink-0'>
-        <BillOfMaterials materials={materials} totalWeightKg={totalWeight} totalPrice={totalPrice} onExportPDF={handleExportPDF} />
+          <BillOfMaterials materials={materials} totalWeightKg={totalWeight} totalPrice={totalPrice} onExportPDF={handleExportPDF} />
+        </div>
       </div>
     </div>
   )
