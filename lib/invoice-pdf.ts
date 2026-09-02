@@ -35,7 +35,7 @@ export interface Invoice {
   created_at: string;
   company_snapshot?: any; // Phase 14: Firmendaten zum Ausstellungszeitpunkt (GoBD)
   reminder_level?: number; // Phase 15: 0 = keine, 1/2 = Mahnung
-  invoice_type?: 'standard' | 'abschlag' | 'schluss'; // Phase 15
+  invoice_type?: 'standard' | 'abschlag' | 'schluss' | 'gutschrift'; // Phase 15 + 22
 }
 
 // Phase 15: Bezeichnung je Rechnungstyp
@@ -43,6 +43,7 @@ export const TYPE_LABEL: Record<string, string> = {
   standard: 'RECHNUNG',
   abschlag: 'ABSCHLAGSRECHNUNG',
   schluss: 'SCHLUSSRECHNUNG',
+  gutschrift: 'GUTSCHRIFT',
 };
 
 export const fmtEur = (n: number) =>
