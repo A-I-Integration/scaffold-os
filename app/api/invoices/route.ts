@@ -71,7 +71,7 @@ export async function POST(req: NextRequest) {
   }
   try {
     const body = await req.json();
-    const { project_id, customer_name, customer_address, positions, tax_rate, invoice_date, due_date, notes, invoice_type } = body;
+    const { project_id, customer_name, customer_address, positions, tax_rate, invoice_date, due_date, notes, invoice_type, reference_invoice_number } = body;
 
     if (!customer_name) {
       return NextResponse.json({ success: false, error: 'Kundenname erforderlich.' }, { status: 400 });
@@ -80,8 +80,14 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: false, error: 'Mindestens eine Position erforderlich.' }, { status: 400 });
     }
 
+    const istGutschrift = invoice_type === 'gutschrift';
+
     // Beträge serverseitig rechnen (Vertrauen ist gut, § 14 ist besser)
-    const net = positions.reduce(
+    // Bei Gutschriften: Positionen werden positiv erfasst (z.B. "Rabatt 200€"),
+    // aber als Beleg mit negativem Betrag gebucht – so wirkt sie korrekt auf
+    // die offene Summe und ist als Korrektur erkennbar (§14 UStG).
+    const vorzeichen = istGutschrift ? -1 : 1;
+    const net = vorzeichen * positions.reduce(
       (s: number, p: any) => s + (Number(p.menge) || 0) * (Number(p.einzelpreis) || 0),
       0
     );
@@ -90,13 +96,14 @@ export async function POST(req: NextRequest) {
     const gross = Math.round((net + tax) * 100) / 100;
     const netRounded = Math.round(net * 100) / 100;
 
-    // Fortlaufende Rechnungsnummer aus der Datenbank holen
+    // Fortlaufende Nummer: Gutschriften bekommen ihre eigene Zählfolge (GS-...),
+    // unabhängig von den Rechnungsnummern (RE-...).
     const numRes = await fetch(`${url}/rest/v1/rpc/next_invoice_number`, {
       method: 'POST',
       headers,
-      body: '{}',
+      body: JSON.stringify(istGutschrift ? { p_prefix: 'GS' } : {}),
     });
-    if (!numRes.ok) throw new Error('Rechnungsnummer: ' + (await numRes.text()));
+    if (!numRes.ok) throw new Error('Belegnummer: ' + (await numRes.text()));
     const invoiceNumber = await numRes.json();
 
     // Phase 14: Firmen-Snapshot für die Rechnung (GoBD – die Rechnung
@@ -134,9 +141,11 @@ export async function POST(req: NextRequest) {
         // Phase 15-Fix: Rechnungstyp wirklich speichern (wurde bisher
         // zwar aus dem Request gelesen, aber nicht in die Datenbank
         // geschrieben – jede Rechnung landete als 'standard')
-        invoice_type: ['standard', 'abschlag', 'schluss'].includes(invoice_type)
+        // Phase 22: 'gutschrift' als vierter, eigener Typ.
+        invoice_type: ['standard', 'abschlag', 'schluss', 'gutschrift'].includes(invoice_type)
           ? invoice_type
           : 'standard',
+        reference_invoice_number: istGutschrift ? (reference_invoice_number || null) : null,
       }),
     });
     if (!res.ok) throw new Error(await res.text());
