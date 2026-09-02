@@ -49,16 +49,18 @@ function emailOk(email: any): boolean {
 }
 
 // ─── GET: alle Kunden laden ───
-export async function GET() {
+export async function GET(req: NextRequest) {
   const role = await callerRole();
   if (!role || !ROLES.includes(role)) {
     return NextResponse.json({ success: false, error: 'Nur Admin und Disposition.' }, { status: 403 });
   }
   try {
-    const res = await fetch(
-      `${url}/rest/v1/customers?select=id,name,contact_person,email,phone,street,zip,city,notes,is_active,created_at&order=name`,
-      { headers }
-    );
+    const { searchParams } = new URL(req.url);
+    const id = searchParams.get('id');
+    const query = id
+      ? `id=eq.${id}&select=id,name,contact_person,email,phone,street,zip,city,notes,is_active,created_at`
+      : `select=id,name,contact_person,email,phone,street,zip,city,notes,is_active,created_at&order=name`;
+    const res = await fetch(`${url}/rest/v1/customers?${query}`, { headers });
     if (!res.ok) {
       const t = await res.text();
       // Tabelle fehlt (ältere Instanz ohne Phase-18-Migration)?
