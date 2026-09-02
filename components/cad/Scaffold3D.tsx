@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from 'react'
 import { Canvas, useThree } from '@react-three/fiber'
-import { OrbitControls, Grid, Text, ContactShadows, Environment } from '@react-three/drei'
+import { OrbitControls, Grid, Text } from '@react-three/drei'
 import * as THREE from 'three'
 import { CADModel, ScaffoldComponent3D } from '@/lib/calculations/cad-engine'
 
@@ -494,30 +494,16 @@ function Scene({ model, showBuilding, showScaffold, showDimensions, selectedComp
       <CameraController viewMode={viewMode} target={target} />
 
       {/* Umgebungslicht */}
-      <ambientLight intensity={0.4} />
+      <ambientLight intensity={0.6} />
 
       {/* Haupt-Sonnenlicht */}
       <directionalLight
         position={[15, 20, 10]}
-        intensity={1.2}
+        intensity={1.0}
         castShadow
-        shadow-mapSize-width={2048}
-        shadow-mapSize-height={2048}
-        shadow-camera-far={100}
-        shadow-camera-left={-30}
-        shadow-camera-right={30}
-        shadow-camera-top={30}
-        shadow-camera-bottom={-30}
+        shadow-mapSize-width={1024}
+        shadow-mapSize-height={1024}
       />
-
-      {/* Fülllicht von links */}
-      <directionalLight position={[-10, 10, -5]} intensity={0.3} color="#b0c4de" />
-
-      {/* Rücklicht für Kanten */}
-      <pointLight position={[0, 5, -10]} intensity={0.2} color="#ffffff" />
-
-      {/* HDRI Umgebung */}
-      <Environment preset="city" />
 
       {/* Gebäude */}
       <Building3D building={model.building} visible={showBuilding} />
@@ -535,9 +521,6 @@ function Scene({ model, showBuilding, showScaffold, showDimensions, selectedComp
 
       {/* Bemaßung */}
       <DimensionLines model={model} visible={showDimensions} />
-
-      {/* Kontaktschatten für realistischen Bodenkontakt */}
-      <ContactShadows position={[0, 0.01, 0]} opacity={0.5} scale={50} blur={2} far={10} />
 
       {/* Beton-Boden */}
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.02, 0]} receiveShadow>
