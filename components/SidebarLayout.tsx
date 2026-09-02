@@ -56,7 +56,6 @@ const NAV_GROUPS: NavGroup[] = [
       { href: '/rechnungen',     label: 'Rechnungen',     icon: FileText,      roles: ['admin', 'disponent'] },
       { href: '/mietabrechnung', label: 'Mietabrechnung', icon: Euro,          roles: ['admin', 'disponent'] },
       { href: '/nachunternehmer', label: 'Nachunternehmer', icon: Handshake,   roles: ['admin', 'disponent'] },
-      { href: '/dokumentation',  label: 'Dokumentation',  icon: ClipboardList, roles: ['admin', 'disponent', 'bauleiter', 'mitarbeiter', 'lager'] },
     ],
   },
   {
@@ -80,6 +79,7 @@ const NAV_GROUPS: NavGroup[] = [
       { href: '/mitarbeiter',   label: 'Zugänge',       icon: KeyRound,   roles: ['admin', 'disponent'] },
       { href: '/zeiterfassung', label: 'Zeiterfassung', icon: Timer,      roles: ['admin', 'disponent', 'bauleiter'] },
       { href: '/meine-touren',  label: 'Meine Touren',  icon: Navigation, roles: ['admin', 'disponent', 'bauleiter', 'mitarbeiter', 'lager'] },
+      { href: '/dokumentation', label: 'Dokumentation', icon: ClipboardList, roles: ['admin', 'disponent', 'bauleiter', 'mitarbeiter', 'lager'] },
     ],
   },
   {
