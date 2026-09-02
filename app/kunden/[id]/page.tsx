@@ -21,6 +21,9 @@ import {
 } from 'lucide-react'
 import { generateInvoicePDF, fmtEur, fmtDate, type Invoice } from '@/lib/invoice-pdf'
 import VersionsHistorie from '@/components/VersionsHistorie'
+import KundenKontakte from '@/components/KundenKontakte'
+import AuftragsTeam from '@/components/AuftragsTeam'
+import VertragsDokumente from '@/components/VertragsDokumente'
 
 interface Kunde {
   id: string
@@ -279,7 +282,7 @@ export default function KundenDetailPage() {
     } catch (err: any) { alert('❌ ' + err.message) }
   }
 
-  async function createZusatzrechnung() {
+  async function createZusatzrechnung(overrideGrund?: string) {
     if (!zusatzProjectId || !kunde) return
     const menge = Number(String(zusatzPos.menge).replace(',', '.'))
     const einzelpreis = Number(String(zusatzPos.einzelpreis).replace(',', '.'))
@@ -296,10 +299,18 @@ export default function KundenDetailPage() {
           due_date: new Date(Date.now() + 14 * 86400000).toISOString().slice(0, 10),
           notes: zusatzNotiz.trim() || undefined,
           positions: [{ bezeichnung: zusatzPos.bezeichnung.trim(), menge, einheit: zusatzPos.einheit || 'Stk.', einzelpreis }],
+          override_grund: overrideGrund || undefined,
         }),
       })
       const json = await res.json()
-      if (!json.success) throw new Error(json.error)
+      if (!json.success) {
+        if (json.code === 'FREIGABE_FEHLT_OVERRIDE_MOEGLICH') {
+          const grund = prompt(json.error + '\n\nBegründung für die Überschreibung eingeben:')
+          if (grund && grund.trim()) { setSpeichern(false); await createZusatzrechnung(grund.trim()); return }
+          setSpeichern(false); return
+        }
+        throw new Error(json.error)
+      }
       alert(`✅ Rechnung ${json.invoice?.invoice_number} angelegt.`)
       setZusatzPos({ ...LEER_POSITION }); setZusatzNotiz(''); setZusatzProjectId(null)
       ladeDaten()
@@ -308,7 +319,7 @@ export default function KundenDetailPage() {
   }
 
   // ─── Gutschrift: eigener Beleg-Typ, eigene Nummer (GS-...), §14 UStG ───
-  async function createGutschrift() {
+  async function createGutschrift(overrideGrund?: string) {
     if (!gutschriftOffen || !kunde) return
     const betrag = Number(String(gutschriftBetrag).replace(',', '.'))
     if (!gutschriftGrund.trim()) { alert('Bitte einen Grund angeben.'); return }
@@ -326,10 +337,18 @@ export default function KundenDetailPage() {
           reference_invoice_number: gutschriftReferenz.trim() || undefined,
           notes: (gutschriftReferenz.trim() ? `Bezug: ${gutschriftReferenz.trim()}. ` : '') + gutschriftGrund.trim(),
           positions: [{ bezeichnung: gutschriftGrund.trim(), menge: 1, einheit: 'Stk.', einzelpreis: betrag }],
+          override_grund: overrideGrund || undefined,
         }),
       })
       const json = await res.json()
-      if (!json.success) throw new Error(json.error)
+      if (!json.success) {
+        if (json.code === 'FREIGABE_FEHLT_OVERRIDE_MOEGLICH') {
+          const grund = prompt(json.error + '\n\nBegründung für die Überschreibung eingeben:')
+          if (grund && grund.trim()) { setSpeichern(false); await createGutschrift(grund.trim()); return }
+          setSpeichern(false); return
+        }
+        throw new Error(json.error)
+      }
       alert(`✅ Gutschrift ${json.invoice?.invoice_number} angelegt.`)
       setGutschriftGrund(''); setGutschriftBetrag(''); setGutschriftReferenz(''); setGutschriftOffen(null)
       ladeDaten()
@@ -410,6 +429,8 @@ export default function KundenDetailPage() {
           </div>
         )}
 
+        {tab === 'kunde' && <div className="max-w-xl mt-4"><KundenKontakte customerId={kunde.id} /></div>}
+
         {/* ═══════════ TAB: AUFMASS ═══════════ */}
         {tab === 'aufmass' && (
           <div className="space-y-4">
@@ -441,6 +462,7 @@ export default function KundenDetailPage() {
                     <div><p className="text-[10px] text-[#86868b] uppercase">Risiko</p><p className={ki?.riskLevel === 'red' ? 'text-red-600' : ki?.riskLevel === 'yellow' ? 'text-amber-600' : 'text-emerald-600'}>{ki?.riskLevel === 'red' ? 'Hoch' : ki?.riskLevel === 'yellow' ? 'Mittel' : ki ? 'Niedrig' : '–'}</p></div>
                   </div>
                   {!project.data?.step1 && <p className="text-xs text-[#86868b] mt-3">Für diesen Auftrag liegen noch keine Aufmaß-Detaildaten vor.</p>}
+                  <AuftragsTeam projectId={project.id} />
                   <VersionsHistorie projectId={project.id} onRestored={ladeDaten} />
                 </div>
               )
@@ -507,15 +529,18 @@ export default function KundenDetailPage() {
               const angebotsStatus = project.data?.angebotsStatus || null
               const angebotMails = emails.filter((e) => e.type === 'angebot')
               return (
-                <div key={project.id} className="bg-white rounded-xl border border-black/10 p-5 flex flex-wrap items-center justify-between gap-3">
-                  <div>
-                    <p className="font-semibold text-[#1d1d1f] flex items-center gap-1.5"><FileSignature className="h-4 w-4 text-[#e8590c]" /> {project.name || 'Unbenanntes Projekt'}</p>
-                    <p className="text-xs text-[#86868b] mt-1">
-                      {angebotsStatus ? (ANGEBOT_LABEL[angebotsStatus] || angebotsStatus) : 'Noch kein Angebot erstellt'}
-                      {angebotMails.length > 0 && ` · zuletzt versendet ${new Date(angebotMails[0].sent_at).toLocaleDateString('de-DE')}`}
-                    </p>
+                <div key={project.id} className="bg-white rounded-xl border border-black/10 p-5">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                      <p className="font-semibold text-[#1d1d1f] flex items-center gap-1.5"><FileSignature className="h-4 w-4 text-[#e8590c]" /> {project.name || 'Unbenanntes Projekt'}</p>
+                      <p className="text-xs text-[#86868b] mt-1">
+                        {angebotsStatus ? (ANGEBOT_LABEL[angebotsStatus] || angebotsStatus) : 'Noch kein Angebot erstellt'}
+                        {angebotMails.length > 0 && ` · zuletzt versendet ${new Date(angebotMails[0].sent_at).toLocaleDateString('de-DE')}`}
+                      </p>
+                    </div>
+                    <a href={`/aufmass/schritt6?id=${project.id}`} className={btnPrimary}>{angebotsStatus ? 'Angebot öffnen' : 'Angebot erstellen'}</a>
                   </div>
-                  <a href={`/aufmass/schritt6?id=${project.id}`} className={btnPrimary}>{angebotsStatus ? 'Angebot öffnen' : 'Angebot erstellen'}</a>
+                  <VertragsDokumente projectId={project.id} />
                 </div>
               )
             })}
@@ -625,7 +650,7 @@ export default function KundenDetailPage() {
                         </div>
                         <input value={zusatzNotiz} onChange={(e) => setZusatzNotiz(e.target.value)} placeholder="Notiz (optional)" className={inputCls} />
                         <div className="flex gap-2">
-                          <button onClick={createZusatzrechnung} disabled={speichern} className={btnPrimary}>{speichern ? 'Speichert…' : 'Rechnung anlegen'}</button>
+                          <button onClick={() => createZusatzrechnung()} disabled={speichern} className={btnPrimary}>{speichern ? 'Speichert…' : 'Rechnung anlegen'}</button>
                           <button onClick={() => setZusatzProjectId(null)} className={btnSecondary}>Abbrechen</button>
                         </div>
                       </div>
@@ -640,7 +665,7 @@ export default function KundenDetailPage() {
                           <input value={gutschriftReferenz} onChange={(e) => setGutschriftReferenz(e.target.value)} placeholder="Bezug auf Rechnungs-Nr. (optional)" className={inputCls} />
                         </div>
                         <div className="flex gap-2">
-                          <button onClick={createGutschrift} disabled={speichern} className="px-3 py-1.5 rounded-lg bg-purple-600 hover:bg-purple-500 text-white text-xs font-semibold disabled:opacity-50">{speichern ? 'Speichert…' : 'Gutschrift anlegen'}</button>
+                          <button onClick={() => createGutschrift()} disabled={speichern} className="px-3 py-1.5 rounded-lg bg-purple-600 hover:bg-purple-500 text-white text-xs font-semibold disabled:opacity-50">{speichern ? 'Speichert…' : 'Gutschrift anlegen'}</button>
                           <button onClick={() => setGutschriftOffen(null)} className={btnSecondary}>Abbrechen</button>
                         </div>
                       </div>
