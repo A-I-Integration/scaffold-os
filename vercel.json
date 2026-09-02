@@ -3,6 +3,10 @@
     {
       "path": "/api/cron/datenhygiene",
       "schedule": "0 3 * * *"
+    },
+    {
+      "path": "/api/cron/mahnwesen",
+      "schedule": "0 6 * * *"
     }
   ]
 }
