@@ -166,7 +166,7 @@ export async function PATCH(req: NextRequest) {
   }
   try {
     const body = await req.json();
-    const { id, status, reminder_level } = body;
+    const { id, status, reminder_level, positions, net_amount, tax_amount, gross_amount } = body;
 
     if (!id) {
       return NextResponse.json({ success: false, error: 'id erforderlich' }, { status: 400 });
@@ -188,9 +188,15 @@ export async function PATCH(req: NextRequest) {
       }
       patch.reminder_level = rl;
     }
-    if (!status && reminder_level == null) {
-      return NextResponse.json({ success: false, error: 'Nichts zu ändern (status oder reminder_level fehlt).' }, { status: 400 });
+    if (!status && reminder_level == null && !positions && net_amount == null && tax_amount == null && gross_amount == null) {
+      return NextResponse.json({ success: false, error: 'Nichts zu ändern.' }, { status: 400 });
     }
+
+    // Rechnungsbearbeitung: Positionen & Beträge aktualisieren
+    if (positions) patch.positions = positions;
+    if (net_amount != null) patch.net_amount = net_amount;
+    if (tax_amount != null) patch.tax_amount = tax_amount;
+    if (gross_amount != null) patch.gross_amount = gross_amount;
 
     const res = await fetch(`${url}/rest/v1/invoices?id=eq.${id}`, {
       method: 'PATCH',
