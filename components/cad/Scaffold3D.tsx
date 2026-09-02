@@ -1,7 +1,17 @@
 'use client'
 
-import { useMemo, useState, useRef } from 'react'
-import { Canvas, useThree, useFrame } from '@react-three/fiber'
+// Scaffold3D.tsx – v2.0 Performance-Fix (CTO-Approval)
+//
+// Fixes:
+// 1. useFrame()-Killer entfernt → Matrizen nur einmalig beim Mount setzen
+// 2. Farben nur bei Selection/Hover-Änderung aktualisieren
+// 3. CameraController: useEffect statt useMemo (verhindert Kamera-Reset)
+// 4. OrbitControls: makeDefault hinzugefügt
+// 5. useCallback für Event-Handler (verhindert unnötige Re-Renders)
+// ============================================================
+
+import { useMemo, useState, useRef, useEffect, useCallback } from 'react'
+import { Canvas, useThree } from '@react-three/fiber'
 import { OrbitControls, Grid, Text } from '@react-three/drei'
 import * as THREE from 'three'
 import { CADModel, ScaffoldComponent3D } from '@/lib/calculations/cad-engine'
@@ -17,17 +27,200 @@ interface Props {
   viewMode: 'perspective' | 'front' | 'back' | 'left' | 'right' | 'top' | 'bottom'
 }
 
-// --- OPTIMIERT: ALLE BAUTEILE IN EINER KOMPONENTE ---
-function AllScaffoldComponents({ components, visibleTypes, selectedComponent, onSelectComponent }: {
+// ═══════════════════════════════════════════════════════════
+// FARBPALETTE (einmalig, außerhalb der Komponente)
+// ═══════════════════════════════════════════════════════════
+const COLOR_MAP: Record<string, string> = {
+  frame: '#3b82f6',
+  deck: '#f59e0b',
+  railing: '#ef4444',
+  diagonal: '#8b5cf6',
+  footplate: '#6b7280',
+  coupling: '#e8c547',
+  anchor: '#10b981',
+  console: '#f43f5e',
+  stair: '#84cc16',
+  net: '#06b6d4',
+  board: '#d97706',
+  protection_roof: '#f97316',
+  load_plate: '#78716c',
+  corner_brace: '#6366f1',
+}
+
+// ═══════════════════════════════════════════════════════════
+// GEOMETRIE-CACHE (einmalig pro Typ, nicht pro Render)
+// ═══════════════════════════════════════════════════════════
+const GEOMETRY_CACHE = new Map<string, THREE.BufferGeometry>()
+
+function getGeometry(type: string): THREE.BufferGeometry {
+  if (GEOMETRY_CACHE.has(type)) return GEOMETRY_CACHE.get(type)!
+  let geo: THREE.BufferGeometry
+  switch (type) {
+    case 'frame':
+    case 'railing':
+    case 'board':
+    case 'console':
+    case 'stair':
+    case 'protection_roof':
+      geo = new THREE.BoxGeometry(1, 1, 1)
+      break
+    case 'deck':
+      geo = new THREE.BoxGeometry(1, 1, 0.02)
+      break
+    case 'diagonal':
+    case 'corner_brace':
+      geo = new THREE.CylinderGeometry(0.015, 0.015, 1, 8)
+      break
+    case 'footplate':
+    case 'load_plate':
+      geo = new THREE.CylinderGeometry(0.075, 0.075, 0.04, 8)
+      break
+    case 'coupling':
+      geo = new THREE.SphereGeometry(0.04, 8, 8)
+      break
+    case 'anchor':
+      geo = new THREE.CylinderGeometry(0.04, 0.04, 0.3, 8)
+      break
+    case 'net':
+    case 'safety_net':
+      geo = new THREE.PlaneGeometry(1, 1)
+      break
+    default:
+      geo = new THREE.BoxGeometry(1, 1, 1)
+  }
+  GEOMETRY_CACHE.set(type, geo)
+  return geo
+}
+
+// ═══════════════════════════════════════════════════════════
+// MATERIAL-CACHE (einmalig pro Typ)
+// ═══════════════════════════════════════════════════════════
+const MATERIAL_CACHE = new Map<string, THREE.MeshStandardMaterial>()
+
+function getMaterial(type: string, color: THREE.Color): THREE.MeshStandardMaterial {
+  const key = `${type}-${color.getHexString()}`
+  if (MATERIAL_CACHE.has(key)) return MATERIAL_CACHE.get(key)!
+  const mat = new THREE.MeshStandardMaterial({
+    color,
+    metalness: type === 'frame' || type === 'diagonal' ? 0.7 : 0.3,
+    roughness: type === 'deck' || type === 'board' ? 0.7 : 0.3,
+    transparent: type === 'net' || type === 'safety_net',
+    opacity: type === 'net' || type === 'safety_net' ? 0.3 : 0.9,
+    side: type === 'net' || type === 'safety_net' ? THREE.DoubleSide : THREE.FrontSide,
+  })
+  MATERIAL_CACHE.set(key, mat)
+  return mat
+}
+
+// ═══════════════════════════════════════════════════════════
+// INSTANCED BAUTEILE (Performance-optimiert)
+// ═══════════════════════════════════════════════════════════
+function InstancedBauteile({
+  type,
+  items,
+  selectedComponent,
+  hoveredId,
+  onSelect,
+  onHover,
+}: {
+  type: string
+  items: ScaffoldComponent3D[]
+  selectedComponent: string | null
+  hoveredId: string | null
+  onSelect: (id: string | null) => void
+  onHover: (id: string | null) => void
+}) {
+  const meshRef = useRef<THREE.InstancedMesh>(null)
+  const dummy = useMemo(() => new THREE.Object3D(), [])
+  const baseColor = useMemo(() => new THREE.Color(COLOR_MAP[type] || '#888888'), [type])
+  const geometry = useMemo(() => getGeometry(type), [type])
+  const material = useMemo(() => getMaterial(type, baseColor), [type, baseColor])
+
+  // ─── FIX 1: Matrizen nur EINMALIG beim Mount setzen ───
+  useEffect(() => {
+    if (!meshRef.current) return
+    const mesh = meshRef.current
+    items.forEach((item, i) => {
+      dummy.position.set(...item.position)
+      dummy.rotation.set(...item.rotation)
+      dummy.scale.set(...item.scale)
+      dummy.updateMatrix()
+      mesh.setMatrixAt(i, dummy.matrix)
+    })
+    mesh.instanceMatrix.needsUpdate = true
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []) // Nur beim ersten Mount
+
+  // ─── FIX 2: Farben nur bei Selection/Hover-Änderung ───
+  useEffect(() => {
+    if (!meshRef.current) return
+    const mesh = meshRef.current
+    items.forEach((item, i) => {
+      const isSelected = selectedComponent === item.id
+      const isHovered = hoveredId === item.id
+      const col = baseColor.clone()
+      if (isSelected) col.multiplyScalar(1.5).add(new THREE.Color(0.3, 0.3, 0.3))
+      else if (isHovered) col.multiplyScalar(1.2)
+      mesh.setColorAt(i, col)
+    })
+    if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true
+  }, [items, selectedComponent, hoveredId, baseColor])
+
+  const handleClick = useCallback(
+    (e: any) => {
+      e.stopPropagation()
+      if (e.instanceId !== undefined && items[e.instanceId]) {
+        onSelect(items[e.instanceId].id)
+      }
+    },
+    [items, onSelect]
+  )
+
+  const handlePointerOver = useCallback(
+    (e: any) => {
+      e.stopPropagation()
+      if (e.instanceId !== undefined && items[e.instanceId]) {
+        onHover(items[e.instanceId].id)
+        document.body.style.cursor = 'pointer'
+      }
+    },
+    [items, onHover]
+  )
+
+  const handlePointerOut = useCallback(() => {
+    onHover(null)
+    document.body.style.cursor = 'default'
+  }, [onHover])
+
+  return (
+    <instancedMesh
+      ref={meshRef}
+      args={[geometry, material, items.length]}
+      onClick={handleClick}
+      onPointerOver={handlePointerOver}
+      onPointerOut={handlePointerOut}
+      castShadow
+      receiveShadow
+    />
+  )
+}
+
+// ═══════════════════════════════════════════════════════════
+// ALLE BAUTEILE (Gruppierung nach Typ)
+// ═══════════════════════════════════════════════════════════
+function AllScaffoldComponents({
+  components,
+  visibleTypes,
+  selectedComponent,
+  onSelectComponent,
+}: {
   components: ScaffoldComponent3D[]
   visibleTypes: Record<string, boolean>
   selectedComponent: string | null
   onSelectComponent: (id: string | null) => void
 }) {
-  const meshRef = useRef<THREE.InstancedMesh>(null)
   const [hoveredId, setHoveredId] = useState<string | null>(null)
 
-  // Gruppiere Bauteile nach Typ für InstancedMesh
   const grouped = useMemo(() => {
     const groups: Record<string, ScaffoldComponent3D[]> = {}
     components.forEach((comp) => {
@@ -55,122 +248,16 @@ function AllScaffoldComponents({ components, visibleTypes, selectedComponent, on
   )
 }
 
-function InstancedBauteile({ type, items, selectedComponent, hoveredId, onSelect, onHover }: {
-  type: string
-  items: ScaffoldComponent3D[]
-  selectedComponent: string | null
-  hoveredId: string | null
-  onSelect: (id: string | null) => void
-  onHover: (id: string | null) => void
+// ═══════════════════════════════════════════════════════════
+// GEBÄUDE
+// ═══════════════════════════════════════════════════════════
+function Building3D({
+  building,
+  visible,
+}: {
+  building: CADModel['building']
+  visible: boolean
 }) {
-  const meshRef = useRef<THREE.InstancedMesh>(null)
-  const dummy = useMemo(() => new THREE.Object3D(), [])
-
-  // Farbe je Typ
-  const colorMap: Record<string, string> = {
-    frame: '#3b82f6', deck: '#f59e0b', railing: '#ef4444', diagonal: '#8b5cf6',
-    footplate: '#6b7280', coupling: '#e8c547', anchor: '#10b981', console: '#f43f5e',
-    stair: '#84cc16', net: '#06b6d4', board: '#d97706', protection_roof: '#f97316',
-    load_plate: '#78716c', corner_brace: '#6366f1',
-  }
-  const baseColor = new THREE.Color(colorMap[type] || '#888888')
-
-  useFrame(() => {
-    if (!meshRef.current) return
-    items.forEach((item, i) => {
-      dummy.position.set(...item.position)
-      dummy.rotation.set(...item.rotation)
-      dummy.scale.set(...item.scale)
-      dummy.updateMatrix()
-      meshRef.current!.setMatrixAt(i, dummy.matrix)
-
-      // Highlight für ausgewähltes oder hovered Bauteil
-      const isSelected = selectedComponent === item.id
-      const isHovered = hoveredId === item.id
-      const col = baseColor.clone()
-      if (isSelected) col.multiplyScalar(1.5).add(new THREE.Color(0.3, 0.3, 0.3))
-      else if (isHovered) col.multiplyScalar(1.2)
-      meshRef.current!.setColorAt(i, col)
-    })
-    meshRef.current.instanceMatrix.needsUpdate = true
-    if (meshRef.current.instanceColor) meshRef.current.instanceColor.needsUpdate = true
-  })
-
-  // Raycasting für Klicks
-  const handleClick = (e: any) => {
-    e.stopPropagation()
-    if (e.instanceId !== undefined && items[e.instanceId]) {
-      onSelect(items[e.instanceId].id)
-    }
-  }
-
-  const handlePointerOver = (e: any) => {
-    e.stopPropagation()
-    if (e.instanceId !== undefined && items[e.instanceId]) {
-      onHover(items[e.instanceId].id)
-      document.body.style.cursor = 'pointer'
-    }
-  }
-
-  const handlePointerOut = () => {
-    onHover(null)
-    document.body.style.cursor = 'default'
-  }
-
-  // Geometrie je Typ
-  const geometry = useMemo(() => {
-    switch (type) {
-      case 'frame':
-      case 'railing':
-      case 'board':
-      case 'console':
-      case 'stair':
-      case 'protection_roof':
-        return new THREE.BoxGeometry(1, 1, 1)
-      case 'deck':
-        return new THREE.BoxGeometry(1, 1, 0.02)
-      case 'diagonal':
-      case 'corner_brace':
-        return new THREE.CylinderGeometry(0.015, 0.015, 1, 8)
-      case 'footplate':
-      case 'load_plate':
-        return new THREE.CylinderGeometry(0.075, 0.075, 0.04, 8)
-      case 'coupling':
-        return new THREE.SphereGeometry(0.04, 8, 8)
-      case 'anchor':
-        return new THREE.CylinderGeometry(0.04, 0.04, 0.3, 8)
-      case 'net':
-      case 'safety_net':
-        return new THREE.PlaneGeometry(1, 1)
-      default:
-        return new THREE.BoxGeometry(1, 1, 1)
-    }
-  }, [type])
-
-  return (
-    <instancedMesh
-      ref={meshRef}
-      args={[geometry, undefined, items.length]}
-      onClick={handleClick}
-      onPointerOver={handlePointerOver}
-      onPointerOut={handlePointerOut}
-      castShadow
-      receiveShadow
-    >
-      <meshStandardMaterial
-        color={baseColor}
-        metalness={type === 'frame' || type === 'diagonal' ? 0.7 : 0.3}
-        roughness={type === 'deck' || type === 'board' ? 0.7 : 0.3}
-        transparent={type === 'net' || type === 'safety_net'}
-        opacity={type === 'net' || type === 'safety_net' ? 0.3 : 0.9}
-        side={type === 'net' || type === 'safety_net' ? THREE.DoubleSide : THREE.FrontSide}
-      />
-    </instancedMesh>
-  )
-}
-
-// --- GEBÄUDE (vereinfacht) ---
-function Building3D({ building, visible }: { building: CADModel['building']; visible: boolean }) {
   if (!visible) return null
   const { lengthM, heightM, widthM, roofForm, roofHeightM } = building
   const w = widthM || 6
@@ -192,61 +279,146 @@ function Building3D({ building, visible }: { building: CADModel['building']; vis
   )
 }
 
-// --- BEMAßUNG ---
+// ═══════════════════════════════════════════════════════════
+// BEMAßUNG
+// ═══════════════════════════════════════════════════════════
 function DimensionLines({ model, visible }: { model: CADModel; visible: boolean }) {
   if (!visible) return null
   const { building, totalHeightM } = model
   const offset = 2.0
   return (
     <group>
-      <MeasurementLine start={[-building.lengthM / 2 - offset, 0, 0]} end={[-building.lengthM / 2 - offset, building.heightM, 0]} label={`${building.heightM.toFixed(2)} m`} />
-      <MeasurementLine start={[building.lengthM / 2 + offset, 0, 0]} end={[building.lengthM / 2 + offset, totalHeightM, 0]} label={`${totalHeightM.toFixed(2)} m`} />
-      <MeasurementLine start={[-building.lengthM / 2, -offset, 0]} end={[building.lengthM / 2, -offset, 0]} label={`${building.lengthM.toFixed(2)} m`} />
+      <MeasurementLine
+        start={[-building.lengthM / 2 - offset, 0, 0]}
+        end={[-building.lengthM / 2 - offset, building.heightM, 0]}
+        label={`${building.heightM.toFixed(2)} m`}
+      />
+      <MeasurementLine
+        start={[building.lengthM / 2 + offset, 0, 0]}
+        end={[building.lengthM / 2 + offset, totalHeightM, 0]}
+        label={`${totalHeightM.toFixed(2)} m`}
+      />
+      <MeasurementLine
+        start={[-building.lengthM / 2, -offset, 0]}
+        end={[building.lengthM / 2, -offset, 0]}
+        label={`${building.lengthM.toFixed(2)} m`}
+      />
     </group>
   )
 }
 
-function MeasurementLine({ start, end, label }: { start: [number, number, number]; end: [number, number, number]; label: string }) {
-  const mid = useMemo(() => new THREE.Vector3().addVectors(new THREE.Vector3(...start), new THREE.Vector3(...end)).multiplyScalar(0.5), [start, end])
+function MeasurementLine({
+  start,
+  end,
+  label,
+}: {
+  start: [number, number, number]
+  end: [number, number, number]
+  label: string
+}) {
+  const mid = useMemo(
+    () =>
+      new THREE.Vector3()
+        .addVectors(new THREE.Vector3(...start), new THREE.Vector3(...end))
+        .multiplyScalar(0.5),
+    [start, end]
+  )
   return (
     <group>
       <mesh position={[mid.x, mid.y, mid.z]}>
-        <cylinderGeometry args={[0.02, 0.02, new THREE.Vector3(...start).distanceTo(new THREE.Vector3(...end)), 8]} />
+        <cylinderGeometry
+          args={[
+            0.02,
+            0.02,
+            new THREE.Vector3(...start).distanceTo(new THREE.Vector3(...end)),
+            8,
+          ]}
+        />
         <meshStandardMaterial color="#f59e0b" />
       </mesh>
-      <Text position={[mid.x, mid.y + 0.4, mid.z]} fontSize={0.3} color="#f59e0b" anchorX="center">{label}</Text>
+      <Text
+        position={[mid.x, mid.y + 0.4, mid.z]}
+        fontSize={0.3}
+        color="#f59e0b"
+        anchorX="center"
+      >
+        {label}
+      </Text>
     </group>
   )
 }
 
-// --- KAMERA ---
-function CameraController({ viewMode, target }: { viewMode: string; target: [number, number, number] }) {
+// ═══════════════════════════════════════════════════════════
+// KAMERA-CONTROLLER (FIX 3: useEffect statt useMemo)
+// ═══════════════════════════════════════════════════════════
+function CameraController({
+  viewMode,
+  target,
+}: {
+  viewMode: string
+  target: [number, number, number]
+}) {
   const { camera } = useThree()
-  useMemo(() => {
+  const prevViewMode = useRef(viewMode)
+
+  useEffect(() => {
+    if (prevViewMode.current === viewMode) return
+    prevViewMode.current = viewMode
+
     const dist = Math.max(25, target[1] * 1.5)
     let pos: [number, number, number] = [dist, dist * 0.6, dist]
     switch (viewMode) {
-      case 'front': pos = [0, target[1] * 0.5, dist]; break
-      case 'back': pos = [0, target[1] * 0.5, -dist]; break
-      case 'left': pos = [-dist, target[1] * 0.5, 0]; break
-      case 'right': pos = [dist, target[1] * 0.5, 0]; break
-      case 'top': pos = [0, dist, 0]; break
-      case 'bottom': pos = [0, -dist * 0.3, 0]; break
+      case 'front':
+        pos = [0, target[1] * 0.5, dist]
+        break
+      case 'back':
+        pos = [0, target[1] * 0.5, -dist]
+        break
+      case 'left':
+        pos = [-dist, target[1] * 0.5, 0]
+        break
+      case 'right':
+        pos = [dist, target[1] * 0.5, 0]
+        break
+      case 'top':
+        pos = [0, dist, 0]
+        break
+      case 'bottom':
+        pos = [0, -dist * 0.3, 0]
+        break
     }
     camera.position.set(...pos)
     camera.lookAt(target[0], target[1], target[2])
   }, [viewMode, camera, target])
+
   return null
 }
 
-// --- HAUPT-SZENE ---
-function Scene({ model, showBuilding, showScaffold, showDimensions, selectedComponent, onSelectComponent, visibleTypes, viewMode }: Props) {
+// ═══════════════════════════════════════════════════════════
+// HAUPT-SZENE
+// ═══════════════════════════════════════════════════════════
+function Scene({
+  model,
+  showBuilding,
+  showScaffold,
+  showDimensions,
+  selectedComponent,
+  onSelectComponent,
+  visibleTypes,
+  viewMode,
+}: Props) {
   const target: [number, number, number] = [0, model.building.heightM / 2, 0]
   return (
     <group>
       <CameraController viewMode={viewMode} target={target} />
       <ambientLight intensity={0.6} />
-      <directionalLight position={[15, 20, 10]} intensity={1.0} castShadow shadow-mapSize-width={1024} shadow-mapSize-height={1024} />
+      <directionalLight
+        position={[15, 20, 10]}
+        intensity={1.0}
+        castShadow
+        shadow-mapSize-width={1024}
+        shadow-mapSize-height={1024}
+      />
       <Building3D building={model.building} visible={showBuilding} />
       {showScaffold && (
         <AllScaffoldComponents
@@ -265,12 +437,30 @@ function Scene({ model, showBuilding, showScaffold, showDimensions, selectedComp
   )
 }
 
-// --- EXPORT ---
-export default function Scaffold3D({ model, showBuilding, showScaffold, showDimensions, selectedComponent, onSelectComponent, visibleTypes, viewMode }: Props) {
-  const cameraDistance = Math.max(model.building.lengthM, model.building.heightM) * 2 + 8
+// ═══════════════════════════════════════════════════════════
+// EXPORT: HAUPTKOMPONENTE
+// ═══════════════════════════════════════════════════════════
+export default function Scaffold3D({
+  model,
+  showBuilding,
+  showScaffold,
+  showDimensions,
+  selectedComponent,
+  onSelectComponent,
+  visibleTypes,
+  viewMode,
+}: Props) {
+  const cameraDistance =
+    Math.max(model.building.lengthM, model.building.heightM) * 2 + 8
   return (
     <div className="w-full h-full rounded-xl overflow-hidden border border-black/10 bg-[#f0f4f8] relative">
-      <Canvas shadows camera={{ position: [cameraDistance, cameraDistance * 0.6, cameraDistance], fov: 45 }}>
+      <Canvas
+        shadows
+        camera={{
+          position: [cameraDistance, cameraDistance * 0.6, cameraDistance],
+          fov: 45,
+        }}
+      >
         <Scene
           model={model}
           showBuilding={showBuilding}
@@ -281,16 +471,44 @@ export default function Scaffold3D({ model, showBuilding, showScaffold, showDime
           visibleTypes={visibleTypes}
           viewMode={viewMode}
         />
-        <Grid position={[0, -0.01, 0]} args={[80, 80]} cellSize={1} cellThickness={0.5} cellColor="#94a3b8" sectionSize={5} sectionThickness={1} sectionColor="#64748b" fadeDistance={60} fadeStrength={1} infiniteGrid />
-        <OrbitControls enablePan enableZoom enableRotate minDistance={5} maxDistance={150} target={[0, model.building.heightM / 2, 0]} />
+        <Grid
+          position={[0, -0.01, 0]}
+          args={[80, 80]}
+          cellSize={1}
+          cellThickness={0.5}
+          cellColor="#94a3b8"
+          sectionSize={5}
+          sectionThickness={1}
+          sectionColor="#64748b"
+          fadeDistance={60}
+          fadeStrength={1}
+          infiniteGrid
+        />
+        <OrbitControls
+          makeDefault
+          enablePan
+          enableZoom
+          enableRotate
+          minDistance={5}
+          maxDistance={150}
+          target={[0, model.building.heightM / 2, 0]}
+        />
       </Canvas>
       <div className="absolute bottom-4 left-4 bg-white/90 backdrop-blur rounded-xl px-3 py-2 text-xs text-[#424245] border border-black/10 pointer-events-none shadow-sm">
         <p>🖱️ Links: Drehen | Rechts: Verschieben | Scroll: Zoomen</p>
       </div>
       {selectedComponent && (
         <div className="absolute top-4 right-4 bg-white/95 backdrop-blur rounded-xl px-4 py-3 text-sm border border-black/10 shadow-lg z-50">
-          <p className="font-semibold text-[#1d1d1f]">{model.components3D.find((c) => c.id === selectedComponent)?.name}</p>
-          <p className="text-xs text-[#86868b] mt-1">Art.-Nr.: {model.components3D.find((c) => c.id === selectedComponent)?.articleNumber}</p>
+          <p className="font-semibold text-[#1d1d1f]">
+            {model.components3D.find((c) => c.id === selectedComponent)?.name}
+          </p>
+          <p className="text-xs text-[#86868b] mt-1">
+            Art.-Nr.:{' '}
+            {
+              model.components3D.find((c) => c.id === selectedComponent)
+                ?.articleNumber
+            }
+          </p>
         </div>
       )}
     </div>

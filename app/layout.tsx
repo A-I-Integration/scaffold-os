@@ -3,7 +3,7 @@ import { Inter } from "next/font/google"
 import Script from "next/script"
 import "./globals.css"
 import SidebarLayout from "@/components/SidebarLayout"
-import CookieBanner from "@/components/CookieBanner"
+import CookieBannerWrapper from "@/components/CookieBannerWrapper"
 
 const inter = Inter({ subsets: ["latin"] })
 
@@ -65,7 +65,7 @@ export default function RootLayout({
         )}
         {/* Cookie-/Einwilligungs-Banner nur auf der Master-Website
             (überall dort, wo das Ads-Tag aktiv ist). */}
-        {googleAdsId && <CookieBanner />}
+        {googleAdsId && <CookieBannerWrapper />}
         <SidebarLayout>{children}</SidebarLayout>
       </body>
     </html>
