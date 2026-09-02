@@ -12,6 +12,7 @@ import KiHinweis from '@/components/KiHinweis';
 
 interface Check {
   regel: string;
+  norm?: string;
   status: 'ok' | 'warnung' | 'kritisch' | 'unbekannt';
   hinweis: string;
 }
@@ -61,7 +62,7 @@ export default function DinCheck({ projektId }: { projektId: string | null }) {
         disabled={loading}
         className="w-full rounded-xl bg-[#1d1d1f] hover:bg-black disabled:opacity-50 py-3 font-semibold text-white transition-colors"
       >
-        {loading ? '⏳ KI prüft gegen DIN EN 12811 …' : ergebnis ? '🛡️ DIN EN 12811 erneut prüfen' : '🛡️ DIN EN 12811 prüfen'}
+        {loading ? '⏳ KI prüft gegen DIN EN 12811/12810 & TRBS 2121-1 …' : ergebnis ? '🛡️ Normen-Check erneut durchführen' : '🛡️ Gegen DIN EN 12811/12810 & TRBS 2121-1 prüfen'}
       </button>
 
       {fehler && <p className="mt-2 text-sm text-red-600">{fehler}</p>}
@@ -76,6 +77,7 @@ export default function DinCheck({ projektId }: { projektId: string | null }) {
                   <span className="text-sm font-semibold">{st.icon} {c.regel}</span>
                   <span className="text-[10px] uppercase tracking-wide shrink-0">{st.label}</span>
                 </div>
+                {c.norm && <span className="text-[10px] text-current opacity-60">{c.norm}</span>}
                 <p className="text-xs mt-1 opacity-80">{c.hinweis}</p>
               </div>
             );

@@ -102,17 +102,19 @@ export async function POST(req: NextRequest) {
       besonderheiten: d.fotoAnalyse?.zusammenfassung ?? d.fotoAnalyse?.hinweise ?? null,
     };
 
-    const prompt = `Du bist ein erfahrener Gerüstbau-Fachplaner. Prüfe die folgenden Aufmaß-Daten gegen die Kernanforderungen der DIN EN 12811 (Gerüste – Leistungsanforderungen, Entwurf, Konstruktion).
+    const prompt = `Du bist ein erfahrener Gerüstbau-Fachplaner. Prüfe die folgenden Aufmaß-Daten gegen die Kernanforderungen von DIN EN 12811-1 (Gerüste – Leistungsanforderungen, Entwurf, Bemessung), DIN EN 12810-1/-2 (Fassadengerüste aus vorgefertigten Bauteilen – nur relevant, wenn ein Systemgerüst/Rahmengerüst verwendet wird) und TRBS 2121-1 (Gefährdungen von Personen durch Absturz bei Bereitstellung und Benutzung von Gerüsten).
 
 PRÜFE diese Punkte (festes Gerüst):
-1. Lastklasse passend zur Verwendung (z. B. LK 3 für typische Fassadenarbeiten, LK 4+ bei Materiallagerung auf dem Gerüst)
-2. Verankerung/Anker: ausreichende Ankerdichte bei der Gebäudehöhe (Faustregel: ab etwa 8 m Höhe Verankerung erforderlich, Dichte steigt mit Höhe und Windzone)
-3. Breitenklasse des Gerüsts passend zur Nutzung
-4. Seitenschutz (Geländer/Bordbrett) bei Arbeitsbelägen über 1 m Absturzhöhe
-5. Fangvorrichtungen/Netze bei entsprechender Höhe oder Dachrand
-6. Zugänge/Aufstiege und Treppen oder Leitersteige
-7. Beläge: durchgehend, ausreichende Fläche für Lastklasse
-8. Besonderheiten aus den Fotos (Hindernisse, Durchfahrten → Konsolen/Schirme nötig?)
+1. Lastklasse passend zur Verwendung (z. B. LK 3 für typische Fassadenarbeiten, LK 4+ bei Materiallagerung auf dem Gerüst) – DIN EN 12811-1
+2. Verankerung/Anker: ausreichende Ankerdichte bei der Gebäudehöhe (Faustregel: ab etwa 8 m Höhe Verankerung erforderlich, Dichte steigt mit Höhe und Windzone) – DIN EN 12811-1
+3. Breitenklasse des Gerüsts passend zur Nutzung – DIN EN 12811-1
+4. Seitenschutz (Geländerholm, Zwischenholm, Bordbrett – dreiteiliger Seitenschutz) bei Arbeitsbelägen über 1 m Absturzhöhe – TRBS 2121-1
+5. Fangvorrichtungen/Netze bei entsprechender Höhe oder Dachrand – TRBS 2121-1
+6. Zugänge/Aufstiege und Treppen oder Leitersteige – DIN EN 12811-1 / TRBS 2121-1
+7. Beläge: durchgehend, ausreichende Fläche für Lastklasse – DIN EN 12811-1
+8. Absturzsicherung während Auf-/Abbau (vorlaufender Seitenschutz oder PSAgA, solange der endgültige Seitenschutz noch fehlt) – TRBS 2121-1
+9. Sofern Systemgerüst (Rahmengerüst): passende Bauteile/Systemfreigabe des Herstellers gemäß DIN EN 12810, sonst "unbekannt"
+10. Besonderheiten aus den Fotos (Hindernisse, Durchfahrten → Konsolen/Schirme nötig?)
 
 FAKTEN ZUM PROJEKT:
 ${JSON.stringify(fakten, null, 2)}
@@ -120,15 +122,16 @@ ${JSON.stringify(fakten, null, 2)}
 Antworte AUSSCHLIESSLICH als JSON:
 {
   "checks": [
-    { "regel": "<kurzer Titel>", "status": "<ok|warnung|kritisch|unbekannt>", "hinweis": "<1-2 Sätze, konkret auf DIESES Projekt bezogen>" }
+    { "regel": "<kurzer Titel>", "norm": "<z.B. DIN EN 12811-1 oder TRBS 2121-1>", "status": "<ok|warnung|kritisch|unbekannt>", "hinweis": "<1-2 Sätze, konkret auf DIESES Projekt bezogen>" }
   ],
   "zusammenfassung": "<2-3 Sätze Gesamteinschätzung>"
 }
 
 Regeln:
-- Genau die 8 Prüfpunkte oben, in dieser Reihenfolge.
-- "unbekannt" wenn Daten fehlen – NICHT raten.
+- Genau die 10 Prüfpunkte oben, in dieser Reihenfolge.
+- "unbekannt" wenn Daten fehlen – NICHT raten. Erfinde KEINE Normwerte, die nicht aus den Fakten oder allgemein bekannten Faustregeln ableitbar sind.
 - "kritisch" nur bei klarem Sicherheitsproblem, "warnung" bei zu prüfenden Punkten.
+- Erinnere in der Zusammenfassung daran, dass dies ein KI-Hinweis ist, keine Prüfung durch eine befähigte Person nach TRBS 2121-1 ersetzt und keine Abnahme darstellt.
 - Deutsch, sachlich, kein Text außerhalb des JSON.`;
 
     const kiRes = await fetch(`${baseUrl}/chat/completions`, {
