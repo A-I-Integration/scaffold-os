@@ -58,7 +58,7 @@ export async function GET(req: NextRequest) {
     }
   }
 
-  const ergebnis = { erstellt: [] as string[], ohne_preis: [] as string[], fehler: [] as string[] };
+  const ergebnis = { erstellt: [] as string[], ohne_preis: [] as string[], ohne_freigabe: [] as string[], fehler: [] as string[] };
 
   try {
     const res = await fetch(`${url}/rest/v1/projects?status=eq.active&select=id,name,adresse,data`, { headers });
@@ -83,6 +83,17 @@ export async function GET(req: NextRequest) {
       const kunde = s1.name || p.name || '–';
 
       if (preis <= 0) { ergebnis.ohne_preis.push(p.name || p.id); continue; }
+
+      // Phase 27: Pflicht-Verknüpfung Prüfung/Freigabe → Rechnung gilt auch hier.
+      // Ein Cron-Job kann nicht mit Begründung überschreiben (das ist bewusst
+      // eine Admin-Handlung) – also überspringen und melden statt umgehen.
+      const freigabeRes = await fetch(
+        `${url}/rest/v1/project_events?project_id=eq.${p.id}&type=eq.pruefung_freigabe&select=pruefung_details`,
+        { headers }
+      );
+      const freigabeRows = freigabeRes.ok ? await freigabeRes.json() : [];
+      const freigegeben = freigabeRows.some((r: any) => r.pruefung_details?.freigegeben === true);
+      if (!freigegeben) { ergebnis.ohne_freigabe.push(p.name || p.id); continue; }
 
       try {
         // WICHTIG: /api/invoices verlangt eine eingeloggte Session (admin/disponent) –

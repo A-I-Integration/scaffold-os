@@ -199,7 +199,7 @@ function RechnungenContent() {
     );
   }
 
-  async function handleSave() {
+  async function handleSave(overrideGrund?: string) {
     if (!customerName.trim()) { alert('Bitte Kundenname eingeben!'); return; }
     const valid = positions.filter((p) => p.bezeichnung.trim() && p.menge > 0);
     if (!valid.length) { alert('Bitte mindestens eine Position mit Bezeichnung und Menge eintragen!'); return; }
@@ -218,10 +218,20 @@ function RechnungenContent() {
           due_date: dueDate,
           notes: notes.trim() || null,
           invoice_type: invoiceType,
+          override_grund: overrideGrund || undefined,
         }),
       });
       const json = await res.json();
-      if (!json.success) throw new Error(json.error || 'Speichern fehlgeschlagen');
+      if (!json.success) {
+        // Phase 27: Pflicht-Verknüpfung Prüfung/Freigabe → Rechnung.
+        // Admin bekommt die Möglichkeit, mit Begründung zu überschreiben.
+        if (json.code === 'FREIGABE_FEHLT_OVERRIDE_MOEGLICH') {
+          const grund = prompt(json.error + '\n\nBegründung für die Überschreibung eingeben:');
+          if (grund && grund.trim()) { setSaving(false); await handleSave(grund.trim()); return; }
+          setSaving(false); return;
+        }
+        throw new Error(json.error || 'Speichern fehlgeschlagen');
+      }
       setShowForm(false);
       setCustomerName(''); setCustomerAddress(''); setNotes(''); setProjectId(null);
       setInvoiceType('standard');
@@ -551,7 +561,7 @@ function RechnungenContent() {
             )}
 
             <button
-              onClick={handleSave}
+              onClick={() => handleSave()}
               disabled={saving}
               className="w-full rounded-xl bg-[#e8590c] hover:bg-[#d9480f] disabled:opacity-50 py-3 font-bold text-white transition-colors"
             >

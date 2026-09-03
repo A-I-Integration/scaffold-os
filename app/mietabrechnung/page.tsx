@@ -128,7 +128,7 @@ export default function MietabrechnungPage() {
 
   useEffect(() => { lade(); }, [lade]);
 
-  async function nachberechnung(zeile: MietZeile) {
+  async function nachberechnung(zeile: MietZeile, overrideGrund?: string) {
     const preis = parseZahl(zeile.preisProWoche);
     if (preis <= 0) {
       setFehler(`Bitte bei „${zeile.projekt.name}" einen Wochenpreis eintragen.`);
@@ -155,10 +155,18 @@ export default function MietabrechnungPage() {
             einheit: 'Wo.',
             einzelpreis: preis,
           }],
+          override_grund: overrideGrund || undefined,
         }),
       });
       const antwort = await res.json();
-      if (!res.ok) throw new Error(antwort.error || 'Rechnung konnte nicht angelegt werden.');
+      if (!res.ok) {
+        if (antwort.code === 'FREIGABE_FEHLT_OVERRIDE_MOEGLICH') {
+          const grund = prompt(antwort.error + '\n\nBegründung für die Überschreibung eingeben:');
+          if (grund && grund.trim()) { setBeschaeftigt(null); await nachberechnung(zeile, grund.trim()); return; }
+          setBeschaeftigt(null); return;
+        }
+        throw new Error(antwort.error || 'Rechnung konnte nicht angelegt werden.');
+      }
 
       // 2) Im Projekt merken, bis wann abgerechnet wurde (verhindert Doppelabrechnung)
       const patch = await fetch('/api/projects', {

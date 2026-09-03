@@ -22,7 +22,29 @@ export async function POST(req: Request) {
 
     const { Resend } = await import('resend');
     const resend = new Resend(apiKey);
-    const projectUrl = `${process.env.NEXT_PUBLIC_APP_URL || 'https://scaffold-os.vercel.app'}/aufmass/schritt6?id=${projectId}`;
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://scaffold-os.vercel.app';
+
+    // NEU (Phase 33): Fern-Annahme-Link statt der geschützten internen Seite –
+    // Kunde bekommt einen unerratbaren Token, keine interne Projekt-ID im Link,
+    // und braucht keinen eigenen Login mehr, um das Angebot zu sehen/anzunehmen.
+    let projectUrl = `${appUrl}/aufmass/schritt6?id=${projectId}`;
+    if (mailType === 'angebot' && projectId) {
+      try {
+        const supaUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+        const supaKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
+        const supaHeaders = { 'Content-Type': 'application/json', apikey: supaKey, Authorization: `Bearer ${supaKey}` };
+        const getRes = await fetch(`${supaUrl}/rest/v1/project_access_tokens?project_id=eq.${projectId}&select=token`, { headers: supaHeaders });
+        let token = getRes.ok ? (await getRes.json())?.[0]?.token : null;
+        if (!token) {
+          const insRes = await fetch(`${supaUrl}/rest/v1/project_access_tokens`, {
+            method: 'POST', headers: { ...supaHeaders, Prefer: 'return=representation' },
+            body: JSON.stringify({ project_id: projectId }),
+          });
+          if (insRes.ok) token = (await insRes.json())?.[0]?.token;
+        }
+        if (token) projectUrl = `${appUrl}/angebot/${token}`;
+      } catch { /* Fällt zurück auf die interne Seite, falls Token-Erzeugung fehlschlägt */ }
+    }
 
     const attachments = [];
     if (pdfBase64) {
@@ -72,7 +94,6 @@ export async function POST(req: Request) {
 
     // Phase 18: Öffnungs-Pixel (1×1, unsichtbar). Referenz: Projekt-ID
     // bei Angeboten, Rechnungsnummer bei Rechnungen/Mahnungen.
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://scaffold-os.vercel.app';
     const trackRef = mailType === 'angebot' ? projectId : (invoiceNumber || projectName);
     const pixel = `<img src="${appUrl}/api/track/open?typ=${mailType}&ref=${encodeURIComponent(trackRef)}" width="1" height="1" alt="" style="display:none" />`;
 
