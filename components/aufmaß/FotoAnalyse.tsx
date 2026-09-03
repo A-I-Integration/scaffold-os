@@ -42,7 +42,7 @@ export default function FotoAnalyse({ sessionId }: Props) {
       <button
         onClick={handleAnalyze}
         disabled={analyzing}
-        className="w-full rounded-xl border border-purple-500/50 bg-purple-600/20 py-3 text-sm font-medium text-purple-300 hover:bg-purple-600/30 disabled:opacity-50 transition"
+        className="w-full rounded-xl border border-purple-300 bg-purple-50 py-3 text-sm font-medium text-purple-700 hover:bg-purple-100 disabled:opacity-50 transition"
       >
         {analyzing ? (
           <span className="flex items-center justify-center gap-2">
@@ -56,8 +56,8 @@ export default function FotoAnalyse({ sessionId }: Props) {
       <KiHinweis text="KI-gestützte Foto-Analyse – erkannte Merkmale bitte vor Ort gegenprüfen." />
 
       {result && (
-        <div className="rounded-xl bg-purple-900/20 border border-purple-500/30 p-4 animate-in fade-in slide-in-from-top-2">
-          <p className="text-xs text-purple-300 font-medium mb-2">🔮 KI-Analyse</p>
+        <div className="rounded-xl bg-purple-50 border border-purple-200 p-4 animate-in fade-in slide-in-from-top-2">
+          <p className="text-xs text-purple-700 font-medium mb-2">🔮 KI-Analyse</p>
           <p className="text-sm text-[#1d1d1f] whitespace-pre-line">{result}</p>
           <p className="text-[10px] text-[#86868b] mt-3">
             Hinweis: Die Analyse wird mit dem Projekt gespeichert. Exakte Maße bitte per LiDAR-Scan oder manuell erfassen.

@@ -197,11 +197,11 @@ export default function GrundrissUpload({ sessionId }: Props) {
         <button
           onClick={handleAnalyze}
           disabled={analyzing}
-          className="w-full rounded-xl border border-teal-500/50 bg-teal-600/20 py-3 text-sm font-medium text-teal-300 hover:bg-teal-600/30 disabled:opacity-50 transition"
+          className="w-full rounded-xl border border-teal-300 bg-teal-50 py-3 text-sm font-medium text-teal-700 hover:bg-teal-100 disabled:opacity-50 transition"
         >
           {analyzing ? (
             <span className="flex items-center justify-center gap-2">
-              <span className="h-4 w-4 animate-spin rounded-full border-2 border-teal-500 border-t-transparent" />
+              <span className="h-4 w-4 animate-spin rounded-full border-2 border-teal-600 border-t-transparent" />
               KI analysiert Grundrisse...
             </span>
           ) : (
@@ -213,13 +213,13 @@ export default function GrundrissUpload({ sessionId }: Props) {
 
       {/* ─── Ergebnis ─── */}
       {result && (
-        <div className="rounded-xl bg-teal-900/20 border border-teal-500/30 p-4 animate-in fade-in slide-in-from-top-2">
-          <p className="text-xs text-teal-300 font-medium mb-2">📐 KI-Grundriss-Analyse</p>
+        <div className="rounded-xl bg-teal-50 border border-teal-200 p-4 animate-in fade-in slide-in-from-top-2">
+          <p className="text-xs text-teal-700 font-medium mb-2">📐 KI-Grundriss-Analyse</p>
 
           {masse.length > 0 && (
             <div className="flex flex-wrap gap-2 mb-3">
               {masse.map(([k, v]) => (
-                <span key={k} className="rounded-full bg-teal-500/20 border border-teal-500/40 px-3 py-1 text-xs text-teal-200">
+                <span key={k} className="rounded-full bg-white border border-teal-300 px-3 py-1 text-xs text-teal-800">
                   {k}: <strong>{v}</strong>
                 </span>
               ))}
@@ -227,7 +227,7 @@ export default function GrundrissUpload({ sessionId }: Props) {
           )}
 
           {discarded.length > 0 && (
-            <div className="rounded-xl bg-red-900/20 border border-red-500/30 p-3 mb-3">
+            <div className="rounded-xl bg-red-50 border border-red-200 p-3 mb-3">
               <p className="text-xs text-red-700 font-medium mb-1">⚠️ Nicht belegte / unplausible KI-Werte verworfen:</p>
               {discarded.map((d, i) => (
                 <p key={i} className="text-xs text-red-700">• {d}</p>
