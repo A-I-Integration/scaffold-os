@@ -171,6 +171,30 @@ function Schritt6Content() {
     return hazards;
   }
   function buildScaffoldInput() {
+    // NEU: Brücken-Aufmaß – Spannweiten werden wie Abschnitte behandelt
+    // (jede Spannweite = eine Sektion für die Mengenberechnung), aber mit
+    // eigener Breite je Feld statt einer einzigen Gebäudebreite.
+    if (s1.projektart === 'bruecke' && s2.bruecke) {
+      const spannweiten = (s2.bruecke.spannweiten || []).filter((sp: any) => parseFloat(sp.spannweiteM) > 0)
+      const hoehe = parseFloat(s2.bruecke.hoeheUeberGrundM) || 0
+      const breite = parseFloat(spannweiten[0]?.breiteM) || parseFloat(s2.breite) || 2
+      const sections = spannweiten.map((sp: any, i: number) => ({ bezeichnung: sp.bezeichnung || `Feld ${i + 1}`, lengthM: parseFloat(sp.spannweiteM), heightM: hoehe }))
+      return {
+        customer: s1.name || '', address: s1.adresse || '', trade: 'bruecke',
+        projectDurationDays: parseInt(s1.dauer) || 30, lengthM: sections.reduce((s: number, x: any) => s + x.lengthM, 0), heightM: hoehe,
+        widthM: breite, eavesHeightM: hoehe, roofForm: 'kein' as const,
+        roofOverhangM: 0, facadeType: 'putz' as const, obstacles: [],
+        sections,
+        scaffoldType: (s3.geruesttyp === 'trag' ? 'rahmen' : 'rahmen') as any, deckingType: (s3.belag || 'stahl').toLowerCase(),
+        fieldLengthM: parseFloat(s3.feldlänge || s3.feldlange) || 2.07, groundType: (s3.untergrund || s3.boden || 'beton').toLowerCase(),
+        manufacturer: systemAnzeigename(s3.system, s3.customSystem) || undefined,
+        anchorType: (s4.anker || 'fassadenanker').toLowerCase(), groundCondition: (s4.untergrund || 'beton').toLowerCase(),
+        hasSlope: false, hasLightShafts: false, hasBasement: false, needsLoadDistribution: s2.bruecke.untergrundArt === 'gewaesser' || s2.bruecke.untergrundArt === 'gelaende',
+        environment: { hasPowerLines: false, hasVegetation: false, hasNeighborProperty: false, hasPublicTraffic: s2.bruecke.untergrundArt === 'strasse', needsNoParkingZone: s2.bruecke.verkehrEinschraenkungNoetig, needsSpecialUse: s2.bruecke.verkehrEinschraenkungNoetig, hasStorageArea: false, hasTruckAccess: false, needsCrane: false, needsProtectionRoof: false, needsSafetyNet: s2.bruecke.untergrundArt === 'strasse' || s2.bruecke.untergrundArt === 'schiene' || s2.bruecke.untergrundArt === 'gewaesser' },
+        windZone: (parseInt(s4.windzone) as 1 | 2 | 3 | 4) || 2, hazards: s2.bruecke.untergrundArt === 'strasse' ? ['oeffentlicher_weg'] : s2.bruecke.untergrundArt === 'schiene' ? ['bahnstrecke'] : [], additionalNotes: s4.zusaetzliche_hinweise || '',
+        bruecke: { aufhaengung: s2.bruecke.aufhaengung, untergrundArt: s2.bruecke.untergrundArt, verkehrEinschraenkungNoetig: s2.bruecke.verkehrEinschraenkungNoetig },
+      }
+    }
     // NEU: Mehrere Abschnitte (unterschiedliche Höhen/ums Eck) aus Schritt 2,
     // falls vorhanden. Abschnitt 1 = die Haupt-Länge/Höhe oben im Formular.
     const zusatzAbschnitte = Array.isArray(s2.abschnitte) ? s2.abschnitte : [];
