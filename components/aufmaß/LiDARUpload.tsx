@@ -190,8 +190,8 @@ export default function LiDARUpload({ sessionId, onMeasurements }: Props) {
       </div>
 
       {scan && (
-        <div className="rounded-xl bg-purple-900/20 border border-purple-500/30 p-4 animate-in fade-in slide-in-from-top-2 space-y-4">
-          <p className="text-xs text-purple-300 font-medium">
+        <div className="rounded-xl bg-purple-50 border border-purple-200 p-4 animate-in fade-in slide-in-from-top-2 space-y-4">
+          <p className="text-xs text-purple-700 font-medium">
             ✅ Ausgewertet: <span className="text-[#1d1d1f]">{scan.name}</span>
             {scan.m.kalibriert && <span className="ml-2 rounded bg-emerald-500/15 border border-emerald-500/40 px-1.5 py-0.5 text-emerald-700">Kalibriert ({scan.m.referenz})</span>}
           </p>
