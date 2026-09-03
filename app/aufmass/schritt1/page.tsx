@@ -13,6 +13,8 @@ const LEERES_FORM = {
   // Projekt
   name: '',
   adresse: '',
+  // NEU: Projektart – bestimmt, ob Schritt 2 Gebäude- oder Brücken-Felder zeigt
+  projektart: 'gebaeude' as 'gebaeude' | 'bruecke',
 
   // Ansprechpartner
   ansprechpartnerName: '',
@@ -232,6 +234,31 @@ export default function Schritt1Page() {
 
         <div className="bg-[#f5f5f7] rounded-xl p-6 space-y-8">
 
+          {/* ─── PROJEKTART ─── */}
+          <div className="border-b border-black/10 pb-6">
+            <h3 className="text-[#e8590c] text-xs font-bold uppercase tracking-wider mb-4">Projektart</h3>
+            <div className="grid grid-cols-2 gap-3">
+              <button
+                type="button"
+                onClick={() => handleChange('projektart', 'gebaeude')}
+                className={`rounded-xl border-2 p-4 text-left transition ${form.projektart === 'gebaeude' ? 'border-[#e8590c] bg-[#e8590c]/10' : 'border-black/10 bg-black/5 hover:bg-black/10'}`}
+              >
+                <div className="text-2xl mb-1">🏢</div>
+                <div className="font-semibold text-[#1d1d1f]">Gebäude</div>
+                <div className="text-xs text-[#86868b] mt-0.5">Fassadengerüst, Standard-Aufmaß</div>
+              </button>
+              <button
+                type="button"
+                onClick={() => handleChange('projektart', 'bruecke')}
+                className={`rounded-xl border-2 p-4 text-left transition ${form.projektart === 'bruecke' ? 'border-[#e8590c] bg-[#e8590c]/10' : 'border-black/10 bg-black/5 hover:bg-black/10'}`}
+              >
+                <div className="text-2xl mb-1">🌉</div>
+                <div className="font-semibold text-[#1d1d1f]">Brücke</div>
+                <div className="text-xs text-[#86868b] mt-0.5">Trag-/Hängegerüst, Spannweiten statt Gebäudemaße</div>
+              </button>
+            </div>
+          </div>
+
           {/* ─── PROJEKT ─── */}
           <div className="border-b border-black/10 pb-6">
             <h3 className="text-[#e8590c] text-xs font-bold uppercase tracking-wider mb-4">Projekt</h3>
@@ -247,13 +274,13 @@ export default function Schritt1Page() {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium mb-2 text-[#424245]">Baustellen-Adresse *</label>
+                <label className="block text-sm font-medium mb-2 text-[#424245]">{form.projektart === 'bruecke' ? 'Brücken-Standort *' : 'Baustellen-Adresse *'}</label>
                 <input
                   type="text"
                   value={form.adresse}
                   onChange={(e) => handleChange('adresse', e.target.value)}
                   className="w-full bg-black/10 border border-black/10 rounded-xl px-4 py-3 text-[#1d1d1f] placeholder-[#86868b] focus:outline-none focus:border-orange-500 transition"
-                  placeholder="z.B. Musterstraße 1, 12345 Berlin"
+                  placeholder={form.projektart === 'bruecke' ? 'z.B. A1, Rheinbrücke Musterhausen' : 'z.B. Musterstraße 1, 12345 Berlin'}
                 />
               </div>
             </div>

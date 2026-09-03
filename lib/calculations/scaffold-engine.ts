@@ -459,13 +459,25 @@ export function calculateScaffoldMaterial(
     // 13. SEITENSCHUTZ
     sideProtectionArea += aArea;
   }
-  // 7. FUßPLATTEN
-  totalFootPlates = totalFrames;
+  // 7. FUßPLATTEN – bei Hängegerüst entfällt die Bodenständerung
+  const istHaengend = input.bruecke?.aufhaengung === 'haengend';
+  totalFootPlates = istHaengend ? 0 : totalFrames;
   if (totalConsoles > 0) {
     warnings.push(`Dachüberstand erkannt – Konsolen erforderlich (${totalConsoles} Stk. über alle Abschnitte)`);
   }
   if (abschnitte.length > 1) {
     tips.push(`${abschnitte.length} Abschnitte erfasst (unterschiedliche Höhen/ums Eck) – Gesamtfläche ${Math.round(scaffoldArea)} m².`);
+  }
+  if (input.bruecke) {
+    if (istHaengend) {
+      warnings.push('Hängegerüst: Keine Fußplatten kalkuliert. Die Aufhängepunkte am Bauwerk und die zulässigen Lasten sind statisch NICHT durch diese Kalkulation abgedeckt – eigener Tragwerksnachweis durch einen Fachplaner/Prüfingenieur erforderlich.')
+    } else {
+      warnings.push('Traggerüst: Gründung/Standsicherheit auf dem Untergrund unter der Brücke (ggf. Gewässer/Gelände) separat statisch prüfen.')
+    }
+    if (input.bruecke.untergrundArt === 'strasse') warnings.push('Gerüst über Straßenverkehr: Auffangkonstruktion/Schutzabdeckung und verkehrsrechtliche Anordnung erforderlich.')
+    if (input.bruecke.untergrundArt === 'schiene') warnings.push('Gerüst über Gleisanlage: Zustimmung des Eisenbahninfrastrukturunternehmens und Sicherungsposten (Sperrpause) erforderlich.')
+    if (input.bruecke.untergrundArt === 'gewaesser') warnings.push('Gerüst über Gewässer: Wasserrechtliche Erlaubnis prüfen; Auftrieb/Kolkbildung bei Traggerüst-Gründung im Gewässer beachten.')
+    if (input.bruecke.verkehrEinschraenkungNoetig) warnings.push('Verkehrseinschränkung für Auf-/Abbau angegeben: Verkehrsrechtliche Anordnung/Baustellenabsicherung rechtzeitig beantragen.')
   }
 
   // 10. ANKER (Anker-Typ richtet sich nach der höchsten Höhe im Gerüst)

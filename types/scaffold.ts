@@ -14,6 +14,7 @@ export type TradeType =
   | 'kamin'
   | 'werbeanlage'
   | 'fenster'
+  | 'bruecke'
   | 'allgemein';
 
 // --- AUFMAß: SCHRITT 2 (Gebäude) ---
@@ -145,6 +146,17 @@ export interface ScaffoldInput {
   // leer, ersetzt dies lengthM/heightM/roofOverhangM oben für die
   // Mengenberechnung – die einzelnen Felder bleiben als Fallback für
   // ältere, einabschnittige Projekte erhalten.
+  // NEU: Projektart – Gebäude (Standard) oder Brücke. Bei "bruecke" werden
+  // sections aus den Spannweiten gebildet, lengthM/heightM bleiben als
+  // Fallback ungenutzt. Aufhängungsart bestimmt, ob Fußplatten/Bodenständer
+  // erzeugt werden (bodenstehend) oder Hängekomponenten (haengend).
+  projektart?: 'gebaeude' | 'bruecke';
+  bruecke?: {
+    aufhaengung: 'haengend' | 'bodenstehend';
+    untergrundArt: 'strasse' | 'schiene' | 'gewaesser' | 'gelaende';
+    verkehrEinschraenkungNoetig: boolean;
+  };
+
   sections?: ScaffoldSection[];
 
   // Schritt 3

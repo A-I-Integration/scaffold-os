@@ -22,6 +22,14 @@ export default function Schritt2Page() {
     // NEU: weitere Abschnitte für Gebäude mit unterschiedlichen Höhen
     // oder die um eine Ecke gehen. Länge/Höhe oben bleiben "Abschnitt 1".
     abschnitte: [] as { bezeichnung: string; laenge: string; hoehe: string }[],
+    // NEU: Brücken-Aufmaß (nur relevant, wenn step1Data.projektart === 'bruecke')
+    bruecke: {
+      spannweiten: [{ bezeichnung: 'Feld 1', spannweiteM: '', breiteM: '' }] as { bezeichnung: string; spannweiteM: string; breiteM: string }[],
+      hoeheUeberGrundM: '',
+      aufhaengung: 'bodenstehend' as 'haengend' | 'bodenstehend',
+      untergrundArt: 'strasse' as 'strasse' | 'schiene' | 'gewaesser' | 'gelaende',
+      verkehrEinschraenkungNoetig: false,
+    },
     dachform: '',
     dachueberstand: '',
     fassade: '',
@@ -136,9 +144,15 @@ export default function Schritt2Page() {
     const saved2 = localStorage.getItem('scaffold_step2');
     if (saved2) {
       const geladen = JSON.parse(saved2);
-      // Fix: ältere gespeicherte Aufmaße (vor "mehrere Abschnitte") haben kein
-      // abschnitte-Feld – ohne diesen Fallback stürzt die Seite beim Rendern ab.
-      setForm((prev) => ({ ...prev, ...geladen, abschnitte: Array.isArray(geladen.abschnitte) ? geladen.abschnitte : [] }));
+      // Fix: ältere gespeicherte Aufmaße (vor "mehrere Abschnitte"/"Brücke") haben
+      // kein abschnitte- bzw. bruecke-Feld – ohne diesen Fallback stürzt die Seite
+      // beim Rendern ab.
+      setForm((prev) => ({
+        ...prev,
+        ...geladen,
+        abschnitte: Array.isArray(geladen.abschnitte) ? geladen.abschnitte : [],
+        bruecke: geladen.bruecke && Array.isArray(geladen.bruecke.spannweiten) ? geladen.bruecke : prev.bruecke,
+      }));
     }
 
     // LiDAR-Maße aus Schritt 1 übernehmen (nur leere Felder, nichts überschreiben)
@@ -248,7 +262,31 @@ export default function Schritt2Page() {
     }));
   }
 
+  const istBruecke = step1Data?.projektart === 'bruecke';
+
+  function bruecke() { return form.bruecke; }
+  function setBruecke(patch: Partial<typeof form.bruecke>) {
+    setForm(prev => ({ ...prev, bruecke: { ...prev.bruecke, ...patch } }));
+  }
+  function updateSpannweite(idx: number, patch: Partial<{ bezeichnung: string; spannweiteM: string; breiteM: string }>) {
+    setForm(prev => {
+      const neu = [...prev.bruecke.spannweiten];
+      neu[idx] = { ...neu[idx], ...patch };
+      return { ...prev, bruecke: { ...prev.bruecke, spannweiten: neu } };
+    });
+  }
+
+  function brueckeGueltig() {
+    return form.bruecke.spannweiten.some(s => parseFloat(s.spannweiteM) > 0) && parseFloat(form.bruecke.hoeheUeberGrundM) >= 0;
+  }
+
   function handleWeiter() {
+    if (istBruecke) {
+      if (!brueckeGueltig()) { alert('Bitte mindestens eine Spannweite und die Höhe über Grund/Gewässer eingeben!'); return; }
+      localStorage.setItem('scaffold_step2', JSON.stringify(form));
+      router.push('/aufmass/schritt3');
+      return;
+    }
     if (!form.laenge || !form.hoehe) {
       alert('Bitte gib mindestens Länge und Höhe ein!');
       return;
@@ -261,6 +299,12 @@ export default function Schritt2Page() {
   // Schritte 3–5 nutzen dann ihre Standardwerte (in Schritt 6 jederzeit änderbar
   // über Zurück-Navigation).
   function handleDirektAngebot() {
+    if (istBruecke) {
+      if (!brueckeGueltig()) { alert('Bitte mindestens eine Spannweite und die Höhe über Grund/Gewässer eingeben!'); return; }
+      localStorage.setItem('scaffold_step2', JSON.stringify(form));
+      router.push('/aufmass/schritt6');
+      return;
+    }
     if (!form.laenge || !form.hoehe) {
       alert('Bitte gib mindestens Länge und Höhe ein!');
       return;
@@ -271,6 +315,105 @@ export default function Schritt2Page() {
 
   function zurueck() {
     router.push('/aufmass/schritt1');
+  }
+
+  // ═══════════ BRÜCKEN-AUFMASS (eigener, kürzerer Zweig) ═══════════
+  if (istBruecke) {
+    return (
+      <div className="min-h-screen bg-white text-[#1d1d1f] p-6">
+        <div className="max-w-2xl mx-auto">
+          <button onClick={zurueck} className="text-[#86868b] hover:text-[#1d1d1f] text-sm mb-2">← Zurück</button>
+          <h1 className="text-3xl font-bold mb-2">🌉 Brücke & Spannweiten</h1>
+          <p className="text-[#86868b] mb-2">Baustelle: Schritt 2 von 6</p>
+          {step1Data && (
+            <div className="bg-black/5 rounded-xl p-3 mb-6 text-sm text-[#86868b]">
+              <span className="text-[#424245] font-medium">{step1Data.name}</span> · {step1Data.adresse}
+            </div>
+          )}
+
+          <div className="bg-[#f5f5f7] rounded-xl p-6 space-y-6">
+            <div>
+              <h3 className="text-[#e8590c] text-xs font-bold uppercase tracking-wider mb-3">Spannweite(n)</h3>
+              <p className="text-xs text-[#86868b] mb-3">Bei mehreren Feldern (z. B. mehrfeldrige Brücke) je Feld eine Zeile hinzufügen.</p>
+              <div className="space-y-2">
+                {form.bruecke.spannweiten.map((s, idx) => (
+                  <div key={idx} className="grid grid-cols-[1fr_auto_auto_auto] gap-2 items-center">
+                    <input value={s.bezeichnung} onChange={e => updateSpannweite(idx, { bezeichnung: e.target.value })}
+                      placeholder={`Feld ${idx + 1}`} className="bg-black/10 border border-black/10 rounded-xl px-3 py-2 text-sm" />
+                    <input type="number" value={s.spannweiteM} onChange={e => updateSpannweite(idx, { spannweiteM: e.target.value })}
+                      placeholder="Spannweite m" className="w-28 bg-black/10 border border-black/10 rounded-xl px-3 py-2 text-sm" />
+                    <input type="number" value={s.breiteM} onChange={e => updateSpannweite(idx, { breiteM: e.target.value })}
+                      placeholder="Breite m" className="w-24 bg-black/10 border border-black/10 rounded-xl px-3 py-2 text-sm" />
+                    {form.bruecke.spannweiten.length > 1 && (
+                      <button type="button" onClick={() => setBruecke({ spannweiten: form.bruecke.spannweiten.filter((_, i) => i !== idx) })} className="text-red-600 text-sm px-2">✕</button>
+                    )}
+                  </div>
+                ))}
+              </div>
+              <button type="button" onClick={() => setBruecke({ spannweiten: [...form.bruecke.spannweiten, { bezeichnung: `Feld ${form.bruecke.spannweiten.length + 1}`, spannweiteM: '', breiteM: '' }] })}
+                className="mt-2 text-sm text-[#e8590c] font-semibold hover:underline">+ Weiteres Feld hinzufügen</button>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium mb-2 text-[#424245]">Höhe über Grund / Gewässer (m) *</label>
+              <input type="number" value={form.bruecke.hoeheUeberGrundM} onChange={e => setBruecke({ hoeheUeberGrundM: e.target.value })}
+                className="w-full bg-black/10 border border-black/10 rounded-xl px-4 py-3" placeholder="z.B. 6.5" />
+              <p className="text-xs text-[#86868b] mt-1">Lichte Höhe von der Arbeitsebene bis zum Boden bzw. Wasserspiegel darunter.</p>
+            </div>
+
+            <div>
+              <h3 className="text-[#e8590c] text-xs font-bold uppercase tracking-wider mb-3">Aufhängungsart</h3>
+              <div className="grid grid-cols-2 gap-3">
+                <button type="button" onClick={() => setBruecke({ aufhaengung: 'bodenstehend' })}
+                  className={`rounded-xl border-2 p-4 text-left transition ${form.bruecke.aufhaengung === 'bodenstehend' ? 'border-[#e8590c] bg-[#e8590c]/10' : 'border-black/10 bg-black/5'}`}>
+                  <div className="font-semibold">⚒️ Traggerüst (bodenstehend)</div>
+                  <div className="text-xs text-[#86868b] mt-0.5">Stützt sich am Boden/Gewässergrund ab</div>
+                </button>
+                <button type="button" onClick={() => setBruecke({ aufhaengung: 'haengend' })}
+                  className={`rounded-xl border-2 p-4 text-left transition ${form.bruecke.aufhaengung === 'haengend' ? 'border-[#e8590c] bg-[#e8590c]/10' : 'border-black/10 bg-black/5'}`}>
+                  <div className="font-semibold">⛓️ Hängegerüst</div>
+                  <div className="text-xs text-[#86868b] mt-0.5">Hängt am Brückenbauwerk, kein Bodenkontakt</div>
+                </button>
+              </div>
+            </div>
+
+            <div>
+              <h3 className="text-[#e8590c] text-xs font-bold uppercase tracking-wider mb-3">Was befindet sich darunter?</h3>
+              <div className="grid grid-cols-2 gap-2">
+                {([
+                  { id: 'strasse', label: '🚗 Straße' },
+                  { id: 'schiene', label: '🚆 Schiene' },
+                  { id: 'gewaesser', label: '🌊 Gewässer' },
+                  { id: 'gelaende', label: '🌳 Gelände' },
+                ] as const).map(opt => (
+                  <button key={opt.id} type="button" onClick={() => setBruecke({ untergrundArt: opt.id })}
+                    className={`rounded-xl border-2 p-3 text-sm text-left transition ${form.bruecke.untergrundArt === opt.id ? 'border-[#e8590c] bg-[#e8590c]/10' : 'border-black/10 bg-black/5'}`}>
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <label className="flex items-center gap-2 text-sm bg-amber-50 border border-amber-200 rounded-xl p-3">
+              <input type="checkbox" checked={form.bruecke.verkehrEinschraenkungNoetig} onChange={e => setBruecke({ verkehrEinschraenkungNoetig: e.target.checked })} />
+              Verkehrseinschränkung/-sperrung für Auf-/Abbau nötig (löst Hinweis auf Genehmigung/Verkehrssicherung aus)
+            </label>
+
+            <div className="rounded-xl bg-blue-50 border border-blue-200 p-3 text-xs text-blue-800">
+              ℹ️ Dieses Aufmaß liefert die Geometrie für die Material-/Kostenkalkulation. Die Tragwerksplanung für Hängegerüste
+              (Aufhängepunkte, zulässige Lasten am Bauwerk) ist eine eigenständige statische Nachweisführung durch einen
+              Fachplaner/Prüfingenieur und wird hier nicht ersetzt.
+            </div>
+          </div>
+
+          <div className="flex gap-3 mt-6">
+            <button onClick={handleWeiter} className="flex-1 bg-[#e8590c] hover:bg-[#d9480f] text-white font-semibold py-3 rounded-xl transition">
+              Weiter zu Schritt 3 →
+            </button>
+          </div>
+        </div>
+      </div>
+    )
   }
 
   return (
