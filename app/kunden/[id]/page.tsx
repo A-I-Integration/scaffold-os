@@ -114,6 +114,7 @@ export default function KundenDetailPage() {
   const [kunde, setKunde] = useState<Kunde | null>(null)
   const [projects, setProjects] = useState<Project[]>([])
   const [invoices, setInvoices] = useState<Invoice[]>([])
+  const [opens, setOpens] = useState<Record<string, { anzahl: number; zuletzt: string }>>({})
   const [emails, setEmails] = useState<EmailLog[]>([])
   const [fotos, setFotos] = useState<Record<string, Media[]>>({})
   const [dokEintraege, setDokEintraege] = useState<Record<string, DokEvent[]>>({})
@@ -157,6 +158,23 @@ export default function KundenDetailPage() {
       setKunde(gefundenerKunde)
       if (gefundenerKunde) setKundeForm(gefundenerKunde)
       setInvoices(iJson.success ? (iJson.invoices || []) : [])
+
+      // NEU: „👁 Gesehen"-Tracking wie auf der Rechnungen-Übersicht (bisher
+      // fehlte das hier komplett, obwohl die Daten längst erfasst werden).
+      try {
+        const tRes = await fetch('/api/track/status')
+        const tJson = await tRes.json()
+        if (tJson.success) {
+          const map: Record<string, { anzahl: number; zuletzt: string }> = {}
+          for (const o of tJson.opens) {
+            if (o.typ !== 'rechnung' && o.typ !== 'mahnung') continue
+            if (!map[o.ref] || o.zuletzt > map[o.ref].zuletzt) {
+              map[o.ref] = { anzahl: (map[o.ref]?.anzahl || 0) + o.anzahl, zuletzt: o.zuletzt }
+            }
+          }
+          setOpens(map)
+        }
+      } catch { /* Tracking optional */ }
 
       // Projekte/Aufträge dieses Kunden: keine customer_id-Spalte vorhanden,
       // Zuordnung wie auf der Kunden-Übersicht über den exakten Namen.
@@ -610,6 +628,9 @@ export default function KundenDetailPage() {
                                 <span className={`text-[10px] px-1.5 py-0.5 rounded border ${gutschrift ? 'bg-purple-500/10 text-purple-700 border-purple-500/30' : 'bg-blue-500/10 text-blue-700 border-blue-500/30'}`}>{TYPE_LABEL[inv.invoice_type]}</span>
                               )}
                               <span className={`text-[10px] px-1.5 py-0.5 rounded border ${verzug ? STATUS_COLOR.ueberfaellig : STATUS_COLOR[inv.status]}`}>{verzug ? 'Überfällig' : STATUS_LABEL[inv.status]}</span>
+                              {opens[inv.invoice_number] && (
+                                <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-700 border border-emerald-500/40" title={`E-Mail geöffnet (${opens[inv.invoice_number].anzahl}×, zuletzt ${new Date(opens[inv.invoice_number].zuletzt).toLocaleString('de-DE')})`}>👁 Gesehen</span>
+                              )}
                               <span className="text-[#86868b]">{fmtDate(inv.invoice_date)}</span>
                               <span className={`ml-auto font-bold ${gutschrift ? 'text-purple-700' : verzug ? 'text-red-600' : 'text-[#1d1d1f]'}`}>{fmtEur(Number(inv.gross_amount))} €</span>
                               <div className="flex gap-1">
