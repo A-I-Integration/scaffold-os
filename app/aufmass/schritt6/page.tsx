@@ -13,6 +13,7 @@ import { KIAnalysis } from '@/types/scaffold';
 import { systemAnzeigename } from '@/lib/calculations/geruest-systeme';
 import DispositionResult from '@/components/aufmaß/DispositionResult';
 import { DispositionResult as DispositionData } from '@/lib/calculations/disposition';
+import { generateInvoicePDF, fmtDate as fmtRechnungsDatum, type Invoice } from '@/lib/invoice-pdf';
 
 const DigitalTwin = dynamic(() => import('@/components/aufmaß/DigitalTwin'), {
   ssr: false,
@@ -62,9 +63,31 @@ function Schritt6Content() {
     rabatt: { aktiv: false, betrag: '' },
   });
 
-  // Live-Kalkulation: Basis = KI-Verkaufspreis, dann Zu-/Abschläge
+  // NEU (Phase 30): Preisbasis wählbar – KI-Kalkulation oder Festpreis pro m².
+  const [preisModus, setPreisModus] = useState<'ki' | 'festpreis'>('ki');
+  const [festpreisProM2, setFestpreisProM2] = useState('');
+  useEffect(() => {
+    fetch('/api/company').then(r => r.json()).then(j => {
+      const v = j.company?.calc_festpreis_pro_m2;
+      if (v != null && v !== '') setFestpreisProM2(String(v));
+    }).catch(() => {});
+  }, []);
+
+  // NEU (Phase 31): Rechnung direkt anlegen + Versand-Dialog inline in Schritt 6
+  const [rechnungErstellenLaeuft, setRechnungErstellenLaeuft] = useState(false);
+  const [rechnungErstellt, setRechnungErstellt] = useState<Invoice | null>(null);
+  const [zeigeVersandDialog, setZeigeVersandDialog] = useState(false);
+  const [rechnungEmail, setRechnungEmail] = useState('');
+  const [rechnungSendenLaeuft, setRechnungSendenLaeuft] = useState(false);
+  const [rechnungVersendet, setRechnungVersendet] = useState(false);
+  const [rechnungFehler, setRechnungFehler] = useState('');
+
+  // Live-Kalkulation: Basis = KI-Verkaufspreis ODER Festpreis/m² × Fläche, dann Zu-/Abschläge
   function calcAngebot() {
-    const basis = kiResult?.suggestedPrice ?? 0;
+    const flaeche = kiResult?.totalAreaM2 ?? 0;
+    const basis = preisModus === 'festpreis'
+      ? (parseFloat(festpreisProM2.replace(',', '.')) || 0) * flaeche
+      : (kiResult?.suggestedPrice ?? 0);
     const mieteBetrag = anpassungen.miete.aktiv
       ? (parseFloat(anpassungen.miete.wochen) || 0) * (parseFloat(anpassungen.miete.preisProWoche) || 0)
       : 0;
@@ -87,12 +110,15 @@ function Schritt6Content() {
         if (!json.success || !json.project) throw new Error(json.error || 'Projekt nicht gefunden');
         const p = json.project;
         const d = p.data || {};
-        const { angebotAnpassungen, kiResult: savedKi, angebotsStatus: savedStatus, ...steps } = d;
+        const { angebotAnpassungen, kiResult: savedKi, angebotsStatus: savedStatus, preisModus: savedPreisModus, festpreisProM2: savedFestpreis, ...steps } = d;
         setStepData(steps);
         if (angebotAnpassungen) setAnpassungen(angebotAnpassungen);
         // NEU (Prio-2-Sprint): KI-Ergebnis und Angebotsstatus wiederherstellen
         if (savedKi) setKiResult(savedKi);
         if (savedStatus) setAngebotsStatus(savedStatus);
+        // NEU (Phase 30): gewählte Preisbasis wiederherstellen
+        if (savedPreisModus) setPreisModus(savedPreisModus);
+        if (savedFestpreis) setFestpreisProM2(savedFestpreis);
         setSavedProjectId(p.id);
       } catch (err: any) {
         console.error('Projekt-Laden fehlgeschlagen:', err);
@@ -256,7 +282,7 @@ function Schritt6Content() {
       // Aktualisierung. Jetzt: existiert savedProjectId schon, wird PATCH verwendet
       // (aktualisiert das bestehende Projekt UND sichert automatisch eine Version
       // des bisherigen Stands, siehe /api/projects PATCH).
-      const gespeicherteDaten = { ...stepData, angebotAnpassungen: anpassungen, kiResult, angebotsStatus };
+      const gespeicherteDaten = { ...stepData, angebotAnpassungen: anpassungen, kiResult, angebotsStatus, preisModus, festpreisProM2 };
       let result: any;
       if (savedProjectId) {
         const response = await fetch('/api/projects', {
@@ -482,37 +508,95 @@ function Schritt6Content() {
   // NEU (Phase 13): Rechnung aus angenommenem Angebot erstellen
   function handleRechnung() {
     if (!kiResult || !savedProjectId) return;
-    const positions = kiResult.materialList.map((item) => ({
-      bezeichnung: item.name,
-      menge: item.quantity,
-      einheit: item.unit,
-      einzelpreis: item.unitPrice,
-    }));
-    if (kiResult.laborCost > 0) {
-      positions.push({
-        bezeichnung: 'Arbeitsleistung Montage/Demontage',
-        menge: kiResult.estimatedLaborHours,
-        einheit: 'Std.',
-        einzelpreis: kiResult.estimatedLaborHours > 0
-          ? Math.round((kiResult.laborCost / kiResult.estimatedLaborHours) * 100) / 100
-          : 0,
-      });
+    erstelleUndOeffneVersand();
+  }
+
+  // NEU (Phase 31): 1 Klick in Schritt 6 → Rechnung wird direkt angelegt UND
+  // der Versand-Dialog öffnet sich hier, ohne zu /rechnungen zu navigieren.
+  // Sendet nichts automatisch – Versand bleibt ein bewusster, zweiter Klick.
+  async function erstelleUndOeffneVersand(overrideGrund?: string) {
+    if (!kiResult || !savedProjectId) return;
+    const ang = calcAngebot();
+    const flaeche = kiResult.totalAreaM2;
+    const positions: { bezeichnung: string; menge: number; einheit: string; einzelpreis: number }[] = [];
+
+    positions.push({
+      bezeichnung: preisModus === 'festpreis'
+        ? `Gerüstbau gemäß Angebot (${flaeche ?? '–'} m² × ${festpreisProM2.replace('.', ',')} €/m²)`
+        : 'Gerüstbau gemäß Angebot (Material, Arbeit, Transport)',
+      menge: 1, einheit: 'Pauschale', einzelpreis: Math.round(ang.basis * 100) / 100,
+    });
+    if (anpassungen.miete.aktiv && ang.mieteBetrag > 0) {
+      positions.push({ bezeichnung: `Mietverlängerung ${anpassungen.miete.wochen} Wo. à ${anpassungen.miete.preisProWoche} €`, menge: 1, einheit: 'Pauschale', einzelpreis: ang.mieteBetrag });
     }
-    if (kiResult.transportCost > 0) {
-      positions.push({
-        bezeichnung: 'Transport & Logistik',
-        menge: 1,
-        einheit: 'Pauschale',
-        einzelpreis: kiResult.transportCost,
-      });
+    if (anpassungen.nachtrag.aktiv && ang.nachtragBetrag > 0) {
+      positions.push({ bezeichnung: anpassungen.nachtrag.text?.trim() || 'Nachtrag', menge: 1, einheit: 'Pauschale', einzelpreis: ang.nachtragBetrag });
     }
-    sessionStorage.setItem('scaffold_invoice_draft', JSON.stringify({
-      project_id: savedProjectId,
-      customer_name: s1.name || '',
-      customer_address: s1.adresse || '',
-      positions,
-    }));
-    router.push('/rechnungen?neu=1');
+    if (anpassungen.rabatt.aktiv && ang.rabattBetrag > 0) {
+      positions.push({ bezeichnung: 'Sonderrabatt', menge: 1, einheit: 'Pauschale', einzelpreis: -ang.rabattBetrag });
+    }
+
+    setRechnungErstellenLaeuft(true);
+    setRechnungFehler('');
+    try {
+      const res = await fetch('/api/invoices', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          project_id: savedProjectId,
+          customer_name: s1.name || '',
+          customer_address: s1.adresse || '',
+          notes: anpassungen.skonto ? '2% Skonto bei Zahlung innerhalb von 8 Tagen.' : undefined,
+          positions,
+          override_grund: overrideGrund || undefined,
+        }),
+      });
+      const json = await res.json();
+      if (!json.success) {
+        if (json.code === 'FREIGABE_FEHLT_OVERRIDE_MOEGLICH') {
+          const grund = prompt(json.error + '\n\nBegründung für die Überschreibung eingeben:');
+          setRechnungErstellenLaeuft(false);
+          if (grund && grund.trim()) { await erstelleUndOeffneVersand(grund.trim()); }
+          return;
+        }
+        throw new Error(json.error || 'Rechnung konnte nicht angelegt werden.');
+      }
+      setRechnungErstellt(json.invoice);
+      setRechnungEmail(s1.ansprechpartnerEmail || s1.bauleiterEmail || '');
+      setZeigeVersandDialog(true);
+    } catch (err: any) {
+      setRechnungFehler(err.message);
+    }
+    setRechnungErstellenLaeuft(false);
+  }
+
+  async function handleRechnungVersenden() {
+    if (!rechnungErstellt || !rechnungEmail.trim() || !rechnungEmail.includes('@')) {
+      setRechnungFehler('Bitte eine gültige E-Mail-Adresse eingeben.');
+      return;
+    }
+    setRechnungSendenLaeuft(true);
+    setRechnungFehler('');
+    try {
+      const doc = generateInvoicePDF(rechnungErstellt);
+      const pdfBase64 = doc.output('datauristring');
+      const res = await fetch('/api/email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          type: 'rechnung', to: rechnungEmail.trim(), projectId: savedProjectId,
+          projectName: s1.name, customerName: s1.name,
+          invoiceNumber: rechnungErstellt.invoice_number, grossAmount: Number(rechnungErstellt.gross_amount),
+          dueDate: fmtRechnungsDatum(rechnungErstellt.due_date), pdfBase64,
+        }),
+      });
+      const json = await res.json();
+      if (!json.success) throw new Error(json.error || 'Versand fehlgeschlagen.');
+      setRechnungVersendet(true);
+    } catch (err: any) {
+      setRechnungFehler(err.message);
+    }
+    setRechnungSendenLaeuft(false);
   }
 
   // ═══════════════════════════════════════════════════════════
@@ -712,12 +796,46 @@ function Schritt6Content() {
                 </div>
               )}
 
-              {/* NEU (Phase 13): Rechnung erstellen, sobald Angebot angenommen */}
-              {angebotsStatus === 'angenommen' && savedProjectId && kiResult && (
+              {/* NEU (Phase 13/31): Rechnung erstellen, sobald Angebot angenommen –
+                  1 Klick legt die Rechnung direkt an und öffnet den Versand-Dialog hier. */}
+              {angebotsStatus === 'angenommen' && savedProjectId && kiResult && !zeigeVersandDialog && (
                 <div className="pt-2 border-t border-black/10">
-                  <button onClick={handleRechnung} className="w-full rounded-xl bg-[#e8590c] hover:bg-[#d9480f] py-3 font-bold text-white transition-colors">
-                    🧾 Rechnung erstellen
+                  <button onClick={handleRechnung} disabled={rechnungErstellenLaeuft} className="w-full rounded-xl bg-[#e8590c] hover:bg-[#d9480f] disabled:opacity-50 py-3 font-bold text-white transition-colors">
+                    {rechnungErstellenLaeuft ? '⏳ Rechnung wird angelegt…' : '🧾 Rechnung erstellen'}
                   </button>
+                  {rechnungFehler && <p className="text-xs text-red-600 mt-2">❌ {rechnungFehler}</p>}
+                </div>
+              )}
+
+              {/* NEU (Phase 31): Versand-Dialog direkt hier, kein Sprung zu /rechnungen */}
+              {zeigeVersandDialog && rechnungErstellt && (
+                <div className="pt-2 border-t border-black/10">
+                  <div className="rounded-xl bg-emerald-50 border border-emerald-200 p-4 space-y-3">
+                    <p className="text-sm font-semibold text-emerald-800">✅ Rechnung {rechnungErstellt.invoice_number} angelegt ({Number(rechnungErstellt.gross_amount).toLocaleString('de-DE', { minimumFractionDigits: 2 })} €)</p>
+                    {!rechnungVersendet ? (
+                      <>
+                        <div>
+                          <label className="block text-xs text-[#86868b] mb-1">An welche E-Mail-Adresse senden?</label>
+                          <input
+                            value={rechnungEmail}
+                            onChange={(e) => setRechnungEmail(e.target.value)}
+                            placeholder="kunde@beispiel.de"
+                            className="w-full bg-white border border-black/10 rounded-lg px-3 py-2 text-sm text-[#1d1d1f]"
+                          />
+                        </div>
+                        {rechnungFehler && <p className="text-xs text-red-600">❌ {rechnungFehler}</p>}
+                        <div className="flex gap-2">
+                          <button onClick={handleRechnungVersenden} disabled={rechnungSendenLaeuft} className="flex-1 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 py-2.5 font-bold text-white text-sm transition-colors">
+                            {rechnungSendenLaeuft ? '⏳ Wird gesendet…' : '📧 Jetzt senden'}
+                          </button>
+                          <button onClick={() => { const doc = generateInvoicePDF(rechnungErstellt); doc.save(`Rechnung_${rechnungErstellt.invoice_number}.pdf`); }} className="rounded-xl bg-black/5 hover:bg-black/10 px-4 py-2.5 text-sm font-medium">📄 PDF</button>
+                        </div>
+                        <button onClick={() => router.push('/rechnungen')} className="text-xs text-[#86868b] hover:underline">Später versenden – zu allen Rechnungen</button>
+                      </>
+                    ) : (
+                      <p className="text-sm text-emerald-800">📧 Versendet an {rechnungEmail}.</p>
+                    )}
+                  </div>
                 </div>
               )}
 
@@ -794,7 +912,31 @@ function Schritt6Content() {
                     </button>
                   </div>
 
-                  {/* ─── Länger mieten ─── */}
+                  {/* ─── NEU (Phase 30): Preisbasis – KI-Kalkulation oder Festpreis/m² ─── */}
+                  <div className="bg-white rounded-xl p-4 mb-4 border border-black/10">
+                    <p className="text-sm font-semibold text-[#1d1d1f] mb-2">Preisbasis für dieses Angebot</p>
+                    <div className="grid grid-cols-2 gap-2 mb-2">
+                      <button onClick={() => setPreisModus('ki')} className={`rounded-lg border px-3 py-2 text-xs font-semibold transition ${preisModus === 'ki' ? 'bg-[#e8590c]/10 border-[#e8590c] text-[#e8590c]' : 'bg-[#f5f5f7] border-black/10 text-[#86868b]'}`}>
+                        🧮 KI-Kalkulation
+                      </button>
+                      <button onClick={() => setPreisModus('festpreis')} className={`rounded-lg border px-3 py-2 text-xs font-semibold transition ${preisModus === 'festpreis' ? 'bg-[#e8590c]/10 border-[#e8590c] text-[#e8590c]' : 'bg-[#f5f5f7] border-black/10 text-[#86868b]'}`}>
+                        📐 Festpreis pro m²
+                      </button>
+                    </div>
+                    {preisModus === 'festpreis' && (
+                      <div className="flex items-center gap-2">
+                        <input
+                          value={festpreisProM2}
+                          onChange={(e) => setFestpreisProM2(e.target.value)}
+                          placeholder="z.B. 18,50"
+                          className={inputCls + ' w-32'}
+                        />
+                        <span className="text-xs text-[#86868b]">€/m² × {kiResult.totalAreaM2 ?? '–'} m² = <strong>{((parseFloat(festpreisProM2.replace(',', '.')) || 0) * (kiResult.totalAreaM2 ?? 0)).toFixed(2)} €</strong></span>
+                      </div>
+                    )}
+                    <p className="text-[10px] text-[#86868b] mt-1.5">Material-/Kostenaufstellung unten zeigt weiterhin die KI-Kalkulation (für die eigene Kalkulation) – der Angebotspreis an den Kunden folgt der hier gewählten Basis.</p>
+                  </div>
+
                   <div className="bg-black/10/40 rounded-xl p-3 mb-3">
                     <div className="flex items-center justify-between">
                       <div>
