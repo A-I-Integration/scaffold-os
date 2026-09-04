@@ -554,8 +554,14 @@ export default function Schritt1Page() {
               </p>
               <LiDARUpload
                 sessionId={sessionId}
-                onMeasurements={(m) => {
+                onMeasurements={(m, name) => {
                   localStorage.setItem('scaffold_lidar_measurements', JSON.stringify(m));
+                  if (name) localStorage.setItem('scaffold_lidar_scan_name', name);
+                  // Neu: markiert diesen Scan als "frisch" – Schritt 2 übernimmt ihn
+                  // dann garantiert, auch wenn dort schon (ggf. veraltete) Werte
+                  // stehen, statt ihn wegen "nur leere Felder" stillschweigend zu
+                  // ignorieren (gleiches Muster wie bei der Grundriss-Analyse).
+                  localStorage.setItem('scaffold_lidar_fresh', '1');
                 }}
               />
               <p className="text-[11px] text-[#86868b] mt-2">
@@ -563,7 +569,6 @@ export default function Schritt1Page() {
               </p>
             </div>
           )}
-
           {/* ─── DROHNEN-UPLOAD (nur wenn aktiviert) ─── */}
           {form.drohnen && sessionId && (
             <div className="bg-black/10/30 rounded-xl p-6 border border-black/10">

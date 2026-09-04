@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { uploadScanClient, getScanStatusClient } from '@/lib/media-client';
 
 // Ab dieser Größe geht der Scan direkt zu Supabase Storage und wird vom
@@ -45,7 +45,7 @@ interface Measurements {
 
 interface Props {
   sessionId: string;
-  onMeasurements?: (m: Measurements) => void;
+  onMeasurements?: (m: Measurements, name: string) => void;
 }
 
 // Kalibrier-Achsen, die der Nutzer als Referenz einmessen kann
@@ -66,6 +66,18 @@ export default function LiDARUpload({ sessionId, onMeasurements }: Props) {
 
   // Phase-Anzeige für den Worker-Pfad (große Scans)
   const [phase, setPhase] = useState<string>('');
+
+  // Fix: Bisher startete "scan" bei jedem Neu-Mount (z.B. nach Zurück-Navigation
+  // von Schritt 2) leer, obwohl das Ergebnis längst analysiert war – die Anzeige
+  // sah dann fälschlich nach "noch keine Aufnahme" aus. Jetzt wird ein
+  // vorhandenes Ergebnis beim Laden der Seite wiederhergestellt.
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem('scaffold_lidar_measurements');
+      const name = localStorage.getItem('scaffold_lidar_scan_name');
+      if (raw) setScan({ m: JSON.parse(raw), name: name || 'Punktwolke' });
+    } catch { /* ignore */ }
+  }, []);
 
   const handleFile = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -93,7 +105,7 @@ export default function LiDARUpload({ sessionId, onMeasurements }: Props) {
           const st = await getScanStatusClient(media.id);
           if (st.status === 'done' && st.measurements) {
             setScan({ m: st.measurements, name: file.name });
-            onMeasurements?.(st.measurements);
+            onMeasurements?.(st.measurements, file.name);
             break;
           }
           if (st.status === 'error') throw new Error(st.fehler || 'Analyse fehlgeschlagen');
@@ -113,7 +125,7 @@ export default function LiDARUpload({ sessionId, onMeasurements }: Props) {
         if (!res.ok) throw new Error(json.error || 'Upload fehlgeschlagen');
 
         setScan({ m: json.measurements, name: json.fileName });
-        onMeasurements?.(json.measurements);
+        onMeasurements?.(json.measurements, json.fileName);
       }
     } catch (err: any) {
       alert('Scan-Fehler: ' + err.message);
@@ -151,7 +163,7 @@ export default function LiDARUpload({ sessionId, onMeasurements }: Props) {
       referenz: `${REF_OPTIONS.find((r) => r.id === refFeld)?.label} = ${bekannt} m`,
     };
     setScan({ m: k, name: scan.name });
-    onMeasurements?.(k);
+    onMeasurements?.(k, scan.name);
   }, [scan, refFeld, refWert, onMeasurements]);
 
   const feldVerfuegbar = (id: string) => {
