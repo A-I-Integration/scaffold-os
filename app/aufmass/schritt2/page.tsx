@@ -165,12 +165,21 @@ export default function Schritt2Page() {
       try {
         const m = JSON.parse(lidarRaw);
         const fresh = localStorage.getItem('scaffold_lidar_fresh') === '1';
-        setForm((prev) => ({
-          ...prev,
-          laenge: fresh ? (m.lengthM ? m.lengthM.toFixed(2) : prev.laenge) : (prev.laenge || (m.lengthM ? m.lengthM.toFixed(2) : '')),
-          breite: fresh ? (m.widthM ? m.widthM.toFixed(2) : prev.breite) : (prev.breite || (m.widthM ? m.widthM.toFixed(2) : '')),
-          hoehe: fresh ? (m.heightM ? m.heightM.toFixed(2) : prev.hoehe) : (prev.hoehe || (m.heightM ? m.heightM.toFixed(2) : '')),
-        }));
+        setForm((prev) => {
+          const next = {
+            ...prev,
+            laenge: fresh ? (m.lengthM ? m.lengthM.toFixed(2) : prev.laenge) : (prev.laenge || (m.lengthM ? m.lengthM.toFixed(2) : '')),
+            breite: fresh ? (m.widthM ? m.widthM.toFixed(2) : prev.breite) : (prev.breite || (m.widthM ? m.widthM.toFixed(2) : '')),
+            hoehe: fresh ? (m.heightM ? m.heightM.toFixed(2) : prev.hoehe) : (prev.hoehe || (m.heightM ? m.heightM.toFixed(2) : '')),
+          };
+          // Fix: sofort sichern, nicht erst bei "Weiter" – sonst gehen die
+          // übernommenen Werte verloren, wenn man zwischendurch zu Schritt 1
+          // zurückgeht und wieder vor (Komponente wird neu gemountet, der
+          // "frisch"-Marker ist dann schon verbraucht und würde sonst nichts
+          // mehr übernehmen, weil die alten, ungespeicherten Werte fehlen).
+          try { localStorage.setItem('scaffold_step2', JSON.stringify(next)); } catch { /* ignore */ }
+          return next;
+        });
         if (fresh) localStorage.removeItem('scaffold_lidar_fresh');
         setLidarUebernommen(true);
         return true;
@@ -204,20 +213,27 @@ export default function Schritt2Page() {
         const fresh = localStorage.getItem('scaffold_grundriss_fresh') === '1';
         const gHoehe = g.hoehe ? String(g.hoehe) : (g.hoehe_geschaetzt ? String(g.hoehe_geschaetzt) : '');
         if (fresh) {
-          setForm((prev) => ({
-            ...prev,
-            laenge: g.laenge ? String(g.laenge) : prev.laenge,
-            breite: g.breite ? String(g.breite) : prev.breite,
-            hoehe: gHoehe || prev.hoehe,
-            traufhoehe: g.traufhoehe ? String(g.traufhoehe) : prev.traufhoehe,
-            dachform: dachformen.includes(g.dachform) ? g.dachform : prev.dachform,
-            hauseingaenge: g.hauseingaenge ? String(g.hauseingaenge) : prev.hauseingaenge,
-            hindernisse: Array.isArray(g.hindernisse)
-              ? g.hindernisse.filter((h: string) => hindernisListe.includes(h))
-              : prev.hindernisse,
-            garagen: g.garagen === true,
-            durchfahrt: g.durchfahrt === true,
-          }));
+          setForm((prev) => {
+            const next = {
+              ...prev,
+              laenge: g.laenge ? String(g.laenge) : prev.laenge,
+              breite: g.breite ? String(g.breite) : prev.breite,
+              hoehe: gHoehe || prev.hoehe,
+              traufhoehe: g.traufhoehe ? String(g.traufhoehe) : prev.traufhoehe,
+              dachform: dachformen.includes(g.dachform) ? g.dachform : prev.dachform,
+              hauseingaenge: g.hauseingaenge ? String(g.hauseingaenge) : prev.hauseingaenge,
+              hindernisse: Array.isArray(g.hindernisse)
+                ? g.hindernisse.filter((h: string) => hindernisListe.includes(h))
+                : prev.hindernisse,
+              garagen: g.garagen === true,
+              durchfahrt: g.durchfahrt === true,
+            };
+            // Fix: sofort sichern (gleiches Problem wie bei LiDAR – sonst gehen
+            // die Werte bei Zurück->Vor-Navigation verloren, weil der
+            // "frisch"-Marker nur einmal gilt).
+            try { localStorage.setItem('scaffold_step2', JSON.stringify(next)); } catch { /* ignore */ }
+            return next;
+          });
           if (!g.hoehe && g.hoehe_geschaetzt) setHoeheGeschaetzt(true);
           localStorage.removeItem('scaffold_grundriss_fresh');
         } else {
@@ -455,13 +471,13 @@ export default function Schritt2Page() {
         <div className="bg-[#f5f5f7] rounded-xl p-6 space-y-6">
 
           {lidarUebernommen && (
-            <div className="rounded-xl bg-purple-900/20 border border-purple-500/30 p-3 text-sm text-purple-300">
+            <div className="rounded-xl bg-purple-50 border border-purple-200 p-3 text-sm text-purple-700">
               📐 Maße wurden aus dem LiDAR-Scan übernommen – bitte prüfen und bei Bedarf anpassen.
             </div>
           )}
 
           {grundrissUebernommen && (
-            <div className="rounded-xl bg-teal-900/20 border border-teal-500/30 p-3 text-sm text-teal-300">
+            <div className="rounded-xl bg-teal-50 border border-teal-200 p-3 text-sm text-teal-700">
               📋 Werte wurden aus der KI-Grundriss-Analyse übernommen – bitte prüfen und bei Bedarf anpassen.
             </div>
           )}
