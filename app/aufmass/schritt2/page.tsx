@@ -180,7 +180,11 @@ export default function Schritt2Page() {
           try { localStorage.setItem('scaffold_step2', JSON.stringify(next)); } catch { /* ignore */ }
           return next;
         });
-        if (fresh) localStorage.removeItem('scaffold_lidar_fresh');
+        // Fix: den "frisch"-Marker NICHT hier löschen. Das Löschen direkt
+        // nach dem ersten Anwenden führte dazu, dass er beim nächsten
+        // Zurück->Vor-Springen schon "verbraucht" war und die Werte dann
+        // nicht mehr übernommen wurden. Er wird jetzt erst gelöscht, wenn
+        // wirklich auf "Weiter" geklickt wird (siehe handleWeiter unten).
         setLidarUebernommen(true);
         return true;
       } catch {
@@ -235,7 +239,8 @@ export default function Schritt2Page() {
             return next;
           });
           if (!g.hoehe && g.hoehe_geschaetzt) setHoeheGeschaetzt(true);
-          localStorage.removeItem('scaffold_grundriss_fresh');
+          // Fix: siehe Kommentar bei versucheLidarUebernahme – wird erst bei
+          // "Weiter" gelöscht, nicht schon hier.
         } else {
           setForm((prev) => ({
             ...prev,
@@ -331,6 +336,11 @@ export default function Schritt2Page() {
       return;
     }
     localStorage.setItem('scaffold_step2', JSON.stringify(form));
+    // Fix: "frisch"-Marker erst hier verbrauchen – die Werte wurden jetzt
+    // bewusst bestätigt (weitergegangen), erst ab jetzt darf ein späteres
+    // Zurückkommen sie nicht mehr zwingend überschreiben.
+    localStorage.removeItem('scaffold_lidar_fresh');
+    localStorage.removeItem('scaffold_grundriss_fresh');
     router.push('/aufmass/schritt3');
   }
 
@@ -349,6 +359,8 @@ export default function Schritt2Page() {
       return;
     }
     localStorage.setItem('scaffold_step2', JSON.stringify(form));
+    localStorage.removeItem('scaffold_lidar_fresh');
+    localStorage.removeItem('scaffold_grundriss_fresh');
     router.push('/aufmass/schritt6');
   }
 
