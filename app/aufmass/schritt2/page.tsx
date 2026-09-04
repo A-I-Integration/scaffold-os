@@ -155,21 +155,42 @@ export default function Schritt2Page() {
       }));
     }
 
-    // LiDAR-Maße aus Schritt 1 übernehmen (nur leere Felder, nichts überschreiben)
-    const lidarRaw = localStorage.getItem('scaffold_lidar_measurements');
-    if (lidarRaw) {
+    // LiDAR-Maße aus Schritt 1 übernehmen (nur leere Felder, nichts überschreiben).
+    // Fix: War bisher nur EIN einmaliger Check beim Laden – falls die Analyse beim
+    // Wechsel zu Schritt 2 noch beim Worker lief, kam das Ergebnis nie an. Jetzt
+    // wird bis zu 2 Minuten lang alle paar Sekunden nachgeschaut, ob es fertig ist.
+    const versucheLidarUebernahme = () => {
+      const lidarRaw = localStorage.getItem('scaffold_lidar_measurements');
+      if (!lidarRaw) return false;
       try {
         const m = JSON.parse(lidarRaw);
+        const fresh = localStorage.getItem('scaffold_lidar_fresh') === '1';
         setForm((prev) => ({
           ...prev,
-          laenge: prev.laenge || (m.lengthM ? m.lengthM.toFixed(2) : ''),
-          breite: prev.breite || (m.widthM ? m.widthM.toFixed(2) : ''),
-          hoehe: prev.hoehe || (m.heightM ? m.heightM.toFixed(2) : ''),
+          laenge: fresh ? (m.lengthM ? m.lengthM.toFixed(2) : prev.laenge) : (prev.laenge || (m.lengthM ? m.lengthM.toFixed(2) : '')),
+          breite: fresh ? (m.widthM ? m.widthM.toFixed(2) : prev.breite) : (prev.breite || (m.widthM ? m.widthM.toFixed(2) : '')),
+          hoehe: fresh ? (m.heightM ? m.heightM.toFixed(2) : prev.hoehe) : (prev.hoehe || (m.heightM ? m.heightM.toFixed(2) : '')),
         }));
+        if (fresh) localStorage.removeItem('scaffold_lidar_fresh');
         setLidarUebernommen(true);
+        return true;
       } catch {
-        // ignore
+        return false;
       }
+    };
+    // Fix: Der Polling-Aufbau darf NICHT vorzeitig aus dem Effekt zurückkehren –
+    // sonst werden die Grundriss- und Foto-Übernahme weiter unten (siehe unten)
+    // komplett übersprungen, und zwar IMMER, wenn beim allerersten Check noch
+    // keine LiDAR-Daten vorlagen (also im Normalfall, wenn gar kein LiDAR-Scan
+    // gemacht wurde). Das war der Bug: „Daten wurden nicht in Schritt 2
+    // übernommen" betraf dadurch nicht nur LiDAR, sondern auch Grundriss/Foto.
+    let lidarIntervall: ReturnType<typeof setInterval> | undefined;
+    if (!versucheLidarUebernahme()) {
+      let versuche = 0;
+      lidarIntervall = setInterval(() => {
+        versuche++;
+        if (versucheLidarUebernahme() || versuche >= 24) clearInterval(lidarIntervall); // 24 × 5s = 2 Min.
+      }, 5000);
     }
 
     // KI-Grundriss-Analyse aus Schritt 1 übernehmen.
@@ -251,6 +272,8 @@ export default function Schritt2Page() {
         // ignore
       }
     }
+
+    return () => { if (lidarIntervall) clearInterval(lidarIntervall); };
   }, []);
 
   function toggleHindernis(h: string) {
