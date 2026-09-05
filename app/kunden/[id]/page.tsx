@@ -42,6 +42,7 @@ interface Project {
   adresse: string | null
   data: any
   created_at: string
+  customer_id?: string | null
 }
 
 interface EmailLog {
@@ -183,11 +184,11 @@ export default function KundenDetailPage() {
         }
       } catch { /* Tracking optional */ }
 
-      // Projekte/Aufträge dieses Kunden: keine customer_id-Spalte vorhanden,
-      // Zuordnung wie auf der Kunden-Übersicht über den exakten Namen.
+      // NEU (Phase 34): echte Verknüpfung über customer_id, mit Namensvergleich
+      // nur noch als Rückfalloption für alte Projekte ohne diese Verknüpfung.
       const alleProjekte: Project[] = pJson.success ? (pJson.projects || []) : []
       const eigeneProjekte = gefundenerKunde
-        ? alleProjekte.filter((p) => p.name && nameMatch(p.name, gefundenerKunde.name))
+        ? alleProjekte.filter((p) => p.customer_id === gefundenerKunde.id || (!p.customer_id && p.name && nameMatch(p.name, gefundenerKunde.name)))
         : []
       setProjects(eigeneProjekte)
 
@@ -457,7 +458,17 @@ export default function KundenDetailPage() {
     setSpeichern(false)
   }
 
-  const kundenInvoices = useMemo(() => invoices.filter((i) => kunde && nameMatch(i.customer_name, kunde.name)), [invoices, kunde])
+  // NEU (Phase 34): echte Verknüpfung – direkt über customer_id ODER über ein
+  // Projekt, das diesem Kunden zugeordnet ist. Namensvergleich bleibt als
+  // Rückfalloption für alte Rechnungen ohne diese Verknüpfung.
+  const eigeneProjektIds = useMemo(() => new Set(projects.map(p => p.id)), [projects])
+  const kundenInvoices = useMemo(() => invoices.filter((i) =>
+    kunde && (
+      i.customer_id === kunde.id ||
+      (i.project_id && eigeneProjektIds.has(i.project_id)) ||
+      (!i.customer_id && !i.project_id && nameMatch(i.customer_name, kunde.name))
+    )
+  ), [invoices, kunde, eigeneProjektIds])
   const offeneInvoices = useMemo(() => kundenInvoices.filter((i) => i.status === 'offen' || i.status === 'ueberfaellig'), [kundenInvoices])
   const offeneSumme = offeneInvoices.reduce((s, i) => s + Number(i.gross_amount), 0)
   const ueberfaelligeSumme = offeneInvoices.filter(istUeberfaellig).reduce((s, i) => s + Number(i.gross_amount), 0)

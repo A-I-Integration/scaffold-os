@@ -37,6 +37,7 @@ export interface Invoice {
   reminder_level?: number; // Phase 15: 0 = keine, 1/2 = Mahnung
   invoice_type?: 'standard' | 'abschlag' | 'schluss' | 'gutschrift'; // Phase 15 + 22
   reference_invoice_number?: string | null; // Phase 22: bei Gutschriften, Bezug auf Original
+  customer_id?: string | null; // Phase 34: echte Kunde-Verknüpfung statt Namensvergleich
 }
 
 // Phase 15: Bezeichnung je Rechnungstyp

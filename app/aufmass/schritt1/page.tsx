@@ -13,6 +13,9 @@ const LEERES_FORM = {
   // Projekt
   name: '',
   adresse: '',
+  // NEU (Phase 34): echte Verknüpfung zum Kundenstamm statt Namensvergleich.
+  // null = neuer/nicht im Kundenstamm gefundener Kunde (bisheriges Verhalten).
+  customerId: null as string | null,
   // NEU: Projektart – bestimmt, ob Schritt 2 Gebäude- oder Brücken-Felder zeigt
   projektart: 'gebaeude' as 'gebaeude' | 'bruecke',
 
@@ -67,6 +70,13 @@ export default function Schritt1Page() {
   const router = useRouter();
 
   const [form, setForm] = useState({ ...LEERES_FORM });
+  // NEU (Phase 34): echte Kunden-Verknüpfung statt reinem Namensvergleich.
+  const [kundenListe, setKundenListe] = useState<{ id: string; name: string; street?: string; zip?: string; city?: string }[]>([]);
+  const [zeigeKundenDropdown, setZeigeKundenDropdown] = useState(false);
+
+  useEffect(() => {
+    fetch('/api/kunden').then(r => r.json()).then(j => { if (j.success) setKundenListe(j.kunden || []) }).catch(() => {});
+  }, []);
 
   const [sessionId, setSessionId] = useState<string>('');
   const [hatAlteDaten, setHatAlteDaten] = useState(false);
@@ -172,7 +182,7 @@ export default function Schritt1Page() {
     return tage ? Math.ceil(tage / 7) : parseInt(form.dauer) || 4;
   }
 
-  function handleChange(field: string, value: string) {
+  function handleChange(field: string, value: string | null) {
     setForm((prev) => ({ ...prev, [field]: value }));
   }
 
@@ -263,15 +273,53 @@ export default function Schritt1Page() {
           <div className="border-b border-black/10 pb-6">
             <h3 className="text-[#e8590c] text-xs font-bold uppercase tracking-wider mb-4">Projekt</h3>
             <div className="space-y-4">
-              <div>
+              <div className="relative">
                 <label className="block text-sm font-medium mb-2 text-[#424245]">Kunde / Projektname *</label>
                 <input
                   type="text"
                   value={form.name}
-                  onChange={(e) => handleChange('name', e.target.value)}
+                  onChange={(e) => { handleChange('name', e.target.value); handleChange('customerId', null); setZeigeKundenDropdown(true); }}
+                  onFocus={() => setZeigeKundenDropdown(true)}
+                  onBlur={() => setTimeout(() => setZeigeKundenDropdown(false), 150)}
                   className="w-full bg-black/10 border border-black/10 rounded-xl px-4 py-3 text-[#1d1d1f] placeholder-[#86868b] focus:outline-none focus:border-orange-500 transition"
                   placeholder="z.B. Musterbau GmbH"
                 />
+                {form.customerId && (
+                  <span className="absolute right-3 top-[42px] text-[10px] px-2 py-1 rounded-full bg-emerald-500/15 text-emerald-700 border border-emerald-500/40">✓ Kundenstamm</span>
+                )}
+                {/* NEU (Phase 34): Live-Vorschläge aus dem Kundenstamm – verhindert
+                    Tippfehler/andere Schreibweise, die Rechnungen später unsichtbar
+                    vom eigentlichen Kunden trennen würden. */}
+                {zeigeKundenDropdown && form.name.trim().length >= 2 && !form.customerId && (() => {
+                  const treffer = kundenListe.filter(k => k.name.toLowerCase().includes(form.name.trim().toLowerCase())).slice(0, 6);
+                  if (treffer.length === 0) return null;
+                  return (
+                    <div className="absolute z-10 mt-1 w-full bg-white border border-black/10 rounded-xl shadow-lg overflow-hidden">
+                      <p className="px-3 py-1.5 text-[10px] text-[#86868b] uppercase bg-[#f5f5f7]">Aus dem Kundenstamm auswählen</p>
+                      {treffer.map(k => (
+                        <button
+                          key={k.id}
+                          type="button"
+                          onMouseDown={() => {
+                            handleChange('name', k.name);
+                            handleChange('customerId', k.id);
+                            if (!form.adresse && k.street) {
+                              handleChange('adresse', [k.street, [k.zip, k.city].filter(Boolean).join(' ')].filter(Boolean).join(', '));
+                            }
+                            setZeigeKundenDropdown(false);
+                          }}
+                          className="w-full text-left px-3 py-2 text-sm hover:bg-[#f5f5f7] border-t border-black/5"
+                        >
+                          <span className="font-medium text-[#1d1d1f]">{k.name}</span>
+                          {k.city && <span className="text-[#86868b]"> · {k.city}</span>}
+                        </button>
+                      ))}
+                    </div>
+                  );
+                })()}
+                {form.name.trim().length >= 2 && !form.customerId && !kundenListe.some(k => k.name.toLowerCase() === form.name.trim().toLowerCase()) && (
+                  <p className="text-[11px] text-[#86868b] mt-1">Kein Eintrag im Kundenstamm gefunden – wird als neuer Kunde behandelt. Falls dieser Kunde schon existiert, bitte Schreibweise prüfen (siehe Vorschläge oben).</p>
+                )}
               </div>
               <div>
                 <label className="block text-sm font-medium mb-2 text-[#424245]">{form.projektart === 'bruecke' ? 'Brücken-Standort *' : 'Baustellen-Adresse *'}</label>

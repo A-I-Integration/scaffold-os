@@ -67,7 +67,7 @@ export default function KundenPage() {
   const router = useRouter();
   const [kunden, setKunden] = useState<Kunde[]>([]);
   const [invoices, setInvoices] = useState<Invoice[]>([]);
-  const [projects, setProjects] = useState<{ id: string; name: string | null; adresse: string | null; data: any }[]>([]);
+  const [projects, setProjects] = useState<{ id: string; name: string | null; adresse: string | null; data: any; customer_id?: string | null }[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [migrationFehlt, setMigrationFehlt] = useState(false);
@@ -170,15 +170,20 @@ export default function KundenPage() {
   }
 
   // ─── Rechnungen des Kunden ───
-  const rechnungenVon = (k: Kunde) =>
-    invoices.filter((i) => nameMatch(i.customer_name, k.name));
+  // NEU (Phase 34): echte Verknüpfung über customer_id ODER über ein Projekt
+  // dieses Kunden. Namensvergleich nur noch Rückfalloption für alte Daten.
+  const rechnungenVon = (k: Kunde) => {
+    const eigeneIds = new Set(auftraegeVon(k).map((p) => p.id));
+    return invoices.filter((i) =>
+      i.customer_id === k.id ||
+      (i.project_id && eigeneIds.has(i.project_id)) ||
+      (!i.customer_id && !i.project_id && nameMatch(i.customer_name, k.name))
+    );
+  };
 
-  // ─── Aufträge (Projekte) des Kunden (Phase 20) ───
-  // Gleiche Zuordnung wie bei Rechnungen: über den Namen, weil
-  // "projects" keine feste kunde_id-Spalte hat (Kunde/Projektname
-  // wird im Aufmaß Schritt 1 als ein Feld erfasst).
+  // ─── Aufträge (Projekte) des Kunden ───
   const auftraegeVon = (k: Kunde) =>
-    projects.filter((p) => p.name && nameMatch(p.name, k.name));
+    projects.filter((p) => p.customer_id === k.id || (!p.customer_id && p.name && nameMatch(p.name, k.name)));
 
   function handlePDF(inv: Invoice) {
     const doc = generateInvoicePDF(inv);

@@ -76,7 +76,7 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { name, adresse, data, status } = body;
+    const { name, adresse, data, status, customer_id } = body;
 
     if (!name || !adresse) {
       return NextResponse.json({ error: 'Name und Adresse erforderlich' }, { status: 400 });
@@ -90,6 +90,7 @@ export async function POST(req: NextRequest) {
         adresse,
         data: data || {},
         status: status || 'active',
+        customer_id: customer_id || null,
       }),
     });
 
@@ -117,7 +118,7 @@ export async function PATCH(req: NextRequest) {
 
   try {
     const body = await req.json();
-    const { id, status, data, name, adresse } = body;
+    const { id, status, data, name, adresse, customer_id } = body;
 
     if (!id) {
       return NextResponse.json({ success: false, error: 'id erforderlich' }, { status: 400 });
@@ -133,6 +134,7 @@ export async function PATCH(req: NextRequest) {
     if (status) patch.status = status;
     if (name !== undefined) patch.name = name;
     if (adresse !== undefined) patch.adresse = adresse;
+    if (customer_id !== undefined) patch.customer_id = customer_id;
 
     // NEU (Prio-2-Sprint): data-Merge – z. B. KI-Ergebnis/Angebotsstatus nachträglich sichern.
     // Bestehende Projektdaten werden gelesen und mit den neuen Feldern gemergt (nichts geht verloren).

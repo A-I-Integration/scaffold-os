@@ -84,7 +84,7 @@ export async function POST(req: NextRequest) {
   }
   try {
     const body = await req.json();
-    const { project_id, customer_name, customer_address, positions, tax_rate, invoice_date, due_date, notes, invoice_type, reference_invoice_number, override_grund } = body;
+    const { project_id, customer_name, customer_address, positions, tax_rate, invoice_date, due_date, notes, invoice_type, reference_invoice_number, override_grund, customer_id: customerIdBody } = body;
 
     if (!customer_name) {
       return NextResponse.json({ success: false, error: 'Kundenname erforderlich.' }, { status: 400 });
@@ -159,12 +159,24 @@ export async function POST(req: NextRequest) {
       }
     } catch { /* Snapshot optional – Rechnung geht auch ohne */ }
 
+    // NEU (Phase 34): echte Kunde-Verknüpfung statt reinem Namensvergleich.
+    // Direkt übergebene customer_id hat Vorrang; sonst vom verknüpften
+    // Projekt übernehmen, falls dort eine hinterlegt ist.
+    let customerId = customerIdBody || null;
+    if (!customerId && project_id) {
+      try {
+        const pRes = await fetch(`${url}/rest/v1/projects?id=eq.${project_id}&select=customer_id`, { headers });
+        if (pRes.ok) customerId = (await pRes.json())?.[0]?.customer_id || null;
+      } catch { /* optional */ }
+    }
+
     const res = await fetch(`${url}/rest/v1/invoices`, {
       method: 'POST',
       headers: { ...headers, 'Prefer': 'return=representation' },
       body: JSON.stringify({
         invoice_number: invoiceNumber,
         project_id: project_id || null,
+        customer_id: customerId,
         customer_name,
         customer_address: customer_address || null,
         positions,
