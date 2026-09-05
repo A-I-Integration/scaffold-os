@@ -561,6 +561,32 @@ export default function KundenDetailPage() {
     setSpeichern(false)
   }
 
+  // NEU (Phase 39): E-Rechnung (ZUGFeRD) – bettet die gesetzlich
+  // vorgeschriebene, maschinenlesbare EN-16931-Rechnung zusätzlich in die
+  // gewohnte PDF ein. Echte Validierung serverseitig, siehe API-Route.
+  const [zugferdLaeuft, setZugferdLaeuft] = useState<string | null>(null)
+  async function handleZugferd(inv: Invoice) {
+    setZugferdLaeuft(inv.id)
+    try {
+      const doc = generateInvoicePDF(inv)
+      const pdfBase64 = doc.output('datauristring').split(',')[1]
+      const res = await fetch('/api/invoices/zugferd', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ invoice_id: inv.id, pdfBase64 }),
+      })
+      const json = await res.json()
+      if (!json.success) {
+        const details = json.details?.map((d: any) => `• ${d.field}: ${d.message}`).join('\n')
+        throw new Error(json.error + (details ? '\n\n' + details : ''))
+      }
+      const a = document.createElement('a')
+      a.href = 'data:application/pdf;base64,' + json.pdfBase64
+      a.download = `${TYPE_LABEL[inv.invoice_type || 'standard']}_${inv.invoice_number}_ZUGFeRD.pdf`
+      a.click()
+    } catch (err: any) { alert('❌ ' + err.message) }
+    setZugferdLaeuft(null)
+  }
+
   async function createGutschrift(overrideGrund?: string) {
     if (!gutschriftOffen || !kunde) return
     const betrag = Number(String(gutschriftBetrag).replace(',', '.'))
@@ -1043,6 +1069,7 @@ export default function KundenDetailPage() {
                                   <button onClick={() => { setEditInvoice(inv); setEditPositions(inv.positions || []) }} title="Neue Version anlegen (alte bleibt unverändert, wird storniert)" className="p-1.5 rounded-lg bg-black/5 hover:bg-black/10 text-[#1d1d1f]"><Pencil className="h-3.5 w-3.5" /></button>
                                 )}
                                 <button onClick={() => { const doc = generateInvoicePDF(inv); doc.save(`${TYPE_LABEL[inv.invoice_type || 'standard']}_${inv.invoice_number}.pdf`) }} title="PDF" className="p-1.5 rounded-lg bg-black/5 hover:bg-black/10 text-[#1d1d1f]"><Download className="h-3.5 w-3.5" /></button>
+                                <button onClick={() => handleZugferd(inv)} disabled={zugferdLaeuft === inv.id} title="E-Rechnung (ZUGFeRD) – PDF mit eingebetteter maschinenlesbarer Rechnung" className="p-1.5 rounded-lg bg-indigo-600/20 hover:bg-indigo-600/40 disabled:opacity-50 text-indigo-700 text-[10px] font-bold w-7 flex items-center justify-center">{zugferdLaeuft === inv.id ? '…' : 'e⚡'}</button>
                                 <button onClick={() => sendInvoice(inv)} title="Erneut senden" className="p-1.5 rounded-lg bg-blue-600/20 hover:bg-blue-600/40 text-blue-700"><Send className="h-3.5 w-3.5" /></button>
                                 {inv.status !== 'storniert' && !gutschrift && (
                                   <button onClick={() => { setZahlungOffen(inv); setZahlungBetrag(String(Number(inv.gross_amount) - Number(inv.paid_amount || 0))); setZahlungDatum(new Date().toISOString().slice(0, 10)); setZahlungNotiz('') }} title="Zahlung erfassen (auch teilweise)" className="p-1.5 rounded-lg bg-blue-600/20 hover:bg-blue-600/40 text-blue-700">
