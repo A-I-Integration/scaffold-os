@@ -196,7 +196,10 @@ export async function POST(req: NextRequest) {
         invoice_type: ['standard', 'abschlag', 'schluss', 'gutschrift'].includes(invoice_type)
           ? invoice_type
           : 'standard',
-        reference_invoice_number: istGutschrift ? (reference_invoice_number || null) : null,
+        // Phase 35: reference_invoice_number jetzt auch für normale Rechnungen
+        // erlaubt – für "Neue Version ersetzt alte Rechnung" (siehe unten),
+        // nicht mehr nur für Gutschriften.
+        reference_invoice_number: reference_invoice_number || null,
       }),
     });
     if (!res.ok) throw new Error(await res.text());
@@ -238,7 +241,7 @@ export async function PATCH(req: NextRequest) {
   }
   try {
     const body = await req.json();
-    const { id, status, reminder_level, positions, net_amount, tax_amount, gross_amount } = body;
+    const { id, status, reminder_level, notes } = body;
 
     if (!id) {
       return NextResponse.json({ success: false, error: 'id erforderlich' }, { status: 400 });
@@ -260,15 +263,15 @@ export async function PATCH(req: NextRequest) {
       }
       patch.reminder_level = rl;
     }
-    if (!status && reminder_level == null && !positions && net_amount == null && tax_amount == null && gross_amount == null) {
+    if (notes !== undefined) patch.notes = notes;
+    if (!status && reminder_level == null && notes === undefined) {
       return NextResponse.json({ success: false, error: 'Nichts zu ändern.' }, { status: 400 });
     }
-
-    // Rechnungsbearbeitung: Positionen & Beträge aktualisieren
-    if (positions) patch.positions = positions;
-    if (net_amount != null) patch.net_amount = net_amount;
-    if (tax_amount != null) patch.tax_amount = tax_amount;
-    if (gross_amount != null) patch.gross_amount = gross_amount;
+    // Phase 35 (GoBD): Positionen/Beträge einer bereits ausgestellten Rechnung
+    // werden absichtlich NICHT mehr per PATCH änderbar gemacht – eine Rechnung
+    // muss nach Erstellung unveränderbar bleiben. Änderungen laufen jetzt über
+    // "Neue Version anlegen" (POST einer neuen Rechnung mit Bezug + diese hier
+    // auf "storniert" setzen), siehe Kunden-Detail.
 
     const res = await fetch(`${url}/rest/v1/invoices?id=eq.${id}`, {
       method: 'PATCH',
