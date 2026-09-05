@@ -21,6 +21,7 @@ import {
 } from 'lucide-react'
 import { generateInvoicePDF, generateLieferscheinPDF, fmtEur, fmtDate, type Invoice } from '@/lib/invoice-pdf'
 import SignaturePad from '@/components/aufmaß/SignaturePad'
+import { uploadVertragsdokument } from '@/lib/vertrag-upload-client'
 import VersionsHistorie from '@/components/VersionsHistorie'
 import KundenKontakte from '@/components/KundenKontakte'
 import AuftragsTeam from '@/components/AuftragsTeam'
@@ -55,7 +56,7 @@ interface EmailLog {
   sent_at: string
 }
 
-interface Media { id: string; file_name: string; url: string; created_at: string }
+interface Media { id: string; file_name: string; url: string; created_at: string; file_type?: string; metadata?: { kind?: string } }
 interface DokEvent { id: string; type: string; text_note: string | null; photos: { url: string; file_name: string }[]; status: string; created_at: string; pruefung_details?: { freigegeben?: boolean } | null }
 
 const EMAIL_TYPE_LABEL: Record<string, string> = {
@@ -90,10 +91,10 @@ const DOK_TYPE_LABEL: Record<string, string> = {
 const fmtTimestamp = (d: string | null) => (d ? new Date(d).toLocaleDateString('de-DE') : '–')
 
 const LEER_POSITION = { bezeichnung: '', menge: '1', einheit: 'Stk.', einzelpreis: '' }
-const TABS = ['kunde', 'aufmass', 'medien', 'angebote', 'rechnungen'] as const
+const TABS = ['kunde', 'aufmass', 'bilder', 'dokumente', 'angebote', 'rechnungen'] as const
 type Tab = typeof TABS[number]
 const TAB_LABEL: Record<Tab, string> = {
-  kunde: 'Kunde', aufmass: 'Aufmaß', medien: 'Bilder & Doku', angebote: 'Angebote', rechnungen: 'Rechnungen',
+  kunde: 'Kunde', aufmass: 'Aufmaß', bilder: 'Bilder', dokumente: 'Dokumente', angebote: 'Angebote', rechnungen: 'Rechnungen',
 }
 
 // Gleicher Namensabgleich wie auf der Kunden-Übersicht (app/kunden/page.tsx):
@@ -119,6 +120,8 @@ export default function KundenDetailPage() {
   const [opens, setOpens] = useState<Record<string, { anzahl: number; zuletzt: string }>>({})
   const [emails, setEmails] = useState<EmailLog[]>([])
   const [fotos, setFotos] = useState<Record<string, Media[]>>({})
+  // NEU: Upload für Bilder/Dokumente direkt in Kunden-Detail
+  const [uploadLaeuft, setUploadLaeuft] = useState<string | null>(null) // "<projectId>-bilder" oder "<projectId>-dokumente"
   const [dokEintraege, setDokEintraege] = useState<Record<string, DokEvent[]>>({})
   const [loading, setLoading] = useState(true)
   const [speichern, setSpeichern] = useState(false)
@@ -454,6 +457,28 @@ export default function KundenDetailPage() {
     setSpeichern(false)
   }
 
+  // NEU: Bild oder Dokument direkt in Kunden-Detail hochladen (Kamera/Scan
+  // auf dem Handy möglich, da der Datei-Dialog bei Bildern die Kamera
+  // anbietet – "capture" auf dem <input>).
+  async function handleMedienUpload(projectId: string, art: 'bilder' | 'dokumente', file: File) {
+    setUploadLaeuft(`${projectId}-${art}`)
+    try {
+      const hochgeladen = await uploadVertragsdokument(file, projectId, art)
+      const res = await fetch('/api/project-media', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          project_id: projectId, storage_path: hochgeladen.storage_path,
+          file_name: hochgeladen.file_name, file_type: hochgeladen.file_type,
+          metadata: { kind: art === 'bilder' ? 'foto' : 'dokument' },
+        }),
+      })
+      const json = await res.json()
+      if (!json.success) throw new Error(json.error)
+      await ladeDaten()
+    } catch (err: any) { alert('❌ Upload fehlgeschlagen: ' + err.message) }
+    setUploadLaeuft(null)
+  }
+
   // NEU (Phase 37): Lieferschein erstellen – Materialliste kommt automatisch
   // aus dem KI-Ergebnis des Aufmaßes, kein erneutes Abtippen nötig.
   async function createLieferschein() {
@@ -647,26 +672,70 @@ export default function KundenDetailPage() {
         )}
 
         {/* ═══════════ TAB: BILDER & DOKU ═══════════ */}
-        {tab === 'medien' && (
+        {tab === 'bilder' && (
           <div className="space-y-4">
             {projects.length === 0 && <p className="text-sm text-[#86868b]">Noch keine Aufträge für diesen Kunden.</p>}
             {projects.map((project) => {
-              const projFotos = fotos[project.id] || []
+              const projBilder = (fotos[project.id] || []).filter((f) => !f.file_type || f.file_type.startsWith('image/'))
+              const laedt = uploadLaeuft === `${project.id}-bilder`
+              return (
+                <div key={project.id} className="bg-white rounded-xl border border-black/10 p-5 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <p className="font-semibold text-[#1d1d1f]">{project.name || 'Unbenanntes Projekt'}</p>
+                    <label className={`flex items-center gap-1.5 text-xs font-semibold cursor-pointer ${laedt ? 'text-[#86868b]' : 'text-[#e8590c] hover:underline'}`}>
+                      <ImageIcon className="h-3.5 w-3.5" /> {laedt ? 'Lädt hoch…' : '+ Bild hochladen'}
+                      <input
+                        type="file" accept="image/*" capture="environment" className="hidden" disabled={laedt}
+                        onChange={(e) => { const f = e.target.files?.[0]; if (f) handleMedienUpload(project.id, 'bilder', f); e.target.value = '' }}
+                      />
+                    </label>
+                  </div>
+                  {projBilder.length > 0 ? (
+                    <div className="grid grid-cols-4 sm:grid-cols-6 gap-2">
+                      {projBilder.map((f) => (
+                        <a key={f.id} href={f.url} target="_blank" rel="noreferrer"><img src={f.url} alt={f.file_name} className="w-full h-16 object-cover rounded-lg border border-black/10" /></a>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-xs text-[#86868b]">Noch keine Bilder. Auf dem Handy öffnet der Button direkt die Kamera zum Fotografieren.</p>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        )}
+
+        {tab === 'dokumente' && (
+          <div className="space-y-4">
+            {projects.length === 0 && <p className="text-sm text-[#86868b]">Noch keine Aufträge für diesen Kunden.</p>}
+            {projects.map((project) => {
               const projDok = dokEintraege[project.id] || []
-              if (projFotos.length === 0 && projDok.length === 0) return null
+              const projDateien = (fotos[project.id] || []).filter((f) => f.file_type && !f.file_type.startsWith('image/'))
+              const laedt = uploadLaeuft === `${project.id}-dokumente`
               return (
                 <div key={project.id} className="bg-white rounded-xl border border-black/10 p-5 space-y-4">
-                  <p className="font-semibold text-[#1d1d1f]">{project.name || 'Unbenanntes Projekt'}</p>
-                  {projFotos.length > 0 && (
-                    <div>
-                      <p className="text-xs text-[#86868b] mb-1.5 flex items-center gap-1"><ImageIcon className="h-3.5 w-3.5" /> Fotos ({projFotos.length})</p>
-                      <div className="grid grid-cols-4 sm:grid-cols-6 gap-2">
-                        {projFotos.map((f) => (
-                          <a key={f.id} href={f.url} target="_blank" rel="noreferrer"><img src={f.url} alt={f.file_name} className="w-full h-16 object-cover rounded-lg border border-black/10" /></a>
-                        ))}
-                      </div>
-                    </div>
+                  <div className="flex items-center justify-between">
+                    <p className="font-semibold text-[#1d1d1f]">{project.name || 'Unbenanntes Projekt'}</p>
+                    <label className={`flex items-center gap-1.5 text-xs font-semibold cursor-pointer ${laedt ? 'text-[#86868b]' : 'text-[#e8590c] hover:underline'}`}>
+                      <ClipboardList className="h-3.5 w-3.5" /> {laedt ? 'Lädt hoch…' : '+ PDF/Dokument hochladen'}
+                      <input
+                        type="file" accept="application/pdf,.pdf,.doc,.docx,image/*" className="hidden" disabled={laedt}
+                        onChange={(e) => { const f = e.target.files?.[0]; if (f) handleMedienUpload(project.id, 'dokumente', f); e.target.value = '' }}
+                      />
+                    </label>
+                  </div>
+
+                  {projDateien.length > 0 && (
+                    <ul className="space-y-1.5">
+                      {projDateien.map((f) => (
+                        <li key={f.id} className="flex items-center justify-between text-xs bg-[#f5f5f7] rounded-lg px-3 py-2">
+                          <span>{f.file_name} <span className="text-[#86868b]">· {fmtDate(f.created_at)}</span></span>
+                          <a href={f.url} target="_blank" rel="noreferrer" className="text-[#e8590c] hover:underline">Öffnen</a>
+                        </li>
+                      ))}
+                    </ul>
                   )}
+
                   {projDok.length > 0 && (
                     <div>
                       <p className="text-xs text-[#86868b] mb-1.5 flex items-center gap-1"><ClipboardList className="h-3.5 w-3.5" /> Dokumentation ({projDok.length})</p>
@@ -688,12 +757,13 @@ export default function KundenDetailPage() {
                       </ul>
                     </div>
                   )}
+
+                  {projDateien.length === 0 && projDok.length === 0 && (
+                    <p className="text-xs text-[#86868b]">Noch keine Dokumente. Ein gescanntes Papier lässt sich z.B. über die Kamera-/Scan-App des Handys als PDF speichern und hier hochladen.</p>
+                  )}
                 </div>
               )
             })}
-            {projects.length > 0 && projects.every((p) => (fotos[p.id] || []).length === 0 && (dokEintraege[p.id] || []).length === 0) && (
-              <p className="text-sm text-[#86868b]">Noch keine Fotos oder Dokumentation zu den Aufträgen dieses Kunden.</p>
-            )}
           </div>
         )}
 

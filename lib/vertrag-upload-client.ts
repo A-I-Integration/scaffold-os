@@ -19,14 +19,14 @@ export interface HochgeladeneDatei {
   file_type: string;
 }
 
-export async function uploadVertragsdokument(file: File, projectId: string): Promise<HochgeladeneDatei> {
+export async function uploadVertragsdokument(file: File, projectId: string, unterordner: string = 'vertraege'): Promise<HochgeladeneDatei> {
   const supabase = createClient();
 
   if (file.size > 20 * 1024 * 1024) throw new Error('Datei zu groß (max. 20MB)');
 
   const fileExt = file.name.split('.').pop()?.toLowerCase() || 'pdf';
   const fileName = `${Date.now()}_${Math.random().toString(36).substring(2, 8)}.${fileExt}`;
-  const storagePath = `projects/${projectId}/vertraege/${fileName}`;
+  const storagePath = `projects/${projectId}/${unterordner}/${fileName}`;
 
   const { error: uploadError } = await supabase.storage
     .from('project-media')
