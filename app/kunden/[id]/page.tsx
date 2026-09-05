@@ -19,7 +19,8 @@ import {
   Pencil, Send, Euro, AlertCircle, ChevronDown, ChevronUp, X, Ruler,
   ClipboardList, Image as ImageIcon, FileSignature, User,
 } from 'lucide-react'
-import { generateInvoicePDF, fmtEur, fmtDate, type Invoice } from '@/lib/invoice-pdf'
+import { generateInvoicePDF, generateLieferscheinPDF, fmtEur, fmtDate, type Invoice } from '@/lib/invoice-pdf'
+import SignaturePad from '@/components/aufmaß/SignaturePad'
 import VersionsHistorie from '@/components/VersionsHistorie'
 import KundenKontakte from '@/components/KundenKontakte'
 import AuftragsTeam from '@/components/AuftragsTeam'
@@ -146,6 +147,12 @@ export default function KundenDetailPage() {
   const [standzeitArt, setStandzeitArt] = useState<'komplett' | 'teilweise'>('komplett')
   const [standzeitNeuerPreis, setStandzeitNeuerPreis] = useState('')
   const [standzeitGrund, setStandzeitGrund] = useState('')
+
+  // NEU (Phase 37): Lieferschein
+  const [lieferscheinOffen, setLieferscheinOffen] = useState<{ projectId: string; type: 'aufbau' | 'abbau' } | null>(null)
+  const [lsUnterschriftName, setLsUnterschriftName] = useState('')
+  const [lsSignatur, setLsSignatur] = useState<string | null>(null)
+  const [lsSignaturOffen, setLsSignaturOffen] = useState(false)
 
   // Kunde bearbeiten
   const [kundeForm, setKundeForm] = useState<Partial<Kunde>>({})
@@ -443,6 +450,37 @@ export default function KundenDetailPage() {
       alert(`✅ Standzeit-Gutschrift ${json.invoice?.invoice_number} über ${betrag.toLocaleString('de-DE', { minimumFractionDigits: 2 })} € angelegt.`)
       setStandzeitOffen(null); setStandzeitDatum(''); setStandzeitNeuerPreis(''); setStandzeitGrund(''); setStandzeitArt('komplett')
       ladeDaten()
+    } catch (err: any) { alert('❌ ' + err.message) }
+    setSpeichern(false)
+  }
+
+  // NEU (Phase 37): Lieferschein erstellen – Materialliste kommt automatisch
+  // aus dem KI-Ergebnis des Aufmaßes, kein erneutes Abtippen nötig.
+  async function createLieferschein() {
+    if (!lieferscheinOffen || !kunde) return
+    const project = projects.find(p => p.id === lieferscheinOffen.projectId)
+    if (!project) return
+    const materialList = project.data?.kiResult?.materialList || []
+    const materials = materialList.map((m: any) => ({ name: m.name, quantity: m.quantity, unit: m.unit }))
+
+    setSpeichern(true)
+    try {
+      const res = await fetch('/api/delivery-notes', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          project_id: project.id, customer_id: kunde.id, customer_name: kunde.name,
+          customer_address: [kunde.street, [kunde.zip, kunde.city].filter(Boolean).join(' ')].filter(Boolean).join(', ') || undefined,
+          type: lieferscheinOffen.type, materials,
+          signed_by_name: lsUnterschriftName.trim() || undefined,
+          signature_data_url: lsSignatur || undefined,
+        }),
+      })
+      const json = await res.json()
+      if (!json.success) throw new Error(json.error)
+      const doc = generateLieferscheinPDF(json.delivery_note)
+      doc.save(`Lieferschein_${json.delivery_note.ls_number}.pdf`)
+      alert(`✅ Lieferschein ${json.delivery_note.ls_number} erstellt und heruntergeladen.`)
+      setLieferscheinOffen(null); setLsUnterschriftName(''); setLsSignatur(null)
     } catch (err: any) { alert('❌ ' + err.message) }
     setSpeichern(false)
   }
@@ -745,15 +783,45 @@ export default function KundenDetailPage() {
                         <span className="flex items-center gap-1 text-[#424245]">🏗️ Aufbau: <strong>{aufbauAm ? fmtTimestamp(aufbauAm) : 'noch offen'}</strong></span>
                         <span className="flex items-center gap-1 text-[#424245]">📦 Abbau: <strong>{abbauAm ? fmtTimestamp(abbauAm) : 'noch offen'}</strong></span>
                         {geplantesEnde && <span className="flex items-center gap-1 text-[#86868b]">geplantes Ende: {fmtDate(geplantesEnde)}</span>}
-                        <button
-                          onClick={() => { setStandzeitOffen(standzeitOffen === project.id ? null : project.id); setStandzeitDatum(abbauAm ? abbauAm.slice(0, 10) : '') }}
-                          className="ml-auto text-amber-700 font-semibold hover:underline"
-                        >
-                          ⏱️ Standzeit-Korrektur (früher/teilweise abgebaut)
-                        </button>
+                        <div className="ml-auto flex items-center gap-3">
+                          <button onClick={() => { setLieferscheinOffen({ projectId: project.id, type: 'aufbau' }); setLsUnterschriftName(''); setLsSignatur(null) }} className="text-blue-700 font-semibold hover:underline">
+                            📋 Lieferschein Aufbau
+                          </button>
+                          <button onClick={() => { setLieferscheinOffen({ projectId: project.id, type: 'abbau' }); setLsUnterschriftName(''); setLsSignatur(null) }} className="text-blue-700 font-semibold hover:underline">
+                            📋 Lieferschein Abbau
+                          </button>
+                          <button
+                            onClick={() => { setStandzeitOffen(standzeitOffen === project.id ? null : project.id); setStandzeitDatum(abbauAm ? abbauAm.slice(0, 10) : '') }}
+                            className="text-amber-700 font-semibold hover:underline"
+                          >
+                            ⏱️ Standzeit-Korrektur
+                          </button>
+                        </div>
                       </div>
                     )
                   })()}
+
+                  {/* NEU: Lieferschein anlegen (Aufbau/Abbau bestätigen, mit Materialliste + optionaler Unterschrift) */}
+                  {lieferscheinOffen?.projectId === project.id && (
+                    <div className="px-5 py-3 bg-blue-50 border-b border-blue-200 space-y-2">
+                      <p className="text-[11px] text-blue-800">
+                        Bestätigt {lieferscheinOffen.type === 'aufbau' ? 'den Aufbau' : 'den Abbau'} als eigener Beleg (Lieferschein), unabhängig von der Rechnung – schließt die Lücke zwischen Ausführung und Rechnungsstellung.
+                      </p>
+                      <input value={lsUnterschriftName} onChange={e => setLsUnterschriftName(e.target.value)} placeholder="Name (wer bestätigt/unterschreibt)" className={inputCls} />
+                      {lsSignatur ? (
+                        <div className="flex items-center gap-2">
+                          <img src={lsSignatur} alt="Unterschrift" className="h-16 border border-black/10 rounded-lg bg-white" />
+                          <button onClick={() => setLsSignatur(null)} className="text-xs text-red-600 hover:underline">Entfernen</button>
+                        </div>
+                      ) : (
+                        <button onClick={() => setLsSignaturOffen(true)} className="text-xs text-blue-700 font-semibold hover:underline">✍️ Unterschrift erfassen (optional)</button>
+                      )}
+                      <div className="flex gap-2">
+                        <button onClick={() => createLieferschein()} disabled={speichern} className="rounded-lg bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white px-4 py-2 text-sm font-semibold">{speichern ? 'Speichert…' : 'Lieferschein erstellen'}</button>
+                        <button onClick={() => setLieferscheinOffen(null)} className={btnSecondary}>Abbrechen</button>
+                      </div>
+                    </div>
+                  )}
 
                   {standzeitOffen === project.id && (
                     <div className="px-5 py-3 bg-amber-50 border-b border-amber-200 space-y-2">
@@ -925,6 +993,18 @@ export default function KundenDetailPage() {
           </div>
         )}
       </div>
+
+      {/* ─── NEU (Phase 37): Unterschrift für Lieferschein erfassen ─── */}
+      {lsSignaturOffen && (
+        <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-xl max-w-md w-full p-6">
+            <SignaturePad
+              onSave={(dataUrl) => { setLsSignatur(dataUrl); setLsSignaturOffen(false) }}
+              onCancel={() => setLsSignaturOffen(false)}
+            />
+          </div>
+        </div>
+      )}
 
       {/* ─── Neue Version einer Rechnung anlegen (GoBD: alte bleibt unverändert) ─── */}
       {editInvoice && (

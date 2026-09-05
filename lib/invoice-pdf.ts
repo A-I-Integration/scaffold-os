@@ -236,3 +236,101 @@ export function generateMahnungPDF(inv: Invoice, stufe: 1 | 2, mahnkosten?: { pa
 
   return doc;
 }
+
+// ============================================================
+// Lieferschein (Phase 37) – bestätigt Auf-/Abbau vor der
+// Rechnungsstellung, mit Materialliste und optionaler Unterschrift.
+// ============================================================
+
+export interface DeliveryNoteMaterial {
+  name: string;
+  quantity: number;
+  unit: string;
+}
+
+export interface DeliveryNote {
+  id: string;
+  ls_number: string;
+  project_id: string | null;
+  customer_id?: string | null;
+  customer_name: string;
+  customer_address: string | null;
+  type: 'aufbau' | 'abbau';
+  performed_date: string;
+  materials: DeliveryNoteMaterial[];
+  notes: string | null;
+  signed_by_name: string | null;
+  signature_data_url: string | null;
+  company_snapshot?: any;
+  created_at: string;
+}
+
+export function generateLieferscheinPDF(ln: DeliveryNote) {
+  const doc = new jsPDF();
+  const pageWidth = doc.internal.pageSize.getWidth();
+  const cs = ln.company_snapshot || {};
+
+  doc.setFillColor(30, 58, 138); doc.rect(0, 0, pageWidth, 35, 'F');
+  doc.setTextColor(255, 255, 255); doc.setFontSize(18); doc.setFont('helvetica', 'bold'); doc.text('SCAFFOLD OS', 14, 18);
+  doc.setFontSize(20); doc.text('LIEFERSCHEIN', pageWidth - 14, 18, { align: 'right' });
+  doc.setFontSize(9); doc.setFont('helvetica', 'normal');
+  doc.text(ln.type === 'aufbau' ? 'Bestätigung Gerüstaufbau' : 'Bestätigung Gerüstabbau', pageWidth - 14, 26, { align: 'right' });
+
+  const senderLine = [cs.company_name, [cs.street, [cs.zip, cs.city].filter(Boolean).join(' ')].filter(Boolean).join(', ')].filter(Boolean).join(' • ');
+  if (senderLine) { doc.setFontSize(7); doc.setTextColor(100, 116, 139); doc.text(senderLine, 14, 40); }
+
+  let y = 50;
+  doc.setFillColor(248, 250, 252); doc.rect(14, y, 90, 28, 'F');
+  doc.setTextColor(71, 85, 105); doc.setFontSize(8); doc.setFont('helvetica', 'bold'); doc.text('KUNDE / BAUSTELLE', 18, y + 6);
+  doc.setFont('helvetica', 'normal'); doc.setTextColor(15, 23, 42); doc.setFontSize(9);
+  doc.text(ln.customer_name, 18, y + 14);
+  if (ln.customer_address) doc.text(doc.splitTextToSize(ln.customer_address, 80), 18, y + 20);
+
+  doc.setFillColor(248, 250, 252); doc.rect(108, y, 88, 28, 'F');
+  doc.setTextColor(71, 85, 105); doc.setFontSize(8); doc.setFont('helvetica', 'bold'); doc.text('BELEG', 112, y + 6);
+  doc.setFont('helvetica', 'normal'); doc.setTextColor(15, 23, 42); doc.setFontSize(9);
+  doc.text(`Lieferschein: ${ln.ls_number}`, 112, y + 14);
+  doc.text(`Datum: ${fmtDate(ln.performed_date)}`, 112, y + 20);
+
+  y = 92;
+  doc.setTextColor(15, 23, 42); doc.setFontSize(11); doc.setFont('helvetica', 'bold');
+  doc.text(ln.type === 'aufbau' ? 'Hiermit wird bestätigt: Das Gerüst wurde aufgebaut.' : 'Hiermit wird bestätigt: Das Gerüst wurde abgebaut.', 14, y);
+  y += 10;
+
+  if (ln.materials?.length) {
+    doc.setFontSize(9); doc.setFont('helvetica', 'bold'); doc.setFillColor(241, 245, 249);
+    doc.rect(14, y, 182, 8, 'F');
+    doc.text('Material', 18, y + 5.5); doc.text('Menge', 150, y + 5.5); doc.text('Einheit', 175, y + 5.5);
+    y += 10;
+    doc.setFont('helvetica', 'normal');
+    for (const m of ln.materials) {
+      if (y > 250) { doc.addPage(); y = 20; }
+      doc.text(m.name, 18, y);
+      doc.text(String(m.quantity), 150, y);
+      doc.text(m.unit, 175, y);
+      y += 6;
+    }
+    y += 6;
+  }
+
+  if (ln.notes) {
+    doc.setFontSize(9); doc.setFont('helvetica', 'normal'); doc.setTextColor(71, 85, 105);
+    doc.text(doc.splitTextToSize(ln.notes, 180), 14, y);
+    y += 14;
+  }
+
+  // Unterschrift
+  y = Math.max(y, 235);
+  if (ln.signature_data_url) {
+    try { doc.addImage(ln.signature_data_url, 'PNG', 14, y, 60, 25); } catch { /* Bild optional */ }
+  }
+  doc.setDrawColor(148, 163, 184); doc.line(14, y + 27, 90, y + 27);
+  doc.setFontSize(8); doc.setTextColor(100, 116, 139);
+  doc.text(ln.signed_by_name ? `Unterschrift: ${ln.signed_by_name}` : 'Unterschrift Kunde/Bauleiter', 14, y + 32);
+
+  doc.setTextColor(148, 163, 184); doc.setFontSize(7);
+  const footer = [cs.company_name, cs.street, [cs.zip, cs.city].filter(Boolean).join(' ')].filter(Boolean).join(' • ');
+  if (footer) doc.text(footer, pageWidth / 2, 285, { align: 'center' });
+
+  return doc;
+}
