@@ -54,7 +54,7 @@ interface EmailLog {
 }
 
 interface Media { id: string; file_name: string; url: string; created_at: string }
-interface DokEvent { id: string; type: string; text_note: string | null; photos: { url: string; file_name: string }[]; status: string; created_at: string }
+interface DokEvent { id: string; type: string; text_note: string | null; photos: { url: string; file_name: string }[]; status: string; created_at: string; pruefung_details?: { freigegeben?: boolean } | null }
 
 const EMAIL_TYPE_LABEL: Record<string, string> = {
   angebot: '📄 Angebot', rechnung: '🧾 Rechnung', mahnung: '⏰ Mahnung',
@@ -138,6 +138,13 @@ export default function KundenDetailPage() {
 
   // Offene Posten
   const [offenePostenOpen, setOffenePostenOpen] = useState(true)
+
+  // Standzeit-Korrektur (vorzeitiger/teilweiser Abbau)
+  const [standzeitOffen, setStandzeitOffen] = useState<string | null>(null) // project_id
+  const [standzeitDatum, setStandzeitDatum] = useState('')
+  const [standzeitArt, setStandzeitArt] = useState<'komplett' | 'teilweise'>('komplett')
+  const [standzeitNeuerPreis, setStandzeitNeuerPreis] = useState('')
+  const [standzeitGrund, setStandzeitGrund] = useState('')
 
   // Kunde bearbeiten
   const [kundeForm, setKundeForm] = useState<Partial<Kunde>>({})
@@ -337,6 +344,82 @@ export default function KundenDetailPage() {
   }
 
   // ─── Gutschrift: eigener Beleg-Typ, eigene Nummer (GS-...), §14 UStG ───
+  // NEU: Bauzeitraum ermitteln – Aufbau = erste freigegebene Prüfung/
+  // Freigabe, Abbau = erster Demontage-Eintrag im Dokumentation-Modul.
+  function bauzeitraum(projectId: string) {
+    const dok = dokEintraege[projectId] || []
+    const aufbau = dok
+      .filter(e => e.type === 'pruefung_freigabe' && e.pruefung_details?.freigegeben)
+      .sort((a, b) => a.created_at.localeCompare(b.created_at))[0]
+    const abbau = dok
+      .filter(e => e.type === 'demontage')
+      .sort((a, b) => a.created_at.localeCompare(b.created_at))[0]
+    return { aufbauAm: aufbau?.created_at || null, abbauAm: abbau?.created_at || null }
+  }
+
+  function tageZwischen(a: string, b: string) {
+    return Math.round((new Date(b).getTime() - new Date(a).getTime()) / 86400000)
+  }
+
+  // NEU: Standzeit-Korrektur bei vorzeitigem/teilweisem Abbau – erstellt eine
+  // Gutschrift über die nicht genutzte Zeit. Ändert NIE eine bereits
+  // versendete Rechnung rückwirkend (steuerrechtlich sauberer als das).
+  async function createStandzeitKorrektur(overrideGrund?: string) {
+    if (!standzeitOffen || !kunde) return
+    const project = projects.find(p => p.id === standzeitOffen)
+    if (!project) return
+    const geplantesEnde = project.data?.step1?.projektende
+    const alterPreis = Number(project.data?.angebotAnpassungen?.miete?.preisProWoche) || 0
+    if (!geplantesEnde) { alert('Für diesen Auftrag ist kein geplantes Standzeit-Ende im Aufmaß hinterlegt.'); return }
+    if (!alterPreis) { alert('Für diesen Auftrag ist kein Wochenpreis (Miete) im Angebot hinterlegt – Korrektur kann nicht automatisch berechnet werden.'); return }
+    if (!standzeitDatum) { alert('Bitte das Datum des (Teil-)Abbaus angeben.'); return }
+
+    const tageUngenutzt = tageZwischen(standzeitDatum, geplantesEnde)
+    if (tageUngenutzt <= 0) { alert('Das Datum liegt nicht vor dem geplanten Ende – keine Korrektur nötig.'); return }
+    const wochenUngenutzt = Math.round((tageUngenutzt / 7) * 100) / 100
+
+    const neuerPreis = standzeitArt === 'komplett' ? 0 : Number(String(standzeitNeuerPreis).replace(',', '.'))
+    if (standzeitArt === 'teilweise' && (!standzeitNeuerPreis || neuerPreis < 0 || neuerPreis >= alterPreis)) {
+      alert('Bitte einen reduzierten Wochenpreis eingeben, der niedriger als der bisherige ist.')
+      return
+    }
+    const preisDifferenzProWoche = alterPreis - neuerPreis
+    const betrag = Math.round(wochenUngenutzt * preisDifferenzProWoche * 100) / 100
+
+    setSpeichern(true)
+    try {
+      const beschreibung = standzeitArt === 'komplett'
+        ? `Standzeit-Gutschrift: Gerüst „${project.name}" bereits am ${new Date(standzeitDatum).toLocaleDateString('de-DE')} komplett abgebaut statt geplant am ${new Date(geplantesEnde).toLocaleDateString('de-DE')} (${wochenUngenutzt} Wo. nicht genutzt).`
+        : `Standzeit-Gutschrift: Gerüst „${project.name}" ab ${new Date(standzeitDatum).toLocaleDateString('de-DE')} teilweise reduziert (Wochenpreis ${alterPreis}€ → ${neuerPreis}€), ${wochenUngenutzt} Wo. bis geplantem Ende ${new Date(geplantesEnde).toLocaleDateString('de-DE')}.`
+      const res = await fetch('/api/invoices', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          project_id: standzeitOffen, customer_name: kunde.name,
+          customer_address: [kunde.street, [kunde.zip, kunde.city].filter(Boolean).join(' ')].filter(Boolean).join(', ') || undefined,
+          due_date: new Date().toISOString().slice(0, 10),
+          invoice_type: 'gutschrift',
+          notes: (standzeitGrund.trim() ? standzeitGrund.trim() + '. ' : '') + beschreibung,
+          positions: [{ bezeichnung: beschreibung, menge: wochenUngenutzt, einheit: 'Wo.', einzelpreis: preisDifferenzProWoche }],
+          override_grund: overrideGrund || undefined,
+        }),
+      })
+      const json = await res.json()
+      if (!json.success) {
+        if (json.code === 'FREIGABE_FEHLT_OVERRIDE_MOEGLICH') {
+          const grund = prompt(json.error + '\n\nBegründung für die Überschreibung eingeben:')
+          setSpeichern(false)
+          if (grund && grund.trim()) { await createStandzeitKorrektur(grund.trim()) }
+          return
+        }
+        throw new Error(json.error)
+      }
+      alert(`✅ Standzeit-Gutschrift ${json.invoice?.invoice_number} über ${betrag.toLocaleString('de-DE', { minimumFractionDigits: 2 })} € angelegt.`)
+      setStandzeitOffen(null); setStandzeitDatum(''); setStandzeitNeuerPreis(''); setStandzeitGrund(''); setStandzeitArt('komplett')
+      ladeDaten()
+    } catch (err: any) { alert('❌ ' + err.message) }
+    setSpeichern(false)
+  }
+
   async function createGutschrift(overrideGrund?: string) {
     if (!gutschriftOffen || !kunde) return
     const betrag = Number(String(gutschriftBetrag).replace(',', '.'))
@@ -615,6 +698,53 @@ export default function KundenDetailPage() {
                     <p className="text-sm font-semibold text-[#1d1d1f]">{project.name || (project.id === '__ohne__' ? 'Ohne Auftrag' : 'Unbenanntes Projekt')} ({projInvoices.length})</p>
                     {projOffen > 0 && <span className="text-xs text-red-600 font-semibold">{fmtEur(projOffen)} € offen</span>}
                   </div>
+
+                  {/* NEU: Bauzeitraum – Aufbau/Abbau, aus dem Dokumentation-Modul abgeleitet */}
+                  {project.id !== '__ohne__' && (() => {
+                    const { aufbauAm, abbauAm } = bauzeitraum(project.id)
+                    const geplantesEnde = project.data?.step1?.projektende
+                    return (
+                      <div className="px-5 py-2.5 bg-[#f5f5f7] border-b border-black/5 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs">
+                        <span className="flex items-center gap-1 text-[#424245]">🏗️ Aufbau: <strong>{aufbauAm ? fmtTimestamp(aufbauAm) : 'noch offen'}</strong></span>
+                        <span className="flex items-center gap-1 text-[#424245]">📦 Abbau: <strong>{abbauAm ? fmtTimestamp(abbauAm) : 'noch offen'}</strong></span>
+                        {geplantesEnde && <span className="flex items-center gap-1 text-[#86868b]">geplantes Ende: {fmtDate(geplantesEnde)}</span>}
+                        <button
+                          onClick={() => { setStandzeitOffen(standzeitOffen === project.id ? null : project.id); setStandzeitDatum(abbauAm ? abbauAm.slice(0, 10) : '') }}
+                          className="ml-auto text-amber-700 font-semibold hover:underline"
+                        >
+                          ⏱️ Standzeit-Korrektur (früher/teilweise abgebaut)
+                        </button>
+                      </div>
+                    )
+                  })()}
+
+                  {standzeitOffen === project.id && (
+                    <div className="px-5 py-3 bg-amber-50 border-b border-amber-200 space-y-2">
+                      <p className="text-[11px] text-amber-800">Berechnet die Gutschrift für die nicht genutzte Standzeit anhand des im Angebot hinterlegten Wochenpreises und des geplanten Endes aus dem Aufmaß. Ändert keine bestehende Rechnung, sondern erstellt eine eigene Gutschrift.</p>
+                      <div className="grid grid-cols-2 gap-2">
+                        <button onClick={() => setStandzeitArt('komplett')} className={`rounded-lg border px-3 py-2 text-xs font-semibold ${standzeitArt === 'komplett' ? 'bg-amber-600 text-white border-amber-600' : 'bg-white border-black/10'}`}>Komplett abgebaut</button>
+                        <button onClick={() => setStandzeitArt('teilweise')} className={`rounded-lg border px-3 py-2 text-xs font-semibold ${standzeitArt === 'teilweise' ? 'bg-amber-600 text-white border-amber-600' : 'bg-white border-black/10'}`}>Teilweise reduziert</button>
+                      </div>
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <label className="block text-[10px] text-[#86868b] mb-0.5">Datum (Teil-)Abbau</label>
+                          <input type="date" value={standzeitDatum} onChange={e => setStandzeitDatum(e.target.value)} className={inputCls} />
+                        </div>
+                        {standzeitArt === 'teilweise' && (
+                          <div>
+                            <label className="block text-[10px] text-[#86868b] mb-0.5">Neuer Wochenpreis ab diesem Datum (€)</label>
+                            <input value={standzeitNeuerPreis} onChange={e => setStandzeitNeuerPreis(e.target.value)} placeholder="z.B. 150" className={inputCls} />
+                          </div>
+                        )}
+                      </div>
+                      <input value={standzeitGrund} onChange={e => setStandzeitGrund(e.target.value)} placeholder="Notiz (optional)" className={inputCls} />
+                      <div className="flex gap-2">
+                        <button onClick={() => createStandzeitKorrektur()} disabled={speichern} className="rounded-lg bg-amber-600 hover:bg-amber-500 disabled:opacity-50 text-white px-4 py-2 text-sm font-semibold">{speichern ? 'Speichert…' : 'Gutschrift berechnen & anlegen'}</button>
+                        <button onClick={() => setStandzeitOffen(null)} className={btnSecondary}>Abbrechen</button>
+                      </div>
+                    </div>
+                  )}
+
                   <div className="px-5 py-3">
                     {projInvoices.length === 0 ? <p className="text-xs text-[#86868b] mb-2">Noch keine Rechnung.</p> : (
                       <ul className="divide-y divide-black/5 mb-2">
