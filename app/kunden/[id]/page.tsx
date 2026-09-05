@@ -149,6 +149,8 @@ export default function KundenDetailPage() {
   const [standzeitDatum, setStandzeitDatum] = useState('')
   const [standzeitArt, setStandzeitArt] = useState<'komplett' | 'teilweise'>('komplett')
   const [standzeitNeuerPreis, setStandzeitNeuerPreis] = useState('')
+  const [standzeitAbschnitteAb, setStandzeitAbschnitteAb] = useState<string[]>([]) // Bezeichnungen der abgebauten Abschnitte
+  const [standzeitProzentManuell, setStandzeitProzentManuell] = useState('')
   const [standzeitGrund, setStandzeitGrund] = useState('')
 
   // NEU (Phase 37): Lieferschein
@@ -398,6 +400,20 @@ export default function KundenDetailPage() {
     return Math.round((new Date(b).getTime() - new Date(a).getTime()) / 86400000)
   }
 
+  // NEU: Anteil der Fläche, der abgebaut wird – aus den ausgewählten
+  // Abschnitten (falls das Aufmaß mehrere Abschnitte hat) oder aus der
+  // manuell eingegebenen Prozentzahl (einfaches, einabschnittiges Gerüst).
+  function flaechenAnteilAbgebautProzent(project: Project): number | null {
+    const breakdown = project.data?.kiResult?.sectionBreakdown as { bezeichnung: string; areaM2: number }[] | undefined
+    const gesamtflaeche = project.data?.kiResult?.totalAreaM2
+    if (breakdown && breakdown.length > 0 && gesamtflaeche) {
+      const abgebauteFlaeche = breakdown.filter(b => standzeitAbschnitteAb.includes(b.bezeichnung)).reduce((s, b) => s + b.areaM2, 0)
+      return Math.round((abgebauteFlaeche / gesamtflaeche) * 10000) / 100
+    }
+    const manuell = Number(String(standzeitProzentManuell).replace(',', '.'))
+    return manuell > 0 && manuell <= 100 ? manuell : null
+  }
+
   // NEU: Standzeit-Korrektur bei vorzeitigem/teilweisem Abbau – erstellt eine
   // Gutschrift über die nicht genutzte Zeit. Ändert NIE eine bereits
   // versendete Rechnung rückwirkend (steuerrechtlich sauberer als das).
@@ -415,9 +431,16 @@ export default function KundenDetailPage() {
     if (tageUngenutzt <= 0) { alert('Das Datum liegt nicht vor dem geplanten Ende – keine Korrektur nötig.'); return }
     const wochenUngenutzt = Math.round((tageUngenutzt / 7) * 100) / 100
 
-    const neuerPreis = standzeitArt === 'komplett' ? 0 : Number(String(standzeitNeuerPreis).replace(',', '.'))
-    if (standzeitArt === 'teilweise' && (!standzeitNeuerPreis || neuerPreis < 0 || neuerPreis >= alterPreis)) {
-      alert('Bitte einen reduzierten Wochenpreis eingeben, der niedriger als der bisherige ist.')
+    const neuerPreis = standzeitArt === 'komplett' ? 0 : (() => {
+      // Automatisch aus dem Flächenanteil berechnen, falls möglich; manuelle
+      // Eingabe im Feld "Neuer Wochenpreis" hat aber immer Vorrang, falls
+      // ausgefüllt (z. B. wenn die Fläche keine gute Näherung ist).
+      if (standzeitNeuerPreis) return Number(String(standzeitNeuerPreis).replace(',', '.'))
+      const anteil = flaechenAnteilAbgebautProzent(project)
+      return anteil != null ? Math.round(alterPreis * (1 - anteil / 100) * 100) / 100 : NaN
+    })()
+    if (standzeitArt === 'teilweise' && (isNaN(neuerPreis) || neuerPreis < 0 || neuerPreis >= alterPreis)) {
+      alert('Bitte entweder Abschnitte auswählen / einen Flächenanteil in % angeben, oder direkt einen reduzierten Wochenpreis eintragen.')
       return
     }
     const preisDifferenzProWoche = alterPreis - neuerPreis
@@ -861,7 +884,7 @@ export default function KundenDetailPage() {
                             📋 Lieferschein Abbau
                           </button>
                           <button
-                            onClick={() => { setStandzeitOffen(standzeitOffen === project.id ? null : project.id); setStandzeitDatum(abbauAm ? abbauAm.slice(0, 10) : '') }}
+                            onClick={() => { setStandzeitOffen(standzeitOffen === project.id ? null : project.id); setStandzeitDatum(abbauAm ? abbauAm.slice(0, 10) : ''); setStandzeitAbschnitteAb([]); setStandzeitProzentManuell(''); setStandzeitNeuerPreis('') }}
                             className="text-amber-700 font-semibold hover:underline"
                           >
                             ⏱️ Standzeit-Korrektur
@@ -905,13 +928,48 @@ export default function KundenDetailPage() {
                           <label className="block text-[10px] text-[#86868b] mb-0.5">Datum (Teil-)Abbau</label>
                           <input type="date" value={standzeitDatum} onChange={e => setStandzeitDatum(e.target.value)} className={inputCls} />
                         </div>
-                        {standzeitArt === 'teilweise' && (
-                          <div>
-                            <label className="block text-[10px] text-[#86868b] mb-0.5">Neuer Wochenpreis ab diesem Datum (€)</label>
-                            <input value={standzeitNeuerPreis} onChange={e => setStandzeitNeuerPreis(e.target.value)} placeholder="z.B. 150" className={inputCls} />
-                          </div>
-                        )}
                       </div>
+                      {standzeitArt === 'teilweise' && (() => {
+                        const breakdown = project.data?.kiResult?.sectionBreakdown as { bezeichnung: string; areaM2: number }[] | undefined
+                        const gesamtflaeche = project.data?.kiResult?.totalAreaM2
+                        const alterPreis = Number(project.data?.angebotAnpassungen?.miete?.preisProWoche) || 0
+                        const anteil = flaechenAnteilAbgebautProzent(project)
+                        const autoPreis = anteil != null ? Math.round(alterPreis * (1 - anteil / 100) * 100) / 100 : null
+                        return (
+                          <div className="bg-white rounded-lg p-3 space-y-2 border border-amber-200">
+                            {breakdown && breakdown.length > 0 && gesamtflaeche ? (
+                              <>
+                                <p className="text-[11px] text-[#424245] font-medium">Welche Abschnitte werden jetzt abgebaut? (Gesamtfläche: {gesamtflaeche} m²)</p>
+                                {breakdown.map((b) => (
+                                  <label key={b.bezeichnung} className="flex items-center gap-2 text-xs">
+                                    <input
+                                      type="checkbox"
+                                      checked={standzeitAbschnitteAb.includes(b.bezeichnung)}
+                                      onChange={(e) => setStandzeitAbschnitteAb(e.target.checked ? [...standzeitAbschnitteAb, b.bezeichnung] : standzeitAbschnitteAb.filter(x => x !== b.bezeichnung))}
+                                    />
+                                    {b.bezeichnung} ({b.areaM2} m²)
+                                  </label>
+                                ))}
+                              </>
+                            ) : (
+                              <div>
+                                <label className="block text-[10px] text-[#86868b] mb-0.5">Wie viel % der Fläche wird abgebaut?</label>
+                                <input value={standzeitProzentManuell} onChange={e => setStandzeitProzentManuell(e.target.value)} placeholder="z.B. 50" className={inputCls} />
+                              </div>
+                            )}
+                            <div className="text-[11px] text-[#86868b]">
+                              {anteil != null && alterPreis > 0
+                                ? <>→ {anteil.toFixed(1)}% der Fläche abgebaut → neuer Wochenpreis automatisch <strong>{autoPreis?.toFixed(2)} €</strong> statt {alterPreis} €</>
+                                : 'Abschnitte auswählen oder % eingeben, um den neuen Wochenpreis automatisch zu berechnen.'}
+                            </div>
+                            <div>
+                              <label className="block text-[10px] text-[#86868b] mb-0.5">Oder direkt einen Wochenpreis eintragen (überschreibt die automatische Berechnung)</label>
+                              <input value={standzeitNeuerPreis} onChange={e => setStandzeitNeuerPreis(e.target.value)} placeholder={autoPreis != null ? String(autoPreis) : 'z.B. 150'} className={inputCls} />
+                            </div>
+                            <p className="text-[10px] text-amber-700">Hinweis: Die flächenbasierte Berechnung ist eine Näherung für Material/Miete – feste Kostenanteile (z.B. An-/Abfahrt, Genehmigung) werden dabei nicht automatisch herausgerechnet.</p>
+                          </div>
+                        )
+                      })()}
                       <input value={standzeitGrund} onChange={e => setStandzeitGrund(e.target.value)} placeholder="Notiz (optional)" className={inputCls} />
                       <div className="flex gap-2">
                         <button onClick={() => createStandzeitKorrektur()} disabled={speichern} className="rounded-lg bg-amber-600 hover:bg-amber-500 disabled:opacity-50 text-white px-4 py-2 text-sm font-semibold">{speichern ? 'Speichert…' : 'Gutschrift berechnen & anlegen'}</button>
