@@ -13,6 +13,12 @@ export default function Schritt2Page() {
   const [kiUebernommen, setKiUebernommen] = useState(false);
   const [grundrissUebernommen, setGrundrissUebernommen] = useState(false);
   const [hoeheGeschaetzt, setHoeheGeschaetzt] = useState(false);
+  // NEU: Vorschläge für weitere Abschnitte aus LiDAR-Ebenen mit deutlich
+  // abweichender Höhe (z.B. Anbau) – wird NICHT automatisch übernommen,
+  // nur vorgeschlagen. Einfache Wände desselben Gebäudes (gleiche Höhe)
+  // würden sonst fälschlich als eigene Abschnitte gezählt und das Gerüst
+  // für mehrere Gebäude statt eines berechnen.
+  const [abschnittVorschlaege, setAbschnittVorschlaege] = useState<{ bezeichnung: string; laenge: string; hoehe: string }[]>([]);
 
   const [form, setForm] = useState({
     laenge: '',
@@ -165,12 +171,33 @@ export default function Schritt2Page() {
       try {
         const m = JSON.parse(lidarRaw);
         const fresh = localStorage.getItem('scaffold_lidar_fresh') === '1';
+        // NEU: Erkennt der Scan mehrere Ebenen (Hauptfassade, Ebene 2, ...),
+        // werden diese jetzt als "Abschnitte" übernommen – Hauptfassade wird
+        // Abschnitt 1 (die Länge/Höhe-Felder oben), alle weiteren Ebenen
+        // werden zusätzliche Abschnitte. Vorher gingen diese Detail-Werte
+        // verloren, es wurde nur die grobe Gesamt-Bounding-Box übernommen.
+        const ebenenListe: { breiteM: number; hoeheM: number }[] = Array.isArray(m.ebenen) ? m.ebenen : [];
+        const hauptEbene = ebenenListe[0];
+        const weitereEbenen = ebenenListe.slice(1);
+        const EBENEN_NAMEN = ['Hauptfassade', 'Ebene 2', 'Ebene 3', 'Ebene 4', 'Ebene 5', 'Ebene 6'];
+
         setForm((prev) => {
           const next = {
             ...prev,
-            laenge: fresh ? (m.lengthM ? m.lengthM.toFixed(2) : prev.laenge) : (prev.laenge || (m.lengthM ? m.lengthM.toFixed(2) : '')),
+            laenge: fresh
+              ? (hauptEbene?.breiteM ? hauptEbene.breiteM.toFixed(2) : (m.lengthM ? m.lengthM.toFixed(2) : prev.laenge))
+              : (prev.laenge || (hauptEbene?.breiteM ? hauptEbene.breiteM.toFixed(2) : (m.lengthM ? m.lengthM.toFixed(2) : ''))),
             breite: fresh ? (m.widthM ? m.widthM.toFixed(2) : prev.breite) : (prev.breite || (m.widthM ? m.widthM.toFixed(2) : '')),
-            hoehe: fresh ? (m.heightM ? m.heightM.toFixed(2) : prev.hoehe) : (prev.hoehe || (m.heightM ? m.heightM.toFixed(2) : '')),
+            hoehe: fresh
+              ? (hauptEbene?.hoeheM ? hauptEbene.hoeheM.toFixed(2) : (m.heightM ? m.heightM.toFixed(2) : prev.hoehe))
+              : (prev.hoehe || (hauptEbene?.hoeheM ? hauptEbene.hoeheM.toFixed(2) : (m.heightM ? m.heightM.toFixed(2) : ''))),
+            abschnitte: fresh && weitereEbenen.length > 0
+              ? weitereEbenen.map((e, i) => ({
+                  bezeichnung: EBENEN_NAMEN[i + 1] || `Ebene ${i + 2}`,
+                  laenge: e.breiteM ? e.breiteM.toFixed(2) : '',
+                  hoehe: e.hoeheM ? e.hoeheM.toFixed(2) : '',
+                }))
+              : prev.abschnitte,
           };
           // Fix: sofort sichern, nicht erst bei "Weiter" – sonst gehen die
           // übernommenen Werte verloren, wenn man zwischendurch zu Schritt 1
@@ -185,6 +212,21 @@ export default function Schritt2Page() {
         // Zurück->Vor-Springen schon "verbraucht" war und die Werte dann
         // nicht mehr übernommen wurden. Er wird jetzt erst gelöscht, wenn
         // wirklich auf "Weiter" geklickt wird (siehe handleWeiter unten).
+        // Abschnitts-Vorschläge: nur Ebenen mit deutlich (>0.5 m) abweichender
+        // Höhe zur Hauptfassade – reine Seitenwände mit gleicher Höhe werden
+        // NICHT vorgeschlagen (wären fälschlich zusätzliche Gebäude).
+        if (Array.isArray(m.ebenen) && m.ebenen.length > 1) {
+          const hauptHoehe = m.ebenen[0]?.hoeheM;
+          const vorschlaege = m.ebenen
+            .slice(1)
+            .filter((e: any) => hauptHoehe && Math.abs(e.hoeheM - hauptHoehe) > 0.5)
+            .map((e: any, i: number) => ({
+              bezeichnung: `LiDAR-Ebene ${i + 2} (abweichende Höhe)`,
+              laenge: e.breiteM ? e.breiteM.toFixed(2) : '',
+              hoehe: e.hoeheM ? e.hoeheM.toFixed(2) : '',
+            }));
+          setAbschnittVorschlaege(vorschlaege);
+        }
         setLidarUebernommen(true);
         return true;
       } catch {
@@ -485,6 +527,7 @@ export default function Schritt2Page() {
           {lidarUebernommen && (
             <div className="rounded-xl bg-purple-50 border border-purple-200 p-3 text-sm text-purple-700">
               📐 Maße wurden aus dem LiDAR-Scan übernommen – bitte prüfen und bei Bedarf anpassen.
+              {form.abschnitte.length > 0 && ` Der Scan hat ${form.abschnitte.length + 1} Ebenen erkannt – als Abschnitte weiter unten eingetragen.`}
             </div>
           )}
 
@@ -542,6 +585,33 @@ export default function Schritt2Page() {
                 placeholder="z.B. 8.5" />
             </div>
           </div>
+
+          {/* NEU: Vorschläge aus LiDAR-Ebenen mit abweichender Höhe – bewusst
+              nur ein Vorschlag mit Bestätigung, keine automatische Übernahme
+              (siehe Begründung im Code-Kommentar). */}
+          {abschnittVorschlaege.length > 0 && (
+            <div className="rounded-xl bg-purple-50 border border-purple-200 p-4 space-y-2">
+              <p className="text-sm font-medium text-purple-800">
+                📐 LiDAR hat {abschnittVorschlaege.length} weitere Fläche(n) mit deutlich abweichender Höhe erkannt – vermutlich ein Anbau oder Gebäudeteil mit anderer Höhe, nicht nur eine andere Wand.
+              </p>
+              {abschnittVorschlaege.map((v, i) => (
+                <div key={i} className="flex items-center justify-between bg-white rounded-lg px-3 py-2 text-sm">
+                  <span>{v.bezeichnung}: {v.laenge} m breit × {v.hoehe} m hoch</span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setForm({ ...form, abschnitte: [...form.abschnitte, v] });
+                      setAbschnittVorschlaege(abschnittVorschlaege.filter((_, j) => j !== i));
+                    }}
+                    className="text-purple-700 text-xs font-semibold hover:underline shrink-0 ml-2"
+                  >
+                    + Als Abschnitt übernehmen
+                  </button>
+                </div>
+              ))}
+              <p className="text-[11px] text-purple-700">Bitte vor Ort prüfen, ob es sich wirklich um einen eigenen Gebäudeteil handelt.</p>
+            </div>
+          )}
 
           {/* NEU: weitere Abschnitte (unterschiedliche Höhen / ums Eck) */}
           <div className="rounded-xl bg-black/5 border border-black/10 p-4 space-y-3">
