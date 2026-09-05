@@ -748,11 +748,18 @@ export default function KundenDetailPage() {
                   <div className="px-5 py-3">
                     {projInvoices.length === 0 ? <p className="text-xs text-[#86868b] mb-2">Noch keine Rechnung.</p> : (
                       <ul className="divide-y divide-black/5 mb-2">
-                        {projInvoices.map((inv) => {
+                        {projInvoices
+                          .filter((inv) => inv.invoice_type !== 'gutschrift' || !projInvoices.some((o) => o.invoice_number === inv.reference_invoice_number))
+                          .map((inv) => {
                           const verzug = istUeberfaellig(inv)
                           const gutschrift = inv.invoice_type === 'gutschrift'
+                          // NEU: zugehörige Korrekturen (Gutschriften, die sich auf DIESE
+                          // Rechnung beziehen) direkt darunter gruppiert anzeigen, statt
+                          // verstreut in der chronologischen Liste.
+                          const korrekturen = gutschrift ? [] : projInvoices.filter((o) => o.invoice_type === 'gutschrift' && o.reference_invoice_number === inv.invoice_number)
                           return (
-                            <li key={inv.id} className="py-2 flex flex-wrap items-center gap-2 text-sm">
+                            <li key={inv.id} className="py-2">
+                            <div className="flex flex-wrap items-center gap-2 text-sm">
                               <span className="font-medium text-[#1d1d1f]">{inv.invoice_number}</span>
                               {inv.invoice_type && inv.invoice_type !== 'standard' && (
                                 <span className={`text-[10px] px-1.5 py-0.5 rounded border ${gutschrift ? 'bg-purple-500/10 text-purple-700 border-purple-500/30' : 'bg-blue-500/10 text-blue-700 border-blue-500/30'}`}>{TYPE_LABEL[inv.invoice_type]}</span>
@@ -774,6 +781,36 @@ export default function KundenDetailPage() {
                                 )}
                                 <button onClick={() => deleteInvoice(inv)} title="Löschen" className="p-1.5 rounded-lg bg-red-500/10 hover:bg-red-500/30 text-red-600"><Trash2 className="h-3.5 w-3.5" /></button>
                               </div>
+                            </div>
+
+                            {/* NEU: direkter Ändern/Gutschrift-Button an JEDER Rechnung –
+                                erstellt eine verknüpfte Gutschrift, sichtbar direkt darunter
+                                gruppiert, statt in der Liste verstreut. */}
+                            {!gutschrift && (
+                              <button
+                                onClick={() => { setGutschriftOffen(project.id); setGutschriftReferenz(inv.invoice_number); setGutschriftGrund('') }}
+                                className="ml-1 mt-1 flex items-center gap-1 text-[11px] text-purple-700 font-medium hover:underline"
+                              >
+                                <Pencil className="h-3 w-3" /> Ändern / Gutschrift zu {inv.invoice_number}
+                              </button>
+                            )}
+
+                            {korrekturen.length > 0 && (
+                              <ul className="ml-4 pl-3 mt-1.5 border-l-2 border-purple-200 space-y-1">
+                                {korrekturen.map((k) => (
+                                  <li key={k.id} className="flex flex-wrap items-center gap-2 text-xs bg-purple-50 rounded-lg px-2.5 py-1.5">
+                                    <span className="font-medium text-purple-800">↳ {k.invoice_number}</span>
+                                    <span className="text-[10px] px-1.5 py-0.5 rounded border bg-purple-500/10 text-purple-700 border-purple-500/30">Gutschrift</span>
+                                    <span className="text-[#86868b]">{fmtDate(k.invoice_date)}</span>
+                                    <span className="ml-auto font-bold text-purple-700">{fmtEur(Number(k.gross_amount))} €</span>
+                                    <div className="flex gap-1">
+                                      <button onClick={() => { const doc = generateInvoicePDF(k); doc.save(`Gutschrift_${k.invoice_number}.pdf`) }} title="PDF" className="p-1 rounded bg-black/5 hover:bg-black/10 text-[#1d1d1f]"><Download className="h-3 w-3" /></button>
+                                      <button onClick={() => sendInvoice(k)} title="Senden" className="p-1 rounded bg-blue-600/20 hover:bg-blue-600/40 text-blue-700"><Send className="h-3 w-3" /></button>
+                                    </div>
+                                  </li>
+                                ))}
+                              </ul>
+                            )}
                             </li>
                           )
                         })}
