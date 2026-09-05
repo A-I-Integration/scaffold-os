@@ -174,10 +174,19 @@ export function generateInvoicePDF(inv: Invoice) {
 }
 
 // ─── Phase 15: Mahnungs-PDF (1. / 2. Mahnung) ───
-export function generateMahnungPDF(inv: Invoice, stufe: 1 | 2) {
+export function generateMahnungPDF(inv: Invoice, stufe: 1 | 2, mahnkosten?: { pauschale: number; zinssatz: number; tageUeberfaellig: number }) {
   const doc = new jsPDF();
   const pageWidth = doc.internal.pageSize.getWidth();
   const cs = inv.company_snapshot || {};
+
+  // NEU (Phase 36): Verzugszinsen (§ 288 Abs. 2 BGB, B2B) + Mahnpauschale
+  // (§ 288 Abs. 5 BGB) – taggenau ab Fälligkeit berechnet, nicht ab
+  // Mahndatum, da der Verzug bereits mit Fälligkeit beginnt.
+  const pauschale = mahnkosten?.pauschale ?? 0;
+  const zinssatz = mahnkosten?.zinssatz ?? 0;
+  const tage = mahnkosten?.tageUeberfaellig ?? 0;
+  const zinsen = Math.round(Number(inv.gross_amount) * (zinssatz / 100) * (tage / 365) * 100) / 100;
+  const gesamtMitZinsen = Math.round((Number(inv.gross_amount) + zinsen + pauschale) * 100) / 100;
 
   doc.setFillColor(30, 58, 138); doc.rect(0, 0, pageWidth, 35, 'F');
   doc.setTextColor(255, 255, 255); doc.setFontSize(18); doc.setFont('helvetica', 'bold'); doc.text('SCAFFOLD OS', 14, 18);
@@ -206,9 +215,20 @@ export function generateMahnungPDF(inv: Invoice, stufe: 1 | 2) {
   doc.setTextColor(15, 23, 42); doc.setFontSize(10); doc.setFont('helvetica', 'normal');
   const betrag = fmtEur(Number(inv.gross_amount)) + ' €';
   const text = stufe === 1
-    ? `Sehr geehrte Damen und Herren,\n\ntrotz Fälligkeit am ${fmtDate(inv.due_date)} konnten wir für die oben genannte Rechnung über ${betrag} noch keinen Zahlungseingang feststellen. Sicher handelt es sich um ein Versehen – wir bitten Sie, den Betrag innerhalb von 7 Tagen unter Angabe der Rechnungsnummer zu überweisen.${cs.iban ? `\n\nBankverbindung: ${cs.bank_name || ''}, IBAN ${cs.iban}${cs.bic ? ', BIC ' + cs.bic : ''}` : ''}\n\nSollten Sie die Zahlung bereits veranlasst haben, betrachten Sie dieses Schreiben als gegenstandslos.\n\nMit freundlichen Grüßen\n${cs.company_name || ''}`
-    : `Sehr geehrte Damen und Herren,\n\ntrotz unserer ersten Mahnung ist die oben genannte Rechnung über ${betrag} weiterhin unbezahlt. Wir fordern Sie hiermit letztmalig auf, den Betrag innerhalb von 7 Tagen zu begleichen.${cs.iban ? `\n\nBankverbindung: ${cs.bank_name || ''}, IBAN ${cs.iban}${cs.bic ? ', BIC ' + cs.bic : ''}` : ''}\n\nAndernfalls sehen wir uns gezwungen, weitere rechtliche Schritte einzuleiten. Bitte beachten Sie, dass ab diesem Zeitpunkt Verzugszinsen gemäß § 288 BGB anfallen.\n\nMit freundlichen Grüßen\n${cs.company_name || ''}`;
+    ? `Sehr geehrte Damen und Herren,\n\ntrotz Fälligkeit am ${fmtDate(inv.due_date)} konnten wir für die oben genannte Rechnung über ${betrag} noch keinen Zahlungseingang feststellen. Sicher handelt es sich um ein Versehen – wir bitten Sie, den unten genannten Gesamtbetrag innerhalb von 7 Tagen unter Angabe der Rechnungsnummer zu überweisen.${cs.iban ? `\n\nBankverbindung: ${cs.bank_name || ''}, IBAN ${cs.iban}${cs.bic ? ', BIC ' + cs.bic : ''}` : ''}\n\nSollten Sie die Zahlung bereits veranlasst haben, betrachten Sie dieses Schreiben als gegenstandslos.\n\nMit freundlichen Grüßen\n${cs.company_name || ''}`
+    : `Sehr geehrte Damen und Herren,\n\ntrotz unserer ersten Mahnung ist die oben genannte Rechnung über ${betrag} weiterhin unbezahlt. Wir fordern Sie hiermit letztmalig auf, den unten genannten Gesamtbetrag innerhalb von 7 Tagen zu begleichen.${cs.iban ? `\n\nBankverbindung: ${cs.bank_name || ''}, IBAN ${cs.iban}${cs.bic ? ', BIC ' + cs.bic : ''}` : ''}\n\nAndernfalls sehen wir uns gezwungen, weitere rechtliche Schritte einzuleiten.\n\nMit freundlichen Grüßen\n${cs.company_name || ''}`;
   doc.text(doc.splitTextToSize(text, 180), 14, y);
+
+  // NEU: Kosten-Aufstellung (Rechnungsbetrag + Verzugszinsen + Mahnpauschale)
+  y += (stufe === 1 ? 62 : 56);
+  doc.setDrawColor(226, 232, 240); doc.setFillColor(254, 252, 232); doc.roundedRect(14, y, 182, 38, 2, 2, 'FD');
+  doc.setFontSize(8); doc.setTextColor(120, 53, 15); doc.setFont('helvetica', 'bold'); doc.text('FÄLLIGER GESAMTBETRAG', 20, y + 8);
+  doc.setFont('helvetica', 'normal'); doc.setFontSize(9); doc.setTextColor(15, 23, 42);
+  doc.text('Offener Rechnungsbetrag', 20, y + 16); doc.text(betrag, 190, y + 16, { align: 'right' });
+  doc.text(`Verzugszinsen (${zinssatz.toFixed(2)} % p.a., ${tage} Tage seit Fälligkeit, § 288 BGB)`, 20, y + 23); doc.text(fmtEur(zinsen) + ' €', 190, y + 23, { align: 'right' });
+  doc.text(`Mahnpauschale (§ 288 Abs. 5 BGB)`, 20, y + 30); doc.text(fmtEur(pauschale) + ' €', 190, y + 30, { align: 'right' });
+  doc.setFont('helvetica', 'bold'); doc.setDrawColor(120, 53, 15); doc.line(150, y + 33, 190, y + 33);
+  doc.text('Gesamt', 130, y + 38); doc.text(fmtEur(gesamtMitZinsen) + ' €', 190, y + 38, { align: 'right' });
 
   doc.setTextColor(148, 163, 184); doc.setFontSize(7);
   const footer = [cs.company_name, cs.street, [cs.zip, cs.city].filter(Boolean).join(' ')].filter(Boolean).join(' • ');

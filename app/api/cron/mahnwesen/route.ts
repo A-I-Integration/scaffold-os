@@ -51,6 +51,19 @@ export async function GET(req: NextRequest) {
 
   const ergebnis = { versendet: [] as string[], ohne_email: [] as string[], fehler: [] as string[], uebersprungen: 0 };
 
+  // NEU (Phase 36): Verzugszinssatz + Mahnpauschale aus den Firmeneinstellungen.
+  // Sinnvolle gesetzliche Defaults, falls noch nichts hinterlegt ist.
+  let mahnPauschale = 5.0;
+  let mahnZinssatz = 10.52;
+  try {
+    const cRes = await fetch(`${url}/rest/v1/company_settings?select=mahnung_pauschale,mahnung_verzugszinssatz&limit=1`, { headers });
+    if (cRes.ok) {
+      const rows = await cRes.json();
+      if (rows?.[0]?.mahnung_pauschale != null) mahnPauschale = Number(rows[0].mahnung_pauschale);
+      if (rows?.[0]?.mahnung_verzugszinssatz != null) mahnZinssatz = Number(rows[0].mahnung_verzugszinssatz);
+    }
+  } catch { /* Defaults greifen */ }
+
   try {
     const res = await fetch(
       `${url}/rest/v1/invoices?status=eq.offen&invoice_type=neq.gutschrift&select=*`,
@@ -70,17 +83,25 @@ export async function GET(req: NextRequest) {
       if (!stufe) { ergebnis.uebersprungen++; continue; }
 
       try {
-        // Kunden-E-Mail über den Kundenstamm nachschlagen (Rechnung
-        // selbst speichert keine E-Mail, nur den Namen).
-        const kRes = await fetch(
-          `${url}/rest/v1/customers?name=ilike.${encodeURIComponent(inv.customer_name)}&select=email&limit=1`,
-          { headers }
-        );
-        const kRows = kRes.ok ? await kRes.json() : [];
-        const email = kRows?.[0]?.email;
+        // NEU (Phase 34/36): E-Mail zuerst über die echte customer_id-Verknüpfung
+        // suchen, Namensvergleich nur noch als Rückfalloption für alte Rechnungen.
+        let email: string | undefined;
+        if ((inv as any).customer_id) {
+          const kRes = await fetch(`${url}/rest/v1/customers?id=eq.${(inv as any).customer_id}&select=email&limit=1`, { headers });
+          const kRows = kRes.ok ? await kRes.json() : [];
+          email = kRows?.[0]?.email;
+        }
+        if (!email) {
+          const kRes = await fetch(
+            `${url}/rest/v1/customers?name=ilike.${encodeURIComponent(inv.customer_name)}&select=email&limit=1`,
+            { headers }
+          );
+          const kRows = kRes.ok ? await kRes.json() : [];
+          email = kRows?.[0]?.email;
+        }
         if (!email) { ergebnis.ohne_email.push(inv.invoice_number); continue; }
 
-        const doc = generateMahnungPDF(inv, stufe);
+        const doc = generateMahnungPDF(inv, stufe, { pauschale: mahnPauschale, zinssatz: mahnZinssatz, tageUeberfaellig: tage });
         const pdfBase64 = doc.output('datauristring');
 
         const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://scaffold-os.vercel.app';
