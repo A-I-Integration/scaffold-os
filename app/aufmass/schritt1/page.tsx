@@ -73,6 +73,7 @@ export default function Schritt1Page() {
   // NEU (Phase 34): echte Kunden-Verknüpfung statt reinem Namensvergleich.
   const [kundenListe, setKundenListe] = useState<{ id: string; name: string; street?: string; zip?: string; city?: string }[]>([]);
   const [zeigeKundenDropdown, setZeigeKundenDropdown] = useState(false);
+  const [neuerKundeLaeuft, setNeuerKundeLaeuft] = useState(false);
 
   useEffect(() => {
     fetch('/api/kunden').then(r => r.json()).then(j => { if (j.success) setKundenListe(j.kunden || []) }).catch(() => {});
@@ -318,7 +319,30 @@ export default function Schritt1Page() {
                   );
                 })()}
                 {form.name.trim().length >= 2 && !form.customerId && !kundenListe.some(k => k.name.toLowerCase() === form.name.trim().toLowerCase()) && (
-                  <p className="text-[11px] text-[#86868b] mt-1">Kein Eintrag im Kundenstamm gefunden – wird als neuer Kunde behandelt. Falls dieser Kunde schon existiert, bitte Schreibweise prüfen (siehe Vorschläge oben).</p>
+                  <div className="mt-1 flex items-center justify-between gap-2">
+                    <p className="text-[11px] text-[#86868b]">Kein Eintrag im Kundenstamm gefunden. Schreibweise prüfen (Vorschläge oben) oder:</p>
+                    <button
+                      type="button"
+                      disabled={neuerKundeLaeuft}
+                      onClick={async () => {
+                        setNeuerKundeLaeuft(true);
+                        try {
+                          const res = await fetch('/api/kunden', {
+                            method: 'POST', headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ name: form.name.trim() }),
+                          });
+                          const json = await res.json();
+                          if (!json.success) throw new Error(json.error || 'Anlegen fehlgeschlagen');
+                          setKundenListe((prev) => [...prev, json.kunde]);
+                          handleChange('customerId', json.kunde.id);
+                        } catch (e: any) { alert('❌ ' + e.message); }
+                        setNeuerKundeLaeuft(false);
+                      }}
+                      className="shrink-0 text-[11px] font-semibold text-[#e8590c] hover:underline disabled:opacity-50"
+                    >
+                      {neuerKundeLaeuft ? 'Wird angelegt…' : '+ Als neuen Kunden im Kundenstamm anlegen'}
+                    </button>
+                  </div>
                 )}
               </div>
               <div>
