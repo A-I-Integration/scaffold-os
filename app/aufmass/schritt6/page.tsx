@@ -288,13 +288,13 @@ function Schritt6Content() {
         const response = await fetch('/api/projects', {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ id: savedProjectId, name: s1.name || 'Unbenanntes Projekt', adresse: s1.adresse || '', data: gespeicherteDaten }),
+          body: JSON.stringify({ id: savedProjectId, name: s1.name || 'Unbenanntes Projekt', adresse: s1.adresse || '', data: gespeicherteDaten, customer_id: s1.customerId || null }),
         });
         const json = await response.json();
         if (!response.ok || !json.success) throw new Error(json.error || 'Speichern fehlgeschlagen');
         result = { id: savedProjectId };
       } else {
-        const response = await fetch('/api/projects', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: s1.name || 'Unbenanntes Projekt', adresse: s1.adresse || '', data: gespeicherteDaten, status: 'active' }) });
+        const response = await fetch('/api/projects', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: s1.name || 'Unbenanntes Projekt', adresse: s1.adresse || '', data: gespeicherteDaten, status: 'active', customer_id: s1.customerId || null }) });
         result = await response.json();
         if (!response.ok) throw new Error(result.error || 'Speichern fehlgeschlagen');
       }
