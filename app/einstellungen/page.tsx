@@ -37,6 +37,9 @@ interface Company {
   calc_permit_low: string;
   calc_permit_high: string;
   calc_crane_day: string;
+  calc_festpreis_pro_m2: string;
+  mahnung_pauschale: string;
+  mahnung_verzugszinssatz: string;
 }
 
 const EMPTY: Company = {
@@ -45,7 +48,8 @@ const EMPTY: Company = {
   depot_address: '',
   calc_hourly_rate: '', calc_hours_per_sqm: '', calc_transport_per_kg: '',
   calc_transport_min: '', calc_trip_flat: '', calc_permit_low: '',
-  calc_permit_high: '', calc_crane_day: '',
+  calc_permit_high: '', calc_crane_day: '', calc_festpreis_pro_m2: '',
+  mahnung_pauschale: '', mahnung_verzugszinssatz: '',
 };
 
 // Kalkulations-Grundlagen: Diese Werte nutzt die Angebots-Kalkulation.
@@ -59,6 +63,15 @@ const KALK_FIELDS: { key: keyof Company; label: string; hint: string }[] = [
   { key: 'calc_permit_low', label: 'Genehmigung bis 12 m Höhe (€)', hint: 'Standard: 250' },
   { key: 'calc_permit_high', label: 'Genehmigung über 12 m Höhe (€)', hint: 'Standard: 450' },
   { key: 'calc_crane_day', label: 'Kran-Tagessatz (€)', hint: 'Standard: 850 – wird berechnet, wenn im Aufmaß „Kran nötig" gewählt ist' },
+  { key: 'calc_festpreis_pro_m2', label: 'Festpreis pro m² (€, optional)', hint: 'Leer = KI-Kalkulation bleibt Standard. Kann in Aufmaß Schritt 6 als Angebotsbasis gewählt werden.' },
+];
+
+// Mahnwesen: Verzugszinsen + Mahnpauschale (§ 288 BGB). Der Zinssatz ändert
+// sich zum 1.1./1.7. jeden Jahres (Basiszinssatz nach § 247 BGB) – deshalb
+// hier einstellbar statt fest im Code.
+const MAHNUNG_FIELDS: { key: keyof Company; label: string; hint: string }[] = [
+  { key: 'mahnung_pauschale', label: 'Mahnpauschale je Mahnung (€)', hint: 'Standard: 5,00 € – angemessene Pauschale je Mahnstufe (§ 288 Abs. 5 BGB)' },
+  { key: 'mahnung_verzugszinssatz', label: 'Verzugszinssatz % p.a. (B2B)', hint: 'Basiszinssatz + 9 Prozentpunkte, § 288 Abs. 2 BGB. Aktueller Basiszinssatz: bundesbank.de/de/bundesbank/basiszinssatz – bitte halbjährlich (1.1./1.7.) aktualisieren.' },
 ];
 
 const FIELDS: { key: keyof Company; label: string; hint?: string; span?: boolean }[] = [
@@ -113,6 +126,9 @@ export default function EinstellungenPage() {
       // damit die numeric-Spalten den Wert sauber speichern.
       const payload = { ...company };
       for (const f of KALK_FIELDS) {
+        payload[f.key] = payload[f.key].replace(',', '.').trim();
+      }
+      for (const f of MAHNUNG_FIELDS) {
         payload[f.key] = payload[f.key].replace(',', '.').trim();
       }
       const res = await fetch('/api/company', {
@@ -211,6 +227,45 @@ export default function EinstellungenPage() {
               onClick={handleSave}
               disabled={saving}
               className="w-full rounded-xl bg-[#e8590c] hover:bg-[#d9480f] disabled:opacity-50 py-3 font-bold text-white transition-colors flex items-center justify-center gap-2"
+            >
+              <Save className="h-4 w-4" />
+              {saving ? 'Speichert…' : 'Alles speichern'}
+            </button>
+          </div>
+        )}
+
+        {/* ─── NEU (Phase 36): Mahnwesen – Verzugszinsen + Mahnpauschale ─── */}
+        {!loading && !error && (
+          <div className="bg-[#f5f5f7] rounded-xl p-6 border border-amber-500/30 space-y-4">
+            <div>
+              <h2 className="text-lg font-bold text-[#1d1d1f]">Mahnwesen: Verzugszinsen & Pauschale</h2>
+              <p className="text-sm text-[#86868b]">
+                Wird automatisch auf jede 1./2. Mahnung gerechnet und dort ausgewiesen. Der
+                Zinssatz basiert auf dem gesetzlichen Basiszinssatz (§ 247 BGB) + 9 Prozentpunkte
+                für Geschäftskunden (B2B, § 288 Abs. 2 BGB) – ändert sich zum 1. Januar und
+                1. Juli. Bitte dann kurz hier nachtragen.
+              </p>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {MAHNUNG_FIELDS.map((f) => (
+                <div key={f.key}>
+                  <label className="block text-xs text-[#86868b] mb-1">{f.label}</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={company[f.key]}
+                    onChange={(e) => setCompany({ ...company, [f.key]: e.target.value })}
+                    className="w-full px-3 py-2 bg-black/10 border border-black/10 rounded-xl text-sm text-[#1d1d1f] focus:outline-none focus:border-amber-500"
+                  />
+                  <p className="text-[11px] text-[#86868b] mt-1">{f.hint}</p>
+                </div>
+              ))}
+            </div>
+            <button
+              onClick={handleSave}
+              disabled={saving}
+              className="w-full rounded-xl bg-amber-600 hover:bg-amber-500 disabled:opacity-50 py-3 font-bold text-white transition-colors flex items-center justify-center gap-2"
             >
               <Save className="h-4 w-4" />
               {saving ? 'Speichert…' : 'Alles speichern'}

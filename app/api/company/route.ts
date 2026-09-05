@@ -75,7 +75,8 @@ export async function POST(req: NextRequest) {
       // Kalkulations-Grundlagen (Einstellungen → Angebots-Kalkulation)
       'calc_hourly_rate', 'calc_hours_per_sqm', 'calc_transport_per_kg',
       'calc_transport_min', 'calc_trip_flat', 'calc_permit_low',
-      'calc_permit_high', 'calc_crane_day',
+      'calc_permit_high', 'calc_crane_day', 'calc_festpreis_pro_m2',
+      'mahnung_pauschale', 'mahnung_verzugszinssatz',
     ];
     const patch: Record<string, any> = { updated_at: new Date().toISOString() };
     for (const f of allowed) {

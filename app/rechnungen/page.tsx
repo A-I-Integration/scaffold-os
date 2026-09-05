@@ -100,6 +100,9 @@ function RechnungenContent() {
   const [showForm, setShowForm] = useState(false);
   const [saving, setSaving] = useState(false);
   const [companyMissing, setCompanyMissing] = useState(false);
+  // NEU (Phase 36): Verzugszinssatz/Mahnpauschale für manuell ausgelöste Mahnungen.
+  const [mahnPauschale, setMahnPauschale] = useState(5.0);
+  const [mahnZinssatz, setMahnZinssatz] = useState(10.52);
 
   // Phase 14: Hinweis, wenn das Firmenprofil noch nicht ausgefüllt ist
   useEffect(() => {
@@ -108,6 +111,8 @@ function RechnungenContent() {
         const res = await fetch('/api/company');
         const json = await res.json();
         if (json.success) setCompanyMissing(!json.company?.company_name);
+        if (json.company?.mahnung_pauschale != null) setMahnPauschale(Number(json.company.mahnung_pauschale));
+        if (json.company?.mahnung_verzugszinssatz != null) setMahnZinssatz(Number(json.company.mahnung_verzugszinssatz));
       } catch { /* Banner optional */ }
     })();
   }, []);
@@ -171,6 +176,7 @@ function RechnungenContent() {
       const draft = JSON.parse(raw);
       setCustomerName(draft.customer_name || '');
       setCustomerAddress(draft.customer_address || '');
+      if (draft.notes) setNotes(draft.notes);
       if (Array.isArray(draft.positions) && draft.positions.length) {
         setPositions(draft.positions);
       }
@@ -313,7 +319,8 @@ function RechnungenContent() {
     if (stufe > 2) { alert('Für diese Rechnung wurden bereits 2 Mahnungen erstellt. Nächster Schritt: Inkasso/Anwalt.'); return; }
     if (!confirm(`${stufe}. Mahnung für Rechnung ${inv.invoice_number} erstellen?`)) return;
     try {
-      const doc = generateMahnungPDF(inv, stufe);
+      const tage = inv.due_date ? Math.max(0, Math.floor((new Date(new Date().toDateString()).getTime() - new Date(inv.due_date + 'T00:00:00').getTime()) / 86400000)) : 0;
+      const doc = generateMahnungPDF(inv, stufe, { pauschale: mahnPauschale, zinssatz: mahnZinssatz, tageUeberfaellig: tage });
       doc.save(`${stufe}_Mahnung_${inv.invoice_number}.pdf`);
 
       // Optional direkt per E-Mail

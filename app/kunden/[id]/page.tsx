@@ -236,26 +236,52 @@ export default function KundenDetailPage() {
     setSpeichern(false)
   }
 
-  // ─── Rechnung bearbeiten ───
-  async function saveInvoiceEdit() {
+  // ─── Rechnung als neue Version anlegen (GoBD: alte Rechnung bleibt
+  // unverändert, wird nur storniert; die Änderungen landen auf einer neuen,
+  // eigenen Rechnungsnummer – kein nachträgliches Verändern eines bereits
+  // ausgestellten Belegs mehr). ───
+  async function saveAlsNeueVersion(overrideGrund?: string) {
     if (!editInvoice) return
-    const net = editPositions.reduce((s, p) => s + (Number(p.menge) || 0) * (Number(p.einzelpreis) || 0), 0)
-    const rate = Number(editInvoice.tax_rate) || 19
-    const tax = Math.round(net * rate) / 100
-    const gross = Math.round((net + tax) * 100) / 100
+    if (editPositions.length === 0) { alert('Mindestens eine Position erforderlich.'); return }
 
     setSpeichern(true)
     try {
       const res = await fetch('/api/invoices', {
-        method: 'PATCH',
+        method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          id: editInvoice.id, positions: editPositions,
-          net_amount: Math.round(net * 100) / 100, tax_amount: tax, gross_amount: gross,
+          project_id: editInvoice.project_id, customer_id: editInvoice.customer_id,
+          customer_name: editInvoice.customer_name, customer_address: editInvoice.customer_address,
+          tax_rate: editInvoice.tax_rate, due_date: editInvoice.due_date,
+          invoice_type: editInvoice.invoice_type === 'gutschrift' ? 'standard' : (editInvoice.invoice_type || 'standard'),
+          notes: `Ersetzt ${editInvoice.invoice_number}. ${editInvoice.notes || ''}`.trim(),
+          reference_invoice_number: editInvoice.invoice_number,
+          positions: editPositions,
+          override_grund: overrideGrund || undefined,
         }),
       })
       const json = await res.json()
-      if (!json.success) throw new Error(json.error)
+      if (!json.success) {
+        if (json.code === 'FREIGABE_FEHLT_OVERRIDE_MOEGLICH') {
+          const grund = prompt(json.error + '\n\nBegründung für die Überschreibung eingeben:')
+          setSpeichern(false)
+          if (grund && grund.trim()) { await saveAlsNeueVersion(grund.trim()) }
+          return
+        }
+        throw new Error(json.error)
+      }
+
+      // Alte Rechnung als storniert markieren – Inhalt bleibt unverändert
+      // (GoBD-Unveränderbarkeit), nur der Status ändert sich.
+      await fetch('/api/invoices', {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: editInvoice.id, status: 'storniert',
+          notes: `${editInvoice.notes || ''}\nErsetzt durch ${json.invoice?.invoice_number} am ${new Date().toLocaleDateString('de-DE')}.`.trim(),
+        }),
+      })
+
+      alert(`✅ Neue Version ${json.invoice?.invoice_number} angelegt, ${editInvoice.invoice_number} als storniert markiert.`)
       setEditInvoice(null)
       ladeDaten()
     } catch (err: any) { alert('❌ ' + err.message) }
@@ -760,14 +786,14 @@ export default function KundenDetailPage() {
                     {projInvoices.length === 0 ? <p className="text-xs text-[#86868b] mb-2">Noch keine Rechnung.</p> : (
                       <ul className="divide-y divide-black/5 mb-2">
                         {projInvoices
-                          .filter((inv) => inv.invoice_type !== 'gutschrift' || !projInvoices.some((o) => o.invoice_number === inv.reference_invoice_number))
+                          .filter((inv) => !projInvoices.some((o) => o.id !== inv.id && o.reference_invoice_number === inv.invoice_number))
                           .map((inv) => {
                           const verzug = istUeberfaellig(inv)
                           const gutschrift = inv.invoice_type === 'gutschrift'
-                          // NEU: zugehörige Korrekturen (Gutschriften, die sich auf DIESE
-                          // Rechnung beziehen) direkt darunter gruppiert anzeigen, statt
-                          // verstreut in der chronologischen Liste.
-                          const korrekturen = gutschrift ? [] : projInvoices.filter((o) => o.invoice_type === 'gutschrift' && o.reference_invoice_number === inv.invoice_number)
+                          // NEU: zugehörige Korrekturen – Gutschriften UND "neue
+                          // Versionen" (Ersatz nach GoBD-Storno) – direkt darunter
+                          // gruppiert, statt verstreut in der chronologischen Liste.
+                          const korrekturen = projInvoices.filter((o) => o.id !== inv.id && o.reference_invoice_number === inv.invoice_number)
                           return (
                             <li key={inv.id} className="py-2">
                             <div className="flex flex-wrap items-center gap-2 text-sm">
@@ -782,7 +808,9 @@ export default function KundenDetailPage() {
                               <span className="text-[#86868b]">{fmtDate(inv.invoice_date)}</span>
                               <span className={`ml-auto font-bold ${gutschrift ? 'text-purple-700' : verzug ? 'text-red-600' : 'text-[#1d1d1f]'}`}>{fmtEur(Number(inv.gross_amount))} €</span>
                               <div className="flex gap-1">
-                                <button onClick={() => { setEditInvoice(inv); setEditPositions(inv.positions || []) }} title="Bearbeiten" className="p-1.5 rounded-lg bg-black/5 hover:bg-black/10 text-[#1d1d1f]"><Pencil className="h-3.5 w-3.5" /></button>
+                                {inv.status !== 'storniert' && (
+                                  <button onClick={() => { setEditInvoice(inv); setEditPositions(inv.positions || []) }} title="Neue Version anlegen (alte bleibt unverändert, wird storniert)" className="p-1.5 rounded-lg bg-black/5 hover:bg-black/10 text-[#1d1d1f]"><Pencil className="h-3.5 w-3.5" /></button>
+                                )}
                                 <button onClick={() => { const doc = generateInvoicePDF(inv); doc.save(`${TYPE_LABEL[inv.invoice_type || 'standard']}_${inv.invoice_number}.pdf`) }} title="PDF" className="p-1.5 rounded-lg bg-black/5 hover:bg-black/10 text-[#1d1d1f]"><Download className="h-3.5 w-3.5" /></button>
                                 <button onClick={() => sendInvoice(inv)} title="Erneut senden" className="p-1.5 rounded-lg bg-blue-600/20 hover:bg-blue-600/40 text-blue-700"><Send className="h-3.5 w-3.5" /></button>
                                 {inv.status !== 'storniert' && !gutschrift && (
@@ -808,18 +836,21 @@ export default function KundenDetailPage() {
 
                             {korrekturen.length > 0 && (
                               <ul className="ml-4 pl-3 mt-1.5 border-l-2 border-purple-200 space-y-1">
-                                {korrekturen.map((k) => (
+                                {korrekturen.map((k) => {
+                                  const kGutschrift = k.invoice_type === 'gutschrift'
+                                  return (
                                   <li key={k.id} className="flex flex-wrap items-center gap-2 text-xs bg-purple-50 rounded-lg px-2.5 py-1.5">
                                     <span className="font-medium text-purple-800">↳ {k.invoice_number}</span>
-                                    <span className="text-[10px] px-1.5 py-0.5 rounded border bg-purple-500/10 text-purple-700 border-purple-500/30">Gutschrift</span>
+                                    <span className="text-[10px] px-1.5 py-0.5 rounded border bg-purple-500/10 text-purple-700 border-purple-500/30">{kGutschrift ? 'Gutschrift' : 'Neue Version'}</span>
                                     <span className="text-[#86868b]">{fmtDate(k.invoice_date)}</span>
                                     <span className="ml-auto font-bold text-purple-700">{fmtEur(Number(k.gross_amount))} €</span>
                                     <div className="flex gap-1">
-                                      <button onClick={() => { const doc = generateInvoicePDF(k); doc.save(`Gutschrift_${k.invoice_number}.pdf`) }} title="PDF" className="p-1 rounded bg-black/5 hover:bg-black/10 text-[#1d1d1f]"><Download className="h-3 w-3" /></button>
+                                      <button onClick={() => { const doc = generateInvoicePDF(k); doc.save(`${kGutschrift ? 'Gutschrift' : 'Rechnung'}_${k.invoice_number}.pdf`) }} title="PDF" className="p-1 rounded bg-black/5 hover:bg-black/10 text-[#1d1d1f]"><Download className="h-3 w-3" /></button>
                                       <button onClick={() => sendInvoice(k)} title="Senden" className="p-1 rounded bg-blue-600/20 hover:bg-blue-600/40 text-blue-700"><Send className="h-3 w-3" /></button>
                                     </div>
                                   </li>
-                                ))}
+                                  )
+                                })}
                               </ul>
                             )}
                             </li>
@@ -895,14 +926,17 @@ export default function KundenDetailPage() {
         )}
       </div>
 
-      {/* ─── Rechnung bearbeiten Modal ─── */}
+      {/* ─── Neue Version einer Rechnung anlegen (GoBD: alte bleibt unverändert) ─── */}
       {editInvoice && (
         <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl shadow-xl max-w-lg w-full max-h-[80vh] overflow-y-auto p-6 space-y-4">
             <div className="flex items-center justify-between">
-              <h3 className="text-sm font-semibold text-[#1d1d1f]">{TYPE_LABEL[editInvoice.invoice_type || 'standard']} {editInvoice.invoice_number} bearbeiten</h3>
+              <h3 className="text-sm font-semibold text-[#1d1d1f]">Neue Version von {editInvoice.invoice_number} anlegen</h3>
               <button onClick={() => setEditInvoice(null)} className="p-1 rounded-lg hover:bg-black/5"><X className="h-4 w-4" /></button>
             </div>
+            <p className="text-[11px] text-[#86868b] bg-amber-50 border border-amber-200 rounded-lg p-2.5">
+              Rechnungen dürfen nach Ausstellung nicht mehr nachträglich verändert werden (GoBD). {editInvoice.invoice_number} bleibt daher unverändert erhalten und wird automatisch auf „storniert" gesetzt – die Änderungen hier landen auf einer neuen, eigenen Rechnungsnummer.
+            </p>
             <div className="space-y-2">
               {editPositions.map((pos, idx) => (
                 <div key={idx} className="grid grid-cols-12 gap-2 items-center">
@@ -916,7 +950,7 @@ export default function KundenDetailPage() {
               <button onClick={() => setEditPositions([...editPositions, { ...LEER_POSITION }])} className="flex items-center gap-1 text-xs text-[#e8590c] font-semibold hover:underline"><Plus className="h-3.5 w-3.5" /> Position hinzufügen</button>
             </div>
             <div className="flex gap-2">
-              <button onClick={saveInvoiceEdit} disabled={speichern} className={btnPrimary}>{speichern ? 'Speichert…' : 'Speichern'}</button>
+              <button onClick={() => saveAlsNeueVersion()} disabled={speichern} className={btnPrimary}>{speichern ? 'Speichert…' : '🔄 Als neue Version anlegen'}</button>
               <button onClick={() => setEditInvoice(null)} className={btnSecondary}>Abbrechen</button>
             </div>
           </div>
