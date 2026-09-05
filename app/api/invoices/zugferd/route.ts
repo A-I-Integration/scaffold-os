@@ -4,6 +4,7 @@ import path from 'path';
 import {
   embedFacturX, validateInput, DocumentTypeCode, UnitCode, VatCategoryCode, Profile, Flavor,
 } from '@stackforge-eu/factur-x';
+import { generateInvoicePdfCompliant } from '@/lib/invoice-pdf-server';
 
 // ============================================================
 // SCAFFOLD OS – E-Rechnung / ZUGFeRD (Phase 39)
@@ -18,10 +19,10 @@ import {
 // Die eingebetteten Rechnungsdaten werden hier ECHT gegen das
 // offizielle EN-16931-Schema und die Geschäftsregeln geprüft (nicht
 // nur behauptet) – schlägt das fehl, wird NICHTS eingebettet, sondern
-// ein klarer Fehler zurückgegeben. Die strengere PDF/A-3-Archivformat-
-// Konformität (eingebettete Schriftart) ist NICHT vollständig erfüllt
-// – siehe README. Das ändert nichts an der Gültigkeit der Rechnung
-// selbst, kann aber bei sehr strengen Archivierungs-Prüfungen auffallen.
+// ein klarer Fehler zurückgegeben. Die sichtbare PDF wird jetzt mit
+// einer server-seitig eingebetteten Schriftart erzeugt (siehe
+// lib/invoice-pdf-server.ts) – schließt die zuvor offene PDF/A-3-
+// Schriftart-Lücke.
 // ============================================================
 
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
@@ -34,9 +35,9 @@ function feldFehlt(bezeichnung: string) {
 
 export async function POST(req: NextRequest) {
   try {
-    const { invoice_id, pdfBase64 } = await req.json();
-    if (!invoice_id || !pdfBase64) {
-      return NextResponse.json({ success: false, error: 'invoice_id und pdfBase64 erforderlich' }, { status: 400 });
+    const { invoice_id } = await req.json();
+    if (!invoice_id) {
+      return NextResponse.json({ success: false, error: 'invoice_id erforderlich' }, { status: 400 });
     }
 
     const invRes = await fetch(`${url}/rest/v1/invoices?id=eq.${invoice_id}&select=*`, { headers });
@@ -117,7 +118,10 @@ export async function POST(req: NextRequest) {
     }
 
     const iccProfile = await readFile(path.join(process.cwd(), 'lib/assets/srgb.icc'));
-    const pdfBuffer = Buffer.from(pdfBase64, 'base64');
+    // NEU (Nachtrag Phase 39): eigene, server-seitige PDF mit eingebetteter
+    // Schriftart statt der vom Browser (jsPDF, Schrift nicht eingebettet)
+    // geschickten – schließt die PDF/A-3-Lücke von eben vollständig.
+    const pdfBuffer = Buffer.from(await generateInvoicePdfCompliant(inv));
 
     const result = await embedFacturX({
       pdf: pdfBuffer, input, profile: Profile.EN16931, flavor: Flavor.ZUGFERD, rgbIccProfile: iccProfile,

@@ -568,11 +568,9 @@ export default function KundenDetailPage() {
   async function handleZugferd(inv: Invoice) {
     setZugferdLaeuft(inv.id)
     try {
-      const doc = generateInvoicePDF(inv)
-      const pdfBase64 = doc.output('datauristring').split(',')[1]
       const res = await fetch('/api/invoices/zugferd', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ invoice_id: inv.id, pdfBase64 }),
+        body: JSON.stringify({ invoice_id: inv.id }),
       })
       const json = await res.json()
       if (!json.success) {
