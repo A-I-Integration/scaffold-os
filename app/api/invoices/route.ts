@@ -241,7 +241,7 @@ export async function PATCH(req: NextRequest) {
   }
   try {
     const body = await req.json();
-    const { id, status, reminder_level, notes } = body;
+    const { id, status, reminder_level, notes, paid_amount } = body;
 
     if (!id) {
       return NextResponse.json({ success: false, error: 'id erforderlich' }, { status: 400 });
@@ -264,7 +264,11 @@ export async function PATCH(req: NextRequest) {
       patch.reminder_level = rl;
     }
     if (notes !== undefined) patch.notes = notes;
-    if (!status && reminder_level == null && notes === undefined) {
+    // NEU (Phase 38): paid_amount – reflektiert den tatsächlichen Zahlungs-
+    // eingang, kein Eingriff in den ursprünglich ausgestellten Rechnungs-
+    // inhalt (Positionen/Beträge bleiben unveränderbar, siehe oben).
+    if (paid_amount != null) patch.paid_amount = Number(paid_amount);
+    if (!status && reminder_level == null && notes === undefined && paid_amount == null) {
       return NextResponse.json({ success: false, error: 'Nichts zu ändern.' }, { status: 400 });
     }
     // Phase 35 (GoBD): Positionen/Beträge einer bereits ausgestellten Rechnung

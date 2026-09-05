@@ -38,6 +38,7 @@ export interface Invoice {
   invoice_type?: 'standard' | 'abschlag' | 'schluss' | 'gutschrift'; // Phase 15 + 22
   reference_invoice_number?: string | null; // Phase 22: bei Gutschriften, Bezug auf Original
   customer_id?: string | null; // Phase 34: echte Kunde-Verknüpfung statt Namensvergleich
+  paid_amount?: number; // Phase 38: Teilzahlungen
 }
 
 // Phase 15: Bezeichnung je Rechnungstyp

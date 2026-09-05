@@ -256,7 +256,8 @@ function RechnungenContent() {
       const res = await fetch('/api/invoices', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: inv.id, status }),
+        // NEU (Phase 38): paid_amount konsistent mit dem Status halten.
+        body: JSON.stringify({ id: inv.id, status, paid_amount: status === 'bezahlt' ? Number(inv.gross_amount) : 0 }),
       });
       const json = await res.json();
       if (!json.success) throw new Error(json.error);
@@ -264,6 +265,31 @@ function RechnungenContent() {
     } catch (err: any) {
       alert('❌ ' + err.message);
     }
+  }
+
+  // NEU (Phase 38): Teilzahlung oder vollständige Zahlung erfassen
+  const [zahlungOffen, setZahlungOffen] = useState<Invoice | null>(null);
+  const [zahlungBetrag, setZahlungBetrag] = useState('');
+  const [zahlungDatum, setZahlungDatum] = useState(new Date().toISOString().slice(0, 10));
+  const [zahlungLaeuft, setZahlungLaeuft] = useState(false);
+
+  async function erfasseZahlung() {
+    if (!zahlungOffen) return;
+    const betrag = Number(String(zahlungBetrag).replace(',', '.'));
+    if (!betrag || betrag <= 0) { alert('Bitte einen Betrag > 0 eingeben.'); return; }
+    setZahlungLaeuft(true);
+    try {
+      const res = await fetch('/api/invoice-payments', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ invoice_id: zahlungOffen.id, amount: betrag, payment_date: zahlungDatum }),
+      });
+      const json = await res.json();
+      if (!json.success) throw new Error(json.error);
+      alert(json.vollstaendig_bezahlt ? '✅ Vollständig bezahlt.' : `✅ Teilzahlung erfasst. Noch offen: ${(Number(zahlungOffen.gross_amount) - json.paid_amount).toFixed(2)} €`);
+      setZahlungOffen(null); setZahlungBetrag('');
+      await load();
+    } catch (err: any) { alert('❌ ' + err.message); }
+    setZahlungLaeuft(false);
   }
 
   async function handleDelete(inv: Invoice) {
@@ -627,7 +653,12 @@ function RechnungenContent() {
                       </td>
                       <td className="p-4 text-[#1d1d1f]">{inv.customer_name}</td>
                       <td className="p-4 text-[#424245]">{fmtDate(inv.invoice_date)}</td>
-                      <td className="p-4 text-right text-[#1d1d1f]">{fmtEur(Number(inv.gross_amount))} €</td>
+                      <td className="p-4 text-right text-[#1d1d1f]">
+                        {fmtEur(Number(inv.gross_amount))} €
+                        {Number(inv.paid_amount) > 0 && inv.status !== 'bezahlt' && (
+                          <div className="text-[10px] text-blue-700">Teilzahlung {fmtEur(Number(inv.paid_amount))} € · offen {fmtEur(Number(inv.gross_amount) - Number(inv.paid_amount))} €</div>
+                        )}
+                      </td>
                       <td className="p-4">
                         <select
                           value={inv.status}
@@ -671,6 +702,13 @@ function RechnungenContent() {
                           {inv.status === 'offen' && (
                             <>
                               <button
+                                onClick={() => { setZahlungOffen(inv); setZahlungBetrag(String(Number(inv.gross_amount) - Number(inv.paid_amount || 0))); setZahlungDatum(new Date().toISOString().slice(0, 10)) }}
+                                title="Zahlung erfassen (auch teilweise)"
+                                className="p-2 rounded-xl bg-blue-600/30 hover:bg-blue-600/50 text-blue-700 transition-colors"
+                              >
+                                <Euro className="h-4 w-4" />
+                              </button>
+                              <button
                                 onClick={() => handleStatus(inv, 'bezahlt')}
                                 title="Als bezahlt markieren"
                                 className="p-2 rounded-xl bg-emerald-600/30 hover:bg-emerald-600/50 text-emerald-700 transition-colors"
@@ -700,6 +738,34 @@ function RechnungenContent() {
           DATEV-Export: Buchungsstapel im EXTF-Format (Formatversion 700, SKR 03, Erlöskonto {DATEV_ERLOESKONTO_19}).
           Berater-/Mandantennummer und Konten bitte vor dem ersten Import mit dem Steuerberater abstimmen.
         </p>
+
+        {/* ─── NEU (Phase 38): Zahlung erfassen (voll oder teilweise) ─── */}
+        {zahlungOffen && (
+          <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4">
+            <div className="bg-white rounded-2xl shadow-xl max-w-sm w-full p-6 space-y-3">
+              <div className="flex items-center justify-between">
+                <h3 className="text-sm font-semibold text-[#1d1d1f]">Zahlung erfassen: {zahlungOffen.invoice_number}</h3>
+                <button onClick={() => setZahlungOffen(null)} className="p-1 rounded-lg hover:bg-black/5"><X className="h-4 w-4" /></button>
+              </div>
+              <p className="text-[11px] text-[#86868b]">
+                Rechnungsbetrag {fmtEur(Number(zahlungOffen.gross_amount))} € · bisher eingegangen {fmtEur(Number(zahlungOffen.paid_amount || 0))} € · offen {fmtEur(Number(zahlungOffen.gross_amount) - Number(zahlungOffen.paid_amount || 0))} €
+              </p>
+              <div>
+                <label className="block text-xs text-[#86868b] mb-1">Betrag (€)</label>
+                <input value={zahlungBetrag} onChange={(e) => setZahlungBetrag(e.target.value)} className="w-full px-3 py-2 bg-white border border-black/10 rounded-lg text-sm" />
+                <p className="text-[10px] text-[#86868b] mt-1">Vorausgefüllt mit dem offenen Betrag – für eine Teilzahlung einfach anpassen.</p>
+              </div>
+              <div>
+                <label className="block text-xs text-[#86868b] mb-1">Datum</label>
+                <input type="date" value={zahlungDatum} onChange={(e) => setZahlungDatum(e.target.value)} className="w-full px-3 py-2 bg-white border border-black/10 rounded-lg text-sm" />
+              </div>
+              <div className="flex gap-2">
+                <button onClick={erfasseZahlung} disabled={zahlungLaeuft} className="px-4 py-2 rounded-xl bg-[#e8590c] hover:bg-[#d9480f] disabled:opacity-50 text-white text-sm font-semibold">{zahlungLaeuft ? 'Speichert…' : 'Zahlung erfassen'}</button>
+                <button onClick={() => setZahlungOffen(null)} className="px-4 py-2 rounded-xl bg-black/5 hover:bg-black/10 text-sm font-medium">Abbrechen</button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
