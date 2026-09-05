@@ -12,6 +12,7 @@
   "dependencies": {
     "@react-three/drei": "^10.7.7",
     "@react-three/fiber": "^9.7.0",
+    "@stackforge-eu/factur-x": "^1.4.0",
     "@supabase/ssr": "^0.12.4",
     "@supabase/supabase-js": "^2.109.0",
     "jspdf": "^4.2.1",
