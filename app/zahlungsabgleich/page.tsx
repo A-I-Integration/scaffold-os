@@ -24,12 +24,16 @@ import { Upload, Check, AlertTriangle, FileText } from 'lucide-react';
 
 interface Invoice {
   id: string; invoice_number: string; customer_name: string; gross_amount: number;
-  status: string; due_date: string | null; invoice_type?: string;
+  status: string; due_date: string | null; invoice_type?: string; paid_amount?: number;
 }
 interface Zeile { text: string; betraege: number[] }
 interface Vorschlag {
   invoice: Invoice; zeile: Zeile;
   nummerGefunden: boolean; betragGefunden: boolean;
+  // NEU (Phase 38): falls die Rechnungsnummer gefunden wurde, aber der
+  // Betrag nicht zum vollen offenen Betrag passt – möglicher Teilbetrag,
+  // aus der Kontozeile übernommen, statt den Treffer zu verwerfen.
+  teilBetrag?: number;
 }
 
 function parseCsv(text: string): string[][] {
@@ -86,17 +90,24 @@ export default function ZahlungsabgleichPage() {
   function abgleichen(parsedZeilen: Zeile[]) {
     const treffer: Vorschlag[] = [];
     for (const inv of invoices) {
+      const offenerBetrag = Math.round((Number(inv.gross_amount) - Number(inv.paid_amount || 0)) * 100) / 100;
       for (const zeile of parsedZeilen) {
         const nummerGefunden = zeile.text.toUpperCase().includes(inv.invoice_number.toUpperCase());
-        const betragGefunden = zeile.betraege.some(b => Math.abs(b - Number(inv.gross_amount)) < 0.01);
+        const betragGefunden = zeile.betraege.some(b => Math.abs(b - offenerBetrag) < 0.01);
+        // NEU (Phase 38): Rechnungsnummer gefunden, aber Betrag passt nicht
+        // zum vollen offenen Betrag → möglicher Teilbetrag statt Verwerfen.
+        const teilBetrag = !betragGefunden
+          ? zeile.betraege.find(b => b > 0 && b < offenerBetrag)
+          : undefined;
         if (nummerGefunden || betragGefunden) {
-          treffer.push({ invoice: inv, zeile, nummerGefunden, betragGefunden });
+          treffer.push({ invoice: inv, zeile, nummerGefunden, betragGefunden, teilBetrag });
           break; // pro Rechnung nur der erste Treffer
         }
       }
     }
     setVorschlaege(treffer);
-    // Nur eindeutige Treffer (Nummer UND Betrag) vorab anhaken – alles andere bewusst zur Prüfung
+    // Nur eindeutige Treffer (Nummer UND voller Betrag) vorab anhaken – alles
+    // andere (inkl. mögliche Teilzahlungen) bewusst zur Prüfung.
     setAusgewaehlt(new Set(treffer.filter(t => t.nummerGefunden && t.betragGefunden).map(t => t.invoice.id)));
     setMsg(null);
   }
@@ -115,16 +126,28 @@ export default function ZahlungsabgleichPage() {
     setMsg(null);
     let ok = 0, fehler = 0;
     for (const id of ausgewaehlt) {
+      const treffer = vorschlaege.find(v => v.invoice.id === id);
       try {
-        const res = await fetch('/api/invoices', {
-          method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ id, status: 'bezahlt' }),
-        });
-        const json = await res.json();
-        if (json.success) ok++; else fehler++;
+        if (treffer?.teilBetrag) {
+          // NEU (Phase 38): Teilbetrag über die Zahlungs-API buchen, statt
+          // die Rechnung fälschlich komplett auf "bezahlt" zu setzen.
+          const res = await fetch('/api/invoice-payments', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ invoice_id: id, amount: treffer.teilBetrag }),
+          });
+          const json = await res.json();
+          if (json.success) ok++; else fehler++;
+        } else {
+          const res = await fetch('/api/invoices', {
+            method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ id, status: 'bezahlt', paid_amount: treffer ? Number(treffer.invoice.gross_amount) : undefined }),
+          });
+          const json = await res.json();
+          if (json.success) ok++; else fehler++;
+        }
       } catch { fehler++; }
     }
-    setMsg({ ok: fehler === 0, text: `✅ ${ok} Rechnung(en) als bezahlt gebucht.${fehler ? ` ❌ ${fehler} fehlgeschlagen.` : ''}` });
+    setMsg({ ok: fehler === 0, text: `✅ ${ok} Rechnung(en) verbucht.${fehler ? ` ❌ ${fehler} fehlgeschlagen.` : ''}` });
     setVerbuchen(false);
     setVorschlaege([]); setZeilen([]); setAusgewaehlt(new Set());
     lade();
@@ -167,7 +190,8 @@ export default function ZahlungsabgleichPage() {
                     <div className="flex gap-1.5 mt-1">
                       {v.nummerGefunden && <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-emerald-100 text-emerald-700">Rechnungsnr. gefunden</span>}
                       {v.betragGefunden && <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-emerald-100 text-emerald-700">Betrag stimmt</span>}
-                      {!v.nummerGefunden && !v.betragGefunden && <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700">Unsicher – bitte prüfen</span>}
+                      {v.teilBetrag && <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-blue-100 text-blue-700">Teilzahlung: {v.teilBetrag.toFixed(2)} € (Rest bleibt offen)</span>}
+                      {!v.nummerGefunden && !v.betragGefunden && !v.teilBetrag && <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700">Unsicher – bitte prüfen</span>}
                     </div>
                   </div>
                 </li>

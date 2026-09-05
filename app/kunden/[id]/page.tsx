@@ -338,12 +338,40 @@ export default function KundenDetailPage() {
     try {
       const res = await fetch('/api/invoices', {
         method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: inv.id, status: neuerStatus }),
+        // NEU (Phase 38): paid_amount konsistent mit dem Status halten –
+        // "als bezahlt markieren" heißt jetzt auch: voll bezahlt (für
+        // Teilzahlungen gibt es die eigene "💶 Zahlung erfassen"-Funktion.
+        body: JSON.stringify({ id: inv.id, status: neuerStatus, paid_amount: neuerStatus === 'bezahlt' ? Number(inv.gross_amount) : 0 }),
       })
       const json = await res.json()
       if (!json.success) throw new Error(json.error)
       ladeDaten()
     } catch (err: any) { alert('❌ ' + err.message) }
+  }
+
+  // NEU (Phase 38): Teilzahlung oder vollständige Zahlung erfassen
+  const [zahlungOffen, setZahlungOffen] = useState<Invoice | null>(null)
+  const [zahlungBetrag, setZahlungBetrag] = useState('')
+  const [zahlungDatum, setZahlungDatum] = useState(new Date().toISOString().slice(0, 10))
+  const [zahlungNotiz, setZahlungNotiz] = useState('')
+
+  async function erfasseZahlung() {
+    if (!zahlungOffen) return
+    const betrag = Number(String(zahlungBetrag).replace(',', '.'))
+    if (!betrag || betrag <= 0) { alert('Bitte einen Betrag > 0 eingeben.'); return }
+    setSpeichern(true)
+    try {
+      const res = await fetch('/api/invoice-payments', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ invoice_id: zahlungOffen.id, amount: betrag, payment_date: zahlungDatum, note: zahlungNotiz.trim() || undefined }),
+      })
+      const json = await res.json()
+      if (!json.success) throw new Error(json.error)
+      alert(json.vollstaendig_bezahlt ? '✅ Vollständig bezahlt.' : `✅ Teilzahlung erfasst. Noch offen: ${(Number(zahlungOffen.gross_amount) - json.paid_amount).toFixed(2)} €`)
+      setZahlungOffen(null); setZahlungBetrag(''); setZahlungNotiz('')
+      ladeDaten()
+    } catch (err: any) { alert('❌ ' + err.message) }
+    setSpeichern(false)
   }
 
   async function createZusatzrechnung(overrideGrund?: string) {
@@ -582,8 +610,8 @@ export default function KundenDetailPage() {
     )
   ), [invoices, kunde, eigeneProjektIds])
   const offeneInvoices = useMemo(() => kundenInvoices.filter((i) => i.status === 'offen' || i.status === 'ueberfaellig'), [kundenInvoices])
-  const offeneSumme = offeneInvoices.reduce((s, i) => s + Number(i.gross_amount), 0)
-  const ueberfaelligeSumme = offeneInvoices.filter(istUeberfaellig).reduce((s, i) => s + Number(i.gross_amount), 0)
+  const offeneSumme = offeneInvoices.reduce((s, i) => s + (Number(i.gross_amount) - Number(i.paid_amount || 0)), 0)
+  const ueberfaelligeSumme = offeneInvoices.filter(istUeberfaellig).reduce((s, i) => s + (Number(i.gross_amount) - Number(i.paid_amount || 0)), 0)
 
   const inputCls = 'w-full px-3 py-2 bg-white border border-black/10 rounded-lg text-sm text-[#1d1d1f] focus:outline-none focus:border-[#e8590c]'
   const btnPrimary = 'px-3 py-1.5 rounded-lg bg-[#e8590c] hover:bg-[#d9480f] text-white text-xs font-semibold transition-colors disabled:opacity-50'
@@ -839,8 +867,9 @@ export default function KundenDetailPage() {
                             <span className="font-medium">{inv.invoice_number}</span>
                             <span className={`text-[10px] px-1.5 py-0.5 rounded border ${verzug ? STATUS_COLOR.ueberfaellig : STATUS_COLOR[inv.status]}`}>{verzug ? 'Überfällig' : STATUS_LABEL[inv.status]}</span>
                             <span className="text-[#86868b]">fällig {fmtDate(inv.due_date)}</span>
-                            <span className={`ml-auto font-bold ${verzug ? 'text-red-600' : ''}`}>{fmtEur(Number(inv.gross_amount))} €</span>
-                            <button onClick={() => toggleStatus(inv)} className={btnSecondary}><Check className="h-3 w-3" /></button>
+                            {Number(inv.paid_amount) > 0 && <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-700">Teilzahlung {fmtEur(Number(inv.paid_amount))} €</span>}
+                            <span className={`ml-auto font-bold ${verzug ? 'text-red-600' : ''}`}>{fmtEur(Number(inv.gross_amount) - Number(inv.paid_amount || 0))} € offen</span>
+                            <button onClick={() => { setZahlungOffen(inv); setZahlungBetrag(String(Number(inv.gross_amount) - Number(inv.paid_amount || 0))); setZahlungDatum(new Date().toISOString().slice(0, 10)); setZahlungNotiz('') }} title="Zahlung erfassen" className={btnSecondary}><Euro className="h-3 w-3" /></button>
                           </li>
                         )
                       })}
@@ -858,7 +887,7 @@ export default function KundenDetailPage() {
                 ? kundenInvoices.filter((i) => !i.project_id)
                 : kundenInvoices.filter((i) => i.project_id === project.id)
               if (project.id === '__ohne__' && projInvoices.length === 0) return null
-              const projOffen = projInvoices.filter((i) => i.status === 'offen' || i.status === 'ueberfaellig').reduce((s, i) => s + Number(i.gross_amount), 0)
+              const projOffen = projInvoices.filter((i) => i.status === 'offen' || i.status === 'ueberfaellig').reduce((s, i) => s + (Number(i.gross_amount) - Number(i.paid_amount || 0)), 0)
 
               return (
                 <div key={project.id} className="bg-white rounded-xl border border-black/10 overflow-hidden">
@@ -998,6 +1027,12 @@ export default function KundenDetailPage() {
                                 <span className={`text-[10px] px-1.5 py-0.5 rounded border ${gutschrift ? 'bg-purple-500/10 text-purple-700 border-purple-500/30' : 'bg-blue-500/10 text-blue-700 border-blue-500/30'}`}>{TYPE_LABEL[inv.invoice_type]}</span>
                               )}
                               <span className={`text-[10px] px-1.5 py-0.5 rounded border ${verzug ? STATUS_COLOR.ueberfaellig : STATUS_COLOR[inv.status]}`}>{verzug ? 'Überfällig' : STATUS_LABEL[inv.status]}</span>
+                              {/* NEU (Phase 38): Teilzahlungs-Hinweis */}
+                              {inv.status !== 'bezahlt' && inv.status !== 'storniert' && Number(inv.paid_amount) > 0 && (
+                                <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-700 border border-blue-500/30" title={`${fmtEur(Number(inv.paid_amount))} € bereits eingegangen`}>
+                                  Teilzahlung: {fmtEur(Number(inv.paid_amount))} € · offen {fmtEur(Number(inv.gross_amount) - Number(inv.paid_amount))} €
+                                </span>
+                              )}
                               {opens[inv.invoice_number] && (
                                 <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-700 border border-emerald-500/40" title={`E-Mail geöffnet (${opens[inv.invoice_number].anzahl}×, zuletzt ${new Date(opens[inv.invoice_number].zuletzt).toLocaleString('de-DE')})`}>👁 Gesehen</span>
                               )}
@@ -1010,7 +1045,12 @@ export default function KundenDetailPage() {
                                 <button onClick={() => { const doc = generateInvoicePDF(inv); doc.save(`${TYPE_LABEL[inv.invoice_type || 'standard']}_${inv.invoice_number}.pdf`) }} title="PDF" className="p-1.5 rounded-lg bg-black/5 hover:bg-black/10 text-[#1d1d1f]"><Download className="h-3.5 w-3.5" /></button>
                                 <button onClick={() => sendInvoice(inv)} title="Erneut senden" className="p-1.5 rounded-lg bg-blue-600/20 hover:bg-blue-600/40 text-blue-700"><Send className="h-3.5 w-3.5" /></button>
                                 {inv.status !== 'storniert' && !gutschrift && (
-                                  <button onClick={() => toggleStatus(inv)} title={inv.status === 'bezahlt' ? 'Auf offen setzen' : 'Als bezahlt markieren'} className={`p-1.5 rounded-lg ${inv.status === 'bezahlt' ? 'bg-emerald-600/20 hover:bg-emerald-600/40 text-emerald-700' : 'bg-black/5 hover:bg-emerald-600/30 text-[#86868b]'}`}>
+                                  <button onClick={() => { setZahlungOffen(inv); setZahlungBetrag(String(Number(inv.gross_amount) - Number(inv.paid_amount || 0))); setZahlungDatum(new Date().toISOString().slice(0, 10)); setZahlungNotiz('') }} title="Zahlung erfassen (auch teilweise)" className="p-1.5 rounded-lg bg-blue-600/20 hover:bg-blue-600/40 text-blue-700">
+                                    <Euro className="h-3.5 w-3.5" />
+                                  </button>
+                                )}
+                                {inv.status !== 'storniert' && !gutschrift && (
+                                  <button onClick={() => toggleStatus(inv)} title={inv.status === 'bezahlt' ? 'Auf offen setzen' : 'Direkt als vollständig bezahlt markieren'} className={`p-1.5 rounded-lg ${inv.status === 'bezahlt' ? 'bg-emerald-600/20 hover:bg-emerald-600/40 text-emerald-700' : 'bg-black/5 hover:bg-emerald-600/30 text-[#86868b]'}`}>
                                     {inv.status === 'bezahlt' ? <RotateCcw className="h-3.5 w-3.5" /> : <Check className="h-3.5 w-3.5" />}
                                   </button>
                                 )}
@@ -1121,6 +1161,38 @@ export default function KundenDetailPage() {
           </div>
         )}
       </div>
+
+      {/* ─── NEU (Phase 38): Zahlung erfassen (voll oder teilweise) ─── */}
+      {zahlungOffen && (
+        <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-xl max-w-sm w-full p-6 space-y-3">
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-semibold text-[#1d1d1f]">Zahlung erfassen: {zahlungOffen.invoice_number}</h3>
+              <button onClick={() => setZahlungOffen(null)} className="p-1 rounded-lg hover:bg-black/5"><X className="h-4 w-4" /></button>
+            </div>
+            <p className="text-[11px] text-[#86868b]">
+              Rechnungsbetrag {fmtEur(Number(zahlungOffen.gross_amount))} € · bisher eingegangen {fmtEur(Number(zahlungOffen.paid_amount || 0))} € · offen {fmtEur(Number(zahlungOffen.gross_amount) - Number(zahlungOffen.paid_amount || 0))} €
+            </p>
+            <div>
+              <label className="block text-xs text-[#86868b] mb-1">Betrag (€)</label>
+              <input value={zahlungBetrag} onChange={e => setZahlungBetrag(e.target.value)} className={inputCls} />
+              <p className="text-[10px] text-[#86868b] mt-1">Vorausgefüllt mit dem noch offenen Betrag – für eine Teilzahlung einfach anpassen.</p>
+            </div>
+            <div>
+              <label className="block text-xs text-[#86868b] mb-1">Datum</label>
+              <input type="date" value={zahlungDatum} onChange={e => setZahlungDatum(e.target.value)} className={inputCls} />
+            </div>
+            <div>
+              <label className="block text-xs text-[#86868b] mb-1">Notiz (optional)</label>
+              <input value={zahlungNotiz} onChange={e => setZahlungNotiz(e.target.value)} placeholder="z.B. Überweisung, Anzahlung" className={inputCls} />
+            </div>
+            <div className="flex gap-2">
+              <button onClick={erfasseZahlung} disabled={speichern} className={btnPrimary}>{speichern ? 'Speichert…' : 'Zahlung erfassen'}</button>
+              <button onClick={() => setZahlungOffen(null)} className={btnSecondary}>Abbrechen</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ─── NEU (Phase 37): Unterschrift für Lieferschein erfassen ─── */}
       {lsSignaturOffen && (
