@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { BuildingParams } from '@/lib/calculations/cad-engine'
 import { GERUEST_SYSTEME } from '@/lib/calculations/geruest-systeme'
+import { uploadVertragsdokument } from '@/lib/vertrag-upload-client'
 
 interface Props {
   building: BuildingParams
@@ -15,6 +16,50 @@ interface Props {
 
 export default function BuildingForm({ building, systemId, onChange, onSystemChange, onGenerate, warnings }: Props) {
   const [activeTab, setActiveTab] = useState<'gebaeude' | 'geruest' | 'system'>('gebaeude')
+  const [analyseLaeuft, setAnalyseLaeuft] = useState(false)
+  const [analyseHinweis, setAnalyseHinweis] = useState<string | null>(null)
+
+  // NEU (Phase 41): Grundriss/Foto hochladen und automatisch auswerten –
+  // nutzt dieselbe, sorgfältig geprüfte Anti-Halluzinations-Logik wie im
+  // Aufmaß (siehe lib/grundriss-parsing.ts). "cad-uploads" als fester
+  // Ordner, da CAD (noch) kein eigenes Projekt hat, solange kein Angebot
+  // angelegt wurde.
+  async function handlePlanUpload(file: File) {
+    setAnalyseLaeuft(true)
+    setAnalyseHinweis(null)
+    try {
+      const hochgeladen = await uploadVertragsdokument(file, 'cad-uploads', 'plaene')
+      const res = await fetch('/api/cad/analyze-plan', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ files: [{ storage_path: hochgeladen.storage_path, file_type: hochgeladen.file_type }] }),
+      })
+      const json = await res.json()
+      if (!json.success) throw new Error(json.error)
+
+      const patch: Partial<BuildingParams> = {}
+      if (json.laenge) patch.lengthM = json.laenge
+      if (json.breite) patch.widthM = json.breite
+      if (json.hoehe) patch.heightM = json.hoehe
+      if (json.traufhoehe) patch.eavesHeightM = json.traufhoehe
+      const dachMap: Record<string, BuildingParams['roofForm']> = {
+        Satteldach: 'satteldach', Flachdach: 'flachdach', Pultdach: 'pultdach',
+        Walmdach: 'walmdach', Mansarddach: 'mansardendach', Zeltdach: 'walmdach',
+      }
+      if (json.dachform && dachMap[json.dachform]) patch.roofForm = dachMap[json.dachform]
+      if (json.geschosse) patch.floors = json.geschosse
+
+      if (Object.keys(patch).length === 0) {
+        setAnalyseHinweis('Keine eindeutig belegten Maße gefunden – bitte Werte manuell eintragen.')
+      } else {
+        onChange({ ...building, ...patch })
+        const uebernommen = Object.keys(patch).length
+        setAnalyseHinweis(`${uebernommen} Angabe(n) übernommen.${json.hoeheGeschaetzt ? ' Höhe geschätzt aus Geschosszahl, bitte prüfen.' : ''}${json.verworfen?.length ? ' Verworfen (unbelegt): ' + json.verworfen.join('; ') : ''}`)
+      }
+    } catch (err: any) {
+      setAnalyseHinweis('❌ ' + err.message)
+    }
+    setAnalyseLaeuft(false)
+  }
 
   const update = (key: keyof BuildingParams, value: any) => {
     onChange({ ...building, [key]: value })
@@ -44,6 +89,18 @@ export default function BuildingForm({ building, systemId, onChange, onSystemCha
       <div className='flex-1 overflow-y-auto p-4 space-y-4'>
         {activeTab === 'gebaeude' && (
           <div className='space-y-3'>
+            {/* NEU: Grundriss/Foto hochladen und automatisch auswerten */}
+            <label className={`flex flex-col items-center justify-center gap-1 rounded-xl border-2 border-dashed p-4 text-center cursor-pointer transition-colors ${analyseLaeuft ? 'border-black/10 bg-black/5' : 'border-[#e8590c]/40 hover:bg-[#fff4ed]'}`}>
+              <span className='text-xl'>{analyseLaeuft ? '⏳' : '📐'}</span>
+              <span className='text-xs font-semibold text-[#424245]'>{analyseLaeuft ? 'Wird ausgewertet…' : 'Grundriss/Foto hochladen'}</span>
+              <span className='text-[10px] text-[#86868b]'>Maße werden automatisch übernommen, wo eindeutig belegt</span>
+              <input type='file' accept='image/*,application/pdf' className='hidden' disabled={analyseLaeuft}
+                onChange={(e) => { const f = e.target.files?.[0]; if (f) handlePlanUpload(f); e.target.value = '' }} />
+            </label>
+            {analyseHinweis && (
+              <p className={`text-[10px] rounded-lg p-2 ${analyseHinweis.startsWith('❌') ? 'bg-red-50 text-red-700' : 'bg-blue-50 text-blue-700'}`}>{analyseHinweis}</p>
+            )}
+
             {/* NEU: mehrteiliges Gebäude (unterschiedliche Höhen/Ecken) */}
             <div className='rounded-xl border border-black/10 p-3 bg-[#f5f5f7] space-y-2'>
               <label className='flex items-center gap-2 text-xs font-medium text-[#424245]'>

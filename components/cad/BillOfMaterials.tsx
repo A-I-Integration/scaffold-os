@@ -80,16 +80,22 @@ export default function BillOfMaterials({ materials, totalWeightKg, totalPrice, 
                 className='w-full px-2 py-1.5 text-xs border rounded-lg'
               />
               {ausgewaehlterKunde && <span className='absolute right-2 top-1.5 text-[9px] px-1.5 py-0.5 rounded-full bg-emerald-500/15 text-emerald-700 border border-emerald-500/40'>✓</span>}
-              {zeigeDropdown && kundenSuche.trim().length >= 2 && !ausgewaehlterKunde && (() => {
-                const treffer = (customers || []).filter((c) => c.name.toLowerCase().includes(kundenSuche.trim().toLowerCase())).slice(0, 6)
+              {zeigeDropdown && !ausgewaehlterKunde && (() => {
+                const suche = kundenSuche.trim().toLowerCase()
+                // FIX: vorher erschienen Vorschläge erst ab 2 eingegebenen
+                // Zeichen – dadurch wirkte die Kundenliste beim Anklicken
+                // des Feldes wie verschwunden. Jetzt: Fokussieren allein
+                // zeigt schon alle bestehenden Kunden (wie ein normales
+                // Dropdown), Tippen filtert zusätzlich.
+                const treffer = (customers || []).filter((c) => !suche || c.name.toLowerCase().includes(suche)).slice(0, 8)
                 return (
-                  <div className='absolute z-10 mt-1 w-full bg-white border border-black/10 rounded-xl shadow-lg overflow-hidden'>
+                  <div className='absolute z-10 mt-1 w-full bg-white border border-black/10 rounded-xl shadow-lg overflow-hidden max-h-64 overflow-y-auto'>
                     {treffer.map((c) => (
                       <button key={c.id} type='button' onMouseDown={() => { setAusgewaehlterKunde({ id: c.id, name: c.name }); setKundenSuche(c.name) }} className='w-full text-left px-3 py-2 text-xs hover:bg-[#f5f5f7] border-t border-black/5 first:border-t-0'>
                         {c.name}{c.city && <span className='text-[#86868b]'> · {c.city}</span>}
                       </button>
                     ))}
-                    {treffer.length === 0 && onCreateCustomer && (
+                    {treffer.length === 0 && suche && onCreateCustomer && (
                       <button
                         type='button'
                         disabled={neuerKundeLaeuft}
