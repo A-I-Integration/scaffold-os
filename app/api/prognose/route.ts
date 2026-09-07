@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { kiFetchMitRetry, KI_UEBERLASTET_MELDUNG } from '@/lib/ki-fetch';
 
 // ============================================================
 // SCAFFOLD OS – Lager-Prognose (Nr. 4)
@@ -163,7 +164,7 @@ AUFGABE:
 3) Weise falls sinnvoll auf Artikel hin, die Kapital binden (Bestand ohne Verbrauch).
 Halte dich kurz – maximal 150 Wörter. Keine Einleitung, keine Höflichkeiten.`;
 
-    const kiRes = await fetch(`${baseUrl}/chat/completions`, {
+    const kiRes = await kiFetchMitRetry(`${baseUrl}/chat/completions`, {
       method: 'POST',
       headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -175,6 +176,9 @@ Halte dich kurz – maximal 150 Wörter. Keine Einleitung, keine Höflichkeiten.
     });
     const kiJson = await kiRes.json();
     if (!kiRes.ok) {
+      if (kiRes.status === 429) {
+        return NextResponse.json({ success: false, error: KI_UEBERLASTET_MELDUNG }, { status: 429 });
+      }
       const msg = kiJson?.error?.message || JSON.stringify(kiJson);
       return NextResponse.json({ success: false, error: 'KI-Anfrage fehlgeschlagen: ' + msg }, { status: 502 });
     }

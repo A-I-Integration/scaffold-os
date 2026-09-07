@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { kiFetchMitRetry, KI_UEBERLASTET_MELDUNG } from '@/lib/ki-fetch';
 import { createClient } from '@/lib/supabase/server';
 
 // ─── POST: KI-Foto-Analyse (Mistral Vision) ───
@@ -70,7 +71,7 @@ Antworte AUSSCHLIESSLICH als JSON-Objekt mit genau diesen Feldern:
 
 Regeln: Nur erkennbare Dinge eintragen, im Zweifel null bzw. leere Liste. Keine Maße schätzen. Kein Text außerhalb des JSON.`;
 
-    const kiRes = await fetch(`${baseUrl}/chat/completions`, {
+    const kiRes = await kiFetchMitRetry(`${baseUrl}/chat/completions`, {
       method: 'POST',
       headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -89,6 +90,9 @@ Regeln: Nur erkennbare Dinge eintragen, im Zweifel null bzw. leere Liste. Keine 
     });
 
     if (!kiRes.ok) {
+      if (kiRes.status === 429) {
+        return NextResponse.json({ success: false, error: KI_UEBERLASTET_MELDUNG }, { status: 429 });
+      }
       const errText = await kiRes.text();
       return NextResponse.json({
         success: false,

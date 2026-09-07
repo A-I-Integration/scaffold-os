@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { kiFetchMitRetry, KI_UEBERLASTET_MELDUNG } from '@/lib/ki-fetch';
 import { createClient } from '@/lib/supabase/server';
 
 // ============================================================
@@ -134,7 +135,7 @@ Regeln:
 - Erinnere in der Zusammenfassung daran, dass dies ein KI-Hinweis ist, keine Prüfung durch eine befähigte Person nach TRBS 2121-1 ersetzt und keine Abnahme darstellt.
 - Deutsch, sachlich, kein Text außerhalb des JSON.`;
 
-    const kiRes = await fetch(`${baseUrl}/chat/completions`, {
+    const kiRes = await kiFetchMitRetry(`${baseUrl}/chat/completions`, {
       method: 'POST',
       headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -144,6 +145,7 @@ Regeln:
         temperature: 0.2,
       }),
     });
+    if (kiRes.status === 429) throw new Error(KI_UEBERLASTET_MELDUNG);
     if (!kiRes.ok) throw new Error('KI-Anfrage fehlgeschlagen: ' + (await kiRes.text()));
     const kiJson = await kiRes.json();
     const roh = kiJson.choices?.[0]?.message?.content || '{}';

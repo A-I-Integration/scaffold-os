@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { kiFetchMitRetry, KI_UEBERLASTET_MELDUNG } from '@/lib/ki-fetch';
 import { createClient } from '@/lib/supabase/server';
 import { geocodeAll, buildTable, tableAsText } from '@/lib/routing';
 
@@ -133,7 +134,7 @@ Antworte AUSSCHLIESSLICH als JSON:
   "warnungen": ["<z.B. nicht geocodierbare Adressen, zu wenig Fahrer, nicht eingeplante Aufträge>"]
 }`;
 
-    const kiRes = await fetch(`${baseUrl}/chat/completions`, {
+    const kiRes = await kiFetchMitRetry(`${baseUrl}/chat/completions`, {
       method: 'POST',
       headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -146,6 +147,9 @@ Antworte AUSSCHLIESSLICH als JSON:
     });
 
     if (!kiRes.ok) {
+      if (kiRes.status === 429) {
+        return NextResponse.json({ success: false, error: KI_UEBERLASTET_MELDUNG }, { status: 429 });
+      }
       const errText = await kiRes.text();
       return NextResponse.json({ success: false, error: `KI-Fehler (${kiRes.status}): ${errText.slice(0, 300)}` }, { status: 502 });
     }
