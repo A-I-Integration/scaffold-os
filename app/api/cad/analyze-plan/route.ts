@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { kiFetchMitRetry, KI_UEBERLASTET_MELDUNG } from '@/lib/ki-fetch';
 import { createClient } from '@/lib/supabase/server';
 import { pruefeUndFiltere } from '@/lib/grundriss-parsing';
 
@@ -42,7 +43,7 @@ export async function POST(req: NextRequest) {
     for (const pdf of pdfs) {
       const docUrl = `${supabaseUrl}/storage/v1/object/public/project-media/${pdf.storage_path}`;
       try {
-        const ocrRes = await fetch(`${baseUrl}/ocr`, {
+        const ocrRes = await kiFetchMitRetry(`${baseUrl}/ocr`, {
           method: 'POST',
           headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
           body: JSON.stringify({ model: ocrModel, document: { type: 'document_url', document_url: docUrl } }),
@@ -84,12 +85,15 @@ STRENGE REGELN:
     const content: any[] = [{ type: 'text', text: prompt }];
     for (const url of imageUrls) content.push({ type: 'image_url', image_url: { url } });
 
-    const kiRes = await fetch(`${baseUrl}/chat/completions`, {
+    const kiRes = await kiFetchMitRetry(`${baseUrl}/chat/completions`, {
       method: 'POST',
       headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({ model, messages: [{ role: 'user', content }], temperature: 0.2, max_tokens: 1000, response_format: { type: 'json_object' } }),
     });
-    if (!kiRes.ok) return NextResponse.json({ success: false, error: `KI-Fehler (${kiRes.status}): ${(await kiRes.text()).slice(0, 300)}` }, { status: 502 });
+    if (!kiRes.ok) {
+      if (kiRes.status === 429) return NextResponse.json({ success: false, error: KI_UEBERLASTET_MELDUNG }, { status: 429 });
+      return NextResponse.json({ success: false, error: `KI-Fehler (${kiRes.status}): ${(await kiRes.text()).slice(0, 300)}` }, { status: 502 });
+    }
 
     const kiJson = await kiRes.json();
     const raw = kiJson.choices?.[0]?.message?.content?.trim();

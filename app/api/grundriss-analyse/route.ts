@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { kiFetchMitRetry, KI_UEBERLASTET_MELDUNG } from '@/lib/ki-fetch';
 import { createClient } from '@/lib/supabase/server';
 import { deterministicFromText, escapeRegExp, pruefeUndFiltere } from '@/lib/grundriss-parsing';
 
@@ -64,7 +65,7 @@ export async function POST(req: NextRequest) {
     for (const pdf of pdfs) {
       const docUrl = `${supabaseUrl}/storage/v1/object/public/project-media/${pdf.storage_path}`;
       try {
-        const ocrRes = await fetch(`${baseUrl}/ocr`, {
+        const ocrRes = await kiFetchMitRetry(`${baseUrl}/ocr`, {
           method: 'POST',
           headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -132,7 +133,7 @@ STRENGE REGELN:
       content.push({ type: 'image_url', image_url: { url } });
     }
 
-    const kiRes = await fetch(`${baseUrl}/chat/completions`, {
+    const kiRes = await kiFetchMitRetry(`${baseUrl}/chat/completions`, {
       method: 'POST',
       headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -145,6 +146,9 @@ STRENGE REGELN:
     });
 
     if (!kiRes.ok) {
+      if (kiRes.status === 429) {
+        return NextResponse.json({ success: false, error: KI_UEBERLASTET_MELDUNG }, { status: 429 });
+      }
       const errText = await kiRes.text();
       return NextResponse.json({
         success: false,
