@@ -34,6 +34,9 @@ export interface BuildingParams {
   // statt der einzelnen lengthM/heightM oben. Dieselbe Grundidee wie die
   // "Abschnitte" im Aufmaß, hier zusätzlich mit optionalem Eckwinkel.
   sections?: BuildingSection[]
+  // NEU: Lastklasse nach DIN EN 12811-1 (1-6) – bisher nirgends erfasst,
+  // aber nötig, um die Regelausführungs-Grenzen einer Zulassung zu prüfen.
+  lastklasse?: number
 }
 
 export interface GebaeudeSegment {
