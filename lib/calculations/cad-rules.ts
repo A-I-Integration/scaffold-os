@@ -162,8 +162,9 @@ export const CAD_RULES: CADRule[] = [
     affectedField: 'heightM',
   },
   // NEU: Regelausführungs-Grenzen aus der amtlichen Zulassung (Marktvergleich
-  // "Wie kommen wir an diese Daten" – DIBt-Zulassung Z-8.1-919, Layher-
-  // Allround STAR). WICHTIG: nur die reinen GRENZWERTE der bereits
+  // "Wie kommen wir an diese Daten" – DIBt-Zulassung Z-8.1-919 vom 2.11.2022,
+  // gültig bis 2.11.2027, "Layher Allround STAR 70" – aktuelle Fassung echt
+  // gelesen und mit der Vorgängerversion abgeglichen: Grenzwerte unverändert). WICHTIG: nur die reinen GRENZWERTE der bereits
   // vorab geprüften Standard-Konfiguration – keine eigene Berechnung,
   // keine Übernahme der eigentlichen Bemessungsformeln aus der Zulassung
   // (Federsteifigkeiten, Querschnittswerte usw. bleiben Sache des
@@ -176,10 +177,9 @@ export const CAD_RULES: CADRule[] = [
     title: 'Außerhalb der geprüften Regelausführung',
     message:
       'Diese Planung liegt außerhalb der "Regelausführung" der Zulassung Z-8.1-919 ' +
-      '(Layher-Allround STAR: Feldweite ≤ 3,07 m, Höhe ≤ 24 m, Lastklasse ≤ 3, Systembreite 0,73 m). ' +
-      'Für diese Konfiguration ist ein Einzel-Standsicherheitsnachweis durch einen Statiker erforderlich – ' +
-      'HINWEIS: Diese Zulassungsnummer galt bis 2017, bitte vor Verwendung die aktuell gültige ' +
-      'Layher-Zulassung prüfen (dibt.de).',
+      '(Layher Allround STAR 70: Feldweite ≤ 3,07 m, Höhe ≤ 24 m über Gelände, Lastklasse ≤ 3, Systembreite 0,73 m). ' +
+      'Für diese Konfiguration ist ein Einzel-Standsicherheitsnachweis durch einen Statiker erforderlich. ' +
+      '(Zulassung Z-8.1-919 vom 2. November 2022, gültig bis 2. November 2027 – danach bitte erneut die aktuelle Fassung auf dibt.de prüfen.)',
     condition: (p) => {
       if (p.system?.id !== 'layher-allround') return false
       const durchschnFeldweite = p.fieldCount > 0 ? p.totalLengthM / p.fieldCount : 0
