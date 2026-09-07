@@ -53,7 +53,7 @@ export default function BuildingForm({ building, systemId, onChange, onSystemCha
       } else {
         onChange({ ...building, ...patch })
         const uebernommen = Object.keys(patch).length
-        setAnalyseHinweis(`KI-Vorschlag: ${uebernommen} Angabe(n) übernommen, bitte prüfen.${json.hoeheGeschaetzt ? ' Höhe geschätzt aus Geschosszahl.' : ''}${json.verworfen?.length ? ' Verworfen (unbelegt): ' + json.verworfen.join('; ') : ''}`)
+        setAnalyseHinweis(`${json.ohneKi ? 'Direkt aus dem Plan erkannt (ohne KI)' : 'KI-Vorschlag'}: ${uebernommen} Angabe(n) übernommen, bitte prüfen.${json.hoeheGeschaetzt ? ' Höhe geschätzt aus Geschosszahl.' : ''}${json.verworfen?.length ? ' Verworfen (unbelegt): ' + json.verworfen.join('; ') : ''}`)
       }
     } catch (err: any) {
       setAnalyseHinweis('❌ ' + err.message)

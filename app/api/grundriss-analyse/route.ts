@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { kiFetchMitRetry, KI_UEBERLASTET_MELDUNG } from '@/lib/ki-fetch';
 import { createClient } from '@/lib/supabase/server';
-import { deterministicFromText, escapeRegExp, pruefeUndFiltere } from '@/lib/grundriss-parsing';
+import { deterministicFromText, escapeRegExp, pruefeUndFiltere, versucheDirektenPdfText } from '@/lib/grundriss-parsing';
 
 // ─── POST: KI-Grundriss-Analyse ───
 // Nimmt eine sessionId, holt die hochgeladenen Grundrisse aus
@@ -65,6 +65,15 @@ export async function POST(req: NextRequest) {
     for (const pdf of pdfs) {
       const docUrl = `${supabaseUrl}/storage/v1/object/public/project-media/${pdf.storage_path}`;
       try {
+        // NEU: zuerst echten Text direkt aus der PDF lesen – ganz ohne KI.
+        // Nur bei eingescannten Bild-PDFs ohne Textebene auf KI-OCR zurückfallen.
+        const pdfRes = await fetch(docUrl);
+        const direkterText = pdfRes.ok ? await versucheDirektenPdfText(Buffer.from(await pdfRes.arrayBuffer())) : '';
+        if (direkterText) {
+          ocrText += `\n\n--- PDF-Plan (direkt gelesen, ohne KI) ---\n${direkterText}`;
+          continue;
+        }
+
         const ocrRes = await kiFetchMitRetry(`${baseUrl}/ocr`, {
           method: 'POST',
           headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
@@ -80,7 +89,7 @@ export async function POST(req: NextRequest) {
         }
         const ocrJson = await ocrRes.json();
         const pages: string[] = (ocrJson.pages || []).map((p: any) => p.markdown || '').filter(Boolean);
-        if (pages.length) ocrText += `\n\n--- PDF-Plan ---\n${pages.join('\n\n')}`;
+        if (pages.length) ocrText += `\n\n--- PDF-Plan (KI-OCR) ---\n${pages.join('\n\n')}`;
       } catch (e: any) {
         pdfErrors.push(`OCR fehlgeschlagen: ${e.message}`);
       }

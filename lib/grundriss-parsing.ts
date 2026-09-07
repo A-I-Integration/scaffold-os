@@ -118,3 +118,25 @@ export function pruefeUndFiltere(structured: Record<string, any>, ocrText: strin
 
   return verworfen;
 }
+
+/**
+ * Versucht, echten Text direkt aus einer PDF zu lesen – OHNE jede KI.
+ * Funktioniert nur bei PDFs mit echter Textebene (die meisten am
+ * Computer erstellten/exportierten Baupläne), NICHT bei eingescannten
+ * Bild-PDFs (dafür bleibt der KI-OCR-Weg als Rückfalloption nötig).
+ * Gibt einen leeren String zurück, wenn kein brauchbarer Text gefunden
+ * wurde (Aufrufer soll dann auf KI-OCR zurückfallen).
+ */
+export async function versucheDirektenPdfText(pdfBuffer: Buffer): Promise<string> {
+  try {
+    const { PDFParse } = await import('pdf-parse');
+    const parser = new PDFParse({ data: pdfBuffer });
+    const result = await parser.getText();
+    const text = (result.text || '').trim();
+    // Weniger als ~30 Zeichen sinnvoller Text = vermutlich eine
+    // gescannte Bild-PDF ohne echte Textebene, kein brauchbares Ergebnis.
+    return text.length >= 30 ? text : '';
+  } catch {
+    return ''; // z.B. verschlüsselte/beschädigte PDF – Aufrufer fällt auf KI-OCR zurück
+  }
+}
