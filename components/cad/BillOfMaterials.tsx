@@ -11,12 +11,17 @@ interface Props {
   logistik?: LogistikDaten | null
   onExportPDF?: () => void
   onExportCSV?: () => void
-  customers?: { id: string; name: string }[]
-  onAssignCustomer?: (customerId: string) => void
+  customers?: { id: string; name: string; city?: string }[]
+  onCreateCustomer?: (name: string) => Promise<{ id: string; name: string } | null>
+  onAssignCustomer?: (customerId: string, customerName: string) => void
+  zuordnenLaeuft?: boolean
 }
 
-export default function BillOfMaterials({ materials, totalWeightKg, totalPrice, logistik, onExportPDF, onExportCSV, customers, onAssignCustomer }: Props) {
-  const [selectedCustomer, setSelectedCustomer] = useState('')
+export default function BillOfMaterials({ materials, totalWeightKg, totalPrice, logistik, onExportPDF, onExportCSV, customers, onCreateCustomer, onAssignCustomer, zuordnenLaeuft }: Props) {
+  const [kundenSuche, setKundenSuche] = useState('')
+  const [ausgewaehlterKunde, setAusgewaehlterKunde] = useState<{ id: string; name: string } | null>(null)
+  const [zeigeDropdown, setZeigeDropdown] = useState(false)
+  const [neuerKundeLaeuft, setNeuerKundeLaeuft] = useState(false)
   const [logistikOffen, setLogistikOffen] = useState(true)
   const grouped = materials.reduce((acc, item) => {
     if (!acc[item.category]) acc[item.category] = []
@@ -61,27 +66,56 @@ export default function BillOfMaterials({ materials, totalWeightKg, totalPrice, 
           </div>
         )}
 
-        {/* Kunden-Zuordnung */}
-        {customers && customers.length > 0 && onAssignCustomer && (
-          <div className='mb-4 bg-blue-50 rounded-xl p-3 border border-blue-200'>
-            <label className='block text-xs font-medium text-blue-800 mb-1.5'>Kunde zuordnen</label>
-            <select
-              value={selectedCustomer}
-              onChange={(e) => setSelectedCustomer(e.target.value)}
-              className='w-full px-2 py-1.5 text-xs border rounded-lg mb-2'
-            >
-              <option value=''>Kunde wählen...</option>
-              {customers.map((c) => (
-                <option key={c.id} value={c.id}>{c.name}</option>
-              ))}
-            </select>
+        {/* Kunden-Zuordnung → direkt als Angebot anlegen (Phase 41) */}
+        {customers && onAssignCustomer && (
+          <div className='mb-4 bg-blue-50 rounded-xl p-3 border border-blue-200 relative'>
+            <label className='block text-xs font-medium text-blue-800 mb-1.5'>Kunde zuordnen → als Angebot anlegen</label>
+            <div className='relative'>
+              <input
+                value={kundenSuche}
+                onChange={(e) => { setKundenSuche(e.target.value); setAusgewaehlterKunde(null); setZeigeDropdown(true) }}
+                onFocus={() => setZeigeDropdown(true)}
+                onBlur={() => setTimeout(() => setZeigeDropdown(false), 150)}
+                placeholder='Kundenname eingeben oder auswählen'
+                className='w-full px-2 py-1.5 text-xs border rounded-lg'
+              />
+              {ausgewaehlterKunde && <span className='absolute right-2 top-1.5 text-[9px] px-1.5 py-0.5 rounded-full bg-emerald-500/15 text-emerald-700 border border-emerald-500/40'>✓</span>}
+              {zeigeDropdown && kundenSuche.trim().length >= 2 && !ausgewaehlterKunde && (() => {
+                const treffer = (customers || []).filter((c) => c.name.toLowerCase().includes(kundenSuche.trim().toLowerCase())).slice(0, 6)
+                return (
+                  <div className='absolute z-10 mt-1 w-full bg-white border border-black/10 rounded-xl shadow-lg overflow-hidden'>
+                    {treffer.map((c) => (
+                      <button key={c.id} type='button' onMouseDown={() => { setAusgewaehlterKunde({ id: c.id, name: c.name }); setKundenSuche(c.name) }} className='w-full text-left px-3 py-2 text-xs hover:bg-[#f5f5f7] border-t border-black/5 first:border-t-0'>
+                        {c.name}{c.city && <span className='text-[#86868b]'> · {c.city}</span>}
+                      </button>
+                    ))}
+                    {treffer.length === 0 && onCreateCustomer && (
+                      <button
+                        type='button'
+                        disabled={neuerKundeLaeuft}
+                        onMouseDown={async () => {
+                          setNeuerKundeLaeuft(true)
+                          const neu = await onCreateCustomer(kundenSuche.trim())
+                          if (neu) { setAusgewaehlterKunde(neu); setKundenSuche(neu.name) }
+                          setNeuerKundeLaeuft(false)
+                        }}
+                        className='w-full text-left px-3 py-2 text-xs text-[#e8590c] font-semibold hover:bg-[#f5f5f7] disabled:opacity-50'
+                      >
+                        {neuerKundeLaeuft ? 'Wird angelegt…' : `+ „${kundenSuche.trim()}" als neuen Kunden anlegen`}
+                      </button>
+                    )}
+                  </div>
+                )
+              })()}
+            </div>
             <button
-              onClick={() => selectedCustomer && onAssignCustomer(selectedCustomer)}
-              disabled={!selectedCustomer}
-              className='w-full py-1.5 bg-blue-600 text-white text-xs font-medium rounded-lg hover:bg-blue-700 disabled:bg-gray-300 transition-colors'
+              onClick={() => ausgewaehlterKunde && onAssignCustomer(ausgewaehlterKunde.id, ausgewaehlterKunde.name)}
+              disabled={!ausgewaehlterKunde || zuordnenLaeuft}
+              className='w-full mt-2 py-1.5 bg-blue-600 text-white text-xs font-medium rounded-lg hover:bg-blue-700 disabled:bg-gray-300 transition-colors'
             >
-              💾 Projekt zuordnen
+              {zuordnenLaeuft ? 'Wird angelegt…' : '💾 Als Angebot anlegen'}
             </button>
+            <p className='text-[10px] text-blue-700/70 mt-1'>Öffnet danach die Kunden-Seite – von dort aus: Rechnung erstellen, Freigabe, E-Rechnung usw.</p>
           </div>
         )}
 

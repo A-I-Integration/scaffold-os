@@ -19,6 +19,7 @@
 // ============================================================
 
 import { useState, useMemo, useCallback, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
 import dynamic from 'next/dynamic'
 import {
   BuildingParams, CADModel, generateCADModel, generateBillOfMaterials, checkCollisions,
@@ -49,6 +50,7 @@ const COMPONENT_LABELS: Record<string, string> = {
 }
 
 export default function CADPage() {
+  const router = useRouter()
   const [viewMode, setViewMode] = useState<ViewMode>('3d')
   const [building, setBuilding] = useState<BuildingParams>({
     lengthM: 18.4, widthM: 8.0, heightM: 12.0, eavesHeightM: 10.0, roofHeightM: 2.5,
@@ -153,10 +155,57 @@ export default function CADPage() {
     URL.revokeObjectURL(a.href)
   }, [materials, totalWeight, totalPrice, logistik])
 
-  const handleAssignCustomer = useCallback((customerId: string) => {
-    const kunde = kunden.find(k => k.id === customerId)
-    alert(`Zuordnung zu „${kunde?.name}" vorgemerkt. Der Weg zum gespeicherten Auftrag läuft weiterhin über Aufmaß → Schritt 6 (dort wird das Projekt mit Kundennamen angelegt).`)
-  }, [kunden])
+  const [zuordnenLaeuft, setZuordnenLaeuft] = useState(false)
+
+  const handleCreateCustomer = useCallback(async (name: string) => {
+    try {
+      const res = await fetch('/api/kunden', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name }) })
+      const json = await res.json()
+      if (!json.success) throw new Error(json.error)
+      const neu = { id: json.kunde.id, name: json.kunde.name }
+      setKunden((prev) => [...prev, neu])
+      return neu
+    } catch (err: any) {
+      alert('❌ Kunde konnte nicht angelegt werden: ' + err.message)
+      return null
+    }
+  }, [])
+
+  // NEU (Phase 41): erzeugt aus der aktuellen CAD-Stückliste ein echtes
+  // Angebot (Projekt mit Kunden-Verknüpfung) – dasselbe Muster wie beim
+  // GAEB-Import: die Stückliste wird als kiResult.materialList abgelegt,
+  // damit ab der Kunden-Detail-Seite alles Bestehende weiterläuft
+  // (Rechnung erstellen, Freigabe-Pflicht, E-Rechnung).
+  const handleAssignCustomer = useCallback(async (customerId: string, customerName: string) => {
+    if (!model) return
+    setZuordnenLaeuft(true)
+    try {
+      const kiResult = {
+        materialList: materials, totalMaterialCost: Math.round(totalPrice * 100) / 100,
+        totalWeightKg: Math.round(totalWeight), estimatedLaborHours: logistik?.aufbauStunden || 0,
+        laborCost: 0, transportCost: 0,
+        totalCost: Math.round(totalPrice * 100) / 100, suggestedPrice: Math.round(totalPrice * 100) / 100,
+        margin: 0, marginPercent: 0, riskLevel: 'green' as const,
+        warnings: [`Aus CAD-Planung erzeugt (${model.system?.hersteller || ''} ${model.system?.systemName || ''}, ${model.totalAreaM2.toFixed(1)} m²). Preis basiert auf reinen Materialkosten – Arbeitszeit/Marge vor Versand noch prüfen/ergänzen.`],
+        tips: [], scaffoldClass: 'CAD-Planung', requiredAnchorCount: 0, requiredLoadDistributionPlates: 0,
+        totalAreaM2: model.totalAreaM2,
+      }
+      const res = await fetch('/api/projects', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: `CAD-Planung ${customerName}`, adresse: '', customer_id: customerId,
+          data: { step1: { name: customerName, adresse: '', gewerke: ['allgemein'], dauer: '30' }, kiResult, angebotsStatus: 'erstellt' },
+          status: 'active',
+        }),
+      })
+      const json = await res.json()
+      if (!json.success) throw new Error(json.error)
+      router.push(`/kunden/${customerId}`)
+    } catch (err: any) {
+      alert('❌ ' + err.message)
+    }
+    setZuordnenLaeuft(false)
+  }, [model, materials, totalPrice, totalWeight, logistik, router])
 
   return (
     <div className='h-screen flex flex-col bg-[#fbfbfd]'>
@@ -220,7 +269,9 @@ export default function CADPage() {
             onExportPDF={handleExportPDF}
             onExportCSV={handleExportCSV}
             customers={kunden}
+            onCreateCustomer={handleCreateCustomer}
             onAssignCustomer={handleAssignCustomer}
+            zuordnenLaeuft={zuordnenLaeuft}
           />
         </div>
       </div>
