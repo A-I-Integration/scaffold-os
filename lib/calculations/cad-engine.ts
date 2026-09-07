@@ -854,18 +854,50 @@ export function detectCollisions(model: CADModel): CollisionResult {
   }
 
   // Bauteil-Gebäude Kollisionen
+  // FIX (Marktvergleich-Lücke 2): Bei mehrteiligen Gebäuden (unterschiedliche
+  // Höhen/Ecken, siehe berechneGebaeudeSegmente) hätte die alte Prüfung mit
+  // EINEM globalen Rechteck (building.lengthM/heightM/widthM) bei Ecken
+  // falsche Ergebnisse geliefert – ein Bauteil im Anbau-Abschnitt läge
+  // rechnerisch oft außerhalb des globalen Rechtecks (unentdeckte Kollision)
+  // oder umgekehrt fälschlich "im Gebäude" (falscher Alarm). Jetzt wird
+  // pro Bauteil der tatsächlich zuständige Abschnitt herangezogen.
   const building = model.building
+  const segmente = building.sections && building.sections.length >= 2
+    ? berechneGebaeudeSegmente(building.sections)
+    : null
+
   comps.forEach((comp) => {
-    // Prüfe ob Bauteil INSIDE Gebäude ist (falsche Position)
     const bx = comp.position[0]
     const by = comp.position[1]
     const bz = comp.position[2]
+    let istInnerhalb = false
 
-    const insideX = bx >= -building.lengthM / 2 && bx <= building.lengthM / 2
-    const insideY = by >= 0 && by <= building.heightM
-    const insideZ = bz >= -building.widthM / 2 - 0.5 && bz <= building.widthM / 2 + 0.5
+    if (segmente) {
+      // Bauteil in das lokale Koordinatensystem JEDES Abschnitts drehen und
+      // dort mit dessen eigener Länge/Höhe prüfen (der Gerüst-Tiefen-Puffer
+      // von 0.5 m bleibt gleich wie bei der einteiligen Prüfung).
+      for (const seg of segmente) {
+        // Empirisch mit bekannten Punkten geprüft (Mittelpunkt → 0,0;
+        // Segment-Ende → Länge/2,0): lokalX/Z korrekt mit rotationYRad direkt,
+        // keine weitere Vorzeichenumkehr nötig.
+        const relX = bx - seg.mitteX
+        const relZ = bz - seg.mitteZ
+        const w = seg.rotationYRad
+        const lokalX = relX * Math.cos(w) - relZ * Math.sin(w)
+        const lokalZ = relX * Math.sin(w) + relZ * Math.cos(w)
+        const insideX = lokalX >= -seg.laengeM / 2 && lokalX <= seg.laengeM / 2
+        const insideY = by >= 0 && by <= seg.hoeheM
+        const insideZ = lokalZ >= -(building.widthM || 6) / 2 - 0.5 && lokalZ <= (building.widthM || 6) / 2 + 0.5
+        if (insideX && insideY && insideZ) { istInnerhalb = true; break }
+      }
+    } else {
+      const insideX = bx >= -building.lengthM / 2 && bx <= building.lengthM / 2
+      const insideY = by >= 0 && by <= building.heightM
+      const insideZ = bz >= -building.widthM / 2 - 0.5 && bz <= building.widthM / 2 + 0.5
+      istInnerhalb = insideX && insideY && insideZ
+    }
 
-    if (insideX && insideY && insideZ && comp.type !== 'anchor') {
+    if (istInnerhalb && comp.type !== 'anchor') {
       collisions.push({
         componentA: comp.id,
         componentB: 'building',
