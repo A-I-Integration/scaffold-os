@@ -53,7 +53,7 @@ export default function BuildingForm({ building, systemId, onChange, onSystemCha
       } else {
         onChange({ ...building, ...patch })
         const uebernommen = Object.keys(patch).length
-        setAnalyseHinweis(`${uebernommen} Angabe(n) übernommen.${json.hoeheGeschaetzt ? ' Höhe geschätzt aus Geschosszahl, bitte prüfen.' : ''}${json.verworfen?.length ? ' Verworfen (unbelegt): ' + json.verworfen.join('; ') : ''}`)
+        setAnalyseHinweis(`KI-Vorschlag: ${uebernommen} Angabe(n) übernommen, bitte prüfen.${json.hoeheGeschaetzt ? ' Höhe geschätzt aus Geschosszahl.' : ''}${json.verworfen?.length ? ' Verworfen (unbelegt): ' + json.verworfen.join('; ') : ''}`)
       }
     } catch (err: any) {
       setAnalyseHinweis('❌ ' + err.message)
@@ -92,8 +92,8 @@ export default function BuildingForm({ building, systemId, onChange, onSystemCha
             {/* NEU: Grundriss/Foto hochladen und automatisch auswerten */}
             <label className={`flex flex-col items-center justify-center gap-1 rounded-xl border-2 border-dashed p-4 text-center cursor-pointer transition-colors ${analyseLaeuft ? 'border-black/10 bg-black/5' : 'border-[#e8590c]/40 hover:bg-[#fff4ed]'}`}>
               <span className='text-xl'>{analyseLaeuft ? '⏳' : '📐'}</span>
-              <span className='text-xs font-semibold text-[#424245]'>{analyseLaeuft ? 'Wird ausgewertet…' : 'Grundriss/Foto hochladen'}</span>
-              <span className='text-[10px] text-[#86868b]'>Maße werden automatisch übernommen, wo eindeutig belegt</span>
+              <span className='text-xs font-semibold text-[#424245]'>{analyseLaeuft ? 'KI wertet aus…' : 'Grundriss/Foto hochladen (KI-Auswertung)'}</span>
+              <span className='text-[10px] text-[#86868b]'>KI-Vorschlag – Maße werden nur übernommen, wo im Plan eindeutig belegt; bitte vor dem Angebot prüfen</span>
               <input type='file' accept='image/*,application/pdf' className='hidden' disabled={analyseLaeuft}
                 onChange={(e) => { const f = e.target.files?.[0]; if (f) handlePlanUpload(f); e.target.value = '' }} />
             </label>
