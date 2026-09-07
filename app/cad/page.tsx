@@ -18,7 +18,7 @@
 //   mit Zulassungen, Statik-Export, IFC-Export, VR.
 // ============================================================
 
-import { useState, useMemo, useCallback, useEffect } from 'react'
+import { useState, useMemo, useCallback, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import dynamic from 'next/dynamic'
 import {
@@ -26,7 +26,8 @@ import {
   generateBuildingFeatures, detectFeatureCollisions, calculateLogistics,
 } from '@/lib/calculations/cad-engine'
 import { checkRules, groupRulesBySeverity } from '@/lib/calculations/cad-rules'
-import { generatePDFHTML, downloadPDF } from '@/lib/export/pdf-export'
+import { generatePDFHTML, downloadPDF, generateMontageplanHTML } from '@/lib/export/pdf-export'
+import { uploadVertragsdokument } from '@/lib/vertrag-upload-client'
 import BuildingForm from '@/components/cad/BuildingForm'
 import BillOfMaterials from '@/components/cad/BillOfMaterials'
 import Scaffold2D from '@/components/cad/Scaffold2D'
@@ -130,6 +131,17 @@ export default function CADPage() {
     downloadPDF(html, `Geruestbau-Dokumentation-${new Date().toISOString().split('T')[0]}.html`)
   }, [model, materials])
 
+  // NEU (Marktvergleich-Lücke 1): Montageplan – Aufbaureihenfolge je Ebene,
+  // getrennt von der reinen Stückliste.
+  const handleExportMontageplan = useCallback(() => {
+    if (!model) return
+    const html = generateMontageplanHTML(model, {
+      companyName: 'Ihr Unternehmen', projectName: 'Gerüstprojekt',
+      date: new Date().toLocaleDateString('de-DE'),
+    })
+    downloadPDF(html, `Montageplan-${new Date().toISOString().split('T')[0]}.html`)
+  }, [model])
+
   // Stückliste als CSV (öffnet direkt in Excel, kein Zusatzpaket nötig)
   const handleExportCSV = useCallback(() => {
     if (!materials.length) return
@@ -156,6 +168,9 @@ export default function CADPage() {
   }, [materials, totalWeight, totalPrice, logistik])
 
   const [zuordnenLaeuft, setZuordnenLaeuft] = useState(false)
+  // NEU (Marktvergleich-Lücke 3): Referenz auf das 3D-Canvas, um beim
+  // Anlegen eines Angebots automatisch ein Bild als Anlage zu erfassen.
+  const canvasRef = useRef<HTMLCanvasElement | null>(null)
 
   const handleCreateCustomer = useCallback(async (name: string) => {
     try {
@@ -199,7 +214,32 @@ export default function CADPage() {
         }),
       })
       const json = await res.json()
-      if (!json.success) throw new Error(json.error)
+      // FIX: /api/projects antwortet bei Erfolg mit { id }, nicht mit
+      // { success, project } – die alte Prüfung hätte hier IMMER einen
+      // Fehler gezeigt, selbst wenn das Projekt korrekt angelegt wurde.
+      if (!res.ok || !json.id) throw new Error(json.error || 'Anlegen fehlgeschlagen')
+
+      // NEU (Marktvergleich-Lücke 3): 3D-Ansicht als Bild erfassen und dem
+      // neuen Projekt als Anlage hinzufügen – erscheint danach im
+      // Bilder-Reiter der Kunden-Seite, nutzbar fürs Angebot.
+      if (canvasRef.current) {
+        try {
+          const blob: Blob | null = await new Promise((resolve) => canvasRef.current!.toBlob(resolve, 'image/png'))
+          if (blob) {
+            const datei = new File([blob], `CAD-Ansicht-${new Date().toISOString().split('T')[0]}.png`, { type: 'image/png' })
+            const hochgeladen = await uploadVertragsdokument(datei, json.id, 'bilder')
+            await fetch('/api/project-media', {
+              method: 'POST', headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                project_id: json.id, storage_path: hochgeladen.storage_path,
+                file_name: hochgeladen.file_name, file_type: hochgeladen.file_type,
+                metadata: { kind: 'foto' },
+              }),
+            })
+          }
+        } catch { /* Bild-Anlage optional – Angebot ist auch ohne gültig */ }
+      }
+
       router.push(`/kunden/${customerId}`)
     } catch (err: any) {
       alert('❌ ' + err.message)
@@ -248,7 +288,7 @@ export default function CADPage() {
           </div>
           <div className='flex-1 p-4 min-h-0'>
             {viewMode === '3d' && model && (
-              <Scaffold3D model={model} features={features} showBuilding={showBuilding} showScaffold={showScaffold} showDimensions={showDimensions} selectedComponent={selectedComponent} onSelectComponent={setSelectedComponent} visibleTypes={visibleTypes} viewMode={viewAngle} />
+              <Scaffold3D model={model} features={features} showBuilding={showBuilding} showScaffold={showScaffold} showDimensions={showDimensions} selectedComponent={selectedComponent} onSelectComponent={setSelectedComponent} visibleTypes={visibleTypes} viewMode={viewAngle} onCanvasReady={(c) => { canvasRef.current = c }} />
             )}
             {viewMode === '2d' && model && <Scaffold2D model={model} />}
           </div>
@@ -267,6 +307,7 @@ export default function CADPage() {
             totalPrice={totalPrice}
             logistik={logistik}
             onExportPDF={handleExportPDF}
+            onExportMontageplan={handleExportMontageplan}
             onExportCSV={handleExportCSV}
             customers={kunden}
             onCreateCustomer={handleCreateCustomer}

@@ -80,10 +80,12 @@ export default function DatenschutzPage() {
 
           <Section title="5. Mistral AI">
             <p>
-              An Mistral werden Baustellenfotos für Fotoanalyse, Projektname und
+              An Mistral werden Baustellenfotos für Fotoanalyse, Grundrisse/Baupläne
+              (Bilder oder PDF, ggf. per KI-OCR ausgelesener Text) für die automatische
+              Maßerkennung im Aufmaß und in der CAD-Planung, Projektname und
               Baustellenadresse für Routenplanung, Mitarbeitername und Skills für
-              Umdispositionsvorschläge sowie Lagermengen und Materialnamen für Prognosen
-              übermittelt.
+              Umdispositionsvorschläge, Lagermengen und Materialnamen für Prognosen sowie
+              Aufmaß-Daten für den DIN-EN-12811-Hinweis-Check übermittelt.
             </p>
             <p>
               Es werden keine Zeiterfassungs-, Gehalts- oder GPS-Daten an Mistral übermittelt.
@@ -93,7 +95,17 @@ export default function DatenschutzPage() {
               erstellen ausschließlich Vorschläge, die von einem Menschen geprüft und
               freigegeben werden. Es finden keine vollautomatisierten Entscheidungen
               im Sinne von Art. 22 DSGVO statt. Die KI analysiert Gebäude, Material
-              und Abläufe – keine Bewertung oder Überwachung von Personen.
+              und Abläufe – keine Bewertung oder Überwachung von Personen. Aus demselben
+              Grund stufen wir diese Funktionen nach dem EU AI Act als Anwendungen mit
+              minimalem Risiko ein (keine Anwendung aus Anhang III, z. B. Personalauswahl,
+              Bonitätsprüfung oder biometrische Erkennung).
+            </p>
+            <p>
+              Mistral AI SAS ist ein Unternehmen nach französischem Recht; die
+              Datenverarbeitung erfolgt nach Angaben des Anbieters innerhalb der EU.
+              <strong className="text-[#1d1d1f]"> Hinweis:</strong> Ein Auftragsverarbeitungsvertrag
+              nach Art. 28 DSGVO mit Mistral ist Voraussetzung für den rechtskonformen
+              Einsatz und muss von uns abgeschlossen/geprüft werden.
             </p>
           </Section>
 

@@ -11,13 +11,14 @@ interface Props {
   logistik?: LogistikDaten | null
   onExportPDF?: () => void
   onExportCSV?: () => void
+  onExportMontageplan?: () => void
   customers?: { id: string; name: string; city?: string }[]
   onCreateCustomer?: (name: string) => Promise<{ id: string; name: string } | null>
   onAssignCustomer?: (customerId: string, customerName: string) => void
   zuordnenLaeuft?: boolean
 }
 
-export default function BillOfMaterials({ materials, totalWeightKg, totalPrice, logistik, onExportPDF, onExportCSV, customers, onCreateCustomer, onAssignCustomer, zuordnenLaeuft }: Props) {
+export default function BillOfMaterials({ materials, totalWeightKg, totalPrice, logistik, onExportPDF, onExportCSV, onExportMontageplan, customers, onCreateCustomer, onAssignCustomer, zuordnenLaeuft }: Props) {
   const [kundenSuche, setKundenSuche] = useState('')
   const [ausgewaehlterKunde, setAusgewaehlterKunde] = useState<{ id: string; name: string } | null>(null)
   const [zeigeDropdown, setZeigeDropdown] = useState(false)
@@ -149,7 +150,7 @@ export default function BillOfMaterials({ materials, totalWeightKg, totalPrice, 
           ))}
         </div>
       </div>
-      {(onExportPDF || onExportCSV) && (
+      {(onExportPDF || onExportCSV || onExportMontageplan) && (
         <div className='p-4 border-t border-black/5 grid grid-cols-2 gap-2'>
           {onExportCSV && (
             <button onClick={onExportCSV} className='py-2.5 bg-emerald-600 text-white text-sm font-medium rounded-xl hover:bg-emerald-700 transition-colors'>
@@ -159,6 +160,11 @@ export default function BillOfMaterials({ materials, totalWeightKg, totalPrice, 
           {onExportPDF && (
             <button onClick={onExportPDF} className='py-2.5 bg-black/5 text-[#1d1d1f] text-sm font-medium rounded-xl hover:bg-black/10 transition-colors'>
               📄 Dokumentation
+            </button>
+          )}
+          {onExportMontageplan && (
+            <button onClick={onExportMontageplan} className='col-span-2 py-2.5 bg-blue-600 text-white text-sm font-medium rounded-xl hover:bg-blue-700 transition-colors'>
+              🪜 Montageplan (Aufbaureihenfolge)
             </button>
           )}
         </div>

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { kiFetchMitRetry, KI_UEBERLASTET_MELDUNG } from '@/lib/ki-fetch';
 import { createClient } from '@/lib/supabase/server';
-import { pruefeUndFiltere } from '@/lib/grundriss-parsing';
+import { pruefeUndFiltere, versucheDirektenPdfText, deterministicFromText } from '@/lib/grundriss-parsing';
 
 // ============================================================
 // SCAFFOLD OS – CAD: Grundriss/Foto hochladen und auswerten (Phase 41)
@@ -43,6 +43,16 @@ export async function POST(req: NextRequest) {
     for (const pdf of pdfs) {
       const docUrl = `${supabaseUrl}/storage/v1/object/public/project-media/${pdf.storage_path}`;
       try {
+        // NEU: zuerst versuchen, echten Text direkt aus der PDF zu lesen –
+        // ganz ohne KI (kein Rate-Limit-Risiko, sofort). Nur wenn das
+        // nichts liefert (z.B. eingescannte Bild-PDF), auf KI-OCR zurückfallen.
+        const pdfRes = await fetch(docUrl);
+        const direkterText = pdfRes.ok ? await versucheDirektenPdfText(Buffer.from(await pdfRes.arrayBuffer())) : '';
+        if (direkterText) {
+          ocrText += `\n\n--- PDF-Plan (direkt gelesen, ohne KI) ---\n${direkterText}`;
+          continue;
+        }
+
         const ocrRes = await kiFetchMitRetry(`${baseUrl}/ocr`, {
           method: 'POST',
           headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
@@ -51,13 +61,35 @@ export async function POST(req: NextRequest) {
         if (!ocrRes.ok) { pdfErrors.push(`OCR (${ocrRes.status}): ${(await ocrRes.text()).slice(0, 150)}`); continue; }
         const ocrJson = await ocrRes.json();
         const pages: string[] = (ocrJson.pages || []).map((p: any) => p.markdown || '').filter(Boolean);
-        if (pages.length) ocrText += `\n\n--- PDF-Plan ---\n${pages.join('\n\n')}`;
+        if (pages.length) ocrText += `\n\n--- PDF-Plan (KI-OCR) ---\n${pages.join('\n\n')}`;
       } catch (e: any) { pdfErrors.push(`OCR fehlgeschlagen: ${e.message}`); }
     }
 
     if (images.length === 0 && !ocrText) {
       const detail = pdfErrors.length ? ` (${pdfErrors.join(' | ')})` : '';
       return NextResponse.json({ success: false, error: `Keine auswertbare Datei${detail}. Tipp: als Foto/PNG hochladen.` }, { status: 422 });
+    }
+
+    // NEU: Wenn NUR eine PDF hochgeladen wurde (kein Bild, das eine
+    // Vision-Analyse bräuchte) und der direkt/ohne-KI gelesene Text schon
+    // Länge UND Breite eindeutig per Muster liefert, lohnt sich der
+    // zusätzliche KI-Aufruf nicht – direkt mit dem Musterergebnis antworten.
+    if (images.length === 0 && ocrText) {
+      const det = deterministicFromText(ocrText);
+      if (typeof det.laenge === 'number' && typeof det.breite === 'number') {
+        const structured: Record<string, any> = { ...det };
+        const verworfen = pruefeUndFiltere(structured, ocrText);
+        return NextResponse.json({
+          success: true,
+          laenge: structured.laenge ?? null, breite: structured.breite ?? null,
+          hoehe: structured.hoehe ?? structured.hoehe_geschaetzt ?? null,
+          hoeheGeschaetzt: structured.hoehe == null && structured.hoehe_geschaetzt != null,
+          traufhoehe: structured.traufhoehe ?? null, dachform: structured.dachform ?? null,
+          geschosse: structured.geschosse ?? null,
+          zusammenfassung: 'Direkt aus dem Plan-Text erkannt (ohne KI-Aufruf).',
+          verworfen, ohneKi: true,
+        });
+      }
     }
 
     const imageUrls = images.map((m: any) => `${supabaseUrl}/storage/v1/object/public/project-media/${m.storage_path}`);

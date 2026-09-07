@@ -28,6 +28,9 @@ interface Props {
   onSelectComponent: (id: string | null) => void
   visibleTypes: Record<string, boolean>
   viewMode: 'perspective' | 'front' | 'back' | 'left' | 'right' | 'top' | 'bottom'
+  // NEU (Marktvergleich-Lücke 3): erlaubt der aufrufenden Seite, die
+  // 3D-Ansicht als Bild für die Angebots-Anlage zu erfassen.
+  onCanvasReady?: (canvas: HTMLCanvasElement) => void
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -593,6 +596,7 @@ function Scaffold3D({
   onSelectComponent,
   visibleTypes,
   viewMode,
+  onCanvasReady,
 }: Props) {
   const cameraDistance =
     Math.max(model.building.lengthM, model.building.heightM) * 2 + 8
@@ -612,7 +616,8 @@ function Scaffold3D({
         camera={cameraConfig}
         frameloop="demand"
         dpr={[1, 2]}
-        gl={{ antialias: true, powerPreference: 'high-performance' }}
+        gl={{ antialias: true, powerPreference: 'high-performance', preserveDrawingBuffer: true }}
+        onCreated={({ gl }) => onCanvasReady?.(gl.domElement)}
       >
         <AdaptiveDpr pixelated />
         <AdaptiveEvents />
