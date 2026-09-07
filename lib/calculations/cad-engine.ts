@@ -7,6 +7,13 @@
 import { GeruestSystem, findeSystem } from './geruest-systeme'
 import { MaterialItem } from '@/types/scaffold'
 
+export interface BuildingSection {
+  bezeichnung?: string
+  laengeM: number
+  hoeheM: number
+  winkelGrad?: number // Abwinklung ggü. der Richtung des vorherigen Abschnitts (0 = geradeaus, 90 = rechtwinklige Ecke)
+}
+
 export interface BuildingParams {
   lengthM: number
   widthM: number
@@ -22,6 +29,51 @@ export interface BuildingParams {
   overhangM: number
   setbackM: number
   sides: ('front' | 'back' | 'left' | 'right')[]
+  // NEU: mehrteiliges Gebäude (unterschiedliche Höhen/Ecken) – wenn gesetzt
+  // (2+ Einträge), wird die Gebäudeform aus diesen Abschnitten aufgebaut,
+  // statt der einzelnen lengthM/heightM oben. Dieselbe Grundidee wie die
+  // "Abschnitte" im Aufmaß, hier zusätzlich mit optionalem Eckwinkel.
+  sections?: BuildingSection[]
+}
+
+export interface GebaeudeSegment {
+  bezeichnung?: string
+  laengeM: number
+  hoeheM: number
+  startX: number
+  startZ: number
+  endX: number
+  endZ: number
+  mitteX: number
+  mitteZ: number
+  rotationYRad: number
+}
+
+/**
+ * Berechnet die Position/Ausrichtung jedes Gebäudeabschnitts nach dem
+ * Schildkröten-Prinzip: jeder Abschnitt startet dort, wo der vorherige
+ * endet, in der Richtung, die sich aus dem kumulierten Winkel ergibt.
+ * Reine Geometrie-Berechnung, unabhängig von Three.js – deshalb auch ohne
+ * laufenden Browser testbar.
+ */
+export function berechneGebaeudeSegmente(sections: BuildingSection[]): GebaeudeSegment[] {
+  const segmente: GebaeudeSegment[] = []
+  let x = 0, z = 0, winkelRad = 0
+  for (const s of sections) {
+    winkelRad += ((s.winkelGrad || 0) * Math.PI) / 180
+    const dx = Math.cos(winkelRad) * s.laengeM
+    const dz = Math.sin(winkelRad) * s.laengeM
+    const mitteX = x + dx / 2
+    const mitteZ = z + dz / 2
+    segmente.push({
+      bezeichnung: s.bezeichnung, laengeM: s.laengeM, hoeheM: s.hoeheM,
+      startX: x, startZ: z, endX: x + dx, endZ: z + dz,
+      mitteX, mitteZ, rotationYRad: -winkelRad,
+    })
+    x += dx
+    z += dz
+  }
+  return segmente
 }
 
 export interface ScaffoldField {
@@ -903,5 +955,149 @@ export function performStaticChecks(model: CADModel): StaticCheckResult {
   return {
     passed: checks.every(c => c.passed || c.severity === 'warning'),
     checks,
+  }
+}
+
+// ============================================================
+// CAD v4 – Gebäudemerkmale (Fenster/Türen/Balkone), Hindernis-
+// Kollisionen und Logistik (Phase 29)
+// ============================================================
+//
+// Bisher existierten windowCount/doorCount/balconyCount nur als
+// Eingabefelder ohne jede Wirkung im Modell. Jetzt werden daraus
+// tatsächlich platzierte Gebäudemerkmale je Fassadenseite.
+
+export type BuildingFeatureType = 'window' | 'door' | 'balcony'
+
+export interface BuildingFeature3D {
+  id: string
+  type: BuildingFeatureType
+  side: 'front' | 'back' | 'left' | 'right'
+  // Position relativ zur Fassadenmitte (x entlang der Fassade, y = Höhe)
+  offsetAlongM: number
+  bottomY: number
+  widthM: number
+  heightM: number
+  depthM: number   // Balkon-Auskragung, sonst 0
+  floorIndex: number
+}
+
+// Verteilt Fenster/Türen/Balkone gleichmäßig auf Geschosse und Fassaden.
+// Türen nur im Erdgeschoss, Balkone nur in Obergeschossen.
+export function generateBuildingFeatures(building: BuildingParams): BuildingFeature3D[] {
+  const features: BuildingFeature3D[] = []
+  const sides: BuildingFeature3D['side'][] = building.sides?.length ? building.sides : ['front']
+  const floors = Math.max(1, building.floors || 1)
+  const floorHeights = building.floorHeightsM?.length === floors
+    ? building.floorHeightsM
+    : Array(floors).fill(building.heightM / floors)
+
+  const floorBottom = (i: number) => floorHeights.slice(0, i).reduce((s, h) => s + h, 0)
+  const facadeLength = (side: string) => (side === 'front' || side === 'back') ? building.lengthM : building.widthM
+
+  // Fenster: gleichmäßig über alle Seiten und Geschosse verteilt
+  const windowsPerSideFloor = Math.max(0, Math.round((building.windowCount || 0) / (sides.length * floors)))
+  sides.forEach((side) => {
+    const len = facadeLength(side)
+    for (let f = 0; f < floors; f++) {
+      const count = windowsPerSideFloor
+      if (count === 0) continue
+      const spacing = len / (count + 1)
+      for (let w = 0; w < count; w++) {
+        features.push({
+          id: `win-${side}-${f}-${w}`, type: 'window', side,
+          offsetAlongM: -len / 2 + spacing * (w + 1),
+          bottomY: floorBottom(f) + 0.9, widthM: Math.min(1.2, spacing * 0.6), heightM: Math.min(1.4, floorHeights[f] * 0.5),
+          depthM: 0, floorIndex: f,
+        })
+      }
+    }
+  })
+
+  // Türen: nur Erdgeschoss, vorne bevorzugt
+  const doorSides = sides.includes('front') ? ['front', ...sides.filter(s => s !== 'front')] : sides
+  for (let d = 0; d < (building.doorCount || 0); d++) {
+    const side = doorSides[d % doorSides.length] as BuildingFeature3D['side']
+    const len = facadeLength(side)
+    const perSide = Math.ceil((building.doorCount || 0) / doorSides.length)
+    const idx = Math.floor(d / doorSides.length)
+    const spacing = len / (perSide + 1)
+    features.push({
+      id: `door-${d}`, type: 'door', side,
+      offsetAlongM: -len / 2 + spacing * (idx + 1) + (spacing / 4), // leicht versetzt zu Fenstern
+      bottomY: 0, widthM: 1.0, heightM: 2.1, depthM: 0, floorIndex: 0,
+    })
+  }
+
+  // Balkone: Obergeschosse, auskragend (relevant für Gerüst-Kollision!)
+  for (let b = 0; b < (building.balconyCount || 0); b++) {
+    const side = sides[b % sides.length] as BuildingFeature3D['side']
+    const f = floors > 1 ? 1 + (b % (floors - 1)) : 0
+    const len = facadeLength(side)
+    features.push({
+      id: `balcony-${b}`, type: 'balcony', side,
+      offsetAlongM: -len / 2 + len * ((b % 3) + 1) / 4,
+      bottomY: floorBottom(f), widthM: Math.min(3.0, len * 0.35), heightM: 1.1, depthM: 1.2, floorIndex: f,
+    })
+  }
+
+  return features
+}
+
+// Hindernis-Kollisionen: Balkone/Erker ragen in den Gerüstbereich →
+// regelkonforme Vorschläge (Konsolen, Überbrückungsträger).
+export function detectFeatureCollisions(model: CADModel, features: BuildingFeature3D[]): CADWarning[] {
+  const warnings: CADWarning[] = []
+  const scaffoldDepth = model.system?.rahmenBreitenM?.[0] || 0.73
+  features.filter(f => f.type === 'balcony').forEach((b) => {
+    if (b.depthM >= scaffoldDepth * 0.5) {
+      warnings.push({
+        type: 'warning', code: 'BALKON_KOLLISION',
+        message: `Balkon (${b.side}, ${b.floorIndex + 1}. OG) ragt ${b.depthM.toFixed(1)} m in den Gerüstbereich – Vorschlag: Konsolen/Auskragung oder Überbrückungsträger im betroffenen Feld einplanen.`,
+      })
+    }
+  })
+  if (model.building.overhangM > 0.3) {
+    warnings.push({ type: 'info', code: 'DACHUEBERSTAND', message: `Dachüberstand ${model.building.overhangM} m – Konsolen an der obersten Lage erforderlich.` })
+  }
+  return warnings
+}
+
+// Logistik: Gewicht, Transportvolumen, LKW-Bedarf, Auf-/Abbauzeit.
+// Annahmen sind bewusst konservativ und hier zentral änderbar – KEINE
+// herstellerspezifischen Angaben, sondern Richtwerte für die Angebotsphase.
+export interface LogistikDaten {
+  gesamtgewichtKg: number
+  transportvolumenM3: number
+  lkwFahrten: number            // bei 7,5-t-LKW (Nutzlast ~3,5 t)
+  aufbauStunden: number
+  abbauStunden: number
+  annahmen: string[]
+}
+
+export function calculateLogistics(
+  model: CADModel,
+  materials: MaterialItem[],
+  hoursPerSqm: number = 2.0,
+): LogistikDaten {
+  const gesamtgewichtKg = materials.reduce((s, m) => s + m.weightKg * m.quantity, 0)
+  // Richtwert: Gerüstmaterial gebündelt ~ 250 kg/m³ (Stahl-Rahmengerüst, gemischt gestapelt)
+  const transportvolumenM3 = gesamtgewichtKg / 250
+  const nutzlastKg = 3500
+  const lkwFahrten = Math.max(1, Math.ceil(gesamtgewichtKg / nutzlastKg))
+  const aufbauStunden = Math.ceil(model.totalAreaM2 * hoursPerSqm)
+  // Abbau typischerweise ~60 % der Aufbauzeit
+  const abbauStunden = Math.ceil(aufbauStunden * 0.6)
+  return {
+    gesamtgewichtKg: Math.round(gesamtgewichtKg),
+    transportvolumenM3: Math.round(transportvolumenM3 * 10) / 10,
+    lkwFahrten,
+    aufbauStunden,
+    abbauStunden,
+    annahmen: [
+      'Transportvolumen: ~250 kg/m³ gestapeltes Stahl-Rahmengerüst',
+      'LKW-Fahrten: 7,5-t-LKW mit ~3,5 t Nutzlast',
+      `Aufbau: ${hoursPerSqm} h/m² (aus Kalkulations-Grundlagen), Abbau ~60 % davon`,
+    ],
   }
 }

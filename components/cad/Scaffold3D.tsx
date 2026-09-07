@@ -14,12 +14,13 @@
 
 import { useMemo, useState, useRef, useEffect, useCallback, memo } from 'react'
 import { Canvas, useThree } from '@react-three/fiber'
-import { OrbitControls, Grid, Text } from '@react-three/drei'
+import { OrbitControls, Grid, Text, Sky, AdaptiveDpr, AdaptiveEvents, Environment } from '@react-three/drei'
 import * as THREE from 'three'
-import { CADModel, ScaffoldComponent3D } from '@/lib/calculations/cad-engine'
+import { CADModel, ScaffoldComponent3D, BuildingFeature3D } from '@/lib/calculations/cad-engine'
 
 interface Props {
   model: CADModel
+  features?: BuildingFeature3D[]
   showBuilding: boolean
   showScaffold: boolean
   showDimensions: boolean
@@ -32,21 +33,26 @@ interface Props {
 // ═══════════════════════════════════════════════════════════
 // FARBPALETTE (einmalig, außerhalb der Komponente)
 // ═══════════════════════════════════════════════════════════
+// FIX (Optik-Überarbeitung): vorher hatte jeder Bauteiltyp eine eigene,
+// grelle Kennfarbe (Blau/Orange/Rot/Lila usw.) – gut zum Debuggen, sieht
+// aber aus wie ein Spielzeug-Baukasten, nicht wie echtes Gerüst. Echtes
+// Stahlgerüst ist fast durchgehend verzinkt (silbrig-grau glänzend), nur
+// Holzbeläge/Bordbretter sind bräunlich. Jetzt entsprechend angepasst.
 const COLOR_MAP: Record<string, string> = {
-  frame: '#3b82f6',
-  deck: '#f59e0b',
-  railing: '#ef4444',
-  diagonal: '#8b5cf6',
-  footplate: '#6b7280',
-  coupling: '#e8c547',
-  anchor: '#10b981',
-  console: '#f43f5e',
-  stair: '#84cc16',
-  net: '#06b6d4',
-  board: '#d97706',
-  protection_roof: '#f97316',
-  load_plate: '#78716c',
-  corner_brace: '#6366f1',
+  frame: '#c3c9cf',        // Rahmen – verzinkter Stahl
+  deck: '#a8adb3',         // Stahl-Beläge – etwas dunkler/matter als die Rahmen
+  railing: '#c3c9cf',       // Geländer – gleiches verzinktes Rohr wie die Rahmen
+  diagonal: '#c3c9cf',      // Diagonalen – verzinkter Stahl
+  footplate: '#8a8f94',    // Fußplatten – dunklerer, matterer Stahl (Bodenkontakt)
+  coupling: '#6e7378',     // Kupplungen – Guss/dunkler Stahl
+  anchor: '#6e7378',       // Anker – dunkler Stahl
+  console: '#c3c9cf',      // Konsolen – verzinkter Stahl
+  stair: '#a8adb3',        // Treppen – Stahl, ähnlich den Belägen
+  net: '#3b6fa0',          // Schutznetz – klassisches Blau, halbtransparent
+  board: '#8a6d4f',        // Bordbretter – Holz
+  protection_roof: '#7a828a', // Schutzdach – Well-/Stahlblech, gedeckter Grauton
+  load_plate: '#5c4a38',   // Lastverteilplatten – Holz, dunkler
+  corner_brace: '#c3c9cf', // Eckverbindungen – verzinkter Stahl
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -99,16 +105,25 @@ function getGeometry(type: string): THREE.BufferGeometry {
 // ═══════════════════════════════════════════════════════════
 const MATERIAL_CACHE = new Map<string, THREE.MeshStandardMaterial>()
 
+const METALL_TYPEN = new Set(['frame', 'diagonal', 'railing', 'corner_brace', 'console', 'coupling', 'anchor', 'footplate', 'deck', 'stair'])
+const HOLZ_TYPEN = new Set(['board', 'load_plate'])
+
 function getMaterial(type: string, color: THREE.Color): THREE.MeshStandardMaterial {
   const key = `${type}-${color.getHexString()}`
   if (MATERIAL_CACHE.has(key)) return MATERIAL_CACHE.get(key)!
+  const istMetall = METALL_TYPEN.has(type)
+  const istHolz = HOLZ_TYPEN.has(type)
   const mat = new THREE.MeshStandardMaterial({
     color,
-    metalness: type === 'frame' || type === 'diagonal' ? 0.7 : 0.3,
-    roughness: type === 'deck' || type === 'board' ? 0.7 : 0.3,
+    // Verzinkter Stahl: hohe Metallizität, mittlere Rauheit (mattes, nicht
+    // spiegelndes Glänzen – "Feuerverzinkung", keine Hochglanz-Chromoptik).
+    // Holz: kein Metall, deutlich rauer.
+    metalness: istMetall ? 0.85 : istHolz ? 0.0 : 0.3,
+    roughness: istMetall ? 0.4 : istHolz ? 0.85 : 0.5,
     transparent: type === 'net' || type === 'safety_net',
-    opacity: type === 'net' || type === 'safety_net' ? 0.3 : 0.9,
+    opacity: type === 'net' || type === 'safety_net' ? 0.35 : 1,
     side: type === 'net' || type === 'safety_net' ? THREE.DoubleSide : THREE.FrontSide,
+    envMapIntensity: istMetall ? 1.4 : 0.5,
   })
   MATERIAL_CACHE.set(key, mat)
   return mat
@@ -133,12 +148,13 @@ function InstancedBauteile({
   onHover: (id: string | null) => void
 }) {
   const meshRef = useRef<THREE.InstancedMesh>(null)
+  const { invalidate } = useThree()
   const dummy = useMemo(() => new THREE.Object3D(), [])
   const baseColor = useMemo(() => new THREE.Color(COLOR_MAP[type] || '#888888'), [type])
   const geometry = useMemo(() => getGeometry(type), [type])
   const material = useMemo(() => getMaterial(type, baseColor), [type, baseColor])
 
-  // ─── FIX 1: Matrizen nur EINMALIG beim Mount setzen ───
+  // ─── Matrizen setzen (bei Modell-Änderung neu, nicht pro Frame) ───
   useEffect(() => {
     if (!meshRef.current) return
     const mesh = meshRef.current
@@ -150,10 +166,10 @@ function InstancedBauteile({
       mesh.setMatrixAt(i, dummy.matrix)
     })
     mesh.instanceMatrix.needsUpdate = true
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []) // Nur beim ersten Mount
+    invalidate() // frameloop="demand": Neuzeichnen anstoßen
+  }, [items, dummy, invalidate])
 
-  // ─── FIX 2: Farben nur bei Selection/Hover-Änderung ───
+  // ─── Farben nur bei Selection/Hover-Änderung ───
   useEffect(() => {
     if (!meshRef.current) return
     const mesh = meshRef.current
@@ -166,7 +182,8 @@ function InstancedBauteile({
       mesh.setColorAt(i, col)
     })
     if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true
-  }, [items, selectedComponent, hoveredId, baseColor])
+    invalidate()
+  }, [items, selectedComponent, hoveredId, baseColor, invalidate])
 
   const handleClick = useCallback(
     (e: any) => {
@@ -251,13 +268,18 @@ const AllScaffoldComponents = memo(function AllScaffoldComponents({
 })
 
 // ═══════════════════════════════════════════════════════════
-// GEBÄUDE
+// GEBÄUDE – jetzt mit echten Fenstern, Türen, Balkonen (CAD v4)
+// Das Gebäude steht mit seiner Vorderseite bei z = -w/2 - 0.5,
+// das Gerüst davor. Merkmale werden je Fassadenseite auf die
+// jeweilige Außenfläche gesetzt.
 // ═══════════════════════════════════════════════════════════
 function Building3D({
   building,
+  features,
   visible,
 }: {
   building: CADModel['building']
+  features: BuildingFeature3D[]
   visible: boolean
 }) {
   if (!visible) return null
@@ -265,16 +287,74 @@ function Building3D({
   const w = widthM || 6
   const roofH = roofHeightM || 0
 
+  // Weltposition eines Fassaden-Merkmals aus seiner Seite + Offset
+  const featureTransform = (f: BuildingFeature3D): { pos: [number, number, number]; rot: [number, number, number] } => {
+    const y = f.bottomY + f.heightM / 2
+    const out = f.type === 'balcony' ? f.depthM / 2 : 0.02
+    switch (f.side) {
+      case 'front':  return { pos: [f.offsetAlongM, y, w / 2 + out], rot: [0, 0, 0] }
+      case 'back':   return { pos: [f.offsetAlongM, y, -w / 2 - out], rot: [0, Math.PI, 0] }
+      case 'left':   return { pos: [-lengthM / 2 - out, y, f.offsetAlongM], rot: [0, -Math.PI / 2, 0] }
+      case 'right':  return { pos: [lengthM / 2 + out, y, f.offsetAlongM], rot: [0, Math.PI / 2, 0] }
+    }
+  }
+
   return (
     <group position={[0, 0, -w / 2 - 0.5]}>
-      <mesh position={[0, heightM / 2, 0]}>
+      {/* Baukörper */}
+      <mesh position={[0, heightM / 2, 0]} castShadow receiveShadow>
         <boxGeometry args={[lengthM, heightM, w]} />
-        <meshStandardMaterial color="#e8e0d5" roughness={0.9} />
+        <meshStandardMaterial color="#e6dfd3" roughness={0.85} />
       </mesh>
+
+      {/* Fenster / Türen / Balkone */}
+      {features.map((f) => {
+        const { pos, rot } = featureTransform(f)
+        if (f.type === 'balcony') {
+          return (
+            <group key={f.id} position={pos} rotation={rot}>
+              {/* Balkonplatte */}
+              <mesh position={[0, -f.heightM / 2 + 0.08, 0]} castShadow>
+                <boxGeometry args={[f.widthM, 0.16, f.depthM]} />
+                <meshStandardMaterial color="#b8b0a4" roughness={0.9} />
+              </mesh>
+              {/* Brüstung */}
+              <mesh position={[0, 0.05, f.depthM / 2 - 0.03]}>
+                <boxGeometry args={[f.widthM, f.heightM - 0.2, 0.06]} />
+                <meshStandardMaterial color="#7a8290" roughness={0.6} metalness={0.3} />
+              </mesh>
+            </group>
+          )
+        }
+        const istTuer = f.type === 'door'
+        return (
+          <group key={f.id} position={pos} rotation={rot}>
+            {/* Laibung (dunkel, leicht eingesetzt) */}
+            <mesh>
+              <boxGeometry args={[f.widthM, f.heightM, 0.06]} />
+              <meshStandardMaterial color={istTuer ? '#4a3a2c' : '#2b3a4a'} roughness={istTuer ? 0.7 : 0.2} metalness={istTuer ? 0.05 : 0.5} />
+            </mesh>
+            {/* Rahmen */}
+            <mesh position={[0, 0, 0.035]}>
+              <boxGeometry args={[f.widthM + 0.08, f.heightM + 0.08, 0.02]} />
+              <meshStandardMaterial color="#f4f1ea" roughness={0.6} />
+            </mesh>
+            {/* Fensterkreuz */}
+            {!istTuer && (
+              <>
+                <mesh position={[0, 0, 0.04]}><boxGeometry args={[0.03, f.heightM, 0.02]} /><meshStandardMaterial color="#f4f1ea" /></mesh>
+                <mesh position={[0, 0, 0.04]}><boxGeometry args={[f.widthM, 0.03, 0.02]} /><meshStandardMaterial color="#f4f1ea" /></mesh>
+              </>
+            )}
+          </group>
+        )
+      })}
+
+      {/* Dach */}
       {roofForm !== 'kein' && roofH > 0 && (
-        <mesh position={[0, heightM + roofH / 2, 0]}>
-          <coneGeometry args={[Math.max(lengthM, w) / 2 * 0.9, roofH, 4]} />
-          <meshStandardMaterial color="#8b7355" roughness={0.9} />
+        <mesh position={[0, heightM + roofH / 2, 0]} castShadow>
+          <coneGeometry args={[Math.max(lengthM, w) / 2 * 0.95, roofH, 4]} />
+          <meshStandardMaterial color="#8a5a3c" roughness={0.9} />
         </mesh>
       )}
     </group>
@@ -397,10 +477,26 @@ function CameraController({
 }
 
 // ═══════════════════════════════════════════════════════════
+// SCHATTEN EINFRIEREN (Performance): das Gerüstmodell ist statisch –
+// die Schattenkarte muss nur neu berechnet werden, wenn sich das
+// Modell ändert, nicht bei jeder Kamerabewegung.
+// ═══════════════════════════════════════════════════════════
+function ShadowFreeze({ modelKey }: { modelKey: string }) {
+  const { gl, invalidate } = useThree()
+  useEffect(() => {
+    gl.shadowMap.autoUpdate = false
+    gl.shadowMap.needsUpdate = true
+    invalidate()
+  }, [gl, invalidate, modelKey])
+  return null
+}
+
+// ═══════════════════════════════════════════════════════════
 // HAUPT-SZENE
 // ═══════════════════════════════════════════════════════════
 function Scene({
   model,
+  features,
   showBuilding,
   showScaffold,
   showDimensions,
@@ -410,18 +506,41 @@ function Scene({
   viewMode,
 }: Props) {
   const target: [number, number, number] = [0, model.building.heightM / 2, 0]
+  // Schatten-Kamera eng ans Modell anpassen (Standardwerte sind viel zu groß
+  // und verschwenden Auflösung).
+  const extent = Math.max(model.building.lengthM, model.building.widthM || 6, model.totalHeightM) * 0.8 + 5
+  const modelKey = `${model.fieldCount}-${model.levelCount}-${model.totalHeightM}-${(features || []).length}`
   return (
     <group>
+      <ShadowFreeze modelKey={modelKey} />
       <CameraController viewMode={viewMode} target={target} />
-      <ambientLight intensity={0.6} />
+      <Sky sunPosition={[40, 30, 20]} turbidity={6} rayleigh={2} />
+      {/* NEU (Optik-Überarbeitung): sorgt für echte Umgebungsreflexionen auf
+          dem verzinkten Stahl – ohne das sieht Metall matt/plastikartig aus,
+          egal wie gut die Grundfarbe gewählt ist. background={false}: nur
+          für Reflexionen/Beleuchtung genutzt, der sichtbare Himmel bleibt <Sky>. */}
+      <Environment preset="city" background={false} resolution={256} environmentIntensity={0.6} />
+      <ambientLight intensity={0.55} />
+      <hemisphereLight args={['#dfe9f5', '#8c7a63', 0.35]} />
       <directionalLight
-        position={[15, 20, 10]}
-        intensity={1.0}
+        position={[25, 35, 18]}
+        intensity={1.3}
         castShadow
         shadow-mapSize-width={1024}
         shadow-mapSize-height={1024}
+        shadow-camera-left={-extent}
+        shadow-camera-right={extent}
+        shadow-camera-top={extent}
+        shadow-camera-bottom={-extent}
+        shadow-camera-near={1}
+        shadow-camera-far={150}
+        shadow-bias={-0.0005}
       />
-      <Building3D building={model.building} visible={showBuilding} />
+      {/* NEU: sanftes Gegenlicht von der anderen Seite – vermeidet komplett
+          schwarze/unlesbare Schattenseiten am Gerüst, wie es bei echten
+          Baustellenfotos durch Streulicht ohnehin nie vorkommt. */}
+      <directionalLight position={[-20, 15, -15]} intensity={0.35} color="#dce8f5" />
+      <Building3D building={model.building} features={features || []} visible={showBuilding} />
       {showScaffold && (
         <AllScaffoldComponents
           components={model.components3D}
@@ -431,19 +550,23 @@ function Scene({
         />
       )}
       <DimensionLines model={model} visible={showDimensions} />
-      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.02, 0]}>
-        <planeGeometry args={[100, 100]} />
-        <meshStandardMaterial color="#9ca3af" roughness={0.95} />
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.02, 0]} receiveShadow>
+        <planeGeometry args={[120, 120]} />
+        <meshStandardMaterial color="#b9c0c8" roughness={0.95} />
       </mesh>
     </group>
   )
 }
 
 // ═══════════════════════════════════════════════════════════
-// EXPORT: HAUPTKOMPONENTE – mit memo() und stabilisiertem camera
+// EXPORT: HAUPTKOMPONENTE – frameloop="demand": es wird nur dann neu
+// gezeichnet, wenn sich wirklich etwas ändert (Kamera, Auswahl, Modell),
+// nicht dauerhaft mit voller Bildrate. Das ist der wichtigste Schalter
+// gegen "3D lässt sich nicht flüssig bewegen".
 // ═══════════════════════════════════════════════════════════
 function Scaffold3D({
   model,
+  features,
   showBuilding,
   showScaffold,
   showDimensions,
@@ -455,7 +578,6 @@ function Scaffold3D({
   const cameraDistance =
     Math.max(model.building.lengthM, model.building.heightM) * 2 + 8
 
-  // FIX 6: camera-Objekt stabilisieren – verhindert Canvas-Neuinitialisierung
   const cameraConfig = useMemo(
     () => ({
       position: [cameraDistance, cameraDistance * 0.6, cameraDistance] as [number, number, number],
@@ -465,10 +587,19 @@ function Scaffold3D({
   )
 
   return (
-    <div className="w-full h-full rounded-xl overflow-hidden border border-black/10 bg-[#f0f4f8] relative">
-      <Canvas shadows camera={cameraConfig}>
+    <div className="w-full h-full rounded-xl overflow-hidden border border-black/10 bg-[#dfe7ef] relative">
+      <Canvas
+        shadows
+        camera={cameraConfig}
+        frameloop="demand"
+        dpr={[1, 2]}
+        gl={{ antialias: true, powerPreference: 'high-performance' }}
+      >
+        <AdaptiveDpr pixelated />
+        <AdaptiveEvents />
         <Scene
           model={model}
+          features={features}
           showBuilding={showBuilding}
           showScaffold={showScaffold}
           showDimensions={showDimensions}
@@ -495,8 +626,11 @@ function Scaffold3D({
           enablePan
           enableZoom
           enableRotate
+          enableDamping
+          dampingFactor={0.08}
           minDistance={5}
           maxDistance={150}
+          maxPolarAngle={Math.PI / 2 - 0.02}
           target={[0, model.building.heightM / 2, 0]}
         />
       </Canvas>
