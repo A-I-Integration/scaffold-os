@@ -74,11 +74,15 @@ export default function CookieBanner() {
 
   return (
     <>
-      {/* Dauerhafter Widerrufs-Link (nur nach getroffener Entscheidung) */}
+      {/* Dauerhafter Widerrufs-Link (nur nach getroffener Entscheidung).
+          Bewusst unten LINKS und sehr unauffällig (kleine, halbtransparente
+          Pille, erst bei Hover deutlicher) – rechts unten liegen bei
+          mehreren Seiten (z.B. CAD-Ansicht) eigene Bedienelemente, damit
+          es dort nicht überlappt. */}
       {!zeigen && (
         <button
           onClick={() => setZeigen(true)}
-          className="fixed bottom-4 right-4 z-40 text-[12px] text-[#86868b] hover:text-[#1d1d1f] underline underline-offset-2 bg-white/80 backdrop-blur px-2 py-1 rounded-lg"
+          className="fixed bottom-2 left-2 z-40 text-[9px] text-[#86868b]/50 hover:text-[#1d1d1f] hover:bg-white/90 underline underline-offset-2 bg-white/40 backdrop-blur px-1 py-0.5 rounded transition-colors"
         >
           Cookie-Einstellungen
         </button>
