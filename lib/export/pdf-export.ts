@@ -244,3 +244,202 @@ export function downloadPDF(html: string, filename: string) {
   document.body.removeChild(a)
   URL.revokeObjectURL(url)
 }
+
+// ============================================================
+// Montageplan (Marktvergleich-Lücke – Punkt 1)
+//
+// Anders als die Stückliste (WAS wird gebraucht) zeigt der Montageplan
+// IN WELCHER REIHENFOLGE aufgebaut wird – Ebene für Ebene, von unten
+// nach oben, in einer branchenüblichen Grundreihenfolge (Fußplatten →
+// Rahmen → Aussteifung → Beläge → Geländer/Anker je Ebene).
+//
+// WICHTIG, wie beim DIN-Hinweis-Check: das ist eine ordnende
+// Arbeitshilfe, KEIN Ersatz für die eigene Montageanweisung/
+// Gefährdungsbeurteilung des Fachbetriebs – die tatsächliche
+// Reihenfolge vor Ort kann je nach Situation abweichen.
+// ============================================================
+
+interface MontageSchritt {
+  ebene: number
+  titel: string
+  beschreibung: string
+  bauteile: { name: string; anzahl: number }[]
+}
+
+const MONTAGE_TYP_LABEL: Record<string, string> = {
+  footplate: 'Fußplatten', frame: 'Rahmen/Stiele', diagonal: 'Diagonalen',
+  coupling: 'Kupplungen', corner_brace: 'Eckverbindungen', deck: 'Beläge',
+  railing: 'Geländer', board: 'Bordbretter', anchor: 'Wandanker',
+  console: 'Konsolen', stair: 'Treppen', net: 'Schutznetze',
+  safety_net: 'Fangnetze', protection_roof: 'Schutzdächer', load_plate: 'Lastverteilplatten',
+}
+
+export function generateMontageplan(model: CADModel): MontageSchritt[] {
+  const schritte: MontageSchritt[] = []
+  const ebenen = [...model.levels].sort((a, b) => a.index - b.index)
+
+  ebenen.forEach((ebene, i) => {
+    const compsEbene = model.components3D.filter((c) => c.levelId === ebene.id)
+    const zaehleTyp = (typ: string) => compsEbene.filter((c) => c.type === typ).length
+
+    if (i === 0) {
+      const anzahl = zaehleTyp('footplate')
+      if (anzahl > 0) {
+        schritte.push({
+          ebene: 0, titel: 'Fußplatten setzen und ausrichten',
+          beschreibung: 'Untergrund prüfen (Tragfähigkeit, Ebenheit), Fußplatten im Rastermaß setzen, Wasserwaage prüfen.',
+          bauteile: [{ name: 'Fußplatten', anzahl }],
+        })
+      }
+    }
+
+    const rahmenAnzahl = zaehleTyp('frame')
+    const diagAnzahl = zaehleTyp('diagonal')
+    const eckAnzahl = zaehleTyp('corner_brace')
+    if (rahmenAnzahl > 0 || diagAnzahl > 0) {
+      schritte.push({
+        ebene: ebene.index, titel: `Ebene ${ebene.index + 1}: Rahmen aufstellen und aussteifen`,
+        beschreibung: `Rahmen/Stiele auf die vorherige Ebene aufsetzen und verriegeln, anschließend Diagonalen zur Aussteifung einhängen.`,
+        bauteile: [
+          { name: 'Rahmen/Stiele', anzahl: rahmenAnzahl },
+          { name: 'Diagonalen', anzahl: diagAnzahl },
+          ...(eckAnzahl > 0 ? [{ name: 'Eckverbindungen', anzahl: eckAnzahl }] : []),
+        ],
+      })
+    }
+
+    const belagAnzahl = zaehleTyp('deck')
+    if (belagAnzahl > 0) {
+      schritte.push({
+        ebene: ebene.index, titel: `Ebene ${ebene.index + 1}: Beläge verlegen`,
+        beschreibung: 'Beläge einhängen/verriegeln, auf durchgängige, lückenlose Belagfläche achten.',
+        bauteile: [{ name: 'Beläge', anzahl: belagAnzahl }],
+      })
+    }
+
+    const gelaenderAnzahl = zaehleTyp('railing')
+    const bordAnzahl = zaehleTyp('board')
+    if (gelaenderAnzahl > 0 || bordAnzahl > 0) {
+      schritte.push({
+        ebene: ebene.index, titel: `Ebene ${ebene.index + 1}: Seitenschutz montieren`,
+        beschreibung: 'Geländer und Bordbretter unmittelbar nach dem Betreten der neuen Ebene montieren – kein ungesicherter Aufenthalt an der Absturzkante.',
+        bauteile: [
+          { name: 'Geländer', anzahl: gelaenderAnzahl },
+          ...(bordAnzahl > 0 ? [{ name: 'Bordbretter', anzahl: bordAnzahl }] : []),
+        ],
+      })
+    }
+
+    const ankerAnzahl = model.anchors.filter((a) => a.positionY >= ebene.bottomY && a.positionY < ebene.topY).length
+    if (ankerAnzahl > 0) {
+      schritte.push({
+        ebene: ebene.index, titel: `Ebene ${ebene.index + 1}: Verankerung herstellen`,
+        beschreibung: 'Wandanker gemäß Ankerraster setzen, bevor mit der nächsten Ebene fortgefahren wird – Standsicherheit vor Weiterbau prüfen.',
+        bauteile: [{ name: 'Wandanker', anzahl: ankerAnzahl }],
+      })
+    }
+
+    const treppeAnzahl = zaehleTyp('stair')
+    const konsoleAnzahl = zaehleTyp('console')
+    if (treppeAnzahl > 0 || konsoleAnzahl > 0) {
+      schritte.push({
+        ebene: ebene.index, titel: `Ebene ${ebene.index + 1}: Zugang/Konsolen`,
+        beschreibung: 'Treppen und Konsolen an vorgesehener Position montieren.',
+        bauteile: [
+          ...(treppeAnzahl > 0 ? [{ name: 'Treppen', anzahl: treppeAnzahl }] : []),
+          ...(konsoleAnzahl > 0 ? [{ name: 'Konsolen', anzahl: konsoleAnzahl }] : []),
+        ],
+      })
+    }
+  })
+
+  const schutzTypen = ['protection_roof', 'safety_net', 'net', 'load_plate']
+  const schutzComps = model.components3D.filter((c) => schutzTypen.includes(c.type))
+  if (schutzComps.length > 0) {
+    const gruppiert = schutzTypen.map((t) => ({ name: MONTAGE_TYP_LABEL[t], anzahl: schutzComps.filter((c) => c.type === t).length })).filter((g) => g.anzahl > 0)
+    schritte.push({
+      ebene: 99, titel: 'Zusätzliche Schutzeinrichtungen',
+      beschreibung: 'Schutzdächer, Fang-/Schutznetze und Lastverteilplatten gemäß Planung ergänzen.',
+      bauteile: gruppiert,
+    })
+  }
+
+  return schritte
+}
+
+export function generateMontageplanHTML(model: CADModel, options: { projectName: string; companyName: string; date: string }): string {
+  const schritte = generateMontageplan(model)
+  const gruppen = new Map<number, MontageSchritt[]>()
+  schritte.forEach((s) => { if (!gruppen.has(s.ebene)) gruppen.set(s.ebene, []); gruppen.get(s.ebene)!.push(s) })
+
+  const ebenenHtml = [...gruppen.entries()].map(([ebeneIdx, ebenenSchritte], gi) => `
+    <h3>${ebeneIdx === 99 ? 'Nach Fertigstellung aller Ebenen' : `Ebene ${ebeneIdx + 1}`}</h3>
+    ${ebenenSchritte.map((s, i) => `
+      <div class="info-box">
+        <strong>Schritt ${gi + 1}.${i + 1}: ${s.titel}</strong>
+        <p style="margin-top:6px;">${s.beschreibung}</p>
+        <table style="margin-top:8px;">
+          <tr><th>Bauteil</th><th class="text-right">Anzahl</th></tr>
+          ${s.bauteile.map((b) => `<tr><td>${b.name}</td><td class="text-right">${b.anzahl}</td></tr>`).join('')}
+        </table>
+      </div>
+    `).join('')}
+  `).join('')
+
+  return `<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<title>Montageplan – ${options.projectName}</title>
+<style>
+  @page { size: A4; margin: 15mm; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Segoe UI', Arial, sans-serif; font-size: 10pt; line-height: 1.4; color: #1d1d1f; }
+  .page { padding: 20px; }
+  .cover { text-align: center; padding-top: 60px; }
+  .cover h1 { font-size: 24pt; color: #e8590c; margin-bottom: 10px; }
+  .cover .subtitle { font-size: 13pt; color: #86868b; margin-bottom: 30px; }
+  .cover .meta { font-size: 10pt; color: #424245; line-height: 1.9; }
+  h2 { font-size: 15pt; color: #1d1d1f; margin: 22px 0 12px; padding-bottom: 6px; border-bottom: 2px solid #e8590c; }
+  h3 { font-size: 12pt; color: #1d1d1f; margin: 18px 0 8px; background: #f5f5f7; padding: 6px 10px; border-radius: 8px; }
+  table { width: 100%; border-collapse: collapse; margin: 6px 0; font-size: 9pt; }
+  th { background: #f5f5f7; padding: 5px 6px; text-align: left; font-weight: 600; }
+  td { padding: 4px 6px; border-bottom: 1px solid #e5e5ea; }
+  .text-right { text-align: right; }
+  .info-box { background: #fafafa; border-left: 3px solid #e8590c; padding: 10px 14px; margin: 8px 0 14px; border-radius: 0 8px 8px 0; }
+  .warning-box { background: #fff8e6; border-left: 4px solid #f59e0b; padding: 12px 15px; margin: 15px 0; border-radius: 0 8px 8px 0; }
+  .footer { margin-top: 30px; padding-top: 12px; border-top: 1px solid #e5e5ea; font-size: 8pt; color: #86868b; text-align: center; }
+</style>
+</head>
+<body>
+<div class="page">
+  <div class="cover">
+    <h1>Montageplan</h1>
+    <p class="subtitle">Aufbaureihenfolge nach Ebenen</p>
+    <div class="meta">
+      <p><strong>Projekt:</strong> ${options.projectName}</p>
+      <p><strong>Erstellt für:</strong> ${options.companyName}</p>
+      <p><strong>Datum:</strong> ${options.date}</p>
+      <p><strong>System:</strong> ${model.system?.hersteller || ''} ${model.system?.systemName || ''}</p>
+    </div>
+  </div>
+
+  <div class="warning-box">
+    <strong>Wichtiger Hinweis:</strong> Dieser Montageplan ist eine ordnende Arbeitshilfe auf
+    Basis der Planungsdaten (eine branchenübliche Grundreihenfolge: Fußplatten → Rahmen →
+    Aussteifung → Beläge → Seitenschutz → Verankerung je Ebene). Er ersetzt NICHT die eigene
+    Montageanweisung, Gefährdungsbeurteilung und fachliche Beurteilung des ausführenden
+    Betriebs vor Ort – insbesondere bei Abweichungen durch Baustellenbedingungen, Witterung
+    oder Bauablauf ist die Reihenfolge entsprechend anzupassen.
+  </div>
+
+  <h2>Aufbau, Ebene für Ebene</h2>
+  ${ebenenHtml}
+
+  <div class="footer">
+    <p>SCAFFOLD OS – Montageplan – automatisch aus der CAD-Planung erzeugt – ${options.date}</p>
+  </div>
+</div>
+</body>
+</html>`
+}
