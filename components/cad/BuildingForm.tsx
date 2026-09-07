@@ -44,9 +44,74 @@ export default function BuildingForm({ building, systemId, onChange, onSystemCha
       <div className='flex-1 overflow-y-auto p-4 space-y-4'>
         {activeTab === 'gebaeude' && (
           <div className='space-y-3'>
-            <div><label className='block text-xs font-medium text-[#424245] mb-1'>Gebäudelänge (m)</label><input type='number' step='0.01' value={building.lengthM} onChange={(e) => update('lengthM', parseFloat(e.target.value))} className='w-full px-3 py-2 border rounded-xl text-sm' /></div>
+            {/* NEU: mehrteiliges Gebäude (unterschiedliche Höhen/Ecken) */}
+            <div className='rounded-xl border border-black/10 p-3 bg-[#f5f5f7] space-y-2'>
+              <label className='flex items-center gap-2 text-xs font-medium text-[#424245]'>
+                <input
+                  type='checkbox'
+                  checked={!!building.sections && building.sections.length >= 2}
+                  onChange={(e) => {
+                    if (e.target.checked) {
+                      onChange({ ...building, sections: [
+                        { bezeichnung: 'Hauptgebäude', laengeM: building.lengthM, hoeheM: building.heightM },
+                        { bezeichnung: 'Anbau', laengeM: 6, hoeheM: Math.max(3, building.heightM - 4), winkelGrad: 0 },
+                      ] })
+                    } else {
+                      const { sections, ...rest } = building
+                      onChange(rest)
+                    }
+                  }}
+                />
+                Mehrteiliges Gebäude (unterschiedliche Höhen/Ecken)
+              </label>
+              {building.sections && building.sections.length >= 2 && (
+                <div className='space-y-2'>
+                  {building.sections.map((s, i) => (
+                    <div key={i} className='bg-white rounded-lg p-2 border border-black/10 space-y-1.5'>
+                      <div className='flex items-center justify-between'>
+                        <input
+                          value={s.bezeichnung || ''}
+                          onChange={(e) => {
+                            const neu = [...building.sections!]; neu[i] = { ...neu[i], bezeichnung: e.target.value }
+                            onChange({ ...building, sections: neu })
+                          }}
+                          placeholder={`Abschnitt ${i + 1}`}
+                          className='text-xs font-medium border-b border-black/10 focus:outline-none flex-1'
+                        />
+                        {building.sections!.length > 2 && (
+                          <button onClick={() => onChange({ ...building, sections: building.sections!.filter((_, x) => x !== i) })} className='text-[10px] text-red-600 ml-2'>Entfernen</button>
+                        )}
+                      </div>
+                      <div className='grid grid-cols-3 gap-1.5'>
+                        <div>
+                          <label className='block text-[9px] text-[#86868b]'>Länge (m)</label>
+                          <input type='number' step='0.01' value={s.laengeM} onChange={(e) => { const neu = [...building.sections!]; neu[i] = { ...neu[i], laengeM: parseFloat(e.target.value) || 0 }; onChange({ ...building, sections: neu }) }} className='w-full px-1.5 py-1 border rounded text-xs' />
+                        </div>
+                        <div>
+                          <label className='block text-[9px] text-[#86868b]'>Höhe (m)</label>
+                          <input type='number' step='0.01' value={s.hoeheM} onChange={(e) => { const neu = [...building.sections!]; neu[i] = { ...neu[i], hoeheM: parseFloat(e.target.value) || 0 }; onChange({ ...building, sections: neu }) }} className='w-full px-1.5 py-1 border rounded text-xs' />
+                        </div>
+                        <div>
+                          <label className='block text-[9px] text-[#86868b]'>Winkel (°)</label>
+                          <input type='number' step='1' value={s.winkelGrad || 0} onChange={(e) => { const neu = [...building.sections!]; neu[i] = { ...neu[i], winkelGrad: parseFloat(e.target.value) || 0 }; onChange({ ...building, sections: neu }) }} placeholder='0' className='w-full px-1.5 py-1 border rounded text-xs' title='0 = geradeaus weiter, 90 = rechtwinklige Ecke' />
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                  <button
+                    onClick={() => onChange({ ...building, sections: [...building.sections!, { bezeichnung: `Abschnitt ${building.sections!.length + 1}`, laengeM: 5, hoeheM: building.heightM, winkelGrad: 0 }] })}
+                    className='text-xs text-[#e8590c] font-semibold hover:underline'
+                  >
+                    + Weiteren Abschnitt hinzufügen
+                  </button>
+                  <p className='text-[10px] text-[#86868b]'>Winkel: 0° = geradeaus weiter, 90°/-90° = rechtwinklige Ecke. Fenster/Türen/Balkone werden bei mehrteiligen Gebäuden im 3D-Modell noch nicht platziert.</p>
+                </div>
+              )}
+            </div>
+
+            <div><label className='block text-xs font-medium text-[#424245] mb-1'>Gebäudelänge (m){building.sections && building.sections.length >= 2 ? ' – wird durch Abschnitte oben ersetzt' : ''}</label><input type='number' step='0.01' value={building.lengthM} onChange={(e) => update('lengthM', parseFloat(e.target.value))} disabled={!!building.sections && building.sections.length >= 2} className='w-full px-3 py-2 border rounded-xl text-sm disabled:opacity-40' /></div>
             <div><label className='block text-xs font-medium text-[#424245] mb-1'>Gebäudebreite (m)</label><input type='number' step='0.01' value={building.widthM} onChange={(e) => update('widthM', parseFloat(e.target.value))} className='w-full px-3 py-2 border rounded-xl text-sm' /></div>
-            <div><label className='block text-xs font-medium text-[#424245] mb-1'>Gebäudehöhe (m)</label><input type='number' step='0.01' value={building.heightM} onChange={(e) => update('heightM', parseFloat(e.target.value))} className='w-full px-3 py-2 border rounded-xl text-sm' /></div>
+            <div><label className='block text-xs font-medium text-[#424245] mb-1'>Gebäudehöhe (m){building.sections && building.sections.length >= 2 ? ' – wird durch Abschnitte oben ersetzt' : ''}</label><input type='number' step='0.01' value={building.heightM} onChange={(e) => update('heightM', parseFloat(e.target.value))} disabled={!!building.sections && building.sections.length >= 2} className='w-full px-3 py-2 border rounded-xl text-sm disabled:opacity-40' /></div>
             <div><label className='block text-xs font-medium text-[#424245] mb-1'>Traufenhöhe (m)</label><input type='number' step='0.01' value={building.eavesHeightM} onChange={(e) => update('eavesHeightM', parseFloat(e.target.value))} className='w-full px-3 py-2 border rounded-xl text-sm' /></div>
             <div><label className='block text-xs font-medium text-[#424245] mb-1'>Dachhöhe (m)</label><input type='number' step='0.01' value={building.roofHeightM} onChange={(e) => update('roofHeightM', parseFloat(e.target.value))} className='w-full px-3 py-2 border rounded-xl text-sm' /></div>
             <div><label className='block text-xs font-medium text-[#424245] mb-1'>Dachform</label><select value={building.roofForm} onChange={(e) => update('roofForm', e.target.value)} className='w-full px-3 py-2 border rounded-xl text-sm'><option value='flachdach'>Flachdach</option><option value='satteldach'>Satteldach</option><option value='walmdach'>Walmdach</option><option value='pultdach'>Pultdach</option><option value='mansardendach'>Mansardendach</option><option value='kein'>Kein Dach</option></select></div>
