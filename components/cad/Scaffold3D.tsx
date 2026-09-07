@@ -16,7 +16,7 @@ import { useMemo, useState, useRef, useEffect, useCallback, memo } from 'react'
 import { Canvas, useThree } from '@react-three/fiber'
 import { OrbitControls, Grid, Text, Sky, AdaptiveDpr, AdaptiveEvents, Environment } from '@react-three/drei'
 import * as THREE from 'three'
-import { CADModel, ScaffoldComponent3D, BuildingFeature3D } from '@/lib/calculations/cad-engine'
+import { CADModel, ScaffoldComponent3D, BuildingFeature3D, berechneGebaeudeSegmente } from '@/lib/calculations/cad-engine'
 
 interface Props {
   model: CADModel
@@ -283,9 +283,28 @@ function Building3D({
   visible: boolean
 }) {
   if (!visible) return null
-  const { lengthM, heightM, widthM, roofForm, roofHeightM } = building
+  const { lengthM, heightM, widthM, roofForm, roofHeightM, sections } = building
   const w = widthM || 6
   const roofH = roofHeightM || 0
+
+  // NEU: mehrteiliges Gebäude (unterschiedliche Höhen/Ecken) – wenn 2+
+  // Abschnitte angegeben sind, wird die Form daraus aufgebaut statt aus
+  // der einzelnen lengthM/heightM. Fenster/Türen/Balkone bleiben für
+  // diesen ersten Schritt bewusst nur beim Einzelgebäude aktiv (siehe
+  // Lieferhinweis) – das Gebäudevolumen selbst ist aber schon korrekt.
+  if (sections && sections.length >= 2) {
+    const segmente = berechneGebaeudeSegmente(sections)
+    return (
+      <group>
+        {segmente.map((seg, i) => (
+          <mesh key={i} position={[seg.mitteX, seg.hoeheM / 2, seg.mitteZ]} rotation={[0, seg.rotationYRad, 0]} castShadow receiveShadow>
+            <boxGeometry args={[seg.laengeM, seg.hoeheM, w]} />
+            <meshStandardMaterial color="#e6dfd3" roughness={0.85} />
+          </mesh>
+        ))}
+      </group>
+    )
+  }
 
   // Weltposition eines Fassaden-Merkmals aus seiner Seite + Offset
   const featureTransform = (f: BuildingFeature3D): { pos: [number, number, number]; rot: [number, number, number] } => {

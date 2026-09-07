@@ -406,6 +406,13 @@ export function generateCADModel(
   const warnings: CADWarning[] = []
 
   if (building.lengthM <= 0) warnings.push({ type: 'error', code: 'BUILDING_LENGTH_ZERO', message: 'Gebäudelänge muss größer als 0 sein.' })
+  // NEU: solange das Gerüst selbst der mehrteiligen Gebäudeform noch nicht
+  // folgt (nächster Ausbauschritt), hier ehrlich darauf hinweisen – sonst
+  // könnte der Eindruck entstehen, das Gerüst würde schon korrekt um die
+  // Abschnitte/Ecken herumgeführt.
+  if (building.sections && building.sections.length >= 2) {
+    warnings.push({ type: 'info', code: 'SECTIONS_SCAFFOLD_NOT_YET', message: 'Die Gebäudeform zeigt bereits alle Abschnitte korrekt. Das Gerüst selbst folgt der mehrteiligen Form (Ecken/Höhensprünge) noch nicht – das ist der nächste Ausbauschritt. Aktuell wird das Gerüst noch anhand der einzelnen Länge/Höhe-Felder erzeugt.' })
+  }
   if (building.heightM <= 0) warnings.push({ type: 'error', code: 'BUILDING_HEIGHT_ZERO', message: 'Gebäudehöhe muss größer als 0 sein.' })
   if (building.heightM > 40) warnings.push({ type: 'warning', code: 'HEIGHT_VERY_HIGH', message: 'Gebäudehöhe > 40m – Statik prüfen lassen!' })
 
