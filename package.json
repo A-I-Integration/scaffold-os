@@ -16,6 +16,7 @@
     "@stackforge-eu/factur-x": "^1.4.0",
     "@supabase/ssr": "^0.12.4",
     "@supabase/supabase-js": "^2.109.0",
+    "fast-xml-parser": "^5.11.1",
     "jspdf": "^4.2.1",
     "jspdf-autotable": "^5.0.8",
     "lucide-react": "^0.545.0",
