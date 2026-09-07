@@ -22,7 +22,7 @@ import { useState, useMemo, useCallback, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import dynamic from 'next/dynamic'
 import {
-  BuildingParams, CADModel, generateCADModel, generateBillOfMaterials, checkCollisions,
+  BuildingParams, CADModel, generateCADModel, generateBillOfMaterials, checkCollisions, detectCollisions,
   generateBuildingFeatures, detectFeatureCollisions, calculateLogistics,
 } from '@/lib/calculations/cad-engine'
 import { checkRules, groupRulesBySeverity } from '@/lib/calculations/cad-rules'
@@ -86,7 +86,18 @@ export default function CADPage() {
     const newModel = generateCADModel(building, systemId)
     const collisionWarnings = checkCollisions(newModel)
     const featureWarnings = detectFeatureCollisions(newModel, generateBuildingFeatures(building))
-    newModel.warnings = [...newModel.warnings, ...collisionWarnings, ...featureWarnings]
+    // NEU (Marktvergleich-Lücke 2): echte geometrische Kollisionsprüfung
+    // (Bauteil-Bauteil zu nah beieinander, Bauteil versehentlich im
+    // Gebäudekörper) – bisher berechnet, aber nirgends angezeigt.
+    const geometrieCheck = detectCollisions(newModel)
+    const geometrieWarnings = geometrieCheck.hasCollision
+      ? [{
+          type: 'warning' as const,
+          code: 'GEOMETRIE_KOLLISION',
+          message: `${geometrieCheck.collisions.length} geometrische Kollision(en) erkannt (Bauteile zu nah beieinander oder im Gebäudekörper) – bitte Planung prüfen.`,
+        }]
+      : []
+    newModel.warnings = [...newModel.warnings, ...collisionWarnings, ...featureWarnings, ...geometrieWarnings]
     setModel(newModel)
     setSelectedComponent(null)
   }, [building, systemId])
