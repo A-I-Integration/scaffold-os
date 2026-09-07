@@ -1140,3 +1140,66 @@ export function calculateLogistics(
     ],
   }
 }
+
+// ============================================================
+// Statik-Export-Schnittstelle (Marktvergleich-Lücke 4)
+//
+// Gibt der Statiker/dem Statikbüro reine Geometriedaten zur eigenen
+// Weiterverarbeitung mit – NACH DEM VORBILD von Layhers "LayPLAN TO
+// RSTAB" (Geometrie/Positionen), aber bewusst OHNE deren
+// zulassungsgebundene Querschnitts-/Werkstoffdaten, die wir nicht
+// besitzen und nicht erfinden dürfen. Enthält NIEMALS eine eigene
+// Standsicherheitsaussage – das bleibt immer Aufgabe des Statikers.
+// ============================================================
+
+export interface StatikExport {
+  hinweis: string
+  erzeugtAm: string
+  system: { hersteller: string; systemName: string; verwendeteRahmenbreiteM: number } | null
+  gebaeude: {
+    laengeM: number; breiteM: number; hoeheM: number
+    abschnitte?: { bezeichnung?: string; laengeM: number; hoeheM: number; startM: [number, number]; endeM: [number, number] }[]
+  }
+  gesamtmasse: { laengeM: number; hoeheM: number; flaecheM2: number; feldanzahl: number; lagenanzahl: number }
+  bauteile: { id: string; typ: string; positionM: [number, number, number] }[]
+  anker: { id: string; positionM: [number, number, number] }[]
+}
+
+export function generateStatikExport(model: CADModel): StatikExport {
+  const segmente = model.building.sections && model.building.sections.length >= 2
+    ? berechneGebaeudeSegmente(model.building.sections)
+    : null
+
+  return {
+    hinweis:
+      'WICHTIG: Diese Datei enthält AUSSCHLIESSLICH Geometriedaten (Positionen, Abmessungen) ' +
+      'der geplanten Gerüstkonstruktion. Sie enthält KEINE Trag-/Querschnittsdaten, keine ' +
+      'Werkstoffkennwerte und KEINE Standsicherheitsaussage. Für den projektbezogenen ' +
+      'statischen Einzelnachweis müssen die amtlichen Zulassungsdaten des angegebenen ' +
+      'Gerüstsystems (Hersteller/Bezeichnung siehe unten) durch den Statiker ergänzt werden.',
+    erzeugtAm: new Date().toISOString(),
+    system: model.system
+      ? { hersteller: model.system.hersteller, systemName: model.system.systemName, verwendeteRahmenbreiteM: model.system.rahmenBreitenM[0] }
+      : null,
+    gebaeude: {
+      laengeM: model.building.lengthM, breiteM: model.building.widthM, hoeheM: model.building.heightM,
+      abschnitte: segmente?.map((s) => ({
+        bezeichnung: s.bezeichnung, laengeM: s.laengeM, hoeheM: s.hoeheM,
+        startM: [Math.round(s.startX * 100) / 100, Math.round(s.startZ * 100) / 100],
+        endeM: [Math.round(s.endX * 100) / 100, Math.round(s.endZ * 100) / 100],
+      })),
+    },
+    gesamtmasse: {
+      laengeM: model.totalLengthM, hoeheM: model.totalHeightM, flaecheM2: model.totalAreaM2,
+      feldanzahl: model.fieldCount, lagenanzahl: model.levelCount,
+    },
+    bauteile: model.components3D.map((c) => ({
+      id: c.id, typ: c.type,
+      positionM: [Math.round(c.position[0] * 1000) / 1000, Math.round(c.position[1] * 1000) / 1000, Math.round(c.position[2] * 1000) / 1000],
+    })),
+    anker: model.anchors.map((a) => ({
+      id: a.id,
+      positionM: [Math.round(a.positionX * 1000) / 1000, Math.round(a.positionY * 1000) / 1000, Math.round(a.positionZ * 1000) / 1000],
+    })),
+  }
+}

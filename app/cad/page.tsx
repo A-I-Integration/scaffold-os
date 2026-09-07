@@ -22,7 +22,7 @@ import { useState, useMemo, useCallback, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import dynamic from 'next/dynamic'
 import {
-  BuildingParams, CADModel, generateCADModel, generateBillOfMaterials, checkCollisions, detectCollisions,
+  BuildingParams, CADModel, generateCADModel, generateBillOfMaterials, checkCollisions, detectCollisions, generateStatikExport,
   generateBuildingFeatures, detectFeatureCollisions, calculateLogistics,
 } from '@/lib/calculations/cad-engine'
 import { checkRules, groupRulesBySeverity } from '@/lib/calculations/cad-rules'
@@ -151,6 +151,19 @@ export default function CADPage() {
       date: new Date().toLocaleDateString('de-DE'),
     })
     downloadPDF(html, `Montageplan-${new Date().toISOString().split('T')[0]}.html`)
+  }, [model])
+
+  // NEU (Marktvergleich-Lücke 4): reine Geometriedaten für einen externen
+  // Statiker – kein eigener Standsicherheitsnachweis.
+  const handleExportStatik = useCallback(() => {
+    if (!model) return
+    const daten = generateStatikExport(model)
+    const blob = new Blob([JSON.stringify(daten, null, 2)], { type: 'application/json' })
+    const a = document.createElement('a')
+    a.href = URL.createObjectURL(blob)
+    a.download = `Statik-Geometriedaten-${new Date().toISOString().split('T')[0]}.json`
+    a.click()
+    URL.revokeObjectURL(a.href)
   }, [model])
 
   // Stückliste als CSV (öffnet direkt in Excel, kein Zusatzpaket nötig)
@@ -319,6 +332,7 @@ export default function CADPage() {
             logistik={logistik}
             onExportPDF={handleExportPDF}
             onExportMontageplan={handleExportMontageplan}
+            onExportStatikGeometrie={handleExportStatik}
             onExportCSV={handleExportCSV}
             customers={kunden}
             onCreateCustomer={handleCreateCustomer}
