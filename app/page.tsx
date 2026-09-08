@@ -386,10 +386,10 @@ export default function HomePage() {
         </p>
         <div className="mt-10 flex flex-col sm:flex-row items-center justify-center gap-4">
           <Link
-            href="/anfrage"
+            href="/anfrage?art=demo"
             className="inline-flex items-center gap-2 bg-[#e8590c] hover:bg-[#d9480f] text-white font-medium text-lg px-8 py-3.5 rounded-full transition-all hover:scale-[1.02] shadow-lg shadow-orange-600/20"
           >
-            Angebot anfragen
+            Demo anfordern
             <ArrowRight className="w-5 h-5" />
           </Link>
           <Link
@@ -596,7 +596,7 @@ export default function HomePage() {
                       : 'bg-black/5 hover:bg-black/10 text-[#1d1d1f]'
                   }`}
                 >
-                  Jetzt Demo anfordern
+                  Starten
                   <ArrowRight className="w-4 h-4" />
                 </Link>
               </div>
