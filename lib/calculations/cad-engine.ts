@@ -12,6 +12,11 @@ export interface BuildingSection {
   laengeM: number
   hoeheM: number
   winkelGrad?: number // Abwinklung ggü. der Richtung des vorherigen Abschnitts (0 = geradeaus, 90 = rechtwinklige Ecke)
+  // NEU: eigene Dachform je Abschnitt (z.B. Kirchenschiff Satteldach,
+  // angebauter Turm eigene Form) – fehlt sie, gilt die globale Dachform
+  // des Gebäudes (Rückwärtskompatibilität).
+  roofForm?: 'flachdach' | 'satteldach' | 'walmdach' | 'pultdach' | 'mansardendach' | 'kein'
+  roofHoeheM?: number
 }
 
 export interface BuildingParams {
@@ -50,6 +55,9 @@ export interface GebaeudeSegment {
   mitteX: number
   mitteZ: number
   rotationYRad: number
+  // NEU: eigene Dachform/-höhe je Abschnitt, durchgereicht aus BuildingSection
+  roofForm?: BuildingSection['roofForm']
+  roofHoeheM?: number
 }
 
 /**
@@ -72,6 +80,7 @@ export function berechneGebaeudeSegmente(sections: BuildingSection[]): GebaeudeS
       bezeichnung: s.bezeichnung, laengeM: s.laengeM, hoeheM: s.hoeheM,
       startX: x, startZ: z, endX: x + dx, endZ: z + dz,
       mitteX, mitteZ, rotationYRad: -winkelRad,
+      roofForm: s.roofForm, roofHoeheM: s.roofHoeheM,
     })
     x += dx
     z += dz

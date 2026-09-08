@@ -276,6 +276,54 @@ const AllScaffoldComponents = memo(function AllScaffoldComponents({
 // das Gerüst davor. Merkmale werden je Fassadenseite auf die
 // jeweilige Außenfläche gesetzt.
 // ═══════════════════════════════════════════════════════════
+
+// NEU: echte, pro Dachform unterschiedliche Geometrie (vorher: IMMER
+// derselbe Kegel, unabhängig von der gewählten Dachform). Satteldach/
+// Pultdach als geneigte Kastenflächen (einfache, robuste Geometrie +
+// Rotation statt Extrude – leichter nachvollziehbar korrekt zu bauen).
+// Walmdach/Mansardendach bleiben als Kegel-Näherung (für ein Walmdach
+// optisch bereits recht plausibel).
+function RoofMesh({ roofForm, laengeM, breiteM, roofH }: { roofForm: string; laengeM: number; breiteM: number; roofH: number }) {
+  if (roofForm === 'kein' || roofForm === 'flachdach' || roofH <= 0) return null
+
+  if (roofForm === 'satteldach') {
+    const halbeBreite = breiteM / 2
+    const hangLaenge = Math.sqrt(halbeBreite * halbeBreite + roofH * roofH)
+    const neigungRad = Math.atan2(roofH, halbeBreite)
+    const dicke = 0.08
+    return (
+      <group>
+        {[1, -1].map((seite) => (
+          <mesh key={seite} position={[0, roofH / 2, (seite * halbeBreite) / 2]} rotation={[seite * neigungRad, 0, 0]} castShadow>
+            <boxGeometry args={[laengeM, dicke, hangLaenge]} />
+            <meshStandardMaterial color="#8a5a3c" roughness={0.9} />
+          </mesh>
+        ))}
+      </group>
+    )
+  }
+
+  if (roofForm === 'pultdach') {
+    const hangLaenge = Math.sqrt(breiteM * breiteM + roofH * roofH)
+    const neigungRad = Math.atan2(roofH, breiteM)
+    return (
+      <mesh position={[0, roofH / 2, 0]} rotation={[neigungRad, 0, 0]} castShadow>
+        <boxGeometry args={[laengeM, 0.08, hangLaenge]} />
+        <meshStandardMaterial color="#8a5a3c" roughness={0.9} />
+      </mesh>
+    )
+  }
+
+  // Walmdach / Mansardendach / Fallback: Kegel-Näherung (unverändert
+  // zum bisherigen Verhalten).
+  return (
+    <mesh position={[0, roofH / 2, 0]} castShadow>
+      <coneGeometry args={[Math.max(laengeM, breiteM) / 2 * 0.95, roofH, 4]} />
+      <meshStandardMaterial color="#8a5a3c" roughness={0.9} />
+    </mesh>
+  )
+}
+
 function Building3D({
   building,
   features,
@@ -300,10 +348,18 @@ function Building3D({
     return (
       <group>
         {segmente.map((seg, i) => (
-          <mesh key={i} position={[seg.mitteX, seg.hoeheM / 2, seg.mitteZ]} rotation={[0, seg.rotationYRad, 0]} castShadow receiveShadow>
-            <boxGeometry args={[seg.laengeM, seg.hoeheM, w]} />
-            <meshStandardMaterial color="#e6dfd3" roughness={0.85} />
-          </mesh>
+          <group key={i} position={[seg.mitteX, 0, seg.mitteZ]} rotation={[0, seg.rotationYRad, 0]}>
+            <mesh position={[0, seg.hoeheM / 2, 0]} castShadow receiveShadow>
+              <boxGeometry args={[seg.laengeM, seg.hoeheM, w]} />
+              <meshStandardMaterial color="#e6dfd3" roughness={0.85} />
+            </mesh>
+            {/* NEU: Dach je Abschnitt – eigene Dachform, falls angegeben,
+                sonst die globale Dachform des Gebäudes. Vorher hatte ein
+                mehrteiliges Gebäude überhaupt kein Dach. */}
+            <group position={[0, seg.hoeheM, 0]}>
+              <RoofMesh roofForm={seg.roofForm || roofForm} laengeM={seg.laengeM} breiteM={w} roofH={seg.roofHoeheM ?? roofH} />
+            </group>
+          </group>
         ))}
       </group>
     )
@@ -374,10 +430,9 @@ function Building3D({
 
       {/* Dach */}
       {roofForm !== 'kein' && roofH > 0 && (
-        <mesh position={[0, heightM + roofH / 2, 0]} castShadow>
-          <coneGeometry args={[Math.max(lengthM, w) / 2 * 0.95, roofH, 4]} />
-          <meshStandardMaterial color="#8a5a3c" roughness={0.9} />
-        </mesh>
+        <group position={[0, heightM, 0]}>
+          <RoofMesh roofForm={roofForm} laengeM={lengthM} breiteM={w} roofH={roofH} />
+        </group>
       )}
     </group>
   )
