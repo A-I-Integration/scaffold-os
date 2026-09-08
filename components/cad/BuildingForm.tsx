@@ -153,6 +153,27 @@ export default function BuildingForm({ building, systemId, onChange, onSystemCha
                           <input type='number' step='1' value={s.winkelGrad || 0} onChange={(e) => { const neu = [...building.sections!]; neu[i] = { ...neu[i], winkelGrad: parseFloat(e.target.value) || 0 }; onChange({ ...building, sections: neu }) }} placeholder='0' className='w-full px-1.5 py-1 border rounded text-xs' title='0 = geradeaus weiter, 90 = rechtwinklige Ecke' />
                         </div>
                       </div>
+                      {/* NEU: Dachform + Dachhöhe eigens je Abschnitt –
+                          z.B. Kirchenschiff Satteldach, Turm eigene Form.
+                          Leer = übernimmt die globale Dachform des Gebäudes. */}
+                      <div className='grid grid-cols-2 gap-1.5'>
+                        <div>
+                          <label className='block text-[9px] text-[#86868b]'>Dachform (Abschnitt)</label>
+                          <select value={s.roofForm || ''} onChange={(e) => { const neu = [...building.sections!]; neu[i] = { ...neu[i], roofForm: (e.target.value || undefined) as any }; onChange({ ...building, sections: neu }) }} className='w-full px-1.5 py-1 border rounded text-xs'>
+                            <option value=''>wie Gebäude ({building.roofForm})</option>
+                            <option value='satteldach'>Satteldach</option>
+                            <option value='pultdach'>Pultdach</option>
+                            <option value='walmdach'>Walmdach</option>
+                            <option value='mansardendach'>Mansardendach</option>
+                            <option value='flachdach'>Flachdach</option>
+                            <option value='kein'>Kein Dach</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label className='block text-[9px] text-[#86868b]'>Dachhöhe (m, Abschnitt)</label>
+                          <input type='number' step='0.1' value={s.roofHoeheM ?? ''} placeholder={String(building.roofHeightM || 2)} onChange={(e) => { const neu = [...building.sections!]; neu[i] = { ...neu[i], roofHoeheM: e.target.value ? parseFloat(e.target.value) : undefined }; onChange({ ...building, sections: neu }) }} className='w-full px-1.5 py-1 border rounded text-xs' />
+                        </div>
+                      </div>
                     </div>
                   ))}
                   <button
