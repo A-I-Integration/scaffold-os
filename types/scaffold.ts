@@ -141,6 +141,10 @@ export interface ScaffoldInput {
   roofOverhangM: number;
   facadeType: FacadeType;
   obstacles: Obstacle[];
+  // NEU: Lastklasse nach DIN EN 12811-1 (1-6) – bisher nirgends erfasst.
+  // Rein informativ/dokumentierend (herstellerunabhängige Norm-Definition),
+  // beeinflusst noch keine Materialauswahl.
+  lastklasse?: number;
   // NEU: mehrere Abschnitte mit unterschiedlicher Länge/Höhe (z.B.
   // Gebäude mit Anbau, das um eine Ecke geht). Wenn gesetzt und nicht
   // leer, ersetzt dies lengthM/heightM/roofOverhangM oben für die
@@ -254,3 +258,14 @@ export interface ProjectCalculation {
   status: 'draft' | 'confirmed' | 'ordered';
 }
 export type PartialScaffoldInput = Partial<ScaffoldInput>;
+// Lastklassen nach DIN EN 12811-1:2004-03, Tabelle 3 – herstellerunabhängig,
+// die max. gleichmäßig verteilte Verkehrslast q1 je Lastklasse in kN/m².
+// Rein informativ (z.B. für die Anzeige im Aufmaß), keine eigene Berechnung.
+export const LASTKLASSE_Q1_KN_M2: Record<number, number> = {
+  1: 0.75,
+  2: 1.5,
+  3: 2.0,
+  4: 3.0,
+  5: 4.5,
+  6: 6.0,
+};
