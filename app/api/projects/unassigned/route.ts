@@ -44,6 +44,7 @@ export async function GET(req: NextRequest) {
         id: p.id, name: p.name, adresse: p.adresse,
         kunde: p.customer?.name || p.data?.step1?.name || '',
         projektbeginn: p.data.step1.projektbeginn,
+        materialList: p.data?.kiResult?.materialList || [],
       }))
       .sort((a: any, b: any) => a.projektbeginn.localeCompare(b.projektbeginn));
 
