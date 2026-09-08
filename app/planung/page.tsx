@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import AuftragsTeam from '@/components/AuftragsTeam';
 import {
   getEmployees,
   getAbsences,
@@ -46,6 +47,10 @@ export default function PlanungPage() {
   const [editAbsence, setEditAbsence] = useState<Absence | null>(null);
   const [showAddTour, setShowAddTour] = useState(false);
   const [showRecommend, setShowRecommend] = useState(false);
+  // NEU (Phase 43): Neue Aufträge aus dem Aufmaß, die noch kein Team haben
+  const [neueAuftraege, setNeueAuftraege] = useState<{ id: string; name: string; kunde: string; adresse: string; projektbeginn: string }[]>([])
+  const [offenGeoeffnet, setOffenGeoeffnet] = useState<string | null>(null)
+  const [kiTeamVorschlag, setKiTeamVorschlag] = useState<Record<string, { laeuft: boolean; ergebnis?: any; fehler?: string }>>({})
   const [showEditEmployee, setShowEditEmployee] = useState(false);
 
   // NEU: KI-Umdisposition bei Ausfällen
@@ -96,7 +101,24 @@ export default function PlanungPage() {
       if (t) setTransports(t);
     }
     loadRefs();
+    // NEU (Phase 43): neue, unzugewiesene Aufträge laden
+    fetch('/api/projects/unassigned').then((r) => r.json()).then((j) => { if (j.success) setNeueAuftraege(j.projekte) }).catch(() => {})
   }, [loadData]);
+
+  async function holeKiTeamVorschlag(projektId: string, datum: string) {
+    setKiTeamVorschlag((prev) => ({ ...prev, [projektId]: { laeuft: true } }))
+    try {
+      const res = await fetch('/api/team-vorschlag', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ project_id: projektId, datum }),
+      })
+      const json = await res.json()
+      if (!json.success) { setKiTeamVorschlag((prev) => ({ ...prev, [projektId]: { laeuft: false, fehler: json.error } })); return }
+      setKiTeamVorschlag((prev) => ({ ...prev, [projektId]: { laeuft: false, ergebnis: json } }))
+    } catch (e: any) {
+      setKiTeamVorschlag((prev) => ({ ...prev, [projektId]: { laeuft: false, fehler: e.message } }))
+    }
+  }
 
   async function handleAddEmployee(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -296,6 +318,57 @@ export default function PlanungPage() {
 
         {/* ÜBERSICHT */}
         {activeTab === 'overview' && (
+          <div className="space-y-4">
+            {/* NEU (Phase 43): Neue Aufträge aus dem Aufmaß ohne Team –
+                schließt die Lücke, dass ein Auftrag mit Datum bisher
+                nirgends automatisch zur Personal-Zuteilung auftauchte. */}
+            {neueAuftraege.length > 0 && (
+              <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
+                <h3 className="text-sm font-semibold text-amber-900 mb-3">
+                  🆕 Neue Aufträge ohne Team ({neueAuftraege.length})
+                </h3>
+                <div className="space-y-2">
+                  {neueAuftraege.map((p) => (
+                    <div key={p.id} className="bg-white rounded-lg border border-amber-200">
+                      <button onClick={() => setOffenGeoeffnet(offenGeoeffnet === p.id ? null : p.id)} className="w-full flex items-center justify-between p-3 text-left">
+                        <div>
+                          <div className="text-sm font-medium text-gray-900">{p.name} – {p.kunde}</div>
+                          <div className="text-xs text-gray-500">{p.adresse} · geplanter Beginn: {new Date(p.projektbeginn).toLocaleDateString('de-DE')}</div>
+                        </div>
+                        <span className="text-xs text-amber-700">{offenGeoeffnet === p.id ? '▲' : '▼ Team zuweisen'}</span>
+                      </button>
+                      {offenGeoeffnet === p.id && (
+                        <div className="border-t border-amber-100 p-3 space-y-3">
+                          <button
+                            onClick={() => holeKiTeamVorschlag(p.id, p.projektbeginn)}
+                            disabled={kiTeamVorschlag[p.id]?.laeuft}
+                            className="text-xs px-3 py-1.5 rounded-lg bg-blue-600 text-white font-medium disabled:opacity-50"
+                          >
+                            {kiTeamVorschlag[p.id]?.laeuft ? 'KI prüft…' : '🤖 KI-Vorschlag für dieses Datum'}
+                          </button>
+                          {kiTeamVorschlag[p.id]?.fehler && (
+                            <p className="text-xs text-red-700 bg-red-50 rounded-lg p-2">❌ {kiTeamVorschlag[p.id].fehler}</p>
+                          )}
+                          {kiTeamVorschlag[p.id]?.ergebnis && (
+                            <div className="text-xs bg-blue-50 rounded-lg p-2 space-y-1">
+                              <p className="text-blue-800">🤖 KI-Vorschlag – bitte prüfen, keine automatische Zuweisung: {kiTeamVorschlag[p.id].ergebnis.hinweis}</p>
+                              {kiTeamVorschlag[p.id].ergebnis.vorschlaege.length === 0 && <p className="text-blue-700">Keine passenden, verfügbaren Mitarbeiter gefunden.</p>}
+                              {kiTeamVorschlag[p.id].ergebnis.vorschlaege.map((v: any) => (
+                                <p key={v.employee_id} className="text-blue-900">• <strong>{v.name}</strong> ({v.rolle}) – {v.begruendung}</p>
+                              ))}
+                            </div>
+                          )}
+                          <div className="pt-1">
+                            <AuftragsTeam projectId={p.id} />
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
               <div className="text-sm font-medium text-gray-500">Mitarbeiter gesamt</div>
@@ -321,6 +394,7 @@ export default function PlanungPage() {
               <div className="text-sm font-medium text-gray-500">Geplante Touren</div>
               <div className="text-3xl font-bold text-blue-600 mt-2">{stats?.plannedTours || 0}</div>
             </div>
+          </div>
           </div>
         )}
 
