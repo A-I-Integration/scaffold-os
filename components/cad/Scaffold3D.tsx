@@ -13,7 +13,7 @@
 // ============================================================
 
 import { useMemo, useState, useRef, useEffect, useCallback, memo } from 'react'
-import { Canvas, useThree } from '@react-three/fiber'
+import { Canvas, useThree, useFrame } from '@react-three/fiber'
 import { OrbitControls, Grid, Text, Sky, AdaptiveDpr, AdaptiveEvents, Environment } from '@react-three/drei'
 import * as THREE from 'three'
 import { CADModel, ScaffoldComponent3D, BuildingFeature3D, berechneGebaeudeSegmente } from '@/lib/calculations/cad-engine'
@@ -238,23 +238,38 @@ const AllScaffoldComponents = memo(function AllScaffoldComponents({
   visibleTypes,
   selectedComponent,
   onSelectComponent,
+  lodLevel,
 }: {
   components: ScaffoldComponent3D[]
   visibleTypes: Record<string, boolean>
   selectedComponent: string | null
   onSelectComponent: (id: string | null) => void
+  lodLevel: 0 | 1 | 2
 }) {
   const [hoveredId, setHoveredId] = useState<string | null>(null)
 
+  // NEU: LOD (Level of Detail) – bei größerer Kameradistanz werden
+  // Bauteile mit viel Instanzen, aber wenig visuellem Gewicht aus der
+  // Nähe (Kupplungen, Lastverteilplatten, Netze) ausgeblendet. Reine
+  // Zeichenlast-Reduktion, keine Geometrie-Vereinfachung nötig, da die
+  // Grundformen ohnehin schon einfache Primitive sind (siehe getGeometry).
+  const LOD_AUSBLENDEN: Record<number, string[]> = {
+    0: [],
+    1: ['coupling'],
+    2: ['coupling', 'load_plate', 'net', 'safety_net', 'protection_roof'],
+  }
+
   const grouped = useMemo(() => {
+    const ausgeblendet = new Set(LOD_AUSBLENDEN[lodLevel] || [])
     const groups: Record<string, ScaffoldComponent3D[]> = {}
     components.forEach((comp) => {
       if (visibleTypes[comp.type] === false) return
+      if (ausgeblendet.has(comp.type)) return
       if (!groups[comp.type]) groups[comp.type] = []
       groups[comp.type].push(comp)
     })
     return groups
-  }, [components, visibleTypes])
+  }, [components, visibleTypes, lodLevel])
 
   return (
     <group>
@@ -611,6 +626,33 @@ function BridgeDeck3D({ building, visible }: { building: CADModel['building']; v
   )
 }
 
+// NEU: LOD-Steuerung – prüft die Kameradistanz und meldet nur bei
+// tatsächlicher Stufen-Änderung zurück (kein State-Update pro Frame,
+// das war genau das Problem, das der frühere useFrame-Killer behoben
+// hat – hier wird bewusst nur bei echter Änderung neu gerendert).
+function LODController({ target, onLevelChange }: { target: [number, number, number]; onLevelChange: (level: 0 | 1 | 2) => void }) {
+  const { camera } = useThree()
+  const letzteStufe = useRef<0 | 1 | 2>(0)
+  useFrame(() => {
+    const dx = camera.position.x - target[0]
+    const dy = camera.position.y - target[1]
+    const dz = camera.position.z - target[2]
+    const distanz = Math.sqrt(dx * dx + dy * dy + dz * dz)
+    // Relativ zur nutzbaren Zoom-Spanne (OrbitControls: minDistance=5,
+    // maxDistance=150) statt absoluter Meter – so lösen Standard-Ansichten
+    // bei GROSSEN Gebäuden (die von Haus aus einen größeren Startabstand
+    // brauchen) nicht sofort eine LOD-Reduktion aus. Reduktion greift erst,
+    // wenn wirklich nah am Zoom-Limit "rausgezoomt" wird.
+    const zoomAnteil = (distanz - 5) / (150 - 5)
+    const stufe: 0 | 1 | 2 = zoomAnteil > 0.8 ? 2 : zoomAnteil > 0.55 ? 1 : 0
+    if (stufe !== letzteStufe.current) {
+      letzteStufe.current = stufe
+      onLevelChange(stufe)
+    }
+  })
+  return null
+}
+
 function Scene({
   model,
   features,
@@ -628,10 +670,12 @@ function Scene({
   // und verschwenden Auflösung).
   const extent = Math.max(model.building.lengthM, model.building.widthM || 6, model.totalHeightM) * 0.8 + 5
   const modelKey = `${model.fieldCount}-${model.levelCount}-${model.totalHeightM}-${(features || []).length}`
+  const [lodLevel, setLodLevel] = useState<0 | 1 | 2>(0)
   return (
     <group>
       <ShadowFreeze modelKey={modelKey} />
       <CameraController viewMode={viewMode} target={target} />
+      <LODController target={target} onLevelChange={setLodLevel} />
       <Sky sunPosition={[40, 30, 20]} turbidity={6} rayleigh={2} />
       {/* NEU (Optik-Überarbeitung): sorgt für echte Umgebungsreflexionen auf
           dem verzinkten Stahl – ohne das sieht Metall matt/plastikartig aus,
@@ -666,6 +710,7 @@ function Scene({
           visibleTypes={visibleTypes}
           selectedComponent={selectedComponent}
           onSelectComponent={onSelectComponent}
+          lodLevel={lodLevel}
         />
       )}
       <DimensionLines model={model} visible={showDimensions} />
