@@ -26,6 +26,7 @@ import {
   generateBuildingFeatures, detectFeatureCollisions, calculateLogistics,
 } from '@/lib/calculations/cad-engine'
 import { checkRules, groupRulesBySeverity } from '@/lib/calculations/cad-rules'
+import { buildTopologyGraph, pruefeKnotenIsolation } from '@/lib/calculations/topology-graph'
 import { generatePDFHTML, downloadPDF, generateMontageplanHTML } from '@/lib/export/pdf-export'
 import { uploadVertragsdokument } from '@/lib/vertrag-upload-client'
 import BuildingForm from '@/components/cad/BuildingForm'
@@ -97,7 +98,19 @@ export default function CADPage() {
           message: `${geometrieCheck.collisions.length} geometrische Kollision(en) erkannt (Bauteile zu nah beieinander oder im Gebäudekörper) – bitte Planung prüfen.`,
         }]
       : []
-    newModel.warnings = [...newModel.warnings, ...collisionWarnings, ...featureWarnings, ...geometrieWarnings]
+    // NEU (Architektur-Dokument Punkt 3): Knoten-Graph aus den Bauteilen
+    // ableiten und auf isolierte (unverbundene) Knoten prüfen – additiv,
+    // ändert nichts an der bestehenden components3D-Struktur.
+    const graph = buildTopologyGraph(newModel)
+    const isolierteKnoten = pruefeKnotenIsolation(graph)
+    const knotenWarnings = isolierteKnoten.length > 0
+      ? [{
+          type: 'info' as const,
+          code: 'ISOLIERTE_KNOTEN',
+          message: `${isolierteKnoten.length} Knotenpunkt(e) ohne Querriegel-/Diagonalen-Anbindung gefunden (${graph.nodes.length} Knoten, ${graph.edges.length} Kanten insgesamt) – ungewöhnlich bei einer regulär generierten Planung, bitte prüfen.`,
+        }]
+      : []
+    newModel.warnings = [...newModel.warnings, ...collisionWarnings, ...featureWarnings, ...geometrieWarnings, ...knotenWarnings]
     setModel(newModel)
     setSelectedComponent(null)
   }, [building, systemId])
