@@ -57,9 +57,10 @@ export async function GET(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url);
     const id = searchParams.get('id');
+    const sortiert = searchParams.get('sort') === 'neueste' ? 'created_at.desc' : 'name';
     const query = id
       ? `id=eq.${id}&select=id,name,contact_person,email,phone,street,zip,city,notes,is_active,created_at`
-      : `select=id,name,contact_person,email,phone,street,zip,city,notes,is_active,created_at&order=name`;
+      : `select=id,name,contact_person,email,phone,street,zip,city,notes,is_active,created_at&order=${sortiert}`;
     const res = await fetch(`${url}/rest/v1/customers?${query}`, { headers });
     if (!res.ok) {
       const t = await res.text();
