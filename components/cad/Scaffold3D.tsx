@@ -31,6 +31,9 @@ interface Props {
   // NEU (Marktvergleich-Lücke 3): erlaubt der aufrufenden Seite, die
   // 3D-Ansicht als Bild für die Angebots-Anlage zu erfassen.
   onCanvasReady?: (canvas: HTMLCanvasElement) => void
+  // NEU: Brücken-Zugangsgerüst – ersetzt den Gebäude-Baukörper durch
+  // eine Brückendeck-Kante mit Hängekonsolen (siehe BridgeDeck3D).
+  bridgeMode?: boolean
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -571,6 +574,43 @@ function ShadowFreeze({ modelKey }: { modelKey: string }) {
 // ═══════════════════════════════════════════════════════════
 // HAUPT-SZENE
 // ═══════════════════════════════════════════════════════════
+// NEU: Brücken-Zugangsgerüst (Marktvergleich, "Brücken" – nur das
+// Zugangsgerüst AN der Brücke, NICHT das Traggerüst/Lehrgerüst unter
+// einer Brücke – das ist eine andere Norm, immer statisch
+// einzelnachzuweisen, dafür gibt es bewusst kein CAD-Tool). Ersetzt
+// beim Bauwerkstyp "Brücke" den Gebäude-Baukörper durch eine einfache
+// Brückendeck-Kante mit Hängekonsolen – das Gerüst selbst (Rahmen,
+// Beläge, Geländer) kommt unverändert aus derselben, bereits
+// geprüften InstancedBauteile-Pipeline wie beim Gebäude.
+function BridgeDeck3D({ building, visible }: { building: CADModel['building']; visible: boolean }) {
+  if (!visible) return null
+  const { lengthM, heightM, widthM } = building
+  const w = widthM || 6
+  const deckDicke = 0.6
+  const konsolenAbstandM = 3
+  const anzahlKonsolen = Math.max(2, Math.round(lengthM / konsolenAbstandM) + 1)
+
+  return (
+    <group position={[0, 0, -w / 2 - 0.5]}>
+      {/* Brückendeck – eine Platte auf Höhe der Gerüst-Oberkante */}
+      <mesh position={[0, heightM + deckDicke / 2, w / 2]} castShadow receiveShadow>
+        <boxGeometry args={[lengthM + 1, deckDicke, w * 2]} />
+        <meshStandardMaterial color="#8c8f94" roughness={0.85} />
+      </mesh>
+      {/* Hängekonsolen: verbinden Deck-Unterkante mit dem Gerüst darunter */}
+      {Array.from({ length: anzahlKonsolen }).map((_, i) => {
+        const x = -lengthM / 2 + (i * lengthM) / (anzahlKonsolen - 1)
+        return (
+          <mesh key={i} position={[x, heightM - 0.15, w / 4]} rotation={[Math.PI / 2, 0, 0]} castShadow>
+            <cylinderGeometry args={[0.03, 0.03, w / 2, 8]} />
+            <meshStandardMaterial color="#3a3f47" roughness={0.5} metalness={0.7} />
+          </mesh>
+        )
+      })}
+    </group>
+  )
+}
+
 function Scene({
   model,
   features,
@@ -581,6 +621,7 @@ function Scene({
   onSelectComponent,
   visibleTypes,
   viewMode,
+  bridgeMode,
 }: Props) {
   const target: [number, number, number] = [0, model.building.heightM / 2, 0]
   // Schatten-Kamera eng ans Modell anpassen (Standardwerte sind viel zu groß
@@ -617,7 +658,8 @@ function Scene({
           schwarze/unlesbare Schattenseiten am Gerüst, wie es bei echten
           Baustellenfotos durch Streulicht ohnehin nie vorkommt. */}
       <directionalLight position={[-20, 15, -15]} intensity={0.35} color="#dce8f5" />
-      <Building3D building={model.building} features={features || []} visible={showBuilding} />
+      <Building3D building={model.building} features={features || []} visible={showBuilding && !bridgeMode} />
+      <BridgeDeck3D building={model.building} visible={showBuilding && !!bridgeMode} />
       {showScaffold && (
         <AllScaffoldComponents
           components={model.components3D}
@@ -652,6 +694,7 @@ function Scaffold3D({
   visibleTypes,
   viewMode,
   onCanvasReady,
+  bridgeMode,
 }: Props) {
   const cameraDistance =
     Math.max(model.building.lengthM, model.building.heightM) * 2 + 8
@@ -686,6 +729,7 @@ function Scaffold3D({
           onSelectComponent={onSelectComponent}
           visibleTypes={visibleTypes}
           viewMode={viewMode}
+          bridgeMode={bridgeMode}
         />
         <Grid
           position={[0, -0.01, 0]}
