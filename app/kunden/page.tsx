@@ -73,6 +73,7 @@ export default function KundenPage() {
   const [migrationFehlt, setMigrationFehlt] = useState(false);
 
   const [search, setSearch] = useState('');
+  const [sortNeueste, setSortNeueste] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [neu, setNeu] = useState(false);
   const [form, setForm] = useState({ ...LEER_FORM });
@@ -244,12 +245,16 @@ export default function KundenPage() {
 
   // Gefilterte Liste (Suche über Name, Ort, Ansprechpartner)
   const q = search.trim().toLowerCase();
-  const gefiltert = kunden.filter((k) =>
-    !q ||
-    k.name.toLowerCase().includes(q) ||
-    (k.city || '').toLowerCase().includes(q) ||
-    (k.contact_person || '').toLowerCase().includes(q)
-  );
+  const gefiltert = kunden
+    .filter((k) =>
+      !q ||
+      k.name.toLowerCase().includes(q) ||
+      (k.city || '').toLowerCase().includes(q) ||
+      (k.contact_person || '').toLowerCase().includes(q)
+    )
+    .sort((a, b) => sortNeueste
+      ? (b.created_at || '').localeCompare(a.created_at || '')
+      : a.name.localeCompare(b.name));
 
   const offenGesamt = (k: Kunde) =>
     rechnungenVon(k)
@@ -273,12 +278,20 @@ export default function KundenPage() {
               </p>
             </div>
           </div>
-          <button
-            onClick={neuAnlegen}
-            className="flex items-center gap-2 rounded-xl bg-blue-600 hover:bg-blue-500 px-4 py-2 text-sm font-semibold text-white transition-colors"
-          >
-            <Plus className="h-4 w-4" /> Neuer Kunde
-          </button>
+          <div className="flex gap-2">
+            <a
+              href="/kunden/import"
+              className="flex items-center gap-2 rounded-xl bg-black/5 hover:bg-black/10 px-4 py-2 text-sm font-semibold text-[#1d1d1f] transition-colors"
+            >
+              📥 Import
+            </a>
+            <button
+              onClick={neuAnlegen}
+              className="flex items-center gap-2 rounded-xl bg-blue-600 hover:bg-blue-500 px-4 py-2 text-sm font-semibold text-white transition-colors"
+            >
+              <Plus className="h-4 w-4" /> Neuer Kunde
+            </button>
+          </div>
         </div>
 
         {/* Hinweis, falls die Kundenstamm-Migration noch fehlt */}
@@ -307,6 +320,11 @@ export default function KundenPage() {
                 placeholder="Suchen (Name, Ort, Ansprechpartner)…"
                 className="w-full pl-9 pr-3 py-2 bg-black/10 border border-black/10 rounded-xl text-sm text-[#1d1d1f] focus:outline-none focus:border-[#e8590c]"
               />
+            </div>
+            <div className="flex gap-2 text-xs">
+              <button onClick={() => setSortNeueste(false)} className={`px-2.5 py-1 rounded-lg ${!sortNeueste ? 'bg-[#e8590c] text-white' : 'bg-black/5 text-[#424245]'}`}>A–Z</button>
+              <button onClick={() => setSortNeueste(true)} className={`px-2.5 py-1 rounded-lg ${sortNeueste ? 'bg-[#e8590c] text-white' : 'bg-black/5 text-[#424245]'}`}>Neueste zuerst</button>
+              <span className="ml-auto self-center text-[#86868b]">{gefiltert.length} Kunde{gefiltert.length !== 1 ? 'n' : ''}</span>
             </div>
 
             <div className="bg-[#f5f5f7] rounded-xl border border-blue-500/20 overflow-hidden">
