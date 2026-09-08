@@ -187,6 +187,35 @@ export const CAD_RULES: CADRule[] = [
       return p.totalHeightM > 24 || durchschnFeldweite > 3.07 || lastklasse > 3
     },
   },
+  // NEU: Belag-Lastklassen-Zuordnung aus derselben Zulassung, "Tabelle 6:
+  // Zuordnung der Beläge zu den Lastklassen". Das Standard-Stahlboden-Belag
+  // (0,32 m, das, was die Planung bei reiner Feldlängen-Auswahl automatisch
+  // annimmt) trägt bei größerer Feldweite NICHT mehr die volle Lastklasse –
+  // ab Lastklasse ≤3 wird stattdessen der Robustboden (0,61 m) benötigt.
+  // Reine Hinweisregel (info), keine automatische Material-Umstellung –
+  // die Wahl bleibt bei euch, aber jetzt sichtbar dokumentiert.
+  {
+    id: 'BELAG_LASTKLASSE_LAYHER_ALLROUND',
+    severity: 'info',
+    title: 'Belagstyp prüfen (Lastklassen-Zuordnung)',
+    message:
+      'Nach Zulassung Z-8.1-919, Tabelle 6: Das Standard-Stahlboden 0,32 m trägt bei dieser Feldweite ' +
+      'nicht die gewählte Lastklasse (Stahlboden 0,32 m: bis 2,07 m → LK6, 2,57 m → LK5, 3,07 m → LK4). ' +
+      'Bitte Feldweite reduzieren oder einen für diese Lastklasse zugelassenen Belag wählen (z.B. Robustboden ' +
+      '0,61 m für Lastklasse ≤ 3 bei Feldweiten bis 3,07 m) – siehe Tabelle 6 der Zulassung für weitere Optionen.',
+    condition: (p) => {
+      if (p.system?.id !== 'layher-allround') return false
+      const lastklasse = p.building.lastklasse ?? 3
+      const durchschnFeldweite = p.fieldCount > 0 ? p.totalLengthM / p.fieldCount : 0
+      // Maximale Lastklasse, die das Standard-Stahlboden 0,32 m bei dieser
+      // Feldweite laut Tabelle 6 trägt.
+      let maxLastklasseStahlboden = 6
+      if (durchschnFeldweite > 2.07) maxLastklasseStahlboden = 5
+      if (durchschnFeldweite > 2.57) maxLastklasseStahlboden = 4
+      if (durchschnFeldweite > 3.07) maxLastklasseStahlboden = 0 // außerhalb der Tabelle
+      return lastklasse > maxLastklasseStahlboden
+    },
+  },
 ]
 
 export function checkRules(params: RuleCheckParams): RuleCheckResult[] {
