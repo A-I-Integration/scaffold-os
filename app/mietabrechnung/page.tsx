@@ -188,7 +188,29 @@ export default function MietabrechnungPage() {
   }
 
   async function abgebaut(zeile: MietZeile) {
-    if (!window.confirm(`„${zeile.projekt.name}" als abgebaut/abschlossen markieren? Das Gerüst steht dann nicht mehr in der Miete.`)) return;
+    // NEU: prüfen, ob zur Demontage schon Material zurückgebucht wurde –
+    // schließt dieselbe Lücke wie bei der Standzeit-Korrektur (Kunden-
+    // Detail): "Projekt abgeschlossen" ändert für sich genommen NICHTS
+    // am Lagerbestand.
+    let materialHinweis = ''
+    try {
+      const [eventsRes, statusRes] = await Promise.all([
+        fetch(`/api/project-events?project_id=${zeile.projekt.id}`),
+        fetch(`/api/inventory/return-status?project_id=${zeile.projekt.id}`),
+      ])
+      const eventsJson = await eventsRes.json()
+      const statusJson = await statusRes.json()
+      const demontageEvents = (eventsJson.events || eventsJson.data || []).filter((e: any) => e.type === 'demontage')
+      const erledigt: string[] = statusJson.erledigtEventIds || []
+      const offen = demontageEvents.filter((e: any) => !erledigt.includes(e.id))
+      if (demontageEvents.length === 0) {
+        materialHinweis = '\n\n⚠️ Für dieses Projekt ist noch keine Demontage dokumentiert – vergiss nicht, das im Dokumentation-Bereich zu erfassen.'
+      } else if (offen.length > 0) {
+        materialHinweis = '\n\n⚠️ Für die dokumentierte Demontage wurde noch kein Material ins Lager zurückgebucht. „Abgeschlossen" ändert den Lagerbestand NICHT automatisch – bitte zusätzlich im Dokumentation-Bereich „📦 Material buchen" nutzen.'
+      }
+    } catch { /* Hinweis optional, kein Blocker für den eigentlichen Abschluss */ }
+
+    if (!window.confirm(`„${zeile.projekt.name}" als abgebaut/abschlossen markieren? Das Gerüst steht dann nicht mehr in der Miete.${materialHinweis}`)) return;
     setBeschaeftigt(zeile.projekt.id);
     setFehler('');
     setMeldung('');
