@@ -386,6 +386,44 @@ export default function KundenDetailPage() {
     setSpeichern(false)
   }
 
+  // NEU: Rechnung direkt aus einem Angebot erstellen, das NICHT über
+  // Aufmaß entstanden ist (CAD, GAEB, Brücken-Zugangsgerüst) – die
+  // haben bisher gefehlt, nur Aufmaß hatte diesen 1-Klick-Weg. Nutzt
+  // dieselbe kiResult.suggestedPrice-Datenquelle, die schon beim
+  // "Als Angebot anlegen" hinterlegt wurde.
+  const [rechnungAusAngebotLaeuft, setRechnungAusAngebotLaeuft] = useState<string | null>(null)
+  async function erstelleRechnungAusAngebot(project: Project, overrideGrund?: string) {
+    if (!kunde) return
+    const ki = project.data?.kiResult
+    const preis = ki?.suggestedPrice ?? ki?.totalCost
+    if (!preis) { alert('Für dieses Projekt liegt kein berechneter Preis vor – bitte Position manuell über "Rechnung anlegen" eintragen.'); return }
+    setRechnungAusAngebotLaeuft(project.id)
+    try {
+      const res = await fetch('/api/invoices', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          project_id: project.id, customer_name: kunde.name,
+          customer_address: [kunde.street, [kunde.zip, kunde.city].filter(Boolean).join(', ')].filter(Boolean).join(', ') || undefined,
+          due_date: new Date(Date.now() + 14 * 86400000).toISOString().slice(0, 10),
+          positions: [{ bezeichnung: `Gerüstbau gemäß Angebot${ki?.totalAreaM2 ? ` (${ki.totalAreaM2} m²)` : ''}`, menge: 1, einheit: 'Pauschale', einzelpreis: Math.round(preis * 100) / 100 }],
+          override_grund: overrideGrund || undefined,
+        }),
+      })
+      const json = await res.json()
+      if (!json.success) {
+        if (json.code === 'FREIGABE_FEHLT_OVERRIDE_MOEGLICH') {
+          const grund = prompt(json.error + '\n\nBegründung für die Überschreibung eingeben:')
+          if (grund && grund.trim()) { setRechnungAusAngebotLaeuft(null); await erstelleRechnungAusAngebot(project, grund.trim()); return }
+          setRechnungAusAngebotLaeuft(null); return
+        }
+        throw new Error(json.error)
+      }
+      alert(`✅ Rechnung ${json.invoice?.invoice_number} angelegt.`)
+      ladeDaten()
+    } catch (err: any) { alert('❌ ' + err.message) }
+    setRechnungAusAngebotLaeuft(null)
+  }
+
   async function createZusatzrechnung(overrideGrund?: string) {
     if (!zusatzProjectId || !kunde) return
     const menge = Number(String(zusatzPos.menge).replace(',', '.'))
@@ -1070,7 +1108,20 @@ export default function KundenDetailPage() {
                   )}
 
                   <div className="px-5 py-3">
-                    {projInvoices.length === 0 ? <p className="text-xs text-[#86868b] mb-2">Noch keine Rechnung.</p> : (
+                    {projInvoices.length === 0 ? (
+                      <div className="mb-2">
+                        <p className="text-xs text-[#86868b] mb-2">Noch keine Rechnung.</p>
+                        {project.data?.kiResult && (
+                          <button
+                            onClick={() => erstelleRechnungAusAngebot(project)}
+                            disabled={rechnungAusAngebotLaeuft === project.id}
+                            className="text-xs px-3 py-1.5 rounded-lg bg-[#e8590c] text-white font-medium disabled:opacity-50"
+                          >
+                            {rechnungAusAngebotLaeuft === project.id ? 'Wird angelegt…' : '🧾 Rechnung aus Angebot erstellen'}
+                          </button>
+                        )}
+                      </div>
+                    ) : (
                       <ul className="divide-y divide-black/5 mb-2">
                         {projInvoices
                           .filter((inv) => !projInvoices.some((o) => o.id !== inv.id && o.reference_invoice_number === inv.invoice_number))
