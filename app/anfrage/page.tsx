@@ -17,7 +17,7 @@ import { HardHat, ArrowLeft, CheckCircle2, Send, Building2, Rocket } from 'lucid
 // gespeichert (Registrierung bleibt geschlossen).
 // ============================================================
 
-type AnfrageArt = 'nutzung' | 'pilot';
+type AnfrageArt = 'nutzung' | 'pilot' | 'demo';
 
 const TEXT: Record<AnfrageArt, { titel: string; untertitel: string; button: string }> = {
   nutzung: {
@@ -32,12 +32,18 @@ const TEXT: Record<AnfrageArt, { titel: string; untertitel: string; button: stri
       'Sie möchten SCAFFOLD OS erst unverbindlich kennenlernen? Als Pilotkunde testen Sie die Software mit Ihren echten Abläufen – wir begleiten die Einführung persönlich.',
     button: 'Pilotprojekt anfragen',
   },
+  demo: {
+    titel: 'Demo-Zugang anfordern',
+    untertitel:
+      'Tragen Sie kurz Ihre Daten ein – wir richten Ihnen persönlich einen Demo-Zugang ein und schicken Ihnen die Zugangsdaten zu.',
+    button: 'Demo-Zugang anfordern',
+  },
 };
 
 function AnfrageFormular() {
   const params = useSearchParams();
   const artParam = params.get('art');
-  const [art, setArt] = useState<AnfrageArt>(artParam === 'pilot' ? 'pilot' : 'nutzung');
+  const [art, setArt] = useState<AnfrageArt>(artParam === 'pilot' ? 'pilot' : artParam === 'demo' ? 'demo' : 'nutzung');
 
   const [name, setName] = useState('');
   const [firma, setFirma] = useState('');
