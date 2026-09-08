@@ -152,6 +152,18 @@ export default function KundenDetailPage() {
   const [standzeitAbschnitteAb, setStandzeitAbschnitteAb] = useState<string[]>([]) // Bezeichnungen der abgebauten Abschnitte
   const [standzeitProzentManuell, setStandzeitProzentManuell] = useState('')
   const [standzeitGrund, setStandzeitGrund] = useState('')
+  // NEU: Material-Rückgabe-Status – prüft, ob zur Demontage schon Material
+  // ins Lager zurückgebucht wurde (schließt die Lücke zwischen
+  // Standzeit-Korrektur und Lager).
+  const [materialRueckgabeStatus, setMaterialRueckgabeStatus] = useState<Record<string, string[]>>({})
+
+  async function ladeMaterialRueckgabeStatus(projectId: string) {
+    try {
+      const res = await fetch(`/api/inventory/return-status?project_id=${projectId}`)
+      const json = await res.json()
+      if (json.success) setMaterialRueckgabeStatus((prev) => ({ ...prev, [projectId]: json.erledigtEventIds }))
+    } catch { /* Hinweis optional, kein Blocker */ }
+  }
 
   // NEU (Phase 37): Lieferschein
   const [lieferscheinOffen, setLieferscheinOffen] = useState<{ projectId: string; type: 'aufbau' | 'abbau' } | null>(null)
@@ -937,7 +949,7 @@ export default function KundenDetailPage() {
                             📋 Lieferschein Abbau
                           </button>
                           <button
-                            onClick={() => { setStandzeitOffen(standzeitOffen === project.id ? null : project.id); setStandzeitDatum(abbauAm ? abbauAm.slice(0, 10) : ''); setStandzeitAbschnitteAb([]); setStandzeitProzentManuell(''); setStandzeitNeuerPreis('') }}
+                            onClick={() => { setStandzeitOffen(standzeitOffen === project.id ? null : project.id); setStandzeitDatum(abbauAm ? abbauAm.slice(0, 10) : ''); setStandzeitAbschnitteAb([]); setStandzeitProzentManuell(''); setStandzeitNeuerPreis(''); ladeMaterialRueckgabeStatus(project.id) }}
                             className="text-amber-700 font-semibold hover:underline"
                           >
                             ⏱️ Standzeit-Korrektur
@@ -972,6 +984,32 @@ export default function KundenDetailPage() {
                   {standzeitOffen === project.id && (
                     <div className="px-5 py-3 bg-amber-50 border-b border-amber-200 space-y-2">
                       <p className="text-[11px] text-amber-800">Berechnet die Gutschrift für die nicht genutzte Standzeit anhand des im Angebot hinterlegten Wochenpreises und des geplanten Endes aus dem Aufmaß. Ändert keine bestehende Rechnung, sondern erstellt eine eigene Gutschrift.</p>
+                      {/* NEU: Hinweis auf Material-Rückgabe – schließt die Lücke
+                          zwischen Rechnungs-Kürzung (hier) und Lagerbestand. */}
+                      {(() => {
+                        const demontageEvents = (dokEintraege[project.id] || []).filter((e) => e.type === 'demontage')
+                        const erledigt = materialRueckgabeStatus[project.id] || []
+                        if (demontageEvents.length === 0) {
+                          return (
+                            <p className="text-[11px] bg-blue-50 border border-blue-200 rounded-lg p-2 text-blue-800">
+                              ℹ️ Noch keine Demontage dokumentiert. Vergiss nicht, den Abbau im Dokumentation-Bereich zu erfassen – dort kann dann auch das Material ins Lager zurückgebucht werden.
+                            </p>
+                          )
+                        }
+                        const offene = demontageEvents.filter((e) => !erledigt.includes(e.id))
+                        if (offene.length > 0) {
+                          return (
+                            <p className="text-[11px] bg-red-50 border border-red-200 rounded-lg p-2 text-red-800">
+                              ⚠️ Für {offene.length === demontageEvents.length ? 'die' : `${offene.length} von ${demontageEvents.length}`} dokumentierte(n) Demontage(n) wurde noch kein Material ins Lager zurückgebucht. Die Gutschrift hier ändert den Lagerbestand nicht automatisch – bitte zusätzlich im Dokumentation-Bereich „📦 Material buchen" nutzen.
+                            </p>
+                          )
+                        }
+                        return (
+                          <p className="text-[11px] bg-emerald-50 border border-emerald-200 rounded-lg p-2 text-emerald-800">
+                            ✅ Material-Rückgabe für die dokumentierte(n) Demontage(n) bereits erfasst.
+                          </p>
+                        )
+                      })()}
                       <div className="grid grid-cols-2 gap-2">
                         <button onClick={() => setStandzeitArt('komplett')} className={`rounded-lg border px-3 py-2 text-xs font-semibold ${standzeitArt === 'komplett' ? 'bg-amber-600 text-white border-amber-600' : 'bg-white border-black/10'}`}>Komplett abgebaut</button>
                         <button onClick={() => setStandzeitArt('teilweise')} className={`rounded-lg border px-3 py-2 text-xs font-semibold ${standzeitArt === 'teilweise' ? 'bg-amber-600 text-white border-amber-600' : 'bg-white border-black/10'}`}>Teilweise reduziert</button>
