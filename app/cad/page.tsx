@@ -166,6 +166,23 @@ export default function CADPage() {
     URL.revokeObjectURL(a.href)
   }, [model])
 
+  // NEU: IFC-Export (Architektur-Dokument Punkt 5) – echter BIM-Datenaustausch,
+  // vor Einbau ausführlich mit web-ifc getestet (Schreiben + Wiedereinlesen +
+  // Geometrie-Extraktion verifiziert).
+  const [ifcExportLaeuft, setIfcExportLaeuft] = useState(false)
+  const handleExportIFC = useCallback(async () => {
+    if (!model) return
+    setIfcExportLaeuft(true)
+    try {
+      const { generateIFC, downloadIFC } = await import('@/lib/export/ifc-export')
+      const daten = await generateIFC(model, 'SCAFFOLD OS Gerüstplanung')
+      downloadIFC(daten, `Geruest-${new Date().toISOString().split('T')[0]}.ifc`)
+    } catch (err: any) {
+      alert('❌ IFC-Export fehlgeschlagen: ' + err.message)
+    }
+    setIfcExportLaeuft(false)
+  }, [model])
+
   // Stückliste als CSV (öffnet direkt in Excel, kein Zusatzpaket nötig)
   const handleExportCSV = useCallback(() => {
     if (!materials.length) return
@@ -333,6 +350,7 @@ export default function CADPage() {
             onExportPDF={handleExportPDF}
             onExportMontageplan={handleExportMontageplan}
             onExportStatikGeometrie={handleExportStatik}
+            onExportIFC={ifcExportLaeuft ? undefined : handleExportIFC}
             onExportCSV={handleExportCSV}
             customers={kunden}
             onCreateCustomer={handleCreateCustomer}
