@@ -48,9 +48,14 @@ export default function PlanungPage() {
   const [showAddTour, setShowAddTour] = useState(false);
   const [showRecommend, setShowRecommend] = useState(false);
   // NEU (Phase 43): Neue Aufträge aus dem Aufmaß, die noch kein Team haben
-  const [neueAuftraege, setNeueAuftraege] = useState<{ id: string; name: string; kunde: string; adresse: string; projektbeginn: string }[]>([])
+  const [neueAuftraege, setNeueAuftraege] = useState<{ id: string; name: string; kunde: string; adresse: string; projektbeginn: string; materialList: { name: string; quantity: number; unit: string }[] }[]>([])
   const [offenGeoeffnet, setOffenGeoeffnet] = useState<string | null>(null)
   const [kiTeamVorschlag, setKiTeamVorschlag] = useState<Record<string, { laeuft: boolean; ergebnis?: any; fehler?: string }>>({})
+  // NEU: Material für die Fahrt zuordnen (Lagerartikel je Materialzeile
+  // wählen, bewusst kein automatisches Matching gegen den Lagerbestand).
+  const [lagerArtikel, setLagerArtikel] = useState<{ id: string; name: string; unit: string }[]>([])
+  const [materialZuordnung, setMaterialZuordnung] = useState<Record<string, Record<number, string>>>({}) // projektId -> zeilenIndex -> inventory_id
+  const [transportAnlegenLaeuft, setTransportAnlegenLaeuft] = useState<string | null>(null)
   const [showEditEmployee, setShowEditEmployee] = useState(false);
 
   // NEU: KI-Umdisposition bei Ausfällen
@@ -101,9 +106,34 @@ export default function PlanungPage() {
       if (t) setTransports(t);
     }
     loadRefs();
-    // NEU (Phase 43): neue, unzugewiesene Aufträge laden
+    // NEU (Phase 45): neue, unzugewiesene Aufträge laden
     fetch('/api/projects/unassigned').then((r) => r.json()).then((j) => { if (j.success) setNeueAuftraege(j.projekte) }).catch(() => {})
+    fetch('/api/inventory').then((r) => r.json()).then((j) => { if (j.success) setLagerArtikel((j.items || []).map((i: any) => ({ id: i.id, name: i.name, unit: i.unit }))) }).catch(() => {})
   }, [loadData]);
+
+  async function erstelleTransporteFuerAuftrag(projektId: string, adresse: string) {
+    const zuordnung = materialZuordnung[projektId] || {}
+    const projekt = neueAuftraege.find((p) => p.id === projektId)
+    if (!projekt) return
+    const zeilen = Object.entries(zuordnung).filter(([, invId]) => invId)
+    if (zeilen.length === 0) { alert('Bitte mindestens eine Materialzeile einem Lagerartikel zuordnen.'); return }
+    setTransportAnlegenLaeuft(projektId)
+    let erstellt = 0
+    for (const [zeilenIndexStr, inventoryId] of zeilen) {
+      const zeile = projekt.materialList[parseInt(zeilenIndexStr)]
+      if (!zeile) continue
+      try {
+        const res = await fetch('/api/transport-orders', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ inventory_id: inventoryId, quantity: zeile.quantity, to_project_id: projektId }),
+        })
+        const json = await res.json()
+        if (json.success) erstellt++
+      } catch { /* einzelne Zeile überspringen, Rest weiterlaufen lassen */ }
+    }
+    setTransportAnlegenLaeuft(null)
+    alert(`✅ ${erstellt} Transportauftrag/-aufträge angelegt für ${adresse}. Im Touren-Bereich zu einer Fahrt (Fahrzeug + Fahrer) zusammenstellen – der zugewiesene Mitarbeiter sieht die Fahrt danach direkt beim Einloggen.`)
+  }
 
   async function holeKiTeamVorschlag(projektId: string, datum: string) {
     setKiTeamVorschlag((prev) => ({ ...prev, [projektId]: { laeuft: true } }))
@@ -361,6 +391,37 @@ export default function PlanungPage() {
                           <div className="pt-1">
                             <AuftragsTeam projectId={p.id} />
                           </div>
+                          {/* NEU (Phase 45): Material der Fahrt zuordnen – schließt die
+                              Lücke zwischen "Team zugewiesen" und einer sichtbaren Fahrt
+                              mit Material für den Mitarbeiter. */}
+                          {p.materialList.length > 0 && (
+                            <div className="pt-3 border-t border-amber-100">
+                              <p className="text-xs font-semibold text-gray-700 mb-2">📦 Material für die Fahrt zuordnen</p>
+                              <div className="space-y-1.5">
+                                {p.materialList.map((zeile, i) => (
+                                  <div key={i} className="flex items-center gap-2 text-xs">
+                                    <span className="flex-1 text-gray-600">{zeile.quantity} {zeile.unit} {zeile.name}</span>
+                                    <select
+                                      value={materialZuordnung[p.id]?.[i] || ''}
+                                      onChange={(e) => setMaterialZuordnung((prev) => ({ ...prev, [p.id]: { ...(prev[p.id] || {}), [i]: e.target.value } }))}
+                                      className="px-2 py-1 border rounded-lg text-xs w-48"
+                                    >
+                                      <option value="">– Lagerartikel wählen –</option>
+                                      {lagerArtikel.map((la) => <option key={la.id} value={la.id}>{la.name}</option>)}
+                                    </select>
+                                  </div>
+                                ))}
+                              </div>
+                              <button
+                                onClick={() => erstelleTransporteFuerAuftrag(p.id, p.adresse)}
+                                disabled={transportAnlegenLaeuft === p.id}
+                                className="mt-2 text-xs px-3 py-1.5 rounded-lg bg-emerald-600 text-white font-medium disabled:opacity-50"
+                              >
+                                {transportAnlegenLaeuft === p.id ? 'Wird angelegt…' : '🚚 Transportaufträge anlegen'}
+                              </button>
+                              <p className="text-[10px] text-gray-500 mt-1">Danach im Touren-Bereich zu einer Fahrt (Fahrzeug + Fahrer) zusammenstellen.</p>
+                            </div>
+                          )}
                         </div>
                       )}
                     </div>
