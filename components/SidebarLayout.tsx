@@ -48,6 +48,7 @@ const NAV_GROUPS: NavGroup[] = [
       { href: '/aufmass/schritt1', label: 'Aufmaß', icon: Ruler, roles: ['admin', 'bauleiter'] },
       { href: '/cad',              label: 'CAD',    icon: Ruler, roles: ['admin', 'bauleiter'] },
       { href: '/cad/bruecke',      label: 'Brücke', icon: Ruler, roles: ['admin', 'bauleiter'] },
+      { href: '/cad/traggeruest',  label: 'Traggerüst-Anfrage', icon: Ruler, roles: ['admin', 'bauleiter'] },
       { href: '/gaeb',             label: 'GAEB',   icon: FileText, roles: ['admin', 'disponent'] },
     ],
   },
