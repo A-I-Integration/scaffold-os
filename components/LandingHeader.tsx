@@ -35,10 +35,10 @@ export default function LandingHeader() {
         <nav className="flex items-center gap-6 text-sm">
           <Link href="/login" className="text-[#6e6e73] hover:text-[#1d1d1f] transition-colors">Anmelden</Link>
           <Link
-            href="/kaufen"
+            href="/anfrage?art=demo"
             className="bg-[#e8590c] hover:bg-[#d9480f] text-white font-medium px-4 py-1.5 rounded-full transition-colors"
           >
-            3 Tage kostenlos testen
+            Jetzt Demo anfordern
           </Link>
         </nav>
       </div>

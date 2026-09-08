@@ -36,7 +36,7 @@ export default function LoginPage() {
         body: JSON.stringify({ email, phase: 'check' }),
       })
       if (gate.status === 403) {
-        setError('Dieser Demo-Zugang wurde von diesem Anschluss bereits genutzt. Fordern Sie gern einen persönlichen Testzugang über scaffoldos.de/kaufen an – 3 Tage kostenlos.')
+        setError('Dieser Demo-Zugang wurde von diesem Anschluss bereits genutzt. Fordern Sie gern einen persönlichen Demo-Zugang über scaffoldos.de/anfrage?art=demo an.')
         setLoading(false)
         return
       }

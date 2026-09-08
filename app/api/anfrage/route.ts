@@ -20,6 +20,7 @@ import { NextRequest, NextResponse } from 'next/server';
 const ART_LABEL: Record<string, string> = {
   nutzung: 'Nutzungs-Anfrage',
   pilot: 'Pilotprojekt-Anfrage',
+  demo: 'Demo-Zugang-Anfrage',
 };
 
 function esc(s: string): string {

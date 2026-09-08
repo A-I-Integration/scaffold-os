@@ -30,7 +30,7 @@ export const metadata: Metadata = {
   metadataBase: new URL('https://scaffoldos.de'),
   title: 'Gerüstbau Software: KI-Aufmaß, Lager & Angebote | SCAFFOLD OS',
   description:
-    'Die All-in-One Software für Gerüstbauer. KI-Aufmaß, Angebote in Minuten, Touren-GPS & GoBD-Rechnung. Jetzt 3 Tage kostenlos auf Handy & PC testen!',
+    'Die All-in-One Software für Gerüstbauer. KI-Aufmaß, Angebote in Minuten, Touren-GPS & GoBD-Rechnung. Jetzt Demo-Zugang anfordern!',
   keywords: [
     'Gerüstbau Software', 'Gerüstbau Aufmaß', 'Aufmaß Software Gerüstbau',
     'Gerüst Kalkulation', 'Gerüstbau Disposition', 'Lagerverwaltung Gerüstbau',
@@ -40,7 +40,7 @@ export const metadata: Metadata = {
   openGraph: {
     title: 'Gerüstbau Software: KI-Aufmaß, Lager & Angebote | SCAFFOLD OS',
     description:
-      'Die All-in-One Software für Gerüstbauer. KI-Aufmaß, Angebote in Minuten, Touren-GPS & GoBD-Rechnung. Jetzt 3 Tage kostenlos auf Handy & PC testen!',
+      'Die All-in-One Software für Gerüstbauer. KI-Aufmaß, Angebote in Minuten, Touren-GPS & GoBD-Rechnung. Jetzt Demo-Zugang anfordern!',
     url: 'https://scaffoldos.de',
     siteName: 'SCAFFOLD OS',
     locale: 'de_DE',
@@ -58,7 +58,7 @@ export const metadata: Metadata = {
     card: 'summary_large_image',
     title: 'Gerüstbau Software: KI-Aufmaß, Lager & Angebote | SCAFFOLD OS',
     description:
-      'Die All-in-One Software für Gerüstbauer. KI-Aufmaß, Angebote in Minuten, Touren-GPS & GoBD-Rechnung. Jetzt 3 Tage kostenlos testen!',
+      'Die All-in-One Software für Gerüstbauer. KI-Aufmaß, Angebote in Minuten, Touren-GPS & GoBD-Rechnung. Jetzt Demo-Zugang anfordern!',
     images: ['/og-share.png'],
   },
 };
@@ -186,12 +186,12 @@ const FAQ = [
   {
     frage: 'Was kostet SCAFFOLD OS?',
     antwort:
-      'Drei Pakete: Starter für 249 € im Monat, Priority für 495 €, Enterprise für 749 €. Starter reicht für bis zu 5 Mitarbeiter, Priority für 20. Enterprise hebt alle Limits auf. Jedes Paket startet mit 3 kostenlosen Testtagen.',
+      'Drei Pakete: Starter für 249 € im Monat, Priority für 495 €, Enterprise für 749 €. Starter reicht für bis zu 5 Mitarbeiter, Priority für 20. Enterprise hebt alle Limits auf. Auf Anfrage richten wir Ihnen vorab einen persönlichen Demo-Zugang ein.',
   },
   {
     frage: 'Kann ich SCAFFOLD OS kostenlos testen?',
     antwort:
-      'Ja. Jedes Paket startet mit 3 Testtagen. Du gibst Firma, Name und E-Mail an. Dann hinterlegst du eine Zahlungsart und bekommst sofort dein eigenes System: firma.scaffoldos.de. Die erste Abbuchung kommt erst nach den 3 Tagen.',
+      'Ja. Fordern Sie über den Button „Jetzt Demo anfordern" einen Demo-Zugang an – kurz Ihre Daten eintragen, wir richten Ihnen persönlich einen Zugang ein und schicken Ihnen die Zugangsdaten zu.',
   },
   {
     frage: 'Wie viel Zeit spare ich mit SCAFFOLD OS?',
@@ -552,8 +552,8 @@ export default function HomePage() {
             Drei Pakete. <span className="text-[#86868b]">Ein klarer Preis pro Monat.</span>
           </h2>
           <p className="mt-4 text-center text-[#6e6e73] max-w-2xl mx-auto">
-            Jedes Paket startet mit 3 kostenlosen Testtagen. Du zahlst per
-            SEPA-Lastschrift oder Kreditkarte. Nach 36 Monaten kannst du monatlich kündigen.
+            Auf Anfrage richten wir Ihnen vorab einen persönlichen Demo-Zugang ein. Danach
+            zahlen Sie per SEPA-Lastschrift oder Kreditkarte, nach 36 Monaten monatlich kündbar.
           </p>
           <div className="mt-12 grid md:grid-cols-3 gap-6">
             {PAKETE.map((paket) => (
@@ -589,14 +589,14 @@ export default function HomePage() {
                   ))}
                 </ul>
                 <Link
-                  href={`/kaufen?plan=${paket.id}`}
+                  href={`/anfrage?art=demo`}
                   className={`mt-8 inline-flex items-center justify-center gap-2 font-semibold px-6 py-3 rounded-full transition-all hover:scale-[1.02] ${
                     paket.hervorgehoben
                       ? 'bg-[#e8590c] hover:bg-[#d9480f] text-white'
                       : 'bg-black/5 hover:bg-black/10 text-[#1d1d1f]'
                   }`}
                 >
-                  3 Tage kostenlos testen
+                  Jetzt Demo anfordern
                   <ArrowRight className="w-4 h-4" />
                 </Link>
               </div>
@@ -693,16 +693,15 @@ export default function HomePage() {
             In 3 Minuten startklar.
           </h2>
           <p className="mt-4 text-lg text-[#6e6e73] leading-relaxed">
-            Paket wählen, Firma eintragen, loslegen. Dein eigenes System unter
-            firma.scaffoldos.de. 3 Tage kostenlos. Die erste Abbuchung kommt erst
-            nach der Testphase.
+            Kurz Ihre Daten eintragen – wir richten Ihnen persönlich einen Demo-Zugang
+            ein und schicken Ihnen die Zugangsdaten zu.
           </p>
           <div className="mt-8 flex flex-col sm:flex-row items-center justify-center gap-4">
             <Link
-              href="/kaufen"
+              href="/anfrage?art=demo"
               className="inline-flex items-center gap-2 bg-[#e8590c] hover:bg-[#d9480f] text-white font-medium text-lg px-8 py-3.5 rounded-full transition-all hover:scale-[1.02] shadow-lg shadow-orange-600/20"
             >
-              Jetzt 3 Tage kostenlos testen
+              Jetzt Demo anfordern
               <ArrowRight className="w-5 h-5" />
             </Link>
             <Link
