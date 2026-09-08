@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import KIWarnings from '@/components/aufmaß/KIWarnings';
 import { useKIValidation } from '@/hooks/useKIValidation';
-import { PartialScaffoldInput } from '@/types/scaffold';
+import { PartialScaffoldInput, LASTKLASSE_Q1_KN_M2 } from '@/types/scaffold';
 
 export default function Schritt2Page() {
   const router = useRouter();
@@ -39,6 +39,7 @@ export default function Schritt2Page() {
     dachform: '',
     dachueberstand: '',
     fassade: '',
+    lastklasse: 3 as number,
     garagen: false,
     fluchtwege: false,
     werbeanlagen: false,
@@ -110,6 +111,7 @@ export default function Schritt2Page() {
       roofOverhangM: parseFloat(form.dachueberstand) || 0,
       facadeType: fassadeMap[form.fassade] || 'mauerwerk',
       obstacles,
+      lastklasse: form.lastklasse ?? 3,
       // Defaults für Felder, die erst in späteren Schritten kommen
       projectDurationDays: 30,
       scaffoldType: 'rahmen',
@@ -671,6 +673,20 @@ export default function Schritt2Page() {
                 </button>
               ))}
             </div>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium mb-3 text-[#424245]">Lastklasse (DIN EN 12811-1)</label>
+            <select
+              value={form.lastklasse ?? 3}
+              onChange={(e) => setForm({ ...form, lastklasse: parseInt(e.target.value) })}
+              className="w-full bg-black/10 border border-black/10 rounded-xl px-4 py-2 text-[#1d1d1f]"
+            >
+              {[1, 2, 3, 4, 5, 6].map((lk) => (
+                <option key={lk} value={lk}>Lastklasse {lk} ({LASTKLASSE_Q1_KN_M2[lk]} kN/m²)</option>
+              ))}
+            </select>
+            <p className="text-[11px] text-[#86868b] mt-1">Rein zur Dokumentation – Standard ist meist Lastklasse 3 (Putz-/Maler-/Fassadenarbeiten).</p>
           </div>
 
           <div>

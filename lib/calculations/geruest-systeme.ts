@@ -30,6 +30,17 @@ export interface GeruestSystem {
 export const GERUEST_SYSTEME: GeruestSystem[] = [
   // ─── Modulsysteme ───
   {
+    id: 'peri-up-flex',
+    hersteller: 'PERI',
+    systemName: 'UP Flex',
+    bauart: 'modul',
+    rasterHoeheM: 2.0,
+    feldlangenM: [2.0, 2.5, 3.0],
+    standardFeldlangeM: 2.5,
+    rahmenBreitenM: [0.75],
+    hinweis: 'Rosetten-Modulsystem, Regelausführung "Flex F75" nach Zulassung Z-8.22-863 geprüft',
+  },
+  {
     id: 'layher-allround',
     hersteller: 'Layher',
     systemName: 'Allround (Stahl)',

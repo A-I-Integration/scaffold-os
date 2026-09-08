@@ -187,6 +187,30 @@ export const CAD_RULES: CADRule[] = [
       return p.totalHeightM > 24 || durchschnFeldweite > 3.07 || lastklasse > 3
     },
   },
+  // NEU: Regelausführungs-Grenzen für PERI UP Flex – Zulassung Z-8.22-863
+  // (aktuell gültige Fassung: 3. Oktober 2025, gültig bis 3. Oktober 2030;
+  // Kernbestimmung "Regelausführung Flex F75" vollständig gelesen in der
+  // Vorgängerfassung vom 13.4.2021 – über alle seitherigen Änderungsbescheide
+  // hinweg blieben die Grenzwerte selbst unverändert, nur der Bauteilkatalog
+  // wurde ergänzt). Andere Grenzwerte als bei Layher: Feldweite ≤3,0 m
+  // (nicht 3,07 m), Systembreite 0,75 m (nicht 0,73 m) – bewusst NICHT
+  // dieselben Zahlen wie bei Layher verwendet.
+  {
+    id: 'REGELAUSFUEHRUNG_GRENZE_PERI_UP_FLEX',
+    severity: 'error',
+    title: 'Außerhalb der geprüften Regelausführung',
+    message:
+      'Diese Planung liegt außerhalb der "Regelausführung Flex F75" der Zulassung Z-8.22-863 ' +
+      '(PERI UP Flex: Feldweite ≤ 3,0 m, Höhe ≤ 24 m über Gelände, Lastklasse ≤ 3, Systembreite 0,75 m). ' +
+      'Für diese Konfiguration ist ein Einzel-Standsicherheitsnachweis durch einen Statiker erforderlich. ' +
+      '(Zulassung Z-8.22-863 vom 3. Oktober 2025, gültig bis 3. Oktober 2030.)',
+    condition: (p) => {
+      if (p.system?.id !== 'peri-up-flex') return false
+      const durchschnFeldweite = p.fieldCount > 0 ? p.totalLengthM / p.fieldCount : 0
+      const lastklasse = p.building.lastklasse ?? 3
+      return p.totalHeightM > 24 || durchschnFeldweite > 3.0 || lastklasse > 3
+    },
+  },
   // NEU: Belag-Lastklassen-Zuordnung aus derselben Zulassung, "Tabelle 6:
   // Zuordnung der Beläge zu den Lastklassen". Das Standard-Stahlboden-Belag
   // (0,32 m, das, was die Planung bei reiner Feldlängen-Auswahl automatisch
@@ -214,6 +238,28 @@ export const CAD_RULES: CADRule[] = [
       if (durchschnFeldweite > 2.57) maxLastklasseStahlboden = 4
       if (durchschnFeldweite > 3.07) maxLastklasseStahlboden = 0 // außerhalb der Tabelle
       return lastklasse > maxLastklasseStahlboden
+    },
+  },
+  // NEU: Belag-Lastklassen-Zuordnung für PERI UP Flex, Tabelle 30 der
+  // Zulassung Z-8.22-863 (Standardbelag "Stahlbelag UDG 25") – eigene,
+  // andere Werte als bei Layher, bewusst nicht übertragen.
+  {
+    id: 'BELAG_LASTKLASSE_PERI_UP_FLEX',
+    severity: 'info',
+    title: 'Belagstyp prüfen (Lastklassen-Zuordnung)',
+    message:
+      'Nach Zulassung Z-8.22-863, Tabelle 30: Der Standard-Stahlbelag UDG 25 trägt bei dieser Feldweite ' +
+      'nicht die gewählte Lastklasse (bis 2,0 m → LK6, 2,5 m → LK5, 3,0 m → LK4). Bitte Feldweite reduzieren ' +
+      'oder einen für diese Lastklasse zugelassenen Belag wählen (Tabelle 30 der Zulassung für weitere Optionen).',
+    condition: (p) => {
+      if (p.system?.id !== 'peri-up-flex') return false
+      const lastklasse = p.building.lastklasse ?? 3
+      const durchschnFeldweite = p.fieldCount > 0 ? p.totalLengthM / p.fieldCount : 0
+      let maxLastklasseStahlbelag = 6
+      if (durchschnFeldweite > 2.0) maxLastklasseStahlbelag = 5
+      if (durchschnFeldweite > 2.5) maxLastklasseStahlbelag = 4
+      if (durchschnFeldweite > 3.0) maxLastklasseStahlbelag = 0
+      return lastklasse > maxLastklasseStahlbelag
     },
   },
 ]
