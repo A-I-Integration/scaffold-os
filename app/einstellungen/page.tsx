@@ -95,6 +95,9 @@ export default function EinstellungenPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // NEU: Preisliste je Gerüst-Typ (Arbeitsgerüst, Hängegerüst, Traggerüst
+  // usw. – frei benennbar) für den schnellen Festpreis-Modus im Aufmaß.
+  const [preisliste, setPreisliste] = useState<{ name: string; preis_pro_m2: string }[]>([])
 
   useEffect(() => {
     (async () => {
@@ -109,6 +112,9 @@ export default function EinstellungenPage() {
             c[k] = v === null || v === undefined ? '' : String(v);
           }
           setCompany(c);
+          if (Array.isArray(json.company.preisliste_geruesttypen)) {
+            setPreisliste(json.company.preisliste_geruesttypen.map((p: any) => ({ name: p.name || '', preis_pro_m2: String(p.preis_pro_m2 ?? '') })))
+          }
         }
       } catch (err: any) {
         setError(err.message);
@@ -124,13 +130,16 @@ export default function EinstellungenPage() {
     try {
       // Kalkulations-Felder: deutsches Komma in Punkt umwandeln ("0,8" → "0.8"),
       // damit die numeric-Spalten den Wert sauber speichern.
-      const payload = { ...company };
+      const payload: any = { ...company };
       for (const f of KALK_FIELDS) {
         payload[f.key] = payload[f.key].replace(',', '.').trim();
       }
       for (const f of MAHNUNG_FIELDS) {
         payload[f.key] = payload[f.key].replace(',', '.').trim();
       }
+      payload.preisliste_geruesttypen = preisliste
+        .filter((p) => p.name.trim() && p.preis_pro_m2.trim())
+        .map((p) => ({ name: p.name.trim(), preis_pro_m2: parseFloat(p.preis_pro_m2.replace(',', '.')) || 0 }));
       const res = await fetch('/api/company', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -222,6 +231,54 @@ export default function EinstellungenPage() {
                   <p className="text-[11px] text-[#86868b] mt-1">{f.hint}</p>
                 </div>
               ))}
+            </div>
+            <button
+              onClick={handleSave}
+              disabled={saving}
+              className="w-full rounded-xl bg-[#e8590c] hover:bg-[#d9480f] disabled:opacity-50 py-3 font-bold text-white transition-colors flex items-center justify-center gap-2"
+            >
+              <Save className="h-4 w-4" />
+              {saving ? 'Speichert…' : 'Alles speichern'}
+            </button>
+          </div>
+        )}
+
+        {/* ─── NEU (Phase 46): Preisliste je Gerüst-Typ – schneller Festpreis-Modus im Aufmaß ─── */}
+        {!loading && !error && (
+          <div className="bg-[#f5f5f7] rounded-xl p-6 border border-black/10 space-y-4">
+            <div>
+              <h2 className="text-lg font-bold text-[#1d1d1f]">Preisliste je Gerüst-Typ</h2>
+              <p className="text-sm text-[#86868b]">
+                Feste €/m²-Preise für eure Standard-Gerüsttypen (z. B. Arbeits-/Schutzgerüst,
+                Hängegerüst, Fahrgerüst, Traggerüst) – im Aufmaß Schritt 6 im Festpreis-Modus per
+                Klick wählbar, statt jedes Mal neu einzutippen. Namen frei wählbar.
+              </p>
+            </div>
+            <div className="space-y-2">
+              {preisliste.map((p, i) => (
+                <div key={i} className="flex gap-2 items-center">
+                  <input
+                    value={p.name}
+                    onChange={(e) => setPreisliste((prev) => prev.map((x, j) => j === i ? { ...x, name: e.target.value } : x))}
+                    placeholder="z.B. Arbeits-/Schutzgerüst"
+                    className="flex-1 px-3 py-2 bg-black/10 border border-black/10 rounded-xl text-sm text-[#1d1d1f] focus:outline-none focus:border-[#e8590c]"
+                  />
+                  <input
+                    type="number" step="0.01" min="0"
+                    value={p.preis_pro_m2}
+                    onChange={(e) => setPreisliste((prev) => prev.map((x, j) => j === i ? { ...x, preis_pro_m2: e.target.value } : x))}
+                    placeholder="€/m²"
+                    className="w-28 px-3 py-2 bg-black/10 border border-black/10 rounded-xl text-sm text-[#1d1d1f] focus:outline-none focus:border-[#e8590c]"
+                  />
+                  <button onClick={() => setPreisliste((prev) => prev.filter((_, j) => j !== i))} className="px-2 py-2 text-red-600 hover:bg-red-50 rounded-lg text-sm">✕</button>
+                </div>
+              ))}
+              <button
+                onClick={() => setPreisliste((prev) => [...prev, { name: '', preis_pro_m2: '' }])}
+                className="text-sm text-[#e8590c] font-medium hover:underline"
+              >
+                + Gerüst-Typ hinzufügen
+              </button>
             </div>
             <button
               onClick={handleSave}
