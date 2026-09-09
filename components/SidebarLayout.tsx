@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useState, useEffect } from 'react';
 import { createClient } from '@/lib/supabase/client';
+import ProductTour from './ProductTour';
 import {
   HardHat, LayoutDashboard, Warehouse, CalendarClock, Truck,
   KeyRound, Ruler, Navigation, LogOut, Menu, X, Database, TrendingUp, Timer, Route,
@@ -111,6 +112,7 @@ export default function SidebarLayout({ children }: { children: React.ReactNode 
   const [loading, setLoading] = useState(true);
   const [open, setOpen] = useState(true);
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({});
+  const [zeigeTour, setZeigeTour] = useState(false);
   const pathname = usePathname();
   const router = useRouter();
   const supabase = createClient();
@@ -129,6 +131,10 @@ export default function SidebarLayout({ children }: { children: React.ReactNode 
           .eq('id', user.id)
           .single();
         setProfile(data);
+        // NEU (Phase 47): Produkt-Tour beim allerersten Login zeigen
+        if (typeof window !== 'undefined' && !localStorage.getItem(`scaffold_tour_seen_${user.id}`)) {
+          setZeigeTour(true);
+        }
       }
       setLoading(false);
     }
@@ -305,6 +311,14 @@ export default function SidebarLayout({ children }: { children: React.ReactNode 
       <main className="flex-1 overflow-auto">
         {children}
       </main>
+
+      {/* NEU (Phase 47): Produkt-Tour beim ersten Login */}
+      {zeigeTour && user && (
+        <ProductTour onClose={() => {
+          localStorage.setItem(`scaffold_tour_seen_${user.id}`, 'true');
+          setZeigeTour(false);
+        }} />
+      )}
     </div>
   );
 }
