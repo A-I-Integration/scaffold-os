@@ -150,7 +150,10 @@ export default function GaebPage() {
         }),
       });
       const json = await res.json();
-      if (!json.success) throw new Error(json.error);
+      // FIX (Audit): /api/projects antwortet bei POST-Erfolg mit { id },
+      // nicht mit { success }. Diese Prüfung hätte JEDE erfolgreiche
+      // Angebotserstellung als Fehler gemeldet.
+      if (!res.ok || !json.id) throw new Error(json.error || 'Anlegen fehlgeschlagen');
       router.push(`/kunden/${ausgewaehlterKunde.id}`);
     } catch (err: any) { alert('❌ ' + err.message); }
     setAnlegenLaeuft(false);
