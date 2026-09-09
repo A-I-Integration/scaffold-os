@@ -66,10 +66,13 @@ function Schritt6Content() {
   // NEU (Phase 30): Preisbasis wählbar – KI-Kalkulation oder Festpreis pro m².
   const [preisModus, setPreisModus] = useState<'ki' | 'festpreis'>('ki');
   const [festpreisProM2, setFestpreisProM2] = useState('');
+  // NEU (Phase 46): Preisliste je Gerüst-Typ aus den Einstellungen
+  const [preisliste, setPreisliste] = useState<{ name: string; preis_pro_m2: number }[]>([])
   useEffect(() => {
     fetch('/api/company').then(r => r.json()).then(j => {
       const v = j.company?.calc_festpreis_pro_m2;
       if (v != null && v !== '') setFestpreisProM2(String(v));
+      if (Array.isArray(j.company?.preisliste_geruesttypen)) setPreisliste(j.company.preisliste_geruesttypen);
     }).catch(() => {});
   }, []);
 
@@ -924,7 +927,21 @@ function Schritt6Content() {
                       </button>
                     </div>
                     {preisModus === 'festpreis' && (
-                      <div className="flex items-center gap-2">
+                      <div>
+                        {preisliste.length > 0 && (
+                          <div className="flex flex-wrap gap-1.5 mb-2">
+                            {preisliste.map((p, i) => (
+                              <button
+                                key={i}
+                                onClick={() => setFestpreisProM2(String(p.preis_pro_m2).replace('.', ','))}
+                                className="px-2.5 py-1 rounded-lg text-[11px] bg-[#f5f5f7] border border-black/10 text-[#424245] hover:border-[#e8590c] hover:text-[#e8590c] transition"
+                              >
+                                {p.name} · {String(p.preis_pro_m2).replace('.', ',')} €/m²
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                        <div className="flex items-center gap-2">
                         <input
                           value={festpreisProM2}
                           onChange={(e) => setFestpreisProM2(e.target.value)}
@@ -932,6 +949,7 @@ function Schritt6Content() {
                           className={inputCls + ' w-32'}
                         />
                         <span className="text-xs text-[#86868b]">€/m² × {kiResult.totalAreaM2 ?? '–'} m² = <strong>{((parseFloat(festpreisProM2.replace(',', '.')) || 0) * (kiResult.totalAreaM2 ?? 0)).toFixed(2)} €</strong></span>
+                        </div>
                       </div>
                     )}
                     <p className="text-[10px] text-[#86868b] mt-1.5">Material-/Kostenaufstellung unten zeigt weiterhin die KI-Kalkulation (für die eigene Kalkulation) – der Angebotspreis an den Kunden folgt der hier gewählten Basis.</p>
