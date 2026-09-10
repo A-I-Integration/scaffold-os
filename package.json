@@ -50,13 +50,12 @@
     "@types/react-dom": "^19",
     "@types/react-signature-canvas": "^1.0.7",
     "@types/three": "^0.185.3",
-    "@vitejs/plugin-react": "^6.1.1",
     "eslint": "^9",
     "eslint-config-next": "16.2.12",
     "tailwindcss": "^4",
     "typescript": "^5",
-    "vite": "^8.2.2",
+    "vite": "^6.4.3",
     "vite-tsconfig-paths": "^6.1.1",
-    "vitest": "^5.0.0"
+    "vitest": "^3.2.4"
   }
 }
