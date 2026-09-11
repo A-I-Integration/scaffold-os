@@ -34,6 +34,19 @@ export async function POST(req: NextRequest) {
     if (!inventory_id || !quantity || !to_project_id) {
       return NextResponse.json({ success: false, error: 'inventory_id, quantity und to_project_id erforderlich' }, { status: 400 });
     }
+    // FIX: Transportaufträge reduzierten bisher NICHT den verfügbaren
+    // Lagerbestand (anders als /api/inventory/reserve) – genau die
+    // Doppelverplanungs-Gefahr, die die Lager-Reservierung eigentlich
+    // verhindern sollte, bestand für diesen zweiten Weg weiterhin.
+    // Jetzt gleiche Prüfung/Abbuchung wie bei der Reservierung.
+    const getRes = await fetch(`${url}/rest/v1/inventory?id=eq.${inventory_id}&select=quantity,name`, { headers });
+    if (!getRes.ok) throw new Error(await getRes.text());
+    const items = await getRes.json();
+    if (!items.length) return NextResponse.json({ success: false, error: 'Lagerartikel nicht gefunden.' }, { status: 404 });
+    const verfuegbar = items[0].quantity;
+    if (quantity > verfuegbar) {
+      return NextResponse.json({ success: false, error: `Nur ${verfuegbar} ${items[0].name} verfügbar (angefragt: ${quantity}) – ggf. bereits anderweitig reserviert/verplant.` }, { status: 400 });
+    }
     const res = await fetch(`${url}/rest/v1/transport_orders`, {
       method: 'POST',
       headers: { ...headers, 'Content-Type': 'application/json', Prefer: 'return=representation' },
@@ -41,6 +54,11 @@ export async function POST(req: NextRequest) {
     });
     if (!res.ok) throw new Error(await res.text());
     const rows = await res.json();
+    // Bestand entsprechend abbuchen (gleiches Muster wie inventory/reserve)
+    await fetch(`${url}/rest/v1/inventory?id=eq.${inventory_id}`, {
+      method: 'PATCH', headers: { ...headers, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ quantity: verfuegbar - quantity }),
+    }).catch(() => { /* Transport ist angelegt, Bestandskorrektur notfalls manuell im Lager-Bereich */ });
     return NextResponse.json({ success: true, transport: rows[0] });
   } catch (err: any) {
     return NextResponse.json({ success: false, error: err.message }, { status: 500 });

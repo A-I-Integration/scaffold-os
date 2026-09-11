@@ -57,6 +57,28 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: false, error: 'project_id und employee_id erforderlich' }, { status: 400 });
     }
 
+    // NEU: Bauleiter darf nur Mitarbeiter seiner eigenen Kolonne zuweisen
+    // (gleiche Absicherung wie bei der Wochenplanung) – Admin/Disposition
+    // weiterhin uneingeschränkt.
+    const supabase = await createClient();
+    const { data: profile } = await supabase.from('profiles').select('role').eq('id', userId).single();
+    if (profile?.role === 'bauleiter') {
+      const meRes = await fetch(`${url}/rest/v1/employees?select=id&user_id=eq.${userId}&limit=1`, { headers });
+      const meRows = meRes.ok ? await meRes.json() : [];
+      const meineEmployeeId = meRows?.[0]?.id;
+      if (meineEmployeeId && employee_id !== meineEmployeeId) {
+        const zielRes = await fetch(`${url}/rest/v1/employees?id=eq.${employee_id}&select=kolonne_id`, { headers });
+        const zielRows = zielRes.ok ? await zielRes.json() : [];
+        const zielKolonne = zielRows?.[0]?.kolonne_id;
+        const eigeneKolonnenRes = await fetch(`${url}/rest/v1/kolonnen?bauleiter_id=eq.${meineEmployeeId}&select=id`, { headers });
+        const eigeneKolonnen = eigeneKolonnenRes.ok ? await eigeneKolonnenRes.json() : [];
+        const istEigen = eigeneKolonnen.some((k: any) => k.id === zielKolonne);
+        if (!istEigen) {
+          return NextResponse.json({ success: false, error: 'Dieser Mitarbeiter gehört nicht zu deiner Kolonne.' }, { status: 403 });
+        }
+      }
+    }
+
     const res = await fetch(`${url}/rest/v1/project_assignments`, {
       method: 'POST',
       headers: { ...headers, Prefer: 'return=representation,resolution=merge-duplicates' },
