@@ -111,6 +111,24 @@ export async function POST(req: NextRequest) {
     });
     if (!res.ok) throw new Error(await res.text());
     const rows = await res.json();
+
+    // NEU: Wochenplanung und Team-Zuweisung (project_assignments) waren
+    // bisher zwei komplett getrennte Systeme – beim täglichen Einsatz
+    // automatisch auch die Team-Zuweisung anlegen (falls noch nicht
+    // vorhanden), damit "wer ist im Team" und "wer ist wann eingeteilt"
+    // zusammenpassen. Nur bei tatsächlicher Projekt-Zuordnung (nicht beim
+    // Entfernen/Freistellen).
+    if (project_id) {
+      const vorhandenRes = await fetch(`${url}/rest/v1/project_assignments?project_id=eq.${project_id}&employee_id=eq.${employee_id}&select=id`, { headers });
+      const vorhanden = vorhandenRes.ok ? await vorhandenRes.json() : [];
+      if (vorhanden.length === 0) {
+        await fetch(`${url}/rest/v1/project_assignments`, {
+          method: 'POST', headers,
+          body: JSON.stringify({ project_id, employee_id, rolle: 'helfer' }),
+        }).catch(() => { /* nicht kritisch – Tageseinsatz bleibt trotzdem gespeichert */ });
+      }
+    }
+
     return NextResponse.json({ success: true, einsatz: rows[0] });
   } catch (err: any) {
     return NextResponse.json({ success: false, error: err.message }, { status: 500 });
