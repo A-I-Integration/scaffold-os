@@ -40,6 +40,7 @@ function fmtTime(iso: string | null) {
 export default function MeineTourenPage() {
   const [employees, setEmployees] = useState<EmployeeWithSkills[]>([]);
   const [meId, setMeId] = useState<string>('');
+  const [heutigerEinsatz, setHeutigerEinsatz] = useState<{ id: string; name: string } | null>(null);
   const [tours, setTours] = useState<Tour[]>([]);
   const [entries, setEntries] = useState<TimeEntry[]>([]);
   const [loading, setLoading] = useState(true);
@@ -102,6 +103,18 @@ export default function MeineTourenPage() {
         const er = await fetch(`/api/time-entries?employee_id=${meId}&from=${todayISO()}`, { cache: 'no-store' });
         const ej = await er.json();
         if (ej.success) setEntries(ej.entries || []);
+        // NEU (Phase 54): heutigen Wochenplan-Einsatz laden – zeigt sofort
+        // Änderungen, die der Bauleiter/Disponent per Drag & Drop in der
+        // Wochenplanung vorgenommen hat.
+        try {
+          const heute = todayISO();
+          const wr = await fetch(`/api/wochenplanung?start=${heute}&end=${heute}`, { cache: 'no-store' });
+          const wj = await wr.json();
+          if (wj.success) {
+            const meiner = (wj.einsaetze || []).find((e: any) => e.employee_id === meId);
+            setHeutigerEinsatz(meiner?.project || null);
+          }
+        } catch { /* nicht kritisch, Rest der Seite funktioniert weiter */ }
       }
     } catch (e) { console.error(e); }
     setLoading(false);
@@ -252,6 +265,17 @@ export default function MeineTourenPage() {
         {showAllHint && (
           <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 text-sm text-blue-800">
             ℹ️ Für dich ist aktuell keine eigene Tour zugeordnet – du siehst die Übersicht aller Touren.
+          </div>
+        )}
+
+        {/* NEU (Phase 54): heutiger Einsatz aus der Wochenplanung – zeigt
+            automatisch, wenn der Bauleiter/Disponent per Drag & Drop
+            geändert hat, ohne dass eine formale Tour (Fahrzeug+Fahrer)
+            angelegt sein muss. */}
+        {heutigerEinsatz && (
+          <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4">
+            <p className="text-xs font-semibold text-emerald-700 uppercase tracking-wide">Heutiger Einsatz (Wochenplanung)</p>
+            <p className="text-lg font-bold text-emerald-900 mt-1">📁 {heutigerEinsatz.name}</p>
           </div>
         )}
 

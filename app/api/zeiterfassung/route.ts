@@ -116,7 +116,7 @@ export async function PUT(req: NextRequest) {
 
   try {
     const body = await req.json();
-    const { id, start_time, end_time, work_date, hours, break_minutes, note, project_id } = body;
+    const { id, start_time, end_time, work_date, hours, break_minutes, note, project_id, spesen_euro, fahrzeit_minuten, uebernachtung } = body;
     if (!id) {
       return NextResponse.json({ success: false, error: 'id erforderlich' }, { status: 400 });
     }
@@ -128,6 +128,10 @@ export async function PUT(req: NextRequest) {
     if (end_time) updates.end_time = end_time;
     // NEU (Phase 52): optionale Projekt-Zuordnung auch nachträglich änderbar
     if (project_id !== undefined) updates.project_id = project_id || null;
+    // NEU (Phase 53): Spesen/Fahrzeiten/Übernachtung nachträglich änderbar
+    if (spesen_euro !== undefined) updates.spesen_euro = spesen_euro || 0;
+    if (fahrzeit_minuten !== undefined) updates.fahrzeit_minuten = fahrzeit_minuten || 0;
+    if (uebernachtung !== undefined) updates.uebernachtung = !!uebernachtung;
 
     if (hours !== undefined && hours !== null) {
       updates.hours = hours;
@@ -179,7 +183,7 @@ export async function POST(req: NextRequest) {
 
   try {
     const body = await req.json();
-    const { employee_id, work_date, start_time, end_time, hours, break_minutes, note, project_id } = body;
+    const { employee_id, work_date, start_time, end_time, hours, break_minutes, note, project_id, spesen_euro, fahrzeit_minuten, uebernachtung } = body;
 
     if (!employee_id || !work_date) {
       return NextResponse.json(
@@ -195,6 +199,10 @@ export async function POST(req: NextRequest) {
       break_minutes: 0,
       // NEU (Phase 52): optionale Projekt-Zuordnung für Soll-Ist-Vergleich
       project_id: project_id || null,
+      // NEU (Phase 53): Spesen/Fahrzeiten/Übernachtung für die Lohnabrechnung
+      spesen_euro: spesen_euro || 0,
+      fahrzeit_minuten: fahrzeit_minuten || 0,
+      uebernachtung: !!uebernachtung,
     };
 
     if (start_time && end_time) {

@@ -40,6 +40,9 @@ interface Entry {
   note: string | null;
   project_id?: string | null;
   project?: { id: string; name: string } | null;
+  spesen_euro?: number | null;
+  fahrzeit_minuten?: number | null;
+  uebernachtung?: boolean | null;
 }
 
 interface Summary { ist_hours: number; pause_minutes: number; days: number }
@@ -79,6 +82,9 @@ export default function ZeiterfassungPage() {
   const [fNotiz, setFNotiz] = useState('');
   const [fProjekt, setFProjekt] = useState('');
   const [projekte, setProjekte] = useState<{ id: string; name: string }[]>([]);
+  const [fSpesen, setFSpesen] = useState('');
+  const [fFahrzeit, setFFahrzeit] = useState('');
+  const [fUebernachtung, setFUebernachtung] = useState(false);
   const [addFor, setAddFor] = useState<string | null>(null);
   const [aDatum, setADatum] = useState('');
   const [saving, setSaving] = useState(false);
@@ -141,13 +147,13 @@ export default function ZeiterfassungPage() {
   function startAdd(empId: string) {
     setAddFor(empId);
     setADatum(`${month}-01`);
-    setFVon(''); setFBis(''); setFStunden(''); setFPause(''); setFNotiz(''); setFProjekt('');
+    setFVon(''); setFBis(''); setFStunden(''); setFPause(''); setFNotiz(''); setFProjekt(''); setFSpesen(''); setFFahrzeit(''); setFUebernachtung(false);
     setEditId(null);
   }
 
   function resetForm() {
     setEditId(null); setAddFor(null);
-    setFVon(''); setFBis(''); setFStunden(''); setFPause(''); setFNotiz(''); setFProjekt('');
+    setFVon(''); setFBis(''); setFStunden(''); setFPause(''); setFNotiz(''); setFProjekt(''); setFSpesen(''); setFFahrzeit(''); setFUebernachtung(false);
   }
 
   // Von/Bis (lokal eingegeben) → ISO für die API
@@ -193,7 +199,7 @@ export default function ZeiterfassungPage() {
     setSaving(true); setMsg('');
     try {
       if (!aDatum) throw new Error('Datum fehlt.');
-      const body: any = { employee_id: empId, work_date: aDatum, note: fNotiz || null, project_id: fProjekt || null };
+      const body: any = { employee_id: empId, work_date: aDatum, note: fNotiz || null, project_id: fProjekt || null, spesen_euro: fSpesen ? parseFloat(fSpesen.replace(',', '.')) : 0, fahrzeit_minuten: fFahrzeit ? parseInt(fFahrzeit, 10) : 0, uebernachtung: fUebernachtung };
       if (fVon && fBis) {
         body.start_time = toISO(aDatum, fVon);
         body.end_time = toISO(aDatum, fBis);
@@ -321,6 +327,28 @@ export default function ZeiterfassungPage() {
             {projekte.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
           </select>
         </div>
+        {/* NEU (Phase 53): Spesen, Fahrzeiten, Übernachtung für die Lohnabrechnung.
+            Verpflegungspauschalen (14€/28€) und Übernachtungspauschale (20€)
+            aktuell recherchiert – als Schnellauswahl, weiterhin frei änderbar,
+            keine Steuerberatung. */}
+        <div className="grid grid-cols-2 gap-2">
+          <div>
+            <label className="text-xs text-[#86868b]">Spesen (€)</label>
+            <input inputMode="decimal" placeholder="0,00" value={fSpesen} onChange={e => setFSpesen(e.target.value)} className={input} />
+            <div className="flex gap-1 mt-1">
+              <button type="button" onClick={() => setFSpesen('14')} className="text-[10px] px-2 py-0.5 rounded bg-black/5 hover:bg-black/10">&gt;8h: 14€</button>
+              <button type="button" onClick={() => setFSpesen('28')} className="text-[10px] px-2 py-0.5 rounded bg-black/5 hover:bg-black/10">24h: 28€</button>
+            </div>
+          </div>
+          <div>
+            <label className="text-xs text-[#86868b]">Fahrzeit (min)</label>
+            <input inputMode="numeric" placeholder="0" value={fFahrzeit} onChange={e => setFFahrzeit(e.target.value)} className={input} />
+          </div>
+        </div>
+        <label className="flex items-center gap-2 text-xs text-[#424245]">
+          <input type="checkbox" checked={fUebernachtung} onChange={e => { setFUebernachtung(e.target.checked); if (e.target.checked && !fSpesen) setFSpesen('20'); }} />
+          Übernachtung (auswärtige Baustelle) – Pauschale 20€
+        </label>
         <p className="text-xs text-[#86868b]">
           Von+Bis → Pause automatisch ({BREAK_RULE_TEXT}). Nur Stunden → gilt als Netto.
         </p>
@@ -444,6 +472,9 @@ export default function ZeiterfassungPage() {
                       </span>
                       {e.note && <span className="text-[#86868b]">· {e.note}</span>}
                       {e.project?.name && <span className="text-blue-600">· 📁 {e.project.name}</span>}
+                      {!!e.spesen_euro && <span className="text-emerald-600">· {Number(e.spesen_euro).toFixed(2)}€ Spesen</span>}
+                      {!!e.fahrzeit_minuten && <span className="text-purple-600">· {e.fahrzeit_minuten}min Fahrzeit</span>}
+                      {e.uebernachtung && <span className="text-amber-600">· 🛏️ Übernachtung</span>}
                       {canEdit && editId !== e.id && (
                         <button onClick={() => startEdit(e)}
                           className="ml-auto inline-flex items-center gap-1 text-xs border border-black/10 hover:border-[#e8590c] text-[#424245] hover:text-[#e8590c] px-2.5 py-1 rounded-md transition-colors">
