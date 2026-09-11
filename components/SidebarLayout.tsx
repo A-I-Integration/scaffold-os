@@ -83,6 +83,7 @@ const NAV_GROUPS: NavGroup[] = [
     key: 'mitarbeiter', label: 'Mitarbeiter', icon: KeyRound,
     items: [
       { href: '/mitarbeiter',   label: 'Zugänge',       icon: KeyRound,   roles: ['admin', 'disponent'] },
+      { href: '/kolonnen',      label: 'Kolonnen',      icon: Users,      roles: ['admin', 'disponent', 'bauleiter'] },
       { href: '/wochenplanung', label: 'Wochenplanung', icon: CalendarClock, roles: ['admin', 'disponent', 'bauleiter'] },
       { href: '/zeiterfassung', label: 'Zeiterfassung', icon: Timer,      roles: ['admin', 'disponent', 'bauleiter'] },
       { href: '/meine-touren',  label: 'Meine Touren',  icon: Navigation, roles: ['admin', 'disponent', 'bauleiter', 'mitarbeiter', 'lager'] },
