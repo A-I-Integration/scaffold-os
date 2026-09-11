@@ -1,36 +1,54 @@
-# CAD – wirklich vollständiges Paket (behebt beide Deployment-Fehler)
+# Kolonnen-System (für 15-20 Teams mit eigenem Bauleiter)
 
-## Ursachen der beiden Fehler
+## Was gebaut wurde
 
-1. **"Cannot find module 'pdf-parse'"** – `npm install pdf-parse` wurde
-   noch nicht bei dir lokal ausgeführt (steht nur in meiner
-   Arbeitsumgebung, nicht in deiner echten package.json/package-lock.json,
-   bis du den Befehl unten wirklich ausführst).
+Neues Organisationskonzept: **Kolonnen** (feste Teams mit einem
+Bauleiter), zusätzlich zur bestehenden Wochenplanung.
 
-2. **"Export generateMontageplanHTML doesn't exist"** – mein Fehler:
-   Ich habe dir `app/cad/page.tsx` geschickt (das diese Funktion
-   importiert), aber die Datei `lib/export/pdf-export.ts`, die diese
-   Funktion tatsächlich enthält, habe ich dir nie geschickt. Ich dachte
-   fälschlich, sie sei bei dir schon vorhanden.
+**Neue Seite "Kolonnen"** (Sidebar → Mitarbeiter):
+- Admin/Disposition: Kolonnen anlegen, Bauleiter zuweisen, Mitarbeiter
+  verteilen – **jederzeit änderbar**, wie gefordert
+- Bauleiter: sieht **nur seine eigene** Kolonne (rein lesend)
 
-## Diesmal wirklich alles zusammen
+**Wochenplanung jetzt automatisch eingeschränkt:**
+- Bauleiter sieht/plant in der Wochenplanung **nur seine eigene
+  Kolonne** – bei 15-20 Kolonnen sonst völlig unübersichtlich und
+  nicht seine Zuständigkeit
+- Admin/Disposition sehen weiterhin **alle** Mitarbeiter/Kolonnen
+- Zusätzliche Absicherung: Ein Bauleiter kann über die API auch nicht
+  versehentlich/absichtlich einen fremden Mitarbeiter einplanen –
+  wird serverseitig geprüft, nicht nur in der Oberfläche versteckt
 
-Ich habe jede einzelne Datei nachverfolgt, die `app/cad/page.tsx`
-(direkt oder indirekt über die Komponenten) tatsächlich braucht –
-**14 Dateien**, keine ausgelassen. Bei mir baut das vollständig sauber
-(119/119 Seiten).
+## Zwei echte Fehler bei mir selbst gefunden, bevor sie ausgeliefert wurden
 
-## Installation (Reihenfolge beachten)
+1. Ich hatte fälschlich angenommen, es gäbe ein Feld
+   `profiles.employee_id` zur Verknüpfung Login↔Mitarbeiter – die
+   echte Verknüpfung läuft über `employees.user_id` (bestätigtes
+   Muster aus der bestehenden `/api/me`-Route). Korrigiert.
+2. Ein verschachtelter Datenbank-Abruf (Kolonne + ihre Mitglieder in
+   einer Anfrage) hätte einen exakten, nur geschätzten
+   Datenbank-Constraint-Namen gebraucht – bei zwei Beziehungen
+   zwischen denselben zwei Tabellen (Bauleiter UND Mitglieder) ist das
+   riskant. Auf zwei getrennte, sichere Abfragen umgestellt.
 
-```bash
-# 1. Fehlende Pakete WIRKLICH installieren (nicht überspringen):
-npm install pdf-parse
+Build lokal geprüft, keine Fehler (133 Seiten). Tests laufen weiter
+sauber (20/20).
 
-# 2. Alle Dateien aus diesem ZIP an die passenden Stellen kopieren
-#    (überschreiben), dann:
-git add app/cad/ app/api/cad/ app/api/grundriss-analyse/ components/cad/ lib/calculations/cad-engine.ts lib/calculations/cad-rules.ts lib/calculations/geruest-systeme.ts lib/export/pdf-export.ts lib/grundriss-parsing.ts lib/ki-fetch.ts lib/vertrag-upload-client.ts
-git commit -m "CAD: vollständiges, konsistentes Paket (behebt fehlende Datei + fehlendes Paket)"
-git push -u origin feat/kunden-detail
+## Installation
+
+```sql
+-- Supabase SQL Editor:
+-- (Inhalt von supabase/phase-55-kolonnen.sql)
 ```
 
-Kein SQL nötig.
+- `app/api/kolonnen/route.ts` (neu)
+- `app/kolonnen/page.tsx` (neu)
+- `app/api/wochenplanung/route.ts` (ersetzen)
+- `components/SidebarLayout.tsx` (ersetzen)
+
+```bash
+git pull
+git add app/api/kolonnen app/kolonnen app/api/wochenplanung/route.ts components/SidebarLayout.tsx supabase/phase-55-kolonnen.sql
+git commit -m "Kolonnen-System: Bauleiter sieht nur eigenes Team, Admin/Disposition alle"
+git push
+```
