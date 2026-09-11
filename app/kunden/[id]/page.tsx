@@ -24,6 +24,8 @@ import SignaturePad from '@/components/aufmaß/SignaturePad'
 import { uploadVertragsdokument } from '@/lib/vertrag-upload-client'
 import VersionsHistorie from '@/components/VersionsHistorie'
 import KundenKontakte from '@/components/KundenKontakte'
+import KundeEmails from '@/components/KundeEmails'
+import MaterialReservieren from '@/components/MaterialReservieren'
 import AuftragsTeam from '@/components/AuftragsTeam'
 import VertragsDokumente from '@/components/VertragsDokumente'
 
@@ -91,10 +93,10 @@ const DOK_TYPE_LABEL: Record<string, string> = {
 const fmtTimestamp = (d: string | null) => (d ? new Date(d).toLocaleDateString('de-DE') : '–')
 
 const LEER_POSITION = { bezeichnung: '', menge: '1', einheit: 'Stk.', einzelpreis: '' }
-const TABS = ['kunde', 'aufmass', 'bilder', 'dokumente', 'angebote', 'rechnungen'] as const
+const TABS = ['kunde', 'aufmass', 'bilder', 'dokumente', 'angebote', 'rechnungen', 'emails'] as const
 type Tab = typeof TABS[number]
 const TAB_LABEL: Record<Tab, string> = {
-  kunde: 'Kunde', aufmass: 'Aufmaß', bilder: 'Bilder', dokumente: 'Dokumente', angebote: 'Angebote', rechnungen: 'Rechnungen',
+  kunde: 'Kunde', aufmass: 'Aufmaß', bilder: 'Bilder', dokumente: 'Dokumente', angebote: 'Angebote', rechnungen: 'Rechnungen', emails: 'E-Mails',
 }
 
 // Gleicher Namensabgleich wie auf der Kunden-Übersicht (app/kunden/page.tsx):
@@ -756,6 +758,7 @@ export default function KundenDetailPage() {
         )}
 
         {tab === 'kunde' && <div className="max-w-xl mt-4"><KundenKontakte customerId={kunde.id} /></div>}
+        {tab === 'emails' && <KundeEmails customerId={kunde.id} kundenEmail={kunde.email} />}
 
         {/* ═══════════ TAB: AUFMASS ═══════════ */}
         {tab === 'aufmass' && (
@@ -1119,6 +1122,9 @@ export default function KundenDetailPage() {
                           >
                             {rechnungAusAngebotLaeuft === project.id ? 'Wird angelegt…' : '🧾 Rechnung aus Angebot erstellen'}
                           </button>
+                        )}
+                        {project.data?.kiResult?.materialList && (
+                          <MaterialReservieren projectId={project.id} materialList={project.data.kiResult.materialList} />
                         )}
                       </div>
                     ) : (
