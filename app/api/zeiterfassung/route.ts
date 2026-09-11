@@ -66,7 +66,7 @@ export async function GET(req: NextRequest) {
     let empEndpoint = `${url}/rest/v1/employees?select=id,first_name,last_name,weekly_hours,status&order=last_name.asc,first_name.asc`;
     if (employeeId) empEndpoint += `&id=eq.${employeeId}`;
 
-    let entEndpoint = `${url}/rest/v1/time_entries?select=*&work_date=gte.${from}&work_date=lte.${to}&order=work_date.asc,start_time.asc`;
+    let entEndpoint = `${url}/rest/v1/time_entries?select=*,project:project_id(id,name)&work_date=gte.${from}&work_date=lte.${to}&order=work_date.asc,start_time.asc`;
     if (employeeId) entEndpoint += `&employee_id=eq.${employeeId}`;
 
     const [empRes, entRes] = await Promise.all([
@@ -116,7 +116,7 @@ export async function PUT(req: NextRequest) {
 
   try {
     const body = await req.json();
-    const { id, start_time, end_time, work_date, hours, break_minutes, note } = body;
+    const { id, start_time, end_time, work_date, hours, break_minutes, note, project_id } = body;
     if (!id) {
       return NextResponse.json({ success: false, error: 'id erforderlich' }, { status: 400 });
     }
@@ -126,6 +126,8 @@ export async function PUT(req: NextRequest) {
     if (work_date) updates.work_date = work_date;
     if (start_time) updates.start_time = start_time;
     if (end_time) updates.end_time = end_time;
+    // NEU (Phase 52): optionale Projekt-Zuordnung auch nachträglich änderbar
+    if (project_id !== undefined) updates.project_id = project_id || null;
 
     if (hours !== undefined && hours !== null) {
       updates.hours = hours;
@@ -177,7 +179,7 @@ export async function POST(req: NextRequest) {
 
   try {
     const body = await req.json();
-    const { employee_id, work_date, start_time, end_time, hours, break_minutes, note } = body;
+    const { employee_id, work_date, start_time, end_time, hours, break_minutes, note, project_id } = body;
 
     if (!employee_id || !work_date) {
       return NextResponse.json(
@@ -191,6 +193,8 @@ export async function POST(req: NextRequest) {
       work_date,
       note: note || null,
       break_minutes: 0,
+      // NEU (Phase 52): optionale Projekt-Zuordnung für Soll-Ist-Vergleich
+      project_id: project_id || null,
     };
 
     if (start_time && end_time) {

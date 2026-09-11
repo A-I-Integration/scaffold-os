@@ -26,6 +26,7 @@ import VersionsHistorie from '@/components/VersionsHistorie'
 import KundenKontakte from '@/components/KundenKontakte'
 import KundeEmails from '@/components/KundeEmails'
 import MaterialReservieren from '@/components/MaterialReservieren'
+import SollIstStunden from '@/components/SollIstStunden'
 import AuftragsTeam from '@/components/AuftragsTeam'
 import VertragsDokumente from '@/components/VertragsDokumente'
 
@@ -777,6 +778,7 @@ export default function KundenDetailPage() {
                     <div>
                       <p className="font-semibold text-[#1d1d1f] flex items-center gap-1.5"><Ruler className="h-4 w-4 text-[#e8590c]" /> {project.name || 'Unbenanntes Projekt'}</p>
                       {project.adresse && <p className="text-xs text-[#86868b]">{project.adresse}</p>}
+                      {ki?.estimatedLaborHours != null && <SollIstStunden projectId={project.id} geplantStunden={ki.estimatedLaborHours} />}
                     </div>
                     <a href={`/aufmass/schritt6?id=${project.id}`} className={btnSecondary}>Aufmaß öffnen</a>
                   </div>
