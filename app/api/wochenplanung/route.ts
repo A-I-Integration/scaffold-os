@@ -60,7 +60,7 @@ export async function GET(req: NextRequest) {
     const [empRes, einsatzRes, absenceRes, projRes] = await Promise.all([
       fetch(`${url}/rest/v1/employees?select=id,first_name,last_name,status,kolonne_id&status=eq.active&order=last_name.asc,first_name.asc${mitarbeiterFilter}`, { headers }),
       fetch(`${url}/rest/v1/taeglicher_einsatz?einsatz_datum=gte.${start}&einsatz_datum=lte.${end}&select=*,project:project_id(id,name)`, { headers }),
-      fetch(`${url}/rest/v1/absences?status=eq.approved&start_date=lte.${end}&end_date=gte.${start}&select=*`, { headers }),
+      fetch(`${url}/rest/v1/absences?or=(status.eq.approved,type.eq.sick)&start_date=lte.${end}&end_date=gte.${start}&select=*`, { headers }),
       fetch(`${url}/rest/v1/projects?status=eq.active&select=id,name,data`, { headers }),
     ]);
     if (!empRes.ok) throw new Error(await empRes.text());
@@ -104,6 +104,55 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ success: false, error: 'Dieser Mitarbeiter gehört nicht zu deiner Kolonne.' }, { status: 403 });
       }
     }
+    // NEU: Läuft der Auftrag über mehrere Tage/Wochen, wird der Mitarbeiter
+    // automatisch für die gesamte Dauer eingetragen (Mo-Fr), nicht nur für
+    // den einen Tag, auf den gezogen wurde – ausgehend vom gezogenen Tag als
+    // Start für DIESEN Mitarbeiter.
+    const erstellteTage: string[] = [einsatz_datum];
+    if (project_id) {
+      const projRes = await fetch(`${url}/rest/v1/projects?id=eq.${project_id}&select=data`, { headers });
+      const projRows = projRes.ok ? await projRes.json() : [];
+      const step1 = projRows?.[0]?.data?.step1;
+      let anzahlWerktage = 0;
+      if (step1?.projektende) {
+        const start = new Date(einsatz_datum);
+        const ende = new Date(step1.projektende);
+        const tageDiff = Math.round((ende.getTime() - start.getTime()) / 86400000);
+        if (tageDiff > 0) anzahlWerktage = tageDiff;
+      } else if (step1?.dauer) {
+        // Fallback: "dauer" ist bei Aufmaß-Projekten in WOCHEN hinterlegt.
+        // Bei CAD/GAEB/Brücken-Angeboten ist der Wert weniger einheitlich
+        // gepflegt – bewusst als grobe Näherung behandelt, nicht als exakt.
+        const wochen = parseFloat(step1.dauer);
+        if (!isNaN(wochen) && wochen > 0) anzahlWerktage = Math.round(wochen * 5);
+      }
+      if (anzahlWerktage > 1) {
+        // FIX: erst hier selbst getestet – die einfache Schleife hätte bei
+        // Wochenenden innerhalb der Dauer zu WENIGE Werktage erzeugt (das
+        // Wochenende wurde übersprungen, aber nicht durch einen weiteren
+        // Tag ausgeglichen). Jetzt: so lange Kalendertage weitergehen, bis
+        // wirklich genug Werktage erreicht sind.
+        const startDatum = new Date(einsatz_datum);
+        let hinzugefuegt = 1; // Starttag zählt schon als 1. Werktag
+        let i = 1;
+        while (hinzugefuegt < anzahlWerktage && i < 120) { // Sicherheitsgrenze
+          const naechsterTag = new Date(startDatum);
+          naechsterTag.setDate(naechsterTag.getDate() + i);
+          const wochentag = naechsterTag.getDay();
+          i++;
+          if (wochentag === 0 || wochentag === 6) continue; // Wochenende überspringen, zählt nicht mit
+          const iso = naechsterTag.toISOString().slice(0, 10);
+          await fetch(`${url}/rest/v1/taeglicher_einsatz`, {
+            method: 'POST',
+            headers: { ...headers, Prefer: 'resolution=merge-duplicates' },
+            body: JSON.stringify({ employee_id, einsatz_datum: iso, project_id, notiz: notiz || null, updated_at: new Date().toISOString() }),
+          }).catch(() => { /* einzelnen Tag überspringen, Rest weiterlaufen lassen */ });
+          erstellteTage.push(iso);
+          hinzugefuegt++;
+        }
+      }
+    }
+
     const res = await fetch(`${url}/rest/v1/taeglicher_einsatz`, {
       method: 'POST',
       headers: { ...headers, Prefer: 'resolution=merge-duplicates,return=representation' },
@@ -129,7 +178,7 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    return NextResponse.json({ success: true, einsatz: rows[0] });
+    return NextResponse.json({ success: true, einsatz: rows[0], erstellteTage });
   } catch (err: any) {
     return NextResponse.json({ success: false, error: err.message }, { status: 500 });
   }

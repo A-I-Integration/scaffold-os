@@ -70,7 +70,12 @@ export default function WochenplanungPage() {
       body: JSON.stringify({ employee_id: employeeId, einsatz_datum: datum, project_id: projectId }),
     })
     const json = await res.json()
-    if (json.success) laden_fn()
+    if (json.success) {
+      if (json.erstellteTage?.length > 1) {
+        alert(`✅ Für die gesamte Auftragsdauer eingetragen: ${json.erstellteTage.length} Werktage (${json.erstellteTage[0]} bis ${json.erstellteTage[json.erstellteTage.length - 1]}).`)
+      }
+      laden_fn()
+    }
     else alert('❌ ' + json.error)
   }
 
@@ -152,8 +157,9 @@ export default function WochenplanungPage() {
                 if (abwesenheit) {
                   const info = ABSENCE_LABEL[abwesenheit.type] || ABSENCE_LABEL.other
                   return (
-                    <div key={i} className={`rounded-lg border text-[11px] px-1.5 py-2 flex items-center justify-center text-center border-t ${info.farbe}`}>
+                    <div key={i} className={`rounded-lg border text-[11px] px-1.5 py-2 flex flex-col items-center justify-center text-center border-t ${info.farbe}`}>
                       {info.label}
+                      {abwesenheit.status === 'pending' && <span className="text-[9px] opacity-70">(wartet auf Freigabe)</span>}
                     </div>
                   )
                 }
