@@ -165,7 +165,11 @@ export default function MeineTourenPage() {
     try {
       const res = await fetch('/api/time-entries', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ employee_id: meId, tour_id: myTour?.id || null, note: myTour ? `Tour: ${myTour.name}` : null }),
+        // NEU: heutigen Wochenplanungs-Einsatz automatisch als Projekt
+        // vorschlagen – das eigentliche Einstempeln bleibt weiterhin ein
+        // aktiver, manueller Schritt des Mitarbeiters, nur das Projekt-Feld
+        // wird ihm dabei nicht nochmal abverlangt.
+        body: JSON.stringify({ employee_id: meId, tour_id: myTour?.id || null, project_id: heutigerEinsatz?.id || null, note: myTour ? `Tour: ${myTour.name}` : null }),
       });
       const json = await res.json();
       if (!json.success) throw new Error(json.error);
