@@ -38,6 +38,8 @@ interface Entry {
   hours: number | null;
   break_minutes: number | null;
   note: string | null;
+  project_id?: string | null;
+  project?: { id: string; name: string } | null;
 }
 
 interface Summary { ist_hours: number; pause_minutes: number; days: number }
@@ -75,6 +77,8 @@ export default function ZeiterfassungPage() {
   const [fStunden, setFStunden] = useState('');
   const [fPause, setFPause] = useState('');
   const [fNotiz, setFNotiz] = useState('');
+  const [fProjekt, setFProjekt] = useState('');
+  const [projekte, setProjekte] = useState<{ id: string; name: string }[]>([]);
   const [addFor, setAddFor] = useState<string | null>(null);
   const [aDatum, setADatum] = useState('');
   const [saving, setSaving] = useState(false);
@@ -111,6 +115,13 @@ export default function ZeiterfassungPage() {
 
   useEffect(() => { load(); }, [load]);
 
+  // NEU (Phase 52): Projekte für die Soll-Ist-Zuordnung laden
+  useEffect(() => {
+    fetch('/api/projects').then((r) => r.json()).then((j) => {
+      if (j.success) setProjekte((j.projects || []).map((p: any) => ({ id: p.id, name: p.name })));
+    }).catch(() => {});
+  }, []);
+
   // ─── Soll-Berechnung (Wochenstunden ÷ 5 × Arbeitstage Mo–Fr) ───
   const workdays = workdaysInMonth(month);
   const sollFor = (emp: Employee) =>
@@ -130,13 +141,13 @@ export default function ZeiterfassungPage() {
   function startAdd(empId: string) {
     setAddFor(empId);
     setADatum(`${month}-01`);
-    setFVon(''); setFBis(''); setFStunden(''); setFPause(''); setFNotiz('');
+    setFVon(''); setFBis(''); setFStunden(''); setFPause(''); setFNotiz(''); setFProjekt('');
     setEditId(null);
   }
 
   function resetForm() {
     setEditId(null); setAddFor(null);
-    setFVon(''); setFBis(''); setFStunden(''); setFPause(''); setFNotiz('');
+    setFVon(''); setFBis(''); setFStunden(''); setFPause(''); setFNotiz(''); setFProjekt('');
   }
 
   // Von/Bis (lokal eingegeben) → ISO für die API
@@ -182,7 +193,7 @@ export default function ZeiterfassungPage() {
     setSaving(true); setMsg('');
     try {
       if (!aDatum) throw new Error('Datum fehlt.');
-      const body: any = { employee_id: empId, work_date: aDatum, note: fNotiz || null };
+      const body: any = { employee_id: empId, work_date: aDatum, note: fNotiz || null, project_id: fProjekt || null };
       if (fVon && fBis) {
         body.start_time = toISO(aDatum, fVon);
         body.end_time = toISO(aDatum, fBis);
@@ -303,6 +314,13 @@ export default function ZeiterfassungPage() {
           </div>
         </div>
         <input placeholder="Notiz (optional)" value={fNotiz} onChange={e => setFNotiz(e.target.value)} className={input} />
+        <div>
+          <label className="text-xs text-[#86868b]">Projekt (optional, für Soll-Ist-Vergleich)</label>
+          <select value={fProjekt} onChange={e => setFProjekt(e.target.value)} className={input}>
+            <option value="">– kein Projekt (z.B. Büro, allgemein) –</option>
+            {projekte.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+          </select>
+        </div>
         <p className="text-xs text-[#86868b]">
           Von+Bis → Pause automatisch ({BREAK_RULE_TEXT}). Nur Stunden → gilt als Netto.
         </p>
@@ -425,6 +443,7 @@ export default function ZeiterfassungPage() {
                         {e.break_minutes ? ` · Pause ${e.break_minutes} min` : ''}
                       </span>
                       {e.note && <span className="text-[#86868b]">· {e.note}</span>}
+                      {e.project?.name && <span className="text-blue-600">· 📁 {e.project.name}</span>}
                       {canEdit && editId !== e.id && (
                         <button onClick={() => startEdit(e)}
                           className="ml-auto inline-flex items-center gap-1 text-xs border border-black/10 hover:border-[#e8590c] text-[#424245] hover:text-[#e8590c] px-2.5 py-1 rounded-md transition-colors">
