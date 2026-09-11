@@ -1,10 +1,12 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useState, useEffect, Suspense } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 
-export default function Schritt5Page() {
+function Schritt5Content() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const projectId = searchParams.get('id');
   const [step1Data, setStep1Data] = useState<any>(null);
   const [step2Data, setStep2Data] = useState<any>(null);
 
@@ -20,21 +22,34 @@ export default function Schritt5Page() {
   });
 
   useEffect(() => {
+    if (projectId) {
+      (async () => {
+        try {
+          const res = await fetch('/api/projects?id=' + projectId);
+          const json = await res.json();
+          const d = json.project?.data;
+          if (json.success && d?.step1) { localStorage.setItem('scaffold_step1', JSON.stringify(d.step1)); setStep1Data(d.step1); }
+          if (json.success && d?.step2) { localStorage.setItem('scaffold_step2', JSON.stringify(d.step2)); setStep2Data(d.step2); }
+          if (json.success && d?.step5) { localStorage.setItem('scaffold_step5', JSON.stringify(d.step5)); setForm(d.step5); }
+        } catch { /* ignore */ }
+      })();
+      return;
+    }
     const s1 = localStorage.getItem('scaffold_step1');
     const s2 = localStorage.getItem('scaffold_step2');
     if (s1) setStep1Data(JSON.parse(s1));
     if (s2) setStep2Data(JSON.parse(s2));
     const s5 = localStorage.getItem('scaffold_step5');
     if (s5) setForm(JSON.parse(s5));
-  }, []);
+  }, [projectId]);
 
   function handleWeiter() {
     localStorage.setItem('scaffold_step5', JSON.stringify(form));
-    router.push('/aufmass/schritt6');
+    router.push(projectId ? `/aufmass/schritt6?id=${projectId}` : '/aufmass/schritt6');
   }
 
   function zurueck() {
-    router.push('/aufmass/schritt4');
+    router.push(projectId ? `/aufmass/schritt4?id=${projectId}` : '/aufmass/schritt4');
   }
 
   // Automatische Schätzung basierend auf Schritt 2
@@ -104,5 +119,13 @@ export default function Schritt5Page() {
         </div>
       </div>
     </div>
+  );
+}
+// useSearchParams braucht in Next eine Suspense-Grenze (Prerendering)
+export default function Schritt5Page() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-white p-8 text-[#86868b]">Lädt…</div>}>
+      <Schritt5Content />
+    </Suspense>
   );
 }

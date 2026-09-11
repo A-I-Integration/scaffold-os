@@ -1,13 +1,15 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useState, useEffect, Suspense } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import KIWarnings from '@/components/aufmaß/KIWarnings';
 import { useKIValidation } from '@/hooks/useKIValidation';
 import { PartialScaffoldInput, LASTKLASSE_Q1_KN_M2 } from '@/types/scaffold';
 
-export default function Schritt2Page() {
+function Schritt2Content() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const projectId = searchParams.get('id');
   const [step1Data, setStep1Data] = useState<any>(null);
   const [lidarUebernommen, setLidarUebernommen] = useState(false);
   const [kiUebernommen, setKiUebernommen] = useState(false);
@@ -146,7 +148,36 @@ export default function Schritt2Page() {
   // ⭐ KI-VALIDIERUNG: Läuft bei JEDER Form-Änderung automatisch
   const kiResult = useKIValidation(mapFormToKIInput());
 
+  // NEU (Bug-Fix): Bei geöffnetem, bestehendem Projekt (?id=...) die
+  // ECHTEN, gespeicherten Daten aus der Datenbank laden – nicht den
+  // projektunabhängigen Zwischenspeicher. Läuft VOR dem bestehenden
+  // Ladeeffekt unten und überschreibt den Zwischenspeicher, damit dieser
+  // beim eigenen Lesen bereits die richtigen Werte vorfindet.
   useEffect(() => {
+    if (!projectId) return;
+    (async () => {
+      try {
+        const res = await fetch('/api/projects?id=' + projectId);
+        const json = await res.json();
+        const d = json.project?.data;
+        if (json.success && d?.step1) localStorage.setItem('scaffold_step1', JSON.stringify(d.step1));
+        if (json.success && d?.step2) {
+          localStorage.setItem('scaffold_step2', JSON.stringify(d.step2));
+          setStep1Data(d.step1 || {});
+          setForm((prev) => ({
+            ...prev, ...d.step2,
+            abschnitte: Array.isArray(d.step2.abschnitte) ? d.step2.abschnitte : [],
+            bruecke: d.step2.bruecke && Array.isArray(d.step2.bruecke.spannweiten) ? d.step2.bruecke : prev.bruecke,
+          }));
+        }
+      } catch { /* Bestehender Ladeeffekt greift als Fallback */ }
+    })();
+  }, [projectId]);
+
+  useEffect(() => {
+    // Bei geöffnetem Projekt (?id=...) übernimmt der Effekt oben – hier
+    // NICHT zusätzlich den (dann veralteten) Zwischenspeicher lesen.
+    if (!projectId) {
     const saved = localStorage.getItem('scaffold_step1');
     if (saved) setStep1Data(JSON.parse(saved));
     const saved2 = localStorage.getItem('scaffold_step2');
@@ -161,6 +192,7 @@ export default function Schritt2Page() {
         abschnitte: Array.isArray(geladen.abschnitte) ? geladen.abschnitte : [],
         bruecke: geladen.bruecke && Array.isArray(geladen.bruecke.spannweiten) ? geladen.bruecke : prev.bruecke,
       }));
+    }
     }
 
     // LiDAR-Maße aus Schritt 1 übernehmen (nur leere Felder, nichts überschreiben).
@@ -372,7 +404,7 @@ export default function Schritt2Page() {
     if (istBruecke) {
       if (!brueckeGueltig()) { alert('Bitte mindestens eine Spannweite und die Höhe über Grund/Gewässer eingeben!'); return; }
       localStorage.setItem('scaffold_step2', JSON.stringify(form));
-      router.push('/aufmass/schritt3');
+      router.push(projectId ? `/aufmass/schritt3?id=${projectId}` : '/aufmass/schritt3');
       return;
     }
     if (!form.laenge || !form.hoehe) {
@@ -385,7 +417,7 @@ export default function Schritt2Page() {
     // Zurückkommen sie nicht mehr zwingend überschreiben.
     localStorage.removeItem('scaffold_lidar_fresh');
     localStorage.removeItem('scaffold_grundriss_fresh');
-    router.push('/aufmass/schritt3');
+    router.push(projectId ? `/aufmass/schritt3?id=${projectId}` : '/aufmass/schritt3');
   }
 
   // Schnellweg nach KI-Grundriss-Analyse: direkt zur Zusammenfassung/Angebot.
@@ -395,7 +427,7 @@ export default function Schritt2Page() {
     if (istBruecke) {
       if (!brueckeGueltig()) { alert('Bitte mindestens eine Spannweite und die Höhe über Grund/Gewässer eingeben!'); return; }
       localStorage.setItem('scaffold_step2', JSON.stringify(form));
-      router.push('/aufmass/schritt6');
+      router.push(projectId ? `/aufmass/schritt6?id=${projectId}` : '/aufmass/schritt6');
       return;
     }
     if (!form.laenge || !form.hoehe) {
@@ -405,11 +437,11 @@ export default function Schritt2Page() {
     localStorage.setItem('scaffold_step2', JSON.stringify(form));
     localStorage.removeItem('scaffold_lidar_fresh');
     localStorage.removeItem('scaffold_grundriss_fresh');
-    router.push('/aufmass/schritt6');
+    router.push(projectId ? `/aufmass/schritt6?id=${projectId}` : '/aufmass/schritt6');
   }
 
   function zurueck() {
-    router.push('/aufmass/schritt1');
+    router.push(projectId ? `/aufmass/schritt1?id=${projectId}` : '/aufmass/schritt1');
   }
 
   // ═══════════ BRÜCKEN-AUFMASS (eigener, kürzerer Zweig) ═══════════
@@ -751,5 +783,13 @@ export default function Schritt2Page() {
         </div>
       </div>
     </div>
+  );
+}
+// useSearchParams braucht in Next eine Suspense-Grenze (Prerendering)
+export default function Schritt2Page() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-white p-8 text-[#86868b]">Lädt…</div>}>
+      <Schritt2Content />
+    </Suspense>
   );
 }

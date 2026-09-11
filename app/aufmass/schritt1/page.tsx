@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useState, useEffect, Suspense } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import PhotoUpload from '@/components/aufmaß/PhotoUpload';
 import LiDARUpload from '@/components/aufmaß/LiDARUpload';
 import FotoAnalyse from '@/components/aufmaß/FotoAnalyse';
@@ -66,8 +66,14 @@ const WIZARD_KEYS = [
   'scaffold_grundriss_fresh',
 ];
 
-export default function Schritt1Page() {
+function Schritt1Content() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  // FIX (Bug-Report): Projekt-ID durch den ganzen Assistenten durchreichen –
+  // vorher kannte NUR Schritt 6 die ID, alle anderen Schritte zeigten beim
+  // Zurückgehen immer den zuletzt im Browser gespeicherten Zwischenstand,
+  // unabhängig davon, welches Projekt man eigentlich geöffnet hatte.
+  const projectId = searchParams.get('id');
 
   const [form, setForm] = useState({ ...LEERES_FORM });
   // NEU (Phase 34): echte Kunden-Verknüpfung statt reinem Namensvergleich.
@@ -94,6 +100,26 @@ export default function Schritt1Page() {
 
   // Gespeicherte Daten laden
   useEffect(() => {
+    // NEU: Bei geöffnetem, bestehendem Projekt (?id=...) die ECHTEN,
+    // gespeicherten Daten aus der Datenbank laden – nicht den
+    // projektunabhängigen Zwischenspeicher, der sonst Daten aus einem
+    // ANDEREN Projekt zeigen würde. Überschreibt zusätzlich den
+    // Zwischenspeicher, damit auch Schritte, die die ID (noch) nicht
+        // selbst durchreichen, den richtigen Stand sehen.
+    if (projectId) {
+      (async () => {
+        try {
+          const res = await fetch('/api/projects?id=' + projectId);
+          const json = await res.json();
+          if (json.success && json.project?.data?.step1) {
+            const parsed = json.project.data.step1;
+            localStorage.setItem('scaffold_step1', JSON.stringify(parsed));
+            setForm((prev) => ({ ...prev, ...parsed }));
+          }
+        } catch { /* Fallback unten greift weiterhin */ }
+      })();
+      return;
+    }
     const saved = localStorage.getItem('scaffold_step1');
     // Hinweis anzeigen, wenn irgendwo noch Wizard-Daten liegen
     const irgendwoDaten = WIZARD_KEYS.some((k) => localStorage.getItem(k) !== null);
@@ -111,7 +137,7 @@ export default function Schritt1Page() {
         // ignore
       }
     }
-  }, []);
+  }, [projectId]);
 
   const gewerkListe = [
     { id: 'Maler', icon: '🎨', color: 'bg-blue-600/20 border-blue-500 text-blue-300' },
@@ -209,7 +235,7 @@ export default function Schritt1Page() {
       return;
     }
     localStorage.setItem('scaffold_step1', JSON.stringify(form));
-    router.push('/aufmass/schritt2');
+    router.push(projectId ? `/aufmass/schritt2?id=${projectId}` : '/aufmass/schritt2');
   }
 
   return (
@@ -677,5 +703,13 @@ export default function Schritt1Page() {
         </div>
       </div>
     </div>
+  );
+}
+// useSearchParams braucht in Next eine Suspense-Grenze (Prerendering)
+export default function Schritt1Page() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-white p-8 text-[#86868b]">Lädt…</div>}>
+      <Schritt1Content />
+    </Suspense>
   );
 }

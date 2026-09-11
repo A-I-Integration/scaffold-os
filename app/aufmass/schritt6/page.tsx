@@ -334,7 +334,7 @@ function Schritt6Content() {
   function handleQuantityChange(index: number, newQty: number) {
     setEditedMaterials((prev) => { const updated = [...prev]; const item = { ...updated[index] }; item.quantity = Math.max(0, newQty); item.totalPrice = item.quantity * item.unitPrice; updated[index] = item; return updated; });
   }
-  function handleZurueck() { router.push('/aufmass/schritt5'); }
+  function handleZurueck() { router.push(searchParams.get('id') ? `/aufmass/schritt5?id=${searchParams.get('id')}` : '/aufmass/schritt5'); }
 
   // ═══════════════════════════════════════════════════════════
   // NEU: E-MAIL, QR, UNTERSCHRIFT HANDLER
