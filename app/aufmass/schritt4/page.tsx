@@ -1,10 +1,12 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useState, useEffect, Suspense } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 
-export default function Schritt4Page() {
+function Schritt4Content() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const projectId = searchParams.get('id');
   const [step1Data, setStep1Data] = useState<any>(null);
 
   const [form, setForm] = useState({
@@ -39,11 +41,23 @@ export default function Schritt4Page() {
   const gefahrenListe = ['Hochspannung', 'Bahnstrecke', 'Öffentlicher Weg', 'Nachbargrundstück', 'Glasfassade', 'Denkmalschutz'];
 
   useEffect(() => {
+    if (projectId) {
+      (async () => {
+        try {
+          const res = await fetch('/api/projects?id=' + projectId);
+          const json = await res.json();
+          const d = json.project?.data;
+          if (json.success && d?.step1) { localStorage.setItem('scaffold_step1', JSON.stringify(d.step1)); setStep1Data(d.step1); }
+          if (json.success && d?.step4) { localStorage.setItem('scaffold_step4', JSON.stringify(d.step4)); setForm(d.step4); }
+        } catch { /* ignore */ }
+      })();
+      return;
+    }
     const saved = localStorage.getItem('scaffold_step1');
     if (saved) setStep1Data(JSON.parse(saved));
     const saved4 = localStorage.getItem('scaffold_step4');
     if (saved4) setForm(JSON.parse(saved4));
-  }, []);
+  }, [projectId]);
 
   function toggleGefahr(g: string) {
     setForm(prev => ({
@@ -56,11 +70,11 @@ export default function Schritt4Page() {
 
   function handleWeiter() {
     localStorage.setItem('scaffold_step4', JSON.stringify(form));
-    router.push('/aufmass/schritt5');
+    router.push(projectId ? `/aufmass/schritt5?id=${projectId}` : '/aufmass/schritt5');
   }
 
   function zurueck() {
-    router.push('/aufmass/schritt3');
+    router.push(projectId ? `/aufmass/schritt3?id=${projectId}` : '/aufmass/schritt3');
   }
 
   return (
@@ -241,5 +255,13 @@ export default function Schritt4Page() {
         </div>
       </div>
     </div>
+  );
+}
+// useSearchParams braucht in Next eine Suspense-Grenze (Prerendering)
+export default function Schritt4Page() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-white p-8 text-[#86868b]">Lädt…</div>}>
+      <Schritt4Content />
+    </Suspense>
   );
 }
