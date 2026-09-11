@@ -9,7 +9,7 @@ import {
   HardHat, LayoutDashboard, Warehouse, CalendarClock, Truck,
   KeyRound, Ruler, Navigation, LogOut, Menu, X, Database, TrendingUp, Timer, Route,
   FileText, Settings, BookOpen, HelpCircle, Upload, Euro, Users, Handshake, ClipboardList,
-  Wrench, ChevronDown, ChevronRight, CreditCard,
+  Wrench, ChevronDown, ChevronRight, CreditCard, Mail,
 } from 'lucide-react';
 
 // ============================================================
@@ -40,6 +40,7 @@ interface NavGroup {
 // Einzelne Punkte ohne Gruppe (Start/Ende der Liste)
 const NAV_TOP: NavItem = { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard, roles: ['admin', 'disponent'] };
 const NAV_BOTTOM: NavItem = { href: '/hilfe', label: 'Hilfe', icon: HelpCircle, roles: ['admin', 'disponent', 'bauleiter', 'mitarbeiter', 'lager'] };
+const NAV_MEINE_EMAIL: NavItem = { href: '/meine-email', label: 'Meine E-Mail', icon: Mail, roles: ['admin', 'disponent', 'bauleiter', 'mitarbeiter', 'lager'] };
 
 // Hauptbereiche mit Unterpunkten (Akkordeon)
 const NAV_GROUPS: NavGroup[] = [
@@ -82,6 +83,7 @@ const NAV_GROUPS: NavGroup[] = [
     key: 'mitarbeiter', label: 'Mitarbeiter', icon: KeyRound,
     items: [
       { href: '/mitarbeiter',   label: 'Zugänge',       icon: KeyRound,   roles: ['admin', 'disponent'] },
+      { href: '/wochenplanung', label: 'Wochenplanung', icon: CalendarClock, roles: ['admin', 'disponent', 'bauleiter'] },
       { href: '/zeiterfassung', label: 'Zeiterfassung', icon: Timer,      roles: ['admin', 'disponent', 'bauleiter'] },
       { href: '/meine-touren',  label: 'Meine Touren',  icon: Navigation, roles: ['admin', 'disponent', 'bauleiter', 'mitarbeiter', 'lager'] },
       { href: '/dokumentation', label: 'Dokumentation', icon: ClipboardList, roles: ['admin', 'disponent', 'bauleiter', 'mitarbeiter', 'lager'] },
@@ -260,6 +262,20 @@ export default function SidebarLayout({ children }: { children: React.ReactNode 
               </div>
             );
           })}
+
+          {/* ── Meine E-Mail (einzeln, für alle Rollen) ── */}
+          {NAV_MEINE_EMAIL.roles.includes(role) && (
+            <Link
+              href={NAV_MEINE_EMAIL.href}
+              className={`flex items-center gap-3 px-3 py-2.5 rounded-full transition-colors ${
+                isActive(NAV_MEINE_EMAIL.href) ? 'bg-[#e8590c]/10 text-[#e8590c]' : 'hover:bg-black/5 text-[#424245]'
+              } ${!open ? 'justify-center' : ''}`}
+              title={!open ? NAV_MEINE_EMAIL.label : undefined}
+            >
+              <NAV_MEINE_EMAIL.icon className={`w-5 h-5 shrink-0 ${isActive(NAV_MEINE_EMAIL.href) ? 'text-[#e8590c]' : 'text-[#86868b]'}`} />
+              {open && <span className="text-sm font-medium">{NAV_MEINE_EMAIL.label}</span>}
+            </Link>
+          )}
 
           {/* ── Hilfe (einzeln) ── */}
           {NAV_BOTTOM.roles.includes(role) && (
