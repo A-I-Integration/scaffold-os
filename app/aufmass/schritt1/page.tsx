@@ -2,6 +2,7 @@
 
 import { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
+import { sollFrischGeladenWerden, leseMarkierung, setzeMarkierung } from '@/lib/aufmass-projekt-session';
 import PhotoUpload from '@/components/aufmaß/PhotoUpload';
 import LiDARUpload from '@/components/aufmaß/LiDARUpload';
 import FotoAnalyse from '@/components/aufmaß/FotoAnalyse';
@@ -109,13 +110,8 @@ function Schritt1Content() {
     // zuletzt bearbeiteten geändert hat (neues/anderes Projekt geöffnet).
     // Innerhalb derselben Sitzung (gleiche ID) bleibt der Zwischenspeicher
     // mit den eigenen, frischen Änderungen unangetastet.
-    if (projectId) {
-      const zuletztBearbeitet = localStorage.getItem('scaffold_editing_project_id');
-      if (zuletztBearbeitet === projectId) {
-        // Bereits diese Sitzung – NICHT erneut von der Datenbank laden,
-        // sonst gehen eigene Änderungen aus einem früheren Schritt verloren.
-      } else {
-        localStorage.setItem('scaffold_editing_project_id', projectId);
+    if (sollFrischGeladenWerden(projectId, leseMarkierung())) {
+        setzeMarkierung(projectId!);
         // FIX: Sofort auf leer zurücksetzen, BEVOR der Datenbank-Abruf
         // überhaupt startet – sonst zeigt das Formular für einen Moment
         // (oder bei einem fehlschlagenden Abruf sogar dauerhaft) noch die
@@ -145,7 +141,6 @@ function Schritt1Content() {
         })();
         return;
       }
-    }
     const saved = localStorage.getItem('scaffold_step1');
     // Hinweis anzeigen, wenn irgendwo noch Wizard-Daten liegen
     const irgendwoDaten = WIZARD_KEYS.some((k) => localStorage.getItem(k) !== null);

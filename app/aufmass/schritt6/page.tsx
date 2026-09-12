@@ -12,6 +12,7 @@ import DinCheck from '@/components/aufmaß/DinCheck';
 import { KIAnalysis } from '@/types/scaffold';
 import { systemAnzeigename } from '@/lib/calculations/geruest-systeme';
 import { geruesttypZuScaffoldType } from '@/lib/calculations/scaffold-engine';
+import { sollFrischGeladenWerden, leseMarkierung, setzeMarkierung, schliesseSitzungAb } from '@/lib/aufmass-projekt-session';
 import DispositionResult from '@/components/aufmaß/DispositionResult';
 import { DispositionResult as DispositionData } from '@/lib/calculations/disposition';
 import { generateInvoicePDF, fmtDate as fmtRechnungsDatum, type Invoice } from '@/lib/invoice-pdf';
@@ -149,9 +150,8 @@ function Schritt6Content() {
     // dabei IMMER wieder mit dem alten Datenbank-Stand überschrieben, direkt
     // bevor "Speichern" geklickt wurde. Jetzt: nur EINMAL pro Bearbeitungs-
     // Sitzung von der Datenbank laden (gleiches Muster wie in Schritt 1-5).
-    const zuletztBearbeitet = localStorage.getItem('scaffold_editing_project_id');
-    if (zuletztBearbeitet === projectId) return; // schon diese Sitzung – NICHT erneut laden
-    localStorage.setItem('scaffold_editing_project_id', projectId);
+    if (!sollFrischGeladenWerden(projectId, leseMarkierung())) return; // schon diese Sitzung – NICHT erneut laden
+    setzeMarkierung(projectId!);
     // FIX (systematische Prüfung): sofort zurücksetzen, bevor der Abruf
     // startet – sonst könnten kurzzeitig oder bei einem fehlschlagenden
     // Abruf dauerhaft die Werte/Ergebnisse eines ANDEREN Projekts
@@ -194,8 +194,7 @@ function Schritt6Content() {
     // schon die Datenbank-Daten gesetzt wurden.
     const projectId = searchParams.get('id');
     if (projectId) {
-      const zuletztBearbeitet = localStorage.getItem('scaffold_editing_project_id');
-      if (zuletztBearbeitet !== projectId) return; // Effekt oben hat gerade frisch geladen
+      if (sollFrischGeladenWerden(projectId, leseMarkierung())) return; // Effekt oben hat gerade frisch geladen
     }
     const data: Record<string, any> = {};
     for (let i = 1; i <= 5; i++) {
@@ -364,7 +363,7 @@ function Schritt6Content() {
         // zurücksetzen – ein späteres, erneutes Öffnen desselben Projekts
         // lädt dann wieder frisch von der Datenbank statt dem (jetzt eh
         // identischen) Zwischenspeicher zu vertrauen.
-        localStorage.removeItem('scaffold_editing_project_id');
+        schliesseSitzungAb();
       } else {
         const response = await fetch('/api/projects', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: s1.name || 'Unbenanntes Projekt', adresse: s1.adresse || '', data: gespeicherteDaten, status: 'active', customer_id: s1.customerId || null }) });
         result = await response.json();
