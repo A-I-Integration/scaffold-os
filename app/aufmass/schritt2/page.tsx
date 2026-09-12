@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, Suspense } from 'react';
+import { useState, useEffect, useRef, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import KIWarnings from '@/components/aufmaß/KIWarnings';
 import { useKIValidation } from '@/hooks/useKIValidation';
@@ -10,6 +10,9 @@ function Schritt2Content() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const projectId = searchParams.get('id');
+  // NEU: eindeutiges Signal zwischen den beiden Lade-Effekten (siehe unten) –
+  // ob GERADE FRISCH von der Datenbank geladen wurde oder nicht.
+  const istFrischGeladenRef = useRef(false);
   const [step1Data, setStep1Data] = useState<any>(null);
   const [lidarUebernommen, setLidarUebernommen] = useState(false);
   const [kiUebernommen, setKiUebernommen] = useState(false);
@@ -153,10 +156,19 @@ function Schritt2Content() {
   // projektunabhängigen Zwischenspeicher. Läuft VOR dem bestehenden
   // Ladeeffekt unten und überschreibt den Zwischenspeicher, damit dieser
   // beim eigenen Lesen bereits die richtigen Werte vorfindet.
+  //
+  // FIX (zweite Runde): "istFrischGeladenRef" markiert eindeutig, OB dieser
+  // Effekt gerade frisch von der Datenbank geladen hat oder nicht – der
+  // Effekt darunter braucht dieses eindeutige Signal, um zu wissen, ob ER
+  // den Zwischenspeicher lesen muss. Die vorherige Fassung prüfte dort nur
+  // "ist überhaupt eine ID da", was bei einem Rückkehr-Besuch (gleiche
+  // Sitzung) fälschlich dazu führte, dass GAR KEINE Datenquelle gelesen
+  // wurde – Höhe/Breite/etc. blieben leer.
   useEffect(() => {
-    if (!projectId) return;
+    if (!projectId) { istFrischGeladenRef.current = false; return; }
     const zuletztBearbeitet = localStorage.getItem('scaffold_editing_project_id');
-    if (zuletztBearbeitet === projectId) return; // schon diese Sitzung – Zwischenspeicher (mit ggf. eigenen frischen Änderungen) NICHT überschreiben
+    if (zuletztBearbeitet === projectId) { istFrischGeladenRef.current = false; return; } // schon diese Sitzung
+    istFrischGeladenRef.current = true;
     localStorage.setItem('scaffold_editing_project_id', projectId);
     (async () => {
       try {
@@ -173,14 +185,18 @@ function Schritt2Content() {
             bruecke: d.step2.bruecke && Array.isArray(d.step2.bruecke.spannweiten) ? d.step2.bruecke : prev.bruecke,
           }));
         }
-      } catch { /* Bestehender Ladeeffekt greift als Fallback */ }
+      } catch { /* Fallback-Effekt unten greift, wenn dieser fehlschlägt */
+        istFrischGeladenRef.current = false;
+      }
     })();
   }, [projectId]);
 
   useEffect(() => {
-    // Bei geöffnetem Projekt (?id=...) übernimmt der Effekt oben – hier
-    // NICHT zusätzlich den (dann veralteten) Zwischenspeicher lesen.
-    if (!projectId) {
+    // Nur überspringen, wenn der Effekt oben GERADE FRISCH von der
+    // Datenbank geladen hat (eindeutig per Ref, nicht nur "ID vorhanden") –
+    // bei einem Rückkehr-Besuch in derselben Sitzung MUSS hier gelesen
+    // werden, sonst bleiben die Felder leer.
+    if (!istFrischGeladenRef.current) {
     const saved = localStorage.getItem('scaffold_step1');
     if (saved) setStep1Data(JSON.parse(saved));
     const saved2 = localStorage.getItem('scaffold_step2');
@@ -198,6 +214,18 @@ function Schritt2Content() {
     }
     }
 
+    // FIX (der eigentliche, hier gefundene Fehler): Diese komplette
+    // LiDAR-/Grundriss-/Foto-Übernahme ist NUR für ein NEUES, gerade
+    // erst begonnenes Aufmaß sinnvoll. Sie lief bisher UNBEDINGT, auch
+    // beim Bearbeiten eines bestehenden, bereits gespeicherten Projekts
+    // – dabei konnte veraltetes, längst vergessenes Foto-/Scan-Material
+    // aus dem Browser-Speicher (von einer ganz anderen, früheren Sitzung)
+    // mit dem asynchronen Datenbank-Laden oben in einen Wettlauf geraten
+    // und frisch geladene Höhe/Breite/etc. wieder überschreiben oder
+    // leeren. Bei einem bestehenden Projekt (?id=...) macht diese
+    // Übernahme ohnehin keinen Sinn – die Werte kommen aus der Datenbank.
+    let lidarIntervall: ReturnType<typeof setInterval> | undefined;
+    if (!projectId) {
     // LiDAR-Maße aus Schritt 1 übernehmen (nur leere Felder, nichts überschreiben).
     // Fix: War bisher nur EIN einmaliger Check beim Laden – falls die Analyse beim
     // Wechsel zu Schritt 2 noch beim Worker lief, kam das Ergebnis nie an. Jetzt
@@ -276,7 +304,6 @@ function Schritt2Content() {
     // keine LiDAR-Daten vorlagen (also im Normalfall, wenn gar kein LiDAR-Scan
     // gemacht wurde). Das war der Bug: „Daten wurden nicht in Schritt 2
     // übernommen" betraf dadurch nicht nur LiDAR, sondern auch Grundriss/Foto.
-    let lidarIntervall: ReturnType<typeof setInterval> | undefined;
     if (!versucheLidarUebernahme()) {
       let versuche = 0;
       lidarIntervall = setInterval(() => {
@@ -372,6 +399,7 @@ function Schritt2Content() {
         // ignore
       }
     }
+    } // Ende: if (!projectId) – LiDAR/Grundriss/Foto-Übernahme nur bei neuem Aufmaß
 
     return () => { if (lidarIntervall) clearInterval(lidarIntervall); };
   }, []);
