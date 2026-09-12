@@ -133,6 +133,25 @@ function Schritt6Content() {
   useEffect(() => {
     const projectId = searchParams.get('id');
     if (!projectId) return;
+    // FIX (zweiter, damit verbundener Fehler): savedProjectId wurde bisher
+    // NUR gesetzt, wenn hier tatsächlich von der Datenbank geladen wurde.
+    // Beim zweiten Betreten in derselben Sitzung (Guard unten überspringt
+    // den Datenbank-Abruf bewusst) wäre savedProjectId leer geblieben –
+    // React-State wird beim Verlassen/Wiederkommen der Seite zurückgesetzt.
+    // Das hätte beim Speichern zu einem NEUEN, doppelten Projekt geführt
+    // statt das bestehende zu aktualisieren. Jetzt: sofort aus der URL
+    // setzen, unabhängig davon, ob unten neu geladen wird.
+    setSavedProjectId(projectId);
+    // FIX (der eigentliche, verbleibende Fehler): Dieser Effekt lief bisher
+    // bei JEDEM Betreten von Schritt 6 mit ?id= – auch dann, wenn man
+    // gerade erst über Schritt 1-5 etwas geändert hatte und zum Speichern
+    // zurückkommt. Er hat die frischen, noch nicht gespeicherten Änderungen
+    // dabei IMMER wieder mit dem alten Datenbank-Stand überschrieben, direkt
+    // bevor "Speichern" geklickt wurde. Jetzt: nur EINMAL pro Bearbeitungs-
+    // Sitzung von der Datenbank laden (gleiches Muster wie in Schritt 1-5).
+    const zuletztBearbeitet = localStorage.getItem('scaffold_editing_project_id');
+    if (zuletztBearbeitet === projectId) return; // schon diese Sitzung – NICHT erneut laden
+    localStorage.setItem('scaffold_editing_project_id', projectId);
     (async () => {
       try {
         const res = await fetch('/api/projects?id=' + projectId);
@@ -158,8 +177,19 @@ function Schritt6Content() {
   }, [searchParams]);
 
   useEffect(() => {
-    // Wenn ein Projekt per ?id= geöffnet wurde, kommen die Daten aus der DB (s. o.)
-    if (searchParams.get('id')) return;
+    // FIX: Vorher wurde hier IMMER übersprungen, sobald ?id= gesetzt war –
+    // das ließ Schritt 6 ohne jede Datenquelle da stehen, wenn man (wegen
+    // des Fixes oben) NICHT erneut von der Datenbank geladen hat, weil man
+    // gerade erst über Schritt 1-5 in DERSELBEN Sitzung etwas geändert hat.
+    // Jetzt: der Zwischenspeicher (mit den frischen Änderungen aus den
+    // vorherigen Schritten) wird in genau diesem Fall gelesen – nur beim
+    // allerersten Laden eines Projekts (siehe Effekt oben) NICHT, da dort
+    // schon die Datenbank-Daten gesetzt wurden.
+    const projectId = searchParams.get('id');
+    if (projectId) {
+      const zuletztBearbeitet = localStorage.getItem('scaffold_editing_project_id');
+      if (zuletztBearbeitet !== projectId) return; // Effekt oben hat gerade frisch geladen
+    }
     const data: Record<string, any> = {};
     for (let i = 1; i <= 5; i++) {
       const raw = localStorage.getItem(`scaffold_step${i}`);
