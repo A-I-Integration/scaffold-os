@@ -116,6 +116,11 @@ function Schritt1Content() {
         // sonst gehen eigene Änderungen aus einem früheren Schritt verloren.
       } else {
         localStorage.setItem('scaffold_editing_project_id', projectId);
+        // FIX: Sofort auf leer zurücksetzen, BEVOR der Datenbank-Abruf
+        // überhaupt startet – sonst zeigt das Formular für einen Moment
+        // (oder bei einem fehlschlagenden Abruf sogar dauerhaft) noch die
+        // Werte des VORHERIGEN, anderen Projekts an.
+        setForm({ ...LEERES_FORM });
         (async () => {
           try {
             const res = await fetch('/api/projects?id=' + projectId);
@@ -123,9 +128,20 @@ function Schritt1Content() {
             if (json.success && json.project?.data?.step1) {
               const parsed = json.project.data.step1;
               localStorage.setItem('scaffold_step1', JSON.stringify(parsed));
-              setForm((prev) => ({ ...prev, ...parsed }));
+              setForm({ ...LEERES_FORM, ...parsed });
+            } else if (json.success && json.project) {
+              // Kein step1 in den Daten, aber Projekt existiert – zumindest
+              // den (echten) Namen aus dem Projekt selbst übernehmen, statt
+              // leer zu lassen.
+              setForm((prev) => ({ ...prev, name: json.project.name || prev.name, adresse: json.project.adresse || prev.adresse }));
             }
-          } catch { /* Fallback unten greift weiterhin */ }
+          } catch {
+            // FIX: Vorher blieb das Formular bei einem Fehler in einem
+            // undefinierten Zustand (weder alte noch neue Daten sicher) –
+            // jetzt zumindest sichtbar melden, statt stillschweigend falsche
+            // Werte stehen zu lassen.
+            setHatAlteDaten(false);
+          }
         })();
         return;
       }
