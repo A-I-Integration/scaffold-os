@@ -155,6 +155,9 @@ function Schritt2Content() {
   // beim eigenen Lesen bereits die richtigen Werte vorfindet.
   useEffect(() => {
     if (!projectId) return;
+    const zuletztBearbeitet = localStorage.getItem('scaffold_editing_project_id');
+    if (zuletztBearbeitet === projectId) return; // schon diese Sitzung – Zwischenspeicher (mit ggf. eigenen frischen Änderungen) NICHT überschreiben
+    localStorage.setItem('scaffold_editing_project_id', projectId);
     (async () => {
       try {
         const res = await fetch('/api/projects?id=' + projectId);

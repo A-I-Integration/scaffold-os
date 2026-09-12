@@ -296,6 +296,11 @@ function Schritt6Content() {
         const json = await response.json();
         if (!response.ok || !json.success) throw new Error(json.error || 'Speichern fehlgeschlagen');
         result = { id: savedProjectId };
+        // NEU: Nach erfolgreichem Speichern die "Sitzungs"-Markierung
+        // zurücksetzen – ein späteres, erneutes Öffnen desselben Projekts
+        // lädt dann wieder frisch von der Datenbank statt dem (jetzt eh
+        // identischen) Zwischenspeicher zu vertrauen.
+        localStorage.removeItem('scaffold_editing_project_id');
       } else {
         const response = await fetch('/api/projects', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: s1.name || 'Unbenanntes Projekt', adresse: s1.adresse || '', data: gespeicherteDaten, status: 'active', customer_id: s1.customerId || null }) });
         result = await response.json();
