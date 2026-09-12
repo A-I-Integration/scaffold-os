@@ -3,6 +3,17 @@
 import { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 
+const LEERES_FORM_S5 = {
+  arbeitsbuehnen: '',
+  rahmen: '',
+  diagonale: '',
+  spindeltreppe: '',
+  gelander: '',
+  anker: '',
+  liefertermin: '',
+  abholtermin: '',
+};
+
 function Schritt5Content() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -10,22 +21,14 @@ function Schritt5Content() {
   const [step1Data, setStep1Data] = useState<any>(null);
   const [step2Data, setStep2Data] = useState<any>(null);
 
-  const [form, setForm] = useState({
-    arbeitsbuehnen: '',
-    rahmen: '',
-    diagonale: '',
-    spindeltreppe: '',
-    gelander: '',
-    anker: '',
-    liefertermin: '',
-    abholtermin: '',
-  });
+  const [form, setForm] = useState({ ...LEERES_FORM_S5 });
 
   useEffect(() => {
     if (projectId) {
       const zuletztBearbeitet = localStorage.getItem('scaffold_editing_project_id');
       if (zuletztBearbeitet !== projectId) {
         localStorage.setItem('scaffold_editing_project_id', projectId);
+        setForm({ ...LEERES_FORM_S5 });
         (async () => {
           try {
             const res = await fetch('/api/projects?id=' + projectId);

@@ -3,40 +3,42 @@
 import { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 
+const LEERES_FORM_S4 = {
+  // Bestehend
+  ankerung: 'fassade',
+  ankerAbstand: '2.0',
+  schutzdach: false,
+  fangnetz: false,
+  windzone: '2',
+  gefahren: [] as string[],
+  notiz: '',
+  // Neu: Untergrund
+  untergrund: 'beton',
+  gefaelle: false,
+  tragfaehigkeit: 'normal',
+  unterkellert: false,
+  lichtschaechte: false,
+  lastverteilplatten: false,
+  // Neu: Umgebung
+  freileitungen: false,
+  stromleitungen: false,
+  baeume: false,
+  nachbargrundstueck: false,
+  oeffentlicherVerkehrsraum: false,
+  halteverbot: false,
+  sondernutzung: false,
+  lagerflaeche: false,
+  lkwZufahrt: true,
+  kranErforderlich: false,
+};
+
 function Schritt4Content() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const projectId = searchParams.get('id');
   const [step1Data, setStep1Data] = useState<any>(null);
 
-  const [form, setForm] = useState({
-    // Bestehend
-    ankerung: 'fassade',
-    ankerAbstand: '2.0',
-    schutzdach: false,
-    fangnetz: false,
-    windzone: '2',
-    gefahren: [] as string[],
-    notiz: '',
-    // Neu: Untergrund
-    untergrund: 'beton',
-    gefaelle: false,
-    tragfaehigkeit: 'normal',
-    unterkellert: false,
-    lichtschaechte: false,
-    lastverteilplatten: false,
-    // Neu: Umgebung
-    freileitungen: false,
-    stromleitungen: false,
-    baeume: false,
-    nachbargrundstueck: false,
-    oeffentlicherVerkehrsraum: false,
-    halteverbot: false,
-    sondernutzung: false,
-    lagerflaeche: false,
-    lkwZufahrt: true,
-    kranErforderlich: false,
-  });
+  const [form, setForm] = useState({ ...LEERES_FORM_S4 });
 
   const gefahrenListe = ['Hochspannung', 'Bahnstrecke', 'Öffentlicher Weg', 'Nachbargrundstück', 'Glasfassade', 'Denkmalschutz'];
 
@@ -45,6 +47,7 @@ function Schritt4Content() {
       const zuletztBearbeitet = localStorage.getItem('scaffold_editing_project_id');
       if (zuletztBearbeitet !== projectId) {
         localStorage.setItem('scaffold_editing_project_id', projectId);
+        setForm({ ...LEERES_FORM_S4 });
         (async () => {
           try {
             const res = await fetch('/api/projects?id=' + projectId);

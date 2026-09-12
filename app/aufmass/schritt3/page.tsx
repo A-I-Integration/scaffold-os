@@ -4,6 +4,18 @@ import { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { GERUEST_SYSTEME, CUSTOM_SYSTEM_ID, findeSystem } from '@/lib/calculations/geruest-systeme';
 
+const LEERES_FORM_S3 = {
+  geruesttyp: '',
+  system: '',          // Gerüstsystem-ID aus geruest-systeme.ts ('' = hersteller-neutral, 'custom' = eigenes)
+  customSystem: '',    // Freitext bei system === 'custom'
+  feldlange: '3.0',
+  belag: 'holz',
+  gelander: true,
+  diagonale: true,
+  fahrbar: false,
+  boden: 'beton',
+};
+
 function Schritt3Content() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -13,17 +25,7 @@ function Schritt3Content() {
   // Abschnitt (z.B. Fassadengerüst am Hauptgebäude, Dachgerüst am Anbau).
   const [abschnitte, setAbschnitte] = useState<{ bezeichnung: string; laenge: string; hoehe: string; geruesttyp?: string }[]>([])
   
-  const [form, setForm] = useState({
-    geruesttyp: '',
-    system: '',          // Gerüstsystem-ID aus geruest-systeme.ts ('' = hersteller-neutral, 'custom' = eigenes)
-    customSystem: '',    // Freitext bei system === 'custom'
-    feldlange: '3.0',
-    belag: 'holz',
-    gelander: true,
-    diagonale: true,
-    fahrbar: false,
-    boden: 'beton',
-  });
+  const [form, setForm] = useState({ ...LEERES_FORM_S3 });
 
   const geruestTypen = [
     { id: 'fassade', name: 'Fassadengerüst', icon: '🏢', desc: 'Standard für Maler & WDVS' },
@@ -54,6 +56,11 @@ function Schritt3Content() {
       const zuletztBearbeitet = localStorage.getItem('scaffold_editing_project_id');
       if (zuletztBearbeitet !== projectId) {
         localStorage.setItem('scaffold_editing_project_id', projectId);
+        // FIX (systematische Prüfung): sofort zurücksetzen, bevor der
+        // Abruf startet – sonst könnten kurzzeitig oder bei einem
+        // fehlschlagenden Abruf dauerhaft die Werte eines ANDEREN
+        // Projekts sichtbar bleiben.
+        setForm({ ...LEERES_FORM_S3 });
         (async () => {
           try {
             const res = await fetch('/api/projects?id=' + projectId);

@@ -25,15 +25,13 @@ function Schritt2Content() {
   // für mehrere Gebäude statt eines berechnen.
   const [abschnittVorschlaege, setAbschnittVorschlaege] = useState<{ bezeichnung: string; laenge: string; hoehe: string }[]>([]);
 
-  const [form, setForm] = useState({
+function leeresFormS2() {
+  return {
     laenge: '',
     hoehe: '',
     breite: '',
     traufhoehe: '',
-    // NEU: weitere Abschnitte für Gebäude mit unterschiedlichen Höhen
-    // oder die um eine Ecke gehen. Länge/Höhe oben bleiben "Abschnitt 1".
     abschnitte: [] as { bezeichnung: string; laenge: string; hoehe: string }[],
-    // NEU: Brücken-Aufmaß (nur relevant, wenn step1Data.projektart === 'bruecke')
     bruecke: {
       spannweiten: [{ bezeichnung: 'Feld 1', spannweiteM: '', breiteM: '' }] as { bezeichnung: string; spannweiteM: string; breiteM: string }[],
       hoeheUeberGrundM: '',
@@ -51,7 +49,10 @@ function Schritt2Content() {
     hauseingaenge: '',
     hindernisse: [] as string[],
     durchfahrt: false,
-  });
+  };
+}
+
+  const [form, setForm] = useState(leeresFormS2());
 
   const hindernisListe = ['Erker', 'Balkon', 'Wintergarten', 'Kamin', 'Gaube', 'Markise'];
   const dachformen = ['Satteldach', 'Flachdach', 'Pultdach', 'Walmdach', 'Mansarddach', 'Zeltdach'];
@@ -170,6 +171,11 @@ function Schritt2Content() {
     if (zuletztBearbeitet === projectId) { istFrischGeladenRef.current = false; return; } // schon diese Sitzung
     istFrischGeladenRef.current = true;
     localStorage.setItem('scaffold_editing_project_id', projectId);
+    // FIX (systematische Prüfung): sofort zurücksetzen, bevor der Abruf
+    // startet – sonst könnten kurzzeitig oder bei einem fehlschlagenden
+    // Abruf dauerhaft die Werte eines ANDEREN Projekts sichtbar bleiben.
+    setForm(leeresFormS2());
+    setStep1Data(null);
     (async () => {
       try {
         const res = await fetch('/api/projects?id=' + projectId);
