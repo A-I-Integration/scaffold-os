@@ -170,6 +170,22 @@ export default function KundenPage() {
     }
   }
 
+  // NEU: echtes Löschen für versehentlich angelegte, noch leere Kunden
+  // (ohne Projekte/Rechnungen/Ansprechpartner) – für alles andere bleibt
+  // "Deaktivieren" der richtige Weg, damit keine Daten verwaisen.
+  async function handleLoeschen(k: Kunde) {
+    if (!confirm(`„${k.name}" wirklich endgültig löschen? Das lässt sich nicht rückgängig machen.`)) return;
+    try {
+      const res = await fetch(`/api/kunden?id=${k.id}`, { method: 'DELETE' });
+      const json = await res.json();
+      if (!json.success) throw new Error(json.error);
+      setSelectedId(null);
+      await load();
+    } catch (err: any) {
+      alert('❌ ' + err.message);
+    }
+  }
+
   // ─── Rechnungen des Kunden ───
   // NEU (Phase 34): echte Verknüpfung über customer_id ODER über ein Projekt
   // dieses Kunden. Namensvergleich nur noch Rückfalloption für alte Daten.
@@ -386,12 +402,21 @@ export default function KundenPage() {
                       {neu ? 'Neuen Kunden anlegen' : selected!.name}
                     </h2>
                     {selected && (
-                      <button
-                        onClick={() => toggleAktiv(selected)}
-                        className="text-xs text-[#86868b] hover:text-[#1d1d1f] underline"
-                      >
-                        {selected.is_active ? 'Deaktivieren' : 'Wieder aktivieren'}
-                      </button>
+                      <div className="flex items-center gap-3">
+                        <button
+                          onClick={() => toggleAktiv(selected)}
+                          className="text-xs text-[#86868b] hover:text-[#1d1d1f] underline"
+                        >
+                          {selected.is_active ? 'Deaktivieren' : 'Wieder aktivieren'}
+                        </button>
+                        <button
+                          onClick={() => handleLoeschen(selected)}
+                          title="Nur möglich, wenn keine Projekte/Rechnungen/Ansprechpartner vorhanden sind"
+                          className="text-xs text-red-600 hover:text-red-700 underline"
+                        >
+                          Endgültig löschen
+                        </button>
+                      </div>
                     )}
                   </div>
 

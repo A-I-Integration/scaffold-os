@@ -154,3 +154,43 @@ export async function PATCH(req: NextRequest) {
     return NextResponse.json({ success: false, error: err.message }, { status: 500 });
   }
 }
+
+// DELETE ?id=... – echtes Löschen, aber NUR wenn keinerlei verknüpfte
+// Daten existieren (Projekte, Rechnungen, Ansprechpartner). Sonst:
+// klare Fehlermeldung mit Verweis auf "Deaktivieren" – ein versehentlich
+// angelegter, noch leerer Kunde soll sich wirklich entfernen lassen,
+// ein Kunde mit echten Geschäftsvorgängen aber nicht (würde sonst
+// Rechnungen/Projekte verwaisen lassen oder mitlöschen).
+export async function DELETE(req: NextRequest) {
+  const role = await callerRole();
+  if (!role || !['admin', 'disponent'].includes(role)) {
+    return NextResponse.json({ success: false, error: 'Nur Admin und Disposition.' }, { status: 403 });
+  }
+  try {
+    const id = new URL(req.url).searchParams.get('id');
+    if (!id) return NextResponse.json({ success: false, error: 'id erforderlich' }, { status: 400 });
+
+    const [projRes, invRes, kontakteRes] = await Promise.all([
+      fetch(`${url}/rest/v1/projects?customer_id=eq.${id}&select=id&limit=1`, { headers }),
+      fetch(`${url}/rest/v1/invoices?customer_id=eq.${id}&select=id&limit=1`, { headers }),
+      fetch(`${url}/rest/v1/customer_contacts?customer_id=eq.${id}&select=id&limit=1`, { headers }).catch(() => null),
+    ]);
+    const hatProjekte = projRes.ok && (await projRes.json()).length > 0;
+    const hatRechnungen = invRes.ok && (await invRes.json()).length > 0;
+    const hatKontakte = kontakteRes && kontakteRes.ok && (await kontakteRes.json()).length > 0;
+
+    if (hatProjekte || hatRechnungen || hatKontakte) {
+      return NextResponse.json({
+        success: false,
+        error: `Dieser Kunde hat bereits ${hatProjekte ? 'Projekte' : hatRechnungen ? 'Rechnungen' : 'Ansprechpartner'} – kann nicht gelöscht werden (Daten blieben sonst verwaist). Bitte stattdessen „Deaktivieren" nutzen.`,
+        code: 'HAT_VERKNUEPFTE_DATEN',
+      }, { status: 409 });
+    }
+
+    const res = await fetch(`${url}/rest/v1/customers?id=eq.${id}`, { method: 'DELETE', headers });
+    if (!res.ok) throw new Error(await res.text());
+    return NextResponse.json({ success: true });
+  } catch (err: any) {
+    return NextResponse.json({ success: false, error: err.message }, { status: 500 });
+  }
+}
