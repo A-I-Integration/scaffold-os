@@ -193,17 +193,26 @@ export default function WochenplanungPage() {
         <div className="mt-6">
           <h2 className="text-sm font-semibold text-[#1d1d1f] mb-2">Projekte zum Reinziehen</h2>
           <div className="flex flex-wrap gap-2">
-            {projects.map((p) => (
+            {projects.map((p) => {
+              const beginn = p.data?.step1?.projektbeginn
+              const ende = p.data?.step1?.projektende
+              const adresse = p.data?.step1?.adresse
+              return (
               <div
                 key={p.id}
                 draggable
                 onDragStart={() => setZiehendesProjekt(p.id)}
                 onDragEnd={() => setZiehendesProjekt(null)}
+                title={adresse || ''}
                 className="px-3 py-1.5 rounded-xl bg-white border border-black/10 text-xs font-medium text-[#1d1d1f] cursor-move hover:border-[#e8590c]"
               >
                 📁 {p.name}
+                {adresse && <span className="text-[#86868b] font-normal"> · {adresse}</span>}
+                {beginn && ende && <span className="text-emerald-700 font-normal"> · {beginn.slice(5).replace('-','.')}–{ende.slice(5).replace('-','.')}</span>}
+                {!ende && <span className="text-amber-600 font-normal"> · kein Enddatum hinterlegt</span>}
               </div>
-            ))}
+              )
+            })}
           </div>
           <p className="text-[11px] text-[#86868b] mt-2">Projekt auf einen freien Tag bei einem Mitarbeiter ziehen, um zuzuweisen. Zugewiesene Kacheln lassen sich auf einen anderen Tag/Mitarbeiter ziehen, um sie zu verschieben.</p>
         </div>
