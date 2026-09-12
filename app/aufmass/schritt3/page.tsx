@@ -2,6 +2,7 @@
 
 import { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
+import { sollFrischGeladenWerden, leseMarkierung, setzeMarkierung } from '@/lib/aufmass-projekt-session';
 import { GERUEST_SYSTEME, CUSTOM_SYSTEM_ID, findeSystem } from '@/lib/calculations/geruest-systeme';
 
 const LEERES_FORM_S3 = {
@@ -52,10 +53,8 @@ function Schritt3Content() {
   ];
 
   useEffect(() => {
-    if (projectId) {
-      const zuletztBearbeitet = localStorage.getItem('scaffold_editing_project_id');
-      if (zuletztBearbeitet !== projectId) {
-        localStorage.setItem('scaffold_editing_project_id', projectId);
+    if (sollFrischGeladenWerden(projectId, leseMarkierung())) {
+        setzeMarkierung(projectId!);
         // FIX (systematische Prüfung): sofort zurücksetzen, bevor der
         // Abruf startet – sonst könnten kurzzeitig oder bei einem
         // fehlschlagenden Abruf dauerhaft die Werte eines ANDEREN
@@ -73,7 +72,6 @@ function Schritt3Content() {
         })();
         return;
       }
-    }
     const saved = localStorage.getItem('scaffold_step1');
     if (saved) setStep1Data(JSON.parse(saved));
     const saved2 = localStorage.getItem('scaffold_step2');

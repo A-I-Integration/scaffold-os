@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
+import { sollFrischGeladenWerden, leseMarkierung, setzeMarkierung } from '@/lib/aufmass-projekt-session';
 import KIWarnings from '@/components/aufmaß/KIWarnings';
 import { useKIValidation } from '@/hooks/useKIValidation';
 import { PartialScaffoldInput, LASTKLASSE_Q1_KN_M2 } from '@/types/scaffold';
@@ -166,11 +167,9 @@ function leeresFormS2() {
   // Sitzung) fälschlich dazu führte, dass GAR KEINE Datenquelle gelesen
   // wurde – Höhe/Breite/etc. blieben leer.
   useEffect(() => {
-    if (!projectId) { istFrischGeladenRef.current = false; return; }
-    const zuletztBearbeitet = localStorage.getItem('scaffold_editing_project_id');
-    if (zuletztBearbeitet === projectId) { istFrischGeladenRef.current = false; return; } // schon diese Sitzung
-    istFrischGeladenRef.current = true;
-    localStorage.setItem('scaffold_editing_project_id', projectId);
+    istFrischGeladenRef.current = sollFrischGeladenWerden(projectId, leseMarkierung());
+    if (!istFrischGeladenRef.current) return;
+    setzeMarkierung(projectId!);
     // FIX (systematische Prüfung): sofort zurücksetzen, bevor der Abruf
     // startet – sonst könnten kurzzeitig oder bei einem fehlschlagenden
     // Abruf dauerhaft die Werte eines ANDEREN Projekts sichtbar bleiben.

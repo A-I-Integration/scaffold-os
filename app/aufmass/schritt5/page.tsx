@@ -2,6 +2,7 @@
 
 import { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
+import { sollFrischGeladenWerden, leseMarkierung, setzeMarkierung } from '@/lib/aufmass-projekt-session';
 
 const LEERES_FORM_S5 = {
   arbeitsbuehnen: '',
@@ -24,10 +25,8 @@ function Schritt5Content() {
   const [form, setForm] = useState({ ...LEERES_FORM_S5 });
 
   useEffect(() => {
-    if (projectId) {
-      const zuletztBearbeitet = localStorage.getItem('scaffold_editing_project_id');
-      if (zuletztBearbeitet !== projectId) {
-        localStorage.setItem('scaffold_editing_project_id', projectId);
+    if (sollFrischGeladenWerden(projectId, leseMarkierung())) {
+        setzeMarkierung(projectId!);
         setForm({ ...LEERES_FORM_S5 });
         (async () => {
           try {
@@ -41,7 +40,6 @@ function Schritt5Content() {
         })();
         return;
       }
-    }
     const s1 = localStorage.getItem('scaffold_step1');
     const s2 = localStorage.getItem('scaffold_step2');
     if (s1) setStep1Data(JSON.parse(s1));

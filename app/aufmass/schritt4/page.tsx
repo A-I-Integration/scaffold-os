@@ -2,6 +2,7 @@
 
 import { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
+import { sollFrischGeladenWerden, leseMarkierung, setzeMarkierung } from '@/lib/aufmass-projekt-session';
 
 const LEERES_FORM_S4 = {
   // Bestehend
@@ -43,10 +44,8 @@ function Schritt4Content() {
   const gefahrenListe = ['Hochspannung', 'Bahnstrecke', 'Öffentlicher Weg', 'Nachbargrundstück', 'Glasfassade', 'Denkmalschutz'];
 
   useEffect(() => {
-    if (projectId) {
-      const zuletztBearbeitet = localStorage.getItem('scaffold_editing_project_id');
-      if (zuletztBearbeitet !== projectId) {
-        localStorage.setItem('scaffold_editing_project_id', projectId);
+    if (sollFrischGeladenWerden(projectId, leseMarkierung())) {
+        setzeMarkierung(projectId!);
         setForm({ ...LEERES_FORM_S4 });
         (async () => {
           try {
@@ -59,7 +58,6 @@ function Schritt4Content() {
         })();
         return;
       }
-    }
     const saved = localStorage.getItem('scaffold_step1');
     if (saved) setStep1Data(JSON.parse(saved));
     const saved4 = localStorage.getItem('scaffold_step4');
