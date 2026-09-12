@@ -152,6 +152,13 @@ function Schritt6Content() {
     const zuletztBearbeitet = localStorage.getItem('scaffold_editing_project_id');
     if (zuletztBearbeitet === projectId) return; // schon diese Sitzung – NICHT erneut laden
     localStorage.setItem('scaffold_editing_project_id', projectId);
+    // FIX (systematische Prüfung): sofort zurücksetzen, bevor der Abruf
+    // startet – sonst könnten kurzzeitig oder bei einem fehlschlagenden
+    // Abruf dauerhaft die Werte/Ergebnisse eines ANDEREN Projekts
+    // sichtbar bleiben.
+    setStepData({});
+    setKiResult(null);
+    setAngebotsStatus('erstellt');
     (async () => {
       try {
         const res = await fetch('/api/projects?id=' + projectId);
