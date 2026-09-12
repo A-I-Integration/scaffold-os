@@ -23,17 +23,21 @@ function Schritt5Content() {
 
   useEffect(() => {
     if (projectId) {
-      (async () => {
-        try {
-          const res = await fetch('/api/projects?id=' + projectId);
-          const json = await res.json();
-          const d = json.project?.data;
-          if (json.success && d?.step1) { localStorage.setItem('scaffold_step1', JSON.stringify(d.step1)); setStep1Data(d.step1); }
-          if (json.success && d?.step2) { localStorage.setItem('scaffold_step2', JSON.stringify(d.step2)); setStep2Data(d.step2); }
-          if (json.success && d?.step5) { localStorage.setItem('scaffold_step5', JSON.stringify(d.step5)); setForm(d.step5); }
-        } catch { /* ignore */ }
-      })();
-      return;
+      const zuletztBearbeitet = localStorage.getItem('scaffold_editing_project_id');
+      if (zuletztBearbeitet !== projectId) {
+        localStorage.setItem('scaffold_editing_project_id', projectId);
+        (async () => {
+          try {
+            const res = await fetch('/api/projects?id=' + projectId);
+            const json = await res.json();
+            const d = json.project?.data;
+            if (json.success && d?.step1) { localStorage.setItem('scaffold_step1', JSON.stringify(d.step1)); setStep1Data(d.step1); }
+            if (json.success && d?.step2) { localStorage.setItem('scaffold_step2', JSON.stringify(d.step2)); setStep2Data(d.step2); }
+            if (json.success && d?.step5) { localStorage.setItem('scaffold_step5', JSON.stringify(d.step5)); setForm(d.step5); }
+          } catch { /* ignore */ }
+        })();
+        return;
+      }
     }
     const s1 = localStorage.getItem('scaffold_step1');
     const s2 = localStorage.getItem('scaffold_step2');

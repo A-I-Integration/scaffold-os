@@ -42,16 +42,20 @@ function Schritt4Content() {
 
   useEffect(() => {
     if (projectId) {
-      (async () => {
-        try {
-          const res = await fetch('/api/projects?id=' + projectId);
-          const json = await res.json();
-          const d = json.project?.data;
-          if (json.success && d?.step1) { localStorage.setItem('scaffold_step1', JSON.stringify(d.step1)); setStep1Data(d.step1); }
-          if (json.success && d?.step4) { localStorage.setItem('scaffold_step4', JSON.stringify(d.step4)); setForm(d.step4); }
-        } catch { /* ignore */ }
-      })();
-      return;
+      const zuletztBearbeitet = localStorage.getItem('scaffold_editing_project_id');
+      if (zuletztBearbeitet !== projectId) {
+        localStorage.setItem('scaffold_editing_project_id', projectId);
+        (async () => {
+          try {
+            const res = await fetch('/api/projects?id=' + projectId);
+            const json = await res.json();
+            const d = json.project?.data;
+            if (json.success && d?.step1) { localStorage.setItem('scaffold_step1', JSON.stringify(d.step1)); setStep1Data(d.step1); }
+            if (json.success && d?.step4) { localStorage.setItem('scaffold_step4', JSON.stringify(d.step4)); setForm(d.step4); }
+          } catch { /* ignore */ }
+        })();
+        return;
+      }
     }
     const saved = localStorage.getItem('scaffold_step1');
     if (saved) setStep1Data(JSON.parse(saved));

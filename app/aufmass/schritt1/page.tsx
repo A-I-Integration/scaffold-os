@@ -100,25 +100,35 @@ function Schritt1Content() {
 
   // Gespeicherte Daten laden
   useEffect(() => {
-    // NEU: Bei geöffnetem, bestehendem Projekt (?id=...) die ECHTEN,
-    // gespeicherten Daten aus der Datenbank laden – nicht den
-    // projektunabhängigen Zwischenspeicher, der sonst Daten aus einem
-    // ANDEREN Projekt zeigen würde. Überschreibt zusätzlich den
-    // Zwischenspeicher, damit auch Schritte, die die ID (noch) nicht
-        // selbst durchreichen, den richtigen Stand sehen.
+    // FIX (Regression): Der erste Versuch hat bei JEDEM Schritt-Wechsel die
+    // Server-Daten neu geladen – das hat frische, noch nicht gespeicherte
+    // Änderungen aus einem früheren Schritt (z.B. Name/Datum hier in
+    // Schritt 1) wieder überschrieben, bevor sie in Schritt 6 gespeichert
+    // werden konnten. Jetzt: nur EINMAL pro Bearbeitungs-Sitzung von der
+    // Datenbank laden – erkannt daran, ob sich die Projekt-ID gegenüber der
+    // zuletzt bearbeiteten geändert hat (neues/anderes Projekt geöffnet).
+    // Innerhalb derselben Sitzung (gleiche ID) bleibt der Zwischenspeicher
+    // mit den eigenen, frischen Änderungen unangetastet.
     if (projectId) {
-      (async () => {
-        try {
-          const res = await fetch('/api/projects?id=' + projectId);
-          const json = await res.json();
-          if (json.success && json.project?.data?.step1) {
-            const parsed = json.project.data.step1;
-            localStorage.setItem('scaffold_step1', JSON.stringify(parsed));
-            setForm((prev) => ({ ...prev, ...parsed }));
-          }
-        } catch { /* Fallback unten greift weiterhin */ }
-      })();
-      return;
+      const zuletztBearbeitet = localStorage.getItem('scaffold_editing_project_id');
+      if (zuletztBearbeitet === projectId) {
+        // Bereits diese Sitzung – NICHT erneut von der Datenbank laden,
+        // sonst gehen eigene Änderungen aus einem früheren Schritt verloren.
+      } else {
+        localStorage.setItem('scaffold_editing_project_id', projectId);
+        (async () => {
+          try {
+            const res = await fetch('/api/projects?id=' + projectId);
+            const json = await res.json();
+            if (json.success && json.project?.data?.step1) {
+              const parsed = json.project.data.step1;
+              localStorage.setItem('scaffold_step1', JSON.stringify(parsed));
+              setForm((prev) => ({ ...prev, ...parsed }));
+            }
+          } catch { /* Fallback unten greift weiterhin */ }
+        })();
+        return;
+      }
     }
     const saved = localStorage.getItem('scaffold_step1');
     // Hinweis anzeigen, wenn irgendwo noch Wizard-Daten liegen
