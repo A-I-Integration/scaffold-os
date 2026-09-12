@@ -263,6 +263,20 @@ export default function KundenDetailPage() {
     setSpeichern(false)
   }
 
+  // NEU: Kunde endgültig löschen – nur möglich ohne Projekte/Rechnungen/
+  // Ansprechpartner (sonst bewusst blockiert, siehe API), damit ein
+  // versehentlich angelegter, leerer Kunde wirklich entfernt werden kann.
+  async function handleKundeLoeschen() {
+    if (!kunde) return
+    if (!confirm(`„${kunde.name}" wirklich endgültig löschen? Das lässt sich nicht rückgängig machen.`)) return
+    try {
+      const res = await fetch(`/api/kunden?id=${kunde.id}`, { method: 'DELETE' })
+      const json = await res.json()
+      if (!json.success) throw new Error(json.error)
+      router.push('/kunden')
+    } catch (err: any) { alert('❌ ' + err.message) }
+  }
+
   // ─── Rechnung als neue Version anlegen (GoBD: alte Rechnung bleibt
   // unverändert, wird nur storniert; die Änderungen landen auf einer neuen,
   // eigenen Rechnungsnummer – kein nachträgliches Verändern eines bereits
@@ -754,6 +768,11 @@ export default function KundenDetailPage() {
               <input value={kundeForm.city || ''} onChange={(e) => setKundeForm({ ...kundeForm, city: e.target.value })} placeholder="Ort" className={inputCls} />
             </div>
             <button onClick={saveKunde} disabled={speichern} className={btnPrimary}>{speichern ? 'Speichert…' : 'Speichern'}</button>
+            {projects.length === 0 && kundenInvoices.length === 0 && (
+              <button onClick={handleKundeLoeschen} className="ml-2 text-xs text-red-600 hover:text-red-700 underline">
+                Endgültig löschen
+              </button>
+            )}
             <p className="text-[11px] text-[#86868b] pt-2 border-t border-black/5">Kunde seit {fmtTimestamp(kunde.created_at)} · {projects.length} Auftrag/Aufträge · {kundenInvoices.length} Rechnung(en)</p>
           </div>
         )}
