@@ -55,7 +55,7 @@ export async function GET(req: NextRequest) {
     const res = await fetch(
       id
         ? `${url}/rest/v1/projects?id=eq.${id}&select=*`
-        : `${url}/rest/v1/projects?select=*&order=created_at.desc`,
+        : `${url}/rest/v1/projects?select=*&order=created_at.desc&limit=3000`,
       { headers }
     );
     if (!res.ok) throw new Error(await res.text());

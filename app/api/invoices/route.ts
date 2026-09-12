@@ -62,7 +62,7 @@ export async function GET() {
   }
   try {
     const res = await fetch(
-      `${url}/rest/v1/invoices?select=*&order=created_at.desc`,
+      `${url}/rest/v1/invoices?select=*&order=created_at.desc&limit=3000`,
       { headers }
     );
     if (!res.ok) throw new Error(await res.text());

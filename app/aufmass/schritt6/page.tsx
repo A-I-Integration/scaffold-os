@@ -40,6 +40,32 @@ function Schritt6Content() {
   const [savedProjectId, setSavedProjectId] = useState<string | null>(null);
   const [editMode, setEditMode] = useState(false);
   const [editedMaterials, setEditedMaterials] = useState<any[]>([]);
+  // NEU: Sonderteile – frei eintragbare Zusatzpositionen, die es in der
+  // parametrischen Berechnung nicht gibt (z.B. Sonderanfertigung,
+  // ungewöhnliche Verbinder, Fremdleistung als Materialposition).
+  const [neuesSonderteil, setNeuesSonderteil] = useState({ name: '', menge: '1', einzelpreis: '' });
+
+  function sonderteilHinzufuegen() {
+    if (!neuesSonderteil.name.trim() || !neuesSonderteil.einzelpreis) {
+      alert('Bitte Bezeichnung und Einzelpreis angeben.');
+      return;
+    }
+    const menge = parseFloat(neuesSonderteil.menge.replace(',', '.')) || 1;
+    const einzelpreis = parseFloat(neuesSonderteil.einzelpreis.replace(',', '.')) || 0;
+    setEditedMaterials((prev) => [
+      ...prev,
+      {
+        articleNumber: 'SONDER', name: neuesSonderteil.name.trim(), category: 'Sonderteil',
+        quantity: menge, unit: 'Stk', unitPrice: einzelpreis, totalPrice: menge * einzelpreis,
+        weightKg: 0, riskLevel: 'green', aiRecommendation: 'Manuell als Sonderteil hinzugefügt',
+      },
+    ]);
+    setNeuesSonderteil({ name: '', menge: '1', einzelpreis: '' });
+  }
+
+  function sonderteilEntfernen(index: number) {
+    setEditedMaterials((prev) => prev.filter((_, i) => i !== index));
+  }
 
   // ═══════════════════════════════════════════════════════════
   // NEU: Phase 1 Features
@@ -1067,7 +1093,7 @@ function Schritt6Content() {
                   {editedMaterials.map((item, i) => (
                     <div key={i} className="flex items-center gap-3 bg-black/10/50 p-3 rounded-xl">
                       <div className="flex-1">
-                        <p className="text-sm font-medium text-[#1d1d1f]">{item.name}</p>
+                        <p className="text-sm font-medium text-[#1d1d1f]">{item.name} {item.category === 'Sonderteil' && <span className="text-[10px] text-[#e8590c] font-normal">(Sonderteil)</span>}</p>
                         <p className="text-xs text-[#86868b]">{item.articleNumber}</p>
                       </div>
                       <div className="flex items-center gap-2">
@@ -1076,8 +1102,31 @@ function Schritt6Content() {
                         <button onClick={() => handleQuantityChange(i, item.quantity + 1)} className="w-8 h-8 rounded bg-black/10 text-[#1d1d1f] hover:bg-black/15">+</button>
                       </div>
                       <div className="w-20 text-right text-sm text-[#1d1d1f]">{(item.quantity * item.unitPrice).toFixed(2)} €</div>
+                      {item.category === 'Sonderteil' && (
+                        <button onClick={() => sonderteilEntfernen(i)} className="text-red-600 hover:bg-red-50 rounded-lg p-1.5">✕</button>
+                      )}
                     </div>
                   ))}
+                </div>
+                {/* NEU: Sonderteile hinzufügen – für alles, was die
+                    parametrische Berechnung nicht kennt. */}
+                <div className="mt-4 pt-4 border-t border-black/10">
+                  <p className="text-sm font-semibold text-[#1d1d1f] mb-2">➕ Sonderteil hinzufügen</p>
+                  <div className="flex gap-2 items-end">
+                    <div className="flex-1">
+                      <label className="text-xs text-[#86868b]">Bezeichnung</label>
+                      <input value={neuesSonderteil.name} onChange={(e) => setNeuesSonderteil({ ...neuesSonderteil, name: e.target.value })} placeholder="z.B. Sonderanfertigung Konsole" className="w-full px-3 py-2 border rounded-xl text-sm" />
+                    </div>
+                    <div className="w-20">
+                      <label className="text-xs text-[#86868b]">Menge</label>
+                      <input value={neuesSonderteil.menge} onChange={(e) => setNeuesSonderteil({ ...neuesSonderteil, menge: e.target.value })} className="w-full px-3 py-2 border rounded-xl text-sm" />
+                    </div>
+                    <div className="w-28">
+                      <label className="text-xs text-[#86868b]">Einzelpreis (€)</label>
+                      <input value={neuesSonderteil.einzelpreis} onChange={(e) => setNeuesSonderteil({ ...neuesSonderteil, einzelpreis: e.target.value })} placeholder="0,00" className="w-full px-3 py-2 border rounded-xl text-sm" />
+                    </div>
+                    <button onClick={sonderteilHinzufuegen} className="px-4 py-2 bg-[#e8590c] text-white text-sm font-semibold rounded-xl">Hinzufügen</button>
+                  </div>
                 </div>
               </div>
             )}
