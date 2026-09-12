@@ -9,6 +9,9 @@ function Schritt3Content() {
   const searchParams = useSearchParams();
   const projectId = searchParams.get('id');
   const [step1Data, setStep1Data] = useState<any>(null);
+  // NEU: Abschnitte aus Schritt 2 – erlaubt einen eigenen Gerüsttyp je
+  // Abschnitt (z.B. Fassadengerüst am Hauptgebäude, Dachgerüst am Anbau).
+  const [abschnitte, setAbschnitte] = useState<{ bezeichnung: string; laenge: string; hoehe: string; geruesttyp?: string }[]>([])
   
   const [form, setForm] = useState({
     geruesttyp: '',
@@ -57,6 +60,7 @@ function Schritt3Content() {
             const json = await res.json();
             const d = json.project?.data;
             if (json.success && d?.step1) { localStorage.setItem('scaffold_step1', JSON.stringify(d.step1)); setStep1Data(d.step1); }
+            if (json.success && d?.step2?.abschnitte) { setAbschnitte(d.step2.abschnitte); }
             if (json.success && d?.step3) { localStorage.setItem('scaffold_step3', JSON.stringify(d.step3)); setForm(d.step3); }
           } catch { /* ignore, unten bleibt der bisherige Stand */ }
         })();
@@ -65,9 +69,25 @@ function Schritt3Content() {
     }
     const saved = localStorage.getItem('scaffold_step1');
     if (saved) setStep1Data(JSON.parse(saved));
+    const saved2 = localStorage.getItem('scaffold_step2');
+    if (saved2) { try { const p = JSON.parse(saved2); if (Array.isArray(p.abschnitte)) setAbschnitte(p.abschnitte); } catch { /* ignore */ } }
     const saved3 = localStorage.getItem('scaffold_step3');
     if (saved3) setForm(JSON.parse(saved3));
   }, [projectId]);
+
+  // Gerüsttyp eines einzelnen Abschnitts ändern – wird zurück in
+  // scaffold_step2 gespeichert, damit Schritt 6 es beim Zusammenbauen
+  // der Berechnung findet (ScaffoldSection.scaffoldType).
+  function abschnittTypAendern(index: number, typ: string) {
+    setAbschnitte((prev) => {
+      const neu = prev.map((a, i) => i === index ? { ...a, geruesttyp: typ } : a)
+      try {
+        const bestehend = JSON.parse(localStorage.getItem('scaffold_step2') || '{}')
+        localStorage.setItem('scaffold_step2', JSON.stringify({ ...bestehend, abschnitte: neu }))
+      } catch { /* ignore */ }
+      return neu
+    })
+  }
 
   function handleWeiter() {
     if (!form.geruesttyp) {
@@ -121,6 +141,32 @@ function Schritt3Content() {
               ))}
             </div>
           </div>
+
+          {/* NEU: Eigener Gerüsttyp je zusätzlichem Abschnitt (z.B.
+              Fassadengerüst am Hauptgebäude, Dachgerüst am Anbau) – die
+              Auswahl oben gilt für Abschnitt 1 (Hauptgebäude), zusätzliche
+              Abschnitte aus Schritt 2 können hier individuell abweichen. */}
+          {abschnitte.length > 0 && (
+            <div>
+              <label className="block text-sm font-medium mb-3 text-[#424245]">Gerüsttyp je zusätzlichem Abschnitt</label>
+              <div className="space-y-2">
+                {abschnitte.map((a, i) => (
+                  <div key={i} className="flex items-center gap-2">
+                    <span className="text-sm text-[#424245] w-40 truncate">{a.bezeichnung || `Abschnitt ${i + 2}`}</span>
+                    <select
+                      value={a.geruesttyp || ''}
+                      onChange={(e) => abschnittTypAendern(i, e.target.value)}
+                      className="flex-1 px-3 py-2 border rounded-xl text-sm"
+                    >
+                      <option value="">wie oben ({geruestTypen.find((g) => g.id === form.geruesttyp)?.name || 'Hauptauswahl'})</option>
+                      {geruestTypen.map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}
+                    </select>
+                  </div>
+                ))}
+              </div>
+              <p className="text-[11px] text-[#86868b] mt-1">Ohne eigene Auswahl gilt für diesen Abschnitt die Hauptauswahl oben.</p>
+            </div>
+          )}
 
           <div>
             <label className="block text-sm font-medium mb-1 text-[#424245]">Gerüstsystem / Hersteller (optional)</label>
