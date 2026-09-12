@@ -57,6 +57,41 @@ describe('calculateScaffoldMaterial – Regelfall', () => {
   })
 })
 
+describe('calculateScaffoldMaterial – unterschiedliche Gerüsttypen je Abschnitt (NEU)', () => {
+  it('nutzt pro Abschnitt den eigenen Gerüsttyp für die Lagen-Berechnung', () => {
+    // "rahmen" hat 2,0 m Rahmenhöhe, "modul" 1,5 m – bei 6 m Höhe muss
+    // das genau 3 bzw. 4 Lagen ergeben.
+    const result = calculateScaffoldMaterial({
+      ...STANDARD_INPUT,
+      sections: [
+        { bezeichnung: 'Hauptfassade', lengthM: 10, heightM: 6, scaffoldType: 'rahmen' },
+        { bezeichnung: 'Anbau', lengthM: 5, heightM: 6, scaffoldType: 'modul' },
+      ],
+    })
+    const hauptfassade = result.sectionBreakdown?.find((s) => s.bezeichnung === 'Hauptfassade')
+    const anbau = result.sectionBreakdown?.find((s) => s.bezeichnung === 'Anbau')
+    expect(hauptfassade?.levels).toBe(3) // 6 / 2.0
+    expect(anbau?.levels).toBe(4)        // 6 / 1.5
+  })
+
+  it('ohne eigenen Typ je Abschnitt gilt weiterhin der globale Gerüsttyp (rückwärtskompatibel)', () => {
+    const result = calculateScaffoldMaterial({
+      ...STANDARD_INPUT,
+      scaffoldType: 'modul',
+      // Zwei Abschnitte, damit sectionBreakdown überhaupt mitgeliefert wird
+      // (bei nur einem Abschnitt bewusst weggelassen, siehe engine).
+      sections: [
+        { bezeichnung: 'Ohne eigenen Typ A', lengthM: 10, heightM: 6 },
+        { bezeichnung: 'Ohne eigenen Typ B', lengthM: 8, heightM: 6 },
+      ],
+    })
+    const a = result.sectionBreakdown?.find((s) => s.bezeichnung === 'Ohne eigenen Typ A')
+    const b = result.sectionBreakdown?.find((s) => s.bezeichnung === 'Ohne eigenen Typ B')
+    expect(a?.levels).toBe(4) // 6 / 1.5 (modul, vom globalen Typ übernommen)
+    expect(b?.levels).toBe(4)
+  })
+})
+
 describe('calculateScaffoldMaterial – Randfälle', () => {
   it('sehr kleines Gebäude stürzt nicht ab und liefert trotzdem Material', () => {
     const result = calculateScaffoldMaterial({ ...STANDARD_INPUT, lengthM: 2, heightM: 3, widthM: 2 })

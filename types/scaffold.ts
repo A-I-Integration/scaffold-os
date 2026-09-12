@@ -123,6 +123,10 @@ export interface ScaffoldSection {
   heightM: number;
   fieldLengthM?: number;   // optional, sonst input.fieldLengthM
   roofOverhangM?: number;  // optional, sonst input.roofOverhangM
+  // NEU: eigener Gerüsttyp je Abschnitt (z.B. Fassadengerüst am
+  // Hauptgebäude, Dachgerüst am Anbau) – fehlt er, gilt der globale Typ
+  // (input.scaffoldType), rückwärtskompatibel zu bestehenden Projekten.
+  scaffoldType?: ScaffoldType;
 }
 
 export interface ScaffoldInput {

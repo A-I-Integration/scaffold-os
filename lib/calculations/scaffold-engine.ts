@@ -302,6 +302,31 @@ function getFrameHeight(scaffoldType: ScaffoldType): number {
   }
 }
 
+// NEU: Übersetzt die in Schritt 3 wählbare Gerüst-ZWECK-Auswahl
+// (Fassade/Fahr/Trag/Dach/Raum/Hänge) in den internen System-Typ
+// (rahmen/modul/fahrbar/hang/spezial), den getFrameHeight() erwartet.
+// BUGFIX: Vorher wurde der Zweck-Wert direkt (nur klein geschrieben)
+// als System-Typ übergeben – da die Wortlisten nicht übereinstimmen
+// ('fassade' ≠ 'rahmen', 'fahr' ≠ 'fahrbar', 'haenge' ≠ 'hang'), landete
+// JEDE Auswahl im "sonst"-Fall von getFrameHeight() und hatte dadurch nie
+// eine Auswirkung auf die Lagen-Berechnung.
+export function geruesttypZuScaffoldType(geruesttyp: string | undefined): ScaffoldType {
+  switch ((geruesttyp || '').toLowerCase()) {
+    case 'fahr':
+      return 'fahrbar';
+    case 'haenge':
+      return 'hang';
+    // Fassade/Trag/Dach/Raum nutzen alle das übliche Rahmensystem – es
+    // gibt für diese Zwecke keinen eigenen Systemtyp in der Kalkulation.
+    case 'fassade':
+    case 'trag':
+    case 'dach':
+    case 'raum':
+    default:
+      return 'rahmen';
+  }
+}
+
 function determineScaffoldClass(input: ScaffoldInput): string {
   const { heightM, trade, windZone, facadeType } = input;
   let loadClass = 2;
@@ -395,7 +420,6 @@ export function calculateScaffoldMaterial(
   // Ohne "sections" läuft exakt die bisherige Ein-Abschnitt-Rechnung
   // (rückwärtskompatibel, keine Änderung am Ergebnis für bestehende
   // Projekte).
-  const frameHeight = getFrameHeight(input.scaffoldType);
   const abschnitte = input.sections && input.sections.length > 0
     ? input.sections
     : [{ lengthM: input.lengthM, heightM: input.heightM, fieldLengthM: input.fieldLengthM, roofOverhangM: input.roofOverhangM, bezeichnung: 'Gerüst' }];
@@ -416,7 +440,11 @@ export function calculateScaffoldMaterial(
 
   for (const a of abschnitte) {
     const fl = a.fieldLengthM || input.fieldLengthM;
-    const aLevels = Math.ceil(a.heightM / frameHeight);
+    // NEU: eigener Gerüsttyp je Abschnitt möglich (z.B. Fassadengerüst +
+    // Dachgerüst im selben Aufmaß) – bestimmt hier die Rahmenhöhe/Lagen-
+    // Anzahl DIESES Abschnitts. Ohne Angabe gilt weiterhin der globale Typ.
+    const aFrameHeight = getFrameHeight(a.scaffoldType || input.scaffoldType);
+    const aLevels = Math.ceil(a.heightM / aFrameHeight);
     const aFields = Math.ceil(a.lengthM / fl);
     const aArea = a.lengthM * a.heightM;
     levels = Math.max(levels, aLevels); // für Anzeige: höchster Abschnitt

@@ -11,6 +11,7 @@ import SignaturePad from '@/components/aufmaß/SignaturePad';
 import DinCheck from '@/components/aufmaß/DinCheck';
 import { KIAnalysis } from '@/types/scaffold';
 import { systemAnzeigename } from '@/lib/calculations/geruest-systeme';
+import { geruesttypZuScaffoldType } from '@/lib/calculations/scaffold-engine';
 import DispositionResult from '@/components/aufmaß/DispositionResult';
 import { DispositionResult as DispositionData } from '@/lib/calculations/disposition';
 import { generateInvoicePDF, fmtDate as fmtRechnungsDatum, type Invoice } from '@/lib/invoice-pdf';
@@ -240,7 +241,7 @@ function Schritt6Content() {
         widthM: breite, eavesHeightM: hoehe, roofForm: 'kein' as const,
         roofOverhangM: 0, facadeType: 'putz' as const, obstacles: [],
         sections,
-        scaffoldType: (s3.geruesttyp === 'trag' ? 'rahmen' : 'rahmen') as any, deckingType: (s3.belag || 'stahl').toLowerCase(),
+        scaffoldType: geruesttypZuScaffoldType(s3.geruesttyp), deckingType: (s3.belag || 'stahl').toLowerCase(),
         fieldLengthM: parseFloat(s3.feldlänge || s3.feldlange) || 2.07, groundType: (s3.untergrund || s3.boden || 'beton').toLowerCase(),
         manufacturer: systemAnzeigename(s3.system, s3.customSystem) || undefined,
         anchorType: (s4.anker || 'fassadenanker').toLowerCase(), groundCondition: (s4.untergrund || 'beton').toLowerCase(),
@@ -255,7 +256,7 @@ function Schritt6Content() {
     const zusatzAbschnitte = Array.isArray(s2.abschnitte) ? s2.abschnitte : [];
     const gueltigeZusatzAbschnitte = zusatzAbschnitte
       .filter((a: any) => parseFloat(a.laenge) > 0 && parseFloat(a.hoehe) > 0)
-      .map((a: any, i: number) => ({ bezeichnung: a.bezeichnung || `Abschnitt ${i + 2}`, lengthM: parseFloat(a.laenge), heightM: parseFloat(a.hoehe) }));
+      .map((a: any, i: number) => ({ bezeichnung: a.bezeichnung || `Abschnitt ${i + 2}`, lengthM: parseFloat(a.laenge), heightM: parseFloat(a.hoehe), scaffoldType: a.geruesttyp ? geruesttypZuScaffoldType(a.geruesttyp) : undefined }));
     const sections = gueltigeZusatzAbschnitte.length > 0
       ? [{ bezeichnung: 'Abschnitt 1', lengthM: parseFloat(s2.laenge) || 0, heightM: parseFloat(s2.hoehe) || 0 }, ...gueltigeZusatzAbschnitte]
       : undefined;
@@ -266,7 +267,7 @@ function Schritt6Content() {
       widthM: parseFloat(s2.breite) || 0, eavesHeightM: parseFloat(s2.traufhoehe) || 0, roofForm: mapDachform(s2.dachform),
       roofOverhangM: parseFloat(s2.dachueberstand) || 0, facadeType: mapFassade(s2.fassade), obstacles: mapHindernisse(s2),
       sections,
-      scaffoldType: (s3.geruesttyp || 'rahmen').toLowerCase(), deckingType: (s3.belag || 'stahl').toLowerCase(),
+      scaffoldType: geruesttypZuScaffoldType(s3.geruesttyp), deckingType: (s3.belag || 'stahl').toLowerCase(),
       fieldLengthM: parseFloat(s3.feldlänge || s3.feldlange) || 2.07, groundType: (s3.untergrund || s3.boden || 'beton').toLowerCase(),
       manufacturer: systemAnzeigename(s3.system, s3.customSystem) || undefined,
       anchorType: (s4.anker || 'fassadenanker').toLowerCase(), groundCondition: (s4.untergrund || 'beton').toLowerCase(),
