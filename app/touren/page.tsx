@@ -18,7 +18,7 @@ interface Driver {
 }
 interface TransportOrder {
   id: string; quantity: number; status: string; created_at: string;
-  to_project?: { name: string; adresse: string } | null;
+  to_project?: { name: string; adresse: string; data?: { step1?: { projektbeginn?: string; projektende?: string } } } | null;
   inventory?: { name: string } | null;
 }
 interface Stop {
@@ -441,6 +441,12 @@ export default function TourenPage() {
                         <span className="block text-[#86868b] text-xs">
                           → {t.to_project?.name || 'Baustelle'}{t.to_project?.adresse ? `, ${t.to_project.adresse}` : ''}
                         </span>
+                        {t.to_project?.data?.step1?.projektbeginn && (
+                          <span className="block text-emerald-700 text-xs font-medium">
+                            📅 Projektbeginn: {new Date(t.to_project.data.step1.projektbeginn + 'T00:00:00').toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' })}
+                            {t.to_project.data.step1.projektende && ` – ${new Date(t.to_project.data.step1.projektende + 'T00:00:00').toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' })}`}
+                          </span>
+                        )}
                       </span>
                     </button>
                   );
