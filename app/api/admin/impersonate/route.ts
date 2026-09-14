@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
+import { serverErrorResponse } from '@/lib/auth';
 
 // ============================================================
 // SCAFFOLD OS – Impersonation (Phase 17)
@@ -109,6 +110,6 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ success: true, login_url: actionLink, hostname });
   } catch (err: any) {
-    return NextResponse.json({ success: false, error: err.message }, { status: 500 });
+    return serverErrorResponse(err);
   }
 }

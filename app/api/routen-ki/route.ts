@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { kiFetchMitRetry, KI_UEBERLASTET_MELDUNG } from '@/lib/ki-fetch';
 import { createClient } from '@/lib/supabase/server';
 import { geocodeAll, buildTable, tableAsText } from '@/lib/routing';
+import { serverErrorResponse } from '@/lib/auth';
 
 // ─── POST /api/routen-ki ───
 // KI-Tourenplan für ein Datum: bündelt offene Transporte, Baustellen-Bestände,
@@ -181,6 +182,6 @@ Antworte AUSSCHLIESSLICH als JSON:
       },
     });
   } catch (err: any) {
-    return NextResponse.json({ success: false, error: err.message || 'Unbekannter Fehler' }, { status: 500 });
+    return serverErrorResponse(err);
   }
 }

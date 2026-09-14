@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
+import { serverErrorResponse } from '@/lib/auth';
 
 // ============================================================
 // SCAFFOLD OS – Sprachnotiz-Transkription (Phase 18)
@@ -73,6 +74,6 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ success: true, text });
   } catch (err: any) {
-    return NextResponse.json({ success: false, error: err.message }, { status: 500 });
+    return serverErrorResponse(err);
   }
 }

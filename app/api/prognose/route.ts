@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { kiFetchMitRetry, KI_UEBERLASTET_MELDUNG } from '@/lib/ki-fetch';
-import { requireAuth, unauthorizedResponse } from '@/lib/auth';
+import { requireAuth, unauthorizedResponse, serverErrorResponse } from '@/lib/auth';
 
 // ============================================================
 // SCAFFOLD OS – Lager-Prognose (Nr. 4)
@@ -129,7 +129,7 @@ export async function GET() {
     const { rows, kpis } = buildForecast(await invRes.json(), await transRes.json());
     return NextResponse.json({ success: true, rows, kpis, period_days: DAYS });
   } catch (err: any) {
-    return NextResponse.json({ success: false, error: err.message }, { status: 500 });
+    return serverErrorResponse(err);
   }
 }
 
@@ -189,6 +189,6 @@ Halte dich kurz – maximal 150 Wörter. Keine Einleitung, keine Höflichkeiten.
     const text = kiJson?.choices?.[0]?.message?.content || '';
     return NextResponse.json({ success: true, summary: text });
   } catch (err: any) {
-    return NextResponse.json({ success: false, error: err.message }, { status: 500 });
+    return serverErrorResponse(err);
   }
 }

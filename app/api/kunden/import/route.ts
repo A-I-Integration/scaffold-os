@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
+import { serverErrorResponse } from '@/lib/auth';
 
 // ============================================================
 // SCAFFOLD OS – Massen-Import von Kunden (z.B. Umstieg von CP-Pro,
@@ -58,6 +59,6 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ success: true, importiert: gueltig.length, uebersprungen });
   } catch (err: any) {
-    return NextResponse.json({ success: false, error: err.message }, { status: 500 });
+    return serverErrorResponse(err);
   }
 }

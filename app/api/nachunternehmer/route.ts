@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
+import { serverErrorResponse } from '@/lib/auth';
 
 // ============================================================
 // SCAFFOLD OS – Nachunternehmer-API (Stammdaten + Rahmenvertrag)
@@ -115,7 +116,7 @@ export async function GET() {
     const rows = await res.json();
     return NextResponse.json({ success: true, nachunternehmer: rows });
   } catch (err: any) {
-    return NextResponse.json({ success: false, error: err.message }, { status: 500 });
+    return serverErrorResponse(err);
   }
 }
 
@@ -150,7 +151,7 @@ export async function POST(req: NextRequest) {
     const rows = await res.json();
     return NextResponse.json({ success: true, eintrag: rows[0] });
   } catch (err: any) {
-    return NextResponse.json({ success: false, error: err.message }, { status: 500 });
+    return serverErrorResponse(err);
   }
 }
 
@@ -186,6 +187,6 @@ export async function PATCH(req: NextRequest) {
     }
     return NextResponse.json({ success: true, eintrag: rows[0] });
   } catch (err: any) {
-    return NextResponse.json({ success: false, error: err.message }, { status: 500 });
+    return serverErrorResponse(err);
   }
 }

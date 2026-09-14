@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
+import { serverErrorResponse } from '@/lib/auth';
 
 // ─── Typen ───
 interface Ebene {
@@ -458,6 +459,6 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ measurements, fileName: file.name });
   } catch (err: any) {
-    return NextResponse.json({ error: err.message || 'Unbekannter Fehler' }, { status: 500 });
+    return serverErrorResponse(err);
   }
 }

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
+import { serverErrorResponse } from '@/lib/auth';
 
 // ============================================================
 // SCAFFOLD OS – Material-Rückgabe-Status je Projekt (Phase 42)
@@ -39,6 +40,6 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json({ success: true, erledigtEventIds });
   } catch (err: any) {
-    return NextResponse.json({ success: false, error: err.message }, { status: 500 });
+    return serverErrorResponse(err);
   }
 }

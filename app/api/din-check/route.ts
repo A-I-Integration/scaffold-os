@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { kiFetchMitRetry, KI_UEBERLASTET_MELDUNG } from '@/lib/ki-fetch';
 import { createClient } from '@/lib/supabase/server';
+import { serverErrorResponse } from '@/lib/auth';
 
 // ============================================================
 // SCAFFOLD OS – DIN EN 12811 KI-Check (Phase 18)
@@ -167,6 +168,6 @@ Regeln:
 
     return NextResponse.json({ success: true, dinCheck });
   } catch (err: any) {
-    return NextResponse.json({ success: false, error: err.message }, { status: 500 });
+    return serverErrorResponse(err);
   }
 }

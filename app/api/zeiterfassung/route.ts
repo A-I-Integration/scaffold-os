@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { computeNetHours } from '@/lib/worktime';
+import { serverErrorResponse } from '@/lib/auth';
 
 // ============================================================
 // SCAFFOLD OS – Monatsübersicht Zeiterfassung (Nr. 6)
@@ -100,7 +101,7 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json({ success: true, employees, entriesByEmployee: byEmployee, summary });
   } catch (err: any) {
-    return NextResponse.json({ success: false, error: err.message }, { status: 500 });
+    return serverErrorResponse(err);
   }
 }
 
@@ -167,7 +168,7 @@ export async function PUT(req: NextRequest) {
     if (!res.ok) throw new Error(await res.text());
     return NextResponse.json({ success: true, entry: (await res.json())[0] });
   } catch (err: any) {
-    return NextResponse.json({ success: false, error: err.message }, { status: 500 });
+    return serverErrorResponse(err);
   }
 }
 
@@ -237,6 +238,6 @@ export async function POST(req: NextRequest) {
     if (!res.ok) throw new Error(await res.text());
     return NextResponse.json({ success: true, entry: (await res.json())[0] });
   } catch (err: any) {
-    return NextResponse.json({ success: false, error: err.message }, { status: 500 });
+    return serverErrorResponse(err);
   }
 }

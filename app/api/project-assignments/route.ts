@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
+import { serverErrorResponse } from '@/lib/auth';
 
 // ============================================================
 // SCAFFOLD OS – Mitarbeiter-Auftrags-Zuordnung (Phase 28)
@@ -43,7 +44,7 @@ export async function GET(req: NextRequest) {
     if (!res.ok) throw new Error(await res.text());
     return NextResponse.json({ success: true, assignments: await res.json() });
   } catch (err: any) {
-    return NextResponse.json({ success: false, error: err.message }, { status: 500 });
+    return serverErrorResponse(err);
   }
 }
 
@@ -88,7 +89,7 @@ export async function POST(req: NextRequest) {
     const rows = await res.json();
     return NextResponse.json({ success: true, assignment: rows[0] });
   } catch (err: any) {
-    return NextResponse.json({ success: false, error: err.message }, { status: 500 });
+    return serverErrorResponse(err);
   }
 }
 
@@ -105,6 +106,6 @@ export async function DELETE(req: NextRequest) {
     if (!res.ok) throw new Error(await res.text());
     return NextResponse.json({ success: true });
   } catch (err: any) {
-    return NextResponse.json({ success: false, error: err.message }, { status: 500 });
+    return serverErrorResponse(err);
   }
 }

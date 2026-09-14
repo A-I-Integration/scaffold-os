@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import Stripe from 'stripe';
-import { requireAuth, unauthorizedResponse } from '@/lib/auth';
+import { requireAuth, unauthorizedResponse, serverErrorResponse } from '@/lib/auth';
 
 // ============================================================
 // SCAFFOLD OS – Stripe: Checkout starten (NUR Master-Instanz)
@@ -97,6 +97,6 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ success: true, url: session.url });
   } catch (err: any) {
-    return NextResponse.json({ success: false, error: err.message }, { status: 500 });
+    return serverErrorResponse(err);
   }
 }

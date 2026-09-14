@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { verschluesseln } from '@/lib/email-crypto';
 import { ImapFlow } from 'imapflow';
+import { serverErrorResponse } from '@/lib/auth';
 
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const key = process.env.SUPABASE_SERVICE_ROLE_KEY!;
@@ -24,7 +25,7 @@ export async function GET() {
       gemeinsame: rows.filter((r: any) => r.employee_id === null),
     });
   } catch (err: any) {
-    return NextResponse.json({ success: false, error: err.message }, { status: 500 });
+    return serverErrorResponse(err);
   }
 }
 
@@ -74,7 +75,7 @@ export async function POST(req: NextRequest) {
     if (!res.ok) throw new Error(await res.text());
     return NextResponse.json({ success: true });
   } catch (err: any) {
-    return NextResponse.json({ success: false, error: err.message }, { status: 500 });
+    return serverErrorResponse(err);
   }
 }
 
@@ -96,6 +97,6 @@ export async function DELETE(req: NextRequest) {
     if (!res.ok) throw new Error(await res.text());
     return NextResponse.json({ success: true });
   } catch (err: any) {
-    return NextResponse.json({ success: false, error: err.message }, { status: 500 });
+    return serverErrorResponse(err);
   }
 }

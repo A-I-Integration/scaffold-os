@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { trackImpact } from '@/lib/impact';
+import { serverErrorResponse } from '@/lib/auth';
 
 // ============================================================
 // SCAFFOLD OS – Projekte API
@@ -68,7 +69,7 @@ export async function GET(req: NextRequest) {
     }
     return NextResponse.json({ success: true, projects: rows });
   } catch (err: any) {
-    return NextResponse.json({ success: false, error: err.message }, { status: 500 });
+    return serverErrorResponse(err);
   }
 }
 
@@ -102,7 +103,7 @@ export async function POST(req: NextRequest) {
     const result = await response.json();
     return NextResponse.json({ id: result[0].id });
   } catch (err: any) {
-    return NextResponse.json({ error: err.message || 'Unbekannter Fehler' }, { status: 500 });
+    return serverErrorResponse(err);
   }
 }
 
@@ -194,7 +195,7 @@ export async function PATCH(req: NextRequest) {
 
     return NextResponse.json({ success: true, project: rows[0] });
   } catch (err: any) {
-    return NextResponse.json({ success: false, error: err.message }, { status: 500 });
+    return serverErrorResponse(err);
   }
 }
 
@@ -235,6 +236,6 @@ export async function DELETE(req: NextRequest) {
     }
     return NextResponse.json({ success: true });
   } catch (err: any) {
-    return NextResponse.json({ success: false, error: err.message }, { status: 500 });
+    return serverErrorResponse(err);
   }
 }

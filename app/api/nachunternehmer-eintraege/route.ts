@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
+import { serverErrorResponse } from '@/lib/auth';
 
 // ============================================================
 // SCAFFOLD OS – Nachunternehmer-Leistungserfassung
@@ -101,7 +102,7 @@ export async function GET(req: NextRequest) {
     const rows = await res.json();
     return NextResponse.json({ success: true, eintraege: rows });
   } catch (err: any) {
-    return NextResponse.json({ success: false, error: err.message }, { status: 500 });
+    return serverErrorResponse(err);
   }
 }
 
@@ -157,7 +158,7 @@ export async function POST(req: NextRequest) {
     const rows = await res.json();
     return NextResponse.json({ success: true, eintrag: rows[0] });
   } catch (err: any) {
-    return NextResponse.json({ success: false, error: err.message }, { status: 500 });
+    return serverErrorResponse(err);
   }
 }
 
@@ -199,7 +200,7 @@ export async function PATCH(req: NextRequest) {
     const rows = await res.json();
     return NextResponse.json({ success: true, geaendert: rows?.length || 0 });
   } catch (err: any) {
-    return NextResponse.json({ success: false, error: err.message }, { status: 500 });
+    return serverErrorResponse(err);
   }
 }
 
@@ -237,6 +238,6 @@ export async function DELETE(req: NextRequest) {
     if (!res.ok) throw new Error(await res.text());
     return NextResponse.json({ success: true });
   } catch (err: any) {
-    return NextResponse.json({ success: false, error: err.message }, { status: 500 });
+    return serverErrorResponse(err);
   }
 }

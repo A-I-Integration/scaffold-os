@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { buildGaebX84 } from '@/lib/gaeb';
 import { createClient } from '@/lib/supabase/server';
+import { serverErrorResponse } from '@/lib/auth';
 
 // ============================================================
 // SCAFFOLD OS – GAEB-Angebot exportieren (Phase 40)
@@ -37,6 +38,6 @@ export async function POST(req: NextRequest) {
     const x84 = buildGaebX84(xml, preise);
     return NextResponse.json({ success: true, x84 });
   } catch (err: any) {
-    return NextResponse.json({ success: false, error: err.message }, { status: 500 });
+    return serverErrorResponse(err);
   }
 }

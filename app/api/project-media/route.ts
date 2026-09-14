@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
+import { serverErrorResponse } from '@/lib/auth';
 
 // ============================================================
 // SCAFFOLD OS – Projekt-Dateien (Fotos & Dokumente)
@@ -69,7 +70,7 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json({ success: true, media });
   } catch (err: any) {
-    return NextResponse.json({ success: false, error: err.message }, { status: 500 });
+    return serverErrorResponse(err);
   }
 }
 
@@ -100,6 +101,6 @@ export async function POST(req: NextRequest) {
     const rows = await res.json();
     return NextResponse.json({ success: true, media: rows[0] });
   } catch (err: any) {
-    return NextResponse.json({ success: false, error: err.message }, { status: 500 });
+    return serverErrorResponse(err);
   }
 }

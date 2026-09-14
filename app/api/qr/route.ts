@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import QRCode from 'qrcode';
-import { requireAuth, unauthorizedResponse } from '@/lib/auth';
+import { requireAuth, unauthorizedResponse, serverErrorResponse } from '@/lib/auth';
 
 export async function GET(req: Request) {
   if (!(await requireAuth())) return unauthorizedResponse();
@@ -33,6 +33,6 @@ export async function GET(req: Request) {
       },
     });
   } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: 500 });
+    return serverErrorResponse(err);
   }
 }

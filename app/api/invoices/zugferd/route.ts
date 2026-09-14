@@ -5,7 +5,7 @@ import {
   embedFacturX, validateInput, DocumentTypeCode, UnitCode, VatCategoryCode, Profile, Flavor,
 } from '@stackforge-eu/factur-x';
 import { generateInvoicePdfCompliant } from '@/lib/invoice-pdf-server';
-import { requireAuth, unauthorizedResponse } from '@/lib/auth';
+import { requireAuth, unauthorizedResponse, serverErrorResponse } from '@/lib/auth';
 
 // ============================================================
 // SCAFFOLD OS – E-Rechnung / ZUGFeRD (Phase 39)
@@ -131,6 +131,6 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ success: true, pdfBase64: Buffer.from(result.pdf).toString('base64') });
   } catch (err: any) {
-    return NextResponse.json({ success: false, error: err.message }, { status: 500 });
+    return serverErrorResponse(err);
   }
 }

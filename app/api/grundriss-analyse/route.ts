@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { kiFetchMitRetry, KI_UEBERLASTET_MELDUNG } from '@/lib/ki-fetch';
 import { createClient } from '@/lib/supabase/server';
 import { deterministicFromText, escapeRegExp, pruefeUndFiltere, versucheDirektenPdfText } from '@/lib/grundriss-parsing';
+import { serverErrorResponse } from '@/lib/auth';
 
 // ─── POST: KI-Grundriss-Analyse ───
 // Nimmt eine sessionId, holt die hochgeladenen Grundrisse aus
@@ -218,6 +219,6 @@ STRENGE REGELN:
       model,
     });
   } catch (err: any) {
-    return NextResponse.json({ success: false, error: err.message || 'Unbekannter Fehler' }, { status: 500 });
+    return serverErrorResponse(err);
   }
 }

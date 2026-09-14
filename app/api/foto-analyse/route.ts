@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { kiFetchMitRetry, KI_UEBERLASTET_MELDUNG } from '@/lib/ki-fetch';
 import { createClient } from '@/lib/supabase/server';
+import { serverErrorResponse } from '@/lib/auth';
 
 // ─── POST: KI-Foto-Analyse (Mistral Vision) ───
 // Nimmt eine sessionId, holt die hochgeladenen Baustellen-Fotos aus
@@ -127,6 +128,6 @@ Regeln: Nur erkennbare Dinge eintragen, im Zweifel null bzw. leere Liste. Keine 
       model,
     });
   } catch (err: any) {
-    return NextResponse.json({ success: false, error: err.message || 'Unbekannter Fehler' }, { status: 500 });
+    return serverErrorResponse(err);
   }
 }

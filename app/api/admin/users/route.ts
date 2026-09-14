@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { aktuellerPlan, UPGRADE_HINWEIS } from '@/lib/plan-limits';
+import { serverErrorResponse } from '@/lib/auth';
 
 // ============================================================
 // SCAFFOLD OS – Admin-API: Mitarbeiter-Logins verwalten
@@ -56,7 +57,7 @@ export async function GET() {
     if (!res.ok) throw new Error(await res.text());
     return NextResponse.json({ success: true, employees: await res.json() });
   } catch (err: any) {
-    return NextResponse.json({ success: false, error: err.message }, { status: 500 });
+    return serverErrorResponse(err);
   }
 }
 
@@ -192,6 +193,6 @@ export async function POST(req: NextRequest) {
       employee: employeeResult,
     });
   } catch (err: any) {
-    return NextResponse.json({ success: false, error: err.message }, { status: 500 });
+    return serverErrorResponse(err);
   }
 }
