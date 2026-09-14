@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { kiRateLimitPruefen } from '@/lib/rate-limit';
 import { kiFetchMitRetry, KI_UEBERLASTET_MELDUNG } from '@/lib/ki-fetch';
 import { createClient } from '@/lib/supabase/server';
 import { deterministicFromText, escapeRegExp, pruefeUndFiltere, versucheDirektenPdfText } from '@/lib/grundriss-parsing';
@@ -39,6 +40,10 @@ export async function POST(req: NextRequest) {
     if (!user) {
       return NextResponse.json({ success: false, error: 'Nicht eingeloggt' }, { status: 401 });
     }
+
+    // Phase 63: KI-Rate-Limit (pro Nutzer, Default 20/Min)
+    const rl = await kiRateLimitPruefen(req, user.id);
+    if (!rl.ok) return rl.response;
 
     // Grundrisse der Session holen (max. 4 für die Analyse)
     const { data: media, error: dbError } = await supabase
