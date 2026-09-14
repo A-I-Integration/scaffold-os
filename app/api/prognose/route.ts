@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { kiFetchMitRetry, KI_UEBERLASTET_MELDUNG } from '@/lib/ki-fetch';
+import { requireAuth, unauthorizedResponse } from '@/lib/auth';
 
 // ============================================================
 // SCAFFOLD OS – Lager-Prognose (Nr. 4)
@@ -116,6 +117,7 @@ function buildForecast(inventory: any[], transports: any[]): { rows: ForecastRow
 }
 
 export async function GET() {
+  if (!(await requireAuth())) return unauthorizedResponse();
   try {
     const [invRes, transRes] = await Promise.all([
       fetch(`${url}/rest/v1/inventory?select=id,name,quantity,unit,unit_price,min_stock&is_active=eq.true`, { headers }),
@@ -133,6 +135,7 @@ export async function GET() {
 
 // ─── POST: KI-Einschätzung ───
 export async function POST(req: NextRequest) {
+  if (!(await requireAuth())) return unauthorizedResponse();
   try {
     const apiKey = process.env.KI_API_KEY;
     if (!apiKey) {

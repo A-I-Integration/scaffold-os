@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
+import { requireAuth, unauthorizedResponse } from '@/lib/auth';
 
 export async function POST(req: Request) {
+  if (!(await requireAuth())) return unauthorizedResponse();
   try {
     const apiKey = process.env.RESEND_API_KEY;
     if (!apiKey) {
