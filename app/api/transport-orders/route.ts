@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth, unauthorizedResponse, serverErrorResponse } from '@/lib/auth';
+import { validiere, materialZuordnungSchema } from '@/lib/validation';
 
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const key = process.env.SUPABASE_SERVICE_ROLE_KEY!;
@@ -32,10 +33,11 @@ export async function GET() {
 export async function POST(req: NextRequest) {
   if (!(await requireAuth())) return unauthorizedResponse();
   try {
-    const body = await req.json();
-    const { inventory_id, quantity, to_project_id, from_project_id } = body;
-    if (!inventory_id || !quantity || !to_project_id) {
-      return NextResponse.json({ success: false, error: 'inventory_id, quantity und to_project_id erforderlich' }, { status: 400 });
+    const parsed = validiere(materialZuordnungSchema, await req.json());
+    if (!parsed.ok) return parsed.response;
+    const { inventory_id, quantity, to_project_id, from_project_id } = parsed.data;
+    if (!to_project_id) {
+      return NextResponse.json({ success: false, error: 'to_project_id erforderlich' }, { status: 400 });
     }
     // FIX: Transportaufträge reduzierten bisher NICHT den verfügbaren
     // Lagerbestand (anders als /api/inventory/reserve) – genau die

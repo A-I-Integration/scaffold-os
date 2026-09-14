@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { serverErrorResponse } from '@/lib/auth';
+import { validiere, kolonneAnlegenSchema, kolonneMitgliedSchema } from '@/lib/validation';
 
 // ============================================================
 // SCAFFOLD OS – Kolonnen-Verwaltung (Phase 55)
@@ -84,8 +85,9 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ success: false, error: 'Nur Admin und Disposition dürfen Kolonnen anlegen.' }, { status: 403 });
   }
   try {
-    const { name, bauleiter_id } = await req.json();
-    if (!name) return NextResponse.json({ success: false, error: 'Name erforderlich' }, { status: 400 });
+    const parsed = validiere(kolonneAnlegenSchema, await req.json());
+    if (!parsed.ok) return parsed.response;
+    const { name, bauleiter_id } = parsed.data;
     const res = await fetch(`${url}/rest/v1/kolonnen`, {
       method: 'POST', headers: { ...headers, Prefer: 'return=representation' },
       body: JSON.stringify({ name, bauleiter_id: bauleiter_id || null }),
@@ -107,8 +109,9 @@ export async function PUT(req: NextRequest) {
     return NextResponse.json({ success: false, error: 'Nur Admin und Disposition dürfen Mitarbeiter umverteilen.' }, { status: 403 });
   }
   try {
-    const { employee_id, kolonne_id } = await req.json();
-    if (!employee_id) return NextResponse.json({ success: false, error: 'employee_id erforderlich' }, { status: 400 });
+    const parsed = validiere(kolonneMitgliedSchema, await req.json());
+    if (!parsed.ok) return parsed.response;
+    const { employee_id, kolonne_id } = parsed.data;
     const res = await fetch(`${url}/rest/v1/employees?id=eq.${employee_id}`, {
       method: 'PATCH', headers,
       body: JSON.stringify({ kolonne_id: kolonne_id || null }),

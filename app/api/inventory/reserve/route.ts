@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { requireAuth, unauthorizedResponse, serverErrorResponse } from '@/lib/auth';
+import { validiere, materialZuordnungSchema } from '@/lib/validation';
 
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const key = process.env.SUPABASE_SERVICE_ROLE_KEY!;
@@ -10,11 +11,11 @@ const headers = { apikey: key, Authorization: `Bearer ${key}`, 'Content-Type': '
 export async function POST(req: Request) {
   if (!(await requireAuth())) return unauthorizedResponse();
   try {
-    const body = await req.json();
-    const { inventory_id, project_id, quantity, notes } = body;
-
-    if (!inventory_id || !project_id || !quantity || quantity < 1) {
-      return NextResponse.json({ success: false, error: 'inventory_id, project_id und quantity erforderlich' }, { status: 400 });
+    const parsed = validiere(materialZuordnungSchema, await req.json());
+    if (!parsed.ok) return parsed.response;
+    const { inventory_id, project_id, quantity, notes } = parsed.data;
+    if (!project_id) {
+      return NextResponse.json({ success: false, error: 'project_id erforderlich' }, { status: 400 });
     }
 
     // 1. Aktuellen Bestand prüfen
