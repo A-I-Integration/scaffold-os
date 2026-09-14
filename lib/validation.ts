@@ -15,7 +15,7 @@ import { z } from 'zod';
 // Änderungen klein zu halten.
 // ============================================================
 
-const uuid = z.string().uuid({ message: 'Ungültige ID.' });
+export const uuid = z.string().uuid({ message: 'Ungültige ID.' });
 const isoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, { message: 'Datum muss im Format JJJJ-MM-TT sein.' });
 
 /** Prüft `body` gegen `schema`. Gibt bei Erfolg die geprüften, sauber
@@ -86,3 +86,29 @@ export const materialZuordnungSchema = z.object({
   quantity: z.number().positive('Menge muss größer als 0 sein.'),
   notes: z.string().max(2000).nullable().optional(),
 });
+
+// ─── Nachunternehmer (Phase 61, Sicherheits-Review) ───
+// IDs, die in PostgREST-Filter-URLs interpoliert werden, MÜSSEN als
+// UUID validiert sein: Sonst kann ein Wert wie "abc&or=(...)" die
+// Query-Struktur verändern. Bisher verhinderte nur der uuid-Spalten-
+// typ der DB Schäden – darauf verlassen wir uns nicht länger.
+export const nachunternehmerEintragPostSchema = z.object({
+  subcontractor_id: uuid,
+  project_id: uuid.nullable().optional(),
+  project_name: z.string().trim().max(500).nullable().optional(),
+  datum: isoDate,
+  art: z.enum(['montage_m2', 'demontage_m2', 'regie_stunden', 'anfahrt']),
+  // Bewusst unkritisch: Deutsche Dezimalkomma-Strings werden weiterhin
+  // serverseitig mit zuZahl() geparst (Client-Vertrag ändert sich nicht).
+  menge: z.unknown(),
+  einheitspreis: z.unknown(),
+  stundenzettel: z.boolean().optional(),
+  bemerkung: z.string().max(2000).nullable().optional(),
+});
+
+export const nachunternehmerStatusPatchSchema = z.union([
+  z.object({ ids: z.array(uuid).min(1).max(500), status: z.enum(['offen', 'abgerechnet']) }),
+  z.object({ subcontractor_id: uuid, monat: z.string().regex(/^\d{4}-\d{2}$/), status: z.enum(['offen', 'abgerechnet']) }),
+]);
+
+export const nachunternehmerEintragDeleteSchema = z.object({ id: uuid });

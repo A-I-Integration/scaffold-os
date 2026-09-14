@@ -1,6 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { serverErrorResponse } from '@/lib/auth';
+import {
+  validiere,
+  uuid,
+  nachunternehmerEintragPostSchema,
+  nachunternehmerStatusPatchSchema,
+  nachunternehmerEintragDeleteSchema,
+} from '@/lib/validation';
 
 // ============================================================
 // SCAFFOLD OS – Nachunternehmer-Leistungserfassung
@@ -20,6 +27,13 @@ import { serverErrorResponse } from '@/lib/auth';
 //
 // Rollen: admin + disponent. Muster: createClient nur für die
 // Rollenprüfung, Daten über REST mit SERVICE_ROLE_KEY.
+//
+// Phase 61 (Sicherheits-Review): Alle IDs werden vor der Interpolation
+// in PostgREST-Filter-URLs per Zod als UUID validiert. Bisher kam der
+// Schutz nur implizit vom uuid-Spalten-Typ der DB – das reicht nicht
+// als Absicherung. Zusätzlich: DELETE ist jetzt atomar bedingt
+// (status=eq.offen in der Delete-Query), statt Check-then-Delete mit
+// Race-Condition. Kein SQL nötig, keine Daten-Veränderung.
 // ============================================================
 
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
@@ -31,7 +45,6 @@ const headers = {
 };
 
 const ROLES = ['admin', 'disponent'];
-const ARTEN = ['montage_m2', 'demontage_m2', 'regie_stunden', 'anfahrt'];
 
 async function callerRole(): Promise<string | null> {
   try {
@@ -79,6 +92,10 @@ export async function GET(req: NextRequest) {
     if (!sub) {
       return NextResponse.json({ success: false, error: 'sub fehlt' }, { status: 400 });
     }
+    // Phase 61: sub landet in der PostgREST-Filter-URL – nur UUIDs erlauben.
+    if (!uuid.safeParse(sub).success) {
+      return NextResponse.json({ success: false, error: 'sub muss eine gültige UUID sein.' }, { status: 400 });
+    }
     let query = `subcontractor_id=eq.${sub}&select=*&order=datum.desc`;
     const monat = searchParams.get('monat');
     if (monat) {
@@ -113,17 +130,12 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ success: false, error: 'Nur Admin und Disposition.' }, { status: 403 });
   }
   try {
-    const body = await req.json();
-    if (!body.subcontractor_id) {
-      return NextResponse.json({ success: false, error: 'subcontractor_id fehlt' }, { status: 400 });
-    }
-    if (!ARTEN.includes(body.art)) {
-      return NextResponse.json({ success: false, error: 'art ungültig.' }, { status: 400 });
-    }
-    const datum = String(body.datum || '').trim();
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(datum)) {
-      return NextResponse.json({ success: false, error: 'datum fehlt (YYYY-MM-DD).' }, { status: 400 });
-    }
+    const roh = await req.json();
+    // Alter Client-Vertrag: leerer String statt null für project_id.
+    if (roh && typeof roh === 'object' && roh.project_id === '') roh.project_id = null;
+    const v = validiere(nachunternehmerEintragPostSchema, roh);
+    if (!v.ok) return v.response;
+    const body = v.data;
     const menge = zuZahl(body.menge);
     const einheitspreis = zuZahl(body.einheitspreis);
     if (!menge || menge <= 0) {
@@ -139,7 +151,7 @@ export async function POST(req: NextRequest) {
       subcontractor_id: body.subcontractor_id,
       project_id: body.project_id || null,
       project_name: body.project_name ? String(body.project_name).trim() : null,
-      datum,
+      datum: body.datum,
       art: body.art,
       menge,
       einheitspreis,
@@ -169,23 +181,17 @@ export async function PATCH(req: NextRequest) {
     return NextResponse.json({ success: false, error: 'Nur Admin und Disposition.' }, { status: 403 });
   }
   try {
-    const body = await req.json();
-    const status = body.status === 'abgerechnet' ? 'abgerechnet' : 'offen';
+    const v = validiere(nachunternehmerStatusPatchSchema, await req.json());
+    if (!v.ok) return v.response;
+    const { status } = v.data;
 
-    let filter = '';
-    if (Array.isArray(body.ids) && body.ids.length) {
-      filter = `id=in.(${body.ids.join(',')})`;
-    } else if (body.subcontractor_id && body.monat) {
-      const g = monatsGrenzen(String(body.monat));
-      if (!g) {
-        return NextResponse.json({ success: false, error: 'monat ungültig (YYYY-MM)' }, { status: 400 });
-      }
-      filter = `subcontractor_id=eq.${body.subcontractor_id}&datum=gte.${g.von}&datum=lte.${g.bis}`;
+    let filter: string;
+    if ('ids' in v.data) {
+      filter = `id=in.(${v.data.ids.join(',')})`;
     } else {
-      return NextResponse.json(
-        { success: false, error: 'ids[] oder subcontractor_id + monat nötig.' },
-        { status: 400 }
-      );
+      // Schema garantiert YYYY-MM → monatsGrenzen kann hier nicht null liefern.
+      const g = monatsGrenzen(v.data.monat)!;
+      filter = `subcontractor_id=eq.${v.data.subcontractor_id}&datum=gte.${g.von}&datum=lte.${g.bis}`;
     }
 
     const res = await fetch(
@@ -211,10 +217,9 @@ export async function DELETE(req: NextRequest) {
     return NextResponse.json({ success: false, error: 'Nur Admin und Disposition.' }, { status: 403 });
   }
   try {
-    const { id } = await req.json();
-    if (!id) {
-      return NextResponse.json({ success: false, error: 'id fehlt' }, { status: 400 });
-    }
+    const v = validiere(nachunternehmerEintragDeleteSchema, await req.json());
+    if (!v.ok) return v.response;
+    const { id } = v.data;
     // Erst Status prüfen: Abgerechnetes bleibt unantastbar (GoBD)
     const check = await fetch(
       `${url}/rest/v1/subcontractor_entries?id=eq.${id}&select=id,status`,
@@ -231,7 +236,10 @@ export async function DELETE(req: NextRequest) {
         { status: 409 }
       );
     }
-    const res = await fetch(`${url}/rest/v1/subcontractor_entries?id=eq.${id}`, {
+    // Phase 61: atomare Bedingung statt Check-then-Delete. Bei zwei
+    // parallelen Requests konnte sonst beide den Status-Check bestehen
+    // (Race) – jetzt löscht nur, wer ZU DIESEM ZEITPUNKT noch 'offen' ist.
+    const res = await fetch(`${url}/rest/v1/subcontractor_entries?id=eq.${id}&status=eq.offen`, {
       method: 'DELETE',
       headers,
     });
