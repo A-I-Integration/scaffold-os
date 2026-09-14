@@ -140,3 +140,33 @@ export async function versucheDirektenPdfText(pdfBuffer: Buffer): Promise<string
     return ''; // z.B. verschlüsselte/beschädigte PDF – Aufrufer fällt auf KI-OCR zurück
   }
 }
+
+/**
+ * Versucht, Text aus einem BILD lokal zu lesen – klassische Texterkennung
+ * (Tesseract, Mustererkennung von Buchstabenformen), KEINE KI, läuft
+ * komplett serverseitig ohne externen Aufruf, kein Rate-Limit-Risiko.
+ *
+ * Funktioniert gut bei sauberen, gedruckten/getippten Plänen. Bei sehr
+ * unruhigen Fotos oder handschriftlichen Vermerken kann die Erkennung
+ * lückenhaft sein – deshalb wird das Ergebnis genau wie beim PDF-Weg
+ * durch dieselbe Anti-Halluzinations-Prüfung (pruefeUndFiltere) gejagt,
+ * und bei zu wenig erkanntem Text bleibt der KI-Vision-Weg als
+ * Rückfalloption bestehen.
+ */
+export async function versucheLokalenBildText(imageBuffer: Buffer): Promise<string> {
+  try {
+    const { createWorker } = await import('tesseract.js');
+    const path = await import('path');
+    const langPath = path.join(process.cwd(), 'node_modules/@tesseract.js-data/deu/4.0.0');
+    const worker = await createWorker('deu', 1, { langPath, cachePath: langPath, gzip: true });
+    try {
+      const { data } = await worker.recognize(imageBuffer);
+      const text = (data.text || '').trim();
+      return text.length >= 30 ? text : '';
+    } finally {
+      await worker.terminate();
+    }
+  } catch {
+    return ''; // z.B. sehr unruhiges Bild – Aufrufer fällt auf KI-Vision zurück
+  }
+}
