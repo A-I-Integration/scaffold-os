@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import Stripe from 'stripe';
+import { requireAuth, unauthorizedResponse } from '@/lib/auth';
 
 // ============================================================
 // SCAFFOLD OS – Stripe: Kundenportal öffnen (NUR Master-Instanz)
@@ -13,6 +14,7 @@ import Stripe from 'stripe';
 // ============================================================
 
 export async function POST(req: NextRequest) {
+  if (!(await requireAuth())) return unauthorizedResponse();
   try {
     const key = process.env.STRIPE_SECRET_KEY;
     if (!key) {

@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { requireAuth, unauthorizedResponse } from '@/lib/auth';
 
 export async function POST(req: NextRequest) {
+  if (!(await requireAuth())) return unauthorizedResponse();
   try {
     const { projectId, materialList } = await req.json();
 

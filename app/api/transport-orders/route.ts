@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { requireAuth, unauthorizedResponse } from '@/lib/auth';
 
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const key = process.env.SUPABASE_SERVICE_ROLE_KEY!;
@@ -9,6 +10,7 @@ const headers = { apikey: key, Authorization: `Bearer ${key}` };
 // from_project_id / to_project_id → projects, inventory_id → inventory.
 // Projekte: Adress-Spalte heißt "adresse".
 export async function GET() {
+  if (!(await requireAuth())) return unauthorizedResponse();
   try {
     const res = await fetch(
       `${url}/rest/v1/transport_orders?select=*,to_project:to_project_id(id,name,adresse,data),from_project:from_project_id(id,name),inventory:inventory_id(name)&status=eq.pending&order=created_at.desc`,
@@ -28,6 +30,7 @@ export async function GET() {
 // Lagerbestand ohne Bestätigung – die Menge/das Lager-Bauteil wird vom
 // Aufrufer (Disponent, nach Prüfung) mitgegeben.
 export async function POST(req: NextRequest) {
+  if (!(await requireAuth())) return unauthorizedResponse();
   try {
     const body = await req.json();
     const { inventory_id, quantity, to_project_id, from_project_id } = body;

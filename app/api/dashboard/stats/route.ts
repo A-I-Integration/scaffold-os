@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { requireAuth, unauthorizedResponse } from '@/lib/auth';
 
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const key = process.env.SUPABASE_SERVICE_ROLE_KEY!;
@@ -24,6 +25,7 @@ function getMonthKey(d: string) {
 }
 
 export async function GET() {
+  if (!(await requireAuth())) return unauthorizedResponse();
   try {
     // ─── PROJEKTE ───
     const allProjects = await safeFetch('projects?select=*&order=created_at.desc');
