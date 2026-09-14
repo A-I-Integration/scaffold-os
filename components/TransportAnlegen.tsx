@@ -43,7 +43,12 @@ export default function TransportAnlegen({ projectId, materialList }: { projectI
         const json = await res.json()
         if (json.success) erfolgreich.push(zeile.name)
         else alert(`⚠️ ${zeile.name}: ${json.error}`)
-      } catch { /* einzelne Zeile überspringen, Rest weiterlaufen lassen */ }
+      } catch (err: any) {
+        // FIX: War bisher ein stiller Fehlerfang – ein echter Fehler (z.B.
+        // Netzwerkproblem) verschwand komplett ohne jede Meldung, sodass
+        // "nichts passierte" und niemand wusste, warum.
+        alert(`⚠️ ${zeile.name}: Anlegen fehlgeschlagen (${err?.message || 'unbekannter Fehler'})`)
+      }
     }
     setAngelegt((prev) => [...prev, ...erfolgreich])
     setLaeuft(false)

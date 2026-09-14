@@ -43,7 +43,12 @@ export default function MaterialReservieren({ projectId, materialList }: { proje
         const json = await res.json()
         if (json.success) erfolgreich.push(zeile.name)
         else alert(`⚠️ ${zeile.name}: ${json.error}`)
-      } catch { /* einzelne Zeile überspringen, Rest weiterlaufen lassen */ }
+      } catch (err: any) {
+        // FIX: War bisher ein stiller Fehlerfang (gleicher Fehler wie bei
+        // TransportAnlegen gefunden) – ein echter Fehler verschwand ohne
+        // jede Meldung, "nichts passierte" ohne erkennbaren Grund.
+        alert(`⚠️ ${zeile.name}: Reservierung fehlgeschlagen (${err?.message || 'unbekannter Fehler'})`)
+      }
     }
     setBereitsReserviert((prev) => [...prev, ...erfolgreich])
     setLaeuft(false)
