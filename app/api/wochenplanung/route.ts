@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { serverErrorResponse } from '@/lib/auth';
+import { validiere, wochenplanungEinsatzSchema } from '@/lib/validation';
 
 // ============================================================
 // SCAFFOLD OS – Wochenplanung (Phase 54)
@@ -87,10 +88,9 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ success: false, error: 'Nur Admin, Disposition und Bauleiter dürfen die Wochenplanung ändern.' }, { status: 403 });
   }
   try {
-    const { employee_id, einsatz_datum, project_id, notiz } = await req.json();
-    if (!employee_id || !einsatz_datum) {
-      return NextResponse.json({ success: false, error: 'employee_id und einsatz_datum erforderlich' }, { status: 400 });
-    }
+    const parsed = validiere(wochenplanungEinsatzSchema, await req.json());
+    if (!parsed.ok) return parsed.response;
+    const { employee_id, einsatz_datum, project_id, notiz } = parsed.data;
     // NEU (Phase 55): Bauleiter darf nur Mitarbeiter seiner eigenen Kolonne
     // (oder sich selbst) einplanen – verhindert versehentliches/absichtliches
     // Einteilen fremder Kolonnen.
