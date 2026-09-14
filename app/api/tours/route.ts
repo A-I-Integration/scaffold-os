@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { requireAuth, unauthorizedResponse } from '@/lib/auth';
 
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const key = process.env.SUPABASE_SERVICE_ROLE_KEY!;
@@ -6,6 +7,7 @@ const headers = { apikey: key, Authorization: `Bearer ${key}`, 'Content-Type': '
 
 // GET /api/tours
 export async function GET() {
+  if (!(await requireAuth())) return unauthorizedResponse();
   try {
     const [toursRes, stopsRes] = await Promise.all([
       fetch(`${url}/rest/v1/tours?select=*,vehicle:vehicle_id(name,license_plate),driver:driver_id(id,name,employee_id)&order=planned_date.desc`, { headers }),
@@ -28,6 +30,7 @@ export async function GET() {
 
 // POST /api/tours – Tour erstellen
 export async function POST(req: Request) {
+  if (!(await requireAuth())) return unauthorizedResponse();
   try {
     const body = await req.json();
     const { name, vehicle_id, driver_id, planned_date, planned_start_time, transport_order_ids } = body;
@@ -94,6 +97,7 @@ export async function POST(req: Request) {
 
 // PUT /api/tours – Tour aktualisieren (Status, GPS, etc.)
 export async function PUT(req: Request) {
+  if (!(await requireAuth())) return unauthorizedResponse();
   try {
     const body = await req.json();
     const { id, status, completed_at, route_data } = body;

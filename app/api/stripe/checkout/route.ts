@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import Stripe from 'stripe';
+import { requireAuth, unauthorizedResponse } from '@/lib/auth';
 
 // ============================================================
 // SCAFFOLD OS – Stripe: Checkout starten (NUR Master-Instanz)
@@ -40,6 +41,7 @@ function preisIdFuerPlan(plan: string): string | undefined {
 }
 
 export async function POST(req: NextRequest) {
+  if (!(await requireAuth())) return unauthorizedResponse();
   try {
     const stripe = getStripe();
     if (!stripe) {

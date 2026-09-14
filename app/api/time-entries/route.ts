@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { computeNetHours } from '@/lib/worktime';
+import { requireAuth, unauthorizedResponse } from '@/lib/auth';
 
 // ============================================================
 // SCAFFOLD OS – Zeiterfassung API (Stempeln)
@@ -20,6 +21,7 @@ const headers = { apikey: key, Authorization: `Bearer ${key}`, 'Content-Type': '
 
 // GET /api/time-entries?employee_id=...&from=YYYY-MM-DD&to=YYYY-MM-DD
 export async function GET(req: Request) {
+  if (!(await requireAuth())) return unauthorizedResponse();
   try {
     const { searchParams } = new URL(req.url);
     const employeeId = searchParams.get('employee_id');
@@ -43,6 +45,7 @@ export async function GET(req: Request) {
 // Einstempeln: { employee_id, tour_id?, project_id?, note? } → start_time = jetzt
 // Manuell:     { employee_id, work_date, hours, break_minutes?, note? }
 export async function POST(req: Request) {
+  if (!(await requireAuth())) return unauthorizedResponse();
   try {
     const body = await req.json();
     const { employee_id, work_date, hours, break_minutes, tour_id, project_id, note } = body;
@@ -90,6 +93,7 @@ export async function POST(req: Request) {
 // Start + Ende bekannt sind (aus Update oder Bestand), werden Pause
 // (30/45-Regel) und Netto-Stunden automatisch gesetzt.
 export async function PUT(req: Request) {
+  if (!(await requireAuth())) return unauthorizedResponse();
   try {
     const body = await req.json();
     const { id, start_time, end_time, work_date, hours, break_minutes, note } = body;

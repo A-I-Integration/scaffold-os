@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { requireAuth, unauthorizedResponse } from '@/lib/auth';
 
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const key = process.env.SUPABASE_SERVICE_ROLE_KEY!;
@@ -8,6 +9,7 @@ const headers = { apikey: key, Authorization: `Bearer ${key}` };
 // Stunden für dieses Projekt (Soll-Ist-Vergleich mit
 // kiResult.estimatedLaborHours aus der Kalkulation).
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  if (!(await requireAuth())) return unauthorizedResponse();
   const { id } = await params;
   try {
     const res = await fetch(`${url}/rest/v1/time_entries?project_id=eq.${id}&select=hours`, { headers });

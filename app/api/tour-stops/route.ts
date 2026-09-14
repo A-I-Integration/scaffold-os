@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { requireAuth, unauthorizedResponse } from '@/lib/auth';
 
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const key = process.env.SUPABASE_SERVICE_ROLE_KEY!;
@@ -6,6 +7,7 @@ const headers = { apikey: key, Authorization: `Bearer ${key}`, 'Content-Type': '
 
 // GET /api/tour-stops?tour_id=... – Stopps einer Tour
 export async function GET(req: Request) {
+  if (!(await requireAuth())) return unauthorizedResponse();
   try {
     const { searchParams } = new URL(req.url);
     const tourId = searchParams.get('tour_id');
@@ -23,6 +25,7 @@ export async function GET(req: Request) {
 
 // PUT /api/tour-stops – Stopp-Status aktualisieren (wird von der Fahrer-App aufgerufen)
 export async function PUT(req: Request) {
+  if (!(await requireAuth())) return unauthorizedResponse();
   try {
     const body = await req.json();
     const { id, status, estimated_arrival, actual_arrival } = body;

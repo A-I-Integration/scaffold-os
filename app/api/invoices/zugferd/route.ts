@@ -5,6 +5,7 @@ import {
   embedFacturX, validateInput, DocumentTypeCode, UnitCode, VatCategoryCode, Profile, Flavor,
 } from '@stackforge-eu/factur-x';
 import { generateInvoicePdfCompliant } from '@/lib/invoice-pdf-server';
+import { requireAuth, unauthorizedResponse } from '@/lib/auth';
 
 // ============================================================
 // SCAFFOLD OS – E-Rechnung / ZUGFeRD (Phase 39)
@@ -34,6 +35,7 @@ function feldFehlt(bezeichnung: string) {
 }
 
 export async function POST(req: NextRequest) {
+  if (!(await requireAuth())) return unauthorizedResponse();
   try {
     const { invoice_id } = await req.json();
     if (!invoice_id) {
