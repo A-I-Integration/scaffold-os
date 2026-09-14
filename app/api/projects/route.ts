@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { trackImpact } from '@/lib/impact';
 import { serverErrorResponse } from '@/lib/auth';
+import { beiAngebotsannahme } from '@/lib/angebot-annahme';
 
 // ============================================================
 // SCAFFOLD OS – Projekte API
@@ -140,6 +141,12 @@ export async function PATCH(req: NextRequest) {
     // NEU (Prio-2-Sprint): data-Merge – z. B. KI-Ergebnis/Angebotsstatus nachträglich sichern.
     // Bestehende Projektdaten werden gelesen und mit den neuen Feldern gemergt (nichts geht verloren).
     // Phase 25: den bisherigen Stand VOR dem Überschreiben als Version sichern (Aufmaß-Versionierung).
+    // NEU: Übergang zu "angenommen" erkennen (war vorher nicht angenommen,
+    // ist es jetzt) – löst automatisch Lager-Reservierung + Transportauftrag
+    // aus (Zusammenspiel Aufmaß→Lager→Tour). Nur bei einem echten Übergang,
+    // nicht bei jedem weiteren Speichern eines bereits angenommenen Angebots.
+    let solltAutomatikAusloesen = false;
+
     if (data && typeof data === 'object') {
       const cur = await fetch(`${url}/rest/v1/projects?id=eq.${id}&select=data,name,adresse`, { headers });
       if (!cur.ok) throw new Error(await cur.text());
@@ -148,6 +155,10 @@ export async function PATCH(req: NextRequest) {
         return NextResponse.json({ success: false, error: 'Projekt nicht gefunden.' }, { status: 404 });
       }
       const bisher = curRows[0];
+
+      if (data.angebotsStatus === 'angenommen' && bisher.data?.angebotsStatus !== 'angenommen') {
+        solltAutomatikAusloesen = true;
+      }
 
       // Nur sichern, wenn es überhaupt schon einen nennenswerten Stand gab
       // (sonst würde die allererste Zwischenspeicherung schon eine leere
@@ -182,6 +193,12 @@ export async function PATCH(req: NextRequest) {
     const rows = await res.json();
     if (!rows?.length) {
       return NextResponse.json({ success: false, error: 'Projekt nicht gefunden.' }, { status: 404 });
+    }
+
+    // NEU: Bei echter Neu-Annahme automatisch Lager reservieren +
+    // Transportaufträge anlegen (Zusammenspiel Aufmaß→Lager→Tour).
+    if (solltAutomatikAusloesen) {
+      beiAngebotsannahme(id).catch(() => {});
     }
 
     // Phase 17: Impact-Tracking – Abschluss mit Marge erfassen

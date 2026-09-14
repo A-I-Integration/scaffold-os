@@ -1149,6 +1149,16 @@ export default function KundenDetailPage() {
                           <>
                             <MaterialReservieren projectId={project.id} materialList={project.data.kiResult.materialList} />
                             <TransportAnlegen projectId={project.id} materialList={project.data.kiResult.materialList} />
+                            {project.data?.lagerAutomatikErgebnis && (() => {
+                              const erg = project.data.lagerAutomatikErgebnis
+                              const probleme = [...(erg.nichtGefunden || []), ...(erg.nichtGenugBestand || [])]
+                              if (probleme.length === 0) return null
+                              return (
+                                <div className="mt-2 bg-amber-50 border border-amber-200 rounded-lg p-2 text-[11px] text-amber-800">
+                                  ⚠️ Automatische Lager-Reservierung bei Annahme: {erg.reserviert?.length || 0} Position(en) automatisch reserviert, aber nicht zugeordnet werden konnten: {probleme.join(', ')}. Bitte oben manuell nachholen.
+                                </div>
+                              )
+                            })()}
                           </>
                         )}
                       </div>
