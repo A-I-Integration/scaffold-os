@@ -1,54 +1,51 @@
-# Kolonnen-System (für 15-20 Teams mit eigenem Bauleiter)
+# Fehlermeldungen abstrahiert (69 von 69 gefundenen Stellen)
 
 ## Was gebaut wurde
 
-Neues Organisationskonzept: **Kolonnen** (feste Teams mit einem
-Bauleiter), zusätzlich zur bestehenden Wochenplanung.
+Neue Funktion `serverErrorResponse(err)` in `lib/auth.ts`: Der echte
+Fehler landet server-seitig im Log (Sentry fängt das jetzt ohnehin
+ab, aus der vorletzten Sitzung), der Client bekommt nur noch eine
+generische, sichere Meldung ("Da ist leider etwas schiefgelaufen.
+Bitte erneut versuchen.").
 
-**Neue Seite "Kolonnen"** (Sidebar → Mitarbeiter):
-- Admin/Disposition: Kolonnen anlegen, Bauleiter zuweisen, Mitarbeiter
-  verteilen – **jederzeit änderbar**, wie gefordert
-- Bauleiter: sieht **nur seine eigene** Kolonne (rein lesend)
+## Bewusst NICHT angefasst
 
-**Wochenplanung jetzt automatisch eingeschränkt:**
-- Bauleiter sieht/plant in der Wochenplanung **nur seine eigene
-  Kolonne** – bei 15-20 Kolonnen sonst völlig unübersichtlich und
-  nicht seine Zuständigkeit
-- Admin/Disposition sehen weiterhin **alle** Mitarbeiter/Kolonnen
-- Zusätzliche Absicherung: Ein Bauleiter kann über die API auch nicht
-  versehentlich/absichtlich einen fremden Mitarbeiter einplanen –
-  wird serverseitig geprüft, nicht nur in der Oberfläche versteckt
+- **4 Cron-Job-Routen**: rein intern, kein Nutzer sieht die Antwort
+  direkt (von Vercel per CRON_SECRET aufgerufen) – hätte nur die
+  nützlichen Teil-Ergebnisse in der Antwort verloren, ohne echten
+  Sicherheitsgewinn
+- **Alle absichtlichen Validierungs-Meldungen** ("Nur 5 Stück
+  verfügbar", "Kunde nicht gefunden", etc.) – diese liefen nie über
+  `err.message`, sondern waren immer eigene, klare Texte mit anderem
+  Statuscode (400/404/409) und bleiben unverändert nutzbar
 
-## Zwei echte Fehler bei mir selbst gefunden, bevor sie ausgeliefert wurden
+## Ablauf
 
-1. Ich hatte fälschlich angenommen, es gäbe ein Feld
-   `profiles.employee_id` zur Verknüpfung Login↔Mitarbeiter – die
-   echte Verknüpfung läuft über `employees.user_id` (bestätigtes
-   Muster aus der bestehenden `/api/me`-Route). Korrigiert.
-2. Ein verschachtelter Datenbank-Abruf (Kolonne + ihre Mitglieder in
-   einer Anfrage) hätte einen exakten, nur geschätzten
-   Datenbank-Constraint-Namen gebraucht – bei zwei Beziehungen
-   zwischen denselben zwei Tabellen (Bauleiter UND Mitglieder) ist das
-   riskant. Auf zwei getrennte, sichere Abfragen umgestellt.
+Drei leicht unterschiedliche Schreibweisen im Code gefunden und alle
+abgedeckt (mit/ohne "success"-Feld, mit/ohne Fallback-Text). Am Ende
+zweimal nachgeprüft, ob wirklich nichts übrig blieb – zwei Dateien
+(`projects`, `provision`) beim ersten Durchlauf übersehen, im zweiten
+Anlauf gefunden und ebenfalls korrigiert.
 
-Build lokal geprüft, keine Fehler (133 Seiten). Tests laufen weiter
-sauber (20/20).
+Build vollständig geprüft (133/133 Seiten), alle 27 Tests bestehen.
 
 ## Installation
 
-```sql
--- Supabase SQL Editor:
--- (Inhalt von supabase/phase-55-kolonnen.sql)
-```
-
-- `app/api/kolonnen/route.ts` (neu)
-- `app/kolonnen/page.tsx` (neu)
-- `app/api/wochenplanung/route.ts` (ersetzen)
-- `components/SidebarLayout.tsx` (ersetzen)
+70 Dateien, alle über Git hinzufügen:
 
 ```bash
 git pull
-git add app/api/kolonnen app/kolonnen app/api/wochenplanung/route.ts components/SidebarLayout.tsx supabase/phase-55-kolonnen.sql
-git commit -m "Kolonnen-System: Bauleiter sieht nur eigenes Team, Admin/Disposition alle"
+git add -A
+git status
+```
+
+Bitte vor dem Commit `git status` prüfen, dass nur die erwarteten
+API-Routen + `lib/auth.ts` als geändert markiert sind (keine anderen,
+unbeabsichtigten lokalen Änderungen mit hochladen). Dann:
+
+```bash
+git commit -m "Fehlermeldungen abstrahiert: keine internen Details mehr an den Client"
 git push
 ```
+
+Kein SQL nötig.

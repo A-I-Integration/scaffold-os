@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { kiFetchMitRetry, KI_UEBERLASTET_MELDUNG } from '@/lib/ki-fetch';
 import { createClient } from '@/lib/supabase/server';
-import { pruefeUndFiltere, versucheDirektenPdfText, deterministicFromText } from '@/lib/grundriss-parsing';
+import { pruefeUndFiltere, versucheDirektenPdfText, deterministicFromText, versucheLokalenBildText } from '@/lib/grundriss-parsing';
+import { serverErrorResponse } from '@/lib/auth';
 
 // ============================================================
 // SCAFFOLD OS – CAD: Grundriss/Foto hochladen und auswerten (Phase 41)
@@ -65,16 +66,33 @@ export async function POST(req: NextRequest) {
       } catch (e: any) { pdfErrors.push(`OCR fehlgeschlagen: ${e.message}`); }
     }
 
-    if (images.length === 0 && !ocrText) {
+    // NEU: bei Bildern zuerst lokale Texterkennung versuchen – klassische
+    // OCR (keine KI), läuft komplett bei uns, kein Rate-Limit-Risiko.
+    // Nur Bilder, bei denen das nichts Brauchbares liefert (z.B. sehr
+    // unruhige Fotos), gehen weiterhin an die KI-Bildanalyse.
+    const bilderFuerVision: typeof images = [];
+    for (const bild of images) {
+      const imgUrl = `${supabaseUrl}/storage/v1/object/public/project-media/${bild.storage_path}`;
+      try {
+        const bildRes = await fetch(imgUrl);
+        const lokalerText = bildRes.ok ? await versucheLokalenBildText(Buffer.from(await bildRes.arrayBuffer())) : '';
+        if (lokalerText) {
+          ocrText += `\n\n--- Bild-Plan (lokal gelesen, ohne KI) ---\n${lokalerText}`;
+        } else {
+          bilderFuerVision.push(bild);
+        }
+      } catch { bilderFuerVision.push(bild); }
+    }
+
+    if (bilderFuerVision.length === 0 && !ocrText) {
       const detail = pdfErrors.length ? ` (${pdfErrors.join(' | ')})` : '';
       return NextResponse.json({ success: false, error: `Keine auswertbare Datei${detail}. Tipp: als Foto/PNG hochladen.` }, { status: 422 });
     }
 
-    // NEU: Wenn NUR eine PDF hochgeladen wurde (kein Bild, das eine
-    // Vision-Analyse bräuchte) und der direkt/ohne-KI gelesene Text schon
-    // Länge UND Breite eindeutig per Muster liefert, lohnt sich der
-    // zusätzliche KI-Aufruf nicht – direkt mit dem Musterergebnis antworten.
-    if (images.length === 0 && ocrText) {
+    // Wenn KEIN Bild mehr die KI-Bildanalyse braucht (alle lokal gelesen
+    // oder es waren nur PDFs) und der Text schon Länge UND Breite
+    // eindeutig per Muster liefert, lohnt sich der KI-Aufruf nicht.
+    if (bilderFuerVision.length === 0 && ocrText) {
       const det = deterministicFromText(ocrText);
       if (typeof det.laenge === 'number' && typeof det.breite === 'number') {
         const structured: Record<string, any> = { ...det };
@@ -92,7 +110,7 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    const imageUrls = images.map((m: any) => `${supabaseUrl}/storage/v1/object/public/project-media/${m.storage_path}`);
+    const imageUrls = bilderFuerVision.map((m: any) => `${supabaseUrl}/storage/v1/object/public/project-media/${m.storage_path}`);
 
     const prompt = `Du bist ein erfahrener Gerüstbau-Planer. Analysiere diese Grundrisse/Baupläne${ocrText ? ' (Bilder und/oder per OCR extrahierter Plan-Text, siehe unten)' : ''}.
 
@@ -147,6 +165,6 @@ STRENGE REGELN:
       verworfen,
     });
   } catch (err: any) {
-    return NextResponse.json({ success: false, error: err.message }, { status: 500 });
+    return serverErrorResponse(err);
   }
 }

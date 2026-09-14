@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { requireAuth, unauthorizedResponse } from '@/lib/auth';
+import { requireAuth, unauthorizedResponse, serverErrorResponse } from '@/lib/auth';
 
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const key = process.env.SUPABASE_SERVICE_ROLE_KEY!;
@@ -52,6 +52,6 @@ export async function POST(req: Request) {
       expectedDelivery: new Date(Date.now() + item.supplier_lead_time * 86400000).toISOString().split('T')[0],
     });
   } catch (err: any) {
-    return NextResponse.json({ success: false, error: err.message }, { status: 500 });
+    return serverErrorResponse(err);
   }
 }

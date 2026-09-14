@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
+import { serverErrorResponse } from '@/lib/auth';
 
 // ============================================================
 // SCAFFOLD OS – Projekt-Ereignisse API (Phase 18)
@@ -55,7 +56,7 @@ export async function GET(req: NextRequest) {
     if (!res.ok) throw new Error(await res.text());
     return NextResponse.json({ success: true, events: await res.json() });
   } catch (err: any) {
-    return NextResponse.json({ success: false, error: err.message }, { status: 500 });
+    return serverErrorResponse(err);
   }
 }
 
@@ -102,7 +103,7 @@ export async function POST(req: NextRequest) {
     const rows = await res.json();
     return NextResponse.json({ success: true, event: rows[0] });
   } catch (err: any) {
-    return NextResponse.json({ success: false, error: err.message }, { status: 500 });
+    return serverErrorResponse(err);
   }
 }
 
@@ -147,6 +148,6 @@ export async function PATCH(req: NextRequest) {
     }
     return NextResponse.json({ success: true, event: rows[0] });
   } catch (err: any) {
-    return NextResponse.json({ success: false, error: err.message }, { status: 500 });
+    return serverErrorResponse(err);
   }
 }

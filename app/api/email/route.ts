@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { requireAuth, unauthorizedResponse } from '@/lib/auth';
+import { requireAuth, unauthorizedResponse, serverErrorResponse } from '@/lib/auth';
 
 export async function POST(req: Request) {
   if (!(await requireAuth())) return unauthorizedResponse();
@@ -148,6 +148,6 @@ export async function POST(req: Request) {
     return NextResponse.json({ success: true, id: data?.id });
   } catch (err: any) {
     console.error('[Email API] Fehler:', err);
-    return NextResponse.json({ success: false, error: err.message }, { status: 500 });
+    return serverErrorResponse(err);
   }
 }

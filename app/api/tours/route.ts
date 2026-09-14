@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { requireAuth, unauthorizedResponse } from '@/lib/auth';
+import { requireAuth, unauthorizedResponse, serverErrorResponse } from '@/lib/auth';
 
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const key = process.env.SUPABASE_SERVICE_ROLE_KEY!;
@@ -24,7 +24,7 @@ export async function GET() {
     }));
     return NextResponse.json({ success: true, tours: toursWithStops });
   } catch (err: any) {
-    return NextResponse.json({ success: false, error: err.message }, { status: 500 });
+    return serverErrorResponse(err);
   }
 }
 
@@ -91,7 +91,7 @@ export async function POST(req: Request) {
 
     return NextResponse.json({ success: true, tour });
   } catch (err: any) {
-    return NextResponse.json({ success: false, error: err.message }, { status: 500 });
+    return serverErrorResponse(err);
   }
 }
 
@@ -115,6 +115,6 @@ export async function PUT(req: Request) {
     if (!res.ok) throw new Error(await res.text());
     return NextResponse.json({ success: true, tour: await res.json() });
   } catch (err: any) {
-    return NextResponse.json({ success: false, error: err.message }, { status: 500 });
+    return serverErrorResponse(err);
   }
 }

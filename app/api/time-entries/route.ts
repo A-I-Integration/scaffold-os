@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { computeNetHours } from '@/lib/worktime';
-import { requireAuth, unauthorizedResponse } from '@/lib/auth';
+import { requireAuth, unauthorizedResponse, serverErrorResponse } from '@/lib/auth';
 
 // ============================================================
 // SCAFFOLD OS – Zeiterfassung API (Stempeln)
@@ -37,7 +37,7 @@ export async function GET(req: Request) {
     if (!res.ok) throw new Error(await res.text());
     return NextResponse.json({ success: true, entries: await res.json() });
   } catch (err: any) {
-    return NextResponse.json({ success: false, error: err.message }, { status: 500 });
+    return serverErrorResponse(err);
   }
 }
 
@@ -82,7 +82,7 @@ export async function POST(req: Request) {
     if (!res.ok) throw new Error(await res.text());
     return NextResponse.json({ success: true, entry: (await res.json())[0] });
   } catch (err: any) {
-    return NextResponse.json({ success: false, error: err.message }, { status: 500 });
+    return serverErrorResponse(err);
   }
 }
 
@@ -145,6 +145,6 @@ export async function PUT(req: Request) {
     if (!res.ok) throw new Error(await res.text());
     return NextResponse.json({ success: true, entry: (await res.json())[0] });
   } catch (err: any) {
-    return NextResponse.json({ success: false, error: err.message }, { status: 500 });
+    return serverErrorResponse(err);
   }
 }

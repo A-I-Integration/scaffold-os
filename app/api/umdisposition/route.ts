@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { buildUmdispositionSuggestion } from '@/lib/umdisposition';
+import { serverErrorResponse } from '@/lib/auth';
 
 // ─── POST /api/umdisposition ───
 // KI-Umdisposition für ein Datum (Button in der Planung).
@@ -33,6 +34,6 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ success: true, ...result });
   } catch (err: any) {
-    return NextResponse.json({ success: false, error: err.message || 'Unbekannter Fehler' }, { status: 500 });
+    return serverErrorResponse(err);
   }
 }

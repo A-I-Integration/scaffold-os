@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { kiFetchMitRetry, KI_UEBERLASTET_MELDUNG } from '@/lib/ki-fetch';
+import { serverErrorResponse } from '@/lib/auth';
 
 // ============================================================
 // SCAFFOLD OS – KI-Vorschlag für die Wochenplanung (Phase 54)
@@ -96,6 +97,6 @@ Nutze NUR die employee_id/project_id-Werte aus den Listen oben, erfinde keine. M
 
     return NextResponse.json({ success: true, vorschlaege, hinweis: parsed.hinweis || '' });
   } catch (err: any) {
-    return NextResponse.json({ success: false, error: err.message }, { status: 500 });
+    return serverErrorResponse(err);
   }
 }

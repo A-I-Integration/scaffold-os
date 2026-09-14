@@ -4,6 +4,7 @@ import { runProvision, loadTenant } from '@/lib/provision/orchestrate';
 import { deleteSupabaseProject } from '@/lib/provision/supabase-mgmt';
 import { deleteVercelProject } from '@/lib/provision/vercel';
 import { deleteUptimeMonitor } from '@/lib/provision/uptimerobot';
+import { serverErrorResponse } from '@/lib/auth';
 
 // ============================================================
 // SCAFFOLD OS – Kunden-Setup-Paket: Provisionierungs-API
@@ -126,7 +127,7 @@ export async function POST(req: NextRequest) {
     const tenant = await runProvision(created.id);
     return NextResponse.json({ success: true, tenant: stripSecrets(tenant) });
   } catch (err: any) {
-    return NextResponse.json({ success: false, error: err.message || 'Unbekannter Fehler' }, { status: 500 });
+    return serverErrorResponse(err);
   }
 }
 
@@ -144,7 +145,7 @@ export async function GET() {
     if (!res.ok) throw new Error(await res.text());
     return NextResponse.json({ success: true, tenants: await res.json() });
   } catch (err: any) {
-    return NextResponse.json({ success: false, error: err.message }, { status: 500 });
+    return serverErrorResponse(err);
   }
 }
 
@@ -192,7 +193,7 @@ export async function DELETE(req: NextRequest) {
     }
     return NextResponse.json({ success: true });
   } catch (err: any) {
-    return NextResponse.json({ success: false, error: err.message }, { status: 500 });
+    return serverErrorResponse(err);
   }
 }
 

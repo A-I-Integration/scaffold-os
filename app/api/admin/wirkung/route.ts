@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
+import { serverErrorResponse } from '@/lib/auth';
 
 // ============================================================
 // SCAFFOLD OS – Pilot-Wirkung (Phase 17, nur Master-Instanz)
@@ -147,6 +148,6 @@ export async function GET() {
 
     return NextResponse.json({ success: true, gesamt: ergebnis, kunden });
   } catch (err: any) {
-    return NextResponse.json({ success: false, error: err.message }, { status: 500 });
+    return serverErrorResponse(err);
   }
 }

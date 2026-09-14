@@ -36,3 +36,18 @@ export async function requireAuth(): Promise<{ userId: string } | null> {
 export function unauthorizedResponse() {
   return NextResponse.json({ success: false, error: 'Nicht angemeldet.' }, { status: 401 });
 }
+
+// NEU (Phase 59, Sicherheits-Review): Bei einem unerwarteten Fehler
+// (Datenbank-Ausfall, Netzwerkfehler o.ä.) wurde bisher überall
+// `err.message` direkt an den Client zurückgegeben – das kann interne
+// Details wie Tabellen- oder Constraint-Namen preisgeben. Jetzt: die
+// echte Meldung landet server-seitig im Log (Sentry fängt das jetzt
+// ohnehin ab), der Client bekommt nur eine generische, sichere Meldung.
+// GILT NUR für unerwartete Fehler (Status 500) – absichtliche,
+// hilfreiche Validierungs-Meldungen ("Nur 5 Stück verfügbar", "Kunde
+// nicht gefunden") bleiben unverändert, die sind nie über err.message
+// gelaufen, sondern immer als eigener, klarer Text formuliert.
+export function serverErrorResponse(err: unknown, ctx?: string) {
+  console.error(ctx ? `[${ctx}]` : '[API-Fehler]', err);
+  return NextResponse.json({ success: false, error: 'Da ist leider etwas schiefgelaufen. Bitte erneut versuchen.' }, { status: 500 });
+}

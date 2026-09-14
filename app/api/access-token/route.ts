@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
+import { serverErrorResponse } from '@/lib/auth';
 
 // ============================================================
 // SCAFFOLD OS – Zugangs-Token für Fern-Annahme (Phase 33)
@@ -56,6 +57,6 @@ export async function POST(req: NextRequest) {
     const rows = await insRes.json();
     return NextResponse.json({ success: true, token: rows[0].token });
   } catch (err: any) {
-    return NextResponse.json({ success: false, error: err.message }, { status: 500 });
+    return serverErrorResponse(err);
   }
 }

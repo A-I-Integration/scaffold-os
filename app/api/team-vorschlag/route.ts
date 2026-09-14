@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { buildTeamVorschlag } from '@/lib/team-vorschlag';
+import { serverErrorResponse } from '@/lib/auth';
 
 // POST /api/team-vorschlag { project_id, datum, gewerke? }
 export async function POST(req: NextRequest) {
@@ -20,6 +21,6 @@ export async function POST(req: NextRequest) {
     if ('fehler' in ergebnis) return NextResponse.json({ success: false, error: ergebnis.fehler }, { status: 502 });
     return NextResponse.json({ success: true, ...ergebnis });
   } catch (err: any) {
-    return NextResponse.json({ success: false, error: err.message }, { status: 500 });
+    return serverErrorResponse(err);
   }
 }

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { trackImpact } from '@/lib/impact';
+import { serverErrorResponse } from '@/lib/auth';
 
 // ============================================================
 // SCAFFOLD OS – Rechnungen API (Phase 13: Rechnungsmodul)
@@ -69,7 +70,7 @@ export async function GET() {
     const rows = await res.json();
     return NextResponse.json({ success: true, invoices: rows });
   } catch (err: any) {
-    return NextResponse.json({ success: false, error: err.message }, { status: 500 });
+    return serverErrorResponse(err);
   }
 }
 
@@ -226,7 +227,7 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ success: true, invoice: rows[0], override_verwendet: overrideVerwendet });
   } catch (err: any) {
-    return NextResponse.json({ success: false, error: err.message }, { status: 500 });
+    return serverErrorResponse(err);
   }
 }
 
@@ -290,7 +291,7 @@ export async function PATCH(req: NextRequest) {
     }
     return NextResponse.json({ success: true, invoice: rows[0] });
   } catch (err: any) {
-    return NextResponse.json({ success: false, error: err.message }, { status: 500 });
+    return serverErrorResponse(err);
   }
 }
 
@@ -331,6 +332,6 @@ export async function DELETE(req: NextRequest) {
     if (!res.ok) throw new Error(await res.text());
     return NextResponse.json({ success: true });
   } catch (err: any) {
-    return NextResponse.json({ success: false, error: err.message }, { status: 500 });
+    return serverErrorResponse(err);
   }
 }

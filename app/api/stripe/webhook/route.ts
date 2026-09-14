@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import Stripe from 'stripe';
 import { runProvision } from '@/lib/provision/orchestrate';
 import { pauseSupabaseProject, restoreSupabaseProject } from '@/lib/provision/supabase-mgmt';
+import { serverErrorResponse } from '@/lib/auth';
 
 // ============================================================
 // SCAFFOLD OS – Stripe: Webhook (NUR Master-Instanz)
@@ -322,7 +323,7 @@ export async function POST(req: NextRequest) {
     }
   } catch (err: any) {
     console.error(`[stripe-webhook] Fehler bei ${event.type}:`, err.message);
-    return NextResponse.json({ error: err.message }, { status: 500 });
+    return serverErrorResponse(err);
   }
 
   return NextResponse.json({ received: true });
