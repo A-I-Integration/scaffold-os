@@ -340,6 +340,24 @@ function Schritt6Content() {
   async function handleSpeichern() {
     setIsSaving(true);
     try {
+      // NEU (Zusammenspiel-Kette): Wurde in Schritt 1 kein bestehender Kunde
+      // ausgewählt, sondern nur ein Name eingetippt, blieb das Projekt bisher
+      // KOMPLETT ohne Kundenverknüpfung – das Projekt tauchte dann nirgends
+      // in "Kunden" auf. Jetzt: automatisch einen neuen Kunden anlegen, bevor
+      // das Projekt gespeichert wird (Straße/PLZ/Ort lassen sich aus der
+      // freien Adresse hier nicht zuverlässig trennen – landet bewusst
+      // komplett im Straße-Feld, in Kunden-Detail jederzeit nachbearbeitbar).
+      let ermittelteCustomerId = s1.customerId || null;
+      if (!ermittelteCustomerId && s1.name?.trim()) {
+        try {
+          const kRes = await fetch('/api/kunden', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name: s1.name.trim(), street: s1.adresse || null }),
+          });
+          const kJson = await kRes.json();
+          if (kJson.success && kJson.kunde?.id) ermittelteCustomerId = kJson.kunde.id;
+        } catch { /* Projekt wird trotzdem gespeichert, auch ohne Kundenverknüpfung */ }
+      }
       // NEU (Prio-2-Sprint): KI-Ergebnis und Angebotsstatus mit ins Projekt speichern,
       // damit sie beim Öffnen aus dem Dashboard wieder da sind
       // Phase 25 – WICHTIGER FIX: Bisher wurde hier IMMER POST aufgerufen, auch wenn
@@ -354,7 +372,7 @@ function Schritt6Content() {
         const response = await fetch('/api/projects', {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ id: savedProjectId, name: s1.name || 'Unbenanntes Projekt', adresse: s1.adresse || '', data: gespeicherteDaten, customer_id: s1.customerId || null }),
+          body: JSON.stringify({ id: savedProjectId, name: s1.name || 'Unbenanntes Projekt', adresse: s1.adresse || '', data: gespeicherteDaten, customer_id: ermittelteCustomerId }),
         });
         const json = await response.json();
         if (!response.ok || !json.success) throw new Error(json.error || 'Speichern fehlgeschlagen');
@@ -365,7 +383,7 @@ function Schritt6Content() {
         // identischen) Zwischenspeicher zu vertrauen.
         schliesseSitzungAb();
       } else {
-        const response = await fetch('/api/projects', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: s1.name || 'Unbenanntes Projekt', adresse: s1.adresse || '', data: gespeicherteDaten, status: 'active', customer_id: s1.customerId || null }) });
+        const response = await fetch('/api/projects', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: s1.name || 'Unbenanntes Projekt', adresse: s1.adresse || '', data: gespeicherteDaten, status: 'active', customer_id: ermittelteCustomerId }) });
         result = await response.json();
         if (!response.ok) throw new Error(result.error || 'Speichern fehlgeschlagen');
       }
