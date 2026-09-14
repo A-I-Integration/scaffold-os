@@ -112,3 +112,19 @@ export const nachunternehmerStatusPatchSchema = z.union([
 ]);
 
 export const nachunternehmerEintragDeleteSchema = z.object({ id: uuid });
+
+// ─── Attach-Photos (Phase 62, Sicherheits-Review) ───
+// projectId geht UNVALIDIERT in einen Storage-Pfad (projects/${projectId}/...)
+// → Path-Traversal-Risiko. sessionId ist eine TEXT-Spalte (kein DB-Schutz)
+// und landet ungeprüft in der PostgREST-URL. Beides wird hier abgedichtet.
+// Das Session-Format entspricht exakt der Generierung in
+// app/aufmass/schritt1/page.tsx: 'sess_' + Date.now() + '_' + Zufall(base36).
+export const attachPhotosSessionSchema = z.object({
+  sessionId: z.string().regex(/^sess_\d+_[a-z0-9]{1,20}$/, { message: 'sessionId hat ein ungültiges Format.' }),
+  projectId: uuid,
+});
+
+export const attachPhotosSignatureSchema = z.object({
+  projectId: uuid,
+  signatureData: z.string().min(1),
+});
