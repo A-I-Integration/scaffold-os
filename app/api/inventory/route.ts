@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { aktuellerPlan, UPGRADE_HINWEIS } from '@/lib/plan-limits';
+import { requireAuth, unauthorizedResponse } from '@/lib/auth';
 
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const key = process.env.SUPABASE_SERVICE_ROLE_KEY!;
@@ -25,6 +26,7 @@ async function lagerLimitVerletzt(delta: number): Promise<string | null> {
 
 // GET /api/inventory
 export async function GET() {
+  if (!(await requireAuth())) return unauthorizedResponse();
   try {
     const res = await fetch(`${url}/rest/v1/inventory?select=*&is_active=eq.true&order=name`, { headers });
     if (!res.ok) throw new Error(await res.text());
@@ -37,6 +39,7 @@ export async function GET() {
 
 // POST /api/inventory – Neuer Artikel
 export async function POST(req: Request) {
+  if (!(await requireAuth())) return unauthorizedResponse();
   try {
     const body = await req.json();
     const item = {
@@ -74,6 +77,7 @@ export async function POST(req: Request) {
 
 // PUT /api/inventory – Artikel aktualisieren
 export async function PUT(req: Request) {
+  if (!(await requireAuth())) return unauthorizedResponse();
   try {
     const body = await req.json();
     const { id, ...updates } = body;
@@ -103,6 +107,7 @@ export async function PUT(req: Request) {
 
 // DELETE /api/inventory?id=... – Artikel deaktivieren
 export async function DELETE(req: Request) {
+  if (!(await requireAuth())) return unauthorizedResponse();
   try {
     const { searchParams } = new URL(req.url);
     const id = searchParams.get('id');

@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { requireAuth, unauthorizedResponse } from '@/lib/auth';
 
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const key = process.env.SUPABASE_SERVICE_ROLE_KEY!;
@@ -6,6 +7,7 @@ const headers = { apikey: key, Authorization: `Bearer ${key}`, 'Content-Type': '
 
 // POST /api/gps – Position speichern
 export async function POST(req: Request) {
+  if (!(await requireAuth())) return unauthorizedResponse();
   try {
     const body = await req.json();
     const { vehicle_id, driver_id, lat, lng, accuracy, speed, heading, battery_level } = body;
@@ -37,6 +39,7 @@ export async function POST(req: Request) {
 
 // GET /api/gps?vehicle_id=... – Letzte Positionen
 export async function GET(req: Request) {
+  if (!(await requireAuth())) return unauthorizedResponse();
   try {
     const { searchParams } = new URL(req.url);
     const vehicleId = searchParams.get('vehicle_id');

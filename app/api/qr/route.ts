@@ -1,7 +1,9 @@
 import { NextResponse } from 'next/server';
 import QRCode from 'qrcode';
+import { requireAuth, unauthorizedResponse } from '@/lib/auth';
 
 export async function GET(req: Request) {
+  if (!(await requireAuth())) return unauthorizedResponse();
   try {
     const { searchParams } = new URL(req.url);
     const projectId = searchParams.get('projectId');

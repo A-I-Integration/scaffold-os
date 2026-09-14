@@ -6,8 +6,10 @@
 import { NextResponse } from 'next/server';
 import { optimizeDisposition } from '@/lib/calculations/disposition';
 import { createClient } from '@/lib/supabase/server';
+import { requireAuth, unauthorizedResponse } from '@/lib/auth';
 
 export async function POST(request: Request) {
+  if (!(await requireAuth())) return unauthorizedResponse();
   try {
     const body = await request.json();
     const { materialList, targetSiteId, targetAddress } = body;

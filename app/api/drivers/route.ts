@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { requireAuth, unauthorizedResponse } from '@/lib/auth';
 
 // ============================================================
 // SCAFFOLD OS – Fahrer-API
@@ -13,6 +14,7 @@ const key = process.env.SUPABASE_SERVICE_ROLE_KEY!;
 const headers = { apikey: key, Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' };
 
 export async function GET() {
+  if (!(await requireAuth())) return unauthorizedResponse();
   try {
     const res = await fetch(
       `${url}/rest/v1/drivers?select=*,employee:employee_id(id,first_name,last_name)&is_active=eq.true&order=name`,
@@ -27,6 +29,7 @@ export async function GET() {
 
 // POST – neuen Fahrer anlegen: { name, employee_id? }
 export async function POST(req: NextRequest) {
+  if (!(await requireAuth())) return unauthorizedResponse();
   try {
     const { name, employee_id } = await req.json();
     if (!name || !String(name).trim()) {
@@ -47,6 +50,7 @@ export async function POST(req: NextRequest) {
 
 // PUT – Verknüpfung setzen/lösen: { id, employee_id | null }
 export async function PUT(req: NextRequest) {
+  if (!(await requireAuth())) return unauthorizedResponse();
   try {
     const { id, employee_id } = await req.json();
     if (!id) {
