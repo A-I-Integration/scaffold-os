@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { kiRateLimitPruefen } from '@/lib/rate-limit';
 import { kiFetchMitRetry, KI_UEBERLASTET_MELDUNG } from '@/lib/ki-fetch';
 import { createClient } from '@/lib/supabase/server';
 import { serverErrorResponse } from '@/lib/auth';
@@ -47,6 +48,10 @@ export async function POST(req: NextRequest) {
   if (!role || !['admin', 'bauleiter', 'disponent'].includes(role)) {
     return NextResponse.json({ success: false, error: 'Keine Berechtigung.' }, { status: 403 });
   }
+
+  // Phase 63: KI-Rate-Limit (User-ID löst der Limiter selbst auf)
+  const rl = await kiRateLimitPruefen(req);
+  if (!rl.ok) return rl.response;
 
   const apiKey = process.env.KI_API_KEY;
   if (!apiKey) {

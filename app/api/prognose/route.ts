@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { kiRateLimitPruefen } from '@/lib/rate-limit';
 import { kiFetchMitRetry, KI_UEBERLASTET_MELDUNG } from '@/lib/ki-fetch';
 import { requireAuth, unauthorizedResponse, serverErrorResponse } from '@/lib/auth';
 
@@ -135,7 +136,11 @@ export async function GET() {
 
 // ─── POST: KI-Einschätzung ───
 export async function POST(req: NextRequest) {
-  if (!(await requireAuth())) return unauthorizedResponse();
+  const auth = await requireAuth();
+  if (!auth) return unauthorizedResponse();
+  // Phase 63: KI-Rate-Limit (pro Nutzer, Default 20/Min)
+  const rl = await kiRateLimitPruefen(req, auth.userId);
+  if (!rl.ok) return rl.response;
   try {
     const apiKey = process.env.KI_API_KEY;
     if (!apiKey) {
