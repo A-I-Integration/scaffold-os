@@ -26,6 +26,7 @@ import VersionsHistorie from '@/components/VersionsHistorie'
 import KundenKontakte from '@/components/KundenKontakte'
 import KundeEmails from '@/components/KundeEmails'
 import MaterialReservieren from '@/components/MaterialReservieren'
+import TransportAnlegen from '@/components/TransportAnlegen'
 import SollIstStunden from '@/components/SollIstStunden'
 import AuftragsTeam from '@/components/AuftragsTeam'
 import VertragsDokumente from '@/components/VertragsDokumente'
@@ -1145,7 +1146,10 @@ export default function KundenDetailPage() {
                           </button>
                         )}
                         {project.data?.kiResult?.materialList && (
-                          <MaterialReservieren projectId={project.id} materialList={project.data.kiResult.materialList} />
+                          <>
+                            <MaterialReservieren projectId={project.id} materialList={project.data.kiResult.materialList} />
+                            <TransportAnlegen projectId={project.id} materialList={project.data.kiResult.materialList} />
+                          </>
                         )}
                       </div>
                     ) : (
