@@ -11,7 +11,7 @@ const headers = { apikey: key, Authorization: `Bearer ${key}` };
 export async function GET() {
   try {
     const res = await fetch(
-      `${url}/rest/v1/transport_orders?select=*,to_project:to_project_id(id,name,adresse),from_project:from_project_id(id,name),inventory:inventory_id(name)&status=eq.pending&order=created_at.desc`,
+      `${url}/rest/v1/transport_orders?select=*,to_project:to_project_id(id,name,adresse,data),from_project:from_project_id(id,name),inventory:inventory_id(name)&status=eq.pending&order=created_at.desc`,
       { headers }
     );
     if (!res.ok) throw new Error(await res.text());
