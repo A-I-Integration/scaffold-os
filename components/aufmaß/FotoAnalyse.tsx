@@ -7,6 +7,15 @@ interface Props {
   sessionId: string;
 }
 
+// Phase 66: Die Analyse läuft jetzt über die Queue (POST legt einen
+// ki_jobs-Eintrag an und antwortet SOFORT, GET pollt den Status).
+// Vorteil: kein Vercel-Timeout mehr, die Analyse kann auch länger
+// dauern; mehrere Uploads stauen sich nicht mehr gegenseitig auf.
+// Das Endergebnis ist identisch zum alten synchronen Aufruf.
+
+const POLL_INTERVAL_MS = 3000;
+const POLL_MAX = 200; // 200 × 3 s = max. 10 Minuten Wartezeit
+
 export default function FotoAnalyse({ sessionId }: Props) {
   const [analyzing, setAnalyzing] = useState(false);
   const [result, setResult] = useState<string | null>(null);
@@ -20,6 +29,7 @@ export default function FotoAnalyse({ sessionId }: Props) {
   const handleAnalyze = useCallback(async () => {
     setAnalyzing(true);
     try {
+      // 1) Job anlegen — antwortet sofort mit { jobId, status: 'queued' }
       const res = await fetch('/api/foto-analyse', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -27,9 +37,24 @@ export default function FotoAnalyse({ sessionId }: Props) {
       });
       const json = await res.json();
       if (!res.ok || !json.success) throw new Error(json.error || 'Analyse fehlgeschlagen');
+      const jobId = json.jobId as string;
 
-      setResult(json.analysis);
-      localStorage.setItem('scaffold_foto_analyse', json.analysis);
+      // 2) Pollen bis der Worker fertig ist
+      let data: any = null;
+      for (let i = 0; i < POLL_MAX; i++) {
+        await new Promise((r) => setTimeout(r, POLL_INTERVAL_MS));
+        const pollRes = await fetch(`/api/foto-analyse?jobId=${jobId}`);
+        data = await pollRes.json();
+        if (!pollRes.ok && pollRes.status !== 500) throw new Error(data.error || 'Polling fehlgeschlagen');
+        if (data.status === 'done' || data.status === 'error') break;
+      }
+
+      if (!data || data.status !== 'done') {
+        throw new Error(data?.error || 'Die Analyse dauert zu lange. Bitte später erneut versuchen.');
+      }
+
+      setResult(data.analysis);
+      localStorage.setItem('scaffold_foto_analyse', data.analysis);
     } catch (err: any) {
       alert('KI-Analyse fehlgeschlagen: ' + err.message);
     } finally {
@@ -47,7 +72,7 @@ export default function FotoAnalyse({ sessionId }: Props) {
         {analyzing ? (
           <span className="flex items-center justify-center gap-2">
             <span className="h-4 w-4 animate-spin rounded-full border-2 border-purple-500 border-t-transparent" />
-            KI analysiert Fotos...
+            KI analysiert Fotos (läuft im Hintergrund)...
           </span>
         ) : (
           <span>🔮 KI-Foto-Analyse starten (Fassade, Hindernisse, Hinweise)</span>
