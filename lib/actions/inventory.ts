@@ -216,6 +216,13 @@ export async function createTransportOrder(formData: FormData): Promise<{ succes
     updated_by: auth.userId,
   };
 
+  // Phase 67 (BUGFIX): Verfügbarkeit prüfen BEVOR der Auftrag angelegt wird.
+  const { data: itemCheck } = await supabase.from('inventory_items').select('quantity, name').eq('id', order.inventory_id).single();
+  if (!itemCheck) throw new Error('Artikel nicht gefunden.');
+  if (itemCheck.quantity < order.quantity) {
+    throw new Error(`Nicht genügend Bestand für "${itemCheck.name}": ${itemCheck.quantity} verfügbar, ${order.quantity} angefordert.`);
+  }
+
   const { data, error } = await supabase.from('transport_orders').insert(order).select().single();
   if (error) return { success: false, error: error.message };
 
@@ -230,6 +237,14 @@ export async function createTransportOrder(formData: FormData): Promise<{ succes
     created_by: auth.userId,
   });
 
+  // Phase 67 (BUGFIX): Zentrallager-Bestand SOFORT abziehen.
+  // Vorher wurde nur das Protokoll oben geschrieben — der Bestand
+  // blieb unverändert, Material war faktisch unendlich verfügbar.
+  const { error: stockError } = await supabase.from('inventory_items')
+    .update({ quantity: itemCheck.quantity - order.quantity })
+    .eq('id', order.inventory_id);
+  if (stockError) throw new Error(`Bestandsabzug fehlgeschlagen: ${stockError.message}`);
+
   revalidatePath('/lager');
   return { success: true, data };
 }
@@ -238,6 +253,46 @@ export async function updateTransportOrderStatus(id: string, status: string): Pr
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { success: false, error: 'Nicht authentifiziert' };
+
+  // Phase 67 (BUGFIX): Auftrag holen BEVOR gebucht wird (Idempotenz).
+  const { data: order } = await supabase.from('transport_orders').select('*').eq('id', id).single();
+  if (!order) return { success: false, error: 'Transportauftrag nicht gefunden.' };
+
+  if (status === 'delivered' && order.status !== 'delivered') {
+    // Geliefert = physisch auf Baustelle angekommen:
+    // site_stock.quantity erhoehen (upsert), Reservierung aufloesen.
+    const { data: existing } = await supabase.from('site_stock')
+      .select('*')
+      .eq('project_id', order.to_project_id)
+      .eq('inventory_id', order.inventory_id)
+      .maybeSingle();
+    if (existing) {
+      const newQty = (existing.quantity || 0) + order.quantity;
+      const newReserved = Math.max(0, (existing.reserved_quantity || 0) - order.quantity);
+      const { error: upErr } = await supabase.from('site_stock')
+        .update({ quantity: newQty, reserved_quantity: newReserved })
+        .eq('id', existing.id);
+      if (upErr) return { success: false, error: `site_stock-Update fehlgeschlagen: ${upErr.message}` };
+    } else {
+      const { error: insErr } = await supabase.from('site_stock').insert({
+        project_id: order.to_project_id,
+        inventory_id: order.inventory_id,
+        quantity: order.quantity,
+        reserved_quantity: 0,
+      });
+      if (insErr) return { success: false, error: `site_stock-Eintrag fehlgeschlagen: ${insErr.message}` };
+    }
+  }
+
+  if (status === 'cancelled' && order.status !== 'cancelled') {
+    // Storno = Material kommt zurueck ins Zentrallager.
+    const { data: item } = await supabase.from('inventory_items').select('quantity').eq('id', order.inventory_id).single();
+    if (item) {
+      await supabase.from('inventory_items')
+        .update({ quantity: item.quantity + order.quantity })
+        .eq('id', order.inventory_id);
+    }
+  }
 
   const updates: any = { status, updated_by: user.id };
   if (status === 'delivered') updates.completed_at = new Date().toISOString();

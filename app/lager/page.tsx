@@ -150,7 +150,8 @@ export default function LagerPage() {
     totalItems: inventory.length,
     criticalCount: inventory.filter(i => getStatus(i).status === 'critical' || getStatus(i).status === 'empty').length,
     warningCount: inventory.filter(i => getStatus(i).status === 'warning').length,
-    pendingTransports: transports.filter(t => t.status === 'pending').length,
+    // Phase 67: 'offen' = pending + in_transit (Unterwegs zaehlt mit)
+    pendingTransports: transports.filter(t => t.status === 'pending' || t.status === 'in_transit').length,
   };
 
   // ─── CRUD ÜBER REST-API ───
@@ -322,10 +323,10 @@ export default function LagerPage() {
           <div className="space-y-6">
             {/* Stats */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-              <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm"><div className="text-sm font-medium text-gray-500">Artikel gesamt</div><div className="text-3xl font-bold text-gray-900 mt-2">{stats.totalItems}</div></div>
-              <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm"><div className="text-sm font-medium text-gray-500">Kritisch</div><div className="text-3xl font-bold text-red-600 mt-2">{stats.criticalCount}</div></div>
-              <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm"><div className="text-sm font-medium text-gray-500">Nachbestellen</div><div className="text-3xl font-bold text-yellow-600 mt-2">{stats.warningCount}</div></div>
-              <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm"><div className="text-sm font-medium text-gray-500">Offene Transporte</div><div className="text-3xl font-bold text-blue-600 mt-2">{stats.pendingTransports}</div></div>
+              <div onClick={() => setActiveTab('warehouse')} title="Zum Zentrallager" className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm cursor-pointer hover:border-blue-400 hover:shadow-md transition"><div className="text-sm font-medium text-gray-500">Artikel gesamt</div><div className="text-3xl font-bold text-gray-900 mt-2">{stats.totalItems}</div></div>
+              <div onClick={() => setActiveTab('warehouse')} title="Zum Zentrallager (Kritische zuerst)" className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm cursor-pointer hover:border-red-400 hover:shadow-md transition"><div className="text-sm font-medium text-gray-500">Kritisch</div><div className="text-3xl font-bold text-red-600 mt-2">{stats.criticalCount}</div></div>
+              <div onClick={() => setActiveTab('warehouse')} title="Zum Zentrallager" className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm cursor-pointer hover:border-yellow-400 hover:shadow-md transition"><div className="text-sm font-medium text-gray-500">Nachbestellen</div><div className="text-3xl font-bold text-yellow-600 mt-2">{stats.warningCount}</div></div>
+              <div onClick={() => setActiveTab('transports')} title="Zu den Transporten" className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm cursor-pointer hover:border-blue-400 hover:shadow-md transition"><div className="text-sm font-medium text-gray-500">Offene Transporte</div><div className="text-3xl font-bold text-blue-600 mt-2">{stats.pendingTransports}</div></div>
             </div>
 
             {/* Kritische Artikel + Nachbestell-Button */}
@@ -465,7 +466,7 @@ export default function LagerPage() {
                 <div className="px-6 py-4 grid grid-cols-2 sm:grid-cols-4 gap-4">
                   <div><div className="text-xs text-gray-500">Gesamt</div><div className="text-lg font-semibold text-gray-900">{stock.quantity} {stock.inventory?.unit}</div></div>
                   <div><div className="text-xs text-gray-500">Reserviert</div><div className="text-lg font-semibold text-orange-600">{stock.reserved_quantity} {stock.inventory?.unit}</div></div>
-                  <div><div className="text-xs text-gray-500">Verfügbar</div><div className="text-lg font-semibold text-green-600">{stock.available_quantity} {stock.inventory?.unit}</div></div>
+                  <div><div className="text-xs text-gray-500">Verfügbar</div><div className="text-lg font-semibold text-green-600">{Math.max(0, stock.available_quantity)} {stock.inventory?.unit}</div></div>
                   <div><div className="text-xs text-gray-500">Mindestbestand</div><div className="text-lg font-semibold text-gray-700">{stock.min_stock} {stock.inventory?.unit}</div></div>
                 </div>
               </div>
