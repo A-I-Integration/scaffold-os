@@ -72,6 +72,16 @@ async function ladeBilder(tenant, bucket, pfade) {
 // ─── Jobtyp → Prompt + Modell ───
 function jobConfig(job) {
   const input = job.payload?.input || {};
+  // Phase 66+: Wenn die API-Route einen FERTIGEN Request abgelegt hat
+  // (payload.request.messages), wird der 1:1 an die KI durchgereicht.
+  // Prompt-Logik lebt damit weiterhin in den Routen, nicht hier.
+  if (job.payload?.request && Array.isArray(job.payload.request.messages)) {
+    return {
+      model: job.payload.request.model || KI_MODEL,
+      build: async () => job.payload.request.messages,
+      requestExtras: job.payload.request,
+    };
+  }
   switch (job.type) {
     case 'foto-analyse':
       return {
@@ -111,11 +121,20 @@ function jobConfig(job) {
 async function verarbeiteJob(tenant, job) {
   const cfg = jobConfig(job);
   const messages = await cfg.build(tenant);
+  // requestExtras (temperature/response_format/max_tokens) aus dem
+  // fertigen Request übernehmen, Defaults als Fallback.
+  const extras = cfg.requestExtras || {};
 
   const res = await kiFetch(`${KI_BASE_URL}/chat/completions`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${KI_API_KEY}` },
-    body: JSON.stringify({ model: cfg.model, messages, max_tokens: 4096 }),
+    body: JSON.stringify({
+      model: cfg.model,
+      messages,
+      temperature: extras.temperature ?? 0.3,
+      max_tokens: extras.max_tokens ?? 4096,
+      ...(extras.response_format ? { response_format: extras.response_format } : {}),
+    }),
   });
   const data = await res.json();
   const text = data.choices?.[0]?.message?.content || '';
