@@ -20,11 +20,13 @@ export default function FotoAnalyse({ sessionId }: Props) {
   const [analyzing, setAnalyzing] = useState(false);
   const [result, setResult] = useState<string | null>(null);
 
-  // Gespeichertes Ergebnis wiederherstellen (z.B. nach Zurück-Navigation)
+  // Gespeichertes Ergebnis wiederherstellen (z.B. nach Zurück-Navigation).
+  // Phase 66c: Session-scoped Key — vorher lag die Analyse GLOBAL im
+  // Browser und wurde bei JEDEM Aufmaß gezeigt, egal welche Baustelle.
+  const storageKey = `scaffold_foto_analyse_${sessionId}`;
   useEffect(() => {
-    const saved = localStorage.getItem('scaffold_foto_analyse');
-    if (saved) setResult(saved);
-  }, []);
+    setResult(localStorage.getItem(storageKey));
+  }, [storageKey]);
 
   const handleAnalyze = useCallback(async () => {
     setAnalyzing(true);
@@ -54,7 +56,7 @@ export default function FotoAnalyse({ sessionId }: Props) {
       }
 
       setResult(data.analysis);
-      localStorage.setItem('scaffold_foto_analyse', data.analysis);
+      localStorage.setItem(storageKey, data.analysis);
     } catch (err: any) {
       alert('KI-Analyse fehlgeschlagen: ' + err.message);
     } finally {
