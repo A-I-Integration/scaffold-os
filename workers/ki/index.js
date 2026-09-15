@@ -21,7 +21,14 @@
 //   VISION_MODEL=mistral-medium-latest
 // ============================================================
 
-const TENANTS = JSON.parse(process.env.TENANTS || '[]');
+// Phase 66b: Tenant-Format-Normalisierung. Der punktwolke-Worker nutzt
+// url/key, dieser Worker supabaseUrl/serviceKey — wir akzeptieren BEIDE,
+// damit dieselbe TENANTS-Env-Variable für alle Worker gilt.
+const TENANTS = JSON.parse(process.env.TENANTS || '[]').map((t) => ({
+  name: t.name,
+  supabaseUrl: t.supabaseUrl || t.url,
+  serviceKey: t.serviceKey || t.key,
+}));
 const KI_BASE_URL = process.env.KI_BASE_URL || 'https://api.mistral.ai/v1';
 const KI_API_KEY = process.env.KI_API_KEY || '';
 const KI_MODEL = process.env.KI_MODEL || 'mistral-large-latest';
