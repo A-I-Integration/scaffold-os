@@ -1,0 +1,6 @@
+{
+  "name": "scaffold-os-ki-worker",
+  "version": "1.0.0",
+  "private": true,
+  "description": "SCAFFOLD OS KI-Queue-Worker (Phase 65) - laeuft auf Hetzner"
+}
