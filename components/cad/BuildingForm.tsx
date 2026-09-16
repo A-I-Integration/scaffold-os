@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { BuildingParams } from '@/lib/calculations/cad-engine'
 import { GERUEST_SYSTEME } from '@/lib/calculations/geruest-systeme'
 import { uploadVertragsdokument } from '@/lib/vertrag-upload-client'
@@ -18,15 +18,33 @@ export default function BuildingForm({ building, systemId, onChange, onSystemCha
   const [activeTab, setActiveTab] = useState<'gebaeude' | 'geruest' | 'system'>('gebaeude')
   const [analyseLaeuft, setAnalyseLaeuft] = useState(false)
   const [analyseHinweis, setAnalyseHinweis] = useState<string | null>(null)
+  // Phase 68-E: welche Felder hat die letzte Analyse automatisch befuellt?
+  const analyseFelderRef = useRef<string[]>([])
 
   // NEU (Phase 41): Grundriss/Foto hochladen und automatisch auswerten –
   // nutzt dieselbe, sorgfältig geprüfte Anti-Halluzinations-Logik wie im
   // Aufmaß (siehe lib/grundriss-parsing.ts). "cad-uploads" als fester
   // Ordner, da CAD (noch) kein eigenes Projekt hat, solange kein Angebot
   // angelegt wurde.
+  // Phase 68-E: Dateityp hart prüfen. Der accept-Filter des Inputs gilt
+  // nur fuer den Auswahl-Dialog - "Alle Dateien" kann trotzdem eine DXF
+  // durchschleusen. Die KI (Vision) kann nur Pixel/PDF lesen, keine
+  // CAD-Vektordaten; vorher schlug die Analyse dann verwirrend fehl.
+  const ERLAUBT = ['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'application/pdf'];
+  const DXF_ARTEN = ['.dxf', '.dwg', '.dwt', '.ifc', '.step', '.stp', '.igs'];
+
   async function handlePlanUpload(file: File) {
+    setAnalyseHinweis(null);
+    const ext = '.' + (file.name.split('.').pop() || '').toLowerCase();
+    if (!ERLAUBT.includes(file.type) || DXF_ARTEN.includes(ext)) {
+      setAnalyseHinweis(
+        DXF_ARTEN.includes(ext)
+          ? `❌ ${ext.toUpperCase()}-Dateien werden noch nicht unterstützt. Bitte im CAD-Programm als PDF exportieren (z. B. AutoCAD: Plot → PDF) oder einen Screenshot vom Grundriss hochladen. Erlaubt: JPG, PNG, Webp, PDF.`
+          : `❌ Dateiformat nicht unterstützt (erkannt: ${file.type || ext}). Erlaubt: JPG, PNG, Webp, PDF.`
+      );
+      return;
+    }
     setAnalyseLaeuft(true)
-    setAnalyseHinweis(null)
     try {
       const hochgeladen = await uploadVertragsdokument(file, 'cad-uploads', 'plaene')
       const res = await fetch('/api/cad/analyze-plan', {
@@ -51,7 +69,21 @@ export default function BuildingForm({ building, systemId, onChange, onSystemCha
       if (Object.keys(patch).length === 0) {
         setAnalyseHinweis('Keine eindeutig belegten Maße gefunden – bitte Werte manuell eintragen.')
       } else {
-        onChange({ ...building, ...patch })
+        // Phase 68-E: Felder, die die VORHERIGE Analyse automatisch
+        // befuellt hatte, aber die NEUE Analyse NICHT mehr liefert,
+        // zuruecksetzen (sonst haengen alte Plan-Werte am neuen Plan).
+        // Nur KI-Felder — manuelle Eingaben bleiben unangetastet.
+        const vorherigeAutoFelder = (analyseFelderRef.current || []) as string[];
+        // Defaults = exakt die Startwerte aus app/cad/page.tsx
+        const defaults: Record<string, any> = {
+          lengthM: 18.4, widthM: 8.0, heightM: 12.0, eavesHeightM: 10.0, floors: 3,
+        };
+        const zurueck: Record<string, any> = {};
+        for (const f of vorherigeAutoFelder) {
+          if (!(f in patch) && f in defaults) zurueck[f] = defaults[f];
+        }
+        analyseFelderRef.current = Object.keys(patch);
+        onChange({ ...building, ...zurueck, ...patch })
         const uebernommen = Object.keys(patch).length
         setAnalyseHinweis(`${json.ohneKi ? 'Direkt aus dem Plan erkannt (ohne KI)' : 'KI-Vorschlag'}: ${uebernommen} Angabe(n) übernommen, bitte prüfen.${json.hoeheGeschaetzt ? ' Höhe geschätzt aus Geschosszahl.' : ''}${json.verworfen?.length ? ' Verworfen (unbelegt): ' + json.verworfen.join('; ') : ''}`)
       }
@@ -93,7 +125,7 @@ export default function BuildingForm({ building, systemId, onChange, onSystemCha
             <label className={`flex flex-col items-center justify-center gap-1 rounded-xl border-2 border-dashed p-4 text-center cursor-pointer transition-colors ${analyseLaeuft ? 'border-black/10 bg-black/5' : 'border-[#e8590c]/40 hover:bg-[#fff4ed]'}`}>
               <span className='text-xl'>{analyseLaeuft ? '⏳' : '📐'}</span>
               <span className='text-xs font-semibold text-[#424245]'>{analyseLaeuft ? 'KI wertet aus…' : 'Grundriss/Foto hochladen (KI-Auswertung)'}</span>
-              <span className='text-[10px] text-[#86868b]'>KI-Vorschlag – Maße werden nur übernommen, wo im Plan eindeutig belegt; bitte vor dem Angebot prüfen</span>
+              <span className='text-[10px] text-[#86868b]'>Erlaubt: JPG, PNG, Webp, PDF. DXF/DWG: bitte als PDF exportieren. KI-Vorschlag – Maße werden nur übernommen, wo im Plan eindeutig belegt; bitte vor dem Angebot prüfen</span>
               <input type='file' accept='image/*,application/pdf' className='hidden' disabled={analyseLaeuft}
                 onChange={(e) => { const f = e.target.files?.[0]; if (f) handlePlanUpload(f); e.target.value = '' }} />
             </label>
