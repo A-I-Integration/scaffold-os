@@ -33,18 +33,35 @@ export async function POST(req: Request) {
   if (!(await requireAuth())) return unauthorizedResponse();
   try {
     const body = await req.json();
-    const { name, vehicle_id, driver_id, planned_date, planned_start_time, transport_order_ids } = body;
+    // Phase 68-C: project_ids = Baustellen-Anfahrten OHNE Materialtransport
+    // (z. B. Team-Anfahrt bei Projektstart). Mindestens EIN Stop
+    // (Transport ODER Baustelle) wird weiterhin verlangt.
+    const { name, vehicle_id, driver_id, planned_date, planned_start_time } = body;
+    const transport_order_ids: string[] = body.transport_order_ids || [];
+    const project_ids: string[] = body.project_ids || [];
 
-    if (!name || !vehicle_id || !driver_id || !transport_order_ids || transport_order_ids.length === 0) {
-      return NextResponse.json({ success: false, error: 'Name, Fahrzeug, Fahrer und mindestens ein Transport erforderlich' }, { status: 400 });
+    if (!name || !vehicle_id || !driver_id || (transport_order_ids.length === 0 && project_ids.length === 0)) {
+      return NextResponse.json({ success: false, error: 'Name, Fahrzeug, Fahrer und mindestens ein Stopp (Transport oder Baustelle) erforderlich' }, { status: 400 });
     }
 
-    // 1. Transport-Details holen für Adressen (echtes Schema: to_project_id → projects)
-    const toRes = await fetch(`${url}/rest/v1/transport_orders?id=in.(${transport_order_ids.join(',')})&select=*,to_project:to_project_id(name,adresse),inventory:inventory_id(name,quantity)`, { headers });
-    if (!toRes.ok) throw new Error(await toRes.text());
-    const orders = await toRes.json();
-    // Reihenfolge aus dem Request übernehmen (KI-optimierte Stopp-Reihenfolge)
-    orders.sort((a: any, b: any) => transport_order_ids.indexOf(a.id) - transport_order_ids.indexOf(b.id));
+    // 1a. Transport-Details holen für Adressen (echtes Schema: to_project_id → projects)
+    let orders: any[] = [];
+    if (transport_order_ids.length > 0) {
+      const toRes = await fetch(`${url}/rest/v1/transport_orders?id=in.(${transport_order_ids.join(',')})&select=*,to_project:to_project_id(name,adresse),inventory:inventory_id(name,quantity)`, { headers });
+      if (!toRes.ok) throw new Error(await toRes.text());
+      orders = await toRes.json();
+      // Reihenfolge aus dem Request übernehmen (KI-optimierte Stopp-Reihenfolge)
+      orders.sort((a: any, b: any) => transport_order_ids.indexOf(a.id) - transport_order_ids.indexOf(b.id));
+    }
+
+    // 1b. Baustellen für Anfahrts-Stops holen (kein Material, nur Anfahrt)
+    let projekte: any[] = [];
+    if (project_ids.length > 0) {
+      const pRes = await fetch(`${url}/rest/v1/projects?id=in.(${project_ids.join(',')})&select=id,name,adresse`, { headers });
+      if (!pRes.ok) throw new Error(await pRes.text());
+      projekte = await pRes.json();
+      projekte.sort((a: any, b: any) => project_ids.indexOf(a.id) - project_ids.indexOf(b.id));
+    }
 
     // 2. Tour erstellen
     const tourRes = await fetch(`${url}/rest/v1/tours`, {
@@ -57,21 +74,31 @@ export async function POST(req: Request) {
         planned_date,
         planned_start_time,
         status: 'planned',
-        total_weight_kg: orders.reduce((s: number, o: any) => s + (o.quantity || 0), 0),
+        total_weight_kg: orders.reduce((s: number, o: any) => s + (o.quantity || 0), 0), // Anfahrten tragen 0 Gewicht
       }),
     });
     if (!tourRes.ok) throw new Error(await tourRes.text());
     const tour = (await tourRes.json())[0];
 
-    // 3. Stopps erstellen (einfache Reihenfolge = Transport-Reihenfolge)
-    const stops = orders.map((o: any, i: number) => ({
-      tour_id: tour.id,
-      transport_order_id: o.id,
-      project_id: o.to_project_id,
-      stop_order: i + 1,
-      address: o.to_project?.adresse || 'Unbekannt',
-      status: 'pending',
-    }));
+    // 3. Stopps erstellen: Transporte zuerst, dann Baustellen-Anfahrten
+    const stops = [
+      ...orders.map((o: any, i: number) => ({
+        tour_id: tour.id,
+        transport_order_id: o.id,
+        project_id: o.to_project_id,
+        stop_order: i + 1,
+        address: o.to_project?.adresse || 'Unbekannt',
+        status: 'pending',
+      })),
+      ...projekte.map((p: any, i: number) => ({
+        tour_id: tour.id,
+        transport_order_id: null,          // Phase 68-C: reine Anfahrt
+        project_id: p.id,
+        stop_order: orders.length + i + 1, // nach den Transporten
+        address: p.adresse || 'Unbekannt',
+        status: 'pending',
+      })),
+    ];
 
     const stopsRes = await fetch(`${url}/rest/v1/tour_stops`, {
       method: 'POST',
