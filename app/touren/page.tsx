@@ -72,6 +72,9 @@ export default function TourenPage() {
   const [fVehicle, setFVehicle] = useState('');
   const [fDriver, setFDriver] = useState('');
   const [fSelected, setFSelected] = useState<string[]>([]);
+  // Phase 68-C: Baustellen-Anfahrten (ohne Material)
+  const [fProjSelected, setFProjSelected] = useState<string[]>([]);
+  const [projekte, setProjekte] = useState<any[]>([]);
   const [fSaving, setFSaving] = useState(false);
   const [fMessage, setFMessage] = useState('');
 
@@ -101,6 +104,12 @@ export default function TourenPage() {
       else setError('Transporte: ' + (transJson.error || 'Fehler'));
       if (vehJson.success) setVehicles(vehJson.vehicles || []);
       if (drvJson.success) setDrivers(drvJson.drivers || []);
+      // Phase 68-C: aktive Projekte für Baustellen-Anfahrten
+      try {
+        const prjRes = await fetch('/api/projects', { cache: 'no-store' });
+        const prjJson = await prjRes.json();
+        if (prjJson.success) setProjekte((prjJson.projects || []).filter((p: any) => p.status === 'active'));
+      } catch { /* Projekt-Liste optional */ }
       try { setEmployees(await getEmployees()); } catch { /* Mitarbeiter-Liste optional */ }
     } catch (e: any) {
       setError(e.message);
@@ -109,6 +118,12 @@ export default function TourenPage() {
   }, []);
 
   useEffect(() => { loadAll(); }, [loadAll]);
+
+  // Phase 68-C: aktive Baustellen, die noch in KEINER offenen Tour vorkommen
+  const verplanteProjektIds = new Set(
+    tours.flatMap((t: any) => (t.status === 'completed' || t.status === 'cancelled') ? [] : (t.stops || []).map((s: any) => s.project_id))
+  );
+  const anfahrten = projekte.filter((p: any) => p.adresse && !verplanteProjektIds.has(p.id));
 
   const loadEntries = useCallback(async () => {
     setSLoading(true);
@@ -140,20 +155,20 @@ export default function TourenPage() {
     if (!fName.trim()) { setFMessage('Bitte Tour-Name eingeben.'); return; }
     if (!fVehicle) { setFMessage('Bitte Fahrzeug wählen.'); return; }
     if (!fDriver) { setFMessage('Bitte Fahrer wählen.'); return; }
-    if (fSelected.length === 0) { setFMessage('Bitte mindestens einen Transportauftrag wählen.'); return; }
+    if (fSelected.length === 0 && fProjSelected.length === 0) { setFMessage('Bitte mindestens einen Transport ODER eine Baustellen-Anfahrt wählen.'); return; }
     setFSaving(true);
     try {
       const res = await fetch('/api/tours', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           name: fName.trim(), vehicle_id: fVehicle, driver_id: fDriver,
-          planned_date: fDate, planned_start_time: fTime, transport_order_ids: fSelected,
+          planned_date: fDate, planned_start_time: fTime, transport_order_ids: fSelected, project_ids: fProjSelected,
         }),
       });
       const json = await res.json();
       if (!json.success) throw new Error(json.error);
       setFMessage('✅ Tour „' + fName + '" wurde angelegt.');
-      setFName(''); setFSelected([]);
+      setFName(''); setFSelected([]); setFProjSelected([]);
       loadAll();
     } catch (e: any) { setFMessage('Fehler: ' + e.message); }
     setFSaving(false);
@@ -406,7 +421,7 @@ export default function TourenPage() {
                 disabled={fSaving}
                 className="w-full bg-[#e8590c] hover:bg-[#d9480f] text-white disabled:opacity-50 rounded-xl px-4 py-3 font-semibold transition"
               >
-                {fSaving ? 'Lege an…' : `Tour anlegen (${fSelected.length} Transport${fSelected.length === 1 ? '' : 'e'})`}
+                {fSaving ? 'Lege an…' : `Tour anlegen (${fSelected.length + fProjSelected.length} Stopp${fSelected.length + fProjSelected.length === 1 ? '' : 's'})`}
               </button>
             </div>
 
@@ -452,6 +467,34 @@ export default function TourenPage() {
                   );
                 })}
               </div>
+            </div>
+          </div>
+
+          {/* Phase 68-C: Baustellen-Anfahrten (ohne Material) */}
+          <div className="mt-6">
+            <h2 className="font-semibold text-lg mb-1">Baustellen-Anfahrten (ohne Material)</h2>
+            <p className="text-[#86868b] text-sm mb-3">Aktive Projekte ohne geplante Tour — für Team-Anfahrt anhaken.</p>
+            {anfahrten.length === 0 && (
+              <div className="text-[#86868b] text-sm py-4 text-center bg-[#f5f5f7] border border-black/10 rounded-xl">Keine offenen Baustellen.</div>
+            )}
+            <div className="space-y-2 max-h-[260px] overflow-y-auto pr-1">
+              {anfahrten.map((p: any) => {
+                const idx = fProjSelected.indexOf(p.id);
+                const selected = idx >= 0;
+                return (
+                  <button key={p.id}
+                    onClick={() => setFProjSelected(selected ? fProjSelected.filter(x => x !== p.id) : [...fProjSelected, p.id])}
+                    className={`w-full text-left rounded-xl border p-3 transition flex items-center gap-3 ${selected ? 'border-[#0071e3] bg-blue-50' : 'border-black/10 bg-white/50 hover:border-black/20'}`}>
+                    <span className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold shrink-0 ${selected ? 'bg-[#0071e3] text-white' : 'bg-black/10'}`}>
+                      {selected ? fSelected.length + idx + 1 : '·'}
+                    </span>
+                    <span className="flex-1">
+                      <span className="block font-medium">{p.name}</span>
+                      <span className="block text-[#86868b] text-xs">{p.adresse}</span>
+                    </span>
+                  </button>
+                );
+              })}
             </div>
           </div>
 
