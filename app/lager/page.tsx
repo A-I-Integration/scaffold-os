@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import AbbauDialog from '@/components/lager/AbbauDialog';
 import { useRouter } from 'next/navigation';
 import BarcodeScanner from '@/components/lager/BarcodeScanner';
 import {
@@ -38,6 +39,7 @@ export default function LagerPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
+  const [abbauProjekt, setAbbauProjekt] = useState<{ id: string; name: string } | null>(null);
 
   // ─── ROLLEN-STATE ───
   const [userRole, setUserRole] = useState<string | null>(null);
@@ -455,28 +457,58 @@ export default function LagerPage() {
 
         {/* ═══════════════════════════════════════════════════════════ */}
         {/* BAUSTELLEN */}
-        {activeTab === 'sites' && (
+        {activeTab === 'sites' && (() => {
+          // Phase 68-B: nach Baustelle gruppieren (eine Karte pro Baustelle,
+          // darin alle Materialpositionen)
+          const gruppen = new Map<string, { name: string; items: typeof siteStock }>();
+          for (const s of siteStock) {
+            const pid = s.project_id || s.project?.id || 'unbekannt';
+            if (!gruppen.has(pid)) gruppen.set(pid, { name: s.project?.name || 'Baustelle', items: [] });
+            gruppen.get(pid)!.items.push(s);
+          }
+          const baustellen = [...gruppen.entries()];
+          return (
           <div className="space-y-6">
-            {siteStock.length === 0 ? <div className="bg-white rounded-xl border border-gray-200 p-8 text-center text-gray-500">Kein Baustellenbestand vorhanden</div> : siteStock.map(stock => (
-              <div key={stock.id} className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+            {baustellen.length === 0 ? <div className="bg-white rounded-xl border border-gray-200 p-8 text-center text-gray-500">Kein Baustellenbestand vorhanden</div> : baustellen.map(([pid, grp]) => (
+              <div key={pid} className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
                 <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
-                  <div><h3 className="font-semibold text-gray-900">{stock.project?.name || 'Baustelle'}</h3><p className="text-sm text-gray-500">{stock.inventory?.name}</p></div>
-                  <span className={`px-2 py-1 rounded-full text-xs font-semibold text-[#1d1d1f] ${stock.statusColor}`}>{stock.statusLabel}</span>
+                  <h3 className="font-semibold text-gray-900">{grp.name}</h3>
+                  {canManage && (
+                    <button onClick={() => setAbbauProjekt({ id: pid, name: grp.name })}
+                      className="px-4 py-2 rounded-xl bg-[#0071e3] text-white text-sm font-medium hover:bg-[#0077ed]">
+                      Abbau / Rücklauf
+                    </button>
+                  )}
                 </div>
-                <div className="px-6 py-4 grid grid-cols-2 sm:grid-cols-4 gap-4">
-                  <div><div className="text-xs text-gray-500">Gesamt</div><div className="text-lg font-semibold text-gray-900">{stock.quantity} {stock.inventory?.unit}</div></div>
-                  <div><div className="text-xs text-gray-500">Reserviert</div><div className="text-lg font-semibold text-orange-600">{stock.reserved_quantity} {stock.inventory?.unit}</div></div>
-                  <div><div className="text-xs text-gray-500">Verfügbar</div><div className="text-lg font-semibold text-green-600">{Math.max(0, stock.available_quantity)} {stock.inventory?.unit}</div></div>
-                  <div><div className="text-xs text-gray-500">Mindestbestand</div><div className="text-lg font-semibold text-gray-700">{stock.min_stock} {stock.inventory?.unit}</div></div>
-                </div>
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="text-left text-xs text-gray-500 border-b border-gray-100">
+                      <th className="px-6 py-2">Material</th>
+                      <th className="px-2 py-2">Physisch da</th>
+                      <th className="px-2 py-2">Reserviert</th>
+                      <th className="px-2 py-2">Verfügbar</th>
+                      <th className="px-6 py-2">Mindestbestand</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {grp.items.map(stock => (
+                      <tr key={stock.id} className="border-b border-gray-50">
+                        <td className="px-6 py-2 font-medium text-gray-900">{stock.inventory?.name}</td>
+                        <td className="px-2 py-2 text-gray-700">{stock.quantity} {stock.inventory?.unit}</td>
+                        <td className="px-2 py-2 text-orange-600">{stock.reserved_quantity} {stock.inventory?.unit}</td>
+                        <td className="px-2 py-2">
+                          <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${stock.statusColor}`}>{Math.max(0, stock.available_quantity)} {stock.inventory?.unit}</span>
+                        </td>
+                        <td className="px-6 py-2 text-gray-500">{stock.min_stock} {stock.inventory?.unit}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
             ))}
           </div>
-        )}
-
-        {/* ═══════════════════════════════════════════════════════════ */}
-        {/* TRANSPORTE */}
-        {activeTab === 'transports' && (
+          );
+        })()}{activeTab === 'transports' && (
           <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
             <div className="overflow-x-auto">
               <table className="w-full text-sm text-left">
@@ -740,6 +772,23 @@ export default function LagerPage() {
             </div>
           </div>
         </div>
+      )}
+      {/* Phase 68-B: Abbau-Rücklauf-Dialog */}
+      {abbauProjekt && (
+        <AbbauDialog
+          projektId={abbauProjekt.id}
+          projektName={abbauProjekt.name}
+          positionen={siteStock
+            .filter((s) => (s.project_id || s.project?.id || 'unbekannt') === abbauProjekt.id && (s.quantity || 0) > 0)
+            .map((s) => ({
+              inventory_id: s.inventory_id,
+              name: s.inventory?.name || 'Artikel',
+              unit: s.inventory?.unit || 'Stk',
+              mengeVorOrt: s.quantity || 0,
+            }))}
+          onClose={() => setAbbauProjekt(null)}
+          onFertig={() => { loadInventory(); loadData(); }}
+        />
       )}
     </div>
   );
