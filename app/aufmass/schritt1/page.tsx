@@ -110,7 +110,8 @@ function Schritt1Content() {
     // zuletzt bearbeiteten geändert hat (neues/anderes Projekt geöffnet).
     // Innerhalb derselben Sitzung (gleiche ID) bleibt der Zwischenspeicher
     // mit den eigenen, frischen Änderungen unangetastet.
-    if (sollFrischGeladenWerden(projectId, leseMarkierung())) {
+    const zwischenstand = localStorage.getItem('scaffold_step1');
+    if (sollFrischGeladenWerden(projectId, leseMarkierung()) || !zwischenstand) {
         setzeMarkierung(projectId!);
         // FIX: Sofort auf leer zurücksetzen, BEVOR der Datenbank-Abruf
         // überhaupt startet – sonst zeigt das Formular für einen Moment
@@ -141,7 +142,7 @@ function Schritt1Content() {
         })();
         return;
       }
-    const saved = localStorage.getItem('scaffold_step1');
+    const saved = zwischenstand;
     // Hinweis anzeigen, wenn irgendwo noch Wizard-Daten liegen
     const irgendwoDaten = WIZARD_KEYS.some((k) => localStorage.getItem(k) !== null);
     setHatAlteDaten(irgendwoDaten);

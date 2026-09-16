@@ -168,6 +168,17 @@ function Schritt6Content() {
         const d = p.data || {};
         const { angebotAnpassungen, kiResult: savedKi, angebotsStatus: savedStatus, preisModus: savedPreisModus, festpreisProM2: savedFestpreis, ...steps } = d;
         setStepData(steps);
+        // Phase 68 (Fix Ruecknavigation): Schritte 1-5 auch in den lokalen
+        // Zwischenspeicher spiegeln. Vorher landeten sie nur im React-State.
+        // Konsequenz: Dashboard -> Projekt -> Schritt 6 -> zurueck zu Schritt 1
+        // zeigte Name/Adresse LEER an (Schritt 1 fand keinen Zwischenspeicher,
+        // die Markierung sagte aber 'schon geladen').
+        for (let i = 1; i <= 5; i++) {
+          const schritt = (steps as Record<string, any>)[`step${i}`];
+          if (schritt) {
+            try { localStorage.setItem(`scaffold_step${i}`, JSON.stringify(schritt)); } catch { /* Speicher voll o.ae. */ }
+          }
+        }
         if (angebotAnpassungen) setAnpassungen(angebotAnpassungen);
         // NEU (Prio-2-Sprint): KI-Ergebnis und Angebotsstatus wiederherstellen
         if (savedKi) setKiResult(savedKi);
