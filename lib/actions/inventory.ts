@@ -217,7 +217,7 @@ export async function createTransportOrder(formData: FormData): Promise<{ succes
   };
 
   // Phase 67 (BUGFIX): Verfügbarkeit prüfen BEVOR der Auftrag angelegt wird.
-  const { data: itemCheck } = await supabase.from('inventory_items').select('quantity, name').eq('id', order.inventory_id).single();
+  const { data: itemCheck } = await supabase.from('inventory').select('quantity, name').eq('id', order.inventory_id).single();
   if (!itemCheck) throw new Error('Artikel nicht gefunden.');
   if (itemCheck.quantity < order.quantity) {
     throw new Error(`Nicht genügend Bestand für "${itemCheck.name}": ${itemCheck.quantity} verfügbar, ${order.quantity} angefordert.`);
@@ -240,7 +240,7 @@ export async function createTransportOrder(formData: FormData): Promise<{ succes
   // Phase 67 (BUGFIX): Zentrallager-Bestand SOFORT abziehen.
   // Vorher wurde nur das Protokoll oben geschrieben — der Bestand
   // blieb unverändert, Material war faktisch unendlich verfügbar.
-  const { error: stockError } = await supabase.from('inventory_items')
+  const { error: stockError } = await supabase.from('inventory')
     .update({ quantity: itemCheck.quantity - order.quantity })
     .eq('id', order.inventory_id);
   if (stockError) throw new Error(`Bestandsabzug fehlgeschlagen: ${stockError.message}`);
@@ -286,9 +286,9 @@ export async function updateTransportOrderStatus(id: string, status: string): Pr
 
   if (status === 'cancelled' && order.status !== 'cancelled') {
     // Storno = Material kommt zurueck ins Zentrallager.
-    const { data: item } = await supabase.from('inventory_items').select('quantity').eq('id', order.inventory_id).single();
+    const { data: item } = await supabase.from('inventory').select('quantity').eq('id', order.inventory_id).single();
     if (item) {
-      await supabase.from('inventory_items')
+      await supabase.from('inventory')
         .update({ quantity: item.quantity + order.quantity })
         .eq('id', order.inventory_id);
     }
