@@ -129,7 +129,7 @@ export async function POST(req: NextRequest) {
         const siteRows = await siteGet.json();
         if (siteRows?.length) {
           const site = siteRows[0];
-          const neueBaustellenMenge = Math.max(0, (site.quantity || 0) - mengeZurueck - menzeVerlust);
+          const neueBaustellenMenge = Math.max(0, (site.quantity || 0) - menzeZurueck - menzeVerlust);
           await fetch(`${url}/rest/v1/site_stock?id=eq.${site.id}`, {
             method: 'PATCH', headers,
             body: JSON.stringify({ quantity: neueBaustellenMenge }),
