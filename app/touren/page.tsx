@@ -169,7 +169,11 @@ export default function TourenPage() {
       if (!json.success) throw new Error(json.error);
       setFMessage('✅ Tour „' + fName + '" wurde angelegt.');
       setFName(''); setFSelected([]); setFProjSelected([]);
-      loadAll();
+      await loadAll();
+      // Phase 68-D: direkt zum Touren-Tab wechseln, damit die neue Tour
+      // sofort sichtbar ist (vorher blieb man auf dem leeren Formular
+      // stehen — sah aus, als waere alles verschwunden).
+      setTab('touren');
     } catch (e: any) { setFMessage('Fehler: ' + e.message); }
     setFSaving(false);
   }
@@ -475,7 +479,10 @@ export default function TourenPage() {
             <h2 className="font-semibold text-lg mb-1">Baustellen-Anfahrten (ohne Material)</h2>
             <p className="text-[#86868b] text-sm mb-3">Aktive Projekte ohne geplante Tour — für Team-Anfahrt anhaken.</p>
             {anfahrten.length === 0 && (
-              <div className="text-[#86868b] text-sm py-4 text-center bg-[#f5f5f7] border border-black/10 rounded-xl">Keine offenen Baustellen.</div>
+              <div className="text-sm py-4 text-center bg-green-50 border border-green-200 rounded-xl">
+                  <span className="text-green-700 font-medium">✓ Alle aktiven Baustellen sind verplant.</span>
+                  <span className="block text-[#86868b] mt-1">Neue Baustelle? Projekt im Dashboard auf „aktiv“ setzen — sie erscheint dann hier automatisch.</span>
+                </div>
             )}
             <div className="space-y-2 max-h-[260px] overflow-y-auto pr-1">
               {anfahrten.map((p: any) => {
