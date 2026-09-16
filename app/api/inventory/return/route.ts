@@ -103,9 +103,9 @@ export async function POST(req: NextRequest) {
       }
 
       if (menzeVerlust > 0) {
-        // Bewusst KEINE Bestandsänderung – das Material war schon "draußen"
-        // (Reservierung hat den Bestand bereits verringert), es kommt nur
-        // nicht zurück. Reine Protokollierung für Auswertung/Nachbelastung.
+        // Bewusst KEINE Zentrallager-Änderung – das Material war schon
+        // "draußen", es kommt nur nicht zurück. Reine Protokollierung
+        // für Auswertung/Nachbelastung.
         await fetch(`${url}/rest/v1/inventory_transactions`, {
           method: 'POST', headers,
           body: JSON.stringify({
@@ -115,6 +115,26 @@ export async function POST(req: NextRequest) {
             reference_id: event_id || null,
           }),
         });
+      }
+
+      // Phase 68-B: Baustellenbestand verringern. Beide Mengen (zurueck +
+      // verlust) verlassen die Baustelle physisch. Vorher fehlte diese
+      // Buchung komplett — Material lag nach dem Abbau digital ewig
+      // auf der Baustelle UND im Zentrallager (doppelt).
+      const siteGet = await fetch(
+        `${url}/rest/v1/site_stock?project_id=eq.${project_id}&inventory_id=eq.${inventory_id}&select=id,quantity`,
+        { headers },
+      );
+      if (siteGet.ok) {
+        const siteRows = await siteGet.json();
+        if (siteRows?.length) {
+          const site = siteRows[0];
+          const neueBaustellenMenge = Math.max(0, (site.quantity || 0) - mengeZurueck - menzeVerlust);
+          await fetch(`${url}/rest/v1/site_stock?id=eq.${site.id}`, {
+            method: 'PATCH', headers,
+            body: JSON.stringify({ quantity: neueBaustellenMenge }),
+          });
+        }
       }
 
       ergebnisse.push({ inventory_id, name: artikel.name, unit: artikel.unit, zurueck: menzeZurueck, verlust: menzeVerlust });
