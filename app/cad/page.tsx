@@ -299,6 +299,10 @@ export default function CADPage() {
         warnings: [`Aus CAD-Planung erzeugt (${model.system?.hersteller || ''} ${model.system?.systemName || ''}, ${model.totalAreaM2.toFixed(1)} m²). Preis basiert auf reinen Materialkosten – Arbeitszeit/Marge vor Versand noch prüfen/ergänzen.`],
         tips: [], scaffoldClass: 'CAD-Planung', requiredAnchorCount: 0, requiredLoadDistributionPlates: 0,
         totalAreaM2: model.totalAreaM2,
+        // Phase 81: Gebaeude-Parameter + System mitschicken. Schritt 6 leitet
+        // daraus step2/step3 ab, wenn sie fehlen -> funktioniert auch mit
+        // veraltetem Frontend-Code und rettet Alt-Projekte.
+        building, systemId,
       }
       const res = await fetch('/api/projects', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
