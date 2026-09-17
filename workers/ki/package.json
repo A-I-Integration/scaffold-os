@@ -1,6 +1,9 @@
 {
   "name": "scaffold-os-ki-worker",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "private": true,
-  "description": "SCAFFOLD OS KI-Queue-Worker (Phase 65) - laeuft auf Hetzner"
+  "description": "SCAFFOLD OS KI-Queue-Worker (Phase 68-M: CAD-Pipeline inkl. PDF-Text)",
+  "dependencies": {
+    "pdf-parse": "^1.1.1"
+  }
 }
