@@ -304,7 +304,25 @@ export default function CADPage() {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           name: `CAD-Planung ${customerName}`, adresse: '', customer_id: customerId,
-          data: { step1: { name: customerName, adresse: '', gewerke: ['allgemein'], dauer: '30' }, kiResult, angebotsStatus: 'erstellt' },
+          // Phase 80: Auch step2 (Gebäude) und step3 (Gerüstplanung)
+          // mitschreiben - Schritt 6 liest genau diese und zeigte sonst
+          // alles als '–' an. Werte kommen 1:1 aus dem CAD-Modell.
+          data: {
+            step1: { name: customerName, adresse: '', gewerke: ['allgemein'], dauer: '30' },
+            step2: {
+              laenge: String(building.lengthM || ''), breite: String(building.widthM || ''),
+              hoehe: String(building.heightM || ''), traufhoehe: String(building.eavesHeightM || ''),
+              dachform: building.roofForm ? building.roofForm[0].toUpperCase() + building.roofForm.slice(1) : '',
+              fassade: 'Putz', hindernisse: [], abschnitte: [],
+              dachueberstand: String(building.overhangM || 0.5), durchfahrt: false,
+            },
+            step3: {
+              geruesttyp: 'fassade', system: systemId, customSystem: '',
+              feldlange: '2.5', belag: 'stahl', gelander: true, diagonale: true,
+              fahrbar: false, boden: 'beton',
+            },
+            kiResult, angebotsStatus: 'erstellt',
+          },
           status: 'active',
         }),
       })
