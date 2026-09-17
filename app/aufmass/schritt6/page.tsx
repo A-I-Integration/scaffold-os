@@ -78,7 +78,10 @@ function Schritt6Content() {
   const [showQR, setShowQR] = useState(false);
   const [angebotsStatus, setAngebotsStatus] = useState<'erstellt' | 'versendet' | 'gelesen' | 'angenommen'>('erstellt');
   const [pdfBase64, setPdfBase64] = useState<string | null>(null);
-  const [customerEmail, setCustomerEmail] = useState('');
+  const [customerEmail, setCustomerEmail] = useState('')
+  // Phase 82: E-Mail-Formular standardmäßig zugeklappt (war nach jedem
+  // Speichern sofort sichtbar und hat sich aufgedrängt).
+  const [showEmailForm, setShowEmailForm] = useState(false);
 
   // ═══════════════════════════════════════════════════════════
   // NEU: Angebot-Anpassungen (Skonto, Mietverlängerung, Nachtrag, Sonderrabatt)
@@ -847,8 +850,16 @@ function Schritt6Content() {
                 📄 PDF erzeugen & herunterladen
               </button>
 
-              {/* NEU: E-Mail */}
-              {savedProjectId && kiResult && (
+              {/* NEU: E-Mail (Phase 82: aufklappbar, nicht mehr aufdringlich) */}
+              {savedProjectId && kiResult && !showEmailForm && (
+                <button
+                  onClick={() => setShowEmailForm(true)}
+                  className="w-full rounded-xl bg-black/5 hover:bg-black/10 py-3 font-medium text-sm text-[#1d1d1f] transition-colors"
+                >
+                  📧 Angebot per E-Mail senden…
+                </button>
+              )}
+              {savedProjectId && kiResult && showEmailForm && (
                 <div className="space-y-2 pt-2 border-t border-black/10">
                   <label className="block text-xs text-[#86868b]">E-Mail Kunde</label>
                   <input
@@ -866,7 +877,13 @@ function Schritt6Content() {
                     {emailStatus === 'sending' ? '📧 Wird gesendet...' :
                      emailStatus === 'sent' ? '✅ E-Mail versendet' :
                      emailStatus === 'error' ? '❌ Fehler – erneut versuchen' :
-                     '📧 Angebot per E-Mail senden'}
+                     '📧 Jetzt senden'}
+                  </button>
+                  <button
+                    onClick={() => setShowEmailForm(false)}
+                    className="w-full text-xs text-[#86868b] hover:underline"
+                  >
+                    Abbrechen
                   </button>
                 </div>
               )}
