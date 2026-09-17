@@ -98,6 +98,65 @@ function pruefeUndFiltere(structured, ocrText) {
   if (ocrText) { const det = deterministicFromText(ocrText); for (const k of ['laenge', 'breite', 'hoehe', 'traufhoehe']) if (det[k] != null) structured[k] = det[k]; }
   return verworfen;
 }
+// Phase 73: DXF-Text extrahieren. DXF ist reine Text-Datei; die
+// Beschriftungen stehen in TEXT-/MTEXT-Entitaeten (Group-Codes 1/3).
+// Kein CAD-Parser noetig - unsere deterministischen Muster brauchen
+// nur die Beschriftungs-Strings ("Geruestlaenge: 25.00 m" etc.).
+function extrahiereDxfText(raw) {
+  const lines = raw.split(/\r?\n/);
+  const out = [];
+  for (let i = 0; i < lines.length - 1; i++) {
+    const code = lines[i].trim();
+    if (code === '1' || code === '3') {
+      out.push(lines[i + 1]);
+      i++;
+    }
+  }
+  return out
+    .join('\n')
+    .replace(/\\P/g, '\n')              // MTEXT-Zeilenumbruch
+    .replace(/\{(\\[^;]+;)?|\}/g, '')   // MTEXT-Format-Klammern
+    .replace(/%%[dDcC]/g, '\u00b0')        // DXF-Sonderzeichen
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+// Phase 73: PLY-Punktwolke (z. B. aus dem LiDAR-Aufmass) einlesen und
+// die Begrenzungsbox der Punkte als Laenge x Breite x Hoehe liefern.
+// ASCII-PLY; Binary wird mit klarer Meldung abgelehnt.
+function parsePly(buf) {
+  const headerEnd = buf.indexOf('end_header');
+  if (headerEnd < 0) throw new Error('PLY: ungueltiger Header (end_header fehlt)');
+  const headerStr = buf.subarray(0, headerEnd).toString('latin1');
+  if (!/format\s+ascii\s+1\.0/.test(headerStr)) {
+    throw new Error('PLY: Binary-PLY wird noch nicht unterstuetzt - bitte als ASCII exportieren.');
+  }
+  const vc = headerStr.match(/element\s+vertex\s+(\d+)/);
+  if (!vc) throw new Error('PLY: kein element vertex im Header');
+  const vertexCount = parseInt(vc[1], 10);
+  const props = [];
+  for (const m of headerStr.matchAll(/property\s+\S+\s+(\S+)/g)) props.push(m[1]);
+  const ix = props.indexOf('x'), iy = props.indexOf('y'), iz = props.indexOf('z');
+  if (ix < 0 || iy < 0 || iz < 0) throw new Error('PLY: x/y/z-Properties fehlen');
+  const dataStart = buf.indexOf('\n', headerEnd) + 1;
+  const lines = buf.subarray(dataStart).toString('latin1').split('\n');
+  let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity, minZ = Infinity, maxZ = -Infinity;
+  let gelesen = 0;
+  for (let i = 0; i < lines.length && gelesen < vertexCount; i++) {
+    const parts = lines[i].trim().split(/\s+/);
+    if (parts.length < props.length) continue;
+    const x = parseFloat(parts[ix]), y = parseFloat(parts[iy]), z = parseFloat(parts[iz]);
+    if (isNaN(x) || isNaN(y) || isNaN(z)) continue;
+    gelesen++;
+    if (x < minX) minX = x; if (x > maxX) maxX = x;
+    if (y < minY) minY = y; if (y > maxY) maxY = y;
+    if (z < minZ) minZ = z; if (z > maxZ) maxZ = z;
+  }
+  if (gelesen < Math.min(vertexCount, 10)) throw new Error('PLY: zu wenig Punkte lesbar');
+  const r2 = (v) => Math.round(v * 100) / 100;
+  return { laenge: r2(maxX - minX), breite: r2(maxY - minY), hoehe: r2(maxZ - minZ), punkte: gelesen };
+}
+
 const CAD_PROMPT = (ocrText) => `Du bist ein erfahrener Gerüstbau-Planer. Analysiere diese Grundrisse/Baupläne${ocrText ? ' (Bilder und/oder per OCR extrahierter Plan-Text, siehe unten)' : ''}.
 
 Antworte AUSSCHLIESSLICH als JSON-Objekt mit genau diesen Feldern:
@@ -161,6 +220,33 @@ async function verarbeiteCadAnalyseJob(tenant, job) {
           text = (ocrJson.pages || []).map((p) => p.markdown || p.text || '').join('\n').trim();
         }
         if (text) ocrText += (ocrText ? '\n' : '') + text;
+      }
+    } else if (f.storage_path.toLowerCase().endsWith('.dxf')) {
+      // Phase 73: DXF -> Beschriftungen extrahieren, dann derselbe Weg
+      // wie OCR-Text (deterministisch + Prompt mit Fundament).
+      const dl = await fetch(url);
+      if (dl.ok) {
+        const text = extrahiereDxfText(Buffer.from(await dl.arrayBuffer()).toString('latin1'));
+        if (text) ocrText += (ocrText ? '\\n' : '') + text;
+      }
+    } else if (f.storage_path.toLowerCase().endsWith('.ply')) {
+      // Phase 73: PLY-Punktwolke -> Begrenzungsbox = Masse. Direkte
+      // Antwort, keine KI noetig.
+      const dl = await fetch(url);
+      if (dl.ok) {
+        const dims = parsePly(Buffer.from(await dl.arrayBuffer()));
+        const antwort = {
+          laenge: dims.laenge, breite: dims.breite, hoehe: dims.hoehe,
+          hoeheGeschaetzt: true, traufhoehe: null, dachform: null, geschosse: null,
+          zusammenfassung: `Aus Punktwolke (PLY) berechnet: ${dims.laenge} x ${dims.breite} x ${dims.hoehe} m (Begrenzungsbox ueber ${dims.punkte} Punkten).`,
+          verworfen: [], ohneKi: true,
+        };
+        await fetch(`${tenant.supabaseUrl}/rest/v1/ki_jobs?id=eq.${job.id}`, {
+          method: 'PATCH', headers: { ...restHeaders(tenant.serviceKey), Prefer: 'return=minimal' },
+          body: JSON.stringify({ status: 'done', result: { antwort }, versuche: job.versuche + 1, fertig_am: new Date().toISOString() }),
+        });
+        console.log(`[ki-worker] ${tenant.name}: Job ${job.id} (cad-analyse) fertig (PLY)`);
+        return;
       }
     } else if ((f.file_type || '').startsWith('image/')) {
       // KEINE Tesseract-OCR mehr (war der 3-Minuten-Haenger): Die
