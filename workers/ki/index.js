@@ -139,18 +139,46 @@ function parsePly(buf) {
   const ix = props.indexOf('x'), iy = props.indexOf('y'), iz = props.indexOf('z');
   if (ix < 0 || iy < 0 || iz < 0) throw new Error('PLY: x/y/z-Properties fehlen');
   const dataStart = buf.indexOf('\n', headerEnd) + 1;
-  const lines = buf.subarray(dataStart).toString('latin1').split('\n');
+  const isAscii = /format\s+ascii\s+1\.0/.test(headerStr);
+  const isBinLE = /format\s+binary_little_endian\s+1\.0/.test(headerStr);
+  const isBinBE = /format\s+binary_big_endian\s+1\.0/.test(headerStr);
+  if (!isAscii && !isBinLE && !isBinBE) throw new Error('PLY: Format nicht unterstuetzt (weder ASCII noch Binary 1.0).');
   let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity, minZ = Infinity, maxZ = -Infinity;
   let gelesen = 0;
-  for (let i = 0; i < lines.length && gelesen < vertexCount; i++) {
-    const parts = lines[i].trim().split(/\s+/);
-    if (parts.length < props.length) continue;
-    const x = parseFloat(parts[ix]), y = parseFloat(parts[iy]), z = parseFloat(parts[iz]);
-    if (isNaN(x) || isNaN(y) || isNaN(z)) continue;
-    gelesen++;
-    if (x < minX) minX = x; if (x > maxX) maxX = x;
-    if (y < minY) minY = y; if (y > maxY) maxY = y;
-    if (z < minZ) minZ = z; if (z > maxZ) maxZ = z;
+  if (isAscii) {
+    const lines = buf.subarray(dataStart).toString('latin1').split('\n');
+    for (let i = 0; i < lines.length && gelesen < vertexCount; i++) {
+      const parts = lines[i].trim().split(/\s+/);
+      if (parts.length < props.length) continue;
+      const x = parseFloat(parts[ix]), y = parseFloat(parts[iy]), z = parseFloat(parts[iz]);
+      if (isNaN(x) || isNaN(y) || isNaN(z)) continue;
+      gelesen++;
+      if (x < minX) minX = x; if (x > maxX) maxX = x;
+      if (y < minY) minY = y; if (y > maxY) maxY = y;
+      if (z < minZ) minZ = z; if (z > maxZ) maxZ = z;
+    }
+  } else {
+    // Phase 76: Binary-PLY (little/big endian). Datensatz-Typen und
+    // Byte-Offsets aus dem Header bestimmen - funktioniert mit
+    // zusaetzlichen Properties (intensity, classification u.a.).
+    const SIZES = { int8: 1, uint8: 1, char: 1, uchar: 1, int16: 2, uint16: 2, short: 2, ushort: 2, int32: 4, uint32: 4, int: 4, uint: 4, float32: 4, float: 4, float64: 8, double: 8 };
+    const sizeOf = (t) => SIZES[t] || 4;
+    const stride = props.reduce((s, p) => s + sizeOf(p.type), 0);
+    const off = (idx) => props.slice(0, idx).reduce((s, p) => s + sizeOf(p.type), 0);
+    const ox = off(ix), oy = off(iy), oz = off(iz);
+    const read = isBinLE
+      ? { f: (o) => buf.readFloatLE(o) }
+      : { f: (o) => buf.readFloatBE(o) };
+    for (let i = 0; i < vertexCount; i++) {
+      const o = dataStart + i * stride;
+      if (o + stride > buf.length) break;
+      const x = read.f(o + ox), y = read.f(o + oy), z = read.f(o + oz);
+      if (isNaN(x) || isNaN(y) || isNaN(z)) continue;
+      gelesen++;
+      if (x < minX) minX = x; if (x > maxX) maxX = x;
+      if (y < minY) minY = y; if (y > maxY) maxY = y;
+      if (z < minZ) minZ = z; if (z > maxZ) maxZ = z;
+    }
   }
   if (gelesen < Math.min(vertexCount, 10)) throw new Error('PLY: zu wenig Punkte lesbar');
   const r2 = (v) => Math.round(v * 100) / 100;
