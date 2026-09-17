@@ -31,16 +31,19 @@ export default function BuildingForm({ building, systemId, onChange, onSystemCha
   // durchschleusen. Die KI (Vision) kann nur Pixel/PDF lesen, keine
   // CAD-Vektordaten; vorher schlug die Analyse dann verwirrend fehl.
   const ERLAUBT = ['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'application/pdf'];
-  const DXF_ARTEN = ['.dxf', '.dwg', '.dwt', '.ifc', '.step', '.stp', '.igs'];
+  // Phase 73: DXF (Beschriftungen werden direkt geparst) und PLY
+  // (Punktwolke -> Begrenzungsbox) werden jetzt unterstuetzt.
+  const NEU_ERLAUBT = ['.dxf', '.ply'];
+  const DXF_ARTEN = ['.dwg', '.dwt', '.ifc', '.step', '.stp', '.igs']; // .dfx entfaellt, ist jetzt erlaubt
 
   async function handlePlanUpload(file: File) {
     setAnalyseHinweis(null);
     const ext = '.' + (file.name.split('.').pop() || '').toLowerCase();
-    if (!ERLAUBT.includes(file.type) || DXF_ARTEN.includes(ext)) {
+    if ((!ERLAUBT.includes(file.type) && !NEU_ERLAUBT.includes(ext)) || DXF_ARTEN.includes(ext)) {
       setAnalyseHinweis(
         DXF_ARTEN.includes(ext)
-          ? `❌ ${ext.toUpperCase()}-Dateien werden noch nicht unterstützt. Bitte im CAD-Programm als PDF exportieren (z. B. AutoCAD: Plot → PDF) oder einen Screenshot vom Grundriss hochladen. Erlaubt: JPG, PNG, Webp, PDF.`
-          : `❌ Dateiformat nicht unterstützt (erkannt: ${file.type || ext}). Erlaubt: JPG, PNG, Webp, PDF.`
+          ? `❌ ${ext.toUpperCase()}-Dateien werden nicht unterstützt. Bitte als DXF oder PDF exportieren. Erlaubt: JPG, PNG, Webp, PDF, DXF, PLY.`
+          : `❌ Dateiformat nicht unterstützt (erkannt: ${file.type || ext}). Erlaubt: JPG, PNG, Webp, PDF, DXF, PLY.`
       );
       return;
     }
@@ -143,7 +146,7 @@ export default function BuildingForm({ building, systemId, onChange, onSystemCha
             <label className={`flex flex-col items-center justify-center gap-1 rounded-xl border-2 border-dashed p-4 text-center cursor-pointer transition-colors ${analyseLaeuft ? 'border-black/10 bg-black/5' : 'border-[#e8590c]/40 hover:bg-[#fff4ed]'}`}>
               <span className='text-xl'>{analyseLaeuft ? '⏳' : '📐'}</span>
               <span className='text-xs font-semibold text-[#424245]'>{analyseLaeuft ? 'KI wertet aus…' : 'Grundriss/Foto hochladen (KI-Auswertung)'}</span>
-              <span className='text-[10px] text-[#86868b]'>Erlaubt: JPG, PNG, Webp, PDF. DXF/DWG: bitte als PDF exportieren. KI-Vorschlag – Maße werden nur übernommen, wo im Plan eindeutig belegt; bitte vor dem Angebot prüfen</span>
+              <span className='text-[10px] text-[#86868b]'>Erlaubt: JPG, PNG, Webp, PDF, DXF (Beschriftungen werden gelesen), PLY (Punktwolke). DWG/IFC: bitte als DXF/PDF exportieren. Maße werden nur übernommen, wo eindeutig belegt; bitte prüfen</span>
               <input type='file' accept='image/*,application/pdf' className='hidden' disabled={analyseLaeuft}
                 onChange={(e) => { const f = e.target.files?.[0]; if (f) handlePlanUpload(f); e.target.value = '' }} />
             </label>
