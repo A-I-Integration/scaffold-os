@@ -77,18 +77,27 @@ export default function CADPage() {
   })
   const [kunden, setKunden] = useState<{ id: string; name: string }[]>([])
   const [hoursPerSqm, setHoursPerSqm] = useState(2.0)
+  // Phase 68-G: Auto-Generierung des Modells. Nach 'Neu starten' auf
+  // false gesetzt -> Leinwand bleibt leer, bis der Nutzer Maße ändert
+  // oder 'Gerüst neu berechnen' wählt. Behebt: Reset baut Haus sofort
+  // wieder auf (Effekt unten generierte bei model=null sofort neu).
+  const [autoGenerate, setAutoGenerate] = useState(true)
 
   // Phase 68-F: 'Neu starten' — setzt ALLES auf den Anfangszustand
   // zurück (Maße, System, erzeugtes Modell, Auswahl, Stunden).
   // Bestehende Projekte in der DB bleiben unberührt — es geht nur
   // um den Arbeitsstand in dieser CAD-Sitzung.
   function handleNeuStarten() {
-    if (!window.confirm('Wirklich neu starten?\n\nAlle Maße, das Gerüst-Modell und die Einstellungen werden auf den Anfangszustand zurückgesetzt. Bereits gespeicherte Projekte bleiben unverändert.')) return;
+    if (!window.confirm('Wirklich neu starten?\n\nDas 3D-Modell wird geleert und alle Maße auf den Anfangszustand gesetzt. Das Gerüst erscheint erst wieder, wenn du Maße änderst oder „Gerüst neu berechnen“ wählst. Bereits gespeicherte Projekte bleiben unverändert.')) return;
     setBuilding(DEFAULT_BUILDING);
     setSystemId('layher-allround');
     setModel(null);
     setSelectedComponent(null);
     setHoursPerSqm(2.0);
+    // Phase 68-G: Auto-Generierung sperren -> Leinwand bleibt leer,
+    // bis der Nutzer erneut handelt (sonst baut der Effekt unten das
+    // Haus sofort wieder auf und der Reset wirkt wirkungslos).
+    setAutoGenerate(false);
   }
 
   // Echte Kunden + Kalkulations-Grundlagen laden
@@ -132,8 +141,8 @@ export default function CADPage() {
   }, [building, systemId])
 
   useEffect(() => {
-    if (!model) generate()
-  }, [generate, model])
+    if (!model && autoGenerate) generate()
+  }, [generate, model, autoGenerate])
 
   const ruleResults = useMemo(() => {
     if (!model) return { errors: [], warnings: [], infos: [] }
@@ -339,7 +348,7 @@ export default function CADPage() {
       </div>
       <div className='flex-1 flex overflow-hidden'>
         <div className='w-72 shrink-0 overflow-y-auto'>
-          <BuildingForm building={building} systemId={systemId} onChange={setBuilding} onSystemChange={setSystemId} onGenerate={generate} warnings={allWarnings} />
+          <BuildingForm building={building} systemId={systemId} onChange={(b) => { setAutoGenerate(true); setBuilding(b); }} onSystemChange={(s) => { setAutoGenerate(true); setSystemId(s); }} onGenerate={() => { setAutoGenerate(true); generate(); }} warnings={allWarnings} />
         </div>
         <div className='flex-1 flex flex-col min-w-0'>
           <div className='flex items-center justify-between px-4 py-2 bg-white/50 border-b border-black/5'>
@@ -364,7 +373,19 @@ export default function CADPage() {
             {viewMode === '3d' && model && (
               <Scaffold3D model={model} features={features} showBuilding={showBuilding} showScaffold={showScaffold} showDimensions={showDimensions} selectedComponent={selectedComponent} onSelectComponent={setSelectedComponent} visibleTypes={visibleTypes} viewMode={viewAngle} onCanvasReady={(c) => { canvasRef.current = c }} />
             )}
+            {/* Phase 68-G: Leerzustand nach 'Neu starten' */}
+            {viewMode === '3d' && !model && (
+              <div className='h-full flex flex-col items-center justify-center gap-3 text-center'>
+                <p className='text-sm text-[#86868b] max-w-xs'>Kein Modell. Maße links eingeben oder Grundriss hochladen – dann „Gerüst neu berechnen“.</p>
+                <button onClick={() => { setAutoGenerate(true); generate(); }} className='px-4 py-2 text-sm font-medium rounded-xl bg-[#0071e3] text-white hover:bg-[#0077ed]'>Gerüst neu berechnen</button>
+              </div>
+            )}
             {viewMode === '2d' && model && <Scaffold2D model={model} />}
+            {viewMode === '2d' && !model && (
+              <div className='h-full flex items-center justify-center'>
+                <p className='text-sm text-[#86868b]'>Kein Modell – zuerst „Gerüst neu berechnen“.</p>
+              </div>
+            )}
           </div>
           <div className='px-4 py-2 bg-white/50 border-t border-black/5 flex gap-2 flex-wrap max-h-24 overflow-y-auto'>
             {Object.entries(visibleTypes).map(([type, visible]) => (
