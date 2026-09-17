@@ -29,12 +29,12 @@ export function deterministicFromText(text: string): Record<string, number | str
     found.breite = Math.min(a, b);
   }
 
-  const th = text.match(/traufhöhe[^\d]{0,15}(\d{1,2}[.,]\d{1,2})/i)
+  const th = text.match(/traufh(?:ö|oe)he[^\d]{0,15}(\d{1,2}[.,]\d{1,2})/i)
     || text.match(/traufe\s*[=:+]?\s*(\d{1,2}[.,]\d{1,2})/i)
     || text.match(/(?:^|\s)TH\s*[=:+]\s*(\d{1,2}[.,]\d{1,2})/m);
   if (th) found.traufhoehe = parsePlanNumber(th[1]);
 
-  const fh = text.match(/firsthöhe[^\d]{0,15}(\d{1,2}[.,]\d{1,2})/i)
+  const fh = text.match(/firsth(?:ö|oe)he[^\d]{0,15}(\d{1,2}[.,]\d{1,2})/i)
     || text.match(/first\s*[=:+]\s*(\d{1,2}[.,]\d{1,2})/i)
     || text.match(/(?:^|\s)FH\s*[=:+]\s*(\d{1,2}[.,]\d{1,2})/m);
   if (fh) found.hoehe = parsePlanNumber(fh[1]);
@@ -45,7 +45,7 @@ export function deterministicFromText(text: string): Record<string, number | str
   // Phase 68-I: GERÜSTPLAN-/FASSADENZEICHNUNGS-Muster. Ein Gerüstplan
   // (Seitenansicht) kennt keine Gebäudetiefe; die horizontale Ausdehnung
   // heißt dort "Gerüstlänge"/"Gerüstbreite" oder "X,XX m gesamt".
-  const gl = text.match(/gerüst(?:länge|breite)[^\d]{0,15}(\d{1,3}[.,]\d{1,2})/i)
+  const gl = text.match(/ger(?:ü|ue)st(?:l(?:ä|ae)nge|breite)[^\d]{0,15}(\d{1,3}[.,]\d{1,2})/i)
     || text.match(/(\d{1,3}[.,]\d{1,2})\s*m\s+gesamt/i);
   if (gl && !found.laenge) {
     const v = parsePlanNumber(gl[1]);
@@ -54,8 +54,8 @@ export function deterministicFromText(text: string): Record<string, number | str
     if (v >= 5) found.laenge = v;
   }
 
-  const gho = text.match(/gerüsthöhe[^\d]{0,15}(\d{1,2}[.,]\d{1,2})/i)
-    || text.match(/gesamthöhe[^\d]{0,15}(\d{1,2}[.,]\d{1,2})/i);
+  const gho = text.match(/ger(?:ü|ue)sth(?:ö|oe)he[^\d]{0,15}(\d{1,2}[.,]\d{1,2})/i)
+    || text.match(/gesamth(?:ö|oe)he[^\d]{0,15}(\d{1,2}[.,]\d{1,2})/i);
   if (gho && !found.hoehe) found.hoehe = parsePlanNumber(gho[1]);
 
   return found;

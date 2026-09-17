@@ -61,18 +61,18 @@ function deterministicFromText(text) {
   const found = {};
   const hm = text.match(/(?:haus(?:ma[ßs])?|aussenma[ßs]|außenma[ßs]|gebaeude(?:ma[ßs])?|gebäude(?:ma[ßs])?|grundriss)\s*:?\s*(\d{1,3}[.,]\d{1,2})\s*[mx×*]\s*(\d{1,3}[.,]\d{1,2})/i);
   if (hm) { found.laenge = parsePlanNumber(hm[1]); found.breite = parsePlanNumber(hm[2]); }
-  const trauf = text.match(/traufh[oö]he[^\d]{0,15}(\d{1,2}[.,]\d{1,2})/i);
+  const trauf = text.match(/traufh(?:[oö]|oe)he[^\d]{0,15}(\d{1,2}[.,]\d{1,2})/i);
   if (trauf) found.traufhoehe = parsePlanNumber(trauf[1]);
-  const first = text.match(/firsth[oö]he[^\d]{0,15}(\d{1,2}[.,]\d{1,2})/i);
+  const first = text.match(/firsth(?:[oö]|oe)he[^\d]{0,15}(\d{1,2}[.,]\d{1,2})/i);
   if (first && !found.hoehe) found.hoehe = parsePlanNumber(first[1]);
   const dach = text.match(/\b(Satteldach|Flachdach|Pultdach|Walmdach|Mansarddach|Zeltdach)\b/i);
   if (dach) found.dachform = dach[1][0].toUpperCase() + dach[1].slice(1).toLowerCase();
   // Phase 68-I: GERÜSTPLAN-/FASSADENZEICHNUNGS-Muster
-  const gl = text.match(/gerüst(?:länge|breite)[^\d]{0,15}(\d{1,3}[.,]\d{1,2})/i)
+  const gl = text.match(/ger(?:ü|ue)st(?:l(?:ä|ae)nge|breite)[^\d]{0,15}(\d{1,3}[.,]\d{1,2})/i)
     || text.match(/(\d{1,3}[.,]\d{1,2})\s*m\s+gesamt/i);
   if (gl && !found.laenge) { const v = parsePlanNumber(gl[1]); if (v !== null && v >= 5) found.laenge = v; }
-  const gho = text.match(/gerüsthöhe[^\d]{0,15}(\d{1,2}[.,]\d{1,2})/i)
-    || text.match(/gesamthöhe[^\d]{0,15}(\d{1,2}[.,]\d{1,2})/i);
+  const gho = text.match(/ger(?:ü|ue)sth(?:o|oe)he[^\d]{0,15}(\d{1,2}[.,]\d{1,2})/i)
+    || text.match(/gesamth(?:o|oe)he[^\d]{0,15}(\d{1,2}[.,]\d{1,2})/i);
   if (gho && !found.hoehe) found.hoehe = parsePlanNumber(gho[1]);
   return found;
 }
