@@ -54,12 +54,15 @@ const COMPONENT_LABELS: Record<string, string> = {
 export default function CADPage() {
   const router = useRouter()
   const [viewMode, setViewMode] = useState<ViewMode>('3d')
-  const [building, setBuilding] = useState<BuildingParams>({
+  // Phase 68-F: Anfangs-Zustand als Konstante, damit 'Neu starten'
+  // exakt diesen Stand wiederherstellen kann.
+  const DEFAULT_BUILDING: BuildingParams = {
     lengthM: 18.4, widthM: 8.0, heightM: 12.0, eavesHeightM: 10.0, roofHeightM: 2.5,
     roofForm: 'satteldach', floors: 3, floorHeightsM: [4.0, 4.0, 4.0],
     windowCount: 12, doorCount: 2, balconyCount: 2, overhangM: 0.5,
     sides: ['front'], setbackM: 0,
-  })
+  }
+  const [building, setBuilding] = useState<BuildingParams>(DEFAULT_BUILDING)
   const [systemId, setSystemId] = useState<string>('layher-allround')
   const [model, setModel] = useState<CADModel | null>(null)
   const [selectedComponent, setSelectedComponent] = useState<string | null>(null)
@@ -74,6 +77,19 @@ export default function CADPage() {
   })
   const [kunden, setKunden] = useState<{ id: string; name: string }[]>([])
   const [hoursPerSqm, setHoursPerSqm] = useState(2.0)
+
+  // Phase 68-F: 'Neu starten' — setzt ALLES auf den Anfangszustand
+  // zurück (Maße, System, erzeugtes Modell, Auswahl, Stunden).
+  // Bestehende Projekte in der DB bleiben unberührt — es geht nur
+  // um den Arbeitsstand in dieser CAD-Sitzung.
+  function handleNeuStarten() {
+    if (!window.confirm('Wirklich neu starten?\n\nAlle Maße, das Gerüst-Modell und die Einstellungen werden auf den Anfangszustand zurückgesetzt. Bereits gespeicherte Projekte bleiben unverändert.')) return;
+    setBuilding(DEFAULT_BUILDING);
+    setSystemId('layher-allround');
+    setModel(null);
+    setSelectedComponent(null);
+    setHoursPerSqm(2.0);
+  }
 
   // Echte Kunden + Kalkulations-Grundlagen laden
   useEffect(() => {
@@ -311,6 +327,10 @@ export default function CADPage() {
           </p>
         </div>
         <div className='flex items-center gap-2'>
+          <button onClick={handleNeuStarten} title='Alle Eingaben zurücksetzen'
+            className='px-3 py-1.5 text-xs font-medium rounded-lg border border-red-200 text-red-600 hover:bg-red-50 transition-colors'>
+            ↺ Neu starten
+          </button>
           <div className='flex bg-black/5 rounded-lg p-0.5'>
             <button onClick={() => setViewMode('3d')} className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${viewMode === '3d' ? 'bg-white text-[#1d1d1f] shadow-sm' : 'text-[#86868b]'}`}>3D</button>
             <button onClick={() => setViewMode('2d')} className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${viewMode === '2d' ? 'bg-white text-[#1d1d1f] shadow-sm' : 'text-[#86868b]'}`}>2D</button>
