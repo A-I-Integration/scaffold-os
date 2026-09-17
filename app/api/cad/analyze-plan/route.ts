@@ -135,7 +135,16 @@ STRENGE REGELN:
 1. JEDER Zahlenwert braucht einen Eintrag in "belege" (wörtliches Zitat), sonst null.
 2. NIEMALS RECHNEN: keine Addition von Bemaßungsketten, keine Schätzung.
 3. laenge/breite = Gesamt-Außenmaß, niemals Innenraum-Maße.
-4. Kein Text außerhalb des JSON.${ocrText ? `\n\nEXTRAHIERTER PLAN-TEXT (OCR):${ocrText}` : ''}`;
+4. Kein Text außerhalb des JSON.
+5. Wenn ein Wert im Plan NICHT steht: immer null liefern – niemals 0.
+
+SPEZIALFALL GERÜSTPLAN / FASSADENZEICHNUNG (Seitenansicht statt Grundriss):
+- Horizontale Ausdehnung: "Gerüstlänge", "Gerüstbreite: X m", "X,XX m gesamt"
+  -> laenge. Feldweite und Feldanzahl sind NUR Detailmaße – sie NICHT
+  als laenge verwenden, außer der Gesamtwert ist vermaßt.
+- Vertikale Ausdehnung: "Gerüsthöhe", "X,XX m Gesamthöhe" -> hoehe.
+- Gebäudebreite/Tiefe ist in einer Fassadenansicht meist NICHT erkennbar:
+  dann breite: null liefern (korrekt – nicht 0, nicht raten).${ocrText ? `\n\nEXTRAHIERTER PLAN-TEXT (OCR):${ocrText}` : ''}`;
 
     const content: any[] = [{ type: 'text', text: prompt }];
     for (const url of imageUrls) content.push({ type: 'image_url', image_url: { url } });

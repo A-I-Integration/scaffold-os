@@ -42,6 +42,22 @@ export function deterministicFromText(text: string): Record<string, number | str
   const dach = text.match(/\b(Satteldach|Flachdach|Pultdach|Walmdach|Mansarddach|Zeltdach)\b/i);
   if (dach) found.dachform = dach[1][0].toUpperCase() + dach[1].slice(1).toLowerCase();
 
+  // Phase 68-I: GERÜSTPLAN-/FASSADENZEICHNUNGS-Muster. Ein Gerüstplan
+  // (Seitenansicht) kennt keine Gebäudetiefe; die horizontale Ausdehnung
+  // heißt dort "Gerüstlänge"/"Gerüstbreite" oder "X,XX m gesamt".
+  const gl = text.match(/gerüst(?:länge|breite)[^\d]{0,15}(\d{1,3}[.,]\d{1,2})/i)
+    || text.match(/(\d{1,3}[.,]\d{1,2})\s*m\s+gesamt/i);
+  if (gl && !found.laenge) {
+    const v = parsePlanNumber(gl[1]);
+    // Horizontale Ausdehnung eines Gerüsts ist praktisch immer >= 5 m;
+    // kleinere Werte sind eher Tiefe/Wandabstand und werden ignoriert.
+    if (v >= 5) found.laenge = v;
+  }
+
+  const gho = text.match(/gerüsthöhe[^\d]{0,15}(\d{1,2}[.,]\d{1,2})/i)
+    || text.match(/gesamthöhe[^\d]{0,15}(\d{1,2}[.,]\d{1,2})/i);
+  if (gho && !found.hoehe) found.hoehe = parsePlanNumber(gho[1]);
+
   return found;
 }
 
