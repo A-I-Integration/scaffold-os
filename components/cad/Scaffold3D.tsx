@@ -14,7 +14,7 @@
 
 import { useMemo, useState, useRef, useEffect, useCallback, memo } from 'react'
 import { Canvas, useThree, useFrame } from '@react-three/fiber'
-import { OrbitControls, Grid, Text, Sky, AdaptiveDpr, AdaptiveEvents, Environment } from '@react-three/drei'
+import { OrbitControls, Grid, Text, Sky, AdaptiveDpr, AdaptiveEvents, Environment, ContactShadows } from '@react-three/drei'
 import * as THREE from 'three'
 import { CADModel, ScaffoldComponent3D, BuildingFeature3D, berechneGebaeudeSegmente } from '@/lib/calculations/cad-engine'
 
@@ -369,7 +369,7 @@ function Building3D({
           <group key={i} position={[seg.mitteX, 0, seg.mitteZ]} rotation={[0, seg.rotationYRad, 0]}>
             <mesh position={[0, seg.hoeheM / 2, 0]} castShadow receiveShadow>
               <boxGeometry args={[seg.laengeM, seg.hoeheM, w]} />
-              <meshStandardMaterial color="#e6dfd3" roughness={0.85} />
+              <meshStandardMaterial color="#e6dfd3" roughness={0.9} map={getPutzTex()} bumpMap={getPutzTex()} bumpScale={0.12} />
             </mesh>
             {/* NEU: Dach je Abschnitt – eigene Dachform, falls angegeben,
                 sonst die globale Dachform des Gebäudes. Vorher hatte ein
@@ -400,7 +400,7 @@ function Building3D({
       {/* Baukörper */}
       <mesh position={[0, heightM / 2, 0]} castShadow receiveShadow>
         <boxGeometry args={[lengthM, heightM, w]} />
-        <meshStandardMaterial color="#e6dfd3" roughness={0.85} />
+        <meshStandardMaterial color="#e6dfd3" roughness={0.9} map={getPutzTex()} bumpMap={getPutzTex()} bumpScale={0.12} />
       </mesh>
 
       {/* Fenster / Türen / Balkone */}
@@ -587,6 +587,109 @@ function ShadowFreeze({ modelKey }: { modelKey: string }) {
 }
 
 // ═══════════════════════════════════════════════════════════
+// Phase 70 (CTO Visual-Upgrade):
+// 1. AutoFraming – Kamera richtet sich am Modell aus: 5-m-Häuschen
+//    und 60-m-Halle fuellen den Ausschnitt gleich gut (vorher: fixe
+//    Ecke -> Modell klein in der Bildmitte-ferne).
+// 2. GroundingShadow – weicher Kontaktschatten am Boden: Gerüst und
+//    Gebäude STEHEN statt zu schweben.
+// 3. Putz-Textur – prozedurale Oberfläche (Canvas-Noise, kein Asset)
+//    statt einfarbiger Plastik-Wand.
+// ═══════════════════════════════════════════════════════════
+
+// Feiner Putz-Noise (Canvas-generiert, lazily, SSR-sicher).
+let putzTexCache: THREE.CanvasTexture | null = null
+function getPutzTex(): THREE.CanvasTexture | null {
+  if (typeof window === 'undefined') return null // SSR: erst clientseitig erzeugen
+  if (!putzTexCache) {
+    const size = 256
+    const canvas = document.createElement('canvas')
+    canvas.width = canvas.height = size
+    const ctx = canvas.getContext('2d')!
+    ctx.fillStyle = '#e6dfd3'
+    ctx.fillRect(0, 0, size, size)
+    const img = ctx.getImageData(0, 0, size, size)
+    for (let i = 0; i < img.data.length; i += 4) {
+      const n = (Math.random() - 0.5) * 16
+      img.data[i] += n
+      img.data[i + 1] += n
+      img.data[i + 2] += n
+    }
+    ctx.putImageData(img, 0, 0)
+    putzTexCache = new THREE.CanvasTexture(canvas)
+    putzTexCache.wrapS = putzTexCache.wrapT = THREE.RepeatWrapping
+    putzTexCache.repeat.set(3, 2)
+  }
+  return putzTexCache
+}
+
+function AutoFraming({ targetRef, modelKey }: { targetRef: { current: THREE.Group | null }; modelKey: string }) {
+  const camera = useThree((s) => s.camera)
+  const controls = useThree((s) => s.controls) as any
+  const invalidate = useThree((s) => s.invalidate)
+  useEffect(() => {
+    const id = requestAnimationFrame(() => {
+      const target = targetRef.current
+      if (!target) return
+      const box = new THREE.Box3().setFromObject(target, true)
+      if (box.isEmpty()) return
+      const sphere = box.getBoundingSphere(new THREE.Sphere())
+      const center = sphere.center
+      const radius = Math.max(sphere.radius, 1)
+      const cam = camera as THREE.PerspectiveCamera
+      const fitDist = (radius / Math.sin((cam.fov * Math.PI) / 360)) * 1.12
+      camera.position.set(center.x + fitDist * 0.72, center.y + fitDist * 0.45, center.z + fitDist * 0.72)
+      cam.near = Math.max(0.1, radius / 200)
+      cam.far = Math.max(400, radius * 60)
+      cam.updateProjectionMatrix()
+      if (controls) {
+        controls.target.copy(center)
+        controls.update()
+      }
+      invalidate()
+    })
+    return () => cancelAnimationFrame(id)
+  }, [modelKey, targetRef, camera, controls, invalidate])
+  return null
+}
+
+function GroundingShadow({ targetRef, modelKey }: { targetRef: { current: THREE.Group | null }; modelKey: string }) {
+  const invalidate = useThree((s) => s.invalidate)
+  const [cfg, setCfg] = useState<{ pos: [number, number, number]; scale: number; far: number } | null>(null)
+  useEffect(() => {
+    const id = requestAnimationFrame(() => {
+      const target = targetRef.current
+      if (!target) return
+      const box = new THREE.Box3().setFromObject(target, true)
+      if (box.isEmpty()) return
+      const c = box.getCenter(new THREE.Vector3())
+      const size = box.getSize(new THREE.Vector3())
+      setCfg({
+        pos: [c.x, 0.02, c.z],
+        scale: Math.max(size.x, size.z) * 1.5 + 8,
+        far: Math.max(size.y * 1.4, 6),
+      })
+      invalidate()
+    })
+    return () => cancelAnimationFrame(id)
+  }, [modelKey, targetRef, invalidate])
+  if (!cfg) return null
+  return (
+    <ContactShadows
+      key={modelKey}
+      position={cfg.pos}
+      scale={cfg.scale}
+      far={cfg.far}
+      opacity={0.5}
+      blur={2.4}
+      resolution={512}
+      color="#16222e"
+      frames={1}
+    />
+  )
+}
+
+// ═══════════════════════════════════════════════════════════
 // HAUPT-SZENE
 // ═══════════════════════════════════════════════════════════
 // NEU: Brücken-Zugangsgerüst (Marktvergleich, "Brücken" – nur das
@@ -744,6 +847,11 @@ function Scaffold3D({
   const cameraDistance =
     Math.max(model.building.lengthM, model.building.heightM) * 2 + 8
 
+  const contentRef = useRef<THREE.Group>(null)
+  const modelKey = useMemo(
+    () => `${model.building.lengthM}x${model.building.widthM}x${model.building.heightM}:${model.components3D.length}`,
+    [model],
+  )
   const cameraConfig = useMemo(
     () => ({
       position: [cameraDistance, cameraDistance * 0.6, cameraDistance] as [number, number, number],
@@ -764,18 +872,22 @@ function Scaffold3D({
       >
         <AdaptiveDpr pixelated />
         <AdaptiveEvents />
-        <Scene
-          model={model}
-          features={features}
-          showBuilding={showBuilding}
-          showScaffold={showScaffold}
-          showDimensions={showDimensions}
-          selectedComponent={selectedComponent}
-          onSelectComponent={onSelectComponent}
-          visibleTypes={visibleTypes}
-          viewMode={viewMode}
-          bridgeMode={bridgeMode}
-        />
+        <group ref={contentRef}>
+          <Scene
+            model={model}
+            features={features}
+            showBuilding={showBuilding}
+            showScaffold={showScaffold}
+            showDimensions={showDimensions}
+            selectedComponent={selectedComponent}
+            onSelectComponent={onSelectComponent}
+            visibleTypes={visibleTypes}
+            viewMode={viewMode}
+            bridgeMode={bridgeMode}
+          />
+        </group>
+        <AutoFraming targetRef={contentRef} modelKey={modelKey} />
+        <GroundingShadow targetRef={contentRef} modelKey={modelKey} />
         <Grid
           position={[0, -0.01, 0]}
           args={[80, 80]}
