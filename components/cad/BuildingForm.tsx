@@ -147,7 +147,13 @@ export default function BuildingForm({ building, systemId, onChange, onSystemCha
               <span className='text-xl'>{analyseLaeuft ? '⏳' : '📐'}</span>
               <span className='text-xs font-semibold text-[#424245]'>{analyseLaeuft ? 'KI wertet aus…' : 'Grundriss/Foto hochladen (KI-Auswertung)'}</span>
               <span className='text-[10px] text-[#86868b]'>Erlaubt: JPG, PNG, Webp, PDF, DXF (Beschriftungen werden gelesen), PLY (Punktwolke). DWG/IFC: bitte als DXF/PDF exportieren. Maße werden nur übernommen, wo eindeutig belegt; bitte prüfen</span>
-              <input type='file' accept='image/*,application/pdf,.dxf,.ply' className='hidden' disabled={analyseLaeuft}
+              {/* Phase 75: 'accept' komplett entfernt. Der macOS-Dialog hat
+                    DXF/PLY trotz Eintrag im accept-Attribut ausgegraut
+                    (Safari-Filter + Cache). Jetzt zeigt der Dialog ALLE
+                    Dateien an - die erlaubten Typen entscheidet allein
+                    unsere Validierung direkt darunter (klare deutsche
+                    Meldung bei unbekanntem Format). */}
+              <input type='file' className='hidden' disabled={analyseLaeuft}
                 onChange={(e) => { const f = e.target.files?.[0]; if (f) handlePlanUpload(f); e.target.value = '' }} />
             </label>
             {analyseHinweis && (
