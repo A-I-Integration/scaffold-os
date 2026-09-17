@@ -67,6 +67,9 @@ function deterministicFromText(text) {
   if (first && !found.hoehe) found.hoehe = parsePlanNumber(first[1]);
   const dach = text.match(/\b(Satteldach|Flachdach|Pultdach|Walmdach|Mansarddach|Zeltdach)\b/i);
   if (dach) found.dachform = dach[1][0].toUpperCase() + dach[1].slice(1).toLowerCase();
+  // Phase 78: Geschosszahl ('2 Geschosse', 'Geschosse: 3')
+  const ges = text.match(/(\d{1,2})\s*geschoss/i) || text.match(/geschoss(?:e|zahl)?\s*:?\s*(\d{1,2})/i);
+  if (ges) found.geschosse = parseInt(ges[1], 10);
   // Phase 68-I: GERÜSTPLAN-/FASSADENZEICHNUNGS-Muster
   const gl = text.match(/ger(?:ü|ue)st(?:l(?:ä|ae)nge|breite)[^\d]{0,15}(\d{1,3}[.,]\d{1,2})/i)
     || text.match(/(\d{1,3}[.,]\d{1,2})\s*m\s+gesamt/i);
@@ -290,7 +293,7 @@ async function verarbeiteCadAnalyseJob(tenant, job) {
       const antwort = {
         laenge: det.laenge, breite: det.breite, hoehe: det.hoehe ?? null,
         hoeheGeschaetzt: false, traufhoehe: det.traufhoehe ?? null,
-        dachform: det.dachform ?? null, geschosse: null,
+        dachform: det.dachform ?? null, geschosse: det.geschosse ?? (det.hoehe ? 1 : null), // Phase 78: mit Höhe mindestens 1 Geschoss, sonst baut das Modell nicht
         zusammenfassung: 'Direkt aus dem Plan-Text erkannt (ohne KI).',
         verworfen: [], ohneKi: true,
       };
@@ -318,6 +321,7 @@ async function verarbeiteCadAnalyseJob(tenant, job) {
   if (!raw) throw new Error('Vision-KI lieferte keine Antwort');
   let structured;
   try { structured = JSON.parse(raw); } catch { structured = { zusammenfassung: raw }; }
+  if (structured.geschosse == null && (structured.hoehe != null || structured.hoehe_geschaetzt != null)) structured.geschosse = 1; // Phase 78
   const verworfen = pruefeUndFiltere(structured, ocrText);
   const antwort = {
     laenge: structured.laenge ?? null, breite: structured.breite ?? null,
