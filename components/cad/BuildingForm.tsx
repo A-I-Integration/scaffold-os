@@ -54,17 +54,35 @@ export default function BuildingForm({ building, systemId, onChange, onSystemCha
       const json = await res.json()
       if (!json.success) throw new Error(json.error)
 
+      // Phase 68-K: Queue-Job pollen statt synchron zu warten.
+      // Der POST legt bei Bedarf einen ki_jobs-Eintrag an (Vision-KI)
+      // und antwortet SOFORT mit { jobId, status: 'queued' }. Der
+      // Hetzner-Worker rechnet im Hintergrund; alle 3 s wird gepollt.
+      let ergebnis: any = json
+      if (json.jobId) {
+        setAnalyseHinweis('⏳ Analyse in der Warteschlange – läuft im Hintergrund…')
+        for (let i = 0; i < 200; i++) { // max. 10 Min
+          await new Promise((r) => setTimeout(r, 3000))
+          const pollRes = await fetch(`/api/cad/analyze-plan?jobId=${json.jobId}`)
+          const pj = await pollRes.json()
+          if (!pollRes.ok || !pj.success) throw new Error(pj.error || 'Polling fehlgeschlagen')
+          if (pj.status === 'done') { ergebnis = pj; break }
+          if (pj.status === 'error') throw new Error(pj.error || 'KI-Analyse fehlgeschlagen')
+        }
+        if (ergebnis.jobId) throw new Error('Die Analyse dauert zu lange – bitte in ein paar Minuten erneut probieren.')
+      }
+
       const patch: Partial<BuildingParams> = {}
-      if (json.laenge) patch.lengthM = json.laenge
-      if (json.breite) patch.widthM = json.breite
-      if (json.hoehe) patch.heightM = json.hoehe
-      if (json.traufhoehe) patch.eavesHeightM = json.traufhoehe
+      if (ergebnis.laenge) patch.lengthM = ergebnis.laenge
+      if (ergebnis.breite) patch.widthM = ergebnis.breite
+      if (ergebnis.hoehe) patch.heightM = ergebnis.hoehe
+      if (ergebnis.traufhoehe) patch.eavesHeightM = ergebnis.traufhoehe
       const dachMap: Record<string, BuildingParams['roofForm']> = {
         Satteldach: 'satteldach', Flachdach: 'flachdach', Pultdach: 'pultdach',
         Walmdach: 'walmdach', Mansarddach: 'mansardendach', Zeltdach: 'walmdach',
       }
-      if (json.dachform && dachMap[json.dachform]) patch.roofForm = dachMap[json.dachform]
-      if (json.geschosse) patch.floors = json.geschosse
+      if (ergebnis.dachform && dachMap[ergebnis.dachform]) patch.roofForm = dachMap[ergebnis.dachform]
+      if (ergebnis.geschosse) patch.floors = ergebnis.geschosse
 
       if (Object.keys(patch).length === 0) {
         setAnalyseHinweis('Keine eindeutig belegten Maße gefunden – bitte Werte manuell eintragen.')
@@ -85,7 +103,7 @@ export default function BuildingForm({ building, systemId, onChange, onSystemCha
         analyseFelderRef.current = Object.keys(patch);
         onChange({ ...building, ...zurueck, ...patch })
         const uebernommen = Object.keys(patch).length
-        setAnalyseHinweis(`${json.ohneKi ? 'Direkt aus dem Plan erkannt (ohne KI)' : 'KI-Vorschlag'}: ${uebernommen} Angabe(n) übernommen, bitte prüfen.${json.hoeheGeschaetzt ? ' Höhe geschätzt aus Geschosszahl.' : ''}${json.verworfen?.length ? ' Verworfen (unbelegt): ' + json.verworfen.join('; ') : ''}`)
+        setAnalyseHinweis(`${ergebnis.ohneKi ? 'Direkt aus dem Plan erkannt (ohne KI)' : 'KI-Vorschlag (aus der Queue)'}: ${uebernommen} Angabe(n) übernommen, bitte prüfen.${ergebnis.hoeheGeschaetzt ? ' Höhe geschätzt aus Geschosszahl.' : ''}${ergebnis.verworfen?.length ? ' Verworfen (unbelegt): ' + ergebnis.verworfen.join('; ') : ''}`)
       }
     } catch (err: any) {
       setAnalyseHinweis('❌ ' + err.message)
