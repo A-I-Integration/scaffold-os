@@ -167,6 +167,26 @@ function Schritt6Content() {
         const p = json.project;
         const d = p.data || {};
         const { angebotAnpassungen, kiResult: savedKi, angebotsStatus: savedStatus, preisModus: savedPreisModus, festpreisProM2: savedFestpreis, ...steps } = d;
+        // Phase 81: Fehlende step2/step3 aus kiResult ableiten (CAD-Projekte,
+        // deren Frontend step2/3 nicht mitschrieb - z. B. veraltetes Bundle).
+        // kiResult enthaelt building + systemId ab Phase 81, Werte 1:1.
+        if (!(steps as any).step2 && savedKi?.building) {
+          const b = savedKi.building;
+          (steps as any).step2 = {
+            laenge: String(b.lengthM || ''), breite: String(b.widthM || ''),
+            hoehe: String(b.heightM || ''), traufhoehe: String(b.eavesHeightM || ''),
+            dachform: b.roofForm ? String(b.roofForm)[0].toUpperCase() + String(b.roofForm).slice(1) : '',
+            fassade: 'Putz', hindernisse: [], abschnitte: [],
+            dachueberstand: String(b.overhangM ?? 0.5), durchfahrt: false,
+          };
+        }
+        if (!(steps as any).step3 && savedKi?.systemId) {
+          (steps as any).step3 = {
+            geruesttyp: 'fassade', system: savedKi.systemId, customSystem: '',
+            feldlange: '2.5', belag: 'stahl', gelander: true, diagonale: true,
+            fahrbar: false, boden: 'beton',
+          };
+        }
         setStepData(steps);
         // Phase 68 (Fix Ruecknavigation): Schritte 1-5 auch in den lokalen
         // Zwischenspeicher spiegeln. Vorher landeten sie nur im React-State.
