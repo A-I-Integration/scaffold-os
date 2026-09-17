@@ -120,6 +120,7 @@ STRENGE REGELN:
 4. Kein Text außerhalb des JSON.
 5. Wenn ein Wert im Plan NICHT steht: immer null liefern – niemals 0.
 6. Achsenbeschriftungen, Z-Werte und Ebenen-Hinweise (z. B. "Dach (Z=9,0m)", "OG1 (Z=3,0m)") gelten ALS vermaßt – daraus darf "hoehe" direkt gelesen werden.
+7. Der ENDWERT der Höhenachse (Z) ist die Gebäudehöhe – z. B. zeigt die Skala 0-12 eine Höhe von 12 m an. Ebenso: Der höchste beschriftete Z-Wert gilt als "hoehe".
 
 SPEZIALFALL GERÜSTPLAN / FASSADENZEICHNUNG (Seitenansicht statt Grundriss):
 - Horizontale Ausdehnung: "Gerüstlänge", "Gerüstbreite: X m", "X,XX m gesamt"
@@ -213,6 +214,18 @@ async function verarbeiteCadAnalyseJob(tenant, job) {
     zusammenfassung: structured.zusammenfassung || '',
     verworfen, ohneKi: false,
   };
+  // Phase 71: Deterministischer Höhen-Fallback. Das Vision-Modell ist
+  // nicht deterministisch - manche Läufe liefern hoehe, manche nicht
+  // (bei gleichem Bild). Wenn die KI keine Höhe fand, aber die
+  // Geschosszahl kennt, wird die Höhe als Geschosse x 3 m geschätzt
+  // (3 m/Geschoss = üblicher Gerüstbau-Planungswert) und EINDEUTIG
+  // als Schätzung markiert. Das Frontend zeigt das als
+  // 'Höhe geschätzt aus Geschosszahl' an.
+  if (antwort.hoehe == null && antwort.geschosse != null && antwort.geschosse >= 1 && antwort.geschosse <= 15) {
+    antwort.hoehe = antwort.geschosse * 3;
+    antwort.hoeheGeschaetzt = true;
+    antwort.zusammenfassung = (antwort.zusammenfassung ? antwort.zusammenfassung + ' ' : '') + '(Höhe aus Geschosszahl × 3 m geschätzt - bitte prüfen.)';
+  }
   await fetch(`${tenant.supabaseUrl}/rest/v1/ki_jobs?id=eq.${job.id}`, {
     method: 'PATCH', headers: { ...restHeaders(tenant.serviceKey), Prefer: 'return=minimal' },
     body: JSON.stringify({ status: 'done', result: { antwort }, versuche: job.versuche + 1, fertig_am: new Date().toISOString() }),
