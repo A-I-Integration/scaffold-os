@@ -54,24 +54,19 @@ const COMPONENT_LABELS: Record<string, string> = {
 export default function CADPage() {
   const router = useRouter()
   const [viewMode, setViewMode] = useState<ViewMode>('3d')
-  // Phase 68-F: Anfangs-Zustand als Konstante, damit 'Neu starten'
-  // exakt diesen Stand wiederherstellen kann.
-  const DEFAULT_BUILDING: BuildingParams = {
-    lengthM: 18.4, widthM: 8.0, heightM: 12.0, eavesHeightM: 10.0, roofHeightM: 2.5,
-    roofForm: 'satteldach', floors: 3, floorHeightsM: [4.0, 4.0, 4.0],
-    windowCount: 12, doorCount: 2, balconyCount: 2, overhangM: 0.5,
-    sides: ['front'], setbackM: 0,
-  }
+  // Phase 68-L: Demo-Gebäude entfernt. Die Seite startet konsistent
+  // LEER (wie nach 'Neu starten') - ein Reload bringt nichts mehr
+  // zurueck, das der Nutzer bewusst geleert hatte.
   // Phase 68-H: 'Neu starten' setzt auf WIRKLICH LEERE Werte (0),
   // nicht auf die Demo-Werte. Dachform/Geschosszahl behalten sinnvolle
   // Startwerte, damit Selects nicht leer wirken.
   const LEERES_GEBAEUDE: BuildingParams = {
     lengthM: 0, widthM: 0, heightM: 0, eavesHeightM: 0, roofHeightM: 0,
-    roofForm: 'satteldach', floors: 1, floorHeightsM: [],
+    roofForm: 'satteldach', floors: 0, floorHeightsM: [], // Phase 68-L: 0 statt 1 - 'Neu starten' leert wirklich alles
     windowCount: 0, doorCount: 0, balconyCount: 0, overhangM: 0,
     sides: ['front'], setbackM: 0,
   }
-  const [building, setBuilding] = useState<BuildingParams>(DEFAULT_BUILDING)
+  const [building, setBuilding] = useState<BuildingParams>(LEERES_GEBAEUDE)
   const [systemId, setSystemId] = useState<string>('layher-allround')
   const [model, setModel] = useState<CADModel | null>(null)
   const [selectedComponent, setSelectedComponent] = useState<string | null>(null)
@@ -90,7 +85,7 @@ export default function CADPage() {
   // false gesetzt -> Leinwand bleibt leer, bis der Nutzer Maße ändert
   // oder 'Gerüst neu berechnen' wählt. Behebt: Reset baut Haus sofort
   // wieder auf (Effekt unten generierte bei model=null sofort neu).
-  const [autoGenerate, setAutoGenerate] = useState(true)
+  const [autoGenerate, setAutoGenerate] = useState(false)
 
   // Phase 68-F: 'Neu starten' — setzt ALLES auf den Anfangszustand
   // zurück (Maße, System, erzeugtes Modell, Auswahl, Stunden).
@@ -121,7 +116,7 @@ export default function CADPage() {
     // Phase 68-H: Ohne Grundmaße kein Modell erzeugen (sonst entsteht
     // bei leeren Feldern nach jedem Tastendruck ein defektes/NaN-Modell,
     // sobald autoGenerate wieder aktiviert wird).
-    if (building.lengthM <= 0 || building.widthM <= 0 || building.heightM <= 0) {
+    if (building.lengthM <= 0 || building.widthM <= 0 || building.heightM <= 0 || building.floors < 1) {
       setModel(null);
       return;
     }
@@ -184,6 +179,11 @@ export default function CADPage() {
 
   const toggleType = useCallback((type: string) => {
     setVisibleTypes((prev) => ({ ...prev, [type]: !prev[type] }))
+  }, [])
+
+  // Phase 68-J: Statt toter Buttons ohne Modell -> klarer Hinweis beim Klick.
+  const exportOhneModellHinweis = useCallback(() => {
+    alert('⚠️ Noch kein Gerüst-Modell vorhanden.\n\nBitte zuerst links Maße eingeben und „Gerüst neu berechnen“ – danach stehen Excel, Dokumentation, Montageplan, Statik-Export und IFC-Export zur Verfügung.');
   }, [])
 
   const handleExportPDF = useCallback(() => {
@@ -405,7 +405,7 @@ export default function CADPage() {
           </div>
           <div className='px-4 py-2 bg-white/50 border-t border-black/5 flex gap-2 flex-wrap max-h-24 overflow-y-auto'>
             {Object.entries(visibleTypes).map(([type, visible]) => (
-              <button key={type} onClick={() => toggleType(type)} className={`px-2 py-1 text-[10px] font-medium rounded-full border transition-colors ${visible ? 'bg-blue-50 border-blue-200 text-blue-700' : 'bg-gray-50 border-gray-200 text-gray-400 line-through'}`}>
+              <button key={type} onClick={() => toggleType(type)} disabled={!model} title={!model ? 'Erst Gerüst berechnen' : undefined} className={`px-2 py-1 text-[10px] font-medium rounded-full border transition-colors ${visible ? 'bg-blue-50 border-blue-200 text-blue-700' : 'bg-gray-50 border-gray-200 text-gray-400 line-through'} ${!model ? 'opacity-40 cursor-not-allowed' : ''}`}>
                 {COMPONENT_LABELS[type] || type}
               </button>
             ))}
@@ -417,15 +417,16 @@ export default function CADPage() {
             totalWeightKg={totalWeight}
             totalPrice={totalPrice}
             logistik={logistik}
-            onExportPDF={handleExportPDF}
-            onExportMontageplan={handleExportMontageplan}
-            onExportStatikGeometrie={handleExportStatik}
-            onExportIFC={ifcExportLaeuft ? undefined : handleExportIFC}
-            onExportCSV={handleExportCSV}
+            onExportPDF={model ? handleExportPDF : exportOhneModellHinweis}
+            onExportMontageplan={model ? handleExportMontageplan : exportOhneModellHinweis}
+            onExportStatikGeometrie={model ? handleExportStatik : exportOhneModellHinweis}
+            onExportIFC={!model ? exportOhneModellHinweis : (ifcExportLaeuft ? undefined : handleExportIFC)}
+            onExportCSV={model ? handleExportCSV : exportOhneModellHinweis}
             customers={kunden}
             onCreateCustomer={handleCreateCustomer}
             onAssignCustomer={handleAssignCustomer}
             zuordnenLaeuft={zuordnenLaeuft}
+            disabled={!model}
           />
         </div>
       </div>
