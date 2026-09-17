@@ -62,6 +62,15 @@ export default function CADPage() {
     windowCount: 12, doorCount: 2, balconyCount: 2, overhangM: 0.5,
     sides: ['front'], setbackM: 0,
   }
+  // Phase 68-H: 'Neu starten' setzt auf WIRKLICH LEERE Werte (0),
+  // nicht auf die Demo-Werte. Dachform/Geschosszahl behalten sinnvolle
+  // Startwerte, damit Selects nicht leer wirken.
+  const LEERES_GEBAEUDE: BuildingParams = {
+    lengthM: 0, widthM: 0, heightM: 0, eavesHeightM: 0, roofHeightM: 0,
+    roofForm: 'satteldach', floors: 1, floorHeightsM: [],
+    windowCount: 0, doorCount: 0, balconyCount: 0, overhangM: 0,
+    sides: ['front'], setbackM: 0,
+  }
   const [building, setBuilding] = useState<BuildingParams>(DEFAULT_BUILDING)
   const [systemId, setSystemId] = useState<string>('layher-allround')
   const [model, setModel] = useState<CADModel | null>(null)
@@ -89,7 +98,7 @@ export default function CADPage() {
   // um den Arbeitsstand in dieser CAD-Sitzung.
   function handleNeuStarten() {
     if (!window.confirm('Wirklich neu starten?\n\nDas 3D-Modell wird geleert und alle Maße auf den Anfangszustand gesetzt. Das Gerüst erscheint erst wieder, wenn du Maße änderst oder „Gerüst neu berechnen“ wählst. Bereits gespeicherte Projekte bleiben unverändert.')) return;
-    setBuilding(DEFAULT_BUILDING);
+    setBuilding(LEERES_GEBAEUDE); // Phase 68-H: wirklich leere Felder statt Demo-Werte
     setSystemId('layher-allround');
     setModel(null);
     setSelectedComponent(null);
@@ -109,6 +118,13 @@ export default function CADPage() {
   const features = useMemo(() => generateBuildingFeatures(building), [building])
 
   const generate = useCallback(() => {
+    // Phase 68-H: Ohne Grundmaße kein Modell erzeugen (sonst entsteht
+    // bei leeren Feldern nach jedem Tastendruck ein defektes/NaN-Modell,
+    // sobald autoGenerate wieder aktiviert wird).
+    if (building.lengthM <= 0 || building.widthM <= 0 || building.heightM <= 0) {
+      setModel(null);
+      return;
+    }
     const newModel = generateCADModel(building, systemId)
     const collisionWarnings = checkCollisions(newModel)
     const featureWarnings = detectFeatureCollisions(newModel, generateBuildingFeatures(building))
