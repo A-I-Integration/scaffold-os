@@ -80,8 +80,13 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const { name, adresse, data, status, customer_id } = body;
 
-    if (!name || !adresse) {
-      return NextResponse.json({ error: 'Name und Adresse erforderlich' }, { status: 400 });
+    // Phase 79: Adresse ist beim Anlegen nicht mehr zwingend. Der
+    // CAD-Flow ('Als Angebot anlegen') erzeugt Projekte ohne Adresse
+    // (Kunde frisch, Baustelle noch nicht bekannt) - der Button konnte
+    // vorher gar nie funktionieren. Platzhalter signalisiert auf der
+    // Kunden-Seite klar, dass nachgetragen werden muss (Tourenplanung!).
+    if (!name) {
+      return NextResponse.json({ error: 'Name erforderlich' }, { status: 400 });
     }
 
     const response = await fetch(`${url}/rest/v1/projects`, {
@@ -89,7 +94,7 @@ export async function POST(req: NextRequest) {
       headers: { ...headers, 'Prefer': 'return=representation' },
       body: JSON.stringify({
         name,
-        adresse,
+        adresse: adresse || '(Adresse nachtragen)',
         data: data || {},
         status: status || 'active',
         customer_id: customer_id || null,
