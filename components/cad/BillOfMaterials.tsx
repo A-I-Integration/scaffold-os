@@ -18,9 +18,11 @@ interface Props {
   onCreateCustomer?: (name: string) => Promise<{ id: string; name: string } | null>
   onAssignCustomer?: (customerId: string, customerName: string) => void
   zuordnenLaeuft?: boolean
+  // Phase 68-J: ohne Gerüst-Modell werden Exporte optisch ausgegraut
+  disabled?: boolean
 }
 
-export default function BillOfMaterials({ materials, totalWeightKg, totalPrice, logistik, onExportPDF, onExportCSV, onExportMontageplan, onExportStatikGeometrie, onExportIFC, customers, onCreateCustomer, onAssignCustomer, zuordnenLaeuft }: Props) {
+export default function BillOfMaterials({ materials, totalWeightKg, totalPrice, logistik, onExportPDF, onExportCSV, onExportMontageplan, onExportStatikGeometrie, onExportIFC, customers, onCreateCustomer, onAssignCustomer, zuordnenLaeuft, disabled = false }: Props) {
   const [kundenSuche, setKundenSuche] = useState('')
   const [ausgewaehlterKunde, setAusgewaehlterKunde] = useState<{ id: string; name: string } | null>(null)
   const [zeigeDropdown, setZeigeDropdown] = useState(false)
@@ -153,7 +155,7 @@ export default function BillOfMaterials({ materials, totalWeightKg, totalPrice, 
         </div>
       </div>
       {(onExportPDF || onExportCSV || onExportMontageplan || onExportStatikGeometrie || onExportIFC) && (
-        <div className='p-4 border-t border-black/5 grid grid-cols-2 gap-2'>
+        <div className={`p-4 border-t border-black/5 grid grid-cols-2 gap-2 ${disabled ? 'opacity-40' : ''}`}>
           {onExportCSV && (
             <button onClick={onExportCSV} className='py-2.5 bg-emerald-600 text-white text-sm font-medium rounded-xl hover:bg-emerald-700 transition-colors'>
               📊 Excel (CSV)
