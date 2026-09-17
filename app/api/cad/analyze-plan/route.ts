@@ -4,6 +4,17 @@ import { kiFetchMitRetry, KI_UEBERLASTET_MELDUNG } from '@/lib/ki-fetch';
 import { createClient } from '@/lib/supabase/server';
 import { pruefeUndFiltere, versucheDirektenPdfText, deterministicFromText, versucheLokalenBildText } from '@/lib/grundriss-parsing';
 import { serverErrorResponse } from '@/lib/auth';
+import { uuid } from '@/lib/validation';
+
+// Phase 68-K: ki_jobs-Zugriff laeuft ueber die REST-API mit Service-Role-Key
+// (RLS auf ki_jobs hat keine Policies -> SSR-Client koennte nicht schreiben).
+const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
+const restHeaders = {
+  'Content-Type': 'application/json',
+  apikey: SERVICE_KEY!,
+  Authorization: `Bearer ${SERVICE_KEY!}`,
+};
 
 // ============================================================
 // SCAFFOLD OS – CAD: Grundriss/Foto hochladen und auswerten (Phase 41)
@@ -149,27 +160,79 @@ SPEZIALFALL GERÜSTPLAN / FASSADENZEICHNUNG (Seitenansicht statt Grundriss):
     const content: any[] = [{ type: 'text', text: prompt }];
     for (const url of imageUrls) content.push({ type: 'image_url', image_url: { url } });
 
-    const kiRes = await kiFetchMitRetry(`${baseUrl}/chat/completions`, {
+    // Phase 68-K: Die Vision-KI laeuft in die Warteschlange (ki_jobs).
+    // Grund: Der synchrone Aufruf dauert 60-90s+ (Vision-Bilder) und wurde
+    // von Vercel nach ~60s abgeschossen -> leere Antwort, kryptischer
+    // Browser-Fehler ("The string did not match the expected pattern").
+    // Der Hetzner-Worker reicht payload.request 1:1 an Mistral durch
+    // (Weg A aus Phase 66) - KEINE Worker-Aenderung noetig. OCR-Text wird
+    // in payload.meta mitgegeben, das GET-Polling macht das Post-Processing.
+    const jobRes = await fetch(`${SUPABASE_URL}/rest/v1/ki_jobs`, {
       method: 'POST',
-      headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ model, messages: [{ role: 'user', content }], temperature: 0.2, max_tokens: 1000, response_format: { type: 'json_object' } }),
+      headers: { ...restHeaders, Prefer: 'return=representation' },
+      body: JSON.stringify({
+        type: 'cad-analyse',
+        project_id: null,
+        payload: {
+          request: {
+            model,
+            messages: [{ role: 'user', content }],
+            temperature: 0.2,
+            max_tokens: 1000,
+            response_format: { type: 'json_object' },
+          },
+          meta: { ocrText: ocrText || '' },
+        },
+        erstellt_von: user.id,
+      }),
     });
-    if (!kiRes.ok) {
-      if (kiRes.status === 429) return NextResponse.json({ success: false, error: KI_UEBERLASTET_MELDUNG }, { status: 429 });
-      return NextResponse.json({ success: false, error: `KI-Fehler (${kiRes.status}): ${(await kiRes.text()).slice(0, 300)}` }, { status: 502 });
+    if (!jobRes.ok) throw new Error(`ki_jobs-Insert fehlgeschlagen: ${jobRes.status}`);
+    const rows = await jobRes.json();
+    return NextResponse.json({ success: true, jobId: rows[0].id, status: 'queued' });
+  } catch (err: any) {
+    return serverErrorResponse(err);
+  }
+}
+
+// ─── GET: Job-Status pollen, bei 'done' Post-Processing (Phase 68-K) ───
+export async function GET(req: NextRequest) {
+  try {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return NextResponse.json({ success: false, error: 'Nicht eingeloggt' }, { status: 401 });
+
+    const jobId = req.nextUrl.searchParams.get('jobId');
+    if (!jobId || !uuid.safeParse(jobId).success) {
+      return NextResponse.json({ success: false, error: 'Gültige jobId als Query-Param nötig.' }, { status: 400 });
     }
 
-    const kiJson = await kiRes.json();
-    const raw = kiJson.choices?.[0]?.message?.content?.trim();
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/ki_jobs?id=eq.${jobId}&select=status,result,error,payload`, { headers: restHeaders });
+    if (!res.ok) throw new Error(`ki_jobs-Select fehlgeschlagen: ${res.status}`);
+    const rows = await res.json();
+    if (!rows.length) return NextResponse.json({ success: false, error: 'Job nicht gefunden.' }, { status: 404 });
+    const job = rows[0];
+
+    if (job.status === 'error') {
+      return NextResponse.json({ success: false, status: 'error', error: job.error || 'KI-Analyse fehlgeschlagen' }, { status: 500 });
+    }
+    if (job.status !== 'done') {
+      return NextResponse.json({ success: true, status: job.status, jobId });
+    }
+
+    // Post-Processing = exakt die frühere POST-Logik (KI-JSON parsen,
+    // deterministische Werte mergen, plausibilisieren).
+    const raw = (job.result?.text || '').trim();
     if (!raw) return NextResponse.json({ success: false, error: 'KI hat keine Antwort geliefert' }, { status: 502 });
 
     let structured: Record<string, any>;
     try { structured = JSON.parse(raw); } catch { structured = { zusammenfassung: raw }; }
 
+    const ocrText = job.payload?.meta?.ocrText || '';
     const verworfen = pruefeUndFiltere(structured, ocrText);
 
     return NextResponse.json({
       success: true,
+      status: 'done',
       laenge: structured.laenge ?? null, breite: structured.breite ?? null,
       hoehe: structured.hoehe ?? structured.hoehe_geschaetzt ?? null,
       hoeheGeschaetzt: structured.hoehe == null && structured.hoehe_geschaetzt != null,
