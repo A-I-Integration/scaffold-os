@@ -104,11 +104,12 @@ Antworte AUSSCHLIESSLICH als JSON-Objekt mit genau diesen Feldern:
 {
   "laenge": <Außenmaß Gebäudelänge in Metern als Zahl – NUR das Gesamt-Außenmaß, sonst null>,
   "breite": <Außenmaß Gebäudebreite in Metern als Zahl – gleiche Regel wie laenge>,
-  "hoehe": <Gebäudehöhe in Metern als Zahl – NUR wenn vermaßt, sonst null>,
+  "hoehe": <Gebäudehöhe in Metern als Zahl – wenn vermaßt oder aus Achsen/Z-Werten direkt ablesbar, sonst null>,
+  "hoehe_geschaetzt": <Gebäudehöhe in Metern – wenn NICHT vermaßt, aber aus Achsen, Z-Werten oder Ebenen-Beschriftungen eindeutig ableitbar, sonst null>,
   "traufhoehe": <Traufhöhe in Metern als Zahl – NUR wenn vermaßt, sonst null>,
   "geschosse": <Anzahl Geschosse als Zahl, wenn erkennbar, sonst null>,
   "dachform": "<Satteldach, Flachdach, Pultdach, Walmdach, Mansarddach, Zeltdach — oder null>",
-  "belege": { "laenge": "<wörtliches Zitat aus dem Plan oder null>", "breite": "<...>", "hoehe": "<...>", "traufhoehe": "<...>", "dachform": "<...>" },
+  "belege": { "laenge": "<wörtliches Zitat aus dem Plan oder null>", "breite": "<...>", "hoehe": "<...>", "hoehe_geschaetzt": "<...>", "traufhoehe": "<...>", "dachform": "<...>" },
   "zusammenfassung": "<2-3 Sätze: Gebäudeform, Maße, Besonderheiten>"
 }
 
@@ -118,6 +119,7 @@ STRENGE REGELN:
 3. laenge/breite = Gesamt-Außenmaß, niemals Innenraum-Maße.
 4. Kein Text außerhalb des JSON.
 5. Wenn ein Wert im Plan NICHT steht: immer null liefern – niemals 0.
+6. Achsenbeschriftungen, Z-Werte und Ebenen-Hinweise (z. B. "Dach (Z=9,0m)", "OG1 (Z=3,0m)") gelten ALS vermaßt – daraus darf "hoehe" direkt gelesen werden.
 
 SPEZIALFALL GERÜSTPLAN / FASSADENZEICHNUNG (Seitenansicht statt Grundriss):
 - Horizontale Ausdehnung: "Gerüstlänge", "Gerüstbreite: X m", "X,XX m gesamt"
