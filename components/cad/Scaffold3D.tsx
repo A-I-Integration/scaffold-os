@@ -44,21 +44,24 @@ interface Props {
 // aber aus wie ein Spielzeug-Baukasten, nicht wie echtes Gerüst. Echtes
 // Stahlgerüst ist fast durchgehend verzinkt (silbrig-grau glänzend), nur
 // Holzbeläge/Bordbretter sind bräunlich. Jetzt entsprechend angepasst.
+// Phase 72 (Referenz-Optik wie Profi-Gerüstplanung): echtes Feuerverzinken
+// ist HELL silbrig und MATT - nicht dunkel spiegelnd. Rote Horizontale
+// (Riegel/Belagskanten) wie im Referenz-Rendering, Holz heller.
 const COLOR_MAP: Record<string, string> = {
-  frame: '#c3c9cf',        // Rahmen – verzinkter Stahl
-  deck: '#a8adb3',         // Stahl-Beläge – etwas dunkler/matter als die Rahmen
-  railing: '#c3c9cf',       // Geländer – gleiches verzinktes Rohr wie die Rahmen
-  diagonal: '#c3c9cf',      // Diagonalen – verzinkter Stahl
-  footplate: '#8a8f94',    // Fußplatten – dunklerer, matterer Stahl (Bodenkontakt)
-  coupling: '#6e7378',     // Kupplungen – Guss/dunkler Stahl
-  anchor: '#6e7378',       // Anker – dunkler Stahl
-  console: '#c3c9cf',      // Konsolen – verzinkter Stahl
-  stair: '#a8adb3',        // Treppen – Stahl, ähnlich den Belägen
-  net: '#3b6fa0',          // Schutznetz – klassisches Blau, halbtransparent
-  board: '#8a6d4f',        // Bordbretter – Holz
-  protection_roof: '#7a828a', // Schutzdach – Well-/Stahlblech, gedeckter Grauton
-  load_plate: '#5c4a38',   // Lastverteilplatten – Holz, dunkler
-  corner_brace: '#c3c9cf', // Eckverbindungen – verzinkter Stahl
+  frame: '#dde2e7',        // Rahmen – helles verzinktes Rohr
+  deck: '#c9402e',         // Beläge – rot (Riegel-Akzent wie Referenz)
+  railing: '#d5dade',      // Geländer – verzinkt
+  diagonal: '#cfd4d9',     // Diagonalen – verzinkt
+  footplate: '#aab0b6',    // Fußplatten – etwas dunkler
+  coupling: '#8d9399',     // Kupplungen – Gussgrau
+  anchor: '#8d9399',       // Anker
+  console: '#dde2e7',      // Konsolen – verzinkt
+  stair: '#c2c7cc',        // Treppen
+  net: '#4a80b8',          // Schutznetz – Blau, halbtransparent
+  board: '#b08a5e',        // Bordbretter – helles Holz
+  protection_roof: '#9aa2a9', // Schutzdach
+  load_plate: '#7a6248',   // Lastverteilplatten – Holz
+  corner_brace: '#cfd4d9', // Eckverbindungen
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -119,17 +122,19 @@ function getMaterial(type: string, color: THREE.Color): THREE.MeshStandardMateri
   if (MATERIAL_CACHE.has(key)) return MATERIAL_CACHE.get(key)!
   const istMetall = METALL_TYPEN.has(type)
   const istHolz = HOLZ_TYPEN.has(type)
+  // Phase 72: Feuerverzinkung wirkt nur hell, wenn das Licht diffus
+  // gestreut wird. Vorher: metalness 0.85 + envMapIntensity 1.4 ->
+  // die Environment wurde gespiegelt und die Flächen sahen DUNKEL aus
+  // (der "schwarze Balken"-Effekt). Jetzt: mattes, helles Silber.
+  const istRot = type === 'deck' // rote Belags-Riegel
   const mat = new THREE.MeshStandardMaterial({
     color,
-    // Verzinkter Stahl: hohe Metallizität, mittlere Rauheit (mattes, nicht
-    // spiegelndes Glänzen – "Feuerverzinkung", keine Hochglanz-Chromoptik).
-    // Holz: kein Metall, deutlich rauer.
-    metalness: istMetall ? 0.85 : istHolz ? 0.0 : 0.3,
-    roughness: istMetall ? 0.4 : istHolz ? 0.85 : 0.5,
+    metalness: istHolz ? 0.0 : istRot ? 0.3 : 0.55,
+    roughness: istHolz ? 0.8 : istRot ? 0.55 : 0.55,
     transparent: type === 'net' || type === 'safety_net',
     opacity: type === 'net' || type === 'safety_net' ? 0.35 : 1,
     side: type === 'net' || type === 'safety_net' ? THREE.DoubleSide : THREE.FrontSide,
-    envMapIntensity: istMetall ? 1.4 : 0.5,
+    envMapIntensity: istHolz ? 0.4 : 0.8,
   })
   MATERIAL_CACHE.set(key, mat)
   return mat
