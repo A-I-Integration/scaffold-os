@@ -138,9 +138,26 @@ function parsePly(buf) {
   const vc = headerStr.match(/element\s+vertex\s+(\d+)/);
   if (!vc) throw new Error('PLY: kein element vertex im Header');
   const vertexCount = parseInt(vc[1], 10);
+  // Phase 84: Properties NUR aus dem vertex-Element lesen (z. B. die
+  // FACE-Liste 'property list uchar int vertex_indices' verzerrte vorher
+  // die Struktur) und als {type, name}-Paare speichern. Vorher standen
+  // in 'props' nur NAMEN -> p.type war undefined -> sizeOf fiel auf 4
+  // Bytes zurueck -> stride 20 statt 14 -> Versatz pro Datensatz -> die
+  // absurd grossen Werte (6.79e+38) im Formular.
   const props = [];
-  for (const m of headerStr.matchAll(/property\s+\S+\s+(\S+)/g)) props.push(m[1]);
-  const ix = props.indexOf('x'), iy = props.indexOf('y'), iz = props.indexOf('z');
+  let inVertex = false;
+  for (const rawLine of headerStr.split(/\r?\n/)) {
+    const line = rawLine.trim();
+    if (/^element\s/.test(line)) { inVertex = /^element\s+vertex\b/.test(line); continue; }
+    if (!inVertex) continue;
+    const pm = line.match(/^property\s+(\S+)\s+(\S+)$/);
+    if (!pm) continue;
+    if (pm[1] === 'list') continue; // Listen in Vertex-Daten: nicht unterstuetzt
+    props.push({ type: pm[1], name: pm[2] });
+  }
+  const ix = props.findIndex(p => p.name === 'x');
+  const iy = props.findIndex(p => p.name === 'y');
+  const iz = props.findIndex(p => p.name === 'z');
   if (ix < 0 || iy < 0 || iz < 0) throw new Error('PLY: x/y/z-Properties fehlen');
   const dataStart = buf.indexOf('\n', headerEnd) + 1;
   const isAscii = /format\s+ascii\s+1\.0/.test(headerStr);
@@ -186,7 +203,14 @@ function parsePly(buf) {
   }
   if (gelesen < Math.min(vertexCount, 10)) throw new Error('PLY: zu wenig Punkte lesbar');
   const r2 = (v) => Math.round(v * 100) / 100;
-  return { laenge: r2(maxX - minX), breite: r2(maxY - minY), hoehe: r2(maxZ - minZ), punkte: gelesen };
+  // Phase 84: Plausibilitaets-Check. Versatz-Fehler erzeugen BBoxen im
+  // e+38-Bereich - die duerfen nie das Formular erreichen.
+  const spanX = maxX - minX, spanY = maxY - minY, spanZ = maxZ - minZ;
+  if (!isFinite(spanX) || !isFinite(spanY) || !isFinite(spanZ) ||
+      spanX > 10000 || spanY > 10000 || spanZ > 10000) {
+    throw new Error(`PLY: unplausible Ausdehnung (${r2(spanX)} x ${r2(spanY)} x ${r2(spanZ)} m) - Datei-Struktur passt nicht zum Header.`);
+  }
+  return { laenge: r2(spanX), breite: r2(spanY), hoehe: r2(spanZ), punkte: gelesen };
 }
 
 const CAD_PROMPT = (ocrText) => `Du bist ein erfahrener Gerüstbau-Planer. Analysiere diese Grundrisse/Baupläne${ocrText ? ' (Bilder und/oder per OCR extrahierter Plan-Text, siehe unten)' : ''}.
