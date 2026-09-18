@@ -1,8 +1,8 @@
 'use client'
 
-import { useState } from 'react'
+import { Suspense, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { HardHat, Ruler, Route, Timer } from 'lucide-react'
 
 // ============================================================
@@ -11,9 +11,25 @@ import { HardHat, Ruler, Route, Timer } from 'lucide-react'
 // unverändert (Supabase signInWithPassword + Rollen-Routing).
 // Registrierung bleibt bewusst entfernt – Zugänge legt
 // CEO/Dispo unter „Zugänge" an.
+//
+// Phase 88: Bei ?demo_abgelaufen=1 (gesetzt vom Proxy nach dem
+// harten Demo-Logout) wird ein Hinweis auf die abgelaufene
+// 24h-Frist angezeigt.
 // ============================================================
 
 export default function LoginPage() {
+  // useSearchParams erfordert in Next 16 eine Suspense-Boundary,
+  // sonst schlägt der statische Build fehl.
+  return (
+    <Suspense fallback={null}>
+      <LoginForm />
+    </Suspense>
+  )
+}
+
+function LoginForm() {
+  const searchParams = useSearchParams()
+  const demoAbgelaufen = searchParams.get('demo_abgelaufen') === '1'
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
@@ -126,6 +142,16 @@ export default function LoginPage() {
 
           <h1 className="text-2xl font-semibold tracking-tight text-[#1d1d1f]">Anmelden</h1>
           <p className="text-[#86868b] text-sm mt-1 mb-8">Mit Ihrem Firmenzugang einloggen.</p>
+
+          {demoAbgelaufen && (
+            <div className="mb-6 px-4 py-3 bg-[#fff4e6] border border-[#ffd8a8] rounded-xl text-sm text-[#d9480f] leading-relaxed">
+              Ihr 24-Stunden-Demo-Zugang ist abgelaufen. Gern richten wir Ihnen einen
+              persönlichen Demo-Zugang ein:{' '}
+              <a href="/anfrage?art=demo" className="font-medium underline underline-offset-2">
+                Demo anfordern
+              </a>
+            </div>
+          )}
 
           <form onSubmit={handleLogin} className="space-y-5">
             <div>

@@ -11,6 +11,14 @@ import { NextResponse, type NextRequest } from 'next/server';
 // Wer eine Seite direkt per Adresse aufruft, für die seine
 // Rolle nicht freigeschaltet ist, wird auf seinen
 // Startbereich umgeleitet.
+//
+// Phase 88: 24h-Auto-Logout für den Demo-Zugang. Der Proxy
+// prüft bei jedem Request des Demo-Accounts das httpOnly-Cookie
+// „demo_login_at" (gesetzt von /api/auth/demo-gate beim
+// Registrieren). Ist die 24h-Frist überschritten, wird hart
+// ausgeloggt: Redirect auf /login?demo_abgelaufen=1, alle
+// sb-*-Session-Cookies und das demo_login_at-Cookie werden
+// gelöscht. Auf Instanzen ohne DEMO_LOGIN_EMAIL ein No-Op.
 // ============================================================
 
 // Welche Rolle darf welchen Bereich sehen?
@@ -94,6 +102,53 @@ export async function proxy(request: NextRequest) {
     const allowed = protectedPaths.find(p => path.startsWith(p));
     if (allowed && !ROLE_ACCESS[allowed].includes(role)) {
       return NextResponse.redirect(new URL(homeFor(role), request.url));
+    }
+  }
+
+  // ─── Phase 88: 24h-Frist des Demo-Zugangs prüfen ───
+  // Bewusst erst HIER (nach allen Supabase-Aufrufen): der
+  // createServerClient darf „response" über seine Cookie-Callbacks
+  // neu bauen – ein früher gesetztes Cookie ginge dabei verloren.
+  const demoEmail = (process.env.DEMO_LOGIN_EMAIL || '').toLowerCase().trim();
+  if (demoEmail && user && user.email?.toLowerCase() === demoEmail) {
+    const DEMO_LIMIT_MS = 24 * 60 * 60 * 1000;
+    const raw = request.cookies.get('demo_login_at')?.value;
+
+    if (!raw) {
+      // Cookie fehlt noch: der „register"-Aufruf im Login läuft
+      // fire-and-forget NACH dem Einloggen – beim ersten Request
+      // danach kann das Cookie noch fehlen. Fenster jetzt starten
+      // statt sofort auszusperren (verlängert nichts: die
+      // IP-Sperre verhindert ein zweites Login ohnehin).
+      response.cookies.set('demo_login_at', String(Date.now()), {
+        httpOnly: true,
+        sameSite: 'lax',
+        secure: process.env.NODE_ENV === 'production',
+        maxAge: 60 * 60 * 24 * 30,
+        path: '/',
+      });
+    } else {
+      const ts = Number(raw);
+      if (!Number.isFinite(ts) || Date.now() - ts > DEMO_LIMIT_MS) {
+        // Frist überschritten oder Zeitstempel korrumpiert
+        // → hart ausloggen. Alle sb-*-Cookies (Supabase-Session,
+        // auch ge-chunkte) und demo_login_at löschen.
+        const expired = path.startsWith('/api/')
+          ? NextResponse.json(
+              { error: 'Demo-Zugang abgelaufen' },
+              { status: 401 }
+            )
+          : NextResponse.redirect(
+              new URL('/login?demo_abgelaufen=1', request.url)
+            );
+        for (const cookie of request.cookies.getAll()) {
+          if (cookie.name.startsWith('sb-')) {
+            expired.cookies.set(cookie.name, '', { maxAge: 0, path: '/' });
+          }
+        }
+        expired.cookies.set('demo_login_at', '', { maxAge: 0, path: '/' });
+        return expired;
+      }
     }
   }
 
