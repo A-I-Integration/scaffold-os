@@ -131,9 +131,10 @@ function parsePly(buf) {
   const headerEnd = buf.indexOf('end_header');
   if (headerEnd < 0) throw new Error('PLY: ungueltiger Header (end_header fehlt)');
   const headerStr = buf.subarray(0, headerEnd).toString('latin1');
-  if (!/format\s+ascii\s+1\.0/.test(headerStr)) {
-    throw new Error('PLY: Binary-PLY wird noch nicht unterstuetzt - bitte als ASCII exportieren.');
-  }
+  // Phase 83: Veralteten ASCII-Guard entfernt. Der urspruengliche Check
+  // warf fuer Binary-Dateien, BEVOR die Phase-76-Binary-Logik unten
+  // greifen konnte -> Binary-PLY scheiterte trotz vorhandenem Support.
+  // Die Format-Pruefung macht der Phase-76-Code selbst (isAscii/isBinLE/isBinBE).
   const vc = headerStr.match(/element\s+vertex\s+(\d+)/);
   if (!vc) throw new Error('PLY: kein element vertex im Header');
   const vertexCount = parseInt(vc[1], 10);
