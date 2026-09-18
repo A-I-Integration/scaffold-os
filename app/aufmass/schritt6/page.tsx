@@ -130,9 +130,16 @@ function Schritt6Content() {
       : 0;
     const nachtragBetrag = anpassungen.nachtrag.aktiv ? parseFloat(anpassungen.nachtrag.betrag) || 0 : 0;
     const rabattBetrag = anpassungen.rabatt.aktiv ? parseFloat(anpassungen.rabatt.betrag) || 0 : 0;
-    const endpreis = Math.max(0, basis + mieteBetrag + nachtragBetrag - rabattBetrag);
+    // Phase 88: Kran-Position - Tagessatz aus Einstellungen x Bauzeit (Schritt 1),
+    // nur wenn der Haken in Schritt 4 gesetzt ist. Vorher: Haken existierte,
+    // wurde aber nie gelesen UND die Kalkulation kannte keine Kran-Position.
+    const kranTage = parseInt(String((stepData as any)?.step1?.dauer || '1')) || 1;
+    const kranTagessatz = Number(companyProfile?.calc_crane_day) || 850;
+    const kranAktiv = !!((stepData as any)?.step4?.kranErforderlich);
+    const kranBetrag = kranAktiv ? Math.round(kranTagessatz * kranTage * 100) / 100 : 0;
+    const endpreis = Math.max(0, basis + mieteBetrag + nachtragBetrag + kranBetrag - rabattBetrag);
     const skontoBetrag = anpassungen.skonto ? endpreis * 0.02 : 0;
-    return { basis, mieteBetrag, nachtragBetrag, rabattBetrag, endpreis, skontoBetrag };
+    return { basis, mieteBetrag, nachtragBetrag, kranBetrag, kranTage, kranTagessatz, kranAktiv, rabattBetrag, endpreis, skontoBetrag };
   }
   const eur = (n: number) => n.toFixed(2) + ' €';
 
@@ -346,7 +353,7 @@ function Schritt6Content() {
       anchorType: (s4.anker || 'fassadenanker').toLowerCase(), groundCondition: (s4.untergrund || 'beton').toLowerCase(),
       hasSlope: s4.gefaelle || false, hasLightShafts: s4.lichtschaechte || false, hasBasement: s4.keller || false,
       needsLoadDistribution: s4.lastverteilplatten || false,
-      environment: { hasPowerLines: s4.freileitungen || false, hasVegetation: s4.vegetation || false, hasNeighborProperty: s4.nachbargrundstueck || false, hasPublicTraffic: s2.durchfahrt || false, needsNoParkingZone: s4.halteverbotszone || false, needsSpecialUse: s4.sondernutzung || false, hasStorageArea: s4.lagerflaeche || false, hasTruckAccess: s4.lkw_zufahrt || false, needsCrane: s4.kran || false, needsProtectionRoof: s4.schutzdach || false, needsSafetyNet: s4.fangnetz || false },
+      environment: { hasPowerLines: s4.freileitungen || false, hasVegetation: s4.vegetation || false, hasNeighborProperty: s4.nachbargrundstueck || false, hasPublicTraffic: s2.durchfahrt || false, needsNoParkingZone: s4.halteverbotszone || false, needsSpecialUse: s4.sondernutzung || false, hasStorageArea: s4.lagerflaeche || false, hasTruckAccess: s4.lkw_zufahrt || false, needsCrane: s4.kranErforderlich || false, // Phase 88: falscher Key - Schritt 4 speichert 'kranErforderlich' needsProtectionRoof: s4.schutzdach || false, needsSafetyNet: s4.fangnetz || false },
       windZone: (parseInt(s4.windzone) as 1|2|3|4) || 1, hazards: mapGefahren(s4), additionalNotes: s4.zusaetzliche_hinweise || '',
     };
   }
@@ -520,6 +527,9 @@ function Schritt6Content() {
       doc.text('Angebots-Anpassungen', 110, cy); cy += 8;
       doc.setFontSize(9); doc.setFont('helvetica', 'normal'); doc.setTextColor(71, 85, 105);
       doc.text('Basispreis (KI-Kalkulation)', 116, cy); doc.text(ang.basis.toFixed(2) + ' €', 190, cy, { align: 'right' }); cy += 9;
+      if (ang.kranBetrag > 0) {
+        doc.text(`Kran (${ang.kranTage} T. à ${ang.kranTagessatz} €)`, 116, cy); doc.text(ang.kranBetrag.toFixed(2) + ' €', 190, cy, { align: 'right' }); cy += 9;
+      }
       if (anpassungen.miete.aktiv && ang.mieteBetrag > 0) {
         doc.text(`Mietverlängerung (${anpassungen.miete.wochen} Wo.)`, 116, cy);
         doc.text('+' + ang.mieteBetrag.toFixed(2) + ' €', 190, cy, { align: 'right' }); cy += 9;
@@ -670,6 +680,9 @@ function Schritt6Content() {
         : 'Gerüstbau gemäß Angebot (Material, Arbeit, Transport)',
       menge: 1, einheit: 'Pauschale', einzelpreis: Math.round(ang.basis * 100) / 100,
     });
+    if (ang.kranBetrag > 0) {
+      positions.push({ bezeichnung: `Kran (${ang.kranTage} Tage à ${ang.kranTagessatz} €)`, menge: 1, einheit: 'Pauschale', einzelpreis: ang.kranBetrag });
+    }
     if (anpassungen.miete.aktiv && ang.mieteBetrag > 0) {
       positions.push({ bezeichnung: `Mietverlängerung ${anpassungen.miete.wochen} Wo. à ${anpassungen.miete.preisProWoche} €`, menge: 1, einheit: 'Pauschale', einzelpreis: ang.mieteBetrag });
     }
@@ -1191,6 +1204,7 @@ function Schritt6Content() {
                   {/* ─── Live-Endpreis ─── */}
                   <div className="rounded-xl bg-white/80 border border-black/10 p-4 space-y-1.5 text-sm">
                     <div className="flex justify-between text-[#86868b]"><span>Basispreis (KI)</span><span className="text-[#1d1d1f]">{eur(a.basis)}</span></div>
+                    {a.kranBetrag > 0 && <div className="flex justify-between text-[#86868b]"><span>+ Kran ({a.kranTage} T. à {eur(a.kranTagessatz)})</span><span className="text-[#1d1d1f]">{eur(a.kranBetrag)}</span></div>}
                     {a.mieteBetrag > 0 && <div className="flex justify-between text-[#86868b]"><span>+ Mietverlängerung</span><span className="text-[#1d1d1f]">{eur(a.mieteBetrag)}</span></div>}
                     {a.nachtragBetrag > 0 && <div className="flex justify-between text-[#86868b]"><span>+ Nachtrag</span><span className="text-[#1d1d1f]">{eur(a.nachtragBetrag)}</span></div>}
                     {a.rabattBetrag > 0 && <div className="flex justify-between text-[#86868b]"><span>− Sonderrabatt</span><span className="text-red-600">−{eur(a.rabattBetrag)}</span></div>}
