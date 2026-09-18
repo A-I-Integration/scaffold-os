@@ -851,15 +851,15 @@ function Schritt6Content() {
               </button>
 
               {/* NEU: E-Mail (Phase 82: aufklappbar, nicht mehr aufdringlich) */}
-              {savedProjectId && kiResult && !showEmailForm && (
+              {savedProjectId && !showEmailForm && ( // 82-Fix: kiResult-Bedingung entfernt – Angebot-E-Mail geht auch ohne KI-Ergebnis
                 <button
                   onClick={() => setShowEmailForm(true)}
-                  className="w-full rounded-xl bg-black/5 hover:bg-black/10 py-3 font-medium text-sm text-[#1d1d1f] transition-colors"
+                  className="w-full rounded-xl bg-blue-600 hover:bg-blue-500 py-3 font-semibold text-white transition-colors"
                 >
                   📧 Angebot per E-Mail senden…
                 </button>
               )}
-              {savedProjectId && kiResult && showEmailForm && (
+              {savedProjectId && showEmailForm && ( // 82-Fix: dto.
                 <div className="space-y-2 pt-2 border-t border-black/10">
                   <label className="block text-xs text-[#86868b]">E-Mail Kunde</label>
                   <input
