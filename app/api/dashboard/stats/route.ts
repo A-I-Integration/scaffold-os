@@ -34,7 +34,11 @@ export async function GET() {
     const enrichedProjects = allProjects.map((p: any) => {
       const data = parseData(p.data);
       const step6 = data?.step6 || data?.s6 || {};
-      const ki = step6.kiResult || step6.ki_result || {};
+      // FIX: Die CAD-Planung speichert ihr kiResult AUF data-Ebene
+      // (data.kiResult), nicht unter data.step6 – ohne diesen Fallback
+      // blieben CAD-Projekte im Dashboard bei 0 €. Aufmaß (Schritt 6)
+      // schreibt unter step6, deshalb zuerst dort suchen.
+      const ki = step6.kiResult || step6.ki_result || data?.kiResult || data?.ki_result || {};
       const total_value = p.total_value || ki.suggestedPrice || ki.suggested_price || 0;
       const margin_percent = p.margin_percent || ki.marginPercent || ki.margin_percent || 0;
       // Geschätzte Kosten = Umsatz * (1 - Marge/100)
