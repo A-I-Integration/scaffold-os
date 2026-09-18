@@ -353,7 +353,10 @@ function Schritt6Content() {
       anchorType: (s4.anker || 'fassadenanker').toLowerCase(), groundCondition: (s4.untergrund || 'beton').toLowerCase(),
       hasSlope: s4.gefaelle || false, hasLightShafts: s4.lichtschaechte || false, hasBasement: s4.keller || false,
       needsLoadDistribution: s4.lastverteilplatten || false,
-      environment: { hasPowerLines: s4.freileitungen || false, hasVegetation: s4.vegetation || false, hasNeighborProperty: s4.nachbargrundstueck || false, hasPublicTraffic: s2.durchfahrt || false, needsNoParkingZone: s4.halteverbotszone || false, needsSpecialUse: s4.sondernutzung || false, hasStorageArea: s4.lagerflaeche || false, hasTruckAccess: s4.lkw_zufahrt || false, needsCrane: s4.kranErforderlich || false, // Phase 88: falscher Key - Schritt 4 speichert 'kranErforderlich' needsProtectionRoof: s4.schutzdach || false, needsSafetyNet: s4.fangnetz || false },
+      // Phase 88: falscher Key behoben - Schritt 4 speichert 'kranErforderlich'
+      // (Hinweis bewusst in eigener Zeile: ein Zeilenkommentar mitten in
+      // dem Object-Literal würde den Rest der Zeile auskommentieren).
+      environment: { hasPowerLines: s4.freileitungen || false, hasVegetation: s4.vegetation || false, hasNeighborProperty: s4.nachbargrundstueck || false, hasPublicTraffic: s2.durchfahrt || false, needsNoParkingZone: s4.halteverbotszone || false, needsSpecialUse: s4.sondernutzung || false, hasStorageArea: s4.lagerflaeche || false, hasTruckAccess: s4.lkw_zufahrt || false, needsCrane: s4.kranErforderlich || false, needsProtectionRoof: s4.schutzdach || false, needsSafetyNet: s4.fangnetz || false },
       windZone: (parseInt(s4.windzone) as 1|2|3|4) || 1, hazards: mapGefahren(s4), additionalNotes: s4.zusaetzliche_hinweise || '',
     };
   }
