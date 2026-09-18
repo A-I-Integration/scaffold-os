@@ -99,11 +99,14 @@ function Schritt6Content() {
   const [festpreisProM2, setFestpreisProM2] = useState('');
   // NEU (Phase 46): Preisliste je Gerüst-Typ aus den Einstellungen
   const [preisliste, setPreisliste] = useState<{ name: string; preis_pro_m2: number }[]>([])
+  // Phase 87: Firmenprofil fuer Angebot-PDF (Absender + Fusszeile, wie Rechnung)
+  const [companyProfile, setCompanyProfile] = useState<any>(null)
   useEffect(() => {
     fetch('/api/company').then(r => r.json()).then(j => {
       const v = j.company?.calc_festpreis_pro_m2;
       if (v != null && v !== '') setFestpreisProM2(String(v));
       if (Array.isArray(j.company?.preisliste_geruesttypen)) setPreisliste(j.company.preisliste_geruesttypen);
+      setCompanyProfile(j.company || null);
     }).catch(() => {});
   }, []);
 
@@ -469,6 +472,13 @@ function Schritt6Content() {
     doc.setTextColor(255, 255, 255); doc.setFontSize(18); doc.setFont('helvetica', 'bold'); doc.text('SCAFFOLD OS', 14, 18);
     doc.setFontSize(22); doc.text('ANGEBOT', pageWidth - 14, 18, { align: 'right' });
     doc.setFontSize(9); doc.text('KI-gestützte Gerüstbau-Kalkulation', pageWidth - 14, 26, { align: 'right' });
+    // Phase 87: Absender in der Kopfleiste (gleiche Daten wie Rechnung)
+    if (companyProfile) {
+      doc.setFontSize(8); doc.setFont('helvetica', 'normal');
+      doc.text(String(companyProfile.company_name || ''), 14, 24.5);
+      doc.text(String(companyProfile.street || ''), 14, 29);
+      doc.text([companyProfile.zip, companyProfile.city].filter(Boolean).join(' '), 14, 33.5);
+    }
     let y = 45;
     const sysName = systemAnzeigename(s3.system, s3.customSystem);
     const projBoxH = sysName ? 38 : 30;
@@ -539,7 +549,18 @@ function Schritt6Content() {
       + (anpassungen.skonto ? '\n7. Bei Zahlung innerhalb von 14 Tagen ab Rechnungsdatum gewähren wir 2 % Skonto auf den Endpreis.' : '');
     doc.text(agbText, 14, 45, { maxWidth: 180, lineHeightFactor: 1.5 });
     doc.setDrawColor(15, 23, 42); doc.line(14, 230, 100, 230); doc.line(110, 230, 196, 230); doc.setTextColor(15, 23, 42); doc.setFontSize(9); doc.text('Ort, Datum', 14, 236); doc.text('Unterschrift Auftraggeber', 14, 242); doc.text('Ort, Datum', 110, 236); doc.text('Unterschrift Auftragnehmer', 110, 242);
-    doc.setTextColor(148, 163, 184); doc.setFontSize(7); doc.text('SCAFFOLD OS • KI-gestützte Gerüstbau-Software • Automatisch generiert', pageWidth / 2, 285, { align: 'center' });
+    // Phase 87: Firmen-Fußzeile (Kontakt, Steuer, Bank) wie auf der Rechnung
+    if (companyProfile) {
+      doc.setDrawColor(226, 232, 240); doc.line(14, 266, pageWidth - 14, 266);
+      doc.setTextColor(100, 116, 139); doc.setFontSize(7); doc.setFont('helvetica', 'normal');
+      const fk1 = [companyProfile.phone ? 'Tel. ' + companyProfile.phone : '', companyProfile.email || '', companyProfile.website || ''].filter(Boolean).join('  •  ');
+      const fk2 = [companyProfile.steuer_nr ? 'Steuer-Nr. ' + companyProfile.steuer_nr : '', companyProfile.ust_id ? 'USt-IdNr. ' + companyProfile.ust_id : ''].filter(Boolean).join('  •  ');
+      const fk3 = [companyProfile.bank_name || '', companyProfile.iban ? 'IBAN ' + companyProfile.iban : '', companyProfile.bic ? 'BIC ' + companyProfile.bic : ''].filter(Boolean).join('  •  ');
+      if (fk1) doc.text(fk1, pageWidth / 2, 271, { align: 'center' });
+      if (fk2) doc.text(fk2, pageWidth / 2, 275.5, { align: 'center' });
+      if (fk3) doc.text(fk3, pageWidth / 2, 280, { align: 'center' });
+    }
+    doc.setTextColor(148, 163, 184); doc.setFontSize(7); doc.text('SCAFFOLD OS • KI-gestützte Gerüstbau-Software • Automatisch generiert', pageWidth / 2, 288, { align: 'center' });
     return doc.output('datauristring');
   }
 
