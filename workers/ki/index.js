@@ -291,9 +291,14 @@ async function verarbeiteCadAnalyseJob(tenant, job) {
       const dl = await fetch(url);
       if (dl.ok) {
         const dims = parsePly(Buffer.from(await dl.arrayBuffer()));
+        // Phase 85: Geschoss-Fallback fehlte im PLY-Pfad (war nur in
+        // DXF/Vision). Ohne Geschosse baut das CAD kein Modell -> kein
+        // Bild, keine Stueckliste, keine Kunden-Anbindung. Mit bekannter
+        // Hoehe ist 1 Geschoss die sichere Annahme.
         const antwort = {
           laenge: dims.laenge, breite: dims.breite, hoehe: dims.hoehe,
-          hoeheGeschaetzt: true, traufhoehe: null, dachform: null, geschosse: null,
+          hoeheGeschaetzt: true, traufhoehe: null, dachform: null,
+          geschosse: dims.hoehe > 0 ? 1 : null,
           zusammenfassung: `Aus Punktwolke (PLY) berechnet: ${dims.laenge} x ${dims.breite} x ${dims.hoehe} m (Begrenzungsbox ueber ${dims.punkte} Punkten).`,
           verworfen: [], ohneKi: true,
         };
