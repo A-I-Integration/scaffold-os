@@ -278,7 +278,7 @@ export default function TourenPage() {
         <div className="flex items-center justify-between mb-6">
           <div>
             <h1 className="text-3xl font-bold text-[#e8590c]">🗺️ Touren & Disposition</h1>
-            <p className="text-[#86868b] text-sm mt-1">Tagesplanung, Tour-Überwachung und Stundenauswertung</p>
+            <p className="text-[#86868b] text-sm mt-1">Tagesplanung und Tour-Überwachung</p>
           </div>
           <button onClick={loadAll} className="bg-[#f5f5f7] hover:bg-black/10 border border-black/10 rounded-xl px-4 py-2 text-sm transition">
             ↻ Aktualisieren
@@ -309,7 +309,7 @@ export default function TourenPage() {
 
         {/* Tabs */}
         <div className="flex gap-2 mb-6 border-b border-black/10 pb-0">
-          {([['touren', '🚛 Touren'], ['neu', '➕ Neue Tour'], ['stunden', '⏱️ Stundenauswertung']] as [Tab, string][]).map(([key, label]) => (
+          {([['touren', '🚛 Touren'], ['neu', '➕ Neue Tour']] as [Tab, string][]).map(([key, label]) => (
             <button
               key={key}
               onClick={() => setTab(key)}
