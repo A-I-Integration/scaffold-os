@@ -1,9 +1,9 @@
 import Link from 'next/link';
 import type { Metadata } from 'next';
 import {
-  ArrowRight, Ruler, FileText, Route, Timer, Warehouse, Check,
-  Users, Package, Clock, Camera, CalendarCheck,
-  Globe, HardHat, CalendarClock,
+  ArrowRight, Ruler, FileText, Route, Timer, Warehouse, ShieldCheck, Check,
+  Users, Package, Clock, Camera, QrCode, PenLine, MapPin, CalendarCheck,
+  Sparkles, Globe, HardHat,
 } from 'lucide-react';
 import dynamic from 'next/dynamic';
 import LandingHeader from '@/components/LandingHeader';
@@ -118,47 +118,49 @@ const KERNBEREICHE = [
   },
 ];
 
-// Bewusst kompakt gehalten (6 statt 12 Karten): Besucher sollen das
-// Leistungsbild verstehen – die detaillierte Feature-Matrix bleibt intern
-// und ist für Wettbewerber nicht einsehbar.
 const ALLE_FUNKTIONEN = [
   { icon: Ruler, titel: 'Aufmaß & KI-Angebot', text: (<>Baustelle in 6 Schritten erfassen – die <strong>KI</strong> liefert Materialliste, Kalkulation und Angebots-PDF.</>) },
-  { icon: Camera, titel: 'CAD-Planung & 3D-Scan', text: 'Fassaden einmessen per Foto, Drohne oder Punktwolke – CAD-unterstützt, mit DIN-12811-Check.' },
+  { icon: Camera, titel: 'Foto, Drohne & 3D-Scan', text: 'Fotos am Handy, Drohnen-Upload bis 20 MB, Punktwolken-Auswertung für Großscans.' },
+  { icon: QrCode, titel: 'QR & Unterschrift', text: 'Angebot mit QR-Code und digitaler Unterschrift – der Kunde unterschreibt auf dem Handy.' },
   { icon: Route, titel: 'Touren & Disposition', text: 'Routen-KI plant den Tag, GPS zeigt die Fahrzeuge, Umdisposition bei Krankheit oder Wetter.' },
-  { icon: Timer, titel: 'Zeiterfassung & Planung', text: 'Stempeln am Handy, Pausen-Automatik, Soll-Ist-Vergleich – Krank und Urlaub direkt im Plan.' },
+  { icon: MapPin, titel: 'Fahrer-Navigation & GPS', text: 'Fahrer navigieren direkt aus der App, die Zentrale sieht jede Position live.' },
+  { icon: Timer, titel: 'Zeiterfassung', text: 'Stempeln am Handy, Pausen-Automatik, Soll-Ist-Vergleich, Überstunden – ohne Zettelwirtschaft.' },
+  { icon: CalendarCheck, titel: 'Planung & Abwesenheiten', text: 'Krank und Urlaub direkt im Plan – Konflikte werden sofort sichtbar.' },
   { icon: Warehouse, titel: 'Lager & Prognose', text: 'Bestände im Blick, automatische Stückliste, KI warnt, bevor Material knapp wird.' },
-  { icon: FileText, titel: 'Rechnungen & DATEV', text: (<><strong>GoBD-konforme Rechnungen</strong> mit Mahnwesen – Buchungsstapel direkt für den Steuerberater.</>) },
+  { icon: FileText, titel: 'Rechnungen & DATEV', text: (<><strong>GoBD-konforme Rechnungen</strong> mit Mahnwesen – Buchungsstapel und Lohndaten direkt für den Steuerberater.</>) },
+  { icon: Sparkles, titel: 'KI überall', text: 'Materialberechnung, Routen-Vorschläge, Sprachnotizen, Foto-Analyse – die KI arbeitet im Hintergrund mit.' },
+  { icon: PenLine, titel: 'Digitaler Zwilling', text: 'Jede Baustelle als digitales Modell – Änderungen am Gerüst bleiben dokumentiert.' },
+  { icon: ShieldCheck, titel: 'Datenschutz aus Frankfurt', text: 'Eigene Datenbank pro Betrieb, EU-Hosting, DSGVO- und EU-AI-Act-konform.' },
 ];
 
-// Konkurrenz-Sicherung: keine detaillierte Feature-Matrix und keine
-// harten Limits mehr öffentlich. Nur ein Einstiegspreis („ab 249 €"),
-// Enterprise bewusst „auf Anfrage – je nach Betriebsgröße".
 const PAKETE = [
   {
-    id: 'demo',
-    name: 'Demo',
-    preis: 'Kostenlos',
-    proMonat: false,
-    cta: 'Demo anfordern',
-    zielgruppe: 'Persönlicher Testzugang – unverbindlich, wir richten ihn für Sie ein.',
+    id: 'starter',
+    name: 'Starter',
+    preis: '249 €',
+    zielgruppe: 'Für kleine Betriebe, die digital starten wollen.',
     features: [
-      'Alle Kernmodule zum Ausprobieren',
-      'Persönliche Einführung inklusive',
-      'Endet automatisch – nichts zu kündigen',
+      '1 Admin-/CEO-Zugang',
+      '2 Dispo-Zugänge',
+      'Bis zu 5 Mitarbeiter',
+      'Lager bis 10.000 Teile',
+      'Aufmaß mit KI-Angebot & PDF',
+      'Zeiterfassung & Touren',
     ],
     hervorgehoben: false,
   },
   {
-    id: 'professional',
-    name: 'Professional',
-    preis: 'ab 249 €',
-    proMonat: true,
-    cta: 'Demo anfordern',
-    zielgruppe: 'Für kleine & mittlere Gerüstbau-Betriebe.',
+    id: 'priority',
+    name: 'Priority',
+    preis: '495 €',
+    zielgruppe: 'Für wachsende Betriebe mit mehreren Kolonnen.',
     features: [
-      'Aufmaß, KI-Angebot, Disposition, Lager & Zeiterfassung',
-      'Alle Rollen: CEO, Disposition, Bauleiter, Lager',
-      'Wächst mit Ihrem Betrieb mit',
+      'CEO-, Dispo-, Bauleiter- & Lager-Zugänge',
+      'Bis zu 20 Mitarbeiter',
+      'Lager bis 20.000 Teile',
+      'Alle Starter-Funktionen',
+      'Routen-KI & GPS-Tracking',
+      'Lager-Prognose & Reservierung',
     ],
     hervorgehoben: true,
   },
@@ -166,13 +168,14 @@ const PAKETE = [
     id: 'enterprise',
     name: 'Enterprise',
     preis: 'Auf Anfrage',
-    proMonat: false,
-    cta: 'Angebot anfordern',
-    zielgruppe: 'Preis je nach Betriebsgröße & Modulen.',
+    zielgruppe: 'Für große Betriebe – alles ohne Limits.',
     features: [
-      'Individuelle Zusammenstellung & Limits',
-      'Sonderkonditionen für Großbetriebe',
-      'Persönliche Beratung & Onboarding',
+      'Alle Rollen & Zugänge unbegrenzt',
+      'Mitarbeiter unbegrenzt',
+      'Lager unbegrenzt',
+      'Alle Priority-Funktionen',
+      'Punktwolken-Großscans bis 500 MB',
+      'Persönlicher Ansprechpartner',
     ],
     hervorgehoben: false,
   },
@@ -197,7 +200,7 @@ const FAQ = [
   {
     frage: 'Was kostet SCAFFOLD OS?',
     antwort:
-      'Professional startet ab 249 € pro Monat. Der Enterprise-Preis richtet sich nach Betriebsgröße und Modulen – fordern Sie ein Angebot an. Und Sie können vorab jederzeit einen persönlichen Demo-Zugang anfordern.',
+      'Drei Pakete: Starter für 249 € im Monat, Priority für 495 €. Enterprise hebt alle Limits auf – der Preis richtet sich nach Betriebsgröße und Modulen, gerne erstellen wir Ihnen ein Angebot. Auf Anfrage richten wir Ihnen vorab einen persönlichen Demo-Zugang ein.',
   },
   {
     frage: 'Kann ich SCAFFOLD OS kostenlos testen?',
@@ -254,8 +257,8 @@ const JSONLD = {
         'Komplette Software für Gerüstbau-Betriebe: KI-Aufmaß, Angebot, Disposition, Lager, Touren, Zeiterfassung und Rechnung in einem System.',
       inLanguage: 'de',
       offers: [
-        { '@type': 'Offer', name: 'Demo', price: '0', priceCurrency: 'EUR' },
-        { '@type': 'Offer', name: 'Professional', price: '249', priceCurrency: 'EUR' },
+        { '@type': 'Offer', name: 'Starter', price: '249', priceCurrency: 'EUR' },
+        { '@type': 'Offer', name: 'Priority', price: '495', priceCurrency: 'EUR' },
         { '@type': 'Offer', name: 'Enterprise' },
       ],
       provider: { '@id': 'https://scaffoldos.de/#organization' },
@@ -404,12 +407,6 @@ export default function HomePage() {
             <ArrowRight className="w-5 h-5" />
           </Link>
           <Link
-            href={TERMIN_URL}
-            className="inline-flex items-center gap-2 text-[#1d1d1f] font-medium text-lg px-8 py-3.5 rounded-full border border-black/10 hover:bg-black/5 transition-colors"
-          >
-            <CalendarClock className="w-5 h-5" /> Termin buchen
-          </Link>
-          <Link
             href="/login"
             className="inline-flex items-center gap-2 text-[#1d1d1f] font-medium text-lg px-8 py-3.5 rounded-full border border-black/10 hover:bg-black/5 transition-colors"
           >
@@ -418,9 +415,6 @@ export default function HomePage() {
         </div>
         <p className="mt-6 text-sm text-[#86868b]">
           Keine Installation · Läuft auf Handy, Tablet & PC · Daten in Frankfurt am Main
-        </p>
-        <p className="mt-2 text-xs text-[#a1a1a6] tracking-wide">
-          DIN-12811-Check · GoBD-Rechnung · DSGVO & EU-AI-Act · Hosting in Deutschland
         </p>
       </section>
 
@@ -569,12 +563,11 @@ export default function HomePage() {
       <section className="px-6 pb-24" id="pakete">
         <div className="max-w-6xl mx-auto">
           <h2 className="text-2xl md:text-4xl font-semibold tracking-tight text-center">
-            Kostenlos testen. <span className="text-[#86868b]">Enterprise auf Anfrage.</span>
+            Drei Pakete. <span className="text-[#86868b]">Ein klarer Preis pro Monat.</span>
           </h2>
           <p className="mt-4 text-center text-[#6e6e73] max-w-2xl mx-auto">
-            Auf Wunsch richten wir Ihnen vorab einen persönlichen Demo-Zugang ein. Professional
-            startet ab 249 € pro Monat – der Enterprise-Preis richtet sich nach Betriebsgröße
-            und Modulen.
+            Auf Anfrage richten wir Ihnen vorab einen persönlichen Demo-Zugang ein. Danach
+            zahlen Sie per SEPA-Lastschrift oder Kreditkarte, nach 36 Monaten monatlich kündbar.
           </p>
           <div className="mt-12 grid md:grid-cols-3 gap-6">
             {PAKETE.map((paket) => (
@@ -594,7 +587,7 @@ export default function HomePage() {
                 <p className="text-xl font-semibold tracking-tight">{paket.name}</p>
                 <p className="mt-4 text-4xl font-semibold tracking-tight">
                   {paket.preis}
-                  {paket.proMonat && (
+                  {paket.id !== 'enterprise' && (
                     <span className={`text-base font-normal ${paket.hervorgehoben ? 'text-white/60' : 'text-[#86868b]'}`}>
                       /Monat
                     </span>
@@ -612,14 +605,14 @@ export default function HomePage() {
                   ))}
                 </ul>
                 <Link
-                  href={paket.id === 'enterprise' ? '/anfrage' : '/anfrage?art=demo'}
+                  href={`/anfrage?art=demo`}
                   className={`mt-8 inline-flex items-center justify-center gap-2 font-semibold px-6 py-3 rounded-full transition-all hover:scale-[1.02] ${
                     paket.hervorgehoben
                       ? 'bg-[#e8590c] hover:bg-[#d9480f] text-white'
                       : 'bg-black/5 hover:bg-black/10 text-[#1d1d1f]'
                   }`}
                 >
-                  {paket.cta}
+                  Starten
                   <ArrowRight className="w-4 h-4" />
                 </Link>
               </div>
@@ -632,40 +625,40 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* ─── Terminbuchung über Microsoft Bookings (nur Master, per NEXT_PUBLIC_TERMIN_BUCHUNG=1) ─── */}
-      {process.env.NEXT_PUBLIC_TERMIN_BUCHUNG === '1' && (
-        <section className="px-6 pb-24" id="termin">
-          <div className="max-w-4xl mx-auto text-center mb-10">
-            <p className="text-sm font-semibold tracking-widest text-[#e8590c] uppercase mb-3">
-              Persönliche Beratung
-            </p>
-            <h2 className="text-2xl md:text-4xl font-semibold tracking-tight">
-              Fragen? Termin machen.{' '}
-              <span className="text-[#86868b]">Direkt im Kalender.</span>
-            </h2>
-            <p className="mt-4 text-lg text-[#6e6e73] leading-relaxed max-w-2xl mx-auto">
-              Wähl Datum und Uhrzeit. Wir zeigen dir SCAFFOLD OS live, beantworten
-              deine Fragen und rechnen gemeinsam deinen Fall durch.
-            </p>
-          </div>
-          <div className="max-w-2xl mx-auto text-center bg-[#f5f5f7] rounded-3xl border border-black/5 px-8 py-12">
-            <CalendarCheck className="h-12 w-12 text-[#e8590c] mx-auto mb-5" />
-            <p className="text-lg font-semibold text-[#1d1d1f] mb-1">Kostenlose Erstberatung</p>
-            <p className="text-sm text-[#86868b] mb-8">30 Minuten · Telefon oder Videocall · unverbindlich</p>
-            <a
-              href="https://bookings.cloud.microsoft/book/G6a479b91191146b89ae2cc4218c926ab@scaffoldos.de/?ismsaljsauthenabled=true"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-2 rounded-full bg-[#e8590c] hover:bg-[#d9480f] px-8 py-4 text-lg font-bold text-white transition-colors"
-            >
-              Kostenlosen Termin buchen <ArrowRight className="h-5 w-5" />
-            </a>
-            <p className="mt-6 text-xs text-[#86868b]">
-              Die Buchung läuft über Microsoft Bookings – du bekommst sofort eine Bestätigung per E-Mail.
-            </p>
-          </div>
-        </section>
-      )}
+      {/* ─── Terminbuchung über Google Kalender ───
+          Link per Env-Var NEXT_PUBLIC_TERMIN_URL steuerbar (siehe Dateikopf),
+          Fallback bis dahin: Demo-Anfrage-Formular. */}
+      <section className="px-6 pb-24" id="termin">
+        <div className="max-w-4xl mx-auto text-center mb-10">
+          <p className="text-sm font-semibold tracking-widest text-[#e8590c] uppercase mb-3">
+            Persönliche Beratung
+          </p>
+          <h2 className="text-2xl md:text-4xl font-semibold tracking-tight">
+            Fragen? Termin machen.{' '}
+            <span className="text-[#86868b]">Direkt im Kalender.</span>
+          </h2>
+          <p className="mt-4 text-lg text-[#6e6e73] leading-relaxed max-w-2xl mx-auto">
+            Wähl Datum und Uhrzeit. Wir zeigen dir SCAFFOLD OS live, beantworten
+            deine Fragen und rechnen gemeinsam deinen Fall durch.
+          </p>
+        </div>
+        <div className="max-w-2xl mx-auto text-center bg-[#f5f5f7] rounded-3xl border border-black/5 px-8 py-12">
+          <CalendarCheck className="h-12 w-12 text-[#e8590c] mx-auto mb-5" />
+          <p className="text-lg font-semibold text-[#1d1d1f] mb-1">Kostenlose Erstberatung</p>
+          <p className="text-sm text-[#86868b] mb-8">30 Minuten · Telefon oder Videocall · unverbindlich</p>
+          <a
+            href={TERMIN_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-2 rounded-full bg-[#e8590c] hover:bg-[#d9480f] px-8 py-4 text-lg font-bold text-white transition-colors"
+          >
+            Kostenlosen Termin buchen <ArrowRight className="h-5 w-5" />
+          </a>
+          <p className="mt-6 text-xs text-[#86868b]">
+            Die Buchung läuft über unseren Google Kalender – du bekommst sofort eine Bestätigung per E-Mail.
+          </p>
+        </div>
+      </section>
 
       {/* ─── Alle Funktionen im Überblick ─── */}
       <section className="px-6 pb-24">
