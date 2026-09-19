@@ -16,11 +16,6 @@ interface Driver {
   id: string; name: string; employee_id?: string | null;
   employee?: { id: string; first_name: string; last_name: string } | null;
 }
-interface TransportOrder {
-  id: string; quantity: number; status: string; created_at: string;
-  to_project?: { name: string; adresse: string; data?: { step1?: { projektbeginn?: string; projektende?: string } } } | null;
-  inventory?: { name: string } | null;
-}
 interface Stop {
   id: string; stop_order: number; address: string; status: string;
   transport_order?: { quantity: number; inventory?: { name: string } | null } | null;
@@ -139,8 +134,7 @@ export default function TourenPage() {
       return Array.isArray(liste) && liste.some((m) => Number(m?.quantity ?? 0) > 0);
     } catch { return false; }
   };
-  const anfahrtenTeam = anfahrten.filter((p) => !hatMaterial(p));
-  const anfahrtenMitMaterial = anfahrten.filter((p) => hatMaterial(p));
+  // EINE Liste: alle Baustellen anhakbar; hatMaterial(p) steuert nur das Badge.
 
   const loadEntries = useCallback(async () => {
     setSLoading(true);
@@ -169,24 +163,29 @@ export default function TourenPage() {
 
   async function createTour() {
     setFMessage('');
-    if (!fName.trim()) { setFMessage('Bitte Tour-Name eingeben.'); return; }
+    // Tour-Name ist optional – wird aus Datum + erstem Stopp erzeugt.
     if (!fVehicle) { setFMessage('Bitte Fahrzeug wählen.'); return; }
     if (fDrivers.length === 0) { setFMessage('Bitte mindestens eine Person wählen (Mehrfachauswahl möglich).'); return; }
     if (fSelected.length === 0 && fProjSelected.length === 0) { setFMessage('Bitte mindestens einen Transport ODER eine Baustellen-Anfahrt wählen.'); return; }
     setFSaving(true);
+    const erstesProjekt = projekte.find(p => p.id === fProjSelected[0]);
+    const tourName = fName.trim() ||
+      `Tour ${new Date(fDate + 'T00:00:00').toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' })}${erstesProjekt ? ` – ${erstesProjekt.name}` : ''}`;
     try {
+      setFMessage('');
       const res = await fetch('/api/tours', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           // FIX: erste gewählte Person fährt (driver_id), alle gewählten
           // Personen werden als Team gespeichert (team_ids).
-          name: fName.trim(), vehicle_id: fVehicle, driver_id: fDrivers[0], team_ids: fDrivers,
+          name: tourName, vehicle_id: fVehicle, driver_id: fDrivers[0], team_ids: fDrivers,
           planned_date: fDate, planned_start_time: fTime, transport_order_ids: fSelected, project_ids: fProjSelected,
         }),
       });
       const json = await res.json();
       if (!json.success) throw new Error(json.error);
-      setFMessage('✅ Tour „' + fName + '" wurde angelegt.');
+      setFMessage('✅ Tour „' + tourName + '" wurde angelegt.');
       setFName(''); setFSelected([]); setFProjSelected([]); setFDrivers([]);
       await loadAll();
       // Phase 68-D: direkt zum Touren-Tab wechseln, damit die neue Tour
@@ -395,7 +394,7 @@ export default function TourenPage() {
             <div className="bg-[#f5f5f7] border border-black/10 rounded-xl p-5 space-y-4">
               <h2 className="font-semibold text-lg">Tour anlegen</h2>
               <div>
-                <label className="block text-sm text-[#86868b] mb-1">Tour-Name *</label>
+                <label className="block text-sm text-[#86868b] mb-1">Tour-Name <span className="text-xs">(optional – wird sonst aus Datum + erstem Stopp erzeugt)</span></label>
                 <input value={fName} onChange={e => setFName(e.target.value)} placeholder="z. B. Tour Nord Vormittag" className={inputCls} />
               </div>
               <div className="grid grid-cols-2 gap-3">
@@ -448,52 +447,37 @@ export default function TourenPage() {
 
           </div>
 
-          {/* Phase 68-C: Baustellen-Anfahrten (ohne Material) */}
+          {/* Phase 68-C: Baustellen-Anfahrten – ALLE anhakbar, 📦-Badge = Material geplant */}
           <div className="mt-6">
-            <h2 className="font-semibold text-lg mb-1">Baustellen-Anfahrten (nur Team, kein Material)</h2>
-            <p className="text-[#86868b] text-sm mb-3">Aktive Projekte ohne geplante Tour — für Team-Anfahrt anhaken.</p>
-            {anfahrtenTeam.length === 0 && (
+            <h2 className="font-semibold text-lg mb-1">Baustellen-Anfahrten</h2>
+            <p className="text-[#86868b] text-sm mb-3">Aktive Projekte ohne geplante Tour – zum Anhaken anklicken. Markierte 📦 haben Material geplant und brauchen zusätzlich einen Materialtransport (Lager-Anbindung folgt).</p>
+            {anfahrten.length === 0 && (
               <div className="text-sm py-4 text-center bg-green-50 border border-green-200 rounded-xl">
-                  <span className="text-green-700 font-medium">✓ Alle Baustellen ohne Material sind verplant.</span>
+                  <span className="text-green-700 font-medium">✓ Alle Baustellen sind verplant.</span>
                   <span className="block text-[#86868b] mt-1">Neue Baustelle? Projekt im Dashboard auf „aktiv“ setzen — sie erscheint dann hier automatisch.</span>
                 </div>
             )}
-            <div className="space-y-2 max-h-[260px] overflow-y-auto pr-1">
-              {anfahrtenTeam.map((p: any) => {
+            <div className="space-y-2 max-h-[320px] overflow-y-auto pr-1">
+              {anfahrten.map((p: any) => {
                 const idx = fProjSelected.indexOf(p.id);
                 const selected = idx >= 0;
+                const mitMat = hatMaterial(p);
                 return (
                   <button key={p.id}
                     onClick={() => setFProjSelected(selected ? fProjSelected.filter(x => x !== p.id) : [...fProjSelected, p.id])}
-                    className={`w-full text-left rounded-xl border p-3 transition flex items-center gap-3 ${selected ? 'border-[#0071e3] bg-blue-50' : 'border-black/10 bg-white/50 hover:border-black/20'}`}>
+                    className={`w-full text-left rounded-xl border p-3 transition flex items-center gap-3 ${selected ? 'border-[#0071e3] bg-blue-50' : mitMat ? 'border-amber-200 bg-amber-50 hover:border-amber-400' : 'border-black/10 bg-white/50 hover:border-black/20'}`}>
                     <span className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold shrink-0 ${selected ? 'bg-[#0071e3] text-white' : 'bg-black/10'}`}>
-                      {selected ? fSelected.length + idx + 1 : '·'}
+                      {selected ? idx + 1 : '·'}
                     </span>
                     <span className="flex-1">
                       <span className="block font-medium">{p.name}</span>
                       <span className="block text-[#86868b] text-xs">{p.adresse}</span>
                     </span>
+                    {mitMat && <span className="text-xs font-medium text-amber-800 bg-amber-200/70 rounded-full px-2 py-0.5 shrink-0">📦 Material</span>}
                   </button>
                 );
               })}
             </div>
-            {anfahrtenMitMaterial.length > 0 && (
-              <div className="mt-5">
-                <h3 className="font-semibold text-base mb-1">Baustellen mit Material (brauchen Materialtransport)</h3>
-                <p className="text-[#86868b] text-sm mb-3">Diese Projekte haben im Aufmaß Material geplant – eine reine Team-Anfahrt reicht nicht. Der Transport aus dem Lager läuft künftig über die offenen Transportaufträge (rechts) – die automatische Anbindung folgt.</p>
-                <div className="space-y-2 max-h-[200px] overflow-y-auto pr-1">
-                  {anfahrtenMitMaterial.map((p: any) => (
-                    <div key={p.id} className="w-full text-left rounded-xl border border-amber-200 bg-amber-50 p-3 flex items-center gap-3">
-                      <span className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold shrink-0 bg-amber-200 text-amber-900">M</span>
-                      <span className="flex-1">
-                        <span className="block font-medium">{p.name}</span>
-                        <span className="block text-[#86868b] text-xs">{p.adresse}</span>
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
           </div>
 
           {/* Fahrer ↔ Mitarbeiter verknüpfen (Phase 6) */}
