@@ -127,6 +127,22 @@ export default function TourenPage() {
   );
   const anfahrten = projekte.filter((p: any) => p.adresse && !verplanteProjektIds.has(p.id));
 
+  // FIX: Projekte mit Materialliste (Aufmaß Schritt 5 / KI Schritt 4)
+  // brauchen einen Materialtransport und gehören nicht in die reine
+  // Team-Anfahrt – sie werden separat gelistet.
+  const hatMaterial = (p: any) => {
+    try {
+      const d = typeof p.data === 'string' ? JSON.parse(p.data) : (p.data || {});
+      const s5 = d?.step5 || d?.s5 || {};
+      const felder = ['rahmen', 'diagonale', 'gelander', 'arbeitsbuehnen', 'spindeltreppe', 'anker'];
+      if (felder.some((k) => parseFloat(String(s5[k] || '0').replace(',', '.')) > 0)) return true;
+      const liste = d?.step4?.kiResult?.materialList || d?.step4?.ki_result?.materialList || [];
+      return Array.isArray(liste) && liste.some((m) => Number(m?.quantity ?? 0) > 0);
+    } catch { return false; }
+  };
+  const anfahrtenTeam = anfahrten.filter((p) => !hatMaterial(p));
+  const anfahrtenMitMaterial = anfahrten.filter((p) => hatMaterial(p));
+
   const loadEntries = useCallback(async () => {
     setSLoading(true);
     try {
@@ -485,14 +501,14 @@ export default function TourenPage() {
           <div className="mt-6">
             <h2 className="font-semibold text-lg mb-1">Baustellen-Anfahrten (nur Team, kein Material)</h2>
             <p className="text-[#86868b] text-sm mb-3">Aktive Projekte ohne geplante Tour — für Team-Anfahrt anhaken.</p>
-            {anfahrten.length === 0 && (
+            {anfahrtenTeam.length === 0 && (
               <div className="text-sm py-4 text-center bg-green-50 border border-green-200 rounded-xl">
-                  <span className="text-green-700 font-medium">✓ Alle aktiven Baustellen sind verplant.</span>
+                  <span className="text-green-700 font-medium">✓ Alle Baustellen ohne Material sind verplant.</span>
                   <span className="block text-[#86868b] mt-1">Neue Baustelle? Projekt im Dashboard auf „aktiv“ setzen — sie erscheint dann hier automatisch.</span>
                 </div>
             )}
             <div className="space-y-2 max-h-[260px] overflow-y-auto pr-1">
-              {anfahrten.map((p: any) => {
+              {anfahrtenTeam.map((p: any) => {
                 const idx = fProjSelected.indexOf(p.id);
                 const selected = idx >= 0;
                 return (
@@ -510,6 +526,23 @@ export default function TourenPage() {
                 );
               })}
             </div>
+            {anfahrtenMitMaterial.length > 0 && (
+              <div className="mt-5">
+                <h3 className="font-semibold text-base mb-1">Baustellen mit Material (brauchen Materialtransport)</h3>
+                <p className="text-[#86868b] text-sm mb-3">Diese Projekte haben im Aufmaß Material geplant – eine reine Team-Anfahrt reicht nicht. Der Transport aus dem Lager läuft künftig über die offenen Transportaufträge (rechts) – die automatische Anbindung folgt.</p>
+                <div className="space-y-2 max-h-[200px] overflow-y-auto pr-1">
+                  {anfahrtenMitMaterial.map((p: any) => (
+                    <div key={p.id} className="w-full text-left rounded-xl border border-amber-200 bg-amber-50 p-3 flex items-center gap-3">
+                      <span className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold shrink-0 bg-amber-200 text-amber-900">M</span>
+                      <span className="flex-1">
+                        <span className="block font-medium">{p.name}</span>
+                        <span className="block text-[#86868b] text-xs">{p.adresse}</span>
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Fahrer ↔ Mitarbeiter verknüpfen (Phase 6) */}
