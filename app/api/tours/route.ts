@@ -37,6 +37,9 @@ export async function POST(req: Request) {
     // (z. B. Team-Anfahrt bei Projektstart). Mindestens EIN Stop
     // (Transport ODER Baustelle) wird weiterhin verlangt.
     const { name, vehicle_id, driver_id, planned_date, planned_start_time } = body;
+    // team_ids: Mehrfachauswahl Team (erste ID = Fahrer). Spalte per
+    // supabase/phase-89-tour-team.sql angelegt (jsonb, Default []).
+    const team_ids: string[] = body.team_ids || [];
     const transport_order_ids: string[] = body.transport_order_ids || [];
     const project_ids: string[] = body.project_ids || [];
 
@@ -71,6 +74,7 @@ export async function POST(req: Request) {
         name,
         vehicle_id,
         driver_id,
+        team_ids,
         planned_date,
         planned_start_time,
         status: 'planned',

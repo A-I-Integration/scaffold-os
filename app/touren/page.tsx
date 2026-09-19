@@ -28,6 +28,7 @@ interface Stop {
 interface Tour {
   id: string; name: string; status: string; planned_date: string; planned_start_time: string | null;
   total_weight_kg: number | null; vehicle: Vehicle | null; driver: Driver | null; stops: Stop[];
+  team_ids?: string[] | null;
 }
 interface TimeEntry {
   id: string; work_date: string; start_time: string | null; end_time: string | null;
@@ -58,7 +59,6 @@ function fmtTime(iso: string | null) {
 export default function TourenPage() {
   const [tab, setTab] = useState<Tab>('touren');
   const [tours, setTours] = useState<Tour[]>([]);
-  const [transports, setTransports] = useState<TransportOrder[]>([]);
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [drivers, setDrivers] = useState<Driver[]>([]);
   const [employees, setEmployees] = useState<EmployeeWithSkills[]>([]);
@@ -72,7 +72,9 @@ export default function TourenPage() {
   const [fDate, setFDate] = useState(todayISO());
   const [fTime, setFTime] = useState('07:00');
   const [fVehicle, setFVehicle] = useState('');
-  const [fDriver, setFDriver] = useState('');
+  // FIX: Mehrere Leute pro Tour – erste Person fährt (driver_id),
+  // alle gewählten landen in team_ids.
+  const [fDrivers, setFDrivers] = useState<string[]>([]);
   const [fSelected, setFSelected] = useState<string[]>([]);
   // Phase 68-C: Baustellen-Anfahrten (ohne Material)
   const [fProjSelected, setFProjSelected] = useState<string[]>([]);
@@ -91,19 +93,16 @@ export default function TourenPage() {
   const loadAll = useCallback(async () => {
     setLoading(true); setError('');
     try {
-      const [toursRes, transRes, vehRes, drvRes] = await Promise.all([
+      const [toursRes, vehRes, drvRes] = await Promise.all([
         fetch('/api/tours?t=' + Date.now(), { cache: 'no-store' }),
-        fetch('/api/transport-orders?t=' + Date.now(), { cache: 'no-store' }),
         fetch('/api/vehicles', { cache: 'no-store' }),
         fetch('/api/drivers', { cache: 'no-store' }),
       ]);
-      const [toursJson, transJson, vehJson, drvJson] = await Promise.all([
-        toursRes.json(), transRes.json(), vehRes.json(), drvRes.json(),
+      const [toursJson, vehJson, drvJson] = await Promise.all([
+        toursRes.json(), vehRes.json(), drvRes.json(),
       ]);
       if (toursJson.success) setTours(toursJson.tours || []);
       else setError('Touren: ' + (toursJson.error || 'Fehler'));
-      if (transJson.success) setTransports(transJson.transports || []);
-      else setError('Transporte: ' + (transJson.error || 'Fehler'));
       if (vehJson.success) setVehicles(vehJson.vehicles || []);
       if (drvJson.success) setDrivers(drvJson.drivers || []);
       // Phase 68-C: aktive Projekte für Baustellen-Anfahrten
@@ -172,21 +171,23 @@ export default function TourenPage() {
     setFMessage('');
     if (!fName.trim()) { setFMessage('Bitte Tour-Name eingeben.'); return; }
     if (!fVehicle) { setFMessage('Bitte Fahrzeug wählen.'); return; }
-    if (!fDriver) { setFMessage('Bitte Fahrer wählen.'); return; }
+    if (fDrivers.length === 0) { setFMessage('Bitte mindestens eine Person wählen (Mehrfachauswahl möglich).'); return; }
     if (fSelected.length === 0 && fProjSelected.length === 0) { setFMessage('Bitte mindestens einen Transport ODER eine Baustellen-Anfahrt wählen.'); return; }
     setFSaving(true);
     try {
       const res = await fetch('/api/tours', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          name: fName.trim(), vehicle_id: fVehicle, driver_id: fDriver,
+          // FIX: erste gewählte Person fährt (driver_id), alle gewählten
+          // Personen werden als Team gespeichert (team_ids).
+          name: fName.trim(), vehicle_id: fVehicle, driver_id: fDrivers[0], team_ids: fDrivers,
           planned_date: fDate, planned_start_time: fTime, transport_order_ids: fSelected, project_ids: fProjSelected,
         }),
       });
       const json = await res.json();
       if (!json.success) throw new Error(json.error);
       setFMessage('✅ Tour „' + fName + '" wurde angelegt.');
-      setFName(''); setFSelected([]); setFProjSelected([]);
+      setFName(''); setFSelected([]); setFProjSelected([]); setFDrivers([]);
       await loadAll();
       // Phase 68-D: direkt zum Touren-Tab wechseln, damit die neue Tour
       // sofort sichtbar ist (vorher blieb man auf dem leeren Formular
@@ -257,14 +258,6 @@ export default function TourenPage() {
     hoursPerEmployee[k].hours += e.hours || 0;
   }
 
-  // Leerfahrt-Hinweis: Transporte zur selben Adresse bündeln
-  const addrCount: Record<string, number> = {};
-  for (const t of transports) {
-    const a = t.to_project?.adresse || 'Unbekannt';
-    addrCount[a] = (addrCount[a] || 0) + 1;
-  }
-  const bundleHint = Object.entries(addrCount).filter(([, n]) => n > 1);
-
   const inputCls = 'w-full bg-[#f5f5f7] border border-black/10 rounded-lg px-3 py-2 text-[#1d1d1f] focus:border-[#e8590c] focus:outline-none';
 
   if (loading) {
@@ -308,10 +301,6 @@ export default function TourenPage() {
             <div className="text-2xl font-bold text-[#e8590c]">{inProgress.length}</div>
             <div className="text-[#86868b] text-sm">Unterwegs</div>
           </div>
-          <div className="bg-[#f5f5f7] border border-black/10 rounded-xl p-4">
-            <div className="text-2xl font-bold text-[#e8590c]">{transports.length}</div>
-            <div className="text-[#86868b] text-sm">Offene Transporte</div>
-          </div>
         </div>
 
         {/* Tabs */}
@@ -354,7 +343,7 @@ export default function TourenPage() {
                   <div className="text-sm text-[#424245]">
                     🚛 {tour.vehicle?.name || '–'} {tour.vehicle?.license_plate ? `(${tour.vehicle.license_plate})` : ''}
                     <span className="mx-2 text-[#86868b]">|</span>
-                    👷 {tour.driver?.name || '–'}
+                    👷 {tour.driver?.name || '–'}{Array.isArray(tour.team_ids) && tour.team_ids.length > 1 ? ` +${tour.team_ids.length - 1}` : ''}
                   </div>
                   <span className={`px-3 py-1 rounded-full text-xs font-semibold ${STATUS_CLASS[tour.status] || 'bg-black/20'}`}>
                     {STATUS_LABEL[tour.status] || tour.status}
@@ -428,12 +417,20 @@ export default function TourenPage() {
                 {vehicles.length === 0 && <p className="text-xs text-[#e8590c] mt-1">Keine Fahrzeuge – Phase-4-SQL ausführen bzw. Fahrzeuge anlegen.</p>}
               </div>
               <div>
-                <label className="block text-sm text-[#86868b] mb-1">Fahrer *</label>
-                <select value={fDriver} onChange={e => setFDriver(e.target.value)} className={inputCls}>
-                  <option value="">– wählen –</option>
-                  {drivers.map(d => <option key={d.id} value={d.id}>{d.name}{d.employee ? ` (${d.employee.first_name} ${d.employee.last_name})` : ''}</option>)}
-                </select>
-                {drivers.length === 0 && <p className="text-xs text-[#e8590c] mt-1">Keine Fahrer – Phase-4-SQL enthält Beispiel-Datensätze.</p>}
+                <label className="block text-sm text-[#86868b] mb-1">Team / Fahrer * <span className="text-xs">(Mehrfachauswahl – erste Person fährt)</span></label>
+                <div className="w-full rounded-xl border border-black/10 bg-white/60 px-3 py-2 space-y-1.5 max-h-36 overflow-y-auto">
+                  {drivers.map(d => (
+                    <label key={d.id} className="flex items-center gap-2 text-sm cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={fDrivers.includes(d.id)}
+                        onChange={e => setFDrivers(e.target.checked ? [...fDrivers, d.id] : fDrivers.filter(x => x !== d.id))}
+                      />
+                      <span>{d.name}{d.employee ? ` (${d.employee.first_name} ${d.employee.last_name})` : ''}</span>
+                    </label>
+                  ))}
+                  {drivers.length === 0 && <p className="text-xs text-[#e8590c]">Keine Fahrer – Phase-4-SQL enthält Beispiel-Datensätze.</p>}
+                </div>
               </div>
               {fMessage && (
                 <div className={`rounded-xl p-3 text-sm ${fMessage.startsWith('✅') ? 'bg-emerald-50 border border-emerald-200 text-emerald-700' : 'bg-red-50 border border-red-200 text-red-700'}`}>
@@ -449,52 +446,6 @@ export default function TourenPage() {
               </button>
             </div>
 
-            <div className="bg-[#f5f5f7] border border-black/10 rounded-xl p-5">
-              <h2 className="font-semibold text-lg mb-1">Offene Transportaufträge</h2>
-              <p className="text-[#86868b] text-sm mb-3">Reihenfolge der Auswahl = Reihenfolge der Stopps.</p>
-              {bundleHint.length > 0 && (
-                <div className="mb-3 bg-blue-50 border border-blue-200 rounded-xl p-3 text-xs text-blue-800">
-                  💡 <strong>Leerfahrten vermeiden:</strong> {bundleHint.map(([a, n]) => `${n}× ${a}`).join(' · ')} – gleiche Adressen in eine Tour bündeln.
-                </div>
-              )}
-              {transports.length === 0 && (
-                <div className="text-[#86868b] text-sm py-6 text-center">
-                  Keine offenen Transportaufträge.
-                  <span className="block text-xs mt-1">Transportaufträge entstehen, wenn Material aus dem Lager für eine Baustelle reserviert wird – die automatische Anbindung ist in Arbeit.</span>
-                </div>
-              )}
-              <div className="space-y-2 max-h-[420px] overflow-y-auto pr-1">
-                {transports.map(t => {
-                  const idx = fSelected.indexOf(t.id);
-                  const selected = idx >= 0;
-                  return (
-                    <button
-                      key={t.id}
-                      onClick={() => setFSelected(selected ? fSelected.filter(x => x !== t.id) : [...fSelected, t.id])}
-                      className={`w-full text-left rounded-xl border p-3 transition flex items-center gap-3 ${
-                        selected ? 'border-[#e8590c] bg-[#e8590c]/10' : 'border-black/10 bg-white/50 hover:border-black/20'
-                      }`}
-                    >
-                      <span className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold shrink-0 ${selected ? 'bg-amber-500 text-black' : 'bg-black/10'}`}>
-                        {selected ? idx + 1 : '·'}
-                      </span>
-                      <span className="flex-1">
-                        <span className="block font-medium">{t.inventory?.name || 'Material'} × {t.quantity}</span>
-                        <span className="block text-[#86868b] text-xs">
-                          → {t.to_project?.name || 'Baustelle'}{t.to_project?.adresse ? `, ${t.to_project.adresse}` : ''}
-                        </span>
-                        {t.to_project?.data?.step1?.projektbeginn && (
-                          <span className="block text-emerald-700 text-xs font-medium">
-                            📅 Projektbeginn: {new Date(t.to_project.data.step1.projektbeginn + 'T00:00:00').toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' })}
-                            {t.to_project.data.step1.projektende && ` – ${new Date(t.to_project.data.step1.projektende + 'T00:00:00').toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' })}`}
-                          </span>
-                        )}
-                      </span>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
           </div>
 
           {/* Phase 68-C: Baustellen-Anfahrten (ohne Material) */}
