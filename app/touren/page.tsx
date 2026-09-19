@@ -105,7 +105,9 @@ export default function TourenPage() {
       try {
         const prjRes = await fetch('/api/projects', { cache: 'no-store' });
         const prjJson = await prjRes.json();
-        if (prjJson.success) setProjekte((prjJson.projects || []).filter((p: any) => p.status === 'active'));
+        // FIX: Dashboard zaehlt 'aktiv' als 'nicht completed' – hier genauso,
+        // sonst fehlen Baustellen ohne expliziten Status (Stand 19.09.: 10 vs 2).
+        if (prjJson.success) setProjekte((prjJson.projects || []).filter((p: any) => p.status !== 'completed'));
       } catch { /* Projekt-Liste optional */ }
       try { setEmployees(await getEmployees()); } catch { /* Mitarbeiter-Liste optional */ }
     } catch (e: any) {
@@ -120,7 +122,9 @@ export default function TourenPage() {
   const verplanteProjektIds = new Set(
     tours.flatMap((t: any) => (t.status === 'completed' || t.status === 'cancelled') ? [] : (t.stops || []).map((s: any) => s.project_id))
   );
-  const anfahrten = projekte.filter((p: any) => p.adresse && !verplanteProjektIds.has(p.id));
+  // FIX: Kein Adresse-Zwang – Projekte ohne Adresse tauchen auf
+  // („Adresse nachtragen"), sonst verschwinden sie unsichtbar.
+  const anfahrten = projekte.filter((p: any) => !verplanteProjektIds.has(p.id));
 
   // FIX: Projekte mit Materialliste (Aufmaß Schritt 5 / KI Schritt 4)
   // brauchen einen Materialtransport und gehören nicht in die reine
@@ -328,10 +332,10 @@ export default function TourenPage() {
             )}
             {tours.map(tour => (
               <div key={tour.id} className="bg-[#f5f5f7] border border-black/10 rounded-xl overflow-hidden">
-                <div className="p-4 flex flex-wrap items-center gap-4">
-                  <button onClick={() => setExpandedTour(expandedTour === tour.id ? null : tour.id)} className="text-[#86868b] hover:text-[#1d1d1f] w-6">
-                    {expandedTour === tour.id ? '▾' : '▸'}
-                  </button>
+                {/* FIX: ganze Zeile klickbar (nicht nur der kleine Pfeil) */}
+                <div onClick={() => setExpandedTour(expandedTour === tour.id ? null : tour.id)}
+                  className="p-4 flex flex-wrap items-center gap-4 cursor-pointer select-none hover:bg-black/[0.03] transition-colors">
+                  <span className="text-[#86868b] w-6">{expandedTour === tour.id ? '▾' : '▸'}</span>
                   <div className="flex-1 min-w-[200px]">
                     <div className="font-semibold">{tour.name}</div>
                     <div className="text-[#86868b] text-sm">
@@ -427,7 +431,7 @@ export default function TourenPage() {
                               />
                               <span className="flex-1">
                                 <span className="block font-medium">{p.name}</span>
-                                <span className="block text-[#86868b] text-xs">{p.adresse}</span>
+                                <span className="block text-[#86868b] text-xs">{p.adresse || '(Adresse nachtragen)'}</span>
                               </span>
                               {mitMat && <span className="text-xs font-medium text-amber-800 bg-amber-200/70 rounded-full px-2 py-0.5 shrink-0">📦</span>}
                             </label>
