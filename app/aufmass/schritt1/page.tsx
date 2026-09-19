@@ -124,6 +124,11 @@ function Schritt1Content() {
             const json = await res.json();
             if (json.success && json.project?.data?.step1) {
               const parsed = json.project.data.step1;
+              // FIX: Datums-Strings normalisieren – je nach Erstellungsweg liegt
+              // hier mal "2026-09-19", mal "2026-09-19T00:00:00.000Z" vor.
+              // <input type="date"> zeigt Letzteres als LEER an.
+              if (typeof parsed.projektbeginn === 'string') parsed.projektbeginn = parsed.projektbeginn.slice(0, 10);
+              if (typeof parsed.projektende === 'string') parsed.projektende = parsed.projektende.slice(0, 10);
               localStorage.setItem('scaffold_step1', JSON.stringify(parsed));
               setForm({ ...LEERES_FORM, ...parsed });
             } else if (json.success && json.project) {
@@ -154,6 +159,8 @@ function Schritt1Content() {
           parsed.gewerke = [parsed.gewerk];
           delete parsed.gewerk;
         }
+        if (typeof parsed.projektbeginn === 'string') parsed.projektbeginn = parsed.projektbeginn.slice(0, 10);
+        if (typeof parsed.projektende === 'string') parsed.projektende = parsed.projektende.slice(0, 10);
         setForm((prev) => ({ ...prev, ...parsed }));
       } catch {
         // ignore
