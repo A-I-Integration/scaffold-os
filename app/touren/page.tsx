@@ -68,8 +68,9 @@ export default function TourenPage() {
   const [fTime, setFTime] = useState('07:00');
   const [fVehicle, setFVehicle] = useState('');
   // FIX: Mehrere Leute pro Tour – erste Person fährt (driver_id),
-  // alle gewählten landen in team_ids.
+  // alle gewählten landen in team_ids. Auswahl als Dropdown (wie Fahrzeug).
   const [fDrivers, setFDrivers] = useState<string[]>([]);
+  const [teamOpen, setTeamOpen] = useState(false);
   const [fSelected, setFSelected] = useState<string[]>([]);
   // Phase 68-C: Baustellen-Anfahrten (ohne Material)
   const [fProjSelected, setFProjSelected] = useState<string[]>([]);
@@ -417,18 +418,35 @@ export default function TourenPage() {
               </div>
               <div>
                 <label className="block text-sm text-[#86868b] mb-1">Team / Fahrer * <span className="text-xs">(Mehrfachauswahl – erste Person fährt)</span></label>
-                <div className="w-full rounded-xl border border-black/10 bg-white/60 px-3 py-2 space-y-1.5 max-h-36 overflow-y-auto">
-                  {drivers.map(d => (
-                    <label key={d.id} className="flex items-center gap-2 text-sm cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={fDrivers.includes(d.id)}
-                        onChange={e => setFDrivers(e.target.checked ? [...fDrivers, d.id] : fDrivers.filter(x => x !== d.id))}
-                      />
-                      <span>{d.name}{d.employee ? ` (${d.employee.first_name} ${d.employee.last_name})` : ''}</span>
-                    </label>
-                  ))}
-                  {drivers.length === 0 && <p className="text-xs text-[#e8590c]">Keine Fahrer – Phase-4-SQL enthält Beispiel-Datensätze.</p>}
+                <div className="relative">
+                  {/* Aussehen/Verhalten wie das Fahrzeug-Dropdown oben, nur mit Mehrfachauswahl */}
+                  <button type="button" onClick={() => setTeamOpen(o => !o)}
+                    className="w-full rounded-xl border border-black/10 bg-white/60 px-3 py-2 text-[15px] outline-none focus:border-[#e8590c]/50 flex items-center justify-between gap-2 text-left">
+                    <span className={fDrivers.length === 0 ? 'text-[#86868b]' : ''}>
+                      {fDrivers.length === 0
+                        ? '– wählen –'
+                        : fDrivers.map(id => drivers.find(d => d.id === id)?.name).filter(Boolean).join(', ')}
+                    </span>
+                    <span className="text-[#86868b] text-xs">▾</span>
+                  </button>
+                  {teamOpen && (
+                    <>
+                      <div className="fixed inset-0 z-10" onClick={() => setTeamOpen(false)} />
+                      <div className="absolute z-20 mt-1 w-full rounded-xl border border-black/10 bg-white shadow-lg max-h-48 overflow-y-auto p-2 space-y-1">
+                        {drivers.map(d => (
+                          <label key={d.id} className="flex items-center gap-2 text-sm px-2 py-1.5 rounded-lg hover:bg-black/5 cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={fDrivers.includes(d.id)}
+                              onChange={e => setFDrivers(e.target.checked ? [...fDrivers, d.id] : fDrivers.filter(x => x !== d.id))}
+                            />
+                            <span>{d.name}{d.employee ? ` (${d.employee.first_name} ${d.employee.last_name})` : ''}</span>
+                          </label>
+                        ))}
+                        {drivers.length === 0 && <p className="text-xs text-[#e8590c] px-2 py-1.5">Keine Fahrer – Phase-4-SQL enthält Beispiel-Datensätze.</p>}
+                      </div>
+                    </>
+                  )}
                 </div>
               </div>
               {fMessage && (
