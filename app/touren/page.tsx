@@ -63,7 +63,6 @@ export default function TourenPage() {
   const [expandedTour, setExpandedTour] = useState<string | null>(null);
 
   // Formular „Neue Tour"
-  const [fName, setFName] = useState('');
   const [fDate, setFDate] = useState(todayISO());
   const [fTime, setFTime] = useState('07:00');
   const [fVehicle, setFVehicle] = useState('');
@@ -71,6 +70,7 @@ export default function TourenPage() {
   // alle gewählten landen in team_ids. Auswahl als Dropdown (wie Fahrzeug).
   const [fDrivers, setFDrivers] = useState<string[]>([]);
   const [teamOpen, setTeamOpen] = useState(false);
+  const [stopsOpen, setStopsOpen] = useState(false);
   const [fSelected, setFSelected] = useState<string[]>([]);
   // Phase 68-C: Baustellen-Anfahrten (ohne Material)
   const [fProjSelected, setFProjSelected] = useState<string[]>([]);
@@ -170,8 +170,8 @@ export default function TourenPage() {
     if (fSelected.length === 0 && fProjSelected.length === 0) { setFMessage('Bitte mindestens einen Transport ODER eine Baustellen-Anfahrt wählen.'); return; }
     setFSaving(true);
     const erstesProjekt = projekte.find(p => p.id === fProjSelected[0]);
-    const tourName = fName.trim() ||
-      `Tour ${new Date(fDate + 'T00:00:00').toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' })}${erstesProjekt ? ` – ${erstesProjekt.name}` : ''}`;
+    // Name entfällt als Eingabe – wird automatisch aus Datum + erstem Stopp gebaut.
+    const tourName = `Tour ${new Date(fDate + 'T00:00:00').toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' })}${erstesProjekt ? ` – ${erstesProjekt.name}` : ''}`;
     try {
       setFMessage('');
       const res = await fetch('/api/tours', {
@@ -187,7 +187,7 @@ export default function TourenPage() {
       const json = await res.json();
       if (!json.success) throw new Error(json.error);
       setFMessage('✅ Tour „' + tourName + '" wurde angelegt.');
-      setFName(''); setFSelected([]); setFProjSelected([]); setFDrivers([]);
+      setFSelected([]); setFProjSelected([]); setFDrivers([]);
       await loadAll();
       // Phase 68-D: direkt zum Touren-Tab wechseln, damit die neue Tour
       // sofort sichtbar ist (vorher blieb man auf dem leeren Formular
@@ -395,8 +395,49 @@ export default function TourenPage() {
             <div className="bg-[#f5f5f7] border border-black/10 rounded-xl p-5 space-y-4">
               <h2 className="font-semibold text-lg">Tour anlegen</h2>
               <div>
-                <label className="block text-sm text-[#86868b] mb-1">Tour-Name <span className="text-xs">(optional – wird sonst aus Datum + erstem Stopp erzeugt)</span></label>
-                <input value={fName} onChange={e => setFName(e.target.value)} placeholder="z. B. Tour Nord Vormittag" className={inputCls} />
+                {/* FIX: Baustellen-Auswahl als Dropdown direkt im Formular
+                    (gleiche Funktion wie Fahrzeug/Team). Enthält nur Projekte
+                    ohne geplante Tour. Tour-Name entfällt – er wird aus
+                    Datum + erstem Stopp automatisch erzeugt. */}
+                <label className="block text-sm text-[#86868b] mb-1">Baustellen (Stopps) *</label>
+                <div className="relative">
+                  <button type="button" onClick={() => setStopsOpen(o => !o)}
+                    className="w-full rounded-xl border border-black/10 bg-white/60 px-3 py-2 text-[15px] outline-none focus:border-[#e8590c]/50 flex items-center justify-between gap-2 text-left">
+                    <span className={fProjSelected.length === 0 ? 'text-[#86868b]' : ''}>
+                      {fProjSelected.length === 0
+                        ? '– Baustellen wählen –'
+                        : fProjSelected.map(id => projekte.find(p => p.id === id)?.name).filter(Boolean).join(', ')}
+                    </span>
+                    <span className="text-[#86868b] text-xs">▾</span>
+                  </button>
+                  {stopsOpen && (
+                    <>
+                      <div className="fixed inset-0 z-10" onClick={() => setStopsOpen(false)} />
+                      <div className="absolute z-20 mt-1 w-full rounded-xl border border-black/10 bg-white shadow-lg max-h-64 overflow-y-auto p-2 space-y-1">
+                        {anfahrten.map(p => {
+                          const idx = fProjSelected.indexOf(p.id);
+                          const selected = idx >= 0;
+                          const mitMat = hatMaterial(p);
+                          return (
+                            <label key={p.id} className={`flex items-center gap-2 text-sm px-2 py-1.5 rounded-lg cursor-pointer ${mitMat ? 'bg-amber-50 hover:bg-amber-100' : 'hover:bg-black/5'}`}>
+                              <input
+                                type="checkbox"
+                                checked={selected}
+                                onChange={() => setFProjSelected(selected ? fProjSelected.filter(x => x !== p.id) : [...fProjSelected, p.id])}
+                              />
+                              <span className="flex-1">
+                                <span className="block font-medium">{p.name}</span>
+                                <span className="block text-[#86868b] text-xs">{p.adresse}</span>
+                              </span>
+                              {mitMat && <span className="text-xs font-medium text-amber-800 bg-amber-200/70 rounded-full px-2 py-0.5 shrink-0">📦</span>}
+                            </label>
+                          );
+                        })}
+                        {anfahrten.length === 0 && <p className="text-xs text-[#86868b] px-2 py-1.5">✓ Alle Baustellen sind verplant.</p>}
+                      </div>
+                    </>
+                  )}
+                </div>
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
@@ -465,38 +506,8 @@ export default function TourenPage() {
 
           </div>
 
-          {/* Phase 68-C: Baustellen-Anfahrten – ALLE anhakbar, 📦-Badge = Material geplant */}
-          <div className="mt-6">
-            <h2 className="font-semibold text-lg mb-1">Baustellen-Anfahrten</h2>
-            <p className="text-[#86868b] text-sm mb-3">Aktive Projekte ohne geplante Tour – zum Anhaken anklicken. Markierte 📦 haben Material geplant und brauchen zusätzlich einen Materialtransport (Lager-Anbindung folgt).</p>
-            {anfahrten.length === 0 && (
-              <div className="text-sm py-4 text-center bg-green-50 border border-green-200 rounded-xl">
-                  <span className="text-green-700 font-medium">✓ Alle Baustellen sind verplant.</span>
-                  <span className="block text-[#86868b] mt-1">Neue Baustelle? Projekt im Dashboard auf „aktiv“ setzen — sie erscheint dann hier automatisch.</span>
-                </div>
-            )}
-            <div className="space-y-2 max-h-[320px] overflow-y-auto pr-1">
-              {anfahrten.map((p: any) => {
-                const idx = fProjSelected.indexOf(p.id);
-                const selected = idx >= 0;
-                const mitMat = hatMaterial(p);
-                return (
-                  <button key={p.id}
-                    onClick={() => setFProjSelected(selected ? fProjSelected.filter(x => x !== p.id) : [...fProjSelected, p.id])}
-                    className={`w-full text-left rounded-xl border p-3 transition flex items-center gap-3 ${selected ? 'border-[#0071e3] bg-blue-50' : mitMat ? 'border-amber-200 bg-amber-50 hover:border-amber-400' : 'border-black/10 bg-white/50 hover:border-black/20'}`}>
-                    <span className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold shrink-0 ${selected ? 'bg-[#0071e3] text-white' : 'bg-black/10'}`}>
-                      {selected ? idx + 1 : '·'}
-                    </span>
-                    <span className="flex-1">
-                      <span className="block font-medium">{p.name}</span>
-                      <span className="block text-[#86868b] text-xs">{p.adresse}</span>
-                    </span>
-                    {mitMat && <span className="text-xs font-medium text-amber-800 bg-amber-200/70 rounded-full px-2 py-0.5 shrink-0">📦 Material</span>}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
+          {/* Phase 68-C: Baustellen-Auswahl ist jetzt das Dropdown „Baustellen (Stopps)"
+              im Formular oben – diese separate Liste entfällt. */}
 
           {/* Fahrer ↔ Mitarbeiter verknüpfen (Phase 6) */}
           <div className="mt-6 bg-[#f5f5f7] border border-black/10 rounded-xl p-5">
