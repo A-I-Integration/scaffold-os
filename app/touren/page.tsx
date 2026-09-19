@@ -47,7 +47,9 @@ const STOP_STATUS_LABEL: Record<string, string> = {
   pending: 'Offen', arrived: 'Angekommen', completed: 'Erledigt', skipped: 'Übersprungen',
 };
 
-function todayISO() { return new Date().toISOString().split('T')[0]; }
+// Lokales Datum (YYYY-MM-DD). toISOString() läuft auf UTC und liefert
+// zwischen 00:00 und 02:00 Uhr deutscher Zeit noch den Vortag.
+function todayISO() { return new Date().toLocaleDateString('sv-SE'); }
 function fmtTime(iso: string | null) {
   if (!iso) return '–';
   return new Date(iso).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
@@ -225,7 +227,9 @@ export default function TourenPage() {
 
   // ─── Abgeleitete Daten ───
   const today = todayISO();
-  const toursToday = tours.filter(t => t.planned_date === today);
+  // FIX: planned_date kann "2026-09-19" oder "2026-09-19T07:00:00..." sein –
+  // beide Seiten auf YYYY-MM-DD normalisieren, sonst matcht nie etwas.
+  const toursToday = tours.filter(t => String(t.planned_date ?? '').slice(0, 10) === today);
   const planned = tours.filter(t => t.status === 'planned');
   const inProgress = tours.filter(t => t.status === 'in_progress');
 
@@ -326,9 +330,9 @@ export default function TourenPage() {
                   <div className="flex-1 min-w-[200px]">
                     <div className="font-semibold">{tour.name}</div>
                     <div className="text-[#86868b] text-sm">
-                      {new Date(tour.planned_date + 'T00:00:00').toLocaleDateString('de-DE', { weekday: 'short', day: '2-digit', month: '2-digit' })}
+                      {new Date(String(tour.planned_date || '').slice(0, 10) + 'T00:00:00').toLocaleDateString('de-DE', { weekday: 'short', day: '2-digit', month: '2-digit' })}
                       {tour.planned_start_time ? ` · ab ${tour.planned_start_time}` : ''}
-                      {` · ${tour.stops.length} Stopp${tour.stops.length === 1 ? '' : 's'}`}
+                      {` · ${tour.stops?.length ?? 0} Stopp${(tour.stops?.length ?? 0) === 1 ? '' : 's'}`}
                     </div>
                   </div>
                   <div className="text-sm text-[#424245]">
@@ -354,9 +358,9 @@ export default function TourenPage() {
                 </div>
                 {expandedTour === tour.id && (
                   <div className="border-t border-black/10 p-4 bg-white/50">
-                    {tour.stops.length === 0 && <div className="text-[#86868b] text-sm">Keine Stopps.</div>}
+                    {!(tour.stops?.length) && <div className="text-[#86868b] text-sm">Keine Stopps.</div>}
                     <ol className="space-y-2">
-                      {tour.stops.map(stop => (
+                      {(tour.stops ?? []).map(stop => (
                         <li key={stop.id} className="flex items-center gap-3 text-sm">
                           <span className="w-7 h-7 rounded-full bg-black/10 flex items-center justify-center text-xs font-bold shrink-0">
                             {stop.stop_order}
