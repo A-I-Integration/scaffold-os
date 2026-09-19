@@ -274,98 +274,12 @@ const JSONLD = {
   ],
 };
 
-// ─── Ein Blick ins System: echte Screenshots aus dem laufenden Betrieb ───
-// Bilder liegen in public/screenshots/ (WebP). Persönliche Daten sind unkenntlich gemacht.
-const BLICKE = [
-  {
-    titel: 'Der Betrieb auf einen Blick',
-    text: 'Das Dashboard zeigt dir jeden Morgen, was zählt. Ganz ohne Berichte.',
-    punkte: [
-      'Finanzen: aktive Projekte, offene Posten, Gesamtumsatz',
-      'Betrieb heute: Touren, unterwegs, geplante Einsätze',
-      'Team & Lager: aktive Mitarbeiter, Lagerwert in Echtzeit',
-      'Handlungsbedarf sofort sichtbar – z. B. offene Urlaubsanträge',
-    ],
-    bilder: [
-      { src: '/screenshots/dashboard.webp', alt: 'SCAFFOLD OS Dashboard mit Finanzen, Betrieb heute und Team & Lager' },
-    ],
-  },
-  {
-    titel: 'Aufmaß am Handy – in 6 geführten Schritten',
-    text: 'Das Aufmaß führt dich Schritt für Schritt durch die Baustelle. Direkt vor Ort, ohne Zettel.',
-    punkte: [
-      'Projekt, Maße und Gerüsttyp strukturiert erfassen',
-      'Fotos, LiDAR-/3D-Scan und GPS-Position direkt verknüpft',
-      'Automatische Vorschläge statt leerer Formulare',
-    ],
-    bilder: [
-      { src: '/screenshots/aufmass-projekt.webp', alt: 'Aufmaß Schritt 1: Projekt anlegen mit Kunde, Adresse und Terminen' },
-      { src: '/screenshots/aufmass-erfassung.webp', alt: 'Aufmaß Schritt 2: digitale Maßerfassung mit Foto und 3D-Scan' },
-    ],
-  },
-  {
-    titel: 'KI-Planung rechnet Material & Kalkulation',
-    text: 'Aus deinen Maßen wird eine Materialliste. Mit Gewicht, Stunden und Preis. Prüfhinweise inklusive.',
-    punkte: [
-      'Materialberechnung mit Gerüstklasse, Gewicht und Stundensatz',
-      'DIN-12811-Hinweise und Sicherheitschecks integriert',
-      'Alle Vorschläge prüfbar und jederzeit anpassbar',
-    ],
-    bilder: [
-      { src: '/screenshots/ki-planung.webp', alt: 'Zusammenfassung und KI-Planung mit Materialberechnung' },
-    ],
-  },
-  {
-    titel: 'Angebot in Minuten statt Stunden',
-    text: 'Rabatt, Nachtrag oder längere Miete? Ein Klick genügt. Der Endpreis aktualisiert sich sofort.',
-    punkte: [
-      'Anpassungen ohne Taschenrechner: Optionen einfach aktivieren',
-      'Basispreis und Endpreis transparent nachvollziehbar',
-      'KI-Disposition und digitaler Zwilling direkt im Angebot',
-    ],
-    bilder: [
-      { src: '/screenshots/angebot.webp', alt: 'Angebot anpassen mit Optionen, Endpreis und KI-Disposition' },
-    ],
-  },
-  {
-    titel: 'Lager mit KI-Prognose',
-    text: 'Das Lager warnt, bevor Material fehlt. Und sagt dir, welcher Nachkauf sich lohnt.',
-    punkte: [
-      'Bestände mit Reservierungen und Verfügbarkeit in Echtzeit',
-      'KI-Analyse: Gesamtlage, dringendste Maßnahmen, Kapitalbindung',
-      'Prognose auf Basis der aktuellen Disposition',
-    ],
-    bilder: [
-      { src: '/screenshots/lager-prognose.webp', alt: 'Lager-Prognose mit KI-Analyse und Materialliste' },
-    ],
-  },
-  {
-    titel: 'Die Mitarbeiter-App für die Baustelle',
-    text: 'Monteure sehen ihre Touren, stempeln die Zeit, melden sich krank. Alles am Handy.',
-    punkte: [
-      'Meine Touren mit Baustellen-Infos und Anfahrt',
-      'Zeiterfassung per Knopfdruck – ohne Stundenzettel',
-      'Krank- und Urlaubsmeldung direkt an die Disposition',
-    ],
-    bilder: [
-      { src: '/screenshots/mitarbeiter-app.webp', alt: 'Mitarbeiter-App mit Touren, Zeiterfassung und Krankmeldung' },
-    ],
-  },
-];
-
-function ScreenshotRahmen({ src, alt }: { src: string; alt: string }) {
-  return (
-    <div className="rounded-2xl border border-black/10 bg-white shadow-xl shadow-black/5 overflow-hidden">
-      <div className="flex items-center gap-1.5 px-4 py-2.5 border-b border-black/5 bg-[#f5f5f7]">
-        <span className="w-2.5 h-2.5 rounded-full bg-[#ff5f57]" />
-        <span className="w-2.5 h-2.5 rounded-full bg-[#febc2e]" />
-        <span className="w-2.5 h-2.5 rounded-full bg-[#28c840]" />
-      </div>
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img src={src} alt={alt} width={1440} height={819} loading="lazy" className="w-full h-auto block" />
-    </div>
-  );
-}
+// HINWEIS: Die Screenshot-Sektion („Ein Blick ins System" mit echten
+// UI-Bildern aus dem Betrieb) wurde bewusst entfernt – sie zeigte der
+// Konkurrenz zu viel vom internen Aufbau. Interessenten sehen das System
+// live: interaktive Demo (AufmassDemo), persönlicher Demo-Zugang oder
+// Termin im Google Kalender. Auch die Dateien unter public/screenshots/
+// wurden gelöscht (sonst weiterhin unter /screenshots/*.webp erreichbar).
 
 export default function HomePage() {
   return (
@@ -433,57 +347,6 @@ export default function HomePage() {
           </p>
         </div>
         <AufmassDemo />
-      </section>
-
-      {/* ─── Ein Blick ins System (echte Screenshots) ─── */}
-      <section className="px-6 pb-24">
-        <div className="max-w-6xl mx-auto">
-          <div className="max-w-3xl mx-auto text-center mb-14">
-            <p className="text-sm font-semibold tracking-widest text-[#e8590c] uppercase mb-3">
-              Ein Blick ins System
-            </p>
-            <h2 className="text-2xl md:text-4xl font-semibold tracking-tight">
-              Echt statt Hochglanz.{' '}
-              <span className="text-[#86868b]">So sieht SCAFFOLD OS im Alltag aus.</span>
-            </h2>
-            <p className="mt-4 text-lg text-[#6e6e73] leading-relaxed">
-              Keine Mock-ups, keine leeren Versprechen – echte Bildschirme aus dem
-              laufenden Betrieb, Feature für Feature.
-            </p>
-          </div>
-
-          <div className="space-y-16 md:space-y-24">
-            {BLICKE.map((blick, i) => (
-              <div key={blick.titel} className="grid md:grid-cols-2 gap-8 md:gap-12 items-center">
-                <div className={i % 2 === 1 ? 'md:order-2' : ''}>
-                  <h3 className="text-xl md:text-2xl font-semibold tracking-tight">
-                    {blick.titel}
-                  </h3>
-                  <p className="mt-3 text-[#6e6e73] leading-relaxed">{blick.text}</p>
-                  <ul className="mt-5 space-y-2.5">
-                    {blick.punkte.map((punkt) => (
-                      <li key={punkt} className="flex items-start gap-2.5 text-[15px] leading-relaxed">
-                        <Check className="w-4 h-4 mt-1 text-[#e8590c] shrink-0" />
-                        <span>{punkt}</span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-                <div className={i % 2 === 1 ? 'md:order-1' : ''}>
-                  {blick.bilder.length === 1 ? (
-                    <ScreenshotRahmen src={blick.bilder[0].src} alt={blick.bilder[0].alt} />
-                  ) : (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                      {blick.bilder.map((bild) => (
-                        <ScreenshotRahmen key={bild.src} src={bild.src} alt={bild.alt} />
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
       </section>
 
       {/* ─── Was ist SCAFFOLD OS? (Aufklärung) ─── */}
