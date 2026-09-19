@@ -438,7 +438,10 @@ export default function TourenPage() {
                 </div>
               )}
               {transports.length === 0 && (
-                <div className="text-[#86868b] text-sm py-6 text-center">Keine offenen Transportaufträge.</div>
+                <div className="text-[#86868b] text-sm py-6 text-center">
+                  Keine offenen Transportaufträge.
+                  <span className="block text-xs mt-1">Transportaufträge entstehen, wenn Material aus dem Lager für eine Baustelle reserviert wird – die automatische Anbindung ist in Arbeit.</span>
+                </div>
               )}
               <div className="space-y-2 max-h-[420px] overflow-y-auto pr-1">
                 {transports.map(t => {
@@ -476,7 +479,7 @@ export default function TourenPage() {
 
           {/* Phase 68-C: Baustellen-Anfahrten (ohne Material) */}
           <div className="mt-6">
-            <h2 className="font-semibold text-lg mb-1">Baustellen-Anfahrten (ohne Material)</h2>
+            <h2 className="font-semibold text-lg mb-1">Baustellen-Anfahrten (nur Team, kein Material)</h2>
             <p className="text-[#86868b] text-sm mb-3">Aktive Projekte ohne geplante Tour — für Team-Anfahrt anhaken.</p>
             {anfahrten.length === 0 && (
               <div className="text-sm py-4 text-center bg-green-50 border border-green-200 rounded-xl">
