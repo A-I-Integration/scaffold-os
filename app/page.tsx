@@ -1,9 +1,9 @@
 import Link from 'next/link';
 import type { Metadata } from 'next';
 import {
-  ArrowRight, Ruler, FileText, Route, Timer, Warehouse, ShieldCheck, Check,
-  Users, Package, Clock, Camera, QrCode, PenLine, MapPin, CalendarCheck,
-  Sparkles, Globe, HardHat,
+  ArrowRight, Ruler, FileText, Route, Timer, Warehouse, Check,
+  Users, Package, Clock, Camera, CalendarCheck,
+  Globe, HardHat, CalendarClock,
 } from 'lucide-react';
 import dynamic from 'next/dynamic';
 import LandingHeader from '@/components/LandingHeader';
@@ -11,6 +11,13 @@ import LandingHeader from '@/components/LandingHeader';
 // Aufmaß-Demo wird als eigener JS-Chunk nachgeladen (Code-Splitting) –
 // entlastet die mobile Startladephase, HTML bleibt server-seitig gerendert.
 const AufmassDemo = dynamic(() => import('@/components/AufmassDemo'));
+
+// ─── Terminbuchung über Google Kalender ───
+// Eigener Appointment-Link (Google Kalender → Terminplanung →
+// Buchungsseite → Link kopieren) als Env-Var in Vercel hinterlegen:
+//   NEXT_PUBLIC_TERMIN_URL=https://calendar.google.com/calendar/appointments/...
+// Fallback bis dahin: Demo-Anfrage-Formular.
+const TERMIN_URL = process.env.NEXT_PUBLIC_TERMIN_URL || '/anfrage?art=demo';
 
 // ============================================================
 // SCAFFOLD OS – Startseite (Design v2 „Apple", erweitert)
@@ -28,19 +35,21 @@ const AufmassDemo = dynamic(() => import('@/components/AufmassDemo'));
 
 export const metadata: Metadata = {
   metadataBase: new URL('https://scaffoldos.de'),
-  title: 'Gerüstbau Software: KI-Aufmaß, Lager & Angebote | SCAFFOLD OS',
+  title: 'Gerüstbausoftware: KI-Aufmaß, CAD-Planung & Disposition | SCAFFOLD OS',
   description:
-    'Die All-in-One Software für Gerüstbauer. KI-Aufmaß, Angebote in Minuten, Touren-GPS & GoBD-Rechnung. Jetzt Demo-Zugang anfordern!',
+    'Die Gerüstbausoftware für den gesamten Betrieb: KI-Aufmaß & CAD-Planung, Angebote in Minuten, Touren-Disposition, Lager, Zeiterfassung & GoBD-Rechnung. DSGVO-konform, EU-Hosting. Jetzt Demo anfordern!',
   keywords: [
-    'Gerüstbau Software', 'Gerüstbau Aufmaß', 'Aufmaß Software Gerüstbau',
-    'Gerüst Kalkulation', 'Gerüstbau Disposition', 'Lagerverwaltung Gerüstbau',
-    'Zeiterfassung Gerüstbau', 'Gerüstbau App', 'DIN 12811', 'Gerüst Angebot erstellen',
+    'Gerüstbausoftware', 'Gerüstbau Software', 'Gerüstbau Aufmaß', 'Aufmaß Software Gerüstbau',
+    'CAD Gerüstbau', 'Gerüst CAD', 'Gerüst Kalkulation', 'Gerüstbau Disposition',
+    'Kolonnenplanung', 'Lagerverwaltung Gerüstbau', 'Zeiterfassung Gerüstbau',
+    'Gerüstbau App', 'Standzeit Abrechnung', 'Vorhaltegebühr', 'DIN 12811',
+    'Gerüst Angebot erstellen', 'GoBD Rechnung Gerüstbau', 'Gerüstbau ERP',
   ],
   alternates: { canonical: 'https://scaffoldos.de' },
   openGraph: {
-    title: 'Gerüstbau Software: KI-Aufmaß, Lager & Angebote | SCAFFOLD OS',
+    title: 'Gerüstbausoftware: KI-Aufmaß, CAD-Planung & Disposition | SCAFFOLD OS',
     description:
-      'Die All-in-One Software für Gerüstbauer. KI-Aufmaß, Angebote in Minuten, Touren-GPS & GoBD-Rechnung. Jetzt Demo-Zugang anfordern!',
+      'Die Gerüstbausoftware für den gesamten Betrieb: KI-Aufmaß & CAD-Planung, Angebote in Minuten, Touren-Disposition, Lager, Zeiterfassung & GoBD-Rechnung. DSGVO-konform, EU-Hosting. Jetzt Demo anfordern!',
     url: 'https://scaffoldos.de',
     siteName: 'SCAFFOLD OS',
     locale: 'de_DE',
@@ -50,13 +59,13 @@ export const metadata: Metadata = {
         url: '/og-share.png',
         width: 1200,
         height: 630,
-        alt: 'SCAFFOLD OS – Die Software für Gerüstbau-Betriebe',
+        alt: 'SCAFFOLD OS – Die Gerüstbausoftware für Aufmaß, CAD & Disposition',
       },
     ],
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'Gerüstbau Software: KI-Aufmaß, Lager & Angebote | SCAFFOLD OS',
+    title: 'Gerüstbausoftware: KI-Aufmaß, CAD-Planung & Disposition | SCAFFOLD OS',
     description:
       'Die All-in-One Software für Gerüstbauer. KI-Aufmaß, Angebote in Minuten, Touren-GPS & GoBD-Rechnung. Jetzt Demo-Zugang anfordern!',
     images: ['/og-share.png'],
@@ -109,64 +118,61 @@ const KERNBEREICHE = [
   },
 ];
 
+// Bewusst kompakt gehalten (6 statt 12 Karten): Besucher sollen das
+// Leistungsbild verstehen – die detaillierte Feature-Matrix bleibt intern
+// und ist für Wettbewerber nicht einsehbar.
 const ALLE_FUNKTIONEN = [
   { icon: Ruler, titel: 'Aufmaß & KI-Angebot', text: (<>Baustelle in 6 Schritten erfassen – die <strong>KI</strong> liefert Materialliste, Kalkulation und Angebots-PDF.</>) },
-  { icon: Camera, titel: 'Foto, Drohne & 3D-Scan', text: 'Fotos am Handy, Drohnen-Upload bis 20 MB, Punktwolken-Auswertung für Großscans.' },
-  { icon: QrCode, titel: 'QR & Unterschrift', text: 'Angebot mit QR-Code und digitaler Unterschrift – der Kunde unterschreibt auf dem Handy.' },
+  { icon: Camera, titel: 'CAD-Planung & 3D-Scan', text: 'Fassaden einmessen per Foto, Drohne oder Punktwolke – CAD-unterstützt, mit DIN-12811-Check.' },
   { icon: Route, titel: 'Touren & Disposition', text: 'Routen-KI plant den Tag, GPS zeigt die Fahrzeuge, Umdisposition bei Krankheit oder Wetter.' },
-  { icon: MapPin, titel: 'Fahrer-Navigation & GPS', text: 'Fahrer navigieren direkt aus der App, die Zentrale sieht jede Position live.' },
-  { icon: Timer, titel: 'Zeiterfassung', text: 'Stempeln am Handy, Pausen-Automatik, Soll-Ist-Vergleich, Überstunden – ohne Zettelwirtschaft.' },
-  { icon: CalendarCheck, titel: 'Planung & Abwesenheiten', text: 'Krank und Urlaub direkt im Plan – Konflikte werden sofort sichtbar.' },
+  { icon: Timer, titel: 'Zeiterfassung & Planung', text: 'Stempeln am Handy, Pausen-Automatik, Soll-Ist-Vergleich – Krank und Urlaub direkt im Plan.' },
   { icon: Warehouse, titel: 'Lager & Prognose', text: 'Bestände im Blick, automatische Stückliste, KI warnt, bevor Material knapp wird.' },
-  { icon: FileText, titel: 'Rechnungen & DATEV', text: (<><strong>GoBD-konforme Rechnungen</strong> mit Mahnwesen – Buchungsstapel und Lohndaten direkt für den Steuerberater.</>) },
-  { icon: Sparkles, titel: 'KI überall', text: 'Materialberechnung, Routen-Vorschläge, Sprachnotizen, Foto-Analyse – die KI arbeitet im Hintergrund mit.' },
-  { icon: PenLine, titel: 'Digitaler Zwilling', text: 'Jede Baustelle als digitales Modell – Änderungen am Gerüst bleiben dokumentiert.' },
-  { icon: ShieldCheck, titel: 'Datenschutz aus Frankfurt', text: 'Eigene Datenbank pro Betrieb, EU-Hosting, DSGVO- und EU-AI-Act-konform.' },
+  { icon: FileText, titel: 'Rechnungen & DATEV', text: (<><strong>GoBD-konforme Rechnungen</strong> mit Mahnwesen – Buchungsstapel direkt für den Steuerberater.</>) },
 ];
 
+// Konkurrenz-Sicherung: keine detaillierte Feature-Matrix und keine
+// harten Limits mehr öffentlich. Nur ein Einstiegspreis („ab 249 €"),
+// Enterprise bewusst „auf Anfrage – je nach Betriebsgröße".
 const PAKETE = [
   {
-    id: 'starter',
-    name: 'Starter',
-    preis: '249 €',
-    zielgruppe: 'Für kleine Betriebe, die digital starten wollen.',
+    id: 'demo',
+    name: 'Demo',
+    preis: 'Kostenlos',
+    proMonat: false,
+    cta: 'Demo anfordern',
+    zielgruppe: 'Persönlicher Testzugang – unverbindlich, wir richten ihn für Sie ein.',
     features: [
-      '1 Admin-/CEO-Zugang',
-      '2 Dispo-Zugänge',
-      'Bis zu 5 Mitarbeiter',
-      'Lager bis 10.000 Teile',
-      'Aufmaß mit KI-Angebot & PDF',
-      'Zeiterfassung & Touren',
+      'Alle Kernmodule zum Ausprobieren',
+      'Persönliche Einführung inklusive',
+      'Endet automatisch – nichts zu kündigen',
     ],
     hervorgehoben: false,
   },
   {
-    id: 'priority',
-    name: 'Priority',
-    preis: '495 €',
-    zielgruppe: 'Für wachsende Betriebe mit mehreren Kolonnen.',
+    id: 'professional',
+    name: 'Professional',
+    preis: 'ab 249 €',
+    proMonat: true,
+    cta: 'Demo anfordern',
+    zielgruppe: 'Für kleine & mittlere Gerüstbau-Betriebe.',
     features: [
-      'CEO-, Dispo-, Bauleiter- & Lager-Zugänge',
-      'Bis zu 20 Mitarbeiter',
-      'Lager bis 20.000 Teile',
-      'Alle Starter-Funktionen',
-      'Routen-KI & GPS-Tracking',
-      'Lager-Prognose & Reservierung',
+      'Aufmaß, KI-Angebot, Disposition, Lager & Zeiterfassung',
+      'Alle Rollen: CEO, Disposition, Bauleiter, Lager',
+      'Wächst mit Ihrem Betrieb mit',
     ],
     hervorgehoben: true,
   },
   {
     id: 'enterprise',
     name: 'Enterprise',
-    preis: '749 €',
-    zielgruppe: 'Für große Betriebe – alles ohne Limits.',
+    preis: 'Auf Anfrage',
+    proMonat: false,
+    cta: 'Angebot anfordern',
+    zielgruppe: 'Preis je nach Betriebsgröße & Modulen.',
     features: [
-      'Alle Rollen & Zugänge unbegrenzt',
-      'Mitarbeiter unbegrenzt',
-      'Lager unbegrenzt',
-      'Alle Priority-Funktionen',
-      'Punktwolken-Großscans bis 500 MB',
-      'Persönlicher Ansprechpartner',
+      'Individuelle Zusammenstellung & Limits',
+      'Sonderkonditionen für Großbetriebe',
+      'Persönliche Beratung & Onboarding',
     ],
     hervorgehoben: false,
   },
@@ -184,9 +190,14 @@ const FAQ = [
       'Der Bauleiter erfasst die Baustelle direkt am Handy. Sechs geführte Schritte: Fotos hochladen, Maße eingeben, Gerüsttyp wählen. Fertig. Die KI rechnet daraus Material und Preis. Am Ende steht ein fertiges Angebots-PDF – mit QR-Code und Unterschrift auf dem Handy.',
   },
   {
+    frage: 'Kann SCAFFOLD OS CAD-Grundrisse einlesen?',
+    antwort:
+      'Ja. Grundrisse und Fassadenmessung funktionieren per Foto, Drohnen-Upload oder Punktwolke – die CAD-Auswertung prüft Abstände und Aufbau nach DIN 12811 und erzeugt daraus automatisch die Materialliste.',
+  },
+  {
     frage: 'Was kostet SCAFFOLD OS?',
     antwort:
-      'Drei Pakete: Starter für 249 € im Monat, Priority für 495 €, Enterprise für 749 €. Starter reicht für bis zu 5 Mitarbeiter, Priority für 20. Enterprise hebt alle Limits auf. Auf Anfrage richten wir Ihnen vorab einen persönlichen Demo-Zugang ein.',
+      'Professional startet ab 249 € pro Monat. Der Enterprise-Preis richtet sich nach Betriebsgröße und Modulen – fordern Sie ein Angebot an. Und Sie können vorab jederzeit einen persönlichen Demo-Zugang anfordern.',
   },
   {
     frage: 'Kann ich SCAFFOLD OS kostenlos testen?',
@@ -243,9 +254,9 @@ const JSONLD = {
         'Komplette Software für Gerüstbau-Betriebe: KI-Aufmaß, Angebot, Disposition, Lager, Touren, Zeiterfassung und Rechnung in einem System.',
       inLanguage: 'de',
       offers: [
-        { '@type': 'Offer', name: 'Starter', price: '249', priceCurrency: 'EUR' },
-        { '@type': 'Offer', name: 'Priority', price: '495', priceCurrency: 'EUR' },
-        { '@type': 'Offer', name: 'Enterprise', price: '749', priceCurrency: 'EUR' },
+        { '@type': 'Offer', name: 'Demo', price: '0', priceCurrency: 'EUR' },
+        { '@type': 'Offer', name: 'Professional', price: '249', priceCurrency: 'EUR' },
+        { '@type': 'Offer', name: 'Enterprise' },
       ],
       provider: { '@id': 'https://scaffoldos.de/#organization' },
     },
@@ -380,9 +391,9 @@ export default function HomePage() {
         </p>
         <p className="mt-6 text-lg md:text-xl text-[#6e6e73] max-w-2xl mx-auto leading-relaxed">
           SCAFFOLD OS ersetzt Zettel, Excel und Telefonkette. Ein System für alles:
-          <strong> Aufmaß mit KI</strong>, Angebot in Minuten, Touren mit GPS,
-          Zeiterfassung und <strong>GoBD-Rechnung</strong>. Alles läuft im Browser –
-          auf Handy, Tablet und PC.
+          <strong> KI-Aufmaß & CAD-Planung</strong>, Angebot in Minuten, Touren mit
+          GPS, Zeiterfassung und <strong>GoBD-Rechnung</strong>. Alles läuft im
+          Browser – auf Handy, Tablet und PC.
         </p>
         <div className="mt-10 flex flex-col sm:flex-row items-center justify-center gap-4">
           <Link
@@ -393,6 +404,12 @@ export default function HomePage() {
             <ArrowRight className="w-5 h-5" />
           </Link>
           <Link
+            href={TERMIN_URL}
+            className="inline-flex items-center gap-2 text-[#1d1d1f] font-medium text-lg px-8 py-3.5 rounded-full border border-black/10 hover:bg-black/5 transition-colors"
+          >
+            <CalendarClock className="w-5 h-5" /> Termin buchen
+          </Link>
+          <Link
             href="/login"
             className="inline-flex items-center gap-2 text-[#1d1d1f] font-medium text-lg px-8 py-3.5 rounded-full border border-black/10 hover:bg-black/5 transition-colors"
           >
@@ -401,6 +418,9 @@ export default function HomePage() {
         </div>
         <p className="mt-6 text-sm text-[#86868b]">
           Keine Installation · Läuft auf Handy, Tablet & PC · Daten in Frankfurt am Main
+        </p>
+        <p className="mt-2 text-xs text-[#a1a1a6] tracking-wide">
+          DIN-12811-Check · GoBD-Rechnung · DSGVO & EU-AI-Act · Hosting in Deutschland
         </p>
       </section>
 
@@ -549,11 +569,12 @@ export default function HomePage() {
       <section className="px-6 pb-24" id="pakete">
         <div className="max-w-6xl mx-auto">
           <h2 className="text-2xl md:text-4xl font-semibold tracking-tight text-center">
-            Drei Pakete. <span className="text-[#86868b]">Ein klarer Preis pro Monat.</span>
+            Kostenlos testen. <span className="text-[#86868b]">Enterprise auf Anfrage.</span>
           </h2>
           <p className="mt-4 text-center text-[#6e6e73] max-w-2xl mx-auto">
-            Auf Anfrage richten wir Ihnen vorab einen persönlichen Demo-Zugang ein. Danach
-            zahlen Sie per SEPA-Lastschrift oder Kreditkarte, nach 36 Monaten monatlich kündbar.
+            Auf Wunsch richten wir Ihnen vorab einen persönlichen Demo-Zugang ein. Professional
+            startet ab 249 € pro Monat – der Enterprise-Preis richtet sich nach Betriebsgröße
+            und Modulen.
           </p>
           <div className="mt-12 grid md:grid-cols-3 gap-6">
             {PAKETE.map((paket) => (
@@ -573,9 +594,11 @@ export default function HomePage() {
                 <p className="text-xl font-semibold tracking-tight">{paket.name}</p>
                 <p className="mt-4 text-4xl font-semibold tracking-tight">
                   {paket.preis}
-                  <span className={`text-base font-normal ${paket.hervorgehoben ? 'text-white/60' : 'text-[#86868b]'}`}>
-                    /Monat
-                  </span>
+                  {paket.proMonat && (
+                    <span className={`text-base font-normal ${paket.hervorgehoben ? 'text-white/60' : 'text-[#86868b]'}`}>
+                      /Monat
+                    </span>
+                  )}
                 </p>
                 <p className={`mt-2 text-sm ${paket.hervorgehoben ? 'text-white/60' : 'text-[#86868b]'}`}>
                   {paket.zielgruppe}
@@ -589,14 +612,14 @@ export default function HomePage() {
                   ))}
                 </ul>
                 <Link
-                  href={`/anfrage?art=demo`}
+                  href={paket.id === 'enterprise' ? '/anfrage' : '/anfrage?art=demo'}
                   className={`mt-8 inline-flex items-center justify-center gap-2 font-semibold px-6 py-3 rounded-full transition-all hover:scale-[1.02] ${
                     paket.hervorgehoben
                       ? 'bg-[#e8590c] hover:bg-[#d9480f] text-white'
                       : 'bg-black/5 hover:bg-black/10 text-[#1d1d1f]'
                   }`}
                 >
-                  Starten
+                  {paket.cta}
                   <ArrowRight className="w-4 h-4" />
                 </Link>
               </div>
