@@ -15,6 +15,36 @@
 
 const MARKER_KEY = 'scaffold_editing_project_id';
 
+// Alle localStorage-Schlüssel, die ein Aufmaß-Durchlauf (Schritt 1–6)
+// im Browser ablegt. War vorher nur in schritt1/page.tsx dupliziert und
+// dort auch unvollständig (scaffold_lidar_scan_name/-fresh fehlten) –
+// zentral hier, damit jede Stelle, die "alles vom Aufmaß löschen" meint,
+// wirklich alles löscht (Bug: nach dem Speichern eines Projekts blieben
+// scaffold_step1–5 im Browser stehen und ein direkt danach gestartetes
+// NEUES Aufmaß zeigte die alten Daten des vorherigen Projekts an).
+export const WIZARD_KEYS = [
+  'scaffold_step1',
+  'scaffold_step2',
+  'scaffold_step3',
+  'scaffold_step4',
+  'scaffold_step5',
+  'scaffold_step6',
+  'scaffold_lidar_measurements',
+  'scaffold_lidar_scan_name',
+  'scaffold_lidar_fresh',
+  'scaffold_foto_daten',
+  'scaffold_foto_analyse',
+  'scaffold_grundriss_daten',
+  'scaffold_grundriss_analyse',
+  'scaffold_grundriss_fresh',
+];
+
+/** Entfernt alle oben gelisteten Aufmaß-Zwischenspeicher aus dem Browser. */
+export function loescheWizardDaten() {
+  if (typeof window === 'undefined') return;
+  WIZARD_KEYS.forEach((k) => localStorage.removeItem(k));
+}
+
 /**
  * Reine Entscheidungslogik, ohne localStorage-Zugriff – dadurch ohne
  * Browser-Umgebung testbar.

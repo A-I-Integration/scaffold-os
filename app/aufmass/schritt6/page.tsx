@@ -12,7 +12,7 @@ import DinCheck from '@/components/aufmaß/DinCheck';
 import { KIAnalysis } from '@/types/scaffold';
 import { systemAnzeigename } from '@/lib/calculations/geruest-systeme';
 import { geruesttypZuScaffoldType } from '@/lib/calculations/scaffold-engine';
-import { sollFrischGeladenWerden, leseMarkierung, setzeMarkierung, schliesseSitzungAb } from '@/lib/aufmass-projekt-session';
+import { sollFrischGeladenWerden, leseMarkierung, setzeMarkierung, schliesseSitzungAb, loescheWizardDaten } from '@/lib/aufmass-projekt-session';
 import DispositionResult from '@/components/aufmaß/DispositionResult';
 import { DispositionResult as DispositionData } from '@/lib/calculations/disposition';
 import { generateInvoicePDF, fmtDate as fmtRechnungsDatum, type Invoice } from '@/lib/invoice-pdf';
@@ -439,13 +439,16 @@ function Schritt6Content() {
         try { await fetch('/api/attach-photos', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sessionId, projectId: result.id }) }); localStorage.removeItem('scaffold_session_id'); } catch (photoErr) { console.error('Foto-Verknüpfung fehlgeschlagen:', photoErr); }
       }
       setSavedProjectId(result.id);
-      // Temporäre Upload-/KI-Daten aufräumen, damit sie nicht ins nächste Projekt rutschen
-      localStorage.removeItem('scaffold_lidar_measurements');
-      localStorage.removeItem('scaffold_foto_analyse');
-      localStorage.removeItem('scaffold_foto_daten');
-      localStorage.removeItem('scaffold_grundriss_analyse');
-      localStorage.removeItem('scaffold_grundriss_daten');
-      localStorage.setItem('scaffold_step6', JSON.stringify({ kiResult, savedAt: new Date().toISOString() }));
+      // BUGFIX (Aufmaß-Kette): Vorher wurden hier nur die Upload-/KI-Zwischen-
+      // daten (LiDAR/Foto/Grundriss) gelöscht, NICHT aber scaffold_step1–5
+      // (Kunde, Adresse, Gewerke, alle Maße). Diese blieben im Browser stehen –
+      // ein direkt danach gestartetes NEUES Aufmaß (ohne ?id=) las in Schritt 1
+      // genau diese Reste wieder ein und zeigte die Daten des GERADE
+      // gespeicherten Projekts als Vorbelegung für das neue an. Jetzt: nach
+      // erfolgreichem Speichern werden wirklich ALLE Wizard-Zwischenspeicher
+      // gelöscht (React-State auf dieser Seite bleibt unberührt, die Seite
+      // selbst liest ab hier nicht mehr aus localStorage nach).
+      loescheWizardDaten();
       alert('✅ Projekt gespeichert! ID: ' + result.id);
     } catch (err: any) { alert('❌ Speichern fehlgeschlagen: ' + err.message); } finally { setIsSaving(false); }
   }
