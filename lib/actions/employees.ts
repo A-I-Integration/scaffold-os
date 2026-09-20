@@ -507,6 +507,30 @@ export async function getRecommendedEmployees(
 
   if (!employees) return [];
 
+  // NEU (Touren <-> Planung verbinden): Bisher sah die Verfügbarkeits-
+  // Prüfung nur die separate Vorplanung (tour_assignments/tour_plans),
+  // NICHT aber eine Zuteilung in einer ECHTEN Tour (/touren, Tabelle
+  // tours + drivers) – dadurch konnte jemand für denselben Tag doppelt
+  // eingeteilt werden, einmal real in /touren, einmal von hier aus
+  // empfohlen. Einmalig (nicht pro Mitarbeiter) laden und auflösen:
+  // team_ids auf tours enthält drivers.id (nicht employees.id, siehe
+  // api/tours POST: team_ids = fDrivers), daher der Umweg über drivers.
+  const { data: echteTourenHeute } = await supabase
+    .from('tours')
+    .select('driver_id, team_ids, driver:driver_id(employee_id)')
+    .eq('planned_date', tourDate)
+    .neq('status', 'cancelled');
+  const { data: alleFahrer } = await supabase.from('drivers').select('id, employee_id');
+  const fahrerZuMitarbeiter = new Map((alleFahrer || []).map((d: any) => [d.id, d.employee_id]));
+  const mitarbeiterInEchterTourHeute = new Set<string>();
+  (echteTourenHeute || []).forEach((t: any) => {
+    if (t.driver?.employee_id) mitarbeiterInEchterTourHeute.add(t.driver.employee_id);
+    (t.team_ids || []).forEach((driverId: string) => {
+      const empId = fahrerZuMitarbeiter.get(driverId);
+      if (empId) mitarbeiterInEchterTourHeute.add(empId);
+    });
+  });
+
   const recommendations: EmployeeRecommendation[] = [];
 
   for (const emp of employees) {
@@ -533,7 +557,13 @@ export async function getRecommendedEmployees(
 
     const hasTour = existingTours?.some((a: any) => a.tour?.planned_date === tourDate);
     if (hasTour) {
-      conflicts.push('Bereits in anderer Tour');
+      conflicts.push('Bereits in anderer Tour (Vorplanung)');
+      score -= 80;
+    }
+    // NEU: zusätzlich gegen ECHTE, bereits gefahrene/geplante Touren prüfen
+    // (siehe Ladeschritt oben) – vorher hier unsichtbar.
+    if (mitarbeiterInEchterTourHeute.has(emp.id)) {
+      conflicts.push('Bereits einer Tour zugeteilt (/touren)');
       score -= 80;
     }
 
