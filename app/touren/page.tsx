@@ -376,7 +376,14 @@ export default function TourenPage() {
                           <span className="w-7 h-7 rounded-full bg-black/10 flex items-center justify-center text-xs font-bold shrink-0">
                             {stop.stop_order}
                           </span>
-                          <span className="flex-1">{stop.address}</span>
+                          <span className="flex-1">
+                            {/* Verknuepfung wie in Planung: Klick -> zum Projekt (Aufmaß) */}
+                            {(stop as any).project_id ? (
+                              <a href={`/aufmass/schritt6?id=${(stop as any).project_id}`} className="hover:text-[#e8590c] hover:underline underline-offset-2">{stop.address || 'Baustelle öffnen'}</a>
+                            ) : (
+                              stop.address
+                            )}
+                          </span>
                           <span className="text-[#86868b]">
                             {stop.transport_order?.inventory?.name || ''}
                             {stop.transport_order?.quantity ? ` × ${stop.transport_order.quantity}` : ''}
@@ -437,7 +444,9 @@ export default function TourenPage() {
                                 onChange={() => setFProjSelected(selected ? fProjSelected.filter(x => x !== p.id) : [...fProjSelected, p.id])}
                               />
                               <span className="flex-1">
-                                <span className="block font-medium">{p.name}</span>
+                                <a href={`/aufmass/schritt6?id=${p.id}`} title="Projekt öffnen"
+                                  onClick={e => { e.preventDefault(); e.stopPropagation(); window.location.href = `/aufmass/schritt6?id=${p.id}`; }}
+                                  className="block font-medium hover:text-[#e8590c] hover:underline underline-offset-2">{p.name}</a>
                                 <span className="block text-[#86868b] text-xs">{p.adresse || '(Adresse nachtragen)'}</span>
                               </span>
                               {bereitsVerplant && <span className="text-xs font-medium text-[#86868b] bg-black/10 rounded-full px-2 py-0.5 shrink-0">in Tour</span>}
