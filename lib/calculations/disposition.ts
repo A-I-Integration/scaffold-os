@@ -97,8 +97,15 @@ export async function optimizeDisposition(
   let totalSavedHours = 0;
   let totalSavedCo2 = 0;
   
-  // 1. Alle benötigten Artikel-Nummern sammeln
-  const articleNumbers = materialList.map(m => m.articleNumber);
+  // 1. Abgleich-Schlüssel sammeln: bewusst der Artikel-NAME, nicht die
+  // articleNumber. Die articleNumber ist ein interner KI-Katalogcode
+  // (z.B. "RA-001") aus scaffold-engine.ts/cad-engine.ts und hat keine
+  // Entsprechung in der echten Lager-Tabelle (inventory.sku bleibt für
+  // reale Artikel meist leer). Der Name ist der einzige verlässliche
+  // Abgleichspunkt – siehe lib/angebot-annahme.ts, wo aus demselben
+  // Grund bewusst per Name (case-insensitive, exakter Treffer) statt
+  // per articleNumber abgeglichen wird.
+  const articleNumbers = materialList.map(m => m.name);
   
     // 2. Bestände parallel abfragen (mit Fallback)
   let centralStock: CentralStock[] = [];
@@ -129,9 +136,9 @@ export async function optimizeDisposition(
   // 4. Jeden Artikel einzeln optimieren
   for (const item of materialList) {
     const needed = item.quantity;
-    const central = centralByArticle.get(item.articleNumber);
+    const central = centralByArticle.get(item.name);
     const centralQty = central?.quantity || 0;
-    const sites = siteByArticle.get(item.articleNumber) || [];
+    const sites = siteByArticle.get(item.name) || [];
     
     // Beste Quelle finden
     let bestSource: DispositionSuggestion;
