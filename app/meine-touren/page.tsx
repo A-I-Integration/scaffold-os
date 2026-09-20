@@ -20,6 +20,7 @@ interface Tour {
   id: string; name: string; status: string; planned_date: string; planned_start_time: string | null;
   vehicle?: { name: string; license_plate: string } | null;
   driver?: { name: string; employee_id?: string | null } | null;
+  team_ids?: string[] | null;
   stops: Stop[];
 }
 interface TimeEntry {
@@ -48,6 +49,11 @@ export default function MeineTourenPage() {
   const [msg, setMsg] = useState('');
   const [autoMe, setAutoMe] = useState<{ id: string; name: string } | null>(null);
   const [showAllHint, setShowAllHint] = useState(false);
+  // team_ids auf tours enthält drivers.id (nicht employees.id, siehe
+  // api/tours POST: team_ids = fDrivers, die Fahrer-Auswahl-IDs). Um zu
+  // prüfen, ob "ich" (employees.id) im Team einer Tour stehe, brauchen wir
+  // die Zuordnung drivers.id -> employee_id aus /api/drivers.
+  const [meineFahrerIds, setMeineFahrerIds] = useState<string[]>([]);
 
   // Abwesenheit-Formular
   const [absType, setAbsType] = useState<'sick' | 'vacation'>('sick');
@@ -84,6 +90,24 @@ export default function MeineTourenPage() {
     })();
   }, []);
 
+  // Eigene Fahrer-IDs auflösen, sobald bekannt ist, wer "ich" bin – damit
+  // Touren erkannt werden, in denen ich nur als Team-Mitglied (nicht als
+  // Hauptfahrer) über team_ids eingeteilt bin.
+  useEffect(() => {
+    if (!meId) { setMeineFahrerIds([]); return; }
+    (async () => {
+      try {
+        const res = await fetch('/api/drivers', { cache: 'no-store' });
+        const json = await res.json();
+        if (json.success) {
+          setMeineFahrerIds(
+            (json.drivers || []).filter((d: any) => d.employee_id === meId).map((d: any) => d.id)
+          );
+        }
+      } catch (e) { console.error(e); }
+    })();
+  }, [meId]);
+
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
@@ -94,8 +118,16 @@ export default function MeineTourenPage() {
         const relevant = (json.tours || []).filter((t: Tour) =>
           t.planned_date >= today && t.status !== 'completed' && t.status !== 'cancelled'
         );
-        // Persönliche Touren zuerst: Ist mein Mitarbeiter mit dem Fahrer verknüpft?
-        const mine = meId ? relevant.filter((t: Tour) => t.driver?.employee_id === meId) : [];
+        // Persönliche Touren zuerst: bin ich Fahrer ODER im Team der Tour
+        // (team_ids)? VORHER: nur der Fahrer sah seine Tour hier – ein als
+        // Team-Mitglied (nicht Fahrer) eingeteilter Mitarbeiter sah "seine"
+        // Tour nicht, obwohl er ihr zugewiesen war. team_ids enthält
+        // drivers.id (nicht employees.id, s. api/tours POST), daher der
+        // Abgleich über meineFahrerIds (aufgelöst aus /api/drivers).
+        const mine = meId ? relevant.filter((t: Tour) =>
+          t.driver?.employee_id === meId ||
+          (t.team_ids || []).some((id) => meineFahrerIds.includes(id))
+        ) : [];
         setShowAllHint(meId !== '' && mine.length === 0 && relevant.length > 0);
         setTours(mine.length > 0 ? mine : relevant);
       }
@@ -118,7 +150,7 @@ export default function MeineTourenPage() {
       }
     } catch (e) { console.error(e); }
     setLoading(false);
-  }, [meId]);
+  }, [meId, meineFahrerIds]);
 
   useEffect(() => { loadData(); }, [loadData]);
 
