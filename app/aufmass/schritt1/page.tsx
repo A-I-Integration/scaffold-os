@@ -2,7 +2,7 @@
 
 import { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { sollFrischGeladenWerden, leseMarkierung, setzeMarkierung } from '@/lib/aufmass-projekt-session';
+import { sollFrischGeladenWerden, leseMarkierung, setzeMarkierung, WIZARD_KEYS } from '@/lib/aufmass-projekt-session';
 import PhotoUpload from '@/components/aufmaß/PhotoUpload';
 import LiDARUpload from '@/components/aufmaß/LiDARUpload';
 import FotoAnalyse from '@/components/aufmaß/FotoAnalyse';
@@ -50,22 +50,6 @@ const LEERES_FORM = {
   gps: false,
   gpsPosition: '',
 };
-
-// Alle Wizard-Schlüssel, die ein Aufmaß im Browser ablegt
-const WIZARD_KEYS = [
-  'scaffold_step1',
-  'scaffold_step2',
-  'scaffold_step3',
-  'scaffold_step4',
-  'scaffold_step5',
-  'scaffold_step6',
-  'scaffold_lidar_measurements',
-  'scaffold_foto_daten',
-  'scaffold_foto_analyse',
-  'scaffold_grundriss_daten',
-  'scaffold_grundriss_analyse',
-  'scaffold_grundriss_fresh',
-];
 
 function Schritt1Content() {
   const router = useRouter();
