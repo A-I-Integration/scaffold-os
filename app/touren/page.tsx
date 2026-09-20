@@ -122,9 +122,8 @@ export default function TourenPage() {
   const verplanteProjektIds = new Set(
     tours.flatMap((t: any) => (t.status === 'completed' || t.status === 'cancelled') ? [] : (t.stops || []).map((s: any) => s.project_id))
   );
-  // FIX: Kein Adresse-Zwang – Projekte ohne Adresse tauchen auf
-  // („Adresse nachtragen"), sonst verschwinden sie unsichtbar.
-  const anfahrten = projekte.filter((p: any) => !verplanteProjektIds.has(p.id));
+  // FIX: Kein Adresse-Zwang – Projekte ohne Adresse tauchen im Dropdown auf
+  // („Adresse nachtragen"). Verplant-Status steuert nur das Ausgrauen.
 
   // FIX: Projekte mit Materialliste (Aufmaß Schritt 5 / KI Schritt 4)
   // brauchen einen Materialtransport und gehören nicht in die reine
@@ -279,6 +278,9 @@ export default function TourenPage() {
           <div>
             <h1 className="text-3xl font-bold text-[#e8590c]">🗺️ Touren & Disposition</h1>
             <p className="text-[#86868b] text-sm mt-1">Tagesplanung und Tour-Überwachung</p>
+            {/* Versions-Stempel: nur sichtbar, wenn dieser Build geladen ist.
+                Fehlt er, lieg Chrome-Cache/Service Worker dazwischen. */}
+            <p className="text-[10px] text-black/30 mt-0.5">Stand: FINAL-20.09 · Baustellen: alle 10, verplante ausgegraut</p>
           </div>
           <button onClick={loadAll} className="bg-[#f5f5f7] hover:bg-black/10 border border-black/10 rounded-xl px-4 py-2 text-sm transition">
             ↻ Aktualisieren
@@ -418,26 +420,32 @@ export default function TourenPage() {
                     <>
                       <div className="fixed inset-0 z-10" onClick={() => setStopsOpen(false)} />
                       <div className="absolute z-20 mt-1 w-full rounded-xl border border-black/10 bg-white shadow-lg max-h-64 overflow-y-auto p-2 space-y-1">
-                        {anfahrten.map(p => {
+                        {/* ALLE Baustellen anzeigen (erwartet: 10). Bereits in
+                            einer Tour verplante sind ausgegraut + nicht waehlbar. */}
+                        {projekte.map(p => {
                           const idx = fProjSelected.indexOf(p.id);
                           const selected = idx >= 0;
                           const mitMat = hatMaterial(p);
+                          const bereitsVerplant = verplanteProjektIds.has(p.id);
                           return (
-                            <label key={p.id} className={`flex items-center gap-2 text-sm px-2 py-1.5 rounded-lg cursor-pointer ${mitMat ? 'bg-amber-50 hover:bg-amber-100' : 'hover:bg-black/5'}`}>
+                            <label key={p.id} title={bereitsVerplant ? 'Bereits in einer Tour verplant' : undefined}
+                              className={`flex items-center gap-2 text-sm px-2 py-1.5 rounded-lg ${bereitsVerplant ? 'opacity-50 cursor-not-allowed' : `cursor-pointer ${mitMat ? 'bg-amber-50 hover:bg-amber-100' : 'hover:bg-black/5'}`}`}>
                               <input
                                 type="checkbox"
                                 checked={selected}
+                                disabled={bereitsVerplant}
                                 onChange={() => setFProjSelected(selected ? fProjSelected.filter(x => x !== p.id) : [...fProjSelected, p.id])}
                               />
                               <span className="flex-1">
                                 <span className="block font-medium">{p.name}</span>
                                 <span className="block text-[#86868b] text-xs">{p.adresse || '(Adresse nachtragen)'}</span>
                               </span>
+                              {bereitsVerplant && <span className="text-xs font-medium text-[#86868b] bg-black/10 rounded-full px-2 py-0.5 shrink-0">in Tour</span>}
                               {mitMat && <span className="text-xs font-medium text-amber-800 bg-amber-200/70 rounded-full px-2 py-0.5 shrink-0">📦</span>}
                             </label>
                           );
                         })}
-                        {anfahrten.length === 0 && <p className="text-xs text-[#86868b] px-2 py-1.5">✓ Alle Baustellen sind verplant.</p>}
+                        {projekte.length === 0 && <p className="text-xs text-[#86868b] px-2 py-1.5">Keine Baustellen vorhanden.</p>}
                       </div>
                     </>
                   )}
