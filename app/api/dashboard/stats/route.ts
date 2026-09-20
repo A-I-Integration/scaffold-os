@@ -76,6 +76,27 @@ export async function GET() {
     const months = Object.keys(monthlyRevenue).sort();
     const revenueChart = months.map(m => ({ month: m, revenue: Math.round(monthlyRevenue[m]), count: monthlyCount[m] || 0 }));
 
+    // NEU (Dashboard-Aufräumen): Projektliste pro Monat, damit ein Klick
+    // auf einen Monatsbalken im Dashboard die zugehörigen Projekte/
+    // Rechnungen anzeigen kann (druckbar), ohne einen weiteren
+    // API-Aufruf zu brauchen. Bewusst ALLE Projekte des Monats (nicht
+    // nur die mit total_value > 0), damit z.B. auch offene Aufmaße ohne
+    // Preis in der Liste auftauchen und nicht "verschwinden".
+    const projectsByMonth: Record<string, any[]> = {};
+    enrichedProjects.forEach((p: any) => {
+      if (!projectsByMonth[p.monthKey]) projectsByMonth[p.monthKey] = [];
+      projectsByMonth[p.monthKey].push({
+        id: p.id,
+        name: p.name,
+        customer: p.customer,
+        status: p.status,
+        value: p.total_value,
+        margin: p.margin_percent,
+        profit: Math.round(p.estimated_profit),
+        created_at: p.created_at,
+      });
+    });
+
     // ─── CHART: Margen-Verteilung ───
     const marginBuckets = { '0-10%': 0, '10-20%': 0, '20-30%': 0, '30%+': 0, 'Keine': 0 };
     enrichedProjects.forEach((p: any) => {
@@ -196,6 +217,7 @@ export async function GET() {
           margin: p.margin_percent,
         })),
       },
+      projectsByMonth,
       alerts: alerts.slice(0, 6),
       recentProjects: enrichedProjects.slice(0, 10).map((p: any) => ({
         id: p.id,

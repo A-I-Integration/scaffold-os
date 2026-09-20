@@ -74,6 +74,10 @@ interface ChartsData {
   marginDistribution: MarginDist;
   topProfitProjects: TopProfit[];
 }
+interface MonthProject {
+  id: string; name: string; customer: string; status: string;
+  value: number; margin: number; profit: number; created_at: string;
+}
 
 export default function DashboardPage() {
   const router = useRouter();
@@ -86,6 +90,8 @@ export default function DashboardPage() {
   const [busyId, setBusyId] = useState<string | null>(null);
   const [msg, setMsg] = useState("");
   const [zeigeOnboarding, setZeigeOnboarding] = useState(false);
+  const [projectsByMonth, setProjectsByMonth] = useState<Record<string, MonthProject[]>>({});
+  const [selectedMonth, setSelectedMonth] = useState<string | null>(null);
 
   async function loadDashboard() {
     setError("");
@@ -98,6 +104,7 @@ export default function DashboardPage() {
       setProjects(json.recentProjects || []);
       setAlerts(json.alerts || []);
       setCharts(json.charts || null);
+      setProjectsByMonth(json.projectsByMonth || {});
     } catch (err: any) {
       setError(err.message);
     } finally {
@@ -284,10 +291,10 @@ export default function DashboardPage() {
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
               <KpiCard label="Aktive Projekte" value={stats.activeProjectsCount} color="text-[#e8590c]" href="#projekte" />
               <KpiCard label="Abgeschlossen" value={stats.completedProjectsCount} color="text-[#86868b]" href="#projekte" />
-              <KpiCard label="Gesamtumsatz" value={formatCurrency(stats.totalRevenue)} color="text-emerald-600" />
-              <KpiCard label="Gesch. Kosten" value={formatCurrency(stats.totalEstimatedCosts)} color="text-red-600" />
-              <KpiCard label="Gesch. Gewinn" value={formatCurrency(stats.totalEstimatedProfit)} color="text-emerald-600" />
-              <KpiCard label="Ø Marge" value={`${stats.avgMargin}%`} color={stats.avgMargin < 15 ? "text-red-600" : "text-emerald-600"} />
+              <KpiCard label="Gesamtumsatz" value={formatCurrency(stats.totalRevenue)} color="text-emerald-600" href="#projekte" />
+              <KpiCard label="Gesch. Kosten" value={formatCurrency(stats.totalEstimatedCosts)} color="text-red-600" href="#projekte" />
+              <KpiCard label="Gesch. Gewinn" value={formatCurrency(stats.totalEstimatedProfit)} color="text-emerald-600" href="#projekte" />
+              <KpiCard label="Ø Marge" value={`${stats.avgMargin}%`} color={stats.avgMargin < 15 ? "text-red-600" : "text-emerald-600"} href="#projekte" />
             </div>
             {stats.withValueCount === 0 && stats.totalProjects > 0 && (
               <p className="text-xs text-[#86868b] mt-3">
@@ -324,9 +331,15 @@ export default function DashboardPage() {
               ) : (
                 <div className="space-y-3">
                   {charts.revenueByMonth.map((d) => (
-                    <div key={d.month} className="flex items-center gap-3">
-                      <div className="w-16 text-xs text-[#86868b] text-right shrink-0">{formatMonth(d.month)}</div>
-                      <div className="flex-1 h-8 bg-[#f5f5f7] rounded-full overflow-hidden relative">
+                    <div key={d.month} className="flex items-center gap-3 cursor-pointer group"
+                      onClick={() => setSelectedMonth(selectedMonth === d.month ? null : d.month)}
+                      title="Klicken für die Projektliste dieses Monats">
+                      <div className={`w-16 text-xs text-right shrink-0 ${selectedMonth === d.month ? 'text-[#e8590c] font-semibold' : 'text-[#86868b]'}`}>
+                        {formatMonth(d.month)}
+                      </div>
+                      <div className={`flex-1 h-8 bg-[#f5f5f7] rounded-full overflow-hidden relative transition-all ${
+                        selectedMonth === d.month ? 'ring-2 ring-[#e8590c]' : 'group-hover:ring-1 group-hover:ring-[#e8590c]/40'
+                      }`}>
                         <div className="h-full bg-[#e8590c]/85 rounded-full transition-all duration-700"
                           style={{ width: `${Math.max(5, (d.revenue / maxRevenue) * 100)}%` }} />
                         <span className="absolute inset-0 flex items-center px-3 text-xs font-medium text-[#1d1d1f]">
@@ -336,6 +349,17 @@ export default function DashboardPage() {
                     </div>
                   ))}
                 </div>
+              )}
+
+              {/* Monats-Drilldown: Projektliste zum angeklickten Monat, druckbar */}
+              {selectedMonth && (
+                <MonthDrilldown
+                  month={selectedMonth}
+                  monthLabel={formatMonth(selectedMonth)}
+                  projects={projectsByMonth[selectedMonth] || []}
+                  onClose={() => setSelectedMonth(null)}
+                  onOpenProject={(id) => router.push(`/aufmass/schritt1?id=${id}`)}
+                />
               )}
             </div>
 
@@ -381,7 +405,7 @@ export default function DashboardPage() {
               {charts.topProfitProjects.map((p) => (
                 <div key={p.id}
                   className="bg-[#f5f5f7] rounded-2xl p-4 hover:ring-1 hover:ring-[#e8590c]/40 transition cursor-pointer"
-                  onClick={() => router.push(`/aufmass/schritt6?id=${p.id}`)}>
+                  onClick={() => router.push(`/aufmass/schritt1?id=${p.id}`)}>
                   <div className="text-sm font-medium text-[#1d1d1f] truncate">{p.name}</div>
                   <div className="text-xs text-[#86868b] mt-1">Umsatz: {formatCurrency(p.revenue)}</div>
                   <div className="text-lg font-bold text-emerald-600 mt-2">+{formatCurrency(p.profit)}</div>
@@ -423,7 +447,7 @@ export default function DashboardPage() {
                 <tbody className="divide-y divide-black/5">
                   {projects.map((p) => (
                     <tr key={p.id} className="hover:bg-[#f5f5f7] transition-colors cursor-pointer"
-                      onClick={() => router.push(`/aufmass/schritt6?id=${p.id}`)}>
+                      onClick={() => router.push(`/aufmass/schritt1?id=${p.id}`)}>
                       <td className="px-4 py-3 font-medium text-[#1d1d1f]">{p.name}</td>
                       <td className="px-4 py-3 text-[#86868b]">{p.customer}</td>
                       <td className="px-4 py-3 text-emerald-600">
@@ -500,6 +524,96 @@ function Section({ icon, title, children }: { icon: React.ReactNode; title: stri
     <div className="mb-8">
       <h2 className="text-lg font-semibold text-[#1d1d1f] mb-3 flex items-center gap-2">{icon} {title}</h2>
       {children}
+    </div>
+  );
+}
+
+// ─── Monats-Drilldown: druckbare/speicherbare Projektliste eines Monats ───
+function MonthDrilldown({
+  month, monthLabel, projects, onClose, onOpenProject,
+}: {
+  month: string; monthLabel: string; projects: MonthProject[];
+  onClose: () => void; onOpenProject: (id: string) => void;
+}) {
+  const printAreaId = "monats-druckbereich";
+  const gesamt = projects.reduce((s, p) => s + (p.value || 0), 0);
+
+  function drucken() {
+    window.print();
+  }
+
+  return (
+    <div className="mt-5 border-t border-black/5 pt-5">
+      {/* Nur dieser Bereich wird gedruckt (Browser-Druckdialog = "Drucken" oder "Als PDF speichern") */}
+      <style>{`
+        @media print {
+          body * { visibility: hidden; }
+          #${printAreaId}, #${printAreaId} * { visibility: visible; }
+          #${printAreaId} { position: absolute; top: 0; left: 0; width: 100%; padding: 24px; }
+          #${printAreaId} .no-print { display: none !important; }
+        }
+      `}</style>
+
+      <div id={printAreaId}>
+        <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
+          <h4 className="text-base font-semibold text-[#1d1d1f]">
+            Projekte / Rechnungen – {monthLabel} ({projects.length})
+          </h4>
+          <div className="no-print flex gap-2">
+            <button onClick={drucken}
+              className="px-3 py-1.5 bg-white border border-black/10 hover:border-[#e8590c] text-[#1d1d1f] rounded-full text-xs transition-colors">
+              🖨️ Drucken / Als PDF speichern
+            </button>
+            <button onClick={onClose}
+              className="px-3 py-1.5 bg-white border border-black/10 hover:border-red-400 text-[#1d1d1f] rounded-full text-xs transition-colors">
+              Schließen
+            </button>
+          </div>
+        </div>
+
+        {projects.length === 0 ? (
+          <p className="text-[#86868b] text-sm">Keine Projekte in diesem Monat.</p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-sm min-w-[640px]">
+              <thead className="bg-[#f5f5f7] text-[#86868b] text-xs uppercase">
+                <tr>
+                  <th className="px-3 py-2">Projekt</th>
+                  <th className="px-3 py-2">Kunde</th>
+                  <th className="px-3 py-2">Status</th>
+                  <th className="px-3 py-2">Wert</th>
+                  <th className="px-3 py-2">Marge</th>
+                  <th className="px-3 py-2">Gewinn</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-black/5">
+                {projects.map((p) => (
+                  <tr key={p.id} className="no-print-hover hover:bg-[#f5f5f7] cursor-pointer"
+                    onClick={() => onOpenProject(p.id)}>
+                    <td className="px-3 py-2 font-medium text-[#1d1d1f]">{p.name}</td>
+                    <td className="px-3 py-2 text-[#86868b]">{p.customer}</td>
+                    <td className="px-3 py-2 text-[#86868b]">
+                      {p.status === "active" ? "Aktiv" : p.status === "completed" ? "Abgeschlossen" : p.status}
+                    </td>
+                    <td className="px-3 py-2 text-emerald-600">
+                      {p.value > 0 ? `${p.value.toLocaleString("de-DE")} €` : "–"}
+                    </td>
+                    <td className="px-3 py-2">{p.margin > 0 ? `${p.margin}%` : "–"}</td>
+                    <td className="px-3 py-2">{p.profit > 0 ? `${p.profit.toLocaleString("de-DE")} €` : "–"}</td>
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot>
+                <tr className="border-t border-black/10 font-semibold">
+                  <td className="px-3 py-2" colSpan={3}>Summe</td>
+                  <td className="px-3 py-2 text-emerald-700">{gesamt.toLocaleString("de-DE")} €</td>
+                  <td className="px-3 py-2" colSpan={2} />
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
