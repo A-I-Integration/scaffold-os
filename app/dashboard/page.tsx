@@ -114,7 +114,11 @@ export default function DashboardPage() {
 
   useEffect(() => {
     loadDashboard();
-    const interval = setInterval(loadDashboard, 15000);
+    // PERFORMANCE-FIX: War 15s – bei vielen gleichzeitig offenen Dashboard-
+    // Tabs (mehrere Nutzer einer Firma) macht jeder Tab bei jedem Tick ~8
+    // volle Tabellen-Abfragen. 45s hält das Dashboard weiterhin "live"
+    // genug für eine Übersichtsseite, senkt die Last aber um Faktor 3.
+    const interval = setInterval(loadDashboard, 45000);
     // Onboarding-Banner: nur für Admins, solange Ersteinrichtung offen ist
     (async () => {
       try {

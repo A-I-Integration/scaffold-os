@@ -531,31 +531,66 @@ export async function getRecommendedEmployees(
     });
   });
 
+  // PERFORMANCE-FIX: Vorher wurden absences/tour_assignments/skills PRO
+  // MITARBEITER einzeln abgefragt (3 Requests × N Mitarbeiter in einer
+  // Schleife) – bei z.B. 150 aktiven Mitarbeitern >400 Anfragen für EINEN
+  // Empfehlungs-Klick. Jetzt: für alle betroffenen Mitarbeiter auf einmal
+  // laden (3 Anfragen insgesamt) und in der Schleife nur noch aus den
+  // bereits geladenen Maps lesen – exakt dieselbe Logik/Ergebnis, nur ohne
+  // die Anfragen pro Mitarbeiter zu wiederholen.
+  const empIds = employees.map((e: any) => e.id);
+
+  const { data: alleAbsencesRoh } = empIds.length
+    ? await supabase
+        .from('absences')
+        .select('employee_id, type')
+        .in('employee_id', empIds)
+        .lte('start_date', tourDate)
+        .gte('end_date', tourDate)
+        .eq('status', 'approved')
+    : { data: [] as any[] };
+  const absencesNachMitarbeiter = new Map<string, any[]>();
+  (alleAbsencesRoh || []).forEach((a: any) => {
+    const liste = absencesNachMitarbeiter.get(a.employee_id) || [];
+    liste.push(a);
+    absencesNachMitarbeiter.set(a.employee_id, liste);
+  });
+
+  const { data: alleZuweisungenRoh } = empIds.length
+    ? await supabase
+        .from('tour_assignments')
+        .select('employee_id, tour_id, tour:tour_id(planned_date)')
+        .in('employee_id', empIds)
+    : { data: [] as any[] };
+  const vorplanungTourHeuteNachMitarbeiter = new Set<string>(
+    (alleZuweisungenRoh || [])
+      .filter((a: any) => a.tour?.planned_date === tourDate)
+      .map((a: any) => a.employee_id)
+  );
+
+  const { data: alleSkillsRoh } = empIds.length
+    ? await supabase.from('employee_skills').select('*').in('employee_id', empIds)
+    : { data: [] as any[] };
+  const skillsNachMitarbeiter = new Map<string, any[]>();
+  (alleSkillsRoh || []).forEach((s: any) => {
+    const liste = skillsNachMitarbeiter.get(s.employee_id) || [];
+    liste.push(s);
+    skillsNachMitarbeiter.set(s.employee_id, liste);
+  });
+
   const recommendations: EmployeeRecommendation[] = [];
 
   for (const emp of employees) {
     let score = 50;
     const conflicts: string[] = [];
 
-    const { data: absences } = await supabase
-      .from('absences')
-      .select('*')
-      .eq('employee_id', emp.id)
-      .lte('start_date', tourDate)
-      .gte('end_date', tourDate)
-      .eq('status', 'approved');
-
-    if (absences && absences.length > 0) {
+    const absences = absencesNachMitarbeiter.get(emp.id) || [];
+    if (absences.length > 0) {
       conflicts.push(`Abwesend: ${absences[0].type}`);
       score -= 100;
     }
 
-    const { data: existingTours } = await supabase
-      .from('tour_assignments')
-      .select('tour_id, tour:tour_id(planned_date)')
-      .eq('employee_id', emp.id);
-
-    const hasTour = existingTours?.some((a: any) => a.tour?.planned_date === tourDate);
+    const hasTour = vorplanungTourHeuteNachMitarbeiter.has(emp.id);
     if (hasTour) {
       conflicts.push('Bereits in anderer Tour (Vorplanung)');
       score -= 80;
@@ -567,12 +602,9 @@ export async function getRecommendedEmployees(
       score -= 80;
     }
 
-    const { data: skills } = await supabase
-      .from('employee_skills')
-      .select('*')
-      .eq('employee_id', emp.id);
+    const skills = skillsNachMitarbeiter.get(emp.id) || [];
 
-    const skillNames = (skills || []).map((s: any) => s.skill_name.toLowerCase());
+    const skillNames = skills.map((s: any) => s.skill_name.toLowerCase());
     const required = requiredSkills.map(s => s.toLowerCase());
 
     for (const req of required) {

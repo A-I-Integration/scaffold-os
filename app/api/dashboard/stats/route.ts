@@ -123,15 +123,20 @@ export async function GET() {
       : 0;
 
     // ─── LAGER ───
-    const inventoryItems = await safeFetch('inventory?select=*&is_active=eq.true');
+    // PERFORMANCE-FIX: war select=* (zieht jede Spalte inkl. z.B. sku,
+    // category, location bei jedem 45s-Tick) – hier werden nur name/
+    // quantity/min_stock/unit_price wirklich ausgewertet.
+    const inventoryItems = await safeFetch('inventory?select=id,name,quantity,min_stock,unit_price&is_active=eq.true');
     const criticalStock = inventoryItems.filter((i: any) => i.min_stock && i.quantity <= i.min_stock);
     const inventoryValue = inventoryItems.reduce((sum: number, i: any) => sum + (i.quantity || 0) * (i.unit_price || 0), 0);
 
     // ─── MITARBEITER ───
-    const allEmployees = await safeFetch('employees?select=*');
+    // PERFORMANCE-FIX: war select=* – hier wird nur status ausgezählt.
+    const allEmployees = await safeFetch('employees?select=id,status');
 
     // ─── TRANSPORTE ───
-    const activeTransports = await safeFetch('transport_orders?select=*&status=in.(pending,in_transit)');
+    // PERFORMANCE-FIX: war select=* – hier wird nur status ausgezählt.
+    const activeTransports = await safeFetch('transport_orders?select=id,status&status=in.(pending,in_transit)');
 
     // ─── TOUREN, ZEITERFASSUNG, ABWESENHEITEN (Phase 4/5 – robust dank safeFetch) ───
     const todayStr = now.toISOString().split('T')[0];
