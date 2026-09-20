@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth, unauthorizedResponse, serverErrorResponse } from '@/lib/auth';
 import { validiere, materialZuordnungSchema } from '@/lib/validation';
+import { bucheAusZentrallager } from '@/lib/inventory/buchung';
 
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const key = process.env.SUPABASE_SERVICE_ROLE_KEY!;
@@ -39,19 +40,30 @@ export async function POST(req: NextRequest) {
     if (!to_project_id) {
       return NextResponse.json({ success: false, error: 'to_project_id erforderlich' }, { status: 400 });
     }
-    // FIX: Transportaufträge reduzierten bisher NICHT den verfügbaren
-    // Lagerbestand (anders als /api/inventory/reserve) – genau die
-    // Doppelverplanungs-Gefahr, die die Lager-Reservierung eigentlich
-    // verhindern sollte, bestand für diesen zweiten Weg weiterhin.
-    // Jetzt gleiche Prüfung/Abbuchung wie bei der Reservierung.
-    const getRes = await fetch(`${url}/rest/v1/inventory?id=eq.${inventory_id}&select=quantity,name`, { headers });
-    if (!getRes.ok) throw new Error(await getRes.text());
-    const items = await getRes.json();
-    if (!items.length) return NextResponse.json({ success: false, error: 'Lagerartikel nicht gefunden.' }, { status: 404 });
-    const verfuegbar = items[0].quantity;
-    if (quantity > verfuegbar) {
-      return NextResponse.json({ success: false, error: `Nur ${verfuegbar} ${items[0].name} verfügbar (angefragt: ${quantity}) – ggf. bereits anderweitig reserviert/verplant.` }, { status: 400 });
+
+    // Zentrale Buchungsfunktion (lib/inventory/buchung.ts): prüft
+    // Bestand, bucht atomar ab, legt site_stock-Reservierung an und
+    // loggt in inventory_transactions – vorher tat dieser Weg nur die
+    // Bestandsprüfung/-Abbuchung selbst (fire-and-forget, kein
+    // site_stock, kein Log), war also im Lager-Bestand unsichtbar.
+    const buchung = await bucheAusZentrallager({
+      inventory_id,
+      project_id: to_project_id,
+      quantity,
+      reason: `Transportauftrag${from_project_id ? ` von Baustelle ${from_project_id}` : ''} nach Baustelle ${to_project_id}`,
+      reference_type: 'transport',
+    });
+    if (!buchung.success) {
+      return NextResponse.json({ success: false, error: buchung.error }, { status: 400 });
     }
+
+    // Bekannte, bewusst in Kauf genommene Lücke: Sollte der folgende
+    // Insert fehlschlagen, bleibt die Buchung oben (Bestand abgezogen,
+    // site_stock reserviert) ohne zugehörigen Transportauftrag stehen.
+    // Für eine echte Atomarität über zwei Tabellen bräuchte es eine
+    // DB-Funktion/Transaktion – nicht Teil dieser Änderung, aber ein
+    // Fehler hier ist wenigstens sichtbar (Response, kein stiller Fail
+    // wie vorher) und über inventory_transactions nachvollziehbar.
     const res = await fetch(`${url}/rest/v1/transport_orders`, {
       method: 'POST',
       headers: { ...headers, 'Content-Type': 'application/json', Prefer: 'return=representation' },
@@ -59,11 +71,6 @@ export async function POST(req: NextRequest) {
     });
     if (!res.ok) throw new Error(await res.text());
     const rows = await res.json();
-    // Bestand entsprechend abbuchen (gleiches Muster wie inventory/reserve)
-    await fetch(`${url}/rest/v1/inventory?id=eq.${inventory_id}`, {
-      method: 'PATCH', headers: { ...headers, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ quantity: verfuegbar - quantity }),
-    }).catch(() => { /* Transport ist angelegt, Bestandskorrektur notfalls manuell im Lager-Bereich */ });
     return NextResponse.json({ success: true, transport: rows[0] });
   } catch (err: any) {
     return serverErrorResponse(err);
