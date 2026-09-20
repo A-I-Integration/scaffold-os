@@ -16,7 +16,7 @@ import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import {
   ArrowLeft, FileText, Mail, Download, Check, RotateCcw, Trash2, Plus,
-  Pencil, Send, Euro, AlertCircle, ChevronDown, ChevronUp, X, Ruler,
+  Pencil, Send, Euro, AlertCircle, ChevronDown, ChevronUp, X, Ruler, Scissors,
   ClipboardList, Image as ImageIcon, FileSignature, User,
 } from 'lucide-react'
 import { generateInvoicePDF, generateLieferscheinPDF, fmtEur, fmtDate, type Invoice } from '@/lib/invoice-pdf'
@@ -328,6 +328,39 @@ export default function KundenDetailPage() {
       ladeDaten()
     } catch (err: any) { alert('❌ ' + err.message) }
     setSpeichern(false)
+  }
+
+  // NEU (Teilabbau-Abrechnung): Michelles Vorgabe – bei teilweise
+  // abgebautem Gerüst wird die bestehende Rechnung storniert und eine
+  // neue, anteilig reduzierte angelegt (gehört in den Rechnungsteil
+  // beim Kunden). Nutzt bewusst dieselbe, bereits vorhandene und
+  // GoBD-konforme "Neue Version"-Funktion (saveAlsNeueVersion) statt
+  // eines eigenen, parallelen Mechanismus – nur die Mengen der
+  // Positionen werden vorab automatisch anteilig gekürzt, bevor sich
+  // der bestehende Bearbeiten-Dialog öffnet. Vor dem Speichern kann
+  // jede Position dort weiterhin von Hand angepasst werden.
+  function teilabbauVorschlagen(inv: Invoice) {
+    const eingabe = prompt(
+      `Wie viel Prozent von "${inv.invoice_number}" ist bereits abgebaut? (0–100)\n\n` +
+      `Die neue Rechnung wird auf den verbleibenden Anteil reduziert – alle Positions-Mengen werden entsprechend gekürzt. ${inv.invoice_number} wird automatisch storniert, sobald du die neue Version speicherst. Vor dem Speichern kannst du jede Position noch von Hand anpassen.`,
+      '50'
+    )
+    if (!eingabe) return
+    const abgebautProzent = Number(eingabe.replace(',', '.'))
+    if (!(abgebautProzent > 0 && abgebautProzent <= 100)) {
+      alert('Bitte eine Zahl zwischen 1 und 100 eingeben.')
+      return
+    }
+    const verbleibendFaktor = (100 - abgebautProzent) / 100
+    const reduziertePositionen = (inv.positions || []).map((pos: any) => ({
+      ...pos,
+      menge: Math.round(Number(String(pos.menge).replace(',', '.')) * verbleibendFaktor * 100) / 100,
+    }))
+    setEditInvoice({
+      ...inv,
+      notes: `Teilabbau: ${abgebautProzent}% abgebaut, Rechnung auf ${Math.round(verbleibendFaktor * 100)}% reduziert. ${inv.notes || ''}`.trim(),
+    })
+    setEditPositions(reduziertePositionen)
   }
 
   async function deleteInvoice(inv: Invoice) {
@@ -1195,6 +1228,9 @@ export default function KundenDetailPage() {
                               <div className="flex gap-1">
                                 {inv.status !== 'storniert' && (
                                   <button onClick={() => { setEditInvoice(inv); setEditPositions(inv.positions || []) }} title="Neue Version anlegen (alte bleibt unverändert, wird storniert)" className="p-1.5 rounded-lg bg-black/5 hover:bg-black/10 text-[#1d1d1f]"><Pencil className="h-3.5 w-3.5" /></button>
+                                )}
+                                {inv.status !== 'storniert' && !gutschrift && (
+                                  <button onClick={() => teilabbauVorschlagen(inv)} title="Teilabbau: Rechnung anteilig reduzieren (alte wird storniert, neue mit gekürzten Mengen angelegt)" className="p-1.5 rounded-lg bg-amber-500/10 hover:bg-amber-500/25 text-amber-700"><Scissors className="h-3.5 w-3.5" /></button>
                                 )}
                                 <button onClick={() => { const doc = generateInvoicePDF(inv); doc.save(`${TYPE_LABEL[inv.invoice_type || 'standard']}_${inv.invoice_number}.pdf`) }} title="PDF" className="p-1.5 rounded-lg bg-black/5 hover:bg-black/10 text-[#1d1d1f]"><Download className="h-3.5 w-3.5" /></button>
                                 <button onClick={() => handleZugferd(inv)} disabled={zugferdLaeuft === inv.id} title="E-Rechnung (ZUGFeRD) – PDF mit eingebetteter maschinenlesbarer Rechnung" className="p-1.5 rounded-lg bg-indigo-600/20 hover:bg-indigo-600/40 disabled:opacity-50 text-indigo-700 text-[10px] font-bold w-7 flex items-center justify-center">{zugferdLaeuft === inv.id ? '…' : 'e⚡'}</button>
