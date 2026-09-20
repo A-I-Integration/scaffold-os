@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { requireAuth, unauthorizedResponse, serverErrorResponse } from '@/lib/auth';
+import { bestaetigeAnlieferung } from '@/lib/inventory/buchung';
 
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const key = process.env.SUPABASE_SERVICE_ROLE_KEY!;
@@ -47,6 +48,10 @@ export async function PUT(req: Request) {
     const stops = await res.json();
 
     // Bei "completed": zugehörigen Transportauftrag ebenfalls abschließen
+    // UND die Anlieferung im Lager verbuchen (site_stock: reserviert ->
+    // physisch da, completed_at setzen) – vorher wurde nur der Status
+    // auf 'delivered' gesetzt, ohne dass sich am Lagerbestand etwas
+    // aenderte ("physisch 0, reserviert N" blieb dauerhaft stehen).
     if (status === 'completed') {
       const orderId = stops?.[0]?.transport_order_id;
       if (orderId) {
@@ -55,6 +60,7 @@ export async function PUT(req: Request) {
           headers,
           body: JSON.stringify({ status: 'delivered' }),
         });
+        await bestaetigeAnlieferung(orderId).catch(() => {});
       }
     }
 

@@ -19,6 +19,8 @@
 // "Transportauftrag anlegen") bleiben für diese Fälle nutzbar.
 // ============================================================
 
+import { bucheAusZentrallager } from '@/lib/inventory/buchung';
+
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const key = process.env.SUPABASE_SERVICE_ROLE_KEY!;
 const headers = { apikey: key, Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' };
@@ -52,28 +54,24 @@ export async function beiAngebotsannahme(projectId: string): Promise<Angebotsann
       ergebnis.nichtGefunden.push(zeile.name);
       continue;
     }
-    if (treffer.quantity < zeile.quantity) {
-      ergebnis.nichtGenugBestand.push(`${zeile.name} (${zeile.quantity} benötigt, ${treffer.quantity} verfügbar)`);
+
+    // Zentrale Buchungsfunktion (lib/inventory/buchung.ts) – prüft
+    // Bestand, bucht atomar ab, legt site_stock-Reservierung an,
+    // loggt in inventory_transactions. Liest den Bestand bei jedem
+    // Aufruf frisch aus der DB, daher kein manuelles Nachführen eines
+    // lokalen Zwischenstands mehr nötig, auch wenn derselbe Lagerartikel
+    // mehrfach in der Materialliste vorkommt.
+    const buchung = await bucheAusZentrallager({
+      inventory_id: treffer.id,
+      project_id: projectId,
+      quantity: zeile.quantity,
+      reason: 'Automatisch bei Angebots-Annahme reserviert',
+      reference_type: 'angebot_annahme',
+    });
+    if (!buchung.success) {
+      ergebnis.nichtGenugBestand.push(`${zeile.name}: ${buchung.error}`);
       continue;
     }
-
-    // Bestand abbuchen (gleiche Logik wie /api/inventory/reserve)
-    const patchRes = await fetch(`${url}/rest/v1/inventory?id=eq.${treffer.id}`, {
-      method: 'PATCH', headers, body: JSON.stringify({ quantity: treffer.quantity - zeile.quantity }),
-    });
-    if (!patchRes.ok) { ergebnis.nichtGefunden.push(`${zeile.name} (Fehler beim Abbuchen)`); continue; }
-    // Bestand im lokalen Cache auch anpassen, falls derselbe Artikel mehrfach
-    // in der Materialliste vorkommt (mehrere Zeilen, gleicher Lagerartikel).
-    treffer.quantity -= zeile.quantity;
-
-    await fetch(`${url}/rest/v1/site_stock`, {
-      method: 'POST', headers,
-      body: JSON.stringify({ inventory_id: treffer.id, project_id: projectId, quantity: 0, reserved_quantity: zeile.quantity, min_stock: 0, status: 'ok' }),
-    }).catch(() => {});
-    await fetch(`${url}/rest/v1/inventory_transactions`, {
-      method: 'POST', headers,
-      body: JSON.stringify({ inventory_id: treffer.id, project_id: projectId, type: 'out', quantity: -zeile.quantity, reason: 'Automatisch bei Angebots-Annahme reserviert', reference_type: 'reservation' }),
-    }).catch(() => {});
     ergebnis.reserviert.push(zeile.name);
 
     // Transportauftrag anlegen (gleiche Logik wie /api/transport-orders POST)
