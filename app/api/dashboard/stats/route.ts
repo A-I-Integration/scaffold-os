@@ -164,7 +164,9 @@ export async function GET() {
       alerts.push({
         severity: 'warning', icon: '🗓️',
         title: `${pendingAbsenceRows.length} Abwesenheits-Antrag${pendingAbsenceRows.length === 1 ? '' : 'e'} offen`,
-        message: 'Krank/Urlaub wartet auf Genehmigung', action: '/planung', actionLabel: 'Planung öffnen',
+        // FIX (Bug-Report): verlinkte vorher auf /planung (Übersicht) –
+        // Genehmigen passiert aber im Abwesenheiten-Tab, also direkt dorthin.
+        message: 'Krank/Urlaub wartet auf Genehmigung', action: '/planung?tab=absences', actionLabel: 'Planung öffnen',
       });
     }
     if (avgMargin > 0 && avgMargin < 15 && activeProjects.length > 0) {
