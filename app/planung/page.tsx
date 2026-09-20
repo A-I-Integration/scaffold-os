@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, Suspense } from 'react';
+import { useSearchParams } from 'next/navigation';
 import AuftragsTeam from '@/components/AuftragsTeam';
 import {
   getEmployees,
@@ -31,8 +32,17 @@ import {
 
 type Tab = 'overview' | 'employees' | 'absences' | 'tours';
 
-export default function PlanungPage() {
-  const [activeTab, setActiveTab] = useState<Tab>('overview');
+function PlanungContent() {
+  // FIX (Bug-Report): Dashboard-Alarm "Abwesenheits-Antrag offen" verlinkte
+  // vorher nur auf /planung und landete immer auf Übersicht – man musste
+  // manuell auf den Abwesenheiten-Tab klicken. Jetzt liest die Seite einen
+  // ?tab=... Parameter und öffnet direkt den passenden Tab.
+  const searchParams = useSearchParams();
+  const tabParam = searchParams.get('tab');
+  const initialTab: Tab = (tabParam === 'overview' || tabParam === 'employees' || tabParam === 'absences' || tabParam === 'tours')
+    ? tabParam
+    : 'overview';
+  const [activeTab, setActiveTab] = useState<Tab>(initialTab);
   const [employees, setEmployees] = useState<EmployeeWithSkills[]>([]);
   const [absences, setAbsences] = useState<Absence[]>([]);
   const [tours, setTours] = useState<TourPlan[]>([]);
@@ -964,5 +974,14 @@ export default function PlanungPage() {
         </div>
       )}
     </div>
+  );
+}
+
+// useSearchParams braucht in Next eine Suspense-Grenze (Prerendering)
+export default function PlanungPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-white p-8 text-[#86868b]">Lädt…</div>}>
+      <PlanungContent />
+    </Suspense>
   );
 }
