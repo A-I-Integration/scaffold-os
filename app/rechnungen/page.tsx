@@ -345,8 +345,39 @@ function RechnungenContent() {
   }
 
   // Phase 15: Rechnung per E-Mail versenden (PDF im Anhang)
+  // NEU: E-Mail-Adresse wird vorgeschlagen, damit sie nicht jedes Mal neu
+  // eingetippt werden muss – Priorität: 1. Ansprechpartner-E-Mail aus
+  // Schritt 1 des zugehörigen Aufmaß-Projekts, 2. falls dort keine hinterlegt
+  // ist, die im Kundenkonto gespeicherte E-Mail. Schlägt beides fehl (kein
+  // project_id/customer_id, Fetch-Fehler, keine E-Mail hinterlegt), bleibt
+  // das Feld leer – es wird nie eine Adresse erfunden.
+  async function ermittleVorgeschlageneEmail(inv: Invoice): Promise<string> {
+    try {
+      if (inv.project_id) {
+        const pRes = await fetch('/api/projects?id=' + inv.project_id);
+        const pJson = await pRes.json();
+        const step1Email = pJson?.project?.data?.step1?.ansprechpartnerEmail;
+        if (step1Email && String(step1Email).includes('@')) return String(step1Email);
+      }
+    } catch {
+      // Vorbelegung ist nur Komfort – bei Fehler einfach weiter zum Fallback.
+    }
+    try {
+      if (inv.customer_id) {
+        const kRes = await fetch('/api/kunden?id=' + inv.customer_id);
+        const kJson = await kRes.json();
+        const kundenEmail = kJson?.kunden?.[0]?.email;
+        if (kundenEmail && String(kundenEmail).includes('@')) return String(kundenEmail);
+      }
+    } catch {
+      // Auch hier: kein Fehler nach außen, nur keine Vorbelegung.
+    }
+    return '';
+  }
+
   async function handleSendMail(inv: Invoice) {
-    const to = prompt(`An welche E-Mail-Adresse soll Rechnung ${inv.invoice_number} gesendet werden?`);
+    const vorschlagEmail = await ermittleVorgeschlageneEmail(inv);
+    const to = prompt(`An welche E-Mail-Adresse soll Rechnung ${inv.invoice_number} gesendet werden?`, vorschlagEmail);
     if (!to || !to.includes('@')) return;
     try {
       const doc = generateInvoicePDF(inv);
