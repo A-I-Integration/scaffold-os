@@ -15,6 +15,8 @@ interface Props {
   onExportStatikGeometrie?: () => void
   onExportIFC?: () => void
   customers?: { id: string; name: string; city?: string }[]
+  kundenLadeFehler?: boolean
+  onRetryKunden?: () => void
   onCreateCustomer?: (name: string) => Promise<{ id: string; name: string } | null>
   onAssignCustomer?: (customerId: string, customerName: string) => void
   zuordnenLaeuft?: boolean
@@ -22,7 +24,7 @@ interface Props {
   disabled?: boolean
 }
 
-export default function BillOfMaterials({ materials, totalWeightKg, totalPrice, logistik, onExportPDF, onExportCSV, onExportMontageplan, onExportStatikGeometrie, onExportIFC, customers, onCreateCustomer, onAssignCustomer, zuordnenLaeuft, disabled = false }: Props) {
+export default function BillOfMaterials({ materials, totalWeightKg, totalPrice, logistik, onExportPDF, onExportCSV, onExportMontageplan, onExportStatikGeometrie, onExportIFC, customers, kundenLadeFehler, onRetryKunden, onCreateCustomer, onAssignCustomer, zuordnenLaeuft, disabled = false }: Props) {
   const [kundenSuche, setKundenSuche] = useState('')
   const [ausgewaehlterKunde, setAusgewaehlterKunde] = useState<{ id: string; name: string } | null>(null)
   const [zeigeDropdown, setZeigeDropdown] = useState(false)
@@ -75,6 +77,16 @@ export default function BillOfMaterials({ materials, totalWeightKg, totalPrice, 
         {customers && onAssignCustomer && (
           <div className='mb-4 bg-blue-50 rounded-xl p-3 border border-blue-200 relative'>
             <label className='block text-xs font-medium text-blue-800 mb-1.5'>Kunde zuordnen → als Angebot anlegen</label>
+            {kundenLadeFehler && (
+              <div className='mb-2 flex items-center justify-between gap-2 bg-red-50 border border-red-200 rounded-lg px-2 py-1.5'>
+                <span className='text-[10px] text-red-700'>⚠️ Kundenliste konnte nicht geladen werden – bestehende Kunden werden evtl. nicht angezeigt. Bitte NICHT „als neuen Kunden anlegen" klicken, um Duplikate zu vermeiden.</span>
+                {onRetryKunden && (
+                  <button type='button' onClick={onRetryKunden} className='shrink-0 text-[10px] font-semibold text-red-700 underline'>
+                    erneut laden
+                  </button>
+                )}
+              </div>
+            )}
             <div className='relative'>
               <input
                 value={kundenSuche}
@@ -100,7 +112,7 @@ export default function BillOfMaterials({ materials, totalWeightKg, totalPrice, 
                         {c.name}{c.city && <span className='text-[#86868b]'> · {c.city}</span>}
                       </button>
                     ))}
-                    {treffer.length === 0 && suche && onCreateCustomer && (
+                    {treffer.length === 0 && suche && onCreateCustomer && !kundenLadeFehler && (
                       <button
                         type='button'
                         disabled={neuerKundeLaeuft}

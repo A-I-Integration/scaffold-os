@@ -402,7 +402,20 @@ function Schritt6Content() {
             body: JSON.stringify({ name: s1.name.trim(), street: s1.adresse || null }),
           });
           const kJson = await kRes.json();
-          if (kJson.success && kJson.kunde?.id) ermittelteCustomerId = kJson.kunde.id;
+          if (kJson.success && kJson.kunde?.id) {
+            ermittelteCustomerId = kJson.kunde.id;
+            // FIX: die neu angelegte/gefundene Kunden-ID zurück in Schritt 1
+            // schreiben. Vorher blieb sie nur lokal in dieser Funktion -
+            // jedes erneute Speichern (z.B. nach Preisanpassung) fand
+            // s1.customerId wieder leer vor und legte einen weiteren
+            // Kunden mit demselben Namen an (Duplikate).
+            setStepData((prev) => ({ ...prev, step1: { ...(prev.step1 || {}), customerId: ermittelteCustomerId } }));
+            try {
+              const raw = localStorage.getItem('scaffold_step1');
+              const parsed = raw ? JSON.parse(raw) : {};
+              localStorage.setItem('scaffold_step1', JSON.stringify({ ...parsed, customerId: ermittelteCustomerId }));
+            } catch { /* Speicher voll o.ae. - Projekt wird trotzdem gespeichert */ }
+          }
         } catch { /* Projekt wird trotzdem gespeichert, auch ohne Kundenverknüpfung */ }
       }
       // NEU (Prio-2-Sprint): KI-Ergebnis und Angebotsstatus mit ins Projekt speichern,

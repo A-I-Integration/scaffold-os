@@ -80,6 +80,11 @@ export default function CADPage() {
     board: true, protection_roof: true, safety_net: true, load_plate: true, corner_brace: true,
   })
   const [kunden, setKunden] = useState<{ id: string; name: string }[]>([])
+  // Fix: vorher wurde ein Fehler beim Laden der Kundenliste (Netzwerk,
+  // Rechte, Timeout) still verschluckt -> Liste blieb leer, Nutzer sah
+  // beim Tippen nie den echten Treffer und legte per "+ neuen Kunden
+  // anlegen" versehentlich Duplikate an. Jetzt sichtbar + erneut ladbar.
+  const [kundenLadeFehler, setKundenLadeFehler] = useState(false)
   const [hoursPerSqm, setHoursPerSqm] = useState(2.0)
   // Phase 68-G: Auto-Generierung des Modells. Nach 'Neu starten' auf
   // false gesetzt -> Leinwand bleibt leer, bis der Nutzer Maße ändert
@@ -105,10 +110,21 @@ export default function CADPage() {
   }
 
   // Echte Kunden + Kalkulations-Grundlagen laden
-  useEffect(() => {
-    fetch('/api/kunden').then(r => r.json()).then(j => { if (j.success) setKunden((j.kunden || []).map((k: any) => ({ id: k.id, name: k.name }))) }).catch(() => {})
-    fetch('/api/company').then(r => r.json()).then(j => { const v = Number(j.company?.calc_hours_per_sqm); if (v > 0) setHoursPerSqm(v) }).catch(() => {})
+  const loadKunden = useCallback(() => {
+    setKundenLadeFehler(false)
+    fetch('/api/kunden')
+      .then(r => r.json())
+      .then(j => {
+        if (j.success) setKunden((j.kunden || []).map((k: any) => ({ id: k.id, name: k.name })))
+        else setKundenLadeFehler(true)
+      })
+      .catch(() => setKundenLadeFehler(true))
   }, [])
+
+  useEffect(() => {
+    loadKunden()
+    fetch('/api/company').then(r => r.json()).then(j => { const v = Number(j.company?.calc_hours_per_sqm); if (v > 0) setHoursPerSqm(v) }).catch(() => {})
+  }, [loadKunden])
 
   const features = useMemo(() => generateBuildingFeatures(building), [building])
 
@@ -445,6 +461,8 @@ export default function CADPage() {
             onExportIFC={!model ? exportOhneModellHinweis : (ifcExportLaeuft ? undefined : handleExportIFC)}
             onExportCSV={model ? handleExportCSV : exportOhneModellHinweis}
             customers={kunden}
+            kundenLadeFehler={kundenLadeFehler}
+            onRetryKunden={loadKunden}
             onCreateCustomer={handleCreateCustomer}
             onAssignCustomer={handleAssignCustomer}
             zuordnenLaeuft={zuordnenLaeuft}
