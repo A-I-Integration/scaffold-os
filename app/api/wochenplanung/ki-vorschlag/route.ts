@@ -85,7 +85,12 @@ Nutze NUR die employee_id/project_id-Werte aus den Listen oben, erfinde keine. M
     const res = await kiFetchMitRetry(`${baseUrl}/chat/completions`, {
       method: 'POST',
       headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ model, messages: [{ role: 'user', content: prompt }], temperature: 0.3, max_tokens: 800, response_format: { type: 'json_object' } }),
+      // FIX (Bug aus den Logs, "Unterminated string in JSON"): 800 Token
+      // reichten bei mehreren freien Tagen/Projekten nicht für alle bis zu
+      // 8 Vorschläge inkl. Begründungstext - die Antwort wurde mitten im
+      // JSON abgeschnitten und JSON.parse() ist dann mit einer für den
+      // Nutzer nichtssagenden 500-Meldung gescheitert. Erhöht + Fallback.
+      body: JSON.stringify({ model, messages: [{ role: 'user', content: prompt }], temperature: 0.3, max_tokens: 1600, response_format: { type: 'json_object' } }),
     });
     if (res.status === 429) return NextResponse.json({ success: false, error: KI_UEBERLASTET_MELDUNG }, { status: 429 });
     if (!res.ok) return NextResponse.json({ success: false, error: `KI-Fehler (${res.status})` }, { status: 502 });
@@ -94,7 +99,14 @@ Nutze NUR die employee_id/project_id-Werte aus den Listen oben, erfinde keine. M
     const raw = kiJson.choices?.[0]?.message?.content;
     if (!raw) return NextResponse.json({ success: false, error: 'KI hat keine Antwort geliefert' }, { status: 502 });
 
-    const parsed = JSON.parse(raw);
+    let parsed: any;
+    try {
+      parsed = JSON.parse(raw);
+    } catch {
+      // Klare, verständliche Meldung statt der generischen 500 aus dem
+      // äußeren catch-Block - der Nutzer kann es einfach erneut versuchen.
+      return NextResponse.json({ success: false, error: 'Die KI-Antwort war unvollständig. Bitte erneut versuchen.' }, { status: 502 });
+    }
     // Anti-Halluzination: nur Vorschläge mit echten IDs aus den Listen behalten
     const gueltigeMitarbeiter = new Set(freieTage.map((f) => f.employee_id));
     const gueltigeProjekte = new Set(offeneProjekte.map((p: any) => p.id));

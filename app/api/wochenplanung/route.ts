@@ -143,7 +143,12 @@ export async function POST(req: NextRequest) {
           i++;
           if (wochentag === 0 || wochentag === 6) continue; // Wochenende überspringen, zählt nicht mit
           const iso = naechsterTag.toISOString().slice(0, 10);
-          await fetch(`${url}/rest/v1/taeglicher_einsatz`, {
+          // FIX: "resolution=merge-duplicates" wirkt bei PostgREST nur mit
+          // explizitem on_conflict-Parameter, der die Spalten des
+          // UNIQUE-Index nennt - ohne ihn wird stillschweigend eine normale
+          // INSERT versucht, die bei einem bestehenden Eintrag mit 409/23505
+          // (unique_violation) fehlschlägt, statt zu aktualisieren.
+          await fetch(`${url}/rest/v1/taeglicher_einsatz?on_conflict=employee_id,einsatz_datum`, {
             method: 'POST',
             headers: { ...headers, Prefer: 'resolution=merge-duplicates' },
             body: JSON.stringify({ employee_id, einsatz_datum: iso, project_id, notiz: notiz || null, updated_at: new Date().toISOString() }),
@@ -165,7 +170,13 @@ export async function POST(req: NextRequest) {
     const altRows = altRes.ok ? await altRes.json() : [];
     const altesProjectId: string | null = altRows?.[0]?.project_id || null;
 
-    const res = await fetch(`${url}/rest/v1/taeglicher_einsatz`, {
+    // FIX (Bug aus den Logs, 23505 unique_violation): "resolution=merge-
+    // duplicates" braucht bei PostgREST den on_conflict-Parameter, sonst
+    // schlägt der Upsert fehl, sobald für diesen Mitarbeiter/Tag schon ein
+    // Eintrag existiert (z.B. beim Verschieben auf einen Tag, der schon
+    // belegt war) - der Nutzer sah dann nur "Da ist leider etwas
+    // schiefgelaufen" ohne erkennbaren Grund.
+    const res = await fetch(`${url}/rest/v1/taeglicher_einsatz?on_conflict=employee_id,einsatz_datum`, {
       method: 'POST',
       headers: { ...headers, Prefer: 'resolution=merge-duplicates,return=representation' },
       body: JSON.stringify({ employee_id, einsatz_datum, project_id: project_id || null, notiz: notiz || null, updated_at: new Date().toISOString() }),
