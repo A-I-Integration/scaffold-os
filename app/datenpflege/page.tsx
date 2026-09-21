@@ -1,6 +1,8 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import Link from 'next/link';
+import { erforderlicheKlasse } from '@/lib/touren/fuehrerschein';
 
 // ============================================================
 // SCAFFOLD OS – Datenpflege (nur CEO/Admin)
@@ -19,7 +21,7 @@ interface Col {
   render?: (r: Row) => string; // nur Anzeige (z.B. verknüpfte Namen)
 }
 
-interface CreateField { key: string; label: string; placeholder?: string; }
+interface CreateField { key: string; label: string; placeholder?: string; type?: 'text' | 'number'; }
 
 interface Section {
   key: string;             // Schlüssel in den API-Daten
@@ -32,6 +34,10 @@ interface Section {
   // der Datenpflege, nur Bearbeiten/Löschen bestehender Einträge.
   createEndpoint?: string;
   createFields?: CreateField[];
+  // NEU: "auf die Zeile klicken → öffnet sich" – nur für Bereiche mit
+  // einer sinnvollen Zielseite (Kunden haben z.B. eine eigene Detailseite,
+  // Fahrzeuge/Fahrer werden nur inline hier bearbeitet und haben keine).
+  openHref?: (row: Row) => string;
 }
 
 const SECTIONS: Section[] = [
@@ -43,6 +49,13 @@ const SECTIONS: Section[] = [
       { key: 'status', label: 'Status', edit: true },
       { key: 'created_at', label: 'Erstellt', render: r => new Date(r.created_at).toLocaleDateString('de-DE') },
     ],
+    // Es gibt (noch) keine eigene Projekt-Detailseite in der App – die
+    // Planung ist die Stelle, an der ein einzelnes Projekt (Team
+    // zuweisen, Material, Termine) am ehesten "geöffnet" wird. Zeigt das
+    // Projekt dort sofort aufgeklappt an, wenn es noch ein offener
+    // Auftrag ohne Team ist – ist es bereits vollständig verplant, landet
+    // man auf der allgemeinen Planungs-Übersicht (kein Deep-Link dafür).
+    openHref: r => `/planung?tab=overview&project_id=${r.id}`,
   },
   {
     key: 'inventory', table: 'inventory', title: 'Lager-Artikel', icon: '📦',
@@ -53,6 +66,7 @@ const SECTIONS: Section[] = [
       { key: 'unit_price', label: 'Preis €', edit: true, type: 'number' },
       { key: 'is_active', label: 'Aktiv', render: r => (r.is_active ? '✅' : '❌') },
     ],
+    openHref: () => `/lager`,
   },
   {
     key: 'transports', table: 'transport_orders', title: 'Transportaufträge', icon: '🚚',
@@ -74,18 +88,29 @@ const SECTIONS: Section[] = [
       { key: 'vehicle', label: 'Fahrzeug', render: r => r.vehicle?.name || '–' },
       { key: 'status', label: 'Status', edit: true },
     ],
+    openHref: () => `/touren`,
   },
   {
     key: 'vehicles', table: 'vehicles', title: 'Fahrzeuge', icon: '🚛',
     columns: [
       { key: 'name', label: 'Name', edit: true },
       { key: 'license_plate', label: 'Kennzeichen', edit: true },
+      { key: 'typ', label: 'Typ', edit: true },
+      { key: 'zulaessiges_gesamtgewicht_kg', label: 'Gesamtgewicht (kg)', edit: true, type: 'number' },
+      {
+        key: 'erforderliche_klasse', label: 'Erfordert Führerschein',
+        render: r => erforderlicheKlasse(r.zulaessiges_gesamtgewicht_kg) || '– (Gewicht fehlt)',
+      },
+      { key: 'nutzlast_kg', label: 'Nutzlast (kg)', edit: true, type: 'number' },
       { key: 'is_active', label: 'Aktiv', render: r => (r.is_active ? '✅' : '❌') },
     ],
     createEndpoint: '/api/vehicles',
     createFields: [
       { key: 'name', label: 'Name', placeholder: 'z.B. Sprinter 3' },
       { key: 'license_plate', label: 'Kennzeichen', placeholder: 'z.B. SC-OS 4' },
+      { key: 'typ', label: 'Typ', placeholder: 'z.B. Sprinter, LKW 7,5t' },
+      { key: 'zulaessiges_gesamtgewicht_kg', label: 'Zul. Gesamtgewicht (kg)', placeholder: 'z.B. 7500', type: 'number' },
+      { key: 'nutzlast_kg', label: 'Nutzlast (kg)', placeholder: 'z.B. 3200', type: 'number' },
     ],
   },
   {
@@ -111,6 +136,7 @@ const SECTIONS: Section[] = [
       { key: 'city', label: 'Ort', edit: true },
       { key: 'is_active', label: 'Aktiv', render: r => (r.is_active ? '✅' : '❌') },
     ],
+    openHref: r => `/kunden/${r.id}`,
   },
 ];
 
@@ -137,8 +163,11 @@ export default function DatenpflegePage() {
       const json = await res.json();
       if (!json.success) throw new Error(json.error);
       setData({
+        // FIX: /api/admin/data liefert "customers" schon länger mit, hier
+        // wurden sie aber nie übernommen - der Kunden-Reiter zeigte deshalb
+        // immer "(0)" an, egal wie viele Kunden es gab.
         projects: json.projects, inventory: json.inventory, transports: json.transports,
-        tours: json.tours, vehicles: json.vehicles, drivers: json.drivers,
+        tours: json.tours, vehicles: json.vehicles, drivers: json.drivers, customers: json.customers,
       });
     } catch (e: any) { setError(e.message); }
     setLoading(false);
@@ -185,10 +214,17 @@ export default function DatenpflegePage() {
     if (!section.createEndpoint) return;
     setBusy(true); setMsg('');
     try {
+      const payload: Row = {};
+      for (const f of section.createFields || []) {
+        let v = createValues[f.key];
+        if (v === undefined || v === '') continue; // leer -> Feld weglassen (DB-Default greift)
+        if (f.type === 'number') v = Number(v);
+        payload[f.key] = v;
+      }
       const res = await fetch(section.createEndpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(createValues),
+        body: JSON.stringify(payload),
       });
       const json = await res.json();
       if (!json.success) throw new Error(json.error);
@@ -267,7 +303,7 @@ export default function DatenpflegePage() {
                     <div key={f.key} className="min-w-[200px]">
                       <label className="block text-xs text-[#86868b] mb-1">{f.label}</label>
                       <input
-                        type="text"
+                        type={f.type === 'number' ? 'number' : 'text'}
                         placeholder={f.placeholder}
                         value={createValues[f.key] ?? ''}
                         onChange={e => setCreateValues({ ...createValues, [f.key]: e.target.value })}
@@ -307,7 +343,7 @@ export default function DatenpflegePage() {
                   const isEditing = editingId === row.id;
                   return (
                     <tr key={row.id} className="border-b border-black/5/60 align-top">
-                      {section.columns.map(col => (
+                      {section.columns.map((col, i) => (
                         <td key={col.key} className="py-2.5 pr-4">
                           {isEditing && col.edit ? (
                             <input
@@ -317,6 +353,17 @@ export default function DatenpflegePage() {
                               onChange={e => setEditValues({ ...editValues, [col.key]: e.target.value })}
                               className={inputCls}
                             />
+                          ) : i === 0 && section.openHref ? (
+                            // NEU: erste Spalte klickbar - öffnet die Zeile an der
+                            // sinnvollsten Stelle (z.B. Kunden-Detailseite,
+                            // Planung fürs Projekt). Nur bei Bereichen mit einer
+                            // passenden Zielseite (openHref gesetzt).
+                            <Link
+                              href={section.openHref(row)}
+                              className="whitespace-nowrap text-[#e8590c] font-medium hover:underline"
+                            >
+                              {col.render ? col.render(row) : String(row[col.key] ?? '–')}
+                            </Link>
                           ) : (
                             <span className="whitespace-nowrap">
                               {col.render ? col.render(row) : String(row[col.key] ?? '–')}

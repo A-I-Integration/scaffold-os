@@ -14,6 +14,14 @@ import { serverErrorResponse } from '@/lib/auth';
 //
 // POST { kunden: { name, contact_person?, email?, phone?, street?, zip?, city?, notes? }[] }
 // → { success, importiert, uebersprungen: { zeile, grund }[] }
+//
+// FIX (Kunden-Duplikate): dieser Import hatte BISHER GAR KEINEN
+// Dubletten-Check - jeder Import legte für jede Zeile einen neuen
+// Kunden an, auch wenn er (z.B. aus dem normalen App-Betrieb) schon
+// existierte. Jetzt: gleiche Regel wie beim normalen Kunden-Anlegen
+// (POST /api/kunden) - Name (getrimmt, ohne Groß-/Kleinschreibung)
+// gegen den Bestand geprüft, Treffer werden übersprungen statt
+// dupliziert.
 // ============================================================
 
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
@@ -41,6 +49,12 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: false, error: 'Maximal 1000 Datensätze pro Import.' }, { status: 400 });
     }
 
+    // Bestehende Kunden laden (Name, getrimmt/klein), um Dubletten beim
+    // Import zu überspringen statt sie neu anzulegen.
+    const bestandRes = await fetch(`${url}/rest/v1/customers?select=name`, { headers });
+    const bestandRows = bestandRes.ok ? await bestandRes.json() : [];
+    const bekannteNamen = new Set<string>(bestandRows.map((k: any) => String(k.name || '').trim().toLowerCase()));
+
     const gueltig: Record<string, any>[] = [];
     const uebersprungen: { zeile: number; grund: string }[] = [];
 
@@ -49,6 +63,9 @@ export async function POST(req: NextRequest) {
       for (const f of FELDER) if (k[f] !== undefined && k[f] !== null && String(k[f]).trim() !== '') clean[f] = String(k[f]).trim();
       if (!clean.name) { uebersprungen.push({ zeile: i + 1, grund: 'Kein Name' }); return; }
       if (!emailOk(clean.email)) { uebersprungen.push({ zeile: i + 1, grund: `Ungültige E-Mail: ${clean.email}` }); return; }
+      const nameKey = clean.name.toLowerCase();
+      if (bekannteNamen.has(nameKey)) { uebersprungen.push({ zeile: i + 1, grund: `Kunde existiert bereits: ${clean.name}` }); return; }
+      bekannteNamen.add(nameKey); // gegen Dubletten INNERHALB derselben Import-Datei
       gueltig.push(clean);
     });
 

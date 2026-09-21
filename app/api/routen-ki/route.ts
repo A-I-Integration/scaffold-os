@@ -4,6 +4,7 @@ import { kiFetchMitRetry, KI_UEBERLASTET_MELDUNG } from '@/lib/ki-fetch';
 import { createClient } from '@/lib/supabase/server';
 import { geocodeAll, buildTable, tableAsText } from '@/lib/routing';
 import { serverErrorResponse } from '@/lib/auth';
+import { darfFahrzeugFahren, erforderlicheKlasse } from '@/lib/touren/fuehrerschein';
 
 // ─── POST /api/routen-ki ───
 // KI-Tourenplan für ein Datum: bündelt offene Transporte, Baustellen-Bestände,
@@ -57,8 +58,8 @@ export async function POST(req: NextRequest) {
     // ─── Daten sammeln ───
     const [orders, vehicles, drivers, stocks, absences] = await Promise.all([
       rest(`transport_orders?status=eq.pending&select=id,quantity,status,from_project_id,to_project_id,inventory:inventory_id(name,unit),from_project:from_project_id(id,name,adresse),to_project:to_project_id(id,name,adresse)`),
-      rest(`vehicles?is_active=eq.true&select=id,name,license_plate&order=name`),
-      rest(`drivers?is_active=eq.true&select=id,name,employee_id,employee:employee_id(id,first_name,last_name)&order=name`),
+      rest(`vehicles?is_active=eq.true&select=id,name,license_plate,zulaessiges_gesamtgewicht_kg&order=name`),
+      rest(`drivers?is_active=eq.true&select=id,name,employee_id,employee:employee_id(id,first_name,last_name,fuehrerschein_klassen)&order=name`),
       rest(`site_stock?quantity=gt.0&select=quantity,reserved_quantity,inventory:inventory_id(name,unit),project:project_id(id,name,adresse)`),
       rest(`absences?status=eq.approved&start_date=lte.${date}&end_date=gte.${date}&select=employee_id,type,employee:employee_id(id,first_name,last_name)`),
     ]);
@@ -71,6 +72,24 @@ export async function POST(req: NextRequest) {
     const absentEmployeeIds = new Set((absences || []).map((a: any) => a.employee_id));
     const availableDrivers = (drivers || []).filter((d: any) => !d.employee_id || !absentEmployeeIds.has(d.employee_id));
     const absentDrivers = (drivers || []).filter((d: any) => d.employee_id && absentEmployeeIds.has(d.employee_id));
+
+    // FIX (Verknüpfung Fahrer ↔ Fahrzeug, Phase 91): die KI soll erst gar
+    // keine Kombination vorschlagen, für die der Fahrer nicht die nötige
+    // Führerschein-Klasse hat (endgültig geprüft wird es ohnehin nochmal
+    // beim tatsächlichen Anlegen der Tour in POST /api/tours).
+    function fahrerDarf(driverName: string, vehicleName: string): boolean {
+      const fahrer = availableDrivers.find((d: any) => d.name === driverName);
+      const fahrzeug = (vehicles || []).find((v: any) => v.name === vehicleName);
+      if (!fahrer || !fahrzeug) return true; // unbekannter Name -> nicht blockieren, KI-Antwort selbst validiert Namen später
+      return darfFahrzeugFahren(fahrer.employee?.fuehrerschein_klassen, fahrzeug.zulaessiges_gesamtgewicht_kg);
+    }
+    const fahrzeugKlassenText = (vehicles || [])
+      .filter((v: any) => v.zulaessiges_gesamtgewicht_kg)
+      .map((v: any) => `${v.name}: ${v.zulaessiges_gesamtgewicht_kg} kg zul. Gesamtgewicht → erfordert Führerschein-Klasse ${erforderlicheKlasse(v.zulaessiges_gesamtgewicht_kg)}`)
+      .join('\n');
+    const fahrerKlassenText = availableDrivers
+      .map((d: any) => `${d.name}: ${(d.employee?.fuehrerschein_klassen || []).join(', ') || 'keine Klasse hinterlegt'}`)
+      .join('\n');
 
     // ─── Adressen geocodieren (Lager + alle beteiligten Baustellen) ───
     const addressItems: { label: string; address: string }[] = [];
@@ -108,7 +127,9 @@ BAUSTELLEN-BESTÄNDE (Material, das schon auf Baustellen liegt):
 ${stockLines || '(keine)'}
 
 FAHRZEUGE: ${(vehicles || []).map((v: any) => `${v.name} (${v.license_plate || 'kein Kennzeichen'})`).join(', ') || 'keine'}
+${fahrzeugKlassenText ? `FAHRZEUG-GEWICHTE (bestimmen die nötige Führerschein-Klasse):\n${fahrzeugKlassenText}` : ''}
 VERFÜGBARE FAHRER: ${availableDrivers.map((d: any) => d.name).join(', ') || 'keine'}
+${fahrerKlassenText ? `FÜHRERSCHEIN-KLASSEN DER FAHRER:\n${fahrerKlassenText}` : ''}
 ${absentDrivers.length ? `ABWESENDE FAHRER (krank/urlaub): ${absentDrivers.map((d: any) => d.name).join(', ')}` : ''}
 
 ${matrixText}
@@ -118,6 +139,7 @@ REGELN:
 - Baustelle-zu-Baustelle-Umladungen bevorzugen, wenn das Material dort frei liegt statt vom Lager.
 - Fahrzeit-Matrix berücksichtigen: nahe Stopps in eine Tour, sinnvolle Reihenfolge.
 - Jede Tour: ein Fahrzeug, ein Fahrer, maximal ~6 Stopps.
+- WICHTIG: ein Fahrer darf einem Fahrzeug nur zugeordnet werden, wenn seine Führerschein-Klasse laut FAHRZEUG-GEWICHTE/FÜHRERSCHEIN-KLASSEN-Angaben oben ausreicht. Passt es bei keinem verfügbaren Fahrer, das Fahrzeug NICHT einplanen und den Grund in "warnungen" nennen.
 - Verwende AUSSCHLIESSLICH die echten IDs, Fahrzeug-, Fahrer- und Projektnamen aus den Daten oben.
 
 Antworte AUSSCHLIESSLICH als JSON:
@@ -171,6 +193,26 @@ Antworte AUSSCHLIESSLICH als JSON:
       plan = JSON.parse(raw);
     } catch {
       return NextResponse.json({ success: false, error: 'KI-Antwort war kein gültiges JSON' }, { status: 502 });
+    }
+
+    // Nachträgliche Prüfung (Verlass dich nicht nur auf die KI-Anweisung):
+    // jede vorgeschlagene Fahrer/Fahrzeug-Kombination gegen die
+    // Führerschein-Klassen gegenprüfen. Ungültige Touren werden nicht
+    // stillschweigend entfernt (die KI-Antwort bleibt sichtbar/nutzbar),
+    // sondern als Warnung markiert - beim tatsächlichen Übernehmen in eine
+    // echte Tour greift ohnehin nochmal die serverseitige Prüfung in
+    // POST /api/tours.
+    if (Array.isArray(plan?.touren)) {
+      const zusatzWarnungen: string[] = [];
+      for (const t of plan.touren) {
+        if (t?.fahrer && t?.fahrzeug && !fahrerDarf(t.fahrer, t.fahrzeug)) {
+          t.fuehrerschein_warnung = true;
+          zusatzWarnungen.push(`⚠️ ${t.fahrer} hat nicht die nötige Führerschein-Klasse für ${t.fahrzeug} (Tour „${t.name || '?'}") - bitte anderen Fahrer wählen.`);
+        }
+      }
+      if (zusatzWarnungen.length > 0) {
+        plan.warnungen = [...(plan.warnungen || []), ...zusatzWarnungen];
+      }
     }
 
     return NextResponse.json({
