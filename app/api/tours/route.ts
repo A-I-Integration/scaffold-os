@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { requireAuth, unauthorizedResponse, serverErrorResponse } from '@/lib/auth';
+import { darfFahrzeugFahren, erforderlicheKlasse } from '@/lib/touren/fuehrerschein';
 
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const key = process.env.SUPABASE_SERVICE_ROLE_KEY!;
@@ -82,6 +83,35 @@ export async function POST(req: Request) {
     }
     if (!driver_id) {
       return NextResponse.json({ success: false, error: 'Mindestens eine zuständige Person erforderlich.' }, { status: 400 });
+    }
+
+    // FIX (Verknüpfung Fahrer ↔ Fahrzeug, Phase 91): bisher wurde beim
+    // Anlegen einer Tour GAR NICHT geprüft, ob der zugewiesene Fahrer laut
+    // Führerschein-Klasse überhaupt das gewählte Fahrzeug fahren darf. Nur
+    // prüfbar, wenn beim Fahrzeug ein zulässiges Gesamtgewicht hinterlegt
+    // ist (Datenpflege) - sonst wird nicht blockiert, um Bestandsdaten
+    // nicht kaputt zu machen.
+    if (vehicle_id) {
+      const [vehRes, drvRes] = await Promise.all([
+        fetch(`${url}/rest/v1/vehicles?id=eq.${vehicle_id}&select=name,zulaessiges_gesamtgewicht_kg`, { headers }),
+        fetch(`${url}/rest/v1/drivers?id=eq.${driver_id}&select=name,employee_id`, { headers }),
+      ]);
+      const vehRows = vehRes.ok ? await vehRes.json() : [];
+      const drvRows = drvRes.ok ? await drvRes.json() : [];
+      const fahrzeug = vehRows?.[0];
+      const fahrer = drvRows?.[0];
+      if (fahrzeug?.zulaessiges_gesamtgewicht_kg && fahrer?.employee_id) {
+        const empRes = await fetch(`${url}/rest/v1/employees?id=eq.${fahrer.employee_id}&select=fuehrerschein_klassen`, { headers });
+        const empRows = empRes.ok ? await empRes.json() : [];
+        const klassen: string[] = empRows?.[0]?.fuehrerschein_klassen || [];
+        if (!darfFahrzeugFahren(klassen, fahrzeug.zulaessiges_gesamtgewicht_kg)) {
+          const erforderlich = erforderlicheKlasse(fahrzeug.zulaessiges_gesamtgewicht_kg);
+          return NextResponse.json({
+            success: false,
+            error: `${fahrer.name || 'Der Fahrer'} hat nicht die nötige Führerschein-Klasse für ${fahrzeug.name || 'dieses Fahrzeug'} (erforderlich: ${erforderlich}). Bitte Führerschein-Klassen beim Mitarbeiter in der Planung hinterlegen oder einen anderen Fahrer wählen.`,
+          }, { status: 400 });
+        }
+      }
     }
 
     // 1a. Transport-Details holen für Adressen (echtes Schema: to_project_id → projects)

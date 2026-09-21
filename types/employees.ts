@@ -25,6 +25,10 @@ export interface Employee {
   hourly_rate: number;
   drivers_license: string | null;
   license_expires: string | null;
+  // NEU (Phase 91): strukturierte Führerschein-Klassen (z.B. ['B','C1']),
+  // getrennt vom Freitext-Feld drivers_license - wird für die
+  // Fahrzeug-Berechtigungsprüfung genutzt (siehe lib/touren/fuehrerschein.ts).
+  fuehrerschein_klassen: string[] | null;
   home_address: string | null;
   home_lat: number | null;
   home_lng: number | null;

@@ -29,6 +29,7 @@ import {
   EmployeeStats,
   EmployeeRecommendation,
 } from '@/types/employees';
+import { FUEHRERSCHEIN_KLASSEN } from '@/lib/touren/fuehrerschein';
 
 type Tab = 'overview' | 'employees' | 'absences' | 'tours';
 
@@ -60,6 +61,14 @@ function PlanungContent() {
   // NEU (Phase 43): Neue Aufträge aus dem Aufmaß, die noch kein Team haben
   const [neueAuftraege, setNeueAuftraege] = useState<{ id: string; name: string; kunde: string; adresse: string; projektbeginn: string; materialList: { name: string; quantity: number; unit: string }[] }[]>([])
   const [offenGeoeffnet, setOffenGeoeffnet] = useState<string | null>(null)
+  // NEU: Deep-Link von der Datenpflege ("Projekt öffnen") - es gibt noch
+  // keine eigene Projekt-Detailseite, daher springt der Klick hierher und
+  // klappt den Auftrag automatisch auf, WENN er noch ohne Team ist (das ist
+  // die einzige Stelle, an der ein einzelnes Projekt hier "geöffnet"
+  // werden kann). Ist er schon voll verplant, gibt es dafür noch keinen
+  // Deep-Link - dann bleibt es bei der allgemeinen Übersicht plus Hinweis.
+  const projectIdParam = searchParams.get('project_id');
+  const [unassignedGeladen, setUnassignedGeladen] = useState(false);
   const [kiTeamVorschlag, setKiTeamVorschlag] = useState<Record<string, { laeuft: boolean; ergebnis?: any; fehler?: string }>>({})
   // NEU: Material für die Fahrt zuordnen (Lagerartikel je Materialzeile
   // wählen, bewusst kein automatisches Matching gegen den Lagerbestand).
@@ -117,9 +126,22 @@ function PlanungContent() {
     }
     loadRefs();
     // NEU (Phase 45): neue, unzugewiesene Aufträge laden
-    fetch('/api/projects/unassigned').then((r) => r.json()).then((j) => { if (j.success) setNeueAuftraege(j.projekte) }).catch(() => {})
+    fetch('/api/projects/unassigned').then((r) => r.json()).then((j) => { if (j.success) setNeueAuftraege(j.projekte) }).catch(() => {}).finally(() => setUnassignedGeladen(true))
     fetch('/api/inventory').then((r) => r.json()).then((j) => { if (j.success) setLagerArtikel((j.items || []).map((i: any) => ({ id: i.id, name: i.name, unit: i.unit }))) }).catch(() => {})
   }, [loadData]);
+
+  // Deep-Link: sobald die offenen Aufträge geladen sind, den per
+  // ?project_id=... übergebenen Auftrag automatisch aufklappen und dahin
+  // scrollen (siehe Kommentar bei projectIdParam oben).
+  useEffect(() => {
+    if (!projectIdParam || !unassignedGeladen) return;
+    if (neueAuftraege.some((p) => p.id === projectIdParam)) {
+      setOffenGeoeffnet(projectIdParam);
+      setTimeout(() => {
+        document.getElementById(`auftrag-${projectIdParam}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }, 150);
+    }
+  }, [projectIdParam, unassignedGeladen, neueAuftraege]);
 
   async function erstelleTransporteFuerAuftrag(projektId: string, adresse: string) {
     const zuordnung = materialZuordnung[projektId] || {}
@@ -359,6 +381,11 @@ function PlanungContent() {
         {/* ÜBERSICHT */}
         {activeTab === 'overview' && (
           <div className="space-y-4">
+            {projectIdParam && unassignedGeladen && !neueAuftraege.some((p) => p.id === projectIdParam) && (
+              <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 text-sm text-blue-800">
+                ℹ️ Dieses Projekt ist bereits vollständig verplant (kein offener Auftrag mehr) – dafür gibt es hier noch keine eigene Ansicht.
+              </div>
+            )}
             {/* NEU (Phase 43): Neue Aufträge aus dem Aufmaß ohne Team –
                 schließt die Lücke, dass ein Auftrag mit Datum bisher
                 nirgends automatisch zur Personal-Zuteilung auftauchte. */}
@@ -369,7 +396,7 @@ function PlanungContent() {
                 </h3>
                 <div className="space-y-2">
                   {neueAuftraege.map((p) => (
-                    <div key={p.id} className="bg-white rounded-lg border border-amber-200">
+                    <div key={p.id} id={`auftrag-${p.id}`} className="bg-white rounded-lg border border-amber-200">
                       <button onClick={() => setOffenGeoeffnet(offenGeoeffnet === p.id ? null : p.id)} className="w-full flex items-center justify-between p-3 text-left">
                         <div>
                           <div className="text-sm font-medium text-gray-900">{p.name} – {p.kunde}</div>
@@ -525,7 +552,12 @@ function PlanungContent() {
                           </form>
                         </div>
                       </td>
-                      <td className="px-6 py-4 text-gray-600 text-xs">{emp.drivers_license || '-'}</td>
+                      <td className="px-6 py-4 text-gray-600 text-xs">
+                        {emp.drivers_license || '-'}
+                        {(emp.fuehrerschein_klassen || []).length > 0 && (
+                          <div className="text-[10px] text-gray-400">{(emp.fuehrerschein_klassen || []).join(', ')}</div>
+                        )}
+                      </td>
                       <td className="px-6 py-4 text-right">
                         <button onClick={() => { setEditingEmployee(emp); setShowEditEmployee(true); }} className="text-blue-600 text-xs mr-2 hover:underline">Bearbeiten</button>
                         <button onClick={() => handleDeleteEmployee(emp.id)} className="text-red-600 text-xs hover:underline">Deaktivieren</button>
@@ -683,6 +715,17 @@ function PlanungContent() {
                 <div><label className="block text-sm font-medium text-gray-700 mb-1">Stundensatz (€)</label><input name="hourly_rate" type="number" step="0.01" defaultValue="0" className="w-full px-3 py-2 border rounded-xl text-sm" /></div>
                 <div><label className="block text-sm font-medium text-gray-700 mb-1">Führerschein</label><input name="drivers_license" className="w-full px-3 py-2 border rounded-xl text-sm" /></div>
               </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Führerschein-Klassen (für Fahrzeug-Zuweisung)</label>
+                <div className="flex flex-wrap gap-3">
+                  {FUEHRERSCHEIN_KLASSEN.map(k => (
+                    <label key={k} className="flex items-center gap-1.5 text-sm bg-gray-50 border border-gray-200 rounded-lg px-2.5 py-1.5">
+                      <input type="checkbox" name="fuehrerschein_klassen" value={k} />
+                      {k}
+                    </label>
+                  ))}
+                </div>
+              </div>
               <div><label className="block text-sm font-medium text-gray-700 mb-1">Adresse</label><input name="home_address" className="w-full px-3 py-2 border rounded-xl text-sm" /></div>
               <div><label className="block text-sm font-medium text-gray-700 mb-1">Notizen</label><textarea name="notes" rows={2} className="w-full px-3 py-2 border rounded-xl text-sm" /></div>
               <div className="flex justify-end gap-2">
@@ -727,6 +770,17 @@ function PlanungContent() {
                 <div><label className="block text-sm font-medium text-gray-700 mb-1">Wochenstunden</label><input name="weekly_hours" type="number" defaultValue={editingEmployee.weekly_hours} className="w-full px-3 py-2 border rounded-xl text-sm" /></div>
                 <div><label className="block text-sm font-medium text-gray-700 mb-1">Stundensatz (€)</label><input name="hourly_rate" type="number" step="0.01" defaultValue={editingEmployee.hourly_rate} className="w-full px-3 py-2 border rounded-xl text-sm" /></div>
                 <div><label className="block text-sm font-medium text-gray-700 mb-1">Führerschein</label><input name="drivers_license" defaultValue={editingEmployee.drivers_license || ''} className="w-full px-3 py-2 border rounded-xl text-sm" /></div>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Führerschein-Klassen (für Fahrzeug-Zuweisung)</label>
+                <div className="flex flex-wrap gap-3">
+                  {FUEHRERSCHEIN_KLASSEN.map(k => (
+                    <label key={k} className="flex items-center gap-1.5 text-sm bg-gray-50 border border-gray-200 rounded-lg px-2.5 py-1.5">
+                      <input type="checkbox" name="fuehrerschein_klassen" value={k} defaultChecked={(editingEmployee.fuehrerschein_klassen || []).includes(k)} />
+                      {k}
+                    </label>
+                  ))}
+                </div>
               </div>
               <div><label className="block text-sm font-medium text-gray-700 mb-1">Adresse</label><input name="home_address" defaultValue={editingEmployee.home_address || ''} className="w-full px-3 py-2 border rounded-xl text-sm" /></div>
               <div><label className="block text-sm font-medium text-gray-700 mb-1">Notizen</label><textarea name="notes" defaultValue={editingEmployee.notes || ''} rows={2} className="w-full px-3 py-2 border rounded-xl text-sm" /></div>

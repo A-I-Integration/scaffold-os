@@ -7,8 +7,14 @@ import { createClient } from '@/lib/supabase/server';
 //
 // SICHERHEIT: Nur admin + disponent (Session-Check per Cookie).
 // Datenbank-Zugriff danach per REST + SERVICE_ROLE_KEY.
-// Exakte Dubletten (Name + PLZ + Ort) werden übersprungen.
 // Insert in Blöcken à 100 Zeilen (PostgREST-Bulk).
+//
+// FIX (Kunden-Duplikate): Dubletten-Check lief bisher über die
+// Kombination Name+PLZ+Ort - fehlte bei einem bestehenden Kunden
+// PLZ/Ort (oder war leicht anders erfasst), griff der Check nicht und
+// es entstand trotzdem ein Duplikat. Jetzt dieselbe Regel wie beim
+// normalen Kunden-Anlegen (POST /api/kunden): Name allein (getrimmt,
+// ohne Groß-/Kleinschreibung) reicht für den Dubletten-Treffer.
 // ============================================================
 
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
@@ -67,13 +73,14 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  // Vorhandene Kunden laden → exakte Dubletten überspringen
+  // Vorhandene Kunden laden → Dubletten überspringen (Name allein,
+  // getrimmt/klein - siehe FIX-Kommentar oben)
   let vorhanden = new Set<string>();
   try {
-    const res = await fetch(`${url}/rest/v1/customers?select=name,zip,city&is_active=eq.true`, { headers: adminHeaders });
+    const res = await fetch(`${url}/rest/v1/customers?select=name&is_active=eq.true`, { headers: adminHeaders });
     if (res.ok) {
-      const bestand = (await res.json()) as { name: string; zip: string | null; city: string | null }[];
-      vorhanden = new Set(bestand.map((k) => `${k.name}|${k.zip || ''}|${k.city || ''}`.toLowerCase()));
+      const bestand = (await res.json()) as { name: string }[];
+      vorhanden = new Set(bestand.map((k) => String(k.name || '').trim().toLowerCase()));
     }
   } catch (e) {
     console.error('customers-Bestand nicht lesbar (Import läuft ohne Dubletten-Check):', e);
@@ -91,9 +98,8 @@ export async function POST(req: NextRequest) {
       fehler.push({ zeile, grund: 'Name fehlt' });
       return;
     }
-    const zip = s(r.zip, 10);
-    const city = s(r.city, 100);
-    if (vorhanden.has(`${name}|${zip || ''}|${city || ''}`.toLowerCase())) {
+    const nameKey = name.toLowerCase();
+    if (vorhanden.has(nameKey)) {
       uebersprungen++;
       return;
     }
@@ -102,14 +108,15 @@ export async function POST(req: NextRequest) {
       fehler.push({ zeile, grund: `E-Mail ungültig: ${email}` });
       return;
     }
+    vorhanden.add(nameKey); // gegen Dubletten INNERHALB derselben Import-Datei
     eintraege.push({
       name,
       contact_person: s(r.contact_person, 200),
       email,
       phone: s(r.phone, 50),
       street: s(r.street, 200),
-      zip,
-      city,
+      zip: s(r.zip, 10),
+      city: s(r.city, 100),
       notes: s(r.notes, 2000),
       is_active: true,
     });
