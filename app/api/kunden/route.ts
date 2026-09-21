@@ -101,6 +101,24 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: false, error: 'E-Mail-Adresse ungültig.' }, { status: 400 });
     }
 
+    // FIX: Dopplungs-Sperre. Mehrere Stellen im Frontend (CAD, Aufmaß-
+    // Wizard) rufen dieses Endpoint auf, um bei Bedarf automatisch einen
+    // neuen Kunden anzulegen - bei Frontend-Fehlern (z.B. Kundenliste
+    // nicht geladen, ID nicht gemerkt) konnte das zu mehreren identisch
+    // benannten Duplikaten führen. Vor dem Anlegen: existiert schon ein
+    // Kunde mit exakt diesem Namen (Groß-/Kleinschreibung egal), wird
+    // dieser zurückgegeben statt ein neuer Datensatz angelegt.
+    const dupCheck = await fetch(
+      `${url}/rest/v1/customers?name=ilike.${encodeURIComponent(clean.name)}&select=id,name,contact_person,email,phone,street,zip,city,notes,is_active,created_at&limit=1`,
+      { headers }
+    );
+    if (dupCheck.ok) {
+      const dupRows = await dupCheck.json();
+      if (dupRows?.[0]) {
+        return NextResponse.json({ success: true, kunde: dupRows[0], bereitsVorhanden: true });
+      }
+    }
+
     const res = await fetch(`${url}/rest/v1/customers`, {
       method: 'POST',
       headers: { ...headers, 'Prefer': 'return=representation' },

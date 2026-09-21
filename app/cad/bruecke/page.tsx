@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useCallback, useRef } from 'react'
+import { useState, useCallback, useRef, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import dynamic from 'next/dynamic'
 import {
@@ -40,10 +40,25 @@ export default function BrueckePage() {
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
   const [zuordnenLaeuft, setZuordnenLaeuft] = useState(false)
   const [kunden, setKunden] = useState<{ id: string; name: string }[]>([])
+  // Fix: Fehler beim Laden der Kundenliste wurde bisher still verschluckt
+  // -> Liste blieb leer, Nutzer sah beim Tippen nie den echten Treffer und
+  // legte per "+ neuen Kunden anlegen" versehentlich Duplikate an.
+  const [kundenLadeFehler, setKundenLadeFehler] = useState(false)
 
-  useState(() => {
-    fetch('/api/kunden').then((r) => r.json()).then((j) => { if (j.success) setKunden((j.kunden || []).map((k: any) => ({ id: k.id, name: k.name }))) }).catch(() => {})
-  })
+  const loadKunden = useCallback(() => {
+    setKundenLadeFehler(false)
+    fetch('/api/kunden')
+      .then((r) => r.json())
+      .then((j) => {
+        if (j.success) setKunden((j.kunden || []).map((k: any) => ({ id: k.id, name: k.name })))
+        else setKundenLadeFehler(true)
+      })
+      .catch(() => setKundenLadeFehler(true))
+  }, [])
+
+  useEffect(() => {
+    loadKunden()
+  }, [loadKunden])
 
   const generate = useCallback(() => {
     const building: BuildingParams = {
@@ -186,7 +201,7 @@ export default function BrueckePage() {
               <BillOfMaterials
                 materials={materials} totalWeightKg={totalWeight} totalPrice={totalPrice} logistik={logistik}
                 onExportPDF={handleExportPDF}
-                customers={kunden} onCreateCustomer={handleCreateCustomer} onAssignCustomer={handleAssignCustomer} zuordnenLaeuft={zuordnenLaeuft}
+                customers={kunden} kundenLadeFehler={kundenLadeFehler} onRetryKunden={loadKunden} onCreateCustomer={handleCreateCustomer} onAssignCustomer={handleAssignCustomer} zuordnenLaeuft={zuordnenLaeuft}
               />
             )}
           </div>
