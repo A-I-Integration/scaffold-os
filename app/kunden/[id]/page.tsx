@@ -178,6 +178,13 @@ export default function KundenDetailPage() {
   // Kunde bearbeiten
   const [kundeForm, setKundeForm] = useState<Partial<Kunde>>({})
 
+  // ─── Kunden zusammenführen (Duplikate) ───
+  const [alleKunden, setAlleKunden] = useState<{ id: string; name: string; city?: string }[]>([])
+  const [mergeSuche, setMergeSuche] = useState('')
+  const [mergeZiel, setMergeZiel] = useState<{ id: string; name: string } | null>(null)
+  const [mergeLaeuft, setMergeLaeuft] = useState(false)
+  const [alleKundenFehler, setAlleKundenFehler] = useState(false)
+
   const ladeDaten = useCallback(async () => {
     setLoading(true)
     try {
@@ -246,6 +253,16 @@ export default function KundenDetailPage() {
 
   useEffect(() => { ladeDaten() }, [ladeDaten])
 
+  // Alle Kunden laden (für die Zielauswahl beim Zusammenführen)
+  const ladeAlleKunden = useCallback(() => {
+    setAlleKundenFehler(false)
+    fetch('/api/kunden').then(r => r.json()).then(j => {
+      if (j.success) setAlleKunden((j.kunden || []).map((k: any) => ({ id: k.id, name: k.name, city: k.city })))
+      else setAlleKundenFehler(true)
+    }).catch(() => setAlleKundenFehler(true))
+  }, [])
+  useEffect(() => { ladeAlleKunden() }, [ladeAlleKunden])
+
   // ─── Kunde speichern ───
   async function saveKunde() {
     if (!kunde) return
@@ -276,6 +293,30 @@ export default function KundenDetailPage() {
       if (!json.success) throw new Error(json.error)
       router.push('/kunden')
     } catch (err: any) { alert('❌ ' + err.message) }
+  }
+
+  // NEU: Duplikate zusammenführen – dieser Kunde (auf dieser Seite) wird
+  // in den ausgewählten Zielkunden "aufgelöst": alle seine Aufträge,
+  // Rechnungen, Lieferscheine, Ansprechpartner und der E-Mail-Verlauf
+  // wandern zum Ziel, danach wird dieser (jetzt leere) Kunde gelöscht.
+  async function handleKundeMergen() {
+    if (!kunde || !mergeZiel) return
+    if (!confirm(
+      `„${kunde.name}" wirklich in „${mergeZiel.name}" zusammenführen?\n\n` +
+      `Alle Aufträge, Rechnungen, Lieferscheine und Ansprechpartner von „${kunde.name}" werden auf „${mergeZiel.name}" umgehängt. „${kunde.name}" wird danach gelöscht. Das lässt sich nicht rückgängig machen.`
+    )) return
+    setMergeLaeuft(true)
+    try {
+      const res = await fetch('/api/kunden/merge', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sourceId: kunde.id, targetId: mergeZiel.id }),
+      })
+      const json = await res.json()
+      if (!json.success) throw new Error(json.error)
+      alert(`✅ „${json.quelle}" wurde mit „${json.ziel}" zusammengeführt.`)
+      router.push(`/kunden/${mergeZiel.id}`)
+    } catch (err: any) { alert('❌ ' + err.message) }
+    setMergeLaeuft(false)
   }
 
   // ─── Rechnung als neue Version anlegen (GoBD: alte Rechnung bleibt
@@ -808,6 +849,47 @@ export default function KundenDetailPage() {
               </button>
             )}
             <p className="text-[11px] text-[#86868b] pt-2 border-t border-black/5">Kunde seit {fmtTimestamp(kunde.created_at)} · {projects.length} Auftrag/Aufträge · {kundenInvoices.length} Rechnung(en)</p>
+
+            {/* Duplikate zusammenführen */}
+            <div className="pt-3 border-t border-black/5">
+              <h4 className="text-xs font-semibold text-[#1d1d1f] mb-1">Duplikat? Mit anderem Kunden zusammenführen</h4>
+              <p className="text-[11px] text-[#86868b] mb-2">Alle Aufträge, Rechnungen, Lieferscheine und Ansprechpartner von „{kunde.name}" wandern zum ausgewählten Kunden, „{kunde.name}" wird danach gelöscht.</p>
+              {alleKundenFehler && (
+                <div className="mb-2 flex items-center justify-between gap-2 bg-red-50 border border-red-200 rounded-lg px-2 py-1.5">
+                  <span className="text-[10px] text-red-700">⚠️ Kundenliste konnte nicht geladen werden.</span>
+                  <button type="button" onClick={ladeAlleKunden} className="shrink-0 text-[10px] font-semibold text-red-700 underline">erneut laden</button>
+                </div>
+              )}
+              <div className="relative">
+                <input
+                  value={mergeZiel ? mergeZiel.name : mergeSuche}
+                  onChange={(e) => { setMergeSuche(e.target.value); setMergeZiel(null) }}
+                  placeholder="Zielkunde suchen…"
+                  className={inputCls}
+                />
+                {!mergeZiel && mergeSuche.trim().length >= 1 && !alleKundenFehler && (() => {
+                  const suche = mergeSuche.trim().toLowerCase()
+                  const treffer = alleKunden.filter(k => k.id !== kunde.id && k.name.toLowerCase().includes(suche)).slice(0, 8)
+                  if (treffer.length === 0) return null
+                  return (
+                    <div className="absolute z-10 mt-1 w-full bg-white border border-black/10 rounded-xl shadow-lg overflow-hidden max-h-64 overflow-y-auto">
+                      {treffer.map(k => (
+                        <button key={k.id} type="button" onClick={() => { setMergeZiel({ id: k.id, name: k.name }); setMergeSuche('') }} className="w-full text-left px-3 py-2 text-xs hover:bg-[#f5f5f7] border-t border-black/5 first:border-t-0">
+                          {k.name}{k.city && <span className="text-[#86868b]"> · {k.city}</span>}
+                        </button>
+                      ))}
+                    </div>
+                  )
+                })()}
+              </div>
+              <button
+                onClick={handleKundeMergen}
+                disabled={!mergeZiel || mergeLaeuft}
+                className="mt-2 text-xs font-medium px-3 py-1.5 rounded-lg bg-red-600 text-white disabled:bg-gray-300 hover:bg-red-700 transition-colors"
+              >
+                {mergeLaeuft ? 'Wird zusammengeführt…' : `„${kunde.name}" in Zielkunden zusammenführen`}
+              </button>
+            </div>
           </div>
         )}
 
