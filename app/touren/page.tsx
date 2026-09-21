@@ -167,14 +167,23 @@ export default function TourenPage() {
 
   async function createTour() {
     setFMessage('');
-    // Tour-Name ist optional – wird aus Datum + erstem Stopp erzeugt.
-    if (!fVehicle) { setFMessage('Bitte Fahrzeug wählen.'); return; }
+    // NEU: Fahrzeug nur noch Pflicht, wenn wirklich Material transportiert
+    // wird (fSelected = Transportaufträge). Ein reiner Arbeitstag
+    // (nur Baustellen-Anfahrten, kein Material) braucht kein Fahrzeug.
+    if (fSelected.length > 0 && !fVehicle) { setFMessage('Bitte Fahrzeug wählen (für den Materialtransport).'); return; }
     if (fDrivers.length === 0) { setFMessage('Bitte mindestens eine Person wählen (Mehrfachauswahl möglich).'); return; }
     if (fSelected.length === 0 && fProjSelected.length === 0) { setFMessage('Bitte mindestens einen Transport ODER eine Baustellen-Anfahrt wählen.'); return; }
     setFSaving(true);
     const erstesProjekt = projekte.find(p => p.id === fProjSelected[0]);
     // Name entfällt als Eingabe – wird automatisch aus Datum + erstem Stopp gebaut.
     const tourName = `Tour ${new Date(fDate + 'T00:00:00').toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' })}${erstesProjekt ? ` – ${erstesProjekt.name}` : ''}`;
+    // NEU: Personenauswahl kann jetzt auch Mitarbeiter enthalten, die noch
+    // KEINEN Fahrer-Datensatz haben ("emp:<employeeId>", siehe Auswahlliste
+    // unten) - die Server-Route legt dafür bei Bedarf automatisch einen
+    // Fahrer-Datensatz an, damit nicht jeder MA vorher manuell als "Fahrer"
+    // angelegt werden muss.
+    const echteFahrerIds = fDrivers.filter(id => !id.startsWith('emp:'));
+    const neueMitarbeiterIds = fDrivers.filter(id => id.startsWith('emp:')).map(id => id.slice(4));
     try {
       setFMessage('');
       const res = await fetch('/api/tours', {
@@ -183,7 +192,8 @@ export default function TourenPage() {
         body: JSON.stringify({
           // FIX: erste gewählte Person fährt (driver_id), alle gewählten
           // Personen werden als Team gespeichert (team_ids).
-          name: tourName, vehicle_id: fVehicle, driver_id: fDrivers[0], team_ids: fDrivers,
+          name: tourName, vehicle_id: fVehicle || null, driver_id: echteFahrerIds[0] || null,
+          team_ids: echteFahrerIds, team_employee_ids: neueMitarbeiterIds,
           planned_date: fDate, planned_start_time: fTime, transport_order_ids: fSelected, project_ids: fProjSelected,
         }),
       });
@@ -471,7 +481,7 @@ export default function TourenPage() {
                 </div>
               </div>
               <div>
-                <label className="block text-sm text-[#86868b] mb-1">Fahrzeug *</label>
+                <label className="block text-sm text-[#86868b] mb-1">Fahrzeug{fSelected.length > 0 ? ' *' : ' (nur bei Materialtransport nötig)'}</label>
                 <select value={fVehicle} onChange={e => setFVehicle(e.target.value)} className={inputCls}>
                   <option value="">– wählen –</option>
                   {vehicles.map(v => <option key={v.id} value={v.id}>{v.name} ({v.license_plate})</option>)}
@@ -487,7 +497,10 @@ export default function TourenPage() {
                     <span className={fDrivers.length === 0 ? 'text-[#86868b]' : ''}>
                       {fDrivers.length === 0
                         ? '– wählen –'
-                        : fDrivers.map(id => drivers.find(d => d.id === id)?.name).filter(Boolean).join(', ')}
+                        : fDrivers.map(id => id.startsWith('emp:')
+                            ? (() => { const e = employees.find(e => e.id === id.slice(4)); return e ? `${e.first_name} ${e.last_name}` : null; })()
+                            : drivers.find(d => d.id === id)?.name
+                          ).filter(Boolean).join(', ')}
                     </span>
                     <span className="text-[#86868b] text-xs">▾</span>
                   </button>
@@ -506,6 +519,24 @@ export default function TourenPage() {
                           </label>
                         ))}
                         {drivers.length === 0 && <p className="text-xs text-[#e8590c] px-2 py-1.5">Keine Fahrer – Phase-4-SQL enthält Beispiel-Datensätze.</p>}
+                        {/* NEU: für reine Arbeitstage (kein Material) auch Mitarbeiter
+                            wählbar, die noch keinen Fahrer-Datensatz haben - wird beim
+                            Anlegen der Tour automatisch für sie erstellt. */}
+                        {employees.filter(e => !drivers.some(d => d.employee_id === e.id)).length > 0 && (
+                          <>
+                            <p className="text-[10px] text-[#86868b] uppercase px-2 pt-1.5 pb-0.5 border-t border-black/5 mt-1">Weitere Mitarbeiter</p>
+                            {employees.filter(e => !drivers.some(d => d.employee_id === e.id)).map(e => (
+                              <label key={e.id} className="flex items-center gap-2 text-sm px-2 py-1.5 rounded-lg hover:bg-black/5 cursor-pointer">
+                                <input
+                                  type="checkbox"
+                                  checked={fDrivers.includes(`emp:${e.id}`)}
+                                  onChange={ev => setFDrivers(ev.target.checked ? [...fDrivers, `emp:${e.id}`] : fDrivers.filter(x => x !== `emp:${e.id}`))}
+                                />
+                                <span>{e.first_name} {e.last_name}</span>
+                              </label>
+                            ))}
+                          </>
+                        )}
                       </div>
                     </>
                   )}

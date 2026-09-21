@@ -36,15 +36,52 @@ export async function POST(req: Request) {
     // Phase 68-C: project_ids = Baustellen-Anfahrten OHNE Materialtransport
     // (z. B. Team-Anfahrt bei Projektstart). Mindestens EIN Stop
     // (Transport ODER Baustelle) wird weiterhin verlangt.
-    const { name, vehicle_id, driver_id, planned_date, planned_start_time } = body;
+    let { vehicle_id, driver_id } = body;
+    const { name, planned_date, planned_start_time } = body;
     // team_ids: Mehrfachauswahl Team (erste ID = Fahrer). Spalte per
     // supabase/phase-89-tour-team.sql angelegt (jsonb, Default []).
-    const team_ids: string[] = body.team_ids || [];
+    let team_ids: string[] = body.team_ids || [];
     const transport_order_ids: string[] = body.transport_order_ids || [];
     const project_ids: string[] = body.project_ids || [];
+    // NEU: für reine Arbeitstage (nur Baustellen-Anfahrten, kein Material)
+    // sollen auch Mitarbeiter ohne bestehenden Fahrer-Datensatz wählbar
+    // sein - für jede hier übergebene employee_id wird bei Bedarf
+    // automatisch ein Fahrer-Datensatz angelegt (oder ein vorhandener
+    // wiederverwendet), damit nicht jeder MA vorher manuell als "Fahrer"
+    // eingerichtet werden muss.
+    const team_employee_ids: string[] = body.team_employee_ids || [];
 
-    if (!name || !vehicle_id || !driver_id || (transport_order_ids.length === 0 && project_ids.length === 0)) {
-      return NextResponse.json({ success: false, error: 'Name, Fahrzeug, Fahrer und mindestens ein Stopp (Transport oder Baustelle) erforderlich' }, { status: 400 });
+    if (!name || (transport_order_ids.length === 0 && project_ids.length === 0)) {
+      return NextResponse.json({ success: false, error: 'Name und mindestens ein Stopp (Transport oder Baustelle) erforderlich' }, { status: 400 });
+    }
+    // Fahrzeug ist nur Pflicht, wenn wirklich Material transportiert wird.
+    if (transport_order_ids.length > 0 && !vehicle_id) {
+      return NextResponse.json({ success: false, error: 'Fahrzeug ist bei Materialtransport erforderlich.' }, { status: 400 });
+    }
+
+    if (team_employee_ids.length > 0) {
+      const neueDriverIds: string[] = [];
+      for (const employeeId of team_employee_ids) {
+        const vorhandenRes = await fetch(`${url}/rest/v1/drivers?employee_id=eq.${employeeId}&select=id&limit=1`, { headers });
+        const vorhanden = vorhandenRes.ok ? await vorhandenRes.json() : [];
+        if (vorhanden?.[0]) { neueDriverIds.push(vorhanden[0].id); continue; }
+        const empRes = await fetch(`${url}/rest/v1/employees?id=eq.${employeeId}&select=first_name,last_name`, { headers });
+        const empRows = empRes.ok ? await empRes.json() : [];
+        const empName = empRows?.[0] ? `${empRows[0].first_name} ${empRows[0].last_name}` : 'Mitarbeiter';
+        const erstelltRes = await fetch(`${url}/rest/v1/drivers`, {
+          method: 'POST', headers: { ...headers, Prefer: 'return=representation' },
+          body: JSON.stringify({ name: empName, employee_id: employeeId }),
+        });
+        if (erstelltRes.ok) {
+          const erstellt = (await erstelltRes.json())?.[0];
+          if (erstellt?.id) neueDriverIds.push(erstellt.id);
+        }
+      }
+      team_ids = [...team_ids, ...neueDriverIds];
+      if (!driver_id) driver_id = neueDriverIds[0] || null;
+    }
+    if (!driver_id) {
+      return NextResponse.json({ success: false, error: 'Mindestens eine zuständige Person erforderlich.' }, { status: 400 });
     }
 
     // 1a. Transport-Details holen für Adressen (echtes Schema: to_project_id → projects)

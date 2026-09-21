@@ -1,10 +1,21 @@
 import { NextResponse } from 'next/server';
-import { requireAuth, unauthorizedResponse, serverErrorResponse } from '@/lib/auth';
+import { requireAuth, unauthorizedResponse, serverErrorResponse, forbiddenResponse } from '@/lib/auth';
 import { bestaetigeAnlieferung } from '@/lib/inventory/buchung';
+import { darfStoppAendern } from '@/lib/touren/berechtigung';
 
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const key = process.env.SUPABASE_SERVICE_ROLE_KEY!;
 const headers = { apikey: key, Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' };
+
+// FIX (Sicherheitslücke): bisher konnte JEDER eingeloggte Nutzer den
+// Status EINES BELIEBIGEN Tour-Stopps ändern (keinerlei Zuständigkeits-
+// Prüfung) - bei "completed" löst das automatisch eine Lager-/
+// Lieferbuchung aus. Jetzt: nur admin/disponent ODER der Mitarbeiter,
+// der laut Tour (driver_id oder team_ids) tatsächlich für diese Tour
+// zuständig ist, darf den Status ändern. Gleiches Muster wie
+// requireOwnEmployeeOrAdmin() in lib/auth.ts, nur über Touren/Fahrer
+// statt direkt über employee_id. (Phase 90: nach lib/touren/berechtigung.ts
+// ausgelagert, da /api/tour-stops/nicht-fertig dieselbe Prüfung braucht.)
 
 // GET /api/tour-stops?tour_id=... – Stopps einer Tour
 export async function GET(req: Request) {
@@ -33,6 +44,18 @@ export async function PUT(req: Request) {
 
     if (!id || !status) {
       return NextResponse.json({ success: false, error: 'id und status erforderlich' }, { status: 400 });
+    }
+
+    // FIX (Sicherheitslücke): erst Zuständigkeit prüfen, bevor irgendetwas
+    // geändert wird.
+    const stoppRes = await fetch(`${url}/rest/v1/tour_stops?id=eq.${id}&select=tour_id`, { headers });
+    if (!stoppRes.ok) throw new Error(await stoppRes.text());
+    const stoppRows = await stoppRes.json();
+    if (!stoppRows?.[0]) {
+      return NextResponse.json({ success: false, error: 'Stopp nicht gefunden.' }, { status: 404 });
+    }
+    if (!(await darfStoppAendern(stoppRows[0].tour_id))) {
+      return forbiddenResponse('Du bist für diese Tour nicht zuständig.');
     }
 
     const updates: any = { status };
