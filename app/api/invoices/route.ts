@@ -85,7 +85,7 @@ export async function POST(req: NextRequest) {
   }
   try {
     const body = await req.json();
-    const { project_id, customer_name, customer_address, positions, tax_rate, invoice_date, due_date, notes, invoice_type, reference_invoice_number, override_grund, customer_id: customerIdBody } = body;
+    const { project_id, customer_name, customer_address, positions, tax_rate, invoice_date, due_date, notes, invoice_type, reference_invoice_number, override_grund, customer_id: customerIdBody, replace_invoice_id } = body;
 
     if (!customer_name) {
       return NextResponse.json({ success: false, error: 'Kundenname erforderlich.' }, { status: 400 });
@@ -186,34 +186,53 @@ export async function POST(req: NextRequest) {
       return d.toISOString().slice(0, 10);
     })();
 
-    const res = await fetch(`${url}/rest/v1/rpc/create_invoice`, {
+    // FIX (Bug-Report, Phase 94, "Punkt 4"): "Neue Version anlegen" (Storno
+    // + Ersatz-Rechnung, app/kunden/[id]/page.tsx saveAlsNeueVersion) lief
+    // bisher als ZWEI getrennte Requests (erst diese POST hier, danach ein
+    // eigener PATCH, der die alte Rechnung auf 'storniert' setzt) - der
+    // PATCH wurde nie auf Erfolg geprüft. Schlug er fehl, blieb die alte
+    // Rechnung "offen", obwohl schon eine neue, inhaltsgleiche existierte
+    // (doppelte Buchung, GoBD-Inkonsistenz). Jetzt: wird replace_invoice_id
+    // mitgeschickt, läuft alles über EINEN atomaren RPC-Aufruf
+    // (create_invoice_as_new_version, supabase/phase-94-storno-neue-version-
+    // atomar.sql), der die neue Rechnung anlegt UND die alte in derselben
+    // Transaktion storniert - schlägt ein Teil fehl, wird beides zurück-
+    // gerollt, nie nur die Hälfte.
+    const istNeueVersion = !!replace_invoice_id;
+    const rpcName = istNeueVersion ? 'create_invoice_as_new_version' : 'create_invoice';
+    const rpcParams: Record<string, any> = {
+      p_prefix: istGutschrift ? 'GS' : 'RE',
+      p_project_id: project_id || null,
+      p_customer_id: customerId,
+      p_customer_name: customer_name,
+      p_customer_address: customer_address || null,
+      p_positions: positions,
+      p_net_amount: netRounded,
+      p_tax_rate: rate,
+      p_tax_amount: tax,
+      p_gross_amount: gross,
+      p_invoice_date: resolvedInvoiceDate,
+      p_due_date: resolvedDueDate,
+      p_notes: notes || null,
+      p_company_snapshot: companySnapshot,
+      // Phase 15-Fix: Rechnungstyp wirklich speichern (wurde bisher
+      // zwar aus dem Request gelesen, aber nicht in die Datenbank
+      // geschrieben – jede Rechnung landete als 'standard')
+      // Phase 22: 'gutschrift' als vierter, eigener Typ.
+      p_invoice_type: resolvedInvoiceType,
+      // Phase 35: reference_invoice_number jetzt auch für normale Rechnungen
+      // erlaubt – für "Neue Version ersetzt alte Rechnung" (siehe unten),
+      // nicht mehr nur für Gutschriften.
+      p_reference_invoice_number: reference_invoice_number || null,
+    };
+    if (istNeueVersion) {
+      rpcParams.p_old_invoice_id = replace_invoice_id;
+    }
+
+    const res = await fetch(`${url}/rest/v1/rpc/${rpcName}`, {
       method: 'POST',
       headers: { ...headers, 'Prefer': 'return=representation' },
-      body: JSON.stringify({
-        p_prefix: istGutschrift ? 'GS' : 'RE',
-        p_project_id: project_id || null,
-        p_customer_id: customerId,
-        p_customer_name: customer_name,
-        p_customer_address: customer_address || null,
-        p_positions: positions,
-        p_net_amount: netRounded,
-        p_tax_rate: rate,
-        p_tax_amount: tax,
-        p_gross_amount: gross,
-        p_invoice_date: resolvedInvoiceDate,
-        p_due_date: resolvedDueDate,
-        p_notes: notes || null,
-        p_company_snapshot: companySnapshot,
-        // Phase 15-Fix: Rechnungstyp wirklich speichern (wurde bisher
-        // zwar aus dem Request gelesen, aber nicht in die Datenbank
-        // geschrieben – jede Rechnung landete als 'standard')
-        // Phase 22: 'gutschrift' als vierter, eigener Typ.
-        p_invoice_type: resolvedInvoiceType,
-        // Phase 35: reference_invoice_number jetzt auch für normale Rechnungen
-        // erlaubt – für "Neue Version ersetzt alte Rechnung" (siehe unten),
-        // nicht mehr nur für Gutschriften.
-        p_reference_invoice_number: reference_invoice_number || null,
-      }),
+      body: JSON.stringify(rpcParams),
     });
     if (!res.ok) throw new Error(await res.text());
 

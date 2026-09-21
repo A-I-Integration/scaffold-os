@@ -329,6 +329,16 @@ export default function KundenDetailPage() {
 
     setSpeichern(true)
     try {
+      // FIX (Bug-Report, Phase 94, "Punkt 4"): neue Rechnung anlegen UND
+      // alte als storniert markieren liefen bisher als zwei getrennte,
+      // unverzahnte Requests - der zweite (PATCH storniert) wurde nie auf
+      // Erfolg geprüft. Schlug er fehl, blieb die alte Rechnung "offen",
+      // obwohl schon eine neue, inhaltsgleiche existierte (doppelte
+      // Buchung, GoBD-Inkonsistenz), und die Oberfläche meldete trotzdem
+      // Erfolg. Jetzt: EIN Request mit replace_invoice_id, der Server
+      // erledigt beides atomar (rpc/create_invoice_as_new_version,
+      // supabase/phase-94-storno-neue-version-atomar.sql) - schlägt ein
+      // Teil fehl, passiert gar nichts, nie nur die Hälfte.
       const res = await fetch('/api/invoices', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -341,6 +351,7 @@ export default function KundenDetailPage() {
           reference_invoice_number: editInvoice.invoice_number,
           positions: editPositions,
           override_grund: overrideGrund || undefined,
+          replace_invoice_id: editInvoice.id,
         }),
       })
       const json = await res.json()
@@ -353,16 +364,6 @@ export default function KundenDetailPage() {
         }
         throw new Error(json.error)
       }
-
-      // Alte Rechnung als storniert markieren – Inhalt bleibt unverändert
-      // (GoBD-Unveränderbarkeit), nur der Status ändert sich.
-      await fetch('/api/invoices', {
-        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          id: editInvoice.id, status: 'storniert',
-          notes: `${editInvoice.notes || ''}\nErsetzt durch ${json.invoice?.invoice_number} am ${new Date().toLocaleDateString('de-DE')}.`.trim(),
-        }),
-      })
 
       alert(`✅ Neue Version ${json.invoice?.invoice_number} angelegt, ${editInvoice.invoice_number} als storniert markiert.`)
       setEditInvoice(null)

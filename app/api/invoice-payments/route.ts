@@ -120,7 +120,14 @@ export async function DELETE(req: NextRequest) {
     const payment = (await payRes.json())?.[0];
     if (!payment) return NextResponse.json({ success: false, error: 'Zahlung nicht gefunden.' }, { status: 404 });
 
-    const invRes = await fetch(`${url}/rest/v1/invoices?id=eq.${payment.invoice_id}&select=gross_amount,paid_amount`, { headers });
+    // FIX (Bug-Report, Phase 94, "Punkt 4"): status wurde hier bisher nicht
+    // mitgeladen, das PATCH unten hat 'bezahlt'/'offen' aber UNBEDINGT
+    // gesetzt - wurde die Zahlung einer bereits stornierten Rechnung
+    // gelöscht (z.B. Korrektur einer Fehlbuchung), sprang der Status
+    // stillschweigend von 'storniert' zurück auf 'offen'/'bezahlt'. Jetzt:
+    // status wird mitgeladen, und die PATCH setzt status nur, wenn die
+    // Rechnung aktuell NICHT storniert ist - 'storniert' bleibt geschützt.
+    const invRes = await fetch(`${url}/rest/v1/invoices?id=eq.${payment.invoice_id}&select=gross_amount,paid_amount,status`, { headers });
     const inv = (await invRes.json())?.[0];
 
     await fetch(`${url}/rest/v1/invoice_payments?id=eq.${id}`, { method: 'DELETE', headers });
@@ -128,9 +135,13 @@ export async function DELETE(req: NextRequest) {
     if (inv) {
       const neuerBetrag = Math.max(0, Math.round((Number(inv.paid_amount) - Number(payment.amount)) * 100) / 100);
       const vollstaendig = Number(inv.gross_amount) - neuerBetrag <= 0.01;
+      const patchBody: Record<string, any> = { paid_amount: neuerBetrag };
+      if (inv.status !== 'storniert') {
+        patchBody.status = vollstaendig ? 'bezahlt' : 'offen';
+      }
       await fetch(`${url}/rest/v1/invoices?id=eq.${payment.invoice_id}`, {
         method: 'PATCH', headers,
-        body: JSON.stringify({ paid_amount: neuerBetrag, status: vollstaendig ? 'bezahlt' : 'offen' }),
+        body: JSON.stringify(patchBody),
       });
     }
 
