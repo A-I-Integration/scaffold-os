@@ -106,10 +106,20 @@ function buildDatevEXTF(invoices: Invoice[]): { csv: string; uebersprungen: Invo
     const belegdatum = String(d.getDate()).padStart(2, '0') + String(d.getMonth() + 1).padStart(2, '0');
     // Debitor aus Projektbezug ableitbar – hier Sammeldebitor (mit Steuerberater abstimmen)
     const konto = String(DATEV_DEBITOR_START);
+    // FIX (Bug-Report): das EXTF-"Umsatz"-Feld muss laut DATEV-Format
+    // IMMER positiv sein - das Vorzeichen wird ausschließlich über das
+    // separate Soll/Haben-Kennzeichen ausgedrückt, nie über eine negative
+    // Zahl. Gutschriften haben in unserer DB einen negativen gross_amount
+    // (siehe app/api/invoices/route.ts) und wurden bisher trotzdem mit
+    // negativem Betrag UND festem "S" (Soll) exportiert - laut EXTF-Spec
+    // kein gültiger Datensatz. Normale Rechnung: Debitor Soll, Erlöskonto
+    // Haben -> "S" auf dem Debitorenkonto. Gutschrift kehrt das um -> "H".
+    const betragNetto = Number(inv.gross_amount);
+    const sollHaben = betragNetto < 0 ? 'H' : 'S';
     rows.push([
-      q(eur(Number(inv.gross_amount))), '"S"', '"EUR"', '', '', '',
+      q(eur(Math.abs(betragNetto))), q(sollHaben), '"EUR"', '', '', '',
       q(konto), q(gegenkonto), '', q(belegdatum), q(inv.invoice_number), '', '',
-      q('Rechnung ' + inv.customer_name),
+      q((inv.invoice_type === 'gutschrift' ? 'Gutschrift ' : 'Rechnung ') + inv.customer_name),
     ].join(';'));
   }
 
