@@ -10,9 +10,19 @@ import { DispositionResult as DispositionData, DispositionSuggestion } from '@/l
 interface Props {
 result: DispositionData | null;
   loading?: boolean;
+  // NEU (Bug-Report, tote Buttons): "Transportaufträge erstellen" wurde
+  // entfernt – das würde die bewusste Entscheidung unterlaufen, Lager-
+  // Reservierung/Transportaufträge NUR bei Angebotsannahme automatisch
+  // auszulösen (siehe lib/angebot-annahme.ts, beiAngebotsannahme). Hier,
+  // in der Disposition-Vorschau VOR Angebotsannahme, gibt es dafür nur
+  // noch "Als Dispositionsplan speichern" – reine Ablage der Vorschau am
+  // Projekt, ohne Lager/Transport anzufassen.
+  onSpeichern?: () => void;
+  speichernLaeuft?: boolean;
+  speichernDeaktiviertGrund?: string;
 }
 
-export default function DispositionResult({ result, loading }: Props) {
+export default function DispositionResult({ result, loading, onSpeichern, speichernLaeuft, speichernDeaktiviertGrund }: Props) {
   if (loading) {
     return (
       <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-8 text-center">
@@ -154,14 +164,18 @@ export default function DispositionResult({ result, loading }: Props) {
       </div>
 
       {/* Aktionen */}
-      <div className="flex flex-col sm:flex-row gap-3">
-        <button className="flex-1 rounded-xl bg-emerald-600 hover:bg-emerald-500 py-3 font-semibold text-white transition-colors">
-          🚛 Transportaufträge erstellen
-        </button>
-        <button className="flex-1 rounded-xl bg-black/10 hover:bg-black/15 py-3 font-semibold text-[#1d1d1f] transition-colors">
-          📋 Als Dispositionsplan speichern
-        </button>
-      </div>
+      {onSpeichern && (
+        <div className="flex flex-col sm:flex-row gap-3">
+          <button
+            onClick={onSpeichern}
+            disabled={speichernLaeuft || !!speichernDeaktiviertGrund}
+            title={speichernDeaktiviertGrund || undefined}
+            className="flex-1 rounded-xl bg-black/10 hover:bg-black/15 disabled:opacity-50 disabled:cursor-not-allowed py-3 font-semibold text-[#1d1d1f] transition-colors"
+          >
+            {speichernLaeuft ? 'Speichert…' : '📋 Als Dispositionsplan speichern'}
+          </button>
+        </div>
+      )}
     </div>
   );
 }
