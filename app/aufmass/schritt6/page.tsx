@@ -393,6 +393,33 @@ function Schritt6Content() {
     if (!kiResult) { alert('Bitte zuerst KI-Materialberechnung durchführen!'); return; }
     await runDisposition(kiResult.materialList);
   }
+
+  // NEU (Bug-Report, tote Buttons in DispositionResult): reine Ablage der
+  // Disposition-Vorschau am Projekt (data.dispositionsplan), damit sie
+  // später nachvollziehbar ist. Rührt bewusst NICHT an Lager/Transport –
+  // das bleibt der Automatik bei Angebotsannahme vorbehalten (siehe
+  // lib/angebot-annahme.ts).
+  const [dispSpeichernLaeuft, setDispSpeichernLaeuft] = useState(false);
+  async function handleDispositionsplanSpeichern() {
+    if (!savedProjectId || !dispResult) return;
+    setDispSpeichernLaeuft(true);
+    try {
+      const res = await fetch('/api/projects', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: savedProjectId,
+          data: { dispositionsplan: { ...dispResult, gespeichertAm: new Date().toISOString() } },
+        }),
+      });
+      const json = await res.json();
+      if (!json.success) throw new Error(json.error || 'Speichern fehlgeschlagen');
+      alert('✅ Dispositionsplan am Projekt gespeichert.');
+    } catch (err: any) {
+      alert('❌ ' + err.message);
+    }
+    setDispSpeichernLaeuft(false);
+  }
   async function handleSpeichern() {
     setIsSaving(true);
     try {
@@ -1337,7 +1364,17 @@ function Schritt6Content() {
                   </button>
                   {dispError && <div className="mt-4 rounded-xl border border-red-500/30 bg-red-500/10 p-4"><p className="text-sm font-medium text-red-700">Fehler: {dispError}</p></div>}
                 </div>
-                {dispResult && <div className="animate-in fade-in slide-in-from-top-4 duration-500"><DispositionResult result={dispResult} loading={dispLoading} /></div>}
+                {dispResult && (
+                  <div className="animate-in fade-in slide-in-from-top-4 duration-500">
+                    <DispositionResult
+                      result={dispResult}
+                      loading={dispLoading}
+                      onSpeichern={handleDispositionsplanSpeichern}
+                      speichernLaeuft={dispSpeichernLaeuft}
+                      speichernDeaktiviertGrund={savedProjectId ? undefined : 'Bitte zuerst "Projekt speichern" klicken'}
+                    />
+                  </div>
+                )}
               </div>
             )}
 
