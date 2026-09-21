@@ -7,6 +7,7 @@ import { NextResponse } from 'next/server';
 import { optimizeDisposition } from '@/lib/calculations/disposition';
 import { createClient } from '@/lib/supabase/server';
 import { requireAuth, unauthorizedResponse } from '@/lib/auth';
+import { distanceMatrixKm } from '@/lib/google-distance';
 
 export async function POST(request: Request) {
   if (!(await requireAuth())) return unauthorizedResponse();
@@ -56,7 +57,7 @@ export async function POST(request: Request) {
     }
 
     // --- BAUSTELLEN-BESTAND (robust) ---
-    async function getSiteStock(materialNamen: string[], excludeSiteId: string) {
+    async function getSiteStock(materialNamen: string[], excludeSiteId: string, zielAdresse: string) {
       try {
         const gesuchte = new Set(materialNamen.map((n) => n.trim().toLowerCase()));
 
@@ -89,15 +90,27 @@ export async function POST(request: Request) {
 
         const siteMap = new Map(sites?.map((s: any) => [s.id, s]) || []);
 
+        // Echte Fahrstrecke je Baustellen-Adresse zur Ziel-Adresse (ein
+        // API-Call für alle Adressen auf einmal). Ohne Ziel-Adresse oder
+        // ohne auflösbare Baustellen-Adresse bleibt distanceKm `null` -
+        // KEINE erfundene Zahl mehr (siehe lib/google-distance.ts).
+        const adressen = [...new Set(
+          [...siteMap.values()].map((s: any) => s.adresse).filter((a: string) => a && a.trim())
+        )] as string[];
+        const distanzen = zielAdresse
+          ? await distanceMatrixKm(adressen, zielAdresse)
+          : new Map<string, number | null>();
+
         return gefiltert.map((item: any) => {
           const site = siteMap.get(item.project_id);
+          const adresse = site?.adresse || '';
           return {
             siteId: item.project_id,
             siteName: site?.name || `Baustelle ${item.project_id}`,
-            address: site?.adresse || '',
+            address: adresse,
             articleNumber: item.inventory?.name || '',
             quantity: item.quantity || 0,
-            distanceKm: Math.floor(Math.random() * 35) + 5,
+            distanceKm: adresse ? (distanzen.get(adresse) ?? null) : null,
           };
         });
       } catch (e) {

@@ -373,16 +373,25 @@ function Schritt6Content() {
       if (!response.ok) { const err = await response.json(); throw new Error(err.error || 'Berechnung fehlgeschlagen'); }
       const json = await response.json();
       setKiResult(json.data);
+      // NEU: Disposition (Lager + andere Baustellen prüfen, bevor neu
+      // gekauft wird) läuft jetzt automatisch direkt im Anschluss an die
+      // Materialberechnung - kein extra Klick mehr nötig. Nutzt json.data
+      // direkt statt kiResult (State-Update von setKiResult oben ist an
+      // dieser Stelle noch nicht sichtbar).
+      runDisposition(json.data.materialList);
     } catch (err: any) { setKiError(err.message); } finally { setKiLoading(false); }
   }
-  async function handleDisposition() {
-    if (!kiResult) { alert('Bitte zuerst KI-Materialberechnung durchführen!'); return; }
+  async function runDisposition(materialList: any[]) {
     setDispLoading(true); setDispError(null);
     try {
-      const response = await fetch('/api/disposition', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ materialList: kiResult.materialList, targetSiteId: s1.id || 'neu', targetAddress: s1.adresse || '' }) });
+      const response = await fetch('/api/disposition', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ materialList, targetSiteId: s1.id || 'neu', targetAddress: s1.adresse || '' }) });
       if (!response.ok) { const err = await response.json(); throw new Error(err.error || 'Disposition fehlgeschlagen'); }
       const json = await response.json(); setDispResult(json.data);
     } catch (err: any) { setDispError(err.message); } finally { setDispLoading(false); }
+  }
+  async function handleDisposition() {
+    if (!kiResult) { alert('Bitte zuerst KI-Materialberechnung durchführen!'); return; }
+    await runDisposition(kiResult.materialList);
   }
   async function handleSpeichern() {
     setIsSaving(true);
@@ -1303,11 +1312,11 @@ function Schritt6Content() {
                     <span className="text-3xl">🚛</span>
                     <div>
                       <h3 className="text-xl font-bold text-[#1d1d1f]">KI-Disposition</h3>
-                      <p className="text-sm text-[#86868b]">Prüfe, ob Material von anderen Baustellen direkt geliefert werden kann</p>
+                      <p className="text-sm text-[#86868b]">Prüft automatisch, ob Material von anderen Baustellen direkt geliefert werden kann, statt neu zu bestellen</p>
                     </div>
                   </div>
                   <button onClick={handleDisposition} disabled={dispLoading} className="w-full rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 disabled:cursor-not-allowed py-4 font-bold text-white transition-colors">
-                    {dispLoading ? <span className="flex items-center justify-center gap-2"><span className="h-5 w-5 animate-spin rounded-full border-2 border-white border-t-transparent"></span>Optimiere Routen...</span> : '🚛 Disposition optimieren'}
+                    {dispLoading ? <span className="flex items-center justify-center gap-2"><span className="h-5 w-5 animate-spin rounded-full border-2 border-white border-t-transparent"></span>Optimiere Routen...</span> : '🔄 Disposition erneut prüfen'}
                   </button>
                   {dispError && <div className="mt-4 rounded-xl border border-red-500/30 bg-red-500/10 p-4"><p className="text-sm font-medium text-red-700">Fehler: {dispError}</p></div>}
                 </div>
