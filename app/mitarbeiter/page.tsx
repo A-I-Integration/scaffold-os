@@ -19,6 +19,14 @@ interface Employee {
   user_id: string | null;
 }
 
+interface PayrollDoc {
+  id: string;
+  month: string;
+  file_name: string;
+  uploaded_at: string;
+  sent_at: string | null;
+}
+
 const ROLES = [
   { value: 'mitarbeiter', label: 'Mitarbeiter – Stempeln, eigene Fahrten, Krank/Urlaub' },
   { value: 'lager', label: 'Lager – Lager + Stempeln + Krank/Urlaub' },
@@ -63,6 +71,69 @@ export default function MitarbeiterPage() {
   useEffect(() => { load(); }, [load]);
 
   const unlinked = employees.filter(e => !e.user_id);
+
+  // ─── Lohnabrechnungen hochladen (NEU: Mitarbeiter-Bereich) ───
+  const [lohnEmployee, setLohnEmployee] = useState('');
+  const [lohnMonth, setLohnMonth] = useState(currentMonth());
+  const [lohnFile, setLohnFile] = useState<File | null>(null);
+  const [lohnUploading, setLohnUploading] = useState(false);
+  const [lohnMsg, setLohnMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const [lohnDocs, setLohnDocs] = useState<PayrollDoc[]>([]);
+  const [lohnLoading, setLohnLoading] = useState(false);
+
+  function currentMonth(): string {
+    const n = new Date();
+    return `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, '0')}`;
+  }
+
+  const loadLohnDocs = useCallback(async (employeeId: string) => {
+    if (!employeeId) { setLohnDocs([]); return; }
+    setLohnLoading(true);
+    try {
+      const res = await fetch(`/api/lohnabrechnungen?employee_id=${employeeId}`, { cache: 'no-store' });
+      const json = await res.json();
+      if (json.success) setLohnDocs(json.documents || []);
+    } catch { /* still, wird oben ggf. per Fehlermeldung sichtbar */ }
+    setLohnLoading(false);
+  }, []);
+
+  useEffect(() => { loadLohnDocs(lohnEmployee); }, [lohnEmployee, loadLohnDocs]);
+
+  async function lohnHochladen() {
+    setLohnMsg(null);
+    if (!lohnEmployee || !lohnMonth || !lohnFile) {
+      setLohnMsg({ ok: false, text: 'Mitarbeiter, Monat und PDF sind Pflicht.' });
+      return;
+    }
+    setLohnUploading(true);
+    try {
+      const fd = new FormData();
+      fd.set('employee_id', lohnEmployee);
+      fd.set('month', lohnMonth);
+      fd.set('file', lohnFile);
+      const res = await fetch('/api/lohnabrechnungen', { method: 'POST', body: fd });
+      const json = await res.json();
+      if (!json.success) throw new Error(json.error);
+      setLohnMsg({ ok: true, text: `✅ Lohnabrechnung ${lohnMonth} hochgeladen.` });
+      setLohnFile(null);
+      loadLohnDocs(lohnEmployee);
+    } catch (e: any) {
+      setLohnMsg({ ok: false, text: '❌ ' + e.message });
+    }
+    setLohnUploading(false);
+  }
+
+  async function lohnLoeschen(id: string) {
+    if (!confirm('Diese Lohnabrechnung wirklich löschen?')) return;
+    try {
+      const res = await fetch(`/api/lohnabrechnungen?id=${id}`, { method: 'DELETE' });
+      const json = await res.json();
+      if (!json.success) throw new Error(json.error);
+      loadLohnDocs(lohnEmployee);
+    } catch (e: any) {
+      alert('Fehler beim Löschen: ' + e.message);
+    }
+  }
 
   async function submit() {
     setMsg(null);
@@ -170,6 +241,64 @@ export default function MitarbeiterPage() {
           {msg && (
             <div className={`rounded-xl p-4 whitespace-pre-line ${msg.ok ? 'bg-emerald-50 border border-emerald-200 text-emerald-700' : 'bg-red-50 border border-red-200 text-red-700'}`}>
               {msg.text}
+            </div>
+          )}
+        </section>
+
+        {/* ─── Lohnabrechnung hochladen (NEU) ─── */}
+        <section className="bg-white border border-black/5 rounded-2xl p-5 space-y-4">
+          <h2 className="text-lg font-semibold">💶 Lohnabrechnung ablegen</h2>
+          <p className="text-sm text-[#86868b]">
+            Fertige Lohnabrechnung (PDF) pro Mitarbeiter und Monat hochladen – der Mitarbeiter sieht sie danach
+            im eigenen Bereich unter „Lohnabrechnungen" (ansehen, versenden, als PDF speichern).
+          </p>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div>
+              <label className="block text-sm text-[#86868b] mb-1">Mitarbeiter *</label>
+              <select value={lohnEmployee} onChange={e => setLohnEmployee(e.target.value)} className={inputCls}>
+                <option value="">– wählen –</option>
+                {employees.map(e => (
+                  <option key={e.id} value={e.id}>{e.first_name} {e.last_name}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm text-[#86868b] mb-1">Monat *</label>
+              <input type="month" value={lohnMonth} onChange={e => setLohnMonth(e.target.value)} className={inputCls} />
+            </div>
+            <div>
+              <label className="block text-sm text-[#86868b] mb-1">PDF *</label>
+              <input type="file" accept="application/pdf" onChange={e => setLohnFile(e.target.files?.[0] || null)}
+                className="w-full text-sm text-[#424245] file:mr-3 file:py-2 file:px-3 file:rounded-lg file:border-0 file:bg-black/10 file:text-sm file:font-medium hover:file:bg-black/15" />
+            </div>
+          </div>
+          <button onClick={lohnHochladen} disabled={lohnUploading}
+            className="rounded-xl bg-[#e8590c] hover:bg-[#d9480f] text-white disabled:opacity-50 px-5 py-2.5 font-semibold transition">
+            {lohnUploading ? '⏳ Lädt hoch…' : '⬆️ Hochladen'}
+          </button>
+          {lohnMsg && (
+            <div className={`rounded-xl p-4 ${lohnMsg.ok ? 'bg-emerald-50 border border-emerald-200 text-emerald-700' : 'bg-red-50 border border-red-200 text-red-700'}`}>
+              {lohnMsg.text}
+            </div>
+          )}
+
+          {lohnEmployee && (
+            <div className="pt-2">
+              <h3 className="text-sm font-semibold text-[#424245] mb-2">Bereits abgelegt</h3>
+              {lohnLoading ? (
+                <p className="text-sm text-[#86868b]">Lade…</p>
+              ) : lohnDocs.length === 0 ? (
+                <p className="text-sm text-[#86868b]">Noch keine Lohnabrechnung für diesen Mitarbeiter.</p>
+              ) : (
+                <ul className="space-y-1.5">
+                  {lohnDocs.map(d => (
+                    <li key={d.id} className="flex items-center justify-between text-sm bg-[#f5f5f7] rounded-lg px-3 py-2">
+                      <span>{d.month} – {d.file_name}{d.sent_at ? ' · versendet' : ''}</span>
+                      <button onClick={() => lohnLoeschen(d.id)} className="text-red-600 hover:text-red-700 text-xs font-medium">Löschen</button>
+                    </li>
+                  ))}
+                </ul>
+              )}
             </div>
           )}
         </section>
