@@ -5,22 +5,23 @@ import { getEmployees, createAbsence } from '@/lib/actions/employees';
 import type { EmployeeWithSkills } from '@/types/employees';
 import ProjektDokumentation from '@/components/ProjektDokumentation';
 import Link from 'next/link';
-import { Wrench, Navigation, ClipboardList, Euro } from 'lucide-react';
+import { Wrench, Navigation } from 'lucide-react';
 
 // ============================================================
 // SCAFFOLD OS – Mitarbeiter-Bereich (Bauleiter / Mitarbeiter)
 //
-// NEU: zentrale Startseite mit 4 Reitern, statt einer einzelnen
-// langen Seite – "oben" (über den Reitern) bleibt sichtbar, wer
-// eingeloggt ist (Namens-Erkennung), unabhängig vom gewählten Reiter:
-//   1. Werkzeug           – Zugang zum Aufmaß
-//   2. Touren & Stempeln  – Tour des Tages, Packliste, Zeiterfassung,
-//                           Krank/Urlaub (bisheriger Seiteninhalt,
-//                           UNVERÄNDERT übernommen)
-//   3. Baustellen-Dokumentation – bestehende /dokumentation-Logik
-//                           (ProjektDokumentation), hier mit
-//                           vorausgewähltem eigenen Mitarbeiter
-//   4. Lohnabrechnungen    – ansehen, versenden, als PDF speichern
+// Zentrale Startseite mit 2 Reitern – "oben" (über den Reitern)
+// bleibt sichtbar, wer eingeloggt ist (Namens-Erkennung),
+// unabhängig vom gewählten Reiter:
+//   1. Werkzeuge   – Zugang zu Aufmaß/CAD/Brücke/Traggerüst/GAEB,
+//                    darunter die Baustellen-Dokumentation
+//                    (bestehende /dokumentation-Logik, mit
+//                    vorausgewähltem eigenen Mitarbeiter)
+//   2. Mitarbeiter – Tour des Tages, Packliste, Zeiterfassung,
+//                    Krank/Urlaub (bisheriger Seiteninhalt,
+//                    UNVERÄNDERT übernommen), darunter die
+//                    Lohnabrechnungen (ansehen, versenden, als
+//                    PDF speichern)
 // ============================================================
 
 interface Stop {
@@ -46,7 +47,7 @@ const ME_KEY = 'scaffold_me_employee';
 const PACK_KEY = 'scaffold_packliste_';
 const DOK_PROJECT_KEY = 'scaffold_dokumentation_project';
 
-type Tab = 'werkzeug' | 'touren' | 'dokumentation' | 'lohnabrechnung';
+type Tab = 'werkzeuge' | 'mitarbeiter';
 
 function todayISO() { return new Date().toISOString().split('T')[0]; }
 function fmtTime(iso: string | null) {
@@ -55,7 +56,7 @@ function fmtTime(iso: string | null) {
 }
 
 export default function MeineTourenPage() {
-  const [activeTab, setActiveTab] = useState<Tab>('touren');
+  const [activeTab, setActiveTab] = useState<Tab>('mitarbeiter');
   const [employees, setEmployees] = useState<EmployeeWithSkills[]>([]);
   const [meId, setMeId] = useState<string>('');
   const [heutigerEinsatz, setHeutigerEinsatz] = useState<{ id: string; name: string } | null>(null);
@@ -213,7 +214,7 @@ export default function MeineTourenPage() {
   }, [heutigerEinsatz]);
 
   useEffect(() => {
-    if (activeTab === 'dokumentation' && dokProjects.length === 0) loadDokProjects();
+    if (activeTab === 'werkzeuge' && dokProjects.length === 0) loadDokProjects();
   }, [activeTab, dokProjects.length, loadDokProjects]);
 
   function selectDokProject(id: string) {
@@ -234,7 +235,7 @@ export default function MeineTourenPage() {
   }, [meId]);
 
   useEffect(() => {
-    if (activeTab === 'lohnabrechnung' && meId) loadLohnDocs();
+    if (activeTab === 'mitarbeiter' && meId) loadLohnDocs();
   }, [activeTab, meId, loadLohnDocs]);
 
   async function lohnAnsehen(id: string) {
@@ -363,10 +364,8 @@ export default function MeineTourenPage() {
   const inputCls = 'w-full bg-[#f5f5f7] border border-black/10 rounded-lg px-3 py-2 text-[#1d1d1f] focus:border-[#e8590c] focus:outline-none';
 
   const TABS: { key: Tab; label: string; icon: any }[] = [
-    { key: 'werkzeug', label: 'Werkzeug', icon: Wrench },
-    { key: 'touren', label: 'Touren & Stempeln', icon: Navigation },
-    { key: 'dokumentation', label: 'Baustellen-Dokumentation', icon: ClipboardList },
-    { key: 'lohnabrechnung', label: 'Lohnabrechnungen', icon: Euro },
+    { key: 'werkzeuge', label: 'Werkzeuge', icon: Wrench },
+    { key: 'mitarbeiter', label: 'Mitarbeiter', icon: Navigation },
   ];
 
   if (loading && tours.length === 0) {
@@ -430,10 +429,11 @@ export default function MeineTourenPage() {
           ))}
         </div>
 
-        {/* ═══ REITER 1: WERKZEUG ═══ */}
-        {activeTab === 'werkzeug' && (
+        {/* ═══ REITER 1: WERKZEUGE (inkl. Baustellen-Dokumentation) ═══ */}
+        {activeTab === 'werkzeuge' && (
+          <div className="space-y-5">
           <section className="bg-[#f5f5f7] border border-black/10 rounded-xl p-5 space-y-3">
-            <h2 className="font-semibold">🛠️ Werkzeug</h2>
+            <h2 className="font-semibold">🛠️ Werkzeuge</h2>
             <p className="text-sm text-[#86868b]">Werkzeuge für die Baustelle – aktuell verfügbar:</p>
             <div className="space-y-2">
               <Link
@@ -488,10 +488,29 @@ export default function MeineTourenPage() {
               </Link>
             </div>
           </section>
+
+          <section className="bg-[#f5f5f7] border border-black/10 rounded-xl p-4">
+            <h2 className="font-semibold mb-3">📋 Baustellen-Dokumentation</h2>
+            <label className="block text-sm text-[#86868b] mb-1">Projekt / Baustelle *</label>
+            {dokLoading ? (
+              <p className="text-sm text-[#86868b]">Lade Projekte…</p>
+            ) : (
+              <select value={dokProjectId} onChange={e => selectDokProject(e.target.value)} className={inputCls}>
+                <option value="">– Projekt wählen –</option>
+                {dokProjects.map(p => (
+                  <option key={p.id} value={p.id}>
+                    {p.name || p.adresse || p.id} {p.status === 'completed' ? '(abgeschlossen)' : ''}
+                  </option>
+                ))}
+              </select>
+            )}
+          </section>
+          {dokProjectId && <ProjektDokumentation projectId={dokProjectId} employeeId={meId || null} />}
+          </div>
         )}
 
-        {/* ═══ REITER 2: TOUREN & STEMPELN ═══ */}
-        {activeTab === 'touren' && (
+        {/* ═══ REITER 2: MITARBEITER (Touren, Stempeln, Krank/Urlaub, Lohnabrechnungen) ═══ */}
+        {activeTab === 'mitarbeiter' && (
           <div className="space-y-5">
             {showAllHint && (
               <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 text-sm text-blue-800">
@@ -703,33 +722,7 @@ export default function MeineTourenPage() {
                 Die Meldung erscheint sofort in der Planung – die Disposition kann Personal und Fahrten umplanen.
               </p>
             </section>
-          </div>
-        )}
 
-        {/* ═══ REITER 3: BAUSTELLEN-DOKUMENTATION ═══ */}
-        {activeTab === 'dokumentation' && (
-          <div className="space-y-5">
-            <section className="bg-[#f5f5f7] border border-black/10 rounded-xl p-4">
-              <label className="block text-sm text-[#86868b] mb-1">Projekt / Baustelle *</label>
-              {dokLoading ? (
-                <p className="text-sm text-[#86868b]">Lade Projekte…</p>
-              ) : (
-                <select value={dokProjectId} onChange={e => selectDokProject(e.target.value)} className={inputCls}>
-                  <option value="">– Projekt wählen –</option>
-                  {dokProjects.map(p => (
-                    <option key={p.id} value={p.id}>
-                      {p.name || p.adresse || p.id} {p.status === 'completed' ? '(abgeschlossen)' : ''}
-                    </option>
-                  ))}
-                </select>
-              )}
-            </section>
-            {dokProjectId && <ProjektDokumentation projectId={dokProjectId} employeeId={meId || null} />}
-          </div>
-        )}
-
-        {/* ═══ REITER 4: LOHNABRECHNUNGEN ═══ */}
-        {activeTab === 'lohnabrechnung' && (
           <section className="bg-[#f5f5f7] border border-black/10 rounded-xl p-4 space-y-3">
             <h2 className="font-semibold">💶 Lohnabrechnungen</h2>
             {!meId ? (
@@ -767,6 +760,7 @@ export default function MeineTourenPage() {
               </div>
             )}
           </section>
+          </div>
         )}
       </div>
     </div>
