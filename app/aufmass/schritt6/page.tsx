@@ -460,6 +460,23 @@ function Schritt6Content() {
       if (sessionId) {
         try { await fetch('/api/attach-photos', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sessionId, projectId: result.id }) }); localStorage.removeItem('scaffold_session_id'); } catch (photoErr) { console.error('Foto-Verknüpfung fehlgeschlagen:', photoErr); }
       }
+      // FIX (Bug-Report, Projekt-Duplikate): Nach dem ALLERERSTEN Speichern
+      // (POST, neues Projekt) wurde bisher nur der React-State
+      // (savedProjectId) gesetzt, NICHT aber die Browser-URL - die zeigte
+      // weiterhin kein ?id=. Kam es direkt danach zu einem Reload/einer
+      // Zurück-Navigation (z.B. über den Browser), "vergaß" die Seite beim
+      // Neuladen, dass das Projekt schon existiert (kein ?id= in der URL,
+      // React-State zurückgesetzt) - ein erneutes "Speichern" legte dann
+      // über POST ein komplett ZWEITES, doppeltes Projekt an, statt das
+      // bestehende zu aktualisieren (siehe z.B. zwei "Merola"-Duplikate mit
+      // identischen, alten Daten, 10 Sekunden auseinander angelegt). Jetzt:
+      // URL sofort still (ohne History-Eintrag/Scroll) auf ?id=<neue-ID>
+      // aktualisieren und die Sitzungs-Markierung setzen - ein Reload lädt
+      // danach korrekt über PATCH statt erneut über POST.
+      if (!savedProjectId) {
+        router.replace(`/aufmass/schritt6?id=${result.id}`, { scroll: false });
+        setzeMarkierung(result.id);
+      }
       setSavedProjectId(result.id);
       // BUGFIX (Aufmaß-Kette): Vorher wurden hier nur die Upload-/KI-Zwischen-
       // daten (LiDAR/Foto/Grundriss) gelöscht, NICHT aber scaffold_step1–5
