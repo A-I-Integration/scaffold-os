@@ -16,7 +16,11 @@ export interface SiteStock {
   address: string;
   articleNumber: string;
   quantity: number;
-  distanceKm: number; // Entfernung zur Ziel-Baustelle
+  // Entfernung zur Ziel-Baustelle (echte Fahrstrecke via Google Distance
+  // Matrix, siehe lib/google-distance.ts). `null` = nicht ermittelbar
+  // (kein API-Key, Adresse nicht auflösbar, API nicht erreichbar) -
+  // wird NIE durch eine geschätzte/erfundene Zahl ersetzt.
+  distanceKm: number | null;
 }
 
 export interface CentralStock {
@@ -34,12 +38,12 @@ export interface DispositionSuggestion {
   sourceSiteName?: string;
   availableQuantity: number;
   missingQuantity: number;
-  transportCost: number;
-  transportCostOptimized: number;
-  distanceKm: number;
-  dieselLiters: number;
-  timeHours: number;
-  co2Kg: number;
+  transportCost: number | null;
+  transportCostOptimized: number | null;
+  distanceKm: number | null;
+  dieselLiters: number | null;
+  timeHours: number | null;
+  co2Kg: number | null;
   savings: number;
   reason: string;
 }
@@ -63,10 +67,10 @@ export interface OptimizedRoute {
   to: string;
   siteName?: string;
   articles: string[];
-  distanceKm: number;
-  dieselLiters: number;
-  timeHours: number;
-  co2Kg: number;
+  distanceKm: number | null;
+  dieselLiters: number | null;
+  timeHours: number | null;
+  co2Kg: number | null;
   savingsVsCentral: number;
 }
 
@@ -85,7 +89,7 @@ export async function optimizeDisposition(
   targetSiteId: string,
   targetAddress: string,
   getCentralStock: (articleNumbers: string[]) => Promise<CentralStock[]>,
-  getSiteStock: (articleNumbers: string[], excludeSiteId: string) => Promise<SiteStock[]>
+  getSiteStock: (articleNumbers: string[], excludeSiteId: string, targetAddress: string) => Promise<SiteStock[]>
 ): Promise<DispositionResult> {
   
   const suggestions: DispositionSuggestion[] = [];
@@ -118,7 +122,7 @@ export async function optimizeDisposition(
   }
 
   try {
-    siteStock = await getSiteStock(articleNumbers, targetSiteId);
+    siteStock = await getSiteStock(articleNumbers, targetSiteId, targetAddress);
   } catch (e) {
     console.warn('[Disposition] Baustellenbestand nicht erreichbar, verwende leeren Bestand');
   }
@@ -144,19 +148,33 @@ export async function optimizeDisposition(
     let bestSource: DispositionSuggestion;
     
     if (sites.length > 0) {
-      // Es gibt Überbestand auf anderen Baustellen
-      // Nächste Baustelle finden
-      const nearestSite = sites.sort((a, b) => a.distanceKm - b.distanceKm)[0];
+      // Es gibt Überbestand auf anderen Baustellen. Nächste Baustelle
+      // finden - Sites mit bekannter Entfernung werden bevorzugt
+      // (aufsteigend sortiert), Sites ohne ermittelbare Entfernung
+      // (distanceKm === null) kommen ans Ende, statt fälschlich als
+      // "nah" zu gelten.
+      const nearestSite = [...sites].sort((a, b) => {
+        if (a.distanceKm == null && b.distanceKm == null) return 0;
+        if (a.distanceKm == null) return 1;
+        if (b.distanceKm == null) return -1;
+        return a.distanceKm - b.distanceKm;
+      })[0];
       const availableOnSite = Math.min(needed, nearestSite.quantity);
-      
+      const distBekannt = nearestSite.distanceKm != null;
+      const distHinRueck = distBekannt ? nearestSite.distanceKm! * 2 : null; // Hin + Zurück
+      const distHinweis = distBekannt
+        ? `(${nearestSite.distanceKm} km)`
+        : '(Entfernung nicht ermittelbar - Google-Distanzberechnung prüfen)';
+
       if (availableOnSite >= needed) {
         // Komplett von Baustelle direkt
-        const dist = nearestSite.distanceKm * 2; // Hin + Zurück (oder nur Hin wenn Tour geplant)
-        const diesel = (dist / 100) * DIESEL_PER_100KM;
-        const time = dist / LKW_SPEED_KMH;
-        const costDirect = dist * LKW_COST_PER_KM;
-        const costViaCentral = (nearestSite.distanceKm + 50) * LKW_COST_PER_KM + HANDLING_COST_CENTRAL; // Annahme: Lager ist ~50km entfernt
-        
+        const diesel = distHinRueck != null ? (distHinRueck / 100) * DIESEL_PER_100KM : null;
+        const time = distHinRueck != null ? distHinRueck / LKW_SPEED_KMH : null;
+        const costDirect = distHinRueck != null ? distHinRueck * LKW_COST_PER_KM : null;
+        const costViaCentral = distBekannt
+          ? (nearestSite.distanceKm! + 50) * LKW_COST_PER_KM + HANDLING_COST_CENTRAL // Annahme: Lager ist ~50km entfernt
+          : null;
+
         bestSource = {
           articleNumber: item.articleNumber,
           articleName: item.name,
@@ -168,20 +186,19 @@ export async function optimizeDisposition(
           missingQuantity: 0,
           transportCost: costDirect,
           transportCostOptimized: costDirect,
-          distanceKm: dist,
+          distanceKm: distHinRueck,
           dieselLiters: diesel,
           timeHours: time,
-          co2Kg: diesel * CO2_PER_LITER_DIESEL,
-          savings: Math.max(0, costViaCentral - costDirect),
-          reason: `Direkt von Baustelle "${nearestSite.siteName}" (${nearestSite.distanceKm} km). Kein Umweg über Zentrallager nötig.`,
+          co2Kg: diesel != null ? diesel * CO2_PER_LITER_DIESEL : null,
+          savings: costViaCentral != null && costDirect != null ? Math.max(0, costViaCentral - costDirect) : 0,
+          reason: `Direkt von Baustelle "${nearestSite.siteName}" ${distHinweis}. Kein Umweg über Zentrallager nötig.`,
         };
       } else {
         // Teilweise von Baustelle, Rest von Zentrallager
         const missing = needed - availableOnSite;
-        const dist = nearestSite.distanceKm * 2;
-        const diesel = (dist / 100) * DIESEL_PER_100KM;
-        const costDirect = dist * LKW_COST_PER_KM;
-        
+        const diesel = distHinRueck != null ? (distHinRueck / 100) * DIESEL_PER_100KM : null;
+        const costDirect = distHinRueck != null ? distHinRueck * LKW_COST_PER_KM : null;
+
         bestSource = {
           articleNumber: item.articleNumber,
           articleName: item.name,
@@ -193,12 +210,12 @@ export async function optimizeDisposition(
           missingQuantity: missing,
           transportCost: costDirect,
           transportCostOptimized: costDirect,
-          distanceKm: dist,
+          distanceKm: distHinRueck,
           dieselLiters: diesel,
-          timeHours: dist / LKW_SPEED_KMH,
-          co2Kg: diesel * CO2_PER_LITER_DIESEL,
+          timeHours: distHinRueck != null ? distHinRueck / LKW_SPEED_KMH : null,
+          co2Kg: diesel != null ? diesel * CO2_PER_LITER_DIESEL : null,
           savings: availableOnSite * 15, // ca. 15€ Einsparung pro Stück durch Vermeidung doppelter Fahrt
-          reason: `${availableOnSite} Stk von Baustelle "${nearestSite.siteName}", ${missing} Stk aus Zentrallager nachbestellen.`,
+          reason: `${availableOnSite} Stk von Baustelle "${nearestSite.siteName}" ${distHinweis}, ${missing} Stk aus Zentrallager nachbestellen.`,
         };
       }
     } else if (centralQty >= needed) {
@@ -244,10 +261,10 @@ export async function optimizeDisposition(
     
     suggestions.push(bestSource);
     totalSavings += bestSource.savings;
-    totalSavedKm += bestSource.distanceKm;
-    totalSavedDiesel += bestSource.dieselLiters;
-    totalSavedHours += bestSource.timeHours;
-    totalSavedCo2 += bestSource.co2Kg;
+    totalSavedKm += bestSource.distanceKm ?? 0;
+    totalSavedDiesel += bestSource.dieselLiters ?? 0;
+    totalSavedHours += bestSource.timeHours ?? 0;
+    totalSavedCo2 += bestSource.co2Kg ?? 0;
   }
   
   // 5. Routen gruppieren (Baustellen zusammenfassen)

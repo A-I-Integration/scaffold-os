@@ -99,10 +99,16 @@ export default function DispositionResult({ result, loading }: Props) {
                   Artikel: {route.articles.join(', ')}
                 </p>
                 <div className="flex gap-4 text-xs text-[#86868b]">
-                  <span>{route.distanceKm} km</span>
-                  <span>{route.dieselLiters.toFixed(1)} L Diesel</span>
-                  <span>{route.timeHours.toFixed(1)} h Fahrtzeit</span>
-                  <span>{route.co2Kg.toFixed(1)} kg CO₂</span>
+                  {route.distanceKm != null ? (
+                    <>
+                      <span>{route.distanceKm} km</span>
+                      <span>{route.dieselLiters?.toFixed(1)} L Diesel</span>
+                      <span>{route.timeHours?.toFixed(1)} h Fahrtzeit</span>
+                      <span>{route.co2Kg?.toFixed(1)} kg CO₂</span>
+                    </>
+                  ) : (
+                    <span className="text-amber-600">⚠️ Entfernung nicht ermittelbar</span>
+                  )}
                 </div>
               </div>
             ))}
