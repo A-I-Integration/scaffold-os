@@ -33,6 +33,13 @@ const DATEV_BERATER_NR = '1000';      // Beraternummer
 const DATEV_MANDANT_NR = '1';         // Mandantennummer
 const DATEV_DEBITOR_START = 10000;    // Debitoren-Sammelkonto
 const DATEV_ERLOESKONTO_19 = '8400';  // Erlöse 19 % USt (SKR 03)
+const DATEV_ERLOESKONTO_7 = '8300';   // Erlöse 7 % USt (SKR 03)
+// FIX (Bug-Report): Für 0 % USt gibt es in SKR 03 mehrere mögliche Konten
+// je nach Grund der Steuerfreiheit (z.B. innergemeinschaftlich, Export,
+// §13b-Bauleistung/Reverse-Charge – bei Gerüstbau nicht unüblich). Ohne
+// Rücksprache mit dem Steuerberater KEIN Konto raten – 0%-Rechnungen
+// werden daher beim Export ausgeschlossen und der Anwenderin explizit
+// gemeldet, statt ein möglicherweise falsches Konto zu bebuchen.
 const DATEV_SACHKONTENLAENGE = '4';
 
 const STATUS_LABEL: Record<string, string> = {
@@ -50,8 +57,22 @@ const STATUS_BADGE: Record<string, string> = {
 };
 
 
+// FIX (Bug-Report): liefert das korrekte SKR-03-Erlöskonto je USt-Satz,
+// oder null, wenn der Satz (noch) keinem Konto zugeordnet ist – vorher
+// wurde hier unabhängig vom Steuersatz IMMER das 19%-Konto 8400
+// zurückgegeben (Ternary mit identischem Wert in beiden Zweigen).
+function erloeskontoFuer(taxRate: number): string | null {
+  if (taxRate === 19) return DATEV_ERLOESKONTO_19;
+  if (taxRate === 7) return DATEV_ERLOESKONTO_7;
+  return null; // z.B. 0 % – Grund der Steuerfreiheit nicht automatisch bekannt
+}
+
 // ─── DATEV-Buchungsstapel (EXTF-CSV, Formatversion 700) ───
-function buildDatevEXTF(invoices: Invoice[]): string {
+// Rückgabe: csv-Text plus die Rechnungen, die NICHT exportiert werden
+// konnten, weil ihr USt-Satz keinem Konto zugeordnet ist (siehe
+// erloeskontoFuer) – der Aufrufer meldet diese explizit statt sie
+// stillschweigend wegzulassen oder falsch zu buchen.
+function buildDatevEXTF(invoices: Invoice[]): { csv: string; uebersprungen: Invoice[] } {
   const now = new Date();
   const stamp =
     now.getFullYear() +
@@ -76,20 +97,24 @@ function buildDatevEXTF(invoices: Invoice[]): string {
   const q = (s: string) => '"' + s.replace(/"/g, '""') + '"';
   const eur = (n: number) => fmtEur(n); // Komma-Dezimal, DATEV-konform
 
-  const rows = invoices.map((inv) => {
+  const uebersprungen: Invoice[] = [];
+  const rows: string[] = [];
+  for (const inv of invoices) {
+    const gegenkonto = erloeskontoFuer(Number(inv.tax_rate));
+    if (!gegenkonto) { uebersprungen.push(inv); continue; }
     const d = new Date(inv.invoice_date + 'T00:00:00');
     const belegdatum = String(d.getDate()).padStart(2, '0') + String(d.getMonth() + 1).padStart(2, '0');
     // Debitor aus Projektbezug ableitbar – hier Sammeldebitor (mit Steuerberater abstimmen)
     const konto = String(DATEV_DEBITOR_START);
-    const gegenkonto = Number(inv.tax_rate) === 19 ? DATEV_ERLOESKONTO_19 : DATEV_ERLOESKONTO_19;
-    return [
+    rows.push([
       q(eur(Number(inv.gross_amount))), '"S"', '"EUR"', '', '', '',
       q(konto), q(gegenkonto), '', q(belegdatum), q(inv.invoice_number), '', '',
       q('Rechnung ' + inv.customer_name),
-    ].join(';');
-  });
+    ].join(';'));
+  }
 
-  return '﻿' + header + '\r\n' + columns + '\r\n' + rows.join('\r\n') + '\r\n';
+  const csv = '﻿' + header + '\r\n' + columns + '\r\n' + rows.join('\r\n') + '\r\n';
+  return { csv, uebersprungen };
 }
 
 function RechnungenContent() {
@@ -387,7 +412,20 @@ function RechnungenContent() {
   function handleDatevExport() {
     const exportable = invoices.filter((i) => i.status !== 'storniert');
     if (!exportable.length) { alert('Keine Rechnungen zum Exportieren vorhanden.'); return; }
-    const csv = buildDatevEXTF(exportable);
+    const { csv, uebersprungen } = buildDatevEXTF(exportable);
+    // FIX (Bug-Report): vorher wurden 0%-Rechnungen mitexportiert, aber
+    // fälschlich auf das 19%-Konto gebucht. Jetzt werden sie
+    // ausgeschlossen und der Anwenderin explizit gemeldet, statt
+    // stillschweigend falsch oder gar nicht zu erscheinen.
+    if (uebersprungen.length > 0) {
+      const liste = uebersprungen.map((i) => `${i.invoice_number} (${i.customer_name})`).join('\n');
+      alert(
+        `⚠️ ${uebersprungen.length} Rechnung(en) mit 0 % USt wurden NICHT exportiert, ` +
+        `weil das passende DATEV-Konto vom Steuerberater festgelegt werden muss:\n\n${liste}\n\n` +
+        `Diese bitte manuell/gesondert buchen oder erst nach Klärung des Kontos hier exportieren.`
+      );
+    }
+    if (uebersprungen.length === exportable.length) return; // ausschließlich 0%-Rechnungen ausgewählt, nichts zu exportieren
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
     const link = document.createElement('a');
     link.href = URL.createObjectURL(blob);
@@ -735,7 +773,7 @@ function RechnungenContent() {
         </div>
 
         <p className="text-xs text-[#86868b]">
-          DATEV-Export: Buchungsstapel im EXTF-Format (Formatversion 700, SKR 03, Erlöskonto {DATEV_ERLOESKONTO_19}).
+          DATEV-Export: Buchungsstapel im EXTF-Format (Formatversion 700, SKR 03, Erlöskonto {DATEV_ERLOESKONTO_19} für 19&nbsp;%, {DATEV_ERLOESKONTO_7} für 7&nbsp;%; 0&nbsp;%-Rechnungen werden nicht mitexportiert).
           Berater-/Mandantennummer und Konten bitte vor dem ersten Import mit dem Steuerberater abstimmen.
         </p>
 
