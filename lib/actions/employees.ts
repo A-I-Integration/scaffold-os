@@ -40,6 +40,37 @@ async function checkAdminOrDisponent(supabase: any): Promise<{ allowed: boolean;
   return { allowed: true, userId: user.id };
 }
 
+// NEU (Mitarbeiter-Bereich-Audit): ohne diese Prüfung konnte jeder
+// eingeloggte Nutzer eine Abwesenheit für eine BELIEBIGE employee_id
+// beantragen (Urlaub/Krank im Namen eines Kollegen). Erlaubt: admin/
+// disponent (dürfen für andere handeln) ODER die employee_id gehört
+// zum eigenen Login (employees.user_id = eigene User-ID).
+async function checkOwnEmployeeOrAdmin(supabase: any, employeeId: string): Promise<{ allowed: boolean; userId?: string; error?: string }> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { allowed: false, error: 'Nicht authentifiziert' };
+
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('role')
+    .eq('id', user.id)
+    .single();
+
+  if (profile && ['admin', 'disponent'].includes(profile.role)) {
+    return { allowed: true, userId: user.id };
+  }
+
+  const { data: ownEmployee } = await supabase
+    .from('employees')
+    .select('id')
+    .eq('id', employeeId)
+    .eq('user_id', user.id)
+    .maybeSingle();
+
+  if (ownEmployee) return { allowed: true, userId: user.id };
+
+  return { allowed: false, error: 'Du darfst nur für dich selbst eine Abwesenheit beantragen.' };
+}
+
 function getTodayDate(): string {
   return new Date().toISOString().split('T')[0];
 }
@@ -256,8 +287,12 @@ export async function createAbsence(formData: FormData): Promise<{ success: bool
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { success: false, error: 'Nicht authentifiziert' };
 
+  const employeeId = formData.get('employee_id') as string;
+  const auth = await checkOwnEmployeeOrAdmin(supabase, employeeId);
+  if (!auth.allowed) return { success: false, error: auth.error };
+
   const absence = {
-    employee_id: formData.get('employee_id') as string,
+    employee_id: employeeId,
     start_date: formData.get('start_date') as string,
     end_date: formData.get('end_date') as string,
     type: formData.get('type') as string,
