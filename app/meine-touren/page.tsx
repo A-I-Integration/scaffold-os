@@ -26,6 +26,7 @@ import { Wrench, Navigation } from 'lucide-react';
 
 interface Stop {
   id: string; stop_order: number; address: string; status: string;
+  project_id?: string | null;
   transport_order?: { quantity: number; inventory?: { name: string } | null } | null;
 }
 interface Tour {
@@ -65,6 +66,9 @@ export default function MeineTourenPage() {
   const [loading, setLoading] = useState(true);
   const [checked, setChecked] = useState<Record<string, boolean>>({});
   const [msg, setMsg] = useState('');
+  // ─── "Fertig" / "Nicht fertig geworden" je Stopp (Phase 90) ───
+  const [stoppLaeuft, setStoppLaeuft] = useState<Record<string, boolean>>({});
+  const [stoppMsg, setStoppMsg] = useState<Record<string, string>>({});
   const [autoMe, setAutoMe] = useState<{ id: string; name: string } | null>(null);
   const [showAllHint, setShowAllHint] = useState(false);
   // team_ids auf tours enthält drivers.id (nicht employees.id, siehe
@@ -282,6 +286,62 @@ export default function MeineTourenPage() {
     const next = { ...checked, [key]: !checked[key] };
     setChecked(next);
     localStorage.setItem(PACK_KEY + myTour.id, JSON.stringify(next));
+  }
+
+  // ─── Stopp als "Fertig" markieren (Phase 90) ───
+  // NEU: jeder Mitarbeiter (nicht nur der eingetragene Fahrer, siehe
+  // darfStoppAendern in der API) kann einen Stopp abschließen. Vorher wird
+  // geprüft, ob für die zugehörige Baustelle bereits eine Dokumentation
+  // (Foto/Notiz, siehe ProjektDokumentation) existiert – ohne Doku kein
+  // "Fertig", damit der Papierkram nicht hinten runterfällt.
+  async function handleStoppFertig(stop: Stop) {
+    setStoppLaeuft(prev => ({ ...prev, [stop.id]: true }));
+    setStoppMsg(prev => ({ ...prev, [stop.id]: '' }));
+    try {
+      if (stop.project_id) {
+        const dokRes = await fetch(`/api/project-events?project_id=${stop.project_id}&t=${Date.now()}`, { cache: 'no-store' });
+        const dokJson = await dokRes.json();
+        const hatDoku = dokJson.success && (dokJson.events || []).length > 0;
+        if (!hatDoku) {
+          setStoppMsg(prev => ({ ...prev, [stop.id]: 'doku_fehlt' }));
+          setStoppLaeuft(prev => ({ ...prev, [stop.id]: false }));
+          return;
+        }
+      }
+      const res = await fetch('/api/tour-stops', {
+        method: 'PUT', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: stop.id, status: 'completed', actual_arrival: new Date().toISOString() }),
+      });
+      const json = await res.json();
+      if (!json.success) throw new Error(json.error || 'Fehler beim Speichern.');
+      await loadData();
+    } catch (e: any) {
+      setStoppMsg(prev => ({ ...prev, [stop.id]: e.message || 'Fehler beim Speichern.' }));
+    }
+    setStoppLaeuft(prev => ({ ...prev, [stop.id]: false }));
+  }
+
+  // ─── Stopp als "Nicht fertig geworden" markieren (Phase 90) ───
+  // Merkt den Stopp automatisch für den nächsten freien Werktag desselben
+  // Mitarbeiters beim selben Projekt vor (Server-Logik siehe
+  // /api/tour-stops/nicht-fertig).
+  async function handleStoppNichtFertig(stop: Stop) {
+    if (!confirm('Diesen Stopp als "nicht fertig geworden" markieren? Er wird automatisch für den nächsten freien Tag vorgemerkt.')) return;
+    setStoppLaeuft(prev => ({ ...prev, [stop.id]: true }));
+    setStoppMsg(prev => ({ ...prev, [stop.id]: '' }));
+    try {
+      const res = await fetch('/api/tour-stops/nicht-fertig', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ stopId: stop.id }),
+      });
+      const json = await res.json();
+      if (!json.success) throw new Error(json.error || 'Fehler beim Speichern.');
+      setStoppMsg(prev => ({ ...prev, [stop.id]: json.vorgemerkt ? `vorgemerkt:${json.vorgemerkt}` : 'kein_folgetag' }));
+      await loadData();
+    } catch (e: any) {
+      setStoppMsg(prev => ({ ...prev, [stop.id]: e.message || 'Fehler beim Speichern.' }));
+    }
+    setStoppLaeuft(prev => ({ ...prev, [stop.id]: false }));
   }
 
   // Packliste aus Stopps aggregieren
@@ -559,9 +619,9 @@ export default function MeineTourenPage() {
                     {myTour.stops.map(stop => (
                       <li key={stop.id} className="ml-5 relative">
                         <span className={`absolute -left-[31px] w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${
-                          stop.status === 'completed' ? 'bg-emerald-600' : 'bg-black/20'
+                          stop.status === 'completed' ? 'bg-emerald-600' : stop.status === 'skipped' ? 'bg-amber-600' : 'bg-black/20'
                         }`}>
-                          {stop.status === 'completed' ? '✓' : stop.stop_order}
+                          {stop.status === 'completed' ? '✓' : stop.status === 'skipped' ? '⏭' : stop.stop_order}
                         </span>
                         <div className="font-medium">{stop.address}</div>
                         {stop.transport_order?.inventory?.name && (
@@ -576,6 +636,50 @@ export default function MeineTourenPage() {
                         >
                           → Navigation
                         </a>
+
+                        {stop.status !== 'completed' && stop.status !== 'skipped' && (
+                          <div className="mt-2 flex flex-wrap items-center gap-2">
+                            <button
+                              onClick={() => handleStoppFertig(stop)}
+                              disabled={!!stoppLaeuft[stop.id]}
+                              className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-xs font-semibold transition disabled:opacity-50"
+                            >
+                              ✅ Fertig
+                            </button>
+                            <button
+                              onClick={() => handleStoppNichtFertig(stop)}
+                              disabled={!!stoppLaeuft[stop.id]}
+                              className="px-3 py-1.5 rounded-lg bg-black/10 hover:bg-black/20 text-xs font-semibold transition disabled:opacity-50"
+                            >
+                              ⏭️ Nicht fertig geworden
+                            </button>
+                          </div>
+                        )}
+
+                        {stoppMsg[stop.id] === 'doku_fehlt' && (
+                          <div className="mt-2 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-2">
+                            ⚠️ Bitte zuerst eine Dokumentation (Foto/Notiz) für diese Baustelle hinzufügen, bevor du auf &quot;Fertig&quot; setzt.
+                            {stop.project_id && (
+                              <button
+                                onClick={() => { setDokProjectId(stop.project_id!); setActiveTab('werkzeuge'); }}
+                                className="block mt-1 text-[#e8590c] font-semibold hover:underline"
+                              >
+                                → Jetzt dokumentieren
+                              </button>
+                            )}
+                          </div>
+                        )}
+                        {stoppMsg[stop.id]?.startsWith('vorgemerkt:') && (
+                          <div className="mt-2 text-xs text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg p-2">
+                            ↻ Automatisch vorgemerkt für {new Date(stoppMsg[stop.id].split(':')[1] + 'T00:00:00').toLocaleDateString('de-DE', { weekday: 'long', day: '2-digit', month: '2-digit' })}.
+                          </div>
+                        )}
+                        {stoppMsg[stop.id] === 'kein_folgetag' && (
+                          <div className="mt-2 text-xs text-[#86868b]">Als &quot;nicht fertig&quot; markiert.</div>
+                        )}
+                        {stoppMsg[stop.id] && stoppMsg[stop.id] !== 'doku_fehlt' && stoppMsg[stop.id] !== 'kein_folgetag' && !stoppMsg[stop.id].startsWith('vorgemerkt:') && (
+                          <div className="mt-2 text-xs text-red-600">❌ {stoppMsg[stop.id]}</div>
+                        )}
                       </li>
                     ))}
                   </ol>
