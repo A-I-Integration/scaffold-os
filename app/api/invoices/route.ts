@@ -172,6 +172,20 @@ export async function POST(req: NextRequest) {
     const resolvedInvoiceType = ['standard', 'abschlag', 'schluss', 'gutschrift'].includes(invoice_type)
       ? invoice_type
       : 'standard';
+    // FIX (Bug-Report): due_date wurde bisher, wenn nicht explizit mitgeschickt
+    // (z.B. beim automatischen "Rechnung erstellen" in Aufmaß-Schritt 6, das
+    // nie ein due_date sendet), als null gespeichert. fmtDate() zeigt für
+    // null nur "–" an – die Rechnung (PDF und Versand-E-Mail) hatte dann gar
+    // kein Zahlungsziel. Gleicher Standard wie im manuellen Rechnungsformular
+    // (/rechnungen, dort clientseitig vorbelegt): Rechnungsdatum + 14 Tage,
+    // wenn kein due_date übergeben wurde.
+    const resolvedInvoiceDate = invoice_date || new Date().toISOString().slice(0, 10);
+    const resolvedDueDate = due_date || (() => {
+      const d = new Date(resolvedInvoiceDate + 'T00:00:00');
+      d.setDate(d.getDate() + 14);
+      return d.toISOString().slice(0, 10);
+    })();
+
     const res = await fetch(`${url}/rest/v1/rpc/create_invoice`, {
       method: 'POST',
       headers: { ...headers, 'Prefer': 'return=representation' },
@@ -186,8 +200,8 @@ export async function POST(req: NextRequest) {
         p_tax_rate: rate,
         p_tax_amount: tax,
         p_gross_amount: gross,
-        p_invoice_date: invoice_date || new Date().toISOString().slice(0, 10),
-        p_due_date: due_date || null,
+        p_invoice_date: resolvedInvoiceDate,
+        p_due_date: resolvedDueDate,
         p_notes: notes || null,
         p_company_snapshot: companySnapshot,
         // Phase 15-Fix: Rechnungstyp wirklich speichern (wurde bisher
