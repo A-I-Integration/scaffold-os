@@ -26,7 +26,7 @@ const headers = {
 const ROLES = ['admin', 'disponent'];
 
 // Felder, die angelegt / geändert werden dürfen (Whitelist)
-const FELDER = ['name', 'contact_person', 'email', 'phone', 'street', 'zip', 'city', 'notes', 'is_active'];
+const FELDER = ['name', 'contact_person', 'email', 'phone', 'street', 'zip', 'city', 'notes', 'is_active', 'datev_konto'];
 
 async function callerRole(): Promise<string | null> {
   try {
@@ -60,8 +60,8 @@ export async function GET(req: NextRequest) {
     const id = searchParams.get('id');
     const sortiert = searchParams.get('sort') === 'neueste' ? 'created_at.desc' : 'name';
     const query = id
-      ? `id=eq.${id}&select=id,name,contact_person,email,phone,street,zip,city,notes,is_active,created_at`
-      : `select=id,name,contact_person,email,phone,street,zip,city,notes,is_active,created_at&order=${sortiert}`;
+      ? `id=eq.${id}&select=id,name,contact_person,email,phone,street,zip,city,notes,is_active,datev_konto,created_at`
+      : `select=id,name,contact_person,email,phone,street,zip,city,notes,is_active,datev_konto,created_at&order=${sortiert}`;
     const res = await fetch(`${url}/rest/v1/customers?${query}`, { headers });
     if (!res.ok) {
       const t = await res.text();
@@ -109,7 +109,7 @@ export async function POST(req: NextRequest) {
     // Kunde mit exakt diesem Namen (Groß-/Kleinschreibung egal), wird
     // dieser zurückgegeben statt ein neuer Datensatz angelegt.
     const dupCheck = await fetch(
-      `${url}/rest/v1/customers?name=ilike.${encodeURIComponent(clean.name)}&select=id,name,contact_person,email,phone,street,zip,city,notes,is_active,created_at&limit=1`,
+      `${url}/rest/v1/customers?name=ilike.${encodeURIComponent(clean.name)}&select=id,name,contact_person,email,phone,street,zip,city,notes,is_active,datev_konto,created_at&limit=1`,
       { headers }
     );
     if (dupCheck.ok) {
