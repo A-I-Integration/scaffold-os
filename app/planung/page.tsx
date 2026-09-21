@@ -29,7 +29,7 @@ import {
   EmployeeStats,
   EmployeeRecommendation,
 } from '@/types/employees';
-import { FUEHRERSCHEIN_KLASSEN } from '@/lib/touren/fuehrerschein';
+import { FUEHRERSCHEIN_KLASSEN, erforderlicheKlasse } from '@/lib/touren/fuehrerschein';
 
 type Tab = 'overview' | 'employees' | 'absences' | 'tours';
 
@@ -72,9 +72,16 @@ function PlanungContent() {
   const [kiTeamVorschlag, setKiTeamVorschlag] = useState<Record<string, { laeuft: boolean; ergebnis?: any; fehler?: string }>>({})
   // NEU: Material für die Fahrt zuordnen (Lagerartikel je Materialzeile
   // wählen, bewusst kein automatisches Matching gegen den Lagerbestand).
-  const [lagerArtikel, setLagerArtikel] = useState<{ id: string; name: string; unit: string }[]>([])
+  const [lagerArtikel, setLagerArtikel] = useState<{ id: string; name: string; unit: string; weight_kg: number }[]>([])
   const [materialZuordnung, setMaterialZuordnung] = useState<Record<string, Record<number, string>>>({}) // projektId -> zeilenIndex -> inventory_id
   const [transportAnlegenLaeuft, setTransportAnlegenLaeuft] = useState<string | null>(null)
+  // NEU (Phase 92): Fahrzeug-Vorschlag direkt beim Aufmaß, anhand des
+  // Gesamtgewichts der zugeordneten Materialzeilen (nicht nur später in
+  // der Touren-Planung, siehe Kundenwunsch "beim Aufmaß direkt anhand des
+  // Materials"). Reine Empfehlung/Anzeige - die tatsächliche Fahrzeug-
+  // /Fahrer-Zuweisung bleibt bewusst im Touren-Bereich, wo der bereits
+  // bestehende, serverseitig blockierende Führerschein-Check greift.
+  const [fahrzeuge, setFahrzeuge] = useState<{ id: string; name: string; capacity_kg: number | null; zulaessiges_gesamtgewicht_kg: number | null }[]>([])
   const [showEditEmployee, setShowEditEmployee] = useState(false);
 
   // NEU: KI-Umdisposition bei Ausfällen
@@ -127,8 +134,43 @@ function PlanungContent() {
     loadRefs();
     // NEU (Phase 45): neue, unzugewiesene Aufträge laden
     fetch('/api/projects/unassigned').then((r) => r.json()).then((j) => { if (j.success) setNeueAuftraege(j.projekte) }).catch(() => {}).finally(() => setUnassignedGeladen(true))
-    fetch('/api/inventory').then((r) => r.json()).then((j) => { if (j.success) setLagerArtikel((j.items || []).map((i: any) => ({ id: i.id, name: i.name, unit: i.unit }))) }).catch(() => {})
+    fetch('/api/inventory').then((r) => r.json()).then((j) => { if (j.success) setLagerArtikel((j.items || []).map((i: any) => ({ id: i.id, name: i.name, unit: i.unit, weight_kg: Number(i.weight_kg) || 0 }))) }).catch(() => {})
+    // NEU (Phase 92): Fahrzeuge für die Gewichts-Empfehlung beim Aufmaß laden
+    fetch('/api/vehicles').then((r) => r.json()).then((j) => { if (j.success) setFahrzeuge((j.vehicles || []).map((v: any) => ({ id: v.id, name: v.name, capacity_kg: v.capacity_kg != null ? Number(v.capacity_kg) : null, zulaessiges_gesamtgewicht_kg: v.zulaessiges_gesamtgewicht_kg != null ? Number(v.zulaessiges_gesamtgewicht_kg) : null }))) }).catch(() => {})
   }, [loadData]);
+
+  // NEU (Phase 92): Gesamtgewicht der einem Projekt zugeordneten
+  // Materialzeilen (Lagerartikel-Gewicht × Menge der Zeile). Zeilen ohne
+  // zugeordneten Lagerartikel oder ohne hinterlegtes Gewicht zählen nicht
+  // mit - das Ergebnis ist dann eine Mindestschätzung, kein exaktes Gewicht.
+  function gesamtgewichtZugeordnet(projektId: string): { gewicht: number; unvollstaendig: boolean } {
+    const zuordnung = materialZuordnung[projektId] || {}
+    const projekt = neueAuftraege.find((p) => p.id === projektId)
+    if (!projekt) return { gewicht: 0, unvollstaendig: false }
+    let gewicht = 0
+    let unvollstaendig = false
+    for (const [zeilenIndexStr, inventoryId] of Object.entries(zuordnung)) {
+      if (!inventoryId) continue
+      const zeile = projekt.materialList[parseInt(zeilenIndexStr)]
+      if (!zeile) continue
+      const artikel = lagerArtikel.find((la) => la.id === inventoryId)
+      if (!artikel || !artikel.weight_kg) { unvollstaendig = true; continue }
+      gewicht += artikel.weight_kg * zeile.quantity
+    }
+    return { gewicht, unvollstaendig }
+  }
+
+  // NEU (Phase 92): passendes Fahrzeug für ein Gesamtgewicht vorschlagen -
+  // das leichteste Fahrzeug, dessen Nutzlast reicht (kein Fahrzeug
+  // überdimensioniert einsetzen). Fahrzeuge ohne hinterlegte Nutzlast
+  // werden nicht vorgeschlagen (kein Rateergebnis).
+  function fahrzeugVorschlag(gewichtKg: number) {
+    if (gewichtKg <= 0) return null
+    const passend = fahrzeuge
+      .filter((f) => f.capacity_kg != null && f.capacity_kg >= gewichtKg)
+      .sort((a, b) => (a.capacity_kg || 0) - (b.capacity_kg || 0))
+    return passend[0] || null
+  }
 
   // Deep-Link: sobald die offenen Aufträge geladen sind, den per
   // ?project_id=... übergebenen Auftrag automatisch aufklappen und dahin
@@ -449,6 +491,32 @@ function PlanungContent() {
                                   </div>
                                 ))}
                               </div>
+                              {/* NEU (Phase 92): Fahrzeug-Empfehlung direkt hier anhand
+                                  des zugeordneten Materialgewichts - noch keine
+                                  Zuweisung, nur eine Entscheidungshilfe fürs Aufmaß. */}
+                              {(() => {
+                                const { gewicht, unvollstaendig } = gesamtgewichtZugeordnet(p.id)
+                                if (gewicht <= 0) return null
+                                const vorschlag = fahrzeugVorschlag(gewicht)
+                                return (
+                                  <div className="mt-2 text-[11px] bg-gray-50 border border-gray-200 rounded-lg p-2">
+                                    <p className="text-gray-700">
+                                      📦 Gesamtgewicht der zugeordneten Positionen: <strong>{gewicht.toLocaleString('de-DE')} kg</strong>
+                                      {unvollstaendig && ' (mind. – bei manchen Artikeln fehlt das Gewicht in der Lagerpflege)'}
+                                    </p>
+                                    {vorschlag ? (
+                                      <p className="text-emerald-700 mt-0.5">
+                                        🚛 Empfehlung: <strong>{vorschlag.name}</strong> (Nutzlast {vorschlag.capacity_kg?.toLocaleString('de-DE')} kg)
+                                        {vorschlag.zulaessiges_gesamtgewicht_kg != null && (
+                                          <> – erfordert Führerschein-Klasse <strong>{erforderlicheKlasse(vorschlag.zulaessiges_gesamtgewicht_kg) || '–'}</strong></>
+                                        )}
+                                      </p>
+                                    ) : (
+                                      <p className="text-amber-700 mt-0.5">⚠️ Kein Fahrzeug mit ausreichend hinterlegter Nutzlast gefunden – Nutzlast bei den Fahrzeugen in der Datenpflege prüfen.</p>
+                                    )}
+                                  </div>
+                                )
+                              })()}
                               <button
                                 onClick={() => erstelleTransporteFuerAuftrag(p.id, p.adresse)}
                                 disabled={transportAnlegenLaeuft === p.id}
@@ -456,7 +524,7 @@ function PlanungContent() {
                               >
                                 {transportAnlegenLaeuft === p.id ? 'Wird angelegt…' : '🚚 Transportaufträge anlegen'}
                               </button>
-                              <p className="text-[10px] text-gray-500 mt-1">Danach im Touren-Bereich zu einer Fahrt (Fahrzeug + Fahrer) zusammenstellen.</p>
+                              <p className="text-[10px] text-gray-500 mt-1">Danach im Touren-Bereich zu einer Fahrt (Fahrzeug + Fahrer) zusammenstellen – die Führerschein-Klasse des Fahrers wird dort automatisch geprüft.</p>
                             </div>
                           )}
                         </div>

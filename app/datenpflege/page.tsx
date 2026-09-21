@@ -95,22 +95,22 @@ const SECTIONS: Section[] = [
     columns: [
       { key: 'name', label: 'Name', edit: true },
       { key: 'license_plate', label: 'Kennzeichen', edit: true },
-      { key: 'typ', label: 'Typ', edit: true },
+      { key: 'type', label: 'Typ', edit: true },
       { key: 'zulaessiges_gesamtgewicht_kg', label: 'Gesamtgewicht (kg)', edit: true, type: 'number' },
       {
         key: 'erforderliche_klasse', label: 'Erfordert Führerschein',
         render: r => erforderlicheKlasse(r.zulaessiges_gesamtgewicht_kg) || '– (Gewicht fehlt)',
       },
-      { key: 'nutzlast_kg', label: 'Nutzlast (kg)', edit: true, type: 'number' },
+      { key: 'capacity_kg', label: 'Nutzlast (kg)', edit: true, type: 'number' },
       { key: 'is_active', label: 'Aktiv', render: r => (r.is_active ? '✅' : '❌') },
     ],
     createEndpoint: '/api/vehicles',
     createFields: [
       { key: 'name', label: 'Name', placeholder: 'z.B. Sprinter 3' },
       { key: 'license_plate', label: 'Kennzeichen', placeholder: 'z.B. SC-OS 4' },
-      { key: 'typ', label: 'Typ', placeholder: 'z.B. Sprinter, LKW 7,5t' },
+      { key: 'type', label: 'Typ', placeholder: 'z.B. Sprinter, LKW 7,5t' },
       { key: 'zulaessiges_gesamtgewicht_kg', label: 'Zul. Gesamtgewicht (kg)', placeholder: 'z.B. 7500', type: 'number' },
-      { key: 'nutzlast_kg', label: 'Nutzlast (kg)', placeholder: 'z.B. 3200', type: 'number' },
+      { key: 'capacity_kg', label: 'Nutzlast (kg)', placeholder: 'z.B. 3200', type: 'number' },
     ],
   },
   {

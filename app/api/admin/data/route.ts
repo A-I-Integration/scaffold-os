@@ -27,7 +27,7 @@ const EDITABLE: Record<string, string[]> = {
   inventory:        ['name', 'quantity', 'unit_price', 'min_stock', 'is_active'],
   transport_orders: ['quantity', 'status', 'priority'],
   tours:            ['name', 'planned_date', 'planned_start_time', 'status'],
-  vehicles:         ['name', 'license_plate', 'is_active', 'typ', 'zulaessiges_gesamtgewicht_kg', 'nutzlast_kg'],
+  vehicles:         ['name', 'license_plate', 'is_active', 'type', 'zulaessiges_gesamtgewicht_kg', 'capacity_kg'],
   drivers:          ['name', 'is_active'],
   customers:        ['name', 'contact_person', 'email', 'phone', 'street', 'zip', 'city', 'notes', 'is_active'],
 };
@@ -69,7 +69,7 @@ export async function GET() {
       fetch(`${url}/rest/v1/inventory?select=id,name,quantity,unit_price,min_stock,is_active&order=name`, { headers }),
       fetch(`${url}/rest/v1/transport_orders?select=id,quantity,status,priority,created_at,inventory:inventory_id(name),to_project:to_project_id(name)&order=created_at.desc`, { headers }),
       fetch(`${url}/rest/v1/tours?select=id,name,status,planned_date,planned_start_time,driver:driver_id(name),vehicle:vehicle_id(name)&order=planned_date.desc`, { headers }),
-      fetch(`${url}/rest/v1/vehicles?select=id,name,license_plate,is_active,typ,zulaessiges_gesamtgewicht_kg,nutzlast_kg&order=name`, { headers }),
+      fetch(`${url}/rest/v1/vehicles?select=id,name,license_plate,is_active,type,zulaessiges_gesamtgewicht_kg,capacity_kg&order=name`, { headers }),
       fetch(`${url}/rest/v1/drivers?select=id,name,is_active,employee:employee_id(first_name,last_name)&order=name`, { headers }),
     ]);
 
