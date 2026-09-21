@@ -136,16 +136,6 @@ export async function POST(req: NextRequest) {
     const gross = Math.round((net + tax) * 100) / 100;
     const netRounded = Math.round(net * 100) / 100;
 
-    // Fortlaufende Nummer: Gutschriften bekommen ihre eigene Zählfolge (GS-...),
-    // unabhängig von den Rechnungsnummern (RE-...).
-    const numRes = await fetch(`${url}/rest/v1/rpc/next_invoice_number`, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify(istGutschrift ? { p_prefix: 'GS' } : {}),
-    });
-    if (!numRes.ok) throw new Error('Belegnummer: ' + (await numRes.text()));
-    const invoiceNumber = await numRes.json();
-
     // Phase 14: Firmen-Snapshot für die Rechnung (GoBD – die Rechnung
     // muss die zum Ausstellungszeitpunkt gültigen Firmendaten zeigen)
     let companySnapshot: any = null;
@@ -171,41 +161,58 @@ export async function POST(req: NextRequest) {
       } catch { /* optional */ }
     }
 
-    const res = await fetch(`${url}/rest/v1/invoices`, {
+    // FIX (Bug-Report, Phase 93): Nummernvergabe UND Insert liefen bisher
+    // als zwei getrennte Requests (erst next_invoice_number, dann POST
+    // /invoices) - schlug der Insert fehl, war die Nummer schon vergeben:
+    // Lücke im GoBD-Nummernkreis. Jetzt EIN einziger RPC-Aufruf
+    // (create_invoice, supabase/phase-93-rechnung-atomar.sql), der
+    // Nummernvergabe + Insert in derselben Transaktion macht - schlägt
+    // der Insert fehl, wird die Nummer mit zurückgerollt statt zu
+    // verbrennen.
+    const resolvedInvoiceType = ['standard', 'abschlag', 'schluss', 'gutschrift'].includes(invoice_type)
+      ? invoice_type
+      : 'standard';
+    const res = await fetch(`${url}/rest/v1/rpc/create_invoice`, {
       method: 'POST',
       headers: { ...headers, 'Prefer': 'return=representation' },
       body: JSON.stringify({
-        invoice_number: invoiceNumber,
-        project_id: project_id || null,
-        customer_id: customerId,
-        customer_name,
-        customer_address: customer_address || null,
-        positions,
-        net_amount: netRounded,
-        tax_rate: rate,
-        tax_amount: tax,
-        gross_amount: gross,
-        status: 'offen',
-        invoice_date: invoice_date || new Date().toISOString().slice(0, 10),
-        due_date: due_date || null,
-        notes: notes || null,
-        company_snapshot: companySnapshot,
+        p_prefix: istGutschrift ? 'GS' : 'RE',
+        p_project_id: project_id || null,
+        p_customer_id: customerId,
+        p_customer_name: customer_name,
+        p_customer_address: customer_address || null,
+        p_positions: positions,
+        p_net_amount: netRounded,
+        p_tax_rate: rate,
+        p_tax_amount: tax,
+        p_gross_amount: gross,
+        p_invoice_date: invoice_date || new Date().toISOString().slice(0, 10),
+        p_due_date: due_date || null,
+        p_notes: notes || null,
+        p_company_snapshot: companySnapshot,
         // Phase 15-Fix: Rechnungstyp wirklich speichern (wurde bisher
         // zwar aus dem Request gelesen, aber nicht in die Datenbank
         // geschrieben – jede Rechnung landete als 'standard')
         // Phase 22: 'gutschrift' als vierter, eigener Typ.
-        invoice_type: ['standard', 'abschlag', 'schluss', 'gutschrift'].includes(invoice_type)
-          ? invoice_type
-          : 'standard',
+        p_invoice_type: resolvedInvoiceType,
         // Phase 35: reference_invoice_number jetzt auch für normale Rechnungen
         // erlaubt – für "Neue Version ersetzt alte Rechnung" (siehe unten),
         // nicht mehr nur für Gutschriften.
-        reference_invoice_number: reference_invoice_number || null,
+        p_reference_invoice_number: reference_invoice_number || null,
       }),
     });
     if (!res.ok) throw new Error(await res.text());
 
-    const rows = await res.json();
+    // create_invoice gibt eine einzelne invoices-Zeile zurück. PostgREST
+    // liefert das Ergebnis einer RPC, die eine einzelne Tabellenzeile
+    // zurückgibt, je nach Konfiguration entweder als Array mit einem
+    // Element oder als einzelnes Objekt - beide Formen werden hier
+    // akzeptiert, statt eine davon zu erraten.
+    const rpcResult = await res.json();
+    const invoiceRow = Array.isArray(rpcResult) ? rpcResult[0] : rpcResult;
+    if (!invoiceRow?.id) throw new Error('Rechnung wurde angelegt, aber die Antwort der Datenbank hatte ein unerwartetes Format.');
+    const rows = [invoiceRow]; // ab hier wie zuvor: rows[0] = angelegte Rechnung
+    const invoiceNumber = invoiceRow.invoice_number;
 
     // Phase 27: Admin-Überschreibung protokollieren
     if (overrideVerwendet && rows[0]?.id) {
