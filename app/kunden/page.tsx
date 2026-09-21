@@ -32,12 +32,15 @@ interface Kunde {
   city: string | null;
   notes: string | null;
   is_active: boolean;
+  // NEU (Phase 95, DATEV-Sammeldebitor-Fix): optionale, vom Steuerberater
+  // vergebene Einzeldebitoren-Kontonummer.
+  datev_konto: string | null;
   created_at: string;
 }
 
 const LEER_FORM = {
   name: '', contact_person: '', email: '', phone: '',
-  street: '', zip: '', city: '', notes: '',
+  street: '', zip: '', city: '', notes: '', datev_konto: '',
 };
 
 const STATUS_LABEL: Record<string, string> = {
@@ -448,6 +451,10 @@ export default function KundenPage() {
                     <div>
                       <label className="block text-xs text-[#86868b] mb-1">Ort</label>
                       <input value={form.city} onChange={(e) => setForm({ ...form, city: e.target.value })} className={inputCls} placeholder="Musterstadt" />
+                    </div>
+                    <div>
+                      <label className="block text-xs text-[#86868b] mb-1">DATEV-Kontonummer (Einzeldebitor, optional)</label>
+                      <input value={form.datev_konto} onChange={(e) => setForm({ ...form, datev_konto: e.target.value })} className={inputCls} placeholder="z. B. 10001 – sonst Sammelkonto" />
                     </div>
                     <div className="md:col-span-2">
                       <label className="block text-xs text-[#86868b] mb-1">Notizen</label>

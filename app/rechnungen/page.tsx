@@ -72,7 +72,15 @@ function erloeskontoFuer(taxRate: number): string | null {
 // konnten, weil ihr USt-Satz keinem Konto zugeordnet ist (siehe
 // erloeskontoFuer) – der Aufrufer meldet diese explizit statt sie
 // stillschweigend wegzulassen oder falsch zu buchen.
-function buildDatevEXTF(invoices: Invoice[]): { csv: string; uebersprungen: Invoice[] } {
+// FIX (Bug-Report, Phase 95, "Sammeldebitor"): bisher wurde JEDER Kunde auf
+// dasselbe feste Debitoren-Sammelkonto (DATEV_DEBITOR_START) gebucht – DATEV
+// kann offene Posten dann nicht einem einzelnen Kunden zuordnen. Neu: optionaler
+// zweiter Parameter kontenProKunde (customer_id -> vom Steuerberater vergebene
+// Einzeldebitoren-Kontonummer, siehe customers.datev_konto). Ist für den Kunden
+// einer Rechnung ein Konto hinterlegt, wird darauf gebucht; ist keins hinterlegt
+// (Feld leer/nicht gepflegt), bleibt exakt das bisherige Sammelkonto-Verhalten
+// erhalten – keine bestehende Buchung ändert sich stillschweigend.
+function buildDatevEXTF(invoices: Invoice[], kontenProKunde: Record<string, string> = {}): { csv: string; uebersprungen: Invoice[] } {
   const now = new Date();
   const stamp =
     now.getFullYear() +
@@ -104,8 +112,10 @@ function buildDatevEXTF(invoices: Invoice[]): { csv: string; uebersprungen: Invo
     if (!gegenkonto) { uebersprungen.push(inv); continue; }
     const d = new Date(inv.invoice_date + 'T00:00:00');
     const belegdatum = String(d.getDate()).padStart(2, '0') + String(d.getMonth() + 1).padStart(2, '0');
-    // Debitor aus Projektbezug ableitbar – hier Sammeldebitor (mit Steuerberater abstimmen)
-    const konto = String(DATEV_DEBITOR_START);
+    // Individuelles Debitorenkonto, falls beim Kunden hinterlegt – sonst
+    // weiterhin das Sammelkonto (mit Steuerberater abstimmen).
+    const eigenesKonto = inv.customer_id ? kontenProKunde[inv.customer_id] : undefined;
+    const konto = (eigenesKonto && eigenesKonto.trim()) || String(DATEV_DEBITOR_START);
     // FIX (Bug-Report): das EXTF-"Umsatz"-Feld muss laut DATEV-Format
     // IMMER positiv sein - das Vorzeichen wird ausschließlich über das
     // separate Soll/Haben-Kennzeichen ausgedrückt, nie über eine negative
@@ -138,6 +148,9 @@ function RechnungenContent() {
   // NEU (Phase 36): Verzugszinssatz/Mahnpauschale für manuell ausgelöste Mahnungen.
   const [mahnPauschale, setMahnPauschale] = useState(5.0);
   const [mahnZinssatz, setMahnZinssatz] = useState(10.52);
+  // NEU (Phase 95, DATEV-Sammeldebitor-Fix): customer_id -> optionale
+  // Einzeldebitoren-Kontonummer, für den DATEV-Export (siehe buildDatevEXTF).
+  const [kundenKonten, setKundenKonten] = useState<Record<string, string>>({});
 
   // Phase 14: Hinweis, wenn das Firmenprofil noch nicht ausgefüllt ist
   useEffect(() => {
@@ -149,6 +162,25 @@ function RechnungenContent() {
         if (json.company?.mahnung_pauschale != null) setMahnPauschale(Number(json.company.mahnung_pauschale));
         if (json.company?.mahnung_verzugszinssatz != null) setMahnZinssatz(Number(json.company.mahnung_verzugszinssatz));
       } catch { /* Banner optional */ }
+    })();
+  }, []);
+
+  // NEU (Phase 95): Kunden-Debitorenkonten für den DATEV-Export laden.
+  // Rein optional (siehe buildDatevEXTF) – schlägt der Fetch fehl, bleibt
+  // die Map leer und der Export nutzt für alle das Sammelkonto wie bisher.
+  useEffect(() => {
+    (async () => {
+      try {
+        const res = await fetch('/api/kunden');
+        const json = await res.json();
+        if (json.success) {
+          const map: Record<string, string> = {};
+          for (const k of json.kunden || []) {
+            if (k.datev_konto && String(k.datev_konto).trim()) map[k.id] = String(k.datev_konto).trim();
+          }
+          setKundenKonten(map);
+        }
+      } catch { /* Export fällt sonst auf Sammelkonto zurück */ }
     })();
   }, []);
 
@@ -453,7 +485,7 @@ function RechnungenContent() {
   function handleDatevExport() {
     const exportable = invoices.filter((i) => i.status !== 'storniert');
     if (!exportable.length) { alert('Keine Rechnungen zum Exportieren vorhanden.'); return; }
-    const { csv, uebersprungen } = buildDatevEXTF(exportable);
+    const { csv, uebersprungen } = buildDatevEXTF(exportable, kundenKonten);
     // FIX (Bug-Report): vorher wurden 0%-Rechnungen mitexportiert, aber
     // fälschlich auf das 19%-Konto gebucht. Jetzt werden sie
     // ausgeschlossen und der Anwenderin explizit gemeldet, statt
@@ -815,6 +847,7 @@ function RechnungenContent() {
 
         <p className="text-xs text-[#86868b]">
           DATEV-Export: Buchungsstapel im EXTF-Format (Formatversion 700, SKR 03, Erlöskonto {DATEV_ERLOESKONTO_19} für 19&nbsp;%, {DATEV_ERLOESKONTO_7} für 7&nbsp;%; 0&nbsp;%-Rechnungen werden nicht mitexportiert).
+          Kunden ohne eigene DATEV-Kontonummer (siehe Kundenstamm) laufen über das Sammelkonto {DATEV_DEBITOR_START}.
           Berater-/Mandantennummer und Konten bitte vor dem ersten Import mit dem Steuerberater abstimmen.
         </p>
 

@@ -39,6 +39,10 @@ interface Kunde {
   street: string | null
   zip: string | null
   city: string | null
+  // NEU (Phase 95, DATEV-Sammeldebitor-Fix): optionale, vom Steuerberater
+  // vergebene Einzeldebitoren-Kontonummer. Leer = Export bucht weiter auf
+  // das Sammelkonto (siehe app/rechnungen/page.tsx buildDatevEXTF).
+  datev_konto: string | null
   created_at: string
 }
 
@@ -842,6 +846,18 @@ export default function KundenDetailPage() {
               <input value={kundeForm.street || ''} onChange={(e) => setKundeForm({ ...kundeForm, street: e.target.value })} placeholder="Straße" className={inputCls} />
               <input value={kundeForm.zip || ''} onChange={(e) => setKundeForm({ ...kundeForm, zip: e.target.value })} placeholder="PLZ" className={inputCls} />
               <input value={kundeForm.city || ''} onChange={(e) => setKundeForm({ ...kundeForm, city: e.target.value })} placeholder="Ort" className={inputCls} />
+            </div>
+            {/* NEU (Phase 95): optionale DATEV-Einzeldebitoren-Kontonummer –
+                vom Steuerberater vergeben, leer lassen = weiter Sammelkonto
+                im DATEV-Export (siehe /rechnungen, Buchungsstapel-Export). */}
+            <div>
+              <label className="block text-xs text-[#86868b] mb-1">DATEV-Kontonummer (Einzeldebitor, optional)</label>
+              <input
+                value={kundeForm.datev_konto || ''}
+                onChange={(e) => setKundeForm({ ...kundeForm, datev_konto: e.target.value })}
+                placeholder="z. B. 10001 – vom Steuerberater vergeben, sonst Sammelkonto"
+                className={inputCls}
+              />
             </div>
             <button onClick={saveKunde} disabled={speichern} className={btnPrimary}>{speichern ? 'Speichert…' : 'Speichern'}</button>
             {projects.length === 0 && kundenInvoices.length === 0 && (
