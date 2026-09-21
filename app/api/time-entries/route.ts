@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { computeNetHours } from '@/lib/worktime';
-import { requireAuth, unauthorizedResponse, serverErrorResponse } from '@/lib/auth';
+import { requireAuth, unauthorizedResponse, serverErrorResponse, requireOwnEmployeeOrAdmin, forbiddenResponse } from '@/lib/auth';
 
 // ============================================================
 // SCAFFOLD OS – Zeiterfassung API (Stempeln)
@@ -54,6 +54,11 @@ export async function POST(req: Request) {
       return NextResponse.json({ success: false, error: 'employee_id erforderlich' }, { status: 400 });
     }
 
+    // FIX (Mitarbeiter-Bereich-Audit): ohne diese Prüfung konnte jeder
+    // eingeloggte Nutzer für eine beliebige employee_id stempeln.
+    const auth = await requireOwnEmployeeOrAdmin(employee_id);
+    if (!auth.allowed) return forbiddenResponse(auth.error);
+
     const now = new Date();
     const entry: any = {
       employee_id,
@@ -101,6 +106,18 @@ export async function PUT(req: Request) {
     if (!id) {
       return NextResponse.json({ success: false, error: 'id erforderlich' }, { status: 400 });
     }
+
+    // FIX (Mitarbeiter-Bereich-Audit): ohne diese Prüfung konnte jeder
+    // eingeloggte Nutzer JEDEN Zeiteintrag per id ändern (fremde Stunden,
+    // Uhrzeiten, Notizen) – unabhängig davon, wem der Eintrag gehört.
+    const owner = await fetch(`${url}/rest/v1/time_entries?id=eq.${id}&select=employee_id`, { headers });
+    if (!owner.ok) throw new Error(await owner.text());
+    const ownerRows = await owner.json();
+    if (!ownerRows?.[0]) {
+      return NextResponse.json({ success: false, error: 'Eintrag nicht gefunden.' }, { status: 404 });
+    }
+    const auth = await requireOwnEmployeeOrAdmin(ownerRows[0].employee_id);
+    if (!auth.allowed) return forbiddenResponse(auth.error);
 
     const updates: any = { updated_at: new Date().toISOString() };
     if (note !== undefined) updates.note = note;
