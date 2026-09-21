@@ -256,12 +256,12 @@ export default function MeineTourenPage() {
   }
 
   async function lohnVersenden(id: string) {
-    const ziel = prompt('An welche E-Mail-Adresse senden? (leer lassen für deine eigene Login-E-Mail)') || '';
     setLohnSending(id); setLohnMsg('');
     try {
+      // Geht immer an die eigene Login-E-Mail (kein Abfragen mehr).
       const res = await fetch('/api/lohnabrechnungen/send', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id, to: ziel.trim() || undefined }),
+        body: JSON.stringify({ id }),
       });
       const json = await res.json();
       if (!json.success) throw new Error(json.error);
@@ -435,16 +435,58 @@ export default function MeineTourenPage() {
           <section className="bg-[#f5f5f7] border border-black/10 rounded-xl p-5 space-y-3">
             <h2 className="font-semibold">🛠️ Werkzeug</h2>
             <p className="text-sm text-[#86868b]">Werkzeuge für die Baustelle – aktuell verfügbar:</p>
-            <Link
-              href="/aufmass/schritt1"
-              className="flex items-center gap-3 bg-white border border-black/10 rounded-xl p-4 hover:border-[#e8590c]/40 transition"
-            >
-              <Wrench className="w-6 h-6 text-[#e8590c] shrink-0" />
-              <div>
-                <div className="font-semibold">📐 Aufmaß</div>
-                <div className="text-[#86868b] text-sm">Baustelle erfassen – Maße, Fotos, Material.</div>
-              </div>
-            </Link>
+            <div className="space-y-2">
+              <Link
+                href="/aufmass/schritt1"
+                className="flex items-center gap-3 bg-white border border-black/10 rounded-xl p-4 hover:border-[#e8590c]/40 transition"
+              >
+                <Wrench className="w-6 h-6 text-[#e8590c] shrink-0" />
+                <div>
+                  <div className="font-semibold">📐 Aufmaß</div>
+                  <div className="text-[#86868b] text-sm">Baustelle erfassen – Maße, Fotos, Material.</div>
+                </div>
+              </Link>
+              <Link
+                href="/cad"
+                className="flex items-center gap-3 bg-white border border-black/10 rounded-xl p-4 hover:border-[#e8590c]/40 transition"
+              >
+                <Wrench className="w-6 h-6 text-[#e8590c] shrink-0" />
+                <div>
+                  <div className="font-semibold">📏 CAD</div>
+                  <div className="text-[#86868b] text-sm">Gerüst am Bildschirm konstruieren.</div>
+                </div>
+              </Link>
+              <Link
+                href="/cad/bruecke"
+                className="flex items-center gap-3 bg-white border border-black/10 rounded-xl p-4 hover:border-[#e8590c]/40 transition"
+              >
+                <Wrench className="w-6 h-6 text-[#e8590c] shrink-0" />
+                <div>
+                  <div className="font-semibold">🌉 Brücke</div>
+                  <div className="text-[#86868b] text-sm">Brückengerüst planen.</div>
+                </div>
+              </Link>
+              <Link
+                href="/cad/traggeruest"
+                className="flex items-center gap-3 bg-white border border-black/10 rounded-xl p-4 hover:border-[#e8590c]/40 transition"
+              >
+                <Wrench className="w-6 h-6 text-[#e8590c] shrink-0" />
+                <div>
+                  <div className="font-semibold">🏗️ Traggerüst-Anfrage</div>
+                  <div className="text-[#86868b] text-sm">Anfrage für ein Traggerüst stellen.</div>
+                </div>
+              </Link>
+              <Link
+                href="/gaeb"
+                className="flex items-center gap-3 bg-white border border-black/10 rounded-xl p-4 hover:border-[#e8590c]/40 transition"
+              >
+                <Wrench className="w-6 h-6 text-[#e8590c] shrink-0" />
+                <div>
+                  <div className="font-semibold">📄 GAEB</div>
+                  <div className="text-[#86868b] text-sm">GAEB-Leistungsverzeichnis einlesen/exportieren.</div>
+                </div>
+              </Link>
+            </div>
           </section>
         )}
 
@@ -712,7 +754,7 @@ export default function MeineTourenPage() {
                         disabled={lohnSending === d.id}
                         className="text-sm px-3 py-1.5 rounded-lg bg-[#e8590c]/10 hover:bg-[#e8590c]/20 text-[#e8590c] transition disabled:opacity-50"
                       >
-                        {lohnSending === d.id ? '⏳ …' : '✉️ Versenden'}
+                        {lohnSending === d.id ? '⏳ …' : '✉️ An meine E-Mail senden'}
                       </button>
                     </div>
                   </li>

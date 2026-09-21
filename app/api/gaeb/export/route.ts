@@ -10,7 +10,7 @@ import { serverErrorResponse } from '@/lib/auth';
 // buildGaebX84 – robust auch ohne/mit unvollständiger Positionsnummer).
 // ============================================================
 
-const ROLES = ['admin', 'disponent'];
+const ROLES = ['admin', 'disponent', 'mitarbeiter'];
 
 async function callerRole(): Promise<string | null> {
   try {
