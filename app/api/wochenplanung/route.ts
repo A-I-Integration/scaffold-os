@@ -154,6 +154,17 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    // FIX (Team-Chaos): bevor der Einsatz des Tages überschrieben wird,
+    // merken, welches Projekt an diesem Tag bisher eingetragen war – damit
+    // danach geprüft werden kann, ob der Mitarbeiter dort noch gebraucht
+    // wird (siehe unten "verwaiste Team-Zuweisung entfernen").
+    const altRes = await fetch(
+      `${url}/rest/v1/taeglicher_einsatz?employee_id=eq.${employee_id}&einsatz_datum=eq.${einsatz_datum}&select=project_id`,
+      { headers }
+    );
+    const altRows = altRes.ok ? await altRes.json() : [];
+    const altesProjectId: string | null = altRows?.[0]?.project_id || null;
+
     const res = await fetch(`${url}/rest/v1/taeglicher_einsatz`, {
       method: 'POST',
       headers: { ...headers, Prefer: 'resolution=merge-duplicates,return=representation' },
@@ -179,6 +190,31 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    // FIX (Team-Chaos): wechselt der Mitarbeiter an diesem Tag von einem
+    // Projekt zu einem anderen (oder wird freigestellt), und ist er auf dem
+    // ALTEN Projekt an KEINEM anderen Tag mehr eingeplant, dann die
+    // automatisch angelegte Team-Zuweisung (project_assignments) dort
+    // wieder entfernen – sonst bleibt die "Team"-Liste auf der
+    // Baustellenseite stehen, obwohl in der Wochenplanung längst jemand
+    // anders eingetragen ist ("nicht änderbar"-Chaos).
+    // WICHTIG: es wird NUR eine automatisch (von diesem Sync) angelegte
+    // Zuweisung entfernt (created_by ist dabei immer NULL, siehe oben) –
+    // manuell im Team-Bereich hinzugefügte Mitarbeiter (created_by gesetzt)
+    // werden nie automatisch entfernt.
+    if (altesProjectId && altesProjectId !== (project_id || null)) {
+      const nochEingeplantRes = await fetch(
+        `${url}/rest/v1/taeglicher_einsatz?employee_id=eq.${employee_id}&project_id=eq.${altesProjectId}&select=einsatz_datum&limit=1`,
+        { headers }
+      );
+      const nochEingeplant = nochEingeplantRes.ok ? await nochEingeplantRes.json() : [];
+      if (nochEingeplant.length === 0) {
+        await fetch(
+          `${url}/rest/v1/project_assignments?project_id=eq.${altesProjectId}&employee_id=eq.${employee_id}&created_by=is.null`,
+          { method: 'DELETE', headers }
+        ).catch(() => { /* nicht kritisch – Wochenplanung bleibt trotzdem korrekt */ });
+      }
+    }
+
     return NextResponse.json({ success: true, einsatz: rows[0], erstellteTage });
   } catch (err: any) {
     return serverErrorResponse(err);
@@ -195,8 +231,34 @@ export async function DELETE(req: NextRequest) {
     const employeeId = searchParams.get('employee_id');
     const datum = searchParams.get('einsatz_datum');
     if (!employeeId || !datum) return NextResponse.json({ success: false, error: 'employee_id und einsatz_datum erforderlich' }, { status: 400 });
+
+    // FIX (Team-Chaos): wie bei POST – vor dem Löschen merken, welches
+    // Projekt betroffen war, damit danach eine verwaiste automatische
+    // Team-Zuweisung entfernt werden kann.
+    const altRes = await fetch(
+      `${url}/rest/v1/taeglicher_einsatz?employee_id=eq.${employeeId}&einsatz_datum=eq.${datum}&select=project_id`,
+      { headers }
+    );
+    const altRows = altRes.ok ? await altRes.json() : [];
+    const altesProjectId: string | null = altRows?.[0]?.project_id || null;
+
     const res = await fetch(`${url}/rest/v1/taeglicher_einsatz?employee_id=eq.${employeeId}&einsatz_datum=eq.${datum}`, { method: 'DELETE', headers });
     if (!res.ok) throw new Error(await res.text());
+
+    if (altesProjectId) {
+      const nochEingeplantRes = await fetch(
+        `${url}/rest/v1/taeglicher_einsatz?employee_id=eq.${employeeId}&project_id=eq.${altesProjectId}&select=einsatz_datum&limit=1`,
+        { headers }
+      );
+      const nochEingeplant = nochEingeplantRes.ok ? await nochEingeplantRes.json() : [];
+      if (nochEingeplant.length === 0) {
+        await fetch(
+          `${url}/rest/v1/project_assignments?project_id=eq.${altesProjectId}&employee_id=eq.${employeeId}&created_by=is.null`,
+          { method: 'DELETE', headers }
+        ).catch(() => { /* nicht kritisch */ });
+      }
+    }
+
     return NextResponse.json({ success: true });
   } catch (err: any) {
     return serverErrorResponse(err);
