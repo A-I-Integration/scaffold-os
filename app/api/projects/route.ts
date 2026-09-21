@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { trackImpact } from '@/lib/impact';
-import { serverErrorResponse } from '@/lib/auth';
+import { requireAuth, unauthorizedResponse, serverErrorResponse } from '@/lib/auth';
 import { beiAngebotsannahme } from '@/lib/angebot-annahme';
 
 // ============================================================
@@ -27,6 +27,11 @@ const headers = {
 };
 
 const WRITE_ROLES = ['admin', 'disponent'];
+// NEU (Mitarbeiter-Bereich-Erweiterung): Aufmaß anlegen/aktualisieren
+// (POST/PATCH) ist jetzt zusätzlich für Bauleiter + Mitarbeiter erlaubt,
+// damit sie über den neuen "Werkzeug"-Bereich selbst ein Aufmaß machen
+// können. Löschen (DELETE) bleibt bei WRITE_ROLES (nur admin/disponent).
+const AUFMASS_ROLES = ['admin', 'disponent', 'bauleiter', 'mitarbeiter'];
 
 async function callerRole(): Promise<string | null> {
   try {
@@ -76,6 +81,18 @@ export async function GET(req: NextRequest) {
 
 // ─── POST: Projekt anlegen (bestehend, unverändert) ───
 export async function POST(req: NextRequest) {
+  // FIX (Sicherheits-Audit): POST hatte bisher GAR KEINE Prüfung – jeder,
+  // auch nicht eingeloggt, konnte ein Projekt anlegen. Jetzt: mindestens
+  // eingeloggt UND eine der für Aufmaß zugelassenen Rollen.
+  const role = await callerRole();
+  if (!role) return unauthorizedResponse();
+  if (!AUFMASS_ROLES.includes(role)) {
+    return NextResponse.json(
+      { success: false, error: 'Keine Berechtigung, ein Aufmaß anzulegen.' },
+      { status: 403 }
+    );
+  }
+
   try {
     const body = await req.json();
     const { name, adresse, data, status, customer_id } = body;
@@ -113,19 +130,26 @@ export async function POST(req: NextRequest) {
   }
 }
 
-// ─── PATCH: Status ändern (abschließen / wieder öffnen) ───
+// ─── PATCH: Aufmaß-Daten aktualisieren ODER Status ändern (abschließen / wieder öffnen) ───
 export async function PATCH(req: NextRequest) {
   const role = await callerRole();
-  if (!role || !WRITE_ROLES.includes(role)) {
-    return NextResponse.json(
-      { success: false, error: 'Nur Admin und Disposition dürfen Projekte ändern.' },
-      { status: 403 }
-    );
-  }
+  if (!role) return unauthorizedResponse();
 
   try {
     const body = await req.json();
     const { id, status, data, name, adresse, customer_id } = body;
+
+    // FIX (Mitarbeiter-Bereich-Erweiterung): Bauleiter/Mitarbeiter dürfen
+    // ihr Aufmaß weiter bearbeiten/speichern (data/name/adresse), aber
+    // NICHT den Projekt-Status ändern (abschließen/wieder öffnen bleibt
+    // eine Admin/Dispo-Entscheidung, da das u.a. Lager-Buchungen auslöst).
+    const erlaubteRollen = status ? WRITE_ROLES : AUFMASS_ROLES;
+    if (!erlaubteRollen.includes(role)) {
+      return NextResponse.json(
+        { success: false, error: status ? 'Nur Admin und Disposition dürfen den Status ändern.' : 'Keine Berechtigung, dieses Aufmaß zu ändern.' },
+        { status: 403 }
+      );
+    }
 
     if (!id) {
       return NextResponse.json({ success: false, error: 'id erforderlich' }, { status: 400 });
