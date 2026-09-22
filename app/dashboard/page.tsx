@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import { starteNeuesAufmass } from "@/lib/aufmass-projekt-session";
 import {
   RefreshCw, Plus, AlertTriangle, CalendarDays, Euro, Users, Warehouse,
   CheckCircle2, RotateCcw, Trash2,
@@ -218,7 +219,7 @@ export default function DashboardPage() {
               className="inline-flex items-center gap-1.5 px-4 py-2 bg-white border border-black/10 hover:border-[#e8590c] text-[#1d1d1f] rounded-full text-sm transition-colors">
               <RefreshCw className="w-4 h-4" /> Aktualisieren
             </button>
-            <button onClick={() => router.push("/aufmass/schritt1")}
+            <button onClick={() => { starteNeuesAufmass(); router.push("/aufmass/schritt1"); }}
               className="inline-flex items-center gap-1.5 px-4 py-2 bg-[#e8590c] hover:bg-[#d9480f] text-white rounded-full text-sm font-semibold transition-colors shadow-sm">
               <Plus className="w-4 h-4" /> Neues Aufmaß
             </button>
@@ -429,7 +430,7 @@ export default function DashboardPage() {
           {projects.length === 0 ? (
             <div className="bg-white border border-black/5 shadow-sm rounded-2xl p-8 text-center">
               <p className="text-[#86868b] mb-4">Keine Projekte gefunden.</p>
-              <button onClick={() => router.push("/aufmass/schritt1")}
+              <button onClick={() => { starteNeuesAufmass(); router.push("/aufmass/schritt1"); }}
                 className="px-4 py-2 bg-[#e8590c] hover:bg-[#d9480f] text-white rounded-full text-sm font-semibold transition-colors shadow-sm">
                 Erstes Aufmaß anlegen
               </button>

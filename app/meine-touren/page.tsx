@@ -6,6 +6,7 @@ import type { EmployeeWithSkills } from '@/types/employees';
 import ProjektDokumentation from '@/components/ProjektDokumentation';
 import Link from 'next/link';
 import { Wrench, Navigation } from 'lucide-react';
+import { starteNeuesAufmass } from '@/lib/aufmass-projekt-session';
 
 // ============================================================
 // SCAFFOLD OS – Mitarbeiter-Bereich (Bauleiter / Mitarbeiter)
@@ -498,6 +499,7 @@ export default function MeineTourenPage() {
             <div className="space-y-2">
               <Link
                 href="/aufmass/schritt1"
+                onClick={() => starteNeuesAufmass()}
                 className="flex items-center gap-3 bg-white border border-black/10 rounded-xl p-4 hover:border-[#e8590c]/40 transition"
               >
                 <Wrench className="w-6 h-6 text-[#e8590c] shrink-0" />

@@ -18,9 +18,14 @@ import KiHinweis from '@/components/KiHinweis';
 
 interface Props {
   sessionId: string;
+  // FIX (Bug-Report): Ist bereits ein gespeichertes Projekt geöffnet
+  // (?id=... in der URL), läuft der Upload/Abruf direkt über project_id –
+  // sonst verschwinden bereits hochgeladene Grundrisse beim Wiederöffnen
+  // eines Projekts (neue sessionId pro Browser-Besuch, siehe media-client.ts).
+  projectId?: string | null;
 }
 
-export default function GrundrissUpload({ sessionId }: Props) {
+export default function GrundrissUpload({ sessionId, projectId }: Props) {
   const [files, setFiles] = useState<ProjectMedia[]>([]);
   const [uploading, setUploading] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -41,11 +46,11 @@ export default function GrundrissUpload({ sessionId }: Props) {
 
   useEffect(() => {
     if (!sessionId) return;
-    getGrundrisseClient(sessionId)
+    getGrundrisseClient(sessionId, projectId)
       .then(setFiles)
       .catch(console.error)
       .finally(() => setLoading(false));
-  }, [sessionId]);
+  }, [sessionId, projectId]);
 
   const handleFileSelect = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const selected = e.target.files;
@@ -58,7 +63,7 @@ export default function GrundrissUpload({ sessionId }: Props) {
       if (file.size > 15 * 1024 * 1024) { alert(`${file.name} zu groß (max. 15MB).`); continue; }
 
       try {
-        const media = await uploadGrundrissClient(file, sessionId);
+        const media = await uploadGrundrissClient(file, sessionId, projectId);
         setFiles((prev) => [media, ...prev]);
       } catch (err: any) {
         alert(`Upload fehlgeschlagen: ${err.message}`);
@@ -66,7 +71,7 @@ export default function GrundrissUpload({ sessionId }: Props) {
     }
     setUploading(false);
     e.target.value = '';
-  }, [sessionId]);
+  }, [sessionId, projectId]);
 
   const handleDelete = useCallback(async (media: ProjectMedia) => {
     if (!confirm(`"${media.file_name}" löschen?`)) return;
@@ -84,7 +89,7 @@ export default function GrundrissUpload({ sessionId }: Props) {
       const res = await fetch('/api/grundriss-analyse', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sessionId }),
+        body: JSON.stringify({ sessionId, projectId }),
       });
       const json = await res.json();
       if (!res.ok || !json.success) throw new Error(json.error || 'Analyse fehlgeschlagen');
@@ -109,7 +114,7 @@ export default function GrundrissUpload({ sessionId }: Props) {
     } finally {
       setAnalyzing(false);
     }
-  }, [sessionId]);
+  }, [sessionId, projectId]);
 
   const getPublicUrl = (path: string) =>
     `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/project-media/${path}`;

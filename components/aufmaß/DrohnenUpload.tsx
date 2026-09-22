@@ -5,11 +5,15 @@ import { uploadDrohneClient, getDrohnenClient, deleteProjectMediaClient, Project
 
 interface Props {
   sessionId: string;
+  // FIX (Bug-Report): siehe GrundrissUpload.tsx – bei bereits gespeichertem
+  // Projekt läuft der Abruf über project_id, sonst verschwinden Aufnahmen
+  // beim Wiederöffnen des Projekts.
+  projectId?: string | null;
 }
 
 // Drohnen-Aufnahmen: eigener Bereich für Luftbilder der Baustelle.
 // Läuft getrennt von den Baustellen-Fotos (eigener Storage-Pfad /drohnen/).
-export default function DrohnenUpload({ sessionId }: Props) {
+export default function DrohnenUpload({ sessionId, projectId }: Props) {
   const [aufnahmen, setAufnahmen] = useState<ProjectMedia[]>([]);
   const [uploading, setUploading] = useState(false);
   const [preview, setPreview] = useState<string | null>(null);
@@ -17,11 +21,11 @@ export default function DrohnenUpload({ sessionId }: Props) {
 
   useEffect(() => {
     if (!sessionId) return;
-    getDrohnenClient(sessionId)
+    getDrohnenClient(sessionId, projectId)
       .then(setAufnahmen)
       .catch(console.error)
       .finally(() => setLoading(false));
-  }, [sessionId]);
+  }, [sessionId, projectId]);
 
   const handleFileSelect = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
@@ -33,7 +37,7 @@ export default function DrohnenUpload({ sessionId }: Props) {
       if (file.size > 20 * 1024 * 1024) { alert(`${file.name} zu groß (max. 20MB).`); continue; }
 
       try {
-        const result = await uploadDrohneClient(file, sessionId);
+        const result = await uploadDrohneClient(file, sessionId, projectId);
         setAufnahmen((prev) => [result, ...prev]);
       } catch (err: any) {
         alert(`Upload fehlgeschlagen: ${err.message}`);
@@ -41,7 +45,7 @@ export default function DrohnenUpload({ sessionId }: Props) {
     }
     setUploading(false);
     e.target.value = '';
-  }, [sessionId]);
+  }, [sessionId, projectId]);
 
   const handleDelete = useCallback(async (media: ProjectMedia) => {
     if (!confirm(`"${media.file_name}" löschen?`)) return;

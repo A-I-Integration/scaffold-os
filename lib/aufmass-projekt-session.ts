@@ -72,3 +72,21 @@ export function schliesseSitzungAb() {
   if (typeof window === 'undefined') return;
   localStorage.removeItem(MARKER_KEY);
 }
+
+// FIX (Bug-Report: "wenn ich es neu mache soll die Seite immer leer sein"):
+// Vorher landete "Neues Aufmaß" (Dashboard/Meine-Touren, kein ?id= in der
+// URL) einfach auf Schritt 1 – die Seite las dann unbedingt den noch
+// vorhandenen Zwischenspeicher (scaffold_step1 etc.) eines VORHERIGEN,
+// nie gespeicherten Aufmaßes und zeigte dessen alte Werte/Dateien wieder
+// an, obwohl der Nutzer bewusst neu beginnen wollte. Bisher gab es diesen
+// Reset nur im Notfall-Button "Neu beginnen" in Schritt 1 selbst. Jetzt:
+// dieselbe, bereits bewährte Logik zentral, damit jeder "Neues Aufmaß"-
+// Einstieg sie nutzen kann.
+/** Löscht alle Aufmaß-Zwischenspeicher und erzeugt eine frische Session-ID
+ * für Datei-Uploads – für den bewussten Einstieg in ein NEUES Aufmaß. */
+export function starteNeuesAufmass() {
+  if (typeof window === 'undefined') return;
+  loescheWizardDaten();
+  localStorage.removeItem('scaffold_session_id');
+  localStorage.removeItem(MARKER_KEY);
+}
