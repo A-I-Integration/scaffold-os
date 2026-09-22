@@ -924,7 +924,10 @@ export default function KundenDetailPage() {
               const s3 = project.data?.step3 || {}
               const s5 = project.data?.step5 || {}
               const ki = project.data?.kiResult
-              const system = s3.system === 'custom' ? s3.customSystem : s3.system
+              const zusatzAbschnitteMitSystem = Array.isArray(s2.abschnitte) ? s2.abschnitte.filter((a: any) => a.system) : []
+              const hauptSystemName = s3.system === 'custom' ? s3.customSystem : s3.system
+              const systemGemischt = zusatzAbschnitteMitSystem.some((a: any) => (a.system === 'custom' ? a.customSystem : a.system) !== hauptSystemName)
+              const system = systemGemischt ? 'Gemischt' : hauptSystemName
               return (
                 <div key={project.id} className="bg-white rounded-xl border border-black/10 p-5">
                   <div className="flex items-start justify-between gap-2 mb-3">

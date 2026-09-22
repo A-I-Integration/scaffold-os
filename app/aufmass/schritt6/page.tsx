@@ -302,6 +302,25 @@ function Schritt6Content() {
     if (g.includes('Fenster')) return 'fenster';
     return 'allgemein';
   }
+  // NEU: Gerüstsystem-Anzeige inkl. gemischter Systeme (unterschiedliche
+  // Hersteller je Abschnitt, siehe Schritt 3 "Gerüstsystem je Abschnitt").
+  // Liefert den Hauptsystem-Namen für Abschnitt 1 sowie – falls mindestens
+  // ein zusätzlicher Abschnitt bewusst ein abweichendes System gewählt hat
+  // (a.system gesetzt und ungleich Hauptsystem) – eine Aufschlüsselung je
+  // Abschnitt. Rein informativ: Material-/Feldlängen-Berechnung bleibt wie
+  // bisher an die Standard-Feldlänge in Schritt 3 gekoppelt.
+  function systemUebersicht(s3: any, s2: any): { haupt: string; gemischt: boolean; abschnitte: { bezeichnung: string; system: string }[] } {
+    const haupt = systemAnzeigename(s3.system, s3.customSystem) || 'Hersteller-neutral';
+    const zusatzAbschnitte = Array.isArray(s2.abschnitte) ? s2.abschnitte : [];
+    const eigeneAbschnitte = zusatzAbschnitte
+      .filter((a: any) => a.system)
+      .map((a: any, i: number) => ({
+        bezeichnung: a.bezeichnung || `Abschnitt ${i + 2}`,
+        system: systemAnzeigename(a.system, a.customSystem) || haupt,
+      }));
+    const gemischt = eigeneAbschnitte.some((a: { system: string }) => a.system !== haupt);
+    return { haupt, gemischt, abschnitte: eigeneAbschnitte };
+  }
   function mapGefahren(step4: any): string[] {
     const hazards: string[] = [];
     if (step4.hochspannung) hazards.push('hochspannung');
@@ -565,7 +584,8 @@ function Schritt6Content() {
       doc.text([companyProfile.zip, companyProfile.city].filter(Boolean).join(' '), 14, 33.5);
     }
     let y = 45;
-    const sysName = systemAnzeigename(s3.system, s3.customSystem);
+    const sysUebersicht = systemUebersicht(s3, s2);
+    const sysName = sysUebersicht.gemischt ? 'Gemischt (siehe Zusammenfassung)' : systemAnzeigename(s3.system, s3.customSystem);
     const projBoxH = sysName ? 38 : 30;
     doc.setFillColor(248, 250, 252); doc.rect(14, y, 90, projBoxH, 'F');
     doc.setTextColor(71, 85, 105); doc.setFontSize(8); doc.setFont('helvetica', 'bold'); doc.text('PROJEKT', 18, y + 6);
@@ -871,10 +891,19 @@ function Schritt6Content() {
           <p className="text-xs font-bold uppercase tracking-wider text-[#e8590c] mb-2">Schritt 3 – Gerüstplanung</p>
           <div className="grid grid-cols-2 gap-2 text-sm">
             <div><span className="text-[#86868b]">Gerüsttyp:</span> <span className="text-[#1d1d1f]">{s3.geruesttyp || '–'}</span></div>
-            <div><span className="text-[#86868b]">System:</span> <span className="text-[#1d1d1f]">{systemAnzeigename(s3.system, s3.customSystem) || 'Hersteller-neutral'}</span></div>
+            <div><span className="text-[#86868b]">System:</span> <span className="text-[#1d1d1f]">{systemUebersicht(s3, s2).gemischt ? 'Gemischt (siehe Abschnitte unten)' : (systemAnzeigename(s3.system, s3.customSystem) || 'Hersteller-neutral')}</span></div>
             <div><span className="text-[#86868b]">Belag:</span> <span className="text-[#1d1d1f]">{s3.belag || '–'}</span></div>
             <div><span className="text-[#86868b]">Feldlänge:</span> <span className="text-[#1d1d1f]">{s3.feldlänge || s3.feldlange || '–'} m</span></div>
             <div><span className="text-[#86868b]">Untergrund:</span> <span className="text-[#1d1d1f]">{s3.untergrund || s3.boden || '–'}</span></div>
+            {systemUebersicht(s3, s2).gemischt && (
+              <div className="col-span-2">
+                <span className="text-[#86868b]">Systeme je Abschnitt:</span>{' '}
+                <span className="text-[#1d1d1f]">
+                  Abschnitt 1: {systemUebersicht(s3, s2).haupt}
+                  {systemUebersicht(s3, s2).abschnitte.map((a, i) => `, ${a.bezeichnung}: ${a.system}`).join('')}
+                </span>
+              </div>
+            )}
           </div>
         </div>
         <div className="rounded-xl bg-black/10/50 p-4">
