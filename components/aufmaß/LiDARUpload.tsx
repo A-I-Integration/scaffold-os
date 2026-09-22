@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useCallback, useEffect } from 'react';
-import { uploadScanClient, getScanStatusClient } from '@/lib/media-client';
+import { uploadScanClient, getScanStatusClient, getScanClient } from '@/lib/media-client';
 
 // Ab dieser Größe geht der Scan direkt zu Supabase Storage und wird vom
 // Punktwolken-Worker (Docker) analysiert – umgeht das Vercel-Upload-Limit.
@@ -84,9 +84,39 @@ export default function LiDARUpload({ sessionId, projectId, onMeasurements }: Pr
     try {
       const raw = localStorage.getItem('scaffold_lidar_measurements');
       const name = localStorage.getItem('scaffold_lidar_scan_name');
-      if (raw) setScan({ m: JSON.parse(raw), name: name || 'Punktwolke' });
+      if (raw) { setScan({ m: JSON.parse(raw), name: name || 'Punktwolke' }); return; }
     } catch { /* ignore */ }
-  }, []);
+
+    // FIX (Bug-Report: "LiDAR wieder gelöscht" beim Wiederöffnen eines
+    // bestehenden Projekts): Der obige localStorage-Check kennt nur die
+    // aktuelle Browser-Sitzung. Wird ein längst gespeichertes Projekt neu
+    // geöffnet (anderer Tab, anderer Tag), war hier bisher NIE ein Abruf
+    // aus der Datenbank vorgesehen – anders als bei Foto/Grundriss/Drohne.
+    // Die Datei/Messwerte lagen die ganze Zeit unverändert in project_media,
+    // nur die Anzeige zeigte fälschlich "noch keine Aufnahme". Jetzt: bei
+    // bekannter projectId den zuletzt hochgeladenen Scan nachladen – rein
+    // zur Anzeige. Bewusst OHNE onMeasurements()/„fresh"-Markierung, damit
+    // dieses reine Wiederherstellen nicht versehentlich bereits geprüfte/
+    // angepasste Werte in Schritt 2 überschreibt (das war der ursprüngliche
+    // Bug bei "kommt nichts bei Schritt 2 an").
+    if (!projectId) return;
+    getScanClient(sessionId, projectId)
+      .then((files) => {
+        const neuester = files[0];
+        if (!neuester) return;
+        const meta = (neuester.metadata || {}) as any;
+        // Zwei Formen, je nach Upload-Weg: Großscan über den Worker legt die
+        // Messwerte verschachtelt unter metadata.measurements ab (siehe
+        // getScanStatusClient); der Direktweg über /api/lidar-upload
+        // speichert sie direkt in metadata selbst.
+        const m: Measurements | undefined = meta.measurements
+          ? meta.measurements
+          : (typeof meta.lengthM === 'number' ? (meta as Measurements) : undefined);
+        if (!m) return; // z.B. Großscan noch in der Warteschlange/mit Fehler
+        setScan({ m, name: neuester.file_name });
+      })
+      .catch(() => { /* Anzeige bleibt leer, kein harter Fehler nötig */ });
+  }, [sessionId, projectId]);
 
   const handleFile = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];

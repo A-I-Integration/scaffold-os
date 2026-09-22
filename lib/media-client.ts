@@ -236,6 +236,32 @@ export async function deleteProjectMediaClient(mediaId: string, storagePath: str
   if (error) throw new Error(`Löschen fehlgeschlagen: ${error.message}`);
 }
 
+// FIX (Bug-Report: "LiDAR wieder gelöscht" beim Wiederöffnen eines
+// bestehenden Projekts): Anders als bei Fotos/Grundrissen/Drohnen (siehe
+// getProjectMediaClient/getGrundrisseClient/getDrohnenClient) gab es für
+// LiDAR-Scans bisher GAR KEINEN Abruf aus der Datenbank – die Anzeige in
+// Schritt 1 kannte nur den Browser-Zwischenspeicher (localStorage) der
+// aktuellen Sitzung. Beim erneuten Öffnen eines längst gespeicherten
+// Projekts (neuer Browser-Tab/neue Sitzung) war der Scan dadurch scheinbar
+// weg, obwohl Datei und Messwerte unverändert in project_media lagen.
+// Scans laufen unter zwei Dateityp-Präfixen: "lidar/…" (kleine Scans,
+// Direktweg über /api/lidar-upload) und "scan/…" (Großscans über den
+// Punktwolken-Worker, siehe uploadScanClient unten) – beide hier
+// zusammenfassen, neuester zuerst.
+export async function getScanClient(sessionId: string, projectId?: string | null): Promise<ProjectMedia[]> {
+  const supabase = createClient();
+
+  let query = supabase.from('project_media').select('*');
+  query = projectId ? query.eq('project_id', projectId) : query.eq('session_id', sessionId).is('project_id', null);
+
+  const { data, error } = await query.order('created_at', { ascending: false });
+
+  if (error) throw new Error(`Fehler beim Laden: ${error.message}`);
+  return ((data || []) as ProjectMedia[]).filter(
+    (m) => m.file_type.startsWith('lidar/') || m.file_type.startsWith('scan/')
+  );
+}
+
 // ─── Großscans (NEU: Direkt-Upload + Worker-Warteschlange) ───
 // Dateien über dem Vercel-Limit (~4,5MB) gehen direkt vom Browser zu
 // Supabase Storage. Der Punktwolken-Worker (Docker, Hetzner) holt sich
