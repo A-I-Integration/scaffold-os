@@ -163,7 +163,21 @@ function Schritt6Content() {
     // dabei IMMER wieder mit dem alten Datenbank-Stand überschrieben, direkt
     // bevor "Speichern" geklickt wurde. Jetzt: nur EINMAL pro Bearbeitungs-
     // Sitzung von der Datenbank laden (gleiches Muster wie in Schritt 1-5).
-    if (!sollFrischGeladenWerden(projectId, leseMarkierung())) return; // schon diese Sitzung – NICHT erneut laden
+    // FIX (Bug-Report: "alles weg, keine Höhen/Breite, Gerüsttyp auch nicht
+    // mehr drin"): Die Markierung wird von JEDEM Schritt geteilt und sagt
+    // nur "irgendein Schritt hat dieses Projekt diese Sitzung schon frisch
+    // geladen" – nicht "Schritt 6 hat seine eigenen Daten schon geladen".
+    // Wurde z.B. vorher nur Schritt 1 besucht (Markierung dadurch gesetzt)
+    // und man kommt DANACH direkt zu Schritt 6 – etwa über "Aufmaß öffnen"
+    // auf der Kunden-Detailseite, die immer direkt hierher verlinkt –, ohne
+    // Schritt 2-5 zu durchlaufen, dachte Schritt 6 fälschlich "schon
+    // geladen" und blieb komplett leer, obwohl das Projekt vollständige
+    // Daten in der Datenbank hat. Zusätzliche Absicherung: nur wirklich
+    // überspringen, wenn scaffold_step2 (das Schritt 6 zwingend braucht)
+    // auch tatsächlich im Zwischenspeicher vorhanden ist.
+    const schonWirklichGeladen = !sollFrischGeladenWerden(projectId, leseMarkierung())
+      && !!localStorage.getItem('scaffold_step2');
+    if (schonWirklichGeladen) return; // wirklich schon vorhanden – nicht erneut laden
     setzeMarkierung(projectId!);
     // FIX (systematische Prüfung): sofort zurücksetzen, bevor der Abruf
     // startet – sonst könnten kurzzeitig oder bei einem fehlschlagenden
