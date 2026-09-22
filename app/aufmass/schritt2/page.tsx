@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { sollFrischGeladenWerden, leseMarkierung, setzeMarkierung, leiteStepsAusKiResultAb } from '@/lib/aufmass-projekt-session';
+import { setzeMarkierung, leseSchrittGeladenesProjekt, setzeSchrittGeladenesProjekt, leiteStepsAusKiResultAb } from '@/lib/aufmass-projekt-session';
 import KIWarnings from '@/components/aufmaß/KIWarnings';
 import { useKIValidation } from '@/hooks/useKIValidation';
 import { PartialScaffoldInput, LASTKLASSE_Q1_KN_M2 } from '@/types/scaffold';
@@ -175,7 +175,17 @@ function leeresFormS2() {
   // Sitzung) fälschlich dazu führte, dass GAR KEINE Datenquelle gelesen
   // wurde – Höhe/Breite/etc. blieben leer.
   useEffect(() => {
-    istFrischGeladenRef.current = sollFrischGeladenWerden(projectId, leseMarkierung());
+    // FIX (Bug-Report: "über Dashboard -> Schritt 1 -> Schritt 2 bleibt
+    // Schritt 2 leer"): sollFrischGeladenWerden allein prüft nur die
+    // geteilte Markierung ("irgendein Schritt hat dieses Projekt diese
+    // Sitzung schon angefasst") – wird sie z.B. von Schritt 1 gesetzt
+    // (Öffnen über Dashboard -> Schritt 1 -> "Weiter" zu Schritt 2), hielt
+    // sich Schritt 2 fälschlich für schon geladen, obwohl er selbst nie
+    // etwas geladen hatte und scaffold_step2 im Zwischenspeicher noch
+    // fehlte – die Seite blieb komplett leer. Jetzt: projektgenauer, nur
+    // von Schritt 2 selbst beschriebener Ladestand (siehe
+    // lib/aufmass-projekt-session.ts) statt der geteilten Markierung allein.
+    istFrischGeladenRef.current = leseSchrittGeladenesProjekt(2) !== projectId;
     if (!istFrischGeladenRef.current) { setDbLadungAbgeschlossen(true); return; }
     setzeMarkierung(projectId!);
     // FIX (systematische Prüfung): sofort zurücksetzen, bevor der Abruf
@@ -188,6 +198,10 @@ function leeresFormS2() {
         const res = await fetch('/api/projects?id=' + projectId);
         const json = await res.json();
         const d = json.project?.data;
+        // Erst NACH erfolgreicher Antwort vermerken – bei einem Fehler
+        // (siehe catch unten) soll ein erneuter Versuch weiterhin frisch
+        // laden.
+        if (json.success) setzeSchrittGeladenesProjekt(2, projectId!);
         if (json.success && d?.step1) localStorage.setItem('scaffold_step1', JSON.stringify(d.step1));
         // FIX (Bug-Report: "Schritt 2 alle Daten raus" / "CAD-Datei komplett
         // raus"): ältere, über den CAD-Planer erzeugte Projekte speichern

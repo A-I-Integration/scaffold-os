@@ -2,7 +2,7 @@
 
 import { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { sollFrischGeladenWerden, leseMarkierung, setzeMarkierung, leiteStepsAusKiResultAb } from '@/lib/aufmass-projekt-session';
+import { setzeMarkierung, leseSchrittGeladenesProjekt, setzeSchrittGeladenesProjekt, leiteStepsAusKiResultAb } from '@/lib/aufmass-projekt-session';
 import { GERUEST_SYSTEME, CUSTOM_SYSTEM_ID, findeSystem } from '@/lib/calculations/geruest-systeme';
 
 const LEERES_FORM_S3 = {
@@ -53,7 +53,17 @@ function Schritt3Content() {
   ];
 
   useEffect(() => {
-    if (sollFrischGeladenWerden(projectId, leseMarkierung())) {
+    // FIX (Bug-Report: "über Dashboard -> Schritt 1 -> Schritt 2 bleibt
+    // Schritt 2 leer" – dasselbe Muster betrifft auch Schritt 3): die
+    // geteilte Markierung (sollFrischGeladenWerden) sagt nur "irgendein
+    // Schritt hat dieses Projekt diese Sitzung schon angefasst" – nicht
+    // "Schritt 3 hat seine eigenen Daten für GENAU dieses Projekt schon
+    // geladen". Wurde die Markierung von einem ANDEREN Schritt gesetzt
+    // (z.B. Schritt 1), hielt sich Schritt 3 fälschlich für schon geladen,
+    // obwohl scaffold_step3 im Zwischenspeicher noch fehlte oder zu einem
+    // anderen Projekt gehörte. Jetzt: projektgenauer, nur von Schritt 3
+    // selbst beschriebener Ladestand (siehe lib/aufmass-projekt-session.ts).
+    if (leseSchrittGeladenesProjekt(3) !== projectId) {
         setzeMarkierung(projectId!);
         // FIX (systematische Prüfung): sofort zurücksetzen, bevor der
         // Abruf startet – sonst könnten kurzzeitig oder bei einem
@@ -65,6 +75,10 @@ function Schritt3Content() {
             const res = await fetch('/api/projects?id=' + projectId);
             const json = await res.json();
             const d = json.project?.data;
+            // Erst NACH erfolgreicher Antwort vermerken – bei einem Fehler
+            // (siehe catch unten) soll ein erneuter Versuch weiterhin
+            // frisch laden.
+            if (json.success) setzeSchrittGeladenesProjekt(3, projectId!);
             if (json.success && d?.step1) { localStorage.setItem('scaffold_step1', JSON.stringify(d.step1)); setStep1Data(d.step1); }
             if (json.success && d?.step2?.abschnitte) { setAbschnitte(d.step2.abschnitte); }
             // FIX (Bug-Report: "CAD-Datei komplett raus"): ältere, über den

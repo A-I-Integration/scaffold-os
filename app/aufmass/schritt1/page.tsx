@@ -2,7 +2,7 @@
 
 import { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { sollFrischGeladenWerden, leseMarkierung, setzeMarkierung, WIZARD_KEYS, gewerkeVonStep1 } from '@/lib/aufmass-projekt-session';
+import { setzeMarkierung, leseSchrittGeladenesProjekt, setzeSchrittGeladenesProjekt, WIZARD_KEYS, gewerkeVonStep1 } from '@/lib/aufmass-projekt-session';
 import PhotoUpload from '@/components/aufmaß/PhotoUpload';
 import LiDARUpload from '@/components/aufmaß/LiDARUpload';
 import FotoAnalyse from '@/components/aufmaß/FotoAnalyse';
@@ -95,7 +95,17 @@ function Schritt1Content() {
     // Innerhalb derselben Sitzung (gleiche ID) bleibt der Zwischenspeicher
     // mit den eigenen, frischen Änderungen unangetastet.
     const zwischenstand = localStorage.getItem('scaffold_step1');
-    if (sollFrischGeladenWerden(projectId, leseMarkierung()) || !zwischenstand) {
+    // FIX (Bug-Report: "über Dashboard -> Schritt 1 -> Schritt 2 bleibt
+    // Schritt 2 leer" – dasselbe Muster betrifft aber auch Schritt 1
+    // selbst): Die geteilte Markierung (sollFrischGeladenWerden) sagt nur
+    // "irgendein Schritt hat dieses Projekt diese Sitzung schon
+    // angefasst" – nicht "Schritt 1 hat seine eigenen Daten für GENAU
+    // dieses Projekt schon geladen". Und "!zwischenstand" allein prüfte
+    // nur, OB überhaupt ein scaffold_step1 im Speicher liegt – nicht, ob
+    // es zu DIESEM Projekt gehört (könnte von einem vorher besuchten,
+    // ANDEREN Projekt stammen). Jetzt: projektgenauer, nur von Schritt 1
+    // selbst beschriebener Ladestand (siehe lib/aufmass-projekt-session.ts).
+    if (leseSchrittGeladenesProjekt(1) !== projectId) {
         setzeMarkierung(projectId!);
         // FIX: Sofort auf leer zurücksetzen, BEVOR der Datenbank-Abruf
         // überhaupt startet – sonst zeigt das Formular für einen Moment
@@ -106,6 +116,10 @@ function Schritt1Content() {
           try {
             const res = await fetch('/api/projects?id=' + projectId);
             const json = await res.json();
+            // Erst NACH erfolgreicher Antwort vermerken – bei einem Fehler
+            // (siehe catch unten) soll ein erneuter Versuch weiterhin
+            // frisch laden.
+            if (json.success) setzeSchrittGeladenesProjekt(1, projectId!);
             if (json.success && json.project?.data?.step1) {
               const parsed = json.project.data.step1;
               // FIX (Bug-Report: "Gewerke wieder gelöscht" / "Merola ...

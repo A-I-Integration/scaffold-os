@@ -12,7 +12,7 @@ import DinCheck from '@/components/aufmaß/DinCheck';
 import { KIAnalysis } from '@/types/scaffold';
 import { systemAnzeigename } from '@/lib/calculations/geruest-systeme';
 import { geruesttypZuScaffoldType } from '@/lib/calculations/scaffold-engine';
-import { sollFrischGeladenWerden, leseMarkierung, setzeMarkierung, leseSchritt6GeladenesProjekt, setzeSchritt6GeladenesProjekt, schliesseSitzungAb, loescheWizardDaten, leiteStepsAusKiResultAb, gewerkeVonStep1 } from '@/lib/aufmass-projekt-session';
+import { sollFrischGeladenWerden, leseMarkierung, setzeMarkierung, leseSchrittGeladenesProjekt, setzeSchrittGeladenesProjekt, schliesseSitzungAb, loescheWizardDaten, leiteStepsAusKiResultAb, gewerkeVonStep1 } from '@/lib/aufmass-projekt-session';
 import DispositionResult from '@/components/aufmaß/DispositionResult';
 import { DispositionResult as DispositionData } from '@/lib/calculations/disposition';
 import { generateInvoicePDF, fmtDate as fmtRechnungsDatum, type Invoice } from '@/lib/invoice-pdf';
@@ -180,12 +180,12 @@ function Schritt6Content() {
     // gehört. Wurde zwischendurch ein ANDERES Projekt besucht, blieb dessen
     // scaffold_step2 stehen und hat den Check fälschlich "erfüllt". Jetzt:
     // eigener, nur von Schritt 6 selbst beschriebener Zwischenspeicher
-    // (siehe leseSchritt6GeladenesProjekt/setzeSchritt6GeladenesProjekt),
-    // der GENAU festhält, für welche Projekt-ID Schritt 6 seine Daten
-    // zuletzt selbst geladen hat – projektgenau und unabhängig davon, was
-    // andere Schritte zwischendurch im geteilten Zwischenspeicher abgelegt
-    // haben.
-    if (leseSchritt6GeladenesProjekt() === projectId) return; // Schritt 6 hat DIESES Projekt bereits selbst geladen
+    // (siehe leseSchrittGeladenesProjekt/setzeSchrittGeladenesProjekt in
+    // lib/aufmass-projekt-session.ts), der GENAU festhält, für welche
+    // Projekt-ID Schritt 6 seine Daten zuletzt selbst geladen hat –
+    // projektgenau und unabhängig davon, was andere Schritte zwischendurch
+    // im geteilten Zwischenspeicher abgelegt haben.
+    if (leseSchrittGeladenesProjekt(6) === projectId) return; // Schritt 6 hat DIESES Projekt bereits selbst geladen
     setzeMarkierung(projectId!);
     // FIX (systematische Prüfung): sofort zurücksetzen, bevor der Abruf
     // startet – sonst könnten kurzzeitig oder bei einem fehlschlagenden
@@ -228,7 +228,7 @@ function Schritt6Content() {
         setSavedProjectId(p.id);
         // Erst NACH erfolgreichem Laden vermerken – bei einem Fehler (siehe
         // catch unten) soll ein erneuter Versuch weiterhin frisch laden.
-        setzeSchritt6GeladenesProjekt(projectId!);
+        setzeSchrittGeladenesProjekt(6, projectId!);
       } catch (err: any) {
         console.error('Projekt-Laden fehlgeschlagen:', err);
         setKiError('Projekt konnte nicht geladen werden: ' + err.message);
@@ -558,7 +558,7 @@ function Schritt6Content() {
         // wieder von der Datenbank nachladen (kurzes Flackern) und dabei
         // den gerade erst gespeicherten, im React-State bereits aktuellen
         // Stand überschreiben.
-        setzeSchritt6GeladenesProjekt(result.id);
+        setzeSchrittGeladenesProjekt(6, result.id);
       }
       setSavedProjectId(result.id);
       // BUGFIX (Aufmaß-Kette): Vorher wurden hier nur die Upload-/KI-Zwischen-
