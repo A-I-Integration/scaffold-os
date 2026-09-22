@@ -37,6 +37,7 @@ export const WIZARD_KEYS = [
   'scaffold_grundriss_daten',
   'scaffold_grundriss_analyse',
   'scaffold_grundriss_fresh',
+  'scaffold_schritt6_geladenes_projekt',
 ];
 
 /** Entfernt alle oben gelisteten Aufmaß-Zwischenspeicher aus dem Browser. */
@@ -66,11 +67,42 @@ export function setzeMarkierung(projectId: string) {
   localStorage.setItem(MARKER_KEY, projectId);
 }
 
+// FIX (Bug-Report, 2. Anlauf: "Angebot öffnen" zeigt ein Aufmaß OHNE die
+// CAD-Daten"): Die Markierung oben wird von JEDEM der 6 Schritte
+// geschrieben und sagt deshalb nur "irgendein Schritt hat dieses Projekt
+// diese Sitzung schon angefasst" – nicht "Schritt 6 hat für GENAU dieses
+// Projekt seine eigenen, vollständigen Daten schon aus der Datenbank
+// geladen". Der bisherige Zusatz-Check in Schritt 6 (ob überhaupt
+// irgendein scaffold_step2 im Zwischenspeicher liegt) hat das nicht
+// zuverlässig unterschieden: lag dort noch scaffold_step2 eines VORHER
+// besuchten, ANDEREN Projekts (der Zwischenspeicher ist nicht projekt-
+// gebunden), wurde der Check fälschlich "erfüllt" und Schritt 6 blieb
+// leer. Eigener, NUR von Schritt 6 selbst beschriebener Schlüssel, damit
+// diese Entscheidung projektgenau und unabhängig von anderen Schritten ist.
+const SCHRITT6_GELADEN_KEY = 'scaffold_schritt6_geladenes_projekt';
+
+/** Liefert die Projekt-ID, für die Schritt 6 seine Daten zuletzt selbst
+ * vollständig aus der Datenbank geladen hat (oder null). */
+export function leseSchritt6GeladenesProjekt(): string | null {
+  if (typeof window === 'undefined') return null;
+  return localStorage.getItem(SCHRITT6_GELADEN_KEY);
+}
+
+/** Markiert, dass Schritt 6 seine Daten für GENAU dieses Projekt geladen hat. */
+export function setzeSchritt6GeladenesProjekt(projectId: string) {
+  if (typeof window === 'undefined') return;
+  localStorage.setItem(SCHRITT6_GELADEN_KEY, projectId);
+}
+
 /** Nach erfolgreichem Speichern: Markierung entfernen, damit ein
  * späteres erneutes Öffnen wieder korrekt frisch von der Datenbank lädt. */
 export function schliesseSitzungAb() {
   if (typeof window === 'undefined') return;
   localStorage.removeItem(MARKER_KEY);
+  // Siehe SCHRITT6_GELADEN_KEY oben: nach dem Speichern soll ein späteres
+  // erneutes Öffnen (z.B. über "Angebot öffnen") ebenfalls wieder frisch
+  // laden, statt sich auf den jetzt ggf. veralteten Ladestand zu verlassen.
+  localStorage.removeItem(SCHRITT6_GELADEN_KEY);
 }
 
 // FIX (Bug-Report: "wenn ich es neu mache soll die Seite immer leer sein"):

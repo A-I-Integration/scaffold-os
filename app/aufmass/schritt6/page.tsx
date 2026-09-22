@@ -12,7 +12,7 @@ import DinCheck from '@/components/aufmaß/DinCheck';
 import { KIAnalysis } from '@/types/scaffold';
 import { systemAnzeigename } from '@/lib/calculations/geruest-systeme';
 import { geruesttypZuScaffoldType } from '@/lib/calculations/scaffold-engine';
-import { sollFrischGeladenWerden, leseMarkierung, setzeMarkierung, schliesseSitzungAb, loescheWizardDaten, leiteStepsAusKiResultAb, gewerkeVonStep1 } from '@/lib/aufmass-projekt-session';
+import { sollFrischGeladenWerden, leseMarkierung, setzeMarkierung, leseSchritt6GeladenesProjekt, setzeSchritt6GeladenesProjekt, schliesseSitzungAb, loescheWizardDaten, leiteStepsAusKiResultAb, gewerkeVonStep1 } from '@/lib/aufmass-projekt-session';
 import DispositionResult from '@/components/aufmaß/DispositionResult';
 import { DispositionResult as DispositionData } from '@/lib/calculations/disposition';
 import { generateInvoicePDF, fmtDate as fmtRechnungsDatum, type Invoice } from '@/lib/invoice-pdf';
@@ -172,12 +172,20 @@ function Schritt6Content() {
     // auf der Kunden-Detailseite, die immer direkt hierher verlinkt –, ohne
     // Schritt 2-5 zu durchlaufen, dachte Schritt 6 fälschlich "schon
     // geladen" und blieb komplett leer, obwohl das Projekt vollständige
-    // Daten in der Datenbank hat. Zusätzliche Absicherung: nur wirklich
-    // überspringen, wenn scaffold_step2 (das Schritt 6 zwingend braucht)
-    // auch tatsächlich im Zwischenspeicher vorhanden ist.
-    const schonWirklichGeladen = !sollFrischGeladenWerden(projectId, leseMarkierung())
-      && !!localStorage.getItem('scaffold_step2');
-    if (schonWirklichGeladen) return; // wirklich schon vorhanden – nicht erneut laden
+    // Daten in der Datenbank hat.
+    // FIX (2. Anlauf, Bug-Report: "Angebot öffnen" zeigt ein Aufmaß OHNE die
+    // CAD-Daten"): Die erste Absicherung dafür hat nur geprüft, OB
+    // irgendein scaffold_step2 im (von allen Projekten gemeinsam genutzten)
+    // Zwischenspeicher lag – nicht, ob es wirklich zu DIESEM Projekt
+    // gehört. Wurde zwischendurch ein ANDERES Projekt besucht, blieb dessen
+    // scaffold_step2 stehen und hat den Check fälschlich "erfüllt". Jetzt:
+    // eigener, nur von Schritt 6 selbst beschriebener Zwischenspeicher
+    // (siehe leseSchritt6GeladenesProjekt/setzeSchritt6GeladenesProjekt),
+    // der GENAU festhält, für welche Projekt-ID Schritt 6 seine Daten
+    // zuletzt selbst geladen hat – projektgenau und unabhängig davon, was
+    // andere Schritte zwischendurch im geteilten Zwischenspeicher abgelegt
+    // haben.
+    if (leseSchritt6GeladenesProjekt() === projectId) return; // Schritt 6 hat DIESES Projekt bereits selbst geladen
     setzeMarkierung(projectId!);
     // FIX (systematische Prüfung): sofort zurücksetzen, bevor der Abruf
     // startet – sonst könnten kurzzeitig oder bei einem fehlschlagenden
@@ -218,6 +226,9 @@ function Schritt6Content() {
         if (savedPreisModus) setPreisModus(savedPreisModus);
         if (savedFestpreis) setFestpreisProM2(savedFestpreis);
         setSavedProjectId(p.id);
+        // Erst NACH erfolgreichem Laden vermerken – bei einem Fehler (siehe
+        // catch unten) soll ein erneuter Versuch weiterhin frisch laden.
+        setzeSchritt6GeladenesProjekt(projectId!);
       } catch (err: any) {
         console.error('Projekt-Laden fehlgeschlagen:', err);
         setKiError('Projekt konnte nicht geladen werden: ' + err.message);
@@ -542,6 +553,12 @@ function Schritt6Content() {
       if (!savedProjectId) {
         router.replace(`/aufmass/schritt6?id=${result.id}`, { scroll: false });
         setzeMarkierung(result.id);
+        // Die URL-Änderung löst den Lade-Effekt oben erneut aus (neue
+        // searchParams) – ohne diesen Vermerk würde er unnötig sofort
+        // wieder von der Datenbank nachladen (kurzes Flackern) und dabei
+        // den gerade erst gespeicherten, im React-State bereits aktuellen
+        // Stand überschreiben.
+        setzeSchritt6GeladenesProjekt(result.id);
       }
       setSavedProjectId(result.id);
       // BUGFIX (Aufmaß-Kette): Vorher wurden hier nur die Upload-/KI-Zwischen-
