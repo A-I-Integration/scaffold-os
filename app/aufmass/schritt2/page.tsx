@@ -14,6 +14,14 @@ function Schritt2Content() {
   // NEU: eindeutiges Signal zwischen den beiden Lade-Effekten (siehe unten) –
   // ob GERADE FRISCH von der Datenbank geladen wurde oder nicht.
   const istFrischGeladenRef = useRef(false);
+  // FIX (Bug-Report: "kommt nichts bei Schritt 2 an" – neuer LiDAR-Scan
+  // für ein BESTEHENDES Projekt): signalisiert, wann der Datenbank-Ladeeffekt
+  // unten fertig ist (egal ob er wirklich geladen hat oder – weil dieselbe
+  // Sitzung – gar nicht musste). Der zweite Effekt (LiDAR-/Grundriss-
+  // Übernahme) wartet darauf, bevor er bei einem bestehenden Projekt
+  // überhaupt anfängt – sonst könnte die asynchrone DB-Antwort SPÄTER
+  // ankommen und frisch übernommene Scan-Werte wieder überschreiben.
+  const [dbLadungAbgeschlossen, setDbLadungAbgeschlossen] = useState(false);
   const [step1Data, setStep1Data] = useState<any>(null);
   const [lidarUebernommen, setLidarUebernommen] = useState(false);
   const [kiUebernommen, setKiUebernommen] = useState(false);
@@ -168,7 +176,7 @@ function leeresFormS2() {
   // wurde – Höhe/Breite/etc. blieben leer.
   useEffect(() => {
     istFrischGeladenRef.current = sollFrischGeladenWerden(projectId, leseMarkierung());
-    if (!istFrischGeladenRef.current) return;
+    if (!istFrischGeladenRef.current) { setDbLadungAbgeschlossen(true); return; }
     setzeMarkierung(projectId!);
     // FIX (systematische Prüfung): sofort zurücksetzen, bevor der Abruf
     // startet – sonst könnten kurzzeitig oder bei einem fehlschlagenden
@@ -192,6 +200,8 @@ function leeresFormS2() {
         }
       } catch { /* Fallback-Effekt unten greift, wenn dieser fehlschlägt */
         istFrischGeladenRef.current = false;
+      } finally {
+        setDbLadungAbgeschlossen(true);
       }
     })();
   }, [projectId]);
@@ -219,18 +229,31 @@ function leeresFormS2() {
     }
     }
 
-    // FIX (der eigentliche, hier gefundene Fehler): Diese komplette
-    // LiDAR-/Grundriss-/Foto-Übernahme ist NUR für ein NEUES, gerade
-    // erst begonnenes Aufmaß sinnvoll. Sie lief bisher UNBEDINGT, auch
-    // beim Bearbeiten eines bestehenden, bereits gespeicherten Projekts
-    // – dabei konnte veraltetes, längst vergessenes Foto-/Scan-Material
-    // aus dem Browser-Speicher (von einer ganz anderen, früheren Sitzung)
-    // mit dem asynchronen Datenbank-Laden oben in einen Wettlauf geraten
-    // und frisch geladene Höhe/Breite/etc. wieder überschreiben oder
-    // leeren. Bei einem bestehenden Projekt (?id=...) macht diese
-    // Übernahme ohnehin keinen Sinn – die Werte kommen aus der Datenbank.
+    // FIX (ursprünglicher Fehler): Diese komplette LiDAR-/Grundriss-Übernahme
+    // lief früher UNBEDINGT, auch beim Bearbeiten eines bestehenden,
+    // bereits gespeicherten Projekts – dabei konnte veraltetes, längst
+    // vergessenes Scan-/Grundriss-Material aus dem Browser-Speicher (von
+    // einer ganz anderen, früheren Sitzung) mit dem asynchronen Datenbank-
+    // Laden oben in einen Wettlauf geraten und frisch geladene Höhe/
+    // Breite/etc. wieder überschreiben. Deshalb wurde sie komplett auf
+    // "kein ?id=" beschränkt.
+    //
+    // FIX (Bug-Report: "kommt nichts bei Schritt 2 an"): Das ging zu weit –
+    // lädt man in Schritt 1 eines BESTEHENDEN Projekts einen NEUEN LiDAR-
+    // Scan oder Grundriss hoch, kam das Ergebnis dadurch nie in Schritt 2
+    // an (die Übernahme lief ja nur bei "kein Projekt"). Jetzt: bei einem
+    // bestehenden Projekt erst starten, wenn der Datenbank-Ladeeffekt oben
+    // fertig ist (dbLadungAbgeschlossen – verhindert den ursprünglichen
+    // Wettlauf), UND nur dann übernehmen, wenn der jeweilige "frisch"-
+    // Marker aus Schritt 1 wirklich gesetzt ist – uraltes, unzusammen-
+    // hängendes Material ohne diesen Marker bleibt weiterhin außen vor.
+    const projektExistiertBereits = !!projectId;
+    if (projektExistiertBereits && !dbLadungAbgeschlossen) return;
+    const lidarFrisch = localStorage.getItem('scaffold_lidar_fresh') === '1';
+    const grundrissFrisch = localStorage.getItem('scaffold_grundriss_fresh') === '1';
+
     let lidarIntervall: ReturnType<typeof setInterval> | undefined;
-    if (!projectId) {
+    if (!projektExistiertBereits || lidarFrisch) {
     // LiDAR-Maße aus Schritt 1 übernehmen (nur leere Felder, nichts überschreiben).
     // Fix: War bisher nur EIN einmaliger Check beim Laden – falls die Analyse beim
     // Wechsel zu Schritt 2 noch beim Worker lief, kam das Ergebnis nie an. Jetzt
@@ -316,11 +339,16 @@ function leeresFormS2() {
         if (versucheLidarUebernahme() || versuche >= 24) clearInterval(lidarIntervall); // 24 × 5s = 2 Min.
       }, 5000);
     }
+    } // Ende: if (!projektExistiertBereits || lidarFrisch) – LiDAR-Übernahme
 
     // KI-Grundriss-Analyse aus Schritt 1 übernehmen.
     // Frisch analysiert (Flag aus Schritt 1)? Dann gewinnen die Grundriss-Werte
     // und ersetzen Alt-Eingaben komplett. Beim späteren Wiederaufruf (Zurück-
     // Navigation) bleibt es beim alten Verhalten: nur leere Felder füllen.
+    // Bei bestehendem Projekt nur übernehmen, wenn in Schritt 1 gerade neu
+    // analysiert wurde (grundrissFrisch) – sonst bleibt es bei den aus der
+    // Datenbank geladenen Werten (siehe Kommentar oben bei lidarFrisch).
+    if (!projektExistiertBereits || grundrissFrisch) {
     const grundrissRaw = localStorage.getItem('scaffold_grundriss_daten');
     if (grundrissRaw) {
       try {
@@ -380,8 +408,12 @@ function leeresFormS2() {
         // ignore
       }
     }
+    } // Ende: if (!projektExistiertBereits || grundrissFrisch) – Grundriss-Übernahme
 
-    // KI-Foto-Analyse aus Schritt 1 übernehmen (nur leere Felder / neue Werte)
+    // KI-Foto-Analyse aus Schritt 1 übernehmen (nur leere Felder / neue Werte).
+    // scaffold_foto_daten wird aktuell an keiner Stelle geschrieben (toter Code) –
+    // bewusst unverändert bei "nur neues Aufmaß" belassen (nicht Teil dieses Bugs).
+    if (!projektExistiertBereits) {
     const fotoRaw = localStorage.getItem('scaffold_foto_daten');
     if (fotoRaw) {
       try {
@@ -404,10 +436,10 @@ function leeresFormS2() {
         // ignore
       }
     }
-    } // Ende: if (!projectId) – LiDAR/Grundriss/Foto-Übernahme nur bei neuem Aufmaß
+    } // Ende: if (!projektExistiertBereits) – Foto-Übernahme
 
     return () => { if (lidarIntervall) clearInterval(lidarIntervall); };
-  }, []);
+  }, [dbLadungAbgeschlossen]);
 
   function toggleHindernis(h: string) {
     setForm(prev => ({
