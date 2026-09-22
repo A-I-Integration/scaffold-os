@@ -2,7 +2,7 @@
 
 import { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { setzeMarkierung, leseSchrittGeladenesProjekt, setzeSchrittGeladenesProjekt } from '@/lib/aufmass-projekt-session';
+import { setzeMarkierung, leseSchrittGeladenesProjekt, setzeSchrittGeladenesProjekt, bevorzugeLokalenStandFuerSchritt } from '@/lib/aufmass-projekt-session';
 
 const LEERES_FORM_S5 = {
   arbeitsbuehnen: '',
@@ -40,13 +40,29 @@ function Schritt5Content() {
             const json = await res.json();
             const d = json.project?.data;
             if (json.success) setzeSchrittGeladenesProjekt(5, projectId!);
-            if (json.success && d?.step1) { localStorage.setItem('scaffold_step1', JSON.stringify(d.step1)); setStep1Data(d.step1); }
-            if (json.success && d?.step2) { localStorage.setItem('scaffold_step2', JSON.stringify(d.step2)); setStep2Data(d.step2); }
-            if (json.success && d?.step4) { localStorage.setItem('scaffold_step4', JSON.stringify(d.step4)); setStep4Data(d.step4); }
+            // FIX (Bug-Report: "Schritt 1 Datum eingetragen, Schritt 5
+            // übernimmt es nicht"): Schritt 5 hat hier bisher IMMER die
+            // Datenbank-Werte von Schritt 1/2/4 übernommen, sobald er
+            // selbst zum ersten Mal in dieser Sitzung lädt – auch wenn
+            // Schritt 1/2/4 GERADE ERST in dieser selben Sitzung bearbeitet
+            // wurden und ihre frischen Änderungen (z.B. ein neu gesetztes
+            // Projektdatum) noch gar nicht gespeichert waren. Die Datenbank
+            // hatte dann zwangsläufig den älteren Stand, der die frischen
+            // Änderungen überschrieben hat. Jetzt: nur dann aus der
+            // Datenbank übernehmen, wenn der jeweilige Schritt NICHT schon
+            // in dieser Sitzung selbst geladen/bearbeitet wurde – sonst
+            // gilt der lokale, aktuellere Stand (siehe
+            // bevorzugeLokalenStandFuerSchritt).
+            const step1Anzeige = bevorzugeLokalenStandFuerSchritt(1, projectId, d?.step1);
+            const step2Anzeige = bevorzugeLokalenStandFuerSchritt(2, projectId, d?.step2);
+            const step4Anzeige = bevorzugeLokalenStandFuerSchritt(4, projectId, d?.step4);
+            if (json.success && step1Anzeige) { localStorage.setItem('scaffold_step1', JSON.stringify(step1Anzeige)); setStep1Data(step1Anzeige); }
+            if (json.success && step2Anzeige) { localStorage.setItem('scaffold_step2', JSON.stringify(step2Anzeige)); setStep2Data(step2Anzeige); }
+            if (json.success && step4Anzeige) { localStorage.setItem('scaffold_step4', JSON.stringify(step4Anzeige)); setStep4Data(step4Anzeige); }
             if (json.success && d?.step5) { localStorage.setItem('scaffold_step5', JSON.stringify(d.step5)); }
             // FIX: mit Schritt 1 (Termine), Schritt 4 (KI-Mengen) und
             // Schritt 2 (Schätzung) verknüpfen – nur leere Felder füllen.
-            if (json.success && d) setForm(mitVorschlaegen(d.step5 || null, d.step1 || null, d.step2 || null, d.step4 || null));
+            if (json.success && d) setForm(mitVorschlaegen(d.step5 || null, step1Anzeige || null, step2Anzeige || null, step4Anzeige || null));
           } catch { /* ignore */ }
         })();
         return;

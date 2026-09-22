@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { setzeMarkierung, leseSchrittGeladenesProjekt, setzeSchrittGeladenesProjekt, leiteStepsAusKiResultAb } from '@/lib/aufmass-projekt-session';
+import { setzeMarkierung, leseSchrittGeladenesProjekt, setzeSchrittGeladenesProjekt, bevorzugeLokalenStandFuerSchritt, leiteStepsAusKiResultAb } from '@/lib/aufmass-projekt-session';
 import KIWarnings from '@/components/aufmaß/KIWarnings';
 import { useKIValidation } from '@/hooks/useKIValidation';
 import { PartialScaffoldInput, LASTKLASSE_Q1_KN_M2 } from '@/types/scaffold';
@@ -202,7 +202,15 @@ function leeresFormS2() {
         // (siehe catch unten) soll ein erneuter Versuch weiterhin frisch
         // laden.
         if (json.success) setzeSchrittGeladenesProjekt(2, projectId!);
-        if (json.success && d?.step1) localStorage.setItem('scaffold_step1', JSON.stringify(d.step1));
+        // FIX (Bug-Report: "Schritt 1 Datum eingetragen, Schritt 5
+        // übernimmt es nicht" – dasselbe Muster betrifft auch die
+        // Kunde/Adresse-Anzeige hier): Wurde Schritt 1 in dieser Sitzung
+        // bereits selbst besucht/bearbeitet, ist der lokale Zwischen-
+        // speicher aktueller als dieser Datenbank-Wert (z.B. gerade erst
+        // eingetragene, noch nicht gespeicherte Änderungen) – dann NICHT
+        // überschreiben (siehe bevorzugeLokalenStandFuerSchritt).
+        const step1Anzeige = bevorzugeLokalenStandFuerSchritt(1, projectId, d?.step1);
+        if (json.success && step1Anzeige) localStorage.setItem('scaffold_step1', JSON.stringify(step1Anzeige));
         // FIX (Bug-Report: "Schritt 2 alle Daten raus" / "CAD-Datei komplett
         // raus"): ältere, über den CAD-Planer erzeugte Projekte speichern
         // kein step2 – nur kiResult.building. Bisher blieb Schritt 2 dann
@@ -211,7 +219,7 @@ function leeresFormS2() {
         const step2Quelle = d?.step2 || leiteStepsAusKiResultAb({ step2: d?.step2 }, d?.kiResult).step2;
         if (json.success && step2Quelle) {
           localStorage.setItem('scaffold_step2', JSON.stringify(step2Quelle));
-          setStep1Data(d.step1 || {});
+          setStep1Data(step1Anzeige || {});
           setForm((prev) => ({
             ...prev, ...step2Quelle,
             abschnitte: Array.isArray(step2Quelle.abschnitte) ? step2Quelle.abschnitte : [],

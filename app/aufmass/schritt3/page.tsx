@@ -2,7 +2,7 @@
 
 import { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { setzeMarkierung, leseSchrittGeladenesProjekt, setzeSchrittGeladenesProjekt, leiteStepsAusKiResultAb } from '@/lib/aufmass-projekt-session';
+import { setzeMarkierung, leseSchrittGeladenesProjekt, setzeSchrittGeladenesProjekt, bevorzugeLokalenStandFuerSchritt, leiteStepsAusKiResultAb } from '@/lib/aufmass-projekt-session';
 import { GERUEST_SYSTEME, CUSTOM_SYSTEM_ID, findeSystem } from '@/lib/calculations/geruest-systeme';
 
 const LEERES_FORM_S3 = {
@@ -79,8 +79,17 @@ function Schritt3Content() {
             // (siehe catch unten) soll ein erneuter Versuch weiterhin
             // frisch laden.
             if (json.success) setzeSchrittGeladenesProjekt(3, projectId!);
-            if (json.success && d?.step1) { localStorage.setItem('scaffold_step1', JSON.stringify(d.step1)); setStep1Data(d.step1); }
-            if (json.success && d?.step2?.abschnitte) { setAbschnitte(d.step2.abschnitte); }
+            // FIX (Bug-Report: "Schritt 1 Datum eingetragen, Schritt 5
+            // übernimmt es nicht" – dasselbe Muster betrifft auch die
+            // Kunde/Adresse- und Abschnitte-Anzeige hier): Wurden Schritt 1
+            // bzw. Schritt 2 in dieser Sitzung bereits selbst besucht/
+            // bearbeitet, ist der lokale Zwischenspeicher aktueller als
+            // dieser Datenbank-Wert – dann NICHT überschreiben (siehe
+            // bevorzugeLokalenStandFuerSchritt).
+            const step1Anzeige = bevorzugeLokalenStandFuerSchritt(1, projectId, d?.step1);
+            if (json.success && step1Anzeige) { localStorage.setItem('scaffold_step1', JSON.stringify(step1Anzeige)); setStep1Data(step1Anzeige); }
+            const step2Anzeige = bevorzugeLokalenStandFuerSchritt(2, projectId, d?.step2);
+            if (json.success && step2Anzeige?.abschnitte) { setAbschnitte(step2Anzeige.abschnitte); }
             // FIX (Bug-Report: "CAD-Datei komplett raus"): ältere, über den
             // CAD-Planer erzeugte Projekte speichern kein step3 – nur
             // kiResult.systemId. Bisher blieb Schritt 3 dann leer. Jetzt:

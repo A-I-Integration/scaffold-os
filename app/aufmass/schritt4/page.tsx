@@ -2,7 +2,7 @@
 
 import { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { setzeMarkierung, leseSchrittGeladenesProjekt, setzeSchrittGeladenesProjekt } from '@/lib/aufmass-projekt-session';
+import { setzeMarkierung, leseSchrittGeladenesProjekt, setzeSchrittGeladenesProjekt, bevorzugeLokalenStandFuerSchritt } from '@/lib/aufmass-projekt-session';
 
 const LEERES_FORM_S4 = {
   // Bestehend
@@ -58,7 +58,11 @@ function Schritt4Content() {
             const json = await res.json();
             const d = json.project?.data;
             if (json.success) setzeSchrittGeladenesProjekt(4, projectId!);
-            if (json.success && d?.step1) { localStorage.setItem('scaffold_step1', JSON.stringify(d.step1)); setStep1Data(d.step1); }
+            // FIX (Bug-Report: "Schritt 1 Datum eingetragen, Schritt 5
+            // übernimmt es nicht" – dasselbe Muster betrifft auch die
+            // Kunde/Adresse-Anzeige hier): siehe bevorzugeLokalenStandFuerSchritt.
+            const step1Anzeige = bevorzugeLokalenStandFuerSchritt(1, projectId, d?.step1);
+            if (json.success && step1Anzeige) { localStorage.setItem('scaffold_step1', JSON.stringify(step1Anzeige)); setStep1Data(step1Anzeige); }
             if (json.success && d?.step4) { localStorage.setItem('scaffold_step4', JSON.stringify(d.step4)); setForm(d.step4); }
           } catch { /* ignore */ }
         })();

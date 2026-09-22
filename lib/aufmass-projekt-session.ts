@@ -112,6 +112,32 @@ export function setzeSchrittGeladenesProjekt(schritt: number, projectId: string)
  * (siehe SCHRITT_GELADEN_PREFIX) – für WIZARD_KEYS unten. */
 const ALLE_SCHRITT_GELADEN_KEYS = [1, 2, 3, 4, 5, 6].map((n) => SCHRITT_GELADEN_PREFIX + n);
 
+// FIX (Bug-Report: "Schritt 1 Datum eingetragen, Schritt 5 übernimmt es
+// nicht"): Schritt 2-5 lesen beim eigenen frischen Laden nebenbei auch
+// scaffold_step1 (für die Kunde/Adresse-Anzeige) bzw. bei Schritt 5 zudem
+// step2/step4 (für die automatische Schätzung/Terminvorschläge) direkt aus
+// der DATENBANK und überschreiben damit den Zwischenspeicher. Das ist ein
+// Problem, wenn der QUELL-Schritt (z.B. Schritt 1) in DERSELBEN Sitzung
+// schon besucht/bearbeitet wurde: frisch eingetragene, noch NICHT
+// gespeicherte Änderungen (z.B. ein gerade erst gesetztes Datum) wurden
+// dann beim Weiterklicken in den folgenden Schritten wieder mit dem
+// älteren Datenbank-Stand überschrieben. Diese Funktion entscheidet, ob
+// stattdessen der lokale Zwischenspeicher verwendet werden soll: NUR wenn
+// der Quell-Schritt in dieser Sitzung bereits selbst geladen/bearbeitet
+// wurde (siehe leseSchrittGeladenesProjekt) ist der lokale Stand
+// tatsächlich aktueller als ein erneuter Datenbank-Wert.
+export function bevorzugeLokalenStandFuerSchritt(quellSchritt: number, projectId: string | null, datenbankWert: any): any {
+  if (projectId && leseSchrittGeladenesProjekt(quellSchritt) === projectId) {
+    if (typeof window !== 'undefined') {
+      try {
+        const lokal = localStorage.getItem(`scaffold_step${quellSchritt}`);
+        if (lokal) return JSON.parse(lokal);
+      } catch { /* ignore, dann unten Datenbank-Wert */ }
+    }
+  }
+  return datenbankWert;
+}
+
 /** Nach erfolgreichem Speichern: Markierung entfernen, damit ein
  * späteres erneutes Öffnen wieder korrekt frisch von der Datenbank lädt. */
 export function schliesseSitzungAb() {

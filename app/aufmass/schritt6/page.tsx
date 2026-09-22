@@ -12,7 +12,7 @@ import DinCheck from '@/components/aufmaß/DinCheck';
 import { KIAnalysis } from '@/types/scaffold';
 import { systemAnzeigename } from '@/lib/calculations/geruest-systeme';
 import { geruesttypZuScaffoldType } from '@/lib/calculations/scaffold-engine';
-import { sollFrischGeladenWerden, leseMarkierung, setzeMarkierung, leseSchrittGeladenesProjekt, setzeSchrittGeladenesProjekt, schliesseSitzungAb, loescheWizardDaten, leiteStepsAusKiResultAb, gewerkeVonStep1 } from '@/lib/aufmass-projekt-session';
+import { sollFrischGeladenWerden, leseMarkierung, setzeMarkierung, leseSchrittGeladenesProjekt, setzeSchrittGeladenesProjekt, bevorzugeLokalenStandFuerSchritt, schliesseSitzungAb, loescheWizardDaten, leiteStepsAusKiResultAb, gewerkeVonStep1 } from '@/lib/aufmass-projekt-session';
 import DispositionResult from '@/components/aufmaß/DispositionResult';
 import { DispositionResult as DispositionData } from '@/lib/calculations/disposition';
 import { generateInvoicePDF, fmtDate as fmtRechnungsDatum, type Invoice } from '@/lib/invoice-pdf';
@@ -202,6 +202,23 @@ function Schritt6Content() {
         const p = json.project;
         const d = p.data || {};
         const { angebotAnpassungen, kiResult: savedKi, angebotsStatus: savedStatus, preisModus: savedPreisModus, festpreisProM2: savedFestpreis, ...steps } = d;
+        // FIX (Bug-Report: "Schritt 1 Datum eingetragen, Schritt 5
+        // übernimmt es nicht" – dasselbe Muster betrifft auch Schritt 6):
+        // Wenn Schritt 6 hier zum ERSTEN Mal in dieser Sitzung lädt (z.B.
+        // beim ganz normalen Durchlaufen von Schritt 1 bis 6), wurden
+        // Schritt 1-5 bisher IMMER 1:1 aus der Datenbank übernommen – auch
+        // wenn man GERADE ERST in dieser selben Sitzung z.B. in Schritt 1
+        // ein neues Datum eingetragen hatte, das noch gar nicht gespeichert
+        // war. Die Datenbank hatte dann zwangsläufig den älteren Stand, der
+        // die frischen Änderungen beim Erreichen von Schritt 6 überschrieben
+        // hätte. Jetzt: nur dann aus der Datenbank übernehmen, wenn der
+        // jeweilige Schritt NICHT schon in dieser Sitzung selbst bearbeitet
+        // wurde – sonst gilt der lokale, aktuellere Stand (siehe
+        // bevorzugeLokalenStandFuerSchritt).
+        for (let i = 1; i <= 5; i++) {
+          const key = `step${i}`;
+          (steps as Record<string, any>)[key] = bevorzugeLokalenStandFuerSchritt(i, projectId, (steps as Record<string, any>)[key]);
+        }
         // Phase 81 (jetzt zentral in leiteStepsAusKiResultAb, siehe dort):
         // Fehlende step2/step3 aus kiResult ableiten (CAD-Projekte, deren
         // Frontend step2/3 nicht mitschrieb - z. B. veraltetes Bundle).
