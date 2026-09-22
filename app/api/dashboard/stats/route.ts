@@ -173,7 +173,7 @@ export async function GET() {
       alerts.push({
         severity: 'critical', icon: '📉',
         title: `Ø Marge nur ${avgMargin.toFixed(1)}%`,
-        message: 'Ziel: mindestens 25%', action: '/aufmass', actionLabel: 'Neues Aufmaß',
+        message: 'Ziel: mindestens 25%', action: '/aufmass/schritt1', actionLabel: 'Neues Aufmaß',
       });
     }
 
