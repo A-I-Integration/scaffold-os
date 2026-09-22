@@ -5,6 +5,7 @@ import { usePathname } from 'next/navigation';
 import { useState, useEffect } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { useRouter } from 'next/navigation';
+import { starteNeuesAufmass } from '@/lib/aufmass-projekt-session';
 
 interface UserProfile {
   id: string;
@@ -142,7 +143,15 @@ export default function AuthNav() {
               )}
 
               {canAccessAufmass && (
-                <Link href="/aufmass/schritt1" className={navLinkClass('/aufmass/schritt1')}>
+                // FIX (Bug-Report: "Werkzeug → Aufmaß soll leer sein"): siehe
+                // SidebarLayout.tsx – dieser Menüpunkt verlinkt immer ohne
+                // ?id= auf ein bewusst neues, leeres Aufmaß, hatte den dafür
+                // nötigen Reset des Zwischenspeichers bisher aber nicht.
+                <Link
+                  href="/aufmass/schritt1"
+                  onClick={() => starteNeuesAufmass()}
+                  className={navLinkClass('/aufmass/schritt1')}
+                >
                   Aufmaß
                 </Link>
               )}
