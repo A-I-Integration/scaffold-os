@@ -296,6 +296,28 @@ function Schritt6Content() {
     if (step2.garagen) obstacles.push({ type: 'sonstiges', count: 1, notes: 'Garage/Nebengebäude' });
     return obstacles;
   }
+  // FIX (Bug-Report: "Gewerke wird auch nicht gespeichert"): Schritt 1
+  // speichert seit der Umstellung auf Mehrfachauswahl unter s1.gewerke
+  // (string[]) – hier wurde aber noch überall das alte, seit dieser
+  // Migration nie mehr befüllte Einzelfeld s1.gewerk gelesen (immer
+  // undefined). Dadurch zeigten Zusammenfassung und Angebots-PDF trotz
+  // Auswahl in Schritt 1 immer "–" bzw. rechneten mit dem Trade-Default
+  // "allgemein". Für die Anzeige werden jetzt alle ausgewählten Gewerke
+  // aufgelistet; für das strukturelle "trade"-Feld der Kalkulation wird
+  // – bei mehreren Gewerken – dasselbe Prioritäts-Mapping verwendet, das
+  // schon in Schritt 1 (getLastklasse) für die dortige Lastklassen-
+  // Einschätzung gilt, keine neue Regel.
+  function gewerkeAnzeige(step1: any): string {
+    const g: string[] = Array.isArray(step1.gewerke) ? step1.gewerke : [];
+    return g.length > 0 ? g.join(', ') : '–';
+  }
+  function mapGewerkeZuTrade(gewerke: string[]): string {
+    const g = gewerke || [];
+    if (g.includes('WDVS/Fassade') || g.includes('Putz')) return 'fassade';
+    if (g.includes('Dach')) return 'dach';
+    if (g.includes('Fenster')) return 'fenster';
+    return 'allgemein';
+  }
   function mapGefahren(step4: any): string[] {
     const hazards: string[] = [];
     if (step4.hochspannung) hazards.push('hochspannung');
@@ -342,7 +364,7 @@ function Schritt6Content() {
       : undefined;
 
     return {
-      customer: s1.name || '', address: s1.adresse || '', trade: (s1.gewerk || 'allgemein').toLowerCase(),
+      customer: s1.name || '', address: s1.adresse || '', trade: mapGewerkeZuTrade(s1.gewerke),
       projectDurationDays: parseInt(s1.dauer) || 30, lengthM: parseFloat(s2.laenge) || 0, heightM: parseFloat(s2.hoehe) || 0,
       widthM: parseFloat(s2.breite) || 0, eavesHeightM: parseFloat(s2.traufhoehe) || 0, roofForm: mapDachform(s2.dachform),
       roofOverhangM: parseFloat(s2.dachueberstand) || 0, facadeType: mapFassade(s2.fassade), obstacles: mapHindernisse(s2),
@@ -565,7 +587,7 @@ function Schritt6Content() {
     doc.setTextColor(71, 85, 105); doc.setFontSize(8); doc.setFont('helvetica', 'bold'); doc.text('PROJEKT', 18, y + 6);
     doc.setFont('helvetica', 'normal'); doc.setTextColor(15, 23, 42); doc.setFontSize(9);
     doc.text(`Kunde: ${s1.name || '-'}`, 18, y + 14); doc.text(`Adresse: ${s1.adresse || '-'}`, 18, y + 20);
-    doc.text(`Gewerk: ${s1.gewerk || '-'}`, 18, y + 26);
+    doc.text(`Gewerk: ${gewerkeAnzeige(s1)}`, 18, y + 26);
     if (sysName) doc.text(`System: ${sysName}`, 18, y + 32);
     doc.setFillColor(248, 250, 252); doc.rect(108, y, 88, 30, 'F');
     doc.setTextColor(71, 85, 105); doc.setFontSize(8); doc.setFont('helvetica', 'bold'); doc.text('ANGEBOTSDATEN', 112, y + 6);
@@ -839,7 +861,7 @@ function Schritt6Content() {
           <div className="grid grid-cols-2 gap-2 text-sm">
             <div><span className="text-[#86868b]">Kunde:</span> <span className="text-[#1d1d1f]">{s1.name || '–'}</span></div>
             <div><span className="text-[#86868b]">Adresse:</span> <span className="text-[#1d1d1f]">{s1.adresse || '–'}</span></div>
-            <div><span className="text-[#86868b]">Gewerk:</span> <span className="text-[#1d1d1f]">{s1.gewerk || '–'}</span></div>
+            <div><span className="text-[#86868b]">Gewerk:</span> <span className="text-[#1d1d1f]">{gewerkeAnzeige(s1)}</span></div>
             <div><span className="text-[#86868b]">Dauer:</span> <span className="text-[#1d1d1f]">{s1.dauer || '–'} Tage</span></div>
             {s1.ansprechpartnerName && <div className="col-span-2"><span className="text-[#86868b]">Ansprechpartner:</span> <span className="text-[#1d1d1f]">{s1.ansprechpartnerName} {s1.ansprechpartnerTelefon} {s1.ansprechpartnerEmail}</span></div>}
             {s1.bauleiterName && <div className="col-span-2"><span className="text-[#86868b]">Bauleiter:</span> <span className="text-[#1d1d1f]">{s1.bauleiterName} {s1.bauleiterTelefon} {s1.bauleiterEmail}</span></div>}

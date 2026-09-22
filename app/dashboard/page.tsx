@@ -266,7 +266,16 @@ export default function DashboardPage() {
                       <p className="text-sm text-[#86868b] truncate">{a.message}</p>
                     </div>
                   </div>
-                  <button onClick={() => router.push(a.action)}
+                  <button onClick={() => {
+                    // FIX (Bug-Report: "neues Aufmaß soll immer leer sein"): auch
+                    // dieser Alert-Button führt zu einem NEUEN, noch nicht
+                    // gespeicherten Aufmaß (kein ?id= im Ziel) – muss also
+                    // genauso zurückgesetzt werden wie die anderen "Neues
+                    // Aufmaß"-Einstiege, sonst könnten Reste eines vorherigen,
+                    // nie gespeicherten Versuchs durchscheinen.
+                    if (a.action.startsWith('/aufmass/schritt1') && !a.action.includes('?id=')) starteNeuesAufmass();
+                    router.push(a.action);
+                  }}
                     className="shrink-0 px-3 py-1.5 bg-white border border-black/10 hover:border-[#e8590c] text-[#1d1d1f] rounded-full text-sm transition-colors">
                     {a.actionLabel}
                   </button>

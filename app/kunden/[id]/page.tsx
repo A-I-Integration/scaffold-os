@@ -935,7 +935,7 @@ export default function KundenDetailPage() {
                     <a href={`/aufmass/schritt6?id=${project.id}`} className={btnSecondary}>Aufmaß öffnen</a>
                   </div>
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
-                    <div><p className="text-[10px] text-[#86868b] uppercase">Gewerk</p><p className="text-[#1d1d1f]">{s1.gewerk || '–'}</p></div>
+                    <div><p className="text-[10px] text-[#86868b] uppercase">Gewerk</p><p className="text-[#1d1d1f]">{Array.isArray(s1.gewerke) && s1.gewerke.length > 0 ? s1.gewerke.join(', ') : '–'}</p></div>
                     <div><p className="text-[10px] text-[#86868b] uppercase">System</p><p className="text-[#1d1d1f]">{system || '–'}</p></div>
                     <div><p className="text-[10px] text-[#86868b] uppercase">Maße (L×H×B)</p><p className="text-[#1d1d1f]">{s2.laenge || '–'}×{s2.hoehe || '–'}×{s2.breite || '–'} m</p></div>
                     <div><p className="text-[10px] text-[#86868b] uppercase">Fassade</p><p className="text-[#1d1d1f]">{s2.fassade || '–'}</p></div>
