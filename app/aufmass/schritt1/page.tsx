@@ -2,7 +2,7 @@
 
 import { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { sollFrischGeladenWerden, leseMarkierung, setzeMarkierung, WIZARD_KEYS } from '@/lib/aufmass-projekt-session';
+import { sollFrischGeladenWerden, leseMarkierung, setzeMarkierung, WIZARD_KEYS, gewerkeVonStep1 } from '@/lib/aufmass-projekt-session';
 import PhotoUpload from '@/components/aufmaß/PhotoUpload';
 import LiDARUpload from '@/components/aufmaß/LiDARUpload';
 import FotoAnalyse from '@/components/aufmaß/FotoAnalyse';
@@ -108,16 +108,15 @@ function Schritt1Content() {
             const json = await res.json();
             if (json.success && json.project?.data?.step1) {
               const parsed = json.project.data.step1;
-              // FIX (Bug-Report: "Gewerke wieder gelöscht"): Diese Migration
-              // (altes Einzelfeld "gewerk" -> neues Array-Feld "gewerke")
-              // gab es bisher NUR auf dem Zwischenspeicher-Pfad unten, nicht
-              // hier beim frischen Laden von der Datenbank – bei älteren
-              // Projekten, die noch das alte Feld haben, blieb "gewerke"
-              // dadurch leer und alle Gewerke-Häkchen verschwanden.
-              if (parsed.gewerk && !parsed.gewerke) {
-                parsed.gewerke = [parsed.gewerk];
-                delete parsed.gewerk;
-              }
+              // FIX (Bug-Report: "Gewerke wieder gelöscht" / "Merola ...
+              // gewerke"): zentrale Funktion statt eigener Migration hier –
+              // versteht sowohl das alte Einzelfeld "gewerk" als auch
+              // bekannte umbenannte Alt-Werte (z.B. "Fassade" ->
+              // "WDVS/Fassade", siehe lib/aufmass-projekt-session.ts). Vorher
+              // gab es diese Übersetzung nur auf dem Zwischenspeicher-Pfad
+              // unten, nicht hier beim frischen Laden von der Datenbank.
+              parsed.gewerke = gewerkeVonStep1(parsed);
+              delete parsed.gewerk;
               // FIX: Datums-Strings normalisieren – je nach Erstellungsweg liegt
               // hier mal "2026-09-19", mal "2026-09-19T00:00:00.000Z" vor.
               // <input type="date"> zeigt Letzteres als LEER an.
@@ -159,11 +158,10 @@ function Schritt1Content() {
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
-        // Migration: altes Format (gewerk: string) → neues Format (gewerke: string[])
-        if (parsed.gewerk && !parsed.gewerke) {
-          parsed.gewerke = [parsed.gewerk];
-          delete parsed.gewerk;
-        }
+        // Migration: altes Format (gewerk: string) → neues Format (gewerke: string[]),
+        // plus Übersetzung bekannter umbenannter Alt-Werte (siehe gewerkeVonStep1).
+        parsed.gewerke = gewerkeVonStep1(parsed);
+        delete parsed.gewerk;
         if (typeof parsed.projektbeginn === 'string') parsed.projektbeginn = parsed.projektbeginn.slice(0, 10);
         if (typeof parsed.projektende === 'string') parsed.projektende = parsed.projektende.slice(0, 10);
         setForm((prev) => ({ ...prev, ...parsed }));

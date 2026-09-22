@@ -99,12 +99,33 @@ export function starteNeuesAufmass() {
 // z.B. "Aufmaß öffnen" DIREKT, ohne über Schritt 1 zu laufen), sah bei
 // solchen Alt-Projekten weiterhin nur ein leeres "gewerke"-Array. Zentral,
 // damit jede Anzeigestelle beide Formate versteht.
+// FIX (Bug-Report: "Merola hat ... gewerke [gelöscht]"): Vor der Umstellung
+// auf die heutigen 6 Gewerke-Kacheln (Commit bf3c86e) gab es eine andere,
+// kleinere Liste an Einzelauswahl-Werten: "Fassade", "Dach", "Kamin",
+// "Werbeanlage", "Fenster", "Allgemein". Bei sehr alten Projekten steht
+// deshalb z.B. noch "Fassade" (statt "WDVS/Fassade") gespeichert – dieser
+// Wert existiert unter diesem Namen in der heutigen Kachel-Liste nicht
+// mehr, weshalb Schritt 1 keine Kachel markieren konnte, obwohl die Daten
+// unverändert korrekt in der Datenbank lagen (die Kunden-Detailseite zeigte
+// über diese Funktion ja auch weiterhin richtig "Fassade" an).
+// NUR eindeutige 1:1-Umbenennungen werden hier automatisch übersetzt – für
+// "Kamin"/"Werbeanlage"/"Allgemein" gibt es keine klare heutige Entsprechung
+// mehr, die wird deshalb bewusst NICHT geraten, sondern unverändert
+// durchgereicht (zeigt weiterhin keine Kachel als ausgewählt, aber verliert
+// auch keine Daten und erfindet keine falsche Zuordnung).
+const GEWERK_UMBENENNUNGEN: Record<string, string> = {
+  'Fassade': 'WDVS/Fassade',
+};
+
 /** Liefert die Gewerke eines step1-Objekts – neues Array-Feld "gewerke",
- * mit Fallback auf das alte Einzelfeld "gewerk" für ältere Projekte. */
+ * mit Fallback auf das alte Einzelfeld "gewerk" für ältere Projekte, sowie
+ * Übersetzung bekannter, eindeutig umbenannter Alt-Werte auf die heutigen
+ * Kachel-Bezeichnungen (siehe GEWERK_UMBENENNUNGEN). */
 export function gewerkeVonStep1(step1: any): string[] {
-  if (Array.isArray(step1?.gewerke) && step1.gewerke.length > 0) return step1.gewerke;
-  if (step1?.gewerk) return [step1.gewerk];
-  return [];
+  const roh: string[] = Array.isArray(step1?.gewerke) && step1.gewerke.length > 0
+    ? step1.gewerke
+    : (step1?.gewerk ? [step1.gewerk] : []);
+  return roh.map((g) => GEWERK_UMBENENNUNGEN[g] || g);
 }
 
 // FIX (Bug-Report: "Schritt 2 alle Daten raus" / "CAD-Datei komplett raus"):
