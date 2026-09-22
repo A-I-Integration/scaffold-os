@@ -3,7 +3,7 @@
 import { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { sollFrischGeladenWerden, leseMarkierung, setzeMarkierung } from '@/lib/aufmass-projekt-session';
-import { GERUEST_SYSTEME, CUSTOM_SYSTEM_ID, findeSystem } from '@/lib/calculations/geruest-systeme';
+import { GERUEST_SYSTEME, CUSTOM_SYSTEM_ID, findeSystem, systemAnzeigename } from '@/lib/calculations/geruest-systeme';
 
 const LEERES_FORM_S3 = {
   geruesttyp: '',
@@ -24,7 +24,7 @@ function Schritt3Content() {
   const [step1Data, setStep1Data] = useState<any>(null);
   // NEU: Abschnitte aus Schritt 2 – erlaubt einen eigenen Gerüsttyp je
   // Abschnitt (z.B. Fassadengerüst am Hauptgebäude, Dachgerüst am Anbau).
-  const [abschnitte, setAbschnitte] = useState<{ bezeichnung: string; laenge: string; hoehe: string; geruesttyp?: string }[]>([])
+  const [abschnitte, setAbschnitte] = useState<{ bezeichnung: string; laenge: string; hoehe: string; geruesttyp?: string; system?: string; customSystem?: string }[]>([])
   
   const [form, setForm] = useState({ ...LEERES_FORM_S3 });
 
@@ -86,6 +86,34 @@ function Schritt3Content() {
   function abschnittTypAendern(index: number, typ: string) {
     setAbschnitte((prev) => {
       const neu = prev.map((a, i) => i === index ? { ...a, geruesttyp: typ } : a)
+      try {
+        const bestehend = JSON.parse(localStorage.getItem('scaffold_step2') || '{}')
+        localStorage.setItem('scaffold_step2', JSON.stringify({ ...bestehend, abschnitte: neu }))
+      } catch { /* ignore */ }
+      return neu
+    })
+  }
+
+  // NEU: Gerüstsystem/Hersteller eines einzelnen Abschnitts ändern – für
+  // gemischte Systeme (z.B. Layher am Hauptgebäude, anderes System am
+  // Anbau). '' = "wie oben" (übernimmt die Hauptauswahl). Wird wie der
+  // Gerüsttyp je Abschnitt zurück in scaffold_step2 gespeichert.
+  function abschnittSystemAendern(index: number, systemId: string) {
+    setAbschnitte((prev) => {
+      const neu = prev.map((a, i) => i === index
+        ? { ...a, system: systemId, customSystem: systemId === CUSTOM_SYSTEM_ID ? a.customSystem : '' }
+        : a)
+      try {
+        const bestehend = JSON.parse(localStorage.getItem('scaffold_step2') || '{}')
+        localStorage.setItem('scaffold_step2', JSON.stringify({ ...bestehend, abschnitte: neu }))
+      } catch { /* ignore */ }
+      return neu
+    })
+  }
+
+  function abschnittCustomSystemAendern(index: number, name: string) {
+    setAbschnitte((prev) => {
+      const neu = prev.map((a, i) => i === index ? { ...a, customSystem: name } : a)
       try {
         const bestehend = JSON.parse(localStorage.getItem('scaffold_step2') || '{}')
         localStorage.setItem('scaffold_step2', JSON.stringify({ ...bestehend, abschnitte: neu }))
@@ -228,6 +256,44 @@ function Schritt3Content() {
               )}
             </div>
           </div>
+
+          {/* NEU: Gerüstsystem/Hersteller je zusätzlichem Abschnitt – für
+              gemischte Systeme (z.B. Layher am Hauptgebäude, ein anderes
+              System am Anbau). Die Auswahl oben gilt für Abschnitt 1
+              (Hauptgebäude), zusätzliche Abschnitte können abweichen. */}
+          {abschnitte.length > 0 && (
+            <div>
+              <label className="block text-sm font-medium mb-3 text-[#424245]">Gerüstsystem je zusätzlichem Abschnitt</label>
+              <div className="space-y-2">
+                {abschnitte.map((a, i) => (
+                  <div key={i} className="flex items-center gap-2">
+                    <span className="text-sm text-[#424245] w-40 truncate">{a.bezeichnung || `Abschnitt ${i + 2}`}</span>
+                    <div className="flex-1 space-y-1">
+                      <select
+                        value={a.system || ''}
+                        onChange={(e) => abschnittSystemAendern(i, e.target.value)}
+                        className="w-full px-3 py-2 border rounded-xl text-sm"
+                      >
+                        <option value="">wie oben ({systemAnzeigename(form.system, form.customSystem) || 'Hersteller-neutral'})</option>
+                        {GERUEST_SYSTEME.map((s) => <option key={s.id} value={s.id}>{s.hersteller} {s.systemName}</option>)}
+                        <option value={CUSTOM_SYSTEM_ID}>Eigenes System / anderer Hersteller</option>
+                      </select>
+                      {a.system === CUSTOM_SYSTEM_ID && (
+                        <input
+                          type="text"
+                          value={a.customSystem || ''}
+                          onChange={(e) => abschnittCustomSystemAendern(i, e.target.value)}
+                          placeholder="z. B. Altrad, Betco, Gebrauchtes Misch-System …"
+                          className="w-full px-3 py-2 border rounded-xl text-sm"
+                        />
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <p className="text-[11px] text-[#86868b] mt-1">Ohne eigene Auswahl gilt für diesen Abschnitt die Hauptauswahl oben. Hinweis: Feldlänge & Materialberechnung richten sich weiterhin nach der Standard-Feldlänge unten – das Abschnitts-System wird in Zusammenfassung und Angebot korrekt ausgewiesen.</p>
+            </div>
+          )}
 
           <div>
             <label className="block text-sm font-medium mb-2 text-[#424245]">Standard-Feldlänge (m)</label>
