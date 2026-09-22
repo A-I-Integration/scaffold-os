@@ -5,6 +5,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { useState, useEffect } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import ProductTour from './ProductTour';
+import { starteNeuesAufmass } from '@/lib/aufmass-projekt-session';
 import {
   HardHat, LayoutDashboard, Warehouse, CalendarClock, Truck,
   KeyRound, Ruler, Navigation, LogOut, Menu, X, Database, TrendingUp, Timer, Route,
@@ -28,6 +29,14 @@ interface NavItem {
   label: string;
   icon: any;
   roles: RoleKey[];
+  // FIX (Bug-Report: "Werkzeug → Aufmaß soll leer sein"): Dieser Menüpunkt
+  // verlinkt IMMER ohne ?id= auf ein bewusst neues, leeres Aufmaß (anders
+  // als "Aufmaß öffnen" bei einem bestehenden Projekt, das seine ?id=
+  // behält und dadurch unverändert weiter funktioniert). Bisher fehlte
+  // hier der Reset, den Dashboard/Meine-Touren beim "Neues Aufmaß"-Button
+  // bereits nutzen – alter Zwischenspeicher (scaffold_step1 etc.) blieb
+  // dadurch stehen und tauchte beim nächsten Öffnen fälschlich wieder auf.
+  resetAufmassVorNavigation?: boolean;
 }
 
 interface NavGroup {
@@ -47,7 +56,7 @@ const NAV_GROUPS: NavGroup[] = [
   {
     key: 'werkzeug', label: 'Werkzeug', icon: Wrench,
     items: [
-      { href: '/aufmass/schritt1', label: 'Aufmaß', icon: Ruler, roles: ['admin', 'bauleiter', 'mitarbeiter'] },
+      { href: '/aufmass/schritt1', label: 'Aufmaß', icon: Ruler, roles: ['admin', 'bauleiter', 'mitarbeiter'], resetAufmassVorNavigation: true },
       { href: '/cad',              label: 'CAD',    icon: Ruler, roles: ['admin', 'bauleiter', 'mitarbeiter'] },
       { href: '/cad/bruecke',      label: 'Brücke', icon: Ruler, roles: ['admin', 'bauleiter', 'mitarbeiter'] },
       { href: '/cad/traggeruest',  label: 'Traggerüst-Anfrage', icon: Ruler, roles: ['admin', 'bauleiter', 'mitarbeiter'] },
@@ -249,6 +258,7 @@ export default function SidebarLayout({ children }: { children: React.ReactNode 
                         <Link
                           key={item.href}
                           href={item.href}
+                          onClick={item.resetAufmassVorNavigation ? () => starteNeuesAufmass() : undefined}
                           className={`flex items-center gap-2.5 px-3 py-2 rounded-full transition-colors ${
                             active ? 'bg-[#e8590c]/10 text-[#e8590c]' : 'hover:bg-black/5 text-[#424245]'
                           }`}
