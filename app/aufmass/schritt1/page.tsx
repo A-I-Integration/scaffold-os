@@ -108,6 +108,16 @@ function Schritt1Content() {
             const json = await res.json();
             if (json.success && json.project?.data?.step1) {
               const parsed = json.project.data.step1;
+              // FIX (Bug-Report: "Gewerke wieder gelöscht"): Diese Migration
+              // (altes Einzelfeld "gewerk" -> neues Array-Feld "gewerke")
+              // gab es bisher NUR auf dem Zwischenspeicher-Pfad unten, nicht
+              // hier beim frischen Laden von der Datenbank – bei älteren
+              // Projekten, die noch das alte Feld haben, blieb "gewerke"
+              // dadurch leer und alle Gewerke-Häkchen verschwanden.
+              if (parsed.gewerk && !parsed.gewerke) {
+                parsed.gewerke = [parsed.gewerk];
+                delete parsed.gewerk;
+              }
               // FIX: Datums-Strings normalisieren – je nach Erstellungsweg liegt
               // hier mal "2026-09-19", mal "2026-09-19T00:00:00.000Z" vor.
               // <input type="date"> zeigt Letzteres als LEER an.
@@ -119,7 +129,18 @@ function Schritt1Content() {
               // Kein step1 in den Daten, aber Projekt existiert – zumindest
               // den (echten) Namen aus dem Projekt selbst übernehmen, statt
               // leer zu lassen.
-              setForm((prev) => ({ ...prev, name: json.project.name || prev.name, adresse: json.project.adresse || prev.adresse }));
+              // FIX (Bug-Report: "Gewerke wieder gelöscht"): Bei sehr alten,
+              // über den CAD-Planer erzeugten Projekten (vor Phase 80) gibt
+              // es gar kein step1 – nur kiResult. Der CAD-Planer selbst legt
+              // in diesem Fall 'allgemein' als Gewerk an; das hier
+              // übernehmen, statt die Gewerke-Auswahl leer zu lassen.
+              const kiResult = json.project.data?.kiResult;
+              setForm((prev) => ({
+                ...prev,
+                name: json.project.name || prev.name,
+                adresse: json.project.adresse || prev.adresse,
+                gewerke: prev.gewerke.length > 0 ? prev.gewerke : (kiResult ? ['allgemein'] : prev.gewerke),
+              }));
             }
           } catch {
             // FIX: Vorher blieb das Formular bei einem Fehler in einem
