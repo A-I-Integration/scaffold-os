@@ -1097,14 +1097,30 @@ export default function KundenDetailPage() {
                     <ul className="divide-y divide-black/5">
                       {offeneInvoices.map((inv) => {
                         const verzug = istUeberfaellig(inv)
+                        const gutschrift = inv.invoice_type === 'gutschrift'
                         return (
-                          <li key={inv.id} className="py-2 flex items-center gap-2 text-sm">
+                          <li key={inv.id} className="py-2 flex flex-wrap items-center gap-2 text-sm">
                             <span className="font-medium">{inv.invoice_number}</span>
                             <span className={`text-[10px] px-1.5 py-0.5 rounded border ${verzug ? STATUS_COLOR.ueberfaellig : STATUS_COLOR[inv.status]}`}>{verzug ? 'Überfällig' : STATUS_LABEL[inv.status]}</span>
                             <span className="text-[#86868b]">fällig {fmtDate(inv.due_date)}</span>
                             {Number(inv.paid_amount) > 0 && <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-700">Teilzahlung {fmtEur(Number(inv.paid_amount))} €</span>}
                             <span className={`ml-auto font-bold ${verzug ? 'text-red-600' : ''}`}>{fmtEur(Number(inv.gross_amount) - Number(inv.paid_amount || 0))} € offen</span>
-                            <button onClick={() => { setZahlungOffen(inv); setZahlungBetrag(String(Number(inv.gross_amount) - Number(inv.paid_amount || 0))); setZahlungDatum(new Date().toISOString().slice(0, 10)); setZahlungNotiz('') }} title="Zahlung erfassen" className={btnSecondary}><Euro className="h-3 w-3" /></button>
+                            {/* NEU: dieselben Bearbeiten-Aktionen wie unten bei "je Auftrag" –
+                                bisher gab es hier nur "Zahlung erfassen", man konnte eine offene
+                                Rechnung aus dieser Schnellübersicht heraus nicht ändern/stornieren/
+                                erneut senden, ohne erst zum passenden Auftrag herunterzuscrollen. */}
+                            <div className="flex gap-1">
+                              {inv.status !== 'storniert' && (
+                                <button onClick={() => { setEditInvoice(inv); setEditPositions(inv.positions || []) }} title="Neue Version anlegen (alte bleibt unverändert, wird storniert)" className={btnSecondary}><Pencil className="h-3 w-3" /></button>
+                              )}
+                              <button onClick={() => { const doc = generateInvoicePDF(inv); doc.save(`${TYPE_LABEL[inv.invoice_type || 'standard']}_${inv.invoice_number}.pdf`) }} title="PDF" className={btnSecondary}><Download className="h-3 w-3" /></button>
+                              <button onClick={() => sendInvoice(inv)} title="Erneut senden" className={btnSecondary}><Send className="h-3 w-3" /></button>
+                              <button onClick={() => { setZahlungOffen(inv); setZahlungBetrag(String(Number(inv.gross_amount) - Number(inv.paid_amount || 0))); setZahlungDatum(new Date().toISOString().slice(0, 10)); setZahlungNotiz('') }} title="Zahlung erfassen" className={btnSecondary}><Euro className="h-3 w-3" /></button>
+                              {!gutschrift && (
+                                <button onClick={() => toggleStatus(inv)} title="Direkt als vollständig bezahlt markieren" className={btnSecondary}><Check className="h-3 w-3" /></button>
+                              )}
+                              <button onClick={() => deleteInvoice(inv)} title="Löschen" className="p-1.5 rounded-lg bg-red-500/10 hover:bg-red-500/30 text-red-600"><Trash2 className="h-3 w-3" /></button>
+                            </div>
                           </li>
                         )
                       })}
