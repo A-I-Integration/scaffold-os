@@ -345,6 +345,10 @@ export async function POST(req: NextRequest) {
     const formData = await req.formData();
     const file = formData.get('file') as File;
     const sessionId = formData.get('sessionId') as string;
+    // FIX (Bug-Report): bei bereits gespeichertem Projekt direkt über
+    // project_id ablegen statt über die browserlokale sessionId – siehe
+    // lib/media-client.ts für die ausführliche Begründung.
+    const projectId = (formData.get('projectId') as string) || null;
 
     if (!file || !sessionId) {
       return NextResponse.json({ error: 'Datei und sessionId erforderlich' }, { status: 400 });
@@ -428,7 +432,7 @@ export async function POST(req: NextRequest) {
     // ── 5) Datei speichern ──
     const supabase = await createClient();
     const fileName = `lidar_${Date.now()}.${ext}`;
-    const filePath = `temp/${sessionId}/${fileName}`;
+    const filePath = projectId ? `projects/${projectId}/${fileName}` : `temp/${sessionId}/${fileName}`;
 
     const { error: upErr } = await supabase.storage
       .from('project-media')
@@ -444,7 +448,8 @@ export async function POST(req: NextRequest) {
     const { error: dbErr } = await supabase
       .from('project_media')
       .insert({
-        session_id: sessionId,
+        project_id: projectId,
+        session_id: projectId ? null : sessionId,
         file_name: file.name,
         storage_path: filePath,
         file_type: `lidar/${ext}`,

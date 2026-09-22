@@ -5,9 +5,13 @@ import { uploadProjectMediaClient, getProjectMediaClient, deleteProjectMediaClie
 
 interface Props {
   sessionId: string;
+  // FIX (Bug-Report): siehe GrundrissUpload.tsx – bei bereits gespeichertem
+  // Projekt läuft der Abruf über project_id, sonst verschwinden Fotos beim
+  // Wiederöffnen des Projekts.
+  projectId?: string | null;
 }
 
-export default function PhotoUpload({ sessionId }: Props) {
+export default function PhotoUpload({ sessionId, projectId }: Props) {
   const [photos, setPhotos] = useState<ProjectMedia[]>([]);
   const [uploading, setUploading] = useState(false);
   const [preview, setPreview] = useState<string | null>(null);
@@ -15,11 +19,11 @@ export default function PhotoUpload({ sessionId }: Props) {
 
   useEffect(() => {
     if (!sessionId) return;
-    getProjectMediaClient(sessionId)
+    getProjectMediaClient(sessionId, projectId)
       .then(setPhotos)
       .catch(console.error)
       .finally(() => setLoading(false));
-  }, [sessionId]);
+  }, [sessionId, projectId]);
 
   const handleFileSelect = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
@@ -31,7 +35,7 @@ export default function PhotoUpload({ sessionId }: Props) {
       if (file.size > 10 * 1024 * 1024) { alert(`${file.name} zu groß (max. 10MB).`); continue; }
 
       try {
-        const result = await uploadProjectMediaClient(file, sessionId);
+        const result = await uploadProjectMediaClient(file, sessionId, projectId);
         setPhotos((prev) => [result, ...prev]);
       } catch (err: any) {
         alert(`Upload fehlgeschlagen: ${err.message}`);
@@ -39,7 +43,7 @@ export default function PhotoUpload({ sessionId }: Props) {
     }
     setUploading(false);
     e.target.value = '';
-  }, [sessionId]);
+  }, [sessionId, projectId]);
 
   const handleDelete = useCallback(async (media: ProjectMedia) => {
     if (!confirm(`"${media.file_name}" löschen?`)) return;

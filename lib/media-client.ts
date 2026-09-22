@@ -17,11 +17,33 @@ export interface ProjectMedia {
   created_at: string;
 }
 
+// FIX (Bug-Report, "Daten/Datei weg beim Wiederöffnen"): Alle Upload-
+// Funktionen hier liefen bisher AUSSCHLIESSLICH über sessionId – eine rein
+// browserlokale, projektunabhängige ID. Beim ersten Speichern eines
+// Projekts wurden die Dateien zwar per project_id verknüpft (siehe
+// /api/attach-photos), danach aber die sessionId aus dem Browser gelöscht.
+// Wurde ein GESPEICHERTES Projekt später erneut geöffnet, entstand eine
+// NEUE sessionId – die Upload-Widgets suchten dann weiter nur nach dieser
+// neuen (leeren) sessionId und fanden die längst vorhandenen, dem Projekt
+// zugeordneten Dateien nie wieder (obwohl sie in der Datenbank unverändert
+// vorhanden waren). Jetzt: sobald eine projectId bekannt ist (Projekt
+// existiert bereits), läuft Upload/Abruf DIREKT über project_id – keine
+// Zwischenstation über session_id mehr nötig, Dateien bleiben dauerhaft
+// sichtbar. Ohne projectId (neues, noch nicht gespeichertes Aufmaß) bleibt
+// exakt das bisherige Verhalten über session_id erhalten.
+function speicherPfad(bereich: 'fotos' | 'grundrisse' | 'drohnen' | 'scans', fileName: string, sessionId: string, projectId?: string | null) {
+  const teilpfad = bereich === 'fotos' ? '' : `${bereich}/`;
+  return projectId
+    ? `projects/${projectId}/${teilpfad}${fileName}`
+    : `temp/${sessionId}/${teilpfad}${fileName}`;
+}
+
 // Upload direkt vom Browser zu Supabase Storage.
 // Umgeht das Vercel-Body-Limit (~4,5MB) und zeigt echte Fehlermeldungen.
 export async function uploadProjectMediaClient(
   file: File,
-  sessionId: string
+  sessionId: string,
+  projectId?: string | null
 ): Promise<ProjectMedia> {
   const supabase = createClient();
 
@@ -32,7 +54,7 @@ export async function uploadProjectMediaClient(
 
   const fileExt = file.name.split('.').pop()?.toLowerCase() || 'jpg';
   const fileName = `${Date.now()}_${Math.random().toString(36).substring(2, 8)}.${fileExt}`;
-  const storagePath = `temp/${sessionId}/${fileName}`;
+  const storagePath = speicherPfad('fotos', fileName, sessionId, projectId);
 
   const { error: uploadError } = await supabase.storage
     .from('project-media')
@@ -43,7 +65,8 @@ export async function uploadProjectMediaClient(
   const { data: media, error: dbError } = await supabase
     .from('project_media')
     .insert({
-      session_id: sessionId,
+      project_id: projectId || null,
+      session_id: projectId ? null : sessionId,
       file_name: file.name,
       storage_path: storagePath,
       file_type: file.type,
@@ -66,7 +89,8 @@ export async function uploadProjectMediaClient(
 // von den Baustellen-Fotos getrennt – die KI-Foto-Analyse bleibt unberührt.
 export async function uploadGrundrissClient(
   file: File,
-  sessionId: string
+  sessionId: string,
+  projectId?: string | null
 ): Promise<ProjectMedia> {
   const supabase = createClient();
 
@@ -79,7 +103,7 @@ export async function uploadGrundrissClient(
 
   const fileExt = file.name.split('.').pop()?.toLowerCase() || (isPdf ? 'pdf' : 'jpg');
   const fileName = `${Date.now()}_${Math.random().toString(36).substring(2, 8)}.${fileExt}`;
-  const storagePath = `temp/${sessionId}/grundrisse/${fileName}`;
+  const storagePath = speicherPfad('grundrisse', fileName, sessionId, projectId);
 
   const { error: uploadError } = await supabase.storage
     .from('project-media')
@@ -90,7 +114,8 @@ export async function uploadGrundrissClient(
   const { data: media, error: dbError } = await supabase
     .from('project_media')
     .insert({
-      session_id: sessionId,
+      project_id: projectId || null,
+      session_id: projectId ? null : sessionId,
       file_name: file.name,
       storage_path: storagePath,
       file_type: file.type,
@@ -108,14 +133,13 @@ export async function uploadGrundrissClient(
   return media as ProjectMedia;
 }
 
-export async function getGrundrisseClient(sessionId: string): Promise<ProjectMedia[]> {
+export async function getGrundrisseClient(sessionId: string, projectId?: string | null): Promise<ProjectMedia[]> {
   const supabase = createClient();
 
-  const { data, error } = await supabase
-    .from('project_media')
-    .select('*')
-    .eq('session_id', sessionId)
-    .is('project_id', null)
+  let query = supabase.from('project_media').select('*');
+  query = projectId ? query.eq('project_id', projectId) : query.eq('session_id', sessionId).is('project_id', null);
+
+  const { data, error } = await query
     .like('storage_path', '%/grundrisse/%')
     .order('created_at', { ascending: false });
 
@@ -123,14 +147,13 @@ export async function getGrundrisseClient(sessionId: string): Promise<ProjectMed
   return (data || []) as ProjectMedia[];
 }
 
-export async function getProjectMediaClient(sessionId: string): Promise<ProjectMedia[]> {
+export async function getProjectMediaClient(sessionId: string, projectId?: string | null): Promise<ProjectMedia[]> {
   const supabase = createClient();
 
-  const { data, error } = await supabase
-    .from('project_media')
-    .select('*')
-    .eq('session_id', sessionId)
-    .is('project_id', null)
+  let query = supabase.from('project_media').select('*');
+  query = projectId ? query.eq('project_id', projectId) : query.eq('session_id', sessionId).is('project_id', null);
+
+  const { data, error } = await query
     .not('storage_path', 'like', '%/grundrisse/%') // Grundrisse laufen getrennt
     .not('storage_path', 'like', '%/drohnen/%') // Drohnen-Aufnahmen laufen getrennt
     .order('created_at', { ascending: false });
@@ -144,7 +167,8 @@ export async function getProjectMediaClient(sessionId: string): Promise<ProjectM
 // von den Baustellen-Fotos getrennt – die KI-Foto-Analyse bleibt unberührt.
 export async function uploadDrohneClient(
   file: File,
-  sessionId: string
+  sessionId: string,
+  projectId?: string | null
 ): Promise<ProjectMedia> {
   const supabase = createClient();
 
@@ -155,7 +179,7 @@ export async function uploadDrohneClient(
 
   const fileExt = file.name.split('.').pop()?.toLowerCase() || 'jpg';
   const fileName = `${Date.now()}_${Math.random().toString(36).substring(2, 8)}.${fileExt}`;
-  const storagePath = `temp/${sessionId}/drohnen/${fileName}`;
+  const storagePath = speicherPfad('drohnen', fileName, sessionId, projectId);
 
   const { error: uploadError } = await supabase.storage
     .from('project-media')
@@ -166,7 +190,8 @@ export async function uploadDrohneClient(
   const { data: media, error: dbError } = await supabase
     .from('project_media')
     .insert({
-      session_id: sessionId,
+      project_id: projectId || null,
+      session_id: projectId ? null : sessionId,
       file_name: file.name,
       storage_path: storagePath,
       file_type: file.type,
@@ -184,14 +209,13 @@ export async function uploadDrohneClient(
   return media as ProjectMedia;
 }
 
-export async function getDrohnenClient(sessionId: string): Promise<ProjectMedia[]> {
+export async function getDrohnenClient(sessionId: string, projectId?: string | null): Promise<ProjectMedia[]> {
   const supabase = createClient();
 
-  const { data, error } = await supabase
-    .from('project_media')
-    .select('*')
-    .eq('session_id', sessionId)
-    .is('project_id', null)
+  let query = supabase.from('project_media').select('*');
+  query = projectId ? query.eq('project_id', projectId) : query.eq('session_id', sessionId).is('project_id', null);
+
+  const { data, error } = await query
     .like('storage_path', '%/drohnen/%')
     .order('created_at', { ascending: false });
 
@@ -220,7 +244,8 @@ export async function deleteProjectMediaClient(mediaId: string, storagePath: str
 export async function uploadScanClient(
   file: File,
   sessionId: string,
-  ext: string
+  ext: string,
+  projectId?: string | null
 ): Promise<ProjectMedia> {
   const supabase = createClient();
 
@@ -229,7 +254,7 @@ export async function uploadScanClient(
   const { data: { user } } = await supabase.auth.getUser();
 
   const fileName = `${Date.now()}_${Math.random().toString(36).substring(2, 8)}.${ext}`;
-  const storagePath = `temp/${sessionId}/scans/${fileName}`;
+  const storagePath = speicherPfad('scans', fileName, sessionId, projectId);
 
   const { error: uploadError } = await supabase.storage
     .from('project-media')
@@ -240,7 +265,8 @@ export async function uploadScanClient(
   const { data: media, error: dbError } = await supabase
     .from('project_media')
     .insert({
-      session_id: sessionId,
+      project_id: projectId || null,
+      session_id: projectId ? null : sessionId,
       file_name: file.name,
       storage_path: storagePath,
       file_type: `scan/${ext}`,

@@ -45,6 +45,15 @@ interface Measurements {
 
 interface Props {
   sessionId: string;
+  // FIX (Bug-Report, Konsistenz mit den anderen drei Upload-Komponenten):
+  // Ist ein Projekt bereits gespeichert, wird die Scan-Datei direkt mit
+  // project_id abgelegt statt über die browserlokale sessionId – sonst
+  // bleibt sie nach einem Neuöffnen des Projekts dauerhaft verwaist
+  // (session_id zeigt auf eine längst nicht mehr existierende Sitzung).
+  // Die Messwerte selbst kommen (wie bisher) über onMeasurements in
+  // scaffold_step2/step2-Daten und werden beim Speichern mit dem Projekt
+  // persistiert – diese Änderung betrifft nur die Roh-Scan-Datei im Storage.
+  projectId?: string | null;
   onMeasurements?: (m: Measurements, name: string) => void;
 }
 
@@ -57,7 +66,7 @@ const REF_OPTIONS: { id: keyof Pick<Measurements, 'lengthM' | 'widthM' | 'height
   { id: 'heightM', label: 'Gebäude-Höhe' },
 ];
 
-export default function LiDARUpload({ sessionId, onMeasurements }: Props) {
+export default function LiDARUpload({ sessionId, projectId, onMeasurements }: Props) {
   const [uploading, setUploading] = useState(false);
   const [scan, setScan] = useState<{ m: Measurements; name: string } | null>(null);
   // Kalibrierung
@@ -96,7 +105,7 @@ export default function LiDARUpload({ sessionId, onMeasurements }: Props) {
       if (file.size >= WORKER_AB_BYTES) {
         // ── Großer Scan: Direkt-Upload + Worker-Analyse ──
         setPhase(`Lade hoch (${(file.size / 1e6).toFixed(0)} MB, direkt zum Speicher)…`);
-        const media = await uploadScanClient(file, sessionId, ext);
+        const media = await uploadScanClient(file, sessionId, ext, projectId);
 
         // Pollen, bis der Worker fertig ist (max. 10 Minuten)
         const deadline = Date.now() + 10 * 60 * 1000;
@@ -118,6 +127,7 @@ export default function LiDARUpload({ sessionId, onMeasurements }: Props) {
         const fd = new FormData();
         fd.append('file', file);
         fd.append('sessionId', sessionId);
+        if (projectId) fd.append('projectId', projectId);
 
         const res = await fetch('/api/lidar-upload', { method: 'POST', body: fd });
         const json = await res.json();
@@ -134,7 +144,7 @@ export default function LiDARUpload({ sessionId, onMeasurements }: Props) {
       setPhase('');
       e.target.value = '';
     }
-  }, [sessionId, onMeasurements]);
+  }, [sessionId, projectId, onMeasurements]);
 
   // Referenzmaß anwenden: alle Werte werden um den Faktor skaliert
   const kalibrieren = useCallback(() => {

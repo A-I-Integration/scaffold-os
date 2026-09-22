@@ -59,7 +59,11 @@ export async function POST(req: NextRequest) {
   try {
     const model = process.env.KI_VISION_MODEL || 'mistral-small-2506';
 
-    const { sessionId } = await req.json();
+    // FIX (Bug-Report): bei bereits gespeichertem Projekt (projectId
+    // mitgeschickt) werden die Fotos über project_id gesucht – sonst
+    // findet die Analyse Dateien nicht, die schon einem Projekt zugeordnet
+    // sind (session_id ist dann null, siehe lib/media-client.ts).
+    const { sessionId, projectId } = await req.json();
     if (!sessionId) {
       return NextResponse.json({ success: false, error: 'sessionId fehlt' }, { status: 400 });
     }
@@ -80,10 +84,9 @@ export async function POST(req: NextRequest) {
     // 404-'Keine Fotos'-Prüfung weiterhin sofort, und die Bild-
     // URLs sind zum Zeitpunkt der Job-Anlage garantiert die
     // richtigen (auch wenn session_id später attached wird).
-    const { data: media, error: dbError } = await supabase
-      .from('project_media')
-      .select('storage_path, file_type')
-      .eq('session_id', sessionId)
+    let fotoQuery = supabase.from('project_media').select('storage_path, file_type');
+    fotoQuery = projectId ? fotoQuery.eq('project_id', projectId) : fotoQuery.eq('session_id', sessionId);
+    const { data: media, error: dbError } = await fotoQuery
       .like('file_type', 'image/%')
       .not('storage_path', 'like', '%/grundrisse/%') // Grundrisse gehören zur Grundriss-KI
       .order('created_at', { ascending: true })

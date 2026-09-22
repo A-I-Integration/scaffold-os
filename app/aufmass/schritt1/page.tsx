@@ -649,9 +649,9 @@ function Schritt1Content() {
               <p className="text-sm text-[#86868b] mb-4">
                 Fotos werden mit dem Projekt verknüpft, sobald es gespeichert wird.
               </p>
-              <PhotoUpload sessionId={sessionId} />
+              <PhotoUpload sessionId={sessionId} projectId={projectId} />
               <div className="mt-4">
-                <FotoAnalyse sessionId={sessionId} />
+                <FotoAnalyse sessionId={sessionId} projectId={projectId} />
               </div>
             </div>
           )}
@@ -665,6 +665,7 @@ function Schritt1Content() {
               </p>
               <LiDARUpload
                 sessionId={sessionId}
+                projectId={projectId}
                 onMeasurements={(m, name) => {
                   localStorage.setItem('scaffold_lidar_measurements', JSON.stringify(m));
                   if (name) localStorage.setItem('scaffold_lidar_scan_name', name);
@@ -688,7 +689,7 @@ function Schritt1Content() {
                 Luftbilder der Baustelle hochladen – Dachform, Aufbauten und schwer zugängliche
                 Bereiche dokumentieren. Aufnahmen werden mit dem Projekt verknüpft.
               </p>
-              <DrohnenUpload sessionId={sessionId} />
+              <DrohnenUpload sessionId={sessionId} projectId={projectId} />
             </div>
           )}
 
@@ -700,7 +701,7 @@ function Schritt1Content() {
                 Grundriss als Bild oder PDF hochladen – die KI liest Maße und Gebäudedaten aus
                 und füllt das Aufmaß in Schritt 2 automatisch vor.
               </p>
-              <GrundrissUpload sessionId={sessionId} />
+              <GrundrissUpload sessionId={sessionId} projectId={projectId} />
             </div>
           )}
 

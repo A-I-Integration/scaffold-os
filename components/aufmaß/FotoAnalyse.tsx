@@ -5,6 +5,9 @@ import KiHinweis from '@/components/KiHinweis';
 
 interface Props {
   sessionId: string;
+  // FIX (Bug-Report): bei bereits gespeichertem Projekt sucht die Analyse
+  // die Fotos über project_id statt über die browserlokale sessionId.
+  projectId?: string | null;
 }
 
 // Phase 66: Die Analyse läuft jetzt über die Queue (POST legt einen
@@ -16,7 +19,7 @@ interface Props {
 const POLL_INTERVAL_MS = 3000;
 const POLL_MAX = 200; // 200 × 3 s = max. 10 Minuten Wartezeit
 
-export default function FotoAnalyse({ sessionId }: Props) {
+export default function FotoAnalyse({ sessionId, projectId }: Props) {
   const [analyzing, setAnalyzing] = useState(false);
   const [result, setResult] = useState<string | null>(null);
 
@@ -35,7 +38,7 @@ export default function FotoAnalyse({ sessionId }: Props) {
       const res = await fetch('/api/foto-analyse', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sessionId }),
+        body: JSON.stringify({ sessionId, projectId }),
       });
       const json = await res.json();
       if (!res.ok || !json.success) throw new Error(json.error || 'Analyse fehlgeschlagen');
@@ -62,7 +65,7 @@ export default function FotoAnalyse({ sessionId }: Props) {
     } finally {
       setAnalyzing(false);
     }
-  }, [sessionId]);
+  }, [sessionId, projectId]);
 
   return (
     <div className="space-y-3">
