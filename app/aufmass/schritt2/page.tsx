@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { sollFrischGeladenWerden, leseMarkierung, setzeMarkierung } from '@/lib/aufmass-projekt-session';
+import { sollFrischGeladenWerden, leseMarkierung, setzeMarkierung, leiteStepsAusKiResultAb } from '@/lib/aufmass-projekt-session';
 import KIWarnings from '@/components/aufmaß/KIWarnings';
 import { useKIValidation } from '@/hooks/useKIValidation';
 import { PartialScaffoldInput, LASTKLASSE_Q1_KN_M2 } from '@/types/scaffold';
@@ -189,13 +189,19 @@ function leeresFormS2() {
         const json = await res.json();
         const d = json.project?.data;
         if (json.success && d?.step1) localStorage.setItem('scaffold_step1', JSON.stringify(d.step1));
-        if (json.success && d?.step2) {
-          localStorage.setItem('scaffold_step2', JSON.stringify(d.step2));
+        // FIX (Bug-Report: "Schritt 2 alle Daten raus" / "CAD-Datei komplett
+        // raus"): ältere, über den CAD-Planer erzeugte Projekte speichern
+        // kein step2 – nur kiResult.building. Bisher blieb Schritt 2 dann
+        // komplett leer (nur der Lastklasse-3-Default aus leeresFormS2()
+        // war noch zu sehen). Jetzt: wie in Schritt 6 daraus ableiten.
+        const step2Quelle = d?.step2 || leiteStepsAusKiResultAb({ step2: d?.step2 }, d?.kiResult).step2;
+        if (json.success && step2Quelle) {
+          localStorage.setItem('scaffold_step2', JSON.stringify(step2Quelle));
           setStep1Data(d.step1 || {});
           setForm((prev) => ({
-            ...prev, ...d.step2,
-            abschnitte: Array.isArray(d.step2.abschnitte) ? d.step2.abschnitte : [],
-            bruecke: d.step2.bruecke && Array.isArray(d.step2.bruecke.spannweiten) ? d.step2.bruecke : prev.bruecke,
+            ...prev, ...step2Quelle,
+            abschnitte: Array.isArray(step2Quelle.abschnitte) ? step2Quelle.abschnitte : [],
+            bruecke: step2Quelle.bruecke && Array.isArray(step2Quelle.bruecke.spannweiten) ? step2Quelle.bruecke : prev.bruecke,
           }));
         }
       } catch { /* Fallback-Effekt unten greift, wenn dieser fehlschlägt */

@@ -2,7 +2,7 @@
 
 import { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { sollFrischGeladenWerden, leseMarkierung, setzeMarkierung } from '@/lib/aufmass-projekt-session';
+import { sollFrischGeladenWerden, leseMarkierung, setzeMarkierung, leiteStepsAusKiResultAb } from '@/lib/aufmass-projekt-session';
 import { GERUEST_SYSTEME, CUSTOM_SYSTEM_ID, findeSystem } from '@/lib/calculations/geruest-systeme';
 
 const LEERES_FORM_S3 = {
@@ -67,7 +67,12 @@ function Schritt3Content() {
             const d = json.project?.data;
             if (json.success && d?.step1) { localStorage.setItem('scaffold_step1', JSON.stringify(d.step1)); setStep1Data(d.step1); }
             if (json.success && d?.step2?.abschnitte) { setAbschnitte(d.step2.abschnitte); }
-            if (json.success && d?.step3) { localStorage.setItem('scaffold_step3', JSON.stringify(d.step3)); setForm(d.step3); }
+            // FIX (Bug-Report: "CAD-Datei komplett raus"): ältere, über den
+            // CAD-Planer erzeugte Projekte speichern kein step3 – nur
+            // kiResult.systemId. Bisher blieb Schritt 3 dann leer. Jetzt:
+            // wie in Schritt 6 daraus ableiten.
+            const step3Quelle = d?.step3 || leiteStepsAusKiResultAb({ step3: d?.step3 }, d?.kiResult).step3;
+            if (json.success && step3Quelle) { localStorage.setItem('scaffold_step3', JSON.stringify(step3Quelle)); setForm(step3Quelle); }
           } catch { /* ignore, unten bleibt der bisherige Stand */ }
         })();
         return;
