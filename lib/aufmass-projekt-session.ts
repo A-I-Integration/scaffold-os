@@ -37,7 +37,12 @@ export const WIZARD_KEYS = [
   'scaffold_grundriss_daten',
   'scaffold_grundriss_analyse',
   'scaffold_grundriss_fresh',
-  'scaffold_schritt6_geladenes_projekt',
+  'scaffold_schritt_geladenes_projekt_1',
+  'scaffold_schritt_geladenes_projekt_2',
+  'scaffold_schritt_geladenes_projekt_3',
+  'scaffold_schritt_geladenes_projekt_4',
+  'scaffold_schritt_geladenes_projekt_5',
+  'scaffold_schritt_geladenes_projekt_6',
 ];
 
 /** Entfernt alle oben gelisteten Aufmaß-Zwischenspeicher aus dem Browser. */
@@ -68,41 +73,55 @@ export function setzeMarkierung(projectId: string) {
 }
 
 // FIX (Bug-Report, 2. Anlauf: "Angebot öffnen" zeigt ein Aufmaß OHNE die
-// CAD-Daten"): Die Markierung oben wird von JEDEM der 6 Schritte
-// geschrieben und sagt deshalb nur "irgendein Schritt hat dieses Projekt
-// diese Sitzung schon angefasst" – nicht "Schritt 6 hat für GENAU dieses
-// Projekt seine eigenen, vollständigen Daten schon aus der Datenbank
-// geladen". Der bisherige Zusatz-Check in Schritt 6 (ob überhaupt
-// irgendein scaffold_step2 im Zwischenspeicher liegt) hat das nicht
-// zuverlässig unterschieden: lag dort noch scaffold_step2 eines VORHER
-// besuchten, ANDEREN Projekts (der Zwischenspeicher ist nicht projekt-
-// gebunden), wurde der Check fälschlich "erfüllt" und Schritt 6 blieb
-// leer. Eigener, NUR von Schritt 6 selbst beschriebener Schlüssel, damit
-// diese Entscheidung projektgenau und unabhängig von anderen Schritten ist.
-const SCHRITT6_GELADEN_KEY = 'scaffold_schritt6_geladenes_projekt';
+// CAD-Daten" / "über Dashboard → Schritt 1 → Schritt 2 bleibt Schritt 2
+// leer"): Die Markierung oben wird von JEDEM der 6 Schritte geschrieben
+// und sagt deshalb nur "irgendein Schritt hat dieses Projekt diese
+// Sitzung schon angefasst" – nicht "DIESER Schritt hat für GENAU dieses
+// Projekt seine EIGENEN, vollständigen Daten schon aus der Datenbank
+// geladen". Beispiel für den zweiten Bug-Report: Dashboard öffnet ein
+// Projekt über Schritt 1 (setzt die Markierung); klickt man von dort zu
+// Schritt 2 weiter, sah Schritt 2 die (von Schritt 1 gesetzte) Markierung
+// bereits auf "dieses Projekt" stehen und hielt sich fälschlich für schon
+// geladen – obwohl er selbst nie etwas geladen hatte und scaffold_step2
+// im Zwischenspeicher noch fehlte. Ein früherer Zusatz-Check in Schritt 6
+// allein (ob überhaupt irgendein scaffold_step2 im Zwischenspeicher
+// liegt) reicht dafür nicht: lag dort noch scaffold_step2 eines VORHER
+// besuchten, ANDEREN Projekts, wurde der Check fälschlich "erfüllt".
+// Jeder Schritt merkt sich deshalb jetzt selbst, unter einem NUR von ihm
+// selbst beschriebenen Schlüssel, für welche Projekt-ID er seine eigenen
+// Daten zuletzt wirklich vollständig aus der Datenbank geladen hat –
+// projektgenau und unabhängig davon, was andere Schritte im geteilten
+// Zwischenspeicher/der geteilten Markierung hinterlassen haben.
+const SCHRITT_GELADEN_PREFIX = 'scaffold_schritt_geladenes_projekt_';
 
-/** Liefert die Projekt-ID, für die Schritt 6 seine Daten zuletzt selbst
- * vollständig aus der Datenbank geladen hat (oder null). */
-export function leseSchritt6GeladenesProjekt(): string | null {
+/** Liefert die Projekt-ID, für die GENAU dieser Schritt (1-6) seine Daten
+ * zuletzt selbst vollständig aus der Datenbank geladen hat (oder null). */
+export function leseSchrittGeladenesProjekt(schritt: number): string | null {
   if (typeof window === 'undefined') return null;
-  return localStorage.getItem(SCHRITT6_GELADEN_KEY);
+  return localStorage.getItem(SCHRITT_GELADEN_PREFIX + schritt);
 }
 
-/** Markiert, dass Schritt 6 seine Daten für GENAU dieses Projekt geladen hat. */
-export function setzeSchritt6GeladenesProjekt(projectId: string) {
+/** Markiert, dass GENAU dieser Schritt (1-6) seine Daten für dieses
+ * Projekt geladen hat. */
+export function setzeSchrittGeladenesProjekt(schritt: number, projectId: string) {
   if (typeof window === 'undefined') return;
-  localStorage.setItem(SCHRITT6_GELADEN_KEY, projectId);
+  localStorage.setItem(SCHRITT_GELADEN_PREFIX + schritt, projectId);
 }
+
+/** Alle 6 "hat dieser Schritt für dieses Projekt schon geladen"-Schlüssel
+ * (siehe SCHRITT_GELADEN_PREFIX) – für WIZARD_KEYS unten. */
+const ALLE_SCHRITT_GELADEN_KEYS = [1, 2, 3, 4, 5, 6].map((n) => SCHRITT_GELADEN_PREFIX + n);
 
 /** Nach erfolgreichem Speichern: Markierung entfernen, damit ein
  * späteres erneutes Öffnen wieder korrekt frisch von der Datenbank lädt. */
 export function schliesseSitzungAb() {
   if (typeof window === 'undefined') return;
   localStorage.removeItem(MARKER_KEY);
-  // Siehe SCHRITT6_GELADEN_KEY oben: nach dem Speichern soll ein späteres
-  // erneutes Öffnen (z.B. über "Angebot öffnen") ebenfalls wieder frisch
-  // laden, statt sich auf den jetzt ggf. veralteten Ladestand zu verlassen.
-  localStorage.removeItem(SCHRITT6_GELADEN_KEY);
+  // Siehe SCHRITT_GELADEN_PREFIX oben: nach dem Speichern soll ein
+  // späteres erneutes Öffnen (z.B. über "Angebot öffnen" oder das
+  // Dashboard) für JEDEN Schritt wieder frisch laden, statt sich auf den
+  // jetzt ggf. veralteten Ladestand zu verlassen.
+  ALLE_SCHRITT_GELADEN_KEYS.forEach((k) => localStorage.removeItem(k));
 }
 
 // FIX (Bug-Report: "wenn ich es neu mache soll die Seite immer leer sein"):

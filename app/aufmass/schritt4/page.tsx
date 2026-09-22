@@ -2,7 +2,7 @@
 
 import { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { sollFrischGeladenWerden, leseMarkierung, setzeMarkierung } from '@/lib/aufmass-projekt-session';
+import { setzeMarkierung, leseSchrittGeladenesProjekt, setzeSchrittGeladenesProjekt } from '@/lib/aufmass-projekt-session';
 
 const LEERES_FORM_S4 = {
   // Bestehend
@@ -44,7 +44,12 @@ function Schritt4Content() {
   const gefahrenListe = ['Hochspannung', 'Bahnstrecke', 'Öffentlicher Weg', 'Nachbargrundstück', 'Glasfassade', 'Denkmalschutz'];
 
   useEffect(() => {
-    if (sollFrischGeladenWerden(projectId, leseMarkierung())) {
+    // FIX (Bug-Report: "über Dashboard -> Schritt 1 -> Schritt 2 bleibt
+    // Schritt 2 leer" – dasselbe Muster betrifft auch Schritt 4): siehe
+    // ausführlicher Kommentar in Schritt 3. Projektgenauer, nur von
+    // Schritt 4 selbst beschriebener Ladestand statt der geteilten,
+    // nicht-schrittspezifischen Markierung allein.
+    if (leseSchrittGeladenesProjekt(4) !== projectId) {
         setzeMarkierung(projectId!);
         setForm({ ...LEERES_FORM_S4 });
         (async () => {
@@ -52,6 +57,7 @@ function Schritt4Content() {
             const res = await fetch('/api/projects?id=' + projectId);
             const json = await res.json();
             const d = json.project?.data;
+            if (json.success) setzeSchrittGeladenesProjekt(4, projectId!);
             if (json.success && d?.step1) { localStorage.setItem('scaffold_step1', JSON.stringify(d.step1)); setStep1Data(d.step1); }
             if (json.success && d?.step4) { localStorage.setItem('scaffold_step4', JSON.stringify(d.step4)); setForm(d.step4); }
           } catch { /* ignore */ }
