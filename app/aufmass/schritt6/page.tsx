@@ -12,7 +12,7 @@ import DinCheck from '@/components/aufmaß/DinCheck';
 import { KIAnalysis } from '@/types/scaffold';
 import { systemAnzeigename } from '@/lib/calculations/geruest-systeme';
 import { geruesttypZuScaffoldType } from '@/lib/calculations/scaffold-engine';
-import { sollFrischGeladenWerden, leseMarkierung, setzeMarkierung, schliesseSitzungAb, loescheWizardDaten } from '@/lib/aufmass-projekt-session';
+import { sollFrischGeladenWerden, leseMarkierung, setzeMarkierung, schliesseSitzungAb, loescheWizardDaten, leiteStepsAusKiResultAb, gewerkeVonStep1 } from '@/lib/aufmass-projekt-session';
 import DispositionResult from '@/components/aufmaß/DispositionResult';
 import { DispositionResult as DispositionData } from '@/lib/calculations/disposition';
 import { generateInvoicePDF, fmtDate as fmtRechnungsDatum, type Invoice } from '@/lib/invoice-pdf';
@@ -180,26 +180,10 @@ function Schritt6Content() {
         const p = json.project;
         const d = p.data || {};
         const { angebotAnpassungen, kiResult: savedKi, angebotsStatus: savedStatus, preisModus: savedPreisModus, festpreisProM2: savedFestpreis, ...steps } = d;
-        // Phase 81: Fehlende step2/step3 aus kiResult ableiten (CAD-Projekte,
-        // deren Frontend step2/3 nicht mitschrieb - z. B. veraltetes Bundle).
-        // kiResult enthaelt building + systemId ab Phase 81, Werte 1:1.
-        if (!(steps as any).step2 && savedKi?.building) {
-          const b = savedKi.building;
-          (steps as any).step2 = {
-            laenge: String(b.lengthM || ''), breite: String(b.widthM || ''),
-            hoehe: String(b.heightM || ''), traufhoehe: String(b.eavesHeightM || ''),
-            dachform: b.roofForm ? String(b.roofForm)[0].toUpperCase() + String(b.roofForm).slice(1) : '',
-            fassade: 'Putz', hindernisse: [], abschnitte: [],
-            dachueberstand: String(b.overhangM ?? 0.5), durchfahrt: false,
-          };
-        }
-        if (!(steps as any).step3 && savedKi?.systemId) {
-          (steps as any).step3 = {
-            geruesttyp: 'fassade', system: savedKi.systemId, customSystem: '',
-            feldlange: '2.5', belag: 'stahl', gelander: true, diagonale: true,
-            fahrbar: false, boden: 'beton',
-          };
-        }
+        // Phase 81 (jetzt zentral in leiteStepsAusKiResultAb, siehe dort):
+        // Fehlende step2/step3 aus kiResult ableiten (CAD-Projekte, deren
+        // Frontend step2/3 nicht mitschrieb - z. B. veraltetes Bundle).
+        Object.assign(steps as any, leiteStepsAusKiResultAb(steps as any, savedKi));
         setStepData(steps);
         // Phase 68 (Fix Ruecknavigation): Schritte 1-5 auch in den lokalen
         // Zwischenspeicher spiegeln. Vorher landeten sie nur im React-State.
@@ -308,7 +292,7 @@ function Schritt6Content() {
   // schon in Schritt 1 (getLastklasse) für die dortige Lastklassen-
   // Einschätzung gilt, keine neue Regel.
   function gewerkeAnzeige(step1: any): string {
-    const g: string[] = Array.isArray(step1.gewerke) ? step1.gewerke : [];
+    const g = gewerkeVonStep1(step1);
     return g.length > 0 ? g.join(', ') : '–';
   }
   function mapGewerkeZuTrade(gewerke: string[]): string {
@@ -383,7 +367,7 @@ function Schritt6Content() {
       : undefined;
 
     return {
-      customer: s1.name || '', address: s1.adresse || '', trade: mapGewerkeZuTrade(s1.gewerke),
+      customer: s1.name || '', address: s1.adresse || '', trade: mapGewerkeZuTrade(gewerkeVonStep1(s1)),
       projectDurationDays: parseInt(s1.dauer) || 30, lengthM: parseFloat(s2.laenge) || 0, heightM: parseFloat(s2.hoehe) || 0,
       widthM: parseFloat(s2.breite) || 0, eavesHeightM: parseFloat(s2.traufhoehe) || 0, roofForm: mapDachform(s2.dachform),
       roofOverhangM: parseFloat(s2.dachueberstand) || 0, facadeType: mapFassade(s2.fassade), obstacles: mapHindernisse(s2),
