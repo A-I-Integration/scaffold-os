@@ -94,6 +94,12 @@ export async function GET() {
         margin: p.margin_percent,
         profit: Math.round(p.estimated_profit),
         created_at: p.created_at,
+        // NEU (Dashboard "Letzte Projekte" jetzt monatsgefiltert statt
+        // fest auf 10 Einträge begrenzt): daysSinceUpdate wird hier
+        // genauso berechnet wie unten bei recentProjects, damit die
+        // "Letzte Projekte"-Tabelle beim Wechsel auf einen Monat aus
+        // projectsByMonth exakt dieselbe "Update"-Spalte anzeigen kann.
+        daysSinceUpdate: Math.floor((now.getTime() - new Date(p.updated_at).getTime()) / (1000 * 60 * 60 * 24)),
       });
     });
 
