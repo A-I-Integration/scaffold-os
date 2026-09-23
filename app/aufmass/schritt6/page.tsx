@@ -185,7 +185,16 @@ function Schritt6Content() {
     // Projekt-ID Schritt 6 seine Daten zuletzt selbst geladen hat –
     // projektgenau und unabhängig davon, was andere Schritte zwischendurch
     // im geteilten Zwischenspeicher abgelegt haben.
-    if (leseSchrittGeladenesProjekt(6) === projectId) return; // Schritt 6 hat DIESES Projekt bereits selbst geladen
+    // FIX (Bug-Report: "über Touren/Kunden-Link auf ein Projekt geklickt,
+    // Schritt 6 landet leer"): Die Markierung allein reicht nicht - sie
+    // übersteht ein normales <a href>-Neuladen der Seite (kein interner
+    // App-Wechsel, z.B. von der Touren- oder Kunden-Seite), der React-
+    // Zustand (stepData) aber nicht. War die Markierung von einem FRÜHEREN
+    // Seitenaufruf noch für GENAU dieses Projekt gesetzt, dachte Schritt 6
+    // fälschlich "schon geladen" und übersprang den Datenbank-Abruf, obwohl
+    // auf der frisch geladenen Seite noch gar keine Daten im Speicher
+    // waren. Jetzt: nur überspringen, wenn tatsächlich schon Daten da sind.
+    if (leseSchrittGeladenesProjekt(6) === projectId && Object.keys(stepData).length > 0) return; // Schritt 6 hat DIESES Projekt bereits selbst geladen
     setzeMarkierung(projectId!);
     // FIX (systematische Prüfung): sofort zurücksetzen, bevor der Abruf
     // startet – sonst könnten kurzzeitig oder bei einem fehlschlagenden
