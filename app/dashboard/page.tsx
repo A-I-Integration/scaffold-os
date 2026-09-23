@@ -78,6 +78,22 @@ interface ChartsData {
 interface MonthProject {
   id: string; name: string; customer: string; status: string;
   value: number; margin: number; profit: number; created_at: string;
+  daysSinceUpdate: number;
+}
+
+// Für "Letzte Projekte": aktueller Monat als "YYYY-MM", gleiches Format
+// wie monthKey serverseitig (getMonthKey in stats/route.ts).
+function aktuellerMonatKey() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+}
+const MONATSNAMEN = [
+  'Januar', 'Februar', 'März', 'April', 'Mai', 'Juni',
+  'Juli', 'August', 'September', 'Oktober', 'November', 'Dezember',
+];
+function formatMonthLong(m: string) {
+  const [y, mo] = m.split('-');
+  return `${MONATSNAMEN[parseInt(mo, 10) - 1]} ${y}`;
 }
 
 export default function DashboardPage() {
@@ -93,8 +109,19 @@ export default function DashboardPage() {
   const [zeigeOnboarding, setZeigeOnboarding] = useState(false);
   const [projectsByMonth, setProjectsByMonth] = useState<Record<string, MonthProject[]>>({});
   const [selectedMonth, setSelectedMonth] = useState<string | null>(null);
+  // NEU (Bug-Report: "Aktualisieren-Button funktioniert nicht"): der Klick
+  // hat vorher tatsächlich neu geladen, aber ohne jedes sichtbare Feedback
+  // (kein Spinner, Button blieb unverändert) – wenn sich die Daten gerade
+  // nicht geändert hatten, sah es für den Nutzer so aus, als würde gar
+  // nichts passieren. `refreshing` macht den Klick jetzt sichtbar.
+  const [refreshing, setRefreshing] = useState(false);
+  // NEU (Bug-Report: "Letzte Projekte" wird sonst unbegrenzt lang):
+  // Tabelle zeigt jetzt nur noch den gewählten Monat, Default = aktueller
+  // Monat, Auswahl per Dropdown unter der Tabelle.
+  const [letzteProjekteMonat, setLetzteProjekteMonat] = useState<string>(aktuellerMonatKey());
 
   async function loadDashboard() {
+    setRefreshing(true);
     setError("");
     try {
       const res = await fetch(`/api/dashboard/stats?t=${Date.now()}`, { cache: "no-store" });
@@ -110,6 +137,7 @@ export default function DashboardPage() {
       setError(err.message);
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
   }
 
@@ -193,6 +221,15 @@ export default function DashboardPage() {
     ? Object.values(charts.marginDistribution).reduce((a, b) => a + b, 0)
     : 1;
 
+  // NEU: Projekte des im Dropdown gewählten Monats für "Letzte Projekte".
+  // aktuellerMonatKey() steht immer als Option zur Verfügung, auch wenn in
+  // diesem Monat noch kein Projekt angelegt wurde (dann leere Liste statt
+  // fehlender Dropdown-Option).
+  const letzteProjekteListe = projectsByMonth[letzteProjekteMonat] || [];
+  const letzteProjekteMonate = Array.from(
+    new Set([...Object.keys(projectsByMonth), aktuellerMonatKey()])
+  ).sort().reverse();
+
   if (loading && !stats) {
     return (
       <div className="min-h-screen bg-[#fbfbfd] text-[#1d1d1f] flex items-center justify-center">
@@ -212,12 +249,12 @@ export default function DashboardPage() {
         <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
           <div>
             <h1 className="text-2xl md:text-3xl font-semibold tracking-tight">Dashboard</h1>
-            <p className="text-[#86868b] text-sm mt-1">Live-Übersicht · aktualisiert alle 15 s</p>
+            <p className="text-[#86868b] text-sm mt-1">Live-Übersicht · aktualisiert alle 45 s</p>
           </div>
           <div className="flex gap-3">
-            <button onClick={loadDashboard}
-              className="inline-flex items-center gap-1.5 px-4 py-2 bg-white border border-black/10 hover:border-[#e8590c] text-[#1d1d1f] rounded-full text-sm transition-colors">
-              <RefreshCw className="w-4 h-4" /> Aktualisieren
+            <button onClick={loadDashboard} disabled={refreshing}
+              className="inline-flex items-center gap-1.5 px-4 py-2 bg-white border border-black/10 hover:border-[#e8590c] text-[#1d1d1f] rounded-full text-sm transition-colors disabled:opacity-60 disabled:cursor-wait">
+              <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} /> {refreshing ? 'Aktualisiert …' : 'Aktualisieren'}
             </button>
             <button onClick={() => { starteNeuesAufmass(); router.push("/aufmass/schritt1"); }}
               className="inline-flex items-center gap-1.5 px-4 py-2 bg-[#e8590c] hover:bg-[#d9480f] text-white rounded-full text-sm font-semibold transition-colors shadow-sm">
@@ -433,16 +470,20 @@ export default function DashboardPage() {
         {/* ═══ 6) PROJEKTE – mit Abschließen / Löschen ═══ */}
         <div id="projekte">
           <h2 className="text-lg font-semibold text-[#1d1d1f] mb-3 flex items-center gap-2">
-            <Warehouse className="w-5 h-5 text-[#e8590c]" /> Letzte Projekte {projects.length > 0 && `(${projects.length})`}
+            <Warehouse className="w-5 h-5 text-[#e8590c]" /> Letzte Projekte {letzteProjekteListe.length > 0 && `(${letzteProjekteListe.length})`}
           </h2>
 
-          {projects.length === 0 ? (
+          {(stats?.totalProjects ?? 0) === 0 ? (
             <div className="bg-white border border-black/5 shadow-sm rounded-2xl p-8 text-center">
               <p className="text-[#86868b] mb-4">Keine Projekte gefunden.</p>
               <button onClick={() => { starteNeuesAufmass(); router.push("/aufmass/schritt1"); }}
                 className="px-4 py-2 bg-[#e8590c] hover:bg-[#d9480f] text-white rounded-full text-sm font-semibold transition-colors shadow-sm">
                 Erstes Aufmaß anlegen
               </button>
+            </div>
+          ) : letzteProjekteListe.length === 0 ? (
+            <div className="bg-white border border-black/5 shadow-sm rounded-2xl p-8 text-center">
+              <p className="text-[#86868b]">Keine Projekte im gewählten Monat ({formatMonthLong(letzteProjekteMonat)}).</p>
             </div>
           ) : (
             <div className="bg-white border border-black/5 shadow-sm rounded-2xl overflow-x-auto">
@@ -459,7 +500,7 @@ export default function DashboardPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-black/5">
-                  {projects.map((p) => (
+                  {letzteProjekteListe.map((p) => (
                     <tr key={p.id} className="hover:bg-[#f5f5f7] transition-colors cursor-pointer"
                       onClick={() => router.push(`/aufmass/schritt1?id=${p.id}`)}>
                       <td className="px-4 py-3 font-medium text-[#1d1d1f]">{p.name}</td>
@@ -526,6 +567,25 @@ export default function DashboardPage() {
               </table>
             </div>
           )}
+
+          {/* NEU: Monatsauswahl für "Letzte Projekte" – Default aktueller Monat,
+              damit die Seite nicht unbegrenzt lang wird, alte Monate bleiben
+              aber über das Dropdown erreichbar. */}
+          <div className="flex items-center gap-2 mt-3">
+            <label htmlFor="letzte-projekte-monat" className="text-sm text-[#86868b]">Monat:</label>
+            <select
+              id="letzte-projekte-monat"
+              value={letzteProjekteMonat}
+              onChange={(e) => setLetzteProjekteMonat(e.target.value)}
+              className="bg-white border border-black/10 rounded-full px-3 py-1.5 text-sm text-[#1d1d1f] focus:outline-none focus:border-[#e8590c]"
+            >
+              {letzteProjekteMonate.map((m) => (
+                <option key={m} value={m}>
+                  {formatMonthLong(m)}{m === aktuellerMonatKey() ? ' (aktuell)' : ''}
+                </option>
+              ))}
+            </select>
+          </div>
         </div>
       </div>
     </div>
