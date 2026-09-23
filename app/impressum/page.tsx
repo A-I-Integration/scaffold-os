@@ -30,7 +30,7 @@ export default function ImpressumPage() {
             <h2 className="text-lg font-semibold text-[#e8590c] mb-2">Angaben gemäß § 5 DDG</h2>
             <p>
               AI Integration<br />
-              Inhaberin: Michelle Merola (Einzelunternehmen)<br />
+              Inhaberin: Michelle Merola<br />
               Ölbachstr. 48<br />
               48691 Vreden
             </p>
@@ -53,15 +53,8 @@ export default function ImpressumPage() {
           </div>
 
           <div>
-            <h2 className="text-lg font-semibold text-[#e8590c] mb-2">Unternehmensform</h2>
-            <p>
-              AI Integration ist ein Einzelunternehmen (kein Kleingewerbe).
-            </p>
-          </div>
-
-          <div>
             <h2 className="text-lg font-semibold text-[#e8590c] mb-2">Umsatzsteuer-Identifikationsnummer</h2>
-            <p>Umsatzsteuer-Identifikationsnummer gemäß § 27a UStG: wird ergänzt.</p>
+            <p>Umsatzsteuer-Identifikationsnummer gemäß § 27a UStG: DE4177943584</p>
           </div>
         </section>
       </div>

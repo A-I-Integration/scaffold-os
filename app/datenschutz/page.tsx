@@ -38,7 +38,7 @@ export default function DatenschutzPage() {
         <div className="space-y-8 text-[#424245] leading-relaxed">
           <Section title="1. Verantwortlicher">
             <p>
-              AI Integration, Inhaberin Michelle Merola (Einzelunternehmen),
+              AI Integration, Inhaberin Michelle Merola,
               Ölbachstr. 48, 48691 Vreden. SCAFFOLD OS ist ein Produkt von AI Integration.
             </p>
             <p>
@@ -59,6 +59,11 @@ export default function DatenschutzPage() {
             <p>
               GPS-Daten werden während aktiver Touren erfasst: Position, Genauigkeit,
               Geschwindigkeit, Richtung, Fahrzeug und Fahrer.
+            </p>
+            <p>
+              Beim Verbinden eines eigenen oder gemeinsam genutzten E-Mail-Postfachs
+              (z. B. info@...) innerhalb von SCAFFOLD OS: E-Mail-Adresse, IMAP-/SMTP-Server,
+              Portnummer und ein verschlüsselt gespeichertes Passwort.
             </p>
           </Section>
 
@@ -84,8 +89,21 @@ export default function DatenschutzPage() {
               (Bilder oder PDF, ggf. per KI-OCR ausgelesener Text) für die automatische
               Maßerkennung im Aufmaß und in der CAD-Planung, Projektname und
               Baustellenadresse für Routenplanung, Mitarbeitername und Skills für
-              Umdispositionsvorschläge, Lagermengen und Materialnamen für Prognosen sowie
+              Umdispositionsvorschläge und die wöchentliche Personaleinsatzplanung,
+              Lagermengen und Materialnamen für Prognosen sowie
               Aufmaß-Daten für den DIN-EN-12811-Hinweis-Check übermittelt.
+            </p>
+            <p>
+              Gesprochene Sprachnotizen von der Baustelle werden zur Umwandlung in Text
+              ebenfalls an Mistral (Modell „Voxtral") übermittelt. Die Audiodatei selbst
+              wird danach nicht gespeichert – nur der erzeugte Text bleibt im Projekt.
+            </p>
+            <p>
+              Vor Übermittlung an Mistral werden Texteingaben zusätzlich serverseitig nach
+              erkennbaren personenbezogenen Mustern (E-Mail-Adressen, Telefonnummern, IBAN,
+              Adressen) durchsucht und durch Platzhalter ersetzt, soweit technisch möglich.
+              Bei Bild-, PDF- und Audioinhalten ist das nicht möglich; hierfür gilt der
+              Auftragsverarbeitungsvertrag mit Mistral.
             </p>
             <p>
               Es werden keine Zeiterfassungs-, Gehalts- oder GPS-Daten an Mistral übermittelt.
@@ -120,8 +138,13 @@ export default function DatenschutzPage() {
             </p>
             <p>
               <strong className="text-[#1d1d1f]">Resend:</strong> Versand transaktionaler
-              E-Mails mit Empfängeradressen und Inhalten (Auftragsverarbeitung mit
-              EU-Standardvertragsklauseln).
+              E-Mails mit Empfängeradressen und Inhalten, u. a. Anfragen, Rechnungen und
+              Lohnabrechnungen (Auftragsverarbeitung mit EU-Standardvertragsklauseln).
+            </p>
+            <p>
+              <strong className="text-[#1d1d1f]">Stripe:</strong> Zahlungsabwicklung für das
+              SCAFFOLD-OS-Abonnement; verarbeitet dazu Name, Rechnungsadresse und
+              Zahlungsmethode (Kreditkarte/SEPA) der Vertragspartner (Auftragsverarbeitung).
             </p>
             <p>
               <strong className="text-[#1d1d1f]">OpenStreetMap/Nominatim/OSRM:</strong>{' '}
@@ -136,7 +159,17 @@ export default function DatenschutzPage() {
               als E-Mail weitergeleitet.
             </p>
             <p>
-              Es werden keine Google-, Meta-, LinkedIn-, Sentry-, Clarity- oder vergleichbaren
+              Auf der Marketing-Website scaffoldos.de setzen wir Google Ads (Google Ireland
+              Limited) zur Erfolgsmessung unserer Werbeanzeigen ein. Über den Google Consent
+              Mode ist die Cookie-Setzung standardmäßig deaktiviert („denied"); erst mit
+              ausdrücklicher Einwilligung über den Cookie-Banner werden Marketing-Cookies
+              aktiv gesetzt. Eine Ablehnung ist genauso einfach wie eine Zustimmung, die
+              Entscheidung kann jederzeit über „Cookie-Einstellungen" widerrufen werden.
+              Kundeninstallationen von SCAFFOLD OS (die Software selbst, nicht die
+              Marketing-Website) binden dieses Tag nicht ein.
+            </p>
+            <p>
+              Es werden keine Meta-, LinkedIn-, Sentry-, Clarity- oder vergleichbaren
               Trackingdienste eingesetzt.
             </p>
           </Section>
