@@ -15,7 +15,7 @@ import { geruesttypZuScaffoldType } from '@/lib/calculations/scaffold-engine';
 import { sollFrischGeladenWerden, leseMarkierung, setzeMarkierung, leseSchrittGeladenesProjekt, setzeSchrittGeladenesProjekt, schliesseSitzungAb, loescheWizardDaten, leiteStepsAusKiResultAb, gewerkeVonStep1 } from '@/lib/aufmass-projekt-session';
 import DispositionResult from '@/components/aufmaß/DispositionResult';
 import { DispositionResult as DispositionData } from '@/lib/calculations/disposition';
-import { generateInvoicePDF, fmtDate as fmtRechnungsDatum, type Invoice } from '@/lib/invoice-pdf';
+import { generateInvoicePDF, fmtDate as fmtRechnungsDatum, holePdfBase64FuerVersand, type Invoice } from '@/lib/invoice-pdf';
 
 const DigitalTwin = dynamic(() => import('@/components/aufmaß/DigitalTwin'), {
   ssr: false,
@@ -864,8 +864,7 @@ function Schritt6Content() {
     setRechnungSendenLaeuft(true);
     setRechnungFehler('');
     try {
-      const doc = generateInvoicePDF(rechnungErstellt);
-      const pdfBase64 = doc.output('datauristring');
+      const { pdfBase64, hinweis } = await holePdfBase64FuerVersand(rechnungErstellt);
       const res = await fetch('/api/email', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -878,6 +877,7 @@ function Schritt6Content() {
       });
       const json = await res.json();
       if (!json.success) throw new Error(json.error || 'Versand fehlgeschlagen.');
+      if (hinweis) setRechnungFehler('Gesendet, aber: ' + hinweis);
       setRechnungVersendet(true);
     } catch (err: any) {
       setRechnungFehler(err.message);

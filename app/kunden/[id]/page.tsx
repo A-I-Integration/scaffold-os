@@ -19,7 +19,7 @@ import {
   Pencil, Send, Euro, AlertCircle, ChevronDown, ChevronUp, X, Ruler, Scissors,
   ClipboardList, Image as ImageIcon, FileSignature, User,
 } from 'lucide-react'
-import { generateInvoicePDF, generateLieferscheinPDF, fmtEur, fmtDate, type Invoice } from '@/lib/invoice-pdf'
+import { generateInvoicePDF, generateLieferscheinPDF, fmtEur, fmtDate, holePdfBase64FuerVersand, type Invoice } from '@/lib/invoice-pdf'
 import { gewerkeVonStep1 } from '@/lib/aufmass-projekt-session'
 import SignaturePad from '@/components/aufmaß/SignaturePad'
 import { uploadVertragsdokument } from '@/lib/vertrag-upload-client'
@@ -424,8 +424,7 @@ export default function KundenDetailPage() {
     const to = prompt(`An welche E-Mail-Adresse soll ${TYPE_LABEL[inv.invoice_type || 'standard']} ${inv.invoice_number} gesendet werden?`, kunde?.email || '')
     if (!to || !to.includes('@')) return
     try {
-      const doc = generateInvoicePDF(inv)
-      const pdfBase64 = doc.output('datauristring')
+      const { pdfBase64, istZugferd, hinweis } = await holePdfBase64FuerVersand(inv)
       const res = await fetch('/api/email', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -438,7 +437,7 @@ export default function KundenDetailPage() {
       })
       const json = await res.json()
       if (!json.success) throw new Error(json.error)
-      alert('✅ ' + inv.invoice_number + ' an ' + to + ' gesendet!')
+      alert((istZugferd ? '✅ ' : '⚠️ ') + inv.invoice_number + ' an ' + to + ' gesendet!' + (hinweis ? '\n\n' + hinweis : ''))
       ladeDaten()
     } catch (err: any) { alert('❌ ' + err.message) }
   }

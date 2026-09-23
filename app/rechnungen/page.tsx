@@ -5,7 +5,7 @@ import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { Suspense } from 'react';
 import {
-  generateInvoicePDF, generateMahnungPDF, fmtEur, fmtDate,
+  generateInvoicePDF, generateMahnungPDF, fmtEur, fmtDate, holePdfBase64FuerVersand,
   type Invoice, type Position,
 } from '@/lib/invoice-pdf';
 import {
@@ -412,8 +412,7 @@ function RechnungenContent() {
     const to = prompt(`An welche E-Mail-Adresse soll Rechnung ${inv.invoice_number} gesendet werden?`, vorschlagEmail);
     if (!to || !to.includes('@')) return;
     try {
-      const doc = generateInvoicePDF(inv);
-      const pdfBase64 = doc.output('datauristring');
+      const { pdfBase64, istZugferd, hinweis } = await holePdfBase64FuerVersand(inv);
       const res = await fetch('/api/email', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -431,7 +430,7 @@ function RechnungenContent() {
       });
       const json = await res.json();
       if (!json.success) throw new Error(json.error || 'Versand fehlgeschlagen');
-      alert('✅ Rechnung ' + inv.invoice_number + ' an ' + to + ' gesendet!');
+      alert((istZugferd ? '✅ ' : '⚠️ ') + 'Rechnung ' + inv.invoice_number + ' an ' + to + ' gesendet!' + (hinweis ? '\n\n' + hinweis : ''));
     } catch (err: any) {
       alert('❌ E-Mail fehlgeschlagen: ' + err.message);
     }

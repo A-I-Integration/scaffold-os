@@ -55,6 +55,46 @@ export const fmtEur = (n: number) =>
 export const fmtDate = (d: string | null) =>
   d ? new Date(d + 'T00:00:00').toLocaleDateString('de-DE') : '–';
 
+// ─── E-Rechnung (ZUGFeRD) beim Versand – NEU ───
+// Bisher wurde beim E-Mail-Versand immer die reine, im Browser erzeugte
+// PDF verschickt (visuell identisch, aber ohne maschinenlesbare Daten -
+// rechtlich keine "E-Rechnung" nach EN 16931). Die fertige ZUGFeRD-Logik
+// (app/api/invoices/zugferd) gab es zwar schon, aber nur hinter einem
+// manuellen "e⚡"-Button, den im Tagesgeschäft niemand extra anklickt.
+//
+// Jetzt Standard beim Versand: zuerst die E-Rechnung (PDF mit
+// eingebetteten EN-16931-Daten) versuchen. Schlägt das fehl (z.B. weil in
+// den Firmeneinstellungen noch USt-IdNr./Adresse fehlen, oder die
+// Rechnungsdaten die Validierung nicht bestehen), NICHT den Versand
+// blockieren, sondern mit einem Hinweis auf die bisherige reine PDF
+// zurückfallen - die Rechnung muss in jedem Fall rausgehen können.
+export async function holePdfBase64FuerVersand(
+  inv: Invoice
+): Promise<{ pdfBase64: string; istZugferd: boolean; hinweis?: string }> {
+  try {
+    const res = await fetch('/api/invoices/zugferd', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ invoice_id: inv.id }),
+    });
+    const json = await res.json();
+    if (json.success && json.pdfBase64) {
+      return { pdfBase64: json.pdfBase64, istZugferd: true };
+    }
+    return {
+      pdfBase64: generateInvoicePDF(inv).output('datauristring'),
+      istZugferd: false,
+      hinweis: 'Ohne E-Rechnung-Daten gesendet (' + (json.error || 'unbekannter Fehler') + ') - normale PDF verschickt.',
+    };
+  } catch {
+    return {
+      pdfBase64: generateInvoicePDF(inv).output('datauristring'),
+      istZugferd: false,
+      hinweis: 'E-Rechnung-Dienst nicht erreichbar - normale PDF verschickt.',
+    };
+  }
+}
+
 // ─── §14-UStG-Rechnungs-PDF im Angebots-Design ───
 export function generateInvoicePDF(inv: Invoice) {
   const doc = new jsPDF();
