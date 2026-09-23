@@ -2,7 +2,7 @@
 
 import { useState, useCallback } from 'react';
 import { FileText, Download, Mail, Check, RotateCcw, Image as ImageIcon, ClipboardList, Plus, ChevronDown, ChevronUp } from 'lucide-react';
-import { generateInvoicePDF, fmtEur, fmtDate, type Invoice } from '@/lib/invoice-pdf';
+import { generateInvoicePDF, fmtEur, fmtDate, holePdfBase64FuerVersand, type Invoice } from '@/lib/invoice-pdf';
 
 // ============================================================
 // SCAFFOLD OS – Auftrags-Karte für die Kunden-Seite (Phase 20)
@@ -132,8 +132,7 @@ export default function KundeAuftrag({
     const to = prompt(`An welche E-Mail-Adresse soll Rechnung ${inv.invoice_number} gesendet werden?`, kunde.email || '');
     if (!to || !to.includes('@')) return;
     try {
-      const doc = generateInvoicePDF(inv);
-      const pdfBase64 = doc.output('datauristring');
+      const { pdfBase64, istZugferd, hinweis } = await holePdfBase64FuerVersand(inv);
       const res = await fetch('/api/email', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -145,7 +144,7 @@ export default function KundeAuftrag({
       });
       const json = await res.json();
       if (!json.success) throw new Error(json.error || 'Versand fehlgeschlagen');
-      alert('✅ Rechnung ' + inv.invoice_number + ' an ' + to + ' gesendet!');
+      alert((istZugferd ? '✅ ' : '⚠️ ') + 'Rechnung ' + inv.invoice_number + ' an ' + to + ' gesendet!' + (hinweis ? '\n\n' + hinweis : ''));
     } catch (err: any) {
       alert('❌ E-Mail fehlgeschlagen: ' + err.message);
     }
