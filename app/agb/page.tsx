@@ -41,7 +41,7 @@ export default function AgbPage() {
               SCAFFOLD OS geschäftlich nutzen.
             </p>
             <p>
-              Vertragspartner ist AI Integration, Inhaberin Michelle Merola (Einzelunternehmen),
+              Vertragspartner ist AI Integration, Inhaberin Michelle Merola,
               Ölbachstr. 48, 48691 Vreden. SCAFFOLD OS ist ein Produkt von AI Integration.
             </p>
           </Section>
@@ -51,8 +51,9 @@ export default function AgbPage() {
               SCAFFOLD OS ist eine cloudbasierte Software zur digitalen Unterstützung
               insbesondere von Gerüstbau- und Bauunternehmen. Der Funktionsumfang kann unter
               anderem Aufmaß, Projektverwaltung, Tourenplanung, Mitarbeiter- und
-              Zeitverwaltung, Lager- und Fuhrparkverwaltung, Kommunikation sowie KI-gestützte
-              Funktionen umfassen.
+              Zeitverwaltung, Lager- und Fuhrparkverwaltung, Rechnungsstellung einschließlich
+              elektronischer Rechnung (ZUGFeRD), Kommunikation sowie KI-gestützte Funktionen
+              umfassen.
             </p>
             <p>
               Maßgeblich ist der bei Vertragsschluss vereinbarte Leistungsumfang. Funktionen
