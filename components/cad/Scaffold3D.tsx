@@ -39,6 +39,10 @@ interface Props {
   // ohne diese Props verhält sich die Komponente exakt wie vorher.
   notes?: CADNote[]
   onAddNote?: (componentId: string, componentName: string, componentType: string, text: string) => void
+  // NEU (CP-Pro-Marktvergleich, "Ebenen"-Lücke): optional, rein additiv –
+  // ohne diese Props verhält sich die Komponente exakt wie vorher.
+  hiddenSides?: Set<string>
+  hiddenLevels?: Set<number>
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -249,12 +253,16 @@ const AllScaffoldComponents = memo(function AllScaffoldComponents({
   selectedComponent,
   onSelectComponent,
   lodLevel,
+  hiddenSides,
+  hiddenLevels,
 }: {
   components: ScaffoldComponent3D[]
   visibleTypes: Record<string, boolean>
   selectedComponent: string | null
   onSelectComponent: (id: string | null) => void
   lodLevel: 0 | 1 | 2
+  hiddenSides?: Set<string>
+  hiddenLevels?: Set<number>
 }) {
   const [hoveredId, setHoveredId] = useState<string | null>(null)
 
@@ -275,11 +283,23 @@ const AllScaffoldComponents = memo(function AllScaffoldComponents({
     components.forEach((comp) => {
       if (visibleTypes[comp.type] === false) return
       if (ausgeblendet.has(comp.type)) return
+      // NEU (Ebenen/Layers): Bauteil nach Seite/Lage filtern.
+      // fieldId-Format: "field-{side}-{levelIndex}-{fieldIndex}"
+      // Bauteile OHNE fieldId (globale Anker, Dächer etc.) passieren immer.
+      if (comp.fieldId && (hiddenSides?.size || hiddenLevels?.size)) {
+        const parts = comp.fieldId.split('-') // ["field", side, levelIndex, fieldIndex]
+        if (parts.length >= 3) {
+          const side = parts[1]
+          const levelIdx = parseInt(parts[2], 10)
+          if (hiddenSides?.has(side)) return
+          if (!isNaN(levelIdx) && hiddenLevels?.has(levelIdx)) return
+        }
+      }
       if (!groups[comp.type]) groups[comp.type] = []
       groups[comp.type].push(comp)
     })
     return groups
-  }, [components, visibleTypes, lodLevel])
+  }, [components, visibleTypes, lodLevel, hiddenSides, hiddenLevels])
 
   return (
     <group>
@@ -809,6 +829,8 @@ function Scene({
   visibleTypes,
   viewMode,
   bridgeMode,
+  hiddenSides,
+  hiddenLevels,
 }: Props) {
   const target: [number, number, number] = [0, model.building.heightM / 2, 0]
   // Schatten-Kamera eng ans Modell anpassen (Standardwerte sind viel zu groß
@@ -856,6 +878,8 @@ function Scene({
           selectedComponent={selectedComponent}
           onSelectComponent={onSelectComponent}
           lodLevel={lodLevel}
+          hiddenSides={hiddenSides}
+          hiddenLevels={hiddenLevels}
         />
       )}
       <DimensionLines model={model} visible={showDimensions} />
@@ -887,6 +911,8 @@ function Scaffold3D({
   bridgeMode,
   notes,
   onAddNote,
+  hiddenSides,
+  hiddenLevels,
 }: Props) {
   const cameraDistance =
     Math.max(model.building.lengthM, model.building.heightM) * 2 + 8
@@ -928,6 +954,8 @@ function Scaffold3D({
             visibleTypes={visibleTypes}
             viewMode={viewMode}
             bridgeMode={bridgeMode}
+            hiddenSides={hiddenSides}
+            hiddenLevels={hiddenLevels}
           />
         </group>
         <AutoFraming targetRef={contentRef} modelKey={modelKey} />

@@ -27,6 +27,8 @@ import {
 } from '@/lib/calculations/cad-engine'
 import { checkRules, groupRulesBySeverity } from '@/lib/calculations/cad-rules'
 import type { CADNote } from '@/types/cad-notes'
+import type { CADLayerState, SideVisibility } from '@/types/cad-layers'
+import { createInitialLayerState } from '@/types/cad-layers'
 import { buildTopologyGraph, pruefeKnotenIsolation } from '@/lib/calculations/topology-graph'
 import { generatePDFHTML, downloadPDF, generateMontageplanHTML } from '@/lib/export/pdf-export'
 import { uploadVertragsdokument } from '@/lib/vertrag-upload-client'
@@ -110,6 +112,53 @@ export default function CADPage() {
     setNotes((prev) => prev.filter((n) => n.id !== id))
   }, [])
 
+  // NEU (CP-Pro-Marktvergleich, "Ebenen"-Lücke): Sichtbarkeit nach Seite/Lage.
+  // Wird beim Generieren automatisch aus dem erzeugten Modell abgeleitet
+  // (alle Seiten/Lagen initial sichtbar). Beim Reset geleert.
+  const [layerState, setLayerState] = useState<CADLayerState | null>(null)
+
+  const handleToggleSide = useCallback((side: keyof SideVisibility) => {
+    setLayerState((prev) => prev ? { ...prev, sides: { ...prev.sides, [side]: !prev.sides[side] } } : prev)
+  }, [])
+  const handleToggleLevel = useCallback((levelIndex: number) => {
+    setLayerState((prev) => prev ? { ...prev, levels: { ...prev.levels, [levelIndex]: !prev.levels[levelIndex] } } : prev)
+  }, [])
+  const handleShowAllLayers = useCallback(() => {
+    setLayerState((prev) => {
+      if (!prev) return prev
+      const sides = { ...prev.sides }
+      for (const k of Object.keys(sides) as (keyof SideVisibility)[]) sides[k] = true
+      const levels = { ...prev.levels }
+      for (const k of Object.keys(levels)) levels[Number(k)] = true
+      return { sides, levels }
+    })
+  }, [])
+  const handleHideAllLayers = useCallback(() => {
+    setLayerState((prev) => {
+      if (!prev) return prev
+      const sides = { ...prev.sides }
+      for (const k of Object.keys(sides) as (keyof SideVisibility)[]) sides[k] = false
+      const levels = { ...prev.levels }
+      for (const k of Object.keys(levels)) levels[Number(k)] = false
+      return { sides, levels }
+    })
+  }, [])
+
+  // Abgeleitete Sets für 3D-Filter (stabil per useMemo, damit
+  // AllScaffoldComponents nicht unnötig re-rendert)
+  const hiddenSides = useMemo(() => {
+    if (!layerState) return undefined
+    const s = new Set<string>()
+    for (const [side, vis] of Object.entries(layerState.sides)) { if (!vis) s.add(side) }
+    return s.size > 0 ? s : undefined
+  }, [layerState])
+  const hiddenLevels = useMemo(() => {
+    if (!layerState) return undefined
+    const s = new Set<number>()
+    for (const [idx, vis] of Object.entries(layerState.levels)) { if (!vis) s.add(Number(idx)) }
+    return s.size > 0 ? s : undefined
+  }, [layerState])
+
   // Phase 68-F: 'Neu starten' — setzt ALLES auf den Anfangszustand
   // zurück (Maße, System, erzeugtes Modell, Auswahl, Stunden).
   // Bestehende Projekte in der DB bleiben unberührt — es geht nur
@@ -122,6 +171,7 @@ export default function CADPage() {
     setSelectedComponent(null);
     setHoursPerSqm(2.0);
     setNotes([]); // Notizen gehören zum verworfenen Modell, sonst "kleben" alte Notizen an neuen Bauteil-IDs
+    setLayerState(null); // Ebenen gehören zum verworfenen Modell
     // Phase 68-G: Auto-Generierung sperren -> Leinwand bleibt leer,
     // bis der Nutzer erneut handelt (sonst baut der Effekt unten das
     // Haus sofort wieder auf und der Reset wirkt wirkungslos).
@@ -184,6 +234,8 @@ export default function CADPage() {
     newModel.warnings = [...newModel.warnings, ...collisionWarnings, ...featureWarnings, ...geometrieWarnings, ...knotenWarnings]
     setModel(newModel)
     setSelectedComponent(null)
+    // Ebenen-State aus dem frisch erzeugten Modell ableiten
+    setLayerState(createInitialLayerState(building.sides || ['front'], newModel.levelCount))
   }, [building, systemId])
 
   useEffect(() => {
@@ -448,7 +500,7 @@ export default function CADPage() {
           </div>
           <div className='flex-1 p-4 min-h-0'>
             {viewMode === '3d' && model && (
-              <Scaffold3D model={model} features={features} showBuilding={showBuilding} showScaffold={showScaffold} showDimensions={showDimensions} selectedComponent={selectedComponent} onSelectComponent={setSelectedComponent} visibleTypes={visibleTypes} viewMode={viewAngle} onCanvasReady={(c) => { canvasRef.current = c }} notes={notes} onAddNote={handleAddNote} />
+              <Scaffold3D model={model} features={features} showBuilding={showBuilding} showScaffold={showScaffold} showDimensions={showDimensions} selectedComponent={selectedComponent} onSelectComponent={setSelectedComponent} visibleTypes={visibleTypes} viewMode={viewAngle} onCanvasReady={(c) => { canvasRef.current = c }} notes={notes} onAddNote={handleAddNote} hiddenSides={hiddenSides} hiddenLevels={hiddenLevels} />
             )}
             {/* Phase 68-G: Leerzustand nach 'Neu starten' */}
             {viewMode === '3d' && !model && (
@@ -492,6 +544,11 @@ export default function CADPage() {
             disabled={!model}
             notes={notes}
             onDeleteNote={handleDeleteNote}
+            layerState={layerState}
+            onToggleSide={handleToggleSide}
+            onToggleLevel={handleToggleLevel}
+            onShowAllLayers={handleShowAllLayers}
+            onHideAllLayers={handleHideAllLayers}
           />
         </div>
       </div>
