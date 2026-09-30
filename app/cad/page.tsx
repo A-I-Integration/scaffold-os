@@ -26,6 +26,7 @@ import {
   generateBuildingFeatures, detectFeatureCollisions, calculateLogistics,
 } from '@/lib/calculations/cad-engine'
 import { checkRules, groupRulesBySeverity } from '@/lib/calculations/cad-rules'
+import type { CADNote } from '@/types/cad-notes'
 import { buildTopologyGraph, pruefeKnotenIsolation } from '@/lib/calculations/topology-graph'
 import { generatePDFHTML, downloadPDF, generateMontageplanHTML } from '@/lib/export/pdf-export'
 import { uploadVertragsdokument } from '@/lib/vertrag-upload-client'
@@ -91,6 +92,23 @@ export default function CADPage() {
   // oder 'Gerüst neu berechnen' wählt. Behebt: Reset baut Haus sofort
   // wieder auf (Effekt unten generierte bei model=null sofort neu).
   const [autoGenerate, setAutoGenerate] = useState(false)
+  // NEU (CP-Pro-Marktvergleich, "Notizen"-Lücke): Anmerkungen an einzelnen
+  // Bauteilen. Bewusst NICHT Teil von `model` (das wird bei jeder
+  // Neuberechnung komplett neu erzeugt) – Notizen bleiben so über ein
+  // "Gerüst neu berechnen" hinweg erhalten. Werden Bauteil-IDs durch eine
+  // geänderte Planung ungültig, bleibt die Notiz einfach ungenutzt
+  // (kein Fehler, keine Auswirkung auf Stückliste/Statik/IFC).
+  const [notes, setNotes] = useState<CADNote[]>([])
+  const handleAddNote = useCallback((componentId: string, componentName: string, componentType: string, text: string) => {
+    setNotes((prev) => [...prev, {
+      id: `notiz-${Date.now()}-${Math.round(Math.random() * 1000)}`,
+      componentId, componentName, componentType, text,
+      createdAt: new Date().toISOString(),
+    }])
+  }, [])
+  const handleDeleteNote = useCallback((id: string) => {
+    setNotes((prev) => prev.filter((n) => n.id !== id))
+  }, [])
 
   // Phase 68-F: 'Neu starten' — setzt ALLES auf den Anfangszustand
   // zurück (Maße, System, erzeugtes Modell, Auswahl, Stunden).
@@ -103,6 +121,7 @@ export default function CADPage() {
     setModel(null);
     setSelectedComponent(null);
     setHoursPerSqm(2.0);
+    setNotes([]); // Notizen gehören zum verworfenen Modell, sonst "kleben" alte Notizen an neuen Bauteil-IDs
     // Phase 68-G: Auto-Generierung sperren -> Leinwand bleibt leer,
     // bis der Nutzer erneut handelt (sonst baut der Effekt unten das
     // Haus sofort wieder auf und der Reset wirkt wirkungslos).
@@ -342,6 +361,10 @@ export default function CADPage() {
               fahrbar: false, boden: 'beton',
             },
             kiResult, angebotsStatus: 'erstellt',
+            // NEU (CP-Pro-Marktvergleich, "Notizen"-Lücke): rein additives
+            // Feld, wird von der bestehenden Kunden-/Angebots-Seite bisher
+            // nirgends gelesen – ändert an deren Verhalten nichts.
+            cadNotizen: notes,
           },
           status: 'active',
         }),
@@ -378,7 +401,7 @@ export default function CADPage() {
       alert('❌ ' + err.message)
     }
     setZuordnenLaeuft(false)
-  }, [model, materials, totalPrice, totalWeight, logistik, router])
+  }, [model, materials, totalPrice, totalWeight, logistik, router, notes])
 
   return (
     <div className='h-screen flex flex-col bg-[#fbfbfd]'>
@@ -425,7 +448,7 @@ export default function CADPage() {
           </div>
           <div className='flex-1 p-4 min-h-0'>
             {viewMode === '3d' && model && (
-              <Scaffold3D model={model} features={features} showBuilding={showBuilding} showScaffold={showScaffold} showDimensions={showDimensions} selectedComponent={selectedComponent} onSelectComponent={setSelectedComponent} visibleTypes={visibleTypes} viewMode={viewAngle} onCanvasReady={(c) => { canvasRef.current = c }} />
+              <Scaffold3D model={model} features={features} showBuilding={showBuilding} showScaffold={showScaffold} showDimensions={showDimensions} selectedComponent={selectedComponent} onSelectComponent={setSelectedComponent} visibleTypes={visibleTypes} viewMode={viewAngle} onCanvasReady={(c) => { canvasRef.current = c }} notes={notes} onAddNote={handleAddNote} />
             )}
             {/* Phase 68-G: Leerzustand nach 'Neu starten' */}
             {viewMode === '3d' && !model && (
@@ -467,6 +490,8 @@ export default function CADPage() {
             onAssignCustomer={handleAssignCustomer}
             zuordnenLaeuft={zuordnenLaeuft}
             disabled={!model}
+            notes={notes}
+            onDeleteNote={handleDeleteNote}
           />
         </div>
       </div>
