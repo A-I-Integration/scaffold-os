@@ -44,6 +44,8 @@ interface Props {
   // ohne diese Props verhält sich die Komponente exakt wie vorher.
   hiddenSides?: Set<string>
   hiddenLevels?: Set<number>
+  // NEU (CP-Pro-Marktvergleich, "Drag & Drop"-Lücke): optional, rein additiv.
+  onDropComponent?: (type: string, position: [number, number, number], side: string, levelIndex: number) => void
   // NEU (CP-Pro-Marktvergleich, "Freie Bemaßung"-Lücke): optional, rein additiv.
   measureMode?: boolean
   onMeasurePoint?: (point: [number, number, number], componentName?: string) => void
@@ -1043,6 +1045,7 @@ function Scaffold3D({
   onAddNote,
   hiddenSides,
   hiddenLevels,
+  onDropComponent,
   measureMode,
   onMeasurePoint,
   customDimensions,
@@ -1052,6 +1055,79 @@ function Scaffold3D({
     Math.max(model.building.lengthM, model.building.heightM) * 2 + 8
 
   const contentRef = useRef<THREE.Group>(null)
+  const canvasElRef = useRef<HTMLCanvasElement | null>(null)
+
+  // --- Drag & Drop: HTML5 Drop auf die 3D-Szene ---
+  const handleDragOver = useCallback((e: React.DragEvent) => {
+    if (!onDropComponent) return
+    if (!e.dataTransfer.types.includes('application/scaffold-component')) return
+    e.preventDefault()
+    e.dataTransfer.dropEffect = 'copy'
+  }, [onDropComponent])
+
+  const handleDrop = useCallback((e: React.DragEvent) => {
+    if (!onDropComponent) return
+    const raw = e.dataTransfer.getData('application/scaffold-component')
+    if (!raw) return
+    e.preventDefault()
+    let parsed: { type: string }
+    try { parsed = JSON.parse(raw) } catch { return }
+
+    // Mausposition → 3D-Bodenebene (y=0) per Raycasting
+    const canvas = canvasElRef.current
+    if (!canvas) return
+    const rect = canvas.getBoundingClientRect()
+    const ndcX = ((e.clientX - rect.left) / rect.width) * 2 - 1
+    const ndcY = -((e.clientY - rect.top) / rect.height) * 2 + 1
+
+    // Raycasting auf Bodenebene y=0
+    const raycaster = new THREE.Raycaster()
+    // Kameraposition aus Canvas-State nicht direkt zugreifbar, daher
+    // nutzen wir einen simplen Ansatz: Ebene y=0 mit NDC-Strahl schneiden.
+    // Die Kamera-Info holen wir aus dem Canvas' internen Three.js-Renderer.
+    // Workaround: drop-Position als Proportion der Gebäudeabmessungen schätzen.
+    const halfL = model.building.lengthM / 2
+    const halfW = (model.building.widthM || 6) / 2
+    const rasterH = model.levels?.[0]?.heightM || 2.0
+
+    // Einfache Zuordnung: X-Anteil des Canvas → X-Position auf dem Gerüst,
+    // Y-Anteil → Level-Index (unten = Level 0, oben = höchstes Level)
+    const canvasXRatio = (e.clientX - rect.left) / rect.width   // 0..1
+    const canvasYRatio = (e.clientY - rect.top) / rect.height   // 0 oben, 1 unten
+
+    // Seite bestimmen: linke Hälfte = Front, rechte = Back (vereinfacht für Perspektive)
+    const side = canvasXRatio < 0.3 ? 'left' : canvasXRatio > 0.7 ? 'right' : canvasYRatio < 0.5 ? 'back' : 'front'
+
+    // Level: umgekehrt zu Y (oben = hoher Level)
+    const levelCount = model.levelCount || 1
+    const levelIndex = Math.max(0, Math.min(levelCount - 1, Math.round((1 - canvasYRatio) * (levelCount - 1))))
+
+    // X/Z-Position basierend auf Seite und Proportion
+    let posX = 0
+    let posZ = 0
+    const fieldProp = canvasXRatio // vereinfacht
+    switch (side) {
+      case 'front':
+        posX = -halfL + fieldProp * model.building.lengthM
+        posZ = halfW + 0.3 // knapp vor der Fassade
+        break
+      case 'back':
+        posX = -halfL + fieldProp * model.building.lengthM
+        posZ = -(halfW + 0.3)
+        break
+      case 'left':
+        posX = -(halfL + 0.3)
+        posZ = -halfW + fieldProp * (model.building.widthM || 6)
+        break
+      case 'right':
+        posX = halfL + 0.3
+        posZ = -halfW + fieldProp * (model.building.widthM || 6)
+        break
+    }
+    const posY = levelIndex * rasterH
+
+    onDropComponent(parsed.type, [posX, posY, posZ], side, levelIndex)
+  }, [onDropComponent, model])
   const modelKey = useMemo(
     () => `${model.building.lengthM}x${model.building.widthM}x${model.building.heightM}:${model.components3D.length}`,
     [model],
@@ -1065,14 +1141,14 @@ function Scaffold3D({
   )
 
   return (
-    <div className="w-full h-full rounded-xl overflow-hidden border border-black/10 bg-[#dfe7ef] relative">
+    <div className="w-full h-full rounded-xl overflow-hidden border border-black/10 bg-[#dfe7ef] relative" onDragOver={handleDragOver} onDrop={handleDrop}>
       <Canvas
         shadows
         camera={cameraConfig}
         frameloop="demand"
         dpr={[1, 2]}
         gl={{ antialias: true, powerPreference: 'high-performance', preserveDrawingBuffer: true }}
-        onCreated={({ gl }) => onCanvasReady?.(gl.domElement)}
+        onCreated={({ gl }) => { canvasElRef.current = gl.domElement; onCanvasReady?.(gl.domElement) }}
       >
         <AdaptiveDpr pixelated />
         <AdaptiveEvents />
@@ -1125,7 +1201,7 @@ function Scaffold3D({
         />
       </Canvas>
       <div className="absolute bottom-4 left-4 bg-white/90 backdrop-blur rounded-xl px-3 py-2 text-xs text-[#424245] border border-black/10 pointer-events-none shadow-sm">
-        <p>🖱️ Links: Drehen | Rechts: Verschieben | Scroll: Zoomen</p>
+        <p>🖱️ Links: Drehen | Rechts: Verschieben | Scroll: Zoomen{onDropComponent ? ' | 🧩 Bauteil hierher ziehen' : ''}</p>
       </div>
       {selectedComponent && (() => {
         const comp = model.components3D.find((c) => c.id === selectedComponent)

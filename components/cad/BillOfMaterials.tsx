@@ -6,9 +6,11 @@ import type { LogistikDaten } from '@/lib/calculations/cad-engine'
 import type { CADNote } from '@/types/cad-notes'
 import type { CADLayerState, SideVisibility } from '@/types/cad-layers'
 import type { CustomDimension } from '@/types/cad-dimensions'
+import type { ManualPlacement } from '@/lib/calculations/cad-engine'
 import NotesPanel from './NotesPanel'
 import LayersPanel from './LayersPanel'
 import DimensionsPanel from './DimensionsPanel'
+import ComponentCatalog from './ComponentCatalog'
 
 interface Props {
   materials: MaterialItem[]
@@ -44,9 +46,12 @@ interface Props {
   onDeleteDimension?: (id: string) => void
   measureMode?: boolean
   onToggleMeasureMode?: () => void
+  // NEU (CP-Pro-Marktvergleich, "Drag & Drop"-Lücke): optional, rein additiv.
+  manualPlacements?: ManualPlacement[]
+  onRemoveManualPlacement?: (id: string) => void
 }
 
-export default function BillOfMaterials({ materials, totalWeightKg, totalPrice, logistik, onExportPDF, onExportCSV, onExportMontageplan, onExportStatikGeometrie, onExportIFC, customers, kundenLadeFehler, onRetryKunden, onCreateCustomer, onAssignCustomer, zuordnenLaeuft, disabled = false, notes, onDeleteNote, layerState, onToggleSide, onToggleLevel, onShowAllLayers, onHideAllLayers, customDimensions, onDeleteDimension, measureMode, onToggleMeasureMode }: Props) {
+export default function BillOfMaterials({ materials, totalWeightKg, totalPrice, logistik, onExportPDF, onExportCSV, onExportMontageplan, onExportStatikGeometrie, onExportIFC, customers, kundenLadeFehler, onRetryKunden, onCreateCustomer, onAssignCustomer, zuordnenLaeuft, disabled = false, notes, onDeleteNote, layerState, onToggleSide, onToggleLevel, onShowAllLayers, onHideAllLayers, customDimensions, onDeleteDimension, measureMode, onToggleMeasureMode, manualPlacements, onRemoveManualPlacement }: Props) {
   const [kundenSuche, setKundenSuche] = useState('')
   const [ausgewaehlterKunde, setAusgewaehlterKunde] = useState<{ id: string; name: string } | null>(null)
   const [zeigeDropdown, setZeigeDropdown] = useState(false)
@@ -114,6 +119,36 @@ export default function BillOfMaterials({ materials, totalWeightKg, totalPrice, 
             measureMode={!!measureMode}
             onToggleMeasureMode={onToggleMeasureMode}
           />
+        )}
+
+        {/* Drag & Drop Bauteil-Katalog (CP-Pro-Marktvergleich) */}
+        <ComponentCatalog disabled={disabled} />
+
+        {/* Manuell platzierte Bauteile (CP-Pro-Marktvergleich) */}
+        {manualPlacements && manualPlacements.length > 0 && onRemoveManualPlacement && (
+          <div className='mb-4 bg-[#f5f5f7] rounded-xl overflow-hidden'>
+            <div className='px-3 py-2 bg-black/5'>
+              <span className='text-xs font-semibold text-[#424245] uppercase'>🧩 Manuell platziert ({manualPlacements.length})</span>
+            </div>
+            <div className='px-3 py-2 space-y-1'>
+              {manualPlacements.map((pl) => (
+                <div key={pl.id} className='flex items-center justify-between gap-1 group'>
+                  <div className='flex-1 min-w-0'>
+                    <span className='text-xs font-medium text-[#1d1d1f] capitalize'>{pl.type.replace(/_/g, ' ')}</span>
+                    <span className='text-[10px] text-[#86868b] ml-1'>Ebene {pl.levelIndex + 1} · {pl.side}</span>
+                  </div>
+                  <button
+                    type='button'
+                    onClick={() => onRemoveManualPlacement(pl.id)}
+                    className='shrink-0 w-5 h-5 flex items-center justify-center rounded text-[10px] text-red-500 opacity-0 group-hover:opacity-100 hover:bg-red-50 transition-opacity'
+                    title='Manuelles Bauteil entfernen'
+                  >
+                    ✕
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
         )}
 
         {/* Notizen/Anmerkungen an Bauteilen (CP-Pro-Marktvergleich) */}

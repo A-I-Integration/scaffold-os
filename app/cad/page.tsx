@@ -23,13 +23,14 @@ import { useRouter } from 'next/navigation'
 import dynamic from 'next/dynamic'
 import {
   BuildingParams, CADModel, generateCADModel, generateBillOfMaterials, checkCollisions, detectCollisions, generateStatikExport,
-  generateBuildingFeatures, detectFeatureCollisions, calculateLogistics,
+  generateBuildingFeatures, detectFeatureCollisions, calculateLogistics, addManualPlacement,
 } from '@/lib/calculations/cad-engine'
 import { checkRules, groupRulesBySeverity } from '@/lib/calculations/cad-rules'
 import type { CADNote } from '@/types/cad-notes'
 import type { CADLayerState, SideVisibility } from '@/types/cad-layers'
 import { createInitialLayerState } from '@/types/cad-layers'
 import type { CustomDimension } from '@/types/cad-dimensions'
+import type { ManualPlacement } from '@/lib/calculations/cad-engine'
 import { buildTopologyGraph, pruefeKnotenIsolation } from '@/lib/calculations/topology-graph'
 import { generatePDFHTML, downloadPDF, generateMontageplanHTML } from '@/lib/export/pdf-export'
 import { uploadVertragsdokument } from '@/lib/vertrag-upload-client'
@@ -165,6 +166,8 @@ export default function CADPage() {
   const [measureMode, setMeasureMode] = useState(false)
   const [customDimensions, setCustomDimensions] = useState<CustomDimension[]>([])
   const [pendingMeasurePoint, setPendingMeasurePoint] = useState<{ point: [number, number, number]; label?: string } | null>(null)
+  // NEU (CP-Pro-Marktvergleich, "Drag & Drop"-Lücke): manuell platzierte Bauteile
+  const [manualPlacements, setManualPlacements] = useState<ManualPlacement[]>([])
 
   const handleToggleMeasureMode = useCallback(() => {
     setMeasureMode((prev) => {
@@ -201,6 +204,24 @@ export default function CADPage() {
     setCustomDimensions((prev) => prev.filter((d) => d.id !== id))
   }, [])
 
+  // NEU (CP-Pro-Marktvergleich, "Drag & Drop"-Lücke)
+  const handleDropComponent = useCallback((type: string, position: [number, number, number], side: string, levelIndex: number) => {
+    const placement: ManualPlacement = {
+      id: `manual-${type}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      type: type as ManualPlacement['type'],
+      positionX: position[0],
+      positionY: position[1],
+      positionZ: position[2],
+      side: side as ManualPlacement['side'],
+      levelIndex,
+    }
+    setManualPlacements((prev) => [...prev, placement])
+  }, [])
+
+  const handleRemoveManualPlacement = useCallback((id: string) => {
+    setManualPlacements((prev) => prev.filter((p) => p.id !== id))
+  }, [])
+
   // Phase 68-F: 'Neu starten' — setzt ALLES auf den Anfangszustand
   // zurück (Maße, System, erzeugtes Modell, Auswahl, Stunden).
   // Bestehende Projekte in der DB bleiben unberührt — es geht nur
@@ -217,6 +238,7 @@ export default function CADPage() {
     setMeasureMode(false); // Bemaßungen gehören zum verworfenen Modell
     setCustomDimensions([]);
     setPendingMeasurePoint(null);
+    setManualPlacements([]); // Manuelle Bauteile gehören zum verworfenen Modell
     // Phase 68-G: Auto-Generierung sperren -> Leinwand bleibt leer,
     // bis der Nutzer erneut handelt (sonst baut der Effekt unten das
     // Haus sofort wieder auf und der Reset wirkt wirkungslos).
@@ -296,18 +318,32 @@ export default function CADPage() {
     return groupRulesBySeverity(results)
   }, [model, building])
 
+  // NEU (Drag & Drop): Modell + manuell platzierte Bauteile zusammenführen.
+  // Das Basis-Modell bleibt unverändert, manuelle Bauteile werden als
+  // Shallow-Copy hinzugefügt – so überleben sie jede Re-Generierung.
+  const modelWithManual = useMemo(() => {
+    if (!model) return null
+    if (manualPlacements.length === 0) return model
+    // Shallow Copy, damit das originale model-Objekt nicht mutiert wird
+    let merged: CADModel = { ...model, components3D: [...model.components3D], anchors: [...model.anchors] }
+    for (const pl of manualPlacements) {
+      merged = addManualPlacement(merged, pl)
+    }
+    return merged
+  }, [model, manualPlacements])
+
   const allWarnings = useMemo(() => {
     const rules = [...ruleResults.errors, ...ruleResults.warnings, ...ruleResults.infos]
     return [
       ...rules.map((r) => ({ type: r.rule.severity, message: r.rule.message })),
-      ...(model?.warnings || []).map((w) => ({ type: w.type, message: w.message })),
+      ...(modelWithManual?.warnings || []).map((w) => ({ type: w.type, message: w.message })),
     ]
   }, [ruleResults, model])
 
-  const materials = useMemo(() => (model ? generateBillOfMaterials(model) : []), [model])
+  const materials = useMemo(() => (modelWithManual ? generateBillOfMaterials(modelWithManual) : []), [modelWithManual])
   const totalWeight = useMemo(() => materials.reduce((s, i) => s + i.weightKg * i.quantity, 0), [materials])
   const totalPrice = useMemo(() => materials.reduce((s, i) => s + i.totalPrice, 0), [materials])
-  const logistik = useMemo(() => (model ? calculateLogistics(model, materials, hoursPerSqm) : null), [model, materials, hoursPerSqm])
+  const logistik = useMemo(() => (modelWithManual ? calculateLogistics(modelWithManual, materials, hoursPerSqm) : null), [modelWithManual, materials, hoursPerSqm])
 
   const toggleType = useCallback((type: string) => {
     setVisibleTypes((prev) => ({ ...prev, [type]: !prev[type] }))
@@ -506,7 +542,7 @@ export default function CADPage() {
         <div>
           <h1 className='text-lg font-semibold text-[#1d1d1f]'>Gerüstbau-CAD</h1>
           <p className='text-xs text-[#86868b]'>
-            {model?.system ? `${model.system.hersteller} ${model.system.systemName}` : 'Kein System'} · {model?.fieldCount} Felder · {model?.levelCount} Lagen · {model?.totalAreaM2.toFixed(1)} m² · {model?.components3D.length || 0} Bauteile · {features.length} Gebäudemerkmale
+            {modelWithManual?.system ? `${modelWithManual.system.hersteller} ${modelWithManual.system.systemName}` : 'Kein System'} · {modelWithManual?.fieldCount} Felder · {modelWithManual?.levelCount} Lagen · {modelWithManual?.totalAreaM2.toFixed(1)} m² · {modelWithManual?.components3D.length || 0} Bauteile · {features.length} Gebäudemerkmale
           </p>
         </div>
         <div className='flex items-center gap-2'>
@@ -544,8 +580,8 @@ export default function CADPage() {
             )}
           </div>
           <div className='flex-1 p-4 min-h-0'>
-            {viewMode === '3d' && model && (
-              <Scaffold3D model={model} features={features} showBuilding={showBuilding} showScaffold={showScaffold} showDimensions={showDimensions} selectedComponent={selectedComponent} onSelectComponent={setSelectedComponent} visibleTypes={visibleTypes} viewMode={viewAngle} onCanvasReady={(c) => { canvasRef.current = c }} notes={notes} onAddNote={handleAddNote} hiddenSides={hiddenSides} hiddenLevels={hiddenLevels} measureMode={measureMode} onMeasurePoint={handleMeasurePoint} customDimensions={customDimensions} pendingMeasurePoint={pendingMeasurePoint?.point ?? null} />
+            {viewMode === '3d' && modelWithManual && (
+              <Scaffold3D model={modelWithManual} features={features} showBuilding={showBuilding} showScaffold={showScaffold} showDimensions={showDimensions} selectedComponent={selectedComponent} onSelectComponent={setSelectedComponent} visibleTypes={visibleTypes} viewMode={viewAngle} onCanvasReady={(c) => { canvasRef.current = c }} notes={notes} onAddNote={handleAddNote} hiddenSides={hiddenSides} hiddenLevels={hiddenLevels} measureMode={measureMode} onMeasurePoint={handleMeasurePoint} customDimensions={customDimensions} pendingMeasurePoint={pendingMeasurePoint?.point ?? null} onDropComponent={handleDropComponent} />
             )}
             {/* Phase 68-G: Leerzustand nach 'Neu starten' */}
             {viewMode === '3d' && !model && (
@@ -554,7 +590,7 @@ export default function CADPage() {
                 <button onClick={() => { setAutoGenerate(true); generate(); }} className='px-4 py-2 text-sm font-medium rounded-xl bg-[#0071e3] text-white hover:bg-[#0077ed]'>Gerüst neu berechnen</button>
               </div>
             )}
-            {viewMode === '2d' && model && <Scaffold2D model={model} />}
+            {viewMode === '2d' && modelWithManual && <Scaffold2D model={modelWithManual} />}
             {viewMode === '2d' && !model && (
               <div className='h-full flex items-center justify-center'>
                 <p className='text-sm text-[#86868b]'>Kein Modell – zuerst „Gerüst neu berechnen“.</p>
@@ -598,6 +634,8 @@ export default function CADPage() {
             onDeleteDimension={handleDeleteDimension}
             measureMode={measureMode}
             onToggleMeasureMode={handleToggleMeasureMode}
+            manualPlacements={manualPlacements}
+            onRemoveManualPlacement={handleRemoveManualPlacement}
           />
         </div>
       </div>
