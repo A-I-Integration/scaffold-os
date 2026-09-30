@@ -2,11 +2,11 @@
 
 // ============================================================
 // components/cad/ComponentCatalog.tsx
-// SCAFFOLD OS – Drag & Drop Bauteil-Katalog (CP-Pro-Marktvergleich)
+// SCAFFOLD OS – Klick-Platzierung Bauteil-Katalog (CP-Pro-Marktvergleich)
 //
-// NEU: Draggable Karten der 7 manuell platzierbaren Bauteiltypen.
-// HTML5 Drag API – dataTransfer übergibt den Typ als JSON.
-// Rein additiv, eigene Komponente.
+// Klickbare Karten der 7 manuell platzierbaren Bauteiltypen.
+// Auswahl eines Typs aktiviert den Platzierungsmodus: Klick auf
+// das Gerüst in der 3D-Ansicht platziert das Bauteil.
 // ============================================================
 
 import { useState } from 'react'
@@ -24,9 +24,11 @@ const CATALOG_ITEMS: { type: string; label: string; icon: string; description: s
 
 interface Props {
   disabled?: boolean
+  selectedType?: string | null
+  onSelectType?: (type: string | null) => void
 }
 
-export default function ComponentCatalog({ disabled = false }: Props) {
+export default function ComponentCatalog({ disabled = false, selectedType, onSelectType }: Props) {
   const [offen, setOffen] = useState(true)
 
   return (
@@ -41,33 +43,52 @@ export default function ComponentCatalog({ disabled = false }: Props) {
       {offen && (
         <div className='px-3 py-2'>
           <p className='text-[10px] text-[#86868b] mb-2'>
-            Bauteil auf das 3D-Modell ziehen, um es manuell zu platzieren.
+            {selectedType
+              ? '✅ Bauteil ausgewählt – klicke auf das Gerüst, um es zu platzieren. Nochmal klicken zum Abbrechen.'
+              : 'Bauteil auswählen, dann auf das Gerüst klicken, um es zu platzieren.'}
           </p>
 
           <div className='space-y-1'>
-            {CATALOG_ITEMS.map((item) => (
-              <div
-                key={item.type}
-                draggable={!disabled}
-                onDragStart={(e) => {
-                  if (disabled) { e.preventDefault(); return }
-                  e.dataTransfer.setData('application/scaffold-component', JSON.stringify({ type: item.type }))
-                  e.dataTransfer.effectAllowed = 'copy'
-                }}
-                className={`flex items-center gap-2 px-2 py-1.5 rounded-lg border transition-colors ${
-                  disabled
-                    ? 'bg-gray-50 border-gray-200 text-gray-400 cursor-not-allowed'
-                    : 'bg-white border-black/10 text-[#1d1d1f] cursor-grab hover:bg-blue-50 hover:border-blue-200 active:cursor-grabbing'
-                }`}
-              >
-                <span className='text-sm shrink-0'>{item.icon}</span>
-                <div className='flex-1 min-w-0'>
-                  <div className='text-xs font-medium'>{item.label}</div>
-                  <div className='text-[10px] text-[#86868b] truncate'>{item.description}</div>
-                </div>
-              </div>
-            ))}
+            {CATALOG_ITEMS.map((item) => {
+              const isSelected = selectedType === item.type
+              return (
+                <button
+                  key={item.type}
+                  type='button'
+                  disabled={disabled}
+                  onClick={() => {
+                    if (disabled || !onSelectType) return
+                    // Toggle: nochmal klicken deselektiert
+                    onSelectType(isSelected ? null : item.type)
+                  }}
+                  className={`w-full flex items-center gap-2 px-2 py-1.5 rounded-lg border transition-colors text-left ${
+                    disabled
+                      ? 'bg-gray-50 border-gray-200 text-gray-400 cursor-not-allowed'
+                      : isSelected
+                        ? 'bg-blue-100 border-blue-400 text-blue-900 ring-2 ring-blue-400/50'
+                        : 'bg-white border-black/10 text-[#1d1d1f] hover:bg-blue-50 hover:border-blue-200 cursor-pointer'
+                  }`}
+                >
+                  <span className='text-sm shrink-0'>{item.icon}</span>
+                  <div className='flex-1 min-w-0'>
+                    <div className='text-xs font-medium'>{item.label}</div>
+                    <div className='text-[10px] text-[#86868b] truncate'>{item.description}</div>
+                  </div>
+                  {isSelected && <span className='text-xs text-blue-600 shrink-0'>✓</span>}
+                </button>
+              )
+            })}
           </div>
+
+          {selectedType && onSelectType && (
+            <button
+              type='button'
+              onClick={() => onSelectType(null)}
+              className='w-full mt-2 py-1.5 text-xs font-medium text-red-600 border border-red-200 rounded-lg hover:bg-red-50 transition-colors'
+            >
+              ✕ Platzierung abbrechen
+            </button>
+          )}
         </div>
       )}
     </div>
