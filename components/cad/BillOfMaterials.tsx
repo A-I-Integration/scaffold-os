@@ -5,8 +5,10 @@ import { MaterialItem } from '@/types/scaffold'
 import type { LogistikDaten } from '@/lib/calculations/cad-engine'
 import type { CADNote } from '@/types/cad-notes'
 import type { CADLayerState, SideVisibility } from '@/types/cad-layers'
+import type { CustomDimension } from '@/types/cad-dimensions'
 import NotesPanel from './NotesPanel'
 import LayersPanel from './LayersPanel'
+import DimensionsPanel from './DimensionsPanel'
 
 interface Props {
   materials: MaterialItem[]
@@ -37,9 +39,14 @@ interface Props {
   onToggleLevel?: (levelIndex: number) => void
   onShowAllLayers?: () => void
   onHideAllLayers?: () => void
+  // NEU (CP-Pro-Marktvergleich, "Freie Bemaßung"-Lücke): optional, rein additiv.
+  customDimensions?: CustomDimension[]
+  onDeleteDimension?: (id: string) => void
+  measureMode?: boolean
+  onToggleMeasureMode?: () => void
 }
 
-export default function BillOfMaterials({ materials, totalWeightKg, totalPrice, logistik, onExportPDF, onExportCSV, onExportMontageplan, onExportStatikGeometrie, onExportIFC, customers, kundenLadeFehler, onRetryKunden, onCreateCustomer, onAssignCustomer, zuordnenLaeuft, disabled = false, notes, onDeleteNote, layerState, onToggleSide, onToggleLevel, onShowAllLayers, onHideAllLayers }: Props) {
+export default function BillOfMaterials({ materials, totalWeightKg, totalPrice, logistik, onExportPDF, onExportCSV, onExportMontageplan, onExportStatikGeometrie, onExportIFC, customers, kundenLadeFehler, onRetryKunden, onCreateCustomer, onAssignCustomer, zuordnenLaeuft, disabled = false, notes, onDeleteNote, layerState, onToggleSide, onToggleLevel, onShowAllLayers, onHideAllLayers, customDimensions, onDeleteDimension, measureMode, onToggleMeasureMode }: Props) {
   const [kundenSuche, setKundenSuche] = useState('')
   const [ausgewaehlterKunde, setAusgewaehlterKunde] = useState<{ id: string; name: string } | null>(null)
   const [zeigeDropdown, setZeigeDropdown] = useState(false)
@@ -96,6 +103,16 @@ export default function BillOfMaterials({ materials, totalWeightKg, totalPrice, 
             onToggleLevel={onToggleLevel}
             onShowAll={onShowAllLayers}
             onHideAll={onHideAllLayers}
+          />
+        )}
+
+        {/* Freie Bemaßung (CP-Pro-Marktvergleich) */}
+        {customDimensions && onDeleteDimension && onToggleMeasureMode && (
+          <DimensionsPanel
+            dimensions={customDimensions}
+            onDeleteDimension={onDeleteDimension}
+            measureMode={!!measureMode}
+            onToggleMeasureMode={onToggleMeasureMode}
           />
         )}
 
