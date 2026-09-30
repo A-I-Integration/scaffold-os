@@ -18,6 +18,7 @@ import { OrbitControls, Grid, Text, Sky, AdaptiveDpr, AdaptiveEvents, Environmen
 import * as THREE from 'three'
 import { CADModel, ScaffoldComponent3D, BuildingFeature3D, berechneGebaeudeSegmente } from '@/lib/calculations/cad-engine'
 import type { CADNote } from '@/types/cad-notes'
+import type { CustomDimension } from '@/types/cad-dimensions'
 
 interface Props {
   model: CADModel
@@ -43,6 +44,11 @@ interface Props {
   // ohne diese Props verhält sich die Komponente exakt wie vorher.
   hiddenSides?: Set<string>
   hiddenLevels?: Set<number>
+  // NEU (CP-Pro-Marktvergleich, "Freie Bemaßung"-Lücke): optional, rein additiv.
+  measureMode?: boolean
+  onMeasurePoint?: (point: [number, number, number], componentName?: string) => void
+  customDimensions?: CustomDimension[]
+  pendingMeasurePoint?: [number, number, number] | null
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -159,6 +165,8 @@ function InstancedBauteile({
   hoveredId,
   onSelect,
   onHover,
+  measureMode,
+  onMeasurePoint,
 }: {
   type: string
   items: ScaffoldComponent3D[]
@@ -166,6 +174,8 @@ function InstancedBauteile({
   hoveredId: string | null
   onSelect: (id: string | null) => void
   onHover: (id: string | null) => void
+  measureMode?: boolean
+  onMeasurePoint?: (point: [number, number, number], componentName?: string) => void
 }) {
   const meshRef = useRef<THREE.InstancedMesh>(null)
   const { invalidate } = useThree()
@@ -209,10 +219,19 @@ function InstancedBauteile({
     (e: any) => {
       e.stopPropagation()
       if (e.instanceId !== undefined && items[e.instanceId]) {
+        // NEU (Freie Bemaßung): Im Mess-Modus den 3D-Punkt melden
+        // statt den Bauteil zu selektieren
+        if (measureMode && onMeasurePoint && e.point) {
+          onMeasurePoint(
+            [e.point.x, e.point.y, e.point.z],
+            items[e.instanceId].name
+          )
+          return
+        }
         onSelect(items[e.instanceId].id)
       }
     },
-    [items, onSelect]
+    [items, onSelect, measureMode, onMeasurePoint]
   )
 
   const handlePointerOver = useCallback(
@@ -220,7 +239,7 @@ function InstancedBauteile({
       e.stopPropagation()
       if (e.instanceId !== undefined && items[e.instanceId]) {
         onHover(items[e.instanceId].id)
-        document.body.style.cursor = 'pointer'
+        document.body.style.cursor = measureMode ? 'crosshair' : 'pointer'
       }
     },
     [items, onHover]
@@ -255,6 +274,8 @@ const AllScaffoldComponents = memo(function AllScaffoldComponents({
   lodLevel,
   hiddenSides,
   hiddenLevels,
+  measureMode,
+  onMeasurePoint,
 }: {
   components: ScaffoldComponent3D[]
   visibleTypes: Record<string, boolean>
@@ -263,6 +284,8 @@ const AllScaffoldComponents = memo(function AllScaffoldComponents({
   lodLevel: 0 | 1 | 2
   hiddenSides?: Set<string>
   hiddenLevels?: Set<number>
+  measureMode?: boolean
+  onMeasurePoint?: (point: [number, number, number], componentName?: string) => void
 }) {
   const [hoveredId, setHoveredId] = useState<string | null>(null)
 
@@ -312,6 +335,8 @@ const AllScaffoldComponents = memo(function AllScaffoldComponents({
           hoveredId={hoveredId}
           onSelect={onSelectComponent}
           onHover={setHoveredId}
+          measureMode={measureMode}
+          onMeasurePoint={onMeasurePoint}
         />
       ))}
     </group>
@@ -551,6 +576,104 @@ function MeasurementLine({
       >
         {label}
       </Text>
+    </group>
+  )
+}
+
+// ═══════════════════════════════════════════════════════════
+// FREIE BEMASSUNG: Maßlinie für beliebige Winkel + Marker
+// ═══════════════════════════════════════════════════════════
+function FreeMeasurementLine({
+  start,
+  end,
+  label,
+}: {
+  start: [number, number, number]
+  end: [number, number, number]
+  label: string
+}) {
+  const startV = useMemo(() => new THREE.Vector3(...start), [start])
+  const endV = useMemo(() => new THREE.Vector3(...end), [end])
+  const mid = useMemo(() => startV.clone().add(endV).multiplyScalar(0.5), [startV, endV])
+  const dir = useMemo(() => endV.clone().sub(startV), [startV, endV])
+  const len = useMemo(() => dir.length(), [dir])
+  // Quaternion um den Zylinder (Y-Achse) in Richtung start→end zu drehen
+  const quat = useMemo(() => {
+    const q = new THREE.Quaternion()
+    q.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir.clone().normalize())
+    return q
+  }, [dir])
+  // Euler-Winkel aus dem Quaternion für die group-Rotation
+  const euler = useMemo(() => new THREE.Euler().setFromQuaternion(quat), [quat])
+
+  return (
+    <group>
+      {/* Linie */}
+      <mesh position={[mid.x, mid.y, mid.z]} rotation={euler}>
+        <cylinderGeometry args={[0.03, 0.03, len, 8]} />
+        <meshStandardMaterial color="#f59e0b" />
+      </mesh>
+      {/* Endkugeln */}
+      <mesh position={start}>
+        <sphereGeometry args={[0.08, 12, 12]} />
+        <meshStandardMaterial color="#f59e0b" />
+      </mesh>
+      <mesh position={end}>
+        <sphereGeometry args={[0.08, 12, 12]} />
+        <meshStandardMaterial color="#f59e0b" />
+      </mesh>
+      {/* Label */}
+      <Text
+        position={[mid.x, mid.y + 0.5, mid.z]}
+        fontSize={0.35}
+        color="#f59e0b"
+        anchorX="center"
+        outlineWidth={0.02}
+        outlineColor="#ffffff"
+      >
+        {label}
+      </Text>
+    </group>
+  )
+}
+
+/** Orangener Punkt am ersten angeklickten Messpunkt */
+function PendingMeasureMarker({ position }: { position: [number, number, number] }) {
+  const meshRef = useRef<THREE.Mesh>(null)
+  // Sanftes Pulsieren für visuelles Feedback
+  useFrame(({ clock }) => {
+    if (meshRef.current) {
+      const s = 0.12 + Math.sin(clock.elapsedTime * 3) * 0.03
+      meshRef.current.scale.setScalar(s / 0.12)
+    }
+  })
+  return (
+    <mesh ref={meshRef} position={position}>
+      <sphereGeometry args={[0.12, 16, 16]} />
+      <meshStandardMaterial color="#f59e0b" emissive="#f59e0b" emissiveIntensity={0.5} />
+    </mesh>
+  )
+}
+
+/** Rendert alle benutzerdefinierten Maßlinien + optionalen Pending-Marker */
+function CustomDimensionLines({
+  dimensions,
+  pendingPoint,
+}: {
+  dimensions?: CustomDimension[]
+  pendingPoint?: [number, number, number] | null
+}) {
+  return (
+    <group>
+      {(dimensions || []).map((dim) => (
+        <FreeMeasurementLine
+          key={dim.id}
+          start={dim.start}
+          end={dim.end}
+          label={`${dim.distanceM.toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} m`}
+        />
+      ))}
+      {pendingPoint && <PendingMeasureMarker position={pendingPoint} />}
     </group>
   )
 }
@@ -831,6 +954,10 @@ function Scene({
   bridgeMode,
   hiddenSides,
   hiddenLevels,
+  measureMode,
+  onMeasurePoint,
+  customDimensions,
+  pendingMeasurePoint,
 }: Props) {
   const target: [number, number, number] = [0, model.building.heightM / 2, 0]
   // Schatten-Kamera eng ans Modell anpassen (Standardwerte sind viel zu groß
@@ -880,9 +1007,12 @@ function Scene({
           lodLevel={lodLevel}
           hiddenSides={hiddenSides}
           hiddenLevels={hiddenLevels}
+          measureMode={measureMode}
+          onMeasurePoint={onMeasurePoint}
         />
       )}
       <DimensionLines model={model} visible={showDimensions} />
+      <CustomDimensionLines dimensions={customDimensions} pendingPoint={pendingMeasurePoint} />
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.02, 0]} receiveShadow>
         <planeGeometry args={[120, 120]} />
         <meshStandardMaterial color="#b9c0c8" roughness={0.95} />
@@ -913,6 +1043,10 @@ function Scaffold3D({
   onAddNote,
   hiddenSides,
   hiddenLevels,
+  measureMode,
+  onMeasurePoint,
+  customDimensions,
+  pendingMeasurePoint,
 }: Props) {
   const cameraDistance =
     Math.max(model.building.lengthM, model.building.heightM) * 2 + 8
@@ -956,6 +1090,10 @@ function Scaffold3D({
             bridgeMode={bridgeMode}
             hiddenSides={hiddenSides}
             hiddenLevels={hiddenLevels}
+            measureMode={measureMode}
+            onMeasurePoint={onMeasurePoint}
+            customDimensions={customDimensions}
+            pendingMeasurePoint={pendingMeasurePoint}
           />
         </group>
         <AutoFraming targetRef={contentRef} modelKey={modelKey} />

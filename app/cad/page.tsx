@@ -29,6 +29,7 @@ import { checkRules, groupRulesBySeverity } from '@/lib/calculations/cad-rules'
 import type { CADNote } from '@/types/cad-notes'
 import type { CADLayerState, SideVisibility } from '@/types/cad-layers'
 import { createInitialLayerState } from '@/types/cad-layers'
+import type { CustomDimension } from '@/types/cad-dimensions'
 import { buildTopologyGraph, pruefeKnotenIsolation } from '@/lib/calculations/topology-graph'
 import { generatePDFHTML, downloadPDF, generateMontageplanHTML } from '@/lib/export/pdf-export'
 import { uploadVertragsdokument } from '@/lib/vertrag-upload-client'
@@ -159,6 +160,47 @@ export default function CADPage() {
     return s.size > 0 ? s : undefined
   }, [layerState])
 
+  // NEU (CP-Pro-Marktvergleich, "Freie Bemaßung"-Lücke): Mess-Modus,
+  // gespeicherte Bemaßungen und der ausstehende erste Messpunkt.
+  const [measureMode, setMeasureMode] = useState(false)
+  const [customDimensions, setCustomDimensions] = useState<CustomDimension[]>([])
+  const [pendingMeasurePoint, setPendingMeasurePoint] = useState<{ point: [number, number, number]; label?: string } | null>(null)
+
+  const handleToggleMeasureMode = useCallback(() => {
+    setMeasureMode((prev) => {
+      if (prev) setPendingMeasurePoint(null) // Beim Deaktivieren den ausstehenden Punkt verwerfen
+      return !prev
+    })
+  }, [])
+
+  const handleMeasurePoint = useCallback((point: [number, number, number], componentName?: string) => {
+    setPendingMeasurePoint((prev) => {
+      if (!prev) {
+        // Erster Punkt – merken, noch keine Bemaßung
+        return { point, label: componentName }
+      }
+      // Zweiter Punkt – Bemaßung erzeugen
+      const dx = point[0] - prev.point[0]
+      const dy = point[1] - prev.point[1]
+      const dz = point[2] - prev.point[2]
+      const distanceM = Math.sqrt(dx * dx + dy * dy + dz * dz)
+      const dim: CustomDimension = {
+        id: `dim-${Date.now()}-${Math.round(Math.random() * 1000)}`,
+        start: prev.point,
+        end: point,
+        distanceM,
+        startLabel: prev.label,
+        endLabel: componentName,
+      }
+      setCustomDimensions((ds) => [...ds, dim])
+      return null // Pending-Punkt zurücksetzen
+    })
+  }, [])
+
+  const handleDeleteDimension = useCallback((id: string) => {
+    setCustomDimensions((prev) => prev.filter((d) => d.id !== id))
+  }, [])
+
   // Phase 68-F: 'Neu starten' — setzt ALLES auf den Anfangszustand
   // zurück (Maße, System, erzeugtes Modell, Auswahl, Stunden).
   // Bestehende Projekte in der DB bleiben unberührt — es geht nur
@@ -172,6 +214,9 @@ export default function CADPage() {
     setHoursPerSqm(2.0);
     setNotes([]); // Notizen gehören zum verworfenen Modell, sonst "kleben" alte Notizen an neuen Bauteil-IDs
     setLayerState(null); // Ebenen gehören zum verworfenen Modell
+    setMeasureMode(false); // Bemaßungen gehören zum verworfenen Modell
+    setCustomDimensions([]);
+    setPendingMeasurePoint(null);
     // Phase 68-G: Auto-Generierung sperren -> Leinwand bleibt leer,
     // bis der Nutzer erneut handelt (sonst baut der Effekt unten das
     // Haus sofort wieder auf und der Reset wirkt wirkungslos).
@@ -500,7 +545,7 @@ export default function CADPage() {
           </div>
           <div className='flex-1 p-4 min-h-0'>
             {viewMode === '3d' && model && (
-              <Scaffold3D model={model} features={features} showBuilding={showBuilding} showScaffold={showScaffold} showDimensions={showDimensions} selectedComponent={selectedComponent} onSelectComponent={setSelectedComponent} visibleTypes={visibleTypes} viewMode={viewAngle} onCanvasReady={(c) => { canvasRef.current = c }} notes={notes} onAddNote={handleAddNote} hiddenSides={hiddenSides} hiddenLevels={hiddenLevels} />
+              <Scaffold3D model={model} features={features} showBuilding={showBuilding} showScaffold={showScaffold} showDimensions={showDimensions} selectedComponent={selectedComponent} onSelectComponent={setSelectedComponent} visibleTypes={visibleTypes} viewMode={viewAngle} onCanvasReady={(c) => { canvasRef.current = c }} notes={notes} onAddNote={handleAddNote} hiddenSides={hiddenSides} hiddenLevels={hiddenLevels} measureMode={measureMode} onMeasurePoint={handleMeasurePoint} customDimensions={customDimensions} pendingMeasurePoint={pendingMeasurePoint?.point ?? null} />
             )}
             {/* Phase 68-G: Leerzustand nach 'Neu starten' */}
             {viewMode === '3d' && !model && (
@@ -549,6 +594,10 @@ export default function CADPage() {
             onToggleLevel={handleToggleLevel}
             onShowAllLayers={handleShowAllLayers}
             onHideAllLayers={handleHideAllLayers}
+            customDimensions={customDimensions}
+            onDeleteDimension={handleDeleteDimension}
+            measureMode={measureMode}
+            onToggleMeasureMode={handleToggleMeasureMode}
           />
         </div>
       </div>
