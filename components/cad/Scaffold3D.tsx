@@ -17,6 +17,7 @@ import { Canvas, useThree, useFrame } from '@react-three/fiber'
 import { OrbitControls, Grid, Text, Sky, AdaptiveDpr, AdaptiveEvents, Environment, ContactShadows } from '@react-three/drei'
 import * as THREE from 'three'
 import { CADModel, ScaffoldComponent3D, BuildingFeature3D, berechneGebaeudeSegmente } from '@/lib/calculations/cad-engine'
+import type { CADNote } from '@/types/cad-notes'
 
 interface Props {
   model: CADModel
@@ -34,6 +35,10 @@ interface Props {
   // NEU: Brücken-Zugangsgerüst – ersetzt den Gebäude-Baukörper durch
   // eine Brückendeck-Kante mit Hängekonsolen (siehe BridgeDeck3D).
   bridgeMode?: boolean
+  // NEU (CP-Pro-Marktvergleich, "Notizen"-Lücke): optional, rein additiv –
+  // ohne diese Props verhält sich die Komponente exakt wie vorher.
+  notes?: CADNote[]
+  onAddNote?: (componentId: string, componentName: string, componentType: string, text: string) => void
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -694,6 +699,38 @@ function GroundingShadow({ targetRef, modelKey }: { targetRef: { current: THREE.
   )
 }
 
+// NEU (CP-Pro-Marktvergleich, "Notizen"-Lücke): kleine, eigenständige
+// Eingabekomponente mit eigenem lokalem State – wird im Info-Kasten mit
+// key={bauteilId} gerendert, damit React den Entwurfstext beim
+// Bauteilwechsel durch Neumontage zurücksetzt (kein setState in useEffect
+// im Elternteil nötig).
+function NoteInput({ onSubmit }: { onSubmit: (text: string) => void }) {
+  const [text, setText] = useState('')
+  return (
+    <>
+      <textarea
+        value={text}
+        onChange={(e) => setText(e.target.value)}
+        placeholder="Notiz zu diesem Bauteil…"
+        rows={2}
+        className="w-full text-xs border rounded-lg px-2 py-1 resize-none"
+      />
+      <button
+        type="button"
+        disabled={!text.trim()}
+        onClick={() => {
+          if (!text.trim()) return
+          onSubmit(text.trim())
+          setText('')
+        }}
+        className="w-full mt-1 py-1 bg-[#e8590c] text-white text-[11px] font-medium rounded-lg hover:bg-[#d14e0a] disabled:bg-gray-300 transition-colors"
+      >
+        + Notiz hinzufügen
+      </button>
+    </>
+  )
+}
+
 // ═══════════════════════════════════════════════════════════
 // HAUPT-SZENE
 // ═══════════════════════════════════════════════════════════
@@ -848,6 +885,8 @@ function Scaffold3D({
   viewMode,
   onCanvasReady,
   bridgeMode,
+  notes,
+  onAddNote,
 }: Props) {
   const cameraDistance =
     Math.max(model.building.lengthM, model.building.heightM) * 2 + 8
@@ -922,20 +961,34 @@ function Scaffold3D({
       <div className="absolute bottom-4 left-4 bg-white/90 backdrop-blur rounded-xl px-3 py-2 text-xs text-[#424245] border border-black/10 pointer-events-none shadow-sm">
         <p>🖱️ Links: Drehen | Rechts: Verschieben | Scroll: Zoomen</p>
       </div>
-      {selectedComponent && (
-        <div className="absolute top-4 right-4 bg-white/95 backdrop-blur rounded-xl px-4 py-3 text-sm border border-black/10 shadow-lg z-50">
-          <p className="font-semibold text-[#1d1d1f]">
-            {model.components3D.find((c) => c.id === selectedComponent)?.name}
-          </p>
-          <p className="text-xs text-[#86868b] mt-1">
-            Art.-Nr.:{' '}
-            {
-              model.components3D.find((c) => c.id === selectedComponent)
-                ?.articleNumber
-            }
-          </p>
-        </div>
-      )}
+      {selectedComponent && (() => {
+        const comp = model.components3D.find((c) => c.id === selectedComponent)
+        // NEU (CP-Pro-Marktvergleich, "Notizen"-Lücke): Notiz-Eingabe direkt
+        // am ausgewählten Bauteil, additiv im bestehenden Info-Kasten –
+        // nur sichtbar, wenn die aufrufende Seite notes/onAddNote übergibt.
+        const bauteilNotizen = (notes || []).filter((n) => n.componentId === selectedComponent)
+        return (
+          <div className="absolute top-4 right-4 bg-white/95 backdrop-blur rounded-xl px-4 py-3 text-sm border border-black/10 shadow-lg z-50 max-w-[240px]">
+            <p className="font-semibold text-[#1d1d1f]">{comp?.name}</p>
+            <p className="text-xs text-[#86868b] mt-1">Art.-Nr.: {comp?.articleNumber}</p>
+            {onAddNote && comp && (
+              <div className="mt-2 pt-2 border-t border-black/10">
+                {bauteilNotizen.length > 0 && (
+                  <div className="space-y-1 mb-2 max-h-24 overflow-y-auto">
+                    {bauteilNotizen.map((n) => (
+                      <p key={n.id} className="text-[11px] text-[#424245] bg-[#f5f5f7] rounded-lg px-2 py-1 whitespace-pre-wrap">{n.text}</p>
+                    ))}
+                  </div>
+                )}
+                {/* key=comp.id: eigener State pro Bauteil, React setzt ihn beim
+                    Bauteilwechsel durch Neumontage automatisch zurück – ohne
+                    einen zusätzlichen setState-in-useEffect. */}
+                <NoteInput key={comp.id} onSubmit={(text) => onAddNote(comp.id, comp.name, comp.type, text)} />
+              </div>
+            )}
+          </div>
+        )
+      })()}
     </div>
   )
 }

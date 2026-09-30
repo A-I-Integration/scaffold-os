@@ -3,6 +3,8 @@
 import { useState } from 'react'
 import { MaterialItem } from '@/types/scaffold'
 import type { LogistikDaten } from '@/lib/calculations/cad-engine'
+import type { CADNote } from '@/types/cad-notes'
+import NotesPanel from './NotesPanel'
 
 interface Props {
   materials: MaterialItem[]
@@ -22,9 +24,13 @@ interface Props {
   zuordnenLaeuft?: boolean
   // Phase 68-J: ohne Gerüst-Modell werden Exporte optisch ausgegraut
   disabled?: boolean
+  // NEU (CP-Pro-Marktvergleich, "Notizen"-Lücke): optional, rein additiv –
+  // ohne diese Props verhält sich die Komponente exakt wie vorher.
+  notes?: CADNote[]
+  onDeleteNote?: (id: string) => void
 }
 
-export default function BillOfMaterials({ materials, totalWeightKg, totalPrice, logistik, onExportPDF, onExportCSV, onExportMontageplan, onExportStatikGeometrie, onExportIFC, customers, kundenLadeFehler, onRetryKunden, onCreateCustomer, onAssignCustomer, zuordnenLaeuft, disabled = false }: Props) {
+export default function BillOfMaterials({ materials, totalWeightKg, totalPrice, logistik, onExportPDF, onExportCSV, onExportMontageplan, onExportStatikGeometrie, onExportIFC, customers, kundenLadeFehler, onRetryKunden, onCreateCustomer, onAssignCustomer, zuordnenLaeuft, disabled = false, notes, onDeleteNote }: Props) {
   const [kundenSuche, setKundenSuche] = useState('')
   const [ausgewaehlterKunde, setAusgewaehlterKunde] = useState<{ id: string; name: string } | null>(null)
   const [zeigeDropdown, setZeigeDropdown] = useState(false)
@@ -72,6 +78,9 @@ export default function BillOfMaterials({ materials, totalWeightKg, totalPrice, 
             )}
           </div>
         )}
+
+        {/* Notizen/Anmerkungen an Bauteilen (CP-Pro-Marktvergleich) */}
+        {notes && onDeleteNote && <NotesPanel notes={notes} onDeleteNote={onDeleteNote} />}
 
         {/* Kunden-Zuordnung → direkt als Angebot anlegen (Phase 41) */}
         {customers && onAssignCustomer && (
