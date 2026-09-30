@@ -4,7 +4,9 @@ import { useState } from 'react'
 import { MaterialItem } from '@/types/scaffold'
 import type { LogistikDaten } from '@/lib/calculations/cad-engine'
 import type { CADNote } from '@/types/cad-notes'
+import type { CADLayerState, SideVisibility } from '@/types/cad-layers'
 import NotesPanel from './NotesPanel'
+import LayersPanel from './LayersPanel'
 
 interface Props {
   materials: MaterialItem[]
@@ -28,9 +30,16 @@ interface Props {
   // ohne diese Props verhält sich die Komponente exakt wie vorher.
   notes?: CADNote[]
   onDeleteNote?: (id: string) => void
+  // NEU (CP-Pro-Marktvergleich, "Ebenen"-Lücke): optional, rein additiv –
+  // ohne diese Props verhält sich die Komponente exakt wie vorher.
+  layerState?: CADLayerState | null
+  onToggleSide?: (side: keyof SideVisibility) => void
+  onToggleLevel?: (levelIndex: number) => void
+  onShowAllLayers?: () => void
+  onHideAllLayers?: () => void
 }
 
-export default function BillOfMaterials({ materials, totalWeightKg, totalPrice, logistik, onExportPDF, onExportCSV, onExportMontageplan, onExportStatikGeometrie, onExportIFC, customers, kundenLadeFehler, onRetryKunden, onCreateCustomer, onAssignCustomer, zuordnenLaeuft, disabled = false, notes, onDeleteNote }: Props) {
+export default function BillOfMaterials({ materials, totalWeightKg, totalPrice, logistik, onExportPDF, onExportCSV, onExportMontageplan, onExportStatikGeometrie, onExportIFC, customers, kundenLadeFehler, onRetryKunden, onCreateCustomer, onAssignCustomer, zuordnenLaeuft, disabled = false, notes, onDeleteNote, layerState, onToggleSide, onToggleLevel, onShowAllLayers, onHideAllLayers }: Props) {
   const [kundenSuche, setKundenSuche] = useState('')
   const [ausgewaehlterKunde, setAusgewaehlterKunde] = useState<{ id: string; name: string } | null>(null)
   const [zeigeDropdown, setZeigeDropdown] = useState(false)
@@ -77,6 +86,17 @@ export default function BillOfMaterials({ materials, totalWeightKg, totalPrice, 
               </div>
             )}
           </div>
+        )}
+
+        {/* Ebenen/Layers (CP-Pro-Marktvergleich) */}
+        {layerState && onToggleSide && onToggleLevel && onShowAllLayers && onHideAllLayers && (
+          <LayersPanel
+            layerState={layerState}
+            onToggleSide={onToggleSide}
+            onToggleLevel={onToggleLevel}
+            onShowAll={onShowAllLayers}
+            onHideAll={onHideAllLayers}
+          />
         )}
 
         {/* Notizen/Anmerkungen an Bauteilen (CP-Pro-Marktvergleich) */}
