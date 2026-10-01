@@ -10,7 +10,7 @@ import {
   HardHat, LayoutDashboard, Warehouse, CalendarClock, Truck,
   KeyRound, Ruler, Navigation, LogOut, Menu, X, Database, TrendingUp, Timer, Route,
   FileText, Settings, BookOpen, HelpCircle, Upload, Euro, Users, Handshake, ClipboardList,
-  Wrench, ChevronDown, ChevronRight, CreditCard, Mail,
+  Wrench, ChevronDown, ChevronRight, CreditCard, Mail, FolderOpen,
 } from 'lucide-react';
 
 // ============================================================
@@ -70,6 +70,7 @@ const NAV_GROUPS: NavGroup[] = [
       { href: '/rechnungen',     label: 'Rechnungen',     icon: FileText,      roles: ['admin', 'disponent'] },
       { href: '/zahlungsabgleich', label: 'Zahlungsabgleich', icon: CreditCard, roles: ['admin', 'disponent'] },
       { href: '/mietabrechnung', label: 'Mietabrechnung', icon: Euro,          roles: ['admin', 'disponent'] },
+      { href: '/dokumente',     label: 'Dokumente',      icon: FolderOpen,    roles: ['admin', 'disponent'] },
       { href: '/nachunternehmer', label: 'Nachunternehmer', icon: Handshake,   roles: ['admin', 'disponent'] },
     ],
   },
