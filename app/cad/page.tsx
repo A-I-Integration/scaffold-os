@@ -405,6 +405,37 @@ export default function CADPage() {
   }, [model, manualPlacements, removedGroups])
   const removedCount = useMemo(() => removedGroups.reduce((n, g) => n + g.length, 0), [removedGroups])
 
+  // Bauteil per Klick ersetzen: das angeklickte Bauteil (bei Treppen der ganze
+  // Turm) wird entfernt und an derselben Stelle durch den gewählten Typ aus dem
+  // Katalog ersetzt. Seite/Ebene werden aus der Lage abgeleitet (Annahme: Raster 2 m).
+  const handleReplaceComponent = useCallback((id: string, newType: string) => {
+    if (!modelWithManual) return
+    const comps = modelWithManual.components3D
+    const tm = id.match(/^stair-(?:frame|step|rail)-(\d+)(?:-|$)/)
+    const src = (tm ? comps.find((c) => c.id === `stair-frame-${tm[1]}`) : null) ?? comps.find((c) => c.id === id)
+    if (!src) return
+    const n = comps.length || 1
+    const mx = comps.reduce((a, c) => a + c.position[0], 0) / n
+    const mz = comps.reduce((a, c) => a + c.position[2], 0) / n
+    const seitlich = Math.abs(Math.sin(src.rotation[1])) > 0.7
+    const side: ManualPlacement['side'] = seitlich
+      ? (src.position[0] < mx ? 'left' : 'right')
+      : (src.position[2] < mz ? 'back' : 'front')
+    const placement: ManualPlacement = {
+      id: `manual-${newType}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      type: newType as ManualPlacement['type'],
+      positionX: src.position[0],
+      positionY: src.position[1],
+      positionZ: src.position[2],
+      side,
+      levelIndex: Math.max(0, Math.round(src.position[1] / 2)),
+      rotationY: seitlich ? src.rotation[1] : 0,
+    }
+    handleRemoveComponent(id)
+    setManualPlacements((prev) => [...prev, placement])
+    setSelectedComponent(placement.id)
+  }, [modelWithManual, handleRemoveComponent])
+
   const allWarnings = useMemo(() => {
     const rules = [...ruleResults.errors, ...ruleResults.warnings, ...ruleResults.infos]
     return [
@@ -661,7 +692,7 @@ export default function CADPage() {
           </div>
           <div className='flex-1 p-4 min-h-0'>
             {viewMode === '3d' && modelWithManual && (
-              <Scaffold3D model={modelWithManual} features={features} showBuilding={showBuilding} showScaffold={showScaffold} showDimensions={showDimensions} selectedComponent={selectedComponent} onSelectComponent={setSelectedComponent} visibleTypes={visibleTypes} viewMode={viewAngle} onCanvasReady={(c) => { canvasRef.current = c }} notes={notes} onAddNote={handleAddNote} hiddenSides={hiddenSides} hiddenLevels={hiddenLevels} measureMode={measureMode} onMeasurePoint={handleMeasurePoint} customDimensions={customDimensions} pendingMeasurePoint={pendingMeasurePoint?.point ?? null} placementType={placementType} onPlacementClick={handlePlacementClick} showEnvironment={showEnvironment} onRemoveComponent={handleRemoveComponent} removedCount={removedCount} />
+              <Scaffold3D model={modelWithManual} features={features} showBuilding={showBuilding} showScaffold={showScaffold} showDimensions={showDimensions} selectedComponent={selectedComponent} onSelectComponent={setSelectedComponent} visibleTypes={visibleTypes} viewMode={viewAngle} onCanvasReady={(c) => { canvasRef.current = c }} notes={notes} onAddNote={handleAddNote} hiddenSides={hiddenSides} hiddenLevels={hiddenLevels} measureMode={measureMode} onMeasurePoint={handleMeasurePoint} customDimensions={customDimensions} pendingMeasurePoint={pendingMeasurePoint?.point ?? null} placementType={placementType} onPlacementClick={handlePlacementClick} showEnvironment={showEnvironment} onRemoveComponent={handleRemoveComponent} onReplaceComponent={handleReplaceComponent} removedCount={removedCount} />
             )}
             {/* Phase 68-G: Leerzustand nach 'Neu starten' */}
             {viewMode === '3d' && !model && (

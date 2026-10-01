@@ -18,6 +18,7 @@ import { OrbitControls, Grid, Text, Sky, AdaptiveDpr, AdaptiveEvents, Environmen
 import * as THREE from 'three'
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 import { CADModel, ScaffoldComponent3D, BuildingFeature3D, berechneGebaeudeSegmente, hatGeradeAbschnitte } from '@/lib/calculations/cad-engine'
+import { CATALOG_ITEMS } from './ComponentCatalog'
 import type { CADNote } from '@/types/cad-notes'
 import type { CustomDimension } from '@/types/cad-dimensions'
 
@@ -58,6 +59,7 @@ interface Props {
   showEnvironment?: boolean
   // NEU: ausgewähltes Bauteil per Knopf entfernen (Seite blendet es aus bzw. löscht es).
   onRemoveComponent?: (id: string) => void
+  onReplaceComponent?: (id: string, newType: string) => void
   // Anzahl entfernter Bauteile – hält den Kamera-Ausschnitt beim Entfernen/Zurückholen
   // stabil (die Bauteilzahl steckt im Rahmen-Schlüssel) und frischt den Schatten auf.
   removedCount?: number
@@ -1573,6 +1575,7 @@ function Scaffold3D({
   pendingMeasurePoint,
   showEnvironment,
   onRemoveComponent,
+  onReplaceComponent,
   removedCount,
 }: Props) {
   const cameraDistance =
@@ -1684,6 +1687,22 @@ function Scaffold3D({
                 >
                   {comp.id.startsWith('stair-') ? '🗑 Treppenturm entfernen' : '🗑 Bauteil entfernen'}
                 </button>
+              </div>
+            )}
+            {onReplaceComponent && comp && (
+              <div className="mt-2 pt-2 border-t border-black/10">
+                <label className="block text-[10px] text-[#86868b] mb-1">Ersetzen durch …</label>
+                <select
+                  key={comp.id}
+                  defaultValue=""
+                  onChange={(e) => { if (e.target.value) onReplaceComponent(comp.id, e.target.value) }}
+                  className="w-full px-2 py-1.5 text-xs rounded-lg border border-black/10 bg-white text-[#1d1d1f]"
+                >
+                  <option value="" disabled>Bauteil wählen …</option>
+                  {CATALOG_ITEMS.map((it) => (
+                    <option key={it.type} value={it.type}>{it.icon} {it.label}</option>
+                  ))}
+                </select>
               </div>
             )}
             {onAddNote && comp && (
