@@ -16,6 +16,7 @@ import { useMemo, useState, useRef, useEffect, useCallback, memo } from 'react'
 import { Canvas, useThree, useFrame } from '@react-three/fiber'
 import { OrbitControls, Grid, Text, Sky, AdaptiveDpr, AdaptiveEvents, Environment, ContactShadows } from '@react-three/drei'
 import * as THREE from 'three'
+import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 import { CADModel, ScaffoldComponent3D, BuildingFeature3D, berechneGebaeudeSegmente } from '@/lib/calculations/cad-engine'
 import type { CADNote } from '@/types/cad-notes'
 import type { CustomDimension } from '@/types/cad-dimensions'
@@ -87,44 +88,127 @@ const COLOR_MAP: Record<string, string> = {
 // ═══════════════════════════════════════════════════════════
 const GEOMETRY_CACHE = new Map<string, THREE.BufferGeometry>()
 
-function getGeometry(type: string): THREE.BufferGeometry {
-  if (GEOMETRY_CACHE.has(type)) return GEOMETRY_CACHE.get(type)!
-  let geo: THREE.BufferGeometry
-  switch (type) {
-    case 'frame':
-    case 'railing':
-    case 'board':
-    case 'console':
-    case 'stair':
-    case 'protection_roof':
-      geo = new THREE.BoxGeometry(1, 1, 1)
-      break
-    case 'deck':
-      geo = new THREE.BoxGeometry(1, 1, 0.02)
-      break
-    case 'diagonal':
-    case 'corner_brace':
-      geo = new THREE.CylinderGeometry(0.015, 0.015, 1, 8)
-      break
-    case 'footplate':
-    case 'load_plate':
-      geo = new THREE.CylinderGeometry(0.075, 0.075, 0.04, 8)
-      break
-    case 'coupling':
-      geo = new THREE.SphereGeometry(0.04, 8, 8)
-      break
-    case 'anchor':
-      geo = new THREE.CylinderGeometry(0.04, 0.04, 0.3, 8)
-      break
-    case 'net':
-    case 'safety_net':
-      geo = new THREE.PlaneGeometry(1, 1)
-      break
-    default:
-      geo = new THREE.BoxGeometry(1, 1, 1)
+// ─── Realistik-Update: EINHEITSFORMEN ───
+// Konvention: `item.scale` enthält die ECHTEN Maße des Bauteils in Metern
+// (so erzeugt es cad-engine.ts, auch bei manuell platzierten Bauteilen).
+// Die Basisformen müssen deshalb Einheitsformen sein (Ausdehnung 1 pro
+// Achse) – vorher waren sie zusätzlich verkleinert (z. B. Belag 0,02 × 0,02 m
+// = 0,4 mm dick, Diagonale Radius 0,45 mm) und damit praktisch unsichtbar.
+
+/** Rohr-Typen: Zylinder entlang der LÄNGSTEN scale-Achse, Durchmesser fix
+ *  (ANNAHME: übliche Gerüstrohr-Durchmesser, rein optisch). */
+const TUBE_DIAMETER_M: Record<string, number> = {
+  frame: 0.048,
+  diagonal: 0.034,
+  corner_brace: 0.034,
+  anchor: 0.03,
+  railing: 0.048, // nur Variante 'post' (Treppengeländer-Pfosten)
+}
+
+/** Variante je Bauteil: gleicher Typ, aber unterschiedliche Bauform. */
+function getVariant(item: ScaffoldComponent3D): string {
+  if (item.type === 'railing') {
+    // Feld-Geländer: [Länge, 1.0, 0.04] → offener Rahmen aus Rohren.
+    // Treppen-Geländer: [0.04, Höhe, 0.04] → senkrechtes Rohr.
+    const [sx, sy, sz] = item.scale
+    return sy > sx * 5 && sy > sz * 5 ? 'post' : 'rail'
   }
-  GEOMETRY_CACHE.set(type, geo)
+  return 'default'
+}
+
+function isTube(type: string, variant: string): boolean {
+  if (type === 'railing') return variant === 'post'
+  return type in TUBE_DIAMETER_M
+}
+
+function mergeParts(parts: THREE.BufferGeometry[]): THREE.BufferGeometry {
+  const merged = mergeGeometries(parts, false)
+  parts.forEach((p) => p.dispose())
+  return merged ?? new THREE.BoxGeometry(1, 1, 1)
+}
+
+function getGeometry(type: string, variant: string = 'default'): THREE.BufferGeometry {
+  const cacheKey = `${type}|${variant}`
+  if (GEOMETRY_CACHE.has(cacheKey)) return GEOMETRY_CACHE.get(cacheKey)!
+  let geo: THREE.BufferGeometry
+  if (isTube(type, variant)) {
+    // Einheitszylinder: Durchmesser 1, Länge 1, Achse = Y. Durchmesser und
+    // Länge setzt die Instanz-Matrix (siehe InstancedBauteile).
+    geo = new THREE.CylinderGeometry(0.5, 0.5, 1, 10)
+  } else {
+    switch (type) {
+      case 'railing': {
+        // Offenes Geländer in der Einheitsbox [Länge, 1.0 m, 0.04 m]:
+        // 3 Rohre (Handlauf, Knieleiste, unten) statt massiver Platte.
+        // y-Skala ist bei Feld-Geländern immer 1.0 m, z-Skala 0.04 m →
+        // Durchmesser 0.04 in y-Einheiten bzw. 1 in z-Einheiten ergibt
+        // ein rundes Rohr von 4 cm.
+        const parts = [0.46, 0.0, -0.46].map((y) => {
+          const g = new THREE.CylinderGeometry(0.5, 0.5, 1, 8)
+          g.rotateZ(Math.PI / 2) // Achse Y → X
+          g.scale(1, 0.04, 1)
+          g.translate(0, y, 0)
+          return g
+        })
+        geo = mergeParts(parts)
+        break
+      }
+      case 'stair': {
+        // Treppenturm in der Einheitsbox [0.8, Höhe, 0.8]: 4 Eckrohre
+        // statt massivem Block (Stufen + Geländer sind eigene Bauteile).
+        const parts = ([[-0.45, -0.45], [0.45, -0.45], [-0.45, 0.45], [0.45, 0.45]] as const).map(([x, z]) => {
+          const g = new THREE.CylinderGeometry(0.5, 0.5, 1, 8)
+          g.scale(0.05, 1, 0.05) // ≈ 4 cm Durchmesser bei 0.8 m Breite
+          g.translate(x, 0, z)
+          return g
+        })
+        geo = mergeParts(parts)
+        break
+      }
+      case 'footplate':
+        geo = new THREE.CylinderGeometry(0.5, 0.5, 1, 16)
+        break
+      case 'coupling':
+        // Rosette: flache Scheibe (scale ist 0.05 → Ø ≈ 12 cm, ≈ 1 cm dick)
+        geo = new THREE.CylinderGeometry(1.2, 1.2, 0.2, 16)
+        break
+      case 'net':
+      case 'safety_net':
+        geo = new THREE.PlaneGeometry(1, 1)
+        break
+      case 'frame':
+      case 'board':
+      case 'console':
+      case 'deck':
+      case 'load_plate':
+      case 'protection_roof':
+      default:
+        geo = new THREE.BoxGeometry(1, 1, 1)
+    }
+  }
+  GEOMETRY_CACHE.set(cacheKey, geo)
   return geo
+}
+
+// Netz-Textur: feines Gitter auf transparentem Grund (SSR-sicher, lazy).
+let netTexCache: THREE.CanvasTexture | null = null
+function getNetTex(): THREE.CanvasTexture | null {
+  if (typeof window === 'undefined') return null
+  if (!netTexCache) {
+    const size = 64
+    const canvas = document.createElement('canvas')
+    canvas.width = canvas.height = size
+    const ctx = canvas.getContext('2d')!
+    ctx.clearRect(0, 0, size, size)
+    ctx.strokeStyle = '#ffffff'
+    ctx.lineWidth = 10
+    ctx.strokeRect(0, 0, size, size)
+    netTexCache = new THREE.CanvasTexture(canvas)
+    netTexCache.wrapS = netTexCache.wrapT = THREE.RepeatWrapping
+    netTexCache.repeat.set(14, 7) // ≈ 18 × 21 cm Maschen bei 2,5 × 1,5 m
+    netTexCache.anisotropy = 4
+  }
+  return netTexCache
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -145,13 +229,17 @@ function getMaterial(type: string, color: THREE.Color): THREE.MeshStandardMateri
   // die Environment wurde gespiegelt und die Flächen sahen DUNKEL aus
   // (der "schwarze Balken"-Effekt). Jetzt: mattes, helles Silber.
   const istRot = type === 'deck' // rote Belags-Riegel
+  const istNetz = type === 'net' || type === 'safety_net'
   const mat = new THREE.MeshStandardMaterial({
     color,
     metalness: istHolz ? 0.0 : istRot ? 0.3 : 0.55,
     roughness: istHolz ? 0.8 : istRot ? 0.55 : 0.55,
-    transparent: type === 'net' || type === 'safety_net',
-    opacity: type === 'net' || type === 'safety_net' ? 0.35 : 1,
-    side: type === 'net' || type === 'safety_net' ? THREE.DoubleSide : THREE.FrontSide,
+    transparent: istNetz,
+    // Netz: Gitter-Textur (Linien deckend, Maschen durchsichtig)
+    map: istNetz ? getNetTex() : null,
+    alphaTest: istNetz ? 0.08 : 0,
+    opacity: 1,
+    side: istNetz ? THREE.DoubleSide : THREE.FrontSide,
     envMapIntensity: istHolz ? 0.4 : 0.8,
   })
   MATERIAL_CACHE.set(key, mat)
@@ -161,8 +249,16 @@ function getMaterial(type: string, color: THREE.Color): THREE.MeshStandardMateri
 // ═══════════════════════════════════════════════════════════
 // INSTANCED BAUTEILE (Performance-optimiert)
 // ═══════════════════════════════════════════════════════════
+// Hilfsobjekte für die Rohr-Ausrichtung (einmalig, nicht pro Instanz)
+const TUBE_Q_ITEM = new THREE.Quaternion()
+const TUBE_Q_FIX = new THREE.Quaternion()
+const TUBE_EULER = new THREE.Euler()
+const TUBE_Q_Y_TO_X = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, 1), -Math.PI / 2)
+const TUBE_Q_Y_TO_Z = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), Math.PI / 2)
+
 function InstancedBauteile({
   type,
+  variant = 'default',
   items,
   selectedComponent,
   hoveredId,
@@ -174,6 +270,7 @@ function InstancedBauteile({
   onPlacementClick,
 }: {
   type: string
+  variant?: string
   items: ScaffoldComponent3D[]
   selectedComponent: string | null
   hoveredId: string | null
@@ -188,8 +285,9 @@ function InstancedBauteile({
   const { invalidate } = useThree()
   const dummy = useMemo(() => new THREE.Object3D(), [])
   const baseColor = useMemo(() => new THREE.Color(COLOR_MAP[type] || '#888888'), [type])
-  const geometry = useMemo(() => getGeometry(type), [type])
+  const geometry = useMemo(() => getGeometry(type, variant), [type, variant])
   const material = useMemo(() => getMaterial(type, baseColor), [type, baseColor])
+  const tube = isTube(type, variant)
 
   // ─── Matrizen setzen (bei Modell-Änderung neu, nicht pro Frame) ───
   useEffect(() => {
@@ -197,14 +295,34 @@ function InstancedBauteile({
     const mesh = meshRef.current
     items.forEach((item, i) => {
       dummy.position.set(...item.position)
-      dummy.rotation.set(...item.rotation)
-      dummy.scale.set(...item.scale)
+      if (tube) {
+        // Rohr: Einheitszylinder (Achse Y) entlang der längsten scale-Achse
+        // legen, Durchmesser fix, Länge = Maß dieser Achse. Reihenfolge:
+        // erst Achsen-Korrektur (lokal), dann die Bauteil-Rotation.
+        const [sx, sy, sz] = item.scale
+        const d = TUBE_DIAMETER_M[type] ?? 0.048
+        TUBE_Q_ITEM.setFromEuler(TUBE_EULER.set(item.rotation[0], item.rotation[1], item.rotation[2]))
+        if (sx >= sy && sx >= sz) {
+          TUBE_Q_FIX.copy(TUBE_Q_Y_TO_X)
+          dummy.scale.set(d, sx, d)
+        } else if (sz >= sy) {
+          TUBE_Q_FIX.copy(TUBE_Q_Y_TO_Z)
+          dummy.scale.set(d, sz, d)
+        } else {
+          TUBE_Q_FIX.identity()
+          dummy.scale.set(d, sy, d)
+        }
+        dummy.quaternion.copy(TUBE_Q_ITEM.multiply(TUBE_Q_FIX))
+      } else {
+        dummy.rotation.set(...item.rotation)
+        dummy.scale.set(...item.scale)
+      }
       dummy.updateMatrix()
       mesh.setMatrixAt(i, dummy.matrix)
     })
     mesh.instanceMatrix.needsUpdate = true
     invalidate() // frameloop="demand": Neuzeichnen anstoßen
-  }, [items, dummy, invalidate])
+  }, [items, dummy, invalidate, tube, type])
 
   // ─── Farben nur bei Selection/Hover-Änderung ───
   useEffect(() => {
@@ -335,7 +453,9 @@ const AllScaffoldComponents = memo(function AllScaffoldComponents({
 
   const grouped = useMemo(() => {
     const ausgeblendet = new Set(LOD_AUSBLENDEN[lodLevel] || [])
-    const groups: Record<string, ScaffoldComponent3D[]> = {}
+    // Gruppiert nach Typ UND Bauform (z. B. Geländer 'rail' vs. 'post'),
+    // damit jede Gruppe mit EINER Geometrie als InstancedMesh gezeichnet wird.
+    const groups: Record<string, { type: string; variant: string; items: ScaffoldComponent3D[] }> = {}
     components.forEach((comp) => {
       if (visibleTypes[comp.type] === false) return
       if (ausgeblendet.has(comp.type)) return
@@ -351,18 +471,21 @@ const AllScaffoldComponents = memo(function AllScaffoldComponents({
           if (!isNaN(levelIdx) && hiddenLevels?.has(levelIdx)) return
         }
       }
-      if (!groups[comp.type]) groups[comp.type] = []
-      groups[comp.type].push(comp)
+      const variant = getVariant(comp)
+      const key = `${comp.type}|${variant}`
+      if (!groups[key]) groups[key] = { type: comp.type, variant, items: [] }
+      groups[key].items.push(comp)
     })
     return groups
   }, [components, visibleTypes, lodLevel, hiddenSides, hiddenLevels])
 
   return (
     <group>
-      {Object.entries(grouped).map(([type, items]) => (
+      {Object.entries(grouped).map(([key, { type, variant, items }]) => (
         <InstancedBauteile
-          key={type}
+          key={key}
           type={type}
+          variant={variant}
           items={items}
           selectedComponent={selectedComponent}
           hoveredId={hoveredId}
