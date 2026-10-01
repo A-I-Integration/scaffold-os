@@ -17,7 +17,7 @@ import { Canvas, useThree, useFrame } from '@react-three/fiber'
 import { OrbitControls, Grid, Text, Sky, AdaptiveDpr, AdaptiveEvents, Environment, ContactShadows, Edges } from '@react-three/drei'
 import * as THREE from 'three'
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
-import { CADModel, ScaffoldComponent3D, BuildingFeature3D, berechneGebaeudeSegmente } from '@/lib/calculations/cad-engine'
+import { CADModel, ScaffoldComponent3D, BuildingFeature3D, berechneGebaeudeSegmente, hatGeradeAbschnitte } from '@/lib/calculations/cad-engine'
 import type { CADNote } from '@/types/cad-notes'
 import type { CustomDimension } from '@/types/cad-dimensions'
 
@@ -653,8 +653,13 @@ function Building3D({
   // Lieferhinweis) – das Gebäudevolumen selbst ist aber schon korrekt.
   if (sections && sections.length >= 2) {
     const segmente = berechneGebaeudeSegmente(sections)
+    // Gerade Abschnitte (Höhenstufen): Gebäude wie das einfache Gebäude
+    // ausrichten (x zentriert, Vorderfront bei z = -0,5), damit das Gerüst
+    // davor steht. Bei Ecken bleibt die bisherige Lage (Startpunkt im Ursprung).
+    const gerade = hatGeradeAbschnitte(building)
+    const gesamtL = sections.reduce((sum, s) => sum + s.laengeM, 0)
     return (
-      <group>
+      <group position={gerade ? [-gesamtL / 2, 0, -w / 2 - 0.5] : [0, 0, 0]}>
         {segmente.map((seg, i) => (
           <group key={i} position={[seg.mitteX, 0, seg.mitteZ]} rotation={[0, seg.rotationYRad, 0]}>
             <mesh position={[0, seg.hoeheM / 2, 0]} castShadow receiveShadow>
