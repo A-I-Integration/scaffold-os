@@ -993,6 +993,18 @@ export function addManualPlacement(
   const feldLage = feld ? model.levels.find((l) => l.index === feld.levelIndex) : undefined
   if (feld && feldLage) {
     model.components3D.push(...treppenlaufInFeld(model, feld, feldLage, newPlacement.id))
+    // Treppenöffnung: der Belag des Feldes direkt darüber (gleiche Seite und Lage,
+    // nächste Ebene) entfällt, damit der Lauf oben ankommt. Beim Entfernen der
+    // Treppe wird das Modell neu aufgebaut, der Belag ist dann wieder da.
+    // Eckfelder haben eigene Belag-IDs und bleiben unverändert.
+    const darueber = model.fields.find(
+      (f) => f.side === feld.side && f.levelIndex === feld.levelIndex + 1 &&
+        Math.abs(f.positionX - feld.positionX) < 1e-6 && Math.abs(f.positionZ - feld.positionZ) < 1e-6
+    )
+    if (darueber) {
+      const deckId = `deck-${darueber.id}`
+      model.components3D = model.components3D.filter((c) => c.id !== deckId)
+    }
   } else if (component) {
     model.components3D.push(component)
   }
