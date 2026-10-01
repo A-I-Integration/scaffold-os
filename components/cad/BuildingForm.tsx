@@ -86,6 +86,11 @@ export default function BuildingForm({ building, systemId, onChange, onSystemCha
       }
       if (ergebnis.dachform && dachMap[ergebnis.dachform]) patch.roofForm = dachMap[ergebnis.dachform]
       if (ergebnis.geschosse) patch.floors = ergebnis.geschosse
+      // Punktwolke: erkannte Geruestseiten uebernehmen (sonst bleibt es bei „Vorne“)
+      if (Array.isArray(ergebnis.geruestSeiten) && ergebnis.geruestSeiten.length > 0) {
+        const gueltig = ergebnis.geruestSeiten.filter((x: string) => ['front', 'back', 'left', 'right'].includes(x))
+        if (gueltig.length > 0) patch.sides = gueltig
+      }
       // Gestuftes Gebaeude aus Punktwolke: Hoehenabschnitte uebernehmen.
       // Laenge = Summe der Abschnitte, Hoehe = hoechster Abschnitt.
       if (Array.isArray(ergebnis.abschnitte) && ergebnis.abschnitte.length >= 2) {
