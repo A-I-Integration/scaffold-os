@@ -140,6 +140,10 @@ export interface ScaffoldComponent3D {
   color: string
   fieldId?: string
   levelId?: string
+  // Nur Treppenturm im Feld (Scaffmax-Stil): Anzahl Läufe (je Lage einer,
+  // im Zickzack) und Richtung des ersten Laufs (1 = links→rechts, -1 = umgekehrt).
+  flights?: number
+  flightStartDir?: 1 | -1
 }
 
 export interface CADModel {
@@ -233,6 +237,36 @@ export function generateScaffoldComponents(model: CADModel): ScaffoldComponent3D
     fieldsBySide.get(key)!.push(f)
   })
 
+  // === TREPPEN-PLAN ===
+  // Ein Treppenturm sitzt IM Feld (Zickzack-Läufe, ein Lauf je Lage) und deckt
+  // bis zu 3 Lagen ab, aber nur so viele, wie an seiner Stelle Felder
+  // existieren. Bei Höhenstufen folgt je Stufe der nächste Turm.
+  const stairInterval = 3
+  const stairBase = fields.find((f) => f.side === 'front' && f.levelIndex === 0)
+  const stairPlans: { i: number; covered: number; field: ScaffoldField; level: ScaffoldLevel }[] = []
+  const stairDeckDir = new Map<string, 1 | -1>() // Feld-ID → Ende, an dem der Lauf ankommt (Belag nur dort)
+  {
+    let stairLevel = 0
+    for (let guard = 0; guard < levels.length + 2 && stairLevel < levels.length; guard++) {
+      const i = stairLevel
+      const level = levels.find((l) => l.index === i)
+      const stairField = fields.find((f) => f.side === 'front' && f.levelIndex === i)
+      if (!stairField || !level) break
+      const aufTurm = !stairBase || Math.abs(stairField.positionX - stairBase.positionX) < 0.01
+      const getragen = i === 0 || aufTurm || fields.some((g) => g.side === 'front' && g.levelIndex === i - 1 && Math.abs(g.positionX - stairField.positionX) <= g.lengthM / 2)
+      if (!getragen) break
+      let covered = 0
+      while (covered < stairInterval && fields.some((g) => g.side === 'front' && g.levelIndex === i + covered && Math.abs(g.positionX - stairField.positionX) < 0.01)) covered++
+      covered = Math.max(1, covered)
+      stairPlans.push({ i, covered, field: stairField, level })
+      for (let j = i; j < i + covered; j++) {
+        const f = fields.find((g) => g.side === 'front' && g.levelIndex === j && Math.abs(g.positionX - stairField.positionX) < 0.01)
+        if (f) stairDeckDir.set(f.id, j % 2 === 0 ? 1 : -1)
+      }
+      stairLevel += covered
+    }
+  }
+
   // === BASIS-BAUTEILE (pro Feld) ===
   fields.forEach((field) => {
     const { positionX, positionY, positionZ, lengthM, widthM, levelIndex, side } = field
@@ -250,8 +284,12 @@ export function generateScaffoldComponents(model: CADModel): ScaffoldComponent3D
     components.push({ id: `rail-${field.id}-bottom`, type: 'frame', articleNumber: 'QR-001', name: 'Querriegel', position: [positionX, yBottom + 0.05, positionZ], rotation: [0, 0, 0], scale: [lengthM, 0.04, 0.04], color: colorFrame, fieldId: field.id, levelId: level.id })
     components.push({ id: `rail-${field.id}-top`, type: 'frame', articleNumber: 'QR-001', name: 'Querriegel', position: [positionX, yTop - 0.05, positionZ], rotation: [0, 0, 0], scale: [lengthM, 0.04, 0.04], color: colorFrame, fieldId: field.id, levelId: level.id })
 
-    // Arbeitsbühne
-    components.push({ id: `deck-${field.id}`, type: 'deck', articleNumber: getDeckArticle(lengthM), name: `Arbeitsbühne ${lengthM}m`, position: [positionX, yTop, positionZ + widthM / 2 - 0.02], rotation: [-Math.PI / 2, 0, 0], scale: [lengthM - 0.05, widthM - 0.05, 0.02], color: colorDeck, fieldId: field.id, levelId: level.id })
+    // Arbeitsbühne – im Treppenfeld nur die Hälfte, an der der Lauf ankommt
+    // (die andere Hälfte bleibt für den nächsten Lauf offen).
+    const treppenEnde = stairDeckDir.get(field.id)
+    const deckL = treppenEnde ? (lengthM - 0.05) / 2 : lengthM - 0.05
+    const deckX = treppenEnde ? positionX + treppenEnde * (lengthM - 0.05) / 4 : positionX
+    components.push({ id: `deck-${field.id}`, type: 'deck', articleNumber: getDeckArticle(lengthM), name: `Arbeitsbühne ${lengthM}m`, position: [deckX, yTop, positionZ + widthM / 2 - 0.02], rotation: [-Math.PI / 2, 0, 0], scale: [deckL, widthM - 0.05, 0.02], color: colorDeck, fieldId: field.id, levelId: level.id })
 
     // Geländer
     components.push({ id: `railing-${field.id}-top`, type: 'railing', articleNumber: getRailingArticle(lengthM), name: `Geländer ${lengthM}m`, position: [positionX, yTop, positionZ + widthM / 2 + 0.02], rotation: [0, 0, 0], scale: [lengthM, 1.0, 0.04], color: colorRailing, fieldId: field.id, levelId: level.id })
@@ -334,45 +372,35 @@ export function generateScaffoldComponents(model: CADModel): ScaffoldComponent3D
     }
   }
 
-  // === TREPPEN (echte Spindeltreppen) ===
-  // Ein Treppenturm deckt bis zu 3 Lagen ab, aber nur so viele, wie an seiner
-  // Stelle Felder existieren. Bei Höhenstufen folgt daher je Stufe der
-  // nächste Turm; er muss auf dem Gerüst darunter stehen (oder, wie beim
-  // einfachen Gebäude, auf dem Turm darunter).
-  const stairInterval = 3
-  const stairBase = fields.find((f) => f.side === 'front' && f.levelIndex === 0)
-  let stairLevel = 0
-  for (let guard = 0; guard < levels.length + 2 && stairLevel < levels.length; guard++) {
-    const i = stairLevel
-    const level = levels.find((l) => l.index === i)
-    // Finde ein Feld an der Vorderseite für die Treppe
-    const stairField = fields.find(f => f.side === 'front' && f.levelIndex === i)
-    if (!stairField || !level) break
-    const stairX = stairField.positionX - stairField.lengthM / 2 - 0.9
-    const stairZ = stairField.positionZ
-    const aufTurm = !stairBase || Math.abs(stairField.positionX - stairBase.positionX) < 0.01
-    const getragen = i === 0 || aufTurm || fields.some((g) => g.side === 'front' && g.levelIndex === i - 1 && Math.abs(g.positionX - stairX) <= g.lengthM / 2)
-    if (!getragen) break
-    let covered = 0
-    while (covered < stairInterval && fields.some((g) => g.side === 'front' && g.levelIndex === i + covered && Math.abs(g.positionX - stairField.positionX) < 0.01)) covered++
-    covered = Math.max(1, covered)
+  // === TREPPEN (Scaffmax-Stil: Zickzack-Läufe im Feld) ===
+  for (const plan of stairPlans) {
+    const { i, covered, field: sf, level } = plan
     const totalStairHeight = level.heightM * covered
+    const stairL = Math.max(1.0, sf.lengthM - 0.25)
+    const stairW = Math.max(0.4, sf.widthM * 0.8)
+    const stairX = sf.positionX
+    const stairZ = sf.positionZ + sf.widthM / 2 - 0.02 // gleiche Lage wie der Belag
+    const startDir: 1 | -1 = i % 2 === 0 ? 1 : -1
 
-    // Treppen-Rahmen
-    components.push({ id: `stair-frame-${i}`, type: 'stair', articleNumber: 'SP-001', name: 'Spindeltreppe', position: [stairX, level.bottomY + totalStairHeight / 2, stairZ], rotation: [0, 0, 0], scale: [0.8, totalStairHeight, 0.8], color: colorStair, levelId: level.id })
+    // Treppen-Rahmen (Holme der Läufe, siehe Variante in Scaffold3D)
+    components.push({ id: `stair-frame-${i}`, type: 'stair', articleNumber: 'SP-001', name: 'Spindeltreppe', position: [stairX, level.bottomY + totalStairHeight / 2, stairZ], rotation: [0, 0, 0], scale: [stairL, totalStairHeight, stairW], color: colorStair, levelId: level.id, flights: covered, flightStartDir: startDir })
 
-    // Stufen (alle 25cm)
-    const stepCount = Math.ceil(totalStairHeight / 0.25)
-    for (let st = 0; st < stepCount; st++) {
-      const stepY = level.bottomY + (st * 0.25)
-      components.push({ id: `stair-step-${i}-${st}`, type: 'deck', articleNumber: 'ST-001', name: 'Treppenstufe', position: [stairX, stepY, stairZ + 0.2], rotation: [0, 0, 0], scale: [0.7, 0.04, 0.25], color: '#a0a0a0', levelId: level.id })
+    // Stufen: je Lage ein Lauf, Richtung wechselt je Lage (Zickzack)
+    const perFlight = Math.max(1, Math.round(level.heightM / 0.25))
+    const tread = (stairL - 0.2) / perFlight
+    let stepNo = 0
+    for (let fl = 0; fl < covered; fl++) {
+      const dir = (i + fl) % 2 === 0 ? 1 : -1
+      const x0 = dir > 0 ? stairX - stairL / 2 + 0.1 : stairX + stairL / 2 - 0.1
+      for (let k = 0; k < perFlight; k++) {
+        const stepY = level.bottomY + fl * level.heightM + (k + 1) * (level.heightM / perFlight) - 0.04
+        components.push({ id: `stair-step-${i}-${stepNo++}`, type: 'deck', articleNumber: 'ST-001', name: 'Treppenstufe', position: [x0 + dir * (k + 0.5) * tread, stepY, stairZ], rotation: [0, 0, 0], scale: [tread * 0.92, 0.04, stairW - 0.08], color: '#a0a0a0', levelId: level.id })
+      }
     }
 
-    // Treppen-Geländer
-    components.push({ id: `stair-rail-${i}`, type: 'railing', articleNumber: 'SG-001', name: 'Treppengeländer', position: [stairX - 0.4, level.bottomY + totalStairHeight / 2, stairZ], rotation: [0, 0, 0], scale: [0.04, totalStairHeight, 0.04], color: colorRailing, levelId: level.id })
-    components.push({ id: `stair-rail-${i}-2`, type: 'railing', articleNumber: 'SG-001', name: 'Treppengeländer', position: [stairX + 0.4, level.bottomY + totalStairHeight / 2, stairZ], rotation: [0, 0, 0], scale: [0.04, totalStairHeight, 0.04], color: colorRailing, levelId: level.id })
-
-    stairLevel += covered
+    // Endpfosten des Treppenturms
+    components.push({ id: `stair-rail-${i}`, type: 'railing', articleNumber: 'SG-001', name: 'Treppengeländer', position: [stairX - stairL / 2, level.bottomY + totalStairHeight / 2, stairZ], rotation: [0, 0, 0], scale: [0.04, totalStairHeight, 0.04], color: colorRailing, levelId: level.id })
+    components.push({ id: `stair-rail-${i}-2`, type: 'railing', articleNumber: 'SG-001', name: 'Treppengeländer', position: [stairX + stairL / 2, level.bottomY + totalStairHeight / 2, stairZ], rotation: [0, 0, 0], scale: [0.04, totalStairHeight, 0.04], color: colorRailing, levelId: level.id })
   }
 
   // === FANGNETZE ===

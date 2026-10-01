@@ -116,6 +116,12 @@ function getVariant(item: ScaffoldComponent3D): string {
     const [sx, sy, sz] = item.scale
     return sy > sx * 5 && sy > sz * 5 ? 'post' : 'rail'
   }
+  if (item.type === 'stair' && item.flights) {
+    // Treppenturm mit Zickzack-Läufen: Variante trägt Läufe, Startrichtung
+    // und die Maße (cm) – die Geometrie wird in echten Metern gebaut.
+    const [sx, sy, sz] = item.scale
+    return `zz${item.flights}|${item.flightStartDir === -1 ? 1 : 0}|${Math.round(sx * 100)}|${Math.round(sy * 100)}|${Math.round(sz * 100)}`
+  }
   return 'default'
 }
 
@@ -157,6 +163,40 @@ function getGeometry(type: string, variant: string = 'default'): THREE.BufferGeo
         break
       }
       case 'stair': {
+        if (variant.startsWith('zz')) {
+          // Zickzack-Läufe (Scaffmax-Stil): je Lage ein Lauf mit zwei Holmen.
+          // Gebaut in echten Metern um den Mittelpunkt und durch die Maße
+          // geteilt – die Instanz-Skalierung (= Maße) macht daraus wieder Meter.
+          const [nS, p0S, lS, hS, wS] = variant.slice(2).split('|')
+          const N = Math.max(1, parseInt(nS, 10)), p0 = parseInt(p0S, 10)
+          const L = parseInt(lS, 10) / 100, H = parseInt(hS, 10) / 100, W = parseInt(wS, 10) / 100
+          const rise = H / N
+          const perFlight = Math.max(1, Math.round(rise / 0.25))
+          const tread = (L - 0.2) / perFlight
+          const rs = rise / perFlight
+          const parts: THREE.BufferGeometry[] = []
+          const up = new THREE.Vector3(0, 1, 0)
+          for (let f = 0; f < N; f++) {
+            const dir = (f + p0) % 2 === 0 ? 1 : -1
+            const xa = dir > 0 ? -L / 2 + 0.1 - 0.5 * tread : L / 2 - 0.1 + 0.5 * tread
+            const xb = dir > 0 ? L / 2 - 0.1 + 0.5 * tread : -L / 2 + 0.1 - 0.5 * tread
+            const yBase = -H / 2 + f * rise
+            const ya = yBase + rs - 0.04 - 0.10 - 0.5 * rs
+            const yb = yBase + perFlight * rs - 0.04 - 0.10 + 0.5 * rs
+            const a = new THREE.Vector3(xa, ya, 0), b = new THREE.Vector3(xb, yb, 0)
+            const len = a.distanceTo(b)
+            const q = new THREE.Quaternion().setFromUnitVectors(up, b.clone().sub(a).normalize())
+            for (const zz of [-1, 1]) {
+              const g = new THREE.CylinderGeometry(0.025, 0.025, len, 8)
+              g.applyQuaternion(q)
+              g.translate((xa + xb) / 2, (ya + yb) / 2, zz * (W / 2 - 0.03))
+              parts.push(g)
+            }
+          }
+          geo = mergeParts(parts)
+          geo.scale(1 / L, 1 / H, 1 / W)
+          break
+        }
         // Treppenturm in der Einheitsbox [0.8, Höhe, 0.8]: 4 Eckrohre
         // statt massivem Block (Stufen + Geländer sind eigene Bauteile).
         const parts = ([[-0.45, -0.45], [0.45, -0.45], [-0.45, 0.45], [0.45, 0.45]] as const).map(([x, z]) => {
