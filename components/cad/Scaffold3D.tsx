@@ -56,6 +56,11 @@ interface Props {
   // NEU (Umgebung, Schritt 1): Bäume um das Gebäude. Optional, rein additiv;
   // ohne diese Prop bleibt die Szene exakt wie vorher.
   showEnvironment?: boolean
+  // NEU: ausgewähltes Bauteil per Knopf entfernen (Seite blendet es aus bzw. löscht es).
+  onRemoveComponent?: (id: string) => void
+  // Anzahl entfernter Bauteile – hält den Kamera-Ausschnitt beim Entfernen/Zurückholen
+  // stabil (die Bauteilzahl steckt im Rahmen-Schlüssel) und frischt den Schatten auf.
+  removedCount?: number
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -1470,12 +1475,13 @@ function Scene({
   placementType,
   onPlacementClick,
   showEnvironment,
+  removedCount,
 }: Props) {
   const target: [number, number, number] = [0, model.building.heightM / 2, 0]
   // Schatten-Kamera eng ans Modell anpassen (Standardwerte sind viel zu groß
   // und verschwenden Auflösung).
   const extent = Math.max(model.building.lengthM, model.building.widthM || 6, model.totalHeightM) * 0.8 + 5
-  const modelKey = `${model.fieldCount}-${model.levelCount}-${model.totalHeightM}-${(features || []).length}`
+  const modelKey = `${model.fieldCount}-${model.levelCount}-${model.totalHeightM}-${(features || []).length}-${removedCount || 0}`
   const [lodLevel, setLodLevel] = useState<0 | 1 | 2>(0)
   return (
     <group>
@@ -1566,6 +1572,8 @@ function Scaffold3D({
   customDimensions,
   pendingMeasurePoint,
   showEnvironment,
+  onRemoveComponent,
+  removedCount,
 }: Props) {
   const cameraDistance =
     Math.max(model.building.lengthM, model.building.heightM) * 2 + 8
@@ -1573,8 +1581,8 @@ function Scaffold3D({
   const contentRef = useRef<THREE.Group>(null)
 
   const modelKey = useMemo(
-    () => `${model.building.lengthM}x${model.building.widthM}x${model.building.heightM}:${model.components3D.length}`,
-    [model],
+    () => `${model.building.lengthM}x${model.building.widthM}x${model.building.heightM}:${model.components3D.length + (removedCount || 0)}`,
+    [model, removedCount],
   )
   const cameraConfig = useMemo(
     () => ({
@@ -1617,6 +1625,7 @@ function Scaffold3D({
             placementType={placementType}
             onPlacementClick={onPlacementClick}
             showEnvironment={showEnvironment}
+            removedCount={removedCount}
           />
         </group>
         <AutoFraming targetRef={contentRef} modelKey={modelKey} />
@@ -1666,6 +1675,17 @@ function Scaffold3D({
           <div className="absolute top-4 right-4 bg-white/95 backdrop-blur rounded-xl px-4 py-3 text-sm border border-black/10 shadow-lg z-50 max-w-[240px]">
             <p className="font-semibold text-[#1d1d1f]">{comp?.name}</p>
             <p className="text-xs text-[#86868b] mt-1">Art.-Nr.: {comp?.articleNumber}</p>
+            {onRemoveComponent && comp && (
+              <div className="mt-2 pt-2 border-t border-black/10">
+                <button
+                  onClick={() => onRemoveComponent(comp.id)}
+                  className="w-full px-2 py-1.5 text-xs font-medium rounded-lg border border-red-200 text-red-600 hover:bg-red-50 transition-colors"
+                  title="Entf-Taste geht auch. Über „Rückgängig“ oben holst du es zurück."
+                >
+                  {comp.id.startsWith('stair-') ? '🗑 Treppenturm entfernen' : '🗑 Bauteil entfernen'}
+                </button>
+              </div>
+            )}
             {onAddNote && comp && (
               <div className="mt-2 pt-2 border-t border-black/10">
                 {bauteilNotizen.length > 0 && (

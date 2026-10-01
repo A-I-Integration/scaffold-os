@@ -172,6 +172,10 @@ export default function CADPage() {
   const [manualPlacements, setManualPlacements] = useState<ManualPlacement[]>([])
   // Ausgewählter Bauteiltyp für die Klick-Platzierung (null = Modus aus)
   const [placementType, setPlacementType] = useState<string | null>(null)
+  // Manuell entfernte Bauteile (z. B. eine Treppe, die weg soll). Jeder Eintrag
+  // ist eine Gruppe von Bauteil-IDs (Treppen werden als Ganzes entfernt).
+  // Wird bei „Gerüst neu berechnen“ zurückgesetzt, weil sich die IDs dann ändern.
+  const [removedGroups, setRemovedGroups] = useState<string[][]>([])
 
   const handleToggleMeasureMode = useCallback(() => {
     setMeasureMode((prev) => {
@@ -246,6 +250,39 @@ export default function CADPage() {
     setManualPlacements((prev) => prev.filter((p) => p.id !== id))
   }, [])
 
+  // Bauteil per Klick entfernen: manuell gesetzte Bauteile werden gelöscht,
+  // erzeugte Bauteile ausgeblendet (rückgängig machbar). Teile eines
+  // Treppenturms (Holme, Stufen, Pfosten) gehen immer gemeinsam.
+  const handleRemoveComponent = useCallback((id: string) => {
+    const pl = manualPlacements.find((p) => p.id === id || id.startsWith(`manual-${p.id}`))
+    if (pl) {
+      handleRemoveManualPlacement(pl.id)
+      setSelectedComponent(null)
+      return
+    }
+    if (!model) return
+    const m = id.match(/^stair-(?:frame|step|rail)-(\d+)(?:-|$)/)
+    const ids = m
+      ? model.components3D.filter((c) => new RegExp(`^stair-(?:frame|step|rail)-${m[1]}(?:-|$)`).test(c.id)).map((c) => c.id)
+      : [id]
+    setRemovedGroups((prev) => [...prev, ids])
+    setSelectedComponent(null)
+  }, [manualPlacements, handleRemoveManualPlacement, model])
+
+  // Entf/Backspace entfernt das ausgewählte Bauteil (nicht beim Tippen in Feldern)
+  useEffect(() => {
+    if (!selectedComponent) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Delete' && e.key !== 'Backspace') return
+      const t = e.target as HTMLElement | null
+      if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable)) return
+      e.preventDefault()
+      handleRemoveComponent(selectedComponent)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [selectedComponent, handleRemoveComponent])
+
   // Phase 68-F: 'Neu starten' — setzt ALLES auf den Anfangszustand
   // zurück (Maße, System, erzeugtes Modell, Auswahl, Stunden).
   // Bestehende Projekte in der DB bleiben unberührt — es geht nur
@@ -255,6 +292,7 @@ export default function CADPage() {
     setBuilding(LEERES_GEBAEUDE); // Phase 68-H: wirklich leere Felder statt Demo-Werte
     setSystemId('layher-allround');
     setModel(null);
+    setRemovedGroups([]);
     setSelectedComponent(null);
     setHoursPerSqm(2.0);
     setNotes([]); // Notizen gehören zum verworfenen Modell, sonst "kleben" alte Notizen an neuen Bauteil-IDs
@@ -325,6 +363,7 @@ export default function CADPage() {
       : []
     newModel.warnings = [...newModel.warnings, ...collisionWarnings, ...featureWarnings, ...geometrieWarnings, ...knotenWarnings]
     setModel(newModel)
+    setRemovedGroups([])
     setSelectedComponent(null)
     // Ebenen-State aus dem frisch erzeugten Modell ableiten
     setLayerState(createInitialLayerState(building.sides || ['front'], newModel.levelCount))
@@ -348,14 +387,23 @@ export default function CADPage() {
   // Shallow-Copy hinzugefügt – so überleben sie jede Re-Generierung.
   const modelWithManual = useMemo(() => {
     if (!model) return null
-    if (manualPlacements.length === 0) return model
+    if (manualPlacements.length === 0 && removedGroups.length === 0) return model
     // Shallow Copy, damit das originale model-Objekt nicht mutiert wird
     let merged: CADModel = { ...model, components3D: [...model.components3D], anchors: [...model.anchors] }
     for (const pl of manualPlacements) {
       merged = addManualPlacement(merged, pl)
     }
+    if (removedGroups.length > 0) {
+      const weg = new Set(removedGroups.flat())
+      merged = {
+        ...merged,
+        components3D: merged.components3D.filter((c) => !weg.has(c.id)),
+        anchors: merged.anchors.filter((a) => !weg.has(`anchor-${a.id}`)),
+      }
+    }
     return merged
-  }, [model, manualPlacements])
+  }, [model, manualPlacements, removedGroups])
+  const removedCount = useMemo(() => removedGroups.reduce((n, g) => n + g.length, 0), [removedGroups])
 
   const allWarnings = useMemo(() => {
     const rules = [...ruleResults.errors, ...ruleResults.warnings, ...ruleResults.infos]
@@ -381,7 +429,7 @@ export default function CADPage() {
 
   const handleExportPDF = useCallback(() => {
     if (!model) return
-    const html = generatePDFHTML(model, materials, {
+    const html = generatePDFHTML(modelWithManual ?? model, materials, {
       include3D: true, include2D: true, includeBOM: true, includeChecks: true,
       companyName: 'Ihr Unternehmen', projectName: 'Gerüstprojekt',
       date: new Date().toLocaleDateString('de-DE'),
@@ -393,7 +441,7 @@ export default function CADPage() {
   // getrennt von der reinen Stückliste.
   const handleExportMontageplan = useCallback(() => {
     if (!model) return
-    const html = generateMontageplanHTML(model, {
+    const html = generateMontageplanHTML(modelWithManual ?? model, {
       companyName: 'Ihr Unternehmen', projectName: 'Gerüstprojekt',
       date: new Date().toLocaleDateString('de-DE'),
     })
@@ -404,7 +452,7 @@ export default function CADPage() {
   // Statiker – kein eigener Standsicherheitsnachweis.
   const handleExportStatik = useCallback(() => {
     if (!model) return
-    const daten = generateStatikExport(model)
+    const daten = generateStatikExport(modelWithManual ?? model)
     const blob = new Blob([JSON.stringify(daten, null, 2)], { type: 'application/json' })
     const a = document.createElement('a')
     a.href = URL.createObjectURL(blob)
@@ -422,7 +470,7 @@ export default function CADPage() {
     setIfcExportLaeuft(true)
     try {
       const { generateIFC, downloadIFC } = await import('@/lib/export/ifc-export')
-      const daten = await generateIFC(model, 'SCAFFOLD OS Gerüstplanung')
+      const daten = await generateIFC(modelWithManual ?? model, 'SCAFFOLD OS Gerüstplanung')
       downloadIFC(daten, `Geruest-${new Date().toISOString().split('T')[0]}.ifc`)
     } catch (err: any) {
       alert('❌ IFC-Export fehlgeschlagen: ' + err.message)
@@ -592,6 +640,12 @@ export default function CADPage() {
               <label className='flex items-center gap-1 text-xs text-[#424245]'><input type='checkbox' checked={showScaffold} onChange={(e) => setShowScaffold(e.target.checked)} className='accent-[#e8590c]' />Gerüst</label>
               <label className='flex items-center gap-1 text-xs text-[#424245]'><input type='checkbox' checked={showDimensions} onChange={(e) => setShowDimensions(e.target.checked)} className='accent-[#e8590c]' />Bemaßung</label>
               <label className='flex items-center gap-1 text-xs text-[#424245]'><input type='checkbox' checked={showEnvironment} onChange={(e) => setShowEnvironment(e.target.checked)} className='accent-[#e8590c]' />Umgebung</label>
+              {removedGroups.length > 0 && (
+                <span className='flex items-center gap-1 ml-2 text-xs text-[#424245]'>
+                  <button onClick={() => setRemovedGroups((prev) => prev.slice(0, -1))} className='px-2 py-0.5 rounded-md border border-black/10 hover:bg-black/5' title='Zuletzt entferntes Bauteil zurückholen'>↩ Rückgängig</button>
+                  <button onClick={() => setRemovedGroups([])} className='px-2 py-0.5 rounded-md border border-black/10 hover:bg-black/5' title='Alle entfernten Bauteile zurückholen'>Alle zurück ({removedCount})</button>
+                </span>
+              )}
             </div>
             {viewMode === '3d' && (
               <select value={viewAngle} onChange={(e) => setViewAngle(e.target.value as any)} className='text-xs border rounded-lg px-2 py-1'>
@@ -607,7 +661,7 @@ export default function CADPage() {
           </div>
           <div className='flex-1 p-4 min-h-0'>
             {viewMode === '3d' && modelWithManual && (
-              <Scaffold3D model={modelWithManual} features={features} showBuilding={showBuilding} showScaffold={showScaffold} showDimensions={showDimensions} selectedComponent={selectedComponent} onSelectComponent={setSelectedComponent} visibleTypes={visibleTypes} viewMode={viewAngle} onCanvasReady={(c) => { canvasRef.current = c }} notes={notes} onAddNote={handleAddNote} hiddenSides={hiddenSides} hiddenLevels={hiddenLevels} measureMode={measureMode} onMeasurePoint={handleMeasurePoint} customDimensions={customDimensions} pendingMeasurePoint={pendingMeasurePoint?.point ?? null} placementType={placementType} onPlacementClick={handlePlacementClick} showEnvironment={showEnvironment} />
+              <Scaffold3D model={modelWithManual} features={features} showBuilding={showBuilding} showScaffold={showScaffold} showDimensions={showDimensions} selectedComponent={selectedComponent} onSelectComponent={setSelectedComponent} visibleTypes={visibleTypes} viewMode={viewAngle} onCanvasReady={(c) => { canvasRef.current = c }} notes={notes} onAddNote={handleAddNote} hiddenSides={hiddenSides} hiddenLevels={hiddenLevels} measureMode={measureMode} onMeasurePoint={handleMeasurePoint} customDimensions={customDimensions} pendingMeasurePoint={pendingMeasurePoint?.point ?? null} placementType={placementType} onPlacementClick={handlePlacementClick} showEnvironment={showEnvironment} onRemoveComponent={handleRemoveComponent} removedCount={removedCount} />
             )}
             {/* Phase 68-G: Leerzustand nach 'Neu starten' */}
             {viewMode === '3d' && !model && (
