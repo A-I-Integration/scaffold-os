@@ -55,7 +55,14 @@ export async function POST(req: NextRequest) {
     const companyName = String(body.company_name || '').trim();
     const adminName = String(body.admin_name || '').trim();
     const adminEmail = String(body.admin_email || '').trim().toLowerCase();
-    const plan = ['starter', 'priority', 'enterprise'].includes(body.plan) ? body.plan : 'starter';
+    // Enterprise ist "auf Anfrage" und wird nicht online gekauft.
+    if (body.plan === 'enterprise') {
+      return NextResponse.json(
+        { success: false, error: 'Das Enterprise-Paket gibt es auf Anfrage. Bitte kontaktieren Sie uns.' },
+        { status: 400 }
+      );
+    }
+    const plan = ['starter', 'priority'].includes(body.plan) ? body.plan : 'starter';
 
     const priceId = preisIdFuerPlan(plan);
     if (!priceId) {
