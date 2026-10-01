@@ -26,10 +26,10 @@ const TERMIN_URL = process.env.NEXT_PUBLIC_TERMIN_URL || '/anfrage?art=demo';
 // Inhalt (Stand: Paket-Relaunch):
 //  Hero mit Produkt-Aufklärung + Login-Link
 //  „Was ist SCAFFOLD OS?" + Prozesskette (7 Schritte)
-//  Zeitersparnis (≥ 2 Stunden/Tag)
+//  Zeitersparnis (Richtwert, eigene Einschätzung)
 //  3 Kernbereiche: Aufmaß, Mitarbeiter, Lager
 //  Alle Funktionen im Überblick
-//  3 Pakete: Starter 249 € / Priority 495 € / Enterprise 749 €
+//  3 Pakete: Starter 249 € / Priority 495 € / Enterprise auf Anfrage
 //  FAQ (SEO/GEO) + strukturierte Daten (JSON-LD)
 // ============================================================
 
@@ -200,17 +200,17 @@ const FAQ = [
   {
     frage: 'Was kostet SCAFFOLD OS?',
     antwort:
-      'Drei Pakete: Starter für 249 € im Monat, Priority für 495 €. Enterprise hebt alle Limits auf – der Preis richtet sich nach Betriebsgröße und Modulen, gerne erstellen wir Ihnen ein Angebot. Auf Anfrage richten wir Ihnen vorab einen persönlichen Demo-Zugang ein.',
+      'Drei Pakete: Starter für 249 € im Monat, Priority für 495 € (jeweils zzgl. MwSt., Mindestvertragslaufzeit 36 Monate). Enterprise hebt alle Limits auf – der Preis richtet sich nach Betriebsgröße und Modulen, gerne erstellen wir Ihnen ein Angebot. Optional buchbar: Onboarding für 1.490 € netto, erweitert zusätzlich 2.490 € netto (mit Lagereinrichtung und Schulung der Mitarbeiter). Auf Anfrage richten wir Ihnen vorab einen persönlichen Demo-Zugang ein.',
   },
   {
     frage: 'Kann ich SCAFFOLD OS kostenlos testen?',
     antwort:
-      'Ja. Fordern Sie über den Button „Jetzt Demo anfordern" einen Demo-Zugang an – kurz Ihre Daten eintragen, wir richten Ihnen persönlich einen Zugang ein und schicken Ihnen die Zugangsdaten zu.',
+      'Ja, über einen kostenlosen und unverbindlichen Demo-Zugang. Fordern Sie ihn über den Button „Jetzt Demo anfordern" an – kurz Ihre Daten eintragen, wir richten Ihnen persönlich einen Zugang ein und schicken Ihnen die Zugangsdaten zu. Eine kostenlose Testphase nach Vertragsabschluss gibt es nicht.',
   },
   {
     frage: 'Wie viel Zeit spare ich mit SCAFFOLD OS?',
     antwort:
-      'Mindestens 2 Stunden pro Tag. Ein Aufmaß mit Angebot dauert etwa 15 Minuten statt 2 bis 3 Stunden. Auch Zettel, Abstimmungs-Anrufe und handschriftliche Zeiterfassung fallen weg.',
+      'Das hängt vom Betrieb ab. Als Richtwert nach unserer eigenen Einschätzung (keine Kundenstudie): Ein Aufmaß mit Angebot dauert etwa 15 Minuten statt oft 2 bis 3 Stunden. Auch Zettel, Abstimmungs-Anrufe und handschriftliche Zeiterfassung fallen weg.',
   },
   {
     frage: 'Brauche ich IT-Kenntnisse oder eine Installation?',
@@ -380,13 +380,18 @@ export default function HomePage() {
           <div className="mt-12 rounded-3xl bg-[#1d1d1f] text-white px-8 py-10 md:px-14 text-center shadow-2xl shadow-black/10">
             <Clock className="w-8 h-8 text-[#ff922b] mx-auto" strokeWidth={1.5} />
             <p className="mt-4 text-2xl md:text-3xl font-semibold tracking-tight">
-              Mindestens 2 Stunden gespart. Jeden Tag.
+              Bis zu 2 Stunden gespart. Jeden Tag.
             </p>
             <p className="mt-4 text-white/70 leading-relaxed max-w-2xl mx-auto">
-              Ein Aufmaß mit fertigem Angebot dauert bei uns etwa <strong>15 Minuten</strong>.
-              Früher waren es 2 bis 3 Stunden. Zettel, Telefonate und doppelte
-              Eingaben fallen weg. Das spart über <strong>40 Stunden im Monat</strong>.
+              Ein Aufmaß mit fertigem Angebot dauert nach unserer Einschätzung etwa{' '}
+              <strong>15 Minuten</strong>. Früher waren es oft 2 bis 3 Stunden. Zettel,
+              Telefonate und doppelte Eingaben fallen weg. Das kann bis zu{' '}
+              <strong>40 Stunden im Monat</strong> sparen.
               Dein Team arbeitet auf der Baustelle – nicht im Büro.
+            </p>
+            <p className="mt-4 text-xs text-white/40 max-w-2xl mx-auto">
+              Richtwerte aus eigener Einschätzung, keine Kundenstudie. Die tatsächliche
+              Zeitersparnis hängt vom Betrieb ab.
             </p>
           </div>
         </div>
@@ -482,7 +487,8 @@ export default function HomePage() {
             ))}
           </div>
           <p className="mt-8 text-center text-sm text-[#86868b]">
-            Alle Preise zzgl. MwSt. · Fragen zu den Paketen?{' '}
+            Alle Preise zzgl. MwSt. · Mindestvertragslaufzeit 36 Monate · Optional: Onboarding
+            1.490 € netto, erweitert zusätzlich 2.490 € netto · Fragen zu den Paketen?{' '}
             <Link href="/anfrage" className="text-[#e8590c] hover:underline">Kontakt aufnehmen</Link>
           </p>
         </div>
