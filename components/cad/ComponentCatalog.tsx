@@ -15,7 +15,7 @@ import { useState } from 'react'
 export const CATALOG_ITEMS: { type: string; label: string; icon: string; description: string }[] = [
   { type: 'anchor', label: 'Fassadenanker', icon: '🔩', description: 'Verankerung an der Fassade' },
   { type: 'console', label: 'Konsole', icon: '📐', description: 'Auskragende Plattform' },
-  { type: 'stair', label: 'Treppe', icon: '🪜', description: 'Spindeltreppe für Zugang' },
+  { type: 'stair', label: 'Treppe', icon: '🪜', description: 'Treppenlauf im Feld, jede Seite (Belag vorher entfernen)' },
   { type: 'net', label: 'Fangnetz', icon: '🥅', description: 'Seitlicher Schutz' },
   { type: 'board', label: 'Bordbrett', icon: '🪵', description: 'Absturzsicherung am Rand' },
   { type: 'protection_roof', label: 'Schutzdach', icon: '🛡️', description: 'Schutz gegen herabfallende Teile' },

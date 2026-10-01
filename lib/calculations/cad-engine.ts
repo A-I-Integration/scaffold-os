@@ -988,7 +988,12 @@ export function addManualPlacement(
 
   // Füge entsprechendes 3D-Bauteil hinzu
   const component = placementToComponent(newPlacement, model)
-  if (component) {
+  // Treppe in ein Feld gesetzt: richtiger Zickzack-Lauf statt Einzelteil
+  const feld = placement.type === 'stair' && placement.fieldId ? model.fields.find((f) => f.id === placement.fieldId) : undefined
+  const feldLage = feld ? model.levels.find((l) => l.index === feld.levelIndex) : undefined
+  if (feld && feldLage) {
+    model.components3D.push(...treppenlaufInFeld(model, feld, feldLage, newPlacement.id))
+  } else if (component) {
     model.components3D.push(component)
   }
 
@@ -1004,6 +1009,35 @@ export function addManualPlacement(
   }
 
   return model
+}
+
+/**
+ * Ein Treppenlauf (Zickzack, eine Lage) im angegebenen Feld – gleiche Bauweise
+ * wie die automatisch erzeugten Treppentürme, aber an beliebiger Seite.
+ * Die Teile werden im Vorne-System erzeugt und auf die Seite des Feldes gedreht.
+ * IDs: `${id}` (Holme), `${id}-step-N`, `${id}-rail`, `${id}-rail-2`.
+ */
+export function treppenlaufInFeld(model: CADModel, field: ScaffoldField, level: ScaffoldLevel, id: string): ScaffoldComponent3D[] {
+  const rahmen = seitenRahmen(field.side, model.building)
+  const [px, pz] = rahmen.toLocal(field.positionX, field.positionZ)
+  const stairL = Math.max(1.0, field.lengthM - 0.25)
+  const stairW = Math.max(0.4, field.widthM * 0.8)
+  const stairZ = pz + field.widthM / 2 - 0.02
+  const startDir: 1 | -1 = field.levelIndex % 2 === 0 ? 1 : -1
+  const h = level.heightM
+  const out: ScaffoldComponent3D[] = []
+  out.push({ id, type: 'stair', articleNumber: 'SP-001', name: 'Treppenlauf (manuell)', position: [px, level.bottomY + h / 2, stairZ], rotation: [0, 0, 0], scale: [stairL, h, stairW], color: '#84cc16', levelId: level.id, flights: 1, flightStartDir: startDir })
+  const perFlight = Math.max(1, Math.round(h / 0.25))
+  const tread = (stairL - 0.2) / perFlight
+  const x0 = startDir > 0 ? px - stairL / 2 + 0.1 : px + stairL / 2 - 0.1
+  for (let k = 0; k < perFlight; k++) {
+    const stepY = level.bottomY + (k + 1) * (h / perFlight) - 0.04
+    out.push({ id: `${id}-step-${k}`, type: 'deck', articleNumber: 'ST-001', name: 'Treppenstufe', position: [x0 + startDir * (k + 0.5) * tread, stepY, stairZ], rotation: [0, 0, 0], scale: [tread * 0.92, 0.04, stairW - 0.08], color: '#a0a0a0', levelId: level.id })
+  }
+  out.push({ id: `${id}-rail`, type: 'railing', articleNumber: 'SG-001', name: 'Treppengeländer', position: [px - stairL / 2, level.bottomY + h / 2, stairZ], rotation: [0, 0, 0], scale: [0.04, h, 0.04], color: '#ef4444', levelId: level.id })
+  out.push({ id: `${id}-rail-2`, type: 'railing', articleNumber: 'SG-001', name: 'Treppengeländer', position: [px + stairL / 2, level.bottomY + h / 2, stairZ], rotation: [0, 0, 0], scale: [0.04, h, 0.04], color: '#ef4444', levelId: level.id })
+  out.forEach((c) => bauteilInWelt(c, rahmen))
+  return out
 }
 
 export function removeManualPlacement(model: CADModel, id: string): CADModel {

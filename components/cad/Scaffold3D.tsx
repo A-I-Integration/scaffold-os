@@ -1690,7 +1690,7 @@ function Scaffold3D({
                   className="w-full px-2 py-1.5 text-xs font-medium rounded-lg border border-red-200 text-red-600 hover:bg-red-50 transition-colors"
                   title="Entf-Taste geht auch. Über „Rückgängig“ oben holst du es zurück."
                 >
-                  {comp.id.startsWith('stair-') ? '🗑 Treppenturm entfernen' : '🗑 Bauteil entfernen'}
+                  {comp.id.startsWith('stair-') || comp.id.startsWith('manual-stair-') ? '🗑 Treppe entfernen' : '🗑 Bauteil entfernen'}
                 </button>
               </div>
             )}

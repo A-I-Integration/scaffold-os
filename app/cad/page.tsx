@@ -243,8 +243,24 @@ export default function CADPage() {
       side: side as ManualPlacement['side'],
       levelIndex,
     }
+    // Treppe: auf das nächste Feld dieser Seite und Lage einrasten (Zickzack-Lauf im Feld)
+    if (type === 'stair' && model) {
+      const lage = model.fields.filter((f) => f.side === side && f.levelIndex === levelIndex)
+      const entlangX = side === 'front' || side === 'back'
+      let best: (typeof lage)[number] | null = null
+      let bestD = Infinity
+      for (const f of lage) {
+        const d = Math.abs((entlangX ? position[0] - f.positionX : position[2] - f.positionZ))
+        if (d < bestD) { bestD = d; best = f }
+      }
+      if (best) {
+        placement.fieldId = best.id
+        placement.positionX = best.positionX
+        placement.positionZ = best.positionZ
+      }
+    }
     setManualPlacements((prev) => [...prev, placement])
-  }, [])
+  }, [model])
 
   const handleRemoveManualPlacement = useCallback((id: string) => {
     setManualPlacements((prev) => prev.filter((p) => p.id !== id))
@@ -254,7 +270,7 @@ export default function CADPage() {
   // erzeugte Bauteile ausgeblendet (rückgängig machbar). Teile eines
   // Treppenturms (Holme, Stufen, Pfosten) gehen immer gemeinsam.
   const handleRemoveComponent = useCallback((id: string) => {
-    const pl = manualPlacements.find((p) => p.id === id || id.startsWith(`manual-${p.id}`))
+    const pl = manualPlacements.find((p) => p.id === id || id.startsWith(`${p.id}-`))
     if (pl) {
       handleRemoveManualPlacement(pl.id)
       setSelectedComponent(null)
@@ -430,6 +446,7 @@ export default function CADPage() {
       side,
       levelIndex: Math.max(0, Math.round(src.position[1] / 2)),
       rotationY: seitlich ? src.rotation[1] : 0,
+      fieldId: newType === 'stair' ? src.fieldId : undefined,
     }
     handleRemoveComponent(id)
     setManualPlacements((prev) => [...prev, placement])
