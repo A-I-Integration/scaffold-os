@@ -88,6 +88,16 @@ export function berechneGebaeudeSegmente(sections: BuildingSection[]): GebaeudeS
   return segmente
 }
 
+/**
+ * Gerade mehrteiliges Gebäude: 2+ Abschnitte, alle ohne Eckwinkel
+ * (z. B. Höhenstufen). Nur dafür folgt das Gerüst den Abschnitten;
+ * bei Ecken (Winkel ≠ 0) wird es weiter aus Länge/Höhe erzeugt.
+ */
+export function hatGeradeAbschnitte(b: BuildingParams): boolean {
+  return !!b.sections && b.sections.length >= 2 &&
+    b.sections.every((s) => !s.winkelGrad && s.laengeM > 0 && s.hoeheM > 0)
+}
+
 export interface ScaffoldField {
   id: string
   index: number
@@ -318,6 +328,7 @@ export function generateScaffoldComponents(model: CADModel): ScaffoldComponent3D
       const consoleCount = Math.ceil(model.fieldCount * (building.overhangM / 0.73))
       for (let i = 0; i < consoleCount; i++) {
         const field = fields[i % fields.length]
+        if (!fields.some((g) => g.side === field.side && g.levelIndex === topLevel.index && Math.abs(g.positionX - field.positionX) < 0.01 && Math.abs(g.positionZ - field.positionZ) < 0.01)) continue
         components.push({ id: `console-${i}`, type: 'console', articleNumber: 'KO-001', name: 'Konsole 0,73m', position: [field.positionX, topLevel.topY, field.positionZ + field.widthM / 2 + 0.3], rotation: [0, 0, 0], scale: [0.73, 0.04, 0.3], color: colorConsole, levelId: topLevel.id })
       }
     }
@@ -329,7 +340,12 @@ export function generateScaffoldComponents(model: CADModel): ScaffoldComponent3D
     const level = levels[i]
     // Finde ein Feld an der Vorderseite für die Treppe
     const stairField = fields.find(f => f.side === 'front' && f.levelIndex === i)
-    if (stairField && level) {
+    // Treppe nur als durchgehender Turm: Ab der 2. Treppe muss sie an
+    // derselben Stelle stehen wie die unterste (bei Höhenstufen sonst
+    // schwebend). Bei einfachem Gebäude immer erfüllt.
+    const stairBase = fields.find((f) => f.side === 'front' && f.levelIndex === 0)
+    const stairTraegerVorhanden = !stairField || i === 0 || !stairBase || Math.abs(stairField.positionX - stairBase.positionX) < 0.01
+    if (stairField && level && stairTraegerVorhanden) {
       const stairX = stairField.positionX - stairField.lengthM / 2 - 0.9
       const stairZ = stairField.positionZ
       const totalStairHeight = level.heightM * Math.min(stairInterval, levels.length - i)
@@ -357,18 +373,28 @@ export function generateScaffoldComponents(model: CADModel): ScaffoldComponent3D
     for (let i = 0; i < Math.min(netCount, 5); i++) {
       const level = levels[Math.min(i + 2, levels.length - 1)]
       const field = fields[i % fields.length]
-      if (level && field) {
+      if (level && field && fields.some((g) => g.side === field.side && g.levelIndex === level.index && Math.abs(g.positionX - field.positionX) < 0.01)) {
         components.push({ id: `net-${i}`, type: 'net', articleNumber: 'FN-001', name: 'Fangnetz', position: [field.positionX, level.topY - 0.5, field.positionZ + field.widthM / 2 + 0.05], rotation: [0, 0, 0], scale: [field.lengthM, 1.5, 0.01], color: colorNet, levelId: level.id })
       }
     }
   }
 
   // === SCHUTZDÄCHER ===
+  // Höhe des Gebäudes an der Stelle x (bei Höhenstufen die des jeweiligen Abschnitts)
+  const hoeheBeiX = (x: number): number => {
+    if (!hatGeradeAbschnitte(building)) return building.heightM
+    let cur = -building.lengthM / 2
+    for (const sec of building.sections!) {
+      if (x < cur + sec.laengeM) return sec.hoeheM
+      cur += sec.laengeM
+    }
+    return building.sections![building.sections!.length - 1].hoeheM
+  }
   if (building.heightM > 15 || building.overhangM > 0.5) {
     const roofCount = Math.max(1, Math.ceil(building.lengthM / 6))
     for (let i = 0; i < roofCount; i++) {
       const xPos = (i * 6) - building.lengthM / 2 + 3
-      components.push({ id: `roof-${i}`, type: 'protection_roof', articleNumber: 'SD-001', name: 'Schutzdach', position: [xPos, building.heightM + 0.5, 0.5], rotation: [0.3, 0, 0], scale: [6, 0.1, 2], color: colorRoof })
+      components.push({ id: `roof-${i}`, type: 'protection_roof', articleNumber: 'SD-001', name: 'Schutzdach', position: [xPos, hoeheBeiX(xPos) + 0.5, 0.5], rotation: [0.3, 0, 0], scale: [6, 0.1, 2], color: colorRoof })
     }
   }
 
@@ -418,12 +444,19 @@ export function generateCADModel(
   const warnings: CADWarning[] = []
 
   if (building.lengthM <= 0) warnings.push({ type: 'error', code: 'BUILDING_LENGTH_ZERO', message: 'Gebäudelänge muss größer als 0 sein.' })
-  // NEU: solange das Gerüst selbst der mehrteiligen Gebäudeform noch nicht
-  // folgt (nächster Ausbauschritt), hier ehrlich darauf hinweisen – sonst
-  // könnte der Eindruck entstehen, das Gerüst würde schon korrekt um die
-  // Abschnitte/Ecken herumgeführt.
-  if (building.sections && building.sections.length >= 2) {
-    warnings.push({ type: 'info', code: 'SECTIONS_SCAFFOLD_NOT_YET', message: 'Die Gebäudeform zeigt bereits alle Abschnitte korrekt. Das Gerüst selbst folgt der mehrteiligen Form (Ecken/Höhensprünge) noch nicht – das ist der nächste Ausbauschritt. Aktuell wird das Gerüst noch anhand der einzelnen Länge/Höhe-Felder erzeugt.' })
+  // Mehrteiliges Gebäude: bei geraden Abschnitten (Höhenstufen) folgt das
+  // Gerüst den Abschnitten. Länge/Höhe des Modells werden dann aus den
+  // Abschnitten abgeleitet (Summe / höchster Abschnitt).
+  const abschnitte: BuildingSection[] | null = hatGeradeAbschnitte(building) ? building.sections! : null
+  if (abschnitte) {
+    building = {
+      ...building,
+      lengthM: Math.round(abschnitte.reduce((sum, a) => sum + a.laengeM, 0) * 100) / 100,
+      heightM: Math.max(...abschnitte.map((a) => a.hoeheM)),
+    }
+    warnings.push({ type: 'info', code: 'SECTIONS_SCAFFOLD_STEPPED', message: 'Das Gerüst folgt den Höhenstufen der Abschnitte (je Abschnitt eigene Lagenzahl). Die senkrechten Stirnseiten der Stufen und die Seitenflächen sind nicht gesondert eingerüstet.' })
+  } else if (building.sections && building.sections.length >= 2) {
+    warnings.push({ type: 'info', code: 'SECTIONS_SCAFFOLD_NOT_YET', message: 'Die Gebäudeform zeigt alle Abschnitte. Das Gerüst folgt aber nur geraden Abschnitten (Höhensprünge ohne Winkel). Bei Ecken (Winkel ≠ 0) wird das Gerüst noch anhand der einzelnen Länge/Höhe-Felder erzeugt.' })
   }
   if (building.heightM <= 0) warnings.push({ type: 'error', code: 'BUILDING_HEIGHT_ZERO', message: 'Gebäudehöhe muss größer als 0 sein.' })
   if (building.heightM > 40) warnings.push({ type: 'warning', code: 'HEIGHT_VERY_HIGH', message: 'Gebäudehöhe > 40m – Statik prüfen lassen!' })
@@ -438,7 +471,75 @@ export function generateCADModel(
   // Bestimme zu bebauende Seiten
   const activeSides: ('front' | 'back' | 'left' | 'right')[] = building.sides && building.sides.length > 0 ? building.sides : ['front']
 
+  const abschnittsAnker: ScaffoldAnchor[] = []
+  const abschnittDivs = abschnitte
+    ? abschnitte.map((sec) => system ? calculateFieldDivision(sec.laengeM, system) : { fields: 1, fieldLengthM: 2.07, remainderM: 0, distribution: [2.07] })
+    : null
+
   for (const side of activeSides) {
+    if (abschnitte && abschnittDivs) {
+      // --- Gestuftes Gebäude: je Abschnitt eigene Felder/Lagen ---
+      const w = building.widthM || 0
+      const runs: { div: typeof fieldDiv; hoeheM: number; along: number }[] = []
+      if (side === 'front' || side === 'back') {
+        let cursor = -building.lengthM / 2
+        abschnitte.forEach((sec, si) => { runs.push({ div: abschnittDivs[si], hoeheM: sec.hoeheM, along: cursor }); cursor += sec.laengeM })
+      } else {
+        const sec = side === 'left' ? abschnitte[0] : abschnitte[abschnitte.length - 1]
+        runs.push({ div: fieldDivWidth, hoeheM: sec.hoeheM, along: -w - 0.5 })
+      }
+      const fixed = side === 'front' ? distanceToBuildingM
+        : side === 'back' ? -distanceToBuildingM - scaffoldWidthM - w
+        : side === 'left' ? -building.lengthM / 2 - distanceToBuildingM - scaffoldWidthM / 2
+        : building.lengthM / 2 + distanceToBuildingM + scaffoldWidthM / 2
+      const proLage = new Map<number, ScaffoldField[]>()
+      runs.forEach((run, ri) => {
+        const rl = system ? calculateLevels(run.hoeheM, system) : levelCalc
+        rl.levelsData.forEach((levelData) => {
+          let cum = 0
+          run.div.distribution.forEach((fieldLength, fi) => {
+            const list = proLage.get(levelData.index) || []
+            const along = run.along + cum + fieldLength / 2
+            cum += fieldLength
+            const isFB = side === 'front' || side === 'back'
+            const field: ScaffoldField = {
+              id: `field-${side}-${levelData.index}-${list.length}`,
+              index: list.length,
+              lengthM: fieldLength,
+              widthM: scaffoldWidthM,
+              positionX: parseFloat((isFB ? along : fixed).toFixed(3)),
+              positionY: levelData.bottomY,
+              positionZ: parseFloat((isFB ? fixed : along).toFixed(3)),
+              side: side as 'front' | 'back' | 'left' | 'right',
+              levelIndex: levelData.index,
+              isCorner: (ri === 0 && fi === 0) || (ri === runs.length - 1 && fi === run.div.distribution.length - 1),
+            }
+            list.push(field)
+            proLage.set(levelData.index, list)
+            fields.push(field)
+          })
+        })
+        // Verankerungen je Abschnitt
+        if (run.hoeheM > 6) {
+          const anchorLevels = Math.floor(rl.levels / 2)
+          for (let al = 0; al < anchorLevels; al++) {
+            const yAnchor = (al * 2 + 2) * levelCalc.levelHeightM
+            for (let f = 0; f < run.div.fields; f += 2) {
+              const along = run.along + f * run.div.fieldLengthM + run.div.fieldLengthM / 2
+              let xPos = 0, zPos = 0
+              if (side === 'front') { xPos = along; zPos = distanceToBuildingM + scaffoldWidthM / 2 }
+              else if (side === 'back') { xPos = along; zPos = -distanceToBuildingM - scaffoldWidthM / 2 - w }
+              else { xPos = fixed; zPos = along }
+              abschnittsAnker.push({ id: `anchor-${side}-${ri}-${al}-${f}`, positionX: xPos, positionY: yAnchor, positionZ: zPos, side: side as 'front' | 'back' | 'left' | 'right', type: 'fassadenanker' })
+            }
+          }
+        }
+      })
+      levelCalc.levelsData.forEach((levelData) => {
+        levels.push({ id: `level-${side}-${levelData.index}`, index: levelData.index, heightM: levelCalc.levelHeightM, bottomY: levelData.bottomY, topY: levelData.topY, fields: proLage.get(levelData.index) || [] })
+      })
+      continue
+    }
     // Positionierung je Seite
     let zOffset = 0
     let xOffset = 0
@@ -509,7 +610,8 @@ export function generateCADModel(
 
   // Verankerungen (alle Seiten)
   const anchors: ScaffoldAnchor[] = []
-  if (building.heightM > 6) {
+  if (abschnitte) anchors.push(...abschnittsAnker)
+  else if (building.heightM > 6) {
     const anchorLevels = Math.floor(levelCalc.levelsData.length / 2)
     for (const side of activeSides) {
       for (let al = 0; al < anchorLevels; al++) {
@@ -539,10 +641,10 @@ export function generateCADModel(
     levels,
     anchors,
     components3D: [],
-    totalLengthM: fieldDiv.fields * fieldDiv.fieldLengthM,
+    totalLengthM: abschnitte ? building.lengthM : fieldDiv.fields * fieldDiv.fieldLengthM,
     totalHeightM: building.heightM,
-    totalAreaM2: building.lengthM * building.heightM,
-    fieldCount: fieldDiv.fields,
+    totalAreaM2: abschnitte ? abschnitte.reduce((sum, a) => sum + a.laengeM * a.hoeheM, 0) : building.lengthM * building.heightM,
+    fieldCount: abschnittDivs ? abschnittDivs.reduce((sum, d) => sum + d.fields, 0) : fieldDiv.fields,
     levelCount: levelCalc.levels,
     warnings
   }
