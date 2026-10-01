@@ -124,6 +124,83 @@ function extrahiereDxfText(raw) {
     .trim();
 }
 
+// Stufen-Erkennung: Hoehenprofil entlang der laengeren Horizontalachse.
+// Je 0,5-m-Streifen wird die Oberkante bestimmt (robust: mindestens 2 Punkte, bei dichter
+// Wolke 5, innerhalb von 0,3 m), benachbarte Streifen mit aehnlicher Hoehe (Toleranz
+// 1,0 m) werden zu Abschnitten zusammengefasst. Liefert null, wenn keine
+// eindeutige Stufung erkennbar ist (1 Abschnitt oder mehr als 6).
+// ACHTUNG: Gerueste in der Wolke werden NICHT herausgefiltert - ihre
+// Oberkante (Gelaender) kann die Hoehe um ca. 1 m erhoehen.
+function erkenneStufen(px, py, pz, d) {
+  const n = pz.length;
+  if (n < 50) return null;
+  const alongX = d.spanX >= d.spanY;
+  const s = alongX ? px : py;
+  const sMin = alongX ? d.minX : d.minY;
+  const span = alongX ? d.spanX : d.spanY;
+  const quer = alongX ? d.spanY : d.spanX;
+  if (!(span >= 4)) return null;
+  const bin = Math.max(0.5, span / 200);
+  const nb = Math.max(1, Math.ceil(span / bin));
+  const zs = Array.from({ length: nb }, () => []);
+  for (let i = 0; i < n; i++) {
+    const b = Math.min(nb - 1, Math.max(0, Math.floor((s[i] - sMin) / bin)));
+    zs[b].push(pz[i]);
+  }
+  let top = zs.map((a) => {
+    if (a.length < 2) return null;
+    a.sort((u, v) => v - u);
+    const K = a.length >= 200 ? 5 : 2; // dichte Wolke: mehr Punkte verlangen (Rauschen/Ausreisser)
+    for (let k = 0; k + K - 1 < a.length; k++) if (a[k] - a[k + K - 1] <= 0.3) return a[k];
+    return a[0];
+  });
+  if (top.every((t) => t == null)) return null;
+  const first = top.find((t) => t != null);
+  for (let i = 0; i < nb; i++) { if (top[i] == null) top[i] = i > 0 ? top[i - 1] : first; }
+  const hts = top.map((t) => t - d.minZ);
+  const median = (a) => { const b = [...a].sort((u, v) => u - v); return b[Math.floor(b.length / 2)]; };
+  const TOL = 1.0;
+  let segs = [];
+  for (let i = 0; i < nb; i++) {
+    const cur = segs[segs.length - 1];
+    if (cur && Math.abs(hts[i] - median(cur.h)) <= TOL) cur.h.push(hts[i]);
+    else segs.push({ h: [hts[i]] });
+  }
+  const minBins = Math.max(2, Math.ceil(1.0 / bin));
+  for (let guard = 0; guard < 500; guard++) {
+    let changed = false;
+    // zu kurze Abschnitte in den aehnlicheren Nachbarn einschmelzen (kuerzester zuerst)
+    let idx = -1;
+    segs.forEach((g, i) => { if (g.h.length < minBins && (idx < 0 || g.h.length < segs[idx].h.length)) idx = i; });
+    if (idx >= 0 && segs.length > 1) {
+      const m = median(segs[idx].h);
+      const l = idx > 0 ? Math.abs(median(segs[idx - 1].h) - m) : Infinity;
+      const r = idx < segs.length - 1 ? Math.abs(median(segs[idx + 1].h) - m) : Infinity;
+      const t = l <= r ? idx - 1 : idx + 1;
+      const [a, b] = t < idx ? [t, idx] : [idx, t];
+      segs.splice(a, 2, { h: segs[a].h.concat(segs[b].h) });
+      changed = true;
+    }
+    // benachbarte Abschnitte mit gleicher Hoehe verschmelzen
+    for (let i = 0; i + 1 < segs.length; i++) {
+      if (Math.abs(median(segs[i].h) - median(segs[i + 1].h)) <= TOL) {
+        segs.splice(i, 2, { h: segs[i].h.concat(segs[i + 1].h) });
+        changed = true; break;
+      }
+    }
+    if (!changed) break;
+  }
+  if (segs.length < 2 || segs.length > 6) return null;
+  const r1 = (v) => Math.round(v * 10) / 10;
+  let used = 0;
+  const abschnitte = segs.map((g, i) => {
+    const len = i === segs.length - 1 ? span - used : g.h.length * bin;
+    used += g.h.length * bin;
+    return { laengeM: r1(len), hoeheM: r1(median(g.h)) };
+  });
+  return { achse: alongX ? 'x' : 'y', abschnitte, laenge: span, tiefe: quer };
+}
+
 // Phase 73: PLY-Punktwolke (z. B. aus dem LiDAR-Aufmass) einlesen und
 // die Begrenzungsbox der Punkte als Laenge x Breite x Hoehe liefern.
 // ASCII-PLY; Binary wird mit klarer Meldung abgelehnt.
@@ -166,6 +243,9 @@ function parsePly(buf) {
   if (!isAscii && !isBinLE && !isBinBE) throw new Error('PLY: Format nicht unterstuetzt (weder ASCII noch Binary 1.0).');
   let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity, minZ = Infinity, maxZ = -Infinity;
   let gelesen = 0;
+  // Stichprobe der Punkte (max. ca. 300000) fuer die Stufen-Erkennung.
+  const probeSchritt = Math.max(1, Math.ceil(vertexCount / 300000));
+  const px = [], py = [], pz = [];
   if (isAscii) {
     const lines = buf.subarray(dataStart).toString('latin1').split('\n');
     for (let i = 0; i < lines.length && gelesen < vertexCount; i++) {
@@ -174,6 +254,7 @@ function parsePly(buf) {
       const x = parseFloat(parts[ix]), y = parseFloat(parts[iy]), z = parseFloat(parts[iz]);
       if (isNaN(x) || isNaN(y) || isNaN(z)) continue;
       gelesen++;
+      if (gelesen % probeSchritt === 0) { px.push(x); py.push(y); pz.push(z); }
       if (x < minX) minX = x; if (x > maxX) maxX = x;
       if (y < minY) minY = y; if (y > maxY) maxY = y;
       if (z < minZ) minZ = z; if (z > maxZ) maxZ = z;
@@ -196,6 +277,7 @@ function parsePly(buf) {
       const x = read.f(o + ox), y = read.f(o + oy), z = read.f(o + oz);
       if (isNaN(x) || isNaN(y) || isNaN(z)) continue;
       gelesen++;
+      if (gelesen % probeSchritt === 0) { px.push(x); py.push(y); pz.push(z); }
       if (x < minX) minX = x; if (x > maxX) maxX = x;
       if (y < minY) minY = y; if (y > maxY) maxY = y;
       if (z < minZ) minZ = z; if (z > maxZ) maxZ = z;
@@ -210,7 +292,9 @@ function parsePly(buf) {
       spanX > 10000 || spanY > 10000 || spanZ > 10000) {
     throw new Error(`PLY: unplausible Ausdehnung (${r2(spanX)} x ${r2(spanY)} x ${r2(spanZ)} m) - Datei-Struktur passt nicht zum Header.`);
   }
-  return { laenge: r2(spanX), breite: r2(spanY), hoehe: r2(spanZ), punkte: gelesen };
+  let stufen = null;
+  try { stufen = erkenneStufen(px, py, pz, { minX, minY, minZ, spanX, spanY }); } catch (e) { stufen = null; }
+  return { laenge: r2(spanX), breite: r2(spanY), hoehe: r2(spanZ), punkte: gelesen, stufen };
 }
 
 const CAD_PROMPT = (ocrText) => `Du bist ein erfahrener Gerüstbau-Planer. Analysiere diese Grundrisse/Baupläne${ocrText ? ' (Bilder und/oder per OCR extrahierter Plan-Text, siehe unten)' : ''}.
@@ -295,11 +379,23 @@ async function verarbeiteCadAnalyseJob(tenant, job) {
         // DXF/Vision). Ohne Geschosse baut das CAD kein Modell -> kein
         // Bild, keine Stueckliste, keine Kunden-Anbindung. Mit bekannter
         // Hoehe ist 1 Geschoss die sichere Annahme.
+        // Geschosse: aus der gemessenen Hoehe geschaetzt (Annahme 3,0 m je
+        // Geschoss), mindestens 1. Nur ein Vorschlag - im Formular pruefen.
+        const st = dims.stufen;
+        const hoeheMax = st ? Math.max(...st.abschnitte.map((a) => a.hoeheM)) : dims.hoehe;
+        const hinweise = ['Geschosszahl aus der Hoehe geschaetzt (3,0 m je Geschoss).',
+          'Ein vorhandenes Geruest in der Punktwolke wird nicht herausgerechnet - Hoehen koennen dadurch ca. 1 m zu hoch sein.'];
+        if (st) hinweise.unshift(`Gestuftes Gebaeude erkannt: ${st.abschnitte.length} Abschnitte entlang einer Achse.`);
         const antwort = {
-          laenge: dims.laenge, breite: dims.breite, hoehe: dims.hoehe,
-          hoeheGeschaetzt: true, traufhoehe: null, dachform: null,
-          geschosse: dims.hoehe > 0 ? 1 : null,
-          zusammenfassung: `Aus Punktwolke (PLY) berechnet: ${dims.laenge} x ${dims.breite} x ${dims.hoehe} m (Begrenzungsbox ueber ${dims.punkte} Punkten).`,
+          laenge: st ? Math.round(st.laenge * 100) / 100 : dims.laenge,
+          breite: st ? Math.round(st.tiefe * 100) / 100 : dims.breite,
+          hoehe: hoeheMax,
+          hoeheGeschaetzt: false, traufhoehe: null, dachform: null,
+          geschosse: hoeheMax > 0 ? Math.max(1, Math.round(hoeheMax / 3)) : null,
+          geschosseGeschaetzt: hoeheMax > 0,
+          abschnitte: st ? st.abschnitte : null,
+          hinweise,
+          zusammenfassung: `Aus Punktwolke (PLY) berechnet: ${dims.laenge} x ${dims.breite} x ${dims.hoehe} m (Begrenzungsbox ueber ${dims.punkte} Punkten)${st ? `; ${st.abschnitte.length} Hoehenstufen erkannt` : ''}.`,
           verworfen: [], ohneKi: true,
         };
         await fetch(`${tenant.supabaseUrl}/rest/v1/ki_jobs?id=eq.${job.id}`, {
