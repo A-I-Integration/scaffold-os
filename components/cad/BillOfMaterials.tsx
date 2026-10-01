@@ -49,9 +49,12 @@ interface Props {
   // NEU (CP-Pro-Marktvergleich, "Drag & Drop"-Lücke): optional, rein additiv.
   manualPlacements?: ManualPlacement[]
   onRemoveManualPlacement?: (id: string) => void
+  // Klick-Platzierung: aktuell gewählter Bauteiltyp + Setter
+  placementType?: string | null
+  onSelectPlacementType?: (type: string | null) => void
 }
 
-export default function BillOfMaterials({ materials, totalWeightKg, totalPrice, logistik, onExportPDF, onExportCSV, onExportMontageplan, onExportStatikGeometrie, onExportIFC, customers, kundenLadeFehler, onRetryKunden, onCreateCustomer, onAssignCustomer, zuordnenLaeuft, disabled = false, notes, onDeleteNote, layerState, onToggleSide, onToggleLevel, onShowAllLayers, onHideAllLayers, customDimensions, onDeleteDimension, measureMode, onToggleMeasureMode, manualPlacements, onRemoveManualPlacement }: Props) {
+export default function BillOfMaterials({ materials, totalWeightKg, totalPrice, logistik, onExportPDF, onExportCSV, onExportMontageplan, onExportStatikGeometrie, onExportIFC, customers, kundenLadeFehler, onRetryKunden, onCreateCustomer, onAssignCustomer, zuordnenLaeuft, disabled = false, notes, onDeleteNote, layerState, onToggleSide, onToggleLevel, onShowAllLayers, onHideAllLayers, customDimensions, onDeleteDimension, measureMode, onToggleMeasureMode, manualPlacements, onRemoveManualPlacement, placementType, onSelectPlacementType }: Props) {
   const [kundenSuche, setKundenSuche] = useState('')
   const [ausgewaehlterKunde, setAusgewaehlterKunde] = useState<{ id: string; name: string } | null>(null)
   const [zeigeDropdown, setZeigeDropdown] = useState(false)
@@ -121,8 +124,8 @@ export default function BillOfMaterials({ materials, totalWeightKg, totalPrice, 
           />
         )}
 
-        {/* Drag & Drop Bauteil-Katalog (CP-Pro-Marktvergleich) */}
-        <ComponentCatalog disabled={disabled} />
+        {/* Bauteil-Katalog mit Klick-Platzierung (CP-Pro-Marktvergleich) */}
+        <ComponentCatalog disabled={disabled} selectedType={placementType} onSelectType={onSelectPlacementType} />
 
         {/* Manuell platzierte Bauteile (CP-Pro-Marktvergleich) */}
         {manualPlacements && manualPlacements.length > 0 && onRemoveManualPlacement && (

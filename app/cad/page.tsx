@@ -168,13 +168,32 @@ export default function CADPage() {
   const [pendingMeasurePoint, setPendingMeasurePoint] = useState<{ point: [number, number, number]; label?: string } | null>(null)
   // NEU (CP-Pro-Marktvergleich, "Drag & Drop"-Lücke): manuell platzierte Bauteile
   const [manualPlacements, setManualPlacements] = useState<ManualPlacement[]>([])
+  // Ausgewählter Bauteiltyp für die Klick-Platzierung (null = Modus aus)
+  const [placementType, setPlacementType] = useState<string | null>(null)
 
   const handleToggleMeasureMode = useCallback(() => {
     setMeasureMode((prev) => {
       if (prev) setPendingMeasurePoint(null) // Beim Deaktivieren den ausstehenden Punkt verwerfen
+      else setPlacementType(null) // Mess- und Platzierungsmodus schließen sich gegenseitig aus
       return !prev
     })
   }, [])
+
+  const handleSelectPlacementType = useCallback((type: string | null) => {
+    setPlacementType(type)
+    if (type) {
+      setMeasureMode(false)
+      setPendingMeasurePoint(null)
+    }
+  }, [])
+
+  // ESC beendet den Platzierungsmodus
+  useEffect(() => {
+    if (!placementType) return
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setPlacementType(null) }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [placementType])
 
   const handleMeasurePoint = useCallback((point: [number, number, number], componentName?: string) => {
     setPendingMeasurePoint((prev) => {
@@ -204,8 +223,11 @@ export default function CADPage() {
     setCustomDimensions((prev) => prev.filter((d) => d.id !== id))
   }, [])
 
-  // NEU (CP-Pro-Marktvergleich, "Drag & Drop"-Lücke)
-  const handleDropComponent = useCallback((type: string, position: [number, number, number], side: string, levelIndex: number) => {
+  // NEU (CP-Pro-Marktvergleich, "Klick-Platzierung"): Klick auf das Gerüst
+  // im Platzierungsmodus setzt das gewählte Bauteil an die geklickte Position.
+  // Der Modus bleibt aktiv (mehrere Bauteile hintereinander setzbar), bis
+  // der Typ abgewählt wird oder ESC gedrückt wird.
+  const handlePlacementClick = useCallback((type: string, position: [number, number, number], side: string, levelIndex: number) => {
     const placement: ManualPlacement = {
       id: `manual-${type}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
       type: type as ManualPlacement['type'],
@@ -239,6 +261,7 @@ export default function CADPage() {
     setCustomDimensions([]);
     setPendingMeasurePoint(null);
     setManualPlacements([]); // Manuelle Bauteile gehören zum verworfenen Modell
+    setPlacementType(null);
     // Phase 68-G: Auto-Generierung sperren -> Leinwand bleibt leer,
     // bis der Nutzer erneut handelt (sonst baut der Effekt unten das
     // Haus sofort wieder auf und der Reset wirkt wirkungslos).
@@ -581,7 +604,7 @@ export default function CADPage() {
           </div>
           <div className='flex-1 p-4 min-h-0'>
             {viewMode === '3d' && modelWithManual && (
-              <Scaffold3D model={modelWithManual} features={features} showBuilding={showBuilding} showScaffold={showScaffold} showDimensions={showDimensions} selectedComponent={selectedComponent} onSelectComponent={setSelectedComponent} visibleTypes={visibleTypes} viewMode={viewAngle} onCanvasReady={(c) => { canvasRef.current = c }} notes={notes} onAddNote={handleAddNote} hiddenSides={hiddenSides} hiddenLevels={hiddenLevels} measureMode={measureMode} onMeasurePoint={handleMeasurePoint} customDimensions={customDimensions} pendingMeasurePoint={pendingMeasurePoint?.point ?? null} onDropComponent={handleDropComponent} />
+              <Scaffold3D model={modelWithManual} features={features} showBuilding={showBuilding} showScaffold={showScaffold} showDimensions={showDimensions} selectedComponent={selectedComponent} onSelectComponent={setSelectedComponent} visibleTypes={visibleTypes} viewMode={viewAngle} onCanvasReady={(c) => { canvasRef.current = c }} notes={notes} onAddNote={handleAddNote} hiddenSides={hiddenSides} hiddenLevels={hiddenLevels} measureMode={measureMode} onMeasurePoint={handleMeasurePoint} customDimensions={customDimensions} pendingMeasurePoint={pendingMeasurePoint?.point ?? null} placementType={placementType} onPlacementClick={handlePlacementClick} />
             )}
             {/* Phase 68-G: Leerzustand nach 'Neu starten' */}
             {viewMode === '3d' && !model && (
@@ -636,6 +659,8 @@ export default function CADPage() {
             onToggleMeasureMode={handleToggleMeasureMode}
             manualPlacements={manualPlacements}
             onRemoveManualPlacement={handleRemoveManualPlacement}
+            placementType={placementType}
+            onSelectPlacementType={handleSelectPlacementType}
           />
         </div>
       </div>
