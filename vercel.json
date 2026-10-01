@@ -11,6 +11,10 @@
     {
       "path": "/api/cron/standzeit-abrechnung",
       "schedule": "0 7 * * *"
+    },
+    {
+      "path": "/api/cron/mietende-erinnerung",
+      "schedule": "30 6 * * *"
     }
   ]
 }

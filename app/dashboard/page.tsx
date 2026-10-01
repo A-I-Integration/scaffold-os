@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { starteNeuesAufmass } from "@/lib/aufmass-projekt-session";
+import MieteEndeCard from "@/components/dashboard/MieteEndeCard";
 import {
   RefreshCw, Plus, AlertTriangle, CalendarDays, Euro, Users, Warehouse,
   CheckCircle2, RotateCcw, Trash2,
@@ -287,6 +288,9 @@ export default function DashboardPage() {
             {msg}
           </div>
         )}
+
+        {/* Mietende in Kürze (blendet sich selbst aus, wenn nichts ansteht) */}
+        <MieteEndeCard />
 
         {/* ═══ 1) ALERTS – Wichtigstes zuerst ═══ */}
         {alerts.length > 0 && (
