@@ -16,8 +16,8 @@ export default function KaufenErfolgPage() {
         <div className="text-6xl mb-6">🎉</div>
         <h1 className="text-3xl font-black">Willkommen bei SCAFFOLD OS!</h1>
         <p className="text-[#86868b] mt-4 leading-relaxed">
-          Deine Testphase hat begonnen – es wurde <strong className="text-[#1d1d1f]">nichts abgebucht</strong>.
-          Die erste Abbuchung erfolgt erst nach 3 Tagen.
+          Dein Abo ist abgeschlossen. Die Rechnung bekommst du per E-Mail.
+          Die monatliche Abbuchung läuft über Stripe.
         </p>
         <div className="bg-[#f5f5f7] rounded-xl p-6 mt-6 text-left space-y-3">
           <p className="text-sm text-[#424245]">

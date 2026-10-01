@@ -11,7 +11,8 @@ import { Check } from 'lucide-react';
 //
 // Sammelt Firma/Name/E-Mail und schickt den Kunden zum
 // Stripe-Checkout (SEPA-Lastschrift oder Kreditkarte,
-// 3 Tage kostenlos testen, Mindestvertragslaufzeit 36 Monate).
+// keine Testphase, Mindestvertragslaufzeit 36 Monate).
+// Enterprise gibt es nur auf Anfrage (kein Checkout).
 // Die eigentliche Zahlung läuft komplett bei Stripe.
 //
 // Das Paket kommt per URL: /kaufen?plan=starter|priority|enterprise
@@ -32,7 +33,7 @@ const PLAENE: Record<string, { name: string; preis: string; features: string[] }
   },
   enterprise: {
     name: 'Enterprise',
-    preis: '749 €',
+    preis: 'Auf Anfrage',
     features: ['Alle Rollen unbegrenzt', 'Mitarbeiter unbegrenzt', 'Lager unbegrenzt'],
   },
 };
@@ -41,7 +42,6 @@ const PLAENE: Record<string, { name: string; preis: string; features: string[] }
 const VORAUSZAHLUNG: Record<string, { monat: number; gesamt: string; rabatt: string; ersparnis: string }> = {
   starter: { monat: 249, gesamt: '8.964 €', rabatt: '8.515,80 €', ersparnis: '448,20 €' },
   priority: { monat: 495, gesamt: '17.820 €', rabatt: '16.929 €', ersparnis: '891 €' },
-  enterprise: { monat: 749, gesamt: '26.964 €', rabatt: '25.615,80 €', ersparnis: '1.348,20 €' },
 };
 
 function KaufenForm() {
@@ -55,6 +55,30 @@ function KaufenForm() {
 
   const planId = params.get('plan') || 'starter';
   const plan = PLAENE[planId] || PLAENE.starter;
+
+  // Enterprise: kein Checkout, nur individuelles Angebot (siehe AGB § 4)
+  if (planId === 'enterprise') {
+    return (
+      <div className="min-h-screen bg-white text-[#1d1d1f] flex items-center justify-center p-6">
+        <div className="w-full max-w-md text-center">
+          <h1 className="text-3xl font-black">SCAFFOLD OS Enterprise</h1>
+          <p className="text-[#86868b] mt-4 leading-relaxed">
+            Enterprise gibt es auf Anfrage: Der Preis richtet sich nach Betriebsgröße und Modulen.
+            Wir erstellen Ihnen gerne ein individuelles Angebot.
+          </p>
+          <Link
+            href="/anfrage"
+            className="inline-block mt-8 bg-[#e8590c] hover:bg-[#d9480f] text-white font-black uppercase tracking-wide px-8 py-4 rounded-xl transition"
+          >
+            Angebot anfragen
+          </Link>
+          <p className="text-xs text-[#86868b] mt-6">
+            <Link href="/#pakete" className="text-[#e8590c] hover:underline">← Zur Paket-Übersicht</Link>
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   async function absenden(e: React.FormEvent) {
     e.preventDefault();
@@ -82,9 +106,10 @@ function KaufenForm() {
           <Link href="/" className="text-[#86868b] hover:text-[#424245] text-sm">← Zur Startseite</Link>
           <h1 className="text-3xl font-black mt-4">SCAFFOLD OS abonnieren</h1>
           <p className="text-[#86868b] mt-2 text-sm">
-            3 Tage kostenlos testen, danach{' '}
-            <span className="text-[#e8590c] font-bold">{plan.preis}/Monat</span> ({plan.name}).
+            <span className="text-[#e8590c] font-bold">{plan.preis}/Monat</span> zzgl. MwSt. ({plan.name}).
             Mindestvertragslaufzeit 36 Monate, danach monatlich kündbar.
+            Erst ansehen?{' '}
+            <Link href="/anfrage?art=demo" className="text-[#e8590c] hover:underline">Demo-Zugang anfordern</Link>.
           </p>
         </div>
 
@@ -92,7 +117,7 @@ function KaufenForm() {
         <div className="mb-6 bg-[#f5f5f7] rounded-xl p-5">
           <div className="flex items-baseline justify-between">
             <p className="font-bold text-lg">{plan.name}</p>
-            <p className="text-[#e8590c] font-bold">{plan.preis}<span className="text-[#86868b] font-normal text-sm">/Monat</span></p>
+            <p className="text-[#e8590c] font-bold">{plan.preis}<span className="text-[#86868b] font-normal text-sm">/Monat zzgl. MwSt.</span></p>
           </div>
           <ul className="mt-3 space-y-1.5">
             {plan.features.map((f) => (
@@ -180,12 +205,12 @@ function KaufenForm() {
             disabled={loading}
             className="w-full bg-[#e8590c] hover:bg-[#d9480f] disabled:opacity-50 text-white font-black uppercase tracking-wide py-4 rounded-xl transition"
           >
-            {loading ? 'Weiter zu Stripe…' : `Jetzt 3 Tage kostenlos testen →`}
+            {loading ? 'Weiter zu Stripe…' : 'Jetzt abonnieren →'}
           </button>
 
           <p className="text-[11px] text-[#86868b] text-center leading-relaxed">
             Sichere Zahlung über Stripe (SEPA-Lastschrift oder Kreditkarte).<br />
-            Erste Abbuchung erst nach der 3-tägigen Testphase. Monatliche Rechnung per E-Mail.<br />
+            Die erste Abbuchung erfolgt direkt nach dem Kauf. Monatliche Rechnung per E-Mail.<br />
             Vertragslaufzeit: 36 Monate, danach monatlich kündbar.<br />
             Mit dem Kauf akzeptierst du unsere{' '}
             <Link href="/agb" className="underline hover:text-[#424245]">AGB</Link> und{' '}

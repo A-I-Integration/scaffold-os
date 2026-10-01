@@ -6,7 +6,7 @@ import { requireAuth, unauthorizedResponse, serverErrorResponse } from '@/lib/au
 // SCAFFOLD OS – Stripe: Checkout starten (NUR Master-Instanz)
 //
 // POST { company_name, admin_name, admin_email, plan }
-// → Legt eine Stripe-Checkout-Session an (Abo, 3 Tage Test,
+// → Legt eine Stripe-Checkout-Session an (Abo ohne Testphase,
 //   SEPA-Lastschrift + Kreditkarte) und liefert die URL zurück.
 //   Die Kauf-Seite (/kaufen) leitet den Kunden dorthin weiter.
 //
@@ -81,7 +81,6 @@ export async function POST(req: NextRequest) {
       // Zahlungsarten kommen aus dem Stripe-Dashboard (Managed Payments).
       // Dort „SEPA-Lastschrift" aktivieren, wenn gewünscht.
       subscription_data: {
-        trial_period_days: 3,
         metadata: { company_name: companyName, admin_email: adminEmail, admin_name: adminName, plan, price_id: priceId },
       },
       metadata: { company_name: companyName, admin_email: adminEmail, admin_name: adminName, plan, price_id: priceId },

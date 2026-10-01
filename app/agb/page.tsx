@@ -4,6 +4,8 @@ import { HardHat, ArrowLeft } from 'lucide-react';
 // ============================================================
 // SCAFFOLD OS – AGB / SaaS-Vertrag (B2B)
 // Inhalt: Arbeitsfassung vom 11.08.2026 (Anwalt prüft final).
+// Änderung 01.10.2026: Enterprise auf Anfrage, keine Testphase (nur Demo-Zugang),
+// § 4/§ 5 angepasst – bitte vom Anwalt mitprüfen lassen.
 // Interne Prüf-/Arbeitsnotizen aus der PDF-Arbeitsfassung
 // wurden hier bewusst NICHT übernommen.
 // ============================================================
@@ -77,10 +79,11 @@ export default function AgbPage() {
           <Section title="§ 4 Preise und Zahlung">
             <p>
               Das SCAFFOLD-OS-Abonnement wird in drei Paketen angeboten: Starter 249 € netto pro
-              Monat, Priority 495 € netto pro Monat und Enterprise 749 € netto pro Monat. Die
-              Abrechnung erfolgt monatlich im Voraus über den Zahlungsdienstleister Stripe
-              (Kreditkarte oder SEPA-Lastschrift). Die erste Abbuchung erfolgt nach Ablauf der
-              Testphase gemäß § 5.
+              Monat und Priority 495 € netto pro Monat. Für das Paket Enterprise erstellen wir
+              ein individuelles Angebot; der Preis richtet sich nach Betriebsgröße und Modulen.
+              Die Abrechnung erfolgt monatlich im Voraus über den Zahlungsdienstleister Stripe
+              (Kreditkarte oder SEPA-Lastschrift). Die erste Abbuchung erfolgt zu Vertragsbeginn
+              gemäß § 5.
             </p>
             <p>
               Alternativ kann der Vertrag für eine Laufzeit von sechsunddreißig (36) Monaten mit
@@ -105,19 +108,17 @@ export default function AgbPage() {
             </p>
           </Section>
 
-          <Section title="§ 5 Testphase, Laufzeit und Kündigung">
+          <Section title="§ 5 Vertragsbeginn, Laufzeit und Kündigung">
             <p>
-              Der Vertrag beginnt mit einer kostenlosen Testphase von drei Tagen. Innerhalb der
-              Testphase kann der Vertrag jederzeit ohne Angabe von Gründen beendet werden; es
-              entstehen keine Kosten. Eine Beendigung während der Testphase ist per E-Mail an{' '}
-              <a href="mailto:info@scaffoldos.de" className="text-[#e8590c] hover:text-[#e8590c]">info@scaffoldos.de</a>{' '}
-              oder über den Zahlungsdienstleister möglich.
+              Vor Vertragsschluss kann SCAFFOLD OS über einen kostenlosen und unverbindlichen
+              Demo-Zugang kennengelernt werden, den wir auf Anfrage einrichten. Eine kostenlose
+              Testphase nach Vertragsschluss gibt es nicht; der Vertrag beginnt mit dem Abschluss
+              des Abonnements, die erste Abbuchung erfolgt zu diesem Zeitpunkt.
             </p>
             <p>
-              Wird der Vertrag nicht innerhalb der Testphase beendet, verlängert er sich
-              automatisch in ein kostenpflichtiges Abonnement mit einer Mindestvertragslaufzeit
-              von sechsunddreißig (36) Monaten ab Ende der Testphase. Während der
-              Mindestvertragslaufzeit ist eine ordentliche Kündigung ausgeschlossen.
+              Der Vertrag hat eine Mindestvertragslaufzeit von sechsunddreißig (36) Monaten ab
+              Vertragsbeginn. Während der Mindestvertragslaufzeit ist eine ordentliche Kündigung
+              ausgeschlossen.
             </p>
             <p>
               Nach Ablauf der Mindestvertragslaufzeit verlängert sich der Vertrag auf
@@ -128,7 +129,7 @@ export default function AgbPage() {
             </p>
             <p>
               Für Verträge mit 36-monatiger Laufzeit und Vorauszahlung gilt § 4 Abs. 2; die Regelungen
-              dieses Paragraphen zur Testphase und zur außerordentlichen Kündigung gelten entsprechend.
+              dieses Paragraphen zur außerordentlichen Kündigung gelten entsprechend.
             </p>
             <p>
               Das Recht zur außerordentlichen Kündigung aus wichtigem Grund bleibt unberührt.

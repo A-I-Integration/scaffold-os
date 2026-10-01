@@ -44,7 +44,7 @@ const SCHRITTE = [
   {
     icon: RefreshCcw,
     titel: '3. Parallel weiterarbeiten',
-    text: 'Für Wechsler verlängern wir die Testphase auf 30 Tage: Beide Systeme laufen nebeneinander, Sie wechseln in Ruhe – ohne Druck.',
+    text: 'Für Wechsler verlängern wir den Demo-Zugang auf 30 Tage: Beide Systeme laufen nebeneinander, Sie wechseln in Ruhe – ohne Druck.',
   },
 ];
 
@@ -62,7 +62,7 @@ const FAQ_WECHSEL = [
   },
   {
     frage: 'Kann ich meine Daten später wieder mitnehmen?',
-    antwort: 'Ja. Ihre Daten gehören Ihnen – ein Export ist jederzeit möglich. Es gibt keine Kündigungsfalle und keine Weggesperrt-Garantie: monatlich kündbar, fertig.',
+    antwort: 'Ja. Ihre Daten gehören Ihnen – ein Export ist jederzeit möglich. Es gibt keine Weggesperrt-Garantie: Nach der Mindestvertragslaufzeit von 36 Monaten ist das Abo monatlich kündbar.',
   },
   {
     frage: 'Was kostet der Umzug?',
@@ -70,7 +70,7 @@ const FAQ_WECHSEL = [
   },
   {
     frage: 'Wie läuft der Parallelbetrieb?',
-    antwort: 'Nennen Sie uns im Termin oder per E-Mail, dass Sie wechseln – wir verlängern Ihre Testphase auf 30 Tage. In der Zeit arbeiten Sie mit beiden Systemen und entscheiden in Ruhe.',
+    antwort: 'Nennen Sie uns im Termin oder per E-Mail, dass Sie wechseln – wir verlängern Ihren Demo-Zugang auf 30 Tage. In der Zeit arbeiten Sie mit beiden Systemen und entscheiden in Ruhe.',
   },
 ];
 
