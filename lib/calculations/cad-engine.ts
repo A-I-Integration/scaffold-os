@@ -210,6 +210,75 @@ export function calculateLevels(
   return { levels, levelHeightM: rasterH, levelsData }
 }
 
+// ============================================================
+// SEITEN-GEOMETRIE (Umfassungsgerüst)
+// Alle Bauteile eines Feldes werden in einem lokalen "Vorne"-Koordinatensystem
+// erzeugt (Länge entlang x, nach außen +z). Für Hinten/Links/Rechts wird das
+// Ergebnis um das Gebäude gedreht (Hinten 180°, Links -90°, Rechts +90°),
+// damit Geländer außen, Beläge richtig herum und alle Seiten am Haus liegen.
+// Das Gebäude ist in der Szene um 0,5 m nach hinten versetzt gezeichnet
+// (Vorderkante z = -0,5) – darum rechnen wir mit Lv = L + 1 und Wv = W + 1.
+// ============================================================
+type SeitenId = 'front' | 'back' | 'left' | 'right'
+interface SeitenRahmen {
+  yaw: number
+  toLocal: (x: number, z: number) => [number, number]
+  toWorld: (lx: number, lz: number) => [number, number]
+}
+export function seitenRahmen(side: SeitenId, building: { lengthM: number; widthM?: number }): SeitenRahmen {
+  const Lv = (building.lengthM || 0) + 1
+  const Wv = (building.widthM || 0) + 1
+  switch (side) {
+    case 'back':
+      return { yaw: Math.PI, toLocal: (x, z) => [-x, -z - Wv], toWorld: (lx, lz) => [-lx, -lz - Wv] }
+    case 'left':
+      return { yaw: -Math.PI / 2, toLocal: (x, z) => [z + Wv / 2, -x - Lv / 2], toWorld: (lx, lz) => [-(lz + Lv / 2), lx - Wv / 2] }
+    case 'right':
+      return { yaw: Math.PI / 2, toLocal: (x, z) => [-(z + Wv / 2), x - Lv / 2], toWorld: (lx, lz) => [lz + Lv / 2, -lx - Wv / 2] }
+    default:
+      return { yaw: 0, toLocal: (x, z) => [x, z], toWorld: (lx, lz) => [lx, lz] }
+  }
+}
+
+/** Dreht eine Euler-Rotation (XYZ) zusätzlich um die Hochachse (yaw). */
+function eulerMitYaw(rot: [number, number, number], yaw: number): [number, number, number] {
+  if (!yaw) return rot
+  const c1 = Math.cos(rot[0] / 2), s1 = Math.sin(rot[0] / 2)
+  const c2 = Math.cos(rot[1] / 2), s2 = Math.sin(rot[1] / 2)
+  const c3 = Math.cos(rot[2] / 2), s3 = Math.sin(rot[2] / 2)
+  const b = {
+    x: s1 * c2 * c3 + c1 * s2 * s3,
+    y: c1 * s2 * c3 - s1 * c2 * s3,
+    z: c1 * c2 * s3 + s1 * s2 * c3,
+    w: c1 * c2 * c3 - s1 * s2 * s3,
+  }
+  const a = { x: 0, y: Math.sin(yaw / 2), z: 0, w: Math.cos(yaw / 2) }
+  const q = {
+    x: a.x * b.w + a.w * b.x + a.y * b.z - a.z * b.y,
+    y: a.y * b.w + a.w * b.y + a.z * b.x - a.x * b.z,
+    z: a.z * b.w + a.w * b.z + a.x * b.y - a.y * b.x,
+    w: a.w * b.w - a.x * b.x - a.y * b.y - a.z * b.z,
+  }
+  const m11 = 1 - 2 * (q.y * q.y + q.z * q.z)
+  const m12 = 2 * (q.x * q.y - q.z * q.w)
+  const m13 = 2 * (q.x * q.z + q.y * q.w)
+  const m22 = 1 - 2 * (q.x * q.x + q.z * q.z)
+  const m23 = 2 * (q.y * q.z - q.x * q.w)
+  const m32 = 2 * (q.y * q.z + q.x * q.w)
+  const m33 = 1 - 2 * (q.x * q.x + q.y * q.y)
+  const ey = Math.asin(Math.max(-1, Math.min(1, m13)))
+  if (Math.abs(m13) < 0.9999999) return [Math.atan2(-m23, m33), ey, Math.atan2(-m12, m11)]
+  return [Math.atan2(m32, m22), ey, 0]
+}
+
+/** Lokales Bauteil (Vorne-System) ins Szenen-System der Seite übertragen. */
+function bauteilInWelt(c: ScaffoldComponent3D, rahmen: SeitenRahmen): void {
+  if (!rahmen.yaw) return
+  const [wx, wz] = rahmen.toWorld(c.position[0], c.position[2])
+  c.position = [wx, c.position[1], wz]
+  c.rotation = eulerMitYaw(c.rotation, rahmen.yaw)
+}
+
 export function generateScaffoldComponents(model: CADModel): ScaffoldComponent3D[] {
   const components: ScaffoldComponent3D[] = []
   const { system, fields, levels, building } = model
@@ -269,9 +338,13 @@ export function generateScaffoldComponents(model: CADModel): ScaffoldComponent3D
 
   // === BASIS-BAUTEILE (pro Feld) ===
   fields.forEach((field) => {
-    const { positionX, positionY, positionZ, lengthM, widthM, levelIndex, side } = field
+    const { lengthM, widthM, levelIndex, side } = field
     const level = levels.find((l) => l.index === levelIndex)
     if (!level) return
+    // Lokale Position im Vorne-System; am Ende der Schleife wird gedreht.
+    const rahmen = seitenRahmen(side, building)
+    const [positionX, positionZ] = rahmen.toLocal(field.positionX, field.positionZ)
+    const ersterIdx = components.length
     const yBottom = level.bottomY
     const yTop = level.topY
     const levelH = level.heightM
@@ -312,7 +385,50 @@ export function generateScaffoldComponents(model: CADModel): ScaffoldComponent3D
 
     // Bordbretter
     components.push({ id: `board-${field.id}`, type: 'board', articleNumber: 'BB-001', name: `Bordbrett ${lengthM}m`, position: [positionX, yTop + 0.3, positionZ - widthM / 2 - 0.02], rotation: [0, 0, 0], scale: [lengthM, 0.19, 0.02], color: colorBoard, fieldId: field.id, levelId: level.id })
+
+    for (let ci = ersterIdx; ci < components.length; ci++) bauteilInWelt(components[ci], rahmen)
   })
+
+  // === ECKFELDER (geschlossener Umlauf) ===
+  // Wo zwei benachbarte Seiten (vorne/hinten + links/rechts) beide gerüstet sind,
+  // bleibt zwischen den Seiten eine Lücke. Pro Lage wird sie mit einem Eckbelag,
+  // einem Eckpfosten außen und zwei Geländern an den Außenkanten geschlossen.
+  {
+    const aktiveSeiten = new Set(fields.map((f) => f.side))
+    const sw = fields[0]?.widthM ?? 0.73
+    for (const fb of ['front', 'back'] as const) {
+      for (const lr of ['left', 'right'] as const) {
+        if (!aktiveSeiten.has(fb) || !aktiveSeiten.has(lr)) continue
+        const lageIdxs = [...new Set(fields.filter((f) => f.side === fb).map((f) => f.levelIndex))]
+        for (const idx of lageIdxs) {
+          const level = levels.find((l) => l.index === idx)
+          const fbF = fields.filter((f) => f.side === fb && f.levelIndex === idx)
+          const lrF = fields.filter((f) => f.side === lr && f.levelIndex === idx)
+          if (!level || fbF.length === 0 || lrF.length === 0) continue
+          // Außenkante der Querseite (links: -x, rechts: +x) und Ende der Längsseite
+          const xEnde = lr === 'left' ? Math.min(...fbF.map((f) => f.positionX - f.lengthM / 2)) : Math.max(...fbF.map((f) => f.positionX + f.lengthM / 2))
+          const xAussen = lr === 'left' ? lrF[0].positionX - sw : lrF[0].positionX + sw
+          const zEnde = fb === 'front' ? Math.max(...lrF.map((f) => f.positionZ + f.lengthM / 2)) : Math.min(...lrF.map((f) => f.positionZ - f.lengthM / 2))
+          const zAussen = fb === 'front' ? fbF[0].positionZ + sw : fbF[0].positionZ - sw
+          const dx = Math.abs(xAussen - xEnde)
+          const dz = Math.abs(zAussen - zEnde)
+          if (dx < 0.05 || dz < 0.05 || dx > 3 || dz > 3) continue
+          const cx = (xEnde + xAussen) / 2
+          const cz = (zEnde + zAussen) / 2
+          const yTop = level.topY
+          const idBase = `corner-${fb}-${lr}-${idx}`
+          components.push({ id: `${idBase}-deck`, type: 'deck', articleNumber: 'AB-001', name: 'Eckbelag', position: [cx, yTop, cz], rotation: [-Math.PI / 2, 0, 0], scale: [dx - 0.04, dz - 0.04, 0.02], color: colorDeck, levelId: level.id })
+          components.push({ id: `${idBase}-post`, type: 'frame', articleNumber: 'RA-001', name: 'Eckpfosten', position: [xAussen + (lr === 'left' ? 0.04 : -0.04), level.bottomY + level.heightM / 2, zAussen + (fb === 'front' ? -0.04 : 0.04)], rotation: [0, 0, 0], scale: [0.073, level.heightM, 0.04], color: colorFrame, levelId: level.id })
+          // Geländer an den zwei Außenkanten
+          components.push({ id: `${idBase}-rail-x`, type: 'railing', articleNumber: 'GE-001', name: 'Eckgeländer', position: [cx, yTop, zAussen + (fb === 'front' ? 0.02 : -0.02)], rotation: [0, 0, 0], scale: [dx, 1.0, 0.04], color: colorRailing, levelId: level.id })
+          components.push({ id: `${idBase}-rail-z`, type: 'railing', articleNumber: 'GE-001', name: 'Eckgeländer', position: [xAussen + (lr === 'left' ? -0.02 : 0.02), yTop, cz], rotation: [0, Math.PI / 2, 0], scale: [dz, 1.0, 0.04], color: colorRailing, levelId: level.id })
+          if (idx === 0) {
+            components.push({ id: `${idBase}-foot`, type: 'footplate', articleNumber: 'FP-001', name: 'Fußplatte', position: [xAussen + (lr === 'left' ? 0.04 : -0.04), level.bottomY - 0.02, zAussen + (fb === 'front' ? -0.04 : 0.04)], rotation: [0, 0, 0], scale: [0.15, 0.04, 0.15], color: colorFoot, levelId: level.id })
+          }
+        }
+      }
+    }
+  }
 
   // === ECKVERBINDUNGEN ===
   // Finde Eck-Felder (erstes/letztes Feld jeder Seite)
@@ -367,7 +483,10 @@ export function generateScaffoldComponents(model: CADModel): ScaffoldComponent3D
       for (let i = 0; i < consoleCount; i++) {
         const field = fields[i % fields.length]
         if (!fields.some((g) => g.side === field.side && g.levelIndex === topLevel.index && Math.abs(g.positionX - field.positionX) < 0.01 && Math.abs(g.positionZ - field.positionZ) < 0.01)) continue
-        components.push({ id: `console-${i}`, type: 'console', articleNumber: 'KO-001', name: 'Konsole 0,73m', position: [field.positionX, topLevel.topY, field.positionZ + field.widthM / 2 + 0.3], rotation: [0, 0, 0], scale: [0.73, 0.04, 0.3], color: colorConsole, levelId: topLevel.id })
+        const rf = seitenRahmen(field.side, building)
+        const [lx, lz] = rf.toLocal(field.positionX, field.positionZ)
+        const [wx, wz] = rf.toWorld(lx, lz + field.widthM / 2 + 0.3)
+        components.push({ id: `console-${i}`, type: 'console', articleNumber: 'KO-001', name: 'Konsole 0,73m', position: [wx, topLevel.topY, wz], rotation: eulerMitYaw([0, 0, 0], rf.yaw), scale: [0.73, 0.04, 0.3], color: colorConsole, levelId: topLevel.id })
       }
     }
   }
@@ -411,7 +530,10 @@ export function generateScaffoldComponents(model: CADModel): ScaffoldComponent3D
       const level = levels[Math.min(i + 2, levels.length - 1)]
       const field = fields[i % fields.length]
       if (level && field && fields.some((g) => g.side === field.side && g.levelIndex === level.index && Math.abs(g.positionX - field.positionX) < 0.01)) {
-        components.push({ id: `net-${i}`, type: 'net', articleNumber: 'FN-001', name: 'Fangnetz', position: [field.positionX, level.topY - 0.5, field.positionZ + field.widthM / 2 + 0.05], rotation: [0, 0, 0], scale: [field.lengthM, 1.5, 0.01], color: colorNet, levelId: level.id })
+        const rf = seitenRahmen(field.side, building)
+        const [lx, lz] = rf.toLocal(field.positionX, field.positionZ)
+        const [wx, wz] = rf.toWorld(lx, lz + field.widthM / 2 + 0.05)
+        components.push({ id: `net-${i}`, type: 'net', articleNumber: 'FN-001', name: 'Fangnetz', position: [wx, level.topY - 0.5, wz], rotation: eulerMitYaw([0, 0, 0], rf.yaw), scale: [field.lengthM, 1.5, 0.01], color: colorNet, levelId: level.id })
       }
     }
   }
@@ -440,7 +562,10 @@ export function generateScaffoldComponents(model: CADModel): ScaffoldComponent3D
   for (let i = 0; i < loadPlateCount; i++) {
     const field = fields[i % fields.length]
     if (field.levelIndex === 0) {
-      components.push({ id: `loadplate-${i}`, type: 'load_plate', articleNumber: 'LV-001', name: 'Lastverteilplatte', position: [field.positionX - field.lengthM / 2 + 0.02, -0.04, field.positionZ], rotation: [0, 0, 0], scale: [0.3, 0.04, 0.3], color: colorLoadPlate, fieldId: field.id })
+      const rf = seitenRahmen(field.side, building)
+      const [lx, lz] = rf.toLocal(field.positionX, field.positionZ)
+      const [wx, wz] = rf.toWorld(lx - field.lengthM / 2 + 0.02, lz)
+      components.push({ id: `loadplate-${i}`, type: 'load_plate', articleNumber: 'LV-001', name: 'Lastverteilplatte', position: [wx, -0.04, wz], rotation: [0, 0, 0], scale: [0.3, 0.04, 0.3], color: colorLoadPlate, fieldId: field.id })
     }
   }
 
@@ -525,10 +650,11 @@ export function generateCADModel(
         const sec = side === 'left' ? abschnitte[0] : abschnitte[abschnitte.length - 1]
         runs.push({ div: fieldDivWidth, hoeheM: sec.hoeheM, along: -w - 0.5 })
       }
+      // Lage der inneren Gerüstlinie je Seite (Gebäude ist 0,5 m nach hinten versetzt)
       const fixed = side === 'front' ? distanceToBuildingM
-        : side === 'back' ? -distanceToBuildingM - scaffoldWidthM - w
-        : side === 'left' ? -building.lengthM / 2 - distanceToBuildingM - scaffoldWidthM / 2
-        : building.lengthM / 2 + distanceToBuildingM + scaffoldWidthM / 2
+        : side === 'back' ? -distanceToBuildingM - w - 1
+        : side === 'left' ? -building.lengthM / 2 - 0.5 - distanceToBuildingM
+        : building.lengthM / 2 + 0.5 + distanceToBuildingM
       const proLage = new Map<number, ScaffoldField[]>()
       runs.forEach((run, ri) => {
         const rl = system ? calculateLevels(run.hoeheM, system) : levelCalc
@@ -565,8 +691,8 @@ export function generateCADModel(
               const along = run.along + f * run.div.fieldLengthM + run.div.fieldLengthM / 2
               let xPos = 0, zPos = 0
               if (side === 'front') { xPos = along; zPos = distanceToBuildingM + scaffoldWidthM / 2 }
-              else if (side === 'back') { xPos = along; zPos = -distanceToBuildingM - scaffoldWidthM / 2 - w }
-              else { xPos = fixed; zPos = along }
+              else if (side === 'back') { xPos = along; zPos = -distanceToBuildingM - scaffoldWidthM / 2 - w - 1 }
+              else { xPos = side === 'left' ? fixed - scaffoldWidthM / 2 : fixed + scaffoldWidthM / 2; zPos = along }
               abschnittsAnker.push({ id: `anchor-${side}-${ri}-${al}-${f}`, positionX: xPos, positionY: yAnchor, positionZ: zPos, side: side as 'front' | 'back' | 'left' | 'right', type: 'fassadenanker' })
             }
           }
@@ -589,16 +715,16 @@ export function generateCADModel(
         useLengthDiv = fieldDiv
         break
       case 'back':
-        zOffset = -distanceToBuildingM - scaffoldWidthM - (building.widthM || 0)
+        zOffset = -distanceToBuildingM - (building.widthM || 0) - 1
         useLengthDiv = fieldDiv
         break
       case 'left':
-        xOffset = -distanceToBuildingM - scaffoldWidthM
+        xOffset = -building.lengthM / 2 - 0.5 - distanceToBuildingM
         useLengthDiv = fieldDivWidth
         rotation = Math.PI / 2
         break
       case 'right':
-        xOffset = distanceToBuildingM + building.lengthM
+        xOffset = building.lengthM / 2 + 0.5 + distanceToBuildingM
         useLengthDiv = fieldDivWidth
         rotation = Math.PI / 2
         break
@@ -620,7 +746,7 @@ export function generateCADModel(
           zPos = zOffset
         } else {
           xPos = xOffset
-          zPos = fieldIndex * fieldLength - totalLength / 2 + fieldLength / 2 - (building.widthM || 0) / 2
+          zPos = fieldIndex * fieldLength - totalLength / 2 + fieldLength / 2 - (building.widthM || 0) / 2 - 0.5
         }
 
         const isCorner = fieldIndex === 0 || fieldIndex === useLengthDiv.distribution.length - 1
@@ -661,9 +787,9 @@ export function generateCADModel(
           let xPos = 0
           let zPos = 0
           if (side === 'front') { xPos = pos; zPos = distanceToBuildingM + scaffoldWidthM / 2 }
-          else if (side === 'back') { xPos = pos; zPos = -distanceToBuildingM - scaffoldWidthM / 2 - (building.widthM || 0) }
-          else if (side === 'left') { xPos = -distanceToBuildingM - scaffoldWidthM / 2; zPos = pos - (building.widthM || 0) / 2 }
-          else if (side === 'right') { xPos = distanceToBuildingM + building.lengthM + scaffoldWidthM / 2; zPos = pos - (building.widthM || 0) / 2 }
+          else if (side === 'back') { xPos = pos; zPos = -distanceToBuildingM - scaffoldWidthM / 2 - (building.widthM || 0) - 1 }
+          else if (side === 'left') { xPos = -building.lengthM / 2 - 0.5 - distanceToBuildingM - scaffoldWidthM / 2; zPos = pos - (building.widthM || 0) / 2 - 0.5 }
+          else if (side === 'right') { xPos = building.lengthM / 2 + 0.5 + distanceToBuildingM + scaffoldWidthM / 2; zPos = pos - (building.widthM || 0) / 2 - 0.5 }
 
           anchors.push({ id: `anchor-${side}-${al}-${f}`, positionX: xPos, positionY: yAnchor, positionZ: zPos, side: side as 'front' | 'back' | 'left' | 'right', type: 'fassadenanker' })
         }
