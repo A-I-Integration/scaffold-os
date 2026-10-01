@@ -14,7 +14,7 @@
 
 import { useMemo, useState, useRef, useEffect, useCallback, memo } from 'react'
 import { Canvas, useThree, useFrame } from '@react-three/fiber'
-import { OrbitControls, Grid, Text, Sky, AdaptiveDpr, AdaptiveEvents, Environment, ContactShadows } from '@react-three/drei'
+import { OrbitControls, Grid, Text, Sky, AdaptiveDpr, AdaptiveEvents, Environment, ContactShadows, Edges } from '@react-three/drei'
 import * as THREE from 'three'
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 import { CADModel, ScaffoldComponent3D, BuildingFeature3D, berechneGebaeudeSegmente } from '@/lib/calculations/cad-engine'
@@ -190,6 +190,67 @@ function getGeometry(type: string, variant: string = 'default'): THREE.BufferGeo
   return geo
 }
 
+// ─── Kantenlinien (Stufe 2, "technische Zeichnung") ───
+// Nur für kantige Bauteile; Rohre/Netze/Rosetten brauchen keine Kanten
+// (Rundungen wirken durch Shading, Linien an Zylindern würden flimmern).
+const EDGE_TYPES = new Set(['deck', 'board', 'console', 'load_plate', 'protection_roof'])
+
+let boxEdgePositions: Float32Array | null = null
+function getBoxEdgePositions(): Float32Array {
+  if (!boxEdgePositions) {
+    const box = new THREE.BoxGeometry(1, 1, 1)
+    const edges = new THREE.EdgesGeometry(box)
+    boxEdgePositions = new Float32Array(edges.attributes.position.array as ArrayLike<number>)
+    box.dispose()
+    edges.dispose()
+  }
+  return boxEdgePositions
+}
+
+/** Baut EINE Linien-Geometrie für alle Kanten-Bauteile (ein Draw-Call).
+ *  Wird nur bei Modell-/Filteränderung neu berechnet, nicht pro Frame. */
+function buildEdgeGeometry(items: ScaffoldComponent3D[]): THREE.BufferGeometry | null {
+  if (items.length === 0) return null
+  const base = getBoxEdgePositions()
+  const perItem = base.length
+  const out = new Float32Array(items.length * perItem)
+  const obj = new THREE.Object3D()
+  const v = new THREE.Vector3()
+  items.forEach((item, n) => {
+    obj.position.set(...item.position)
+    obj.rotation.set(...item.rotation)
+    obj.scale.set(...item.scale)
+    obj.updateMatrix()
+    for (let i = 0; i < perItem; i += 3) {
+      v.set(base[i], base[i + 1], base[i + 2]).applyMatrix4(obj.matrix)
+      const o = n * perItem + i
+      out[o] = v.x
+      out[o + 1] = v.y
+      out[o + 2] = v.z
+    }
+  })
+  const geo = new THREE.BufferGeometry()
+  geo.setAttribute('position', new THREE.BufferAttribute(out, 3))
+  return geo
+}
+
+function ScaffoldEdges({ items }: { items: ScaffoldComponent3D[] }) {
+  const { invalidate } = useThree()
+  const geometry = useMemo(() => buildEdgeGeometry(items), [items])
+  useEffect(() => {
+    invalidate()
+    return () => { geometry?.dispose() }
+  }, [geometry, invalidate])
+  if (!geometry) return null
+  return (
+    // raycast deaktiviert: Linien dürfen Klicks (Auswahl, Messen,
+    // Platzieren) nicht abfangen.
+    <lineSegments geometry={geometry} raycast={() => null}>
+      <lineBasicMaterial color="#2b3138" transparent opacity={0.55} />
+    </lineSegments>
+  )
+}
+
 // Netz-Textur: feines Gitter auf transparentem Grund (SSR-sicher, lazy).
 let netTexCache: THREE.CanvasTexture | null = null
 function getNetTex(): THREE.CanvasTexture | null {
@@ -241,6 +302,11 @@ function getMaterial(type: string, color: THREE.Color): THREE.MeshStandardMateri
     opacity: 1,
     side: istNetz ? THREE.DoubleSide : THREE.FrontSide,
     envMapIntensity: istHolz ? 0.4 : 0.8,
+    // Box-Bauteile bekommen Kantenlinien (ScaffoldEdges): Flächen minimal
+    // nach hinten versetzen, damit die Linien nicht mit ihnen flackern.
+    polygonOffset: EDGE_TYPES.has(type),
+    polygonOffsetFactor: 1,
+    polygonOffsetUnits: 1,
   })
   MATERIAL_CACHE.set(key, mat)
   return mat
@@ -479,8 +545,16 @@ const AllScaffoldComponents = memo(function AllScaffoldComponents({
     return groups
   }, [components, visibleTypes, lodLevel, hiddenSides, hiddenLevels])
 
+  // Kanten-Bauteile (aus denselben gefilterten Gruppen → Ebenen-/Typ-Filter
+  // und LOD gelten automatisch auch für die Linien).
+  const edgeItems = useMemo(
+    () => Object.values(grouped).filter((g) => EDGE_TYPES.has(g.type)).flatMap((g) => g.items),
+    [grouped]
+  )
+
   return (
     <group>
+      <ScaffoldEdges items={edgeItems} />
       {Object.entries(grouped).map(([key, { type, variant, items }]) => (
         <InstancedBauteile
           key={key}
@@ -582,6 +656,7 @@ function Building3D({
           <group key={i} position={[seg.mitteX, 0, seg.mitteZ]} rotation={[0, seg.rotationYRad, 0]}>
             <mesh position={[0, seg.hoeheM / 2, 0]} castShadow receiveShadow>
               <boxGeometry args={[seg.laengeM, seg.hoeheM, w]} />
+              <Edges threshold={15} color="#8f8676" />
               <meshStandardMaterial color="#e6dfd3" roughness={0.9} map={getPutzTex()} bumpMap={getPutzTex()} bumpScale={0.12} />
             </mesh>
             {/* NEU: Dach je Abschnitt – eigene Dachform, falls angegeben,
@@ -613,6 +688,7 @@ function Building3D({
       {/* Baukörper */}
       <mesh position={[0, heightM / 2, 0]} castShadow receiveShadow>
         <boxGeometry args={[lengthM, heightM, w]} />
+        <Edges threshold={15} color="#8f8676" />
         <meshStandardMaterial color="#e6dfd3" roughness={0.9} map={getPutzTex()} bumpMap={getPutzTex()} bumpScale={0.12} />
       </mesh>
 
