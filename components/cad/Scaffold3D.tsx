@@ -1199,10 +1199,10 @@ function computeTreeSpots(model: CADModel): TreeSpot[] {
     const z = cz + (rnd() * 2 - 1) * reach
     // Sperrzone um Gebäude + Gerüst (Rechteck + Margin)
     if (Math.abs(x - cx) < halfX && Math.abs(z - cz) < halfZ) continue
-    // Blickrichtung der Start-Kamera (+x/+z): dort keine Bäume, sie würden das Gebäude verdecken
+    // Blickrichtung der Start-Kamera (+x/+z): dort und seitlich davor keine Bäume (verdecken das Gebäude)
     const dx = x - cx, dz = z - cz
     const dl = Math.hypot(dx, dz) || 1
-    if ((dx / dl) * 0.7071 + (dz / dl) * 0.7071 > 0.3) continue
+    if ((dx / dl) * 0.7071 + (dz / dl) * 0.7071 > -0.2) continue
     // Mindestabstand zu anderen Bäumen
     if (spots.some((p) => (p.x - x) ** 2 + (p.z - z) ** 2 < 4.0 * 4.0)) continue
     // innerhalb der Bodenplatte (120 × 120) bleiben
