@@ -201,6 +201,43 @@ function erkenneStufen(px, py, pz, d) {
   return { achse: alongX ? 'x' : 'y', abschnitte, laenge: span, tiefe: quer };
 }
 
+// Phase 90: Geruest-Seiten in der Punktwolke erkennen.
+// Ein Geruest ist an einer Aussenseite eine Schicht mit Tiefe (Stiele, Belaege,
+// Gelaender in mehreren Abstaenden), eine blanke Wand ist praktisch eine
+// Ebene (wenige 10-cm-Scheiben). Je Seite werden die belegten 10-cm-Scheiben
+// in den ersten 2,0 m ab dem aeussersten Punkt gezaehlt (Mittelbereich der
+// Seite, Ecken ausgenommen). >= 8 belegte Scheiben (= mind. 0,8 m Tiefe)
+// -> Geruest auf dieser Seite. Zuordnung (Annahme): y-min = vorne, y-max =
+// hinten, x-min = links, x-max = rechts. Liefert null, wenn keine Seite
+// eindeutig ist. ACHTUNG: nur an synthetischen Dateien geprueft.
+function erkenneGeruestSeiten(px, py, d) {
+  const n = px.length;
+  if (n < 500 || !(d.spanX > 3) || !(d.spanY > 3)) return null;
+  const SCHEIBE = 0.1, TIEFE = 2.0, MIN_SCHEIBEN = 8;
+  const minPunkte = Math.max(5, Math.round(n * 0.0002));
+  const aussen = (alongX, fromMin) => {
+    const a = alongX ? px : py;      // Koordinate entlang der Seite
+    const b = alongX ? py : px;      // Koordinate senkrecht zur Seite
+    const aMin = alongX ? d.minX : d.minY, aSpan = alongX ? d.spanX : d.spanY;
+    const bMin = alongX ? d.minY : d.minX, bSpan = alongX ? d.spanY : d.spanX;
+    const lo = aMin + aSpan * 0.25, hi = aMin + aSpan * 0.75;
+    const bins = new Array(Math.ceil(TIEFE / SCHEIBE) + 1).fill(0);
+    for (let i = 0; i < n; i++) {
+      if (a[i] < lo || a[i] > hi) continue;
+      const t = fromMin ? b[i] - bMin : bMin + bSpan - b[i];
+      if (t < 0 || t > TIEFE) continue;
+      bins[Math.floor(t / SCHEIBE)]++;
+    }
+    return bins.filter((c) => c >= minPunkte).length >= MIN_SCHEIBEN;
+  };
+  const seiten = [];
+  if (aussen(true, true)) seiten.push('front');
+  if (aussen(true, false)) seiten.push('back');
+  if (aussen(false, true)) seiten.push('left');
+  if (aussen(false, false)) seiten.push('right');
+  return seiten.length ? seiten : null;
+}
+
 // Phase 73: PLY-Punktwolke (z. B. aus dem LiDAR-Aufmass) einlesen und
 // die Begrenzungsbox der Punkte als Laenge x Breite x Hoehe liefern.
 // ASCII-PLY; Binary wird mit klarer Meldung abgelehnt.
@@ -294,7 +331,9 @@ function parsePly(buf) {
   }
   let stufen = null;
   try { stufen = erkenneStufen(px, py, pz, { minX, minY, minZ, spanX, spanY }); } catch (e) { stufen = null; }
-  return { laenge: r2(spanX), breite: r2(spanY), hoehe: r2(spanZ), punkte: gelesen, stufen };
+  let geruestSeiten = null;
+  try { geruestSeiten = erkenneGeruestSeiten(px, py, { minX, minY, spanX, spanY }); } catch (e) { geruestSeiten = null; }
+  return { laenge: r2(spanX), breite: r2(spanY), hoehe: r2(spanZ), punkte: gelesen, stufen, geruestSeiten };
 }
 
 const CAD_PROMPT = (ocrText) => `Du bist ein erfahrener Gerüstbau-Planer. Analysiere diese Grundrisse/Baupläne${ocrText ? ' (Bilder und/oder per OCR extrahierter Plan-Text, siehe unten)' : ''}.
@@ -385,6 +424,8 @@ async function verarbeiteCadAnalyseJob(tenant, job) {
         const hoeheMax = st ? Math.max(...st.abschnitte.map((a) => a.hoeheM)) : dims.hoehe;
         const hinweise = ['Geschosszahl aus der Hoehe geschaetzt (3,0 m je Geschoss).',
           'Ein vorhandenes Geruest in der Punktwolke wird nicht herausgerechnet - Hoehen koennen dadurch ca. 1 m zu hoch sein.'];
+        const gs = dims.geruestSeiten;
+        if (gs) hinweise.unshift(`Geruest in der Punktwolke erkannt auf: ${gs.map((x) => ({ front: 'Vorne', back: 'Hinten', left: 'Links', right: 'Rechts' }[x])).join(', ')} (Zuordnung vorne/hinten/links/rechts ist eine Annahme - bitte pruefen). Die Masse enthalten das Geruest und sind deshalb zu gross.`);
         if (st) hinweise.unshift(`Gestuftes Gebaeude erkannt: ${st.abschnitte.length} Abschnitte entlang einer Achse.`);
         const antwort = {
           laenge: st ? Math.round(st.laenge * 100) / 100 : dims.laenge,
@@ -394,6 +435,7 @@ async function verarbeiteCadAnalyseJob(tenant, job) {
           geschosse: hoeheMax > 0 ? Math.max(1, Math.round(hoeheMax / 3)) : null,
           geschosseGeschaetzt: hoeheMax > 0,
           abschnitte: st ? st.abschnitte : null,
+          geruestSeiten: gs || null,
           hinweise,
           zusammenfassung: `Aus Punktwolke (PLY) berechnet: ${dims.laenge} x ${dims.breite} x ${dims.hoehe} m (Begrenzungsbox ueber ${dims.punkte} Punkten)${st ? `; ${st.abschnitte.length} Hoehenstufen erkannt` : ''}.`,
           verworfen: [], ohneKi: true,
