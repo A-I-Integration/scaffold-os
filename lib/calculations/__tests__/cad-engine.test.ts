@@ -83,3 +83,38 @@ describe('generateCADModel + generateBillOfMaterials (Regelfall)', () => {
     expect(model).toBeDefined()
   })
 })
+
+describe('Dachrand-Absturzschutz (Flachdach)', () => {
+  const FLACH: BuildingParams = { ...STANDARD_BUILDING, roofForm: 'flachdach', roofHeightM: 0, heightM: 6, eavesHeightM: 6, floors: 2, floorHeightsM: [3, 3], sides: ['front', 'back', 'left', 'right'] }
+  const dachrand = (m: ReturnType<typeof generateCADModel>) => m.components3D.filter((c) => c.id.startsWith('dachrand-'))
+
+  it('ohne Schalter entstehen keine Dachrand-Teile', () => {
+    expect(dachrand(generateCADModel(FLACH, 'layher-allround'))).toHaveLength(0)
+  })
+
+  it('mit Schalter: nur oberste Lage, Handlauf endet 1,0 m über Dachkante', () => {
+    const m = generateCADModel({ ...FLACH, dachrandSchutz: true }, 'layher-allround')
+    const teile = dachrand(m)
+    expect(teile.length).toBeGreaterThan(0)
+    const obersteLage = Math.max(...m.levels.map((l) => l.index))
+    for (const t of teile) {
+      const feld = m.fields.find((f) => f.id === t.id.replace('dachrand-', '').replace(/-pfosten-[lr]$/, ''))
+      expect(feld?.levelIndex).toBe(obersteLage)
+    }
+    const gelaender = teile.filter((c) => !c.id.includes('-pfosten-'))
+    for (const g of gelaender) expect(g.position[1] + g.scale[1] / 2).toBeCloseTo(FLACH.heightM + 1.0, 5)
+    // zwei Pfosten je Gelaender
+    expect(teile.length).toBe(gelaender.length * 3)
+  })
+
+  it('nicht bei Satteldach', () => {
+    const m = generateCADModel({ ...FLACH, roofForm: 'satteldach', dachrandSchutz: true }, 'layher-allround')
+    expect(dachrand(m)).toHaveLength(0)
+  })
+
+  it('verändert sonst nichts am Modell (alle anderen Bauteile identisch)', () => {
+    const a = generateCADModel(FLACH, 'layher-allround').components3D
+    const b = generateCADModel({ ...FLACH, dachrandSchutz: true }, 'layher-allround').components3D.filter((c) => !c.id.startsWith('dachrand-'))
+    expect(b).toEqual(a)
+  })
+})
