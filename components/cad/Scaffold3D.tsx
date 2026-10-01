@@ -437,6 +437,11 @@ function InstancedBauteile({
       mesh.setMatrixAt(i, dummy.matrix)
     })
     mesh.instanceMatrix.needsUpdate = true
+    // WICHTIG fürs Anklicken: Der Raycaster prüft zuerst die Hüllkugel/-box der
+    // InstancedMesh. Three berechnet sie nur einmal (beim ersten Klick-Test) –
+    // danach ist sie veraltet und Klicks gehen an den Bauteilen vorbei.
+    mesh.computeBoundingSphere()
+    mesh.computeBoundingBox()
     invalidate() // frameloop="demand": Neuzeichnen anstoßen
   }, [items, dummy, invalidate, tube, type])
 
