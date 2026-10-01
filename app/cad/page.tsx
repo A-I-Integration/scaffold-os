@@ -78,6 +78,8 @@ export default function CADPage() {
   const [showBuilding, setShowBuilding] = useState(true)
   const [showScaffold, setShowScaffold] = useState(true)
   const [showDimensions, setShowDimensions] = useState(true)
+  // NEU (Umgebung, Schritt 1): Bäume um das Gebäude, rein optisch
+  const [showEnvironment, setShowEnvironment] = useState(true)
   const [viewAngle, setViewAngle] = useState<'perspective' | 'front' | 'back' | 'left' | 'right' | 'top' | 'bottom'>('perspective')
   const [visibleTypes, setVisibleTypes] = useState<Record<string, boolean>>({
     frame: true, deck: true, railing: true, diagonal: true, footplate: true,
@@ -589,6 +591,7 @@ export default function CADPage() {
               <label className='flex items-center gap-1 text-xs text-[#424245]'><input type='checkbox' checked={showBuilding} onChange={(e) => setShowBuilding(e.target.checked)} className='accent-[#e8590c]' />Gebäude</label>
               <label className='flex items-center gap-1 text-xs text-[#424245]'><input type='checkbox' checked={showScaffold} onChange={(e) => setShowScaffold(e.target.checked)} className='accent-[#e8590c]' />Gerüst</label>
               <label className='flex items-center gap-1 text-xs text-[#424245]'><input type='checkbox' checked={showDimensions} onChange={(e) => setShowDimensions(e.target.checked)} className='accent-[#e8590c]' />Bemaßung</label>
+              <label className='flex items-center gap-1 text-xs text-[#424245]'><input type='checkbox' checked={showEnvironment} onChange={(e) => setShowEnvironment(e.target.checked)} className='accent-[#e8590c]' />Umgebung</label>
             </div>
             {viewMode === '3d' && (
               <select value={viewAngle} onChange={(e) => setViewAngle(e.target.value as any)} className='text-xs border rounded-lg px-2 py-1'>
@@ -604,7 +607,7 @@ export default function CADPage() {
           </div>
           <div className='flex-1 p-4 min-h-0'>
             {viewMode === '3d' && modelWithManual && (
-              <Scaffold3D model={modelWithManual} features={features} showBuilding={showBuilding} showScaffold={showScaffold} showDimensions={showDimensions} selectedComponent={selectedComponent} onSelectComponent={setSelectedComponent} visibleTypes={visibleTypes} viewMode={viewAngle} onCanvasReady={(c) => { canvasRef.current = c }} notes={notes} onAddNote={handleAddNote} hiddenSides={hiddenSides} hiddenLevels={hiddenLevels} measureMode={measureMode} onMeasurePoint={handleMeasurePoint} customDimensions={customDimensions} pendingMeasurePoint={pendingMeasurePoint?.point ?? null} placementType={placementType} onPlacementClick={handlePlacementClick} />
+              <Scaffold3D model={modelWithManual} features={features} showBuilding={showBuilding} showScaffold={showScaffold} showDimensions={showDimensions} selectedComponent={selectedComponent} onSelectComponent={setSelectedComponent} visibleTypes={visibleTypes} viewMode={viewAngle} onCanvasReady={(c) => { canvasRef.current = c }} notes={notes} onAddNote={handleAddNote} hiddenSides={hiddenSides} hiddenLevels={hiddenLevels} measureMode={measureMode} onMeasurePoint={handleMeasurePoint} customDimensions={customDimensions} pendingMeasurePoint={pendingMeasurePoint?.point ?? null} placementType={placementType} onPlacementClick={handlePlacementClick} showEnvironment={showEnvironment} />
             )}
             {/* Phase 68-G: Leerzustand nach 'Neu starten' */}
             {viewMode === '3d' && !model && (
