@@ -12,7 +12,7 @@
 import { useState } from 'react'
 
 /** Bauteiltypen, die manuell platziert werden können (→ ManualPlacement in cad-engine) */
-const CATALOG_ITEMS: { type: string; label: string; icon: string; description: string }[] = [
+export const CATALOG_ITEMS: { type: string; label: string; icon: string; description: string }[] = [
   { type: 'anchor', label: 'Fassadenanker', icon: '🔩', description: 'Verankerung an der Fassade' },
   { type: 'console', label: 'Konsole', icon: '📐', description: 'Auskragende Plattform' },
   { type: 'stair', label: 'Treppe', icon: '🪜', description: 'Spindeltreppe für Zugang' },

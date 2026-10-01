@@ -844,15 +844,20 @@ export interface ManualPlacement {
   levelIndex: number
   fieldId?: string
   notes?: string
+  // Optional: Drehung um die Hochachse (Bogenmaß), z. B. beim Ersetzen eines
+  // Bauteils an einer Seitenfläche. Ohne Angabe: 0 (wie bisher).
+  rotationY?: number
 }
 
 export function addManualPlacement(
   model: CADModel,
-  placement: Omit<ManualPlacement, 'id'>
+  placement: Omit<ManualPlacement, 'id'> & { id?: string }
 ): CADModel {
+  // Eine mitgegebene ID bleibt erhalten, damit das Bauteil im 3D-Modell
+  // dieselbe ID hat wie die Platzierung (nötig zum Auswählen/Entfernen).
   const newPlacement: ManualPlacement = {
     ...placement,
-    id: `manual-${placement.type}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+    id: placement.id ?? `manual-${placement.type}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
   }
 
   // Füge entsprechendes 3D-Bauteil hinzu
@@ -882,6 +887,14 @@ export function removeManualPlacement(model: CADModel, id: string): CADModel {
 }
 
 function placementToComponent(placement: ManualPlacement, model: CADModel): ScaffoldComponent3D | null {
+  const comp = placementToComponentBase(placement, model)
+  if (comp && placement.rotationY) {
+    comp.rotation = [comp.rotation[0], comp.rotation[1] + placement.rotationY, comp.rotation[2]]
+  }
+  return comp
+}
+
+function placementToComponentBase(placement: ManualPlacement, model: CADModel): ScaffoldComponent3D | null {
   const { type, positionX, positionY, positionZ, side } = placement
 
   switch (type) {
