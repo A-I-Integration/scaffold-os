@@ -86,6 +86,18 @@ export default function BuildingForm({ building, systemId, onChange, onSystemCha
       }
       if (ergebnis.dachform && dachMap[ergebnis.dachform]) patch.roofForm = dachMap[ergebnis.dachform]
       if (ergebnis.geschosse) patch.floors = ergebnis.geschosse
+      // Gestuftes Gebaeude aus Punktwolke: Hoehenabschnitte uebernehmen.
+      // Laenge = Summe der Abschnitte, Hoehe = hoechster Abschnitt.
+      if (Array.isArray(ergebnis.abschnitte) && ergebnis.abschnitte.length >= 2) {
+        const abschnitte = ergebnis.abschnitte
+          .filter((a: any) => a && a.laengeM > 0 && a.hoeheM > 0)
+          .map((a: any, i: number) => ({ bezeichnung: `Abschnitt ${i + 1}`, laengeM: a.laengeM, hoeheM: a.hoeheM, winkelGrad: 0 }))
+        if (abschnitte.length >= 2) {
+          patch.sections = abschnitte
+          patch.lengthM = Math.round(abschnitte.reduce((sum: number, a: any) => sum + a.laengeM, 0) * 100) / 100
+          patch.heightM = Math.max(...abschnitte.map((a: any) => a.hoeheM))
+        }
+      }
 
       if (Object.keys(patch).length === 0) {
         setAnalyseHinweis('Keine eindeutig belegten Maße gefunden – bitte Werte manuell eintragen.')
@@ -104,9 +116,12 @@ export default function BuildingForm({ building, systemId, onChange, onSystemCha
           if (!(f in patch) && f in defaults) zurueck[f] = defaults[f];
         }
         analyseFelderRef.current = Object.keys(patch);
-        onChange({ ...building, ...zurueck, ...patch })
+        const neuesGebaeude: BuildingParams = { ...building, ...zurueck, ...patch }
+        // Abschnitte einer frueheren Analyse entfernen, wenn die neue keine liefert
+        if (vorherigeAutoFelder.includes('sections') && !('sections' in patch)) delete neuesGebaeude.sections
+        onChange(neuesGebaeude)
         const uebernommen = Object.keys(patch).length
-        setAnalyseHinweis(`${ergebnis.ohneKi ? 'Direkt aus dem Plan erkannt (ohne KI)' : 'KI-Vorschlag (aus der Queue)'}: ${uebernommen} Angabe(n) übernommen, bitte prüfen.${ergebnis.hoeheGeschaetzt ? ' Höhe geschätzt aus Geschosszahl.' : ''}${ergebnis.verworfen?.length ? ' Verworfen (unbelegt): ' + ergebnis.verworfen.join('; ') : ''}`)
+        setAnalyseHinweis(`${ergebnis.ohneKi ? 'Direkt aus dem Plan erkannt (ohne KI)' : 'KI-Vorschlag (aus der Queue)'}: ${uebernommen} Angabe(n) übernommen, bitte prüfen.${ergebnis.hoeheGeschaetzt ? ' Höhe geschätzt aus Geschosszahl.' : ''}${ergebnis.abschnitte?.length >= 2 ? ` ${ergebnis.abschnitte.length} Höhenabschnitte erkannt (siehe „Mehrteiliges Gebäude“).` : ''}${Array.isArray(ergebnis.hinweise) && ergebnis.hinweise.length ? ' Hinweise: ' + ergebnis.hinweise.join(' ') : ''}${ergebnis.verworfen?.length ? ' Verworfen (unbelegt): ' + ergebnis.verworfen.join('; ') : ''}`)
       }
     } catch (err: any) {
       setAnalyseHinweis('❌ ' + err.message)
