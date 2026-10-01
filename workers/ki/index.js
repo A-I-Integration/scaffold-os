@@ -238,6 +238,42 @@ function erkenneGeruestSeiten(px, py, d) {
   return seiten.length ? seiten : null;
 }
 
+// Phase 91: Tiefe der Geruestschicht je erkannter Seite. Von der Aussenkante
+// nach innen werden 5-cm-Scheiben (Mittelbereich der Seite) gezaehlt; die
+// Schicht endet bei einer Luecke > 1,2 m (Staenderlinien liegen ca. 0,7-1,1 m auseinander). Ergebnis = Abstand Aussenkante ->
+// Innenkante der zusammenhaengenden Schicht. Annahme: dort beginnt das
+// Gebaeude. Zuordnung wie in erkenneGeruestSeiten. ACHTUNG: nur an
+// synthetischen Dateien geprueft.
+function geruestSchichtTiefen(px, py, d, seiten) {
+  const n = px.length;
+  const SCHEIBE = 0.05, LUECKE = 1.2, MAXT = 4.0;
+  const minPunkte = Math.max(3, Math.round(n * 0.0001));
+  const cfg = { front: [true, true], back: [true, false], left: [false, true], right: [false, false] };
+  const out = {};
+  for (const s of seiten) {
+    const [alongX, fromMin] = cfg[s];
+    const a = alongX ? px : py;
+    const b = alongX ? py : px;
+    const aMin = alongX ? d.minX : d.minY, aSpan = alongX ? d.spanX : d.spanY;
+    const bMin = alongX ? d.minY : d.minX, bSpan = alongX ? d.spanY : d.spanX;
+    const lo = aMin + aSpan * 0.25, hi = aMin + aSpan * 0.75;
+    const bins = new Array(Math.ceil(MAXT / SCHEIBE) + 1).fill(0);
+    for (let i = 0; i < n; i++) {
+      if (a[i] < lo || a[i] > hi) continue;
+      const t = fromMin ? b[i] - bMin : bMin + bSpan - b[i];
+      if (t < 0 || t > MAXT) continue;
+      bins[Math.floor(t / SCHEIBE)]++;
+    }
+    let last = -1, gap = 0;
+    for (let i = 0; i < bins.length; i++) {
+      if (bins[i] >= minPunkte) { last = i; gap = 0; }
+      else if (++gap > LUECKE / SCHEIBE) break;
+    }
+    out[s] = last >= 0 ? (last + 1) * SCHEIBE : null;
+  }
+  return out;
+}
+
 // Phase 73: PLY-Punktwolke (z. B. aus dem LiDAR-Aufmass) einlesen und
 // die Begrenzungsbox der Punkte als Laenge x Breite x Hoehe liefern.
 // ASCII-PLY; Binary wird mit klarer Meldung abgelehnt.
@@ -333,7 +369,22 @@ function parsePly(buf) {
   try { stufen = erkenneStufen(px, py, pz, { minX, minY, minZ, spanX, spanY }); } catch (e) { stufen = null; }
   let geruestSeiten = null;
   try { geruestSeiten = erkenneGeruestSeiten(px, py, { minX, minY, spanX, spanY }); } catch (e) { geruestSeiten = null; }
-  return { laenge: r2(spanX), breite: r2(spanY), hoehe: r2(spanZ), punkte: gelesen, stufen, geruestSeiten };
+  // Phase 91: Masse um die Geruestschicht bereinigen - nur wenn jede erkannte
+  // Seite eine plausible Schichttiefe (0,8-3,5 m) hat; sonst bleibt es bei
+  // der Begrenzungsbox.
+  let ohneGeruest = null;
+  try {
+    if (geruestSeiten) {
+      const t = geruestSchichtTiefen(px, py, { minX, minY, spanX, spanY }, geruestSeiten);
+      const ok = geruestSeiten.every((x) => t[x] != null && t[x] >= 0.8 && t[x] <= 3.5);
+      if (ok) {
+        const lx = spanX - (t.left || 0) - (t.right || 0);
+        const ly = spanY - (t.front || 0) - (t.back || 0);
+        if (lx >= 3 && ly >= 3) ohneGeruest = { laenge: r2(lx), breite: r2(ly), tiefen: t };
+      }
+    }
+  } catch (e) { ohneGeruest = null; }
+  return { laenge: r2(spanX), breite: r2(spanY), hoehe: r2(spanZ), punkte: gelesen, stufen, geruestSeiten, ohneGeruest };
 }
 
 const CAD_PROMPT = (ocrText) => `Du bist ein erfahrener Gerüstbau-Planer. Analysiere diese Grundrisse/Baupläne${ocrText ? ' (Bilder und/oder per OCR extrahierter Plan-Text, siehe unten)' : ''}.
@@ -420,16 +471,20 @@ async function verarbeiteCadAnalyseJob(tenant, job) {
         // Hoehe ist 1 Geschoss die sichere Annahme.
         // Geschosse: aus der gemessenen Hoehe geschaetzt (Annahme 3,0 m je
         // Geschoss), mindestens 1. Nur ein Vorschlag - im Formular pruefen.
-        const st = dims.stufen;
+        // Phase 91: Bei erkanntem Geruest (plausible Schichttiefe) werden die
+        // Hoehenstufen NICHT ausgewertet - sie entstehen sonst aus Geruest-Teilen
+        // (Treppenturm, Gelaender) statt aus dem Gebaeude.
+        const st = dims.ohneGeruest ? null : dims.stufen;
         const hoeheMax = st ? Math.max(...st.abschnitte.map((a) => a.hoeheM)) : dims.hoehe;
         const hinweise = ['Geschosszahl aus der Hoehe geschaetzt (3,0 m je Geschoss).',
           'Ein vorhandenes Geruest in der Punktwolke wird nicht herausgerechnet - Hoehen koennen dadurch ca. 1 m zu hoch sein.'];
         const gs = dims.geruestSeiten;
-        if (gs) hinweise.unshift(`Geruest in der Punktwolke erkannt auf: ${gs.map((x) => ({ front: 'Vorne', back: 'Hinten', left: 'Links', right: 'Rechts' }[x])).join(', ')} (Zuordnung vorne/hinten/links/rechts ist eine Annahme - bitte pruefen). Die Masse enthalten das Geruest und sind deshalb zu gross.`);
+        if (gs) hinweise.unshift(`Geruest in der Punktwolke erkannt auf: ${gs.map((x) => ({ front: 'Vorne', back: 'Hinten', left: 'Links', right: 'Rechts' }[x])).join(', ')} (Zuordnung vorne/hinten/links/rechts ist eine Annahme - bitte pruefen). ${dims.ohneGeruest && !st ? 'Die Masse wurden um die erkannte Geruestschicht verringert (Annahme: das Gebaeude beginnt an der Innenkante der Geruestschicht) - bitte pruefen.' : 'Die Masse enthalten das Geruest und sind deshalb zu gross.'}`);
+        if (dims.ohneGeruest && dims.stufen) hinweise.unshift('Hoehenstufen wurden bei erkanntem Geruest nicht ausgewertet (sie wuerden aus Geruestteilen entstehen) - Gebaeude als einheitlich hoch angenommen.');
         if (st) hinweise.unshift(`Gestuftes Gebaeude erkannt: ${st.abschnitte.length} Abschnitte entlang einer Achse.`);
         const antwort = {
-          laenge: st ? Math.round(st.laenge * 100) / 100 : dims.laenge,
-          breite: st ? Math.round(st.tiefe * 100) / 100 : dims.breite,
+          laenge: st ? Math.round(st.laenge * 100) / 100 : (dims.ohneGeruest ? dims.ohneGeruest.laenge : dims.laenge),
+          breite: st ? Math.round(st.tiefe * 100) / 100 : (dims.ohneGeruest ? dims.ohneGeruest.breite : dims.breite),
           hoehe: hoeheMax,
           hoeheGeschaetzt: false, traufhoehe: null, dachform: null,
           geschosse: hoeheMax > 0 ? Math.max(1, Math.round(hoeheMax / 3)) : null,
