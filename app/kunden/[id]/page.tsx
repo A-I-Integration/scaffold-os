@@ -1014,7 +1014,7 @@ export default function KundenDetailPage() {
                     <ul className="space-y-1.5">
                       {projDateien.map((f) => (
                         <li key={f.id} className="flex items-center justify-between text-xs bg-[#f5f5f7] rounded-lg px-3 py-2">
-                          <span>{f.file_name} <span className="text-[#86868b]">· {fmtDate(f.created_at)}</span></span>
+                          <span>{f.file_name} <span className="text-[#86868b]">· {fmtTimestamp(f.created_at)}</span></span>
                           <a href={f.url} target="_blank" rel="noreferrer" className="text-[#e8590c] hover:underline">Öffnen</a>
                         </li>
                       ))}
