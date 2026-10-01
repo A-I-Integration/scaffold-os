@@ -33,6 +33,9 @@ export interface BuildingParams {
   balconyCount: number
   overhangM: number
   setbackM: number
+  // Optional: Dachrand-Absturzschutz (nur Flachdach, nicht bei gestuften Gebäuden):
+  // zusätzliches Geländer 1,0 m über der Dachkante auf der obersten Lage.
+  dachrandSchutz?: boolean
   sides: ('front' | 'back' | 'left' | 'right')[]
   // NEU: mehrteiliges Gebäude (unterschiedliche Höhen/Ecken) – wenn gesetzt
   // (2+ Einträge), wird die Gebäudeform aus diesen Abschnitten aufgebaut,
@@ -336,6 +339,9 @@ export function generateScaffoldComponents(model: CADModel): ScaffoldComponent3D
     }
   }
 
+  // Dachrand-Schutz nur bei Flachdach und einheitlicher Gebäudehöhe (keine Stufen)
+  const dachrandSchutz = !!building.dachrandSchutz && building.roofForm === 'flachdach' && !hatGeradeAbschnitte(building)
+
   // === BASIS-BAUTEILE (pro Feld) ===
   fields.forEach((field) => {
     const { lengthM, widthM, levelIndex, side } = field
@@ -385,6 +391,20 @@ export function generateScaffoldComponents(model: CADModel): ScaffoldComponent3D
 
     // Bordbretter
     components.push({ id: `board-${field.id}`, type: 'board', articleNumber: 'BB-001', name: `Bordbrett ${lengthM}m`, position: [positionX, yTop + 0.3, positionZ - widthM / 2 - 0.02], rotation: [0, 0, 0], scale: [lengthM, 0.19, 0.02], color: colorBoard, fieldId: field.id, levelId: level.id })
+
+    // Dachrand-Absturzschutz (optional, nur Flachdach, nicht bei gestuften Gebäuden):
+    // auf der obersten Lage ein zusätzliches Geländer, dessen Handlauf 1,0 m über der
+    // Dachkante bzw. dem Belag (je nachdem, was höher liegt) endet, mit Pfosten an den
+    // Feldenden. ANNAHME: Maß 1,0 m – Anforderungen der Norm/BG bitte prüfen.
+    if (dachrandSchutz && !fields.some((g) => g.side === side && g.levelIndex === levelIndex + 1 && Math.abs(g.positionX - field.positionX) < 0.01 && Math.abs(g.positionZ - field.positionZ) < 0.01)) {
+      const basisY = Math.max(yTop, building.heightM)
+      const zAussen = positionZ + widthM / 2 + 0.02
+      components.push({ id: `dachrand-${field.id}`, type: 'railing', articleNumber: getRailingArticle(lengthM), name: `Dachrand-Geländer ${lengthM}m`, position: [positionX, basisY + 0.5, zAussen], rotation: [0, 0, 0], scale: [lengthM, 1.0, 0.04], color: colorRailing, fieldId: field.id, levelId: level.id })
+      const pfostenH = basisY + 1.0 - yTop
+      for (const [tag, sx] of [['l', -1], ['r', 1]] as const) {
+        components.push({ id: `dachrand-${field.id}-pfosten-${tag}`, type: 'railing', articleNumber: 'SG-001', name: 'Dachrand-Pfosten', position: [positionX + sx * (lengthM / 2 - 0.02), yTop + pfostenH / 2, zAussen], rotation: [0, 0, 0], scale: [0.04, pfostenH, 0.04], color: colorRailing, fieldId: field.id, levelId: level.id })
+      }
+    }
 
     for (let ci = ersterIdx; ci < components.length; ci++) bauteilInWelt(components[ci], rahmen)
   })
