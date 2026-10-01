@@ -53,6 +53,9 @@ interface Props {
   onMeasurePoint?: (point: [number, number, number], componentName?: string) => void
   customDimensions?: CustomDimension[]
   pendingMeasurePoint?: [number, number, number] | null
+  // NEU (Umgebung, Schritt 1): Bäume um das Gebäude. Optional, rein additiv;
+  // ohne diese Prop bleibt die Szene exakt wie vorher.
+  showEnvironment?: boolean
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -1148,6 +1151,123 @@ function BridgeDeck3D({ building, visible }: { building: CADModel['building']; v
   )
 }
 
+// ═══════════════════════════════════════════════════════════
+// UMGEBUNG – Schritt 1: Bäume (Low-Poly, instanziert)
+// Rein optischer Kontext wie in Profi-Gerüstplanungs-Renderings.
+// - Platzierung deterministisch (gleiches Gebäude → gleiche Bäume,
+//   kein Springen bei Neuberechnung), außerhalb von Gebäude + Gerüst
+// - 2 Draw-Calls (Stämme, Kronen), Raycast aus → Klicks gehen durch
+// - Keine Auswirkung auf Stückliste/Modell (nicht Teil von components3D)
+// ═══════════════════════════════════════════════════════════
+function mulberry32(seed: number) {
+  let a = seed | 0
+  return () => {
+    a = (a + 0x6d2b79f5) | 0
+    let t = Math.imul(a ^ (a >>> 15), 1 | a)
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296
+  }
+}
+
+interface TreeSpot { x: number; z: number; s: number; hue: number; light: number }
+
+function computeTreeSpots(model: CADModel): TreeSpot[] {
+  const b = model.building
+  const w = b.widthM || 6
+  // Bounding-Box aus Gebäude-Grundriss (Gebäude steht bei z = -w/2 - 0.5)
+  let minX = -b.lengthM / 2, maxX = b.lengthM / 2
+  let minZ = -w - 0.5, maxZ = -0.5
+  // … erweitert um alle Gerüstbauteile
+  for (const c of model.components3D) {
+    if (c.position[0] < minX) minX = c.position[0]
+    if (c.position[0] > maxX) maxX = c.position[0]
+    if (c.position[2] < minZ) minZ = c.position[2]
+    if (c.position[2] > maxZ) maxZ = c.position[2]
+  }
+  const margin = 3.5 // Abstand zum Gerüst, damit kein Baum im Gerüst steht
+  const cx = (minX + maxX) / 2
+  const cz = (minZ + maxZ) / 2
+  const halfX = (maxX - minX) / 2 + margin
+  const halfZ = (maxZ - minZ) / 2 + margin
+  const reach = Math.max(halfX, halfZ) + 12 // Streuradius außerhalb der Sperrzone
+
+  const rnd = mulberry32(Math.round(b.lengthM * 100) * 31 + Math.round(w * 100) * 17 + Math.round(b.heightM * 100))
+  const spots: TreeSpot[] = []
+  const wanted = Math.min(22, 8 + Math.round((b.lengthM + w) / 6))
+  for (let attempt = 0; attempt < 400 && spots.length < wanted; attempt++) {
+    const x = cx + (rnd() * 2 - 1) * reach
+    const z = cz + (rnd() * 2 - 1) * reach
+    // Sperrzone um Gebäude + Gerüst (Rechteck + Margin)
+    if (Math.abs(x - cx) < halfX && Math.abs(z - cz) < halfZ) continue
+    // Mindestabstand zu anderen Bäumen
+    if (spots.some((p) => (p.x - x) ** 2 + (p.z - z) ** 2 < 4.0 * 4.0)) continue
+    // innerhalb der Bodenplatte (120 × 120) bleiben
+    if (Math.abs(x) > 55 || Math.abs(z) > 55) continue
+    spots.push({ x, z, s: 0.8 + rnd() * 0.7, hue: 0.26 + rnd() * 0.08, light: 0.26 + rnd() * 0.12 })
+  }
+  return spots
+}
+
+let treeTrunkGeo: THREE.CylinderGeometry | null = null
+let treeCrownGeo: THREE.IcosahedronGeometry | null = null
+let treeTrunkMat: THREE.MeshStandardMaterial | null = null
+let treeCrownMat: THREE.MeshStandardMaterial | null = null
+
+function Trees({ model, visible }: { model: CADModel; visible: boolean }) {
+  const { invalidate, gl } = useThree()
+  const trunkRef = useRef<THREE.InstancedMesh>(null)
+  const crownRef = useRef<THREE.InstancedMesh>(null)
+  const spots = useMemo(() => computeTreeSpots(model), [model])
+
+  const [trunkGeo, crownGeo, trunkMat, crownMat] = useMemo(() => {
+    if (!treeTrunkGeo) treeTrunkGeo = new THREE.CylinderGeometry(0.16, 0.22, 1, 8) // Höhe 1 → per scale
+    if (!treeCrownGeo) treeCrownGeo = new THREE.IcosahedronGeometry(1, 1)
+    if (!treeTrunkMat) treeTrunkMat = new THREE.MeshStandardMaterial({ color: '#6b4f33', roughness: 1, metalness: 0 })
+    if (!treeCrownMat) treeCrownMat = new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: 0.95, metalness: 0, flatShading: true })
+    return [treeTrunkGeo, treeCrownGeo, treeTrunkMat, treeCrownMat] as const
+  }, [])
+
+  useEffect(() => {
+    const trunk = trunkRef.current
+    const crown = crownRef.current
+    if (!trunk || !crown) return
+    const dummy = new THREE.Object3D()
+    const col = new THREE.Color()
+    spots.forEach((p, i) => {
+      const trunkH = 2.2 * p.s
+      dummy.rotation.set(0, 0, 0)
+      dummy.position.set(p.x, trunkH / 2, p.z)
+      dummy.scale.set(p.s, trunkH, p.s)
+      dummy.updateMatrix()
+      trunk.setMatrixAt(i, dummy.matrix)
+
+      const rx = 1.5 * p.s
+      const ry = 1.9 * p.s
+      dummy.position.set(p.x, trunkH + ry * 0.55, p.z)
+      dummy.scale.set(rx, ry, rx)
+      dummy.updateMatrix()
+      crown.setMatrixAt(i, dummy.matrix)
+      crown.setColorAt(i, col.setHSL(p.hue, 0.45, p.light))
+    })
+    trunk.instanceMatrix.needsUpdate = true
+    crown.instanceMatrix.needsUpdate = true
+    if (crown.instanceColor) crown.instanceColor.needsUpdate = true
+    // Schattenkarte ist eingefroren (ShadowFreeze) → einmal neu berechnen,
+    // damit Bäume beim Einschalten/Neuberechnen ihren Schatten bekommen.
+    gl.shadowMap.needsUpdate = true
+    invalidate()
+  }, [spots, visible, invalidate, gl])
+
+  if (!visible || spots.length === 0) return null
+  return (
+    <group>
+      {/* key=Anzahl: InstancedMesh-Größe ist fix → bei anderer Baumzahl neu mounten */}
+      <instancedMesh key={`t-${spots.length}`} ref={trunkRef} args={[trunkGeo, trunkMat, spots.length]} castShadow raycast={() => null} />
+      <instancedMesh key={`c-${spots.length}`} ref={crownRef} args={[crownGeo, crownMat, spots.length]} castShadow raycast={() => null} />
+    </group>
+  )
+}
+
 // NEU: LOD-Steuerung – prüft die Kameradistanz und meldet nur bei
 // tatsächlicher Stufen-Änderung zurück (kein State-Update pro Frame,
 // das war genau das Problem, das der frühere useFrame-Killer behoben
@@ -1194,6 +1314,7 @@ function Scene({
   pendingMeasurePoint,
   placementType,
   onPlacementClick,
+  showEnvironment,
 }: Props) {
   const target: [number, number, number] = [0, model.building.heightM / 2, 0]
   // Schatten-Kamera eng ans Modell anpassen (Standardwerte sind viel zu groß
@@ -1234,6 +1355,7 @@ function Scene({
       <directionalLight position={[-20, 15, -15]} intensity={0.35} color="#dce8f5" />
       <Building3D building={model.building} features={features || []} visible={showBuilding && !bridgeMode} />
       <BridgeDeck3D building={model.building} visible={showBuilding && !!bridgeMode} />
+      <Trees model={model} visible={!!showEnvironment && !bridgeMode} />
       {showScaffold && (
         <AllScaffoldComponents
           components={model.components3D}
@@ -1287,6 +1409,7 @@ function Scaffold3D({
   onMeasurePoint,
   customDimensions,
   pendingMeasurePoint,
+  showEnvironment,
 }: Props) {
   const cameraDistance =
     Math.max(model.building.lengthM, model.building.heightM) * 2 + 8
@@ -1337,6 +1460,7 @@ function Scaffold3D({
             pendingMeasurePoint={pendingMeasurePoint}
             placementType={placementType}
             onPlacementClick={onPlacementClick}
+            showEnvironment={showEnvironment}
           />
         </group>
         <AutoFraming targetRef={contentRef} modelKey={modelKey} />
