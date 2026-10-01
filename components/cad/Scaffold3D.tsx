@@ -1176,8 +1176,45 @@ function mulberry32(seed: number) {
 
 interface TreeSpot { x: number; z: number; s: number; hue: number; light: number }
 
+// ── Umgebung Schritt 2: gemeinsames Layout (Boden, Straße, Nachbarhaus) ──
+interface EnvRect { x0: number; x1: number; z0: number; z1: number }
+interface EnvLayout {
+  bbox: EnvRect          // Gebäude + Gerüst
+  pave: EnvRect          // Pflasterfläche um das Gerüst
+  street: { z0: number; z1: number } // Straße vor dem Gebäude (+z)
+  house: EnvRect & { h: number; roofH: number }
+}
+
+function computeEnvLayout(model: CADModel): EnvLayout {
+  const b = model.building
+  const w = b.widthM || 6
+  let minX = -b.lengthM / 2, maxX = b.lengthM / 2
+  let minZ = -w - 0.5, maxZ = -0.5
+  for (const c of model.components3D) {
+    if (c.position[0] < minX) minX = c.position[0]
+    if (c.position[0] > maxX) maxX = c.position[0]
+    if (c.position[2] < minZ) minZ = c.position[2]
+    if (c.position[2] > maxZ) maxZ = c.position[2]
+  }
+  const rnd = mulberry32(Math.round(b.lengthM * 100) * 13 + Math.round(w * 100) * 7 + 5)
+  const pave = { x0: minX - 2, x1: maxX + 2, z0: minZ - 2, z1: maxZ + 2 }
+  const street = { z0: pave.z1 + 2.5, z1: pave.z1 + 8.5 }
+  // Nachbarhaus links (−x), 5 m Abstand zum Gerüst, Traufhöhe niedriger als das Gebäude
+  const len = 9 + rnd() * 4
+  const depth = w + (rnd() * 2 - 1)
+  const hx1 = minX - 5
+  const hz1 = -0.5 + (rnd() * 2 - 1)
+  const h = Math.min(10, Math.max(6, b.heightM * 0.6))
+  return {
+    bbox: { x0: minX, x1: maxX, z0: minZ, z1: maxZ },
+    pave, street,
+    house: { x0: hx1 - len, x1: hx1, z0: hz1 - depth, z1: hz1, h, roofH: 2.4 },
+  }
+}
+
 function computeTreeSpots(model: CADModel): TreeSpot[] {
   const b = model.building
+  const env = computeEnvLayout(model)
   const w = b.widthM || 6
   // Bounding-Box aus Gebäude-Grundriss (Gebäude steht bei z = -w/2 - 0.5)
   let minX = -b.lengthM / 2, maxX = b.lengthM / 2
@@ -1208,6 +1245,9 @@ function computeTreeSpots(model: CADModel): TreeSpot[] {
     const dx = x - cx, dz = z - cz
     const dl = Math.hypot(dx, dz) || 1
     if ((dx / dl) * 0.7071 + (dz / dl) * 0.7071 > -0.2) continue
+    // Nicht auf der Straße und nicht im/am Nachbarhaus
+    if (z > env.street.z0 - 1 && z < env.street.z1 + 1) continue
+    if (x > env.house.x0 - 2.5 && x < env.house.x1 + 2.5 && z > env.house.z0 - 2.5 && z < env.house.z1 + 2.5) continue
     // Mindestabstand zu anderen Bäumen
     if (spots.some((p) => (p.x - x) ** 2 + (p.z - z) ** 2 < 4.0 * 4.0)) continue
     // innerhalb der Bodenplatte (120 × 120) bleiben
@@ -1221,6 +1261,72 @@ let treeTrunkGeo: THREE.CylinderGeometry | null = null
 let treeCrownGeo: THREE.IcosahedronGeometry | null = null
 let treeTrunkMat: THREE.MeshStandardMaterial | null = null
 let treeCrownMat: THREE.MeshStandardMaterial | null = null
+
+let envGableGeo: THREE.ShapeGeometry | null = null
+
+// Straße, Pflasterfläche und Nachbarhaus (Umgebung Schritt 2). Der Rasen ist
+// die Bodenplatte der Szene (Farbe wechselt mit dem Schalter "Umgebung").
+function EnvironmentExtras({ model, visible }: { model: CADModel; visible: boolean }) {
+  const { invalidate, gl } = useThree()
+  const L = useMemo(() => computeEnvLayout(model), [model])
+  useEffect(() => {
+    gl.shadowMap.needsUpdate = true
+    invalidate()
+  }, [L, visible, invalidate, gl])
+  if (!visible) return null
+  const { pave, street, house } = L
+  const hd = house.z1 - house.z0
+  const hl = house.x1 - house.x0
+  const hcx = (house.x0 + house.x1) / 2
+  const hcz = (house.z0 + house.z1) / 2
+  const ang = Math.atan2(house.roofH, hd / 2)
+  const slab = Math.hypot(hd / 2, house.roofH) + 0.3
+  const gable = (() => {
+    if (!envGableGeo) {
+      const sh = new THREE.Shape()
+      sh.moveTo(-0.5, 0); sh.lineTo(0.5, 0); sh.lineTo(0, 1); sh.closePath()
+      envGableGeo = new THREE.ShapeGeometry(sh)
+    }
+    return envGableGeo
+  })()
+  const flat = (r: { x0: number; x1: number; z0: number; z1: number }, y: number, color: string, offset: number) => (
+    <mesh rotation={[-Math.PI / 2, 0, 0]} position={[(r.x0 + r.x1) / 2, y, (r.z0 + r.z1) / 2]} receiveShadow>
+      <planeGeometry args={[r.x1 - r.x0, r.z1 - r.z0]} />
+      <meshStandardMaterial color={color} roughness={0.95} polygonOffset polygonOffsetFactor={offset} polygonOffsetUnits={offset} />
+    </mesh>
+  )
+  return (
+    <group>
+      {/* Straße (60 m breit) + Bordstein */}
+      {flat({ x0: -60, x1: 60, z0: street.z0, z1: street.z1 }, -0.017, '#6a6f76', -1)}
+      {flat({ x0: -60, x1: 60, z0: street.z0 - 0.3, z1: street.z0 }, -0.016, '#d6d2ca', -2)}
+      {/* Pflasterfläche um das Gerüst */}
+      {flat(pave, -0.017, '#cbc7be', -1)}
+      {/* Nachbarhaus */}
+      <group position={[hcx, 0, hcz]}>
+        <mesh position={[0, house.h / 2, 0]} castShadow receiveShadow>
+          <boxGeometry args={[hl, house.h, hd]} />
+          <meshStandardMaterial color="#d8d1c4" roughness={0.95} />
+          <Edges threshold={15} color="#8f8676" />
+        </mesh>
+        {/* Satteldach: zwei Platten + Giebelflächen */}
+        <mesh position={[0, house.h + house.roofH / 2 + 0.05, hd / 4]} rotation={[ang, 0, 0]} castShadow>
+          <boxGeometry args={[hl + 0.6, 0.12, slab]} />
+          <meshStandardMaterial color="#9a5b45" roughness={0.9} />
+        </mesh>
+        <mesh position={[0, house.h + house.roofH / 2 + 0.05, -hd / 4]} rotation={[-ang, 0, 0]} castShadow>
+          <boxGeometry args={[hl + 0.6, 0.12, slab]} />
+          <meshStandardMaterial color="#9a5b45" roughness={0.9} />
+        </mesh>
+        {[-1, 1].map((sgn) => (
+          <mesh key={sgn} geometry={gable} position={[sgn * (hl / 2 + 0.001), house.h, 0]} rotation={[0, Math.PI / 2, 0]} scale={[hd, house.roofH, 1]}>
+            <meshStandardMaterial color="#d8d1c4" roughness={0.95} side={THREE.DoubleSide} />
+          </mesh>
+        ))}
+      </group>
+    </group>
+  )
+}
 
 function Trees({ model, visible }: { model: CADModel; visible: boolean }) {
   const { invalidate, gl } = useThree()
@@ -1365,6 +1471,7 @@ function Scene({
       <Building3D building={model.building} features={features || []} visible={showBuilding && !bridgeMode} />
       <BridgeDeck3D building={model.building} visible={showBuilding && !!bridgeMode} />
       <Trees model={model} visible={!!showEnvironment && !bridgeMode} />
+      <EnvironmentExtras model={model} visible={!!showEnvironment && !bridgeMode} />
       {showScaffold && (
         <AllScaffoldComponents
           components={model.components3D}
@@ -1384,7 +1491,7 @@ function Scene({
       <CustomDimensionLines dimensions={customDimensions} pendingPoint={pendingMeasurePoint} />
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.02, 0]} receiveShadow>
         <planeGeometry args={[120, 120]} />
-        <meshStandardMaterial color="#b9c0c8" roughness={0.95} />
+        <meshStandardMaterial color={showEnvironment && !bridgeMode ? '#86a173' : '#b9c0c8'} roughness={0.95} />
       </mesh>
     </group>
   )
@@ -1474,7 +1581,8 @@ function Scaffold3D({
         </group>
         <AutoFraming targetRef={contentRef} modelKey={modelKey} />
         <GroundingShadow targetRef={contentRef} modelKey={modelKey} />
-        <Grid
+        {!(showEnvironment && !bridgeMode) && (
+          <Grid
           position={[0, -0.01, 0]}
           args={[80, 80]}
           cellSize={1}
@@ -1487,6 +1595,7 @@ function Scaffold3D({
           fadeStrength={1}
           infiniteGrid
         />
+        )}
         <OrbitControls
           makeDefault
           enablePan
