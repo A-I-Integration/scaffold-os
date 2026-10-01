@@ -1015,7 +1015,7 @@ export function addManualPlacement(
  * Ein Treppenlauf (Zickzack, eine Lage) im angegebenen Feld – gleiche Bauweise
  * wie die automatisch erzeugten Treppentürme, aber an beliebiger Seite.
  * Die Teile werden im Vorne-System erzeugt und auf die Seite des Feldes gedreht.
- * IDs: `${id}` (Holme), `${id}-step-N`, `${id}-rail`, `${id}-rail-2`.
+ * IDs: `${id}` (Holme), `${id}-step-N`, `${id}-rail-aussen-*` / `${id}-rail-wand-*` (Pfosten, Handlauf, Knieleiste).
  */
 export function treppenlaufInFeld(model: CADModel, field: ScaffoldField, level: ScaffoldLevel, id: string): ScaffoldComponent3D[] {
   const rahmen = seitenRahmen(field.side, model.building)
@@ -1034,8 +1034,28 @@ export function treppenlaufInFeld(model: CADModel, field: ScaffoldField, level: 
     const stepY = level.bottomY + (k + 1) * (h / perFlight) - 0.04
     out.push({ id: `${id}-step-${k}`, type: 'deck', articleNumber: 'ST-001', name: 'Treppenstufe', position: [x0 + startDir * (k + 0.5) * tread, stepY, stairZ], rotation: [0, 0, 0], scale: [tread * 0.92, 0.04, stairW - 0.08], color: '#a0a0a0', levelId: level.id })
   }
-  out.push({ id: `${id}-rail`, type: 'railing', articleNumber: 'SG-001', name: 'Treppengeländer', position: [px - stairL / 2, level.bottomY + h / 2, stairZ], rotation: [0, 0, 0], scale: [0.04, h, 0.04], color: '#ef4444', levelId: level.id })
-  out.push({ id: `${id}-rail-2`, type: 'railing', articleNumber: 'SG-001', name: 'Treppengeländer', position: [px + stairL / 2, level.bottomY + h / 2, stairZ], rotation: [0, 0, 0], scale: [0.04, h, 0.04], color: '#ef4444', levelId: level.id })
+  // Geländer (ANNAHMEN, rein konstruktiv: Handlauf 1,0 m und Knieleiste 0,5 m
+  // über der Stufenoberkante; Außenseite mit Handlauf + Knieleiste, Wandseite nur
+  // Handlauf). Die Pfosten stehen am unteren und oberen Laufende, der obere
+  // reicht 1,0 m über den Belag der nächsten Lage (Absturzsicherung Öffnung).
+  const rs = h / perFlight
+  const xLow = x0 + startDir * 0.5 * tread
+  const xHigh = x0 + startDir * (perFlight - 0.5) * tread
+  const yLow = level.bottomY + rs - 0.02
+  const yHigh = level.bottomY + h - 0.02
+  const rohr = (suffix: string, ax: number, ay: number, bx: number, by: number, z: number) => {
+    const dx = bx - ax, dy = by - ay
+    const len = Math.hypot(dx, dy)
+    out.push({ id: `${id}-${suffix}`, type: 'railing', articleNumber: 'SG-001', name: 'Treppengeländer', position: [(ax + bx) / 2, (ay + by) / 2, z], rotation: [0, 0, Math.atan2(-dx, dy)], scale: [0.04, len, 0.04], color: '#ef4444', levelId: level.id })
+  }
+  const zAussen = stairZ + stairW / 2 - 0.03
+  const zWand = stairZ - stairW / 2 + 0.03
+  for (const [tag, z] of [['aussen', zAussen], ['wand', zWand]] as const) {
+    rohr(`rail-${tag}-pfosten-unten`, xLow, level.bottomY, xLow, yLow + 1.0, z)
+    rohr(`rail-${tag}-pfosten-oben`, xHigh, level.bottomY, xHigh, yHigh + 1.0, z)
+    rohr(`rail-${tag}-handlauf`, xLow, yLow + 1.0, xHigh, yHigh + 1.0, z)
+  }
+  rohr('rail-aussen-knie', xLow, yLow + 0.5, xHigh, yHigh + 0.5, zAussen)
   out.forEach((c) => bauteilInWelt(c, rahmen))
   return out
 }
