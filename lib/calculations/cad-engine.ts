@@ -335,35 +335,44 @@ export function generateScaffoldComponents(model: CADModel): ScaffoldComponent3D
   }
 
   // === TREPPEN (echte Spindeltreppen) ===
+  // Ein Treppenturm deckt bis zu 3 Lagen ab, aber nur so viele, wie an seiner
+  // Stelle Felder existieren. Bei Höhenstufen folgt daher je Stufe der
+  // nächste Turm; er muss auf dem Gerüst darunter stehen (oder, wie beim
+  // einfachen Gebäude, auf dem Turm darunter).
   const stairInterval = 3
-  for (let i = 0; i < levels.length; i += stairInterval) {
-    const level = levels[i]
+  const stairBase = fields.find((f) => f.side === 'front' && f.levelIndex === 0)
+  let stairLevel = 0
+  for (let guard = 0; guard < levels.length + 2 && stairLevel < levels.length; guard++) {
+    const i = stairLevel
+    const level = levels.find((l) => l.index === i)
     // Finde ein Feld an der Vorderseite für die Treppe
     const stairField = fields.find(f => f.side === 'front' && f.levelIndex === i)
-    // Treppe nur als durchgehender Turm: Ab der 2. Treppe muss sie an
-    // derselben Stelle stehen wie die unterste (bei Höhenstufen sonst
-    // schwebend). Bei einfachem Gebäude immer erfüllt.
-    const stairBase = fields.find((f) => f.side === 'front' && f.levelIndex === 0)
-    const stairTraegerVorhanden = !stairField || i === 0 || !stairBase || Math.abs(stairField.positionX - stairBase.positionX) < 0.01
-    if (stairField && level && stairTraegerVorhanden) {
-      const stairX = stairField.positionX - stairField.lengthM / 2 - 0.9
-      const stairZ = stairField.positionZ
-      const totalStairHeight = level.heightM * Math.min(stairInterval, levels.length - i)
+    if (!stairField || !level) break
+    const stairX = stairField.positionX - stairField.lengthM / 2 - 0.9
+    const stairZ = stairField.positionZ
+    const aufTurm = !stairBase || Math.abs(stairField.positionX - stairBase.positionX) < 0.01
+    const getragen = i === 0 || aufTurm || fields.some((g) => g.side === 'front' && g.levelIndex === i - 1 && Math.abs(g.positionX - stairX) <= g.lengthM / 2)
+    if (!getragen) break
+    let covered = 0
+    while (covered < stairInterval && fields.some((g) => g.side === 'front' && g.levelIndex === i + covered && Math.abs(g.positionX - stairField.positionX) < 0.01)) covered++
+    covered = Math.max(1, covered)
+    const totalStairHeight = level.heightM * covered
 
-      // Treppen-Rahmen
-      components.push({ id: `stair-frame-${i}`, type: 'stair', articleNumber: 'SP-001', name: 'Spindeltreppe', position: [stairX, level.bottomY + totalStairHeight / 2, stairZ], rotation: [0, 0, 0], scale: [0.8, totalStairHeight, 0.8], color: colorStair, levelId: level.id })
+    // Treppen-Rahmen
+    components.push({ id: `stair-frame-${i}`, type: 'stair', articleNumber: 'SP-001', name: 'Spindeltreppe', position: [stairX, level.bottomY + totalStairHeight / 2, stairZ], rotation: [0, 0, 0], scale: [0.8, totalStairHeight, 0.8], color: colorStair, levelId: level.id })
 
-      // Stufen (alle 25cm)
-      const stepCount = Math.ceil(totalStairHeight / 0.25)
-      for (let s = 0; s < stepCount; s++) {
-        const stepY = level.bottomY + (s * 0.25)
-        components.push({ id: `stair-step-${i}-${s}`, type: 'deck', articleNumber: 'ST-001', name: 'Treppenstufe', position: [stairX, stepY, stairZ + 0.2], rotation: [0, 0, 0], scale: [0.7, 0.04, 0.25], color: '#a0a0a0', levelId: level.id })
-      }
-
-      // Treppen-Geländer
-      components.push({ id: `stair-rail-${i}`, type: 'railing', articleNumber: 'SG-001', name: 'Treppengeländer', position: [stairX - 0.4, level.bottomY + totalStairHeight / 2, stairZ], rotation: [0, 0, 0], scale: [0.04, totalStairHeight, 0.04], color: colorRailing, levelId: level.id })
-      components.push({ id: `stair-rail-${i}-2`, type: 'railing', articleNumber: 'SG-001', name: 'Treppengeländer', position: [stairX + 0.4, level.bottomY + totalStairHeight / 2, stairZ], rotation: [0, 0, 0], scale: [0.04, totalStairHeight, 0.04], color: colorRailing, levelId: level.id })
+    // Stufen (alle 25cm)
+    const stepCount = Math.ceil(totalStairHeight / 0.25)
+    for (let st = 0; st < stepCount; st++) {
+      const stepY = level.bottomY + (st * 0.25)
+      components.push({ id: `stair-step-${i}-${st}`, type: 'deck', articleNumber: 'ST-001', name: 'Treppenstufe', position: [stairX, stepY, stairZ + 0.2], rotation: [0, 0, 0], scale: [0.7, 0.04, 0.25], color: '#a0a0a0', levelId: level.id })
     }
+
+    // Treppen-Geländer
+    components.push({ id: `stair-rail-${i}`, type: 'railing', articleNumber: 'SG-001', name: 'Treppengeländer', position: [stairX - 0.4, level.bottomY + totalStairHeight / 2, stairZ], rotation: [0, 0, 0], scale: [0.04, totalStairHeight, 0.04], color: colorRailing, levelId: level.id })
+    components.push({ id: `stair-rail-${i}-2`, type: 'railing', articleNumber: 'SG-001', name: 'Treppengeländer', position: [stairX + 0.4, level.bottomY + totalStairHeight / 2, stairZ], rotation: [0, 0, 0], scale: [0.04, totalStairHeight, 0.04], color: colorRailing, levelId: level.id })
+
+    stairLevel += covered
   }
 
   // === FANGNETZE ===
