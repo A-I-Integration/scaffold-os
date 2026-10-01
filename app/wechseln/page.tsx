@@ -11,13 +11,13 @@ import LandingHeader from '@/components/LandingHeader';
 // Landingpage für Betriebe, die bereits eine Gerüstbau-Software
 // nutzen (CP-PRO, WinWorker, SORBA, Excel) und wechseln wollen.
 // Kernbotschaft: Wir übernehmen die Daten, Parallelbetrieb
-// möglich, monatlich kündbar.
+// möglich, nach 36 Monaten Mindestlaufzeit monatlich kündbar.
 // ============================================================
 
 export const metadata: Metadata = {
   title: 'Von CP-PRO, WinWorker & Co. zu SCAFFOLD OS wechseln – Datenübernahme inklusive',
   description:
-    'Wechseln Sie von Ihrer bisherigen Gerüstbau-Software zu SCAFFOLD OS: Wir übernehmen Kunden- und Materialdaten kostenlos, 30 Tage Parallelbetrieb, monatlich kündbar. Cloud statt Windows-Server – mit KI-Aufmaß.',
+    'Wechseln Sie von Ihrer bisherigen Gerüstbau-Software zu SCAFFOLD OS: Wir übernehmen Kunden- und Materialdaten kostenlos, 30 Tage Parallelbetrieb, nach 36 Monaten Mindestlaufzeit monatlich kündbar. Cloud statt Windows-Server – mit KI-Aufmaß.',
   alternates: { canonical: 'https://scaffoldos.de/wechseln' },
 };
 
@@ -27,7 +27,7 @@ const VERGLEICH = [
   { alt: 'Module einzeln dazukaufen', neu: 'Aufmaß, Disposition, Lager, Zeiterfassung – alles drin' },
   { alt: 'KI-Funktionen nicht vorhanden', neu: 'KI berechnet Material, Kalkulation und Lager-Prognose' },
   { alt: 'Datensicherung liegt in Ihrer Hand', neu: 'Server in Frankfurt (EU), automatisch gesichert' },
-  { alt: 'Lange Vertragslaufzeiten & Wartungsverträge', neu: 'Monatlich kündbar, keine Einrichtungsgebühr' },
+  { alt: 'Lange Vertragslaufzeiten & Wartungsverträge', neu: 'Nach 36 Monaten monatlich kündbar, Onboarding nur optional' },
 ];
 
 const SCHRITTE = [
@@ -39,7 +39,7 @@ const SCHRITTE = [
   {
     icon: CloudUpload,
     titel: '2. Wir ziehen um',
-    text: 'Sie laden die Dateien hoch oder schicken sie uns – wir übernehmen Kundenstamm und Materialliste in Ihr neues SCAFFOLD OS. Kostenlos.',
+    text: 'Sie laden die Dateien hoch oder schicken sie uns – wir übernehmen Kundenstamm und Materialliste in Ihr neues SCAFFOLD OS. Die Datenübernahme ist kostenlos.',
   },
   {
     icon: RefreshCcw,
@@ -66,7 +66,7 @@ const FAQ_WECHSEL = [
   },
   {
     frage: 'Was kostet der Umzug?',
-    antwort: 'Nichts. Die Datenübernahme von Kunden- und Materialdaten ist für Wechsler kostenlos – inklusive persönlichem Einrichtungstermin.',
+    antwort: 'Nichts. Die Datenübernahme von Kunden- und Materialdaten ist für Wechsler kostenlos. Ein ausführliches Onboarding (Einrichtung, Schulung) ist optional und kostenpflichtig – die Preise stehen auf der Bestellseite.',
   },
   {
     frage: 'Wie läuft der Parallelbetrieb?',
@@ -90,7 +90,7 @@ export default function WechselnPage() {
         </h1>
         <p className="mt-6 text-lg text-[#6e6e73] leading-relaxed max-w-2xl mx-auto">
           Ob CP-PRO, WinWorker, SORBA oder ein Excel-Kunstwerk: Wir übernehmen Ihre
-          Kunden- und Materialdaten kostenlos, richten alles mit Ihnen ein – und Sie
+          Kunden- und Materialdaten kostenlos – und Sie
           testen 30 Tage parallel zu Ihrer bisherigen Lösung.
         </p>
         <div className="mt-8 flex flex-col sm:flex-row items-center justify-center gap-3">
@@ -213,7 +213,7 @@ export default function WechselnPage() {
             Wechsel-Termin buchen
           </Link>
           <p className="mt-4 text-xs text-[#86868b]">
-            60 Minuten, kostenlos & unverbindlich. Keine Vertragsfalle – monatlich kündbar.
+            60 Minuten, kostenlos & unverbindlich.
           </p>
         </div>
       </section>
