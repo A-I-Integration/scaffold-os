@@ -995,7 +995,7 @@ export default function KundenDetailPage() {
             {projects.length === 0 && <p className="text-sm text-[#86868b]">Noch keine Aufträge für diesen Kunden.</p>}
             {projects.map((project) => {
               const projDok = dokEintraege[project.id] || []
-              const projDateien = (fotos[project.id] || []).filter((f) => f.file_type && !f.file_type.startsWith('image/'))
+              const projDateien = (fotos[project.id] || []).filter((f) => (f.file_type && !f.file_type.startsWith('image/')) || (f.metadata?.kind && ['dokument', 'vertrag', 'grundriss'].includes(f.metadata.kind)))
               const laedt = uploadLaeuft === `${project.id}-dokumente`
               return (
                 <div key={project.id} className="bg-white rounded-xl border border-black/10 p-5 space-y-4">

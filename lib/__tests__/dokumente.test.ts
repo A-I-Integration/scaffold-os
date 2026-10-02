@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { dokumentArt, filtereDokumente, DokumentZeile } from '../dokumente'
+import { dokumentArt, filtereDokumente, projekteFuerKunde, DokumentZeile } from '../dokumente'
 
 describe('dokumentArt', () => {
   it('erkennt Vertrag, Dokument, Grundriss über metadata.kind', () => {
@@ -32,5 +32,29 @@ describe('filtereDokumente', () => {
     expect(filtereDokumente(l, '', 'dokument').map((d) => d.id)).toEqual(['2'])
     expect(filtereDokumente(l, 'meyer', 'dokument')).toEqual([])
     expect(filtereDokumente(l, '  ', 'alle')).toHaveLength(2)
+  })
+})
+
+describe('nur unzugeordnete Dokumente', () => {
+  const l: DokumentZeile[] = [
+    { id: '1', art: 'vertrag', name: 'a.pdf', bezeichnung: null, projektId: 'p1', projekt: 'P', kunde: 'K', datum: null, url: 'u' },
+    { id: '2', art: 'dokument', name: 'b.pdf', bezeichnung: null, projektId: null, projekt: '–', kunde: '–', datum: null, url: 'u' },
+  ]
+  it('zeigt nur Einträge ohne Projekt', () => {
+    expect(filtereDokumente(l, '', 'alle', true).map((d) => d.id)).toEqual(['2'])
+    expect(filtereDokumente(l, '', 'alle').map((d) => d.id)).toEqual(['1', '2'])
+  })
+})
+
+describe('projekteFuerKunde', () => {
+  const kunde = { id: 'k1', name: 'Meyer GmbH' }
+  const p = [
+    { id: 'a', name: 'Haus', kundeId: 'k1' },
+    { id: 'b', name: 'meyer gmbh ', kundeId: null },
+    { id: 'c', name: 'Meyer GmbH', kundeId: 'k2' },
+    { id: 'd', name: 'Halle', kundeId: null },
+  ]
+  it('nimmt customer_id-Treffer und Namens-Treffer ohne customer_id, aber keine fremd verknüpften', () => {
+    expect(projekteFuerKunde(kunde, p).map((x) => x.id)).toEqual(['a', 'b'])
   })
 })

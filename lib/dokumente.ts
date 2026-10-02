@@ -42,11 +42,31 @@ export interface DokumentZeile {
   url: string
 }
 
-export function filtereDokumente(liste: DokumentZeile[], suche: string, art: DokumentArt | 'alle'): DokumentZeile[] {
+export function filtereDokumente(
+  liste: DokumentZeile[],
+  suche: string,
+  art: DokumentArt | 'alle',
+  nurUnzugeordnet = false,
+): DokumentZeile[] {
   const q = suche.trim().toLowerCase()
   return liste.filter((d) => {
+    if (nurUnzugeordnet && d.projektId) return false
     if (art !== 'alle' && d.art !== art) return false
     if (!q) return true
     return [d.name, d.bezeichnung || '', d.projekt, d.kunde].some((s) => s.toLowerCase().includes(q))
   })
+}
+
+export interface KundeOption { id: string; name: string }
+export interface ProjektOption { id: string; name: string; kundeId: string | null }
+
+const gleich = (a: string, b: string) => a.trim().toLowerCase() === b.trim().toLowerCase()
+
+/**
+ * Projekte, die der Kunden-Detailseite (Reiter „Dokumente") zu diesem Kunden
+ * angezeigt werden: direkt über customer_id verknüpft, oder – nur bei Projekten
+ * ohne customer_id – über gleichen Namen. Gleiche Regel wie app/kunden/[id].
+ */
+export function projekteFuerKunde(kunde: KundeOption, projekte: ProjektOption[]): ProjektOption[] {
+  return projekte.filter((p) => p.kundeId === kunde.id || (!p.kundeId && !!p.name && gleich(p.name, kunde.name)))
 }
