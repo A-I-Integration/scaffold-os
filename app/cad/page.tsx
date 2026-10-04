@@ -34,6 +34,7 @@ import type { ManualPlacement } from '@/lib/calculations/cad-engine'
 import { buildTopologyGraph, pruefeKnotenIsolation } from '@/lib/calculations/topology-graph'
 import { generatePDFHTML, downloadPDF, generateMontageplanHTML } from '@/lib/export/pdf-export'
 import { uploadVertragsdokument } from '@/lib/vertrag-upload-client'
+import { berechneCadKosten } from '@/lib/calculations/cad-kosten'
 import BuildingForm from '@/components/cad/BuildingForm'
 import BillOfMaterials from '@/components/cad/BillOfMaterials'
 import Scaffold2D from '@/components/cad/Scaffold2D'
@@ -579,13 +580,19 @@ export default function CADPage() {
     if (!model) return
     setZuordnenLaeuft(true)
     try {
+      // Lohn + Transport wie in der normalen Berechnung, mit den Werten aus
+      // den Firmeneinstellungen (Standardwerte, falls nichts hinterlegt/erreichbar).
+      const einstellungen = await fetch('/api/company').then((r) => r.json()).then((j) => j?.company || null).catch(() => null)
+      const kosten = berechneCadKosten(logistik?.aufbauStunden || 0, totalWeight, einstellungen)
+      const materialKosten = Math.round(totalPrice * 100) / 100
+      const gesamtkosten = Math.round((materialKosten + kosten.laborCost + kosten.transportCost + kosten.tripCost) * 100) / 100
       const kiResult = {
-        materialList: materials, totalMaterialCost: Math.round(totalPrice * 100) / 100,
+        materialList: materials, totalMaterialCost: materialKosten,
         totalWeightKg: Math.round(totalWeight), estimatedLaborHours: logistik?.aufbauStunden || 0,
-        laborCost: 0, transportCost: 0,
-        totalCost: Math.round(totalPrice * 100) / 100, suggestedPrice: Math.round(totalPrice * 100) / 100,
+        laborCost: kosten.laborCost, transportCost: kosten.transportCost, tripCost: kosten.tripCost,
+        totalCost: gesamtkosten, suggestedPrice: gesamtkosten,
         margin: 0, marginPercent: 0, riskLevel: 'green' as const,
-        warnings: [`Aus CAD-Planung erzeugt (${model.system?.hersteller || ''} ${model.system?.systemName || ''}, ${model.totalAreaM2.toFixed(1)} m²). Preis basiert auf reinen Materialkosten – Arbeitszeit/Marge vor Versand noch prüfen/ergänzen.`],
+        warnings: [`Aus CAD-Planung erzeugt (${model.system?.hersteller || ''} ${model.system?.systemName || ''}, ${model.totalAreaM2.toFixed(1)} m²). Preis = Material + Lohn + Transport${kosten.tripCost > 0 ? ' + Fahrt' : ''} zu Selbstkosten, ohne Gewinnaufschlag, Genehmigung und Kran – vor Versand Marge prüfen/ergänzen.`],
         tips: [], scaffoldClass: 'CAD-Planung', requiredAnchorCount: 0, requiredLoadDistributionPlates: 0,
         totalAreaM2: model.totalAreaM2,
         // Phase 81: Gebaeude-Parameter + System mitschicken. Schritt 6 leitet
