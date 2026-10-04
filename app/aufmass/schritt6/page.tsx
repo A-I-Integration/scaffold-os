@@ -15,6 +15,7 @@ import { geruesttypZuScaffoldType } from '@/lib/calculations/scaffold-engine';
 import { sollFrischGeladenWerden, leseMarkierung, setzeMarkierung, leseSchrittGeladenesProjekt, setzeSchrittGeladenesProjekt, schliesseSitzungAb, loescheWizardDaten, leiteStepsAusKiResultAb, gewerkeVonStep1 } from '@/lib/aufmass-projekt-session';
 import DispositionResult from '@/components/aufmaß/DispositionResult';
 import { DispositionResult as DispositionData } from '@/lib/calculations/disposition';
+import { uebernehmeMaterialBearbeitung } from '@/lib/stueckliste-bearbeiten';
 import { generateInvoicePDF, fmtDate as fmtRechnungsDatum, holePdfBase64FuerVersand, type Invoice } from '@/lib/invoice-pdf';
 
 const DigitalTwin = dynamic(() => import('@/components/aufmaß/DigitalTwin'), {
@@ -591,9 +592,7 @@ function Schritt6Content() {
   function handleManualEdit() {
     if (!kiResult) { alert('Bitte zuerst KI-Berechnung durchführen!'); return; }
     if (!editMode) { setEditedMaterials(kiResult.materialList.map((item: any) => ({ ...item }))); } else {
-      const updated = { ...kiResult, materialList: editedMaterials, totalMaterialCost: editedMaterials.reduce((sum: number, item: any) => sum + (item.totalPrice || 0), 0), totalCost: 0 };
-      updated.totalCost = updated.totalMaterialCost + updated.laborCost + updated.transportCost;
-      updated.suggestedPrice = updated.totalCost * 1.25; updated.margin = updated.suggestedPrice - updated.totalCost; updated.marginPercent = 25;
+      const updated = uebernehmeMaterialBearbeitung(kiResult, editedMaterials);
       setKiResult(updated);
     }
     setEditMode(!editMode);
@@ -1383,7 +1382,13 @@ function Schritt6Content() {
                       </div>
                       <div className="flex items-center gap-2">
                         <button onClick={() => handleQuantityChange(i, item.quantity - 1)} className="w-8 h-8 rounded bg-black/10 text-[#1d1d1f] hover:bg-black/15">-</button>
-                        <span className="w-12 text-center text-[#1d1d1f] font-bold">{item.quantity}</span>
+                        <input
+                          type="number" min="0" step="1" inputMode="numeric" value={item.quantity}
+                          onChange={(e) => handleQuantityChange(i, Number(e.target.value) || 0)}
+                          onFocus={(e) => e.target.select()}
+                          aria-label={`Menge ${item.name}`}
+                          className="w-20 text-center text-[#1d1d1f] font-bold border border-black/10 rounded bg-white py-1"
+                        />
                         <button onClick={() => handleQuantityChange(i, item.quantity + 1)} className="w-8 h-8 rounded bg-black/10 text-[#1d1d1f] hover:bg-black/15">+</button>
                       </div>
                       <div className="w-20 text-right text-sm text-[#1d1d1f]">{(item.quantity * item.unitPrice).toFixed(2)} €</div>
