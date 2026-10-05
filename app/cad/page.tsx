@@ -678,8 +678,8 @@ export default function CADPage() {
   }, [model, materials, totalPrice, totalWeight, logistik, router, notes])
 
   return (
-    <div className='h-screen flex flex-col bg-[#fbfbfd]'>
-      <div className='bg-white border-b border-black/5 px-4 py-3 flex items-center justify-between'>
+    <div className='min-h-screen md:h-screen flex flex-col bg-[#fbfbfd]'>
+      <div className='bg-white border-b border-black/5 px-4 py-3 flex flex-wrap gap-2 items-center justify-between'>
         <div>
           <h1 className='text-lg font-semibold text-[#1d1d1f]'>Gerüstbau-CAD</h1>
           <p className='text-xs text-[#86868b]'>
@@ -697,13 +697,13 @@ export default function CADPage() {
           </div>
         </div>
       </div>
-      <div className='flex-1 flex overflow-hidden'>
-        <div className='w-72 shrink-0 overflow-y-auto'>
+      <div className='flex-1 flex flex-col md:flex-row md:overflow-hidden'>
+        <div className='w-full md:w-72 md:shrink-0 md:overflow-y-auto'>
           <BuildingForm building={building} systemId={systemId} onChange={(b) => { setAutoGenerate(true); setBuilding(b); }} onSystemChange={(s) => { setAutoGenerate(true); setSystemId(s); }} onGenerate={() => { setAutoGenerate(true); generate(); }} warnings={allWarnings} />
         </div>
         <div className='flex-1 flex flex-col min-w-0'>
-          <div className='flex items-center justify-between px-4 py-2 bg-white/50 border-b border-black/5'>
-            <div className='flex items-center gap-2'>
+          <div className='flex flex-wrap gap-2 items-center justify-between px-4 py-2 bg-white/50 border-b border-black/5'>
+            <div className='flex flex-wrap items-center gap-2'>
               <label className='flex items-center gap-1 text-xs text-[#424245]'><input type='checkbox' checked={showBuilding} onChange={(e) => setShowBuilding(e.target.checked)} className='accent-[#e8590c]' />Gebäude</label>
               <label className='flex items-center gap-1 text-xs text-[#424245]'><input type='checkbox' checked={showScaffold} onChange={(e) => setShowScaffold(e.target.checked)} className='accent-[#e8590c]' />Gerüst</label>
               <label className='flex items-center gap-1 text-xs text-[#424245]'><input type='checkbox' checked={showDimensions} onChange={(e) => setShowDimensions(e.target.checked)} className='accent-[#e8590c]' />Bemaßung</label>
@@ -727,7 +727,7 @@ export default function CADPage() {
               </select>
             )}
           </div>
-          <div className='flex-1 p-4 min-h-0'>
+          <div className='h-[65vh] min-h-[320px] md:h-auto md:flex-1 p-4 md:min-h-0'>
             {viewMode === '3d' && modelWithManual && (
               <Scaffold3D model={modelWithManual} features={features} showBuilding={showBuilding} showScaffold={showScaffold} showDimensions={showDimensions} selectedComponent={selectedComponent} onSelectComponent={setSelectedComponent} visibleTypes={visibleTypes} viewMode={viewAngle} onCanvasReady={(c) => { canvasRef.current = c }} notes={notes} onAddNote={handleAddNote} hiddenSides={hiddenSides} hiddenLevels={hiddenLevels} measureMode={measureMode} onMeasurePoint={handleMeasurePoint} customDimensions={customDimensions} pendingMeasurePoint={pendingMeasurePoint?.point ?? null} placementType={placementType} onPlacementClick={handlePlacementClick} showEnvironment={showEnvironment} onRemoveComponent={handleRemoveComponent} onReplaceComponent={handleReplaceComponent} removedCount={removedCount} platzierungIdVon={platzierungIdVonBauteil} onBauteilZiehen={handleBauteilZiehen} />
             )}
@@ -753,7 +753,7 @@ export default function CADPage() {
             ))}
           </div>
         </div>
-        <div className='w-72 shrink-0'>
+        <div className='w-full md:w-72 md:shrink-0'>
           <BillOfMaterials
             materials={materials}
             ohnePreis={lagerAnwendung.ohnePreis}
