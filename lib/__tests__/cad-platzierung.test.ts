@@ -61,6 +61,24 @@ describe('gleicheLage', () => {
   })
 })
 
+describe('Leiter', () => {
+  it('steht mittig über der getroffenen Lage, unabhängig von der Klickhöhe', () => {
+    const lage = model.levels.find((l) => l.index === 1)!
+    const p = platzierungAusTreffer(model, 'ladder', [2, lage.bottomY + 0.1, 7], 'front', 1)
+    expect(p.positionY).toBeCloseTo(lage.bottomY + lage.heightM / 2)
+    expect(p.positionX).toBe(2)
+    expect(p.fieldId).toBeUndefined()
+  })
+  it('Verschieben in eine andere Lage setzt die Höhe neu und behält die ID', () => {
+    const vorher = { id: 'manual-ladder-1', ...platzierungAusTreffer(model, 'ladder', [2, 1, 7], 'front', 0) } as ManualPlacement
+    const neu = verschiebePlatzierung(model, vorher, [5, 99, 7], 'front', 1)
+    const lage = model.levels.find((l) => l.index === 1)!
+    expect(neu.id).toBe('manual-ladder-1')
+    expect(neu.positionY).toBeCloseTo(lage.bottomY + lage.heightM / 2)
+    expect(neu.positionX).toBe(5)
+  })
+})
+
 describe('platzierungIdVon', () => {
   const pl = [{ id: 'manual-stair-1' }, { id: 'manual-anchor-2' }]
   it('ordnet Treppenteile der Platzierung zu', () => {

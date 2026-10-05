@@ -18,6 +18,7 @@ export interface KostenErgebnis {
   totalMaterialCost: number
   laborCost: number
   transportCost: number
+  tripCost?: number
   totalCost: number
   suggestedPrice: number
   margin: number
@@ -30,7 +31,8 @@ export function uebernehmeMaterialBearbeitung<T extends KostenErgebnis>(vorher: 
   const material = bearbeitet.reduce((sum, p) => sum + (p.totalPrice || 0), 0)
   const labor = vorher.laborCost || 0
   const transport = vorher.transportCost || 0
-  const totalCost = material + labor + transport
+  const trip = vorher.tripCost || 0
+  const totalCost = material + labor + transport + trip
 
   const alteKosten = vorher.totalCost
   const faktor =

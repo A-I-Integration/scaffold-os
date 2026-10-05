@@ -10,6 +10,11 @@ function basis(over: Partial<Test> = {}): Test {
 }
 
 describe('uebernehmeMaterialBearbeitung', () => {
+  it('rechnet Fahrtkosten mit in die Kosten', () => {
+    const r = uebernehmeMaterialBearbeitung(basis({ tripCost: 40, totalCost: 140, suggestedPrice: 140 }), [pos(10, 10)])
+    expect(r.totalCost).toBe(140)
+    expect(r.suggestedPrice).toBeCloseTo(140)
+  })
   it('CAD-Angebot (Preis = Materialkosten): Preis folgt den Kosten, kein 25-%-Aufschlag', () => {
     const r = uebernehmeMaterialBearbeitung(basis(), [pos(30, 10)])
     expect(r.totalMaterialCost).toBe(300)

@@ -11,9 +11,11 @@ import type { CADModel, ManualPlacement } from './cad-engine'
 
 type Lage = Pick<ManualPlacement, 'type' | 'positionX' | 'positionY' | 'positionZ' | 'side' | 'levelIndex' | 'fieldId'>
 
+type ModellTeil = Pick<CADModel, 'fields'> & Partial<Pick<CADModel, 'levels'>>
+
 /** Platzierung (ohne ID) für einen Treffpunkt auf dem Gerüst. */
 export function platzierungAusTreffer(
-  model: Pick<CADModel, 'fields'> | null,
+  model: ModellTeil | null,
   type: ManualPlacement['type'],
   position: [number, number, number],
   side: ManualPlacement['side'],
@@ -42,12 +44,18 @@ export function platzierungAusTreffer(
       p.positionZ = best.positionZ
     }
   }
+  // Leiter: steht immer über die ganze Höhe der getroffenen Lage (Mitte der Lage),
+  // nicht in Klickhöhe – so hängt sie nie halb in der Luft.
+  if (type === 'ladder' && model?.levels) {
+    const lage = model.levels.find((l) => l.index === levelIndex)
+    if (lage && lage.heightM > 0) p.positionY = lage.bottomY + lage.heightM / 2
+  }
   return p
 }
 
 /** Verschiebt eine vorhandene Platzierung an einen neuen Treffpunkt; ID und Notizen bleiben. */
 export function verschiebePlatzierung(
-  model: Pick<CADModel, 'fields'> | null,
+  model: ModellTeil | null,
   vorher: ManualPlacement,
   position: [number, number, number],
   side: ManualPlacement['side'],

@@ -107,6 +107,7 @@ const COLOR_MAP: Record<string, string> = {
   board: '#b08a5e',        // Bordbretter – helles Holz
   protection_roof: '#9aa2a9', // Schutzdach
   load_plate: '#7a6248',   // Lastverteilplatten – Holz
+  ladder: '#b9c0c7',       // Leitern – Aluminium (schematisch)
   corner_brace: '#cfd4d9', // Eckverbindungen
 }
 
@@ -139,6 +140,10 @@ function getVariant(item: ScaffoldComponent3D): string {
     // Treppen-Geländer: [0.04, Höhe, 0.04] → senkrechtes Rohr.
     const [sx, sy, sz] = item.scale
     return sy > sx * 5 && sy > sz * 5 ? 'post' : 'rail'
+  }
+  if (item.type === 'ladder') {
+    // Schematische Leiter: Variante trägt die Höhe in cm (Sprossen gleichmäßig verteilt).
+    return `ld${Math.round(item.scale[1] * 100)}`
   }
   if (item.type === 'stair' && item.flights) {
     // Treppenturm mit Zickzack-Läufen: Variante trägt Läufe, Startrichtung
@@ -184,6 +189,28 @@ function getGeometry(type: string, variant: string = 'default'): THREE.BufferGeo
           return g
         })
         geo = mergeParts(parts)
+        break
+      }
+      case 'ladder': {
+        // Schematische Leiter in echten Metern (B 0,40 × H × T 0,08), dann auf die
+        // Einheitsbox normiert: zwei Holme + Sprossen im Abstand von ca. 0,28 m.
+        // ANNAHME: keine Herstellermaße, rein zur Darstellung.
+        const W = 0.4, D = 0.08
+        const H = Math.max(0.5, parseInt(variant.slice(2), 10) / 100 || 2)
+        const parts: THREE.BufferGeometry[] = []
+        for (const x of [-1, 1]) {
+          const g = new THREE.BoxGeometry(0.04, H, D)
+          g.translate(x * (W / 2 - 0.02), 0, 0)
+          parts.push(g)
+        }
+        const n = Math.max(2, Math.round(H / 0.28))
+        for (let i = 0; i < n; i++) {
+          const g = new THREE.BoxGeometry(W - 0.04, 0.03, 0.04)
+          g.translate(0, -H / 2 + (i + 0.5) * (H / n), 0)
+          parts.push(g)
+        }
+        geo = mergeParts(parts)
+        geo.scale(1 / W, 1 / H, 1 / D)
         break
       }
       case 'stair': {

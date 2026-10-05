@@ -4,7 +4,7 @@
 // components/cad/ComponentCatalog.tsx
 // SCAFFOLD OS – Klick-Platzierung Bauteil-Katalog (CP-Pro-Marktvergleich)
 //
-// Klickbare Karten der 7 manuell platzierbaren Bauteiltypen.
+// Klickbare Karten der 8 manuell platzierbaren Bauteiltypen.
 // Auswahl eines Typs aktiviert den Platzierungsmodus: Klick auf
 // das Gerüst in der 3D-Ansicht platziert das Bauteil.
 // ============================================================
@@ -20,6 +20,7 @@ export const CATALOG_ITEMS: { type: string; label: string; icon: string; descrip
   { type: 'board', label: 'Bordbrett', icon: '🪵', description: 'Absturzsicherung am Rand' },
   { type: 'protection_roof', label: 'Schutzdach', icon: '🛡️', description: 'Schutz gegen herabfallende Teile' },
   { type: 'load_plate', label: 'Lastverteilplatte', icon: '⬛', description: 'Druckverteilung am Boden' },
+  { type: 'ladder', label: 'Leiter', icon: '↕️', description: 'Schematische Leiter (Artikel LE-001 im Lager pflegen)' },
 ]
 
 interface Props {

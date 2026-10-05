@@ -134,7 +134,7 @@ export interface ScaffoldAnchor {
 
 export interface ScaffoldComponent3D {
   id: string
-  type: 'frame' | 'deck' | 'railing' | 'diagonal' | 'footplate' | 'coupling' | 'anchor' | 'console' | 'stair' | 'net' | 'board' | 'protection_roof' | 'safety_net' | 'load_plate' | 'corner_brace'
+  type: 'frame' | 'deck' | 'railing' | 'diagonal' | 'footplate' | 'coupling' | 'anchor' | 'console' | 'stair' | 'net' | 'board' | 'protection_roof' | 'safety_net' | 'load_plate' | 'corner_brace' | 'ladder'
   articleNumber: string
   name: string
   position: [number, number, number]
@@ -836,6 +836,9 @@ export function generateCADModel(
   return { ...preliminaryModel, components3D }
 }
 
+/** Feste Artikelnummer der Leiter im Lager (jede Firma pflegt Name, Preis und Gewicht selbst). */
+export const LEITER_ARTIKELNUMMER = 'LE-001'
+
 export function generateBillOfMaterials(model: CADModel): MaterialItem[] {
   const counts: Record<string, { name: string; category: string; quantity: number; unit: string; unitPrice: number; weightKg: number; articleNumber: string }> = {}
   model.components3D.forEach((comp) => {
@@ -849,7 +852,7 @@ export function generateBillOfMaterials(model: CADModel): MaterialItem[] {
 }
 
 function getCategoryFromType(type: ScaffoldComponent3D['type']): string {
-  const map: Record<string, string> = { frame: 'Rahmen', deck: 'Belag', railing: 'Geländer', diagonal: 'Diagonalen', footplate: 'Fundamente', coupling: 'Kupplungen', anchor: 'Anker', console: 'Konsolen', stair: 'Treppen', net: 'Sicherheit', board: 'Bordbretter', protection_roof: 'Sicherheit', safety_net: 'Sicherheit', load_plate: 'Fundamente', corner_brace: 'Eckverbindungen' }
+  const map: Record<string, string> = { frame: 'Rahmen', deck: 'Belag', railing: 'Geländer', diagonal: 'Diagonalen', footplate: 'Fundamente', coupling: 'Kupplungen', anchor: 'Anker', console: 'Konsolen', stair: 'Treppen', net: 'Sicherheit', board: 'Bordbretter', protection_roof: 'Sicherheit', safety_net: 'Sicherheit', load_plate: 'Fundamente', corner_brace: 'Eckverbindungen', ladder: 'Leitern' }
   return map[type] || 'Sonstiges'
 }
 
@@ -860,16 +863,19 @@ function getUnit(type: ScaffoldComponent3D['type']): string {
 
 function getUnitPrice(articleNumber: string): number {
   const prices: Record<string, number> = { 'RA-001': 45, 'RA-002': 52, 'RA-003': 58, 'AB-001': 85, 'AB-002': 98, 'AB-003': 112, 'DI-001': 28, 'DI-002': 32, 'DI-003': 36, 'GE-001': 35, 'GE-002': 40, 'GE-003': 45, 'FP-001': 18, 'KU-001': 4.5, 'AN-001': 15, 'QR-001': 12, 'KO-001': 32, 'SP-001': 450, 'FN-001': 4.2, 'SD-001': 850, 'BB-001': 22, 'LV-001': 45, 'EW-001': 25, 'ST-001': 15, 'SG-001': 28 }
+  // Leiter: bewusst KEIN Fantasiepreis – Preis kommt aus dem Lager der Firma (Artikel LE-001).
+  if (articleNumber === LEITER_ARTIKELNUMMER) return 0
   return prices[articleNumber] || 10
 }
 
 function getWeightKg(articleNumber: string): number {
   const weights: Record<string, number> = { 'RA-001': 12.5, 'RA-002': 15.2, 'RA-003': 18.0, 'AB-001': 22, 'AB-002': 26, 'AB-003': 31, 'DI-001': 8.5, 'DI-002': 9.8, 'DI-003': 11.2, 'GE-001': 7.2, 'GE-002': 8.5, 'GE-003': 9.8, 'FP-001': 5.5, 'KU-001': 0.8, 'AN-001': 2.5, 'QR-001': 3.5, 'KO-001': 9.0, 'SP-001': 85.0, 'FN-001': 0.5, 'SD-001': 120.0, 'BB-001': 6.5, 'LV-001': 18.0, 'EW-001': 4.2, 'ST-001': 2.8, 'SG-001': 5.5 }
+  if (articleNumber === LEITER_ARTIKELNUMMER) return 0
   return weights[articleNumber] || 5
 }
 
 function getRecommendation(articleNumber: string): string {
-  const recs: Record<string, string> = { 'RA-001': 'Standard-Rahmen für Feldlänge 2,07 m', 'RA-002': 'Für breitere Felder', 'RA-003': 'Für große Feldlängen', 'AB-001': 'Standard-Arbeitsbühne', 'AB-002': 'Für 2,50 m Feldlänge', 'AB-003': 'Für 3,00 m Feldlänge', 'DI-001': 'Stabilisierung je Feld', 'DI-002': 'Stabilisierung 2,50 m', 'DI-003': 'Stabilisierung 3,00 m', 'GE-001': 'Brüstungsgeländer', 'GE-002': 'Geländer 2,50 m', 'GE-003': 'Geländer 3,00 m', 'FP-001': 'Grundplatte je Standfuß', 'KU-001': 'Verbindung Rahmen/Diagonale', 'AN-001': 'Standard-Fassadenanker', 'QR-001': 'Querriegel', 'KO-001': 'Für Überstände und Dacharbeiten', 'SP-001': 'Zugang je 3–4 Ebenen', 'FN-001': 'Fangnetz bei Höhe > 12m', 'SD-001': 'Schutzdach öffentlicher Raum', 'BB-001': 'Seitenschutz/Absturzsicherung', 'LV-001': 'Bei weichem Untergrund', 'EW-001': 'Eckverstrebung', 'ST-001': 'Treppenstufe', 'SG-001': 'Treppengeländer' }
+  const recs: Record<string, string> = { 'RA-001': 'Standard-Rahmen für Feldlänge 2,07 m', 'RA-002': 'Für breitere Felder', 'RA-003': 'Für große Feldlängen', 'AB-001': 'Standard-Arbeitsbühne', 'AB-002': 'Für 2,50 m Feldlänge', 'AB-003': 'Für 3,00 m Feldlänge', 'DI-001': 'Stabilisierung je Feld', 'DI-002': 'Stabilisierung 2,50 m', 'DI-003': 'Stabilisierung 3,00 m', 'GE-001': 'Brüstungsgeländer', 'GE-002': 'Geländer 2,50 m', 'GE-003': 'Geländer 3,00 m', 'FP-001': 'Grundplatte je Standfuß', 'KU-001': 'Verbindung Rahmen/Diagonale', 'AN-001': 'Standard-Fassadenanker', 'QR-001': 'Querriegel', 'KO-001': 'Für Überstände und Dacharbeiten', 'SP-001': 'Zugang je 3–4 Ebenen', 'FN-001': 'Fangnetz bei Höhe > 12m', 'SD-001': 'Schutzdach öffentlicher Raum', 'BB-001': 'Seitenschutz/Absturzsicherung', 'LV-001': 'Bei weichem Untergrund', 'EW-001': 'Eckverstrebung', 'ST-001': 'Treppenstufe', 'SG-001': 'Treppengeländer', 'LE-001': 'Schematische Leiter – Preis, Gewicht und Name im Lager pflegen' }
   return recs[articleNumber] || 'Standard-Bauteil'
 }
 
@@ -982,7 +988,7 @@ export function generateAnsicht(model: CADModel): Projection2D {
 // --- MANUELLE PLATZIERUNG ---
 export interface ManualPlacement {
   id: string
-  type: 'anchor' | 'console' | 'stair' | 'net' | 'board' | 'protection_roof' | 'load_plate'
+  type: 'anchor' | 'console' | 'stair' | 'net' | 'board' | 'protection_roof' | 'load_plate' | 'ladder'
   positionX: number
   positionY: number
   positionZ: number
@@ -1176,6 +1182,22 @@ function placementToComponentBase(placement: ManualPlacement, model: CADModel): 
         scale: [6, 0.1, 2],
         color: '#f97316',
       }
+    case 'ladder': {
+      // Schematische Anlegeleiter (ANNAHME: keine Herstellermaße): 0,40 m breit,
+      // 0,08 m tief, Höhe = Höhe der gewählten Lage (sonst 2,0 m), steht außen an der Seite.
+      const lage = model.levels.find((l) => l.index === placement.levelIndex)
+      const h = lage && lage.heightM > 0 ? lage.heightM : 2.0
+      return {
+        id: placement.id,
+        type: 'ladder',
+        articleNumber: LEITER_ARTIKELNUMMER,
+        name: 'Leiter (schematisch)',
+        position: [positionX, positionY, positionZ],
+        rotation: [0, side === 'left' || side === 'right' ? Math.PI / 2 : 0, 0],
+        scale: [0.4, h, 0.08],
+        color: '#b9c0c7',
+      }
+    }
     case 'load_plate':
       return {
         id: placement.id,
