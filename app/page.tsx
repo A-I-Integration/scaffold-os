@@ -77,9 +77,9 @@ const KERNBEREICHE = [
     punkte: [
       'Baustelle in 6 geführten Schritten erfassen – am Handy, direkt vor Ort',
       'Fotos, Drohnen-Upload und GPS-Position automatisch verknüpft',
-      'Punktwolken-Auswertung (3D-Scans) für exakte Maße ohne Nachmessen',
+      'Punktwolken-Auswertung (3D-Scans): Maße direkt aus dem Scan, mit Genauigkeitsangabe',
       'Hersteller-Systeme mit echten Maßen: Layher, MJ, Plettac, Alfix u. a.',
-      'KI rechnet Materialliste und Kalkulation, DIN-12811-Check inklusive',
+      'KI rechnet Materialliste und Kalkulation, DIN-EN-12811-Hinweis-Check (KI-gestützt, ersetzt keine Statik)',
       'Angebots-PDF mit QR-Code und Unterschrift – direkt per Mail an den Kunden',
     ],
   },
@@ -120,10 +120,10 @@ const ALLE_FUNKTIONEN = [
   { icon: Timer, titel: 'Zeiterfassung', text: 'Stempeln am Handy, Pausen-Automatik, Soll-Ist-Vergleich, Überstunden – ohne Zettelwirtschaft.' },
   { icon: CalendarCheck, titel: 'Planung & Abwesenheiten', text: 'Krank und Urlaub direkt im Plan – Konflikte werden sofort sichtbar.' },
   { icon: Warehouse, titel: 'Lager & Prognose', text: 'Bestände im Blick, automatische Stückliste, KI warnt, bevor Material knapp wird.' },
-  { icon: FileText, titel: 'Rechnungen & DATEV', text: (<><strong>GoBD-konforme Rechnungen</strong> mit Mahnwesen – Buchungsstapel und Lohndaten direkt für den Steuerberater.</>) },
+  { icon: FileText, titel: 'Rechnungen & DATEV', text: (<><strong>Rechnungen nach GoBD-Grundsätzen</strong> (lückenlose Nummern, Storno statt Löschen) mit Mahnwesen – Buchungsstapel und Lohndaten direkt für den Steuerberater.</>) },
   { icon: Sparkles, titel: 'KI überall', text: 'Materialberechnung, Routen-Vorschläge, Sprachnotizen, Foto-Analyse – die KI arbeitet im Hintergrund mit.' },
   { icon: PenLine, titel: 'Digitaler Zwilling', text: 'Jede Baustelle als digitales Modell – Änderungen am Gerüst bleiben dokumentiert.' },
-  { icon: ShieldCheck, titel: 'Datenschutz aus Frankfurt', text: 'Eigene Datenbank pro Betrieb, EU-Hosting, DSGVO- und EU-AI-Act-konform.' },
+  { icon: ShieldCheck, titel: 'Datenschutz aus Frankfurt', text: 'Eigene Datenbank pro Betrieb, EU-Hosting, Datenschutz nach DSGVO.' },
 ];
 
 const PAKETE = [
@@ -188,7 +188,7 @@ const FAQ = [
   {
     frage: 'Kann SCAFFOLD OS CAD-Grundrisse einlesen?',
     antwort:
-      'Ja. Grundrisse und Fassadenmessung funktionieren per Foto, Drohnen-Upload oder Punktwolke – die CAD-Auswertung prüft Abstände und Aufbau nach DIN 12811 und erzeugt daraus automatisch die Materialliste.',
+      'Ja. Grundrisse und Fassadenmessung funktionieren per Foto, Drohnen-Upload oder Punktwolke – die CAD-Auswertung prüft Regelausführungs-Grenzen für ausgewählte Systeme (derzeit Layher Allround und PERI UP Flex) und erzeugt daraus automatisch die Materialliste.',
   },
   {
     frage: 'Was kostet SCAFFOLD OS?',
@@ -213,7 +213,7 @@ const FAQ = [
   {
     frage: 'Wo werden meine Daten gespeichert?',
     antwort:
-      'Jeder Betrieb bekommt eine eigene Datenbank in Frankfurt am Main. Komplett getrennt von anderen. DSGVO-konform, EU-AI-Act-konform. Deine Daten gehören dir.',
+      'Jeder Betrieb bekommt eine eigene Datenbank in Frankfurt am Main. Komplett getrennt von anderen. DSGVO-konform. Deine Daten gehören dir.',
   },
   {
     frage: 'Wie kann ich kündigen?',
