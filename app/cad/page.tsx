@@ -32,6 +32,7 @@ import { createInitialLayerState } from '@/types/cad-layers'
 import type { CustomDimension } from '@/types/cad-dimensions'
 import type { ManualPlacement } from '@/lib/calculations/cad-engine'
 import { buildTopologyGraph, pruefeKnotenIsolation } from '@/lib/calculations/topology-graph'
+import { wendeLagerAn, type LagerZeile } from '@/lib/calculations/cad-lager'
 import { platzierungAusTreffer, verschiebePlatzierung, gleicheLage, platzierungIdVon } from '@/lib/calculations/cad-platzierung'
 import { generatePDFHTML, downloadPDF, generateMontageplanHTML } from '@/lib/export/pdf-export'
 import { uploadVertragsdokument } from '@/lib/vertrag-upload-client'
@@ -55,7 +56,7 @@ const COMPONENT_LABELS: Record<string, string> = {
   frame: 'Rahmen', deck: 'Beläge', railing: 'Geländer', diagonal: 'Diagonalen',
   footplate: 'Fußplatten', coupling: 'Kupplungen', anchor: 'Anker', console: 'Konsolen',
   stair: 'Treppen', net: 'Netze', board: 'Bordbretter', protection_roof: 'Schutzdächer',
-  safety_net: 'Fangnetze', load_plate: 'Lastplatten', corner_brace: 'Eckverbindungen',
+  safety_net: 'Fangnetze', load_plate: 'Lastplatten', corner_brace: 'Eckverbindungen', ladder: 'Leitern',
 }
 
 export default function CADPage() {
@@ -86,7 +87,7 @@ export default function CADPage() {
   const [visibleTypes, setVisibleTypes] = useState<Record<string, boolean>>({
     frame: true, deck: true, railing: true, diagonal: true, footplate: true,
     coupling: true, anchor: true, console: true, stair: true, net: true,
-    board: true, protection_roof: true, safety_net: true, load_plate: true, corner_brace: true,
+    board: true, protection_roof: true, safety_net: true, load_plate: true, corner_brace: true, ladder: true,
   })
   const [kunden, setKunden] = useState<{ id: string; name: string }[]>([])
   // Fix: vorher wurde ein Fehler beim Laden der Kundenliste (Netzwerk,
@@ -95,6 +96,9 @@ export default function CADPage() {
   // anlegen" versehentlich Duplikate an. Jetzt sichtbar + erneut ladbar.
   const [kundenLadeFehler, setKundenLadeFehler] = useState(false)
   const [hoursPerSqm, setHoursPerSqm] = useState(2.0)
+  // Lager der Firma (Preise, Gewichte, Namen). null = noch nicht geladen / nicht erreichbar → alte CAD-Werte.
+  const [lager, setLager] = useState<LagerZeile[] | null>(null)
+  const [lagerFehler, setLagerFehler] = useState(false)
   // Phase 68-G: Auto-Generierung des Modells. Nach 'Neu starten' auf
   // false gesetzt -> Leinwand bleibt leer, bis der Nutzer Maße ändert
   // oder 'Gerüst neu berechnen' wählt. Behebt: Reset baut Haus sofort
@@ -341,6 +345,10 @@ export default function CADPage() {
   useEffect(() => {
     loadKunden()
     fetch('/api/company').then(r => r.json()).then(j => { const v = Number(j.company?.calc_hours_per_sqm); if (v > 0) setHoursPerSqm(v) }).catch(() => {})
+    // Dasselbe Lager wie im normalen Aufmaß: Preise/Gewichte/Namen der Firma (Abgleich über die Artikelnummer).
+    fetch('/api/inventory').then(r => r.json()).then(j => {
+      if (j.success && Array.isArray(j.items)) { setLager(j.items); setLagerFehler(false) } else setLagerFehler(true)
+    }).catch(() => setLagerFehler(true))
   }, [loadKunden])
 
   const features = useMemo(() => generateBuildingFeatures(building), [building])
@@ -463,7 +471,11 @@ export default function CADPage() {
     ]
   }, [ruleResults, model])
 
-  const materials = useMemo(() => (modelWithManual ? generateBillOfMaterials(modelWithManual) : []), [modelWithManual])
+  const lagerAnwendung = useMemo(
+    () => wendeLagerAn(modelWithManual ? generateBillOfMaterials(modelWithManual) : [], lager),
+    [modelWithManual, lager],
+  )
+  const materials = lagerAnwendung.materials
   const totalWeight = useMemo(() => materials.reduce((s, i) => s + i.weightKg * i.quantity, 0), [materials])
   const totalPrice = useMemo(() => materials.reduce((s, i) => s + i.totalPrice, 0), [materials])
   const logistik = useMemo(() => (modelWithManual ? calculateLogistics(modelWithManual, materials, hoursPerSqm) : null), [modelWithManual, materials, hoursPerSqm])
@@ -744,6 +756,9 @@ export default function CADPage() {
         <div className='w-72 shrink-0'>
           <BillOfMaterials
             materials={materials}
+            ohnePreis={lagerAnwendung.ohnePreis}
+            ohneGewicht={lagerAnwendung.ohneGewicht}
+            lagerFehler={lagerFehler}
             totalWeightKg={totalWeight}
             totalPrice={totalPrice}
             logistik={logistik}

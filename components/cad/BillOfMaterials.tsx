@@ -14,6 +14,11 @@ import ComponentCatalog from './ComponentCatalog'
 
 interface Props {
   materials: MaterialItem[]
+  // Positionen, bei denen im Lager der Firma kein Preis / Gewicht steht (Artikelnummern)
+  ohnePreis?: string[]
+  ohneGewicht?: string[]
+  // Lager konnte nicht geladen werden → Stückliste zeigt die Standardwerte
+  lagerFehler?: boolean
   totalWeightKg: number
   totalPrice: number
   logistik?: LogistikDaten | null
@@ -54,7 +59,7 @@ interface Props {
   onSelectPlacementType?: (type: string | null) => void
 }
 
-export default function BillOfMaterials({ materials, totalWeightKg, totalPrice, logistik, onExportPDF, onExportCSV, onExportMontageplan, onExportStatikGeometrie, onExportIFC, customers, kundenLadeFehler, onRetryKunden, onCreateCustomer, onAssignCustomer, zuordnenLaeuft, disabled = false, notes, onDeleteNote, layerState, onToggleSide, onToggleLevel, onShowAllLayers, onHideAllLayers, customDimensions, onDeleteDimension, measureMode, onToggleMeasureMode, manualPlacements, onRemoveManualPlacement, placementType, onSelectPlacementType }: Props) {
+export default function BillOfMaterials({ materials, ohnePreis = [], ohneGewicht = [], lagerFehler = false, totalWeightKg, totalPrice, logistik, onExportPDF, onExportCSV, onExportMontageplan, onExportStatikGeometrie, onExportIFC, customers, kundenLadeFehler, onRetryKunden, onCreateCustomer, onAssignCustomer, zuordnenLaeuft, disabled = false, notes, onDeleteNote, layerState, onToggleSide, onToggleLevel, onShowAllLayers, onHideAllLayers, customDimensions, onDeleteDimension, measureMode, onToggleMeasureMode, manualPlacements, onRemoveManualPlacement, placementType, onSelectPlacementType }: Props) {
   const [kundenSuche, setKundenSuche] = useState('')
   const [ausgewaehlterKunde, setAusgewaehlterKunde] = useState<{ id: string; name: string } | null>(null)
   const [zeigeDropdown, setZeigeDropdown] = useState(false)
@@ -226,6 +231,16 @@ export default function BillOfMaterials({ materials, totalWeightKg, totalPrice, 
           </div>
         )}
 
+        {lagerFehler && (
+          <div className='mb-3 rounded-lg bg-amber-50 border border-amber-200 px-3 py-2 text-[11px] text-amber-800'>
+            Lager nicht erreichbar – die Stückliste zeigt Standardpreise, nicht die Preise aus deinem Lager.
+          </div>
+        )}
+        {ohnePreis.length > 0 && (
+          <div className='mb-3 rounded-lg bg-orange-50 border border-orange-200 px-3 py-2 text-[11px] text-orange-800'>
+            Für {ohnePreis.join(', ')} ist im Lager kein Preis hinterlegt – bitte Artikel mit dieser Nummer im Lager anlegen und Preis pflegen. Bis dahin zählt die Position mit 0 €.
+          </div>
+        )}
         <div className='space-y-3'>
           {Object.entries(grouped).map(([category, items]) => (
             <div key={category} className='bg-[#f5f5f7] rounded-xl overflow-hidden'>
@@ -237,11 +252,13 @@ export default function BillOfMaterials({ materials, totalWeightKg, totalPrice, 
                   <div key={item.articleNumber} className='px-3 py-2 flex justify-between items-center'>
                     <div>
                       <div className='text-sm text-[#1d1d1f]'>{item.name}</div>
-                      <div className='text-[10px] text-[#86868b]'>{item.articleNumber} · {item.weightKg} kg/Stk</div>
+                      <div className='text-[10px] text-[#86868b]'>{item.articleNumber} · {ohneGewicht.includes(item.articleNumber) ? 'Gewicht im Lager pflegen' : `${item.weightKg} kg/Stk`}</div>
                     </div>
                     <div className='text-right'>
                       <div className='text-sm font-semibold text-[#1d1d1f]'>{item.quantity} {item.unit}</div>
-                      <div className='text-[10px] text-[#86868b]'>{item.totalPrice.toLocaleString('de-DE', { style: 'currency', currency: 'EUR' })}</div>
+                      {ohnePreis.includes(item.articleNumber)
+                        ? <div className='text-[10px] font-medium text-[#e8590c]'>Preis im Lager pflegen</div>
+                        : <div className='text-[10px] text-[#86868b]'>{item.totalPrice.toLocaleString('de-DE', { style: 'currency', currency: 'EUR' })}</div>}
                     </div>
                   </div>
                 ))}
