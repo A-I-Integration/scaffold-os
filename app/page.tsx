@@ -545,6 +545,11 @@ export default function HomePage() {
             <Link href="/disposition-geruestbau" className="rounded-full border border-black/10 px-4 py-1.5 hover:bg-black/5 transition-colors">Disposition &amp; Touren</Link>
             <Link href="/lager-geruestbau" className="rounded-full border border-black/10 px-4 py-1.5 hover:bg-black/5 transition-colors">Lager</Link>
           </nav>
+          <div className="mt-10 text-center">
+            <Link href="/eignungscheck" className="inline-flex items-center gap-2 text-[#e8590c] font-medium hover:underline">
+              Ist SCAFFOLD OS für Ihren Betrieb geeignet? Kurz-Umfrage <ArrowRight className="w-4 h-4" />
+            </Link>
+          </div>
         </div>
       </section>
 
