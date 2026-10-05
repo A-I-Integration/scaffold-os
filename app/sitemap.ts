@@ -17,6 +17,7 @@ export default function sitemap(): MetadataRoute.Sitemap {
     { url: `${BASE}/rechnung-geruestbau`, lastModified: jetzt, changeFrequency: 'monthly', priority: 0.8 },
     { url: `${BASE}/disposition-geruestbau`, lastModified: jetzt, changeFrequency: 'monthly', priority: 0.8 },
     { url: `${BASE}/lager-geruestbau`, lastModified: jetzt, changeFrequency: 'monthly', priority: 0.8 },
+    { url: `${BASE}/eignungscheck`, lastModified: jetzt, changeFrequency: 'monthly', priority: 0.6 },
     { url: `${BASE}/kaufen`, lastModified: jetzt, changeFrequency: 'monthly', priority: 0.9 },
     { url: `${BASE}/anfrage`, lastModified: jetzt, changeFrequency: 'monthly', priority: 0.7 },
     { url: `${BASE}/login`, lastModified: jetzt, changeFrequency: 'yearly', priority: 0.5 },
