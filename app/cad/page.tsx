@@ -32,6 +32,7 @@ import { createInitialLayerState } from '@/types/cad-layers'
 import type { CustomDimension } from '@/types/cad-dimensions'
 import type { ManualPlacement } from '@/lib/calculations/cad-engine'
 import { buildTopologyGraph, pruefeKnotenIsolation } from '@/lib/calculations/topology-graph'
+import { platzierungAusTreffer, verschiebePlatzierung, gleicheLage, platzierungIdVon } from '@/lib/calculations/cad-platzierung'
 import { generatePDFHTML, downloadPDF, generateMontageplanHTML } from '@/lib/export/pdf-export'
 import { uploadVertragsdokument } from '@/lib/vertrag-upload-client'
 import BuildingForm from '@/components/cad/BuildingForm'
@@ -234,32 +235,32 @@ export default function CADPage() {
   // Der Modus bleibt aktiv (mehrere Bauteile hintereinander setzbar), bis
   // der Typ abgewählt wird oder ESC gedrückt wird.
   const handlePlacementClick = useCallback((type: string, position: [number, number, number], side: string, levelIndex: number) => {
+    // Regeln (Treppe rastet auf das nächste Feld ein, sonst genau am Klickpunkt)
+    // liegen in lib/calculations/cad-platzierung.ts – dieselben gelten beim Ziehen.
     const placement: ManualPlacement = {
       id: `manual-${type}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-      type: type as ManualPlacement['type'],
-      positionX: position[0],
-      positionY: position[1],
-      positionZ: position[2],
-      side: side as ManualPlacement['side'],
-      levelIndex,
-    }
-    // Treppe: auf das nächste Feld dieser Seite und Lage einrasten (Zickzack-Lauf im Feld)
-    if (type === 'stair' && model) {
-      const lage = model.fields.filter((f) => f.side === side && f.levelIndex === levelIndex)
-      const entlangX = side === 'front' || side === 'back'
-      let best: (typeof lage)[number] | null = null
-      let bestD = Infinity
-      for (const f of lage) {
-        const d = Math.abs((entlangX ? position[0] - f.positionX : position[2] - f.positionZ))
-        if (d < bestD) { bestD = d; best = f }
-      }
-      if (best) {
-        placement.fieldId = best.id
-        placement.positionX = best.positionX
-        placement.positionZ = best.positionZ
-      }
+      ...platzierungAusTreffer(model, type as ManualPlacement['type'], position, side as ManualPlacement['side'], levelIndex),
     }
     setManualPlacements((prev) => [...prev, placement])
+  }, [model])
+
+  // NEU (Ziehen): manuell gesetzte Bauteile anklicken und an eine andere Stelle
+  // ziehen. Erzeugte Bauteile (Rahmen, Beläge, automatischer Treppenturm)
+  // bleiben unverändert – sie hängen an der Berechnung.
+  const platzierungIdVonBauteil = useCallback(
+    (componentId: string) => platzierungIdVon(componentId, manualPlacements),
+    [manualPlacements],
+  )
+  const handleBauteilZiehen = useCallback((platzierungId: string, position: [number, number, number], side: string, levelIndex: number) => {
+    setManualPlacements((prev) => {
+      const i = prev.findIndex((p) => p.id === platzierungId)
+      if (i < 0) return prev
+      const neu = verschiebePlatzierung(model, prev[i], position, side as ManualPlacement['side'], levelIndex)
+      if (gleicheLage(prev[i], neu)) return prev
+      const kopie = [...prev]
+      kopie[i] = neu
+      return kopie
+    })
   }, [model])
 
   const handleRemoveManualPlacement = useCallback((id: string) => {
@@ -709,7 +710,7 @@ export default function CADPage() {
           </div>
           <div className='flex-1 p-4 min-h-0'>
             {viewMode === '3d' && modelWithManual && (
-              <Scaffold3D model={modelWithManual} features={features} showBuilding={showBuilding} showScaffold={showScaffold} showDimensions={showDimensions} selectedComponent={selectedComponent} onSelectComponent={setSelectedComponent} visibleTypes={visibleTypes} viewMode={viewAngle} onCanvasReady={(c) => { canvasRef.current = c }} notes={notes} onAddNote={handleAddNote} hiddenSides={hiddenSides} hiddenLevels={hiddenLevels} measureMode={measureMode} onMeasurePoint={handleMeasurePoint} customDimensions={customDimensions} pendingMeasurePoint={pendingMeasurePoint?.point ?? null} placementType={placementType} onPlacementClick={handlePlacementClick} showEnvironment={showEnvironment} onRemoveComponent={handleRemoveComponent} onReplaceComponent={handleReplaceComponent} removedCount={removedCount} />
+              <Scaffold3D model={modelWithManual} features={features} showBuilding={showBuilding} showScaffold={showScaffold} showDimensions={showDimensions} selectedComponent={selectedComponent} onSelectComponent={setSelectedComponent} visibleTypes={visibleTypes} viewMode={viewAngle} onCanvasReady={(c) => { canvasRef.current = c }} notes={notes} onAddNote={handleAddNote} hiddenSides={hiddenSides} hiddenLevels={hiddenLevels} measureMode={measureMode} onMeasurePoint={handleMeasurePoint} customDimensions={customDimensions} pendingMeasurePoint={pendingMeasurePoint?.point ?? null} placementType={placementType} onPlacementClick={handlePlacementClick} showEnvironment={showEnvironment} onRemoveComponent={handleRemoveComponent} onReplaceComponent={handleReplaceComponent} removedCount={removedCount} platzierungIdVon={platzierungIdVonBauteil} onBauteilZiehen={handleBauteilZiehen} />
             )}
             {/* Phase 68-G: Leerzustand nach 'Neu starten' */}
             {viewMode === '3d' && !model && (
