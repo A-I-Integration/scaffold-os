@@ -6,12 +6,12 @@ SCAFFOLD OS ist eine SaaS-Software speziell für Gerüstbau-Betriebe im DACH-Rau
 
 ## Kernfunktionen
 - KI-gestütztes Aufmaß auf der Baustelle (Foto, Drohne, 3D-Scan, Punktwolke)
-- Angebotserstellung in Minuten, kalkuliert nach DIN 12811, als PDF
+- Angebotserstellung in Minuten, mit Materialliste und Kalkulation, als PDF
 - Disposition und Einsatzplanung der Monteure
 - Lagerverwaltung mit Stückliste, Reservierung und KI-Prognose
 - GPS-Tourenplanung mit Routen-KI und Fahrer-App
 - Zeiterfassung per Handy, Export für Lohnbuchhaltung (DATEV)
-- GoBD-konforme Rechnungsstellung mit Abschlags- und Schlussrechnungen, Mahnwesen
+- Rechnungsstellung nach GoBD-Grundsätzen mit Abschlags- und Schlussrechnungen, Mahnwesen
 - Kundenverwaltung mit Rechnungsübersicht
 
 ## Pakete und Preise

@@ -4,7 +4,7 @@ import FeatureSeite, { featureJsonLd, type FeatureSeiteProps } from '@/component
 // SEO-/GEO-Seite „Rechnung Gerüstbau". Inhalte stammen aus Startseite, Hilfe und llms.txt.
 
 const PFAD = '/rechnung-geruestbau';
-const TITEL = "Rechnung Gerüstbau: GoBD-konform mit DATEV-Export";
+const TITEL = "Rechnung Gerüstbau: nach GoBD-Grundsätzen mit DATEV-Export";
 const BESCHREIBUNG = "Rechnungen für den Gerüstbau: Voll-, Abschlags- und Schlussrechnung, Mahnwesen und DATEV-Buchungsstapel für den Steuerberater. Jetzt Demo anfordern!";
 
 export const metadata: Metadata = {
@@ -26,7 +26,7 @@ export const metadata: Metadata = {
 const SEITE: FeatureSeiteProps = {
   pfad: PFAD,
   eyebrow: "Rechnung Gerüstbau",
-  h1: "Rechnungen im Gerüstbau – GoBD-konform, DATEV-Export inklusive",
+  h1: "Rechnungen im Gerüstbau – nach GoBD-Grundsätzen, DATEV-Export inklusive",
   antwort: "In SCAFFOLD OS schreibst du Voll-, Abschlags- und Schlussrechnungen für den Gerüstbau, mahnst überfällige Rechnungen und exportierst einen DATEV-Buchungsstapel für deinen Steuerberater.",
   sektionen: [
   {
