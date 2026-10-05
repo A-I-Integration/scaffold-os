@@ -37,19 +37,12 @@ export const metadata: Metadata = {
   metadataBase: new URL('https://scaffoldos.de'),
   title: 'Gerüstbausoftware: KI-Aufmaß, CAD-Planung & Disposition | SCAFFOLD OS',
   description:
-    'Die Gerüstbausoftware für den gesamten Betrieb: KI-Aufmaß & CAD-Planung, Angebote in Minuten, Touren-Disposition, Lager, Zeiterfassung & GoBD-Rechnung. DSGVO-konform, EU-Hosting. Jetzt Demo anfordern!',
-  keywords: [
-    'Gerüstbausoftware', 'Gerüstbau Software', 'Gerüstbau Aufmaß', 'Aufmaß Software Gerüstbau',
-    'CAD Gerüstbau', 'Gerüst CAD', 'Gerüst Kalkulation', 'Gerüstbau Disposition',
-    'Kolonnenplanung', 'Lagerverwaltung Gerüstbau', 'Zeiterfassung Gerüstbau',
-    'Gerüstbau App', 'Standzeit Abrechnung', 'Vorhaltegebühr', 'DIN 12811',
-    'Gerüst Angebot erstellen', 'GoBD Rechnung Gerüstbau', 'Gerüstbau ERP',
-  ],
+    'Gerüstbausoftware: KI-Aufmaß, Angebot, Disposition, Lager, Zeiterfassung & GoBD-Rechnung. Browserbasiert, DSGVO-konform, EU-Hosting. Jetzt Demo anfordern!',
   alternates: { canonical: 'https://scaffoldos.de' },
   openGraph: {
     title: 'Gerüstbausoftware: KI-Aufmaß, CAD-Planung & Disposition | SCAFFOLD OS',
     description:
-      'Die Gerüstbausoftware für den gesamten Betrieb: KI-Aufmaß & CAD-Planung, Angebote in Minuten, Touren-Disposition, Lager, Zeiterfassung & GoBD-Rechnung. DSGVO-konform, EU-Hosting. Jetzt Demo anfordern!',
+      'Gerüstbausoftware: KI-Aufmaß, Angebot, Disposition, Lager, Zeiterfassung & GoBD-Rechnung. Browserbasiert, DSGVO-konform, EU-Hosting. Jetzt Demo anfordern!',
     url: 'https://scaffoldos.de',
     siteName: 'SCAFFOLD OS',
     locale: 'de_DE',
@@ -544,6 +537,14 @@ export default function HomePage() {
               </div>
             ))}
           </div>
+          <nav aria-label="Funktionen im Detail" className="mt-14 flex flex-wrap justify-center gap-3 text-sm">
+            <span className="text-[#86868b] self-center">Im Detail:</span>
+            <Link href="/aufmass-geruestbau" className="rounded-full border border-black/10 px-4 py-1.5 hover:bg-black/5 transition-colors">Aufmaß Gerüstbau</Link>
+            <Link href="/angebot-geruestbau" className="rounded-full border border-black/10 px-4 py-1.5 hover:bg-black/5 transition-colors">Angebot Gerüstbau</Link>
+            <Link href="/rechnung-geruestbau" className="rounded-full border border-black/10 px-4 py-1.5 hover:bg-black/5 transition-colors">Rechnung &amp; DATEV</Link>
+            <Link href="/disposition-geruestbau" className="rounded-full border border-black/10 px-4 py-1.5 hover:bg-black/5 transition-colors">Disposition &amp; Touren</Link>
+            <Link href="/lager-geruestbau" className="rounded-full border border-black/10 px-4 py-1.5 hover:bg-black/5 transition-colors">Lager</Link>
+          </nav>
         </div>
       </section>
 
