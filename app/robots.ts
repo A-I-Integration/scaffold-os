@@ -11,7 +11,7 @@ export default function robots(): MetadataRoute.Robots {
   return {
     rules: {
       userAgent: '*',
-      allow: ['/', '/kaufen', '/anfrage', '/login', '/hilfe', '/impressum', '/datenschutz', '/agb'],
+      allow: ['/', '/aufmass-geruestbau', '/angebot-geruestbau', '/rechnung-geruestbau', '/disposition-geruestbau', '/lager-geruestbau', '/kaufen', '/anfrage', '/login', '/hilfe', '/impressum', '/datenschutz', '/agb'],
       disallow: [
         '/api/',
         '/admin/',
