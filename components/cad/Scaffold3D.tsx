@@ -12,7 +12,7 @@
 // 7. memo() für Scaffold3D und AllScaffoldComponents (verhindert Re-Render bei Parent-Changes)
 // ============================================================
 
-import { useMemo, useState, useRef, useEffect, useCallback, memo } from 'react'
+import { useMemo, useState, useRef, useEffect, useCallback, memo, createContext, useContext } from 'react'
 import { Canvas, useThree, useFrame } from '@react-three/fiber'
 import { OrbitControls, Grid, Text, Sky, AdaptiveDpr, AdaptiveEvents, Environment, ContactShadows, Edges } from '@react-three/drei'
 import * as THREE from 'three'
@@ -63,7 +63,24 @@ interface Props {
   // Anzahl entfernter Bauteile – hält den Kamera-Ausschnitt beim Entfernen/Zurückholen
   // stabil (die Bauteilzahl steckt im Rahmen-Schlüssel) und frischt den Schatten auf.
   removedCount?: number
+  // NEU (Ziehen): manuell gesetzte Bauteile anklicken und an eine andere Stelle
+  // ziehen. Optional und rein additiv – ohne diese Props verhält sich die
+  // Ansicht exakt wie vorher. platzierungIdVon liefert die ID der Platzierung,
+  // zu der ein 3D-Bauteil gehört (null = nicht verschiebbar).
+  platzierungIdVon?: (componentId: string) => string | null
+  onBauteilZiehen?: (platzierungId: string, position: [number, number, number], side: string, levelIndex: number) => void
 }
+
+// Ziehen: geteilt über einen Kontext, damit die Eigenschaften nicht durch
+// vier Komponentenebenen gereicht werden müssen (der Provider steht innerhalb
+// des Canvas, Kontexte von außen kommen dort nicht an).
+interface ZiehKontextWert {
+  ziehId: string | null
+  platzierungIdVon: (componentId: string) => string | null
+  start: (platzierungId: string) => void
+  bewegen: (platzierungId: string, position: [number, number, number], side: string, levelIndex: number) => void
+}
+const ZiehKontext = createContext<ZiehKontextWert | null>(null)
 
 // ═══════════════════════════════════════════════════════════
 // FARBPALETTE (einmalig, außerhalb der Komponente)
@@ -399,6 +416,7 @@ function InstancedBauteile({
 }) {
   const meshRef = useRef<THREE.InstancedMesh>(null)
   const { invalidate } = useThree()
+  const zieh = useContext(ZiehKontext)
   const dummy = useMemo(() => new THREE.Object3D(), [])
   const baseColor = useMemo(() => new THREE.Color(COLOR_MAP[type] || '#888888'), [type])
   const geometry = useMemo(() => getGeometry(type, variant), [type, variant])
@@ -507,10 +525,46 @@ function InstancedBauteile({
       e.stopPropagation()
       if (e.instanceId !== undefined && items[e.instanceId]) {
         onHover(items[e.instanceId].id)
-        document.body.style.cursor = placementType ? 'cell' : measureMode ? 'crosshair' : 'pointer'
+        const verschiebbar = !placementType && !measureMode && !!zieh?.platzierungIdVon(items[e.instanceId].id)
+        document.body.style.cursor = zieh?.ziehId ? 'grabbing' : verschiebbar ? 'grab' : placementType ? 'cell' : measureMode ? 'crosshair' : 'pointer'
       }
     },
-    [items, onHover]
+    [items, onHover, zieh, placementType, measureMode]
+  )
+
+  // Ziehen beginnen: linke Maustaste auf einem manuell gesetzten Bauteil.
+  const handlePointerDown = useCallback(
+    (e: any) => {
+      if (!zieh || placementType || measureMode) return
+      if (e.button !== undefined && e.button !== 0) return
+      if (e.instanceId === undefined || !items[e.instanceId]) return
+      const pid = zieh.platzierungIdVon(items[e.instanceId].id)
+      if (!pid) return
+      e.stopPropagation()
+      onSelect(items[e.instanceId].id)
+      zieh.start(pid)
+    },
+    [zieh, placementType, measureMode, items, onSelect]
+  )
+
+  // Beim Ziehen: Maus über einem anderen Gerüstteil → dorthin verschieben.
+  // Treffer auf dem gezogenen Bauteil selbst werden ignoriert (sonst springt es).
+  const handlePointerMove = useCallback(
+    (e: any) => {
+      if (!zieh?.ziehId) return
+      if (e.instanceId === undefined || !items[e.instanceId] || !e.point) return
+      const item = items[e.instanceId]
+      if (zieh.platzierungIdVon(item.id) === zieh.ziehId) return
+      if (!item.fieldId) return
+      const parts = item.fieldId.split('-')
+      if (parts.length < 3) return
+      const side = parts[1]
+      const levelIndex = parseInt(parts[2], 10)
+      if (isNaN(levelIndex)) return
+      e.stopPropagation()
+      zieh.bewegen(zieh.ziehId, [e.point.x, e.point.y, e.point.z], side, levelIndex)
+    },
+    [zieh, items]
   )
 
   const handlePointerOut = useCallback(() => {
@@ -525,6 +579,8 @@ function InstancedBauteile({
       onClick={handleClick}
       onPointerOver={handlePointerOver}
       onPointerOut={handlePointerOut}
+      onPointerDown={handlePointerDown}
+      onPointerMove={handlePointerMove}
       castShadow
       receiveShadow
     />
@@ -1582,16 +1638,48 @@ function Scaffold3D({
   onRemoveComponent,
   onReplaceComponent,
   removedCount,
+  platzierungIdVon,
+  onBauteilZiehen,
 }: Props) {
+  // Ziehen: ID der gerade gezogenen Platzierung (null = niemand zieht)
+  const [ziehId, setZiehId] = useState<string | null>(null)
+  const ziehKontext = useMemo<ZiehKontextWert | null>(
+    () =>
+      platzierungIdVon && onBauteilZiehen
+        ? { ziehId, platzierungIdVon, start: setZiehId, bewegen: onBauteilZiehen }
+        : null,
+    [ziehId, platzierungIdVon, onBauteilZiehen]
+  )
+  // Loslassen irgendwo (auch außerhalb des Gerüsts oder des Fensters) beendet das Ziehen.
+  useEffect(() => {
+    if (!ziehId) return
+    const ende = () => { setZiehId(null); document.body.style.cursor = 'default' }
+    window.addEventListener('pointerup', ende)
+    window.addEventListener('pointercancel', ende)
+    window.addEventListener('blur', ende)
+    return () => {
+      window.removeEventListener('pointerup', ende)
+      window.removeEventListener('pointercancel', ende)
+      window.removeEventListener('blur', ende)
+    }
+  }, [ziehId])
+
   const cameraDistance =
     Math.max(model.building.lengthM, model.building.heightM) * 2 + 8
 
   const contentRef = useRef<THREE.Group>(null)
 
-  const modelKey = useMemo(
+  const modelKeyLive = useMemo(
     () => `${model.building.lengthM}x${model.building.widthM}x${model.building.heightM}:${model.components3D.length + (removedCount || 0)}`,
     [model, removedCount],
   )
+  // Beim Ziehen bleibt der Rahmen-Schlüssel eingefroren: Ändert sich dabei die
+  // Bauteilzahl (z. B. Treppe in eine oberste Lage), würde die Kamera sonst
+  // mitten im Ziehen neu ausgerichtet und unter der Maus wegspringen.
+  const eingefroren = useRef<string | null>(null)
+  if (!ziehId) eingefroren.current = null
+  else if (eingefroren.current === null) eingefroren.current = modelKeyLive
+  const modelKey = ziehId && eingefroren.current !== null ? eingefroren.current : modelKeyLive
   const cameraConfig = useMemo(
     () => ({
       position: [cameraDistance, cameraDistance * 0.6, cameraDistance] as [number, number, number],
@@ -1612,6 +1700,7 @@ function Scaffold3D({
       >
         <AdaptiveDpr pixelated />
         <AdaptiveEvents />
+        <ZiehKontext.Provider value={ziehKontext}>
         <group ref={contentRef}>
           <Scene
             model={model}
@@ -1636,6 +1725,7 @@ function Scaffold3D({
             removedCount={removedCount}
           />
         </group>
+        </ZiehKontext.Provider>
         <AutoFraming targetRef={contentRef} modelKey={modelKey} />
         <GroundingShadow targetRef={contentRef} modelKey={modelKey} />
         {!(showEnvironment && !bridgeMode) && (
@@ -1658,6 +1748,7 @@ function Scaffold3D({
           enablePan
           enableZoom
           enableRotate
+          enabled={!ziehId}
           enableDamping
           dampingFactor={0.08}
           minDistance={5}
@@ -1670,7 +1761,11 @@ function Scaffold3D({
         <p>
           {placementType
             ? '🧩 Platzierungsmodus: auf das Gerüst klicken, um das Bauteil zu setzen'
-            : '🖱️ Links: Drehen | Rechts: Verschieben | Scroll: Zoomen'}
+            : ziehId
+              ? '✋ Ziehen: an die gewünschte Stelle am Gerüst bewegen, dann loslassen'
+              : platzierungIdVon
+                ? '🖱️ Links: Drehen | Rechts: Verschieben | Scroll: Zoomen | Gesetzte Bauteile: anklicken und ziehen'
+                : '🖱️ Links: Drehen | Rechts: Verschieben | Scroll: Zoomen'}
         </p>
       </div>
       {selectedComponent && (() => {
