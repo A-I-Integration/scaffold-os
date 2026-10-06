@@ -638,8 +638,8 @@ export default function TourenPage() {
 
             {/* Einzelnachweis */}
             {entries.length > 0 && (
-              <div className="bg-[#f5f5f7] border border-black/10 rounded-xl overflow-hidden">
-                <table className="w-full text-sm">
+              <div className="bg-[#f5f5f7] border border-black/10 rounded-xl overflow-x-auto">
+                <table className="w-full min-w-[520px] text-sm">
                   <thead className="bg-white/80 text-[#86868b] text-left">
                     <tr>
                       <th className="px-4 py-2">Datum</th>
