@@ -380,7 +380,7 @@ export default function ZeiterfassungPage() {
       <div className="flex flex-wrap items-center gap-3 mb-6">
         <Clock className="w-7 h-7 text-[#e8590c]" />
         <h1 className="text-2xl font-bold">Zeiterfassung</h1>
-        <div className="flex items-center gap-3 ml-auto">
+        <div className="flex flex-wrap items-center gap-3 ml-auto">
           <input type="month" value={month} onChange={e => setMonth(e.target.value)}
             className="bg-white border border-black/10 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-[#e8590c]" />
           <select value={employeeFilter} onChange={e => setEmployeeFilter(e.target.value)}
