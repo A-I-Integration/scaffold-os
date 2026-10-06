@@ -724,7 +724,8 @@ function RechnungenContent() {
               Noch keine Rechnungen. Erstelle die erste über „Neue Rechnung" – oder direkt aus einem angenommenen Angebot (Aufmaß → Schritt 6).
             </p>
           ) : (
-            <table className="w-full text-sm">
+            <div className="overflow-x-auto">
+            <table className="w-full min-w-[720px] text-sm">
               <thead>
                 <tr className="text-left text-[#86868b] border-b border-black/10">
                   <th className="p-4">Nummer</th>
@@ -841,6 +842,7 @@ function RechnungenContent() {
                 })}
               </tbody>
             </table>
+            </div>
           )}
         </div>
 
