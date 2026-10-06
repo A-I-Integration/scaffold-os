@@ -15,6 +15,7 @@ import { serverErrorResponse } from '@/lib/auth';
 
 const FELDER: { key: string; label: string; max: number; pflicht?: boolean }[] = [
   { key: 'name', label: 'Name', max: 100, pflicht: true },
+  { key: 'land', label: 'Land', max: 40 },
   { key: 'mitarbeiter', label: 'Mitarbeiter im Betrieb', max: 40 },
   { key: 'aufmassWie', label: 'Wie wird das Aufmaß gemacht?', max: 1500 },
   { key: 'aufmassDauer', label: 'Wie lange dauert das Aufmaß?', max: 200 },
@@ -26,6 +27,9 @@ const FELDER: { key: string; label: string; max: number; pflicht?: boolean }[] =
   { key: 'rechnungWie', label: 'Wie wird aus der Leistung eine Rechnung?', max: 1500 },
   { key: 'nervt', label: 'Welches Thema nervt am meisten?', max: 1500 },
   { key: 'software', label: 'Welche Software wird aktuell genutzt?', max: 300 },
+  { key: 'softwareProblem', label: 'Was stört an der aktuellen Lösung?', max: 1500 },
+  { key: 'wechsel', label: 'Wechselbereitschaft', max: 60 },
+  { key: 'wechselBedingung', label: 'Was müsste für einen Wechsel stimmen?', max: 1500 },
   { key: 'kontakt', label: 'Kontakt (freiwillig)', max: 150 },
 ];
 

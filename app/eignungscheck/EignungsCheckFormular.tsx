@@ -9,6 +9,8 @@ import { CheckCircle2, Send } from 'lucide-react';
 
 const MITARBEITER = ['1–5', '6–10', '11–20', '21–50', 'mehr als 50'];
 const FEHLT_OFT = ['Ja, häufig', 'Manchmal', 'Selten', 'Nie'];
+const LAENDER = ['Deutschland', 'Österreich', 'Schweiz', 'Anderes Land'];
+const WECHSEL = ['Ja, bald', 'Vielleicht, wenn es passt', 'Eher nicht', 'Wir nutzen aktuell keine Software'];
 
 const inputCls =
   'w-full bg-white border border-black/10 rounded-lg px-4 py-2.5 text-[#1d1d1f] placeholder-[#86868b] focus:outline-none focus:border-[#e8590c] transition-colors';
@@ -87,6 +89,12 @@ export default function EignungsCheckFormular() {
       <fieldset className="space-y-4">
         <legend className="text-lg font-semibold mb-1">Zu Ihnen</legend>
         <Feld label="Name *"><input className={inputCls} required value={w.name || ''} onChange={set('name')} maxLength={100} autoComplete="name" /></Feld>
+        <Feld label="In welchem Land sitzt Ihr Betrieb?">
+          <select className={inputCls} value={w.land || ''} onChange={set('land')}>
+            <option value="">Bitte wählen</option>
+            {LAENDER.map((m) => <option key={m}>{m}</option>)}
+          </select>
+        </Feld>
         <Feld label="Wie viele Mitarbeiter hat Ihr Betrieb?">
           <select className={inputCls} value={w.mitarbeiter || ''} onChange={set('mitarbeiter')}>
             <option value="">Bitte wählen</option>
@@ -120,6 +128,14 @@ export default function EignungsCheckFormular() {
         <legend className="text-lg font-semibold mb-1">Zum Schluss</legend>
         <Feld label="Welches Thema nervt Sie im Alltag am meisten?">{area('nervt')}</Feld>
         <Feld label="Welche Software nutzen Sie aktuell?">{text('software', 'z. B. Excel, Lexware, eigene Branchenlösung …')}</Feld>
+        <Feld label="Was stört Sie an Ihrer aktuellen Lösung?">{area('softwareProblem')}</Feld>
+        <Feld label="Würden Sie zu einer neuen Software wechseln?">
+          <select className={inputCls} value={w.wechsel || ''} onChange={set('wechsel')}>
+            <option value="">Bitte wählen</option>
+            {WECHSEL.map((m) => <option key={m}>{m}</option>)}
+          </select>
+        </Feld>
+        <Feld label="Was müsste dafür stimmen?">{area('wechselBedingung', 'z. B. Preis, Datenübernahme, Einarbeitung …')}</Feld>
       </fieldset>
 
       <fieldset className="space-y-3 rounded-2xl bg-white border border-black/5 p-5">
