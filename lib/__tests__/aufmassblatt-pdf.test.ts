@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest'
+import { waehleFotos } from '../aufmassblatt-fotos'
 import { abschnitteAusSchritt2, berechneAufmass, erzeugeAufmassblattPdf } from '../aufmassblatt-pdf'
 
 describe('Aufmaßblatt', () => {
@@ -23,5 +24,19 @@ describe('Aufmaßblatt', () => {
     const buf = doc.output('arraybuffer')
     expect(buf.byteLength).toBeGreaterThan(1000)
     expect(doc.getNumberOfPages()).toBe(1)
+  })
+  it('Nachträge und Fotos erzeugen zusätzliche Seiten', () => {
+    const px = 'data:image/jpeg;base64,/9j/4AAQSkZJRgABAQEASABIAAD/2wBDAP//////////////////////////////////////////////////////////////////////////////////////wgALCAABAAEBAREA/8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQABPxA=';
+    const doc = erzeugeAufmassblattPdf({ kunde: 'K', adresse: 'A', abschnitte: [{ bezeichnung: 'F', laengeM: 1, hoeheM: 1 }],
+      nachtraege: [{ text: 'Fangnetz Giebel', betragEur: 250 }, { text: '' }],
+      fotos: Array.from({ length: 7 }, (_, i) => ({ dataUrl: px, beschriftung: `Foto ${i + 1}`, breitePx: 4, hoehePx: 3 })) })
+    expect(doc.getNumberOfPages()).toBe(3) // Blatt + 2 Fotoseiten (7 Fotos, 6 pro Seite)
+  })
+  it('wählt nur echte Fotos, älteste zuerst, mit Limit', () => {
+    const m = (n: string, t: string, c: string, meta: any = {}, path = 'projects/p/' + n) => ({ storage_path: path, file_name: n, file_type: t, created_at: c, metadata: meta })
+    const r = waehleFotos([m('b.jpg', 'image/jpeg', '2026-02'), m('sig.png', 'image/png', '2026-01', { type: 'unterschrift' }), m('doc.pdf', 'application/pdf', '2026-01'),
+      m('a.jpg', 'image/jpeg', '2026-01'), m('scan.png', 'image/png', '2026-01', { kind: 'scan' }), m('g.png', 'image/png', '2026-01', {}, 'projects/p/grundrisse/g.png')])
+    expect(r.map((x) => x.file_name)).toEqual(['a.jpg', 'b.jpg'])
+    expect(waehleFotos([m('a.jpg', 'image/jpeg', '1'), m('b.jpg', 'image/jpeg', '2')], 1)).toHaveLength(1)
   })
 })

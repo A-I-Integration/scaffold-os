@@ -25,6 +25,19 @@ export interface AufmassZeile extends AufmassAbschnitt {
   flaecheM2: number;
 }
 
+export interface AufmassFoto {
+  /** data:image/jpeg;base64,… (bereits verkleinert) */
+  dataUrl: string;
+  beschriftung: string;
+  breitePx: number;
+  hoehePx: number;
+}
+
+export interface AufmassNachtrag {
+  text: string;
+  betragEur?: number;
+}
+
 export interface AufmassblattInput {
   kunde: string;
   adresse: string;
@@ -32,6 +45,10 @@ export interface AufmassblattInput {
   system?: string;
   datum?: Date;
   abschnitte: AufmassAbschnitt[];
+  /** Nachträge/Änderungen (z. B. aus den Angebots-Anpassungen in Schritt 6) */
+  nachtraege?: AufmassNachtrag[];
+  /** Fotodokumentation (Projekt-Fotos), wird auf Folgeseiten gedruckt */
+  fotos?: AufmassFoto[];
   /** Unterschrift des Auftraggebers als data:image/png;base64,… */
   unterschriftDataUrl?: string | null;
   firma?: { name?: string; street?: string; zip?: string; city?: string } | null;
@@ -134,6 +151,23 @@ export function erzeugeAufmassblattPdf(input: AufmassblattInput): jsPDF {
   doc.text(hinweis, 14, ey, { maxWidth: w - 28 });
   ey += 16;
 
+  const nachtraege = (input.nachtraege ?? []).filter((n) => n.text.trim() || (n.betragEur ?? 0) > 0);
+  if (nachtraege.length > 0) {
+    if (ey > 200) {
+      doc.addPage();
+      ey = 30;
+    }
+    autoTable(doc, {
+      startY: ey,
+      head: [['Nachträge / Änderungen', 'Betrag (€ netto)']],
+      body: nachtraege.map((n) => [n.text.trim() || 'Nachtrag', n.betragEur && n.betragEur > 0 ? fmt(n.betragEur) : '–']),
+      theme: 'grid',
+      headStyles: { fillColor: [71, 85, 105] },
+      columnStyles: { 1: { halign: 'right', cellWidth: 40 } },
+    });
+    ey = ((doc as any).lastAutoTable?.finalY ?? ey) + 10;
+  }
+
   if (ey > 220) {
     doc.addPage();
     ey = 30;
@@ -153,5 +187,44 @@ export function erzeugeAufmassblattPdf(input: AufmassblattInput): jsPDF {
   doc.setFontSize(9);
   doc.text('Ort, Datum, Auftragnehmer', 14, liniey + 5);
   doc.text('Ort, Datum, Auftraggeber', 110, liniey + 5);
+
+  const fotos = input.fotos ?? [];
+  if (fotos.length > 0) zeichneFotos(doc, fotos);
   return doc;
+}
+
+const FOTOS_PRO_SEITE = 6; // 2 Spalten × 3 Zeilen
+
+function zeichneFotos(doc: jsPDF, fotos: AufmassFoto[]): void {
+  const w = doc.internal.pageSize.getWidth();
+  const zelleB = (w - 28 - 8) / 2; // 14 mm Rand, 8 mm Abstand
+  const zelleH = 68;
+  fotos.forEach((f, i) => {
+    if (i % FOTOS_PRO_SEITE === 0) {
+      doc.addPage();
+      doc.setTextColor(30, 58, 138);
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(12);
+      doc.text('Fotodokumentation', 14, 20);
+    }
+    const idx = i % FOTOS_PRO_SEITE;
+    const x = 14 + (idx % 2) * (zelleB + 8);
+    const y = 28 + Math.floor(idx / 2) * (zelleH + 14);
+    const verhaeltnis = f.breitePx > 0 && f.hoehePx > 0 ? f.breitePx / f.hoehePx : 4 / 3;
+    let bw = zelleB;
+    let bh = bw / verhaeltnis;
+    if (bh > zelleH) {
+      bh = zelleH;
+      bw = bh * verhaeltnis;
+    }
+    try {
+      doc.addImage(f.dataUrl, 'JPEG', x, y, bw, bh);
+    } catch {
+      /* Bild nicht lesbar: Beschriftung bleibt, Bild entfällt */
+    }
+    doc.setTextColor(71, 85, 105);
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(7);
+    doc.text(f.beschriftung.slice(0, 70), x, y + zelleH + 4, { maxWidth: zelleB });
+  });
 }
