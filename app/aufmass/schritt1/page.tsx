@@ -3,7 +3,7 @@
 import SymbolIcon from '@/components/aufmaß/SymbolIcon';
 import WizardKopf from '@/components/aufmaß/WizardKopf';
 import { ClipboardList } from 'lucide-react';
-import { useState, useEffect, Suspense } from 'react';
+import { useState, useEffect, useRef, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { setzeMarkierung, leseSchrittGeladenesProjekt, setzeSchrittGeladenesProjekt, WIZARD_KEYS, gewerkeVonStep1 } from '@/lib/aufmass-projekt-session';
 import PhotoUpload from '@/components/aufmaß/PhotoUpload';
@@ -17,6 +17,9 @@ const LEERES_FORM = {
   // Projekt
   name: '',
   adresse: '',
+  // NEU: Bezeichnung der Baustelle, damit mehrere Baustellen desselben Kunden
+  // unterscheidbar sind (Projektname bleibt der Kundenname).
+  baustelle: '',
   // NEU (Phase 34): echte Verknüpfung zum Kundenstamm statt Namensvergleich.
   // null = neuer/nicht im Kundenstamm gefundener Kunde (bisheriges Verhalten).
   customerId: null as string | null,
@@ -72,6 +75,19 @@ function Schritt1Content() {
   useEffect(() => {
     fetch('/api/kunden').then(r => r.json()).then(j => { if (j.success) setKundenListe(j.kunden || []) }).catch(() => {});
   }, []);
+
+  // NEU: ?kunde=<id> (Button "Neue Baustelle" auf der Kundenseite) wählt den
+  // Kunden aus dem Kundenstamm vor. Die Adresse bleibt bewusst leer, weil
+  // die Stammadresse nicht die neue Baustelle ist.
+  const kundeParam = searchParams.get('kunde');
+  const kundeVorgewaehlt = useRef(false);
+  useEffect(() => {
+    if (!kundeParam || projectId || kundeVorgewaehlt.current || kundenListe.length === 0) return;
+    const k = kundenListe.find((x) => x.id === kundeParam);
+    if (!k) return;
+    kundeVorgewaehlt.current = true;
+    setForm((prev) => ({ ...prev, name: k.name, customerId: k.id }));
+  }, [kundeParam, projectId, kundenListe]);
 
   const [sessionId, setSessionId] = useState<string>('');
   const [hatAlteDaten, setHatAlteDaten] = useState(false);
@@ -418,6 +434,16 @@ function Schritt1Content() {
                     </button>
                   </div>
                 )}
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-2 text-[#424245]">Bezeichnung der Baustelle (optional)</label>
+                <input
+                  type="text"
+                  value={form.baustelle}
+                  onChange={(e) => handleChange('baustelle', e.target.value)}
+                  className="w-full bg-black/10 border border-black/10 rounded-xl px-4 py-3 text-[#1d1d1f] placeholder-[#86868b] focus:outline-none focus:border-orange-500 transition"
+                  placeholder="z.B. Haus Müller, Nordseite"
+                />
               </div>
               <div>
                 <label className="block text-sm font-medium mb-2 text-[#424245]">{form.projektart === 'bruecke' ? 'Brücken-Standort *' : 'Baustellen-Adresse *'}</label>

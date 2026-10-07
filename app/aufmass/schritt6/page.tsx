@@ -1038,6 +1038,7 @@ function Schritt6Content() {
         <div className="mb-6 rounded-xl border border-black/10 bg-white">
           <div className="flex flex-wrap items-center gap-x-6 gap-y-2 rounded-t-xl border-b border-black/10 bg-[#f5f5f7] px-4 py-3 text-sm">
             <span className="font-semibold">{s1.name || 'Ohne Kundenname'}</span>
+            {s1.baustelle && <span className="font-medium text-[#424245]">{s1.baustelle}</span>}
             <span className="text-[#86868b]">{s1.adresse || '–'}</span>
             <span className="text-[#86868b]">Stand {new Date().toLocaleDateString('de-DE')}</span>
             <span className={`ml-auto rounded-md border px-2 py-0.5 text-xs font-semibold ${zustandCls}`}>{savedProjectId ? zustandText : 'Entwurf – noch nicht gespeichert'}</span>
