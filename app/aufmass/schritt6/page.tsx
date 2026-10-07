@@ -17,7 +17,8 @@ import DispositionResult from '@/components/aufmaß/DispositionResult';
 import { DispositionResult as DispositionData } from '@/lib/calculations/disposition';
 import { uebernehmeMaterialBearbeitung } from '@/lib/stueckliste-bearbeiten';
 import { generateInvoicePDF, fmtDate as fmtRechnungsDatum, holePdfBase64FuerVersand, type Invoice } from '@/lib/invoice-pdf';
-import { abschnitteAusSchritt2, erzeugeAufmassblattPdf, type AufmassFoto } from '@/lib/aufmassblatt-pdf';
+import { abschnitteAusSchritt2, berechneAufmass, erzeugeAufmassblattPdf, type AufmassFoto } from '@/lib/aufmassblatt-pdf';
+import { Save, FileText, Pencil, Check, Ruler, PenLine, ClipboardList, Sparkles, Mail } from 'lucide-react';
 import { ladeAufmassFotos } from '@/lib/aufmassblatt-fotos';
 import { getProjectMediaClient } from '@/lib/media-client';
 
@@ -1009,12 +1010,45 @@ function Schritt6Content() {
   // ═══════════════════════════════════════════════════════════
   // RENDER
   // ═══════════════════════════════════════════════════════════
+  const kopfAbschnitte = abschnitteAusSchritt2(s2);
+  const kopfFlaeche = berechneAufmass(kopfAbschnitte).gesamtM2;
+  const kopfWert = kiResult ? calcAngebot().endpreis : null;
+  const kopfEur = (n: number) => n.toLocaleString('de-DE', { style: 'currency', currency: 'EUR' });
+  const zustandText = angebotsStatus === 'erstellt' ? 'Angebot erstellt' : angebotsStatus === 'versendet' ? 'Angebot versendet' : angebotsStatus === 'gelesen' ? 'Angebot gelesen' : 'Angebot angenommen';
+  const zustandCls = angebotsStatus === 'angenommen' ? 'border-green-600/30 bg-green-50 text-green-800'
+    : angebotsStatus === 'gelesen' ? 'border-blue-600/30 bg-blue-50 text-blue-800'
+    : angebotsStatus === 'versendet' ? 'border-amber-600/30 bg-amber-50 text-amber-800'
+    : 'border-black/10 bg-black/5 text-[#424245]';
+  const kennzahl = (label: string, wert: string, hinweis?: string) => (
+    <div className="px-4 py-3">
+      <div className="text-[11px] uppercase tracking-wide text-[#86868b]">{label}</div>
+      <div className="text-lg font-semibold tabular-nums text-[#1d1d1f]">{wert}</div>
+      {hinweis && <div className="text-[11px] text-[#86868b]">{hinweis}</div>}
+    </div>
+  );
+
   return (
     <div className="min-h-screen bg-white text-[#1d1d1f] p-6">
-      <div className="max-w-4xl mx-auto">
+      <div className="max-w-6xl mx-auto">
         <button onClick={handleZurueck} className="text-[#86868b] hover:text-[#1d1d1f] text-sm mb-2">← Zurück</button>
-        <h1 className="text-3xl font-bold mb-2">📋 Zusammenfassung & KI-Planung</h1>
-        <p className="text-[#86868b] mb-6">Baustelle: Schritt 6 von 6</p>
+        <h1 className="flex items-center gap-2 text-2xl font-semibold mb-1"><ClipboardList className="w-6 h-6 text-[#e8590c]" /> Zusammenfassung & KI-Planung</h1>
+        <p className="text-[#86868b] text-sm mb-5">Baustelle · Schritt 6 von 6</p>
+
+        {/* Vorgangskopf: Kunde, Zustand und Kennzahlen auf einen Blick */}
+        <div className="mb-6 rounded-xl border border-black/10 bg-white">
+          <div className="flex flex-wrap items-center gap-x-6 gap-y-2 rounded-t-xl border-b border-black/10 bg-[#f5f5f7] px-4 py-3 text-sm">
+            <span className="font-semibold">{s1.name || 'Ohne Kundenname'}</span>
+            <span className="text-[#86868b]">{s1.adresse || '–'}</span>
+            <span className="text-[#86868b]">Stand {new Date().toLocaleDateString('de-DE')}</span>
+            <span className={`ml-auto rounded-md border px-2 py-0.5 text-xs font-semibold ${zustandCls}`}>{savedProjectId ? zustandText : 'Entwurf – noch nicht gespeichert'}</span>
+          </div>
+          <div className="grid grid-cols-2 divide-black/10 md:grid-cols-4 md:divide-x">
+            {kennzahl('Aufmaßfläche', kopfFlaeche > 0 ? `${kopfFlaeche.toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} m²` : '–', 'Länge × Höhe der Abschnitte')}
+            {kennzahl('Abschnitte', kopfAbschnitte.length > 0 ? String(kopfAbschnitte.length) : '–')}
+            {kennzahl('Angebotswert', kopfWert !== null ? kopfEur(kopfWert) : '–', kopfWert !== null ? 'zzgl. MwSt.' : 'noch nicht berechnet')}
+            {kennzahl('Gewerk', gewerkeAnzeige(s1) || '–')}
+          </div>
+        </div>
 
         {/* ═══════════════════════════════════════════════════════════ */}
         {/* ANGEBOTSSTATUS-TRACKER */}
@@ -1028,10 +1062,10 @@ function Schritt6Content() {
                 angebotsStatus === 'versendet' ? 'bg-amber-500 text-amber-950' :
                 'bg-black/10 text-[#424245]'
               }`}>
-                {angebotsStatus === 'erstellt' ? '✏️ Erstellt' :
-                 angebotsStatus === 'versendet' ? '📧 Versendet' :
-                 angebotsStatus === 'gelesen' ? '👁️ Gelesen' :
-                 '✅ Angenommen'}
+                {angebotsStatus === 'erstellt' ? 'Erstellt' :
+                 angebotsStatus === 'versendet' ? 'Versendet' :
+                 angebotsStatus === 'gelesen' ? 'Gelesen' :
+                 'Angenommen'}
               </span>
             </div>
             <div className="flex items-center gap-2">
@@ -1065,20 +1099,20 @@ function Schritt6Content() {
               <h2 className="text-lg font-bold text-[#1d1d1f] mb-2">Aktionen</h2>
 
               <button onClick={handleSpeichern} disabled={isSaving} className="w-full rounded-xl bg-black/10 hover:bg-black/15 disabled:opacity-50 disabled:cursor-not-allowed py-3 font-semibold text-[#1d1d1f] transition-colors">
-                {isSaving ? '💾 Wird gespeichert...' : '💾 Projekt speichern'}
+                <span className="inline-flex items-center justify-center gap-2"><Save className="w-4 h-4" />{isSaving ? 'Wird gespeichert…' : 'Projekt speichern'}</span>
               </button>
 
               <button onClick={handlePDF} className="w-full rounded-xl bg-black/10 hover:bg-black/15 py-3 font-semibold text-[#1d1d1f] transition-colors">
-                📄 PDF erzeugen & herunterladen
+                <span className="inline-flex items-center justify-center gap-2"><FileText className="w-4 h-4" />PDF erzeugen & herunterladen</span>
               </button>
 
               {/* NEU: E-Mail (Phase 82: aufklappbar, nicht mehr aufdringlich) */}
               {savedProjectId && !showEmailForm && ( // 82-Fix: kiResult-Bedingung entfernt – Angebot-E-Mail geht auch ohne KI-Ergebnis
                 <button
                   onClick={() => setShowEmailForm(true)}
-                  className="w-full rounded-xl bg-blue-600 hover:bg-blue-500 py-3 font-semibold text-white transition-colors"
+                  className="w-full rounded-xl border border-black/10 bg-white hover:bg-black/5 py-3 font-semibold text-[#1d1d1f] transition-colors"
                 >
-                  📧 Angebot per E-Mail senden…
+                  <span className="inline-flex items-center justify-center gap-2"><Mail className="w-4 h-4" />Angebot per E-Mail senden…</span>
                 </button>
               )}
               {savedProjectId && showEmailForm && ( // 82-Fix: dto.
@@ -1136,8 +1170,8 @@ function Schritt6Content() {
               {/* NEU: Unterschrift */}
               {savedProjectId && (
                 <div className="pt-2 border-t border-black/10">
-                  <button onClick={() => setShowSignature(!showSignature)} className="w-full rounded-xl bg-green-600 hover:bg-green-500 py-3 font-semibold text-white transition-colors">
-                    {showSignature ? '✍️ Unterschrift schließen' : signatureData ? '✅ Unterschrift vorhanden' : '✍️ Kunden-Unterschrift'}
+                  <button onClick={() => setShowSignature(!showSignature)} className="w-full rounded-xl border border-black/10 bg-white hover:bg-black/5 py-3 font-semibold text-[#1d1d1f] transition-colors">
+                    <span className="inline-flex items-center justify-center gap-2">{signatureData && !showSignature ? <Check className="w-4 h-4 text-green-600" /> : <PenLine className="w-4 h-4" />}{showSignature ? 'Unterschrift schließen' : signatureData ? 'Unterschrift vorhanden' : 'Kunden-Unterschrift'}</span>
                   </button>
                   {showSignature && (
                     <div className="mt-3">
@@ -1199,14 +1233,14 @@ function Schritt6Content() {
               )}
 
               {kiResult && (
-                <div className="grid grid-cols-3 gap-2 mt-3 pt-2 border-t border-black/10">
-                  <button onClick={handleSaveStueckliste} className="rounded-xl bg-blue-600 hover:bg-blue-500 py-2 text-xs font-bold text-white transition-colors">💾 Stückliste</button>
-                  <button onClick={handlePDF} className="rounded-xl bg-red-600 hover:bg-red-500 py-2 text-xs font-bold text-white transition-colors">📄 Angebot PDF</button>
-                  <button onClick={handleManualEdit} className="rounded-xl bg-orange-600 hover:bg-orange-500 py-2 text-xs font-bold text-white transition-colors">{editMode ? '✅ Fertig' : '✏️ Manuell'}</button>
+                <div className="grid grid-cols-3 gap-2 mt-3 pt-3 border-t border-black/10">
+                  <button onClick={handleSaveStueckliste} className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-black/10 bg-white hover:bg-black/5 py-2 text-xs font-semibold text-[#1d1d1f] transition-colors"><Save className="w-3.5 h-3.5" />Stückliste</button>
+                  <button onClick={handlePDF} className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-black/10 bg-white hover:bg-black/5 py-2 text-xs font-semibold text-[#1d1d1f] transition-colors"><FileText className="w-3.5 h-3.5" />Angebot PDF</button>
+                  <button onClick={handleManualEdit} className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-black/10 bg-white hover:bg-black/5 py-2 text-xs font-semibold text-[#1d1d1f] transition-colors">{editMode ? <Check className="w-3.5 h-3.5" /> : <Pencil className="w-3.5 h-3.5" />}{editMode ? 'Fertig' : 'Manuell'}</button>
                 </div>
               )}
               {kiResult && abschnitteAusSchritt2(s2).length > 0 && (
-                <button onClick={handleAufmassblatt} disabled={aufmassLaeuft} className="w-full mt-2 rounded-xl bg-[#1e3a8a] hover:bg-[#1e40af] disabled:opacity-60 py-2 text-xs font-bold text-white transition-colors">{aufmassLaeuft ? '⏳ Aufmaßblatt wird erstellt …' : '📐 Aufmaßblatt (PDF) – Maße, Flächen, Fotos, Unterschrift'}</button>
+                <button onClick={handleAufmassblatt} disabled={aufmassLaeuft} className="mt-2 inline-flex w-full items-center justify-center gap-1.5 rounded-lg border border-black/10 bg-white hover:bg-black/5 disabled:opacity-60 py-2 text-xs font-semibold text-[#1d1d1f] transition-colors"><Ruler className="w-3.5 h-3.5" />{aufmassLaeuft ? 'Aufmaßblatt wird erstellt …' : 'Aufmaßblatt (PDF) – Maße, Flächen, Fotos, Unterschrift'}</button>
               )}
             </div>
           </div>
@@ -1222,8 +1256,8 @@ function Schritt6Content() {
                   <KiHinweis text="KI-gestützte Berechnung (Mistral). Materialliste und Preis sind Vorschläge – bitte fachlich prüfen, bevor das Angebot rausgeht." />
                 </div>
               </div>
-              <button onClick={handleKIBerechnung} disabled={kiLoading} className="w-full rounded-xl bg-blue-600 hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed py-4 font-bold text-white transition-colors">
-                {kiLoading ? <span className="flex items-center justify-center gap-2"><span className="h-5 w-5 animate-spin rounded-full border-2 border-white border-t-transparent"></span>KI berechnet Materialliste...</span> : '🚀 KI Planung starten'}
+              <button onClick={handleKIBerechnung} disabled={kiLoading} className="w-full rounded-xl bg-[#e8590c] hover:bg-[#d9480f] disabled:opacity-50 disabled:cursor-not-allowed py-3.5 font-semibold text-white transition-colors">
+                {kiLoading ? <span className="flex items-center justify-center gap-2"><span className="h-5 w-5 animate-spin rounded-full border-2 border-white border-t-transparent"></span>KI berechnet Materialliste...</span> : <span className="inline-flex items-center justify-center gap-2"><Sparkles className="w-4 h-4" />KI Planung starten</span>}
               </button>
               {kiError && <div className="mt-4 rounded-xl border border-red-500/30 bg-red-500/10 p-4"><p className="text-sm font-medium text-red-700">Fehler: {kiError}</p></div>}
             </div>
@@ -1484,8 +1518,8 @@ function Schritt6Content() {
                       <p className="text-sm text-[#86868b]">Prüft automatisch, ob Material von anderen Baustellen direkt geliefert werden kann, statt neu zu bestellen</p>
                     </div>
                   </div>
-                  <button onClick={handleDisposition} disabled={dispLoading} className="w-full rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 disabled:cursor-not-allowed py-4 font-bold text-white transition-colors">
-                    {dispLoading ? <span className="flex items-center justify-center gap-2"><span className="h-5 w-5 animate-spin rounded-full border-2 border-white border-t-transparent"></span>Optimiere Routen...</span> : '🔄 Disposition erneut prüfen'}
+                  <button onClick={handleDisposition} disabled={dispLoading} className="w-full rounded-xl border border-black/10 bg-white hover:bg-black/5 disabled:opacity-50 disabled:cursor-not-allowed py-3.5 font-semibold text-[#1d1d1f] transition-colors">
+                    {dispLoading ? <span className="flex items-center justify-center gap-2"><span className="h-5 w-5 animate-spin rounded-full border-2 border-[#1d1d1f] border-t-transparent"></span>Optimiere Routen...</span> : 'Disposition erneut prüfen'}
                   </button>
                   {dispError && <div className="mt-4 rounded-xl border border-red-500/30 bg-red-500/10 p-4"><p className="text-sm font-medium text-red-700">Fehler: {dispError}</p></div>}
                 </div>
