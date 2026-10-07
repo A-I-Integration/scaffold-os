@@ -17,6 +17,7 @@ import DispositionResult from '@/components/aufmaß/DispositionResult';
 import { DispositionResult as DispositionData } from '@/lib/calculations/disposition';
 import { uebernehmeMaterialBearbeitung } from '@/lib/stueckliste-bearbeiten';
 import { generateInvoicePDF, fmtDate as fmtRechnungsDatum, holePdfBase64FuerVersand, type Invoice } from '@/lib/invoice-pdf';
+import { abschnitteAusSchritt2, erzeugeAufmassblattPdf } from '@/lib/aufmassblatt-pdf';
 
 const DigitalTwin = dynamic(() => import('@/components/aufmaß/DigitalTwin'), {
   ssr: false,
@@ -600,6 +601,23 @@ function Schritt6Content() {
   function handleQuantityChange(index: number, newQty: number) {
     setEditedMaterials((prev) => { const updated = [...prev]; const item = { ...updated[index] }; item.quantity = Math.max(0, newQty); item.totalPrice = item.quantity * item.unitPrice; updated[index] = item; return updated; });
   }
+  // Aufmaßblatt: nachvollziehbare Flächenermittlung (Länge × Höhe je Abschnitt) für den Auftraggeber
+  function handleAufmassblatt() {
+    const abschnitte = abschnitteAusSchritt2(s2);
+    if (abschnitte.length === 0) return;
+    const doc = erzeugeAufmassblattPdf({
+      kunde: s1.name || '',
+      adresse: s1.adresse || '',
+      gewerk: gewerkeAnzeige(s1),
+      system: systemAnzeigename(s3.system, s3.customSystem) || undefined,
+      abschnitte,
+      unterschriftDataUrl: signatureData,
+      firma: companyProfile
+        ? { name: companyProfile.company_name, street: companyProfile.street, zip: companyProfile.zip, city: companyProfile.city }
+        : null,
+    });
+    doc.save(`Aufmass_${String(s1.name || 'Projekt').replace(/[^\wäöüÄÖÜß-]+/g, '_')}.pdf`);
+  }
   function handleZurueck() { router.push(searchParams.get('id') ? `/aufmass/schritt5?id=${searchParams.get('id')}` : '/aufmass/schritt5'); }
 
   // ═══════════════════════════════════════════════════════════
@@ -1162,6 +1180,9 @@ function Schritt6Content() {
                   <button onClick={handlePDF} className="rounded-xl bg-red-600 hover:bg-red-500 py-2 text-xs font-bold text-white transition-colors">📄 Angebot PDF</button>
                   <button onClick={handleManualEdit} className="rounded-xl bg-orange-600 hover:bg-orange-500 py-2 text-xs font-bold text-white transition-colors">{editMode ? '✅ Fertig' : '✏️ Manuell'}</button>
                 </div>
+              )}
+              {kiResult && abschnitteAusSchritt2(s2).length > 0 && (
+                <button onClick={handleAufmassblatt} className="w-full mt-2 rounded-xl bg-[#1e3a8a] hover:bg-[#1e40af] py-2 text-xs font-bold text-white transition-colors">📐 Aufmaßblatt (PDF) – Maße, Flächen, Unterschrift</button>
               )}
             </div>
           </div>
