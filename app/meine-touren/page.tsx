@@ -7,6 +7,7 @@ import ProjektDokumentation from '@/components/ProjektDokumentation';
 import Link from 'next/link';
 import { Wrench, Navigation } from 'lucide-react';
 import { starteNeuesAufmass } from '@/lib/aufmass-projekt-session';
+import { lokalesDatumIso } from '@/lib/datum';
 
 // ============================================================
 // SCAFFOLD OS – Mitarbeiter-Bereich (Bauleiter / Mitarbeiter)
@@ -51,7 +52,7 @@ const DOK_PROJECT_KEY = 'scaffold_dokumentation_project';
 
 type Tab = 'werkzeuge' | 'mitarbeiter';
 
-function todayISO() { return new Date().toISOString().split('T')[0]; }
+function todayISO() { return lokalesDatumIso(); }
 function fmtTime(iso: string | null) {
   if (!iso) return '–';
   return new Date(iso).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
