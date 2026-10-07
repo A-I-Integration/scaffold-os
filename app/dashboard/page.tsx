@@ -531,7 +531,7 @@ export default function DashboardPage() {
                           p.status === "completed" ? "bg-emerald-50 text-emerald-700" :
                           "bg-[#f5f5f7] text-[#86868b]"
                         }`}>
-                          {p.status === "active" ? "Aktiv" : p.status === "completed" ? "Abgeschlossen" : p.status}
+                          {p.status === "entwurf" ? "Entwurf" : p.status === "active" ? "Aktiv" : p.status === "completed" ? "Abgeschlossen" : p.status}
                         </span>
                       </td>
                       <td className="px-4 py-3 text-[#86868b] text-sm">
@@ -547,7 +547,7 @@ export default function DashboardPage() {
                               className="inline-flex items-center gap-1 text-xs border border-black/10 hover:border-emerald-500 text-[#424245] hover:text-emerald-600 px-2.5 py-1.5 rounded-full transition-colors disabled:opacity-40">
                               <CheckCircle2 className="w-3.5 h-3.5" /> Abschließen
                             </button>
-                          ) : (
+                          ) : p.status === "entwurf" ? null : (
                             <button
                               disabled={busyId === p.id}
                               onClick={() => setProjectStatus(p, 'active')}
@@ -671,7 +671,7 @@ function MonthDrilldown({
                     <td className="px-3 py-2 font-medium text-[#1d1d1f]">{p.name}</td>
                     <td className="px-3 py-2 text-[#86868b]">{p.customer}</td>
                     <td className="px-3 py-2 text-[#86868b]">
-                      {p.status === "active" ? "Aktiv" : p.status === "completed" ? "Abgeschlossen" : p.status}
+                      {p.status === "entwurf" ? "Entwurf" : p.status === "active" ? "Aktiv" : p.status === "completed" ? "Abgeschlossen" : p.status}
                     </td>
                     <td className="px-3 py-2 text-emerald-600">
                       {p.value > 0 ? `${p.value.toLocaleString("de-DE")} €` : "–"}

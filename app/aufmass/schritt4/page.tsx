@@ -6,6 +6,7 @@ import { ShieldCheck } from 'lucide-react';
 import { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { setzeMarkierung, leseSchrittGeladenesProjekt, setzeSchrittGeladenesProjekt } from '@/lib/aufmass-projekt-session';
+import { speichereEntwurf } from '@/lib/aufmass-entwurf';
 
 const LEERES_FORM_S4 = {
   // Bestehend
@@ -84,6 +85,7 @@ function Schritt4Content() {
 
   function handleWeiter() {
     localStorage.setItem('scaffold_step4', JSON.stringify(form));
+    if (!projectId) void speichereEntwurf();
     router.push(projectId ? `/aufmass/schritt5?id=${projectId}` : '/aufmass/schritt5');
   }
 

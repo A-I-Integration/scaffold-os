@@ -6,6 +6,7 @@ import { Package } from 'lucide-react';
 import { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { setzeMarkierung, leseSchrittGeladenesProjekt, setzeSchrittGeladenesProjekt } from '@/lib/aufmass-projekt-session';
+import { speichereEntwurf } from '@/lib/aufmass-entwurf';
 
 const LEERES_FORM_S5 = {
   arbeitsbuehnen: '',
@@ -67,6 +68,7 @@ function Schritt5Content() {
 
   function handleWeiter() {
     localStorage.setItem('scaffold_step5', JSON.stringify(form));
+    if (!projectId) void speichereEntwurf();
     router.push(projectId ? `/aufmass/schritt6?id=${projectId}` : '/aufmass/schritt6');
   }
 

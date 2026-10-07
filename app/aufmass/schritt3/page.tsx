@@ -6,6 +6,7 @@ import { Construction } from 'lucide-react';
 import { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { setzeMarkierung, leseSchrittGeladenesProjekt, setzeSchrittGeladenesProjekt, leiteStepsAusKiResultAb } from '@/lib/aufmass-projekt-session';
+import { speichereEntwurf } from '@/lib/aufmass-entwurf';
 import { GERUEST_SYSTEME, CUSTOM_SYSTEM_ID, findeSystem } from '@/lib/calculations/geruest-systeme';
 
 const LEERES_FORM_S3 = {
@@ -122,6 +123,7 @@ function Schritt3Content() {
       return;
     }
     localStorage.setItem('scaffold_step3', JSON.stringify(form));
+    if (!projectId) void speichereEntwurf();
     router.push(projectId ? `/aufmass/schritt4?id=${projectId}` : '/aufmass/schritt4');
   }
 

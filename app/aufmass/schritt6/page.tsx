@@ -13,6 +13,7 @@ import { KIAnalysis } from '@/types/scaffold';
 import { systemAnzeigename } from '@/lib/calculations/geruest-systeme';
 import { geruesttypZuScaffoldType } from '@/lib/calculations/scaffold-engine';
 import { sollFrischGeladenWerden, leseMarkierung, setzeMarkierung, leseSchrittGeladenesProjekt, setzeSchrittGeladenesProjekt, schliesseSitzungAb, loescheWizardDaten, leiteStepsAusKiResultAb, gewerkeVonStep1 } from '@/lib/aufmass-projekt-session';
+import { speichereEntwurf, leseEntwurfId } from '@/lib/aufmass-entwurf';
 import DispositionResult from '@/components/aufmaß/DispositionResult';
 import { DispositionResult as DispositionData } from '@/lib/calculations/disposition';
 import { uebernehmeMaterialBearbeitung } from '@/lib/stueckliste-bearbeiten';
@@ -490,6 +491,10 @@ function Schritt6Content() {
   async function handleSpeichern() {
     setIsSaving(true);
     try {
+      // Auto-Save: Gibt es aus Schritt 1–5 schon einen Entwurf, wird DER zum
+      // endgültigen Projekt (PATCH) – sonst entstünde ein Duplikat.
+      let projektId = savedProjectId;
+      if (!projektId) { await speichereEntwurf(); projektId = leseEntwurfId(); }
       // NEU (Zusammenspiel-Kette): Wurde in Schritt 1 kein bestehender Kunde
       // ausgewählt, sondern nur ein Name eingetippt, blieb das Projekt bisher
       // KOMPLETT ohne Kundenverknüpfung – das Projekt tauchte dann nirgends
@@ -529,17 +534,17 @@ function Schritt6Content() {
       // Aktualisierung. Jetzt: existiert savedProjectId schon, wird PATCH verwendet
       // (aktualisiert das bestehende Projekt UND sichert automatisch eine Version
       // des bisherigen Stands, siehe /api/projects PATCH).
-      const gespeicherteDaten = { ...stepData, angebotAnpassungen: anpassungen, kiResult, angebotsStatus, preisModus, festpreisProM2 };
+      const gespeicherteDaten = { ...stepData, angebotAnpassungen: anpassungen, entwurf: false, kiResult, angebotsStatus, preisModus, festpreisProM2 };
       let result: any;
-      if (savedProjectId) {
+      if (projektId) {
         const response = await fetch('/api/projects', {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ id: savedProjectId, name: s1.name || 'Unbenanntes Projekt', adresse: s1.adresse || '', data: gespeicherteDaten, customer_id: ermittelteCustomerId }),
+          body: JSON.stringify({ id: projektId, name: s1.name || 'Unbenanntes Projekt', adresse: s1.adresse || '', data: gespeicherteDaten, customer_id: ermittelteCustomerId }),
         });
         const json = await response.json();
         if (!response.ok || !json.success) throw new Error(json.error || 'Speichern fehlgeschlagen');
-        result = { id: savedProjectId };
+        result = { id: projektId };
         // NEU: Nach erfolgreichem Speichern die "Sitzungs"-Markierung
         // zurücksetzen – ein späteres, erneutes Öffnen desselben Projekts
         // lädt dann wieder frisch von der Datenbank statt dem (jetzt eh
@@ -567,7 +572,7 @@ function Schritt6Content() {
       // URL sofort still (ohne History-Eintrag/Scroll) auf ?id=<neue-ID>
       // aktualisieren und die Sitzungs-Markierung setzen - ein Reload lädt
       // danach korrekt über PATCH statt erneut über POST.
-      if (!savedProjectId) {
+      if (!searchParams.get('id')) {
         router.replace(`/aufmass/schritt6?id=${result.id}`, { scroll: false });
         setzeMarkierung(result.id);
         // Die URL-Änderung löst den Lade-Effekt oben erneut aus (neue
