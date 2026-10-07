@@ -46,6 +46,13 @@ export interface AufmassNachtrag {
   betragEur?: number;
 }
 
+/** Gerüstergänzung (Konsole, Treppenturm, Netz …): eigene Position, NICHT in der Fläche enthalten */
+export interface AufmassZulage {
+  bezeichnung: string;
+  einheit: 'Stk' | 'lfm';
+  menge: number;
+}
+
 export interface AufmassblattInput {
   kunde: string;
   adresse: string;
@@ -53,6 +60,8 @@ export interface AufmassblattInput {
   system?: string;
   datum?: Date;
   abschnitte: AufmassAbschnitt[];
+  /** Gerüstergänzungen als eigene Positionen (Stück / lfm) */
+  zulagen?: AufmassZulage[];
   /** Nachträge/Änderungen (z. B. aus den Angebots-Anpassungen in Schritt 6) */
   nachtraege?: AufmassNachtrag[];
   /** Fotodokumentation (Projekt-Fotos), wird auf Folgeseiten gedruckt */
@@ -152,6 +161,7 @@ export function erzeugeAufmassblattPdf(input: AufmassblattInput): jsPDF {
     headStyles: { fillColor: [30, 58, 138] },
     columnStyles: { 2: { halign: 'right' }, 3: { halign: 'right' }, 4: { halign: 'right' } },
     didParseCell: (d) => {
+      if (d.section === 'head' && d.column.index >= 2) d.cell.styles.halign = 'right';
       if (d.section === 'body' && d.row.index === zeilen.length) d.cell.styles.fontStyle = 'bold';
     },
   });
@@ -167,6 +177,24 @@ export function erzeugeAufmassblattPdf(input: AufmassblattInput): jsPDF {
       : '');
   doc.text(hinweis, 14, ey, { maxWidth: w - 28 });
   ey += 16;
+
+  const zulagen = (input.zulagen ?? []).filter((z) => z.bezeichnung.trim() && z.menge > 0);
+  if (zulagen.length > 0) {
+    if (ey > 200) {
+      doc.addPage();
+      ey = 30;
+    }
+    autoTable(doc, {
+      startY: ey,
+      head: [['Gerüstergänzungen (nicht in der Fläche enthalten)', 'Einheit', 'Menge']],
+      body: zulagen.map((z) => [z.bezeichnung.trim(), z.einheit, fmt(z.menge)]),
+      theme: 'grid',
+      headStyles: { fillColor: [71, 85, 105] },
+      columnStyles: { 1: { cellWidth: 25 }, 2: { halign: 'right', cellWidth: 30 } },
+      didParseCell: (d) => { if (d.section === 'head' && d.column.index === 2) d.cell.styles.halign = 'right'; },
+    });
+    ey = ((doc as any).lastAutoTable?.finalY ?? ey) + 10;
+  }
 
   const nachtraege = (input.nachtraege ?? []).filter((n) => n.text.trim() || (n.betragEur ?? 0) > 0);
   if (nachtraege.length > 0) {

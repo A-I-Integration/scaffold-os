@@ -25,6 +25,12 @@ describe('Aufmaßblatt', () => {
     expect(r.zeilen.map((z) => z.mindestlaengeAngesetzt)).toEqual([true, false, false])
     expect(r.gesamtM2).toBe(20)
   })
+  it('Gerüstergänzungen erzeugen ein PDF, leere Positionen werden ignoriert', () => {
+    const doc = erzeugeAufmassblattPdf({ kunde: 'K', adresse: 'A', abschnitte: [{ bezeichnung: 'F', laengeM: 10, hoeheM: 6 }],
+      zulagen: [{ bezeichnung: 'Konsole', einheit: 'Stk', menge: 4 }, { bezeichnung: '', einheit: 'lfm', menge: 3 }, { bezeichnung: 'Netz', einheit: 'lfm', menge: 0 }] })
+    expect(doc.getNumberOfPages()).toBe(1)
+    expect(doc.output('arraybuffer').byteLength).toBeGreaterThan(1000)
+  })
   it('erzeugt ein PDF mit Text (auch mit kaputter Unterschrift)', () => {
     const doc = erzeugeAufmassblattPdf({ kunde: 'Muster GmbH', adresse: 'Weg 1, Berlin', abschnitte: [{ bezeichnung: 'Fassade', laengeM: 10, hoeheM: 6 }], unterschriftDataUrl: 'data:image/png;base64,xxx' })
     const buf = doc.output('arraybuffer')

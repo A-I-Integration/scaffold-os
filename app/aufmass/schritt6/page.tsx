@@ -17,7 +17,7 @@ import DispositionResult from '@/components/aufmaß/DispositionResult';
 import { DispositionResult as DispositionData } from '@/lib/calculations/disposition';
 import { uebernehmeMaterialBearbeitung } from '@/lib/stueckliste-bearbeiten';
 import { generateInvoicePDF, fmtDate as fmtRechnungsDatum, holePdfBase64FuerVersand, type Invoice } from '@/lib/invoice-pdf';
-import { abschnitteAusSchritt2, berechneAufmass, erzeugeAufmassblattPdf, type AufmassFoto } from '@/lib/aufmassblatt-pdf';
+import { abschnitteAusSchritt2, berechneAufmass, erzeugeAufmassblattPdf, type AufmassFoto, type AufmassZulage } from '@/lib/aufmassblatt-pdf';
 import { Save, FileText, Pencil, Check, Ruler, PenLine, ClipboardList, Sparkles, Mail } from 'lucide-react';
 import { ladeAufmassFotos } from '@/lib/aufmassblatt-fotos';
 import { getProjectMediaClient } from '@/lib/media-client';
@@ -98,6 +98,8 @@ function Schritt6Content() {
     miete: { aktiv: false, wochen: '', preisProWoche: '' },
     nachtrag: { aktiv: false, text: '', betrag: '' },
     rabatt: { aktiv: false, betrag: '' },
+    // Gerüstergänzungen fürs Aufmaßblatt (Stück/lfm) – fließen NICHT in den Angebotspreis
+    zulagen: [] as { bezeichnung: string; einheit: 'Stk' | 'lfm'; menge: string }[],
   });
 
   // NEU (Phase 30): Preisbasis wählbar – KI-Kalkulation oder Festpreis pro m².
@@ -631,6 +633,7 @@ function Schritt6Content() {
         gewerk: gewerkeAnzeige(s1),
         system: systemAnzeigename(s3.system, s3.customSystem) || undefined,
         abschnitte,
+        zulagen: (anpassungen.zulagen ?? []).map((z): AufmassZulage => ({ bezeichnung: z.bezeichnung, einheit: z.einheit, menge: parseFloat(String(z.menge).replace(',', '.')) || 0 })),
         nachtraege,
         fotos,
         unterschriftDataUrl: signatureData,
@@ -1238,6 +1241,36 @@ function Schritt6Content() {
                   <button onClick={handleSaveStueckliste} className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-black/10 bg-white hover:bg-black/5 py-2 text-xs font-semibold text-[#1d1d1f] transition-colors"><Save className="w-3.5 h-3.5" />Stückliste</button>
                   <button onClick={handlePDF} className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-black/10 bg-white hover:bg-black/5 py-2 text-xs font-semibold text-[#1d1d1f] transition-colors"><FileText className="w-3.5 h-3.5" />Angebot PDF</button>
                   <button onClick={handleManualEdit} className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-black/10 bg-white hover:bg-black/5 py-2 text-xs font-semibold text-[#1d1d1f] transition-colors">{editMode ? <Check className="w-3.5 h-3.5" /> : <Pencil className="w-3.5 h-3.5" />}{editMode ? 'Fertig' : 'Manuell'}</button>
+                </div>
+              )}
+              {kiResult && abschnitteAusSchritt2(s2).length > 0 && (
+                <div className="mt-3 rounded-lg border border-black/10 p-3">
+                  <p className="text-xs font-semibold text-[#1d1d1f]">Gerüstergänzungen fürs Aufmaß</p>
+                  <p className="mb-2 text-[11px] text-[#86868b]">Eigene Positionen (Konsolen, Treppentürme, Netze …), nicht in der Fläche enthalten. Wirkt nur auf das Aufmaßblatt, nicht auf den Angebotspreis.</p>
+                  <datalist id="zulagen-vorschlaege">
+                    <option value="Konsole (Verbreiterung)" /><option value="Treppenturm" /><option value="Netz" /><option value="Schutzdach" /><option value="Überbrückung" />
+                  </datalist>
+                  {(anpassungen.zulagen ?? []).map((z, i) => (
+                    <div key={i} className="mb-1.5 flex items-center gap-1.5">
+                      <input list="zulagen-vorschlaege" value={z.bezeichnung} placeholder="Bezeichnung"
+                        onChange={(e) => setAnpassungen((p) => ({ ...p, zulagen: (p.zulagen ?? []).map((x, j) => j === i ? { ...x, bezeichnung: e.target.value } : x) }))}
+                        className="min-w-0 flex-1 rounded-md border border-black/10 bg-white px-2 py-1.5 text-xs" />
+                      <input type="number" min="0" step="0.01" value={z.menge} placeholder="Menge"
+                        onChange={(e) => setAnpassungen((p) => ({ ...p, zulagen: (p.zulagen ?? []).map((x, j) => j === i ? { ...x, menge: e.target.value } : x) }))}
+                        className="w-16 rounded-md border border-black/10 bg-white px-2 py-1.5 text-xs" />
+                      <select value={z.einheit}
+                        onChange={(e) => setAnpassungen((p) => ({ ...p, zulagen: (p.zulagen ?? []).map((x, j) => j === i ? { ...x, einheit: e.target.value as 'Stk' | 'lfm' } : x) }))}
+                        className="rounded-md border border-black/10 bg-white px-1.5 py-1.5 text-xs">
+                        <option value="Stk">Stk</option><option value="lfm">lfm</option>
+                      </select>
+                      <button type="button" aria-label="Position entfernen"
+                        onClick={() => setAnpassungen((p) => ({ ...p, zulagen: (p.zulagen ?? []).filter((_, j) => j !== i) }))}
+                        className="px-1.5 text-sm text-[#86868b] hover:text-red-600">✕</button>
+                    </div>
+                  ))}
+                  <button type="button"
+                    onClick={() => setAnpassungen((p) => ({ ...p, zulagen: [...(p.zulagen ?? []), { bezeichnung: '', einheit: 'Stk' as const, menge: '' }] }))}
+                    className="text-xs font-semibold text-[#e8590c] hover:underline">+ Position hinzufügen</button>
                 </div>
               )}
               {kiResult && abschnitteAusSchritt2(s2).length > 0 && (
