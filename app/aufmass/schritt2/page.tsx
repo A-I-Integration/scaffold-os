@@ -1,5 +1,8 @@
 'use client';
 
+import SymbolIcon from '@/components/aufmaß/SymbolIcon';
+import WizardKopf from '@/components/aufmaß/WizardKopf';
+import { Building2, Waypoints } from 'lucide-react';
 import { useState, useEffect, useRef, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { setzeMarkierung, leseSchrittGeladenesProjekt, setzeSchrittGeladenesProjekt, leiteStepsAusKiResultAb } from '@/lib/aufmass-projekt-session';
@@ -538,8 +541,7 @@ function leeresFormS2() {
       <div className="min-h-screen bg-white text-[#1d1d1f] p-6">
         <div className="max-w-2xl mx-auto">
           <button onClick={zurueck} className="text-[#86868b] hover:text-[#1d1d1f] text-sm mb-2">← Zurück</button>
-          <h1 className="text-3xl font-bold mb-2">🌉 Brücke & Spannweiten</h1>
-          <p className="text-[#86868b] mb-2">Baustelle: Schritt 2 von 6</p>
+          <WizardKopf schritt={2} titel="Brücke & Spannweiten" icon={Waypoints} />
           {step1Data && (
             <div className="bg-black/5 rounded-xl p-3 mb-6 text-sm text-[#86868b]">
               <span className="text-[#424245] font-medium">{step1Data.name}</span> · {step1Data.adresse}
@@ -581,12 +583,12 @@ function leeresFormS2() {
               <div className="grid grid-cols-2 gap-3">
                 <button type="button" onClick={() => setBruecke({ aufhaengung: 'bodenstehend' })}
                   className={`rounded-xl border-2 p-4 text-left transition ${form.bruecke.aufhaengung === 'bodenstehend' ? 'border-[#e8590c] bg-[#e8590c]/10' : 'border-black/10 bg-black/5'}`}>
-                  <div className="font-semibold">⚒️ Traggerüst (bodenstehend)</div>
+                  <div className="font-semibold flex items-center gap-2"><SymbolIcon e="⚒️" />Traggerüst (bodenstehend)</div>
                   <div className="text-xs text-[#86868b] mt-0.5">Stützt sich am Boden/Gewässergrund ab</div>
                 </button>
                 <button type="button" onClick={() => setBruecke({ aufhaengung: 'haengend' })}
                   className={`rounded-xl border-2 p-4 text-left transition ${form.bruecke.aufhaengung === 'haengend' ? 'border-[#e8590c] bg-[#e8590c]/10' : 'border-black/10 bg-black/5'}`}>
-                  <div className="font-semibold">⛓️ Hängegerüst</div>
+                  <div className="font-semibold flex items-center gap-2"><SymbolIcon e="⛓️" />Hängegerüst</div>
                   <div className="text-xs text-[#86868b] mt-0.5">Hängt am Brückenbauwerk, kein Bodenkontakt</div>
                 </button>
               </div>
@@ -596,10 +598,10 @@ function leeresFormS2() {
               <h3 className="text-[#e8590c] text-xs font-bold uppercase tracking-wider mb-3">Was befindet sich darunter?</h3>
               <div className="grid grid-cols-2 gap-2">
                 {([
-                  { id: 'strasse', label: '🚗 Straße' },
-                  { id: 'schiene', label: '🚆 Schiene' },
-                  { id: 'gewaesser', label: '🌊 Gewässer' },
-                  { id: 'gelaende', label: '🌳 Gelände' },
+                  { id: 'strasse', label: 'Straße' },
+                  { id: 'schiene', label: 'Schiene' },
+                  { id: 'gewaesser', label: 'Gewässer' },
+                  { id: 'gelaende', label: 'Gelände' },
                 ] as const).map(opt => (
                   <button key={opt.id} type="button" onClick={() => setBruecke({ untergrundArt: opt.id })}
                     className={`rounded-xl border-2 p-3 text-sm text-left transition ${form.bruecke.untergrundArt === opt.id ? 'border-[#e8590c] bg-[#e8590c]/10' : 'border-black/10 bg-black/5'}`}>
@@ -635,8 +637,7 @@ function leeresFormS2() {
     <div className="min-h-screen bg-white text-[#1d1d1f] p-6">
       <div className="max-w-2xl mx-auto">
         <button onClick={zurueck} className="text-[#86868b] hover:text-[#1d1d1f] text-sm mb-2">← Zurück</button>
-        <h1 className="text-3xl font-bold mb-2">🏢 Gebäude & Abmessungen</h1>
-        <p className="text-[#86868b] mb-2">Baustelle: Schritt 2 von 6</p>
+        <WizardKopf schritt={2} titel="Gebäude & Abmessungen" icon={Building2} />
 
         {step1Data && (
           <div className="bg-black/5 rounded-xl p-3 mb-6 text-sm text-[#86868b]">
@@ -648,32 +649,32 @@ function leeresFormS2() {
 
           {lidarUebernommen && (
             <div className="rounded-xl bg-purple-50 border border-purple-200 p-3 text-sm text-purple-700">
-              📐 Maße wurden aus dem LiDAR-Scan übernommen – bitte prüfen und bei Bedarf anpassen.
+              Maße wurden aus dem LiDAR-Scan übernommen – bitte prüfen und bei Bedarf anpassen.
               {form.abschnitte.length > 0 && ` Der Scan hat ${form.abschnitte.length + 1} Ebenen erkannt – als Abschnitte weiter unten eingetragen.`}
             </div>
           )}
 
           {grundrissUebernommen && (
             <div className="rounded-xl bg-teal-50 border border-teal-200 p-3 text-sm text-teal-700">
-              📋 Werte wurden aus der KI-Grundriss-Analyse übernommen – bitte prüfen und bei Bedarf anpassen.
+              Werte wurden aus der KI-Grundriss-Analyse übernommen – bitte prüfen und bei Bedarf anpassen.
             </div>
           )}
 
           {grundrissUebernommen && hoeheGeschaetzt && (
             <div className="rounded-xl bg-orange-50 border border-[#e8590c]/30 p-3 text-sm text-[#e8590c]">
-              ⚠️ Die Höhe wurde aus der Geschosszahl geschätzt (3,00 m pro Geschoss) – Grundrisse enthalten meist keine Höhenangabe. Bitte prüfen und korrigieren.
+              Die Höhe wurde aus der Geschosszahl geschätzt (3,00 m pro Geschoss) – Grundrisse enthalten meist keine Höhenangabe. Bitte prüfen und korrigieren.
             </div>
           )}
 
           {grundrissUebernommen && !form.hoehe && (
             <div className="rounded-xl bg-orange-50 border border-[#e8590c]/30 p-3 text-sm text-[#e8590c]">
-              ⚠️ Die Gebäudehöhe fehlt (im Grundriss nicht vermaßt) – bitte manuell eintragen, sie ist Pflicht für die Berechnung.
+              Die Gebäudehöhe fehlt (im Grundriss nicht vermaßt) – bitte manuell eintragen, sie ist Pflicht für die Berechnung.
             </div>
           )}
 
           {kiUebernommen && (
             <div className="rounded-xl bg-blue-900/20 border border-blue-500/30 p-3 text-sm text-blue-700">
-              🔮 Fassade, Dachform und Hindernisse wurden aus der KI-Foto-Analyse vorbefüllt – bitte prüfen, die KI kann sich irren.
+              Fassade, Dachform und Hindernisse wurden aus der KI-Foto-Analyse vorbefüllt – bitte prüfen, die KI kann sich irren.
             </div>
           )}
 
@@ -714,7 +715,7 @@ function leeresFormS2() {
           {abschnittVorschlaege.length > 0 && (
             <div className="rounded-xl bg-purple-50 border border-purple-200 p-4 space-y-2">
               <p className="text-sm font-medium text-purple-800">
-                📐 LiDAR hat {abschnittVorschlaege.length} weitere Fläche(n) mit deutlich abweichender Höhe erkannt – vermutlich ein Anbau oder Gebäudeteil mit anderer Höhe, nicht nur eine andere Wand.
+                LiDAR hat {abschnittVorschlaege.length} weitere Fläche(n) mit deutlich abweichender Höhe erkannt – vermutlich ein Anbau oder Gebäudeteil mit anderer Höhe, nicht nur eine andere Wand.
               </p>
               {abschnittVorschlaege.map((v, i) => (
                 <div key={i} className="flex items-center justify-between bg-white rounded-lg px-3 py-2 text-sm">
@@ -824,25 +825,25 @@ function leeresFormS2() {
           <div className="space-y-3">
             <button onClick={() => setForm({...form, garagen: !form.garagen})}
               className={`w-full p-3 rounded-xl border text-left transition flex items-center gap-3 ${form.garagen ? 'bg-[#e8590c]/10 border-[#e8590c] text-[#e8590c]' : 'bg-black/10 border-black/10'}`}>
-              <span className="text-xl">🚗</span>
+              <SymbolIcon e="🚗" />
               <div><div className="font-semibold text-sm">Garagen / Nebengebäude vorhanden</div></div>
             </button>
 
             <button onClick={() => setForm({...form, fluchtwege: !form.fluchtwege})}
               className={`w-full p-3 rounded-xl border text-left transition flex items-center gap-3 ${form.fluchtwege ? 'bg-[#e8590c]/10 border-[#e8590c] text-[#e8590c]' : 'bg-black/10 border-black/10'}`}>
-              <span className="text-xl">🚪</span>
+              <SymbolIcon e="🚪" />
               <div><div className="font-semibold text-sm">Fluchtwege beachten</div></div>
             </button>
 
             <button onClick={() => setForm({...form, werbeanlagen: !form.werbeanlagen})}
               className={`w-full p-3 rounded-xl border text-left transition flex items-center gap-3 ${form.werbeanlagen ? 'bg-[#e8590c]/10 border-[#e8590c] text-[#e8590c]' : 'bg-black/10 border-black/10'}`}>
-              <span className="text-xl">📢</span>
+              <SymbolIcon e="📢" />
               <div><div className="font-semibold text-sm">Werbeanlagen vorhanden</div><div className="text-xs opacity-70">Müssen berücksichtigt werden</div></div>
             </button>
 
             <button onClick={() => setForm({...form, durchfahrt: !form.durchfahrt})}
               className={`w-full p-3 rounded-xl border text-left transition flex items-center gap-3 ${form.durchfahrt ? 'bg-[#e8590c]/10 border-[#e8590c] text-[#e8590c]' : 'bg-black/10 border-black/10'}`}>
-              <span className="text-xl">🛣️</span>
+              <SymbolIcon e="🛣️" />
               <div><div className="font-semibold text-sm">Durchfahrt / Eingang freizuhalten</div><div className="text-xs opacity-70">Gitterträger erforderlich</div></div>
             </button>
           </div>
@@ -860,12 +861,12 @@ function leeresFormS2() {
 
           <div className="flex gap-3 pt-4">
             <button onClick={zurueck} className="flex-1 bg-black/10 hover:bg-black/15 text-[#1d1d1f] font-semibold py-3 px-4 rounded-xl">← Zurück</button>
-            <button onClick={handleWeiter} className="flex-1 bg-orange-600 hover:bg-orange-700 text-white font-semibold py-3 px-4 rounded-xl">Weiter →</button>
+            <button onClick={handleWeiter} className="flex-1 bg-[#e8590c] hover:bg-[#d9480f] text-white font-semibold py-3 px-4 rounded-xl">Weiter →</button>
           </div>
 
           <button onClick={handleDirektAngebot}
             className="w-full bg-teal-600/20 hover:bg-teal-600/30 border border-teal-500/50 text-teal-300 font-semibold py-3 px-4 rounded-xl transition">
-            ⚡ Direkt zum Angebot (Schritte 3–5 mit Standardwerten)
+            Direkt zum Angebot (Schritte 3–5 mit Standardwerten)
           </button>
 
         </div>
