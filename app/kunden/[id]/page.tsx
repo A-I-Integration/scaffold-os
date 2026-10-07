@@ -20,7 +20,7 @@ import {
   ClipboardList, Image as ImageIcon, FileSignature, User,
 } from 'lucide-react'
 import { generateInvoicePDF, generateLieferscheinPDF, fmtEur, fmtDate, holePdfBase64FuerVersand, type Invoice } from '@/lib/invoice-pdf'
-import { gewerkeVonStep1 } from '@/lib/aufmass-projekt-session'
+import { gewerkeVonStep1, starteNeuesAufmass } from '@/lib/aufmass-projekt-session'
 import SignaturePad from '@/components/aufmaß/SignaturePad'
 import { uploadVertragsdokument } from '@/lib/vertrag-upload-client'
 import VersionsHistorie from '@/components/VersionsHistorie'
@@ -916,6 +916,14 @@ export default function KundenDetailPage() {
         {/* ═══════════ TAB: AUFMASS ═══════════ */}
         {tab === 'aufmass' && (
           <div className="space-y-4">
+            {kunde && (
+              <div className="flex justify-end">
+                <button
+                  onClick={() => { starteNeuesAufmass(); router.push(`/aufmass/schritt1?kunde=${kunde.id}`) }}
+                  className={btnPrimary}
+                ><Plus className="inline h-3.5 w-3.5 -mt-0.5 mr-1" />Neue Baustelle für {kunde.name}</button>
+              </div>
+            )}
             {projects.length === 0 && <p className="text-sm text-[#86868b]">Noch keine Aufträge für diesen Kunden.</p>}
             {projects.map((project) => {
               const s1 = project.data?.step1 || {}
@@ -931,7 +939,7 @@ export default function KundenDetailPage() {
                 <div key={project.id} className="bg-white rounded-xl border border-black/10 p-5">
                   <div className="flex items-start justify-between gap-2 mb-3">
                     <div>
-                      <p className="font-semibold text-[#1d1d1f] flex items-center gap-1.5"><Ruler className="h-4 w-4 text-[#e8590c]" /> {project.name || 'Unbenanntes Projekt'}</p>
+                      <p className="font-semibold text-[#1d1d1f] flex items-center gap-1.5"><Ruler className="h-4 w-4 text-[#e8590c]" /> {project.name || 'Unbenanntes Projekt'}{s1.baustelle ? ` – ${s1.baustelle}` : ''}</p>
                       {project.adresse && <p className="text-xs text-[#86868b]">{project.adresse}</p>}
                       {ki?.estimatedLaborHours != null && <SollIstStunden projectId={project.id} geplantStunden={ki.estimatedLaborHours} />}
                     </div>
