@@ -9,7 +9,7 @@ FROM node:20-alpine
 WORKDIR /app
 COPY package.json ./
 # Keine externen Dependencies – Analyse ist reines Node.js (kein npm install nötig)
-COPY analyse.js index.js ./
+COPY analyse.js ply-binary.js index.js ./
 
 # Healthcheck: Prozess lebt?
 HEALTHCHECK --interval=60s --timeout=5s --retries=3 \

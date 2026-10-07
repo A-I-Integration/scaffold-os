@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { serverErrorResponse } from '@/lib/auth';
+import { istBinaerPly, parsePlyBinary } from '@/lib/ply-binary';
 
 // ─── Typen ───
 interface Ebene {
@@ -52,7 +53,7 @@ function parseOBJ(text: string): number[] {
   return pts;
 }
 
-// ─── PLY (ASCII) ───
+// ─── PLY (ASCII; binäre Dateien liest lib/ply-binary.ts) ───
 function parsePLY(text: string): number[] {
   const pts: number[] = [];
   let inHeader = true;
@@ -146,6 +147,7 @@ function parsePoints(buffer: Buffer, ext: string): number[] {
   let pts: number[];
   if (ext === 'las') pts = parseLAS(buffer);
   else if (ext === 'glb') pts = parseGLB(buffer);
+  else if (ext === 'ply' && istBinaerPly(buffer)) pts = parsePlyBinary(buffer);
   else {
     const text = buffer.toString('utf-8');
     pts = ext === 'obj' ? parseOBJ(text) : parsePLY(text);
