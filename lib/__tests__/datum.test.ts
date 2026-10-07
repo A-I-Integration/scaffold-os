@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { lokalesDatumIso } from '../datum'
+import { lokalesDatumIso, datumPlusTage } from '../datum'
 
 describe('lokalesDatumIso', () => {
   it('nimmt das lokale Datum, auch kurz nach Mitternacht', () => {
@@ -12,5 +12,11 @@ describe('lokalesDatumIso', () => {
   it('Jahreswechsel', () => {
     expect(lokalesDatumIso(new Date(2026, 11, 31, 23, 30))).toBe('2026-12-31')
     expect(lokalesDatumIso(new Date(2027, 0, 1, 0, 5))).toBe('2027-01-01')
+  })
+  it('datumPlusTage rechnet in Kalendertagen, auch über Monats- und Zeitumstellungsgrenzen', () => {
+    expect(datumPlusTage(14, new Date(2026, 9, 7, 0, 30))).toBe('2026-10-21')
+    expect(datumPlusTage(14, new Date(2026, 9, 20, 0, 30))).toBe('2026-11-03')
+    expect(datumPlusTage(1, new Date(2026, 2, 28, 0, 30))).toBe('2026-03-29')
+    expect(datumPlusTage(0, new Date(2026, 9, 7, 0, 30))).toBe('2026-10-07')
   })
 })

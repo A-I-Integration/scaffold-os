@@ -11,6 +11,7 @@ import {
 import {
   FileText, Plus, X, Download, Trash2, Check, Euro, Mail, AlertTriangle,
 } from 'lucide-react';
+import { lokalesDatumIso, datumPlusTage } from '@/lib/datum';
 
 // ============================================================
 // SCAFFOLD OS – Rechnungsmodul (Phase 13)
@@ -192,9 +193,9 @@ function RechnungenContent() {
   ]);
   const [taxRate, setTaxRate] = useState(19);
   const [invoiceType, setInvoiceType] = useState<'standard' | 'abschlag' | 'schluss'>('standard'); // Phase 15
-  const [invoiceDate, setInvoiceDate] = useState(new Date().toISOString().slice(0, 10));
+  const [invoiceDate, setInvoiceDate] = useState(lokalesDatumIso());
   const [dueDate, setDueDate] = useState(
-    new Date(Date.now() + 14 * 86400000).toISOString().slice(0, 10)
+    datumPlusTage(14)
   );
   const [notes, setNotes] = useState('');
   const [projectId, setProjectId] = useState<string | null>(null);
@@ -337,7 +338,7 @@ function RechnungenContent() {
   // NEU (Phase 38): Teilzahlung oder vollständige Zahlung erfassen
   const [zahlungOffen, setZahlungOffen] = useState<Invoice | null>(null);
   const [zahlungBetrag, setZahlungBetrag] = useState('');
-  const [zahlungDatum, setZahlungDatum] = useState(new Date().toISOString().slice(0, 10));
+  const [zahlungDatum, setZahlungDatum] = useState(lokalesDatumIso());
   const [zahlungLaeuft, setZahlungLaeuft] = useState(false);
 
   async function erfasseZahlung() {
@@ -501,7 +502,7 @@ function RechnungenContent() {
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
     const link = document.createElement('a');
     link.href = URL.createObjectURL(blob);
-    link.download = `EXTF_Buchungsstapel_${new Date().toISOString().slice(0, 10)}.csv`;
+    link.download = `EXTF_Buchungsstapel_${lokalesDatumIso()}.csv`;
     link.click();
     URL.revokeObjectURL(link.href);
   }
@@ -813,7 +814,7 @@ function RechnungenContent() {
                           {inv.status === 'offen' && (
                             <>
                               <button
-                                onClick={() => { setZahlungOffen(inv); setZahlungBetrag(String(Number(inv.gross_amount) - Number(inv.paid_amount || 0))); setZahlungDatum(new Date().toISOString().slice(0, 10)) }}
+                                onClick={() => { setZahlungOffen(inv); setZahlungBetrag(String(Number(inv.gross_amount) - Number(inv.paid_amount || 0))); setZahlungDatum(lokalesDatumIso()) }}
                                 title="Zahlung erfassen (auch teilweise)"
                                 className="p-2 rounded-xl bg-blue-600/30 hover:bg-blue-600/50 text-blue-700 transition-colors"
                               >
