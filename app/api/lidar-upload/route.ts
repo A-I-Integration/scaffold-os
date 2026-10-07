@@ -363,7 +363,16 @@ export async function POST(req: NextRequest) {
     const buffer = Buffer.from(bytes);
 
     // ── 1) Punkte lesen ──
-    let pts = parsePoints(buffer, ext!);
+    // Die Fehler der Parser sind bewusst formulierte, harmlose Hinweise
+    // (z. B. "Binäres PLY nicht unterstützt …"). Sie gehen als 400 an den
+    // Nutzer – sonst würden sie vom allgemeinen 500er-Handler unten durch
+    // "Da ist leider etwas schiefgelaufen" ersetzt.
+    let pts: number[];
+    try {
+      pts = parsePoints(buffer, ext!);
+    } catch (parseErr: any) {
+      return NextResponse.json({ error: parseErr?.message || 'Datei konnte nicht gelesen werden' }, { status: 400 });
+    }
     const totalCount = pts.length / 3;
 
     // ── 2) Downsample auf Arbeitsmenge ──
