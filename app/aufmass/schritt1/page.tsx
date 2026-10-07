@@ -193,7 +193,8 @@ function Schritt1Content() {
       }
     const saved = zwischenstand;
     // Hinweis anzeigen, wenn irgendwo noch Wizard-Daten liegen
-    const irgendwoDaten = WIZARD_KEYS.some((k) => localStorage.getItem(k) !== null);
+    // Nur Schritt-Daten zählen – reine LiDAR-/Upload-Reste sind kein "früheres Aufmaß".
+    const irgendwoDaten = ['scaffold_step1', 'scaffold_step2', 'scaffold_step3', 'scaffold_step4', 'scaffold_step5'].some((k) => localStorage.getItem(k) !== null);
     setHatAlteDaten(irgendwoDaten);
     if (saved) {
       try {
