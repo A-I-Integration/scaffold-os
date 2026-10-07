@@ -23,7 +23,15 @@ export interface AufmassAbschnitt {
 export interface AufmassZeile extends AufmassAbschnitt {
   pos: number;
   flaecheM2: number;
+  /** Für die Fläche angesetzte Länge (bei kleinen Flächen mindestens 2,5 m) */
+  laengeAbrechnungM: number;
+  /** true, wenn die Mindestlänge statt der gemessenen Länge angesetzt wurde */
+  mindestlaengeAngesetzt: boolean;
 }
+
+/** Bei Abrechnung nach Flächenmaß wird die Länge kleiner Flächen mit mindestens 2,5 m
+ *  angesetzt (DIN 18451:2023-09, laut Baunormenlexikon; Normtext nicht geprüft). */
+export const MINDESTLAENGE_M = 2.5;
 
 export interface AufmassFoto {
   /** data:image/jpeg;base64,… (bereits verkleinert) */
@@ -82,11 +90,17 @@ export function abschnitteAusSchritt2(s2: any): AufmassAbschnitt[] {
 }
 
 export function berechneAufmass(abschnitte: AufmassAbschnitt[]): { zeilen: AufmassZeile[]; gesamtM2: number } {
-  const zeilen = abschnitte.map((a, i) => ({
-    ...a,
-    pos: i + 1,
-    flaecheM2: runde2(a.laengeM * a.hoeheM),
-  }));
+  const zeilen = abschnitte.map((a, i) => {
+    const mindest = a.laengeM > 0 && a.laengeM < MINDESTLAENGE_M;
+    const laengeAbrechnungM = mindest ? MINDESTLAENGE_M : a.laengeM;
+    return {
+      ...a,
+      pos: i + 1,
+      laengeAbrechnungM,
+      mindestlaengeAngesetzt: mindest,
+      flaecheM2: runde2(laengeAbrechnungM * a.hoeheM),
+    };
+  });
   return { zeilen, gesamtM2: runde2(zeilen.reduce((s, z) => s + z.flaecheM2, 0)) };
 }
 
@@ -131,7 +145,7 @@ export function erzeugeAufmassblattPdf(input: AufmassblattInput): jsPDF {
     startY: y,
     head: [['Pos.', 'Abschnitt', 'Länge (m)', 'Höhe (m)', 'Fläche (m²)']],
     body: [
-      ...zeilen.map((z) => [String(z.pos), z.bezeichnung, fmt(z.laengeM), fmt(z.hoeheM), fmt(z.flaecheM2)]),
+      ...zeilen.map((z) => [String(z.pos), z.bezeichnung, z.mindestlaengeAngesetzt ? `${fmt(z.laengeM)} (${fmt(z.laengeAbrechnungM)})*` : fmt(z.laengeM), fmt(z.hoeheM), fmt(z.flaecheM2)]),
       ['', 'Gesamtfläche', '', '', fmt(gesamtM2)],
     ],
     theme: 'grid',
@@ -147,7 +161,10 @@ export function erzeugeAufmassblattPdf(input: AufmassblattInput): jsPDF {
   doc.setTextColor(71, 85, 105);
   const hinweis =
     'Fläche je Abschnitt = Länge × Höhe der erfassten Maße. Welche Maße vertraglich abgerechnet werden ' +
-    '(z. B. Überstände, Aufmaßregeln nach Vertrag/ATV), richtet sich nach der Vereinbarung mit dem Auftraggeber.';
+    '(z. B. Überstände, Aufmaßregeln nach Vertrag/ATV), richtet sich nach der Vereinbarung mit dem Auftraggeber.' +
+    (zeilen.some((z) => z.mindestlaengeAngesetzt)
+      ? ' * Bei kleinen Flächen wird die Länge mit mindestens 2,50 m angesetzt (Mindestlänge).'
+      : '');
   doc.text(hinweis, 14, ey, { maxWidth: w - 28 });
   ey += 16;
 

@@ -19,6 +19,12 @@ describe('Aufmaßblatt', () => {
     expect(r.zeilen.map((z) => z.flaecheM2)).toEqual([100, 10])
     expect(r.gesamtM2).toBe(110)
   })
+  it('setzt bei kleinen Flächen die Mindestlänge von 2,5 m an', () => {
+    const r = berechneAufmass([{ bezeichnung: 'Klein', laengeM: 1.8, hoeheM: 4 }, { bezeichnung: 'Genau', laengeM: 2.5, hoeheM: 4 }, { bezeichnung: 'Leer', laengeM: 0, hoeheM: 4 }])
+    expect(r.zeilen.map((z) => z.flaecheM2)).toEqual([10, 10, 0])
+    expect(r.zeilen.map((z) => z.mindestlaengeAngesetzt)).toEqual([true, false, false])
+    expect(r.gesamtM2).toBe(20)
+  })
   it('erzeugt ein PDF mit Text (auch mit kaputter Unterschrift)', () => {
     const doc = erzeugeAufmassblattPdf({ kunde: 'Muster GmbH', adresse: 'Weg 1, Berlin', abschnitte: [{ bezeichnung: 'Fassade', laengeM: 10, hoeheM: 6 }], unterschriftDataUrl: 'data:image/png;base64,xxx' })
     const buf = doc.output('arraybuffer')
