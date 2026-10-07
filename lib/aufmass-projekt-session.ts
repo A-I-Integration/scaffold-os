@@ -29,6 +29,7 @@ export const WIZARD_KEYS = [
   'scaffold_step4',
   'scaffold_step5',
   'scaffold_step6',
+  'scaffold_entwurf_id',
   'scaffold_lidar_measurements',
   'scaffold_lidar_scan_name',
   'scaffold_lidar_fresh',

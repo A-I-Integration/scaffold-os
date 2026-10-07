@@ -192,7 +192,9 @@ export async function PATCH(req: NextRequest) {
       // Nur sichern, wenn es überhaupt schon einen nennenswerten Stand gab
       // (sonst würde die allererste Zwischenspeicherung schon eine leere
       // "Version 1" erzeugen).
-      if (bisher.data && Object.keys(bisher.data).length > 0) {
+      // Auto-Save-Entwürfe (data.entwurf) werden bei jedem "Weiter" überschrieben
+      // und erzeugen keine Versionen – sonst entstünden Dutzende Zwischenstände.
+      if (bisher.data && Object.keys(bisher.data).length > 0 && !bisher.data.entwurf) {
         const cntRes = await fetch(`${url}/rest/v1/project_versions?project_id=eq.${id}&select=version_number&order=version_number.desc&limit=1`, { headers });
         const cntRows = cntRes.ok ? await cntRes.json() : [];
         const naechsteNummer = (cntRows?.[0]?.version_number || 0) + 1;
