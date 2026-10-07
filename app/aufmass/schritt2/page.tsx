@@ -6,6 +6,7 @@ import { Building2, Waypoints } from 'lucide-react';
 import { useState, useEffect, useRef, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { setzeMarkierung, leseSchrittGeladenesProjekt, setzeSchrittGeladenesProjekt, leiteStepsAusKiResultAb } from '@/lib/aufmass-projekt-session';
+import { speichereEntwurf } from '@/lib/aufmass-entwurf';
 import KIWarnings from '@/components/aufmaß/KIWarnings';
 import { useKIValidation } from '@/hooks/useKIValidation';
 import { PartialScaffoldInput, LASTKLASSE_Q1_KN_M2 } from '@/types/scaffold';
@@ -495,6 +496,7 @@ function leeresFormS2() {
     if (istBruecke) {
       if (!brueckeGueltig()) { alert('Bitte mindestens eine Spannweite und die Höhe über Grund/Gewässer eingeben!'); return; }
       localStorage.setItem('scaffold_step2', JSON.stringify(form));
+      if (!projectId) void speichereEntwurf();
       router.push(projectId ? `/aufmass/schritt3?id=${projectId}` : '/aufmass/schritt3');
       return;
     }
@@ -508,6 +510,7 @@ function leeresFormS2() {
     // Zurückkommen sie nicht mehr zwingend überschreiben.
     localStorage.removeItem('scaffold_lidar_fresh');
     localStorage.removeItem('scaffold_grundriss_fresh');
+    if (!projectId) void speichereEntwurf();
     router.push(projectId ? `/aufmass/schritt3?id=${projectId}` : '/aufmass/schritt3');
   }
 
@@ -518,6 +521,7 @@ function leeresFormS2() {
     if (istBruecke) {
       if (!brueckeGueltig()) { alert('Bitte mindestens eine Spannweite und die Höhe über Grund/Gewässer eingeben!'); return; }
       localStorage.setItem('scaffold_step2', JSON.stringify(form));
+      if (!projectId) void speichereEntwurf();
       router.push(projectId ? `/aufmass/schritt6?id=${projectId}` : '/aufmass/schritt6');
       return;
     }
@@ -528,6 +532,7 @@ function leeresFormS2() {
     localStorage.setItem('scaffold_step2', JSON.stringify(form));
     localStorage.removeItem('scaffold_lidar_fresh');
     localStorage.removeItem('scaffold_grundriss_fresh');
+    if (!projectId) void speichereEntwurf();
     router.push(projectId ? `/aufmass/schritt6?id=${projectId}` : '/aufmass/schritt6');
   }
 

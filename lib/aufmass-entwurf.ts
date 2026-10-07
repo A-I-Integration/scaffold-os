@@ -4,7 +4,7 @@
 // Bisher lag alles aus Schritt 1–5 nur im Browser (localStorage). Wurde der
 // Browser geschlossen oder der Speicher geleert, war die Arbeit weg. Jetzt
 // wird beim "Weiter" jedes Schritts eine Kopie als Projekt mit
-// data.entwurf = true in der Datenbank abgelegt. Die Projekt-ID merkt sich
+// status = 'entwurf' (und data.entwurf = true) in der Datenbank abgelegt. Die Projekt-ID merkt sich
 // der Browser unter ENTWURF_ID_KEY (nicht in der URL – ein ?id= in der URL
 // würde in Schritt 2 den LiDAR-/Grundriss-/Foto-Import abschalten).
 //
@@ -13,6 +13,9 @@
 // ============================================================
 
 export const ENTWURF_ID_KEY = 'scaffold_entwurf_id';
+// Eigener Status, damit Entwürfe nicht in Wochenplanung, Miete, Abrechnung
+// u. Ä. auftauchen (alle filtern auf status = 'active').
+export const ENTWURF_STATUS = 'entwurf';
 
 export interface EntwurfPayload {
   name: string;
@@ -65,7 +68,7 @@ async function speichereEntwurfEinmal(): Promise<void> {
   const res = await fetch('/api/projects', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ name: p.name, adresse: p.adresse, data: p.data, status: 'active' }),
+    body: JSON.stringify({ name: p.name, adresse: p.adresse, data: p.data, status: ENTWURF_STATUS }),
   });
   if (!res.ok) return;
   const json = await res.json();

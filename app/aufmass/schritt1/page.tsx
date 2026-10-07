@@ -6,6 +6,7 @@ import { ClipboardList } from 'lucide-react';
 import { useState, useEffect, useRef, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { setzeMarkierung, leseSchrittGeladenesProjekt, setzeSchrittGeladenesProjekt, WIZARD_KEYS, gewerkeVonStep1 } from '@/lib/aufmass-projekt-session';
+import { speichereEntwurf } from '@/lib/aufmass-entwurf';
 import PhotoUpload from '@/components/aufmaß/PhotoUpload';
 import LiDARUpload from '@/components/aufmaß/LiDARUpload';
 import FotoAnalyse from '@/components/aufmaß/FotoAnalyse';
@@ -300,6 +301,7 @@ function Schritt1Content() {
       return;
     }
     localStorage.setItem('scaffold_step1', JSON.stringify(form));
+    if (!projectId) void speichereEntwurf();
     router.push(projectId ? `/aufmass/schritt2?id=${projectId}` : '/aufmass/schritt2');
   }
 

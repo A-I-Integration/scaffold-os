@@ -207,6 +207,10 @@ export async function PATCH(req: NextRequest) {
         });
       }
 
+      // Entwurf wird endgültig gespeichert (Schritt 6 sendet entwurf:false) →
+      // erst jetzt wird er ein aktives Projekt.
+      if (bisher.data?.entwurf === true && data.entwurf === false && !status) patch.status = 'active';
+
       patch.data = { ...(bisher.data || {}), ...data };
     }
 
