@@ -17,7 +17,9 @@ import DispositionResult from '@/components/aufmaß/DispositionResult';
 import { DispositionResult as DispositionData } from '@/lib/calculations/disposition';
 import { uebernehmeMaterialBearbeitung } from '@/lib/stueckliste-bearbeiten';
 import { generateInvoicePDF, fmtDate as fmtRechnungsDatum, holePdfBase64FuerVersand, type Invoice } from '@/lib/invoice-pdf';
-import { abschnitteAusSchritt2, erzeugeAufmassblattPdf } from '@/lib/aufmassblatt-pdf';
+import { abschnitteAusSchritt2, erzeugeAufmassblattPdf, type AufmassFoto } from '@/lib/aufmassblatt-pdf';
+import { ladeAufmassFotos } from '@/lib/aufmassblatt-fotos';
+import { getProjectMediaClient } from '@/lib/media-client';
 
 const DigitalTwin = dynamic(() => import('@/components/aufmaß/DigitalTwin'), {
   ssr: false,
@@ -76,6 +78,7 @@ function Schritt6Content() {
   // ═══════════════════════════════════════════════════════════
   const [showSignature, setShowSignature] = useState(false);
   const [signatureData, setSignatureData] = useState<string | null>(null);
+  const [aufmassLaeuft, setAufmassLaeuft] = useState(false);
   const [emailStatus, setEmailStatus] = useState<'idle' | 'sending' | 'sent' | 'error'>('idle');
   const [showQR, setShowQR] = useState(false);
   const [angebotsStatus, setAngebotsStatus] = useState<'erstellt' | 'versendet' | 'gelesen' | 'angenommen'>('erstellt');
@@ -601,22 +604,43 @@ function Schritt6Content() {
   function handleQuantityChange(index: number, newQty: number) {
     setEditedMaterials((prev) => { const updated = [...prev]; const item = { ...updated[index] }; item.quantity = Math.max(0, newQty); item.totalPrice = item.quantity * item.unitPrice; updated[index] = item; return updated; });
   }
-  // Aufmaßblatt: nachvollziehbare Flächenermittlung (Länge × Höhe je Abschnitt) für den Auftraggeber
-  function handleAufmassblatt() {
+  // Aufmaßblatt: nachvollziehbare Flächenermittlung (Länge × Höhe je Abschnitt) für den Auftraggeber,
+  // inkl. Nachtrag (aus den Angebots-Anpassungen) und Fotodokumentation (Projekt-Fotos, falls gespeichert)
+  async function handleAufmassblatt() {
     const abschnitte = abschnitteAusSchritt2(s2);
     if (abschnitte.length === 0) return;
-    const doc = erzeugeAufmassblattPdf({
-      kunde: s1.name || '',
-      adresse: s1.adresse || '',
-      gewerk: gewerkeAnzeige(s1),
-      system: systemAnzeigename(s3.system, s3.customSystem) || undefined,
-      abschnitte,
-      unterschriftDataUrl: signatureData,
-      firma: companyProfile
-        ? { name: companyProfile.company_name, street: companyProfile.street, zip: companyProfile.zip, city: companyProfile.city }
-        : null,
-    });
-    doc.save(`Aufmass_${String(s1.name || 'Projekt').replace(/[^\wäöüÄÖÜß-]+/g, '_')}.pdf`);
+    setAufmassLaeuft(true);
+    try {
+      let fotos: AufmassFoto[] = [];
+      if (savedProjectId) {
+        try {
+          const sessionId = localStorage.getItem('scaffold_session_id') || '';
+          const medien = await getProjectMediaClient(sessionId, savedProjectId);
+          fotos = await ladeAufmassFotos(medien, process.env.NEXT_PUBLIC_SUPABASE_URL || '');
+        } catch {
+          fotos = []; // Fotos sind optional – das Blatt wird trotzdem erzeugt
+        }
+      }
+      const nachtraege = anpassungen.nachtrag.aktiv
+        ? [{ text: anpassungen.nachtrag.text?.trim() || 'Nachtrag', betragEur: parseFloat(String(anpassungen.nachtrag.betrag).replace(',', '.')) || 0 }]
+        : [];
+      const doc = erzeugeAufmassblattPdf({
+        kunde: s1.name || '',
+        adresse: s1.adresse || '',
+        gewerk: gewerkeAnzeige(s1),
+        system: systemAnzeigename(s3.system, s3.customSystem) || undefined,
+        abschnitte,
+        nachtraege,
+        fotos,
+        unterschriftDataUrl: signatureData,
+        firma: companyProfile
+          ? { name: companyProfile.company_name, street: companyProfile.street, zip: companyProfile.zip, city: companyProfile.city }
+          : null,
+      });
+      doc.save(`Aufmass_${String(s1.name || 'Projekt').replace(/[^\wäöüÄÖÜß-]+/g, '_')}.pdf`);
+    } finally {
+      setAufmassLaeuft(false);
+    }
   }
   function handleZurueck() { router.push(searchParams.get('id') ? `/aufmass/schritt5?id=${searchParams.get('id')}` : '/aufmass/schritt5'); }
 
@@ -1182,7 +1206,7 @@ function Schritt6Content() {
                 </div>
               )}
               {kiResult && abschnitteAusSchritt2(s2).length > 0 && (
-                <button onClick={handleAufmassblatt} className="w-full mt-2 rounded-xl bg-[#1e3a8a] hover:bg-[#1e40af] py-2 text-xs font-bold text-white transition-colors">📐 Aufmaßblatt (PDF) – Maße, Flächen, Unterschrift</button>
+                <button onClick={handleAufmassblatt} disabled={aufmassLaeuft} className="w-full mt-2 rounded-xl bg-[#1e3a8a] hover:bg-[#1e40af] disabled:opacity-60 py-2 text-xs font-bold text-white transition-colors">{aufmassLaeuft ? '⏳ Aufmaßblatt wird erstellt …' : '📐 Aufmaßblatt (PDF) – Maße, Flächen, Fotos, Unterschrift'}</button>
               )}
             </div>
           </div>
