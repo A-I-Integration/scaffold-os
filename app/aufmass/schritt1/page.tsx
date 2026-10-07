@@ -175,6 +175,12 @@ function Schritt1Content() {
                 gewerke: prev.gewerke.length > 0 ? prev.gewerke : (kiResult ? ['allgemein'] : prev.gewerke),
               }));
             }
+            // LiDAR-Maße des gespeicherten Projekts wiederherstellen (für die
+            // LiDAR-Hinweise in Schritt 2), falls vorhanden.
+            try {
+              const lidar = json.success ? json.project?.data?.lidarMeasurements : null;
+              if (lidar) localStorage.setItem('scaffold_lidar_measurements', JSON.stringify(lidar));
+            } catch { /* Speicher voll o. ä. – unkritisch */ }
           } catch {
             // FIX: Vorher blieb das Formular bei einem Fehler in einem
             // undefinierten Zustand (weder alte noch neue Daten sicher) –
