@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import { generateInvoicePDF, fmtEur, fmtDate, holePdfBase64FuerVersand, type Invoice } from '@/lib/invoice-pdf';
 import KundeAuftrag from '@/components/KundeAuftrag';
+import { lokalesDatumIso } from '@/lib/datum'
 
 // ============================================================
 // SCAFFOLD OS – Kunden (Reiter für Admin/CEO + Disposition)
@@ -257,7 +258,7 @@ export default function KundenPage() {
     }
   }
 
-  const heute = new Date().toISOString().slice(0, 10);
+  const heute = lokalesDatumIso();
   const istFaelligUeberschritten = (inv: Invoice) =>
     inv.status === 'offen' && inv.due_date && inv.due_date < heute;
 

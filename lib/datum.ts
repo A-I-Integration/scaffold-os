@@ -13,3 +13,9 @@ export function lokalesDatumIso(d: Date = new Date()): string {
   const t = String(d.getDate()).padStart(2, '0');
   return `${j}-${m}-${t}`;
 }
+
+/** Lokales Datum von heute + n Tagen (Kalendertage, unabhängig von Sommer-/Winterzeit). */
+export function datumPlusTage(tage: number, von: Date = new Date()): string {
+  const d = new Date(von.getFullYear(), von.getMonth(), von.getDate() + tage);
+  return lokalesDatumIso(d);
+}

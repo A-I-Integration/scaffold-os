@@ -31,6 +31,7 @@ import TransportAnlegen from '@/components/TransportAnlegen'
 import SollIstStunden from '@/components/SollIstStunden'
 import AuftragsTeam from '@/components/AuftragsTeam'
 import VertragsDokumente from '@/components/VertragsDokumente'
+import { lokalesDatumIso, datumPlusTage } from '@/lib/datum'
 
 interface Kunde {
   id: string
@@ -461,7 +462,7 @@ export default function KundenDetailPage() {
   // NEU (Phase 38): Teilzahlung oder vollständige Zahlung erfassen
   const [zahlungOffen, setZahlungOffen] = useState<Invoice | null>(null)
   const [zahlungBetrag, setZahlungBetrag] = useState('')
-  const [zahlungDatum, setZahlungDatum] = useState(new Date().toISOString().slice(0, 10))
+  const [zahlungDatum, setZahlungDatum] = useState(lokalesDatumIso())
   const [zahlungNotiz, setZahlungNotiz] = useState('')
 
   async function erfasseZahlung() {
@@ -501,7 +502,7 @@ export default function KundenDetailPage() {
         body: JSON.stringify({
           project_id: project.id, customer_name: kunde.name,
           customer_address: [kunde.street, [kunde.zip, kunde.city].filter(Boolean).join(', ')].filter(Boolean).join(', ') || undefined,
-          due_date: new Date(Date.now() + 14 * 86400000).toISOString().slice(0, 10),
+          due_date: datumPlusTage(14),
           positions: [{ bezeichnung: `Gerüstbau gemäß Angebot${ki?.totalAreaM2 ? ` (${ki.totalAreaM2} m²)` : ''}`, menge: 1, einheit: 'Pauschale', einzelpreis: Math.round(preis * 100) / 100 }],
           override_grund: overrideGrund || undefined,
         }),
@@ -535,7 +536,7 @@ export default function KundenDetailPage() {
         body: JSON.stringify({
           project_id: zusatzProjectId, customer_name: kunde.name,
           customer_address: [kunde.street, [kunde.zip, kunde.city].filter(Boolean).join(' ')].filter(Boolean).join(', ') || undefined,
-          due_date: new Date(Date.now() + 14 * 86400000).toISOString().slice(0, 10),
+          due_date: datumPlusTage(14),
           notes: zusatzNotiz.trim() || undefined,
           positions: [{ bezeichnung: zusatzPos.bezeichnung.trim(), menge, einheit: zusatzPos.einheit || 'Stk.', einzelpreis }],
           override_grund: overrideGrund || undefined,
@@ -631,7 +632,7 @@ export default function KundenDetailPage() {
         body: JSON.stringify({
           project_id: standzeitOffen, customer_name: kunde.name,
           customer_address: [kunde.street, [kunde.zip, kunde.city].filter(Boolean).join(' ')].filter(Boolean).join(', ') || undefined,
-          due_date: new Date().toISOString().slice(0, 10),
+          due_date: lokalesDatumIso(),
           invoice_type: 'gutschrift',
           notes: (standzeitGrund.trim() ? standzeitGrund.trim() + '. ' : '') + beschreibung,
           positions: [{ bezeichnung: beschreibung, menge: wochenUngenutzt, einheit: 'Wo.', einzelpreis: preisDifferenzProWoche }],
@@ -745,7 +746,7 @@ export default function KundenDetailPage() {
         body: JSON.stringify({
           project_id: gutschriftOffen, customer_name: kunde.name,
           customer_address: [kunde.street, [kunde.zip, kunde.city].filter(Boolean).join(' ')].filter(Boolean).join(', ') || undefined,
-          due_date: new Date().toISOString().slice(0, 10),
+          due_date: lokalesDatumIso(),
           invoice_type: 'gutschrift',
           reference_invoice_number: gutschriftReferenz.trim() || undefined,
           notes: (gutschriftReferenz.trim() ? `Bezug: ${gutschriftReferenz.trim()}. ` : '') + gutschriftGrund.trim(),
@@ -1122,7 +1123,7 @@ export default function KundenDetailPage() {
                               )}
                               <button onClick={() => { const doc = generateInvoicePDF(inv); doc.save(`${TYPE_LABEL[inv.invoice_type || 'standard']}_${inv.invoice_number}.pdf`) }} title="PDF" className={btnSecondary}><Download className="h-3 w-3" /></button>
                               <button onClick={() => sendInvoice(inv)} title="Erneut senden" className={btnSecondary}><Send className="h-3 w-3" /></button>
-                              <button onClick={() => { setZahlungOffen(inv); setZahlungBetrag(String(Number(inv.gross_amount) - Number(inv.paid_amount || 0))); setZahlungDatum(new Date().toISOString().slice(0, 10)); setZahlungNotiz('') }} title="Zahlung erfassen" className={btnSecondary}><Euro className="h-3 w-3" /></button>
+                              <button onClick={() => { setZahlungOffen(inv); setZahlungBetrag(String(Number(inv.gross_amount) - Number(inv.paid_amount || 0))); setZahlungDatum(lokalesDatumIso()); setZahlungNotiz('') }} title="Zahlung erfassen" className={btnSecondary}><Euro className="h-3 w-3" /></button>
                               {!gutschrift && (
                                 <button onClick={() => toggleStatus(inv)} title="Direkt als vollständig bezahlt markieren" className={btnSecondary}><Check className="h-3 w-3" /></button>
                               )}
@@ -1362,7 +1363,7 @@ export default function KundenDetailPage() {
                                 <button onClick={() => handleZugferd(inv)} disabled={zugferdLaeuft === inv.id} title="E-Rechnung (ZUGFeRD) – PDF mit eingebetteter maschinenlesbarer Rechnung" className="p-1.5 rounded-lg bg-indigo-600/20 hover:bg-indigo-600/40 disabled:opacity-50 text-indigo-700 text-[10px] font-bold w-7 flex items-center justify-center">{zugferdLaeuft === inv.id ? '…' : 'e⚡'}</button>
                                 <button onClick={() => sendInvoice(inv)} title="Erneut senden" className="p-1.5 rounded-lg bg-blue-600/20 hover:bg-blue-600/40 text-blue-700"><Send className="h-3.5 w-3.5" /></button>
                                 {inv.status !== 'storniert' && !gutschrift && (
-                                  <button onClick={() => { setZahlungOffen(inv); setZahlungBetrag(String(Number(inv.gross_amount) - Number(inv.paid_amount || 0))); setZahlungDatum(new Date().toISOString().slice(0, 10)); setZahlungNotiz('') }} title="Zahlung erfassen (auch teilweise)" className="p-1.5 rounded-lg bg-blue-600/20 hover:bg-blue-600/40 text-blue-700">
+                                  <button onClick={() => { setZahlungOffen(inv); setZahlungBetrag(String(Number(inv.gross_amount) - Number(inv.paid_amount || 0))); setZahlungDatum(lokalesDatumIso()); setZahlungNotiz('') }} title="Zahlung erfassen (auch teilweise)" className="p-1.5 rounded-lg bg-blue-600/20 hover:bg-blue-600/40 text-blue-700">
                                     <Euro className="h-3.5 w-3.5" />
                                   </button>
                                 )}
