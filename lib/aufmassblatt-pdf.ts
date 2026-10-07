@@ -115,41 +115,86 @@ export function berechneAufmass(abschnitte: AufmassAbschnitt[]): { zeilen: Aufma
 
 const fmt = (n: number) => n.toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
+const NAVY: [number, number, number] = [30, 58, 138];
+const GRAU_TEXT: [number, number, number] = [71, 85, 105];
+const DUNKEL: [number, number, number] = [15, 23, 42];
+
+function seitenFuss(doc: jsPDF, firma: AufmassblattInput['firma']): void {
+  const w = doc.internal.pageSize.getWidth();
+  const h = doc.internal.pageSize.getHeight();
+  const seiten = doc.getNumberOfPages();
+  const firmenzeile = firma
+    ? [firma.name, firma.street, [firma.zip, firma.city].filter(Boolean).join(' ')].filter(Boolean).join(' · ')
+    : 'Erstellt mit SCAFFOLD OS';
+  for (let i = 1; i <= seiten; i++) {
+    doc.setPage(i);
+    doc.setDrawColor(203, 213, 225);
+    doc.setLineWidth(0.3);
+    doc.line(14, h - 14, w - 14, h - 14);
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(7.5);
+    doc.setTextColor(...GRAU_TEXT);
+    doc.text(firmenzeile, 14, h - 9);
+    doc.text(`Seite ${i} von ${seiten}`, w - 14, h - 9, { align: 'right' });
+  }
+}
+
 export function erzeugeAufmassblattPdf(input: AufmassblattInput): jsPDF {
   const { zeilen, gesamtM2 } = berechneAufmass(input.abschnitte);
   const doc = new jsPDF();
   const w = doc.internal.pageSize.getWidth();
   const datum = (input.datum ?? new Date()).toLocaleDateString('de-DE');
+  const firmenname = String(input.firma?.name || '').trim();
 
-  doc.setFillColor(30, 58, 138);
-  doc.rect(0, 0, w, 35, 'F');
+  // ── Kopfleiste: Betrieb des Auftragnehmers links, Dokumenttitel rechts ──
+  doc.setFillColor(...NAVY);
+  doc.rect(0, 0, w, 32, 'F');
   doc.setTextColor(255, 255, 255);
   doc.setFont('helvetica', 'bold');
-  doc.setFontSize(18);
-  doc.text('SCAFFOLD OS', 14, 18);
-  doc.setFontSize(22);
-  doc.text('AUFMASS', w - 14, 18, { align: 'right' });
-  doc.setFontSize(9);
-  doc.text('Flächenermittlung', w - 14, 26, { align: 'right' });
+  doc.setFontSize(firmenname ? 15 : 18);
+  doc.text(firmenname || 'SCAFFOLD OS', 14, 15);
   if (input.firma) {
-    doc.setFontSize(8);
     doc.setFont('helvetica', 'normal');
-    doc.text(String(input.firma.name || ''), 14, 24.5);
-    doc.text(String(input.firma.street || ''), 14, 29);
-    doc.text([input.firma.zip, input.firma.city].filter(Boolean).join(' '), 14, 33.5);
+    doc.setFontSize(8);
+    doc.text(String(input.firma.street || ''), 14, 21.5);
+    doc.text([input.firma.zip, input.firma.city].filter(Boolean).join(' '), 14, 26);
   }
-
-  doc.setTextColor(15, 23, 42);
-  doc.setFontSize(9);
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(22);
+  doc.text('AUFMASS', w - 14, 15, { align: 'right' });
   doc.setFont('helvetica', 'normal');
-  let y = 46;
-  doc.text(`Auftraggeber: ${input.kunde || '-'}`, 14, y);
-  doc.text(`Baustelle: ${input.adresse || '-'}`, 14, y + 6);
-  if (input.gewerk) doc.text(`Gewerk: ${input.gewerk}`, 14, y + 12);
-  if (input.system) doc.text(`System: ${input.system}`, 14, y + 18);
-  doc.text(`Datum: ${datum}`, w - 14, y, { align: 'right' });
-  y += input.system ? 28 : 22;
+  doc.setFontSize(9);
+  doc.text(`Flächenermittlung · ${datum}`, w - 14, 22, { align: 'right' });
 
+  // ── Zwei Info-Karten ──
+  const kartenY = 40;
+  const kartenH = 30;
+  const kartenB = (w - 28 - 6) / 2;
+  const karte = (x: number, titel: string, zeilenText: string[]) => {
+    doc.setFillColor(244, 246, 250);
+    doc.setDrawColor(226, 232, 240);
+    doc.setLineWidth(0.3);
+    doc.roundedRect(x, kartenY, kartenB, kartenH, 2, 2, 'FD');
+    doc.setFillColor(...NAVY);
+    doc.rect(x, kartenY + 3, 1.2, kartenH - 6, 'F');
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(7.5);
+    doc.setTextColor(...GRAU_TEXT);
+    doc.text(titel, x + 5, kartenY + 7);
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(9.5);
+    doc.setTextColor(...DUNKEL);
+    zeilenText.slice(0, 3).forEach((t, k) => doc.text(doc.splitTextToSize(t, kartenB - 10)[0] ?? '', x + 5, kartenY + 14 + k * 5.5));
+  };
+  karte(14, 'AUFTRAGGEBER / BAUSTELLE', [input.kunde || '–', input.adresse || '–']);
+  karte(14 + kartenB + 6, 'OBJEKT', [
+    `Gewerk: ${input.gewerk || '–'}`,
+    `System: ${input.system || '–'}`,
+    `Abschnitte: ${zeilen.length} · Gesamt: ${fmt(gesamtM2)} m²`,
+  ]);
+  let y = kartenY + kartenH + 10;
+
+  // ── Aufmaß-Tabelle ──
   autoTable(doc, {
     startY: y,
     head: [['Pos.', 'Abschnitt', 'Länge (m)', 'Höhe (m)', 'Fläche (m²)']],
@@ -157,119 +202,169 @@ export function erzeugeAufmassblattPdf(input: AufmassblattInput): jsPDF {
       ...zeilen.map((z) => [String(z.pos), z.bezeichnung, z.mindestlaengeAngesetzt ? `${fmt(z.laengeM)} (${fmt(z.laengeAbrechnungM)})*` : fmt(z.laengeM), fmt(z.hoeheM), fmt(z.flaecheM2)]),
       ['', 'Gesamtfläche', '', '', fmt(gesamtM2)],
     ],
-    theme: 'grid',
-    headStyles: { fillColor: [30, 58, 138] },
-    columnStyles: { 2: { halign: 'right' }, 3: { halign: 'right' }, 4: { halign: 'right' } },
+    theme: 'plain',
+    margin: { left: 14, right: 14 },
+    styles: { fontSize: 10, cellPadding: { top: 3.2, bottom: 3.2, left: 3, right: 3 }, textColor: DUNKEL, lineColor: [226, 232, 240], lineWidth: 0 },
+    headStyles: { fillColor: NAVY, textColor: 255, fontStyle: 'bold', fontSize: 9 },
+    alternateRowStyles: { fillColor: [248, 250, 252] },
+    columnStyles: { 0: { cellWidth: 14, halign: 'center' }, 2: { halign: 'right' }, 3: { halign: 'right' }, 4: { halign: 'right', fontStyle: 'bold' } },
     didParseCell: (d) => {
       if (d.section === 'head' && d.column.index >= 2) d.cell.styles.halign = 'right';
-      if (d.section === 'body' && d.row.index === zeilen.length) d.cell.styles.fontStyle = 'bold';
+      if (d.section === 'body' && d.row.index === zeilen.length) {
+        d.cell.styles.fontStyle = 'bold';
+        d.cell.styles.fillColor = [219, 234, 254];
+        d.cell.styles.fontSize = 11;
+      }
+    },
+    didDrawCell: (d) => {
+      if (d.section === 'body') {
+        doc.setDrawColor(226, 232, 240);
+        doc.setLineWidth(0.2);
+        doc.line(d.cell.x, d.cell.y + d.cell.height, d.cell.x + d.cell.width, d.cell.y + d.cell.height);
+      }
     },
   });
-  let ey = ((doc as any).lastAutoTable?.finalY ?? y) + 8;
+  let ey = ((doc as any).lastAutoTable?.finalY ?? y) + 7;
 
+  // ── Hinweis ──
+  doc.setFont('helvetica', 'italic');
   doc.setFontSize(8);
-  doc.setTextColor(71, 85, 105);
+  doc.setTextColor(...GRAU_TEXT);
   const hinweis =
     'Fläche je Abschnitt = Länge × Höhe der erfassten Maße. Welche Maße vertraglich abgerechnet werden ' +
     '(z. B. Überstände, Aufmaßregeln nach Vertrag/ATV), richtet sich nach der Vereinbarung mit dem Auftraggeber.' +
     (zeilen.some((z) => z.mindestlaengeAngesetzt)
       ? ' * Bei kleinen Flächen wird die Länge mit mindestens 2,50 m angesetzt (Mindestlänge).'
       : '');
-  doc.text(hinweis, 14, ey, { maxWidth: w - 28 });
-  ey += 16;
+  const hinweisZeilen = doc.splitTextToSize(hinweis, w - 28);
+  doc.text(hinweisZeilen, 14, ey);
+  ey += hinweisZeilen.length * 4 + 8;
 
+  // ── Gerüstergänzungen (eigene Positionen, nicht in der Fläche) ──
   const zulagen = (input.zulagen ?? []).filter((z) => z.bezeichnung.trim() && z.menge > 0);
   if (zulagen.length > 0) {
-    if (ey > 200) {
+    if (ey > 195) {
       doc.addPage();
-      ey = 30;
+      ey = 24;
     }
     autoTable(doc, {
       startY: ey,
       head: [['Gerüstergänzungen (nicht in der Fläche enthalten)', 'Einheit', 'Menge']],
       body: zulagen.map((z) => [z.bezeichnung.trim(), z.einheit, fmt(z.menge)]),
-      theme: 'grid',
-      headStyles: { fillColor: [71, 85, 105] },
-      columnStyles: { 1: { cellWidth: 25 }, 2: { halign: 'right', cellWidth: 30 } },
+      theme: 'plain',
+      margin: { left: 14, right: 14 },
+      styles: { fontSize: 10, cellPadding: 3, textColor: DUNKEL },
+      headStyles: { fillColor: GRAU_TEXT, textColor: 255, fontStyle: 'bold', fontSize: 9 },
+      alternateRowStyles: { fillColor: [248, 250, 252] },
+      columnStyles: { 1: { cellWidth: 25 }, 2: { halign: 'right', cellWidth: 32 } },
       didParseCell: (d) => { if (d.section === 'head' && d.column.index === 2) d.cell.styles.halign = 'right'; },
     });
     ey = ((doc as any).lastAutoTable?.finalY ?? ey) + 10;
   }
 
+  // ── Nachträge ──
   const nachtraege = (input.nachtraege ?? []).filter((n) => n.text.trim() || (n.betragEur ?? 0) > 0);
   if (nachtraege.length > 0) {
-    if (ey > 200) {
+    if (ey > 195) {
       doc.addPage();
-      ey = 30;
+      ey = 24;
     }
     autoTable(doc, {
       startY: ey,
       head: [['Nachträge / Änderungen', 'Betrag (€ netto)']],
       body: nachtraege.map((n) => [n.text.trim() || 'Nachtrag', n.betragEur && n.betragEur > 0 ? fmt(n.betragEur) : '–']),
-      theme: 'grid',
-      headStyles: { fillColor: [71, 85, 105] },
-      columnStyles: { 1: { halign: 'right', cellWidth: 40 } },
+      theme: 'plain',
+      margin: { left: 14, right: 14 },
+      styles: { fontSize: 10, cellPadding: 3, textColor: DUNKEL },
+      headStyles: { fillColor: GRAU_TEXT, textColor: 255, fontStyle: 'bold', fontSize: 9 },
+      alternateRowStyles: { fillColor: [248, 250, 252] },
+      columnStyles: { 1: { halign: 'right', cellWidth: 42 } },
+      didParseCell: (d) => { if (d.section === 'head' && d.column.index === 1) d.cell.styles.halign = 'right'; },
     });
-    ey = ((doc as any).lastAutoTable?.finalY ?? ey) + 10;
+    ey = ((doc as any).lastAutoTable?.finalY ?? ey) + 12;
   }
 
-  if (ey > 220) {
+  // ── Unterschriften ──
+  if (ey > 232) {
     doc.addPage();
-    ey = 30;
+    ey = 24;
   }
-  const liniey = ey + 34;
-  if (input.unterschriftDataUrl && /^data:image\/(png|jpeg);base64,/.test(input.unterschriftDataUrl)) {
-    try {
-      doc.addImage(input.unterschriftDataUrl, 'PNG', 118, liniey - 24, 40, 20);
-    } catch {
-      /* ungültige Bilddaten: Unterschriftsfeld bleibt leer */
+  const boxY = Math.max(ey, 205);
+  const boxH = 38;
+  const boxB = (w - 28 - 8) / 2;
+  const unterschrift = (x: number, titel: string, bild?: string | null) => {
+    doc.setDrawColor(203, 213, 225);
+    doc.setLineWidth(0.3);
+    doc.roundedRect(x, boxY, boxB, boxH, 2, 2, 'S');
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(7.5);
+    doc.setTextColor(...GRAU_TEXT);
+    doc.text(titel.toUpperCase(), x + 4, boxY + 6);
+    if (bild && /^data:image\/(png|jpeg);base64,/.test(bild)) {
+      try {
+        doc.addImage(bild, 'PNG', x + 4, boxY + 9, 44, 18);
+      } catch {
+        /* ungültige Bilddaten: Feld bleibt leer */
+      }
     }
-  }
-  doc.setDrawColor(15, 23, 42);
-  doc.line(14, liniey, 100, liniey);
-  doc.line(110, liniey, 196, liniey);
-  doc.setTextColor(15, 23, 42);
-  doc.setFontSize(9);
-  doc.text('Ort, Datum, Auftragnehmer', 14, liniey + 5);
-  doc.text('Ort, Datum, Auftraggeber', 110, liniey + 5);
+    doc.setDrawColor(...DUNKEL);
+    doc.setLineWidth(0.4);
+    doc.line(x + 4, boxY + boxH - 9, x + boxB - 4, boxY + boxH - 9);
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(8);
+    doc.setTextColor(...GRAU_TEXT);
+    doc.text('Ort, Datum, Unterschrift', x + 4, boxY + boxH - 4.5);
+  };
+  unterschrift(14, 'Auftragnehmer');
+  unterschrift(14 + boxB + 8, 'Auftraggeber', input.unterschriftDataUrl);
 
   const fotos = input.fotos ?? [];
-  if (fotos.length > 0) zeichneFotos(doc, fotos);
+  if (fotos.length > 0) zeichneFotos(doc, fotos, input.kunde);
+  seitenFuss(doc, input.firma);
   return doc;
 }
 
 const FOTOS_PRO_SEITE = 6; // 2 Spalten × 3 Zeilen
 
-function zeichneFotos(doc: jsPDF, fotos: AufmassFoto[]): void {
+function zeichneFotos(doc: jsPDF, fotos: AufmassFoto[], kunde: string): void {
   const w = doc.internal.pageSize.getWidth();
   const zelleB = (w - 28 - 8) / 2; // 14 mm Rand, 8 mm Abstand
-  const zelleH = 68;
+  const zelleH = 66;
   fotos.forEach((f, i) => {
     if (i % FOTOS_PRO_SEITE === 0) {
       doc.addPage();
-      doc.setTextColor(30, 58, 138);
+      doc.setFillColor(...NAVY);
+      doc.rect(0, 0, w, 16, 'F');
+      doc.setTextColor(255, 255, 255);
       doc.setFont('helvetica', 'bold');
       doc.setFontSize(12);
-      doc.text('Fotodokumentation', 14, 20);
+      doc.text('Fotodokumentation', 14, 10.5);
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(8.5);
+      doc.text(String(kunde || '').slice(0, 60), w - 14, 10.5, { align: 'right' });
     }
     const idx = i % FOTOS_PRO_SEITE;
     const x = 14 + (idx % 2) * (zelleB + 8);
-    const y = 28 + Math.floor(idx / 2) * (zelleH + 14);
+    const y = 24 + Math.floor(idx / 2) * (zelleH + 15);
+    doc.setFillColor(244, 246, 250);
+    doc.setDrawColor(226, 232, 240);
+    doc.setLineWidth(0.3);
+    doc.roundedRect(x, y, zelleB, zelleH, 1.5, 1.5, 'FD');
     const verhaeltnis = f.breitePx > 0 && f.hoehePx > 0 ? f.breitePx / f.hoehePx : 4 / 3;
-    let bw = zelleB;
+    let bw = zelleB - 4;
     let bh = bw / verhaeltnis;
-    if (bh > zelleH) {
-      bh = zelleH;
+    if (bh > zelleH - 4) {
+      bh = zelleH - 4;
       bw = bh * verhaeltnis;
     }
     try {
-      doc.addImage(f.dataUrl, 'JPEG', x, y, bw, bh);
+      doc.addImage(f.dataUrl, 'JPEG', x + (zelleB - bw) / 2, y + (zelleH - bh) / 2, bw, bh);
     } catch {
-      /* Bild nicht lesbar: Beschriftung bleibt, Bild entfällt */
+      /* Bild nicht lesbar: Rahmen und Beschriftung bleiben */
     }
-    doc.setTextColor(71, 85, 105);
+    doc.setTextColor(...GRAU_TEXT);
     doc.setFont('helvetica', 'normal');
-    doc.setFontSize(7);
-    doc.text(f.beschriftung.slice(0, 70), x, y + zelleH + 4, { maxWidth: zelleB });
+    doc.setFontSize(7.5);
+    doc.text(`${i + 1}. ${f.beschriftung}`.slice(0, 80), x, y + zelleH + 4.5, { maxWidth: zelleB });
   });
 }
