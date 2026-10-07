@@ -1,5 +1,8 @@
 'use client';
 
+import SymbolIcon from '@/components/aufmaß/SymbolIcon';
+import WizardKopf from '@/components/aufmaß/WizardKopf';
+import { ShieldCheck } from 'lucide-react';
 import { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { setzeMarkierung, leseSchrittGeladenesProjekt, setzeSchrittGeladenesProjekt } from '@/lib/aufmass-projekt-session';
@@ -92,8 +95,7 @@ function Schritt4Content() {
     <div className="min-h-screen bg-white text-[#1d1d1f] p-6">
       <div className="max-w-2xl mx-auto">
         <button onClick={zurueck} className="text-[#86868b] hover:text-[#1d1d1f] text-sm mb-2">← Zurück</button>
-        <h1 className="text-3xl font-bold mb-2">🛡️ Sicherheit & Umgebung</h1>
-        <p className="text-[#86868b] mb-2">Baustelle: Schritt 4 von 6</p>
+        <WizardKopf schritt={4} titel="Sicherheit & Umgebung" icon={ShieldCheck} />
         {step1Data && (
           <div className="bg-black/5 rounded-xl p-3 mb-6 text-sm text-[#86868b]">
             <span className="text-[#424245] font-medium">{step1Data.name}</span> · {step1Data.adresse}
@@ -160,7 +162,7 @@ function Schritt4Content() {
               ].map((item: any) => (
                 <button key={item.key} onClick={() => setForm({...form, [item.key]: !(form as any)[item.key]})}
                   className={`w-full p-3 rounded-xl border text-left transition flex items-center gap-3 ${(form as any)[item.key] ? 'bg-[#e8590c]/10 border-[#e8590c] text-[#e8590c]' : 'bg-black/10 border-black/10'}`}>
-                  <span>{item.icon}</span>
+                  <SymbolIcon e={item.icon} />
                   <span className="text-sm font-medium">{item.label}</span>
                 </button>
               ))}
@@ -203,7 +205,7 @@ function Schritt4Content() {
               ].map((item: any) => (
                 <button key={item.key} onClick={() => setForm({...form, [item.key]: !(form as any)[item.key]})}
                   className={`w-full p-3 rounded-xl border text-left transition flex items-center gap-3 ${(form as any)[item.key] ? 'bg-[#e8590c]/10 border-[#e8590c] text-[#e8590c]' : 'bg-black/10 border-black/10'}`}>
-                  <span className="text-xl">{item.icon}</span>
+                  <SymbolIcon e={item.icon} />
                   <span className="text-sm font-medium">{item.label}</span>
                 </button>
               ))}
@@ -214,12 +216,12 @@ function Schritt4Content() {
           <div className="space-y-3">
             <button onClick={() => setForm({...form, schutzdach: !form.schutzdach})}
               className={`w-full p-3 rounded-xl border text-left transition flex items-center gap-3 ${form.schutzdach ? 'bg-[#e8590c]/10 border-[#e8590c] text-[#e8590c]' : 'bg-black/10 border-black/10'}`}>
-              <span className="text-xl">☂️</span>
+              <SymbolIcon e="☂️" />
               <div><div className="font-semibold text-sm">Schutzdach</div><div className="text-xs opacity-70">Für Fußgänger & Nachbarn</div></div>
             </button>
             <button onClick={() => setForm({...form, fangnetz: !form.fangnetz})}
               className={`w-full p-3 rounded-xl border text-left transition flex items-center gap-3 ${form.fangnetz ? 'bg-[#e8590c]/10 border-[#e8590c] text-[#e8590c]' : 'bg-black/10 border-black/10'}`}>
-              <span className="text-xl">🕸️</span>
+              <SymbolIcon e="🕸️" />
               <div><div className="font-semibold text-sm">Fangnetz</div><div className="text-xs opacity-70">Sturzschutz für Material</div></div>
             </button>
           </div>
@@ -244,7 +246,7 @@ function Schritt4Content() {
               {gefahrenListe.map(g => (
                 <button key={g} onClick={() => toggleGefahr(g)}
                   className={`p-3 rounded-xl border text-left transition ${form.gefahren.includes(g) ? 'bg-red-600/20 border-red-500 text-red-700' : 'bg-black/10 border-black/10 text-[#424245]'}`}>
-                  ⚠️ {g}
+                  {g}
                 </button>
               ))}
             </div>
@@ -261,7 +263,7 @@ function Schritt4Content() {
           {/* Buttons */}
           <div className="flex gap-3 pt-4">
             <button onClick={zurueck} className="flex-1 bg-black/10 hover:bg-black/15 text-[#1d1d1f] font-semibold py-3 px-4 rounded-xl">← Zurück</button>
-            <button onClick={handleWeiter} className="flex-1 bg-orange-600 hover:bg-orange-700 text-white font-semibold py-3 px-4 rounded-xl">Weiter →</button>
+            <button onClick={handleWeiter} className="flex-1 bg-[#e8590c] hover:bg-[#d9480f] text-white font-semibold py-3 px-4 rounded-xl">Weiter →</button>
           </div>
         </div>
       </div>

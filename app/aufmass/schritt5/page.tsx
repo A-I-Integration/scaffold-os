@@ -1,5 +1,8 @@
 'use client';
 
+import SymbolIcon from '@/components/aufmaß/SymbolIcon';
+import WizardKopf from '@/components/aufmaß/WizardKopf';
+import { Package } from 'lucide-react';
 import { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { setzeMarkierung, leseSchrittGeladenesProjekt, setzeSchrittGeladenesProjekt } from '@/lib/aufmass-projekt-session';
@@ -79,8 +82,7 @@ function Schritt5Content() {
     <div className="min-h-screen bg-white text-[#1d1d1f] p-6">
       <div className="max-w-2xl mx-auto">
         <button onClick={zurueck} className="text-[#86868b] hover:text-[#1d1d1f] text-sm mb-2">← Zurück</button>
-        <h1 className="text-3xl font-bold mb-2">📦 Material & Termine</h1>
-        <p className="text-[#86868b] mb-2">Baustelle: Schritt 5 von 6</p>
+        <WizardKopf schritt={5} titel="Material & Termine" icon={Package} />
         {step1Data && (
           <div className="bg-black/5 rounded-xl p-3 mb-6 text-sm text-[#86868b]">
             <span className="text-[#424245] font-medium">{step1Data.name}</span> · {step1Data.adresse}
@@ -90,7 +92,7 @@ function Schritt5Content() {
         {/* Automatische Schätzung */}
         {geschLaenge > 0 && geschHoehe > 0 && (
           <div className="bg-blue-50 border border-blue-500/50 rounded-xl p-4 mb-6">
-            <div className="text-blue-600 font-semibold text-sm mb-1">💡 Automatische Schätzung</div>
+            <div className="text-blue-600 font-semibold text-sm mb-1">Automatische Schätzung</div>
             <div className="text-blue-700 text-sm">
               Bei {geschLaenge} m Länge × {geschHoehe} m Höhe ca. <strong>{Math.ceil(geschLaenge * geschHoehe / 3)} Felder</strong> erforderlich
             </div>
@@ -133,7 +135,7 @@ function Schritt5Content() {
 
           <div className="flex gap-3 pt-4">
             <button onClick={zurueck} className="flex-1 bg-black/10 hover:bg-black/15 text-[#1d1d1f] font-semibold py-3 px-4 rounded-xl">← Zurück</button>
-            <button onClick={handleWeiter} className="flex-1 bg-orange-600 hover:bg-orange-700 text-white font-semibold py-3 px-4 rounded-xl">Weiter →</button>
+            <button onClick={handleWeiter} className="flex-1 bg-[#e8590c] hover:bg-[#d9480f] text-white font-semibold py-3 px-4 rounded-xl">Weiter →</button>
           </div>
         </div>
       </div>

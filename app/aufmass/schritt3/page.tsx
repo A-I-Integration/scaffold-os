@@ -1,5 +1,8 @@
 'use client';
 
+import SymbolIcon from '@/components/aufmaß/SymbolIcon';
+import WizardKopf from '@/components/aufmaß/WizardKopf';
+import { Construction } from 'lucide-react';
 import { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { setzeMarkierung, leseSchrittGeladenesProjekt, setzeSchrittGeladenesProjekt, leiteStepsAusKiResultAb } from '@/lib/aufmass-projekt-session';
@@ -132,8 +135,7 @@ function Schritt3Content() {
         <div className="flex items-center gap-3 mb-2">
           <button onClick={zurueck} className="text-[#86868b] hover:text-[#1d1d1f] text-sm">← Zurück</button>
         </div>
-        <h1 className="text-3xl font-bold mb-2">🏗️ Gerüsttyp & Aufbau</h1>
-        <p className="text-[#86868b] mb-2">Baustelle: Schritt 3 von 6</p>
+        <WizardKopf schritt={3} titel="Gerüsttyp & Aufbau" icon={Construction} />
         
         {step1Data && (
           <div className="bg-black/5 rounded-xl p-3 mb-6 text-sm text-[#86868b]">
@@ -156,7 +158,7 @@ function Schritt3Content() {
                       : 'bg-black/10 border-black/10 text-[#424245] hover:border-black/20'
                   }`}
                 >
-                  <span className="text-2xl">{g.icon}</span>
+                  <SymbolIcon e={g.icon} />
                   <div>
                     <div className="font-semibold">{g.name}</div>
                     <div className="text-xs opacity-70">{g.desc}</div>
@@ -212,7 +214,7 @@ function Schritt3Content() {
                       : 'bg-black/10 border-black/10 text-[#424245] hover:border-black/20'
                   }`}
                 >
-                  <span className="text-xl">{s.bauart === 'modul' ? '🧩' : '🖼️'}</span>
+                  <SymbolIcon e={s.bauart === 'modul' ? '🧩' : '🖼️'} />
                   <div className="flex-1">
                     <div className="font-semibold text-sm">{s.hersteller} {s.systemName}</div>
                     <div className="text-xs opacity-70">
@@ -230,7 +232,7 @@ function Schritt3Content() {
                     : 'bg-black/10 border-black/10 text-[#424245] hover:border-black/20'
                 }`}
               >
-                <span className="text-xl">✏️</span>
+                <SymbolIcon e="✏️" />
                 <div className="flex-1">
                   <div className="font-semibold text-sm">Eigenes System / anderer Hersteller</div>
                   <div className="text-xs opacity-70">Namen frei eintragen – Feldlänge bleibt frei wählbar</div>
@@ -295,17 +297,17 @@ function Schritt3Content() {
           <div className="space-y-3">
             <button onClick={() => setForm({...form, gelander: !form.gelander})}
               className={`w-full p-3 rounded-xl border text-left transition flex items-center gap-3 ${form.gelander ? 'bg-[#e8590c]/10 border-[#e8590c] text-[#e8590c]' : 'bg-black/10 border-black/10'}`}>
-              <span className="text-xl">🛡️</span>
+              <SymbolIcon e="🛡️" />
               <div><div className="font-semibold text-sm">Geländer & Brüstung</div><div className="text-xs opacity-70">DIN EN 12811-1 vorgeschrieben</div></div>
             </button>
             <button onClick={() => setForm({...form, diagonale: !form.diagonale})}
               className={`w-full p-3 rounded-xl border text-left transition flex items-center gap-3 ${form.diagonale ? 'bg-[#e8590c]/10 border-[#e8590c] text-[#e8590c]' : 'bg-black/10 border-black/10'}`}>
-              <span className="text-xl">📐</span>
+              <SymbolIcon e="📐" />
               <div><div className="font-semibold text-sm">Diagonale Aussteifung</div><div className="text-xs opacity-70">Empfohlen ab 6 m Höhe</div></div>
             </button>
             <button onClick={() => setForm({...form, fahrbar: !form.fahrbar})}
               className={`w-full p-3 rounded-xl border text-left transition flex items-center gap-3 ${form.fahrbar ? 'bg-[#e8590c]/10 border-[#e8590c] text-[#e8590c]' : 'bg-black/10 border-black/10'}`}>
-              <span className="text-xl">🛞</span>
+              <SymbolIcon e="🛞" />
               <div><div className="font-semibold text-sm">Fahrbar / Rollbar</div><div className="text-xs opacity-70">Rollen unter den Standardfüßen</div></div>
             </button>
           </div>
@@ -324,7 +326,7 @@ function Schritt3Content() {
 
           <div className="flex gap-3 pt-4">
             <button onClick={zurueck} className="flex-1 bg-black/10 hover:bg-black/15 text-[#1d1d1f] font-semibold py-3 px-4 rounded-xl">← Zurück</button>
-            <button onClick={handleWeiter} className="flex-1 bg-orange-600 hover:bg-orange-700 text-white font-semibold py-3 px-4 rounded-xl">Weiter →</button>
+            <button onClick={handleWeiter} className="flex-1 bg-[#e8590c] hover:bg-[#d9480f] text-white font-semibold py-3 px-4 rounded-xl">Weiter →</button>
           </div>
 
         </div>

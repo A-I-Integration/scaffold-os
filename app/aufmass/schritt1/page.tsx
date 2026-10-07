@@ -1,5 +1,8 @@
 'use client';
 
+import SymbolIcon from '@/components/aufmaß/SymbolIcon';
+import WizardKopf from '@/components/aufmaß/WizardKopf';
+import { ClipboardList } from 'lucide-react';
 import { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { setzeMarkierung, leseSchrittGeladenesProjekt, setzeSchrittGeladenesProjekt, WIZARD_KEYS, gewerkeVonStep1 } from '@/lib/aufmass-projekt-session';
@@ -186,12 +189,12 @@ function Schritt1Content() {
   }, [projectId]);
 
   const gewerkListe = [
-    { id: 'Maler', icon: '🎨', color: 'bg-blue-600/20 border-blue-500 text-blue-300' },
+    { id: 'Maler', icon: '🎨', color: 'bg-[#e8590c]/10 border-[#e8590c] text-[#e8590c]' },
     { id: 'WDVS/Fassade', icon: '🏢', color: 'bg-[#e8590c]/10 border-[#e8590c] text-[#e8590c]' },
-    { id: 'Fenster', icon: '🪟', color: 'bg-cyan-600/20 border-cyan-500 text-cyan-300' },
-    { id: 'Dach', icon: '🏠', color: 'bg-red-600/20 border-red-500 text-red-300' },
-    { id: 'Putz', icon: '🧱', color: 'bg-yellow-600/20 border-yellow-500 text-yellow-300' },
-    { id: 'Sonstiges', icon: '🔧', color: 'bg-gray-600/20 border-gray-500 text-gray-300' },
+    { id: 'Fenster', icon: '🪟', color: 'bg-[#e8590c]/10 border-[#e8590c] text-[#e8590c]' },
+    { id: 'Dach', icon: '🏠', color: 'bg-[#e8590c]/10 border-[#e8590c] text-[#e8590c]' },
+    { id: 'Putz', icon: '🧱', color: 'bg-[#e8590c]/10 border-[#e8590c] text-[#e8590c]' },
+    { id: 'Sonstiges', icon: '🔧', color: 'bg-[#e8590c]/10 border-[#e8590c] text-[#e8590c]' },
   ];
 
   const erfassungKacheln = [
@@ -287,13 +290,12 @@ function Schritt1Content() {
   return (
     <div className="min-h-screen bg-white text-[#1d1d1f] p-6">
       <div className="max-w-2xl mx-auto">
-        <h1 className="text-3xl font-bold mb-2">📋 Projekt anlegen</h1>
-        <p className="text-[#86868b] mb-8">Baustelle: Schritt 1 von 6</p>
+        <WizardKopf schritt={1} titel="Projekt anlegen" icon={ClipboardList} />
 
         {hatAlteDaten && (
           <div className="mb-6 bg-orange-50 border border-[#e8590c]/40 rounded-xl p-4">
             <p className="text-amber-800 text-sm font-medium mb-1">
-              ⚠️ Es sind noch Daten eines früheren Aufmaßes gespeichert.
+              Es sind noch Daten eines früheren Aufmaßes gespeichert.
             </p>
             <p className="text-[#e8590c]/80 text-xs mb-3">
               Diese bleiben im Browser erhalten – auch nach Schließen der Seite. Für eine neue Baustelle solltest du neu beginnen, sonst tauchen alte Werte wieder auf.
@@ -309,7 +311,7 @@ function Schritt1Content() {
                 onClick={handleNeuBeginnen}
                 className="flex-1 bg-red-600 hover:bg-red-500 text-white text-sm font-bold py-2 px-4 rounded-xl transition"
               >
-                🗑️ Neu beginnen (alles löschen)
+                Neu beginnen (alles löschen)
               </button>
             </div>
           </div>
@@ -326,7 +328,7 @@ function Schritt1Content() {
                 onClick={() => handleChange('projektart', 'gebaeude')}
                 className={`rounded-xl border-2 p-4 text-left transition ${form.projektart === 'gebaeude' ? 'border-[#e8590c] bg-[#e8590c]/10' : 'border-black/10 bg-black/5 hover:bg-black/10'}`}
               >
-                <div className="text-2xl mb-1">🏢</div>
+                <SymbolIcon e="🏢" className="w-6 h-6 mb-1 shrink-0" />
                 <div className="font-semibold text-[#1d1d1f]">Gebäude</div>
                 <div className="text-xs text-[#86868b] mt-0.5">Fassadengerüst, Standard-Aufmaß</div>
               </button>
@@ -335,7 +337,7 @@ function Schritt1Content() {
                 onClick={() => handleChange('projektart', 'bruecke')}
                 className={`rounded-xl border-2 p-4 text-left transition ${form.projektart === 'bruecke' ? 'border-[#e8590c] bg-[#e8590c]/10' : 'border-black/10 bg-black/5 hover:bg-black/10'}`}
               >
-                <div className="text-2xl mb-1">🌉</div>
+                <SymbolIcon e="🌉" className="w-6 h-6 mb-1 shrink-0" />
                 <div className="font-semibold text-[#1d1d1f]">Brücke</div>
                 <div className="text-xs text-[#86868b] mt-0.5">Trag-/Hängegerüst, Spannweiten statt Gebäudemaße</div>
               </button>
@@ -539,7 +541,7 @@ function Schritt1Content() {
             </div>
             {getStandzeit() !== null && (
               <div className="mt-3 flex items-center gap-2 text-sm text-[#86868b]">
-                <span>📅 Standzeit:</span>
+                <span>Standzeit:</span>
                 <span className="text-[#e8590c] font-medium">{getStandzeit()} Tage</span>
                 <span>(ca. {getWochen()} Wochen)</span>
               </div>
@@ -560,14 +562,14 @@ function Schritt1Content() {
                       : 'bg-black/10 border-black/10 text-[#86868b] hover:border-black/20'
                   }`}
                 >
-                  <span className="text-2xl">{g.icon}</span>
+                  <SymbolIcon e={g.icon} />
                   <span>{g.id}</span>
                 </button>
               ))}
             </div>
             {form.gewerke.length > 0 && (
               <div className="mt-4 flex items-center gap-2 text-sm text-[#86868b]">
-                <span>⚖️ Lastklasse:</span>
+                <span>Lastklasse:</span>
                 <span className="text-[#e8590c] font-medium">{getLastklasse()}</span>
               </div>
             )}
@@ -624,7 +626,7 @@ function Schritt1Content() {
                       : 'bg-black/10 border-black/10 text-[#86868b] hover:border-black/20'
                   }`}
                 >
-                  <span className="text-2xl">{k.icon}</span>
+                  <SymbolIcon e={k.icon} />
                   <span>{k.label}</span>
                 </button>
               ))}
@@ -634,7 +636,7 @@ function Schritt1Content() {
           {/* ─── GPS-STANDORT (nur wenn aktiviert) ─── */}
           {form.gps && (
             <div className="bg-black/10/30 rounded-xl p-6 border border-black/10">
-              <h3 className="text-lg font-bold text-[#1d1d1f] mb-2">📍 Baustellen-Standort</h3>
+              <h3 className="text-lg font-bold text-[#1d1d1f] mb-2 flex items-center gap-2"><SymbolIcon e="📍" className="w-5 h-5 shrink-0 text-[#e8590c]" />Baustellen-Standort</h3>
               <p className="text-sm text-[#86868b] mb-4">
                 Erfasst die GPS-Koordinaten der Baustelle – Grundlage für Anfahrtsplanung und Leerfahrt-Reduktion.
               </p>
@@ -678,7 +680,7 @@ function Schritt1Content() {
           {/* ─── FOTO-UPLOAD (nur wenn aktiviert) ─── */}
           {form.fotos && sessionId && (
             <div className="bg-black/10/30 rounded-xl p-6 border border-black/10">
-              <h3 className="text-lg font-bold text-[#1d1d1f] mb-2">📸 Baustellen-Fotos</h3>
+              <h3 className="text-lg font-bold text-[#1d1d1f] mb-2 flex items-center gap-2"><SymbolIcon e="📸" className="w-5 h-5 shrink-0 text-[#e8590c]" />Baustellen-Fotos</h3>
               <p className="text-sm text-[#86868b] mb-4">
                 Fotos werden mit dem Projekt verknüpft, sobald es gespeichert wird.
               </p>
@@ -692,7 +694,7 @@ function Schritt1Content() {
           {/* ─── LiDAR-UPLOAD (nur wenn aktiviert) ─── */}
           {form.lidar && sessionId && (
             <div className="bg-black/10/30 rounded-xl p-6 border border-black/10">
-              <h3 className="text-lg font-bold text-[#1d1d1f] mb-2">📐 LiDAR / 3D-Scan</h3>
+              <h3 className="text-lg font-bold text-[#1d1d1f] mb-2 flex items-center gap-2"><SymbolIcon e="📐" className="w-5 h-5 shrink-0 text-[#e8590c]" />LiDAR / 3D-Scan</h3>
               <p className="text-sm text-[#86868b] mb-4">
                 OBJ oder PLY-Datei hochladen für automatische Maßextraktion.
               </p>
@@ -710,14 +712,14 @@ function Schritt1Content() {
                 }}
               />
               <p className="text-[11px] text-[#86868b] mt-2">
-                ✅ Erkannte Maße werden in Schritt 2 automatisch eingetragen.
+                Erkannte Maße werden in Schritt 2 automatisch eingetragen.
               </p>
             </div>
           )}
           {/* ─── DROHNEN-UPLOAD (nur wenn aktiviert) ─── */}
           {form.drohnen && sessionId && (
             <div className="bg-black/10/30 rounded-xl p-6 border border-black/10">
-              <h3 className="text-lg font-bold text-[#1d1d1f] mb-2">🚁 Drohnen-Aufnahmen</h3>
+              <h3 className="text-lg font-bold text-[#1d1d1f] mb-2 flex items-center gap-2"><SymbolIcon e="🚁" className="w-5 h-5 shrink-0 text-[#e8590c]" />Drohnen-Aufnahmen</h3>
               <p className="text-sm text-[#86868b] mb-4">
                 Luftbilder der Baustelle hochladen – Dachform, Aufbauten und schwer zugängliche
                 Bereiche dokumentieren. Aufnahmen werden mit dem Projekt verknüpft.
@@ -729,7 +731,7 @@ function Schritt1Content() {
           {/* ─── GRUNDRISS-UPLOAD + KI (nur wenn aktiviert) ─── */}
           {form.grundrisse && sessionId && (
             <div className="bg-black/10/30 rounded-xl p-6 border border-black/10">
-              <h3 className="text-lg font-bold text-[#1d1d1f] mb-2">📋 Grundrisse / Baupläne</h3>
+              <h3 className="text-lg font-bold text-[#1d1d1f] mb-2 flex items-center gap-2"><SymbolIcon e="📋" className="w-5 h-5 shrink-0 text-[#e8590c]" />Grundrisse / Baupläne</h3>
               <p className="text-sm text-[#86868b] mb-4">
                 Grundriss als Bild oder PDF hochladen – die KI liest Maße und Gebäudedaten aus
                 und füllt das Aufmaß in Schritt 2 automatisch vor.
@@ -742,7 +744,7 @@ function Schritt1Content() {
           <div className="pt-4">
             <button
               onClick={handleWeiter}
-              className="w-full bg-orange-600 hover:bg-orange-500 text-white font-bold py-4 rounded-xl transition text-lg"
+              className="w-full bg-[#e8590c] hover:bg-[#d9480f] text-white font-semibold py-3.5 rounded-xl transition text-base"
             >
               Weiter zu Schritt 2 →
             </button>
