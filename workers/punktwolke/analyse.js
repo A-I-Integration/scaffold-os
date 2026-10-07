@@ -3,9 +3,11 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // SCAFFOLD OS – Punktwolken-Analyse (Worker-Version)
 // Identische Algorithmik wie app/api/lidar-upload/route.ts:
-// Parser (PLY-ASCII, LAS, OBJ, GLB) + Ausreißer-Filter + Achsen-/Einheiten-
+// Parser (PLY ASCII + binär, LAS, OBJ, GLB) + Ausreißer-Filter + Achsen-/Einheiten-
 // Erkennung + iterative RANSAC-Ebenen-Erkennung + Abstands-Analyse.
 // ─────────────────────────────────────────────────────────────────────────────
+
+const { istBinaerPly, parsePlyBinary } = require('./ply-binary');
 
 const MAX_POINTS = 120000;
 const TRIM_LO = 0.02, TRIM_HI = 0.98;
@@ -93,6 +95,7 @@ function parsePoints(buffer, ext) {
   let pts;
   if (ext === 'las') pts = parseLAS(buffer);
   else if (ext === 'glb') pts = parseGLB(buffer);
+  else if (ext === 'ply' && istBinaerPly(buffer)) pts = parsePlyBinary(buffer);
   else {
     const text = buffer.toString('utf-8');
     pts = ext === 'obj' ? parseOBJ(text) : parsePLY(text);
@@ -313,4 +316,4 @@ function analysiere(buffer, ext) {
   return measurements;
 }
 
-module.exports = { analysiere };
+module.exports = { analysiere, parsePoints };
