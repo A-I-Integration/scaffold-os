@@ -28,7 +28,7 @@ export default function KaufenErfolgPage() {
           </p>
           <p className="text-sm text-[#424245]">
             <span className="text-[#e8590c] font-bold">3.</span> Keine E-Mail nach 15 Minuten? Schau in den Spam-Ordner oder schreib an{' '}
-            <span className="text-[#e8590c]">info@a-i-integration.de</span>.
+            <span className="text-[#e8590c]">info@scaffoldos.de</span>.
           </p>
         </div>
         <Link

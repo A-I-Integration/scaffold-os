@@ -55,4 +55,4 @@ export function aktuellerPlan(): { id: PlanId; grenzen: PlanGrenzen } | null {
 }
 
 export const UPGRADE_HINWEIS =
-  'Ein Upgrade ist jederzeit möglich – eine kurze Mail an info@a-i-integration.de genügt.';
+  'Ein Upgrade ist jederzeit möglich – eine kurze Mail an info@scaffoldos.de genügt.';

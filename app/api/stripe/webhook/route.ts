@@ -103,7 +103,7 @@ async function benachrichtigeNeuenTestzugang(
   const esc = (v: string) =>
     v.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
-  const empfaenger = process.env.ANFRAGE_EMPFAENGER || 'info@a-i-integration.de';
+  const empfaenger = process.env.ANFRAGE_EMPFAENGER || 'info@scaffoldos.de';
 
   const { Resend } = await import('resend');
   const resend = new Resend(apiKey);
