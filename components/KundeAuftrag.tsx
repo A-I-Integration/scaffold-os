@@ -2,6 +2,7 @@
 
 import { useState, useCallback } from 'react';
 import { FileText, Download, Mail, Check, RotateCcw, Image as ImageIcon, ClipboardList, Plus, ChevronDown, ChevronUp } from 'lucide-react';
+import NachtraegeBlock from '@/components/NachtraegeBlock';
 import EmailVerlaufDialog, { type EmailVerlaufEintrag } from '@/components/EmailVerlaufDialog';
 import { generateInvoicePDF, fmtEur, fmtDate, holePdfBase64FuerVersand, type Invoice } from '@/lib/invoice-pdf';
 
@@ -227,6 +228,9 @@ export default function KundeAuftrag({
             ))}
           </ul>
         )}
+
+        {/* ─── Nachträge (Grund, Datum, Fotos, Betrag, Status, PDF) ─── */}
+        <NachtraegeBlock project={project} kunde={kunde} />
 
         {/* ─── Zusatzrechnung (z.B. Standzeit-Überschreitung, Nachtrag) ─── */}
         {!zusatzOffen ? (
