@@ -2,6 +2,7 @@
 
 import { useState, useCallback } from 'react';
 import { FileText, Download, Mail, Check, RotateCcw, Image as ImageIcon, ClipboardList, Plus, ChevronDown, ChevronUp } from 'lucide-react';
+import EmailVerlaufDialog, { type EmailVerlaufEintrag } from '@/components/EmailVerlaufDialog';
 import { generateInvoicePDF, fmtEur, fmtDate, holePdfBase64FuerVersand, type Invoice } from '@/lib/invoice-pdf';
 
 // ============================================================
@@ -22,7 +23,7 @@ interface Project { id: string; name: string | null; adresse: string | null; dat
 interface Kunde { id: string; name: string; email: string | null; street: string | null; zip: string | null; city: string | null; }
 interface Media { id: string; file_name: string; url: string; created_at: string }
 interface DokEvent { id: string; type: string; text_note: string | null; photos: { url: string; file_name: string }[]; status: string; created_at: string }
-interface EmailLogEintrag { id: string; type: string; to_email: string; subject: string; invoice_number: string | null; sent_at: string }
+interface EmailLogEintrag { id: string; type: string; to_email: string; subject: string; invoice_number: string | null; sent_at: string; body_html?: string | null; attachment_path?: string | null; attachment_name?: string | null }
 
 const EMAIL_TYPE_LABEL: Record<string, string> = {
   angebot: '📄 Angebot', rechnung: '🧾 Rechnung', mahnung: '⏰ Mahnung',
@@ -59,6 +60,7 @@ export default function KundeAuftrag({
   const [fotos, setFotos] = useState<Media[]>([]);
   const [dokEintraege, setDokEintraege] = useState<DokEvent[]>([]);
   const [emails, setEmails] = useState<EmailLogEintrag[]>([]);
+  const [offeneMail, setOffeneMail] = useState<EmailVerlaufEintrag | null>(null);
 
   const rechnungen = invoices.filter((i) => i.project_id === project.id);
   const offen = rechnungen.filter((i) => i.status === 'offen' || i.status === 'ueberfaellig')
@@ -312,8 +314,9 @@ export default function KundeAuftrag({
                   <p className="text-xs text-[#86868b] mb-1.5">E-Mail-Verlauf (ausgehend)</p>
                   <ul className="divide-y divide-black/5 rounded-lg border border-black/10 overflow-hidden">
                     {emails.map((m) => (
-                      <li key={m.id} className="text-xs bg-white px-2.5 py-2 flex flex-wrap items-center gap-2">
+                      <li key={m.id} onClick={() => setOffeneMail(m)} title="Mail ansehen / erneut senden" className="text-xs bg-white px-2.5 py-2 flex flex-wrap items-center gap-2 cursor-pointer hover:bg-black/[0.03]">
                         <span>{EMAIL_TYPE_LABEL[m.type] || m.type}</span>
+                        {m.attachment_path && <span title="Mit Anhang">📎</span>}
                         <span className="text-[#1d1d1f] font-medium">{m.to_email}</span>
                         <span className="text-[#86868b] truncate flex-1 min-w-[120px]">{m.subject}</span>
                         <span className="text-[#86868b] whitespace-nowrap">{new Date(m.sent_at).toLocaleString('de-DE')}</span>
@@ -329,6 +332,7 @@ export default function KundeAuftrag({
           )}
         </div>
       )}
+      {offeneMail && <EmailVerlaufDialog mail={offeneMail} onClose={() => setOffeneMail(null)} />}
     </div>
   );
 }
