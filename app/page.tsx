@@ -517,7 +517,7 @@ export default function HomePage() {
             Kostenlosen Termin buchen <ArrowRight className="h-5 w-5" />
           </a>
           <p className="mt-6 text-xs text-[#86868b]">
-            Die Buchung läuft über unseren Google Kalender – du bekommst sofort eine Bestätigung per E-Mail.
+            Die Buchung läuft über unseren Online-Kalender – du bekommst sofort eine Bestätigung per E-Mail.
           </p>
         </div>
       </section>
