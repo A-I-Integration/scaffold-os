@@ -75,7 +75,7 @@ export async function POST(req: NextRequest) {
       </tr>`;
 
     const { error } = await resend.emails.send({
-      from: 'SCAFFOLD OS <onboarding@resend.dev>',
+      from: 'SCAFFOLD OS <noreply@scaffoldos.de>',
       to: [empfaenger],
       replyTo: email.trim(),
       subject: `[SCAFFOLD OS] ${ART_LABEL[art]}: ${firma.trim()}`,
