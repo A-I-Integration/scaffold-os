@@ -3,6 +3,7 @@
 import { useState, useCallback } from 'react';
 import { FileText, Download, Mail, Check, RotateCcw, Image as ImageIcon, ClipboardList, Plus, ChevronDown, ChevronUp } from 'lucide-react';
 import NachtraegeBlock from '@/components/NachtraegeBlock';
+import SchlussrechnungDialog from '@/components/SchlussrechnungDialog';
 import EmailVerlaufDialog, { type EmailVerlaufEintrag } from '@/components/EmailVerlaufDialog';
 import { generateInvoicePDF, fmtEur, fmtDate, holePdfBase64FuerVersand, type Invoice } from '@/lib/invoice-pdf';
 
@@ -62,6 +63,7 @@ export default function KundeAuftrag({
   const [dokEintraege, setDokEintraege] = useState<DokEvent[]>([]);
   const [emails, setEmails] = useState<EmailLogEintrag[]>([]);
   const [offeneMail, setOffeneMail] = useState<EmailVerlaufEintrag | null>(null);
+  const [schlussOffen, setSchlussOffen] = useState(false);
 
   const rechnungen = invoices.filter((i) => i.project_id === project.id);
   const offen = rechnungen.filter((i) => i.status === 'offen' || i.status === 'ueberfaellig')
@@ -232,6 +234,11 @@ export default function KundeAuftrag({
         {/* ─── Nachträge (Grund, Datum, Fotos, Betrag, Status, PDF) ─── */}
         <NachtraegeBlock project={project} kunde={kunde} />
 
+        {/* ─── Schlussrechnung (Angebotspreis oder Aufmaß, inkl. bestätigter Nachträge) ─── */}
+        <button onClick={() => setSchlussOffen(true)} className="flex items-center gap-1.5 text-xs text-[#e8590c] font-semibold hover:underline">
+          <FileText className="h-3.5 w-3.5" /> Schlussrechnung erstellen (nach Angebot oder Aufmaß, mit Nachträgen)
+        </button>
+
         {/* ─── Zusatzrechnung (z.B. Standzeit-Überschreitung, Nachtrag) ─── */}
         {!zusatzOffen ? (
           <button onClick={() => setZusatzOffen(true)} className="flex items-center gap-1.5 text-xs text-[#e8590c] font-semibold hover:underline">
@@ -335,6 +342,15 @@ export default function KundeAuftrag({
             </>
           )}
         </div>
+      )}
+      {schlussOffen && (
+        <SchlussrechnungDialog
+          projectId={project.id}
+          customerName={kunde.name}
+          customerAddress={[kunde.street, [kunde.zip, kunde.city].filter(Boolean).join(' ')].filter(Boolean).join(', ') || undefined}
+          onClose={() => setSchlussOffen(false)}
+          onCreated={() => onInvoiceCreated()}
+        />
       )}
       {offeneMail && <EmailVerlaufDialog mail={offeneMail} onClose={() => setOffeneMail(null)} />}
     </div>

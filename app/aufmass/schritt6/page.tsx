@@ -22,6 +22,7 @@ import { generateInvoicePDF, fmtDate as fmtRechnungsDatum, holePdfBase64FuerVers
 import { abschnitteAusSchritt2, berechneAufmass, erzeugeAufmassblattPdf, type AufmassFoto, type AufmassZulage } from '@/lib/aufmassblatt-pdf';
 import { Save, FileText, Pencil, Check, Ruler, PenLine, ClipboardList, Sparkles, Mail } from 'lucide-react';
 import { ladeAufmassFotos } from '@/lib/aufmassblatt-fotos';
+import SchlussrechnungDialog from '@/components/SchlussrechnungDialog';
 import { aufmassblattDateiname, legeAufmassblattAmProjektAb } from '@/lib/aufmassblatt-ablage';
 import { getProjectMediaClient } from '@/lib/media-client';
 
@@ -132,6 +133,8 @@ function Schritt6Content() {
   const [rechnungSendenLaeuft, setRechnungSendenLaeuft] = useState(false);
   const [rechnungVersendet, setRechnungVersendet] = useState(false);
   const [rechnungFehler, setRechnungFehler] = useState('');
+  // Schlussrechnung-Dialog (Basis Angebot/Aufmaß, bestätigte Nachträge) – Momentaufnahme des Bildschirmstands
+  const [schlussDaten, setSchlussDaten] = useState<any | null>(null);
 
   // Live-Kalkulation: Basis = KI-Verkaufspreis ODER Festpreis/m² × Fläche, dann Zu-/Abschläge
   function calcAngebot() {
@@ -880,7 +883,8 @@ function Schritt6Content() {
   // NEU (Phase 13): Rechnung aus angenommenem Angebot erstellen
   function handleRechnung() {
     if (!kiResult || !savedProjectId) return;
-    erstelleUndOeffneVersand();
+    // Dialog: Rechnungsart, Abrechnung nach Angebot oder Aufmaß, bestätigte Nachträge
+    setSchlussDaten({ ...stepData, angebotAnpassungen: anpassungen, kiResult, preisModus, festpreisProM2 });
   }
 
   // NEU (Phase 31): 1 Klick in Schritt 6 → Rechnung wird direkt angelegt UND
@@ -1229,6 +1233,22 @@ function Schritt6Content() {
                     </div>
                   )}
                 </div>
+              )}
+
+              {schlussDaten && savedProjectId && (
+                <SchlussrechnungDialog
+                  projectId={savedProjectId}
+                  customerName={s1.name || 'Kunde'}
+                  customerAddress={s1.adresse || undefined}
+                  daten={schlussDaten}
+                  onClose={() => setSchlussDaten(null)}
+                  onCreated={(inv) => {
+                    setRechnungFehler('');
+                    setRechnungErstellt(inv);
+                    setRechnungEmail(s1.ansprechpartnerEmail || s1.bauleiterEmail || '');
+                    setZeigeVersandDialog(true);
+                  }}
+                />
               )}
 
               {/* NEU (Phase 13/31): Rechnung erstellen, sobald Angebot angenommen –
