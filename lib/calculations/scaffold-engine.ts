@@ -322,6 +322,14 @@ export function geruesttypZuScaffoldType(geruesttyp: string | undefined): Scaffo
     case 'trag':
     case 'dach':
     case 'raum':
+    // Arbeits-/Schutzgerüst laufen über das normale Rahmensystem.
+    case 'arbeit':
+    case 'schutz':
+    // ACHTUNG: Einhausung und Wetterschutzdach haben KEINE eigene Berechnung
+    // (Plane, Binder, Dachfläche fehlen). Sie werden hier nur als Rahmen-
+    // gerüst gerechnet – im Angebot (Schritt 6) deshalb Festpreis/m² nutzen.
+    case 'einhausung':
+    case 'wetterschutz':
     default:
       return 'rahmen';
   }

@@ -13,6 +13,7 @@ import { KIAnalysis } from '@/types/scaffold';
 import { systemAnzeigename } from '@/lib/calculations/geruest-systeme';
 import { geruesttypZuScaffoldType } from '@/lib/calculations/scaffold-engine';
 import { sollFrischGeladenWerden, leseMarkierung, setzeMarkierung, leseSchrittGeladenesProjekt, setzeSchrittGeladenesProjekt, schliesseSitzungAb, loescheWizardDaten, leiteStepsAusKiResultAb, gewerkeVonStep1 } from '@/lib/aufmass-projekt-session';
+import { leseLidarFuerProjekt, sitzungGehoertZu } from '@/lib/aufmass-eigentuemer';
 import { speichereEntwurf, leseEntwurfId } from '@/lib/aufmass-entwurf';
 import DispositionResult from '@/components/aufmaß/DispositionResult';
 import { DispositionResult as DispositionData } from '@/lib/calculations/disposition';
@@ -275,7 +276,7 @@ function Schritt6Content() {
       } else { data[`step${i}`] = {}; }
     }
     // LiDAR-Maße und KI-Foto-Analyse aus Schritt 1 mit ins Projekt übernehmen
-    const lidarRaw = localStorage.getItem('scaffold_lidar_measurements');
+    const lidarRaw = leseLidarFuerProjekt('scaffold_lidar_measurements', projectId);
     if (lidarRaw) {
       try { data.lidarMeasurements = JSON.parse(lidarRaw); } catch { /* ignore */ }
     }
@@ -301,6 +302,10 @@ function Schritt6Content() {
   const s1 = stepData.step1 || {};
   const s2 = stepData.step2 || {};
   const s3 = stepData.step3 || {};
+  // Einhausung/Wetterschutzdach haben keine eigene Materialberechnung →
+  // Hinweis, Festpreis pro m² zu verwenden.
+  const hatOhneBerechnungTyp = [s3.geruesttyp, ...((stepData.step2?.abschnitte as any[]) || []).map((a: any) => a?.geruesttyp)]
+    .some((t) => t === 'einhausung' || t === 'wetterschutz');
   const s4 = stepData.step4 || {};
   const s5 = stepData.step5 || {};
 
@@ -556,7 +561,9 @@ function Schritt6Content() {
         if (!response.ok) throw new Error(result.error || 'Speichern fehlgeschlagen');
       }
       const sessionId = localStorage.getItem('scaffold_session_id');
-      if (sessionId) {
+      // Nur anhängen, wenn die Upload-Sitzung zu GENAU diesem Projekt gehört
+      // (nicht zu einem früheren Test-Aufmaß).
+      if (sessionId && sitzungGehoertZu(searchParams.get('id'))) {
         try { await fetch('/api/attach-photos', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sessionId, projectId: result.id }) }); localStorage.removeItem('scaffold_session_id'); } catch (photoErr) { console.error('Foto-Verknüpfung fehlgeschlagen:', photoErr); }
       }
       // FIX (Bug-Report, Projekt-Duplikate): Nach dem ALLERERSTEN Speichern
@@ -1350,6 +1357,13 @@ function Schritt6Content() {
                   {/* ─── NEU (Phase 30): Preisbasis – KI-Kalkulation oder Festpreis/m² ─── */}
                   <div className="bg-white rounded-xl p-4 mb-4 border border-black/10">
                     <p className="text-sm font-semibold text-[#1d1d1f] mb-2">Preisbasis für dieses Angebot</p>
+                    {hatOhneBerechnungTyp && preisModus === 'ki' && (
+                      <div className="mb-3 rounded-lg border border-amber-300 bg-amber-50 p-3 text-xs text-amber-900">
+                        <p className="font-semibold mb-1">Einhausung/Wetterschutzdach: keine eigene Berechnung</p>
+                        <p className="mb-2">Die KI-Kalkulation rechnet diesen Typ wie ein normales Rahmengerüst, ohne Plane, Binder oder Dachfläche. Bitte den Preis über „Festpreis pro m²“ ansetzen.</p>
+                        <button onClick={() => setPreisModus('festpreis')} className="rounded-lg border border-amber-400 bg-white px-3 py-1 font-semibold hover:bg-amber-100 transition">Auf Festpreis pro m² umstellen</button>
+                      </div>
+                    )}
                     <div className="grid grid-cols-2 gap-2 mb-2">
                       <button onClick={() => setPreisModus('ki')} className={`rounded-lg border px-3 py-2 text-xs font-semibold transition ${preisModus === 'ki' ? 'bg-[#e8590c]/10 border-[#e8590c] text-[#e8590c]' : 'bg-[#f5f5f7] border-black/10 text-[#86868b]'}`}>
                         🧮 KI-Kalkulation
