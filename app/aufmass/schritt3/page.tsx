@@ -39,6 +39,10 @@ function Schritt3Content() {
     { id: 'dach', name: 'Dachgerüst', icon: '🏠', desc: 'Dacharbeiten & Schornstein' },
     { id: 'raum', name: 'Raumgerüst', icon: '📦', desc: 'Innenräume, Hallen' },
     { id: 'haenge', name: 'Hängegerüst', icon: '⛓️', desc: 'Fassade ohne Bodenkontakt' },
+    { id: 'arbeit', name: 'Arbeitsgerüst', icon: '🪜', desc: 'Allgemeines Arbeitsgerüst' },
+    { id: 'schutz', name: 'Schutzgerüst', icon: '🛡️', desc: 'Fang-/Schutzgerüst, Schutzdach' },
+    { id: 'einhausung', name: 'Einhausung', icon: '🏗️', desc: 'Plane/Folie – Preis über Festpreis/m² (Schritt 6)' },
+    { id: 'wetterschutz', name: 'Wetterschutzdach', icon: '⛱️', desc: 'Dach über dem Gerüst – Preis über Festpreis/m² (Schritt 6)' },
   ];
 
   const belagTypen = [
