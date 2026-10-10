@@ -99,6 +99,8 @@ function Schritt6Content() {
     skonto: false,
     miete: { aktiv: false, wochen: '', preisProWoche: '' },
     nachtrag: { aktiv: false, text: '', betrag: '' },
+    // Statik / Standsicherheitsnachweis: Fremdleistung (Statiker/Prüfstatiker), keine Software-Berechnung
+    statik: { aktiv: false, text: '', betrag: '' },
     rabatt: { aktiv: false, betrag: '' },
     // Gerüstergänzungen fürs Aufmaßblatt (Stück/lfm) – fließen NICHT in den Angebotspreis
     zulagen: [] as { bezeichnung: string; einheit: 'Stk' | 'lfm'; menge: string }[],
@@ -139,6 +141,7 @@ function Schritt6Content() {
       ? (parseFloat(anpassungen.miete.wochen) || 0) * (parseFloat(anpassungen.miete.preisProWoche) || 0)
       : 0;
     const nachtragBetrag = anpassungen.nachtrag.aktiv ? parseFloat(anpassungen.nachtrag.betrag) || 0 : 0;
+    const statikBetrag = anpassungen.statik?.aktiv ? parseFloat(String(anpassungen.statik.betrag).replace(',', '.')) || 0 : 0;
     const rabattBetrag = anpassungen.rabatt.aktiv ? parseFloat(anpassungen.rabatt.betrag) || 0 : 0;
     // Phase 88: Kran-Position - Tagessatz aus Einstellungen x Bauzeit (Schritt 1),
     // nur wenn der Haken in Schritt 4 gesetzt ist. Vorher: Haken existierte,
@@ -147,9 +150,9 @@ function Schritt6Content() {
     const kranTagessatz = Number(companyProfile?.calc_crane_day) || 850;
     const kranAktiv = !!((stepData as any)?.step4?.kranErforderlich);
     const kranBetrag = kranAktiv ? Math.round(kranTagessatz * kranTage * 100) / 100 : 0;
-    const endpreis = Math.max(0, basis + mieteBetrag + nachtragBetrag + kranBetrag - rabattBetrag);
+    const endpreis = Math.max(0, basis + mieteBetrag + nachtragBetrag + statikBetrag + kranBetrag - rabattBetrag);
     const skontoBetrag = anpassungen.skonto ? endpreis * 0.02 : 0;
-    return { basis, mieteBetrag, nachtragBetrag, kranBetrag, kranTage, kranTagessatz, kranAktiv, rabattBetrag, endpreis, skontoBetrag };
+    return { basis, mieteBetrag, nachtragBetrag, statikBetrag, kranBetrag, kranTage, kranTagessatz, kranAktiv, rabattBetrag, endpreis, skontoBetrag };
   }
   const eur = (n: number) => n.toFixed(2) + ' €';
 
@@ -237,7 +240,8 @@ function Schritt6Content() {
             try { localStorage.setItem(`scaffold_step${i}`, JSON.stringify(schritt)); } catch { /* Speicher voll o.ae. */ }
           }
         }
-        if (angebotAnpassungen) setAnpassungen(angebotAnpassungen);
+        // merge: ältere Projekte kennen 'statik' noch nicht
+        if (angebotAnpassungen) setAnpassungen((p) => ({ ...p, ...angebotAnpassungen }));
         // NEU (Prio-2-Sprint): KI-Ergebnis und Angebotsstatus wiederherstellen
         if (savedKi) setKiResult(savedKi);
         if (savedStatus) setAngebotsStatus(savedStatus);
@@ -714,7 +718,7 @@ function Schritt6Content() {
     doc.setFillColor(236, 253, 245); doc.rect(110, cy - 5, 86, 20, 'F'); doc.setTextColor(4, 120, 87); doc.setFontSize(8); doc.text('Empfohlener Verkaufspreis', 116, cy + 2); doc.setFontSize(12); doc.text(kiResult.suggestedPrice.toFixed(2) + ' €', 190, cy + 2, { align: 'right' }); doc.setFontSize(8); doc.text(`Marge: ${kiResult.margin.toFixed(2)} € (${kiResult.marginPercent}%)`, 116, cy + 12);
     // NEU: Angebot-Anpassungen (Skonto, Mietverlängerung, Nachtrag, Sonderrabatt)
     const ang = calcAngebot();
-    const hatAnpassungen = anpassungen.skonto || anpassungen.miete.aktiv || anpassungen.nachtrag.aktiv || anpassungen.rabatt.aktiv;
+    const hatAnpassungen = anpassungen.skonto || anpassungen.miete.aktiv || anpassungen.nachtrag.aktiv || anpassungen.statik?.aktiv || anpassungen.rabatt.aktiv;
     if (hatAnpassungen) {
       cy += 22;
       if (cy > 235) { doc.addPage(); cy = 30; } // Platz-Sicherung bei langen Materiallisten
@@ -732,6 +736,10 @@ function Schritt6Content() {
       if (anpassungen.nachtrag.aktiv && ang.nachtragBetrag > 0) {
         doc.text(`Nachtrag: ${(anpassungen.nachtrag.text || 'gem. Vereinbarung').slice(0, 30)}`, 116, cy);
         doc.text('+' + ang.nachtragBetrag.toFixed(2) + ' €', 190, cy, { align: 'right' }); cy += 9;
+      }
+      if (anpassungen.statik?.aktiv && ang.statikBetrag > 0) {
+        doc.text(`${(anpassungen.statik.text || 'Statik (Fremdleistung)').slice(0, 34)}`, 116, cy);
+        doc.text('+' + ang.statikBetrag.toFixed(2) + ' €', 190, cy, { align: 'right' }); cy += 9;
       }
       if (anpassungen.rabatt.aktiv && ang.rabattBetrag > 0) {
         doc.text('Sonderrabatt', 116, cy);
@@ -883,6 +891,9 @@ function Schritt6Content() {
     }
     if (anpassungen.nachtrag.aktiv && ang.nachtragBetrag > 0) {
       positions.push({ bezeichnung: anpassungen.nachtrag.text?.trim() || 'Nachtrag', menge: 1, einheit: 'Pauschale', einzelpreis: ang.nachtragBetrag });
+    }
+    if (anpassungen.statik?.aktiv && ang.statikBetrag > 0) {
+      positions.push({ bezeichnung: anpassungen.statik.text?.trim() || 'Statik (Fremdleistung)', menge: 1, einheit: 'Pauschale', einzelpreis: ang.statikBetrag });
     }
     if (anpassungen.rabatt.aktiv && ang.rabattBetrag > 0) {
       positions.push({ bezeichnung: 'Sonderrabatt', menge: 1, einheit: 'Pauschale', einzelpreis: -ang.rabattBetrag });
@@ -1458,6 +1469,35 @@ function Schritt6Content() {
                     )}
                   </div>
 
+                  {/* ─── Statik / Standsicherheitsnachweis (Fremdleistung) ─── */}
+                  <div className="bg-black/10/40 rounded-xl p-3 mb-3">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-sm font-semibold text-[#1d1d1f]">Statik (Fremdleistung)</p>
+                        <p className="text-xs text-[#86868b]">Wird von einem Statiker erstellt – hier nur den Preis als eigene Position ins Angebot setzen</p>
+                      </div>
+                      <button onClick={() => setAnpassungen((p) => ({ ...p, statik: { ...(p.statik ?? { text: '', betrag: '' }), aktiv: !p.statik?.aktiv } }))} className={toggleCls(!!anpassungen.statik?.aktiv)}>
+                        {anpassungen.statik?.aktiv ? '✅ Aktiv' : 'Aktivieren'}
+                      </button>
+                    </div>
+                    {anpassungen.statik?.aktiv && (
+                      <div className="grid grid-cols-3 gap-3 mt-3">
+                        <div className="col-span-2">
+                          <label className="block text-xs text-[#86868b] mb-1">Beschreibung</label>
+                          <input type="text" value={anpassungen.statik.text}
+                            onChange={(e) => setAnpassungen((p) => ({ ...p, statik: { ...p.statik, text: e.target.value } }))}
+                            placeholder="z. B. Statik Fassadengerüst (Fremdleistung)" className={inputCls} />
+                        </div>
+                        <div>
+                          <label className="block text-xs text-[#86868b] mb-1">Betrag (€)</label>
+                          <input type="number" min="0" step="0.01" value={anpassungen.statik.betrag}
+                            onChange={(e) => setAnpassungen((p) => ({ ...p, statik: { ...p.statik, betrag: e.target.value } }))}
+                            placeholder="z. B. 450" className={inputCls} />
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
                   {/* ─── Sonderrabatt ─── */}
                   <div className="bg-black/10/40 rounded-xl p-3 mb-4">
                     <div className="flex items-center justify-between">
@@ -1485,6 +1525,7 @@ function Schritt6Content() {
                     {a.kranBetrag > 0 && <div className="flex justify-between text-[#86868b]"><span>+ Kran ({a.kranTage} T. à {eur(a.kranTagessatz)})</span><span className="text-[#1d1d1f]">{eur(a.kranBetrag)}</span></div>}
                     {a.mieteBetrag > 0 && <div className="flex justify-between text-[#86868b]"><span>+ Mietverlängerung</span><span className="text-[#1d1d1f]">{eur(a.mieteBetrag)}</span></div>}
                     {a.nachtragBetrag > 0 && <div className="flex justify-between text-[#86868b]"><span>+ Nachtrag</span><span className="text-[#1d1d1f]">{eur(a.nachtragBetrag)}</span></div>}
+                    {a.statikBetrag > 0 && <div className="flex justify-between text-[#86868b]"><span>+ Statik (Fremdleistung)</span><span className="text-[#1d1d1f]">{eur(a.statikBetrag)}</span></div>}
                     {a.rabattBetrag > 0 && <div className="flex justify-between text-[#86868b]"><span>− Sonderrabatt</span><span className="text-red-600">−{eur(a.rabattBetrag)}</span></div>}
                     <div className="border-t border-black/10 pt-2 flex justify-between font-bold text-base">
                       <span className="text-[#e8590c]">Endpreis</span>
