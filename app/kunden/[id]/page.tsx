@@ -26,6 +26,7 @@ import { uploadVertragsdokument } from '@/lib/vertrag-upload-client'
 import VersionsHistorie from '@/components/VersionsHistorie'
 import KundenKontakte from '@/components/KundenKontakte'
 import KundeEmails from '@/components/KundeEmails'
+import EmailVerlaufDialog, { type EmailVerlaufEintrag } from '@/components/EmailVerlaufDialog'
 import MaterialReservieren from '@/components/MaterialReservieren'
 import TransportAnlegen from '@/components/TransportAnlegen'
 import SollIstStunden from '@/components/SollIstStunden'
@@ -64,6 +65,9 @@ interface EmailLog {
   subject: string
   invoice_number: string | null
   sent_at: string
+  body_html?: string | null
+  attachment_path?: string | null
+  attachment_name?: string | null
 }
 
 interface Media { id: string; file_name: string; url: string; created_at: string; file_type?: string; metadata?: { kind?: string } }
@@ -129,6 +133,7 @@ export default function KundenDetailPage() {
   const [invoices, setInvoices] = useState<Invoice[]>([])
   const [opens, setOpens] = useState<Record<string, { anzahl: number; zuletzt: string }>>({})
   const [emails, setEmails] = useState<EmailLog[]>([])
+  const [offeneMail, setOffeneMail] = useState<EmailVerlaufEintrag | null>(null)
   const [fotos, setFotos] = useState<Record<string, Media[]>>({})
   // NEU: Upload für Bilder/Dokumente direkt in Kunden-Detail
   const [uploadLaeuft, setUploadLaeuft] = useState<string | null>(null) // "<projectId>-bilder" oder "<projectId>-dokumente"
@@ -1465,8 +1470,9 @@ export default function KundenDetailPage() {
                 <div className="px-5 py-3 border-b border-black/5"><h2 className="text-sm font-semibold text-[#1d1d1f] flex items-center gap-1.5"><Mail className="h-4 w-4 text-[#e8590c]" /> E-Mail-Verlauf ({emails.length})</h2></div>
                 <ul className="divide-y divide-black/5">
                   {emails.map((m) => (
-                    <li key={m.id} className="px-5 py-2 text-xs flex flex-wrap items-center gap-2">
+                    <li key={m.id} onClick={() => setOffeneMail(m)} title="Mail ansehen / erneut senden" className="px-5 py-2 text-xs flex flex-wrap items-center gap-2 cursor-pointer hover:bg-black/[0.03]">
                       <span>{EMAIL_TYPE_LABEL[m.type] || m.type}</span>
+                      {m.attachment_path && <span title="Mit Anhang">📎</span>}
                       <span className="text-[#1d1d1f] font-medium">{m.to_email}</span>
                       <span className="text-[#86868b] truncate flex-1 min-w-[120px]">{m.subject}</span>
                       {m.invoice_number && <span className="text-[#e8590c]">{m.invoice_number}</span>}
@@ -1479,6 +1485,8 @@ export default function KundenDetailPage() {
           </div>
         )}
       </div>
+
+      {offeneMail && <EmailVerlaufDialog mail={offeneMail} onClose={() => setOffeneMail(null)} />}
 
       {/* ─── NEU (Phase 38): Zahlung erfassen (voll oder teilweise) ─── */}
       {zahlungOffen && (

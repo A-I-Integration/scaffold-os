@@ -99,11 +99,7 @@ export async function POST(req: Request) {
     const trackRef = mailType === 'angebot' ? projectId : (invoiceNumber || projectName);
     const pixel = `<img src="${appUrl}/api/track/open?typ=${mailType}&ref=${encodeURIComponent(trackRef)}" width="1" height="1" alt="" style="display:none" />`;
 
-    const { data, error } = await resend.emails.send({
-      from: 'SCAFFOLD OS <onboarding@resend.dev>',
-      to: [to],
-      subject,
-      html: `
+    const htmlBody = `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
           <h2 style="color: #f59e0b;">SCAFFOLD OS</h2>
           ${innerHtml}
@@ -113,7 +109,14 @@ export async function POST(req: Request) {
           </p>
           ${pixel}
         </div>
-      `,
+      `;
+
+    const { data, error } = await resend.emails.send({
+      // MAIL_FROM wie in lib/notify.ts (Standard unverändert: Resend-Testabsender)
+      from: process.env.MAIL_FROM || 'SCAFFOLD OS <onboarding@resend.dev>',
+      to: [to],
+      subject,
+      html: htmlBody,
       attachments: attachments.length > 0 ? attachments : undefined,
     });
 
@@ -121,26 +124,46 @@ export async function POST(req: Request) {
 
     // Phase 20: Versand protokollieren – Fehler hier dürfen den
     // erfolgreichen Versand nicht rückwirkend als fehlgeschlagen melden.
+    // Phase 97: zusätzlich Inhalt + Anhang speichern (Ansehen / erneut senden).
     try {
       const supaUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
       const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
-      await fetch(`${supaUrl}/rest/v1/email_log`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          apikey: serviceKey,
-          Authorization: `Bearer ${serviceKey}`,
-          Prefer: 'return=minimal',
-        },
-        body: JSON.stringify({
-          project_id: mailType === 'angebot' ? (projectId || null) : null,
-          invoice_number: invoiceNumber || null,
-          type: mailType,
-          to_email: to,
-          subject,
-          resend_id: data?.id || null,
-        }),
+      const logHeaders = {
+        'Content-Type': 'application/json',
+        apikey: serviceKey,
+        Authorization: `Bearer ${serviceKey}`,
+        Prefer: 'return=minimal',
+      };
+      // Anhang im Bucket "project-media" ablegen (best effort)
+      let attachmentPath: string | null = null;
+      let attachmentName: string | null = null;
+      if (attachments.length > 0) {
+        try {
+          const path = `email-log/${crypto.randomUUID()}.pdf`;
+          const up = await fetch(`${supaUrl}/storage/v1/object/project-media/${path}`, {
+            method: 'POST',
+            headers: { apikey: serviceKey, Authorization: `Bearer ${serviceKey}`, 'Content-Type': 'application/pdf' },
+            body: Buffer.from(attachments[0].content, 'base64'),
+          });
+          if (up.ok) { attachmentPath = path; attachmentName = attachments[0].filename; }
+        } catch { /* Anhang nicht gespeichert – Protokoll trotzdem */ }
+      }
+      const basis = {
+        project_id: mailType === 'angebot' ? (projectId || null) : null,
+        invoice_number: invoiceNumber || null,
+        type: mailType,
+        to_email: to,
+        subject,
+        resend_id: data?.id || null,
+      };
+      let logRes = await fetch(`${supaUrl}/rest/v1/email_log`, {
+        method: 'POST', headers: logHeaders,
+        body: JSON.stringify({ ...basis, body_html: htmlBody, attachment_path: attachmentPath, attachment_name: attachmentName }),
       });
+      // Spalten aus Phase 97 evtl. noch nicht angelegt → altes Protokoll-Format
+      if (!logRes.ok) {
+        logRes = await fetch(`${supaUrl}/rest/v1/email_log`, { method: 'POST', headers: logHeaders, body: JSON.stringify(basis) });
+      }
     } catch (logErr) {
       console.error('[Email API] Protokollierung fehlgeschlagen (ignoriert):', logErr);
     }
