@@ -6,6 +6,7 @@ import { ClipboardList } from 'lucide-react';
 import { useState, useEffect, useRef, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { setzeMarkierung, leseSchrittGeladenesProjekt, setzeSchrittGeladenesProjekt, WIZARD_KEYS, gewerkeVonStep1 } from '@/lib/aufmass-projekt-session';
+import { NEU, SESSION_EIGENTUEMER_KEY, setzeLidarEigentuemer, sitzungGehoertZu } from '@/lib/aufmass-eigentuemer';
 import { speichereEntwurf } from '@/lib/aufmass-entwurf';
 import PhotoUpload from '@/components/aufmaß/PhotoUpload';
 import LiDARUpload from '@/components/aufmaß/LiDARUpload';
@@ -96,12 +97,18 @@ function Schritt1Content() {
   // Session-ID für Uploads
   useEffect(() => {
     let sid = localStorage.getItem('scaffold_session_id');
-    if (!sid) {
+    // Upload-Sitzung gehört zu genau einem Projekt (oder zum neuen Aufmaß):
+    // passt der Vermerk nicht zum geöffneten Projekt, gibt es eine frische
+    // Sitzung – sonst würden alte Test-Uploads im falschen Projekt landen.
+    const ziel = projectId || NEU;
+    const sitzungPasst = sitzungGehoertZu(projectId);
+    if (!sid || !sitzungPasst) {
       sid = 'sess_' + Date.now() + '_' + Math.random().toString(36).substring(2, 9);
       localStorage.setItem('scaffold_session_id', sid);
     }
+    try { localStorage.setItem(SESSION_EIGENTUEMER_KEY, ziel); } catch { /* ignore */ }
     setSessionId(sid);
-  }, []);
+  }, [projectId]);
 
   // Gespeicherte Daten laden
   useEffect(() => {
@@ -179,7 +186,7 @@ function Schritt1Content() {
             // LiDAR-Hinweise in Schritt 2), falls vorhanden.
             try {
               const lidar = json.success ? json.project?.data?.lidarMeasurements : null;
-              if (lidar) localStorage.setItem('scaffold_lidar_measurements', JSON.stringify(lidar));
+              if (lidar) { localStorage.setItem('scaffold_lidar_measurements', JSON.stringify(lidar)); setzeLidarEigentuemer(projectId); }
             } catch { /* Speicher voll o. ä. – unkritisch */ }
           } catch {
             // FIX: Vorher blieb das Formular bei einem Fehler in einem
@@ -738,6 +745,7 @@ function Schritt1Content() {
                 projectId={projectId}
                 onMeasurements={(m, name) => {
                   localStorage.setItem('scaffold_lidar_measurements', JSON.stringify(m));
+                  setzeLidarEigentuemer(projectId);
                   if (name) localStorage.setItem('scaffold_lidar_scan_name', name);
                   // Neu: markiert diesen Scan als "frisch" – Schritt 2 übernimmt ihn
                   // dann garantiert, auch wenn dort schon (ggf. veraltete) Werte

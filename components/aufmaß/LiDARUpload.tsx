@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useCallback, useEffect } from 'react';
+import { leseLidarFuerProjekt } from '@/lib/aufmass-eigentuemer';
 import { uploadScanClient, getScanStatusClient, getScanClient } from '@/lib/media-client';
 
 // Ab dieser Größe geht der Scan direkt zu Supabase Storage und wird vom
@@ -82,8 +83,8 @@ export default function LiDARUpload({ sessionId, projectId, onMeasurements }: Pr
   // vorhandenes Ergebnis beim Laden der Seite wiederhergestellt.
   useEffect(() => {
     try {
-      const raw = localStorage.getItem('scaffold_lidar_measurements');
-      const name = localStorage.getItem('scaffold_lidar_scan_name');
+      const raw = leseLidarFuerProjekt('scaffold_lidar_measurements', projectId);
+      const name = raw ? localStorage.getItem('scaffold_lidar_scan_name') : null;
       if (raw) { setScan({ m: JSON.parse(raw), name: name || 'Punktwolke' }); return; }
     } catch { /* ignore */ }
 

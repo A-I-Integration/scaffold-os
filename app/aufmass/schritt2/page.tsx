@@ -6,6 +6,7 @@ import { Building2, Waypoints } from 'lucide-react';
 import { useState, useEffect, useRef, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { setzeMarkierung, leseSchrittGeladenesProjekt, setzeSchrittGeladenesProjekt, leiteStepsAusKiResultAb } from '@/lib/aufmass-projekt-session';
+import { leseLidarFuerProjekt } from '@/lib/aufmass-eigentuemer';
 import { speichereEntwurf } from '@/lib/aufmass-entwurf';
 import KIWarnings from '@/components/aufmaß/KIWarnings';
 import { useKIValidation } from '@/hooks/useKIValidation';
@@ -283,7 +284,7 @@ function leeresFormS2() {
     // Wechsel zu Schritt 2 noch beim Worker lief, kam das Ergebnis nie an. Jetzt
     // wird bis zu 2 Minuten lang alle paar Sekunden nachgeschaut, ob es fertig ist.
     const versucheLidarUebernahme = () => {
-      const lidarRaw = localStorage.getItem('scaffold_lidar_measurements');
+      const lidarRaw = leseLidarFuerProjekt('scaffold_lidar_measurements', projectId);
       if (!lidarRaw) return false;
       try {
         const m = JSON.parse(lidarRaw);
@@ -424,7 +425,7 @@ function leeresFormS2() {
           // weder gespeicherter Stand noch LiDAR haben bereits eine Höhe.
           let vorhandeneHoehe = '';
           try { vorhandeneHoehe = JSON.parse(localStorage.getItem('scaffold_step2') || '{}')?.hoehe || ''; } catch { /* ignore */ }
-          try { const lm = JSON.parse(localStorage.getItem('scaffold_lidar_measurements') || '{}'); if (!vorhandeneHoehe && lm.heightM) vorhandeneHoehe = String(lm.heightM); } catch { /* ignore */ }
+          try { const lm = JSON.parse(leseLidarFuerProjekt('scaffold_lidar_measurements', projectId) || '{}'); if (!vorhandeneHoehe && lm.heightM) vorhandeneHoehe = String(lm.heightM); } catch { /* ignore */ }
           if (!vorhandeneHoehe && !g.hoehe && g.hoehe_geschaetzt) setHoeheGeschaetzt(true);
         }
         setGrundrissUebernommen(true);
