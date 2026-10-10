@@ -13,7 +13,6 @@ import { KIAnalysis } from '@/types/scaffold';
 import { systemAnzeigename } from '@/lib/calculations/geruest-systeme';
 import { geruesttypZuScaffoldType } from '@/lib/calculations/scaffold-engine';
 import { sollFrischGeladenWerden, leseMarkierung, setzeMarkierung, leseSchrittGeladenesProjekt, setzeSchrittGeladenesProjekt, schliesseSitzungAb, loescheWizardDaten, leiteStepsAusKiResultAb, gewerkeVonStep1 } from '@/lib/aufmass-projekt-session';
-import { leseLidarFuerProjekt, sitzungGehoertZu } from '@/lib/aufmass-eigentuemer';
 import { speichereEntwurf, leseEntwurfId } from '@/lib/aufmass-entwurf';
 import DispositionResult from '@/components/aufmaß/DispositionResult';
 import { DispositionResult as DispositionData } from '@/lib/calculations/disposition';
@@ -276,7 +275,7 @@ function Schritt6Content() {
       } else { data[`step${i}`] = {}; }
     }
     // LiDAR-Maße und KI-Foto-Analyse aus Schritt 1 mit ins Projekt übernehmen
-    const lidarRaw = leseLidarFuerProjekt('scaffold_lidar_measurements', projectId);
+    const lidarRaw = localStorage.getItem('scaffold_lidar_measurements');
     if (lidarRaw) {
       try { data.lidarMeasurements = JSON.parse(lidarRaw); } catch { /* ignore */ }
     }
@@ -561,9 +560,7 @@ function Schritt6Content() {
         if (!response.ok) throw new Error(result.error || 'Speichern fehlgeschlagen');
       }
       const sessionId = localStorage.getItem('scaffold_session_id');
-      // Nur anhängen, wenn die Upload-Sitzung zu GENAU diesem Projekt gehört
-      // (nicht zu einem früheren Test-Aufmaß).
-      if (sessionId && sitzungGehoertZu(searchParams.get('id'))) {
+      if (sessionId) {
         try { await fetch('/api/attach-photos', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sessionId, projectId: result.id }) }); localStorage.removeItem('scaffold_session_id'); } catch (photoErr) { console.error('Foto-Verknüpfung fehlgeschlagen:', photoErr); }
       }
       // FIX (Bug-Report, Projekt-Duplikate): Nach dem ALLERERSTEN Speichern
