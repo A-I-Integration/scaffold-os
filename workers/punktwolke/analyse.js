@@ -148,31 +148,42 @@ function detectUnitScale(heightRaw) {
 function findFacadePlane(pts, vertAxis, unitScale) {
   const n = pts.length / 3;
   if (n < 200) return null;
-  const threshold = 0.06 / unitScale;
-  const ITER = 6000; // war 400: zu wenig Stichproben, Wände wurden zufällig verpasst (Test: 6000 → 40/40 Läufe mit 4 Wänden)
-  let bestInliers = null, bestN = [0, 0, 0], bestD = 0;
-
+  const threshold = 0.06 / unitScale; // 6 cm
+  // Wände stehen senkrecht: im Grundriss (2D) ist jede Wand eine Gerade.
+  // 2 statt 3 Stichprobenpunkte → Treffer ~10x wahrscheinlicher (Gerüst-/Gebäude-
+  // Scans: nur ~10 % der Punkte liegen auf einer Wand; mit 3 Punkten und 400
+  // Durchläufen wurden Wände zufällig verpasst). Bewertet wird an einer Teilmenge
+  // (schnell), die endgültigen Inlier an allen Punkten.
+  const h = [0, 1, 2].filter((ax) => ax !== vertAxis);
+  const SCORE_N = 20000;
+  const step = Math.max(1, Math.floor(n / SCORE_N));
+  const samp = [];
+  for (let i = 0; i < n; i += step) samp.push(i);
+  const ITER = 1500;
+  const MIN_ABSTAND = 0.5 / unitScale; // Stichprobenpunkte nicht zu nah beieinander
+  let bestCount = 0, bestA = 0, bestB = 0, bestD = 0;
   for (let it = 0; it < ITER; it++) {
-    const i1 = Math.floor(Math.random() * n), i2 = Math.floor(Math.random() * n), i3 = Math.floor(Math.random() * n);
-    if (i1 === i2 || i2 === i3 || i1 === i3) continue;
-    const p1 = [pts[i1 * 3], pts[i1 * 3 + 1], pts[i1 * 3 + 2]];
-    const p2 = [pts[i2 * 3], pts[i2 * 3 + 1], pts[i2 * 3 + 2]];
-    const p3 = [pts[i3 * 3], pts[i3 * 3 + 1], pts[i3 * 3 + 2]];
-    const u = [p2[0] - p1[0], p2[1] - p1[1], p2[2] - p1[2]];
-    const v = [p3[0] - p1[0], p3[1] - p1[1], p3[2] - p1[2]];
-    let a = u[1] * v[2] - u[2] * v[1], b = u[2] * v[0] - u[0] * v[2], c = u[0] * v[1] - u[1] * v[0];
-    const len = Math.hypot(a, b, c);
-    if (len < 1e-9) continue;
-    a /= len; b /= len; c /= len;
-    if (Math.abs([a, b, c][vertAxis]) > 0.15) continue;
-    const d = -(a * p1[0] + b * p1[1] + c * p1[2]);
-    const inliers = new Set();
-    for (let i = 0; i < n; i++) {
-      if (Math.abs(a * pts[i * 3] + b * pts[i * 3 + 1] + c * pts[i * 3 + 2] + d) < threshold) inliers.add(i);
+    const i1 = samp[Math.floor(Math.random() * samp.length)];
+    const i2 = samp[Math.floor(Math.random() * samp.length)];
+    const x1 = pts[i1 * 3 + h[0]], y1 = pts[i1 * 3 + h[1]];
+    const dx = pts[i2 * 3 + h[0]] - x1, dy = pts[i2 * 3 + h[1]] - y1;
+    const len = Math.hypot(dx, dy);
+    if (len < MIN_ABSTAND) continue;
+    const a2 = -dy / len, b2 = dx / len, d2 = -(a2 * x1 + b2 * y1);
+    let count = 0;
+    for (let k = 0; k < samp.length; k++) {
+      const i = samp[k];
+      if (Math.abs(a2 * pts[i * 3 + h[0]] + b2 * pts[i * 3 + h[1]] + d2) < threshold) count++;
     }
-    if (!bestInliers || inliers.size > bestInliers.size) { bestInliers = inliers; bestN = [a, b, c]; bestD = d; }
+    if (count > bestCount) { bestCount = count; bestA = a2; bestB = b2; bestD = d2; }
   }
-  if (!bestInliers || bestInliers.size < Math.max(100, n * 0.03)) return null;
+  if (bestCount === 0) return null;
+  const bestN = [0, 0, 0]; bestN[h[0]] = bestA; bestN[h[1]] = bestB;
+  const bestInliers = new Set();
+  for (let i = 0; i < n; i++) {
+    if (Math.abs(bestA * pts[i * 3 + h[0]] + bestB * pts[i * 3 + h[1]] + bestD) < threshold) bestInliers.add(i);
+  }
+  if (bestInliers.size < Math.max(100, n * 0.03)) return null;
 
   const ev = [0, 0, 0]; ev[vertAxis] = 1;
   const dir = [
