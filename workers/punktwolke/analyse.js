@@ -11,7 +11,7 @@ const { istBinaerPly, parsePlyBinary } = require('./ply-binary');
 
 const MAX_POINTS = 120000;
 const TRIM_LO = 0.02, TRIM_HI = 0.98;
-const MAX_EBENEN = 3;
+const MAX_EBENEN = 4; // vier Fassadenseiten
 
 // ─── Parser ───
 function parseOBJ(text) {
@@ -149,7 +149,7 @@ function findFacadePlane(pts, vertAxis, unitScale) {
   const n = pts.length / 3;
   if (n < 200) return null;
   const threshold = 0.06 / unitScale;
-  const ITER = 400;
+  const ITER = 6000; // war 400: zu wenig Stichproben, Wände wurden zufällig verpasst (Test: 6000 → 40/40 Läufe mit 4 Wänden)
   let bestInliers = null, bestN = [0, 0, 0], bestD = 0;
 
   for (let it = 0; it < ITER; it++) {

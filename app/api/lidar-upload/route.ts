@@ -38,7 +38,7 @@ interface Measurements {
 
 const MAX_POINTS = 120_000;   // Arbeitsmenge (Stride-Sampling)
 const TRIM_LO = 0.02, TRIM_HI = 0.98;
-const MAX_EBENEN = 3;
+const MAX_EBENEN = 4; // vier Fassadenseiten
 
 // ─── OBJ (ASCII) ───
 function parseOBJ(text: string): number[] {
@@ -210,7 +210,7 @@ function findFacadePlane(pts: number[], vertAxis: number, unitScale: number): Pl
   const n = pts.length / 3;
   if (n < 200) return null;
   const threshold = 0.06 / unitScale; // 6 cm
-  const ITER = 400;
+  const ITER = 3000; // war 400: zu wenig Stichproben, Wände wurden zufällig verpasst (Gerüst-Scans: nur ~10 % der Punkte liegen auf einer Wand)
 
   let bestInliers: Set<number> | null = null;
   let bestN = [0, 0, 0], bestD = 0;
