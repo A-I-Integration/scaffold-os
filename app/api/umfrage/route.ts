@@ -9,7 +9,7 @@ import { serverErrorResponse } from '@/lib/auth';
 // Es wird NICHTS in der Datenbank gespeichert.
 //
 // Env-Vars: RESEND_API_KEY (Pflicht), ANFRAGE_EMPFAENGER (optional,
-// Standard: info@a-i-integration.de)
+// Standard: info@scaffoldos.de)
 // Spam-Schutz: Honeypot „website" + Längenlimits.
 // ============================================================
 
@@ -44,7 +44,7 @@ export async function POST(req: NextRequest) {
     const apiKey = process.env.RESEND_API_KEY;
     if (!apiKey) {
       return NextResponse.json(
-        { success: false, error: 'E-Mail-Versand ist derzeit nicht eingerichtet. Bitte per E-Mail an info@a-i-integration.de antworten.' },
+        { success: false, error: 'E-Mail-Versand ist derzeit nicht eingerichtet. Bitte per E-Mail an info@scaffoldos.de antworten.' },
         { status: 503 }
       );
     }
@@ -71,7 +71,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: false, error: 'Bitte beantworten Sie mindestens eine Frage.' }, { status: 400 });
     }
 
-    const empfaenger = process.env.ANFRAGE_EMPFAENGER || 'info@a-i-integration.de';
+    const empfaenger = process.env.ANFRAGE_EMPFAENGER || 'info@scaffoldos.de';
     const { Resend } = await import('resend');
     const resend = new Resend(apiKey);
 
