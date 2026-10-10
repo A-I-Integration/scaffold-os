@@ -7,6 +7,7 @@ import { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { setzeMarkierung, leseSchrittGeladenesProjekt, setzeSchrittGeladenesProjekt, leiteStepsAusKiResultAb } from '@/lib/aufmass-projekt-session';
 import { speichereEntwurf } from '@/lib/aufmass-entwurf';
+import { sichtbareGeruesttypen, leseAngeboteneTypen } from '@/lib/geruesttypen';
 import { GERUEST_SYSTEME, CUSTOM_SYSTEM_ID, findeSystem } from '@/lib/calculations/geruest-systeme';
 
 const LEERES_FORM_S3 = {
@@ -32,18 +33,13 @@ function Schritt3Content() {
   
   const [form, setForm] = useState({ ...LEERES_FORM_S3 });
 
-  const geruestTypen = [
-    { id: 'fassade', name: 'Fassadengerüst', icon: '🏢', desc: 'Standard für Maler & WDVS' },
-    { id: 'fahr', name: 'Fahrgerüst', icon: '🚧', desc: 'Rollbar, für große Flächen' },
-    { id: 'trag', name: 'Traggerüst', icon: '⚒️', desc: 'Überbrückung, hohe Lasten' },
-    { id: 'dach', name: 'Dachgerüst', icon: '🏠', desc: 'Dacharbeiten & Schornstein' },
-    { id: 'raum', name: 'Raumgerüst', icon: '📦', desc: 'Innenräume, Hallen' },
-    { id: 'haenge', name: 'Hängegerüst', icon: '⛓️', desc: 'Fassade ohne Bodenkontakt' },
-    { id: 'arbeit', name: 'Arbeitsgerüst', icon: '🪜', desc: 'Allgemeines Arbeitsgerüst' },
-    { id: 'schutz', name: 'Schutzgerüst', icon: '🛡️', desc: 'Fang-/Schutzgerüst, Schutzdach' },
-    { id: 'einhausung', name: 'Einhausung', icon: '🏗️', desc: 'Plane/Folie – Preis über Festpreis/m² (Schritt 6)' },
-    { id: 'wetterschutz', name: 'Wetterschutzdach', icon: '⛱️', desc: 'Dach über dem Gerüst – Preis über Festpreis/m² (Schritt 6)' },
-  ];
+  // Nur die Gerüsttypen, die der Betrieb im Firmenprofil als Angebot
+  // ausgewählt hat (ohne Auswahl: alle). Bereits gewählte Typen bleiben sichtbar.
+  const [angeboten, setAngeboten] = useState<string[] | null>(null);
+  const geruestTypen = sichtbareGeruesttypen(
+    angeboten,
+    [form.geruesttyp, ...abschnitte.map((a) => a.geruesttyp || '')],
+  );
 
   const belagTypen = [
     { id: 'holz', name: 'Holzbelag', desc: 'Standard, günstig' },
@@ -106,6 +102,16 @@ function Schritt3Content() {
     const saved3 = localStorage.getItem('scaffold_step3');
     if (saved3) setForm(JSON.parse(saved3));
   }, [projectId]);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const res = await fetch('/api/company');
+        const json = await res.json();
+        if (json?.success) setAngeboten(leseAngeboteneTypen(json.company?.angebotene_geruesttypen));
+      } catch { /* Fehler: alle Typen anzeigen */ }
+    })();
+  }, []);
 
   // Gerüsttyp eines einzelnen Abschnitts ändern – wird zurück in
   // scaffold_step2 gespeichert, damit Schritt 6 es beim Zusammenbauen

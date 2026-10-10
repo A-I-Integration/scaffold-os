@@ -81,6 +81,8 @@ export async function POST(req: NextRequest) {
       // NEU: Preisliste je Gerüst-Typ (Arbeitsgerüst, Hängegerüst, Fahrgerüst,
       // Traggerüst usw.) – für den schnellen Festpreis-Modus im Aufmaß.
       'preisliste_geruesttypen',
+      // Welche Gerüsttypen der Betrieb anbietet (Aufmaß Schritt 3 zeigt nur diese)
+      'angebotene_geruesttypen',
     ];
     const patch: Record<string, any> = { updated_at: new Date().toISOString() };
     for (const f of allowed) {

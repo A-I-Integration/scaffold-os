@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { Settings, Save } from 'lucide-react';
+import { ALLE_GERUESTTYPEN, leseAngeboteneTypen } from '@/lib/geruesttypen';
 
 // ============================================================
 // SCAFFOLD OS – Einstellungen: Firmenprofil (Phase 14)
@@ -98,6 +99,11 @@ export default function EinstellungenPage() {
   // NEU: Preisliste je Gerüst-Typ (Arbeitsgerüst, Hängegerüst, Traggerüst
   // usw. – frei benennbar) für den schnellen Festpreis-Modus im Aufmaß.
   const [preisliste, setPreisliste] = useState<{ name: string; preis_pro_m2: string }[]>([])
+  // Welche Gerüsttypen bietet der Betrieb an? ([] = alle). Wird nur gespeichert,
+  // wenn der Nutzer die Auswahl angefasst hat (schützt vor Fehlern, solange die
+  // DB-Spalte aus Phase 96 noch fehlt).
+  const [angeboten, setAngeboten] = useState<string[]>([])
+  const [angebotenGeaendert, setAngebotenGeaendert] = useState(false)
 
   useEffect(() => {
     (async () => {
@@ -112,6 +118,7 @@ export default function EinstellungenPage() {
             c[k] = v === null || v === undefined ? '' : String(v);
           }
           setCompany(c);
+          setAngeboten(leseAngeboteneTypen(json.company.angebotene_geruesttypen) || [])
           if (Array.isArray(json.company.preisliste_geruesttypen)) {
             setPreisliste(json.company.preisliste_geruesttypen.map((p: any) => ({ name: p.name || '', preis_pro_m2: String(p.preis_pro_m2 ?? '') })))
           }
@@ -140,6 +147,12 @@ export default function EinstellungenPage() {
       payload.preisliste_geruesttypen = preisliste
         .filter((p) => p.name.trim() && p.preis_pro_m2.trim())
         .map((p) => ({ name: p.name.trim(), preis_pro_m2: parseFloat(p.preis_pro_m2.replace(',', '.')) || 0 }));
+      if (angebotenGeaendert) {
+        // Alle angehakt = keine Einschränkung → NULL speichern
+        payload.angebotene_geruesttypen = angeboten.length === 0 || angeboten.length === ALLE_GERUESTTYPEN.length ? null : angeboten;
+      } else {
+        delete payload.angebotene_geruesttypen;
+      }
       const res = await fetch('/api/company', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -240,6 +253,40 @@ export default function EinstellungenPage() {
               <Save className="h-4 w-4" />
               {saving ? 'Speichert…' : 'Alles speichern'}
             </button>
+          </div>
+        )}
+
+        {/* ─── Leistungen: welche Gerüsttypen bietet der Betrieb an? ─── */}
+        {!loading && !error && (
+          <div className="bg-[#f5f5f7] rounded-xl p-6 border border-black/10 space-y-4">
+            <div>
+              <h2 className="text-lg font-bold text-[#1d1d1f]">Was bieten wir an?</h2>
+              <p className="text-sm text-[#86868b]">
+                Nur die angehakten Gerüsttypen stehen im Aufmaß (Schritt 3) zur Auswahl.
+                Ist nichts angehakt, werden alle angezeigt. Danach unten „Alles speichern“.
+              </p>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              {ALLE_GERUESTTYPEN.map((t) => {
+                const an = angeboten.length === 0 || angeboten.includes(t.id);
+                return (
+                  <label key={t.id} className="flex items-center gap-2 rounded-lg border border-black/10 bg-white px-3 py-2 text-sm cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={an}
+                      onChange={() => {
+                        setAngebotenGeaendert(true);
+                        setAngeboten((prev) => {
+                          const basis = prev.length === 0 ? ALLE_GERUESTTYPEN.map((x) => x.id) : prev;
+                          return basis.includes(t.id) ? basis.filter((x) => x !== t.id) : [...basis, t.id];
+                        });
+                      }}
+                    />
+                    <span>{t.icon} {t.name}</span>
+                  </label>
+                );
+              })}
+            </div>
           </div>
         )}
 
