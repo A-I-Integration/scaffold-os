@@ -22,6 +22,7 @@ import { generateInvoicePDF, fmtDate as fmtRechnungsDatum, holePdfBase64FuerVers
 import { abschnitteAusSchritt2, berechneAufmass, erzeugeAufmassblattPdf, type AufmassFoto, type AufmassZulage } from '@/lib/aufmassblatt-pdf';
 import { Save, FileText, Pencil, Check, Ruler, PenLine, ClipboardList, Sparkles, Mail } from 'lucide-react';
 import { ladeAufmassFotos } from '@/lib/aufmassblatt-fotos';
+import { aufmassblattDateiname, legeAufmassblattAmProjektAb } from '@/lib/aufmassblatt-ablage';
 import { getProjectMediaClient } from '@/lib/media-client';
 
 const DigitalTwin = dynamic(() => import('@/components/aufmaß/DigitalTwin'), {
@@ -82,6 +83,7 @@ function Schritt6Content() {
   const [showSignature, setShowSignature] = useState(false);
   const [signatureData, setSignatureData] = useState<string | null>(null);
   const [aufmassLaeuft, setAufmassLaeuft] = useState(false);
+  const [aufmassAblageHinweis, setAufmassAblageHinweis] = useState<{ ok: boolean; text: string } | null>(null);
   const [emailStatus, setEmailStatus] = useState<'idle' | 'sending' | 'sent' | 'error'>('idle');
   const [showQR, setShowQR] = useState(false);
   const [angebotsStatus, setAngebotsStatus] = useState<'erstellt' | 'versendet' | 'gelesen' | 'angenommen'>('erstellt');
@@ -629,6 +631,7 @@ function Schritt6Content() {
     const abschnitte = abschnitteAusSchritt2(s2);
     if (abschnitte.length === 0) return;
     setAufmassLaeuft(true);
+    setAufmassAblageHinweis(null);
     try {
       let fotos: AufmassFoto[] = [];
       if (savedProjectId) {
@@ -657,7 +660,19 @@ function Schritt6Content() {
           ? { name: companyProfile.company_name, street: companyProfile.street, zip: companyProfile.zip, city: companyProfile.city }
           : null,
       });
-      doc.save(`Aufmass_${String(s1.name || 'Projekt').replace(/[^\wäöüÄÖÜß-]+/g, '_')}.pdf`);
+      const dateiname = aufmassblattDateiname(String(s1.name || 'Projekt'));
+      doc.save(dateiname);
+      // Zusätzlich am Projekt ablegen (Dokumente), sobald das Projekt gespeichert ist
+      if (savedProjectId) {
+        try {
+          await legeAufmassblattAmProjektAb(doc.output('blob'), savedProjectId, dateiname, !!signatureData);
+          setAufmassAblageHinweis({ ok: true, text: 'Zusätzlich am Projekt unter „Dokumente“ gespeichert.' });
+        } catch (e: any) {
+          setAufmassAblageHinweis({ ok: false, text: `Heruntergeladen, aber nicht am Projekt gespeichert: ${e?.message || 'Fehler'}` });
+        }
+      } else {
+        setAufmassAblageHinweis({ ok: false, text: 'Nur heruntergeladen. Zum Ablegen am Projekt bitte zuerst „Projekt speichern“ klicken und das Aufmaßblatt erneut erstellen.' });
+      }
     } finally {
       setAufmassLaeuft(false);
     }
@@ -1298,6 +1313,9 @@ function Schritt6Content() {
               )}
               {kiResult && abschnitteAusSchritt2(s2).length > 0 && (
                 <button onClick={handleAufmassblatt} disabled={aufmassLaeuft} className="mt-2 inline-flex w-full items-center justify-center gap-1.5 rounded-lg border border-black/10 bg-white hover:bg-black/5 disabled:opacity-60 py-2 text-xs font-semibold text-[#1d1d1f] transition-colors"><Ruler className="w-3.5 h-3.5" />{aufmassLaeuft ? 'Aufmaßblatt wird erstellt …' : 'Aufmaßblatt (PDF) – Maße, Flächen, Fotos, Unterschrift'}</button>
+              )}
+              {aufmassAblageHinweis && (
+                <p className={`mt-1 text-[11px] ${aufmassAblageHinweis.ok ? 'text-emerald-600' : 'text-amber-700'}`}>{aufmassAblageHinweis.text}</p>
               )}
             </div>
           </div>
