@@ -27,6 +27,7 @@ import VersionsHistorie from '@/components/VersionsHistorie'
 import KundenKontakte from '@/components/KundenKontakte'
 import KundeEmails from '@/components/KundeEmails'
 import EmailVerlaufDialog, { type EmailVerlaufEintrag } from '@/components/EmailVerlaufDialog'
+import NeueMailDialog from '@/components/NeueMailDialog'
 import MaterialReservieren from '@/components/MaterialReservieren'
 import TransportAnlegen from '@/components/TransportAnlegen'
 import SollIstStunden from '@/components/SollIstStunden'
@@ -74,7 +75,7 @@ interface Media { id: string; file_name: string; url: string; created_at: string
 interface DokEvent { id: string; type: string; text_note: string | null; photos: { url: string; file_name: string }[]; status: string; created_at: string; pruefung_details?: { freigegeben?: boolean } | null }
 
 const EMAIL_TYPE_LABEL: Record<string, string> = {
-  angebot: '📄 Angebot', rechnung: '🧾 Rechnung', mahnung: '⏰ Mahnung',
+  angebot: '📄 Angebot', rechnung: '🧾 Rechnung', mahnung: '⏰ Mahnung', frei: '✉️ Mail',
 }
 
 const STATUS_LABEL: Record<string, string> = {
@@ -137,6 +138,8 @@ export default function KundenDetailPage() {
   const [rechnungsMails, setRechnungsMails] = useState<EmailLog[]>([])
   const [mailTick, setMailTick] = useState(0)
   const [offeneMail, setOffeneMail] = useState<EmailVerlaufEintrag | null>(null)
+  const [neueMailOffen, setNeueMailOffen] = useState(false)
+  const [kundenMails, setKundenMails] = useState<EmailLog[]>([])
   const [fotos, setFotos] = useState<Record<string, Media[]>>({})
   // NEU: Upload für Bilder/Dokumente direkt in Kunden-Detail
   const [uploadLaeuft, setUploadLaeuft] = useState<string | null>(null) // "<projectId>-bilder" oder "<projectId>-dokumente"
@@ -803,11 +806,22 @@ export default function KundenDetailPage() {
       .catch(() => { /* Verlauf optional */ })
     return () => { aktiv = false }
   }, [rechnungsNummernKey, mailTick])
+  // Mails, die fest diesem Kunden zugeordnet sind (email_log.customer_id, Phase 99) –
+  // u. a. freie Mails ohne Projekt/Rechnung.
+  useEffect(() => {
+    if (!kunde?.id) return
+    let aktiv = true
+    fetch(`/api/email-log?customer_id=${encodeURIComponent(kunde.id)}`)
+      .then((r) => r.json())
+      .then((j) => { if (aktiv && j?.success) setKundenMails(j.emails || []) })
+      .catch(() => { /* Verlauf optional */ })
+    return () => { aktiv = false }
+  }, [kunde?.id, mailTick])
   const alleEmails = useMemo(() => {
     const m = new Map<string, EmailLog>()
-    for (const x of [...emails, ...rechnungsMails]) m.set(x.id, x)
+    for (const x of [...emails, ...rechnungsMails, ...kundenMails]) m.set(x.id, x)
     return [...m.values()].sort((a, b) => new Date(b.sent_at).getTime() - new Date(a.sent_at).getTime())
-  }, [emails, rechnungsMails])
+  }, [emails, rechnungsMails, kundenMails])
   const offeneInvoices = useMemo(() => kundenInvoices.filter((i) => i.status === 'offen' || i.status === 'ueberfaellig'), [kundenInvoices])
   const offeneSumme = offeneInvoices.reduce((s, i) => s + (Number(i.gross_amount) - Number(i.paid_amount || 0)), 0)
   const ueberfaelligeSumme = offeneInvoices.filter(istUeberfaellig).reduce((s, i) => s + (Number(i.gross_amount) - Number(i.paid_amount || 0)), 0)
@@ -943,8 +957,9 @@ export default function KundenDetailPage() {
           <div className="max-w-4xl space-y-4">
             {/* Alles, was SCAFFOLD OS an diesen Kunden verschickt hat (Angebote + Rechnungen) – unabhängig von einer Kunden-E-Mail/Postfach */}
             <div className="bg-white rounded-xl border border-black/10 overflow-hidden">
-              <div className="px-5 py-3 border-b border-black/5">
+              <div className="px-5 py-3 border-b border-black/5 flex items-center justify-between gap-2">
                 <h2 className="text-sm font-semibold text-[#1d1d1f] flex items-center gap-1.5"><Mail className="h-4 w-4 text-[#e8590c]" /> Von SCAFFOLD OS gesendet ({alleEmails.length})</h2>
+                <button onClick={() => setNeueMailOffen(true)} className={btnPrimary}>+ Neue Mail</button>
               </div>
               {alleEmails.length === 0 ? (
                 <p className="px-5 py-4 text-xs text-[#86868b]">Noch keine Angebote oder Rechnungen per Mail über SCAFFOLD OS versendet.</p>
@@ -1520,6 +1535,15 @@ export default function KundenDetailPage() {
       </div>
 
       {offeneMail && <EmailVerlaufDialog mail={offeneMail} onClose={() => setOffeneMail(null)} />}
+      {neueMailOffen && (
+        <NeueMailDialog
+          kunde={{ id: kunde.id, name: kunde.name, email: kunde.email }}
+          rechnungen={kundenInvoices}
+          bisherigeAdressen={[...new Set(alleEmails.map((m) => m.to_email).filter(Boolean))]}
+          onClose={() => setNeueMailOffen(false)}
+          onSent={() => setMailTick((t) => t + 1)}
+        />
+      )}
 
       {/* ─── NEU (Phase 38): Zahlung erfassen (voll oder teilweise) ─── */}
       {zahlungOffen && (
