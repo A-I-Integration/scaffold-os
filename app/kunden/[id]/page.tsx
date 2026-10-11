@@ -1540,6 +1540,7 @@ export default function KundenDetailPage() {
           kunde={{ id: kunde.id, name: kunde.name, email: kunde.email }}
           rechnungen={kundenInvoices}
           bisherigeAdressen={[...new Set(alleEmails.map((m) => m.to_email).filter(Boolean))]}
+          fruehereAngebote={alleEmails.filter((m) => m.type === 'angebot' && m.attachment_path).map((m) => ({ id: m.id, subject: m.subject, sent_at: m.sent_at, attachment_name: m.attachment_name }))}
           onClose={() => setNeueMailOffen(false)}
           onSent={() => setMailTick((t) => t + 1)}
         />
