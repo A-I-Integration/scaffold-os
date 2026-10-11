@@ -8,6 +8,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { setzeMarkierung, leseSchrittGeladenesProjekt, setzeSchrittGeladenesProjekt, leiteStepsAusKiResultAb } from '@/lib/aufmass-projekt-session';
 import { leseLidarFuerProjekt } from '@/lib/aufmass-eigentuemer';
 import { speichereEntwurf } from '@/lib/aufmass-entwurf';
+import { ebenenZuVorschlaegen, ebenenSignatur, flaecheM2, type EbenenVorschlag } from '@/lib/lidar-ebenen';
 import KIWarnings from '@/components/aufmaß/KIWarnings';
 import { useKIValidation } from '@/hooks/useKIValidation';
 import { PartialScaffoldInput, LASTKLASSE_Q1_KN_M2 } from '@/types/scaffold';
@@ -38,6 +39,11 @@ function Schritt2Content() {
   // würden sonst fälschlich als eigene Abschnitte gezählt und das Gerüst
   // für mehrere Gebäude statt eines berechnen.
   const [abschnittVorschlaege, setAbschnittVorschlaege] = useState<{ bezeichnung: string; laenge: string; hoehe: string }[]>([]);
+  // NEU: Alle weiteren vom Scan erkannten Wände (auch gleich hohe) erscheinen als
+  // Auswahlliste – erst nach Klick werden sie zu Abschnitten. Scans mit Gerüst
+  // oder gegenüberliegenden Wänden würden sonst die Fläche vervielfachen.
+  const [ebenenVorschlag, setEbenenVorschlag] = useState<EbenenVorschlag[]>([]);
+  const ebenenSigRef = useRef('');
 
 function leeresFormS2() {
   return {
@@ -297,7 +303,12 @@ function leeresFormS2() {
         const ebenenListe: { breiteM: number; hoeheM: number }[] = Array.isArray(m.ebenen) ? m.ebenen : [];
         const hauptEbene = ebenenListe[0];
         const weitereEbenen = ebenenListe.slice(1);
-        const EBENEN_NAMEN = ['Hauptfassade', 'Ebene 2', 'Ebene 3', 'Ebene 4', 'Ebene 5', 'Ebene 6'];
+        // Hat der Nutzer die Wand-Auswahl zu GENAU diesem Scan schon getroffen
+        // (Zurück/Vor), bleiben seine Abschnitte unangetastet.
+        const signatur = ebenenSignatur(m.ebenen);
+        ebenenSigRef.current = signatur;
+        let scanEntschieden = false;
+        try { scanEntschieden = !!signatur && localStorage.getItem('scaffold_lidar_ebenen_entschieden') === signatur; } catch { /* ignore */ }
 
         setForm((prev) => {
           const next = {
@@ -309,13 +320,9 @@ function leeresFormS2() {
             hoehe: fresh
               ? (hauptEbene?.hoeheM ? hauptEbene.hoeheM.toFixed(2) : (m.heightM ? m.heightM.toFixed(2) : prev.hoehe))
               : (prev.hoehe || (hauptEbene?.hoeheM ? hauptEbene.hoeheM.toFixed(2) : (m.heightM ? m.heightM.toFixed(2) : ''))),
-            abschnitte: fresh && weitereEbenen.length > 0
-              ? weitereEbenen.map((e, i) => ({
-                  bezeichnung: EBENEN_NAMEN[i + 1] || `Ebene ${i + 2}`,
-                  laenge: e.breiteM ? e.breiteM.toFixed(2) : '',
-                  hoehe: e.hoeheM ? e.hoeheM.toFixed(2) : '',
-                }))
-              : prev.abschnitte,
+            // Weitere Wände werden nicht mehr automatisch eingetragen, sondern
+            // unten zur Auswahl angeboten (siehe ebenenVorschlag).
+            abschnitte: fresh && weitereEbenen.length > 0 && !scanEntschieden ? [] : prev.abschnitte,
           };
           // Fix: sofort sichern, nicht erst bei "Weiter" – sonst gehen die
           // übernommenen Werte verloren, wenn man zwischendurch zu Schritt 1
@@ -333,18 +340,9 @@ function leeresFormS2() {
         // Abschnitts-Vorschläge: nur Ebenen mit deutlich (>0.5 m) abweichender
         // Höhe zur Hauptfassade – reine Seitenwände mit gleicher Höhe werden
         // NICHT vorgeschlagen (wären fälschlich zusätzliche Gebäude).
-        if (Array.isArray(m.ebenen) && m.ebenen.length > 1) {
-          const hauptHoehe = m.ebenen[0]?.hoeheM;
-          const vorschlaege = m.ebenen
-            .slice(1)
-            .filter((e: any) => hauptHoehe && Math.abs(e.hoeheM - hauptHoehe) > 0.5)
-            .map((e: any, i: number) => ({
-              bezeichnung: `LiDAR-Ebene ${i + 2} (abweichende Höhe)`,
-              laenge: e.breiteM ? e.breiteM.toFixed(2) : '',
-              hoehe: e.hoeheM ? e.hoeheM.toFixed(2) : '',
-            }));
-          setAbschnittVorschlaege(vorschlaege);
-        }
+        // Auswahlliste für weitere Wände (ersetzt die frühere Höhen-Heuristik).
+        if (fresh && !scanEntschieden) setEbenenVorschlag((alt) => (alt.length ? alt : ebenenZuVorschlaegen(m.ebenen)));
+        else setEbenenVorschlag([]);
         setLidarUebernommen(true);
         return true;
       } catch {
@@ -657,6 +655,7 @@ function leeresFormS2() {
             <div className="rounded-xl bg-purple-50 border border-purple-200 p-3 text-sm text-purple-700">
               Maße wurden aus dem LiDAR-Scan übernommen – bitte prüfen und bei Bedarf anpassen.
               {form.abschnitte.length > 0 && ` Der Scan hat ${form.abschnitte.length + 1} Ebenen erkannt – als Abschnitte weiter unten eingetragen.`}
+              {ebenenVorschlag.length > 0 && ` Der Scan hat ${ebenenVorschlag.length + 1} Ebenen erkannt – bitte unten auswählen, welche als Abschnitte übernommen werden.`}
             </div>
           )}
 
@@ -714,6 +713,64 @@ function leeresFormS2() {
                 placeholder="z.B. 8.5" />
             </div>
           </div>
+
+          {ebenenVorschlag.length > 0 && (
+            <div className="rounded-xl bg-purple-50 border border-purple-200 p-4 space-y-3">
+              <p className="text-sm font-medium text-purple-800">
+                Der Scan hat {ebenenVorschlag.length} weitere Wand/Wände erkannt. Wähle aus, welche als Abschnitte übernommen werden.
+              </p>
+              {ebenenVorschlag.map((v, i) => (
+                <label key={i} className="flex items-center justify-between gap-3 bg-white rounded-lg px-3 py-2 text-sm cursor-pointer">
+                  <span className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={v.aktiv}
+                      onChange={() => setEbenenVorschlag(ebenenVorschlag.map((x, j) => (j === i ? { ...x, aktiv: !x.aktiv } : x)))}
+                    />
+                    {v.bezeichnung}: {v.laenge} m breit × {v.hoehe} m hoch
+                  </span>
+                  <span className="text-xs text-purple-700 shrink-0">{flaecheM2(v.laenge, v.hoehe).toFixed(1)} m²</span>
+                </label>
+              ))}
+              <p className="text-xs text-purple-900">
+                Fläche gesamt: Hauptfassade {flaecheM2(form.laenge, form.hoehe).toFixed(1)} m² + ausgewählt{' '}
+                {ebenenVorschlag.filter((x) => x.aktiv).reduce((sum, x) => sum + flaecheM2(x.laenge, x.hoehe), 0).toFixed(1)} m² ={' '}
+                {(flaecheM2(form.laenge, form.hoehe) + ebenenVorschlag.filter((x) => x.aktiv).reduce((sum, x) => sum + flaecheM2(x.laenge, x.hoehe), 0)).toFixed(1)} m²
+              </p>
+              <p className="text-[11px] text-purple-700">
+                Gegenüberliegende oder doppelte Wände sowie Gerüstteile im Scan nur übernehmen, wenn sie wirklich zum Aufmaß gehören.
+                Ohne Klick auf „Übernehmen“ werden diese Wände nicht berechnet.
+              </p>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const gewaehlt = ebenenVorschlag.filter((x) => x.aktiv).map(({ bezeichnung, laenge, hoehe }) => ({ bezeichnung, laenge, hoehe }));
+                    const neu = { ...form, abschnitte: [...form.abschnitte, ...gewaehlt] };
+                    setForm(neu);
+                    try {
+                      localStorage.setItem('scaffold_step2', JSON.stringify(neu));
+                      localStorage.setItem('scaffold_lidar_ebenen_entschieden', ebenenSigRef.current);
+                    } catch { /* ignore */ }
+                    setEbenenVorschlag([]);
+                  }}
+                  className="rounded-lg bg-purple-700 px-3 py-1.5 text-xs font-semibold text-white hover:bg-purple-800 transition"
+                >
+                  Ausgewählte übernehmen
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    try { localStorage.setItem('scaffold_lidar_ebenen_entschieden', ebenenSigRef.current); } catch { /* ignore */ }
+                    setEbenenVorschlag([]);
+                  }}
+                  className="rounded-lg border border-purple-300 bg-white px-3 py-1.5 text-xs font-semibold text-purple-800 hover:bg-purple-100 transition"
+                >
+                  Keine übernehmen
+                </button>
+              </div>
+            </div>
+          )}
 
           {/* NEU: Vorschläge aus LiDAR-Ebenen mit abweichender Höhe – bewusst
               nur ein Vorschlag mit Bestätigung, keine automatische Übernahme
