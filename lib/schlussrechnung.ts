@@ -123,3 +123,88 @@ export function eingabeAusProjektData(data: any, kranTagessatz: number): Rechnun
     kranTagessatz: Number(kranTagessatz) || 850,
   };
 }
+
+// ============================================================
+// Abzug bereits gestellter Abschlagsrechnungen (§ 14 Abs. 5 UStG)
+//
+// Die Endrechnung muss die vereinnahmten Teilbeträge und die darauf
+// entfallende Umsatzsteuer absetzen. Wir ziehen NETTO ab (Restnetto →
+// USt auf den Rest), damit Netto und USt der Abschläge nicht doppelt
+// berechnet werden. Je Abschlag eine eigene Zeile mit Nummer und Datum.
+// Abgezogen wird der tatsächlich bezahlte Teil (bezahlt = voll,
+// Teilzahlung = anteilig); eine unbezahlte Abschlagsrechnung wird nur
+// auf ausdrückliche Auswahl mit dem vollen Rechnungsbetrag abgezogen.
+// ============================================================
+
+export interface AbschlagLike {
+  id: string;
+  invoice_number: string;
+  invoice_date: string;
+  net_amount: number;
+  tax_rate: number;
+  tax_amount: number;
+  gross_amount: number;
+  status: string;
+  paid_amount?: number | null;
+}
+
+export interface AbschlagAbzug {
+  id: string;
+  nummer: string;
+  datum: string;
+  netto: number;
+  ust: number;
+  brutto: number;
+  /** wurde (teilweise) bezahlt */
+  gezahlt: boolean;
+  /** nur ein Teil wurde bezahlt */
+  teilweise: boolean;
+  /** Steuersatz der Abschlagsrechnung passt zur Schlussrechnung */
+  abziehbar: boolean;
+}
+
+const fmtZahl = (n: number) => n.toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+export function abschlagAbzug(inv: AbschlagLike, satz = 19): AbschlagAbzug {
+  const gross = runde(Number(inv.gross_amount) || 0);
+  const net = runde(Number(inv.net_amount) || 0);
+  const paidRaw = inv.status === 'bezahlt' ? gross : Math.min(Math.max(Number(inv.paid_amount) || 0, 0), gross);
+  const gezahlt = paidRaw > 0;
+  // keine Zahlung → voller Rechnungsbetrag (nur bei ausdrücklicher Auswahl relevant)
+  const basis = gezahlt ? paidRaw : gross;
+  const anteil = gross > 0 ? basis / gross : 0;
+  const netto = basis === gross ? net : runde(net * anteil);
+  const brutto = basis;
+  return {
+    id: inv.id,
+    nummer: inv.invoice_number,
+    datum: inv.invoice_date,
+    netto,
+    ust: runde(brutto - netto),
+    brutto,
+    gezahlt,
+    teilweise: gezahlt && paidRaw < gross,
+    abziehbar: Number(inv.tax_rate) === satz,
+  };
+}
+
+export function baueAbzugsPositionen(abzuege: AbschlagAbzug[]): RechnungsPosition[] {
+  return abzuege.map((a) => {
+    const m = String(a.datum || '').match(/^(\d{4})-(\d{2})-(\d{2})/);
+    const datum = m ? `${m[3]}.${m[2]}.${m[1]}` : a.datum;
+    const zusatz = a.teilweise ? ', anteilig bezahlt' : !a.gezahlt ? ', noch nicht bezahlt' : '';
+    return {
+      bezeichnung: `abzüglich Abschlagsrechnung ${a.nummer} vom ${datum} (netto ${fmtZahl(a.netto)} €, USt ${fmtZahl(a.ust)} €, brutto ${fmtZahl(a.brutto)} €${zusatz})`,
+      menge: 1, einheit: 'Pauschale', einzelpreis: -a.netto,
+    };
+  });
+}
+
+/** Kurzer Hinweistext für die Rechnung: Gesamtleistung und abgezogene Abschläge. */
+export function abzugsHinweis(gesamtNetto: number, abzuege: AbschlagAbzug[], satz = 19): string | undefined {
+  if (abzuege.length === 0) return undefined;
+  const abNetto = runde(abzuege.reduce((s, a) => s + a.netto, 0));
+  const abUst = runde(abzuege.reduce((s, a) => s + a.ust, 0));
+  const gesUst = runde(gesamtNetto * satz / 100);
+  return `Gesamtleistung netto ${fmtZahl(gesamtNetto)} € (USt ${fmtZahl(gesUst)} €), abzüglich vereinnahmter Abschläge netto ${fmtZahl(abNetto)} € (USt ${fmtZahl(abUst)} €).`;
+}

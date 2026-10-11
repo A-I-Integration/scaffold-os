@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { baueRechnungsPositionen, berechneAngebotBetraege, eingabeAusProjektData, summeNetto, type RechnungsEingabe } from '../schlussrechnung';
+import { baueRechnungsPositionen, berechneAngebotBetraege, eingabeAusProjektData, summeNetto, abschlagAbzug, baueAbzugsPositionen, abzugsHinweis, type RechnungsEingabe, type AbschlagLike } from '../schlussrechnung';
 import type { Nachtrag } from '../nachtrag';
 
 const basisEingabe = (o: Partial<RechnungsEingabe> = {}): RechnungsEingabe => ({
@@ -44,5 +44,44 @@ describe('Schlussrechnung', () => {
     const e = eingabeAusProjektData({ kiResult: { totalAreaM2: 10, suggestedPrice: 1 }, preisModus: 'festpreis', festpreisProM2: '9', step4: { kranErforderlich: true }, step1: { dauer: '5' }, angebotAnpassungen: { skonto: true } }, 900);
     expect(e).toMatchObject({ preisModus: 'festpreis', festpreisProM2: '9', kranAktiv: true, kranTage: 5, kranTagessatz: 900 });
     expect(berechneAngebotBetraege(e).kranBetrag).toBe(4500);
+  });
+});
+
+const ab = (o: Partial<AbschlagLike> = {}): AbschlagLike => ({
+  id: 'r1', invoice_number: 'RE-2026-0010', invoice_date: '2026-09-01', net_amount: 3000, tax_rate: 19, tax_amount: 570, gross_amount: 3570, status: 'bezahlt', paid_amount: 0, ...o,
+});
+
+describe('Abzug Abschlagsrechnungen (§ 14 Abs. 5 UStG)', () => {
+  it('bezahlter Abschlag: Netto, USt und Brutto der Rechnung werden abgezogen', () => {
+    const a = abschlagAbzug(ab());
+    expect(a).toMatchObject({ netto: 3000, ust: 570, brutto: 3570, gezahlt: true, teilweise: false, abziehbar: true });
+  });
+  it('Rechenbeispiel: 10.000 netto, zwei Abschläge → Rest 5.000 netto / 950 USt / 5.950 brutto', () => {
+    const leist = [{ bezeichnung: 'Gerüstbau', menge: 1, einheit: 'Pauschale', einzelpreis: 10000 }];
+    const a1 = abschlagAbzug(ab());
+    const a2 = abschlagAbzug(ab({ id: 'r2', invoice_number: 'RE-2026-0011', invoice_date: '2026-10-01', net_amount: 2000, tax_amount: 380, gross_amount: 2380 }));
+    const pos = [...leist, ...baueAbzugsPositionen([a1, a2])];
+    const rest = summeNetto(pos);
+    expect(rest).toBe(5000);
+    expect(Math.round(rest * 0.19 * 100) / 100).toBe(950);
+    expect(pos[1].einzelpreis).toBe(-3000);
+    expect(pos[1].bezeichnung).toBe('abzüglich Abschlagsrechnung RE-2026-0010 vom 01.09.2026 (netto 3.000,00 €, USt 570,00 €, brutto 3.570,00 €)');
+  });
+  it('Teilzahlung: nur der bezahlte Anteil wird abgezogen', () => {
+    const a = abschlagAbzug(ab({ status: 'offen', paid_amount: 1785 }));
+    expect(a).toMatchObject({ netto: 1500, ust: 285, brutto: 1785, gezahlt: true, teilweise: true });
+    expect(baueAbzugsPositionen([a])[0].bezeichnung).toContain('anteilig bezahlt');
+  });
+  it('unbezahlter Abschlag: voller Betrag, aber gekennzeichnet', () => {
+    const a = abschlagAbzug(ab({ status: 'offen', paid_amount: 0 }));
+    expect(a).toMatchObject({ netto: 3000, brutto: 3570, gezahlt: false, teilweise: false });
+    expect(baueAbzugsPositionen([a])[0].bezeichnung).toContain('noch nicht bezahlt');
+  });
+  it('anderer Steuersatz ist nicht abziehbar', () => {
+    expect(abschlagAbzug(ab({ tax_rate: 7, tax_amount: 210, gross_amount: 3210 })).abziehbar).toBe(false);
+  });
+  it('Hinweistext nennt Gesamtleistung und abgezogene Abschläge; ohne Abschläge nichts', () => {
+    expect(abzugsHinweis(10000, [])).toBeUndefined();
+    expect(abzugsHinweis(10000, [abschlagAbzug(ab())])).toBe('Gesamtleistung netto 10.000,00 € (USt 1.900,00 €), abzüglich vereinnahmter Abschläge netto 3.000,00 € (USt 570,00 €).');
   });
 });
