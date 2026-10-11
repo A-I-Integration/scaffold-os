@@ -208,3 +208,15 @@ export function abzugsHinweis(gesamtNetto: number, abzuege: AbschlagAbzug[], sat
   const gesUst = runde(gesamtNetto * satz / 100);
   return `Gesamtleistung netto ${fmtZahl(gesamtNetto)} € (USt ${fmtZahl(gesUst)} €), abzüglich vereinnahmter Abschläge netto ${fmtZahl(abNetto)} € (USt ${fmtZahl(abUst)} €).`;
 }
+
+/** Abzug der gewählten Abschläge ist so hoch wie oder höher als die Gesamtleistung (Rest ≤ 0). */
+export function istAbzugZuHoch(gesamtNetto: number, abzuege: AbschlagAbzug[]): boolean {
+  if (abzuege.length === 0) return false;
+  const ab = runde(abzuege.reduce((s, a) => s + a.netto, 0));
+  return runde(gesamtNetto - ab) <= 0;
+}
+
+/** Ein Abschlag über 100 % der Gesamtleistung ist unzulässig (nur prüfbar, wenn eine Gesamtleistung vorliegt). */
+export function istAbschlagZuHoch(abschlagNetto: number, gesamtNetto: number): boolean {
+  return gesamtNetto > 0 && runde(abschlagNetto) > runde(gesamtNetto);
+}
