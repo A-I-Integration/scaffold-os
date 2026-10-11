@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { Settings, Save } from 'lucide-react';
 import { ALLE_GERUESTTYPEN, leseAngeboteneTypen } from '@/lib/geruesttypen';
+import PostfachEinstellungen from '@/components/PostfachEinstellungen';
 
 // ============================================================
 // SCAFFOLD OS – Einstellungen: Firmenprofil (Phase 14)
@@ -376,6 +377,9 @@ export default function EinstellungenPage() {
             </button>
           </div>
         )}
+
+        {/* ─── NEU: Mein E-Mail-Postfach (je Nutzer) ─── */}
+        <PostfachEinstellungen />
       </div>
     </div>
   );
