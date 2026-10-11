@@ -56,7 +56,7 @@ export default function TraggeruestAnfragePage() {
     try {
       const datum = new Date().toLocaleDateString('de-DE')
       const html = `<!DOCTYPE html><html lang="de"><head><meta charset="utf-8">
-<title>Traggerüst-Anfrage ${form.projektname}</title>
+<title>Traggerüst-Anfrage ${esc(form.projektname)}</title>
 <style>
   body { font-family: -apple-system, Arial, sans-serif; color: #1d1d1f; max-width: 800px; margin: 40px auto; padding: 0 20px; }
   h1 { font-size: 20px; border-bottom: 2px solid #e8590c; padding-bottom: 8px; }
