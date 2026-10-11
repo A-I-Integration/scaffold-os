@@ -5,7 +5,8 @@ import { X, Receipt } from 'lucide-react';
 import { normalisiereNachtraege, nachtragNummer, type Nachtrag } from '@/lib/nachtrag';
 import { abschnitteAusSchritt2, berechneAufmass } from '@/lib/aufmassblatt-pdf';
 import {
-  baueRechnungsPositionen, eingabeAusProjektData, summeNetto, type RechnungsBasis, type RechnungsEingabe,
+  baueRechnungsPositionen, eingabeAusProjektData, summeNetto, abschlagAbzug, baueAbzugsPositionen, abzugsHinweis,
+  type RechnungsBasis, type RechnungsEingabe,
 } from '@/lib/schlussrechnung';
 import type { Invoice } from '@/lib/invoice-pdf';
 
@@ -37,6 +38,8 @@ export default function SchlussrechnungDialog({ projectId, customerName, custome
   const [kranTagessatz, setKranTagessatz] = useState(850);
   const [firmenPreisM2, setFirmenPreisM2] = useState('');
   const [bestehende, setBestehende] = useState<Invoice[]>([]);
+  const [abschlagKandidaten, setAbschlagKandidaten] = useState<Invoice[]>([]);
+  const [gewaehlteAbschlaege, setGewaehlteAbschlaege] = useState<Set<string>>(new Set());
 
   const [basis, setBasis] = useState<RechnungsBasis>('angebot');
   const [art, setArt] = useState<'schluss' | 'standard'>('schluss');
@@ -67,7 +70,21 @@ export default function SchlussrechnungDialog({ projectId, customerName, custome
           const f = cRes.company.calc_festpreis_pro_m2;
           if (f != null && f !== '') setFirmenPreisM2(String(f));
         }
-        if (iRes?.success) setBestehende((iRes.invoices || []).filter((i: Invoice) => i.project_id === projectId && i.status !== 'storniert'));
+        if (iRes?.success) {
+          const alle: Invoice[] = iRes.invoices || [];
+          setBestehende(alle.filter((i) => i.project_id === projectId && i.status !== 'storniert'));
+          // Abschlagsrechnungen dieses Auftrags (§ 14 Abs. 5 UStG: in der Endrechnung abzusetzen);
+          // Abschläge ohne Auftragszuordnung nur bei gleichem Kundennamen und nie vorausgewählt.
+          const kn = customerName.trim().toLowerCase();
+          const kand = alle.filter((i) => i.invoice_type === 'abschlag' && i.status !== 'storniert'
+            && (i.project_id === projectId || (!i.project_id && i.customer_name.trim().toLowerCase() === kn)));
+          setAbschlagKandidaten(kand);
+          setGewaehlteAbschlaege(new Set(kand
+            .filter((i) => i.project_id === projectId)
+            .map((i) => abschlagAbzug(i))
+            .filter((a) => a.abziehbar && a.gezahlt)
+            .map((a) => a.id)));
+        }
         // Vorbelegung Preis/m²: gespeicherter Festpreis des Auftrags, sonst Firmenstandard
         const fp = String(d.festpreisProM2 ?? '');
         setPreisM2(fp || (cRes?.company?.calc_festpreis_pro_m2 != null ? String(cRes.company.calc_festpreis_pro_m2) : ''));
@@ -88,14 +105,24 @@ export default function SchlussrechnungDialog({ projectId, customerName, custome
   const aufmassM2 = useMemo(() => (projektDaten ? berechneAufmass(abschnitteAusSchritt2(projektDaten.step2)).gesamtM2 : 0), [projektDaten]);
   const preisM2Zahl = parseFloat(String(preisM2).replace(',', '.')) || 0;
 
-  const positionen = useMemo(() => {
+  const leistungsPositionen = useMemo(() => {
     if (!eingabe) return [];
     return baueRechnungsPositionen({
       eingabe, basis, aufmassM2, aufmassPreisProM2: preisM2Zahl,
       nachtraege: nachtraege.filter((n) => gewaehlteNachtraege.has(n.id)),
     });
   }, [eingabe, basis, aufmassM2, preisM2Zahl, nachtraege, gewaehlteNachtraege]);
+  // Abzug bereits gestellter Abschlagsrechnungen – nur bei der Schlussrechnung
+  const abzuege = useMemo(
+    () => (art === 'schluss' ? abschlagKandidaten.filter((i) => gewaehlteAbschlaege.has(i.id)).map((i) => abschlagAbzug(i)) : []),
+    [art, abschlagKandidaten, gewaehlteAbschlaege],
+  );
+  const positionen = useMemo(() => [...leistungsPositionen, ...baueAbzugsPositionen(abzuege)], [leistungsPositionen, abzuege]);
+  const gesamtNetto = summeNetto(leistungsPositionen);
   const netto = summeNetto(positionen);
+  const abzugNetto = Math.round(abzuege.reduce((s, a) => s + a.netto, 0) * 100) / 100;
+  const ustRest = Math.round(netto * 19) / 100;
+  const abzugsText = abzugsHinweis(gesamtNetto, abzuege);
 
   const hatAngebotspreis = !!eingabe?.kiResult;
   const aufmassMoeglich = aufmassM2 > 0;
@@ -113,7 +140,7 @@ export default function SchlussrechnungDialog({ projectId, customerName, custome
           customer_name: customerName,
           customer_address: customerAddress || undefined,
           invoice_type: art,
-          notes: eingabe.anpassungen?.skonto ? '2% Skonto bei Zahlung innerhalb von 8 Tagen.' : undefined,
+          notes: [eingabe.anpassungen?.skonto ? '2% Skonto bei Zahlung innerhalb von 8 Tagen.' : '', abzugsText || ''].filter(Boolean).join(' ') || undefined,
           positions: positionen,
           override_grund: overrideGrund || undefined,
         }),
@@ -151,7 +178,7 @@ export default function SchlussrechnungDialog({ projectId, customerName, custome
                 <ul className="space-y-0.5">
                   {bestehende.map((i) => <li key={i.id}>{i.invoice_number} · {eur(Number(i.gross_amount))} brutto · {i.status}</li>)}
                 </ul>
-                <p className="mt-1">Bereits abgerechnete Leistungen werden hier <b>nicht</b> automatisch abgezogen. Bitte prüfen, dass nichts doppelt berechnet wird.</p>
+                <p className="mt-1">Nur <b>Abschlagsrechnungen</b> kannst du unten abziehen. Andere bereits abgerechnete Leistungen werden hier <b>nicht</b> automatisch abgezogen. Bitte prüfen, dass nichts doppelt berechnet wird.</p>
               </div>
             )}
 
@@ -209,6 +236,36 @@ export default function SchlussrechnungDialog({ projectId, customerName, custome
               )}
             </div>
 
+            {art === 'schluss' && abschlagKandidaten.length > 0 && (
+              <div>
+                <p className="text-xs font-semibold text-[#1d1d1f] mb-1">Abschlagsrechnungen abziehen</p>
+                <p className="text-[11px] text-[#86868b] mb-1">Abgezogen wird netto, die Umsatzsteuer wird nur auf den Restbetrag berechnet (§ 14 Abs. 5 UStG). Vorausgewählt sind bezahlte Abschläge.</p>
+                <ul className="space-y-1">
+                  {abschlagKandidaten.map((i) => {
+                    const a = abschlagAbzug(i);
+                    const ohneAuftrag = i.project_id !== projectId;
+                    return (
+                      <li key={i.id}>
+                        <label className={`flex items-center gap-2 text-xs ${a.abziehbar ? 'cursor-pointer' : 'opacity-60'}`}>
+                          <input type="checkbox" disabled={!a.abziehbar} checked={gewaehlteAbschlaege.has(i.id)}
+                            onChange={() => setGewaehlteAbschlaege((prev) => { const s = new Set(prev); s.has(i.id) ? s.delete(i.id) : s.add(i.id); return s; })} />
+                          <span>
+                            {i.invoice_number} · {a.teilweise ? 'teilweise bezahlt' : a.gezahlt ? 'bezahlt' : 'noch nicht bezahlt'}
+                            {ohneAuftrag ? ' · ohne Auftragszuordnung, bitte prüfen' : ''}
+                            {!a.abziehbar ? ' · anderer Steuersatz, nicht abziehbar' : ''}
+                          </span>
+                          <span className="ml-auto font-medium">− {eur(a.netto)} netto</span>
+                        </label>
+                      </li>
+                    );
+                  })}
+                </ul>
+                {abzuege.some((a) => !a.gezahlt) && (
+                  <p className="text-[11px] text-red-600 mt-1">Ein ausgewählter Abschlag ist noch nicht bezahlt. Nach § 14 Abs. 5 UStG werden vereinnahmte Beträge abgezogen. Bitte mit dem Steuerberater klären.</p>
+                )}
+              </div>
+            )}
+
             <div>
               <p className="text-xs font-semibold text-[#1d1d1f] mb-1">Positionen der Rechnung</p>
               <ul className="divide-y divide-black/5 rounded-lg border border-black/10 text-xs">
@@ -218,11 +275,25 @@ export default function SchlussrechnungDialog({ projectId, customerName, custome
                     <span className="whitespace-nowrap font-medium">{eur((Number(p.menge) || 0) * (Number(p.einzelpreis) || 0))}</span>
                   </li>
                 ))}
+                {abzuege.length > 0 && (
+                  <li className="flex items-center gap-2 px-3 py-2 text-[#86868b]">
+                    <span className="flex-1">Gesamtleistung netto {eur(gesamtNetto)}, abzüglich Abschläge netto {eur(abzugNetto)}</span>
+                  </li>
+                )}
                 <li className="flex items-center gap-2 px-3 py-2 bg-[#f5f5f7] font-semibold">
                   <span className="flex-1">Summe netto (zzgl. MwSt.)</span>
                   <span>{eur(netto)}</span>
                 </li>
+                {abzuege.length > 0 && (
+                  <>
+                    <li className="flex items-center gap-2 px-3 py-2"><span className="flex-1">zzgl. 19 % USt auf den Restbetrag</span><span>{eur(ustRest)}</span></li>
+                    <li className="flex items-center gap-2 px-3 py-2 font-semibold"><span className="flex-1">Restbetrag brutto</span><span>{eur(Math.round((netto + ustRest) * 100) / 100)}</span></li>
+                  </>
+                )}
               </ul>
+              {abzuege.length > 0 && netto <= 0 && (
+                <p className="text-xs text-red-600 mt-1">Der Abzug ist so hoch wie oder höher als die Gesamtleistung. Bitte Auswahl prüfen (bei Überzahlung wäre eine Gutschrift nötig).</p>
+              )}
               {projektDaten && daten === undefined && (
                 <p className="text-[10px] text-[#86868b] mt-1">Grundlage: gespeicherter Stand des Auftrags.</p>
               )}
