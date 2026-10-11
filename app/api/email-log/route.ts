@@ -41,12 +41,19 @@ export async function GET(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url);
     const projectId = searchParams.get('project_id');
-    if (!projectId) {
-      return NextResponse.json({ success: false, error: 'project_id erforderlich' }, { status: 400 });
+    // Rechnungs-/Mahn-Mails werden ohne project_id protokolliert (siehe /api/email) –
+    // sie sind nur über die Rechnungsnummer auffindbar.
+    const rechnungsNummern = (searchParams.get('invoice_numbers') || '')
+      .split(',').map((n) => n.trim()).filter((n) => /^[\w.\-\/ ]{1,40}$/.test(n)).slice(0, 200);
+    if (!projectId && rechnungsNummern.length === 0) {
+      return NextResponse.json({ success: false, error: 'project_id oder invoice_numbers erforderlich' }, { status: 400 });
     }
 
+    const filter = projectId
+      ? `project_id=eq.${encodeURIComponent(projectId)}`
+      : `invoice_number=in.(${encodeURIComponent(rechnungsNummern.map((n) => `"${n}"`).join(','))})`;
     const res = await fetch(
-      `${url}/rest/v1/email_log?project_id=eq.${projectId}&select=*&order=sent_at.desc`,
+      `${url}/rest/v1/email_log?${filter}&select=*&order=sent_at.desc`,
       { headers }
     );
     if (!res.ok) throw new Error(await res.text());

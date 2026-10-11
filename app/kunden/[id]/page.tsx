@@ -133,6 +133,9 @@ export default function KundenDetailPage() {
   const [invoices, setInvoices] = useState<Invoice[]>([])
   const [opens, setOpens] = useState<Record<string, { anzahl: number; zuletzt: string }>>({})
   const [emails, setEmails] = useState<EmailLog[]>([])
+  // Rechnungs-Mails haben keine project_id im Protokoll → separat über Rechnungsnummern geladen
+  const [rechnungsMails, setRechnungsMails] = useState<EmailLog[]>([])
+  const [mailTick, setMailTick] = useState(0)
   const [offeneMail, setOffeneMail] = useState<EmailVerlaufEintrag | null>(null)
   const [fotos, setFotos] = useState<Record<string, Media[]>>({})
   // NEU: Upload für Bilder/Dokumente direkt in Kunden-Detail
@@ -429,7 +432,7 @@ export default function KundenDetailPage() {
   async function sendInvoice(inv: Invoice) {
     // Vorschlag: Adresse, an die diese Rechnung zuletzt gesendet wurde (emails ist
     // nach sent_at absteigend sortiert); sonst die E-Mail aus dem Kundenstamm.
-    const zuletztAn = emails.find((m) => m.invoice_number === inv.invoice_number && m.to_email)?.to_email
+    const zuletztAn = alleEmails.find((m) => m.invoice_number === inv.invoice_number && m.to_email)?.to_email
     const to = prompt(`An welche E-Mail-Adresse soll ${TYPE_LABEL[inv.invoice_type || 'standard']} ${inv.invoice_number} gesendet werden?`, zuletztAn || kunde?.email || '')
     if (!to || !to.includes('@')) return
     try {
@@ -447,6 +450,7 @@ export default function KundenDetailPage() {
       const json = await res.json()
       if (!json.success) throw new Error(json.error)
       alert((istZugferd ? '✅ ' : '⚠️ ') + inv.invoice_number + ' an ' + to + ' gesendet!' + (hinweis ? '\n\n' + hinweis : ''))
+      setMailTick((t) => t + 1)
       ladeDaten()
     } catch (err: any) { alert('❌ ' + err.message) }
   }
@@ -789,6 +793,21 @@ export default function KundenDetailPage() {
       (!i.customer_id && !i.project_id && nameMatch(i.customer_name, kunde.name))
     )
   ), [invoices, kunde, eigeneProjektIds])
+  const rechnungsNummernKey = kundenInvoices.map((i) => i.invoice_number).filter(Boolean).sort().join(',')
+  useEffect(() => {
+    if (!rechnungsNummernKey) { setRechnungsMails([]); return }
+    let aktiv = true
+    fetch(`/api/email-log?invoice_numbers=${encodeURIComponent(rechnungsNummernKey)}`)
+      .then((r) => r.json())
+      .then((j) => { if (aktiv && j?.success) setRechnungsMails(j.emails || []) })
+      .catch(() => { /* Verlauf optional */ })
+    return () => { aktiv = false }
+  }, [rechnungsNummernKey, mailTick])
+  const alleEmails = useMemo(() => {
+    const m = new Map<string, EmailLog>()
+    for (const x of [...emails, ...rechnungsMails]) m.set(x.id, x)
+    return [...m.values()].sort((a, b) => new Date(b.sent_at).getTime() - new Date(a.sent_at).getTime())
+  }, [emails, rechnungsMails])
   const offeneInvoices = useMemo(() => kundenInvoices.filter((i) => i.status === 'offen' || i.status === 'ueberfaellig'), [kundenInvoices])
   const offeneSumme = offeneInvoices.reduce((s, i) => s + (Number(i.gross_amount) - Number(i.paid_amount || 0)), 0)
   const ueberfaelligeSumme = offeneInvoices.filter(istUeberfaellig).reduce((s, i) => s + (Number(i.gross_amount) - Number(i.paid_amount || 0)), 0)
@@ -1468,11 +1487,11 @@ export default function KundenDetailPage() {
             })}
 
             {/* E-Mail-Verlauf */}
-            {emails.length > 0 && (
+            {alleEmails.length > 0 && (
               <div className="bg-white rounded-xl border border-black/10 overflow-hidden">
-                <div className="px-5 py-3 border-b border-black/5"><h2 className="text-sm font-semibold text-[#1d1d1f] flex items-center gap-1.5"><Mail className="h-4 w-4 text-[#e8590c]" /> E-Mail-Verlauf ({emails.length})</h2></div>
+                <div className="px-5 py-3 border-b border-black/5"><h2 className="text-sm font-semibold text-[#1d1d1f] flex items-center gap-1.5"><Mail className="h-4 w-4 text-[#e8590c]" /> E-Mail-Verlauf ({alleEmails.length})</h2></div>
                 <ul className="divide-y divide-black/5">
-                  {emails.map((m) => (
+                  {alleEmails.map((m) => (
                     <li key={m.id} onClick={() => setOffeneMail(m)} title="Mail ansehen / erneut senden" className="px-5 py-2 text-xs flex flex-wrap items-center gap-2 cursor-pointer hover:bg-black/[0.03]">
                       <span>{EMAIL_TYPE_LABEL[m.type] || m.type}</span>
                       {m.attachment_path && <span title="Mit Anhang">📎</span>}
