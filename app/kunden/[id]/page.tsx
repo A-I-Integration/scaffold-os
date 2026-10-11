@@ -939,7 +939,36 @@ export default function KundenDetailPage() {
         )}
 
         {tab === 'kunde' && <div className="max-w-xl mt-4"><KundenKontakte customerId={kunde.id} /></div>}
-        {tab === 'emails' && <KundeEmails customerId={kunde.id} kundenEmail={kunde.email} />}
+        {tab === 'emails' && (
+          <div className="max-w-4xl space-y-4">
+            {/* Alles, was SCAFFOLD OS an diesen Kunden verschickt hat (Angebote + Rechnungen) – unabhängig von einer Kunden-E-Mail/Postfach */}
+            <div className="bg-white rounded-xl border border-black/10 overflow-hidden">
+              <div className="px-5 py-3 border-b border-black/5">
+                <h2 className="text-sm font-semibold text-[#1d1d1f] flex items-center gap-1.5"><Mail className="h-4 w-4 text-[#e8590c]" /> Von SCAFFOLD OS gesendet ({alleEmails.length})</h2>
+              </div>
+              {alleEmails.length === 0 ? (
+                <p className="px-5 py-4 text-xs text-[#86868b]">Noch keine Angebote oder Rechnungen per Mail über SCAFFOLD OS versendet.</p>
+              ) : (
+                <ul className="divide-y divide-black/5">
+                  {alleEmails.map((m) => (
+                    <li key={m.id} onClick={() => setOffeneMail(m)} title="Mail ansehen / erneut senden" className="px-5 py-2 text-xs flex flex-wrap items-center gap-2 cursor-pointer hover:bg-black/[0.03]">
+                      <span>{EMAIL_TYPE_LABEL[m.type] || m.type}</span>
+                      {m.attachment_path && <span title="Mit Anhang">📎</span>}
+                      <span className="text-[#1d1d1f] font-medium">{m.to_email}</span>
+                      <span className="text-[#86868b] truncate flex-1 min-w-[120px]">{m.subject}</span>
+                      {m.invoice_number && <span className="text-[#e8590c]">{m.invoice_number}</span>}
+                      <span className="text-[#86868b] whitespace-nowrap">{new Date(m.sent_at).toLocaleString('de-DE')}</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+            {/* Postfach-Ansicht (IMAP): braucht die E-Mail-Adresse des Kunden */}
+            {kunde.email
+              ? <KundeEmails customerId={kunde.id} kundenEmail={kunde.email} />
+              : <p className="text-xs text-[#86868b]">Postfach-Ansicht (eingegangene Mails): Für diesen Kunden ist keine E-Mail-Adresse hinterlegt – im Reiter „Kunde“ ergänzen.</p>}
+          </div>
+        )}
 
         {/* ═══════════ TAB: AUFMASS ═══════════ */}
         {tab === 'aufmass' && (
@@ -1486,24 +1515,6 @@ export default function KundenDetailPage() {
               )
             })}
 
-            {/* E-Mail-Verlauf */}
-            {alleEmails.length > 0 && (
-              <div className="bg-white rounded-xl border border-black/10 overflow-hidden">
-                <div className="px-5 py-3 border-b border-black/5"><h2 className="text-sm font-semibold text-[#1d1d1f] flex items-center gap-1.5"><Mail className="h-4 w-4 text-[#e8590c]" /> E-Mail-Verlauf ({alleEmails.length})</h2></div>
-                <ul className="divide-y divide-black/5">
-                  {alleEmails.map((m) => (
-                    <li key={m.id} onClick={() => setOffeneMail(m)} title="Mail ansehen / erneut senden" className="px-5 py-2 text-xs flex flex-wrap items-center gap-2 cursor-pointer hover:bg-black/[0.03]">
-                      <span>{EMAIL_TYPE_LABEL[m.type] || m.type}</span>
-                      {m.attachment_path && <span title="Mit Anhang">📎</span>}
-                      <span className="text-[#1d1d1f] font-medium">{m.to_email}</span>
-                      <span className="text-[#86868b] truncate flex-1 min-w-[120px]">{m.subject}</span>
-                      {m.invoice_number && <span className="text-[#e8590c]">{m.invoice_number}</span>}
-                      <span className="text-[#86868b] whitespace-nowrap">{new Date(m.sent_at).toLocaleString('de-DE')}</span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
           </div>
         )}
       </div>
