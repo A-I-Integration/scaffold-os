@@ -3,6 +3,7 @@ import { createClient } from '@/lib/supabase/server';
 import { trackImpact } from '@/lib/impact';
 import { requireAuth, unauthorizedResponse, serverErrorResponse } from '@/lib/auth';
 import { beiAngebotsannahme } from '@/lib/angebot-annahme';
+import { autosaveGesperrt, filtereAutosaveData, AUTOSAVE_PROJEKT_ABGESCHLOSSEN_FEHLER } from '@/lib/aufmass-autosave-regeln';
 
 // ============================================================
 // SCAFFOLD OS – Projekte API
@@ -137,7 +138,18 @@ export async function PATCH(req: NextRequest) {
 
   try {
     const body = await req.json();
-    const { id, status, data, name, adresse, customer_id } = body;
+    // Auto-Speichern (Aufmaß Schritt 1–5 bei Bestandsprojekten): nur data.step1–5,
+    // kein Status/Name/Adresse/Kunde, keine Version, nie bei abgeschlossenen Projekten.
+    const autosave = body.autosave === true;
+    const { id } = body;
+    const status = autosave ? undefined : body.status;
+    const name = autosave ? undefined : body.name;
+    const adresse = autosave ? undefined : body.adresse;
+    const customer_id = autosave ? undefined : body.customer_id;
+    const data = autosave ? filtereAutosaveData(body.data) : body.data;
+    if (autosave && Object.keys(data).length === 0) {
+      return NextResponse.json({ success: false, error: 'Auto-Speichern: kein gültiger Schritt (step1–step5).' }, { status: 400 });
+    }
 
     // FIX (Mitarbeiter-Bereich-Erweiterung): Bauleiter/Mitarbeiter dürfen
     // ihr Aufmaß weiter bearbeiten/speichern (data/name/adresse), aber
@@ -177,13 +189,20 @@ export async function PATCH(req: NextRequest) {
     let solltAutomatikAusloesen = false;
 
     if (data && typeof data === 'object') {
-      const cur = await fetch(`${url}/rest/v1/projects?id=eq.${id}&select=data,name,adresse`, { headers });
+      const cur = await fetch(`${url}/rest/v1/projects?id=eq.${id}&select=data,name,adresse,status`, { headers });
       if (!cur.ok) throw new Error(await cur.text());
       const curRows = await cur.json();
       if (!curRows?.length) {
         return NextResponse.json({ success: false, error: 'Projekt nicht gefunden.' }, { status: 404 });
       }
       const bisher = curRows[0];
+
+      if (autosave && autosaveGesperrt(bisher.status)) {
+        return NextResponse.json(
+          { success: false, error: AUTOSAVE_PROJEKT_ABGESCHLOSSEN_FEHLER, code: 'PROJEKT_ABGESCHLOSSEN' },
+          { status: 409 }
+        );
+      }
 
       if (data.angebotsStatus === 'angenommen' && bisher.data?.angebotsStatus !== 'angenommen') {
         solltAutomatikAusloesen = true;
@@ -194,7 +213,7 @@ export async function PATCH(req: NextRequest) {
       // "Version 1" erzeugen).
       // Auto-Save-Entwürfe (data.entwurf) werden bei jedem "Weiter" überschrieben
       // und erzeugen keine Versionen – sonst entstünden Dutzende Zwischenstände.
-      if (bisher.data && Object.keys(bisher.data).length > 0 && !bisher.data.entwurf) {
+      if (!autosave && bisher.data && Object.keys(bisher.data).length > 0 && !bisher.data.entwurf) {
         const cntRes = await fetch(`${url}/rest/v1/project_versions?project_id=eq.${id}&select=version_number&order=version_number.desc&limit=1`, { headers });
         const cntRows = cntRes.ok ? await cntRes.json() : [];
         const naechsteNummer = (cntRows?.[0]?.version_number || 0) + 1;
