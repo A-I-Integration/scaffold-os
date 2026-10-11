@@ -60,7 +60,9 @@ export async function POST(req: NextRequest) {
     }
 
     const encrypted_password = verschluesseln(password);
-    const res = await fetch(`${url}/rest/v1/email_accounts`, {
+    // Eigenes Postfach erneut verbinden = ersetzen (Konflikt über employee_id);
+    // gemeinsame Postfächer (employee_id NULL) werden immer neu angelegt.
+    const res = await fetch(`${url}/rest/v1/email_accounts${geteilt ? '' : '?on_conflict=employee_id'}`, {
       method: 'POST',
       headers: { ...headers, Prefer: geteilt ? 'return=representation' : 'resolution=merge-duplicates,return=representation' },
       body: JSON.stringify({
