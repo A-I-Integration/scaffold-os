@@ -427,7 +427,10 @@ export default function KundenDetailPage() {
   }
 
   async function sendInvoice(inv: Invoice) {
-    const to = prompt(`An welche E-Mail-Adresse soll ${TYPE_LABEL[inv.invoice_type || 'standard']} ${inv.invoice_number} gesendet werden?`, kunde?.email || '')
+    // Vorschlag: Adresse, an die diese Rechnung zuletzt gesendet wurde (emails ist
+    // nach sent_at absteigend sortiert); sonst die E-Mail aus dem Kundenstamm.
+    const zuletztAn = emails.find((m) => m.invoice_number === inv.invoice_number && m.to_email)?.to_email
+    const to = prompt(`An welche E-Mail-Adresse soll ${TYPE_LABEL[inv.invoice_type || 'standard']} ${inv.invoice_number} gesendet werden?`, zuletztAn || kunde?.email || '')
     if (!to || !to.includes('@')) return
     try {
       const { pdfBase64, istZugferd, hinweis } = await holePdfBase64FuerVersand(inv)
