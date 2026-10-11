@@ -7,6 +7,7 @@ import { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { setzeMarkierung, leseSchrittGeladenesProjekt, setzeSchrittGeladenesProjekt } from '@/lib/aufmass-projekt-session';
 import { speichereEntwurf } from '@/lib/aufmass-entwurf';
+import { speichereSchrittAuto } from '@/lib/aufmass-autosave';
 
 const LEERES_FORM_S5 = {
   arbeitsbuehnen: '',
@@ -68,7 +69,7 @@ function Schritt5Content() {
 
   function handleWeiter() {
     localStorage.setItem('scaffold_step5', JSON.stringify(form));
-    if (!projectId) void speichereEntwurf();
+    if (!projectId) void speichereEntwurf(); else void speichereSchrittAuto(projectId, 'step5', form);
     router.push(projectId ? `/aufmass/schritt6?id=${projectId}` : '/aufmass/schritt6');
   }
 

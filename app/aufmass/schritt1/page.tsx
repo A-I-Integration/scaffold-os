@@ -8,6 +8,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { setzeMarkierung, leseSchrittGeladenesProjekt, setzeSchrittGeladenesProjekt, WIZARD_KEYS, gewerkeVonStep1 } from '@/lib/aufmass-projekt-session';
 import { NEU, SESSION_EIGENTUEMER_KEY, setzeLidarEigentuemer, sitzungGehoertZu } from '@/lib/aufmass-eigentuemer';
 import { speichereEntwurf } from '@/lib/aufmass-entwurf';
+import { speichereSchrittAuto } from '@/lib/aufmass-autosave';
 import PhotoUpload from '@/components/aufmaß/PhotoUpload';
 import LiDARUpload from '@/components/aufmaß/LiDARUpload';
 import FotoAnalyse from '@/components/aufmaß/FotoAnalyse';
@@ -315,7 +316,7 @@ function Schritt1Content() {
       return;
     }
     localStorage.setItem('scaffold_step1', JSON.stringify(form));
-    if (!projectId) void speichereEntwurf();
+    if (!projectId) void speichereEntwurf(); else void speichereSchrittAuto(projectId, 'step1', form);
     router.push(projectId ? `/aufmass/schritt2?id=${projectId}` : '/aufmass/schritt2');
   }
 

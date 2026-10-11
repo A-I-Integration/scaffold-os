@@ -8,6 +8,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { setzeMarkierung, leseSchrittGeladenesProjekt, setzeSchrittGeladenesProjekt, leiteStepsAusKiResultAb } from '@/lib/aufmass-projekt-session';
 import { leseLidarFuerProjekt } from '@/lib/aufmass-eigentuemer';
 import { speichereEntwurf } from '@/lib/aufmass-entwurf';
+import { speichereSchrittAuto } from '@/lib/aufmass-autosave';
 import { ebenenZuVorschlaegen, ebenenSignatur, flaecheM2, type EbenenVorschlag } from '@/lib/lidar-ebenen';
 import KIWarnings from '@/components/aufmaß/KIWarnings';
 import { useKIValidation } from '@/hooks/useKIValidation';
@@ -495,7 +496,7 @@ function leeresFormS2() {
     if (istBruecke) {
       if (!brueckeGueltig()) { alert('Bitte mindestens eine Spannweite und die Höhe über Grund/Gewässer eingeben!'); return; }
       localStorage.setItem('scaffold_step2', JSON.stringify(form));
-      if (!projectId) void speichereEntwurf();
+      if (!projectId) void speichereEntwurf(); else void speichereSchrittAuto(projectId, 'step2', form);
       router.push(projectId ? `/aufmass/schritt3?id=${projectId}` : '/aufmass/schritt3');
       return;
     }
@@ -509,7 +510,7 @@ function leeresFormS2() {
     // Zurückkommen sie nicht mehr zwingend überschreiben.
     localStorage.removeItem('scaffold_lidar_fresh');
     localStorage.removeItem('scaffold_grundriss_fresh');
-    if (!projectId) void speichereEntwurf();
+    if (!projectId) void speichereEntwurf(); else void speichereSchrittAuto(projectId, 'step2', form);
     router.push(projectId ? `/aufmass/schritt3?id=${projectId}` : '/aufmass/schritt3');
   }
 
@@ -520,7 +521,7 @@ function leeresFormS2() {
     if (istBruecke) {
       if (!brueckeGueltig()) { alert('Bitte mindestens eine Spannweite und die Höhe über Grund/Gewässer eingeben!'); return; }
       localStorage.setItem('scaffold_step2', JSON.stringify(form));
-      if (!projectId) void speichereEntwurf();
+      if (!projectId) void speichereEntwurf(); else void speichereSchrittAuto(projectId, 'step2', form);
       router.push(projectId ? `/aufmass/schritt6?id=${projectId}` : '/aufmass/schritt6');
       return;
     }
@@ -531,7 +532,7 @@ function leeresFormS2() {
     localStorage.setItem('scaffold_step2', JSON.stringify(form));
     localStorage.removeItem('scaffold_lidar_fresh');
     localStorage.removeItem('scaffold_grundriss_fresh');
-    if (!projectId) void speichereEntwurf();
+    if (!projectId) void speichereEntwurf(); else void speichereSchrittAuto(projectId, 'step2', form);
     router.push(projectId ? `/aufmass/schritt6?id=${projectId}` : '/aufmass/schritt6');
   }
 
