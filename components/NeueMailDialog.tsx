@@ -23,15 +23,17 @@ interface Props {
   kunde: { id: string; name: string; email?: string | null };
   rechnungen: Invoice[];
   bisherigeAdressen: string[];
+  fruehereAngebote?: { id: string; subject: string; sent_at: string; attachment_name?: string | null }[];
   onClose: () => void;
   onSent: () => void;
 }
 
-export default function NeueMailDialog({ kunde, rechnungen, bisherigeAdressen, onClose, onSent }: Props) {
+export default function NeueMailDialog({ kunde, rechnungen, bisherigeAdressen, fruehereAngebote = [], onClose, onSent }: Props) {
   const [kontakte, setKontakte] = useState<{ name: string; email: string | null; bezeichnung: string | null }[]>([]);
   const [auswahl, setAuswahl] = useState<string>('');
   const [frei, setFrei] = useState('');
   const [rechnungNr, setRechnungNr] = useState('');
+  const [angebotMailId, setAngebotMailId] = useState('');
   const [betreff, setBetreff] = useState('');
   const [text, setText] = useState('');
   const [laeuft, setLaeuft] = useState(false);
@@ -59,8 +61,19 @@ export default function NeueMailDialog({ kunde, rechnungen, bisherigeAdressen, o
   const empfaenger = (auswahl === FREI ? frei : auswahl).trim();
   const inv = rechnungen.find((r) => r.invoice_number === rechnungNr) || null;
 
+  function waehleAngebot(mailId: string) {
+    setAngebotMailId(mailId);
+    setRechnungNr('');
+    const a = fruehereAngebote.find((x) => x.id === mailId);
+    if (a) {
+      if (!betreff.trim()) setBetreff(a.subject);
+      if (!text.trim()) setText('Guten Tag,\n\nanbei erhalten Sie unser Angebot.\n\nBei Fragen melden Sie sich gerne.\n\nMit freundlichen Grüßen');
+    }
+  }
+
   function waehleRechnung(nr: string) {
     setRechnungNr(nr);
+    if (nr) setAngebotMailId('');
     const r = rechnungen.find((x) => x.invoice_number === nr);
     if (r) {
       const art = TYP[r.invoice_type || 'standard'] || 'Rechnung';
@@ -85,7 +98,7 @@ export default function NeueMailDialog({ kunde, rechnungen, bisherigeAdressen, o
       }
       const res = await fetch(`/api/kunden/${kunde.id}/mail`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ to: empfaenger, subject: betreff.trim(), text, invoiceNumber: inv?.invoice_number, pdfBase64, pdfName }),
+        body: JSON.stringify({ to: empfaenger, subject: betreff.trim(), text, invoiceNumber: inv?.invoice_number, pdfBase64, pdfName, anhangMailId: angebotMailId || undefined }),
       });
       const json = await res.json();
       if (!json.success) throw new Error(json.error || 'Senden fehlgeschlagen');
@@ -135,6 +148,18 @@ export default function NeueMailDialog({ kunde, rechnungen, bisherigeAdressen, o
             ))}
           </select>
         </div>
+
+        {fruehereAngebote.length > 0 && (
+          <div>
+            <label className="block text-xs text-[#86868b] mb-1 flex items-center gap-1"><Paperclip className="h-3 w-3" /> Früher versendetes Angebot (PDF) anhängen (optional)</label>
+            <select value={angebotMailId} onChange={(e) => waehleAngebot(e.target.value)} className={INPUT}>
+              <option value="">Kein Angebot</option>
+              {fruehereAngebote.map((a) => (
+                <option key={a.id} value={a.id}>{a.subject} · {new Date(a.sent_at).toLocaleDateString('de-DE')}{a.attachment_name ? ` · ${a.attachment_name}` : ''}</option>
+              ))}
+            </select>
+          </div>
+        )}
 
         <div>
           <label className="block text-xs text-[#86868b] mb-1">Betreff</label>
