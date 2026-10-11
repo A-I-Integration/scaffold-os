@@ -42,7 +42,9 @@ export default function SchlussrechnungDialog({ projectId, customerName, custome
   const [gewaehlteAbschlaege, setGewaehlteAbschlaege] = useState<Set<string>>(new Set());
 
   const [basis, setBasis] = useState<RechnungsBasis>('angebot');
-  const [art, setArt] = useState<'schluss' | 'standard'>('schluss');
+  const [art, setArt] = useState<'schluss' | 'standard' | 'abschlag'>('schluss');
+  const [abschlagProzent, setAbschlagProzent] = useState('');
+  const [abschlagBetrag, setAbschlagBetrag] = useState('');
   const [preisM2, setPreisM2] = useState('');
   const [gewaehlteNachtraege, setGewaehlteNachtraege] = useState<Set<string>>(new Set());
 
@@ -117,17 +119,32 @@ export default function SchlussrechnungDialog({ projectId, customerName, custome
     () => (art === 'schluss' ? abschlagKandidaten.filter((i) => gewaehlteAbschlaege.has(i.id)).map((i) => abschlagAbzug(i)) : []),
     [art, abschlagKandidaten, gewaehlteAbschlaege],
   );
-  const positionen = useMemo(() => [...leistungsPositionen, ...baueAbzugsPositionen(abzuege)], [leistungsPositionen, abzuege]);
   const gesamtNetto = summeNetto(leistungsPositionen);
+  // Abschlagsrechnung: Betrag netto direkt ODER Prozent der Gesamtleistung (netto)
+  const zahl = (v: string) => parseFloat(String(v).replace(',', '.')) || 0;
+  const abschlagNetto = art !== 'abschlag' ? 0
+    : zahl(abschlagBetrag) > 0 ? Math.round(zahl(abschlagBetrag) * 100) / 100
+    : Math.round(gesamtNetto * zahl(abschlagProzent)) / 100;
+  const positionen = useMemo(() => {
+    if (art === 'abschlag') {
+      if (abschlagNetto <= 0) return [];
+      const pct = zahl(abschlagBetrag) > 0 ? '' : ` (${zahl(abschlagProzent).toLocaleString('de-DE')} % der Gesamtleistung)`;
+      return [{ bezeichnung: `Abschlagszahlung Gerüstbau${pct}`, menge: 1, einheit: 'Pauschale', einzelpreis: abschlagNetto }];
+    }
+    return [...leistungsPositionen, ...baueAbzugsPositionen(abzuege)];
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [art, abschlagNetto, abschlagBetrag, abschlagProzent, leistungsPositionen, abzuege]);
   const netto = summeNetto(positionen);
   const abzugNetto = Math.round(abzuege.reduce((s, a) => s + a.netto, 0) * 100) / 100;
   const ustRest = Math.round(netto * 19) / 100;
-  const abzugsText = abzugsHinweis(gesamtNetto, abzuege);
+  const abzugsText = art === 'abschlag' ? 'Abschlagszahlung; die Verrechnung erfolgt in der Schlussrechnung.' : abzugsHinweis(gesamtNetto, abzuege);
 
   const hatAngebotspreis = !!eingabe?.kiResult;
   const aufmassMoeglich = aufmassM2 > 0;
+  const basisOk = basis === 'angebot' ? hatAngebotspreis : aufmassMoeglich && preisM2Zahl > 0;
+  // Abschlag mit festem Betrag braucht keine Kalkulationsbasis, mit Prozent schon
   const kannAnlegen = !laeuft && positionen.length > 0 && netto > 0
-    && (basis === 'angebot' ? hatAngebotspreis : aufmassMoeglich && preisM2Zahl > 0);
+    && (art === 'abschlag' && zahl(abschlagBetrag) > 0 ? true : basisOk);
 
   async function anlegen(overrideGrund?: string) {
     if (!eingabe) return;
@@ -185,7 +202,8 @@ export default function SchlussrechnungDialog({ projectId, customerName, custome
             <div className="grid grid-cols-2 gap-2">
               <div>
                 <label className="block text-[11px] text-[#86868b] mb-1">Rechnungsart</label>
-                <select value={art} onChange={(e) => setArt(e.target.value as 'schluss' | 'standard')} className={inputCls}>
+                <select value={art} onChange={(e) => setArt(e.target.value as 'schluss' | 'standard' | 'abschlag')} className={inputCls}>
+                  <option value="abschlag">Abschlagsrechnung</option>
                   <option value="schluss">Schlussrechnung</option>
                   <option value="standard">Rechnung</option>
                 </select>
@@ -213,6 +231,25 @@ export default function SchlussrechnungDialog({ projectId, customerName, custome
                   <label className="block text-[11px] text-[#86868b] mb-1">Preis je m² (netto, €){firmenPreisM2 ? ` – Firmenstandard ${firmenPreisM2.replace('.', ',')} €` : ''}</label>
                   <input value={preisM2} onChange={(e) => setPreisM2(e.target.value)} inputMode="decimal" placeholder="z. B. 12,50" className={inputCls} />
                 </div>
+              </div>
+            )}
+
+            {art === 'abschlag' && (
+              <div className="rounded-lg bg-[#f5f5f7] p-3 space-y-2">
+                <p className="text-[11px] text-[#86868b]">Eine Abschlagsrechnung gehört zu diesem Auftrag. In der Schlussrechnung wird sie später automatisch netto abgezogen (§ 14 Abs. 5 UStG). Gib entweder einen Betrag oder Prozent der Gesamtleistung an.</p>
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="block text-[11px] text-[#86868b] mb-1">Betrag netto (€)</label>
+                    <input value={abschlagBetrag} onChange={(e) => setAbschlagBetrag(e.target.value)} inputMode="decimal" placeholder="z. B. 3000" className={inputCls} />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] text-[#86868b] mb-1">oder Prozent der Gesamtleistung</label>
+                    <input value={abschlagProzent} onChange={(e) => setAbschlagProzent(e.target.value)} inputMode="decimal" placeholder="z. B. 30" disabled={zahl(abschlagBetrag) > 0} className={inputCls + (zahl(abschlagBetrag) > 0 ? ' opacity-50' : '')} />
+                  </div>
+                </div>
+                {zahl(abschlagBetrag) <= 0 && zahl(abschlagProzent) > 0 && (
+                  <p className="text-xs text-[#1d1d1f]">Gesamtleistung netto {eur(gesamtNetto)} × {zahl(abschlagProzent).toLocaleString('de-DE')} % = <b>{eur(abschlagNetto)}</b> netto</p>
+                )}
               </div>
             )}
 
@@ -284,10 +321,10 @@ export default function SchlussrechnungDialog({ projectId, customerName, custome
                   <span className="flex-1">Summe netto (zzgl. MwSt.)</span>
                   <span>{eur(netto)}</span>
                 </li>
-                {abzuege.length > 0 && (
+                {(abzuege.length > 0 || art === 'abschlag') && (
                   <>
-                    <li className="flex items-center gap-2 px-3 py-2"><span className="flex-1">zzgl. 19 % USt auf den Restbetrag</span><span>{eur(ustRest)}</span></li>
-                    <li className="flex items-center gap-2 px-3 py-2 font-semibold"><span className="flex-1">Restbetrag brutto</span><span>{eur(Math.round((netto + ustRest) * 100) / 100)}</span></li>
+                    <li className="flex items-center gap-2 px-3 py-2"><span className="flex-1">{art === 'abschlag' ? 'zzgl. 19 % USt' : 'zzgl. 19 % USt auf den Restbetrag'}</span><span>{eur(ustRest)}</span></li>
+                    <li className="flex items-center gap-2 px-3 py-2 font-semibold"><span className="flex-1">{art === 'abschlag' ? 'Abschlag brutto' : 'Restbetrag brutto'}</span><span>{eur(Math.round((netto + ustRest) * 100) / 100)}</span></li>
                   </>
                 )}
               </ul>
@@ -310,7 +347,7 @@ export default function SchlussrechnungDialog({ projectId, customerName, custome
             {fehler && <p className="text-xs text-red-600">❌ {fehler}</p>}
             <div className="flex gap-2">
               <button onClick={() => anlegen()} disabled={!kannAnlegen || !!brauchtBegruendung} className="flex-1 rounded-lg bg-[#e8590c] hover:bg-[#d9480f] disabled:opacity-50 py-2 text-sm font-semibold text-white">
-                {laeuft ? 'Legt an …' : `${art === 'schluss' ? 'Schlussrechnung' : 'Rechnung'} anlegen`}
+                {laeuft ? 'Legt an …' : `${art === 'schluss' ? 'Schlussrechnung' : art === 'abschlag' ? 'Abschlagsrechnung' : 'Rechnung'} anlegen`}
               </button>
               <button onClick={onClose} className="rounded-lg bg-black/10 hover:bg-black/20 px-3 py-2 text-sm text-[#1d1d1f]">Abbrechen</button>
             </div>
