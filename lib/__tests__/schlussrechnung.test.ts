@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { baueRechnungsPositionen, berechneAngebotBetraege, eingabeAusProjektData, summeNetto, abschlagAbzug, baueAbzugsPositionen, abzugsHinweis, type RechnungsEingabe, type AbschlagLike } from '../schlussrechnung';
+import { baueRechnungsPositionen, berechneAngebotBetraege, eingabeAusProjektData, summeNetto, abschlagAbzug, baueAbzugsPositionen, abzugsHinweis, istAbzugZuHoch, istAbschlagZuHoch, type RechnungsEingabe, type AbschlagLike } from '../schlussrechnung';
 import type { Nachtrag } from '../nachtrag';
 
 const basisEingabe = (o: Partial<RechnungsEingabe> = {}): RechnungsEingabe => ({
@@ -83,5 +83,32 @@ describe('Abzug Abschlagsrechnungen (§ 14 Abs. 5 UStG)', () => {
   it('Hinweistext nennt Gesamtleistung und abgezogene Abschläge; ohne Abschläge nichts', () => {
     expect(abzugsHinweis(10000, [])).toBeUndefined();
     expect(abzugsHinweis(10000, [abschlagAbzug(ab())])).toBe('Gesamtleistung netto 10.000,00 € (USt 1.900,00 €), abzüglich vereinnahmter Abschläge netto 3.000,00 € (USt 570,00 €).');
+  });
+});
+
+describe('Sperren bei zu hohem Abzug / Abschlag', () => {
+  const abz = (netto: number) => abschlagAbzug(ab({ net_amount: netto, tax_amount: Math.round(netto * 19) / 100, gross_amount: Math.round(netto * 119) / 100 }));
+  it('Abzug größer als die Gesamtleistung → gesperrt (Rest < 0)', () => {
+    expect(istAbzugZuHoch(1000, [abz(1500)])).toBe(true);
+    const pos = [{ bezeichnung: 'L', menge: 1, einheit: 'Pauschale', einzelpreis: 1000 }, ...baueAbzugsPositionen([abz(1500)])];
+    expect(summeNetto(pos)).toBe(-500);
+  });
+  it('Abzug gleich der Gesamtleistung → gesperrt (Rest = 0)', () => {
+    expect(istAbzugZuHoch(1000, [abz(1000)])).toBe(true);
+  });
+  it('Abzug kleiner als die Gesamtleistung oder keine Abschläge → nicht gesperrt', () => {
+    expect(istAbzugZuHoch(1000, [abz(300)])).toBe(false);
+    expect(istAbzugZuHoch(1000, [])).toBe(false);
+  });
+  it('mehrere Abschläge zusammen über der Gesamtleistung → gesperrt', () => {
+    expect(istAbzugZuHoch(1000, [abz(600), abz(600)])).toBe(true);
+  });
+  it('Abschlag über 100 % der Gesamtleistung → gesperrt, 100 % und weniger nicht', () => {
+    expect(istAbschlagZuHoch(1200, 1000)).toBe(true);
+    expect(istAbschlagZuHoch(1000, 1000)).toBe(false);
+    expect(istAbschlagZuHoch(300, 1000)).toBe(false);
+  });
+  it('ohne Gesamtleistung ist der Abschlag nicht prüfbar (nicht gesperrt)', () => {
+    expect(istAbschlagZuHoch(500, 0)).toBe(false);
   });
 });

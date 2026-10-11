@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { trackImpact } from '@/lib/impact';
 import { serverErrorResponse } from '@/lib/auth';
+import { abschlagOhneAuftrag, ABSCHLAG_OHNE_AUFTRAG_FEHLER } from '@/lib/rechnung-regeln';
 
 // ============================================================
 // SCAFFOLD OS – Rechnungen API (Phase 13: Rechnungsmodul)
@@ -92,6 +93,12 @@ export async function POST(req: NextRequest) {
     }
     if (!Array.isArray(positions) || positions.length === 0) {
       return NextResponse.json({ success: false, error: 'Mindestens eine Position erforderlich.' }, { status: 400 });
+    }
+
+    // Abschlagsrechnungen nur mit Auftrag: sonst würde die Pflicht-Freigabe unten
+    // (nur bei project_id) komplett umgangen. Ersatz-Rechnungen (Ändern) ausgenommen.
+    if (abschlagOhneAuftrag(invoice_type, project_id, replace_invoice_id)) {
+      return NextResponse.json({ success: false, error: ABSCHLAG_OHNE_AUFTRAG_FEHLER, code: 'ABSCHLAG_OHNE_AUFTRAG' }, { status: 409 });
     }
 
     // Phase 27: Pflicht-Verknüpfung Prüfung/Freigabe → Rechnung. Gilt für JEDE

@@ -5,7 +5,7 @@ import { X, Receipt } from 'lucide-react';
 import { normalisiereNachtraege, nachtragNummer, type Nachtrag } from '@/lib/nachtrag';
 import { abschnitteAusSchritt2, berechneAufmass } from '@/lib/aufmassblatt-pdf';
 import {
-  baueRechnungsPositionen, eingabeAusProjektData, summeNetto, abschlagAbzug, baueAbzugsPositionen, abzugsHinweis,
+  baueRechnungsPositionen, eingabeAusProjektData, summeNetto, abschlagAbzug, baueAbzugsPositionen, abzugsHinweis, istAbzugZuHoch, istAbschlagZuHoch,
   type RechnungsBasis, type RechnungsEingabe,
 } from '@/lib/schlussrechnung';
 import type { Invoice } from '@/lib/invoice-pdf';
@@ -125,6 +125,7 @@ export default function SchlussrechnungDialog({ projectId, customerName, custome
   const abschlagNetto = art !== 'abschlag' ? 0
     : zahl(abschlagBetrag) > 0 ? Math.round(zahl(abschlagBetrag) * 100) / 100
     : Math.round(gesamtNetto * zahl(abschlagProzent)) / 100;
+  const abschlagZuHoch = art === 'abschlag' && istAbschlagZuHoch(abschlagNetto, gesamtNetto);
   const positionen = useMemo(() => {
     if (art === 'abschlag') {
       if (abschlagNetto <= 0) return [];
@@ -143,7 +144,7 @@ export default function SchlussrechnungDialog({ projectId, customerName, custome
   const aufmassMoeglich = aufmassM2 > 0;
   const basisOk = basis === 'angebot' ? hatAngebotspreis : aufmassMoeglich && preisM2Zahl > 0;
   // Abschlag mit festem Betrag braucht keine Kalkulationsbasis, mit Prozent schon
-  const kannAnlegen = !laeuft && positionen.length > 0 && netto > 0
+  const kannAnlegen = !laeuft && positionen.length > 0 && netto > 0 && !abschlagZuHoch
     && (art === 'abschlag' && zahl(abschlagBetrag) > 0 ? true : basisOk);
 
   async function anlegen(overrideGrund?: string) {
@@ -250,6 +251,9 @@ export default function SchlussrechnungDialog({ projectId, customerName, custome
                 {zahl(abschlagBetrag) <= 0 && zahl(abschlagProzent) > 0 && (
                   <p className="text-xs text-[#1d1d1f]">Gesamtleistung netto {eur(gesamtNetto)} × {zahl(abschlagProzent).toLocaleString('de-DE')} % = <b>{eur(abschlagNetto)}</b> netto</p>
                 )}
+                {abschlagZuHoch && (
+                  <p className="text-xs text-red-600">Der Abschlag ist höher als die Gesamtleistung (netto {eur(gesamtNetto)}). Bitte Betrag oder Prozent prüfen.</p>
+                )}
               </div>
             )}
 
@@ -328,7 +332,7 @@ export default function SchlussrechnungDialog({ projectId, customerName, custome
                   </>
                 )}
               </ul>
-              {abzuege.length > 0 && netto <= 0 && (
+              {istAbzugZuHoch(gesamtNetto, abzuege) && (
                 <p className="text-xs text-red-600 mt-1">Der Abzug ist so hoch wie oder höher als die Gesamtleistung. Bitte Auswahl prüfen (bei Überzahlung wäre eine Gutschrift nötig).</p>
               )}
               {projektDaten && daten === undefined && (
