@@ -45,11 +45,17 @@ export async function GET(req: NextRequest) {
     // sie sind nur über die Rechnungsnummer auffindbar.
     const rechnungsNummern = (searchParams.get('invoice_numbers') || '')
       .split(',').map((n) => n.trim()).filter((n) => /^[\w.\-\/ ]{1,40}$/.test(n)).slice(0, 200);
-    if (!projectId && rechnungsNummern.length === 0) {
-      return NextResponse.json({ success: false, error: 'project_id oder invoice_numbers erforderlich' }, { status: 400 });
+    const customerId = searchParams.get('customer_id');
+    if (customerId && !/^[0-9a-f-]{36}$/i.test(customerId)) {
+      return NextResponse.json({ success: false, error: 'Ungültige customer_id' }, { status: 400 });
+    }
+    if (!projectId && !customerId && rechnungsNummern.length === 0) {
+      return NextResponse.json({ success: false, error: 'project_id, customer_id oder invoice_numbers erforderlich' }, { status: 400 });
     }
 
-    const filter = projectId
+    const filter = customerId
+      ? `customer_id=eq.${customerId}`
+      : projectId
       ? `project_id=eq.${encodeURIComponent(projectId)}`
       : `invoice_number=in.(${encodeURIComponent(rechnungsNummern.map((n) => `"${n}"`).join(','))})`;
     const res = await fetch(

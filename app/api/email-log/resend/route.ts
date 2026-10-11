@@ -13,7 +13,8 @@ import { istGueltigeEmail } from '@/lib/email-verlauf';
 // ============================================================
 
 export async function POST(req: Request) {
-  if (!(await requireAuth())) return unauthorizedResponse();
+  const auth = await requireAuth();
+  if (!auth) return unauthorizedResponse();
   try {
     const apiKey = process.env.RESEND_API_KEY;
     if (!apiKey) {
@@ -67,15 +68,22 @@ export async function POST(req: Request) {
 
     // Neuer Versand ebenfalls protokollieren (best effort)
     try {
-      await fetch(`${supaUrl}/rest/v1/email_log`, {
+      const basisLog = {
+        project_id: row.project_id, invoice_number: row.invoice_number, type: row.type,
+        to_email: empfaenger, subject: row.subject, resend_id: data?.id || null,
+        body_html: row.body_html, attachment_path: row.attachment_path, attachment_name: row.attachment_name,
+      };
+      // Phase 99: Kundenzuordnung der Originalmail übernehmen (nur wenn dort vorhanden)
+      let logRes = await fetch(`${supaUrl}/rest/v1/email_log`, {
         method: 'POST',
         headers: { ...h, Prefer: 'return=minimal' },
-        body: JSON.stringify({
-          project_id: row.project_id, invoice_number: row.invoice_number, type: row.type,
-          to_email: empfaenger, subject: row.subject, resend_id: data?.id || null,
-          body_html: row.body_html, attachment_path: row.attachment_path, attachment_name: row.attachment_name,
-        }),
+        body: JSON.stringify({ ...basisLog, customer_id: row.customer_id || null, sent_by: auth.userId, sent_from: process.env.MAIL_FROM || null }),
       });
+      if (!logRes.ok) {
+        logRes = await fetch(`${supaUrl}/rest/v1/email_log`, {
+          method: 'POST', headers: { ...h, Prefer: 'return=minimal' }, body: JSON.stringify(basisLog),
+        });
+      }
     } catch (logErr) {
       console.error('[Email Resend] Protokollierung fehlgeschlagen (ignoriert):', logErr);
     }

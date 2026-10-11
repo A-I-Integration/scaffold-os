@@ -2,7 +2,8 @@ import { NextResponse } from 'next/server';
 import { requireAuth, unauthorizedResponse, serverErrorResponse } from '@/lib/auth';
 
 export async function POST(req: Request) {
-  if (!(await requireAuth())) return unauthorizedResponse();
+  const auth = await requireAuth();
+  if (!auth) return unauthorizedResponse();
   try {
     const apiKey = process.env.RESEND_API_KEY;
     if (!apiKey) {
@@ -156,10 +157,32 @@ export async function POST(req: Request) {
         subject,
         resend_id: data?.id || null,
       };
+      // Phase 99: Mail dem Kunden zuordnen – nur wo eindeutig (Projekt bzw. Rechnungsnummer).
+      let customerId: string | null = null;
+      try {
+        if (projectId) {
+          const pr = await fetch(`${supaUrl}/rest/v1/projects?id=eq.${encodeURIComponent(projectId)}&select=customer_id`, { headers: logHeaders });
+          if (pr.ok) customerId = (await pr.json())?.[0]?.customer_id || null;
+        }
+        if (!customerId && invoiceNumber) {
+          const ir = await fetch(`${supaUrl}/rest/v1/invoices?invoice_number=eq.${encodeURIComponent(invoiceNumber)}&select=customer_id`, { headers: logHeaders });
+          if (ir.ok) customerId = (await ir.json())?.[0]?.customer_id || null;
+        }
+      } catch { /* Zuordnung optional */ }
       let logRes = await fetch(`${supaUrl}/rest/v1/email_log`, {
         method: 'POST', headers: logHeaders,
-        body: JSON.stringify({ ...basis, body_html: htmlBody, attachment_path: attachmentPath, attachment_name: attachmentName }),
+        body: JSON.stringify({
+          ...basis, body_html: htmlBody, attachment_path: attachmentPath, attachment_name: attachmentName,
+          customer_id: customerId, sent_by: auth.userId, sent_from: process.env.MAIL_FROM || null,
+        }),
       });
+      // Phase-99-Spalten evtl. noch nicht da → ohne sie versuchen (Phase 97)
+      if (!logRes.ok) {
+        logRes = await fetch(`${supaUrl}/rest/v1/email_log`, {
+          method: 'POST', headers: logHeaders,
+          body: JSON.stringify({ ...basis, body_html: htmlBody, attachment_path: attachmentPath, attachment_name: attachmentName }),
+        });
+      }
       // Spalten aus Phase 97 evtl. noch nicht angelegt → altes Protokoll-Format
       if (!logRes.ok) {
         logRes = await fetch(`${supaUrl}/rest/v1/email_log`, { method: 'POST', headers: logHeaders, body: JSON.stringify(basis) });
