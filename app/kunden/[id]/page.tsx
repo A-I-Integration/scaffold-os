@@ -33,6 +33,8 @@ import TransportAnlegen from '@/components/TransportAnlegen'
 import SollIstStunden from '@/components/SollIstStunden'
 import AuftragsTeam from '@/components/AuftragsTeam'
 import VertragsDokumente from '@/components/VertragsDokumente'
+import NachtraegeBlock from '@/components/NachtraegeBlock'
+import SchlussrechnungDialog from '@/components/SchlussrechnungDialog'
 import { lokalesDatumIso, datumPlusTage } from '@/lib/datum'
 
 interface Kunde {
@@ -106,10 +108,10 @@ const DOK_TYPE_LABEL: Record<string, string> = {
 const fmtTimestamp = (d: string | null) => (d ? new Date(d).toLocaleDateString('de-DE') : '–')
 
 const LEER_POSITION = { bezeichnung: '', menge: '1', einheit: 'Stk.', einzelpreis: '' }
-const TABS = ['kunde', 'aufmass', 'bilder', 'dokumente', 'angebote', 'rechnungen', 'emails'] as const
+const TABS = ['kunde', 'aufmass', 'bilder', 'dokumente', 'angebote', 'nachtraege', 'rechnungen', 'emails'] as const
 type Tab = typeof TABS[number]
 const TAB_LABEL: Record<Tab, string> = {
-  kunde: 'Kunde', aufmass: 'Aufmaß', bilder: 'Bilder', dokumente: 'Dokumente', angebote: 'Angebote', rechnungen: 'Rechnungen', emails: 'E-Mails',
+  kunde: 'Kunde', aufmass: 'Aufmaß', bilder: 'Bilder', dokumente: 'Dokumente', angebote: 'Angebote', nachtraege: 'Nachträge / Schluss', rechnungen: 'Rechnungen', emails: 'E-Mails',
 }
 
 // Gleicher Namensabgleich wie auf der Kunden-Übersicht (app/kunden/page.tsx):
@@ -152,6 +154,7 @@ export default function KundenDetailPage() {
   const [editPositions, setEditPositions] = useState<any[]>([])
 
   // Zusatzrechnung
+  const [schlussProjectId, setSchlussProjectId] = useState<string | null>(null)
   const [zusatzProjectId, setZusatzProjectId] = useState<string | null>(null)
   const [zusatzPos, setZusatzPos] = useState({ ...LEER_POSITION })
   const [zusatzNotiz, setZusatzNotiz] = useState('')
@@ -1155,6 +1158,31 @@ export default function KundenDetailPage() {
                 </div>
               )
             })}
+          </div>
+        )}
+
+        {/* ═══════════ TAB: NACHTRÄGE / SCHLUSSRECHNUNG ═══════════ */}
+        {tab === 'nachtraege' && (
+          <div className="space-y-4">
+            {projects.length === 0 && <p className="text-sm text-[#86868b]">Noch keine Aufträge für diesen Kunden.</p>}
+            {projects.map((project) => (
+              <div key={project.id} className="bg-white rounded-xl border border-black/10 p-5 space-y-3">
+                <p className="font-semibold text-[#1d1d1f] flex items-center gap-1.5"><FileSignature className="h-4 w-4 text-[#e8590c]" /> {project.name || 'Unbenanntes Projekt'}</p>
+                <NachtraegeBlock project={project} kunde={kunde} />
+                <button onClick={() => setSchlussProjectId(project.id)} className="flex items-center gap-1.5 text-xs text-[#e8590c] font-semibold hover:underline">
+                  <FileText className="h-3.5 w-3.5" /> Schlussrechnung erstellen (nach Angebot oder Aufmaß, mit Nachträgen)
+                </button>
+              </div>
+            ))}
+            {schlussProjectId && (
+              <SchlussrechnungDialog
+                projectId={schlussProjectId}
+                customerName={kunde.name}
+                customerAddress={[kunde.street, [kunde.zip, kunde.city].filter(Boolean).join(' ')].filter(Boolean).join(', ') || undefined}
+                onClose={() => setSchlussProjectId(null)}
+                onCreated={() => ladeDaten()}
+              />
+            )}
           </div>
         )}
 
