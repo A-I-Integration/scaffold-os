@@ -1,8 +1,8 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest, NextResponse, after } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { trackImpact } from '@/lib/impact';
 import { requireAuth, unauthorizedResponse, serverErrorResponse } from '@/lib/auth';
-import { beiAngebotsannahme } from '@/lib/angebot-annahme';
+import { beiAngebotsannahmeSicher } from '@/lib/angebot-annahme';
 import { autosaveGesperrt, filtereAutosaveData, AUTOSAVE_PROJEKT_ABGESCHLOSSEN_FEHLER } from '@/lib/aufmass-autosave-regeln';
 
 // ============================================================
@@ -252,7 +252,7 @@ export async function PATCH(req: NextRequest) {
     // NEU: Bei echter Neu-Annahme automatisch Lager reservieren +
     // Transportaufträge anlegen (Zusammenspiel Aufmaß→Lager→Tour).
     if (solltAutomatikAusloesen) {
-      beiAngebotsannahme(id).catch(() => {});
+      after(() => beiAngebotsannahmeSicher(id));
     }
 
     // Phase 17: Impact-Tracking – Abschluss mit Marge erfassen

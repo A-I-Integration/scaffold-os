@@ -1,6 +1,6 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest, NextResponse, after } from 'next/server';
 import { serverErrorResponse } from '@/lib/auth';
-import { beiAngebotsannahme } from '@/lib/angebot-annahme';
+import { beiAngebotsannahmeSicher } from '@/lib/angebot-annahme';
 
 // ============================================================
 // SCAFFOLD OS – Öffentliche Angebots-Ansicht/Annahme (Phase 33)
@@ -101,7 +101,7 @@ export async function POST(req: NextRequest) {
     // NEU: Bei Annahme automatisch Lager reservieren + Transportaufträge
     // anlegen (Zusammenspiel Aufmaß→Lager→Tour). Läuft im Hintergrund,
     // blockiert die Antwort an den Kunden nicht bei einem Fehler.
-    beiAngebotsannahme(projectId).catch(() => {});
+    after(() => beiAngebotsannahmeSicher(projectId));
 
     return NextResponse.json({ success: true });
   } catch (err: any) {
