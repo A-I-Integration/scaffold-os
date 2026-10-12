@@ -146,3 +146,60 @@ export async function legeAutoTourAn(p: {
     return { hinweis: `Fehler beim Anlegen der Fahrt: ${String(e?.message || e)}` };
   }
 }
+
+// ------------------------------------------------------------
+// Fahrt nachholen: Transportaufträge des Projekts, die noch in keiner
+// Tour sind (Status 'pending'), mit denselben Regeln einplanen und das
+// Ergebnis am Projekt vermerken. Wird automatisch ausgelöst, sobald der
+// Projektbeginn eingetragen/geändert wird (app/api/projects PATCH), und
+// von POST /api/auto-tour ("Jetzt neu prüfen").
+// ------------------------------------------------------------
+export async function fahrtNachholen(projectId: string): Promise<{ ok: boolean; tour?: AutoTourErgebnis; fehler?: string; status?: number }> {
+  const pRes = await fetch(`${url}/rest/v1/projects?id=eq.${projectId}&select=name,adresse,data`, { headers });
+  if (!pRes.ok) throw new Error('Projekt nicht lesbar (' + pRes.status + ')');
+  const projekt = (await pRes.json())?.[0];
+  if (!projekt) return { ok: false, fehler: 'Projekt nicht gefunden', status: 404 };
+
+  const tRes = await fetch(
+    `${url}/rest/v1/transport_orders?to_project_id=eq.${projectId}&status=eq.pending&select=id,quantity,inventory:inventory_id(sku)`,
+    { headers }
+  );
+  if (!tRes.ok) throw new Error('Transportaufträge nicht lesbar (' + tRes.status + ')');
+  const offen: { id: string; quantity: number; inventory: { sku: string | null } | null }[] = await tRes.json();
+  if (offen.length === 0) {
+    return { ok: false, fehler: 'Keine offenen Transportaufträge für dieses Projekt (schon in einer Tour oder nie angelegt).', status: 409 };
+  }
+
+  const tour = await legeAutoTourAn({
+    projektName: projekt.name || 'Projekt',
+    adresse: projekt.adresse ?? null,
+    datum: projekt.data?.step1?.projektbeginn,
+    transportOrderIds: offen.map((o) => o.id),
+    positionen: offen.map((o) => ({ sku: o.inventory?.sku || '', quantity: Number(o.quantity) || 0 })),
+  });
+
+  // Ergebnis am Projekt vermerken (frisch lesen, damit nichts überschrieben wird)
+  const frisch = await fetch(`${url}/rest/v1/projects?id=eq.${projectId}&select=data`, { headers }).then((r) => r.json());
+  const data = frisch?.[0]?.data || {};
+  await fetch(`${url}/rest/v1/projects?id=eq.${projectId}`, {
+    method: 'PATCH', headers,
+    body: JSON.stringify({ data: { ...data, lagerAutomatikErgebnis: { ...(data.lagerAutomatikErgebnis || {}), tour } } }),
+  });
+  return { ok: !!tour.tourId, tour };
+}
+
+/** Für after(): fängt Fehler ab und vermerkt sie als Hinweis am Projekt. */
+export async function fahrtNachholenSicher(projectId: string): Promise<void> {
+  try {
+    await fahrtNachholen(projectId);
+  } catch (e: any) {
+    try {
+      const frisch = await fetch(`${url}/rest/v1/projects?id=eq.${projectId}&select=data`, { headers }).then((r) => r.json());
+      const data = frisch?.[0]?.data || {};
+      await fetch(`${url}/rest/v1/projects?id=eq.${projectId}`, {
+        method: 'PATCH', headers,
+        body: JSON.stringify({ data: { ...data, lagerAutomatikErgebnis: { ...(data.lagerAutomatikErgebnis || {}), tour: { hinweis: `Fehler beim Anlegen der Fahrt: ${String(e?.message || e)}` } } } }),
+      });
+    } catch { /* best-effort */ }
+  }
+}
