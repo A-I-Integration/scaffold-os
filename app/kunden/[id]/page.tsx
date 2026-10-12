@@ -1423,6 +1423,20 @@ export default function KundenDetailPage() {
                                 </div>
                               )
                             })()}
+                            {project.data?.lagerAutomatikErgebnis?.tour && (() => {
+                              const t = project.data.lagerAutomatikErgebnis.tour
+                              if (t.tourId) return (
+                                <div className="mt-2 bg-green-50 border border-green-200 rounded-lg p-2 text-[11px] text-green-800">
+                                  🚚 Fahrt automatisch angelegt: {t.tourName} am {t.datum ? new Date(t.datum).toLocaleDateString('de-DE') : ''} · {t.fahrzeug} · Fahrer {t.fahrer} · ca. {Math.round(t.gewichtKg || 0).toLocaleString('de-DE')} kg (unter Touren ansehbar und änderbar).
+                                </div>
+                              )
+                              if (!t.hinweis) return null
+                              return (
+                                <div className="mt-2 bg-amber-50 border border-amber-200 rounded-lg p-2 text-[11px] text-amber-800">
+                                  ⚠️ Keine Fahrt automatisch angelegt: {t.hinweis} Bitte unter Touren → Neue Tour manuell anlegen.
+                                </div>
+                              )
+                            })()}
                           </>
                         )}
                       </div>
