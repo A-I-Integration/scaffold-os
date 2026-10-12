@@ -29,7 +29,7 @@ import {
   EmployeeStats,
   EmployeeRecommendation,
 } from '@/types/employees';
-import { FUEHRERSCHEIN_KLASSEN, erforderlicheKlasse } from '@/lib/touren/fuehrerschein';
+import { FUEHRERSCHEIN_KLASSEN } from '@/lib/touren/fuehrerschein';
 
 type Tab = 'overview' | 'employees' | 'absences' | 'tours';
 
@@ -70,18 +70,6 @@ function PlanungContent() {
   const projectIdParam = searchParams.get('project_id');
   const [unassignedGeladen, setUnassignedGeladen] = useState(false);
   const [kiTeamVorschlag, setKiTeamVorschlag] = useState<Record<string, { laeuft: boolean; ergebnis?: any; fehler?: string }>>({})
-  // NEU: Material für die Fahrt zuordnen (Lagerartikel je Materialzeile
-  // wählen, bewusst kein automatisches Matching gegen den Lagerbestand).
-  const [lagerArtikel, setLagerArtikel] = useState<{ id: string; name: string; unit: string; weight_kg: number }[]>([])
-  const [materialZuordnung, setMaterialZuordnung] = useState<Record<string, Record<number, string>>>({}) // projektId -> zeilenIndex -> inventory_id
-  const [transportAnlegenLaeuft, setTransportAnlegenLaeuft] = useState<string | null>(null)
-  // NEU (Phase 92): Fahrzeug-Vorschlag direkt beim Aufmaß, anhand des
-  // Gesamtgewichts der zugeordneten Materialzeilen (nicht nur später in
-  // der Touren-Planung, siehe Kundenwunsch "beim Aufmaß direkt anhand des
-  // Materials"). Reine Empfehlung/Anzeige - die tatsächliche Fahrzeug-
-  // /Fahrer-Zuweisung bleibt bewusst im Touren-Bereich, wo der bereits
-  // bestehende, serverseitig blockierende Führerschein-Check greift.
-  const [fahrzeuge, setFahrzeuge] = useState<{ id: string; name: string; capacity_kg: number | null; zulaessiges_gesamtgewicht_kg: number | null }[]>([])
   const [showEditEmployee, setShowEditEmployee] = useState(false);
 
   // NEU: KI-Umdisposition bei Ausfällen
@@ -134,43 +122,7 @@ function PlanungContent() {
     loadRefs();
     // NEU (Phase 45): neue, unzugewiesene Aufträge laden
     fetch('/api/projects/unassigned').then((r) => r.json()).then((j) => { if (j.success) setNeueAuftraege(j.projekte) }).catch(() => {}).finally(() => setUnassignedGeladen(true))
-    fetch('/api/inventory').then((r) => r.json()).then((j) => { if (j.success) setLagerArtikel((j.items || []).map((i: any) => ({ id: i.id, name: i.name, unit: i.unit, weight_kg: Number(i.weight_kg) || 0 }))) }).catch(() => {})
-    // NEU (Phase 92): Fahrzeuge für die Gewichts-Empfehlung beim Aufmaß laden
-    fetch('/api/vehicles').then((r) => r.json()).then((j) => { if (j.success) setFahrzeuge((j.vehicles || []).map((v: any) => ({ id: v.id, name: v.name, capacity_kg: v.capacity_kg != null ? Number(v.capacity_kg) : null, zulaessiges_gesamtgewicht_kg: v.zulaessiges_gesamtgewicht_kg != null ? Number(v.zulaessiges_gesamtgewicht_kg) : null }))) }).catch(() => {})
   }, [loadData]);
-
-  // NEU (Phase 92): Gesamtgewicht der einem Projekt zugeordneten
-  // Materialzeilen (Lagerartikel-Gewicht × Menge der Zeile). Zeilen ohne
-  // zugeordneten Lagerartikel oder ohne hinterlegtes Gewicht zählen nicht
-  // mit - das Ergebnis ist dann eine Mindestschätzung, kein exaktes Gewicht.
-  function gesamtgewichtZugeordnet(projektId: string): { gewicht: number; unvollstaendig: boolean } {
-    const zuordnung = materialZuordnung[projektId] || {}
-    const projekt = neueAuftraege.find((p) => p.id === projektId)
-    if (!projekt) return { gewicht: 0, unvollstaendig: false }
-    let gewicht = 0
-    let unvollstaendig = false
-    for (const [zeilenIndexStr, inventoryId] of Object.entries(zuordnung)) {
-      if (!inventoryId) continue
-      const zeile = projekt.materialList[parseInt(zeilenIndexStr)]
-      if (!zeile) continue
-      const artikel = lagerArtikel.find((la) => la.id === inventoryId)
-      if (!artikel || !artikel.weight_kg) { unvollstaendig = true; continue }
-      gewicht += artikel.weight_kg * zeile.quantity
-    }
-    return { gewicht, unvollstaendig }
-  }
-
-  // NEU (Phase 92): passendes Fahrzeug für ein Gesamtgewicht vorschlagen -
-  // das leichteste Fahrzeug, dessen Nutzlast reicht (kein Fahrzeug
-  // überdimensioniert einsetzen). Fahrzeuge ohne hinterlegte Nutzlast
-  // werden nicht vorgeschlagen (kein Rateergebnis).
-  function fahrzeugVorschlag(gewichtKg: number) {
-    if (gewichtKg <= 0) return null
-    const passend = fahrzeuge
-      .filter((f) => f.capacity_kg != null && f.capacity_kg >= gewichtKg)
-      .sort((a, b) => (a.capacity_kg || 0) - (b.capacity_kg || 0))
-    return passend[0] || null
-  }
 
   // Deep-Link: sobald die offenen Aufträge geladen sind, den per
   // ?project_id=... übergebenen Auftrag automatisch aufklappen und dahin
@@ -184,30 +136,6 @@ function PlanungContent() {
       }, 150);
     }
   }, [projectIdParam, unassignedGeladen, neueAuftraege]);
-
-  async function erstelleTransporteFuerAuftrag(projektId: string, adresse: string) {
-    const zuordnung = materialZuordnung[projektId] || {}
-    const projekt = neueAuftraege.find((p) => p.id === projektId)
-    if (!projekt) return
-    const zeilen = Object.entries(zuordnung).filter(([, invId]) => invId)
-    if (zeilen.length === 0) { alert('Bitte mindestens eine Materialzeile einem Lagerartikel zuordnen.'); return }
-    setTransportAnlegenLaeuft(projektId)
-    let erstellt = 0
-    for (const [zeilenIndexStr, inventoryId] of zeilen) {
-      const zeile = projekt.materialList[parseInt(zeilenIndexStr)]
-      if (!zeile) continue
-      try {
-        const res = await fetch('/api/transport-orders', {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ inventory_id: inventoryId, quantity: zeile.quantity, to_project_id: projektId }),
-        })
-        const json = await res.json()
-        if (json.success) erstellt++
-      } catch { /* einzelne Zeile überspringen, Rest weiterlaufen lassen */ }
-    }
-    setTransportAnlegenLaeuft(null)
-    alert(`✅ ${erstellt} Transportauftrag/-aufträge angelegt für ${adresse}. Im Touren-Bereich zu einer Fahrt (Fahrzeug + Fahrer) zusammenstellen – der zugewiesene Mitarbeiter sieht die Fahrt danach direkt beim Einloggen.`)
-  }
 
   async function holeKiTeamVorschlag(projektId: string, datum: string) {
     setKiTeamVorschlag((prev) => ({ ...prev, [projektId]: { laeuft: true } }))
@@ -470,63 +398,6 @@ function PlanungContent() {
                           <div className="pt-1">
                             <AuftragsTeam projectId={p.id} />
                           </div>
-                          {/* NEU (Phase 45): Material der Fahrt zuordnen – schließt die
-                              Lücke zwischen "Team zugewiesen" und einer sichtbaren Fahrt
-                              mit Material für den Mitarbeiter. */}
-                          {p.materialList.length > 0 && (
-                            <div className="pt-3 border-t border-amber-100">
-                              <p className="text-xs font-semibold text-gray-700 mb-2">📦 Material für die Fahrt zuordnen</p>
-                              <div className="space-y-1.5">
-                                {p.materialList.map((zeile, i) => (
-                                  <div key={i} className="flex items-center gap-2 text-xs">
-                                    <span className="flex-1 text-gray-600">{zeile.quantity} {zeile.unit} {zeile.name}</span>
-                                    <select
-                                      value={materialZuordnung[p.id]?.[i] || ''}
-                                      onChange={(e) => setMaterialZuordnung((prev) => ({ ...prev, [p.id]: { ...(prev[p.id] || {}), [i]: e.target.value } }))}
-                                      className="px-2 py-1 border rounded-lg text-xs w-48"
-                                    >
-                                      <option value="">– Lagerartikel wählen –</option>
-                                      {lagerArtikel.map((la) => <option key={la.id} value={la.id}>{la.name}</option>)}
-                                    </select>
-                                  </div>
-                                ))}
-                              </div>
-                              {/* NEU (Phase 92): Fahrzeug-Empfehlung direkt hier anhand
-                                  des zugeordneten Materialgewichts - noch keine
-                                  Zuweisung, nur eine Entscheidungshilfe fürs Aufmaß. */}
-                              {(() => {
-                                const { gewicht, unvollstaendig } = gesamtgewichtZugeordnet(p.id)
-                                if (gewicht <= 0) return null
-                                const vorschlag = fahrzeugVorschlag(gewicht)
-                                return (
-                                  <div className="mt-2 text-[11px] bg-gray-50 border border-gray-200 rounded-lg p-2">
-                                    <p className="text-gray-700">
-                                      📦 Gesamtgewicht der zugeordneten Positionen: <strong>{gewicht.toLocaleString('de-DE')} kg</strong>
-                                      {unvollstaendig && ' (mind. – bei manchen Artikeln fehlt das Gewicht in der Lagerpflege)'}
-                                    </p>
-                                    {vorschlag ? (
-                                      <p className="text-emerald-700 mt-0.5">
-                                        🚛 Empfehlung: <strong>{vorschlag.name}</strong> (Nutzlast {vorschlag.capacity_kg?.toLocaleString('de-DE')} kg)
-                                        {vorschlag.zulaessiges_gesamtgewicht_kg != null && (
-                                          <> – erfordert Führerschein-Klasse <strong>{erforderlicheKlasse(vorschlag.zulaessiges_gesamtgewicht_kg) || '–'}</strong></>
-                                        )}
-                                      </p>
-                                    ) : (
-                                      <p className="text-amber-700 mt-0.5">⚠️ Kein Fahrzeug mit ausreichend hinterlegter Nutzlast gefunden – Nutzlast bei den Fahrzeugen in der Datenpflege prüfen.</p>
-                                    )}
-                                  </div>
-                                )
-                              })()}
-                              <button
-                                onClick={() => erstelleTransporteFuerAuftrag(p.id, p.adresse)}
-                                disabled={transportAnlegenLaeuft === p.id}
-                                className="mt-2 text-xs px-3 py-1.5 rounded-lg bg-emerald-600 text-white font-medium disabled:opacity-50"
-                              >
-                                {transportAnlegenLaeuft === p.id ? 'Wird angelegt…' : '🚚 Transportaufträge anlegen'}
-                              </button>
-                              <p className="text-[10px] text-gray-500 mt-1">Danach im Touren-Bereich zu einer Fahrt (Fahrzeug + Fahrer) zusammenstellen – die Führerschein-Klasse des Fahrers wird dort automatisch geprüft.</p>
-                            </div>
-                          )}
                         </div>
                       )}
                     </div>
