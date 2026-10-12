@@ -61,6 +61,8 @@ export default function TourenPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [expandedTour, setExpandedTour] = useState<string | null>(null);
+  // Lieferungen, für die die Automatik keine Fahrt anlegen konnte (mit Grund)
+  const [offeneFahrten, setOffeneFahrten] = useState<{ projektId: string; projekt: string; beginn: string | null; hinweis: string }[]>([]);
 
   // Formular „Neue Tour"
   const [fDate, setFDate] = useState(todayISO());
@@ -117,6 +119,20 @@ export default function TourenPage() {
   }, []);
 
   useEffect(() => { loadAll(); }, [loadAll]);
+
+  // Offene Lieferungen automatisch einplanen – ohne Klick. Danach Touren neu laden.
+  useEffect(() => {
+    (async () => {
+      try {
+        const res = await fetch('/api/auto-tour/offene', { method: 'POST' });
+        const json = await res.json();
+        if (json.success) {
+          setOffeneFahrten(json.offen || []);
+          if (json.angelegt > 0) await loadAll();
+        }
+      } catch { /* Automatik optional – Touren bleiben nutzbar */ }
+    })();
+  }, [loadAll]);
 
   // Phase 68-C: aktive Baustellen, die noch in KEINER offenen Tour vorkommen
   const verplanteProjektIds = new Set(
@@ -318,6 +334,20 @@ export default function TourenPage() {
             <div className="text-[#86868b] text-sm">Unterwegs</div>
           </div>
         </div>
+
+        {offeneFahrten.length > 0 && (
+          <div className="mb-4 bg-amber-50 border border-amber-200 rounded-xl p-4 text-sm text-amber-900">
+            <p className="font-semibold mb-1">⚠️ {offeneFahrten.length} Lieferung{offeneFahrten.length === 1 ? '' : 'en'} ohne Tour – das braucht dich</p>
+            <ul className="space-y-1">
+              {offeneFahrten.map((o) => (
+                <li key={o.projektId}>
+                  <span className="font-medium">{o.projekt}</span>
+                  {o.beginn ? ` (Beginn ${new Date(o.beginn).toLocaleDateString('de-DE')})` : ''}: {o.hinweis}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
 
         {/* Tabs */}
         <div className="flex gap-2 mb-6 border-b border-black/10 pb-0">

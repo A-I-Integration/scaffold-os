@@ -28,8 +28,6 @@ import KundenKontakte from '@/components/KundenKontakte'
 import KundeEmails from '@/components/KundeEmails'
 import EmailVerlaufDialog, { type EmailVerlaufEintrag } from '@/components/EmailVerlaufDialog'
 import NeueMailDialog from '@/components/NeueMailDialog'
-import MaterialReservieren from '@/components/MaterialReservieren'
-import TransportAnlegen from '@/components/TransportAnlegen'
 import SollIstStunden from '@/components/SollIstStunden'
 import AuftragsTeam from '@/components/AuftragsTeam'
 import VertragsDokumente from '@/components/VertragsDokumente'
@@ -133,7 +131,6 @@ export default function KundenDetailPage() {
   const [tab, setTab] = useState<Tab>('kunde')
   const [kunde, setKunde] = useState<Kunde | null>(null)
   const [projects, setProjects] = useState<Project[]>([])
-  const [fahrtLaeuft, setFahrtLaeuft] = useState<string | null>(null)
   const [invoices, setInvoices] = useState<Invoice[]>([])
   const [opens, setOpens] = useState<Record<string, { anzahl: number; zuletzt: string }>>({})
   const [emails, setEmails] = useState<EmailLog[]>([])
@@ -273,24 +270,6 @@ export default function KundenDetailPage() {
   }, [id])
 
   useEffect(() => { ladeDaten() }, [ladeDaten])
-
-  // Fahrt erneut automatisch anlegen (wenn sie bei der Annahme nicht entstanden ist)
-  async function versucheFahrtErneut(projectId: string) {
-    setFahrtLaeuft(projectId)
-    try {
-      const res = await fetch('/api/auto-tour', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ project_id: projectId }),
-      })
-      const json = await res.json()
-      if (json.error) alert(json.error)
-      await ladeDaten()
-    } catch (e: any) {
-      alert('Fahrt konnte nicht angelegt werden: ' + (e?.message || e))
-    } finally {
-      setFahrtLaeuft(null)
-    }
-  }
 
   // Alle Kunden laden (für die Zielauswahl beim Zusammenführen)
   const ladeAlleKunden = useCallback(() => {
@@ -1422,52 +1401,6 @@ export default function KundenDetailPage() {
                           >
                             {rechnungAusAngebotLaeuft === project.id ? 'Wird angelegt…' : '🧾 Rechnung aus Angebot erstellen'}
                           </button>
-                        )}
-                        {project.data?.kiResult?.materialList && (
-                          <>
-                            <MaterialReservieren projectId={project.id} materialList={project.data.kiResult.materialList} />
-                            <TransportAnlegen projectId={project.id} materialList={project.data.kiResult.materialList} />
-                            {project.data?.lagerAutomatikErgebnis && (() => {
-                              const erg = project.data.lagerAutomatikErgebnis
-                              const probleme = [...(erg.nichtGefunden || []), ...(erg.nichtGenugBestand || [])]
-                              if (erg.fehler) return (
-                                <div className="mt-2 bg-red-50 border border-red-200 rounded-lg p-2 text-[11px] text-red-800">
-                                  ❌ Automatische Lager-Reservierung bei Annahme ist fehlgeschlagen: {String(erg.fehler)}. Bitte oben manuell reservieren.
-                                </div>
-                              )
-                              if (probleme.length === 0) return null
-                              return (
-                                <div className="mt-2 bg-amber-50 border border-amber-200 rounded-lg p-2 text-[11px] text-amber-800">
-                                  ⚠️ Automatische Lager-Reservierung bei Annahme: {erg.reserviert?.length || 0} Position(en) automatisch reserviert, aber nicht zugeordnet werden konnten: {probleme.join(', ')}. Bitte oben manuell nachholen.
-                                </div>
-                              )
-                            })()}
-                            {project.data?.lagerAutomatikErgebnis && (() => {
-                              const erg = project.data.lagerAutomatikErgebnis
-                              const t = erg.tour
-                              if (t?.tourId) return (
-                                <div className="mt-2 bg-green-50 border border-green-200 rounded-lg p-2 text-[11px] text-green-800">
-                                  🚚 Fahrt automatisch angelegt: {t.tourName} am {t.datum ? new Date(t.datum).toLocaleDateString('de-DE') : ''} · {t.fahrzeug} · Fahrer {t.fahrer} · ca. {Math.round(t.gewichtKg || 0).toLocaleString('de-DE')} kg (unter Touren ansehbar und änderbar).
-                                </div>
-                              )
-                              if (!(erg.transportAngelegt?.length > 0)) return null
-                              return (
-                                <div className="mt-2 bg-amber-50 border border-amber-200 rounded-lg p-2 text-[11px] text-amber-800">
-                                  ⚠️ Keine Fahrt automatisch angelegt: {t?.hinweis || 'Für diese Annahme wurde noch keine Fahrt angelegt.'}
-                                  <div className="mt-1.5">
-                                    <button
-                                      onClick={() => versucheFahrtErneut(project.id)}
-                                      disabled={fahrtLaeuft === project.id}
-                                      className="px-2.5 py-1 rounded-md bg-amber-600 text-white font-medium disabled:opacity-50"
-                                    >
-                                      {fahrtLaeuft === project.id ? 'Wird geprüft…' : '🚚 Fahrt jetzt erneut automatisch anlegen'}
-                                    </button>
-                                    <span className="ml-2">oder unter Touren → Neue Tour manuell.</span>
-                                  </div>
-                                </div>
-                              )
-                            })()}
-                          </>
                         )}
                       </div>
                     ) : (
