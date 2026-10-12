@@ -72,3 +72,28 @@ export function waehleFahrer(
   dürfen.sort((a, b) => a.name.localeCompare(b.name, 'de'));
   return { fahrer: dürfen[0] };
 }
+
+/**
+ * Teilt Transportaufträge auf mehrere Fahrten auf (jede Fahrt höchstens maxKg),
+ * größte zuerst. Ein einzelner Auftrag, der allein zu schwer ist, wird nicht
+ * zerschnitten – dann Hinweis statt Tour.
+ */
+export function teileInFahrten<T extends { gewicht: number }>(
+  items: T[],
+  maxKg: number
+): { fahrten: T[][] } | { hinweis: string } {
+  const sortiert = [...items].sort((a, b) => b.gewicht - a.gewicht);
+  const fahrten: T[][] = [];
+  const summen: number[] = [];
+  for (const it of sortiert) {
+    if (it.gewicht > maxKg) {
+      return { hinweis: `Eine einzelne Position wiegt ca. ${kg(it.gewicht)} und passt in kein Fahrzeug (größte Nutzlast ${kg(maxKg)}) – bitte manuell aufteilen.` };
+    }
+    const i = summen.findIndex((s) => s + it.gewicht <= maxKg);
+    if (i >= 0) { fahrten[i].push(it); summen[i] += it.gewicht; }
+    else { fahrten.push([it]); summen.push(it.gewicht); }
+  }
+  // schwerste Fahrt zuerst, damit sie das größte freie Fahrzeug bekommt
+  const idx = summen.map((_, i) => i).sort((a, b) => summen[b] - summen[a]);
+  return { fahrten: idx.map((i) => fahrten[i]) };
+}
