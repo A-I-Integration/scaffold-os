@@ -92,8 +92,8 @@ const SEITE: FeatureSeiteProps = {
     "label": "Lager"
   },
   {
-    "href": "/kaufen",
-    "label": "Pakete & Preise"
+    "href": "/#pakete",
+    "label": "Pakete"
   }
 ],
   fachlinks: [

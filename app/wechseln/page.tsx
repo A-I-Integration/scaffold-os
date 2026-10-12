@@ -66,7 +66,7 @@ const FAQ_WECHSEL = [
   },
   {
     frage: 'Was kostet der Umzug?',
-    antwort: 'Nichts. Die Datenübernahme von Kunden- und Materialdaten ist für Wechsler kostenlos. Ein ausführliches Onboarding (Einrichtung, Schulung) ist optional und kostenpflichtig – die Preise stehen auf der Bestellseite.',
+    antwort: 'Nichts. Die Datenübernahme von Kunden- und Materialdaten ist für Wechsler kostenlos. Ein ausführliches Onboarding (Einrichtung, Schulung) ist optional und kostenpflichtig – die Preise nennen wir Ihnen auf Anfrage.',
   },
   {
     frage: 'Wie läuft der Parallelbetrieb?',
@@ -102,7 +102,7 @@ export default function WechselnPage() {
             Kostenlosen Wechsel-Termin buchen
           </Link>
           <Link
-            href="/kaufen"
+            href="/anfrage?art=demo"
             className="inline-flex items-center gap-2 rounded-full border border-black/15 hover:border-black/40 font-semibold px-7 py-3.5 transition"
           >
             Erst selbst testen <ArrowRight className="w-4 h-4" />
