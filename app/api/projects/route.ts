@@ -3,6 +3,7 @@ import { createClient } from '@/lib/supabase/server';
 import { trackImpact } from '@/lib/impact';
 import { requireAuth, unauthorizedResponse, serverErrorResponse } from '@/lib/auth';
 import { beiAngebotsannahmeSicher } from '@/lib/angebot-annahme';
+import { fahrtNachholenSicher } from '@/lib/auto-tour';
 import { autosaveGesperrt, filtereAutosaveData, AUTOSAVE_PROJEKT_ABGESCHLOSSEN_FEHLER } from '@/lib/aufmass-autosave-regeln';
 
 // ============================================================
@@ -187,6 +188,7 @@ export async function PATCH(req: NextRequest) {
     // aus (Zusammenspiel Aufmaß→Lager→Tour). Nur bei einem echten Übergang,
     // nicht bei jedem weiteren Speichern eines bereits angenommenen Angebots.
     let solltAutomatikAusloesen = false;
+    let solltFahrtNachholen = false;
 
     if (data && typeof data === 'object') {
       const cur = await fetch(`${url}/rest/v1/projects?id=eq.${id}&select=data,name,adresse,status`, { headers });
@@ -231,6 +233,17 @@ export async function PATCH(req: NextRequest) {
       if (bisher.data?.entwurf === true && data.entwurf === false && !status) patch.status = 'active';
 
       patch.data = { ...(bisher.data || {}), ...data };
+
+      // Projektbeginn wurde NEU eingetragen oder geändert, und bei der Annahme
+      // ist noch keine Fahrt entstanden (z. B. weil das Datum fehlte) →
+      // Fahrt jetzt automatisch einplanen. Nur bei echter Datums-Änderung,
+      // nicht bei jedem Auto-Speichern.
+      const neuBeginn = patch.data?.step1?.projektbeginn;
+      const altBeginn = bisher.data?.step1?.projektbeginn;
+      const erg = patch.data?.lagerAutomatikErgebnis;
+      if (neuBeginn && neuBeginn !== altBeginn && erg?.transportAngelegt?.length > 0 && !erg?.tour?.tourId) {
+        solltFahrtNachholen = true;
+      }
     }
 
     if (!Object.keys(patch).length) {
@@ -253,6 +266,9 @@ export async function PATCH(req: NextRequest) {
     // Transportaufträge anlegen (Zusammenspiel Aufmaß→Lager→Tour).
     if (solltAutomatikAusloesen) {
       after(() => beiAngebotsannahmeSicher(id));
+    }
+    if (solltFahrtNachholen && !solltAutomatikAusloesen) {
+      after(() => fahrtNachholenSicher(id));
     }
 
     // Phase 17: Impact-Tracking – Abschluss mit Marge erfassen
