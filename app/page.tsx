@@ -29,7 +29,7 @@ const TERMIN_URL = process.env.NEXT_PUBLIC_TERMIN_URL || '/anfrage?art=demo';
 //  Zeitersparnis (Richtwert, eigene Einschätzung)
 //  3 Kernbereiche: Aufmaß, Mitarbeiter, Lager
 //  Alle Funktionen im Überblick
-//  3 Pakete: Starter 249 € / Priority 495 € / Enterprise auf Anfrage
+//  3 Pakete: Starter / Priority / Enterprise – alle Preise auf Anfrage
 //  FAQ (SEO/GEO) + strukturierte Daten (JSON-LD)
 // ============================================================
 
@@ -130,7 +130,7 @@ const PAKETE = [
   {
     id: 'starter',
     name: 'Starter',
-    preis: '249 €',
+    preis: 'Auf Anfrage',
     zielgruppe: 'Für kleine Betriebe, die digital starten wollen.',
     features: [
       '1 Admin-/CEO-Zugang',
@@ -145,7 +145,7 @@ const PAKETE = [
   {
     id: 'priority',
     name: 'Priority',
-    preis: '495 €',
+    preis: 'Auf Anfrage',
     zielgruppe: 'Für wachsende Betriebe mit mehreren Kolonnen.',
     features: [
       'CEO-, Dispo-, Bauleiter- & Lager-Zugänge',
@@ -193,7 +193,7 @@ const FAQ = [
   {
     frage: 'Was kostet SCAFFOLD OS?',
     antwort:
-      'Drei Pakete: Starter für 249 € im Monat, Priority für 495 € (jeweils zzgl. MwSt., Mindestvertragslaufzeit 36 Monate). Enterprise hebt alle Limits auf – der Preis richtet sich nach Betriebsgröße und Modulen, gerne erstellen wir Ihnen ein Angebot. Optional buchbar: Onboarding für 1.490 € netto, erweitert zusätzlich 2.490 € netto (mit Lagereinrichtung und Schulung der Mitarbeiter). Auf Anfrage richten wir Ihnen vorab einen persönlichen Demo-Zugang ein.',
+      'Drei Pakete: Starter, Priority und Enterprise. Die Preise nennen wir Ihnen auf Anfrage und erstellen Ihnen gerne ein individuelles Angebot passend zu Betriebsgröße und Modulen (Mindestvertragslaufzeit 36 Monate). Optional buchbar: Onboarding, erweitert mit Lagereinrichtung und Schulung der Mitarbeiter. Auf Anfrage richten wir Ihnen vorab einen persönlichen Demo-Zugang ein.',
   },
   {
     frage: 'Kann ich SCAFFOLD OS kostenlos testen?',
@@ -250,8 +250,8 @@ const JSONLD = {
         'Komplette Software für Gerüstbau-Betriebe: KI-Aufmaß, Angebot, Disposition, Lager, Touren, Zeiterfassung und Rechnung in einem System.',
       inLanguage: 'de',
       offers: [
-        { '@type': 'Offer', name: 'Starter', price: '249', priceCurrency: 'EUR' },
-        { '@type': 'Offer', name: 'Priority', price: '495', priceCurrency: 'EUR' },
+        { '@type': 'Offer', name: 'Starter' },
+        { '@type': 'Offer', name: 'Priority' },
         { '@type': 'Offer', name: 'Enterprise' },
       ],
       provider: { '@id': 'https://scaffoldos.de/#organization' },
@@ -424,7 +424,7 @@ export default function HomePage() {
       <section className="px-6 pb-24" id="pakete">
         <div className="max-w-6xl mx-auto">
           <h2 className="text-2xl md:text-4xl font-semibold tracking-tight text-center">
-            Drei Pakete. <span className="text-[#86868b]">Ein klarer Preis pro Monat.</span>
+            Drei Pakete. <span className="text-[#86868b]">Passend zu Ihrem Betrieb.</span>
           </h2>
           <p className="mt-4 text-center text-[#6e6e73] max-w-2xl mx-auto">
             Auf Anfrage richten wir Ihnen vorab einen persönlichen Demo-Zugang ein. Danach
@@ -448,11 +448,6 @@ export default function HomePage() {
                 <p className="text-xl font-semibold tracking-tight">{paket.name}</p>
                 <p className="mt-4 text-4xl font-semibold tracking-tight">
                   {paket.preis}
-                  {paket.id !== 'enterprise' && (
-                    <span className={`text-base font-normal ${paket.hervorgehoben ? 'text-white/60' : 'text-[#86868b]'}`}>
-                      /Monat
-                    </span>
-                  )}
                 </p>
                 <p className={`mt-2 text-sm ${paket.hervorgehoben ? 'text-white/60' : 'text-[#86868b]'}`}>
                   {paket.zielgruppe}
@@ -480,8 +475,8 @@ export default function HomePage() {
             ))}
           </div>
           <p className="mt-8 text-center text-sm text-[#86868b]">
-            Alle Preise zzgl. MwSt. · Mindestvertragslaufzeit 36 Monate · Optional: Onboarding
-            1.490 € netto, erweitert zusätzlich 2.490 € netto · Fragen zu den Paketen?{' '}
+            Preise und Konditionen auf Anfrage · Mindestvertragslaufzeit 36 Monate · Optional:
+            Onboarding und Schulung · Fragen zu den Paketen?{' '}
             <Link href="/anfrage" className="text-[#e8590c] hover:underline">Kontakt aufnehmen</Link>
           </p>
         </div>

@@ -14,12 +14,11 @@ SCAFFOLD OS ist eine SaaS-Software speziell für Gerüstbau-Betriebe im DACH-Rau
 - Rechnungsstellung nach GoBD-Grundsätzen mit Abschlags- und Schlussrechnungen, Mahnwesen
 - Kundenverwaltung mit Rechnungsübersicht
 
-## Pakete und Preise
-- Starter: 249 €/Monat (1 Admin, 2 Dispo, bis 5 Mitarbeiter, Lager bis 10.000 Teile)
-- Priority: 495 €/Monat (alle Rollen, bis 20 Mitarbeiter, Lager bis 20.000 Teile, Routen-KI)
-- Enterprise: Preis auf Anfrage (alles unbegrenzt, Punktwolken-Großscans, persönlicher Ansprechpartner)
-- Kostenloser, unverbindlicher Demo-Zugang auf Anfrage. Alle Pakete: Mindestvertragslaufzeit 36 Monate, danach monatlich kündbar
-- Vorauszahlung: 36 Monate auf einmal mit 5 % Erlass (per Rechnung/Überweisung)
+## Pakete
+- Starter: 1 Admin, 2 Dispo, bis 5 Mitarbeiter, Lager bis 10.000 Teile
+- Priority: alle Rollen, bis 20 Mitarbeiter, Lager bis 20.000 Teile, Routen-KI
+- Enterprise: alles unbegrenzt, Punktwolken-Großscans, persönlicher Ansprechpartner
+- Preise: auf Anfrage (https://scaffoldos.de/anfrage). Kostenloser, unverbindlicher Demo-Zugang auf Anfrage. Alle Pakete: Mindestvertragslaufzeit 36 Monate, danach monatlich kündbar
 
 ## Anbieter
 AI Integration, Ölbachstr. 48, 48691 Vreden, Deutschland. Kontakt: info@scaffoldos.de

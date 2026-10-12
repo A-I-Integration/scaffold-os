@@ -87,8 +87,8 @@ const SEITE: FeatureSeiteProps = {
     "label": "Disposition & Touren"
   },
   {
-    "href": "/kaufen",
-    "label": "Pakete & Preise"
+    "href": "/#pakete",
+    "label": "Pakete"
   }
 ],
   fachlinks: [],

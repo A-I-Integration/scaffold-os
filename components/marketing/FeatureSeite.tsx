@@ -94,10 +94,10 @@ export default function FeatureSeite({ p, jsonLd }: { p: FeatureSeiteProps; json
                 Demo anfordern <ArrowRight className="w-4 h-4" />
               </Link>
               <Link
-                href="/kaufen"
+                href="/#pakete"
                 className="inline-flex items-center justify-center text-[#1d1d1f] font-medium px-7 py-3 rounded-full border border-black/10 hover:bg-black/5 transition-colors"
               >
-                Pakete & Preise
+                Pakete ansehen
               </Link>
             </div>
           </div>
@@ -169,7 +169,7 @@ export default function FeatureSeite({ p, jsonLd }: { p: FeatureSeiteProps; json
       <footer className="px-6 py-10 border-t border-black/5 text-sm text-[#86868b]">
         <div className="max-w-3xl mx-auto flex flex-wrap gap-x-6 gap-y-2">
           <Link href="/" className="hover:text-[#1d1d1f]">Startseite</Link>
-          <Link href="/kaufen" className="hover:text-[#1d1d1f]">Pakete</Link>
+          <Link href="/#pakete" className="hover:text-[#1d1d1f]">Pakete</Link>
           <Link href="/impressum" className="hover:text-[#1d1d1f]">Impressum</Link>
           <Link href="/datenschutz" className="hover:text-[#1d1d1f]">Datenschutz</Link>
           <Link href="/agb" className="hover:text-[#1d1d1f]">AGB</Link>

@@ -212,7 +212,7 @@ export default function AufmassDemo() {
             </button>
             {istLetzter ? (
               <Link
-                href="/kaufen"
+                href="/anfrage?art=demo"
                 className="inline-flex items-center gap-2 bg-[#e8590c] hover:bg-[#d9480f] text-white text-sm font-medium px-5 py-2.5 rounded-full transition-colors"
               >
                 So einfach geht's – jetzt selbst testen <ArrowRight className="w-4 h-4" />
