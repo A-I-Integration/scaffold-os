@@ -2,6 +2,8 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import AbbauDialog from '@/components/lager/AbbauDialog';
+import { abbauFaellig } from '@/lib/abbau-faellig';
+import { lokalesDatumIso } from '@/lib/datum';
 import { useRouter } from 'next/navigation';
 import BarcodeScanner from '@/components/lager/BarcodeScanner';
 import {
@@ -467,15 +469,29 @@ export default function LagerPage() {
             gruppen.get(pid)!.items.push(s);
           }
           const baustellen = [...gruppen.entries()];
+          const heute = lokalesDatumIso();
+          const hinweise = new Map(baustellen.map(([pid, grp]) => [pid, abbauFaellig(grp.items, grp.items[0]?.project?.projektende, heute)]));
+          const faelligeNamen = baustellen.filter(([pid]) => hinweise.get(pid)?.faellig).map(([, grp]) => grp.name);
           return (
           <div className="space-y-6">
+            {faelligeNamen.length > 0 && (
+              <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-sm text-amber-900">
+                <p className="font-semibold">⚠️ Rücklauf fällig: {faelligeNamen.join(', ')}</p>
+                <p className="text-xs mt-1">Das Projektende ist erreicht und auf der Baustelle liegt noch Material. Bitte „Abbau / Rücklauf“ buchen – die Mengen sind vorausgefüllt, du bestätigst nur Abweichungen.</p>
+              </div>
+            )}
             {baustellen.length === 0 ? <div className="bg-white rounded-xl border border-gray-200 p-8 text-center text-gray-500">Kein Baustellenbestand vorhanden</div> : baustellen.map(([pid, grp]) => (
               <div key={pid} className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
                 <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
-                  <h3 className="font-semibold text-gray-900">{grp.name}</h3>
+                  <div>
+                    <h3 className="font-semibold text-gray-900">{grp.name}</h3>
+                    {hinweise.get(pid)?.faellig && (
+                      <p className="text-xs text-amber-700 mt-0.5">⚠️ Projektende {hinweise.get(pid)?.seit ? new Date(hinweise.get(pid)!.seit!).toLocaleDateString('de-DE') : ''} erreicht – Rücklauf offen ({hinweise.get(pid)?.positionen} Position{hinweise.get(pid)?.positionen === 1 ? '' : 'en'} vor Ort)</p>
+                    )}
+                  </div>
                   {canManage && (
                     <button onClick={() => setAbbauProjekt({ id: pid, name: grp.name })}
-                      className="px-4 py-2 rounded-xl bg-[#0071e3] text-white text-sm font-medium hover:bg-[#0077ed]">
+                      className={`px-4 py-2 rounded-xl text-white text-sm font-medium ${hinweise.get(pid)?.faellig ? 'bg-amber-600 hover:bg-amber-500' : 'bg-[#0071e3] hover:bg-[#0077ed]'}`}>
                       Abbau / Rücklauf
                     </button>
                   )}

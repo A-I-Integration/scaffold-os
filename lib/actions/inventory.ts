@@ -159,13 +159,18 @@ export async function deleteInventoryItem(id: string): Promise<{ success: boolea
 
 export async function getSiteStock(projectId?: string): Promise<SiteStockWithDetails[]> {
   const supabase = await createClient();
-  let query = supabase.from('site_stock').select(`*, inventory:inventory_id(*), project:project_id(id, name)`);
-  if (projectId) query = query.eq('project_id', projectId);
-
-  const { data, error } = await query.order('created_at', { ascending: false });
+  // Mit Projektende (für den Hinweis "Rücklauf fällig"); schlägt das Feld-Alias
+  // fehl, läuft die Abfrage wie bisher ohne – Lager darf davon nie ausfallen.
+  const bauen = (sel: string) => {
+    let q = supabase.from('site_stock').select(sel);
+    if (projectId) q = q.eq('project_id', projectId);
+    return q.order('created_at', { ascending: false });
+  };
+  let { data, error } = await bauen('*, inventory:inventory_id(*), project:project_id(id, name, projektende:data->step1->>projektende)');
+  if (error) ({ data, error } = await bauen('*, inventory:inventory_id(*), project:project_id(id, name)'));
   if (error) throw new Error(`Fehler: ${error.message}`);
 
-  return (data || []).map((item: any) => {
+  return ((data || []) as any[]).map((item: any) => {
     const availableQty = item.quantity - item.reserved_quantity;
     const status = calculateStockStatus(availableQty, item.min_stock, item.min_stock * 2);
     return { ...item, available_quantity: availableQty, status: status.status, statusColor: status.color, statusLabel: status.label };
