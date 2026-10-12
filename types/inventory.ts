@@ -47,7 +47,7 @@ export interface SiteStock {
   updated_by: string | null;
   // Joined
   inventory?: InventoryItem;
-  project?: { id: string; name: string };
+  project?: { id: string; name: string; projektende?: string | null };
 }
 
 // ─── Transportaufträge ───
