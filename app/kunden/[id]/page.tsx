@@ -1411,6 +1411,11 @@ export default function KundenDetailPage() {
                             {project.data?.lagerAutomatikErgebnis && (() => {
                               const erg = project.data.lagerAutomatikErgebnis
                               const probleme = [...(erg.nichtGefunden || []), ...(erg.nichtGenugBestand || [])]
+                              if (erg.fehler) return (
+                                <div className="mt-2 bg-red-50 border border-red-200 rounded-lg p-2 text-[11px] text-red-800">
+                                  ❌ Automatische Lager-Reservierung bei Annahme ist fehlgeschlagen: {String(erg.fehler)}. Bitte oben manuell reservieren.
+                                </div>
+                              )
                               if (probleme.length === 0) return null
                               return (
                                 <div className="mt-2 bg-amber-50 border border-amber-200 rounded-lg p-2 text-[11px] text-amber-800">
