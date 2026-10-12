@@ -21,6 +21,8 @@ export interface SiteStock {
   // (kein API-Key, Adresse nicht auflösbar, API nicht erreichbar) -
   // wird NIE durch eine geschätzte/erfundene Zahl ersetzt.
   distanceKm: number | null;
+  /** Ab wann das Material dort frei ist (Projektende der Baustelle, YYYY-MM-DD). */
+  freiAb?: string;
 }
 
 export interface CentralStock {
@@ -165,6 +167,9 @@ export async function optimizeDisposition(
       const distHinweis = distBekannt
         ? `(${nearestSite.distanceKm} km)`
         : '(Entfernung nicht ermittelbar - Google-Distanzberechnung prüfen)';
+      const freiHinweis = nearestSite.freiAb
+        ? ` Dort frei ab ${nearestSite.freiAb.slice(8, 10)}.${nearestSite.freiAb.slice(5, 7)}.${nearestSite.freiAb.slice(0, 4)} (Abbau).`
+        : '';
 
       if (availableOnSite >= needed) {
         // Komplett von Baustelle direkt
@@ -191,7 +196,7 @@ export async function optimizeDisposition(
           timeHours: time,
           co2Kg: diesel != null ? diesel * CO2_PER_LITER_DIESEL : null,
           savings: costViaCentral != null && costDirect != null ? Math.max(0, costViaCentral - costDirect) : 0,
-          reason: `Direkt von Baustelle "${nearestSite.siteName}" ${distHinweis}. Kein Umweg über Zentrallager nötig.`,
+          reason: `Direkt von Baustelle "${nearestSite.siteName}" ${distHinweis}. Kein Umweg über Zentrallager nötig.${freiHinweis}`,
         };
       } else {
         // Teilweise von Baustelle, Rest von Zentrallager
@@ -215,7 +220,7 @@ export async function optimizeDisposition(
           timeHours: distHinRueck != null ? distHinRueck / LKW_SPEED_KMH : null,
           co2Kg: diesel != null ? diesel * CO2_PER_LITER_DIESEL : null,
           savings: availableOnSite * 15, // ca. 15€ Einsparung pro Stück durch Vermeidung doppelter Fahrt
-          reason: `${availableOnSite} Stk von Baustelle "${nearestSite.siteName}" ${distHinweis}, ${missing} Stk aus Zentrallager nachbestellen.`,
+          reason: `${availableOnSite} Stk von Baustelle "${nearestSite.siteName}" ${distHinweis}, ${missing} Stk aus Zentrallager nachbestellen.${freiHinweis}`,
         };
       }
     } else if (centralQty >= needed) {

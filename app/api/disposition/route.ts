@@ -8,12 +8,13 @@ import { optimizeDisposition } from '@/lib/calculations/disposition';
 import { createClient } from '@/lib/supabase/server';
 import { requireAuth, unauthorizedResponse } from '@/lib/auth';
 import { distanceMatrixKm } from '@/lib/google-distance';
+import { ordneZentralbestand, ordneBaustellenbestand, type LagerMitOrt, type BaustellenInfo } from '@/lib/disposition-bestand';
 
 export async function POST(request: Request) {
   if (!(await requireAuth())) return unauthorizedResponse();
   try {
     const body = await request.json();
-    const { materialList, targetSiteId, targetAddress } = body;
+    const { materialList, targetSiteId, targetAddress, targetStart } = body;
 
     if (!materialList || !Array.isArray(materialList) || materialList.length === 0) {
       return NextResponse.json(
@@ -24,95 +25,65 @@ export async function POST(request: Request) {
 
     const supabase = await createClient();
 
-    // --- ZENTRALLAGER (robust, auch wenn Tabelle leer/falsch) ---
-    // WICHTIG: Abgleich läuft über den Artikel-NAMEN (case-insensitiv,
-    // exakter Treffer), nicht über eine "article_number"-Spalte – die
-    // gibt es in der echten inventory-Tabelle nicht (echte Spalten:
-    // sku, location_in_warehouse, name, quantity, ...). Gleiche
-    // Abgleich-Logik wie in lib/angebot-annahme.ts, bewusst kein
-    // unscharfes Matching.
-    async function getCentralStock(materialNamen: string[]) {
-      try {
-        const gesuchte = new Set(materialNamen.map((n) => n.trim().toLowerCase()));
-        const { data, error } = await supabase
-          .from('inventory')
-          .select('name, quantity, location_in_warehouse')
-          .gt('quantity', 0);
-
-        if (error || !data) {
-          console.warn('[Disposition] inventory table error:', error?.message);
-          return [];
-        }
-        return data
-          .filter((item: any) => gesuchte.has((item.name || '').trim().toLowerCase()))
-          .map((item: any) => ({
-            articleNumber: item.name,
-            quantity: item.quantity || 0,
-            location: item.location_in_warehouse || 'Zentrallager',
-          }));
-      } catch (e) {
-        console.warn('[Disposition] inventory fetch failed:', e);
-        return [];
-      }
+    // --- LAGER laden (einmal) ---
+    // Abgleich Materialzeile ↔ Lagerartikel: erst Artikelnummer (SKU), dann
+    // genau gleicher Name – dieselbe Logik wie bei der Angebots-Annahme
+    // (lib/lager-zuordnung.ts, lib/disposition-bestand.ts). Früher nur per
+    // Name: Artikel mit Artikelnummer wurden nicht gefunden → "neu bestellen".
+    let lager: LagerMitOrt[] = [];
+    try {
+      const { data, error } = await supabase
+        .from('inventory')
+        .select('id, name, sku, quantity, unit, location_in_warehouse')
+        .eq('is_active', true);
+      if (error) console.warn('[Disposition] inventory table error:', error.message);
+      lager = (data || []) as LagerMitOrt[];
+    } catch (e) {
+      console.warn('[Disposition] inventory fetch failed:', e);
     }
 
-    // --- BAUSTELLEN-BESTAND (robust) ---
-    async function getSiteStock(materialNamen: string[], excludeSiteId: string, zielAdresse: string) {
-      try {
-        const gesuchte = new Set(materialNamen.map((n) => n.trim().toLowerCase()));
+    async function getCentralStock() {
+      return ordneZentralbestand(materialList, lager);
+    }
 
-        // site_stock hat keine article_number-Spalte, sondern verweist
-        // per inventory_id auf inventory und per project_id auf projects
-        // (frühere Annahme "site_id" existiert dort nicht).
+    // --- BAUSTELLEN-BESTAND ---
+    // Nur Material auf Baustellen, die bis zu UNSEREM Projektbeginn
+    // abgebaut sind (Projektende im Aufmaß). Ohne Projektbeginn oder ohne
+    // deren Projektende: nicht verfügbar (nichts raten).
+    async function getSiteStock(_namen: string[], excludeSiteId: string, zielAdresse: string) {
+      try {
+        if (!targetStart) return [];
         const { data, error } = await supabase
           .from('site_stock')
-          .select('project_id, quantity, inventory:inventory_id (name)')
+          .select('project_id, inventory_id, quantity')
           .gt('quantity', 0)
           .neq('project_id', excludeSiteId);
-
         if (error || !data || data.length === 0) {
-          console.warn('[Disposition] site_stock empty or missing:', error?.message);
+          if (error) console.warn('[Disposition] site_stock error:', error.message);
           return [];
         }
-
-        const gefiltert = data.filter((d: any) => {
-          const name = d.inventory?.name || '';
-          return gesuchte.has(name.trim().toLowerCase());
-        });
-        if (gefiltert.length === 0) return [];
-
-        // Baustellen-Namen holen
-        const siteIds = [...new Set(gefiltert.map((d: any) => d.project_id))];
+        const siteIds = [...new Set(data.map((d: any) => d.project_id))];
         const { data: sites } = await supabase
           .from('projects')
-          .select('id, name, adresse')
+          .select('id, name, adresse, data')
           .in('id', siteIds);
+        const projekte: BaustellenInfo[] = (sites || []).map((p: any) => ({
+          id: p.id,
+          name: p.name,
+          adresse: p.adresse || null,
+          projektende: typeof p.data?.step1?.projektende === 'string' ? p.data.step1.projektende.slice(0, 10) : null,
+        }));
 
-        const siteMap = new Map(sites?.map((s: any) => [s.id, s]) || []);
+        const zeilen = ordneBaustellenbestand(materialList, lager, data as any[], projekte, String(targetStart).slice(0, 10));
+        if (zeilen.length === 0) return [];
 
-        // Echte Fahrstrecke je Baustellen-Adresse zur Ziel-Adresse (ein
-        // API-Call für alle Adressen auf einmal). Ohne Ziel-Adresse oder
-        // ohne auflösbare Baustellen-Adresse bleibt distanceKm `null` -
-        // KEINE erfundene Zahl mehr (siehe lib/google-distance.ts).
-        const adressen = [...new Set(
-          [...siteMap.values()].map((s: any) => s.adresse).filter((a: string) => a && a.trim())
-        )] as string[];
-        const distanzen = zielAdresse
+        // Echte Fahrstrecke je Baustellen-Adresse zur Ziel-Adresse; ohne
+        // Ergebnis bleibt distanceKm null (keine erfundene Zahl).
+        const adressen = [...new Set(zeilen.map((z) => z.address).filter((a) => a && a.trim()))];
+        const distanzen = zielAdresse && adressen.length > 0
           ? await distanceMatrixKm(adressen, zielAdresse)
           : new Map<string, number | null>();
-
-        return gefiltert.map((item: any) => {
-          const site = siteMap.get(item.project_id);
-          const adresse = site?.adresse || '';
-          return {
-            siteId: item.project_id,
-            siteName: site?.name || `Baustelle ${item.project_id}`,
-            address: adresse,
-            articleNumber: item.inventory?.name || '',
-            quantity: item.quantity || 0,
-            distanceKm: adresse ? (distanzen.get(adresse) ?? null) : null,
-          };
-        });
+        return zeilen.map((z) => ({ ...z, distanceKm: z.address ? (distanzen.get(z.address) ?? null) : null }));
       } catch (e) {
         console.warn('[Disposition] site_stock fetch failed:', e);
         return [];
