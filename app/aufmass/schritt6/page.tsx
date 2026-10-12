@@ -466,7 +466,7 @@ function Schritt6Content() {
   async function runDisposition(materialList: any[]) {
     setDispLoading(true); setDispError(null);
     try {
-      const response = await fetch('/api/disposition', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ materialList, targetSiteId: s1.id || 'neu', targetAddress: s1.adresse || '' }) });
+      const response = await fetch('/api/disposition', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ materialList, targetSiteId: s1.id || 'neu', targetAddress: s1.adresse || '', targetStart: s1.projektbeginn || '' }) });
       if (!response.ok) { const err = await response.json(); throw new Error(err.error || 'Disposition fehlgeschlagen'); }
       const json = await response.json(); setDispResult(json.data);
     } catch (err: any) { setDispError(err.message); } finally { setDispLoading(false); }
