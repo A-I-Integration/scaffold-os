@@ -111,8 +111,11 @@ async function dateiLesen(datei: File): Promise<string> {
       r.readAsText(datei, encoding);
     });
   const utf8 = await alsText('utf-8');
-  // Deutscher Excel-Export ist oft Windows-1252 → Ersatzzeichen? Dann neu lesen.
-  if (utf8.includes('')) return alsText('windows-1252');
+  // Deutscher Excel-Export ist oft Windows-1252: Ungültiges UTF-8 wird beim
+  // Lesen zum Ersatzzeichen U+FFFD → dann als Windows-1252 neu lesen.
+  // (Früher stand hier includes('') – das ist IMMER wahr, dadurch wurden auch
+  // gültige UTF-8-Dateien falsch gelesen: „Geländer" → „GelÃ¤nder".)
+  if (utf8.includes('\uFFFD')) return alsText('windows-1252');
   return utf8;
 }
 
