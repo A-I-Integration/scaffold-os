@@ -236,3 +236,40 @@ export async function fahrtNachholenSicher(projectId: string): Promise<void> {
     } catch { /* best-effort */ }
   }
 }
+
+// ------------------------------------------------------------
+// Alle Projekte mit offenen Transportaufträgen (noch in keiner Tour)
+// automatisch einplanen. Wird beim Öffnen von "Touren" aufgerufen –
+// die Dispo muss nichts anklicken. Reihenfolge: frühester Projektbeginn
+// zuerst, damit knappe Fahrzeuge/Fahrer dort landen, wo es zuerst brennt.
+// Idempotent: Aufträge, die schon in einer Tour sind, werden nicht angefasst.
+// ------------------------------------------------------------
+export interface OffeneFahrt { projektId: string; projekt: string; beginn: string | null; hinweis: string }
+
+export async function offeneFahrtenPruefen(): Promise<{ angelegt: number; offen: OffeneFahrt[] }> {
+  const tRes = await fetch(`${url}/rest/v1/transport_orders?status=eq.pending&to_project_id=not.is.null&select=to_project_id`, { headers, cache: 'no-store' });
+  if (!tRes.ok) throw new Error('Transportaufträge nicht lesbar (' + tRes.status + ')');
+  const ids = Array.from(new Set<string>((await tRes.json()).map((r: any) => r.to_project_id)));
+  if (ids.length === 0) return { angelegt: 0, offen: [] };
+
+  const pRes = await fetch(
+    `${url}/rest/v1/projects?id=in.(${ids.join(',')})&select=id,name,status,beginn:data->step1->>projektbeginn`,
+    { headers, cache: 'no-store' }
+  );
+  if (!pRes.ok) throw new Error('Projekte nicht lesbar (' + pRes.status + ')');
+  const projekte: any[] = (await pRes.json()).filter((x: any) => x.status !== 'completed');
+  projekte.sort((a, b) => String(a.beginn || '9999').localeCompare(String(b.beginn || '9999')));
+
+  let angelegt = 0;
+  const offen: OffeneFahrt[] = [];
+  for (const pr of projekte) {
+    try {
+      const r = await fahrtNachholen(pr.id);
+      if (r.ok) angelegt++;
+      else if (r.tour?.hinweis) offen.push({ projektId: pr.id, projekt: pr.name, beginn: pr.beginn || null, hinweis: r.tour.hinweis });
+    } catch (e: any) {
+      offen.push({ projektId: pr.id, projekt: pr.name, beginn: pr.beginn || null, hinweis: String(e?.message || e) });
+    }
+  }
+  return { angelegt, offen };
+}
