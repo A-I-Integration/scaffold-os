@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { gesamtgewichtKg, waehleFahrzeug, waehleFahrer, type FahrzeugKurz, type FahrerKandidat } from '../auto-tour-wahl';
+import { gesamtgewichtKg, waehleFahrzeug, waehleFahrer, teileInFahrten, type FahrzeugKurz, type FahrerKandidat } from '../auto-tour-wahl';
 
 const sprinter: FahrzeugKurz = { id: 'v1', name: 'Sprinter 1', capacity_kg: 1200, zulaessiges_gesamtgewicht_kg: 3500 };
 const lkw: FahrzeugKurz = { id: 'v2', name: 'Lkw 1', capacity_kg: 6000, zulaessiges_gesamtgewicht_kg: 12000 };
@@ -70,5 +70,25 @@ describe('waehleFahrer', () => {
   it('Fahrzeug ohne hinterlegtes Gesamtgewicht: nicht blockieren', () => {
     const r = waehleFahrer([anna], new Set(), new Set(), { ...sprinter, zulaessiges_gesamtgewicht_kg: null });
     expect('fahrer' in r).toBe(true);
+  });
+});
+
+describe('teileInFahrten', () => {
+  const pos = (g: number) => ({ gewicht: g });
+  it('teilt 3716 kg auf zwei Fahrten à max. 3500', () => {
+    const r = teileInFahrten([pos(2000), pos(1000), pos(600), pos(116)], 3500);
+    expect('fahrten' in r).toBe(true);
+    if ('fahrten' in r) {
+      expect(r.fahrten).toHaveLength(2);
+      for (const f of r.fahrten) expect(f.reduce((s, x) => s + x.gewicht, 0)).toBeLessThanOrEqual(3500);
+      expect(r.fahrten.flat()).toHaveLength(4);
+    }
+  });
+  it('schwerste Fahrt zuerst', () => {
+    const r = teileInFahrten([pos(3000), pos(900)], 3500);
+    if ('fahrten' in r) expect(r.fahrten[0][0].gewicht).toBe(3000);
+  });
+  it('einzelne zu schwere Position → Hinweis', () => {
+    expect('hinweis' in teileInFahrten([pos(4000)], 3500)).toBe(true);
   });
 });
