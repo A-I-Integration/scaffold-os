@@ -97,3 +97,75 @@ export function teileInFahrten<T extends { gewicht: number }>(
   const idx = summen.map((_, i) => i).sort((a, b) => summen[b] - summen[a]);
   return { fahrten: idx.map((i) => fahrten[i]) };
 }
+
+// ------------------------------------------------------------
+// Zeitplanung: Ein Fahrzeug/Fahrer kann am Tag mehrere Fahrten NACHEINANDER
+// fahren (auch für verschiedene Baustellen). Jede Fahrt dauert pauschal
+// FAHRT_DAUER_MIN – das ist eine ANNAHME (Standard 3 Stunden, von Michelle
+// als Vorschlag übernommen), keine gemessene Größe. Die Dispo kann die Startzeit
+// in Touren jederzeit ändern. Fahrten beginnen frühestens TAG_START_MIN und
+// spätestens LETZTER_START_MIN (ebenfalls Annahme), sonst: Hinweis "Tag voll".
+// ------------------------------------------------------------
+export const FAHRT_DAUER_MIN = 180;
+export const TAG_START_MIN = 7 * 60;
+export const LETZTER_START_MIN = 15 * 60;
+
+export interface ZeitPlanung {
+  /** Fahrzeug-ID → ab dieser Minute (seit 00:00) wieder frei */
+  fahrzeugFreiAb: Map<string, number>;
+  /** Mitarbeiter-ID → ab dieser Minute wieder frei */
+  maFreiAb: Map<string, number>;
+}
+
+export function minutenZuUhrzeit(min: number): string {
+  const h = String(Math.floor(min / 60)).padStart(2, '0');
+  const m = String(min % 60).padStart(2, '0');
+  return `${h}:${m}:00`;
+}
+
+export function uhrzeitZuMinuten(zeit: string | null | undefined): number {
+  const m = /^(\d{1,2}):(\d{2})/.exec(zeit || '');
+  return m ? Number(m[1]) * 60 + Number(m[2]) : TAG_START_MIN;
+}
+
+/**
+ * Sucht für eine Fahrt (Gewicht in kg) den frühesten Startzeitpunkt, zu dem
+ * ein passendes Fahrzeug UND ein fahrberechtigter, freier Fahrer verfügbar sind.
+ * Trägt bei Erfolg die Belegung (Start + Fahrtdauer) in `zeit` ein.
+ */
+export function planeFahrtZeit(a: {
+  fahrzeuge: FahrzeugKurz[];
+  kandidaten: FahrerKandidat[];
+  abwesendIds: Set<string>;
+  /** ganztägig gebunden (z. B. auf einer Baustelle eingeteilt) */
+  ganztagBelegteMa: Set<string>;
+  zeit: ZeitPlanung;
+  gewicht: number;
+}): { fahrzeug: FahrzeugKurz; fahrer: FahrerKandidat; startMin: number } | { hinweis: string } {
+  const kandidatenZeiten = new Set<number>([TAG_START_MIN]);
+  for (const v of a.zeit.fahrzeugFreiAb.values()) kandidatenZeiten.add(v);
+  for (const v of a.zeit.maFreiAb.values()) kandidatenZeiten.add(v);
+  const zeiten = Array.from(kandidatenZeiten)
+    .filter((t) => t >= TAG_START_MIN && t <= LETZTER_START_MIN)
+    .sort((x, y) => x - y);
+
+  let hinweisFz: string | null = null;
+  let hinweisFahrer: string | null = null;
+  for (const t of zeiten) {
+    const belegteFz = new Set<string>();
+    a.zeit.fahrzeugFreiAb.forEach((frei, id) => { if (frei > t) belegteFz.add(id); });
+    const fz = waehleFahrzeug(a.fahrzeuge, a.gewicht, belegteFz);
+    if ('hinweis' in fz) { hinweisFz = hinweisFz ?? fz.hinweis; continue; }
+    const belegteMa = new Set<string>(a.ganztagBelegteMa);
+    a.zeit.maFreiAb.forEach((frei, id) => { if (frei > t) belegteMa.add(id); });
+    const fa = waehleFahrer(a.kandidaten, a.abwesendIds, belegteMa, fz.fahrzeug);
+    if ('hinweis' in fa) { hinweisFahrer = hinweisFahrer ?? fa.hinweis; continue; }
+    a.zeit.fahrzeugFreiAb.set(fz.fahrzeug.id, t + FAHRT_DAUER_MIN);
+    a.zeit.maFreiAb.set(fa.fahrer.employee_id, t + FAHRT_DAUER_MIN);
+    return { fahrzeug: fz.fahrzeug, fahrer: fa.fahrer, startMin: t };
+  }
+  return {
+    hinweis: hinweisFahrer
+      ?? (hinweisFz ? `${hinweisFz} (spätester Fahrtbeginn ${minutenZuUhrzeit(LETZTER_START_MIN).slice(0, 5)} Uhr)` : 'Der Tag ist für Fahrten voll.'),
+  };
+}

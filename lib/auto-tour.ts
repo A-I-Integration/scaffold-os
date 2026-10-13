@@ -12,7 +12,8 @@
 
 import { loadArticlePrices } from '@/lib/calculations/article-prices';
 import {
-  gesamtgewichtKg, waehleFahrzeug, waehleFahrer, teileInFahrten,
+  gesamtgewichtKg, teileInFahrten, planeFahrtZeit, minutenZuUhrzeit, uhrzeitZuMinuten, FAHRT_DAUER_MIN,
+  type ZeitPlanung,
   type FahrzeugKurz, type FahrerKandidat,
 } from '@/lib/auto-tour-wahl';
 
@@ -58,7 +59,7 @@ export async function legeAutoTourAn(p: {
 
     const [fahrzeuge, touren, drivers, mitarbeiter, abwesend, zuweisungen] = await Promise.all([
       lese<FahrzeugKurz>('vehicles?is_active=eq.true&select=id,name,capacity_kg,zulaessiges_gesamtgewicht_kg'),
-      lese<any>(`tours?planned_date=eq.${p.datum}&status=in.(planned,in_progress)&select=vehicle_id,driver_id,team_ids`),
+      lese<any>(`tours?planned_date=eq.${p.datum}&status=in.(planned,in_progress)&select=vehicle_id,driver_id,team_ids,planned_start_time`),
       lese<any>('drivers?select=id,name,employee_id'),
       lese<any>('employees?status=eq.active&select=id,first_name,last_name,fuehrerschein_klassen'),
       lese<any>(`absences?status=eq.approved&start_date=lte.${p.datum}&end_date=gte.${p.datum}&select=employee_id`),
@@ -68,17 +69,22 @@ export async function legeAutoTourAn(p: {
 
     // Wer ist an dem Tag schon gebunden? (Touren als Fahrer/Team + Baustellen-Zuteilung mit gleichem Beginn)
     const driverZuMa = new Map<string, string>(drivers.filter((d: any) => d.employee_id).map((d: any) => [d.id, d.employee_id]));
-    const belegteFahrzeuge = new Set<string>(touren.map((t: any) => t.vehicle_id).filter(Boolean));
-    const belegteMa = new Set<string>();
+    // Belegung am Tag: wann ist welches Fahrzeug / welcher Mitarbeiter durch bestehende Touren wieder frei?
+    const zeit: ZeitPlanung = { fahrzeugFreiAb: new Map(), maFreiAb: new Map() };
+    const merke = (m: Map<string, number>, id: string, bis: number) => m.set(id, Math.max(m.get(id) ?? 0, bis));
     for (const t of touren) {
+      const bis = uhrzeitZuMinuten(t.planned_start_time) + FAHRT_DAUER_MIN;
+      if (t.vehicle_id) merke(zeit.fahrzeugFreiAb, t.vehicle_id, bis);
       for (const did of [t.driver_id, ...(Array.isArray(t.team_ids) ? t.team_ids : [])]) {
         const ma = did && driverZuMa.get(did);
-        if (ma) belegteMa.add(ma);
+        if (ma) merke(zeit.maFreiAb, ma, bis);
       }
     }
+    // Baustellen-Zuteilung mit gleichem Beginn: ganztägig gebunden
+    const ganztagBelegteMa = new Set<string>();
     const beginnNachProjekt = new Map<string, string>(beginne.map((b: any) => [b.id, b.beginn]));
     for (const z of zuweisungen) {
-      if (beginnNachProjekt.get(z.project_id) === p.datum) belegteMa.add(z.employee_id);
+      if (beginnNachProjekt.get(z.project_id) === p.datum) ganztagBelegteMa.add(z.employee_id);
     }
     const abwesendIds = new Set<string>(abwesend.map((a: any) => a.employee_id));
 
@@ -102,25 +108,14 @@ export async function legeAutoTourAn(p: {
       name: `${e.first_name} ${e.last_name}`.trim(),
       klassen: Array.isArray(e.fuehrerschein_klassen) ? e.fuehrerschein_klassen : [],
     }));
-    const plan: { items: { id: string; gewicht: number }[]; gewicht: number; fz: FahrzeugKurz; fa: FahrerKandidat }[] = [];
-    // Fahrzeuge/Fahrer, die für DIESES Projekt schon eine Fahrt haben: erst andere
-    // freie bevorzugen (parallel), sonst fährt dieselbe Besatzung die nächste Fahrt
-    // danach (ein Lkw fährt am Tag mehrmals Lager → Baustelle).
-    const eigeneFz = new Set<string>();
-    const eigeneMa = new Set<string>();
+    const plan: { items: { id: string; gewicht: number }[]; gewicht: number; fz: FahrzeugKurz; fa: FahrerKandidat; startMin: number }[] = [];
     for (let i = 0; i < fahrten.length; i++) {
       const items = fahrten[i];
       const w = Math.round(items.reduce((s, x) => s + x.gewicht, 0) * 100) / 100;
       const vor = fahrten.length > 1 ? `Fahrt ${i + 1} von ${fahrten.length}: ` : '';
-      let fz = waehleFahrzeug(fahrzeuge, w, new Set([...belegteFahrzeuge, ...eigeneFz]));
-      if ('hinweis' in fz) fz = waehleFahrzeug(fahrzeuge, w, belegteFahrzeuge);
-      if ('hinweis' in fz) return { hinweis: vor + fz.hinweis, gewichtKg: gewicht, datum: p.datum };
-      let fa = waehleFahrer(kandidaten, abwesendIds, new Set([...belegteMa, ...eigeneMa]), fz.fahrzeug);
-      if ('hinweis' in fa) fa = waehleFahrer(kandidaten, abwesendIds, belegteMa, fz.fahrzeug);
-      if ('hinweis' in fa) return { hinweis: vor + fa.hinweis, gewichtKg: gewicht, datum: p.datum, fahrzeug: fz.fahrzeug.name };
-      eigeneFz.add(fz.fahrzeug.id);
-      eigeneMa.add(fa.fahrer.employee_id);
-      plan.push({ items, gewicht: w, fz: fz.fahrzeug, fa: fa.fahrer });
+      const wahl = planeFahrtZeit({ fahrzeuge, kandidaten, abwesendIds, ganztagBelegteMa, zeit, gewicht: w });
+      if ('hinweis' in wahl) return { hinweis: vor + wahl.hinweis, gewichtKg: gewicht, datum: p.datum };
+      plan.push({ items, gewicht: w, fz: wahl.fahrzeug, fa: wahl.fahrer, startMin: wahl.startMin });
     }
 
     const angelegt: { tourId: string; name: string; fz: string; fa: string }[] = [];
@@ -149,7 +144,7 @@ export async function legeAutoTourAn(p: {
           driver_id: driverId,
           team_ids: [driverId],
           planned_date: p.datum,
-          planned_start_time: '07:00:00',
+          planned_start_time: minutenZuUhrzeit(t.startMin),
           status: 'planned',
           total_weight_kg: Math.round(t.gewicht),
         }),
