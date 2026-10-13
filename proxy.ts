@@ -36,6 +36,12 @@ const ROLE_ACCESS: Record<string, string[]> = {
   '/datenpflege':  ['admin'],
   '/meine-touren': ['admin', 'disponent', 'bauleiter', 'mitarbeiter', 'lager'],
   '/fahrer':       ['admin', 'disponent', 'bauleiter', 'mitarbeiter', 'lager'],
+  // Sicherheitscheck 13.10.: bisher NUR per Menü versteckt, per Adresse für jeden Eingeloggten offen.
+  // Gleiche Rollen wie im Menü (components/SidebarLayout.tsx).
+  '/kunden':           ['admin', 'disponent'],
+  '/rechnungen':       ['admin', 'disponent'],
+  '/zahlungsabgleich': ['admin', 'disponent'],
+  '/mietabrechnung':   ['admin', 'disponent'],
 };
 
 // Wohin gehört eine Rolle? (Startbereich + Ziel bei „kein Zugriff")
