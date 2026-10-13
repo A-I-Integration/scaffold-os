@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { requireAuth, unauthorizedResponse, serverErrorResponse } from '@/lib/auth';
+import { requireAuth, unauthorizedResponse, serverErrorResponse, pruefeRolle } from '@/lib/auth';
+import { ROLLEN } from '@/lib/rollen';
 import { istGueltigeEmail } from '@/lib/email-verlauf';
 import { textZuHtml } from '@/lib/email-kunde';
 
@@ -23,8 +24,9 @@ const headers = { 'Content-Type': 'application/json', apikey: key, Authorization
 const UUID = /^[0-9a-f-]{36}$/i;
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const auth = await requireAuth();
-  if (!auth) return unauthorizedResponse();
+  const rollenPruefung = await pruefeRolle(ROLLEN.ADMIN_DISPO);
+  if (!rollenPruefung.ok) return rollenPruefung.response;
+  const auth = { userId: rollenPruefung.userId };
   const { id } = await params;
   try {
     if (!UUID.test(id)) return NextResponse.json({ success: false, error: 'Ungültige Kunden-ID.' }, { status: 400 });

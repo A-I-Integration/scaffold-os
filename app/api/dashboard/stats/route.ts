@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
-import { requireAuth, unauthorizedResponse } from '@/lib/auth';
+import { requireAuth, unauthorizedResponse, pruefeRolle } from '@/lib/auth';
+import { ROLLEN } from '@/lib/rollen';
 
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const key = process.env.SUPABASE_SERVICE_ROLE_KEY!;
@@ -25,7 +26,8 @@ function getMonthKey(d: string) {
 }
 
 export async function GET() {
-  if (!(await requireAuth())) return unauthorizedResponse();
+  const rollenPruefung = await pruefeRolle(ROLLEN.ADMIN_DISPO);
+  if (!rollenPruefung.ok) return rollenPruefung.response;
   try {
     // ─── PROJEKTE ───
     const allProjects = await safeFetch('projects?select=*&order=created_at.desc');

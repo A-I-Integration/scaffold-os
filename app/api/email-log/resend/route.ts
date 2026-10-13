@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
-import { requireAuth, unauthorizedResponse, serverErrorResponse } from '@/lib/auth';
+import { requireAuth, unauthorizedResponse, serverErrorResponse, pruefeRolle } from '@/lib/auth';
+import { ROLLEN } from '@/lib/rollen';
 import { istGueltigeEmail } from '@/lib/email-verlauf';
 
 // ============================================================
@@ -13,8 +14,9 @@ import { istGueltigeEmail } from '@/lib/email-verlauf';
 // ============================================================
 
 export async function POST(req: Request) {
-  const auth = await requireAuth();
-  if (!auth) return unauthorizedResponse();
+  const rollenPruefung = await pruefeRolle(ROLLEN.ADMIN_DISPO);
+  if (!rollenPruefung.ok) return rollenPruefung.response;
+  const auth = { userId: rollenPruefung.userId };
   try {
     const apiKey = process.env.RESEND_API_KEY;
     if (!apiKey) {

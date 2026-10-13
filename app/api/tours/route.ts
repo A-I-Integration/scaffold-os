@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server';
-import { requireAuth, unauthorizedResponse, serverErrorResponse } from '@/lib/auth';
+import { requireAuth, unauthorizedResponse, serverErrorResponse, forbiddenResponse, pruefeRolle } from '@/lib/auth';
+import { ROLLEN } from '@/lib/rollen';
+import { darfStoppAendern } from '@/lib/touren/berechtigung';
 import { darfFahrzeugFahren, erforderlicheKlasse } from '@/lib/touren/fuehrerschein';
 
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
@@ -31,7 +33,9 @@ export async function GET() {
 
 // POST /api/tours – Tour erstellen
 export async function POST(req: Request) {
-  if (!(await requireAuth())) return unauthorizedResponse();
+  // Touren anlegen: nur Admin/Disposition
+  const rollenPruefung = await pruefeRolle(ROLLEN.ADMIN_DISPO);
+  if (!rollenPruefung.ok) return rollenPruefung.response;
   try {
     const body = await req.json();
     // Phase 68-C: project_ids = Baustellen-Anfahrten OHNE Materialtransport
@@ -199,6 +203,14 @@ export async function PUT(req: Request) {
   try {
     const body = await req.json();
     const { id, status, completed_at, route_data } = body;
+    // Sicherheitslücke geschlossen: bisher konnte JEDER Eingeloggte JEDE Tour ändern.
+    // Jetzt: Admin/Disposition oder wer laut Tour (Fahrer/Team) zuständig ist.
+    if (typeof id !== 'string' || !/^[0-9a-fA-F-]{36}$/.test(id)) {
+      return NextResponse.json({ success: false, error: 'Tour nicht gefunden.' }, { status: 400 });
+    }
+    if (!(await darfStoppAendern(id))) {
+      return forbiddenResponse('Du bist für diese Tour nicht zuständig.');
+    }
     const updates: any = {};
     if (status) updates.status = status;
     if (completed_at) updates.completed_at = completed_at;
