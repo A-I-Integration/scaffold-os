@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
-import { requireAuth, unauthorizedResponse, serverErrorResponse } from '@/lib/auth';
+import { requireAuth, unauthorizedResponse, serverErrorResponse, forbiddenResponse } from '@/lib/auth';
+import { istAdminOderDispo } from '@/lib/touren/berechtigung';
 
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const key = process.env.SUPABASE_SERVICE_ROLE_KEY!;
@@ -38,8 +39,11 @@ export async function POST(req: Request) {
 }
 
 // GET /api/gps?vehicle_id=... – Letzte Positionen
+// Positionen sehen NUR admin und disponent (Datenschutz: Mitarbeiter sehen
+// nicht, wo Kollegen gerade sind).
 export async function GET(req: Request) {
   if (!(await requireAuth())) return unauthorizedResponse();
+  if (!(await istAdminOderDispo())) return forbiddenResponse('Nur Admin und Disposition dürfen GPS-Positionen sehen.');
   try {
     const { searchParams } = new URL(req.url);
     const vehicleId = searchParams.get('vehicle_id');

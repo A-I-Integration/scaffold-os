@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
+import { formatUhrzeit, formatDauer, fahrtdauerMinuten } from '@/lib/touren/hof';
 import { getEmployees, createAbsence } from '@/lib/actions/employees';
 import type { EmployeeWithSkills } from '@/types/employees';
 import ProjektDokumentation from '@/components/ProjektDokumentation';
@@ -36,6 +37,10 @@ interface Tour {
   vehicle?: { name: string; license_plate: string } | null;
   driver?: { name: string; employee_id?: string | null } | null;
   team_ids?: string[] | null;
+  vehicle_id?: string | null;
+  driver_id?: string | null;
+  departed_at?: string | null;
+  returned_at?: string | null;
   stops: Stop[];
 }
 interface TimeEntry {
@@ -73,6 +78,11 @@ export default function MeineTourenPage() {
   const [stoppMsg, setStoppMsg] = useState<Record<string, string>>({});
   const [autoMe, setAutoMe] = useState<{ id: string; name: string } | null>(null);
   const [showAllHint, setShowAllHint] = useState(false);
+  // Vom Hof gefahren / Zurück auf dem Hof (+ GPS unterwegs)
+  const [hofLaeuft, setHofLaeuft] = useState(false);
+  const [hofMsg, setHofMsg] = useState('');
+  const gpsWatchRef = useRef<number | null>(null);
+  const gpsLastSentRef = useRef(0);
   // team_ids auf tours enthält drivers.id (nicht employees.id, siehe
   // api/tours POST: team_ids = fDrivers, die Fahrer-Auswahl-IDs). Um zu
   // prüfen, ob "ich" (employees.id) im Team einer Tour stehe, brauchen wir
@@ -199,6 +209,34 @@ export default function MeineTourenPage() {
     } catch { setChecked({}); }
   }, [myTour?.id]);
 
+  // Ist das wirklich MEINE Tour (Fahrer oder Team)? Nur dann gibt es die
+  // Hof-Knöpfe (ist keine eigene Tour vorhanden, zeigt die Seite zur
+  // Orientierung alle Touren – die dürfen hier nicht geschaltet werden).
+  const istMeineTour = !!(myTour && meId && (
+    myTour.driver?.employee_id === meId ||
+    (myTour.team_ids || []).some((id) => meineFahrerIds.includes(id))
+  ));
+
+  // Seite neu geladen, während die Tour läuft: GPS-Übertragung wieder aufnehmen
+  // (nur auf dem Gerät, auf dem „Vom Hof gefahren“ gedrückt wurde).
+  useEffect(() => {
+    if (!myTour || !istMeineTour || myTour.status !== 'in_progress') return;
+    try {
+      if (localStorage.getItem('scaffold_gps_tour_' + myTour.id) === '1') starteGpsLauf(myTour);
+    } catch {}
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [myTour?.id, myTour?.status, istMeineTour]);
+
+  // Beim Verlassen der Seite die Übertragung beenden (Standort-Symbol aus)
+  useEffect(() => {
+    return () => {
+      if (gpsWatchRef.current !== null && typeof navigator !== 'undefined' && navigator.geolocation) {
+        navigator.geolocation.clearWatch(gpsWatchRef.current);
+        gpsWatchRef.current = null;
+      }
+    };
+  }, []);
+
   // ─── Baustellen-Dokumentation: Projekte laden, heutigen Einsatz vorauswählen ───
   const loadDokProjects = useCallback(async () => {
     setDokLoading(true);
@@ -281,6 +319,77 @@ export default function MeineTourenPage() {
   function selectMe(id: string) {
     setMeId(id);
     localStorage.setItem(ME_KEY, id);
+  }
+
+  // ─── Vom Hof gefahren / Zurück auf dem Hof ───
+  // Beim Knopfdruck wird die Position des Handys einmalig mitgeschickt.
+  // Unterwegs sendet das Handy alle 30 s die Position (nur solange diese
+  // Seite geöffnet ist – im Browser ist kein Hintergrund-Tracking möglich).
+  const GPS_KEY = 'scaffold_gps_tour_';
+
+  function aktuellePosition(): Promise<{ lat: number; lng: number } | null> {
+    return new Promise((resolve) => {
+      if (typeof navigator === 'undefined' || !navigator.geolocation) return resolve(null);
+      navigator.geolocation.getCurrentPosition(
+        (p) => resolve({ lat: p.coords.latitude, lng: p.coords.longitude }),
+        () => resolve(null),
+        { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+      );
+    });
+  }
+
+  function stoppeGpsLauf(tourId?: string) {
+    if (gpsWatchRef.current !== null && typeof navigator !== 'undefined' && navigator.geolocation) {
+      navigator.geolocation.clearWatch(gpsWatchRef.current);
+    }
+    gpsWatchRef.current = null;
+    try { if (tourId) localStorage.removeItem(GPS_KEY + tourId); } catch {}
+  }
+
+  function starteGpsLauf(tour: Tour) {
+    if (gpsWatchRef.current !== null) return;
+    if (typeof navigator === 'undefined' || !navigator.geolocation || !tour.vehicle_id) return;
+    try { localStorage.setItem(GPS_KEY + tour.id, '1'); } catch {}
+    gpsWatchRef.current = navigator.geolocation.watchPosition(
+      async (pos) => {
+        const now = Date.now();
+        if (now - gpsLastSentRef.current < 30000) return;
+        gpsLastSentRef.current = now;
+        const { latitude, longitude, accuracy, speed, heading } = pos.coords;
+        try {
+          await fetch('/api/gps', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ vehicle_id: tour.vehicle_id, driver_id: tour.driver_id, lat: latitude, lng: longitude, accuracy, speed, heading }),
+          });
+        } catch { /* nächster Versuch in 30 s */ }
+      },
+      () => { /* Standort verweigert/nicht verfügbar: Tour läuft trotzdem weiter */ },
+      { enableHighAccuracy: true, maximumAge: 10000, timeout: 15000 }
+    );
+  }
+
+  async function handleHof(aktion: 'abfahrt' | 'rueckkehr') {
+    if (!myTour) return;
+    setHofLaeuft(true); setHofMsg('');
+    try {
+      const pos = await aktuellePosition();
+      const res = await fetch('/api/tours/hof', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tour_id: myTour.id, aktion, lat: pos?.lat, lng: pos?.lng }),
+      });
+      const json = await res.json();
+      if (!json.success) throw new Error(json.error || 'Das hat nicht geklappt.');
+      if (aktion === 'abfahrt') starteGpsLauf(myTour); else stoppeGpsLauf(myTour.id);
+      const hinweise: string[] = [aktion === 'abfahrt' ? '✅ Gute Fahrt! Abfahrt gespeichert.' : '✅ Willkommen zurück! Rückkehr gespeichert.'];
+      if (json.zeitenGespeichert === false) hinweise.push('Die Uhrzeit konnte noch nicht gespeichert werden (Datenbank-Update steht aus – bitte der Disposition Bescheid geben).');
+      else if (!pos) hinweise.push('Dein Standort war nicht verfügbar – die Uhrzeit wurde trotzdem gespeichert.');
+      setHofMsg(hinweise.join(' '));
+      await loadData();
+    } catch (e: any) {
+      setHofMsg('❌ ' + (e?.message || 'Das hat nicht geklappt.'));
+    } finally {
+      setHofLaeuft(false);
+    }
   }
 
   function togglePacked(key: string) {
@@ -686,6 +795,39 @@ export default function MeineTourenPage() {
                       </li>
                     ))}
                   </ol>
+
+                  {/* Vom Hof gefahren / Zurück auf dem Hof */}
+                  {istMeineTour && String(myTour.planned_date).slice(0, 10) <= todayISO() && (
+                    <div className="rounded-xl border border-black/10 bg-white/60 p-3 space-y-2">
+                      {!myTour.departed_at && myTour.status !== 'in_progress' ? (
+                        <button
+                          onClick={() => handleHof('abfahrt')}
+                          disabled={hofLaeuft}
+                          className="w-full bg-[#e8590c] hover:bg-[#d9480f] text-white rounded-xl px-4 py-3 font-semibold transition disabled:opacity-50"
+                        >
+                          {hofLaeuft ? 'Einen Moment …' : '🚛 Vom Hof gefahren'}
+                        </button>
+                      ) : (
+                        <>
+                          <div className="text-sm text-[#424245]">
+                            🚛 Vom Hof gefahren{myTour.departed_at ? ` um ${formatUhrzeit(myTour.departed_at)} Uhr` : ''}
+                            {myTour.departed_at && !myTour.returned_at ? ` · unterwegs seit ${formatDauer(fahrtdauerMinuten(myTour.departed_at, new Date().toISOString()))}` : ''}
+                          </div>
+                          <button
+                            onClick={() => handleHof('rueckkehr')}
+                            disabled={hofLaeuft}
+                            className="w-full bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl px-4 py-3 font-semibold transition disabled:opacity-50"
+                          >
+                            {hofLaeuft ? 'Einen Moment …' : '🏠 Zurück auf dem Hof'}
+                          </button>
+                        </>
+                      )}
+                      {hofMsg && <div className="text-xs text-[#424245]">{hofMsg}</div>}
+                      <p className="text-[11px] text-[#86868b]">
+                        Beim Drücken wird einmalig die Position deines Handys gespeichert. Unterwegs wird sie alle 30 Sekunden an die Disposition übertragen, solange diese Seite geöffnet bleibt. Nur Admin und Disposition sehen sie.
+                      </p>
+                    </div>
+                  )}
 
                   <a
                     href={mapsUrl(myTour)}
