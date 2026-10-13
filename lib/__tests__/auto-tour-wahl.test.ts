@@ -143,3 +143,37 @@ describe('planeFahrtZeit', () => {
     expect(uhrzeitZuMinuten(null)).toBe(420);
   });
 });
+
+import { leseZeitParameter, STANDARD_ZEIT } from '../auto-tour-wahl';
+
+describe('leseZeitParameter', () => {
+  it('Standard bei fehlenden oder ungültigen Werten', () => {
+    expect(leseZeitParameter(null)).toEqual(STANDARD_ZEIT);
+    expect(leseZeitParameter({})).toEqual(STANDARD_ZEIT);
+    expect(leseZeitParameter({ tour_fahrt_dauer_min: 5, tour_letzter_start_min: 100 })).toEqual(STANDARD_ZEIT);
+    expect(leseZeitParameter({ tour_fahrt_dauer_min: 'abc', tour_letzter_start_min: null })).toEqual(STANDARD_ZEIT);
+  });
+  it('übernimmt gültige Betriebswerte', () => {
+    expect(leseZeitParameter({ tour_fahrt_dauer_min: 120, tour_letzter_start_min: 960 })).toEqual({ fahrtDauerMin: 120, letzterStartMin: 960 });
+  });
+});
+
+describe('planeFahrtZeit mit Betriebswerten', () => {
+  const lkw: FahrzeugKurz = { id: 'v1', name: 'Lkw', capacity_kg: 5000, zulaessiges_gesamtgewicht_kg: null };
+  const fahrer: FahrerKandidat = { employee_id: 'e1', name: 'Anna', klassen: ['B'] };
+  const basis = { fahrzeuge: [lkw], kandidaten: [fahrer], abwesendIds: new Set<string>(), ganztagBelegteMa: new Set<string>(), gewicht: 1000 };
+  it('kürzere Fahrtdauer: Fahrten folgen im Abstand der eingestellten Dauer', () => {
+    const zeit: ZeitPlanung = { fahrzeugFreiAb: new Map(), maFreiAb: new Map() };
+    const params = { fahrtDauerMin: 120, letzterStartMin: 900 };
+    const r1 = planeFahrtZeit({ ...basis, zeit, params });
+    const r2 = planeFahrtZeit({ ...basis, zeit, params });
+    expect('startMin' in r1 && r1.startMin).toBe(420);
+    expect('startMin' in r2 && r2.startMin).toBe(540);
+  });
+  it('späterer letzter Start erlaubt eine Fahrt mehr', () => {
+    const zeit: ZeitPlanung = { fahrzeugFreiAb: new Map([['v1', 16 * 60]]), maFreiAb: new Map() };
+    expect('hinweis' in planeFahrtZeit({ ...basis, zeit: { ...zeit, fahrzeugFreiAb: new Map(zeit.fahrzeugFreiAb) } })).toBe(true);
+    const r = planeFahrtZeit({ ...basis, zeit, params: { fahrtDauerMin: 180, letzterStartMin: 17 * 60 } });
+    expect('startMin' in r && r.startMin).toBe(960);
+  });
+});

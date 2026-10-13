@@ -85,6 +85,8 @@ export async function POST(req: NextRequest) {
       'angebotene_geruesttypen',
       // Standort bei Touren erfassen (an/aus) – Datenschutz-Schalter
       'tour_standort_erfassen',
+      // Tourenplanung: Fahrtdauer (Minuten) und späteste Abfahrt (Minuten seit 00:00)
+      'tour_fahrt_dauer_min', 'tour_letzter_start_min',
     ];
     const patch: Record<string, any> = { updated_at: new Date().toISOString() };
     for (const f of allowed) {

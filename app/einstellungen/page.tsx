@@ -109,6 +109,11 @@ export default function EinstellungenPage() {
   // Phase 101 noch fehlt).
   const [standortAn, setStandortAn] = useState(true)
   const [standortGeaendert, setStandortGeaendert] = useState(false)
+  // Tourenplanung: Fahrtdauer (Std) und späteste Abfahrt (HH:MM). Wird nur
+  // gespeichert, wenn angefasst (DB-Spalten aus Phase 102 können noch fehlen).
+  const [fahrtDauerStd, setFahrtDauerStd] = useState('3')
+  const [letzterStart, setLetzterStart] = useState('15:00')
+  const [planungGeaendert, setPlanungGeaendert] = useState(false)
 
   useEffect(() => {
     (async () => {
@@ -125,6 +130,12 @@ export default function EinstellungenPage() {
           setCompany(c);
           setAngeboten(leseAngeboteneTypen(json.company.angebotene_geruesttypen) || [])
           setStandortAn(json.company.tour_standort_erfassen !== false)
+          const dm = Number(json.company.tour_fahrt_dauer_min)
+          if (Number.isFinite(dm) && dm >= 30) setFahrtDauerStd(String(Math.round((dm / 60) * 100) / 100).replace('.', ','))
+          const lm = Number(json.company.tour_letzter_start_min)
+          if (json.company.tour_letzter_start_min != null && Number.isFinite(lm) && lm >= 0) {
+            setLetzterStart(`${String(Math.floor(lm / 60)).padStart(2, '0')}:${String(lm % 60).padStart(2, '0')}`)
+          }
           if (Array.isArray(json.company.preisliste_geruesttypen)) {
             setPreisliste(json.company.preisliste_geruesttypen.map((p: any) => ({ name: p.name || '', preis_pro_m2: String(p.preis_pro_m2 ?? '') })))
           }
@@ -160,6 +171,19 @@ export default function EinstellungenPage() {
         delete payload.angebotene_geruesttypen;
       }
       if (standortGeaendert) payload.tour_standort_erfassen = standortAn;
+      if (planungGeaendert) {
+        const std = parseFloat(fahrtDauerStd.replace(',', '.'));
+        const lm = /^(\d{1,2}):(\d{2})$/.exec(letzterStart);
+        const letzterMin = lm ? Number(lm[1]) * 60 + Number(lm[2]) : NaN;
+        if (!Number.isFinite(std) || std < 0.5 || std > 12) {
+          alert('Bitte eine Fahrtdauer zwischen 0,5 und 12 Stunden eintragen.'); setSaving(false); return;
+        }
+        if (!Number.isFinite(letzterMin) || letzterMin < 7 * 60 || letzterMin > 23 * 60) {
+          alert('Bitte eine späteste Abfahrt zwischen 07:00 und 23:00 Uhr eintragen.'); setSaving(false); return;
+        }
+        payload.tour_fahrt_dauer_min = Math.round(std * 60);
+        payload.tour_letzter_start_min = letzterMin;
+      }
       const res = await fetch('/api/company', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -293,6 +317,40 @@ export default function EinstellungenPage() {
                   </label>
                 );
               })}
+            </div>
+          </div>
+        )}
+
+        {/* ─── Tourenplanung: Fahrtdauer und späteste Abfahrt ─── */}
+        {!loading && !error && (
+          <div className="bg-[#f5f5f7] rounded-xl p-6 border border-black/10 space-y-3">
+            <div>
+              <h2 className="text-lg font-bold text-[#1d1d1f]">Tourenplanung</h2>
+              <p className="text-sm text-[#86868b]">
+                Damit plant die Software mehrere Fahrten pro Tag nacheinander. Schätzt eine normale Fahrt
+                (Beladen, Fahren, Abladen, Rückfahrt) und legt fest, bis wann eine Fahrt spätestens losfahren darf,
+                damit alle pünktlich wieder auf dem Hof sind. Danach unten „Alles speichern“.
+              </p>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <label className="text-sm">
+                <span className="block text-[#1d1d1f] mb-1">Dauer einer Fahrt (Stunden)</span>
+                <input
+                  type="text" inputMode="decimal" value={fahrtDauerStd}
+                  onChange={(e) => { setFahrtDauerStd(e.target.value); setPlanungGeaendert(true); }}
+                  className="w-full rounded-lg border border-black/10 bg-white px-3 py-2"
+                />
+                <span className="block text-xs text-[#86868b] mt-1">Standard: 3 – z. B. 2, 3,5 oder 4</span>
+              </label>
+              <label className="text-sm">
+                <span className="block text-[#1d1d1f] mb-1">Späteste Abfahrt vom Hof</span>
+                <input
+                  type="time" value={letzterStart}
+                  onChange={(e) => { setLetzterStart(e.target.value); setPlanungGeaendert(true); }}
+                  className="w-full rounded-lg border border-black/10 bg-white px-3 py-2"
+                />
+                <span className="block text-xs text-[#86868b] mt-1">Standard: 15:00</span>
+              </label>
             </div>
           </div>
         )}
