@@ -92,3 +92,54 @@ describe('teileInFahrten', () => {
     expect('hinweis' in teileInFahrten([pos(4000)], 3500)).toBe(true);
   });
 });
+
+import { planeFahrtZeit, minutenZuUhrzeit, uhrzeitZuMinuten, FAHRT_DAUER_MIN, type ZeitPlanung } from '../auto-tour-wahl';
+
+describe('planeFahrtZeit', () => {
+  const lkwB: FahrzeugKurz = { id: 'v1', name: 'Lkw', capacity_kg: 5000, zulaessiges_gesamtgewicht_kg: null };
+  const fahrer: FahrerKandidat = { employee_id: 'e1', name: 'Anna', klassen: ['B'] };
+  const leer = (): ZeitPlanung => ({ fahrzeugFreiAb: new Map(), maFreiAb: new Map() });
+  const basis = { fahrzeuge: [lkwB], kandidaten: [fahrer], abwesendIds: new Set<string>(), ganztagBelegteMa: new Set<string>(), gewicht: 1000 };
+
+  it('erste Fahrt startet 07:00, die nächsten folgen im Abstand der Fahrtdauer', () => {
+    const zeit = leer();
+    const r1 = planeFahrtZeit({ ...basis, zeit });
+    const r2 = planeFahrtZeit({ ...basis, zeit });
+    const r3 = planeFahrtZeit({ ...basis, zeit });
+    expect('startMin' in r1 && r1.startMin).toBe(420);
+    expect('startMin' in r2 && r2.startMin).toBe(420 + FAHRT_DAUER_MIN);
+    expect('startMin' in r3 && r3.startMin).toBe(420 + 2 * FAHRT_DAUER_MIN);
+  });
+  it('bestehende Tour belegt das Fahrzeug bis Start + Dauer', () => {
+    const zeit = leer();
+    zeit.fahrzeugFreiAb.set('v1', 420 + FAHRT_DAUER_MIN);
+    zeit.maFreiAb.set('e1', 420 + FAHRT_DAUER_MIN);
+    const r = planeFahrtZeit({ ...basis, zeit });
+    expect('startMin' in r && r.startMin).toBe(600);
+  });
+  it('zu spät am Tag → Hinweis statt Fahrt', () => {
+    const zeit = leer();
+    zeit.fahrzeugFreiAb.set('v1', 16 * 60);
+    const r = planeFahrtZeit({ ...basis, zeit });
+    expect('hinweis' in r).toBe(true);
+  });
+  it('zwei Fahrzeuge: zwei Fahrer fahren parallel um 07:00', () => {
+    const zeit = leer();
+    const v2: FahrzeugKurz = { id: 'v2', name: 'Sprinter', capacity_kg: 5000, zulaessiges_gesamtgewicht_kg: null };
+    const f2: FahrerKandidat = { employee_id: 'e2', name: 'Max', klassen: ['B'] };
+    const b = { ...basis, fahrzeuge: [lkwB, v2], kandidaten: [fahrer, f2] };
+    const r1 = planeFahrtZeit({ ...b, zeit });
+    const r2 = planeFahrtZeit({ ...b, zeit });
+    expect('startMin' in r1 && r1.startMin).toBe(420);
+    expect('startMin' in r2 && r2.startMin).toBe(420);
+  });
+  it('ganztägig gebundener Fahrer wird nicht eingeplant', () => {
+    const r = planeFahrtZeit({ ...basis, zeit: leer(), ganztagBelegteMa: new Set(['e1']) });
+    expect('hinweis' in r).toBe(true);
+  });
+  it('Uhrzeit-Hilfen', () => {
+    expect(minutenZuUhrzeit(600)).toBe('10:00:00');
+    expect(uhrzeitZuMinuten('07:00:00')).toBe(420);
+    expect(uhrzeitZuMinuten(null)).toBe(420);
+  });
+});
