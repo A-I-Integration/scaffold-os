@@ -78,6 +78,8 @@ export default function MeineTourenPage() {
   const [stoppMsg, setStoppMsg] = useState<Record<string, string>>({});
   const [autoMe, setAutoMe] = useState<{ id: string; name: string } | null>(null);
   const [showAllHint, setShowAllHint] = useState(false);
+  // Rolle des Logins (aus /api/me) – steuert, welche Werkzeug-Kacheln sichtbar sind
+  const [rolle, setRolle] = useState<string | null>(null);
   // Vom Hof gefahren / Zurück auf dem Hof (+ GPS unterwegs)
   const [hofLaeuft, setHofLaeuft] = useState(false);
   const [hofMsg, setHofMsg] = useState('');
@@ -128,6 +130,7 @@ export default function MeineTourenPage() {
       try {
         const res = await fetch('/api/me', { cache: 'no-store' });
         const json = await res.json();
+        if (json.success && typeof json.role === 'string') setRolle(json.role);
         if (json.success && json.employee) {
           setAutoMe({ id: json.employee.id, name: `${json.employee.first_name} ${json.employee.last_name}` });
           setMeId(json.employee.id);
@@ -544,6 +547,10 @@ export default function MeineTourenPage() {
     return `https://www.google.com/maps/dir/?api=1&destination=${dest}${waypoints ? `&waypoints=${waypoints}` : ''}&travelmode=driving`;
   }
 
+  // Sichtbarkeit der Werkzeug-Kacheln = tatsächlicher Zugriff (siehe proxy.ts)
+  const darfCad = rolle !== null && ['admin', 'disponent', 'bauleiter'].includes(rolle);
+  const darfAufmass = rolle !== null && ['admin', 'bauleiter'].includes(rolle);
+
   const inputCls = 'w-full bg-[#f5f5f7] border border-black/10 rounded-lg px-3 py-2 text-[#1d1d1f] focus:border-[#e8590c] focus:outline-none';
 
   const TABS: { key: Tab; label: string; icon: any }[] = [
@@ -619,6 +626,7 @@ export default function MeineTourenPage() {
             <h2 className="font-semibold">🛠️ Werkzeuge</h2>
             <p className="text-sm text-[#86868b]">Werkzeuge für die Baustelle – aktuell verfügbar:</p>
             <div className="space-y-2">
+              {darfAufmass && (
               <Link
                 href="/aufmass/schritt1"
                 onClick={() => starteNeuesAufmass()}
@@ -630,6 +638,8 @@ export default function MeineTourenPage() {
                   <div className="text-[#86868b] text-sm">Baustelle erfassen – Maße, Fotos, Material.</div>
                 </div>
               </Link>
+              )}
+              {darfCad && (
               <Link
                 href="/cad"
                 className="flex items-center gap-3 bg-white border border-black/10 rounded-xl p-4 hover:border-[#e8590c]/40 transition"
@@ -640,6 +650,8 @@ export default function MeineTourenPage() {
                   <div className="text-[#86868b] text-sm">Gerüst am Bildschirm konstruieren.</div>
                 </div>
               </Link>
+              )}
+              {darfCad && (
               <Link
                 href="/cad/bruecke"
                 className="flex items-center gap-3 bg-white border border-black/10 rounded-xl p-4 hover:border-[#e8590c]/40 transition"
@@ -650,6 +662,8 @@ export default function MeineTourenPage() {
                   <div className="text-[#86868b] text-sm">Brückengerüst planen.</div>
                 </div>
               </Link>
+              )}
+              {darfCad && (
               <Link
                 href="/cad/traggeruest"
                 className="flex items-center gap-3 bg-white border border-black/10 rounded-xl p-4 hover:border-[#e8590c]/40 transition"
@@ -660,6 +674,7 @@ export default function MeineTourenPage() {
                   <div className="text-[#86868b] text-sm">Anfrage für ein Traggerüst stellen.</div>
                 </div>
               </Link>
+              )}
               <Link
                 href="/gaeb"
                 className="flex items-center gap-3 bg-white border border-black/10 rounded-xl p-4 hover:border-[#e8590c]/40 transition"

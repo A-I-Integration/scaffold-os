@@ -38,6 +38,8 @@ const ROLE_ACCESS: Record<string, string[]> = {
   '/fahrer':       ['admin', 'disponent', 'bauleiter', 'mitarbeiter', 'lager'],
   // Sicherheitscheck 13.10.: bisher NUR per Menü versteckt, per Adresse für jeden Eingeloggten offen.
   // Gleiche Rollen wie im Menü (components/SidebarLayout.tsx).
+  // CAD (inkl. /cad/bruecke, /cad/traggeruest): Admin, Disposition, Bauleiter (Entscheidung 13.10.)
+  '/cad':              ['admin', 'disponent', 'bauleiter'],
   '/kunden':           ['admin', 'disponent'],
   '/rechnungen':       ['admin', 'disponent'],
   '/zahlungsabgleich': ['admin', 'disponent'],

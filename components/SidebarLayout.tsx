@@ -57,9 +57,9 @@ const NAV_GROUPS: NavGroup[] = [
     key: 'werkzeug', label: 'Werkzeug', icon: Wrench,
     items: [
       { href: '/aufmass/schritt1', label: 'Aufmaß', icon: Ruler, roles: ['admin', 'bauleiter', 'mitarbeiter'], resetAufmassVorNavigation: true },
-      { href: '/cad',              label: 'CAD',    icon: Ruler, roles: ['admin', 'bauleiter', 'mitarbeiter'] },
-      { href: '/cad/bruecke',      label: 'Brücke', icon: Ruler, roles: ['admin', 'bauleiter', 'mitarbeiter'] },
-      { href: '/cad/traggeruest',  label: 'Traggerüst-Anfrage', icon: Ruler, roles: ['admin', 'bauleiter', 'mitarbeiter'] },
+      { href: '/cad',              label: 'CAD',    icon: Ruler, roles: ['admin', 'disponent', 'bauleiter'] },
+      { href: '/cad/bruecke',      label: 'Brücke', icon: Ruler, roles: ['admin', 'disponent', 'bauleiter'] },
+      { href: '/cad/traggeruest',  label: 'Traggerüst-Anfrage', icon: Ruler, roles: ['admin', 'disponent', 'bauleiter'] },
       { href: '/gaeb',             label: 'GAEB',   icon: FileText, roles: ['admin', 'disponent', 'mitarbeiter'] },
     ],
   },
