@@ -83,6 +83,8 @@ export async function POST(req: NextRequest) {
       'preisliste_geruesttypen',
       // Welche Gerüsttypen der Betrieb anbietet (Aufmaß Schritt 3 zeigt nur diese)
       'angebotene_geruesttypen',
+      // Standort bei Touren erfassen (an/aus) – Datenschutz-Schalter
+      'tour_standort_erfassen',
     ];
     const patch: Record<string, any> = { updated_at: new Date().toISOString() };
     for (const f of allowed) {

@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/server';
+import { standortErfassungAn } from '@/lib/touren/hof';
 
 // ============================================================
 // SCAFFOLD OS – Zuständigkeits-Prüfung für Touren/Tour-Stopps (Phase 90)
@@ -57,4 +58,24 @@ export async function istAdminOderDispo(): Promise<boolean> {
   if (!user) return false;
   const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single();
   return !!profile && ['admin', 'disponent'].includes(profile.role);
+}
+
+// Ist die Standort-Erfassung bei Touren eingeschaltet (Einstellungen)?
+// Fehlt nur die Spalte (SQL phase-101 noch nicht ausgeführt) -> Standard "an".
+// Bei jedem anderen Fehler wird aus Datenschutzgründen NICHT erfasst.
+export async function standortErfassungAktiv(): Promise<boolean> {
+  try {
+    const r = await fetch(
+      `${url}/rest/v1/company_settings?id=eq.00000000-0000-0000-0000-000000000001&select=tour_standort_erfassen`,
+      { headers }
+    );
+    if (!r.ok) {
+      const txt = await r.text();
+      return /tour_standort_erfassen/.test(txt);
+    }
+    const rows = await r.json();
+    return standortErfassungAn(rows?.[0]);
+  } catch {
+    return false;
+  }
 }

@@ -52,3 +52,12 @@ export function hofSpalteFehlt(fehlertext: string): boolean {
   const spalteFehlt = /PGRST204|42703|does not exist|Could not find/i.test(t);
   return betrifftHof && spalteFehlt;
 }
+
+/**
+ * Ist die Standort-Erfassung bei Touren eingeschaltet? Nur ein ausdrückliches
+ * `false` (Einstellungen -> "Standort bei Touren erfassen" aus) schaltet sie ab;
+ * fehlt die Einstellung (Spalte noch nicht angelegt), gilt der Standard "an".
+ */
+export function standortErfassungAn(company: { tour_standort_erfassen?: unknown } | null | undefined): boolean {
+  return !(company && company.tour_standort_erfassen === false);
+}

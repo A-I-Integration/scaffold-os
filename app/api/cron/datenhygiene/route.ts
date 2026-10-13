@@ -1,10 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { runSqlOnProject } from '@/lib/provision/supabase-mgmt';
+import { hofSpalteFehlt } from '@/lib/touren/hof';
 
 // ============================================================
 // SCAFFOLD OS – Cron: Datenhygiene (NUR Master-Instanz)
 //
-// Löscht GPS-Positionsdaten, die älter als 90 Tage sind –
+// Löscht GPS-Positionsdaten, die älter als 90 Tage sind (gps_tracking) und
+// leert die Koordinaten "Vom Hof gefahren / Zurück auf dem Hof" an Touren,
+// die länger als 90 Tage zurückliegen (die Uhrzeiten bleiben) –
 // auf ALLEN Kundeninstanzen und auf der Master-Instanz selbst.
 //
 // Hintergrund: Der AVV (§ 10) verspricht Kunden eine automatische
@@ -18,6 +21,18 @@ import { runSqlOnProject } from '@/lib/provision/supabase-mgmt';
 export const maxDuration = 300;
 
 const GPS_LOESCH_SQL = `delete from public.gps_tracking where created_at < now() - interval '90 days'`;
+
+// Tour-Koordinaten (Abfahrt/Rückkehr) nach 90 Tagen leeren; die Uhrzeiten bleiben.
+// Als DO-Block: fehlen die Spalten (SQL phase-100 nicht ausgeführt), passiert nichts.
+const HOF_LOESCH_SQL = `do $$ begin
+  if exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'tours' and column_name = 'returned_lng')
+     and exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'tours' and column_name = 'departed_lng') then
+    update public.tours
+       set departed_lat = null, departed_lng = null, returned_lat = null, returned_lng = null
+     where planned_date < current_date - 90
+       and (departed_lat is not null or departed_lng is not null or returned_lat is not null or returned_lng is not null);
+  end if;
+end $$;`;
 
 const masterUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const masterKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
@@ -59,6 +74,24 @@ export async function GET(req: NextRequest) {
     ergebnis.push({ instanz: 'master', ok: false, info: err.message });
   }
 
+  // 3b) Master-Instanz: Tour-Koordinaten > 90 Tage leeren
+  try {
+    const grenze = new Date(Date.now() - 90 * 86400000).toISOString().slice(0, 10);
+    const res = await fetch(
+      `${masterUrl}/rest/v1/tours?planned_date=lt.${grenze}&or=(departed_lat.not.is.null,departed_lng.not.is.null,returned_lat.not.is.null,returned_lng.not.is.null)`,
+      { method: 'PATCH', headers, body: JSON.stringify({ departed_lat: null, departed_lng: null, returned_lat: null, returned_lng: null }) }
+    );
+    if (res.ok) {
+      ergebnis.push({ instanz: 'master (Tour-Koordinaten)', ok: true, info: 'Tour-Koordinaten > 90 Tage geleert' });
+    } else {
+      const txt = await res.text();
+      const fehlt = hofSpalteFehlt(txt);
+      ergebnis.push({ instanz: 'master (Tour-Koordinaten)', ok: fehlt, info: fehlt ? 'Spalten noch nicht vorhanden – nichts zu tun' : txt });
+    }
+  } catch (err: any) {
+    ergebnis.push({ instanz: 'master (Tour-Koordinaten)', ok: false, info: err.message });
+  }
+
   // 4) Alle Kundeninstanzen bereinigen
   try {
     const tRes = await fetch(
@@ -72,6 +105,13 @@ export async function GET(req: NextRequest) {
       try {
         await runSqlOnProject(t.supabase_project_ref, GPS_LOESCH_SQL);
         ergebnis.push({ instanz: t.slug, ok: true, info: 'GPS-Daten > 90 Tage gelöscht' });
+        try {
+          await runSqlOnProject(t.supabase_project_ref, HOF_LOESCH_SQL);
+          ergebnis.push({ instanz: `${t.slug} (Tour-Koordinaten)`, ok: true, info: 'Tour-Koordinaten > 90 Tage geleert' });
+        } catch (err2: any) {
+          ergebnis.push({ instanz: `${t.slug} (Tour-Koordinaten)`, ok: false, info: err2.message });
+          console.error(`[cron-datenhygiene] ${t.slug} (Tour-Koordinaten): ${err2.message}`);
+        }
       } catch (err: any) {
         // Einzelne Instanz darf den Gesamtlauf nicht stoppen
         ergebnis.push({ instanz: t.slug, ok: false, info: err.message });

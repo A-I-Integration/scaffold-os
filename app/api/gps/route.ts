@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { requireAuth, unauthorizedResponse, serverErrorResponse, forbiddenResponse } from '@/lib/auth';
-import { istAdminOderDispo } from '@/lib/touren/berechtigung';
+import { istAdminOderDispo, standortErfassungAktiv } from '@/lib/touren/berechtigung';
 
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const key = process.env.SUPABASE_SERVICE_ROLE_KEY!;
@@ -10,6 +10,10 @@ const headers = { apikey: key, Authorization: `Bearer ${key}`, 'Content-Type': '
 export async function POST(req: Request) {
   if (!(await requireAuth())) return unauthorizedResponse();
   try {
+    // Einstellung "Standort bei Touren erfassen" aus -> nichts speichern
+    if (!(await standortErfassungAktiv())) {
+      return NextResponse.json({ success: true, ignoriert: true });
+    }
     const body = await req.json();
     const { vehicle_id, driver_id, lat, lng, accuracy, speed, heading, battery_level } = body;
 

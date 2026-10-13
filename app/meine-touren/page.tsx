@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { formatUhrzeit, formatDauer, fahrtdauerMinuten } from '@/lib/touren/hof';
+import { formatUhrzeit, formatDauer, fahrtdauerMinuten, standortErfassungAn } from '@/lib/touren/hof';
 import { getEmployees, createAbsence } from '@/lib/actions/employees';
 import type { EmployeeWithSkills } from '@/types/employees';
 import ProjektDokumentation from '@/components/ProjektDokumentation';
@@ -81,6 +81,8 @@ export default function MeineTourenPage() {
   // Vom Hof gefahren / Zurück auf dem Hof (+ GPS unterwegs)
   const [hofLaeuft, setHofLaeuft] = useState(false);
   const [hofMsg, setHofMsg] = useState('');
+  // Einstellung "Standort bei Touren erfassen" (Standard an; der Server erzwingt sie zusätzlich)
+  const [standortAn, setStandortAn] = useState(true);
   const gpsWatchRef = useRef<number | null>(null);
   const gpsLastSentRef = useRef(0);
   // team_ids auf tours enthält drivers.id (nicht employees.id, siehe
@@ -225,7 +227,7 @@ export default function MeineTourenPage() {
       if (localStorage.getItem('scaffold_gps_tour_' + myTour.id) === '1') starteGpsLauf(myTour);
     } catch {}
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [myTour?.id, myTour?.status, istMeineTour]);
+  }, [myTour?.id, myTour?.status, istMeineTour, standortAn]);
 
   // Beim Verlassen der Seite die Übertragung beenden (Standort-Symbol aus)
   useEffect(() => {
@@ -321,6 +323,16 @@ export default function MeineTourenPage() {
     localStorage.setItem(ME_KEY, id);
   }
 
+  useEffect(() => {
+    (async () => {
+      try {
+        const r = await fetch('/api/company', { cache: 'no-store' });
+        const j = await r.json();
+        if (j?.success) setStandortAn(standortErfassungAn(j.company));
+      } catch { /* Standard bleibt, der Server prüft ohnehin */ }
+    })();
+  }, []);
+
   // ─── Vom Hof gefahren / Zurück auf dem Hof ───
   // Beim Knopfdruck wird die Position des Handys einmalig mitgeschickt.
   // Unterwegs sendet das Handy alle 30 s die Position (nur solange diese
@@ -348,7 +360,7 @@ export default function MeineTourenPage() {
 
   function starteGpsLauf(tour: Tour) {
     if (gpsWatchRef.current !== null) return;
-    if (typeof navigator === 'undefined' || !navigator.geolocation || !tour.vehicle_id) return;
+    if (!standortAn || typeof navigator === 'undefined' || !navigator.geolocation || !tour.vehicle_id) return;
     try { localStorage.setItem(GPS_KEY + tour.id, '1'); } catch {}
     gpsWatchRef.current = navigator.geolocation.watchPosition(
       async (pos) => {
@@ -372,7 +384,7 @@ export default function MeineTourenPage() {
     if (!myTour) return;
     setHofLaeuft(true); setHofMsg('');
     try {
-      const pos = await aktuellePosition();
+      const pos = standortAn ? await aktuellePosition() : null;
       const res = await fetch('/api/tours/hof', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ tour_id: myTour.id, aktion, lat: pos?.lat, lng: pos?.lng }),
@@ -382,7 +394,7 @@ export default function MeineTourenPage() {
       if (aktion === 'abfahrt') starteGpsLauf(myTour); else stoppeGpsLauf(myTour.id);
       const hinweise: string[] = [aktion === 'abfahrt' ? '✅ Gute Fahrt! Abfahrt gespeichert.' : '✅ Willkommen zurück! Rückkehr gespeichert.'];
       if (json.zeitenGespeichert === false) hinweise.push('Die Uhrzeit konnte noch nicht gespeichert werden (Datenbank-Update steht aus – bitte der Disposition Bescheid geben).');
-      else if (!pos) hinweise.push('Dein Standort war nicht verfügbar – die Uhrzeit wurde trotzdem gespeichert.');
+      else if (standortAn && !pos) hinweise.push('Dein Standort war nicht verfügbar – die Uhrzeit wurde trotzdem gespeichert.');
       setHofMsg(hinweise.join(' '));
       await loadData();
     } catch (e: any) {
@@ -824,7 +836,9 @@ export default function MeineTourenPage() {
                       )}
                       {hofMsg && <div className="text-xs text-[#424245]">{hofMsg}</div>}
                       <p className="text-[11px] text-[#86868b]">
-                        Beim Drücken wird einmalig die Position deines Handys gespeichert. Unterwegs wird sie alle 30 Sekunden an die Disposition übertragen, solange diese Seite geöffnet bleibt. Nur Admin und Disposition sehen sie.
+                        {standortAn
+                          ? 'Beim Drücken wird einmalig die Position deines Handys gespeichert. Unterwegs wird sie alle 30 Sekunden an die Disposition übertragen, solange diese Seite geöffnet bleibt. Nur Admin und Disposition sehen sie.'
+                          : 'Beim Drücken wird nur die Uhrzeit gespeichert. Dein Standort wird in diesem Betrieb nicht erfasst.'}
                       </p>
                     </div>
                   )}

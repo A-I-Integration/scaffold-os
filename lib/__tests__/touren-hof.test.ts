@@ -57,3 +57,17 @@ describe('hofSpalteFehlt', () => {
     expect(hofSpalteFehlt('')).toBe(false);
   });
 });
+
+import { standortErfassungAn } from '../touren/hof';
+describe('standortErfassungAn', () => {
+  it('ist standardmäßig an (Einstellung fehlt oder true)', () => {
+    expect(standortErfassungAn(null)).toBe(true);
+    expect(standortErfassungAn(undefined)).toBe(true);
+    expect(standortErfassungAn({})).toBe(true);
+    expect(standortErfassungAn({ tour_standort_erfassen: true })).toBe(true);
+    expect(standortErfassungAn({ tour_standort_erfassen: null })).toBe(true);
+  });
+  it('ist nur bei ausdrücklichem false aus', () => {
+    expect(standortErfassungAn({ tour_standort_erfassen: false })).toBe(false);
+  });
+});
