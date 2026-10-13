@@ -32,7 +32,10 @@ export async function GET() {
     const rows = await res.json();
     const employee = rows?.[0] || null;
 
-    return NextResponse.json({ success: true, employee });
+    // Rolle des Logins (z. B. damit Meine Touren nur passende Werkzeuge zeigt)
+    const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single();
+
+    return NextResponse.json({ success: true, employee, role: profile?.role || null });
   } catch (err: any) {
     return serverErrorResponse(err);
   }
