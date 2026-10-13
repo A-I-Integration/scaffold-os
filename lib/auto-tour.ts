@@ -12,7 +12,7 @@
 
 import { loadArticlePrices } from '@/lib/calculations/article-prices';
 import {
-  gesamtgewichtKg, teileInFahrten, planeFahrtZeit, minutenZuUhrzeit, uhrzeitZuMinuten, FAHRT_DAUER_MIN,
+  gesamtgewichtKg, teileInFahrten, planeFahrtZeit, minutenZuUhrzeit, uhrzeitZuMinuten, STANDARD_ZEIT, leseZeitParameter,
   type ZeitPlanung,
   type FahrzeugKurz, type FahrerKandidat,
 } from '@/lib/auto-tour-wahl';
@@ -67,13 +67,21 @@ export async function legeAutoTourAn(p: {
     ]);
     const beginne = await lese<any>('projects?select=id,beginn:data->step1->>projektbeginn');
 
+    // Fahrtdauer / letzter Start laut Einstellungen des Betriebs (Standard 3 Std / 15:00;
+    // fehlt die Spalte noch oder ist sie nicht lesbar, gilt der Standard).
+    let zp = STANDARD_ZEIT;
+    try {
+      const cs = await lese<any>('company_settings?select=tour_fahrt_dauer_min,tour_letzter_start_min&limit=1');
+      zp = leseZeitParameter(cs?.[0]);
+    } catch { /* Standard */ }
+
     // Wer ist an dem Tag schon gebunden? (Touren als Fahrer/Team + Baustellen-Zuteilung mit gleichem Beginn)
     const driverZuMa = new Map<string, string>(drivers.filter((d: any) => d.employee_id).map((d: any) => [d.id, d.employee_id]));
     // Belegung am Tag: wann ist welches Fahrzeug / welcher Mitarbeiter durch bestehende Touren wieder frei?
     const zeit: ZeitPlanung = { fahrzeugFreiAb: new Map(), maFreiAb: new Map() };
     const merke = (m: Map<string, number>, id: string, bis: number) => m.set(id, Math.max(m.get(id) ?? 0, bis));
     for (const t of touren) {
-      const bis = uhrzeitZuMinuten(t.planned_start_time) + FAHRT_DAUER_MIN;
+      const bis = uhrzeitZuMinuten(t.planned_start_time) + zp.fahrtDauerMin;
       if (t.vehicle_id) merke(zeit.fahrzeugFreiAb, t.vehicle_id, bis);
       for (const did of [t.driver_id, ...(Array.isArray(t.team_ids) ? t.team_ids : [])]) {
         const ma = did && driverZuMa.get(did);
@@ -113,7 +121,7 @@ export async function legeAutoTourAn(p: {
       const items = fahrten[i];
       const w = Math.round(items.reduce((s, x) => s + x.gewicht, 0) * 100) / 100;
       const vor = fahrten.length > 1 ? `Fahrt ${i + 1} von ${fahrten.length}: ` : '';
-      const wahl = planeFahrtZeit({ fahrzeuge, kandidaten, abwesendIds, ganztagBelegteMa, zeit, gewicht: w });
+      const wahl = planeFahrtZeit({ fahrzeuge, kandidaten, abwesendIds, ganztagBelegteMa, zeit, gewicht: w, params: zp });
       if ('hinweis' in wahl) return { hinweis: vor + wahl.hinweis, gewichtKg: gewicht, datum: p.datum };
       plan.push({ items, gewicht: w, fz: wahl.fahrzeug, fa: wahl.fahrer, startMin: wahl.startMin });
     }

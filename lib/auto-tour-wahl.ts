@@ -110,6 +110,27 @@ export const FAHRT_DAUER_MIN = 180;
 export const TAG_START_MIN = 7 * 60;
 export const LETZTER_START_MIN = 15 * 60;
 
+/** Einstellbar je Betrieb (Einstellungen -> Tourenplanung); Standard = obige Werte. */
+export interface ZeitParameter { fahrtDauerMin: number; letzterStartMin: number }
+export const STANDARD_ZEIT: ZeitParameter = { fahrtDauerMin: FAHRT_DAUER_MIN, letzterStartMin: LETZTER_START_MIN };
+
+/**
+ * Liest die Betriebs-Einstellungen (company_settings.tour_fahrt_dauer_min,
+ * tour_letzter_start_min). Ungültige oder fehlende Werte -> Standard
+ * (Fahrtdauer 30 Min bis 12 Std, letzter Start 06:00 bis 23:00 und nicht
+ * vor dem Tagesbeginn).
+ */
+export function leseZeitParameter(company: { tour_fahrt_dauer_min?: unknown; tour_letzter_start_min?: unknown } | null | undefined): ZeitParameter {
+  const d = Number(company?.tour_fahrt_dauer_min);
+  const l = Number(company?.tour_letzter_start_min);
+  const dauerOk = company?.tour_fahrt_dauer_min != null && Number.isInteger(d) && d >= 30 && d <= 720;
+  const startOk = company?.tour_letzter_start_min != null && Number.isInteger(l) && l >= 6 * 60 && l <= 23 * 60 && l >= TAG_START_MIN;
+  return {
+    fahrtDauerMin: dauerOk ? d : FAHRT_DAUER_MIN,
+    letzterStartMin: startOk ? l : LETZTER_START_MIN,
+  };
+}
+
 export interface ZeitPlanung {
   /** Fahrzeug-ID → ab dieser Minute (seit 00:00) wieder frei */
   fahrzeugFreiAb: Map<string, number>;
@@ -141,12 +162,15 @@ export function planeFahrtZeit(a: {
   ganztagBelegteMa: Set<string>;
   zeit: ZeitPlanung;
   gewicht: number;
+  /** Fahrtdauer / letzter Start des Betriebs (Standard: 3 Std / 15:00) */
+  params?: ZeitParameter;
 }): { fahrzeug: FahrzeugKurz; fahrer: FahrerKandidat; startMin: number } | { hinweis: string } {
+  const p = a.params ?? STANDARD_ZEIT;
   const kandidatenZeiten = new Set<number>([TAG_START_MIN]);
   for (const v of a.zeit.fahrzeugFreiAb.values()) kandidatenZeiten.add(v);
   for (const v of a.zeit.maFreiAb.values()) kandidatenZeiten.add(v);
   const zeiten = Array.from(kandidatenZeiten)
-    .filter((t) => t >= TAG_START_MIN && t <= LETZTER_START_MIN)
+    .filter((t) => t >= TAG_START_MIN && t <= p.letzterStartMin)
     .sort((x, y) => x - y);
 
   let hinweisFz: string | null = null;
@@ -160,12 +184,12 @@ export function planeFahrtZeit(a: {
     a.zeit.maFreiAb.forEach((frei, id) => { if (frei > t) belegteMa.add(id); });
     const fa = waehleFahrer(a.kandidaten, a.abwesendIds, belegteMa, fz.fahrzeug);
     if ('hinweis' in fa) { hinweisFahrer = hinweisFahrer ?? fa.hinweis; continue; }
-    a.zeit.fahrzeugFreiAb.set(fz.fahrzeug.id, t + FAHRT_DAUER_MIN);
-    a.zeit.maFreiAb.set(fa.fahrer.employee_id, t + FAHRT_DAUER_MIN);
+    a.zeit.fahrzeugFreiAb.set(fz.fahrzeug.id, t + p.fahrtDauerMin);
+    a.zeit.maFreiAb.set(fa.fahrer.employee_id, t + p.fahrtDauerMin);
     return { fahrzeug: fz.fahrzeug, fahrer: fa.fahrer, startMin: t };
   }
   return {
     hinweis: hinweisFahrer
-      ?? (hinweisFz ? `${hinweisFz} (spätester Fahrtbeginn ${minutenZuUhrzeit(LETZTER_START_MIN).slice(0, 5)} Uhr)` : 'Der Tag ist für Fahrten voll.'),
+      ?? (hinweisFz ? `${hinweisFz} (spätester Fahrtbeginn ${minutenZuUhrzeit(p.letzterStartMin).slice(0, 5)} Uhr)` : 'Der Tag ist für Fahrten voll.'),
   };
 }
