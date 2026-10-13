@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { getEmployees } from '@/lib/actions/employees';
 import type { EmployeeWithSkills } from '@/types/employees';
+import { formatUhrzeit, formatDauer, fahrtdauerMinuten } from '@/lib/touren/hof';
 
 // ============================================================
 // SCAFFOLD OS – Touren / Dispo-Cockpit (Disponentin)
@@ -24,6 +25,9 @@ interface Tour {
   id: string; name: string; status: string; planned_date: string; planned_start_time: string | null;
   total_weight_kg: number | null; vehicle: Vehicle | null; driver: Driver | null; stops: Stop[];
   team_ids?: string[] | null;
+  vehicle_id?: string | null;
+  departed_at?: string | null;
+  returned_at?: string | null;
 }
 interface TimeEntry {
   id: string; work_date: string; start_time: string | null; end_time: string | null;
@@ -61,6 +65,9 @@ export default function TourenPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [expandedTour, setExpandedTour] = useState<string | null>(null);
+  // Letzte GPS-Position je Fahrzeug (nur für Touren "unterwegs"; die API liefert
+  // sie ausschließlich an Admin/Disposition)
+  const [positionen, setPositionen] = useState<Record<string, { lat: number; lng: number; at: string }>>({});
   // Lieferungen, für die die Automatik keine Fahrt anlegen konnte (mit Grund)
   const [offeneFahrten, setOffeneFahrten] = useState<{ projektId: string; projekt: string; beginn: string | null; hinweis: string }[]>([]);
 
@@ -119,6 +126,32 @@ export default function TourenPage() {
   }, []);
 
   useEffect(() => { loadAll(); }, [loadAll]);
+
+  // Positionen der laufenden Touren holen und jede Minute aktualisieren
+  useEffect(() => {
+    const laufend = Array.from(new Set(
+      tours.filter(t => t.status === 'in_progress' && t.vehicle_id).map(t => t.vehicle_id as string)
+    ));
+    if (laufend.length === 0) return;
+    let abgebrochen = false;
+    async function holen() {
+      const neu: Record<string, { lat: number; lng: number; at: string }> = {};
+      for (const vid of laufend) {
+        try {
+          const r = await fetch(`/api/gps?vehicle_id=${vid}&limit=1`, { cache: 'no-store' });
+          const j = await r.json();
+          const p = j?.positions?.[0];
+          if (j?.success && p && typeof p.lat === 'number' && typeof p.lng === 'number') {
+            neu[vid] = { lat: p.lat, lng: p.lng, at: p.created_at };
+          }
+        } catch { /* nicht kritisch */ }
+      }
+      if (!abgebrochen) setPositionen(neu);
+    }
+    holen();
+    const iv = setInterval(holen, 60000);
+    return () => { abgebrochen = true; clearInterval(iv); };
+  }, [tours]);
 
   // Offene Lieferungen automatisch einplanen – ohne Klick. Danach Touren neu laden.
   useEffect(() => {
@@ -385,6 +418,22 @@ export default function TourenPage() {
                       {tour.planned_start_time ? ` · ab ${tour.planned_start_time}` : ''}
                       {` · ${tour.stops?.length ?? 0} Stopp${(tour.stops?.length ?? 0) === 1 ? '' : 's'}`}
                     </div>
+                    {tour.departed_at && (
+                      <div className="text-sm text-[#424245]">
+                        🚛 Hof ab {formatUhrzeit(tour.departed_at)}
+                        {tour.returned_at ? ` · 🏠 zurück ${formatUhrzeit(tour.returned_at)} (${formatDauer(fahrtdauerMinuten(tour.departed_at, tour.returned_at))})` : ' · unterwegs'}
+                        {!tour.returned_at && tour.vehicle_id && positionen[tour.vehicle_id] && (
+                          <a
+                            href={`https://www.google.com/maps?q=${positionen[tour.vehicle_id].lat},${positionen[tour.vehicle_id].lng}`}
+                            target="_blank" rel="noreferrer"
+                            onClick={(e) => e.stopPropagation()}
+                            className="ml-2 text-[#e8590c] hover:underline"
+                          >
+                            📍 Position {formatUhrzeit(positionen[tour.vehicle_id].at)}
+                          </a>
+                        )}
+                      </div>
+                    )}
                   </div>
                   <div className="text-sm text-[#424245]">
                     🚛 {tour.vehicle?.name || '–'} {tour.vehicle?.license_plate ? `(${tour.vehicle.license_plate})` : ''}

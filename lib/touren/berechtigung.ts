@@ -48,3 +48,13 @@ export async function eigeneEmployeeId(): Promise<string | null> {
   const { data: employee } = await supabase.from('employees').select('id').eq('user_id', user.id).maybeSingle();
   return employee?.id || null;
 }
+
+// Ist der eingeloggte Nutzer admin oder disponent? (z. B. für GPS-Positionen,
+// die nur diese beiden Rollen sehen dürfen)
+export async function istAdminOderDispo(): Promise<boolean> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return false;
+  const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single();
+  return !!profile && ['admin', 'disponent'].includes(profile.role);
+}
