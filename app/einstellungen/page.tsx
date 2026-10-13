@@ -104,6 +104,11 @@ export default function EinstellungenPage() {
   // DB-Spalte aus Phase 96 noch fehlt).
   const [angeboten, setAngeboten] = useState<string[]>([])
   const [angebotenGeaendert, setAngebotenGeaendert] = useState(false)
+  // Standort bei Touren erfassen (Datenschutz-Schalter). Wird nur gespeichert,
+  // wenn der Nutzer ihn angefasst hat (schützt, solange die DB-Spalte aus
+  // Phase 101 noch fehlt).
+  const [standortAn, setStandortAn] = useState(true)
+  const [standortGeaendert, setStandortGeaendert] = useState(false)
 
   useEffect(() => {
     (async () => {
@@ -119,6 +124,7 @@ export default function EinstellungenPage() {
           }
           setCompany(c);
           setAngeboten(leseAngeboteneTypen(json.company.angebotene_geruesttypen) || [])
+          setStandortAn(json.company.tour_standort_erfassen !== false)
           if (Array.isArray(json.company.preisliste_geruesttypen)) {
             setPreisliste(json.company.preisliste_geruesttypen.map((p: any) => ({ name: p.name || '', preis_pro_m2: String(p.preis_pro_m2 ?? '') })))
           }
@@ -153,6 +159,7 @@ export default function EinstellungenPage() {
       } else {
         delete payload.angebotene_geruesttypen;
       }
+      if (standortGeaendert) payload.tour_standort_erfassen = standortAn;
       const res = await fetch('/api/company', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -287,6 +294,32 @@ export default function EinstellungenPage() {
                 );
               })}
             </div>
+          </div>
+        )}
+
+        {/* ─── Datenschutz: Standort bei Touren ─── */}
+        {!loading && !error && (
+          <div className="bg-[#f5f5f7] rounded-xl p-6 border border-black/10 space-y-3">
+            <div>
+              <h2 className="text-lg font-bold text-[#1d1d1f]">Standort bei Touren</h2>
+              <p className="text-sm text-[#86868b]">
+                Mitarbeiter drücken in „Meine Touren“ beim Losfahren „Vom Hof gefahren“ und bei der Rückkehr „Zurück auf dem Hof“.
+                Ist der Standort an, wird dabei die Handy-Position gespeichert und unterwegs alle 30 Sekunden übertragen (nur solange die Seite offen ist).
+                Sehen können das nur Admin und Disposition. Positionen und Koordinaten werden nach 90 Tagen automatisch gelöscht.
+                Ist der Standort aus, werden nur die Uhrzeiten gespeichert. Danach unten „Alles speichern“.
+              </p>
+            </div>
+            <label className="flex items-center gap-2 rounded-lg border border-black/10 bg-white px-3 py-2 text-sm cursor-pointer">
+              <input
+                type="checkbox"
+                checked={standortAn}
+                onChange={() => { setStandortGeaendert(true); setStandortAn((v) => !v); }}
+              />
+              <span>📍 Standort bei Touren erfassen</span>
+            </label>
+            <p className="text-xs text-[#86868b]">
+              Hinweis: Ob und wie ihr Standortdaten von Beschäftigten erfassen dürft (Information der Mitarbeiter, ggf. Betriebsrat), klärt ihr bitte in eurem Betrieb, z. B. mit eurem Datenschutzbeauftragten.
+            </p>
           </div>
         )}
 

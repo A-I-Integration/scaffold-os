@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { requireAuth, unauthorizedResponse, serverErrorResponse, forbiddenResponse } from '@/lib/auth';
-import { darfStoppAendern } from '@/lib/touren/berechtigung';
+import { darfStoppAendern, standortErfassungAktiv } from '@/lib/touren/berechtigung';
 import { hofSpalteFehlt, istGueltigePosition } from '@/lib/touren/hof';
 
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
@@ -40,7 +40,9 @@ export async function POST(req: Request) {
       return forbiddenResponse('Du bist für diese Tour nicht zuständig.');
     }
 
-    const pos = istGueltigePosition(body?.lat, body?.lng) ? { lat: body.lat as number, lng: body.lng as number } : null;
+    // Einstellung "Standort bei Touren erfassen": ist sie aus, wird nur die Uhrzeit gespeichert
+    const standortAn = await standortErfassungAktiv();
+    const pos = standortAn && istGueltigePosition(body?.lat, body?.lng) ? { lat: body.lat as number, lng: body.lng as number } : null;
 
     // Tour lesen (mit Hof-Spalten; fehlen sie noch, ohne)
     let hatSpalten = true;
