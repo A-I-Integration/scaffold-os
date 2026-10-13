@@ -103,16 +103,23 @@ export async function legeAutoTourAn(p: {
       klassen: Array.isArray(e.fuehrerschein_klassen) ? e.fuehrerschein_klassen : [],
     }));
     const plan: { items: { id: string; gewicht: number }[]; gewicht: number; fz: FahrzeugKurz; fa: FahrerKandidat }[] = [];
+    // Fahrzeuge/Fahrer, die für DIESES Projekt schon eine Fahrt haben: erst andere
+    // freie bevorzugen (parallel), sonst fährt dieselbe Besatzung die nächste Fahrt
+    // danach (ein Lkw fährt am Tag mehrmals Lager → Baustelle).
+    const eigeneFz = new Set<string>();
+    const eigeneMa = new Set<string>();
     for (let i = 0; i < fahrten.length; i++) {
       const items = fahrten[i];
       const w = Math.round(items.reduce((s, x) => s + x.gewicht, 0) * 100) / 100;
       const vor = fahrten.length > 1 ? `Fahrt ${i + 1} von ${fahrten.length}: ` : '';
-      const fz = waehleFahrzeug(fahrzeuge, w, belegteFahrzeuge);
+      let fz = waehleFahrzeug(fahrzeuge, w, new Set([...belegteFahrzeuge, ...eigeneFz]));
+      if ('hinweis' in fz) fz = waehleFahrzeug(fahrzeuge, w, belegteFahrzeuge);
       if ('hinweis' in fz) return { hinweis: vor + fz.hinweis, gewichtKg: gewicht, datum: p.datum };
-      const fa = waehleFahrer(kandidaten, abwesendIds, belegteMa, fz.fahrzeug);
+      let fa = waehleFahrer(kandidaten, abwesendIds, new Set([...belegteMa, ...eigeneMa]), fz.fahrzeug);
+      if ('hinweis' in fa) fa = waehleFahrer(kandidaten, abwesendIds, belegteMa, fz.fahrzeug);
       if ('hinweis' in fa) return { hinweis: vor + fa.hinweis, gewichtKg: gewicht, datum: p.datum, fahrzeug: fz.fahrzeug.name };
-      belegteFahrzeuge.add(fz.fahrzeug.id);
-      belegteMa.add(fa.fahrer.employee_id);
+      eigeneFz.add(fz.fahrzeug.id);
+      eigeneMa.add(fa.fahrer.employee_id);
       plan.push({ items, gewicht: w, fz: fz.fahrzeug, fa: fa.fahrer });
     }
 
@@ -172,8 +179,8 @@ export async function legeAutoTourAn(p: {
       tourId: angelegt[0].tourId,
       tourName: angelegt.length > 1 ? `Anlieferung ${p.projektName} (${angelegt.length} Fahrten)` : angelegt[0].name,
       datum: p.datum, gewichtKg: gewicht,
-      fahrzeug: angelegt.map((x) => x.fz).join(' + '),
-      fahrer: angelegt.map((x) => x.fa).join(' + '),
+      fahrzeug: Array.from(new Set(angelegt.map((x) => x.fz))).join(' + '),
+      fahrer: Array.from(new Set(angelegt.map((x) => x.fa))).join(' + '),
     };
   } catch (e: any) {
     return { hinweis: `Fehler beim Anlegen der Fahrt: ${String(e?.message || e)}` };
