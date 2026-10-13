@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
+import { rolleErlaubt } from '@/lib/rollen';
 
 // ============================================================
 // SCAFFOLD OS – Zentrale Mindest-Auth-Prüfung (Phase 58)
@@ -74,6 +75,29 @@ export async function requireOwnEmployeeOrAdmin(
     return { allowed: false, error: 'Du darfst nur für dich selbst stempeln oder Abwesenheiten beantragen.' };
   } catch {
     return { allowed: false, error: 'Da ist leider etwas schiefgelaufen. Bitte erneut versuchen.' };
+  }
+}
+
+/**
+ * Rollen-Prüfung für API-Routen: eingeloggt UND Rolle erlaubt (Rollen-Gruppen
+ * siehe lib/rollen.ts). Bei Erfolg { ok: true, userId, role }, sonst eine
+ * fertige 401-/403-Antwort in `response`. Fehlt das Profil, gilt "mitarbeiter".
+ */
+export async function pruefeRolle(
+  erlaubt: readonly string[]
+): Promise<{ ok: true; userId: string; role: string } | { ok: false; response: NextResponse }> {
+  try {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return { ok: false, response: unauthorizedResponse() };
+    const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single();
+    const role = profile?.role || 'mitarbeiter';
+    if (!rolleErlaubt(role, erlaubt)) {
+      return { ok: false, response: forbiddenResponse('Dafür hast du keine Berechtigung.') };
+    }
+    return { ok: true, userId: user.id, role };
+  } catch {
+    return { ok: false, response: unauthorizedResponse() };
   }
 }
 

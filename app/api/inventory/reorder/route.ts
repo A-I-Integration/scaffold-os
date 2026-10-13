@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
-import { requireAuth, unauthorizedResponse, serverErrorResponse } from '@/lib/auth';
+import { requireAuth, unauthorizedResponse, serverErrorResponse, pruefeRolle } from '@/lib/auth';
+import { ROLLEN } from '@/lib/rollen';
 
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const key = process.env.SUPABASE_SERVICE_ROLE_KEY!;
@@ -8,7 +9,8 @@ const headers = { apikey: key, Authorization: `Bearer ${key}`, 'Content-Type': '
 // POST /api/inventory/reorder
 // Body: { inventory_id, order_quantity, notes? }
 export async function POST(req: Request) {
-  if (!(await requireAuth())) return unauthorizedResponse();
+  const rollenPruefung = await pruefeRolle(ROLLEN.LAGER);
+  if (!rollenPruefung.ok) return rollenPruefung.response;
   try {
     const body = await req.json();
     const { inventory_id, order_quantity, notes } = body;

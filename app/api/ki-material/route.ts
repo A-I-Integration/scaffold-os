@@ -5,7 +5,8 @@
 import { NextResponse } from 'next/server';
 import { calculateScaffoldMaterial, CostSettings } from '@/lib/calculations/scaffold-engine';
 import { loadArticlePrices } from '@/lib/calculations/article-prices';
-import { requireAuth, unauthorizedResponse } from '@/lib/auth';
+import { requireAuth, unauthorizedResponse, pruefeRolle } from '@/lib/auth';
+import { ROLLEN } from '@/lib/rollen';
 
 // Kalkulations-Grundlagen aus den Firmeneinstellungen laden
 // (company_settings.calc_* – per REST + SERVICE_ROLE_KEY, createClient crasht auf Vercel).
@@ -39,7 +40,8 @@ async function loadCostSettings(): Promise<CostSettings> {
 }
 
 export async function POST(request: Request) {
-  if (!(await requireAuth())) return unauthorizedResponse();
+  const rollenPruefung = await pruefeRolle(ROLLEN.ADMIN_BAULEITER);
+  if (!rollenPruefung.ok) return rollenPruefung.response;
   try {
     const body = await request.json();
 
