@@ -96,8 +96,8 @@ export async function POST(req: NextRequest) {
       },
       geruest: {
         system: s3.system ?? s3.geruestsystem ?? null,
-        lastklasse: s3.lastklasse ?? null,
-        breite_klasse: s3.geruestbreite ?? s3.breite ?? null,
+        lastklasse: s2.lastklasse ?? s3.lastklasse ?? null,
+        breite_klasse: s2.breitenklasse || s3.geruestbreite || s3.breite || null,
         verwendung: s3.verwendung ?? s3.zweck ?? null,
       },
       ki_material: {

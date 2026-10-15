@@ -1011,6 +1011,8 @@ function Schritt6Content() {
             <div><span className="text-[#86868b]">Traufhöhe:</span> <span className="text-[#1d1d1f]">{s2.traufhoehe || '–'} m</span></div>
             <div><span className="text-[#86868b]">Dachform:</span> <span className="text-[#1d1d1f]">{s2.dachform || '–'}</span></div>
             <div><span className="text-[#86868b]">Fassade:</span> <span className="text-[#1d1d1f]">{s2.fassade || '–'}</span></div>
+            <div><span className="text-[#86868b]">Lastklasse:</span> <span className="text-[#1d1d1f]">{s2.lastklasse ? `LK ${s2.lastklasse}` : '–'}</span></div>
+            <div><span className="text-[#86868b]">Breitenklasse:</span> <span className="text-[#1d1d1f]">{s2.breitenklasse || '–'}</span></div>
             <div className="col-span-2"><span className="text-[#86868b]">Hindernisse:</span> <span className="text-[#1d1d1f]">{(s2.hindernisse || []).join(', ') || 'Keine'}</span></div>
           </div>
         </div>
