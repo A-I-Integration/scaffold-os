@@ -67,6 +67,8 @@ function leeresFormS2() {
     fassade: '',
     lastklasse: 3 as number,
     breitenklasse: '' as string,
+    lkVonS1: null as number | null,
+    bkVonS1: '' as string,
     garagen: false,
     fluchtwege: false,
     werbeanlagen: false,
@@ -476,6 +478,20 @@ function leeresFormS2() {
         : [...prev.hindernisse, h]
     }));
   }
+
+  // Auswahl aus Schritt 1 übernehmen, sobald sie neu oder geändert ist (spätere Änderung hier bleibt erhalten,
+  // bis Schritt 1 wieder etwas anderes wählt).
+  useEffect(() => {
+    if (!step1Data) return;
+    const lk = typeof step1Data.lastklasse === 'number' ? step1Data.lastklasse : null;
+    const bk = typeof step1Data.breitenklasse === 'string' ? step1Data.breitenklasse : '';
+    setForm((prev) => {
+      let n = prev; let geaendert = false;
+      if (lk !== null && prev.lkVonS1 !== lk) { n = { ...n, lastklasse: lk, lkVonS1: lk }; geaendert = true; }
+      if (bk && prev.bkVonS1 !== bk) { n = { ...n, breitenklasse: bk, bkVonS1: bk }; geaendert = true; }
+      return geaendert ? n : prev;
+    });
+  }, [step1Data]);
 
   const istBruecke = step1Data?.projektart === 'bruecke';
 
