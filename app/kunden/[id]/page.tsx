@@ -32,6 +32,7 @@ import SollIstStunden from '@/components/SollIstStunden'
 import AuftragsTeam from '@/components/AuftragsTeam'
 import VertragsDokumente from '@/components/VertragsDokumente'
 import NachtraegeBlock from '@/components/NachtraegeBlock'
+import ZwischenaufmassBlock from '@/components/ZwischenaufmassBlock'
 import SchlussrechnungDialog from '@/components/SchlussrechnungDialog'
 import { lokalesDatumIso, datumPlusTage } from '@/lib/datum'
 
@@ -1167,6 +1168,7 @@ export default function KundenDetailPage() {
               <div key={project.id} className="bg-white rounded-xl border border-black/10 p-5 space-y-3">
                 <p className="font-semibold text-[#1d1d1f] flex items-center gap-1.5"><FileSignature className="h-4 w-4 text-[#e8590c]" /> {project.name || 'Unbenanntes Projekt'}</p>
                 <NachtraegeBlock project={project} kunde={kunde} />
+                <ZwischenaufmassBlock project={project} />
                 <button onClick={() => setSchlussProjectId(project.id)} className="flex items-center gap-1.5 text-xs text-[#e8590c] font-semibold hover:underline">
                   <FileText className="h-3.5 w-3.5" /> Schlussrechnung erstellen (nach Angebot oder Aufmaß, mit Nachträgen)
                 </button>

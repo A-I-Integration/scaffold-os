@@ -3,6 +3,7 @@
 import { useState, useCallback } from 'react';
 import { FileText, Download, Mail, Check, RotateCcw, Image as ImageIcon, ClipboardList, Plus, ChevronDown, ChevronUp } from 'lucide-react';
 import NachtraegeBlock from '@/components/NachtraegeBlock';
+import ZwischenaufmassBlock from '@/components/ZwischenaufmassBlock';
 import SchlussrechnungDialog from '@/components/SchlussrechnungDialog';
 import EmailVerlaufDialog, { type EmailVerlaufEintrag } from '@/components/EmailVerlaufDialog';
 import { generateInvoicePDF, fmtEur, fmtDate, holePdfBase64FuerVersand, type Invoice } from '@/lib/invoice-pdf';
@@ -233,6 +234,9 @@ export default function KundeAuftrag({
 
         {/* ─── Nachträge (Grund, Datum, Fotos, Betrag, Status, PDF) ─── */}
         <NachtraegeBlock project={project} kunde={kunde} />
+
+        {/* ─── Zwischenaufmaß (kumuliert je Stichtag) ─── */}
+        <ZwischenaufmassBlock project={project} />
 
         {/* ─── Schlussrechnung (Angebotspreis oder Aufmaß, inkl. bestätigter Nachträge) ─── */}
         <button onClick={() => setSchlussOffen(true)} className="flex items-center gap-1.5 text-xs text-[#e8590c] font-semibold hover:underline">
