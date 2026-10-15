@@ -9,6 +9,7 @@ import {
   type RechnungsBasis, type RechnungsEingabe,
 } from '@/lib/schlussrechnung';
 import type { Invoice } from '@/lib/invoice-pdf';
+import { normalisiereZwischenaufmasse, baueTeilleistungsPosition, markiereAbgerechnet, zwischenaufmassNr, neueMengeM2, type Zwischenaufmass } from '@/lib/zwischenaufmass';
 
 // ============================================================
 // SCAFFOLD OS – Schlussrechnung aus Auftrag erstellen
@@ -45,10 +46,14 @@ export default function SchlussrechnungDialog({ projectId, customerName, custome
   const [art, setArt] = useState<'schluss' | 'standard' | 'abschlag'>('schluss');
   const [abschlagProzent, setAbschlagProzent] = useState('');
   const [abschlagBetrag, setAbschlagBetrag] = useState('');
+  const [zwischenaufmasse, setZwischenaufmasse] = useState<Zwischenaufmass[]>([]);
+  const [abschlagModus, setAbschlagModus] = useState<'betrag' | 'zwischenaufmass'>('betrag');
+  const [gewaehltesZA, setGewaehltesZA] = useState('');
   const [preisM2, setPreisM2] = useState('');
   const [gewaehlteNachtraege, setGewaehlteNachtraege] = useState<Set<string>>(new Set());
 
   const [laeuft, setLaeuft] = useState(false);
+  const [angelegt, setAngelegt] = useState(false);
   const [fehler, setFehler] = useState('');
   const [brauchtBegruendung, setBrauchtBegruendung] = useState<string | null>(null);
   const [begruendung, setBegruendung] = useState('');
@@ -66,6 +71,10 @@ export default function SchlussrechnungDialog({ projectId, customerName, custome
         setProjektDaten(d);
         const n = normalisiereNachtraege(pRes.project?.data?.nachtraege).filter((x) => x.status === 'bestaetigt');
         setNachtraege(n);
+        const za = normalisiereZwischenaufmasse(pRes.project?.data?.zwischenaufmasse);
+        setZwischenaufmasse(za);
+        const offen = za.filter((z) => !z.rechnungId);
+        if (offen.length > 0) setGewaehltesZA(offen[offen.length - 1].id);
         setGewaehlteNachtraege(new Set(n.map((x) => x.id)));
         if (cRes?.success && cRes.company) {
           setKranTagessatz(Number(cRes.company.calc_crane_day) || 850);
@@ -122,11 +131,19 @@ export default function SchlussrechnungDialog({ projectId, customerName, custome
   const gesamtNetto = summeNetto(leistungsPositionen);
   // Abschlagsrechnung: Betrag netto direkt ODER Prozent der Gesamtleistung (netto)
   const zahl = (v: string) => parseFloat(String(v).replace(',', '.')) || 0;
+  const zaModus = art === 'abschlag' && abschlagModus === 'zwischenaufmass';
+  const zaAuswahl = zwischenaufmasse.find((z) => z.id === gewaehltesZA) || null;
+  const teilleistung = useMemo(
+    () => (zaModus && zaAuswahl ? baueTeilleistungsPosition({ z: zaAuswahl, liste: zwischenaufmasse, preisProM2: preisM2Zahl }) : { position: null, fehler: null }),
+    [zaModus, zaAuswahl, zwischenaufmasse, preisM2Zahl],
+  );
   const abschlagNetto = art !== 'abschlag' ? 0
+    : zaModus ? Math.round((teilleistung.position ? teilleistung.position.menge * teilleistung.position.einzelpreis : 0) * 100) / 100
     : zahl(abschlagBetrag) > 0 ? Math.round(zahl(abschlagBetrag) * 100) / 100
     : Math.round(gesamtNetto * zahl(abschlagProzent)) / 100;
-  const abschlagZuHoch = art === 'abschlag' && istAbschlagZuHoch(abschlagNetto, gesamtNetto);
+  const abschlagZuHoch = art === 'abschlag' && !zaModus && istAbschlagZuHoch(abschlagNetto, gesamtNetto);
   const positionen = useMemo(() => {
+    if (zaModus) return teilleistung.position ? [teilleistung.position] : [];
     if (art === 'abschlag') {
       if (abschlagNetto <= 0) return [];
       const pct = zahl(abschlagBetrag) > 0 ? '' : ` (${zahl(abschlagProzent).toLocaleString('de-DE')} % der Gesamtleistung)`;
@@ -134,7 +151,7 @@ export default function SchlussrechnungDialog({ projectId, customerName, custome
     }
     return [...leistungsPositionen, ...baueAbzugsPositionen(abzuege)];
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [art, abschlagNetto, abschlagBetrag, abschlagProzent, leistungsPositionen, abzuege]);
+  }, [art, zaModus, teilleistung, abschlagNetto, abschlagBetrag, abschlagProzent, leistungsPositionen, abzuege]);
   const netto = summeNetto(positionen);
   const abzugNetto = Math.round(abzuege.reduce((s, a) => s + a.netto, 0) * 100) / 100;
   const ustRest = Math.round(netto * 19) / 100;
@@ -144,8 +161,8 @@ export default function SchlussrechnungDialog({ projectId, customerName, custome
   const aufmassMoeglich = aufmassM2 > 0;
   const basisOk = basis === 'angebot' ? hatAngebotspreis : aufmassMoeglich && preisM2Zahl > 0;
   // Abschlag mit festem Betrag braucht keine Kalkulationsbasis, mit Prozent schon
-  const kannAnlegen = !laeuft && positionen.length > 0 && netto > 0 && !abschlagZuHoch
-    && (art === 'abschlag' && zahl(abschlagBetrag) > 0 ? true : basisOk);
+  const kannAnlegen = !laeuft && !angelegt && positionen.length > 0 && netto > 0 && !abschlagZuHoch
+    && (zaModus ? !!teilleistung.position : art === 'abschlag' && zahl(abschlagBetrag) > 0 ? true : basisOk);
 
   async function anlegen(overrideGrund?: string) {
     if (!eingabe) return;
@@ -168,7 +185,24 @@ export default function SchlussrechnungDialog({ projectId, customerName, custome
         if (json.code === 'FREIGABE_FEHLT_OVERRIDE_MOEGLICH') { setBrauchtBegruendung(json.error); return; }
         throw new Error(json.error || 'Rechnung konnte nicht angelegt werden.');
       }
+      let warnung = '';
+      if (zaModus && zaAuswahl && json.invoice?.id) {
+        // Zwischenaufmaß als abgerechnet markieren (frisch lesen, damit nichts überschrieben wird)
+        try {
+          const fr = await fetch(`/api/projects?id=${projectId}`).then((r) => r.json());
+          const liste = normalisiereZwischenaufmasse(fr?.project?.data?.zwischenaufmasse);
+          const neu = markiereAbgerechnet(liste, zaAuswahl.id, { id: json.invoice.id, nummer: json.invoice.invoice_number || '' }, new Date().toISOString().slice(0, 10));
+          const pr = await fetch('/api/projects', {
+            method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ id: projectId, data: { zwischenaufmasse: neu } }),
+          }).then((r) => r.json());
+          if (!pr?.success) throw new Error(pr?.error || 'unbekannt');
+        } catch (e: any) {
+          warnung = `Die Rechnung ${json.invoice.invoice_number || ''} wurde angelegt, aber ${zwischenaufmassNr(zaAuswahl)} konnte nicht als abgerechnet markiert werden (${e?.message || 'Fehler'}). Bitte NICHT erneut anlegen, sonst wird doppelt berechnet.`;
+        }
+      }
       onCreated(json.invoice);
+      if (warnung) { setAngelegt(true); setFehler(warnung); return; }
       onClose();
     } catch (e: any) {
       setFehler(e?.message || 'Fehler');
@@ -237,6 +271,37 @@ export default function SchlussrechnungDialog({ projectId, customerName, custome
 
             {art === 'abschlag' && (
               <div className="rounded-lg bg-[#f5f5f7] p-3 space-y-2">
+                {zwischenaufmasse.length > 0 && (
+                  <div>
+                    <label className="block text-[11px] text-[#86868b] mb-1">Berechnung</label>
+                    <select value={abschlagModus} onChange={(e) => setAbschlagModus(e.target.value as 'betrag' | 'zwischenaufmass')} className={inputCls}>
+                      <option value="betrag">Betrag oder Prozent</option>
+                      <option value="zwischenaufmass">Nach Zwischenaufmaß (nur neue Menge)</option>
+                    </select>
+                  </div>
+                )}
+                {zaModus ? (
+                  <div className="space-y-2">
+                    <div>
+                      <label className="block text-[11px] text-[#86868b] mb-1">Zwischenaufmaß</label>
+                      <select value={gewaehltesZA} onChange={(e) => setGewaehltesZA(e.target.value)} className={inputCls}>
+                        {zwischenaufmasse.map((z) => (
+                          <option key={z.id} value={z.id} disabled={!!z.rechnungId}>
+                            {zwischenaufmassNr(z)} · {new Date(z.stichtag + 'T12:00:00').toLocaleDateString('de-DE')} · {z.flaecheM2.toLocaleString('de-DE')} m² kumuliert{z.rechnungId ? ` · schon abgerechnet (${z.rechnungNr || ''})` : ` · neu ${neueMengeM2(z, zwischenaufmasse).toLocaleString('de-DE')} m²`}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-[11px] text-[#86868b] mb-1">Preis je m² netto (€)</label>
+                      <input value={preisM2} onChange={(e) => setPreisM2(e.target.value)} inputMode="decimal" placeholder="z. B. 8,50" className={inputCls} />
+                    </div>
+                    {teilleistung.fehler && <p className="text-xs text-red-600">{teilleistung.fehler}</p>}
+                    {teilleistung.position && (
+                      <p className="text-xs text-[#1d1d1f]">{teilleistung.position.menge.toLocaleString('de-DE')} m² × {eur(teilleistung.position.einzelpreis)} = <b>{eur(abschlagNetto)}</b> netto</p>
+                    )}
+                  </div>
+                ) : (<>
                 <p className="text-[11px] text-[#86868b]">Eine Abschlagsrechnung gehört zu diesem Auftrag. In der Schlussrechnung wird sie später automatisch netto abgezogen (§ 14 Abs. 5 UStG). Gib entweder einen Betrag oder Prozent der Gesamtleistung an.</p>
                 <div className="grid grid-cols-2 gap-2">
                   <div>
@@ -254,6 +319,7 @@ export default function SchlussrechnungDialog({ projectId, customerName, custome
                 {abschlagZuHoch && (
                   <p className="text-xs text-red-600">Der Abschlag ist höher als die Gesamtleistung (netto {eur(gesamtNetto)}). Bitte Betrag oder Prozent prüfen.</p>
                 )}
+                </>)}
               </div>
             )}
 
