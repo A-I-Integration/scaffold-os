@@ -5,7 +5,7 @@ import WizardKopf from '@/components/aufmaß/WizardKopf';
 import { ClipboardList } from 'lucide-react';
 import { useState, useEffect, useRef, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { vorschlagLastklasse } from '@/lib/geruestklassen';
+import { vorschlagLastklasse, LASTKLASSEN, BREITENKLASSEN, breitenklasseText } from '@/lib/geruestklassen';
 import { setzeMarkierung, leseSchrittGeladenesProjekt, setzeSchrittGeladenesProjekt, WIZARD_KEYS, gewerkeVonStep1 } from '@/lib/aufmass-projekt-session';
 import { NEU, SESSION_EIGENTUEMER_KEY, setzeLidarEigentuemer, sitzungGehoertZu } from '@/lib/aufmass-eigentuemer';
 import { speichereEntwurf } from '@/lib/aufmass-entwurf';
@@ -47,6 +47,8 @@ const LEERES_FORM = {
 
   // Gewerke & Dauer
   gewerke: [] as string[],
+  lastklasse: null as number | null,
+  breitenklasse: '' as string,
   dauer: '4',
 
   // Notizen
@@ -268,11 +270,6 @@ function Schritt1Content() {
       () => setGpsStatus('fehler'),
       { enableHighAccuracy: true, timeout: 15000 }
     );
-  }
-
-  function getLastklasse() {
-    const v = vorschlagLastklasse(form.gewerke);
-    return `LK ${v.klasse}`;
   }
 
   function getStandzeit() {
@@ -608,13 +605,43 @@ function Schritt1Content() {
                 </button>
               ))}
             </div>
-            {form.gewerke.length > 0 && (
-              <div className="mt-4 flex items-center gap-2 text-sm text-[#86868b]">
-                <span>Vorschlag Lastklasse:</span>
-                <span className="text-[#e8590c] font-medium">{getLastklasse()}</span>
-                <span className="text-[11px]">(Auswahl in Schritt 2)</span>
+            <div className="mt-4 space-y-3">
+              {(() => {
+                const v = vorschlagLastklasse(form.gewerke);
+                return (
+                  <p className="text-sm text-[#86868b]">
+                    {v.grund ? <>Vorschlag für {v.grund}: <span className="text-[#e8590c] font-medium">LK {v.klasse}</span>{form.lastklasse !== v.klasse && (
+                      <> · <button type="button" onClick={() => setForm((prev) => ({ ...prev, lastklasse: v.klasse }))} className="text-[#e8590c] font-medium underline">übernehmen</button></>
+                    )}</> : 'Wähle die Lastklasse selbst (Gewerk wählen für einen Vorschlag).'}
+                  </p>
+                );
+              })()}
+              <div>
+                <p className="text-xs font-medium text-[#424245] mb-1">Lastklasse (DIN EN 12811-1)</p>
+                <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
+                  {LASTKLASSEN.map((l) => (
+                    <button key={l.klasse} type="button" onClick={() => setForm((prev) => ({ ...prev, lastklasse: prev.lastklasse === l.klasse ? null : l.klasse }))}
+                      className={`p-2 rounded-xl border text-sm transition ${form.lastklasse === l.klasse ? 'bg-[#e8590c]/10 border-[#e8590c] text-[#e8590c] font-semibold' : 'bg-black/10 border-black/10 text-[#424245]'}`}>
+                      <div>LK {l.klasse}</div>
+                      <div className="text-[10px] text-[#86868b]">{l.q1KnM2.toLocaleString('de-DE')} kN/m²</div>
+                    </button>
+                  ))}
+                </div>
               </div>
-            )}
+              <div>
+                <p className="text-xs font-medium text-[#424245] mb-1">Breitenklasse (DIN EN 12811-1, optional)</p>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                  {BREITENKLASSEN.map((b) => (
+                    <button key={b.klasse} type="button" onClick={() => setForm((prev) => ({ ...prev, breitenklasse: prev.breitenklasse === b.klasse ? '' : b.klasse }))}
+                      className={`p-2 rounded-xl border text-sm transition ${form.breitenklasse === b.klasse ? 'bg-[#e8590c]/10 border-[#e8590c] text-[#e8590c] font-semibold' : 'bg-black/10 border-black/10 text-[#424245]'}`}>
+                      <div>{b.klasse}</div>
+                      <div className="text-[10px] text-[#86868b]">{breitenklasseText(b).replace(b.klasse + ' ', '')}</div>
+                    </button>
+                  ))}
+                </div>
+                <p className="text-[11px] text-[#86868b] mt-1">Nochmal klicken hebt die Auswahl auf. Beides lässt sich in Schritt 2 noch ändern.</p>
+              </div>
+            </div>
           </div>
 
           {/* ─── PROJEKTDAUER ─── */}
