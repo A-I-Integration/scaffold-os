@@ -5,6 +5,7 @@ import WizardKopf from '@/components/aufmaß/WizardKopf';
 import { ClipboardList } from 'lucide-react';
 import { useState, useEffect, useRef, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
+import { vorschlagLastklasse } from '@/lib/geruestklassen';
 import { setzeMarkierung, leseSchrittGeladenesProjekt, setzeSchrittGeladenesProjekt, WIZARD_KEYS, gewerkeVonStep1 } from '@/lib/aufmass-projekt-session';
 import { NEU, SESSION_EIGENTUEMER_KEY, setzeLidarEigentuemer, sitzungGehoertZu } from '@/lib/aufmass-eigentuemer';
 import { speichereEntwurf } from '@/lib/aufmass-entwurf';
@@ -270,11 +271,8 @@ function Schritt1Content() {
   }
 
   function getLastklasse() {
-    const g = form.gewerke;
-    if (g.includes('WDVS/Fassade') || g.includes('Putz')) return 'LK 3';
-    if (g.includes('Maler')) return 'LK 2';
-    if (g.includes('Dach')) return 'LK 4';
-    return 'LK 2';
+    const v = vorschlagLastklasse(form.gewerke);
+    return `LK ${v.klasse}`;
   }
 
   function getStandzeit() {
@@ -612,8 +610,9 @@ function Schritt1Content() {
             </div>
             {form.gewerke.length > 0 && (
               <div className="mt-4 flex items-center gap-2 text-sm text-[#86868b]">
-                <span>Lastklasse:</span>
+                <span>Vorschlag Lastklasse:</span>
                 <span className="text-[#e8590c] font-medium">{getLastklasse()}</span>
+                <span className="text-[11px]">(Auswahl in Schritt 2)</span>
               </div>
             )}
           </div>

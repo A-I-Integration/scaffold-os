@@ -12,7 +12,9 @@ import { speichereSchrittAuto } from '@/lib/aufmass-autosave';
 import { ebenenZuVorschlaegen, ebenenSignatur, flaecheM2, type EbenenVorschlag } from '@/lib/lidar-ebenen';
 import KIWarnings from '@/components/aufmaß/KIWarnings';
 import { useKIValidation } from '@/hooks/useKIValidation';
-import { PartialScaffoldInput, LASTKLASSE_Q1_KN_M2 } from '@/types/scaffold';
+import { PartialScaffoldInput } from '@/types/scaffold';
+import { LASTKLASSEN, BREITENKLASSEN, breitenklasseText, vorschlagLastklasse } from '@/lib/geruestklassen';
+import { gewerkeVonStep1 } from '@/lib/aufmass-projekt-session';
 
 function Schritt2Content() {
   const router = useRouter();
@@ -64,6 +66,7 @@ function leeresFormS2() {
     dachueberstand: '',
     fassade: '',
     lastklasse: 3 as number,
+    breitenklasse: '' as string,
     garagen: false,
     fluchtwege: false,
     werbeanlagen: false,
@@ -861,17 +864,40 @@ function leeresFormS2() {
           </div>
 
           <div>
-            <label className="block text-sm font-medium mb-3 text-[#424245]">Lastklasse (DIN EN 12811-1)</label>
-            <select
-              value={form.lastklasse ?? 3}
-              onChange={(e) => setForm({ ...form, lastklasse: parseInt(e.target.value) })}
-              className="w-full bg-black/10 border border-black/10 rounded-xl px-4 py-2 text-[#1d1d1f]"
-            >
-              {[1, 2, 3, 4, 5, 6].map((lk) => (
-                <option key={lk} value={lk}>Lastklasse {lk} ({LASTKLASSE_Q1_KN_M2[lk]} kN/m²)</option>
+            <label className="block text-sm font-medium mb-1 text-[#424245]">Lastklasse (DIN EN 12811-1)</label>
+            {(() => {
+              const v = vorschlagLastklasse(gewerkeVonStep1(step1Data));
+              return v.grund && (form.lastklasse ?? 3) !== v.klasse ? (
+                <p className="text-[11px] text-[#86868b] mb-2">
+                  Vorschlag für {v.grund}: Lastklasse {v.klasse}.{' '}
+                  <button type="button" onClick={() => setForm({ ...form, lastklasse: v.klasse })} className="text-[#e8590c] font-medium underline">LK {v.klasse} übernehmen</button>
+                </p>
+              ) : null;
+            })()}
+            <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
+              {LASTKLASSEN.map((l) => (
+                <button key={l.klasse} type="button" onClick={() => setForm({ ...form, lastklasse: l.klasse })}
+                  className={`p-2 rounded-xl border text-sm transition ${(form.lastklasse ?? 3) === l.klasse ? 'bg-[#e8590c]/10 border-[#e8590c] text-[#e8590c] font-semibold' : 'bg-black/10 border-black/10 text-[#424245]'}`}>
+                  <div>LK {l.klasse}</div>
+                  <div className="text-[10px] text-[#86868b]">{l.q1KnM2.toLocaleString('de-DE')} kN/m²</div>
+                </button>
               ))}
-            </select>
-            <p className="text-[11px] text-[#86868b] mt-1">Rein zur Dokumentation – Standard ist meist Lastklasse 3 (Putz-/Maler-/Fassadenarbeiten).</p>
+            </div>
+            <p className="text-[11px] text-[#86868b] mt-1">Du wählst die Lastklasse selbst. Der Vorschlag richtet sich nur nach dem Gewerk (Dacharbeiten meist LK 4, Putz/Fassade meist LK 3, Maler meist LK 2).</p>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium mb-1 text-[#424245]">Breitenklasse (DIN EN 12811-1)</label>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+              {BREITENKLASSEN.map((b) => (
+                <button key={b.klasse} type="button" onClick={() => setForm({ ...form, breitenklasse: form.breitenklasse === b.klasse ? '' : b.klasse })}
+                  className={`p-2 rounded-xl border text-sm transition ${form.breitenklasse === b.klasse ? 'bg-[#e8590c]/10 border-[#e8590c] text-[#e8590c] font-semibold' : 'bg-black/10 border-black/10 text-[#424245]'}`}>
+                  <div>{b.klasse}</div>
+                  <div className="text-[10px] text-[#86868b]">{breitenklasseText(b).replace(b.klasse + ' ', '')}</div>
+                </button>
+              ))}
+            </div>
+            <p className="text-[11px] text-[#86868b] mt-1">Optional. Nochmal klicken hebt die Auswahl auf. Gilt für die Belagbreite der Arbeitsebene.</p>
           </div>
 
           <div>
