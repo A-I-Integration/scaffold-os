@@ -2,7 +2,8 @@
 // SCAFFOLD OS – MJ-Gerüst Artikelkatalog (Nachschlagewerk)
 //
 // Quelle: Preislisten MJ OPTIMA (V2.4), MJ OPTIMA TOP (V2.3), MJ OPTIMA metric
-// (V2.3), MJ UNI-CONNECT (V3.3-1), MJ COMBI (V3.4), MJ COMBI metric / TOP (V2.2) und MJ UNI (V3.2),
+// (V2.3), MJ UNI-CONNECT (V3.3-1), MJ COMBI (V3.4), MJ COMBI metric / TOP (V2.2), MJ UNI (V3.2), MJ UNI TOP (V3.3) und MJ Wand und Dach (V1.2), Paletten und Lagertechnik (V1.2), Zubehör (V3.3),
+// Zubehör ZIPKO (V1.1) und den OPTI-RACK-Regalpaketen (Flyer 10.2025),
 // jeweils Stand 04.2025, der MJ-Gerüst GmbH. Die Tabellen wurden
 // automatisch ausgelesen (lib/data/mj-katalog.json) und stichprobenartig gegen
 // die PDFs geprüft. Der Katalog ist NUR ZUM NACHSCHLAGEN: Er verändert weder
@@ -16,7 +17,7 @@
 
 import katalogRoh from '@/lib/data/mj-katalog.json';
 
-export type MjListe = 'optima' | 'optima-top' | 'optima-metric' | 'uni-connect' | 'combi' | 'combi-metric-top' | 'uni';
+export type MjListe = 'optima' | 'optima-top' | 'optima-metric' | 'uni-connect' | 'combi' | 'combi-metric-top' | 'uni' | 'uni-top' | 'wand-dach' | 'paletten' | 'zubehoer' | 'zipko' | 'opti-rack';
 
 export interface MjArtikel {
   /** Artikelnummer laut MJ (6 Stellen) */
@@ -80,14 +81,36 @@ export const MJ_LISTEN: Record<MjListe, MjListeInfo> = {
       { nummer: 'Z-8.1-871', bescheidVom: '07.05.2026', gueltigBis: '08.05.2031', gegenstand: 'MJ UNI 100 (Änderungs-/Verlängerungsbescheid; gilt nur zusammen mit der Zulassung vom 06.05.2020)' },
     ],
   },
+  'uni-top': {
+    key: 'uni-top', name: 'MJ UNI TOP 65', preislisteVersion: 'V3.3', preislisteStand: '04.2025',
+    zulassungen: [{ nummer: 'Z-8.1-902', bescheidVom: '11.08.2026', gueltigBis: '18.08.2031', gegenstand: 'Gerüstbauteile für das Gerüstsystem "MJ UNI TOP 65"' }],
+  },
+  'wand-dach': {
+    key: 'wand-dach', name: 'MJ Wand und Dach (OPTI-BOARD, OPTI-ROOF)', preislisteVersion: 'V1.2', preislisteStand: '04.2025',
+    zulassungen: [], // keine Zulassung übergeben
+  },
+  paletten: { key: 'paletten', name: 'MJ Paletten und Lagertechnik', preislisteVersion: 'V1.2', preislisteStand: '09.2026', zulassungen: [] },
+  zubehoer: { key: 'zubehoer', name: 'MJ Zubehör', preislisteVersion: 'V3.3', preislisteStand: '04.2025', zulassungen: [] },
+  zipko: { key: 'zipko', name: 'MJ Zubehör ZIPKO', preislisteVersion: 'V1.1', preislisteStand: '04.2025', zulassungen: [] },
+  'opti-rack': { key: 'opti-rack', name: 'MJ OPTI-RACK-Regalpakete', preislisteVersion: 'Flyer', preislisteStand: '10.2025', zulassungen: [] },
 };
 
 /** Zulassungen von Systemen, zu denen keine Preisliste hinterlegt ist (daher keine Artikel im Katalog). */
 export const MJ_WEITERE_ZULASSUNGEN: MjZulassung[] = [
   { nummer: 'Z-8.22-926', bescheidVom: '10.10.2025', gueltigBis: '17.10.2030', gegenstand: 'MJ COMBI DUO (Änderungs-/Verlängerungsbescheid; gilt nur zusammen mit der Genehmigung vom 11.11.2020)' },
-  { nummer: 'Z-8.1-902', bescheidVom: '11.08.2026', gueltigBis: '18.08.2031', gegenstand: 'MJ UNI TOP 65 (Zulassung; Preisliste UNI TOP liegt nicht vor)' },
   { nummer: 'Z-8.22-960', bescheidVom: '10.10.2023', gueltigBis: '10.10.2028', gegenstand: 'MJ COMBI metric DUO (Bauartgenehmigung)' },
 ];
+
+/**
+ * MJ OPTI-BOARD (Sicherheitseinhausung) – laut Hersteller-Flyer (Version 1.5, Stand 10/2022)
+ * einsetzbar in UNI, UNI-CONNECT, UNI TOP, COMBI und OPTIMA, senkrecht und waagerecht einbaubar.
+ * Die Artikel/Preise stehen in der Preisliste „Wand und Dach“ (die 37 Flyer-Artikel sind dort
+ * mit identischen Preisen enthalten).
+ */
+export const MJ_OPTI_BOARD = {
+  name: 'MJ OPTI-BOARD',
+  hinweis: 'Alu-Schweißkonstruktion, umlaufende Gummidichtung (nahezu staubdicht), auch als Lichtkassette. Einsetzbar in UNI, UNI-CONNECT, UNI TOP, COMBI und OPTIMA; senkrecht und waagerecht einbaubar (Herstellerflyer V1.5, Stand 10/2022).',
+} as const;
 
 /**
  * MJ OPTI-BEAM (Aluminium-Kastenträger) – Angaben vom Hersteller, von der
