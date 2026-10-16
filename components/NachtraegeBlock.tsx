@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { Plus, FileText, Check, X, Trash2, Camera } from 'lucide-react';
 import {
   type Nachtrag, type NachtragStatus, NACHTRAG_STATUS_LABEL, nachtragNummer, normalisiereNachtraege,
-  neuerNachtrag, setzeNachtragStatus, nachtragSummen, parseBetrag,
+  neuerNachtrag, setzeNachtragStatus, setzeNachtragBetrag, nachtragBraeuchteBetrag, nachtragSummen, parseBetrag,
 } from '@/lib/nachtrag';
 import { erzeugeNachtragPdf } from '@/lib/nachtrag-pdf';
 import { ladeNachtragFotosHoch, ladeFotosFuerPdf, legeNachtragPdfAmProjektAb } from '@/lib/nachtrag-client';
@@ -39,6 +39,7 @@ export default function NachtraegeBlock({ project, kunde }: Props) {
   const [dateien, setDateien] = useState<File[]>([]);
   const [laeuft, setLaeuft] = useState(false);
   const [meldung, setMeldung] = useState<{ ok: boolean; text: string } | null>(null);
+  const [betragEingabe, setBetragEingabe] = useState<Record<string, string>>({});
 
   const summen = nachtragSummen(liste);
 
@@ -83,6 +84,15 @@ export default function NachtraegeBlock({ project, kunde }: Props) {
     if (!window.confirm(frage)) return;
     setLaeuft(true); setMeldung(null);
     try { await speichere((a) => setzeNachtragStatus(a, n.id, neu, heute())); }
+    catch (e: any) { setMeldung({ ok: false, text: e?.message || 'Fehler' }); }
+    finally { setLaeuft(false); }
+  }
+
+  async function betragSpeichern(n: Nachtrag) {
+    const b = parseBetrag(betragEingabe[n.id] || '');
+    if (!(b > 0)) { setMeldung({ ok: false, text: 'Bitte einen Betrag größer 0 eingeben.' }); return; }
+    setLaeuft(true); setMeldung(null);
+    try { await speichere((a) => setzeNachtragBetrag(a, n.id, b)); setBetragEingabe((m) => ({ ...m, [n.id]: '' })); }
     catch (e: any) { setMeldung({ ok: false, text: e?.message || 'Fehler' }); }
     finally { setLaeuft(false); }
   }
@@ -140,7 +150,8 @@ export default function NachtraegeBlock({ project, kunde }: Props) {
                 <span className="font-semibold text-[#1d1d1f]">{nachtragNummer(n)}</span>
                 <span className="text-[#86868b]">{datumDe(n.datum)}</span>
                 <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${STATUS_FARBE[n.status]}`}>{NACHTRAG_STATUS_LABEL[n.status]}{n.statusDatum && n.status !== 'offen' ? ` · ${datumDe(n.statusDatum)}` : ''}</span>
-                <span className="ml-auto font-semibold text-[#1d1d1f]">{eur(n.betrag)}</span>
+                {n.vorOrt && <span className="rounded-full px-2 py-0.5 text-[10px] font-semibold bg-sky-100 text-sky-800">📍 von der Baustelle gemeldet</span>}
+                <span className="ml-auto font-semibold text-[#1d1d1f]">{nachtragBraeuchteBetrag(n) ? 'Betrag fehlt' : eur(n.betrag)}</span>
               </div>
               <p className="text-[#1d1d1f]">{n.titel}</p>
               <p className="text-[#86868b]"><span className="font-medium">Grund:</span> {n.grund}</p>
@@ -154,11 +165,18 @@ export default function NachtraegeBlock({ project, kunde }: Props) {
                   ))}
                 </div>
               )}
+              {n.status === 'offen' && nachtragBraeuchteBetrag(n) && (
+                <div className="flex flex-wrap items-center gap-1.5 rounded-lg bg-amber-50 border border-amber-200 p-2">
+                  <span className="text-amber-800">Betrag (netto) eintragen:</span>
+                  <input value={betragEingabe[n.id] || ''} onChange={(e) => setBetragEingabe((m) => ({ ...m, [n.id]: e.target.value }))} placeholder="z. B. 480,00" inputMode="decimal" className="w-28 rounded-lg border border-black/10 px-2 py-1" />
+                  <button onClick={() => betragSpeichern(n)} disabled={laeuft} className="rounded-lg bg-[#e8590c] px-2 py-1 font-semibold text-white disabled:opacity-60">Speichern</button>
+                </div>
+              )}
               <div className="flex flex-wrap gap-1.5 pt-1">
-                <button onClick={() => pdf(n)} disabled={laeuft} className="inline-flex items-center gap-1 rounded-lg border border-black/10 px-2 py-1 font-semibold hover:bg-black/5 disabled:opacity-60"><FileText className="h-3 w-3" /> PDF</button>
+                <button onClick={() => pdf(n)} disabled={laeuft || nachtragBraeuchteBetrag(n)} title={nachtragBraeuchteBetrag(n) ? 'Erst den Betrag eintragen' : undefined} className="inline-flex items-center gap-1 rounded-lg border border-black/10 px-2 py-1 font-semibold hover:bg-black/5 disabled:opacity-60"><FileText className="h-3 w-3" /> PDF</button>
                 {n.status === 'offen' ? (
                   <>
-                    <button onClick={() => status(n, 'bestaetigt')} disabled={laeuft} className="inline-flex items-center gap-1 rounded-lg border border-emerald-300 px-2 py-1 font-semibold text-emerald-700 hover:bg-emerald-50 disabled:opacity-60"><Check className="h-3 w-3" /> Kunde hat bestätigt</button>
+                    <button onClick={() => status(n, 'bestaetigt')} disabled={laeuft || nachtragBraeuchteBetrag(n)} title={nachtragBraeuchteBetrag(n) ? 'Erst den Betrag eintragen' : undefined} className="inline-flex items-center gap-1 rounded-lg border border-emerald-300 px-2 py-1 font-semibold text-emerald-700 hover:bg-emerald-50 disabled:opacity-60"><Check className="h-3 w-3" /> Kunde hat bestätigt</button>
                     <button onClick={() => status(n, 'abgelehnt')} disabled={laeuft} className="inline-flex items-center gap-1 rounded-lg border border-red-300 px-2 py-1 font-semibold text-red-700 hover:bg-red-50 disabled:opacity-60"><X className="h-3 w-3" /> Abgelehnt</button>
                     <button onClick={() => loeschen(n)} disabled={laeuft} className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-[#86868b] hover:text-red-600 disabled:opacity-60"><Trash2 className="h-3 w-3" /> Löschen</button>
                   </>

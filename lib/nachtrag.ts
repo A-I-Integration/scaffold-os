@@ -27,6 +27,8 @@ export interface Nachtrag {
   /** Datum der letzten Statusänderung (YYYY-MM-DD) */
   statusDatum?: string;
   erstelltAm: string;
+  /** Auf der Baustelle gemeldet (Meine Touren); Betrag darf zunächst 0 sein und wird vom Büro ergänzt. */
+  vorOrt?: boolean;
 }
 
 export const NACHTRAG_STATUS_LABEL: Record<NachtragStatus, string> = {
@@ -63,6 +65,7 @@ export function normalisiereNachtraege(raw: unknown): Nachtrag[] {
       status: STATUS.has(x.status) ? x.status : 'offen',
       statusDatum: x.statusDatum ? String(x.statusDatum) : undefined,
       erstelltAm: String(x.erstelltAm || ''),
+      ...(x.vorOrt === true ? { vorOrt: true } : {}),
     }));
 }
 
@@ -75,7 +78,7 @@ export function parseBetrag(s: string): number {
 
 export function neuerNachtrag(
   liste: Nachtrag[],
-  eingabe: { datum: string; titel: string; grund: string; betrag: number; fotos: NachtragFoto[] },
+  eingabe: { datum: string; titel: string; grund: string; betrag: number; fotos: NachtragFoto[]; vorOrt?: boolean },
   id: string,
   jetzt: Date = new Date(),
 ): Nachtrag {
@@ -89,7 +92,19 @@ export function neuerNachtrag(
     fotos: eingabe.fotos,
     status: 'offen',
     erstelltAm: jetzt.toISOString(),
+    ...(eingabe.vorOrt ? { vorOrt: true } : {}),
   };
+}
+
+/** Trägt/ändert den Betrag eines OFFENEN Nachtrags (Büro ergänzt Meldungen von der Baustelle). */
+export function setzeNachtragBetrag(liste: Nachtrag[], id: string, betrag: number): Nachtrag[] {
+  const b = Math.round(betrag * 100) / 100;
+  return liste.map((n) => (n.id === id && n.status === 'offen' ? { ...n, betrag: b } : n));
+}
+
+/** Ein Nachtrag ohne Betrag ist noch nicht versandfertig (kein PDF, keine Bestätigung). */
+export function nachtragBraeuchteBetrag(n: Pick<Nachtrag, 'betrag'>): boolean {
+  return !(n.betrag > 0);
 }
 
 export function setzeNachtragStatus(liste: Nachtrag[], id: string, status: NachtragStatus, heute: string): Nachtrag[] {
