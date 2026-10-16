@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { oeffentlichRateLimitPruefen } from '@/lib/rate-limit';
 
 // ============================================================
 // SCAFFOLD OS – Terminbuchung auf der Startseite (nur Master!)
@@ -87,6 +88,10 @@ export async function GET() {
 export async function POST(req: NextRequest) {
   const inbox = process.env.LEAD_INBOX;
   if (!inbox) return NextResponse.json({ error: 'Nicht verfügbar' }, { status: 404 });
+
+  // Spam-Schutz: max. 5 Buchungsversuche je IP in 10 Minuten (schützt Datenbank und Mail-Versand)
+  const rl = oeffentlichRateLimitPruefen(req, 'lead-termin', { max: 5, fensterMs: 10 * 60_000 });
+  if (!rl.ok) return rl.response;
 
   let body: Record<string, unknown>;
   try {

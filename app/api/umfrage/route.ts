@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { serverErrorResponse } from '@/lib/auth';
+import { oeffentlichRateLimitPruefen } from '@/lib/rate-limit';
 
 // ============================================================
 // SCAFFOLD OS – Eignungs-Umfrage (öffentlich, ohne Login)
@@ -41,6 +42,10 @@ function esc(s: string): string {
 
 export async function POST(req: NextRequest) {
   try {
+    // Spam-Schutz: max. 5 Antworten je IP in 10 Minuten (schützt den Resend-Versand)
+    const rl = oeffentlichRateLimitPruefen(req, 'umfrage', { max: 5, fensterMs: 10 * 60_000 });
+    if (!rl.ok) return rl.response;
+
     const apiKey = process.env.RESEND_API_KEY;
     if (!apiKey) {
       return NextResponse.json(

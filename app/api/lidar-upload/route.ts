@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
-import { serverErrorResponse } from '@/lib/auth';
+import { serverErrorResponse, requireAuth, unauthorizedResponse } from '@/lib/auth';
 import { istBinaerPly, parsePlyBinary } from '@/lib/ply-binary';
 
 // ─── Typen ───
@@ -345,6 +345,9 @@ function analyzeDistances(
 
 export async function POST(req: NextRequest) {
   try {
+    // Erst Login prüfen, dann die (rechenintensive) Datei lesen
+    if (!(await requireAuth())) return unauthorizedResponse();
+
     const formData = await req.formData();
     const file = formData.get('file') as File;
     const sessionId = formData.get('sessionId') as string;
