@@ -5,7 +5,7 @@ import { alleMjArtikel, sucheMjArtikel, MJ_LISTEN, MJ_OPTI_BEAM, MJ_WEITERE_ZULA
 
 // ============================================================
 // SCAFFOLD OS – MJ-Katalog (Nachschlagewerk, nur lesen)
-// Artikel aus den MJ-Gerüst-Preislisten OPTIMA / OPTIMA TOP / OPTIMA metric / UNI-CONNECT / COMBI / COMBI metric+TOP / UNI 70/100.
+// Artikel aus den MJ-Gerüst-Preislisten OPTIMA / OPTIMA TOP / OPTIMA metric / UNI-CONNECT / COMBI / COMBI metric+TOP / UNI 70/100 / UNI TOP 65.
 // Verändert keine Lagerbestände und keine Preise.
 // ============================================================
 
