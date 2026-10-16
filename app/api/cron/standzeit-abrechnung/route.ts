@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { pruefeCronAufruf } from '@/lib/cron-auth';
 
 // ============================================================
 // SCAFFOLD OS – Cron: Automatische Standzeit-Nachberechnung (Phase 26)
@@ -50,13 +51,8 @@ function isoNachDeutsch(iso: string): string {
 }
 
 export async function GET(req: NextRequest) {
-  const cronSecret = process.env.CRON_SECRET;
-  if (cronSecret) {
-    const auth = req.headers.get('authorization') || '';
-    if (auth !== `Bearer ${cronSecret}`) {
-      return NextResponse.json({ error: 'Nicht autorisiert.' }, { status: 401 });
-    }
-  }
+  const cronFehler = pruefeCronAufruf(req);
+  if (cronFehler) return cronFehler;
 
   const ergebnis = { erstellt: [] as string[], ohne_preis: [] as string[], ohne_freigabe: [] as string[], fehler: [] as string[] };
 
