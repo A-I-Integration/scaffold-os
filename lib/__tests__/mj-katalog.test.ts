@@ -1,10 +1,10 @@
 import { describe, it, expect } from 'vitest';
-import { alleMjArtikel, mjArtikelNachNr, sucheMjArtikel, MJ_LISTEN, MJ_OPTI_BEAM } from '@/lib/mj-katalog';
+import { MJ_WEITERE_ZULASSUNGEN, alleMjArtikel, mjArtikelNachNr, sucheMjArtikel, MJ_LISTEN, MJ_OPTI_BEAM } from '@/lib/mj-katalog';
 import { GERUEST_SYSTEME } from '@/lib/calculations/geruest-systeme';
 
 describe('MJ-Katalog', () => {
   const alle = alleMjArtikel();
-  it('hat Artikel aus allen drei Preislisten', () => {
+  it('hat Artikel aus allen vier Preislisten', () => {
     for (const l of Object.keys(MJ_LISTEN)) expect(alle.filter((a) => a.liste === l).length).toBeGreaterThan(200);
   });
   it('jede Zeile hat 5–6-stellige Artikelnummer und einen Preis > 0', () => {
@@ -28,6 +28,24 @@ describe('MJ-Katalog', () => {
     const e = mjArtikelNachNr('012088')[0]; // Innenecke Wandkassetten (von Hand ergänzt)
     expect(e.preis).toBe(206.1);
   });
+  it('Vollständigkeit: bisher übersehene Artikel sind jetzt drin', () => {
+    // 000357/011158 Spreizdübel, 012600 Eindrehhilfe, Innen-/Außenecke Wandkassetten in jeder Liste
+    for (const l of Object.keys(MJ_LISTEN)) for (const nr of ['000357', '011158', '012600']) expect(alle.some((a) => a.liste === l && a.nr === nr)).toBe(true);
+    expect(mjArtikelNachNr('012088').length).toBe(5);
+    expect(mjArtikelNachNr('012089').find((a) => a.liste === 'optima-top')!.attribute['Gewicht (kg)']).toBe(3.9);
+    expect(mjArtikelNachNr('000693')[0].preis).toBe(40.6); // UNI-CONNECT Kopfspindel 148
+    expect(mjArtikelNachNr('000539').length).toBe(2);
+    expect(mjArtikelNachNr('005610')[0].preis).toBe(280); // Set PSA Größe L-XL
+    expect(mjArtikelNachNr('008822')[0].preis).toBe(73.8);
+  });
+  it('COMBI: Stichproben und Zulassungen', () => {
+    expect(mjArtikelNachNr('009726').find((a) => a.liste === 'combi')!.preis).toBe(27.6);
+    expect(mjArtikelNachNr('000223').find((a) => a.liste === 'combi-metric-top')!.attribute['SW']).toBe(22);
+    expect(mjArtikelNachNr('008156')[0].attribute['Gewicht (kg)']).toBe(1.1);
+    expect(MJ_LISTEN.combi.zulassungen[0].nummer).toBe('Z-8.22-921');
+    expect(MJ_LISTEN['combi-metric-top'].zulassungen[0].gueltigBis).toBe('03.01.2030');
+    expect(MJ_WEITERE_ZULASSUNGEN.map((z) => z.nummer)).toEqual(['Z-8.22-926', 'Z-8.22-960']);
+  });
   it('Suche findet nach Nummer und Name, alle Wörter müssen passen', () => {
     expect(sucheMjArtikel('013535').length).toBeGreaterThan(0);
     expect(sucheMjArtikel('riegel').length).toBeGreaterThan(5);
@@ -35,9 +53,11 @@ describe('MJ-Katalog', () => {
     expect(sucheMjArtikel('', 'optima-top').every((a) => a.liste === 'optima-top')).toBe(true);
   });
   it('Zulassungsdaten und OPTI-BEAM-Schutzrechtshinweis sind hinterlegt', () => {
-    expect(MJ_LISTEN.optima.zulassung.nummer).toBe('Z-8.22-986');
-    expect(MJ_LISTEN['optima-top'].zulassung.gueltigBis).toBe('20.03.2029');
-    expect(MJ_LISTEN['optima-metric'].zulassung.gueltigBis).toBe('04.11.2030');
+    expect(MJ_LISTEN.optima.zulassungen[0].nummer).toBe('Z-8.22-986');
+    expect(MJ_LISTEN['optima-top'].zulassungen[0].gueltigBis).toBe('20.03.2029');
+    expect(MJ_LISTEN['optima-metric'].zulassungen[0].gueltigBis).toBe('04.11.2030');
+    expect(MJ_LISTEN['uni-connect'].zulassungen.map((z) => z.nummer)).toEqual(['Z-8.1-872', 'Z-8.1-922', 'Z-8.1-935']);
+    expect(MJ_LISTEN['uni-connect'].zulassungen[1].gueltigBis).toBe('25.02.2027');
     expect(MJ_OPTI_BEAM.hinweis).toContain('EP 3721028');
     expect(MJ_OPTI_BEAM.hinweis).toContain('EP 3721029');
   });

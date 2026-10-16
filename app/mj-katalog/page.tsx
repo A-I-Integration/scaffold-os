@@ -1,11 +1,11 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { alleMjArtikel, sucheMjArtikel, MJ_LISTEN, MJ_OPTI_BEAM, type MjListe } from '@/lib/mj-katalog';
+import { alleMjArtikel, sucheMjArtikel, MJ_LISTEN, MJ_OPTI_BEAM, MJ_WEITERE_ZULASSUNGEN, type MjListe } from '@/lib/mj-katalog';
 
 // ============================================================
 // SCAFFOLD OS – MJ-Katalog (Nachschlagewerk, nur lesen)
-// Artikel aus den MJ-Gerüst-Preislisten OPTIMA / OPTIMA TOP / OPTIMA metric.
+// Artikel aus den MJ-Gerüst-Preislisten OPTIMA / OPTIMA TOP / OPTIMA metric / UNI-CONNECT / COMBI / COMBI metric+TOP.
 // Verändert keine Lagerbestände und keine Preise.
 // ============================================================
 
@@ -32,14 +32,22 @@ export default function MjKatalogPage() {
         <p>Die Tabellen wurden automatisch ausgelesen. Die Bereichsnamen sind automatisch zugeordnet und können bei einzelnen Artikeln ungenau sein. Hinweise der Preisliste wie „Nettopreis, nicht rabattfähig“ oder „Lieferzeit auf Anfrage“ sind hier nicht enthalten – im Zweifel gilt die Original-Preisliste.</p>
       </div>
 
-      <div className="grid gap-3 md:grid-cols-3">
+      <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
         {Object.values(MJ_LISTEN).map((l) => (
           <div key={l.key} className="rounded-xl border border-black/10 bg-white p-3 text-xs space-y-0.5">
             <p className="text-sm font-semibold text-[#1d1d1f]">{l.name}</p>
             <p>Preisliste {l.preislisteVersion}, Stand {l.preislisteStand}</p>
-            <p>Zulassung <b>{l.zulassung.nummer}</b>, Bescheid vom {l.zulassung.bescheidVom}</p>
-            <p>Gültig bis <b>{l.zulassung.gueltigBis}</b></p>
+            {l.zulassungen.map((z) => (
+              <p key={z.nummer}>Zulassung <b>{z.nummer}</b>{l.zulassungen.length > 1 ? ` (${z.gegenstand.replace('MJ UNI-CONNECT ', '')})` : ''}, Bescheid {z.bescheidVom}, gültig bis <b>{z.gueltigBis}</b></p>
+            ))}
           </div>
+        ))}
+      </div>
+
+      <div className="rounded-xl border border-black/10 bg-white p-3 text-xs space-y-0.5">
+        <p className="text-sm font-semibold text-[#1d1d1f]">Weitere Zulassungen (ohne hinterlegte Preisliste)</p>
+        {MJ_WEITERE_ZULASSUNGEN.map((z) => (
+          <p key={z.nummer}><b>{z.nummer}</b> – {z.gegenstand}, Bescheid {z.bescheidVom}, gültig bis <b>{z.gueltigBis}</b></p>
         ))}
       </div>
 
