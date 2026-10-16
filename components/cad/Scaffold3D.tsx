@@ -844,7 +844,7 @@ function Building3D({
               {/* Balkonplatte */}
               <mesh position={[0, -f.heightM / 2 + 0.08, 0]} castShadow>
                 <boxGeometry args={[f.widthM, 0.16, f.depthM]} />
-                <meshStandardMaterial color="#b8b0a4" roughness={0.9} />
+                <meshStandardMaterial color={f.modus === 'ausgespart' ? '#d6a5a5' : '#b8b0a4'} roughness={0.9} />
               </mesh>
               {/* Brüstung */}
               <mesh position={[0, 0.05, f.depthM / 2 - 0.03]}>

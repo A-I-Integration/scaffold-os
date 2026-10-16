@@ -2,6 +2,7 @@
 
 import { useState, useRef } from 'react'
 import { BuildingParams } from '@/lib/calculations/cad-engine'
+import BalkonEditor from './BalkonEditor'
 import { GERUEST_SYSTEME } from '@/lib/calculations/geruest-systeme'
 import { uploadVertragsdokument } from '@/lib/vertrag-upload-client'
 import { quaderAusObj, quaderAusStl, masseAusQuader, type Quader, type Einheit, type Achse } from '@/lib/cad/modell-import'
@@ -322,6 +323,7 @@ export default function BuildingForm({ building, systemId, onChange, onSystemCha
             <div><label className='block text-xs font-medium text-[#424245] mb-1'>Fenster</label><input type='number' min={0} value={building.windowCount} onChange={(e) => update('windowCount', parseInt(e.target.value))} className='w-full px-3 py-2 border rounded-xl text-sm' /></div>
             <div><label className='block text-xs font-medium text-[#424245] mb-1'>Türen</label><input type='number' min={0} value={building.doorCount} onChange={(e) => update('doorCount', parseInt(e.target.value))} className='w-full px-3 py-2 border rounded-xl text-sm' /></div>
             <div><label className='block text-xs font-medium text-[#424245] mb-1'>Balkone</label><input type='number' min={0} value={building.balconyCount} onChange={(e) => update('balconyCount', parseInt(e.target.value))} className='w-full px-3 py-2 border rounded-xl text-sm' /></div>
+            <BalkonEditor building={building} onChange={onChange} />
           </div>
         )}
         {activeTab === 'geruest' && (
