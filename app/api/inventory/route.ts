@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { aktuellerPlan, UPGRADE_HINWEIS } from '@/lib/plan-limits';
-import { requireAuth, unauthorizedResponse, serverErrorResponse } from '@/lib/auth';
+import { requireAuth, unauthorizedResponse, serverErrorResponse, pruefeRolle } from '@/lib/auth';
+import { ROLLEN } from '@/lib/rollen';
 
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const key = process.env.SUPABASE_SERVICE_ROLE_KEY!;
@@ -39,7 +40,8 @@ export async function GET() {
 
 // POST /api/inventory – Neuer Artikel
 export async function POST(req: Request) {
-  if (!(await requireAuth())) return unauthorizedResponse();
+  const rollenPruefung = await pruefeRolle(ROLLEN.LAGER);
+  if (!rollenPruefung.ok) return rollenPruefung.response;
   try {
     const body = await req.json();
     const item = {
@@ -77,7 +79,8 @@ export async function POST(req: Request) {
 
 // PUT /api/inventory – Artikel aktualisieren
 export async function PUT(req: Request) {
-  if (!(await requireAuth())) return unauthorizedResponse();
+  const rollenPruefung = await pruefeRolle(ROLLEN.LAGER);
+  if (!rollenPruefung.ok) return rollenPruefung.response;
   try {
     const body = await req.json();
     const { id, ...updates } = body;
@@ -107,7 +110,8 @@ export async function PUT(req: Request) {
 
 // DELETE /api/inventory?id=... – Artikel deaktivieren
 export async function DELETE(req: Request) {
-  if (!(await requireAuth())) return unauthorizedResponse();
+  const rollenPruefung = await pruefeRolle(ROLLEN.LAGER);
+  if (!rollenPruefung.ok) return rollenPruefung.response;
   try {
     const { searchParams } = new URL(req.url);
     const id = searchParams.get('id');

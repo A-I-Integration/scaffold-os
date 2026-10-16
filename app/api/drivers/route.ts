@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { requireAuth, unauthorizedResponse, serverErrorResponse } from '@/lib/auth';
+import { requireAuth, unauthorizedResponse, serverErrorResponse, pruefeRolle } from '@/lib/auth';
+import { ROLLEN } from '@/lib/rollen';
 
 // ============================================================
 // SCAFFOLD OS – Fahrer-API
@@ -29,7 +30,8 @@ export async function GET() {
 
 // POST – neuen Fahrer anlegen: { name, employee_id? }
 export async function POST(req: NextRequest) {
-  if (!(await requireAuth())) return unauthorizedResponse();
+  const rollenPruefung = await pruefeRolle(ROLLEN.ADMIN_DISPO);
+  if (!rollenPruefung.ok) return rollenPruefung.response;
   try {
     const { name, employee_id } = await req.json();
     if (!name || !String(name).trim()) {
@@ -50,7 +52,8 @@ export async function POST(req: NextRequest) {
 
 // PUT – Verknüpfung setzen/lösen: { id, employee_id | null }
 export async function PUT(req: NextRequest) {
-  if (!(await requireAuth())) return unauthorizedResponse();
+  const rollenPruefung = await pruefeRolle(ROLLEN.ADMIN_DISPO);
+  if (!rollenPruefung.ok) return rollenPruefung.response;
   try {
     const { id, employee_id } = await req.json();
     if (!id) {
