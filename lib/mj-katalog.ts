@@ -1,5 +1,5 @@
 // ============================================================
-// SCAFFOLD OS – MJ-Gerüst Artikelkatalog (Nachschlagewerk)
+// SCAFFOLD OS – Hersteller-Artikelkatalog MJ-Gerüst und SCAFOM-RUX (Nachschlagewerk)
 //
 // Quelle: Preislisten MJ OPTIMA (V2.4), MJ OPTIMA TOP (V2.3), MJ OPTIMA metric
 // (V2.3), MJ UNI-CONNECT (V3.3-1), MJ COMBI (V3.4), MJ COMBI metric / TOP (V2.2), MJ UNI (V3.2), MJ UNI TOP (V3.3) und MJ Wand und Dach (V1.2), Paletten und Lagertechnik (V1.2), Zubehör (V3.3),
@@ -17,7 +17,8 @@
 
 import katalogRoh from '@/lib/data/mj-katalog.json';
 
-export type MjListe = 'optima' | 'optima-top' | 'optima-metric' | 'uni-connect' | 'combi' | 'combi-metric-top' | 'uni' | 'uni-top' | 'wand-dach' | 'paletten' | 'zubehoer' | 'zipko' | 'opti-rack';
+export type MjListe = 'optima' | 'optima-top' | 'optima-metric' | 'uni-connect' | 'combi' | 'combi-metric-top' | 'uni' | 'uni-top' | 'wand-dach' | 'paletten' | 'zubehoer' | 'zipko' | 'opti-rack'
+  | 'sx-framescaff' | 'sx-super' | 'sx-ringscaff' | 'sx-ringscaff-trt' | 'sx-super-rs' | 'sx-wbs' | 'sx-zubehoer' | 'sx-plex' | 'sx-miete';
 
 export interface MjArtikel {
   /** Artikelnummer laut MJ (6 Stellen) */
@@ -34,6 +35,7 @@ export interface MjArtikel {
 
 export interface MjListeInfo {
   key: MjListe;
+  hersteller: 'MJ-Gerüst' | 'SCAFOM-RUX';
   name: string;
   preislisteVersion: string;
   preislisteStand: string;
@@ -45,19 +47,19 @@ export interface MjZulassung { nummer: string; bescheidVom: string; gueltigBis: 
 
 export const MJ_LISTEN: Record<MjListe, MjListeInfo> = {
   optima: {
-    key: 'optima', name: 'MJ OPTIMA', preislisteVersion: 'V2.4', preislisteStand: '04.2025',
+    key: 'optima', hersteller: 'MJ-Gerüst', name: 'MJ OPTIMA', preislisteVersion: 'V2.4', preislisteStand: '04.2025',
     zulassungen: [{ nummer: 'Z-8.22-986', bescheidVom: '06.07.2026', gueltigBis: '23.07.2027', gegenstand: 'Gerüstbauteile für das modulare Fassadengerüst "MJ OPTIMA"' }],
   },
   'optima-top': {
-    key: 'optima-top', name: 'MJ OPTIMA TOP', preislisteVersion: 'V2.3', preislisteStand: '04.2025',
+    key: 'optima-top', hersteller: 'MJ-Gerüst', name: 'MJ OPTIMA TOP', preislisteVersion: 'V2.3', preislisteStand: '04.2025',
     zulassungen: [{ nummer: 'Z-8.22-987', bescheidVom: '20.03.2024', gueltigBis: '20.03.2029', gegenstand: 'Gerüstbauteile für das Fassaden-Modulsystem "MJ OPTIMA TOP"' }],
   },
   'optima-metric': {
-    key: 'optima-metric', name: 'MJ OPTIMA metric', preislisteVersion: 'V2.3', preislisteStand: '04.2025',
+    key: 'optima-metric', hersteller: 'MJ-Gerüst', name: 'MJ OPTIMA metric', preislisteVersion: 'V2.3', preislisteStand: '04.2025',
     zulassungen: [{ nummer: 'Z-8.22-985', bescheidVom: '04.12.2025', gueltigBis: '04.11.2030', gegenstand: 'Gerüstbauteile für das Fassaden-Modulsystem "MJ OPTIMA metric"' }],
   },
   'uni-connect': {
-    key: 'uni-connect', name: 'MJ UNI-CONNECT', preislisteVersion: 'V3.3-1', preislisteStand: '04.2025',
+    key: 'uni-connect', hersteller: 'MJ-Gerüst', name: 'MJ UNI-CONNECT', preislisteVersion: 'V3.3-1', preislisteStand: '04.2025',
     zulassungen: [
       { nummer: 'Z-8.1-872', bescheidVom: '10.06.2024', gueltigBis: '09.03.2027', gegenstand: 'MJ UNI-CONNECT 70 DUO' },
       { nummer: 'Z-8.1-922', bescheidVom: '27.01.2026', gueltigBis: '25.02.2027', gegenstand: 'MJ UNI-CONNECT 100 DUO (Verlängerung)' },
@@ -65,16 +67,16 @@ export const MJ_LISTEN: Record<MjListe, MjListeInfo> = {
     ],
   },
   combi: {
-    key: 'combi', name: 'MJ COMBI', preislisteVersion: 'V3.4 (laut Dateiname; die Rückseite der Liste nennt V3.3)', preislisteStand: '04.2025',
+    key: 'combi', hersteller: 'MJ-Gerüst', name: 'MJ COMBI', preislisteVersion: 'V3.4 (laut Dateiname; die Rückseite der Liste nennt V3.3)', preislisteStand: '04.2025',
     zulassungen: [{ nummer: 'Z-8.22-921', bescheidVom: '06.07.2026', gueltigBis: '04.09.2030', gegenstand: 'Gerüstbauteile für das Modulsystem "MJ COMBI"' }],
   },
   'combi-metric-top': {
-    key: 'combi-metric-top', name: 'MJ COMBI metric / TOP', preislisteVersion: 'V2.2', preislisteStand: '04.2025',
+    key: 'combi-metric-top', hersteller: 'MJ-Gerüst', name: 'MJ COMBI metric / TOP', preislisteVersion: 'V2.2', preislisteStand: '04.2025',
     // Nur die Zulassung für COMBI metric liegt vor; für COMBI TOP wurde keine Zulassung übergeben.
     zulassungen: [{ nummer: 'Z-8.22-923', bescheidVom: '10.01.2025', gueltigBis: '03.01.2030', gegenstand: 'MJ COMBI metric (Änderungs-/Verlängerungsbescheid; gilt nur zusammen mit der Zulassung vom 10.12.2019)' }],
   },
   uni: {
-    key: 'uni', name: 'MJ UNI 70 / 100', preislisteVersion: 'V3.2', preislisteStand: '04.2025',
+    key: 'uni', hersteller: 'MJ-Gerüst', name: 'MJ UNI 70 / 100', preislisteVersion: 'V3.2', preislisteStand: '04.2025',
     zulassungen: [
       { nummer: 'Z-8.1-184', bescheidVom: '06.07.2026', gueltigBis: '13.07.2027', gegenstand: 'MJ UNI 70 (Verlängerungsbescheid; gilt nur zusammen mit der Zulassung vom 21.06.2019)' },
       { nummer: 'Z-8.1-303', bescheidVom: '16.02.2026', gueltigBis: '02.03.2027', gegenstand: 'MJ UNI 70 DUO (Verlängerungsbescheid; gilt nur zusammen mit der Genehmigung vom 24.02.2020)' },
@@ -82,17 +84,26 @@ export const MJ_LISTEN: Record<MjListe, MjListeInfo> = {
     ],
   },
   'uni-top': {
-    key: 'uni-top', name: 'MJ UNI TOP 65', preislisteVersion: 'V3.3', preislisteStand: '04.2025',
+    key: 'uni-top', hersteller: 'MJ-Gerüst', name: 'MJ UNI TOP 65', preislisteVersion: 'V3.3', preislisteStand: '04.2025',
     zulassungen: [{ nummer: 'Z-8.1-902', bescheidVom: '11.08.2026', gueltigBis: '18.08.2031', gegenstand: 'Gerüstbauteile für das Gerüstsystem "MJ UNI TOP 65"' }],
   },
   'wand-dach': {
-    key: 'wand-dach', name: 'MJ Wand und Dach (OPTI-BOARD, OPTI-ROOF)', preislisteVersion: 'V1.2', preislisteStand: '04.2025',
+    key: 'wand-dach', hersteller: 'MJ-Gerüst', name: 'MJ Wand und Dach (OPTI-BOARD, OPTI-ROOF)', preislisteVersion: 'V1.2', preislisteStand: '04.2025',
     zulassungen: [], // keine Zulassung übergeben
   },
-  paletten: { key: 'paletten', name: 'MJ Paletten und Lagertechnik', preislisteVersion: 'V1.2', preislisteStand: '09.2026', zulassungen: [] },
-  zubehoer: { key: 'zubehoer', name: 'MJ Zubehör', preislisteVersion: 'V3.3', preislisteStand: '04.2025', zulassungen: [] },
-  zipko: { key: 'zipko', name: 'MJ Zubehör ZIPKO', preislisteVersion: 'V1.1', preislisteStand: '04.2025', zulassungen: [] },
-  'opti-rack': { key: 'opti-rack', name: 'MJ OPTI-RACK-Regalpakete', preislisteVersion: 'Flyer', preislisteStand: '10.2025', zulassungen: [] },
+  paletten: { key: 'paletten', hersteller: 'MJ-Gerüst', name: 'MJ Paletten und Lagertechnik', preislisteVersion: 'V1.2', preislisteStand: '09.2026', zulassungen: [] },
+  zubehoer: { key: 'zubehoer', hersteller: 'MJ-Gerüst', name: 'MJ Zubehör', preislisteVersion: 'V3.3', preislisteStand: '04.2025', zulassungen: [] },
+  zipko: { key: 'zipko', hersteller: 'MJ-Gerüst', name: 'MJ Zubehör ZIPKO', preislisteVersion: 'V1.1', preislisteStand: '04.2025', zulassungen: [] },
+  'opti-rack': { key: 'opti-rack', hersteller: 'MJ-Gerüst', name: 'MJ OPTI-RACK-Regalpakete', preislisteVersion: 'Flyer', preislisteStand: '10.2025', zulassungen: [] },
+  'sx-framescaff': { key: 'sx-framescaff', hersteller: 'SCAFOM-RUX', name: 'SCAFOM-RUX FRAMESCAFF', preislisteVersion: '2024-05-DE', preislisteStand: '05.2024', zulassungen: [] },
+  'sx-super': { key: 'sx-super', hersteller: 'SCAFOM-RUX', name: 'SCAFOM-RUX SUPER', preislisteVersion: '2024-05-DE', preislisteStand: '05.2024', zulassungen: [] },
+  'sx-ringscaff': { key: 'sx-ringscaff', hersteller: 'SCAFOM-RUX', name: 'SCAFOM-RUX RINGSCAFF', preislisteVersion: '2024-05-DE', preislisteStand: '05.2024', zulassungen: [] },
+  'sx-ringscaff-trt': { key: 'sx-ringscaff-trt', hersteller: 'SCAFOM-RUX', name: 'SCAFOM-RUX RINGSCAFF Treppenturm', preislisteVersion: '2024-05-DE', preislisteStand: '05.2024', zulassungen: [] },
+  'sx-super-rs': { key: 'sx-super-rs', hersteller: 'SCAFOM-RUX', name: 'SCAFOM-RUX SUPER-RS', preislisteVersion: '2024-05-DE', preislisteStand: '05.2024', zulassungen: [] },
+  'sx-wbs': { key: 'sx-wbs', hersteller: 'SCAFOM-RUX', name: 'SCAFOM-RUX WBS (Wetterschutz)', preislisteVersion: '2024-05-DE', preislisteStand: '05.2024', zulassungen: [] },
+  'sx-zubehoer': { key: 'sx-zubehoer', hersteller: 'SCAFOM-RUX', name: 'SCAFOM-RUX Zubehör', preislisteVersion: '2024-05-DE', preislisteStand: '05.2024', zulassungen: [] },
+  'sx-plex': { key: 'sx-plex', hersteller: 'SCAFOM-RUX', name: 'SCAFOM-RUX PLEX Fassadengerüst', preislisteVersion: '2026-06-DE', preislisteStand: '06.2026', zulassungen: [] },
+  'sx-miete': { key: 'sx-miete', hersteller: 'SCAFOM-RUX', name: 'SCAFOM-RUX Mietpreisliste', preislisteVersion: '2026-08-DE', preislisteStand: '08.2026', zulassungen: [] },
 };
 
 /** Zulassungen von Systemen, zu denen keine Preisliste hinterlegt ist (daher keine Artikel im Katalog). */
