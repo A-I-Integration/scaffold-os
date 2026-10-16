@@ -42,6 +42,24 @@ export default function LagerPage() {
   const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [abbauProjekt, setAbbauProjekt] = useState<{ id: string; name: string } | null>(null);
+  const [abholLaeuft, setAbholLaeuft] = useState<string | null>(null);
+  const [abholMsg, setAbholMsg] = useState<Record<string, { ok: boolean; text: string }>>({});
+
+  async function planeAbholfahrt(projectId: string) {
+    setAbholLaeuft(projectId);
+    try {
+      const res = await fetch('/api/abholung', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ project_id: projectId }) });
+      const json = await res.json().catch(() => ({}));
+      const t = json?.tour;
+      setAbholMsg((m) => ({ ...m, [projectId]: json?.success
+        ? { ok: true, text: `Abholfahrt geplant: ${new Date(t.datum + 'T00:00:00').toLocaleDateString('de-DE')} · ${t.fahrzeug} · ${t.fahrer}` }
+        : { ok: false, text: t?.hinweis || json?.error || 'Das hat nicht geklappt.' } }));
+    } catch (e: any) {
+      setAbholMsg((m) => ({ ...m, [projectId]: { ok: false, text: e?.message || 'Das hat nicht geklappt.' } }));
+    } finally {
+      setAbholLaeuft(null);
+    }
+  }
 
   // ─── ROLLEN-STATE ───
   const [userRole, setUserRole] = useState<string | null>(null);
@@ -485,10 +503,19 @@ export default function LagerPage() {
                 <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
                   <div>
                     <h3 className="font-semibold text-gray-900">{grp.name}</h3>
+                    {abholMsg[pid] && (
+                      <p className={`text-xs mt-0.5 ${abholMsg[pid].ok ? 'text-emerald-700' : 'text-red-600'}`}>{abholMsg[pid].text}</p>
+                    )}
                     {hinweise.get(pid)?.faellig && (
                       <p className="text-xs text-amber-700 mt-0.5">⚠️ Projektende {hinweise.get(pid)?.seit ? new Date(hinweise.get(pid)!.seit!).toLocaleDateString('de-DE') : ''} erreicht – Rücklauf offen ({hinweise.get(pid)?.positionen} Position{hinweise.get(pid)?.positionen === 1 ? '' : 'en'} vor Ort)</p>
                     )}
                   </div>
+                  {canManage && pid !== 'unbekannt' && (
+                    <button onClick={() => planeAbholfahrt(pid)} disabled={abholLaeuft === pid}
+                      className="ml-auto mr-2 px-4 py-2 rounded-xl border border-black/10 text-sm font-medium text-gray-900 hover:bg-black/5 disabled:opacity-50">
+                      {abholLaeuft === pid ? 'Plant…' : '🚚 Abholfahrt planen'}
+                    </button>
+                  )}
                   {canManage && (
                     <button onClick={() => setAbbauProjekt({ id: pid, name: grp.name })}
                       className={`px-4 py-2 rounded-xl text-white text-sm font-medium ${hinweise.get(pid)?.faellig ? 'bg-amber-600 hover:bg-amber-500' : 'bg-[#0071e3] hover:bg-[#0077ed]'}`}>
