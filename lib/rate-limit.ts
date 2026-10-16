@@ -110,3 +110,57 @@ export async function kiRateLimitPruefen(req: NextRequest, userId?: string): Pro
   speicher.set(key, eintrag);
   return { ok: true };
 }
+
+// ============================================================
+// Öffentliche Formulare (ohne Login): pro IP begrenzen, damit Bots
+// den Mail-Versand (Resend) nicht fluten. Eigener Speicher, getrennt
+// von den KI-Limits. Gleiche Einschränkung wie oben: das Fenster liegt
+// im Speicher der jeweiligen Serverless-Instanz (kein hartes globales Limit).
+// ============================================================
+
+const oeffentlichSpeicher = new Map<string, number[]>();
+
+/** Reine Fensterlogik (testbar): true = erlaubt (und gezählt), sonst Wartezeit in Sekunden. */
+export function fensterPruefen(
+  speicherMap: Map<string, number[]>, key: string, jetzt: number, max: number, fensterMs: number,
+): { ok: true } | { ok: false; retryAfterS: number } {
+  const zeiten = (speicherMap.get(key) || []).filter((t) => jetzt - t < fensterMs);
+  if (zeiten.length >= max) {
+    speicherMap.set(key, zeiten);
+    return { ok: false, retryAfterS: Math.max(1, Math.ceil((fensterMs - (jetzt - zeiten[0])) / 1000)) };
+  }
+  zeiten.push(jetzt);
+  speicherMap.set(key, zeiten);
+  return { ok: true };
+}
+
+/**
+ * Rate-Limit für öffentliche Formular-Routen (pro IP und Bereich `name`).
+ * Aufruf ganz am Anfang von POST, vor Mail-Versand und Datenbankzugriff:
+ *
+ *   const rl = oeffentlichRateLimitPruefen(req, 'anfrage', { max: 5, fensterMs: 10 * 60_000 });
+ *   if (!rl.ok) return rl.response;
+ */
+export function oeffentlichRateLimitPruefen(
+  req: NextRequest, name: string, opts: { max: number; fensterMs: number },
+): KiRateLimitErgebnis {
+  const jetzt = Date.now();
+  // Gelegentlich aufräumen, damit der Speicher nicht wächst
+  if (oeffentlichSpeicher.size > 5000) {
+    for (const [k, zeiten] of oeffentlichSpeicher) {
+      if (zeiten.every((t) => jetzt - t >= opts.fensterMs)) oeffentlichSpeicher.delete(k);
+    }
+  }
+  const ip = (req.headers.get('x-forwarded-for')?.split(',')[0] || '').trim()
+    || req.headers.get('x-real-ip')?.trim()
+    || 'unbekannt';
+  const r = fensterPruefen(oeffentlichSpeicher, `${name}:${ip}`, jetzt, opts.max, opts.fensterMs);
+  if (r.ok) return { ok: true };
+  return {
+    ok: false,
+    response: NextResponse.json(
+      { success: false, error: `Zu viele Anfragen. Bitte in ${Math.ceil(r.retryAfterS / 60)} Minute(n) erneut versuchen.` },
+      { status: 429, headers: { 'Retry-After': String(r.retryAfterS) } },
+    ),
+  };
+}
