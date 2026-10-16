@@ -44,3 +44,36 @@ describe('baueTourPackliste', () => {
     expect(p.ausLager).toEqual([]);
   });
 });
+
+import { baueAbholNotiz, leseAbholNotiz } from '@/lib/touren/abholung';
+import { gruppiereStopps } from '@/lib/touren/stopp-gruppen';
+
+describe('Abholfahrt', () => {
+  it('Notiz hin und zurück', () => {
+    const n = baueAbholNotiz([{ name: 'Stahlrahmen', quantity: 40 }, { name: 'Belag 3,0 m', quantity: 12 }]);
+    expect(leseAbholNotiz(n)).toEqual({ istAbholung: true, material: [{ name: 'Stahlrahmen', quantity: 40 }, { name: 'Belag 3,0 m', quantity: 12 }] });
+    expect(leseAbholNotiz('irgendwas').istAbholung).toBe(false);
+    expect(leseAbholNotiz(null).istAbholung).toBe(false);
+  });
+  it('Packliste: Abholung beim Kunden getrennt, Anlieferungen unberührt', () => {
+    const p = baueTourPackliste([
+      { id: 's1', address: 'Weg 1', notes: baueAbholNotiz([{ name: 'Rahmen', quantity: 8 }]) },
+      stopp('Anker', 3),
+    ]);
+    expect(p.beimKunden).toHaveLength(1);
+    expect(p.beimKunden[0].adresse).toBe('Weg 1');
+    expect(p.beimKunden[0].zeilen[0]).toEqual({ key: 'kunde|s1|Rahmen', name: 'Rahmen', quantity: 8 });
+    expect(p.ausLager.map((z) => z.name)).toEqual(['Anker']);
+    expect(alleKeys(p)).toContain('kunde|s1|Rahmen');
+  });
+  it('Stopp-Karte: Abholung wird nicht mit Anlieferung an gleicher Adresse zusammengelegt, Material kommt aus Notiz', () => {
+    const g = gruppiereStopps([
+      { id: 'a', stop_order: 1, address: 'Weg 1', status: 'pending', project_id: 'p', transport_order: { quantity: 2, inventory: { name: 'X' } } },
+      { id: 'b', stop_order: 2, address: 'Weg 1', status: 'pending', project_id: 'p', notes: baueAbholNotiz([{ name: 'Rahmen', quantity: 8 }]) },
+    ]);
+    expect(g).toHaveLength(2);
+    expect(g[1].istAbholung).toBe(true);
+    expect(g[1].material).toEqual([{ name: 'Rahmen', quantity: 8 }]);
+    expect(g[0].istAbholung).toBe(false);
+  });
+});

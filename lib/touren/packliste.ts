@@ -1,3 +1,5 @@
+import { leseAbholNotiz } from '@/lib/touren/abholung';
+
 // ============================================================
 // SCAFFOLD OS – Packliste einer Tour ("Meine Touren")
 //
@@ -7,6 +9,9 @@
 // ============================================================
 
 export interface PackStopp {
+  id?: string;
+  address?: string;
+  notes?: string | null;
   transport_order?: {
     quantity: number;
     from_project_id?: string | null;
@@ -29,7 +34,15 @@ export interface AbholOrt {
   zeilen: PackZeile[];
 }
 
+export interface KundenAbholung {
+  stoppId: string;
+  adresse: string;
+  zeilen: PackZeile[];
+}
+
 export interface TourPackliste {
+  /** Abbau: Material beim Kunden abholen (Abholfahrt). */
+  beimKunden: KundenAbholung[];
   /** Aus dem Zentrallager mitnehmen. */
   ausLager: PackZeile[];
   /** Unterwegs auf anderen Baustellen abholen, je Baustelle. */
@@ -37,11 +50,18 @@ export interface TourPackliste {
 }
 
 export function baueTourPackliste(stops: PackStopp[]): TourPackliste {
+  const beimKunden: KundenAbholung[] = [];
   const lager = new Map<string, number>();
   const orte = new Map<string, AbholOrt>();
   const summen = new Map<string, number>();
 
   for (const s of stops) {
+    const abhol = leseAbholNotiz(s.notes);
+    if (abhol.istAbholung) {
+      const id = s.id || s.address || 'abholung';
+      beimKunden.push({ stoppId: id, adresse: s.address || '', zeilen: abhol.material.map((z) => ({ key: `kunde|${id}|${z.name}`, name: z.name, quantity: z.quantity })) });
+      continue;
+    }
     const t = s.transport_order;
     const name = t?.inventory?.name;
     if (!t || !name) continue;
@@ -67,11 +87,12 @@ export function baueTourPackliste(stops: PackStopp[]): TourPackliste {
   for (const ort of orte.values()) for (const z of ort.zeilen) z.quantity = summen.get(z.key) ?? 0;
 
   return {
+    beimKunden,
     ausLager: [...lager.entries()].map(([name, quantity]) => ({ key: name, name, quantity })),
     abholen: [...orte.values()],
   };
 }
 
 export function alleKeys(p: TourPackliste): string[] {
-  return [...p.ausLager.map((z) => z.key), ...p.abholen.flatMap((o) => o.zeilen.map((z) => z.key))];
+  return [...p.beimKunden.flatMap((k) => k.zeilen.map((z) => z.key)), ...p.ausLager.map((z) => z.key), ...p.abholen.flatMap((o) => o.zeilen.map((z) => z.key))];
 }

@@ -10,6 +10,7 @@
 // Nichts Passendes gefunden → keine Tour, sondern ein Hinweis.
 // ============================================================
 
+import { baueAbholNotiz } from '@/lib/touren/abholung';
 import { loadArticlePrices } from '@/lib/calculations/article-prices';
 import {
   gesamtgewichtKg, teileInFahrten, planeFahrtZeit, minutenZuUhrzeit, uhrzeitZuMinuten, STANDARD_ZEIT, leseZeitParameter,
@@ -282,4 +283,122 @@ export async function offeneFahrtenPruefen(): Promise<{ angelegt: number; offen:
     }
   }
   return { angelegt, offen };
+}
+
+// ------------------------------------------------------------
+// Abholfahrt (Abbau beim Kunden): Tour am Abholtermin (Aufmaß Schritt 5,
+// sonst Projektende aus Schritt 1) mit EINEM Stopp ohne Transportauftrag.
+// Material = was laut Lager (site_stock) vor Ort ist; steht in der Notiz des
+// Stopps (lib/touren/abholung.ts). Fahrzeug/Fahrer nach denselben Regeln wie
+// bei der Anlieferung. Lagerbestände werden hier NICHT verändert – der
+// Rücklauf wird weiter im Lager (Abbau / Rücklauf) gebucht.
+// Idempotent: gibt es schon eine geplante Abholfahrt, wird keine zweite angelegt.
+// ------------------------------------------------------------
+export async function legeAbholTourAn(projectId: string): Promise<AutoTourErgebnis> {
+  try {
+    const projekt = (await lese<any>(`projects?id=eq.${projectId}&select=name,adresse,data`))?.[0];
+    if (!projekt) return { hinweis: 'Projekt nicht gefunden.' };
+    const roh = projekt.data?.step5?.abholtermin || projekt.data?.step1?.projektende;
+    const datum = typeof roh === 'string' && roh ? roh.slice(0, 10) : null;
+    if (!datum) return { hinweis: 'Es ist kein Abholtermin eingetragen (Aufmaß Schritt 5) und kein Projektende (Schritt 1).' };
+    const heute = new Date().toISOString().slice(0, 10);
+    if (datum < heute) return { hinweis: `Der Abholtermin (${datum}) liegt in der Vergangenheit.` };
+
+    const vorhanden = await lese<any>(`tour_stops?project_id=eq.${projectId}&notes=like.ABHOLUNG*&select=id,tour:tour_id(status,planned_date)`);
+    if (vorhanden.some((v: any) => ['planned', 'in_progress'].includes(v.tour?.status))) {
+      return { hinweis: 'Für dieses Projekt ist schon eine Abholfahrt geplant.' };
+    }
+
+    const bestand = await lese<any>(`site_stock?project_id=eq.${projectId}&quantity=gt.0&select=quantity,inventory:inventory_id(name,sku)`);
+    const zeilen = bestand
+      .filter((b: any) => b.inventory?.name)
+      .map((b: any) => ({ name: String(b.inventory.name), sku: String(b.inventory.sku || ''), quantity: Number(b.quantity) || 0 }));
+    if (zeilen.length === 0) return { hinweis: 'Laut Lager ist auf dieser Baustelle kein Material vor Ort – nichts abzuholen.' };
+
+    const preise = await loadArticlePrices();
+    const gewicht = gesamtgewichtKg(zeilen.map((z) => ({ quantity: z.quantity, gewichtProStueckKg: preise[z.sku]?.weightKg ?? 0 })));
+
+    const [fahrzeuge, touren, drivers, mitarbeiter, abwesend, zuweisungen] = await Promise.all([
+      lese<FahrzeugKurz>('vehicles?is_active=eq.true&select=id,name,capacity_kg,zulaessiges_gesamtgewicht_kg'),
+      lese<any>(`tours?planned_date=eq.${datum}&status=in.(planned,in_progress)&select=vehicle_id,driver_id,team_ids,planned_start_time`),
+      lese<any>('drivers?select=id,name,employee_id'),
+      lese<any>('employees?status=eq.active&select=id,first_name,last_name,fuehrerschein_klassen'),
+      lese<any>(`absences?status=eq.approved&start_date=lte.${datum}&end_date=gte.${datum}&select=employee_id`),
+      lese<any>('project_assignments?select=employee_id,project_id'),
+    ]);
+    const beginne = await lese<any>('projects?select=id,beginn:data->step1->>projektbeginn');
+    let zp = STANDARD_ZEIT;
+    try {
+      const cs = await lese<any>('company_settings?select=tour_fahrt_dauer_min,tour_letzter_start_min&limit=1');
+      zp = leseZeitParameter(cs?.[0]);
+    } catch { /* Standard */ }
+
+    const driverZuMa = new Map<string, string>(drivers.filter((d: any) => d.employee_id).map((d: any) => [d.id, d.employee_id]));
+    const zeit: ZeitPlanung = { fahrzeugFreiAb: new Map(), maFreiAb: new Map() };
+    const merke = (m: Map<string, number>, id: string, bis: number) => m.set(id, Math.max(m.get(id) ?? 0, bis));
+    for (const t of touren) {
+      const bis = uhrzeitZuMinuten(t.planned_start_time) + zp.fahrtDauerMin;
+      if (t.vehicle_id) merke(zeit.fahrzeugFreiAb, t.vehicle_id, bis);
+      for (const did of [t.driver_id, ...(Array.isArray(t.team_ids) ? t.team_ids : [])]) {
+        const ma = did && driverZuMa.get(did);
+        if (ma) merke(zeit.maFreiAb, ma, bis);
+      }
+    }
+    const ganztagBelegteMa = new Set<string>();
+    const beginnNachProjekt = new Map<string, string>(beginne.map((b: any) => [b.id, b.beginn]));
+    for (const z of zuweisungen) if (beginnNachProjekt.get(z.project_id) === datum) ganztagBelegteMa.add(z.employee_id);
+    const abwesendIds = new Set<string>(abwesend.map((a: any) => a.employee_id));
+
+    const maxNutzlast = Math.max(0, ...fahrzeuge.map((f) => Number(f.capacity_kg) || 0));
+    if (gewicht > 0 && maxNutzlast > 0 && gewicht > maxNutzlast) {
+      return { hinweis: `Das Material (${Math.round(gewicht)} kg) ist schwerer als das größte Fahrzeug (${Math.round(maxNutzlast)} kg) – bitte die Abholung von Hand auf mehrere Fahrten planen.`, gewichtKg: gewicht, datum };
+    }
+    const kandidaten: FahrerKandidat[] = mitarbeiter.map((e: any) => ({
+      employee_id: e.id,
+      name: `${e.first_name} ${e.last_name}`.trim(),
+      klassen: Array.isArray(e.fuehrerschein_klassen) ? e.fuehrerschein_klassen : [],
+    }));
+    const wahl = planeFahrtZeit({ fahrzeuge, kandidaten, abwesendIds, ganztagBelegteMa, zeit, gewicht, params: zp });
+    if ('hinweis' in wahl) return { hinweis: wahl.hinweis, gewichtKg: gewicht, datum };
+
+    let driverId = drivers.find((d: any) => d.employee_id === wahl.fahrer.employee_id)?.id as string | undefined;
+    if (!driverId) {
+      const r = await fetch(`${url}/rest/v1/drivers`, {
+        method: 'POST', headers: { ...headers, Prefer: 'return=representation' },
+        body: JSON.stringify({ name: wahl.fahrer.name, employee_id: wahl.fahrer.employee_id }),
+      });
+      if (!r.ok) throw new Error('Fahrer-Datensatz konnte nicht angelegt werden (' + r.status + ')');
+      driverId = (await r.json())?.[0]?.id;
+      if (!driverId) throw new Error('Fahrer-Datensatz ohne ID');
+    }
+
+    const tourName = `Abholung ${projekt.name || 'Projekt'}`;
+    const tRes = await fetch(`${url}/rest/v1/tours`, {
+      method: 'POST', headers: { ...headers, Prefer: 'return=representation' },
+      body: JSON.stringify({
+        name: tourName, vehicle_id: wahl.fahrzeug.id, driver_id: driverId, team_ids: [driverId],
+        planned_date: datum, planned_start_time: minutenZuUhrzeit(wahl.startMin), status: 'planned',
+        total_weight_kg: Math.round(gewicht),
+      }),
+    });
+    if (!tRes.ok) throw new Error('Tour konnte nicht angelegt werden (' + tRes.status + ')');
+    const tour = (await tRes.json())?.[0];
+    if (!tour?.id) throw new Error('Tour ohne ID');
+
+    const sRes = await fetch(`${url}/rest/v1/tour_stops`, {
+      method: 'POST', headers,
+      body: JSON.stringify([{
+        tour_id: tour.id, transport_order_id: null, project_id: projectId, stop_order: 1,
+        address: projekt.adresse || 'Unbekannt', status: 'pending',
+        notes: baueAbholNotiz(zeilen.map((z) => ({ name: z.name, quantity: z.quantity }))),
+      }]),
+    });
+    if (!sRes.ok) {
+      await fetch(`${url}/rest/v1/tours?id=eq.${tour.id}`, { method: 'PATCH', headers, body: JSON.stringify({ status: 'cancelled' }) });
+      throw new Error('Tour-Stopp konnte nicht angelegt werden (' + sRes.status + ')');
+    }
+    return { tourId: tour.id, tourName, datum, gewichtKg: gewicht, fahrzeug: wahl.fahrzeug.name, fahrer: wahl.fahrer.name };
+  } catch (e: any) {
+    return { hinweis: `Fehler beim Anlegen der Abholfahrt: ${String(e?.message || e)}` };
+  }
 }

@@ -33,6 +33,7 @@ import { lokalesDatumIso } from '@/lib/datum';
 interface Stop {
   id: string; stop_order: number; address: string; status: string;
   project_id?: string | null;
+  notes?: string | null;
   transport_order?: {
     quantity: number; from_project_id?: string | null;
     inventory?: { name: string } | null;
@@ -804,7 +805,10 @@ export default function MeineTourenPage() {
                         }`}>
                           {g.status === 'completed' ? '✓' : g.status === 'skipped' ? '⏭' : idx + 1}
                         </span>
-                        <div className="font-medium">{g.address}</div>
+                        <div className="font-medium">
+                          {g.istAbholung && <span className="mr-2 rounded-full bg-sky-100 text-sky-800 px-2 py-0.5 text-[11px] font-semibold">🔄 Abholung / Abbau</span>}
+                          {g.address}
+                        </div>
                         {g.material.length > 0 && (
                           <ul className="text-[#86868b] text-sm mt-0.5 space-y-0.5">
                             {g.material.map(m => <li key={m.name}>{m.name} × {m.quantity}</li>)}
@@ -982,6 +986,16 @@ export default function MeineTourenPage() {
                   };
                   return (
                     <div className="space-y-4">
+                      {packliste.beimKunden.map((k) => (
+                        <div key={k.stoppId} className="space-y-2">
+                          <h3 className="text-sm font-semibold text-[#1d1d1f]">
+                            🔄 Beim Kunden abholen (Abbau)
+                            {k.adresse && <span className="block text-xs font-normal text-[#86868b]">{k.adresse}</span>}
+                          </h3>
+                          {k.zeilen.map(zeile)}
+                          <p className="text-xs text-[#86868b]">Menge laut Lager vor Ort. Was intakt zurückkommt und was fehlt, wird danach im Lager unter „Abbau / Rücklauf“ gebucht.</p>
+                        </div>
+                      ))}
                       {packliste.ausLager.length > 0 && (
                         <div className="space-y-2">
                           <h3 className="text-sm font-semibold text-[#1d1d1f]">🏭 Aus dem Lager mitnehmen (zur Baustelle bringen)</h3>
