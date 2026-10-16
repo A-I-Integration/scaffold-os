@@ -301,6 +301,13 @@ function Schritt1Content() {
     setHatAlteDaten(false);
   }
 
+  // Stilles Sichern vor einem Sprung über die Schrittleiste (ohne Pflichtfeld-Meldung)
+  function sichereStill() {
+    try { localStorage.setItem('scaffold_step1', JSON.stringify(form)); } catch { /* ignore */ }
+    if (projectId) void speichereSchrittAuto(projectId, 'step1', form);
+    else if (form.name.trim() && form.adresse.trim() && form.gewerke.length > 0) void speichereEntwurf();
+  }
+
   function handleWeiter() {
     if (!form.name.trim() || !form.adresse.trim()) {
       alert('Bitte gib mindestens Kunde und Adresse ein!');
@@ -318,7 +325,7 @@ function Schritt1Content() {
   return (
     <div className="min-h-screen bg-white text-[#1d1d1f] p-6">
       <div className="max-w-2xl mx-auto">
-        <WizardKopf schritt={1} titel="Projekt anlegen" icon={ClipboardList} />
+        <WizardKopf schritt={1} titel="Projekt anlegen" icon={ClipboardList} vorWechsel={sichereStill} />
 
         {hatAlteDaten && (
           <div className="mb-6 bg-orange-50 border border-[#e8590c]/40 rounded-xl p-4">

@@ -128,6 +128,12 @@ function Schritt3Content() {
     })
   }
 
+  function sichereStill() {
+    try { localStorage.setItem('scaffold_step3', JSON.stringify(form)); } catch { /* ignore */ }
+    if (projectId) void speichereSchrittAuto(projectId, 'step3', form);
+    else if (form.geruesttyp) void speichereEntwurf();
+  }
+
   function handleWeiter() {
     if (!form.geruesttyp) {
       alert('Bitte wähle einen Gerüsttyp aus!');
@@ -148,7 +154,7 @@ function Schritt3Content() {
         <div className="flex items-center gap-3 mb-2">
           <button onClick={zurueck} className="text-[#86868b] hover:text-[#1d1d1f] text-sm">← Zurück</button>
         </div>
-        <WizardKopf schritt={3} titel="Gerüsttyp & Aufbau" icon={Construction} />
+        <WizardKopf schritt={3} titel="Gerüsttyp & Aufbau" icon={Construction} vorWechsel={sichereStill} />
         
         {step1Data && (
           <div className="bg-black/5 rounded-xl p-3 mb-6 text-sm text-[#86868b]">

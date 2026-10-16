@@ -4,6 +4,7 @@ import { useState, useEffect, useRef, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import dynamic from 'next/dynamic';
 import { jsPDF } from 'jspdf';
+import WizardKopf from '@/components/aufmaß/WizardKopf';
 import autoTable from 'jspdf-autotable';
 import KIMaterialResult from '@/components/aufmaß/KIMaterialResult';
 import KiHinweis from '@/components/KiHinweis';
@@ -93,6 +94,7 @@ function Schritt6Content() {
   // Phase 82: E-Mail-Formular standardmäßig zugeklappt (war nach jedem
   // Speichern sofort sichtbar und hat sich aufgedrängt).
   const [showEmailForm, setShowEmailForm] = useState(false);
+  const [vorschauUrl, setVorschauUrl] = useState<string | null>(null);
 
   // ═══════════════════════════════════════════════════════════
   // NEU: Angebot-Anpassungen (Skonto, Mietverlängerung, Nachtrag, Sonderrabatt)
@@ -795,6 +797,22 @@ function Schritt6Content() {
     return doc.output('datauristring');
   }
 
+  // Angebot vor dem Versand ansehen: PDF frisch aus dem aktuellen Stand erzeugen und im Dialog zeigen
+  async function handleVorschau() {
+    if (!kiResult) { alert('Bitte zuerst KI-Materialberechnung durchführen!'); return; }
+    const base64 = generatePDFBase64();
+    if (!base64) return;
+    try {
+      const blob = await (await fetch(base64)).blob();
+      if (vorschauUrl) URL.revokeObjectURL(vorschauUrl);
+      setVorschauUrl(URL.createObjectURL(blob));
+    } catch { alert('Die Vorschau konnte nicht erstellt werden.'); }
+  }
+  function schliesseVorschau() {
+    if (vorschauUrl) URL.revokeObjectURL(vorschauUrl);
+    setVorschauUrl(null);
+  }
+
   // NEU: PDF + Download
   function handlePDF() {
     if (!kiResult) { alert('Bitte zuerst KI-Materialberechnung durchführen!'); return; }
@@ -827,7 +845,8 @@ function Schritt6Content() {
     if (!customerEmail) { alert('Bitte E-Mail-Adresse des Kunden eingeben!'); return; }
     setEmailStatus('sending');
     try {
-      const base64 = pdfBase64 || generatePDFBase64();
+      // immer frisch erzeugen: ein früher zwischengespeichertes PDF könnte nach Änderungen veraltet sein
+      const base64 = generatePDFBase64();
       const res = await fetch('/api/email', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -1078,8 +1097,7 @@ function Schritt6Content() {
     <div className="min-h-screen bg-white text-[#1d1d1f] p-6">
       <div className="max-w-6xl mx-auto">
         <button onClick={handleZurueck} className="text-[#86868b] hover:text-[#1d1d1f] text-sm mb-2">← Zurück</button>
-        <h1 className="flex items-center gap-2 text-2xl font-semibold mb-1"><ClipboardList className="w-6 h-6 text-[#e8590c]" /> Zusammenfassung & KI-Planung</h1>
-        <p className="text-[#86868b] text-sm mb-5">Baustelle · Schritt 6 von 6</p>
+        <WizardKopf schritt={6} titel="Zusammenfassung & KI-Planung" icon={ClipboardList} />
 
         {/* Vorgangskopf: Kunde, Zustand und Kennzahlen auf einen Blick */}
         <div className="mb-6 rounded-xl border border-black/10 bg-white">
@@ -1150,9 +1168,29 @@ function Schritt6Content() {
                 <span className="inline-flex items-center justify-center gap-2"><Save className="w-4 h-4" />{isSaving ? 'Wird gespeichert…' : 'Projekt speichern'}</span>
               </button>
 
+              <button onClick={handleVorschau} className="w-full rounded-xl border border-[#e8590c] bg-white hover:bg-[#e8590c]/5 py-3 font-semibold text-[#e8590c] transition-colors">
+                <span className="inline-flex items-center justify-center gap-2"><FileText className="w-4 h-4" />Angebot ansehen (Vorschau)</span>
+              </button>
+
               <button onClick={handlePDF} className="w-full rounded-xl bg-black/10 hover:bg-black/15 py-3 font-semibold text-[#1d1d1f] transition-colors">
                 <span className="inline-flex items-center justify-center gap-2"><FileText className="w-4 h-4" />PDF erzeugen & herunterladen</span>
               </button>
+
+              {vorschauUrl && (
+                <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-3" onClick={schliesseVorschau}>
+                  <div className="bg-white rounded-2xl shadow-xl w-full max-w-4xl h-[92vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
+                    <div className="flex items-center gap-2 p-3 border-b border-black/10">
+                      <p className="flex-1 text-sm font-semibold text-[#1d1d1f]">Angebot – Vorschau</p>
+                      <a href={vorschauUrl} target="_blank" rel="noreferrer" className="text-xs text-[#e8590c] underline">In neuem Tab öffnen</a>
+                      {savedProjectId && (
+                        <button onClick={() => { schliesseVorschau(); setShowEmailForm(true); }} className="rounded-lg bg-blue-600 hover:bg-blue-500 px-3 py-1.5 text-xs font-semibold text-white">Weiter zum Senden</button>
+                      )}
+                      <button onClick={schliesseVorschau} className="rounded-lg bg-black/10 hover:bg-black/15 px-3 py-1.5 text-xs font-semibold text-[#1d1d1f]">Schließen</button>
+                    </div>
+                    <iframe src={vorschauUrl} title="Angebot Vorschau" className="flex-1 w-full rounded-b-2xl" />
+                  </div>
+                </div>
+              )}
 
               {/* NEU: E-Mail (Phase 82: aufklappbar, nicht mehr aufdringlich) */}
               {savedProjectId && !showEmailForm && ( // 82-Fix: kiResult-Bedingung entfernt – Angebot-E-Mail geht auch ohne KI-Ergebnis

@@ -511,6 +511,12 @@ function leeresFormS2() {
     return form.bruecke.spannweiten.some(s => parseFloat(s.spannweiteM) > 0) && parseFloat(form.bruecke.hoeheUeberGrundM) >= 0;
   }
 
+  function sichereStill() {
+    try { localStorage.setItem('scaffold_step2', JSON.stringify(form)); } catch { /* ignore */ }
+    if (projectId) void speichereSchrittAuto(projectId, 'step2', form);
+    else if (istBruecke ? brueckeGueltig() : (form.laenge && form.hoehe)) void speichereEntwurf();
+  }
+
   function handleWeiter() {
     if (istBruecke) {
       if (!brueckeGueltig()) { alert('Bitte mindestens eine Spannweite und die Höhe über Grund/Gewässer eingeben!'); return; }
@@ -565,7 +571,7 @@ function leeresFormS2() {
       <div className="min-h-screen bg-white text-[#1d1d1f] p-6">
         <div className="max-w-2xl mx-auto">
           <button onClick={zurueck} className="text-[#86868b] hover:text-[#1d1d1f] text-sm mb-2">← Zurück</button>
-          <WizardKopf schritt={2} titel="Brücke & Spannweiten" icon={Waypoints} />
+          <WizardKopf schritt={2} titel="Brücke & Spannweiten" icon={Waypoints} vorWechsel={sichereStill} />
           {step1Data && (
             <div className="bg-black/5 rounded-xl p-3 mb-6 text-sm text-[#86868b]">
               <span className="text-[#424245] font-medium">{step1Data.name}</span> · {step1Data.adresse}
@@ -661,7 +667,7 @@ function leeresFormS2() {
     <div className="min-h-screen bg-white text-[#1d1d1f] p-6">
       <div className="max-w-2xl mx-auto">
         <button onClick={zurueck} className="text-[#86868b] hover:text-[#1d1d1f] text-sm mb-2">← Zurück</button>
-        <WizardKopf schritt={2} titel="Gebäude & Abmessungen" icon={Building2} />
+        <WizardKopf schritt={2} titel="Gebäude & Abmessungen" icon={Building2} vorWechsel={sichereStill} />
 
         {step1Data && (
           <div className="bg-black/5 rounded-xl p-3 mb-6 text-sm text-[#86868b]">
