@@ -14,7 +14,7 @@ export async function GET() {
   try {
     const [toursRes, stopsRes] = await Promise.all([
       fetch(`${url}/rest/v1/tours?select=*,vehicle:vehicle_id(name,license_plate),driver:driver_id(id,name,employee_id)&order=planned_date.desc`, { headers }),
-      fetch(`${url}/rest/v1/tour_stops?select=*,transport_order:transport_order_id(*,inventory:inventory_id(name))&order=stop_order.asc`, { headers }),
+      fetch(`${url}/rest/v1/tour_stops?select=*,transport_order:transport_order_id(*,inventory:inventory_id(name),from_project:from_project_id(id,name,adresse))&order=stop_order.asc`, { headers }),
     ]);
     if (!toursRes.ok) throw new Error(await toursRes.text());
     if (!stopsRes.ok) throw new Error(await stopsRes.text());

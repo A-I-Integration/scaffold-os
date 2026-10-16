@@ -24,7 +24,7 @@ export async function GET(req: Request) {
     const { searchParams } = new URL(req.url);
     const tourId = searchParams.get('tour_id');
 
-    let endpoint = `${url}/rest/v1/tour_stops?select=*,transport_order:transport_order_id(*,inventory:inventory_id(name))&order=stop_order.asc`;
+    let endpoint = `${url}/rest/v1/tour_stops?select=*,transport_order:transport_order_id(*,inventory:inventory_id(name),from_project:from_project_id(id,name,adresse))&order=stop_order.asc`;
     if (tourId) endpoint += `&tour_id=eq.${tourId}`;
 
     const res = await fetch(endpoint, { headers });

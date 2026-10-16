@@ -41,3 +41,25 @@ describe('Nachträge', () => {
     expect(parseBetrag('abc')).toBe(0);
   });
 });
+
+import { setzeNachtragBetrag, nachtragBraeuchteBetrag, normalisiereNachtraege as normN, neuerNachtrag as neuN } from '@/lib/nachtrag';
+
+describe('Nachtrag von der Baustelle (ohne Betrag)', () => {
+  it('wird mit Betrag 0 und Kennzeichen vorOrt angelegt und braucht noch einen Betrag', () => {
+    const n = neuN([], { datum: '2026-10-16', titel: 'Konsolen fehlen', grund: 'x', betrag: 0, fotos: [], vorOrt: true }, 'id1');
+    expect(n.vorOrt).toBe(true);
+    expect(n.betrag).toBe(0);
+    expect(nachtragBraeuchteBetrag(n)).toBe(true);
+    expect(normN([n])[0].vorOrt).toBe(true);
+  });
+  it('normale Nachträge tragen kein vorOrt', () => {
+    const n = neuN([], { datum: '2026-10-16', titel: 'a', grund: 'b', betrag: 100, fotos: [] }, 'id2');
+    expect('vorOrt' in n).toBe(false);
+    expect(nachtragBraeuchteBetrag(n)).toBe(false);
+  });
+  it('Büro ergänzt den Betrag nur bei offenen Nachträgen', () => {
+    const a = neuN([], { datum: '2026-10-16', titel: 'a', grund: 'b', betrag: 0, fotos: [], vorOrt: true }, 'i');
+    expect(setzeNachtragBetrag([a], 'i', 480.456)[0].betrag).toBe(480.46);
+    expect(setzeNachtragBetrag([{ ...a, status: 'bestaetigt' }], 'i', 5)[0].betrag).toBe(0);
+  });
+});

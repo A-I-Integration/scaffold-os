@@ -8,6 +8,8 @@ import ProjektDokumentation from '@/components/ProjektDokumentation';
 import Link from 'next/link';
 import { Wrench, Navigation } from 'lucide-react';
 import { gruppiereStopps, routenAdressen, uhrzeitKurz, type StoppGruppe } from '@/lib/touren/stopp-gruppen';
+import { baueTourPackliste, alleKeys } from '@/lib/touren/packliste';
+import { legeNachtragVorOrtAn } from '@/lib/nachtrag-client';
 import { starteNeuesAufmass } from '@/lib/aufmass-projekt-session';
 import { lokalesDatumIso } from '@/lib/datum';
 
@@ -31,7 +33,11 @@ import { lokalesDatumIso } from '@/lib/datum';
 interface Stop {
   id: string; stop_order: number; address: string; status: string;
   project_id?: string | null;
-  transport_order?: { quantity: number; inventory?: { name: string } | null } | null;
+  transport_order?: {
+    quantity: number; from_project_id?: string | null;
+    inventory?: { name: string } | null;
+    from_project?: { id?: string; name?: string | null; adresse?: string | null } | null;
+  } | null;
 }
 interface Tour {
   id: string; name: string; status: string; planned_date: string; planned_start_time: string | null;
@@ -48,7 +54,6 @@ interface TimeEntry {
   id: string; work_date: string; start_time: string | null; end_time: string | null;
   hours: number | null; note: string | null;
 }
-interface PackItem { name: string; quantity: number; }
 interface DokProject { id: string; name: string | null; adresse: string | null; status: string; }
 interface PayrollDoc { id: string; month: string; file_name: string; uploaded_at: string; sent_at: string | null; }
 
@@ -408,6 +413,28 @@ export default function MeineTourenPage() {
     }
   }
 
+  // ─── Nachtrag melden (fehlt etwas beim Kunden): offener Nachtrag ohne Betrag, Büro ergänzt ───
+  const [nachtragOffen, setNachtragOffen] = useState<string | null>(null);
+  const [nachtragForm, setNachtragForm] = useState({ titel: '', grund: '' });
+  const [nachtragDateien, setNachtragDateien] = useState<File[]>([]);
+  const [nachtragLaeuft, setNachtragLaeuft] = useState(false);
+  const [nachtragMsg, setNachtragMsg] = useState<Record<string, { ok: boolean; text: string }>>({});
+
+  async function handleNachtragMelden(g: StoppGruppe<Stop>) {
+    if (!g.project_id) return;
+    if (!nachtragForm.titel.trim()) { setNachtragMsg((m) => ({ ...m, [g.schluessel]: { ok: false, text: 'Bitte kurz schreiben, was fehlt.' } })); return; }
+    setNachtragLaeuft(true);
+    try {
+      await legeNachtragVorOrtAn(g.project_id, { titel: nachtragForm.titel, grund: nachtragForm.grund.trim() || 'Auf der Baustelle gemeldet (Material/Leistung fehlt)', dateien: nachtragDateien });
+      setNachtragMsg((m) => ({ ...m, [g.schluessel]: { ok: true, text: 'Nachtrag ans Büro gemeldet. Das Büro trägt den Betrag ein.' } }));
+      setNachtragForm({ titel: '', grund: '' }); setNachtragDateien([]); setNachtragOffen(null);
+    } catch (e: any) {
+      setNachtragMsg((m) => ({ ...m, [g.schluessel]: { ok: false, text: e?.message || 'Das hat nicht geklappt.' } }));
+    } finally {
+      setNachtragLaeuft(false);
+    }
+  }
+
   function togglePacked(key: string) {
     if (!myTour) return;
     const next = { ...checked, [key]: !checked[key] };
@@ -493,17 +520,9 @@ export default function MeineTourenPage() {
 
   const stoppGruppen = myTour ? gruppiereStopps(myTour.stops) : [];
 
-  // Packliste aus Stopps aggregieren
-  const packlist: PackItem[] = [];
-  if (myTour) {
-    const agg: Record<string, number> = {};
-    for (const s of myTour.stops) {
-      const name = s.transport_order?.inventory?.name;
-      const qty = s.transport_order?.quantity || 0;
-      if (name) agg[name] = (agg[name] || 0) + qty;
-    }
-    for (const [name, quantity] of Object.entries(agg)) packlist.push({ name, quantity });
-  }
+  // Packliste: aus dem Lager mitnehmen vs. unterwegs abholen
+  const packliste = baueTourPackliste(myTour ? myTour.stops : []);
+  const packKeys = alleKeys(packliste);
 
   const openEntry = entries.find(e => e.start_time && !e.end_time) || null;
   const todayHours = entries.reduce((s, e) => s + (e.hours || 0), 0);
@@ -818,6 +837,46 @@ export default function MeineTourenPage() {
                           </div>
                         )}
 
+                        {g.project_id && (
+                          <div className="mt-2">
+                            {nachtragOffen !== g.schluessel ? (
+                              <button
+                                onClick={() => { setNachtragOffen(g.schluessel); setNachtragMsg((m) => { const n = { ...m }; delete n[g.schluessel]; return n; }); }}
+                                className="text-xs font-semibold text-[#e8590c] hover:underline"
+                              >
+                                ➕ Es fehlt etwas? Nachtrag melden
+                              </button>
+                            ) : (
+                              <div className="bg-white/60 border border-black/10 rounded-lg p-2 space-y-2">
+                                <input
+                                  value={nachtragForm.titel}
+                                  onChange={(e) => setNachtragForm({ ...nachtragForm, titel: e.target.value })}
+                                  placeholder="Was fehlt / was soll zusätzlich gemacht werden?"
+                                  className="w-full rounded-lg border border-black/10 px-2 py-1.5 text-sm"
+                                />
+                                <input
+                                  value={nachtragForm.grund}
+                                  onChange={(e) => setNachtragForm({ ...nachtragForm, grund: e.target.value })}
+                                  placeholder="Grund (optional)"
+                                  className="w-full rounded-lg border border-black/10 px-2 py-1.5 text-sm"
+                                />
+                                <label className="inline-flex items-center gap-1.5 text-xs text-[#86868b] cursor-pointer">
+                                  <input type="file" accept="image/*" multiple className="hidden" onChange={(e) => setNachtragDateien((prev) => [...prev, ...Array.from(e.target.files || [])])} />
+                                  📷 Foto hinzufügen{nachtragDateien.length > 0 ? ` (${nachtragDateien.length})` : ''}
+                                </label>
+                                <p className="text-[11px] text-[#86868b]">Der Betrag bleibt leer – das Büro trägt ihn ein.</p>
+                                <div className="flex gap-2">
+                                  <button onClick={() => handleNachtragMelden(g)} disabled={nachtragLaeuft} className="px-3 py-1.5 rounded-lg bg-[#e8590c] text-white text-xs font-semibold disabled:opacity-50">{nachtragLaeuft ? 'Sendet…' : 'Ans Büro melden'}</button>
+                                  <button onClick={() => { setNachtragOffen(null); setNachtragDateien([]); }} disabled={nachtragLaeuft} className="px-3 py-1.5 rounded-lg bg-black/10 text-xs">Abbrechen</button>
+                                </div>
+                              </div>
+                            )}
+                            {nachtragMsg[g.schluessel] && (
+                              <p className={`mt-1 text-xs ${nachtragMsg[g.schluessel].ok ? 'text-emerald-700' : 'text-red-600'}`}>{nachtragMsg[g.schluessel].text}</p>
+                            )}
+                          </div>
+                        )}
+
                         {stoppMsg[g.schluessel] === 'doku_fehlt' && (
                           <div className="mt-2 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-2">
                             ⚠️ Bitte zuerst eine Dokumentation (Foto/Notiz) für diese Baustelle hinzufügen, bevor du auf &quot;Fertig&quot; setzt.
@@ -897,17 +956,16 @@ export default function MeineTourenPage() {
             </section>
 
             {/* ═══ PACKLISTE ═══ */}
-            {myTour && packlist.length > 0 && (
+            {myTour && packKeys.length > 0 && (
               <section className="bg-[#f5f5f7] border border-black/10 rounded-xl p-4">
                 <h2 className="font-semibold mb-3">📦 Packliste</h2>
-                <div className="space-y-2">
-                  {packlist.map(item => {
-                    const k = item.name;
-                    const done = !!checked[k];
+                {(() => {
+                  const zeile = (z: { key: string; name: string; quantity: number }) => {
+                    const done = !!checked[z.key];
                     return (
                       <button
-                        key={k}
-                        onClick={() => togglePacked(k)}
+                        key={z.key}
+                        onClick={() => togglePacked(z.key)}
                         className={`w-full flex items-center gap-3 rounded-xl border p-3 text-left transition ${
                           done ? 'border-emerald-600 bg-emerald-900/20' : 'border-black/10 bg-white/50'
                         }`}
@@ -917,14 +975,33 @@ export default function MeineTourenPage() {
                         }`}>
                           {done ? '✓' : ''}
                         </span>
-                        <span className={`flex-1 ${done ? 'line-through text-[#86868b]' : ''}`}>{item.name}</span>
-                        <span className="font-bold">{item.quantity}×</span>
+                        <span className={`flex-1 ${done ? 'line-through text-[#86868b]' : ''}`}>{z.name}</span>
+                        <span className="font-bold">{z.quantity}×</span>
                       </button>
                     );
-                  })}
-                </div>
+                  };
+                  return (
+                    <div className="space-y-4">
+                      {packliste.ausLager.length > 0 && (
+                        <div className="space-y-2">
+                          <h3 className="text-sm font-semibold text-[#1d1d1f]">🏭 Aus dem Lager mitnehmen (zur Baustelle bringen)</h3>
+                          {packliste.ausLager.map(zeile)}
+                        </div>
+                      )}
+                      {packliste.abholen.map((ort) => (
+                        <div key={ort.projectId} className="space-y-2">
+                          <h3 className="text-sm font-semibold text-[#1d1d1f]">
+                            🔄 Abholen bei: {ort.name}
+                            {ort.adresse && <span className="block text-xs font-normal text-[#86868b]">{ort.adresse}</span>}
+                          </h3>
+                          {ort.zeilen.map(zeile)}
+                        </div>
+                      ))}
+                    </div>
+                  );
+                })()}
                 <p className="text-[#86868b] text-xs mt-2">
-                  {packlist.filter(i => checked[i.name]).length} von {packlist.length} Positionen geladen
+                  {packKeys.filter(k => checked[k]).length} von {packKeys.length} Positionen geladen
                 </p>
               </section>
             )}
