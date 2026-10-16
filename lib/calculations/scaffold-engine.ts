@@ -415,6 +415,16 @@ export interface CostSettings {
   craneDay?: number;      // Kran-Tagessatz (Standard 850)
 }
 
+/**
+ * Welcher Artikel passt zur Feldlänge? Stufen wie bisher: ab 2,5 m die zweite,
+ * ab 3,0 m die dritte Größe (Rahmen RA, Bühne AB, Diagonale DI, Geländer GE).
+ */
+export function artikelFuerFeldlaenge(praefix: 'RA' | 'AB' | 'DI' | 'GE', feldlaengeM: number): string {
+  if (feldlaengeM >= 3.0) return `${praefix}-003`;
+  if (feldlaengeM >= 2.5) return `${praefix}-002`;
+  return `${praefix}-001`;
+}
+
 export function calculateScaffoldMaterial(
   input: ScaffoldInput,
   articlePrices?: Record<string, Omit<MaterialItem, 'quantity' | 'totalPrice'>>,
@@ -443,7 +453,13 @@ export function calculateScaffoldMaterial(
   let totalFrames = 0, totalDecks = 0, totalDiagonals = 0, totalRailings = 0;
   let totalCouplings = 0, totalFootPlates = 0, totalConsoles = 0, totalBoards = 0;
   let sideProtectionArea = 0, safetyNetArea = 0;
-  let frameArticle = 'RA-001', deckArticle = 'AB-001', diagonalArticle = 'DI-001', railingArticle = 'GE-001';
+  // Mengen je Artikel: jeder Abschnitt wird mit dem zu SEINER Feldlänge passenden
+  // Artikel gezählt (früher galt für alle Abschnitte der größte – siehe
+  // artikelFuerFeldlaenge). Bei einer einheitlichen Feldlänge ergibt sich wie bisher
+  // genau eine Zeile je Bauteil.
+  const rahmenMengen = new Map<string, number>(), deckMengen = new Map<string, number>();
+  const diagonalMengen = new Map<string, number>(), gelaenderMengen = new Map<string, number>();
+  const zaehle = (m: Map<string, number>, key: string, menge: number) => m.set(key, (m.get(key) ?? 0) + menge);
   const sectionBreakdown: { bezeichnung: string; areaM2: number; fields: number; levels: number }[] = [];
 
   for (const a of abschnitte) {
@@ -462,23 +478,19 @@ export function calculateScaffoldMaterial(
 
     // 2. RAHMEN
     totalFrames += aFields * aLevels * 2;
-    if (fl >= 2.5) frameArticle = 'RA-002';
-    if (fl >= 3.0) frameArticle = 'RA-003';
+    zaehle(rahmenMengen, artikelFuerFeldlaenge('RA', fl), aFields * aLevels * 2);
 
     // 3. ARBEITSBÜHNEN
     totalDecks += aFields * aLevels;
-    if (fl >= 2.5) deckArticle = 'AB-002';
-    if (fl >= 3.0) deckArticle = 'AB-003';
+    zaehle(deckMengen, artikelFuerFeldlaenge('AB', fl), aFields * aLevels);
 
     // 4. DIAGONALEN
     totalDiagonals += aFields * aLevels * 2;
-    if (fl >= 2.5) diagonalArticle = 'DI-002';
-    if (fl >= 3.0) diagonalArticle = 'DI-003';
+    zaehle(diagonalMengen, artikelFuerFeldlaenge('DI', fl), aFields * aLevels * 2);
 
     // 5. GELÄNDER
     totalRailings += aFields * aLevels * 2;
-    if (fl >= 2.5) railingArticle = 'GE-002';
-    if (fl >= 3.0) railingArticle = 'GE-003';
+    zaehle(gelaenderMengen, artikelFuerFeldlaenge('GE', fl), aFields * aLevels * 2);
 
     // 6. KUPPLUNGEN
     totalCouplings += aFields * aLevels * 4;
@@ -577,10 +589,9 @@ export function calculateScaffoldMaterial(
     });
   }
 
-  addItem(frameArticle, totalFrames);
-  addItem(deckArticle, totalDecks);
-  addItem(diagonalArticle, totalDiagonals);
-  addItem(railingArticle, totalRailings);
+  for (const mengen of [rahmenMengen, deckMengen, diagonalMengen, gelaenderMengen]) {
+    for (const [key, menge] of [...mengen.entries()].sort(([a], [b]) => a.localeCompare(b))) addItem(key, menge);
+  }
   addItem('KU-001', totalCouplings);
   addItem('FP-001', totalFootPlates);
   if (totalConsoles > 0) addItem('KO-001', totalConsoles);
