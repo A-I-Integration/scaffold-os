@@ -1256,6 +1256,15 @@ function Schritt6Content() {
               {/* NEU: Unterschrift */}
               {savedProjectId && (
                 <div className="pt-2 border-t border-black/10">
+                  {/* Hinweis statt Sperre: Die Annahme (auch per Kunden-Link) darf nie an einem internen
+                      Datum scheitern. Ohne Projektbeginn wird nur keine Fahrt angelegt – sie entsteht
+                      automatisch, sobald das Datum nachgetragen ist (siehe lib/angebot-annahme.ts). */}
+                  {!s1.projektbeginn && angebotsStatus !== 'angenommen' && (
+                    <div className="mb-3 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+                      <strong>Projektbeginn fehlt.</strong> Bei der Annahme wird Material reserviert, aber noch keine Fahrt angelegt.
+                      Trage den Beginn in Schritt 1 ein (oben anklickbar) – die Fahrt entsteht dann automatisch.
+                    </div>
+                  )}
                   <button onClick={() => setShowSignature(!showSignature)} className="w-full rounded-xl border border-black/10 bg-white hover:bg-black/5 py-3 font-semibold text-[#1d1d1f] transition-colors">
                     <span className="inline-flex items-center justify-center gap-2">{signatureData && !showSignature ? <Check className="w-4 h-4 text-green-600" /> : <PenLine className="w-4 h-4" />}{showSignature ? 'Unterschrift schließen' : signatureData ? 'Unterschrift vorhanden' : 'Kunden-Unterschrift'}</span>
                   </button>
