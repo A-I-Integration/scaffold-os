@@ -87,6 +87,7 @@ const NAV_GROUPS: NavGroup[] = [
     items: [
       { href: '/lager',    label: 'Lager',    icon: Warehouse,  roles: ['admin', 'disponent', 'bauleiter', 'lager'] },
       { href: '/prognose', label: 'Prognose', icon: TrendingUp, roles: ['admin', 'disponent', 'lager'] },
+      { href: '/mj-katalog', label: 'MJ-Katalog', icon: BookOpen, roles: ['admin', 'disponent', 'bauleiter', 'lager'] },
     ],
   },
   {

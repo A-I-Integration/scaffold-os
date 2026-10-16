@@ -107,6 +107,42 @@ export const GERUEST_SYSTEME: GeruestSystem[] = [
     hinweis: 'Modulsystem aus dem BrandSafway-Konzern',
   },
 
+  // MJ OPTIMA-Familie: Werte aus den Preislisten/Zulassungen der MJ-Gerüst GmbH (Stand 04.2025).
+  // Feldhöhe 2,00 m; Standard-Feldlänge ist eine Annahme (häufigste Größe) und kann geändert werden.
+  {
+    id: 'mj-optima',
+    hersteller: 'MJ Gerüst',
+    systemName: 'OPTIMA',
+    bauart: 'modul',
+    rasterHoeheM: 2.0,
+    feldlangenM: [1.57, 2.07, 2.57, 3.07],
+    standardFeldlangeM: 2.57,
+    rahmenBreitenM: [0.73, 1.09],
+    hinweis: 'Fassadengerüst mit vorlaufendem Geländer, Zulassung Z-8.22-986 (gültig bis 23.07.2027). Artikel: Menü „MJ-Katalog“',
+  },
+  {
+    id: 'mj-optima-top',
+    hersteller: 'MJ Gerüst',
+    systemName: 'OPTIMA TOP',
+    bauart: 'modul',
+    rasterHoeheM: 2.0,
+    feldlangenM: [1.5, 2.0, 2.5, 3.0],
+    standardFeldlangeM: 2.5,
+    rahmenBreitenM: [0.65, 1.0],
+    hinweis: 'Fassaden-Modulsystem, Zulassung Z-8.22-987 (gültig bis 20.03.2029), Systembreite 0,65 m. Artikel: Menü „MJ-Katalog“',
+  },
+  {
+    id: 'mj-optima-metric',
+    hersteller: 'MJ Gerüst',
+    systemName: 'OPTIMA metric',
+    bauart: 'modul',
+    rasterHoeheM: 2.0,
+    feldlangenM: [1.5, 2.0, 2.5, 3.0],
+    standardFeldlangeM: 2.5,
+    rahmenBreitenM: [0.74, 1.1],
+    hinweis: 'Fassaden-Modulsystem mit metrischen Feldlängen, Zulassung Z-8.22-985 (gültig bis 04.11.2030). Artikel: Menü „MJ-Katalog“',
+  },
+
   // ─── Rahmensysteme (Stahlrahmen-Gerüste) ───
   {
     id: 'layher-speedyscaf',
