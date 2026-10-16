@@ -4,6 +4,7 @@ import { useState, useRef } from 'react'
 import { BuildingParams } from '@/lib/calculations/cad-engine'
 import { GERUEST_SYSTEME } from '@/lib/calculations/geruest-systeme'
 import { uploadVertragsdokument } from '@/lib/vertrag-upload-client'
+import { quaderAusObj, quaderAusStl, masseAusQuader, type Quader, type Einheit, type Achse } from '@/lib/cad/modell-import'
 
 interface Props {
   building: BuildingParams
@@ -18,6 +19,8 @@ export default function BuildingForm({ building, systemId, onChange, onSystemCha
   const [activeTab, setActiveTab] = useState<'gebaeude' | 'geruest' | 'system'>('gebaeude')
   const [analyseLaeuft, setAnalyseLaeuft] = useState(false)
   const [analyseHinweis, setAnalyseHinweis] = useState<string | null>(null)
+  // 3D-Modell (OBJ/STL, z. B. aus SketchUp): Außenmaße im Browser lesen, Einheit/„oben“ wählt die Person
+  const [modellImport, setModellImport] = useState<{ name: string; quader: Quader; einheit: Einheit; oben: Achse } | null>(null)
   // Phase 68-E: welche Felder hat die letzte Analyse automatisch befuellt?
   const analyseFelderRef = useRef<string[]>([])
 
@@ -34,16 +37,28 @@ export default function BuildingForm({ building, systemId, onChange, onSystemCha
   // Phase 73: DXF (Beschriftungen werden direkt geparst) und PLY
   // (Punktwolke -> Begrenzungsbox) werden jetzt unterstuetzt.
   const NEU_ERLAUBT = ['.dxf', '.ply'];
-  const DXF_ARTEN = ['.dwg', '.dwt', '.ifc', '.step', '.stp', '.igs']; // .dfx entfaellt, ist jetzt erlaubt
+  const DXF_ARTEN = ['.dwg', '.dwt', '.ifc', '.step', '.stp', '.igs', '.skp']; // .dfx entfaellt, ist jetzt erlaubt
 
   async function handlePlanUpload(file: File) {
     setAnalyseHinweis(null);
+    setModellImport(null);
     const ext = '.' + (file.name.split('.').pop() || '').toLowerCase();
+    if (ext === '.obj' || ext === '.stl') {
+      if (file.size > 100 * 1024 * 1024) { setAnalyseHinweis('❌ Datei zu groß (max. 100 MB). Bitte das Modell vereinfachen oder nur das Gebäude exportieren.'); return; }
+      try {
+        const quader = ext === '.obj' ? quaderAusObj(await file.text()) : quaderAusStl(await file.arrayBuffer());
+        if (!quader) { setAnalyseHinweis('❌ In der Datei wurden keine Eckpunkte gefunden.'); return; }
+        setModellImport({ name: file.name, quader, einheit: 'm', oben: 'z' });
+      } catch (err: any) {
+        setAnalyseHinweis('❌ Datei konnte nicht gelesen werden: ' + (err?.message || 'Fehler'));
+      }
+      return;
+    }
     if ((!ERLAUBT.includes(file.type) && !NEU_ERLAUBT.includes(ext)) || DXF_ARTEN.includes(ext)) {
       setAnalyseHinweis(
         DXF_ARTEN.includes(ext)
-          ? `❌ ${ext.toUpperCase()}-Dateien werden nicht unterstützt. Bitte als DXF oder PDF exportieren. Erlaubt: JPG, PNG, Webp, PDF, DXF, PLY.`
-          : `❌ Dateiformat nicht unterstützt (erkannt: ${file.type || ext}). Erlaubt: JPG, PNG, Webp, PDF, DXF, PLY.`
+          ? `❌ ${ext.toUpperCase()}-Dateien werden nicht unterstützt. Bitte als OBJ, STL, DXF oder PDF exportieren. Erlaubt: JPG, PNG, Webp, PDF, DXF, PLY, OBJ, STL.`
+          : `❌ Dateiformat nicht unterstützt (erkannt: ${file.type || ext}). Erlaubt: JPG, PNG, Webp, PDF, DXF, PLY, OBJ, STL.`
       );
       return;
     }
@@ -166,7 +181,7 @@ export default function BuildingForm({ building, systemId, onChange, onSystemCha
             <label className={`flex flex-col items-center justify-center gap-1 rounded-xl border-2 border-dashed p-4 text-center cursor-pointer transition-colors ${analyseLaeuft ? 'border-black/10 bg-black/5' : 'border-[#e8590c]/40 hover:bg-[#fff4ed]'}`}>
               <span className='text-xl'>{analyseLaeuft ? '⏳' : '📐'}</span>
               <span className='text-xs font-semibold text-[#424245]'>{analyseLaeuft ? 'KI wertet aus…' : 'Grundriss/Foto hochladen (KI-Auswertung)'}</span>
-              <span className='text-[10px] text-[#86868b]'>Erlaubt: JPG, PNG, Webp, PDF, DXF (Beschriftungen werden gelesen), PLY (Punktwolke). DWG/IFC: bitte als DXF/PDF exportieren. Maße werden nur übernommen, wo eindeutig belegt; bitte prüfen</span>
+              <span className='text-[10px] text-[#86868b]'>Erlaubt: JPG, PNG, Webp, PDF, DXF (Beschriftungen werden gelesen), PLY (Punktwolke), OBJ/STL (3D-Modell, z. B. aus SketchUp: nur Außenmaße). DWG/IFC/SKP: bitte als DXF/OBJ/STL/PDF exportieren. Maße werden nur übernommen, wo eindeutig belegt; bitte prüfen</span>
               {/* Phase 75: 'accept' komplett entfernt. Der macOS-Dialog hat
                     DXF/PLY trotz Eintrag im accept-Attribut ausgegraut
                     (Safari-Filter + Cache). Jetzt zeigt der Dialog ALLE
@@ -176,6 +191,34 @@ export default function BuildingForm({ building, systemId, onChange, onSystemCha
               <input type='file' className='hidden' disabled={analyseLaeuft}
                 onChange={(e) => { const f = e.target.files?.[0]; if (f) handlePlanUpload(f); e.target.value = '' }} />
             </label>
+            {modellImport && (() => {
+              const m = masseAusQuader(modellImport.quader, modellImport.einheit, modellImport.oben)
+              const wahl = 'rounded-lg border border-black/10 bg-white px-2 py-1 text-[11px]'
+              return (
+                <div className='rounded-lg border border-black/10 bg-white p-2 space-y-2 text-[11px] text-[#424245]'>
+                  <p className='font-semibold'>3D-Modell „{modellImport.name}“ gelesen</p>
+                  <p>Rohmaße der Datei: {modellImport.quader.groesse.x.toFixed(2)} × {modellImport.quader.groesse.y.toFixed(2)} × {modellImport.quader.groesse.z.toFixed(2)} (X × Y × Z). Die Datei sagt nicht sicher, in welcher Einheit sie ist und was „oben“ ist – bitte wählen:</p>
+                  <div className='flex flex-wrap gap-2'>
+                    <label>Einheit{' '}
+                      <select className={wahl} value={modellImport.einheit} onChange={(e) => setModellImport({ ...modellImport, einheit: e.target.value as Einheit })}>
+                        <option value='m'>Meter</option><option value='cm'>Zentimeter</option><option value='mm'>Millimeter</option><option value='inch'>Zoll (inch)</option>
+                      </select>
+                    </label>
+                    <label>„Oben“ ist{' '}
+                      <select className={wahl} value={modellImport.oben} onChange={(e) => setModellImport({ ...modellImport, oben: e.target.value as Achse })}>
+                        <option value='z'>Z-Achse</option><option value='y'>Y-Achse</option><option value='x'>X-Achse</option>
+                      </select>
+                    </label>
+                  </div>
+                  <p>Ergebnis: <b>{m.lengthM} m</b> lang × <b>{m.widthM} m</b> breit × <b>{m.heightM} m</b> hoch (umschließender Quader, inkl. Dach/Zubehör – bitte prüfen).</p>
+                  <div className='flex gap-2'>
+                    <button type='button' className='rounded-lg bg-[#0071e3] px-3 py-1 font-semibold text-white'
+                      onClick={() => { onChange({ ...building, lengthM: m.lengthM, widthM: m.widthM, heightM: m.heightM }); setModellImport(null); setAnalyseHinweis('3D-Modell: Länge, Breite und Höhe übernommen, bitte prüfen. Geschosse, Dachform und Fenster bitte selbst eintragen.') }}>Maße übernehmen</button>
+                    <button type='button' className='rounded-lg bg-black/10 px-3 py-1' onClick={() => setModellImport(null)}>Verwerfen</button>
+                  </div>
+                </div>
+              )
+            })()}
             {analyseHinweis && (
               <p className={`text-[10px] rounded-lg p-2 ${analyseHinweis.startsWith('❌') ? 'bg-red-50 text-red-700' : 'bg-blue-50 text-blue-700'}`}>{analyseHinweis}</p>
             )}
