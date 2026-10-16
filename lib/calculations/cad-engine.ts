@@ -6,6 +6,7 @@
 
 import { GeruestSystem, findeSystem } from './geruest-systeme'
 import { MaterialItem } from '@/types/scaffold'
+import { KONSOLE_BREITE_M, type CadBalkon } from '../balkon'
 
 export interface BuildingSection {
   bezeichnung?: string
@@ -45,6 +46,10 @@ export interface BuildingParams {
   // NEU: Lastklasse nach DIN EN 12811-1 (1-6) – bisher nirgends erfasst,
   // aber nötig, um die Regelausführungs-Grenzen einer Zulassung zu prüfen.
   lastklasse?: number
+  // NEU: einzelne Balkone mit fester Position (Seite, Abstand von der Fassadenmitte,
+  // Breite, Auskragung, Geschoss). Wenn gesetzt, ersetzen sie die automatisch
+  // gleichmäßig verteilten Balkone aus balconyCount.
+  balconies?: CadBalkon[]
 }
 
 export interface GebaeudeSegment {
@@ -511,6 +516,44 @@ export function generateScaffoldComponents(model: CADModel): ScaffoldComponent3D
     }
   }
 
+  // === BALKON-KONSOLEN (durchlaufende Balkone) ===
+  // Je Lage, in der der Balkon liegt: an jeder Stütz-Stelle vor dem Balkon
+  // (Felder + 1) aufgerundet(Auskragung / 0,73) Konsolen auf der Wandseite.
+  {
+    const gk = geschossUnterkanten(building)
+    for (const b of building.balconies ?? []) {
+      if (b.modus !== 'durchlaufend' || !(b.depthM > 0)) continue
+      const von = b.offsetAlongM - b.widthM / 2
+      const bis = b.offsetAlongM + b.widthM / 2
+      const f0 = Math.min(Math.max(b.floorIndex, 0), gk.floors - 1)
+      const yVon = gk.bottom(f0)
+      const yBis = yVon + 1.1
+      const je = Math.ceil(b.depthM / KONSOLE_BREITE_M - 1e-9) // Konsolen je Stelle
+      const rf = seitenRahmen(b.side, building)
+      for (const level of levels.filter((l) => l.id.startsWith(`level-${b.side}-`))) {
+        if (!b.alleLagen && !(level.topY > yVon && level.bottomY < yBis)) continue
+        const betroffen = level.fields
+          .filter((f) => ueberdeckt(von, bis, feldEntlangFassade(f.side, f.positionX, f.positionZ, building), f.lengthM))
+          .sort((a, c) => feldEntlangFassade(a.side, a.positionX, a.positionZ, building) - feldEntlangFassade(c.side, c.positionX, c.positionZ, building))
+        if (betroffen.length === 0) continue
+        const stellen: { lx: number; lz: number; breite: number }[] = []
+        const erstes = betroffen[0]
+        const [lx0, lz0] = rf.toLocal(erstes.positionX, erstes.positionZ)
+        stellen.push({ lx: lx0 - erstes.lengthM / 2, lz: lz0, breite: erstes.widthM })
+        for (const f of betroffen) {
+          const [lx, lz] = rf.toLocal(f.positionX, f.positionZ)
+          stellen.push({ lx: lx + f.lengthM / 2, lz, breite: f.widthM })
+        }
+        stellen.forEach((st, p) => {
+          for (let j = 0; j < je; j++) {
+            const [wx, wz] = rf.toWorld(st.lx, st.lz - st.breite / 2 - 0.15 - j * 0.3)
+            components.push({ id: `console-balkon-${b.id}-${level.index}-${p}-${j}`, type: 'console', articleNumber: 'KO-001', name: 'Konsole 0,73m (Balkon)', position: [wx, level.topY, wz], rotation: eulerMitYaw([0, 0, 0], rf.yaw), scale: [KONSOLE_BREITE_M, 0.04, 0.3], color: colorConsole, levelId: level.id })
+          }
+        })
+      }
+    }
+  }
+
   // === TREPPEN (Scaffmax-Stil: Zickzack-Läufe im Feld) ===
   for (const plan of stairPlans) {
     const { i, covered, field: sf, level } = plan
@@ -616,6 +659,36 @@ function getDiagonalArticle(fieldLengthM: number): string {
   return 'DI-001'
 }
 
+// ------------------------------------------------------------
+// Balkone: Lücken im Gerüst (ausgespart) und Hilfen
+// ------------------------------------------------------------
+
+/** Koordinate "entlang der Fassade" (0 = Fassadenmitte) für eine Gerüstposition. */
+export function feldEntlangFassade(side: SeitenId, positionX: number, positionZ: number, building: { widthM?: number }): number {
+  return side === 'front' || side === 'back' ? positionX : positionZ + (building.widthM || 0) / 2 + 0.5
+}
+
+/** Wie weit liegt ein Stück [a - len/2, a + len/2] im Bereich [von, bis]? (> 0,02 m = überdeckt) */
+function ueberdeckt(von: number, bis: number, a: number, len: number): boolean {
+  return Math.min(a + len / 2, bis) - Math.max(a - len / 2, von) > 0.02
+}
+
+/** Bereiche je Seite, in denen wegen ausgesparter Balkone KEIN Gerüstfeld steht. */
+export function balkonLuecken(balconies: CadBalkon[] | undefined): Record<SeitenId, { von: number; bis: number }[]> {
+  const out: Record<SeitenId, { von: number; bis: number }[]> = { front: [], back: [], left: [], right: [] }
+  for (const b of balconies ?? []) {
+    if (b.modus === 'ausgespart' && b.widthM > 0) out[b.side].push({ von: b.offsetAlongM - b.widthM / 2, bis: b.offsetAlongM + b.widthM / 2 })
+  }
+  return out
+}
+
+/** Unterkante jedes Geschosses (m über Boden) – dieselbe Aufteilung wie bei den Gebäudemerkmalen. */
+function geschossUnterkanten(building: BuildingParams): { floors: number; floorHeights: number[]; bottom: (i: number) => number } {
+  const floors = Math.max(1, building.floors || 1)
+  const floorHeights = building.floorHeightsM?.length === floors ? building.floorHeightsM : Array(floors).fill(building.heightM / floors)
+  return { floors, floorHeights, bottom: (i: number) => floorHeights.slice(0, i).reduce((sum, h) => sum + h, 0) }
+}
+
 export function generateCADModel(
   building: BuildingParams,
   systemId: string,
@@ -653,6 +726,14 @@ export function generateCADModel(
   // Bestimme zu bebauende Seiten
   const activeSides: ('front' | 'back' | 'left' | 'right')[] = building.sides && building.sides.length > 0 ? building.sides : ['front']
 
+  // Ausgesparte Balkone: in diesen Bereichen steht kein Gerüstfeld (alle Lagen).
+  const luecken = balkonLuecken(building.balconies)
+  const istInLuecke = (side: SeitenId, a: number, len: number) => luecken[side].some((l) => ueberdeckt(l.von, l.bis, a, len))
+  let lueckeFelder = 0, lueckeLaengeM = 0, lueckeFlaecheM2 = 0
+  const merkeLuecke = (side: SeitenId, levelIndex: number, fieldLength: number, hoeheM: number) => {
+    if (levelIndex === 0 && side === activeSides[0]) { lueckeFelder += 1; lueckeLaengeM += fieldLength; lueckeFlaecheM2 += fieldLength * hoeheM }
+  }
+
   const abschnittsAnker: ScaffoldAnchor[] = []
   const abschnittDivs = abschnitte
     ? abschnitte.map((sec) => system ? calculateFieldDivision(sec.laengeM, system) : { fields: 1, fieldLengthM: 2.07, remainderM: 0, distribution: [2.07] })
@@ -685,6 +766,7 @@ export function generateCADModel(
             const along = run.along + cum + fieldLength / 2
             cum += fieldLength
             const isFB = side === 'front' || side === 'back'
+            if (istInLuecke(side, isFB ? along : along + w / 2 + 0.5, fieldLength)) { merkeLuecke(side, levelData.index, fieldLength, run.hoeheM); return }
             const field: ScaffoldField = {
               id: `field-${side}-${levelData.index}-${list.length}`,
               index: list.length,
@@ -709,6 +791,7 @@ export function generateCADModel(
             const yAnchor = (al * 2 + 2) * levelCalc.levelHeightM
             for (let f = 0; f < run.div.fields; f += 2) {
               const along = run.along + f * run.div.fieldLengthM + run.div.fieldLengthM / 2
+              if (istInLuecke(side, side === 'front' || side === 'back' ? along : along + w / 2 + 0.5, 0)) continue
               let xPos = 0, zPos = 0
               if (side === 'front') { xPos = along; zPos = distanceToBuildingM + scaffoldWidthM / 2 }
               else if (side === 'back') { xPos = along; zPos = -distanceToBuildingM - scaffoldWidthM / 2 - w - 1 }
@@ -769,6 +852,7 @@ export function generateCADModel(
           zPos = fieldIndex * fieldLength - totalLength / 2 + fieldLength / 2 - (building.widthM || 0) / 2 - 0.5
         }
 
+        if (istInLuecke(side, side === 'front' || side === 'back' ? xPos : zPos + (building.widthM || 0) / 2 + 0.5, fieldLength)) { merkeLuecke(side, levelData.index, fieldLength, building.heightM); return }
         const isCorner = fieldIndex === 0 || fieldIndex === useLengthDiv.distribution.length - 1
 
         const field: ScaffoldField = {
@@ -803,6 +887,7 @@ export function generateCADModel(
         for (let f = 0; f < div.fields; f += 2) {
           const totalLength = div.distribution.reduce((a, b) => a + b, 0)
           const pos = f * div.fieldLengthM - totalLength / 2 + div.fieldLengthM / 2
+          if (istInLuecke(side, pos, 0)) continue
 
           let xPos = 0
           let zPos = 0
@@ -817,6 +902,14 @@ export function generateCADModel(
     }
   }
 
+  if (lueckeFelder > 0 || luecken.front.length + luecken.back.length + luecken.left.length + luecken.right.length > 0) {
+    const nAus = (building.balconies ?? []).filter((b) => b.modus === 'ausgespart').length
+    warnings.push({ type: 'info', code: 'BALKON_AUSGESPART', message: `${nAus} Balkon(e) ausgespart: vor jedem Balkon entfällt die ganze Feldspalte (alle Lagen). Fläche, Felder und Stückliste sind entsprechend gekürzt.` })
+  }
+  if ((building.balconies ?? []).some((b) => b.modus === 'durchlaufend' && b.depthM > 0)) {
+    warnings.push({ type: 'info', code: 'BALKON_KONSOLEN', message: 'Durchlaufende Balkone: Konsolen sind eingeplant (Näherung wie im Aufmaß: (Felder + 1) × aufgerundet(Auskragung ÷ 0,73 m) je Lage). Die Gerüstlinie wird nicht um die Auskragung verschoben – bitte mit der Aufbau- und Verwendungsanleitung des Systems prüfen.' })
+  }
+
   const preliminaryModel: CADModel = {
     building,
     system,
@@ -824,10 +917,10 @@ export function generateCADModel(
     levels,
     anchors,
     components3D: [],
-    totalLengthM: abschnitte ? building.lengthM : fieldDiv.fields * fieldDiv.fieldLengthM,
+    totalLengthM: (abschnitte ? building.lengthM : fieldDiv.fields * fieldDiv.fieldLengthM) - lueckeLaengeM,
     totalHeightM: building.heightM,
-    totalAreaM2: abschnitte ? abschnitte.reduce((sum, a) => sum + a.laengeM * a.hoeheM, 0) : building.lengthM * building.heightM,
-    fieldCount: abschnittDivs ? abschnittDivs.reduce((sum, d) => sum + d.fields, 0) : fieldDiv.fields,
+    totalAreaM2: (abschnitte ? abschnitte.reduce((sum, a) => sum + a.laengeM * a.hoeheM, 0) : building.lengthM * building.heightM) - lueckeFlaecheM2,
+    fieldCount: (abschnittDivs ? abschnittDivs.reduce((sum, d) => sum + d.fields, 0) : fieldDiv.fields) - lueckeFelder,
     levelCount: levelCalc.levels,
     warnings
   }
@@ -1417,6 +1510,8 @@ export interface BuildingFeature3D {
   heightM: number
   depthM: number   // Balkon-Auskragung, sonst 0
   floorIndex: number
+  // nur Balkone mit fester Position: wie das Gerüst davor geplant ist
+  modus?: 'durchlaufend' | 'ausgespart'
 }
 
 // Verteilt Fenster/Türen/Balkone gleichmäßig auf Geschosse und Fassaden.
@@ -1466,6 +1561,23 @@ export function generateBuildingFeatures(building: BuildingParams): BuildingFeat
     })
   }
 
+  // Balkone mit fester Position (CAD-Eingabe oder Übernahme aus dem Aufmaß)
+  if (building.balconies && building.balconies.length > 0) {
+    for (const bk of building.balconies) {
+      const geschosse = bk.alleLagen
+        ? (floors > 1 ? Array.from({ length: floors - 1 }, (_, i) => i + 1) : [0])
+        : [Math.min(Math.max(bk.floorIndex, 0), floors - 1)]
+      for (const f of geschosse) {
+        features.push({
+          id: `balcony-${bk.id}-${f}`, type: 'balcony', side: bk.side,
+          offsetAlongM: bk.offsetAlongM, bottomY: floorBottom(f), widthM: bk.widthM, heightM: 1.1, depthM: bk.depthM,
+          floorIndex: f, modus: bk.modus,
+        })
+      }
+    }
+    return features
+  }
+
   // Balkone: Obergeschosse, auskragend (relevant für Gerüst-Kollision!)
   for (let b = 0; b < (building.balconyCount || 0); b++) {
     const side = sides[b % sides.length] as BuildingFeature3D['side']
@@ -1487,10 +1599,13 @@ export function detectFeatureCollisions(model: CADModel, features: BuildingFeatu
   const warnings: CADWarning[] = []
   const scaffoldDepth = model.system?.rahmenBreitenM?.[0] || 0.73
   features.filter(f => f.type === 'balcony').forEach((b) => {
+    if (b.modus === 'ausgespart') return // dort steht kein Gerüstfeld
     if (b.depthM >= scaffoldDepth * 0.5) {
       warnings.push({
         type: 'warning', code: 'BALKON_KOLLISION',
-        message: `Balkon (${b.side}, ${b.floorIndex + 1}. OG) ragt ${b.depthM.toFixed(1)} m in den Gerüstbereich – Vorschlag: Konsolen/Auskragung oder Überbrückungsträger im betroffenen Feld einplanen.`,
+        message: b.modus === 'durchlaufend'
+          ? `Balkon (${b.side}, ${b.floorIndex + 1}. OG) ragt ${b.depthM.toFixed(1)} m in den Gerüstbereich – Konsolen sind eingeplant (Näherung, bitte mit der Aufbauanleitung prüfen).`
+          : `Balkon (${b.side}, ${b.floorIndex + 1}. OG) ragt ${b.depthM.toFixed(1)} m in den Gerüstbereich – Vorschlag: Konsolen/Auskragung oder Überbrückungsträger im betroffenen Feld einplanen.`,
       })
     }
   })

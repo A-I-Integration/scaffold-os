@@ -23,6 +23,16 @@ import type { ScaffoldBalkon } from '../types/scaffold'
 
 export const KONSOLE_BREITE_M = 0.73
 
+/**
+ * Konsolen je Lage für einen durchlaufenden Balkon (Näherung, siehe Annahme 3):
+ * (Felder + 1) Stellen × aufgerundet(Auskragung / 0,73 m).
+ * Wird von der Aufmaß-Engine UND vom CAD genutzt, damit beide gleich rechnen.
+ */
+export function konsolenJeLage(felderVorBalkon: number, auskragungM: number): number {
+  if (!(auskragungM > 0) || felderVorBalkon < 1) return 0
+  return (felderVorBalkon + 1) * Math.ceil(auskragungM / KONSOLE_BREITE_M - 1e-9)
+}
+
 function zahl(v: unknown): number {
   const n = parseFloat(String(v ?? '').replace(',', '.'))
   return Number.isFinite(n) ? n : 0
@@ -83,7 +93,7 @@ export function balkonWirkung(laengeM: number, feldlaengeM: number, balkone: Sca
       nDurch += n
       if (b.auskragungM > 0) {
         const felder = Math.ceil(b.breiteM / fl - 1e-9)
-        konsolen += n * (felder + 1) * Math.ceil(b.auskragungM / KONSOLE_BREITE_M - 1e-9)
+        konsolen += n * konsolenJeLage(felder, b.auskragungM)
       }
     }
   }
@@ -123,4 +133,62 @@ export function balkonAbzug(balkone: ScaffoldBalkon[] | undefined, laengeM: numb
   if (flaecheM2 <= 0) return null
   const b2 = runde2(breite).toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
   return { flaecheM2, text: `abzgl. Balkone (${stueck} Stk., zusammen ${b2} m breit)` }
+}
+
+// ------------------------------------------------------------
+// CAD: einzelne Balkone mit Position
+// ------------------------------------------------------------
+
+/**
+ * Ein Balkon im CAD mit fester Position an einer Fassadenseite.
+ * Weicht bewusst vom Aufmaß-Eintrag (ohne Position) ab.
+ *  - offsetAlongM: Mitte des Balkons, gemessen von der Fassadenmitte
+ *  - alleLagen: true = wie im Aufmaß als Stapel über die ganze Höhe
+ *    (Balkon an jedem Obergeschoss, Konsolen in allen Lagen);
+ *    false = nur das Geschoss floorIndex
+ *  - ausgespart: ganze Feldspalte entfällt (alle Lagen), wie im Aufmaß
+ */
+export interface CadBalkon {
+  id: string
+  side: 'front' | 'back' | 'left' | 'right'
+  offsetAlongM: number
+  widthM: number
+  depthM: number
+  floorIndex: number
+  alleLagen: boolean
+  modus: 'durchlaufend' | 'ausgespart'
+}
+
+/**
+ * Übernimmt die Balkone der Hauptfassade (Abschnitt 1) aus Schritt 2 des Aufmaßes
+ * ins CAD. Das Aufmaß kennt keine Positionen: Die Balkone werden gleichmäßig an der
+ * Vorderseite verteilt (bitte im CAD nachjustieren). Balkone weiterer Abschnitte
+ * werden NICHT übernommen (das CAD hat dafür keine Zuordnung) – die Anzahl wird gemeldet.
+ */
+export function balkoneAusAufmassFuersCad(
+  rohe: unknown,
+  fassadenLaengeM: number,
+  geschosse: number,
+): { balkone: CadBalkon[]; uebersprungen: number } {
+  const haupt = balkoneFuerAbschnitt(rohe, 0)
+  let uebersprungen = 0
+  if (Array.isArray(rohe)) {
+    for (const b of rohe as Record<string, unknown>[]) {
+      if (b && Math.round(zahl(b.abschnitt)) !== 0 && zahl(b.breite) > 0) uebersprungen += Math.max(1, Math.round(zahl(b.anzahl)) || 1)
+    }
+  }
+  const einzeln: ScaffoldBalkon[] = []
+  for (const b of haupt) for (let i = 0; i < b.anzahl; i++) einzeln.push(b)
+  const n = einzeln.length
+  const balkone: CadBalkon[] = einzeln.map((b, i) => ({
+    id: `aufmass-${i + 1}`,
+    side: 'front',
+    offsetAlongM: runde2(-fassadenLaengeM / 2 + (fassadenLaengeM * (i + 1)) / (n + 1)),
+    widthM: b.breiteM,
+    depthM: b.auskragungM,
+    floorIndex: geschosse > 1 ? 1 : 0,
+    alleLagen: true,
+    modus: b.modus,
+  }))
+  return { balkone, uebersprungen }
 }
