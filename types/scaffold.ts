@@ -117,8 +117,23 @@ export type Hazard =
 
 // --- HAUPTEINGABE: Komplettes Aufmaß ---
 
+// Balkon(e) an einem Abschnitt. Ein Eintrag steht für `anzahl` gleiche Balkone
+// (jeweils als Stapel über die ganze Abschnittshöhe angenommen).
+//  - 'durchlaufend': das Gerüst läuft vor dem Balkon durch (Konsolen nötig)
+//  - 'ausgespart':   vor dem Balkon steht kein Gerüstfeld
+// `abzug` (nur bei 'durchlaufend' relevant): Balkonfläche im Aufmaß abziehen.
+export interface ScaffoldBalkon {
+  bezeichnung?: string;
+  breiteM: number;
+  anzahl: number;
+  auskragungM: number;
+  modus: 'durchlaufend' | 'ausgespart';
+  abzug: boolean;
+}
+
 export interface ScaffoldSection {
   bezeichnung?: string;
+  balkone?: ScaffoldBalkon[];
   lengthM: number;
   heightM: number;
   fieldLengthM?: number;   // optional, sonst input.fieldLengthM

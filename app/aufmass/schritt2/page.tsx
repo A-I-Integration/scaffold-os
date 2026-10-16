@@ -55,6 +55,8 @@ function leeresFormS2() {
     breite: '',
     traufhoehe: '',
     abschnitte: [] as { bezeichnung: string; laenge: string; hoehe: string }[],
+    // Balkone: abschnitt '0' = Abschnitt 1 (Hauptfassade), '1' = erster weiterer Abschnitt usw.
+    balkone: [] as { abschnitt: string; bezeichnung: string; breite: string; anzahl: string; auskragung: string; modus: 'durchlaufend' | 'ausgespart'; abzug: boolean }[],
     bruecke: {
       spannweiten: [{ bezeichnung: 'Feld 1', spannweiteM: '', breiteM: '' }] as { bezeichnung: string; spannweiteM: string; breiteM: string }[],
       hoeheUeberGrundM: '',
@@ -232,6 +234,7 @@ function leeresFormS2() {
           setForm((prev) => ({
             ...prev, ...step2Quelle,
             abschnitte: Array.isArray(step2Quelle.abschnitte) ? step2Quelle.abschnitte : [],
+            balkone: Array.isArray(step2Quelle.balkone) ? step2Quelle.balkone : [],
             bruecke: step2Quelle.bruecke && Array.isArray(step2Quelle.bruecke.spannweiten) ? step2Quelle.bruecke : prev.bruecke,
           }));
         }
@@ -261,6 +264,7 @@ function leeresFormS2() {
         ...prev,
         ...geladen,
         abschnitte: Array.isArray(geladen.abschnitte) ? geladen.abschnitte : [],
+        balkone: Array.isArray(geladen.balkone) ? geladen.balkone : [],
         bruecke: geladen.bruecke && Array.isArray(geladen.bruecke.spannweiten) ? geladen.bruecke : prev.bruecke,
       }));
     }
@@ -842,7 +846,14 @@ function leeresFormS2() {
                 <input type="number" value={a.hoehe}
                   onChange={(e) => { const neu = [...form.abschnitte]; neu[idx] = { ...neu[idx], hoehe: e.target.value }; setForm({ ...form, abschnitte: neu }); }}
                   placeholder="Höhe m" className="w-24 bg-black/10 border border-black/10 rounded-xl px-3 py-2 text-sm text-[#1d1d1f]" />
-                <button type="button" onClick={() => setForm({ ...form, abschnitte: form.abschnitte.filter((_, i) => i !== idx) })}
+                <button type="button" onClick={() => setForm({
+                  ...form,
+                  abschnitte: form.abschnitte.filter((_, i) => i !== idx),
+                  // Balkone des gelöschten Abschnitts entfernen, spätere rücken nach
+                  balkone: (form.balkone || [])
+                    .filter((b) => parseInt(b.abschnitt, 10) !== idx + 1)
+                    .map((b) => (parseInt(b.abschnitt, 10) > idx + 1 ? { ...b, abschnitt: String(parseInt(b.abschnitt, 10) - 1) } : b)),
+                })}
                   className="text-red-600 text-sm px-2">✕</button>
               </div>
             ))}
@@ -850,6 +861,58 @@ function leeresFormS2() {
               onClick={() => setForm({ ...form, abschnitte: [...form.abschnitte, { bezeichnung: '', laenge: '', hoehe: '' }] })}
               className="text-sm text-[#e8590c] font-semibold hover:underline">
               + Weiteren Abschnitt hinzufügen
+            </button>
+          </div>
+
+          {/* NEU: Balkone je Abschnitt */}
+          <div className="rounded-xl bg-black/5 border border-black/10 p-4 space-y-3">
+            <p className="text-sm font-medium text-[#424245]">
+              Balkone an der Fassade? Hier erfassen, damit Material und Aufmaß-Fläche stimmen. Ein Eintrag gilt für
+              Balkone gleicher Breite, die als Stapel über die ganze Abschnittshöhe angenommen werden.
+            </p>
+            {(form.balkone || []).map((b, idx) => {
+              const set = (patch: Partial<typeof b>) => { const neu = [...form.balkone]; neu[idx] = { ...neu[idx], ...patch }; setForm({ ...form, balkone: neu }); };
+              return (
+                <div key={idx} className="rounded-xl border border-black/10 bg-white/60 p-3 space-y-2">
+                  <div className="grid grid-cols-[1fr_auto] gap-2 items-center">
+                    <select value={b.abschnitt} onChange={(e) => set({ abschnitt: e.target.value })}
+                      className="bg-black/10 border border-black/10 rounded-xl px-3 py-2 text-sm text-[#1d1d1f]">
+                      <option value="0">Abschnitt 1 (Hauptfassade)</option>
+                      {(form.abschnitte || []).map((a, i) => (
+                        <option key={i} value={String(i + 1)}>{a.bezeichnung || `Abschnitt ${i + 2}`}</option>
+                      ))}
+                    </select>
+                    <button type="button" onClick={() => setForm({ ...form, balkone: form.balkone.filter((_, i) => i !== idx) })}
+                      className="text-red-600 text-sm px-2">✕</button>
+                  </div>
+                  <div className="grid grid-cols-3 gap-2">
+                    <input type="number" value={b.anzahl} onChange={(e) => set({ anzahl: e.target.value })} placeholder="Anzahl"
+                      className="bg-black/10 border border-black/10 rounded-xl px-3 py-2 text-sm text-[#1d1d1f]" />
+                    <input type="number" value={b.breite} onChange={(e) => set({ breite: e.target.value })} placeholder="Breite m"
+                      className="bg-black/10 border border-black/10 rounded-xl px-3 py-2 text-sm text-[#1d1d1f]" />
+                    <input type="number" value={b.auskragung} onChange={(e) => set({ auskragung: e.target.value })} placeholder="Auskragung m"
+                      className="bg-black/10 border border-black/10 rounded-xl px-3 py-2 text-sm text-[#1d1d1f]" />
+                  </div>
+                  <select value={b.modus} onChange={(e) => set({ modus: e.target.value as 'durchlaufend' | 'ausgespart' })}
+                    className="w-full bg-black/10 border border-black/10 rounded-xl px-3 py-2 text-sm text-[#1d1d1f]">
+                    <option value="durchlaufend">Gerüst läuft davor durch (mit Konsolen)</option>
+                    <option value="ausgespart">Balkon wird ausgespart (kein Gerüstfeld davor)</option>
+                  </select>
+                  {b.modus === 'durchlaufend' ? (
+                    <label className="flex items-center gap-2 text-sm text-[#424245]">
+                      <input type="checkbox" checked={b.abzug} onChange={(e) => set({ abzug: e.target.checked })} />
+                      Balkonfläche im Aufmaß abziehen
+                    </label>
+                  ) : (
+                    <p className="text-xs text-[#86868b]">Ausgesparte Balkone werden im Aufmaß immer abgezogen.</p>
+                  )}
+                </div>
+              );
+            })}
+            <button type="button"
+              onClick={() => setForm({ ...form, balkone: [...(form.balkone || []), { abschnitt: '0', bezeichnung: '', breite: '', anzahl: '1', auskragung: '', modus: 'durchlaufend', abzug: false }] })}
+              className="text-sm text-[#e8590c] font-semibold hover:underline">
+              + Balkon hinzufügen
             </button>
           </div>
 

@@ -6,7 +6,9 @@
 // Ausgabe: KIAnalysis (Materialliste + Kosten + Risiko)
 // ============================================================
 
+import { balkonWirkung } from '../balkon';
 import {
+  ScaffoldBalkon,
   ScaffoldInput,
   MaterialItem,
   KIAnalysis,
@@ -461,6 +463,8 @@ export function calculateScaffoldMaterial(
   const diagonalMengen = new Map<string, number>(), gelaenderMengen = new Map<string, number>();
   const zaehle = (m: Map<string, number>, key: string, menge: number) => m.set(key, (m.get(key) ?? 0) + menge);
   const sectionBreakdown: { bezeichnung: string; areaM2: number; fields: number; levels: number }[] = [];
+  let balkonKonsolen = 0;
+  const balkonHinweise: string[] = [];
 
   for (const a of abschnitte) {
     const fl = a.fieldLengthM || input.fieldLengthM;
@@ -469,8 +473,20 @@ export function calculateScaffoldMaterial(
     // Anzahl DIESES Abschnitts. Ohne Angabe gilt weiterhin der globale Typ.
     const aFrameHeight = getFrameHeight(a.scaffoldType || input.scaffoldType);
     const aLevels = Math.ceil(a.heightM / aFrameHeight);
-    const aFields = Math.ceil(a.lengthM / fl);
-    const aArea = a.lengthM * a.heightM;
+    // Balkone: ausgesparte Balkone nehmen Länge weg (dort steht kein Feld),
+    // durchlaufende brauchen zusätzliche Konsolen (Näherung, siehe lib/balkon.ts).
+    const balkone = (a as { balkone?: ScaffoldBalkon[] }).balkone;
+    const bw = balkonWirkung(a.lengthM, fl, balkone);
+    const aFields = Math.ceil(bw.laengeGeruestM / fl);
+    const aArea = bw.laengeGeruestM * a.heightM;
+    if (bw.konsolenProLage > 0) balkonKonsolen += bw.konsolenProLage * aLevels;
+    if (bw.anzahlAusgespart + bw.anzahlDurchlaufend > 0) {
+      const name = a.bezeichnung || 'Abschnitt';
+      const teile: string[] = [];
+      if (bw.anzahlAusgespart > 0) teile.push(`${bw.anzahlAusgespart} ausgespart (−${bw.ausgespartM.toLocaleString('de-DE')} m Gerüstlänge)`);
+      if (bw.anzahlDurchlaufend > 0) teile.push(`${bw.anzahlDurchlaufend} durchlaufend${bw.konsolenProLage > 0 ? ` (+${bw.konsolenProLage * aLevels} Konsolen)` : ''}`);
+      balkonHinweise.push(`${name}: Balkone ${teile.join(', ')}`);
+    }
     levels = Math.max(levels, aLevels); // für Anzeige: höchster Abschnitt
     fields += aFields;
     scaffoldArea += aArea;
@@ -510,8 +526,13 @@ export function calculateScaffoldMaterial(
   // 7. FUßPLATTEN – bei Hängegerüst entfällt die Bodenständerung
   const istHaengend = input.bruecke?.aufhaengung === 'haengend';
   totalFootPlates = istHaengend ? 0 : totalFrames;
-  if (totalConsoles > 0) {
-    warnings.push(`Dachüberstand erkannt – Konsolen erforderlich (${totalConsoles} Stk. über alle Abschnitte)`);
+  const dachKonsolen = totalConsoles;
+  totalConsoles += balkonKonsolen;
+  if (balkonHinweise.length > 0) {
+    warnings.push(`Balkone berücksichtigt – ${balkonHinweise.join('; ')}. Konsolen-Anzahl ist eine Näherung (Annahme: Balkon über die ganze Abschnittshöhe) – bitte mit der Aufbau- und Verwendungsanleitung des Systems prüfen.`);
+  }
+  if (dachKonsolen > 0) {
+    warnings.push(`Dachüberstand erkannt – Konsolen erforderlich (${dachKonsolen} Stk. über alle Abschnitte)`);
   }
   if (abschnitte.length > 1) {
     tips.push(`${abschnitte.length} Abschnitte erfasst (unterschiedliche Höhen/ums Eck) – Gesamtfläche ${Math.round(scaffoldArea)} m².`);
