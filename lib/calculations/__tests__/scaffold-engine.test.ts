@@ -9,7 +9,7 @@
 // ============================================================
 
 import { describe, it, expect } from 'vitest'
-import { calculateScaffoldMaterial } from '../scaffold-engine'
+import { calculateScaffoldMaterial, artikelFuerFeldlaenge } from '../scaffold-engine'
 import type { ScaffoldInput } from '@/types/scaffold'
 
 const STANDARD_INPUT: ScaffoldInput = {
@@ -110,5 +110,51 @@ describe('calculateScaffoldMaterial – Randfälle', () => {
     const wz4 = calculateScaffoldMaterial({ ...STANDARD_INPUT, windZone: 4 })
     // Höhere Windzone darf nicht zu einer *niedrigeren* Kalkulation führen
     expect(wz4.totalCost).toBeGreaterThanOrEqual(wz1.totalCost)
+  })
+})
+
+describe('calculateScaffoldMaterial – gemischte Feldlängen je Abschnitt', () => {
+  const abschnitt = (lengthM: number, fieldLengthM: number) =>
+    ({ lengthM, heightM: 10, fieldLengthM, roofOverhangM: 0.3, bezeichnung: 'Abschnitt' })
+  const menge = (r: ReturnType<typeof calculateScaffoldMaterial>, nr: string) =>
+    r.materialList.find(m => m.articleNumber === nr)?.quantity ?? 0
+
+  it('artikelFuerFeldlaenge: Stufen bei 2,5 m und 3,0 m', () => {
+    expect(artikelFuerFeldlaenge('RA', 2.07)).toBe('RA-001')
+    expect(artikelFuerFeldlaenge('AB', 2.5)).toBe('AB-002')
+    expect(artikelFuerFeldlaenge('DI', 2.57)).toBe('DI-002')
+    expect(artikelFuerFeldlaenge('GE', 3.0)).toBe('GE-003')
+  })
+
+  it('einheitliche Feldlänge: wie bisher genau ein Artikel je Bauteil', () => {
+    const r = calculateScaffoldMaterial({ ...STANDARD_INPUT, sections: [abschnitt(40, 2.07)] } as ScaffoldInput)
+    expect(menge(r, 'RA-001')).toBe(200)
+    expect(menge(r, 'RA-002') + menge(r, 'RA-003')).toBe(0)
+  })
+
+  it('3,07 m + 2,07 m: jeder Abschnitt mit seinem eigenen Artikel (Reihenfolge egal)', () => {
+    for (const sections of [[abschnitt(20, 3.07), abschnitt(20, 2.07)], [abschnitt(20, 2.07), abschnitt(20, 3.07)]]) {
+      const r = calculateScaffoldMaterial({ ...STANDARD_INPUT, sections } as ScaffoldInput)
+      expect(menge(r, 'RA-003')).toBe(70)   // 7 Felder × 5 Lagen × 2
+      expect(menge(r, 'RA-001')).toBe(100)  // 10 Felder × 5 Lagen × 2
+      expect(menge(r, 'AB-003')).toBe(35)
+      expect(menge(r, 'AB-001')).toBe(50)
+      expect(menge(r, 'DI-003') + menge(r, 'DI-001')).toBe(170)
+      expect(menge(r, 'GE-003')).toBe(70)
+      expect(menge(r, 'GE-001')).toBe(100)
+    }
+  })
+
+  it('Fußplatten bleiben so viele wie Rahmen insgesamt', () => {
+    const r = calculateScaffoldMaterial({ ...STANDARD_INPUT, sections: [abschnitt(20, 3.07), abschnitt(20, 2.07)] } as ScaffoldInput)
+    expect(menge(r, 'FP-001')).toBe(170)
+  })
+
+  it('gemischt ist günstiger als alles mit dem großen Artikel', () => {
+    const gemischt = calculateScaffoldMaterial({ ...STANDARD_INPUT, sections: [abschnitt(20, 3.07), abschnitt(20, 2.07)] } as ScaffoldInput)
+    const preis = (nr: string) => gemischt.materialList.find(m => m.articleNumber === nr)!.unitPrice
+    const alleGross = 170 * preis('RA-003')
+    const rahmenKosten = gemischt.materialList.filter(m => m.articleNumber.startsWith('RA-')).reduce((s, m) => s + m.totalPrice, 0)
+    expect(rahmenKosten).toBeLessThan(alleGross)
   })
 })
