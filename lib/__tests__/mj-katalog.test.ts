@@ -7,9 +7,10 @@ describe('MJ-Katalog', () => {
   it('hat Artikel aus allen vier Preislisten', () => {
     for (const l of Object.keys(MJ_LISTEN)) expect(alle.filter((a) => a.liste === l).length).toBeGreaterThanOrEqual(13);
   });
-  it('jede Zeile hat 5–6-stellige Artikelnummer und einen Preis > 0', () => {
+  it('jede Zeile hat eine Artikelnummer (MJ: 5–6 Ziffern) und einen Preis > 0', () => {
     for (const a of alle) {
-      expect(a.nr).toMatch(/^\d{5,6}$/);
+      if (MJ_LISTEN[a.liste].hersteller === 'MJ-Gerüst') expect(a.nr).toMatch(/^\d{5,6}$/);
+      else expect(a.nr).toMatch(/^[A-Za-z0-9][A-Za-z0-9_\-/ ]{3,30}$/);
       expect(a.preis).toBeGreaterThan(0);
     }
   });
@@ -71,6 +72,17 @@ describe('MJ-Katalog', () => {
     expect(mjArtikelNachNr('016276')[0].preis).toBe(2635);
     expect(mjArtikelNachNr('016375').filter((a) => a.liste === 'zubehoer').every((a) => a.attribute['Hinweis'])).toBe(true);
     expect(mjArtikelNachNr('011267')[0].preis).toBe(49.5);
+  });
+  it('SCAFOM-RUX: Umfang, Staffelpreise, Mietpreis und Konfliktmarkierung', () => {
+    const n = (l: string) => alle.filter((a) => a.liste === l).length;
+    expect(Object.values(MJ_LISTEN).filter((l) => l.hersteller === 'SCAFOM-RUX').length).toBe(9);
+    expect([n('sx-framescaff'), n('sx-super'), n('sx-ringscaff'), n('sx-ringscaff-trt'), n('sx-super-rs'), n('sx-wbs'), n('sx-zubehoer'), n('sx-plex'), n('sx-miete')])
+      .toEqual([114, 214, 241, 45, 171, 67, 182, 42, 670]);
+    const g = mjArtikelNachNr('00357').find((a) => a.liste === 'sx-framescaff')!;
+    expect(g.preis).toBe(14.35);
+    expect(String(g.attribute['Staffelpreise'])).toContain('ab 50 Stk.');
+    expect(mjArtikelNachNr('00664').filter((a) => a.liste === 'sx-super').every((a) => a.attribute['Hinweis'])).toBe(true);
+    expect(mjArtikelNachNr('E04RS0002').find((a) => a.liste === 'sx-miete')!.attribute['Mietpreis (€/Woche)']).toBe(0.09);
   });
   it('Suche findet nach Nummer und Name, alle Wörter müssen passen', () => {
     expect(sucheMjArtikel('013535').length).toBeGreaterThan(0);
