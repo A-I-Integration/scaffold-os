@@ -2,7 +2,7 @@
 // SCAFFOLD OS – MJ-Gerüst Artikelkatalog (Nachschlagewerk)
 //
 // Quelle: Preislisten MJ OPTIMA (V2.4), MJ OPTIMA TOP (V2.3), MJ OPTIMA metric
-// (V2.3), MJ UNI-CONNECT (V3.3-1), MJ COMBI (V3.4) und MJ COMBI metric / TOP (V2.2),
+// (V2.3), MJ UNI-CONNECT (V3.3-1), MJ COMBI (V3.4), MJ COMBI metric / TOP (V2.2) und MJ UNI (V3.2),
 // jeweils Stand 04.2025, der MJ-Gerüst GmbH. Die Tabellen wurden
 // automatisch ausgelesen (lib/data/mj-katalog.json) und stichprobenartig gegen
 // die PDFs geprüft. Der Katalog ist NUR ZUM NACHSCHLAGEN: Er verändert weder
@@ -16,7 +16,7 @@
 
 import katalogRoh from '@/lib/data/mj-katalog.json';
 
-export type MjListe = 'optima' | 'optima-top' | 'optima-metric' | 'uni-connect' | 'combi' | 'combi-metric-top';
+export type MjListe = 'optima' | 'optima-top' | 'optima-metric' | 'uni-connect' | 'combi' | 'combi-metric-top' | 'uni';
 
 export interface MjArtikel {
   /** Artikelnummer laut MJ (6 Stellen) */
@@ -72,11 +72,20 @@ export const MJ_LISTEN: Record<MjListe, MjListeInfo> = {
     // Nur die Zulassung für COMBI metric liegt vor; für COMBI TOP wurde keine Zulassung übergeben.
     zulassungen: [{ nummer: 'Z-8.22-923', bescheidVom: '10.01.2025', gueltigBis: '03.01.2030', gegenstand: 'MJ COMBI metric (Änderungs-/Verlängerungsbescheid; gilt nur zusammen mit der Zulassung vom 10.12.2019)' }],
   },
+  uni: {
+    key: 'uni', name: 'MJ UNI 70 / 100', preislisteVersion: 'V3.2', preislisteStand: '04.2025',
+    zulassungen: [
+      { nummer: 'Z-8.1-184', bescheidVom: '06.07.2026', gueltigBis: '13.07.2027', gegenstand: 'MJ UNI 70 (Verlängerungsbescheid; gilt nur zusammen mit der Zulassung vom 21.06.2019)' },
+      { nummer: 'Z-8.1-303', bescheidVom: '16.02.2026', gueltigBis: '02.03.2027', gegenstand: 'MJ UNI 70 DUO (Verlängerungsbescheid; gilt nur zusammen mit der Genehmigung vom 24.02.2020)' },
+      { nummer: 'Z-8.1-871', bescheidVom: '07.05.2026', gueltigBis: '08.05.2031', gegenstand: 'MJ UNI 100 (Änderungs-/Verlängerungsbescheid; gilt nur zusammen mit der Zulassung vom 06.05.2020)' },
+    ],
+  },
 };
 
 /** Zulassungen von Systemen, zu denen keine Preisliste hinterlegt ist (daher keine Artikel im Katalog). */
 export const MJ_WEITERE_ZULASSUNGEN: MjZulassung[] = [
   { nummer: 'Z-8.22-926', bescheidVom: '10.10.2025', gueltigBis: '17.10.2030', gegenstand: 'MJ COMBI DUO (Änderungs-/Verlängerungsbescheid; gilt nur zusammen mit der Genehmigung vom 11.11.2020)' },
+  { nummer: 'Z-8.1-902', bescheidVom: '11.08.2026', gueltigBis: '18.08.2031', gegenstand: 'MJ UNI TOP 65 (Zulassung; Preisliste UNI TOP liegt nicht vor)' },
   { nummer: 'Z-8.22-960', bescheidVom: '10.10.2023', gueltigBis: '10.10.2028', gegenstand: 'MJ COMBI metric DUO (Bauartgenehmigung)' },
 ];
 
