@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { pruefeCronAufruf } from '@/lib/cron-auth';
 import { wirksamesMietende, faelligeErinnerung, tageBis, MietErinnerungen } from '@/lib/miete';
 
 // ============================================================
@@ -36,13 +37,8 @@ function parseData(raw: any): any {
 }
 
 export async function GET(req: NextRequest) {
-  const cronSecret = process.env.CRON_SECRET;
-  if (cronSecret) {
-    const auth = req.headers.get('authorization') || '';
-    if (auth !== `Bearer ${cronSecret}`) {
-      return NextResponse.json({ error: 'Nicht autorisiert.' }, { status: 401 });
-    }
-  }
+  const cronFehler = pruefeCronAufruf(req);
+  if (cronFehler) return cronFehler;
 
   const ergebnis = { faellig: [] as string[], versendet: false, grund: '' as string };
   try {

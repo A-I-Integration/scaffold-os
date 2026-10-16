@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { pruefeCronAufruf } from '@/lib/cron-auth';
 import { runSqlOnProject } from '@/lib/provision/supabase-mgmt';
 import { hofSpalteFehlt } from '@/lib/touren/hof';
 
@@ -48,14 +49,9 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'Nur auf der Master-Instanz.' }, { status: 403 });
   }
 
-  // 2) Vercel-Cron-Secret prüfen (falls gesetzt)
-  const cronSecret = process.env.CRON_SECRET;
-  if (cronSecret) {
-    const auth = req.headers.get('authorization') || '';
-    if (auth !== `Bearer ${cronSecret}`) {
-      return NextResponse.json({ error: 'Ungültiges Cron-Secret.' }, { status: 401 });
-    }
-  }
+  // 2) Cron-Secret ist Pflicht (ohne Secret gesperrt)
+  const cronFehler = pruefeCronAufruf(req);
+  if (cronFehler) return cronFehler;
 
   const ergebnis: { instanz: string; ok: boolean; info: string }[] = [];
 
