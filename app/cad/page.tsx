@@ -353,6 +353,17 @@ export default function CADPage() {
 
   const features = useMemo(() => generateBuildingFeatures(building), [building])
 
+  // Ohne diese Grundmaße entsteht bewusst kein Modell (siehe generate). Damit es nicht
+  // still bleibt (z. B. wenn die Plan-Auswertung nur Teile erkannt hat), wird gesagt, was fehlt.
+  const fehlendeMasse = useMemo(() => {
+    const f: string[] = []
+    if (!(building.lengthM > 0)) f.push('Länge')
+    if (!(building.widthM > 0)) f.push('Breite')
+    if (!(building.heightM > 0)) f.push('Höhe')
+    if (!(building.floors >= 1)) f.push('Geschosse')
+    return f
+  }, [building.lengthM, building.widthM, building.heightM, building.floors])
+
   const generate = useCallback(() => {
     // Phase 68-H: Ohne Grundmaße kein Modell erzeugen (sonst entsteht
     // bei leeren Feldern nach jedem Tastendruck ein defektes/NaN-Modell,
@@ -735,13 +746,16 @@ export default function CADPage() {
             {viewMode === '3d' && !model && (
               <div className='h-full flex flex-col items-center justify-center gap-3 text-center'>
                 <p className='text-sm text-[#86868b] max-w-xs'>Kein Modell. Maße links eingeben oder Grundriss hochladen – dann „Gerüst neu berechnen“.</p>
+                {fehlendeMasse.length > 0 && (
+                  <p className='text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 max-w-xs'>Es fehlen noch: {fehlendeMasse.join(', ')}. Bitte links eintragen – erst dann kann das Gerüst gezeichnet werden.</p>
+                )}
                 <button onClick={() => { setAutoGenerate(true); generate(); }} className='px-4 py-2 text-sm font-medium rounded-xl bg-[#0071e3] text-white hover:bg-[#0077ed]'>Gerüst neu berechnen</button>
               </div>
             )}
             {viewMode === '2d' && modelWithManual && <Scaffold2D model={modelWithManual} />}
             {viewMode === '2d' && !model && (
               <div className='h-full flex items-center justify-center'>
-                <p className='text-sm text-[#86868b]'>Kein Modell – zuerst „Gerüst neu berechnen“.</p>
+                <p className='text-sm text-[#86868b] text-center max-w-xs'>Kein Modell – zuerst „Gerüst neu berechnen“.{fehlendeMasse.length > 0 ? ` Es fehlen noch: ${fehlendeMasse.join(', ')}.` : ''}</p>
               </div>
             )}
           </div>
