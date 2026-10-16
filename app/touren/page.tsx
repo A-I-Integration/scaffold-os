@@ -65,6 +65,7 @@ export default function TourenPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [expandedTour, setExpandedTour] = useState<string | null>(null);
+  const [zuweisenOffen, setZuweisenOffen] = useState(true);
   // Letzte GPS-Position je Fahrzeug (nur für Touren "unterwegs"; die API liefert
   // sie ausschließlich an Admin/Disposition)
   const [positionen, setPositionen] = useState<Record<string, { lat: number; lng: number; at: string }>>({});
@@ -368,19 +369,75 @@ export default function TourenPage() {
           </div>
         </div>
 
-        {offeneFahrten.length > 0 && (
-          <div className="mb-4 bg-amber-50 border border-amber-200 rounded-xl p-4 text-sm text-amber-900">
-            <p className="font-semibold mb-1">⚠️ {offeneFahrten.length} Lieferung{offeneFahrten.length === 1 ? '' : 'en'} ohne Tour – das braucht dich</p>
-            <ul className="space-y-1">
-              {offeneFahrten.map((o) => (
-                <li key={o.projektId}>
-                  <span className="font-medium">{o.projekt}</span>
-                  {o.beginn ? ` (Beginn ${new Date(o.beginn).toLocaleDateString('de-DE')})` : ''}: {o.hinweis}
-                </li>
-              ))}
-            </ul>
-          </div>
-        )}
+        {/* Noch zuzuweisen: offene Baustellen ohne Tour (aufklappbar) + Lieferungen, für die die Automatik keine Fahrt anlegen konnte */}
+        {(() => {
+          const offeneBaustellen = projekte.filter((p: any) => !verplanteProjektIds.has(p.id));
+          const hinweisJe = new Map(offeneFahrten.map((o) => [o.projektId, o]));
+          const nurHinweis = offeneFahrten.filter((o) => !offeneBaustellen.some((p: any) => p.id === o.projektId));
+          const anzahl = offeneBaustellen.length + nurHinweis.length;
+          if (anzahl === 0) return null;
+          const beginnVon = (p: any): string | null => {
+            try {
+              const d = typeof p.data === 'string' ? JSON.parse(p.data) : (p.data || {});
+              const b = d?.step1?.projektbeginn;
+              return b ? new Date(b).toLocaleDateString('de-DE') : null;
+            } catch { return null; }
+          };
+          return (
+            <div className="mb-4 bg-amber-50 border border-amber-200 rounded-xl overflow-hidden text-sm text-amber-900">
+              <button type="button" onClick={() => setZuweisenOffen((o) => !o)} aria-expanded={zuweisenOffen}
+                className="w-full px-4 py-3 flex items-center gap-2 text-left font-semibold hover:bg-amber-100/60 transition-colors">
+                <span className="text-amber-700 w-4">{zuweisenOffen ? '▾' : '▸'}</span>
+                <span>⚠️ Noch zuzuweisen ({anzahl})</span>
+                <span className="ml-auto text-xs font-normal text-amber-700">{zuweisenOffen ? 'Zuklappen' : 'Aufklappen'}</span>
+              </button>
+              {zuweisenOffen && (
+                <div className="border-t border-amber-200 px-4 py-3 space-y-3">
+                  {offeneBaustellen.length > 0 && (
+                    <div>
+                      <p className="text-xs font-semibold uppercase tracking-wide text-amber-800 mb-1.5">Offene Baustellen ohne Tour ({offeneBaustellen.length})</p>
+                      <ul className="divide-y divide-amber-200/70">
+                        {offeneBaustellen.map((p: any) => {
+                          const o = hinweisJe.get(p.id);
+                          const beginn = beginnVon(p);
+                          return (
+                            <li key={p.id} className="py-2 flex flex-wrap items-center gap-x-3 gap-y-1">
+                              <div className="flex-1 min-w-[200px]">
+                                <a href={`/aufmass/schritt6?id=${p.id}`} className="font-medium hover:text-[#e8590c] hover:underline underline-offset-2">{p.name || 'Unbenannt'}</a>
+                                <div className="text-xs text-amber-800/80">
+                                  {p.adresse || '(Adresse nachtragen)'}{beginn ? ` · Beginn ${beginn}` : ''}
+                                </div>
+                                {o?.hinweis && <div className="text-xs text-red-700">Hinweis: {o.hinweis}</div>}
+                              </div>
+                              {hatMaterial(p) && <span className="text-xs font-medium text-amber-900 bg-amber-200/80 rounded-full px-2 py-0.5">📦 mit Material</span>}
+                              <button type="button" onClick={() => { setFProjSelected([p.id]); setTab('neu'); }}
+                                className="rounded-lg bg-[#e8590c] hover:bg-[#d9480f] text-white px-3 py-1.5 text-xs font-semibold transition">
+                                Tour anlegen
+                              </button>
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    </div>
+                  )}
+                  {nurHinweis.length > 0 && (
+                    <div>
+                      <p className="text-xs font-semibold uppercase tracking-wide text-amber-800 mb-1.5">Lieferungen ohne Tour ({nurHinweis.length})</p>
+                      <ul className="space-y-1">
+                        {nurHinweis.map((o) => (
+                          <li key={o.projektId}>
+                            <span className="font-medium">{o.projekt}</span>
+                            {o.beginn ? ` (Beginn ${new Date(o.beginn).toLocaleDateString('de-DE')})` : ''}: {o.hinweis}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          );
+        })()}
 
         {/* Tabs */}
         <div className="flex gap-2 mb-6 border-b border-black/10 pb-0">
