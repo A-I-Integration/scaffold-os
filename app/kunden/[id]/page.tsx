@@ -1220,10 +1220,20 @@ export default function KundenDetailPage() {
                             <div className="w-full sm:w-auto">
                               <RechnungAktionen
                                 gutschrift={gutschrift} storniert={inv.status === 'storniert'} bezahlt={inv.status === 'bezahlt'}
+                                zugferdLaeuft={zugferdLaeuft === inv.id}
                                 onPdf={() => { const doc = generateInvoicePDF(inv); doc.save(`${TYPE_LABEL[inv.invoice_type || 'standard']}_${inv.invoice_number}.pdf`) }}
                                 onSenden={() => sendInvoice(inv)}
                                 onZahlung={() => { setZahlungOffen(inv); setZahlungBetrag(String(Number(inv.gross_amount) - Number(inv.paid_amount || 0))); setZahlungDatum(lokalesDatumIso()); setZahlungNotiz('') }}
                                 onNeueVersion={() => { setEditInvoice(inv); setEditPositions(inv.positions || []) }}
+                                // Gutschrift: das Formular sitzt beim zugehörigen Auftrag weiter unten – dorthin scrollen.
+                                // Rechnungen ohne Auftrag (oder zu einem hier nicht gelisteten Auftrag) haben kein Formular → Eintrag entfällt.
+                                onGutschrift={inv.project_id && projects.some((pr) => pr.id === inv.project_id) ? () => {
+                                  const pid = inv.project_id as string
+                                  setGutschriftOffen(pid); setGutschriftReferenz(inv.invoice_number); setGutschriftGrund('')
+                                  setTimeout(() => document.getElementById(`gutschrift-form-${pid}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 80)
+                                } : undefined}
+                                onTeilabbau={() => teilabbauVorschlagen(inv)}
+                                onZugferd={() => handleZugferd(inv)}
                                 onBezahltToggle={() => toggleStatus(inv)}
                                 onLoeschen={() => deleteInvoice(inv)}
                               />
@@ -1506,7 +1516,7 @@ export default function KundenDetailPage() {
                     )}
 
                     {gutschriftOffen === project.id && (
-                      <div className="bg-purple-500/5 border border-purple-500/20 rounded-xl p-3 space-y-2 mt-2">
+                      <div id={`gutschrift-form-${project.id}`} className="bg-purple-500/5 border border-purple-500/20 rounded-xl p-3 space-y-2 mt-2">
                         <p className="text-[11px] text-purple-700">Eigener Beleg mit eigener Nummer (GS-...), Betrag wird als Korrektur negativ gebucht.</p>
                         <input value={gutschriftGrund} onChange={(e) => setGutschriftGrund(e.target.value)} placeholder="Grund, z. B. „Rabatt Kulanz” oder „Korrektur Aufmaß”" className={inputCls} />
                         <div className="grid grid-cols-2 gap-2">
