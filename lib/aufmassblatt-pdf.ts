@@ -1,5 +1,7 @@
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import { balkonAbzug, balkoneFuerAbschnitt } from './balkon';
+import type { ScaffoldBalkon } from '../types/scaffold';
 
 // ============================================================
 // SCAFFOLD OS – Aufmaßblatt (PDF)
@@ -18,11 +20,19 @@ export interface AufmassAbschnitt {
   bezeichnung: string;
   laengeM: number;
   hoeheM: number;
+  /** Balkone dieses Abschnitts (Abzug je nach Einstellung, siehe lib/balkon.ts) */
+  balkone?: ScaffoldBalkon[];
 }
 
 export interface AufmassZeile extends AufmassAbschnitt {
   pos: number;
+  /** Fläche NACH Abzug der Balkone */
   flaecheM2: number;
+  /** Fläche vor Abzug (Länge × Höhe) */
+  flaecheBruttoM2: number;
+  /** abgezogene Balkonfläche (0, wenn keine) */
+  abzugM2: number;
+  abzugText?: string;
   /** Für die Fläche angesetzte Länge (bei kleinen Flächen mindestens 2,5 m) */
   laengeAbrechnungM: number;
   /** true, wenn die Mindestlänge statt der gemessenen Länge angesetzt wurde */
@@ -82,18 +92,23 @@ function runde2(n: number): number {
 
 /** Liest die Abschnitte aus den Daten von Schritt 2 (Haupt-Maße + Zusatz-Abschnitte). */
 export function abschnitteAusSchritt2(s2: any): AufmassAbschnitt[] {
-  const zusatz = (Array.isArray(s2?.abschnitte) ? s2.abschnitte : [])
-    .filter((a: any) => zahl(a?.laenge) > 0 && zahl(a?.hoehe) > 0)
-    .map((a: any, i: number) => ({
+  const mitBalkon = (balkone: ScaffoldBalkon[]) => (balkone.length > 0 ? { balkone } : {});
+  const rohAbschnitte: { bezeichnung?: unknown; laenge?: unknown; hoehe?: unknown }[] = Array.isArray(s2?.abschnitte) ? s2.abschnitte : [];
+  const zusatz = rohAbschnitte
+    .map((a, originalIndex) => ({ a, originalIndex }))
+    .filter(({ a }) => zahl(a?.laenge) > 0 && zahl(a?.hoehe) > 0)
+    .map(({ a, originalIndex }, i: number) => ({
       bezeichnung: String(a?.bezeichnung || '').trim() || `Abschnitt ${i + 2}`,
       laengeM: zahl(a.laenge),
       hoeheM: zahl(a.hoehe),
+      // Zusatz-Abschnitt Nr. n der Liste = Balkon-Abschnitt n + 1 (0 = Hauptfassade)
+      ...mitBalkon(balkoneFuerAbschnitt(s2?.balkone, originalIndex + 1)),
     }));
   const hauptL = zahl(s2?.laenge);
   const hauptH = zahl(s2?.hoehe);
   const haupt: AufmassAbschnitt[] =
     hauptL > 0 && hauptH > 0
-      ? [{ bezeichnung: zusatz.length > 0 ? 'Abschnitt 1' : 'Fassade', laengeM: hauptL, hoeheM: hauptH }]
+      ? [{ bezeichnung: zusatz.length > 0 ? 'Abschnitt 1' : 'Fassade', laengeM: hauptL, hoeheM: hauptH, ...mitBalkon(balkoneFuerAbschnitt(s2?.balkone, 0)) }]
       : [];
   return [...haupt, ...zusatz];
 }
@@ -102,12 +117,18 @@ export function berechneAufmass(abschnitte: AufmassAbschnitt[]): { zeilen: Aufma
   const zeilen = abschnitte.map((a, i) => {
     const mindest = a.laengeM > 0 && a.laengeM < MINDESTLAENGE_M;
     const laengeAbrechnungM = mindest ? MINDESTLAENGE_M : a.laengeM;
+    const flaecheBruttoM2 = runde2(laengeAbrechnungM * a.hoeheM);
+    const abzug = balkonAbzug(a.balkone, a.laengeM, a.hoeheM);
+    const abzugM2 = abzug ? Math.min(abzug.flaecheM2, flaecheBruttoM2) : 0;
     return {
       ...a,
       pos: i + 1,
       laengeAbrechnungM,
       mindestlaengeAngesetzt: mindest,
-      flaecheM2: runde2(laengeAbrechnungM * a.hoeheM),
+      flaecheBruttoM2,
+      abzugM2,
+      abzugText: abzug && abzugM2 > 0 ? abzug.text : undefined,
+      flaecheM2: runde2(flaecheBruttoM2 - abzugM2),
     };
   });
   return { zeilen, gesamtM2: runde2(zeilen.reduce((s, z) => s + z.flaecheM2, 0)) };
@@ -199,7 +220,10 @@ export function erzeugeAufmassblattPdf(input: AufmassblattInput): jsPDF {
     startY: y,
     head: [['Pos.', 'Abschnitt', 'Länge (m)', 'Höhe (m)', 'Fläche (m²)']],
     body: [
-      ...zeilen.map((z) => [String(z.pos), z.bezeichnung, z.mindestlaengeAngesetzt ? `${fmt(z.laengeM)} (${fmt(z.laengeAbrechnungM)})*` : fmt(z.laengeM), fmt(z.hoeheM), fmt(z.flaecheM2)]),
+      ...zeilen.flatMap((z) => [
+        [String(z.pos), z.bezeichnung, z.mindestlaengeAngesetzt ? `${fmt(z.laengeM)} (${fmt(z.laengeAbrechnungM)})*` : fmt(z.laengeM), fmt(z.hoeheM), fmt(z.flaecheBruttoM2)],
+        ...(z.abzugM2 > 0 ? [['', z.abzugText ?? 'abzgl. Balkone', '', '', `−${fmt(z.abzugM2)}`]] : []),
+      ]),
       ['', 'Gesamtfläche', '', '', fmt(gesamtM2)],
     ],
     theme: 'plain',
@@ -210,7 +234,7 @@ export function erzeugeAufmassblattPdf(input: AufmassblattInput): jsPDF {
     columnStyles: { 0: { cellWidth: 14, halign: 'center' }, 2: { halign: 'right' }, 3: { halign: 'right' }, 4: { halign: 'right', fontStyle: 'bold' } },
     didParseCell: (d) => {
       if (d.section === 'head' && d.column.index >= 2) d.cell.styles.halign = 'right';
-      if (d.section === 'body' && d.row.index === zeilen.length) {
+      if (d.section === 'body' && d.row.index === zeilen.length + zeilen.filter((z) => z.abzugM2 > 0).length) {
         d.cell.styles.fontStyle = 'bold';
         d.cell.styles.fillColor = [219, 234, 254];
         d.cell.styles.fontSize = 11;
@@ -233,6 +257,9 @@ export function erzeugeAufmassblattPdf(input: AufmassblattInput): jsPDF {
   const hinweis =
     'Fläche je Abschnitt = Länge × Höhe der erfassten Maße. Welche Maße vertraglich abgerechnet werden ' +
     '(z. B. Überstände, Aufmaßregeln nach Vertrag/ATV), richtet sich nach der Vereinbarung mit dem Auftraggeber.' +
+    (zeilen.some((z) => z.abzugM2 > 0)
+      ? ' Balkon-Abzüge sind je Abschnitt gesondert ausgewiesen (Breite × Abschnittshöhe).'
+      : '') +
     (zeilen.some((z) => z.mindestlaengeAngesetzt)
       ? ' * Bei kleinen Flächen wird die Länge mit mindestens 2,50 m angesetzt (Mindestlänge).'
       : '');

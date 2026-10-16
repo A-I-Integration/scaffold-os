@@ -20,6 +20,7 @@ import DispositionResult from '@/components/aufmaß/DispositionResult';
 import { DispositionResult as DispositionData } from '@/lib/calculations/disposition';
 import { uebernehmeMaterialBearbeitung } from '@/lib/stueckliste-bearbeiten';
 import { generateInvoicePDF, fmtDate as fmtRechnungsDatum, holePdfBase64FuerVersand, type Invoice } from '@/lib/invoice-pdf';
+import { balkoneFuerAbschnitt } from '@/lib/balkon';
 import { abschnitteAusSchritt2, berechneAufmass, erzeugeAufmassblattPdf, type AufmassFoto, type AufmassZulage } from '@/lib/aufmassblatt-pdf';
 import { Save, FileText, Pencil, Check, Ruler, PenLine, ClipboardList, Sparkles, Mail } from 'lucide-react';
 import { ladeAufmassFotos } from '@/lib/aufmassblatt-fotos';
@@ -418,11 +419,20 @@ function Schritt6Content() {
     // NEU: Mehrere Abschnitte (unterschiedliche Höhen/ums Eck) aus Schritt 2,
     // falls vorhanden. Abschnitt 1 = die Haupt-Länge/Höhe oben im Formular.
     const zusatzAbschnitte = Array.isArray(s2.abschnitte) ? s2.abschnitte : [];
-    const gueltigeZusatzAbschnitte = zusatzAbschnitte
-      .filter((a: any) => parseFloat(a.laenge) > 0 && parseFloat(a.hoehe) > 0)
-      .map((a: any, i: number) => ({ bezeichnung: a.bezeichnung || `Abschnitt ${i + 2}`, lengthM: parseFloat(a.laenge), heightM: parseFloat(a.hoehe), scaffoldType: a.geruesttyp ? geruesttypZuScaffoldType(a.geruesttyp) : undefined }));
-    const sections = gueltigeZusatzAbschnitte.length > 0
-      ? [{ bezeichnung: 'Abschnitt 1', lengthM: parseFloat(s2.laenge) || 0, heightM: parseFloat(s2.hoehe) || 0 }, ...gueltigeZusatzAbschnitte]
+    const rohZusatz: { bezeichnung?: string; laenge?: string; hoehe?: string; geruesttyp?: string }[] = zusatzAbschnitte;
+    const gueltigeZusatzAbschnitte = rohZusatz
+      .map((a, originalIndex) => ({ a, originalIndex }))
+      .filter(({ a }) => parseFloat(a.laenge ?? '') > 0 && parseFloat(a.hoehe ?? '') > 0)
+      .map(({ a, originalIndex }, i: number) => {
+        const balkone = balkoneFuerAbschnitt(s2.balkone, originalIndex + 1);
+        return { bezeichnung: a.bezeichnung || `Abschnitt ${i + 2}`, lengthM: parseFloat(a.laenge ?? ''), heightM: parseFloat(a.hoehe ?? ''), scaffoldType: a.geruesttyp ? geruesttypZuScaffoldType(a.geruesttyp) : undefined, ...(balkone.length > 0 ? { balkone } : {}) };
+      });
+    // Balkone an der Hauptfassade (Abschnitt 1): erzwingen "sections", auch ohne weitere Abschnitte.
+    const hauptBalkone = balkoneFuerAbschnitt(s2.balkone, 0);
+    const hauptLaenge = parseFloat(s2.laenge) || 0;
+    const hauptHoehe = parseFloat(s2.hoehe) || 0;
+    const sections = gueltigeZusatzAbschnitte.length > 0 || (hauptBalkone.length > 0 && hauptLaenge > 0 && hauptHoehe > 0)
+      ? [{ bezeichnung: gueltigeZusatzAbschnitte.length > 0 ? 'Abschnitt 1' : 'Fassade', lengthM: hauptLaenge, heightM: hauptHoehe, ...(hauptBalkone.length > 0 ? { balkone: hauptBalkone } : {}) }, ...gueltigeZusatzAbschnitte]
       : undefined;
 
     return {
