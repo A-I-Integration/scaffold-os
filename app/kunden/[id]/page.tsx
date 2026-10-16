@@ -15,10 +15,11 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import {
-  ArrowLeft, FileText, Mail, Download, Check, RotateCcw, Trash2, Plus,
-  Pencil, Send, Euro, AlertCircle, ChevronDown, ChevronUp, X, Ruler, Scissors,
+  ArrowLeft, FileText, Mail, Download, Trash2, Plus,
+  Send, Euro, AlertCircle, ChevronDown, ChevronUp, X, Ruler,
   ClipboardList, Image as ImageIcon, FileSignature, User,
 } from 'lucide-react'
+import RechnungAktionen from '@/components/RechnungAktionen'
 import { generateInvoicePDF, generateLieferscheinPDF, fmtEur, fmtDate, holePdfBase64FuerVersand, type Invoice } from '@/lib/invoice-pdf'
 import { gewerkeVonStep1, starteNeuesAufmass } from '@/lib/aufmass-projekt-session'
 import SignaturePad from '@/components/aufmaß/SignaturePad'
@@ -1216,17 +1217,16 @@ export default function KundenDetailPage() {
                                 bisher gab es hier nur "Zahlung erfassen", man konnte eine offene
                                 Rechnung aus dieser Schnellübersicht heraus nicht ändern/stornieren/
                                 erneut senden, ohne erst zum passenden Auftrag herunterzuscrollen. */}
-                            <div className="flex gap-1">
-                              {inv.status !== 'storniert' && (
-                                <button onClick={() => { setEditInvoice(inv); setEditPositions(inv.positions || []) }} title="Neue Version anlegen (alte bleibt unverändert, wird storniert)" className={btnSecondary}><Pencil className="h-3 w-3" /></button>
-                              )}
-                              <button onClick={() => { const doc = generateInvoicePDF(inv); doc.save(`${TYPE_LABEL[inv.invoice_type || 'standard']}_${inv.invoice_number}.pdf`) }} title="PDF" className={btnSecondary}><Download className="h-3 w-3" /></button>
-                              <button onClick={() => sendInvoice(inv)} title="Erneut senden" className={btnSecondary}><Send className="h-3 w-3" /></button>
-                              <button onClick={() => { setZahlungOffen(inv); setZahlungBetrag(String(Number(inv.gross_amount) - Number(inv.paid_amount || 0))); setZahlungDatum(lokalesDatumIso()); setZahlungNotiz('') }} title="Zahlung erfassen" className={btnSecondary}><Euro className="h-3 w-3" /></button>
-                              {!gutschrift && (
-                                <button onClick={() => toggleStatus(inv)} title="Direkt als vollständig bezahlt markieren" className={btnSecondary}><Check className="h-3 w-3" /></button>
-                              )}
-                              <button onClick={() => deleteInvoice(inv)} title="Löschen" className="p-1.5 rounded-lg bg-red-500/10 hover:bg-red-500/30 text-red-600"><Trash2 className="h-3 w-3" /></button>
+                            <div className="w-full sm:w-auto">
+                              <RechnungAktionen
+                                gutschrift={gutschrift} storniert={inv.status === 'storniert'} bezahlt={inv.status === 'bezahlt'}
+                                onPdf={() => { const doc = generateInvoicePDF(inv); doc.save(`${TYPE_LABEL[inv.invoice_type || 'standard']}_${inv.invoice_number}.pdf`) }}
+                                onSenden={() => sendInvoice(inv)}
+                                onZahlung={() => { setZahlungOffen(inv); setZahlungBetrag(String(Number(inv.gross_amount) - Number(inv.paid_amount || 0))); setZahlungDatum(lokalesDatumIso()); setZahlungNotiz('') }}
+                                onNeueVersion={() => { setEditInvoice(inv); setEditPositions(inv.positions || []) }}
+                                onBezahltToggle={() => toggleStatus(inv)}
+                                onLoeschen={() => deleteInvoice(inv)}
+                              />
                             </div>
                           </li>
                         )
@@ -1435,41 +1435,23 @@ export default function KundenDetailPage() {
                               )}
                               <span className="text-[#86868b]">{fmtDate(inv.invoice_date)}</span>
                               <span className={`ml-auto font-bold ${gutschrift ? 'text-purple-700' : verzug ? 'text-red-600' : 'text-[#1d1d1f]'}`}>{fmtEur(Number(inv.gross_amount))} €</span>
-                              <div className="flex gap-1">
-                                {inv.status !== 'storniert' && (
-                                  <button onClick={() => { setEditInvoice(inv); setEditPositions(inv.positions || []) }} title="Neue Version anlegen (alte bleibt unverändert, wird storniert)" className="p-1.5 rounded-lg bg-black/5 hover:bg-black/10 text-[#1d1d1f]"><Pencil className="h-3.5 w-3.5" /></button>
-                                )}
-                                {inv.status !== 'storniert' && !gutschrift && (
-                                  <button onClick={() => teilabbauVorschlagen(inv)} title="Teilabbau: Rechnung anteilig reduzieren (alte wird storniert, neue mit gekürzten Mengen angelegt)" className="p-1.5 rounded-lg bg-amber-500/10 hover:bg-amber-500/25 text-amber-700"><Scissors className="h-3.5 w-3.5" /></button>
-                                )}
-                                <button onClick={() => { const doc = generateInvoicePDF(inv); doc.save(`${TYPE_LABEL[inv.invoice_type || 'standard']}_${inv.invoice_number}.pdf`) }} title="PDF" className="p-1.5 rounded-lg bg-black/5 hover:bg-black/10 text-[#1d1d1f]"><Download className="h-3.5 w-3.5" /></button>
-                                <button onClick={() => handleZugferd(inv)} disabled={zugferdLaeuft === inv.id} title="E-Rechnung (ZUGFeRD) – PDF mit eingebetteter maschinenlesbarer Rechnung" className="p-1.5 rounded-lg bg-indigo-600/20 hover:bg-indigo-600/40 disabled:opacity-50 text-indigo-700 text-[10px] font-bold w-7 flex items-center justify-center">{zugferdLaeuft === inv.id ? '…' : 'e⚡'}</button>
-                                <button onClick={() => sendInvoice(inv)} title="Erneut senden" className="p-1.5 rounded-lg bg-blue-600/20 hover:bg-blue-600/40 text-blue-700"><Send className="h-3.5 w-3.5" /></button>
-                                {inv.status !== 'storniert' && !gutschrift && (
-                                  <button onClick={() => { setZahlungOffen(inv); setZahlungBetrag(String(Number(inv.gross_amount) - Number(inv.paid_amount || 0))); setZahlungDatum(lokalesDatumIso()); setZahlungNotiz('') }} title="Zahlung erfassen (auch teilweise)" className="p-1.5 rounded-lg bg-blue-600/20 hover:bg-blue-600/40 text-blue-700">
-                                    <Euro className="h-3.5 w-3.5" />
-                                  </button>
-                                )}
-                                {inv.status !== 'storniert' && !gutschrift && (
-                                  <button onClick={() => toggleStatus(inv)} title={inv.status === 'bezahlt' ? 'Auf offen setzen' : 'Direkt als vollständig bezahlt markieren'} className={`p-1.5 rounded-lg ${inv.status === 'bezahlt' ? 'bg-emerald-600/20 hover:bg-emerald-600/40 text-emerald-700' : 'bg-black/5 hover:bg-emerald-600/30 text-[#86868b]'}`}>
-                                    {inv.status === 'bezahlt' ? <RotateCcw className="h-3.5 w-3.5" /> : <Check className="h-3.5 w-3.5" />}
-                                  </button>
-                                )}
-                                <button onClick={() => deleteInvoice(inv)} title="Löschen" className="p-1.5 rounded-lg bg-red-500/10 hover:bg-red-500/30 text-red-600"><Trash2 className="h-3.5 w-3.5" /></button>
+                              <div className="w-full">
+                                <RechnungAktionen
+                                  gutschrift={gutschrift} storniert={inv.status === 'storniert'} bezahlt={inv.status === 'bezahlt'}
+                                  zugferdLaeuft={zugferdLaeuft === inv.id}
+                                  onPdf={() => { const doc = generateInvoicePDF(inv); doc.save(`${TYPE_LABEL[inv.invoice_type || 'standard']}_${inv.invoice_number}.pdf`) }}
+                                  onSenden={() => sendInvoice(inv)}
+                                  onZahlung={() => { setZahlungOffen(inv); setZahlungBetrag(String(Number(inv.gross_amount) - Number(inv.paid_amount || 0))); setZahlungDatum(lokalesDatumIso()); setZahlungNotiz('') }}
+                                  onNeueVersion={() => { setEditInvoice(inv); setEditPositions(inv.positions || []) }}
+                                  onGutschrift={() => { setGutschriftOffen(project.id); setGutschriftReferenz(inv.invoice_number); setGutschriftGrund('') }}
+                                  onTeilabbau={() => teilabbauVorschlagen(inv)}
+                                  onZugferd={() => handleZugferd(inv)}
+                                  onBezahltToggle={() => toggleStatus(inv)}
+                                  onLoeschen={() => deleteInvoice(inv)}
+                                />
                               </div>
                             </div>
 
-                            {/* NEU: direkter Ändern/Gutschrift-Button an JEDER Rechnung –
-                                erstellt eine verknüpfte Gutschrift, sichtbar direkt darunter
-                                gruppiert, statt in der Liste verstreut. */}
-                            {!gutschrift && (
-                              <button
-                                onClick={() => { setGutschriftOffen(project.id); setGutschriftReferenz(inv.invoice_number); setGutschriftGrund('') }}
-                                className="ml-1 mt-1 flex items-center gap-1 text-[11px] text-purple-700 font-medium hover:underline"
-                              >
-                                <Pencil className="h-3 w-3" /> Ändern / Gutschrift zu {inv.invoice_number}
-                              </button>
-                            )}
 
                             {korrekturen.length > 0 && (
                               <ul className="ml-4 pl-3 mt-1.5 border-l-2 border-purple-200 space-y-1">
@@ -1482,8 +1464,8 @@ export default function KundenDetailPage() {
                                     <span className="text-[#86868b]">{fmtDate(k.invoice_date)}</span>
                                     <span className="ml-auto font-bold text-purple-700">{fmtEur(Number(k.gross_amount))} €</span>
                                     <div className="flex gap-1">
-                                      <button onClick={() => { const doc = generateInvoicePDF(k); doc.save(`${kGutschrift ? 'Gutschrift' : 'Rechnung'}_${k.invoice_number}.pdf`) }} title="PDF" className="p-1 rounded bg-black/5 hover:bg-black/10 text-[#1d1d1f]"><Download className="h-3 w-3" /></button>
-                                      <button onClick={() => sendInvoice(k)} title="Senden" className="p-1 rounded bg-blue-600/20 hover:bg-blue-600/40 text-blue-700"><Send className="h-3 w-3" /></button>
+                                      <button onClick={() => { const doc = generateInvoicePDF(k); doc.save(`${kGutschrift ? 'Gutschrift' : 'Rechnung'}_${k.invoice_number}.pdf`) }} className="inline-flex items-center gap-1 px-2 py-1 rounded bg-black/5 hover:bg-black/10 text-[#1d1d1f] text-[11px] font-medium"><Download className="h-3 w-3" /> PDF</button>
+                                      <button onClick={() => sendInvoice(k)} className="inline-flex items-center gap-1 px-2 py-1 rounded bg-blue-600/15 hover:bg-blue-600/30 text-blue-700 text-[11px] font-medium"><Send className="h-3 w-3" /> Senden</button>
                                     </div>
                                   </li>
                                   )
