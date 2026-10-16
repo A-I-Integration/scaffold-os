@@ -34,7 +34,12 @@ describe('Regression: POST /api/projects Antwortform', () => {
       // z.B. für /api/kunden völlig korrekt ist).
       const postIndex = inhalt.indexOf("fetch('/api/projects'")
       expect(postIndex, `${datei} sollte einen POST an /api/projects enthalten`).toBeGreaterThan(-1)
-      const ausschnitt = inhalt.slice(postIndex, postIndex + 1500)
+      // Prüfung beginnt erst bei der Antwort (res.json()): der Anfrage-Block
+      // davor kann beliebig lang sein (Daten, Kommentare) und darf den
+      // Test nicht aus dem Suchfenster schieben.
+      const antwortIndex = inhalt.indexOf('await res.json()', postIndex)
+      expect(antwortIndex, `${datei}: nach dem POST sollte die Antwort gelesen werden`).toBeGreaterThan(-1)
+      const ausschnitt = inhalt.slice(antwortIndex, antwortIndex + 600)
       expect(ausschnitt).not.toMatch(/if\s*\(\s*!json\.success\s*\)/)
       // Die korrekte Prüfung nutzt json.id (oder !res.ok)
       expect(ausschnitt).toMatch(/json\.id/)
