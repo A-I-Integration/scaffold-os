@@ -14,6 +14,7 @@ export default function robots(): MetadataRoute.Robots {
       allow: ['/', '/aufmass-geruestbau', '/angebot-geruestbau', '/rechnung-geruestbau', '/disposition-geruestbau', '/lager-geruestbau', '/eignungscheck', '/kaufen', '/anfrage', '/login', '/hilfe', '/impressum', '/datenschutz', '/agb'],
       disallow: [
         '/api/',
+        '/ansicht/',
         '/admin/',
         '/dashboard',
         '/aufmass/',

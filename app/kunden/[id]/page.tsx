@@ -36,6 +36,7 @@ import NachtraegeBlock from '@/components/NachtraegeBlock'
 import ZwischenaufmassBlock from '@/components/ZwischenaufmassBlock'
 import SchlussrechnungDialog from '@/components/SchlussrechnungDialog'
 import { lokalesDatumIso, datumPlusTage } from '@/lib/datum'
+import AnsichtLinkBox from '@/components/AnsichtLinkBox'
 
 interface Kunde {
   id: string
@@ -1400,6 +1401,8 @@ export default function KundenDetailPage() {
                       </div>
                     </div>
                   )}
+
+                  {project.data?.kiResult?.building && <AnsichtLinkBox projectId={project.id} />}
 
                   <div className="px-5 py-3">
                     {projInvoices.length === 0 ? (
