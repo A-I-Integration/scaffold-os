@@ -8,6 +8,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { setzeMarkierung, leseSchrittGeladenesProjekt, setzeSchrittGeladenesProjekt } from '@/lib/aufmass-projekt-session';
 import { speichereEntwurf } from '@/lib/aufmass-entwurf';
 import { speichereSchrittAuto } from '@/lib/aufmass-autosave';
+import { lieferMengenAusMaterialliste } from '@/lib/lieferung-mengen';
 
 const LEERES_FORM_S5 = {
   arbeitsbuehnen: '',
@@ -166,15 +167,15 @@ function mitVorschlaegen(s5: any, s1: any, s2: any, s4: any) {
   if (!form.abholtermin) form.abholtermin = normDatum(s1?.projektende);
   // 1) Mengen aus der KI-Materialliste (Schritt 4)
   const liste: any[] = s4?.kiResult?.materialList || s4?.ki_result?.materialList || [];
-  const lo = (x: unknown) => String(x ?? '').toLowerCase();
-  const such = (keys: string[]) => liste.find((m) => keys.some((k) => lo(m?.name).includes(k) || lo(m?.category).includes(k)));
-  const menge = (m: any) => (m && typeof m.quantity === 'number' ? String(m.quantity) : '');
-  if (!form.arbeitsbuehnen) form.arbeitsbuehnen = menge(such(['bühne', 'buehne', 'plattform']));
-  if (!form.rahmen) form.rahmen = menge(such(['rahmen']));
-  if (!form.diagonale) form.diagonale = menge(such(['diagonal']));
-  if (!form.spindeltreppe) form.spindeltreppe = menge(such(['treppe']));
-  if (!form.gelander) form.gelander = menge(such(['geländ', 'gelaend', 'handlauf']));
-  if (!form.anker) form.anker = menge(such(['anker', 'verbindung', 'kupplung']));
+  // Rahmen/Bühnen/Diagonalen/Geländer werden über alle Zeilen addiert (gemischte
+  // Feldlängen), "Anker" zählt nur Anker – Regeln siehe lib/lieferung-mengen.ts.
+  const m = lieferMengenAusMaterialliste(liste);
+  if (!form.arbeitsbuehnen) form.arbeitsbuehnen = m.arbeitsbuehnen;
+  if (!form.rahmen) form.rahmen = m.rahmen;
+  if (!form.diagonale) form.diagonale = m.diagonale;
+  if (!form.spindeltreppe) form.spindeltreppe = m.spindeltreppe;
+  if (!form.gelander) form.gelander = m.gelander;
+  if (!form.anker) form.anker = m.anker;
   // 2) Fallback: Schätzung aus Schritt 2 (nur was die KI nicht lieferte)
   const L = alsZahl(s2?.laenge), H = alsZahl(s2?.hoehe);
   if (L > 0 && H > 0) {
