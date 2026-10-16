@@ -7,6 +7,7 @@ import type { EmployeeWithSkills } from '@/types/employees';
 import ProjektDokumentation from '@/components/ProjektDokumentation';
 import Link from 'next/link';
 import { Wrench, Navigation } from 'lucide-react';
+import { gruppiereStopps, routenAdressen, uhrzeitKurz, type StoppGruppe } from '@/lib/touren/stopp-gruppen';
 import { starteNeuesAufmass } from '@/lib/aufmass-projekt-session';
 import { lokalesDatumIso } from '@/lib/datum';
 
@@ -414,61 +415,83 @@ export default function MeineTourenPage() {
     localStorage.setItem(PACK_KEY + myTour.id, JSON.stringify(next));
   }
 
-  // ─── Stopp als "Fertig" markieren (Phase 90) ───
-  // NEU: jeder Mitarbeiter (nicht nur der eingetragene Fahrer, siehe
-  // darfStoppAendern in der API) kann einen Stopp abschließen. Vorher wird
-  // geprüft, ob für die zugehörige Baustelle bereits eine Dokumentation
-  // (Foto/Notiz, siehe ProjektDokumentation) existiert – ohne Doku kein
-  // "Fertig", damit der Papierkram nicht hinten runterfällt.
-  async function handleStoppFertig(stop: Stop) {
-    setStoppLaeuft(prev => ({ ...prev, [stop.id]: true }));
-    setStoppMsg(prev => ({ ...prev, [stop.id]: '' }));
+  // ─── Lieferung (Karte = alle Stopps an einer Adresse) als "Fertig" markieren (Phase 90) ───
+  // Jeder Mitarbeiter (nicht nur der eingetragene Fahrer, siehe darfStoppAendern
+  // in der API) kann abschließen. Vorher wird EINMAL je Baustelle geprüft, ob
+  // eine Dokumentation (Foto/Notiz, siehe ProjektDokumentation) existiert – ohne
+  // Doku kein "Fertig", damit der Papierkram nicht hinten runterfällt.
+  // Danach wird jeder offene Stopp der Karte einzeln abgeschlossen (je Stopp
+  // wird der Transportauftrag geliefert und im Lager verbucht).
+  async function handleGruppeFertig(g: StoppGruppe<Stop>) {
+    const key = g.schluessel;
+    setStoppLaeuft(prev => ({ ...prev, [key]: true }));
+    setStoppMsg(prev => ({ ...prev, [key]: '' }));
     try {
-      if (stop.project_id) {
-        const dokRes = await fetch(`/api/project-events?project_id=${stop.project_id}&t=${Date.now()}`, { cache: 'no-store' });
+      if (g.project_id) {
+        const dokRes = await fetch(`/api/project-events?project_id=${g.project_id}&t=${Date.now()}`, { cache: 'no-store' });
         const dokJson = await dokRes.json();
         const hatDoku = dokJson.success && (dokJson.events || []).length > 0;
         if (!hatDoku) {
-          setStoppMsg(prev => ({ ...prev, [stop.id]: 'doku_fehlt' }));
-          setStoppLaeuft(prev => ({ ...prev, [stop.id]: false }));
+          setStoppMsg(prev => ({ ...prev, [key]: 'doku_fehlt' }));
+          setStoppLaeuft(prev => ({ ...prev, [key]: false }));
           return;
         }
       }
-      const res = await fetch('/api/tour-stops', {
-        method: 'PUT', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: stop.id, status: 'completed', actual_arrival: new Date().toISOString() }),
-      });
-      const json = await res.json();
-      if (!json.success) throw new Error(json.error || 'Fehler beim Speichern.');
+      for (const stop of g.offeneStops) {
+        const res = await fetch('/api/tour-stops', {
+          method: 'PUT', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id: stop.id, status: 'completed', actual_arrival: new Date().toISOString() }),
+        });
+        const json = await res.json();
+        if (!json.success) throw new Error(json.error || 'Fehler beim Speichern.');
+      }
       await loadData();
     } catch (e: any) {
-      setStoppMsg(prev => ({ ...prev, [stop.id]: e.message || 'Fehler beim Speichern.' }));
+      setStoppMsg(prev => ({ ...prev, [key]: e.message || 'Fehler beim Speichern.' }));
+      try { await loadData(); } catch { /* Anzeige bleibt wie sie ist */ }
     }
-    setStoppLaeuft(prev => ({ ...prev, [stop.id]: false }));
+    setStoppLaeuft(prev => ({ ...prev, [key]: false }));
   }
 
-  // ─── Stopp als "Nicht fertig geworden" markieren (Phase 90) ───
-  // Merkt den Stopp automatisch für den nächsten freien Werktag desselben
-  // Mitarbeiters beim selben Projekt vor (Server-Logik siehe
-  // /api/tour-stops/nicht-fertig).
-  async function handleStoppNichtFertig(stop: Stop) {
-    if (!confirm('Diesen Stopp als "nicht fertig geworden" markieren? Er wird automatisch für den nächsten freien Tag vorgemerkt.')) return;
-    setStoppLaeuft(prev => ({ ...prev, [stop.id]: true }));
-    setStoppMsg(prev => ({ ...prev, [stop.id]: '' }));
+  // ─── Lieferung als "Nicht fertig geworden" markieren (Phase 90) ───
+  // Merkt den Mitarbeiter automatisch für den nächsten freien Werktag beim selben
+  // Projekt vor (Server-Logik siehe /api/tour-stops/nicht-fertig). WICHTIG: das
+  // darf nur EINMAL je Karte passieren – jeder weitere Aufruf würde den nächsten
+  // freien Tag belegen und den Mitarbeiter auf mehrere Tage verteilen. Deshalb
+  // geht nur der erste offene Stopp über diese Route, die übrigen werden direkt
+  // auf "übersprungen" gesetzt.
+  async function handleGruppeNichtFertig(g: StoppGruppe<Stop>) {
+    if (!confirm('Diese Lieferung als "nicht fertig geworden" markieren? Sie wird automatisch für den nächsten freien Tag vorgemerkt.')) return;
+    const [erster, ...rest] = g.offeneStops;
+    if (!erster) return;
+    const key = g.schluessel;
+    setStoppLaeuft(prev => ({ ...prev, [key]: true }));
+    setStoppMsg(prev => ({ ...prev, [key]: '' }));
     try {
       const res = await fetch('/api/tour-stops/nicht-fertig', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ stopId: stop.id }),
+        body: JSON.stringify({ stopId: erster.id }),
       });
       const json = await res.json();
       if (!json.success) throw new Error(json.error || 'Fehler beim Speichern.');
-      setStoppMsg(prev => ({ ...prev, [stop.id]: json.vorgemerkt ? `vorgemerkt:${json.vorgemerkt}` : 'kein_folgetag' }));
+      for (const stop of rest) {
+        const r = await fetch('/api/tour-stops', {
+          method: 'PUT', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id: stop.id, status: 'skipped' }),
+        });
+        const j = await r.json();
+        if (!j.success) throw new Error(j.error || 'Fehler beim Speichern.');
+      }
+      setStoppMsg(prev => ({ ...prev, [key]: json.vorgemerkt ? `vorgemerkt:${json.vorgemerkt}` : 'kein_folgetag' }));
       await loadData();
     } catch (e: any) {
-      setStoppMsg(prev => ({ ...prev, [stop.id]: e.message || 'Fehler beim Speichern.' }));
+      setStoppMsg(prev => ({ ...prev, [key]: e.message || 'Fehler beim Speichern.' }));
+      try { await loadData(); } catch { /* Anzeige bleibt wie sie ist */ }
     }
-    setStoppLaeuft(prev => ({ ...prev, [stop.id]: false }));
+    setStoppLaeuft(prev => ({ ...prev, [key]: false }));
   }
+
+  const stoppGruppen = myTour ? gruppiereStopps(myTour.stops) : [];
 
   // Packliste aus Stopps aggregieren
   const packlist: PackItem[] = [];
@@ -540,7 +563,7 @@ export default function MeineTourenPage() {
 
   // Google-Maps-Route mit allen Stopps als Wegpunkte
   function mapsUrl(tour: Tour): string {
-    const stops = tour.stops.map(s => encodeURIComponent(s.address));
+    const stops = routenAdressen(tour.stops).map(a => encodeURIComponent(a));
     if (stops.length === 0) return '#';
     const dest = stops[stops.length - 1];
     const waypoints = stops.slice(0, -1).join('|');
@@ -744,7 +767,7 @@ export default function MeineTourenPage() {
                 <div className="p-4 space-y-4">
                   <div className="text-sm text-[#424245]">
                     <strong>{myTour.name}</strong>
-                    {myTour.planned_start_time ? ` · Start ${myTour.planned_start_time}` : ''}
+                    {myTour.planned_start_time ? ` · Start ${uhrzeitKurz(myTour.planned_start_time)}` : ''}
                     {myTour.vehicle ? ` · 🚛 ${myTour.vehicle.name} (${myTour.vehicle.license_plate})` : ''}
                     {myTour.planned_date !== todayISO() && (
                       <span className="block text-[#e8590c] mt-1">
@@ -753,41 +776,41 @@ export default function MeineTourenPage() {
                     )}
                   </div>
 
-                  {/* Stopp-Timeline */}
+                  {/* Stopp-Timeline: eine Karte je Adresse (siehe lib/touren/stopp-gruppen.ts) */}
                   <ol className="relative border-l-2 border-black/10 ml-3 space-y-4">
-                    {myTour.stops.map(stop => (
-                      <li key={stop.id} className="ml-5 relative">
+                    {stoppGruppen.map((g, idx) => (
+                      <li key={g.schluessel} className="ml-5 relative">
                         <span className={`absolute -left-[31px] w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${
-                          stop.status === 'completed' ? 'bg-emerald-600' : stop.status === 'skipped' ? 'bg-amber-600' : 'bg-black/20'
+                          g.status === 'completed' ? 'bg-emerald-600' : g.status === 'skipped' ? 'bg-amber-600' : 'bg-black/20'
                         }`}>
-                          {stop.status === 'completed' ? '✓' : stop.status === 'skipped' ? '⏭' : stop.stop_order}
+                          {g.status === 'completed' ? '✓' : g.status === 'skipped' ? '⏭' : idx + 1}
                         </span>
-                        <div className="font-medium">{stop.address}</div>
-                        {stop.transport_order?.inventory?.name && (
-                          <div className="text-[#86868b] text-sm">
-                            {stop.transport_order.inventory.name} × {stop.transport_order.quantity}
-                          </div>
+                        <div className="font-medium">{g.address}</div>
+                        {g.material.length > 0 && (
+                          <ul className="text-[#86868b] text-sm mt-0.5 space-y-0.5">
+                            {g.material.map(m => <li key={m.name}>{m.name} × {m.quantity}</li>)}
+                          </ul>
                         )}
                         <a
-                          href={`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(stop.address)}&travelmode=driving`}
+                          href={`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(g.address)}&travelmode=driving`}
                           target="_blank" rel="noreferrer"
                           className="text-[#e8590c] text-sm hover:underline"
                         >
                           → Navigation
                         </a>
 
-                        {stop.status !== 'completed' && stop.status !== 'skipped' && (
+                        {g.status === 'offen' && (
                           <div className="mt-2 flex flex-wrap items-center gap-2">
                             <button
-                              onClick={() => handleStoppFertig(stop)}
-                              disabled={!!stoppLaeuft[stop.id]}
+                              onClick={() => handleGruppeFertig(g)}
+                              disabled={!!stoppLaeuft[g.schluessel]}
                               className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-xs font-semibold transition disabled:opacity-50"
                             >
                               ✅ Fertig
                             </button>
                             <button
-                              onClick={() => handleStoppNichtFertig(stop)}
-                              disabled={!!stoppLaeuft[stop.id]}
+                              onClick={() => handleGruppeNichtFertig(g)}
+                              disabled={!!stoppLaeuft[g.schluessel]}
                               className="px-3 py-1.5 rounded-lg bg-black/10 hover:bg-black/20 text-xs font-semibold transition disabled:opacity-50"
                             >
                               ⏭️ Nicht fertig geworden
@@ -795,12 +818,12 @@ export default function MeineTourenPage() {
                           </div>
                         )}
 
-                        {stoppMsg[stop.id] === 'doku_fehlt' && (
+                        {stoppMsg[g.schluessel] === 'doku_fehlt' && (
                           <div className="mt-2 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-2">
                             ⚠️ Bitte zuerst eine Dokumentation (Foto/Notiz) für diese Baustelle hinzufügen, bevor du auf &quot;Fertig&quot; setzt.
-                            {stop.project_id && (
+                            {g.project_id && (
                               <button
-                                onClick={() => { setDokProjectId(stop.project_id!); setActiveTab('werkzeuge'); }}
+                                onClick={() => { setDokProjectId(g.project_id!); setActiveTab('werkzeuge'); }}
                                 className="block mt-1 text-[#e8590c] font-semibold hover:underline"
                               >
                                 → Jetzt dokumentieren
@@ -808,16 +831,16 @@ export default function MeineTourenPage() {
                             )}
                           </div>
                         )}
-                        {stoppMsg[stop.id]?.startsWith('vorgemerkt:') && (
+                        {stoppMsg[g.schluessel]?.startsWith('vorgemerkt:') && (
                           <div className="mt-2 text-xs text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg p-2">
-                            ↻ Automatisch vorgemerkt für {new Date(stoppMsg[stop.id].split(':')[1] + 'T00:00:00').toLocaleDateString('de-DE', { weekday: 'long', day: '2-digit', month: '2-digit' })}.
+                            ↻ Automatisch vorgemerkt für {new Date(stoppMsg[g.schluessel].split(':')[1] + 'T00:00:00').toLocaleDateString('de-DE', { weekday: 'long', day: '2-digit', month: '2-digit' })}.
                           </div>
                         )}
-                        {stoppMsg[stop.id] === 'kein_folgetag' && (
+                        {stoppMsg[g.schluessel] === 'kein_folgetag' && (
                           <div className="mt-2 text-xs text-[#86868b]">Als &quot;nicht fertig&quot; markiert.</div>
                         )}
-                        {stoppMsg[stop.id] && stoppMsg[stop.id] !== 'doku_fehlt' && stoppMsg[stop.id] !== 'kein_folgetag' && !stoppMsg[stop.id].startsWith('vorgemerkt:') && (
-                          <div className="mt-2 text-xs text-red-600">❌ {stoppMsg[stop.id]}</div>
+                        {stoppMsg[g.schluessel] && stoppMsg[g.schluessel] !== 'doku_fehlt' && stoppMsg[g.schluessel] !== 'kein_folgetag' && !stoppMsg[g.schluessel].startsWith('vorgemerkt:') && (
+                          <div className="mt-2 text-xs text-red-600">❌ {stoppMsg[g.schluessel]}</div>
                         )}
                       </li>
                     ))}
