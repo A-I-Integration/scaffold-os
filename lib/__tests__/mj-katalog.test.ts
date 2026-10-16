@@ -5,7 +5,7 @@ import { GERUEST_SYSTEME } from '@/lib/calculations/geruest-systeme';
 describe('MJ-Katalog', () => {
   const alle = alleMjArtikel();
   it('hat Artikel aus allen vier Preislisten', () => {
-    for (const l of Object.keys(MJ_LISTEN)) expect(alle.filter((a) => a.liste === l).length).toBeGreaterThan(200);
+    for (const l of Object.keys(MJ_LISTEN)) expect(alle.filter((a) => a.liste === l).length).toBeGreaterThanOrEqual(13);
   });
   it('jede Zeile hat 5–6-stellige Artikelnummer und einen Preis > 0', () => {
     for (const a of alle) {
@@ -14,7 +14,8 @@ describe('MJ-Katalog', () => {
     }
   });
   it('Artikelnummer kommt je Preisliste nur einmal vor', () => {
-    const keys = alle.map((a) => `${a.liste}|${a.nr}`);
+    // Ausnahme: in der MJ-Preisliste doppelt vergebene Nummern sind im Katalog mit „Hinweis“ markiert
+    const keys = alle.filter((a) => !a.attribute['Hinweis']).map((a) => `${a.liste}|${a.nr}`);
     expect(new Set(keys).size).toBe(keys.length);
   });
   it('Stichproben stimmen mit den Preislisten überein', () => {
@@ -30,8 +31,8 @@ describe('MJ-Katalog', () => {
   });
   it('Vollständigkeit: bisher übersehene Artikel sind jetzt drin', () => {
     // 000357/011158 Spreizdübel, 012600 Eindrehhilfe, Innen-/Außenecke Wandkassetten in jeder Liste
-    for (const l of Object.keys(MJ_LISTEN)) for (const nr of ['000357', '011158', '012600']) expect(alle.some((a) => a.liste === l && a.nr === nr)).toBe(true);
-    expect(mjArtikelNachNr('012088').length).toBe(5);
+    for (const l of ['optima', 'optima-top', 'optima-metric', 'uni-connect', 'combi', 'combi-metric-top']) for (const nr of ['000357', '011158', '012600']) expect(alle.some((a) => a.liste === l && a.nr === nr)).toBe(true);
+    expect(mjArtikelNachNr('012088').length).toBe(7);
     expect(mjArtikelNachNr('012089').find((a) => a.liste === 'optima-top')!.attribute['Gewicht (kg)']).toBe(3.9);
     expect(mjArtikelNachNr('000693')[0].preis).toBe(40.6); // UNI-CONNECT Kopfspindel 148
     expect(mjArtikelNachNr('000539').length).toBe(2);
@@ -56,6 +57,20 @@ describe('MJ-Katalog', () => {
     expect(MJ_LISTEN['uni-top'].zulassungen[0].nummer).toBe('Z-8.1-902');
     expect(MJ_LISTEN['uni-top'].zulassungen[0].gueltigBis).toBe('18.08.2031');
     expect(alle.filter((a) => a.liste === 'uni-top').length).toBe(264);
+  });
+  it('Wand und Dach: Artikel, doppelte Nummern zusammengeführt', () => {
+    expect(alle.filter((a) => a.liste === 'wand-dach').length).toBe(84);
+    const k = mjArtikelNachNr('012064').find((a) => a.liste === 'wand-dach')!;
+    expect(k.preis).toBe(172.5);
+    expect(k.gruppe).toContain('METRIC');
+    expect(MJ_LISTEN['wand-dach'].zulassungen).toEqual([]);
+  });
+  it('Paletten, Zubehör, ZIPKO und OPTI-RACK: Umfang und Stichproben', () => {
+    const n = (l: string) => alle.filter((a) => a.liste === l).length;
+    expect([n('paletten'), n('zubehoer'), n('zipko'), n('opti-rack')]).toEqual([37, 433, 13, 16]);
+    expect(mjArtikelNachNr('016276')[0].preis).toBe(2635);
+    expect(mjArtikelNachNr('016375').filter((a) => a.liste === 'zubehoer').every((a) => a.attribute['Hinweis'])).toBe(true);
+    expect(mjArtikelNachNr('011267')[0].preis).toBe(49.5);
   });
   it('Suche findet nach Nummer und Name, alle Wörter müssen passen', () => {
     expect(sucheMjArtikel('013535').length).toBeGreaterThan(0);

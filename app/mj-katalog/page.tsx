@@ -1,11 +1,11 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { alleMjArtikel, sucheMjArtikel, MJ_LISTEN, MJ_OPTI_BEAM, MJ_WEITERE_ZULASSUNGEN, type MjListe } from '@/lib/mj-katalog';
+import { alleMjArtikel, sucheMjArtikel, MJ_LISTEN, MJ_OPTI_BEAM, MJ_OPTI_BOARD, MJ_WEITERE_ZULASSUNGEN, type MjListe } from '@/lib/mj-katalog';
 
 // ============================================================
 // SCAFFOLD OS – MJ-Katalog (Nachschlagewerk, nur lesen)
-// Artikel aus den MJ-Gerüst-Preislisten OPTIMA / OPTIMA TOP / OPTIMA metric / UNI-CONNECT / COMBI / COMBI metric+TOP / UNI 70/100 / UNI TOP 65.
+// Artikel aus den MJ-Gerüst-Preislisten OPTIMA / OPTIMA TOP / OPTIMA metric / UNI-CONNECT / COMBI / COMBI metric+TOP / UNI 70/100 / UNI TOP 65 / Wand und Dach / Paletten / Zubehör / ZIPKO / OPTI-RACK.
 // Verändert keine Lagerbestände und keine Preise.
 // ============================================================
 
@@ -37,6 +37,7 @@ export default function MjKatalogPage() {
           <div key={l.key} className="rounded-xl border border-black/10 bg-white p-3 text-xs space-y-0.5">
             <p className="text-sm font-semibold text-[#1d1d1f]">{l.name}</p>
             <p>Preisliste {l.preislisteVersion}, Stand {l.preislisteStand}</p>
+            {l.zulassungen.length === 0 ? <p className="text-[#86868b]">Keine Zulassung hinterlegt</p> : null}
             {l.zulassungen.map((z) => (
               <p key={z.nummer}>Zulassung <b>{z.nummer}</b>{l.zulassungen.length > 1 ? ` (${z.gegenstand.replace('MJ UNI-CONNECT ', '')})` : ''}, Bescheid {z.bescheidVom}, gültig bis <b>{z.gueltigBis}</b></p>
             ))}
@@ -49,6 +50,11 @@ export default function MjKatalogPage() {
         {MJ_WEITERE_ZULASSUNGEN.map((z) => (
           <p key={z.nummer}><b>{z.nummer}</b> – {z.gegenstand}, Bescheid {z.bescheidVom}, gültig bis <b>{z.gueltigBis}</b></p>
         ))}
+      </div>
+
+      <div className="rounded-xl border border-black/10 bg-white p-3 text-xs space-y-1">
+        <p className="text-sm font-semibold text-[#1d1d1f]">{MJ_OPTI_BOARD.name} (Sicherheitseinhausung)</p>
+        <p>{MJ_OPTI_BOARD.hinweis}</p>
       </div>
 
       <div className="rounded-xl border border-black/10 bg-white p-3 text-xs space-y-1">
