@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
-import { requireAuth, unauthorizedResponse, serverErrorResponse } from '@/lib/auth';
+import { serverErrorResponse, pruefeRolle } from '@/lib/auth';
+import { ROLLEN } from '@/lib/rollen';
 import { validiere, materialZuordnungSchema } from '@/lib/validation';
 import { bucheAusZentrallager } from '@/lib/inventory/buchung';
 
@@ -8,7 +9,8 @@ import { bucheAusZentrallager } from '@/lib/inventory/buchung';
 // Nutzt die zentrale Buchungsfunktion (lib/inventory/buchung.ts) –
 // gleiche Logik wie /api/transport-orders und lib/angebot-annahme.ts.
 export async function POST(req: Request) {
-  if (!(await requireAuth())) return unauthorizedResponse();
+  const rollenPruefung = await pruefeRolle(ROLLEN.LAGER);
+  if (!rollenPruefung.ok) return rollenPruefung.response;
   try {
     const parsed = validiere(materialZuordnungSchema, await req.json());
     if (!parsed.ok) return parsed.response;
