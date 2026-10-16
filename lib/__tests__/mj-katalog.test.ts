@@ -44,13 +44,18 @@ describe('MJ-Katalog', () => {
     expect(mjArtikelNachNr('008156')[0].attribute['Gewicht (kg)']).toBe(1.1);
     expect(MJ_LISTEN.combi.zulassungen[0].nummer).toBe('Z-8.22-921');
     expect(MJ_LISTEN['combi-metric-top'].zulassungen[0].gueltigBis).toBe('03.01.2030');
-    expect(MJ_WEITERE_ZULASSUNGEN.map((z) => z.nummer)).toEqual(['Z-8.22-926', 'Z-8.1-902', 'Z-8.22-960']);
+    expect(MJ_WEITERE_ZULASSUNGEN.map((z) => z.nummer)).toEqual(['Z-8.22-926', 'Z-8.22-960']);
   });
   it('UNI 70/100: Zulassungen hinterlegt, Artikel vollständig eingelesen', () => {
     expect(MJ_LISTEN.uni.zulassungen.map((z) => z.nummer)).toEqual(['Z-8.1-184', 'Z-8.1-303', 'Z-8.1-871']);
     expect(MJ_LISTEN.uni.zulassungen[2].gueltigBis).toBe('08.05.2031');
     expect(alle.filter((a) => a.liste === 'uni').length).toBe(298);
     expect(mjArtikelNachNr('011437').find((a) => a.liste === 'uni')!.preis).toBe(133.4);
+  });
+  it('UNI TOP 65: Zulassung und Artikel', () => {
+    expect(MJ_LISTEN['uni-top'].zulassungen[0].nummer).toBe('Z-8.1-902');
+    expect(MJ_LISTEN['uni-top'].zulassungen[0].gueltigBis).toBe('18.08.2031');
+    expect(alle.filter((a) => a.liste === 'uni-top').length).toBe(264);
   });
   it('Suche findet nach Nummer und Name, alle Wörter müssen passen', () => {
     expect(sucheMjArtikel('013535').length).toBeGreaterThan(0);
