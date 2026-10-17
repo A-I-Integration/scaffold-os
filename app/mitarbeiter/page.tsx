@@ -33,6 +33,7 @@ const ROLES = [
   { value: 'bauleiter', label: 'Bauleiter – Aufmaß, Lager, Übersicht, Stempeln' },
   { value: 'disponent', label: 'Dispo – Mitarbeiter, Touren, Verwaltung' },
   { value: 'admin', label: 'CEO/Admin – alles' },
+  { value: 'statiker', label: 'Statiker (extern) – sieht nur freigegebene CAD-Projekte, ohne Preise' },
 ];
 
 function randomPassword(): string {
@@ -153,7 +154,7 @@ export default function MitarbeiterPage() {
           email: email.trim(),
           password,
           role,
-          employee_id: linkExisting || undefined,
+          employee_id: role === 'statiker' ? undefined : linkExisting || undefined,
         }),
       });
       const json = await res.json();
@@ -186,6 +187,7 @@ export default function MitarbeiterPage() {
         <section className="bg-white border border-black/5 rounded-2xl p-5 space-y-4">
           <h2 className="text-lg font-semibold">🔑 Neuen Zugang anlegen</h2>
 
+          {role !== 'statiker' && (
           <div>
             <label className="block text-sm text-[#86868b] mb-1">Bestehenden Mitarbeiter verknüpfen (optional)</label>
             <select value={linkExisting} onChange={e => setLinkExisting(e.target.value)} className={inputCls}>
@@ -195,8 +197,9 @@ export default function MitarbeiterPage() {
               ))}
             </select>
           </div>
+          )}
 
-          {!linkExisting && (
+          {(role === 'statiker' || !linkExisting) && (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm text-[#86868b] mb-1">Vorname *</label>
@@ -231,6 +234,9 @@ export default function MitarbeiterPage() {
             <select value={role} onChange={e => setRole(e.target.value)} className={inputCls}>
               {ROLES.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
             </select>
+            {role === 'statiker' && (
+              <p className="text-xs text-[#86868b] mt-1">Externer Zugang für Ingenieurbüros: kein Mitarbeiter-Datensatz, sieht nur Projekte, die du ihm freigibst (Kunden → Rechnungen → „Statiker freigeben“).</p>
+            )}
           </div>
 
           <button onClick={submit} disabled={saving}

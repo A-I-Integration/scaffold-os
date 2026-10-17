@@ -92,6 +92,7 @@ function LoginForm() {
       if (role === 'admin' || role === 'disponent') target = '/dashboard'
       else if (role === 'bauleiter') target = '/aufmass/schritt1'
       else if (role === 'lager') target = '/lager'
+      else if (role === 'statiker') target = '/statiker'
     }
     router.push(target)
     router.refresh()

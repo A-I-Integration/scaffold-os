@@ -37,6 +37,7 @@ import ZwischenaufmassBlock from '@/components/ZwischenaufmassBlock'
 import SchlussrechnungDialog from '@/components/SchlussrechnungDialog'
 import { lokalesDatumIso, datumPlusTage } from '@/lib/datum'
 import AnsichtLinkBox from '@/components/AnsichtLinkBox'
+import StatikerFreigabeBox from '@/components/StatikerFreigabeBox'
 
 interface Kunde {
   id: string
@@ -1403,6 +1404,7 @@ export default function KundenDetailPage() {
                   )}
 
                   {project.data?.kiResult?.building && <AnsichtLinkBox projectId={project.id} />}
+                  {project.data?.kiResult?.building && <StatikerFreigabeBox projectId={project.id} />}
 
                   <div className="px-5 py-3">
                     {projInvoices.length === 0 ? (

@@ -24,7 +24,7 @@ const adminHeaders = {
 };
 
 const ALLOWED_CALLERS = ['admin', 'disponent'];
-const VALID_ROLES = ['admin', 'disponent', 'bauleiter', 'mitarbeiter', 'lager'];
+const VALID_ROLES = ['admin', 'disponent', 'bauleiter', 'mitarbeiter', 'lager', 'statiker'];
 
 // Prüft, ob der Aufrufer admin/disponent ist. Gibt null zurück wenn ok, sonst Response.
 async function checkCaller(): Promise<NextResponse | null> {
@@ -68,7 +68,11 @@ export async function POST(req: NextRequest) {
 
   try {
     const body = await req.json();
-    const { first_name, last_name, email, password, role, employee_id } = body;
+    const { first_name, last_name, email, password, role } = body;
+    // Statiker sind externe Ingenieurbüros: nie mit einem Mitarbeiter verknüpft und
+    // ohne Mitarbeiter-Datensatz (kein Stempeln, keine Touren, keine Löhne).
+    const istStatikerLogin = role === 'statiker';
+    const employee_id = istStatikerLogin ? undefined : body.employee_id;
 
     // ─── Eingaben prüfen ───
     if (!email || !password || !role) {
@@ -129,7 +133,9 @@ export async function POST(req: NextRequest) {
     const authRes = await fetch(`${url}/auth/v1/admin/users`, {
       method: 'POST',
       headers: adminHeaders,
-      body: JSON.stringify({ email, password, email_confirm: true }),
+      // app_metadata.statiker kennzeichnet den Login für die Sperren in proxy.ts und
+      // lässt sich nur hier (Service-Schlüssel) setzen, nie durch den Nutzer selbst.
+      body: JSON.stringify({ email, password, email_confirm: true, ...(istStatikerLogin ? { app_metadata: { statiker: true } } : {}) }),
     });
     const authJson = await authRes.json();
     if (!authRes.ok) {
@@ -161,9 +167,11 @@ export async function POST(req: NextRequest) {
       }, { status: 500 });
     }
 
-    // ─── 3) Mitarbeiter verknüpfen ODER neu anlegen ───
+    // ─── 3) Mitarbeiter verknüpfen ODER neu anlegen (nicht bei Statikern) ───
     let employeeResult: any = null;
-    if (employee_id) {
+    if (istStatikerLogin) {
+      // bewusst nichts anlegen
+    } else if (employee_id) {
       const patchRes = await fetch(`${url}/rest/v1/employees?id=eq.${employee_id}`, {
         method: 'PATCH',
         headers: { ...adminHeaders, Prefer: 'return=representation' },

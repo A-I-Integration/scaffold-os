@@ -1,5 +1,6 @@
 import { createServerClient, type CookieOptions } from '@supabase/ssr';
 import { NextResponse, type NextRequest } from 'next/server';
+import { istStatiker, statikerEntscheidung, STATIKER_STARTSEITE } from '@/lib/statiker';
 
 // ============================================================
 // SCAFFOLD OS – Proxy (vormals Middleware)
@@ -45,6 +46,8 @@ const ROLE_ACCESS: Record<string, string[]> = {
   '/rechnungen':       ['admin', 'disponent'],
   '/zahlungsabgleich': ['admin', 'disponent'],
   '/mietabrechnung':   ['admin', 'disponent'],
+  // Statiker (extern): nur die eigene Startseite. Alles andere sperrt der Statiker-Block unten.
+  '/statiker':         ['statiker'],
 };
 
 // Wohin gehört eine Rolle? (Startbereich + Ziel bei „kein Zugriff")
@@ -54,6 +57,7 @@ function homeFor(role: string): string {
   if (role === 'admin' || role === 'disponent') return '/dashboard';
   if (role === 'bauleiter') return '/aufmass/schritt1';
   if (role === 'lager') return '/lager';
+  if (role === 'statiker') return STATIKER_STARTSEITE;
   return '/meine-touren';
 }
 
@@ -92,8 +96,26 @@ export async function proxy(request: NextRequest) {
     return NextResponse.redirect(new URL('/login', request.url));
   }
 
+  // ─── Statiker (extern): Standard = gesperrt ───
+  // Erkannt am Flag app_metadata.statiker (nur per Service-Schlüssel setzbar).
+  // Das Flag kommt mit dem Login-Objekt – keine zusätzliche Datenbank-Abfrage.
+  // Erlaubt sind nur die Pfade aus lib/statiker.ts; jede andere Seite wird zur
+  // Startseite umgeleitet, jede andere API-Route bekommt 403.
+  const istExtern = istStatiker(user);
+  if (user && istExtern) {
+    const entscheidung = statikerEntscheidung(path);
+    if (entscheidung === 'api-sperre') {
+      return NextResponse.json({ success: false, error: 'Keine Berechtigung.' }, { status: 403 });
+    }
+    if (entscheidung === 'umleiten' || isAuthPath) {
+      // Auch „schon eingeloggt, aber auf /login“ → direkt zur Statiker-Startseite
+      return NextResponse.redirect(new URL(STATIKER_STARTSEITE, request.url));
+    }
+    // erlaubt → weiter (ohne Profil-Abfrage, die Rollen-Sperre unten gilt nicht für Statiker)
+  }
+
   // Eingeloggt → Rolle holen (nur wenn nötig)
-  if (user && (isProtected || isAuthPath)) {
+  if (user && !istExtern && (isProtected || isAuthPath)) {
     const { data: profile } = await supabase
       .from('profiles')
       .select('role')
