@@ -12,14 +12,7 @@
 // ============================================================
 
 import { useState } from 'react'
-import type { CADLayerState, SideVisibility, LevelVisibility } from '@/types/cad-layers'
-
-const SIDE_LABELS: Record<keyof SideVisibility, string> = {
-  front: 'Vorderseite',
-  back: 'Rückseite',
-  left: 'Links',
-  right: 'Rechts',
-}
+import { seitenBezeichnung, type CADLayerState, type SideVisibility } from '@/types/cad-layers'
 
 interface Props {
   layerState: CADLayerState
@@ -93,7 +86,7 @@ export default function LayersPanel({ layerState, onToggleSide, onToggleLevel, o
                     className='accent-[#e8590c] w-3.5 h-3.5'
                   />
                   <span className={`text-xs transition-colors ${layerState.sides[side] ? 'text-[#1d1d1f]' : 'text-[#86868b] line-through'}`}>
-                    {SIDE_LABELS[side]}
+                    {seitenBezeichnung(side)}
                   </span>
                 </label>
               ))}

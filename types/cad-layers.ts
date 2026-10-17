@@ -14,12 +14,21 @@
 // Layer-Namen.
 // ============================================================
 
-/** Sichtbarkeit je Gebäudeseite */
-export interface SideVisibility {
-  front: boolean
-  back: boolean
-  left: boolean
-  right: boolean
+/**
+ * Sichtbarkeit je Gebäudeseite. Beim Rechteck-Gebäude die Schlüssel front/back/left/right,
+ * beim Umriss-Gebäude je Kante ein Schlüssel "k0", "k1", … (siehe kantenSchluessel).
+ */
+export type SideVisibility = Record<string, boolean>
+
+/** Schlüssel einer Umriss-Kante in SideVisibility und in der 3D-Filterung */
+export const kantenSchluessel = (kante: number): string => `k${kante}`
+
+/** Anzeigename einer Seite: "Vorderseite" … bzw. "Kante 1" für Umriss-Kanten */
+export function seitenBezeichnung(schluessel: string): string {
+  const feste: Record<string, string> = { front: 'Vorderseite', back: 'Rückseite', left: 'Links', right: 'Rechts' }
+  if (feste[schluessel]) return feste[schluessel]
+  const m = /^k(\d+)$/.exec(schluessel)
+  return m ? `Kante ${Number(m[1]) + 1}` : schluessel
 }
 
 /** Sichtbarkeit je Gerüstlage (Index → sichtbar) */
@@ -34,13 +43,18 @@ export interface CADLayerState {
 /** Erzeugt den Initialzustand: alle Seiten und Lagen sichtbar */
 export function createInitialLayerState(
   activeSides: string[],
-  levelCount: number
+  levelCount: number,
+  /** Umriss-Gebäude: Anzahl der Kanten – dann gibt es je Kante einen Schalter statt der vier Seiten */
+  kantenAnzahl = 0
 ): CADLayerState {
-  const sides: SideVisibility = {
-    front: activeSides.includes('front'),
-    back: activeSides.includes('back'),
-    left: activeSides.includes('left'),
-    right: activeSides.includes('right'),
+  const sides: SideVisibility = {}
+  if (kantenAnzahl > 0) {
+    for (let i = 0; i < kantenAnzahl; i++) sides[kantenSchluessel(i)] = true
+  } else {
+    sides.front = activeSides.includes('front')
+    sides.back = activeSides.includes('back')
+    sides.left = activeSides.includes('left')
+    sides.right = activeSides.includes('right')
   }
   const levels: LevelVisibility = {}
   for (let i = 0; i < levelCount; i++) {
