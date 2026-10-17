@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { generateCADModel, type BuildingParams } from '../cad-engine'
-import { rechteckUmriss, lFormUmriss, pruefeUmriss, normalisiereUmriss, umrissKanten, umrissEcken, geruestEckpunkt, umrissFlaecheSigned } from '../cad-umriss'
+import { rechteckUmriss, lFormUmriss, pruefeUmriss, normalisiereUmriss, umrissKanten, umrissEcken, geruestEckpunkt, umrissFlaecheSigned, zentriereUmriss } from '../cad-umriss'
 
 const basis: BuildingParams = {
   lengthM: 10, widthM: 8, heightM: 8, eavesHeightM: 8, roofHeightM: 0, roofForm: 'flachdach',
@@ -122,9 +122,19 @@ describe('Gerüst folgt dem Umriss', () => {
 })
 
 describe('Umriss-Modus: Fassadenmerkmale', () => {
-  it('Fenster/Türen/Balkone werden im Umriss-Modus nicht auf eine Kiste gesetzt', async () => {
+  it('Fenster und Türen sitzen im Umriss-Modus an den Kanten', async () => {
     const { generateBuildingFeatures } = await import('../cad-engine')
-    expect(generateBuildingFeatures({ ...basis, windowCount: 6, doorCount: 1, umriss: rechteckUmriss(10, 8) })).toEqual([])
+    const mf = generateBuildingFeatures({ ...basis, windowCount: 6, doorCount: 1, umriss: rechteckUmriss(10, 8) })
+    expect(mf.filter((f) => f.type === 'door')).toHaveLength(1)
+    expect(mf.filter((f) => f.type === 'window').length).toBeGreaterThan(0)
+    expect(mf.every((f) => f.umriss)).toBe(true)
+    // jedes Merkmal liegt auf seiner Wandlinie (Abstand zur Kante ~ 0)
+    const kn = umrissKanten(zentriereUmriss(normalisiereUmriss(rechteckUmriss(10, 8))))
+    for (const f of mf) {
+      const k = kn[f.umriss!.kante]
+      const d = (f.umriss!.weltX - k.von.x) * k.n[0] + (f.umriss!.weltZ - k.von.z) * k.n[1]
+      expect(Math.abs(d)).toBeLessThan(1e-6)
+    }
     expect(generateBuildingFeatures({ ...basis, windowCount: 6, doorCount: 1 }).length).toBeGreaterThan(0)
   })
 })

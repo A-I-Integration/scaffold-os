@@ -804,6 +804,47 @@ function UmrissGebaeude({ punkte, heightM }: { punkte: { x: number; z: number }[
   )
 }
 
+function FassadenMerkmal({ f, pos, rot }: { f: BuildingFeature3D; pos: [number, number, number]; rot: [number, number, number] }) {
+  if (f.type === 'balcony') {
+    return (
+      <group key={f.id} position={pos} rotation={rot}>
+        {/* Balkonplatte */}
+        <mesh position={[0, -f.heightM / 2 + 0.08, 0]} castShadow>
+          <boxGeometry args={[f.widthM, 0.16, f.depthM]} />
+          <meshStandardMaterial color={f.modus === 'ausgespart' ? '#d6a5a5' : '#b8b0a4'} roughness={0.9} />
+        </mesh>
+        {/* Brüstung */}
+        <mesh position={[0, 0.05, f.depthM / 2 - 0.03]}>
+          <boxGeometry args={[f.widthM, f.heightM - 0.2, 0.06]} />
+          <meshStandardMaterial color="#7a8290" roughness={0.6} metalness={0.3} />
+        </mesh>
+      </group>
+    )
+  }
+  const istTuer = f.type === 'door'
+  return (
+    <group key={f.id} position={pos} rotation={rot}>
+      {/* Laibung (dunkel, leicht eingesetzt) */}
+      <mesh>
+        <boxGeometry args={[f.widthM, f.heightM, 0.06]} />
+        <meshStandardMaterial color={istTuer ? '#4a3a2c' : '#2b3a4a'} roughness={istTuer ? 0.7 : 0.2} metalness={istTuer ? 0.05 : 0.5} />
+      </mesh>
+      {/* Rahmen */}
+      <mesh position={[0, 0, 0.035]}>
+        <boxGeometry args={[f.widthM + 0.08, f.heightM + 0.08, 0.02]} />
+        <meshStandardMaterial color="#f4f1ea" roughness={0.6} />
+      </mesh>
+      {/* Fensterkreuz */}
+      {!istTuer && (
+        <>
+          <mesh position={[0, 0, 0.04]}><boxGeometry args={[0.03, f.heightM, 0.02]} /><meshStandardMaterial color="#f4f1ea" /></mesh>
+          <mesh position={[0, 0, 0.04]}><boxGeometry args={[f.widthM, 0.03, 0.02]} /><meshStandardMaterial color="#f4f1ea" /></mesh>
+        </>
+      )}
+    </group>
+  )
+}
+
 function Building3D({
   building,
   features,
@@ -819,9 +860,20 @@ function Building3D({
   const roofH = roofHeightM || 0
 
   // Umriss-Modus: Gebäude als Vieleck-Körper (Wände nach oben gezogen) in den
-  // Szenen-Koordinaten des Umrisses. Fenster/Türen/Balkone sind hier noch aus.
+  // Szenen-Koordinaten des Umrisses. Fenster und Türen sitzen an den Kanten.
   if (building.umriss && building.umriss.length >= 3) {
-    return <UmrissGebaeude punkte={building.umriss} heightM={heightM} />
+    return (
+      <group>
+        <UmrissGebaeude punkte={building.umriss} heightM={heightM} />
+        {features.filter((f) => f.umriss).map((f) => {
+          const u = f.umriss!
+          const y = f.bottomY + f.heightM / 2
+          const out = f.type === 'balcony' ? f.depthM / 2 : 0.02
+          const pos: [number, number, number] = [u.weltX + Math.sin(u.yaw) * out, y, u.weltZ + Math.cos(u.yaw) * out]
+          return <FassadenMerkmal key={f.id} f={f} pos={pos} rot={[0, u.yaw, 0]} />
+        })}
+      </group>
+    )
   }
 
   // NEU: mehrteiliges Gebäude (unterschiedliche Höhen/Ecken) – wenn 2+
@@ -881,44 +933,7 @@ function Building3D({
       {/* Fenster / Türen / Balkone */}
       {features.map((f) => {
         const { pos, rot } = featureTransform(f)
-        if (f.type === 'balcony') {
-          return (
-            <group key={f.id} position={pos} rotation={rot}>
-              {/* Balkonplatte */}
-              <mesh position={[0, -f.heightM / 2 + 0.08, 0]} castShadow>
-                <boxGeometry args={[f.widthM, 0.16, f.depthM]} />
-                <meshStandardMaterial color={f.modus === 'ausgespart' ? '#d6a5a5' : '#b8b0a4'} roughness={0.9} />
-              </mesh>
-              {/* Brüstung */}
-              <mesh position={[0, 0.05, f.depthM / 2 - 0.03]}>
-                <boxGeometry args={[f.widthM, f.heightM - 0.2, 0.06]} />
-                <meshStandardMaterial color="#7a8290" roughness={0.6} metalness={0.3} />
-              </mesh>
-            </group>
-          )
-        }
-        const istTuer = f.type === 'door'
-        return (
-          <group key={f.id} position={pos} rotation={rot}>
-            {/* Laibung (dunkel, leicht eingesetzt) */}
-            <mesh>
-              <boxGeometry args={[f.widthM, f.heightM, 0.06]} />
-              <meshStandardMaterial color={istTuer ? '#4a3a2c' : '#2b3a4a'} roughness={istTuer ? 0.7 : 0.2} metalness={istTuer ? 0.05 : 0.5} />
-            </mesh>
-            {/* Rahmen */}
-            <mesh position={[0, 0, 0.035]}>
-              <boxGeometry args={[f.widthM + 0.08, f.heightM + 0.08, 0.02]} />
-              <meshStandardMaterial color="#f4f1ea" roughness={0.6} />
-            </mesh>
-            {/* Fensterkreuz */}
-            {!istTuer && (
-              <>
-                <mesh position={[0, 0, 0.04]}><boxGeometry args={[0.03, f.heightM, 0.02]} /><meshStandardMaterial color="#f4f1ea" /></mesh>
-                <mesh position={[0, 0, 0.04]}><boxGeometry args={[f.widthM, 0.03, 0.02]} /><meshStandardMaterial color="#f4f1ea" /></mesh>
-              </>
-            )}
-          </group>
-        )
+        return <FassadenMerkmal key={f.id} f={f} pos={pos} rot={rot} />
       })}
 
       {/* Dach */}
