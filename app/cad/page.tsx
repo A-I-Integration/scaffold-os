@@ -718,7 +718,7 @@ export default function CADPage() {
       <div className='flex-1 flex flex-col md:flex-row md:overflow-hidden'>
         <div className='w-full md:w-72 md:shrink-0 md:overflow-y-auto'>
           <BuildingForm building={building} systemId={systemId} onChange={(b) => { setAutoGenerate(true); setBuilding(b); }} onSystemChange={(s) => { setAutoGenerate(true); setSystemId(s); }} onGenerate={() => { setAutoGenerate(true); generate(); }} warnings={allWarnings} />
-          <StatikDatenPanel daten={statikDaten} onChange={setStatikDaten} />
+          <StatikDatenPanel daten={statikDaten} onChange={setStatikDaten} model={modelWithManual} />
         </div>
         <div className='flex-1 flex flex-col min-w-0'>
           <div className='flex flex-wrap gap-2 items-center justify-between px-4 py-2 bg-white/50 border-b border-black/5'>

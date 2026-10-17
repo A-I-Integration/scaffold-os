@@ -23,6 +23,7 @@ const Scaffold3D = dynamic(() => import('@/components/cad/Scaffold3D'), {
 })
 
 import type { StatikDaten } from '@/lib/statik-daten'
+import { statikPruefpunkte } from '@/lib/statik-pruefpunkte'
 
 export type AnsichtDaten = {
   projektName: string
@@ -129,11 +130,20 @@ export default function AnsichtViewer({ daten, kopfAktion }: { daten: AnsichtDat
                   ['Untergrund', daten.statik.untergrund],
                   ['Aufbau', daten.statik.aufbau ? new Date(daten.statik.aufbau).toLocaleDateString('de-DE') : undefined],
                   ['Abbau', daten.statik.abbau ? new Date(daten.statik.abbau).toLocaleDateString('de-DE') : undefined],
+                  ['Windzone', daten.statik.windzone],
+                  ['Verankerungsgrund', daten.statik.verankerungsgrund],
+                  ['Bekleidung', daten.statik.bekleidung === 'keine' ? 'Unbekleidet' : daten.statik.bekleidung === 'netz' ? 'Netze' : daten.statik.bekleidung === 'plane' ? 'Planen / Einhausung' : undefined],
                   ['Nutzung', daten.statik.nutzung === 'oeffentlich' ? 'Öffentlich zugänglich' : daten.statik.nutzung === 'privat' ? 'Privat' : undefined],
                 ] as const).filter(([, v]) => v).map(([k, v]) => (
                   <div key={k} className='flex justify-between gap-3'><dt className='text-[#86868b]'>{k}</dt><dd className='text-right font-medium'>{v}</dd></div>
                 ))}
               </dl>
+              {(() => {
+                const punkte = statikPruefpunkte(modell, daten.statik)
+                return punkte.length > 0 ? (
+                  <ul className='mt-2 list-disc pl-4 space-y-1 text-xs text-[#424245]'>{punkte.map((x) => <li key={x.id}><b>{x.thema}:</b> {x.text}</li>)}</ul>
+                ) : null
+              })()}
               {daten.statik.notiz && <p className='mt-2 text-xs text-[#424245] whitespace-pre-wrap'>{daten.statik.notiz}</p>}
               <p className='mt-2 text-[10px] text-[#86868b]'>Angaben des Planers – nicht von SCAFFOLD OS berechnet.</p>
             </div>
