@@ -117,6 +117,15 @@ export default function LvDialog({ model, materials, aufbauStunden, abbauStunden
                 {Object.entries(LASTKLASSEN).map(([k, v]) => <option key={k} value={k}>Lastklasse {k} ({v.toLocaleString('de-DE')} kN/m²)</option>)}
               </select></div>
 
+            <div className='text-[11px] font-semibold uppercase text-[#86868b] pt-1'>Abrechnung (ATV DIN 18451)</div>
+            <div className='grid grid-cols-2 gap-2'>
+              <div><label className={label}>Höhenzuschlag (m)</label>{num('hoehenZuschlagM')}</div>
+              <div><label className={label}>Öffnungen abziehen (m²)</label>{num('oeffnungenAbzugM2')}</div>
+              <div><label className={label}>Giebel Dachgauben (m²)</label>{num('giebelflaecheM2')}</div>
+              <div><label className={label}>Höhe Fanggerüst (m)</label>{num('fanggeruestHoeheM')}</div>
+            </div>
+            <p className='text-[10px] text-[#86868b]'>Die Regeln der ATV sind nicht voreingestellt. Trage ein, was in deinem Vertrag gilt; 0 = nichts anwenden.</p>
+
             <div className='text-[11px] font-semibold uppercase text-[#86868b] pt-1'>Preisfaktoren</div>
             <div className='grid grid-cols-2 gap-2'>
               <div><label className={label}>Stundensatz Fach (€)</label>{num('stundensatzFach')}</div>

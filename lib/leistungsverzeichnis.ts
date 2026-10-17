@@ -43,6 +43,15 @@ export interface LvEingaben {
   /** Zuschlag (Wagnis, Gewinn, Transport, Verwaltung) auf die Kosten in % */
   zuschlagProzent: number
   mwstProzent: number
+  /** Abrechnungsregeln (vom Nutzer einzustellen, keine Normwerte voreingestellt): */
+  /** Höhenzuschlag auf die Gerüstfläche in m (z. B. Überstand über Traufe/Attika, wie im Vertrag/ATV vereinbart) */
+  hoehenZuschlagM: number
+  /** Abzug für Öffnungen in m² (Summe der Öffnungen, die nach Vertrag/ATV abzuziehen sind) */
+  oeffnungenAbzugM2: number
+  /** Giebelflächen der Dachgauben in m² (Zulage, nicht im CAD) */
+  giebelflaecheM2: number
+  /** Höhe des Fanggerüsts in m (optional, 0 = nicht angeben) */
+  fanggeruestHoeheM: number
 }
 
 export const LV_STANDARD_EINGABEN: LvEingaben = {
@@ -60,6 +69,10 @@ export const LV_STANDARD_EINGABEN: LvEingaben = {
   mietsatzProzentJeWoche: 0,
   zuschlagProzent: 0,
   mwstProzent: 19,
+  hoehenZuschlagM: 0,
+  oeffnungenAbzugM2: 0,
+  giebelflaecheM2: 0,
+  fanggeruestHoeheM: 0,
 }
 
 export interface LvPosition {
@@ -129,7 +142,11 @@ export function erzeugeLeistungsverzeichnis(quelle: LvQuelle, e: LvEingaben): Le
   const faktor = 1 + Math.max(0, e.zuschlagProzent) / 100
 
   // Mengen aus dem CAD
-  const flaecheM2 = r2(model.totalAreaM2)
+  const zuschlagFlaecheM2 = (e.hoehenZuschlagM || 0) * (model.totalLengthM || 0)
+  const flaecheM2 = r2(Math.max(0, model.totalAreaM2 + zuschlagFlaecheM2 - (e.oeffnungenAbzugM2 || 0)))
+  const giebelM2 = r2(Math.max(0, e.giebelflaecheM2 || 0))
+  const dachRoh = comps.filter((c) => c.type === 'protection_roof')
+  const einbauhoeheM = dachRoh.length ? r2(Math.min(...dachRoh.map((c) => c.position[1]))) : 0
   const konsolenM = r2(comps.filter((c) => c.type === 'console').reduce((s, c) => s + Math.abs(c.scale[0]), 0))
   const schutzdachM = r2(comps.filter((c) => c.type === 'protection_roof').reduce((s, c) => s + Math.abs(c.scale[0]), 0))
   const treppen = comps.filter((c) => c.type === 'stair').length
@@ -169,8 +186,8 @@ export function erzeugeLeistungsverzeichnis(quelle: LvQuelle, e: LvEingaben): Le
   ], flaecheM2, 'm²', epGrund('geruest', flaecheM2)))
   if (zusatzWochen > 0) {
     t1.push(pos('1.02', 'Gebrauchsüberlassung über die Grundstandzeit', [
-      `Gebrauchsüberlassung des vorbeschriebenen Gerüstes über ${GRUNDSTANDZEIT_WOCHEN} Wochen (Grundstandzeit) hinaus. Abrechnung nach Quadratmeter / Woche.`,
-    ], r2(flaecheM2 * zusatzWochen), 'm²/Wo', epWoche('geruest', flaecheM2)))
+      `Gebrauchsüberlassung des vorbeschriebenen Gerüstes über ${GRUNDSTANDZEIT_WOCHEN} Wochen (Grundstandzeit) hinaus. Abrechnung nach Quadratmeter / Woche.${giebelM2 > 0 ? ' Diese Position umfasst auch die Giebelflächen der Dachgauben (Pos. 1.09).' : ''}`,
+    ], r2((flaecheM2 + giebelM2) * zusatzWochen), 'm²/Wo', epWoche('geruest', flaecheM2)))
   }
   if (konsolenM > 0) {
     t1.push(pos('1.03', 'Konsolen', [
@@ -183,6 +200,8 @@ export function erzeugeLeistungsverzeichnis(quelle: LvQuelle, e: LvEingaben): Le
   if (schutzdachM > 0) {
     t1.push(pos('1.05', 'Schutzdach', [
       'Schutzdach am vorgenannten Gerüst herstellen und für die Grundstandzeit (' + GRUNDSTANDZEIT_WOCHEN + ' Wochen) vorhalten.',
+      ...(einbauhoeheM > 0 ? [`Einbauhöhe ca. ${de(einbauhoeheM, 2)} m über dem Gelände (aus dem CAD-Modell).`] : []),
+      ...(e.fanggeruestHoeheM > 0 ? [`Höhe Fanggerüst: ${de(e.fanggeruestHoeheM, 2)} m.`] : []),
     ], schutzdachM, 'lfdm', epGrund('schutzdach', schutzdachM)))
     if (zusatzWochen > 0) t1.push(pos('1.06', 'Gebrauchsüberlassung des Schutzdaches', [
       'Gebrauchsüberlassung des Schutzdaches über die Grundstandzeit hinaus. Abrechnung nach lfdm / Woche.',
@@ -196,6 +215,12 @@ export function erzeugeLeistungsverzeichnis(quelle: LvQuelle, e: LvEingaben): Le
     if (zusatzWochen > 0) t1.push(pos('1.08', 'Gebrauchsüberlassung des Treppenturms', [
       'Gebrauchsüberlassung für den Treppenturm über die Grundstandzeit hinaus.',
     ], r2(treppen * zusatzWochen), 'Stk/Wo', epWoche('treppe', treppen)))
+  }
+
+  if (giebelM2 > 0) {
+    t1.push(pos('1.09', 'Einrüsten der Giebelflächen der Dachgauben', [
+      'Einrüsten der Giebelflächen der Dachgauben auf der Dachfläche, als Zulage zu Pos. 1.01.',
+    ], giebelM2, 'm²', epGrund('geruest', flaecheM2)))
   }
 
   const t2: LvPosition[] = [
@@ -232,7 +257,8 @@ export function erzeugeLeistungsverzeichnis(quelle: LvQuelle, e: LvEingaben): Le
     mwst,
     summeBrutto: cent(summeNetto + mwst),
     annahmen: [
-      'Mengen aus dem CAD-Modell. Gerüstfläche = Länge × Höhe der eingerüsteten Fassade; Abrechnungsregeln der ATV DIN 18451 (z. B. Mindestlänge, Abzüge) sind nicht eingerechnet – bitte mit dem Vertrag abgleichen.',
+      `Mengen aus dem CAD-Modell. Gerüstfläche = Länge × Höhe der eingerüsteten Fassade${e.hoehenZuschlagM > 0 ? ` + Höhenzuschlag ${de(e.hoehenZuschlagM, 2)} m` : ''}${e.oeffnungenAbzugM2 > 0 ? ` − Öffnungen ${de(e.oeffnungenAbzugM2, 2)} m²` : ''}. Höhenzuschlag und Öffnungsabzug sind Eingaben nach deinen vertraglichen Regeln (ATV DIN 18451); der Normtext ist nicht hinterlegt und nicht geprüft.`,
+      ...(giebelM2 > 0 ? ['Giebelflächen der Dachgauben sind eine Eingabe (nicht im CAD). Der EP der Zulage (Pos. 1.09) entspricht dem EP von Pos. 1.01 – Annahme.'] : []),
       `Einheitspreise abgeleitet aus dem Materialwert der Stückliste (${de(matGesamt, 2)} €), Aufbau-/Abbaustunden (${de(stundenAufAb, 0)} h, nach Materialwert auf die Positionen verteilt) und den eingegebenen Faktoren.`,
       `Grundposition = (Stunden × Stundensatz Facharbeiter + Materialwert × Mietsatz × ${GRUNDSTANDZEIT_WOCHEN} Wochen) × (1 + Zuschlag), geteilt durch die Menge. Vorhaltung je Woche = Materialwert × Mietsatz × (1 + Zuschlag), geteilt durch die Menge.`,
       `Gesamt-Standzeit ${de(e.gesamtStandzeitWochen, 0)} Wochen, davon ${GRUNDSTANDZEIT_WOCHEN} Wochen Grundstandzeit.`,

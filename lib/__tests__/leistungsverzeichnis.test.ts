@@ -95,4 +95,23 @@ describe('Leistungsverzeichnis', () => {
     expect(text).toMatch(/W06/)
     expect(LASTKLASSEN[4]).toBe(3)
   })
+
+  it('Abrechnungsregeln: Höhenzuschlag, Öffnungsabzug, Giebel-Zulage, Einbauhöhe', () => {
+    const q = quelle()
+    const basis = erzeugeLeistungsverzeichnis(q, mitPreisen)
+    const f0 = basis.titel[0].positionen[0].menge
+    expect(basis.titel[0].positionen.find((p) => p.nr === '1.09')).toBeUndefined()
+    const lv = erzeugeLeistungsverzeichnis(q, { ...mitPreisen, hoehenZuschlagM: 1, oeffnungenAbzugM2: 5, giebelflaecheM2: 25, fanggeruestHoeheM: 1.2 })
+    const p = lv.titel[0].positionen
+    expect(p[0].menge).toBeCloseTo(f0 + q.model.totalLengthM - 5, 1)
+    const giebel = p.find((x) => x.nr === '1.09')!
+    expect(giebel.menge).toBe(25)
+    expect(giebel.ep).toBe(p[0].ep)
+    // Vorhaltung umfasst die Giebelflächen
+    const vor0 = basis.titel[0].positionen.find((x) => x.nr === '1.02')!.menge
+    const vor1 = p.find((x) => x.nr === '1.02')!.menge
+    expect(vor1).toBeGreaterThan(vor0)
+    // Standard: nichts angewendet
+    expect(basis.titel[0].positionen[0].menge).toBeCloseTo(q.model.totalAreaM2, 1)
+  })
 })
