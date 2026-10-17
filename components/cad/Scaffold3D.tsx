@@ -767,6 +767,25 @@ function RoofMesh({ roofForm, laengeM, breiteM, roofH }: { roofForm: string; lae
   )
 }
 
+/** Gebäude mit Umriss: Vieleck-Grundfläche, nach oben gezogen (flaches Dach). */
+function UmrissGebaeude({ punkte, heightM }: { punkte: { x: number; z: number }[]; heightM: number }) {
+  const geometrie = useMemo(() => {
+    // Shape liegt in der x/y-Ebene; nach dem Drehen um -90° um x wird shape-y zu -z.
+    // Darum die z-Werte negiert eintragen, dann landen die Punkte bei (x, z).
+    const form = new THREE.Shape(punkte.map((p) => new THREE.Vector2(p.x, -p.z)))
+    const g = new THREE.ExtrudeGeometry(form, { depth: heightM, bevelEnabled: false })
+    g.rotateX(-Math.PI / 2)
+    return g
+  }, [punkte, heightM])
+  useEffect(() => () => geometrie.dispose(), [geometrie])
+  return (
+    <mesh geometry={geometrie} castShadow receiveShadow>
+      <Edges threshold={15} color="#8f8676" />
+      <meshStandardMaterial color="#e6dfd3" roughness={0.9} side={THREE.DoubleSide} />
+    </mesh>
+  )
+}
+
 function Building3D({
   building,
   features,
@@ -780,6 +799,12 @@ function Building3D({
   const { lengthM, heightM, widthM, roofForm, roofHeightM, sections } = building
   const w = widthM || 6
   const roofH = roofHeightM || 0
+
+  // Umriss-Modus: Gebäude als Vieleck-Körper (Wände nach oben gezogen) in den
+  // Szenen-Koordinaten des Umrisses. Fenster/Türen/Balkone sind hier noch aus.
+  if (building.umriss && building.umriss.length >= 3) {
+    return <UmrissGebaeude punkte={building.umriss} heightM={heightM} />
+  }
 
   // NEU: mehrteiliges Gebäude (unterschiedliche Höhen/Ecken) – wenn 2+
   // Abschnitte angegeben sind, wird die Form daraus aufgebaut statt aus

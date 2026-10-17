@@ -6,6 +6,7 @@
 
 import { GeruestSystem, findeSystem } from './geruest-systeme'
 import { MaterialItem } from '@/types/scaffold'
+import { type UmrissPunkt, pruefeUmriss, normalisiereUmriss, umrissKanten, umrissEcken, geruestEckpunkt, umrissBox, zentriereUmriss } from './cad-umriss'
 import { KONSOLE_BREITE_M, type CadBalkon } from '../balkon'
 
 export interface BuildingSection {
@@ -43,6 +44,10 @@ export interface BuildingParams {
   // statt der einzelnen lengthM/heightM oben. Dieselbe Grundidee wie die
   // "Abschnitte" im Aufmaß, hier zusätzlich mit optionalem Eckwinkel.
   sections?: BuildingSection[]
+  // NEU: Gebäude-Umriss als Vieleck (Eckpunkte x/z in m). Wenn gesetzt (3+ Punkte),
+  // folgt das Gerüst dem Umriss Kante für Kante; lengthM/widthM sind dann nur
+  // das umschließende Rechteck. Balkone/Fenster/Türen sind im Umriss-Modus noch aus.
+  umriss?: UmrissPunkt[]
   // NEU: Lastklasse nach DIN EN 12811-1 (1-6) – bisher nirgends erfasst,
   // aber nötig, um die Regelausführungs-Grenzen einer Zulassung zu prüfen.
   lastklasse?: number
@@ -117,6 +122,9 @@ export interface ScaffoldField {
   side: 'front' | 'back' | 'left' | 'right'
   levelIndex: number
   isCorner?: boolean
+  // Nur Umriss-Modus: Nummer der Gebäudekante und Drehwinkel des Feldes um die Hochachse.
+  kante?: number
+  yaw?: number
 }
 
 export interface ScaffoldLevel {
@@ -135,6 +143,8 @@ export interface ScaffoldAnchor {
   positionZ: number
   side: 'front' | 'back' | 'left' | 'right'
   type: string
+  // Nur Umriss-Modus: Drehung des Ankers um die Hochachse
+  yaw?: number
 }
 
 export interface ScaffoldComponent3D {
@@ -167,6 +177,19 @@ export interface CADModel {
   fieldCount: number
   levelCount: number
   warnings: CADWarning[]
+  // Nur Umriss-Modus: Gerüst-Eckpunkte (Schnitt der Innenlinien benachbarter Kanten)
+  umrissEcken?: UmrissGeruestEcke[]
+}
+
+export interface UmrissGeruestEcke {
+  /** Kante, an deren Ende die Ecke liegt (die nächste Kante beginnt hier) */
+  kante: number
+  x: number
+  z: number
+  /** Drehwinkel der Kante `kante` */
+  yaw: number
+  konvex: boolean
+  innenwinkelGrad: number
 }
 
 export interface CADWarning {
@@ -230,6 +253,8 @@ export function calculateLevels(
 type SeitenId = 'front' | 'back' | 'left' | 'right'
 interface SeitenRahmen {
   yaw: number
+  /** true = keine Verschiebung/Drehung nötig (Vorderseite) */
+  identitaet: boolean
   toLocal: (x: number, z: number) => [number, number]
   toWorld: (lx: number, lz: number) => [number, number]
 }
@@ -238,14 +263,35 @@ export function seitenRahmen(side: SeitenId, building: { lengthM: number; widthM
   const Wv = (building.widthM || 0) + 1
   switch (side) {
     case 'back':
-      return { yaw: Math.PI, toLocal: (x, z) => [-x, -z - Wv], toWorld: (lx, lz) => [-lx, -lz - Wv] }
+      return { yaw: Math.PI, identitaet: false, toLocal: (x, z) => [-x, -z - Wv], toWorld: (lx, lz) => [-lx, -lz - Wv] }
     case 'left':
-      return { yaw: -Math.PI / 2, toLocal: (x, z) => [z + Wv / 2, -x - Lv / 2], toWorld: (lx, lz) => [-(lz + Lv / 2), lx - Wv / 2] }
+      return { yaw: -Math.PI / 2, identitaet: false, toLocal: (x, z) => [z + Wv / 2, -x - Lv / 2], toWorld: (lx, lz) => [-(lz + Lv / 2), lx - Wv / 2] }
     case 'right':
-      return { yaw: Math.PI / 2, toLocal: (x, z) => [-(z + Wv / 2), x - Lv / 2], toWorld: (lx, lz) => [lz + Lv / 2, -lx - Wv / 2] }
+      return { yaw: Math.PI / 2, identitaet: false, toLocal: (x, z) => [-(z + Wv / 2), x - Lv / 2], toWorld: (lx, lz) => [lz + Lv / 2, -lx - Wv / 2] }
     default:
-      return { yaw: 0, toLocal: (x, z) => [x, z], toWorld: (lx, lz) => [lx, lz] }
+      return { yaw: 0, identitaet: true, toLocal: (x, z) => [x, z], toWorld: (lx, lz) => [lx, lz] }
   }
+}
+
+/**
+ * Rahmen mit frei gewähltem Ursprung (px, pz) und Drehwinkel yaw (Umriss-Modus).
+ * Lokal: x entlang der Kante, +z nach außen. Die Welt-Richtung von lokal-x ist
+ * (cos yaw, -sin yaw) und von lokal-z (sin yaw, cos yaw).
+ */
+export function rahmenAnPunkt(px: number, pz: number, yaw: number): SeitenRahmen {
+  const c = Math.cos(yaw), s = Math.sin(yaw)
+  return {
+    yaw,
+    identitaet: false,
+    toLocal: (x, z) => [(x - px) * c - (z - pz) * s, (x - px) * s + (z - pz) * c],
+    toWorld: (lx, lz) => [px + lx * c + lz * s, pz - lx * s + lz * c],
+  }
+}
+
+/** Rahmen eines Feldes: im Umriss-Modus um das Feld selbst, sonst nach Seite. */
+export function feldRahmen(field: { side: SeitenId; positionX: number; positionZ: number; yaw?: number; kante?: number }, building: { lengthM: number; widthM?: number }): SeitenRahmen {
+  if (field.kante !== undefined && field.yaw !== undefined) return rahmenAnPunkt(field.positionX, field.positionZ, field.yaw)
+  return seitenRahmen(field.side, building)
 }
 
 /** Dreht eine Euler-Rotation (XYZ) zusätzlich um die Hochachse (yaw). */
@@ -281,11 +327,16 @@ function eulerMitYaw(rot: [number, number, number], yaw: number): [number, numbe
 
 /** Lokales Bauteil (Vorne-System) ins Szenen-System der Seite übertragen. */
 function bauteilInWelt(c: ScaffoldComponent3D, rahmen: SeitenRahmen): void {
-  if (!rahmen.yaw) return
+  if (rahmen.identitaet) return
   const [wx, wz] = rahmen.toWorld(c.position[0], c.position[2])
   c.position = [wx, c.position[1], wz]
   c.rotation = eulerMitYaw(c.rotation, rahmen.yaw)
 }
+
+/** Treppe sitzt an der Vorderseite – im Umriss-Modus an der ersten Kante. */
+const istTreppenFeld = (f: ScaffoldField): boolean => f.side === 'front' && (f.kante === undefined || f.kante === 0)
+const gleicherPlatz = (a: { positionX: number; positionZ: number }, b: { positionX: number; positionZ: number }, tol: number): boolean =>
+  Math.abs(a.positionX - b.positionX) < tol && Math.abs(a.positionZ - b.positionZ) < tol
 
 export function generateScaffoldComponents(model: CADModel): ScaffoldComponent3D[] {
   const components: ScaffoldComponent3D[] = []
@@ -319,7 +370,7 @@ export function generateScaffoldComponents(model: CADModel): ScaffoldComponent3D
   // bis zu 3 Lagen ab, aber nur so viele, wie an seiner Stelle Felder
   // existieren. Bei Höhenstufen folgt je Stufe der nächste Turm.
   const stairInterval = 3
-  const stairBase = fields.find((f) => f.side === 'front' && f.levelIndex === 0)
+  const stairBase = fields.find((f) => istTreppenFeld(f) && f.levelIndex === 0)
   const stairPlans: { i: number; covered: number; field: ScaffoldField; level: ScaffoldLevel }[] = []
   const stairDeckDir = new Map<string, 1 | -1>() // Feld-ID → Ende, an dem der Lauf ankommt (Belag nur dort)
   {
@@ -327,17 +378,17 @@ export function generateScaffoldComponents(model: CADModel): ScaffoldComponent3D
     for (let guard = 0; guard < levels.length + 2 && stairLevel < levels.length; guard++) {
       const i = stairLevel
       const level = levels.find((l) => l.index === i)
-      const stairField = fields.find((f) => f.side === 'front' && f.levelIndex === i)
+      const stairField = fields.find((f) => istTreppenFeld(f) && f.levelIndex === i)
       if (!stairField || !level) break
-      const aufTurm = !stairBase || Math.abs(stairField.positionX - stairBase.positionX) < 0.01
-      const getragen = i === 0 || aufTurm || fields.some((g) => g.side === 'front' && g.levelIndex === i - 1 && Math.abs(g.positionX - stairField.positionX) <= g.lengthM / 2)
+      const aufTurm = !stairBase || gleicherPlatz(stairField, stairBase, 0.01)
+      const getragen = i === 0 || aufTurm || fields.some((g) => istTreppenFeld(g) && g.levelIndex === i - 1 && Math.hypot(g.positionX - stairField.positionX, g.positionZ - stairField.positionZ) <= g.lengthM / 2)
       if (!getragen) break
       let covered = 0
-      while (covered < stairInterval && fields.some((g) => g.side === 'front' && g.levelIndex === i + covered && Math.abs(g.positionX - stairField.positionX) < 0.01)) covered++
+      while (covered < stairInterval && fields.some((g) => istTreppenFeld(g) && g.levelIndex === i + covered && gleicherPlatz(g, stairField, 0.01))) covered++
       covered = Math.max(1, covered)
       stairPlans.push({ i, covered, field: stairField, level })
       for (let j = i; j < i + covered; j++) {
-        const f = fields.find((g) => g.side === 'front' && g.levelIndex === j && Math.abs(g.positionX - stairField.positionX) < 0.01)
+        const f = fields.find((g) => istTreppenFeld(g) && g.levelIndex === j && gleicherPlatz(g, stairField, 0.01))
         if (f) stairDeckDir.set(f.id, j % 2 === 0 ? 1 : -1)
       }
       stairLevel += covered
@@ -353,7 +404,7 @@ export function generateScaffoldComponents(model: CADModel): ScaffoldComponent3D
     const level = levels.find((l) => l.index === levelIndex)
     if (!level) return
     // Lokale Position im Vorne-System; am Ende der Schleife wird gedreht.
-    const rahmen = seitenRahmen(side, building)
+    const rahmen = feldRahmen(field, building)
     const [positionX, positionZ] = rahmen.toLocal(field.positionX, field.positionZ)
     const ersterIdx = components.length
     const yBottom = level.bottomY
@@ -455,10 +506,41 @@ export function generateScaffoldComponents(model: CADModel): ScaffoldComponent3D
     }
   }
 
+  // === ECKFELDER IM UMRISS-MODUS ===
+  // An jeder Außenecke bleibt zwischen den Feldern der zwei Kanten ein Quadrat
+  // (Gerüstbreite × Gerüstbreite) offen. Pro Lage wird es mit Eckbelag, Eckpfosten
+  // und zwei Geländern geschlossen (exakt bei 90°, sonst eine Näherung).
+  // Innenecken: die Felder überlappen sich dort leicht (siehe Warnung).
+  if (model.umrissEcken && model.umrissEcken.length > 0) {
+    const sw = fields[0]?.widthM ?? 0.73
+    for (const ecke of model.umrissEcken) {
+      if (!ecke.konvex) continue
+      const naechste = (ecke.kante + 1) % (building.umriss?.length || 1)
+      const rf = rahmenAnPunkt(ecke.x, ecke.z, ecke.yaw)
+      for (const level of levels) {
+        const hatA = fields.some((f) => f.kante === ecke.kante && f.levelIndex === level.index)
+        const hatB = fields.some((f) => f.kante === naechste && f.levelIndex === level.index)
+        if (!hatA || !hatB) continue
+        const idBase = `corner-umriss-${ecke.kante}-${level.index}`
+        const yTop = level.topY
+        const erster = components.length
+        components.push({ id: `${idBase}-deck`, type: 'deck', articleNumber: 'AB-001', name: 'Eckbelag', position: [sw / 2, yTop, sw / 2], rotation: [-Math.PI / 2, 0, 0], scale: [sw - 0.04, sw - 0.04, 0.02], color: colorDeck, levelId: level.id })
+        components.push({ id: `${idBase}-post`, type: 'frame', articleNumber: 'RA-001', name: 'Eckpfosten', position: [sw - 0.04, level.bottomY + level.heightM / 2, sw - 0.04], rotation: [0, 0, 0], scale: [0.073, level.heightM, 0.04], color: colorFrame, levelId: level.id })
+        components.push({ id: `${idBase}-rail-x`, type: 'railing', articleNumber: 'GE-001', name: 'Eckgeländer', position: [sw / 2, yTop, sw + 0.02], rotation: [0, 0, 0], scale: [sw, 1.0, 0.04], color: colorRailing, levelId: level.id })
+        components.push({ id: `${idBase}-rail-z`, type: 'railing', articleNumber: 'GE-001', name: 'Eckgeländer', position: [sw + 0.02, yTop, sw / 2], rotation: [0, Math.PI / 2, 0], scale: [sw, 1.0, 0.04], color: colorRailing, levelId: level.id })
+        if (level.index === 0) {
+          components.push({ id: `${idBase}-foot`, type: 'footplate', articleNumber: 'FP-001', name: 'Fußplatte', position: [sw - 0.04, level.bottomY - 0.02, sw - 0.04], rotation: [0, 0, 0], scale: [0.15, 0.04, 0.15], color: colorFoot, levelId: level.id })
+        }
+        for (let ci = erster; ci < components.length; ci++) bauteilInWelt(components[ci], rf)
+      }
+    }
+  }
+
   // === ECKVERBINDUNGEN ===
   // Finde Eck-Felder (erstes/letztes Feld jeder Seite)
   const sideGroups = new Map<string, ScaffoldField[]>()
   fields.forEach(f => {
+    if (f.kante !== undefined) return // Umriss-Modus: Ecken werden eigens erzeugt
     if (!sideGroups.has(f.side)) sideGroups.set(f.side, [])
     sideGroups.get(f.side)!.push(f)
   })
@@ -497,7 +579,7 @@ export function generateScaffoldComponents(model: CADModel): ScaffoldComponent3D
 
   // === VERANKERUNGEN ===
   model.anchors.forEach((anchor) => {
-    components.push({ id: `anchor-${anchor.id}`, type: 'anchor', articleNumber: 'AN-001', name: 'Fassadenanker', position: [anchor.positionX, anchor.positionY, anchor.positionZ], rotation: [0, 0, 0], scale: [0.08, 0.08, 0.3], color: colorAnchor })
+    components.push({ id: `anchor-${anchor.id}`, type: 'anchor', articleNumber: 'AN-001', name: 'Fassadenanker', position: [anchor.positionX, anchor.positionY, anchor.positionZ], rotation: eulerMitYaw([0, 0, 0], anchor.yaw ?? 0), scale: [0.08, 0.08, 0.3], color: colorAnchor })
   })
 
   // === KONSOLEN ===
@@ -508,7 +590,7 @@ export function generateScaffoldComponents(model: CADModel): ScaffoldComponent3D
       for (let i = 0; i < consoleCount; i++) {
         const field = fields[i % fields.length]
         if (!fields.some((g) => g.side === field.side && g.levelIndex === topLevel.index && Math.abs(g.positionX - field.positionX) < 0.01 && Math.abs(g.positionZ - field.positionZ) < 0.01)) continue
-        const rf = seitenRahmen(field.side, building)
+        const rf = feldRahmen(field, building)
         const [lx, lz] = rf.toLocal(field.positionX, field.positionZ)
         const [wx, wz] = rf.toWorld(lx, lz + field.widthM / 2 + 0.3)
         components.push({ id: `console-${i}`, type: 'console', articleNumber: 'KO-001', name: 'Konsole 0,73m', position: [wx, topLevel.topY, wz], rotation: eulerMitYaw([0, 0, 0], rf.yaw), scale: [0.73, 0.04, 0.3], color: colorConsole, levelId: topLevel.id })
@@ -560,8 +642,10 @@ export function generateScaffoldComponents(model: CADModel): ScaffoldComponent3D
     const totalStairHeight = level.heightM * covered
     const stairL = Math.max(1.0, sf.lengthM - 0.25)
     const stairW = Math.max(0.4, sf.widthM * 0.8)
-    const stairX = sf.positionX
-    const stairZ = sf.positionZ + sf.widthM / 2 - 0.02 // gleiche Lage wie der Belag
+    const stairRahmen = feldRahmen(sf, building)
+    const [stairX, stairPz] = stairRahmen.toLocal(sf.positionX, sf.positionZ)
+    const stairZ = stairPz + sf.widthM / 2 - 0.02 // gleiche Lage wie der Belag
+    const stairErster = components.length
     const startDir: 1 | -1 = i % 2 === 0 ? 1 : -1
 
     // Treppen-Rahmen (Holme der Läufe, siehe Variante in Scaffold3D)
@@ -583,6 +667,7 @@ export function generateScaffoldComponents(model: CADModel): ScaffoldComponent3D
     // Endpfosten des Treppenturms
     components.push({ id: `stair-rail-${i}`, type: 'railing', articleNumber: 'SG-001', name: 'Treppengeländer', position: [stairX - stairL / 2, level.bottomY + totalStairHeight / 2, stairZ], rotation: [0, 0, 0], scale: [0.04, totalStairHeight, 0.04], color: colorRailing, levelId: level.id })
     components.push({ id: `stair-rail-${i}-2`, type: 'railing', articleNumber: 'SG-001', name: 'Treppengeländer', position: [stairX + stairL / 2, level.bottomY + totalStairHeight / 2, stairZ], rotation: [0, 0, 0], scale: [0.04, totalStairHeight, 0.04], color: colorRailing, levelId: level.id })
+    for (let ci = stairErster; ci < components.length; ci++) bauteilInWelt(components[ci], stairRahmen)
   }
 
   // === FANGNETZE ===
@@ -593,7 +678,7 @@ export function generateScaffoldComponents(model: CADModel): ScaffoldComponent3D
       const level = levels[Math.min(i + 2, levels.length - 1)]
       const field = fields[i % fields.length]
       if (level && field && fields.some((g) => g.side === field.side && g.levelIndex === level.index && Math.abs(g.positionX - field.positionX) < 0.01)) {
-        const rf = seitenRahmen(field.side, building)
+        const rf = feldRahmen(field, building)
         const [lx, lz] = rf.toLocal(field.positionX, field.positionZ)
         const [wx, wz] = rf.toWorld(lx, lz + field.widthM / 2 + 0.05)
         components.push({ id: `net-${i}`, type: 'net', articleNumber: 'FN-001', name: 'Fangnetz', position: [wx, level.topY - 0.5, wz], rotation: eulerMitYaw([0, 0, 0], rf.yaw), scale: [field.lengthM, 1.5, 0.01], color: colorNet, levelId: level.id })
@@ -612,7 +697,7 @@ export function generateScaffoldComponents(model: CADModel): ScaffoldComponent3D
     }
     return building.sections![building.sections!.length - 1].hoeheM
   }
-  if (building.heightM > 15 || building.overhangM > 0.5) {
+  if (!building.umriss && (building.heightM > 15 || building.overhangM > 0.5)) {
     const roofCount = Math.max(1, Math.ceil(building.lengthM / 6))
     for (let i = 0; i < roofCount; i++) {
       const xPos = (i * 6) - building.lengthM / 2 + 3
@@ -625,7 +710,7 @@ export function generateScaffoldComponents(model: CADModel): ScaffoldComponent3D
   for (let i = 0; i < loadPlateCount; i++) {
     const field = fields[i % fields.length]
     if (field.levelIndex === 0) {
-      const rf = seitenRahmen(field.side, building)
+      const rf = feldRahmen(field, building)
       const [lx, lz] = rf.toLocal(field.positionX, field.positionZ)
       const [wx, wz] = rf.toWorld(lx - field.lengthM / 2 + 0.02, lz)
       components.push({ id: `loadplate-${i}`, type: 'load_plate', articleNumber: 'LV-001', name: 'Lastverteilplatte', position: [wx, -0.04, wz], rotation: [0, 0, 0], scale: [0.3, 0.04, 0.3], color: colorLoadPlate, fieldId: field.id })
@@ -697,6 +782,14 @@ export function generateCADModel(
 ): CADModel {
   const system = findeSystem(systemId)
   const warnings: CADWarning[] = []
+
+  // Umriss-Modus: Gerüst folgt dem Vieleck. Ungültiger Umriss → Fehlermeldung, dann normale Rechteck-Logik.
+  if (building.umriss && building.umriss.length > 0) {
+    const fehler = pruefeUmriss(building.umriss)
+    if (fehler.length === 0) return generiereUmrissModell(building, system, scaffoldWidthM, distanceToBuildingM)
+    fehler.forEach((m) => warnings.push({ type: 'error', code: 'UMRISS_UNGUELTIG', message: `Umriss ungültig: ${m} Es wird ersatzweise das Rechteck verwendet.` }))
+    building = { ...building, umriss: undefined }
+  }
 
   if (building.lengthM <= 0) warnings.push({ type: 'error', code: 'BUILDING_LENGTH_ZERO', message: 'Gebäudelänge muss größer als 0 sein.' })
   // Mehrteiliges Gebäude: bei geraden Abschnitten (Höhenstufen) folgt das
@@ -929,6 +1022,150 @@ export function generateCADModel(
   return { ...preliminaryModel, components3D }
 }
 
+/**
+ * Gerüst für ein Gebäude mit frei gezeichnetem Umriss (Vieleck).
+ * Jede Kante bekommt einen eigenen Feldstrang auf der Innenlinie (Abstand
+ * `abstandM` vor der Wand). Zwischen zwei Kanten endet der Strang am Schnittpunkt
+ * der beiden Innenlinien. Außenecken werden mit einem Eckbelag geschlossen.
+ */
+function generiereUmrissModell(
+  gebaeude: BuildingParams,
+  system: GeruestSystem | null,
+  scaffoldWidthM: number,
+  abstandM: number
+): CADModel {
+  const warnings: CADWarning[] = []
+  const umriss = zentriereUmriss(normalisiereUmriss(gebaeude.umriss!))
+  const box = umrissBox(umriss)
+  const building: BuildingParams = {
+    ...gebaeude,
+    umriss,
+    lengthM: Math.round(box.lengthM * 100) / 100,
+    widthM: Math.round(box.widthM * 100) / 100,
+    balconies: undefined,
+    balconyCount: 0,
+    windowCount: 0,
+    doorCount: 0,
+    sides: ['front', 'back', 'left', 'right'],
+  }
+  if (building.heightM <= 0) warnings.push({ type: 'error', code: 'BUILDING_HEIGHT_ZERO', message: 'Gebäudehöhe muss größer als 0 sein.' })
+  if (building.heightM > 40) warnings.push({ type: 'warning', code: 'HEIGHT_VERY_HIGH', message: 'Gebäudehöhe > 40m – Statik prüfen lassen!' })
+  warnings.push({ type: 'info', code: 'UMRISS_MODUS', message: `Gebäude mit Umriss (${umriss.length} Ecken): Das Gerüst läuft um alle Kanten. Balkone, Fenster und Türen sowie die Höhenabschnitte werden im Umriss-Modus noch nicht berücksichtigt; die Treppe steht an Kante 1.` })
+  if ((gebaeude.sections?.length ?? 0) >= 2) warnings.push({ type: 'info', code: 'UMRISS_OHNE_ABSCHNITTE', message: 'Im Umriss-Modus gilt eine einheitliche Gebäudehöhe – die Abschnitte werden ignoriert.' })
+  if ((gebaeude.balconies?.length ?? 0) > 0) warnings.push({ type: 'warning', code: 'UMRISS_OHNE_BALKONE', message: 'Balkone werden im Umriss-Modus noch nicht berücksichtigt (nicht ausgespart, keine Konsolen).' })
+
+  const kanten = umrissKanten(umriss)
+  const ecken = umrissEcken(kanten)
+  const n = kanten.length
+
+  // Gerüst-Eckpunkte (Schnitt der Innenlinien); bei fast gegenläufigen Kanten einfach nach außen versetzt
+  const eckPunkte = kanten.map((k, i) => {
+    const m = kanten[(i + 1) % n]
+    const p = geruestEckpunkt(k, m, abstandM)
+    if (!p) warnings.push({ type: 'warning', code: 'UMRISS_SPITZE', message: `Ecke ${i + 1}: sehr spitzer Winkel – das Gerüst wird dort nur näherungsweise gezeichnet.` })
+    return p ?? { x: k.bis.x + k.n[0] * abstandM, z: k.bis.z + k.n[1] * abstandM }
+  })
+
+  const levelCalc = system ? calculateLevels(building.heightM, system) : { levels: 1, levelHeightM: 2.0, levelsData: [{ index: 0, bottomY: 0, topY: 2.0 }] }
+
+  // Feldstränge je Kante (Länge = Abstand der beiden Gerüst-Eckpunkte entlang der Kante)
+  const straenge = kanten.map((k, i) => {
+    const start = eckPunkte[(i - 1 + n) % n]
+    const ende = eckPunkte[i]
+    const laenge = (ende.x - start.x) * k.u[0] + (ende.z - start.z) * k.u[1]
+    return { k, start, laenge }
+  })
+  const uebersprungen = straenge.filter((s) => s.laenge < 0.5)
+  uebersprungen.forEach((s) => warnings.push({ type: 'warning', code: 'UMRISS_KANTE_ZU_KURZ', message: `Kante ${s.k.index + 1}: zwischen den Nachbarkanten bleibt nur ${Math.max(0, s.laenge).toFixed(2)} m Platz – dort wird kein Gerüst erzeugt.` }))
+  const aktive = straenge.filter((s) => s.laenge >= 0.5)
+  const divs = new Map<number, { distribution: number[]; fields: number; fieldLengthM: number }>()
+  aktive.forEach((s) => divs.set(s.k.index, system ? calculateFieldDivision(s.laenge, system) : { fields: 1, fieldLengthM: 2.07, distribution: [2.07] }))
+
+  const fields: ScaffoldField[] = []
+  const levels: ScaffoldLevel[] = []
+  levelCalc.levelsData.forEach((ld) => {
+    const lageFelder: ScaffoldField[] = []
+    aktive.forEach((s) => {
+      const div = divs.get(s.k.index)!
+      let cum = 0
+      div.distribution.forEach((fl, fi) => {
+        const t = cum + fl / 2
+        cum += fl
+        const field: ScaffoldField = {
+          id: `field-front-${ld.index}-${lageFelder.length}`,
+          index: lageFelder.length,
+          lengthM: fl,
+          widthM: scaffoldWidthM,
+          positionX: parseFloat((s.start.x + s.k.u[0] * t).toFixed(3)),
+          positionY: ld.bottomY,
+          positionZ: parseFloat((s.start.z + s.k.u[1] * t).toFixed(3)),
+          side: 'front',
+          levelIndex: ld.index,
+          isCorner: fi === 0 || fi === div.distribution.length - 1,
+          kante: s.k.index,
+          yaw: s.k.yaw,
+        }
+        lageFelder.push(field)
+        fields.push(field)
+      })
+    })
+    levels.push({ id: `level-umriss-${ld.index}`, index: ld.index, heightM: levelCalc.levelHeightM, bottomY: ld.bottomY, topY: ld.topY, fields: lageFelder })
+  })
+
+  // Eckpunkte für den Eckbelag (nur wenn beide Nachbarkanten ein Gerüst haben)
+  const aktiveIdx = new Set(aktive.map((s) => s.k.index))
+  const umrissEckenModell: UmrissGeruestEcke[] = ecken
+    .filter((e) => aktiveIdx.has(e.index) && aktiveIdx.has((e.index + 1) % n))
+    .map((e) => ({ kante: e.index, x: eckPunkte[e.index].x, z: eckPunkte[e.index].z, yaw: kanten[e.index].yaw, konvex: e.konvex, innenwinkelGrad: e.innenwinkelGrad }))
+  const schraege = umrissEckenModell.filter((e) => e.konvex && Math.abs(e.innenwinkelGrad - 90) > 1)
+  if (schraege.length > 0) warnings.push({ type: 'info', code: 'UMRISS_ECKE_NAEHERUNG', message: `${schraege.length} Außenecke(n) sind nicht 90°: der Eckbelag ist dort nur eine Näherung – Ecken bitte vor Ort/in der Aufbauanleitung prüfen.` })
+  const innen = umrissEckenModell.filter((e) => !e.konvex).length
+  if (innen > 0) warnings.push({ type: 'info', code: 'UMRISS_INNENECKE', message: `${innen} Innenecke(n): die Felder der beiden Kanten überlappen sich dort leicht (Belag/Geländer). Bitte prüfen, ob dort ein Feld entfallen oder verkürzt werden muss.` })
+
+  // Verankerungen: ab 6 m Gebäudehöhe, jedes zweite Feld, jede zweite Lage
+  const anchors: ScaffoldAnchor[] = []
+  if (building.heightM > 6) {
+    const anchorLevels = Math.floor(levelCalc.levelsData.length / 2)
+    for (let al = 0; al < anchorLevels; al++) {
+      const yAnchor = (al * 2 + 2) * levelCalc.levelHeightM
+      aktive.forEach((s) => {
+        const div = divs.get(s.k.index)!
+        let cum = 0
+        div.distribution.forEach((fl, f) => {
+          const t = cum + fl / 2
+          cum += fl
+          if (f % 2 !== 0) return
+          anchors.push({
+            id: `anchor-k${s.k.index}-${al}-${f}`,
+            positionX: s.start.x + s.k.u[0] * t + s.k.n[0] * scaffoldWidthM / 2,
+            positionY: yAnchor,
+            positionZ: s.start.z + s.k.u[1] * t + s.k.n[1] * scaffoldWidthM / 2,
+            side: 'front', type: 'fassadenanker', yaw: s.k.yaw,
+          })
+        })
+      })
+    }
+  }
+
+  const unten = fields.filter((f) => f.levelIndex === 0)
+  const modell: CADModel = {
+    building,
+    system,
+    fields,
+    levels,
+    anchors,
+    components3D: [],
+    totalLengthM: unten.reduce((sum, f) => sum + f.lengthM, 0),
+    totalHeightM: building.heightM,
+    totalAreaM2: kanten.filter((k) => aktiveIdx.has(k.index)).reduce((sum, k) => sum + k.laengeM, 0) * building.heightM,
+    fieldCount: unten.length,
+    levelCount: levelCalc.levels,
+    warnings,
+    umrissEcken: umrissEckenModell,
+  }
+  return { ...modell, components3D: generateScaffoldComponents(modell) }
+}
+
 /** Feste Artikelnummer der Leiter im Lager (jede Firma pflegt Name, Preis und Gewicht selbst). */
 export const LEITER_ARTIKELNUMMER = 'LE-001'
 
@@ -1149,7 +1386,7 @@ export function addManualPlacement(
  * IDs: `${id}` (Holme), `${id}-step-N`, `${id}-rail-aussen-*` / `${id}-rail-wand-*` (Pfosten, Handlauf, Knieleiste).
  */
 export function treppenlaufInFeld(model: CADModel, field: ScaffoldField, level: ScaffoldLevel, id: string): ScaffoldComponent3D[] {
-  const rahmen = seitenRahmen(field.side, model.building)
+  const rahmen = feldRahmen(field, model.building)
   const [px, pz] = rahmen.toLocal(field.positionX, field.positionZ)
   const stairL = Math.max(1.0, field.lengthM - 0.25)
   const stairW = Math.max(0.4, field.widthM * 0.8)
@@ -1517,6 +1754,8 @@ export interface BuildingFeature3D {
 // Verteilt Fenster/Türen/Balkone gleichmäßig auf Geschosse und Fassaden.
 // Türen nur im Erdgeschoss, Balkone nur in Obergeschossen.
 export function generateBuildingFeatures(building: BuildingParams): BuildingFeature3D[] {
+  // Umriss-Modus: Fenster, Türen und Balkone sind hier noch nicht umgesetzt
+  if (building.umriss && building.umriss.length >= 3) return []
   const features: BuildingFeature3D[] = []
   const sides: BuildingFeature3D['side'][] = building.sides?.length ? building.sides : ['front']
   const floors = Math.max(1, building.floors || 1)
