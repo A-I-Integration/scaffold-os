@@ -20,6 +20,8 @@
 
 import { BAUTEIL_FARBEN, type FarbModus } from '@/lib/cad/bauteil-farben'
 import { useState, useMemo, useCallback, useEffect, useRef } from 'react'
+import StatikDatenPanel from '@/components/cad/StatikDatenPanel'
+import { bereinigeStatikDaten, type StatikDaten } from '@/lib/statik-daten'
 import { useRouter } from 'next/navigation'
 import dynamic from 'next/dynamic'
 import {
@@ -79,6 +81,7 @@ export default function CADPage() {
   const [systemId, setSystemId] = useState<string>('layher-allround')
   const [model, setModel] = useState<CADModel | null>(null)
   const [farbModus, setFarbModus] = useState<FarbModus>('real')
+  const [statikDaten, setStatikDaten] = useState<StatikDaten>({})
   const [selectedComponent, setSelectedComponent] = useState<string | null>(null)
   const [showBuilding, setShowBuilding] = useState(true)
   const [showScaffold, setShowScaffold] = useState(true)
@@ -652,6 +655,8 @@ export default function CADPage() {
             // Feld, wird von der bestehenden Kunden-/Angebots-Seite bisher
             // nirgends gelesen – ändert an deren Verhalten nichts.
             cadNotizen: notes,
+            // Angaben für den Statiker (nur Angaben, keine Berechnung)
+            ...(Object.keys(bereinigeStatikDaten(statikDaten)).length > 0 ? { statikDaten: bereinigeStatikDaten(statikDaten) } : {}),
           },
           status: 'active',
         }),
@@ -688,7 +693,7 @@ export default function CADPage() {
       alert('❌ ' + err.message)
     }
     setZuordnenLaeuft(false)
-  }, [model, materials, totalPrice, totalWeight, logistik, router, notes])
+  }, [model, materials, totalPrice, totalWeight, logistik, router, notes, statikDaten])
 
   return (
     <div className='min-h-screen md:h-screen flex flex-col bg-[#fbfbfd]'>
@@ -713,6 +718,7 @@ export default function CADPage() {
       <div className='flex-1 flex flex-col md:flex-row md:overflow-hidden'>
         <div className='w-full md:w-72 md:shrink-0 md:overflow-y-auto'>
           <BuildingForm building={building} systemId={systemId} onChange={(b) => { setAutoGenerate(true); setBuilding(b); }} onSystemChange={(s) => { setAutoGenerate(true); setSystemId(s); }} onGenerate={() => { setAutoGenerate(true); generate(); }} warnings={allWarnings} />
+          <StatikDatenPanel daten={statikDaten} onChange={setStatikDaten} />
         </div>
         <div className='flex-1 flex flex-col min-w-0'>
           <div className='flex flex-wrap gap-2 items-center justify-between px-4 py-2 bg-white/50 border-b border-black/5'>
