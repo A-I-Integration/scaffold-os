@@ -84,6 +84,11 @@ export default function CADPage() {
   const [farbModus, setFarbModus] = useState<FarbModus>('real')
   const [statikDaten, setStatikDaten] = useState<StatikDaten>({})
   const [lvOffen, setLvOffen] = useState(false)
+  // Das LV mit Preisen darf nur Admin erzeugen (Statiker über den Statiker-Bereich). Bis die Rolle bekannt ist: gesperrt.
+  const [rolle, setRolle] = useState<string | null>(null)
+  useEffect(() => {
+    fetch('/api/me', { cache: 'no-store' }).then((r) => r.json()).then((j) => { if (j?.success && typeof j.role === 'string') setRolle(j.role) }).catch(() => {})
+  }, [])
   const [selectedComponent, setSelectedComponent] = useState<string | null>(null)
   const [showBuilding, setShowBuilding] = useState(true)
   const [showScaffold, setShowScaffold] = useState(true)
@@ -798,7 +803,7 @@ export default function CADPage() {
             logistik={logistik}
             onExportPDF={model ? handleExportPDF : exportOhneModellHinweis}
             onExportMontageplan={model ? handleExportMontageplan : exportOhneModellHinweis}
-            onOpenLv={model ? () => setLvOffen(true) : exportOhneModellHinweis}
+            onOpenLv={rolle === 'admin' ? (model ? () => setLvOffen(true) : exportOhneModellHinweis) : undefined}
             onExportStatikGeometrie={model ? handleExportStatik : exportOhneModellHinweis}
             onExportIFC={!model ? exportOhneModellHinweis : (ifcExportLaeuft ? undefined : handleExportIFC)}
             onExportCSV={model ? handleExportCSV : exportOhneModellHinweis}

@@ -44,5 +44,5 @@ export default function StatikerProjektSeite() {
       </div>
     )
   }
-  return <AnsichtViewer daten={daten} kopfAktion={zurueck} />
+  return <AnsichtViewer daten={daten} kopfAktion={zurueck} lvErlaubt />
 }
