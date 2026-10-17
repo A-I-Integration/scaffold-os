@@ -149,14 +149,43 @@ describe('Außentreppe vor dem Gerüst', () => {
     expect(treppe.position[2]).toBeGreaterThan(unten[1].positionZ + unten[1].widthM)
     // jedes Feld behält seinen Belag
     for (const f of m.fields.filter((x) => x.side === 'front')) expect(m.components3D.some((c) => c.id === `deck-${f.id}`)).toBe(true)
-    // ein Podest je Lage
-    const podeste = m.components3D.filter((c) => c.id.startsWith('stair-podest-') && c.type === 'deck')
-    expect(podeste).toHaveLength(treppe.flights!)
-    // Durchgang: Geländer der Endfelder in der Podest-Lage ist um die Podestlänge kürzer
-    const g0 = m.components3D.find((c) => c.id === `railing-${m.fields.find((x) => x.side === 'front' && x.levelIndex === 0 && Math.abs(x.positionX - unten[2].positionX) < 0.01)!.id}-top`)!
-    expect(g0.scale[0]).toBeCloseTo(unten[2].lengthM - TREPPEN_PODEST_M, 2)
-    const g1 = m.components3D.find((c) => c.id === `railing-${unten[0].id}-top`)!
-    expect(g1.scale[0]).toBeCloseTo(unten[0].lengthM, 2)
+    // Podest rechts auf jeder Lage, links auf jeder Lage außer der obersten
+    const lagen = treppe.flights!
+    const podeste = m.components3D.filter((c) => /^stair-podest-[lr]\d+$/.test(c.id))
+    expect(podeste).toHaveLength(2 * lagen - 1)
+    // Durchgänge: Geländer des rechten Endfelds (Lage 0) und des linken (Lage 0) sind um die Podestlänge kürzer
+    const geland = (feld: typeof unten[number], lage: number) => {
+      const f = m.fields.find((x) => x.side === 'front' && x.levelIndex === lage && Math.abs(x.positionX - feld.positionX) < 0.01)!
+      return m.components3D.find((c) => c.id === `railing-${f.id}-top`)!
+    }
+    expect(geland(unten[2], 0).scale[0]).toBeCloseTo(unten[2].lengthM - TREPPEN_PODEST_M, 2)
+    expect(geland(unten[1], 0).scale[0]).toBeCloseTo(unten[1].lengthM - TREPPEN_PODEST_M, 2)
+    expect(geland(unten[0], 0).scale[0]).toBeCloseTo(unten[0].lengthM, 2) // nicht an der Treppe
+    // oberste Lage: links kein Podest, also dort volles Geländer
+    expect(geland(unten[1], lagen - 1).scale[0]).toBeCloseTo(unten[1].lengthM, 2)
+  })
+  it('alle Läufe steigen in dieselbe Richtung, jeder eine Lage hoch (kein Zickzack, nichts übereinander in einer Kehre)', () => {
+    const m = generateCADModel(basis, 'layher-allround')
+    const treppe = m.components3D.find((c) => c.type === 'stair')!
+    const lagen = treppe.flights!
+    expect(lagen).toBeGreaterThanOrEqual(2)
+    expect(treppe.gleichlauf).toBe(true)
+    const stufen = m.components3D.filter((c) => c.id.startsWith('stair-step-0-'))
+    const proLauf = stufen.length / lagen
+    const lauf = (f: number) => stufen.slice(f * proLauf, (f + 1) * proLauf)
+    for (let f = 0; f < lagen; f++) {
+      const l = lauf(f)
+      // x steigt innerhalb des Laufs, y steigt
+      for (let k = 1; k < l.length; k++) {
+        expect(l[k].position[0]).toBeGreaterThan(l[k - 1].position[0])
+        expect(l[k].position[1]).toBeGreaterThan(l[k - 1].position[1])
+      }
+      // jeder Lauf beginnt an derselben Stelle (links) und liegt in derselben Flucht
+      expect(l[0].position[0]).toBeCloseTo(lauf(0)[0].position[0], 3)
+      expect(l[0].position[2]).toBeCloseTo(lauf(0)[0].position[2], 3)
+    }
+    // Lauf f+1 beginnt genau eine Lage über Lauf f
+    expect(lauf(1)[0].position[1] - lauf(0)[0].position[1]).toBeCloseTo(m.levels[0].heightM, 1)
   })
   it('zu kurze Seite (1 Feld): keine Treppe, Warnung', () => {
     const m = generateCADModel({ ...basis, lengthM: 3 }, 'layher-allround')

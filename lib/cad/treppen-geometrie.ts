@@ -17,6 +17,8 @@ export interface TreppenMasse {
   breiteM: number
   /** Länge der Podeste an den Enden (m); 0 = Lauf über die ganze Länge (manuelle Treppe) */
   podestM?: number
+  /** alle Läufe in dieselbe Richtung (links→rechts, bzw. rechts→links bei startRichtung 1) statt im Zickzack */
+  gleichlauf?: boolean
 }
 
 const WANGE_HOEHE = 0.16
@@ -57,7 +59,7 @@ export function treppenTeile(m: TreppenMasse): THREE.BufferGeometry[] {
   const zSeite = W / 2 - 0.03
 
   for (let f = 0; f < N; f++) {
-    const dir = (f + p0) % 2 === 0 ? 1 : -1
+    const dir = m.gleichlauf ? (p0 === 1 ? -1 : 1) : (f + p0) % 2 === 0 ? 1 : -1
     const xStart = -L / 2 + rand, xEnde = L / 2 - rand
     const xa = dir > 0 ? xStart : xEnde
     const xb = dir > 0 ? xEnde : xStart
