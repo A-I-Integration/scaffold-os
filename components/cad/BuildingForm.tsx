@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useRef } from 'react'
-import { BuildingParams } from '@/lib/calculations/cad-engine'
+import { BuildingParams, WANDABSTAND_MIN_M, WANDABSTAND_MAX_M } from '@/lib/calculations/cad-engine'
 import BalkonEditor from './BalkonEditor'
 import UmrissEditor from './UmrissEditor'
 import { GERUEST_SYSTEME } from '@/lib/calculations/geruest-systeme'
@@ -337,6 +337,47 @@ export default function BuildingForm({ building, systemId, onChange, onSystemCha
               </select>
               <p className='text-[10px] text-[#86868b] mt-1'>Wird für die Prüfung der Regelausführungs-Grenzen genutzt (aktuell nur bei Layher Allround geprüft).</p>
             </div>
+            {(() => {
+              const sys = GERUEST_SYSTEME.find((x) => x.id === systemId)
+              const opt = building.geruestOptionen ?? {}
+              const setzeOpt = (patch: Partial<NonNullable<BuildingParams['geruestOptionen']>>) => {
+                const neu = { ...opt, ...patch }
+                // leere Werte entfernen, damit überall wieder der Standard gilt
+                ;(Object.keys(neu) as (keyof typeof neu)[]).forEach((k) => { if (neu[k] === undefined || (typeof neu[k] === 'number' && !Number.isFinite(neu[k] as number))) delete neu[k] })
+                onChange({ ...building, geruestOptionen: Object.keys(neu).length > 0 ? neu : undefined })
+              }
+              return (
+                <div className='border border-black/10 rounded-xl p-3 bg-[#fafafa] space-y-2'>
+                  <p className='text-xs font-semibold text-[#1d1d1f]'>Gerüst-Einstellungen (automatische Erzeugung)</p>
+                  {!sys && <p className='text-[11px] text-[#86868b]'>Bitte zuerst im Tab „System“ ein Gerüstsystem wählen.</p>}
+                  <div className='grid grid-cols-2 gap-2'>
+                    <div>
+                      <label className='block text-[11px] text-[#424245] mb-1'>Gerüstbreite</label>
+                      <select disabled={!sys} value={opt.breiteM ?? ''} onChange={(e) => setzeOpt({ breiteM: e.target.value === '' ? undefined : parseFloat(e.target.value) })} className='w-full px-2 py-1.5 border rounded-lg text-xs'>
+                        <option value=''>Standard (0,73 m)</option>
+                        {sys?.rahmenBreitenM.map((b) => <option key={b} value={b}>{b.toFixed(2).replace('.', ',')} m</option>)}
+                      </select>
+                    </div>
+                    <div>
+                      <label className='block text-[11px] text-[#424245] mb-1'>Feldlänge</label>
+                      <select disabled={!sys} value={opt.feldlaengeM ?? ''} onChange={(e) => setzeOpt({ feldlaengeM: e.target.value === '' ? undefined : parseFloat(e.target.value) })} className='w-full px-2 py-1.5 border rounded-lg text-xs'>
+                        <option value=''>automatisch</option>
+                        {sys?.feldlangenM.map((f) => <option key={f} value={f}>nur {f.toFixed(2).replace('.', ',')} m</option>)}
+                      </select>
+                    </div>
+                    <div>
+                      <label className='block text-[11px] text-[#424245] mb-1'>Wandabstand (m)</label>
+                      <input type='number' step='0.01' min={WANDABSTAND_MIN_M} max={WANDABSTAND_MAX_M} placeholder='0,30' value={opt.wandabstandM ?? ''} onChange={(e) => setzeOpt({ wandabstandM: e.target.value === '' ? undefined : parseFloat(e.target.value) })} className='w-full px-2 py-1.5 border rounded-lg text-xs' />
+                    </div>
+                    <label className='flex items-center gap-2 text-xs text-[#424245] self-end pb-1.5'>
+                      <input type='checkbox' checked={opt.treppe !== false} onChange={(e) => setzeOpt({ treppe: e.target.checked ? undefined : false })} />
+                      Treppe automatisch
+                    </label>
+                  </div>
+                  <p className='text-[10px] text-[#86868b]'>Änderungen gelten sofort im 3D-Modell. Leer lassen = Standardwert.</p>
+                </div>
+              )
+            })()}
             <div><label className='block text-xs font-medium text-[#424245] mb-1'>Dachüberstand (m)</label><input type='number' step='0.01' value={building.overhangM} onChange={(e) => update('overhangM', parseFloat(e.target.value))} className='w-full px-3 py-2 border rounded-xl text-sm' /></div>
             <div><label className='block text-xs font-medium text-[#424245] mb-1'>Rücksprung (m)</label><input type='number' step='0.01' value={building.setbackM} onChange={(e) => update('setbackM', parseFloat(e.target.value))} className='w-full px-3 py-2 border rounded-xl text-sm' /></div>
             <div>
