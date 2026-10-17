@@ -138,13 +138,14 @@ describe('Umriss-Modus: Fassadenmerkmale', () => {
 })
 
 describe('Außentreppe vor dem Gerüst', () => {
-  it('Rechteck: Treppe vor zwei Feldern, Gerüst vollständig, Podest je Lage, Durchgang im Geländer', () => {
+  it('Rechteck: Treppe genau ein Feld lang vor dem zweiten Feld, Gerüst vollständig, Podeste, Durchgänge', () => {
     const m = generateCADModel(basis, 'layher-allround')
     const unten = m.fields.filter((f) => f.side === 'front' && f.levelIndex === 0).sort((a, b) => a.index - b.index)
     expect(unten.length).toBeGreaterThanOrEqual(3)
     const treppe = m.components3D.find((c) => c.type === 'stair')!
-    // Mitte der Treppe = Mitte der Felder 2 und 3
-    expect(treppe.position[0]).toBeCloseTo((unten[1].positionX - unten[1].lengthM / 2 + unten[2].positionX + unten[2].lengthM / 2) / 2, 2)
+    // Mitte der Treppe = Mitte des zweiten Felds, Länge = genau diese Feldlänge
+    expect(treppe.position[0]).toBeCloseTo(unten[1].positionX, 2)
+    expect(treppe.scale[0]).toBeCloseTo(unten[1].lengthM, 2)
     // vor dem Belag: Belagaußenkante = positionZ + Breite - 0,045
     expect(treppe.position[2]).toBeGreaterThan(unten[1].positionZ + unten[1].widthM)
     // jedes Feld behält seinen Belag
@@ -153,16 +154,17 @@ describe('Außentreppe vor dem Gerüst', () => {
     const lagen = treppe.flights!
     const podeste = m.components3D.filter((c) => /^stair-podest-[lr]\d+$/.test(c.id))
     expect(podeste).toHaveLength(2 * lagen - 1)
-    // Durchgänge: Geländer des rechten Endfelds (Lage 0) und des linken (Lage 0) sind um die Podestlänge kürzer
+    // Durchgänge im Geländer
     const geland = (feld: typeof unten[number], lage: number) => {
       const f = m.fields.find((x) => x.side === 'front' && x.levelIndex === lage && Math.abs(x.positionX - feld.positionX) < 0.01)!
       return m.components3D.find((c) => c.id === `railing-${f.id}-top`)!
     }
-    expect(geland(unten[2], 0).scale[0]).toBeCloseTo(unten[2].lengthM - TREPPEN_PODEST_M, 2)
-    expect(geland(unten[1], 0).scale[0]).toBeCloseTo(unten[1].lengthM - TREPPEN_PODEST_M, 2)
-    expect(geland(unten[0], 0).scale[0]).toBeCloseTo(unten[0].lengthM, 2) // nicht an der Treppe
-    // oberste Lage: links kein Podest, also dort volles Geländer
-    expect(geland(unten[1], lagen - 1).scale[0]).toBeCloseTo(unten[1].lengthM, 2)
+    // beide Enden des Treppenfelds haben einen Durchgang (Lage 0), die Nachbarfelder nicht
+    expect(geland(unten[1], 0).scale[0]).toBeCloseTo(unten[1].lengthM - 2 * TREPPEN_PODEST_M, 2)
+    expect(geland(unten[0], 0).scale[0]).toBeCloseTo(unten[0].lengthM, 2)
+    expect(geland(unten[2], 0).scale[0]).toBeCloseTo(unten[2].lengthM, 2)
+    // oberste Lage: nur rechts ein Durchgang
+    expect(geland(unten[1], lagen - 1).scale[0]).toBeCloseTo(unten[1].lengthM - TREPPEN_PODEST_M, 2)
   })
   it('alle Läufe steigen in dieselbe Richtung, jeder eine Lage hoch (kein Zickzack, nichts übereinander in einer Kehre)', () => {
     const m = generateCADModel(basis, 'layher-allround')
@@ -187,14 +189,21 @@ describe('Außentreppe vor dem Gerüst', () => {
     // Lauf f+1 beginnt genau eine Lage über Lauf f
     expect(lauf(1)[0].position[1] - lauf(0)[0].position[1]).toBeCloseTo(m.levels[0].heightM, 1)
   })
-  it('zu kurze Seite (1 Feld): keine Treppe, Warnung', () => {
-    const m = generateCADModel({ ...basis, lengthM: 3 }, 'layher-allround')
-    expect(m.fields.filter((f) => f.side === 'front' && f.levelIndex === 0).length).toBeLessThan(2)
-    expect(m.components3D.some((c) => c.type === 'stair')).toBe(false)
-    expect(m.warnings.some((w) => w.code === 'TREPPE_ZU_KURZ')).toBe(true)
+  it('Treppe ist steil genug: Steigung der Läufe mindestens 40 Grad', () => {
+    const m = generateCADModel(basis, 'layher-allround')
+    const stufen = m.components3D.filter((c) => c.id.startsWith('stair-step-0-'))
+    const lagen = m.components3D.find((c) => c.type === 'stair')!.flights!
+    const l = stufen.slice(0, stufen.length / lagen)
+    const dx = l[l.length - 1].position[0] - l[0].position[0], dy = l[l.length - 1].position[1] - l[0].position[1]
+    expect(Math.atan2(dy, dx) * 180 / Math.PI).toBeGreaterThan(40)
   })
-  it('Treppe aus: keine Warnung wegen zu kurzer Seite', () => {
-    const m = generateCADModel({ ...basis, lengthM: 3, geruestOptionen: { treppe: false } }, 'layher-allround')
-    expect(m.warnings.some((w) => w.code === 'TREPPE_ZU_KURZ')).toBe(false)
+  it('auch bei nur einem Feld an der Seite gibt es eine Treppe', () => {
+    const m = generateCADModel({ ...basis, lengthM: 3 }, 'layher-allround')
+    expect(m.fields.filter((f) => f.side === 'front' && f.levelIndex === 0).length).toBe(1)
+    expect(m.components3D.some((c) => c.type === 'stair')).toBe(true)
+  })
+  it('Treppe aus: keine Treppenteile', () => {
+    const m = generateCADModel({ ...basis, geruestOptionen: { treppe: false } }, 'layher-allround')
+    expect(m.components3D.some((c) => c.type === 'stair' || c.id.startsWith('stair-'))).toBe(false)
   })
 })

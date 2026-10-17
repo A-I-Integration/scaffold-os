@@ -10,7 +10,7 @@ import { type UmrissPunkt, pruefeUmriss, normalisiereUmriss, umrissKanten, umris
 import { KONSOLE_BREITE_M, type CadBalkon } from '../balkon'
 
 /** Länge der Podeste der Außentreppe an den Turmenden (m) – zugleich Breite des Durchgangs im Gerüstgeländer. */
-export const TREPPEN_PODEST_M = 0.9
+export const TREPPEN_PODEST_M = 0.6
 
 export interface BuildingSection {
   bezeichnung?: string
@@ -391,10 +391,10 @@ export function generateScaffoldComponents(model: CADModel): ScaffoldComponent3D
 
   // === TREPPEN-PLAN (Außentreppe) ===
   // Wie in der Praxis steht die Treppe VOR dem Gerüst und gehört nicht zu ihm: das
-  // Gerüst bleibt vollständig (Belag, Geländer). Der Treppenturm überspannt zwei
-  // nebeneinanderliegende Felder der Treppenseite, hat Zickzack-Läufe (je Lage einer)
-  // und auf jeder Lage ein Podest, von dem man durch eine Lücke im Geländer auf den
-  // Belag des Gerüsts tritt. Das Podest liegt abwechselnd am rechten und linken Ende.
+  // Gerüst bleibt vollständig (Belag, Geländer). Der Treppenturm ist genau ein Gerüstfeld
+  // lang (steile Läufe), hat je Lage einen Lauf (alle in dieselbe Richtung) und auf jeder
+  // Lage Podeste an beiden Enden, von denen man durch Lücken im Geländer auf den Belag
+  // des Gerüsts tritt.
   const TREPPEN_BREITE_M = 0.65
   const TREPPEN_ABSTAND_M = 0.05 // Lücke zwischen Belag-Außenkante und Treppe
   // Treppenseite: Rechteck = Vorderseite; Umriss = die längste Kante
@@ -407,24 +407,12 @@ export function generateScaffoldComponents(model: CADModel): ScaffoldComponent3D
   const warnEinmal = (code: string, type: CADWarning['type'], message: string) => {
     if (!model.warnings.some((w) => w.code === code)) model.warnings.push({ type, code, message })
   }
-  const nebeneinander = (f: ScaffoldField, g: ScaffoldField): boolean => {
-    const rf = feldRahmen(f, building)
-    const [fx, fz] = rf.toLocal(f.positionX, f.positionZ)
-    const [gx, gz] = rf.toLocal(g.positionX, g.positionZ)
-    return Math.abs(gz - fz) < 0.05 && Math.abs(gx - fx - (f.lengthM + g.lengthM) / 2) < 0.05
-  }
   const treppeAktiv = building.geruestOptionen?.treppe !== false
   let stairSpan: { a: ScaffoldField; b: ScaffoldField; lagen: number } | undefined
   if (treppeAktiv && treppenFelder0.length > 0) {
-    // bevorzugt etwas von der Ecke weg: Felder 2+3, sonst 1+2, dann weitere Paare
-    const reihenfolge = treppenFelder0.map((_, i) => i).filter((i) => i + 1 < treppenFelder0.length)
-    reihenfolge.sort((x, y) => (x === 1 ? -1 : y === 1 ? 1 : x - y))
-    for (const i of reihenfolge) {
-      if (nebeneinander(treppenFelder0[i], treppenFelder0[i + 1])) { stairSpan = { a: treppenFelder0[i], b: treppenFelder0[i + 1], lagen: 0 }; break }
-    }
-    if (!stairSpan) {
-      warnEinmal('TREPPE_ZU_KURZ', 'warning', `Die Außentreppe braucht an der Treppenseite mindestens 2 Felder nebeneinander – hier ${treppenFelder0.length}. Es wird keine Treppe erzeugt. Bitte eine Treppe von Hand platzieren.`)
-    }
+    // bevorzugt etwas von der Ecke weg: das zweite Feld der Kante, sonst das erste
+    const feld = treppenFelder0[1] ?? treppenFelder0[0]
+    stairSpan = { a: feld, b: feld, lagen: 0 }
   }
   if (stairSpan) {
     const { a, b } = stairSpan
@@ -442,12 +430,10 @@ export function generateScaffoldComponents(model: CADModel): ScaffoldComponent3D
   const durchgang = new Map<string, { links: boolean; rechts: boolean }>()
   if (stairSpan) {
     for (let j = 0; j < stairSpan.lagen; j++) {
-      const feldB = fields.find((f) => istTreppenFeld(f) && f.levelIndex === j && gleicherPlatz(f, stairSpan!.b, 0.01))
-      const feldA = fields.find((f) => istTreppenFeld(f) && f.levelIndex === j && gleicherPlatz(f, stairSpan!.a, 0.01))
-      if (feldB) durchgang.set(feldB.id, { links: false, rechts: true })
-      if (feldA && j < stairSpan.lagen - 1) durchgang.set(feldA.id, { links: true, rechts: false })
+      const feldJ = fields.find((f) => istTreppenFeld(f) && f.levelIndex === j && gleicherPlatz(f, stairSpan!.a, 0.01))
+      if (feldJ) durchgang.set(feldJ.id, { links: j < stairSpan.lagen - 1, rechts: true })
     }
-    warnEinmal('TREPPE_AUSSEN', 'info', 'Die Treppe steht als Außentreppe vor dem Gerüst (zwei Felder lang, alle Läufe in dieselbe Richtung; auf jeder Lage Podest und Durchgang an beiden Enden – von einem Lauf geht man auf dem Gerüstbelag zum Anfang des nächsten). Anschluss an das Gerüst und Standsicherheit der Treppe sind in der Statik zu prüfen.')
+    warnEinmal('TREPPE_AUSSEN', 'info', 'Die Treppe steht als Außentreppe vor dem Gerüst (ein Feld lang, alle Läufe in dieselbe Richtung; auf jeder Lage Podest und Durchgang an beiden Enden – von einem Lauf geht man auf dem Gerüstbelag zum Anfang des nächsten). Anschluss an das Gerüst und Standsicherheit der Treppe sind in der Statik zu prüfen.')
   }
 
   // Dachrand-Schutz nur bei Flachdach und einheitlicher Gebäudehöhe (keine Stufen)
