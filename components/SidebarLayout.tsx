@@ -185,7 +185,8 @@ export default function SidebarLayout({ children }: { children: React.ReactNode 
   }
 
   // Nicht eingeloggt (oder lädt noch) → Seite ohne Menü anzeigen
-  if (loading || !user) {
+  // Statiker-Bereich (extern): bewusst ohne Firmen-Menü, eigene Kopfzeile
+  if (loading || !user || pathname.startsWith('/statiker')) {
     return <>{children}</>;
   }
 
