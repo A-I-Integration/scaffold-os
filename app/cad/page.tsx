@@ -86,6 +86,7 @@ export default function CADPage() {
   const [lvOffen, setLvOffen] = useState(false)
   // Das LV mit Preisen darf nur Admin erzeugen (Statiker über den Statiker-Bereich). Bis die Rolle bekannt ist: gesperrt.
   const [rolle, setRolle] = useState<string | null>(null)
+  const [istStatikerLogin, setIstStatikerLogin] = useState(false)
   useEffect(() => {
     fetch('/api/me', { cache: 'no-store' }).then((r) => r.json()).then((j) => { if (j?.success && typeof j.role === 'string') setRolle(j.role) }).catch(() => {})
   }, [])
@@ -358,8 +359,13 @@ export default function CADPage() {
     loadKunden()
     fetch('/api/company').then(r => r.json()).then(j => { const v = Number(j.company?.calc_hours_per_sqm); if (v > 0) setHoursPerSqm(v) }).catch(() => {})
     // Dasselbe Lager wie im normalen Aufmaß: Preise/Gewichte/Namen der Firma (Abgleich über die Artikelnummer).
-    fetch('/api/inventory').then(r => r.json()).then(j => {
-      if (j.success && Array.isArray(j.items)) { setLager(j.items); setLagerFehler(false) } else setLagerFehler(true)
+    // Statiker (extern) bekommt die Lagerpreise über eine eigene, nur lesende Route (ohne Bestände).
+    const ladeLager = (quelle: string) => fetch(quelle).then(r => r.json())
+    ladeLager('/api/inventory').then(j => {
+      if (j.success && Array.isArray(j.items)) { setLager(j.items); setLagerFehler(false); return }
+      return ladeLager('/api/statiker/lager').then(k => {
+        if (k.success && Array.isArray(k.items)) { setLager(k.items); setLagerFehler(false); setIstStatikerLogin(true) } else setLagerFehler(true)
+      })
     }).catch(() => setLagerFehler(true))
   }, [loadKunden])
 
@@ -803,7 +809,7 @@ export default function CADPage() {
             logistik={logistik}
             onExportPDF={model ? handleExportPDF : exportOhneModellHinweis}
             onExportMontageplan={model ? handleExportMontageplan : exportOhneModellHinweis}
-            onOpenLv={rolle === 'admin' ? (model ? () => setLvOffen(true) : exportOhneModellHinweis) : undefined}
+            onOpenLv={rolle === 'admin' || istStatikerLogin ? (model ? () => setLvOffen(true) : exportOhneModellHinweis) : undefined}
             onExportStatikGeometrie={model ? handleExportStatik : exportOhneModellHinweis}
             onExportIFC={!model ? exportOhneModellHinweis : (ifcExportLaeuft ? undefined : handleExportIFC)}
             onExportCSV={model ? handleExportCSV : exportOhneModellHinweis}

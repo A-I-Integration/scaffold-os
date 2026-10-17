@@ -16,14 +16,14 @@ describe('istStatiker', () => {
 
 describe('statikerDarfPfad', () => {
   it('erlaubt die Statiker-Seiten und -APIs samt Unterpfaden', () => {
-    for (const p of ['/statiker', '/statiker/abc', '/api/statiker/projekte', '/api/statiker/projekte/123', '/login', '/passwort-reset']) {
+    for (const p of ['/statiker', '/statiker/abc', '/api/statiker/projekte', '/api/statiker/projekte/123', '/api/statiker/lager', '/cad', '/cad/bruecke', '/login', '/passwort-reset']) {
       expect(statikerDarfPfad(p), p).toBe(true)
     }
   })
 
   it('sperrt alles andere (Standard = gesperrt)', () => {
     for (const p of [
-      '/', '/dashboard', '/kunden', '/kunden/123', '/rechnungen', '/cad', '/lager', '/hilfe', '/meine-touren',
+      '/', '/dashboard', '/kunden', '/kunden/123', '/rechnungen', '/lager', '/hilfe', '/meine-touren',
       '/api/projects', '/api/kunden', '/api/invoices', '/api/me', '/api/project-media', '/api/admin/users',
       '/api/ansicht-link', '/api/statiker-zuordnung', '/ansicht/abc',
     ]) {

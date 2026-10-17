@@ -51,7 +51,7 @@ describe('Proxy: Statiker (Flag app_metadata.statiker)', () => {
   })
 
   it('leitet jede andere Seite zur Statiker-Startseite um', async () => {
-    for (const p of ['/', '/dashboard', '/kunden', '/kunden/123', '/rechnungen', '/cad', '/hilfe', '/meine-touren', '/ansicht/abc', '/einstellungen']) {
+    for (const p of ['/', '/dashboard', '/kunden', '/kunden/123', '/rechnungen', '/hilfe', '/meine-touren', '/ansicht/abc', '/einstellungen']) {
       const r = await proxy(anfrage(p))
       expect(r.status, p).toBe(307)
       expect(new URL(ziel(r)!).pathname, p).toBe('/statiker')
