@@ -22,6 +22,8 @@ const Scaffold3D = dynamic(() => import('@/components/cad/Scaffold3D'), {
   loading: () => <div className='w-full h-full flex items-center justify-center text-sm text-[#86868b]'>3D-Ansicht wird geladen…</div>,
 })
 
+import type { StatikDaten } from '@/lib/statik-daten'
+
 export type AnsichtDaten = {
   projektName: string
   adresse: string | null
@@ -30,6 +32,8 @@ export type AnsichtDaten = {
   gueltigBis: string | null
   building: BuildingParams
   systemId: string
+  /** Statik-Projektdaten (nur im Statiker-Bereich gesetzt) */
+  statik?: StatikDaten
 }
 
 const ALLE_TYPEN = Object.fromEntries(
@@ -113,6 +117,27 @@ export default function AnsichtViewer({ daten, kopfAktion }: { daten: AnsichtDat
               ))}
             </dl>
           </div>
+
+          {daten.statik && Object.keys(daten.statik).length > 0 && (
+            <div className='rounded-2xl border border-black/5 bg-white p-4'>
+              <h2 className='text-sm font-semibold mb-2'>Projektdaten für die Statik</h2>
+              <dl className='space-y-1.5 text-sm'>
+                {([
+                  ['Windnorm', daten.statik.windnorm],
+                  ['Referenzwind', daten.statik.vrefMs !== undefined ? `${fmt(daten.statik.vrefMs)} m/s` : undefined],
+                  ['Geländekategorie', daten.statik.gelaende],
+                  ['Untergrund', daten.statik.untergrund],
+                  ['Aufbau', daten.statik.aufbau ? new Date(daten.statik.aufbau).toLocaleDateString('de-DE') : undefined],
+                  ['Abbau', daten.statik.abbau ? new Date(daten.statik.abbau).toLocaleDateString('de-DE') : undefined],
+                  ['Nutzung', daten.statik.nutzung === 'oeffentlich' ? 'Öffentlich zugänglich' : daten.statik.nutzung === 'privat' ? 'Privat' : undefined],
+                ] as const).filter(([, v]) => v).map(([k, v]) => (
+                  <div key={k} className='flex justify-between gap-3'><dt className='text-[#86868b]'>{k}</dt><dd className='text-right font-medium'>{v}</dd></div>
+                ))}
+              </dl>
+              {daten.statik.notiz && <p className='mt-2 text-xs text-[#424245] whitespace-pre-wrap'>{daten.statik.notiz}</p>}
+              <p className='mt-2 text-[10px] text-[#86868b]'>Angaben des Planers – nicht von SCAFFOLD OS berechnet.</p>
+            </div>
+          )}
 
           {hinweise.length > 0 && (
             <div className='rounded-2xl border border-amber-300/60 bg-amber-50 p-4'>

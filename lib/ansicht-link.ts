@@ -9,6 +9,7 @@
 import type { BuildingParams, BuildingSection } from './calculations/cad-engine'
 import type { CadBalkon } from './balkon'
 import { pruefeUmriss, type UmrissPunkt } from './calculations/cad-umriss'
+import { bereinigeStatikDaten, type StatikDaten } from './statik-daten'
 
 export const TOKEN_MUSTER = /^[a-f0-9]{48}$/
 export const UUID_MUSTER = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
@@ -104,4 +105,9 @@ export function ansichtAusProjektdaten(daten: unknown): { building: BuildingPara
     ...(Object.keys(geruestOptionen).length > 0 ? { geruestOptionen } : {}),
   }
   return { building, systemId }
+}
+
+/** Statik-Projektdaten aus den gespeicherten Projektdaten (geprüft; leer = nichts hinterlegt). */
+export function statikAusProjektdaten(daten: unknown): StatikDaten {
+  return bereinigeStatikDaten((daten as { statikDaten?: unknown } | null | undefined)?.statikDaten)
 }

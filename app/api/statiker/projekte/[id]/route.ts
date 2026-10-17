@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { serverErrorResponse } from '@/lib/auth'
 import { pruefeStatiker } from '@/lib/statiker-auth'
-import { ansichtAusProjektdaten, UUID_MUSTER } from '@/lib/ansicht-link'
+import { ansichtAusProjektdaten, statikAusProjektdaten, UUID_MUSTER } from '@/lib/ansicht-link'
 
 // ============================================================
 // SCAFFOLD OS – Statiker: ein freigegebenes Projekt ansehen
@@ -47,6 +47,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
       gueltigBis: null,
       building: ansicht.building,
       systemId: ansicht.systemId,
+      statik: statikAusProjektdaten(projekt.data),
     }, { headers: kein_cache })
   } catch (err) {
     return serverErrorResponse(err, 'statiker/projekte/[id] GET')
