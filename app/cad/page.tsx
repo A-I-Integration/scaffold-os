@@ -21,6 +21,7 @@
 import { BAUTEIL_FARBEN, type FarbModus } from '@/lib/cad/bauteil-farben'
 import { useState, useMemo, useCallback, useEffect, useRef } from 'react'
 import StatikDatenPanel from '@/components/cad/StatikDatenPanel'
+import LvDialog from '@/components/cad/LvDialog'
 import { bereinigeStatikDaten, type StatikDaten } from '@/lib/statik-daten'
 import { useRouter } from 'next/navigation'
 import dynamic from 'next/dynamic'
@@ -82,6 +83,7 @@ export default function CADPage() {
   const [model, setModel] = useState<CADModel | null>(null)
   const [farbModus, setFarbModus] = useState<FarbModus>('real')
   const [statikDaten, setStatikDaten] = useState<StatikDaten>({})
+  const [lvOffen, setLvOffen] = useState(false)
   const [selectedComponent, setSelectedComponent] = useState<string | null>(null)
   const [showBuilding, setShowBuilding] = useState(true)
   const [showScaffold, setShowScaffold] = useState(true)
@@ -697,6 +699,9 @@ export default function CADPage() {
 
   return (
     <div className='min-h-screen md:h-screen flex flex-col bg-[#fbfbfd]'>
+      {lvOffen && modelWithManual && (
+        <LvDialog model={modelWithManual} materials={materials} aufbauStunden={logistik?.aufbauStunden ?? 0} abbauStunden={logistik?.abbauStunden ?? 0} onClose={() => setLvOffen(false)} />
+      )}
       <div className='bg-white border-b border-black/5 px-4 py-3 flex flex-wrap gap-2 items-center justify-between'>
         <div>
           <h1 className='text-lg font-semibold text-[#1d1d1f]'>Gerüstbau-CAD</h1>
@@ -793,6 +798,7 @@ export default function CADPage() {
             logistik={logistik}
             onExportPDF={model ? handleExportPDF : exportOhneModellHinweis}
             onExportMontageplan={model ? handleExportMontageplan : exportOhneModellHinweis}
+            onOpenLv={model ? () => setLvOffen(true) : exportOhneModellHinweis}
             onExportStatikGeometrie={model ? handleExportStatik : exportOhneModellHinweis}
             onExportIFC={!model ? exportOhneModellHinweis : (ifcExportLaeuft ? undefined : handleExportIFC)}
             onExportCSV={model ? handleExportCSV : exportOhneModellHinweis}
