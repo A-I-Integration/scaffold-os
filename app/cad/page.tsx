@@ -18,6 +18,7 @@
 //   mit Zulassungen, Statik-Export, IFC-Export, VR.
 // ============================================================
 
+import { BAUTEIL_FARBEN, type FarbModus } from '@/lib/cad/bauteil-farben'
 import { useState, useMemo, useCallback, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import dynamic from 'next/dynamic'
@@ -77,6 +78,7 @@ export default function CADPage() {
   const [building, setBuilding] = useState<BuildingParams>(LEERES_GEBAEUDE)
   const [systemId, setSystemId] = useState<string>('layher-allround')
   const [model, setModel] = useState<CADModel | null>(null)
+  const [farbModus, setFarbModus] = useState<FarbModus>('real')
   const [selectedComponent, setSelectedComponent] = useState<string | null>(null)
   const [showBuilding, setShowBuilding] = useState(true)
   const [showScaffold, setShowScaffold] = useState(true)
@@ -727,6 +729,12 @@ export default function CADPage() {
               )}
             </div>
             {viewMode === '3d' && (
+              <div className='flex rounded-lg border border-black/10 overflow-hidden text-xs' role='group' aria-label='Farbmodus'>
+                <button type='button' onClick={() => setFarbModus('real')} className={`px-2 py-1 ${farbModus === 'real' ? 'bg-[#1d1d1f] text-white' : 'bg-white text-[#424245]'}`} title='Verzinkte Optik wie in der Praxis'>Real</button>
+                <button type='button' onClick={() => setFarbModus('bauteil')} className={`px-2 py-1 ${farbModus === 'bauteil' ? 'bg-[#1d1d1f] text-white' : 'bg-white text-[#424245]'}`} title='Jede Bauteilart in eigener Farbe (mit Legende unten)'>Nach Bauteil</button>
+              </div>
+            )}
+            {viewMode === '3d' && (
               <select value={viewAngle} onChange={(e) => setViewAngle(e.target.value as any)} className='text-xs border rounded-lg px-2 py-1'>
                 <option value='perspective'>3D Perspektive</option>
                 <option value='front'>Vorderansicht</option>
@@ -740,7 +748,7 @@ export default function CADPage() {
           </div>
           <div className='h-[65vh] min-h-[320px] md:h-auto md:flex-1 p-4 md:min-h-0'>
             {viewMode === '3d' && modelWithManual && (
-              <Scaffold3D model={modelWithManual} features={features} showBuilding={showBuilding} showScaffold={showScaffold} showDimensions={showDimensions} selectedComponent={selectedComponent} onSelectComponent={setSelectedComponent} visibleTypes={visibleTypes} viewMode={viewAngle} onCanvasReady={(c) => { canvasRef.current = c }} notes={notes} onAddNote={handleAddNote} hiddenSides={hiddenSides} hiddenLevels={hiddenLevels} measureMode={measureMode} onMeasurePoint={handleMeasurePoint} customDimensions={customDimensions} pendingMeasurePoint={pendingMeasurePoint?.point ?? null} placementType={placementType} onPlacementClick={handlePlacementClick} showEnvironment={showEnvironment} onRemoveComponent={handleRemoveComponent} onReplaceComponent={handleReplaceComponent} removedCount={removedCount} platzierungIdVon={platzierungIdVonBauteil} onBauteilZiehen={handleBauteilZiehen} />
+              <Scaffold3D farbModus={farbModus} model={modelWithManual} features={features} showBuilding={showBuilding} showScaffold={showScaffold} showDimensions={showDimensions} selectedComponent={selectedComponent} onSelectComponent={setSelectedComponent} visibleTypes={visibleTypes} viewMode={viewAngle} onCanvasReady={(c) => { canvasRef.current = c }} notes={notes} onAddNote={handleAddNote} hiddenSides={hiddenSides} hiddenLevels={hiddenLevels} measureMode={measureMode} onMeasurePoint={handleMeasurePoint} customDimensions={customDimensions} pendingMeasurePoint={pendingMeasurePoint?.point ?? null} placementType={placementType} onPlacementClick={handlePlacementClick} showEnvironment={showEnvironment} onRemoveComponent={handleRemoveComponent} onReplaceComponent={handleReplaceComponent} removedCount={removedCount} platzierungIdVon={platzierungIdVonBauteil} onBauteilZiehen={handleBauteilZiehen} />
             )}
             {/* Phase 68-G: Leerzustand nach 'Neu starten' */}
             {viewMode === '3d' && !model && (
@@ -762,6 +770,7 @@ export default function CADPage() {
           <div className='px-4 py-2 bg-white/50 border-t border-black/5 flex gap-2 flex-wrap max-h-24 overflow-y-auto'>
             {Object.entries(visibleTypes).map(([type, visible]) => (
               <button key={type} onClick={() => toggleType(type)} disabled={!model} title={!model ? 'Erst Gerüst berechnen' : undefined} className={`px-2 py-1 text-[10px] font-medium rounded-full border transition-colors ${visible ? 'bg-blue-50 border-blue-200 text-blue-700' : 'bg-gray-50 border-gray-200 text-gray-400 line-through'} ${!model ? 'opacity-40 cursor-not-allowed' : ''}`}>
+                {farbModus === 'bauteil' && viewMode === '3d' && <span aria-hidden className='inline-block w-2 h-2 rounded-full mr-1 align-middle' style={{ background: BAUTEIL_FARBEN[type] ?? '#888888' }} />}
                 {COMPONENT_LABELS[type] || type}
               </button>
             ))}

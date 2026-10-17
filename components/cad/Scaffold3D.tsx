@@ -19,6 +19,7 @@ import * as THREE from 'three'
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 import { CADModel, ScaffoldComponent3D, BuildingFeature3D, berechneGebaeudeSegmente, hatGeradeAbschnitte } from '@/lib/calculations/cad-engine'
 import { CATALOG_ITEMS } from './ComponentCatalog'
+import { bauteilFarbe, type FarbModus } from '@/lib/cad/bauteil-farben'
 import type { CADNote } from '@/types/cad-notes'
 import type { CustomDimension } from '@/types/cad-dimensions'
 
@@ -57,6 +58,7 @@ interface Props {
   // NEU (Umgebung, Schritt 1): Bäume um das Gebäude. Optional, rein additiv;
   // ohne diese Prop bleibt die Szene exakt wie vorher.
   showEnvironment?: boolean
+  farbModus?: FarbModus
   // NEU: ausgewähltes Bauteil per Knopf entfernen (Seite blendet es aus bzw. löscht es).
   onRemoveComponent?: (id: string) => void
   onReplaceComponent?: (id: string, newType: string) => void
@@ -81,6 +83,7 @@ interface ZiehKontextWert {
   bewegen: (platzierungId: string, position: [number, number, number], side: string, levelIndex: number) => void
 }
 const ZiehKontext = createContext<ZiehKontextWert | null>(null)
+const FarbModusKontext = createContext<FarbModus>('real')
 
 // ═══════════════════════════════════════════════════════════
 // FARBPALETTE (einmalig, außerhalb der Komponente)
@@ -374,8 +377,8 @@ const MATERIAL_CACHE = new Map<string, THREE.MeshStandardMaterial>()
 const METALL_TYPEN = new Set(['frame', 'diagonal', 'railing', 'corner_brace', 'console', 'coupling', 'anchor', 'footplate', 'deck', 'stair'])
 const HOLZ_TYPEN = new Set(['board', 'load_plate'])
 
-function getMaterial(type: string, color: THREE.Color): THREE.MeshStandardMaterial {
-  const key = `${type}-${color.getHexString()}`
+function getMaterial(type: string, color: THREE.Color, matt = false): THREE.MeshStandardMaterial {
+  const key = `${type}-${color.getHexString()}${matt ? '-m' : ''}`
   if (MATERIAL_CACHE.has(key)) return MATERIAL_CACHE.get(key)!
   const istMetall = METALL_TYPEN.has(type)
   const istHolz = HOLZ_TYPEN.has(type)
@@ -387,8 +390,9 @@ function getMaterial(type: string, color: THREE.Color): THREE.MeshStandardMateri
   const istNetz = type === 'net' || type === 'safety_net'
   const mat = new THREE.MeshStandardMaterial({
     color,
-    metalness: istHolz ? 0.0 : istRot ? 0.3 : 0.55,
-    roughness: istHolz ? 0.8 : istRot ? 0.55 : 0.55,
+    // Farbmodus „Nach Bauteil“: matt, damit die Farbe nicht vom Metallglanz abgedunkelt wird
+    metalness: matt ? 0.05 : istHolz ? 0.0 : istRot ? 0.3 : 0.55,
+    roughness: matt ? 0.6 : istHolz ? 0.8 : istRot ? 0.55 : 0.55,
     transparent: istNetz,
     // Netz: Gitter-Textur (Linien deckend, Maschen durchsichtig)
     map: istNetz ? getNetTex() : null,
@@ -445,9 +449,10 @@ function InstancedBauteile({
   const { invalidate } = useThree()
   const zieh = useContext(ZiehKontext)
   const dummy = useMemo(() => new THREE.Object3D(), [])
-  const baseColor = useMemo(() => new THREE.Color(COLOR_MAP[type] || '#888888'), [type])
+  const farbModus = useContext(FarbModusKontext)
+  const baseColor = useMemo(() => new THREE.Color(farbModus === 'bauteil' ? bauteilFarbe(type) : (COLOR_MAP[type] || '#888888')), [type, farbModus])
   const geometry = useMemo(() => getGeometry(type, variant), [type, variant])
-  const material = useMemo(() => getMaterial(type, baseColor), [type, baseColor])
+  const material = useMemo(() => getMaterial(type, baseColor, farbModus === 'bauteil'), [type, baseColor, farbModus])
   const tube = isTube(type, variant)
 
   // ─── Matrizen setzen (bei Modell-Änderung neu, nicht pro Frame) ───
@@ -1687,6 +1692,7 @@ function Scaffold3D({
   customDimensions,
   pendingMeasurePoint,
   showEnvironment,
+  farbModus = 'real',
   onRemoveComponent,
   onReplaceComponent,
   removedCount,
@@ -1752,6 +1758,7 @@ function Scaffold3D({
       >
         <AdaptiveDpr pixelated />
         <AdaptiveEvents />
+        <FarbModusKontext.Provider value={farbModus}>
         <ZiehKontext.Provider value={ziehKontext}>
         <group ref={contentRef}>
           <Scene
@@ -1778,6 +1785,7 @@ function Scaffold3D({
           />
         </group>
         </ZiehKontext.Provider>
+        </FarbModusKontext.Provider>
         <AutoFraming targetRef={contentRef} modelKey={modelKey} />
         <GroundingShadow targetRef={contentRef} modelKey={modelKey} />
         {!(showEnvironment && !bridgeMode) && (
