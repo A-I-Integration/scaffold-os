@@ -405,7 +405,7 @@ export default function CADPage() {
     setRemovedGroups([])
     setSelectedComponent(null)
     // Ebenen-State aus dem frisch erzeugten Modell ableiten
-    setLayerState(createInitialLayerState(building.sides || ['front'], newModel.levelCount))
+    setLayerState(createInitialLayerState(building.sides || ['front'], newModel.levelCount, newModel.building.umriss?.length ?? 0))
   }, [building, systemId])
 
   useEffect(() => {

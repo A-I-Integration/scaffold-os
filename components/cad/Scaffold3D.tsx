@@ -20,6 +20,7 @@ import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js
 import { CADModel, ScaffoldComponent3D, BuildingFeature3D, berechneGebaeudeSegmente, hatGeradeAbschnitte } from '@/lib/calculations/cad-engine'
 import { CATALOG_ITEMS } from './ComponentCatalog'
 import { bauteilFarbe, type FarbModus } from '@/lib/cad/bauteil-farben'
+import { kantenSchluessel } from '@/types/cad-layers'
 import type { CADNote } from '@/types/cad-notes'
 import type { CustomDimension } from '@/types/cad-dimensions'
 
@@ -633,6 +634,7 @@ const AllScaffoldComponents = memo(function AllScaffoldComponents({
   lodLevel,
   hiddenSides,
   hiddenLevels,
+  seitenVonFeld,
   measureMode,
   onMeasurePoint,
   placementType,
@@ -645,6 +647,8 @@ const AllScaffoldComponents = memo(function AllScaffoldComponents({
   lodLevel: 0 | 1 | 2
   hiddenSides?: Set<string>
   hiddenLevels?: Set<number>
+  /** Umriss-Modus: Feld-ID → Kanten-Schlüssel ("k0" …), für das Ausblenden einzelner Kanten */
+  seitenVonFeld?: Map<string, string>
   measureMode?: boolean
   onMeasurePoint?: (point: [number, number, number], componentName?: string) => void
   placementType?: string | null
@@ -677,7 +681,7 @@ const AllScaffoldComponents = memo(function AllScaffoldComponents({
       if (comp.fieldId && (hiddenSides?.size || hiddenLevels?.size)) {
         const parts = comp.fieldId.split('-') // ["field", side, levelIndex, fieldIndex]
         if (parts.length >= 3) {
-          const side = parts[1]
+          const side = seitenVonFeld?.get(comp.fieldId) ?? parts[1]
           const levelIdx = parseInt(parts[2], 10)
           if (hiddenSides?.has(side)) return
           if (!isNaN(levelIdx) && hiddenLevels?.has(levelIdx)) return
@@ -689,7 +693,7 @@ const AllScaffoldComponents = memo(function AllScaffoldComponents({
       groups[key].items.push(comp)
     })
     return groups
-  }, [components, visibleTypes, lodLevel, hiddenSides, hiddenLevels])
+  }, [components, visibleTypes, lodLevel, hiddenSides, hiddenLevels, seitenVonFeld])
 
   // Kanten-Bauteile (aus denselben gefilterten Gruppen → Ebenen-/Typ-Filter
   // und LOD gelten automatisch auch für die Linien).
@@ -1606,6 +1610,12 @@ function Scene({
   const extent = Math.max(model.building.lengthM, model.building.widthM || 6, model.totalHeightM) * 0.8 + 5
   const modelKey = `${model.fieldCount}-${model.levelCount}-${model.totalHeightM}-${(features || []).length}-${removedCount || 0}`
   const [lodLevel, setLodLevel] = useState<0 | 1 | 2>(0)
+  // Umriss-Modus: jedes Feld gehört zu einer Kante (Schlüssel "k0" …); sonst leer
+  const seitenVonFeld = useMemo(() => {
+    const m = new Map<string, string>()
+    for (const f of model.fields) if (f.kante !== undefined) m.set(f.id, kantenSchluessel(f.kante))
+    return m.size > 0 ? m : undefined
+  }, [model.fields])
   return (
     <group>
       <ShadowFreeze modelKey={modelKey} />
@@ -1650,6 +1660,7 @@ function Scene({
           lodLevel={lodLevel}
           hiddenSides={hiddenSides}
           hiddenLevels={hiddenLevels}
+          seitenVonFeld={seitenVonFeld}
           measureMode={measureMode}
           onMeasurePoint={onMeasurePoint}
           placementType={placementType}
