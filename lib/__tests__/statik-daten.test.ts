@@ -18,7 +18,7 @@ describe('Statik-Projektdaten', () => {
     expect(pruefeStatikDaten({ aufbau: '2026-11-01', abbau: '2026-11-01' })).toHaveLength(0)
   })
   it('nennt fehlende Angaben', () => {
-    expect(fehlendeStatikAngaben({})).toHaveLength(7)
+    expect(fehlendeStatikAngaben({})).toHaveLength(9)
     expect(fehlendeStatikAngaben({ vrefMs: 0 as number })).not.toContain('Referenzwindgeschwindigkeit')
   })
   it('liest nur bereinigte Statikdaten aus den Projektdaten', () => {

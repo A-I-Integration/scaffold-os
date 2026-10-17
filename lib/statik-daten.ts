@@ -15,6 +15,23 @@ export const GELAENDEKATEGORIEN = [
   { id: 'IV', text: 'IV – Stadtgebiet, viele hohe Gebäude' },
 ] as const
 export const UNTERGRUENDE = ['Beton / Asphalt', 'Pflaster / Platten', 'Schotter / Kies', 'Gewachsener Boden', 'Weicher / aufgefüllter Boden', 'Sonstiger (siehe Notiz)'] as const
+export const WINDZONEN = ['1', '2', '3', '4'] as const
+export const BEKLEIDUNGEN = [
+  { id: 'keine', text: 'Unbekleidet' },
+  { id: 'netz', text: 'Netze / Gittergewebe' },
+  { id: 'plane', text: 'Planen / Einhausung (geschlossen)' },
+] as const
+export const VERANKERUNGSGRUENDE = ['Stahlbeton', 'Vollziegel', 'Lochziegel / Hochlochziegel', 'Porenbeton', 'Holz / Fachwerk', 'Wärmedämmverbundsystem (WDVS)', 'Sonstiger (siehe Notiz)'] as const
+export const SONDERLASTEN = [
+  { id: 'schnee', text: 'Schnee / Eis (Winterbaustelle)' },
+  { id: 'hebezeug', text: 'Aufzug / Winde am Gerüst' },
+  { id: 'anprall', text: 'Fahrzeugverkehr / Anprall am Gerüstfuß' },
+  { id: 'durchfahrt', text: 'Durchfahrt / Überbrückung' },
+  { id: 'haenge', text: 'Hängegerüst' },
+  { id: 'dachfang', text: 'Dachfang- / Schutzgerüst' },
+] as const
+export type SonderlastId = (typeof SONDERLASTEN)[number]['id']
+
 export const NUTZUNGEN = [{ id: 'oeffentlich', text: 'Öffentlich zugänglich' }, { id: 'privat', text: 'Privat / nicht öffentlich' }] as const
 
 export interface StatikDaten {
@@ -25,6 +42,11 @@ export interface StatikDaten {
   aufbau?: string   // ISO-Datum JJJJ-MM-TT
   abbau?: string    // ISO-Datum JJJJ-MM-TT
   nutzung?: 'oeffentlich' | 'privat'
+  windzone?: '1' | '2' | '3' | '4'
+  bekleidung?: 'keine' | 'netz' | 'plane'
+  verankerungsgrund?: string
+  sonderlasten?: SonderlastId[]
+  systemmischung?: boolean
   notiz?: string
 }
 
@@ -49,6 +71,14 @@ export function bereinigeStatikDaten(roh: unknown): StatikDaten {
   if (istDatum(r.aufbau)) aus.aufbau = r.aufbau
   if (istDatum(r.abbau)) aus.abbau = r.abbau
   if (r.nutzung === 'oeffentlich' || r.nutzung === 'privat') aus.nutzung = r.nutzung
+  if ((WINDZONEN as readonly unknown[]).includes(r.windzone)) aus.windzone = r.windzone as StatikDaten['windzone']
+  if (BEKLEIDUNGEN.some((b) => b.id === r.bekleidung)) aus.bekleidung = r.bekleidung as StatikDaten['bekleidung']
+  if (typeof r.verankerungsgrund === 'string' && (VERANKERUNGSGRUENDE as readonly string[]).includes(r.verankerungsgrund)) aus.verankerungsgrund = r.verankerungsgrund
+  if (Array.isArray(r.sonderlasten)) {
+    const ids = SONDERLASTEN.map((x) => x.id).filter((id) => (r.sonderlasten as unknown[]).includes(id))
+    if (ids.length > 0) aus.sonderlasten = ids
+  }
+  if (r.systemmischung === true) aus.systemmischung = true
   if (typeof r.notiz === 'string' && r.notiz.trim()) aus.notiz = r.notiz.trim().slice(0, 500)
   return aus
 }
@@ -70,5 +100,7 @@ export function fehlendeStatikAngaben(d: StatikDaten): string[] {
   if (!d.aufbau) f.push('Aufbaudatum')
   if (!d.abbau) f.push('Abbaudatum')
   if (!d.nutzung) f.push('Öffentlich/privat')
+  if (!d.bekleidung) f.push('Bekleidung')
+  if (!d.verankerungsgrund) f.push('Verankerungsgrund')
   return f
 }
