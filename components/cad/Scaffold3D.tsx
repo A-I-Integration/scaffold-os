@@ -138,7 +138,11 @@ const TUBE_DIAMETER_M: Record<string, number> = {
 }
 
 /** Variante je Bauteil: gleicher Typ, aber unterschiedliche Bauform. */
+/** Treppenstufen sind technisch 'deck' (Artikel ST-001) – für Farbe und Filter zählen sie zur Treppe. */
+const istTreppenstufe = (item: ScaffoldComponent3D): boolean => item.type === 'deck' && item.articleNumber === 'ST-001'
+
 function getVariant(item: ScaffoldComponent3D): string {
+  if (istTreppenstufe(item)) return 'tritt'
   if (item.type === 'railing') {
     // Feld-Geländer: [Länge, 1.0, 0.04] → offener Rahmen aus Rohren.
     // Treppen-Geländer: [0.04, Höhe, 0.04] → senkrechtes Rohr.
@@ -454,7 +458,8 @@ function InstancedBauteile({
   const zieh = useContext(ZiehKontext)
   const dummy = useMemo(() => new THREE.Object3D(), [])
   const farbModus = useContext(FarbModusKontext)
-  const baseColor = useMemo(() => new THREE.Color(farbModus === 'bauteil' ? bauteilFarbe(type) : (COLOR_MAP[type] || '#888888')), [type, farbModus])
+  const farbTyp = variant === 'tritt' ? 'stair' : type
+  const baseColor = useMemo(() => new THREE.Color(farbModus === 'bauteil' ? bauteilFarbe(farbTyp) : (COLOR_MAP[farbTyp] || '#888888')), [farbTyp, farbModus])
   const geometry = useMemo(() => getGeometry(type, variant), [type, variant])
   const material = useMemo(() => getMaterial(type, baseColor, farbModus === 'bauteil'), [type, baseColor, farbModus])
   const tube = isTube(type, variant)
@@ -673,8 +678,9 @@ const AllScaffoldComponents = memo(function AllScaffoldComponents({
     // damit jede Gruppe mit EINER Geometrie als InstancedMesh gezeichnet wird.
     const groups: Record<string, { type: string; variant: string; items: ScaffoldComponent3D[] }> = {}
     components.forEach((comp) => {
-      if (visibleTypes[comp.type] === false) return
-      if (ausgeblendet.has(comp.type)) return
+      const filterTyp = istTreppenstufe(comp) ? 'stair' : comp.type
+      if (visibleTypes[filterTyp] === false) return
+      if (ausgeblendet.has(filterTyp)) return
       // NEU (Ebenen/Layers): Bauteil nach Seite/Lage filtern.
       // fieldId-Format: "field-{side}-{levelIndex}-{fieldIndex}"
       // Bauteile OHNE fieldId (globale Anker, Dächer etc.) passieren immer.
