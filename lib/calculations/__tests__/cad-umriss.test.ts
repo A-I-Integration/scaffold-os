@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { generateCADModel, generateScaffoldComponents, TREPPEN_PODEST_M, type BuildingParams } from '../cad-engine'
+import { generateCADModel, generateScaffoldComponents, treppenlaufInFeld, TREPPEN_PODEST_M, type BuildingParams } from '../cad-engine'
 import { rechteckUmriss, lFormUmriss, pruefeUmriss, normalisiereUmriss, umrissKanten, umrissEcken, geruestEckpunkt, umrissFlaecheSigned, zentriereUmriss } from '../cad-umriss'
 
 const basis: BuildingParams = {
@@ -226,6 +226,36 @@ describe('Außentreppe vor dem Gerüst', () => {
     const brett = c.find((x) => x.id === `board-${feld.id}`)!
     expect(brett.position[1] - brett.scale[1] / 2).toBeGreaterThanOrEqual(deck.position[1])
     expect(brett.position[1] - brett.scale[1] / 2 - deck.position[1]).toBeLessThan(0.05)
+  })
+
+  it('Treppenläufe enden exakt auf der Belaghöhe jeder Lage (auch bei ungleichen Lagenhöhen)', () => {
+    const m = generateCADModel({ ...basis, umriss: rechteckUmriss(10, 8), heightM: 9.1, eavesHeightM: 9.1 }, 'layher-allround')
+    const c = generateScaffoldComponents(m)
+    const stufen = c.filter((x) => x.id.startsWith('stair-step-0-'))
+    expect(stufen.length).toBeGreaterThan(0)
+    const tops = m.levels.map((l) => l.topY)
+    // Jede Lage hat ein Podest rechts auf Belaghöhe; die höchste Stufe jedes Laufs liegt knapp darunter
+    for (const top of tops) {
+      const podest = c.find((x) => x.id.startsWith('stair-podest-r') && Math.abs(x.position[1] + 0.01 - top) < 0.005)
+      expect(podest).toBeDefined()
+      const naechste = stufen.map((x) => x.position[1] + 0.02 - 0.01).filter((y) => y <= top + 0.005)
+      expect(Math.max(...naechste)).toBeCloseTo(top, 1)
+    }
+  })
+
+  it('Umriss-Anker reichen von der Wand bis zur Innenstütze', () => {
+    const m = generateCADModel({ ...basis, umriss: rechteckUmriss(10, 8), heightM: 12, eavesHeightM: 12, floors: 4, floorHeightsM: [3, 3, 3, 3] }, 'layher-allround')
+    expect(m.anchors.length).toBeGreaterThan(0)
+    for (const a of m.anchors) expect(a.laengeM).toBeCloseTo(0.4, 6) // 0,3 m Wandabstand + 0,1 m in der Wand
+  })
+
+  it('Manuelle Treppe: Geländer nur einmal (in der Läufe-Geometrie), keine zusätzlichen Rohre', () => {
+    const m = generateCADModel({ ...basis, sides: ['front'] }, 'layher-allround')
+    const feld = m.fields.find((f) => f.levelIndex === 0)!
+    const teile = treppenlaufInFeld(m, feld, m.levels[0], 'manual-test')
+    expect(teile.filter((t) => t.type === 'railing')).toHaveLength(0)
+    expect(teile.filter((t) => t.type === 'stair')).toHaveLength(1)
+    expect(teile.filter((t) => t.articleNumber === 'ST-001').length).toBeGreaterThan(5)
   })
 })
 

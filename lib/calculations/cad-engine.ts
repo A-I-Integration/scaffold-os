@@ -167,9 +167,13 @@ export interface ScaffoldAnchor {
   type: string
   // Nur Umriss-Modus: Drehung des Ankers um die Hochachse
   yaw?: number
+  /** Länge des Ankerrohrs in m (Umriss-Modus: von 10 cm in der Wand bis zur Innenstütze); fehlt sie, gilt 0,3 m */
+  laengeM?: number
 }
 
 export interface ScaffoldComponent3D {
+  /** Nur Treppenturm: Steighöhe je Lauf (m), wenn die Lagen unterschiedlich hoch sind */
+  lagenHoehenM?: number[]
   /** Nur Rahmen: Rahmenbreite (Abstand Innen-/Außenstütze) in m – die Darstellung zeichnet dann einen echten Leiterrahmen mit zwei Stützen. */
   rahmenBreiteM?: number
   id: string
@@ -632,7 +636,7 @@ export function generateScaffoldComponents(model: CADModel): ScaffoldComponent3D
 
   // === VERANKERUNGEN ===
   model.anchors.forEach((anchor) => {
-    components.push({ id: `anchor-${anchor.id}`, type: 'anchor', articleNumber: 'AN-001', name: 'Fassadenanker', position: [anchor.positionX, anchor.positionY, anchor.positionZ], rotation: eulerMitYaw([0, 0, 0], anchor.yaw ?? 0), scale: [0.08, 0.08, 0.3], color: colorAnchor })
+    components.push({ id: `anchor-${anchor.id}`, type: 'anchor', articleNumber: 'AN-001', name: 'Fassadenanker', position: [anchor.positionX, anchor.positionY, anchor.positionZ], rotation: eulerMitYaw([0, 0, 0], anchor.yaw ?? 0), scale: [0.08, 0.08, anchor.laengeM ?? 0.3], color: colorAnchor })
   })
 
   // === KONSOLEN ===
@@ -702,13 +706,12 @@ export function generateScaffoldComponents(model: CADModel): ScaffoldComponent3D
     const lv = (j: number) => levels.find((l) => l.index === j)!
     const y0 = lv(0).bottomY
     const hGes = lv(lagen - 1).topY - y0
-    const rise = hGes / lagen
+    // Steighöhe je Lauf aus den tatsächlichen Lagenhöhen (Lauf f endet auf dem Belag der Lage f)
+    const rises = Array.from({ length: lagen }, (_, j) => lv(j).topY - (j === 0 ? y0 : lv(j - 1).topY))
+    const gleicheHoehe = rises.every((r) => Math.abs(r - rises[0]) < 0.005)
     const erster = components.length
-    components.push({ id: 'stair-frame-0', type: 'stair', articleNumber: 'SP-001', name: 'Außentreppe', position: [cx, y0 + hGes / 2, zS], rotation: [0, 0, 0], scale: [L, hGes, W], color: colorStair, levelId: lv(0).id, flights: lagen, flightStartDir: 1, podestM: TREPPEN_PODEST_M, gleichlauf: true })
+    components.push({ id: 'stair-frame-0', type: 'stair', articleNumber: 'SP-001', name: 'Außentreppe', position: [cx, y0 + hGes / 2, zS], rotation: [0, 0, 0], scale: [L, hGes, W], color: colorStair, levelId: lv(0).id, flights: lagen, flightStartDir: 1, podestM: TREPPEN_PODEST_M, gleichlauf: true, ...(gleicheHoehe ? {} : { lagenHoehenM: rises }) })
     const run = L - 2 * TREPPEN_PODEST_M
-    const perFlight = Math.max(1, Math.round(rise / 0.25))
-    const tread = run / perFlight
-    const rs = rise / perFlight
     let stepNo = 0
     const podest = (id: string, xp: number, yTop: number, xEnde: number, ende: 1 | -1, levelId: string) => {
       components.push({ id: `stair-podest-${id}`, type: 'deck', articleNumber: 'ST-002', name: 'Treppenpodest', position: [xp, yTop - 0.01, zS], rotation: [0, 0, 0], scale: [TREPPEN_PODEST_M, 0.04, W], color: '#a0a0a0', levelId })
@@ -720,8 +723,12 @@ export function generateScaffoldComponents(model: CADModel): ScaffoldComponent3D
     // Vom Podest rechts geht man über den Gerüstbelag zurück nach links zum Anfang des nächsten Laufs.
     for (let fl = 0; fl < lagen; fl++) {
       const x0 = xL + TREPPEN_PODEST_M
+      const yBasis = fl === 0 ? y0 : lv(fl - 1).topY
+      const perFlight = Math.max(1, Math.round(rises[fl] / 0.25))
+      const tread = run / perFlight
+      const rs = rises[fl] / perFlight
       for (let k = 0; k < perFlight; k++) {
-        const oberkante = y0 + fl * rise + (k + 1) * rs + 0.01
+        const oberkante = yBasis + (k + 1) * rs + 0.01
         components.push({ id: `stair-step-0-${stepNo++}`, type: 'deck', articleNumber: 'ST-001', name: 'Treppenstufe', position: [x0 + (k + 0.5) * tread, oberkante - 0.02, zS], rotation: [0, 0, 0], scale: [tread * 0.92, 0.04, W - 0.08], color: '#a0a0a0', levelId: lv(fl).id })
       }
       const yTop = lv(fl).topY
@@ -1229,10 +1236,11 @@ function generiereUmrissModell(
           if (f % 2 !== 0) return
           anchors.push({
             id: `anchor-k${s.k.index}-${al}-${f}`,
-            positionX: s.start.x + s.k.u[0] * t + s.k.n[0] * scaffoldWidthM / 2,
+            // Ankerrohr von 10 cm in der Wand bis zur Innenstütze (Innenlinie = Wand + Wandabstand)
+            positionX: s.start.x + s.k.u[0] * t - s.k.n[0] * (abstandM + 0.1) / 2,
             positionY: yAnchor,
-            positionZ: s.start.z + s.k.u[1] * t + s.k.n[1] * scaffoldWidthM / 2,
-            side: 'front', type: 'fassadenanker', yaw: s.k.yaw,
+            positionZ: s.start.z + s.k.u[1] * t - s.k.n[1] * (abstandM + 0.1) / 2,
+            side: 'front', type: 'fassadenanker', yaw: s.k.yaw, laengeM: abstandM + 0.1,
           })
         })
       })
@@ -1475,7 +1483,7 @@ export function addManualPlacement(
  * Ein Treppenlauf (Zickzack, eine Lage) im angegebenen Feld – gleiche Bauweise
  * wie die automatisch erzeugten Treppentürme, aber an beliebiger Seite.
  * Die Teile werden im Vorne-System erzeugt und auf die Seite des Feldes gedreht.
- * IDs: `${id}` (Holme), `${id}-step-N`, `${id}-rail-aussen-*` / `${id}-rail-wand-*` (Pfosten, Handlauf, Knieleiste).
+ * IDs: `${id}` (Lauf inkl. Wangen und Geländer), `${id}-step-N` (Stufen).
  */
 export function treppenlaufInFeld(model: CADModel, field: ScaffoldField, level: ScaffoldLevel, id: string): ScaffoldComponent3D[] {
   const rahmen = feldRahmen(field, model.building)
@@ -1494,28 +1502,9 @@ export function treppenlaufInFeld(model: CADModel, field: ScaffoldField, level: 
     const stepY = level.bottomY + (k + 1) * (h / perFlight) - 0.04
     out.push({ id: `${id}-step-${k}`, type: 'deck', articleNumber: 'ST-001', name: 'Treppenstufe', position: [x0 + startDir * (k + 0.5) * tread, stepY, stairZ], rotation: [0, 0, 0], scale: [tread * 0.92, 0.04, stairW - 0.08], color: '#a0a0a0', levelId: level.id })
   }
-  // Geländer (ANNAHMEN, rein konstruktiv: Handlauf 1,0 m und Knieleiste 0,5 m
-  // über der Stufenoberkante; Außenseite mit Handlauf + Knieleiste, Wandseite nur
-  // Handlauf). Die Pfosten stehen am unteren und oberen Laufende, der obere
-  // reicht 1,0 m über den Belag der nächsten Lage (Absturzsicherung Öffnung).
-  const rs = h / perFlight
-  const xLow = x0 + startDir * 0.5 * tread
-  const xHigh = x0 + startDir * (perFlight - 0.5) * tread
-  const yLow = level.bottomY + rs - 0.02
-  const yHigh = level.bottomY + h - 0.02
-  const rohr = (suffix: string, ax: number, ay: number, bx: number, by: number, z: number) => {
-    const dx = bx - ax, dy = by - ay
-    const len = Math.hypot(dx, dy)
-    out.push({ id: `${id}-${suffix}`, type: 'railing', articleNumber: 'SG-001', name: 'Treppengeländer', position: [(ax + bx) / 2, (ay + by) / 2, z], rotation: [0, 0, Math.atan2(-dx, dy)], scale: [0.04, len, 0.04], color: '#ef4444', levelId: level.id })
-  }
-  const zAussen = stairZ + stairW / 2 - 0.03
-  const zWand = stairZ - stairW / 2 + 0.03
-  for (const [tag, z] of [['aussen', zAussen], ['wand', zWand]] as const) {
-    rohr(`rail-${tag}-pfosten-unten`, xLow, level.bottomY, xLow, yLow + 1.0, z)
-    rohr(`rail-${tag}-pfosten-oben`, xHigh, level.bottomY, xHigh, yHigh + 1.0, z)
-    rohr(`rail-${tag}-handlauf`, xLow, yLow + 1.0, xHigh, yHigh + 1.0, z)
-  }
-  rohr('rail-aussen-knie', xLow, yLow + 0.5, xHigh, yHigh + 0.5, zAussen)
+  // Geländer: Wangen, Handläufe (1,0 m über der Stufenoberkante), Knieleisten und Pfosten
+  // gehören zur Läufe-Geometrie des Bauteils 'Treppenlauf' (SP-001) – keine eigenen Rohre mehr,
+  // sonst wären sie doppelt gezeichnet (ANNAHME: Geländer ist im Treppenlauf enthalten).
   out.forEach((c) => bauteilInWelt(c, rahmen))
   return out
 }

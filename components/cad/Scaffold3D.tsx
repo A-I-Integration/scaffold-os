@@ -148,6 +148,7 @@ function getVariant(item: ScaffoldComponent3D): string {
     // Echter Leiterrahmen: zwei Stützen (innen/außen) mit Sprossen und Rosetten.
     return `rahmen|${Math.round(item.scale[1] * 100)}|${Math.round(item.rahmenBreiteM * 100)}`
   }
+  if (item.type === 'anchor') return `an${Math.round(item.scale[2] * 100)}`
   if (item.type === 'deck') {
     // Stahlbelag mit Randleiste und Antirutsch-Rippen: Variante trägt Länge und Breite (cm).
     return `dk${Math.round(item.scale[0] * 100)}|${Math.round(item.scale[1] * 100)}`
@@ -166,7 +167,7 @@ function getVariant(item: ScaffoldComponent3D): string {
     // Treppenturm mit Zickzack-Läufen: Variante trägt Läufe, Startrichtung
     // und die Maße (cm) – die Geometrie wird in echten Metern gebaut.
     const [sx, sy, sz] = item.scale
-    return `zz${item.flights}|${item.flightStartDir === -1 ? 1 : 0}|${Math.round(sx * 100)}|${Math.round(sy * 100)}|${Math.round(sz * 100)}|${Math.round((item.podestM ?? 0) * 100)}|${item.gleichlauf ? 1 : 0}`
+    return `zz${item.flights}|${item.flightStartDir === -1 ? 1 : 0}|${Math.round(sx * 100)}|${Math.round(sy * 100)}|${Math.round(sz * 100)}|${Math.round((item.podestM ?? 0) * 100)}|${item.gleichlauf ? 1 : 0}${item.lagenHoehenM ? `|${item.lagenHoehenM.map((h) => Math.round(h * 100)).join(',')}` : ''}`
   }
   return 'default'
 }
@@ -174,6 +175,7 @@ function getVariant(item: ScaffoldComponent3D): string {
 function isTube(type: string, variant: string): boolean {
   if (type === 'railing') return variant === 'post'
   if (type === 'frame' && variant.startsWith('rahmen')) return false
+  if (type === 'anchor') return false
   return type in TUBE_DIAMETER_M
 }
 
@@ -238,10 +240,10 @@ function getGeometry(type: string, variant: string = 'default'): THREE.BufferGeo
           // Zickzack-Läufe (Scaffmax-Stil): je Lage ein Lauf mit zwei Holmen.
           // Gebaut in echten Metern um den Mittelpunkt und durch die Maße
           // geteilt – die Instanz-Skalierung (= Maße) macht daraus wieder Meter.
-          const [nS, p0S, lS, hS, wS, podS, glS] = variant.slice(2).split('|')
+          const [nS, p0S, lS, hS, wS, podS, glS, hoS] = variant.slice(2).split('|')
           const N = Math.max(1, parseInt(nS, 10)), p0 = parseInt(p0S, 10)
           const L = parseInt(lS, 10) / 100, H = parseInt(hS, 10) / 100, W = parseInt(wS, 10) / 100
-          const parts = treppenTeile({ laeufe: N, startRichtung: p0 === 1 ? 1 : 0, laengeM: L, hoeheM: H, breiteM: W, podestM: parseInt(podS ?? '0', 10) / 100, gleichlauf: glS === '1' })
+          const parts = treppenTeile({ laeufe: N, startRichtung: p0 === 1 ? 1 : 0, laengeM: L, hoeheM: H, breiteM: W, podestM: parseInt(podS ?? '0', 10) / 100, gleichlauf: glS === '1', hoehenM: hoS ? hoS.split(',').map((x) => parseInt(x, 10) / 100) : undefined })
           geo = mergeParts(parts)
           geo.scale(1 / L, 1 / H, 1 / W)
           break
@@ -255,6 +257,25 @@ function getGeometry(type: string, variant: string = 'default'): THREE.BufferGeo
           return g
         })
         geo = mergeParts(parts)
+        break
+      }
+      case 'anchor': {
+        // Fassadenanker in echten Metern (Rohr entlang lokal z, Box 0,08 × 0,08 × L):
+        // Rohr, quadratische Wandplatte am Wandende (−z) und Kupplungskopf am Stützenende (+z).
+        const L = Math.max(0.1, parseInt(variant.slice(2), 10) / 100 || 0.3)
+        const parts: THREE.BufferGeometry[] = []
+        const rohr = new THREE.CylinderGeometry(0.0165, 0.0165, L, 8)
+        rohr.rotateX(Math.PI / 2)
+        parts.push(rohr)
+        const platte = new THREE.BoxGeometry(0.08, 0.08, 0.008)
+        platte.translate(0, 0, -L / 2 + 0.004)
+        parts.push(platte)
+        const kopf = new THREE.CylinderGeometry(0.036, 0.036, 0.04, 10)
+        kopf.rotateX(Math.PI / 2)
+        kopf.translate(0, 0, L / 2 - 0.03)
+        parts.push(kopf)
+        geo = mergeParts(parts)
+        geo.scale(1 / 0.08, 1 / 0.08, 1 / L)
         break
       }
       case 'footplate': {
