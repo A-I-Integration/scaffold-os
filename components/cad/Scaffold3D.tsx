@@ -389,7 +389,10 @@ function getMaterial(type: string, color: THREE.Color, matt = false): THREE.Mesh
   const istRot = type === 'deck' // rote Belags-Riegel
   const istNetz = type === 'net' || type === 'safety_net'
   const mat = new THREE.MeshStandardMaterial({
-    color,
+    // Die Farbe jeder Instanz (setColorAt) wird mit der Material-Farbe MULTIPLIZIERT.
+    // Im Farbmodus „Nach Bauteil“ darum weißes Material, sonst würde die Farbe quadriert
+    // (dunkel/verfälscht). Der Real-Modus bleibt wie bisher.
+    color: matt ? new THREE.Color('#ffffff') : color,
     // Farbmodus „Nach Bauteil“: matt, damit die Farbe nicht vom Metallglanz abgedunkelt wird
     metalness: matt ? 0.05 : istHolz ? 0.0 : istRot ? 0.3 : 0.55,
     roughness: matt ? 0.6 : istHolz ? 0.8 : istRot ? 0.55 : 0.55,
