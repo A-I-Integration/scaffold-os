@@ -90,14 +90,20 @@ describe('Gerüst folgt dem Umriss', () => {
     expect(m.umrissEcken!.filter((e) => e.konvex)).toHaveLength(5)
   })
 
-  it('Treppe sitzt auf Kante 1', () => {
+  it('Treppe sitzt auf der längsten Kante, im zweiten Feld, Belag im Treppenfeld entfällt', () => {
     const m = generateCADModel({ ...basis, umriss: lFormUmriss(12, 9, 5, 4) }, 'layher-allround')
     const treppe = m.components3D.find((c) => c.type === 'stair')
     expect(treppe).toBeDefined()
-    const k0 = umrissKanten(m.building.umriss!)[0]
-    const d = (treppe!.position[0] - k0.von.x) * k0.n[0] + (treppe!.position[2] - k0.von.z) * k0.n[1]
+    const kanten = umrissKanten(m.building.umriss!)
+    const laengste = kanten.reduce((b, k) => (k.laengeM > b.laengeM ? k : b), kanten[0])
+    const d = (treppe!.position[0] - laengste.von.x) * laengste.n[0] + (treppe!.position[2] - laengste.von.z) * laengste.n[1]
     expect(d).toBeGreaterThan(0.3)
     expect(d).toBeLessThan(0.3 + 0.8)
+    // Treppenfeld = zweites Feld dieser Kante: kein Belag darin
+    const feld0 = m.fields.filter((f) => f.kante === laengste.index && f.levelIndex === 0).sort((a, b) => a.index - b.index)
+    expect(m.components3D.some((c) => c.id === `deck-${feld0[1].id}`)).toBe(false)
+    expect(m.components3D.some((c) => c.id === `deck-${feld0[0].id}`)).toBe(true)
+    expect(m.components3D.some((c) => c.id === `deck-${feld0[2].id}`)).toBe(true)
   })
 
   it('ungültiger Umriss: Fehlermeldung und Rückfall auf das Rechteck', () => {
@@ -120,5 +126,29 @@ describe('Umriss-Modus: Fassadenmerkmale', () => {
     const { generateBuildingFeatures } = await import('../cad-engine')
     expect(generateBuildingFeatures({ ...basis, windowCount: 6, doorCount: 1, umriss: rechteckUmriss(10, 8) })).toEqual([])
     expect(generateBuildingFeatures({ ...basis, windowCount: 6, doorCount: 1 }).length).toBeGreaterThan(0)
+  })
+})
+
+describe('Treppe: Austritt ins Nachbarfeld', () => {
+  it('Rechteck: Treppe im zweiten Feld der Vorderseite, Belag dort entfällt in den Treppenlagen', () => {
+    const m = generateCADModel(basis, 'layher-allround')
+    const unten = m.fields.filter((f) => f.side === 'front' && f.levelIndex === 0).sort((a, b) => a.index - b.index)
+    expect(unten.length).toBeGreaterThanOrEqual(3)
+    const treppe = m.components3D.find((c) => c.type === 'stair')!
+    expect(treppe.position[0]).toBeCloseTo(unten[1].positionX, 2)
+    for (let l = 0; l < 3; l++) {
+      const f = m.fields.find((x) => x.side === 'front' && x.levelIndex === l && Math.abs(x.positionX - unten[1].positionX) < 0.01)
+      if (f) expect(m.components3D.some((c) => c.id === `deck-${f.id}`)).toBe(false)
+    }
+  })
+  it('zu kurze Seite (2 Felder): keine Treppe, Warnung', () => {
+    const m = generateCADModel({ ...basis, lengthM: 4 }, 'layher-allround')
+    expect(m.fields.filter((f) => f.side === 'front' && f.levelIndex === 0).length).toBeLessThan(3)
+    expect(m.components3D.some((c) => c.type === 'stair')).toBe(false)
+    expect(m.warnings.some((w) => w.code === 'TREPPE_ZU_KURZ')).toBe(true)
+  })
+  it('Treppe aus: keine Warnung wegen zu kurzer Seite', () => {
+    const m = generateCADModel({ ...basis, lengthM: 4, geruestOptionen: { treppe: false } }, 'layher-allround')
+    expect(m.warnings.some((w) => w.code === 'TREPPE_ZU_KURZ')).toBe(false)
   })
 })

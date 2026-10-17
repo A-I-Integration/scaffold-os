@@ -352,8 +352,6 @@ function bauteilInWelt(c: ScaffoldComponent3D, rahmen: SeitenRahmen): void {
   c.rotation = eulerMitYaw(c.rotation, rahmen.yaw)
 }
 
-/** Treppe sitzt an der Vorderseite – im Umriss-Modus an der ersten Kante. */
-const istTreppenFeld = (f: ScaffoldField): boolean => f.side === 'front' && (f.kante === undefined || f.kante === 0)
 const gleicherPlatz = (a: { positionX: number; positionZ: number }, b: { positionX: number; positionZ: number }, tol: number): boolean =>
   Math.abs(a.positionX - b.positionX) < tol && Math.abs(a.positionZ - b.positionZ) < tol
 
@@ -385,29 +383,63 @@ export function generateScaffoldComponents(model: CADModel): ScaffoldComponent3D
   })
 
   // === TREPPEN-PLAN ===
-  // Ein Treppenturm sitzt IM Feld (Zickzack-Läufe, ein Lauf je Lage) und deckt
-  // bis zu 3 Lagen ab, aber nur so viele, wie an seiner Stelle Felder
-  // existieren. Bei Höhenstufen folgt je Stufe der nächste Turm.
+  // Ein Treppenturm besteht aus Zickzack-Läufen in EINEM Feld (ein Lauf je Lage, bis zu
+  // 3 Lagen). Jeder Lauf geht über die ganze Feldlänge; oben steigt man auf den Belag des
+  // NACHBARFELDS aus. Darum:
+  //  - die Treppe steht im zweiten Feld der Kante (links und rechts ein Nachbarfeld),
+  //  - der Belag im Treppenfeld entfällt in den Lagen, die der Turm durchläuft,
+  //  - ein Lauf wird nur erzeugt, wenn auf seiner Austrittsseite ein Nachbarfeld steht.
   const stairInterval = 3
-  const stairBase = fields.find((f) => istTreppenFeld(f) && f.levelIndex === 0)
+  // Treppenseite: Rechteck = Vorderseite; Umriss = die längste Kante (dort passt der Turm am ehesten)
+  const kantenLaenge = new Map<number, number>()
+  fields.forEach((f) => { if (f.kante !== undefined && f.levelIndex === 0) kantenLaenge.set(f.kante, (kantenLaenge.get(f.kante) ?? 0) + f.lengthM) })
+  let treppenKante: number | undefined
+  kantenLaenge.forEach((len, k) => { if (treppenKante === undefined || len > (kantenLaenge.get(treppenKante) ?? 0) + 1e-9) treppenKante = k })
+  const istTreppenFeld = (f: ScaffoldField): boolean => f.side === 'front' && (f.kante === undefined || f.kante === treppenKante)
+  const treppenFelder0 = fields.filter((f) => istTreppenFeld(f) && f.levelIndex === 0).sort((a, b) => a.index - b.index)
   const stairPlans: { i: number; covered: number; field: ScaffoldField; level: ScaffoldLevel }[] = []
-  const stairDeckDir = new Map<string, 1 | -1>() // Feld-ID → Ende, an dem der Lauf ankommt (Belag nur dort)
-  {
-    let stairLevel = building.geruestOptionen?.treppe === false ? levels.length : 0
+  const stairDeckDir = new Map<string, 1 | -1>() // Feld-ID → Treppenfeld (Belag entfällt); Wert = Austrittsseite des Laufs
+  const warnEinmal = (code: string, type: CADWarning['type'], message: string) => {
+    if (!model.warnings.some((w) => w.code === code)) model.warnings.push({ type, code, message })
+  }
+  const hatNachbarfeld = (f: ScaffoldField, lage: number, dir: 1 | -1): boolean => {
+    const rf = feldRahmen(f, building)
+    const [fx, fz] = rf.toLocal(f.positionX, f.positionZ)
+    return fields.some((g) => {
+      if (g.id === f.id || g.levelIndex !== lage || g.side !== f.side || g.kante !== f.kante) return false
+      const [gx, gz] = rf.toLocal(g.positionX, g.positionZ)
+      return Math.abs(gz - fz) < 0.05 && Math.abs(gx - fx - dir * (f.lengthM + g.lengthM) / 2) < 0.05
+    })
+  }
+  const stairBase = building.geruestOptionen?.treppe === false ? undefined : treppenFelder0[1]
+  if (building.geruestOptionen?.treppe !== false && treppenFelder0.length > 0 && treppenFelder0.length < 3) {
+    warnEinmal('TREPPE_ZU_KURZ', 'warning', `Die Treppe braucht an der Treppenseite mindestens 3 Felder (Austritt ins Nachbarfeld) – bei ${treppenFelder0.length} Feld(ern) wird keine Treppe erzeugt. Bitte eine Treppe von Hand platzieren.`)
+  }
+  if (stairBase) {
+    const saeule = (lage: number) => fields.find((f) => istTreppenFeld(f) && f.levelIndex === lage && gleicherPlatz(f, stairBase, 0.01))
+    let stairLevel = 0
     for (let guard = 0; guard < levels.length + 2 && stairLevel < levels.length; guard++) {
       const i = stairLevel
       const level = levels.find((l) => l.index === i)
-      const stairField = fields.find((f) => istTreppenFeld(f) && f.levelIndex === i)
-      if (!stairField || !level) break
-      const aufTurm = !stairBase || gleicherPlatz(stairField, stairBase, 0.01)
-      const getragen = i === 0 || aufTurm || fields.some((g) => istTreppenFeld(g) && g.levelIndex === i - 1 && Math.hypot(g.positionX - stairField.positionX, g.positionZ - stairField.positionZ) <= g.lengthM / 2)
-      if (!getragen) break
+      const stairField = saeule(i)
+      if (!stairField || !level) {
+        warnEinmal('TREPPE_ENDET', 'info', `Die Treppe endet in Lage ${i}: an ihrer Stelle gibt es darüber kein Gerüstfeld mehr. Weiter oben bitte einen Zugang (Treppe/Leiter) von Hand ergänzen.`)
+        break
+      }
       let covered = 0
-      while (covered < stairInterval && fields.some((g) => istTreppenFeld(g) && g.levelIndex === i + covered && gleicherPlatz(g, stairField, 0.01))) covered++
-      covered = Math.max(1, covered)
+      while (covered < stairInterval && i + covered < levels.length) {
+        const j = i + covered
+        const fj = saeule(j)
+        if (!fj || !hatNachbarfeld(fj, j, j % 2 === 0 ? 1 : -1)) break
+        covered++
+      }
+      if (covered === 0) {
+        warnEinmal('TREPPE_OHNE_NACHBAR', 'info', `Die Treppe endet in Lage ${i}: auf der Austrittsseite fehlt das Nachbarfeld. Weiter oben bitte einen Zugang von Hand ergänzen.`)
+        break
+      }
       stairPlans.push({ i, covered, field: stairField, level })
       for (let j = i; j < i + covered; j++) {
-        const f = fields.find((g) => istTreppenFeld(g) && g.levelIndex === j && gleicherPlatz(g, stairField, 0.01))
+        const f = saeule(j)
         if (f) stairDeckDir.set(f.id, j % 2 === 0 ? 1 : -1)
       }
       stairLevel += covered
@@ -438,12 +470,11 @@ export function generateScaffoldComponents(model: CADModel): ScaffoldComponent3D
     components.push({ id: `rail-${field.id}-bottom`, type: 'frame', articleNumber: 'QR-001', name: 'Querriegel', position: [positionX, yBottom + 0.05, positionZ], rotation: [0, 0, 0], scale: [lengthM, 0.04, 0.04], color: colorFrame, fieldId: field.id, levelId: level.id })
     components.push({ id: `rail-${field.id}-top`, type: 'frame', articleNumber: 'QR-001', name: 'Querriegel', position: [positionX, yTop - 0.05, positionZ], rotation: [0, 0, 0], scale: [lengthM, 0.04, 0.04], color: colorFrame, fieldId: field.id, levelId: level.id })
 
-    // Arbeitsbühne – im Treppenfeld nur die Hälfte, an der der Lauf ankommt
-    // (die andere Hälfte bleibt für den nächsten Lauf offen).
-    const treppenEnde = stairDeckDir.get(field.id)
-    const deckL = treppenEnde ? (lengthM - 0.05) / 2 : lengthM - 0.05
-    const deckX = treppenEnde ? positionX + treppenEnde * (lengthM - 0.05) / 4 : positionX
-    components.push({ id: `deck-${field.id}`, type: 'deck', articleNumber: getDeckArticle(lengthM), name: `Arbeitsbühne ${lengthM}m`, position: [deckX, yTop, positionZ + widthM / 2 - 0.02], rotation: [-Math.PI / 2, 0, 0], scale: [deckL, widthM - 0.05, 0.02], color: colorDeck, fieldId: field.id, levelId: level.id })
+    // Arbeitsbühne – im Treppenfeld entfällt der Belag ganz (der Lauf nimmt das Feld ein,
+    // Austritt auf den Belag des Nachbarfelds).
+    if (!stairDeckDir.has(field.id)) {
+      components.push({ id: `deck-${field.id}`, type: 'deck', articleNumber: getDeckArticle(lengthM), name: `Arbeitsbühne ${lengthM}m`, position: [positionX, yTop, positionZ + widthM / 2 - 0.02], rotation: [-Math.PI / 2, 0, 0], scale: [lengthM - 0.05, widthM - 0.05, 0.02], color: colorDeck, fieldId: field.id, levelId: level.id })
+    }
 
     // Geländer
     components.push({ id: `railing-${field.id}-top`, type: 'railing', articleNumber: getRailingArticle(lengthM), name: `Geländer ${lengthM}m`, position: [positionX, yTop, positionZ + widthM / 2 + 0.02], rotation: [0, 0, 0], scale: [lengthM, 1.0, 0.04], color: colorRailing, fieldId: field.id, levelId: level.id })
@@ -1092,7 +1123,7 @@ function generiereUmrissModell(
   }
   if (building.heightM <= 0) warnings.push({ type: 'error', code: 'BUILDING_HEIGHT_ZERO', message: 'Gebäudehöhe muss größer als 0 sein.' })
   if (building.heightM > 40) warnings.push({ type: 'warning', code: 'HEIGHT_VERY_HIGH', message: 'Gebäudehöhe > 40m – Statik prüfen lassen!' })
-  warnings.push({ type: 'info', code: 'UMRISS_MODUS', message: `Gebäude mit Umriss (${umriss.length} Ecken): Das Gerüst läuft um alle Kanten. Balkone, Fenster und Türen sowie die Höhenabschnitte werden im Umriss-Modus noch nicht berücksichtigt; die Treppe steht an Kante 1.` })
+  warnings.push({ type: 'info', code: 'UMRISS_MODUS', message: `Gebäude mit Umriss (${umriss.length} Ecken): Das Gerüst läuft um alle Kanten. Balkone, Fenster und Türen sowie die Höhenabschnitte werden im Umriss-Modus noch nicht berücksichtigt; die Treppe steht an der längsten Kante.` })
   if ((gebaeude.sections?.length ?? 0) >= 2) warnings.push({ type: 'info', code: 'UMRISS_OHNE_ABSCHNITTE', message: 'Im Umriss-Modus gilt eine einheitliche Gebäudehöhe – die Abschnitte werden ignoriert.' })
   if ((gebaeude.balconies?.length ?? 0) > 0) warnings.push({ type: 'warning', code: 'UMRISS_OHNE_BALKONE', message: 'Balkone werden im Umriss-Modus noch nicht berücksichtigt (nicht ausgespart, keine Konsolen).' })
 
