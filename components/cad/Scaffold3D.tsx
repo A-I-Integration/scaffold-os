@@ -144,6 +144,14 @@ const istTreppenstufe = (item: ScaffoldComponent3D): boolean => item.type === 'd
 
 function getVariant(item: ScaffoldComponent3D): string {
   if (istTreppenstufe(item)) return 'tritt'
+  if (item.type === 'frame' && item.rahmenBreiteM) {
+    // Echter Leiterrahmen: zwei Stützen (innen/außen) mit Sprossen und Rosetten.
+    return `rahmen|${Math.round(item.scale[1] * 100)}|${Math.round(item.rahmenBreiteM * 100)}`
+  }
+  if (item.type === 'deck') {
+    // Stahlbelag mit Randleiste und Antirutsch-Rippen: Variante trägt Länge und Breite (cm).
+    return `dk${Math.round(item.scale[0] * 100)}|${Math.round(item.scale[1] * 100)}`
+  }
   if (item.type === 'railing') {
     // Feld-Geländer: [Länge, 1.0, 0.04] → offener Rahmen aus Rohren.
     // Treppen-Geländer: [0.04, Höhe, 0.04] → senkrechtes Rohr.
@@ -165,6 +173,7 @@ function getVariant(item: ScaffoldComponent3D): string {
 
 function isTube(type: string, variant: string): boolean {
   if (type === 'railing') return variant === 'post'
+  if (type === 'frame' && variant.startsWith('rahmen')) return false
   return type in TUBE_DIAMETER_M
 }
 
@@ -190,7 +199,9 @@ function getGeometry(type: string, variant: string = 'default'): THREE.BufferGeo
         // y-Skala ist bei Feld-Geländern immer 1.0 m, z-Skala 0.04 m →
         // Durchmesser 0.04 in y-Einheiten bzw. 1 in z-Einheiten ergibt
         // ein rundes Rohr von 4 cm.
-        const parts = [0.46, 0.0, -0.46].map((y) => {
+        // Zwei Holme (Handlauf ≈ 0,96 m, Knieleiste ≈ 0,5 m über dem Belag) –
+        // die Geländer-Box sitzt mit ihrer Mitte 0,5 m über der Belaghöhe.
+        const parts = [0.46, 0.0].map((y) => {
           const g = new THREE.CylinderGeometry(0.5, 0.5, 1, 8)
           g.rotateZ(Math.PI / 2) // Achse Y → X
           g.scale(1, 0.04, 1)
@@ -246,9 +257,22 @@ function getGeometry(type: string, variant: string = 'default'): THREE.BufferGeo
         geo = mergeParts(parts)
         break
       }
-      case 'footplate':
-        geo = new THREE.CylinderGeometry(0.5, 0.5, 1, 16)
+      case 'footplate': {
+        // Fußplatte mit Gewindespindel und Mutter, in echten Metern gebaut (Box 0,15 × 0,04 × 0,15).
+        const parts: THREE.BufferGeometry[] = []
+        const plate = new THREE.BoxGeometry(0.15, 0.012, 0.15)
+        plate.translate(0, -0.014, 0)
+        parts.push(plate)
+        const spindel = new THREE.CylinderGeometry(0.018, 0.018, 0.2, 10)
+        spindel.translate(0, 0.082, 0)
+        parts.push(spindel)
+        const mutter = new THREE.CylinderGeometry(0.034, 0.034, 0.03, 6)
+        mutter.translate(0, 0.035, 0)
+        parts.push(mutter)
+        geo = mergeParts(parts)
+        geo.scale(1 / 0.15, 1 / 0.04, 1 / 0.15)
         break
+      }
       case 'coupling':
         // Rosette: flache Scheibe (scale ist 0.05 → Ø ≈ 12 cm, ≈ 1 cm dick)
         geo = new THREE.CylinderGeometry(1.2, 1.2, 0.2, 16)
@@ -257,10 +281,66 @@ function getGeometry(type: string, variant: string = 'default'): THREE.BufferGeo
       case 'safety_net':
         geo = new THREE.PlaneGeometry(1, 1)
         break
-      case 'frame':
+      case 'frame': {
+        if (variant.startsWith('rahmen')) {
+          // Leiterrahmen in echten Metern um den Mittelpunkt der Innenstütze (x = 0, z = 0):
+          // Außenstütze bei z = Rahmenbreite − 0,075, Sprossen oben/mitte/unten, Rosetten alle 0,5 m.
+          const [hS, bS] = variant.slice('rahmen|'.length).split('|')
+          const H = parseInt(hS, 10) / 100, B = parseInt(bS, 10) / 100
+          const zo = Math.max(0.2, B - 0.075)
+          const parts: THREE.BufferGeometry[] = []
+          for (const z of [0, zo]) {
+            const post = new THREE.CylinderGeometry(0.024, 0.024, H, 10)
+            post.translate(0, 0, z)
+            parts.push(post)
+            for (let y = -H / 2 + 0.25; y < H / 2 - 0.05; y += 0.5) {
+              const r = new THREE.CylinderGeometry(0.062, 0.062, 0.008, 14)
+              r.translate(0, y, z)
+              parts.push(r)
+            }
+          }
+          const rungen = H >= 1.4 ? [-H / 2 + 0.05, 0, H / 2 - 0.04] : [-H / 2 + 0.05, H / 2 - 0.04]
+          for (const y of rungen) {
+            const g = new THREE.CylinderGeometry(0.017, 0.017, zo, 8)
+            g.rotateX(Math.PI / 2)
+            g.translate(0, y, zo / 2)
+            parts.push(g)
+          }
+          geo = mergeParts(parts)
+          geo.scale(1 / 0.073, 1 / H, 1 / 0.04)
+          break
+        }
+        geo = new THREE.BoxGeometry(1, 1, 1)
+        break
+      }
+      case 'deck': {
+        if (variant.startsWith('dk')) {
+          // Stahlbelag in echten Metern (Länge × Tiefe × 0,02 m Dicke, lokal z = oben):
+          // Randleiste an den Längskanten und quer liegende Antirutsch-Rippen.
+          const [lS, wS] = variant.slice(2).split('|')
+          const L = parseInt(lS, 10) / 100, Wd = parseInt(wS, 10) / 100
+          const parts: THREE.BufferGeometry[] = []
+          parts.push(new THREE.BoxGeometry(L, Wd, 0.02))
+          for (const sy of [-1, 1]) {
+            const lip = new THREE.BoxGeometry(L, 0.016, 0.03)
+            lip.translate(0, sy * (Wd / 2 - 0.008), 0.02)
+            parts.push(lip)
+          }
+          const n = Math.max(2, Math.floor((L - 0.1) / 0.1))
+          for (let i = 0; i < n; i++) {
+            const rib = new THREE.BoxGeometry(0.018, Wd - 0.06, 0.006)
+            rib.translate(-L / 2 + 0.05 + (i + 0.5) * ((L - 0.1) / n), 0, 0.013)
+            parts.push(rib)
+          }
+          geo = mergeParts(parts)
+          geo.scale(1 / L, 1 / Wd, 1 / 0.02)
+          break
+        }
+        geo = new THREE.BoxGeometry(1, 1, 1)
+        break
+      }
       case 'board':
       case 'console':
-      case 'deck':
       case 'load_plate':
       case 'protection_roof':
       default:

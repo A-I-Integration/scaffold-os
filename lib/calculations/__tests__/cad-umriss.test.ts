@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { generateCADModel, TREPPEN_PODEST_M, type BuildingParams } from '../cad-engine'
+import { generateCADModel, generateScaffoldComponents, TREPPEN_PODEST_M, type BuildingParams } from '../cad-engine'
 import { rechteckUmriss, lFormUmriss, pruefeUmriss, normalisiereUmriss, umrissKanten, umrissEcken, geruestEckpunkt, umrissFlaecheSigned, zentriereUmriss } from '../cad-umriss'
 
 const basis: BuildingParams = {
@@ -206,4 +206,26 @@ describe('Außentreppe vor dem Gerüst', () => {
     const m = generateCADModel({ ...basis, geruestOptionen: { treppe: false } }, 'layher-allround')
     expect(m.components3D.some((c) => c.type === 'stair' || c.id.startsWith('stair-'))).toBe(false)
   })
+
+  it('Rahmen sind echte Leiterrahmen: Außenstütze, Geländer außen und 1 m hoch, Bordbrett am Rand, Fußplatten außen', () => {
+    const m = generateCADModel({ ...basis, sides: ['front'] }, 'layher-allround')
+    const c = generateScaffoldComponents(m)
+    const feld = m.fields.find((f) => f.levelIndex === 0)!
+    const frames = c.filter((x) => x.id.startsWith(`frame-${feld.id}-`))
+    expect(frames).toHaveLength(2)
+    expect(frames.every((f) => Math.abs((f.rahmenBreiteM ?? 0) - feld.widthM) < 1e-9)).toBe(true)
+    // Außenstütze liegt auf der Beläge-Außenkante (abzüglich Rand), Fußplatten stehen unter beiden Stützen
+    const fuss = c.filter((x) => x.type === 'footplate' && x.fieldId === feld.id)
+    expect(fuss).toHaveLength(4)
+    const deck = c.find((x) => x.id === `deck-${feld.id}`)!
+    const gel = c.find((x) => x.id === `railing-${feld.id}-top`)!
+    // Geländer: Mitte 0,5 m über dem Belag (Handlauf ≈ 1 m), nicht mehr auf Belaghöhe und nicht mehr in der Belagmitte
+    expect(gel.position[1] - deck.position[1]).toBeCloseTo(0.5, 6)
+    expect(Math.abs(gel.position[2] - deck.position[2])).toBeGreaterThan(0.3)
+    // Bordbrett steht auf dem Belag (nicht schwebend)
+    const brett = c.find((x) => x.id === `board-${feld.id}`)!
+    expect(brett.position[1] - brett.scale[1] / 2).toBeGreaterThanOrEqual(deck.position[1])
+    expect(brett.position[1] - brett.scale[1] / 2 - deck.position[1]).toBeLessThan(0.05)
+  })
 })
+
