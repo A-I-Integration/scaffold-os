@@ -81,6 +81,14 @@ export function ansichtAusProjektdaten(daten: unknown): { building: BuildingPara
   })
   const umriss = umrissRoh.length >= 3 && umrissRoh.length === (b.umriss as unknown[]).length && pruefeUmriss(umrissRoh).length === 0 ? umrissRoh : null
 
+  const go = (b.geruestOptionen ?? {}) as Record<string, unknown>
+  const geruestOptionen: NonNullable<BuildingParams['geruestOptionen']> = {
+    ...(num(go.breiteM) !== null ? { breiteM: num(go.breiteM) as number } : {}),
+    ...(num(go.wandabstandM) !== null ? { wandabstandM: num(go.wandabstandM) as number } : {}),
+    ...(num(go.feldlaengeM) !== null ? { feldlaengeM: num(go.feldlaengeM) as number } : {}),
+    ...(go.treppe === false ? { treppe: false } : {}),
+  }
+
   const building: BuildingParams = {
     lengthM, widthM, heightM,
     eavesHeightM: num(b.eavesHeightM) ?? 0, roofHeightM: num(b.roofHeightM) ?? 0, roofForm,
@@ -93,6 +101,7 @@ export function ansichtAusProjektdaten(daten: unknown): { building: BuildingPara
     ...(balconies.length > 0 ? { balconies } : {}),
     ...(sections.length >= 2 ? { sections } : {}),
     ...(umriss ? { umriss } : {}),
+    ...(Object.keys(geruestOptionen).length > 0 ? { geruestOptionen } : {}),
   }
   return { building, systemId }
 }

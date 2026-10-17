@@ -21,6 +21,22 @@ export interface BuildingSection {
   roofHoeheM?: number
 }
 
+export interface GeruestOptionen {
+  /** Gerüstbreite in m – muss eine der Breiten des gewählten Systems sein */
+  breiteM?: number
+  /** Abstand Wand → innere Gerüstlinie in m (Standard 0,30) */
+  wandabstandM?: number
+  /** feste Feldlänge in m – muss eine der Feldlängen des Systems sein (sonst automatisch) */
+  feldlaengeM?: number
+  /** false = keine automatische Treppe */
+  treppe?: boolean
+}
+
+export const WANDABSTAND_MIN_M = 0.05
+export const WANDABSTAND_MAX_M = 0.6
+/** ANNAHME: bis 0,30 m Wandabstand ist ohne Zusatzmaßnahmen üblich – bitte mit der Aufbau- und Verwendungsanleitung prüfen. */
+export const WANDABSTAND_HINWEIS_AB_M = 0.3
+
 export interface BuildingParams {
   lengthM: number
   widthM: number
@@ -48,6 +64,9 @@ export interface BuildingParams {
   // folgt das Gerüst dem Umriss Kante für Kante; lengthM/widthM sind dann nur
   // das umschließende Rechteck. Balkone/Fenster/Türen sind im Umriss-Modus noch aus.
   umriss?: UmrissPunkt[]
+  // NEU: Einstellungen für die automatische Gerüst-Erzeugung (alles optional;
+  // ohne Angabe gelten die bisherigen Standardwerte).
+  geruestOptionen?: GeruestOptionen
   // NEU: Lastklasse nach DIN EN 12811-1 (1-6) – bisher nirgends erfasst,
   // aber nötig, um die Regelausführungs-Grenzen einer Zulassung zu prüfen.
   lastklasse?: number
@@ -374,7 +393,7 @@ export function generateScaffoldComponents(model: CADModel): ScaffoldComponent3D
   const stairPlans: { i: number; covered: number; field: ScaffoldField; level: ScaffoldLevel }[] = []
   const stairDeckDir = new Map<string, 1 | -1>() // Feld-ID → Ende, an dem der Lauf ankommt (Belag nur dort)
   {
-    let stairLevel = 0
+    let stairLevel = building.geruestOptionen?.treppe === false ? levels.length : 0
     for (let guard = 0; guard < levels.length + 2 && stairLevel < levels.length; guard++) {
       const i = stairLevel
       const level = levels.find((l) => l.index === i)
@@ -783,10 +802,31 @@ export function generateCADModel(
   const system = findeSystem(systemId)
   const warnings: CADWarning[] = []
 
+  // Gerüst-Einstellungen (Parameter-Panel) prüfen; ungültige Werte → Hinweis + Standard
+  let teilungSystem: GeruestSystem | null = system
+  const opt = building.geruestOptionen
+  if (opt) {
+    if (opt.breiteM !== undefined) {
+      if (system && system.rahmenBreitenM.includes(opt.breiteM)) scaffoldWidthM = opt.breiteM
+      else warnings.push({ type: 'warning', code: 'OPT_BREITE_UNGUELTIG', message: `Gerüstbreite ${opt.breiteM} m gibt es bei diesem System nicht – es gilt ${scaffoldWidthM} m.` })
+    }
+    if (opt.wandabstandM !== undefined) {
+      if (Number.isFinite(opt.wandabstandM) && opt.wandabstandM >= WANDABSTAND_MIN_M && opt.wandabstandM <= WANDABSTAND_MAX_M) {
+        distanceToBuildingM = opt.wandabstandM
+        if (opt.wandabstandM > WANDABSTAND_HINWEIS_AB_M) warnings.push({ type: 'warning', code: 'WANDABSTAND_GROSS', message: `Wandabstand ${opt.wandabstandM.toFixed(2)} m ist größer als ${WANDABSTAND_HINWEIS_AB_M.toFixed(2)} m – Annahme: dann sind meist Zusatzmaßnahmen (z. B. Lückenschluss/Konsolbelag) nötig. Bitte mit der Aufbau- und Verwendungsanleitung des Systems prüfen.` })
+      } else warnings.push({ type: 'warning', code: 'OPT_WANDABSTAND_UNGUELTIG', message: `Wandabstand muss zwischen ${WANDABSTAND_MIN_M} und ${WANDABSTAND_MAX_M} m liegen – es gilt ${distanceToBuildingM} m.` })
+    }
+    if (opt.feldlaengeM !== undefined) {
+      if (system && system.feldlangenM.includes(opt.feldlaengeM)) teilungSystem = { ...system, feldlangenM: [opt.feldlaengeM], standardFeldlangeM: opt.feldlaengeM }
+      else warnings.push({ type: 'warning', code: 'OPT_FELDLAENGE_UNGUELTIG', message: `Feldlänge ${opt.feldlaengeM} m gibt es bei diesem System nicht – die Feldlänge wird automatisch gewählt.` })
+    }
+  }
+  const teile = (laengeM: number) => teilungSystem ? calculateFieldDivision(laengeM, teilungSystem) : { fields: 1, fieldLengthM: 2.07, remainderM: 0, distribution: [2.07] }
+
   // Umriss-Modus: Gerüst folgt dem Vieleck. Ungültiger Umriss → Fehlermeldung, dann normale Rechteck-Logik.
   if (building.umriss && building.umriss.length > 0) {
     const fehler = pruefeUmriss(building.umriss)
-    if (fehler.length === 0) return generiereUmrissModell(building, system, scaffoldWidthM, distanceToBuildingM)
+    if (fehler.length === 0) return generiereUmrissModell(building, system, scaffoldWidthM, distanceToBuildingM, warnings, teile)
     fehler.forEach((m) => warnings.push({ type: 'error', code: 'UMRISS_UNGUELTIG', message: `Umriss ungültig: ${m} Es wird ersatzweise das Rechteck verwendet.` }))
     building = { ...building, umriss: undefined }
   }
@@ -809,8 +849,8 @@ export function generateCADModel(
   if (building.heightM <= 0) warnings.push({ type: 'error', code: 'BUILDING_HEIGHT_ZERO', message: 'Gebäudehöhe muss größer als 0 sein.' })
   if (building.heightM > 40) warnings.push({ type: 'warning', code: 'HEIGHT_VERY_HIGH', message: 'Gebäudehöhe > 40m – Statik prüfen lassen!' })
 
-  const fieldDiv = system ? calculateFieldDivision(building.lengthM, system) : { fields: 1, fieldLengthM: 2.07, remainderM: 0, distribution: [2.07] }
-  const fieldDivWidth = system ? calculateFieldDivision(building.widthM, system) : { fields: 1, fieldLengthM: 2.07, remainderM: 0, distribution: [2.07] }
+  const fieldDiv = teile(building.lengthM)
+  const fieldDivWidth = teile(building.widthM)
   const levelCalc = system ? calculateLevels(building.heightM, system) : { levels: 1, levelHeightM: 2.0, levelsData: [{ index: 0, bottomY: 0, topY: 2.0 }] }
 
   const fields: ScaffoldField[] = []
@@ -829,7 +869,7 @@ export function generateCADModel(
 
   const abschnittsAnker: ScaffoldAnchor[] = []
   const abschnittDivs = abschnitte
-    ? abschnitte.map((sec) => system ? calculateFieldDivision(sec.laengeM, system) : { fields: 1, fieldLengthM: 2.07, remainderM: 0, distribution: [2.07] })
+    ? abschnitte.map((sec) => teile(sec.laengeM))
     : null
 
   for (const side of activeSides) {
@@ -1032,9 +1072,11 @@ function generiereUmrissModell(
   gebaeude: BuildingParams,
   system: GeruestSystem | null,
   scaffoldWidthM: number,
-  abstandM: number
+  abstandM: number,
+  vorWarnungen: CADWarning[],
+  teile: (laengeM: number) => { distribution: number[]; fields: number; fieldLengthM: number }
 ): CADModel {
-  const warnings: CADWarning[] = []
+  const warnings: CADWarning[] = [...vorWarnungen]
   const umriss = zentriereUmriss(normalisiereUmriss(gebaeude.umriss!))
   const box = umrissBox(umriss)
   const building: BuildingParams = {
@@ -1079,7 +1121,7 @@ function generiereUmrissModell(
   uebersprungen.forEach((s) => warnings.push({ type: 'warning', code: 'UMRISS_KANTE_ZU_KURZ', message: `Kante ${s.k.index + 1}: zwischen den Nachbarkanten bleibt nur ${Math.max(0, s.laenge).toFixed(2)} m Platz – dort wird kein Gerüst erzeugt.` }))
   const aktive = straenge.filter((s) => s.laenge >= 0.5)
   const divs = new Map<number, { distribution: number[]; fields: number; fieldLengthM: number }>()
-  aktive.forEach((s) => divs.set(s.k.index, system ? calculateFieldDivision(s.laenge, system) : { fields: 1, fieldLengthM: 2.07, distribution: [2.07] }))
+  aktive.forEach((s) => divs.set(s.k.index, teile(s.laenge)))
 
   const fields: ScaffoldField[] = []
   const levels: ScaffoldLevel[] = []
