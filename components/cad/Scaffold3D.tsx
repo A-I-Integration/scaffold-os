@@ -158,7 +158,7 @@ function getVariant(item: ScaffoldComponent3D): string {
     // Treppenturm mit Zickzack-Läufen: Variante trägt Läufe, Startrichtung
     // und die Maße (cm) – die Geometrie wird in echten Metern gebaut.
     const [sx, sy, sz] = item.scale
-    return `zz${item.flights}|${item.flightStartDir === -1 ? 1 : 0}|${Math.round(sx * 100)}|${Math.round(sy * 100)}|${Math.round(sz * 100)}|${Math.round((item.podestM ?? 0) * 100)}`
+    return `zz${item.flights}|${item.flightStartDir === -1 ? 1 : 0}|${Math.round(sx * 100)}|${Math.round(sy * 100)}|${Math.round(sz * 100)}|${Math.round((item.podestM ?? 0) * 100)}|${item.gleichlauf ? 1 : 0}`
   }
   return 'default'
 }
@@ -227,10 +227,10 @@ function getGeometry(type: string, variant: string = 'default'): THREE.BufferGeo
           // Zickzack-Läufe (Scaffmax-Stil): je Lage ein Lauf mit zwei Holmen.
           // Gebaut in echten Metern um den Mittelpunkt und durch die Maße
           // geteilt – die Instanz-Skalierung (= Maße) macht daraus wieder Meter.
-          const [nS, p0S, lS, hS, wS, podS] = variant.slice(2).split('|')
+          const [nS, p0S, lS, hS, wS, podS, glS] = variant.slice(2).split('|')
           const N = Math.max(1, parseInt(nS, 10)), p0 = parseInt(p0S, 10)
           const L = parseInt(lS, 10) / 100, H = parseInt(hS, 10) / 100, W = parseInt(wS, 10) / 100
-          const parts = treppenTeile({ laeufe: N, startRichtung: p0 === 1 ? 1 : 0, laengeM: L, hoeheM: H, breiteM: W, podestM: parseInt(podS ?? '0', 10) / 100 })
+          const parts = treppenTeile({ laeufe: N, startRichtung: p0 === 1 ? 1 : 0, laengeM: L, hoeheM: H, breiteM: W, podestM: parseInt(podS ?? '0', 10) / 100, gleichlauf: glS === '1' })
           geo = mergeParts(parts)
           geo.scale(1 / L, 1 / H, 1 / W)
           break
