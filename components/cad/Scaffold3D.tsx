@@ -17,6 +17,7 @@ import { Canvas, useThree, useFrame } from '@react-three/fiber'
 import { OrbitControls, Grid, Text, Sky, AdaptiveDpr, AdaptiveEvents, Environment, ContactShadows, Edges } from '@react-three/drei'
 import * as THREE from 'three'
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
+import { treppenTeile } from '@/lib/cad/treppen-geometrie'
 import { CADModel, ScaffoldComponent3D, BuildingFeature3D, berechneGebaeudeSegmente, hatGeradeAbschnitte } from '@/lib/calculations/cad-engine'
 import { CATALOG_ITEMS } from './ComponentCatalog'
 import { bauteilFarbe, type FarbModus } from '@/lib/cad/bauteil-farben'
@@ -229,29 +230,7 @@ function getGeometry(type: string, variant: string = 'default'): THREE.BufferGeo
           const [nS, p0S, lS, hS, wS] = variant.slice(2).split('|')
           const N = Math.max(1, parseInt(nS, 10)), p0 = parseInt(p0S, 10)
           const L = parseInt(lS, 10) / 100, H = parseInt(hS, 10) / 100, W = parseInt(wS, 10) / 100
-          const rise = H / N
-          const perFlight = Math.max(1, Math.round(rise / 0.25))
-          const tread = (L - 0.2) / perFlight
-          const rs = rise / perFlight
-          const parts: THREE.BufferGeometry[] = []
-          const up = new THREE.Vector3(0, 1, 0)
-          for (let f = 0; f < N; f++) {
-            const dir = (f + p0) % 2 === 0 ? 1 : -1
-            const xa = dir > 0 ? -L / 2 + 0.1 - 0.5 * tread : L / 2 - 0.1 + 0.5 * tread
-            const xb = dir > 0 ? L / 2 - 0.1 + 0.5 * tread : -L / 2 + 0.1 - 0.5 * tread
-            const yBase = -H / 2 + f * rise
-            const ya = yBase + rs - 0.04 - 0.10 - 0.5 * rs
-            const yb = yBase + perFlight * rs - 0.04 - 0.10 + 0.5 * rs
-            const a = new THREE.Vector3(xa, ya, 0), b = new THREE.Vector3(xb, yb, 0)
-            const len = a.distanceTo(b)
-            const q = new THREE.Quaternion().setFromUnitVectors(up, b.clone().sub(a).normalize())
-            for (const zz of [-1, 1]) {
-              const g = new THREE.CylinderGeometry(0.025, 0.025, len, 8)
-              g.applyQuaternion(q)
-              g.translate((xa + xb) / 2, (ya + yb) / 2, zz * (W / 2 - 0.03))
-              parts.push(g)
-            }
-          }
+          const parts = treppenTeile({ laufe: N, startRichtung: p0 === 1 ? 1 : 0, laengeM: L, hoeheM: H, breiteM: W })
           geo = mergeParts(parts)
           geo.scale(1 / L, 1 / H, 1 / W)
           break
