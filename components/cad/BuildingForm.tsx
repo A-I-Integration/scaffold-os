@@ -3,6 +3,7 @@
 import { useState, useRef } from 'react'
 import { BuildingParams } from '@/lib/calculations/cad-engine'
 import BalkonEditor from './BalkonEditor'
+import UmrissEditor from './UmrissEditor'
 import { GERUEST_SYSTEME } from '@/lib/calculations/geruest-systeme'
 import { uploadVertragsdokument } from '@/lib/vertrag-upload-client'
 import { quaderAusObj, quaderAusStl, masseAusQuader, type Quader, type Einheit, type Achse } from '@/lib/cad/modell-import'
@@ -310,7 +311,8 @@ export default function BuildingForm({ building, systemId, onChange, onSystemCha
               )}
             </div>
 
-            <div><label className='block text-xs font-medium text-[#424245] mb-1'>Gebäudelänge (m){building.sections && building.sections.length >= 2 ? ' – wird durch Abschnitte oben ersetzt' : ''}</label><input type='number' step='0.01' value={building.lengthM} onChange={(e) => update('lengthM', parseFloat(e.target.value))} disabled={!!building.sections && building.sections.length >= 2} className='w-full px-3 py-2 border rounded-xl text-sm disabled:opacity-40' /></div>
+            <UmrissEditor building={building} onChange={onChange} />
+            <div><label className='block text-xs font-medium text-[#424245] mb-1'>Gebäudelänge (m){building.umriss ? ' – folgt dem Umriss' : building.sections && building.sections.length >= 2 ? ' – wird durch Abschnitte oben ersetzt' : ''}</label><input type='number' step='0.01' value={building.lengthM} onChange={(e) => update('lengthM', parseFloat(e.target.value))} disabled={!!building.sections && building.sections.length >= 2} className='w-full px-3 py-2 border rounded-xl text-sm disabled:opacity-40' /></div>
             <div><label className='block text-xs font-medium text-[#424245] mb-1'>Gebäudebreite (m)</label><input type='number' step='0.01' value={building.widthM} onChange={(e) => update('widthM', parseFloat(e.target.value))} className='w-full px-3 py-2 border rounded-xl text-sm' /></div>
             <div><label className='block text-xs font-medium text-[#424245] mb-1'>Gebäudehöhe (m){building.sections && building.sections.length >= 2 ? ' – wird durch Abschnitte oben ersetzt' : ''}</label><input type='number' step='0.01' value={building.heightM} onChange={(e) => update('heightM', parseFloat(e.target.value))} disabled={!!building.sections && building.sections.length >= 2} className='w-full px-3 py-2 border rounded-xl text-sm disabled:opacity-40' /></div>
             <div><label className='block text-xs font-medium text-[#424245] mb-1'>Traufenhöhe (m)</label><input type='number' step='0.01' value={building.eavesHeightM} onChange={(e) => update('eavesHeightM', parseFloat(e.target.value))} className='w-full px-3 py-2 border rounded-xl text-sm' /></div>

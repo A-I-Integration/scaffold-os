@@ -8,6 +8,7 @@
 
 import type { BuildingParams, BuildingSection } from './calculations/cad-engine'
 import type { CadBalkon } from './balkon'
+import { pruefeUmriss, type UmrissPunkt } from './calculations/cad-umriss'
 
 export const TOKEN_MUSTER = /^[a-f0-9]{48}$/
 export const UUID_MUSTER = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
@@ -73,6 +74,13 @@ export function ansichtAusProjektdaten(daten: unknown): { building: BuildingPara
     } satisfies BuildingSection]
   })
 
+  // Umriss: nur Punkte mit endlichen Zahlen, und nur wenn der Umriss insgesamt gültig ist
+  const umrissRoh: UmrissPunkt[] = (Array.isArray(b.umriss) ? b.umriss : []).flatMap((q: Record<string, unknown>) => {
+    const x = num(q?.x), z = num(q?.z)
+    return x === null || z === null ? [] : [{ x, z }]
+  })
+  const umriss = umrissRoh.length >= 3 && umrissRoh.length === (b.umriss as unknown[]).length && pruefeUmriss(umrissRoh).length === 0 ? umrissRoh : null
+
   const building: BuildingParams = {
     lengthM, widthM, heightM,
     eavesHeightM: num(b.eavesHeightM) ?? 0, roofHeightM: num(b.roofHeightM) ?? 0, roofForm,
@@ -84,6 +92,7 @@ export function ansichtAusProjektdaten(daten: unknown): { building: BuildingPara
     ...(num(b.lastklasse) !== null ? { lastklasse: num(b.lastklasse) as number } : {}),
     ...(balconies.length > 0 ? { balconies } : {}),
     ...(sections.length >= 2 ? { sections } : {}),
+    ...(umriss ? { umriss } : {}),
   }
   return { building, systemId }
 }
