@@ -19,6 +19,8 @@ export interface TreppenMasse {
   podestM?: number
   /** alle Läufe in dieselbe Richtung (links→rechts, bzw. rechts→links bei startRichtung 1) statt im Zickzack */
   gleichlauf?: boolean
+  /** Steighöhe je Lauf (m), Summe = hoeheM; fehlt sie, sind alle Läufe gleich hoch (hoeheM / laeufe) */
+  hoehenM?: number[]
 }
 
 const WANGE_HOEHE = 0.16
@@ -47,23 +49,23 @@ function rohr(a: THREE.Vector3, b: THREE.Vector3, z: number, r = ROHR_R): THREE.
 export function treppenTeile(m: TreppenMasse): THREE.BufferGeometry[] {
   const { laeufe: N, startRichtung: p0, laengeM: L, hoeheM: H, breiteM: W } = m
   const pod = m.podestM ?? 0
-  const rise = H / N
-  const perFlight = Math.max(1, Math.round(rise / 0.25))
+  const hoehen = m.hoehenM && m.hoehenM.length === N ? m.hoehenM : Array.from({ length: N }, () => H / N)
   // Lauf: mit Podest zwischen den Podesten, sonst mit 0,1 m Rand an den Enden
   const rand = pod > 0 ? pod : 0.1
-  const tread = (L - 2 * rand) / perFlight
-  const rs = rise / perFlight
   // Stufenoberkante: mit Podest bündig mit dem Podest/Gerüstbelag (+1 cm), sonst wie bei der manuellen Treppe (-2 cm)
   const off = pod > 0 ? 0.01 : -0.02
   const parts: THREE.BufferGeometry[] = []
   const zSeite = W / 2 - 0.03
 
+  let yBase = -H / 2
   for (let f = 0; f < N; f++) {
+    const rise = hoehen[f]
+    const perFlight = Math.max(1, Math.round(rise / 0.25))
+    const rs = rise / perFlight
     const dir = m.gleichlauf ? (p0 === 1 ? -1 : 1) : (f + p0) % 2 === 0 ? 1 : -1
     const xStart = -L / 2 + rand, xEnde = L / 2 - rand
     const xa = dir > 0 ? xStart : xEnde
     const xb = dir > 0 ? xEnde : xStart
-    const yBase = -H / 2 + f * rise
     // Mittellinie der Wange: 0,12 m unter der Stufenoberkante, vom Anfang der ersten bis zum Ende der letzten Stufe
     const ya = yBase + 0.5 * rs + off - 0.12
     const yb = yBase + (perFlight + 0.5) * rs + off - 0.12
@@ -81,6 +83,7 @@ export function treppenTeile(m: TreppenMasse): THREE.BufferGeometry[] {
         parts.push(rohr(new THREE.Vector3(x, y + 0.02, 0), new THREE.Vector3(x, y + lift, 0), s * zSeite))
       }
     }
+    yBase += rise
   }
   return parts
 }
