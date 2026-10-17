@@ -9,6 +9,9 @@ import { MaterialItem } from '@/types/scaffold'
 import { type UmrissPunkt, pruefeUmriss, normalisiereUmriss, umrissKanten, umrissEcken, geruestEckpunkt, umrissBox, zentriereUmriss } from './cad-umriss'
 import { KONSOLE_BREITE_M, type CadBalkon } from '../balkon'
 
+/** Länge der Podeste der Außentreppe an den Turmenden (m) – zugleich Breite des Durchgangs im Gerüstgeländer. */
+export const TREPPEN_PODEST_M = 0.9
+
 export interface BuildingSection {
   bezeichnung?: string
   laengeM: number
@@ -181,6 +184,8 @@ export interface ScaffoldComponent3D {
   // im Zickzack) und Richtung des ersten Laufs (1 = links→rechts, -1 = umgekehrt).
   flights?: number
   flightStartDir?: 1 | -1
+  // Außentreppe: Länge der Podeste an den Enden (m); 0/leer = Lauf über die ganze Länge
+  podestM?: number
 }
 
 export interface CADModel {
@@ -382,68 +387,62 @@ export function generateScaffoldComponents(model: CADModel): ScaffoldComponent3D
     fieldsBySide.get(key)!.push(f)
   })
 
-  // === TREPPEN-PLAN ===
-  // Ein Treppenturm besteht aus Zickzack-Läufen in EINEM Feld (ein Lauf je Lage, bis zu
-  // 3 Lagen). Jeder Lauf geht über die ganze Feldlänge; oben steigt man auf den Belag des
-  // NACHBARFELDS aus. Darum:
-  //  - die Treppe steht im zweiten Feld der Kante (links und rechts ein Nachbarfeld),
-  //  - der Belag im Treppenfeld entfällt in den Lagen, die der Turm durchläuft,
-  //  - ein Lauf wird nur erzeugt, wenn auf seiner Austrittsseite ein Nachbarfeld steht.
-  const stairInterval = 3
-  // Treppenseite: Rechteck = Vorderseite; Umriss = die längste Kante (dort passt der Turm am ehesten)
+  // === TREPPEN-PLAN (Außentreppe) ===
+  // Wie in der Praxis steht die Treppe VOR dem Gerüst und gehört nicht zu ihm: das
+  // Gerüst bleibt vollständig (Belag, Geländer). Der Treppenturm überspannt zwei
+  // nebeneinanderliegende Felder der Treppenseite, hat Zickzack-Läufe (je Lage einer)
+  // und auf jeder Lage ein Podest, von dem man durch eine Lücke im Geländer auf den
+  // Belag des Gerüsts tritt. Das Podest liegt abwechselnd am rechten und linken Ende.
+  const TREPPEN_BREITE_M = 0.65
+  const TREPPEN_ABSTAND_M = 0.05 // Lücke zwischen Belag-Außenkante und Treppe
+  // Treppenseite: Rechteck = Vorderseite; Umriss = die längste Kante
   const kantenLaenge = new Map<number, number>()
   fields.forEach((f) => { if (f.kante !== undefined && f.levelIndex === 0) kantenLaenge.set(f.kante, (kantenLaenge.get(f.kante) ?? 0) + f.lengthM) })
   let treppenKante: number | undefined
   kantenLaenge.forEach((len, k) => { if (treppenKante === undefined || len > (kantenLaenge.get(treppenKante) ?? 0) + 1e-9) treppenKante = k })
   const istTreppenFeld = (f: ScaffoldField): boolean => f.side === 'front' && (f.kante === undefined || f.kante === treppenKante)
   const treppenFelder0 = fields.filter((f) => istTreppenFeld(f) && f.levelIndex === 0).sort((a, b) => a.index - b.index)
-  const stairPlans: { i: number; covered: number; field: ScaffoldField; level: ScaffoldLevel }[] = []
-  const stairDeckDir = new Map<string, 1 | -1>() // Feld-ID → Treppenfeld (Belag entfällt); Wert = Austrittsseite des Laufs
   const warnEinmal = (code: string, type: CADWarning['type'], message: string) => {
     if (!model.warnings.some((w) => w.code === code)) model.warnings.push({ type, code, message })
   }
-  const hatNachbarfeld = (f: ScaffoldField, lage: number, dir: 1 | -1): boolean => {
+  const nebeneinander = (f: ScaffoldField, g: ScaffoldField): boolean => {
     const rf = feldRahmen(f, building)
     const [fx, fz] = rf.toLocal(f.positionX, f.positionZ)
-    return fields.some((g) => {
-      if (g.id === f.id || g.levelIndex !== lage || g.side !== f.side || g.kante !== f.kante) return false
-      const [gx, gz] = rf.toLocal(g.positionX, g.positionZ)
-      return Math.abs(gz - fz) < 0.05 && Math.abs(gx - fx - dir * (f.lengthM + g.lengthM) / 2) < 0.05
-    })
+    const [gx, gz] = rf.toLocal(g.positionX, g.positionZ)
+    return Math.abs(gz - fz) < 0.05 && Math.abs(gx - fx - (f.lengthM + g.lengthM) / 2) < 0.05
   }
-  const stairBase = building.geruestOptionen?.treppe === false ? undefined : treppenFelder0[1]
-  if (building.geruestOptionen?.treppe !== false && treppenFelder0.length > 0 && treppenFelder0.length < 3) {
-    warnEinmal('TREPPE_ZU_KURZ', 'warning', `Die Treppe braucht an der Treppenseite mindestens 3 Felder (Austritt ins Nachbarfeld) – bei ${treppenFelder0.length} Feld(ern) wird keine Treppe erzeugt. Bitte eine Treppe von Hand platzieren.`)
-  }
-  if (stairBase) {
-    const saeule = (lage: number) => fields.find((f) => istTreppenFeld(f) && f.levelIndex === lage && gleicherPlatz(f, stairBase, 0.01))
-    let stairLevel = 0
-    for (let guard = 0; guard < levels.length + 2 && stairLevel < levels.length; guard++) {
-      const i = stairLevel
-      const level = levels.find((l) => l.index === i)
-      const stairField = saeule(i)
-      if (!stairField || !level) {
-        warnEinmal('TREPPE_ENDET', 'info', `Die Treppe endet in Lage ${i}: an ihrer Stelle gibt es darüber kein Gerüstfeld mehr. Weiter oben bitte einen Zugang (Treppe/Leiter) von Hand ergänzen.`)
-        break
-      }
-      let covered = 0
-      while (covered < stairInterval && i + covered < levels.length) {
-        const j = i + covered
-        const fj = saeule(j)
-        if (!fj || !hatNachbarfeld(fj, j, j % 2 === 0 ? 1 : -1)) break
-        covered++
-      }
-      if (covered === 0) {
-        warnEinmal('TREPPE_OHNE_NACHBAR', 'info', `Die Treppe endet in Lage ${i}: auf der Austrittsseite fehlt das Nachbarfeld. Weiter oben bitte einen Zugang von Hand ergänzen.`)
-        break
-      }
-      stairPlans.push({ i, covered, field: stairField, level })
-      for (let j = i; j < i + covered; j++) {
-        const f = saeule(j)
-        if (f) stairDeckDir.set(f.id, j % 2 === 0 ? 1 : -1)
-      }
-      stairLevel += covered
+  const treppeAktiv = building.geruestOptionen?.treppe !== false
+  let stairSpan: { a: ScaffoldField; b: ScaffoldField; lagen: number } | undefined
+  if (treppeAktiv && treppenFelder0.length > 0) {
+    // bevorzugt etwas von der Ecke weg: Felder 2+3, sonst 1+2, dann weitere Paare
+    const reihenfolge = treppenFelder0.map((_, i) => i).filter((i) => i + 1 < treppenFelder0.length)
+    reihenfolge.sort((x, y) => (x === 1 ? -1 : y === 1 ? 1 : x - y))
+    for (const i of reihenfolge) {
+      if (nebeneinander(treppenFelder0[i], treppenFelder0[i + 1])) { stairSpan = { a: treppenFelder0[i], b: treppenFelder0[i + 1], lagen: 0 }; break }
     }
+    if (!stairSpan) {
+      warnEinmal('TREPPE_ZU_KURZ', 'warning', `Die Außentreppe braucht an der Treppenseite mindestens 2 Felder nebeneinander – hier ${treppenFelder0.length}. Es wird keine Treppe erzeugt. Bitte eine Treppe von Hand platzieren.`)
+    }
+  }
+  if (stairSpan) {
+    const { a, b } = stairSpan
+    let lagen = 0
+    while (lagen < levels.length &&
+      fields.some((f) => istTreppenFeld(f) && f.levelIndex === lagen && gleicherPlatz(f, a, 0.01)) &&
+      fields.some((f) => istTreppenFeld(f) && f.levelIndex === lagen && gleicherPlatz(f, b, 0.01))) lagen++
+    stairSpan.lagen = lagen
+    if (lagen === 0) stairSpan = undefined
+    else if (lagen < levels.length) warnEinmal('TREPPE_ENDET', 'info', `Die Treppe führt bis Lage ${lagen}: darüber fehlen die Gerüstfelder an ihrer Stelle. Weiter oben bitte einen Zugang von Hand ergänzen.`)
+  }
+  // Durchgang im Geländer: Feld-ID (in der jeweiligen Lage) → Seite des Durchgangs
+  const durchgang = new Map<string, 'links' | 'rechts'>()
+  if (stairSpan) {
+    for (let j = 0; j < stairSpan.lagen; j++) {
+      const rechts = j % 2 === 0
+      const feldJ = fields.find((f) => istTreppenFeld(f) && f.levelIndex === j && gleicherPlatz(f, rechts ? stairSpan!.b : stairSpan!.a, 0.01))
+      if (feldJ) durchgang.set(feldJ.id, rechts ? 'rechts' : 'links')
+    }
+    warnEinmal('TREPPE_AUSSEN', 'info', 'Die Treppe steht als Außentreppe vor dem Gerüst (zwei Felder breit, Podest und Durchgang auf jeder Lage). Anschluss an das Gerüst und Standsicherheit der Treppe sind in der Statik zu prüfen.')
   }
 
   // Dachrand-Schutz nur bei Flachdach und einheitlicher Gebäudehöhe (keine Stufen)
@@ -472,12 +471,19 @@ export function generateScaffoldComponents(model: CADModel): ScaffoldComponent3D
 
     // Arbeitsbühne – im Treppenfeld entfällt der Belag ganz (der Lauf nimmt das Feld ein,
     // Austritt auf den Belag des Nachbarfelds).
-    if (!stairDeckDir.has(field.id)) {
+    {
       components.push({ id: `deck-${field.id}`, type: 'deck', articleNumber: getDeckArticle(lengthM), name: `Arbeitsbühne ${lengthM}m`, position: [positionX, yTop, positionZ + widthM / 2 - 0.02], rotation: [-Math.PI / 2, 0, 0], scale: [lengthM - 0.05, widthM - 0.05, 0.02], color: colorDeck, fieldId: field.id, levelId: level.id })
     }
 
     // Geländer
-    components.push({ id: `railing-${field.id}-top`, type: 'railing', articleNumber: getRailingArticle(lengthM), name: `Geländer ${lengthM}m`, position: [positionX, yTop, positionZ + widthM / 2 + 0.02], rotation: [0, 0, 0], scale: [lengthM, 1.0, 0.04], color: colorRailing, fieldId: field.id, levelId: level.id })
+    {
+      // Durchgang zur Außentreppe: Geländer am Podest-Ende um die Podestlänge kürzen
+      const dg = durchgang.get(field.id)
+      const dgLen = dg ? TREPPEN_PODEST_M : 0
+      const railLen = Math.max(0.3, lengthM - dgLen)
+      const railX = positionX + (dg === 'rechts' ? -dgLen / 2 : dg === 'links' ? dgLen / 2 : 0)
+      components.push({ id: `railing-${field.id}-top`, type: 'railing', articleNumber: getRailingArticle(lengthM), name: `Geländer ${lengthM}m`, position: [railX, yTop, positionZ + widthM / 2 + 0.02], rotation: [0, 0, 0], scale: [railLen, 1.0, 0.04], color: colorRailing, fieldId: field.id, levelId: level.id })
+    }
 
     // Diagonalen (alternierend)
     if (levelIndex % 2 === 0) {
@@ -686,38 +692,53 @@ export function generateScaffoldComponents(model: CADModel): ScaffoldComponent3D
     }
   }
 
-  // === TREPPEN (Scaffmax-Stil: Zickzack-Läufe im Feld) ===
-  for (const plan of stairPlans) {
-    const { i, covered, field: sf, level } = plan
-    const totalStairHeight = level.heightM * covered
-    const stairL = Math.max(1.0, sf.lengthM - 0.25)
-    const stairW = Math.max(0.4, sf.widthM * 0.8)
-    const stairRahmen = feldRahmen(sf, building)
-    const [stairX, stairPz] = stairRahmen.toLocal(sf.positionX, sf.positionZ)
-    const stairZ = stairPz + sf.widthM / 2 - 0.02 // gleiche Lage wie der Belag
-    const stairErster = components.length
-    const startDir: 1 | -1 = i % 2 === 0 ? 1 : -1
-
-    // Treppen-Rahmen (Holme der Läufe, siehe Variante in Scaffold3D)
-    components.push({ id: `stair-frame-${i}`, type: 'stair', articleNumber: 'SP-001', name: 'Spindeltreppe', position: [stairX, level.bottomY + totalStairHeight / 2, stairZ], rotation: [0, 0, 0], scale: [stairL, totalStairHeight, stairW], color: colorStair, levelId: level.id, flights: covered, flightStartDir: startDir })
-
-    // Stufen: je Lage ein Lauf, Richtung wechselt je Lage (Zickzack)
-    const perFlight = Math.max(1, Math.round(level.heightM / 0.25))
-    const tread = (stairL - 0.2) / perFlight
+  // === TREPPEN (Außentreppe vor dem Gerüst) ===
+  if (stairSpan) {
+    const { a: fa, b: fb, lagen } = stairSpan
+    const rf = feldRahmen(fa, building)
+    const [ax, az] = rf.toLocal(fa.positionX, fa.positionZ)
+    const [bx] = rf.toLocal(fb.positionX, fb.positionZ)
+    const xL = ax - fa.lengthM / 2, xR = bx + fb.lengthM / 2
+    const L = xR - xL, cx = (xL + xR) / 2
+    const W = TREPPEN_BREITE_M
+    const zS = az + fa.widthM - 0.045 + TREPPEN_ABSTAND_M + W / 2 // Mitte der Treppe, vor der Belag-Außenkante
+    const lv = (j: number) => levels.find((l) => l.index === j)!
+    const y0 = lv(0).bottomY
+    const hGes = lv(lagen - 1).topY - y0
+    const rise = hGes / lagen
+    const erster = components.length
+    components.push({ id: 'stair-frame-0', type: 'stair', articleNumber: 'SP-001', name: 'Außentreppe', position: [cx, y0 + hGes / 2, zS], rotation: [0, 0, 0], scale: [L, hGes, W], color: colorStair, levelId: lv(0).id, flights: lagen, flightStartDir: 1, podestM: TREPPEN_PODEST_M })
+    const run = L - 2 * TREPPEN_PODEST_M
+    const perFlight = Math.max(1, Math.round(rise / 0.25))
+    const tread = run / perFlight
+    const rs = rise / perFlight
     let stepNo = 0
-    for (let fl = 0; fl < covered; fl++) {
-      const dir = (i + fl) % 2 === 0 ? 1 : -1
-      const x0 = dir > 0 ? stairX - stairL / 2 + 0.1 : stairX + stairL / 2 - 0.1
+    for (let fl = 0; fl < lagen; fl++) {
+      const dir = fl % 2 === 0 ? 1 : -1
+      const x0 = dir > 0 ? xL + TREPPEN_PODEST_M : xR - TREPPEN_PODEST_M
       for (let k = 0; k < perFlight; k++) {
-        const stepY = level.bottomY + fl * level.heightM + (k + 1) * (level.heightM / perFlight) - 0.04
-        components.push({ id: `stair-step-${i}-${stepNo++}`, type: 'deck', articleNumber: 'ST-001', name: 'Treppenstufe', position: [x0 + dir * (k + 0.5) * tread, stepY, stairZ], rotation: [0, 0, 0], scale: [tread * 0.92, 0.04, stairW - 0.08], color: '#a0a0a0', levelId: level.id })
+        const oberkante = y0 + fl * rise + (k + 1) * rs + 0.01
+        components.push({ id: `stair-step-0-${stepNo++}`, type: 'deck', articleNumber: 'ST-001', name: 'Treppenstufe', position: [x0 + dir * (k + 0.5) * tread, oberkante - 0.02, zS], rotation: [0, 0, 0], scale: [tread * 0.92, 0.04, W - 0.08], color: '#a0a0a0', levelId: lv(fl).id })
+      }
+      // Podest auf Höhe des Gerüstbelags am Ende des Laufs, mit Geländer außen und stirnseitig
+      const xp = dir > 0 ? xR - TREPPEN_PODEST_M / 2 : xL + TREPPEN_PODEST_M / 2
+      const yTop = lv(fl).topY
+      const xEnde = dir > 0 ? xR : xL
+      components.push({ id: `stair-podest-${fl}`, type: 'deck', articleNumber: 'ST-002', name: 'Treppenpodest', position: [xp, yTop - 0.01, zS], rotation: [0, 0, 0], scale: [TREPPEN_PODEST_M, 0.04, W], color: '#a0a0a0', levelId: lv(fl).id })
+      components.push({ id: `stair-podest-${fl}-gel-aussen`, type: 'railing', articleNumber: 'SG-001', name: 'Podestgeländer', position: [xp, yTop, zS + W / 2 - 0.02], rotation: [0, 0, 0], scale: [TREPPEN_PODEST_M, 1.0, 0.04], color: colorRailing, levelId: lv(fl).id })
+      components.push({ id: `stair-podest-${fl}-gel-ende`, type: 'railing', articleNumber: 'SG-001', name: 'Podestgeländer', position: [xEnde - dir * 0.02, yTop, zS], rotation: [0, Math.PI / 2, 0], scale: [W, 1.0, 0.04], color: colorRailing, levelId: lv(fl).id })
+    }
+    // Pfosten und Fußplatten an den vier Ecken des Turms
+    const hPfosten = hGes + 1.0
+    for (const x of [xL + 0.03, xR - 0.03]) {
+      for (const dz of [-1, 1]) {
+        const z = zS + dz * (W / 2 - 0.03)
+        const tag = `${x < cx ? 'l' : 'r'}${dz < 0 ? 'i' : 'a'}`
+        components.push({ id: `stair-pfosten-${tag}`, type: 'railing', articleNumber: 'SG-001', name: 'Treppenpfosten', position: [x, y0 + hPfosten / 2, z], rotation: [0, 0, 0], scale: [0.04, hPfosten, 0.04], color: colorRailing, levelId: lv(0).id })
+        components.push({ id: `stair-fuss-${tag}`, type: 'footplate', articleNumber: 'FP-001', name: 'Fußplatte', position: [x, y0 - 0.02, z], rotation: [0, 0, 0], scale: [0.15, 0.04, 0.15], color: colorFoot, levelId: lv(0).id })
       }
     }
-
-    // Endpfosten des Treppenturms
-    components.push({ id: `stair-rail-${i}`, type: 'railing', articleNumber: 'SG-001', name: 'Treppengeländer', position: [stairX - stairL / 2, level.bottomY + totalStairHeight / 2, stairZ], rotation: [0, 0, 0], scale: [0.04, totalStairHeight, 0.04], color: colorRailing, levelId: level.id })
-    components.push({ id: `stair-rail-${i}-2`, type: 'railing', articleNumber: 'SG-001', name: 'Treppengeländer', position: [stairX + stairL / 2, level.bottomY + totalStairHeight / 2, stairZ], rotation: [0, 0, 0], scale: [0.04, totalStairHeight, 0.04], color: colorRailing, levelId: level.id })
-    for (let ci = stairErster; ci < components.length; ci++) bauteilInWelt(components[ci], stairRahmen)
+    for (let ci = erster; ci < components.length; ci++) bauteilInWelt(components[ci], rf)
   }
 
   // === FANGNETZE ===
@@ -1263,20 +1284,20 @@ function getUnit(type: ScaffoldComponent3D['type']): string {
 }
 
 function getUnitPrice(articleNumber: string): number {
-  const prices: Record<string, number> = { 'RA-001': 45, 'RA-002': 52, 'RA-003': 58, 'AB-001': 85, 'AB-002': 98, 'AB-003': 112, 'DI-001': 28, 'DI-002': 32, 'DI-003': 36, 'GE-001': 35, 'GE-002': 40, 'GE-003': 45, 'FP-001': 18, 'KU-001': 4.5, 'AN-001': 15, 'QR-001': 12, 'KO-001': 32, 'SP-001': 450, 'FN-001': 4.2, 'SD-001': 850, 'BB-001': 22, 'LV-001': 45, 'EW-001': 25, 'ST-001': 15, 'SG-001': 28 }
+  const prices: Record<string, number> = { 'RA-001': 45, 'RA-002': 52, 'RA-003': 58, 'AB-001': 85, 'AB-002': 98, 'AB-003': 112, 'DI-001': 28, 'DI-002': 32, 'DI-003': 36, 'GE-001': 35, 'GE-002': 40, 'GE-003': 45, 'FP-001': 18, 'KU-001': 4.5, 'AN-001': 15, 'QR-001': 12, 'KO-001': 32, 'SP-001': 450, 'FN-001': 4.2, 'SD-001': 850, 'BB-001': 22, 'LV-001': 45, 'EW-001': 25, 'ST-001': 15, 'ST-002': 38, 'SG-001': 28 }
   // Leiter: bewusst KEIN Fantasiepreis – Preis kommt aus dem Lager der Firma (Artikel LE-001).
   if (articleNumber === LEITER_ARTIKELNUMMER) return 0
   return prices[articleNumber] || 10
 }
 
 function getWeightKg(articleNumber: string): number {
-  const weights: Record<string, number> = { 'RA-001': 12.5, 'RA-002': 15.2, 'RA-003': 18.0, 'AB-001': 22, 'AB-002': 26, 'AB-003': 31, 'DI-001': 8.5, 'DI-002': 9.8, 'DI-003': 11.2, 'GE-001': 7.2, 'GE-002': 8.5, 'GE-003': 9.8, 'FP-001': 5.5, 'KU-001': 0.8, 'AN-001': 2.5, 'QR-001': 3.5, 'KO-001': 9.0, 'SP-001': 85.0, 'FN-001': 0.5, 'SD-001': 120.0, 'BB-001': 6.5, 'LV-001': 18.0, 'EW-001': 4.2, 'ST-001': 2.8, 'SG-001': 5.5 }
+  const weights: Record<string, number> = { 'RA-001': 12.5, 'RA-002': 15.2, 'RA-003': 18.0, 'AB-001': 22, 'AB-002': 26, 'AB-003': 31, 'DI-001': 8.5, 'DI-002': 9.8, 'DI-003': 11.2, 'GE-001': 7.2, 'GE-002': 8.5, 'GE-003': 9.8, 'FP-001': 5.5, 'KU-001': 0.8, 'AN-001': 2.5, 'QR-001': 3.5, 'KO-001': 9.0, 'SP-001': 85.0, 'FN-001': 0.5, 'SD-001': 120.0, 'BB-001': 6.5, 'LV-001': 18.0, 'EW-001': 4.2, 'ST-001': 2.8, 'ST-002': 7.5, 'SG-001': 5.5 }
   if (articleNumber === LEITER_ARTIKELNUMMER) return 0
   return weights[articleNumber] || 5
 }
 
 function getRecommendation(articleNumber: string): string {
-  const recs: Record<string, string> = { 'RA-001': 'Standard-Rahmen für Feldlänge 2,07 m', 'RA-002': 'Für breitere Felder', 'RA-003': 'Für große Feldlängen', 'AB-001': 'Standard-Arbeitsbühne', 'AB-002': 'Für 2,50 m Feldlänge', 'AB-003': 'Für 3,00 m Feldlänge', 'DI-001': 'Stabilisierung je Feld', 'DI-002': 'Stabilisierung 2,50 m', 'DI-003': 'Stabilisierung 3,00 m', 'GE-001': 'Brüstungsgeländer', 'GE-002': 'Geländer 2,50 m', 'GE-003': 'Geländer 3,00 m', 'FP-001': 'Grundplatte je Standfuß', 'KU-001': 'Verbindung Rahmen/Diagonale', 'AN-001': 'Standard-Fassadenanker', 'QR-001': 'Querriegel', 'KO-001': 'Für Überstände und Dacharbeiten', 'SP-001': 'Zugang je 3–4 Ebenen', 'FN-001': 'Fangnetz bei Höhe > 12m', 'SD-001': 'Schutzdach öffentlicher Raum', 'BB-001': 'Seitenschutz/Absturzsicherung', 'LV-001': 'Bei weichem Untergrund', 'EW-001': 'Eckverstrebung', 'ST-001': 'Treppenstufe', 'SG-001': 'Treppengeländer', 'LE-001': 'Schematische Leiter – Preis, Gewicht und Name im Lager pflegen' }
+  const recs: Record<string, string> = { 'RA-001': 'Standard-Rahmen für Feldlänge 2,07 m', 'RA-002': 'Für breitere Felder', 'RA-003': 'Für große Feldlängen', 'AB-001': 'Standard-Arbeitsbühne', 'AB-002': 'Für 2,50 m Feldlänge', 'AB-003': 'Für 3,00 m Feldlänge', 'DI-001': 'Stabilisierung je Feld', 'DI-002': 'Stabilisierung 2,50 m', 'DI-003': 'Stabilisierung 3,00 m', 'GE-001': 'Brüstungsgeländer', 'GE-002': 'Geländer 2,50 m', 'GE-003': 'Geländer 3,00 m', 'FP-001': 'Grundplatte je Standfuß', 'KU-001': 'Verbindung Rahmen/Diagonale', 'AN-001': 'Standard-Fassadenanker', 'QR-001': 'Querriegel', 'KO-001': 'Für Überstände und Dacharbeiten', 'SP-001': 'Zugang je 3–4 Ebenen', 'FN-001': 'Fangnetz bei Höhe > 12m', 'SD-001': 'Schutzdach öffentlicher Raum', 'BB-001': 'Seitenschutz/Absturzsicherung', 'LV-001': 'Bei weichem Untergrund', 'EW-001': 'Eckverstrebung', 'ST-001': 'Treppenstufe', 'ST-002': 'Treppenpodest', 'SG-001': 'Treppengeländer', 'LE-001': 'Schematische Leiter – Preis, Gewicht und Name im Lager pflegen' }
   return recs[articleNumber] || 'Standard-Bauteil'
 }
 
