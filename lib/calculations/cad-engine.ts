@@ -1117,13 +1117,11 @@ function generiereUmrissModell(
     widthM: Math.round(box.widthM * 100) / 100,
     balconies: undefined,
     balconyCount: 0,
-    windowCount: 0,
-    doorCount: 0,
     sides: ['front', 'back', 'left', 'right'],
   }
   if (building.heightM <= 0) warnings.push({ type: 'error', code: 'BUILDING_HEIGHT_ZERO', message: 'Gebäudehöhe muss größer als 0 sein.' })
   if (building.heightM > 40) warnings.push({ type: 'warning', code: 'HEIGHT_VERY_HIGH', message: 'Gebäudehöhe > 40m – Statik prüfen lassen!' })
-  warnings.push({ type: 'info', code: 'UMRISS_MODUS', message: `Gebäude mit Umriss (${umriss.length} Ecken): Das Gerüst läuft um alle Kanten. Balkone, Fenster und Türen sowie die Höhenabschnitte werden im Umriss-Modus noch nicht berücksichtigt; die Treppe steht an der längsten Kante.` })
+  warnings.push({ type: 'info', code: 'UMRISS_MODUS', message: `Gebäude mit Umriss (${umriss.length} Ecken): Das Gerüst läuft um alle Kanten. Balkone sowie die Höhenabschnitte werden im Umriss-Modus noch nicht berücksichtigt (Fenster und Türen werden nach Kantenlänge verteilt); die Treppe steht an der längsten Kante.` })
   if ((gebaeude.sections?.length ?? 0) >= 2) warnings.push({ type: 'info', code: 'UMRISS_OHNE_ABSCHNITTE', message: 'Im Umriss-Modus gilt eine einheitliche Gebäudehöhe – die Abschnitte werden ignoriert.' })
   if ((gebaeude.balconies?.length ?? 0) > 0) warnings.push({ type: 'warning', code: 'UMRISS_OHNE_BALKONE', message: 'Balkone werden im Umriss-Modus noch nicht berücksichtigt (nicht ausgespart, keine Konsolen).' })
 
@@ -1822,13 +1820,76 @@ export interface BuildingFeature3D {
   floorIndex: number
   // nur Balkone mit fester Position: wie das Gerüst davor geplant ist
   modus?: 'durchlaufend' | 'ausgespart'
+  // Umriss-Modus: Lage direkt an der Wand (Szenen-Koordinaten) und Drehwinkel der Kante
+  umriss?: { kante: number; weltX: number; weltZ: number; yaw: number }
+}
+
+// Fenster und Türen für ein Gebäude mit Umriss: verteilt nach Kantenlänge.
+function generiereUmrissMerkmale(building: BuildingParams): BuildingFeature3D[] {
+  const roh = building.umriss!
+  if (pruefeUmriss(roh).length > 0) return []
+  const kanten = umrissKanten(zentriereUmriss(normalisiereUmriss(roh)))
+  const nutzbar = kanten.filter((k) => k.laengeM >= 1.5)
+  const gesamt = nutzbar.reduce((s, k) => s + k.laengeM, 0)
+  if (gesamt <= 0) return []
+  const floors = Math.max(1, building.floors || 1)
+  const floorHeights = building.floorHeightsM?.length === floors
+    ? building.floorHeightsM
+    : Array(floors).fill(building.heightM / floors)
+  const floorBottom = (i: number) => floorHeights.slice(0, i).reduce((s, h) => s + h, 0)
+  const out: BuildingFeature3D[] = []
+  const platziere = (k: typeof kanten[number], offset: number) => ({
+    kante: k.index,
+    weltX: (k.von.x + k.bis.x) / 2 + k.u[0] * offset,
+    weltZ: (k.von.z + k.bis.z) / 2 + k.u[1] * offset,
+    yaw: k.yaw,
+  })
+
+  // Fenster: je Geschoss anteilig zur Kantenlänge
+  const fensterJeGeschoss = Math.max(0, (building.windowCount || 0) / floors)
+  for (const k of nutzbar) {
+    const anzahl = Math.round(fensterJeGeschoss * k.laengeM / gesamt)
+    if (anzahl === 0) continue
+    const abstand = k.laengeM / (anzahl + 1)
+    for (let f = 0; f < floors; f++) {
+      for (let w = 0; w < anzahl; w++) {
+        const offset = -k.laengeM / 2 + abstand * (w + 1)
+        out.push({
+          id: `win-k${k.index}-${f}-${w}`, type: 'window', side: 'front', offsetAlongM: offset,
+          bottomY: floorBottom(f) + 0.9, widthM: Math.min(1.2, abstand * 0.6), heightM: Math.min(1.4, floorHeights[f] * 0.5),
+          depthM: 0, floorIndex: f, umriss: platziere(k, offset),
+        })
+      }
+    }
+  }
+
+  // Türen: Erdgeschoss, längste Kanten zuerst, reihum
+  const nachLaenge = nutzbar.slice().sort((a, b) => b.laengeM - a.laengeM)
+  const tuerenJeKante = new Map<number, number>()
+  for (let d = 0; d < (building.doorCount || 0); d++) {
+    const k = nachLaenge[d % nachLaenge.length]
+    tuerenJeKante.set(k.index, (tuerenJeKante.get(k.index) || 0) + 1)
+  }
+  let nr = 0
+  for (const k of nachLaenge) {
+    const anzahl = tuerenJeKante.get(k.index) || 0
+    const abstand = k.laengeM / (anzahl + 1)
+    for (let i = 0; i < anzahl; i++) {
+      const offset = -k.laengeM / 2 + abstand * (i + 1) + abstand / 4
+      out.push({
+        id: `door-${nr++}`, type: 'door', side: 'front', offsetAlongM: offset,
+        bottomY: 0, widthM: 1.0, heightM: 2.1, depthM: 0, floorIndex: 0, umriss: platziere(k, offset),
+      })
+    }
+  }
+  return out
 }
 
 // Verteilt Fenster/Türen/Balkone gleichmäßig auf Geschosse und Fassaden.
 // Türen nur im Erdgeschoss, Balkone nur in Obergeschossen.
 export function generateBuildingFeatures(building: BuildingParams): BuildingFeature3D[] {
-  // Umriss-Modus: Fenster, Türen und Balkone sind hier noch nicht umgesetzt
-  if (building.umriss && building.umriss.length >= 3) return []
+  // Umriss-Modus: Fenster und Türen je Kante (Balkone noch nicht)
+  if (building.umriss && building.umriss.length >= 3) return generiereUmrissMerkmale(building)
   const features: BuildingFeature3D[] = []
   const sides: BuildingFeature3D['side'][] = building.sides?.length ? building.sides : ['front']
   const floors = Math.max(1, building.floors || 1)
