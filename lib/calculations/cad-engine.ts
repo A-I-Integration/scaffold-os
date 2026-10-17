@@ -170,6 +170,8 @@ export interface ScaffoldAnchor {
 }
 
 export interface ScaffoldComponent3D {
+  /** Nur Rahmen: Rahmenbreite (Abstand Innen-/Außenstütze) in m – die Darstellung zeichnet dann einen echten Leiterrahmen mit zwei Stützen. */
+  rahmenBreiteM?: number
   id: string
   type: 'frame' | 'deck' | 'railing' | 'diagonal' | 'footplate' | 'coupling' | 'anchor' | 'console' | 'stair' | 'net' | 'board' | 'protection_roof' | 'safety_net' | 'load_plate' | 'corner_brace' | 'ladder'
   articleNumber: string
@@ -453,8 +455,8 @@ export function generateScaffoldComponents(model: CADModel): ScaffoldComponent3D
     const levelH = level.heightM
 
     // Rahmen links + rechts
-    components.push({ id: `frame-${field.id}-left`, type: 'frame', articleNumber: getFrameArticle(lengthM), name: `Rahmen ${lengthM}m`, position: [positionX - lengthM / 2 + 0.02, yBottom + levelH / 2, positionZ], rotation: [0, 0, 0], scale: [0.073, levelH, 0.04], color: colorFrame, fieldId: field.id, levelId: level.id })
-    components.push({ id: `frame-${field.id}-right`, type: 'frame', articleNumber: getFrameArticle(lengthM), name: `Rahmen ${lengthM}m`, position: [positionX + lengthM / 2 - 0.02, yBottom + levelH / 2, positionZ], rotation: [0, 0, 0], scale: [0.073, levelH, 0.04], color: colorFrame, fieldId: field.id, levelId: level.id })
+    components.push({ id: `frame-${field.id}-left`, type: 'frame', articleNumber: getFrameArticle(lengthM), name: `Rahmen ${lengthM}m`, position: [positionX - lengthM / 2 + 0.02, yBottom + levelH / 2, positionZ], rotation: [0, 0, 0], scale: [0.073, levelH, 0.04], rahmenBreiteM: widthM, color: colorFrame, fieldId: field.id, levelId: level.id })
+    components.push({ id: `frame-${field.id}-right`, type: 'frame', articleNumber: getFrameArticle(lengthM), name: `Rahmen ${lengthM}m`, position: [positionX + lengthM / 2 - 0.02, yBottom + levelH / 2, positionZ], rotation: [0, 0, 0], scale: [0.073, levelH, 0.04], rahmenBreiteM: widthM, color: colorFrame, fieldId: field.id, levelId: level.id })
 
     // Querriegel
     components.push({ id: `rail-${field.id}-bottom`, type: 'frame', articleNumber: 'QR-001', name: 'Querriegel', position: [positionX, yBottom + 0.05, positionZ], rotation: [0, 0, 0], scale: [lengthM, 0.04, 0.04], color: colorFrame, fieldId: field.id, levelId: level.id })
@@ -474,7 +476,7 @@ export function generateScaffoldComponents(model: CADModel): ScaffoldComponent3D
       const dgR = dg?.rechts ? TREPPEN_PODEST_M : 0
       const railLen = Math.max(0.3, lengthM - dgL - dgR)
       const railX = positionX + (dgL - dgR) / 2
-      components.push({ id: `railing-${field.id}-top`, type: 'railing', articleNumber: getRailingArticle(lengthM), name: `Geländer ${lengthM}m`, position: [railX, yTop, positionZ + widthM / 2 + 0.02], rotation: [0, 0, 0], scale: [railLen, 1.0, 0.04], color: colorRailing, fieldId: field.id, levelId: level.id })
+      components.push({ id: `railing-${field.id}-top`, type: 'railing', articleNumber: getRailingArticle(lengthM), name: `Geländer ${lengthM}m`, position: [railX, yTop + 0.5, positionZ + widthM - 0.045], rotation: [0, 0, 0], scale: [railLen, 1.0, 0.04], color: colorRailing, fieldId: field.id, levelId: level.id })
     }
 
     // Diagonalen (alternierend)
@@ -487,6 +489,9 @@ export function generateScaffoldComponents(model: CADModel): ScaffoldComponent3D
     if (levelIndex === 0) {
       components.push({ id: `foot-${field.id}-left`, type: 'footplate', articleNumber: 'FP-001', name: 'Fußplatte', position: [positionX - lengthM / 2 + 0.02, yBottom - 0.02, positionZ], rotation: [0, 0, 0], scale: [0.15, 0.04, 0.15], color: colorFoot, fieldId: field.id, levelId: level.id })
       components.push({ id: `foot-${field.id}-right`, type: 'footplate', articleNumber: 'FP-001', name: 'Fußplatte', position: [positionX + lengthM / 2 - 0.02, yBottom - 0.02, positionZ], rotation: [0, 0, 0], scale: [0.15, 0.04, 0.15], color: colorFoot, fieldId: field.id, levelId: level.id })
+      // Außenstützen des Rahmens (Rahmenbreite abzüglich Rand): eigene Fußplatten
+      components.push({ id: `foot-${field.id}-left-aussen`, type: 'footplate', articleNumber: 'FP-001', name: 'Fußplatte', position: [positionX - lengthM / 2 + 0.02, yBottom - 0.02, positionZ + widthM - 0.075], rotation: [0, 0, 0], scale: [0.15, 0.04, 0.15], color: colorFoot, fieldId: field.id, levelId: level.id })
+      components.push({ id: `foot-${field.id}-right-aussen`, type: 'footplate', articleNumber: 'FP-001', name: 'Fußplatte', position: [positionX + lengthM / 2 - 0.02, yBottom - 0.02, positionZ + widthM - 0.075], rotation: [0, 0, 0], scale: [0.15, 0.04, 0.15], color: colorFoot, fieldId: field.id, levelId: level.id })
     }
 
     // Kupplungen
@@ -494,7 +499,7 @@ export function generateScaffoldComponents(model: CADModel): ScaffoldComponent3D
     components.push({ id: `coupling-${field.id}-2`, type: 'coupling', articleNumber: 'KU-001', name: 'Kupplung', position: [positionX + lengthM / 2 - 0.02, yTop, positionZ], rotation: [0, 0, 0], scale: [0.05, 0.05, 0.05], color: colorFrame, fieldId: field.id, levelId: level.id })
 
     // Bordbretter
-    components.push({ id: `board-${field.id}`, type: 'board', articleNumber: 'BB-001', name: `Bordbrett ${lengthM}m`, position: [positionX, yTop + 0.3, positionZ - widthM / 2 - 0.02], rotation: [0, 0, 0], scale: [lengthM, 0.19, 0.02], color: colorBoard, fieldId: field.id, levelId: level.id })
+    components.push({ id: `board-${field.id}`, type: 'board', articleNumber: 'BB-001', name: `Bordbrett ${lengthM}m`, position: [positionX, yTop + 0.105, positionZ + widthM - 0.06], rotation: [0, 0, 0], scale: [lengthM, 0.19, 0.02], color: colorBoard, fieldId: field.id, levelId: level.id })
 
     // Dachrand-Absturzschutz (optional, nur Flachdach, nicht bei gestuften Gebäuden):
     // auf der obersten Lage ein zusätzliches Geländer, dessen Handlauf 1,0 m über der
@@ -502,7 +507,7 @@ export function generateScaffoldComponents(model: CADModel): ScaffoldComponent3D
     // Feldenden. ANNAHME: Maß 1,0 m – Anforderungen der Norm/BG bitte prüfen.
     if (dachrandSchutz && !fields.some((g) => g.side === side && g.levelIndex === levelIndex + 1 && Math.abs(g.positionX - field.positionX) < 0.01 && Math.abs(g.positionZ - field.positionZ) < 0.01)) {
       const basisY = Math.max(yTop, building.heightM)
-      const zAussen = positionZ + widthM / 2 + 0.02
+      const zAussen = positionZ + widthM - 0.045
       components.push({ id: `dachrand-${field.id}`, type: 'railing', articleNumber: getRailingArticle(lengthM), name: `Dachrand-Geländer ${lengthM}m`, position: [positionX, basisY + 0.5, zAussen], rotation: [0, 0, 0], scale: [lengthM, 1.0, 0.04], color: colorRailing, fieldId: field.id, levelId: level.id })
       const pfostenH = basisY + 1.0 - yTop
       for (const [tag, sx] of [['l', -1], ['r', 1]] as const) {
@@ -544,8 +549,8 @@ export function generateScaffoldComponents(model: CADModel): ScaffoldComponent3D
           components.push({ id: `${idBase}-deck`, type: 'deck', articleNumber: 'AB-001', name: 'Eckbelag', position: [cx, yTop, cz], rotation: [-Math.PI / 2, 0, 0], scale: [dx - 0.04, dz - 0.04, 0.02], color: colorDeck, levelId: level.id })
           components.push({ id: `${idBase}-post`, type: 'frame', articleNumber: 'RA-001', name: 'Eckpfosten', position: [xAussen + (lr === 'left' ? 0.04 : -0.04), level.bottomY + level.heightM / 2, zAussen + (fb === 'front' ? -0.04 : 0.04)], rotation: [0, 0, 0], scale: [0.073, level.heightM, 0.04], color: colorFrame, levelId: level.id })
           // Geländer an den zwei Außenkanten
-          components.push({ id: `${idBase}-rail-x`, type: 'railing', articleNumber: 'GE-001', name: 'Eckgeländer', position: [cx, yTop, zAussen + (fb === 'front' ? 0.02 : -0.02)], rotation: [0, 0, 0], scale: [dx, 1.0, 0.04], color: colorRailing, levelId: level.id })
-          components.push({ id: `${idBase}-rail-z`, type: 'railing', articleNumber: 'GE-001', name: 'Eckgeländer', position: [xAussen + (lr === 'left' ? -0.02 : 0.02), yTop, cz], rotation: [0, Math.PI / 2, 0], scale: [dz, 1.0, 0.04], color: colorRailing, levelId: level.id })
+          components.push({ id: `${idBase}-rail-x`, type: 'railing', articleNumber: 'GE-001', name: 'Eckgeländer', position: [cx, yTop + 0.5, zAussen + (fb === 'front' ? 0.02 : -0.02)], rotation: [0, 0, 0], scale: [dx, 1.0, 0.04], color: colorRailing, levelId: level.id })
+          components.push({ id: `${idBase}-rail-z`, type: 'railing', articleNumber: 'GE-001', name: 'Eckgeländer', position: [xAussen + (lr === 'left' ? -0.02 : 0.02), yTop + 0.5, cz], rotation: [0, Math.PI / 2, 0], scale: [dz, 1.0, 0.04], color: colorRailing, levelId: level.id })
           if (idx === 0) {
             components.push({ id: `${idBase}-foot`, type: 'footplate', articleNumber: 'FP-001', name: 'Fußplatte', position: [xAussen + (lr === 'left' ? 0.04 : -0.04), level.bottomY - 0.02, zAussen + (fb === 'front' ? -0.04 : 0.04)], rotation: [0, 0, 0], scale: [0.15, 0.04, 0.15], color: colorFoot, levelId: level.id })
           }
@@ -574,8 +579,8 @@ export function generateScaffoldComponents(model: CADModel): ScaffoldComponent3D
         const erster = components.length
         components.push({ id: `${idBase}-deck`, type: 'deck', articleNumber: 'AB-001', name: 'Eckbelag', position: [sw / 2, yTop, sw / 2], rotation: [-Math.PI / 2, 0, 0], scale: [sw - 0.04, sw - 0.04, 0.02], color: colorDeck, levelId: level.id })
         components.push({ id: `${idBase}-post`, type: 'frame', articleNumber: 'RA-001', name: 'Eckpfosten', position: [sw - 0.04, level.bottomY + level.heightM / 2, sw - 0.04], rotation: [0, 0, 0], scale: [0.073, level.heightM, 0.04], color: colorFrame, levelId: level.id })
-        components.push({ id: `${idBase}-rail-x`, type: 'railing', articleNumber: 'GE-001', name: 'Eckgeländer', position: [sw / 2, yTop, sw + 0.02], rotation: [0, 0, 0], scale: [sw, 1.0, 0.04], color: colorRailing, levelId: level.id })
-        components.push({ id: `${idBase}-rail-z`, type: 'railing', articleNumber: 'GE-001', name: 'Eckgeländer', position: [sw + 0.02, yTop, sw / 2], rotation: [0, Math.PI / 2, 0], scale: [sw, 1.0, 0.04], color: colorRailing, levelId: level.id })
+        components.push({ id: `${idBase}-rail-x`, type: 'railing', articleNumber: 'GE-001', name: 'Eckgeländer', position: [sw / 2, yTop + 0.5, sw + 0.02], rotation: [0, 0, 0], scale: [sw, 1.0, 0.04], color: colorRailing, levelId: level.id })
+        components.push({ id: `${idBase}-rail-z`, type: 'railing', articleNumber: 'GE-001', name: 'Eckgeländer', position: [sw + 0.02, yTop + 0.5, sw / 2], rotation: [0, Math.PI / 2, 0], scale: [sw, 1.0, 0.04], color: colorRailing, levelId: level.id })
         if (level.index === 0) {
           components.push({ id: `${idBase}-foot`, type: 'footplate', articleNumber: 'FP-001', name: 'Fußplatte', position: [sw - 0.04, level.bottomY - 0.02, sw - 0.04], rotation: [0, 0, 0], scale: [0.15, 0.04, 0.15], color: colorFoot, levelId: level.id })
         }
@@ -707,8 +712,8 @@ export function generateScaffoldComponents(model: CADModel): ScaffoldComponent3D
     let stepNo = 0
     const podest = (id: string, xp: number, yTop: number, xEnde: number, ende: 1 | -1, levelId: string) => {
       components.push({ id: `stair-podest-${id}`, type: 'deck', articleNumber: 'ST-002', name: 'Treppenpodest', position: [xp, yTop - 0.01, zS], rotation: [0, 0, 0], scale: [TREPPEN_PODEST_M, 0.04, W], color: '#a0a0a0', levelId })
-      components.push({ id: `stair-podest-${id}-gel-aussen`, type: 'railing', articleNumber: 'SG-001', name: 'Podestgeländer', position: [xp, yTop, zS + W / 2 - 0.02], rotation: [0, 0, 0], scale: [TREPPEN_PODEST_M, 1.0, 0.04], color: colorRailing, levelId })
-      components.push({ id: `stair-podest-${id}-gel-ende`, type: 'railing', articleNumber: 'SG-001', name: 'Podestgeländer', position: [xEnde - ende * 0.02, yTop, zS], rotation: [0, Math.PI / 2, 0], scale: [W, 1.0, 0.04], color: colorRailing, levelId })
+      components.push({ id: `stair-podest-${id}-gel-aussen`, type: 'railing', articleNumber: 'SG-001', name: 'Podestgeländer', position: [xp, yTop + 0.5, zS + W / 2 - 0.02], rotation: [0, 0, 0], scale: [TREPPEN_PODEST_M, 1.0, 0.04], color: colorRailing, levelId })
+      components.push({ id: `stair-podest-${id}-gel-ende`, type: 'railing', articleNumber: 'SG-001', name: 'Podestgeländer', position: [xEnde - ende * 0.02, yTop + 0.5, zS], rotation: [0, Math.PI / 2, 0], scale: [W, 1.0, 0.04], color: colorRailing, levelId })
     }
     // Alle Läufe steigen von links nach rechts, jeder eine Lage hoch (wie bei der Außentreppe in der Praxis):
     // Lauf f beginnt links auf Höhe des Belags der Lage f-1 (Lauf 0: am Boden) und endet rechts auf dem Podest der Lage f.
