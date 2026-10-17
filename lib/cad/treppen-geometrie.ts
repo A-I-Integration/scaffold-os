@@ -41,7 +41,7 @@ function rohr(a: THREE.Vector3, b: THREE.Vector3, z: number, r = ROHR_R): THREE.
 
 /** Teilgeometrien des Treppenturms (noch nicht zusammengeführt, noch nicht skaliert). */
 export function treppenTeile(m: TreppenMasse): THREE.BufferGeometry[] {
-  const { laufe: N, startRichtung: p0, laengeM: L, hoeheM: H, breiteM: W } = m
+  const { laeufe: N, startRichtung: p0, laengeM: L, hoeheM: H, breiteM: W } = m
   const rise = H / N
   const perFlight = Math.max(1, Math.round(rise / 0.25))
   const tread = (L - 0.2) / perFlight

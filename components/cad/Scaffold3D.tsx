@@ -230,7 +230,7 @@ function getGeometry(type: string, variant: string = 'default'): THREE.BufferGeo
           const [nS, p0S, lS, hS, wS] = variant.slice(2).split('|')
           const N = Math.max(1, parseInt(nS, 10)), p0 = parseInt(p0S, 10)
           const L = parseInt(lS, 10) / 100, H = parseInt(hS, 10) / 100, W = parseInt(wS, 10) / 100
-          const parts = treppenTeile({ laufe: N, startRichtung: p0 === 1 ? 1 : 0, laengeM: L, hoeheM: H, breiteM: W })
+          const parts = treppenTeile({ laeufe: N, startRichtung: p0 === 1 ? 1 : 0, laengeM: L, hoeheM: H, breiteM: W })
           geo = mergeParts(parts)
           geo.scale(1 / L, 1 / H, 1 / W)
           break
