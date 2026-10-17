@@ -3,7 +3,7 @@
 //
 // Ein Statiker bekommt einen eigenen Login, sieht aber AUSSCHLIESSLICH
 // die ihm freigegebenen CAD-Projekte (3D-Ansicht, Maße, Stückliste ohne
-// Preise). Alles andere ist für ihn gesperrt – und zwar nach dem Prinzip
+// Preise) und das CAD (mit Lagerpreisen, LV). Alles andere ist für ihn gesperrt – und zwar nach dem Prinzip
 // „Standard = gesperrt“: nur die hier aufgelisteten Pfade sind erlaubt.
 // Neue Seiten oder API-Routen sind für Statiker damit automatisch zu.
 //
@@ -19,6 +19,8 @@ export const STATIKER_STARTSEITE = '/statiker'
 export const STATIKER_ERLAUBTE_PFADE = [
   '/statiker',
   '/api/statiker',
+  // CAD (Entscheidung 17.10.): Statiker nutzt das CAD wie der Admin und kann ein LV erstellen
+  '/cad',
   '/login',
   '/passwort-reset',
   '/passwort-vergessen',

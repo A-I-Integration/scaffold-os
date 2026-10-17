@@ -44,9 +44,9 @@ export default function StatikerStartseite() {
         <div className='max-w-3xl mx-auto flex items-center justify-between gap-3'>
           <div>
             <h1 className='text-lg font-semibold'>Meine Projekte</h1>
-            <p className='text-xs text-[#86868b]'>Statiker-Bereich · nur lesend, ohne Preise</p>
+            <p className='text-xs text-[#86868b]'>Statiker-Bereich</p>
           </div>
-          <button onClick={abmelden} className='text-xs px-3 py-1.5 rounded-lg bg-black/5 text-[#424245] hover:bg-black/10'>Abmelden</button>
+          <div className='flex items-center gap-2'><Link href='/cad' className='text-xs px-3 py-1.5 rounded-lg bg-[#e8590c] text-white hover:bg-[#d24f08]'>CAD öffnen</Link><button onClick={abmelden} className='text-xs px-3 py-1.5 rounded-lg bg-black/5 text-[#424245] hover:bg-black/10'>Abmelden</button></div>
         </div>
       </header>
 

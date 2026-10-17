@@ -2,9 +2,8 @@
 
 import { useMemo, useState, type ReactNode } from 'react'
 import dynamic from 'next/dynamic'
-import LvDialog from '@/components/cad/LvDialog'
 import {
-  generateCADModel, generateBuildingFeatures, generateBillOfMaterials, calculateLogistics,
+  generateCADModel, generateBuildingFeatures, generateBillOfMaterials,
   type BuildingParams,
 } from '@/lib/calculations/cad-engine'
 
@@ -44,8 +43,7 @@ const ALLE_TYPEN = Object.fromEntries(
 
 const fmt = (n: number, d = 1) => n.toLocaleString('de-DE', { minimumFractionDigits: d, maximumFractionDigits: d })
 
-export default function AnsichtViewer({ daten, kopfAktion, lvErlaubt = false }: { daten: AnsichtDaten; kopfAktion?: ReactNode; lvErlaubt?: boolean }) {
-  const [lvOffen, setLvOffen] = useState(false)
+export default function AnsichtViewer({ daten, kopfAktion }: { daten: AnsichtDaten; kopfAktion?: ReactNode }) {
   const [auswahl, setAuswahl] = useState<string | null>(null)
   const [ansicht, setAnsicht] = useState<'perspective' | 'front' | 'back' | 'left' | 'right' | 'top'>('perspective')
 
@@ -55,12 +53,6 @@ export default function AnsichtViewer({ daten, kopfAktion, lvErlaubt = false }: 
   }, [daten])
   const features = useMemo(() => (daten ? generateBuildingFeatures(daten.building) : []), [daten])
   const stueckliste = useMemo(() => (modell ? generateBillOfMaterials(modell) : []), [modell])
-  // Statiker kennt die Firmen-Stundenwerte nicht: Standard 2,0 Std/m² (wie im CAD voreingestellt)
-  const lvStunden = useMemo(() => {
-    if (!modell) return { auf: 0, ab: 0 }
-    const l = calculateLogistics(modell, stueckliste, 2.0)
-    return { auf: l.aufbauStunden, ab: l.abbauStunden }
-  }, [modell, stueckliste])
   const gewaehlt = modell?.components3D.find((c) => c.id === auswahl) ?? null
 
   if (!modell) {
@@ -84,9 +76,6 @@ export default function AnsichtViewer({ daten, kopfAktion, lvErlaubt = false }: 
 
   return (
     <div className='min-h-screen bg-[#fbfbfd] text-[#1d1d1f]'>
-      {lvErlaubt && lvOffen && (
-        <LvDialog model={modell} materials={stueckliste} aufbauStunden={lvStunden.auf} abbauStunden={lvStunden.ab} onClose={() => setLvOffen(false)} />
-      )}
       <header className='bg-white border-b border-black/5 px-4 py-3'>
         <div className='max-w-6xl mx-auto flex items-start justify-between gap-3'>
           <div>
@@ -96,12 +85,7 @@ export default function AnsichtViewer({ daten, kopfAktion, lvErlaubt = false }: 
               {daten.gueltigBis ? ` · gültig bis ${new Date(daten.gueltigBis).toLocaleDateString('de-DE')}` : ''}
             </p>
           </div>
-          <div className='flex items-center gap-2'>
-            {lvErlaubt && (
-              <button type='button' onClick={() => setLvOffen(true)} className='shrink-0 text-xs px-3 py-1.5 rounded-lg bg-[#e8590c] text-white hover:bg-[#d24f08]'>📋 Leistungsverzeichnis</button>
-            )}
-            {kopfAktion}
-          </div>
+          {kopfAktion}
         </div>
       </header>
 
