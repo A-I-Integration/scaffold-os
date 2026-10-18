@@ -6,6 +6,7 @@ import BalkonEditor from './BalkonEditor'
 import UmrissEditor from './UmrissEditor'
 import { GERUEST_SYSTEME } from '@/lib/calculations/geruest-systeme'
 import { uploadVertragsdokument } from '@/lib/vertrag-upload-client'
+import { KIRCHE_STANDARD, kircheAlsGebaeude, pruefeKircheMasse, type KircheMasse } from '@/lib/cad/kirche-vorlage'
 import { quaderAusObj, quaderAusStl, masseAusQuader, type Quader, type Einheit, type Achse } from '@/lib/cad/modell-import'
 
 interface Props {
@@ -21,6 +22,8 @@ export default function BuildingForm({ building, systemId, onChange, onSystemCha
   const [activeTab, setActiveTab] = useState<'gebaeude' | 'geruest' | 'system'>('gebaeude')
   const [analyseLaeuft, setAnalyseLaeuft] = useState(false)
   const [analyseHinweis, setAnalyseHinweis] = useState<string | null>(null)
+  const [kircheOffen, setKircheOffen] = useState(false)
+  const [kirche, setKirche] = useState<KircheMasse>(KIRCHE_STANDARD)
   // 3D-Modell (OBJ/STL, z. B. aus SketchUp): Außenmaße im Browser lesen, Einheit/„oben“ wählt die Person
   const [modellImport, setModellImport] = useState<{ name: string; quader: Quader; einheit: Einheit; oben: Achse } | null>(null)
   // Phase 68-E: welche Felder hat die letzte Analyse automatisch befuellt?
@@ -228,6 +231,47 @@ export default function BuildingForm({ building, systemId, onChange, onSystemCha
             {analyseHinweis && (
               <p className={`text-[10px] rounded-lg p-2 ${analyseHinweis.startsWith('❌') ? 'bg-red-50 text-red-700' : 'bg-blue-50 text-blue-700'}`}>{analyseHinweis}</p>
             )}
+
+            {/* Vorlage: Kirche mit Turm – nur der Turm wird eingerüstet */}
+            <div className='rounded-xl border border-black/10 p-3 bg-[#f5f5f7] space-y-2'>
+              <button type='button' onClick={() => setKircheOffen(!kircheOffen)} className='w-full text-left text-xs font-medium text-[#424245]'>
+                ⛪ Vorlage: Kirche mit Turm {kircheOffen ? '▾' : '▸'}
+              </button>
+              {kircheOffen && (() => {
+                const feld = (label: string, key: keyof KircheMasse) => (
+                  <div key={key}>
+                    <label className='block text-[9px] text-[#86868b]'>{label}</label>
+                    <input type='number' step='0.5' min='0' value={Number.isFinite(kirche[key] as number) ? (kirche[key] as number) : ''}
+                      onChange={(e) => setKirche({ ...kirche, [key]: parseFloat(e.target.value) })} className='w-full px-1.5 py-1 border rounded text-xs' />
+                  </div>
+                )
+                const fehler = pruefeKircheMasse(kirche)
+                return (
+                  <div className='space-y-2'>
+                    <p className='text-[10px] text-[#86868b]'>Der Turm steht links am Schiff und wird eingerüstet; Schiff (und Chor) werden nur dargestellt. Turm, Schiff und Chor sind in diesem Modell gleich tief.</p>
+                    <div className='grid grid-cols-2 gap-1.5'>
+                      {feld('Tiefe/Breite (m)', 'breiteM')}
+                      {feld('Schiff-Länge (m)', 'schiffLaengeM')}
+                      {feld('Schiff-Traufe (m)', 'schiffTraufeM')}
+                      {feld('Schiff-Dachhöhe (m)', 'schiffDachM')}
+                      {feld('Turm-Länge (m)', 'turmLaengeM')}
+                      {feld('Turm bis Helmansatz (m)', 'turmSchaftM')}
+                      {feld('Helmhöhe (m)', 'helmM')}
+                      {feld('Chor-Länge (m, 0 = keiner)', 'chorLaengeM')}
+                      {kirche.chorLaengeM > 0 && feld('Chor-Traufe (m)', 'chorTraufeM')}
+                      {kirche.chorLaengeM > 0 && feld('Chor-Dachhöhe (m)', 'chorDachM')}
+                    </div>
+                    <label className='flex items-center gap-2 text-[11px] text-[#424245]'>
+                      <input type='checkbox' checked={kirche.helmEinruesten} onChange={(e) => setKirche({ ...kirche, helmEinruesten: e.target.checked })} />
+                      Turmhelm mit einrüsten
+                    </label>
+                    {fehler && <p className='text-[10px] text-red-600'>{fehler}</p>}
+                    <button type='button' disabled={!!fehler} onClick={() => { onChange({ ...building, ...kircheAlsGebaeude(kirche) }); setKircheOffen(false) }}
+                      className='w-full px-2 py-1.5 rounded-lg bg-[#1d1d1f] text-white text-xs disabled:opacity-40'>Kirche übernehmen</button>
+                  </div>
+                )
+              })()}
+            </div>
 
             {/* NEU: mehrteiliges Gebäude (unterschiedliche Höhen/Ecken) */}
             <div className='rounded-xl border border-black/10 p-3 bg-[#f5f5f7] space-y-2'>

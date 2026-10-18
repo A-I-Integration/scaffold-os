@@ -31,7 +31,8 @@
     "sides": [
       "front",
       "back",
-      "left"
+      "left",
+      "right"
     ],
     "lastklasse": 3,
     "sections": [

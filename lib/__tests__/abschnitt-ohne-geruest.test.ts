@@ -88,3 +88,21 @@ describe('Wand verdeckt bis Höhe', () => {
     expect(m.totalAreaM2).toBeGreaterThan(ohne.totalAreaM2 - 9 * 16)
   })
 })
+
+describe('Turmwand zum Schiff', () => {
+  it('rüstet die Turmwand zum Schiff erst über dem Schiffdach ein', () => {
+    const b: BuildingParams = { ...basis, sides: ['front', 'back', 'left', 'right'] }
+    const m = generateCADModel(b, 'layher-allround')
+    const rechts = m.fields.filter((f) => f.side === 'right')
+    expect(rechts.length).toBeGreaterThan(0)
+    // Schiff: Traufe 14 m + Dach 6 m = 20 m → Gerüst erst ab dort
+    expect(Math.min(...rechts.map((f) => f.positionY))).toBeGreaterThanOrEqual(18)
+    // Wand liegt an der Grenze Turm/Schiff (x = −10,5 + 0,5 + Abstand)
+    expect(Math.min(...rechts.map((f) => f.positionX))).toBeGreaterThan(-10.5)
+    expect(Math.max(...rechts.map((f) => f.positionX))).toBeLessThan(-8)
+    // Fläche: 3 Außenwände + obere Hälfte der Innenwand (9 m × (58 − ~20))
+    const ohne = generateCADModel(basis, 'layher-allround').totalAreaM2
+    expect(m.totalAreaM2).toBeGreaterThan(ohne + 9 * 30)
+    expect(m.totalAreaM2).toBeLessThan(ohne + 9 * 42)
+  })
+})
