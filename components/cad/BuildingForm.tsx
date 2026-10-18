@@ -113,11 +113,15 @@ export default function BuildingForm({ building, systemId, onChange, onSystemCha
       if (Array.isArray(ergebnis.abschnitte) && ergebnis.abschnitte.length >= 2) {
         const abschnitte = ergebnis.abschnitte
           .filter((a: any) => a && a.laengeM > 0 && a.hoeheM > 0)
-          .map((a: any, i: number) => ({ bezeichnung: `Abschnitt ${i + 1}`, laengeM: a.laengeM, hoeheM: a.hoeheM, winkelGrad: 0 }))
+          .map((a: any, i: number) => (
+            // Spitze erkannt (z. B. Turmhelm): Schafthöhe als Abschnittshöhe, darüber ein Walmdach (Pyramide)
+            a.spitzeM > a.schaftM && a.schaftM > 0
+              ? { bezeichnung: `Abschnitt ${i + 1}`, laengeM: a.laengeM, hoeheM: a.schaftM, winkelGrad: 0, roofForm: 'walmdach' as const, roofHoeheM: Math.round((a.spitzeM - a.schaftM) * 10) / 10 }
+              : { bezeichnung: `Abschnitt ${i + 1}`, laengeM: a.laengeM, hoeheM: a.hoeheM, winkelGrad: 0 }))
         if (abschnitte.length >= 2) {
           patch.sections = abschnitte
           patch.lengthM = Math.round(abschnitte.reduce((sum: number, a: any) => sum + a.laengeM, 0) * 100) / 100
-          patch.heightM = Math.max(...abschnitte.map((a: any) => a.hoeheM))
+          patch.heightM = Math.max(...abschnitte.map((a: any) => a.hoeheM + (a.roofHoeheM ?? 0)))
         }
       }
 
@@ -143,7 +147,7 @@ export default function BuildingForm({ building, systemId, onChange, onSystemCha
         if (vorherigeAutoFelder.includes('sections') && !('sections' in patch)) delete neuesGebaeude.sections
         onChange(neuesGebaeude)
         const uebernommen = Object.keys(patch).length
-        setAnalyseHinweis(`${ergebnis.ohneKi ? 'Direkt aus dem Plan erkannt (ohne KI)' : 'KI-Vorschlag (aus der Queue)'}: ${uebernommen} Angabe(n) übernommen, bitte prüfen.${ergebnis.hoeheGeschaetzt ? ' Höhe geschätzt aus Geschosszahl.' : ''}${ergebnis.abschnitte?.length >= 2 ? ` ${ergebnis.abschnitte.length} Höhenabschnitte erkannt (siehe „Mehrteiliges Gebäude“).` : ''}${Array.isArray(ergebnis.hinweise) && ergebnis.hinweise.length ? ' Hinweise: ' + ergebnis.hinweise.join(' ') : ''}${ergebnis.verworfen?.length ? ' Verworfen (unbelegt): ' + ergebnis.verworfen.join('; ') : ''}`)
+        setAnalyseHinweis(`${ergebnis.ohneKi ? 'Direkt aus dem Plan erkannt (ohne KI)' : 'KI-Vorschlag (aus der Queue)'}: ${uebernommen} Angabe(n) übernommen, bitte prüfen.${ergebnis.hoeheGeschaetzt ? ' Höhe geschätzt aus Geschosszahl.' : ''}${ergebnis.abschnitte?.length >= 2 ? ` ${ergebnis.abschnitte.length} Höhenabschnitte erkannt (siehe „Mehrteiliges Gebäude“).` : ''}${ergebnis.abschnitte?.some((a: any) => a.spitzeM) ? ' Spitzer Aufbau (z. B. Turmhelm) erkannt und als Walmdach/Pyramide eingetragen – Schafthöhe und Spitze bitte prüfen; welche Abschnitte eingerüstet werden, wählst du unter „Mehrteiliges Gebäude“.' : ''}${Array.isArray(ergebnis.hinweise) && ergebnis.hinweise.length ? ' Hinweise: ' + ergebnis.hinweise.join(' ') : ''}${ergebnis.verworfen?.length ? ' Verworfen (unbelegt): ' + ergebnis.verworfen.join('; ') : ''}`)
       }
     } catch (err: any) {
       setAnalyseHinweis('❌ ' + err.message)
@@ -277,6 +281,18 @@ export default function BuildingForm({ building, systemId, onChange, onSystemCha
                           <input type='number' step='1' value={s.winkelGrad || 0} onChange={(e) => { const neu = [...building.sections!]; neu[i] = { ...neu[i], winkelGrad: parseFloat(e.target.value) || 0 }; onChange({ ...building, sections: neu }) }} placeholder='0' className='w-full px-1.5 py-1 border rounded text-xs' title='0 = geradeaus weiter, 90 = rechtwinklige Ecke' />
                         </div>
                       </div>
+                      <label className='flex items-center gap-2 text-[11px] text-[#424245] mt-1'>
+                        <input type='checkbox' checked={s.geruest !== false}
+                          onChange={(e) => { const neu = [...building.sections!]; const { geruest: _alt, ...rest } = neu[i]; neu[i] = e.target.checked ? rest : { ...rest, geruest: false }; onChange({ ...building, sections: neu }) }} />
+                        Diesen Abschnitt einrüsten
+                      </label>
+                      {s.geruest !== false && (s.roofForm ?? building.roofForm) === 'walmdach' && (s.roofHoeheM ?? 0) > 0 && (
+                        <label className='flex items-center gap-2 text-[11px] text-[#424245] mt-1' title='Die Lagen über dem Schaft werden nach innen versetzt und kürzer'>
+                          <input type='checkbox' checked={s.helmGeruest === true}
+                            onChange={(e) => { const neu = [...building.sections!]; const { helmGeruest: _h, ...rest } = neu[i]; neu[i] = e.target.checked ? { ...rest, helmGeruest: true } : rest; onChange({ ...building, sections: neu }) }} />
+                          Dachhelm mit einrüsten (Pyramide)
+                        </label>
+                      )}
                       {/* NEU: Dachform + Dachhöhe eigens je Abschnitt –
                           z.B. Kirchenschiff Satteldach, Turm eigene Form.
                           Leer = übernimmt die globale Dachform des Gebäudes. */}

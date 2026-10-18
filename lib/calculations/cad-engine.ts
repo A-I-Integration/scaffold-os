@@ -22,6 +22,10 @@ export interface BuildingSection {
   // des Gebäudes (Rückwärtskompatibilität).
   roofForm?: 'flachdach' | 'satteldach' | 'walmdach' | 'pultdach' | 'mansardendach' | 'kein'
   roofHoeheM?: number
+  /** false = dieser Abschnitt wird NICHT eingerüstet (nur Darstellung, z. B. Kirchenschiff neben dem eingerüsteten Turm). Standard: eingerüstet. */
+  geruest?: boolean
+  /** true = auch den (Walm-)Dachhelm dieses Abschnitts einrüsten: Die Lagen über dem Schaft werden nach innen versetzt und kürzer, so wie die Dachfläche schmaler wird (Annahme: alle Dachflächen gleich geneigt). */
+  helmGeruest?: boolean
 }
 
 export interface GeruestOptionen {
@@ -128,6 +132,35 @@ export function berechneGebaeudeSegmente(sections: BuildingSection[]): GebaeudeS
  * (z. B. Höhenstufen). Nur dafür folgt das Gerüst den Abschnitten;
  * bei Ecken (Winkel ≠ 0) wird es weiter aus Länge/Höhe erzeugt.
  */
+/** Gerüstfläche (Länge × Höhe) aller eingerüsteten Abschnitte für die aktiven Seiten: vorne/hinten je Abschnitt, links/rechts am ersten/letzten Abschnitt. */
+export function stufenFlaecheM2(abschnitte: BuildingSection[], seiten: string[], breiteM: number): number {
+  let sum = 0
+  for (const s of seiten) {
+    if (s === 'front' || s === 'back') sum += abschnitte.filter((a) => a.geruest !== false).reduce((t, a) => t + a.laengeM * a.hoeheM, 0)
+    else {
+      const a = s === 'left' ? abschnitte[0] : abschnitte[abschnitte.length - 1]
+      if (a.geruest !== false) sum += breiteM * a.hoeheM
+    }
+  }
+  return sum
+}
+
+/** true, wenn dieser Abschnitt einen Dachhelm hat, der mit eingerüstet werden soll (nur Walmdach/Pyramide mit Höhe). */
+export function helmAktiv(a: BuildingSection, b: BuildingParams): boolean {
+  return a.geruest !== false && a.helmGeruest === true && (a.roofHoeheM ?? 0) > 0 && (a.roofForm ?? b.roofForm) === 'walmdach'
+}
+
+/** true, wenn an der Stelle x (Gebäudemitte = 0) ein Abschnitt liegt, der nicht eingerüstet wird. */
+export function abschnittOhneGeruestBeiX(b: BuildingParams, x: number): boolean {
+  if (!hatGeradeAbschnitte(b)) return false
+  let cur = -b.sections!.reduce((sum, a) => sum + a.laengeM, 0) / 2
+  for (const sec of b.sections!) {
+    if (x < cur + sec.laengeM) return sec.geruest === false
+    cur += sec.laengeM
+  }
+  return b.sections![b.sections!.length - 1].geruest === false
+}
+
 export function hatGeradeAbschnitte(b: BuildingParams): boolean {
   return !!b.sections && b.sections.length >= 2 &&
     b.sections.every((s) => !s.winkelGrad && s.laengeM > 0 && s.hoeheM > 0)
@@ -779,6 +812,7 @@ export function generateScaffoldComponents(model: CADModel): ScaffoldComponent3D
     const roofCount = Math.max(1, Math.ceil(building.lengthM / 6))
     for (let i = 0; i < roofCount; i++) {
       const xPos = (i * 6) - building.lengthM / 2 + 3
+      if (abschnittOhneGeruestBeiX(building, xPos)) continue
       components.push({ id: `roof-${i}`, type: 'protection_roof', articleNumber: 'SD-001', name: 'Schutzdach', position: [xPos, hoeheBeiX(xPos) + 0.5, 0.5], rotation: [0.3, 0, 0], scale: [6, 0.1, 2], color: colorRoof })
     }
   }
@@ -899,8 +933,11 @@ export function generateCADModel(
     building = {
       ...building,
       lengthM: Math.round(abschnitte.reduce((sum, a) => sum + a.laengeM, 0) * 100) / 100,
-      heightM: Math.max(...abschnitte.map((a) => a.hoeheM)),
+      // Höhe = höchster EINGERÜSTETER Abschnitt (nicht eingerüstete zählen nur für die Gebäudeform)
+      heightM: Math.max(...(abschnitte.some((a) => a.geruest !== false) ? abschnitte.filter((a) => a.geruest !== false) : abschnitte).map((a) => a.hoeheM + (helmAktiv(a, building) ? (a.roofHoeheM ?? 0) : 0))),
     }
+    if (abschnitte.every((a) => a.geruest === false)) warnings.push({ type: 'error', code: 'SECTIONS_KEIN_GERUEST', message: 'Alle Abschnitte sind als „nicht einrüsten“ markiert – es entsteht kein Gerüst.' })
+    else if (abschnitte.some((a) => a.geruest === false)) warnings.push({ type: 'info', code: 'SECTIONS_TEIL_GERUEST', message: `Eingerüstet werden nur ${abschnitte.filter((a) => a.geruest !== false).map((a, i) => a.bezeichnung || `Abschnitt ${i + 1}`).join(', ')}. Die übrigen Abschnitte sind nur zur Darstellung da; die Stirnseiten zum Nachbarabschnitt werden nicht gesondert eingerüstet.` })
     warnings.push({ type: 'info', code: 'SECTIONS_SCAFFOLD_STEPPED', message: 'Das Gerüst folgt den Höhenstufen der Abschnitte (je Abschnitt eigene Lagenzahl). Die senkrechten Stirnseiten der Stufen und die Seitenflächen sind nicht gesondert eingerüstet.' })
   } else if (building.sections && building.sections.length >= 2) {
     warnings.push({ type: 'info', code: 'SECTIONS_SCAFFOLD_NOT_YET', message: 'Die Gebäudeform zeigt alle Abschnitte. Das Gerüst folgt aber nur geraden Abschnitten (Höhensprünge ohne Winkel). Bei Ecken (Winkel ≠ 0) wird das Gerüst noch anhand der einzelnen Länge/Höhe-Felder erzeugt.' })
@@ -927,6 +964,7 @@ export function generateCADModel(
   }
 
   const abschnittsAnker: ScaffoldAnchor[] = []
+  let helmFlaecheM2 = 0
   const abschnittDivs = abschnitte
     ? abschnitte.map((sec) => teile(sec.laengeM))
     : null
@@ -935,13 +973,15 @@ export function generateCADModel(
     if (abschnitte && abschnittDivs) {
       // --- Gestuftes Gebäude: je Abschnitt eigene Felder/Lagen ---
       const w = building.widthM || 0
-      const runs: { div: typeof fieldDiv; hoeheM: number; along: number }[] = []
+      type HelmInfo = { roofH: number; laengeM: number }
+      const runs: { div: typeof fieldDiv; hoeheM: number; along: number; aktiv: boolean; helm?: HelmInfo }[] = []
+      const helmVon = (sec: BuildingSection): HelmInfo | undefined => (helmAktiv(sec, building) ? { roofH: sec.roofHoeheM!, laengeM: sec.laengeM } : undefined)
       if (side === 'front' || side === 'back') {
         let cursor = -building.lengthM / 2
-        abschnitte.forEach((sec, si) => { runs.push({ div: abschnittDivs[si], hoeheM: sec.hoeheM, along: cursor }); cursor += sec.laengeM })
+        abschnitte.forEach((sec, si) => { runs.push({ div: abschnittDivs[si], hoeheM: sec.hoeheM, along: cursor, aktiv: sec.geruest !== false, helm: helmVon(sec) }); cursor += sec.laengeM })
       } else {
         const sec = side === 'left' ? abschnitte[0] : abschnitte[abschnitte.length - 1]
-        runs.push({ div: fieldDivWidth, hoeheM: sec.hoeheM, along: -w - 0.5 })
+        runs.push({ div: fieldDivWidth, hoeheM: sec.hoeheM, along: -w - 0.5, aktiv: sec.geruest !== false, helm: helmVon(sec) })
       }
       // Lage der inneren Gerüstlinie je Seite (Gebäude ist 0,5 m nach hinten versetzt)
       const fixed = side === 'front' ? distanceToBuildingM
@@ -950,6 +990,7 @@ export function generateCADModel(
         : building.lengthM / 2 + 0.5 + distanceToBuildingM
       const proLage = new Map<number, ScaffoldField[]>()
       runs.forEach((run, ri) => {
+        if (!run.aktiv) return
         const rl = system ? calculateLevels(run.hoeheM, system) : levelCalc
         rl.levelsData.forEach((levelData) => {
           let cum = 0
@@ -990,6 +1031,44 @@ export function generateCADModel(
               else { xPos = side === 'left' ? fixed - scaffoldWidthM / 2 : fixed + scaffoldWidthM / 2; zPos = along }
               abschnittsAnker.push({ id: `anchor-${side}-${ri}-${al}-${f}`, positionX: xPos, positionY: yAnchor, positionZ: zPos, side: side as 'front' | 'back' | 'left' | 'right', type: 'fassadenanker' })
             }
+          }
+        }
+        // Dachhelm: Lagen über dem Schaft, je Lage nach innen versetzt und kürzer
+        if (run.helm) {
+          const rasterH = levelCalc.levelHeightM
+          const isFB = side === 'front' || side === 'back'
+          const halbMin = Math.min(run.helm.laengeM, w) / 2
+          const ersteLage = rl.levels
+          for (let idx = ersteLage; ; idx++) {
+            const bottom = parseFloat((idx * rasterH).toFixed(2))
+            if (bottom >= run.hoeheM + run.helm.roofH - 0.01) break
+            const d = halbMin * Math.max(0, bottom - run.hoeheM) / run.helm.roofH
+            const laenge = (isFB ? run.helm.laengeM : w) - 2 * d
+            if (laenge < 1.5) break
+            const hdiv = teile(laenge)
+            const fixedH = side === 'front' || side === 'right' ? fixed - d : fixed + d
+            let cumH = 0
+            hdiv.distribution.forEach((fl, fi) => {
+              const list = proLage.get(idx) || []
+              const alongH = run.along + d + cumH + fl / 2
+              cumH += fl
+              const field: ScaffoldField = {
+                id: `field-${side}-${idx}-${list.length}`,
+                index: list.length,
+                lengthM: fl,
+                widthM: scaffoldWidthM,
+                positionX: parseFloat((isFB ? alongH : fixedH).toFixed(3)),
+                positionY: bottom,
+                positionZ: parseFloat((isFB ? fixedH : alongH).toFixed(3)),
+                side: side as 'front' | 'back' | 'left' | 'right',
+                levelIndex: idx,
+                isCorner: fi === 0 || fi === hdiv.distribution.length - 1,
+              }
+              list.push(field)
+              proLage.set(idx, list)
+              fields.push(field)
+              helmFlaecheM2 += fl * rasterH
+            })
           }
         }
       })
@@ -1109,10 +1188,10 @@ export function generateCADModel(
     levels,
     anchors,
     components3D: [],
-    totalLengthM: (abschnitte ? building.lengthM : fieldDiv.fields * fieldDiv.fieldLengthM) - lueckeLaengeM,
+    totalLengthM: (abschnitte ? abschnitte.filter((a) => a.geruest !== false).reduce((sum, a) => sum + a.laengeM, 0) : fieldDiv.fields * fieldDiv.fieldLengthM) - lueckeLaengeM,
     totalHeightM: building.heightM,
-    totalAreaM2: (abschnitte ? abschnitte.reduce((sum, a) => sum + a.laengeM * a.hoeheM, 0) : building.lengthM * building.heightM) - lueckeFlaecheM2,
-    fieldCount: (abschnittDivs ? abschnittDivs.reduce((sum, d) => sum + d.fields, 0) : fieldDiv.fields) - lueckeFelder,
+    totalAreaM2: (abschnitte ? stufenFlaecheM2(abschnitte, activeSides, building.widthM || 0) + helmFlaecheM2 : building.lengthM * building.heightM) - lueckeFlaecheM2,
+    fieldCount: (abschnittDivs ? abschnittDivs.reduce((sum, d, i) => sum + (abschnitte![i].geruest === false ? 0 : d.fields), 0) : fieldDiv.fields) - lueckeFelder,
     levelCount: levelCalc.levels,
     warnings
   }

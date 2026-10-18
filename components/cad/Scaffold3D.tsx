@@ -824,6 +824,33 @@ const AllScaffoldComponents = memo(function AllScaffoldComponents({
 // Rotation statt Extrude – leichter nachvollziehbar korrekt zu bauen).
 // Walmdach/Mansardendach bleiben als Kegel-Näherung (für ein Walmdach
 // optisch bereits recht plausibel).
+function WalmdachMesh({ laengeM, breiteM, roofH }: { laengeM: number; breiteM: number; roofH: number }) {
+  const geometrie = useMemo(() => {
+    const hl = laengeM / 2, hb = breiteM / 2
+    const r = Math.abs(hl - hb) // halbe Firstlänge
+    const laengsFirst = hl >= hb
+    const fa: [number, number, number] = laengsFirst ? [-r, roofH, 0] : [0, roofH, -r]
+    const fb: [number, number, number] = laengsFirst ? [r, roofH, 0] : [0, roofH, r]
+    const e1: [number, number, number] = [-hl, 0, -hb], e2: [number, number, number] = [hl, 0, -hb], e3: [number, number, number] = [hl, 0, hb], e4: [number, number, number] = [-hl, 0, hb]
+    // Flächen gegen den Uhrzeigersinn von außen gesehen
+    const tris: [number, number, number][][] = laengsFirst
+      ? [[e4, e3, fb], [e4, fb, fa], [e2, e1, fa], [e2, fa, fb], [e1, e4, fa], [e3, e2, fb]]
+      : [[e4, e3, fb], [e4, fb, fa], [e2, e1, fa], [e2, fa, fb], [e1, e4, fa], [e3, e2, fb]]
+    const pos: number[] = []
+    for (const t of tris) for (const v of t) pos.push(...v)
+    const g = new THREE.BufferGeometry()
+    g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3))
+    g.computeVertexNormals()
+    return g
+  }, [laengeM, breiteM, roofH])
+  useEffect(() => () => geometrie.dispose(), [geometrie])
+  return (
+    <mesh geometry={geometrie} castShadow>
+      <meshStandardMaterial color="#8a5a3c" roughness={0.9} side={THREE.DoubleSide} />
+    </mesh>
+  )
+}
+
 function RoofMesh({ roofForm, laengeM, breiteM, roofH }: { roofForm: string; laengeM: number; breiteM: number; roofH: number }) {
   if (roofForm === 'kein' || roofForm === 'flachdach' || roofH <= 0) return null
 
@@ -855,7 +882,11 @@ function RoofMesh({ roofForm, laengeM, breiteM, roofH }: { roofForm: string; lae
     )
   }
 
-  // Walmdach / Mansardendach / Fallback: Kegel-Näherung (unverändert
+  // Walmdach: echtes Walmdach (vier gleich geneigte Flächen; bei quadratischer
+  // Grundfläche eine Pyramide, z. B. Turmhelm).
+  if (roofForm === 'walmdach') return <WalmdachMesh laengeM={laengeM} breiteM={breiteM} roofH={roofH} />
+
+  // Mansardendach / Fallback: Kegel-Näherung (unverändert
   // zum bisherigen Verhalten).
   return (
     <mesh position={[0, roofH / 2, 0]} castShadow>
