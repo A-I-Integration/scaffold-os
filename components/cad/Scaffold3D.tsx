@@ -1845,6 +1845,13 @@ function Scaffold3D({
   platzierungIdVon,
   onBauteilZiehen,
 }: Props) {
+  // Esc schließt den Bauteil-Kasten
+  useEffect(() => {
+    if (!selectedComponent) return
+    const h = (e: KeyboardEvent) => { if (e.key === 'Escape') onSelectComponent(null) }
+    window.addEventListener('keydown', h)
+    return () => window.removeEventListener('keydown', h)
+  }, [selectedComponent, onSelectComponent])
   // Ziehen: ID der gerade gezogenen Platzierung (null = niemand zieht)
   const [ziehId, setZiehId] = useState<string | null>(null)
   const ziehKontext = useMemo<ZiehKontextWert | null>(
@@ -1896,6 +1903,7 @@ function Scaffold3D({
     <div className="w-full h-full rounded-xl overflow-hidden border border-black/10 bg-[#dfe7ef] relative">
       <Canvas
         shadows
+        onPointerMissed={() => { if (selectedComponent) onSelectComponent(null) }}
         camera={cameraConfig}
         frameloop="demand"
         dpr={[1, 2]}
@@ -1982,7 +1990,16 @@ function Scaffold3D({
         const bauteilNotizen = (notes || []).filter((n) => n.componentId === selectedComponent)
         return (
           <div className="absolute top-4 right-4 bg-white/95 backdrop-blur rounded-xl px-4 py-3 text-sm border border-black/10 shadow-lg z-50 max-w-[240px]">
-            <p className="font-semibold text-[#1d1d1f]">{comp?.name}</p>
+            <button
+              type="button"
+              onClick={() => onSelectComponent(null)}
+              aria-label="Schließen"
+              title="Schließen (Esc)"
+              className="absolute top-1.5 right-1.5 w-6 h-6 flex items-center justify-center rounded-full text-[#86868b] hover:bg-black/5 hover:text-[#1d1d1f]"
+            >
+              ✕
+            </button>
+            <p className="font-semibold text-[#1d1d1f] pr-6">{comp?.name}</p>
             <p className="text-xs text-[#86868b] mt-1">Art.-Nr.: {comp?.articleNumber}</p>
             {onRemoveComponent && comp && (
               <div className="mt-2 pt-2 border-t border-black/10">
