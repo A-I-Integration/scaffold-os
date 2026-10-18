@@ -26,6 +26,8 @@ export interface BuildingSection {
   geruest?: boolean
   /** true = auch den (Walm-)Dachhelm dieses Abschnitts einrüsten: Die Lagen über dem Schaft werden nach innen versetzt und kürzer, so wie die Dachfläche schmaler wird (Annahme: alle Dachflächen gleich geneigt). */
   helmGeruest?: boolean
+  /** Je Seite: Gerüst erst ab dieser Höhe (m über Gelände), weil darunter ein anderes Gebäude davorsteht (z. B. Nachbarhaus vor der Turmwand). Annahme: Das Gerüst steht dort auf dem verdeckenden Gebäude – Lastabtrag muss der Statiker prüfen. */
+  geruestAbHoeheM?: Partial<Record<'front' | 'back' | 'left' | 'right', number>>
 }
 
 export interface GeruestOptionen {
@@ -965,6 +967,7 @@ export function generateCADModel(
 
   const abschnittsAnker: ScaffoldAnchor[] = []
   let helmFlaecheM2 = 0
+  let verdecktFlaecheM2 = 0
   const abschnittDivs = abschnitte
     ? abschnitte.map((sec) => teile(sec.laengeM))
     : null
@@ -974,14 +977,14 @@ export function generateCADModel(
       // --- Gestuftes Gebäude: je Abschnitt eigene Felder/Lagen ---
       const w = building.widthM || 0
       type HelmInfo = { roofH: number; laengeM: number }
-      const runs: { div: typeof fieldDiv; hoeheM: number; along: number; aktiv: boolean; helm?: HelmInfo }[] = []
+      const runs: { div: typeof fieldDiv; hoeheM: number; along: number; aktiv: boolean; helm?: HelmInfo; abHoehe: number }[] = []
       const helmVon = (sec: BuildingSection): HelmInfo | undefined => (helmAktiv(sec, building) ? { roofH: sec.roofHoeheM!, laengeM: sec.laengeM } : undefined)
       if (side === 'front' || side === 'back') {
         let cursor = -building.lengthM / 2
-        abschnitte.forEach((sec, si) => { runs.push({ div: abschnittDivs[si], hoeheM: sec.hoeheM, along: cursor, aktiv: sec.geruest !== false, helm: helmVon(sec) }); cursor += sec.laengeM })
+        abschnitte.forEach((sec, si) => { runs.push({ div: abschnittDivs[si], hoeheM: sec.hoeheM, along: cursor, aktiv: sec.geruest !== false, helm: helmVon(sec), abHoehe: sec.geruestAbHoeheM?.[side] ?? 0 }); cursor += sec.laengeM })
       } else {
         const sec = side === 'left' ? abschnitte[0] : abschnitte[abschnitte.length - 1]
-        runs.push({ div: fieldDivWidth, hoeheM: sec.hoeheM, along: -w - 0.5, aktiv: sec.geruest !== false, helm: helmVon(sec) })
+        runs.push({ div: fieldDivWidth, hoeheM: sec.hoeheM, along: -w - 0.5, aktiv: sec.geruest !== false, helm: helmVon(sec), abHoehe: sec.geruestAbHoeheM?.[side] ?? 0 })
       }
       // Lage der inneren Gerüstlinie je Seite (Gebäude ist 0,5 m nach hinten versetzt)
       const fixed = side === 'front' ? distanceToBuildingM
@@ -994,6 +997,10 @@ export function generateCADModel(
         const rl = system ? calculateLevels(run.hoeheM, system) : levelCalc
         rl.levelsData.forEach((levelData) => {
           let cum = 0
+          if (run.abHoehe > 0 && levelData.topY <= run.abHoehe + 0.01) {
+            verdecktFlaecheM2 += run.div.distribution.reduce((a, b) => a + b, 0) * (levelData.topY - levelData.bottomY)
+            return
+          }
           run.div.distribution.forEach((fieldLength, fi) => {
             const list = proLage.get(levelData.index) || []
             const along = run.along + cum + fieldLength / 2
@@ -1022,6 +1029,7 @@ export function generateCADModel(
           const anchorLevels = Math.floor(rl.levels / 2)
           for (let al = 0; al < anchorLevels; al++) {
             const yAnchor = (al * 2 + 2) * levelCalc.levelHeightM
+            if (run.abHoehe > 0 && yAnchor < run.abHoehe) continue
             for (let f = 0; f < run.div.fields; f += 2) {
               const along = run.along + f * run.div.fieldLengthM + run.div.fieldLengthM / 2
               if (istInLuecke(side, side === 'front' || side === 'back' ? along : along + w / 2 + 0.5, 0)) continue
@@ -1190,7 +1198,7 @@ export function generateCADModel(
     components3D: [],
     totalLengthM: (abschnitte ? abschnitte.filter((a) => a.geruest !== false).reduce((sum, a) => sum + a.laengeM, 0) : fieldDiv.fields * fieldDiv.fieldLengthM) - lueckeLaengeM,
     totalHeightM: building.heightM,
-    totalAreaM2: (abschnitte ? stufenFlaecheM2(abschnitte, activeSides, building.widthM || 0) + helmFlaecheM2 : building.lengthM * building.heightM) - lueckeFlaecheM2,
+    totalAreaM2: (abschnitte ? stufenFlaecheM2(abschnitte, activeSides, building.widthM || 0) + helmFlaecheM2 - verdecktFlaecheM2 : building.lengthM * building.heightM) - lueckeFlaecheM2,
     fieldCount: (abschnittDivs ? abschnittDivs.reduce((sum, d, i) => sum + (abschnitte![i].geruest === false ? 0 : d.fields), 0) : fieldDiv.fields) - lueckeFelder,
     levelCount: levelCalc.levels,
     warnings

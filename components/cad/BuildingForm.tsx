@@ -293,6 +293,29 @@ export default function BuildingForm({ building, systemId, onChange, onSystemCha
                           Dachhelm mit einrüsten (Pyramide)
                         </label>
                       )}
+                      {s.geruest !== false && (
+                        <div className='mt-1' title='Steht vor einer Wand ein anderes Gebäude (z. B. Nachbarhaus), wird dort erst ab dieser Höhe eingerüstet. Annahme: das Gerüst steht auf dem verdeckenden Gebäude – Lastabtrag prüft der Statiker.'>
+                          <div className='text-[9px] text-[#86868b]'>Wand verdeckt bis Höhe (m), Gerüst erst darüber</div>
+                          <div className='grid grid-cols-4 gap-1'>
+                            {([['front', 'Vorne'], ['back', 'Hinten'], ['left', 'Links'], ['right', 'Rechts']] as const).map(([k, name]) => (
+                              <div key={k}>
+                                <label className='block text-[9px] text-[#86868b]'>{name}</label>
+                                <input type='number' min='0' step='0.5' value={s.geruestAbHoeheM?.[k] ?? ''} placeholder='0'
+                                  onChange={(e) => {
+                                    const neu = [...building.sections!]
+                                    const ab = { ...(neu[i].geruestAbHoeheM || {}) }
+                                    const v = parseFloat(e.target.value)
+                                    if (v > 0) ab[k] = v; else delete ab[k]
+                                    const { geruestAbHoeheM: _a, ...rest } = neu[i]
+                                    neu[i] = Object.keys(ab).length ? { ...rest, geruestAbHoeheM: ab } : rest
+                                    onChange({ ...building, sections: neu })
+                                  }}
+                                  className='w-full px-1 py-1 border rounded text-xs' />
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
                       {/* NEU: Dachform + Dachhöhe eigens je Abschnitt –
                           z.B. Kirchenschiff Satteldach, Turm eigene Form.
                           Leer = übernimmt die globale Dachform des Gebäudes. */}
