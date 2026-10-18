@@ -95,8 +95,13 @@ describe('Turmwand zum Schiff', () => {
     const m = generateCADModel(b, 'layher-allround')
     const rechts = m.fields.filter((f) => f.side === 'right')
     expect(rechts.length).toBeGreaterThan(0)
-    // Schiff: Traufe 14 m + Dach 6 m = 20 m → Gerüst erst ab dort
-    expect(Math.min(...rechts.map((f) => f.positionY))).toBeGreaterThanOrEqual(18)
+    // Das Gerüst steht auf dem Satteldach: an der Traufe (14 m) beginnt es, in der Mitte am First (20 m)
+    expect(Math.min(...rechts.map((f) => f.positionY))).toBeGreaterThanOrEqual(14 - 2.5)
+    const mitteZ = -9 / 2 - 0.5
+    const mitte = rechts.filter((f) => Math.abs(f.positionZ - mitteZ) < 1)
+    const rand = rechts.filter((f) => Math.abs(f.positionZ - mitteZ) > 3)
+    expect(Math.min(...mitte.map((f) => f.positionY))).toBeGreaterThanOrEqual(20 - 2.5)
+    expect(Math.min(...rand.map((f) => f.positionY))).toBeLessThan(Math.min(...mitte.map((f) => f.positionY)))
     // Wand liegt an der Grenze Turm/Schiff (x = −10,5 + 0,5 + Abstand)
     expect(Math.min(...rechts.map((f) => f.positionX))).toBeGreaterThan(-10.5)
     expect(Math.max(...rechts.map((f) => f.positionX))).toBeLessThan(-8)

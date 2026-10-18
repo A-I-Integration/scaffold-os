@@ -979,7 +979,7 @@ export function generateCADModel(
       // --- Gestuftes Gebäude: je Abschnitt eigene Felder/Lagen ---
       const w = building.widthM || 0
       type HelmInfo = { roofH: number; laengeM: number }
-      const runs: { div: typeof fieldDiv; hoeheM: number; along: number; aktiv: boolean; helm?: HelmInfo; abHoehe: number; fixedO?: number; innen?: boolean }[] = []
+      const runs: { div: typeof fieldDiv; hoeheM: number; along: number; aktiv: boolean; helm?: HelmInfo; abHoehe: number; dachAb?: (along: number) => number; fixedO?: number; innen?: boolean }[] = []
       const helmVon = (sec: BuildingSection): HelmInfo | undefined => (helmAktiv(sec, building) ? { roofH: sec.roofHoeheM!, laengeM: sec.laengeM } : undefined)
       if (side === 'front' || side === 'back') {
         let cursor = -building.lengthM / 2
@@ -1001,7 +1001,16 @@ export function generateCADModel(
           const nbTop = nachbar.hoeheM + (nachbar.roofHoeheM ?? 0)
           if (a.hoeheM <= nbTop + 0.5) return
           const xIf = side === 'right' ? xGrenze : xGrenze - a.laengeM
-          runs.push({ div: fieldDivWidth, hoeheM: a.hoeheM, along: -w - 0.5, aktiv: true, helm: helmVon(a), abHoehe: nbTop, innen: true,
+          // Das Gerüst steht auf dem Dach des Nachbarn: Satteldach = Firstlinie in Gebäudemitte, Traufe an den Rändern.
+          const nbForm = nachbar.roofForm ?? building.roofForm
+          const dachAb = (along: number): number => {
+            if (nbForm === 'satteldach' && (nachbar.roofHoeheM ?? 0) > 0) {
+              const rel = Math.min(1, Math.abs(along - (-w / 2 - 0.5)) / (w / 2))
+              return nachbar.hoeheM + (nachbar.roofHoeheM ?? 0) * (1 - rel)
+            }
+            return nbTop
+          }
+          runs.push({ div: fieldDivWidth, hoeheM: a.hoeheM, along: -w - 0.5, aktiv: true, helm: helmVon(a), abHoehe: nbTop, dachAb, innen: true,
             fixedO: side === 'right' ? xIf + 0.5 + distanceToBuildingM : xIf - 0.5 - distanceToBuildingM })
         })
       }
@@ -1018,14 +1027,12 @@ export function generateCADModel(
         const rl = system ? calculateLevels(run.hoeheM, system) : levelCalc
         rl.levelsData.forEach((levelData) => {
           let cum = 0
-          if (run.abHoehe > 0 && levelData.topY <= run.abHoehe + 0.01) {
-            verdecktFlaecheM2 += run.div.distribution.reduce((a, b) => a + b, 0) * (levelData.topY - levelData.bottomY)
-            return
-          }
           run.div.distribution.forEach((fieldLength, fi) => {
             const list = proLage.get(levelData.index) || []
             const along = run.along + cum + fieldLength / 2
             cum += fieldLength
+            const abFeld = run.dachAb ? run.dachAb(along) : run.abHoehe
+            if (abFeld > 0 && levelData.topY <= abFeld + 0.01) { verdecktFlaecheM2 += fieldLength * (levelData.topY - levelData.bottomY); return }
             const isFB = side === 'front' || side === 'back'
             if (istInLuecke(side, isFB ? along : along + w / 2 + 0.5, fieldLength)) { merkeLuecke(side, levelData.index, fieldLength, run.hoeheM); return }
             const field: ScaffoldField = {
@@ -1050,9 +1057,10 @@ export function generateCADModel(
           const anchorLevels = Math.floor(rl.levels / 2)
           for (let al = 0; al < anchorLevels; al++) {
             const yAnchor = (al * 2 + 2) * levelCalc.levelHeightM
-            if (run.abHoehe > 0 && yAnchor < run.abHoehe) continue
             for (let f = 0; f < run.div.fields; f += 2) {
               const along = run.along + f * run.div.fieldLengthM + run.div.fieldLengthM / 2
+              const abA = run.dachAb ? run.dachAb(along) : run.abHoehe
+              if (abA > 0 && yAnchor < abA) continue
               if (istInLuecke(side, side === 'front' || side === 'back' ? along : along + w / 2 + 0.5, 0)) continue
               let xPos = 0, zPos = 0
               if (side === 'front') { xPos = along; zPos = distanceToBuildingM + scaffoldWidthM / 2 }
