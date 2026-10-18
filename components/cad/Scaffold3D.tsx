@@ -1881,7 +1881,9 @@ function Scaffold3D({
   const contentRef = useRef<THREE.Group>(null)
 
   const modelKeyLive = useMemo(
-    () => `${model.building.lengthM}x${model.building.widthM}x${model.building.heightM}:${model.components3D.length + (removedCount || 0)}`,
+    // Manuell gesetzte Bauteile (id beginnt mit "manual-") zählen nicht mit: Sonst richtet sich die
+    // Kamera bei jedem Platzieren neu aus und zoomt auf das ganze Gebäude zurück.
+    () => `${model.building.lengthM}x${model.building.widthM}x${model.building.heightM}:${model.components3D.filter((c) => !c.id.startsWith('manual-')).length + (removedCount || 0)}`,
     [model, removedCount],
   )
   // Beim Ziehen bleibt der Rahmen-Schlüssel eingefroren: Ändert sich dabei die
