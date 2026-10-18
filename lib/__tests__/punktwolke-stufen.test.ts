@@ -60,3 +60,26 @@ describe('Punktwolke: Höhenabschnitte', () => {
     expect(erkenneStufen(w.px, w.py, w.pz, w.d)).toBeNull()
   })
 })
+
+describe('Punktwolke: Gerüst-Seiten', () => {
+  const ende2 = quelle.indexOf('// Phase 91')
+  const erkenneSeiten = new Function(`${quelle.slice(quelle.indexOf('function erkenneGeruestSeiten'), ende2)}; return erkenneGeruestSeiten;`)() as (px: number[], py: number[], d: Record<string, number>, pz?: number[]) => string[] | null
+  const mitZ = (w: ReturnType<typeof wolke>) => ({ ...w.d, spanZ: Math.max(...w.pz) - Math.min(...w.pz) })
+
+  it('hält ein geneigtes Dach nicht für ein Gerüst', () => {
+    const p: [number, number, number][] = []
+    for (const x of schritt(0, 30, 0.15)) for (const y of schritt(0, 12, 0.1)) p.push([x, y, 12 + 8 * (1 - Math.abs(y - 6) / 6)])
+    for (const x of schritt(0, 30)) for (const z of schritt(0, 12)) { p.push([x, 0, z]); p.push([x, 12, z]) }
+    for (const y of schritt(0, 12)) for (const z of schritt(0, 12)) { p.push([0, y, z]); p.push([30, y, z]) }
+    const w = wolke(p)
+    expect(erkenneSeiten(w.px, w.py, mitZ(w), w.pz)).toBeNull()
+  })
+  it('erkennt ein Gerüst mit Stielen über die Höhe weiterhin', () => {
+    const p: [number, number, number][] = []
+    for (const x of schritt(0, 20)) for (const y of schritt(0, 10)) p.push([x, y, 10])
+    for (const x of schritt(0, 20)) for (const z of schritt(0, 10)) p.push([x, 0, z])
+    for (const x of schritt(0, 20, 1.2)) for (const t of [-1.0, -0.9, -0.8, -0.7, -0.6, -0.5, -0.4, -0.3, -0.2, -0.1]) for (const z of schritt(0, 10, 0.5)) p.push([x, t, z])
+    const w = wolke(p)
+    expect(erkenneSeiten(w.px, w.py, mitZ(w), w.pz)).toContain('front')
+  })
+})
