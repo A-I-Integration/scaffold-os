@@ -73,3 +73,18 @@ describe('Abschnitt ohne Gerüst', () => {
     expect(m.totalHeightM).toBe(45)
   })
 })
+
+describe('Wand verdeckt bis Höhe', () => {
+  it('rüstet die Turmwand erst ab der Höhe des davorstehenden Gebäudes ein', () => {
+    const ohne = generateCADModel(basis, 'layher-allround')
+    const b: BuildingParams = { ...basis, sections: basis.sections!.map((s, i) => (i === 0 ? { ...s, geruestAbHoeheM: { left: 14 } } : s)) }
+    const m = generateCADModel(b, 'layher-allround')
+    const links = m.fields.filter((f) => f.side === 'left')
+    expect(links.length).toBeGreaterThan(0)
+    expect(Math.min(...links.map((f) => f.positionY))).toBeGreaterThanOrEqual(12)
+    expect(m.fields.filter((f) => f.side === 'front').length).toBe(ohne.fields.filter((f) => f.side === 'front').length)
+    // Fläche der linken Wand: 9 m × (58 − ~14) statt 9 × 58
+    expect(m.totalAreaM2).toBeLessThan(ohne.totalAreaM2 - 9 * 12)
+    expect(m.totalAreaM2).toBeGreaterThan(ohne.totalAreaM2 - 9 * 16)
+  })
+})

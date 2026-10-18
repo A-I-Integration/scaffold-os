@@ -113,6 +113,11 @@ export function liesProjektdatei(text: string): LeseErgebnis {
       const rh = zahl(o.roofHoeheM, 0, MAX_MASS_M); if (rh != null) a.roofHoeheM = rh
       if (o.geruest === false) a.geruest = false
       if (o.helmGeruest === true) a.helmGeruest = true
+      if (o.geruestAbHoeheM && typeof o.geruestAbHoeheM === 'object') {
+        const ab: NonNullable<BuildingSection['geruestAbHoeheM']> = {}
+        for (const k of ['front', 'back', 'left', 'right'] as const) { const v = zahl((o.geruestAbHoeheM as Record<string, unknown>)[k], 0.1, MAX_MASS_M); if (v != null) ab[k] = v }
+        if (Object.keys(ab).length) a.geruestAbHoeheM = ab
+      }
       return a
     })
     if (abs.every((a) => a != null)) gebaeude.sections = abs as BuildingSection[]
