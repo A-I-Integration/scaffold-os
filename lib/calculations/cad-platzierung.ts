@@ -9,7 +9,7 @@
 
 import type { CADModel, ManualPlacement } from './cad-engine'
 
-type Lage = Pick<ManualPlacement, 'type' | 'positionX' | 'positionY' | 'positionZ' | 'side' | 'levelIndex' | 'fieldId'>
+type Lage = Pick<ManualPlacement, 'type' | 'positionX' | 'positionY' | 'positionZ' | 'side' | 'levelIndex' | 'fieldId'> & Partial<Pick<ManualPlacement, 'rotationY'>>
 
 type ModellTeil = Pick<CADModel, 'fields'> & Partial<Pick<CADModel, 'levels'>>
 
@@ -42,6 +42,32 @@ export function platzierungAusTreffer(
       p.fieldId = best.id
       p.positionX = best.positionX
       p.positionZ = best.positionZ
+    }
+  }
+  // Fangnetz: hängt außen am nächsten Feld der getroffenen Seite/Lage (Geländerhöhe), an der Seitenwand
+  // (links/rechts) um 90° gedreht – nicht mitten im Gerüst am Klickpunkt, wo man es nicht sieht.
+  if (type === 'net' && model) {
+    const lage = model.fields.filter((f) => f.side === side && f.levelIndex === levelIndex && !f.isCorner)
+    const entlangX = side === 'front' || side === 'back'
+    let best: (typeof lage)[number] | null = null
+    let bestD = Infinity
+    for (const f of lage) {
+      const d = Math.abs(entlangX ? position[0] - f.positionX : position[2] - f.positionZ)
+      if (d < bestD) { bestD = d; best = f }
+    }
+    if (best) {
+      const aussen = (best.widthM || 0.73) / 2 + 0.03
+      p.fieldId = best.id
+      if (entlangX) {
+        p.positionX = best.positionX
+        p.positionZ = best.positionZ + (side === 'front' ? aussen : -aussen)
+      } else {
+        p.positionZ = best.positionZ
+        p.positionX = best.positionX + (side === 'right' ? aussen : -aussen)
+        p.rotationY = Math.PI / 2
+      }
+      const stufe = model.levels?.find((l) => l.index === levelIndex)
+      p.positionY = (stufe ? stufe.bottomY : best.positionY) + 1.0
     }
   }
   // Leiter: steht immer über die ganze Höhe der getroffenen Lage (Mitte der Lage),
