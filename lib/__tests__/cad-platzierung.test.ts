@@ -16,6 +16,21 @@ describe('platzierungAusTreffer', () => {
     expect([p.positionX, p.positionY, p.positionZ]).toEqual([1.1, 2.2, 3.3])
     expect(p.fieldId).toBeUndefined()
   })
+  it('Fangnetz hängt außen am nächsten Feld, an Seitenwänden gedreht', () => {
+    const alle = generateCADModel({ ...building, sides: ['front', 'back', 'left', 'right'] } as BuildingParams, 'layher-allround')
+    const feld = (side: string) => alle.fields.filter((x) => x.side === side && x.levelIndex === 1 && !x.isCorner)[1]
+    const f = feld('front')
+    const p = platzierungAusTreffer(alle, 'net', [f.positionX + 0.2, 3, f.positionZ - 0.4], 'front', 1)
+    expect(p.fieldId).toBe(f.id)
+    expect(p.positionX).toBe(f.positionX)
+    expect(p.positionZ).toBeGreaterThan(f.positionZ)
+    expect(p.rotationY).toBeUndefined()
+    const l = feld('left')
+    const q = platzierungAusTreffer(alle, 'net', [l.positionX + 0.3, 3, l.positionZ + 0.05], 'left', 1)
+    expect(q.positionX).toBeLessThan(l.positionX)
+    expect(q.positionZ).toBe(l.positionZ)
+    expect(q.rotationY).toBeCloseTo(Math.PI / 2)
+  })
   it('Treppe rastet auf das nächste Feld der Seite und Lage ein', () => {
     const f = felder('front', 0)
     expect(f.length).toBeGreaterThan(2)
