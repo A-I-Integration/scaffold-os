@@ -21,6 +21,7 @@ export const STATIKER_ERLAUBTE_PFADE = [
   '/api/statiker',
   // CAD (Entscheidung 17.10.): Statiker nutzt das CAD wie der Admin und kann ein LV erstellen
   '/cad',
+  '/beispiele',
   '/login',
   '/passwort-reset',
   '/passwort-vergessen',

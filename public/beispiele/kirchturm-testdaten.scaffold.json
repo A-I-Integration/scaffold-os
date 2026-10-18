@@ -1,0 +1,76 @@
+{
+  "format": "scaffoldos-cad-projekt",
+  "version": 1,
+  "name": "Kirchturm (TESTDATEN, erfundene Maße)",
+  "gespeichertAm": "2026-10-17T22:05:50.840Z",
+  "testdaten": true,
+  "building": {
+    "lengthM": 9,
+    "widthM": 9,
+    "heightM": 58,
+    "eavesHeightM": 58,
+    "roofHeightM": 0,
+    "roofForm": "flachdach",
+    "floors": 12,
+    "floorHeightsM": [
+      4.833333333333333,
+      4.833333333333333,
+      4.833333333333333,
+      4.833333333333333,
+      4.833333333333333,
+      4.833333333333333,
+      4.833333333333333,
+      4.833333333333333,
+      4.833333333333333,
+      4.833333333333333,
+      4.833333333333333,
+      4.833333333333333
+    ],
+    "windowCount": 0,
+    "doorCount": 0,
+    "balconyCount": 0,
+    "overhangM": 0,
+    "setbackM": 0,
+    "sides": [
+      "front",
+      "back",
+      "left",
+      "right"
+    ],
+    "umriss": [
+      {
+        "x": 0,
+        "z": 9
+      },
+      {
+        "x": 9,
+        "z": 9
+      },
+      {
+        "x": 9,
+        "z": 0
+      },
+      {
+        "x": 0,
+        "z": 0
+      }
+    ],
+    "lastklasse": 3
+  },
+  "systemId": "layher-allround",
+  "statikDaten": {
+    "windnorm": "DIN EN 1991-1-4 mit Nationalem Anhang",
+    "vrefMs": 25,
+    "gelaende": "IV",
+    "untergrund": "Pflaster / Platten",
+    "nutzung": "oeffentlich",
+    "windzone": "2",
+    "bekleidung": "netz",
+    "verankerungsgrund": "Vollziegel",
+    "sonderlasten": [
+      "dachfang"
+    ],
+    "notiz": "TESTDATEN – erfundene Werte, keine Statik. Echte Werte und Nachweis liefert der Statiker."
+  },
+  "notizen": []
+}

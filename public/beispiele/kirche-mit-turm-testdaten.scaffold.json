@@ -1,0 +1,72 @@
+{
+  "format": "scaffoldos-cad-projekt",
+  "version": 1,
+  "name": "Kirche mit Turm und spitzem Helm (TESTDATEN, erfundene Maße)",
+  "gespeichertAm": "2026-10-17T22:05:50.840Z",
+  "testdaten": true,
+  "building": {
+    "lengthM": 39,
+    "widthM": 12,
+    "heightM": 58,
+    "eavesHeightM": 45,
+    "roofHeightM": 13,
+    "roofForm": "flachdach",
+    "floors": 9,
+    "floorHeightsM": [
+      5,
+      5,
+      5,
+      5,
+      5,
+      5,
+      5,
+      5,
+      5
+    ],
+    "windowCount": 0,
+    "doorCount": 0,
+    "balconyCount": 0,
+    "overhangM": 0,
+    "setbackM": 0,
+    "sides": [
+      "front",
+      "back",
+      "left"
+    ],
+    "lastklasse": 3,
+    "sections": [
+      {
+        "bezeichnung": "Turm",
+        "laengeM": 9,
+        "hoeheM": 45,
+        "roofForm": "walmdach",
+        "roofHoeheM": 13,
+        "helmGeruest": true
+      },
+      {
+        "bezeichnung": "Schiff",
+        "laengeM": 30,
+        "hoeheM": 12,
+        "roofForm": "satteldach",
+        "roofHoeheM": 8,
+        "geruest": false
+      }
+    ]
+  },
+  "systemId": "layher-allround",
+  "statikDaten": {
+    "windnorm": "DIN EN 1991-1-4 mit Nationalem Anhang",
+    "vrefMs": 25,
+    "gelaende": "IV",
+    "untergrund": "Pflaster / Platten",
+    "nutzung": "oeffentlich",
+    "windzone": "2",
+    "bekleidung": "netz",
+    "verankerungsgrund": "Vollziegel",
+    "sonderlasten": [
+      "dachfang"
+    ],
+    "notiz": "TESTDATEN – erfundene Werte, keine Statik. Echte Werte und Nachweis liefert der Statiker."
+  },
+  "notizen": []
+}

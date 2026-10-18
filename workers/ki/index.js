@@ -159,43 +159,86 @@ function erkenneStufen(px, py, pz, d) {
   for (let i = 0; i < nb; i++) { if (top[i] == null) top[i] = i > 0 ? top[i - 1] : first; }
   const hts = top.map((t) => t - d.minZ);
   const median = (a) => { const b = [...a].sort((u, v) => u - v); return b[Math.floor(b.length / 2)]; };
-  const TOL = 1.0;
-  let segs = [];
-  for (let i = 0; i < nb; i++) {
-    const cur = segs[segs.length - 1];
-    if (cur && Math.abs(hts[i] - median(cur.h)) <= TOL) cur.h.push(hts[i]);
-    else segs.push({ h: [hts[i]] });
-  }
-  const minBins = Math.max(2, Math.ceil(1.0 / bin));
-  for (let guard = 0; guard < 500; guard++) {
-    let changed = false;
-    // zu kurze Abschnitte in den aehnlicheren Nachbarn einschmelzen (kuerzester zuerst)
-    let idx = -1;
-    segs.forEach((g, i) => { if (g.h.length < minBins && (idx < 0 || g.h.length < segs[idx].h.length)) idx = i; });
-    if (idx >= 0 && segs.length > 1) {
-      const m = median(segs[idx].h);
-      const l = idx > 0 ? Math.abs(median(segs[idx - 1].h) - m) : Infinity;
-      const r = idx < segs.length - 1 ? Math.abs(median(segs[idx + 1].h) - m) : Infinity;
-      const t = l <= r ? idx - 1 : idx + 1;
-      const [a, b] = t < idx ? [t, idx] : [idx, t];
-      segs.splice(a, 2, { h: segs[a].h.concat(segs[b].h) });
-      changed = true;
+  // Spitzen (Turmhelm, Zeltdach): ein Gipfel mit stetig steigender und wieder fallender Flanke
+  // (je Streifen 0,3-2,0 m Hoehenunterschied, mind. 3 m Anstieg, mind. 2 Streifen je Flanke).
+  // Die Flanken wuerden sonst als viele kleine Stufen erkannt. Der Gipfelbereich wird auf die
+  // Spitzenhoehe gesetzt; Schaft- und Spitzenhoehe werden fuer den Abschnitt gemerkt.
+  const spitzenInfo = new Array(nb).fill(null);
+  const STEIL = (a, b) => { const dz = b - a; return dz >= 0.3 && dz <= 2.0; };
+  for (let pk = 1; pk < nb - 1; pk++) {
+    if (!(hts[pk] >= hts[pk - 1] && hts[pk] >= hts[pk + 1])) continue;
+    // Flanke ablaufen; direkt an der Spitze sind bis zu 2 gleich hohe Streifen erlaubt
+    let l = pk, nullen = 0;
+    while (l > 0) {
+      const dz = hts[l] - hts[l - 1];
+      if (STEIL(hts[l - 1], hts[l])) l--;
+      else if (Math.abs(dz) < 0.3 && nullen < 2) { nullen++; l--; }
+      else break;
     }
-    // benachbarte Abschnitte mit gleicher Hoehe verschmelzen
-    for (let i = 0; i + 1 < segs.length; i++) {
-      if (Math.abs(median(segs[i].h) - median(segs[i + 1].h)) <= TOL) {
-        segs.splice(i, 2, { h: segs[i].h.concat(segs[i + 1].h) });
-        changed = true; break;
+    let r = pk; nullen = 0;
+    while (r < nb - 1) {
+      const dz = hts[r] - hts[r + 1];
+      if (STEIL(hts[r + 1], hts[r])) r++;
+      else if (Math.abs(dz) < 0.3 && nullen < 2) { nullen++; r++; }
+      else break;
+    }
+    const anstieg = hts[pk] - Math.max(hts[l], hts[r]);
+    if (pk - l >= 2 && r - pk >= 2 && anstieg >= 3 && !spitzenInfo[pk]) {
+      const info = { schaft: Math.min(hts[l], hts[r]), spitze: hts[pk] };
+      for (let i = l; i <= r; i++) { spitzenInfo[i] = info; hts[i] = info.spitze; }
+      pk = r;
+    }
+  }
+  const segmentiere = (TOL) => {
+    let segs = [];
+    for (let i = 0; i < nb; i++) {
+      const cur = segs[segs.length - 1];
+      if (cur && Math.abs(hts[i] - median(cur.h)) <= TOL) { cur.h.push(hts[i]); cur.b.push(i); }
+      else segs.push({ h: [hts[i]], b: [i] });
+    }
+    const minBins = Math.max(2, Math.ceil(1.0 / bin));
+    for (let guard = 0; guard < 500; guard++) {
+      let changed = false;
+      // zu kurze Abschnitte in den aehnlicheren Nachbarn einschmelzen (kuerzester zuerst)
+      let idx = -1;
+      segs.forEach((g, i) => { if (g.h.length < minBins && (idx < 0 || g.h.length < segs[idx].h.length)) idx = i; });
+      if (idx >= 0 && segs.length > 1) {
+        const m = median(segs[idx].h);
+        const l = idx > 0 ? Math.abs(median(segs[idx - 1].h) - m) : Infinity;
+        const r = idx < segs.length - 1 ? Math.abs(median(segs[idx + 1].h) - m) : Infinity;
+        const t = l <= r ? idx - 1 : idx + 1;
+        const [a, b] = t < idx ? [t, idx] : [idx, t];
+        segs.splice(a, 2, { h: segs[a].h.concat(segs[b].h), b: segs[a].b.concat(segs[b].b) });
+        changed = true;
       }
+      // benachbarte Abschnitte mit gleicher Hoehe verschmelzen
+      for (let i = 0; i + 1 < segs.length; i++) {
+        if (Math.abs(median(segs[i].h) - median(segs[i + 1].h)) <= TOL) {
+          segs.splice(i, 2, { h: segs[i].h.concat(segs[i + 1].h), b: segs[i].b.concat(segs[i + 1].b) });
+          changed = true; break;
+        }
+      }
+      if (!changed) break;
     }
-    if (!changed) break;
-  }
+    return segs;
+  };
+  // Erst mit der engen Toleranz (bisheriges Verhalten). Nur wenn dabei zu viele Abschnitte
+  // entstehen (z. B. spitzer Turmhelm: die Hoehe steigt und faellt in vielen kleinen Stufen),
+  // wird die Toleranz schrittweise groeber.
+  let segs = segmentiere(1.0);
+  for (const tol of [2.0, 3.5, 6.0]) { if (segs.length <= 6) break; segs = segmentiere(tol); }
   if (segs.length < 2 || segs.length > 6) return null;
   const r1 = (v) => Math.round(v * 10) / 10;
   let used = 0;
   const abschnitte = segs.map((g, i) => {
     const len = i === segs.length - 1 ? span - used : g.h.length * bin;
     used += g.h.length * bin;
+    // Spitze (z. B. Turmhelm): mehr als die Haelfte der Streifen gehoert zu einem erkannten Gipfel
+    const sp = g.b.map((bi) => spitzenInfo[bi]).filter(Boolean);
+    if (sp.length > g.b.length / 2) {
+      const schaft = Math.min(...sp.map((x) => x.schaft)), spitze = Math.max(...sp.map((x) => x.spitze));
+      return { laengeM: r1(len), hoeheM: r1(spitze), schaftM: r1(schaft), spitzeM: r1(spitze) };
+    }
     return { laengeM: r1(len), hoeheM: r1(median(g.h)) };
   });
   return { achse: alongX ? 'x' : 'y', abschnitte, laenge: span, tiefe: quer };

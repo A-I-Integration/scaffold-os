@@ -21,6 +21,7 @@
 import { BAUTEIL_FARBEN, type FarbModus } from '@/lib/cad/bauteil-farben'
 import { useState, useMemo, useCallback, useEffect, useRef } from 'react'
 import StatikDatenPanel from '@/components/cad/StatikDatenPanel'
+import { erzeugeProjektdatei, liesProjektdatei } from '@/lib/cad/projektdatei'
 import LvDialog from '@/components/cad/LvDialog'
 import { bereinigeStatikDaten, type StatikDaten } from '@/lib/statik-daten'
 import { useRouter } from 'next/navigation'
@@ -514,6 +515,31 @@ export default function CADPage() {
   }, [])
 
   // Phase 68-J: Statt toter Buttons ohne Modell -> klarer Hinweis beim Klick.
+  // Projektdatei: speichern und wieder laden (Gebäude, System, Statik-Angaben, Notizen)
+  const speichereProjektdatei = () => {
+    const daten = erzeugeProjektdatei({ name: `CAD-Projekt ${new Date().toLocaleDateString('de-DE')}`, building, systemId, statikDaten, notizen: notes })
+    const a = document.createElement('a')
+    a.href = URL.createObjectURL(new Blob([JSON.stringify(daten, null, 2)], { type: 'application/json' }))
+    a.download = `CAD-Projekt-${new Date().toISOString().split('T')[0]}.scaffold.json`
+    a.click()
+    URL.revokeObjectURL(a.href)
+  }
+  const uebernehmeProjektdatei = (text: string, name: string) => {
+    const e = liesProjektdatei(text)
+    if (!e.ok) { window.alert(`„${name}“ konnte nicht geladen werden:\n${e.fehler}`); return }
+    if (!window.confirm(`Projektdatei „${e.daten.name}“ laden?\n\nDas aktuelle Modell, die Notizen und die manuell gesetzten Teile werden ersetzt.${e.daten.testdaten ? '\n\nHinweis: Das sind erfundene Testdaten.' : ''}${e.verworfen.length ? `\n\nNicht übernommen (ungültig oder nicht unterstützt): ${e.verworfen.join(', ')}.` : ''}`)) return
+    setSelectedComponent(null); setManualPlacements([]); setNotes(e.daten.notizen)
+    setStatikDaten(e.daten.statikDaten); setSystemId(e.daten.systemId)
+    setAutoGenerate(true); setBuilding(e.daten.building)
+  }
+  const ladeProjektdatei = (datei: File) => {
+    if (datei.size > 2_000_000) { window.alert('Die Datei ist größer als 2 MB und keine Projektdatei.'); return }
+    datei.text().then((t) => uebernehmeProjektdatei(t, datei.name)).catch(() => window.alert('Die Datei konnte nicht gelesen werden.'))
+  }
+  const ladeBeispiel = () => {
+    fetch('/beispiele/kirchturm-testdaten.scaffold.json').then((r) => r.text()).then((t) => uebernehmeProjektdatei(t, 'Kirchturm (Testdaten)')).catch(() => window.alert('Das Beispiel konnte nicht geladen werden.'))
+  }
+
   const exportOhneModellHinweis = useCallback(() => {
     alert('⚠️ Noch kein Gerüst-Modell vorhanden.\n\nBitte zuerst links Maße eingeben und „Gerüst neu berechnen“ – danach stehen Excel, Dokumentation, Montageplan, Statik-Export und IFC-Export zur Verfügung.');
   }, [])
@@ -809,6 +835,9 @@ export default function CADPage() {
             logistik={logistik}
             onExportPDF={model ? handleExportPDF : exportOhneModellHinweis}
             onExportMontageplan={model ? handleExportMontageplan : exportOhneModellHinweis}
+            onSpeichereProjektdatei={speichereProjektdatei}
+            onLadeProjektdatei={ladeProjektdatei}
+            onLadeBeispiel={ladeBeispiel}
             onOpenLv={rolle === 'admin' || istStatikerLogin ? (model ? () => setLvOffen(true) : exportOhneModellHinweis) : undefined}
             onExportStatikGeometrie={model ? handleExportStatik : exportOhneModellHinweis}
             onExportIFC={!model ? exportOhneModellHinweis : (ifcExportLaeuft ? undefined : handleExportIFC)}

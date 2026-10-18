@@ -27,6 +27,10 @@ interface Props {
   onExportMontageplan?: () => void
   /** Öffnet den Dialog „Leistungsverzeichnis“ (LV mit Einheitspreisen als PDF/Excel) */
   onOpenLv?: () => void
+  /** Projekt als Datei speichern / aus Datei laden / Beispiel laden */
+  onSpeichereProjektdatei?: () => void
+  onLadeProjektdatei?: (datei: File) => void
+  onLadeBeispiel?: () => void
   onExportStatikGeometrie?: () => void
   onExportIFC?: () => void
   customers?: { id: string; name: string; city?: string }[]
@@ -61,7 +65,7 @@ interface Props {
   onSelectPlacementType?: (type: string | null) => void
 }
 
-export default function BillOfMaterials({ materials, ohnePreis = [], ohneGewicht = [], lagerFehler = false, totalWeightKg, totalPrice, logistik, onExportPDF, onExportCSV, onExportMontageplan, onOpenLv, onExportStatikGeometrie, onExportIFC, customers, kundenLadeFehler, onRetryKunden, onCreateCustomer, onAssignCustomer, zuordnenLaeuft, disabled = false, notes, onDeleteNote, layerState, onToggleSide, onToggleLevel, onShowAllLayers, onHideAllLayers, customDimensions, onDeleteDimension, measureMode, onToggleMeasureMode, manualPlacements, onRemoveManualPlacement, placementType, onSelectPlacementType }: Props) {
+export default function BillOfMaterials({ materials, ohnePreis = [], ohneGewicht = [], lagerFehler = false, totalWeightKg, totalPrice, logistik, onExportPDF, onExportCSV, onExportMontageplan, onOpenLv, onSpeichereProjektdatei, onLadeProjektdatei, onLadeBeispiel, onExportStatikGeometrie, onExportIFC, customers, kundenLadeFehler, onRetryKunden, onCreateCustomer, onAssignCustomer, zuordnenLaeuft, disabled = false, notes, onDeleteNote, layerState, onToggleSide, onToggleLevel, onShowAllLayers, onHideAllLayers, customDimensions, onDeleteDimension, measureMode, onToggleMeasureMode, manualPlacements, onRemoveManualPlacement, placementType, onSelectPlacementType }: Props) {
   const [kundenSuche, setKundenSuche] = useState('')
   const [ausgewaehlterKunde, setAusgewaehlterKunde] = useState<{ id: string; name: string } | null>(null)
   const [zeigeDropdown, setZeigeDropdown] = useState(false)
@@ -269,7 +273,7 @@ export default function BillOfMaterials({ materials, ohnePreis = [], ohneGewicht
           ))}
         </div>
       </div>
-      {(onExportPDF || onExportCSV || onExportMontageplan || onOpenLv || onExportStatikGeometrie || onExportIFC) && (
+      {(onExportPDF || onExportCSV || onExportMontageplan || onOpenLv || onSpeichereProjektdatei || onLadeProjektdatei || onLadeBeispiel || onExportStatikGeometrie || onExportIFC) && (
         <div className={`p-4 border-t border-black/5 grid grid-cols-2 gap-2 ${disabled ? 'opacity-40' : ''}`}>
           {onExportCSV && (
             <button onClick={onExportCSV} className='py-2.5 bg-emerald-600 text-white text-sm font-medium rounded-xl hover:bg-emerald-700 transition-colors'>
@@ -289,6 +293,23 @@ export default function BillOfMaterials({ materials, ohnePreis = [], ohneGewicht
           {onExportMontageplan && (
             <button onClick={onExportMontageplan} className='col-span-2 py-2.5 bg-blue-600 text-white text-sm font-medium rounded-xl hover:bg-blue-700 transition-colors'>
               🪜 Montageplan (Aufbaureihenfolge)
+            </button>
+          )}
+          {onSpeichereProjektdatei && (
+            <button onClick={onSpeichereProjektdatei} title='Speichert Gebäude, System, Statik-Angaben und Notizen als Datei' className='col-span-2 py-2.5 bg-black/5 text-[#1d1d1f] text-sm font-medium rounded-xl hover:bg-black/10 transition-colors'>
+              💾 Projektdatei speichern
+            </button>
+          )}
+          {onLadeProjektdatei && (
+            <label className='col-span-2 py-2.5 bg-black/5 text-[#1d1d1f] text-sm font-medium rounded-xl hover:bg-black/10 transition-colors text-center cursor-pointer'>
+              📂 Projektdatei laden
+              <input type='file' accept='.json,.scaffold,application/json' className='hidden'
+                onChange={(ev) => { const f = ev.target.files?.[0]; if (f) onLadeProjektdatei(f); ev.target.value = '' }} />
+            </label>
+          )}
+          {onLadeBeispiel && (
+            <button onClick={onLadeBeispiel} title='Erfundene Testdaten, keine echten Projektwerte' className='col-span-2 py-2 bg-amber-50 text-amber-900 text-xs font-medium rounded-xl hover:bg-amber-100 transition-colors'>
+              🧪 Beispiel laden: Kirchturm (Testdaten)
             </button>
           )}
           {onExportStatikGeometrie && (
