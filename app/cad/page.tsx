@@ -261,6 +261,8 @@ export default function CADPage() {
       ...platzierungAusTreffer(model, type as ManualPlacement['type'], position, side as ManualPlacement['side'], levelIndex),
     }
     setManualPlacements((prev) => [...prev, placement])
+    // Rückmeldung: das neue Bauteil ist danach markiert und der Info-Kasten nennt es.
+    setSelectedComponent(placement.id)
   }, [model])
 
   // NEU (Ziehen): manuell gesetzte Bauteile anklicken und an eine andere Stelle
