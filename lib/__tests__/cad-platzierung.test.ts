@@ -30,6 +30,10 @@ describe('platzierungAusTreffer', () => {
     expect(q.positionX).toBeLessThan(l.positionX)
     expect(q.positionZ).toBe(l.positionZ)
     expect(q.rotationY).toBeCloseTo(Math.PI / 2)
+    // Klick auf ein Bauteil ohne Seite (z. B. Treppe -> 'front'/0): Seite/Lage kommen vom nächsten Feld
+    const r = platzierungAusTreffer(alle, 'net', [l.positionX + 0.3, l.positionY, l.positionZ + 0.05], 'front', 0)
+    expect(r.side).toBe('left')
+    expect(r.levelIndex).toBe(1)
   })
   it('Treppe rastet auf das nächste Feld der Seite und Lage ein', () => {
     const f = felder('front', 0)
