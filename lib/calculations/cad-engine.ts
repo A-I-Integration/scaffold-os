@@ -1097,6 +1097,12 @@ export function generateCADModel(
               proLage.set(idx, list)
               fields.push(field)
               helmFlaecheM2 += fl * rasterH
+              // Anker am Helm: in jeder zweiten Lage an jedem zweiten Feld, an der Außenkante der Lage
+              if (idx % 2 === 1 && fi % 2 === 0) {
+                const wandX = isFB ? alongH : (side === 'left' ? fixedH - scaffoldWidthM / 2 : fixedH + scaffoldWidthM / 2)
+                const wandZ = isFB ? (side === 'front' ? fixedH + scaffoldWidthM / 2 : fixedH - scaffoldWidthM / 2) : alongH
+                abschnittsAnker.push({ id: `anchor-helm-${side}-${idx}-${fi}-${abschnittsAnker.length}`, positionX: wandX, positionY: (idx + 1) * rasterH, positionZ: wandZ, side: side as 'front' | 'back' | 'left' | 'right', type: 'fassadenanker' })
+              }
             })
           }
         }
