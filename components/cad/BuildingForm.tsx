@@ -15,10 +15,11 @@ interface Props {
   onChange: (building: BuildingParams) => void
   onSystemChange: (systemId: string) => void
   onGenerate: () => void
+  onLadeProjektdatei?: (datei: File) => void
   warnings: { type: string; message: string }[]
 }
 
-export default function BuildingForm({ building, systemId, onChange, onSystemChange, onGenerate, warnings }: Props) {
+export default function BuildingForm({ building, systemId, onChange, onSystemChange, onGenerate, onLadeProjektdatei, warnings }: Props) {
   const [activeTab, setActiveTab] = useState<'gebaeude' | 'geruest' | 'system'>('gebaeude')
   const [analyseLaeuft, setAnalyseLaeuft] = useState(false)
   const [analyseHinweis, setAnalyseHinweis] = useState<string | null>(null)
@@ -200,6 +201,13 @@ export default function BuildingForm({ building, systemId, onChange, onSystemCha
               <input type='file' className='hidden' disabled={analyseLaeuft}
                 onChange={(e) => { const f = e.target.files?.[0]; if (f) handlePlanUpload(f); e.target.value = '' }} />
             </label>
+            {onLadeProjektdatei && (
+              <label className='block w-full rounded-xl bg-[#0071e3] px-3 py-2.5 text-center text-sm font-medium text-white hover:bg-[#0062c4] transition-colors cursor-pointer' title='Öffnet eine gespeicherte CAD-Projektdatei (.scaffold.json)'>
+                📂 Projektdatei laden
+                <input type='file' accept='.json,application/json' className='hidden'
+                  onChange={(e) => { const f = e.target.files?.[0]; if (f) onLadeProjektdatei(f); e.target.value = '' }} />
+              </label>
+            )}
             {modellImport && (() => {
               const m = masseAusQuader(modellImport.quader, modellImport.einheit, modellImport.oben)
               const wahl = 'rounded-lg border border-black/10 bg-white px-2 py-1 text-[11px]'

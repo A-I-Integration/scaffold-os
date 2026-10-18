@@ -536,9 +536,6 @@ export default function CADPage() {
     if (datei.size > 2_000_000) { window.alert('Die Datei ist größer als 2 MB und keine Projektdatei.'); return }
     datei.text().then((t) => uebernehmeProjektdatei(t, datei.name)).catch(() => window.alert('Die Datei konnte nicht gelesen werden.'))
   }
-  const ladeBeispiel = () => {
-    fetch('/beispiele/kirchturm-testdaten.scaffold.json').then((r) => r.text()).then((t) => uebernehmeProjektdatei(t, 'Kirchturm (Testdaten)')).catch(() => window.alert('Das Beispiel konnte nicht geladen werden.'))
-  }
 
   const exportOhneModellHinweis = useCallback(() => {
     alert('⚠️ Noch kein Gerüst-Modell vorhanden.\n\nBitte zuerst links Maße eingeben und „Gerüst neu berechnen“ – danach stehen Excel, Dokumentation, Montageplan, Statik-Export und IFC-Export zur Verfügung.');
@@ -759,7 +756,7 @@ export default function CADPage() {
       </div>
       <div className='flex-1 flex flex-col md:flex-row md:overflow-hidden'>
         <div className='w-full md:w-72 md:shrink-0 md:overflow-y-auto'>
-          <BuildingForm building={building} systemId={systemId} onChange={(b) => { setAutoGenerate(true); setBuilding(b); }} onSystemChange={(s) => { setAutoGenerate(true); setSystemId(s); }} onGenerate={() => { setAutoGenerate(true); generate(); }} warnings={allWarnings} />
+          <BuildingForm building={building} systemId={systemId} onChange={(b) => { setAutoGenerate(true); setBuilding(b); }} onSystemChange={(s) => { setAutoGenerate(true); setSystemId(s); }} onGenerate={() => { setAutoGenerate(true); generate(); }} onLadeProjektdatei={ladeProjektdatei} warnings={allWarnings} />
           <StatikDatenPanel daten={statikDaten} onChange={setStatikDaten} model={modelWithManual} />
         </div>
         <div className='flex-1 flex flex-col min-w-0'>
@@ -836,8 +833,6 @@ export default function CADPage() {
             onExportPDF={model ? handleExportPDF : exportOhneModellHinweis}
             onExportMontageplan={model ? handleExportMontageplan : exportOhneModellHinweis}
             onSpeichereProjektdatei={speichereProjektdatei}
-            onLadeProjektdatei={ladeProjektdatei}
-            onLadeBeispiel={ladeBeispiel}
             onOpenLv={rolle === 'admin' || istStatikerLogin ? (model ? () => setLvOffen(true) : exportOhneModellHinweis) : undefined}
             onExportStatikGeometrie={model ? handleExportStatik : exportOhneModellHinweis}
             onExportIFC={!model ? exportOhneModellHinweis : (ifcExportLaeuft ? undefined : handleExportIFC)}
