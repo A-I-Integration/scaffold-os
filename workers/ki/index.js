@@ -253,7 +253,7 @@ function erkenneStufen(px, py, pz, d) {
 // -> Geruest auf dieser Seite. Zuordnung (Annahme): y-min = vorne, y-max =
 // hinten, x-min = links, x-max = rechts. Liefert null, wenn keine Seite
 // eindeutig ist. ACHTUNG: nur an synthetischen Dateien geprueft.
-function erkenneGeruestSeiten(px, py, d) {
+function erkenneGeruestSeiten(px, py, d, pz) {
   const n = px.length;
   if (n < 500 || !(d.spanX > 3) || !(d.spanY > 3)) return null;
   const SCHEIBE = 0.1, TIEFE = 2.0, MIN_SCHEIBEN = 8;
@@ -265,13 +265,20 @@ function erkenneGeruestSeiten(px, py, d) {
     const bMin = alongX ? d.minY : d.minX, bSpan = alongX ? d.spanY : d.spanX;
     const lo = aMin + aSpan * 0.25, hi = aMin + aSpan * 0.75;
     const bins = new Array(Math.ceil(TIEFE / SCHEIBE) + 1).fill(0);
+    // Hoehenbereich je Scheibe: Gerueststiele laufen ueber viele Meter und stehen am Boden;
+    // ein schraeges Dach belegt je Scheibe nur ein Hoehenband weit ueber dem Boden. Ohne
+    // diese Pruefung gilt jede geneigte Dachflaeche faelschlich als Geruest.
+    const zMn = new Array(bins.length).fill(Infinity), zMx = new Array(bins.length).fill(-Infinity);
     for (let i = 0; i < n; i++) {
       if (a[i] < lo || a[i] > hi) continue;
       const t = fromMin ? b[i] - bMin : bMin + bSpan - b[i];
       if (t < 0 || t > TIEFE) continue;
-      bins[Math.floor(t / SCHEIBE)]++;
+      const k = Math.floor(t / SCHEIBE);
+      bins[k]++;
+      if (pz) { if (pz[i] < zMn[k]) zMn[k] = pz[i]; if (pz[i] > zMx[k]) zMx[k] = pz[i]; }
     }
-    return bins.filter((c) => c >= minPunkte).length >= MIN_SCHEIBEN;
+    const minHoehe = pz && d.spanZ > 0 ? Math.min(3, d.spanZ * 0.5) : 0;
+    return bins.filter((c, k) => c >= minPunkte && (!pz || (zMx[k] - zMn[k] >= minHoehe && zMn[k] - d.minZ <= Math.max(1, d.spanZ * 0.15)))).length >= MIN_SCHEIBEN;
   };
   const seiten = [];
   if (aussen(true, true)) seiten.push('front');
@@ -411,7 +418,7 @@ function parsePly(buf) {
   let stufen = null;
   try { stufen = erkenneStufen(px, py, pz, { minX, minY, minZ, spanX, spanY }); } catch (e) { stufen = null; }
   let geruestSeiten = null;
-  try { geruestSeiten = erkenneGeruestSeiten(px, py, { minX, minY, spanX, spanY }); } catch (e) { geruestSeiten = null; }
+  try { geruestSeiten = erkenneGeruestSeiten(px, py, { minX, minY, minZ, spanX, spanY, spanZ }, pz); } catch (e) { geruestSeiten = null; }
   // Phase 91: Masse um die Geruestschicht bereinigen - nur wenn jede erkannte
   // Seite eine plausible Schichttiefe (0,8-3,5 m) hat; sonst bleibt es bei
   // der Begrenzungsbox.
