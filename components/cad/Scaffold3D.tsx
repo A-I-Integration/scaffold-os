@@ -760,7 +760,8 @@ const AllScaffoldComponents = memo(function AllScaffoldComponents({
     components.forEach((comp) => {
       const filterTyp = istTreppenstufe(comp) ? 'stair' : comp.type
       if (visibleTypes[filterTyp] === false) return
-      if (ausgeblendet.has(filterTyp)) return
+      // Manuell gesetzte Bauteile nie per LOD ausblenden – sonst „passiert nichts“, sobald die Kamera weit weg ist.
+      if (ausgeblendet.has(filterTyp) && !comp.id.startsWith('manual-')) return
       // NEU (Ebenen/Layers): Bauteil nach Seite/Lage filtern.
       // fieldId-Format: "field-{side}-{levelIndex}-{fieldIndex}"
       // Bauteile OHNE fieldId (globale Anker, Dächer etc.) passieren immer.
