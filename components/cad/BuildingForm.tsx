@@ -6,7 +6,7 @@ import BalkonEditor from './BalkonEditor'
 import UmrissEditor from './UmrissEditor'
 import { GERUEST_SYSTEME } from '@/lib/calculations/geruest-systeme'
 import { uploadVertragsdokument } from '@/lib/vertrag-upload-client'
-import { KIRCHE_STANDARD, kircheAlsGebaeude, pruefeKircheMasse, type KircheMasse } from '@/lib/cad/kirche-vorlage'
+import { KIRCHE_STANDARD, kircheUebernehmen, pruefeKircheMasse, type KircheMasse } from '@/lib/cad/kirche-vorlage'
 import { quaderAusObj, quaderAusStl, masseAusQuader, type Quader, type Einheit, type Achse } from '@/lib/cad/modell-import'
 
 interface Props {
@@ -266,7 +266,7 @@ export default function BuildingForm({ building, systemId, onChange, onSystemCha
                       Turmhelm mit einrüsten
                     </label>
                     {fehler && <p className='text-[10px] text-red-600'>{fehler}</p>}
-                    <button type='button' disabled={!!fehler} onClick={() => { onChange({ ...building, ...kircheAlsGebaeude(kirche) }); setKircheOffen(false) }}
+                    <button type='button' disabled={!!fehler} onClick={() => { onChange(kircheUebernehmen(building, kirche)); setKircheOffen(false) }}
                       className='w-full px-2 py-1.5 rounded-lg bg-[#1d1d1f] text-white text-xs disabled:opacity-40'>Kirche übernehmen</button>
                   </div>
                 )

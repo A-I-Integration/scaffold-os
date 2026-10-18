@@ -56,3 +56,9 @@ export function kircheAlsGebaeude(m: KircheMasse): BuildingParams {
     sections: abschnitte,
   }
 }
+
+/** Übernimmt die Kirche in vorhandene Gebäudedaten. Ein früher gesetzter Umriss (z. B. aus einer Punktwolke) wird entfernt,
+ *  weil im Umriss-Modus die Abschnitte ignoriert würden und das ganze Gebäude eingerüstet würde. */
+export function kircheUebernehmen(bisher: BuildingParams, m: KircheMasse): BuildingParams {
+  return { ...bisher, ...kircheAlsGebaeude(m), umriss: undefined }
+}

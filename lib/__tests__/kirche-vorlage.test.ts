@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { generateCADModel } from '../calculations/cad-engine'
-import { KIRCHE_STANDARD, kircheAlsGebaeude, pruefeKircheMasse } from '../cad/kirche-vorlage'
+import { KIRCHE_STANDARD, kircheAlsGebaeude, kircheUebernehmen, pruefeKircheMasse } from '../cad/kirche-vorlage'
 
 describe('Kirchenvorlage', () => {
   it('rüstet nur den Turm ein, Schiff und Chor bleiben ohne Gerüst', () => {
@@ -29,5 +29,13 @@ describe('Kirchenvorlage', () => {
     expect(m.anchors.some((a) => a.positionY > 46)).toBe(true)
     const ohne = generateCADModel(kircheAlsGebaeude({ ...KIRCHE_STANDARD, helmEinruesten: false }), 'layher-allround')
     expect(ohne.anchors.some((a) => a.positionY > 46)).toBe(false)
+  })
+  it('entfernt einen früheren Umriss, sonst würde die ganze Kirche eingerüstet', () => {
+    const alt = { ...kircheAlsGebaeude(KIRCHE_STANDARD), umriss: [{ x: 0, z: 0 }, { x: 9, z: 0 }, { x: 9, z: 12 }, { x: 0, z: 12 }], sections: undefined }
+    const neu = kircheUebernehmen(alt, KIRCHE_STANDARD)
+    expect(neu.umriss).toBeUndefined()
+    const m = generateCADModel(neu, 'layher-allround')
+    expect(m.warnings.some((w) => w.code === 'UMRISS_MODUS')).toBe(false)
+    expect(Math.max(...m.fields.map((f) => f.positionX))).toBeLessThan(-8)
   })
 })
