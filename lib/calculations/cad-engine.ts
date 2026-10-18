@@ -968,6 +968,8 @@ export function generateCADModel(
   const abschnittsAnker: ScaffoldAnchor[] = []
   let helmFlaecheM2 = 0
   let verdecktFlaecheM2 = 0
+  let innenFlaecheM2 = 0
+  let innenFelder = 0
   const abschnittDivs = abschnitte
     ? abschnitte.map((sec) => teile(sec.laengeM))
     : null
@@ -977,7 +979,7 @@ export function generateCADModel(
       // --- Gestuftes Gebäude: je Abschnitt eigene Felder/Lagen ---
       const w = building.widthM || 0
       type HelmInfo = { roofH: number; laengeM: number }
-      const runs: { div: typeof fieldDiv; hoeheM: number; along: number; aktiv: boolean; helm?: HelmInfo; abHoehe: number }[] = []
+      const runs: { div: typeof fieldDiv; hoeheM: number; along: number; aktiv: boolean; helm?: HelmInfo; abHoehe: number; fixedO?: number; innen?: boolean }[] = []
       const helmVon = (sec: BuildingSection): HelmInfo | undefined => (helmAktiv(sec, building) ? { roofH: sec.roofHoeheM!, laengeM: sec.laengeM } : undefined)
       if (side === 'front' || side === 'back') {
         let cursor = -building.lengthM / 2
@@ -985,6 +987,23 @@ export function generateCADModel(
       } else {
         const sec = side === 'left' ? abschnitte[0] : abschnitte[abschnitte.length - 1]
         runs.push({ div: fieldDivWidth, hoeheM: sec.hoeheM, along: -w - 0.5, aktiv: sec.geruest !== false, helm: helmVon(sec), abHoehe: sec.geruestAbHoeheM?.[side] ?? 0 })
+        // Innenwände: Wo ein eingerüsteter Abschnitt an einen nicht eingerüsteten, niedrigeren Nachbarn
+        // (z. B. Turm am Kirchenschiff) grenzt, wird seine Wand zum Nachbarn erst über dessen
+        // höchstem Punkt (Traufe + Dach) eingerüstet.
+        const gesamtL = abschnitte.reduce((t, a) => t + a.laengeM, 0)
+        let xGrenze = -gesamtL / 2
+        abschnitte.forEach((a, i) => {
+          xGrenze += a.laengeM
+          const nb = side === 'right' ? abschnitte[i + 1] : undefined
+          const nbL = side === 'left' ? abschnitte[i - 1] : undefined
+          const nachbar = nb ?? nbL
+          if (!nachbar || a.geruest === false || nachbar.geruest !== false) return
+          const nbTop = nachbar.hoeheM + (nachbar.roofHoeheM ?? 0)
+          if (a.hoeheM <= nbTop + 0.5) return
+          const xIf = side === 'right' ? xGrenze : xGrenze - a.laengeM
+          runs.push({ div: fieldDivWidth, hoeheM: a.hoeheM, along: -w - 0.5, aktiv: true, helm: helmVon(a), abHoehe: nbTop, innen: true,
+            fixedO: side === 'right' ? xIf + 0.5 + distanceToBuildingM : xIf - 0.5 - distanceToBuildingM })
+        })
       }
       // Lage der inneren Gerüstlinie je Seite (Gebäude ist 0,5 m nach hinten versetzt)
       const fixed = side === 'front' ? distanceToBuildingM
@@ -994,6 +1013,8 @@ export function generateCADModel(
       const proLage = new Map<number, ScaffoldField[]>()
       runs.forEach((run, ri) => {
         if (!run.aktiv) return
+        const fx = run.fixedO ?? fixed
+        if (run.innen) { innenFlaecheM2 += w * run.hoeheM; innenFelder += run.div.fields }
         const rl = system ? calculateLevels(run.hoeheM, system) : levelCalc
         rl.levelsData.forEach((levelData) => {
           let cum = 0
@@ -1012,7 +1033,7 @@ export function generateCADModel(
               index: list.length,
               lengthM: fieldLength,
               widthM: scaffoldWidthM,
-              positionX: parseFloat((isFB ? along : fixed).toFixed(3)),
+              positionX: parseFloat((isFB ? along : fx).toFixed(3)),
               positionY: levelData.bottomY,
               positionZ: parseFloat((isFB ? fixed : along).toFixed(3)),
               side: side as 'front' | 'back' | 'left' | 'right',
@@ -1036,7 +1057,7 @@ export function generateCADModel(
               let xPos = 0, zPos = 0
               if (side === 'front') { xPos = along; zPos = distanceToBuildingM + scaffoldWidthM / 2 }
               else if (side === 'back') { xPos = along; zPos = -distanceToBuildingM - scaffoldWidthM / 2 - w - 1 }
-              else { xPos = side === 'left' ? fixed - scaffoldWidthM / 2 : fixed + scaffoldWidthM / 2; zPos = along }
+              else { xPos = side === 'left' ? fx - scaffoldWidthM / 2 : fx + scaffoldWidthM / 2; zPos = along }
               abschnittsAnker.push({ id: `anchor-${side}-${ri}-${al}-${f}`, positionX: xPos, positionY: yAnchor, positionZ: zPos, side: side as 'front' | 'back' | 'left' | 'right', type: 'fassadenanker' })
             }
           }
@@ -1054,7 +1075,7 @@ export function generateCADModel(
             const laenge = (isFB ? run.helm.laengeM : w) - 2 * d
             if (laenge < 1.5) break
             const hdiv = teile(laenge)
-            const fixedH = side === 'front' || side === 'right' ? fixed - d : fixed + d
+            const fixedH = side === 'front' || side === 'right' ? fx - d : fx + d
             let cumH = 0
             hdiv.distribution.forEach((fl, fi) => {
               const list = proLage.get(idx) || []
@@ -1198,8 +1219,8 @@ export function generateCADModel(
     components3D: [],
     totalLengthM: (abschnitte ? abschnitte.filter((a) => a.geruest !== false).reduce((sum, a) => sum + a.laengeM, 0) : fieldDiv.fields * fieldDiv.fieldLengthM) - lueckeLaengeM,
     totalHeightM: building.heightM,
-    totalAreaM2: (abschnitte ? stufenFlaecheM2(abschnitte, activeSides, building.widthM || 0) + helmFlaecheM2 - verdecktFlaecheM2 : building.lengthM * building.heightM) - lueckeFlaecheM2,
-    fieldCount: (abschnittDivs ? abschnittDivs.reduce((sum, d, i) => sum + (abschnitte![i].geruest === false ? 0 : d.fields), 0) : fieldDiv.fields) - lueckeFelder,
+    totalAreaM2: (abschnitte ? stufenFlaecheM2(abschnitte, activeSides, building.widthM || 0) + helmFlaecheM2 + innenFlaecheM2 - verdecktFlaecheM2 : building.lengthM * building.heightM) - lueckeFlaecheM2,
+    fieldCount: (abschnittDivs ? abschnittDivs.reduce((sum, d, i) => sum + (abschnitte![i].geruest === false ? 0 : d.fields), 0) + innenFelder : fieldDiv.fields) - lueckeFelder,
     levelCount: levelCalc.levels,
     warnings
   }
