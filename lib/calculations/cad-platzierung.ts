@@ -47,26 +47,30 @@ export function platzierungAusTreffer(
   // Fangnetz: hängt außen am nächsten Feld der getroffenen Seite/Lage (Geländerhöhe), an der Seitenwand
   // (links/rechts) um 90° gedreht – nicht mitten im Gerüst am Klickpunkt, wo man es nicht sieht.
   if (type === 'net' && model) {
-    const lage = model.fields.filter((f) => f.side === side && f.levelIndex === levelIndex && !f.isCorner)
-    const entlangX = side === 'front' || side === 'back'
-    let best: (typeof lage)[number] | null = null
+    // Seite/Lage kommen aus dem angeklickten Bauteil – bei Treppen, Ankern u. Ä. fehlen sie
+    // (dann 'front'/0). Darum: nächstes Feld im ganzen Gerüst nach echtem Abstand zum Klickpunkt.
+    let best: (typeof model.fields)[number] | null = null
     let bestD = Infinity
-    for (const f of lage) {
-      const d = Math.abs(entlangX ? position[0] - f.positionX : position[2] - f.positionZ)
+    for (const f of model.fields) {
+      if (f.isCorner) continue
+      const d = (position[0] - f.positionX) ** 2 + (position[1] - f.positionY) ** 2 + (position[2] - f.positionZ) ** 2
       if (d < bestD) { bestD = d; best = f }
     }
     if (best) {
+      const entlangX = best.side === 'front' || best.side === 'back'
       const aussen = (best.widthM || 0.73) / 2 + 0.03
       p.fieldId = best.id
+      p.side = best.side
+      p.levelIndex = best.levelIndex
       if (entlangX) {
         p.positionX = best.positionX
-        p.positionZ = best.positionZ + (side === 'front' ? aussen : -aussen)
+        p.positionZ = best.positionZ + (best.side === 'front' ? aussen : -aussen)
       } else {
         p.positionZ = best.positionZ
-        p.positionX = best.positionX + (side === 'right' ? aussen : -aussen)
+        p.positionX = best.positionX + (best.side === 'right' ? aussen : -aussen)
         p.rotationY = Math.PI / 2
       }
-      const stufe = model.levels?.find((l) => l.index === levelIndex)
+      const stufe = model.levels?.find((l) => l.index === best.levelIndex)
       p.positionY = (stufe ? stufe.bottomY : best.positionY) + 1.0
     }
   }
