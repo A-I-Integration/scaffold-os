@@ -72,6 +72,8 @@ export function ansichtAusProjektdaten(daten: unknown): { building: BuildingPara
       ...(num(x.winkelGrad) !== null ? { winkelGrad: num(x.winkelGrad) as number } : {}),
       ...((DACH as readonly unknown[]).includes(x.roofForm) ? { roofForm: x.roofForm as BuildingSection['roofForm'] } : {}),
       ...(num(x.roofHoeheM) !== null ? { roofHoeheM: num(x.roofHoeheM) as number } : {}),
+      ...(num(x.tiefeM) !== null && (num(x.tiefeM) as number) > 0 ? { tiefeM: num(x.tiefeM) as number } : {}),
+      ...(num(x.versatzM) !== null ? { versatzM: num(x.versatzM) as number } : {}),
     } satisfies BuildingSection]
   })
 
