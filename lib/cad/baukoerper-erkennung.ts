@@ -40,7 +40,8 @@ export interface BaukoerperErgebnis {
   hinweise: string[]
 }
 
-const MAX_RASTER = 260
+const MAX_RASTER = 520
+const MIN_ZELLE_M = 0.1
 
 function rasterHoehe(tris: number[][], m: Maske, hk: Float32Array, nx: number, ny: number, ox: number, oy: number, c: number) {
   const setze = (ix: number, iy: number, h: number) => {
@@ -94,7 +95,7 @@ export function erkenneBaukoerper(tris: number[][]): BaukoerperErgebnis | null {
   if (g.d - g.c > g.b - g.a) { w += Math.PI / 2; g = grenzen(w) }
   const bu = g.b - g.a, bv = g.d - g.c
   if (!(bu > 3 && bv > 3)) return null
-  const zelle = Math.max(0.25, Math.max(bu, bv) / MAX_RASTER)
+  const zelle = Math.max(MIN_ZELLE_M, Math.max(bu, bv) / MAX_RASTER)
   const luecke = Math.max(1, Math.round(0.6 / zelle))
   const glatt = Math.max(1, Math.round(0.8 / zelle))
   const rand = luecke + glatt + 3
@@ -145,8 +146,9 @@ export function erkenneBaukoerper(tris: number[][]): BaukoerperErgebnis | null {
     if (vmin < 0) { spalten.push(null); continue }
     // Traufe = Höhe an den beiden Außenrändern der Spalte (kleinerer Wert)
     const rd = (y: number) => Math.max(0, hk[y * nx + x])
-    const a = Math.max(rd(vmin), rd(Math.min(vmax, vmin + 1)))
-    const b = Math.max(rd(vmax), rd(Math.max(vmin, vmax - 1)))
+    // Der Rand kann ein Stück Dachschräge enthalten: der niedrigere der beiden äußersten Werte ist die Wandoberkante
+    const a = Math.min(rd(vmin), rd(Math.min(vmax, vmin + 1)))
+    const b = Math.min(rd(vmax), rd(Math.max(vmin, vmax - 1)))
     spalten.push({ vmin, vmax, eave: Math.min(a, b), top, n })
   }
   const xs = spalten.map((s, i) => (s ? i : -1)).filter((i) => i >= 0)
@@ -196,7 +198,7 @@ export function erkenneBaukoerper(tris: number[][]): BaukoerperErgebnis | null {
     let top = 0, anzahl = 0, oben = 0
     const spitzen: number[] = []
     // Die äußersten Spalten grenzen an den Nachbarteil (dessen Wand bleibt im Raster hängen): für Höhe/Dach weglassen
-    const trim = s.bis - s.von + 1 >= 7 ? 2 : 0
+    const trim = s.bis - s.von + 1 >= Math.round(3 / zelle) ? Math.max(2, Math.round(0.5 / zelle)) : 0
     for (let x = s.von + trim; x <= s.bis - trim; x++) for (let y = 0; y < ny; y++) { const i = y * nx + x; if (m[i]) { anzahl++; if (hk[i] > top) top = hk[i]; spitzen.push(hk[i]) } }
     const dach = Math.max(0, top - eave)
     const laenge = (s.bis - s.von + 1) * zelle
@@ -242,7 +244,7 @@ export function erkenneBaukoerper(tris: number[][]): BaukoerperErgebnis | null {
   }
 }
 
-/** Baut aus dem Ergebnis die Abschnitte fürs CAD. Bei `nurTurm` wird nur der erkannte Turm eingerüstet (samt Helm). */
+/** Baut aus dem Ergebnis die Abschnitte fürs CAD. Jedes Teil wird eingerüstet, der Turm samt Helm; bei `nurTurm` nur der erkannte Turm. */
 export function abschnitteAusBaukoerpern(e: BaukoerperErgebnis, nurTurm: boolean): BuildingSection[] {
   return e.teile.map((t, i) => {
     const istTurm = e.turmIndex === i
@@ -255,7 +257,7 @@ export function abschnitteAusBaukoerpern(e: BaukoerperErgebnis, nurTurm: boolean
       roofForm: t.dachForm,
       roofHoeheM: t.dachHoeheM,
       ...(nurTurm && e.turmIndex !== null && !istTurm ? { geruest: false } : {}),
-      ...(istTurm && t.dachForm === 'walmdach' && nurTurm ? { helmGeruest: true } : {}),
+      ...(istTurm && t.dachForm === 'walmdach' ? { helmGeruest: true } : {}),
     } satisfies BuildingSection
   })
 }
