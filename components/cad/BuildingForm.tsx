@@ -7,8 +7,9 @@ import UmrissEditor from './UmrissEditor'
 import { GERUEST_SYSTEME } from '@/lib/calculations/geruest-systeme'
 import { uploadVertragsdokument } from '@/lib/vertrag-upload-client'
 import { KIRCHE_STANDARD, kircheUebernehmen, pruefeKircheMasse, type KircheMasse } from '@/lib/cad/kirche-vorlage'
-import { quaderAusObj, quaderAusStl, masseAusQuader, dreieckeAusObj, dreieckeAusStl, draufsichtDreiecke, type Quader, type Einheit, type Achse } from '@/lib/cad/modell-import'
+import { quaderAusObj, quaderAusStl, masseAusQuader, dreieckeAusObj, dreieckeAusStl, draufsichtDreiecke, dreieckeMitHoehe, type Quader, type Einheit, type Achse } from '@/lib/cad/modell-import'
 import { erkenneGrundriss, FORM_NAME } from '@/lib/cad/grundriss-erkennung'
+import { erkenneBaukoerper, abschnitteAusBaukoerpern } from '@/lib/cad/baukoerper-erkennung'
 import { umrissBox } from '@/lib/calculations/cad-umriss'
 
 interface Props {
@@ -25,6 +26,7 @@ export default function BuildingForm({ building, systemId, onChange, onSystemCha
   const [activeTab, setActiveTab] = useState<'gebaeude' | 'geruest' | 'system'>('gebaeude')
   const [analyseLaeuft, setAnalyseLaeuft] = useState(false)
   const [analyseHinweis, setAnalyseHinweis] = useState<string | null>(null)
+  const [nurTurm, setNurTurm] = useState(true)
   const [kircheOffen, setKircheOffen] = useState(false)
   const [kirche, setKirche] = useState<KircheMasse>(KIRCHE_STANDARD)
   // 3D-Modell (OBJ/STL, z. B. aus SketchUp): Außenmaße im Browser lesen, Einheit/„oben“ wählt die Person
@@ -33,6 +35,11 @@ export default function BuildingForm({ building, systemId, onChange, onSystemCha
   const grundriss = useMemo(() => {
     if (!modellImport) return null
     try { return erkenneGrundriss({ dreiecke: draufsichtDreiecke(modellImport.dreiecke, modellImport.einheit, modellImport.oben) }) } catch { return null }
+  }, [modellImport])
+  // Gebäudeteile (Schiff, Turm, Chor, Anbau …) mit Höhen automatisch erkennen
+  const baukoerper = useMemo(() => {
+    if (!modellImport) return null
+    try { return erkenneBaukoerper(dreieckeMitHoehe(modellImport.dreiecke, modellImport.einheit, modellImport.oben)) } catch { return null }
   }, [modellImport])
   // Phase 68-E: welche Felder hat die letzte Analyse automatisch befuellt?
   const analyseFelderRef = useRef<string[]>([])
@@ -235,6 +242,29 @@ export default function BuildingForm({ building, systemId, onChange, onSystemCha
                       </select>
                     </label>
                   </div>
+                  {baukoerper?.mehrteilig && (
+                    <div className='rounded-lg bg-[#fff7ed] p-2 space-y-1'>
+                      <p>Gebäudeteile erkannt (von links nach rechts):</p>
+                      <ul className='list-disc pl-4'>
+                        {baukoerper.teile.map((t, i) => (
+                          <li key={i}>{baukoerper.turmIndex === i ? <b>Turm</b> : `Teil ${i + 1}`}: {t.laengeM} × {t.tiefeM} m, Wand {t.hoeheM} m{t.dachHoeheM > 0 ? ` + ${t.dachForm === 'walmdach' ? 'Spitze/Helm' : 'Dach'} ${t.dachHoeheM} m` : ''}</li>
+                        ))}
+                      </ul>
+                      {baukoerper.turmIndex !== null && (
+                        <label className='flex items-center gap-2'>
+                          <input type='checkbox' checked={nurTurm} onChange={(e) => setNurTurm(e.target.checked)} />
+                          Nur den Turm einrüsten (Vorschlag – die übrigen Teile werden nur dargestellt)
+                        </label>
+                      )}
+                      <button type='button' className='rounded-lg bg-[#e8590c] px-3 py-1 font-semibold text-white'
+                        onClick={() => {
+                          const abschnitte = abschnitteAusBaukoerpern(baukoerper, nurTurm)
+                          onChange({ ...building, umriss: undefined, sections: abschnitte, lengthM: Math.round(abschnitte.reduce((t, a) => t + a.laengeM, 0) * 100) / 100, widthM: baukoerper.tiefeMaxM, heightM: baukoerper.gesamtHoeheM, sides: ['front', 'back', 'left', 'right'] })
+                          setModellImport(null)
+                          setAnalyseHinweis(`${baukoerper.teile.length} Gebäudeteile übernommen${baukoerper.turmIndex !== null && nurTurm ? ', nur der Turm wird eingerüstet' : ''}. Bitte Maße und Dachformen unter „Mehrteiliges Gebäude“ prüfen.`)
+                        }}>Gebäudeteile übernehmen</button>
+                    </div>
+                  )}
                   {grundriss ? (
                     <p className='rounded-lg bg-[#f0f7ff] p-2'>Grundriss erkannt: <b>{FORM_NAME[grundriss.form]}</b> mit <b>{grundriss.ecken} Ecken</b>{grundriss.innenecken > 0 ? ` (${grundriss.innenecken} Innenecke${grundriss.innenecken > 1 ? 'n' : ''})` : ''}, {grundriss.laengeM} × {grundriss.breiteM} m, ca. {grundriss.flaecheM2} m² (Genauigkeit ca. {Math.round(grundriss.genauigkeitM * 100)} cm). Bitte prüfen.</p>
                   ) : (
@@ -244,7 +274,7 @@ export default function BuildingForm({ building, systemId, onChange, onSystemCha
                   <div className='flex gap-2'>
                     <button type='button' className='rounded-lg bg-[#0071e3] px-3 py-1 font-semibold text-white'
                       onClick={() => { onChange({ ...building, lengthM: m.lengthM, widthM: m.widthM, heightM: m.heightM }); setModellImport(null); setAnalyseHinweis('3D-Modell: Länge, Breite und Höhe übernommen, bitte prüfen. Geschosse, Dachform und Fenster bitte selbst eintragen.') }}>Maße übernehmen</button>
-                    {grundriss && (
+                    {grundriss && !baukoerper?.mehrteilig && (
                       <button type='button' className='rounded-lg bg-[#0071e3] px-3 py-1 font-semibold text-white'
                         onClick={() => { const box = umrissBox(grundriss.umriss); onChange({ ...building, umriss: grundriss.umriss, sections: undefined, lengthM: Math.round(box.lengthM * 100) / 100, widthM: Math.round(box.widthM * 100) / 100, heightM: m.heightM }); setModellImport(null); setAnalyseHinweis(`Grundriss übernommen: ${FORM_NAME[grundriss.form]}, ${grundriss.ecken} Ecken. Höhe ${m.heightM} m. Dachform, Geschosse und Fenster bitte selbst eintragen; Ecken unter „Gebäude-Umriss“ prüfen.`) }}>Grundriss übernehmen</button>
                     )}

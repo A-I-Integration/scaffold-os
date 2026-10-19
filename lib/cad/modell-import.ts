@@ -132,15 +132,38 @@ function begrenze(a: Float32Array): Float32Array {
   return Float32Array.from(aus);
 }
 
-/** Draufsicht: die zwei Achsen, die nicht „oben“ sind, in Metern. */
+/**
+ * Draufsicht in Metern, rechtshändig: Ost = x, App-z = −Nord. So bleibt die Lage von links/rechts
+ * (z. B. Turm links) wie im Modell – eine Spiegelung würde die Kirche verdrehen.
+ * Ost/Nord sind die beiden Achsen nach „oben“ im Kreis (x→y→z): oben = z → Ost x, Nord y; oben = y → Ost z, Nord x; oben = x → Ost y, Nord z.
+ */
+function achsenIndex(oben: Achse): { ost: number; nord: number; hoch: number } {
+  const k = (['x', 'y', 'z'] as Achse[]).indexOf(oben);
+  return { ost: (k + 1) % 3, nord: (k + 2) % 3, hoch: k };
+}
+
 export function draufsichtDreiecke(dreiecke: Float32Array, einheit: Einheit, oben: Achse): [number, number, number, number, number, number][] {
   const f = EINHEIT_FAKTOR[einheit];
-  const achsen = (['x', 'y', 'z'] as Achse[]);
-  const [a, b] = achsen.filter((x) => x !== oben).map((x) => achsen.indexOf(x));
+  const { ost, nord } = achsenIndex(oben);
   const aus: [number, number, number, number, number, number][] = [];
   for (let i = 0; i + 8 < dreiecke.length; i += 9) {
-    const t = [0, 1, 2].map((k) => [dreiecke[i + k * 3 + a] * f, dreiecke[i + k * 3 + b] * f]);
+    const t = [0, 1, 2].map((k) => [dreiecke[i + k * 3 + ost] * f, -dreiecke[i + k * 3 + nord] * f]);
     if (t.every(([x, y]) => Number.isFinite(x) && Number.isFinite(y))) aus.push([t[0][0], t[0][1], t[1][0], t[1][1], t[2][0], t[2][1]]);
+  }
+  return aus;
+}
+
+/** Wie draufsichtDreiecke, aber mit Höhe je Eckpunkt: x1,z1,h1, x2,z2,h2, x3,z3,h3 (Meter, Höhe über der tiefsten Stelle). */
+export function dreieckeMitHoehe(dreiecke: Float32Array, einheit: Einheit, oben: Achse): number[][] {
+  const f = EINHEIT_FAKTOR[einheit];
+  const { ost, nord, hoch } = achsenIndex(oben);
+  let minH = Infinity;
+  for (let i = 0; i + 8 < dreiecke.length; i += 9) for (let k = 0; k < 3; k++) { const h = dreiecke[i + k * 3 + hoch] * f; if (Number.isFinite(h) && h < minH) minH = h; }
+  const aus: number[][] = [];
+  for (let i = 0; i + 8 < dreiecke.length; i += 9) {
+    const t: number[] = [];
+    for (let k = 0; k < 3; k++) t.push(dreiecke[i + k * 3 + ost] * f, -dreiecke[i + k * 3 + nord] * f, dreiecke[i + k * 3 + hoch] * f - minH);
+    if (t.every(Number.isFinite)) aus.push(t);
   }
   return aus;
 }

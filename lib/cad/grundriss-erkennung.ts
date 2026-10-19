@@ -37,7 +37,7 @@ export interface GrundrissErgebnis {
 const MAX_RASTER = 320
 const MIN_MERKMAL_M = 0.8
 
-function huelle(pts: Punkt2[]): Punkt2[] {
+export function huelle(pts: Punkt2[]): Punkt2[] {
   const p = [...pts].sort((a, b) => a[0] - b[0] || a[1] - b[1])
   if (p.length < 3) return p
   const kreuz = (o: Punkt2, a: Punkt2, b: Punkt2) => (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0])
@@ -50,7 +50,7 @@ function huelle(pts: Punkt2[]): Punkt2[] {
 }
 
 /** Winkel (Rad, 0…π/2), bei dem das umschließende Rechteck die kleinste Fläche hat. */
-function hauptrichtung(pts: Punkt2[]): number {
+export function hauptrichtung(pts: Punkt2[]): number {
   const h = huelle(pts)
   if (h.length < 3) return 0
   let besteA = Infinity, besterW = 0
@@ -64,9 +64,9 @@ function hauptrichtung(pts: Punkt2[]): number {
   return besterW
 }
 
-type Maske = Uint8Array
+export type Maske = Uint8Array
 
-function dilatiere(m: Maske, nx: number, ny: number, r: number): Maske {
+export function dilatiere(m: Maske, nx: number, ny: number, r: number): Maske {
   const aus = new Uint8Array(m.length)
   // getrennt: erst waagrecht, dann senkrecht
   const t = new Uint8Array(m.length)
@@ -81,7 +81,7 @@ function dilatiere(m: Maske, nx: number, ny: number, r: number): Maske {
   return aus
 }
 
-function erodiere(m: Maske, nx: number, ny: number, r: number): Maske {
+export function erodiere(m: Maske, nx: number, ny: number, r: number): Maske {
   const inv = new Uint8Array(m.length)
   for (let i = 0; i < m.length; i++) inv[i] = m[i] ? 0 : 1
   // Rand zählt als „leer“: sonst würde die Maske am Rand nicht schrumpfen
@@ -95,7 +95,7 @@ function erodiere(m: Maske, nx: number, ny: number, r: number): Maske {
   return aus
 }
 
-function fuelleInneres(m: Maske, nx: number, ny: number): Maske {
+export function fuelleInneres(m: Maske, nx: number, ny: number): Maske {
   // Außenraum per Flutfüllung vom Rand aus; alles andere ist Gebäude
   const aussen = new Uint8Array(m.length)
   const stapel: number[] = []
@@ -115,7 +115,7 @@ function fuelleInneres(m: Maske, nx: number, ny: number): Maske {
   return aus
 }
 
-function groessteInsel(m: Maske, nx: number, ny: number): Maske {
+export function groessteInsel(m: Maske, nx: number, ny: number): Maske {
   const label = new Int32Array(m.length)
   let besteL = 0, besteGr = 0, l = 0
   for (let s = 0; s < m.length; s++) {

@@ -41,3 +41,34 @@ describe('OBJ/STL → Grundriss', () => {
     expect(erkenneGrundriss({ dreiecke: draufsichtDreiecke(dr, 'm', 'z') })?.form).toBe('rechteck')
   })
 })
+
+import { dreieckeMitHoehe } from '../cad/modell-import'
+import { erkenneBaukoerper, abschnitteAusBaukoerpern } from '../cad/baukoerper-erkennung'
+import { generateCADModel } from '../calculations/cad-engine'
+
+describe('OBJ (Kirche) → Gebäudeteile → Gerüst nur am Turm', () => {
+  type P = [number, number, number]
+  const t3 = (a: P, b: P, c: P) => [a, b, c]
+  const q4 = (a: P, b: P, c: P, d: P) => [t3(a, b, c), t3(a, c, d)]
+  const kasten = (x0: number, z0: number, x1: number, z1: number, h: number) => [
+    ...q4([x0, z0, 0], [x1, z0, 0], [x1, z0, h], [x0, z0, h]), ...q4([x1, z0, 0], [x1, z1, 0], [x1, z1, h], [x1, z0, h]),
+    ...q4([x1, z1, 0], [x0, z1, 0], [x0, z1, h], [x1, z1, h]), ...q4([x0, z1, 0], [x0, z0, 0], [x0, z0, h], [x0, z1, h]),
+    ...q4([x0, z0, h], [x1, z0, h], [x1, z1, h], [x0, z1, h]),
+  ]
+  const pyr = (x0: number, z0: number, x1: number, z1: number, h: number, d: number) => { const sp: P = [(x0 + x1) / 2, (z0 + z1) / 2, h + d]; return [t3([x0, z0, h], [x1, z0, h], sp), t3([x1, z0, h], [x1, z1, h], sp), t3([x1, z1, h], [x0, z1, h], sp), t3([x0, z1, h], [x0, z0, h], sp)] }
+  const sat = (x0: number, z0: number, x1: number, z1: number, h: number, d: number) => { const zm = (z0 + z1) / 2; return [...q4([x0, z0, h], [x1, z0, h], [x1, zm, h + d], [x0, zm, h + d]), ...q4([x0, zm, h + d], [x1, zm, h + d], [x1, z1, h], [x0, z1, h]), t3([x0, z0, h], [x0, zm, h + d], [x0, z1, h]), t3([x1, z0, h], [x1, z1, h], [x1, zm, h + d])] }
+  /** Dreiecke → OBJ-Text (Z oben, App-z = −Y) */
+  const alsObj = (tris: P[][]) => tris.map((t) => t.map((p) => `v ${p[0]} ${-p[1]} ${p[2]}`).join('\n')).join('\n') + '\n' + tris.map((_, i) => `f ${i * 3 + 1} ${i * 3 + 2} ${i * 3 + 3}`).join('\n')
+
+  it('erkennt Turm (links) und Schiff und rüstet im CAD nur den Turm ein', () => {
+    const obj = alsObj([...kasten(0, 1.5, 9, 10.5, 45), ...pyr(0, 1.5, 9, 10.5, 45, 13), ...kasten(9, 0, 39, 12, 12), ...sat(9, 0, 39, 12, 12, 8)])
+    const e = erkenneBaukoerper(dreieckeMitHoehe(dreieckeAusObj(obj), 'm', 'z'))!
+    expect(e.teile.length).toBe(2)
+    expect(e.turmIndex).toBe(0) // Turm links, wie im Modell
+    const b = { lengthM: e.laengeM, widthM: e.tiefeMaxM, heightM: e.gesamtHoeheM, eavesHeightM: 45, roofHeightM: 13, roofForm: 'flachdach' as const, floors: 12, floorHeightsM: Array(12).fill(3.75), windowCount: 0, doorCount: 0, balconyCount: 0, overhangM: 0, setbackM: 0, sides: ['front' as const, 'back' as const, 'left' as const, 'right' as const], sections: abschnitteAusBaukoerpern(e, true) }
+    const m = generateCADModel(b, 'layher-allround')
+    const maxX = Math.max(...m.fields.map((f) => f.positionX))
+    expect(maxX).toBeLessThan(-9) // nur am Turm (links, Turmwand bei -10,5 + Gerüstabstand), nicht am Schiff
+    expect(m.totalHeightM).toBeGreaterThan(55)
+  })
+})
