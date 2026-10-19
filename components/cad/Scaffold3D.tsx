@@ -23,6 +23,7 @@ import { CATALOG_ITEMS } from './ComponentCatalog'
 import { bauteilFarbe, type FarbModus } from '@/lib/cad/bauteil-farben'
 import { kantenSchluessel } from '@/types/cad-layers'
 import type { CADNote } from '@/types/cad-notes'
+import { passendeArtikel, artikelLabel, katalogListeFuerSystem } from '@/lib/cad/katalog-zuordnung'
 import type { CustomDimension } from '@/types/cad-dimensions'
 
 interface Props {
@@ -64,6 +65,10 @@ interface Props {
   // NEU: ausgewähltes Bauteil per Knopf entfernen (Seite blendet es aus bzw. löscht es).
   onRemoveComponent?: (id: string) => void
   onReplaceComponent?: (id: string, newType: string) => void
+  // NEU (Katalogwahl): Hersteller-Artikel pro Bauteil wählen. Optional und rein additiv.
+  systemId?: string
+  artikelWahl?: Record<string, string>
+  onArtikelWahl?: (componentId: string, artikelNr: string | null) => void
   // Anzahl entfernter Bauteile – hält den Kamera-Ausschnitt beim Entfernen/Zurückholen
   // stabil (die Bauteilzahl steckt im Rahmen-Schlüssel) und frischt den Schatten auf.
   removedCount?: number
@@ -1842,6 +1847,9 @@ function Scaffold3D({
   farbModus = 'real',
   onRemoveComponent,
   onReplaceComponent,
+  systemId,
+  artikelWahl,
+  onArtikelWahl,
   removedCount,
   platzierungIdVon,
   onBauteilZiehen,
@@ -2015,6 +2023,27 @@ function Scaffold3D({
                 </button>
               </div>
             )}
+            {onArtikelWahl && comp && systemId && katalogListeFuerSystem(systemId) && (() => {
+              const artikel = passendeArtikel(systemId, comp.type)
+              return (
+                <div className="mt-2 pt-2 border-t border-black/10">
+                  <label className="block text-[10px] text-[#86868b] mb-1">Katalog-Artikel (MJ-Gerüst)</label>
+                  {artikel.length === 0 ? (
+                    <p className="text-[11px] text-[#86868b]">Keine Zuordnung im Katalog für diesen Bauteiltyp.</p>
+                  ) : (
+                    <select
+                      key={comp.id}
+                      value={artikelWahl?.[comp.id] ?? ''}
+                      onChange={(e) => onArtikelWahl(comp.id, e.target.value || null)}
+                      className="w-full px-2 py-1.5 text-xs rounded-lg border border-black/10 bg-white text-[#1d1d1f]"
+                    >
+                      <option value="">Kein Artikel gewählt</option>
+                      {artikel.map((a) => (<option key={a.nr} value={a.nr}>{artikelLabel(a)}</option>))}
+                    </select>
+                  )}
+                </div>
+              )
+            })()}
             {onReplaceComponent && comp && (
               <div className="mt-2 pt-2 border-t border-black/10">
                 <label className="block text-[10px] text-[#86868b] mb-1">Ersetzen durch …</label>
