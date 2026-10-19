@@ -150,6 +150,16 @@ describe('Statiker-Paket', () => {
     expect(dxf).toContain('GERUEST'); expect(dxf).toContain('MASSE'); expect(dxf).toContain('TEXTE'); expect(dxf).toContain('EOF')
   })
 
+  it('Plan-Modus: Standard schematisch, Komponentenmodus liefert größeres DXF und benennt es im Inhalt', () => {
+    const dxf = (d: ReturnType<typeof paketDateien>) => String(d.find((x) => x.name === '2-Geruestplan.dxf')!.data)
+    const std = paketDateien({ ...eingabe, ifc: null })
+    const komp = paketDateien({ ...eingabe, ifc: null, planModus: 'komponenten' })
+    expect(String(std[0].data)).toContain('schematisch')
+    expect(String(komp[0].data)).toContain('mit Bauteilen aus dem CAD-Modell')
+    expect(dxf(komp).length).toBeGreaterThan(dxf(std).length * 2)
+    expect(komp.map((d) => d.name)).toEqual(std.map((d) => d.name))
+  })
+
   it('ZIP lässt sich vollständig auslesen, JSON ist gültig und passt zum Modell', () => {
     const zip = erzeugeStatikerPaket({ ...eingabe, ifc: new Uint8Array([9, 8, 7]) })
     const d = liesZip(zip)

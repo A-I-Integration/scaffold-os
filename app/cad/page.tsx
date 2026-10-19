@@ -598,6 +598,7 @@ export default function CADPage() {
   // Statiker-Paket: eine ZIP mit Lastannahmen-Blatt, Geometrie (JSON), Stückliste
   // ohne Preise und IFC. Nur Angaben und Geometrie, kein Nachweis.
   const [statikerPaketLaeuft, setStatikerPaketLaeuft] = useState(false)
+  const [planModus, setPlanModus] = useState<'schematisch' | 'komponenten'>('schematisch')
   const handleExportStatikerPaket = useCallback(async () => {
     if (!model) return
     setStatikerPaketLaeuft(true)
@@ -612,7 +613,7 @@ export default function CADPage() {
       const zip = erzeugeStatikerPaket({
         model: m, materials, statik: bereinigeStatikDaten(statikDaten),
         projektName: 'Gerüstprojekt', firma: 'Ihr Unternehmen',
-        datum: new Date().toLocaleDateString('de-DE'), ifc,
+        datum: new Date().toLocaleDateString('de-DE'), ifc, planModus,
       })
       const a = document.createElement('a')
       a.href = URL.createObjectURL(new Blob([zip as BlobPart], { type: 'application/zip' }))
@@ -623,7 +624,7 @@ export default function CADPage() {
       alert('❌ Statiker-Paket fehlgeschlagen: ' + (err instanceof Error ? err.message : String(err)))
     }
     setStatikerPaketLaeuft(false)
-  }, [model, modelWithManual, materials, statikDaten])
+  }, [model, modelWithManual, materials, statikDaten, planModus])
 
   // Stückliste als CSV (öffnet direkt in Excel, kein Zusatzpaket nötig)
   const handleExportCSV = useCallback(() => {
@@ -870,6 +871,8 @@ export default function CADPage() {
             onExportStatikGeometrie={model ? handleExportStatik : exportOhneModellHinweis}
             onExportIFC={!model ? exportOhneModellHinweis : (ifcExportLaeuft ? undefined : handleExportIFC)}
             onExportStatikerPaket={!model ? exportOhneModellHinweis : (statikerPaketLaeuft ? undefined : handleExportStatikerPaket)}
+            planModus={planModus}
+            onPlanModusChange={setPlanModus}
             onExportCSV={model ? handleExportCSV : exportOhneModellHinweis}
             customers={kunden}
             kundenLadeFehler={kundenLadeFehler}
