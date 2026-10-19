@@ -70,6 +70,8 @@ interface Props {
   systemId?: string
   artikelWahl?: Record<string, string>
   onArtikelWahl?: (componentId: string, artikelNr: string | null) => void
+  /** Gewählten Artikel auf alle gleichen Bauteile (gleicher Typ und gleicher Standard-Artikel) übertragen; null = Wahl dort entfernen */
+  onArtikelWahlGleiche?: (componentId: string, artikelNr: string | null) => void
   // Anzahl entfernter Bauteile – hält den Kamera-Ausschnitt beim Entfernen/Zurückholen
   // stabil (die Bauteilzahl steckt im Rahmen-Schlüssel) und frischt den Schatten auf.
   removedCount?: number
@@ -1876,6 +1878,7 @@ function Scaffold3D({
   systemId,
   artikelWahl,
   onArtikelWahl,
+  onArtikelWahlGleiche,
   removedCount,
   platzierungIdVon,
   onBauteilZiehen,
@@ -2069,6 +2072,21 @@ function Scaffold3D({
                       {artikel.map((a) => (<option key={a.nr} value={a.nr}>{artikelLabel(a)}</option>))}
                     </select>
                   )}
+                  {artikel.length > 0 && onArtikelWahlGleiche && (() => {
+                    const gleiche = model.components3D.filter((c) => c.type === comp.type && c.articleNumber === comp.articleNumber).length
+                    if (gleiche < 2) return null
+                    const nr = artikelWahl?.[comp.id] ?? null
+                    return (
+                      <button
+                        type="button"
+                        onClick={() => onArtikelWahlGleiche(comp.id, nr)}
+                        className="mt-1.5 w-full px-2 py-1.5 text-xs font-medium rounded-lg border border-black/10 text-[#1d1d1f] hover:bg-black/5 transition-colors"
+                        title={`Gleicher Typ und gleicher Standard-Artikel (${comp.articleNumber})`}
+                      >
+                        {nr ? `Für alle ${gleiche} gleichen übernehmen` : `Wahl bei allen ${gleiche} gleichen entfernen`}
+                      </button>
+                    )
+                  })()}
                 </div>
               )
             })()}
