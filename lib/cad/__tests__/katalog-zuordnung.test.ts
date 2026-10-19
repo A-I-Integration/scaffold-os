@@ -81,3 +81,30 @@ describe('Projektdatei: artikelWahl', () => {
     expect(e3.ok && e3.daten.artikelWahl).toBeUndefined()
   })
 })
+
+import { passendeArtikelFuerKategorie, setzeKatalogArtikel, stelleStandardWiederHer } from '../katalog-zuordnung'
+
+describe('Aufmaß: Katalogwahl je Position', () => {
+  const pos: MaterialItem = { ...mat('BB-001', 4, 22), category: 'Bordbretter', weightKg: 6.5, aiRecommendation: 'Seitenschutz' }
+  it('Kategorien ohne Katalogbereich/anderes System: keine Artikel', () => {
+    expect(passendeArtikelFuerKategorie('mj-plus', 'Sonderteil')).toEqual([])
+    expect(passendeArtikelFuerKategorie('mj-plus', 'Sicherheit')).toEqual([])
+    expect(passendeArtikelFuerKategorie('', 'Bordbretter')).toEqual([])
+    expect(passendeArtikelFuerKategorie('mj-plus', 'Bordbretter').length).toBeGreaterThan(0)
+  })
+  it('tauscht Artikel, Menge bleibt, Gesamtpreis neu, Standard wiederherstellbar', () => {
+    const art = passendeArtikelFuerKategorie('mj-plus', 'Bordbretter')[0]
+    const neu = setzeKatalogArtikel(pos, art, 'MJ COMBI')
+    expect(neu.articleNumber).toBe(art.nr)
+    expect(neu.quantity).toBe(4)
+    expect(neu.totalPrice).toBeCloseTo(4 * art.preis, 2)
+    expect(neu.vorKatalog?.articleNumber).toBe('BB-001')
+    // zweiter Tausch behält den ursprünglichen Standard
+    const art2 = passendeArtikelFuerKategorie('mj-plus', 'Bordbretter')[1]
+    expect(setzeKatalogArtikel(neu, art2, 'MJ COMBI').vorKatalog?.articleNumber).toBe('BB-001')
+    const zurueck = stelleStandardWiederHer(neu)
+    expect(zurueck).toMatchObject({ articleNumber: 'BB-001', unitPrice: 22, weightKg: 6.5, totalPrice: 88, aiRecommendation: 'Seitenschutz' })
+    expect(zurueck.vorKatalog).toBeUndefined()
+    expect(stelleStandardWiederHer(pos)).toBe(pos)
+  })
+})

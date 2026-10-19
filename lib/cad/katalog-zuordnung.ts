@@ -145,3 +145,45 @@ export function wendeKatalogwahlAn(
 const MJ_NAME: Partial<Record<MjListe, string>> = {
   combi: 'MJ COMBI', optima: 'MJ OPTIMA', 'optima-top': 'MJ OPTIMA TOP', 'optima-metric': 'MJ OPTIMA metric', 'uni-connect': 'MJ UNI-CONNECT',
 }
+
+// ---------- Aufmaß: Position der Materialliste gegen Katalogartikel tauschen ----------
+
+/** Kategorie der Materialliste → Bauteiltyp (gleiche Kategorien wie in der CAD-Stückliste) */
+const KATEGORIE_ZU_TYP: Record<string, string> = {
+  Rahmen: 'frame', Belag: 'deck', 'Geländer': 'railing', Diagonalen: 'diagonal', Fundamente: 'footplate',
+  Kupplungen: 'coupling', Anker: 'anchor', Konsolen: 'console', Treppen: 'stair', Bordbretter: 'board', Leitern: 'ladder',
+}
+
+/** Katalogartikel für eine Position der Materialliste. Leer = keine Zuordnung (Sonderteil, Sicherheit, fremdes System …). */
+export function passendeArtikelFuerKategorie(systemId: string, kategorie: string): MjArtikel[] {
+  const typ = KATEGORIE_ZU_TYP[kategorie]
+  return typ ? passendeArtikel(systemId, typ) : []
+}
+
+/** Tauscht eine Position gegen einen Katalogartikel (Menge bleibt). Die alten Werte bleiben in vorKatalog. */
+export function setzeKatalogArtikel(item: MaterialItem, art: MjArtikel, listenName: string): MaterialItem {
+  const gew = art.attribute['Gewicht (kg)']
+  const m = artikelMassM(art)
+  const basis = item.vorKatalog ?? { articleNumber: item.articleNumber, name: item.name, unitPrice: item.unitPrice, weightKg: item.weightKg, aiRecommendation: item.aiRecommendation }
+  return {
+    ...item,
+    articleNumber: art.nr,
+    name: `${art.gruppe}${m != null ? ` ${m.toLocaleString('de-DE')} m` : ''} (${listenName})`,
+    unitPrice: art.preis,
+    totalPrice: Math.round(item.quantity * art.preis * 100) / 100,
+    weightKg: typeof gew === 'number' ? gew : 0,
+    aiRecommendation: 'MJ-Katalogartikel, Listenpreis netto',
+    vorKatalog: basis,
+  }
+}
+
+export function stelleStandardWiederHer(item: MaterialItem): MaterialItem {
+  if (!item.vorKatalog) return item
+  const { vorKatalog, ...rest } = item
+  return { ...rest, ...vorKatalog, totalPrice: Math.round(item.quantity * vorKatalog.unitPrice * 100) / 100 }
+}
+
+export function katalogListenName(systemId: string): string {
+  const l = katalogListeFuerSystem(systemId)
+  return (l && MJ_NAME[l]) || 'MJ'
+}

@@ -19,6 +19,8 @@ import { speichereEntwurf, leseEntwurfId } from '@/lib/aufmass-entwurf';
 import DispositionResult from '@/components/aufmaß/DispositionResult';
 import { DispositionResult as DispositionData } from '@/lib/calculations/disposition';
 import { uebernehmeMaterialBearbeitung } from '@/lib/stueckliste-bearbeiten';
+import { passendeArtikelFuerKategorie, setzeKatalogArtikel, stelleStandardWiederHer, katalogListenName, artikelLabel } from '@/lib/cad/katalog-zuordnung';
+import { mjArtikelNachNr } from '@/lib/mj-katalog';
 import { generateInvoicePDF, fmtDate as fmtRechnungsDatum, holePdfBase64FuerVersand, type Invoice } from '@/lib/invoice-pdf';
 import { balkoneFuerAbschnitt } from '@/lib/balkon';
 import { abschnitteAusSchritt2, berechneAufmass, erzeugeAufmassblattPdf, type AufmassFoto, type AufmassZulage } from '@/lib/aufmassblatt-pdf';
@@ -636,6 +638,18 @@ function Schritt6Content() {
       setKiResult(updated);
     }
     setEditMode(!editMode);
+  }
+  // Katalogwahl je Position (nur Systeme mit hinterlegtem MJ-Katalog); '' = Standard wiederherstellen
+  function handleKatalogArtikel(index: number, nr: string) {
+    setEditedMaterials((prev) => {
+      const updated = [...prev];
+      const item = updated[index];
+      if (!item) return prev;
+      const system: string = stepData.step3?.system || '';
+      const art = nr ? passendeArtikelFuerKategorie(system, item.category).find((a) => a.nr === nr) : undefined;
+      updated[index] = art ? setzeKatalogArtikel(item, art, katalogListenName(system)) : stelleStandardWiederHer(item);
+      return updated;
+    });
   }
   function handleQuantityChange(index: number, newQty: number) {
     setEditedMaterials((prev) => { const updated = [...prev]; const item = { ...updated[index] }; item.quantity = Math.max(0, newQty); item.totalPrice = item.quantity * item.unitPrice; updated[index] = item; return updated; });
@@ -1649,6 +1663,17 @@ function Schritt6Content() {
                       <div className="flex-1">
                         <p className="text-sm font-medium text-[#1d1d1f]">{item.name} {item.category === 'Sonderteil' && <span className="text-[10px] text-[#e8590c] font-normal">(Sonderteil)</span>}</p>
                         <p className="text-xs text-[#86868b]">{item.articleNumber}</p>
+                        {(() => {
+                          const katalog = passendeArtikelFuerKategorie(s3.system || '', item.category);
+                          if (katalog.length === 0) return null;
+                          const aktuell = item.vorKatalog && mjArtikelNachNr(item.articleNumber).length > 0 ? item.articleNumber : '';
+                          return (
+                            <select value={aktuell} onChange={(e) => handleKatalogArtikel(i, e.target.value)} aria-label={`Katalog-Artikel für ${item.name}`} className="mt-1 w-full max-w-md px-2 py-1 text-xs rounded-lg border border-black/10 bg-white text-[#1d1d1f]">
+                              <option value="">{item.vorKatalog ? 'Standard-Artikel wiederherstellen' : 'Katalog-Artikel wählen …'}</option>
+                              {katalog.map((a) => (<option key={a.nr} value={a.nr}>{artikelLabel(a)}</option>))}
+                            </select>
+                          );
+                        })()}
                       </div>
                       <div className="flex items-center gap-2">
                         <button onClick={() => handleQuantityChange(i, item.quantity - 1)} className="w-8 h-8 rounded bg-black/10 text-[#1d1d1f] hover:bg-black/15">-</button>
