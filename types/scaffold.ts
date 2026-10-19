@@ -216,6 +216,8 @@ export interface MaterialItem {
   riskLevel: 'low' | 'medium' | 'high';
   aiRecommendation: string;
   alternative?: string;
+  /** Gesetzt, wenn die Position durch einen Hersteller-Katalogartikel ersetzt wurde: die Werte davor (für „Standard wiederherstellen“). */
+  vorKatalog?: { articleNumber: string; name: string; unitPrice: number; weightKg: number; aiRecommendation: string };
 }
 
 export interface KIAnalysis {

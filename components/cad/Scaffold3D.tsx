@@ -24,6 +24,7 @@ import { bauteilFarbe, type FarbModus } from '@/lib/cad/bauteil-farben'
 import { kantenSchluessel } from '@/types/cad-layers'
 import type { CADNote } from '@/types/cad-notes'
 import { passendeArtikel, artikelLabel, katalogListeFuerSystem } from '@/lib/cad/katalog-zuordnung'
+import { baueLochscheibe, baueFussspindel } from '@/lib/cad/mj-geometrie'
 import type { CustomDimension } from '@/types/cad-dimensions'
 
 interface Props {
@@ -91,6 +92,13 @@ interface ZiehKontextWert {
 }
 const ZiehKontext = createContext<ZiehKontextWert | null>(null)
 const FarbModusKontext = createContext<FarbModus>('real')
+// Optik nach MJ-Katalog: 'modul' (COMBI/OPTIMA: Lochscheibe mit 8 Aussparungen), 'mj' (andere MJ-Systeme: nur Fußspindel), null = bisherige Optik
+type MjOptik = 'modul' | 'mj' | null
+const MjOptikKontext = createContext<MjOptik>(null)
+function mjOptikFuerSystem(systemId?: string): MjOptik {
+  if (!systemId || !katalogListeFuerSystem(systemId)) return null
+  return systemId === 'mj-uniconnect' ? 'mj' : 'modul'
+}
 
 // ═══════════════════════════════════════════════════════════
 // FARBPALETTE (einmalig, außerhalb der Komponente)
@@ -185,13 +193,17 @@ function isTube(type: string, variant: string): boolean {
 }
 
 function mergeParts(parts: THREE.BufferGeometry[]): THREE.BufferGeometry {
-  const merged = mergeGeometries(parts, false)
+  // Gemischte Teile (indizierte Zylinder + nicht indizierte Extrusion der Lochscheibe) lassen sich nur
+  // zusammenführen, wenn alle gleich aufgebaut sind – sonst liefert mergeGeometries null (→ Würfel).
+  const flach = parts.map((p) => (p.index ? p.toNonIndexed() : p))
+  const merged = mergeGeometries(flach, false)
+  flach.forEach((p, i) => { if (p !== parts[i]) p.dispose() })
   parts.forEach((p) => p.dispose())
   return merged ?? new THREE.BoxGeometry(1, 1, 1)
 }
 
-function getGeometry(type: string, variant: string = 'default'): THREE.BufferGeometry {
-  const cacheKey = `${type}|${variant}`
+function getGeometry(type: string, variant: string = 'default', optik: MjOptik = null): THREE.BufferGeometry {
+  const cacheKey = `${type}|${variant}|${optik ?? ''}`
   if (GEOMETRY_CACHE.has(cacheKey)) return GEOMETRY_CACHE.get(cacheKey)!
   let geo: THREE.BufferGeometry
   if (isTube(type, variant)) {
@@ -284,6 +296,14 @@ function getGeometry(type: string, variant: string = 'default'): THREE.BufferGeo
         break
       }
       case 'footplate': {
+        if (optik) {
+          // MJ-Fußspindel (Platte 150 × 150 mm, Rohrspindel, Griffmutter mit Flügeln); gleiche Ausdehnung wie die Standardform
+          const g = baueFussspindel(0.202)
+          g.translate(0, -0.02, 0)
+          g.scale(1 / 0.15, 1 / 0.04, 1 / 0.15)
+          geo = g
+          break
+        }
         // Fußplatte mit Gewindespindel und Mutter, in echten Metern gebaut (Box 0,15 × 0,04 × 0,15).
         const parts: THREE.BufferGeometry[] = []
         const plate = new THREE.BoxGeometry(0.15, 0.012, 0.15)
@@ -301,7 +321,12 @@ function getGeometry(type: string, variant: string = 'default'): THREE.BufferGeo
       }
       case 'coupling':
         // Rosette: flache Scheibe (scale ist 0.05 → Ø ≈ 12 cm, ≈ 1 cm dick)
-        geo = new THREE.CylinderGeometry(1.2, 1.2, 0.2, 16)
+        if (optik === 'modul') {
+          geo = baueLochscheibe(0.01)
+          geo.scale(20, 20, 20) // Instanz-Skalierung 0,05 → echte Größe
+        } else {
+          geo = new THREE.CylinderGeometry(1.2, 1.2, 0.2, 16)
+        }
         break
       case 'net':
       case 'safety_net':
@@ -320,7 +345,7 @@ function getGeometry(type: string, variant: string = 'default'): THREE.BufferGeo
             post.translate(0, 0, z)
             parts.push(post)
             for (let y = -H / 2 + 0.25; y < H / 2 - 0.05; y += 0.5) {
-              const r = new THREE.CylinderGeometry(0.062, 0.062, 0.008, 14)
+              const r = optik === 'modul' ? baueLochscheibe(0.008) : new THREE.CylinderGeometry(0.062, 0.062, 0.008, 14)
               r.translate(0, y, z)
               parts.push(r)
             }
@@ -545,7 +570,8 @@ function InstancedBauteile({
   const farbModus = useContext(FarbModusKontext)
   const farbTyp = variant === 'tritt' ? 'stair' : type
   const baseColor = useMemo(() => new THREE.Color(farbModus === 'bauteil' ? bauteilFarbe(farbTyp) : (COLOR_MAP[farbTyp] || '#888888')), [farbTyp, farbModus])
-  const geometry = useMemo(() => getGeometry(type, variant), [type, variant])
+  const optik = useContext(MjOptikKontext)
+  const geometry = useMemo(() => getGeometry(type, variant, optik), [type, variant, optik])
   const material = useMemo(() => getMaterial(type, baseColor, farbModus === 'bauteil'), [type, baseColor, farbModus])
   const tube = isTube(type, variant)
 
@@ -1924,6 +1950,7 @@ function Scaffold3D({
         <AdaptiveDpr pixelated />
         <AdaptiveEvents />
         <FarbModusKontext.Provider value={farbModus}>
+        <MjOptikKontext.Provider value={mjOptikFuerSystem(systemId)}>
         <ZiehKontext.Provider value={ziehKontext}>
         <group ref={contentRef}>
           <Scene
@@ -1950,6 +1977,7 @@ function Scaffold3D({
           />
         </group>
         </ZiehKontext.Provider>
+        </MjOptikKontext.Provider>
         </FarbModusKontext.Provider>
         <AutoFraming targetRef={contentRef} modelKey={modelKey} />
         <GroundingShadow targetRef={contentRef} modelKey={modelKey} />
