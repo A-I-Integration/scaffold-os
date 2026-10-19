@@ -4,6 +4,8 @@ import { useState, useRef, useMemo, useEffect } from 'react'
 import { BuildingParams, WANDABSTAND_MIN_M, WANDABSTAND_MAX_M } from '@/lib/calculations/cad-engine'
 import BalkonEditor from './BalkonEditor'
 import UmrissEditor from './UmrissEditor'
+import UmrissZeichner from './UmrissZeichner'
+import { figurenZuDxf, type ZPunkt } from '@/lib/cad/dxf-zeichnen'
 import { GERUEST_SYSTEME } from '@/lib/calculations/geruest-systeme'
 import { uploadVertragsdokument } from '@/lib/vertrag-upload-client'
 import { KIRCHE_STANDARD, kircheUebernehmen, pruefeKircheMasse, type KircheMasse } from '@/lib/cad/kirche-vorlage'
@@ -33,7 +35,8 @@ export default function BuildingForm({ building, systemId, onChange, onSystemCha
   // 3D-Modell (OBJ/STL, z. B. aus SketchUp): Außenmaße im Browser lesen, Einheit/„oben“ wählt die Person
   const [modellImport, setModellImport] = useState<{ name: string; format: 'obj' | 'stl'; quader: Quader; dreiecke: Float32Array; einheit: Einheit; oben: Achse; einheitGeschaetzt: boolean } | null>(null)
   // DXF-Zeichnung: Gebäudeumriss aus den Linien gelesen (lib/cad/dxf-umriss.ts); Höhen trägt die Person ein
-  const [dxfImport, setDxfImport] = useState<{ name: string; inhalt: string; ergebnis: DxfUmrissErgebnis; hoehen: string[] } | null>(null)
+  const [dxfImport, setDxfImport] = useState<{ name: string; inhalt: string; ergebnis: DxfUmrissErgebnis; hoehen: string[]; gezeichnet?: boolean } | null>(null)
+  const [zeichnerOffen, setZeichnerOffen] = useState(false)
   // Grundriss (Rechteck, L-Form, Ecken …) automatisch aus dem 3D-Modell erkennen
   const grundriss = useMemo(() => {
     if (!modellImport) return null
@@ -218,6 +221,15 @@ export default function BuildingForm({ building, systemId, onChange, onSystemCha
     return r.teile.map((t) => (t.hoeheM > 0 ? String(t.hoeheM).replace('.', ',') : ''))
   }
 
+  // Gezeichnete Figuren laufen als DXF-Text durch denselben Leseweg wie eine hochgeladene Datei
+  function zeichnungUebernehmen(figuren: ZPunkt[][]) {
+    const inhalt = figurenZuDxf(figuren)
+    const r = leseDxfUmriss(inhalt)
+    setZeichnerOffen(false)
+    if (r.ok) { setAnalyseHinweis(''); setDxfImport({ name: 'Gezeichneter Umriss', inhalt, ergebnis: r, hoehen: dxfHoehenVorbelegung(r), gezeichnet: true }) }
+    else setAnalyseHinweis('❌ Aus der Zeichnung ließ sich kein brauchbarer Umriss lesen: ' + r.hinweise.join(' '))
+  }
+
   function dxfNeuLesen(einheit: Einheit) {
     if (!dxfImport) return
     const r = leseDxfUmriss(dxfImport.inhalt, { einheit })
@@ -313,6 +325,9 @@ export default function BuildingForm({ building, systemId, onChange, onSystemCha
               <input type='file' className='hidden' disabled={analyseLaeuft}
                 onChange={(e) => { const f = e.target.files?.[0]; if (f) handlePlanUpload(f); e.target.value = '' }} />
             </label>
+            <button type='button' onClick={() => setZeichnerOffen(true)} className='block w-full rounded-xl border border-black/10 bg-white px-3 py-2.5 text-center text-sm font-medium text-[#1d1d1f] hover:bg-black/5 transition-colors' title='Ecken im Plan anklicken statt Maße einzutippen'>
+              ✏️ Umriss per Klick zeichnen
+            </button>
             {onLadeProjektdatei && (
               <label className='block w-full rounded-xl bg-[#0071e3] px-3 py-2.5 text-center text-sm font-medium text-white hover:bg-[#0062c4] transition-colors cursor-pointer' title='Öffnet eine gespeicherte CAD-Projektdatei (.scaffold.json)'>
                 📂 Projektdatei laden
@@ -385,6 +400,7 @@ export default function BuildingForm({ building, systemId, onChange, onSystemCha
                 </div>
               )
             })()}
+            {zeichnerOffen && <UmrissZeichner onUebernehmen={zeichnungUebernehmen} onAbbrechen={() => setZeichnerOffen(false)} />}
             {dxfImport && (() => {
               const e = dxfImport.ergebnis
               const wahl = 'rounded-lg border border-black/10 bg-white px-2 py-1 text-[11px]'
@@ -392,14 +408,14 @@ export default function BuildingForm({ building, systemId, onChange, onSystemCha
               const setzeHoehe = (i: number, v: string) => setDxfImport({ ...dxfImport, hoehen: dxfImport.hoehen.map((h, k) => (k === i ? v : h)) })
               return (
                 <div className='rounded-lg border border-black/10 bg-white p-2 space-y-2 text-[11px] text-[#424245]'>
-                  <p className='font-semibold'>DXF-Zeichnung „{dxfImport.name}“ gelesen</p>
+                  <p className='font-semibold'>{dxfImport.gezeichnet ? 'Gezeichneter Umriss' : <>DXF-Zeichnung „{dxfImport.name}“ gelesen</>}</p>
                   <p className='rounded-lg bg-[#f0f7ff] p-2'>Umriss aus den Linien erkannt: <b>{DXF_FORM_NAME[e.form]}</b> mit <b>{e.ecken} Ecken</b>{e.innenecken > 0 ? ` (${e.innenecken} Innenecke${e.innenecken > 1 ? 'n' : ''})` : ''}, <b>{e.laengeM} × {e.breiteM} m</b>, {e.flaecheM2} m². {e.figuren > 1 ? ` Das Hauptgebäude ist das größte von ${e.figuren} Figuren; alle Figuren werden als Teile angeboten.` : ''} Das ist ein Vorschlag – bitte mit dem Plan vergleichen.</p>
-                  <label className='block'>Einheit der Zeichnung{' '}
+                  {!dxfImport.gezeichnet && <label className='block'>Einheit der Zeichnung{' '}
                     <select className={wahl} value={e.einheit ?? 'm'} onChange={(ev) => dxfNeuLesen(ev.target.value as Einheit)}>
                       <option value='m'>Meter</option><option value='cm'>Zentimeter</option><option value='mm'>Millimeter</option><option value='inch'>Zoll (inch)</option>
                     </select>
                     {' '}<span className='text-[#86868b]'>{e.einheitQuelle === 'zeichnung' ? 'aus der Datei' : e.einheitQuelle === 'vorgabe' ? 'von dir gewählt' : 'geschätzt – bitte prüfen'}</span>
-                  </label>
+                  </label>}
                   {(e.teile ?? [null]).map((t, i) => (
                     <div key={i} className='rounded-lg bg-[#fff7ed] p-2 space-y-1'>
                       <p><b>{t ? `Gebäudeteil ${i + 1}` : 'Gebäude'}</b>{t ? `: ${t.laengeM} × ${t.tiefeM} m (${Math.round(t.laengeM * t.tiefeM * 10) / 10} m²), Beginn ${t.startM} m, Versatz ${t.versatzM} m` : ''}{t && e.figuren > 1 ? `, aus Figur ${(e.teileFigur?.[i] ?? 0) + 1}${(e.teileFigur?.[i] ?? 0) === 0 ? ' (Hauptgebäude)' : ''}` : ''} <span className='text-[#86868b]'>(Quelle: DXF)</span></p>
