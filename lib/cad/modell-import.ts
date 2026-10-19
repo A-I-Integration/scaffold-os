@@ -75,3 +75,72 @@ export function masseAusQuader(q: Quader, einheit: Einheit, oben: Achse): { leng
   const hor = (['x', 'y', 'z'] as Achse[]).filter((a) => a !== oben).map((a) => q.groesse[a] * f).sort((a, b) => b - a);
   return { lengthM: runde2(hor[0]), widthM: runde2(hor[1]), heightM: runde2(q.groesse[oben] * f) };
 }
+
+// ------------------------------------------------------------
+// Dreiecke für die Grundriss-Erkennung (Draufsicht)
+// ------------------------------------------------------------
+const MAX_DREIECKE = 600_000;
+
+/** Dreiecke als flache Liste: je Dreieck 9 Zahlen (x1,y1,z1,x2,y2,z2,x3,y3,z3), Rohwerte der Datei. */
+export function dreieckeAusObj(text: string): Float32Array {
+  const v: number[] = [];
+  const tri: number[] = [];
+  for (const zeile of text.split(/\r?\n/)) {
+    if (zeile.startsWith('v ')) {
+      const t = zeile.trim().split(/\s+/);
+      v.push(parseFloat(t[1]), parseFloat(t[2]), parseFloat(t[3]));
+    } else if (zeile.startsWith('f ')) {
+      const idx = zeile.trim().split(/\s+/).slice(1).map((s) => {
+        const n = parseInt(s.split('/')[0], 10);
+        return n < 0 ? v.length / 3 + n : n - 1;
+      });
+      for (let i = 1; i + 1 < idx.length; i++) {
+        for (const k of [idx[0], idx[i], idx[i + 1]]) tri.push(v[k * 3], v[k * 3 + 1], v[k * 3 + 2]);
+      }
+    }
+  }
+  return begrenze(Float32Array.from(tri));
+}
+
+export function dreieckeAusStl(daten: ArrayBuffer): Float32Array {
+  const out: number[] = [];
+  const bytes = daten.byteLength;
+  if (bytes >= 84) {
+    const dv = new DataView(daten);
+    const n = dv.getUint32(80, true);
+    if (bytes === 84 + n * 50) {
+      for (let i = 0; i < n; i++) {
+        const o = 84 + i * 50 + 12;
+        for (let k = 0; k < 9; k++) out.push(dv.getFloat32(o + k * 4, true));
+      }
+      return begrenze(Float32Array.from(out));
+    }
+  }
+  const re = /vertex\s+(\S+)\s+(\S+)\s+(\S+)/g;
+  const text = new TextDecoder().decode(daten);
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(text))) out.push(parseFloat(m[1]), parseFloat(m[2]), parseFloat(m[3]));
+  return begrenze(Float32Array.from(out));
+}
+
+function begrenze(a: Float32Array): Float32Array {
+  const n = Math.floor(a.length / 9);
+  if (n <= MAX_DREIECKE) return a;
+  const schritt = Math.ceil(n / MAX_DREIECKE);
+  const aus: number[] = [];
+  for (let i = 0; i < n; i += schritt) for (let k = 0; k < 9; k++) aus.push(a[i * 9 + k]);
+  return Float32Array.from(aus);
+}
+
+/** Draufsicht: die zwei Achsen, die nicht „oben“ sind, in Metern. */
+export function draufsichtDreiecke(dreiecke: Float32Array, einheit: Einheit, oben: Achse): [number, number, number, number, number, number][] {
+  const f = EINHEIT_FAKTOR[einheit];
+  const achsen = (['x', 'y', 'z'] as Achse[]);
+  const [a, b] = achsen.filter((x) => x !== oben).map((x) => achsen.indexOf(x));
+  const aus: [number, number, number, number, number, number][] = [];
+  for (let i = 0; i + 8 < dreiecke.length; i += 9) {
+    const t = [0, 1, 2].map((k) => [dreiecke[i + k * 3 + a] * f, dreiecke[i + k * 3 + b] * f]);
+    if (t.every(([x, y]) => Number.isFinite(x) && Number.isFinite(y))) aus.push([t[0][0], t[0][1], t[1][0], t[1][1], t[2][0], t[2][1]]);
+  }
+  return aus;
+}
