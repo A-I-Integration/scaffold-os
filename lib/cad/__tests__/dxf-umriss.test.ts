@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { leseDxfUmriss, mitHoehen, type DxfUmrissErgebnis, type DxfLeseErgebnis } from '@/lib/cad/dxf-umriss'
+import { leseDxfUmriss, mitHoehen, parseHoehenTexte, type DxfUmrissErgebnis, type DxfLeseErgebnis } from '@/lib/cad/dxf-umriss'
 import { abschnitteAusTeileListe } from '@/lib/cad/modell-analyse'
 import { generateCADModel, type BuildingParams } from '@/lib/calculations/cad-engine'
 import { erzeugeZeichnungen } from '@/lib/geruest/plan-zeichnung'
@@ -268,4 +268,169 @@ describe('DXF-Umriss: durch die Kette bis zum Komponenten-Plan', () => {
       for (const z of zeichnungen) expect(z.linien.length).toBeGreaterThan(50)
     })
   }
+})
+
+// ================= Mehrere Figuren und Höhen aus TEXT-Entities (feat/dxf-mehrteil) =================
+
+const HAUS: P[] = [[0, 0], [12, 0], [12, 8], [0, 8]]
+const quadrat = (x: number, y: number, l: number, b = l): P[] => [[x, y], [x + l, y], [x + l, y + b], [x, y + b]]
+const flaecheTeile = (r: DxfUmrissErgebnis) => (r.teile ?? []).map((t) => Math.round(t.laengeM * t.tiefeM)).sort((a, b) => a - b)
+const HOEHEN = text('Text', 'Hoehe Haus: 9') + text('Text', 'Hoehe Anbau: 6')
+
+describe('DXF-Umriss: mehrere Figuren werden als Teile angeboten', () => {
+  it('Haus 12×8 + Anbau 4×4 (Polylinien, am Haus anliegend): zwei Teile, beide quelle dxf, Höhen aus den TEXT-Entities', () => {
+    const r = erfolg(leseDxfUmriss(dxf(lwpoly('WAND', HAUS) + lwpoly('WAND', quadrat(12, 0, 4)) + HOEHEN)))
+    expect(r.figuren).toBe(2)
+    expect(r.teile).toHaveLength(2)
+    expect(r.teile!.every((t) => t.quelle === 'dxf')).toBe(true)
+    const [haus, anbau] = r.teile!
+    expect([haus.laengeM, haus.tiefeM]).toEqual([12, 8])
+    expect([anbau.laengeM, anbau.tiefeM]).toEqual([4, 4])
+    expect(flaecheTeile(r)).toEqual([16, 96])
+    expect(haus.hoeheM).toBe(9)
+    expect(anbau.hoeheM).toBe(6)
+    expect(haus.hinweis).toContain('Beschriftung')
+    expect(anbau.versatzM).toBeCloseTo(2, 5)       // Anbau schließt an die Vorderkante an (vorne = unten im Plan)
+    expect(r.hinweise.join(' ')).not.toContain('Höhe ergänzen')
+    expect(r.hinweise.join(' ')).toContain('2 Figuren als Gebäudeteile übernommen')
+  })
+
+  it('dasselbe aus losen LINE-Ringen mit Abstand: zwei Teile, Lücke wird genannt', () => {
+    const r = erfolg(leseDxfUmriss(dxf(ring('WAND', HAUS) + ring('WAND', quadrat(14, 0, 4)) + HOEHEN)))
+    expect(r.teile).toHaveLength(2)
+    expect(flaecheTeile(r)).toEqual([16, 96])
+    expect(r.teile![0].hoeheM).toBe(9); expect(r.teile![1].hoeheM).toBe(6)
+    expect(r.hinweise.join(' ')).toContain('Lücke von 2 m')
+  })
+
+  it('Anbau vor der Hauswand (überlappt in Längsrichtung): Teile werden über die andere Achse nebeneinander gelegt', () => {
+    const r = erfolg(leseDxfUmriss(dxf(lwpoly('WAND', HAUS) + lwpoly('WAND', quadrat(4, 8, 4)) + HOEHEN)))
+    expect(r.teile).toHaveLength(2)
+    expect(flaecheTeile(r)).toEqual([16, 96])
+    expect(r.teile!.map((t) => t.hoeheM).sort()).toEqual([6, 9])
+  })
+
+  it('Figur innerhalb des Hauptumrisses (Innenhof): kein Teil, Hinweis nennt Figur und Grund', () => {
+    const r = erfolg(leseDxfUmriss(dxf(lwpoly('WAND', HAUS) + lwpoly('WAND', quadrat(4, 2, 4)))))
+    expect(r.teile).toHaveLength(1)
+    expect(r.figuren).toBe(1)
+    const h = r.hinweise.join(' ')
+    expect(h).toContain('Figur 2')
+    expect(h).toContain('innerhalb des Hauptumrisses')
+  })
+
+  it('Wanddicke als zweiter Ring innen: ebenfalls nur Hinweis, Umriss und Maße wie bei einer Figur', () => {
+    const r = erfolg(leseDxfUmriss(dxf(lwpoly('WAND', HAUS) + lwpoly('WAND', quadrat(0.3, 0.3, 11.4, 7.4)))))
+    expect(r.teile).toHaveLength(1)
+    expect(nah(r.laengeM, 12)).toBe(true)
+    expect(r.hinweise.join(' ')).toContain('innerhalb')
+  })
+
+  it('Kleinstfigur (unter 2 m²) wird nicht still verworfen, sondern mit Größe und Grund genannt', () => {
+    const r = erfolg(leseDxfUmriss(dxf(lwpoly('WAND', HAUS) + lwpoly('WAND', quadrat(20, 0, 1)))))
+    expect(r.teile).toHaveLength(1)
+    const h = r.hinweise.join(' ')
+    expect(h).toContain('kleiner als 2 m²')
+    expect(h).toContain('Figur 2')
+  })
+
+  it('Figur, die das Haus überlappt und nicht neben die anderen Teile passt: nicht übernommen, mit Grund', () => {
+    const r = erfolg(leseDxfUmriss(dxf(lwpoly('WAND', HAUS) + lwpoly('WAND', quadrat(10, 6, 4)))))
+    expect(r.teile).toHaveLength(1)
+    expect(r.hinweise.join(' ')).toContain('überlappt')
+  })
+
+  it('L-förmiges Haupthaus plus Anbau: alle Streifen nebeneinander, Anbau gehört zur zweiten Figur', () => {
+    const r = erfolg(leseDxfUmriss(dxf(lwpoly('WAND', L_FORM) + lwpoly('WAND', quadrat(20, 0, 4)) + HOEHEN)))
+    expect(r.teile).toHaveLength(3)
+    expect(r.teileFigur!.filter((f) => f === 0)).toHaveLength(2)
+    // Höhe Haus gilt für beide Streifen des Haupthauses
+    expect(r.teile!.filter((_, i) => r.teileFigur![i] === 0).every((t) => t.hoeheM === 9)).toBe(true)
+    expect(r.teile!.filter((_, i) => r.teileFigur![i] === 1).every((t) => t.hoeheM === 6)).toBe(true)
+  })
+
+  it('schräges Haupthaus: weitere Figuren werden nicht still verworfen, sondern mit Grund genannt', () => {
+    const trapez: P[] = [[0, 0], [20, 0], [16, 9], [3, 9]]
+    const r = erfolg(leseDxfUmriss(dxf(lwpoly('WAND', trapez) + lwpoly('WAND', quadrat(25, 0, 4)))))
+    expect(r.teile).toBeNull()
+    expect(r.hinweise.join(' ')).toContain('Figur 2')
+    expect(r.hinweise.join(' ')).toContain('schräge Wände')
+  })
+
+  it('Ein-Figuren-DXF verhält sich wie zuvor (ein Teil, Höhe ergänzen, keine Figuren-Hinweise)', () => {
+    const r = erfolg(leseDxfUmriss(dxf(ring('WAND', HAUS))))
+    expect(r.figuren).toBe(1)
+    expect(r.teile).toHaveLength(1)
+    expect(r.teile![0].hinweis).toBe('Höhe ergänzen')
+    expect(r.hinweise.join(' ')).not.toContain('Figur')
+  })
+
+  it('Mehrteil läuft bis zum Komponenten-Plan', () => {
+    const r = erfolg(leseDxfUmriss(dxf(lwpoly('WAND', HAUS) + lwpoly('WAND', quadrat(12, 0, 4)) + HOEHEN)))
+    const teile = mitHoehen(r.teile!, [])           // Höhen kommen aus den TEXT-Entities
+    expect(teile.map((t) => t.hoeheM)).toEqual([9, 6])
+    const abschnitte = abschnitteAusTeileListe(teile)
+    const b: BuildingParams = {
+      lengthM: 16, widthM: 8, heightM: 9, eavesHeightM: 9, roofHeightM: 0, roofForm: 'flachdach', floors: 3, floorHeightsM: [3, 3, 3],
+      windowCount: 0, doorCount: 0, balconyCount: 0, overhangM: 0, setbackM: 0, sides: ['front', 'back', 'left', 'right'], lastklasse: 3, sections: abschnitte,
+    }
+    const model = generateCADModel(b, 'layher-allround')
+    expect(model.warnings.filter((w) => w.type === 'error')).toEqual([])
+    const z = erzeugeZeichnungen(model, 'komponenten')
+    expect(z).toHaveLength(2)
+    for (const zz of z) expect(zz.linien.length).toBeGreaterThan(50)
+  })
+})
+
+describe('DXF-Umriss: Höhen aus TEXT-Entities zuordnen', () => {
+  const mitAnbauten = (...texte: string[]) => dxf(lwpoly('WAND', HAUS) + lwpoly('WAND', quadrat(12, 0, 4)) + texte.map((t) => text('Text', t)).join(''))
+
+  it('eindeutig: Haus → Hauptgebäude, Anbau → die weitere Figur (Umlaut, Dezimalkomma, Einheit m)', () => {
+    const r = erfolg(leseDxfUmriss(mitAnbauten('Höhe Haus: 9,5 m', 'Höhe Anbau = 6')))
+    expect(r.teile!.map((t) => t.hoeheM)).toEqual([9.5, 6])
+  })
+
+  it('mehrdeutig: zwei Anbauten, aber nur „Höhe Anbau“ → kein Teil vorbelegt, Hinweis nennt den Text', () => {
+    const e = lwpoly('WAND', HAUS) + lwpoly('WAND', quadrat(12, 0, 4)) + lwpoly('WAND', quadrat(-4, 0, 4)) + text('Text', 'Hoehe Anbau: 6') + text('Text', 'Hoehe Haus: 9')
+    const r = erfolg(leseDxfUmriss(dxf(e)))
+    expect(r.teile).toHaveLength(3)
+    const haus = r.teile!.filter((_, i) => r.teileFigur![i] === 0)
+    const anbauten = r.teile!.filter((_, i) => r.teileFigur![i] !== 0)
+    expect(haus.every((t) => t.hoeheM === 9)).toBe(true)
+    expect(anbauten.every((t) => t.hoeheM === 0 && t.hinweis === 'Höhe ergänzen')).toBe(true)
+    expect(r.hinweise.join(' ')).toContain('„Hoehe Anbau: 6“')
+  })
+
+  it('nummerierter Anbau („Höhe Anbau 2“) ist nicht eindeutig einer Figur zuzuordnen', () => {
+    const r = erfolg(leseDxfUmriss(mitAnbauten('Höhe Haus: 9', 'Höhe Anbau 2: 6')))
+    expect(r.teile!.map((t) => t.hoeheM)).toEqual([9, 0])
+    expect(r.hinweise.join(' ')).toContain('Höhe Anbau 2: 6')
+  })
+
+  it('widersprüchliche Werte für dasselbe Teil: nichts vorbelegt, beide Texte genannt', () => {
+    const r = erfolg(leseDxfUmriss(mitAnbauten('Höhe Haus: 9', 'Höhe Haus: 10', 'Höhe Anbau: 6')))
+    expect(r.teile!.map((t) => t.hoeheM)).toEqual([0, 6])
+    expect(r.hinweise.join(' ')).toContain('Höhe Haus: 10')
+  })
+
+  it('unbeschriftete Höhe bei mehreren Teilen: keine Zuordnung geraten', () => {
+    const r = erfolg(leseDxfUmriss(mitAnbauten('Höhe: 9')))
+    expect(r.teile!.every((t) => t.hoeheM === 0)).toBe(true)
+    expect(r.hinweise.join(' ')).toContain('Höhe: 9')
+  })
+
+  it('kein Treffer (nur andere Texte, Zahlen außerhalb 2–40 m, Firsthöhe): „Höhe ergänzen“ wie zuvor', () => {
+    const r = erfolg(leseDxfUmriss(mitAnbauten('Maßstab 1:100', 'Höhe Haus: 1', 'Höhe Anbau: 120', 'Firsthöhe Haus: 11')))
+    expect(r.teile!.every((t) => t.hoeheM === 0 && t.hinweis === 'Höhe ergänzen')).toBe(true)
+  })
+
+  it('beschriftete Höhe bei einer Figur mit einem Teil ohne Bezeichner wird vorbelegt (Ein-Figuren-Verhalten wie zuvor)', () => {
+    const r = erfolg(leseDxfUmriss(dxf(ring('WAND', HAUS) + text('Text', 'Höhe: 9'))))
+    expect(r.teile![0].hoeheM).toBe(9)
+  })
+
+  it('parseHoehenTexte liest nur plausible, wörtlich belegte Zahlen', () => {
+    expect(parseHoehenTexte(['Hoehe Haus: 9', 'Höhe Anbau = 6,5 m', 'Traufhöhe: 7,50', 'Firsthöhe Haus: 11', 'Höhe Haus: 1', 'Höhe Haus: abc', 'Raumhöhe EG'])
+      .map((h) => [h.label, h.wert, h.first])).toEqual([['haus', 9, false], ['anbau', 6.5, false], ['', 7.5, false], ['haus', 11, true]])
+  })
 })

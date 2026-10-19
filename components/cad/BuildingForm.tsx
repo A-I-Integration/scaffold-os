@@ -97,7 +97,7 @@ export default function BuildingForm({ building, systemId, onChange, onSystemCha
         const inhalt = await file.text()
         const r = leseDxfUmriss(inhalt)
         if (r.ok) {
-          setDxfImport({ name: file.name, inhalt, ergebnis: r, hoehen: Array(Math.max(1, r.teile?.length ?? 1)).fill('') })
+          setDxfImport({ name: file.name, inhalt, ergebnis: r, hoehen: dxfHoehenVorbelegung(r) })
           return
         }
         dxfVorspann = 'Aus den Linien der DXF ließ sich kein geschlossener Gebäudeumriss lesen – stattdessen werden die Beschriftungen ausgewertet. '
@@ -212,10 +212,16 @@ export default function BuildingForm({ building, systemId, onChange, onSystemCha
     setAnalyseLaeuft(false)
   }
 
+  // Höhen, die aus Beschriftungen im Plan belegt sind, stehen vorbelegt im Feld (die Person kann sie ändern); alles andere bleibt leer
+  function dxfHoehenVorbelegung(r: DxfUmrissErgebnis): string[] {
+    if (!r.teile) return ['']
+    return r.teile.map((t) => (t.hoeheM > 0 ? String(t.hoeheM).replace('.', ',') : ''))
+  }
+
   function dxfNeuLesen(einheit: Einheit) {
     if (!dxfImport) return
     const r = leseDxfUmriss(dxfImport.inhalt, { einheit })
-    if (r.ok) setDxfImport({ ...dxfImport, ergebnis: r, hoehen: Array(Math.max(1, r.teile?.length ?? 1)).fill('') })
+    if (r.ok) setDxfImport({ ...dxfImport, ergebnis: r, hoehen: dxfHoehenVorbelegung(r) })
     else setAnalyseHinweis('❌ Mit dieser Einheit ergibt sich kein brauchbarer Umriss: ' + r.hinweise.join(' '))
   }
 
@@ -240,9 +246,10 @@ export default function BuildingForm({ building, systemId, onChange, onSystemCha
       text = `${DXF_FORM_NAME[e.form]} aus der DXF übernommen: ${teile.length} Gebäudeteile (siehe „Mehrteiliges Gebäude“).`
     } else if (e.teile && e.teile.length === 1) {
       const t = mitHoehen(e.teile, eingaben)[0]
+      const vonPerson = eingaben[0] !== undefined && eingaben[0] !== e.teile[0].hoeheM   // gleich dem Wert aus dem Plan = nicht von Hand geändert
       const patch: Partial<BuildingParams> = { umriss: undefined, sections: undefined, lengthM: t.laengeM, widthM: t.tiefeM }
       const dachMap: Record<string, BuildingParams['roofForm']> = { Satteldach: 'satteldach', Flachdach: 'flachdach', Pultdach: 'pultdach', Walmdach: 'walmdach', Mansarddach: 'mansardendach', Zeltdach: 'walmdach' }
-      if (eingaben[0]) { patch.heightM = eingaben[0]; patch.eavesHeightM = eingaben[0]; patch.roofForm = 'flachdach'; patch.roofHeightM = 0 }
+      if (vonPerson) { patch.heightM = eingaben[0]; patch.eavesHeightM = eingaben[0]; patch.roofForm = 'flachdach'; patch.roofHeightM = 0 }
       else if (t.hoeheM > 0) { // Höhe aus der Beschriftung im Plan (wörtlich belegt)
         patch.eavesHeightM = t.hoeheM
         patch.heightM = e.textAngaben.hoeheM ?? t.hoeheM
@@ -250,7 +257,7 @@ export default function BuildingForm({ building, systemId, onChange, onSystemCha
       }
       if (!(t.hoeheM > 0)) offen.push(t.hinweis ?? 'Höhe ergänzen')
       neu = { ...building, ...patch }
-      text = `Rechteck aus der DXF übernommen: ${t.laengeM} × ${t.tiefeM} m.${t.hoeheM > 0 && !eingaben[0] ? ' Höhe stammt aus der Beschriftung im Plan – bitte prüfen.' : ''}`
+      text = `Rechteck aus der DXF übernommen: ${t.laengeM} × ${t.tiefeM} m.${t.hoeheM > 0 && !vonPerson ? ' Höhe stammt aus der Beschriftung im Plan – bitte prüfen.' : ''}`
     } else {
       // Form nicht in einfache Teile gliederbar (z. B. schräge Wände): Umriss-Modus wie beim 3D-Modell
       const box = umrissBox(e.umriss)
@@ -386,7 +393,7 @@ export default function BuildingForm({ building, systemId, onChange, onSystemCha
               return (
                 <div className='rounded-lg border border-black/10 bg-white p-2 space-y-2 text-[11px] text-[#424245]'>
                   <p className='font-semibold'>DXF-Zeichnung „{dxfImport.name}“ gelesen</p>
-                  <p className='rounded-lg bg-[#f0f7ff] p-2'>Umriss aus den Linien erkannt: <b>{DXF_FORM_NAME[e.form]}</b> mit <b>{e.ecken} Ecken</b>{e.innenecken > 0 ? ` (${e.innenecken} Innenecke${e.innenecken > 1 ? 'n' : ''})` : ''}, <b>{e.laengeM} × {e.breiteM} m</b>, {e.flaecheM2} m². Das ist ein Vorschlag – bitte mit dem Plan vergleichen.</p>
+                  <p className='rounded-lg bg-[#f0f7ff] p-2'>Umriss aus den Linien erkannt: <b>{DXF_FORM_NAME[e.form]}</b> mit <b>{e.ecken} Ecken</b>{e.innenecken > 0 ? ` (${e.innenecken} Innenecke${e.innenecken > 1 ? 'n' : ''})` : ''}, <b>{e.laengeM} × {e.breiteM} m</b>, {e.flaecheM2} m². {e.figuren > 1 ? ` Das Hauptgebäude ist das größte von ${e.figuren} Figuren; alle Figuren werden als Teile angeboten.` : ''} Das ist ein Vorschlag – bitte mit dem Plan vergleichen.</p>
                   <label className='block'>Einheit der Zeichnung{' '}
                     <select className={wahl} value={e.einheit ?? 'm'} onChange={(ev) => dxfNeuLesen(ev.target.value as Einheit)}>
                       <option value='m'>Meter</option><option value='cm'>Zentimeter</option><option value='mm'>Millimeter</option><option value='inch'>Zoll (inch)</option>
@@ -395,7 +402,7 @@ export default function BuildingForm({ building, systemId, onChange, onSystemCha
                   </label>
                   {(e.teile ?? [null]).map((t, i) => (
                     <div key={i} className='rounded-lg bg-[#fff7ed] p-2 space-y-1'>
-                      <p><b>{t ? `Gebäudeteil ${i + 1}` : 'Gebäude'}</b>{t ? `: ${t.laengeM} × ${t.tiefeM} m` : ''} <span className='text-[#86868b]'>(Quelle: DXF)</span></p>
+                      <p><b>{t ? `Gebäudeteil ${i + 1}` : 'Gebäude'}</b>{t ? `: ${t.laengeM} × ${t.tiefeM} m (${Math.round(t.laengeM * t.tiefeM * 10) / 10} m²), Beginn ${t.startM} m, Versatz ${t.versatzM} m` : ''}{t && e.figuren > 1 ? `, aus Figur ${(e.teileFigur?.[i] ?? 0) + 1}${(e.teileFigur?.[i] ?? 0) === 0 ? ' (Hauptgebäude)' : ''}` : ''} <span className='text-[#86868b]'>(Quelle: DXF)</span></p>
                       <label className='flex flex-wrap items-center gap-2'>Höhe (m){' '}
                         <input className={eingabe} inputMode='decimal' value={dxfImport.hoehen[i] ?? ''} placeholder={t && t.hoeheM > 0 ? String(t.hoeheM).replace('.', ',') : ''} onChange={(ev) => setzeHoehe(i, ev.target.value)} />
                         {(!t || t.hinweis) && <span className='text-[#b45309]'>{t?.hinweis ?? 'Höhe ergänzen'}</span>}

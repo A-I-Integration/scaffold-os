@@ -20,7 +20,7 @@
 import { hauptrichtung, type Punkt2 } from '@/lib/cad/grundriss-erkennung'
 import { EINHEIT_FAKTOR, type Einheit } from '@/lib/cad/modell-import'
 import type { GebaeudeTeil } from '@/lib/cad/modell-analyse'
-import { deterministicFromText, valueInText } from '@/lib/grundriss-parsing'
+import { deterministicFromText, parsePlanNumber, valueInText } from '@/lib/grundriss-parsing'
 import {
   normalisiereUmriss, pruefeUmriss, umrissEcken, umrissKanten, umrissFlaecheSigned, type UmrissPunkt,
 } from '@/lib/calculations/cad-umriss'
@@ -60,6 +60,10 @@ export interface DxfUmrissErgebnis {
   einheitQuelle: 'vorgabe' | 'zeichnung' | 'geschaetzt'
   /** Teile (quelle 'dxf'); null = Form nicht in einfache Teile gliederbar → Umriss verwenden */
   teile: GebaeudeTeil[] | null
+  /** Zu jedem Teil die Nummer der Figur, aus der es stammt (0 = Hauptgebäude, 1.. = weitere Figuren in der Reihenfolge ihrer Größe) */
+  teileFigur?: number[]
+  /** Anzahl der Figuren, die als Teile übernommen wurden (1 = nur das Hauptgebäude) */
+  figuren: number
   textAngaben: DxfTextAngaben
   ebenen: { verwendet: string[]; ignoriert: string[]; modus: 'wand-ebenen' | 'ohne-rauschen' | 'alle' }
   hinweise: string[]
@@ -82,8 +86,11 @@ export type DxfLeseErgebnis = DxfUmrissErgebnis | DxfFehlschlag
 // ---------------------------------------------------------------- Lesen
 
 interface Segment { ax: number; ay: number; bx: number; by: number; ebene: string }
+/** Polylinie (LWPOLYLINE/POLYLINE) als Ganzes: geschlossene Polylinien sind je eine eigene Figur, auch wenn sie sich berühren */
+interface Kette { ebene: string; punkte: { x: number; y: number }[]; geschlossen: boolean }
 interface Gelesen {
   segmente: Segment[]
+  ketten: Kette[]
   texte: string[]
   insunits: number | null
   bogen: boolean
@@ -128,14 +135,12 @@ export function leseDxf(inhalt: string): Gelesen | null {
   if (!saetze.some((s) => s.typ === 'SECTION')) return null
 
   const erste = (s: Satz, c: number) => s.paare.find(([k]) => k === c)?.[1]
-  const out: Gelesen = { segmente: [], texte: [], insunits: null, bogen: false, ignoriert: {} }
+  const out: Gelesen = { segmente: [], ketten: [], texte: [], insunits: null, bogen: false, ignoriert: {} }
   let abschnitt = ''
   let poly: { ebene: string; geschlossen: boolean; punkte: { x: number; y: number }[]; netz: boolean } | null = null
 
   const kette = (ebene: string, p: { x: number; y: number }[], geschlossen: boolean) => {
-    const n = p.length
-    for (let i = 0; i + 1 < n; i++) out.segmente.push({ ax: p[i].x, ay: p[i].y, bx: p[i + 1].x, by: p[i + 1].y, ebene })
-    if (geschlossen && n >= 3) out.segmente.push({ ax: p[n - 1].x, ay: p[n - 1].y, bx: p[0].x, by: p[0].y, ebene })
+    if (p.length >= 2) out.ketten.push({ ebene, punkte: p, geschlossen })
   }
 
   for (const s of saetze) {
@@ -280,6 +285,33 @@ export function findeUmrisse(segmente: Segment[], tol: number): Punkt2[][] {
   return ergebnisse.sort((a, b) => b.flaeche - a.flaeche).map((e) => e.pkt)
 }
 
+/** Fläche eines Punktzuges (Betrag) */
+function flaecheVon(pkt: Punkt2[]): number {
+  let a = 0
+  for (let i = 0; i < pkt.length; i++) { const p = pkt[i], r = pkt[(i + 1) % pkt.length]; a += p[0] * r[1] - r[0] * p[1] }
+  return Math.abs(a) / 2
+}
+
+/**
+ * Alle Figuren der Zeichnung, größte zuerst: jede geschlossene Polylinie ist eine eigene Figur (auch wenn sie eine
+ * andere berührt), aus losen Linien und offenen Ketten wird die Außenkontur je zusammenhängender Figur gebildet.
+ */
+export function findeFiguren(segmente: Segment[], ketten: Kette[], tol: number): Punkt2[][] {
+  const ringe: Punkt2[][] = []
+  const lose: Segment[] = [...segmente]
+  for (const k of ketten) {
+    let p: Punkt2[] = k.punkte.map((q) => [q.x, q.y] as Punkt2)
+    const n = p.length
+    // Startpunkt am Ende wiederholt = geschlossen gezeichnet
+    if (n >= 3 && Math.hypot(p[0][0] - p[n - 1][0], p[0][1] - p[n - 1][1]) <= tol) p = p.slice(0, -1)
+    const schliesst = (k.geschlossen || p.length !== n) && p.length >= 3
+    if (schliesst) { if (flaecheVon(p) > 0) ringe.push(p) }
+    else for (let i = 0; i + 1 < n; i++) lose.push({ ax: k.punkte[i].x, ay: k.punkte[i].y, bx: k.punkte[i + 1].x, by: k.punkte[i + 1].y, ebene: k.ebene })
+  }
+  return [...ringe, ...findeUmrisse(lose.filter((g) => Math.hypot(g.bx - g.ax, g.by - g.ay) > 1e-9), tol)]
+    .sort((a, b) => flaecheVon(b) - flaecheVon(a))
+}
+
 // ---------------------------------------------------------------- Geometrie-Helfer
 
 const GRAD = Math.PI / 180
@@ -388,7 +420,8 @@ function schaetzeEinheitUmriss(lang: number, kurz: number): { einheit: Einheit; 
 
 // ---------------------------------------------------------------- Hauptfunktion
 
-interface Kandidat { ergebnis?: DxfUmrissErgebnis; grund?: string }
+interface Intern { mx: number; my: number; theta: number; norm: UmrissPunkt[] }
+interface Kandidat { ergebnis?: DxfUmrissErgebnis; grund?: string; intern?: Intern }
 
 function formVon(ecken: number, innen: number, ecke: { konvex: boolean }[], rechtwinklig: boolean): DxfForm {
   if (!rechtwinklig) return 'vieleck'
@@ -401,6 +434,53 @@ function formVon(ecken: number, innen: number, ecke: { konvex: boolean }[], rech
     if (abstand === 3) return 't-form'
   }
   return 'vieleck'
+}
+
+interface Platte { fig: number; s: Streifen }
+
+/**
+ * Streifen aller Figuren nebeneinander legen (das Abschnittsmodell kennt nur Teile, die in Längsrichtung aufeinander folgen).
+ * Probiert beide Achsen; gewählt wird, was weniger Teile ergibt (bei Gleichstand die längere Ausdehnung in x).
+ * null, wenn eine Figur nicht in Streifen zerlegbar ist oder sich Streifen in beiden Achsen überlappen.
+ */
+function kombiniere(figs: UmrissPunkt[][]): Platte[] | null {
+  const versuch = (quer: boolean): Platte[] | null => {
+    const alle: Platte[] = []
+    for (let f = 0; f < figs.length; f++) {
+      const s = streifen(quer ? figs[f].map((a) => ({ x: a.z, z: -a.x })) : figs[f])
+      if (!s) return null
+      for (const t of s) alle.push({ fig: f, s: t })
+    }
+    alle.sort((a, b) => a.s.x0 - b.s.x0)
+    for (let i = 0; i + 1 < alle.length; i++) if (alle[i].s.x1 > alle[i + 1].s.x0 + 0.05) return null
+    return alle
+  }
+  const a = versuch(false), b = versuch(true)
+  if (a && b) {
+    const spanA = a[a.length - 1].s.x1 - a[0].s.x0, spanB = b[b.length - 1].s.x1 - b[0].s.x0
+    return b.length < a.length || (b.length === a.length && spanB > spanA) ? b : a
+  }
+  return a ?? b
+}
+
+/** Platten → Teile (Länge entlang x, Tiefe quer, Versatz gegenüber der Mitte des Gesamtumrisses, + = vorne) */
+function teileAusPlatten(l: Platte[]): { teile: GebaeudeTeil[]; figuren: number[] } {
+  const xMin = l[0].s.x0, xMax = l[l.length - 1].s.x1, mitteX = (xMin + xMax) / 2
+  const zMin = Math.min(...l.map((t) => t.s.z0)), zMax = Math.max(...l.map((t) => t.s.z1)), mitteZ = (zMin + zMax) / 2
+  const teile = l.map(({ s: t }, i): GebaeudeTeil => {
+    const zm = (t.z0 + t.z1) / 2
+    const x0 = t.x0 - mitteX, x1 = t.x1 - mitteX, z0 = t.z0 - mitteZ, z1 = t.z1 - mitteZ
+    return {
+      id: `dxf-${i + 1}`, typ: 'bauteil',
+      laengeM: r2(t.x1 - t.x0), tiefeM: r2(t.z1 - t.z0), hoeheM: 0,
+      dachForm: 'flachdach', dachHoeheM: 0,
+      versatzM: r2(zm - mitteZ), startM: r2(x0),
+      grundriss: [{ x: r2(x0), z: r2(z0) }, { x: r2(x1), z: r2(z0) }, { x: r2(x1), z: r2(z1) }, { x: r2(x0), z: r2(z1) }],
+      quelle: 'dxf',
+      hinweis: 'Höhe ergänzen',
+    }
+  })
+  return { teile, figuren: l.map((t) => t.fig) }
 }
 
 function bearbeite(rohUmriss: Punkt2[], faktor: number, einheit: Einheit | null, einheitQuelle: DxfUmrissErgebnis['einheitQuelle'], hinweise: string[]): Kandidat {
@@ -433,41 +513,155 @@ function bearbeite(rohUmriss: Punkt2[], faktor: number, einheit: Einheit | null,
   const form = formVon(ecken.length, innen, ecken, rechtwinklig)
 
   let teile: GebaeudeTeil[] | null = null
+  let teileFigur: number[] | undefined
   if (rechtwinklig) {
-    const quer = norm.map((a) => ({ x: a.z, z: -a.x }))   // um 90° gedreht (Drehung, keine Spiegelung)
-    const s1 = streifen(norm), s2 = streifen(quer)
-    let wahl: Streifen[] | null = null
-    if (s1 && s2) wahl = s1.length < s2.length ? s1 : s2.length < s1.length ? s2 : (spanX >= spanZ ? s1 : s2)
-    else wahl = s1 ?? s2
-    if (!wahl) hinweise.push('Die Form lässt sich nicht in einfache Gebäudeteile gliedern – der Umriss wird als Ganzes verwendet.')
-    else if (wahl.length > MAX_TEILE) hinweise.push(`Der Umriss hätte ${wahl.length} Teile (mehr als ${MAX_TEILE}) – er wird als Ganzes verwendet.`)
-    else {
-      const l = wahl
-      const xMin = l[0].x0, xMax = l[l.length - 1].x1, mitteX = (xMin + xMax) / 2
-      const zMin = Math.min(...l.map((t) => t.z0)), zMax = Math.max(...l.map((t) => t.z1)), mitteZ = (zMin + zMax) / 2
-      teile = l.map((t, i) => {
-        const zm = (t.z0 + t.z1) / 2
-        const x0 = t.x0 - mitteX, x1 = t.x1 - mitteX, z0 = t.z0 - mitteZ, z1 = t.z1 - mitteZ
-        return {
-          id: `dxf-${i + 1}`, typ: 'bauteil' as const,
-          laengeM: r2(t.x1 - t.x0), tiefeM: r2(t.z1 - t.z0), hoeheM: 0,
-          dachForm: 'flachdach' as const, dachHoeheM: 0,
-          versatzM: r2(zm - mitteZ), startM: r2(x0),
-          grundriss: [{ x: r2(x0), z: r2(z0) }, { x: r2(x1), z: r2(z0) }, { x: r2(x1), z: r2(z1) }, { x: r2(x0), z: r2(z1) }],
-          quelle: 'dxf' as const,
-          hinweis: 'Höhe ergänzen',
-        }
-      })
-    }
+    const k = kombiniere([norm])
+    if (!k) hinweise.push('Die Form lässt sich nicht in einfache Gebäudeteile gliedern – der Umriss wird als Ganzes verwendet.')
+    else if (k.length > MAX_TEILE) hinweise.push(`Der Umriss hätte ${k.length} Teile (mehr als ${MAX_TEILE}) – er wird als Ganzes verwendet.`)
+    else { const t = teileAusPlatten(k); teile = t.teile; teileFigur = t.figuren }
   }
   return {
+    intern: { mx, my, theta, norm },
     ergebnis: {
       ok: true, umriss: norm, form, ecken: ecken.length, innenecken: innen, rechtwinklig,
       laengeM: r2(Math.max(spanX, spanZ)), breiteM: r2(Math.min(spanX, spanZ)), flaecheM2: r2(flaeche), drehungGrad,
-      einheit, einheitQuelle, teile,
+      einheit, einheitQuelle, teile, teileFigur, figuren: 1,
       textAngaben: { text: '' }, ebenen: { verwendet: [], ignoriert: [], modus: 'alle' }, hinweise,
     },
   }
+}
+
+// ---------------------------------------------------------------- Mehrere Figuren
+
+const MIN_FIGUR_M2 = 2
+const MAX_TEILE_GESAMT = 12
+
+const fmt = (v: number) => String(r2(v)).replace('.', ',')
+
+/** Liegt der Punkt im Polygon? Der Rand zählt als innen (Toleranz tol). */
+function imPolygon(pt: UmrissPunkt, poly: UmrissPunkt[], tol: number): boolean {
+  let drin = false
+  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+    const a = poly[i], b = poly[j]
+    const dx = b.x - a.x, dz = b.z - a.z, l2 = dx * dx + dz * dz
+    const t = l2 === 0 ? 0 : Math.max(0, Math.min(1, ((pt.x - a.x) * dx + (pt.z - a.z) * dz) / l2))
+    if (Math.hypot(pt.x - (a.x + t * dx), pt.z - (a.z + t * dz)) <= tol) return true
+    if ((a.z > pt.z) !== (b.z > pt.z) && pt.x < ((b.x - a.x) * (pt.z - a.z)) / (b.z - a.z) + a.x) drin = !drin
+  }
+  return drin
+}
+
+/**
+ * Weitere Figuren neben dem Hauptgebäude: jede Figur ab 2 m², die nicht vollständig im Hauptumriss liegt, wird als
+ * eigenes Teil angeboten (Teile nebeneinander in Längsrichtung, wie im Abschnittsmodell). Alles, was nicht
+ * übernommen wird, steht mit Grund in den Hinweisen. Gibt die Zahl der relevanten weiteren Figuren zurück
+ * (für die Zuordnung von Beschriftungen wie „Höhe Anbau“).
+ */
+function verbindeFiguren(e: DxfUmrissErgebnis, intern: Intern, weitere: { roh: Punkt2[]; nr: number }[], faktor: number): number {
+  if (weitere.length === 0) return 0
+  const umwandeln = (roh: Punkt2[]) => drehe(roh.map(([x, y]) => ({ x: (x - intern.mx) * faktor, z: -(y - intern.my) * faktor })), intern.theta)
+  const maxFiguren = 20
+  const klein: string[] = []
+  const relevant: { name: string; poly: UmrissPunkt[] | null }[] = []
+  const betrachtet = weitere.slice(0, maxFiguren)
+  for (const w of betrachtet) {
+    const pts = umwandeln(w.roh)
+    const xs = pts.map((a) => a.x), zs = pts.map((a) => a.z)
+    const flaeche = Math.abs(umrissFlaecheSigned(pts))
+    const name = `Figur ${w.nr} (${fmt(Math.max(Math.max(...xs) - Math.min(...xs), Math.max(...zs) - Math.min(...zs)))} m lang, ${fmt(flaeche)} m²)`
+    if (flaeche < MIN_FIGUR_M2) { klein.push(name); continue }
+    if (pts.every((a) => imPolygon(a, intern.norm, 0.05))) {
+      e.hinweise.push(`${name} liegt vollständig innerhalb des Hauptumrisses (Innenhof, Schacht, Wanddicke o. Ä.) und wurde nicht als Teil übernommen.`)
+      continue
+    }
+    const g = ohneGerade(pts)
+    const r = g.length >= 4 ? rechtwinkligMachen(g) : null
+    relevant.push({ name, poly: r && pruefeUmriss(normalisiereUmriss(r)).length === 0 ? r : null })
+    if (!r) e.hinweise.push(`${name} hat schräge oder unsaubere Wände und wurde nicht als Teil übernommen.`)
+  }
+  if (weitere.length > maxFiguren) klein.push(`${weitere.length - maxFiguren} weitere kleinere Figuren (nicht einzeln geprüft)`)
+  if (klein.length > 0) e.hinweise.push(`Nicht als Teil übernommen, weil kleiner als ${MIN_FIGUR_M2} m²: ${klein.join('; ')}.`)
+
+  const nichtMoeglich = !e.rechtwinklig
+    ? 'der Hauptumriss hat schräge Wände und wird als Ganzes (Vieleck) verwendet'
+    : !e.teile ? 'der Hauptumriss lässt sich nicht in einfache Teile gliedern' : null
+  const angenommen: UmrissPunkt[][] = [intern.norm]
+  const angenommenNamen: string[] = []
+  for (const r of relevant) {
+    if (!r.poly) continue
+    if (nichtMoeglich) { e.hinweise.push(`${r.name} wurde nicht als Teil übernommen: ${nichtMoeglich}.`); continue }
+    const k = kombiniere([...angenommen, r.poly])
+    if (!k) e.hinweise.push(`${r.name} wurde nicht als Teil übernommen: Sie überlappt das Hauptgebäude oder andere Teile in beiden Richtungen – das Abschnittsmodell kennt nur Teile, die nebeneinander liegen.`)
+    else if (k.length > MAX_TEILE_GESAMT) e.hinweise.push(`${r.name} wurde nicht als Teil übernommen: Es gäbe mehr als ${MAX_TEILE_GESAMT} Teile.`)
+    else { angenommen.push(r.poly); angenommenNamen.push(r.name) }
+  }
+  if (angenommen.length > 1) {
+    const k = kombiniere(angenommen)!
+    const t = teileAusPlatten(k)
+    e.teile = t.teile; e.teileFigur = t.figuren; e.figuren = angenommen.length
+    e.hinweise.push(`${angenommen.length} Figuren als Gebäudeteile übernommen (von links nach rechts): Hauptgebäude und ${angenommenNamen.join(', ')}. Höhen, Dachformen und die Lage der Teile bitte prüfen.`)
+    for (let i = 0; i + 1 < k.length; i++) {
+      const luecke = k[i + 1].s.x0 - k[i].s.x1
+      if (luecke > 0.05) e.hinweise.push(`Zwischen Teil ${i + 1} und Teil ${i + 2} liegt eine Lücke von ${fmt(luecke)} m – das Abschnittsmodell legt Teile lückenlos nebeneinander.`)
+    }
+  }
+  return relevant.length
+}
+
+// ---------------------------------------------------------------- Höhen aus Beschriftungen
+
+interface HoehenText { zeile: string; label: string; first: boolean; wert: number }
+
+const HOEHE_ZEILE = /^\s*([a-zäöüß]*?)h(?:ö|oe)he\b\s*(.*?)\s*[:=]\s*(?:ca\.?\s*)?(\d{1,2}(?:[.,]\d{1,2})?)\s*m?\s*$/i
+const HAUPT_NAME = /^(haus|hauptbau|hauptgeb(?:ä|ae)ude|hauptteil|geb(?:ä|ae)ude|wohnhaus|altbau|bestand|kernbau)$/
+const ANBAU_NAME = /^(anbau|vorbau|seitenbau|nebenbau|nebengeb(?:ä|ae)ude|erweiterung|garage|schuppen|carport|wintergarten)(?:\s*\d+)?$/
+
+/** Zeilen der Form „Höhe <Bezeichner>: <Zahl>“; die Zahl muss wörtlich in der Zeile stehen und plausibel sein (2–40 m). */
+export function parseHoehenTexte(zeilen: string[]): HoehenText[] {
+  const out: HoehenText[] = []
+  for (const z of zeilen) {
+    const m = HOEHE_ZEILE.exec(z)
+    if (!m) continue
+    const wert = parsePlanNumber(m[3])
+    if (!Number.isFinite(wert) || wert < 2 || wert > 40 || !valueInText(wert, z)) continue
+    out.push({ zeile: z.trim(), label: m[2].replace(/[()[\]"'„“]/g, '').replace(/\s+/g, ' ').trim().toLowerCase(), first: /first/i.test(m[1]), wert })
+  }
+  return out
+}
+
+/**
+ * Ordnet die Höhen aus dem Plantext den Teilen zu. Nur eindeutige Zuordnungen werden vorbelegt:
+ * „Höhe Haus“ → Hauptgebäude (alle seine Teile), „Höhe Anbau“ → die einzige weitere Figur; unbeschriftete Höhe nur bei genau einem Teil.
+ * Alles andere bleibt leer und wird mit den gefundenen Texten in den Hinweisen genannt. Gibt die Zahl der vorbelegten Teile zurück
+ * und `gefunden`, ob überhaupt eine passende Höhenzeile im Text stand.
+ */
+function ordneHoehenZu(e: DxfUmrissErgebnis, zeilen: string[], weitereFiguren: number): { gesetzt: number; gefunden: boolean } {
+  const teile = e.teile
+  const gefunden = parseHoehenTexte(zeilen).filter((h) => !h.first)
+  if (!teile || gefunden.length === 0) return { gesetzt: 0, gefunden: false }
+  const figuren = e.teileFigur ?? teile.map(() => 0)
+  const proFigur = new Map<number, HoehenText[]>()
+  const offen: string[] = []
+  for (const h of gefunden) {
+    let fig: number | null = null
+    if (h.label === '') fig = teile.length === 1 ? 0 : null
+    else if (HAUPT_NAME.test(h.label)) fig = 0
+    else if (ANBAU_NAME.test(h.label) && !/\d/.test(h.label) && weitereFiguren === 1) fig = 1
+    if (fig === null || !figuren.includes(fig)) { offen.push(`„${h.zeile}“`); continue }
+    proFigur.set(fig, [...(proFigur.get(fig) ?? []), h])
+  }
+  let gesetzt = 0
+  for (const [fig, hs] of proFigur) {
+    if (new Set(hs.map((h) => h.wert)).size > 1) { offen.push(...hs.map((h) => `„${h.zeile}“`)); continue }
+    teile.forEach((t, i) => {
+      if (figuren[i] !== fig) return
+      t.hoeheM = hs[0].wert
+      t.hinweis = `Höhe aus der Beschriftung „${hs[0].zeile}“ im Plan – bitte prüfen`
+      gesetzt++
+    })
+  }
+  if (offen.length > 0) e.hinweise.push(`Höhenangaben im Plan konnten keinem Teil eindeutig zugeordnet werden: ${[...new Set(offen)].join(', ')} – bitte Höhe je Teil eintragen.`)
+  return { gesetzt, gefunden: true }
 }
 
 function textAngabenVon(text: string): DxfTextAngaben {
@@ -489,9 +683,9 @@ export function leseDxfUmriss(inhalt: string, opt: DxfOptionen = {}): DxfLeseErg
   const gelesen = (() => { try { return leseDxf(inhalt) } catch { return null } })()
   if (!gelesen) return { ok: false, grund: 'keine-datei', fallbackKi: true, text: '', hinweise: ['Die Datei ist keine lesbare DXF im Text-Format (ASCII).'] }
   const text = bereinigeText(gelesen.texte)
-  if (gelesen.segmente.length === 0) return { ok: false, grund: 'keine-geometrie', fallbackKi: true, text, hinweise: ['Im Modellbereich der DXF wurden keine Linien (LINE, LWPOLYLINE, POLYLINE) gefunden.'] }
+  if (gelesen.segmente.length === 0 && gelesen.ketten.length === 0) return { ok: false, grund: 'keine-geometrie', fallbackKi: true, text, hinweise: ['Im Modellbereich der DXF wurden keine Linien (LINE, LWPOLYLINE, POLYLINE) gefunden.'] }
 
-  const alleEbenen = [...new Set(gelesen.segmente.map((s) => s.ebene))]
+  const alleEbenen = [...new Set([...gelesen.segmente.map((s) => s.ebene), ...gelesen.ketten.map((k) => k.ebene)])]
   const wand = alleEbenen.filter((e) => WAND.test(e) && !RAUSCHEN.test(e))
   const ohneRauschen = alleEbenen.filter((e) => !RAUSCHEN.test(e))
   const versuche: { modus: DxfUmrissErgebnis['ebenen']['modus']; ebenen: string[] }[] = []
@@ -507,14 +701,17 @@ export function leseDxfUmriss(inhalt: string, opt: DxfOptionen = {}): DxfLeseErg
   const gruende: string[] = []
   for (const v of versuche) {
     const segs = gelesen.segmente.filter((s) => v.ebenen.includes(s.ebene))
-    if (segs.length === 0) continue
+    const ketten = gelesen.ketten.filter((k) => v.ebenen.includes(k.ebene))
+    if (segs.length === 0 && ketten.length === 0) continue
     let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity
     for (const s of segs) { x0 = Math.min(x0, s.ax, s.bx); x1 = Math.max(x1, s.ax, s.bx); y0 = Math.min(y0, s.ay, s.by); y1 = Math.max(y1, s.ay, s.by) }
+    for (const k of ketten) for (const q of k.punkte) { x0 = Math.min(x0, q.x); x1 = Math.max(x1, q.x); y0 = Math.min(y0, q.y); y1 = Math.max(y1, q.y) }
     const diag = Math.hypot(x1 - x0, y1 - y0)
     const luecke = opt.luckeM ?? 0.1
     const tol = faktorBekannt ? luecke / faktorBekannt : diag * 0.0025
-    const kandidaten = findeUmrisse(segs, tol)
-    for (const roh of kandidaten.slice(0, 5)) {
+    const kandidaten = findeFiguren(segs, ketten, tol)
+    for (let ki = 0; ki < Math.min(5, kandidaten.length); ki++) {
+      const roh = kandidaten[ki]
       let einheit: Einheit | null, faktor: number, quelle: DxfUmrissErgebnis['einheitQuelle']
       const h: string[] = []
       if (opt.einheit) { einheit = opt.einheit; faktor = EINHEIT_FAKTOR[opt.einheit]; quelle = 'vorgabe' }
@@ -533,12 +730,13 @@ export function leseDxfUmriss(inhalt: string, opt: DxfOptionen = {}): DxfLeseErg
       e.ebenen = { verwendet: v.ebenen, ignoriert: alleEbenen.filter((x) => !v.ebenen.includes(x)), modus: v.modus }
       e.textAngaben = textAngabenVon(text)
       if (v.modus === 'alle' && alleEbenen.length > 1) e.hinweise.push('Die Ebenennamen sind nicht eindeutig – es wurde die gesamte Geometrie gelesen, die größte geschlossene Figur gilt als Gebäude.')
-      if (kandidaten.length > 1) e.hinweise.push(`${kandidaten.length} getrennte geschlossene Figuren gefunden; die größte wurde als Gebäude genommen.`)
+      const weitereFiguren = verbindeFiguren(e, k.intern!, kandidaten.map((r, i) => ({ roh: r, nr: i + 1 })).filter((_, i) => i !== ki), faktor)
       if (gelesen.bogen) e.hinweise.push('Bögen in Polylinien wurden als gerade Strecken gelesen.')
       const ungelesen = Object.entries(gelesen.ignoriert).map(([t, n]) => `${n} ${t}`).join(', ')
       if (ungelesen) e.hinweise.push(`Nicht gelesen (nur Linien werden ausgewertet): ${ungelesen}.`)
       if (!e.rechtwinklig) e.hinweise.push('Der Umriss hat schräge Wände – er wird als Vieleck (Umriss) übernommen; ein Gerüstplan ist dafür noch nicht verfügbar.')
-      wendeTextHoehenAn(e)
+      const zeilen = gelesen.texte.flatMap((t) => bereinigeText([t]).split('\n'))
+      wendeTextHoehenAn(e, ordneHoehenZu(e, zeilen, weitereFiguren))
       e.hinweise = [...h, ...e.hinweise.filter((x) => !h.includes(x))]
       return e
     }
@@ -552,20 +750,24 @@ export function leseDxfUmriss(inhalt: string, opt: DxfOptionen = {}): DxfLeseErg
   }
 }
 
-/** (a) Höhe aus dem Plantext – nur wenn es genau EIN Teil gibt, sonst bleibt die Zuordnung offen. */
-function wendeTextHoehenAn(e: DxfUmrissErgebnis) {
+/**
+ * (a) Höhe aus dem Plantext. Beschriftete Höhen („Höhe Haus: 9“) hat ordneHoehenZu schon zugeordnet; hier bleibt der
+ * allgemeine Weg (Traufhöhe/Firsthöhe wie im Text-/KI-Pfad) für ein einzelnes Teil und der Hinweis bei mehreren Teilen.
+ */
+function wendeTextHoehenAn(e: DxfUmrissErgebnis, zugeordnet: { gesetzt: number; gefunden: boolean }) {
   const t = e.textAngaben
   const hatHoehe = t.traufhoeheM !== undefined || t.hoeheM !== undefined
   if (!e.teile) return
   if (e.teile.length === 1) {
     const teil = e.teile[0]
+    if (teil.hoeheM > 0) return
     if (t.traufhoeheM !== undefined) {
       teil.hoeheM = t.traufhoeheM
       teil.hinweis = 'Höhe aus der Beschriftung im Plan (Traufhöhe) – bitte prüfen'
     } else if (t.hoeheM !== undefined) {
       teil.hinweis = `Im Plan steht nur eine Firsthöhe (${String(t.hoeheM).replace('.', ',')} m) – Traufhöhe ergänzen`
     }
-  } else if (hatHoehe) {
+  } else if (hatHoehe && !zugeordnet.gefunden) {
     e.hinweise.push(`Im Plantext stehen Höhenangaben (${[t.traufhoeheM !== undefined ? `Traufhöhe ${String(t.traufhoeheM).replace('.', ',')} m` : '', t.hoeheM !== undefined ? `Firsthöhe ${String(t.hoeheM).replace('.', ',')} m` : ''].filter(Boolean).join(', ')}), aber nicht, zu welchem der ${e.teile.length} Teile sie gehören – bitte Höhe je Teil ergänzen.`)
   }
 }
