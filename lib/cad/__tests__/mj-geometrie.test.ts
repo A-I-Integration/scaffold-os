@@ -26,3 +26,29 @@ describe('mj-geometrie', () => {
     expect(mergeGeometries(teile, false)).not.toBeNull()
   })
 })
+
+import { baueRiegel, baueUniRahmen, riegelFarbe, RIEGEL_FARBCODE } from '../mj-geometrie'
+
+describe('Riegel-Farbcode (COMBI-Katalog S. 14)', () => {
+  it('7 Längen mit den Katalogfarben, Toleranz ±3 cm', () => {
+    expect(RIEGEL_FARBCODE.map((f) => `${f.laengeM}:${f.name}`)).toEqual(['0.73:hellbraun', '1.09:grau', '1.4:schwarz', '1.57:braun', '2.07:gelb', '2.57:blau', '3.07:grün'])
+    expect(riegelFarbe(2.57)?.name).toBe('blau')
+    expect(riegelFarbe(2.58)?.name).toBe('blau')
+    expect(riegelFarbe(2.0)).toBeNull()
+  })
+  it('Riegel: Länge stimmt, Farbattribut vorhanden, Farbring nur bei Katalog-Länge', () => {
+    const mit = baueRiegel(2.57), ohne = baueRiegel(2.0)
+    expect(groesse(mit).x).toBeCloseTo(2.57, 2)
+    expect(mit.attributes.color.count).toBe(mit.attributes.position.count)
+    expect(mit.attributes.position.count).toBeGreaterThan(ohne.attributes.position.count)
+  })
+})
+
+describe('UNI-Vertikalrahmen', () => {
+  it('Höhe und Breite wie angefragt (plus Rohrverbinder oben), UNI 100 mit Streben hat mehr Geometrie', () => {
+    const g70 = baueUniRahmen(2, 0.665, false), g100 = baueUniRahmen(2, 1.025, true)
+    expect(groesse(g70).y).toBeCloseTo(2.1, 2)
+    expect(groesse(g70).z).toBeCloseTo(0.665 + 2 * 0.02415, 2)
+    expect(g100.attributes.position.count).toBeGreaterThan(g70.attributes.position.count)
+  })
+})
