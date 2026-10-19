@@ -74,17 +74,17 @@ describe('Komponenten-Plan: Bauteile aus dem Modell', () => {
     expect(s.x2 - s.x1).toBeCloseTo(STAENDER_M, 5)
   })
 
-  it('Grundriss: Gerüst liegt außerhalb des Gebäudes und hat überall denselben Abstand zur Wand (Modellwert 0,8 m)', () => {
+  it('Grundriss: Gerüst liegt außerhalb des Gebäudes, Innenkante im eingestellten Wandabstand (0,3 m)', () => {
     const teile = grundrissBauteile(model).filter((b) => b.typ === 'belag')
     // Gebäude im Plan: x -19,5 ... 19,5, y 0 (vorne) ... 12 (hinten); Plan-y = -Modell-z
     const innen = (praefix: string, f: (b: { x1: number; y1: number; x2: number; y2: number }) => number, wahl: 'max' | 'min') => {
       const w = teile.filter((b) => b.feldId.startsWith(praefix)).map(f)
       return wahl === 'max' ? Math.max(...w) : Math.min(...w)
     }
-    expect(innen('field-front', (b) => Math.max(b.y1, b.y2), 'max')).toBeCloseTo(-0.8, 2)
-    expect(innen('field-back', (b) => Math.min(b.y1, b.y2), 'min')).toBeCloseTo(12.8, 2)
-    expect(innen('field-left', (b) => Math.max(b.x1, b.x2), 'max')).toBeCloseTo(-20.3, 2)
-    expect(innen('field-right', (b) => Math.min(b.x1, b.x2), 'min')).toBeCloseTo(20.3, 2)
+    expect(innen('field-front', (b) => Math.max(b.y1, b.y2), 'max')).toBeCloseTo(-0.3, 2)
+    expect(innen('field-back', (b) => Math.min(b.y1, b.y2), 'min')).toBeCloseTo(12.3, 2)
+    expect(innen('field-left', (b) => Math.max(b.x1, b.x2), 'max')).toBeCloseTo(-19.8, 2)
+    expect(innen('field-right', (b) => Math.min(b.x1, b.x2), 'min')).toBeCloseTo(19.8, 2)
   })
 })
 

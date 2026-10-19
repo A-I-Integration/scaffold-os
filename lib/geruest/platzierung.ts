@@ -22,7 +22,7 @@
 // x = Modell-x, y = -Modell-z (Vorderseite unten).
 // ============================================================
 
-import type { CADModel, ScaffoldField, ScaffoldLevel } from '@/lib/calculations/cad-engine'
+import { GEBAEUDE_SZENEN_VERSATZ_M, type CADModel, type ScaffoldField, type ScaffoldLevel } from '@/lib/calculations/cad-engine'
 
 export type BauteilTyp = 'staender' | 'riegel' | 'diagonale' | 'gelaender' | 'belag' | 'fussplatte' | 'treppe'
 
@@ -44,7 +44,7 @@ export interface PlanBauteil {
  * siehe cad-engine.ts, Abschnitt Seiten-Geometrie). Der Plan zeichnet das Gebäude von z = 0
  * nach hinten; darum werden Modell-z-Werte für den Plan um diesen Betrag verschoben.
  */
-export const SZENE_Z_VERSATZ_M = 0.5
+export const SZENE_Z_VERSATZ_M = GEBAEUDE_SZENEN_VERSATZ_M
 
 /** Ständerbreite (Rohr/Rahmenstiel) in m, wie im Modell (scale 0,073). */
 export const STAENDER_M = 0.073
