@@ -1,23 +1,27 @@
 // ============================================================
 // SCAFFOLD OS – Statiker-Paket
 //
-// Bündelt vorhandene Exporte in EINE ZIP-Datei für den externen Statiker:
-//   1 Lastannahmen-Blatt (HTML, druckbar, mit Unterschriftsfeldern)
-//   2 Geometriedaten (JSON)
-//   3 Stückliste ohne Preise (CSV)
-//   4 Gerüst-Modell (IFC) – nur wenn der IFC-Export gelungen ist
+// Bündelt die Unterlagen für den externen Statiker in EINE ZIP-Datei:
 //   0 Inhalt.txt
-// Die vorhandene Dokumentation liegt bewusst NICHT bei: ihre Zeichnungsseiten sind
-// nur Platzhalter, sie enthält Preise und trägt den Satz "verbindlich".
-// Ein echter Gerüstplan mit Ansichten und Maßen ist noch nicht gebaut.
-// Es wird nichts berechnet und kein Nachweis erstellt. Preise stehen bewusst
-// nicht im Paket (der Statiker sieht auch im CAD keine Preise der Firma).
+//   1 Geruestplan.pdf          Vorderansicht + Grundriss, Maßketten (Vektor)
+//   2 Geruestplan.dxf          dieselben Zeichnungen, Layer GERUEST / MASSE / TEXTE
+//   3 Lastannahmen-Pruefprotokoll.pdf  Lastannahmen-Blatt + Prüfprotokoll (DIN EN 12811-1)
+//   4 Stueckliste.csv          ohne Preise
+//   5 Geometriedaten.json
+//   6 Geruest.ifc              nur wenn der IFC-Export gelungen ist
+// Die vorhandene Dokumentation liegt bewusst NICHT bei (Platzhalter-Zeichnungen,
+// Preise, "verbindlich"). Es wird nichts berechnet und kein Nachweis erstellt.
+// Der Plan ist schematisch (siehe Hinweis in Inhalt.txt).
 // ============================================================
 
 import { generateStatikExport, type CADModel } from '@/lib/calculations/cad-engine'
 import type { StatikDaten } from '@/lib/statik-daten'
 import type { MaterialItem } from '@/types/scaffold'
-import { generateLastannahmenHTML } from './lastannahmen'
+import { erzeugeZeichnungen } from '@/lib/geruest/plan-zeichnung'
+import { pruefeGeruest } from '@/lib/geruest/regelpruefung'
+import { erzeugePlanPdf } from './plan-pdf'
+import { erzeugeDxf } from './dxf-export'
+import { erzeugeLastannahmenPdf } from './lastannahmen-pdf'
 import { erzeugeZip, type ZipDatei } from './zip'
 
 export interface StatikerPaketEingabe {
@@ -51,6 +55,9 @@ export function stuecklisteOhnePreiseCsv(materials: MaterialItem[]): string {
 export function paketDateien(e: StatikerPaketEingabe): ZipDatei[] {
   const dateien: ZipDatei[] = []
   const hatIfc = !!e.ifc && e.ifc.length > 0
+  const opt = { projektName: e.projektName, firma: e.firma, datum: e.datum }
+  const zeichnungen = erzeugeZeichnungen(e.model)
+  const protokoll = pruefeGeruest(e.model, e.statik)
 
   dateien.push({
     name: '0-Inhalt.txt',
@@ -58,24 +65,27 @@ export function paketDateien(e: StatikerPaketEingabe): ZipDatei[] {
       `Statiker-Paket – ${e.projektName}`,
       `Stand ${e.datum} · ${e.firma}`,
       '',
-      '1-Lastannahmen.html   Eingangsdaten für die Statik (Angaben des Planers, druckbar, mit Unterschriftsfeldern)',
-      '2-Geometriedaten.json Positionen und Abmessungen der Bauteile und Anker',
-      '3-Stueckliste.csv     Stückliste mit Gewichten, ohne Preise',
-      hatIfc ? '4-Geruest.ifc        Gerüst-Modell (IFC)' : '(IFC-Modell konnte nicht erzeugt werden und liegt nicht bei)',
+      '1-Geruestplan.pdf                 Vorderansicht und Grundriss mit Maßketten (Vektor-PDF)',
+      '2-Geruestplan.dxf                 dieselben Zeichnungen für CAD (Layer GERUEST, MASSE, TEXTE; Einheit mm)',
+      '3-Lastannahmen-Pruefprotokoll.pdf Eingangsdaten für die Statik (Angaben des Planers) und Prüfprotokoll nach DIN EN 12811-1',
+      '4-Stueckliste.csv                 Stückliste mit Gewichten, ohne Preise',
+      '5-Geometriedaten.json             Positionen und Abmessungen der Bauteile und Anker',
+      hatIfc ? '6-Geruest.ifc                    Gerüst-Modell (IFC)' : '(IFC-Modell konnte nicht erzeugt werden und liegt nicht bei)',
       '',
-      'Nicht enthalten: ein Gerüstplan mit Ansichten und Maßketten (noch nicht in SCAFFOLD OS vorhanden).',
+      `Regelprüfung: ${protokoll.anzahl.ok} OK, ${protokoll.anzahl.warnung} Warnungen, ${protokoll.anzahl.fehler} Fehler (siehe Prüfprotokoll).`,
       '',
-      'WICHTIG: Das Paket enthält Angaben und Geometrie, keinen Standsicherheitsnachweis und keine Berechnung.',
-      'Zulassungsdaten (Querschnitte, Werkstoffe) des Systems fehlen bewusst und sind vom Statiker zu ergänzen.',
+      'HINWEISE:',
+      '- Der Plan ist schematisch aus dem Modell erzeugt (Gerüst im Abstand der Wandabstand-Einstellung, Dächer vereinfacht). Er ersetzt keinen Aufbau- und Verwendungsplan.',
+      '- Das Paket enthält Angaben und Geometrie, keinen Standsicherheitsnachweis und keine Berechnung.',
+      '- Zulassungsdaten (Querschnitte, Werkstoffe) des Systems fehlen bewusst und sind vom Statiker zu ergänzen.',
     ].join('\n'),
   })
-  dateien.push({
-    name: '1-Lastannahmen.html',
-    data: generateLastannahmenHTML(e.model, e.statik, { projektName: e.projektName, firma: e.firma, datum: e.datum }),
-  })
-  dateien.push({ name: '2-Geometriedaten.json', data: JSON.stringify(generateStatikExport(e.model), null, 2) })
-  dateien.push({ name: '3-Stueckliste.csv', data: stuecklisteOhnePreiseCsv(e.materials) })
-  if (hatIfc) dateien.push({ name: '4-Geruest.ifc', data: e.ifc as Uint8Array })
+  dateien.push({ name: '1-Geruestplan.pdf', data: erzeugePlanPdf(zeichnungen, opt) })
+  dateien.push({ name: '2-Geruestplan.dxf', data: erzeugeDxf(zeichnungen) })
+  dateien.push({ name: '3-Lastannahmen-Pruefprotokoll.pdf', data: erzeugeLastannahmenPdf(e.model, e.statik, opt, protokoll) })
+  dateien.push({ name: '4-Stueckliste.csv', data: stuecklisteOhnePreiseCsv(e.materials) })
+  dateien.push({ name: '5-Geometriedaten.json', data: JSON.stringify(generateStatikExport(e.model), null, 2) })
+  if (hatIfc) dateien.push({ name: '6-Geruest.ifc', data: e.ifc as Uint8Array })
   return dateien
 }
 
