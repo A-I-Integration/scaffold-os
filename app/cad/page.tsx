@@ -595,6 +595,36 @@ export default function CADPage() {
     setIfcExportLaeuft(false)
   }, [model])
 
+  // Statiker-Paket: eine ZIP mit Lastannahmen-Blatt, Geometrie (JSON), Stückliste
+  // ohne Preise und IFC. Nur Angaben und Geometrie, kein Nachweis.
+  const [statikerPaketLaeuft, setStatikerPaketLaeuft] = useState(false)
+  const handleExportStatikerPaket = useCallback(async () => {
+    if (!model) return
+    setStatikerPaketLaeuft(true)
+    try {
+      const m = modelWithManual ?? model
+      let ifc: Uint8Array | null = null
+      try {
+        const { generateIFC } = await import('@/lib/export/ifc-export')
+        ifc = await generateIFC(m, 'SCAFFOLD OS Gerüstplanung')
+      } catch { ifc = null } // Paket geht auch ohne IFC; Inhalt.txt weist darauf hin
+      const { erzeugeStatikerPaket } = await import('@/lib/export/statiker-paket')
+      const zip = erzeugeStatikerPaket({
+        model: m, materials, statik: bereinigeStatikDaten(statikDaten),
+        projektName: 'Gerüstprojekt', firma: 'Ihr Unternehmen',
+        datum: new Date().toLocaleDateString('de-DE'), ifc,
+      })
+      const a = document.createElement('a')
+      a.href = URL.createObjectURL(new Blob([zip as BlobPart], { type: 'application/zip' }))
+      a.download = `Statiker-Paket-${new Date().toISOString().split('T')[0]}.zip`
+      a.click()
+      URL.revokeObjectURL(a.href)
+    } catch (err) {
+      alert('❌ Statiker-Paket fehlgeschlagen: ' + (err instanceof Error ? err.message : String(err)))
+    }
+    setStatikerPaketLaeuft(false)
+  }, [model, modelWithManual, materials, statikDaten])
+
   // Stückliste als CSV (öffnet direkt in Excel, kein Zusatzpaket nötig)
   const handleExportCSV = useCallback(() => {
     if (!materials.length) return
@@ -839,6 +869,7 @@ export default function CADPage() {
             onOpenLv={rolle === 'admin' || istStatikerLogin ? (model ? () => setLvOffen(true) : exportOhneModellHinweis) : undefined}
             onExportStatikGeometrie={model ? handleExportStatik : exportOhneModellHinweis}
             onExportIFC={!model ? exportOhneModellHinweis : (ifcExportLaeuft ? undefined : handleExportIFC)}
+            onExportStatikerPaket={!model ? exportOhneModellHinweis : (statikerPaketLaeuft ? undefined : handleExportStatikerPaket)}
             onExportCSV={model ? handleExportCSV : exportOhneModellHinweis}
             customers={kunden}
             kundenLadeFehler={kundenLadeFehler}

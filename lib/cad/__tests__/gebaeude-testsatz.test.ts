@@ -136,5 +136,5 @@ describe('Worker-Bündel (workers/ki/teile.js) ist aktuell und liefert die Teile
     const js = bundle.teileAusPunkten(px, py, pz)
     expect(js.mehrteilig).toBe(true)
     expect(JSON.stringify(js.teile)).toBe(JSON.stringify(ts.teile))
-  })
+  }, 60_000) // rechenintensiv (zehntausende Punkte, zweimal analysiert); 5 s reichen auf langsamen Rechnern nicht
 })
