@@ -69,7 +69,8 @@ export default function BuildingForm({ building, systemId, onChange, onSystemCha
         const quader = ext === '.obj' ? quaderAusObj(await file.text()) : quaderAusStl(await file.arrayBuffer());
         if (!quader) { setAnalyseHinweis('❌ In der Datei wurden keine Eckpunkte gefunden.'); return; }
         const dreiecke = ext === '.obj' ? dreieckeAusObj(await file.text()) : dreieckeAusStl(await file.arrayBuffer());
-        setModellImport({ name: file.name, quader, dreiecke, einheit: 'm', oben: 'z' });
+        // Üblich: OBJ aus Grafik-/3D-Programmen hat Y oben, STL aus CAD hat Z oben (per Auswahl umstellbar)
+        setModellImport({ name: file.name, quader, dreiecke, einheit: 'm', oben: ext === '.obj' ? 'y' : 'z' });
       } catch (err: any) {
         setAnalyseHinweis('❌ Datei konnte nicht gelesen werden: ' + (err?.message || 'Fehler'));
       }
