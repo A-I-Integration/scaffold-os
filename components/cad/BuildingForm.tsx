@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef, useMemo } from 'react'
+import { useState, useRef, useMemo, useEffect } from 'react'
 import { BuildingParams, WANDABSTAND_MIN_M, WANDABSTAND_MAX_M } from '@/lib/calculations/cad-engine'
 import BalkonEditor from './BalkonEditor'
 import UmrissEditor from './UmrissEditor'
@@ -41,6 +41,14 @@ export default function BuildingForm({ building, systemId, onChange, onSystemCha
     if (!modellImport) return null
     try { return erkenneBaukoerper(dreieckeMitHoehe(modellImport.dreiecke, modellImport.einheit, modellImport.oben)) } catch { return null }
   }, [modellImport])
+  // Mehrteiliges Gebäude erkannt: Teile sofort übernehmen (Person muss nichts anklicken, kann aber unten prüfen/ändern).
+  // Läuft erneut, wenn „oben“/Einheit oder die Turm-Auswahl geändert wird.
+  useEffect(() => {
+    if (!modellImport || !baukoerper?.mehrteilig) return
+    const abschnitte = abschnitteAusBaukoerpern(baukoerper, nurTurm)
+    onChange({ ...building, umriss: undefined, sections: abschnitte, lengthM: Math.round(abschnitte.reduce((t, a) => t + a.laengeM, 0) * 100) / 100, widthM: baukoerper.tiefeMaxM, heightM: baukoerper.gesamtHoeheM, sides: ['front', 'back', 'left', 'right'] })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [baukoerper, nurTurm])
   // Phase 68-E: welche Felder hat die letzte Analyse automatisch befuellt?
   const analyseFelderRef = useRef<string[]>([])
 
@@ -245,7 +253,7 @@ export default function BuildingForm({ building, systemId, onChange, onSystemCha
                   </div>
                   {baukoerper?.mehrteilig && (
                     <div className='rounded-lg bg-[#fff7ed] p-2 space-y-1'>
-                      <p>Gebäudeteile erkannt (von links nach rechts):</p>
+                      <p><b>Gebäudeteile automatisch erkannt und übernommen</b> (von links nach rechts) – bitte Maße und Dachformen unter „Mehrteiliges Gebäude“ prüfen:</p>
                       <ul className='list-disc pl-4'>
                         {baukoerper.teile.map((t, i) => (
                           <li key={i}>{baukoerper.turmIndex === i ? <b>Turm</b> : `Teil ${i + 1}`}: {t.laengeM} × {t.tiefeM} m, Wand {t.hoeheM} m{t.dachHoeheM > 0 ? ` + ${t.dachForm === 'walmdach' ? 'Spitze/Helm' : 'Dach'} ${t.dachHoeheM} m` : ''}</li>
@@ -273,8 +281,10 @@ export default function BuildingForm({ building, systemId, onChange, onSystemCha
                   )}
                   <p>Ergebnis: <b>{m.lengthM} m</b> lang × <b>{m.widthM} m</b> breit × <b>{m.heightM} m</b> hoch (umschließender Quader, inkl. Dach/Zubehör – bitte prüfen).</p>
                   <div className='flex gap-2'>
+                    {!baukoerper?.mehrteilig && (
                     <button type='button' className='rounded-lg bg-[#0071e3] px-3 py-1 font-semibold text-white'
                       onClick={() => { onChange({ ...building, lengthM: m.lengthM, widthM: m.widthM, heightM: m.heightM }); setModellImport(null); setAnalyseHinweis('3D-Modell: Länge, Breite und Höhe übernommen, bitte prüfen. Geschosse, Dachform und Fenster bitte selbst eintragen.') }}>Maße übernehmen</button>
+                    )}
                     {grundriss && !baukoerper?.mehrteilig && (
                       <button type='button' className='rounded-lg bg-[#0071e3] px-3 py-1 font-semibold text-white'
                         onClick={() => { const box = umrissBox(grundriss.umriss); onChange({ ...building, umriss: grundriss.umriss, sections: undefined, lengthM: Math.round(box.lengthM * 100) / 100, widthM: Math.round(box.widthM * 100) / 100, heightM: m.heightM }); setModellImport(null); setAnalyseHinweis(`Grundriss übernommen: ${FORM_NAME[grundriss.form]}, ${grundriss.ecken} Ecken. Höhe ${m.heightM} m. Dachform, Geschosse und Fenster bitte selbst eintragen; Ecken unter „Gebäude-Umriss“ prüfen.`) }}>Grundriss übernehmen</button>
