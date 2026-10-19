@@ -381,19 +381,20 @@ export default function CADPage() {
     if (!(building.lengthM > 0)) f.push('Länge')
     if (!(building.widthM > 0)) f.push('Breite')
     if (!(building.heightM > 0)) f.push('Höhe')
-    if (!(building.floors >= 1)) f.push('Geschosse')
     return f
-  }, [building.lengthM, building.widthM, building.heightM, building.floors])
+  }, [building.lengthM, building.widthM, building.heightM])
 
   const generate = useCallback(() => {
     // Phase 68-H: Ohne Grundmaße kein Modell erzeugen (sonst entsteht
     // bei leeren Feldern nach jedem Tastendruck ein defektes/NaN-Modell,
     // sobald autoGenerate wieder aktiviert wird).
-    if (building.lengthM <= 0 || building.widthM <= 0 || building.heightM <= 0 || building.floors < 1) {
+    if (building.lengthM <= 0 || building.widthM <= 0 || building.heightM <= 0) {
       setModel(null);
       return;
     }
-    const newModel = generateCADModel(building, systemId)
+    // Geschosse sind keine Pflicht: fehlen sie, werden sie aus der Höhe geschätzt (ca. 3 m je Geschoss)
+    const gebaeude = building.floors >= 1 ? building : { ...building, floors: Math.max(1, Math.round(building.heightM / 3)), floorHeightsM: [] }
+    const newModel = generateCADModel(gebaeude, systemId)
     const collisionWarnings = checkCollisions(newModel)
     const featureWarnings = detectFeatureCollisions(newModel, generateBuildingFeatures(building))
     // NEU (Marktvergleich-Lücke 2): echte geometrische Kollisionsprüfung
