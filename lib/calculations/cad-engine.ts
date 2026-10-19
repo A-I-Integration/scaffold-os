@@ -45,6 +45,8 @@ export interface GeruestOptionen {
   treppe?: boolean
 }
 
+/** Das Gebäude ist in der 3D-Szene um 0,5 m gegenüber den Gerüst-Koordinaten versetzt (siehe Seiten-Geometrie). */
+export const GEBAEUDE_SZENEN_VERSATZ_M = 0.5
 export const WANDABSTAND_MIN_M = 0.05
 export const WANDABSTAND_MAX_M = 0.6
 /** ANNAHME: bis 0,30 m Wandabstand ist ohne Zusatzmaßnahmen üblich – bitte mit der Aufbau- und Verwendungsanleitung prüfen. */
@@ -829,11 +831,13 @@ export function generateScaffoldComponents(model: CADModel): ScaffoldComponent3D
     return (l.versatzM ?? 0) + ((l.tiefeM ?? w0) - w0) / 2
   }
   if (!building.umriss && (building.heightM > 15 || building.overhangM > 0.5)) {
+    // Schutzdach 0,2 m außerhalb der inneren Gerüstlinie der Vorderseite (bisher fest 0,5 bei Innenlinie 0,3)
+    const schutzdachZ = (fields.find((f) => f.side === 'front')?.positionZ ?? 0.3) + 0.2
     const roofCount = Math.max(1, Math.ceil(building.lengthM / 6))
     for (let i = 0; i < roofCount; i++) {
       const xPos = (i * 6) - building.lengthM / 2 + 3
       if (abschnittOhneGeruestBeiX(building, xPos)) continue
-      components.push({ id: `roof-${i}`, type: 'protection_roof', articleNumber: 'SD-001', name: 'Schutzdach', position: [xPos, hoeheBeiX(xPos) + 0.5, 0.5 + frontVersatzBeiX(xPos)], rotation: [0.3, 0, 0], scale: [6, 0.1, 2], color: colorRoof })
+      components.push({ id: `roof-${i}`, type: 'protection_roof', articleNumber: 'SD-001', name: 'Schutzdach', position: [xPos, hoeheBeiX(xPos) + 0.5, schutzdachZ + frontVersatzBeiX(xPos)], rotation: [0.3, 0, 0], scale: [6, 0.1, 2], color: colorRoof })
     }
   }
 
@@ -944,6 +948,12 @@ export function generateCADModel(
     building = { ...building, umriss: undefined }
   }
 
+  // Rechteck-Modus: Die Gerüstlinien sind in einem Koordinatensystem gerechnet, in dem das Gebäude
+  // um GEBAEUDE_SZENEN_VERSATZ_M größer ist (Lv = L + 1, Wv = W + 1, Vorderkante bei z = -0,5 gezeichnet).
+  // Damit der eingestellte Wandabstand der tatsächliche Abstand Wand → Innenlinie ist (wie im Umriss-Modus),
+  // wird der Versatz hier einmal abgezogen. Vorher stand das Gerüst 0,5 m weiter von der Wand weg als eingestellt.
+  distanceToBuildingM -= GEBAEUDE_SZENEN_VERSATZ_M
+
   if (building.lengthM <= 0) warnings.push({ type: 'error', code: 'BUILDING_LENGTH_ZERO', message: 'Gebäudelänge muss größer als 0 sein.' })
   // Mehrteiliges Gebäude: bei geraden Abschnitten (Höhenstufen) folgt das
   // Gerüst den Abschnitten. Länge/Höhe des Modells werden dann aus den
@@ -1000,7 +1010,7 @@ export function generateCADModel(
       const tiefe = (sec: BuildingSection) => sec.tiefeM && sec.tiefeM > 0 ? sec.tiefeM : w
       const mitteZ = (sec: BuildingSection) => -w / 2 - 0.5 + (sec.versatzM ?? 0)
       const rueckZ = (sec: BuildingSection) => mitteZ(sec) - tiefe(sec) / 2
-      const wandAbst = distanceToBuildingM + 0.5 // Wand → Mitte der inneren Gerüstlinie
+      const wandAbst = distanceToBuildingM + GEBAEUDE_SZENEN_VERSATZ_M // Wand → Mitte der inneren Gerüstlinie (= eingestellter Wandabstand)
       const fzVorne = (sec: BuildingSection) => mitteZ(sec) + tiefe(sec) / 2 + wandAbst
       const fzHinten = (sec: BuildingSection) => rueckZ(sec) - wandAbst
       const tiefeDivs = new Map<number, typeof fieldDiv>()
