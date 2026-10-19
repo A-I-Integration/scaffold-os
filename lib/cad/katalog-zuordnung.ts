@@ -187,3 +187,24 @@ export function katalogListenName(systemId: string): string {
   const l = katalogListeFuerSystem(systemId)
   return (l && MJ_NAME[l]) || 'MJ'
 }
+
+/**
+ * Überträgt die Wahl von Bauteil `id` auf alle gleichen Bauteile (gleicher Typ und gleicher Standard-Artikel).
+ * `nr` = null entfernt die Wahl bei allen. Ohne Bauteil `id` unverändert. Verändert `wahl` nicht.
+ */
+export function uebertrageAufGleiche(
+  bauteile: { id: string; type: string; articleNumber: string }[],
+  wahl: Record<string, string>,
+  id: string,
+  nr: string | null,
+): Record<string, string> {
+  const q = bauteile.find((c) => c.id === id)
+  if (!q) return wahl
+  const neu = { ...wahl }
+  for (const c of bauteile) {
+    if (c.type !== q.type || c.articleNumber !== q.articleNumber) continue
+    if (nr) neu[c.id] = nr
+    else delete neu[c.id]
+  }
+  return neu
+}

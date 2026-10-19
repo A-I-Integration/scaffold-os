@@ -108,3 +108,25 @@ describe('Aufmaß: Katalogwahl je Position', () => {
     expect(stelleStandardWiederHer(pos)).toBe(pos)
   })
 })
+
+import { uebertrageAufGleiche } from '../katalog-zuordnung'
+
+describe('uebertrageAufGleiche', () => {
+  const b = [
+    { id: 'a1', type: 'board', articleNumber: 'BB-001' }, { id: 'a2', type: 'board', articleNumber: 'BB-001' },
+    { id: 'a3', type: 'board', articleNumber: 'BB-002' }, { id: 'r1', type: 'railing', articleNumber: 'BB-001' },
+  ]
+  it('überträgt nur auf gleichen Typ UND gleichen Standard-Artikel', () => {
+    const r = uebertrageAufGleiche(b, {}, 'a1', '000701')
+    expect(r).toEqual({ a1: '000701', a2: '000701' })
+  })
+  it('null entfernt die Wahl bei allen gleichen, andere bleiben', () => {
+    const r = uebertrageAufGleiche(b, { a1: '1', a2: '1', a3: '2' }, 'a2', null)
+    expect(r).toEqual({ a3: '2' })
+  })
+  it('unbekannte ID: unverändert (gleiche Referenz); Eingabe wird nicht verändert', () => {
+    const w = { a3: '2' }
+    expect(uebertrageAufGleiche(b, w, 'zz', '1')).toBe(w)
+    uebertrageAufGleiche(b, w, 'a1', '9'); expect(w).toEqual({ a3: '2' })
+  })
+})
