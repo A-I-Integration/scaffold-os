@@ -14,8 +14,9 @@ import { dreieckeMitHoehe, EINHEIT_FAKTOR, type Achse, type Einheit } from '@/li
 import { erkenneBaukoerper, type BaukoerperErgebnis, type ErkannterTeil } from '@/lib/cad/baukoerper-erkennung'
 import type { BuildingSection } from '@/lib/calculations/cad-engine'
 
-export type TeilTyp = 'schiff' | 'turm' | 'anbau'
-export type TeilQuelle = 'obj-stl' | 'ply'
+/** 'bauteil' = allgemeines Teil ohne erkannte Rolle (z. B. aus DXF-Linien: Maße sind bekannt, ob Schiff oder Turm weiß die Zeichnung nicht) */
+export type TeilTyp = 'schiff' | 'turm' | 'anbau' | 'bauteil'
+export type TeilQuelle = 'obj-stl' | 'ply' | 'dxf'
 
 export interface GebaeudeTeil {
   id: string
@@ -34,6 +35,8 @@ export interface GebaeudeTeil {
   /** Viereck in Metern (x entlang der Länge, z quer), gegen den Uhrzeigersinn */
   grundriss: { x: number; z: number }[]
   quelle: TeilQuelle
+  /** Hinweis an die Person (z. B. „Höhe ergänzen“), wenn ein Wert nicht aus der Datei stammt */
+  hinweis?: string
 }
 
 export interface ModellAnalyse {
@@ -163,7 +166,7 @@ export function abschnitteAusTeileListe(teile: GebaeudeTeil[], nurTurm = false):
   const tiefeMax = Math.max(...teile.map((t) => t.tiefeM))
   const hatTurm = teile.some((t) => t.typ === 'turm')
   return teile.map((t, i) => ({
-    bezeichnung: t.typ === 'turm' ? 'Turm' : t.typ === 'schiff' ? (hatTurm ? 'Kirchenschiff' : 'Hauptbau') : `Anbau ${i + 1}`,
+    bezeichnung: t.typ === 'turm' ? 'Turm' : t.typ === 'schiff' ? (hatTurm ? 'Kirchenschiff' : 'Hauptbau') : t.typ === 'bauteil' ? `Gebäudeteil ${i + 1}` : `Anbau ${i + 1}`,
     laengeM: t.laengeM,
     hoeheM: t.hoeheM,
     ...(Math.abs(t.tiefeM - tiefeMax) > 0.05 ? { tiefeM: t.tiefeM } : {}),

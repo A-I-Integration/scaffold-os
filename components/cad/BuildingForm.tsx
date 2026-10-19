@@ -11,6 +11,7 @@ import { quaderAusObj, quaderAusStl, masseAusQuader, dreieckeAusObj, dreieckeAus
 import { erkenneGrundriss, FORM_NAME } from '@/lib/cad/grundriss-erkennung'
 import { analysiereDreiecke, abschnitteAusTeilen, abschnitteAusTeileListe, vorgabeAchseEinheit, type GebaeudeTeil } from '@/lib/cad/modell-analyse'
 import { umrissBox } from '@/lib/calculations/cad-umriss'
+import { leseDxfUmriss, mitHoehen, DXF_FORM_NAME, type DxfUmrissErgebnis } from '@/lib/cad/dxf-umriss'
 
 interface Props {
   building: BuildingParams
@@ -31,6 +32,8 @@ export default function BuildingForm({ building, systemId, onChange, onSystemCha
   const [kirche, setKirche] = useState<KircheMasse>(KIRCHE_STANDARD)
   // 3D-Modell (OBJ/STL, z. B. aus SketchUp): Außenmaße im Browser lesen, Einheit/„oben“ wählt die Person
   const [modellImport, setModellImport] = useState<{ name: string; format: 'obj' | 'stl'; quader: Quader; dreiecke: Float32Array; einheit: Einheit; oben: Achse; einheitGeschaetzt: boolean } | null>(null)
+  // DXF-Zeichnung: Gebäudeumriss aus den Linien gelesen (lib/cad/dxf-umriss.ts); Höhen trägt die Person ein
+  const [dxfImport, setDxfImport] = useState<{ name: string; inhalt: string; ergebnis: DxfUmrissErgebnis; hoehen: string[] } | null>(null)
   // Grundriss (Rechteck, L-Form, Ecken …) automatisch aus dem 3D-Modell erkennen
   const grundriss = useMemo(() => {
     if (!modellImport) return null
@@ -85,6 +88,20 @@ export default function BuildingForm({ building, systemId, onChange, onSystemCha
         setAnalyseHinweis('❌ Datei konnte nicht gelesen werden: ' + (err?.message || 'Fehler'));
       }
       return;
+    }
+    // DXF: zuerst die Linien lesen (Umriss, Ecken, Teile). Gelingt das nicht (kein geschlossener Umriss), läuft
+    // unverändert der bisherige Weg über die Beschriftungen/KI weiter.
+    let dxfVorspann = ''
+    if (ext === '.dxf' && file.size <= 50 * 1024 * 1024) {
+      try {
+        const inhalt = await file.text()
+        const r = leseDxfUmriss(inhalt)
+        if (r.ok) {
+          setDxfImport({ name: file.name, inhalt, ergebnis: r, hoehen: Array(Math.max(1, r.teile?.length ?? 1)).fill('') })
+          return
+        }
+        dxfVorspann = 'Aus den Linien der DXF ließ sich kein geschlossener Gebäudeumriss lesen – stattdessen werden die Beschriftungen ausgewertet. '
+      } catch { /* bisheriger Weg */ }
     }
     if ((!ERLAUBT.includes(file.type) && !NEU_ERLAUBT.includes(ext)) || DXF_ARTEN.includes(ext)) {
       setAnalyseHinweis(
@@ -166,7 +183,7 @@ export default function BuildingForm({ building, systemId, onChange, onSystemCha
       }
 
       if (Object.keys(patch).length === 0) {
-        setAnalyseHinweis('Keine eindeutig belegten Maße gefunden – bitte Werte manuell eintragen.')
+        setAnalyseHinweis(dxfVorspann + 'Keine eindeutig belegten Maße gefunden – bitte Werte manuell eintragen.')
       } else {
         // Phase 68-E: Felder, die die VORHERIGE Analyse automatisch
         // befuellt hatte, aber die NEUE Analyse NICHT mehr liefert,
@@ -187,12 +204,64 @@ export default function BuildingForm({ building, systemId, onChange, onSystemCha
         if (vorherigeAutoFelder.includes('sections') && !('sections' in patch)) delete neuesGebaeude.sections
         onChange(neuesGebaeude)
         const uebernommen = Object.keys(patch).length
-        setAnalyseHinweis(`${ergebnis.ohneKi ? 'Direkt aus dem Plan erkannt (ohne KI)' : 'KI-Vorschlag (aus der Queue)'}: ${uebernommen} Angabe(n) übernommen, bitte prüfen.${ergebnis.hoeheGeschaetzt ? ' Höhe geschätzt aus Geschosszahl.' : ''}${ergebnis.abschnitte?.length >= 2 ? ` ${ergebnis.abschnitte.length} Höhenabschnitte erkannt (siehe „Mehrteiliges Gebäude“).` : ''}${ergebnis.abschnitte?.some((a: any) => a.spitzeM) ? ' Spitzer Aufbau (z. B. Turmhelm) erkannt und als Walmdach/Pyramide eingetragen – Schafthöhe und Spitze bitte prüfen; welche Abschnitte eingerüstet werden, wählst du unter „Mehrteiliges Gebäude“.' : ''}${Array.isArray(ergebnis.hinweise) && ergebnis.hinweise.length ? ' Hinweise: ' + ergebnis.hinweise.join(' ') : ''}${ergebnis.verworfen?.length ? ' Verworfen (unbelegt): ' + ergebnis.verworfen.join('; ') : ''}`)
+        setAnalyseHinweis(`${dxfVorspann}${ergebnis.ohneKi ? 'Direkt aus dem Plan erkannt (ohne KI)' : 'KI-Vorschlag (aus der Queue)'}: ${uebernommen} Angabe(n) übernommen, bitte prüfen.${ergebnis.hoeheGeschaetzt ? ' Höhe geschätzt aus Geschosszahl.' : ''}${ergebnis.abschnitte?.length >= 2 ? ` ${ergebnis.abschnitte.length} Höhenabschnitte erkannt (siehe „Mehrteiliges Gebäude“).` : ''}${ergebnis.abschnitte?.some((a: any) => a.spitzeM) ? ' Spitzer Aufbau (z. B. Turmhelm) erkannt und als Walmdach/Pyramide eingetragen – Schafthöhe und Spitze bitte prüfen; welche Abschnitte eingerüstet werden, wählst du unter „Mehrteiliges Gebäude“.' : ''}${Array.isArray(ergebnis.hinweise) && ergebnis.hinweise.length ? ' Hinweise: ' + ergebnis.hinweise.join(' ') : ''}${ergebnis.verworfen?.length ? ' Verworfen (unbelegt): ' + ergebnis.verworfen.join('; ') : ''}`)
       }
     } catch (err: any) {
       setAnalyseHinweis('❌ ' + err.message)
     }
     setAnalyseLaeuft(false)
+  }
+
+  function dxfNeuLesen(einheit: Einheit) {
+    if (!dxfImport) return
+    const r = leseDxfUmriss(dxfImport.inhalt, { einheit })
+    if (r.ok) setDxfImport({ ...dxfImport, ergebnis: r, hoehen: Array(Math.max(1, r.teile?.length ?? 1)).fill('') })
+    else setAnalyseHinweis('❌ Mit dieser Einheit ergibt sich kein brauchbarer Umriss: ' + r.hinweise.join(' '))
+  }
+
+  function dxfUebernehmen() {
+    if (!dxfImport) return
+    const e = dxfImport.ergebnis
+    const eingaben = dxfImport.hoehen.map((h) => { const v = parseFloat(h.replace(',', '.')); return Number.isFinite(v) && v > 0 ? v : undefined })
+    const offen: string[] = []
+    let neu: BuildingParams
+    let text: string
+    if (e.teile && e.teile.length >= 2) {
+      // Mehrere Teile: derselbe Weg wie bei OBJ/STL/PLY. Teile ohne Höhe bekommen vorläufig den bisherigen Formularwert (Hinweis bleibt).
+      const teile = mitHoehen(e.teile, eingaben, building.heightM)
+      teile.forEach((t, i) => { if (t.hinweis) offen.push(`Teil ${i + 1}: ${t.hinweis}`) })
+      const abschnitte = abschnitteAusTeileListe(teile)
+      neu = {
+        ...building, umriss: undefined, sections: abschnitte, sides: ['front', 'back', 'left', 'right'],
+        lengthM: Math.round(abschnitte.reduce((sum, a) => sum + a.laengeM, 0) * 100) / 100,
+        widthM: Math.max(...teile.map((t) => t.tiefeM)),
+        heightM: Math.max(...abschnitte.map((a) => a.hoeheM + (a.roofHoeheM ?? 0))),
+      }
+      text = `${DXF_FORM_NAME[e.form]} aus der DXF übernommen: ${teile.length} Gebäudeteile (siehe „Mehrteiliges Gebäude“).`
+    } else if (e.teile && e.teile.length === 1) {
+      const t = mitHoehen(e.teile, eingaben)[0]
+      const patch: Partial<BuildingParams> = { umriss: undefined, sections: undefined, lengthM: t.laengeM, widthM: t.tiefeM }
+      const dachMap: Record<string, BuildingParams['roofForm']> = { Satteldach: 'satteldach', Flachdach: 'flachdach', Pultdach: 'pultdach', Walmdach: 'walmdach', Mansarddach: 'mansardendach', Zeltdach: 'walmdach' }
+      if (eingaben[0]) { patch.heightM = eingaben[0]; patch.eavesHeightM = eingaben[0]; patch.roofForm = 'flachdach'; patch.roofHeightM = 0 }
+      else if (t.hoeheM > 0) { // Höhe aus der Beschriftung im Plan (wörtlich belegt)
+        patch.eavesHeightM = t.hoeheM
+        patch.heightM = e.textAngaben.hoeheM ?? t.hoeheM
+        if (e.textAngaben.dachform && dachMap[e.textAngaben.dachform]) patch.roofForm = dachMap[e.textAngaben.dachform]
+      }
+      if (!(t.hoeheM > 0)) offen.push(t.hinweis ?? 'Höhe ergänzen')
+      neu = { ...building, ...patch }
+      text = `Rechteck aus der DXF übernommen: ${t.laengeM} × ${t.tiefeM} m.${t.hoeheM > 0 && !eingaben[0] ? ' Höhe stammt aus der Beschriftung im Plan – bitte prüfen.' : ''}`
+    } else {
+      // Form nicht in einfache Teile gliederbar (z. B. schräge Wände): Umriss-Modus wie beim 3D-Modell
+      const box = umrissBox(e.umriss)
+      const h = eingaben[0]
+      neu = { ...building, umriss: e.umriss, sections: undefined, lengthM: Math.round(box.lengthM * 100) / 100, widthM: Math.round(box.widthM * 100) / 100, ...(h ? { heightM: h, eavesHeightM: h } : {}) }
+      if (!h) offen.push('Höhe ergänzen')
+      text = `${DXF_FORM_NAME[e.form]} mit ${e.ecken} Ecken als Umriss übernommen – Ecken unter „Gebäude-Umriss“ prüfen.`
+    }
+    onChange(neu)
+    setDxfImport(null)
+    setAnalyseHinweis(`${text}${offen.length ? ' Höhe ergänzen: ' + offen.join('; ') + '.' : ''} Dachform, Geschosse und Fenster bitte selbst eintragen. ${e.hinweise.join(' ')}`.trim())
   }
 
   const update = (key: keyof BuildingParams, value: any) => {
@@ -305,6 +374,38 @@ export default function BuildingForm({ building, systemId, onChange, onSystemCha
                         onClick={() => { const box = umrissBox(grundriss.umriss); onChange({ ...building, umriss: grundriss.umriss, sections: undefined, lengthM: Math.round(box.lengthM * 100) / 100, widthM: Math.round(box.widthM * 100) / 100, heightM: m.heightM }); setModellImport(null); setAnalyseHinweis(`Grundriss übernommen: ${FORM_NAME[grundriss.form]}, ${grundriss.ecken} Ecken. Höhe ${m.heightM} m. Dachform, Geschosse und Fenster bitte selbst eintragen; Ecken unter „Gebäude-Umriss“ prüfen.`) }}>Grundriss übernehmen</button>
                     )}
                     <button type='button' className='rounded-lg bg-black/10 px-3 py-1' onClick={() => setModellImport(null)}>Verwerfen</button>
+                  </div>
+                </div>
+              )
+            })()}
+            {dxfImport && (() => {
+              const e = dxfImport.ergebnis
+              const wahl = 'rounded-lg border border-black/10 bg-white px-2 py-1 text-[11px]'
+              const eingabe = 'w-20 rounded-lg border border-black/10 bg-white px-2 py-1 text-[11px]'
+              const setzeHoehe = (i: number, v: string) => setDxfImport({ ...dxfImport, hoehen: dxfImport.hoehen.map((h, k) => (k === i ? v : h)) })
+              return (
+                <div className='rounded-lg border border-black/10 bg-white p-2 space-y-2 text-[11px] text-[#424245]'>
+                  <p className='font-semibold'>DXF-Zeichnung „{dxfImport.name}“ gelesen</p>
+                  <p className='rounded-lg bg-[#f0f7ff] p-2'>Umriss aus den Linien erkannt: <b>{DXF_FORM_NAME[e.form]}</b> mit <b>{e.ecken} Ecken</b>{e.innenecken > 0 ? ` (${e.innenecken} Innenecke${e.innenecken > 1 ? 'n' : ''})` : ''}, <b>{e.laengeM} × {e.breiteM} m</b>, {e.flaecheM2} m². Das ist ein Vorschlag – bitte mit dem Plan vergleichen.</p>
+                  <label className='block'>Einheit der Zeichnung{' '}
+                    <select className={wahl} value={e.einheit ?? 'm'} onChange={(ev) => dxfNeuLesen(ev.target.value as Einheit)}>
+                      <option value='m'>Meter</option><option value='cm'>Zentimeter</option><option value='mm'>Millimeter</option><option value='inch'>Zoll (inch)</option>
+                    </select>
+                    {' '}<span className='text-[#86868b]'>{e.einheitQuelle === 'zeichnung' ? 'aus der Datei' : e.einheitQuelle === 'vorgabe' ? 'von dir gewählt' : 'geschätzt – bitte prüfen'}</span>
+                  </label>
+                  {(e.teile ?? [null]).map((t, i) => (
+                    <div key={i} className='rounded-lg bg-[#fff7ed] p-2 space-y-1'>
+                      <p><b>{t ? `Gebäudeteil ${i + 1}` : 'Gebäude'}</b>{t ? `: ${t.laengeM} × ${t.tiefeM} m` : ''} <span className='text-[#86868b]'>(Quelle: DXF)</span></p>
+                      <label className='flex flex-wrap items-center gap-2'>Höhe (m){' '}
+                        <input className={eingabe} inputMode='decimal' value={dxfImport.hoehen[i] ?? ''} placeholder={t && t.hoeheM > 0 ? String(t.hoeheM).replace('.', ',') : ''} onChange={(ev) => setzeHoehe(i, ev.target.value)} />
+                        {(!t || t.hinweis) && <span className='text-[#b45309]'>{t?.hinweis ?? 'Höhe ergänzen'}</span>}
+                      </label>
+                    </div>
+                  ))}
+                  {e.hinweise.length > 0 && <ul className='list-disc pl-4 text-[#86868b]'>{e.hinweise.map((h, i) => <li key={i}>{h}</li>)}</ul>}
+                  <div className='flex gap-2'>
+                    <button type='button' className='rounded-lg bg-[#0071e3] px-3 py-1 font-semibold text-white' onClick={dxfUebernehmen}>{e.teile && e.teile.length >= 2 ? 'Gebäudeteile übernehmen' : 'Übernehmen'}</button>
+                    <button type='button' className='rounded-lg bg-black/10 px-3 py-1' onClick={() => setDxfImport(null)}>Verwerfen</button>
                   </div>
                 </div>
               )
