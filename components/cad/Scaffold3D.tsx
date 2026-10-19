@@ -24,7 +24,7 @@ import { bauteilFarbe, type FarbModus } from '@/lib/cad/bauteil-farben'
 import { kantenSchluessel } from '@/types/cad-layers'
 import type { CADNote } from '@/types/cad-notes'
 import { passendeArtikel, artikelLabel, katalogListeFuerSystem } from '@/lib/cad/katalog-zuordnung'
-import { baueLochscheibe, baueFussspindel } from '@/lib/cad/mj-geometrie'
+import { baueLochscheibe, baueFussspindel, baueUniRahmen, baueRiegel } from '@/lib/cad/mj-geometrie'
 import type { CustomDimension } from '@/types/cad-dimensions'
 
 interface Props {
@@ -157,7 +157,7 @@ const TUBE_DIAMETER_M: Record<string, number> = {
 /** Treppenstufen sind technisch 'deck' (Artikel ST-001) – für Farbe und Filter zählen sie zur Treppe. */
 const istTreppenstufe = (item: ScaffoldComponent3D): boolean => item.type === 'deck' && (item.articleNumber === 'ST-001' || item.articleNumber === 'ST-002')
 
-function getVariant(item: ScaffoldComponent3D): string {
+function getVariant(item: ScaffoldComponent3D, optik: MjOptik = null): string {
   if (istTreppenstufe(item)) return 'tritt'
   if (item.type === 'frame' && item.rahmenBreiteM) {
     // Echter Leiterrahmen: zwei Stützen (innen/außen) mit Sprossen und Rosetten.
@@ -172,7 +172,9 @@ function getVariant(item: ScaffoldComponent3D): string {
     // Feld-Geländer: [Länge, 1.0, 0.04] → offener Rahmen aus Rohren.
     // Treppen-Geländer: [0.04, Höhe, 0.04] → senkrechtes Rohr.
     const [sx, sy, sz] = item.scale
-    return sy > sx * 5 && sy > sz * 5 ? 'post' : 'rail'
+    if (sy > sx * 5 && sy > sz * 5) return 'post'
+    // MJ-Modulsystem: Riegel mit Keilköpfen und Farbcode nach Länge (Variante trägt die Länge in cm)
+    return optik === 'modul' ? `mjr|${Math.round(sx * 100)}` : 'rail'
   }
   if (item.type === 'ladder') {
     // Schematische Leiter: Variante trägt die Höhe in cm (Sprossen gleichmäßig verteilt).
@@ -215,6 +217,13 @@ function getGeometry(type: string, variant: string = 'default', optik: MjOptik =
   } else {
     switch (type) {
       case 'railing': {
+        if (variant.startsWith('mjr|')) {
+          const L = Math.max(0.3, parseInt(variant.slice(4), 10) / 100 || 1)
+          const g = baueRiegel(L)
+          g.scale(1 / L, 1, 1 / 0.04) // Einheitsbox [Länge, 1,0 m, 0,04 m] wie bisher
+          geo = g
+          break
+        }
         // Offenes Geländer in der Einheitsbox [Länge, 1.0 m, 0.04 m]:
         // 3 Rohre (Handlauf, Knieleiste, unten) statt massiver Platte.
         // y-Skala ist bei Feld-Geländern immer 1.0 m, z-Skala 0.04 m →
@@ -336,6 +345,16 @@ function getGeometry(type: string, variant: string = 'default', optik: MjOptik =
         break
       case 'frame': {
         if (variant.startsWith('rahmen')) {
+          if (optik === 'mj') {
+            // UNI-Vertikalrahmen (Katalog): Stiele, Querriegel, Rohrzapfen, Kippstifte – keine Lochscheiben
+            const [hU, bU] = variant.slice('rahmen|'.length).split('|')
+            const HU = parseInt(hU, 10) / 100, BU = parseInt(bU, 10) / 100
+            const zoU = Math.max(0.2, BU - 0.075)
+            const g = baueUniRahmen(HU, zoU, BU >= 1.0)
+            g.scale(1 / 0.073, 1 / HU, 1 / 0.04)
+            geo = g
+            break
+          }
           // Leiterrahmen in echten Metern um den Mittelpunkt der Innenstütze (x = 0, z = 0):
           // Außenstütze bei z = Rahmenbreite − 0,075, Sprossen oben/mitte/unten, Rosetten alle 0,5 m.
           const [hS, bS] = variant.slice('rahmen|'.length).split('|')
@@ -494,8 +513,8 @@ const MATERIAL_CACHE = new Map<string, THREE.MeshStandardMaterial>()
 const METALL_TYPEN = new Set(['frame', 'diagonal', 'railing', 'corner_brace', 'console', 'coupling', 'anchor', 'footplate', 'deck', 'stair'])
 const HOLZ_TYPEN = new Set(['board', 'load_plate'])
 
-function getMaterial(type: string, color: THREE.Color, matt = false): THREE.MeshStandardMaterial {
-  const key = `${type}-${color.getHexString()}${matt ? '-m' : ''}`
+function getMaterial(type: string, color: THREE.Color, matt = false, vertexFarben = false): THREE.MeshStandardMaterial {
+  const key = `${type}-${color.getHexString()}${matt ? '-m' : ''}${vertexFarben ? '-vc' : ''}`
   if (MATERIAL_CACHE.has(key)) return MATERIAL_CACHE.get(key)!
   const istMetall = METALL_TYPEN.has(type)
   const istHolz = HOLZ_TYPEN.has(type)
@@ -510,6 +529,7 @@ function getMaterial(type: string, color: THREE.Color, matt = false): THREE.Mesh
     // Im Farbmodus „Nach Bauteil“ darum weißes Material, sonst würde die Farbe quadriert
     // (dunkel/verfälscht). Der Real-Modus bleibt wie bisher.
     color: matt ? new THREE.Color('#ffffff') : color,
+    vertexColors: vertexFarben,
     // Farbmodus „Nach Bauteil“: matt, damit die Farbe nicht vom Metallglanz abgedunkelt wird
     metalness: matt ? 0.05 : istHolz ? 0.0 : istRot ? 0.3 : 0.55,
     roughness: matt ? 0.6 : istHolz ? 0.8 : istRot ? 0.55 : 0.55,
@@ -574,7 +594,7 @@ function InstancedBauteile({
   const baseColor = useMemo(() => new THREE.Color(farbModus === 'bauteil' ? bauteilFarbe(farbTyp) : (COLOR_MAP[farbTyp] || '#888888')), [farbTyp, farbModus])
   const optik = useContext(MjOptikKontext)
   const geometry = useMemo(() => getGeometry(type, variant, optik), [type, variant, optik])
-  const material = useMemo(() => getMaterial(type, baseColor, farbModus === 'bauteil'), [type, baseColor, farbModus])
+  const material = useMemo(() => getMaterial(type, baseColor, farbModus === 'bauteil', variant.startsWith('mjr|')), [type, variant, baseColor, farbModus])
   const tube = isTube(type, variant)
 
   // ─── Matrizen setzen (bei Modell-Änderung neu, nicht pro Frame) ───
@@ -773,6 +793,7 @@ const AllScaffoldComponents = memo(function AllScaffoldComponents({
   onPlacementClick?: (type: string, position: [number, number, number], side: string, levelIndex: number) => void
 }) {
   const [hoveredId, setHoveredId] = useState<string | null>(null)
+  const optik = useContext(MjOptikKontext)
 
   // NEU: LOD (Level of Detail) – bei größerer Kameradistanz werden
   // Bauteile mit viel Instanzen, aber wenig visuellem Gewicht aus der
@@ -807,13 +828,13 @@ const AllScaffoldComponents = memo(function AllScaffoldComponents({
           if (!isNaN(levelIdx) && hiddenLevels?.has(levelIdx)) return
         }
       }
-      const variant = getVariant(comp)
+      const variant = getVariant(comp, optik)
       const key = `${comp.type}|${variant}`
       if (!groups[key]) groups[key] = { type: comp.type, variant, items: [] }
       groups[key].items.push(comp)
     })
     return groups
-  }, [components, visibleTypes, lodLevel, hiddenSides, hiddenLevels, seitenVonFeld])
+  }, [components, visibleTypes, lodLevel, hiddenSides, hiddenLevels, seitenVonFeld, optik])
 
   // Kanten-Bauteile (aus denselben gefilterten Gruppen → Ebenen-/Typ-Filter
   // und LOD gelten automatisch auch für die Linien).
