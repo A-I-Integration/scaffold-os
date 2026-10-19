@@ -434,7 +434,16 @@ function parsePly(buf) {
       }
     }
   } catch (e) { ohneGeruest = null; }
-  return { laenge: r2(spanX), breite: r2(spanY), hoehe: r2(spanZ), punkte: gelesen, stufen, geruestSeiten, ohneGeruest };
+  // Gebaeudeteile (Schiff, Turm, Anbauten) mit Hoehe, Tiefe, Versatz - dieselbe Erkennung wie im Browser (teile.js,
+  // gebuendelt aus lib/cad). Nur wenn kein Geruest erkannt wurde (sonst entstehen "Teile" aus Geruestschichten).
+  let teile = null;
+  try {
+    if (!geruestSeiten) {
+      const t = require('./teile.js').teileAusPunkten(px, py, pz);
+      if (t && t.mehrteilig && t.teile.length >= 2) teile = t;
+    }
+  } catch (e) { teile = null; }
+  return { laenge: r2(spanX), breite: r2(spanY), hoehe: r2(spanZ), punkte: gelesen, stufen, geruestSeiten, ohneGeruest, teile };
 }
 
 const CAD_PROMPT = (ocrText) => `Du bist ein erfahrener Gerüstbau-Planer. Analysiere diese Grundrisse/Baupläne${ocrText ? ' (Bilder und/oder per OCR extrahierter Plan-Text, siehe unten)' : ''}.
@@ -531,6 +540,7 @@ async function verarbeiteCadAnalyseJob(tenant, job) {
         const gs = dims.geruestSeiten;
         if (gs) hinweise.unshift(`Geruest in der Punktwolke erkannt auf: ${gs.map((x) => ({ front: 'Vorne', back: 'Hinten', left: 'Links', right: 'Rechts' }[x])).join(', ')} (Zuordnung vorne/hinten/links/rechts ist eine Annahme - bitte pruefen). ${dims.ohneGeruest && !st ? 'Die Masse wurden um die erkannte Geruestschicht verringert (Annahme: das Gebaeude beginnt an der Innenkante der Geruestschicht) - bitte pruefen.' : 'Die Masse enthalten das Geruest und sind deshalb zu gross.'}`);
         if (dims.ohneGeruest && dims.stufen) hinweise.unshift('Hoehenstufen wurden bei erkanntem Geruest nicht ausgewertet (sie wuerden aus Geruestteilen entstehen) - Gebaeude als einheitlich hoch angenommen.');
+        if (dims.teile) hinweise.unshift(`Gebaeudeteile erkannt: ${dims.teile.teile.length} Teile (Hoehe, Tiefe, Versatz je Teil) - bitte pruefen.`);
         if (st) hinweise.unshift(`Gestuftes Gebaeude erkannt: ${st.abschnitte.length} Abschnitte entlang einer Achse.`);
         const antwort = {
           laenge: st ? Math.round(st.laenge * 100) / 100 : (dims.ohneGeruest ? dims.ohneGeruest.laenge : dims.laenge),
@@ -540,6 +550,8 @@ async function verarbeiteCadAnalyseJob(tenant, job) {
           geschosse: hoeheMax > 0 ? Math.max(1, Math.round(hoeheMax / 3)) : null,
           geschosseGeschaetzt: hoeheMax > 0,
           abschnitte: st ? st.abschnitte : null,
+          // additiv: Gebaeudeteile mit Tiefe/Versatz/Dach (null = nicht erkannt); aeltere Clients ignorieren das Feld
+          teile: dims.teile ? dims.teile.teile : null,
           geruestSeiten: gs || null,
           hinweise,
           zusammenfassung: `Aus Punktwolke (PLY) berechnet: ${dims.laenge} x ${dims.breite} x ${dims.hoehe} m (Begrenzungsbox ueber ${dims.punkte} Punkten)${st ? `; ${st.abschnitte.length} Hoehenstufen erkannt` : ''}.`,

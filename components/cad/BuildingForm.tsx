@@ -1,15 +1,15 @@
 'use client'
 
-import { useState, useRef, useMemo } from 'react'
+import { useState, useRef, useMemo, useEffect } from 'react'
 import { BuildingParams, WANDABSTAND_MIN_M, WANDABSTAND_MAX_M } from '@/lib/calculations/cad-engine'
 import BalkonEditor from './BalkonEditor'
 import UmrissEditor from './UmrissEditor'
 import { GERUEST_SYSTEME } from '@/lib/calculations/geruest-systeme'
 import { uploadVertragsdokument } from '@/lib/vertrag-upload-client'
 import { KIRCHE_STANDARD, kircheUebernehmen, pruefeKircheMasse, type KircheMasse } from '@/lib/cad/kirche-vorlage'
-import { quaderAusObj, quaderAusStl, masseAusQuader, dreieckeAusObj, dreieckeAusStl, draufsichtDreiecke, dreieckeMitHoehe, type Quader, type Einheit, type Achse } from '@/lib/cad/modell-import'
+import { quaderAusObj, quaderAusStl, masseAusQuader, dreieckeAusObj, dreieckeAusStl, draufsichtDreiecke, type Quader, type Einheit, type Achse } from '@/lib/cad/modell-import'
 import { erkenneGrundriss, FORM_NAME } from '@/lib/cad/grundriss-erkennung'
-import { erkenneBaukoerper, abschnitteAusBaukoerpern } from '@/lib/cad/baukoerper-erkennung'
+import { analysiereDreiecke, abschnitteAusTeilen, abschnitteAusTeileListe, vorgabeAchseEinheit, type GebaeudeTeil } from '@/lib/cad/modell-analyse'
 import { umrissBox } from '@/lib/calculations/cad-umriss'
 
 interface Props {
@@ -26,21 +26,30 @@ export default function BuildingForm({ building, systemId, onChange, onSystemCha
   const [activeTab, setActiveTab] = useState<'gebaeude' | 'geruest' | 'system'>('gebaeude')
   const [analyseLaeuft, setAnalyseLaeuft] = useState(false)
   const [analyseHinweis, setAnalyseHinweis] = useState<string | null>(null)
-  const [nurTurm, setNurTurm] = useState(true)
+  const [nurTurm, setNurTurm] = useState(false)
   const [kircheOffen, setKircheOffen] = useState(false)
   const [kirche, setKirche] = useState<KircheMasse>(KIRCHE_STANDARD)
   // 3D-Modell (OBJ/STL, z. B. aus SketchUp): Außenmaße im Browser lesen, Einheit/„oben“ wählt die Person
-  const [modellImport, setModellImport] = useState<{ name: string; quader: Quader; dreiecke: Float32Array; einheit: Einheit; oben: Achse } | null>(null)
+  const [modellImport, setModellImport] = useState<{ name: string; format: 'obj' | 'stl'; quader: Quader; dreiecke: Float32Array; einheit: Einheit; oben: Achse; einheitGeschaetzt: boolean } | null>(null)
   // Grundriss (Rechteck, L-Form, Ecken …) automatisch aus dem 3D-Modell erkennen
   const grundriss = useMemo(() => {
     if (!modellImport) return null
     try { return erkenneGrundriss({ dreiecke: draufsichtDreiecke(modellImport.dreiecke, modellImport.einheit, modellImport.oben) }) } catch { return null }
   }, [modellImport])
   // Gebäudeteile (Schiff, Turm, Chor, Anbau …) mit Höhen automatisch erkennen
-  const baukoerper = useMemo(() => {
+  const analyse = useMemo(() => {
     if (!modellImport) return null
-    try { return erkenneBaukoerper(dreieckeMitHoehe(modellImport.dreiecke, modellImport.einheit, modellImport.oben)) } catch { return null }
+    try { return analysiereDreiecke(modellImport.dreiecke, { format: modellImport.format, einheit: modellImport.einheit, oben: modellImport.oben }) } catch { return null }
   }, [modellImport])
+  const baukoerper = analyse?.ergebnis ?? null
+  // Mehrteiliges Gebäude erkannt: Teile sofort übernehmen (Person muss nichts anklicken, kann aber unten prüfen/ändern).
+  // Läuft erneut, wenn „oben“/Einheit oder die Turm-Auswahl geändert wird.
+  useEffect(() => {
+    if (!modellImport || !analyse || !baukoerper?.mehrteilig) return
+    const abschnitte = abschnitteAusTeilen(analyse, nurTurm)
+    onChange({ ...building, umriss: undefined, sections: abschnitte, lengthM: Math.round(abschnitte.reduce((t, a) => t + a.laengeM, 0) * 100) / 100, widthM: baukoerper.tiefeMaxM, heightM: baukoerper.gesamtHoeheM, sides: ['front', 'back', 'left', 'right'] })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [analyse, nurTurm])
   // Phase 68-E: welche Felder hat die letzte Analyse automatisch befuellt?
   const analyseFelderRef = useRef<string[]>([])
 
@@ -70,7 +79,8 @@ export default function BuildingForm({ building, systemId, onChange, onSystemCha
         if (!quader) { setAnalyseHinweis('❌ In der Datei wurden keine Eckpunkte gefunden.'); return; }
         const dreiecke = ext === '.obj' ? dreieckeAusObj(await file.text()) : dreieckeAusStl(await file.arrayBuffer());
         // Üblich: OBJ aus Grafik-/3D-Programmen hat Y oben, STL aus CAD hat Z oben (per Auswahl umstellbar)
-        setModellImport({ name: file.name, quader, dreiecke, einheit: 'm', oben: ext === '.obj' ? 'y' : 'z' });
+        const vorgabe = vorgabeAchseEinheit(dreiecke, ext === '.obj' ? 'obj' : 'stl');
+        setModellImport({ name: file.name, format: ext === '.obj' ? 'obj' : 'stl', quader, dreiecke, einheit: vorgabe.einheit, oben: vorgabe.oben, einheitGeschaetzt: true });
       } catch (err: any) {
         setAnalyseHinweis('❌ Datei konnte nicht gelesen werden: ' + (err?.message || 'Fehler'));
       }
@@ -130,7 +140,17 @@ export default function BuildingForm({ building, systemId, onChange, onSystemCha
       }
       // Gestuftes Gebaeude aus Punktwolke: Hoehenabschnitte uebernehmen.
       // Laenge = Summe der Abschnitte, Hoehe = hoechster Abschnitt.
-      if (Array.isArray(ergebnis.abschnitte) && ergebnis.abschnitte.length >= 2) {
+      // Gebäudeteile aus der Punktwolke (Schiff, Turm, Anbauten mit Höhe, Tiefe, Versatz): haben Vorrang vor den reinen Höhenstufen
+      if (Array.isArray(ergebnis.teile) && ergebnis.teile.length >= 2) {
+        const teile = ergebnis.teile as GebaeudeTeil[]
+        const abschnitte = abschnitteAusTeileListe(teile, nurTurm)
+        patch.sections = abschnitte
+        patch.umriss = undefined
+        if (!patch.sides) patch.sides = ['front', 'back', 'left', 'right']
+        patch.lengthM = Math.round(abschnitte.reduce((sum, a) => sum + a.laengeM, 0) * 100) / 100
+        patch.widthM = Math.max(...teile.map((t) => t.tiefeM))
+        patch.heightM = Math.max(...abschnitte.map((a) => a.hoeheM + (a.roofHoeheM ?? 0)))
+      } else if (Array.isArray(ergebnis.abschnitte) && ergebnis.abschnitte.length >= 2) {
         const abschnitte = ergebnis.abschnitte
           .filter((a: any) => a && a.laengeM > 0 && a.hoeheM > 0)
           .map((a: any, i: number) => (
@@ -233,7 +253,7 @@ export default function BuildingForm({ building, systemId, onChange, onSystemCha
                   <p>Rohmaße der Datei: {modellImport.quader.groesse.x.toFixed(2)} × {modellImport.quader.groesse.y.toFixed(2)} × {modellImport.quader.groesse.z.toFixed(2)} (X × Y × Z). Die Datei sagt nicht sicher, in welcher Einheit sie ist und was „oben“ ist – bitte wählen:</p>
                   <div className='flex flex-wrap gap-2'>
                     <label>Einheit{' '}
-                      <select className={wahl} value={modellImport.einheit} onChange={(e) => setModellImport({ ...modellImport, einheit: e.target.value as Einheit })}>
+                      <select className={wahl} value={modellImport.einheit} onChange={(e) => setModellImport({ ...modellImport, einheit: e.target.value as Einheit, einheitGeschaetzt: false })}>
                         <option value='m'>Meter</option><option value='cm'>Zentimeter</option><option value='mm'>Millimeter</option><option value='inch'>Zoll (inch)</option>
                       </select>
                     </label>
@@ -243,23 +263,26 @@ export default function BuildingForm({ building, systemId, onChange, onSystemCha
                       </select>
                     </label>
                   </div>
+                  {analyse && (
+                    <p className='text-[#86868b]'>Einheit {modellImport.einheitGeschaetzt ? 'automatisch geschätzt' : 'von dir gewählt'}; „oben“ ist nach Dateityp angenommen (OBJ: Y, STL: Z) – bitte prüfen. {analyse.hinweise.join(' ')}</p>
+                  )}
                   {baukoerper?.mehrteilig && (
                     <div className='rounded-lg bg-[#fff7ed] p-2 space-y-1'>
-                      <p>Gebäudeteile erkannt (von links nach rechts):</p>
+                      <p><b>Gebäudeteile automatisch erkannt und übernommen</b> (von links nach rechts) – bitte Maße und Dachformen unter „Mehrteiliges Gebäude“ prüfen:</p>
                       <ul className='list-disc pl-4'>
                         {baukoerper.teile.map((t, i) => (
-                          <li key={i}>{baukoerper.turmIndex === i ? <b>Turm</b> : `Teil ${i + 1}`}: {t.laengeM} × {t.tiefeM} m, Wand {t.hoeheM} m{t.dachHoeheM > 0 ? ` + ${t.dachForm === 'walmdach' ? 'Spitze/Helm' : 'Dach'} ${t.dachHoeheM} m` : ''}</li>
+                          <li key={i}>{analyse?.teile[i]?.typ === 'turm' ? <b>Turm</b> : analyse?.teile[i]?.typ === 'schiff' ? 'Hauptbau/Schiff' : `Anbau ${i + 1}`}: {t.laengeM} × {t.tiefeM} m, Wand {t.hoeheM} m{t.dachHoeheM > 0 ? ` + ${t.dachForm === 'walmdach' ? 'Spitze/Helm' : 'Dach'} ${t.dachHoeheM} m` : ''}</li>
                         ))}
                       </ul>
                       {baukoerper.turmIndex !== null && (
                         <label className='flex items-center gap-2'>
                           <input type='checkbox' checked={nurTurm} onChange={(e) => setNurTurm(e.target.checked)} />
-                          Nur den Turm einrüsten (Vorschlag – die übrigen Teile werden nur dargestellt)
+                          Nur den Turm einrüsten (sonst bekommt jedes Teil ein Gerüst; die übrigen werden dann nur dargestellt)
                         </label>
                       )}
                       <button type='button' className='rounded-lg bg-[#e8590c] px-3 py-1 font-semibold text-white'
                         onClick={() => {
-                          const abschnitte = abschnitteAusBaukoerpern(baukoerper, nurTurm)
+                          const abschnitte = abschnitteAusTeilen(analyse!, nurTurm)
                           onChange({ ...building, umriss: undefined, sections: abschnitte, lengthM: Math.round(abschnitte.reduce((t, a) => t + a.laengeM, 0) * 100) / 100, widthM: baukoerper.tiefeMaxM, heightM: baukoerper.gesamtHoeheM, sides: ['front', 'back', 'left', 'right'] })
                           setModellImport(null)
                           setAnalyseHinweis(`${baukoerper.teile.length} Gebäudeteile übernommen${baukoerper.turmIndex !== null && nurTurm ? ', nur der Turm wird eingerüstet' : ''}. Bitte Maße und Dachformen unter „Mehrteiliges Gebäude“ prüfen.`)
@@ -273,8 +296,10 @@ export default function BuildingForm({ building, systemId, onChange, onSystemCha
                   )}
                   <p>Ergebnis: <b>{m.lengthM} m</b> lang × <b>{m.widthM} m</b> breit × <b>{m.heightM} m</b> hoch (umschließender Quader, inkl. Dach/Zubehör – bitte prüfen).</p>
                   <div className='flex gap-2'>
+                    {!baukoerper?.mehrteilig && (
                     <button type='button' className='rounded-lg bg-[#0071e3] px-3 py-1 font-semibold text-white'
                       onClick={() => { onChange({ ...building, lengthM: m.lengthM, widthM: m.widthM, heightM: m.heightM }); setModellImport(null); setAnalyseHinweis('3D-Modell: Länge, Breite und Höhe übernommen, bitte prüfen. Geschosse, Dachform und Fenster bitte selbst eintragen.') }}>Maße übernehmen</button>
+                    )}
                     {grundriss && !baukoerper?.mehrteilig && (
                       <button type='button' className='rounded-lg bg-[#0071e3] px-3 py-1 font-semibold text-white'
                         onClick={() => { const box = umrissBox(grundriss.umriss); onChange({ ...building, umriss: grundriss.umriss, sections: undefined, lengthM: Math.round(box.lengthM * 100) / 100, widthM: Math.round(box.widthM * 100) / 100, heightM: m.heightM }); setModellImport(null); setAnalyseHinweis(`Grundriss übernommen: ${FORM_NAME[grundriss.form]}, ${grundriss.ecken} Ecken. Höhe ${m.heightM} m. Dachform, Geschosse und Fenster bitte selbst eintragen; Ecken unter „Gebäude-Umriss“ prüfen.`) }}>Grundriss übernehmen</button>
