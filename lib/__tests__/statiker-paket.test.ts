@@ -1,7 +1,8 @@
 import { describe, it, expect } from 'vitest'
 import { generateCADModel, generateBillOfMaterials, type BuildingParams } from '../calculations/cad-engine'
 import { crc32, erzeugeZip } from '../export/zip'
-import { generateLastannahmenHTML, escapeHtml } from '../export/lastannahmen'
+import { baueLastannahmenDaten } from '../export/lastannahmen'
+import { erzeugeLastannahmenPdf } from '../export/lastannahmen-pdf'
 import { paketDateien, stuecklisteOhnePreiseCsv, erzeugeStatikerPaket } from '../export/statiker-paket'
 import type { MaterialItem } from '@/types/scaffold'
 
@@ -53,47 +54,33 @@ describe('ZIP-Schreiber', () => {
   })
 })
 
-describe('Lastannahmen-Blatt', () => {
+const alleTexte = (d: ReturnType<typeof baueLastannahmenDaten>) => JSON.stringify(d)
+const pdfString = (b: Uint8Array) => new TextDecoder('latin1').decode(b)
+
+describe('Lastannahmen-Blatt (Daten)', () => {
   const model = generateCADModel(basis, 'layher-allround')
 
-  it('zeigt Projekt, System, Geometrie und die Angaben des Planers', () => {
-    const html = generateLastannahmenHTML(model, {
+  it('enthält Projekt, System, Geometrie und die Angaben des Planers', () => {
+    const t = alleTexte(baueLastannahmenDaten(model, {
       windnorm: 'DIN EN 1991-1-4 mit Nationalem Anhang', windzone: '2', vrefMs: 25.5, gelaende: 'III', untergrund: 'Beton / Asphalt',
       aufbau: '2026-11-02', abbau: '2026-12-15', nutzung: 'oeffentlich', bekleidung: 'netz', verankerungsgrund: 'Stahlbeton',
       sonderlasten: ['schnee'],
-    }, opt)
-    expect(html).toContain('Kirche St. Anna')
-    expect(html).toContain('Layher Allround')
-    expect(html).toContain('25,5 m/s')
-    expect(html).toContain('Zone 2')
-    expect(html).toContain('02.11.2026')
-    expect(html).toContain('Schnee / Eis')
-    expect(html).toContain('Stahlbeton')
-    expect(html).toContain(`${model.fieldCount} Felder`)
-    expect(html).toContain(`${model.anchors.length}`)
-    expect(html).not.toContain('Noch nicht angegeben')
+    }, opt))
+    for (const s of ['Kirche St. Anna', 'Layher Allround', '25,5 m/s', 'Zone 2', '02.11.2026', 'Schnee / Eis', 'Stahlbeton', `${model.fieldCount} Felder`]) expect(t).toContain(s)
   })
 
-  it('markiert fehlende Pflichtangaben sichtbar und rechnet keinen Windwert aus', () => {
-    const html = generateLastannahmenHTML(model, { windzone: '3' }, opt)
-    expect(html).toContain('Noch nicht angegeben')
-    expect(html).toContain('Referenzwindgeschwindigkeit')
-    expect(html).toContain('nicht angegeben')
-    expect(html).not.toMatch(/m\/s/)
+  it('markiert fehlende Pflichtangaben und rechnet keinen Windwert aus', () => {
+    const d = baueLastannahmenDaten(model, { windzone: '3' }, opt)
+    expect(d.fehlend.length).toBeGreaterThan(0)
+    const vref = d.sektionen.flatMap((s) => s.zeilen).find((z) => z.label === 'Referenzwindgeschwindigkeit')!
+    expect(vref.wert).toBeNull()
+    expect(alleTexte(d)).not.toMatch(/m\/s/)
   })
 
   it('hat keine Preise und den Hinweis auf fehlenden Nachweis', () => {
-    const html = generateLastannahmenHTML(model, {}, opt)
-    expect(html).not.toContain('€')
-    expect(html).toContain('kein Standsicherheitsnachweis')
-    expect(html).toContain('Unterschrift Statiker')
-  })
-
-  it('entschärft HTML in Texten', () => {
-    const html = generateLastannahmenHTML(model, { notiz: '<img src=x onerror=alert(1)>' }, { ...opt, projektName: '<script>x</script>' })
-    expect(html).not.toContain('<script>')
-    expect(html).not.toContain('<img src=x')
-    expect(escapeHtml(`a&b"c'<d>`)).toBe('a&amp;b&quot;c&#39;&lt;d&gt;')
+    const d = baueLastannahmenDaten(model, {}, opt)
+    expect(alleTexte(d)).not.toContain('€')
+    expect(d.wichtig).toContain('kein Standsicherheitsnachweis')
   })
 
   it('führt Abschnitte eines mehrteiligen Gebäudes auf, auch den nicht eingerüsteten', () => {
@@ -103,11 +90,18 @@ describe('Lastannahmen-Blatt', () => {
         { laengeM: 29.5, hoeheM: 20, roofForm: 'flachdach', roofHoeheM: 0, geruest: false },
       ],
     }, 'layher-allround')
-    const html = generateLastannahmenHTML(m, {}, opt)
-    expect(html).toContain('<th>Abschnitt</th>')
-    expect(html).toContain('45 m')
-    expect(html).toContain('20 m')
-    expect(html).toContain('<td>nein</td>')
+    const tab = baueLastannahmenDaten(m, {}, opt).sektionen.find((s) => s.tabelle)!.tabelle!
+    expect(tab.zeilen.length).toBe(2)
+    expect(tab.zeilen[0][2]).toContain('45')
+    expect(tab.zeilen[1][3]).toBe('nein')
+  })
+})
+
+describe('Lastannahmen- und Prüfprotokoll-PDF', () => {
+  it('erzeugt ein gültiges PDF mit mindestens zwei Seiten', () => {
+    const pdf = erzeugeLastannahmenPdf(generateCADModel(basis, 'layher-allround'), {}, opt)
+    expect(pdfString(pdf.slice(0, 5))).toBe('%PDF-')
+    expect((pdfString(pdf).match(/\/Type\s*\/Page[^s]/g) ?? []).length).toBeGreaterThanOrEqual(2)
   })
 })
 
@@ -135,27 +129,35 @@ describe('Statiker-Paket', () => {
     expect(csv).not.toContain('99')
   })
 
+  const namen = ['0-Inhalt.txt', '1-Geruestplan.pdf', '2-Geruestplan.dxf', '3-Lastannahmen-Pruefprotokoll.pdf', '4-Stueckliste.csv', '5-Geometriedaten.json']
+
   it('enthält die vorgesehenen Dateien in fester Reihenfolge', () => {
-    const mitIfc = paketDateien({ ...eingabe, ifc: new Uint8Array([1, 2, 3]) }).map((d) => d.name)
-    expect(mitIfc).toEqual(['0-Inhalt.txt', '1-Lastannahmen.html', '2-Geometriedaten.json', '3-Stueckliste.csv', '4-Geruest.ifc'])
+    expect(paketDateien({ ...eingabe, ifc: new Uint8Array([1, 2, 3]) }).map((d) => d.name)).toEqual([...namen, '6-Geruest.ifc'])
     const ohneIfc = paketDateien({ ...eingabe, ifc: null })
-    expect(ohneIfc.map((d) => d.name)).toEqual(['0-Inhalt.txt', '1-Lastannahmen.html', '2-Geometriedaten.json', '3-Stueckliste.csv'])
+    expect(ohneIfc.map((d) => d.name)).toEqual(namen)
     expect(String(ohneIfc[0].data)).toContain('IFC-Modell konnte nicht erzeugt werden')
   })
 
   it('kein Textteil im Paket enthält Preise', () => {
-    const texte = paketDateien({ ...eingabe, ifc: null }).map((d) => String(d.data))
-    for (const t of texte) expect(t).not.toContain('€')
+    for (const d of paketDateien({ ...eingabe, ifc: null })) if (typeof d.data === 'string') expect(d.data).not.toContain('€')
+  })
+
+  it('Plan-PDF und DXF sind echte Dateien', () => {
+    const d = paketDateien({ ...eingabe, ifc: null })
+    const plan = d.find((x) => x.name === '1-Geruestplan.pdf')!.data as Uint8Array
+    expect(pdfString(plan.slice(0, 5))).toBe('%PDF-')
+    const dxf = String(d.find((x) => x.name === '2-Geruestplan.dxf')!.data)
+    expect(dxf).toContain('GERUEST'); expect(dxf).toContain('MASSE'); expect(dxf).toContain('TEXTE'); expect(dxf).toContain('EOF')
   })
 
   it('ZIP lässt sich vollständig auslesen, JSON ist gültig und passt zum Modell', () => {
     const zip = erzeugeStatikerPaket({ ...eingabe, ifc: new Uint8Array([9, 8, 7]) })
     const d = liesZip(zip)
-    expect(d.length).toBe(5)
+    expect(d.length).toBe(7)
     for (const x of d) expect(crc32(x.bytes)).toBe(x.crc)
-    const json = JSON.parse(new TextDecoder().decode(d.find((x) => x.name === '2-Geometriedaten.json')!.bytes))
+    const json = JSON.parse(new TextDecoder().decode(d.find((x) => x.name === '5-Geometriedaten.json')!.bytes))
     expect(json.gesamtmasse.feldanzahl).toBe(model.fieldCount)
     expect(json.bauteile.length).toBe(model.components3D.length)
-    expect(Array.from(d.find((x) => x.name === '4-Geruest.ifc')!.bytes)).toEqual([9, 8, 7])
+    expect(Array.from(d.find((x) => x.name === '6-Geruest.ifc')!.bytes)).toEqual([9, 8, 7])
   })
 })
