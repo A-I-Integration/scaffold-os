@@ -44,6 +44,9 @@ import { uploadVertragsdokument } from '@/lib/vertrag-upload-client'
 import { berechneCadKosten } from '@/lib/calculations/cad-kosten'
 import BuildingForm from '@/components/cad/BuildingForm'
 import BillOfMaterials from '@/components/cad/BillOfMaterials'
+import SystemLeiste from '@/components/cad/SystemLeiste'
+import KatalogWahlListe from '@/components/cad/KatalogWahlListe'
+import { katalogListeFuerSystem } from '@/lib/cad/katalog-zuordnung'
 import Scaffold2D from '@/components/cad/Scaffold2D'
 
 const Scaffold3D = dynamic(() => import('@/components/cad/Scaffold3D'), {
@@ -118,6 +121,12 @@ export default function CADPage() {
   // oder 'Gerüst neu berechnen' wählt. Behebt: Reset baut Haus sofort
   // wieder auf (Effekt unten generierte bei model=null sofort neu).
   const [autoGenerate, setAutoGenerate] = useState(false)
+  // Katalogwahl: Bauteil-ID → Artikelnummer des Herstellers (gilt nur für das gewählte System)
+  const [artikelWahl, setArtikelWahl] = useState<Record<string, string>>({})
+  const waehleArtikel = useCallback((id: string, nr: string | null) => {
+    setArtikelWahl((alt) => { const neu = { ...alt }; if (nr) neu[id] = nr; else delete neu[id]; return neu })
+  }, [])
+  const aendereSystem = useCallback((s: string) => { setAutoGenerate(true); setSystemId(s); setArtikelWahl({}) }, [])
   // NEU (CP-Pro-Marktvergleich, "Notizen"-Lücke): Anmerkungen an einzelnen
   // Bauteilen. Bewusst NICHT Teil von `model` (das wird bei jeder
   // Neuberechnung komplett neu erzeugt) – Notizen bleiben so über ein
@@ -790,10 +799,11 @@ export default function CADPage() {
       </div>
       <div className='flex-1 flex flex-col md:flex-row md:overflow-hidden'>
         <div className='w-full md:w-72 md:shrink-0 md:overflow-y-auto'>
-          <BuildingForm building={building} systemId={systemId} onChange={(b) => { setAutoGenerate(true); setBuilding(b); }} onSystemChange={(s) => { setAutoGenerate(true); setSystemId(s); }} onGenerate={() => { setAutoGenerate(true); generate(); }} onLadeProjektdatei={ladeProjektdatei} warnings={allWarnings} />
+          <BuildingForm building={building} systemId={systemId} onChange={(b) => { setAutoGenerate(true); setBuilding(b); }} onSystemChange={aendereSystem} onGenerate={() => { setAutoGenerate(true); generate(); }} onLadeProjektdatei={ladeProjektdatei} warnings={allWarnings} />
           <StatikDatenPanel daten={statikDaten} onChange={setStatikDaten} model={modelWithManual} />
         </div>
         <div className='flex-1 flex flex-col min-w-0'>
+          <SystemLeiste systemId={systemId} onSystemChange={aendereSystem} gewaehlteArtikel={Object.keys(artikelWahl).length} />
           <div className='flex flex-wrap gap-2 items-center justify-between px-4 py-2 bg-white/50 border-b border-black/5'>
             <div className='flex flex-wrap items-center gap-2'>
               <label className='flex items-center gap-1 text-xs text-[#424245]'><input type='checkbox' checked={showBuilding} onChange={(e) => setShowBuilding(e.target.checked)} className='accent-[#e8590c]' />Gebäude</label>
@@ -827,7 +837,7 @@ export default function CADPage() {
           </div>
           <div className='h-[65vh] min-h-[320px] md:h-auto md:flex-1 p-4 md:min-h-0'>
             {viewMode === '3d' && modelWithManual && (
-              <Scaffold3D farbModus={farbModus} model={modelWithManual} features={features} showBuilding={showBuilding} showScaffold={showScaffold} showDimensions={showDimensions} selectedComponent={selectedComponent} onSelectComponent={setSelectedComponent} visibleTypes={visibleTypes} viewMode={viewAngle} onCanvasReady={(c) => { canvasRef.current = c }} notes={notes} onAddNote={handleAddNote} hiddenSides={hiddenSides} hiddenLevels={hiddenLevels} measureMode={measureMode} onMeasurePoint={handleMeasurePoint} customDimensions={customDimensions} pendingMeasurePoint={pendingMeasurePoint?.point ?? null} placementType={placementType} onPlacementClick={handlePlacementClick} showEnvironment={showEnvironment} onRemoveComponent={handleRemoveComponent} onReplaceComponent={handleReplaceComponent} removedCount={removedCount} platzierungIdVon={platzierungIdVonBauteil} onBauteilZiehen={handleBauteilZiehen} />
+              <Scaffold3D farbModus={farbModus} model={modelWithManual} features={features} showBuilding={showBuilding} showScaffold={showScaffold} showDimensions={showDimensions} selectedComponent={selectedComponent} onSelectComponent={setSelectedComponent} visibleTypes={visibleTypes} viewMode={viewAngle} onCanvasReady={(c) => { canvasRef.current = c }} notes={notes} onAddNote={handleAddNote} hiddenSides={hiddenSides} hiddenLevels={hiddenLevels} measureMode={measureMode} onMeasurePoint={handleMeasurePoint} customDimensions={customDimensions} pendingMeasurePoint={pendingMeasurePoint?.point ?? null} placementType={placementType} onPlacementClick={handlePlacementClick} showEnvironment={showEnvironment} onRemoveComponent={handleRemoveComponent} onReplaceComponent={handleReplaceComponent} systemId={systemId} artikelWahl={artikelWahl} onArtikelWahl={waehleArtikel} removedCount={removedCount} platzierungIdVon={platzierungIdVonBauteil} onBauteilZiehen={handleBauteilZiehen} />
             )}
             {/* Phase 68-G: Leerzustand nach 'Neu starten' */}
             {viewMode === '3d' && !model && (
@@ -856,6 +866,7 @@ export default function CADPage() {
           </div>
         </div>
         <div className='w-full md:w-72 md:shrink-0'>
+          <KatalogWahlListe artikelWahl={artikelWahl} liste={katalogListeFuerSystem(systemId)} onZuruecksetzen={() => setArtikelWahl({})} />
           <BillOfMaterials
             materials={materials}
             ohnePreis={lagerAnwendung.ohnePreis}
