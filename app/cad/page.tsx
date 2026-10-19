@@ -46,7 +46,7 @@ import BuildingForm from '@/components/cad/BuildingForm'
 import BillOfMaterials from '@/components/cad/BillOfMaterials'
 import SystemLeiste from '@/components/cad/SystemLeiste'
 import KatalogWahlListe from '@/components/cad/KatalogWahlListe'
-import { katalogListeFuerSystem } from '@/lib/cad/katalog-zuordnung'
+import { katalogListeFuerSystem, wendeKatalogwahlAn } from '@/lib/cad/katalog-zuordnung'
 import Scaffold2D from '@/components/cad/Scaffold2D'
 
 const Scaffold3D = dynamic(() => import('@/components/cad/Scaffold3D'), {
@@ -517,7 +517,13 @@ export default function CADPage() {
     () => wendeLagerAn(modelWithManual ? generateBillOfMaterials(modelWithManual) : [], lager),
     [modelWithManual, lager],
   )
-  const materials = lagerAnwendung.materials
+  const katalogAnwendung = useMemo(
+    () => wendeKatalogwahlAn(systemId, modelWithManual?.components3D ?? [], lagerAnwendung.materials, artikelWahl),
+    [systemId, modelWithManual, lagerAnwendung, artikelWahl],
+  )
+  const materials = katalogAnwendung.materials
+  const ohnePreisListe = useMemo(() => materials.filter((m) => m.unitPrice <= 0).map((m) => m.articleNumber), [materials])
+  const ohneGewichtListe = useMemo(() => materials.filter((m) => m.weightKg <= 0).map((m) => m.articleNumber), [materials])
   const totalWeight = useMemo(() => materials.reduce((s, i) => s + i.weightKg * i.quantity, 0), [materials])
   const totalPrice = useMemo(() => materials.reduce((s, i) => s + i.totalPrice, 0), [materials])
   const logistik = useMemo(() => (modelWithManual ? calculateLogistics(modelWithManual, materials, hoursPerSqm) : null), [modelWithManual, materials, hoursPerSqm])
@@ -529,7 +535,7 @@ export default function CADPage() {
   // Phase 68-J: Statt toter Buttons ohne Modell -> klarer Hinweis beim Klick.
   // Projektdatei: speichern und wieder laden (Gebäude, System, Statik-Angaben, Notizen)
   const speichereProjektdatei = () => {
-    const daten = erzeugeProjektdatei({ name: `CAD-Projekt ${new Date().toLocaleDateString('de-DE')}`, building, systemId, statikDaten, notizen: notes })
+    const daten = erzeugeProjektdatei({ name: `CAD-Projekt ${new Date().toLocaleDateString('de-DE')}`, building, systemId, statikDaten, notizen: notes, artikelWahl })
     const a = document.createElement('a')
     a.href = URL.createObjectURL(new Blob([JSON.stringify(daten, null, 2)], { type: 'application/json' }))
     a.download = `CAD-Projekt-${new Date().toISOString().split('T')[0]}.scaffold.json`
@@ -541,7 +547,7 @@ export default function CADPage() {
     if (!e.ok) { window.alert(`„${name}“ konnte nicht geladen werden:\n${e.fehler}`); return }
     if (!window.confirm(`Projektdatei „${e.daten.name}“ laden?\n\nDas aktuelle Modell, die Notizen und die manuell gesetzten Teile werden ersetzt.${e.daten.testdaten ? '\n\nHinweis: Das sind erfundene Testdaten.' : ''}${e.verworfen.length ? `\n\nNicht übernommen (ungültig oder nicht unterstützt): ${e.verworfen.join(', ')}.` : ''}`)) return
     setSelectedComponent(null); setManualPlacements([]); setNotes(e.daten.notizen)
-    setStatikDaten(e.daten.statikDaten); setSystemId(e.daten.systemId)
+    setStatikDaten(e.daten.statikDaten); setSystemId(e.daten.systemId); setArtikelWahl(e.daten.artikelWahl ?? {})
     setAutoGenerate(true); setBuilding(e.daten.building)
   }
   const ladeProjektdatei = (datei: File) => {
@@ -869,8 +875,8 @@ export default function CADPage() {
           <KatalogWahlListe artikelWahl={artikelWahl} liste={katalogListeFuerSystem(systemId)} onZuruecksetzen={() => setArtikelWahl({})} />
           <BillOfMaterials
             materials={materials}
-            ohnePreis={lagerAnwendung.ohnePreis}
-            ohneGewicht={lagerAnwendung.ohneGewicht}
+            ohnePreis={ohnePreisListe}
+            ohneGewicht={ohneGewichtListe}
             lagerFehler={lagerFehler}
             totalWeightKg={totalWeight}
             totalPrice={totalPrice}

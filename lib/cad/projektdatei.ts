@@ -18,6 +18,7 @@ const MAX_MASS_M = 300
 const MAX_PUNKTE = 200
 const MAX_ABSCHNITTE = 50
 const MAX_NOTIZEN = 500
+const MAX_ARTIKELWAHL = 20000
 const DACHFORMEN = ['flachdach', 'satteldach', 'walmdach', 'pultdach', 'mansardendach', 'kein'] as const
 const SEITEN = ['front', 'back', 'left', 'right'] as const
 
@@ -32,6 +33,8 @@ export interface Projektdatei {
   systemId: string
   statikDaten: StatikDaten
   notizen: CADNote[]
+  /** Katalogwahl: Bauteil-ID → Artikelnummer (optional, ältere Dateien haben sie nicht) */
+  artikelWahl?: Record<string, string>
 }
 
 export type LeseErgebnis =
@@ -41,7 +44,7 @@ export type LeseErgebnis =
 const zahl = (v: unknown, min: number, max: number): number | null =>
   typeof v === 'number' && Number.isFinite(v) && v >= min && v <= max ? v : null
 
-export function erzeugeProjektdatei(p: { name?: string; building: BuildingParams; systemId: string; statikDaten: StatikDaten; notizen: CADNote[]; testdaten?: boolean }): Projektdatei {
+export function erzeugeProjektdatei(p: { name?: string; building: BuildingParams; systemId: string; statikDaten: StatikDaten; notizen: CADNote[]; artikelWahl?: Record<string, string>; testdaten?: boolean }): Projektdatei {
   return {
     format: PROJEKTDATEI_FORMAT,
     version: PROJEKTDATEI_VERSION,
@@ -52,6 +55,7 @@ export function erzeugeProjektdatei(p: { name?: string; building: BuildingParams
     systemId: p.systemId,
     statikDaten: bereinigeStatikDaten(p.statikDaten),
     notizen: p.notizen,
+    ...(p.artikelWahl && Object.keys(p.artikelWahl).length ? { artikelWahl: p.artikelWahl } : {}),
   }
 }
 
@@ -147,6 +151,13 @@ export function liesProjektdatei(text: string): LeseErgebnis {
       })
     : []
 
+  const artikelWahl: Record<string, string> = {}
+  if (r.artikelWahl && typeof r.artikelWahl === 'object') {
+    for (const [k, v] of Object.entries(r.artikelWahl as Record<string, unknown>).slice(0, MAX_ARTIKELWAHL)) {
+      if (typeof v === 'string' && /^[A-Za-z0-9-]{1,20}$/.test(v) && k.length <= 120) artikelWahl[k] = v
+    }
+  }
+
   return {
     ok: true,
     verworfen,
@@ -158,6 +169,7 @@ export function liesProjektdatei(text: string): LeseErgebnis {
       building: gebaeude, systemId,
       statikDaten: bereinigeStatikDaten(r.statikDaten),
       notizen,
+      ...(Object.keys(artikelWahl).length ? { artikelWahl } : {}),
     },
   }
 }
