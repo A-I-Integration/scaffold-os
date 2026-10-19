@@ -112,6 +112,8 @@ export function liesProjektdatei(text: string): LeseErgebnis {
       const rf = DACHFORMEN.find((d) => d === o.roofForm); if (rf) a.roofForm = rf
       const rh = zahl(o.roofHoeheM, 0, MAX_MASS_M); if (rh != null) a.roofHoeheM = rh
       if (o.geruest === false) a.geruest = false
+      const td = zahl(o.tiefeM, 1, MAX_MASS_M); if (td != null) a.tiefeM = td
+      const vs = zahl(o.versatzM, -MAX_MASS_M, MAX_MASS_M); if (vs != null) a.versatzM = vs
       if (o.helmGeruest === true) a.helmGeruest = true
       if (o.geruestAbHoeheM && typeof o.geruestAbHoeheM === 'object') {
         const ab: NonNullable<BuildingSection['geruestAbHoeheM']> = {}

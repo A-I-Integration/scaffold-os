@@ -2,7 +2,9 @@ import type { BuildingParams, BuildingSection } from '@/lib/calculations/cad-eng
 
 /** Eingaben für die Vorlage „Kirche mit Turm": Turm links am Kirchenschiff, optional ein Chor am anderen Ende. */
 export interface KircheMasse {
-  breiteM: number          // Tiefe des Gebäudes (gilt in diesem Modell für Turm, Schiff und Chor gleich)
+  breiteM: number          // Tiefe des Kirchenschiffs
+  turmBreiteM: number      // Tiefe des Turms (mittig am Schiff); gleich breiteM = gleich tief
+  chorBreiteM: number      // Tiefe des Chors (mittig)
   schiffLaengeM: number
   schiffTraufeM: number
   schiffDachM: number      // Höhe des Satteldachs (Traufe bis First)
@@ -16,7 +18,7 @@ export interface KircheMasse {
 }
 
 export const KIRCHE_STANDARD: KircheMasse = {
-  breiteM: 12, schiffLaengeM: 30, schiffTraufeM: 12, schiffDachM: 8,
+  breiteM: 12, turmBreiteM: 9, chorBreiteM: 9, schiffLaengeM: 30, schiffTraufeM: 12, schiffDachM: 8,
   turmLaengeM: 9, turmSchaftM: 45, helmM: 13, helmEinruesten: true,
   chorLaengeM: 0, chorTraufeM: 9, chorDachM: 6,
 }
@@ -26,6 +28,8 @@ const ok = (v: number, min: number, max: number) => Number.isFinite(v) && v >= m
 /** Prüft die Maße; gibt eine Fehlermeldung oder null zurück. */
 export function pruefeKircheMasse(m: KircheMasse): string | null {
   if (!ok(m.breiteM, 3, 60)) return 'Breite: 3 bis 60 m'
+  if (!ok(m.turmBreiteM, 3, 60)) return 'Turm-Tiefe: 3 bis 60 m'
+  if (m.chorLaengeM > 0 && !ok(m.chorBreiteM, 3, 60)) return 'Chor-Tiefe: 3 bis 60 m'
   if (!ok(m.schiffLaengeM, 5, 150)) return 'Schiff-Länge: 5 bis 150 m'
   if (!ok(m.schiffTraufeM, 3, 60)) return 'Schiff-Traufe: 3 bis 60 m'
   if (!ok(m.schiffDachM, 0, 40)) return 'Schiff-Dachhöhe: 0 bis 40 m'
@@ -38,13 +42,15 @@ export function pruefeKircheMasse(m: KircheMasse): string | null {
   return null
 }
 
+const tiefe = (t: number, basis: number): { tiefeM?: number } => (Number.isFinite(t) && Math.abs(t - basis) > 0.005 ? { tiefeM: t } : {})
+
 /** Baut aus den Kirchenmaßen die Gebäudedaten: Turm eingerüstet (links), Schiff und Chor nur dargestellt. */
 export function kircheAlsGebaeude(m: KircheMasse): BuildingParams {
   const abschnitte: BuildingSection[] = [
-    { bezeichnung: 'Turm', laengeM: m.turmLaengeM, hoeheM: m.turmSchaftM, roofForm: m.helmM > 0 ? 'walmdach' : 'flachdach', roofHoeheM: m.helmM, ...(m.helmM > 0 && m.helmEinruesten ? { helmGeruest: true } : {}) },
+    { bezeichnung: 'Turm', laengeM: m.turmLaengeM, hoeheM: m.turmSchaftM, ...tiefe(m.turmBreiteM, m.breiteM), roofForm: m.helmM > 0 ? 'walmdach' : 'flachdach', roofHoeheM: m.helmM, ...(m.helmM > 0 && m.helmEinruesten ? { helmGeruest: true } : {}) },
     { bezeichnung: 'Kirchenschiff', laengeM: m.schiffLaengeM, hoeheM: m.schiffTraufeM, roofForm: 'satteldach', roofHoeheM: m.schiffDachM, geruest: false },
   ]
-  if (m.chorLaengeM > 0) abschnitte.push({ bezeichnung: 'Chor', laengeM: m.chorLaengeM, hoeheM: m.chorTraufeM, roofForm: 'satteldach', roofHoeheM: m.chorDachM, geruest: false })
+  if (m.chorLaengeM > 0) abschnitte.push({ bezeichnung: 'Chor', laengeM: m.chorLaengeM, hoeheM: m.chorTraufeM, roofForm: 'satteldach', roofHoeheM: m.chorDachM, geruest: false, ...tiefe(m.chorBreiteM, m.breiteM) })
   const laenge = abschnitte.reduce((s, a) => s + a.laengeM, 0)
   const gesamtH = m.turmSchaftM + m.helmM
   const geschosse = Math.max(1, Math.round(m.turmSchaftM / 3.5))

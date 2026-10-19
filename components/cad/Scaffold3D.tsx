@@ -1003,9 +1003,9 @@ function Building3D({
     return (
       <group position={gerade ? [-gesamtL / 2, 0, -w / 2 - 0.5] : [0, 0, 0]}>
         {segmente.map((seg, i) => (
-          <group key={i} position={[seg.mitteX, 0, seg.mitteZ]} rotation={[0, seg.rotationYRad, 0]}>
+          <group key={i} position={[seg.mitteX, 0, seg.mitteZ + (gerade ? (seg.versatzM ?? 0) : 0)]} rotation={[0, seg.rotationYRad, 0]}>
             <mesh position={[0, seg.hoeheM / 2, 0]} castShadow receiveShadow>
-              <boxGeometry args={[seg.laengeM, seg.hoeheM, w]} />
+              <boxGeometry args={[seg.laengeM, seg.hoeheM, seg.tiefeM ?? w]} />
               <Edges threshold={15} color="#8f8676" />
               <meshStandardMaterial color="#e6dfd3" roughness={0.9} map={getPutzTex()} bumpMap={getPutzTex()} bumpScale={0.12} />
             </mesh>
@@ -1013,7 +1013,7 @@ function Building3D({
                 sonst die globale Dachform des Gebäudes. Vorher hatte ein
                 mehrteiliges Gebäude überhaupt kein Dach. */}
             <group position={[0, seg.hoeheM, 0]}>
-              <RoofMesh roofForm={seg.roofForm || roofForm} laengeM={seg.laengeM} breiteM={w} roofH={seg.roofHoeheM ?? roofH} />
+              <RoofMesh roofForm={seg.roofForm || roofForm} laengeM={seg.laengeM} breiteM={seg.tiefeM ?? w} roofH={seg.roofHoeheM ?? roofH} />
             </group>
           </group>
         ))}

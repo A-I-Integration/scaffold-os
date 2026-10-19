@@ -273,9 +273,10 @@ export default function BuildingForm({ building, systemId, onChange, onSystemCha
                 const fehler = pruefeKircheMasse(kirche)
                 return (
                   <div className='space-y-2'>
-                    <p className='text-[10px] text-[#86868b]'>Der Turm steht links am Schiff und wird eingerüstet; Schiff (und Chor) werden nur dargestellt. Turm, Schiff und Chor sind in diesem Modell gleich tief.</p>
+                    <p className='text-[10px] text-[#86868b]'>Der Turm steht links am Schiff und wird eingerüstet; Schiff (und Chor) werden nur dargestellt. Turm und Chor stehen mittig am Schiff und dürfen schmaler sein.</p>
                     <div className='grid grid-cols-2 gap-1.5'>
-                      {feld('Tiefe/Breite (m)', 'breiteM')}
+                      {feld('Schiff-Tiefe (m)', 'breiteM')}
+                      {feld('Turm-Tiefe (m)', 'turmBreiteM')}
                       {feld('Schiff-Länge (m)', 'schiffLaengeM')}
                       {feld('Schiff-Traufe (m)', 'schiffTraufeM')}
                       {feld('Schiff-Dachhöhe (m)', 'schiffDachM')}
@@ -283,6 +284,7 @@ export default function BuildingForm({ building, systemId, onChange, onSystemCha
                       {feld('Turm bis Helmansatz (m)', 'turmSchaftM')}
                       {feld('Helmhöhe (m)', 'helmM')}
                       {feld('Chor-Länge (m, 0 = keiner)', 'chorLaengeM')}
+                      {kirche.chorLaengeM > 0 && feld('Chor-Tiefe (m)', 'chorBreiteM')}
                       {kirche.chorLaengeM > 0 && feld('Chor-Traufe (m)', 'chorTraufeM')}
                       {kirche.chorLaengeM > 0 && feld('Chor-Dachhöhe (m)', 'chorDachM')}
                     </div>
@@ -348,6 +350,20 @@ export default function BuildingForm({ building, systemId, onChange, onSystemCha
                         <div>
                           <label className='block text-[9px] text-[#86868b]'>Winkel (°)</label>
                           <input type='number' step='1' value={s.winkelGrad || 0} onChange={(e) => { const neu = [...building.sections!]; neu[i] = { ...neu[i], winkelGrad: parseFloat(e.target.value) || 0 }; onChange({ ...building, sections: neu }) }} placeholder='0' className='w-full px-1.5 py-1 border rounded text-xs' title='0 = geradeaus weiter, 90 = rechtwinklige Ecke' />
+                        </div>
+                      </div>
+                      <div className='grid grid-cols-2 gap-1.5 mt-1' title='Nur nötig, wenn dieser Teil schmaler oder tiefer ist als das Gebäude (z. B. Turm an einem breiten Schiff). Leer = Gebäudetiefe, mittig.'>
+                        <div>
+                          <label className='block text-[9px] text-[#86868b]'>Eigene Tiefe (m)</label>
+                          <input type='number' min='1' step='0.01' value={s.tiefeM ?? ''} placeholder={String(building.widthM || '')}
+                            onChange={(e) => { const neu = [...building.sections!]; const { tiefeM: _t, ...rest } = neu[i]; const v = parseFloat(e.target.value); neu[i] = v > 0 ? { ...rest, tiefeM: v } : rest; onChange({ ...building, sections: neu }) }}
+                            className='w-full px-1.5 py-1 border rounded text-xs' />
+                        </div>
+                        <div>
+                          <label className='block text-[9px] text-[#86868b]'>Versatz nach vorne (m)</label>
+                          <input type='number' step='0.01' value={s.versatzM ?? ''} placeholder='0'
+                            onChange={(e) => { const neu = [...building.sections!]; const { versatzM: _v, ...rest } = neu[i]; const v = parseFloat(e.target.value); neu[i] = Number.isFinite(v) && v !== 0 ? { ...rest, versatzM: v } : rest; onChange({ ...building, sections: neu }) }}
+                            className='w-full px-1.5 py-1 border rounded text-xs' />
                         </div>
                       </div>
                       <label className='flex items-center gap-2 text-[11px] text-[#424245] mt-1'>
