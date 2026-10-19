@@ -33,6 +33,9 @@ interface Props {
   onExportIFC?: () => void
   /** Statiker-Paket: ZIP mit Lastannahmen-Blatt, Geometrie, Stückliste ohne Preise und IFC */
   onExportStatikerPaket?: () => void
+  /** Darstellung des Gerüstplans im Statiker-Paket */
+  planModus?: 'schematisch' | 'komponenten'
+  onPlanModusChange?: (m: 'schematisch' | 'komponenten') => void
   customers?: { id: string; name: string; city?: string }[]
   kundenLadeFehler?: boolean
   onRetryKunden?: () => void
@@ -65,7 +68,7 @@ interface Props {
   onSelectPlacementType?: (type: string | null) => void
 }
 
-export default function BillOfMaterials({ materials, ohnePreis = [], ohneGewicht = [], lagerFehler = false, totalWeightKg, totalPrice, logistik, onExportPDF, onExportCSV, onExportMontageplan, onOpenLv, onSpeichereProjektdatei, onExportStatikGeometrie, onExportIFC, onExportStatikerPaket, customers, kundenLadeFehler, onRetryKunden, onCreateCustomer, onAssignCustomer, zuordnenLaeuft, disabled = false, notes, onDeleteNote, layerState, onToggleSide, onToggleLevel, onShowAllLayers, onHideAllLayers, customDimensions, onDeleteDimension, measureMode, onToggleMeasureMode, manualPlacements, onRemoveManualPlacement, placementType, onSelectPlacementType }: Props) {
+export default function BillOfMaterials({ materials, ohnePreis = [], ohneGewicht = [], lagerFehler = false, totalWeightKg, totalPrice, logistik, onExportPDF, onExportCSV, onExportMontageplan, onOpenLv, onSpeichereProjektdatei, onExportStatikGeometrie, onExportIFC, onExportStatikerPaket, planModus = 'schematisch', onPlanModusChange, customers, kundenLadeFehler, onRetryKunden, onCreateCustomer, onAssignCustomer, zuordnenLaeuft, disabled = false, notes, onDeleteNote, layerState, onToggleSide, onToggleLevel, onShowAllLayers, onHideAllLayers, customDimensions, onDeleteDimension, measureMode, onToggleMeasureMode, manualPlacements, onRemoveManualPlacement, placementType, onSelectPlacementType }: Props) {
   const [kundenSuche, setKundenSuche] = useState('')
   const [ausgewaehlterKunde, setAusgewaehlterKunde] = useState<{ id: string; name: string } | null>(null)
   const [zeigeDropdown, setZeigeDropdown] = useState(false)
@@ -299,6 +302,15 @@ export default function BillOfMaterials({ materials, ohnePreis = [], ohneGewicht
             <button onClick={onSpeichereProjektdatei} title='Speichert Gebäude, System, Statik-Angaben und Notizen als Datei' className='col-span-2 py-2.5 bg-black/5 text-[#1d1d1f] text-sm font-medium rounded-xl hover:bg-black/10 transition-colors'>
               💾 Projektdatei speichern
             </button>
+          )}
+          {onExportStatikerPaket && onPlanModusChange && (
+            <label className='col-span-2 flex items-center justify-between gap-2 text-xs text-[#6e6e73]'>
+              Gerüstplan im Paket
+              <select value={planModus} onChange={(e) => onPlanModusChange(e.target.value as 'schematisch' | 'komponenten')} className='rounded-lg bg-black/5 px-2 py-1.5 text-xs text-[#1d1d1f]'>
+                <option value='schematisch'>Schematisch</option>
+                <option value='komponenten'>Mit Bauteilen (Ständer, Diagonalen, Geländer)</option>
+              </select>
+            </label>
           )}
           {onExportStatikerPaket && (
             <button onClick={onExportStatikerPaket} title="ZIP für den externen Statiker: Lastannahmen-Blatt, Geometrie (JSON), Stückliste ohne Preise, IFC. Kein Standsicherheitsnachweis." className='col-span-2 py-2.5 bg-[#1d1d1f] text-white text-sm font-medium rounded-xl hover:bg-black transition-colors'>

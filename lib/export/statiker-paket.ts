@@ -17,7 +17,7 @@
 import { generateStatikExport, type CADModel } from '@/lib/calculations/cad-engine'
 import type { StatikDaten } from '@/lib/statik-daten'
 import type { MaterialItem } from '@/types/scaffold'
-import { erzeugeZeichnungen } from '@/lib/geruest/plan-zeichnung'
+import { erzeugeZeichnungen, type PlanModus } from '@/lib/geruest/plan-zeichnung'
 import { pruefeGeruest } from '@/lib/geruest/regelpruefung'
 import { erzeugePlanPdf } from './plan-pdf'
 import { erzeugeDxf } from './dxf-export'
@@ -33,6 +33,8 @@ export interface StatikerPaketEingabe {
   /** Deutsches Datum für die Anzeige, z. B. 19.10.2026 */
   datum: string
   ifc?: Uint8Array | null
+  /** 'schematisch' (Standard) oder 'komponenten' (Ständer, Riegel, Diagonalen, Geländer, Belag aus dem CAD-Modell) */
+  planModus?: PlanModus
 }
 
 /** Stückliste ohne Preise (Semikolon, Dezimalkomma, UTF-8 mit BOM für Excel). */
@@ -56,7 +58,8 @@ export function paketDateien(e: StatikerPaketEingabe): ZipDatei[] {
   const dateien: ZipDatei[] = []
   const hatIfc = !!e.ifc && e.ifc.length > 0
   const opt = { projektName: e.projektName, firma: e.firma, datum: e.datum }
-  const zeichnungen = erzeugeZeichnungen(e.model)
+  const modus: PlanModus = e.planModus ?? 'schematisch'
+  const zeichnungen = erzeugeZeichnungen(e.model, modus)
   const protokoll = pruefeGeruest(e.model, e.statik)
 
   dateien.push({
@@ -65,7 +68,7 @@ export function paketDateien(e: StatikerPaketEingabe): ZipDatei[] {
       `Statiker-Paket – ${e.projektName}`,
       `Stand ${e.datum} · ${e.firma}`,
       '',
-      '1-Geruestplan.pdf                 Vorderansicht und Grundriss mit Maßketten (Vektor-PDF)',
+      `1-Geruestplan.pdf                 Vorderansicht und Grundriss mit Maßketten (Vektor-PDF, ${modus === 'komponenten' ? 'mit Bauteilen aus dem CAD-Modell' : 'schematisch'})`,
       '2-Geruestplan.dxf                 dieselben Zeichnungen für CAD (Layer GERUEST, MASSE, TEXTE; Einheit mm)',
       '3-Lastannahmen-Pruefprotokoll.pdf Eingangsdaten für die Statik (Angaben des Planers) und Prüfprotokoll nach DIN EN 12811-1',
       '4-Stueckliste.csv                 Stückliste mit Gewichten, ohne Preise',
@@ -75,7 +78,9 @@ export function paketDateien(e: StatikerPaketEingabe): ZipDatei[] {
       `Regelprüfung: ${protokoll.anzahl.ok} OK, ${protokoll.anzahl.warnung} Warnungen, ${protokoll.anzahl.fehler} Fehler (siehe Prüfprotokoll).`,
       '',
       'HINWEISE:',
-      '- Der Plan ist schematisch aus dem Modell erzeugt (Gerüst im Abstand der Wandabstand-Einstellung, Dächer vereinfacht). Er ersetzt keinen Aufbau- und Verwendungsplan.',
+      modus === 'komponenten'
+        ? '- Der Plan zeigt die Bauteile des CAD-Modells (Ständer, Riegel, Diagonalen, Geländer, Belag), Dächer vereinfacht, Grundriss nur die unterste Lage. Er ersetzt keinen Aufbau- und Verwendungsplan.'
+        : '- Der Plan ist schematisch aus dem Modell erzeugt (Gerüst im Abstand der Wandabstand-Einstellung, Dächer vereinfacht). Er ersetzt keinen Aufbau- und Verwendungsplan.',
       '- Das Paket enthält Angaben und Geometrie, keinen Standsicherheitsnachweis und keine Berechnung.',
       '- Zulassungsdaten (Querschnitte, Werkstoffe) des Systems fehlen bewusst und sind vom Statiker zu ergänzen.',
     ].join('\n'),

@@ -17,6 +17,9 @@
 // ============================================================
 
 import { berechneGebaeudeSegmente, type CADModel } from '@/lib/calculations/cad-engine'
+import { ansichtBauteile, grundrissBauteile, zaehleBauteile, SZENE_Z_VERSATZ_M, type PlanBauteil } from './platzierung'
+
+export type PlanModus = 'schematisch' | 'komponenten'
 
 export type ZLayer = 'GEBAEUDE' | 'GERUEST' | 'MASSE' | 'TEXTE'
 
@@ -108,7 +111,27 @@ function textHoehe(breiteM: number, hoeheM: number): number {
   return TEXT_MM / Math.max(massstab, 0.5)
 }
 
-export function erzeugeVorderansicht(model: CADModel): Zeichnung {
+
+/** Zeichnet Bauteile: Ständer/Fußplatten/Belag als Rechtecke, Diagonalen gestrichelt, Rest als Linien. */
+function zeichneBauteile(p: Maler, bauteile: PlanBauteil[], grundriss: boolean) {
+  for (const b of bauteile) {
+    if (b.sichtbar === false) continue
+    switch (b.typ) {
+      case 'staender': case 'fussplatte': p.rechteck(b.x1, b.y1, b.x2, b.y2, 'GERUEST'); break
+      case 'belag': p.rechteck(b.x1, b.y1, b.x2, b.y2, 'GERUEST'); break
+      case 'diagonale': p.linie(b.x1, b.y1, b.x2, b.y2, 'GERUEST', true); break
+      case 'treppe': if (grundriss) { p.rechteck(b.x1, b.y1, b.x2, b.y2, 'GERUEST'); p.linie(b.x1, b.y1, b.x2, b.y2, 'GERUEST') } else p.linie(b.x1, b.y1, b.x2, b.y2, 'GERUEST'); break
+      default: p.linie(b.x1, b.y1, b.x2, b.y2, 'GERUEST')
+    }
+  }
+}
+
+function zahlenText(bauteile: PlanBauteil[]): string {
+  const z = zaehleBauteile(bauteile)
+  return `Bauteile (Seite Vorne): ${z.felder} Felder, ${z.lagen} Lagen, ${z.staender} Ständer, ${z.riegel} Riegel, ${z.diagonalen} Diagonalen, ${z.gelaender} Geländer, ${z.belaege} Beläge, ${z.fussplatten} Fußplatten`
+}
+
+export function erzeugeVorderansicht(model: CADModel, modus: PlanModus = 'schematisch'): Zeichnung {
   const b = model.building
   const { segs, hatWinkel } = segmente(model)
   const xMin = segs[0].x0
@@ -135,9 +158,11 @@ export function erzeugeVorderansicht(model: CADModel): Zeichnung {
   const vorne = model.levels.flatMap((l) => l.fields.filter((f) => f.side === 'front').map((f) => ({ f, l })))
   let gerueHoehe = 0
   for (const { f, l } of vorne) {
-    p.rechteck(f.positionX - f.lengthM / 2, l.bottomY, f.positionX + f.lengthM / 2, l.topY, 'GERUEST')
+    if (modus === 'schematisch') p.rechteck(f.positionX - f.lengthM / 2, l.bottomY, f.positionX + f.lengthM / 2, l.topY, 'GERUEST')
     gerueHoehe = Math.max(gerueHoehe, l.topY)
   }
+  const teileAnsicht = modus === 'komponenten' ? ansichtBauteile(model, 'front') : []
+  if (modus === 'komponenten') zeichneBauteile(p, teileAnsicht, false)
   for (const a of model.anchors.filter((x) => x.side === 'front')) {
     const k = th * 0.35
     p.linie(a.positionX - k, a.positionY - k, a.positionX + k, a.positionY + k, 'GERUEST'); p.linie(a.positionX - k, a.positionY + k, a.positionX + k, a.positionY - k, 'GERUEST')
@@ -176,12 +201,16 @@ export function erzeugeVorderansicht(model: CADModel): Zeichnung {
   p.text(xMin, hMax + th * 3.2, 'Vorderansicht', 'TEXTE', 'links', 0, 1.6)
   p.text(xMin, hMax + th * 2.0, kopf, 'TEXTE', 'links')
   if (hatWinkel) p.text(xMin, yUnten2 - th * 2.2, 'Hinweis: Abschnitte mit Winkel sind abgewickelt dargestellt (Länge entlang des Gebäudes).', 'TEXTE', 'links')
-  p.text(xMin, yUnten2 - th * (hatWinkel ? 3.6 : 2.2), 'Schematische Darstellung. Dach vereinfacht. Kein Standsicherheitsnachweis.', 'TEXTE', 'links')
+  const fuss = yUnten2 - th * (hatWinkel ? 3.6 : 2.2)
+  if (modus === 'komponenten') {
+    p.text(xMin, fuss, 'Bauteile aus dem CAD-Modell (Ständer, Riegel, Diagonalen gestrichelt, Geländer, Belag). Dach vereinfacht. Kein Standsicherheitsnachweis.', 'TEXTE', 'links')
+    if (teileAnsicht.length > 0) p.text(xMin, fuss - th * 1.4, zahlenText(teileAnsicht), 'TEXTE', 'links')
+  } else p.text(xMin, fuss, 'Schematische Darstellung. Dach vereinfacht. Kein Standsicherheitsnachweis.', 'TEXTE', 'links')
 
   return { id: 'vorderansicht', titel: 'Vorderansicht', linien: p.linien, texte: p.texte, grenzen: grenzenVon(p.linien, p.texte) }
 }
 
-export function erzeugeGrundriss(model: CADModel): Zeichnung {
+export function erzeugeGrundriss(model: CADModel, modus: PlanModus = 'schematisch'): Zeichnung {
   const b = model.building
   const { segs } = segmente(model)
   const W = b.widthM
@@ -208,9 +237,11 @@ export function erzeugeGrundriss(model: CADModel): Zeichnung {
 
   // Gerüst schematisch: zwei Linien (innen: Wandabstand, außen: Wandabstand + Gerüstbreite)
   const geruest = walls.filter((w) => w.s.eingeruestet)
-  if (seiten.has('front')) geruest.forEach(({ s, yVorne }) => { p.linie(s.x0, yVorne - wandabstand, s.x1, yVorne - wandabstand, 'GERUEST'); p.linie(s.x0, yVorne - aussen, s.x1, yVorne - aussen, 'GERUEST') })
-  if (seiten.has('back')) geruest.forEach(({ s, yHinten }) => { p.linie(s.x0, yHinten + wandabstand, s.x1, yHinten + wandabstand, 'GERUEST'); p.linie(s.x0, yHinten + aussen, s.x1, yHinten + aussen, 'GERUEST') })
-  if (geruest.length > 0) {
+  const teileGrundriss = modus === 'komponenten' ? grundrissBauteile(model) : []
+  if (modus === 'komponenten') zeichneBauteile(p, teileGrundriss, true)
+  if (modus === 'schematisch' && seiten.has('front')) geruest.forEach(({ s, yVorne }) => { p.linie(s.x0, yVorne - wandabstand, s.x1, yVorne - wandabstand, 'GERUEST'); p.linie(s.x0, yVorne - aussen, s.x1, yVorne - aussen, 'GERUEST') })
+  if (modus === 'schematisch' && seiten.has('back')) geruest.forEach(({ s, yHinten }) => { p.linie(s.x0, yHinten + wandabstand, s.x1, yHinten + wandabstand, 'GERUEST'); p.linie(s.x0, yHinten + aussen, s.x1, yHinten + aussen, 'GERUEST') })
+  if (modus === 'schematisch' && geruest.length > 0) {
     const erst = geruest[0]; const letzt = geruest[geruest.length - 1]
     if (seiten.has('left')) { const xs = erst.s.x0; p.linie(xs - wandabstand, erst.yVorne, xs - wandabstand, erst.yHinten, 'GERUEST'); p.linie(xs - aussen, erst.yVorne, xs - aussen, erst.yHinten, 'GERUEST') }
     if (seiten.has('right')) { const xs = letzt.s.x1; p.linie(xs + wandabstand, letzt.yVorne, xs + wandabstand, letzt.yHinten, 'GERUEST'); p.linie(xs + aussen, letzt.yVorne, xs + aussen, letzt.yHinten, 'GERUEST') }
@@ -230,13 +261,34 @@ export function erzeugeGrundriss(model: CADModel): Zeichnung {
   const kopf = `Wandabstand ${de(wandabstand)} m · Gerüstbreite ${de(breite)} m · eingerüstete Seiten: ${b.sides.map((x) => ({ front: 'Vorne', back: 'Hinten', left: 'Links', right: 'Rechts' }[x])).join(', ') || 'keine'}`
   p.text(xMin, yMax + th * 3.2, 'Grundriss', 'TEXTE', 'links', 0, 1.6)
   p.text(xMin, yMax + th * 2.0, kopf, 'TEXTE', 'links')
-  p.text(xMin, yUnten2 - th * 2.2, 'Gerüst schematisch (Wandabstand und Gerüstbreite je Seite), nicht aus den einzelnen Feldern gezeichnet. Kein Standsicherheitsnachweis.', 'TEXTE', 'links')
+  if (modus === 'komponenten') {
+    // Abstand Wand - Innenkante Gerüst, so wie das Modell ihn liefert (gemessen, nicht aus der Einstellung)
+    const stst = (a: number[]) => (a.length === 0 ? null : a.length && Math.min(...a) === Math.max(...a) ? `${de(a[0])} m` : `${de(Math.min(...a))} bis ${de(Math.max(...a))} m`)
+    const nahe = (x: number) => walls.find((w) => x >= w.s.x0 - 1e-6 && x <= w.s.x1 + 1e-6) ?? walls[0]
+    const lage = (f: { positionX: number; positionZ: number; side: string }): number => {
+      const zf = f.positionZ + SZENE_Z_VERSATZ_M
+      if (f.side === 'front') return nahe(f.positionX).yVorne + zf
+      if (f.side === 'back') return -zf - nahe(f.positionX).yHinten
+      if (f.side === 'left') return segs[0].x0 - f.positionX
+      return f.positionX - segs[segs.length - 1].x1
+    }
+    const l0 = model.levels.filter((l) => l.index === 0).flatMap((l) => l.fields)
+    const r = (a: number) => Math.round(a * 100) / 100
+    const teile = (['front', 'back', 'left', 'right'] as const).map((sd) => {
+      const w = stst(l0.filter((f) => f.side === sd).map((f) => r(lage(f))))
+      return w ? `${{ front: 'Vorne', back: 'Hinten', left: 'Links', right: 'Rechts' }[sd]} ${w}` : null
+    }).filter(Boolean)
+    if (teile.length > 0) p.text(xMin, yUnten2 - th * 3.6, `Abstand Wand bis Innenkante Gerüst laut Modell: ${teile.join(' · ')} (Einstellung Wandabstand ${de(wandabstand)} m)`, 'TEXTE', 'links')
+  }
+  p.text(xMin, yUnten2 - th * 2.2, modus === 'komponenten'
+    ? 'Felder, Ständer und Geländer der untersten Lage aus dem CAD-Modell. Kein Standsicherheitsnachweis.'
+    : 'Gerüst schematisch (Wandabstand und Gerüstbreite je Seite), nicht aus den einzelnen Feldern gezeichnet. Kein Standsicherheitsnachweis.', 'TEXTE', 'links')
 
   return { id: 'grundriss', titel: 'Grundriss', linien: p.linien, texte: p.texte, grenzen: grenzenVon(p.linien, p.texte) }
 }
 
 /** Alle Zeichnungen des Plans. Im Umriss-Modus (Vieleck) ist der Plan noch nicht verfügbar. */
-export function erzeugeZeichnungen(model: CADModel): Zeichnung[] {
+export function erzeugeZeichnungen(model: CADModel, modus: PlanModus = 'schematisch'): Zeichnung[] {
   if (model.building.umriss && model.building.umriss.length >= 3) return []
-  return [erzeugeVorderansicht(model), erzeugeGrundriss(model)]
+  return [erzeugeVorderansicht(model, modus), erzeugeGrundriss(model, modus)]
 }
