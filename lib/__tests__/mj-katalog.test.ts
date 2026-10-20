@@ -122,4 +122,11 @@ describe('MJ OPTIMA im CAD-Systemkatalog', () => {
     }
     expect(new Set(GERUEST_SYSTEME.map((s) => s.id)).size).toBe(GERUEST_SYSTEME.length);
   });
+
+  it('RUX-Zulassungen: Nummern und Gültigkeit aus den Bescheiden', () => {
+    const nr = (l: keyof typeof MJ_LISTEN) => MJ_LISTEN[l].zulassungen.map((z) => `${z.nummer}:${z.gueltigBis}`)
+    expect(nr('sx-super')).toEqual(['Z-8.1-185.1:05.01.2027', 'Z-8.1-185.2:13.02.2028'])
+    expect(nr('sx-framescaff')).toEqual(['Z-8.1-924:06.07.2031'])
+    expect(nr('sx-ringscaff')).toEqual(['Z-8.22-869:11.04.2031', 'Z-8.22-901:07.01.2031', 'Z-8.22-971:18.01.2028'])
+  })
 });

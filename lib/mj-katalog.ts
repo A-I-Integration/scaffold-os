@@ -101,9 +101,18 @@ export const MJ_LISTEN: Record<MjListe, MjListeInfo> = {
   zubehoer: { key: 'zubehoer', hersteller: 'MJ-Gerüst', name: 'MJ Zubehör', preislisteVersion: 'V3.3', preislisteStand: '04.2025', zulassungen: [] },
   zipko: { key: 'zipko', hersteller: 'MJ-Gerüst', name: 'MJ Zubehör ZIPKO', preislisteVersion: 'V1.1', preislisteStand: '04.2025', zulassungen: [] },
   'opti-rack': { key: 'opti-rack', hersteller: 'MJ-Gerüst', name: 'MJ OPTI-RACK-Regalpakete', preislisteVersion: 'Flyer', preislisteStand: '10.2025', zulassungen: [] },
-  'sx-framescaff': { key: 'sx-framescaff', hersteller: 'SCAFOM-RUX', name: 'SCAFOM-RUX FRAMESCAFF', preislisteVersion: '2024-05-DE', preislisteStand: '05.2024', zulassungen: [] },
-  'sx-super': { key: 'sx-super', hersteller: 'SCAFOM-RUX', name: 'SCAFOM-RUX SUPER', preislisteVersion: '2024-05-DE', preislisteStand: '05.2024', zulassungen: [] },
-  'sx-ringscaff': { key: 'sx-ringscaff', hersteller: 'SCAFOM-RUX', name: 'SCAFOM-RUX RINGSCAFF', preislisteVersion: '2024-05-DE', preislisteStand: '05.2024', zulassungen: [] },
+  'sx-framescaff': { key: 'sx-framescaff', hersteller: 'SCAFOM-RUX', name: 'SCAFOM-RUX FRAMESCAFF', preislisteVersion: '2024-05-DE', preislisteStand: '05.2024', zulassungen: [
+      { nummer: 'Z-8.1-924', bescheidVom: '18.06.2026', gueltigBis: '06.07.2031', gegenstand: 'Gerüstbauteile für das Gerüstsystem "FRAMESCAFF 73" (Änderungs- und Verlängerungsbescheid; gilt nur zusammen mit der Zulassung vom 05.07.2021)' },
+    ] },
+  'sx-super': { key: 'sx-super', hersteller: 'SCAFOM-RUX', name: 'SCAFOM-RUX SUPER', preislisteVersion: '2024-05-DE', preislisteStand: '05.2024', zulassungen: [
+      { nummer: 'Z-8.1-185.1', bescheidVom: '23.01.2024', gueltigBis: '05.01.2027', gegenstand: 'Gerüstbauteile für das "RUX Schnellbaugerüst Super 65" (Änderungs-/Ergänzungsbescheid; gilt nur zusammen mit der Zulassung vom 30.06.2023)' },
+      { nummer: 'Z-8.1-185.2', bescheidVom: '20.02.2023', gueltigBis: '13.02.2028', gegenstand: 'Gerüstbauteile für das Gerüstsystem "RUX Schnellbaugerüst Super 100"' },
+    ] },
+  'sx-ringscaff': { key: 'sx-ringscaff', hersteller: 'SCAFOM-RUX', name: 'SCAFOM-RUX RINGSCAFF', preislisteVersion: '2024-05-DE', preislisteStand: '05.2024', zulassungen: [
+      { nummer: 'Z-8.22-869', bescheidVom: '20.03.2026', gueltigBis: '11.04.2031', gegenstand: 'Gerüstbauteile für das Modulsystem "RINGSCAFF" (Verlängerungsbescheid; gilt nur zusammen mit der Genehmigung vom 09.04.2021)' },
+      { nummer: 'Z-8.22-901', bescheidVom: '02.01.2026', gueltigBis: '07.01.2031', gegenstand: 'Modulsystem "RINGSCAFF-V" (Ergänzungs- und Verlängerungsbescheid; gilt nur zusammen mit der Genehmigung vom 12.01.2021)' },
+      { nummer: 'Z-8.22-971', bescheidVom: '29.01.2024', gueltigBis: '18.01.2028', gegenstand: 'Modulsystem "RINGSCAFF-VD" (Änderungs-, Ergänzungs- und Verlängerungsbescheid; gilt nur zusammen mit der Genehmigung vom 17.01.2019)' },
+    ] },
   'sx-ringscaff-trt': { key: 'sx-ringscaff-trt', hersteller: 'SCAFOM-RUX', name: 'SCAFOM-RUX RINGSCAFF Treppenturm', preislisteVersion: '2024-05-DE', preislisteStand: '05.2024', zulassungen: [] },
   'sx-super-rs': { key: 'sx-super-rs', hersteller: 'SCAFOM-RUX', name: 'SCAFOM-RUX SUPER-RS', preislisteVersion: '2024-05-DE', preislisteStand: '05.2024', zulassungen: [] },
   'sx-wbs': { key: 'sx-wbs', hersteller: 'SCAFOM-RUX', name: 'SCAFOM-RUX WBS (Wetterschutz)', preislisteVersion: '2024-05-DE', preislisteStand: '05.2024', zulassungen: [] },
