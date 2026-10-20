@@ -70,3 +70,34 @@ describe('Lastklassen aus den Zulassungen', () => {
     expect(p!.text).toContain('Z-8.22-986')
   })
 })
+
+import * as XLSX from 'xlsx'
+import { erzeugeStatikExcel } from '../export/statik-excel'
+import { windzonenRichtwertMs } from '../statik-daten'
+
+describe('Richtwerte und Excel-Export', () => {
+  it('Windzonen-Richtwert wird angezeigt, aber nicht in die Angaben übernommen', () => {
+    expect(windzonenRichtwertMs('2')).toBe(25)
+    expect(windzonenRichtwertMs(undefined)).toBeNull()
+    const m = generateCADModel(basis, 'mj-optima')
+    const d = baueLastannahmenDaten(m, { windzone: '2' }, opt)
+    const wind = d.sektionen.find((s) => s.titel.startsWith('3.'))!
+    expect(wind.zeilen.find((z) => z.label === 'Referenzwindgeschwindigkeit')!.wert).toBeNull()
+    expect(wind.zeilen.some((z) => z.label.includes('Richtwert'))).toBe(false) // Richtwert nur als Hinweis im Panel, nicht im Statiker-Blatt
+    expect(statikPruefpunkte(m, { windzone: '2', vrefMs: 20 }).some((p) => p.id === 'wind-richtwert')).toBe(true)
+    expect(statikPruefpunkte(m, { windzone: '2', vrefMs: 25 }).some((p) => p.id === 'wind-richtwert')).toBe(false)
+  })
+
+  it('Excel enthält Blätter für Lastannahmen, Lastklassen, Prüfprotokoll und Stückliste', () => {
+    const m = generateCADModel(basis, 'mj-optima')
+    const bytes = erzeugeStatikExcel(m, { windzone: '2' }, [{ articleNumber: 'A-1', name: '=SUMME(1)', category: 'x', quantity: 2, unit: 'Stk', weightKg: 3 } as never], opt)
+    const wb = XLSX.read(bytes, { type: 'array' })
+    expect(wb.SheetNames).toEqual(expect.arrayContaining(['Lastannahmen', 'Lastklassen Beläge', 'Prüfprotokoll', 'Stückliste']))
+    const pr = XLSX.utils.sheet_to_json<string[]>(wb.Sheets['Prüfprotokoll'], { header: 1 })
+    expect(String(pr[0][1])).toMatch(/grün|gelb|rot/)
+    // Formel-Zeichen am Zellanfang werden entschärft
+    const sl = XLSX.utils.sheet_to_json<string[]>(wb.Sheets['Stückliste'], { header: 1 })
+    expect(String(sl[1][1]).trim().startsWith('=')).toBe(true)
+    expect(String(sl[1][1]).startsWith('=')).toBe(false)
+  })
+})

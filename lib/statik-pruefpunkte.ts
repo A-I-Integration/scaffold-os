@@ -9,7 +9,7 @@
 // ============================================================
 
 import type { CADModel } from './calculations/cad-engine'
-import { SONDERLASTEN, type StatikDaten } from './statik-daten'
+import { SONDERLASTEN, windzonenRichtwertMs, type StatikDaten } from './statik-daten'
 import { katalogListeFuerSystem } from './cad/katalog-zuordnung'
 import { pruefeLastklassen } from './data/zulassung-lastklassen'
 
@@ -61,5 +61,9 @@ export function statikPruefpunkte(model: CADModel | null, statik: StatikDaten): 
     if (statik.sonderlasten?.includes(s.id)) p.push({ id: `sonder-${s.id}`, thema: 'Sonderlast', text: `${s.text}: als zusätzliche Einwirkung in der Statik berücksichtigen.` })
   }
   if (statik.windzone && statik.vrefMs === undefined) p.push({ id: 'wind', thema: 'Wind', text: `Windzone ${statik.windzone} angegeben, aber keine Referenzwindgeschwindigkeit eingetragen.` })
+  const richt = windzonenRichtwertMs(statik.windzone)
+  if (richt !== null && statik.vrefMs !== undefined && statik.vrefMs < richt) {
+    p.push({ id: 'wind-richtwert', thema: 'Wind', text: `Eingetragene Referenzwindgeschwindigkeit ${statik.vrefMs.toLocaleString('de-DE')} m/s liegt unter dem Richtwert ${richt.toLocaleString('de-DE')} m/s der Windzone ${statik.windzone}: Angabe mit dem Statiker abstimmen.` })
+  }
   return p
 }
