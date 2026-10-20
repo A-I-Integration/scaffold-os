@@ -78,6 +78,29 @@ const RUX_TYP: Record<string, RegExp> = {
   stair: /^Alu-Treppe/,
   ladder: /^Etagenleiter/,
 }
+/** Weitere RUX-Preislisten mit geprüften Regeln (Bereichsnamen siehe Preisliste); was fehlt, bleibt ohne Zuordnung. */
+const RUX_REGELN: Partial<Record<MjListe, Record<string, RegExp>>> = {
+  'sx-framescaff': {
+    frame: /^Vertikalrahmen (0,73|1,09), (Stahl|Aluminium)$/,
+    deck: /^(Stahlbelag 0,32 m für U-Auflage|ASTA-Belag für U-Auflage)/,
+    railing: /^Rückengeländer$/,
+    footplate: /^Gewindefußplatte/,
+    board: /^Bordbrett für U-Auflage$/,
+    console: /^(Konsole |Eck-Konsole|Aufsteck-Konsole)/,
+    stair: /^Alu-Podesttreppe/,
+  },
+  'sx-super-rs': {
+    frame: /^(Außenständer|Innenständer|Basisständer)/,
+    deck: /^(Belagbohle aus (Holz|Stahl|Aluminium)|Alu-Belagtafel)/,
+    railing: /^Rückengeländer RS$/,
+    diagonal: /^Diagonale 2,0 m/,
+    footplate: /^Gewindefußplatte/,
+    board: /^Bordbrett$/,
+    console: /^(Kragkonsole|Rahmenkonsole|Kupplungskonsole)/,
+    stair: /^Alu-Treppe/,
+    ladder: /^Etagenleiter/,
+  },
+}
 const RUX_RAHMEN: Record<string, RegExp> = {
   'rux-super65': /^Vertikalrahmen Stahl SUPER 65 ULTRA$/,
   'rux-super100': /^Vertikalrahmen Stahl SUPER 100$/,
@@ -137,6 +160,8 @@ export function artikelPasstZuTyp(a: MjArtikel, bauteilTyp: string, systemId?: s
     const name = a.untertitel.trim()
     return r.gruppe.test(a.gruppe.trim()) && r.name.test(name) && !(r.nicht && r.nicht.test(name))
   }
+  const rux = RUX_REGELN[a.liste]
+  if (rux) return !!rux[bauteilTyp] && rux[bauteilTyp].test(a.gruppe.trim())
   // Die Bereichs-Muster sind nur für diese MJ-Listen geprüft; andere Listen (z. B. Serien aus dem Katalog): keine Zuordnung statt Raten.
   if (!MJ_REGELLISTEN.has(a.liste)) return false
   const muster = TYP_ZU_BEREICH[bauteilTyp]
@@ -227,7 +252,7 @@ export function wendeKatalogwahlAn(
 
 const MJ_NAME: Partial<Record<MjListe, string>> = {
   combi: 'MJ COMBI', optima: 'MJ OPTIMA', 'optima-top': 'MJ OPTIMA TOP', 'optima-metric': 'MJ OPTIMA metric', 'uni-connect': 'MJ UNI-CONNECT',
-  'layher-allround': 'Layher Allround', 'sx-super': 'RUX SUPER',
+  'layher-allround': 'Layher Allround', 'sx-super': 'RUX SUPER', 'sx-framescaff': 'RUX FRAMESCAFF', 'sx-super-rs': 'RUX SUPER-RS',
 }
 
 // ---------- Aufmaß: Position der Materialliste gegen Katalogartikel tauschen ----------
