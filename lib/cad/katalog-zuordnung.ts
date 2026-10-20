@@ -79,7 +79,8 @@ const RUX_TYP: Record<string, RegExp> = {
   ladder: /^Etagenleiter/,
 }
 /** Weitere RUX-Preislisten mit geprüften Regeln (Bereichsnamen siehe Preisliste); was fehlt, bleibt ohne Zuordnung. */
-const RUX_REGELN: Partial<Record<MjListe, Record<string, RegExp>>> = {
+/** Schlüssel: Preisliste oder Serien-Kennung ('katalog:…', wenn eine Liste mehrere Maßvarianten mischt, z. B. RINGSCAFF) */
+const RUX_REGELN: Record<string, Record<string, RegExp>> = {
   'sx-framescaff': {
     frame: /^Vertikalrahmen (0,73|1,09), (Stahl|Aluminium)$/,
     deck: /^(Stahlbelag 0,32 m für U-Auflage|ASTA-Belag für U-Auflage)/,
@@ -100,6 +101,24 @@ const RUX_REGELN: Partial<Record<MjListe, Record<string, RegExp>>> = {
     stair: /^Alu-Treppe/,
     ladder: /^Etagenleiter/,
   },
+}
+const RINGSCAFF_GEMEIN = { frame: /^Ständer mit Rohrverbinder$/, footplate: /^Gewindefußplatte/, ladder: /^Etagenleiter/ }
+RUX_REGELN['katalog:rux-ringscaff-07'] = {
+  ...RINGSCAFF_GEMEIN,
+  deck: /^Stahlbelag .* - LA 07er-Maß$/,
+  railing: /^Rohrriegel - LA 07er-Maß$/,
+  diagonal: /^Diagonale 2,0 m - LA 07er-Maß$/,
+  board: /^Bordbrett, (Holz|Stahl) - LA 07er-Maß$/,
+  console: /^Stahl-Konsole .* - LA 07er-Maß$/,
+  stair: /^Alu-Podesttreppe .* - LA 07er-Maß$/,
+}
+RUX_REGELN['katalog:rux-ringscaff-metrisch'] = {
+  ...RINGSCAFF_GEMEIN,
+  deck: /^Stahlbelag 0,29 m für Rohrauflage - RX metrisch$/,
+  railing: /^Rohrriegel - RX metrisch$/,
+  diagonal: /^Diagonale 2,0 m - RX metrisch( \/ Diagonale 2,0 m - PC)?$/,
+  board: /^Bordbrett, (Holz|Stahl) - RX metrisch( \/ Bordbrett, (Holz|Stahl) - PC)?$/,
+  console: /^Stahl-Konsole für Rohrauflage - RX metrisch$/,
 }
 const RUX_RAHMEN: Record<string, RegExp> = {
   'rux-super65': /^Vertikalrahmen Stahl SUPER 65 ULTRA$/,
@@ -160,7 +179,7 @@ export function artikelPasstZuTyp(a: MjArtikel, bauteilTyp: string, systemId?: s
     const name = a.untertitel.trim()
     return r.gruppe.test(a.gruppe.trim()) && r.name.test(name) && !(r.nicht && r.nicht.test(name))
   }
-  const rux = RUX_REGELN[a.liste]
+  const rux = RUX_REGELN[systemId ?? ''] ?? RUX_REGELN[a.liste]
   if (rux) return !!rux[bauteilTyp] && rux[bauteilTyp].test(a.gruppe.trim())
   // Die Bereichs-Muster sind nur für diese MJ-Listen geprüft; andere Listen (z. B. Serien aus dem Katalog): keine Zuordnung statt Raten.
   if (!MJ_REGELLISTEN.has(a.liste)) return false
@@ -252,7 +271,7 @@ export function wendeKatalogwahlAn(
 
 const MJ_NAME: Partial<Record<MjListe, string>> = {
   combi: 'MJ COMBI', optima: 'MJ OPTIMA', 'optima-top': 'MJ OPTIMA TOP', 'optima-metric': 'MJ OPTIMA metric', 'uni-connect': 'MJ UNI-CONNECT',
-  'layher-allround': 'Layher Allround', 'sx-super': 'RUX SUPER', 'sx-framescaff': 'RUX FRAMESCAFF', 'sx-super-rs': 'RUX SUPER-RS',
+  'layher-allround': 'Layher Allround', 'sx-super': 'RUX SUPER', 'sx-framescaff': 'RUX FRAMESCAFF', 'sx-ringscaff': 'RUX RINGSCAFF', 'sx-super-rs': 'RUX SUPER-RS',
 }
 
 // ---------- Aufmaß: Position der Materialliste gegen Katalogartikel tauschen ----------

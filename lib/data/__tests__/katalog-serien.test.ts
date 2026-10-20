@@ -28,7 +28,7 @@ describe('Serien aus dem Katalog', () => {
     expect(findeKatalogSerie('layher-allround')).toBeNull()
   })
   it('Teilezuordnung nur für Serien mit geprüften Regeln, sonst keine (kein Raten)', () => {
-    const mitRegeln = new Set(['katalog:rux-framescaff', 'katalog:rux-super-rs'])
+    const mitRegeln = new Set(['katalog:rux-framescaff', 'katalog:rux-super-rs', 'katalog:rux-ringscaff-07', 'katalog:rux-ringscaff-metrisch'])
     for (const s of KATALOG_SERIEN) {
       for (const k of ['Rahmen', 'Belag', 'Geländer', 'Fundamente', 'Bordbretter']) {
         const n = passendeArtikelFuerKategorie(s.id, k).length
@@ -47,5 +47,15 @@ describe('Serien aus dem Katalog', () => {
     const d = passendeArtikelFuerKategorie('katalog:rux-super-rs', 'Diagonalen')
     expect(d.length).toBeGreaterThan(0)
     expect(d.every((a) => a.gruppe.startsWith('Diagonale 2,0 m'))).toBe(true)
+  })
+  it('RINGSCAFF: Maßvarianten bleiben getrennt', () => {
+    const namen = (id: string, k: string) => passendeArtikelFuerKategorie(id, k).map((a) => a.gruppe)
+    for (const k of ['Belag', 'Geländer', 'Diagonalen', 'Bordbretter']) {
+      expect(namen('katalog:rux-ringscaff-07', k).every((g) => g.includes('LA 07er-Maß')), k).toBe(true)
+      expect(namen('katalog:rux-ringscaff-metrisch', k).every((g) => g.includes('RX metrisch')), k).toBe(true)
+      expect(namen('katalog:rux-ringscaff-07', k).length).toBeGreaterThan(0)
+      expect(namen('katalog:rux-ringscaff-metrisch', k).length).toBeGreaterThan(0)
+    }
+    expect(namen('katalog:rux-ringscaff-07', 'Rahmen').every((g) => g === 'Ständer mit Rohrverbinder')).toBe(true)
   })
 })
