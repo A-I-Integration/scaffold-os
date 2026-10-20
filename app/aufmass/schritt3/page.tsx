@@ -10,7 +10,7 @@ import { speichereEntwurf } from '@/lib/aufmass-entwurf';
 import { speichereSchrittAuto } from '@/lib/aufmass-autosave';
 import { sichtbareGeruesttypen, leseAngeboteneTypen } from '@/lib/geruesttypen';
 import { GERUEST_SYSTEME, CUSTOM_SYSTEM_ID, findeSystem } from '@/lib/calculations/geruest-systeme';
-import { KATALOG_SERIEN, findeKatalogSerie, katalogSerienHersteller } from '@/lib/data/katalog-serien';
+import { angeboteneKatalogSerien, findeKatalogSerie, katalogSerienHersteller } from '@/lib/data/katalog-serien';
 
 const LEERES_FORM_S3 = {
   geruesttyp: '',
@@ -251,7 +251,7 @@ function Schritt3Content() {
                   <div key={h}>
                     <div className="text-xs font-medium text-[#424245] mb-1">{h}</div>
                     <div className="flex flex-wrap gap-2">
-                      {KATALOG_SERIEN.filter((s) => s.hersteller === h).map((s) => (
+                      {angeboteneKatalogSerien().filter((s) => s.hersteller === h).map((s) => (
                         <button
                           key={s.id}
                           type="button"

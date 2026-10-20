@@ -26,6 +26,8 @@ export const SYSTEM_ZU_LISTE: Record<string, MjListe> = {
   // RUX: eine Preisliste SUPER für beide Systeme; Rahmen werden je System getrennt (RUX_RAHMEN).
   'rux-super65': 'sx-super',
   'rux-super100': 'sx-super',
+  'rux-framescaff': 'sx-framescaff',
+  'rux-ringscaff': 'sx-ringscaff',
 }
 
 const MJ_REGELLISTEN: ReadonlySet<MjListe> = new Set<MjListe>(['combi', 'optima', 'optima-top', 'optima-metric', 'uni-connect'])
@@ -120,6 +122,8 @@ RUX_REGELN['katalog:rux-ringscaff-metrisch'] = {
   board: /^Bordbrett, (Holz|Stahl) - RX metrisch( \/ Bordbrett, (Holz|Stahl) - PC)?$/,
   console: /^Stahl-Konsole für Rohrauflage - RX metrisch$/,
 }
+// CAD-System RINGSCAFF = 07er-Maß (die metrische Variante ist eine eigene Serie im Aufmaß)
+RUX_REGELN['rux-ringscaff'] = RUX_REGELN['katalog:rux-ringscaff-07']
 // MJ-Serien ohne eigenes CAD-System (Serien aus dem Katalog): Bereichsnamen der Preisliste, nur eindeutige Typen.
 RUX_REGELN['katalog:mj-uni'] = {
   deck: /^STAHLBODEN 0,15 M$/,

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { KATALOG_SERIEN, findeKatalogSerie } from '../katalog-serien'
+import { KATALOG_SERIEN, findeKatalogSerie, angeboteneKatalogSerien } from '../katalog-serien'
 import { alleMjArtikel } from '@/lib/mj-katalog'
 import { artikelMassM, katalogListeFuerSystem, passendeArtikelFuerKategorie } from '@/lib/cad/katalog-zuordnung'
 import { systemAnzeigename } from '@/lib/calculations/geruest-systeme'
@@ -73,5 +73,18 @@ describe('Serien aus dem Katalog', () => {
       expect(namen('katalog:rux-ringscaff-metrisch', k).length).toBeGreaterThan(0)
     }
     expect(namen('katalog:rux-ringscaff-07', 'Rahmen').every((g) => g === 'Ständer mit Rohrverbinder')).toBe(true)
+  })
+  it('CAD-Systeme FRAMESCAFF/RINGSCAFF: gleiche Teile wie die Serie, Serie wird nicht doppelt angeboten', () => {
+    const paare: [string, string][] = [['rux-framescaff', 'katalog:rux-framescaff'], ['rux-ringscaff', 'katalog:rux-ringscaff-07']]
+    for (const [sys, serie] of paare) {
+      expect(katalogListeFuerSystem(sys)).toBe(findeKatalogSerie(serie)!.liste)
+      expect(systemAnzeigename(sys)).not.toContain('(Katalog)')
+      for (const k of ['Rahmen', 'Belag', 'Geländer', 'Fundamente']) {
+        expect(passendeArtikelFuerKategorie(sys, k).map((a) => a.nr), `${sys} ${k}`).toEqual(passendeArtikelFuerKategorie(serie, k).map((a) => a.nr))
+        expect(passendeArtikelFuerKategorie(sys, k).length).toBeGreaterThan(0)
+      }
+      expect(angeboteneKatalogSerien().some((s) => s.id === serie)).toBe(false)
+      expect(findeKatalogSerie(serie)).not.toBeNull() // alte Projekte bleiben lesbar
+    }
   })
 })
