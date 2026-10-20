@@ -15,7 +15,7 @@ const opt = { projektName: 'Test', firma: 'Muster GmbH', datum: '20.10.2026' }
 describe('Lastklassen aus den Zulassungen', () => {
   it('Tabellen gehören zu der im Katalog hinterlegten Zulassung', () => {
     for (const [liste, t] of Object.entries(LASTKLASSEN_TABELLEN)) {
-      expect(MJ_LISTEN[liste as keyof typeof MJ_LISTEN].zulassungen.map((z) => z.nummer)).toContain(t!.zulassung)
+      for (const nr of t!.zulassung.split(' / ')) expect(MJ_LISTEN[liste as keyof typeof MJ_LISTEN].zulassungen.map((z) => z.nummer)).toContain(nr)
     }
   })
 
@@ -38,6 +38,16 @@ describe('Lastklassen aus den Zulassungen', () => {
     expect(maxLastklasse(b, 3.07)).toBe(4)
     expect(maxLastklasse(b, 4.14)).toBe(3)
     expect(maxLastklasse(b, 5)).toBeNull()
+  })
+
+  it('liest RINGSCAFF-Tabellen (Z-8.22-869 / -901) und Felder erst ab 2,57 m', () => {
+    const t = LASTKLASSEN_TABELLEN['sx-ringscaff']!
+    const o = t.belaege.find((b) => b.belag.startsWith('RINGSCAFF: O-Stahlboden 0,32'))!
+    expect([maxLastklasse(o, 2.07), maxLastklasse(o, 2.57), maxLastklasse(o, 3.07), maxLastklasse(o, 4)]).toEqual([6, 5, 4, null])
+    const d = t.belaege.find((b) => b.belag === 'RINGSCAFF-V: O-Durchstieg mit Leiter')!
+    expect([maxLastklasse(d, 2.07), maxLastklasse(d, 2.57), maxLastklasse(d, 3.07)]).toEqual([null, 3, 3])
+    const r = t.belaege.find((b) => b.belag === 'RINGSCAFF-V: U-Robustboden 0,32 m')!
+    expect([maxLastklasse(r, 1.57), maxLastklasse(r, 2.07), maxLastklasse(r, 2.57), maxLastklasse(r, 3.07)]).toEqual([6, 5, 4, 3])
   })
 
   it('Abgleich: ok / zu hoch / nicht abgedeckt', () => {

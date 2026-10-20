@@ -27,15 +27,31 @@ describe('Serien aus dem Katalog', () => {
     expect(findeKatalogSerie('katalog:gibt-es-nicht')).toBeNull()
     expect(findeKatalogSerie('layher-allround')).toBeNull()
   })
-  it('Teilezuordnung nur für Serien mit geprüften Regeln, sonst keine (kein Raten)', () => {
-    const mitRegeln = new Set(['katalog:rux-framescaff', 'katalog:rux-super-rs', 'katalog:rux-ringscaff-07', 'katalog:rux-ringscaff-metrisch'])
+  it('Teilezuordnung: jede Serie ordnet nur zu, was Regeln hat; Kategorien ohne Regel bleiben leer', () => {
+    // Kategorien mit mindestens einem Treffer je Serie (geprüft gegen die Preislisten)
+    const erwartet: Record<string, string[]> = {
+      'katalog:rux-framescaff': ['Rahmen', 'Belag', 'Geländer', 'Fundamente', 'Bordbretter', 'Konsolen', 'Treppen'],
+      'katalog:rux-super-rs': ['Rahmen', 'Belag', 'Geländer', 'Diagonalen', 'Fundamente', 'Bordbretter', 'Konsolen', 'Treppen', 'Leitern'],
+      'katalog:rux-ringscaff-07': ['Rahmen', 'Belag', 'Geländer', 'Diagonalen', 'Fundamente', 'Bordbretter', 'Konsolen', 'Treppen', 'Leitern'],
+      'katalog:rux-ringscaff-metrisch': ['Rahmen', 'Belag', 'Geländer', 'Diagonalen', 'Fundamente', 'Bordbretter', 'Konsolen', 'Leitern'],
+      'katalog:mj-uni': ['Belag', 'Geländer', 'Diagonalen', 'Leitern'],
+      'katalog:mj-uni-top': ['Rahmen', 'Belag', 'Geländer', 'Diagonalen', 'Bordbretter', 'Konsolen', 'Treppen', 'Leitern'],
+      'katalog:mj-combi-metric-top': ['Rahmen', 'Belag', 'Geländer', 'Diagonalen', 'Fundamente', 'Bordbretter', 'Konsolen', 'Treppen', 'Leitern'],
+    }
+    const alle = ['Rahmen', 'Belag', 'Geländer', 'Diagonalen', 'Fundamente', 'Bordbretter', 'Konsolen', 'Treppen', 'Leitern', 'Kupplungen', 'Anker']
     for (const s of KATALOG_SERIEN) {
-      for (const k of ['Rahmen', 'Belag', 'Geländer', 'Fundamente', 'Bordbretter']) {
+      for (const k of alle) {
         const n = passendeArtikelFuerKategorie(s.id, k).length
-        if (mitRegeln.has(s.id)) expect(n, `${s.id} ${k}`).toBeGreaterThan(0)
+        if (erwartet[s.id].includes(k)) expect(n, `${s.id} ${k}`).toBeGreaterThan(0)
         else expect(n, `${s.id} ${k}`).toBe(0)
       }
     }
+  })
+  it('MJ-Serien: Rahmen/Beläge kommen nur aus den vorgesehenen Bereichen', () => {
+    const g = (id: string, k: string) => new Set(passendeArtikelFuerKategorie(id, k).map((a) => a.gruppe))
+    expect(g('katalog:mj-uni-top', 'Rahmen')).toEqual(new Set(['RAHMEN']))
+    expect(g('katalog:mj-uni', 'Belag')).toEqual(new Set(['STAHLBODEN 0,15 M']))
+    expect(g('katalog:mj-combi-metric-top', 'Geländer')).toEqual(new Set(['GELÄNDERRIEGEL']))
   })
   it('FRAMESCAFF: Rahmen nur Standardrahmen, Beläge nur Stahl-/ASTA-Belag', () => {
     const rahmen = passendeArtikelFuerKategorie('katalog:rux-framescaff', 'Rahmen').map((a) => a.gruppe)
