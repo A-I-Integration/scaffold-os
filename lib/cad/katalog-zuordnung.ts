@@ -1,5 +1,5 @@
 // ============================================================
-// SCAFFOLD OS – Zuordnung CAD-Bauteil → Hersteller-Katalogartikel (MJ-Gerüst)
+// SCAFFOLD OS – Zuordnung CAD-Bauteil → Hersteller-Katalogartikel (MJ-Gerüst, Layher)
 //
 // Der Katalog (lib/mj-katalog.ts) kennt keine Artikelnamen, nur Bereichsnamen
 // ("RIEGEL", "BORDBRETTER" …) und Maße. Deshalb wird hier über den Bereich
@@ -19,6 +19,9 @@ export const SYSTEM_ZU_LISTE: Record<string, MjListe> = {
   'mj-optima-top': 'optima-top',
   'mj-optima-metric': 'optima-metric',
   'mj-uniconnect': 'uni-connect',
+  // Layher: Die Preisliste AllroundGerüst gilt für Stahl- und Alu-Variante (Alu-Stiele stehen darin als eigene Artikel).
+  'layher-allround': 'layher-allround',
+  'layher-allround-alu': 'layher-allround',
 }
 
 /** Bauteiltyp des CAD → Bereichsnamen im Katalog (Muster auf den Bereichstext, Großschreibung egal) */
@@ -37,6 +40,23 @@ const TYP_ZU_BEREICH: Record<string, RegExp> = {
   protection_roof: /schutzdach/i,
 }
 
+/**
+ * Layher-Preisliste: Der Bereich ist nur der Abschnitt des Katalogs (z. B. "Horizontale Tragelemente");
+ * der Bauteiltyp ergibt sich aus Abschnitt UND Bezeichnung. Was hier nicht eindeutig passt, bleibt ohne Zuordnung.
+ */
+const LAYHER_TYP: Record<string, { gruppe: RegExp; name: RegExp; nicht?: RegExp }> = {
+  frame: { gruppe: /^Vertikale Tragelemente$/, name: /^(Alu-)?(Stiel|Anfangsstiel)\b/, nicht: /Sicherung/ },
+  deck: { gruppe: /^(U|O)-Gerüstböden$/, name: /^(U|O)-.*boden/i, nicht: /Durchstieg|Eckboden|Etagenleiter/ },
+  railing: { gruppe: /^Horizontale Tragelemente$/, name: /^(U|O)-(Riegel|Wechselriegel)/, nicht: /Stahlboden|Doppel/ },
+  diagonal: { gruppe: /^Diagonalaussteifung$/, name: /^Diagonale/ },
+  footplate: { gruppe: /^Gerüstspindeln$/, name: /^(Schwenkbare )?Fußspindel/ },
+  coupling: { gruppe: /^Kupplungen, Zubehör, Verankerung$/, name: /^(Normalkupplung|Drehkupplung|Schnellmontage-)/ },
+  anchor: { gruppe: /^Kupplungen, Zubehör, Verankerung$/, name: /^(Gerüsthalter|Allround Anker)/ },
+  console: { gruppe: /^Konsolen$/, name: /Konsole/ },
+  board: { gruppe: /^Bordbretter$/, name: /^(U|O)-.*bordbrett/i },
+  stair: { gruppe: /^Podesttreppe, Komforttreppe$/, name: /^(U|O)-(Podest|Komfort|Anfangs)treppe/ },
+}
+
 export function katalogListeFuerSystem(systemId: string): MjListe | null {
   return SYSTEM_ZU_LISTE[systemId] ?? null
 }
@@ -50,13 +70,30 @@ export function artikelMassM(a: MjArtikel): number | null {
   return null
 }
 
+/** Anzeigename: MJ → Bereich, Layher → Produktbezeichnung (dort ist der Bereich nur der Katalogabschnitt) */
+export function artikelBezeichnung(a: MjArtikel): string {
+  return a.liste.startsWith('layher-') && a.untertitel ? a.untertitel : a.gruppe
+}
+
 /** Kurzbeschreibung für die Auswahlliste, z. B. "RIEGEL · 1,09 m · 4,5 kg · 30,30 €" */
 export function artikelLabel(a: MjArtikel): string {
   const m = artikelMassM(a)
   const g = a.attribute['Gewicht (kg)']
-  const teile = [a.gruppe, m != null ? `${m.toLocaleString('de-DE')} m` : null, typeof g === 'number' ? `${g.toLocaleString('de-DE')} kg` : null,
+  const teile = [artikelBezeichnung(a), m != null ? `${m.toLocaleString('de-DE')} m` : null, typeof g === 'number' ? `${g.toLocaleString('de-DE')} kg` : null,
     `${a.preis.toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €`]
   return `${a.nr} · ${teile.filter(Boolean).join(' · ')}`
+}
+
+/** Gehört der Artikel (laut Bereich/Bezeichnung) zum Bauteiltyp? Ohne Regel für den Typ: nein. */
+export function artikelPasstZuTyp(a: MjArtikel, bauteilTyp: string): boolean {
+  if (a.liste.startsWith('layher-')) {
+    const r = LAYHER_TYP[bauteilTyp]
+    if (!r) return false
+    const name = a.untertitel.trim()
+    return r.gruppe.test(a.gruppe.trim()) && r.name.test(name) && !(r.nicht && r.nicht.test(name))
+  }
+  const muster = TYP_ZU_BEREICH[bauteilTyp]
+  return !!muster && muster.test(a.gruppe.trim())
 }
 
 /**
@@ -66,9 +103,8 @@ export function artikelLabel(a: MjArtikel): string {
  */
 export function passendeArtikel(systemId: string, bauteilTyp: string, wunschMassM?: number): MjArtikel[] {
   const liste = katalogListeFuerSystem(systemId)
-  const muster = TYP_ZU_BEREICH[bauteilTyp]
-  if (!liste || !muster) return []
-  const treffer = alleMjArtikel().filter((a) => a.liste === liste && muster.test(a.gruppe.trim()))
+  if (!liste) return []
+  const treffer = alleMjArtikel().filter((a) => a.liste === liste && artikelPasstZuTyp(a, bauteilTyp))
   const abstand = (a: MjArtikel) => {
     const m = artikelMassM(a)
     return wunschMassM == null || m == null ? 0 : Math.abs(m - wunschMassM)
@@ -112,7 +148,7 @@ export function wendeKatalogwahlAn(
     const std = mengen.get(b.articleNumber)
     if (!art) { unbekannt.add(nr); continue }
     // Schutz gegen veraltete IDs: Artikel muss zum Bauteiltyp passen
-    if (!TYP_ZU_BEREICH[b.type]?.test(art.gruppe.trim())) continue
+    if (!artikelPasstZuTyp(art, b.type)) continue
     if (!std || std.quantity < 1) continue
     std.quantity -= 1
     std.totalPrice = Math.round(std.quantity * std.unitPrice * 100) / 100
@@ -125,7 +161,7 @@ export function wendeKatalogwahlAn(
       const m = artikelMassM(art)
       neu.set(nr, {
         articleNumber: nr,
-        name: `${art.gruppe}${m != null ? ` ${m.toLocaleString('de-DE')} m` : ''} (${MJ_NAME[liste] ?? 'MJ'})`,
+        name: `${artikelBezeichnung(art)}${m != null ? ` ${m.toLocaleString('de-DE')} m` : ''} (${MJ_NAME[liste] ?? 'Katalog'})`,
         category: std.category,
         quantity: 1,
         unit: std.unit,
@@ -133,7 +169,7 @@ export function wendeKatalogwahlAn(
         totalPrice: art.preis,
         weightKg: typeof gew === 'number' ? gew : 0,
         riskLevel: 'low',
-        aiRecommendation: 'MJ-Katalogartikel, Listenpreis netto',
+        aiRecommendation: 'Hersteller-Katalogartikel, Listenpreis netto',
       })
     }
     ersetzt++
@@ -144,6 +180,7 @@ export function wendeKatalogwahlAn(
 
 const MJ_NAME: Partial<Record<MjListe, string>> = {
   combi: 'MJ COMBI', optima: 'MJ OPTIMA', 'optima-top': 'MJ OPTIMA TOP', 'optima-metric': 'MJ OPTIMA metric', 'uni-connect': 'MJ UNI-CONNECT',
+  'layher-allround': 'Layher Allround',
 }
 
 // ---------- Aufmaß: Position der Materialliste gegen Katalogartikel tauschen ----------
@@ -168,11 +205,11 @@ export function setzeKatalogArtikel(item: MaterialItem, art: MjArtikel, listenNa
   return {
     ...item,
     articleNumber: art.nr,
-    name: `${art.gruppe}${m != null ? ` ${m.toLocaleString('de-DE')} m` : ''} (${listenName})`,
+    name: `${artikelBezeichnung(art)}${m != null ? ` ${m.toLocaleString('de-DE')} m` : ''} (${listenName})`,
     unitPrice: art.preis,
     totalPrice: Math.round(item.quantity * art.preis * 100) / 100,
     weightKg: typeof gew === 'number' ? gew : 0,
-    aiRecommendation: 'MJ-Katalogartikel, Listenpreis netto',
+    aiRecommendation: 'Hersteller-Katalogartikel, Listenpreis netto',
     vorKatalog: basis,
   }
 }
@@ -185,7 +222,7 @@ export function stelleStandardWiederHer(item: MaterialItem): MaterialItem {
 
 export function katalogListenName(systemId: string): string {
   const l = katalogListeFuerSystem(systemId)
-  return (l && MJ_NAME[l]) || 'MJ'
+  return (l && MJ_NAME[l]) || 'Katalog'
 }
 
 /**

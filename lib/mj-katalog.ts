@@ -4,6 +4,10 @@
 // Quelle: Preislisten MJ OPTIMA (V2.4), MJ OPTIMA TOP (V2.3), MJ OPTIMA metric
 // (V2.3), MJ UNI-CONNECT (V3.3-1), MJ COMBI (V3.4), MJ COMBI metric / TOP (V2.2), MJ UNI (V3.2), MJ UNI TOP (V3.3) und MJ Wand und Dach (V1.2), Paletten und Lagertechnik (V1.2), Zubehör (V3.3),
 // Zubehör ZIPKO (V1.1) und den OPTI-RACK-Regalpaketen (Flyer 10.2025),
+// sowie – als eigener Hersteller „Layher“ – Katalog & Preisliste 2026/2027
+// (AllroundGerüst, Schutz-Systeme, Systemfreies Zubehör; lib/data/layher-katalog.json,
+// erzeugt mit scripts/layher-katalog-lesen.py; Bereich = Abschnitt laut Inhaltsverzeichnis,
+// Bezeichnung automatisch ausgelesen und teils gekürzt – maßgeblich sind Art.-Nr., Maße, Gewicht, Preis),
 // jeweils Stand 04.2025, der MJ-Gerüst GmbH. Die Tabellen wurden
 // automatisch ausgelesen (lib/data/mj-katalog.json) und stichprobenartig gegen
 // die PDFs geprüft. Der Katalog ist NUR ZUM NACHSCHLAGEN: Er verändert weder
@@ -16,9 +20,11 @@
 // ============================================================
 
 import katalogRoh from '@/lib/data/mj-katalog.json';
+import layherRoh from '@/lib/data/layher-katalog.json';
 
 export type MjListe = 'optima' | 'optima-top' | 'optima-metric' | 'uni-connect' | 'combi' | 'combi-metric-top' | 'uni' | 'uni-top' | 'wand-dach' | 'paletten' | 'zubehoer' | 'zipko' | 'opti-rack'
-  | 'sx-framescaff' | 'sx-super' | 'sx-ringscaff' | 'sx-ringscaff-trt' | 'sx-super-rs' | 'sx-wbs' | 'sx-zubehoer' | 'sx-plex' | 'sx-miete';
+  | 'sx-framescaff' | 'sx-super' | 'sx-ringscaff' | 'sx-ringscaff-trt' | 'sx-super-rs' | 'sx-wbs' | 'sx-zubehoer' | 'sx-plex' | 'sx-miete'
+  | 'layher-allround' | 'layher-schutz' | 'layher-zubehoer';
 
 export interface MjArtikel {
   /** Artikelnummer laut MJ (6 Stellen) */
@@ -35,7 +41,7 @@ export interface MjArtikel {
 
 export interface MjListeInfo {
   key: MjListe;
-  hersteller: 'MJ-Gerüst' | 'SCAFOM-RUX';
+  hersteller: 'MJ-Gerüst' | 'SCAFOM-RUX' | 'Layher';
   name: string;
   preislisteVersion: string;
   preislisteStand: string;
@@ -103,6 +109,9 @@ export const MJ_LISTEN: Record<MjListe, MjListeInfo> = {
   'sx-wbs': { key: 'sx-wbs', hersteller: 'SCAFOM-RUX', name: 'SCAFOM-RUX WBS (Wetterschutz)', preislisteVersion: '2024-05-DE', preislisteStand: '05.2024', zulassungen: [] },
   'sx-zubehoer': { key: 'sx-zubehoer', hersteller: 'SCAFOM-RUX', name: 'SCAFOM-RUX Zubehör', preislisteVersion: '2024-05-DE', preislisteStand: '05.2024', zulassungen: [] },
   'sx-plex': { key: 'sx-plex', hersteller: 'SCAFOM-RUX', name: 'SCAFOM-RUX PLEX Fassadengerüst', preislisteVersion: '2026-06-DE', preislisteStand: '06.2026', zulassungen: [] },
+  'layher-allround': { key: 'layher-allround', hersteller: 'Layher', name: 'Layher AllroundGerüst', preislisteVersion: 'Katalog & Preisliste 2026/2027', preislisteStand: '2026/2027', zulassungen: [] },
+  'layher-schutz': { key: 'layher-schutz', hersteller: 'Layher', name: 'Layher Schutz-Systeme (Kederdach, Kassettendach, Protect)', preislisteVersion: 'Katalog & Preisliste 2026/2027', preislisteStand: '2026/2027', zulassungen: [] },
+  'layher-zubehoer': { key: 'layher-zubehoer', hersteller: 'Layher', name: 'Layher Systemfreies Zubehör', preislisteVersion: 'Katalog & Preisliste 2026/2027', preislisteStand: '2026/2027', zulassungen: [] },
   'sx-miete': { key: 'sx-miete', hersteller: 'SCAFOM-RUX', name: 'SCAFOM-RUX Mietpreisliste', preislisteVersion: '2026-08-DE', preislisteStand: '08.2026', zulassungen: [] },
 };
 
@@ -139,7 +148,8 @@ export const MJ_OPTI_BEAM = {
   hinweis: 'Nur zur Verwendung mit original MJ-Bauteilen. Nach den europäischen Schutzrechten EP 3721028 und EP 3721029 ist die Verwendung mit Abhebesicherungen und Stieladaptern anderer Hersteller nicht vorgesehen.',
 } as const;
 
-const alle: MjArtikel[] = (katalogRoh as unknown as { n: string; l: string; g: string; u: string; a: Record<string, string | number>; p: number }[]).map((r) => ({
+type RohArtikel = { n: string; l: string; g: string; u: string; a: Record<string, string | number>; p: number };
+const alle: MjArtikel[] = [...(katalogRoh as unknown as RohArtikel[]), ...(layherRoh as unknown as RohArtikel[])].map((r) => ({
   nr: r.n, liste: r.l as MjListe, gruppe: r.g, untertitel: r.u, attribute: r.a, preis: r.p,
 }));
 

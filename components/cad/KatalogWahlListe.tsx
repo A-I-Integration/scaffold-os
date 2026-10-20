@@ -1,7 +1,7 @@
 'use client'
 
 // Liste der im CAD per Klick gewählten Hersteller-Artikel (zusammengefasst mit
-// Stückzahl). Reine Anzeige; Preise = MJ-Listenpreise netto, keine Verkaufspreise.
+// Stückzahl). Reine Anzeige; Preise = Hersteller-Listenpreise netto, keine Verkaufspreise.
 
 import { useMemo } from 'react'
 import { alleMjArtikel } from '@/lib/mj-katalog'

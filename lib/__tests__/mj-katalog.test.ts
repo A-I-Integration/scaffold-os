@@ -10,9 +10,19 @@ describe('MJ-Katalog', () => {
   it('jede Zeile hat eine Artikelnummer (MJ: 5–6 Ziffern) und einen Preis > 0', () => {
     for (const a of alle) {
       if (MJ_LISTEN[a.liste].hersteller === 'MJ-Gerüst') expect(a.nr).toMatch(/^\d{5,6}$/);
+      else if (MJ_LISTEN[a.liste].hersteller === 'Layher') expect(a.nr).toMatch(/^\d{4}\.\d{3}$/);
       else expect(a.nr).toMatch(/^[A-Za-z0-9][A-Za-z0-9_\-/ ]{3,30}$/);
       expect(a.preis).toBeGreaterThan(0);
     }
+  });
+  it('Layher: Stichproben gegen die Preisliste 2026/27 (Allround)', () => {
+    const f = (nr: string) => alle.find((a) => a.liste === 'layher-allround' && a.nr === nr)!;
+    expect(f('2617.100').preis).toBe(35.2);       // Stiel LW 1,00 m
+    expect(f('2617.100').attribute['Gewicht (kg)']).toBe(4.9);
+    expect(f('2601.257').preis).toBe(49.5);       // O-Riegel LW 2,57 m
+    expect(f('3883.414').preis).toBe(164.2);      // U-Stahlboden LW 4,14 × 0,32
+    expect(f('3883.414').attribute['Gewicht (kg)']).toBe(25.6);
+    expect(f('4002.080').gruppe).toBe('Gerüstspindeln');
   });
   it('Artikelnummer kommt je Preisliste nur einmal vor', () => {
     // Ausnahme: in der MJ-Preisliste doppelt vergebene Nummern sind im Katalog mit „Hinweis“ markiert
