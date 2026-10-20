@@ -10,6 +10,7 @@
 // ============================================================
 
 import { alleMjArtikel, type MjArtikel, type MjListe } from '@/lib/mj-katalog'
+import { findeKatalogSerie } from '@/lib/data/katalog-serien'
 import type { MaterialItem } from '@/types/scaffold'
 
 /** CAD-Systemkennung → Preisliste(n) des Katalogs. Nicht gelistete Systeme: kein MJ-Katalog. */
@@ -26,6 +27,8 @@ export const SYSTEM_ZU_LISTE: Record<string, MjListe> = {
   'rux-super65': 'sx-super',
   'rux-super100': 'sx-super',
 }
+
+const MJ_REGELLISTEN: ReadonlySet<MjListe> = new Set<MjListe>(['combi', 'optima', 'optima-top', 'optima-metric', 'uni-connect'])
 
 /** Bauteiltyp des CAD → Bereichsnamen im Katalog (Muster auf den Bereichstext, Großschreibung egal) */
 const TYP_ZU_BEREICH: Record<string, RegExp> = {
@@ -81,7 +84,7 @@ const RUX_RAHMEN: Record<string, RegExp> = {
 }
 
 export function katalogListeFuerSystem(systemId: string): MjListe | null {
-  return SYSTEM_ZU_LISTE[systemId] ?? null
+  return SYSTEM_ZU_LISTE[systemId] ?? findeKatalogSerie(systemId)?.liste ?? null
 }
 
 /** Das wichtigste Längenmaß eines Artikels in m (Länge → Feldlänge → Breite), sonst null */
@@ -134,6 +137,8 @@ export function artikelPasstZuTyp(a: MjArtikel, bauteilTyp: string, systemId?: s
     const name = a.untertitel.trim()
     return r.gruppe.test(a.gruppe.trim()) && r.name.test(name) && !(r.nicht && r.nicht.test(name))
   }
+  // Die Bereichs-Muster sind nur für diese MJ-Listen geprüft; andere Listen (z. B. Serien aus dem Katalog): keine Zuordnung statt Raten.
+  if (!MJ_REGELLISTEN.has(a.liste)) return false
   const muster = TYP_ZU_BEREICH[bauteilTyp]
   return !!muster && muster.test(a.gruppe.trim())
 }
