@@ -171,3 +171,39 @@ describe('Layher AllroundGerüst', () => {
     expect(res.materials.find((x) => x.articleNumber === r.nr)?.name).toMatch(/\(Layher Allround\)$/)
   })
 })
+
+import { artikelGewichtKg, artikelMassM } from '../katalog-zuordnung'
+
+describe('RUX SUPER (Katalogwahl)', () => {
+  it('Super 65 und Super 100 haben die Preisliste SUPER; Rahmen werden je System getrennt', () => {
+    expect(katalogListeFuerSystem('rux-super65')).toBe('sx-super')
+    expect(katalogListeFuerSystem('rux-super100')).toBe('sx-super')
+    const r65 = passendeArtikel('rux-super65', 'frame').map((a) => a.gruppe)
+    const r100 = passendeArtikel('rux-super100', 'frame').map((a) => a.gruppe)
+    expect(r65.length).toBeGreaterThan(0)
+    expect(r100.length).toBeGreaterThan(0)
+    expect(new Set(r65)).toEqual(new Set(['Vertikalrahmen Stahl SUPER 65 ULTRA']))
+    expect(new Set(r100)).toEqual(new Set(['Vertikalrahmen Stahl SUPER 100']))
+  })
+  it('ordnet nur eindeutige Bauteiltypen zu, Kupplungen und Anker nicht', () => {
+    for (const typ of ['deck', 'railing', 'diagonal', 'footplate', 'console', 'board', 'stair']) expect(passendeArtikel('rux-super65', typ).length).toBeGreaterThan(0)
+    expect(passendeArtikel('rux-super65', 'coupling')).toEqual([])
+    expect(passendeArtikel('rux-super65', 'anchor')).toEqual([])
+    expect(passendeArtikel('rux-super65', 'diagonal').every((a) => a.gruppe === 'Diagonale')).toBe(true)
+  })
+  it('liest Maß und Gewicht aus den RUX-Attributen', () => {
+    const rahmen = passendeArtikel('rux-super65', 'frame').find((a) => a.nr === '01538U')!
+    expect(artikelMassM(rahmen)).toBe(2)
+    expect(artikelGewichtKg(rahmen)).toBe(16.5)
+  })
+  it('Katalogwahl ersetzt das Standardbauteil mit RUX-Preis und -Gewicht', () => {
+    const art = passendeArtikel('rux-super65', 'diagonal')[0]
+    const mat = [{ articleNumber: 'D-1', name: 'Diagonale', category: 'Diagonalen', quantity: 2, unit: 'Stk', unitPrice: 10, totalPrice: 20, weightKg: 1, riskLevel: 'low', aiRecommendation: '' }] as never
+    const r = wendeKatalogwahlAn('rux-super65', [{ id: 'b1', type: 'diagonal', articleNumber: 'D-1' }], mat, { b1: art.nr })
+    expect(r.ersetzt).toBe(1)
+    const neu = r.materials.find((m) => m.articleNumber === art.nr)!
+    expect(neu.unitPrice).toBe(art.preis)
+    expect(neu.weightKg).toBe(artikelGewichtKg(art))
+    expect(neu.name).toContain('RUX SUPER')
+  })
+})
