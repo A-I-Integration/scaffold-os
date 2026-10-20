@@ -26,6 +26,8 @@ export interface BelagLastklasse {
   /** "Anlage B, Seite" bzw. "Anlage A, Seite" wie in der Tabelle */
   anlage: string
   stufen: LkStufe[]
+  /** Nur wenn die Zulassung den Belag erst ab einer Feldweite nennt (z. B. "2,57 und 3,07"): kleinere Feldweiten sind nicht abgedeckt */
+  abM?: number
   hinweis?: string
 }
 export interface LastklassenTabelle {
@@ -118,12 +120,33 @@ export const LASTKLASSEN_TABELLEN: Partial<Record<MjListe, LastklassenTabelle>> 
       { belag: 'Alu-Belagbohle d = 45 mm', anlage: '50.75.00', stufen: s([2.0, 6], [2.5, 4], [3.0, 3]) },
     ],
   },
+  'sx-ringscaff': {
+    liste: 'sx-ringscaff', zulassung: 'Z-8.22-869 / Z-8.22-901', tabelle: 'Tabelle 9 (Z-8.22-869) bzw. Tabelle 8 (Z-8.22-901)',
+    stand: 'Bescheide 09.04.2021 (Z-8.22-869) und 12.01.2021 (Z-8.22-901)',
+    hinweis: 'Gelesen aus den Bescheiden von 2021 (Grundbescheide). Die Verlängerungsbescheide von 2026 lagen nicht vor und sind nicht ausgewertet. Maßgeblich ist der aktuelle Bescheid. RINGSCAFF-VD (Z-8.22-971) ist nicht erfasst.',
+    belaege: [
+      { belag: 'RINGSCAFF: O-Stahlboden 0,32 m (auch Clinch, TS, P51)', anlage: 'Anlage B, 28, 35, 37, 40', stufen: s([2.07, 6], [2.57, 5], [3.07, 4]) },
+      { belag: 'RINGSCAFF: U-Stahlboden 0,32 m (auch Clinch, TS)', anlage: 'Anlage B, 34, 36, 38', stufen: s([2.07, 6], [2.57, 5], [3.07, 4]) },
+      { belag: 'RINGSCAFF: O-Stahlboden 0,19 m / U-Stahlboden 0,19 m', anlage: 'Anlage B, 29, 39', stufen: s([2.07, 6], [2.57, 5], [3.07, 4]) },
+      { belag: 'RINGSCAFF: O-Durchstieg mit Leiter', anlage: 'Anlage B, 30', stufen: s([3.07, 3]) },
+      { belag: 'RINGSCAFF: U-Durchstieg mit Leiter', anlage: 'Anlage B, 41', stufen: s([3.07, 3]) },
+      { belag: 'RINGSCAFF-V: O-Stahlboden 0,32 m (auch Clinch, TS)', anlage: 'Anlage B, 27, 33, 35', stufen: s([2.07, 6], [2.57, 5], [3.07, 4]) },
+      { belag: 'RINGSCAFF-V: U-Stahlboden 0,32 m (auch Clinch, TS) / U-Stahlboden 0,19 m', anlage: 'Anlage B, 32, 88, 89, 90, 91, 34, 36, 37', stufen: s([2.07, 6], [2.57, 5], [3.07, 4]) },
+      { belag: 'RINGSCAFF-V: O-Durchstieg mit Leiter', anlage: 'Anlage B, 28', stufen: s([3.07, 3]), abM: 2.57, hinweis: 'Die Zulassung nennt nur die Feldweiten 2,57 m und 3,07 m.' },
+      { belag: 'RINGSCAFF-V: U-Durchstieg mit Leiter', anlage: 'Anlage B, 38', stufen: s([3.07, 3]), abM: 2.57, hinweis: 'Die Zulassung nennt nur die Feldweiten 2,57 m und 3,07 m.' },
+      { belag: 'RINGSCAFF-V: U-Robust-Durchstieg 0,61 m', anlage: 'Anlage B, 92', stufen: s([3.07, 3]) },
+      { belag: 'RINGSCAFF-V: U-Robustböden 0,61 m', anlage: 'Anlage B, 97, 98', stufen: s([3.07, 3]) },
+      { belag: 'RINGSCAFF-V: U-Robustboden 0,32 m', anlage: 'Anlage B, 99', stufen: s([1.57, 6], [2.07, 5], [2.57, 4], [3.07, 3]) },
+      { belag: 'RINGSCAFF-V: U-Stahl-Durchstiegsboden 0,64 m', anlage: 'Anlage B, 100', stufen: s([2.57, 4]), abM: 2.57, hinweis: 'Die Zulassung nennt nur die Feldweite 2,57 m.' },
+    ],
+  },
 }
 
 const TOL = 0.005
 
 /** Höchste Lastklasse eines Belags für eine Feldweite (m); null = Feldweite über der Tabelle (nicht abgedeckt) */
 export function maxLastklasse(b: BelagLastklasse, feldweiteM: number): number | null {
+  if (b.abM !== undefined && feldweiteM < b.abM - TOL) return null
   const st = [...b.stufen].sort((x, y) => x.bisM - y.bisM).find((x) => feldweiteM <= x.bisM + TOL)
   return st ? st.lk : null
 }
