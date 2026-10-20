@@ -174,8 +174,12 @@ export interface LkPruefung {
  * Hält die Beläge der Zulassung gegen die im Modell vorkommenden Feldweiten und die geplante Lastklasse.
  * Das ist ein Abgleich mit der Zulassungstabelle, kein Nachweis. null, wenn für die Liste keine Tabelle erfasst ist.
  */
-export function pruefeLastklassen(liste: MjListe | null, feldweitenM: number[], geplanteLk: number | null | undefined): LkPruefung | null {
-  const tabelle = liste ? LASTKLASSEN_TABELLEN[liste] : undefined
+export function pruefeLastklassen(
+  liste: MjListe | null, feldweitenM: number[], geplanteLk: number | null | undefined,
+  /** Nur für Tests mit Fixture-Daten; im Betrieb gilt LASTKLASSEN_TABELLEN */
+  tabellen: Partial<Record<MjListe, LastklassenTabelle>> = LASTKLASSEN_TABELLEN,
+): LkPruefung | null {
+  const tabelle = liste ? tabellen[liste] : undefined
   if (!tabelle) return null
   const weiten = [...new Set(feldweitenM.map((f) => Math.round(f * 100) / 100))].sort((a, b) => a - b)
   const lk = geplanteLk ?? null

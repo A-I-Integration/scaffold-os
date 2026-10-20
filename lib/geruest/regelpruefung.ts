@@ -19,6 +19,10 @@
 // hinterlegt und werden nicht erfunden. Kommt ein geprüfter Grenzwert hinzu
 // (mit Quelle), wird er als eigene Regel ergänzt.
 //
+// Richtwert-Regeln (lib/geruest/richtwert-regeln.ts): Grenzen, die als Zahl oder Datum im Katalog stehen
+// (Zulassungs-Eckdaten der gewählten Serie). Status 'verletzt' = Richtwert aus dem Katalog überschritten:
+// rot, aber KEINE Sperre. Fehlt der Wert im Katalog, gibt es kein Ergebnis (Regel schweigt).
+//
 // Die Ampel zählt nur Ergebnisse mit art 'geprueft'.
 // ============================================================
 
@@ -26,8 +30,10 @@ import { berechneGebaeudeSegmente, type CADModel } from '@/lib/calculations/cad-
 import { checkRules } from '@/lib/calculations/cad-rules'
 import { fehlendeStatikAngaben, type StatikDaten } from '@/lib/statik-daten'
 import { TYPENSTATIK_HOEHE_HINWEIS_M } from '@/lib/statik-pruefpunkte'
+import { richtwertErgebnisse, type RichtwertOptionen } from '@/lib/geruest/richtwert-regeln'
 
-export type PruefStatus = 'ok' | 'warnung' | 'fehler'
+/** 'verletzt' = Richtwert aus den Zulassungs-Eckdaten des Katalogs überschritten (rot, keine Sperre) */
+export type PruefStatus = 'ok' | 'warnung' | 'fehler' | 'verletzt'
 
 export interface Pruefergebnis {
   id: string
@@ -45,7 +51,7 @@ export interface Pruefprotokoll {
   ergebnisse: Pruefergebnis[]
   /** schlechtester Status aller Ergebnisse mit art 'geprueft' */
   ampel: PruefStatus
-  anzahl: { ok: number; warnung: number; fehler: number }
+  anzahl: { ok: number; warnung: number; fehler: number; verletzt: number }
   hinweis: string
 }
 
@@ -56,7 +62,12 @@ export const PRUEF_HINWEIS =
 /** Systeme, für die in cad-rules.ts Grenzen der Regelausführung mit Zulassungsnummer hinterlegt sind. */
 export const SYSTEME_MIT_REGELAUSFUEHRUNG = ['layher-allround', 'peri-up-flex'] as const
 
-const SCHLECHTER: Record<PruefStatus, number> = { ok: 0, warnung: 1, fehler: 2 }
+const SCHLECHTER: Record<PruefStatus, number> = { ok: 0, warnung: 1, fehler: 2, verletzt: 3 }
+
+/** Zählzeile für Ausgaben. Ohne verletzte Richtwerte exakt der bisherige Text. */
+export function anzahlText(a: Pruefprotokoll['anzahl']): string {
+  return `${a.ok} OK, ${a.warnung} Warnungen, ${a.fehler} Fehler` + (a.verletzt > 0 ? `, ${a.verletzt} Richtwert${a.verletzt === 1 ? '' : 'e'} verletzt` : '')
+}
 
 function m(n: number, stellen = 1): string {
   return n.toLocaleString('de-DE', { maximumFractionDigits: stellen })
@@ -75,7 +86,7 @@ export function abschnittsListe(model: CADModel): { name: string; laengeM: numbe
   return [{ name: `Gebäude (${m(model.building.lengthM)} m × ${m(model.building.heightM)} m)`, laengeM: model.building.lengthM, hoeheM: model.building.heightM, eingeruestet: true }]
 }
 
-export function pruefeGeruest(model: CADModel, statik: StatikDaten = {}): Pruefprotokoll {
+export function pruefeGeruest(model: CADModel, statik: StatikDaten = {}, richtwert: RichtwertOptionen = {}): Pruefprotokoll {
   const e: Pruefergebnis[] = []
   const sysId = model.system?.id
   const abschnitte = abschnittsListe(model)
@@ -167,7 +178,10 @@ export function pruefeGeruest(model: CADModel, statik: StatikDaten = {}): Pruefp
     e.push({ id: 'SYSTEMMISCHUNG', regel: 'Mischsysteme', status: 'warnung', art: 'geprueft', begruendung: 'Bauteile verschiedener Hersteller oder Systeme sind gemischt: ein gesonderter Nachweis ist nötig.', quelle: 'statik-pruefpunkte.ts' })
   }
 
-  const anzahl = { ok: 0, warnung: 0, fehler: 0 }
+  // 10. Richtwerte aus den Zulassungs-Eckdaten der gewählten Katalogserie (nur befüllte Felder)
+  e.push(...richtwertErgebnisse(model, richtwert))
+
+  const anzahl = { ok: 0, warnung: 0, fehler: 0, verletzt: 0 }
   let ampel: PruefStatus = 'ok'
   for (const r of e) {
     anzahl[r.status]++
