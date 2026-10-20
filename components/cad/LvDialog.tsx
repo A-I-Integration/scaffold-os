@@ -13,13 +13,13 @@ import type { CADModel } from '@/lib/calculations/cad-engine'
 import type { MaterialItem } from '@/types/scaffold'
 import {
   erzeugeLeistungsverzeichnis, formatEuro, formatMenge,
-  LV_STANDARD_EINGABEN, LASTKLASSEN, type LvEingaben,
+  LV_STANDARD_EINGABEN, LASTKLASSEN, ZUSATZ_INFO, type LvEingaben, type LvStil, type LvZusatz,
 } from '@/lib/leistungsverzeichnis'
 
 const feld = 'w-full px-2 py-1.5 border rounded-lg text-xs bg-white'
 const label = 'block text-[11px] font-medium text-[#424245] mb-0.5'
 const FIRMA_KEY = 'scaffoldos.lv.firma'
-const FIRMENFELDER = ['auftragnehmer', 'stundensatzFach', 'stundensatzHelfer', 'mietsatzProzentJeWoche', 'zuschlagProzent', 'gesamtStandzeitWochen', 'mwstProzent'] as const
+const FIRMENFELDER = ['auftragnehmer', 'stundensatzFach', 'stundensatzHelfer', 'mietsatzProzentJeWoche', 'zuschlagProzent', 'gesamtStandzeitWochen', 'mwstProzent', 'stil', 'statikPauschale', 'baustelleneinrichtung', 'anfahrtspauschale'] as const
 
 interface Props {
   model: CADModel
@@ -51,6 +51,8 @@ export default function LvDialog({ model, materials, aufbauStunden, abbauStunden
     })
   }
   const zahl = (v: string): number => { const n = parseFloat(v.replace(',', '.')); return Number.isFinite(n) && n >= 0 ? n : 0 }
+
+  const setzeZusatz = (i: number, patch: Partial<LvZusatz>) => setze({ zusatz: e.zusatz.map((z, j) => (j === i ? { ...z, ...patch } : z)) })
 
   const lv = useMemo(
     () => erzeugeLeistungsverzeichnis({ model, materials, aufbauStunden, abbauStunden }, e),
@@ -98,7 +100,14 @@ export default function LvDialog({ model, materials, aufbauStunden, abbauStunden
 
         <div className='grid md:grid-cols-[300px_1fr] gap-0 overflow-hidden flex-1 min-h-0'>
           <div className='p-4 space-y-3 overflow-y-auto border-r border-black/10'>
-            <div className='text-[11px] font-semibold uppercase text-[#86868b]'>Projekt</div>
+            <div className='text-[11px] font-semibold uppercase text-[#86868b]'>Aufbau des LV</div>
+            <select className={feld} value={e.stil} onChange={(ev) => setze({ stil: ev.target.value as LvStil })}>
+              <option value='getrennt'>Aufbau · Vorhaltung · Abbau getrennt (wie ZECH/BVG)</option>
+              <option value='grundstandzeit'>Auf-/Abbau inkl. 4 Wochen Vorhaltung (wie St. Kilian)</option>
+            </select>
+
+            <div className='text-[11px] font-semibold uppercase text-[#86868b] pt-1'>Projekt</div>
+            <div><label className={label}>Projekt-Nr.</label><input className={feld} value={e.projektnummer} onChange={(ev) => setze({ projektnummer: ev.target.value })} /></div>
             <div><label className={label}>Bauvorhaben</label><input className={feld} value={e.bauvorhaben} onChange={(ev) => setze({ bauvorhaben: ev.target.value })} /></div>
             <div><label className={label}>Objektadresse</label><input className={feld} value={e.objektadresse} onChange={(ev) => setze({ objektadresse: ev.target.value })} /></div>
             <div><label className={label}>Bauherr</label><input className={feld} value={e.bauherr} onChange={(ev) => setze({ bauherr: ev.target.value })} /></div>
@@ -112,6 +121,14 @@ export default function LvDialog({ model, materials, aufbauStunden, abbauStunden
                   <option>H1</option><option>H2</option>
                 </select></div>
             </div>
+            <div className='grid grid-cols-2 gap-2'>
+              <div><label className={label}>Untergrund der Befestigung</label><input className={feld} value={e.untergrundBefestigung} onChange={(ev) => setze({ untergrundBefestigung: ev.target.value })} /></div>
+              <div><label className={label}>Aufstellung</label><input className={feld} value={e.aufstellung} onChange={(ev) => setze({ aufstellung: ev.target.value })} /></div>
+            </div>
+            <div><label className={label}>Genutzte Gerüstlagen</label>
+              <select className={feld} value={e.lagen} onChange={(ev) => setze({ lagen: ev.target.value as 'alle' | 'obere' })}>
+                <option value='alle'>alle Gerüstlagen</option><option value='obere'>obere Gerüstlagen</option>
+              </select></div>
             <div><label className={label}>Lastklasse</label>
               <select className={feld} value={e.lastklasse} onChange={(ev) => setze({ lastklasse: parseInt(ev.target.value, 10) })}>
                 {Object.entries(LASTKLASSEN).map(([k, v]) => <option key={k} value={k}>Lastklasse {k} ({v.toLocaleString('de-DE')} kN/m²)</option>)}
@@ -125,6 +142,32 @@ export default function LvDialog({ model, materials, aufbauStunden, abbauStunden
               <div><label className={label}>Höhe Fanggerüst (m)</label>{num('fanggeruestHoeheM')}</div>
             </div>
             <p className='text-[10px] text-[#86868b]'>Die Regeln der ATV sind nicht voreingestellt. Trage ein, was in deinem Vertrag gilt; 0 = nichts anwenden.</p>
+
+            <div className='text-[11px] font-semibold uppercase text-[#86868b] pt-1'>Zusatzleistungen (Menge und EP selbst eintragen)</div>
+            {e.zusatz.map((z, i) => (
+              <div key={z.art} className='rounded-lg border border-black/10 p-2 space-y-1.5'>
+                <div className='text-[11px] font-medium text-[#1d1d1f]'>{ZUSATZ_INFO[z.art].name}</div>
+                <div className='grid grid-cols-2 gap-2'>
+                  <div><label className={label}>Menge ({ZUSATZ_INFO[z.art].einheit})</label>
+                    <input type='number' min={0} step='0.01' className={feld} value={z.menge === 0 ? '' : z.menge} onChange={(ev) => setzeZusatz(i, { menge: zahl(ev.target.value) })} /></div>
+                  <div><label className={label}>EP Aufbau (€)</label>
+                    <input type='number' min={0} step='0.01' className={feld} value={z.epAuf === 0 ? '' : z.epAuf} onChange={(ev) => setzeZusatz(i, { epAuf: zahl(ev.target.value) })} /></div>
+                  <div><label className={label}>EP Vorhaltung/Wo (€)</label>
+                    <input type='number' min={0} step='0.01' className={feld} value={z.epVorh === 0 ? '' : z.epVorh} onChange={(ev) => setzeZusatz(i, { epVorh: zahl(ev.target.value) })} /></div>
+                  <div><label className={label}>EP Abbau (€)</label>
+                    <input type='number' min={0} step='0.01' className={feld} value={z.epAb === 0 ? '' : z.epAb} onChange={(ev) => setzeZusatz(i, { epAb: zahl(ev.target.value) })} /></div>
+                </div>
+              </div>
+            ))}
+            <p className='text-[10px] text-[#86868b]'>Diese Positionen stehen in den Muster-LVs, kommen aber nicht aus dem CAD-Modell. Menge 0 = Position entfällt.</p>
+
+            <div className='text-[11px] font-semibold uppercase text-[#86868b] pt-1'>Pauschalen (netto)</div>
+            <div className='grid grid-cols-2 gap-2'>
+              <div><label className={label}>Technische Bearbeitung / Statik (€)</label>{num('statikPauschale')}</div>
+              <div><label className={label}>Baustelleneinrichtung (€)</label>{num('baustelleneinrichtung')}</div>
+              <div><label className={label}>Anfahrtspauschale je Einsatz (€)</label>{num('anfahrtspauschale')}</div>
+              <div><label className={label}>Anzahl Anfahrten</label>{num('anfahrtAnzahl', '1')}</div>
+            </div>
 
             <div className='text-[11px] font-semibold uppercase text-[#86868b] pt-1'>Preisfaktoren</div>
             <div className='grid grid-cols-2 gap-2'>
@@ -156,7 +199,7 @@ export default function LvDialog({ model, materials, aufbauStunden, abbauStunden
               <tbody>
                 {lv.titel.map((t) => (
                   <Fragment key={`titel${t.nr}`}>
-                    <tr><td colSpan={6} className='pt-3 pb-1 font-semibold text-[#e8590c]'>Titel {t.nr}, {t.titel}</td></tr>
+                    <tr><td colSpan={6} className='pt-3 pb-1 font-semibold text-[#e8590c]'>Titel {t.nrText}, {t.titel}</td></tr>
                     {t.positionen.map((p) => (
                       <tr key={p.nr} className='border-b border-black/5 align-top'>
                         <td className='py-1 pr-2 whitespace-nowrap'>{p.nr}</td>
@@ -167,7 +210,7 @@ export default function LvDialog({ model, materials, aufbauStunden, abbauStunden
                         <td className='py-1 text-right whitespace-nowrap font-medium'>{formatEuro(p.gp)}</td>
                       </tr>
                     ))}
-                    <tr><td colSpan={5} className='py-1 text-right font-semibold'>Summe Titel {t.nr}</td><td className='py-1 text-right font-semibold'>{formatEuro(t.summe)}</td></tr>
+                    <tr><td colSpan={5} className='py-1 text-right font-semibold'>Summe Titel {t.nrText}</td><td className='py-1 text-right font-semibold'>{formatEuro(t.summe)}</td></tr>
                   </Fragment>
                 ))}
               </tbody>
