@@ -16,7 +16,7 @@ import type { BuildingSection } from '@/lib/calculations/cad-engine'
 
 /** 'bauteil' = allgemeines Teil ohne erkannte Rolle (z. B. aus DXF-Linien: Maße sind bekannt, ob Schiff oder Turm weiß die Zeichnung nicht) */
 export type TeilTyp = 'schiff' | 'turm' | 'anbau' | 'bauteil'
-export type TeilQuelle = 'obj-stl' | 'ply' | 'dxf'
+export type TeilQuelle = 'obj-stl' | 'ply' | 'dxf' | 'ifc'
 
 export interface GebaeudeTeil {
   id: string

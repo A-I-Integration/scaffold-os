@@ -33,7 +33,12 @@ export interface DxfOptionen {
   einheit?: Einheit
   /** Größte Lücke in Metern, die zwischen zwei Linienenden noch geschlossen wird (Standard 0,1 m) */
   luckeM?: number
+  /** Herkunft der Teile (Standard 'dxf'); der IFC-Import nutzt dieselbe Formerkennung mit 'ifc' */
+  quelle?: 'dxf' | 'ifc'
 }
+
+/** Abbildung Quellkoordinaten (Zeichnung / IFC-Grundriss) → Teile-Raum; damit lässt sich zu jedem Teil sagen, wo es in der Quelle liegt */
+export interface DxfAbbildung { mx: number; my: number; theta: number; faktor: number; quer: boolean; mitteX: number; mitteZ: number }
 
 export interface DxfTextAngaben {
   /** Gesamter Plantext (TEXT/MTEXT), bereinigt */
@@ -62,6 +67,8 @@ export interface DxfUmrissErgebnis {
   teile: GebaeudeTeil[] | null
   /** Zu jedem Teil die Nummer der Figur, aus der es stammt (0 = Hauptgebäude, 1.. = weitere Figuren in der Reihenfolge ihrer Größe) */
   teileFigur?: number[]
+  /** Lage der Teile in der Quelle (nur gesetzt, wenn `teile` gesetzt ist) */
+  abbildung?: DxfAbbildung
   /** Anzahl der Figuren, die als Teile übernommen wurden (1 = nur das Hauptgebäude) */
   figuren: number
   textAngaben: DxfTextAngaben
@@ -436,7 +443,7 @@ function formVon(ecken: number, innen: number, ecke: { konvex: boolean }[], rech
   return 'vieleck'
 }
 
-interface Platte { fig: number; s: Streifen }
+interface Platte { fig: number; s: Streifen; quer: boolean }
 
 /**
  * Streifen aller Figuren nebeneinander legen (das Abschnittsmodell kennt nur Teile, die in Längsrichtung aufeinander folgen).
@@ -449,7 +456,7 @@ function kombiniere(figs: UmrissPunkt[][]): Platte[] | null {
     for (let f = 0; f < figs.length; f++) {
       const s = streifen(quer ? figs[f].map((a) => ({ x: a.z, z: -a.x })) : figs[f])
       if (!s) return null
-      for (const t of s) alle.push({ fig: f, s: t })
+      for (const t of s) alle.push({ fig: f, s: t, quer })
     }
     alle.sort((a, b) => a.s.x0 - b.s.x0)
     for (let i = 0; i + 1 < alle.length; i++) if (alle[i].s.x1 > alle[i + 1].s.x0 + 0.05) return null
@@ -464,7 +471,7 @@ function kombiniere(figs: UmrissPunkt[][]): Platte[] | null {
 }
 
 /** Platten → Teile (Länge entlang x, Tiefe quer, Versatz gegenüber der Mitte des Gesamtumrisses, + = vorne) */
-function teileAusPlatten(l: Platte[]): { teile: GebaeudeTeil[]; figuren: number[] } {
+function teileAusPlatten(l: Platte[]): { teile: GebaeudeTeil[]; figuren: number[]; mitteX: number; mitteZ: number; quer: boolean } {
   const xMin = l[0].s.x0, xMax = l[l.length - 1].s.x1, mitteX = (xMin + xMax) / 2
   const zMin = Math.min(...l.map((t) => t.s.z0)), zMax = Math.max(...l.map((t) => t.s.z1)), mitteZ = (zMin + zMax) / 2
   const teile = l.map(({ s: t }, i): GebaeudeTeil => {
@@ -480,7 +487,7 @@ function teileAusPlatten(l: Platte[]): { teile: GebaeudeTeil[]; figuren: number[
       hinweis: 'Höhe ergänzen',
     }
   })
-  return { teile, figuren: l.map((t) => t.fig) }
+  return { teile, figuren: l.map((t) => t.fig), mitteX, mitteZ, quer: l[0].quer }
 }
 
 function bearbeite(rohUmriss: Punkt2[], faktor: number, einheit: Einheit | null, einheitQuelle: DxfUmrissErgebnis['einheitQuelle'], hinweise: string[]): Kandidat {
@@ -514,18 +521,19 @@ function bearbeite(rohUmriss: Punkt2[], faktor: number, einheit: Einheit | null,
 
   let teile: GebaeudeTeil[] | null = null
   let teileFigur: number[] | undefined
+  let abbildung: DxfAbbildung | undefined
   if (rechtwinklig) {
     const k = kombiniere([norm])
     if (!k) hinweise.push('Die Form lässt sich nicht in einfache Gebäudeteile gliedern – der Umriss wird als Ganzes verwendet.')
     else if (k.length > MAX_TEILE) hinweise.push(`Der Umriss hätte ${k.length} Teile (mehr als ${MAX_TEILE}) – er wird als Ganzes verwendet.`)
-    else { const t = teileAusPlatten(k); teile = t.teile; teileFigur = t.figuren }
+    else { const t = teileAusPlatten(k); teile = t.teile; teileFigur = t.figuren; abbildung = { mx, my, theta, faktor, quer: t.quer, mitteX: t.mitteX, mitteZ: t.mitteZ } }
   }
   return {
     intern: { mx, my, theta, norm },
     ergebnis: {
       ok: true, umriss: norm, form, ecken: ecken.length, innenecken: innen, rechtwinklig,
       laengeM: r2(Math.max(spanX, spanZ)), breiteM: r2(Math.min(spanX, spanZ)), flaecheM2: r2(flaeche), drehungGrad,
-      einheit, einheitQuelle, teile, teileFigur, figuren: 1,
+      einheit, einheitQuelle, teile, teileFigur, abbildung, figuren: 1,
       textAngaben: { text: '' }, ebenen: { verwendet: [], ignoriert: [], modus: 'alle' }, hinweise,
     },
   }
@@ -599,6 +607,7 @@ function verbindeFiguren(e: DxfUmrissErgebnis, intern: Intern, weitere: { roh: P
     const k = kombiniere(angenommen)!
     const t = teileAusPlatten(k)
     e.teile = t.teile; e.teileFigur = t.figuren; e.figuren = angenommen.length
+    e.abbildung = { mx: intern.mx, my: intern.my, theta: intern.theta, faktor, quer: t.quer, mitteX: t.mitteX, mitteZ: t.mitteZ }
     e.hinweise.push(`${angenommen.length} Figuren als Gebäudeteile übernommen (von links nach rechts): Hauptgebäude und ${angenommenNamen.join(', ')}. Höhen, Dachformen und die Lage der Teile bitte prüfen.`)
     for (let i = 0; i + 1 < k.length; i++) {
       const luecke = k[i + 1].s.x0 - k[i].s.x1
@@ -682,7 +691,14 @@ function textAngabenVon(text: string): DxfTextAngaben {
 export function leseDxfUmriss(inhalt: string, opt: DxfOptionen = {}): DxfLeseErgebnis {
   const gelesen = (() => { try { return leseDxf(inhalt) } catch { return null } })()
   if (!gelesen) return { ok: false, grund: 'keine-datei', fallbackKi: true, text: '', hinweise: ['Die Datei ist keine lesbare DXF im Text-Format (ASCII).'] }
-  const text = bereinigeText(gelesen.texte)
+  return umrissAusGelesen(gelesen, bereinigeText(gelesen.texte), opt)
+}
+
+/**
+ * Gemeinsamer Kern für DXF und IFC: Linien/geschlossene Figuren (in Zeichnungseinheiten) → Umriss, Ecken, Form, Teile.
+ * Der IFC-Import legt hier die Grundriss-Umrisse als geschlossene Ketten ab; es gibt nur diese eine Formerkennung.
+ */
+function umrissAusGelesen(gelesen: Gelesen, text: string, opt: DxfOptionen): DxfLeseErgebnis {
   if (gelesen.segmente.length === 0 && gelesen.ketten.length === 0) return { ok: false, grund: 'keine-geometrie', fallbackKi: true, text, hinweise: ['Im Modellbereich der DXF wurden keine Linien (LINE, LWPOLYLINE, POLYLINE) gefunden.'] }
 
   const alleEbenen = [...new Set([...gelesen.segmente.map((s) => s.ebene), ...gelesen.ketten.map((k) => k.ebene)])]
@@ -738,6 +754,7 @@ export function leseDxfUmriss(inhalt: string, opt: DxfOptionen = {}): DxfLeseErg
       const zeilen = gelesen.texte.flatMap((t) => bereinigeText([t]).split('\n'))
       wendeTextHoehenAn(e, ordneHoehenZu(e, zeilen, weitereFiguren))
       e.hinweise = [...h, ...e.hinweise.filter((x) => !h.includes(x))]
+      if (opt.quelle === 'ifc' && e.teile) e.teile = e.teile.map((t) => ({ ...t, id: t.id.replace(/^dxf-/, 'ifc-'), quelle: 'ifc' as const }))
       return e
     }
   }
@@ -770,6 +787,27 @@ function wendeTextHoehenAn(e: DxfUmrissErgebnis, zugeordnet: { gesetzt: number; 
   } else if (hatHoehe && !zugeordnet.gefunden) {
     e.hinweise.push(`Im Plantext stehen Höhenangaben (${[t.traufhoeheM !== undefined ? `Traufhöhe ${String(t.traufhoeheM).replace('.', ',')} m` : '', t.hoeheM !== undefined ? `Firsthöhe ${String(t.hoeheM).replace('.', ',')} m` : ''].filter(Boolean).join(', ')}), aber nicht, zu welchem der ${e.teile.length} Teile sie gehören – bitte Höhe je Teil ergänzen.`)
   }
+}
+
+/**
+ * IFC-Import: geschlossene Grundriss-Umrisse (Meter, y nach oben wie im Plan) durch dieselbe Formerkennung wie DXF.
+ * Die Figuren sind schon sauber geschlossen; es gibt keine Ebenen, keinen Text und keine Einheitenschätzung.
+ */
+export function umrissAusFiguren(figuren: Punkt2[][], opt: Pick<DxfOptionen, 'luckeM' | 'quelle'> = {}): DxfLeseErgebnis {
+  const gelesen: Gelesen = {
+    segmente: [], texte: [], insunits: 6, bogen: false, ignoriert: {},
+    ketten: figuren.filter((f) => f.length >= 3).map((f) => ({ ebene: 'IFC', punkte: f.map(([x, y]) => ({ x, y })), geschlossen: true })),
+  }
+  return umrissAusGelesen(gelesen, '', { ...opt, einheit: 'm' })
+}
+
+/** Ort eines Punktes im Teile-Raum (x, z in Metern, wie `GebaeudeTeil.grundriss`) → Koordinaten in der Quelle (bei IFC: x, y des Grundrisses in Metern) */
+export function teilPunktInQuelle(a: DxfAbbildung, x: number, z: number): Punkt2 {
+  let px = x + a.mitteX, pz = z + a.mitteZ
+  if (a.quer) { const ox = -pz, oz = px; px = ox; pz = oz }   // Umkehrung von (x, z) → (z, -x)
+  const c = Math.cos(a.theta * GRAD), s = Math.sin(a.theta * GRAD)
+  const qx = px * c - pz * s, qz = px * s + pz * c           // Umkehrung von drehe()
+  return [qx / a.faktor + a.mx, -qz / a.faktor + a.my]
 }
 
 /**

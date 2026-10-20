@@ -14,6 +14,7 @@ import { erkenneGrundriss, FORM_NAME } from '@/lib/cad/grundriss-erkennung'
 import { analysiereDreiecke, abschnitteAusTeilen, abschnitteAusTeileListe, vorgabeAchseEinheit, type GebaeudeTeil } from '@/lib/cad/modell-analyse'
 import { umrissBox } from '@/lib/calculations/cad-umriss'
 import { leseDxfUmriss, mitHoehen, DXF_FORM_NAME, type DxfUmrissErgebnis } from '@/lib/cad/dxf-umriss'
+import type { IfcZusatz } from '@/lib/cad/ifc-einleser'
 
 interface Props {
   building: BuildingParams
@@ -37,7 +38,9 @@ export default function BuildingForm({ building, systemId, onChange, onSystemCha
   // 3D-Modell (OBJ/STL, z. B. aus SketchUp): Außenmaße im Browser lesen, Einheit/„oben“ wählt die Person
   const [modellImport, setModellImport] = useState<{ name: string; format: 'obj' | 'stl'; quader: Quader; dreiecke: Float32Array; einheit: Einheit; oben: Achse; einheitGeschaetzt: boolean } | null>(null)
   // DXF-Zeichnung: Gebäudeumriss aus den Linien gelesen (lib/cad/dxf-umriss.ts); Höhen trägt die Person ein
-  const [dxfImport, setDxfImport] = useState<{ name: string; inhalt: string; ergebnis: DxfUmrissErgebnis; hoehen: string[]; gezeichnet?: boolean } | null>(null)
+  // Dasselbe Feld trägt auch den IFC-Import (`ifc` gesetzt): gleiche Formerkennung, gleiche Teile, gleicher Prüfschritt
+  const [dxfImport, setDxfImport] = useState<{ name: string; inhalt: string; ergebnis: DxfUmrissErgebnis; hoehen: string[]; gezeichnet?: boolean; ifc?: IfcZusatz } | null>(null)
+  const [ifcFortschritt, setIfcFortschritt] = useState<{ anteil: number; text: string } | null>(null)
   const [zeichnerOffen, setZeichnerOffen] = useState(false)
   // Grundriss (Rechteck, L-Form, Ecken …) automatisch aus dem 3D-Modell erkennen
   const grundriss = useMemo(() => {
@@ -74,7 +77,7 @@ export default function BuildingForm({ building, systemId, onChange, onSystemCha
   // Phase 73: DXF (Beschriftungen werden direkt geparst) und PLY
   // (Punktwolke -> Begrenzungsbox) werden jetzt unterstuetzt.
   const NEU_ERLAUBT = ['.dxf', '.ply'];
-  const DXF_ARTEN = ['.dwg', '.dwt', '.ifc', '.step', '.stp', '.igs', '.skp']; // .dfx entfaellt, ist jetzt erlaubt
+  const DXF_ARTEN = ['.dwg', '.dwt', '.step', '.stp', '.igs', '.skp']; // .ifc wird seit dem IFC-Import gelesen (unten)
 
   async function handlePlanUpload(file: File) {
     setAnalyseHinweis(null);
@@ -94,6 +97,24 @@ export default function BuildingForm({ building, systemId, onChange, onSystemCha
       }
       return;
     }
+    // IFC (BIM): reiner Geometrie-Pfad, die KI wird für IFC nie gefragt. Gelingt das Lesen nicht, kommt eine ehrliche
+    // Meldung und es wird nichts halb übernommen.
+    if (ext === '.ifc') {
+      setAnalyseLaeuft(true)
+      setIfcFortschritt({ anteil: 0, text: 'IFC wird vorbereitet …' })
+      try {
+        const { leseIfc } = await import('@/lib/cad/ifc-einleser')
+        const r = await leseIfc(file, { onFortschritt: (anteil, text) => setIfcFortschritt({ anteil, text }) })
+        if (r.ok) setDxfImport({ name: file.name, inhalt: '', ergebnis: r, hoehen: dxfHoehenVorbelegung(r), ifc: r })
+        else setAnalyseHinweis('❌ ' + r.meldung + (r.hinweise.length ? ' ' + r.hinweise.join(' ') : ''))
+      } catch (err) {
+        setAnalyseHinweis('❌ Die IFC-Datei konnte nicht gelesen werden: ' + ((err as Error)?.message || 'Fehler') + ' Bitte als DXF/OBJ exportieren.')
+      } finally {
+        setIfcFortschritt(null)
+        setAnalyseLaeuft(false)
+      }
+      return
+    }
     // DXF: zuerst die Linien lesen (Umriss, Ecken, Teile). Gelingt das nicht (kein geschlossener Umriss), läuft
     // unverändert der bisherige Weg über die Beschriftungen/KI weiter.
     let dxfVorspann = ''
@@ -111,8 +132,8 @@ export default function BuildingForm({ building, systemId, onChange, onSystemCha
     if ((!ERLAUBT.includes(file.type) && !NEU_ERLAUBT.includes(ext)) || DXF_ARTEN.includes(ext)) {
       setAnalyseHinweis(
         DXF_ARTEN.includes(ext)
-          ? `❌ ${ext.toUpperCase()}-Dateien werden nicht unterstützt. Bitte als OBJ, STL, DXF oder PDF exportieren. Erlaubt: JPG, PNG, Webp, PDF, DXF, PLY, OBJ, STL.`
-          : `❌ Dateiformat nicht unterstützt (erkannt: ${file.type || ext}). Erlaubt: JPG, PNG, Webp, PDF, DXF, PLY, OBJ, STL.`
+          ? `❌ ${ext.toUpperCase()}-Dateien werden nicht unterstützt. Bitte als IFC, OBJ, STL, DXF oder PDF exportieren. Erlaubt: JPG, PNG, Webp, PDF, DXF, PLY, OBJ, STL, IFC.`
+          : `❌ Dateiformat nicht unterstützt (erkannt: ${file.type || ext}). Erlaubt: JPG, PNG, Webp, PDF, DXF, PLY, OBJ, STL, IFC.`
       );
       return;
     }
@@ -257,7 +278,7 @@ export default function BuildingForm({ building, systemId, onChange, onSystemCha
         widthM: Math.max(...teile.map((t) => t.tiefeM)),
         heightM: Math.max(...abschnitte.map((a) => a.hoeheM + (a.roofHoeheM ?? 0))),
       }
-      text = `${DXF_FORM_NAME[e.form]} aus der DXF übernommen: ${teile.length} Gebäudeteile (siehe „Mehrteiliges Gebäude“).`
+      text = `${DXF_FORM_NAME[e.form]} aus der ${dxfImport.ifc ? 'IFC' : 'DXF'} übernommen: ${teile.length} Gebäudeteile (siehe „Mehrteiliges Gebäude“).`
     } else if (e.teile && e.teile.length === 1) {
       const t = mitHoehen(e.teile, eingaben)[0]
       const vonPerson = eingaben[0] !== undefined && eingaben[0] !== e.teile[0].hoeheM   // gleich dem Wert aus dem Plan = nicht von Hand geändert
@@ -271,7 +292,7 @@ export default function BuildingForm({ building, systemId, onChange, onSystemCha
       }
       if (!(t.hoeheM > 0)) offen.push(t.hinweis ?? 'Höhe ergänzen')
       neu = { ...building, ...patch }
-      text = `Rechteck aus der DXF übernommen: ${t.laengeM} × ${t.tiefeM} m.${t.hoeheM > 0 && !vonPerson ? ' Höhe stammt aus der Beschriftung im Plan – bitte prüfen.' : ''}`
+      text = `Rechteck aus der ${dxfImport.ifc ? 'IFC' : 'DXF'} übernommen: ${t.laengeM} × ${t.tiefeM} m.${t.hoeheM > 0 && !vonPerson ? (dxfImport.ifc ? ' Höhe stammt aus den Geschossen des IFC – bitte prüfen.' : ' Höhe stammt aus der Beschriftung im Plan – bitte prüfen.') : ''}`
     } else {
       // Form nicht in einfache Teile gliederbar (z. B. schräge Wände): Umriss-Modus wie beim 3D-Modell
       const box = umrissBox(e.umriss)
@@ -316,8 +337,8 @@ export default function BuildingForm({ building, systemId, onChange, onSystemCha
             {/* NEU: Grundriss/Foto hochladen und automatisch auswerten */}
             <label className={`flex flex-col items-center justify-center gap-1 rounded-xl border-2 border-dashed p-4 text-center cursor-pointer transition-colors ${analyseLaeuft ? 'border-black/10 bg-black/5' : 'border-[#e8590c]/40 hover:bg-[#fff4ed]'}`}>
               <span className='text-xl'>{analyseLaeuft ? '⏳' : '📐'}</span>
-              <span className='text-xs font-semibold text-[#424245]'>{analyseLaeuft ? 'KI wertet aus…' : 'Grundriss/Foto hochladen (KI-Auswertung)'}</span>
-              <span className='text-[10px] text-[#86868b]'>Erlaubt: JPG, PNG, Webp, PDF, DXF (Beschriftungen werden gelesen), PLY (Punktwolke), OBJ/STL (3D-Modell, z. B. aus SketchUp: nur Außenmaße). DWG/IFC/SKP: bitte als DXF/OBJ/STL/PDF exportieren. Maße werden nur übernommen, wo eindeutig belegt; bitte prüfen</span>
+              <span className='text-xs font-semibold text-[#424245]'>{ifcFortschritt ? 'IFC wird gelesen (ohne KI)…' : analyseLaeuft ? 'KI wertet aus…' : 'Grundriss/Foto hochladen (KI-Auswertung)'}</span>
+              <span className='text-[10px] text-[#86868b]'>Erlaubt: JPG, PNG, Webp, PDF, DXF (Beschriftungen werden gelesen), PLY (Punktwolke), OBJ/STL (3D-Modell, z. B. aus SketchUp: nur Außenmaße), IFC (BIM-Modell: Geschosse, Umriss und Teile werden ohne KI gelesen, bis 200 MB). DWG/SKP: bitte als DXF/OBJ/STL/IFC/PDF exportieren. Maße werden nur übernommen, wo eindeutig belegt; bitte prüfen</span>
               {/* Phase 75: 'accept' komplett entfernt. Der macOS-Dialog hat
                     DXF/PLY trotz Eintrag im accept-Attribut ausgegraut
                     (Safari-Filter + Cache). Jetzt zeigt der Dialog ALLE
@@ -326,6 +347,12 @@ export default function BuildingForm({ building, systemId, onChange, onSystemCha
                     Meldung bei unbekanntem Format). */}
               <input type='file' className='hidden' disabled={analyseLaeuft}
                 onChange={(e) => { const f = e.target.files?.[0]; if (f) handlePlanUpload(f); e.target.value = '' }} />
+              {ifcFortschritt && (
+                <span className='w-full space-y-1'>
+                  <span className='block h-1.5 w-full overflow-hidden rounded-full bg-black/10'><span className='block h-full bg-[#e8590c] transition-all' style={{ width: `${Math.round(ifcFortschritt.anteil * 100)}%` }} /></span>
+                  <span className='block text-[10px] text-[#424245]'>{ifcFortschritt.text}</span>
+                </span>
+              )}
             </label>
             <button type='button' onClick={() => setZeichnerOffen(true)} className='block w-full rounded-xl border border-black/10 bg-white px-3 py-2.5 text-center text-sm font-medium text-[#1d1d1f] hover:bg-black/5 transition-colors' title='Ecken im Plan anklicken statt Maße einzutippen'>
               ✏️ Umriss per Klick zeichnen
@@ -410,9 +437,15 @@ export default function BuildingForm({ building, systemId, onChange, onSystemCha
               const setzeHoehe = (i: number, v: string) => setDxfImport({ ...dxfImport, hoehen: dxfImport.hoehen.map((h, k) => (k === i ? v : h)) })
               return (
                 <div className='rounded-lg border border-black/10 bg-white p-2 space-y-2 text-[11px] text-[#424245]'>
-                  <p className='font-semibold'>{dxfImport.gezeichnet ? 'Gezeichneter Umriss' : <>DXF-Zeichnung „{dxfImport.name}“ gelesen</>}</p>
-                  <p className='rounded-lg bg-[#f0f7ff] p-2'>Umriss aus den Linien erkannt: <b>{DXF_FORM_NAME[e.form]}</b> mit <b>{e.ecken} Ecken</b>{e.innenecken > 0 ? ` (${e.innenecken} Innenecke${e.innenecken > 1 ? 'n' : ''})` : ''}, <b>{e.laengeM} × {e.breiteM} m</b>, {e.flaecheM2} m². {e.figuren > 1 ? ` Das Hauptgebäude ist das größte von ${e.figuren} Figuren; alle Figuren werden als Teile angeboten.` : ''} Das ist ein Vorschlag – bitte mit dem Plan vergleichen.</p>
-                  {!dxfImport.gezeichnet && <label className='block'>Einheit der Zeichnung{' '}
+                  <p className='font-semibold'>{dxfImport.gezeichnet ? 'Gezeichneter Umriss' : dxfImport.ifc ? <>IFC-Modell „{dxfImport.name}“ gelesen</> : <>DXF-Zeichnung „{dxfImport.name}“ gelesen</>}</p>
+                  <p className='rounded-lg bg-[#f0f7ff] p-2'>Umriss {dxfImport.ifc ? 'aus den Geschossen des Modells' : 'aus den Linien'} erkannt: <b>{DXF_FORM_NAME[e.form]}</b> mit <b>{e.ecken} Ecken</b>{e.innenecken > 0 ? ` (${e.innenecken} Innenecke${e.innenecken > 1 ? 'n' : ''})` : ''}, <b>{e.laengeM} × {e.breiteM} m</b>, {e.flaecheM2} m². {e.figuren > 1 ? ` Das Hauptgebäude ist das größte von ${e.figuren} Figuren; alle Figuren werden als Teile angeboten.` : ''} Das ist ein Vorschlag – bitte mit dem Plan vergleichen.</p>
+                  {dxfImport.ifc && (
+                    <div className='rounded-lg bg-[#f5f5f7] p-2'>
+                      <p className='font-semibold'>Geschosse laut IFC (Gelände bei {String(dxfImport.ifc.gelaendeElevationM).replace('.', ',')} m)</p>
+                      <ul className='list-disc pl-4'>{dxfImport.ifc.geschosse.map((g, i) => <li key={i}>{g.name}: Elevation {String(g.elevationM).replace('.', ',')} m{g.oberkanteM !== null && !g.unterirdisch ? `, Wandoberkante ${String(g.oberkanteM).replace('.', ',')} m über Gelände` : ''}{g.unterirdisch ? ' (unter Gelände, nicht verwendet)' : ''}</li>)}</ul>
+                    </div>
+                  )}
+                  {!dxfImport.gezeichnet && !dxfImport.ifc && <label className='block'>Einheit der Zeichnung{' '}
                     <select className={wahl} value={e.einheit ?? 'm'} onChange={(ev) => dxfNeuLesen(ev.target.value as Einheit)}>
                       <option value='m'>Meter</option><option value='cm'>Zentimeter</option><option value='mm'>Millimeter</option><option value='inch'>Zoll (inch)</option>
                     </select>
@@ -420,7 +453,7 @@ export default function BuildingForm({ building, systemId, onChange, onSystemCha
                   </label>}
                   {(e.teile ?? [null]).map((t, i) => (
                     <div key={i} className='rounded-lg bg-[#fff7ed] p-2 space-y-1'>
-                      <p><b>{t ? `Gebäudeteil ${i + 1}` : 'Gebäude'}</b>{t ? `: ${t.laengeM} × ${t.tiefeM} m (${Math.round(t.laengeM * t.tiefeM * 10) / 10} m²), Beginn ${t.startM} m, Versatz ${t.versatzM} m` : ''}{t && e.figuren > 1 ? `, aus Figur ${(e.teileFigur?.[i] ?? 0) + 1}${(e.teileFigur?.[i] ?? 0) === 0 ? ' (Hauptgebäude)' : ''}` : ''} <span className='text-[#86868b]'>(Quelle: DXF)</span></p>
+                      <p><b>{t ? `Gebäudeteil ${i + 1}` : 'Gebäude'}</b>{t ? `: ${t.laengeM} × ${t.tiefeM} m (${Math.round(t.laengeM * t.tiefeM * 10) / 10} m²), Beginn ${t.startM} m, Versatz ${t.versatzM} m` : ''}{t && e.figuren > 1 ? `, aus Figur ${(e.teileFigur?.[i] ?? 0) + 1}${(e.teileFigur?.[i] ?? 0) === 0 ? ' (Hauptgebäude)' : ''}` : ''} <span className='text-[#86868b]'>(Quelle: {dxfImport.ifc ? 'IFC' : 'DXF'})</span></p>
                       <label className='flex flex-wrap items-center gap-2'>Höhe (m){' '}
                         <input className={eingabe} inputMode='decimal' value={dxfImport.hoehen[i] ?? ''} placeholder={t && t.hoeheM > 0 ? String(t.hoeheM).replace('.', ',') : ''} onChange={(ev) => setzeHoehe(i, ev.target.value)} />
                         {(!t || t.hinweis) && <span className='text-[#b45309]'>{t?.hinweis ?? 'Höhe ergänzen'}</span>}
