@@ -26,13 +26,15 @@ export interface KatalogSerie {
   feldlangenM: number[]
   standardFeldlangeM: number
   hinweis: string
+  /** Gibt es dafür inzwischen ein CAD-System (GERUEST_SYSTEME), wird die Serie in der Auswahl nicht mehr doppelt angeboten; alte Projekte mit dieser Kennung funktionieren weiter. */
+  ersetztDurchSystem?: string
 }
 
 const HINWEIS = 'Feldlängen aus den Katalogartikeln abgeleitet (keine Herstellerangabe), Rahmenbreite und Höhenraster nicht hinterlegt – bitte beim Hersteller prüfen.'
 
 export const KATALOG_SERIEN: KatalogSerie[] = [
-  { id: 'katalog:rux-framescaff', liste: 'sx-framescaff', hersteller: 'RUX', name: 'FRAMESCAFF', bauart: 'rahmen', feldGruppe: '^Rückengeländer$', minM: 1.5, feldlangenM: [1.57, 2.07, 2.57, 3.07], standardFeldlangeM: 2.57, hinweis: HINWEIS },
-  { id: 'katalog:rux-ringscaff-07', liste: 'sx-ringscaff', hersteller: 'RUX', name: 'RINGSCAFF (07er-Maß)', bauart: 'modul', feldGruppe: '^Rohrriegel - LA 07er-Maß$', minM: 1.5, feldlangenM: [1.57, 2.07, 2.57, 3.07], standardFeldlangeM: 2.57, hinweis: HINWEIS },
+  { id: 'katalog:rux-framescaff', liste: 'sx-framescaff', hersteller: 'RUX', name: 'FRAMESCAFF', bauart: 'rahmen', feldGruppe: '^Rückengeländer$', minM: 1.5, feldlangenM: [1.57, 2.07, 2.57, 3.07], standardFeldlangeM: 2.57, hinweis: HINWEIS, ersetztDurchSystem: 'rux-framescaff' },
+  { id: 'katalog:rux-ringscaff-07', liste: 'sx-ringscaff', hersteller: 'RUX', name: 'RINGSCAFF (07er-Maß)', bauart: 'modul', feldGruppe: '^Rohrriegel - LA 07er-Maß$', minM: 1.5, feldlangenM: [1.57, 2.07, 2.57, 3.07], standardFeldlangeM: 2.57, hinweis: HINWEIS, ersetztDurchSystem: 'rux-ringscaff' },
   { id: 'katalog:rux-ringscaff-metrisch', liste: 'sx-ringscaff', hersteller: 'RUX', name: 'RINGSCAFF (metrisch)', bauart: 'modul', feldGruppe: '^Rohrriegel - RX metrisch$', minM: 1.25, feldlangenM: [1.25, 1.5, 2, 2.5, 3], standardFeldlangeM: 2.5, hinweis: HINWEIS },
   { id: 'katalog:rux-super-rs', liste: 'sx-super-rs', hersteller: 'RUX', name: 'SUPER-RS', bauart: 'modul', feldGruppe: '^Rohrriegel - RX metrisch$', minM: 1.25, feldlangenM: [1.5, 2, 2.5, 3], standardFeldlangeM: 2.5, hinweis: HINWEIS },
   { id: 'katalog:mj-uni', liste: 'uni', hersteller: 'MJ Gerüst', name: 'UNI', bauart: 'rahmen', feldGruppe: '^STAHLBODEN 0,15 M$', minM: 1.25, feldlangenM: [1.25, 1.5, 2, 2.5, 3, 4], standardFeldlangeM: 2.5, hinweis: HINWEIS },
@@ -47,6 +49,11 @@ export function findeKatalogSerie(id: string | undefined): KatalogSerie | null {
   return KATALOG_SERIEN.find((s) => s.id === id) ?? null
 }
 
+/** Serien, die in der Auswahl angeboten werden (ohne die, die ein eigenes CAD-System haben) */
+export function angeboteneKatalogSerien(): KatalogSerie[] {
+  return KATALOG_SERIEN.filter((s) => !s.ersetztDurchSystem)
+}
+
 export function katalogSerienHersteller(): string[] {
-  return Array.from(new Set(KATALOG_SERIEN.map((s) => s.hersteller)))
+  return Array.from(new Set(angeboteneKatalogSerien().map((s) => s.hersteller)))
 }
