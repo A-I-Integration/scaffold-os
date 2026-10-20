@@ -27,6 +27,9 @@ export const STATIKER_ERLAUBTE_PFADE = [
   '/passwort-vergessen',
 ] as const
 
+/** Unterpfade der erlaubten Pfade, die für Statiker trotzdem gesperrt sind (internes Messwerkzeug). */
+export const STATIKER_GESPERRTE_PFADE = ['/cad/feldtest'] as const
+
 type UserMitMetadaten = { app_metadata?: Record<string, unknown> | null } | null | undefined
 
 /** Ist dieser Login ein Statiker? (Flag im app_metadata, nicht änderbar durch den Nutzer) */
@@ -39,6 +42,7 @@ export function statikerDarfPfad(pfad: string): boolean {
   if (typeof pfad !== 'string' || !pfad.startsWith('/')) return false
   // Doppelte Schrägstriche / Rückwärtspfade nie durchlassen
   if (pfad.includes('//') || pfad.includes('..') || pfad.includes('\\')) return false
+  if (STATIKER_GESPERRTE_PFADE.some((g) => pfad === g || pfad.startsWith(g + '/'))) return false
   return STATIKER_ERLAUBTE_PFADE.some((erlaubt) => pfad === erlaubt || pfad.startsWith(erlaubt + '/'))
 }
 
