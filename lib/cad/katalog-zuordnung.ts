@@ -22,6 +22,9 @@ export const SYSTEM_ZU_LISTE: Record<string, MjListe> = {
   // Layher: Die Preisliste AllroundGerüst gilt für Stahl- und Alu-Variante (Alu-Stiele stehen darin als eigene Artikel).
   'layher-allround': 'layher-allround',
   'layher-allround-alu': 'layher-allround',
+  // RUX: eine Preisliste SUPER für beide Systeme; Rahmen werden je System getrennt (RUX_RAHMEN).
+  'rux-super65': 'sx-super',
+  'rux-super100': 'sx-super',
 }
 
 /** Bauteiltyp des CAD → Bereichsnamen im Katalog (Muster auf den Bereichstext, Großschreibung egal) */
@@ -57,6 +60,26 @@ const LAYHER_TYP: Record<string, { gruppe: RegExp; name: RegExp; nicht?: RegExp 
   stair: { gruppe: /^Podesttreppe, Komforttreppe$/, name: /^(U|O)-(Podest|Komfort|Anfangs)treppe/ },
 }
 
+/**
+ * RUX-Preisliste SUPER: Der Bereich ist der Produktname. Nur eindeutige Zuordnungen; Ösen-/"-0"-Varianten,
+ * Rahmen für Dachüberstand und Mischgruppen bleiben bewusst außen vor. Kupplungen/Anker stehen in der
+ * Zubehör-Liste und sind nicht zugeordnet.
+ */
+const RUX_TYP: Record<string, RegExp> = {
+  deck: /^(Belagbohle aus (Holz|Stahl|Aluminium)|Alu-Belagtafel)/,
+  railing: /^Rückengeländer$/,
+  diagonal: /^Diagonale$/,
+  footplate: /^Gewindefußplatte/,
+  console: /^(Kragkonsole|Rahmenkonsole|Kupplungskonsole|Einhängekonsole|Verlängerungskonsole|Dachdecker-Konsole|Eckkonsole)/,
+  board: /^Bordbrett$/,
+  stair: /^Alu-Treppe/,
+  ladder: /^Etagenleiter/,
+}
+const RUX_RAHMEN: Record<string, RegExp> = {
+  'rux-super65': /^Vertikalrahmen Stahl SUPER 65 ULTRA$/,
+  'rux-super100': /^Vertikalrahmen Stahl SUPER 100$/,
+}
+
 export function katalogListeFuerSystem(systemId: string): MjListe | null {
   return SYSTEM_ZU_LISTE[systemId] ?? null
 }
@@ -67,7 +90,20 @@ export function artikelMassM(a: MjArtikel): number | null {
     const v = a.attribute[k]
     if (typeof v === 'number') return v
   }
+  // SCAFOM-RUX: "H/L x B (m)" als Zahl oder Text "1,00 x 0,65" (erste Zahl = Höhe bzw. Länge)
+  const hl = a.attribute['H/L x B (m)']
+  if (typeof hl === 'number') return hl
+  if (typeof hl === 'string') {
+    const z = parseFloat(hl.split('x')[0].trim().replace(',', '.'))
+    if (Number.isFinite(z)) return z
+  }
   return null
+}
+
+/** Gewicht in kg: MJ/Layher "Gewicht (kg)", SCAFOM-RUX "ca. kg"; sonst null */
+export function artikelGewichtKg(a: MjArtikel): number | null {
+  const v = a.attribute['Gewicht (kg)'] ?? a.attribute['ca. kg']
+  return typeof v === 'number' ? v : null
 }
 
 /** Anzeigename: MJ → Bereich, Layher → Produktbezeichnung (dort ist der Bereich nur der Katalogabschnitt) */
@@ -78,14 +114,20 @@ export function artikelBezeichnung(a: MjArtikel): string {
 /** Kurzbeschreibung für die Auswahlliste, z. B. "RIEGEL · 1,09 m · 4,5 kg · 30,30 €" */
 export function artikelLabel(a: MjArtikel): string {
   const m = artikelMassM(a)
-  const g = a.attribute['Gewicht (kg)']
+  const g = artikelGewichtKg(a)
   const teile = [artikelBezeichnung(a), m != null ? `${m.toLocaleString('de-DE')} m` : null, typeof g === 'number' ? `${g.toLocaleString('de-DE')} kg` : null,
     `${a.preis.toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €`]
   return `${a.nr} · ${teile.filter(Boolean).join(' · ')}`
 }
 
 /** Gehört der Artikel (laut Bereich/Bezeichnung) zum Bauteiltyp? Ohne Regel für den Typ: nein. */
-export function artikelPasstZuTyp(a: MjArtikel, bauteilTyp: string): boolean {
+export function artikelPasstZuTyp(a: MjArtikel, bauteilTyp: string, systemId?: string): boolean {
+  if (a.liste === 'sx-super') {
+    const g = a.gruppe.trim()
+    if (bauteilTyp === 'frame') return !!systemId && !!RUX_RAHMEN[systemId] && RUX_RAHMEN[systemId].test(g)
+    const r = RUX_TYP[bauteilTyp]
+    return !!r && r.test(g)
+  }
   if (a.liste.startsWith('layher-')) {
     const r = LAYHER_TYP[bauteilTyp]
     if (!r) return false
@@ -104,7 +146,7 @@ export function artikelPasstZuTyp(a: MjArtikel, bauteilTyp: string): boolean {
 export function passendeArtikel(systemId: string, bauteilTyp: string, wunschMassM?: number): MjArtikel[] {
   const liste = katalogListeFuerSystem(systemId)
   if (!liste) return []
-  const treffer = alleMjArtikel().filter((a) => a.liste === liste && artikelPasstZuTyp(a, bauteilTyp))
+  const treffer = alleMjArtikel().filter((a) => a.liste === liste && artikelPasstZuTyp(a, bauteilTyp, systemId))
   const abstand = (a: MjArtikel) => {
     const m = artikelMassM(a)
     return wunschMassM == null || m == null ? 0 : Math.abs(m - wunschMassM)
@@ -148,11 +190,11 @@ export function wendeKatalogwahlAn(
     const std = mengen.get(b.articleNumber)
     if (!art) { unbekannt.add(nr); continue }
     // Schutz gegen veraltete IDs: Artikel muss zum Bauteiltyp passen
-    if (!artikelPasstZuTyp(art, b.type)) continue
+    if (!artikelPasstZuTyp(art, b.type, systemId)) continue
     if (!std || std.quantity < 1) continue
     std.quantity -= 1
     std.totalPrice = Math.round(std.quantity * std.unitPrice * 100) / 100
-    const gew = art.attribute['Gewicht (kg)']
+    const gew = artikelGewichtKg(art)
     const bisher = neu.get(nr)
     if (bisher) {
       bisher.quantity += 1
@@ -167,7 +209,7 @@ export function wendeKatalogwahlAn(
         unit: std.unit,
         unitPrice: art.preis,
         totalPrice: art.preis,
-        weightKg: typeof gew === 'number' ? gew : 0,
+        weightKg: gew ?? 0,
         riskLevel: 'low',
         aiRecommendation: 'Hersteller-Katalogartikel, Listenpreis netto',
       })
@@ -180,7 +222,7 @@ export function wendeKatalogwahlAn(
 
 const MJ_NAME: Partial<Record<MjListe, string>> = {
   combi: 'MJ COMBI', optima: 'MJ OPTIMA', 'optima-top': 'MJ OPTIMA TOP', 'optima-metric': 'MJ OPTIMA metric', 'uni-connect': 'MJ UNI-CONNECT',
-  'layher-allround': 'Layher Allround',
+  'layher-allround': 'Layher Allround', 'sx-super': 'RUX SUPER',
 }
 
 // ---------- Aufmaß: Position der Materialliste gegen Katalogartikel tauschen ----------
@@ -199,7 +241,7 @@ export function passendeArtikelFuerKategorie(systemId: string, kategorie: string
 
 /** Tauscht eine Position gegen einen Katalogartikel (Menge bleibt). Die alten Werte bleiben in vorKatalog. */
 export function setzeKatalogArtikel(item: MaterialItem, art: MjArtikel, listenName: string): MaterialItem {
-  const gew = art.attribute['Gewicht (kg)']
+  const gew = artikelGewichtKg(art)
   const m = artikelMassM(art)
   const basis = item.vorKatalog ?? { articleNumber: item.articleNumber, name: item.name, unitPrice: item.unitPrice, weightKg: item.weightKg, aiRecommendation: item.aiRecommendation }
   return {
@@ -208,7 +250,7 @@ export function setzeKatalogArtikel(item: MaterialItem, art: MjArtikel, listenNa
     name: `${artikelBezeichnung(art)}${m != null ? ` ${m.toLocaleString('de-DE')} m` : ''} (${listenName})`,
     unitPrice: art.preis,
     totalPrice: Math.round(item.quantity * art.preis * 100) / 100,
-    weightKg: typeof gew === 'number' ? gew : 0,
+    weightKg: gew ?? 0,
     aiRecommendation: 'Hersteller-Katalogartikel, Listenpreis netto',
     vorKatalog: basis,
   }
