@@ -120,6 +120,34 @@ RUX_REGELN['katalog:rux-ringscaff-metrisch'] = {
   board: /^Bordbrett, (Holz|Stahl) - RX metrisch( \/ Bordbrett, (Holz|Stahl) - PC)?$/,
   console: /^Stahl-Konsole für Rohrauflage - RX metrisch$/,
 }
+// MJ-Serien ohne eigenes CAD-System (Serien aus dem Katalog): Bereichsnamen der Preisliste, nur eindeutige Typen.
+RUX_REGELN['katalog:mj-uni'] = {
+  deck: /^STAHLBODEN 0,15 M$/,
+  railing: /^RÜCKENGELÄNDER$/,
+  diagonal: /^DIAGONALE$/,
+  ladder: /^ETAGENLEITER$/,
+}
+RUX_REGELN['katalog:mj-uni-top'] = {
+  frame: /^RAHMEN$/,
+  deck: /^BELÄGE$/,
+  railing: /^RÜCKENGELÄNDER$/,
+  diagonal: /^DIAGONALE$/,
+  board: /^BORDBRETTER$/,
+  console: /^KONSOLEN$/,
+  stair: /^AUFSTIEGE(, TREPPEN)?$/,
+  ladder: /^ETAGENLEITER$/,
+}
+RUX_REGELN['katalog:mj-combi-metric-top'] = {
+  frame: /^(VERTIKALSTIEL MIT GESTAUCHTEM ROHRVERBINDER|VERTIKALSTIEL OHNE ROHRVERBINDER|ANFANGSSTIEL)$/,
+  deck: /^(BELÄGE|STAHLBODEN 0,15 M METRIC - UT)$/,
+  railing: /^GELÄNDERRIEGEL$/,
+  diagonal: /^VERTIKAL-DIAGONALE METRIC$/,
+  footplate: /^FUSSSPINDELN$/,
+  board: /^BORDBRETTER$/,
+  console: /^KONSOLEN$/,
+  stair: /^AUFSTIEGE$/,
+  ladder: /^ETAGENLEITER$/,
+}
 const RUX_RAHMEN: Record<string, RegExp> = {
   'rux-super65': /^Vertikalrahmen Stahl SUPER 65 ULTRA$/,
   'rux-super100': /^Vertikalrahmen Stahl SUPER 100$/,
@@ -271,7 +299,7 @@ export function wendeKatalogwahlAn(
 
 const MJ_NAME: Partial<Record<MjListe, string>> = {
   combi: 'MJ COMBI', optima: 'MJ OPTIMA', 'optima-top': 'MJ OPTIMA TOP', 'optima-metric': 'MJ OPTIMA metric', 'uni-connect': 'MJ UNI-CONNECT',
-  'layher-allround': 'Layher Allround', 'sx-super': 'RUX SUPER', 'sx-framescaff': 'RUX FRAMESCAFF', 'sx-ringscaff': 'RUX RINGSCAFF', 'sx-super-rs': 'RUX SUPER-RS',
+  'layher-allround': 'Layher Allround', 'sx-super': 'RUX SUPER', 'sx-framescaff': 'RUX FRAMESCAFF', 'sx-ringscaff': 'RUX RINGSCAFF', uni: 'MJ UNI', 'uni-top': 'MJ UNI TOP 65', 'combi-metric-top': 'MJ COMBI metric / TOP', 'sx-super-rs': 'RUX SUPER-RS',
 }
 
 // ---------- Aufmaß: Position der Materialliste gegen Katalogartikel tauschen ----------
