@@ -4,8 +4,8 @@ import { passendeArtikel, katalogListeFuerSystem, artikelLabel } from '../katalo
 describe('katalog-zuordnung', () => {
   it('kennt MJ-Systeme, fremde Systeme nicht', () => {
     expect(katalogListeFuerSystem('mj-plus')).toBe('combi')
-    expect(katalogListeFuerSystem('layher-allround')).toBeNull()
-    expect(passendeArtikel('layher-allround', 'board')).toEqual([])
+    expect(katalogListeFuerSystem('peri-up-flex')).toBeNull()
+    expect(passendeArtikel('peri-up-flex', 'board')).toEqual([])
   })
   it('Bordbretter COMBI: nur Bereich BORDBRETTER, nach Wunschmaß sortiert', () => {
     const l = passendeArtikel('mj-plus', 'board', 1.09)
@@ -55,7 +55,7 @@ describe('wendeKatalogwahlAn', () => {
   it('ohne Wahl, fremdes System, unbekannte ID, falscher Typ: unverändert', () => {
     const m = [mat('BB-001', 3)]
     expect(wendeKatalogwahlAn('mj-plus', bauteile, m, {}).materials).toBe(m)
-    expect(wendeKatalogwahlAn('layher-allround', bauteile, m, { b1: bord.nr }).materials).toBe(m)
+    expect(wendeKatalogwahlAn('peri-up-flex', bauteile, m, { b1: bord.nr }).materials).toBe(m)
     expect(wendeKatalogwahlAn('mj-plus', bauteile, m, { zz: bord.nr }).ersetzt).toBe(0)
     const frame = passendeArtikel('mj-plus', 'frame')[0]
     expect(wendeKatalogwahlAn('mj-plus', bauteile, m, { b1: frame.nr }).ersetzt).toBe(0)
@@ -128,5 +128,46 @@ describe('uebertrageAufGleiche', () => {
     const w = { a3: '2' }
     expect(uebertrageAufGleiche(b, w, 'zz', '1')).toBe(w)
     uebertrageAufGleiche(b, w, 'a1', '9'); expect(w).toEqual({ a3: '2' })
+  })
+})
+
+
+describe('Layher AllroundGerüst', () => {
+  it('beide Allround-Systeme nutzen die Layher-Liste', () => {
+    expect(katalogListeFuerSystem('layher-allround')).toBe('layher-allround')
+    expect(katalogListeFuerSystem('layher-allround-alu')).toBe('layher-allround')
+  })
+  it('Riegel 1,09 m: Art.-Nr. 2601.109, 4,0 kg, 30,30 € (Preisliste 2026/27)', () => {
+    const l = passendeArtikel('layher-allround', 'railing', 1.09)
+    expect(l[0].nr).toBe('2601.109')
+    expect(l[0].preis).toBe(30.3)
+    expect(l[0].attribute['Gewicht (kg)']).toBe(4)
+    expect(artikelLabel(l[0])).toMatch(/^2601\.109 · O-Riegel LW/)
+  })
+  it('Stahlboden 1,09 × 0,32: 3883.109, 7,7 kg, 69,00 €', () => {
+    const b = passendeArtikel('layher-allround', 'deck', 1.09).find((a) => a.nr === '3883.109')!
+    expect(b.preis).toBe(69)
+    expect(b.attribute['Gewicht (kg)']).toBe(7.7)
+    expect(b.attribute['Breite (m)']).toBe(0.32)
+  })
+  it('jeder zugeordnete Typ liefert nur Artikel der Layher-Liste, ohne Sicherungen/Durchstiege', () => {
+    for (const t of ['frame', 'deck', 'railing', 'diagonal', 'footplate', 'coupling', 'anchor', 'console', 'board', 'stair']) {
+      const l = passendeArtikel('layher-allround', t)
+      expect(l.length, t).toBeGreaterThan(0)
+      expect(l.every((a) => a.liste === 'layher-allround' && a.preis > 0), t).toBe(true)
+    }
+    expect(passendeArtikel('layher-allround', 'frame').some((a) => /Sicherung/.test(a.untertitel))).toBe(false)
+    expect(passendeArtikel('layher-allround', 'deck').some((a) => /Durchstieg/.test(a.untertitel))).toBe(false)
+  })
+  it('Typen ohne sichere Regel bleiben ohne Zuordnung', () => {
+    expect(passendeArtikel('layher-allround', 'net')).toEqual([])
+    expect(passendeArtikel('layher-allround', 'safety_net')).toEqual([])
+  })
+  it('Stückliste: Riegel-Wahl ersetzt 1 Standardstück', () => {
+    const r = passendeArtikel('layher-allround', 'railing', 1.09)[0]
+    const m = [{ articleNumber: 'RA-001', name: 'x', category: 'Geländer', quantity: 3, unit: 'Stk', unitPrice: 10, totalPrice: 30, weightKg: 1, riskLevel: 'low' as const, aiRecommendation: '' }]
+    const res = wendeKatalogwahlAn('layher-allround', [{ id: 'r1', type: 'railing', articleNumber: 'RA-001' }], m, { r1: r.nr })
+    expect(res.ersetzt).toBe(1)
+    expect(res.materials.find((x) => x.articleNumber === r.nr)?.name).toMatch(/\(Layher Allround\)$/)
   })
 })

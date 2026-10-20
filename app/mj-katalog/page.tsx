@@ -4,7 +4,7 @@ import { useMemo, useState } from 'react';
 import { alleMjArtikel, sucheMjArtikel, MJ_LISTEN, MJ_OPTI_BEAM, MJ_OPTI_BOARD, MJ_WEITERE_ZULASSUNGEN, type MjListe } from '@/lib/mj-katalog';
 
 // ============================================================
-// SCAFFOLD OS – Herstellerkatalog MJ-Gerüst und SCAFOM-RUX (Nachschlagewerk, nur lesen)
+// SCAFFOLD OS – Herstellerkatalog MJ-Gerüst, SCAFOM-RUX und Layher (Nachschlagewerk, nur lesen)
 // Artikel aus den MJ-Gerüst-Preislisten OPTIMA / OPTIMA TOP / OPTIMA metric / UNI-CONNECT / COMBI / COMBI metric+TOP / UNI 70/100 / UNI TOP 65 / Wand und Dach / Paletten / Zubehör / ZIPKO / OPTI-RACK.
 // Verändert keine Lagerbestände und keine Preise.
 // ============================================================
@@ -23,12 +23,12 @@ export default function MjKatalogPage() {
   return (
     <div className="max-w-6xl mx-auto p-4 md:p-6 space-y-4">
       <div>
-        <h1 className="text-2xl font-bold text-[#1d1d1f]">Herstellerkatalog (MJ-Gerüst, SCAFOM-RUX)</h1>
-        <p className="text-sm text-[#86868b]">{gesamt} Artikelzeilen aus den Preislisten von MJ-Gerüst (Stand 04.2025, Paletten 09.2026) und SCAFOM-RUX (Verkauf 05.2024, PLEX 06.2026, Miete 08.2026). Zum Nachschlagen – verändert weder Lager noch Kalkulation.</p>
+        <h1 className="text-2xl font-bold text-[#1d1d1f]">Herstellerkatalog (MJ-Gerüst, SCAFOM-RUX, Layher)</h1>
+        <p className="text-sm text-[#86868b]">{gesamt} Artikelzeilen aus den Preislisten von MJ-Gerüst (Stand 04.2025, Paletten 09.2026) SCAFOM-RUX (Verkauf 05.2024, PLEX 06.2026, Miete 08.2026) und Layher (Katalog & Preisliste 2026/2027). Zum Nachschlagen – verändert weder Lager noch Kalkulation.</p>
       </div>
 
       <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900 space-y-1">
-        <p><b>Wichtig:</b> Preise sind Herstellerlisten-Preise netto (zzgl. MwSt.), keine Verkaufspreise. Die SCAFOM-RUX-Verkaufslisten sind von 05.2024 und können überholt sein; Staffelpreise stehen in „Staffelpreise“, der Listenpreis gilt ab 1 Stück. In der SCAFOM-RUX-Mietliste ist der Preis der Stückpreis, die Wochenmiete steht in „Mietpreis (€/Woche)“. Maß- und Gewichtsangaben sind laut MJ unverbindliche Richtwerte.</p>
+        <p><b>Wichtig:</b> Preise sind Herstellerlisten-Preise netto (zzgl. MwSt.), keine Verkaufspreise. Die SCAFOM-RUX-Verkaufslisten sind von 05.2024 und können überholt sein; Staffelpreise stehen in „Staffelpreise“, der Listenpreis gilt ab 1 Stück. In der SCAFOM-RUX-Mietliste ist der Preis der Stückpreis, die Wochenmiete steht in „Mietpreis (€/Woche)“. Maß- und Gewichtsangaben sind laut MJ unverbindliche Richtwerte. Layher: Bereich = Abschnitt laut Inhaltsverzeichnis, Bezeichnungen automatisch ausgelesen und teils gekürzt – maßgeblich sind Art.-Nr., Maße, Gewicht und Preis.</p>
         <p>Die Tabellen wurden automatisch ausgelesen. Die Bereichsnamen sind automatisch zugeordnet und können bei einzelnen Artikeln ungenau sein. Hinweise der Preisliste wie „Nettopreis, nicht rabattfähig“ oder „Lieferzeit auf Anfrage“ sind hier nicht enthalten – im Zweifel gilt die Original-Preisliste.</p>
       </div>
 

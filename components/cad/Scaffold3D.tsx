@@ -2079,7 +2079,7 @@ function Scaffold3D({
               const artikel = passendeArtikel(systemId, comp.type)
               return (
                 <div className="mt-2 pt-2 border-t border-black/10">
-                  <label className="block text-[10px] text-[#86868b] mb-1">Katalog-Artikel (MJ-Gerüst)</label>
+                  <label className="block text-[10px] text-[#86868b] mb-1">Katalog-Artikel (Hersteller)</label>
                   {artikel.length === 0 ? (
                     <p className="text-[11px] text-[#86868b]">Keine Zuordnung im Katalog für diesen Bauteiltyp.</p>
                   ) : (
