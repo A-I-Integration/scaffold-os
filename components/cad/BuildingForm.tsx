@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef, useMemo, useEffect } from 'react'
+import { useState, useRef, useMemo, useEffect, type ReactNode } from 'react'
 import { BuildingParams, WANDABSTAND_MIN_M, WANDABSTAND_MAX_M } from '@/lib/calculations/cad-engine'
 import BalkonEditor from './BalkonEditor'
 import UmrissEditor from './UmrissEditor'
@@ -23,9 +23,11 @@ interface Props {
   onGenerate: () => void
   onLadeProjektdatei?: (datei: File) => void
   warnings: { type: string; message: string }[]
+  /** Zusätzlicher Bereich am Ende der scrollenden Liste, also über dem Button „Gerüst neu berechnen“ (z. B. Projektdaten für die Statik) */
+  zusatz?: ReactNode
 }
 
-export default function BuildingForm({ building, systemId, onChange, onSystemChange, onGenerate, onLadeProjektdatei, warnings }: Props) {
+export default function BuildingForm({ building, systemId, onChange, onSystemChange, onGenerate, onLadeProjektdatei, warnings, zusatz }: Props) {
   const [activeTab, setActiveTab] = useState<'gebaeude' | 'geruest' | 'system'>('gebaeude')
   const [analyseLaeuft, setAnalyseLaeuft] = useState(false)
   const [analyseHinweis, setAnalyseHinweis] = useState<string | null>(null)
@@ -715,6 +717,7 @@ export default function BuildingForm({ building, systemId, onChange, onSystemCha
             ))}
           </div>
         )}
+        {zusatz && <div className='-mx-4 -mb-4 pt-1'>{zusatz}</div>}
       </div>
       <div className='p-4 border-t border-black/5'>
         <button onClick={onGenerate} className='w-full py-2.5 bg-[#e8590c] text-white text-sm font-medium rounded-xl hover:bg-[#d04f0b] transition-colors'>🔄 Gerüst neu berechnen</button>

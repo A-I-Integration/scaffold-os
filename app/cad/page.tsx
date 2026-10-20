@@ -810,8 +810,8 @@ export default function CADPage() {
       </div>
       <div className='flex-1 flex flex-col md:flex-row md:overflow-hidden'>
         <div className='w-full md:w-72 md:shrink-0 md:overflow-y-auto'>
-          <BuildingForm building={building} systemId={systemId} onChange={(b) => { setAutoGenerate(true); setBuilding(b); }} onSystemChange={aendereSystem} onGenerate={() => { setAutoGenerate(true); generate(); }} onLadeProjektdatei={ladeProjektdatei} warnings={allWarnings} />
-          <StatikDatenPanel daten={statikDaten} onChange={setStatikDaten} model={modelWithManual} />
+          <BuildingForm building={building} systemId={systemId} onChange={(b) => { setAutoGenerate(true); setBuilding(b); }} onSystemChange={aendereSystem} onGenerate={() => { setAutoGenerate(true); generate(); }} onLadeProjektdatei={ladeProjektdatei} warnings={allWarnings}
+            zusatz={<StatikDatenPanel daten={statikDaten} onChange={setStatikDaten} model={modelWithManual} />} />
         </div>
         <div className='flex-1 flex flex-col min-w-0'>
           <SystemLeiste systemId={systemId} onSystemChange={aendereSystem} gewaehlteArtikel={Object.keys(artikelWahl).length} />
