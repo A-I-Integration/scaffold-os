@@ -38,10 +38,10 @@ export const LASTKLASSEN: Record<number, number> = { 1: 0.75, 2: 1.5, 3: 2.0, 4:
 export type LvStil = 'getrennt' | 'grundstandzeit'
 
 /** Zusatzleistungen aus den Muster-LVs, die nicht aus dem CAD-Modell kommen: Menge und EP trägt die Firma ein. */
-export type ZusatzArt = 'dachfang' | 'seitenschutz' | 'ueberbrueckung'
+export type ZusatzArt = 'dachfang' | 'seitenschutz' | 'ueberbrueckung' | 'strahlnetze' | 'aufzug' | 'bauzaun'
 export interface LvZusatz {
   art: ZusatzArt
-  /** Dachfanggerüst/Seitenschutz in m, Überbrückung in Stück; 0 = Position entfällt */
+  /** Dachfanggerüst/Seitenschutz/Bauzaun in m, Strahlnetze in m², Überbrückung/Aufzug in Stück; 0 = Position entfällt */
   menge: number
   /** EP Aufbau, EP Vorhaltung je Woche, EP Abbau (jeweils netto, je Einheit) */
   epAuf: number
@@ -49,10 +49,14 @@ export interface LvZusatz {
   epAb: number
 }
 
-export const ZUSATZ_INFO: Record<ZusatzArt, { name: string; einheit: string }> = {
-  dachfang: { name: 'Dachfanggerüst DIN 4420-1', einheit: 'm' },
-  seitenschutz: { name: 'Zusätzlicher Seitenschutz (innenliegendes Geländer)', einheit: 'm' },
-  ueberbrueckung: { name: 'Überbrückung aus Systemgitterträgern (Einbringöffnung)', einheit: 'St' },
+export const ZUSATZ_INFO: Record<ZusatzArt, { name: string; einheit: string; /** Vorhalteeinheit je Woche */ woEinheit: string; /** Leistungsbeschreibung (ohne Projektwerte) */ text?: string }> = {
+  dachfang: { name: 'Dachfanggerüst DIN 4420-1', einheit: 'm', woEinheit: 'mWo' },
+  seitenschutz: { name: 'Zusätzlicher Seitenschutz (innenliegendes Geländer)', einheit: 'm', woEinheit: 'mWo' },
+  ueberbrueckung: { name: 'Überbrückung aus Systemgitterträgern (Einbringöffnung)', einheit: 'St', woEinheit: 'StWo' },
+  // Nach dem Muster-LV Kirche (Ernst Architekten): Menge und Preise sind Eingaben, technische Werte (Netztyp, Tragkraft, Förderhöhe) trägt der Anwender in die Ausschreibung ein.
+  strahlnetze: { name: 'Strahlnetze', einheit: 'm²', woEinheit: 'm²Wo', text: 'Vertikale Bekleidung der Außenachse des Gerüstes mit hochreißfesten Strahlnetzen zur Eindämmung der Staubentwicklung, Lieferung und Montage im Rastermaß des Gerüstes, spätere Demontage. Netztyp, Brandverhalten und Höhe nach Angabe des Auftraggebers.' },
+  aufzug: { name: 'Personen- und Lastenaufzug', einheit: 'St', woEinheit: 'StWo', text: 'Personen- und Lastenaufzug montieren und später wieder demontieren. Tragkraft, Grundfläche, Förderhöhe und Etageneinrichtungen nach Angabe des Auftraggebers.' },
+  bauzaun: { name: 'Bauzaunelemente', einheit: 'm', woEinheit: 'mWo', text: 'Bauzaunanlage sachgerecht montieren und später wieder demontieren, Positionierung nach Vorgabe der Bauleitung.' },
 }
 
 export interface LvEingaben {
@@ -115,6 +119,9 @@ export const LV_STANDARD_EINGABEN: LvEingaben = {
     { art: 'dachfang', menge: 0, epAuf: 0, epVorh: 0, epAb: 0 },
     { art: 'seitenschutz', menge: 0, epAuf: 0, epVorh: 0, epAb: 0 },
     { art: 'ueberbrueckung', menge: 0, epAuf: 0, epVorh: 0, epAb: 0 },
+    { art: 'strahlnetze', menge: 0, epAuf: 0, epVorh: 0, epAb: 0 },
+    { art: 'aufzug', menge: 0, epAuf: 0, epVorh: 0, epAb: 0 },
+    { art: 'bauzaun', menge: 0, epAuf: 0, epVorh: 0, epAb: 0 },
   ],
   bauvorhaben: '',
   bauherr: '',
@@ -297,7 +304,7 @@ export function erzeugeLeistungsverzeichnis(quelle: LvQuelle, e: LvEingaben): Le
     if (giebelM2 > 0) T2.add('Einrüsten der Giebelflächen der Dachgauben – Aufbau', ['Einrüsten der Giebelflächen der Dachgauben auf der Dachfläche, als Zulage zum Fassadengerüst. Abbau und Vorhaltung werden gesondert vergütet.'], giebelM2, 'm²', epAufbau('geruest', flaecheM2))
     for (const z of aktiveZusatz) {
       const i = ZUSATZ_INFO[z.art]
-      T2.add(`${i.name} – Aufbau`, [`Aufbau ${i.name}, Abbau und Vorhaltung werden gesondert vergütet.`], z.menge, i.einheit, cent(z.epAuf))
+      T2.add(`${i.name} – Aufbau`, [...(i.text ? [i.text] : []), `Aufbau ${i.name}, Abbau und Vorhaltung werden gesondert vergütet.`], z.menge, i.einheit, cent(z.epAuf))
     }
     if (konsolenM > 0) T2.add('Konsolen – Aufbau', ['Konsolen, herausnehmbar, als Belagsverbreiterung am vorgenannten Gerüst montieren. Abbau und Vorhaltung werden gesondert vergütet.'], konsolenM, 'm', epAufbau('konsolen', konsolenM))
     if (schutzdachM > 0) T2.add('Schutzdach – Aufbau', [
@@ -313,7 +320,7 @@ export function erzeugeLeistungsverzeichnis(quelle: LvQuelle, e: LvEingaben): Le
     vorhalt('Arbeits- und Schutzgerüst', 'geruest', flaecheM2 + giebelM2, 'm²Wo', 'm² Gerüst', `Arbeits- und Schutzgerüst, Höhe der obersten Gerüstlage ca. ${de(model.totalHeightM, 2)} m`)
     for (const z of aktiveZusatz) {
       const i = ZUSATZ_INFO[z.art]
-      if (woGesamt > 0) T2.add(`Vorhaltung ${i.name}`, [`Vorhaltung für ${i.name}, Abrechnung nach ${i.einheit === 'St' ? 'Stück' : 'Länge'} mal Vorhaltedauer in Wochen.`], r2(z.menge * woGesamt), i.einheit === 'St' ? 'StWo' : 'mWo', cent(z.epVorh))
+      if (woGesamt > 0) T2.add(`Vorhaltung ${i.name}`, [`Vorhaltung für ${i.name}, Abrechnung nach ${i.einheit === 'St' ? 'Stück' : i.einheit === 'm²' ? 'Fläche' : 'Länge'} mal Vorhaltedauer in Wochen.`], r2(z.menge * woGesamt), i.woEinheit, cent(z.epVorh))
     }
     vorhalt('Konsolen', 'konsolen', konsolenM, 'mWo', 'Länge', 'Konsolen')
     vorhalt('Schutzdach', 'schutzdach', schutzdachM, 'mWo', 'Länge', 'Schutzdach')
@@ -343,8 +350,8 @@ export function erzeugeLeistungsverzeichnis(quelle: LvQuelle, e: LvEingaben): Le
     verl('Fassadengerüst', 'geruest', flaecheM2 + giebelM2, 'm²Wo', 'Arbeits- und Schutzgerüst')
     for (const z of aktiveZusatz) {
       const i = ZUSATZ_INFO[z.art]
-      T2.add(i.name, [`${i.name} auf- und abbauen, inkl. Grundstandzeit (${GRUNDSTANDZEIT_WOCHEN} Wochen).`], z.menge, i.einheit, cent(z.epAuf + z.epAb + z.epVorh * GRUNDSTANDZEIT_WOCHEN))
-      if (zusatzWo > 0) T2.add(`Verlängerung der Vorhaltung ${i.name}`, [`Verlängerung der Vorhaltung zur Vorposition ${i.name}.`], r2(z.menge * zusatzWo), i.einheit === 'St' ? 'StWo' : 'mWo', cent(z.epVorh))
+      T2.add(i.name, [...(i.text ? [i.text] : []), `${i.name} auf- und abbauen, inkl. Grundstandzeit (${GRUNDSTANDZEIT_WOCHEN} Wochen).`], z.menge, i.einheit, cent(z.epAuf + z.epAb + z.epVorh * GRUNDSTANDZEIT_WOCHEN))
+      if (zusatzWo > 0) T2.add(`Verlängerung der Vorhaltung ${i.name}`, [`Verlängerung der Vorhaltung zur Vorposition ${i.name}.`], r2(z.menge * zusatzWo), i.woEinheit, cent(z.epVorh))
     }
     if (konsolenM > 0) T2.add('Konsolen', ['Konsolen, herausnehmbar, als Belagsverbreiterung am vorgenannten Gerüst montieren und später wieder demontieren, inkl. Grundstandzeit (' + GRUNDSTANDZEIT_WOCHEN + ' Wochen).'], konsolenM, 'm', epGrund('konsolen', konsolenM))
     verl('Konsolen', 'konsolen', konsolenM, 'mWo', 'Konsolen')
@@ -412,7 +419,7 @@ export function erzeugeLeistungsverzeichnis(quelle: LvQuelle, e: LvEingaben): Le
       e.stil === 'getrennt'
         ? `Aufbau, Vorhaltung und Abbau sind getrennte Positionen (Aufbau wie in den Muster-LVs). Vorhaltung über die gesamte Standzeit von ${de(e.gesamtStandzeitWochen, 0)} Wochen (Menge × Wochen). Aufbau-EP = Aufbaustunden × Stundensatz Facharbeiter, Abbau-EP = Abbaustunden × Stundensatz (je mit Zuschlag, nach Materialwert verteilt); das Material steckt in der Vorhaltung.`
         : `Gesamt-Standzeit ${de(e.gesamtStandzeitWochen, 0)} Wochen, davon ${GRUNDSTANDZEIT_WOCHEN} Wochen Grundstandzeit in der Aufbauposition, danach Verlängerung der Vorhaltung.`,
-      ...(aktiveZusatz.length ? ['Dachfanggerüst, Seitenschutz und Überbrückung kommen nicht aus dem CAD-Modell: Menge und Einheitspreise sind Eingaben.'] : []),
+      ...(aktiveZusatz.length ? ['Dachfanggerüst, Seitenschutz, Überbrückung, Strahlnetze, Aufzug und Bauzaun kommen nicht aus dem CAD-Modell: Menge und Einheitspreise sind Eingaben.'] : []),
       'Gliederung und Wortlaut orientieren sich an den Muster-LVs (ZECH Bau SE / BVG Los 4 und Ernst Architekten BDA / St. Kilian). Die Bezeichnung „SW“ der Breitenklasse folgt dem Muster-LV; Normtext nicht geprüft. Pauschalen für Statik, Baustelleneinrichtung und Anfahrt sind Eingaben.',
       'Last-, Breiten- und Höhenklasse nach DIN EN 12811-1 (Normtext nicht geprüft). Die Höhenklasse ist eine Eingabe, nicht aus dem CAD berechnet.',
       'Dieses LV ersetzt keine Statik und keine Prüfung durch eine befähigte Person.',
