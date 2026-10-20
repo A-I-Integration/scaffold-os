@@ -9,7 +9,8 @@
     "start": "next start",
     "lint": "eslint",
     "test": "vitest run",
-    "build:worker-teile": "node scripts/build-worker-teile.mjs"
+    "build:worker-teile": "node scripts/build-worker-teile.mjs",
+    "ifc:testmodelle": "node scripts/erzeuge-ifc-testmodelle.mjs"
   },
   "dependencies": {
     "@pdf-lib/fontkit": "^1.1.1",
