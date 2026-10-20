@@ -116,3 +116,38 @@ describe('Proxy: normale Rollen bleiben unverändert', () => {
     }
   })
 })
+
+describe('Proxy: Feldtest (/cad/feldtest) nur für Admin', () => {
+  it('Admin darf, Disposition und Bauleitung werden umgeleitet – das übrige CAD bleibt für sie offen', async () => {
+    aktuellerNutzer = { id: 'f1', email: 'a@firma.de', app_metadata: {} }
+    aktuelleRolle = 'admin'
+    expect((await proxy(anfrage('/cad/feldtest'))).status).toBe(200)
+    for (const rolle of ['disponent', 'bauleiter', 'mitarbeiter', 'lager']) {
+      aktuelleRolle = rolle
+      const r = await proxy(anfrage('/cad/feldtest'))
+      expect(r.status, rolle).toBe(307)
+      expect(new URL(ziel(r)!).pathname, rolle).not.toBe('/cad/feldtest')
+    }
+    for (const rolle of ['disponent', 'bauleiter']) {
+      aktuelleRolle = rolle
+      expect((await proxy(anfrage('/cad'))).status, rolle).toBe(200)
+    }
+  })
+
+  it('Statiker (extern) darf das CAD, aber nicht den Feldtest', async () => {
+    aktuellerNutzer = { id: 'f2', email: 's@statik.de', app_metadata: { statiker: true } }
+    aktuelleRolle = 'statiker'
+    expect((await proxy(anfrage('/cad'))).status).toBe(200)
+    for (const p of ['/cad/feldtest', '/cad/feldtest/x']) {
+      const r = await proxy(anfrage(p))
+      expect(r.status, p).toBe(307)
+      expect(new URL(ziel(r)!).pathname, p).toBe('/statiker')
+    }
+  })
+
+  it('Nicht eingeloggt → Login', async () => {
+    const r = await proxy(anfrage('/cad/feldtest'))
+    expect(r.status).toBe(307)
+    expect(new URL(ziel(r)!).pathname).toBe('/login')
+  })
+})
