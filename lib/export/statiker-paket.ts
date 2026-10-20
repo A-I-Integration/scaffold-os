@@ -9,6 +9,7 @@
 //   4 Stueckliste.csv          ohne Preise
 //   5 Geometriedaten.json
 //   6 Geruest.ifc              nur wenn der IFC-Export gelungen ist
+//   7 Statikdaten.xlsx         Lastannahmen, Lastklassen der Beläge, Prüfpunkte, Prüfprotokoll mit Ampel, Stückliste (Excel)
 // Die vorhandene Dokumentation liegt bewusst NICHT bei (Platzhalter-Zeichnungen,
 // Preise, "verbindlich"). Es wird nichts berechnet und kein Nachweis erstellt.
 // Der Plan ist schematisch (siehe Hinweis in Inhalt.txt).
@@ -22,6 +23,7 @@ import { pruefeGeruest } from '@/lib/geruest/regelpruefung'
 import { erzeugePlanPdf } from './plan-pdf'
 import { erzeugeDxf } from './dxf-export'
 import { erzeugeLastannahmenPdf } from './lastannahmen-pdf'
+import { erzeugeStatikExcel } from './statik-excel'
 import { erzeugeZip, type ZipDatei } from './zip'
 
 export interface StatikerPaketEingabe {
@@ -73,6 +75,7 @@ export function paketDateien(e: StatikerPaketEingabe): ZipDatei[] {
       '3-Lastannahmen-Pruefprotokoll.pdf Eingangsdaten für die Statik (Angaben des Planers) und Prüfprotokoll nach DIN EN 12811-1',
       '4-Stueckliste.csv                 Stückliste mit Gewichten, ohne Preise',
       '5-Geometriedaten.json             Positionen und Abmessungen der Bauteile und Anker',
+      '7-Statikdaten.xlsx               dieselben Angaben, Prüfpunkte, Prüfprotokoll (mit Ampel) und Stückliste ohne Preise als Excel-Datei',
       hatIfc ? '6-Geruest.ifc                    Gerüst-Modell (IFC)' : '(IFC-Modell konnte nicht erzeugt werden und liegt nicht bei)',
       '',
       `Regelprüfung: ${protokoll.anzahl.ok} OK, ${protokoll.anzahl.warnung} Warnungen, ${protokoll.anzahl.fehler} Fehler (siehe Prüfprotokoll).`,
@@ -91,6 +94,7 @@ export function paketDateien(e: StatikerPaketEingabe): ZipDatei[] {
   dateien.push({ name: '4-Stueckliste.csv', data: stuecklisteOhnePreiseCsv(e.materials) })
   dateien.push({ name: '5-Geometriedaten.json', data: JSON.stringify(generateStatikExport(e.model), null, 2) })
   if (hatIfc) dateien.push({ name: '6-Geruest.ifc', data: e.ifc as Uint8Array })
+  dateien.push({ name: '7-Statikdaten.xlsx', data: erzeugeStatikExcel(e.model, e.statik, e.materials, opt, protokoll) })
   return dateien
 }
 

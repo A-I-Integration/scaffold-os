@@ -2,8 +2,9 @@
 // SCAFFOLD OS – Projektdaten für die Statik (Angaben des Planers)
 //
 // Das sind nur ANGABEN, die der Statiker braucht. SCAFFOLD OS rechnet damit
-// nichts nach und leitet keine Windwerte aus einer Zone ab: die Referenz-
-// windgeschwindigkeit trägt der Planer selbst ein.
+// nichts nach und trägt keine Windwerte selbst ein: die Referenz-
+// windgeschwindigkeit trägt der Planer selbst ein. Zur Windzone wird nur ein
+// RICHTWERT angezeigt (siehe WINDZONEN_RICHTWERT_MS), der nie automatisch übernommen wird.
 // Gespeichert im Projekt unter data.statikDaten (kein SQL nötig).
 // ============================================================
 
@@ -16,6 +17,19 @@ export const GELAENDEKATEGORIEN = [
 ] as const
 export const UNTERGRUENDE = ['Beton / Asphalt', 'Pflaster / Platten', 'Schotter / Kies', 'Gewachsener Boden', 'Weicher / aufgefüllter Boden', 'Sonstiger (siehe Notiz)'] as const
 export const WINDZONEN = ['1', '2', '3', '4'] as const
+/**
+ * Richtwert: Basiswindgeschwindigkeit v_b,0 je Windzone nach DIN EN 1991-1-4/NA (Tabelle der Windzonen).
+ * QUELLE/STAND: aus Fachkenntnis, NICHT gegen ein übergebenes Dokument geprüft – bitte gegen die Norm prüfen.
+ * Gilt ohne Höhen-, Gelände- und Küstenabminderung/-zuschlag; die Windzone selbst hängt vom Standort ab
+ * (Verwaltungsgrenzen) und wird hier nicht ermittelt. Kein Ersatz für die Angabe des Statikers.
+ */
+export const WINDZONEN_RICHTWERT_MS: Record<(typeof WINDZONEN)[number], number> = { '1': 22.5, '2': 25, '3': 27.5, '4': 30 }
+export const WINDZONEN_RICHTWERT_HINWEIS = 'Richtwert v_b,0 der Windzone laut DIN EN 1991-1-4/NA (aus Fachkenntnis, bitte gegen die Norm prüfen; ohne Gelände-/Höhenabminderung)'
+
+export function windzonenRichtwertMs(zone: StatikDaten['windzone']): number | null {
+  return zone ? WINDZONEN_RICHTWERT_MS[zone] : null
+}
+
 export const BEKLEIDUNGEN = [
   { id: 'keine', text: 'Unbekleidet' },
   { id: 'netz', text: 'Netze / Gittergewebe' },

@@ -17,7 +17,7 @@
 // ============================================================
 
 import { berechneGebaeudeSegmente, type CADModel } from '@/lib/calculations/cad-engine'
-import { ansichtBauteile, grundrissBauteile, zaehleBauteile, SZENE_Z_VERSATZ_M, type PlanBauteil } from './platzierung'
+import { ansichtBauteile, grundrissBauteile, zaehleBauteile, SZENE_Z_VERSATZ_M, STAENDER_M, type PlanBauteil } from './platzierung'
 
 export type PlanModus = 'schematisch' | 'komponenten'
 
@@ -112,18 +112,88 @@ function textHoehe(breiteM: number, hoeheM: number): number {
 }
 
 
-/** Zeichnet Bauteile: Ständer/Fußplatten/Belag als Rechtecke, Diagonalen gestrichelt, Rest als Linien. */
-function zeichneBauteile(p: Maler, bauteile: PlanBauteil[], grundriss: boolean) {
+/** Symbolstil im Komponenten-Plan: Modulsysteme mit Lochscheibe, Rahmensysteme mit Querriegel */
+export type SymbolStil = 'modul' | 'rahmen' | 'neutral'
+export function symbolStilVon(model: CADModel): SymbolStil {
+  const b = model.system?.bauart
+  return b === 'modul' ? 'modul' : b === 'rahmen' ? 'rahmen' : 'neutral'
+}
+
+/** Lochscheibe: Abstand entlang des Stiels (Layher-Katalog: alle 50 cm; bei anderen Modulsystemen angenommen). */
+export const LOCHSCHEIBE_ABSTAND_M = 0.5
+/** Maße der Symbole in m: Lochscheibe (Ø 124 mm, Optik-Annahme wie im 3D), Rohr Ø 48,3 mm (Katalog), Fußplatte 150 mm, Spindel Ø 38 mm, Flügelmutter 205 mm (Layher-Katalog) */
+const LOCH_D = 0.124
+const ROHR_D = 0.0483
+const SPINDEL_D = 0.038
+const FLUEGEL_B = 0.205
+
+function kreis(p: Maler, cx: number, cy: number, d: number, n = 16) {
+  for (let i = 0; i < n; i++) {
+    const a1 = (i / n) * Math.PI * 2, a2 = ((i + 1) / n) * Math.PI * 2
+    p.linie(cx + (d / 2) * Math.cos(a1), cy + (d / 2) * Math.sin(a1), cx + (d / 2) * Math.cos(a2), cy + (d / 2) * Math.sin(a2), 'GERUEST')
+  }
+}
+
+/** Zeichnet Bauteile: Ständer/Fußplatten/Belag als Rechtecke, Diagonalen gestrichelt, Rest als Linien. Mit Symbolen je Bauart. */
+function zeichneBauteile(p: Maler, bauteile: PlanBauteil[], grundriss: boolean, stil: SymbolStil = 'neutral') {
+  const staenderJeFeld = new Map<string, PlanBauteil[]>()
   for (const b of bauteile) {
     if (b.sichtbar === false) continue
     switch (b.typ) {
-      case 'staender': case 'fussplatte': p.rechteck(b.x1, b.y1, b.x2, b.y2, 'GERUEST'); break
+      case 'staender':
+        if (grundriss && stil === 'modul') {
+          // Draufsicht: Rohr als Kreis mit Lochscheibe als größerem Kreis
+          const cx = (b.x1 + b.x2) / 2, cy = (b.y1 + b.y2) / 2
+          kreis(p, cx, cy, ROHR_D); kreis(p, cx, cy, LOCH_D)
+        } else {
+          p.rechteck(b.x1, b.y1, b.x2, b.y2, 'GERUEST')
+          if (!grundriss && stil === 'modul') {
+            // Ansicht: Lochscheiben als schmale Rechtecke alle 0,50 m
+            const cx = (b.x1 + b.x2) / 2
+            for (let y = b.y1 + LOCHSCHEIBE_ABSTAND_M; y < b.y2 - 1e-6; y += LOCHSCHEIBE_ABSTAND_M) p.rechteck(cx - LOCH_D / 2, y - 0.006, cx + LOCH_D / 2, y + 0.006, 'GERUEST')
+          }
+          if (grundriss && stil === 'rahmen') { const l = staenderJeFeld.get(b.feldId) ?? []; l.push(b); staenderJeFeld.set(b.feldId, l) }
+        }
+        break
+      case 'fussplatte': {
+        if (grundriss || stil === 'neutral') { p.rechteck(b.x1, b.y1, b.x2, b.y2, 'GERUEST'); break }
+        // Ansicht: Fußspindel = Platte, Spindel, Flügelmutter
+        const cx = (b.x1 + b.x2) / 2, yo = b.y2
+        p.rechteck(b.x1, b.y1, b.x2, b.y1 + 0.012, 'GERUEST')
+        p.rechteck(cx - SPINDEL_D / 2, b.y1 + 0.012, cx + SPINDEL_D / 2, yo, 'GERUEST')
+        p.rechteck(cx - FLUEGEL_B / 2, b.y1 + 0.02, cx + FLUEGEL_B / 2, b.y1 + 0.032, 'GERUEST')
+        break
+      }
       case 'belag': p.rechteck(b.x1, b.y1, b.x2, b.y2, 'GERUEST'); break
       case 'diagonale': p.linie(b.x1, b.y1, b.x2, b.y2, 'GERUEST', true); break
       case 'treppe': if (grundriss) { p.rechteck(b.x1, b.y1, b.x2, b.y2, 'GERUEST'); p.linie(b.x1, b.y1, b.x2, b.y2, 'GERUEST') } else p.linie(b.x1, b.y1, b.x2, b.y2, 'GERUEST'); break
+      case 'riegel':
+        p.linie(b.x1, b.y1, b.x2, b.y2, 'GERUEST')
+        if (!grundriss && stil === 'modul') {
+          // Keilkopf an beiden Enden
+          for (const x of [b.x1, b.x2]) p.rechteck(x - 0.03, b.y1 - 0.04, x + 0.03, b.y1 + 0.04, 'GERUEST')
+        }
+        break
       default: p.linie(b.x1, b.y1, b.x2, b.y2, 'GERUEST')
     }
   }
+  // Rahmensystem im Grundriss: Querriegel des Rahmens an beiden Feldenden (über die Gerüstbreite)
+  for (const st of staenderJeFeld.values()) {
+    const xl = Math.min(...st.map((b) => b.x1)), xr = Math.max(...st.map((b) => b.x2))
+    const yl = Math.min(...st.map((b) => b.y1)), yr = Math.max(...st.map((b) => b.y2))
+    if (xr - xl >= yr - yl) { p.linie(xl, yl + STAENDER_M / 2, xr, yl + STAENDER_M / 2, 'GERUEST'); p.linie(xl, yr - STAENDER_M / 2, xr, yr - STAENDER_M / 2, 'GERUEST') }
+    else { p.linie(xl + STAENDER_M / 2, yl, xl + STAENDER_M / 2, yr, 'GERUEST'); p.linie(xr - STAENDER_M / 2, yl, xr - STAENDER_M / 2, yr, 'GERUEST') }
+  }
+}
+
+/** Legende der Symbole (nur Komponentenplan) */
+function symbolHinweis(model: CADModel, grundriss: boolean): string {
+  const st = symbolStilVon(model)
+  if (st === 'modul') return grundriss
+    ? 'Symbole: Ständer als Kreis (Ø 48,3 mm) mit Lochscheibe (Ø 124 mm, Maß angenommen). '
+    : `Symbole: Lochscheiben alle ${de(LOCHSCHEIBE_ABSTAND_M)} m (Abstand laut Layher-Katalog, bei anderen Systemen angenommen), Keilköpfe an den Riegeln, Fußspindel mit Platte und Flügelmutter. `
+  if (st === 'rahmen') return grundriss ? 'Symbole: Rahmen mit Querriegel über die Gerüstbreite. ' : 'Symbole: Fußspindel mit Platte und Flügelmutter. '
+  return ''
 }
 
 function zahlenText(bauteile: PlanBauteil[]): string {
@@ -162,7 +232,7 @@ export function erzeugeVorderansicht(model: CADModel, modus: PlanModus = 'schema
     gerueHoehe = Math.max(gerueHoehe, l.topY)
   }
   const teileAnsicht = modus === 'komponenten' ? ansichtBauteile(model, 'front') : []
-  if (modus === 'komponenten') zeichneBauteile(p, teileAnsicht, false)
+  if (modus === 'komponenten') zeichneBauteile(p, teileAnsicht, false, symbolStilVon(model))
   for (const a of model.anchors.filter((x) => x.side === 'front')) {
     const k = th * 0.35
     p.linie(a.positionX - k, a.positionY - k, a.positionX + k, a.positionY + k, 'GERUEST'); p.linie(a.positionX - k, a.positionY + k, a.positionX + k, a.positionY - k, 'GERUEST')
@@ -203,7 +273,7 @@ export function erzeugeVorderansicht(model: CADModel, modus: PlanModus = 'schema
   if (hatWinkel) p.text(xMin, yUnten2 - th * 2.2, 'Hinweis: Abschnitte mit Winkel sind abgewickelt dargestellt (Länge entlang des Gebäudes).', 'TEXTE', 'links')
   const fuss = yUnten2 - th * (hatWinkel ? 3.6 : 2.2)
   if (modus === 'komponenten') {
-    p.text(xMin, fuss, 'Bauteile aus dem CAD-Modell (Ständer, Riegel, Diagonalen gestrichelt, Geländer, Belag). Dach vereinfacht. Kein Standsicherheitsnachweis.', 'TEXTE', 'links')
+    p.text(xMin, fuss, 'Bauteile aus dem CAD-Modell (Ständer, Riegel, Diagonalen gestrichelt, Geländer, Belag). ' + symbolHinweis(model, false) + 'Dach vereinfacht. Kein Standsicherheitsnachweis.', 'TEXTE', 'links')
     if (teileAnsicht.length > 0) p.text(xMin, fuss - th * 1.4, zahlenText(teileAnsicht), 'TEXTE', 'links')
   } else p.text(xMin, fuss, 'Schematische Darstellung. Dach vereinfacht. Kein Standsicherheitsnachweis.', 'TEXTE', 'links')
 
@@ -238,7 +308,7 @@ export function erzeugeGrundriss(model: CADModel, modus: PlanModus = 'schematisc
   // Gerüst schematisch: zwei Linien (innen: Wandabstand, außen: Wandabstand + Gerüstbreite)
   const geruest = walls.filter((w) => w.s.eingeruestet)
   const teileGrundriss = modus === 'komponenten' ? grundrissBauteile(model) : []
-  if (modus === 'komponenten') zeichneBauteile(p, teileGrundriss, true)
+  if (modus === 'komponenten') zeichneBauteile(p, teileGrundriss, true, symbolStilVon(model))
   if (modus === 'schematisch' && seiten.has('front')) geruest.forEach(({ s, yVorne }) => { p.linie(s.x0, yVorne - wandabstand, s.x1, yVorne - wandabstand, 'GERUEST'); p.linie(s.x0, yVorne - aussen, s.x1, yVorne - aussen, 'GERUEST') })
   if (modus === 'schematisch' && seiten.has('back')) geruest.forEach(({ s, yHinten }) => { p.linie(s.x0, yHinten + wandabstand, s.x1, yHinten + wandabstand, 'GERUEST'); p.linie(s.x0, yHinten + aussen, s.x1, yHinten + aussen, 'GERUEST') })
   if (modus === 'schematisch' && geruest.length > 0) {
@@ -281,7 +351,7 @@ export function erzeugeGrundriss(model: CADModel, modus: PlanModus = 'schematisc
     if (teile.length > 0) p.text(xMin, yUnten2 - th * 3.6, `Abstand Wand bis Innenkante Gerüst laut Modell: ${teile.join(' · ')} (Einstellung Wandabstand ${de(wandabstand)} m)`, 'TEXTE', 'links')
   }
   p.text(xMin, yUnten2 - th * 2.2, modus === 'komponenten'
-    ? 'Felder, Ständer und Geländer der untersten Lage aus dem CAD-Modell. Kein Standsicherheitsnachweis.'
+    ? 'Felder, Ständer und Geländer der untersten Lage aus dem CAD-Modell. ' + symbolHinweis(model, true) + 'Kein Standsicherheitsnachweis.'
     : 'Gerüst schematisch (Wandabstand und Gerüstbreite je Seite), nicht aus den einzelnen Feldern gezeichnet. Kein Standsicherheitsnachweis.', 'TEXTE', 'links')
 
   return { id: 'grundriss', titel: 'Grundriss', linien: p.linien, texte: p.texte, grenzen: grenzenVon(p.linien, p.texte) }

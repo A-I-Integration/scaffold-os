@@ -132,9 +132,9 @@ describe('Statiker-Paket', () => {
   const namen = ['0-Inhalt.txt', '1-Geruestplan.pdf', '2-Geruestplan.dxf', '3-Lastannahmen-Pruefprotokoll.pdf', '4-Stueckliste.csv', '5-Geometriedaten.json']
 
   it('enthält die vorgesehenen Dateien in fester Reihenfolge', () => {
-    expect(paketDateien({ ...eingabe, ifc: new Uint8Array([1, 2, 3]) }).map((d) => d.name)).toEqual([...namen, '6-Geruest.ifc'])
+    expect(paketDateien({ ...eingabe, ifc: new Uint8Array([1, 2, 3]) }).map((d) => d.name)).toEqual([...namen, '6-Geruest.ifc', '7-Statikdaten.xlsx'])
     const ohneIfc = paketDateien({ ...eingabe, ifc: null })
-    expect(ohneIfc.map((d) => d.name)).toEqual(namen)
+    expect(ohneIfc.map((d) => d.name)).toEqual([...namen, '7-Statikdaten.xlsx'])
     expect(String(ohneIfc[0].data)).toContain('IFC-Modell konnte nicht erzeugt werden')
   })
 
@@ -163,7 +163,7 @@ describe('Statiker-Paket', () => {
   it('ZIP lässt sich vollständig auslesen, JSON ist gültig und passt zum Modell', () => {
     const zip = erzeugeStatikerPaket({ ...eingabe, ifc: new Uint8Array([9, 8, 7]) })
     const d = liesZip(zip)
-    expect(d.length).toBe(7)
+    expect(d.length).toBe(8)
     for (const x of d) expect(crc32(x.bytes)).toBe(x.crc)
     const json = JSON.parse(new TextDecoder().decode(d.find((x) => x.name === '5-Geometriedaten.json')!.bytes))
     expect(json.gesamtmasse.feldanzahl).toBe(model.fieldCount)

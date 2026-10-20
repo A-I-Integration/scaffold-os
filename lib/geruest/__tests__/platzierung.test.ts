@@ -118,3 +118,35 @@ describe('Plan-Zeichnung: Modi', () => {
     expect(erzeugeZeichnungen(m, 'komponenten')).toEqual([])
   })
 })
+
+describe('Komponenten-Plan: Symbole je Bauart', () => {
+  const modul = generateCADModel(kirche(), 'layher-allround')
+  const rahmen = generateCADModel(kirche(), 'layher-speedyscaf')
+  it('Modulsystem: Lochscheiben alle 0,50 m am Ständer, Keilköpfe, Fußspindel – mehr Linien als neutral', () => {
+    expect(modul.system?.bauart).toBe('modul')
+    const a = erzeugeVorderansicht(modul, 'komponenten')
+    // Lochscheibe = schmales Rechteck (0,124 m breit): kommt in der Ansicht vor
+    expect(a.linien.some((l) => Math.abs(Math.abs(l.x2 - l.x1) - 0.124) < 1e-9 && Math.abs(l.y2 - l.y1) < 1e-9)).toBe(true)
+    // Flügelmutter der Fußspindel (0,205 m)
+    expect(a.linien.some((l) => Math.abs(Math.abs(l.x2 - l.x1) - 0.205) < 1e-9)).toBe(true)
+    expect(a.texte.some((t) => /Lochscheiben alle 0,50 m/.test(t.text))).toBe(true)
+  })
+  it('Modulsystem im Grundriss: Ständer als Kreis (16 Segmente) mit Lochscheibe', () => {
+    const g = erzeugeGrundriss(modul, 'komponenten')
+    const kurz = g.linien.filter((l) => Math.hypot(l.x2 - l.x1, l.y2 - l.y1) < 0.05)
+    expect(kurz.length).toBeGreaterThan(100)
+    expect(g.texte.some((t) => /Ständer als Kreis/.test(t.text))).toBe(true)
+  })
+  it('Rahmensystem: keine Lochscheiben, dafür Querriegel im Grundriss', () => {
+    expect(rahmen.system?.bauart).toBe('rahmen')
+    const a = erzeugeVorderansicht(rahmen, 'komponenten')
+    expect(a.linien.some((l) => Math.abs(Math.abs(l.x2 - l.x1) - 0.124) < 1e-9 && Math.abs(l.y2 - l.y1) < 1e-9)).toBe(false)
+    const g = erzeugeGrundriss(rahmen, 'komponenten')
+    expect(g.texte.some((t) => /Querriegel/.test(t.text))).toBe(true)
+  })
+  it('Schematischer Plan bleibt unverändert (keine Symbole)', () => {
+    const s = erzeugeVorderansicht(modul, 'schematisch')
+    expect(s.texte.some((t) => /Lochscheibe/.test(t.text))).toBe(false)
+  })
+})
+

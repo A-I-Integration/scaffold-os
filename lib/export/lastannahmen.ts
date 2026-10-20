@@ -12,6 +12,9 @@ import type { CADModel } from '@/lib/calculations/cad-engine'
 import { BEKLEIDUNGEN, GELAENDEKATEGORIEN, SONDERLASTEN, fehlendeStatikAngaben, type StatikDaten } from '@/lib/statik-daten'
 import { statikPruefpunkte } from '@/lib/statik-pruefpunkte'
 import { abschnittsListe } from '@/lib/geruest/regelpruefung'
+import { MJ_LISTEN } from '@/lib/mj-katalog'
+import { katalogListeFuerSystem } from '@/lib/cad/katalog-zuordnung'
+import { pruefeLastklassen, type LkErgebnis } from '@/lib/data/zulassung-lastklassen'
 
 export interface LastannahmenOptionen {
   projektName: string
@@ -49,6 +52,44 @@ function datumDe(iso?: string): string | null {
   if (!iso) return null
   const [j, m, t] = iso.split('-')
   return `${t}.${m}.${j}`
+}
+
+const LK_ERGEBNIS_TEXT: Record<LkErgebnis, string> = {
+  ok: 'deckt die geplante Lastklasse ab',
+  'zu-hoch': 'geplante Lastklasse höher als zulässig',
+  'nicht-abgedeckt': 'Feldweite nicht in der Tabelle',
+}
+
+/** Abschnitt 6: Zulassung und Lastklassen der Beläge (Angaben der Zulassung, kein Nachweis); null, wenn für das System nichts erfasst ist */
+function zulassungsSektion(model: CADModel): LastSektion | null {
+  const sys = model.system
+  const liste = sys ? katalogListeFuerSystem(sys.id) : null
+  const weiten = model.fields.map((f) => f.lengthM)
+  const pr = pruefeLastklassen(liste, weiten, model.building.lastklasse)
+  if (!liste || !pr) return null
+  const z = MJ_LISTEN[liste].zulassungen[0]
+  const fw = (n: number) => `${zahl(n)} m`
+  return {
+    titel: '6. Zulassung und Lastklassen der Beläge (Angaben der Zulassung)',
+    zeilen: [
+      { label: 'Zulassung', wert: z ? `${z.nummer} (Bescheid vom ${z.bescheidVom}, gültig bis ${z.gueltigBis})` : pr.tabelle.zulassung },
+      { label: 'Tabelle in der Zulassung', wert: `${pr.tabelle.tabelle} „Zuordnung der Beläge zu den Lastklassen“ – ${pr.tabelle.stand}` },
+      { label: 'Feldweiten im Modell', wert: pr.feldweitenM.length > 0 ? pr.feldweitenM.map(fw).join(', ') : null },
+      { label: 'Geplante Lastklasse', wert: pr.geplanteLk !== null ? String(pr.geplanteLk) : null },
+      { label: 'Hinweis', wert: 'Die Werte stammen aus der Zulassung (von Hand aus den Tabellenseiten übertragen). Es ist KEIN Nachweis. Maßgeblich ist der aktuelle Bescheid; Einschränkungen im Text der Zulassung (Fang-/Dachfanggerüst, Belagsicherung, Gerüstbreite) sind nicht übernommen.' },
+      ...(liste === 'combi' && sys?.id === 'mj-plus' ? [{ label: 'Annahme', wert: 'MJ-Plus wird hier der Zulassung MJ COMBI zugeordnet – bitte prüfen.' }] : []),
+      ...(pr.tabelle.hinweis ? [{ label: 'Zur Tabelle', wert: pr.tabelle.hinweis }] : []),
+    ],
+    tabelle: {
+      kopf: ['Belag laut Zulassung', 'Anlage', 'Höchste Lastklasse je Feldweite', ...(pr.geplanteLk !== null ? ['Abgleich'] : [])],
+      zeilen: pr.zeilen.map((z2) => [
+        z2.belag,
+        z2.anlage,
+        z2.proFeldweite.map((p) => `${fw(p.feldweiteM)}: ${p.maxLk === null ? 'nicht abgedeckt' : `≤ ${p.maxLk}`}`).join('; ') || 'keine Felder',
+        ...(pr.geplanteLk !== null ? [z2.ergebnis ? LK_ERGEBNIS_TEXT[z2.ergebnis] : '-'] : []),
+      ]),
+    },
+  }
 }
 
 export function baueLastannahmenDaten(model: CADModel, statik: StatikDaten, opt: LastannahmenOptionen): LastannahmenDaten {
@@ -114,6 +155,9 @@ export function baueLastannahmenDaten(model: CADModel, statik: StatikDaten, opt:
       ],
     },
   ]
+
+  const zulSektion = zulassungsSektion(model)
+  if (zulSektion) sektionen.push(zulSektion)
 
   return {
     titel: 'Lastannahmen und Eingangsdaten für die Statik',

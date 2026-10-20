@@ -90,12 +90,12 @@ export function erzeugeLastannahmenPdf(model: CADModel, statik: StatikDaten, opt
   }
 
   if (daten.planungshinweise.length > 0) {
-    ueberschrift('6. Hinweise aus der Planung')
+    ueberschrift(`${daten.sektionen.length + 1}. Hinweise aus der Planung`)
     autoTable(doc, { startY: y, margin: { left: RAND, right: RAND }, theme: 'plain', styles: { fontSize: 8.5, cellPadding: 1 }, body: daten.planungshinweise.map((t) => ['•', pdfText(t)]), columnStyles: { 0: { cellWidth: 5 } } })
     y = tabEnde() + 4
   }
   if (daten.pruefpunkte.length > 0) {
-    ueberschrift(`${daten.planungshinweise.length > 0 ? '7' : '6'}. Prüfpunkte für den Statiker (Hinweise, keine Nachweise)`)
+    ueberschrift(`${daten.sektionen.length + (daten.planungshinweise.length > 0 ? 2 : 1)}. Prüfpunkte für den Statiker (Hinweise, keine Nachweise)`)
     autoTable(doc, { startY: y, margin: { left: RAND, right: RAND }, theme: 'plain', styles: { fontSize: 8.5, cellPadding: 1 }, body: daten.pruefpunkte.map((p) => [pdfText(p.thema), pdfText(p.text)]), columnStyles: { 0: { cellWidth: 38, fontStyle: 'bold' } } })
     y = tabEnde() + 4
   }
