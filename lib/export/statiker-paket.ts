@@ -19,7 +19,7 @@ import { generateStatikExport, type CADModel } from '@/lib/calculations/cad-engi
 import type { StatikDaten } from '@/lib/statik-daten'
 import type { MaterialItem } from '@/types/scaffold'
 import { erzeugeZeichnungen, type PlanModus } from '@/lib/geruest/plan-zeichnung'
-import { pruefeGeruest } from '@/lib/geruest/regelpruefung'
+import { pruefeGeruest, anzahlText } from '@/lib/geruest/regelpruefung'
 import { erzeugePlanPdf } from './plan-pdf'
 import { erzeugeDxf } from './dxf-export'
 import { erzeugeLastannahmenPdf } from './lastannahmen-pdf'
@@ -78,7 +78,7 @@ export function paketDateien(e: StatikerPaketEingabe): ZipDatei[] {
       '7-Statikdaten.xlsx               dieselben Angaben, Prüfpunkte, Prüfprotokoll (mit Ampel) und Stückliste ohne Preise als Excel-Datei',
       hatIfc ? '6-Geruest.ifc                    Gerüst-Modell (IFC)' : '(IFC-Modell konnte nicht erzeugt werden und liegt nicht bei)',
       '',
-      `Regelprüfung: ${protokoll.anzahl.ok} OK, ${protokoll.anzahl.warnung} Warnungen, ${protokoll.anzahl.fehler} Fehler (siehe Prüfprotokoll).`,
+      `Regelprüfung: ${anzahlText(protokoll.anzahl)} (siehe Prüfprotokoll).`,
       '',
       'HINWEISE:',
       modus === 'komponenten'

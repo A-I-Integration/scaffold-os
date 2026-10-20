@@ -11,6 +11,7 @@ const AMPEL: Record<PruefStatus, { punkt: string; text: string }> = {
   ok: { punkt: 'bg-green-500', text: 'Ampel grün: keine Auffälligkeit bei den automatisch prüfbaren Regeln' },
   warnung: { punkt: 'bg-amber-400', text: 'Ampel gelb: mindestens eine Warnung' },
   fehler: { punkt: 'bg-red-500', text: 'Ampel rot: mindestens ein Fehler' },
+  verletzt: { punkt: 'bg-red-500', text: 'Ampel rot: mindestens ein Richtwert aus den Zulassungs-Eckdaten verletzt (keine Sperre)' },
 }
 const label = 'block text-[11px] font-medium text-[#424245] mb-0.5'
 

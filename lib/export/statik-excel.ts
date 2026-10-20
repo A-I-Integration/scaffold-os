@@ -11,11 +11,11 @@ import * as XLSX from 'xlsx'
 import type { CADModel } from '@/lib/calculations/cad-engine'
 import type { StatikDaten } from '@/lib/statik-daten'
 import type { MaterialItem } from '@/types/scaffold'
-import { pruefeGeruest, type PruefStatus, type Pruefprotokoll } from '@/lib/geruest/regelpruefung'
+import { pruefeGeruest, anzahlText, type PruefStatus, type Pruefprotokoll } from '@/lib/geruest/regelpruefung'
 import { baueLastannahmenDaten, NICHT_ANGEGEBEN, type LastannahmenOptionen } from './lastannahmen'
 
-const STATUS_TEXT: Record<PruefStatus, string> = { ok: 'OK', warnung: 'WARNUNG', fehler: 'FEHLER' }
-const AMPEL_FARBE: Record<PruefStatus, string> = { ok: 'grün', warnung: 'gelb', fehler: 'rot' }
+const STATUS_TEXT: Record<PruefStatus, string> = { ok: 'OK', warnung: 'WARNUNG', fehler: 'FEHLER', verletzt: 'VERLETZT' }
+const AMPEL_FARBE: Record<PruefStatus, string> = { ok: 'grün', warnung: 'gelb', fehler: 'rot', verletzt: 'rot' }
 
 function blatt(zeilen: (string | number)[][], breiten: number[]): XLSX.WorkSheet {
   const ws = XLSX.utils.aoa_to_sheet(zeilen)
@@ -59,7 +59,7 @@ export function erzeugeStatikExcel(
   }
 
   const pr: (string | number)[][] = [
-    ['Ampel', `${AMPEL_FARBE[protokoll.ampel]} (${protokoll.anzahl.ok} OK, ${protokoll.anzahl.warnung} Warnungen, ${protokoll.anzahl.fehler} Fehler)`],
+    ['Ampel', `${AMPEL_FARBE[protokoll.ampel]} (${anzahlText(protokoll.anzahl)})`],
     [protokoll.hinweis],
     [],
     ['Status', 'Art', 'Regel', 'Abschnitt', 'Begründung', 'Quelle'],

@@ -10,7 +10,7 @@ import { jsPDF } from 'jspdf'
 import autoTable from 'jspdf-autotable'
 import type { CADModel } from '@/lib/calculations/cad-engine'
 import type { StatikDaten } from '@/lib/statik-daten'
-import { pruefeGeruest, type Pruefprotokoll, type PruefStatus } from '@/lib/geruest/regelpruefung'
+import { pruefeGeruest, anzahlText, type Pruefprotokoll, type PruefStatus } from '@/lib/geruest/regelpruefung'
 import { baueLastannahmenDaten, NICHT_ANGEGEBEN, type LastannahmenOptionen } from './lastannahmen'
 
 const ORANGE: [number, number, number] = [232, 89, 12]
@@ -18,12 +18,13 @@ const DUNKEL: [number, number, number] = [29, 29, 31]
 const GRAU: [number, number, number] = [110, 110, 115]
 const RAND = 14
 
-const STATUS_TEXT: Record<PruefStatus, string> = { ok: 'OK', warnung: 'WARNUNG', fehler: 'FEHLER' }
-const STATUS_FARBE: Record<PruefStatus, [number, number, number]> = { ok: [34, 139, 76], warnung: [217, 119, 6], fehler: [200, 40, 40] }
+const STATUS_TEXT: Record<PruefStatus, string> = { ok: 'OK', warnung: 'WARNUNG', fehler: 'FEHLER', verletzt: 'VERLETZT' }
+const STATUS_FARBE: Record<PruefStatus, [number, number, number]> = { ok: [34, 139, 76], warnung: [217, 119, 6], fehler: [200, 40, 40], verletzt: [200, 40, 40] }
 const AMPEL_TEXT: Record<PruefStatus, string> = {
   ok: 'Ampel grün: keine Auffälligkeit bei den automatisch prüfbaren Regeln.',
   warnung: 'Ampel gelb: mindestens eine Warnung bei den automatisch prüfbaren Regeln.',
   fehler: 'Ampel rot: mindestens ein Fehler bei den automatisch prüfbaren Regeln.',
+  verletzt: 'Ampel rot: mindestens ein Richtwert aus den Zulassungs-Eckdaten des Katalogs verletzt (keine Sperre, die Entscheidung liegt beim Prüfer).',
 }
 
 /** Standardschrift (Helvetica/WinAnsi) kennt einige Zeichen nicht: ersetzen statt Kauderwelsch zu drucken. */
@@ -107,7 +108,7 @@ export function erzeugeLastannahmenPdf(model: CADModel, statik: StatikDaten, opt
   doc.setFont('helvetica', 'normal'); doc.setFontSize(9); doc.setTextColor(...GRAU)
   doc.text(pdfText(daten.kopf), RAND, y); y += 5
   box(pr.hinweis, [245, 158, 11])
-  box(`${AMPEL_TEXT[pr.ampel]}  Ergebnisse gesamt: ${pr.anzahl.ok} OK, ${pr.anzahl.warnung} Warnungen, ${pr.anzahl.fehler} Fehler.`, STATUS_FARBE[pr.ampel], true)
+  box(`${AMPEL_TEXT[pr.ampel]}  Ergebnisse gesamt: ${anzahlText(pr.anzahl)}.`, STATUS_FARBE[pr.ampel], true)
   doc.setFont('helvetica', 'normal'); doc.setFontSize(8); doc.setTextColor(...GRAU)
   const legende = doc.splitTextToSize('Art "geprüft": eindeutig aus dem Modell prüfbar, zählt für die Ampel. Art "Hinweis": nicht eindeutig regelbar oder kein Grenzwert hinterlegt; der gemessene Wert steht im Text und ist gegen die Zulassung zu prüfen. Es gibt keine Sperre.', innen)
   doc.text(legende, RAND, y); y += legende.length * 3.6 + 2
@@ -119,7 +120,7 @@ export function erzeugeLastannahmenPdf(model: CADModel, statik: StatikDaten, opt
     body: pr.ergebnisse.map((r) => [STATUS_TEXT[r.status], r.art === 'geprueft' ? 'geprüft' : 'Hinweis', pdfText(r.regel), pdfText(r.abschnitt ?? 'gesamt'), pdfText(r.begruendung), pdfText(r.quelle)]),
     didParseCell: (d) => {
       if (d.section === 'body' && d.column.index === 0) {
-        const status = (['ok', 'warnung', 'fehler'] as PruefStatus[]).find((s) => STATUS_TEXT[s] === d.cell.raw)
+        const status = (['ok', 'warnung', 'fehler', 'verletzt'] as PruefStatus[]).find((s) => STATUS_TEXT[s] === d.cell.raw)
         if (status) d.cell.styles.textColor = STATUS_FARBE[status]
       }
     },
