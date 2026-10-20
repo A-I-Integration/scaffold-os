@@ -201,6 +201,8 @@ export const GERUEST_SYSTEME: GeruestSystem[] = [
   },
 ];
 
+import { findeKatalogSerie } from '@/lib/data/katalog-serien';
+
 // Eigenes System (Freitext) – wird im Formular separat abgefragt
 export const CUSTOM_SYSTEM_ID = 'custom';
 
@@ -217,5 +219,7 @@ export function systemAnzeigename(
   if (!systemId) return null;
   if (systemId === CUSTOM_SYSTEM_ID) return customName?.trim() || 'Eigenes System';
   const s = findeSystem(systemId);
-  return s ? `${s.hersteller} ${s.systemName}` : null;
+  if (s) return `${s.hersteller} ${s.systemName}`;
+  const k = findeKatalogSerie(systemId);
+  return k ? `${k.hersteller} ${k.name} (Katalog)` : null;
 }

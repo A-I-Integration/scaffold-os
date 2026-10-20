@@ -10,6 +10,7 @@ import { speichereEntwurf } from '@/lib/aufmass-entwurf';
 import { speichereSchrittAuto } from '@/lib/aufmass-autosave';
 import { sichtbareGeruesttypen, leseAngeboteneTypen } from '@/lib/geruesttypen';
 import { GERUEST_SYSTEME, CUSTOM_SYSTEM_ID, findeSystem } from '@/lib/calculations/geruest-systeme';
+import { KATALOG_SERIEN, findeKatalogSerie, katalogSerienHersteller } from '@/lib/data/katalog-serien';
 
 const LEERES_FORM_S3 = {
   geruesttyp: '',
@@ -243,6 +244,36 @@ function Schritt3Content() {
                   </div>
                 </button>
               ))}
+              <div className="p-3 rounded-xl border border-black/10 bg-black/5 space-y-2">
+                <div className="text-sm font-semibold text-[#1d1d1f]">Weitere Serien aus dem Katalog</div>
+                <p className="text-xs text-[#86868b]">Für Serien ohne fertige Systemdaten: Marke und Serie wählen. Die Feldlängen sind aus den Katalogartikeln abgeleitet (keine Herstellerangabe), Rahmenbreite und Höhenraster sind nicht hinterlegt – bitte beim Hersteller prüfen.</p>
+                {katalogSerienHersteller().map((h) => (
+                  <div key={h}>
+                    <div className="text-xs font-medium text-[#424245] mb-1">{h}</div>
+                    <div className="flex flex-wrap gap-2">
+                      {KATALOG_SERIEN.filter((s) => s.hersteller === h).map((s) => (
+                        <button
+                          key={s.id}
+                          type="button"
+                          onClick={() => setForm({
+                            ...form,
+                            system: form.system === s.id ? '' : s.id,
+                            customSystem: '',
+                            feldlange: form.system === s.id ? form.feldlange : String(s.standardFeldlangeM),
+                          })}
+                          className={`px-3 py-1.5 rounded-lg border text-xs transition ${
+                            form.system === s.id
+                              ? 'bg-[#e8590c]/10 border-[#e8590c] text-[#e8590c] font-semibold'
+                              : 'bg-white border-black/10 text-[#424245] hover:border-black/20'
+                          }`}
+                        >
+                          {s.name} · {s.bauart === 'modul' ? 'Modul' : 'Rahmen'}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
               <button
                 onClick={() => setForm({ ...form, system: form.system === CUSTOM_SYSTEM_ID ? '' : CUSTOM_SYSTEM_ID })}
                 className={`p-3 rounded-xl border text-left transition flex items-center gap-3 ${
@@ -278,14 +309,15 @@ function Schritt3Content() {
             >
               {(() => {
                 const sys = findeSystem(form.system);
-                const basis = sys ? sys.feldlangenM : [2.0, 2.5, 3.0, 3.5];
+                const serie = findeKatalogSerie(form.system);
+                const basis = sys ? sys.feldlangenM : serie ? serie.feldlangenM : [2.0, 2.5, 3.0, 3.5];
                 const werte = [...new Set([...basis.map(String), form.feldlange])].sort((a, b) => parseFloat(a) - parseFloat(b));
                 return werte.map((w) => {
                   const n = parseFloat(w);
-                  const std = sys && n === sys.standardFeldlangeM;
+                  const std = (sys && n === sys.standardFeldlangeM) || (serie && n === serie.standardFeldlangeM);
                   return (
                     <option key={w} value={w}>
-                      {n.toFixed(2).replace('.', ',')} m{std ? ' (System-Standard)' : !sys && n === 3.0 ? ' (Standard)' : ''}
+                      {n.toFixed(2).replace('.', ',')} m{std ? (sys ? ' (System-Standard)' : ' (Katalog-Standard)') : !sys && !serie && n === 3.0 ? ' (Standard)' : ''}
                     </option>
                   );
                 });
