@@ -10,6 +10,8 @@
 
 import type { CADModel } from './calculations/cad-engine'
 import { SONDERLASTEN, type StatikDaten } from './statik-daten'
+import { katalogListeFuerSystem } from './cad/katalog-zuordnung'
+import { pruefeLastklassen } from './data/zulassung-lastklassen'
 
 export interface Pruefpunkt {
   id: string
@@ -40,6 +42,12 @@ export function statikPruefpunkte(model: CADModel | null, statik: StatikDaten): 
     if (platten > 0) p.push({ id: 'fuss', thema: 'Fußpunkte und Bodenpressung', text: `${platten} Lastverteilungsplatten im Modell: Bodenpressung unter den Fußpunkten mit dem angegebenen Untergrund abgleichen.` })
     if (model.building.umriss && model.building.umriss.length >= 3) {
       p.push({ id: 'umriss', thema: 'Gebäude mit Umriss', text: 'Das Gerüst läuft um Ecken (Umriss): Verankerung und Aussteifung an den Ecken sowie schräg einfallender Wind (Kräfte parallel zur Fassade) prüfen.' })
+    }
+    const lkListe = model.system ? katalogListeFuerSystem(model.system.id) : null
+    const lkPr = lkListe && model.building.lastklasse ? pruefeLastklassen(lkListe, model.fields.map((f) => f.lengthM), model.building.lastklasse) : null
+    if (lkPr) {
+      const ok = lkPr.zeilen.filter((z) => z.ergebnis === 'ok').length
+      p.push({ id: 'belag-lk', thema: 'Beläge und Lastklasse', text: `Laut Zulassung ${lkPr.tabelle.zulassung} (${lkPr.tabelle.tabelle}) decken ${ok} von ${lkPr.zeilen.length} Belagarten die Lastklasse ${lkPr.geplanteLk} bei den Feldweiten im Modell ab. Belagwahl gegen die Zulassung prüfen (Abschnitt 6 im Lastannahmen-Blatt).` })
     }
     if (model.building.lastklasse) p.push({ id: 'lastklasse', thema: 'Lastklasse', text: `Gewählte Lastklasse ${model.building.lastklasse}: Lagenbelegung (wie viele Lagen gleichzeitig belastet) festlegen.` })
   }
