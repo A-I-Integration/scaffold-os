@@ -169,6 +169,17 @@ describe('Leistungsverzeichnis', () => {
       expect(p.find((x) => x.titel.startsWith('Vorhaltung Überbrückung'))).toMatchObject({ einheit: 'StWo', menge: 16 })
       expect(p.find((x) => x.titel.startsWith('Dachfanggerüst') && x.titel.endsWith('Abbau'))).toMatchObject({ einheit: 'm', ep: 3 })
     })
+    it('Strahlnetze (m²), Aufzug (St) und Bauzaun (m) nach dem Muster-LV Kirche', () => {
+      const z = (art: 'strahlnetze' | 'aufzug' | 'bauzaun', menge: number) => ({ art, menge, epAuf: 4, epVorh: 0.2, epAb: 2 })
+      const lv = erzeugeLeistungsverzeichnis(quelle(), { ...mitPreisen, gesamtStandzeitWochen: 16, zusatz: [z('strahlnetze', 500), z('aufzug', 1), z('bauzaun', 160)] })
+      const p = g(lv)
+      expect(p.find((x) => x.titel === 'Strahlnetze – Aufbau')).toMatchObject({ einheit: 'm²', menge: 500, ep: 4 })
+      expect(p.find((x) => x.titel === 'Vorhaltung Strahlnetze')).toMatchObject({ einheit: 'm²Wo', menge: 8000, ep: 0.2 })
+      expect(p.find((x) => x.titel === 'Vorhaltung Personen- und Lastenaufzug')).toMatchObject({ einheit: 'StWo', menge: 16 })
+      expect(p.find((x) => x.titel === 'Bauzaunelemente – Abbau')).toMatchObject({ einheit: 'm', menge: 160, ep: 2 })
+      const aufbau = lv.titel.flatMap((t) => t.positionen).find((x) => x.titel === 'Personen- und Lastenaufzug – Aufbau')!
+      expect(aufbau.text.join(' ')).toContain('nach Angabe des Auftraggebers')
+    })
     it('Zusatzleistung ohne EP wird als fehlende Angabe gemeldet', () => {
       const lv = erzeugeLeistungsverzeichnis(quelle(), { ...mitPreisen, zusatz: [{ art: 'dachfang', menge: 10, epAuf: 0, epVorh: 0, epAb: 0 }, ...LV_STANDARD_EINGABEN.zusatz.slice(1)] })
       expect(lv.fehlendeAngaben.join(' ')).toMatch(/Dachfanggerüst/)
