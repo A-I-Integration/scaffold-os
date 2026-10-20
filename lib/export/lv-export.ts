@@ -70,7 +70,7 @@ export function erzeugeLvPdf(lv: Leistungsverzeichnis): jsPDF {
   const spMenge = B - RAND - 75
   for (const t of lv.titel) {
     neueSeite()
-    absatz(`Titel ${t.nr}, ${t.titel}`, 13, true, ORANGE); y += 3
+    absatz(`Titel ${t.nrText}, ${t.titel}`, 13, true, ORANGE); y += 3
     for (const p of t.positionen) {
       platz(40)
       doc.setFont('helvetica', 'bold'); doc.setFontSize(10); doc.setTextColor(...DUNKEL)
@@ -96,7 +96,7 @@ export function erzeugeLvPdf(lv: Leistungsverzeichnis): jsPDF {
     }
     platz(14)
     doc.setFont('helvetica', 'bold'); doc.setFontSize(11); doc.setTextColor(...DUNKEL)
-    doc.text(`Summe Titel ${t.nr}`, B - RAND - 45, y, { align: 'right' })
+    doc.text(`Summe Titel ${t.nrText}`, B - RAND - 45, y, { align: 'right' })
     doc.text(formatEuro(t.summe), B - RAND, y, { align: 'right' })
     y += 8
   }
@@ -108,7 +108,7 @@ export function erzeugeLvPdf(lv: Leistungsverzeichnis): jsPDF {
     doc.setFont('helvetica', fett ? 'bold' : 'normal'); doc.setFontSize(fett ? 12 : 11); doc.setTextColor(...DUNKEL)
     doc.text(l, RAND, y); doc.text(v, B - RAND, y, { align: 'right' }); y += fett ? 9 : 7
   }
-  for (const t of lv.titel) zeile(`Titel ${t.nr}  ${t.titel}`, formatEuro(t.summe))
+  for (const t of lv.titel) zeile(`Titel ${t.nrText}  ${t.titel}`, formatEuro(t.summe))
   doc.setDrawColor(...GRAU); doc.line(RAND, y - 3, B - RAND, y - 3); y += 2
   zeile('Angebotssumme netto', formatEuro(lv.summeNetto), true)
   zeile(`zzgl. ${lv.eingaben.mwstProzent.toLocaleString('de-DE')} % MwSt`, formatEuro(lv.mwst))
@@ -148,7 +148,7 @@ export async function erzeugeLvXlsx(lv: Leistungsverzeichnis): Promise<ArrayBuff
 
   const titelSummenZellen: string[] = []
   for (const t of lv.titel) {
-    set(`A${r}`, { t: 's', v: `Titel ${t.nr}` }); set(`B${r}`, { t: 's', v: t.titel }); r += 1
+    set(`A${r}`, { t: 's', v: `Titel ${t.nrText}` }); set(`B${r}`, { t: 's', v: t.titel }); r += 1
     const erste = r
     for (const p of t.positionen) {
       set(`A${r}`, { t: 's', v: p.nr })
@@ -160,7 +160,7 @@ export async function erzeugeLvXlsx(lv: Leistungsverzeichnis): Promise<ArrayBuff
       r += 1
     }
     const letzte = r - 1
-    set(`B${r}`, { t: 's', v: `Summe Titel ${t.nr}` })
+    set(`B${r}`, { t: 's', v: `Summe Titel ${t.nrText}` })
     set(`F${r}`, { t: 'n', v: t.summe, f: `SUM(F${erste}:F${letzte})`, z: euro })
     titelSummenZellen.push(`F${r}`)
     r += 2
