@@ -27,7 +27,25 @@ describe('Serien aus dem Katalog', () => {
     expect(findeKatalogSerie('katalog:gibt-es-nicht')).toBeNull()
     expect(findeKatalogSerie('layher-allround')).toBeNull()
   })
-  it('keine Teilezuordnung für Serien ohne geprüfte Regeln (kein Raten)', () => {
-    for (const s of KATALOG_SERIEN) for (const k of ['Rahmen', 'Belag', 'Geländer', 'Diagonalen']) expect(passendeArtikelFuerKategorie(s.id, k)).toEqual([])
+  it('Teilezuordnung nur für Serien mit geprüften Regeln, sonst keine (kein Raten)', () => {
+    const mitRegeln = new Set(['katalog:rux-framescaff', 'katalog:rux-super-rs'])
+    for (const s of KATALOG_SERIEN) {
+      for (const k of ['Rahmen', 'Belag', 'Geländer', 'Fundamente', 'Bordbretter']) {
+        const n = passendeArtikelFuerKategorie(s.id, k).length
+        if (mitRegeln.has(s.id)) expect(n, `${s.id} ${k}`).toBeGreaterThan(0)
+        else expect(n, `${s.id} ${k}`).toBe(0)
+      }
+    }
+  })
+  it('FRAMESCAFF: Rahmen nur Standardrahmen, Beläge nur Stahl-/ASTA-Belag', () => {
+    const rahmen = passendeArtikelFuerKategorie('katalog:rux-framescaff', 'Rahmen').map((a) => a.gruppe)
+    expect(new Set(rahmen)).toEqual(new Set(['Vertikalrahmen 0,73, Stahl', 'Vertikalrahmen 0,73, Aluminium', 'Vertikalrahmen 1,09, Stahl']))
+    const belag = new Set(passendeArtikelFuerKategorie('katalog:rux-framescaff', 'Belag').map((a) => a.gruppe.split(' ')[0]))
+    expect([...belag].sort()).toEqual(['ASTA-Belag', 'Stahlbelag'])
+  })
+  it('SUPER-RS: Diagonalen nur Diagonale 2,0 m', () => {
+    const d = passendeArtikelFuerKategorie('katalog:rux-super-rs', 'Diagonalen')
+    expect(d.length).toBeGreaterThan(0)
+    expect(d.every((a) => a.gruppe.startsWith('Diagonale 2,0 m'))).toBe(true)
   })
 })
