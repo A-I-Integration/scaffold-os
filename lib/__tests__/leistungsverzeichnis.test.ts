@@ -275,4 +275,16 @@ describe('Leistungsverzeichnis', () => {
       expect(lv.titel[4].positionen[2].ep).toBe(40)
     })
   })
+
+  it('Gerüsthöhe im Langtext = oberste Lage (Raster), nicht die Gebäudehöhe', () => {
+    const b: BuildingParams = { ...gebaeude, heightM: 11.2, eavesHeightM: 11.2, floorHeightsM: [2.8, 2.8, 2.8, 2.8] }
+    const model = generateCADModel(b, 'layher-allround')
+    const oben = Math.max(...model.levels.map((l) => l.topY))
+    expect(oben).toBeGreaterThan(11.2)
+    const materials: MaterialItem[] = generateBillOfMaterials(model).map((m) => ({ ...m, unitPrice: 10, totalPrice: m.quantity * 10 }))
+    const log = calculateLogistics(model, materials, 2.0)
+    const lv = erzeugeLeistungsverzeichnis({ model, materials, aufbauStunden: log.aufbauStunden, abbauStunden: log.abbauStunden }, mitPreisen)
+    const text = lv.titel[1].positionen[0].text.join(' ')
+    expect(text).toContain(`Höhe der obersten Gerüstlage ca. ${oben.toLocaleString('de-DE', { minimumFractionDigits: 2 })} m`)
+  })
 })

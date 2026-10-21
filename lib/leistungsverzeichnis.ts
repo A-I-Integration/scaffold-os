@@ -281,6 +281,8 @@ export function erzeugeLeistungsverzeichnis(quelle: LvQuelle, e: LvEingaben): Le
     return { liste, add, nrText }
   }
 
+  // Tatsächliche Oberkante des Gerüsts: oberste Lage (Raster) – liegt über der Gebäudehöhe, wenn diese kein Vielfaches der Rasterhöhe ist
+  const geruestTopM = r2(model.levels?.length ? Math.max(...model.levels.map((l) => l.topY)) : model.totalHeightM)
   const breite = model.fields[0]?.widthM ?? 0
   const bk = e.breitenklasseManuell?.trim() ? e.breitenklasseManuell.trim().toUpperCase() : breitenklasse(breite)
   const kn = LASTKLASSEN[e.lastklasse]
@@ -300,7 +302,7 @@ export function erzeugeLeistungsverzeichnis(quelle: LvQuelle, e: LvEingaben): Le
     `${e.lagen === 'alle' ? 'Alle' : 'Obere'} Gerüstlagen genutzt, Einrüstung für Fassadenarbeiten und Dacharbeiten, an senkrechten Bauwerksaußenflächen.`,
     `Abstand zum Gebäude ${de(wandabstand, 2)} m, verankern nach Wahl des Auftragnehmers am Bauwerk${ankerAnzahl > 0 ? ` (laut CAD-Modell ca. ${ankerAnzahl} Anker)` : ''}, Untergrund der Befestigung ${e.untergrundBefestigung || 'laut Angabe'}.`,
     `Aufstellung: ${e.aufstellung || 'laut Angabe'}, Standfläche waagerecht, über Lastverteiler belastbar.`,
-    `Traufe des Gebäudes bei ca. ${de(traufe, 2)} m, Höhe der obersten Gerüstlage ca. ${de(model.totalHeightM, 2)} m über dem Gelände${first > traufe ? `, First bei ca. ${de(first, 2)} m` : ''}.`,
+    `Traufe des Gebäudes bei ca. ${de(traufe, 2)} m, Höhe der obersten Gerüstlage ca. ${de(geruestTopM, 2)} m über dem Gelände${first > traufe ? `, First bei ca. ${de(first, 2)} m` : ''}.`,
     'Ankerlöcher sind nach Fertigstellung fachgerecht zu verschließen.',
   ]
   const aktiveZusatz = (e.zusatz ?? []).filter((z) => z.menge > 0)
@@ -339,10 +341,10 @@ export function erzeugeLeistungsverzeichnis(quelle: LvQuelle, e: LvEingaben): Le
     ], schutzdachM, 'm', epAufbau('schutzdach', schutzdachM))
     if (treppen > 0) T2.add('Treppenaufgang – Aufbau', [
       'Treppenaufgang für Gerüst als Gerüsttreppe nach DIN EN 12811-1 vor dem Gerüst, mit Zwischenpodesten je Gerüstlage. Abbau und Vorhaltung werden gesondert vergütet.',
-      `Bauhöhe ca. ${de(model.totalHeightM, 2)} m.`,
+      `Bauhöhe ca. ${de(geruestTopM, 2)} m.`,
     ], treppen, 'St', epAufbau('treppe', treppen))
     // Vorhaltung
-    vorhalt('Arbeits- und Schutzgerüst', 'geruest', flaecheM2 + giebelM2, 'm²Wo', 'm² Gerüst', `Arbeits- und Schutzgerüst, Höhe der obersten Gerüstlage ca. ${de(model.totalHeightM, 2)} m`)
+    vorhalt('Arbeits- und Schutzgerüst', 'geruest', flaecheM2 + giebelM2, 'm²Wo', 'm² Gerüst', `Arbeits- und Schutzgerüst, Höhe der obersten Gerüstlage ca. ${de(geruestTopM, 2)} m`)
     for (const z of aktiveZusatz) {
       const i = ZUSATZ_INFO[z.art]
       if (woGesamt > 0) T2.add(`Vorhaltung ${i.name}`, [`Vorhaltung für ${i.name}, Abrechnung nach ${i.einheit === 'St' ? 'Stück' : i.einheit === 'm²' ? 'Fläche' : 'Länge'} mal Vorhaltedauer in Wochen.`], r2(z.menge * woGesamt), i.woEinheit, cent(z.epVorh))
@@ -388,7 +390,7 @@ export function erzeugeLeistungsverzeichnis(quelle: LvQuelle, e: LvEingaben): Le
     verl('Schutzdach', 'schutzdach', schutzdachM, 'mWo', 'Schutzdach')
     if (treppen > 0) T2.add('Gerüsttreppe', [
       'Gerüsttreppe nach DIN EN 12811-1 vor dem Gerüst, mit Zwischenpodesten je Gerüstlage, als Zugang zum Arbeitsbereich montieren und später wieder demontieren, inkl. Grundstandzeit (' + GRUNDSTANDZEIT_WOCHEN + ' Wochen).',
-      `Bauhöhe ca. ${de(model.totalHeightM, 2)} m.`,
+      `Bauhöhe ca. ${de(geruestTopM, 2)} m.`,
     ], treppen, 'St', epGrund('treppe', treppen))
     verl('Gerüsttreppe', 'treppe', treppen, 'StWo', 'Gerüsttreppe')
   }
@@ -403,7 +405,7 @@ export function erzeugeLeistungsverzeichnis(quelle: LvQuelle, e: LvEingaben): Le
 
   // ── Stil „statiker“: Gliederung wie im LV des Auftraggebers für eine Turmeinrüstung (Wuppertal City-Kirche) ──
   const statikerTitel = (): LvTitel[] => {
-    const hoeheText = e.geruestHoeheAusschreibungM && e.geruestHoeheAusschreibungM > 0 ? e.geruestHoeheAusschreibungM : model.totalHeightM
+    const hoeheText = e.geruestHoeheAusschreibungM && e.geruestHoeheAusschreibungM > 0 ? e.geruestHoeheAusschreibungM : geruestTopM
     const nrFmt = (titelNr: string, i: number, zweistellig = false) => `${titelNr}.${zweistellig ? String(i).padStart(2, '0') : i}`
     const baue = (titelNr: string, zweistellig = false) => {
       const liste: LvPosition[] = []
@@ -453,7 +455,7 @@ export function erzeugeLeistungsverzeichnis(quelle: LvQuelle, e: LvEingaben): Le
     const gKonsolen = konsolenM > 0 ? epAufbau('konsolen', konsolenM) * konsolenM + epAbbau('konsolen', konsolenM) * konsolenM : 0
     const matGerKo = mat.geruest + mat.konsolen
     const g1 = b2.add(`Arbeitsgerüste mit integrierten Traggerüsten am Turmschaft bis ${de(hoeheText, 0)} m Höhe`, [
-      `Systemgerüst als ${bauart} nach DIN EN 12811, ${klassen}, 1. Bauabschnitt, Höhe bis ${de(hoeheText, 2)} m (CAD: ${de(model.totalHeightM, 2)} m, ${de(flaecheM2, 2)} m² Gerüstfläche).`,
+      `Systemgerüst als ${bauart} nach DIN EN 12811, ${klassen}, 1. Bauabschnitt, Höhe bis ${de(hoeheText, 2)} m (oberste Gerüstlage im CAD: ${de(geruestTopM, 2)} m, Gebäudehöhe ${de(model.totalHeightM, 2)} m, ${de(flaecheM2, 2)} m² Gerüstfläche).`,
       'Preis = Aufbau + Abbau aus dem CAD (Stunden × Stundensatz, mit Zuschlag), Vorhaltung in der Folgeposition.',
     ], 1, 'Stück', cent(gGeruest + gKonsolen))
     vorh(b2, g1.nr, 'Arbeitsgerüste am Turmschaft 1. BA', miet(matGerKo))
