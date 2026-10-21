@@ -846,6 +846,9 @@ export function generateScaffoldComponents(model: CADModel): ScaffoldComponent3D
     const l = building.sections![building.sections!.length - 1]
     return (l.versatzM ?? 0) + ((l.tiefeM ?? w0) - w0) / 2
   }
+  // Schutzdach unten an der Vorderseite (Schutz von Zugang/Gehweg), nicht oben auf dem Dach.
+  // ANNAHME: Unterkante ca. 4 m über Boden – Eingang und tatsächliche Höhe kennt das Modell nicht; die Person verschiebt es bei Bedarf.
+  const SCHUTZDACH_HOEHE_M = 4
   if (!building.umriss && (building.heightM > 15 || building.overhangM > 0.5)) {
     // Schutzdach 0,2 m außerhalb der inneren Gerüstlinie der Vorderseite (bisher fest 0,5 bei Innenlinie 0,3)
     const schutzdachZ = (fields.find((f) => f.side === 'front')?.positionZ ?? 0.3) + 0.2
@@ -853,7 +856,7 @@ export function generateScaffoldComponents(model: CADModel): ScaffoldComponent3D
     for (let i = 0; i < roofCount; i++) {
       const xPos = (i * 6) - building.lengthM / 2 + 3
       if (abschnittOhneGeruestBeiX(building, xPos)) continue
-      components.push({ id: `roof-${i}`, type: 'protection_roof', articleNumber: 'SD-001', name: 'Schutzdach', position: [xPos, hoeheBeiX(xPos) + 0.5, schutzdachZ + frontVersatzBeiX(xPos)], rotation: [0.3, 0, 0], scale: [6, 0.1, 2], color: colorRoof })
+      components.push({ id: `roof-${i}`, type: 'protection_roof', articleNumber: 'SD-001', name: 'Schutzdach', position: [xPos, Math.min(SCHUTZDACH_HOEHE_M, hoeheBeiX(xPos)) + 0.5, schutzdachZ + frontVersatzBeiX(xPos)], rotation: [0.3, 0, 0], scale: [6, 0.1, 2], color: colorRoof })
     }
   }
 
