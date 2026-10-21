@@ -30,6 +30,7 @@ const EDITABLE: Record<string, string[]> = {
   vehicles:         ['name', 'license_plate', 'is_active', 'type', 'zulaessiges_gesamtgewicht_kg', 'capacity_kg'],
   drivers:          ['name', 'is_active'],
   customers:        ['name', 'contact_person', 'email', 'phone', 'street', 'zip', 'city', 'notes', 'is_active'],
+  abrechnung_m2:    ['name', 'preis_m2', 'is_active'],
 };
 
 // Prüft, ob der Aufrufer admin ist. null = ok, sonst Fehler-Response.
@@ -63,6 +64,11 @@ export async function GET() {
       { headers }
     );
     const customers = customersRes.ok ? await customersRes.json() : [];
+    // Abrechnung nach m² (ab Phase 104): fehlt die Tabelle noch, bleiben die Listen leer
+    const m2Res = await fetch(`${url}/rest/v1/abrechnung_m2?select=id,art,name,preis_m2,is_active&order=name`, { headers });
+    const m2Rows: { art: string }[] = m2Res.ok ? await m2Res.json() : [];
+    const grundpreise = m2Rows.filter((r) => r.art === 'grundpreis');
+    const aufpreise = m2Rows.filter((r) => r.art === 'aufpreis');
 
     const [projects, inventory, transports, tours, vehicles, drivers] = await Promise.all([
       fetch(`${url}/rest/v1/projects?select=id,name,adresse,status,created_at&order=created_at.desc`, { headers }),
@@ -86,6 +92,8 @@ export async function GET() {
       vehicles: await vehicles.json(),
       drivers: await drivers.json(),
       customers,
+      grundpreise,
+      aufpreise,
     });
   } catch (err: any) {
     return serverErrorResponse(err);

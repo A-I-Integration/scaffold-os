@@ -34,6 +34,8 @@ interface Section {
   // der Datenpflege, nur Bearbeiten/Löschen bestehender Einträge.
   createEndpoint?: string;
   createFields?: CreateField[];
+  // feste Werte, die beim Anlegen immer mitgeschickt werden (z. B. art)
+  createFixed?: Row;
   // NEU: "auf die Zeile klicken → öffnet sich" – nur für Bereiche mit
   // einer sinnvollen Zielseite (Kunden haben z.B. eine eigene Detailseite,
   // Fahrzeuge/Fahrer werden nur inline hier bearbeitet und haben keine).
@@ -67,6 +69,34 @@ const SECTIONS: Section[] = [
       { key: 'is_active', label: 'Aktiv', render: r => (r.is_active ? '✅' : '❌') },
     ],
     openHref: () => `/lager`,
+  },
+  {
+    key: 'grundpreise', table: 'abrechnung_m2', title: 'Preis je m² (Gerüsttyp)', icon: '📐',
+    columns: [
+      { key: 'name', label: 'Gerüsttyp', edit: true },
+      { key: 'preis_m2', label: '€ je m² (netto)', edit: true, type: 'number' },
+      { key: 'is_active', label: 'Aktiv', render: r => (r.is_active ? '✅' : '❌') },
+    ],
+    createEndpoint: '/api/abrechnung-m2',
+    createFixed: { art: 'grundpreis' },
+    createFields: [
+      { key: 'name', label: 'Gerüsttyp', placeholder: 'z. B. Fassadengerüst' },
+      { key: 'preis_m2', label: '€ je m² (netto)', type: 'number', placeholder: 'z. B. 12.50' },
+    ],
+  },
+  {
+    key: 'aufpreise', table: 'abrechnung_m2', title: 'Aufpreise je m²', icon: '➕',
+    columns: [
+      { key: 'name', label: 'Aufpreis', edit: true },
+      { key: 'preis_m2', label: '€ je m² (netto)', edit: true, type: 'number' },
+      { key: 'is_active', label: 'Aktiv', render: r => (r.is_active ? '✅' : '❌') },
+    ],
+    createEndpoint: '/api/abrechnung-m2',
+    createFixed: { art: 'aufpreis' },
+    createFields: [
+      { key: 'name', label: 'Aufpreis', placeholder: 'z. B. Höhe über 20 m' },
+      { key: 'preis_m2', label: '€ je m² (netto)', type: 'number', placeholder: 'z. B. 2.00' },
+    ],
   },
   {
     key: 'transports', table: 'transport_orders', title: 'Transportaufträge', icon: '🚚',
@@ -215,6 +245,7 @@ export default function DatenpflegePage() {
     setBusy(true); setMsg('');
     try {
       const payload: Row = {};
+      Object.assign(payload, section.createFixed || {});
       for (const f of section.createFields || []) {
         let v = createValues[f.key];
         if (v === undefined || v === '') continue; // leer -> Feld weglassen (DB-Default greift)
