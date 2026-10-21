@@ -36,11 +36,13 @@ export default function BuildingForm({ building, systemId, onChange, onSystemCha
   const [kircheOffen, setKircheOffen] = useState(false)
   const [kirche, setKirche] = useState<KircheMasse>(KIRCHE_STANDARD)
   // 3D-Modell (OBJ/STL, z. B. aus SketchUp): Außenmaße im Browser lesen, Einheit/„oben“ wählt die Person
-  const [modellImport, setModellImport] = useState<{ name: string; format: 'obj' | 'stl'; quader: Quader; dreiecke: Float32Array; einheit: Einheit; oben: Achse; einheitGeschaetzt: boolean } | null>(null)
+  const [modellImport, setModellImport] = useState<{ name: string; format: 'obj' | 'stl'; quader: Quader; dreiecke: Float32Array; einheit: Einheit; oben: Achse; einheitGeschaetzt: boolean; quelle?: 'nwd' } | null>(null)
   // DXF-Zeichnung: Gebäudeumriss aus den Linien gelesen (lib/cad/dxf-umriss.ts); Höhen trägt die Person ein
   // Dasselbe Feld trägt auch den IFC-Import (`ifc` gesetzt): gleiche Formerkennung, gleiche Teile, gleicher Prüfschritt
   const [dxfImport, setDxfImport] = useState<{ name: string; inhalt: string; ergebnis: DxfUmrissErgebnis; hoehen: string[]; gezeichnet?: boolean; ifc?: IfcZusatz } | null>(null)
   const [ifcFortschritt, setIfcFortschritt] = useState<{ anteil: number; text: string } | null>(null)
+  // NWD (Navisworks): Konvertierung in der Autodesk-Cloud, gestaffelte Anzeige Upload → Konvertierung → Einlesen
+  const [nwdFortschritt, setNwdFortschritt] = useState<{ phase: 'upload' | 'konvertierung' | 'einlesen'; anteil: number; text: string } | null>(null)
   const [zeichnerOffen, setZeichnerOffen] = useState(false)
   // Grundriss (Rechteck, L-Form, Ecken …) automatisch aus dem 3D-Modell erkennen
   const grundriss = useMemo(() => {
@@ -50,7 +52,7 @@ export default function BuildingForm({ building, systemId, onChange, onSystemCha
   // Gebäudeteile (Schiff, Turm, Chor, Anbau …) mit Höhen automatisch erkennen
   const analyse = useMemo(() => {
     if (!modellImport) return null
-    try { return analysiereDreiecke(modellImport.dreiecke, { format: modellImport.format, einheit: modellImport.einheit, oben: modellImport.oben }) } catch { return null }
+    try { return analysiereDreiecke(modellImport.dreiecke, { format: modellImport.format, einheit: modellImport.einheit, oben: modellImport.oben, quelle: modellImport.quelle }) } catch { return null }
   }, [modellImport])
   const baukoerper = analyse?.ergebnis ?? null
   // Mehrteiliges Gebäude erkannt: Teile sofort übernehmen (Person muss nichts anklicken, kann aber unten prüfen/ändern).
@@ -96,6 +98,29 @@ export default function BuildingForm({ building, systemId, onChange, onSystemCha
         setAnalyseHinweis('❌ Datei konnte nicht gelesen werden: ' + (err?.message || 'Fehler'));
       }
       return;
+    }
+    // NWD (Navisworks): wird in der Autodesk-Cloud (APS) in ein 3D-Format umgewandelt und danach wie OBJ eingelesen.
+    // Gelingt etwas nicht, kommt eine ehrliche Meldung samt Hinweis auf den schnelleren IFC/OBJ-Export.
+    if (ext === '.nwd') {
+      setAnalyseLaeuft(true)
+      setNwdFortschritt({ phase: 'upload', anteil: 0, text: 'Upload zu Autodesk wird vorbereitet …' })
+      try {
+        const { konvertiereNwd } = await import('@/lib/cad/nwd-client')
+        const r = await konvertiereNwd(file, { onFortschritt: (phase, anteil, text) => setNwdFortschritt({ phase, anteil, text }) })
+        if (r.ok) {
+          const { spannweiten } = await import('@/lib/cad/modell-analyse')
+          const [x, y, z] = spannweiten(r.dreiecke)
+          // glTF: laut Standard Y oben und Meter. OBJ aus der Konvertierung: wie jede OBJ-Datei geschätzt, die Person kann ändern.
+          const vorgabe = r.format === 'gltf' ? { oben: 'y' as Achse, einheit: 'm' as Einheit } : vorgabeAchseEinheit(r.dreiecke, 'obj')
+          setModellImport({ name: file.name, format: 'obj', quader: { groesse: { x, y, z }, punkte: r.dreiecke.length / 3 }, dreiecke: r.dreiecke, einheit: vorgabe.einheit, oben: vorgabe.oben, einheitGeschaetzt: r.format !== 'gltf', quelle: 'nwd' })
+        } else setAnalyseHinweis('❌ ' + r.meldung)
+      } catch (err) {
+        setAnalyseHinweis('❌ Die NWD-Datei konnte nicht umgewandelt werden: ' + ((err as Error)?.message || 'Fehler') + ' Ein Export als IFC/OBJ ist schneller.')
+      } finally {
+        setNwdFortschritt(null)
+        setAnalyseLaeuft(false)
+      }
+      return
     }
     // IFC (BIM): reiner Geometrie-Pfad, die KI wird für IFC nie gefragt. Gelingt das Lesen nicht, kommt eine ehrliche
     // Meldung und es wird nichts halb übernommen.
@@ -337,8 +362,8 @@ export default function BuildingForm({ building, systemId, onChange, onSystemCha
             {/* NEU: Grundriss/Foto hochladen und automatisch auswerten */}
             <label className={`flex flex-col items-center justify-center gap-1 rounded-xl border-2 border-dashed p-4 text-center cursor-pointer transition-colors ${analyseLaeuft ? 'border-black/10 bg-black/5' : 'border-[#e8590c]/40 hover:bg-[#fff4ed]'}`}>
               <span className='text-xl'>{analyseLaeuft ? '⏳' : '📐'}</span>
-              <span className='text-xs font-semibold text-[#424245]'>{ifcFortschritt ? 'IFC wird gelesen (ohne KI)…' : analyseLaeuft ? 'KI wertet aus…' : 'Grundriss/Foto hochladen (KI-Auswertung)'}</span>
-              <span className='text-[10px] text-[#86868b]'>Erlaubt: JPG, PNG, Webp, PDF, DXF (Beschriftungen werden gelesen), PLY (Punktwolke), OBJ/STL (3D-Modell, z. B. aus SketchUp: nur Außenmaße), IFC (BIM-Modell: Geschosse, Umriss und Teile werden ohne KI gelesen, bis 200 MB). DWG/SKP: bitte als DXF/OBJ/STL/IFC/PDF exportieren. Maße werden nur übernommen, wo eindeutig belegt; bitte prüfen</span>
+              <span className='text-xs font-semibold text-[#424245]'>{nwdFortschritt ? 'NWD wird umgewandelt (ohne KI)…' : ifcFortschritt ? 'IFC wird gelesen (ohne KI)…' : analyseLaeuft ? 'KI wertet aus…' : 'Grundriss/Foto hochladen (KI-Auswertung)'}</span>
+              <span className='text-[10px] text-[#86868b]'>Erlaubt: JPG, PNG, Webp, PDF, DXF (Beschriftungen werden gelesen), PLY (Punktwolke), OBJ/STL (3D-Modell, z. B. aus SketchUp: nur Außenmaße), IFC (BIM-Modell: Geschosse, Umriss und Teile werden ohne KI gelesen, bis 200 MB), NWD (Navisworks, bis 200 MB: Umwandlung in der Autodesk-Cloud, begrenzt auf 1 pro Minute und ein Tageslimit; IFC/OBJ ist schneller). DWG/SKP: bitte als DXF/OBJ/STL/IFC/PDF exportieren. Maße werden nur übernommen, wo eindeutig belegt; bitte prüfen</span>
               {/* Phase 75: 'accept' komplett entfernt. Der macOS-Dialog hat
                     DXF/PLY trotz Eintrag im accept-Attribut ausgegraut
                     (Safari-Filter + Cache). Jetzt zeigt der Dialog ALLE
@@ -347,6 +372,18 @@ export default function BuildingForm({ building, systemId, onChange, onSystemCha
                     Meldung bei unbekanntem Format). */}
               <input type='file' className='hidden' disabled={analyseLaeuft}
                 onChange={(e) => { const f = e.target.files?.[0]; if (f) handlePlanUpload(f); e.target.value = '' }} />
+              {nwdFortschritt && (
+                <span className='w-full space-y-1'>
+                  <span className='flex justify-between text-[10px] font-semibold text-[#424245]'>
+                    {(['upload', 'konvertierung', 'einlesen'] as const).map((p, i) => (
+                      <span key={p} className={nwdFortschritt.phase === p ? 'text-[#e8590c]' : ''}>{i + 1}. {p === 'upload' ? 'Upload' : p === 'konvertierung' ? 'Konvertierung' : 'Einlesen'}</span>
+                    ))}
+                  </span>
+                  <span className='block h-1.5 w-full overflow-hidden rounded-full bg-black/10'><span className='block h-full bg-[#e8590c] transition-all' style={{ width: `${Math.round(((['upload', 'konvertierung', 'einlesen'].indexOf(nwdFortschritt.phase) + nwdFortschritt.anteil) / 3) * 100)}%` }} /></span>
+                  <span className='block text-[10px] text-[#424245]'>{nwdFortschritt.text}</span>
+                  {nwdFortschritt.phase === 'konvertierung' && <span className='block text-[10px] text-[#86868b]'>Ein Export als IFC/OBJ aus Navisworks ist schneller und kostenlos.</span>}
+                </span>
+              )}
               {ifcFortschritt && (
                 <span className='w-full space-y-1'>
                   <span className='block h-1.5 w-full overflow-hidden rounded-full bg-black/10'><span className='block h-full bg-[#e8590c] transition-all' style={{ width: `${Math.round(ifcFortschritt.anteil * 100)}%` }} /></span>
