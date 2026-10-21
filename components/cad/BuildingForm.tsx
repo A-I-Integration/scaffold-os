@@ -767,6 +767,59 @@ export default function BuildingForm({ building, systemId, onChange, onSystemCha
                       Treppe automatisch
                     </label>
                   </div>
+                  <div className='border-t border-black/10 pt-2 space-y-1.5'>
+                    <label className='flex items-center gap-2 text-xs font-medium text-[#1d1d1f]'>
+                      <input type='checkbox' checked={!!opt.kederplane} onChange={(e) => setzeOpt({ kederplane: e.target.checked ? { vonM: 0, bisM: Math.round(building.heightM * 100) / 100 } : undefined })} />
+                      Kederplane (vertikale Bekleidung, alle Gerüstseiten)
+                    </label>
+                    {opt.kederplane && (
+                      <div className='grid grid-cols-2 gap-2'>
+                        <div><label className='block text-[11px] text-[#424245] mb-1'>von Höhe (m)</label>
+                          <input type='number' step='0.5' min={0} value={opt.kederplane.vonM} onChange={(e) => setzeOpt({ kederplane: { ...opt.kederplane!, vonM: parseFloat(e.target.value) } })} className='w-full px-2 py-1.5 border rounded-lg text-xs' /></div>
+                        <div><label className='block text-[11px] text-[#424245] mb-1'>bis Höhe (m)</label>
+                          <input type='number' step='0.5' min={0} value={opt.kederplane.bisM} onChange={(e) => setzeOpt({ kederplane: { ...opt.kederplane!, bisM: parseFloat(e.target.value) } })} className='w-full px-2 py-1.5 border rounded-lg text-xs' /></div>
+                        <p className='col-span-2 text-[10px] text-[#86868b]'>Es werden nur ganze Gerüstlagen im Bereich bekleidet. Der Preis kommt aus dem Lager (Artikel KP-001).</p>
+                      </div>
+                    )}
+                  </div>
+                  <div className='border-t border-black/10 pt-2 space-y-1.5'>
+                    <label className='flex items-center gap-2 text-xs font-medium text-[#1d1d1f]'>
+                      <input type='checkbox' checked={!!opt.aufzug} onChange={(e) => setzeOpt({ aufzug: e.target.checked ? { seite: 'front', gemietet: true } : undefined })} />
+                      Personen-/Lastenaufzug (an einer Seite)
+                    </label>
+                    {opt.aufzug && (() => {
+                      const az = opt.aufzug!
+                      const setzeAz = (patch: Partial<typeof az>) => {
+                        const neu = { ...az, ...patch }
+                        ;(Object.keys(neu) as (keyof typeof neu)[]).forEach((k) => { if (neu[k] === undefined || (typeof neu[k] === 'number' && !Number.isFinite(neu[k] as number))) delete neu[k] })
+                        setzeOpt({ aufzug: neu })
+                      }
+                      const zahlOderLeer = (v: string) => (v === '' ? undefined : parseFloat(v))
+                      return (
+                        <div className='grid grid-cols-2 gap-2'>
+                          <div><label className='block text-[11px] text-[#424245] mb-1'>Seite</label>
+                            <select value={az.seite} onChange={(e) => setzeAz({ seite: e.target.value as typeof az.seite })} className='w-full px-2 py-1.5 border rounded-lg text-xs'>
+                              <option value='front'>Vorne</option><option value='back'>Hinten</option><option value='left'>Links</option><option value='right'>Rechts</option>
+                            </select></div>
+                          <div><label className='block text-[11px] text-[#424245] mb-1'>Förderhöhe bis (m)</label>
+                            <input type='number' step='0.5' min={0} placeholder='oberste Lage' value={az.bisM ?? ''} onChange={(e) => setzeAz({ bisM: zahlOderLeer(e.target.value) })} className='w-full px-2 py-1.5 border rounded-lg text-xs' /></div>
+                          <div><label className='block text-[11px] text-[#424245] mb-1'>Haltestellen (Anzahl)</label>
+                            <input type='number' step='1' min={0} value={az.haltestellen ?? ''} onChange={(e) => setzeAz({ haltestellen: zahlOderLeer(e.target.value) })} className='w-full px-2 py-1.5 border rounded-lg text-xs' /></div>
+                          <label className='flex items-center gap-2 text-xs text-[#424245] self-end pb-1.5'>
+                            <input type='checkbox' checked={az.gemietet} onChange={(e) => setzeAz({ gemietet: e.target.checked })} />
+                            wird von außen gemietet
+                          </label>
+                          <div><label className='block text-[11px] text-[#424245] mb-1'>Kosten Aufbau (€)</label>
+                            <input type='number' step='0.01' min={0} value={az.kostenAufbauEur ?? ''} onChange={(e) => setzeAz({ kostenAufbauEur: zahlOderLeer(e.target.value) })} className='w-full px-2 py-1.5 border rounded-lg text-xs' /></div>
+                          <div><label className='block text-[11px] text-[#424245] mb-1'>Vorhaltung je Woche (€)</label>
+                            <input type='number' step='0.01' min={0} value={az.kostenVorhaltungJeWocheEur ?? ''} onChange={(e) => setzeAz({ kostenVorhaltungJeWocheEur: zahlOderLeer(e.target.value) })} className='w-full px-2 py-1.5 border rounded-lg text-xs' /></div>
+                          <div><label className='block text-[11px] text-[#424245] mb-1'>Kosten Abbau (€)</label>
+                            <input type='number' step='0.01' min={0} value={az.kostenAbbauEur ?? ''} onChange={(e) => setzeAz({ kostenAbbauEur: zahlOderLeer(e.target.value) })} className='w-full px-2 py-1.5 border rounded-lg text-xs' /></div>
+                          <p className='col-span-2 text-[10px] text-[#86868b]'>{az.gemietet ? 'Gemietet: Fremdleistung, kommt nicht in die Stückliste. Die Kosten (netto) trägst du von Hand ein, sie gehen ins LV.' : 'Aus eigenem Inventar: steht in der Stückliste (Artikel AZ-001, Preis im Lager pflegen). Die Kosten oben gelten zusätzlich fürs LV.'}</p>
+                        </div>
+                      )
+                    })()}
+                  </div>
                   <p className='text-[10px] text-[#86868b]'>Änderungen gelten sofort im 3D-Modell. Leer lassen = Standardwert.</p>
                 </div>
               )
