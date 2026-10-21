@@ -111,7 +111,8 @@ export default function BuildingForm({ building, systemId, onChange, onSystemCha
           const { spannweiten } = await import('@/lib/cad/modell-analyse')
           const [x, y, z] = spannweiten(r.dreiecke)
           // glTF: laut Standard Y oben und Meter. OBJ aus der Konvertierung: wie jede OBJ-Datei geschätzt, die Person kann ändern.
-          const vorgabe = r.format === 'gltf' ? { oben: 'y' as Achse, einheit: 'm' as Einheit } : vorgabeAchseEinheit(r.dreiecke, 'obj')
+          // OBJ aus der Autodesk-Umwandlung behält (nach Annahme) die Koordinaten von Navisworks: Z oben (Gegenprobe am Kirchturm: Z-Spanne 33 m passt zum Turmschaft, Y-Spanne 17 m nicht)
+          const vorgabe = r.format === 'gltf' ? { oben: 'y' as Achse, einheit: 'm' as Einheit } : { oben: 'z' as Achse, einheit: vorgabeAchseEinheit(r.dreiecke, 'obj').einheit }
           setModellImport({ name: file.name, format: 'obj', quader: { groesse: { x, y, z }, punkte: r.dreiecke.length / 3 }, dreiecke: r.dreiecke, einheit: vorgabe.einheit, oben: vorgabe.oben, einheitGeschaetzt: r.format !== 'gltf', quelle: 'nwd' })
         } else setAnalyseHinweis('❌ ' + r.meldung)
       } catch (err) {
@@ -421,7 +422,7 @@ export default function BuildingForm({ building, systemId, onChange, onSystemCha
                     </label>
                   </div>
                   {analyse && (
-                    <p className='text-[#86868b]'>Einheit {modellImport.einheitGeschaetzt ? 'automatisch geschätzt' : 'von dir gewählt'}; „oben“ ist nach Dateityp angenommen (OBJ: Y, STL: Z) – bitte prüfen. {analyse.hinweise.join(' ')}</p>
+                    <p className='text-[#86868b]'>Einheit {modellImport.einheitGeschaetzt ? 'automatisch geschätzt' : 'von dir gewählt'}; „oben“ ist nach Dateityp angenommen ({modellImport.quelle === 'nwd' ? 'NWD: Z, wie in Navisworks' : 'OBJ: Y, STL: Z'}) – bitte prüfen. {analyse.hinweise.join(' ')}</p>
                   )}
                   {baukoerper?.mehrteilig && (
                     <div className='rounded-lg bg-[#fff7ed] p-2 space-y-1'>
