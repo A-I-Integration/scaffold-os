@@ -112,6 +112,13 @@ describe('Job-Lebenszyklus', () => {
     expect(r.fehler_text).toContain('412 MB')
   })
 
+  it('bei Fehler bleibt das Autodesk-Protokoll zur Untersuchung stehen, bei Erfolg wird es gelöscht', async () => {
+    const e = umgebung(neuerJob(), { status: 'failed', derivatives: [{ outputType: 'svf', status: 'failed', messages: [{ type: 'error', message: 'extractor -777' }] }] })
+    await fuehreWeiter(neuerJob(), e.d)
+    expect(e.aps.loescheManifest).not.toHaveBeenCalled()
+    expect(e.aps.loescheObjekt).toHaveBeenCalled()
+  })
+
   it('kein Modell in der Datei → Fehler, nichts Halbes', async () => {
     const e = umgebung(neuerJob(), SVF)
     e.aps.modellGuid.mockResolvedValueOnce(null as never)
