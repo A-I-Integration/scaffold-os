@@ -172,8 +172,24 @@ export function abschnittOhneGeruestBeiX(b: BuildingParams, x: number): boolean 
 }
 
 export function hatGeradeAbschnitte(b: BuildingParams): boolean {
-  return !!b.sections && b.sections.length >= 2 &&
+  return !!b.sections && b.sections.length >= 1 &&
     b.sections.every((s) => !s.winkelGrad && s.laengeM > 0 && s.hoeheM > 0)
+}
+
+/**
+ * Entfernt leere Abschnitte (Länge oder Höhe 0, z. B. ein frisch angelegter, noch nicht ausgefüllter „Anbau“).
+ * Ohne das gilt die ganze Abschnittsliste als „nicht gerade“ und die Abschnitts-Einstellungen
+ * (Wand verdeckt bis Höhe, eigene Tiefe, nicht einrüsten …) werden stillschweigend ignoriert.
+ * Bleibt genau ein Abschnitt übrig, gilt seine Tiefe als Gebäudetiefe.
+ */
+export function bereinigeAbschnitte(b: BuildingParams): BuildingParams {
+  const sec = b.sections
+  if (!sec || sec.length === 0) return b
+  const voll = sec.filter((s) => s.laengeM > 0 && s.hoeheM > 0)
+  if (voll.length === sec.length || voll.length === 0) return b
+  const neu: BuildingParams = { ...b, sections: voll }
+  if (voll.length === 1 && voll[0].tiefeM && voll[0].tiefeM > 0) neu.widthM = voll[0].tiefeM
+  return neu
 }
 
 export interface ScaffoldField {
@@ -916,6 +932,7 @@ export function generateCADModel(
   scaffoldWidthM: number = 0.73,
   distanceToBuildingM: number = 0.3
 ): CADModel {
+  building = bereinigeAbschnitte(building)
   const system = findeSystem(systemId)
   const warnings: CADWarning[] = []
 
