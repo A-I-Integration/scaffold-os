@@ -21,7 +21,7 @@ function umgebung(job: NwdJob, manifestWert: unknown | (() => unknown), jetzt = 
   const aps = {
     manifest: vi.fn(async () => (typeof manifestWert === 'function' ? (manifestWert as () => unknown)() : manifestWert)),
     modellGuid: vi.fn(async () => 'guid-1'), uebersetze: vi.fn(async () => undefined),
-    ladeDerivat: vi.fn(async () => new TextEncoder().encode('v 0 0 0\nv 1 0 0\nv 0 1 0\nf 1 2 3\n').buffer as ArrayBuffer),
+    ladeDerivatStrom: vi.fn(async () => ({ bytes: 0, strom: new Response('v 0 0 0\nv 1 0 0\nv 0 1 0\nf 1 2 3\n').body! })),
     loescheObjekt: vi.fn(async () => undefined), loescheManifest: vi.fn(async () => undefined),
   }
   const ablage = { speichern: vi.fn(async (p: string, d: ArrayBuffer) => { gespeichert.set(p, d) }), loeschen: vi.fn(async (p: string) => { gespeichert.delete(p) }) }
@@ -106,7 +106,7 @@ describe('Job-Lebenszyklus', () => {
   it('zu großes Ergebnis → Meldung nennt die tatsächliche Größe (Eingrenzung im Betrieb)', async () => {
     const j = neuerJob({ stufe: 'obj' })
     const e = umgebung(j, OBJ)
-    e.aps.ladeDerivat.mockRejectedValueOnce(new ApsFehler('zu-gross', 'Das Ergebnis ist zu groß (412 MB).'))
+    e.aps.ladeDerivatStrom.mockRejectedValueOnce(new ApsFehler('zu-gross', 'Das Ergebnis ist zu groß (412 MB).'))
     const r = await fuehreWeiter(j, e.d)
     expect(r.fehler_code).toBe('zu-gross')
     expect(r.fehler_text).toContain('412 MB')

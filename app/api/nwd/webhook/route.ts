@@ -6,7 +6,7 @@ import { geheimnisGleich } from '@/lib/nwd/zugang'
 // Absicherung: gemeinsames Geheimnis APS_WEBHOOK_SECRET, entweder im Header `x-nwd-secret` oder als `?token=`
 // in der registrierten Webhook-Adresse. Der Inhalt der Nachricht wird NICHT geglaubt: er liefert nur die URN,
 // den Stand holen wir selbst bei Autodesk (fuehreWeiter fragt das Manifest ab).
-export const maxDuration = 60
+export const maxDuration = 300
 
 function findeUrn(x: unknown, tiefe = 0): string | null {
   if (!x || typeof x !== 'object' || tiefe > 4) return null
