@@ -222,4 +222,57 @@ describe('Leistungsverzeichnis', () => {
     expect(p.menge).toBe(40)
     expect(p.gp).toBe(2000)
   })
+
+  describe('Stil „Statiker-LV“ (Wuppertal)', () => {
+    const stat: LvEingaben = { ...mitPreisen, stil: 'statiker', gesamtStandzeitWochen: 50, lastklasse: 4, breitenklasseManuell: 'w09', geruestHoeheAusschreibungM: 32 }
+    const alle = (lv: ReturnType<typeof erzeugeLeistungsverzeichnis>) => lv.titel.flatMap((t) => t.positionen)
+
+    it('hat die Titel und Positionsnummern des Statiker-LV', () => {
+      const lv = erzeugeLeistungsverzeichnis(quelle(), stat)
+      expect(lv.titel.map((t) => t.nrText)).toEqual(['01', '02', '03', '11', '12'])
+      expect(lv.titel[0].positionen).toHaveLength(14) // 01.1–01.13 + Vorhaltung Verkehrssicherung (im Statiker-LV doppelt als „01.10“ beziffert, hier 01.14)
+      expect(lv.titel[1].positionen).toHaveLength(26)
+      expect(lv.titel[2].positionen.map((p) => p.nr)).toEqual(['03.01', '03.02', '03.03', '03.04', '03.05', '03.06'])
+      expect(lv.titel[3].positionen[0].nr).toBe('11.1')
+      expect(lv.titel[4].positionen).toHaveLength(5)
+      expect(lv.titel[1].positionen[0].titel).toBe('Arbeitsgerüste mit integrierten Traggerüsten am Turmschaft bis 32 m Höhe')
+      const nummern = alle(lv).map((p) => p.nr)
+      expect(new Set(nummern).size).toBe(nummern.length)
+      const titel = alle(lv).map((p) => p.titel)
+      expect(new Set(titel).size).toBe(titel.length)
+    })
+
+    it('Gerüst 1. BA = Aufbau + Abbau aus dem CAD, Vorhaltung = Standzeit in Wochen', () => {
+      const q = quelle()
+      const lv = erzeugeLeistungsverzeichnis(q, stat)
+      const p = lv.titel[1].positionen
+      expect(p[0].einheit).toBe('Stück')
+      expect(p[0].menge).toBe(1)
+      expect(p[0].ep).toBeGreaterThan(0)
+      expect(p[1].einheit).toBe('Wo')
+      expect(p[1].menge).toBe(50)
+      expect(p[1].ep).toBeGreaterThan(0)
+      expect(p[0].text.join(' ')).toContain('W09')
+      expect(p[0].text.join(' ')).toContain('Lastklasse 4')
+      expect(p[0].text.join(' ')).toContain('32,00 m')
+    })
+
+    it('Positionen ohne CAD-Wert haben Preis 0 und lassen sich in der Tabelle befüllen', () => {
+      const q = quelle()
+      const lv = erzeugeLeistungsverzeichnis(q, stat)
+      const kederplane = alle(lv).find((p) => p.titel.startsWith('Vertikale Bekleidung der Gerüste 1. BA'))!
+      expect(kederplane.ep).toBe(0)
+      const lv2 = erzeugeLeistungsverzeichnis(q, { ...stat, epUeberschreibung: { [kederplane.titel]: 4200 } })
+      const k2 = alle(lv2).find((p) => p.titel === kederplane.titel)!
+      expect(k2.gp).toBe(4200)
+      expect(lv2.summeNetto).toBeCloseTo(lv.summeNetto + 4200, 2)
+    })
+
+    it('Pauschalen und Stundensätze kommen aus den Eingaben', () => {
+      const lv = erzeugeLeistungsverzeichnis(quelle(), stat)
+      expect(lv.titel[3].positionen[0].ep).toBe(900)
+      expect(lv.titel[4].positionen[0].ep).toBe(50)
+      expect(lv.titel[4].positionen[2].ep).toBe(40)
+    })
+  })
 })

@@ -34,8 +34,9 @@ export const LASTKLASSEN: Record<number, number> = { 1: 0.75, 2: 1.5, 3: 2.0, 4:
  * Aufbau des LV:
  *  - 'getrennt': Aufbau, Vorhaltung (Gesamtstandzeit) und Abbau als eigene Positionen (wie ZECH/BVG)
  *  - 'grundstandzeit': Auf- und Abbau mit 4 Wochen Grundvorhaltung in einer Position, danach Verlängerung (wie St. Kilian)
+ *  - 'statiker': Gliederung des Auftraggeber-LV für Turmeinrüstungen (Stück-Pauschalen, Vorhaltung in Wochen, 2 Bauabschnitte; Muster: Wuppertal City-Kirche)
  */
-export type LvStil = 'getrennt' | 'grundstandzeit'
+export type LvStil = 'getrennt' | 'grundstandzeit' | 'statiker'
 
 /** Zusatzleistungen aus den Muster-LVs, die nicht aus dem CAD-Modell kommen: Menge und EP trägt die Firma ein. */
 export type ZusatzArt = 'dachfang' | 'seitenschutz' | 'ueberbrueckung' | 'strahlnetze' | 'aufzug' | 'bauzaun'
@@ -103,6 +104,10 @@ export interface LvEingaben {
   giebelflaecheM2: number
   /** Höhe des Fanggerüsts in m (optional, 0 = nicht angeben) */
   fanggeruestHoeheM: number
+  /** Breitenklasse von Hand (z. B. "W09"); leer = aus der Gerüstbreite im CAD */
+  breitenklasseManuell?: string
+  /** Höhe des Gerüsts laut Ausschreibung in m (z. B. 32 bei „bis 32 m“, Dachfang über der Traufe); leer = Höhe aus dem CAD */
+  geruestHoeheAusschreibungM?: number
   /** Eigene Aufbau-/Abbaustunden statt der Werte aus dem CAD (leer/undefined = CAD-Wert) */
   aufbauStundenManuell?: number
   abbauStundenManuell?: number
@@ -277,7 +282,7 @@ export function erzeugeLeistungsverzeichnis(quelle: LvQuelle, e: LvEingaben): Le
   }
 
   const breite = model.fields[0]?.widthM ?? 0
-  const bk = breitenklasse(breite)
+  const bk = e.breitenklasseManuell?.trim() ? e.breitenklasseManuell.trim().toUpperCase() : breitenklasse(breite)
   const kn = LASTKLASSEN[e.lastklasse]
   const traufe = model.building.eavesHeightM || model.building.heightM
   const first = model.building.heightM + (model.building.roofHeightM || 0)
@@ -396,8 +401,126 @@ export function erzeugeLeistungsverzeichnis(quelle: LvQuelle, e: LvEingaben): Le
     T3.add('Anfahrtspauschale', ['Anfahrtspauschale für unvorhergesehene Kleinsteinsätze zur Ausführung oder Teilausführung vertraglicher Leistungen, einschließlich sämtlicher Personal- und Fahrzeugkosten.'], e.anfahrtAnzahl, 'St', cent(e.anfahrtspauschale))
   }
 
+  // ── Stil „statiker“: Gliederung wie im LV des Auftraggebers für eine Turmeinrüstung (Wuppertal City-Kirche) ──
+  const statikerTitel = (): LvTitel[] => {
+    const hoeheText = e.geruestHoeheAusschreibungM && e.geruestHoeheAusschreibungM > 0 ? e.geruestHoeheAusschreibungM : model.totalHeightM
+    const nrFmt = (titelNr: string, i: number, zweistellig = false) => `${titelNr}.${zweistellig ? String(i).padStart(2, '0') : i}`
+    const baue = (titelNr: string, zweistellig = false) => {
+      const liste: LvPosition[] = []
+      const add = (titel: string, text: string[], menge: number, einheit: string, ep: number): LvPosition => {
+        const mo = e.mengeUeberschreibung?.[titel]
+        const eo = e.epUeberschreibung?.[titel]
+        const mengeNeu = mo !== undefined && Number.isFinite(mo) && mo >= 0 ? mo : menge
+        const epNeu = eo !== undefined && Number.isFinite(eo) && eo >= 0 ? cent(eo) : ep
+        const p: LvPosition = {
+          nr: nrFmt(titelNr, liste.length + 1, zweistellig), titel, text, menge: mengeNeu, einheit, ep: epNeu, gp: cent(mengeNeu * epNeu),
+          ...(mengeNeu !== menge || epNeu !== ep ? { manuell: { ...(mengeNeu !== menge ? { menge: true } : {}), ...(epNeu !== ep ? { ep: true } : {}) } } : {}),
+          berechnet: { ep, menge },
+        }
+        liste.push(p)
+        return p
+      }
+      return { liste, add }
+    }
+    const miet = (matSumme: number) => cent(matSumme * (e.mietsatzProzentJeWoche / 100) * faktor)
+    const OHNE_CAD = 'Nicht aus dem CAD: Menge und Preis bitte in der Tabelle eintragen.'
+    const vorh = (b: ReturnType<typeof baue>, bezugNr: string, bezugTitel: string, ep: number, einheit = 'Wo', mengeWo = woGesamt, text?: string) =>
+      b.add(`Vorhaltung zur Vorposition ${bezugNr}`, [text ?? `Vorhaltung zur Vorposition ${bezugNr} ${bezugTitel}.`], r2(mengeWo), einheit, ep)
+    const zus = (art: ZusatzArt) => (e.zusatz ?? []).find((z) => z.art === art)
+
+    // Titel 01 – Baustelleneinrichtung
+    const b1 = baue('01')
+    const be = b1.add('Baustelleneinrichtung', ['Baustelleneinrichtung für den eigenen Bedarf einrichten und später wieder demontieren, An- und Rücklieferung sämtlicher Materialien und Geräte.'], 1, 'Stück', cent(e.baustelleneinrichtung))
+    vorh(b1, be.nr, 'Baustelleneinrichtung', 0)
+    const wc = b1.add('Baustellen-Container-WC', ['Baustellen-Container-WC für Damen und Herren. ' + OHNE_CAD], 1, 'Stück', 0)
+    vorh(b1, wc.nr, 'Baustellen-Container-WC', 0)
+    const zaun = zus('bauzaun')
+    const bz = b1.add('Bauzaun', ['Schutzzaun zur Sicherung der Baustelle gegen unbefugtes Betreten und zur Sicherung der Baustelleneinrichtung.'], zaun?.menge ?? 0, 'm', cent(zaun?.epAuf ?? 0) + cent(zaun?.epAb ?? 0))
+    vorh(b1, bz.nr, 'Bauzaun', cent(zaun?.epVorh ?? 0), 'm/Wo', (zaun?.menge ?? 0) * woGesamt)
+    const tor = b1.add('Bauzauntor', ['Bewegliches Tor auf Rollen mit Kette und Zahlenschloss, Öffnungsbreite bis 4 m. ' + OHNE_CAD], 0, 'Stück', 0)
+    vorh(b1, tor.nr, 'Bauzauntor', 0)
+    const abd = b1.add('Abdecken von Bodenflächen BE', ['Baufolie und OSB-Platten auf den Bodenflächen innerhalb der Baustelleneinrichtung. ' + OHNE_CAD], 0, 'm²', 0)
+    vorh(b1, abd.nr, 'Abdecken von Bodenflächen BE', 0, 'm²/Wo', 0)
+    b1.add('Beantragung öffentlich-rechtliche Genehmigung', ['Antrag auf Sondernutzung der öffentlichen Verkehrsflächen zur Erstellung der Arbeitsgerüste. ' + OHNE_CAD], 1, 'Stck', 0)
+    b1.add('Einrichten Halteverbotszone', ['Einrichten und Räumen einer Halteverbotszone zum Be- und Entladen der Fahrzeuge. ' + OHNE_CAD], 1, 'Stck', 0)
+    const vs = b1.add('Verkehrssicherung', ['Kennzeichnung der Gerüste im öffentlichen Verkehrsraum mit Warnleuchten und Warnbaken. ' + OHNE_CAD], 1, 'Stck', 0)
+    vorh(b1, vs.nr, 'Verkehrssicherung', 0, 'm²/Wo', 0)
+
+    // Titel 02 – Gerüstarbeiten Turmschaft
+    const b2 = baue('02')
+    const klassen = `Lastklasse ${e.lastklasse} (${de(kn ?? 0, 0)} kN/m²), Breitenklasse ${bk}, Höhenklasse ${e.hoehenklasse}`
+    const gGeruest = (epAufbau('geruest', flaecheM2) * flaecheM2 + epAbbau('geruest', flaecheM2) * flaecheM2)
+    const gKonsolen = konsolenM > 0 ? epAufbau('konsolen', konsolenM) * konsolenM + epAbbau('konsolen', konsolenM) * konsolenM : 0
+    const matGerKo = mat.geruest + mat.konsolen
+    const g1 = b2.add(`Arbeitsgerüste mit integrierten Traggerüsten am Turmschaft bis ${de(hoeheText, 0)} m Höhe`, [
+      `Systemgerüst als ${bauart} nach DIN EN 12811, ${klassen}, 1. Bauabschnitt, Höhe bis ${de(hoeheText, 2)} m (CAD: ${de(model.totalHeightM, 2)} m, ${de(flaecheM2, 2)} m² Gerüstfläche).`,
+      'Preis = Aufbau + Abbau aus dem CAD (Stunden × Stundensatz, mit Zuschlag), Vorhaltung in der Folgeposition.',
+    ], 1, 'Stück', cent(gGeruest + gKonsolen))
+    vorh(b2, g1.nr, 'Arbeitsgerüste am Turmschaft 1. BA', miet(matGerKo))
+    const g2 = b2.add('Arbeitsgerüste mit int. Tragger. am Turmschaft bis ca. 21,5 m Höhe', ['Arbeitsgerüste am Turmschaft wie Pos. ' + g1.nr + ', 2. Bauabschnitt (Rückbau von 32 m auf ca. 21,5 m). ' + OHNE_CAD], 1, 'Stück', 0)
+    vorh(b2, g2.nr, 'Arbeitsgerüste 2. BA', 0, 'Wo', 0)
+    const ub = zus('ueberbrueckung')
+    const ubp = b2.add('Überbrückungen Dachflächen angrenzende Bauteile', ['Gitterträger und Stahlträger zur Schaffung von Überbrückungen, Abfangungen und als lastenverteilende Unterkonstruktion. ' + (ub && ub.menge > 0 ? 'Preise aus den Zusatzleistungen im LV-Fenster.' : OHNE_CAD)], 1, 'Stück', ub && ub.menge > 0 ? cent(ub.menge * (ub.epAuf + ub.epAb)) : 0)
+    vorh(b2, ubp.nr, 'Überbrückungen', ub && ub.menge > 0 ? cent(ub.menge * ub.epVorh) : 0)
+    const sdN = dachRoh.length
+    const sdAuf = sdN > 0 ? epAufbau('schutzdach', schutzdachM) * schutzdachM + epAbbau('schutzdach', schutzdachM) * schutzdachM : 0
+    const sdp = b2.add('Schutzdächer Zugang Eingang Kirche', ['Schutzgerüst nach DIN 4420-1 und DGUV-Vorschriften bei turmartigen Bauwerken. Anzahl und Lage aus dem CAD sind ein Vorschlag (unten vorne), der Eingang ist im Modell nicht bekannt.'], sdN, 'Stück', sdN > 0 ? cent(sdAuf / sdN) : 0)
+    vorh(b2, sdp.nr, 'Schutzdächer', miet(mat.schutzdach), 'Wo', sdN > 0 ? woGesamt : 0)
+    const kd1 = b2.add('Vertikale Bekleidung der Gerüste 1. BA ca. 21,5m bis ca. 32m', ['Vertikale Bekleidung der Außenachse des Gerüstes mit Kederplane zur Eindämmung der Staubentwicklung. ' + OHNE_CAD], 1, 'Stück', 0)
+    vorh(b2, kd1.nr, 'Vertikale Bekleidung 1. BA', 0, 'Wo', 0)
+    const kd2 = b2.add('Vertikale Bekleidung der Gerüste 2. BA bis ca. 17,5m', ['Vertikale Bekleidung der Außenachse des Gerüstes mit Kederplane bis ca. 17,5 m. ' + OHNE_CAD], 1, 'Stück', 0)
+    vorh(b2, kd2.nr, 'Vertikale Bekleidung 2. BA', 0, 'Wo', 0)
+    const tr1 = b2.add(`Gerüsttreppenturm 1. BA, H = ca. ${de(hoeheText, 0)} m`, ['Aufstieg zum Erreichen der Arbeitsplätze als Gerüsttreppe. Preis aus dem CAD (Aufbau + Abbau Treppenaufgang).'], 1, 'Stück',
+      treppen > 0 ? cent(epAufbau('treppe', treppen) * treppen + epAbbau('treppe', treppen) * treppen) : 0)
+    vorh(b2, tr1.nr, 'Gerüsttreppenturm 1. BA', miet(mat.treppe), 'Wo', treppen > 0 ? woGesamt : 0)
+    const tr2 = b2.add('Gerüsttreppenturm 2. BA, H = ca. 21,5m', ['Gerüsttreppenturm am Turmschaft wie Pos. ' + tr1.nr + '. ' + OHNE_CAD], 1, 'Stück', 0)
+    vorh(b2, tr2.nr, 'Gerüsttreppenturm 2. BA', 0, 'Wo', 0)
+    const az = zus('aufzug')
+    const az1 = b2.add(`Personen- und Lastenaufzug 500/800kg 1.BA H = ca. ${de(hoeheText, 0)}m`, ['Transportbühne für Personen und Lasten nach DIN EN 16719. ' + (az && az.menge > 0 ? 'Preise aus den Zusatzleistungen im LV-Fenster.' : OHNE_CAD)], 1, 'Stück', az && az.menge > 0 ? cent(az.menge * (az.epAuf + az.epAb)) : 0)
+    vorh(b2, az1.nr, 'Personen- und Lastenaufzug 1. BA', az && az.menge > 0 ? cent(az.menge * az.epVorh) : 0)
+    const az2 = b2.add('Personen- und Lastenaufzug 500/800kg 2.BA H = ca. 21,5m', ['Aufzug am Turmschaft wie Pos. ' + az1.nr + '. ' + OHNE_CAD], 1, 'Stück', 0)
+    vorh(b2, az2.nr, 'Personen- und Lastenaufzug 2. BA', 0, 'Wo', 0)
+    const h1 = b2.add('Haltestellenausstattung 1. BA', ['System-Haltestellen für die Transportbühne. ' + OHNE_CAD], 5, 'Stück', 0)
+    vorh(b2, h1.nr, 'Haltestellenausstattung 1. BA', 0, 'StckWo', 5 * woGesamt)
+    const h2 = b2.add('Haltestellenausstattung 2. BA', ['System-Haltestellen für die Transportbühne. ' + OHNE_CAD], 10, 'Stück', 0)
+    vorh(b2, h2.nr, 'Haltestellenausstattung 2. BA', 0, 'StckWo', 10 * woGesamt)
+    const dsch = b2.add('Schutz von Dachflächen', ['Gummischrotmatten und Bohlenbelag als Lastverteilung sowie zum Schutz auf angrenzenden Dachflächen unter dem Gerüst. ' + OHNE_CAD], 1, 'Stück', 0)
+    vorh(b2, dsch.nr, 'Schutz von Dachflächen', 0, 'Wo', 0)
+
+    // Titel 03 – Umbau am Bestandsgerüst (nummeriert wie im LV: 03.01 …)
+    const b3 = baue('03', true)
+    b3.add('Ausbau / Umbau Beläge', ['Am bestehenden Gerüst werden Umbauarbeiten vorgenommen, um die Beläge temporär entfernen zu können. ' + OHNE_CAD], 12, 'Einsätze', 0)
+    b3.add('Ausbau / Rückbau / Umbau Beläge', ['Rückbau und Umbau der Beläge am bestehenden Gerüst. ' + OHNE_CAD], 12, 'Einsätze', 0)
+    b3.add('Ersatz der Bauteile', ['Ersatz von Bauteilen am bestehenden Gerüst. ' + OHNE_CAD], 12, 'Stück', 0)
+    const um = b3.add('Umbau der Gerüste gem. Zeichnung -20', ['Umbau der obersten Arbeitslage zur Arbeitslage mit Aufnahme einer Hubeinrichtung. ' + OHNE_CAD], 1, 'Stück', 0)
+    vorh(b3, um.nr, 'Umbau der Gerüste', 0, 'Wo', 0)
+    b3.add('Umbau der Fachwerkbinder an den Gerüsten Nord, Süd und Ost', ['Umbau der Gitterträger in den oberen Arbeitslagen. ' + OHNE_CAD], 1, 'Stück', 0)
+
+    // Titel 11 – Technische Bearbeitung
+    const b11 = baue('11')
+    b11.add('Technische Bearbeitung, Vorbemerkungen', ['Technische Bearbeitung gemäß Punkt 8, 9, 10 nach DIN EN 12811 sowie den Technischen Vorbemerkungen.'], 1, 'Stück', cent(e.statikPauschale))
+
+    // Titel 12 – Stundenlohnarbeiten
+    const b12 = baue('12')
+    const std = 'Für die Ausführung nicht vertraglich geregelter Leistungen'
+    b12.add('Facharbeiterstunden', [`${std}, ohne Materialgestellung und ohne anteilige LKW-Kosten.`], 50, 'h', cent(e.stundensatzFach))
+    b12.add('Facharbeiterstunden inkl. Material, bei sep. An- und Abfahrt', [`${std}, einschließlich Materialgestellung und anteiliger LKW-Kosten. Preis bitte eintragen.`], 50, 'h', 0)
+    b12.add('Helferstunden', [`${std}, ohne Materialgestellung und ohne anteilige LKW-Kosten.`], 50, 'h', cent(e.stundensatzHelfer))
+    b12.add('Helferstunden inkl. Material, bei sep. An- und Abfahrt', [`${std}, einschließlich Materialgestellung und anteiliger LKW-Kosten. Preis bitte eintragen.`], 50, 'h', 0)
+    b12.add('Anfahrtpauschalen', ['Anfahrtspauschale für unvorhergesehene Kleinsteinsätze zur Ausführung oder Teilausführung vertraglicher Leistungen.'], 10, 'Stck', cent(e.anfahrtspauschale))
+
+    const ts = (nr: number, nrText: string, name: string, l: LvPosition[]): LvTitel => ({ nr, nrText, titel: name, positionen: l, summe: cent(l.reduce((s2, x) => s2 + x.gp, 0)) })
+    return [
+      ts(1, '01', 'Baustelleneinrichtung', b1.liste),
+      ts(2, '02', 'Gerüstarbeiten Turmschaft', b2.liste),
+      ts(3, '03', 'Umbau am Bestandsgerüst', b3.liste),
+      ts(11, '11', 'Technische Bearbeitung', b11.liste),
+      ts(12, '12', 'Stundenlohnarbeiten', b12.liste),
+    ]
+  }
+
   const summe = (p: LvPosition[]) => cent(p.reduce((s, x) => s + x.gp, 0))
-  const titel: LvTitel[] = [
+  const titel: LvTitel[] = e.stil === 'statiker' ? statikerTitel() : [
     { nr: 1, nrText: T1.nrText, titel: 'Technische Bearbeitung und Baustelleneinrichtung', positionen: T1.liste, summe: summe(T1.liste) },
     { nr: 2, nrText: T2.nrText, titel: `Außeneinrüstung – Fassadengerüst Lastklasse ${e.lastklasse}${kn ? ` (${de(kn, 0)} kN/m²)` : ''}`, positionen: T2.liste, summe: summe(T2.liste) },
     { nr: 3, nrText: T3.nrText, titel: 'Stundenlohnarbeiten', positionen: T3.liste, summe: summe(T3.liste) },
@@ -436,7 +559,9 @@ export function erzeugeLeistungsverzeichnis(quelle: LvQuelle, e: LvEingaben): Le
       ...(giebelM2 > 0 ? ['Giebelflächen der Dachgauben sind eine Eingabe (nicht im CAD). Der EP der Zulage (Pos. 1.09) entspricht dem EP von Pos. 1.01 – Annahme.'] : []),
       `Einheitspreise abgeleitet aus dem Materialwert der Stückliste (${de(matGesamt, 2)} €), Aufbau-/Abbaustunden (${de(stundenAufAb, 0)} h, nach Materialwert auf die Positionen verteilt) und den eingegebenen Faktoren.`,
       `Vorhaltung je Woche = Materialwert × Mietsatz × (1 + Zuschlag), geteilt durch die Menge.${e.stil === 'grundstandzeit' ? ` Grundposition = (Stunden × Stundensatz Facharbeiter + Materialwert × Mietsatz × ${GRUNDSTANDZEIT_WOCHEN} Wochen) × (1 + Zuschlag), geteilt durch die Menge.` : ''}`,
-      e.stil === 'getrennt'
+      e.stil === 'statiker'
+        ? `Gliederung wie im LV des Auftraggebers (Turmeinrüstung): Stück-Pauschalen mit Vorhaltung in Wochen (Standzeit ${de(e.gesamtStandzeitWochen, 0)} Wochen). Preis der Gerüstposition = Aufbau + Abbau (Stunden × Stundensatz, mit Zuschlag) aus dem CAD; Vorhaltung je Woche = Materialwert × Mietsatz × (1 + Zuschlag). Annahme: 1. Bauabschnitt = gesamtes CAD-Gerüst. Positionen ohne Wert im CAD (2. Bauabschnitt, Kederplane, Haltestellen, Dachschutz, Umbau am Bestandsgerüst, Baustelleneinrichtung außer der Pauschale) haben Menge und Preis zum Selbsteintragen in der Tabelle.`
+      : e.stil === 'getrennt'
         ? `Aufbau, Vorhaltung und Abbau sind getrennte Positionen (Aufbau wie in den Muster-LVs). Vorhaltung über die gesamte Standzeit von ${de(e.gesamtStandzeitWochen, 0)} Wochen (Menge × Wochen). Aufbau-EP = Aufbaustunden × Stundensatz Facharbeiter, Abbau-EP = Abbaustunden × Stundensatz (je mit Zuschlag, nach Materialwert verteilt); das Material steckt in der Vorhaltung.`
         : `Gesamt-Standzeit ${de(e.gesamtStandzeitWochen, 0)} Wochen, davon ${GRUNDSTANDZEIT_WOCHEN} Wochen Grundstandzeit in der Aufbauposition, danach Verlängerung der Vorhaltung.`,
       ...(aktiveZusatz.length ? ['Dachfanggerüst, Seitenschutz, Überbrückung, Strahlnetze, Aufzug und Bauzaun kommen nicht aus dem CAD-Modell: Menge und Einheitspreise sind Eingaben.'] : []),
