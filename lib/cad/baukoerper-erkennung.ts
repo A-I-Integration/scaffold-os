@@ -36,6 +36,8 @@ export interface BaukoerperErgebnis {
   turmIndex: number | null
   /** true, wenn sich Höhe oder Tiefe zwischen den Teilen deutlich unterscheiden (sonst reicht ein einfacher Umriss) */
   mehrteilig: boolean
+  /** true: vorbelegen, dass nur der Turm eingerüstet wird (z. B. wenn der Rest schon im Modell steht oder nur der Turm gemeint ist) */
+  nurTurmVorgabe?: boolean
   genauigkeitM: number
   hinweise: string[]
 }

@@ -32,7 +32,8 @@ export default function BuildingForm({ building, systemId, onChange, onSystemCha
   const [activeTab, setActiveTab] = useState<'gebaeude' | 'geruest' | 'system'>('gebaeude')
   const [analyseLaeuft, setAnalyseLaeuft] = useState(false)
   const [analyseHinweis, setAnalyseHinweis] = useState<string | null>(null)
-  const [nurTurm, setNurTurm] = useState(false)
+  // null = Vorgabe der Erkennung (z. B. bei Modellen mit eingebautem Gerüst: nur der Turm), sonst die Wahl der Person
+  const [nurTurmWahl, setNurTurm] = useState<boolean | null>(null)
   const [kircheOffen, setKircheOffen] = useState(false)
   const [kirche, setKirche] = useState<KircheMasse>(KIRCHE_STANDARD)
   // 3D-Modell (OBJ/STL, z. B. aus SketchUp): Außenmaße im Browser lesen, Einheit/„oben“ wählt die Person
@@ -55,6 +56,7 @@ export default function BuildingForm({ building, systemId, onChange, onSystemCha
     try { return analysiereDreiecke(modellImport.dreiecke, { format: modellImport.format, einheit: modellImport.einheit, oben: modellImport.oben, quelle: modellImport.quelle }) } catch { return null }
   }, [modellImport])
   const baukoerper = analyse?.ergebnis ?? null
+  const nurTurm = nurTurmWahl ?? !!baukoerper?.nurTurmVorgabe
   // Mehrteiliges Gebäude erkannt: Teile sofort übernehmen (Person muss nichts anklicken, kann aber unten prüfen/ändern).
   // Läuft erneut, wenn „oben“/Einheit oder die Turm-Auswahl geändert wird.
   useEffect(() => {
@@ -212,7 +214,7 @@ export default function BuildingForm({ building, systemId, onChange, onSystemCha
       // Gebäudeteile aus der Punktwolke (Schiff, Turm, Anbauten mit Höhe, Tiefe, Versatz): haben Vorrang vor den reinen Höhenstufen
       if (Array.isArray(ergebnis.teile) && ergebnis.teile.length >= 2) {
         const teile = ergebnis.teile as GebaeudeTeil[]
-        const abschnitte = abschnitteAusTeileListe(teile, nurTurm)
+        const abschnitte = abschnitteAusTeileListe(teile, nurTurmWahl === true)
         patch.sections = abschnitte
         patch.umriss = undefined
         if (!patch.sides) patch.sides = ['front', 'back', 'left', 'right']

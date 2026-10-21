@@ -10,6 +10,9 @@
 //      (≥ 20 m²). Ihr Umriss ist der Grundriss des Schafts, ihre Höhe die Schafthöhe.
 //      Der Belag des Gerüsts liegt tiefer und ist nicht gemeint; Stiele und Geländer haben
 //      keine große waagrechte Fläche.
+//   3. Angebautes Gebäude mit Satteldach erkennen (z. B. Verbindungsbau/Querhaus an der Turmwand): zwei große,
+//      gegenüberliegende geneigte Dachflächen, deren First auf eine Schaftwand zuläuft. Es kommt als zweiter Abschnitt
+//      OHNE Gerüst (Traufe, Dachhöhe, Breite), damit das Gerüst an der Turmwand dem Dach folgt statt gerade zu enden.
 // Die Drehung um die senkrechte Achse wird aus den senkrechten Flächen (Wände) bestimmt.
 // Das Ergebnis ist ein VORSCHLAG: Die Person prüft ihn. Hat das Modell kein Flachdach, kommt `null`.
 // ============================================================
@@ -95,6 +98,82 @@ export function wandDrehung(tris: Dreieck[]): number {
   return (Math.abs(g) < 0.3 ? 0 : g) * Math.PI / 180
 }
 
+
+export interface AnbauDach {
+  /** Seite des Schafts entlang der Firstrichtung, an der das Gebäude angebaut ist */
+  seite: 'plus' | 'minus'
+  /** Firstrichtung in den Wandachsen: der Anbau ragt entlang dieser Achse vom Schaft weg */
+  achse: 'u' | 'v'
+  /** Länge des Anbaus ab der Schaftwand (m) */
+  ueberstandM: number
+  /** Breite quer zum First (Traufe zu Traufe, m) */
+  breiteM: number
+  traufeM: number
+  firstM: number
+}
+
+const MIN_DACHPLATTE_M2 = 2
+const MIN_DACHSEITE_M2 = 15
+
+/**
+ * Sucht ein angebautes Satteldach neben dem Schaft. Gesucht sind zwei große geneigte Flächen (Neigung ca. 18–72°),
+ * die in den Wandachsen in entgegengesetzte Richtungen fallen, ihr First läuft auf eine Schaftwand zu und liegt mittig
+ * zum Schaft. Kleine geneigte Teile (Diagonalen, Stiele des Gerüsts) zählen nicht (Einzelfläche ≥ 2 m²). `null`, wenn nichts so Eindeutiges gefunden wird.
+ */
+export function findeAnbauDach(tris: Dreieck[], ang: number, schaft: { u0: number; u1: number; v0: number; v1: number; hoeheM: number }): AnbauDach | null {
+  const c = Math.cos(ang), s = Math.sin(ang)
+  type P = { u: number; v: number; z: number }
+  // Gruppen nach Fallrichtung: 'u+', 'u-', 'v+', 'v-' (Richtung, in die die Fläche nach unten abfällt)
+  const gr: Record<string, { a: number; nz: number; pts: P[] }> = {}
+  for (const t of tris) {
+    const ux = t[3] - t[0], uy = t[4] - t[1], uz = t[5] - t[2], vx = t[6] - t[0], vy = t[7] - t[1], vz = t[8] - t[2]
+    let nx = uy * vz - uz * vy, ny = uz * vx - ux * vz, nz = ux * vy - uy * vx
+    const len = Math.hypot(nx, ny, nz)
+    if (len < 1e-9) continue
+    const a = len / 2
+    if (a < MIN_DACHPLATTE_M2) continue
+    if (nz < 0) { nx = -nx; ny = -ny; nz = -nz }
+    const nzr = nz / len
+    if (nzr < 0.3 || nzr > 0.95) continue
+    const nu = nx * c + ny * s, nv = -nx * s + ny * c
+    const hor = Math.hypot(nu, nv)
+    let key: string
+    if (Math.abs(nu) > 0.97 * hor) key = nu > 0 ? 'u+' : 'u-'
+    else if (Math.abs(nv) > 0.97 * hor) key = nv > 0 ? 'v+' : 'v-'
+    else continue
+    const g = gr[key] ?? (gr[key] = { a: 0, nz: 0, pts: [] })
+    g.a += a; g.nz += nzr * a
+    for (const i of [0, 3, 6]) g.pts.push({ u: t[i] * c + t[i + 1] * s, v: -t[i] * s + t[i + 1] * c, z: t[i + 2] })
+  }
+  let beste: (AnbauDach & { flaeche: number }) | null = null
+  for (const [ka, kb, achseFall] of [['u+', 'u-', 'u'], ['v+', 'v-', 'v']] as const) {
+    const A = gr[ka], B = gr[kb]
+    if (!A || !B || A.a < MIN_DACHSEITE_M2 || B.a < MIN_DACHSEITE_M2) continue
+    if (Math.abs(A.nz / A.a - B.nz / B.a) > 0.1) continue // gleiche Neigung
+    const pts = [...A.pts, ...B.pts]
+    const quer = (p: P) => (achseFall === 'u' ? p.u : p.v) // Richtung quer zum First
+    const laengs = (p: P) => (achseFall === 'u' ? p.v : p.u) // Richtung des Firsts
+    let q0 = Infinity, q1 = -Infinity, l0 = Infinity, l1 = -Infinity, zMin = Infinity, zMax = -Infinity
+    for (const p of pts) { q0 = Math.min(q0, quer(p)); q1 = Math.max(q1, quer(p)); l0 = Math.min(l0, laengs(p)); l1 = Math.max(l1, laengs(p)); zMin = Math.min(zMin, p.z); zMax = Math.max(zMax, p.z) }
+    if (zMax - zMin < 2 || zMax > schaft.hoeheM - 1) continue
+    // Der First liegt in der Mitte zwischen den Traufen
+    const hoch = pts.filter((p) => p.z > zMax - 0.05).map(quer)
+    const firstQ = hoch.reduce((x, y) => x + y, 0) / hoch.length
+    if (Math.abs(firstQ - (q0 + q1) / 2) > 0.1 * (q1 - q0)) continue
+    // mittig zum Schaft (sonst müsste der Versatz bestimmt werden – dann lieber von Hand)
+    const sq0 = achseFall === 'u' ? schaft.u0 : schaft.v0, sq1 = achseFall === 'u' ? schaft.u1 : schaft.v1
+    const sl0 = achseFall === 'u' ? schaft.v0 : schaft.u0, sl1 = achseFall === 'u' ? schaft.v1 : schaft.u1
+    if (Math.abs((q0 + q1) / 2 - (sq0 + sq1) / 2) > 0.5) continue
+    const d: Omit<AnbauDach, 'seite' | 'ueberstandM'> = { achse: achseFall === 'u' ? 'v' : 'u', breiteM: q1 - q0, traufeM: zMin, firstM: zMax }
+    let kand: AnbauDach | null = null
+    if (l1 > sl1 + 1 && l0 >= sl0 && l0 <= sl1 + 0.7) kand = { ...d, seite: 'plus', ueberstandM: l1 - sl1 }
+    else if (l0 < sl0 - 1 && l1 <= sl1 && l1 >= sl0 - 0.7) kand = { ...d, seite: 'minus', ueberstandM: sl0 - l0 }
+    if (kand && (!beste || A.a + B.a > beste.flaeche)) beste = { ...kand, flaeche: A.a + B.a }
+  }
+  if (!beste) return null
+  return { seite: beste.seite, achse: beste.achse, ueberstandM: beste.ueberstandM, breiteM: beste.breiteM, traufeM: beste.traufeM, firstM: beste.firstM }
+}
+
 export interface SchaftImGeruest {
   ergebnis: BaukoerperErgebnis
   geruest: GeruestLagen
@@ -147,16 +226,33 @@ export function erkenneSchaftImGeruest(tris: Dreieck[]): SchaftImGeruest | null 
     if (u < u0) u0 = u; if (u > u1) u1 = u; if (v < v0) v0 = v; if (v > v1) v1 = v
   }
   const r = (x: number) => Math.round(x * 100) / 100
-  const laenge = r(u1 - u0), tiefe = r(v1 - v0)
-  if (laenge < MIN_MASS_M || tiefe < MIN_MASS_M || hoehe < MIN_MASS_M) return null
   const hoeheR = r(hoehe)
+  const uExt = r(u1 - u0), vExt = r(v1 - v0)
+  if (uExt < MIN_MASS_M || vExt < MIN_MASS_M || hoehe < MIN_MASS_M) return null
+  const anbau = findeAnbauDach(tris, ang, { u0, u1, v0, v1, hoeheM: hoeheR })
+  // Länge = Richtung, in der ein Anbau anschließt (Abschnitte liegen hintereinander); sonst u
+  const laenge = anbau && anbau.achse === 'v' ? vExt : uExt
+  const tiefe = anbau && anbau.achse === 'v' ? uExt : vExt
+  const komma = (x: number) => r(x).toString().replace('.', ',')
+  const schaftTeil = { laengeM: laenge, tiefeM: tiefe, versatzM: 0, hoeheM: hoeheR, dachHoeheM: 0, dachForm: 'flachdach' as const }
+  const hinweise = [
+    `Gerüst im Modell erkannt (${lagen.lagenM.length} Lagen im Abstand von ${lagen.abstandM.toFixed(1).replace('.', ',')} m, bis ${komma(lagen.lagenM[lagen.lagenM.length - 1])} m): Es wurde nicht als Gebäude gelesen.`,
+    `Turmschaft aus dem Flachdach: ${komma(laenge)} × ${komma(tiefe)} m, Traufhöhe ${komma(hoeheR)} m.`,
+  ]
+  let teile: BaukoerperErgebnis['teile'] = [schaftTeil]
+  let turmIndex = 0
+  if (anbau) {
+    const anbauTeil = { laengeM: r(anbau.ueberstandM), tiefeM: r(anbau.breiteM), versatzM: 0, hoeheM: r(anbau.traufeM), dachHoeheM: r(anbau.firstM - anbau.traufeM), dachForm: 'satteldach' as const }
+    teile = anbau.seite === 'plus' ? [schaftTeil, anbauTeil] : [anbauTeil, schaftTeil]
+    turmIndex = anbau.seite === 'plus' ? 0 : 1
+    const eckenHoehe = anbauTeil.hoeheM + anbauTeil.dachHoeheM * (1 - tiefe / anbauTeil.tiefeM)
+    hinweise.push(`Angebautes Gebäude mit Satteldach erkannt: ${komma(anbauTeil.laengeM)} × ${komma(anbauTeil.tiefeM)} m, Traufe ${komma(anbauTeil.hoeheM)} m, First ${komma(anbau.firstM)} m. Es wird nicht eingerüstet; die Turmwand daneben wird erst über dem Dach eingerüstet (an den Turmkanten ca. ${komma(eckenHoehe)} m, in der Mitte ${komma(anbau.firstM)} m). Maße und Dachform bitte mit Plan oder Foto prüfen.`)
+  } else {
+    hinweise[1] += ' Angebaute Gebäudeteile und die Seiten mit teilweise verdeckter Wand („Wand verdeckt bis Höhe“) bitte selbst ergänzen.'
+  }
   const ergebnis: BaukoerperErgebnis = {
-    teile: [{ laengeM: laenge, tiefeM: tiefe, versatzM: 0, hoeheM: hoeheR, dachHoeheM: 0, dachForm: 'flachdach' }],
-    tiefeMaxM: tiefe, laengeM: laenge, gesamtHoeheM: hoeheR, turmIndex: 0, mehrteilig: true, genauigkeitM: 0.2,
-    hinweise: [
-      `Gerüst im Modell erkannt (${lagen.lagenM.length} Lagen im Abstand von ${lagen.abstandM.toFixed(1).replace('.', ',')} m, bis ${r(lagen.lagenM[lagen.lagenM.length - 1]).toString().replace('.', ',')} m): Es wurde nicht als Gebäude gelesen.`,
-      `Turmschaft aus dem Flachdach: ${laenge.toString().replace('.', ',')} × ${tiefe.toString().replace('.', ',')} m, Traufhöhe ${hoeheR.toString().replace('.', ',')} m. Angebaute Gebäudeteile und die Seiten mit teilweise verdeckter Wand („Wand verdeckt bis Höhe“) bitte selbst ergänzen.`,
-    ],
+    teile, tiefeMaxM: Math.max(...teile.map((t) => t.tiefeM)), laengeM: r(teile.reduce((x, t) => x + t.laengeM, 0)), gesamtHoeheM: hoeheR,
+    turmIndex, mehrteilig: true, nurTurmVorgabe: true, genauigkeitM: 0.2, hinweise,
   }
   return { ergebnis, geruest: lagen, dachFlaecheM2: r(dachA) }
 }
