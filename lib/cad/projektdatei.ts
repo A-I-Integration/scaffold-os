@@ -7,7 +7,7 @@
 // übernommen. Die Datei enthält KEINE Berechnung und keinen Standsicherheitsnachweis.
 // ============================================================
 
-import type { BuildingParams, BuildingSection } from '@/lib/calculations/cad-engine'
+import type { BuildingParams, BuildingSection, CadTuer } from '@/lib/calculations/cad-engine'
 import { findeSystem } from '@/lib/calculations/geruest-systeme'
 import { bereinigeStatikDaten, type StatikDaten } from '@/lib/statik-daten'
 import type { CADNote } from '@/types/cad-notes'
@@ -136,7 +136,36 @@ export function liesProjektdatei(text: string): LeseErgebnis {
     const wa = zahl(o.wandabstandM, 0, 5); if (wa != null) opt.wandabstandM = wa
     const fl = zahl(o.feldlaengeM, 0.1, 10); if (fl != null) opt.feldlaengeM = fl
     if (typeof o.treppe === 'boolean') opt.treppe = o.treppe
+    if (typeof o.tuerenFreihalten === 'boolean') opt.tuerenFreihalten = o.tuerenFreihalten
+    if (o.kederplane && typeof o.kederplane === 'object') {
+      const k = o.kederplane as Record<string, unknown>
+      const von = zahl(k.vonM, 0, MAX_MASS_M), bis = zahl(k.bisM, 0, MAX_MASS_M)
+      if (von != null && bis != null) opt.kederplane = { vonM: von, bisM: bis }
+    }
+    if (o.aufzug && typeof o.aufzug === 'object') {
+      const z = o.aufzug as Record<string, unknown>
+      if (z.seite === 'front' || z.seite === 'back' || z.seite === 'left' || z.seite === 'right') {
+        const az: NonNullable<typeof opt.aufzug> = { seite: z.seite, gemietet: z.gemietet === true }
+        const bis = zahl(z.bisM, 0, MAX_MASS_M); if (bis != null) az.bisM = bis
+        const hs = zahl(z.haltestellen, 0, 100); if (hs != null) az.haltestellen = Math.round(hs)
+        const k1 = zahl(z.kostenAufbauEur, 0, 1e7); if (k1 != null) az.kostenAufbauEur = k1
+        const k2 = zahl(z.kostenVorhaltungJeWocheEur, 0, 1e7); if (k2 != null) az.kostenVorhaltungJeWocheEur = k2
+        const k3 = zahl(z.kostenAbbauEur, 0, 1e7); if (k3 != null) az.kostenAbbauEur = k3
+        opt.aufzug = az
+      }
+    }
     if (Object.keys(opt).length) gebaeude.geruestOptionen = opt
+  }
+  if (Array.isArray(g.tueren) && g.tueren.length > 0 && g.tueren.length <= 200) {
+    const liste = g.tueren.flatMap((t, i): CadTuer[] => {
+      const o = t as Record<string, unknown>
+      const side = o?.side
+      const off = zahl(o?.offsetAlongM, -MAX_MASS_M, MAX_MASS_M), b = zahl(o?.widthM, 0.3, 10), h = zahl(o?.heightM, 0.5, 10)
+      if ((side !== 'front' && side !== 'back' && side !== 'left' && side !== 'right') || off == null || b == null || h == null) return []
+      return [{ id: typeof o.id === 'string' && o.id.length <= 40 ? o.id : `t${i}`, side, offsetAlongM: off, widthM: b, heightM: h }]
+    })
+    if (liste.length === g.tueren.length) gebaeude.tueren = liste
+    else verworfen.push('Türen (ungültige Angaben)')
   }
   for (const k of ['balconies']) if (g[k] != null) verworfen.push('Balkone')
 

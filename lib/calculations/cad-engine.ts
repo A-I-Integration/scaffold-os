@@ -54,6 +54,16 @@ export interface GeruestOptionen {
   aufzug?: AufzugOptionen
 }
 
+/** Eine Tür mit fester Lage im Erdgeschoss. */
+export interface CadTuer {
+  id: string
+  side: 'front' | 'back' | 'left' | 'right'
+  /** Mitte der Tür, gemessen ab Fassadenmitte (m) */
+  offsetAlongM: number
+  widthM: number
+  heightM: number
+}
+
 export interface AufzugOptionen {
   seite: 'front' | 'back' | 'left' | 'right'
   /** Förderhöhe bis (m über Gelände); leer = oberste Gerüstlage */
@@ -112,6 +122,8 @@ export interface BuildingParams {
   // Breite, Auskragung, Geschoss). Wenn gesetzt, ersetzen sie die automatisch
   // gleichmäßig verteilten Balkone aus balconyCount.
   balconies?: CadBalkon[]
+  /** Türen einzeln planen (Seite, Lage, Maße). Wenn gesetzt, ersetzen sie die gleichmäßig verteilten Türen aus doorCount (nicht im Umriss-Modus). */
+  tueren?: CadTuer[]
 }
 
 export interface GebaeudeSegment {
@@ -2202,12 +2214,19 @@ export function generateBuildingFeatures(building: BuildingParams): BuildingFeat
     }
   })
 
+  // Türen mit fester Lage (CAD-Eingabe): ersetzen die gleichmäßig verteilten Türen
+  if (building.tueren && building.tueren.length > 0) {
+    for (const t of building.tueren) {
+      features.push({ id: `door-${t.id}`, type: 'door', side: t.side, offsetAlongM: t.offsetAlongM, bottomY: 0, widthM: t.widthM, heightM: t.heightM, depthM: 0, floorIndex: 0 })
+    }
+  }
   // Türen: nur Erdgeschoss, vorne bevorzugt
   const doorSides = sides.includes('front') ? ['front', ...sides.filter(s => s !== 'front')] : sides
-  for (let d = 0; d < (building.doorCount || 0); d++) {
+  const autoTueren = building.tueren && building.tueren.length > 0 ? 0 : (building.doorCount || 0)
+  for (let d = 0; d < autoTueren; d++) {
     const side = doorSides[d % doorSides.length] as BuildingFeature3D['side']
     const len = facadeLength(side)
-    const perSide = Math.ceil((building.doorCount || 0) / doorSides.length)
+    const perSide = Math.ceil(autoTueren / doorSides.length)
     const idx = Math.floor(d / doorSides.length)
     const spacing = len / (perSide + 1)
     features.push({

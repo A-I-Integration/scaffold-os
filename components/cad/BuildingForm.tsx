@@ -4,6 +4,7 @@ import Lod2Panel from '@/components/cad/Lod2Panel'
 import { useState, useRef, useMemo, useEffect, type ReactNode } from 'react'
 import { BuildingParams, WANDABSTAND_MIN_M, WANDABSTAND_MAX_M } from '@/lib/calculations/cad-engine'
 import BalkonEditor from './BalkonEditor'
+import TuerEditor from './TuerEditor'
 import UmrissEditor from './UmrissEditor'
 import UmrissZeichner from './UmrissZeichner'
 import { figurenZuDxf, type ZPunkt } from '@/lib/cad/dxf-zeichnen'
@@ -719,6 +720,7 @@ export default function BuildingForm({ building, systemId, onChange, onSystemCha
             <div><label className='block text-xs font-medium text-[#424245] mb-1'>Türen</label><input type='number' min={0} value={building.doorCount} onChange={(e) => update('doorCount', parseInt(e.target.value))} className='w-full px-3 py-2 border rounded-xl text-sm' /></div>
             <div><label className='block text-xs font-medium text-[#424245] mb-1'>Balkone</label><input type='number' min={0} value={building.balconyCount} onChange={(e) => update('balconyCount', parseInt(e.target.value))} className='w-full px-3 py-2 border rounded-xl text-sm' /></div>
             <BalkonEditor building={building} onChange={onChange} />
+            <TuerEditor building={building} onChange={onChange} />
           </div>
         )}
         {activeTab === 'geruest' && (

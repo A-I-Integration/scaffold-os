@@ -51,3 +51,40 @@ describe('Türen im Gerüst freihalten', () => {
     expect(ohne.components3D.some((c) => c.articleNumber === DURCHGANG_ARTIKELNUMMER)).toBe(false)
   })
 })
+
+describe('Türen einzeln planen', () => {
+  const mitTueren: BuildingParams = {
+    ...basis, doorCount: 5,
+    tueren: [
+      { id: 'a', side: 'front', offsetAlongM: -3, widthM: 1.2, heightM: 2.2 },
+      { id: 'b', side: 'left', offsetAlongM: 1, widthM: 0.9, heightM: 2.1 },
+    ],
+  }
+
+  it('ersetzt die gleichmäßig verteilten Türen und nimmt die Maße 1:1', () => {
+    const t = generateBuildingFeatures(mitTueren).filter((f) => f.type === 'door')
+    expect(t).toHaveLength(2)
+    expect(t[0]).toMatchObject({ side: 'front', offsetAlongM: -3, widthM: 1.2, heightM: 2.2, bottomY: 0, floorIndex: 0 })
+    expect(t[1]).toMatchObject({ side: 'left', offsetAlongM: 1, widthM: 0.9 })
+  })
+
+  it('ohne Einträge gilt weiter doorCount', () => {
+    expect(generateBuildingFeatures({ ...mitTueren, tueren: undefined }).filter((f) => f.type === 'door')).toHaveLength(5)
+    expect(generateBuildingFeatures({ ...mitTueren, tueren: [] }).filter((f) => f.type === 'door')).toHaveLength(5)
+  })
+
+  it('der Durchgang liegt vor der angegebenen Tür und nur dort', () => {
+    const m = generateCADModel({ ...mitTueren, tueren: [mitTueren.tueren![0]] }, 'layher-allround')
+    const dg = m.fields.filter((f) => f.durchgang)
+    expect(dg.length).toBeGreaterThan(0)
+    expect(dg.every((f) => f.side === 'front' && f.levelIndex === 0)).toBe(true)
+    for (const f of dg) {
+      const a = feldEntlangFassade(f.side, f.positionX, f.positionZ, m.building)
+      expect(Math.min(a + f.lengthM / 2, -3 + 0.6) - Math.max(a - f.lengthM / 2, -3 - 0.6)).toBeGreaterThan(0.02)
+    }
+    // Felder weit weg von x = -3 bleiben normal
+    const fern = m.fields.filter((f) => f.side === 'front' && f.levelIndex === 0 && Math.abs(feldEntlangFassade(f.side, f.positionX, f.positionZ, m.building) + 3) > 3.5)
+    expect(fern.length).toBeGreaterThan(0)
+    expect(fern.every((f) => !f.durchgang)).toBe(true)
+  })
+})
