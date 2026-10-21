@@ -462,6 +462,18 @@ export default function BuildingForm({ building, systemId, onChange, onSystemCha
                       <button type='button' className='rounded-lg bg-[#0071e3] px-3 py-1 font-semibold text-white'
                         onClick={() => { const box = umrissBox(grundriss.umriss); onChange({ ...building, umriss: grundriss.umriss, sections: undefined, lengthM: Math.round(box.lengthM * 100) / 100, widthM: Math.round(box.widthM * 100) / 100, heightM: m.heightM }); setModellImport(null); setAnalyseHinweis(`Grundriss übernommen: ${FORM_NAME[grundriss.form]}, ${grundriss.ecken} Ecken. Höhe ${m.heightM} m. Dachform, Geschosse und Fenster bitte selbst eintragen; Ecken unter „Gebäude-Umriss“ prüfen.`) }}>Grundriss übernehmen</button>
                     )}
+                    {modellImport.quelle === 'nwd' && (
+                      <button type='button' className='rounded-lg border border-black/15 px-3 py-1' title='Speichert das umgewandelte (verdichtete) Modell als OBJ-Datei, z. B. zur Fehlersuche oder zur Ansicht in einem 3D-Programm'
+                        onClick={async () => {
+                          const { dreieckeZuObj } = await import('@/lib/cad/obj-export')
+                          const text = dreieckeZuObj(modellImport.dreiecke, `Umgewandelt aus ${modellImport.name}; Einheit/oben wie in der Quelle (Z oben)`)
+                          const a = document.createElement('a')
+                          a.href = URL.createObjectURL(new Blob([text], { type: 'text/plain' }))
+                          a.download = modellImport.name.replace(/\.nwd$/i, '') + '-umgewandelt.obj'
+                          a.click()
+                          setTimeout(() => URL.revokeObjectURL(a.href), 10000)
+                        }}>Modell als OBJ speichern</button>
+                    )}
                     <button type='button' className='rounded-lg bg-black/10 px-3 py-1' onClick={() => setModellImport(null)}>Verwerfen</button>
                   </div>
                 </div>
