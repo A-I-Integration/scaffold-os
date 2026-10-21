@@ -12,6 +12,7 @@
 // ============================================================
 import { dreieckeMitHoehe, EINHEIT_FAKTOR, type Achse, type Einheit } from '@/lib/cad/modell-import'
 import { erkenneBaukoerper, type BaukoerperErgebnis, type ErkannterTeil } from '@/lib/cad/baukoerper-erkennung'
+import { erkenneSchaftImGeruest } from '@/lib/cad/geruest-modell'
 import type { BuildingSection } from '@/lib/calculations/cad-engine'
 
 /** 'bauteil' = allgemeines Teil ohne erkannte Rolle (z. B. aus DXF-Linien: Maße sind bekannt, ob Schiff oder Turm weiß die Zeichnung nicht) */
@@ -139,7 +140,9 @@ export function analysiereDreiecke(dreiecke: Float32Array, opt: { format: 'obj' 
   const roh = dreieckeMitHoehe(dreiecke, einheit, oben)
   const { tris, hinweise } = bereinigeDreiecke(roh)
   const minH = tris.length ? minVon(tris) : 0
-  const ergebnis = erkenneBaukoerper(minH === 0 ? tris : tris.map((t) => [t[0], t[1], t[2] - minH, t[3], t[4], t[5] - minH, t[6], t[7], t[8] - minH]))
+  const auf0 = minH === 0 ? tris : tris.map((t) => [t[0], t[1], t[2] - minH, t[3], t[4], t[5] - minH, t[6], t[7], t[8] - minH])
+  // Modell mit eingebautem Gerüst (z. B. NWD vom Statiker): Turmschaft aus dem Flachdach statt Gerüst-Fragmente
+  const ergebnis = erkenneSchaftImGeruest(auf0)?.ergebnis ?? erkenneBaukoerper(auf0)
   if (!ergebnis) return null
   return { einheit, oben, einheitGeschaetzt: geschaetzt, teile: teilModell(ergebnis, opt.quelle ?? 'obj-stl'), ergebnis, hinweise: [...hinweise, ...ergebnis.hinweise] }
 }
