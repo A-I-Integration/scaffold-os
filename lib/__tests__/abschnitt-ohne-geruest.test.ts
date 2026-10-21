@@ -111,3 +111,25 @@ describe('Turmwand zum Schiff', () => {
     expect(m.totalAreaM2).toBeLessThan(ohne + 9 * 42)
   })
 })
+
+describe('Leerer Abschnitt (Länge/Höhe 0) und Einzelabschnitt', () => {
+  const turm = (ab?: Record<string, number>): BuildingParams => ({
+    lengthM: 9.15, widthM: 9.15, heightM: 31, eavesHeightM: 31, roofHeightM: 0, roofForm: 'flachdach',
+    floors: 10, floorHeightsM: Array(10).fill(3.1), windowCount: 0, doorCount: 0, balconyCount: 0, overhangM: 0, setbackM: 0,
+    sides: ['front', 'back', 'left', 'right'],
+    sections: [
+      { bezeichnung: 'Anbau 1', laengeM: 0, hoeheM: 0, geruest: false },
+      { bezeichnung: 'Hauptbau', laengeM: 9.15, hoeheM: 31, tiefeM: 9.15, roofForm: 'flachdach', roofHoeheM: 0, ...(ab ? { geruestAbHoeheM: ab } : {}) },
+    ],
+  })
+  it('beachtet „Wand verdeckt bis Höhe“, auch wenn ein leerer Abschnitt in der Liste steht', () => {
+    const ohne = generateCADModel(turm(), 'layher-allround')
+    for (const seite of ['front', 'back', 'left', 'right'] as const) {
+      const m = generateCADModel(turm({ [seite]: 17 }), 'layher-allround')
+      const f = m.fields.filter((x) => x.side === seite)
+      expect(f.length).toBeGreaterThan(0)
+      expect(Math.min(...f.map((x) => x.positionY))).toBeGreaterThanOrEqual(15)
+      expect(m.totalAreaM2).toBeLessThan(ohne.totalAreaM2 - 9 * 12)
+    }
+  })
+})
