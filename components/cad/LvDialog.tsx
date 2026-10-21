@@ -34,7 +34,9 @@ export default function LvDialog({ model, materials, aufbauStunden, abbauStunden
   const [e, setE] = useState<LvEingaben>(() => {
     try {
       const roh = typeof window !== 'undefined' ? localStorage.getItem(FIRMA_KEY) : null
-      return roh ? { ...LV_STANDARD_EINGABEN, ...JSON.parse(roh) } : LV_STANDARD_EINGABEN
+      const basis: LvEingaben = roh ? { ...LV_STANDARD_EINGABEN, ...JSON.parse(roh) } : LV_STANDARD_EINGABEN
+      // Lastklasse kommt aus dem CAD (Gebäude → Gerüst), nicht aus einem festen Standard
+      return model.building.lastklasse ? { ...basis, lastklasse: model.building.lastklasse } : basis
     } catch { return LV_STANDARD_EINGABEN }
   })
   const [fehler, setFehler] = useState<string | null>(null)

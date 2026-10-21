@@ -40,6 +40,12 @@ describe('Abschnitt ohne Gerüst', () => {
     const roofs = m.components3D.filter((c) => c.type === 'protection_roof')
     expect(roofs.every((c) => c.position[0] < -10)).toBe(true)
   })
+  it('setzt Schutzdächer unten an die Vorderseite, nicht oben aufs Dach', () => {
+    const m = generateCADModel(basis, 'layher-allround')
+    const roofs = m.components3D.filter((c) => c.type === 'protection_roof')
+    expect(roofs.length).toBeGreaterThan(0)
+    expect(roofs.every((c) => c.position[1] < 6)).toBe(true) // Turm ist 58 m hoch
+  })
 
   it('Turmhelm: Lagen über dem Schaft werden nach innen versetzt und kürzer', () => {
     const b: BuildingParams = { ...basis, sections: [
