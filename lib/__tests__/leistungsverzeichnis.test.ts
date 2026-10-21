@@ -190,4 +190,36 @@ describe('Leistungsverzeichnis', () => {
       expect(lv.titel[2].positionen[2]).toMatchObject({ einheit: 'St', menge: 3, ep: 80, gp: 240 })
     })
   })
+
+  it('Handeingaben: eigene Stunden, Menge und EP ersetzen die berechneten Werte', () => {
+    const q = quelle()
+    const basis = erzeugeLeistungsverzeichnis(q, mitPreisen)
+    const aufbau = g(basis).find((p) => p.titel.endsWith('Fassadengerüst – Aufbau'))!
+    expect(aufbau.manuell).toBeUndefined()
+
+    // Doppelte Aufbaustunden → Aufbau-EP verdoppelt sich (Zuschlag und Stundensatz bleiben)
+    const mehr = erzeugeLeistungsverzeichnis(q, { ...mitPreisen, aufbauStundenManuell: q.aufbauStunden * 2 })
+    const a2 = g(mehr).find((p) => p.titel === aufbau.titel)!
+    expect(a2.ep).toBeCloseTo(aufbau.ep * 2, 1)
+    const ab1 = g(basis).find((p) => p.titel === 'Arbeits- und Schutzgerüst – Abbau')!
+    expect(g(mehr).find((p) => p.titel === ab1.titel)!.ep).toBeCloseTo(ab1.ep, 2)
+
+    // EP und Menge einer Position von Hand: GP = Menge × EP, Summen folgen, Markierung gesetzt
+    const lv = erzeugeLeistungsverzeichnis(q, { ...mitPreisen, epUeberschreibung: { [aufbau.titel]: 7.5 }, mengeUeberschreibung: { [aufbau.titel]: 100 } })
+    const p = g(lv).find((x) => x.titel === aufbau.titel)!
+    expect(p.ep).toBe(7.5)
+    expect(p.menge).toBe(100)
+    expect(p.gp).toBe(750)
+    expect(p.manuell).toEqual({ ep: true, menge: true })
+    expect(p.berechnet).toEqual({ ep: aufbau.ep, menge: aufbau.menge })
+    expect(lv.summeNetto).not.toBe(basis.summeNetto)
+    expect(lv.annahmen.some((a) => a.includes('von Hand geändert'))).toBe(true)
+  })
+
+  it('Stundenlohn-Positionen lassen sich ebenfalls von Hand anpassen', () => {
+    const lv = erzeugeLeistungsverzeichnis(quelle(), { ...mitPreisen, mengeUeberschreibung: { 'Fachmonteurstunden für nicht vertraglich geregelte Leistungen': 40 } })
+    const p = lv.titel[2].positionen[0]
+    expect(p.menge).toBe(40)
+    expect(p.gp).toBe(2000)
+  })
 })

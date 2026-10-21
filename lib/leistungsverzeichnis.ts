@@ -103,6 +103,12 @@ export interface LvEingaben {
   giebelflaecheM2: number
   /** Höhe des Fanggerüsts in m (optional, 0 = nicht angeben) */
   fanggeruestHoeheM: number
+  /** Eigene Aufbau-/Abbaustunden statt der Werte aus dem CAD (leer/undefined = CAD-Wert) */
+  aufbauStundenManuell?: number
+  abbauStundenManuell?: number
+  /** Eigene Einheitspreise / Mengen je Position, Schlüssel = Kurztitel der Position (bleibt stabil, wenn sich die Nummern verschieben) */
+  epUeberschreibung?: Record<string, number>
+  mengeUeberschreibung?: Record<string, number>
 }
 
 export const LV_STANDARD_EINGABEN: LvEingaben = {
@@ -155,6 +161,10 @@ export interface LvPosition {
   ep: number
   /** Gesamtpreis = Menge × EP, auf Cent gerundet */
   gp: number
+  /** Was die Person von Hand geändert hat (sonst aus dem CAD / den Faktoren berechnet) */
+  manuell?: { ep?: boolean; menge?: boolean }
+  /** Berechnete Werte vor der Änderung von Hand (zum Zurücksetzen und Anzeigen) */
+  berechnet?: { ep: number; menge: number }
 }
 
 export interface LvTitel {
@@ -207,6 +217,9 @@ export interface LvQuelle {
 
 export function erzeugeLeistungsverzeichnis(quelle: LvQuelle, e: LvEingaben): Leistungsverzeichnis {
   const { model, materials } = quelle
+  // Stunden: eigene Eingabe geht vor dem CAD-Wert
+  const aufbauStunden = e.aufbauStundenManuell !== undefined && e.aufbauStundenManuell >= 0 ? e.aufbauStundenManuell : quelle.aufbauStunden
+  const abbauStunden = e.abbauStundenManuell !== undefined && e.abbauStundenManuell >= 0 ? e.abbauStundenManuell : quelle.abbauStunden
   const comps = model.components3D
   const faktor = 1 + Math.max(0, e.zuschlagProzent) / 100
 
@@ -224,7 +237,7 @@ export function erzeugeLeistungsverzeichnis(quelle: LvQuelle, e: LvEingaben): Le
   const mat: Record<Gruppe, number> = { geruest: 0, konsolen: 0, schutzdach: 0, treppe: 0 }
   for (const m of materials) mat[gruppeVon(m.articleNumber)] += m.totalPrice
   const matGesamt = mat.geruest + mat.konsolen + mat.schutzdach + mat.treppe
-  const stundenAufAb = quelle.aufbauStunden + quelle.abbauStunden
+  const stundenAufAb = aufbauStunden + abbauStunden
   const stundenVon = (g: Gruppe): number => (matGesamt > 0 ? (stundenAufAb * mat[g]) / matGesamt : 0)
 
   const epGrund = (g: Gruppe, menge: number): number => {
@@ -241,15 +254,22 @@ export function erzeugeLeistungsverzeichnis(quelle: LvQuelle, e: LvEingaben): Le
     if (!(menge > 0) || !(matGesamt > 0)) return 0
     return cent(((stunden * mat[g]) / matGesamt * e.stundensatzFach * faktor) / menge)
   }
-  const epAufbau = (g: Gruppe, menge: number) => epLohn(g, menge, quelle.aufbauStunden)
-  const epAbbau = (g: Gruppe, menge: number) => epLohn(g, menge, quelle.abbauStunden)
+  const epAufbau = (g: Gruppe, menge: number) => epLohn(g, menge, aufbauStunden)
+  const epAbbau = (g: Gruppe, menge: number) => epLohn(g, menge, abbauStunden)
 
   /** Positionen eines Titels fortlaufend nummerieren: "02.1", "02.2" … */
   const titelMit = (nr: number) => {
     const liste: LvPosition[] = []
     const nrText = String(nr).padStart(2, '0')
     const add = (titel: string, text: string[], menge: number, einheit: string, ep: number): LvPosition => {
-      const p: LvPosition = { nr: `${nrText}.${liste.length + 1}`, titel, text, menge, einheit, ep, gp: cent(menge * ep) }
+      const mo = e.mengeUeberschreibung?.[titel]
+      const eo = e.epUeberschreibung?.[titel]
+      const mengeNeu = mo !== undefined && Number.isFinite(mo) && mo >= 0 ? mo : menge
+      const epNeu = eo !== undefined && Number.isFinite(eo) && eo >= 0 ? cent(eo) : ep
+      const p: LvPosition = {
+        nr: `${nrText}.${liste.length + 1}`, titel, text, menge: mengeNeu, einheit, ep: epNeu, gp: cent(mengeNeu * epNeu),
+        ...(mengeNeu !== menge || epNeu !== ep ? { manuell: { ...(mengeNeu !== menge ? { menge: true } : {}), ...(epNeu !== ep ? { ep: true } : {}) }, berechnet: { ep, menge } } : { berechnet: { ep, menge } }),
+      }
       liste.push(p)
       return p
     }
@@ -422,6 +442,10 @@ export function erzeugeLeistungsverzeichnis(quelle: LvQuelle, e: LvEingaben): Le
       ...(aktiveZusatz.length ? ['Dachfanggerüst, Seitenschutz, Überbrückung, Strahlnetze, Aufzug und Bauzaun kommen nicht aus dem CAD-Modell: Menge und Einheitspreise sind Eingaben.'] : []),
       'Gliederung und Wortlaut orientieren sich an den Muster-LVs (ZECH Bau SE / BVG Los 4 und Ernst Architekten BDA / St. Kilian). Die Bezeichnung „SW“ der Breitenklasse folgt dem Muster-LV; Normtext nicht geprüft. Pauschalen für Statik, Baustelleneinrichtung und Anfahrt sind Eingaben.',
       'Last-, Breiten- und Höhenklasse nach DIN EN 12811-1 (Normtext nicht geprüft). Die Höhenklasse ist eine Eingabe, nicht aus dem CAD berechnet.',
+      ...(e.aufbauStundenManuell !== undefined || e.abbauStundenManuell !== undefined
+        ? [`Stunden von Hand eingegeben: Aufbau ${de(aufbauStunden, 0)} h, Abbau ${de(abbauStunden, 0)} h (CAD-Wert: ${de(quelle.aufbauStunden, 0)} h / ${de(quelle.abbauStunden, 0)} h).`] : []),
+      ...(Object.keys(e.epUeberschreibung ?? {}).length || Object.keys(e.mengeUeberschreibung ?? {}).length
+        ? ['Einzelne Mengen oder Einheitspreise wurden von Hand geändert (im Vorschau-Dialog markiert); diese Werte ersetzen die berechneten.'] : []),
       'Dieses LV ersetzt keine Statik und keine Prüfung durch eine befähigte Person.',
     ],
     fehlendeAngaben: fehlend,
