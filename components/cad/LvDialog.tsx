@@ -141,7 +141,7 @@ export default function LvDialog({ model, materials, aufbauStunden, abbauStunden
               <div><label className={label}>Breitenklasse (leer = aus CAD)</label>
                 <input className={feld} placeholder='z. B. W09' value={e.breitenklasseManuell ?? ''} onChange={(ev) => setze({ breitenklasseManuell: ev.target.value || undefined })} /></div>
               <div><label className={label}>Höhe laut Ausschreibung (m)</label>
-                <input type='number' min={0} step='0.5' className={feld} placeholder={String(model.totalHeightM)} value={e.geruestHoeheAusschreibungM ?? ''}
+                <input type='number' min={0} step='0.5' className={feld} placeholder={String(model.levels?.length ? Math.max(...model.levels.map((l) => l.topY)) : model.totalHeightM)} value={e.geruestHoeheAusschreibungM ?? ''}
                   onChange={(ev) => setze({ geruestHoeheAusschreibungM: ev.target.value === '' ? undefined : zahl(ev.target.value) })} /></div>
             </div>
             <div><label className={label}>Genutzte Gerüstlagen</label>
