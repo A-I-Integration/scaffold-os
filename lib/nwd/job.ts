@@ -197,7 +197,8 @@ export async function fehlschlag(job: NwdJob, d: Abhaengigkeiten, code: string, 
 export async function raeumeAuf(job: NwdJob, d: Abhaengigkeiten): Promise<void> {
   if (job.aufgeraeumt || !d.konfig) { return }
   try {
-    if (job.aps_urn) await d.aps.loescheManifest(d.konfig, job.aps_urn).catch(() => undefined)
+    // Bei Fehlern bleibt das Ergebnis-Protokoll bei Autodesk stehen (läuft dort nach ca. 24 h von selbst ab): ohne es lässt sich ein Fehler wie „extractor -777“ nicht untersuchen
+    if (job.aps_urn && job.status !== 'fehler') await d.aps.loescheManifest(d.konfig, job.aps_urn).catch(() => undefined)
     if (job.aps_objekt) await d.aps.loescheObjekt(d.konfig, job.aps_objekt).catch(() => undefined)
     await d.speicher.aendern(job.id, { aufgeraeumt: true })
   } catch { /* Aufräumen darf nie den Auftrag kippen; APS löscht „transient“-Dateien ohnehin nach ca. 24 h */ }
