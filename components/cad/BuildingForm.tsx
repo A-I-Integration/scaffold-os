@@ -1,5 +1,6 @@
 'use client'
 
+import Lod2Panel from '@/components/cad/Lod2Panel'
 import { useState, useRef, useMemo, useEffect, type ReactNode } from 'react'
 import { BuildingParams, WANDABSTAND_MIN_M, WANDABSTAND_MAX_M } from '@/lib/calculations/cad-engine'
 import BalkonEditor from './BalkonEditor'
@@ -404,6 +405,7 @@ export default function BuildingForm({ building, systemId, onChange, onSystemCha
                   onChange={(e) => { const f = e.target.files?.[0]; if (f) onLadeProjektdatei(f); e.target.value = '' }} />
               </label>
             )}
+            <Lod2Panel building={building} onChange={onChange} onHinweis={setAnalyseHinweis} />
             {modellImport && (() => {
               const m = masseAusQuader(modellImport.quader, modellImport.einheit, modellImport.oben)
               const wahl = 'rounded-lg border border-black/10 bg-white px-2 py-1 text-[11px]'
