@@ -34,6 +34,9 @@ export interface BuildingSection {
   versatzM?: number
 }
 
+/** Artikelnummer des Durchgangsrahmen-Binders vor Türen (kein Fantasiepreis: Preis und Gewicht kommen aus dem Lager der Firma). */
+export const DURCHGANG_ARTIKELNUMMER = 'DR-001'
+
 export interface GeruestOptionen {
   /** Gerüstbreite in m – muss eine der Breiten des gewählten Systems sein */
   breiteM?: number
@@ -45,6 +48,8 @@ export interface GeruestOptionen {
   treppe?: boolean
   /** Vertikale Bekleidung mit Kederplane an der Außenachse zwischen zwei Höhen (m über Gelände), an allen Gerüstseiten; nur ganze Lagen im Bereich werden bekleidet */
   kederplane?: { vonM: number; bisM: number }
+  /** false = Türen nicht freihalten. Standard (leer/true): vor jeder Tür im Erdgeschoss entsteht in der untersten Lage ein Durchgang (kein Fuß-Querriegel, keine Diagonale, Durchgangsrahmen-Binder). */
+  tuerenFreihalten?: boolean
   /** Personen-/Lastenaufzug an einer Gerüstseite (außen vor dem Gerüst) */
   aufzug?: AufzugOptionen
 }
@@ -221,6 +226,8 @@ export interface ScaffoldField {
   side: 'front' | 'back' | 'left' | 'right'
   levelIndex: number
   isCorner?: boolean
+  /** unterste Lage vor einer Tür: Durchgang (siehe GeruestOptionen.tuerenFreihalten) */
+  durchgang?: boolean
   // Nur Umriss-Modus: Nummer der Gebäudekante und Drehwinkel des Feldes um die Hochachse.
   kante?: number
   yaw?: number
@@ -542,7 +549,7 @@ export function generateScaffoldComponents(model: CADModel): ScaffoldComponent3D
     components.push({ id: `frame-${field.id}-right`, type: 'frame', articleNumber: getFrameArticle(lengthM), name: `Rahmen ${lengthM}m`, position: [positionX + lengthM / 2 - 0.02, yBottom + levelH / 2, positionZ], rotation: [0, 0, 0], scale: [0.073, levelH, 0.04], rahmenBreiteM: widthM, color: colorFrame, fieldId: field.id, levelId: level.id })
 
     // Querriegel
-    components.push({ id: `rail-${field.id}-bottom`, type: 'frame', articleNumber: 'QR-001', name: 'Querriegel', position: [positionX, yBottom + 0.05, positionZ], rotation: [0, 0, 0], scale: [lengthM, 0.04, 0.04], color: colorFrame, fieldId: field.id, levelId: level.id })
+    if (!(field.durchgang && levelIndex === 0)) components.push({ id: `rail-${field.id}-bottom`, type: 'frame', articleNumber: 'QR-001', name: 'Querriegel', position: [positionX, yBottom + 0.05, positionZ], rotation: [0, 0, 0], scale: [lengthM, 0.04, 0.04], color: colorFrame, fieldId: field.id, levelId: level.id })
     components.push({ id: `rail-${field.id}-top`, type: 'frame', articleNumber: 'QR-001', name: 'Querriegel', position: [positionX, yTop - 0.05, positionZ], rotation: [0, 0, 0], scale: [lengthM, 0.04, 0.04], color: colorFrame, fieldId: field.id, levelId: level.id })
 
     // Arbeitsbühne – im Treppenfeld entfällt der Belag ganz (der Lauf nimmt das Feld ein,
@@ -562,8 +569,13 @@ export function generateScaffoldComponents(model: CADModel): ScaffoldComponent3D
       components.push({ id: `railing-${field.id}-top`, type: 'railing', articleNumber: getRailingArticle(lengthM), name: `Geländer ${lengthM}m`, position: [railX, yTop + 0.5, positionZ + widthM - 0.045], rotation: [0, 0, 0], scale: [railLen, 1.0, 0.04], color: colorRailing, fieldId: field.id, levelId: level.id })
     }
 
-    // Diagonalen (alternierend)
-    if (levelIndex % 2 === 0) {
+    // Durchgang vor einer Tür: Durchgangsrahmen-Binder trägt die Lage darüber (Preis/Gewicht aus dem Lager)
+    if (field.durchgang && levelIndex === 0) {
+      components.push({ id: `durchgang-${field.id}`, type: 'frame', articleNumber: DURCHGANG_ARTIKELNUMMER, name: 'Durchgangsrahmen-Binder (Tür)', position: [positionX, yTop - 0.25, positionZ], rotation: [0, 0, 0], scale: [lengthM, 0.4, 0.06], color: '#0ea5e9', fieldId: field.id, levelId: level.id })
+    }
+
+    // Diagonalen (alternierend) – im Durchgang vor einer Tür entfällt die Diagonale
+    if (levelIndex % 2 === 0 && !(field.durchgang && levelIndex === 0)) {
       const diagLen = Math.sqrt(lengthM * lengthM + levelH * levelH)
       components.push({ id: `diagonal-${field.id}`, type: 'diagonal', articleNumber: getDiagonalArticle(lengthM), name: `Diagonale ${lengthM}m`, position: [positionX, yBottom + levelH / 2, positionZ], rotation: [0, 0, Math.atan2(levelH, lengthM)], scale: [0.03, diagLen, 0.03], color: colorDiagonal, fieldId: field.id, levelId: level.id })
     }
@@ -1334,6 +1346,23 @@ export function generateCADModel(
     }
   }
 
+  // Türen freihalten: Felder der untersten Lage vor einer Tür werden zum Durchgang.
+  if (opt?.tuerenFreihalten !== false && !(building.umriss && building.umriss.length >= 3)) {
+    const tueren = generateBuildingFeatures(building).filter((f) => f.type === 'door')
+    const betroffeneTueren = new Set<string>()
+    for (const t of tueren) {
+      for (const f of fields) {
+        if (f.levelIndex !== 0 || f.side !== t.side) continue
+        const a = feldEntlangFassade(f.side, f.positionX, f.positionZ, building)
+        if (ueberdeckt(t.offsetAlongM - t.widthM / 2, t.offsetAlongM + t.widthM / 2, a, f.lengthM)) { f.durchgang = true; betroffeneTueren.add(t.id) }
+      }
+    }
+    if (betroffeneTueren.size > 0) {
+      const nFelder = fields.filter((f) => f.durchgang).length
+      warnings.push({ type: 'info', code: 'TUER_DURCHGANG', message: `${betroffeneTueren.size} Tür(en) freigehalten: ${nFelder} Feld(er) der untersten Lage sind Durchgang (kein Fuß-Querriegel, keine Diagonale, ein Durchgangsrahmen-Binder je Feld). Die Lagen darüber stehen weiter. Welche Teile ein Durchgang bei Ihrem System braucht, sowie Überbrückung und Statik bitte nach Zulassung/Aufbauanleitung prüfen; Preis und Gewicht des Binders (Artikel ${DURCHGANG_ARTIKELNUMMER}) kommen aus dem Lager.` })
+    }
+  }
+
   if (lueckeFelder > 0 || luecken.front.length + luecken.back.length + luecken.left.length + luecken.right.length > 0) {
     const nAus = (building.balconies ?? []).filter((b) => b.modus === 'ausgespart').length
     warnings.push({ type: 'info', code: 'BALKON_AUSGESPART', message: `${nAus} Balkon(e) ausgespart: vor jedem Balkon entfällt die ganze Feldspalte (alle Lagen). Fläche, Felder und Stückliste sind entsprechend gekürzt.` })
@@ -1537,14 +1566,14 @@ function getUnitPrice(articleNumber: string): number {
   // Leiter: bewusst KEIN Fantasiepreis – Preis kommt aus dem Lager der Firma (Artikel LE-001).
   if (articleNumber === LEITER_ARTIKELNUMMER) return 0
   // Kederplane und Aufzug: kein Fantasiepreis – Preis kommt aus dem Lager der Firma (bei gemietetem Aufzug von Hand im LV)
-  if (articleNumber === 'KP-001' || articleNumber === 'AZ-001') return 0
+  if (articleNumber === 'KP-001' || articleNumber === 'AZ-001' || articleNumber === DURCHGANG_ARTIKELNUMMER) return 0
   return prices[articleNumber] || 10
 }
 
 function getWeightKg(articleNumber: string): number {
   const weights: Record<string, number> = { 'RA-001': 12.5, 'RA-002': 15.2, 'RA-003': 18.0, 'AB-001': 22, 'AB-002': 26, 'AB-003': 31, 'DI-001': 8.5, 'DI-002': 9.8, 'DI-003': 11.2, 'GE-001': 7.2, 'GE-002': 8.5, 'GE-003': 9.8, 'FP-001': 5.5, 'KU-001': 0.8, 'AN-001': 2.5, 'QR-001': 3.5, 'KO-001': 9.0, 'SP-001': 85.0, 'FN-001': 0.5, 'SD-001': 120.0, 'BB-001': 6.5, 'LV-001': 18.0, 'EW-001': 4.2, 'ST-001': 2.8, 'ST-002': 7.5, 'SG-001': 5.5 }
   if (articleNumber === LEITER_ARTIKELNUMMER) return 0
-  if (articleNumber === 'KP-001' || articleNumber === 'AZ-001') return 0 // Gewicht kommt aus dem Lager
+  if (articleNumber === 'KP-001' || articleNumber === 'AZ-001' || articleNumber === DURCHGANG_ARTIKELNUMMER) return 0 // Gewicht kommt aus dem Lager
   return weights[articleNumber] || 5
 }
 
