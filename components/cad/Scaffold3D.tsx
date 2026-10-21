@@ -428,6 +428,62 @@ function getGeometry(type: string, variant: string = 'default', optik: MjOptik =
   return geo
 }
 
+// ─── Personen-/Lastenaufzug: Gittermast mit Kabine (statt Quader) ───
+// Mast 0,8 × 0,8 m aus vier Stielen, Querriegeln und Diagonalen je Meter, Kabine an der unteren Haltestelle.
+const AUFZUG_MAST_M = 0.8
+const AUFZUG_GEO_CACHE = new Map<number, THREE.BufferGeometry>()
+export function baueAufzugMast(hoehe: number): THREE.BufferGeometry {
+  const key = Math.round(hoehe * 10)
+  const hit = AUFZUG_GEO_CACHE.get(key)
+  if (hit) return hit
+  const teile: THREE.BufferGeometry[] = []
+  const w = AUFZUG_MAST_M, h2 = hoehe / 2, d = 0.05
+  const box = (sx: number, sy: number, sz: number, x: number, y: number, z: number, rz = 0, rx = 0) => {
+    const g = new THREE.BoxGeometry(sx, sy, sz)
+    g.rotateZ(rz); g.rotateX(rx); g.translate(x, y, z)
+    teile.push(g)
+  }
+  for (const sx of [-1, 1]) for (const sz of [-1, 1]) box(d, hoehe, d, sx * w / 2, 0, sz * w / 2)
+  const felder = Math.max(1, Math.round(hoehe))
+  const dh = hoehe / felder
+  for (let i = 0; i <= felder; i++) {
+    const y = -h2 + i * dh
+    box(w, 0.03, 0.03, 0, y, w / 2); box(w, 0.03, 0.03, 0, y, -w / 2)
+    box(0.03, 0.03, w, w / 2, y, 0); box(0.03, 0.03, w, -w / 2, y, 0)
+  }
+  const ang = Math.atan2(dh, w)
+  const len = Math.hypot(dh, w)
+  for (let i = 0; i < felder; i++) {
+    const y = -h2 + (i + 0.5) * dh
+    const f = i % 2 === 0 ? 1 : -1
+    // Diagonalen an den vier Flächen
+    const g1 = new THREE.BoxGeometry(len, 0.025, 0.025); g1.rotateZ(f * ang); g1.translate(0, y, w / 2); teile.push(g1)
+    const g2 = new THREE.BoxGeometry(len, 0.025, 0.025); g2.rotateZ(f * ang); g2.translate(0, y, -w / 2); teile.push(g2)
+    const g3 = new THREE.BoxGeometry(0.025, 0.025, len); g3.rotateX(f * ang); g3.translate(w / 2, y, 0); teile.push(g3)
+    const g4 = new THREE.BoxGeometry(0.025, 0.025, len); g4.rotateX(f * ang); g4.translate(-w / 2, y, 0); teile.push(g4)
+  }
+  const geo = mergeGeometries(teile.map((g) => g.index ? g.toNonIndexed() : g)) ?? new THREE.BoxGeometry(w, hoehe, w)
+  AUFZUG_GEO_CACHE.set(key, geo)
+  return geo
+}
+
+function Aufzug3D({ comp }: { comp: ScaffoldComponent3D }) {
+  const farbModus = useContext(FarbModusKontext)
+  const hoehe = Math.max(2, comp.scale[1])
+  const geo = useMemo(() => baueAufzugMast(hoehe), [hoehe])
+  const farbe = farbModus === 'bauteil' ? bauteilFarbe('elevator') : '#1d4ed8'
+  return (
+    <group position={comp.position} rotation={comp.rotation}>
+      <mesh geometry={geo}><meshStandardMaterial color={farbe} metalness={0.2} roughness={0.5} /></mesh>
+      {/* Kabine an der unteren Haltestelle, vor dem Mast zum Gerüst hin */}
+      <mesh position={[0, -hoehe / 2 + 1.35, 0]}>
+        <boxGeometry args={[1.3, 2.2, 1.3]} />
+        <meshStandardMaterial color={farbModus === 'bauteil' ? bauteilFarbe('elevator') : '#2563eb'} metalness={0.15} roughness={0.55} transparent opacity={0.92} />
+      </mesh>
+    </group>
+  )
+}
+
 // ─── Kantenlinien (Stufe 2, "technische Zeichnung") ───
 // Nur für kantige Bauteile; Rohre/Netze/Rosetten brauchen keine Kanten
 // (Rundungen wirken durch Shading, Linien an Zylindern würden flimmern).
@@ -851,7 +907,10 @@ const AllScaffoldComponents = memo(function AllScaffoldComponents({
   return (
     <group>
       <ScaffoldEdges items={edgeItems} />
-      {Object.entries(grouped).map(([key, { type, variant, items }]) => (
+      {Object.values(grouped).filter((g) => g.type === 'elevator').flatMap((g) => g.items).map((c) => (
+        <Aufzug3D key={c.id} comp={c} />
+      ))}
+      {Object.entries(grouped).filter(([, g]) => g.type !== 'elevator').map(([key, { type, variant, items }]) => (
         <InstancedBauteile
           key={key}
           type={type}
