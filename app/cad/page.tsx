@@ -43,6 +43,7 @@ import { generatePDFHTML, downloadPDF, generateMontageplanHTML } from '@/lib/exp
 import { uploadVertragsdokument } from '@/lib/vertrag-upload-client'
 import { berechneCadKosten } from '@/lib/calculations/cad-kosten'
 import BuildingForm from '@/components/cad/BuildingForm'
+import M2Abrechnung from '@/components/cad/M2Abrechnung'
 import BillOfMaterials from '@/components/cad/BillOfMaterials'
 import SystemLeiste from '@/components/cad/SystemLeiste'
 import KatalogWahlListe from '@/components/cad/KatalogWahlListe'
@@ -88,6 +89,8 @@ export default function CADPage() {
   const [farbModus, setFarbModus] = useState<FarbModus>('real')
   const [statikDaten, setStatikDaten] = useState<StatikDaten>({})
   const [lvOffen, setLvOffen] = useState(false)
+  // Abrechnung nach m² (nur Admin): gewählter Preis je m² (Datenpflege) → Festpreis/m² im Angebot
+  const [m2Wahl, setM2Wahl] = useState<{ preisProM2: number; summe: number } | null>(null)
   // Das LV mit Preisen darf nur Admin erzeugen (Statiker über den Statiker-Bereich). Bis die Rolle bekannt ist: gesperrt.
   const [rolle, setRolle] = useState<string | null>(null)
   const [istStatikerLogin, setIstStatikerLogin] = useState(false)
@@ -741,6 +744,8 @@ export default function CADPage() {
               fahrbar: false, boden: 'beton',
             },
             kiResult, angebotsStatus: 'erstellt',
+            // Abrechnung nach m² gewählt (Datenpflege): Schritt 6 startet im Festpreis-Modus mit diesem €/m²
+            ...(m2Wahl && m2Wahl.preisProM2 > 0 ? { preisModus: 'festpreis', festpreisProM2: String(m2Wahl.preisProM2) } : {}),
             // NEU (CP-Pro-Marktvergleich, "Notizen"-Lücke): rein additives
             // Feld, wird von der bestehenden Kunden-/Angebots-Seite bisher
             // nirgends gelesen – ändert an deren Verhalten nichts.
@@ -783,7 +788,7 @@ export default function CADPage() {
       alert('❌ ' + err.message)
     }
     setZuordnenLaeuft(false)
-  }, [model, materials, totalPrice, totalWeight, logistik, router, notes, statikDaten])
+  }, [model, materials, totalPrice, totalWeight, logistik, router, notes, statikDaten, m2Wahl])
 
   return (
     <div className='min-h-screen md:h-screen flex flex-col bg-[#fbfbfd]'>
@@ -877,6 +882,7 @@ export default function CADPage() {
           </div>
         </div>
         <div className='w-full md:w-72 md:shrink-0'>
+          {rolle === 'admin' && model && <M2Abrechnung flaecheM2={modelWithManual?.totalAreaM2 ?? model.totalAreaM2} onChange={setM2Wahl} />}
           <KatalogWahlListe artikelWahl={artikelWahl} liste={katalogListeFuerSystem(systemId)} onZuruecksetzen={() => setArtikelWahl({})} />
           <BillOfMaterials
             materials={materials}
