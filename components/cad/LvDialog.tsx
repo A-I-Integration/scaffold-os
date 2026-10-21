@@ -54,6 +54,15 @@ export default function LvDialog({ model, materials, aufbauStunden, abbauStunden
   }
   const zahl = (v: string): number => { const n = parseFloat(v.replace(',', '.')); return Number.isFinite(n) && n >= 0 ? n : 0 }
 
+  const setzePos = (feldName: 'epUeberschreibung' | 'mengeUeberschreibung', titel: string, wert: string, berechnet: number) => {
+    const alt = { ...(e[feldName] ?? {}) }
+    const n = wert.trim() === '' ? NaN : parseFloat(wert.replace(',', '.'))
+    if (!Number.isFinite(n) || n < 0 || Math.abs(n - berechnet) < 0.005) delete alt[titel]
+    else alt[titel] = n
+    setze({ [feldName]: alt } as Partial<LvEingaben>)
+  }
+  const hatManuell = Object.keys(e.epUeberschreibung ?? {}).length + Object.keys(e.mengeUeberschreibung ?? {}).length > 0
+
   const setzeZusatz = (i: number, patch: Partial<LvZusatz>) => setze({ zusatz: e.zusatz.map((z, j) => (j === i ? { ...z, ...patch } : z)) })
 
   const lv = useMemo(
@@ -74,15 +83,6 @@ export default function LvDialog({ model, materials, aufbauStunden, abbauStunden
       const { erzeugeLvPdf } = await import('@/lib/export/lv-export')
       speichern(erzeugeLvPdf(lv).output('blob'), `${dateiBasis}.pdf`)
     } catch (err) { setFehler('PDF konnte nicht erstellt werden: ' + (err instanceof Error ? err.message : String(err))) }
-  }
-  // Werte auf die Positionsnummern des Auftraggeber-LV legen (hier: Wuppertal City-Kirche)
-  const alsZuordnung = async () => {
-    try {
-      setFehler(null)
-      const { erzeugeLvZuordnung, erzeugeLvZuordnungXlsx } = await import('@/lib/lv-zuordnung')
-      const daten = await erzeugeLvZuordnungXlsx(erzeugeLvZuordnung(lv, model))
-      speichern(new Blob([daten], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }), `LV-Zuordnung-${new Date().toISOString().split('T')[0]}.xlsx`)
-    } catch (err) { setFehler('Zuordnung konnte nicht erstellt werden: ' + (err instanceof Error ? err.message : String(err))) }
   }
   const alsExcel = async () => {
     try {
@@ -186,17 +186,29 @@ export default function LvDialog({ model, materials, aufbauStunden, abbauStunden
               <div><label className={label}>Stundensatz Helfer (€)</label>{num('stundensatzHelfer')}</div>
               <div><label className={label}>Stunden Fach (Titel 2)</label>{num('stundenFach', '1')}</div>
               <div><label className={label}>Stunden Helfer (Titel 2)</label>{num('stundenHelfer', '1')}</div>
+              <div><label className={label}>Aufbaustunden (CAD: {Math.round(aufbauStunden)} h)</label>
+                <input type='number' min={0} step='1' className={feld} placeholder={String(Math.round(aufbauStunden))} value={e.aufbauStundenManuell ?? ''}
+                  onChange={(ev) => setze({ aufbauStundenManuell: ev.target.value === '' ? undefined : zahl(ev.target.value) })} /></div>
+              <div><label className={label}>Abbaustunden (CAD: {Math.round(abbauStunden)} h)</label>
+                <input type='number' min={0} step='1' className={feld} placeholder={String(Math.round(abbauStunden))} value={e.abbauStundenManuell ?? ''}
+                  onChange={(ev) => setze({ abbauStundenManuell: ev.target.value === '' ? undefined : zahl(ev.target.value) })} /></div>
               <div><label className={label}>Mietsatz je Woche (% Material)</label>{num('mietsatzProzentJeWoche')}</div>
               <div><label className={label}>Zuschlag (%)</label>{num('zuschlagProzent')}</div>
               <div><label className={label}>MwSt (%)</label>{num('mwstProzent', '1')}</div>
             </div>
-            <p className='text-[10px] text-[#86868b]'>Es gibt keine eingebauten Preise. Stundensätze, Mietsatz und Zuschlag trägst du ein; sie werden in diesem Browser gemerkt.</p>
+            <p className='text-[10px] text-[#86868b]'>Es gibt keine eingebauten Preise. Stundensätze, Mietsatz und Zuschlag trägst du ein; sie werden in diesem Browser gemerkt. Aufbau-/Abbaustunden leer lassen = Wert aus dem CAD. Menge und Preis jeder Position kannst du rechts in der Tabelle direkt ändern.</p>
           </div>
 
           <div className='p-4 overflow-y-auto min-w-0'>
             {lv.fehlendeAngaben.length > 0 && (
               <div className='mb-3 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-[11px] text-amber-900'>
                 <b>Entwurf:</b> Es fehlen noch Angaben – {lv.fehlendeAngaben.join('; ')}. Das PDF wird bis dahin als Entwurf gekennzeichnet.
+              </div>
+            )}
+            {hatManuell && (
+              <div className='mb-2 flex items-center justify-between rounded-lg bg-amber-50 px-3 py-1.5 text-[11px] text-amber-900'>
+                <span>Gelb markierte Mengen/Preise hast du von Hand geändert.</span>
+                <button type='button' className='underline' onClick={() => setze({ epUeberschreibung: {}, mengeUeberschreibung: {} })}>Alle zurücksetzen</button>
               </div>
             )}
             <table className='w-full text-xs'>
@@ -215,9 +227,17 @@ export default function LvDialog({ model, materials, aufbauStunden, abbauStunden
                       <tr key={p.nr} className='border-b border-black/5 align-top'>
                         <td className='py-1 pr-2 whitespace-nowrap'>{p.nr}</td>
                         <td className='py-1 pr-2'>{p.titel}</td>
-                        <td className='py-1 pr-2 text-right whitespace-nowrap'>{formatMenge(p.menge)}</td>
+                        <td className='py-1 pr-2 text-right whitespace-nowrap'>
+                          <input type='number' min={0} step='0.01' aria-label={`Menge ${p.nr}`} title={p.manuell?.menge ? `von Hand geändert, berechnet: ${formatMenge(p.berechnet?.menge ?? 0)}` : 'Menge ändern'}
+                            className={`w-20 rounded border px-1 py-0.5 text-right ${p.manuell?.menge ? 'border-amber-400 bg-amber-50' : 'border-transparent hover:border-black/15'}`}
+                            value={p.menge} onChange={(ev) => setzePos('mengeUeberschreibung', p.titel, ev.target.value, p.berechnet?.menge ?? p.menge)} />
+                        </td>
                         <td className='py-1 pr-2 whitespace-nowrap'>{p.einheit}</td>
-                        <td className='py-1 pr-2 text-right whitespace-nowrap'>{formatEuro(p.ep)}</td>
+                        <td className='py-1 pr-2 text-right whitespace-nowrap'>
+                          <input type='number' min={0} step='0.01' aria-label={`Einheitspreis ${p.nr}`} title={p.manuell?.ep ? `von Hand geändert, berechnet: ${formatEuro(p.berechnet?.ep ?? 0)}` : 'Einheitspreis ändern'}
+                            className={`w-24 rounded border px-1 py-0.5 text-right ${p.manuell?.ep ? 'border-amber-400 bg-amber-50' : 'border-transparent hover:border-black/15'}`}
+                            value={p.ep} onChange={(ev) => setzePos('epUeberschreibung', p.titel, ev.target.value, p.berechnet?.ep ?? p.ep)} /> €
+                        </td>
                         <td className='py-1 text-right whitespace-nowrap font-medium'>{formatEuro(p.gp)}</td>
                       </tr>
                     ))}
@@ -241,7 +261,6 @@ export default function LvDialog({ model, materials, aufbauStunden, abbauStunden
         <div className='flex items-center justify-between gap-3 px-5 py-3 border-t border-black/10'>
           <span className='text-[11px] text-red-600'>{fehler}</span>
           <div className='flex gap-2'>
-            <button type='button' onClick={alsZuordnung} title='Mengen, Wochen und Preise auf die Positionsnummern des LV vom Statiker (Wuppertal) legen; was das CAD nicht kennt, bleibt leer' className='px-4 py-2 border border-emerald-600 text-emerald-700 text-sm font-medium rounded-xl hover:bg-emerald-50'>📋 Zuordnung zum LV (Wuppertal)</button>
             <button type='button' onClick={alsExcel} className='px-4 py-2 bg-emerald-600 text-white text-sm font-medium rounded-xl hover:bg-emerald-700'>📊 Excel</button>
             <button type='button' onClick={alsPdf} className='px-4 py-2 bg-[#e8590c] text-white text-sm font-medium rounded-xl hover:bg-[#d24f08]'>📄 PDF</button>
           </div>
