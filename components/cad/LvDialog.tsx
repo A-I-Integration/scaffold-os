@@ -115,6 +115,7 @@ export default function LvDialog({ model, materials, aufbauStunden, abbauStunden
             <select className={feld} value={e.stil} onChange={(ev) => setze({ stil: ev.target.value as LvStil })}>
               <option value='getrennt'>Aufbau · Vorhaltung · Abbau getrennt (wie ZECH/BVG)</option>
               <option value='grundstandzeit'>Auf-/Abbau inkl. 4 Wochen Vorhaltung (wie St. Kilian)</option>
+              <option value='statiker'>Wie Statiker-LV: Stück-Pauschalen, 2 Bauabschnitte (Wuppertal)</option>
             </select>
 
             <div className='text-[11px] font-semibold uppercase text-[#86868b] pt-1'>Projekt</div>
@@ -135,6 +136,13 @@ export default function LvDialog({ model, materials, aufbauStunden, abbauStunden
             <div className='grid grid-cols-2 gap-2'>
               <div><label className={label}>Untergrund der Befestigung</label><input className={feld} value={e.untergrundBefestigung} onChange={(ev) => setze({ untergrundBefestigung: ev.target.value })} /></div>
               <div><label className={label}>Aufstellung</label><input className={feld} value={e.aufstellung} onChange={(ev) => setze({ aufstellung: ev.target.value })} /></div>
+            </div>
+            <div className='grid grid-cols-2 gap-2'>
+              <div><label className={label}>Breitenklasse (leer = aus CAD)</label>
+                <input className={feld} placeholder='z. B. W09' value={e.breitenklasseManuell ?? ''} onChange={(ev) => setze({ breitenklasseManuell: ev.target.value || undefined })} /></div>
+              <div><label className={label}>Höhe laut Ausschreibung (m)</label>
+                <input type='number' min={0} step='0.5' className={feld} placeholder={String(model.totalHeightM)} value={e.geruestHoeheAusschreibungM ?? ''}
+                  onChange={(ev) => setze({ geruestHoeheAusschreibungM: ev.target.value === '' ? undefined : zahl(ev.target.value) })} /></div>
             </div>
             <div><label className={label}>Genutzte Gerüstlagen</label>
               <select className={feld} value={e.lagen} onChange={(ev) => setze({ lagen: ev.target.value as 'alle' | 'obere' })}>
