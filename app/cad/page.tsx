@@ -837,6 +837,7 @@ export default function CADPage() {
               <div className='flex rounded-lg border border-black/10 overflow-hidden text-xs' role='group' aria-label='Farbmodus'>
                 <button type='button' onClick={() => setFarbModus('real')} className={`px-2 py-1 ${farbModus === 'real' ? 'bg-[#1d1d1f] text-white' : 'bg-white text-[#424245]'}`} title='Verzinkte Optik wie in der Praxis'>Real</button>
                 <button type='button' onClick={() => setFarbModus('bauteil')} className={`px-2 py-1 ${farbModus === 'bauteil' ? 'bg-[#1d1d1f] text-white' : 'bg-white text-[#424245]'}`} title='Jede Bauteilart in eigener Farbe (mit Legende unten)'>Nach Bauteil</button>
+                <button type='button' onClick={() => setFarbModus('praesentation')} className={`px-2 py-1 ${farbModus === 'praesentation' ? 'bg-[#1d1d1f] text-white' : 'bg-white text-[#424245]'}`} title='Weißer Hintergrund, dunkle Gerüstrohre, Backstein/Schiefer/Rasen (schematisch, nicht aus einem Scan)'>Präsentation</button>
               </div>
             )}
             {viewMode === '3d' && (

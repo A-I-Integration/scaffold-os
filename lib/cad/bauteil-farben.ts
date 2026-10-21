@@ -20,7 +20,7 @@ export const BAUTEIL_FARBEN: Record<string, string> = {
   corner_brace: '#4f46e5',
 }
 
-export type FarbModus = 'real' | 'bauteil'
+export type FarbModus = 'real' | 'bauteil' | 'praesentation'
 
 export function bauteilFarbe(type: string): string {
   return BAUTEIL_FARBEN[type] ?? '#888888'

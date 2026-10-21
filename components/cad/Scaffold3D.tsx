@@ -22,6 +22,7 @@ import { CADModel, ScaffoldComponent3D, BuildingFeature3D, berechneGebaeudeSegme
 import { CATALOG_ITEMS } from './ComponentCatalog'
 import Umgebung3D from './Umgebung3D'
 import { bauteilFarbe, type FarbModus } from '@/lib/cad/bauteil-farben'
+import { baueBacksteinMaterial, getGrasTex, getSchieferTex, PRAESENTATION_ROHR, PRAESENTATION_HINTERGRUND } from '@/lib/cad/praesentation-material'
 import { kantenSchluessel } from '@/types/cad-layers'
 import type { CADNote } from '@/types/cad-notes'
 import { passendeArtikel, artikelLabel, katalogListeFuerSystem } from '@/lib/cad/katalog-zuordnung'
@@ -592,7 +593,7 @@ function InstancedBauteile({
   const dummy = useMemo(() => new THREE.Object3D(), [])
   const farbModus = useContext(FarbModusKontext)
   const farbTyp = variant === 'tritt' ? 'stair' : type
-  const baseColor = useMemo(() => new THREE.Color(farbModus === 'bauteil' ? bauteilFarbe(farbTyp) : (COLOR_MAP[farbTyp] || '#888888')), [farbTyp, farbModus])
+  const baseColor = useMemo(() => new THREE.Color(farbModus === 'bauteil' ? bauteilFarbe(farbTyp) : farbModus === 'praesentation' && farbTyp !== 'net' && farbTyp !== 'safety_net' ? PRAESENTATION_ROHR : (COLOR_MAP[farbTyp] || '#888888')), [farbTyp, farbModus])
   const optik = useContext(MjOptikKontext)
   const geometry = useMemo(() => getGeometry(type, variant, optik), [type, variant, optik])
   const material = useMemo(() => getMaterial(type, baseColor, farbModus === 'bauteil', variant.startsWith('mjr|')), [type, variant, baseColor, farbModus])
@@ -881,6 +882,7 @@ const AllScaffoldComponents = memo(function AllScaffoldComponents({
 // Walmdach/Mansardendach bleiben als Kegel-Näherung (für ein Walmdach
 // optisch bereits recht plausibel).
 function WalmdachMesh({ laengeM, breiteM, roofH }: { laengeM: number; breiteM: number; roofH: number }) {
+  const praes = useContext(FarbModusKontext) === 'praesentation'
   const geometrie = useMemo(() => {
     const hl = laengeM / 2, hb = breiteM / 2
     const r = Math.abs(hl - hb) // halbe Firstlänge
@@ -902,12 +904,27 @@ function WalmdachMesh({ laengeM, breiteM, roofH }: { laengeM: number; breiteM: n
   useEffect(() => () => geometrie.dispose(), [geometrie])
   return (
     <mesh geometry={geometrie} castShadow>
-      <meshStandardMaterial color="#8a5a3c" roughness={0.9} side={THREE.DoubleSide} />
+      <DachMaterial praes={praes} doubleSide />
     </mesh>
   )
 }
 
+// Präsentationsmodus: Wand = Backstein (Weltkoordinaten), Dach = Schiefer; sonst die bisherigen Materialien.
+function WandMaterial({ praes, putz = true, doubleSide = false }: { praes: boolean; putz?: boolean; doubleSide?: boolean }) {
+  const backstein = useMemo(() => (praes ? baueBacksteinMaterial(doubleSide) : null), [praes, doubleSide])
+  useEffect(() => () => { backstein?.dispose() }, [backstein])
+  if (backstein) return <primitive object={backstein} attach="material" />
+  if (!putz) return <meshStandardMaterial color="#e6dfd3" roughness={0.9} side={doubleSide ? THREE.DoubleSide : THREE.FrontSide} />
+  return <meshStandardMaterial color="#e6dfd3" roughness={0.9} map={getPutzTex()} bumpMap={getPutzTex()} bumpScale={0.12} side={doubleSide ? THREE.DoubleSide : THREE.FrontSide} />
+}
+
+function DachMaterial({ praes, doubleSide = false }: { praes: boolean; doubleSide?: boolean }) {
+  if (praes) return <meshStandardMaterial color="#ffffff" map={getSchieferTex()} roughness={0.8} side={doubleSide ? THREE.DoubleSide : THREE.FrontSide} />
+  return <meshStandardMaterial color="#8a5a3c" roughness={0.9} side={doubleSide ? THREE.DoubleSide : THREE.FrontSide} />
+}
+
 function RoofMesh({ roofForm, laengeM, breiteM, roofH }: { roofForm: string; laengeM: number; breiteM: number; roofH: number }) {
+  const praes = useContext(FarbModusKontext) === 'praesentation'
   if (roofForm === 'kein' || roofForm === 'flachdach' || roofH <= 0) return null
 
   if (roofForm === 'satteldach') {
@@ -920,7 +937,7 @@ function RoofMesh({ roofForm, laengeM, breiteM, roofH }: { roofForm: string; lae
         {[1, -1].map((seite) => (
           <mesh key={seite} position={[0, roofH / 2, (seite * halbeBreite) / 2]} rotation={[seite * neigungRad, 0, 0]} castShadow>
             <boxGeometry args={[laengeM, dicke, hangLaenge]} />
-            <meshStandardMaterial color="#8a5a3c" roughness={0.9} />
+            <DachMaterial praes={praes} />
           </mesh>
         ))}
       </group>
@@ -933,7 +950,7 @@ function RoofMesh({ roofForm, laengeM, breiteM, roofH }: { roofForm: string; lae
     return (
       <mesh position={[0, roofH / 2, 0]} rotation={[neigungRad, 0, 0]} castShadow>
         <boxGeometry args={[laengeM, 0.08, hangLaenge]} />
-        <meshStandardMaterial color="#8a5a3c" roughness={0.9} />
+        <DachMaterial praes={praes} />
       </mesh>
     )
   }
@@ -947,13 +964,14 @@ function RoofMesh({ roofForm, laengeM, breiteM, roofH }: { roofForm: string; lae
   return (
     <mesh position={[0, roofH / 2, 0]} castShadow>
       <coneGeometry args={[Math.max(laengeM, breiteM) / 2 * 0.95, roofH, 4]} />
-      <meshStandardMaterial color="#8a5a3c" roughness={0.9} />
+      <DachMaterial praes={praes} />
     </mesh>
   )
 }
 
 /** Gebäude mit Umriss: Vieleck-Grundfläche, nach oben gezogen (flaches Dach). */
 function UmrissGebaeude({ punkte, heightM }: { punkte: { x: number; z: number }[]; heightM: number }) {
+  const praes = useContext(FarbModusKontext) === 'praesentation'
   const geometrie = useMemo(() => {
     // Shape liegt in der x/y-Ebene; nach dem Drehen um -90° um x wird shape-y zu -z.
     // Darum die z-Werte negiert eintragen, dann landen die Punkte bei (x, z).
@@ -966,7 +984,7 @@ function UmrissGebaeude({ punkte, heightM }: { punkte: { x: number; z: number }[
   return (
     <mesh geometry={geometrie} castShadow receiveShadow>
       <Edges threshold={15} color="#8f8676" />
-      <meshStandardMaterial color="#e6dfd3" roughness={0.9} side={THREE.DoubleSide} />
+      <WandMaterial praes={praes} putz={false} doubleSide />
     </mesh>
   )
 }
@@ -1021,6 +1039,7 @@ function Building3D({
   features: BuildingFeature3D[]
   visible: boolean
 }) {
+  const praes = useContext(FarbModusKontext) === 'praesentation'
   if (!visible) return null
   const { lengthM, heightM, widthM, roofForm, roofHeightM, sections } = building
   const w = widthM || 6
@@ -1062,7 +1081,7 @@ function Building3D({
             <mesh position={[0, seg.hoeheM / 2, 0]} castShadow receiveShadow>
               <boxGeometry args={[seg.laengeM, seg.hoeheM, seg.tiefeM ?? w]} />
               <Edges threshold={15} color="#8f8676" />
-              <meshStandardMaterial color="#e6dfd3" roughness={0.9} map={getPutzTex()} bumpMap={getPutzTex()} bumpScale={0.12} />
+              <WandMaterial praes={praes} />
             </mesh>
             {/* NEU: Dach je Abschnitt – eigene Dachform, falls angegeben,
                 sonst die globale Dachform des Gebäudes. Vorher hatte ein
@@ -1094,7 +1113,7 @@ function Building3D({
       <mesh position={[0, heightM / 2, 0]} castShadow receiveShadow>
         <boxGeometry args={[lengthM, heightM, w]} />
         <Edges threshold={15} color="#8f8676" />
-        <meshStandardMaterial color="#e6dfd3" roughness={0.9} map={getPutzTex()} bumpMap={getPutzTex()} bumpScale={0.12} />
+        <WandMaterial praes={praes} />
       </mesh>
 
       {/* Fenster / Türen / Balkone */}
@@ -1543,6 +1562,27 @@ function LODController({ target, onLevelChange }: { target: [number, number, num
   return null
 }
 
+// Präsentationsmodus: Rasenfläche rund ums Gebäude auf weißem Grund (schematisch, keine Scan-Daten)
+function GrasFlaeche({ model }: { model: CADModel }) {
+  const w = model.building.widthM || 6
+  const groesse = Math.max(model.building.lengthM, w) + 16
+  const tex = useMemo(() => {
+    const t = getGrasTex()
+    if (!t) return null
+    const c = t.clone()
+    c.needsUpdate = true
+    c.repeat.set(groesse / 3, groesse / 3)
+    return c
+  }, [groesse])
+  useEffect(() => () => { tex?.dispose() }, [tex])
+  return (
+    <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.01, -w / 2 - 0.5]} receiveShadow>
+      <planeGeometry args={[groesse, groesse]} />
+      <meshStandardMaterial color="#ffffff" map={tex} roughness={1} />
+    </mesh>
+  )
+}
+
 function Scene({
   model,
   features,
@@ -1565,6 +1605,7 @@ function Scene({
   showEnvironment,
   removedCount,
 }: Props) {
+  const praes = useContext(FarbModusKontext) === 'praesentation'
   const target: [number, number, number] = [0, model.building.heightM / 2, 0]
   // Schatten-Kamera eng ans Modell anpassen (Standardwerte sind viel zu groß
   // und verschwenden Auflösung).
@@ -1582,7 +1623,7 @@ function Scene({
       <ShadowFreeze modelKey={modelKey} />
       <CameraController viewMode={viewMode} target={target} />
       <LODController target={target} onLevelChange={setLodLevel} />
-      <Sky sunPosition={[40, 30, 20]} turbidity={6} rayleigh={2} />
+      {praes ? <color attach="background" args={[PRAESENTATION_HINTERGRUND]} /> : <Sky sunPosition={[40, 30, 20]} turbidity={6} rayleigh={2} />}
       {/* NEU (Optik-Überarbeitung): sorgt für echte Umgebungsreflexionen auf
           dem verzinkten Stahl – ohne das sieht Metall matt/plastikartig aus,
           egal wie gut die Grundfarbe gewählt ist. background={false}: nur
@@ -1610,7 +1651,7 @@ function Scene({
       <directionalLight position={[-20, 15, -15]} intensity={0.35} color="#dce8f5" />
       <Building3D building={model.building} features={features || []} visible={showBuilding && !bridgeMode} />
       <BridgeDeck3D building={model.building} visible={showBuilding && !!bridgeMode} />
-      <Umgebung3D model={model} visible={!!showEnvironment && !bridgeMode} />
+      <Umgebung3D model={model} visible={!!showEnvironment && !bridgeMode && !praes} />
       {showScaffold && (
         <AllScaffoldComponents
           components={model.components3D}
@@ -1631,8 +1672,9 @@ function Scene({
       <CustomDimensionLines dimensions={customDimensions} pendingPoint={pendingMeasurePoint} />
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.02, 0]} receiveShadow>
         <planeGeometry args={[120, 120]} />
-        <meshStandardMaterial color={showEnvironment && !bridgeMode ? '#86a173' : '#b9c0c8'} roughness={0.95} />
+        <meshStandardMaterial color={praes ? PRAESENTATION_HINTERGRUND : showEnvironment && !bridgeMode ? '#86a173' : '#b9c0c8'} roughness={0.95} />
       </mesh>
+      {praes && <GrasFlaeche model={model} />}
     </group>
   )
 }
