@@ -103,6 +103,15 @@ describe('Job-Lebenszyklus', () => {
     expect((await fuehreWeiter(neuerJob(), e2.d)).fehler_text).toMatch(/nicht erreichbar/)
   })
 
+  it('zu großes Ergebnis → Meldung nennt die tatsächliche Größe (Eingrenzung im Betrieb)', async () => {
+    const j = neuerJob({ stufe: 'obj' })
+    const e = umgebung(j, OBJ)
+    e.aps.ladeDerivat.mockRejectedValueOnce(new ApsFehler('zu-gross', 'Das Ergebnis ist zu groß (412 MB).'))
+    const r = await fuehreWeiter(j, e.d)
+    expect(r.fehler_code).toBe('zu-gross')
+    expect(r.fehler_text).toContain('412 MB')
+  })
+
   it('kein Modell in der Datei → Fehler, nichts Halbes', async () => {
     const e = umgebung(neuerJob(), SVF)
     e.aps.modellGuid.mockResolvedValueOnce(null as never)

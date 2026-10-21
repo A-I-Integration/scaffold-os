@@ -173,7 +173,9 @@ export function fehlerAus(e: unknown): FehlerInfo {
       netz: 'Die Autodesk-Cloud ist gerade nicht erreichbar.',
       'aps-fehler': 'Die Autodesk-Cloud meldet einen Fehler bei der Umwandlung.',
     }
-    return { code: e.code, text: `${t[e.code] ?? t['aps-fehler']} ${FALLBACK_HINWEIS}` }
+    // Technische Einzelheit (z. B. tatsächliche Größe) anhängen: ohne sie lässt sich ein Fehler im Betrieb nicht eingrenzen
+    const detail = e.message.replace(/\s+/g, ' ').slice(0, 200)
+    return { code: e.code, text: `${t[e.code] ?? t['aps-fehler']} ${FALLBACK_HINWEIS} (Detail: ${detail})` }
   }
   return { code: 'intern', text: `Die Konvertierung ist fehlgeschlagen. ${FALLBACK_HINWEIS}` }
 }
@@ -181,6 +183,7 @@ export function fehlerAus(e: unknown): FehlerInfo {
 // ---------------------------------------------------------------- Fortschritt voranbringen
 
 export async function fehlschlag(job: NwdJob, d: Abhaengigkeiten, code: string, text: string): Promise<NwdJob> {
+  console.error('[NWD] Auftrag fehlgeschlagen', job.id, code, text)
   const patch: Partial<NwdJob> = { status: 'fehler', fehler_code: code, fehler_text: text, fortschritt: null, fertig_am: new Date(d.jetzt()).toISOString() }
   await d.speicher.aendern(job.id, patch)
   const neu = { ...job, ...patch } as NwdJob
