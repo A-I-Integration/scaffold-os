@@ -16,7 +16,7 @@ import type { BuildingSection } from '@/lib/calculations/cad-engine'
 
 /** 'bauteil' = allgemeines Teil ohne erkannte Rolle (z. B. aus DXF-Linien: Maße sind bekannt, ob Schiff oder Turm weiß die Zeichnung nicht) */
 export type TeilTyp = 'schiff' | 'turm' | 'anbau' | 'bauteil'
-export type TeilQuelle = 'obj-stl' | 'ply' | 'dxf' | 'ifc'
+export type TeilQuelle = 'obj-stl' | 'ply' | 'dxf' | 'ifc' | 'nwd'
 
 export interface GebaeudeTeil {
   id: string
@@ -131,7 +131,7 @@ export function vorgabeAchseEinheit(dreiecke: Float32Array, format: 'obj' | 'stl
 }
 
 /** OBJ/STL: Dreiecke (x,y,z je Ecke) → Teile. `einheit`/`oben` überschreiben die Schätzung (z. B. Wahl der Person). */
-export function analysiereDreiecke(dreiecke: Float32Array, opt: { format: 'obj' | 'stl'; einheit?: Einheit; oben?: Achse }): ModellAnalyse | null {
+export function analysiereDreiecke(dreiecke: Float32Array, opt: { format: 'obj' | 'stl'; einheit?: Einheit; oben?: Achse; quelle?: TeilQuelle }): ModellAnalyse | null {
   const oben: Achse = opt.oben ?? (opt.format === 'obj' ? 'y' : 'z')
   let einheit = opt.einheit
   let geschaetzt = false
@@ -141,7 +141,7 @@ export function analysiereDreiecke(dreiecke: Float32Array, opt: { format: 'obj' 
   const minH = tris.length ? minVon(tris) : 0
   const ergebnis = erkenneBaukoerper(minH === 0 ? tris : tris.map((t) => [t[0], t[1], t[2] - minH, t[3], t[4], t[5] - minH, t[6], t[7], t[8] - minH]))
   if (!ergebnis) return null
-  return { einheit, oben, einheitGeschaetzt: geschaetzt, teile: teilModell(ergebnis, 'obj-stl'), ergebnis, hinweise: [...hinweise, ...ergebnis.hinweise] }
+  return { einheit, oben, einheitGeschaetzt: geschaetzt, teile: teilModell(ergebnis, opt.quelle ?? 'obj-stl'), ergebnis, hinweise: [...hinweise, ...ergebnis.hinweise] }
 }
 
 /** PLY: Punkte (Z oben, Einheit Meter) → Teile. Jeder Punkt wird wie ein winziges Dreieck behandelt. */
