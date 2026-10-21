@@ -75,6 +75,15 @@ export default function LvDialog({ model, materials, aufbauStunden, abbauStunden
       speichern(erzeugeLvPdf(lv).output('blob'), `${dateiBasis}.pdf`)
     } catch (err) { setFehler('PDF konnte nicht erstellt werden: ' + (err instanceof Error ? err.message : String(err))) }
   }
+  // Werte auf die Positionsnummern des Auftraggeber-LV legen (hier: Wuppertal City-Kirche)
+  const alsZuordnung = async () => {
+    try {
+      setFehler(null)
+      const { erzeugeLvZuordnung, erzeugeLvZuordnungXlsx } = await import('@/lib/lv-zuordnung')
+      const daten = await erzeugeLvZuordnungXlsx(erzeugeLvZuordnung(lv, model))
+      speichern(new Blob([daten], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }), `LV-Zuordnung-${new Date().toISOString().split('T')[0]}.xlsx`)
+    } catch (err) { setFehler('Zuordnung konnte nicht erstellt werden: ' + (err instanceof Error ? err.message : String(err))) }
+  }
   const alsExcel = async () => {
     try {
       setFehler(null)
@@ -232,6 +241,7 @@ export default function LvDialog({ model, materials, aufbauStunden, abbauStunden
         <div className='flex items-center justify-between gap-3 px-5 py-3 border-t border-black/10'>
           <span className='text-[11px] text-red-600'>{fehler}</span>
           <div className='flex gap-2'>
+            <button type='button' onClick={alsZuordnung} title='Mengen, Wochen und Preise auf die Positionsnummern des LV vom Statiker (Wuppertal) legen; was das CAD nicht kennt, bleibt leer' className='px-4 py-2 border border-emerald-600 text-emerald-700 text-sm font-medium rounded-xl hover:bg-emerald-50'>📋 Zuordnung zum LV (Wuppertal)</button>
             <button type='button' onClick={alsExcel} className='px-4 py-2 bg-emerald-600 text-white text-sm font-medium rounded-xl hover:bg-emerald-700'>📊 Excel</button>
             <button type='button' onClick={alsPdf} className='px-4 py-2 bg-[#e8590c] text-white text-sm font-medium rounded-xl hover:bg-[#d24f08]'>📄 PDF</button>
           </div>
