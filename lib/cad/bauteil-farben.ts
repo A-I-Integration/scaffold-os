@@ -13,6 +13,8 @@ export const BAUTEIL_FARBEN: Record<string, string> = {
   stair: '#84cc16',
   net: '#06b6d4',
   safety_net: '#06b6d4',
+  sheeting: '#94a3b8',
+  elevator: '#f59e0b',
   board: '#92400e',
   protection_roof: '#f97316',
   load_plate: '#78716c',

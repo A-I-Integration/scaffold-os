@@ -305,7 +305,13 @@ export function erzeugeLeistungsverzeichnis(quelle: LvQuelle, e: LvEingaben): Le
     `Traufe des Gebäudes bei ca. ${de(traufe, 2)} m, Höhe der obersten Gerüstlage ca. ${de(geruestTopM, 2)} m über dem Gelände${first > traufe ? `, First bei ca. ${de(first, 2)} m` : ''}.`,
     'Ankerlöcher sind nach Fertigstellung fachgerecht zu verschließen.',
   ]
-  const aktiveZusatz = (e.zusatz ?? []).filter((z) => z.menge > 0)
+  // Aufzug aus dem CAD (Gerüst-Einstellungen): Menge 1 und Kosten von Hand aus dem Modell statt aus den Zusatzleistungen
+  const azOpt = model.building.geruestOptionen?.aufzug
+  const zusatzEff: LvZusatz[] = (e.zusatz ?? []).map((z) => (z.art === 'aufzug' && azOpt
+    ? { art: 'aufzug' as const, menge: 1, epAuf: azOpt.kostenAufbauEur ?? 0, epVorh: azOpt.kostenVorhaltungJeWocheEur ?? 0, epAb: azOpt.kostenAbbauEur ?? 0 }
+    : z))
+  const kederplaneFlaecheM2 = r2(comps.filter((c) => c.type === 'sheeting').reduce((sum, c) => sum + Math.abs(c.scale[0]) * Math.abs(c.scale[1]), 0))
+  const aktiveZusatz = zusatzEff.filter((z) => z.menge > 0)
 
   // ── Titel 01: Technische Bearbeitung, Baustelleneinrichtung ──
   const T1 = titelMit(1)
@@ -428,7 +434,7 @@ export function erzeugeLeistungsverzeichnis(quelle: LvQuelle, e: LvEingaben): Le
     const OHNE_CAD = 'Nicht aus dem CAD: Menge und Preis bitte in der Tabelle eintragen.'
     const vorh = (b: ReturnType<typeof baue>, bezugNr: string, bezugTitel: string, ep: number, einheit = 'Wo', mengeWo = woGesamt, text?: string) =>
       b.add(`Vorhaltung zur Vorposition ${bezugNr}`, [text ?? `Vorhaltung zur Vorposition ${bezugNr} ${bezugTitel}.`], r2(mengeWo), einheit, ep)
-    const zus = (art: ZusatzArt) => (e.zusatz ?? []).find((z) => z.art === art)
+    const zus = (art: ZusatzArt) => zusatzEff.find((z) => z.art === art)
 
     // Titel 01 – Baustelleneinrichtung
     const b1 = baue('01')
@@ -468,7 +474,7 @@ export function erzeugeLeistungsverzeichnis(quelle: LvQuelle, e: LvEingaben): Le
     const sdAuf = sdN > 0 ? epAufbau('schutzdach', schutzdachM) * schutzdachM + epAbbau('schutzdach', schutzdachM) * schutzdachM : 0
     const sdp = b2.add('Schutzdächer Zugang Eingang Kirche', ['Schutzgerüst nach DIN 4420-1 und DGUV-Vorschriften bei turmartigen Bauwerken. Anzahl und Lage aus dem CAD sind ein Vorschlag (unten vorne), der Eingang ist im Modell nicht bekannt.'], sdN, 'Stück', sdN > 0 ? cent(sdAuf / sdN) : 0)
     vorh(b2, sdp.nr, 'Schutzdächer', miet(mat.schutzdach), 'Wo', sdN > 0 ? woGesamt : 0)
-    const kd1 = b2.add('Vertikale Bekleidung der Gerüste 1. BA ca. 21,5m bis ca. 32m', ['Vertikale Bekleidung der Außenachse des Gerüstes mit Kederplane zur Eindämmung der Staubentwicklung. ' + OHNE_CAD], 1, 'Stück', 0)
+    const kd1 = b2.add('Vertikale Bekleidung der Gerüste 1. BA ca. 21,5m bis ca. 32m', ['Vertikale Bekleidung der Außenachse des Gerüstes mit Kederplane zur Eindämmung der Staubentwicklung. ' + (kederplaneFlaecheM2 > 0 ? `Aus dem CAD: ${de(kederplaneFlaecheM2, 2)} m² Plane (Höhenbereich ${de(model.building.geruestOptionen?.kederplane?.vonM ?? 0, 1)}–${de(model.building.geruestOptionen?.kederplane?.bisM ?? 0, 1)} m). Preis bitte eintragen.` : OHNE_CAD)], 1, 'Stück', 0)
     vorh(b2, kd1.nr, 'Vertikale Bekleidung 1. BA', 0, 'Wo', 0)
     const kd2 = b2.add('Vertikale Bekleidung der Gerüste 2. BA bis ca. 17,5m', ['Vertikale Bekleidung der Außenachse des Gerüstes mit Kederplane bis ca. 17,5 m. ' + OHNE_CAD], 1, 'Stück', 0)
     vorh(b2, kd2.nr, 'Vertikale Bekleidung 2. BA', 0, 'Wo', 0)
@@ -478,12 +484,13 @@ export function erzeugeLeistungsverzeichnis(quelle: LvQuelle, e: LvEingaben): Le
     const tr2 = b2.add('Gerüsttreppenturm 2. BA, H = ca. 21,5m', ['Gerüsttreppenturm am Turmschaft wie Pos. ' + tr1.nr + '. ' + OHNE_CAD], 1, 'Stück', 0)
     vorh(b2, tr2.nr, 'Gerüsttreppenturm 2. BA', 0, 'Wo', 0)
     const az = zus('aufzug')
-    const az1 = b2.add(`Personen- und Lastenaufzug 500/800kg 1.BA H = ca. ${de(hoeheText, 0)}m`, ['Transportbühne für Personen und Lasten nach DIN EN 16719. ' + (az && az.menge > 0 ? 'Preise aus den Zusatzleistungen im LV-Fenster.' : OHNE_CAD)], 1, 'Stück', az && az.menge > 0 ? cent(az.menge * (az.epAuf + az.epAb)) : 0)
+    const az1 = b2.add(`Personen- und Lastenaufzug 500/800kg 1.BA H = ca. ${de(hoeheText, 0)}m`, ['Transportbühne für Personen und Lasten nach DIN EN 16719. ' + (azOpt ? `${azOpt.gemietet ? 'Gemietet von einem Fremdunternehmen' : 'Aus eigenem Inventar'}, Kosten von Hand aus den Gerüst-Einstellungen.` : az && az.menge > 0 ? 'Preise aus den Zusatzleistungen im LV-Fenster.' : OHNE_CAD)], 1, 'Stück', az && az.menge > 0 ? cent(az.menge * (az.epAuf + az.epAb)) : 0)
     vorh(b2, az1.nr, 'Personen- und Lastenaufzug 1. BA', az && az.menge > 0 ? cent(az.menge * az.epVorh) : 0)
     const az2 = b2.add('Personen- und Lastenaufzug 500/800kg 2.BA H = ca. 21,5m', ['Aufzug am Turmschaft wie Pos. ' + az1.nr + '. ' + OHNE_CAD], 1, 'Stück', 0)
     vorh(b2, az2.nr, 'Personen- und Lastenaufzug 2. BA', 0, 'Wo', 0)
-    const h1 = b2.add('Haltestellenausstattung 1. BA', ['System-Haltestellen für die Transportbühne. ' + OHNE_CAD], 5, 'Stück', 0)
-    vorh(b2, h1.nr, 'Haltestellenausstattung 1. BA', 0, 'StckWo', 5 * woGesamt)
+    const hAnz = azOpt?.haltestellen && azOpt.haltestellen > 0 ? azOpt.haltestellen : 5
+    const h1 = b2.add('Haltestellenausstattung 1. BA', ['System-Haltestellen für die Transportbühne. ' + (azOpt?.haltestellen ? 'Anzahl aus den Gerüst-Einstellungen, Preis bitte eintragen.' : OHNE_CAD)], hAnz, 'Stück', 0)
+    vorh(b2, h1.nr, 'Haltestellenausstattung 1. BA', 0, 'StckWo', hAnz * woGesamt)
     const h2 = b2.add('Haltestellenausstattung 2. BA', ['System-Haltestellen für die Transportbühne. ' + OHNE_CAD], 10, 'Stück', 0)
     vorh(b2, h2.nr, 'Haltestellenausstattung 2. BA', 0, 'StckWo', 10 * woGesamt)
     const dsch = b2.add('Schutz von Dachflächen', ['Gummischrotmatten und Bohlenbelag als Lastverteilung sowie zum Schutz auf angrenzenden Dachflächen unter dem Gerüst. ' + OHNE_CAD], 1, 'Stück', 0)

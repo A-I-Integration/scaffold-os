@@ -43,6 +43,24 @@ export interface GeruestOptionen {
   feldlaengeM?: number
   /** false = keine automatische Treppe */
   treppe?: boolean
+  /** Vertikale Bekleidung mit Kederplane an der Außenachse zwischen zwei Höhen (m über Gelände), an allen Gerüstseiten; nur ganze Lagen im Bereich werden bekleidet */
+  kederplane?: { vonM: number; bisM: number }
+  /** Personen-/Lastenaufzug an einer Gerüstseite (außen vor dem Gerüst) */
+  aufzug?: AufzugOptionen
+}
+
+export interface AufzugOptionen {
+  seite: 'front' | 'back' | 'left' | 'right'
+  /** Förderhöhe bis (m über Gelände); leer = oberste Gerüstlage */
+  bisM?: number
+  /** Anzahl Haltestellen (für das LV) */
+  haltestellen?: number
+  /** true = wird von einem Fremdunternehmen gemietet (nicht im eigenen Material/Lager, Kosten von Hand); false = aus dem eigenen Inventar */
+  gemietet: boolean
+  /** Kosten netto, von Hand (Aufbau/Montage, Vorhaltung je Woche, Abbau) */
+  kostenAufbauEur?: number
+  kostenVorhaltungJeWocheEur?: number
+  kostenAbbauEur?: number
 }
 
 /** Das Gebäude ist in der 3D-Szene um 0,5 m gegenüber den Gerüst-Koordinaten versetzt (siehe Seiten-Geometrie). */
@@ -236,9 +254,11 @@ export interface ScaffoldComponent3D {
   /** Nur Rahmen: Rahmenbreite (Abstand Innen-/Außenstütze) in m – die Darstellung zeichnet dann einen echten Leiterrahmen mit zwei Stützen. */
   rahmenBreiteM?: number
   id: string
-  type: 'frame' | 'deck' | 'railing' | 'diagonal' | 'footplate' | 'coupling' | 'anchor' | 'console' | 'stair' | 'net' | 'board' | 'protection_roof' | 'safety_net' | 'load_plate' | 'corner_brace' | 'ladder'
+  type: 'frame' | 'deck' | 'railing' | 'diagonal' | 'footplate' | 'coupling' | 'anchor' | 'console' | 'stair' | 'net' | 'board' | 'protection_roof' | 'safety_net' | 'load_plate' | 'corner_brace' | 'ladder' | 'sheeting' | 'elevator'
   articleNumber: string
   name: string
+  /** true = Fremdleistung (z. B. gemieteter Aufzug): kommt nicht in die Stückliste des eigenen Materials */
+  extern?: boolean
   position: [number, number, number]
   rotation: [number, number, number]
   scale: [number, number, number]
@@ -820,6 +840,43 @@ export function generateScaffoldComponents(model: CADModel): ScaffoldComponent3D
         const [wx, wz] = rf.toWorld(lx, lz + field.widthM / 2 + 0.05)
         components.push({ id: `net-${i}`, type: 'net', articleNumber: 'FN-001', name: 'Fangnetz', position: [wx, level.topY - 0.5, wz], rotation: eulerMitYaw([0, 0, 0], rf.yaw), scale: [field.lengthM, 1.5, 0.01], color: colorNet, levelId: level.id })
       }
+    }
+  }
+
+  // === KEDERPLANE (vertikale Bekleidung der Außenachse) ===
+  const kp = building.geruestOptionen?.kederplane
+  if (kp && Number.isFinite(kp.vonM) && Number.isFinite(kp.bisM) && kp.bisM > kp.vonM) {
+    for (const level of levels) {
+      // nur Lagen, die ganz im gewählten Höhenbereich liegen (Planen werden lagenweise gehängt)
+      if (level.bottomY < kp.vonM - 0.01 || level.topY > kp.bisM + 0.01) continue
+      for (const field of fields) {
+        if (field.levelIndex !== level.index) continue
+        const rf = feldRahmen(field, building)
+        const [lx, lz] = rf.toLocal(field.positionX, field.positionZ)
+        const [wx, wz] = rf.toWorld(lx, lz + field.widthM / 2 + 0.08)
+        components.push({ id: `kederplane-${field.id}`, type: 'sheeting', articleNumber: 'KP-001', name: 'Kederplane (Feld)', position: [wx, level.bottomY + level.heightM / 2, wz], rotation: eulerMitYaw([0, 0, 0], rf.yaw), scale: [field.lengthM, level.heightM, 0.01], color: '#e5e7eb', fieldId: field.id, levelId: level.id })
+      }
+    }
+  }
+
+  // === AUFZUG (eine Seite, außen vor dem Gerüst) ===
+  const az = building.geruestOptionen?.aufzug
+  if (az) {
+    let seitenFelder = fields.filter((f) => f.side === az.seite && f.levelIndex === 0)
+    if (!seitenFelder.length) {
+      // Umriss-Modus (Felder gehören Gebäudekanten, nicht Seiten) oder Seite ohne Gerüst: erstes Feld unten
+      seitenFelder = fields.filter((f) => f.levelIndex === 0)
+      if (seitenFelder.length) model.warnings.push({ type: 'info', code: 'AUFZUG_SEITE', message: 'Für die gewählte Aufzug-Seite gibt es kein Gerüstfeld (Umriss-Modus oder Seite ohne Gerüst): Der Aufzug steht am ersten Feld.' })
+    }
+    const feld = seitenFelder[Math.floor(seitenFelder.length / 2)]
+    if (feld) {
+      const obenY = levels.length ? levels[levels.length - 1].topY : building.heightM
+      const bis = az.bisM && az.bisM > 0 ? Math.min(az.bisM, obenY) : obenY
+      const rf = feldRahmen(feld, building)
+      const [lx, lz] = rf.toLocal(feld.positionX, feld.positionZ)
+      const tiefe = 1.6
+      const [wx, wz] = rf.toWorld(lx, lz + feld.widthM / 2 + tiefe / 2 + 0.1)
+      components.push({ id: 'aufzug-0', type: 'elevator', articleNumber: 'AZ-001', name: az.gemietet ? 'Personen- und Lastenaufzug (gemietet)' : 'Personen- und Lastenaufzug', extern: !!az.gemietet, position: [wx, bis / 2, wz], rotation: eulerMitYaw([0, 0, 0], rf.yaw), scale: [1.6, bis, tiefe], color: '#f59e0b', fieldId: feld.id })
     }
   }
 
@@ -1455,6 +1512,7 @@ export const LEITER_ARTIKELNUMMER = 'LE-001'
 export function generateBillOfMaterials(model: CADModel): MaterialItem[] {
   const counts: Record<string, { name: string; category: string; quantity: number; unit: string; unitPrice: number; weightKg: number; articleNumber: string }> = {}
   model.components3D.forEach((comp) => {
+    if (comp.extern) return // Fremdleistung (z. B. gemieteter Aufzug): nicht im eigenen Material
     const key = comp.articleNumber
     if (!counts[key]) {
       counts[key] = { name: comp.name, category: getCategoryFromType(comp.type), quantity: 0, unit: getUnit(comp.type), unitPrice: getUnitPrice(key), weightKg: getWeightKg(key), articleNumber: key }
@@ -1465,7 +1523,7 @@ export function generateBillOfMaterials(model: CADModel): MaterialItem[] {
 }
 
 function getCategoryFromType(type: ScaffoldComponent3D['type']): string {
-  const map: Record<string, string> = { frame: 'Rahmen', deck: 'Belag', railing: 'Geländer', diagonal: 'Diagonalen', footplate: 'Fundamente', coupling: 'Kupplungen', anchor: 'Anker', console: 'Konsolen', stair: 'Treppen', net: 'Sicherheit', board: 'Bordbretter', protection_roof: 'Sicherheit', safety_net: 'Sicherheit', load_plate: 'Fundamente', corner_brace: 'Eckverbindungen', ladder: 'Leitern' }
+  const map: Record<string, string> = { frame: 'Rahmen', deck: 'Belag', railing: 'Geländer', diagonal: 'Diagonalen', footplate: 'Fundamente', coupling: 'Kupplungen', anchor: 'Anker', console: 'Konsolen', stair: 'Treppen', sheeting: 'Sicherheit', elevator: 'Aufzug', net: 'Sicherheit', board: 'Bordbretter', protection_roof: 'Sicherheit', safety_net: 'Sicherheit', load_plate: 'Fundamente', corner_brace: 'Eckverbindungen', ladder: 'Leitern' }
   return map[type] || 'Sonstiges'
 }
 
@@ -1478,12 +1536,15 @@ function getUnitPrice(articleNumber: string): number {
   const prices: Record<string, number> = { 'RA-001': 45, 'RA-002': 52, 'RA-003': 58, 'AB-001': 85, 'AB-002': 98, 'AB-003': 112, 'DI-001': 28, 'DI-002': 32, 'DI-003': 36, 'GE-001': 35, 'GE-002': 40, 'GE-003': 45, 'FP-001': 18, 'KU-001': 4.5, 'AN-001': 15, 'QR-001': 12, 'KO-001': 32, 'SP-001': 450, 'FN-001': 4.2, 'SD-001': 850, 'BB-001': 22, 'LV-001': 45, 'EW-001': 25, 'ST-001': 15, 'ST-002': 38, 'SG-001': 28 }
   // Leiter: bewusst KEIN Fantasiepreis – Preis kommt aus dem Lager der Firma (Artikel LE-001).
   if (articleNumber === LEITER_ARTIKELNUMMER) return 0
+  // Kederplane und Aufzug: kein Fantasiepreis – Preis kommt aus dem Lager der Firma (bei gemietetem Aufzug von Hand im LV)
+  if (articleNumber === 'KP-001' || articleNumber === 'AZ-001') return 0
   return prices[articleNumber] || 10
 }
 
 function getWeightKg(articleNumber: string): number {
   const weights: Record<string, number> = { 'RA-001': 12.5, 'RA-002': 15.2, 'RA-003': 18.0, 'AB-001': 22, 'AB-002': 26, 'AB-003': 31, 'DI-001': 8.5, 'DI-002': 9.8, 'DI-003': 11.2, 'GE-001': 7.2, 'GE-002': 8.5, 'GE-003': 9.8, 'FP-001': 5.5, 'KU-001': 0.8, 'AN-001': 2.5, 'QR-001': 3.5, 'KO-001': 9.0, 'SP-001': 85.0, 'FN-001': 0.5, 'SD-001': 120.0, 'BB-001': 6.5, 'LV-001': 18.0, 'EW-001': 4.2, 'ST-001': 2.8, 'ST-002': 7.5, 'SG-001': 5.5 }
   if (articleNumber === LEITER_ARTIKELNUMMER) return 0
+  if (articleNumber === 'KP-001' || articleNumber === 'AZ-001') return 0 // Gewicht kommt aus dem Lager
   return weights[articleNumber] || 5
 }
 

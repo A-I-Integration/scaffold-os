@@ -126,6 +126,8 @@ const COLOR_MAP: Record<string, string> = {
   console: '#dde2e7',      // Konsolen – verzinkt
   stair: '#c2c7cc',        // Treppen
   net: '#4a80b8',          // Schutznetz – Blau, halbtransparent
+  sheeting: '#e8eaed',     // Kederplane – helle Plane
+  elevator: '#f59e0b',     // Personen-/Lastenaufzug
   board: '#b08a5e',        // Bordbretter – helles Holz
   protection_roof: '#9aa2a9', // Schutzdach
   load_plate: '#7a6248',   // Lastverteilplatten – Holz
@@ -343,6 +345,7 @@ function getGeometry(type: string, variant: string = 'default', optik: MjOptik =
         break
       case 'net':
       case 'safety_net':
+      case 'sheeting':
         geo = new THREE.PlaneGeometry(1, 1)
         break
       case 'frame': {
@@ -535,12 +538,12 @@ function getMaterial(type: string, color: THREE.Color, matt = false, vertexFarbe
     // Farbmodus „Nach Bauteil“: matt, damit die Farbe nicht vom Metallglanz abgedunkelt wird
     metalness: matt ? 0.05 : istHolz ? 0.0 : istRot ? 0.3 : 0.55,
     roughness: matt ? 0.6 : istHolz ? 0.8 : istRot ? 0.55 : 0.55,
-    transparent: istNetz,
+    transparent: istNetz || type === 'sheeting',
     // Netz: Gitter-Textur (Linien deckend, Maschen durchsichtig)
     map: istNetz ? getNetTex() : null,
     alphaTest: istNetz ? 0.08 : 0,
-    opacity: 1,
-    side: istNetz ? THREE.DoubleSide : THREE.FrontSide,
+    opacity: type === 'sheeting' ? 0.78 : 1,
+    side: istNetz || type === 'sheeting' ? THREE.DoubleSide : THREE.FrontSide,
     envMapIntensity: istHolz ? 0.4 : 0.8,
     // Box-Bauteile bekommen Kantenlinien (ScaffoldEdges): Flächen minimal
     // nach hinten versetzen, damit die Linien nicht mit ihnen flackern.

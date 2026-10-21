@@ -38,7 +38,7 @@ export type AnsichtDaten = {
 }
 
 const ALLE_TYPEN = Object.fromEntries(
-  ['frame', 'deck', 'railing', 'diagonal', 'footplate', 'coupling', 'anchor', 'console', 'stair', 'net', 'board', 'protection_roof', 'safety_net', 'load_plate', 'corner_brace', 'ladder'].map((t) => [t, true]),
+  ['frame', 'deck', 'railing', 'diagonal', 'footplate', 'coupling', 'anchor', 'console', 'stair', 'net', 'board', 'protection_roof', 'safety_net', 'load_plate', 'corner_brace', 'ladder', 'sheeting', 'elevator'].map((t) => [t, true]),
 ) as Record<string, boolean>
 
 const fmt = (n: number, d = 1) => n.toLocaleString('de-DE', { minimumFractionDigits: d, maximumFractionDigits: d })
