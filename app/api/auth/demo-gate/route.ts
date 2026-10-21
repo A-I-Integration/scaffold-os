@@ -19,6 +19,8 @@ import { NextRequest, NextResponse } from 'next/server';
 //
 // Aktivierung: NUR auf der Demo-Instanz die Env-Var
 //   DEMO_LOGIN_EMAIL=demo@…  setzen.
+// Die IP-Sperre selbst ist seit 21.10.2026 standardmäßig AUS und wird nur mit
+//   DEMO_IP_SPERRE=1  wieder eingeschaltet.
 // Auf allen anderen Instanzen (Master + Kunden) ist die Route
 // ein No-Op: { demo: false } → Login läuft wie bisher.
 // Fensterlänge überschreibbar per Env, ohne Re-Deploy-Zwang:
@@ -49,6 +51,15 @@ const headers = {
 
 const FENSTER_STUNDEN = Number(process.env.DEMO_GATE_STUNDEN) || 168; // 7 Tage
 
+/**
+ * IP-Sperre nur, wenn ausdrücklich eingeschaltet: DEMO_IP_SPERRE=1.
+ * Standard (21.10.2026): AUS – der Demo-Login funktioniert von jedem Anschluss beliebig oft.
+ * Der 24-h-Auto-Logout (Proxy, Cookie demo_login_at) ist davon unabhängig.
+ */
+function ipSperreAktiv(): boolean {
+  return ['1', 'true', 'ja'].includes((process.env.DEMO_IP_SPERRE || '').toLowerCase().trim());
+}
+
 function clientIp(req: NextRequest): string {
   // Vercel: x-forwarded-for, erster Eintrag = Client
   const fwd = req.headers.get('x-forwarded-for');
@@ -71,6 +82,11 @@ export async function POST(req: NextRequest) {
 
   const email = (body.email || '').toLowerCase().trim();
   if (email !== demoEmail) return NextResponse.json({ demo: false });
+
+  // IP-Sperre aus: nichts prüfen, nichts speichern
+  if (!ipSperreAktiv()) {
+    return NextResponse.json({ demo: true, gesperrt: false, ok: true });
+  }
 
   const ip = clientIp(req);
 
