@@ -152,7 +152,7 @@ export function erkenneSchaftImGeruest(tris: Dreieck[]): SchaftImGeruest | null 
   const hoeheR = r(hoehe)
   const ergebnis: BaukoerperErgebnis = {
     teile: [{ laengeM: laenge, tiefeM: tiefe, versatzM: 0, hoeheM: hoeheR, dachHoeheM: 0, dachForm: 'flachdach' }],
-    tiefeMaxM: tiefe, laengeM: laenge, gesamtHoeheM: hoeheR, turmIndex: 0, mehrteilig: false, genauigkeitM: 0.2,
+    tiefeMaxM: tiefe, laengeM: laenge, gesamtHoeheM: hoeheR, turmIndex: 0, mehrteilig: true, genauigkeitM: 0.2,
     hinweise: [
       `Gerüst im Modell erkannt (${lagen.lagenM.length} Lagen im Abstand von ${lagen.abstandM.toFixed(1).replace('.', ',')} m, bis ${r(lagen.lagenM[lagen.lagenM.length - 1]).toString().replace('.', ',')} m): Es wurde nicht als Gebäude gelesen.`,
       `Turmschaft aus dem Flachdach: ${laenge.toString().replace('.', ',')} × ${tiefe.toString().replace('.', ',')} m, Traufhöhe ${hoeheR.toString().replace('.', ',')} m. Angebaute Gebäudeteile und die Seiten mit teilweise verdeckter Wand („Wand verdeckt bis Höhe“) bitte selbst ergänzen.`,

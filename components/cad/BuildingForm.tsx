@@ -570,7 +570,7 @@ export default function BuildingForm({ building, systemId, onChange, onSystemCha
               <label className='flex items-center gap-2 text-xs font-medium text-[#424245]'>
                 <input
                   type='checkbox'
-                  checked={!!building.sections && building.sections.length >= 2}
+                  checked={!!building.sections && building.sections.length >= 1}
                   onChange={(e) => {
                     if (e.target.checked) {
                       onChange({ ...building, sections: [
@@ -585,7 +585,7 @@ export default function BuildingForm({ building, systemId, onChange, onSystemCha
                 />
                 Mehrteiliges Gebäude (unterschiedliche Höhen/Ecken)
               </label>
-              {building.sections && building.sections.length >= 2 && (
+              {building.sections && building.sections.length >= 1 && (
                 <div className='space-y-2'>
                   {building.sections.map((s, i) => (
                     <div key={i} className='bg-white rounded-lg p-2 border border-black/10 space-y-1.5'>
@@ -701,13 +701,13 @@ export default function BuildingForm({ building, systemId, onChange, onSystemCha
             </div>
 
             <UmrissEditor building={building} onChange={onChange} />
-            <div><label className='block text-xs font-medium text-[#424245] mb-1'>Gebäudelänge (m){building.umriss ? ' – folgt dem Umriss' : building.sections && building.sections.length >= 2 ? ' – wird durch Abschnitte oben ersetzt' : ''}</label><input type='number' step='0.01' value={building.lengthM} onChange={(e) => update('lengthM', parseFloat(e.target.value))} disabled={!!building.sections && building.sections.length >= 2} className='w-full px-3 py-2 border rounded-xl text-sm disabled:opacity-40' /></div>
+            <div><label className='block text-xs font-medium text-[#424245] mb-1'>Gebäudelänge (m){building.umriss ? ' – folgt dem Umriss' : building.sections && building.sections.length >= 1 ? ' – wird durch Abschnitte oben ersetzt' : ''}</label><input type='number' step='0.01' value={building.lengthM} onChange={(e) => update('lengthM', parseFloat(e.target.value))} disabled={!!building.sections && building.sections.length >= 1} className='w-full px-3 py-2 border rounded-xl text-sm disabled:opacity-40' /></div>
             <div><label className='block text-xs font-medium text-[#424245] mb-1'>Gebäudebreite (m)</label><input type='number' step='0.01' value={building.widthM} onChange={(e) => update('widthM', parseFloat(e.target.value))} className='w-full px-3 py-2 border rounded-xl text-sm' /></div>
-            <div><label className='block text-xs font-medium text-[#424245] mb-1'>Gebäudehöhe (m){building.sections && building.sections.length >= 2 ? ' – wird durch Abschnitte oben ersetzt' : ''}</label><input type='number' step='0.01' value={building.heightM} onChange={(e) => update('heightM', parseFloat(e.target.value))} disabled={!!building.sections && building.sections.length >= 2} className='w-full px-3 py-2 border rounded-xl text-sm disabled:opacity-40' /></div>
+            <div><label className='block text-xs font-medium text-[#424245] mb-1'>Gebäudehöhe (m){building.sections && building.sections.length >= 1 ? ' – wird durch Abschnitte oben ersetzt' : ''}</label><input type='number' step='0.01' value={building.heightM} onChange={(e) => update('heightM', parseFloat(e.target.value))} disabled={!!building.sections && building.sections.length >= 1} className='w-full px-3 py-2 border rounded-xl text-sm disabled:opacity-40' /></div>
             <div><label className='block text-xs font-medium text-[#424245] mb-1'>Traufenhöhe (m)</label><input type='number' step='0.01' value={building.eavesHeightM} onChange={(e) => update('eavesHeightM', parseFloat(e.target.value))} className='w-full px-3 py-2 border rounded-xl text-sm' /></div>
             <div><label className='block text-xs font-medium text-[#424245] mb-1'>Dachhöhe (m)</label><input type='number' step='0.01' value={building.roofHeightM} onChange={(e) => update('roofHeightM', parseFloat(e.target.value))} className='w-full px-3 py-2 border rounded-xl text-sm' /></div>
             <div><label className='block text-xs font-medium text-[#424245] mb-1'>Dachform</label><select value={building.roofForm} onChange={(e) => update('roofForm', e.target.value)} className='w-full px-3 py-2 border rounded-xl text-sm'><option value='flachdach'>Flachdach</option><option value='satteldach'>Satteldach</option><option value='walmdach'>Walmdach</option><option value='pultdach'>Pultdach</option><option value='mansardendach'>Mansardendach</option><option value='kein'>Kein Dach</option></select></div>
-            {building.roofForm === 'flachdach' && !(building.sections && building.sections.length >= 2) && (
+            {building.roofForm === 'flachdach' && !(building.sections && building.sections.length >= 1) && (
               <label className='flex items-center gap-2 text-xs text-[#424245] col-span-2'><input type='checkbox' checked={!!building.dachrandSchutz} onChange={(e) => update('dachrandSchutz', e.target.checked)} />Dachrand-Absturzschutz (Geländer 1,0 m über Dachkante, oberste Lage)</label>
             )}
             <div><label className='block text-xs font-medium text-[#424245] mb-1'>Geschosse</label><input type='number' min={1} value={building.floors} onChange={(e) => update('floors', parseInt(e.target.value))} className='w-full px-3 py-2 border rounded-xl text-sm' /></div>

@@ -2,7 +2,8 @@ import { describe, it, expect } from 'vitest'
 import { existsSync, readFileSync } from 'fs'
 import { dreieckeAusObj } from '../modell-import'
 import { erkenneSchaftImGeruest, findeGeruestLagen } from '../geruest-modell'
-import { analysiereDreiecke } from '../modell-analyse'
+import { analysiereDreiecke, abschnitteAusTeilen } from '../modell-analyse'
+import { generateCADModel, type BuildingParams } from '../../calculations/cad-engine'
 
 // Synthetisches Modell wie die Wuppertaler NWD: Turmschaft mit Flachdach, ein angebautes Gebäude und ein Gerüst
 // (Beläge im 2-m-Abstand mit vielen kleinen Dreiecken, Stiele, Geländer) um den Turm.
@@ -88,8 +89,24 @@ describe('Turmschaft in Modell mit Gerüst', () => {
       expect(Math.max(t.laengeM, t.tiefeM)).toBeCloseTo(9, 1)
       expect(Math.min(t.laengeM, t.tiefeM)).toBeCloseTo(7, 1)
       expect(a.hinweise.some((h) => h.includes('Gerüst im Modell erkannt'))).toBe(true)
+      expect(a.ergebnis.mehrteilig).toBe(true) // sonst bietet die Oberfläche die Teile nicht zur Übernahme an
     })
   }
+  it('der erkannte Turm lässt sich einrüsten, „Wand verdeckt bis Höhe“ wirkt auch bei einem einzigen Abschnitt', () => {
+    const modell = [...turm(), ...anbau(), ...geruest(0, 0, 9, 7, 30)]
+    const a = analysiereDreiecke(alsFloat(modell), { format: 'obj', einheit: 'm', oben: 'z', quelle: 'nwd' })!
+    const sections = abschnitteAusTeilen(a)
+    expect(sections.length).toBe(1)
+    const b = (ab?: Record<string, number>): BuildingParams => ({
+      lengthM: a.ergebnis.laengeM, widthM: a.ergebnis.tiefeMaxM, heightM: a.ergebnis.gesamtHoeheM, eavesHeightM: a.ergebnis.gesamtHoeheM, roofHeightM: 0, roofForm: 'flachdach',
+      floors: 10, floorHeightsM: Array(10).fill(3.1), windowCount: 0, doorCount: 0, balconyCount: 0, overhangM: 0, setbackM: 0,
+      sides: ['front', 'back', 'left', 'right'], sections: [{ ...sections[0], ...(ab ? { geruestAbHoeheM: ab } : {}) }],
+    })
+    const ohne = generateCADModel(b(), 'layher-allround')
+    const mit = generateCADModel(b({ right: 17 }), 'layher-allround')
+    expect(ohne.fields.length).toBeGreaterThan(0)
+    expect(mit.totalAreaM2).toBeLessThan(ohne.totalAreaM2 - 7 * 10)
+  })
   it('ein Turm mit Spitzdach und Gerüst: kein falscher Schaft aus den Belägen', () => {
     // Pyramidendach statt Flachdach: keine große waagrechte Fläche oberhalb/außerhalb der Gerüstlagen
     const spitz = box(0, 0, 9, 7, 0, 31, false)
