@@ -10,13 +10,15 @@
 // Alle Abhängigkeiten (Datenbank, APS, Ablage) sind austauschbar, damit die Tests ohne Netz laufen.
 // ============================================================
 import * as apsModul from '@/lib/nwd/aps'
+import { verdichteObjStrom } from '@/lib/nwd/obj-verdichten'
 import { ApsFehler, apsKonfig, manifestStand, findeObjDatei, urnVon, type ApsKonfig, type Stufe } from '@/lib/nwd/aps'
 
 export const NWD_MAX_BYTES = 200 * 1024 * 1024
 export const NWD_WARTEZEIT_MS = 10 * 60 * 1000
 export const NWD_ABSTAND_MS = 60 * 1000
 export const NWD_TAGESLIMIT_STANDARD = 20
-export const ERGEBNIS_MAX_BYTES = 250 * 1024 * 1024
+// Das Ergebnis wird als Datenstrom gelesen und verdichtet (obj-verdichten.ts); die Grenze schützt nur vor Unsinn
+export const ERGEBNIS_MAX_BYTES = 1024 * 1024 * 1024
 export const ERGEBNIS_BUCKET = 'project-media'
 export const FALLBACK_HINWEIS = 'Ein Export als IFC oder OBJ aus Navisworks/Revit ist schneller und braucht keine Cloud.'
 
@@ -91,7 +93,7 @@ export interface Ablage {
   loeschen(pfad: string): Promise<void>
 }
 
-export type ApsApi = Pick<typeof apsModul, 'manifest' | 'modellGuid' | 'uebersetze' | 'ladeDerivat' | 'loescheObjekt' | 'loescheManifest'>
+export type ApsApi = Pick<typeof apsModul, 'manifest' | 'modellGuid' | 'uebersetze' | 'ladeDerivatStrom' | 'loescheObjekt' | 'loescheManifest'>
 
 export interface Abhaengigkeiten { speicher: JobSpeicher; ablage: Ablage; aps: ApsApi; konfig: ApsKonfig | null; jetzt: () => number }
 
@@ -238,9 +240,12 @@ export async function fuehreWeiter(job: NwdJob, d: Abhaengigkeiten): Promise<Nwd
     if (!gewonnen) return (await d.speicher.holen(job.id)) ?? job
     const datei = findeObjDatei(m)
     if (!datei) return fehlschlag(job, d, 'aps-fehler', `Im Ergebnis von Autodesk war keine Geometrie-Datei. ${FALLBACK_HINWEIS}`)
-    const daten = await d.aps.ladeDerivat(d.konfig, job.aps_urn, datei.derivatUrn, ERGEBNIS_MAX_BYTES)
+    const { strom } = await d.aps.ladeDerivatStrom(d.konfig, job.aps_urn, datei.derivatUrn)
+    const v = await verdichteObjStrom(strom, { maxBytes: ERGEBNIS_MAX_BYTES })
+    if (!v.dreieckeNachher) return fehlschlag(job, d, 'aps-fehler', `Im Ergebnis von Autodesk waren keine Flächen. ${FALLBACK_HINWEIS}`)
+    console.log(`[NWD] ${job.id}: ${v.dreieckeVorher} -> ${v.dreieckeNachher} Dreiecke`)
     const pfad = `nwd/${job.id}.obj`
-    await d.ablage.speichern(pfad, daten, 'text/plain')
+    await d.ablage.speichern(pfad, new TextEncoder().encode(v.obj).buffer as ArrayBuffer, 'text/plain')
     const fertig: Partial<NwdJob> = { status: 'fertig', ergebnis_pfad: pfad, ergebnis_format: 'obj', fortschritt: null, fertig_am: new Date(d.jetzt()).toISOString() }
     await d.speicher.aendern(job.id, fertig)
     const neu = { ...job, ...fertig } as NwdJob

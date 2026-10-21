@@ -161,6 +161,13 @@ export async function ladeDerivat(k: ApsKonfig, urn: string, derivatUrn: string,
   return daten
 }
 
+/** Wie `ladeDerivat`, aber als Datenstrom (für sehr große Ergebnisse, die nie komplett im Speicher liegen sollen). */
+export async function ladeDerivatStrom(k: ApsKonfig, urn: string, derivatUrn: string): Promise<{ strom: ReadableStream<Uint8Array>; bytes: number }> {
+  const res = await aps(`${APS_BASIS}/modelderivative/v2/designdata/${urn}/manifest/${encodeURIComponent(derivatUrn)}`, { headers: await auth(k) }, 'Ergebnis laden')
+  if (!res.body) throw new ApsFehler('aps-fehler', 'APS hat keine Daten geliefert.')
+  return { strom: res.body, bytes: Number(res.headers.get('content-length') || 0) }
+}
+
 export async function loescheManifest(k: ApsKonfig, urn: string): Promise<void> {
   const res = await fetch(`${APS_BASIS}/modelderivative/v2/designdata/${urn}/manifest`, { method: 'DELETE', headers: await auth(k) })
   if (!res.ok && res.status !== 404) await pruefe(res, 'Ergebnis löschen')

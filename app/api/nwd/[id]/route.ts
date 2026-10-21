@@ -10,7 +10,7 @@ import { ergebnisUrl } from '@/lib/nwd/zugang'
 //   POST   Upload ist bei Autodesk angekommen → Übersetzung starten
 //   GET    Stand abfragen (treibt den Ablauf voran; der Browser fragt alle 20 s)
 //   DELETE Ergebnisdatei und Reste aufräumen (nachdem der Browser sie gelesen hat)
-export const maxDuration = 60
+export const maxDuration = 300
 
 type Ctx = { params: Promise<{ id: string }> }
 
