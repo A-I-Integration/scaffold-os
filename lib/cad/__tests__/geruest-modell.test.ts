@@ -117,6 +117,62 @@ describe('Turmschaft in Modell mit Gerüst', () => {
   })
 })
 
+// Turm 9 × 7 × 31 m; an der +y-Wand ein Querbau 21 × 5 m mit Satteldach (Traufe 12 m, First 22 m, First läuft auf den Turm zu)
+const satteldachAnbau = (): number[][] => {
+  const t = box(-6, 7, 15, 12, 0, 12, false)
+  t.push(...quad([-6, 7, 12], [4.5, 7, 22], [4.5, 12, 22], [-6, 12, 12], 1))
+  t.push(...quad([15, 7, 12], [4.5, 7, 22], [4.5, 12, 22], [15, 12, 12], 1))
+  return t
+}
+
+describe('Angebautes Satteldach am Turm', () => {
+  for (const grad of [0, 25]) {
+    it(`erkennt den Querbau als zweiten Abschnitt ohne Gerüst (Drehung ${grad}°)`, () => {
+      const modell = drehe([...turm(), ...satteldachAnbau(), ...geruest(0, 0, 9, 7, 30)], grad)
+      const a = analysiereDreiecke(alsFloat(modell), { format: 'obj', einheit: 'm', oben: 'z', quelle: 'nwd' })!
+      expect(a.teile.length).toBe(2)
+      // Ob der Querbau vor oder hinter dem Turm steht, hängt von der Achsenrichtung des Modells ab
+      const t = a.teile.find((x) => x.typ === 'turm')!
+      const n = a.teile.find((x) => x.typ !== 'turm')!
+      expect(t).toBeDefined()
+      expect(t.laengeM).toBeCloseTo(7, 1) // Richtung, in der der Anbau anschließt
+      expect(t.tiefeM).toBeCloseTo(9, 1)
+      expect(n.dachForm).toBe('satteldach')
+      expect(n.tiefeM).toBeCloseTo(21, 0)
+      expect(n.hoeheM).toBeCloseTo(12, 1)
+      expect(n.dachHoeheM).toBeCloseTo(10, 1)
+      expect(a.ergebnis.nurTurmVorgabe).toBe(true)
+      expect(a.hinweise.some((h) => h.includes('Satteldach erkannt'))).toBe(true)
+    })
+  }
+  it('die Turmwand zum Anbau wird dem Dach folgend eingerüstet (Giebelform, an den Kanten tiefer als in der Mitte)', () => {
+    const a = analysiereDreiecke(alsFloat([...turm(), ...satteldachAnbau(), ...geruest(0, 0, 9, 7, 30)]), { format: 'obj', einheit: 'm', oben: 'z', quelle: 'nwd' })!
+    const sections = abschnitteAusTeilen(a, true)
+    const nachbarIdx = sections.findIndex((x) => x.geruest === false)
+    expect(nachbarIdx).toBeGreaterThanOrEqual(0)
+    const seite = nachbarIdx === 0 ? 'left' : 'right' // Turmwand, die an den Querbau grenzt
+    const b: BuildingParams = {
+      lengthM: a.ergebnis.laengeM, widthM: a.ergebnis.tiefeMaxM, heightM: a.ergebnis.gesamtHoeheM, eavesHeightM: a.ergebnis.gesamtHoeheM, roofHeightM: 0, roofForm: 'flachdach',
+      floors: 10, floorHeightsM: Array(10).fill(3.1), windowCount: 0, doorCount: 0, balconyCount: 0, overhangM: 0, setbackM: 0,
+      sides: ['front', 'back', 'left', 'right'], sections,
+    }
+    const m = generateCADModel(b, 'layher-allround')
+    const wand = m.fields.filter((f) => f.side === seite)
+    expect(wand.length).toBeGreaterThan(0)
+    const zs = [...new Set(wand.map((f) => Math.round(f.positionZ * 10) / 10))].sort((x, y) => x - y)
+    const tiefstKante = Math.min(...wand.filter((f) => f.positionZ === Math.min(...wand.map((g) => g.positionZ))).map((f) => f.positionY))
+    const mitteZ = (zs[0] + zs[zs.length - 1]) / 2
+    const mitte = wand.filter((f) => Math.abs(f.positionZ - mitteZ) < 1)
+    expect(Math.min(...mitte.map((f) => f.positionY))).toBeGreaterThanOrEqual(22 - 2.5)
+    expect(tiefstKante).toBeLessThan(Math.min(...mitte.map((f) => f.positionY)))
+    expect(tiefstKante).toBeGreaterThanOrEqual(17.7 - 2.5)
+  })
+  it('ohne Satteldach (nur flaches Dach am Anbau) bleibt es bei einem Abschnitt', () => {
+    const a = analysiereDreiecke(alsFloat([...turm(), ...anbau(), ...geruest(0, 0, 9, 7, 30)]), { format: 'obj', einheit: 'm', oben: 'z', quelle: 'nwd' })!
+    expect(a.teile.length).toBe(1)
+  })
+})
+
 // Echte Datei (Wuppertal, NWD → OBJ, zu groß fürs Repo): nur mit NWD_KIRCHTURM_OBJ=<Pfad> (OBJ, Z oben, Meter).
 // Sollwerte stammen aus der Vermessung der Datei: Schaft 9,14 × 9,18 m; Höhe 31,0 m über Ursprung
 // (31,2 m über der tiefsten Stelle des Modells, die 0,2 m unter dem Ursprung liegt).
@@ -125,10 +181,20 @@ describe.skipIf(!echt || !existsSync(echt))('Wuppertal Kirchturm (echte Datei)',
   it('liest einen Turmschaft statt Fragmenten', () => {
     const d = dreieckeAusObj(readFileSync(echt!, 'utf8'))
     const a = analysiereDreiecke(d, { format: 'obj', einheit: 'm', oben: 'z', quelle: 'nwd' })!
-    expect(a.teile.length).toBe(1)
-    expect(a.teile[0].laengeM).toBeCloseTo(9.14, 1)
-    expect(a.teile[0].tiefeM).toBeCloseTo(9.18, 1)
-    expect(a.teile[0].hoeheM).toBeGreaterThan(30.9)
-    expect(a.teile[0].hoeheM).toBeLessThan(31.5)
+    // Turm + angebautes Satteldach (Querbau an der Nordwand, nachgemessen: Traufe ca. 11,1 m, First ca. 22,6 m, Breite ca. 20,7 m)
+    expect(a.teile.length).toBe(2)
+    const turm = a.teile.find((x) => x.typ === 'turm')!
+    const bau = a.teile.find((x) => x.typ !== 'turm')!
+    expect(turm.laengeM).toBeCloseTo(9.18, 1) // Richtung zum Anbau
+    expect(turm.tiefeM).toBeCloseTo(9.14, 1)
+    expect(turm.hoeheM).toBeGreaterThan(30.9)
+    expect(turm.hoeheM).toBeLessThan(31.5)
+    expect(bau.dachForm).toBe('satteldach')
+    expect(bau.hoeheM).toBeGreaterThan(10.8)
+    expect(bau.hoeheM).toBeLessThan(11.5)
+    expect(bau.hoeheM + bau.dachHoeheM).toBeGreaterThan(22.3)
+    expect(bau.hoeheM + bau.dachHoeheM).toBeLessThan(23)
+    expect(bau.tiefeM).toBeGreaterThan(20)
+    expect(bau.tiefeM).toBeLessThan(22)
   })
 })
