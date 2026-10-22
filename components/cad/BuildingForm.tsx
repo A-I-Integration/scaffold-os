@@ -13,7 +13,7 @@ import { uploadVertragsdokument } from '@/lib/vertrag-upload-client'
 import { KIRCHE_STANDARD, kircheUebernehmen, pruefeKircheMasse, type KircheMasse } from '@/lib/cad/kirche-vorlage'
 import { quaderAusObj, quaderAusStl, masseAusQuader, dreieckeAusObj, dreieckeAusStl, draufsichtDreiecke, type Quader, type Einheit, type Achse } from '@/lib/cad/modell-import'
 import { erkenneGrundriss, FORM_NAME } from '@/lib/cad/grundriss-erkennung'
-import { analysiereDreiecke, abschnitteAusTeilen, abschnitteAusTeileListe, vorgabeAchseEinheit, type GebaeudeTeil } from '@/lib/cad/modell-analyse'
+import { analysiereDreiecke, nullpunktUeberTiefstem, abschnitteAusTeilen, abschnitteAusTeileListe, vorgabeAchseEinheit, type GebaeudeTeil } from '@/lib/cad/modell-analyse'
 import { umrissBox } from '@/lib/calculations/cad-umriss'
 import { leseDxfUmriss, mitHoehen, DXF_FORM_NAME, type DxfUmrissErgebnis } from '@/lib/cad/dxf-umriss'
 import type { IfcZusatz } from '@/lib/cad/ifc-einleser'
@@ -408,7 +408,9 @@ export default function BuildingForm({ building, systemId, onChange, onSystemCha
             )}
             <Lod2Panel building={building} onChange={onChange} onHinweis={setAnalyseHinweis} />
             {modellImport && (() => {
-              const m = masseAusQuader(modellImport.quader, modellImport.einheit, modellImport.oben)
+              const m0 = masseAusQuader(modellImport.quader, modellImport.einheit, modellImport.oben)
+              // Höhe ab Unterkante Bauwerk (Fußspindeln unter dem Gelände zählen nicht), wie bei den erkannten Gebäudeteilen
+              const m = { ...m0, heightM: Math.round((m0.heightM - nullpunktUeberTiefstem(modellImport.dreiecke, modellImport.einheit, modellImport.oben)) * 100) / 100 }
               const wahl = 'rounded-lg border border-black/10 bg-white px-2 py-1 text-[11px]'
               return (
                 <div className='rounded-lg border border-black/10 bg-white p-2 space-y-2 text-[11px] text-[#424245]'>
