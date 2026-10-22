@@ -518,7 +518,17 @@ export function generateScaffoldComponents(model: CADModel): ScaffoldComponent3D
     // Felder vor einer Tür (Durchgang) werden übersprungen – dort wird gegangen, nicht die Treppe gestellt.
     const frei = treppenFelder0.filter((f) => !f.durchgang)
     const kandidaten = frei.length > 0 ? frei : treppenFelder0
-    const feld = kandidaten[1] ?? kandidaten[0]
+    // Die Treppe soll möglichst bis ganz nach oben führen: unter den Kandidaten gewinnt das Feld mit den meisten
+    // durchgehenden Lagen; bei Gleichstand gilt die bisherige Vorliebe (zweites Feld, dann erstes, dann die übrigen).
+    const lagenAn = (f: ScaffoldField): number => {
+      let n = 0
+      while (n < levels.length && fields.some((g) => istTreppenFeld(g) && g.levelIndex === n && gleicherPlatz(g, f, 0.01))) n++
+      return n
+    }
+    const reihenfolge = [kandidaten[1], kandidaten[0], ...kandidaten.slice(2)].filter((f): f is ScaffoldField => !!f)
+    let feld = reihenfolge[0]
+    let bestLagen = lagenAn(feld)
+    for (const f of reihenfolge) { const n = lagenAn(f); if (n > bestLagen) { feld = f; bestLagen = n } }
     stairSpan = { a: feld, b: feld, lagen: 0 }
     if (treppenFelder0.some((f) => f.durchgang)) {
       const standard = treppenFelder0[1] ?? treppenFelder0[0]
@@ -551,6 +561,15 @@ export function generateScaffoldComponents(model: CADModel): ScaffoldComponent3D
   // Dachrand-Schutz nur bei Flachdach und einheitlicher Gebäudehöhe (keine Stufen)
   const dachrandSchutz = !!building.dachrandSchutz && building.roofForm === 'flachdach' && !hatGeradeAbschnitte(building)
 
+  // Durchgang über mehrere Felder: zwischen zwei benachbarten Durchgangsfeldern stehen weder Rahmen noch Fußplatten
+  // (sie stünden mitten im Türdurchgang); der Durchgangsrahmen-Binder jedes Feldes überbrückt die Lücke.
+  const entlang = (f: ScaffoldField): number => feldEntlangFassade(f.side, f.positionX, f.positionZ, building)
+  const dgNachbar = (f: ScaffoldField, richtung: -1 | 1): boolean => {
+    if (!f.durchgang || f.levelIndex !== 0) return false
+    const grenze = entlang(f) + richtung * f.lengthM / 2
+    return fields.some((g) => g.id !== f.id && g.durchgang && g.side === f.side && g.levelIndex === 0 && Math.abs(entlang(g) - richtung * g.lengthM / 2 - grenze) < 0.05)
+  }
+
   // === BASIS-BAUTEILE (pro Feld) ===
   fields.forEach((field) => {
     const { lengthM, widthM, levelIndex, side } = field
@@ -565,8 +584,9 @@ export function generateScaffoldComponents(model: CADModel): ScaffoldComponent3D
     const levelH = level.heightM
 
     // Rahmen links + rechts
-    components.push({ id: `frame-${field.id}-left`, type: 'frame', articleNumber: getFrameArticle(lengthM), name: `Rahmen ${lengthM}m`, position: [positionX - lengthM / 2 + 0.02, yBottom + levelH / 2, positionZ], rotation: [0, 0, 0], scale: [0.073, levelH, 0.04], rahmenBreiteM: widthM, color: colorFrame, fieldId: field.id, levelId: level.id })
-    components.push({ id: `frame-${field.id}-right`, type: 'frame', articleNumber: getFrameArticle(lengthM), name: `Rahmen ${lengthM}m`, position: [positionX + lengthM / 2 - 0.02, yBottom + levelH / 2, positionZ], rotation: [0, 0, 0], scale: [0.073, levelH, 0.04], rahmenBreiteM: widthM, color: colorFrame, fieldId: field.id, levelId: level.id })
+    const dgLinks = dgNachbar(field, -1), dgRechts = dgNachbar(field, 1)
+    if (!dgLinks) components.push({ id: `frame-${field.id}-left`, type: 'frame', articleNumber: getFrameArticle(lengthM), name: `Rahmen ${lengthM}m`, position: [positionX - lengthM / 2 + 0.02, yBottom + levelH / 2, positionZ], rotation: [0, 0, 0], scale: [0.073, levelH, 0.04], rahmenBreiteM: widthM, color: colorFrame, fieldId: field.id, levelId: level.id })
+    if (!dgRechts) components.push({ id: `frame-${field.id}-right`, type: 'frame', articleNumber: getFrameArticle(lengthM), name: `Rahmen ${lengthM}m`, position: [positionX + lengthM / 2 - 0.02, yBottom + levelH / 2, positionZ], rotation: [0, 0, 0], scale: [0.073, levelH, 0.04], rahmenBreiteM: widthM, color: colorFrame, fieldId: field.id, levelId: level.id })
 
     // Querriegel
     if (!(field.durchgang && levelIndex === 0)) components.push({ id: `rail-${field.id}-bottom`, type: 'frame', articleNumber: 'QR-001', name: 'Querriegel', position: [positionX, yBottom + 0.05, positionZ], rotation: [0, 0, 0], scale: [lengthM, 0.04, 0.04], color: colorFrame, fieldId: field.id, levelId: level.id })
@@ -602,11 +622,11 @@ export function generateScaffoldComponents(model: CADModel): ScaffoldComponent3D
 
     // Fußplatten (nur unterste Lage)
     if (levelIndex === 0) {
-      components.push({ id: `foot-${field.id}-left`, type: 'footplate', articleNumber: 'FP-001', name: 'Fußplatte', position: [positionX - lengthM / 2 + 0.02, yBottom - 0.02, positionZ], rotation: [0, 0, 0], scale: [0.15, 0.04, 0.15], color: colorFoot, fieldId: field.id, levelId: level.id })
-      components.push({ id: `foot-${field.id}-right`, type: 'footplate', articleNumber: 'FP-001', name: 'Fußplatte', position: [positionX + lengthM / 2 - 0.02, yBottom - 0.02, positionZ], rotation: [0, 0, 0], scale: [0.15, 0.04, 0.15], color: colorFoot, fieldId: field.id, levelId: level.id })
+      if (!dgLinks) components.push({ id: `foot-${field.id}-left`, type: 'footplate', articleNumber: 'FP-001', name: 'Fußplatte', position: [positionX - lengthM / 2 + 0.02, yBottom - 0.02, positionZ], rotation: [0, 0, 0], scale: [0.15, 0.04, 0.15], color: colorFoot, fieldId: field.id, levelId: level.id })
+      if (!dgRechts) components.push({ id: `foot-${field.id}-right`, type: 'footplate', articleNumber: 'FP-001', name: 'Fußplatte', position: [positionX + lengthM / 2 - 0.02, yBottom - 0.02, positionZ], rotation: [0, 0, 0], scale: [0.15, 0.04, 0.15], color: colorFoot, fieldId: field.id, levelId: level.id })
       // Außenstützen des Rahmens (Rahmenbreite abzüglich Rand): eigene Fußplatten
-      components.push({ id: `foot-${field.id}-left-aussen`, type: 'footplate', articleNumber: 'FP-001', name: 'Fußplatte', position: [positionX - lengthM / 2 + 0.02, yBottom - 0.02, positionZ + widthM - 0.075], rotation: [0, 0, 0], scale: [0.15, 0.04, 0.15], color: colorFoot, fieldId: field.id, levelId: level.id })
-      components.push({ id: `foot-${field.id}-right-aussen`, type: 'footplate', articleNumber: 'FP-001', name: 'Fußplatte', position: [positionX + lengthM / 2 - 0.02, yBottom - 0.02, positionZ + widthM - 0.075], rotation: [0, 0, 0], scale: [0.15, 0.04, 0.15], color: colorFoot, fieldId: field.id, levelId: level.id })
+      if (!dgLinks) components.push({ id: `foot-${field.id}-left-aussen`, type: 'footplate', articleNumber: 'FP-001', name: 'Fußplatte', position: [positionX - lengthM / 2 + 0.02, yBottom - 0.02, positionZ + widthM - 0.075], rotation: [0, 0, 0], scale: [0.15, 0.04, 0.15], color: colorFoot, fieldId: field.id, levelId: level.id })
+      if (!dgRechts) components.push({ id: `foot-${field.id}-right-aussen`, type: 'footplate', articleNumber: 'FP-001', name: 'Fußplatte', position: [positionX + lengthM / 2 - 0.02, yBottom - 0.02, positionZ + widthM - 0.075], rotation: [0, 0, 0], scale: [0.15, 0.04, 0.15], color: colorFoot, fieldId: field.id, levelId: level.id })
     }
 
     // Kupplungen
@@ -1376,6 +1396,12 @@ export function generateCADModel(
         const a = feldEntlangFassade(f.side, f.positionX, f.positionZ, building)
         if (ueberdeckt(t.offsetAlongM - t.widthM / 2, t.offsetAlongM + t.widthM / 2, a, f.lengthM)) { f.durchgang = true; betroffeneTueren.add(t.id) }
       }
+    }
+    const lage0 = levels.find((l) => l.index === 0)
+    if (lage0) {
+      const frei = lage0.heightM - 0.45 // Lagenhöhe abzüglich Durchgangsrahmen-Binder (im Modell 0,40 m hoch, darunter ca. 0,05 m Abstand)
+      const zuHoch = tueren.filter((t) => betroffeneTueren.has(t.id) && t.heightM > frei + 0.01)
+      if (zuHoch.length > 0) warnings.push({ type: 'warning', code: 'TUER_ZU_HOCH', message: `${zuHoch.length} Tür(en) sind höher als die freie Durchgangshöhe unter der ersten Lage (im Modell ca. ${frei.toFixed(2).replace('.', ',')} m): der Belag der ersten Lage läge vor dem oberen Teil der Tür. Bitte Türhöhe prüfen oder die Durchgangslösung (Überbrückung, höherer Durchgangsrahmen) mit der Zulassung abstimmen.` })
     }
     if (betroffeneTueren.size > 0) {
       const nFelder = fields.filter((f) => f.durchgang).length
