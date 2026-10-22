@@ -62,6 +62,12 @@ export interface CadTuer {
   offsetAlongM: number
   widthM: number
   heightM: number
+  /** Aufschlag der Tür: nach innen (Standard) oder nach außen ins Gerüst */
+  aufschlag?: 'innen' | 'aussen'
+  /** Anzahl Türflügel (Standard 1); je Flügel gilt Türbreite ÷ Flügel */
+  fluegel?: 1 | 2
+  /** Einflügelig, Aufschlag nach außen: Flügel klappt beim Öffnen bis zur Wand zurück – in Richtung der kleineren (minus, Standard) oder größeren (plus) Koordinate ab Fassadenmitte */
+  anschlag?: 'minus' | 'plus'
 }
 
 export interface AufzugOptionen {
@@ -240,6 +246,8 @@ export interface ScaffoldField {
   isCorner?: boolean
   /** unterste Lage vor einer Tür: Durchgang (siehe GeruestOptionen.tuerenFreihalten) */
   durchgang?: boolean
+  /** Durchgang vor einer nach außen aufgehenden Tür: Belag, Geländer und Bordbrett der untersten Lage entfallen */
+  durchgangOffen?: boolean
   // Nur Umriss-Modus: Nummer der Gebäudekante und Drehwinkel des Feldes um die Hochachse.
   kante?: number
   yaw?: number
@@ -981,6 +989,12 @@ export function generateScaffoldComponents(model: CADModel): ScaffoldComponent3D
     }
   }
 
+  // Durchgang vor nach außen aufgehender Tür: Belag, Geländer und Bordbrett der untersten Lage entfallen (Freiraum für den Türflügel)
+  const offeneFelder = new Set(fields.filter((f) => f.durchgangOffen && f.levelIndex === 0).map((f) => f.id))
+  if (offeneFelder.size > 0) {
+    return components.filter((c) => !(c.fieldId && offeneFelder.has(c.fieldId) && (c.type === 'deck' || c.type === 'railing' || c.type === 'board')))
+  }
+
   return components
 }
 
@@ -1390,12 +1404,27 @@ export function generateCADModel(
   if (opt?.tuerenFreihalten !== false && !(building.umriss && building.umriss.length >= 3)) {
     const tueren = generateBuildingFeatures(building).filter((f) => f.type === 'door')
     const betroffeneTueren = new Set<string>()
+    const aussenTueren = new Set<string>()
     for (const t of tueren) {
+      // Aufschlag nach außen: der Flügel schlägt ins Gerüst; Freiraum = Türbreite + Flügelweite dort, wohin der Flügel zurückklappt (Annahme: bis 180°)
+      const spec = building.tueren?.find((x) => `door-${x.id}` === t.id)
+      const aussen = spec?.aufschlag === 'aussen'
+      const flWeite = aussen ? t.widthM / (spec?.fluegel === 2 ? 2 : 1) : 0
+      const extraMinus = aussen ? (spec?.fluegel === 2 || (spec?.anschlag ?? 'minus') === 'minus' ? flWeite : 0) : 0
+      const extraPlus = aussen ? (spec?.fluegel === 2 || spec?.anschlag === 'plus' ? flWeite : 0) : 0
       for (const f of fields) {
         if (f.levelIndex !== 0 || f.side !== t.side) continue
         const a = feldEntlangFassade(f.side, f.positionX, f.positionZ, building)
-        if (ueberdeckt(t.offsetAlongM - t.widthM / 2, t.offsetAlongM + t.widthM / 2, a, f.lengthM)) { f.durchgang = true; betroffeneTueren.add(t.id) }
+        if (ueberdeckt(t.offsetAlongM - t.widthM / 2 - extraMinus, t.offsetAlongM + t.widthM / 2 + extraPlus, a, f.lengthM)) {
+          f.durchgang = true
+          if (aussen) { f.durchgangOffen = true; aussenTueren.add(t.id) }
+          betroffeneTueren.add(t.id)
+        }
       }
+    }
+    if (aussenTueren.size > 0) {
+      const nOffen = fields.filter((f) => f.durchgangOffen).length
+      warnings.push({ type: 'info', code: 'TUER_AUFSCHLAG', message: `${aussenTueren.size} Tür(en) öffnen nach außen: in ${nOffen} Feld(ern) der untersten Lage entfallen Belag, Geländer und Bordbrett, damit der Flügel aufschlagen kann (Freiraum = Türbreite plus Flügelweite auf der Anschlagseite; Annahme: der Flügel schlägt bis zur Wand zurück). Die Lagen darüber stehen auf den Durchgangsrahmen-Bindern. Seitliche Absicherung an den Enden der Öffnung, Zugang und Statik bitte prüfen.` })
     }
     const lage0 = levels.find((l) => l.index === 0)
     if (lage0) {
