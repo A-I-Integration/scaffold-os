@@ -12,6 +12,7 @@ import { GERUEST_SYSTEME } from '@/lib/calculations/geruest-systeme'
 import { uploadVertragsdokument } from '@/lib/vertrag-upload-client'
 import { KIRCHE_STANDARD, kircheUebernehmen, pruefeKircheMasse, type KircheMasse } from '@/lib/cad/kirche-vorlage'
 import { quaderAusObj, quaderAusStl, masseAusQuader, dreieckeAusObj, dreieckeAusStl, draufsichtDreiecke, obenAusObjKopf, type Quader, type Einheit, type Achse, EINHEIT_FAKTOR } from '@/lib/cad/modell-import'
+import { merkeModell, ladeGemerktesModell, vergissModell, nwdZwischenspeicher } from '@/lib/cad/modell-speicher'
 import { erkenneGrundriss, FORM_NAME } from '@/lib/cad/grundriss-erkennung'
 import { analysiereDreiecke, schaetzeEinheit, spannweiten, nullpunktUeberTiefstem, abschnitteAusTeilen, abschnitteAusTeileListe, vorgabeAchseEinheit, type GebaeudeTeil } from '@/lib/cad/modell-analyse'
 import { umrissBox } from '@/lib/calculations/cad-umriss'
@@ -40,6 +41,20 @@ export default function BuildingForm({ building, systemId, onChange, onSystemCha
   const [kirche, setKirche] = useState<KircheMasse>(KIRCHE_STANDARD)
   // 3D-Modell (OBJ/STL, z. B. aus SketchUp): Außenmaße im Browser lesen, Einheit/„oben“ wählt die Person
   const [modellImport, setModellImport] = useState<{ name: string; format: 'obj' | 'stl'; quader: Quader; dreiecke: Float32Array; einheit: Einheit; oben: Achse; einheitGeschaetzt: boolean; quelle?: 'nwd'; obenAusKopf?: boolean } | null>(null)
+  // Das hochgeladene Modell überlebt Neuladen und Programmwechsel (IndexedDB im Browser). Weg ist es nur nach
+  // „Verwerfen“, „Neu starten“, Kunden-Zuordnung oder einem neuen Upload.
+  useEffect(() => {
+    let abgebrochen = false
+    ladeGemerktesModell().then((m) => {
+      if (abgebrochen || !m) return
+      setModellImport((aktuell) => aktuell ?? (m as unknown as NonNullable<typeof aktuell>))
+      setAnalyseHinweis((h) => h ?? `Dein zuletzt hochgeladenes 3D-Modell „${m.name}“ wurde wiederhergestellt. Mit „Verwerfen“ entfernst du es.`)
+    }).catch(() => undefined)
+    return () => { abgebrochen = true }
+  }, [])
+  useEffect(() => {
+    if (modellImport) void merkeModell(modellImport)
+  }, [modellImport])
   // DXF-Zeichnung: Gebäudeumriss aus den Linien gelesen (lib/cad/dxf-umriss.ts); Höhen trägt die Person ein
   // Dasselbe Feld trägt auch den IFC-Import (`ifc` gesetzt): gleiche Formerkennung, gleiche Teile, gleicher Prüfschritt
   const [dxfImport, setDxfImport] = useState<{ name: string; inhalt: string; ergebnis: DxfUmrissErgebnis; hoehen: string[]; gezeichnet?: boolean; ifc?: IfcZusatz } | null>(null)
@@ -88,6 +103,7 @@ export default function BuildingForm({ building, systemId, onChange, onSystemCha
   async function handlePlanUpload(file: File) {
     setAnalyseHinweis(null);
     setModellImport(null);
+    void vergissModell(); // neuer Upload ersetzt das gemerkte Modell
     const ext = '.' + (file.name.split('.').pop() || '').toLowerCase();
     if (ext === '.obj' || ext === '.stl') {
       if (file.size > 100 * 1024 * 1024) { setAnalyseHinweis('❌ Datei zu groß (max. 100 MB). Bitte das Modell vereinfachen oder nur das Gebäude exportieren.'); return; }
@@ -113,7 +129,7 @@ export default function BuildingForm({ building, systemId, onChange, onSystemCha
       setNwdFortschritt({ phase: 'upload', anteil: 0, text: 'Upload zu Autodesk wird vorbereitet …' })
       try {
         const { konvertiereNwd } = await import('@/lib/cad/nwd-client')
-        const r = await konvertiereNwd(file, { onFortschritt: (phase, anteil, text) => setNwdFortschritt({ phase, anteil, text }) })
+        const r = await konvertiereNwd(file, { zwischenspeicher: nwdZwischenspeicher(), onFortschritt: (phase, anteil, text) => setNwdFortschritt({ phase, anteil, text }) })
         if (r.ok) {
           const { spannweiten } = await import('@/lib/cad/modell-analyse')
           const [x, y, z] = spannweiten(r.dreiecke)
@@ -121,6 +137,7 @@ export default function BuildingForm({ building, systemId, onChange, onSystemCha
           // OBJ aus der Autodesk-Umwandlung behält (nach Annahme) die Koordinaten von Navisworks: Z oben (Gegenprobe am Kirchturm: Z-Spanne 33 m passt zum Turmschaft, Y-Spanne 17 m nicht)
           const vorgabe = r.format === 'gltf' ? { oben: 'y' as Achse, einheit: 'm' as Einheit } : { oben: 'z' as Achse, einheit: vorgabeAchseEinheit(r.dreiecke, 'obj').einheit }
           setModellImport({ name: file.name, format: 'obj', quader: { groesse: { x, y, z }, punkte: r.dreiecke.length / 3 }, dreiecke: r.dreiecke, einheit: vorgabe.einheit, oben: vorgabe.oben, einheitGeschaetzt: r.format !== 'gltf', quelle: 'nwd' })
+          if (r.ausZwischenspeicher) setAnalyseHinweis('Diese NWD-Datei war schon übersetzt – das Ergebnis kommt aus dem Zwischenspeicher, es wurde kein neuer Autodesk-Auftrag gestartet.')
         } else setAnalyseHinweis('❌ ' + r.meldung)
       } catch (err) {
         setAnalyseHinweis('❌ Die NWD-Datei konnte nicht umgewandelt werden: ' + ((err as Error)?.message || 'Fehler') + ' Ein Export als IFC/OBJ ist schneller.')
@@ -484,7 +501,7 @@ export default function BuildingForm({ building, systemId, onChange, onSystemCha
                           setTimeout(() => URL.revokeObjectURL(a.href), 10000)
                         }}>Modell als OBJ speichern</button>
                     )}
-                    <button type='button' className='rounded-lg bg-black/10 px-3 py-1' onClick={() => setModellImport(null)}>Verwerfen</button>
+                    <button type='button' className='rounded-lg bg-black/10 px-3 py-1' onClick={() => { setModellImport(null); void vergissModell() }}>Verwerfen</button>
                   </div>
                 </div>
               )
