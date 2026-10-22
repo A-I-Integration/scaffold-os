@@ -34,6 +34,9 @@ export interface BuildingSection {
   versatzM?: number
 }
 
+/** Abstand Unterkante Durchgangsrahmen-Binder → Oberkante der Lage (m): Binder im Modell 0,40 m hoch, 0,05 m Abstand. */
+export const BINDER_UNTERKANTE_M = 0.45
+
 /** Artikelnummer des Durchgangsrahmen-Binders vor Türen (kein Fantasiepreis: Preis und Gewicht kommen aus dem Lager der Firma). */
 export const DURCHGANG_ARTIKELNUMMER = 'DR-001'
 
@@ -246,8 +249,12 @@ export interface ScaffoldField {
   isCorner?: boolean
   /** unterste Lage vor einer Tür: Durchgang (siehe GeruestOptionen.tuerenFreihalten) */
   durchgang?: boolean
-  /** Durchgang vor einer nach außen aufgehenden Tür: Belag, Geländer und Bordbrett der untersten Lage entfallen */
+  /** Durchgang: Belag, Geländer und Bordbrett dieser Lage entfallen (die Lage liegt unterhalb des Binders über der Tür) */
   durchgangOffen?: boolean
+  /** Durchgang: oberste freigehaltene Lage – hier liegt der Durchgangsrahmen-Binder, der Belag darüber bleibt */
+  durchgangOben?: boolean
+  /** Randfeld neben einer Türöffnung: Rahmen am Rand der Öffnung doppelt und zusätzliche Diagonale (minus/plus = welches Feldende an der Öffnung liegt) */
+  verstaerkt?: { minus?: boolean; plus?: boolean }
   // Nur Umriss-Modus: Nummer der Gebäudekante und Drehwinkel des Feldes um die Hochachse.
   kante?: number
   yaw?: number
@@ -573,9 +580,9 @@ export function generateScaffoldComponents(model: CADModel): ScaffoldComponent3D
   // (sie stünden mitten im Türdurchgang); der Durchgangsrahmen-Binder jedes Feldes überbrückt die Lücke.
   const entlang = (f: ScaffoldField): number => feldEntlangFassade(f.side, f.positionX, f.positionZ, building)
   const dgNachbar = (f: ScaffoldField, richtung: -1 | 1): boolean => {
-    if (!f.durchgang || f.levelIndex !== 0) return false
+    if (!f.durchgang) return false
     const grenze = entlang(f) + richtung * f.lengthM / 2
-    return fields.some((g) => g.id !== f.id && g.durchgang && g.side === f.side && g.levelIndex === 0 && Math.abs(entlang(g) - richtung * g.lengthM / 2 - grenze) < 0.05)
+    return fields.some((g) => g.id !== f.id && g.durchgang && g.side === f.side && g.levelIndex === f.levelIndex && Math.abs(entlang(g) - richtung * g.lengthM / 2 - grenze) < 0.05)
   }
 
   // === BASIS-BAUTEILE (pro Feld) ===
@@ -596,9 +603,22 @@ export function generateScaffoldComponents(model: CADModel): ScaffoldComponent3D
     if (!dgLinks) components.push({ id: `frame-${field.id}-left`, type: 'frame', articleNumber: getFrameArticle(lengthM), name: `Rahmen ${lengthM}m`, position: [positionX - lengthM / 2 + 0.02, yBottom + levelH / 2, positionZ], rotation: [0, 0, 0], scale: [0.073, levelH, 0.04], rahmenBreiteM: widthM, color: colorFrame, fieldId: field.id, levelId: level.id })
     if (!dgRechts) components.push({ id: `frame-${field.id}-right`, type: 'frame', articleNumber: getFrameArticle(lengthM), name: `Rahmen ${lengthM}m`, position: [positionX + lengthM / 2 - 0.02, yBottom + levelH / 2, positionZ], rotation: [0, 0, 0], scale: [0.073, levelH, 0.04], rahmenBreiteM: widthM, color: colorFrame, fieldId: field.id, levelId: level.id })
 
+    // Randfeld neben einer Türöffnung: zweiter Rahmen am Rand der Öffnung und zusätzliche Diagonale
+    if (field.verstaerkt) {
+      const rahmenArt = getFrameArticle(lengthM)
+      const verst = (seite: 'minus' | 'plus') => {
+        const vorz = seite === 'minus' ? -1 : 1
+        components.push({ id: `frame-${field.id}-verst-${seite}`, type: 'frame', articleNumber: rahmenArt, name: `Verstärkungsrahmen Tür ${lengthM}m`, position: [positionX + vorz * (lengthM / 2 - 0.16), yBottom + levelH / 2, positionZ], rotation: [0, 0, 0], scale: [0.073, levelH, 0.04], rahmenBreiteM: widthM, color: colorFrame, fieldId: field.id, levelId: level.id })
+      }
+      if (field.verstaerkt.minus) verst('minus')
+      if (field.verstaerkt.plus) verst('plus')
+      const diagLenV = Math.sqrt(lengthM * lengthM + levelH * levelH)
+      components.push({ id: `diagonal-${field.id}-verst`, type: 'diagonal', articleNumber: getDiagonalArticle(lengthM), name: `Verstärkungsdiagonale Tür ${lengthM}m`, position: [positionX, yBottom + levelH / 2, positionZ], rotation: [0, 0, -Math.atan2(levelH, lengthM)], scale: [0.03, diagLenV, 0.03], color: colorDiagonal, fieldId: field.id, levelId: level.id })
+    }
+
     // Querriegel
-    if (!(field.durchgang && levelIndex === 0)) components.push({ id: `rail-${field.id}-bottom`, type: 'frame', articleNumber: 'QR-001', name: 'Querriegel', position: [positionX, yBottom + 0.05, positionZ], rotation: [0, 0, 0], scale: [lengthM, 0.04, 0.04], color: colorFrame, fieldId: field.id, levelId: level.id })
-    components.push({ id: `rail-${field.id}-top`, type: 'frame', articleNumber: 'QR-001', name: 'Querriegel', position: [positionX, yTop - 0.05, positionZ], rotation: [0, 0, 0], scale: [lengthM, 0.04, 0.04], color: colorFrame, fieldId: field.id, levelId: level.id })
+    if (!field.durchgang) components.push({ id: `rail-${field.id}-bottom`, type: 'frame', articleNumber: 'QR-001', name: 'Querriegel', position: [positionX, yBottom + 0.05, positionZ], rotation: [0, 0, 0], scale: [lengthM, 0.04, 0.04], color: colorFrame, fieldId: field.id, levelId: level.id })
+    if (!(field.durchgang && !field.durchgangOben)) components.push({ id: `rail-${field.id}-top`, type: 'frame', articleNumber: 'QR-001', name: 'Querriegel', position: [positionX, yTop - 0.05, positionZ], rotation: [0, 0, 0], scale: [lengthM, 0.04, 0.04], color: colorFrame, fieldId: field.id, levelId: level.id })
 
     // Arbeitsbühne – im Treppenfeld entfällt der Belag ganz (der Lauf nimmt das Feld ein,
     // Austritt auf den Belag des Nachbarfelds).
@@ -618,12 +638,12 @@ export function generateScaffoldComponents(model: CADModel): ScaffoldComponent3D
     }
 
     // Durchgang vor einer Tür: Durchgangsrahmen-Binder trägt die Lage darüber (Preis/Gewicht aus dem Lager)
-    if (field.durchgang && levelIndex === 0) {
+    if (field.durchgang && field.durchgangOben) {
       components.push({ id: `durchgang-${field.id}`, type: 'frame', articleNumber: DURCHGANG_ARTIKELNUMMER, name: 'Durchgangsrahmen-Binder (Tür)', position: [positionX, yTop - 0.25, positionZ], rotation: [0, 0, 0], scale: [lengthM, 0.4, 0.06], color: '#0ea5e9', fieldId: field.id, levelId: level.id })
     }
 
     // Diagonalen (alternierend) – im Durchgang vor einer Tür entfällt die Diagonale
-    if (levelIndex % 2 === 0 && !(field.durchgang && levelIndex === 0)) {
+    if (levelIndex % 2 === 0 && !field.durchgang) {
       const diagLen = Math.sqrt(lengthM * lengthM + levelH * levelH)
       components.push({ id: `diagonal-${field.id}`, type: 'diagonal', articleNumber: getDiagonalArticle(lengthM), name: `Diagonale ${lengthM}m`, position: [positionX, yBottom + levelH / 2, positionZ], rotation: [0, 0, Math.atan2(levelH, lengthM)], scale: [0.03, diagLen, 0.03], color: colorDiagonal, fieldId: field.id, levelId: level.id })
     }
@@ -638,8 +658,8 @@ export function generateScaffoldComponents(model: CADModel): ScaffoldComponent3D
     }
 
     // Kupplungen
-    components.push({ id: `coupling-${field.id}-1`, type: 'coupling', articleNumber: 'KU-001', name: 'Kupplung', position: [positionX - lengthM / 2 + 0.02, yTop, positionZ], rotation: [0, 0, 0], scale: [0.05, 0.05, 0.05], color: colorFrame, fieldId: field.id, levelId: level.id })
-    components.push({ id: `coupling-${field.id}-2`, type: 'coupling', articleNumber: 'KU-001', name: 'Kupplung', position: [positionX + lengthM / 2 - 0.02, yTop, positionZ], rotation: [0, 0, 0], scale: [0.05, 0.05, 0.05], color: colorFrame, fieldId: field.id, levelId: level.id })
+    if (!dgLinks) components.push({ id: `coupling-${field.id}-1`, type: 'coupling', articleNumber: 'KU-001', name: 'Kupplung', position: [positionX - lengthM / 2 + 0.02, yTop, positionZ], rotation: [0, 0, 0], scale: [0.05, 0.05, 0.05], color: colorFrame, fieldId: field.id, levelId: level.id })
+    if (!dgRechts) components.push({ id: `coupling-${field.id}-2`, type: 'coupling', articleNumber: 'KU-001', name: 'Kupplung', position: [positionX + lengthM / 2 - 0.02, yTop, positionZ], rotation: [0, 0, 0], scale: [0.05, 0.05, 0.05], color: colorFrame, fieldId: field.id, levelId: level.id })
 
     // Bordbretter
     components.push({ id: `board-${field.id}`, type: 'board', articleNumber: 'BB-001', name: `Bordbrett ${lengthM}m`, position: [positionX, yTop + 0.105, positionZ + widthM - 0.06], rotation: [0, 0, 0], scale: [lengthM, 0.19, 0.02], color: colorBoard, fieldId: field.id, levelId: level.id })
@@ -990,9 +1010,17 @@ export function generateScaffoldComponents(model: CADModel): ScaffoldComponent3D
   }
 
   // Durchgang vor nach außen aufgehender Tür: Belag, Geländer und Bordbrett der untersten Lage entfallen (Freiraum für den Türflügel)
-  const offeneFelder = new Set(fields.filter((f) => f.durchgangOffen && f.levelIndex === 0).map((f) => f.id))
-  if (offeneFelder.size > 0) {
-    return components.filter((c) => !(c.fieldId && offeneFelder.has(c.fieldId) && (c.type === 'deck' || c.type === 'railing' || c.type === 'board')))
+  // In der Türöffnung dürfen keine Stangen, Netze oder Planen stehen: in allen freigehaltenen Lagen entfallen Netze, Planen
+  // und Leitern, unterhalb des Binders zusätzlich Belag, Geländer und Bordbrett.
+  const durchgangsFelder = new Set(fields.filter((f) => f.durchgang).map((f) => f.id))
+  const offeneFelder = new Set(fields.filter((f) => f.durchgangOffen).map((f) => f.id))
+  if (durchgangsFelder.size > 0) {
+    return components.filter((c) => {
+      if (!c.fieldId) return true
+      if (durchgangsFelder.has(c.fieldId) && (c.type === 'net' || c.type === 'safety_net' || c.type === 'sheeting' || c.type === 'ladder')) return false
+      if (offeneFelder.has(c.fieldId) && (c.type === 'deck' || c.type === 'railing' || c.type === 'board')) return false
+      return true
+    })
   }
 
   return components
@@ -1341,13 +1369,16 @@ export function generateCADModel(
 
         let xPos = 0
         let zPos = 0
+        // Feldmitte aus der Summe der vorherigen Feldlängen (das Restfeld ist kürzer als die übrigen; mit fieldIndex × Feldlänge
+        // lag das letzte Feld versetzt und überlappte das vorletzte)
+        const vorherLaenge = useLengthDiv.distribution.slice(0, fieldIndex).reduce((x, y) => x + y, 0)
 
         if (side === 'front' || side === 'back') {
-          xPos = fieldIndex * fieldLength - totalLength / 2 + fieldLength / 2
+          xPos = vorherLaenge - totalLength / 2 + fieldLength / 2
           zPos = zOffset
         } else {
           xPos = xOffset
-          zPos = fieldIndex * fieldLength - totalLength / 2 + fieldLength / 2 - (building.widthM || 0) / 2 - 0.5
+          zPos = vorherLaenge - totalLength / 2 + fieldLength / 2 - (building.widthM || 0) / 2 - 0.5
         }
 
         if (istInLuecke(side, side === 'front' || side === 'back' ? xPos : zPos + (building.widthM || 0) / 2 + 0.5, fieldLength)) { merkeLuecke(side, levelData.index, fieldLength, building.heightM); return }
@@ -1400,11 +1431,16 @@ export function generateCADModel(
     }
   }
 
-  // Türen freihalten: Felder der untersten Lage vor einer Tür werden zum Durchgang.
+  // Türen freihalten: In der Türöffnung darf keine Stange stehen. Alle Felder vor der Tür (bei Aufschlag nach außen
+  // inklusive Flügelweite) werden über so viele Lagen freigehalten, dass der Durchgangsrahmen-Binder oberhalb der Tür liegt;
+  // die Randfelder links und rechts der Öffnung werden verstärkt (zweiter Rahmen am Rand, zusätzliche Diagonale).
   if (opt?.tuerenFreihalten !== false && !(building.umriss && building.umriss.length >= 3)) {
     const tueren = generateBuildingFeatures(building).filter((f) => f.type === 'door')
     const betroffeneTueren = new Set<string>()
     const aussenTueren = new Set<string>()
+    const lagenTop = (i: number): number | undefined => levels.find((l) => l.index === i)?.topY
+    const lagenAnzahl = levels.reduce((m, l) => Math.max(m, l.index + 1), 0)
+    let maxK = 0
     for (const t of tueren) {
       // Aufschlag nach außen: der Flügel schlägt ins Gerüst; Freiraum = Türbreite + Flügelweite dort, wohin der Flügel zurückklappt (Annahme: bis 180°)
       const spec = building.tueren?.find((x) => `door-${x.id}` === t.id)
@@ -1412,29 +1448,43 @@ export function generateCADModel(
       const flWeite = aussen ? t.widthM / (spec?.fluegel === 2 ? 2 : 1) : 0
       const extraMinus = aussen ? (spec?.fluegel === 2 || (spec?.anschlag ?? 'minus') === 'minus' ? flWeite : 0) : 0
       const extraPlus = aussen ? (spec?.fluegel === 2 || spec?.anschlag === 'plus' ? flWeite : 0) : 0
+      // Anzahl freizuhaltender Lagen: erste Lage, deren Oberkante minus Binder über der Türoberkante liegt
+      let K = 1
+      while (K < lagenAnzahl && (lagenTop(K - 1) ?? Infinity) - BINDER_UNTERKANTE_M < t.heightM) K++
+      maxK = Math.max(maxK, K)
       for (const f of fields) {
-        if (f.levelIndex !== 0 || f.side !== t.side) continue
+        if (f.side !== t.side || f.levelIndex >= K) continue
         const a = feldEntlangFassade(f.side, f.positionX, f.positionZ, building)
         if (ueberdeckt(t.offsetAlongM - t.widthM / 2 - extraMinus, t.offsetAlongM + t.widthM / 2 + extraPlus, a, f.lengthM)) {
           f.durchgang = true
-          if (aussen) { f.durchgangOffen = true; aussenTueren.add(t.id) }
+          if (f.levelIndex === K - 1) f.durchgangOben = true
+          else f.durchgangOffen = true
+          if (aussen) aussenTueren.add(t.id)
           betroffeneTueren.add(t.id)
         }
       }
     }
-    if (aussenTueren.size > 0) {
-      const nOffen = fields.filter((f) => f.durchgangOffen).length
-      warnings.push({ type: 'info', code: 'TUER_AUFSCHLAG', message: `${aussenTueren.size} Tür(en) öffnen nach außen: in ${nOffen} Feld(ern) der untersten Lage entfallen Belag, Geländer und Bordbrett, damit der Flügel aufschlagen kann (Freiraum = Türbreite plus Flügelweite auf der Anschlagseite; Annahme: der Flügel schlägt bis zur Wand zurück). Die Lagen darüber stehen auf den Durchgangsrahmen-Bindern. Seitliche Absicherung an den Enden der Öffnung, Zugang und Statik bitte prüfen.` })
-    }
-    const lage0 = levels.find((l) => l.index === 0)
-    if (lage0) {
-      const frei = lage0.heightM - 0.45 // Lagenhöhe abzüglich Durchgangsrahmen-Binder (im Modell 0,40 m hoch, darunter ca. 0,05 m Abstand)
-      const zuHoch = tueren.filter((t) => betroffeneTueren.has(t.id) && t.heightM > frei + 0.01)
-      if (zuHoch.length > 0) warnings.push({ type: 'warning', code: 'TUER_ZU_HOCH', message: `${zuHoch.length} Tür(en) sind höher als die freie Durchgangshöhe unter der ersten Lage (im Modell ca. ${frei.toFixed(2).replace('.', ',')} m): der Belag der ersten Lage läge vor dem oberen Teil der Tür. Bitte Türhöhe prüfen oder die Durchgangslösung (Überbrückung, höherer Durchgangsrahmen) mit der Zulassung abstimmen.` })
+    // Randfelder verstärken
+    const along = (f: ScaffoldField) => feldEntlangFassade(f.side, f.positionX, f.positionZ, building)
+    let nVerstaerkt = 0
+    for (const n of fields) {
+      if (n.durchgang) continue
+      for (const d of fields) {
+        if (!d.durchgang || d.side !== n.side || d.levelIndex !== n.levelIndex) continue
+        const plusAnOeffnung = Math.abs(along(n) + n.lengthM / 2 - (along(d) - d.lengthM / 2)) < 0.05
+        const minusAnOeffnung = Math.abs(along(n) - n.lengthM / 2 - (along(d) + d.lengthM / 2)) < 0.05
+        if (!plusAnOeffnung && !minusAnOeffnung) continue
+        n.verstaerkt = { ...(n.verstaerkt ?? {}), ...(plusAnOeffnung ? { plus: true } : {}), ...(minusAnOeffnung ? { minus: true } : {}) }
+      }
+      if (n.verstaerkt) nVerstaerkt++
     }
     if (betroffeneTueren.size > 0) {
       const nFelder = fields.filter((f) => f.durchgang).length
-      warnings.push({ type: 'info', code: 'TUER_DURCHGANG', message: `${betroffeneTueren.size} Tür(en) freigehalten: ${nFelder} Feld(er) der untersten Lage sind Durchgang (kein Fuß-Querriegel, keine Diagonale, ein Durchgangsrahmen-Binder je Feld). Die Lagen darüber stehen weiter. Welche Teile ein Durchgang bei Ihrem System braucht, sowie Überbrückung und Statik bitte nach Zulassung/Aufbauanleitung prüfen; Preis und Gewicht des Binders (Artikel ${DURCHGANG_ARTIKELNUMMER}) kommen aus dem Lager.` })
+      warnings.push({ type: 'info', code: 'TUER_DURCHGANG', message: `${betroffeneTueren.size} Tür(en) freigehalten: ${nFelder} Feld(er) über ${maxK} Lage(n) sind Durchgang – in der Türöffnung stehen keine Rahmen, Diagonalen, Querriegel, Netze oder Planen, und unterhalb des Binders entfallen Belag, Geländer und Bordbrett. Der Durchgangsrahmen-Binder (Artikel ${DURCHGANG_ARTIKELNUMMER}, je Feld ein Stück) liegt oberhalb der Tür; Preis und Gewicht kommen aus dem Lager. Die ${nVerstaerkt} Randfelder links und rechts sind verstärkt (zweiter Rahmen am Rand, zusätzliche Diagonale). Welche Teile ein Durchgang bei Ihrem System braucht, Lastabtragung, Verankerung und Statik bitte nach Zulassung/Aufbauanleitung prüfen.` })
+      if (maxK > 2) warnings.push({ type: 'warning', code: 'TUER_LAGEN', message: `Die Tür ist so hoch, dass ${maxK} Lagen freigehalten werden: der Binder überbrückt die Öffnung in ${(lagenTop(maxK - 1) ?? 0).toFixed(1).replace('.', ',')} m Höhe. Bitte Türhöhe prüfen; eine so große Überbrückung braucht eine statische Nachweisführung.` })
+    }
+    if (aussenTueren.size > 0) {
+      warnings.push({ type: 'info', code: 'TUER_AUFSCHLAG', message: `${aussenTueren.size} Tür(en) öffnen nach außen: der Freiraum umfasst Türbreite plus Flügelweite auf der Anschlagseite (Annahme: der Flügel schlägt bis zur Wand zurück). Seitliche Absicherung an den Enden der Öffnung bitte prüfen.` })
     }
   }
 

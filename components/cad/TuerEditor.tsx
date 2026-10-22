@@ -40,7 +40,7 @@ export default function TuerEditor({ building, onChange }: Props) {
         {tueren.length > 0
           ? 'Die Zahl „Türen“ oben wird ignoriert, solange hier Türen stehen. '
           : 'Ohne Einträge werden die Türen oben gleichmäßig verteilt. '}
-        Die Mitte wird ab Fassadenmitte gemessen (0 = Mitte, minus = links). Vor jeder Tür entsteht im Gerüst ein Durchgang, wenn „Türen freihalten“ an ist. Bei Aufschlag nach außen entfallen auf der untersten Lage zusätzlich Belag und Geländer, damit der Flügel aufschlagen kann.
+        Die Mitte wird ab Fassadenmitte gemessen (0 = Mitte, minus = links). Wenn „Türen freihalten“ an ist, bleibt die Türöffnung frei von Stangen: Die Felder davor entfallen über so viele Lagen, bis der Durchgangsrahmen-Binder über der Tür liegt, und die Randfelder links und rechts werden verstärkt. Bei Aufschlag nach außen wird zusätzlich Platz für den Flügel freigehalten.
         {imUmriss && ' Im Umriss-Modus gilt die Einzelplanung noch nicht.'}
       </p>
       {tueren.map((t, idx) => (
