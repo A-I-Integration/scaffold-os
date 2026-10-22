@@ -174,26 +174,23 @@ describe('Angebautes Satteldach am Turm', () => {
 })
 
 // Echte Datei (Wuppertal, NWD → OBJ, zu groß fürs Repo): nur mit NWD_KIRCHTURM_OBJ=<Pfad> (OBJ, Z oben, Meter).
-// Sollwerte stammen aus der Vermessung der Datei: Schaft 9,14 × 9,18 m; Höhe 31,0 m über Ursprung
-// (31,2 m über der tiefsten Stelle des Modells, die 0,2 m unter dem Ursprung liegt).
+// Sollwerte stammen aus der Vermessung der Datei: Schaft 9,14 × 9,18 m; Höhe 31,0 m über Ursprung (= Unterkante Bauwerk).
+// Der tiefste Punkt des Modells liegt 0,2156 m unter dem Ursprung (Fußspindeln): Höhen gelten ab dem Ursprung, nicht ab dem tiefsten Punkt.
 const echt = process.env.NWD_KIRCHTURM_OBJ
 describe.skipIf(!echt || !existsSync(echt))('Wuppertal Kirchturm (echte Datei)', () => {
   it('liest einen Turmschaft statt Fragmenten', () => {
     const d = dreieckeAusObj(readFileSync(echt!, 'utf8'))
     const a = analysiereDreiecke(d, { format: 'obj', einheit: 'm', oben: 'z', quelle: 'nwd' })!
-    // Turm + angebautes Satteldach (Querbau an der Nordwand, nachgemessen: Traufe ca. 11,1 m, First ca. 22,6 m, Breite ca. 20,7 m)
+    // Turm + angebautes Satteldach (Querbau an der Nordwand, nachgemessen: Traufe ca. 10,9 m, First ca. 22,4 m, Breite ca. 20,7 m)
     expect(a.teile.length).toBe(2)
     const turm = a.teile.find((x) => x.typ === 'turm')!
     const bau = a.teile.find((x) => x.typ !== 'turm')!
     expect(turm.laengeM).toBeCloseTo(9.18, 1) // Richtung zum Anbau
     expect(turm.tiefeM).toBeCloseTo(9.14, 1)
-    expect(turm.hoeheM).toBeGreaterThan(30.9)
-    expect(turm.hoeheM).toBeLessThan(31.5)
+    expect(turm.hoeheM).toBeCloseTo(31.0, 1)
     expect(bau.dachForm).toBe('satteldach')
-    expect(bau.hoeheM).toBeGreaterThan(10.8)
-    expect(bau.hoeheM).toBeLessThan(11.5)
-    expect(bau.hoeheM + bau.dachHoeheM).toBeGreaterThan(22.3)
-    expect(bau.hoeheM + bau.dachHoeheM).toBeLessThan(23)
+    expect(bau.hoeheM).toBeCloseTo(10.9, 1)
+    expect(bau.hoeheM + bau.dachHoeheM).toBeCloseTo(22.37, 1)
     expect(bau.tiefeM).toBeGreaterThan(20)
     expect(bau.tiefeM).toBeLessThan(22)
   })
