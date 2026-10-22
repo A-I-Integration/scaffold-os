@@ -117,7 +117,7 @@ const NULLPUNKT_MAX_M = 1
  */
 export function bestimmeNullpunkt(tris: number[][]): { verschiebungM: number; hinweis?: string } {
   const bins = new Map<number, number>()
-  const hSumme = new Map<number, number>() // Σ (Höhe × Fläche) je Raster-Feld, für die genaue mittlere Höhe
+  const fein = new Map<number, { a: number; ha: number }>() // Raster 5 mm: genaue Höhe der größten Fläche im gefundenen Feld
   for (const t of tris) {
     const h0 = t[2], h1 = t[5], h2 = t[8]
     if (Math.max(h0, h1, h2) - Math.min(h0, h1, h2) > 0.01) continue // nicht waagrecht
@@ -125,12 +125,17 @@ export function bestimmeNullpunkt(tris: number[][]): { verschiebungM: number; hi
     const a = Math.abs(ux * vy - uy * vx) / 2
     const k = Math.round(((h0 + h1 + h2) / 3) / 0.05)
     bins.set(k, (bins.get(k) ?? 0) + a)
-    hSumme.set(k, (hSumme.get(k) ?? 0) + a * ((h0 + h1 + h2) / 3))
+    const hm = (h0 + h1 + h2) / 3
+    const f = fein.get(Math.round(hm / 0.005)) ?? { a: 0, ha: 0 }
+    f.a += a; f.ha += a * hm
+    fein.set(Math.round(hm / 0.005), f)
   }
   const keys = [...bins.keys()].sort((x, y) => x - y)
   const erster = keys.find((k) => (bins.get(k) ?? 0) >= NULLPUNKT_MIN_FLAECHE_M2)
   if (erster === undefined) return { verschiebungM: 0 }
-  const v = Math.max(0, (hSumme.get(erster) ?? 0) / (bins.get(erster) ?? 1))
+  // Innerhalb des gefundenen 5-cm-Feldes zählt die Höhe mit der größten Fläche (Grundplatten, Boden) – nicht der Mittelwert mit zufälligen Nachbarn
+  let besteFlaeche = 0, v = 0
+  for (const [kf, f] of fein) if (Math.round(kf * 0.005 / 0.05) === erster && f.a > besteFlaeche) { besteFlaeche = f.a; v = Math.max(0, f.ha / f.a) }
   if (v < 0.04 || v > NULLPUNKT_MAX_M) return { verschiebungM: 0 }
   const cm = Math.round(v * 100)
   return { verschiebungM: v, hinweis: `Nullpunkt der Höhen: Unterkante des Bauwerks, ${cm} cm über dem tiefsten Punkt des Modells (Fußspindeln o. Ä. darunter zählen nicht mit).` }

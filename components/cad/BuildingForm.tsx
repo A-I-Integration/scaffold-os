@@ -11,7 +11,7 @@ import { figurenZuDxf, type ZPunkt } from '@/lib/cad/dxf-zeichnen'
 import { GERUEST_SYSTEME } from '@/lib/calculations/geruest-systeme'
 import { uploadVertragsdokument } from '@/lib/vertrag-upload-client'
 import { KIRCHE_STANDARD, kircheUebernehmen, pruefeKircheMasse, type KircheMasse } from '@/lib/cad/kirche-vorlage'
-import { quaderAusObj, quaderAusStl, masseAusQuader, dreieckeAusObj, dreieckeAusStl, draufsichtDreiecke, type Quader, type Einheit, type Achse } from '@/lib/cad/modell-import'
+import { quaderAusObj, quaderAusStl, masseAusQuader, dreieckeAusObj, dreieckeAusStl, draufsichtDreiecke, type Quader, type Einheit, type Achse, EINHEIT_FAKTOR } from '@/lib/cad/modell-import'
 import { erkenneGrundriss, FORM_NAME } from '@/lib/cad/grundriss-erkennung'
 import { analysiereDreiecke, nullpunktUeberTiefstem, abschnitteAusTeilen, abschnitteAusTeileListe, vorgabeAchseEinheit, type GebaeudeTeil } from '@/lib/cad/modell-analyse'
 import { umrissBox } from '@/lib/calculations/cad-umriss'
@@ -410,7 +410,7 @@ export default function BuildingForm({ building, systemId, onChange, onSystemCha
             {modellImport && (() => {
               const m0 = masseAusQuader(modellImport.quader, modellImport.einheit, modellImport.oben)
               // Höhe ab Unterkante Bauwerk (Fußspindeln unter dem Gelände zählen nicht), wie bei den erkannten Gebäudeteilen
-              const m = { ...m0, heightM: Math.round((m0.heightM - nullpunktUeberTiefstem(modellImport.dreiecke, modellImport.einheit, modellImport.oben)) * 100) / 100 }
+              const m = { ...m0, heightM: Math.round((modellImport.quader.groesse[modellImport.oben] * EINHEIT_FAKTOR[modellImport.einheit] - nullpunktUeberTiefstem(modellImport.dreiecke, modellImport.einheit, modellImport.oben)) * 100) / 100 }
               const wahl = 'rounded-lg border border-black/10 bg-white px-2 py-1 text-[11px]'
               return (
                 <div className='rounded-lg border border-black/10 bg-white p-2 space-y-2 text-[11px] text-[#424245]'>
