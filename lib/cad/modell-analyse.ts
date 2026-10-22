@@ -105,6 +105,37 @@ export function bereinigeDreiecke(tris: number[][]): { tris: number[][]; hinweis
   return { tris: rest, hinweise }
 }
 
+/** Mindestfläche (m²) waagrechter Dreiecke, ab der eine Höhe als Unterkante des Bauwerks (Gelände) gilt. */
+const NULLPUNKT_MIN_FLAECHE_M2 = 3
+/** Nullpunkt höchstens so viel über dem tiefsten Punkt (m); darüber bleibt es beim tiefsten Punkt (z. B. Kellergeschoss). */
+const NULLPUNKT_MAX_M = 1
+
+/**
+ * Höhe der Bauwerks-Unterkante über dem tiefsten Punkt (Höhen müssen schon auf den tiefsten Punkt = 0 bezogen sein).
+ * Gesucht wird die tiefste Höhe (Raster 0,05 m), auf der waagrechte Dreiecke mindestens `NULLPUNKT_MIN_FLAECHE_M2` Fläche haben.
+ * Liegt sie weniger als `NULLPUNKT_MAX_M` über dem tiefsten Punkt, gilt sie als Nullpunkt; sonst bleibt der tiefste Punkt.
+ */
+export function bestimmeNullpunkt(tris: number[][]): { verschiebungM: number; hinweis?: string } {
+  const bins = new Map<number, number>()
+  const hSumme = new Map<number, number>() // Σ (Höhe × Fläche) je Raster-Feld, für die genaue mittlere Höhe
+  for (const t of tris) {
+    const h0 = t[2], h1 = t[5], h2 = t[8]
+    if (Math.max(h0, h1, h2) - Math.min(h0, h1, h2) > 0.01) continue // nicht waagrecht
+    const ux = t[3] - t[0], uy = t[4] - t[1], vx = t[6] - t[0], vy = t[7] - t[1]
+    const a = Math.abs(ux * vy - uy * vx) / 2
+    const k = Math.round(((h0 + h1 + h2) / 3) / 0.05)
+    bins.set(k, (bins.get(k) ?? 0) + a)
+    hSumme.set(k, (hSumme.get(k) ?? 0) + a * ((h0 + h1 + h2) / 3))
+  }
+  const keys = [...bins.keys()].sort((x, y) => x - y)
+  const erster = keys.find((k) => (bins.get(k) ?? 0) >= NULLPUNKT_MIN_FLAECHE_M2)
+  if (erster === undefined) return { verschiebungM: 0 }
+  const v = Math.max(0, (hSumme.get(erster) ?? 0) / (bins.get(erster) ?? 1))
+  if (v < 0.04 || v > NULLPUNKT_MAX_M) return { verschiebungM: 0 }
+  const cm = Math.round(v * 100)
+  return { verschiebungM: v, hinweis: `Nullpunkt der Höhen: Unterkante des Bauwerks, ${cm} cm über dem tiefsten Punkt des Modells (Fußspindeln o. Ä. darunter zählen nicht mit).` }
+}
+
 function teilModell(e: BaukoerperErgebnis, quelle: TeilQuelle): GebaeudeTeil[] {
   const gesamtL = e.teile.reduce((s, t) => s + t.laengeM, 0)
   let pos = -gesamtL / 2
@@ -140,7 +171,12 @@ export function analysiereDreiecke(dreiecke: Float32Array, opt: { format: 'obj' 
   const roh = dreieckeMitHoehe(dreiecke, einheit, oben)
   const { tris, hinweise } = bereinigeDreiecke(roh)
   const minH = tris.length ? minVon(tris) : 0
-  const auf0 = minH === 0 ? tris : tris.map((t) => [t[0], t[1], t[2] - minH, t[3], t[4], t[5] - minH, t[6], t[7], t[8] - minH])
+  // Nullpunkt = Unterkante des Bauwerks (größte waagrechte Fläche ganz unten), nicht der tiefste Einzelpunkt:
+  // Fußspindeln oder Grundplatten unter dem Gelände würden sonst alle Höhen um ihre Tiefe vergrößern.
+  const grund = bestimmeNullpunkt(tris.map((t) => t.slice()))
+  const versatz = minH + grund.verschiebungM
+  const auf0 = versatz === 0 ? tris : tris.map((t) => [t[0], t[1], Math.max(0, t[2] - versatz), t[3], t[4], Math.max(0, t[5] - versatz), t[6], t[7], Math.max(0, t[8] - versatz)])
+  if (grund.hinweis) hinweise.push(grund.hinweis)
   // Modell mit eingebautem Gerüst (z. B. NWD vom Statiker): Turmschaft aus dem Flachdach statt Gerüst-Fragmente
   const ergebnis = erkenneSchaftImGeruest(auf0)?.ergebnis ?? erkenneBaukoerper(auf0)
   if (!ergebnis) return null
