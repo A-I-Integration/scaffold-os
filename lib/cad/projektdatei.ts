@@ -162,7 +162,11 @@ export function liesProjektdatei(text: string): LeseErgebnis {
       const side = o?.side
       const off = zahl(o?.offsetAlongM, -MAX_MASS_M, MAX_MASS_M), b = zahl(o?.widthM, 0.3, 10), h = zahl(o?.heightM, 0.5, 10)
       if ((side !== 'front' && side !== 'back' && side !== 'left' && side !== 'right') || off == null || b == null || h == null) return []
-      return [{ id: typeof o.id === 'string' && o.id.length <= 40 ? o.id : `t${i}`, side, offsetAlongM: off, widthM: b, heightM: h }]
+      const tuer: CadTuer = { id: typeof o.id === 'string' && o.id.length <= 40 ? o.id : `t${i}`, side, offsetAlongM: off, widthM: b, heightM: h }
+      if (o.aufschlag === 'innen' || o.aufschlag === 'aussen') tuer.aufschlag = o.aufschlag
+      if (o.fluegel === 1 || o.fluegel === 2) tuer.fluegel = o.fluegel
+      if (o.anschlag === 'minus' || o.anschlag === 'plus') tuer.anschlag = o.anschlag
+      return [tuer]
     })
     if (liste.length === g.tueren.length) gebaeude.tueren = liste
     else verworfen.push('Türen (ungültige Angaben)')

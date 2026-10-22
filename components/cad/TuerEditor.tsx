@@ -40,7 +40,7 @@ export default function TuerEditor({ building, onChange }: Props) {
         {tueren.length > 0
           ? 'Die Zahl „Türen“ oben wird ignoriert, solange hier Türen stehen. '
           : 'Ohne Einträge werden die Türen oben gleichmäßig verteilt. '}
-        Die Mitte wird ab Fassadenmitte gemessen (0 = Mitte, minus = links). Vor jeder Tür entsteht im Gerüst ein Durchgang, wenn „Türen freihalten“ an ist.
+        Die Mitte wird ab Fassadenmitte gemessen (0 = Mitte, minus = links). Vor jeder Tür entsteht im Gerüst ein Durchgang, wenn „Türen freihalten“ an ist. Bei Aufschlag nach außen entfallen auf der untersten Lage zusätzlich Belag und Geländer, damit der Flügel aufschlagen kann.
         {imUmriss && ' Im Umriss-Modus gilt die Einzelplanung noch nicht.'}
       </p>
       {tueren.map((t, idx) => (
@@ -60,6 +60,30 @@ export default function TuerEditor({ building, onChange }: Props) {
             <label className='text-[10px] text-[#86868b]'>Höhe (m)
               <input type='number' step='0.05' min={0.5} className={eingaben} value={t.heightM} onChange={(e) => aendere(idx, { heightM: zahl(e.target.value) })} />
             </label>
+            <label className='text-[10px] text-[#86868b]'>Aufschlag
+              <select className={eingaben} value={t.aufschlag ?? 'innen'} onChange={(e) => aendere(idx, { aufschlag: e.target.value as 'innen' | 'aussen' })}>
+                <option value='innen'>nach innen</option>
+                <option value='aussen'>nach außen (ins Gerüst)</option>
+              </select>
+            </label>
+            {t.aufschlag === 'aussen' && (
+              <>
+                <label className='text-[10px] text-[#86868b]'>Flügel
+                  <select className={eingaben} value={t.fluegel ?? 1} onChange={(e) => aendere(idx, { fluegel: parseInt(e.target.value, 10) === 2 ? 2 : 1 })}>
+                    <option value={1}>1 Flügel</option>
+                    <option value={2}>2 Flügel</option>
+                  </select>
+                </label>
+                {(t.fluegel ?? 1) === 1 && (
+                  <label className='text-[10px] text-[#86868b] col-span-2'>Flügel klappt zurück nach
+                    <select className={eingaben} value={t.anschlag ?? 'minus'} onChange={(e) => aendere(idx, { anschlag: e.target.value as 'minus' | 'plus' })}>
+                      <option value='minus'>Minus-Seite (kleinere Zahl bei „Mitte ab Fassadenmitte“)</option>
+                      <option value='plus'>Plus-Seite (größere Zahl)</option>
+                    </select>
+                  </label>
+                )}
+              </>
+            )}
           </div>
           <button type='button' onClick={() => setTueren(tueren.filter((_, i) => i !== idx))} className='text-[11px] text-red-600 hover:underline'>Tür entfernen</button>
         </div>

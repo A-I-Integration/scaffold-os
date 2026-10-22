@@ -152,3 +152,43 @@ describe('Türhöhe', () => {
     expect(normal.warnings.some((w) => w.code === 'TUER_ZU_HOCH')).toBe(false)
   })
 })
+
+describe('Tür mit Aufschlag nach außen', () => {
+  const tuer = (extra: Partial<NonNullable<BuildingParams['tueren']>[number]>) =>
+    ({ ...basis, doorCount: 0, tueren: [{ id: 't', side: 'front' as const, offsetAlongM: 0, widthM: 1.0, heightM: 2.1, ...extra }] })
+
+  it('nach innen: Belag und Geländer der Lage 0 bleiben (nur Durchgang wie bisher)', () => {
+    const m = generateCADModel(tuer({ aufschlag: 'innen' }), 'layher-allround')
+    const dg = m.fields.filter((f) => f.durchgang)
+    expect(dg.length).toBeGreaterThan(0)
+    expect(dg.every((f) => !f.durchgangOffen)).toBe(true)
+    for (const f of dg) expect(m.components3D.some((c) => c.fieldId === f.id && c.type === 'deck')).toBe(true)
+  })
+
+  it('nach außen: in den Durchgangsfeldern entfallen Belag, Geländer und Bordbrett der Lage 0, Binder bleibt', () => {
+    const m = generateCADModel(tuer({ aufschlag: 'aussen' }), 'layher-allround')
+    const offen = m.fields.filter((f) => f.durchgangOffen)
+    expect(offen.length).toBeGreaterThan(0)
+    for (const f of offen) {
+      const teile = m.components3D.filter((c) => c.fieldId === f.id)
+      expect(teile.some((c) => c.type === 'deck' || c.type === 'railing' || c.type === 'board')).toBe(false)
+      expect(teile.some((c) => c.articleNumber === DURCHGANG_ARTIKELNUMMER)).toBe(true)
+    }
+    // Lage 1 vor der Tür bleibt vollständig
+    const lage1 = m.fields.filter((f) => f.side === 'front' && f.levelIndex === 1)
+    expect(lage1.some((f) => m.components3D.some((c) => c.fieldId === f.id && c.type === 'deck'))).toBe(true)
+    expect(m.warnings.some((w) => w.code === 'TUER_AUFSCHLAG')).toBe(true)
+  })
+
+  it('Flügelweite vergrößert den Freiraum auf der Anschlagseite', () => {
+    const f = (extra: Parameters<typeof tuer>[0]) => generateCADModel(tuer({ aufschlag: 'aussen', widthM: 2, ...extra }), 'layher-allround').fields.filter((x) => x.durchgang && x.levelIndex === 0)
+    const innen = generateCADModel(tuer({ aufschlag: 'innen', widthM: 2 }), 'layher-allround').fields.filter((x) => x.durchgang)
+    const minus = f({ fluegel: 1, anschlag: 'minus' })
+    const plus = f({ fluegel: 1, anschlag: 'plus' })
+    expect(minus.length).toBeGreaterThanOrEqual(innen.length)
+    expect(plus.length).toBeGreaterThanOrEqual(innen.length)
+    const mitte = (arr: typeof minus) => arr.reduce((s, x) => s + x.positionX, 0) / arr.length
+    // Minus-Anschlag verschiebt den freien Bereich nach links, Plus-Anschlag nach rechts
+    expect(mitte(minus)).toBeLessThan(mitte(plus))
+  })
+})
