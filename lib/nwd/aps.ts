@@ -33,7 +33,10 @@ async function pruefe(res: Response, was: string): Promise<Response> {
   if (res.ok) return res
   let text = ''
   try { text = (await res.text()).slice(0, 300) } catch { /* egal */ }
-  if (res.status === 401 || res.status === 403) throw new ApsFehler('auth', `APS lehnt den Zugang ab (${was}, ${res.status}). APS_CLIENT_ID/APS_CLIENT_SECRET oder die Rechte der APS-App prüfen.`, res.status)
+  // 401 oder 403 schon bei der Anmeldung: Zugangsdaten falsch. 403 erst NACH erfolgreicher Anmeldung (z. B. beim Start der Übersetzung):
+  // die Zugangsdaten stimmen, APS verweigert die Leistung – meist Kontingent bzw. Abo oder die Rechte der App.
+  if (res.status === 401 || (res.status === 403 && was === 'Anmeldung')) throw new ApsFehler('auth', `APS lehnt den Zugang ab (${was}, ${res.status}). APS_CLIENT_ID/APS_CLIENT_SECRET oder die Rechte der APS-App prüfen. ${text}`.trim(), res.status)
+  if (res.status === 403) throw new ApsFehler('kontingent', `APS verweigert „${was}“ (403), obwohl die Anmeldung funktioniert: meist Kontingent bzw. Abo oder die Rechte der App, nicht die Zugangsdaten. Antwort von APS: ${text || '(leer)'}`, 403)
   if (res.status === 429) throw new ApsFehler('kontingent', `APS meldet: zu viele Anfragen bzw. Kontingent erreicht (${was}).`, 429)
   throw new ApsFehler('aps-fehler', `APS-Fehler bei „${was}“ (${res.status}) ${text}`.trim(), res.status)
 }

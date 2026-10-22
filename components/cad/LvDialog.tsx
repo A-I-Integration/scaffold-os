@@ -15,6 +15,7 @@ import {
   erzeugeLeistungsverzeichnis, formatEuro, formatMenge,
   LV_STANDARD_EINGABEN, LASTKLASSEN, ZUSATZ_INFO, type LvEingaben, type LvStil, type LvZusatz,
 } from '@/lib/leistungsverzeichnis'
+import { leseStatikerLvXlsx, type StatikerLvErgebnis } from '@/lib/statiker-lv-einlesen'
 
 const feld = 'w-full px-2 py-1.5 border rounded-lg text-xs bg-white'
 const label = 'block text-[11px] font-medium text-[#424245] mb-0.5'
@@ -40,6 +41,7 @@ export default function LvDialog({ model, materials, aufbauStunden, abbauStunden
     } catch { return LV_STANDARD_EINGABEN }
   })
   const [fehler, setFehler] = useState<string | null>(null)
+  const [statikerLv, setStatikerLv] = useState<StatikerLvErgebnis | null>(null)
 
   const setze = (patch: Partial<LvEingaben>) => {
     setE((alt) => {
@@ -117,6 +119,28 @@ export default function LvDialog({ model, materials, aufbauStunden, abbauStunden
               <option value='grundstandzeit'>Auf-/Abbau inkl. 4 Wochen Vorhaltung (wie St. Kilian)</option>
               <option value='statiker'>Wie Statiker-LV: Stück-Pauschalen, 2 Bauabschnitte (Wuppertal)</option>
             </select>
+
+            <label className='block text-[11px] text-[#424245]'>
+              <span className={label}>Angaben aus dem Statiker-LV (Excel) übernehmen</span>
+              <input type='file' accept='.xlsx' className='block w-full text-[11px]' onChange={async (ev) => {
+                const f = ev.target.files?.[0]
+                ev.target.value = ''
+                if (!f) return
+                try {
+                  setFehler(null)
+                  const r = await leseStatikerLvXlsx(await f.arrayBuffer())
+                  setze(r.werte)
+                  setStatikerLv(r)
+                } catch (err) { setFehler('Excel konnte nicht gelesen werden: ' + (err instanceof Error ? err.message : String(err))) }
+              }} />
+            </label>
+            {statikerLv && (
+              <div className='rounded-lg border border-black/10 bg-[#f5f5f7] p-2 text-[11px] text-[#424245] space-y-1'>
+                <div className='font-semibold'>Aus dem Statiker-LV übernommen:</div>
+                {statikerLv.gefunden.map((g) => <div key={g.label}>{g.label}: <b>{g.wert}</b> <span className='text-[#86868b]'>({g.fundstelle})</span></div>)}
+                {statikerLv.nichtGefunden.length > 0 && <div className='text-[#b45309]'>Nicht gefunden (bitte selbst eintragen): {statikerLv.nichtGefunden.join(', ')}</div>}
+              </div>
+            )}
 
             <div className='text-[11px] font-semibold uppercase text-[#86868b] pt-1'>Projekt</div>
             <div><label className={label}>Projekt-Nr.</label><input className={feld} value={e.projektnummer} onChange={(ev) => setze({ projektnummer: ev.target.value })} /></div>
