@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { quaderAusObj, quaderAusStl, masseAusQuader } from '@/lib/cad/modell-import';
+import { quaderAusObj, quaderAusStl, masseAusQuader, obenAusObjKopf } from '@/lib/cad/modell-import';
 
 const OBJ = `# Test
 v 0 0 0
@@ -57,5 +57,20 @@ describe('masseAusQuader', () => {
   it('Zoll und Millimeter werden umgerechnet', () => {
     expect(masseAusQuader({ groesse: { x: 393.7008, y: 236.2205, z: 314.9606 }, punkte: 3 }, 'inch', 'z')).toEqual({ lengthM: 10, widthM: 6, heightM: 8 });
     expect(masseAusQuader({ groesse: { x: 12000, y: 8000, z: 9500 }, punkte: 3 }, 'mm', 'z')).toEqual({ lengthM: 12, widthM: 8, heightM: 9.5 });
+  });
+});
+
+describe('OBJ-Kopf: welche Achse oben ist', () => {
+  it('liest „Z oben“ aus dem Kommentar der NWD-Umwandlung', () => {
+    expect(obenAusObjKopf('# Umgewandelt aus Kirchtturm 3D.nwd; Einheit/oben wie in der Quelle (Z oben)\nv 0 0 0\n')).toBe('z');
+  });
+  it('liest „Y oben“ in beliebiger Schreibweise', () => {
+    expect(obenAusObjKopf('# Export (y oben)\nv 1 2 3')).toBe('y');
+    expect(obenAusObjKopf('# X-oben\nv 1 2 3')).toBe('x');
+  });
+  it('null, wenn der Kopf nichts sagt oder der Hinweis nicht im Kommentar steht', () => {
+    expect(obenAusObjKopf(OBJ)).toBeNull();
+    expect(obenAusObjKopf('v 0 0 0\n# Z oben\n')).toBeNull();
+    expect(obenAusObjKopf('o Z oben\nv 0 0 0')).toBeNull();
   });
 });

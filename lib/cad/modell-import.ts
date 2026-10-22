@@ -167,3 +167,19 @@ export function dreieckeMitHoehe(dreiecke: Float32Array, einheit: Einheit, oben:
   }
   return aus;
 }
+
+/**
+ * „Oben“-Achse aus dem Kopf einer OBJ-Datei: Kommentarzeilen am Anfang (z. B. „# … (Z oben)“ aus der Umwandlung von NWD).
+ * `null`, wenn der Kopf nichts dazu sagt – dann gilt die Annahme nach Dateityp (OBJ: Y).
+ */
+export function obenAusObjKopf(text: string): Achse | null {
+  const kopfZeilen: string[] = [];
+  for (const z of text.slice(0, 2000).split(/\r?\n/)) {
+    if (z.trim() === '') continue;
+    if (!z.startsWith('#') || kopfZeilen.length >= 5) break; // nur die Kommentare ganz am Anfang
+    kopfZeilen.push(z);
+  }
+  const kopf = kopfZeilen.join(' ');
+  const m = /\b([XYZ])[\s-]*oben\b/i.exec(kopf);
+  return m ? (m[1].toLowerCase() as Achse) : null;
+}
