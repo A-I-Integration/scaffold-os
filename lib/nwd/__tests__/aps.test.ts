@@ -34,6 +34,20 @@ describe('APS-Aufrufe (komplett gemockt)', () => {
     await expect(apsToken(K)).rejects.toMatchObject({ code: 'auth' })
   })
 
+  it('403 bei der Anmeldung → auth (Zugangsdaten bzw. Rechte der App)', async () => {
+    fetchMock.mockResolvedValue(antwort('forbidden', 403))
+    await expect(apsToken(K)).rejects.toMatchObject({ code: 'auth' })
+  })
+
+  it('403 beim Start der Übersetzung nach erfolgreicher Anmeldung → kontingent, mit Antworttext von APS', async () => {
+    fetchMock.mockResolvedValueOnce(antwort({ access_token: 'T', expires_in: 3600 })).mockResolvedValueOnce(antwort('{"reason":"quota exceeded"}', 403))
+    const fehler = await uebersetze(K, 'urn', 'svf').catch((e) => e)
+    expect(fehler).toBeInstanceOf(ApsFehler)
+    expect(fehler.code).toBe('kontingent')
+    expect(fehler.message).toContain('nicht die Zugangsdaten')
+    expect(fehler.message).toContain('quota exceeded')
+  })
+
   it('Übersetzung wird von APS abgelehnt → nicht-unterstuetzt', async () => {
     fetchMock.mockResolvedValueOnce(antwort({ access_token: 'T', expires_in: 3600 })).mockResolvedValueOnce(antwort('format not supported', 400))
     await expect(uebersetze(K, 'urn', 'obj', 'guid')).rejects.toMatchObject({ code: 'nicht-unterstuetzt' })
