@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { bestimmeNullpunkt } from '../modell-analyse'
+import { bestimmeNullpunkt, nullpunktUeberTiefstem } from '../modell-analyse'
 
 /** Waagrechtes Rechteck (x0..x1 × y0..y1) auf Höhe h als zwei Dreiecke: x,y,h je Ecke. */
 const platte = (x0: number, y0: number, x1: number, y1: number, h: number): number[][] => [
@@ -25,5 +25,10 @@ describe('Nullpunkt der Höhen (Unterkante des Bauwerks statt tiefster Punkt)', 
 
   it('ohne waagrechte Flächen: keine Verschiebung', () => {
     expect(bestimmeNullpunkt([[0, 0, 0, 1, 0, 5, 0, 1, 5]]).verschiebungM).toBe(0)
+  })
+
+  it('Höhe des umschließenden Quaders: Abzug gegenüber dem tiefsten Punkt (Z oben, Meter)', () => {
+    const tris = [...platte(0, 0, 0.15, 0.15, -0.2156), ...platte(0, 0, 9, 9, 0), ...platte(0, 0, 9, 9, 31)]
+    expect(nullpunktUeberTiefstem(Float32Array.from(tris.flat()), 'm', 'z')).toBeCloseTo(0.2156, 3)
   })
 })

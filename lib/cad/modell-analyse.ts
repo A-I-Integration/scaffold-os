@@ -136,6 +136,11 @@ export function bestimmeNullpunkt(tris: number[][]): { verschiebungM: number; hi
   return { verschiebungM: v, hinweis: `Nullpunkt der Höhen: Unterkante des Bauwerks, ${cm} cm über dem tiefsten Punkt des Modells (Fußspindeln o. Ä. darunter zählen nicht mit).` }
 }
 
+/** Wie weit die Bauwerks-Unterkante über dem tiefsten Punkt des Modells liegt (m), für die Höhe des umschließenden Quaders. */
+export function nullpunktUeberTiefstem(dreiecke: Float32Array, einheit: Einheit, oben: Achse): number {
+  return bestimmeNullpunkt(dreieckeMitHoehe(dreiecke, einheit, oben)).verschiebungM
+}
+
 function teilModell(e: BaukoerperErgebnis, quelle: TeilQuelle): GebaeudeTeil[] {
   const gesamtL = e.teile.reduce((s, t) => s + t.laengeM, 0)
   let pos = -gesamtL / 2
