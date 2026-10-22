@@ -21,6 +21,7 @@
 import { BAUTEIL_FARBEN, type FarbModus } from '@/lib/cad/bauteil-farben'
 import { useState, useMemo, useCallback, useEffect, useRef } from 'react'
 import StatikDatenPanel from '@/components/cad/StatikDatenPanel'
+import { vergissModell } from '@/lib/cad/modell-speicher'
 import { erzeugeProjektdatei, liesProjektdatei } from '@/lib/cad/projektdatei'
 import LvDialog from '@/components/cad/LvDialog'
 import { bereinigeStatikDaten, type StatikDaten } from '@/lib/statik-daten'
@@ -339,6 +340,7 @@ export default function CADPage() {
   // um den Arbeitsstand in dieser CAD-Sitzung.
   function handleNeuStarten() {
     if (!window.confirm('Wirklich neu starten?\n\nDas 3D-Modell wird geleert und alle Maße auf den Anfangszustand gesetzt. Das Gerüst erscheint erst wieder, wenn du Maße änderst oder „Gerüst neu berechnen“ wählst. Bereits gespeicherte Projekte bleiben unverändert.')) return;
+    void vergissModell(); // hochgeladenes 3D-Modell im Browser-Zwischenspeicher ebenfalls entfernen
     setBuilding(LEERES_GEBAEUDE); // Phase 68-H: wirklich leere Felder statt Demo-Werte
     setSystemId('layher-allround');
     setModel(null);
@@ -783,6 +785,7 @@ export default function CADPage() {
         } catch { /* Bild-Anlage optional – Angebot ist auch ohne gültig */ }
       }
 
+      void vergissModell() // Angebot ist dem Kunden zugeordnet → gemerktes Modell darf weg
       router.push(`/kunden/${customerId}`)
     } catch (err: any) {
       alert('❌ ' + err.message)

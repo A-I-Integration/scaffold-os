@@ -8,6 +8,7 @@
 // ============================================================
 import { dreieckeAusObj } from '@/lib/cad/modell-import'
 import { dreieckeAusGltf } from '@/lib/cad/gltf-dreiecke'
+import { dateiHash, type NwdZwischenspeicher } from '@/lib/cad/modell-speicher'
 
 export const NWD_ABFRAGE_MS = 20_000
 export const NWD_MAX_WARTEN_MS = 10 * 60 * 1000
@@ -19,12 +20,14 @@ export type NwdPhase = 'upload' | 'konvertierung' | 'einlesen'
 export type NwdFortschritt = (phase: NwdPhase, anteil: number, text: string) => void
 
 export type NwdErgebnis =
-  | { ok: true; dreiecke: Float32Array; format: 'obj' | 'gltf' }
+  | { ok: true; dreiecke: Float32Array; format: 'obj' | 'gltf'; /** true: Ergebnis stammt aus dem Zwischenspeicher, es wurde nichts zu Autodesk geschickt */ ausZwischenspeicher?: boolean }
   | { ok: false; meldung: string }
 
 export interface NwdOptionen {
   onFortschritt?: NwdFortschritt
   signal?: AbortSignal
+  /** Ergebnisse je Dateiinhalt (SHA-256) merken: dieselbe NWD wird nie ein zweites Mal bei Autodesk übersetzt */
+  zwischenspeicher?: NwdZwischenspeicher | null
   abfrageMs?: number
   maxWartenMs?: number
   /** austauschbar für Tests */
@@ -77,6 +80,16 @@ export async function konvertiereNwd(datei: File, o: NwdOptionen = {}): Promise<
   const aufraeumen = () => { if (id) void f(`/api/nwd/${id}`, { method: 'DELETE' }).catch(() => undefined) }
   try {
     if (datei.size > NWD_MAX_BYTES_CLIENT) return { ok: false, meldung: `Die Datei ist größer als 200 MB. ${FALLBACK}` }
+    let hash: string | null = null
+    if (o.zwischenspeicher) {
+      melde('upload', 0, 'Prüfe, ob diese Datei schon übersetzt wurde …')
+      hash = await dateiHash(datei)
+      const treffer = hash ? await o.zwischenspeicher.hole(hash) : null
+      if (treffer) {
+        melde('einlesen', 1, 'Bereits übersetzt – aus dem Zwischenspeicher geladen (kein Autodesk-Auftrag)')
+        return { ok: true, dreiecke: treffer.dreiecke, format: treffer.format, ausZwischenspeicher: true }
+      }
+    }
     melde('upload', 0, 'Upload zu Autodesk wird vorbereitet …')
     const r1 = await f('/api/nwd', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ dateiname: datei.name, bytes: datei.size }), signal: o.signal })
     const j1 = await json(r1)
@@ -112,6 +125,7 @@ export async function konvertiereNwd(datei: File, o: NwdOptionen = {}): Promise<
     melde('einlesen', 0.5, 'Modell wird eingelesen …')
     const erg = await leseNwdErgebnis(st.format === 'gltf' ? 'gltf' : 'obj', daten)
     aufraeumen()
+    if (erg.ok && hash && o.zwischenspeicher) await o.zwischenspeicher.speichere(hash, { format: erg.format, dreiecke: erg.dreiecke })
     if (erg.ok) melde('einlesen', 1, 'Fertig eingelesen')
     return erg
   } catch (e) {
