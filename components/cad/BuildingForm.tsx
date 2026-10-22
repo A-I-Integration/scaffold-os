@@ -11,9 +11,9 @@ import { figurenZuDxf, type ZPunkt } from '@/lib/cad/dxf-zeichnen'
 import { GERUEST_SYSTEME } from '@/lib/calculations/geruest-systeme'
 import { uploadVertragsdokument } from '@/lib/vertrag-upload-client'
 import { KIRCHE_STANDARD, kircheUebernehmen, pruefeKircheMasse, type KircheMasse } from '@/lib/cad/kirche-vorlage'
-import { quaderAusObj, quaderAusStl, masseAusQuader, dreieckeAusObj, dreieckeAusStl, draufsichtDreiecke, type Quader, type Einheit, type Achse, EINHEIT_FAKTOR } from '@/lib/cad/modell-import'
+import { quaderAusObj, quaderAusStl, masseAusQuader, dreieckeAusObj, dreieckeAusStl, draufsichtDreiecke, obenAusObjKopf, type Quader, type Einheit, type Achse, EINHEIT_FAKTOR } from '@/lib/cad/modell-import'
 import { erkenneGrundriss, FORM_NAME } from '@/lib/cad/grundriss-erkennung'
-import { analysiereDreiecke, nullpunktUeberTiefstem, abschnitteAusTeilen, abschnitteAusTeileListe, vorgabeAchseEinheit, type GebaeudeTeil } from '@/lib/cad/modell-analyse'
+import { analysiereDreiecke, schaetzeEinheit, spannweiten, nullpunktUeberTiefstem, abschnitteAusTeilen, abschnitteAusTeileListe, vorgabeAchseEinheit, type GebaeudeTeil } from '@/lib/cad/modell-analyse'
 import { umrissBox } from '@/lib/calculations/cad-umriss'
 import { leseDxfUmriss, mitHoehen, DXF_FORM_NAME, type DxfUmrissErgebnis } from '@/lib/cad/dxf-umriss'
 import type { IfcZusatz } from '@/lib/cad/ifc-einleser'
@@ -39,7 +39,7 @@ export default function BuildingForm({ building, systemId, onChange, onSystemCha
   const [kircheOffen, setKircheOffen] = useState(false)
   const [kirche, setKirche] = useState<KircheMasse>(KIRCHE_STANDARD)
   // 3D-Modell (OBJ/STL, z. B. aus SketchUp): Außenmaße im Browser lesen, Einheit/„oben“ wählt die Person
-  const [modellImport, setModellImport] = useState<{ name: string; format: 'obj' | 'stl'; quader: Quader; dreiecke: Float32Array; einheit: Einheit; oben: Achse; einheitGeschaetzt: boolean; quelle?: 'nwd' } | null>(null)
+  const [modellImport, setModellImport] = useState<{ name: string; format: 'obj' | 'stl'; quader: Quader; dreiecke: Float32Array; einheit: Einheit; oben: Achse; einheitGeschaetzt: boolean; quelle?: 'nwd'; obenAusKopf?: boolean } | null>(null)
   // DXF-Zeichnung: Gebäudeumriss aus den Linien gelesen (lib/cad/dxf-umriss.ts); Höhen trägt die Person ein
   // Dasselbe Feld trägt auch den IFC-Import (`ifc` gesetzt): gleiche Formerkennung, gleiche Teile, gleicher Prüfschritt
   const [dxfImport, setDxfImport] = useState<{ name: string; inhalt: string; ergebnis: DxfUmrissErgebnis; hoehen: string[]; gezeichnet?: boolean; ifc?: IfcZusatz } | null>(null)
@@ -92,12 +92,15 @@ export default function BuildingForm({ building, systemId, onChange, onSystemCha
     if (ext === '.obj' || ext === '.stl') {
       if (file.size > 100 * 1024 * 1024) { setAnalyseHinweis('❌ Datei zu groß (max. 100 MB). Bitte das Modell vereinfachen oder nur das Gebäude exportieren.'); return; }
       try {
-        const quader = ext === '.obj' ? quaderAusObj(await file.text()) : quaderAusStl(await file.arrayBuffer());
+        const objText = ext === '.obj' ? await file.text() : null;
+        const quader = objText !== null ? quaderAusObj(objText) : quaderAusStl(await file.arrayBuffer());
         if (!quader) { setAnalyseHinweis('❌ In der Datei wurden keine Eckpunkte gefunden.'); return; }
-        const dreiecke = ext === '.obj' ? dreieckeAusObj(await file.text()) : dreieckeAusStl(await file.arrayBuffer());
+        const dreiecke = objText !== null ? dreieckeAusObj(objText) : dreieckeAusStl(await file.arrayBuffer());
         // Üblich: OBJ aus Grafik-/3D-Programmen hat Y oben, STL aus CAD hat Z oben (per Auswahl umstellbar)
         const vorgabe = vorgabeAchseEinheit(dreiecke, ext === '.obj' ? 'obj' : 'stl');
-        setModellImport({ name: file.name, format: ext === '.obj' ? 'obj' : 'stl', quader, dreiecke, einheit: vorgabe.einheit, oben: vorgabe.oben, einheitGeschaetzt: true });
+        // Steht im Dateikopf, welche Achse oben ist (z. B. aus der NWD-Umwandlung: „Z oben“), gilt das statt der Annahme nach Dateityp
+        const obenKopf = objText !== null ? obenAusObjKopf(objText) : null;
+        setModellImport({ name: file.name, format: ext === '.obj' ? 'obj' : 'stl', quader, dreiecke, einheit: obenKopf ? schaetzeEinheit(spannweiten(dreiecke), obenKopf).einheit : vorgabe.einheit, oben: obenKopf ?? vorgabe.oben, einheitGeschaetzt: true, ...(obenKopf ? { obenAusKopf: true } : {}) });
       } catch (err: any) {
         setAnalyseHinweis('❌ Datei konnte nicht gelesen werden: ' + (err?.message || 'Fehler'));
       }
@@ -429,7 +432,7 @@ export default function BuildingForm({ building, systemId, onChange, onSystemCha
                     </label>
                   </div>
                   {analyse && (
-                    <p className='text-[#86868b]'>Einheit {modellImport.einheitGeschaetzt ? 'automatisch geschätzt' : 'von dir gewählt'}; „oben“ ist nach Dateityp angenommen ({modellImport.quelle === 'nwd' ? 'NWD: Z, wie in Navisworks' : 'OBJ: Y, STL: Z'}) – bitte prüfen. {analyse.hinweise.join(' ')}</p>
+                    <p className='text-[#86868b]'>Einheit {modellImport.einheitGeschaetzt ? 'automatisch geschätzt' : 'von dir gewählt'}; „oben“ {modellImport.obenAusKopf ? 'steht im Dateikopf' : `ist nach Dateityp angenommen (${modellImport.quelle === 'nwd' ? 'NWD: Z, wie in Navisworks' : 'OBJ: Y, STL: Z'})`} – bitte prüfen. {analyse.hinweise.join(' ')}</p>
                   )}
                   {baukoerper?.mehrteilig && (
                     <div className='rounded-lg bg-[#fff7ed] p-2 space-y-1'>
