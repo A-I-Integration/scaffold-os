@@ -24,6 +24,7 @@
 
 import type { CADModel } from '@/lib/calculations/cad-engine'
 import type { MaterialItem } from '@/types/scaffold'
+import { kappeModellAufHoehe, kappeMaterial } from '@/lib/cad/bauabschnitt'
 
 export const GRUNDSTANDZEIT_WOCHEN = 4
 
@@ -114,6 +115,10 @@ export interface LvEingaben {
   /** Eigene Einheitspreise / Mengen je Position, Schlüssel = Kurztitel der Position (bleibt stabil, wenn sich die Nummern verschieben) */
   epUeberschreibung?: Record<string, number>
   mengeUeberschreibung?: Record<string, number>
+  /** Stil „statiker“: Höhe des 2. Bauabschnitts in m (Rückbau); das CAD wird darauf gekappt. Leer = 21,5 m, 0 = Positionen bleiben leer */
+  hoeheBa2M?: number
+  /** Stil „statiker“: Standzeit des 2. Bauabschnitts in Wochen (leer/0 = in der Tabelle eintragen) */
+  standzeitBa2Wochen?: number
 }
 
 export const LV_STANDARD_EINGABEN: LvEingaben = {
@@ -465,8 +470,23 @@ export function erzeugeLeistungsverzeichnis(quelle: LvQuelle, e: LvEingaben): Le
       'Preis = Aufbau + Abbau aus dem CAD (Stunden × Stundensatz, mit Zuschlag), Vorhaltung in der Folgeposition.',
     ], 1, 'Stück', cent(gGeruest + gKonsolen))
     vorh(b2, g1.nr, 'Arbeitsgerüste am Turmschaft 1. BA', miet(matGerKo))
-    const g2 = b2.add('Arbeitsgerüste mit int. Tragger. am Turmschaft bis ca. 21,5 m Höhe', ['Arbeitsgerüste am Turmschaft wie Pos. ' + g1.nr + ', 2. Bauabschnitt (Rückbau von 32 m auf ca. 21,5 m). ' + OHNE_CAD], 1, 'Stück', 0)
-    vorh(b2, g2.nr, 'Arbeitsgerüste 2. BA', 0, 'Wo', 0)
+    // 2. Bauabschnitt: das CAD-Gerüst auf die Höhe des Rückbaus kappen (Annahme: gleiche Berechnung wie 1. BA, Aufbau + Abbau + Vorhaltung)
+    const hBa2 = e.hoeheBa2M === undefined ? 21.5 : e.hoeheBa2M
+    const ba2 = hBa2 > 0 ? kappeModellAufHoehe(model, hBa2) : null
+    const woBa2 = Math.max(0, e.standzeitBa2Wochen ?? 0)
+    const mat2: Record<Gruppe, number> = { geruest: 0, konsolen: 0, schutzdach: 0, treppe: 0 }
+    if (ba2) for (const m of kappeMaterial(materials, model, ba2.model)) mat2[gruppeVon(m.articleNumber)] += m.totalPrice
+    const matGesamt2 = mat2.geruest + mat2.konsolen + mat2.schutzdach + mat2.treppe
+    const stunden2 = ba2 ? (aufbauStunden + abbauStunden) * ba2.flaechenAnteil : 0
+    const lohn2 = (g: Gruppe): number => (matGesamt2 > 0 ? cent(((stunden2 * mat2[g]) / matGesamt2) * e.stundensatzFach * faktor) : 0)
+    const miet2 = (matSumme: number) => cent(matSumme * (e.mietsatzProzentJeWoche / 100) * faktor)
+    const hoeheBa2Text = ba2 ? de(ba2.obenM, 2) : de(hBa2 > 0 ? hBa2 : 21.5, 1)
+    const g2Text = ba2
+      ? [`Arbeitsgerüste am Turmschaft wie Pos. ${g1.nr}, 2. Bauabschnitt (Rückbau von ${de(hoeheText, 0)} m auf ca. ${hoeheBa2Text} m).`,
+        `Aus dem CAD auf ${ba2.lagenBehalten} von ${ba2.lagenGesamt} Lagen gekappt (oberste Lage ${hoeheBa2Text} m, ${de(r2(flaecheM2 * ba2.flaechenAnteil), 2)} m² Gerüstfläche). Preis = Aufbau + Abbau wie 1. BA, auf die gekappte Fläche und Stückliste gerechnet; ein bereits stehender Gerüstteil aus dem 1. BA ist nicht abgezogen, bitte prüfen.`]
+      : [`Arbeitsgerüste am Turmschaft wie Pos. ${g1.nr}, 2. Bauabschnitt (Rückbau von ${de(hoeheText, 0)} m auf ca. 21,5 m). ` + OHNE_CAD]
+    const g2 = b2.add(`Arbeitsgerüste mit int. Tragger. am Turmschaft bis ca. 21,5 m Höhe`, g2Text, 1, 'Stück', ba2 ? cent(lohn2('geruest') + lohn2('konsolen')) : 0)
+    vorh(b2, g2.nr, 'Arbeitsgerüste 2. BA', ba2 ? miet2(mat2.geruest + mat2.konsolen) : 0, 'Wo', woBa2)
     const ub = zus('ueberbrueckung')
     const ubp = b2.add('Überbrückungen Dachflächen angrenzende Bauteile', ['Gitterträger und Stahlträger zur Schaffung von Überbrückungen, Abfangungen und als lastenverteilende Unterkonstruktion. ' + (ub && ub.menge > 0 ? 'Preise aus den Zusatzleistungen im LV-Fenster.' : OHNE_CAD)], 1, 'Stück', ub && ub.menge > 0 ? cent(ub.menge * (ub.epAuf + ub.epAb)) : 0)
     vorh(b2, ubp.nr, 'Überbrückungen', ub && ub.menge > 0 ? cent(ub.menge * ub.epVorh) : 0)
@@ -476,13 +496,15 @@ export function erzeugeLeistungsverzeichnis(quelle: LvQuelle, e: LvEingaben): Le
     vorh(b2, sdp.nr, 'Schutzdächer', miet(mat.schutzdach), 'Wo', sdN > 0 ? woGesamt : 0)
     const kd1 = b2.add('Vertikale Bekleidung der Gerüste 1. BA ca. 21,5m bis ca. 32m', ['Vertikale Bekleidung der Außenachse des Gerüstes mit Kederplane zur Eindämmung der Staubentwicklung. ' + (kederplaneFlaecheM2 > 0 ? `Aus dem CAD: ${de(kederplaneFlaecheM2, 2)} m² Plane (Höhenbereich ${de(model.building.geruestOptionen?.kederplane?.vonM ?? 0, 1)}–${de(model.building.geruestOptionen?.kederplane?.bisM ?? 0, 1)} m). Preis bitte eintragen.` : OHNE_CAD)], 1, 'Stück', 0)
     vorh(b2, kd1.nr, 'Vertikale Bekleidung 1. BA', 0, 'Wo', 0)
-    const kd2 = b2.add('Vertikale Bekleidung der Gerüste 2. BA bis ca. 17,5m', ['Vertikale Bekleidung der Außenachse des Gerüstes mit Kederplane bis ca. 17,5 m. ' + OHNE_CAD], 1, 'Stück', 0)
+    const kederplane2M2 = ba2 ? r2(ba2.model.components3D.filter((c) => c.type === 'sheeting').reduce((sum, c) => sum + Math.abs(c.scale[0]) * Math.abs(c.scale[1]), 0)) : 0
+    const kd2 = b2.add('Vertikale Bekleidung der Gerüste 2. BA bis ca. 17,5m', ['Vertikale Bekleidung der Außenachse des Gerüstes mit Kederplane bis ca. 17,5 m. ' + (kederplane2M2 > 0 ? `Aus dem CAD (2. BA, bis ${hoeheBa2Text} m gekappt): ${de(kederplane2M2, 2)} m² Plane. Preis bitte eintragen.` : OHNE_CAD)], 1, 'Stück', 0)
     vorh(b2, kd2.nr, 'Vertikale Bekleidung 2. BA', 0, 'Wo', 0)
     const tr1 = b2.add(`Gerüsttreppenturm 1. BA, H = ca. ${de(hoeheText, 0)} m`, ['Aufstieg zum Erreichen der Arbeitsplätze als Gerüsttreppe. Preis aus dem CAD (Aufbau + Abbau Treppenaufgang).'], 1, 'Stück',
       treppen > 0 ? cent(epAufbau('treppe', treppen) * treppen + epAbbau('treppe', treppen) * treppen) : 0)
     vorh(b2, tr1.nr, 'Gerüsttreppenturm 1. BA', miet(mat.treppe), 'Wo', treppen > 0 ? woGesamt : 0)
-    const tr2 = b2.add('Gerüsttreppenturm 2. BA, H = ca. 21,5m', ['Gerüsttreppenturm am Turmschaft wie Pos. ' + tr1.nr + '. ' + OHNE_CAD], 1, 'Stück', 0)
-    vorh(b2, tr2.nr, 'Gerüsttreppenturm 2. BA', 0, 'Wo', 0)
+    const treppen2 = ba2 ? ba2.model.components3D.filter((c) => c.type === 'stair').length : 0
+    const tr2 = b2.add('Gerüsttreppenturm 2. BA, H = ca. 21,5m', ['Gerüsttreppenturm am Turmschaft wie Pos. ' + tr1.nr + (treppen2 > 0 ? `, auf ca. ${hoeheBa2Text} m gekappt. Preis aus dem CAD (Aufbau + Abbau Treppenaufgang).` : '. ' + OHNE_CAD)], 1, 'Stück', treppen2 > 0 ? lohn2('treppe') : 0)
+    vorh(b2, tr2.nr, 'Gerüsttreppenturm 2. BA', treppen2 > 0 ? miet2(mat2.treppe) : 0, 'Wo', treppen2 > 0 ? woBa2 : 0)
     const az = zus('aufzug')
     const az1 = b2.add(`Personen- und Lastenaufzug 500/800kg 1.BA H = ca. ${de(hoeheText, 0)}m`, ['Transportbühne für Personen und Lasten nach DIN EN 16719. ' + (azOpt ? `${azOpt.gemietet ? 'Gemietet von einem Fremdunternehmen' : 'Aus eigenem Inventar'}, Kosten von Hand aus den Gerüst-Einstellungen.` : az && az.menge > 0 ? 'Preise aus den Zusatzleistungen im LV-Fenster.' : OHNE_CAD)], 1, 'Stück', az && az.menge > 0 ? cent(az.menge * (az.epAuf + az.epAb)) : 0)
     vorh(b2, az1.nr, 'Personen- und Lastenaufzug 1. BA', az && az.menge > 0 ? cent(az.menge * az.epVorh) : 0)
@@ -569,7 +591,7 @@ export function erzeugeLeistungsverzeichnis(quelle: LvQuelle, e: LvEingaben): Le
       `Einheitspreise abgeleitet aus dem Materialwert der Stückliste (${de(matGesamt, 2)} €), Aufbau-/Abbaustunden (${de(stundenAufAb, 0)} h, nach Materialwert auf die Positionen verteilt) und den eingegebenen Faktoren.`,
       `Vorhaltung je Woche = Materialwert × Mietsatz × (1 + Zuschlag), geteilt durch die Menge.${e.stil === 'grundstandzeit' ? ` Grundposition = (Stunden × Stundensatz Facharbeiter + Materialwert × Mietsatz × ${GRUNDSTANDZEIT_WOCHEN} Wochen) × (1 + Zuschlag), geteilt durch die Menge.` : ''}`,
       e.stil === 'statiker'
-        ? `Gliederung wie im LV des Auftraggebers (Turmeinrüstung): Stück-Pauschalen mit Vorhaltung in Wochen (Standzeit ${de(e.gesamtStandzeitWochen, 0)} Wochen). Preis der Gerüstposition = Aufbau + Abbau (Stunden × Stundensatz, mit Zuschlag) aus dem CAD; Vorhaltung je Woche = Materialwert × Mietsatz × (1 + Zuschlag). Annahme: 1. Bauabschnitt = gesamtes CAD-Gerüst. Positionen ohne Wert im CAD (2. Bauabschnitt, Kederplane, Haltestellen, Dachschutz, Umbau am Bestandsgerüst, Baustelleneinrichtung außer der Pauschale) haben Menge und Preis zum Selbsteintragen in der Tabelle.`
+        ? `Gliederung wie im LV des Auftraggebers (Turmeinrüstung): Stück-Pauschalen mit Vorhaltung in Wochen (Standzeit ${de(e.gesamtStandzeitWochen, 0)} Wochen). Preis der Gerüstposition = Aufbau + Abbau (Stunden × Stundensatz, mit Zuschlag) aus dem CAD; Vorhaltung je Woche = Materialwert × Mietsatz × (1 + Zuschlag). Annahme: 1. Bauabschnitt = gesamtes CAD-Gerüst; 2. Bauabschnitt (Gerüst, Treppenturm, Plane-Menge) = dasselbe CAD, gekappt auf die eingestellte Höhe (Standard 21,5 m, oberste Lage = nächstgelegene Lagenoberkante), Preis wie 1. BA (Aufbau + Abbau + Vorhaltung); Aufzug und Haltestellen 2. BA bleiben ohne Wert. Positionen ohne Wert im CAD (Kederplane-Preis, Haltestellen, Dachschutz, Umbau am Bestandsgerüst, Baustelleneinrichtung außer der Pauschale) haben Menge und Preis zum Selbsteintragen in der Tabelle.`
       : e.stil === 'getrennt'
         ? `Aufbau, Vorhaltung und Abbau sind getrennte Positionen (Aufbau wie in den Muster-LVs). Vorhaltung über die gesamte Standzeit von ${de(e.gesamtStandzeitWochen, 0)} Wochen (Menge × Wochen). Aufbau-EP = Aufbaustunden × Stundensatz Facharbeiter, Abbau-EP = Abbaustunden × Stundensatz (je mit Zuschlag, nach Materialwert verteilt); das Material steckt in der Vorhaltung.`
         : `Gesamt-Standzeit ${de(e.gesamtStandzeitWochen, 0)} Wochen, davon ${GRUNDSTANDZEIT_WOCHEN} Wochen Grundstandzeit in der Aufbauposition, danach Verlängerung der Vorhaltung.`,

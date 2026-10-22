@@ -144,6 +144,16 @@ export default function LvDialog({ model, materials, aufbauStunden, abbauStunden
                 <input type='number' min={0} step='0.5' className={feld} placeholder={String(model.levels?.length ? Math.max(...model.levels.map((l) => l.topY)) : model.totalHeightM)} value={e.geruestHoeheAusschreibungM ?? ''}
                   onChange={(ev) => setze({ geruestHoeheAusschreibungM: ev.target.value === '' ? undefined : zahl(ev.target.value) })} /></div>
             </div>
+            {e.stil === 'statiker' && (
+              <div className='grid grid-cols-2 gap-2'>
+                <div><label className={label}>2. Bauabschnitt: Höhe (m)</label>
+                  <input type='number' min={0} step='0.5' className={feld} placeholder='21,5' value={e.hoeheBa2M ?? ''}
+                    onChange={(ev) => setze({ hoeheBa2M: ev.target.value === '' ? undefined : zahl(ev.target.value) })} /></div>
+                <div><label className={label}>2. Bauabschnitt: Standzeit (Wochen)</label>
+                  <input type='number' min={0} step='1' className={feld} value={e.standzeitBa2Wochen ?? ''}
+                    onChange={(ev) => setze({ standzeitBa2Wochen: ev.target.value === '' ? undefined : zahl(ev.target.value) })} /></div>
+              </div>
+            )}
             <div><label className={label}>Genutzte Gerüstlagen</label>
               <select className={feld} value={e.lagen} onChange={(ev) => setze({ lagen: ev.target.value as 'alle' | 'obere' })}>
                 <option value='alle'>alle Gerüstlagen</option><option value='obere'>obere Gerüstlagen</option>
