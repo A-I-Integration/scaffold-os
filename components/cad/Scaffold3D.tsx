@@ -1092,6 +1092,31 @@ function FassadenMerkmal({ f, pos, rot }: { f: BuildingFeature3D; pos: [number, 
   )
 }
 
+/** Lage einer Tür am gestuften Gebäude (gerade Höhenstufen), in den Koordinaten der Gebäudegruppe. null = liegt in keinem Abschnitt. */
+export function tuerPlatzierungGestuft(
+  f: { side: 'front' | 'back' | 'left' | 'right'; offsetAlongM: number; bottomY: number; heightM: number },
+  segmente: { mitteX: number; mitteZ: number; laengeM: number; tiefeM?: number; versatzM?: number }[],
+  gesamtL: number,
+  standardTiefeM: number,
+): { pos: [number, number, number]; rot: [number, number, number] } | null {
+  const y = f.bottomY + f.heightM / 2
+  const zMitte = (sg: (typeof segmente)[number]) => sg.mitteZ + (sg.versatzM ?? 0)
+  const tiefe = (sg: (typeof segmente)[number]) => sg.tiefeM ?? standardTiefeM
+  if (f.side === 'front' || f.side === 'back') {
+    const x = f.offsetAlongM + gesamtL / 2
+    const sg = segmente.find((q) => Math.abs(x - q.mitteX) <= q.laengeM / 2 + 0.001)
+    if (!sg) return null
+    return f.side === 'front'
+      ? { pos: [x, y, zMitte(sg) + tiefe(sg) / 2 + 0.02], rot: [0, 0, 0] }
+      : { pos: [x, y, zMitte(sg) - tiefe(sg) / 2 - 0.02], rot: [0, Math.PI, 0] }
+  }
+  const sg = f.side === 'left' ? segmente[0] : segmente[segmente.length - 1]
+  if (!sg) return null
+  return f.side === 'left'
+    ? { pos: [sg.mitteX - sg.laengeM / 2 - 0.02, y, zMitte(sg) + f.offsetAlongM], rot: [0, -Math.PI / 2, 0] }
+    : { pos: [sg.mitteX + sg.laengeM / 2 + 0.02, y, zMitte(sg) + f.offsetAlongM], rot: [0, Math.PI / 2, 0] }
+}
+
 function Building3D({
   building,
   features,
@@ -1153,6 +1178,12 @@ function Building3D({
             </group>
           </group>
         ))}
+        {/* Türen am gestuften Gebäude (nur gerade Höhenstufen): die Tür sitzt an der Wand des Abschnitts,
+            in dem sie liegt. Fenster und Balkone werden hier noch nicht gezeichnet. */}
+        {gerade && features.filter((f) => f.type === 'door').map((f) => {
+          const t = tuerPlatzierungGestuft(f, segmente, gesamtL, w)
+          return t ? <FassadenMerkmal key={f.id} f={f} pos={t.pos} rot={t.rot} /> : null
+        })}
       </group>
     )
   }
