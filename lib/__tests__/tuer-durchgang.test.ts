@@ -118,3 +118,37 @@ describe('Treppe und Türen', () => {
     expect(m2.warnings.some((w) => w.code === 'TREPPE_VERSETZT')).toBe(false)
   })
 })
+
+describe('Gestuftes Gebäude (Turm + Anbau) mit Tür in der Mitte', () => {
+  const turm: BuildingParams = {
+    ...basis, lengthM: 20, widthM: 9, heightM: 32, eavesHeightM: 11, floors: 8, floorHeightsM: Array(8).fill(4), doorCount: 0,
+    sections: [{ laengeM: 9, hoeheM: 32 }, { laengeM: 11, hoeheM: 11 }],
+    tueren: [{ id: 'a', side: 'front', offsetAlongM: 0, widthM: 2.1, heightM: 2.1 }],
+  }
+
+  it('im Türdurchgang stehen auf Lage 0 weder Rahmen noch Fußplatten', () => {
+    const m = generateCADModel(turm, 'layher-allround')
+    expect(m.fields.some((f) => f.durchgang)).toBe(true)
+    const vorn0 = new Set(m.fields.filter((f) => f.side === 'front' && f.levelIndex === 0).map((f) => f.id))
+    const imDurchgang = m.components3D.filter((c) => (c.type === 'frame' || c.type === 'footplate') && c.fieldId && vorn0.has(c.fieldId) && c.id.match(/^(frame|foot)-/) && Math.abs(c.position[0]) < 1.0)
+    expect(imDurchgang.map((c) => `${c.id}@${c.position[0].toFixed(2)}`)).toEqual([])
+  })
+
+  it('die Treppe führt trotz Tür über alle Lagen', () => {
+    const m = generateCADModel(turm, 'layher-allround')
+    const treppe = m.components3D.find((c) => c.id === 'stair-frame-0')!
+    expect(treppe).toBeDefined()
+    const lagenGes = Math.max(...m.fields.filter((f) => f.side === 'front').map((f) => f.levelIndex)) + 1
+    expect(treppe.flights).toBeGreaterThanOrEqual(lagenGes - 6) // mindestens bis über den Anbau (11 m ≈ 5–6 Lagen) hinaus
+    expect(treppe.flights).toBe(m.warnings.some((w) => w.code === 'TREPPE_ENDET') ? treppe.flights : lagenGes)
+  })
+})
+
+describe('Türhöhe', () => {
+  it('warnt, wenn die Tür höher ist als die freie Durchgangshöhe', () => {
+    const hoch = generateCADModel({ ...basis, doorCount: 0, tueren: [{ id: 'h', side: 'front', offsetAlongM: 0, widthM: 1, heightM: 2.95 }] }, 'layher-allround')
+    expect(hoch.warnings.some((w) => w.code === 'TUER_ZU_HOCH')).toBe(true)
+    const normal = generateCADModel({ ...basis, doorCount: 0, tueren: [{ id: 'n', side: 'front', offsetAlongM: 0, widthM: 1, heightM: 1.5 }] }, 'layher-allround')
+    expect(normal.warnings.some((w) => w.code === 'TUER_ZU_HOCH')).toBe(false)
+  })
+})
