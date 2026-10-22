@@ -88,3 +88,33 @@ describe('Türen einzeln planen', () => {
     expect(fern.every((f) => !f.durchgang)).toBe(true)
   })
 })
+
+describe('Treppe und Türen', () => {
+  const ohneTuer: BuildingParams = { ...basis, doorCount: 0 }
+  // Die Treppe hat kein eigenes Feld-Merkmal: ihre Mitte (x) entspricht der Mitte des Treppenfelds (Vorderseite, Lage 0).
+  const treppenFeld = (m: ReturnType<typeof generateCADModel>) => {
+    const x = m.components3D.find((c) => c.id === 'stair-frame-0')!.position[0]
+    return m.fields.find((f) => f.side === 'front' && f.levelIndex === 0 && Math.abs(f.positionX - x) < 0.02)!
+  }
+
+  it('die Treppe steht nicht vor einer Tür: sie weicht auf ein freies Feld aus', () => {
+    const m0 = generateCADModel(ohneTuer, 'layher-allround')
+    const f0 = treppenFeld(m0)
+    const a = feldEntlangFassade(f0.side, f0.positionX, f0.positionZ, m0.building)
+    // Tür genau dort, wo die Treppe sonst stünde
+    const m1 = generateCADModel({ ...ohneTuer, tueren: [{ id: 't', side: 'front', offsetAlongM: a, widthM: 1, heightM: 2.1 }] }, 'layher-allround')
+    const f1 = treppenFeld(m1)
+    expect(f1.durchgang).toBeFalsy()
+    expect(f1.positionX).not.toBeCloseTo(f0.positionX, 1)
+    expect(m1.warnings.some((w) => w.code === 'TREPPE_VERSETZT')).toBe(true)
+  })
+
+  it('ohne Tür an der Treppenstelle bleibt die Treppe, wo sie war', () => {
+    const m0 = generateCADModel(ohneTuer, 'layher-allround')
+    const f0 = treppenFeld(m0)
+    const a = feldEntlangFassade(f0.side, f0.positionX, f0.positionZ, m0.building)
+    const m2 = generateCADModel({ ...ohneTuer, tueren: [{ id: 't', side: 'front', offsetAlongM: a + 6, widthM: 1, heightM: 2.1 }] }, 'layher-allround')
+    expect(treppenFeld(m2).positionX).toBeCloseTo(f0.positionX, 3)
+    expect(m2.warnings.some((w) => w.code === 'TREPPE_VERSETZT')).toBe(false)
+  })
+})

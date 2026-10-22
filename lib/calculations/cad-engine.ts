@@ -514,9 +514,17 @@ export function generateScaffoldComponents(model: CADModel): ScaffoldComponent3D
   const treppeAktiv = building.geruestOptionen?.treppe !== false
   let stairSpan: { a: ScaffoldField; b: ScaffoldField; lagen: number } | undefined
   if (treppeAktiv && treppenFelder0.length > 0) {
-    // bevorzugt etwas von der Ecke weg: das zweite Feld der Kante, sonst das erste
-    const feld = treppenFelder0[1] ?? treppenFelder0[0]
+    // bevorzugt etwas von der Ecke weg: das zweite Feld der Kante, sonst das erste.
+    // Felder vor einer Tür (Durchgang) werden übersprungen – dort wird gegangen, nicht die Treppe gestellt.
+    const frei = treppenFelder0.filter((f) => !f.durchgang)
+    const kandidaten = frei.length > 0 ? frei : treppenFelder0
+    const feld = kandidaten[1] ?? kandidaten[0]
     stairSpan = { a: feld, b: feld, lagen: 0 }
+    if (treppenFelder0.some((f) => f.durchgang)) {
+      const standard = treppenFelder0[1] ?? treppenFelder0[0]
+      if (frei.length === 0) model.warnings.push({ type: 'warning', code: 'TREPPE_VOR_TUER', message: 'Alle Felder der Treppenseite liegen vor einer Tür: die Treppe steht trotzdem dort. Bitte Türen oder Treppenseite prüfen.' })
+      else if (standard.durchgang) model.warnings.push({ type: 'info', code: 'TREPPE_VERSETZT', message: 'Die Treppe wurde von ihrer üblichen Stelle weg versetzt, weil dort eine Tür liegt (Durchgang).' })
+    }
   }
   if (stairSpan) {
     const { a, b } = stairSpan
