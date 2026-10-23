@@ -117,7 +117,7 @@ export function erzeugeLvPdf(lv: Leistungsverzeichnis): jsPDF {
       y += kopfZeilen.length * 4.6 + 1
       for (const para of p.text) {
         doc.setFont('helvetica', 'normal'); doc.setFontSize(9.5); doc.setTextColor(...DUNKEL)
-        const zeilen = doc.splitTextToSize(para, innen - 24) as string[]
+        const zeilen = doc.splitTextToSize(para, innen - 24 - 4) as string[]
         for (const z of zeilen) { platz(5); doc.text(z, RAND + 24, y); y += 4.1 }
         y += 1.2
       }
