@@ -169,7 +169,7 @@ export function fehlerAus(e: unknown): FehlerInfo {
   if (e instanceof ApsFehler) {
     const t: Record<string, string> = {
       auth: 'Die Verbindung zur Autodesk-Cloud ist nicht richtig eingerichtet (Zugangsdaten). Bitte dem Administrator Bescheid geben.',
-      kontingent: 'Autodesk lehnt die Umwandlung ab: Das Kontingent ist aufgebraucht, das Abo ist der App noch nicht zugeordnet bzw. nicht freigeschaltet, oder die Cloud ist überlastet. Die Zugangsdaten sind in Ordnung.',
+      kontingent: 'Die NWD-Umwandlung ist gerade nicht verfügbar: Das Autodesk-Kontingent dieses Systems ist erreicht oder nicht freigeschaltet. Bitte dem Administrator Bescheid geben, er kann es bei Autodesk aufladen.',
       'nicht-unterstuetzt': 'Autodesk kann diese NWD-Datei nicht in ein lesbares 3D-Format umwandeln.',
       'zu-gross': 'Das Konvertierungsergebnis ist zu groß für den Import.',
       netz: 'Die Autodesk-Cloud ist gerade nicht erreichbar.',

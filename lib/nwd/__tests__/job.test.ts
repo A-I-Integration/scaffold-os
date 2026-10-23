@@ -175,3 +175,15 @@ describe('Kosten-Schutz', () => {
     expect(e.aps.loescheObjekt).toHaveBeenCalled()
   })
 })
+
+describe('fehlerAus: Kontingent', () => {
+  it('verständlicher Satz zuerst, technische Einzelheit danach', async () => {
+    const { fehlerAus } = await import('../job')
+    const { ApsFehler } = await import('../aps')
+    const f = fehlerAus(new ApsFehler('kontingent', 'APS verweigert (403) ProductAccessRequiresCapacity', 403))
+    expect(f.code).toBe('kontingent')
+    expect(f.text).toMatch(/^Die NWD-Umwandlung ist gerade nicht verfügbar/)
+    expect(f.text).toContain('Administrator')
+    expect(f.text).toContain('(Detail: APS verweigert (403) ProductAccessRequiresCapacity)')
+  })
+})
