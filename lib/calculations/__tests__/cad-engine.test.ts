@@ -8,7 +8,7 @@ import { GERUEST_SYSTEME } from '../geruest-systeme'
 
 const STANDARD_BUILDING: BuildingParams = {
   lengthM: 15, widthM: 6, heightM: 10, eavesHeightM: 10,
-  roofForm: 'satteldach', roofOverhangM: 0.3, roofHeightM: 2,
+  roofForm: 'satteldach', roofHeightM: 2,
   floors: 3, floorHeightsM: [3, 3, 3], windowCount: 4, doorCount: 1, balconyCount: 0,
   overhangM: 0.3, setbackM: 0, sides: ['front'],
 }
