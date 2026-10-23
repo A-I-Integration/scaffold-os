@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { generateCADModel, generateBillOfMaterials, calculateLogistics, type BuildingParams } from '../calculations/cad-engine'
 import { rechteckUmriss } from '../calculations/cad-umriss'
-import { erzeugeLeistungsverzeichnis, breitenklasse, LV_STANDARD_EINGABEN, LASTKLASSEN, type LvEingaben } from '../leistungsverzeichnis'
+import { erzeugeLeistungsverzeichnis, breitenklasse, breitenklasseZuSchmal, LV_STANDARD_EINGABEN, LASTKLASSEN, type LvEingaben } from '../leistungsverzeichnis'
 import type { MaterialItem } from '@/types/scaffold'
 
 const gebaeude: BuildingParams = {
@@ -223,7 +223,17 @@ describe('Leistungsverzeichnis', () => {
     expect(p.gp).toBe(2000)
   })
 
-  describe('Stil „Statiker-LV“ (Wuppertal)', () => {
+  describe('Breitenklasse-Warnung', () => {
+  it('warnt, wenn die geforderte Klasse breiter ist als das CAD-Gerüst', () => {
+    expect(breitenklasseZuSchmal('W09', 0.73)).toBe(true)
+    expect(breitenklasseZuSchmal('w09', 0.9)).toBe(false)
+    expect(breitenklasseZuSchmal('W06', 0.73)).toBe(false)
+    expect(breitenklasseZuSchmal('', 0.73)).toBe(false)
+    expect(breitenklasseZuSchmal('W09', 0)).toBe(false)
+  })
+})
+
+describe('Stil „Statiker-LV“ (Wuppertal)', () => {
     const stat: LvEingaben = { ...mitPreisen, stil: 'statiker', gesamtStandzeitWochen: 50, lastklasse: 4, breitenklasseManuell: 'w09', geruestHoeheAusschreibungM: 32 }
     const alle = (lv: ReturnType<typeof erzeugeLeistungsverzeichnis>) => lv.titel.flatMap((t) => t.positionen)
 
