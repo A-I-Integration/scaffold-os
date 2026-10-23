@@ -2409,7 +2409,10 @@ export function detectFeatureCollisions(model: CADModel, features: BuildingFeatu
 export interface LogistikDaten {
   gesamtgewichtKg: number
   transportvolumenM3: number
-  lkwFahrten: number            // bei 7,5-t-LKW (Nutzlast ~3,5 t)
+  lkwFahrten: number            // ohne Fahrzeugwahl: 7,5-t-LKW (Nutzlast ~3,5 t)
+  /** Nutzlast, mit der gerechnet wurde, und das gewählte Fahrzeug (fehlt bei der festen Annahme) */
+  nutzlastKg: number
+  fahrzeugName?: string
   aufbauStunden: number
   abbauStunden: number
   annahmen: string[]
@@ -2419,11 +2422,12 @@ export function calculateLogistics(
   model: CADModel,
   materials: MaterialItem[],
   hoursPerSqm: number = 2.0,
+  fahrzeug?: { name: string; nutzlastKg: number } | null,
 ): LogistikDaten {
   const gesamtgewichtKg = materials.reduce((s, m) => s + m.weightKg * m.quantity, 0)
   // Richtwert: Gerüstmaterial gebündelt ~ 250 kg/m³ (Stahl-Rahmengerüst, gemischt gestapelt)
   const transportvolumenM3 = gesamtgewichtKg / 250
-  const nutzlastKg = 3500
+  const nutzlastKg = fahrzeug && fahrzeug.nutzlastKg > 0 ? fahrzeug.nutzlastKg : 3500
   const lkwFahrten = Math.max(1, Math.ceil(gesamtgewichtKg / nutzlastKg))
   const aufbauStunden = Math.ceil(model.totalAreaM2 * hoursPerSqm)
   // Abbau typischerweise ~60 % der Aufbauzeit
@@ -2432,11 +2436,13 @@ export function calculateLogistics(
     gesamtgewichtKg: Math.round(gesamtgewichtKg),
     transportvolumenM3: Math.round(transportvolumenM3 * 10) / 10,
     lkwFahrten,
+    nutzlastKg,
+    ...(fahrzeug && fahrzeug.nutzlastKg > 0 ? { fahrzeugName: fahrzeug.name } : {}),
     aufbauStunden,
     abbauStunden,
     annahmen: [
       'Transportvolumen: ~250 kg/m³ gestapeltes Stahl-Rahmengerüst',
-      'LKW-Fahrten: 7,5-t-LKW mit ~3,5 t Nutzlast',
+      fahrzeug && fahrzeug.nutzlastKg > 0 ? `Fahrten: ${fahrzeug.name} mit ${Math.round(fahrzeug.nutzlastKg).toLocaleString('de-DE')} kg Nutzlast (Angabe aus der Datenpflege)` : 'LKW-Fahrten: 7,5-t-LKW mit ~3,5 t Nutzlast (feste Annahme)',
       `Aufbau: ${hoursPerSqm} h/m² (aus Kalkulations-Grundlagen), Abbau ~60 % davon`,
     ],
   }

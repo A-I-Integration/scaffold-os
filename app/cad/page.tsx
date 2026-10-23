@@ -18,6 +18,7 @@
 //   mit Zulassungen, Statik-Export, IFC-Export, VR.
 // ============================================================
 
+import { fahrzeugeAus, waehleFahrzeug, type LogistikFahrzeug } from '@/lib/logistik-fahrzeug'
 import { BAUTEIL_FARBEN, type FarbModus } from '@/lib/cad/bauteil-farben'
 import { useState, useMemo, useCallback, useEffect, useRef } from 'react'
 import StatikDatenPanel from '@/components/cad/StatikDatenPanel'
@@ -107,6 +108,11 @@ export default function CADPage() {
   const [istStatikerLogin, setIstStatikerLogin] = useState(false)
   useEffect(() => {
     fetch('/api/me', { cache: 'no-store' }).then((r) => r.json()).then((j) => { if (j?.success && typeof j.role === 'string') setRolle(j.role) }).catch(() => {})
+  }, [])
+  const [fahrzeuge, setFahrzeuge] = useState<LogistikFahrzeug[]>([])
+  const [fahrzeugWahl, setFahrzeugWahl] = useState('auto')
+  useEffect(() => {
+    fetch('/api/vehicles', { cache: 'no-store' }).then((r) => r.json()).then((j) => { if (j?.success) setFahrzeuge(fahrzeugeAus(j.vehicles)) }).catch(() => {})
   }, [])
   const [selectedComponent, setSelectedComponent] = useState<string | null>(null)
   // Teilabbau: Fenster offen? Auswahl/Eingaben
@@ -603,7 +609,11 @@ export default function CADPage() {
   const ohneGewichtListe = useMemo(() => materials.filter((m) => m.weightKg <= 0).map((m) => m.articleNumber), [materials])
   const totalWeight = useMemo(() => materials.reduce((s, i) => s + i.weightKg * i.quantity, 0), [materials])
   const totalPrice = useMemo(() => materials.reduce((s, i) => s + i.totalPrice, 0), [materials])
-  const logistik = useMemo(() => (modelWithManual ? calculateLogistics(modelWithManual, materials, hoursPerSqm) : null), [modelWithManual, materials, hoursPerSqm])
+  const logistik = useMemo(() => {
+    if (!modelWithManual) return null
+    const gewicht = materials.reduce((sum, m) => sum + m.weightKg * m.quantity, 0)
+    return calculateLogistics(modelWithManual, materials, hoursPerSqm, waehleFahrzeug(fahrzeuge, gewicht, fahrzeugWahl))
+  }, [modelWithManual, materials, hoursPerSqm, fahrzeuge, fahrzeugWahl])
   const abbauErgebnis = useMemo(() => {
     if (!modelWithManual) return null
     const zahl = (v: string) => { const n = parseFloat(v.replace(',', '.')); return Number.isFinite(n) && n > 0 ? n : 0 }
@@ -1034,6 +1044,9 @@ export default function CADPage() {
           <KatalogWahlListe artikelWahl={artikelWahl} liste={katalogListeFuerSystem(systemId)} onZuruecksetzen={() => setArtikelWahl({})} />
           <BillOfMaterials
             materials={materials}
+            fahrzeuge={fahrzeuge}
+            fahrzeugWahl={fahrzeugWahl}
+            onFahrzeugWahl={setFahrzeugWahl}
             ohnePreis={ohnePreisListe}
             ohneGewicht={ohneGewichtListe}
             lagerFehler={lagerFehler}
