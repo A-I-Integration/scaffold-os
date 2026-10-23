@@ -33,8 +33,11 @@ export function breitenklasseFuerBreite(breiteM: number): string | null {
   return null;
 }
 
+// Mindestklassen nach DGUV Information 201-011: Putz-, Dachdeckungs-, Maler- und
+// Fassadenbekleidungsarbeiten erfordern mindestens LK 3 und W06. Dach steht hier bewusst bei LK 4 (Annahme: Material
+// wird gelagert, schwere Baustoffe/Bauteile = LK 4 bis 6); das ist nicht aus der Norm abgeleitet, die Statik entscheidet.
 const LK_JE_GEWERK: Record<string, number> = {
-  'WDVS/Fassade': 3, Putz: 3, Maler: 2, Dach: 4,
+  'WDVS/Fassade': 3, Putz: 3, Maler: 3, Dach: 4,
 };
 
 /** Vorschlag aus den gewählten Gewerken: die HÖCHSTE passende Klasse (bei Dach + Putz also LK 4).

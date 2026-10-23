@@ -27,6 +27,7 @@ import type { MaterialItem } from '@/types/scaffold'
 import { kappeModellAufHoehe, kappeMaterial } from '@/lib/cad/bauabschnitt'
 import { standardpreisFuer, type LvStandardpreise } from '@/lib/lv-firmenwerte'
 import { MIN_BREITE_AB_LK4_M } from '@/lib/geruestklassen'
+import { lagenansatzText } from '@/lib/lastansatz'
 
 export const GRUNDSTANDZEIT_WOCHEN = 4
 
@@ -595,6 +596,12 @@ export function erzeugeLeistungsverzeichnis(quelle: LvQuelle, e: LvEingaben): Le
   if (!(e.mietsatzProzentJeWoche > 0)) fehlend.push('Mietsatz je Woche (% vom Materialwert)')
   if (!(flaecheM2 > 0)) fehlend.push('Gerüstfläche (kein Gerüst im Modell)')
   if (!(e.statikPauschale > 0)) fehlend.push('Pauschale technische Bearbeitung / statische Berechnung')
+  if (e.stil === 'statiker') {
+    // Positionen, die das CAD nicht liefert (Preis/Menge von Hand, Hinweis des Statikers): offen, solange EP oder Menge 0 ist
+    const HAENDISCH = ['Überbrückungen', 'Schutzdächer', 'Haltestellenausstattung', 'Personen- und Lastenaufzug', 'Schutz von Dachflächen', 'Ausbau / Umbau Beläge', 'Ausbau / Rückbau / Umbau Beläge', 'Ersatz der Bauteile', 'Umbau der Gerüste', 'Umbau der Fachwerkbinder']
+    const offen = titel.flatMap((t) => t.positionen).filter((p) => HAENDISCH.some((h) => p.titel.startsWith(h)) && !p.titel.startsWith('Vorhaltung') && (!(p.ep > 0) || !(p.menge > 0)))
+    if (offen.length > 0) fehlend.push(`Preis oder Menge von Hand: ${[...new Set(offen.map((p) => `${p.nr} ${p.titel.replace(/ H = ca\..*$/, '')}`))].join(', ')}`)
+  }
   for (const z of aktiveZusatz) {
     const i = ZUSATZ_INFO[z.art]
     if (!(z.epAuf > 0) || !(z.epAb > 0) || !(z.epVorh > 0)) fehlend.push(`Einheitspreise für ${i.name} (Aufbau, Vorhaltung je Woche, Abbau)`)
@@ -627,8 +634,9 @@ export function erzeugeLeistungsverzeichnis(quelle: LvQuelle, e: LvEingaben): Le
         ? `Aufbau, Vorhaltung und Abbau sind getrennte Positionen (Aufbau wie in den Muster-LVs). Vorhaltung über die gesamte Standzeit von ${de(e.gesamtStandzeitWochen, 0)} Wochen (Menge × Wochen). Aufbau-EP = Aufbaustunden × Stundensatz Facharbeiter, Abbau-EP = Abbaustunden × Stundensatz (je mit Zuschlag, nach Materialwert verteilt); das Material steckt in der Vorhaltung.`
         : `Gesamt-Standzeit ${de(e.gesamtStandzeitWochen, 0)} Wochen, davon ${GRUNDSTANDZEIT_WOCHEN} Wochen Grundstandzeit in der Aufbauposition, danach Verlängerung der Vorhaltung.`,
       ...(aktiveZusatz.length ? ['Dachfanggerüst, Seitenschutz, Überbrückung, Strahlnetze, Aufzug und Bauzaun kommen nicht aus dem CAD-Modell: Menge und Einheitspreise sind Eingaben.'] : []),
-      'Gliederung und Wortlaut orientieren sich an den Muster-LVs (ZECH Bau SE / BVG Los 4 und Ernst Architekten BDA / St. Kilian). Die Bezeichnung „SW“ der Breitenklasse folgt dem Muster-LV; Normtext nicht geprüft. Pauschalen für Statik, Baustelleneinrichtung und Anfahrt sind Eingaben.',
+      'Gliederung und Wortlaut orientieren sich an üblichen Muster-Leistungsverzeichnissen. Die Bezeichnung „SW“ der Breitenklasse folgt dem Muster-LV; Normtext nicht geprüft. Pauschalen für Statik, Baustelleneinrichtung und Anfahrt sind Eingaben.',
       'Last-, Breiten- und Höhenklasse nach DIN EN 12811-1 (Normtext nicht geprüft). Die Höhenklasse ist eine Eingabe, nicht aus dem CAD berechnet.',
+      ...(lagenansatzText(e.lastklasse) ? [lagenansatzText(e.lastklasse)!] : []),
       ...(e.aufbauStundenManuell !== undefined || e.abbauStundenManuell !== undefined
         ? [`Stunden von Hand eingegeben: Aufbau ${de(aufbauStunden, 0)} h, Abbau ${de(abbauStunden, 0)} h (CAD-Wert: ${de(quelle.aufbauStunden, 0)} h / ${de(quelle.abbauStunden, 0)} h).`] : []),
       ...(Object.keys(e.epUeberschreibung ?? {}).length || Object.keys(e.mengeUeberschreibung ?? {}).length
