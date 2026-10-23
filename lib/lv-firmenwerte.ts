@@ -15,11 +15,14 @@ export interface LvStandardpreis {
   ep?: number
   /** Einheitspreis der Vorhaltung (€ je Einheit und Woche) */
   epJeWoche?: number
+  /** Faktor in % auf Menge × EP dieser Position (z. B. 80); leer = der allgemeine Faktor aus dem LV-Dialog */
+  faktorProzent?: number
 }
 export type LvStandardpreise = Record<string, LvStandardpreis>
 
 /** Positionen ohne CAD-Wert, für die ein Standardpreis hinterlegt werden kann. Schlüssel = Anfang des Positionstitels. */
 export const LV_STANDARDPREIS_POSITIONEN: { schluessel: string; name: string; einheit: string; mitWoche: boolean }[] = [
+  { schluessel: 'Technische Bearbeitung', name: 'Technische Bearbeitung, Vorbemerkungen', einheit: 'Stück', mitWoche: false },
   { schluessel: 'Baustelleneinrichtung', name: 'Baustelleneinrichtung (Miete je Woche)', einheit: 'Stück', mitWoche: true },
   { schluessel: 'Baustellen-Container-WC', name: 'Baustellen-Container-WC', einheit: 'Stück', mitWoche: true },
   { schluessel: 'Bauzaun', name: 'Bauzaun (Auf- und Abbau)', einheit: 'm', mitWoche: true },
@@ -62,7 +65,8 @@ export function standardpreiseAus(roh: unknown): LvStandardpreise {
     if (!w || typeof w !== 'object') continue
     const ep = zahlOderNull((w as LvStandardpreis).ep)
     const epJeWoche = zahlOderNull((w as LvStandardpreis).epJeWoche)
-    if (ep !== undefined || epJeWoche !== undefined) aus[p.schluessel] = { ...(ep !== undefined ? { ep } : {}), ...(epJeWoche !== undefined ? { epJeWoche } : {}) }
+    const faktorProzent = zahlOderNull((w as LvStandardpreis).faktorProzent)
+    if (ep !== undefined || epJeWoche !== undefined || faktorProzent !== undefined) aus[p.schluessel] = { ...(ep !== undefined ? { ep } : {}), ...(epJeWoche !== undefined ? { epJeWoche } : {}), ...(faktorProzent !== undefined ? { faktorProzent } : {}) }
   }
   return aus
 }

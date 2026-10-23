@@ -8,6 +8,9 @@ describe('LV-Firmenwerte und Standardpreise', () => {
     expect(standardpreiseAus(null)).toEqual({})
     expect(standardpreiseAus([1, 2])).toEqual({})
   })
+  it('übernimmt den Faktor je Position', () => {
+    expect(standardpreiseAus({ Bauzaun: { faktorProzent: '80' }, Bauzauntor: { faktorProzent: 0 } })).toEqual({ Bauzaun: { faktorProzent: 80 } })
+  })
   it('findet den Preis über den Titelanfang, längster Schlüssel gewinnt', () => {
     const p = { Bauzaun: { ep: 1 }, Bauzauntor: { ep: 2 } }
     expect(standardpreisFuer(p, 'Bauzauntor')?.ep).toBe(2)
