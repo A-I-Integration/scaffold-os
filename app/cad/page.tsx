@@ -118,6 +118,7 @@ export default function CADPage() {
   const [aussehenEinheit, setAussehenEinheit] = useState<'m' | 'cm' | 'mm'>('m')
   const [aussehenOben, setAussehenOben] = useState<'x' | 'y' | 'z'>('y')
   const [aussehenHinweis, setAussehenHinweis] = useState('')
+  const [aussehenVersatz, setAussehenVersatz] = useState<{ x: number; z: number; grad: number }>({ x: 0, z: 0, grad: 0 })
   useEffect(() => {
     let weg = false
     ladeGemerktesAussehen().then((m) => {
@@ -125,24 +126,25 @@ export default function CADPage() {
       setAussehen((alt) => alt ?? m.aussehen)
       setAussehenEinheit(m.einheit === 'cm' || m.einheit === 'mm' ? m.einheit : 'm')
       setAussehenOben(m.oben === 'x' || m.oben === 'z' ? m.oben : 'y')
+      if (m.versatz) setAussehenVersatz(m.versatz)
     })
     return () => { weg = true }
   }, [])
   useEffect(() => {
-    if (aussehen) void merkeAussehen({ aussehen, einheit: aussehenEinheit, oben: aussehenOben })
-  }, [aussehen, aussehenEinheit, aussehenOben])
+    if (aussehen) void merkeAussehen({ aussehen, einheit: aussehenEinheit, oben: aussehenOben, versatz: aussehenVersatz })
+  }, [aussehen, aussehenEinheit, aussehenOben, aussehenVersatz])
   const ladeAussehen = async (datei: File) => {
     setAussehenHinweis('')
     try {
       const r = aussehenAusDatei(await datei.arrayBuffer(), datei.name)
       if (!r.ok) { setAussehenHinweis('❌ ' + r.meldung); return }
-      setAussehen(r.aussehen); setAussehenEin(true); setAussehenEinheit('m'); setAussehenOben('y')
+      setAussehen(r.aussehen); setAussehenEin(true); setAussehenEinheit('m'); setAussehenOben('y'); setAussehenVersatz({ x: 0, z: 0, grad: 0 })
       setAussehenHinweis(r.hinweis ?? '')
     } catch (e) { setAussehenHinweis('❌ Datei konnte nicht gelesen werden: ' + (e instanceof Error ? e.message : 'Fehler')) }
   }
   const echtesGebaeude = useMemo(
-    () => (aussehen && aussehenEin ? { aussehen, faktor: aussehenEinheit === 'cm' ? 0.01 : aussehenEinheit === 'mm' ? 0.001 : 1, oben: aussehenOben } : null),
-    [aussehen, aussehenEin, aussehenEinheit, aussehenOben],
+    () => (aussehen && aussehenEin ? { aussehen, faktor: aussehenEinheit === 'cm' ? 0.01 : aussehenEinheit === 'mm' ? 0.001 : 1, oben: aussehenOben, versatzX: aussehenVersatz.x, versatzZ: aussehenVersatz.z, drehungGrad: aussehenVersatz.grad } : null),
+    [aussehen, aussehenEin, aussehenEinheit, aussehenOben, aussehenVersatz],
   )
   const [abbauEin, setAbbauEin] = useState<TeilabbauEingabe>(TEILABBAU_START)
   const [showBuilding, setShowBuilding] = useState(true)
@@ -961,6 +963,11 @@ export default function CADPage() {
                     <select className='text-xs border rounded-lg px-1 py-1 bg-white' value={aussehenEinheit} onChange={(ev) => setAussehenEinheit(ev.target.value as 'm' | 'cm' | 'mm')} title='Einheit der Datei'>
                       <option value='m'>Meter</option><option value='cm'>cm</option><option value='mm'>mm</option>
                     </select>
+                    <select className='text-xs border rounded-lg px-1 py-1 bg-white' value={aussehenVersatz.grad} onChange={(ev) => setAussehenVersatz((v) => ({ ...v, grad: Number(ev.target.value) }))} title='Gebäude drehen, damit es zum Gerüst passt'>
+                      {[0, 90, 180, 270].map((g) => <option key={g} value={g}>{g}°</option>)}
+                    </select>
+                    <label className='text-[11px] text-[#424245]' title='Gebäude nach links/rechts schieben (m)'>X <input type='number' step='1' className='w-14 text-xs border rounded px-1 py-0.5 bg-white' value={aussehenVersatz.x} onChange={(ev) => setAussehenVersatz((v) => ({ ...v, x: Number(ev.target.value) || 0 }))} /></label>
+                    <label className='text-[11px] text-[#424245]' title='Gebäude nach vorn/hinten schieben (m)'>Z <input type='number' step='1' className='w-14 text-xs border rounded px-1 py-0.5 bg-white' value={aussehenVersatz.z} onChange={(ev) => setAussehenVersatz((v) => ({ ...v, z: Number(ev.target.value) || 0 }))} /></label>
                     <button type='button' className='text-xs text-[#86868b] underline' onClick={() => { setAussehen(null); void vergissAussehen() }}>entfernen</button>
                   </>
                 )}
