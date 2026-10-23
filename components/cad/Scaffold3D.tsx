@@ -22,6 +22,7 @@ import { CADModel, ScaffoldComponent3D, BuildingFeature3D, berechneGebaeudeSegme
 import { CATALOG_ITEMS } from './ComponentCatalog'
 import Umgebung3D from './Umgebung3D'
 import { bauteilFarbe, type FarbModus } from '@/lib/cad/bauteil-farben'
+import { baueStabwerk, STAB_FARBEN, type StabArt } from '@/lib/cad/stabwerk'
 import { baueBacksteinMaterial, getGrasTex, getSchieferTex, PRAESENTATION_ROHR, PRAESENTATION_HINTERGRUND } from '@/lib/cad/praesentation-material'
 import { kantenSchluessel } from '@/types/cad-layers'
 import type { CADNote } from '@/types/cad-notes'
@@ -842,6 +843,48 @@ function InstancedBauteile({
 // ═══════════════════════════════════════════════════════════
 // ALLE BAUTEILE (Gruppierung nach Typ) – mit memo()
 // ═══════════════════════════════════════════════════════════
+// ─── Statik-Ansicht: Gerüst als Stabwerk (Linien, Knoten, Dreiecke) ───
+// Nur Geometrie aus den Bauteil-Maßen (siehe lib/cad/stabwerk.ts), keine Statik-Aussage.
+const Stabwerk3D = memo(function Stabwerk3D({ components, visibleTypes }: { components: ScaffoldComponent3D[]; visibleTypes: Record<string, boolean> }) {
+  const { invalidate } = useThree()
+  const werk = useMemo(
+    () => baueStabwerk(components.filter((c) => visibleTypes[istTreppenstufe(c) ? 'stair' : c.type] !== false)),
+    [components, visibleTypes],
+  )
+  const linien = useMemo(() => {
+    const pos = new Float32Array(werk.staebe.length * 6)
+    const farbe = new Float32Array(werk.staebe.length * 6)
+    const c = new THREE.Color()
+    werk.staebe.forEach((st, i) => {
+      pos.set([...st.a, ...st.b], i * 6)
+      c.set(STAB_FARBEN[st.art as StabArt])
+      farbe.set([c.r, c.g, c.b, c.r, c.g, c.b], i * 6)
+    })
+    const g = new THREE.BufferGeometry()
+    g.setAttribute('position', new THREE.BufferAttribute(pos, 3))
+    g.setAttribute('color', new THREE.BufferAttribute(farbe, 3))
+    return g
+  }, [werk])
+  const punkte = useMemo(() => {
+    const g = new THREE.BufferGeometry()
+    g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(werk.knoten.flat()), 3))
+    return g
+  }, [werk])
+  const flaeche = useMemo(() => {
+    const g = new THREE.BufferGeometry()
+    g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(werk.flaechen), 3))
+    return g
+  }, [werk])
+  useEffect(() => { invalidate() }, [werk, invalidate])
+  return (
+    <group>
+      <mesh geometry={flaeche}><meshBasicMaterial color="#f59e0b" transparent opacity={0.22} side={THREE.DoubleSide} depthWrite={false} /></mesh>
+      <lineSegments geometry={linien}><lineBasicMaterial vertexColors /></lineSegments>
+      <points geometry={punkte}><pointsMaterial color="#374151" size={2} sizeAttenuation={false} /></points>
+    </group>
+  )
+})
+
 const AllScaffoldComponents = memo(function AllScaffoldComponents({
   components,
   visibleTypes,
@@ -1716,6 +1759,8 @@ function Scene({
   removedCount,
 }: Props) {
   const praes = useContext(FarbModusKontext) === 'praesentation'
+  const statik = useContext(FarbModusKontext) === 'statik'
+  const weiss = praes || statik // weißer Studio-Hintergrund ohne Himmel, Umgebung und Nebel
   const target: [number, number, number] = [0, model.building.heightM / 2, 0]
   // Schatten-Kamera eng ans Modell anpassen (Standardwerte sind viel zu groß
   // und verschwenden Auflösung).
@@ -1733,7 +1778,7 @@ function Scene({
       <ShadowFreeze modelKey={modelKey} />
       <CameraController viewMode={viewMode} target={target} />
       <LODController target={target} onLevelChange={setLodLevel} />
-      {praes ? <color attach="background" args={[PRAESENTATION_HINTERGRUND]} /> : <Sky sunPosition={[40, 30, 20]} turbidity={6} rayleigh={2} />}
+      {weiss ? <color attach="background" args={[PRAESENTATION_HINTERGRUND]} /> : <Sky sunPosition={[40, 30, 20]} turbidity={6} rayleigh={2} />}
       {/* NEU (Optik-Überarbeitung): sorgt für echte Umgebungsreflexionen auf
           dem verzinkten Stahl – ohne das sieht Metall matt/plastikartig aus,
           egal wie gut die Grundfarbe gewählt ist. background={false}: nur
@@ -1761,8 +1806,9 @@ function Scene({
       <directionalLight position={[-20, 15, -15]} intensity={0.35} color="#dce8f5" />
       <Building3D building={model.building} features={features || []} visible={showBuilding && !bridgeMode} />
       <BridgeDeck3D building={model.building} visible={showBuilding && !!bridgeMode} />
-      <Umgebung3D model={model} visible={!!showEnvironment && !bridgeMode && !praes} />
-      {showScaffold && (
+      <Umgebung3D model={model} visible={!!showEnvironment && !bridgeMode && !weiss} />
+      {showScaffold && statik && <Stabwerk3D components={model.components3D} visibleTypes={visibleTypes} />}
+      {showScaffold && !statik && (
         <AllScaffoldComponents
           components={model.components3D}
           visibleTypes={visibleTypes}
@@ -1784,12 +1830,12 @@ function Scene({
           grau und hebt sich mit harter Kante vom weißen Hintergrund ab). Sonst: großer Boden, der am Horizont
           über den Nebel in die Himmelsfarbe übergeht statt an einer sichtbaren Kante zu enden. */}
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.02, 0]} receiveShadow>
-        <planeGeometry args={[praes ? 120 : 600, praes ? 120 : 600]} />
-        {praes
+        <planeGeometry args={[weiss ? 120 : 600, weiss ? 120 : 600]} />
+        {weiss
           ? <shadowMaterial transparent opacity={0.22} />
           : <meshStandardMaterial color={showEnvironment && !bridgeMode ? '#86a173' : '#b9c0c8'} roughness={0.95} />}
       </mesh>
-      <HorizontNebel an={!praes} />
+      <HorizontNebel an={!weiss} />
       {praes && <GrasFlaeche model={model} />}
     </group>
   )
