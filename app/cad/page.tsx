@@ -842,6 +842,7 @@ export default function CADPage() {
                 <button type='button' onClick={() => setFarbModus('real')} className={`px-2 py-1 ${farbModus === 'real' ? 'bg-[#1d1d1f] text-white' : 'bg-white text-[#424245]'}`} title='Verzinkte Optik wie in der Praxis'>Real</button>
                 <button type='button' onClick={() => setFarbModus('bauteil')} className={`px-2 py-1 ${farbModus === 'bauteil' ? 'bg-[#1d1d1f] text-white' : 'bg-white text-[#424245]'}`} title='Jede Bauteilart in eigener Farbe (mit Legende unten)'>Nach Bauteil</button>
                 <button type='button' onClick={() => setFarbModus('praesentation')} className={`px-2 py-1 ${farbModus === 'praesentation' ? 'bg-[#1d1d1f] text-white' : 'bg-white text-[#424245]'}`} title='Weißer Hintergrund, dunkle Gerüstrohre, Backstein/Schiefer/Rasen (schematisch, nicht aus einem Scan)'>Präsentation</button>
+                <button type='button' onClick={() => setFarbModus('statik')} className={`px-2 py-1 ${farbModus === 'statik' ? 'bg-[#1d1d1f] text-white' : 'bg-white text-[#424245]'}`} title='Statik: Gerüst nur als Stabwerk – Linien (Stiele, Riegel, Diagonalen, Geländer, Anker), Knotenpunkte und Flächen (Beläge). Reine Geometrie, keine Standsicherheitsaussage. Anklicken und Messen sind in dieser Ansicht aus.'>Statik</button>
               </div>
             )}
             {viewMode === '3d' && (
