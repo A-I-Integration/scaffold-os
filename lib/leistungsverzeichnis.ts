@@ -25,6 +25,7 @@
 import type { CADModel } from '@/lib/calculations/cad-engine'
 import type { MaterialItem } from '@/types/scaffold'
 import { kappeModellAufHoehe, kappeMaterial } from '@/lib/cad/bauabschnitt'
+import { standardpreisFuer, type LvStandardpreise } from '@/lib/lv-firmenwerte'
 
 export const GRUNDSTANDZEIT_WOCHEN = 4
 
@@ -119,6 +120,8 @@ export interface LvEingaben {
   hoeheBa2M?: number
   /** Stil „statiker“: Standzeit des 2. Bauabschnitts in Wochen (leer/0 = in der Tabelle eintragen) */
   standzeitBa2Wochen?: number
+  /** Standardpreise aus der Datenpflege für Positionen ohne CAD-Wert (füllen nur, wo sonst 0 € stehen würde) */
+  standardpreise?: LvStandardpreise
 }
 
 export const LV_STANDARD_EINGABEN: LvEingaben = {
@@ -420,9 +423,11 @@ export function erzeugeLeistungsverzeichnis(quelle: LvQuelle, e: LvEingaben): Le
     const nrFmt = (titelNr: string, i: number, zweistellig = false) => `${titelNr}.${zweistellig ? String(i).padStart(2, '0') : i}`
     const baue = (titelNr: string, zweistellig = false) => {
       const liste: LvPosition[] = []
-      const add = (titel: string, text: string[], menge: number, einheit: string, ep: number): LvPosition => {
+      const add = (titel: string, text: string[], menge: number, einheit: string, epCad: number): LvPosition => {
         const mo = e.mengeUeberschreibung?.[titel]
         const eo = e.epUeberschreibung?.[titel]
+        const std = epCad > 0 ? undefined : standardpreisFuer(e.standardpreise, titel)?.ep
+        const ep = std ? cent(std) : epCad
         const mengeNeu = mo !== undefined && Number.isFinite(mo) && mo >= 0 ? mo : menge
         const epNeu = eo !== undefined && Number.isFinite(eo) && eo >= 0 ? cent(eo) : ep
         const p: LvPosition = {
@@ -437,8 +442,18 @@ export function erzeugeLeistungsverzeichnis(quelle: LvQuelle, e: LvEingaben): Le
     }
     const miet = (matSumme: number) => cent(matSumme * (e.mietsatzProzentJeWoche / 100) * faktor)
     const OHNE_CAD = 'Nicht aus dem CAD: Menge und Preis bitte in der Tabelle eintragen.'
-    const vorh = (b: ReturnType<typeof baue>, bezugNr: string, bezugTitel: string, ep: number, einheit = 'Wo', mengeWo = woGesamt, text?: string) =>
-      b.add(`Vorhaltung zur Vorposition ${bezugNr}`, [text ?? `Vorhaltung zur Vorposition ${bezugNr} ${bezugTitel}.`], r2(mengeWo), einheit, ep)
+    const vorh = (b: ReturnType<typeof baue>, bezugNr: string, bezugTitel: string, ep: number, einheit = 'Wo', mengeWo = woGesamt, text?: string) => {
+      // Standardpreis „je Woche“ aus der Datenpflege: nur, wo das CAD/die Zusatzleistung keinen Preis liefert
+      const bezug = b.liste.find((x) => x.nr === bezugNr)
+      const woche = ep > 0 || !bezug ? undefined : standardpreisFuer(e.standardpreise, bezug.titel)?.epJeWoche
+      if (woche) {
+        const wochen = /2\. ?BA/.test(bezug!.titel) && (e.standzeitBa2Wochen ?? 0) > 0 ? e.standzeitBa2Wochen! : woGesamt
+        if (!(mengeWo > 0) && bezug!.menge > 0) { mengeWo = bezug!.menge * wochen; einheit = bezug!.einheit === 'Stück' || bezug!.einheit === 'Stck' ? 'StckWo' : `${bezug!.einheit}Wo` }
+        else if (!(mengeWo > 0)) mengeWo = wochen
+        ep = cent(woche)
+      }
+      return b.add(`Vorhaltung zur Vorposition ${bezugNr}`, [text ?? `Vorhaltung zur Vorposition ${bezugNr} ${bezugTitel}.`], r2(mengeWo), einheit, ep)
+    }
     const zus = (art: ZusatzArt) => zusatzEff.find((z) => z.art === art)
 
     // Titel 01 – Baustelleneinrichtung

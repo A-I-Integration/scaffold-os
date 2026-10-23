@@ -242,6 +242,22 @@ describe('Leistungsverzeichnis', () => {
       expect(new Set(titel).size).toBe(titel.length)
     })
 
+    it('Standardpreise aus der Datenpflege füllen Positionen ohne CAD-Wert, Handeingaben gewinnen', () => {
+      const ohne = erzeugeLeistungsverzeichnis(quelle(), stat)
+      const std: LvEingaben = { ...stat, standardpreise: { 'Haltestellenausstattung 2. BA': { ep: 100, epJeWoche: 2 }, 'Baustellen-Container-WC': { ep: 250 } } }
+      const mit = erzeugeLeistungsverzeichnis(quelle(), std)
+      const pos = (lv: typeof ohne, t: string) => alle(lv).find((p) => p.titel === t)!
+      expect(pos(ohne, 'Haltestellenausstattung 2. BA').ep).toBe(0)
+      expect(pos(mit, 'Haltestellenausstattung 2. BA').ep).toBe(100)
+      expect(pos(mit, 'Baustellen-Container-WC').ep).toBe(250)
+      const vh = alle(mit).find((p) => p.titel.startsWith('Vorhaltung zur Vorposition') && p.nr === pos(mit, 'Haltestellenausstattung 2. BA').nr.replace(/\.(\d+)$/, (_m, n) => '.' + (Number(n) + 1)))
+      expect(vh?.ep).toBe(2)
+      expect(vh?.menge).toBe(500) // 10 Haltestellen × 50 Wochen
+      const hand = erzeugeLeistungsverzeichnis(quelle(), { ...std, epUeberschreibung: { 'Baustellen-Container-WC': 99 } })
+      expect(pos(hand, 'Baustellen-Container-WC').ep).toBe(99)
+      expect(mit.summeNetto).toBeGreaterThan(ohne.summeNetto)
+    })
+
     it('Gerüst 1. BA = Aufbau + Abbau aus dem CAD, Vorhaltung = Standzeit in Wochen', () => {
       const q = quelle()
       const lv = erzeugeLeistungsverzeichnis(q, stat)

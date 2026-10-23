@@ -87,6 +87,8 @@ export async function POST(req: NextRequest) {
       'tour_standort_erfassen',
       // Tourenplanung: Fahrtdauer (Minuten) und späteste Abfahrt (Minuten seit 00:00)
       'tour_fahrt_dauer_min', 'tour_letzter_start_min',
+      // Leistungsverzeichnis: Firmenwerte und Standardpreise (gelten auf allen Geräten)
+      'lv_firmenwerte', 'lv_standardpreise',
     ];
     const patch: Record<string, any> = { updated_at: new Date().toISOString() };
     for (const f of allowed) {

@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { erforderlicheKlasse } from '@/lib/touren/fuehrerschein';
+import LvStandardpreiseEditor from '@/components/datenpflege/LvStandardpreiseEditor';
 
 // ============================================================
 // SCAFFOLD OS – Datenpflege (nur CEO/Admin)
@@ -176,6 +177,8 @@ export default function DatenpflegePage() {
   const [error, setError] = useState('');
   const [msg, setMsg] = useState('');
   const [section, setSection] = useState<Section>(SECTIONS[0]);
+  // Sonder-Bereich ohne Tabelle: Standardpreise fürs Leistungsverzeichnis
+  const [lvOffen, setLvOffen] = useState(false);
 
   // Inline-Bearbeitung
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -304,20 +307,32 @@ export default function DatenpflegePage() {
           {SECTIONS.map(s => (
             <button
               key={s.key}
-              onClick={() => { setSection(s); setEditingId(null); setMsg(''); setShowCreate(false); setCreateValues({}); }}
+              onClick={() => { setLvOffen(false); setSection(s); setEditingId(null); setMsg(''); setShowCreate(false); setCreateValues({}); }}
               className={`rounded-xl px-4 py-2 text-sm font-medium transition ${
-                section.key === s.key ? 'bg-amber-600 text-[#1d1d1f]' : 'bg-[#f5f5f7] text-[#424245] hover:bg-black/10'
+                !lvOffen && section.key === s.key ? 'bg-amber-600 text-[#1d1d1f]' : 'bg-[#f5f5f7] text-[#424245] hover:bg-black/10'
               }`}
             >
               {s.icon} {s.title} ({(data[s.key] || []).length})
             </button>
           ))}
+          <button
+            onClick={() => { setLvOffen(true); setEditingId(null); setMsg(''); setShowCreate(false); }}
+            className={`rounded-xl px-4 py-2 text-sm font-medium transition ${lvOffen ? 'bg-amber-600 text-[#1d1d1f]' : 'bg-[#f5f5f7] text-[#424245] hover:bg-black/10'}`}
+          >
+            📋 LV-Standardpreise
+          </button>
         </div>
 
-        {error && <div className="bg-red-900/40 border border-red-200 rounded-xl p-4 text-red-700">{error}</div>}
-        {msg && <div className={`rounded-xl p-3 text-sm ${msg.startsWith('✅') ? 'bg-emerald-50 border border-emerald-200 text-emerald-700' : 'bg-red-50 border border-red-200 text-red-700'}`}>{msg}</div>}
+        {lvOffen && (
+          <section className="bg-white border border-black/5 rounded-2xl p-5 overflow-x-auto">
+            <LvStandardpreiseEditor />
+          </section>
+        )}
 
-        {section.createEndpoint && (
+        {!lvOffen && error && <div className="bg-red-900/40 border border-red-200 rounded-xl p-4 text-red-700">{error}</div>}
+        {!lvOffen && msg && <div className={`rounded-xl p-3 text-sm ${msg.startsWith('✅') ? 'bg-emerald-50 border border-emerald-200 text-emerald-700' : 'bg-red-50 border border-red-200 text-red-700'}`}>{msg}</div>}
+
+        {!lvOffen && section.createEndpoint && (
           <div className="bg-white border border-black/5 rounded-2xl p-5">
             {!showCreate ? (
               <button
@@ -356,7 +371,7 @@ export default function DatenpflegePage() {
           </div>
         )}
 
-        <section className="bg-white border border-black/5 rounded-2xl p-5 overflow-x-auto">
+        {!lvOffen && <section className="bg-white border border-black/5 rounded-2xl p-5 overflow-x-auto">
           {loading ? (
             <p className="text-[#86868b]">Lade…</p>
           ) : rows.length === 0 ? (
@@ -429,7 +444,7 @@ export default function DatenpflegePage() {
               </tbody>
             </table>
           )}
-        </section>
+        </section>}
 
         <p className="text-[#86868b] text-xs">
           💡 Hinweis: Einträge, die noch woanders benutzt werden (z.B. ein Projekt in einem Transport),
