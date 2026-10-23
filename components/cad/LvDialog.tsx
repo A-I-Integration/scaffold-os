@@ -143,9 +143,9 @@ export default function LvDialog({ model, materials, aufbauStunden, abbauStunden
           <div className='p-4 space-y-3 overflow-y-auto border-r border-black/10'>
             <div className='text-[11px] font-semibold uppercase text-[#86868b]'>Aufbau des LV</div>
             <select className={feld} value={e.stil} onChange={(ev) => setze({ stil: ev.target.value as LvStil })}>
-              <option value='getrennt'>Aufbau · Vorhaltung · Abbau getrennt (wie ZECH/BVG)</option>
-              <option value='grundstandzeit'>Auf-/Abbau inkl. 4 Wochen Vorhaltung (wie St. Kilian)</option>
-              <option value='statiker'>Wie Statiker-LV: Stück-Pauschalen, 2 Bauabschnitte (Wuppertal)</option>
+              <option value='getrennt'>Aufbau · Vorhaltung · Abbau getrennt</option>
+              <option value='grundstandzeit'>Auf-/Abbau inkl. 4 Wochen Vorhaltung</option>
+              <option value='statiker'>Gliederung des Auftraggebers: Stück-Pauschalen, 2 Bauabschnitte (Turmeinrüstung)</option>
             </select>
 
             <label className='block text-[11px] text-[#424245]'>
@@ -240,7 +240,7 @@ export default function LvDialog({ model, materials, aufbauStunden, abbauStunden
                 </div>
               </div>
             ))}
-            <p className='text-[10px] text-[#86868b]'>Diese Positionen stehen in den Muster-LVs, kommen aber nicht aus dem CAD-Modell. Menge 0 = Position entfällt.</p>
+            <p className='text-[10px] text-[#86868b]'>Diese Positionen stehen in üblichen Leistungsverzeichnissen, kommen aber nicht aus dem CAD-Modell. Menge 0 = Position entfällt.</p>
 
             <div className='text-[11px] font-semibold uppercase text-[#86868b] pt-1'>Pauschalen (netto)</div>
             <div className='grid grid-cols-2 gap-2'>

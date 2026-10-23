@@ -15,6 +15,7 @@ import { abschnittsListe } from '@/lib/geruest/regelpruefung'
 import { MJ_LISTEN } from '@/lib/mj-katalog'
 import { katalogListeFuerSystem } from '@/lib/cad/katalog-zuordnung'
 import { pruefeLastklassen, type LkErgebnis } from '@/lib/data/zulassung-lastklassen'
+import { lagenansatz } from '@/lib/lastansatz'
 
 export interface LastannahmenOptionen {
   projektName: string
@@ -110,6 +111,8 @@ export function baueLastannahmenDaten(model: CADModel, statik: StatikDaten, opt:
         { label: 'Gerüstbreite', wert: sys ? `${zahl(b.geruestOptionen?.breiteM ?? sys.rahmenBreitenM[0])} m` : null },
         { label: 'Höhenraster', wert: sys ? `${zahl(sys.rasterHoeheM)} m` : null },
         { label: 'Lastklasse (DIN EN 12811-1)', wert: b.lastklasse ? String(b.lastklasse) : null },
+        { label: 'Lastansatz (längenorientiert)', wert: lagenansatz(b.lastklasse) ? `Lage 1: 100 % = ${zahl(lagenansatz(b.lastklasse)!.lage1KnM2)} kN/m² · Lage 2: 50 % = ${zahl(lagenansatz(b.lastklasse)!.lage2KnM2)} kN/m² (Belastung auf 1,5 Lagen)` : null },
+        { label: 'Teilflächenlast q2 (ab LK 4)', wert: lagenansatz(b.lastklasse)?.q2KnM2 != null ? `${zahl(lagenansatz(b.lastklasse)!.q2KnM2!)} kN/m², Teilflächenfaktor ${zahl(lagenansatz(b.lastklasse)!.ap!)}` : null },
         { label: 'Mischsysteme', wert: statik.systemmischung ? 'ja - gesonderter Nachweis nötig' : 'nein / nicht angegeben' },
       ],
     },

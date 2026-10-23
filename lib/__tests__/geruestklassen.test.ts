@@ -7,9 +7,9 @@ describe('Gerüstklassen', () => {
     expect(vorschlagLastklasse(['Putz', 'Dach']).klasse).toBe(4);
     expect(vorschlagLastklasse(['Putz', 'Dach']).grund).toBe('Dach');
   });
-  it('Putz/WDVS LK 3, Maler LK 2, unbekannt LK 2', () => {
+  it('Putz/WDVS/Maler mindestens LK 3 (DGUV 201-011), unbekannt LK 2', () => {
     expect(vorschlagLastklasse(['WDVS/Fassade']).klasse).toBe(3);
-    expect(vorschlagLastklasse(['Maler']).klasse).toBe(2);
+    expect(vorschlagLastklasse(['Maler']).klasse).toBe(3);
     expect(vorschlagLastklasse([]).klasse).toBe(2);
     expect(vorschlagLastklasse(['Fenster']).klasse).toBe(2);
   });
