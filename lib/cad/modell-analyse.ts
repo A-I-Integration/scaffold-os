@@ -13,6 +13,7 @@
 import { dreieckeMitHoehe, EINHEIT_FAKTOR, type Achse, type Einheit } from '@/lib/cad/modell-import'
 import { erkenneBaukoerper, type BaukoerperErgebnis, type ErkannterTeil } from '@/lib/cad/baukoerper-erkennung'
 import { erkenneSchaftImGeruest } from '@/lib/cad/geruest-modell'
+import { erkennePortale, type ErkanntesPortal } from '@/lib/cad/portal-erkennung'
 import type { BuildingSection } from '@/lib/calculations/cad-engine'
 
 /** 'bauteil' = allgemeines Teil ohne erkannte Rolle (z. B. aus DXF-Linien: Maße sind bekannt, ob Schiff oder Turm weiß die Zeichnung nicht) */
@@ -47,6 +48,8 @@ export interface ModellAnalyse {
   teile: GebaeudeTeil[]
   ergebnis: BaukoerperErgebnis
   hinweise: string[]
+  /** Portale/Vorbauten an der Schaftwand (Vorschlag für Türen; nur bei Modellen mit erkanntem Schaft) */
+  portale?: ErkanntesPortal[]
 }
 
 const UEBLICHE_GROESSE_M = 30
@@ -188,9 +191,12 @@ export function analysiereDreiecke(dreiecke: Float32Array, opt: { format: 'obj' 
   const auf0 = versatz === 0 ? tris : tris.map((t) => [t[0], t[1], Math.max(0, t[2] - versatz), t[3], t[4], Math.max(0, t[5] - versatz), t[6], t[7], Math.max(0, t[8] - versatz)])
   if (grund.hinweis) hinweise.push(grund.hinweis)
   // Modell mit eingebautem Gerüst (z. B. NWD vom Statiker): Turmschaft aus dem Flachdach statt Gerüst-Fragmente
-  const ergebnis = erkenneSchaftImGeruest(auf0)?.ergebnis ?? erkenneBaukoerper(auf0)
+  const schaft = erkenneSchaftImGeruest(auf0)
+  const ergebnis = schaft?.ergebnis ?? erkenneBaukoerper(auf0)
   if (!ergebnis) return null
-  return { einheit, oben, einheitGeschaetzt: geschaetzt, teile: teilModell(ergebnis, opt.quelle ?? 'obj-stl'), ergebnis, hinweise: [...hinweise, ...ergebnis.hinweise] }
+  const portale = schaft ? erkennePortale(auf0, schaft.schaftLage, schaft.geruest.lagenM) : []
+  const portalHinweise = portale.map((p) => `Portal/Vorbau erkannt: ${p.breiteM.toString().replace('.', ',')} m breit, ${p.hoeheM.toString().replace('.', ',')} m hoch, ${p.tiefeM.toString().replace('.', ',')} m vor der Wand (Vorschlag für eine Tür, Seite bitte prüfen).`)
+  return { einheit, oben, einheitGeschaetzt: geschaetzt, teile: teilModell(ergebnis, opt.quelle ?? 'obj-stl'), ergebnis, hinweise: [...hinweise, ...ergebnis.hinweise, ...portalHinweise], ...(portale.length ? { portale } : {}) }
 }
 
 /** PLY: Punkte (Z oben, Einheit Meter) → Teile. Jeder Punkt wird wie ein winziges Dreieck behandelt. */

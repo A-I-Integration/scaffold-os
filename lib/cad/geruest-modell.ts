@@ -178,6 +178,8 @@ export interface SchaftImGeruest {
   ergebnis: BaukoerperErgebnis
   geruest: GeruestLagen
   dachFlaecheM2: number
+  /** Schaft in den Wandachsen (u, v): Drehung gegen die Modellachsen und Ausdehnung; `laengenAchse` = Achse, entlang der die Teile hintereinander liegen; `anbauSeite` = Seite dieser Achse, an der ein Anbau hängt */
+  schaftLage: { ang: number; u0: number; u1: number; v0: number; v1: number; laengenAchse: 'u' | 'v'; anbauSeite: 'plus' | 'minus' | null }
 }
 
 /**
@@ -254,5 +256,5 @@ export function erkenneSchaftImGeruest(tris: Dreieck[]): SchaftImGeruest | null 
     teile, tiefeMaxM: Math.max(...teile.map((t) => t.tiefeM)), laengeM: r(teile.reduce((x, t) => x + t.laengeM, 0)), gesamtHoeheM: hoeheR,
     turmIndex, mehrteilig: true, nurTurmVorgabe: true, genauigkeitM: 0.2, hinweise,
   }
-  return { ergebnis, geruest: lagen, dachFlaecheM2: r(dachA) }
+  return { ergebnis, geruest: lagen, dachFlaecheM2: r(dachA), schaftLage: { ang, u0, u1, v0, v1, laengenAchse: anbau && anbau.achse === 'v' ? 'v' : 'u', anbauSeite: anbau ? anbau.seite : null } }
 }
