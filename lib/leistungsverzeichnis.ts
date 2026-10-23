@@ -459,7 +459,7 @@ export function erzeugeLeistungsverzeichnis(quelle: LvQuelle, e: LvEingaben): Le
         const wochen = zweiteBa ? Math.max(0, e.standzeitBa2Wochen ?? 0) : woGesamt
         const stueck = bezug.einheit === 'Stück' || bezug.einheit === 'Stck'
         mengeWo = bezug.menge > 0 ? bezug.menge * wochen : 0
-        einheit = stueck ? (bezug.menge > 1 ? 'StckWo' : 'Wo') : `${bezug.einheit.replace('²', '2')}Wo`
+        if (stueck) { if (bezug.menge > 1) einheit = 'StckWo' } else einheit = `${bezug.einheit}/Wo`
         ep = cent(woche)
       }
       return b.add(`Vorhaltung zur Vorposition ${bezugNr}`, [text ?? `Vorhaltung zur Vorposition ${bezugNr} ${bezugTitel}.`], r2(mengeWo), einheit, ep)
