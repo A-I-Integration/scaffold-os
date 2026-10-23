@@ -68,7 +68,44 @@ export function erzeugeLvPdf(lv: Leistungsverzeichnis): jsPDF {
 
   // ── Titel und Positionen ──
   const spMenge = B - RAND - 75
+  // Preisliste: eine Tabelle mit den Spalten Position, Menge EH, Beschreibung, Einzelpreis, %, Gesamtpreis (alle Titel fortlaufend)
+  const tabelle = lv.eingaben.stil === 'preisliste'
+  const xMenge = RAND + 36, xEH = RAND + 38, xBesch = RAND + 56, wBesch = 53, xEP = B - RAND - 48, xProz = B - RAND - 32
+  const zahl2 = (v: number) => formatMenge(v, 2)
+  const tabellenKopf = () => {
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(9); doc.setTextColor(...GRAU)
+    doc.text('Position', RAND, y); doc.text('Menge', xMenge, y, { align: 'right' }); doc.text('EH', xEH, y); doc.text('Beschreibung', xBesch, y)
+    doc.text('Einzelpreis €', xEP, y, { align: 'right' }); doc.text('%', xProz, y, { align: 'right' }); doc.text('Gesamtpreis €', B - RAND, y, { align: 'right' })
+    y += 2; doc.setDrawColor(...GRAU); doc.line(RAND, y, B - RAND, y); y += 5
+  }
+  let ersteTabellenSeite = true
   for (const t of lv.titel) {
+    if (tabelle) {
+      if (ersteTabellenSeite) { neueSeite(); tabellenKopf(); ersteTabellenSeite = false } else platz(30)
+      doc.setFont('helvetica', 'bold'); doc.setFontSize(10); doc.setTextColor(...DUNKEL)
+      doc.text(t.nrText, RAND, y); doc.text(t.titel, xBesch - 40, y)
+      y += 6
+      for (const p of t.positionen) {
+        doc.setFont('helvetica', 'normal'); doc.setFontSize(9.5)
+        const zeilen = doc.splitTextToSize(p.titel, wBesch) as string[]
+        const h = Math.max(1, zeilen.length) * 4.3 + 2.5
+        if (y + h > H - 20) { neueSeite(); tabellenKopf() }
+        doc.setTextColor(...(p.entfaellt ? GRAU : DUNKEL))
+        doc.text(p.nr, RAND, y)
+        doc.text(formatMenge(p.menge, lv.mengeStellen), xMenge, y, { align: 'right' }); doc.text(p.einheit, xEH, y)
+        zeilen.forEach((z, i) => doc.text(z, xBesch, y + i * 4.3))
+        if (p.entfaellt) { doc.setDrawColor(...GRAU); doc.line(xBesch, y - 1, xBesch + Math.min(wBesch, doc.getTextWidth(zeilen[0])), y - 1) }
+        doc.text(zahl2(p.ep), xEP, y, { align: 'right' })
+        if (p.faktorProzent) doc.text(`${p.faktorProzent.toLocaleString('de-DE')}%`, xProz, y, { align: 'right' })
+        doc.setFont('helvetica', 'bold'); doc.text(zahl2(p.gp), B - RAND, y, { align: 'right' })
+        y += h
+      }
+      platz(14)
+      doc.setFont('helvetica', 'bold'); doc.setFontSize(10); doc.setTextColor(...DUNKEL)
+      doc.text(`Summe ${t.nrText}`, xEP, y, { align: 'right' }); doc.text(zahl2(t.summe), B - RAND, y, { align: 'right' })
+      y += 8
+      continue
+    }
     neueSeite()
     absatz(`Titel ${t.nrText}, ${t.titel}`, 13, true, ORANGE); y += 3
     for (const p of t.positionen) {
@@ -86,7 +123,7 @@ export function erzeugeLvPdf(lv: Leistungsverzeichnis): jsPDF {
       }
       platz(10)
       doc.setFont('helvetica', 'normal'); doc.setFontSize(10)
-      doc.text(`${formatMenge(p.menge)} ${p.einheit}`, spMenge, y, { align: 'right' })
+      doc.text(`${formatMenge(p.menge, lv.mengeStellen)} ${p.einheit}`, spMenge, y, { align: 'right' })
       doc.text(`x  ${formatEuro(p.ep)}`, spMenge + 28, y, { align: 'right' })
       if (p.faktorProzent) doc.text(`x  ${p.faktorProzent.toLocaleString('de-DE')} %`, spMenge + 45, y, { align: 'right' })
       if (p.entfaellt) doc.text('entfällt', RAND + 24, y)
@@ -138,7 +175,7 @@ export async function erzeugeLvXlsx(lv: Leistungsverzeichnis): Promise<ArrayBuff
   const zellen: Record<string, Zelle> = {}
   const set = (ref: string, c: Zelle) => { zellen[ref] = c }
   const euro = '#,##0.00 "€"'
-  const zahl = '#,##0.00'
+  const zahl = lv.mengeStellen === 3 ? '#,##0.000' : '#,##0.00'
   let r = 1
 
   set(`A${r}`, { t: 's', v: 'Leistungsverzeichnis – Gerüstarbeiten nach DIN 18451' }); r += 1

@@ -38,9 +38,10 @@ export const LASTKLASSEN: Record<number, number> = { 1: 0.75, 2: 1.5, 3: 2.0, 4:
  * Aufbau des LV:
  *  - 'getrennt': Aufbau, Vorhaltung (Gesamtstandzeit) und Abbau als eigene Positionen (wie ZECH/BVG)
  *  - 'grundstandzeit': Auf- und Abbau mit 4 Wochen Grundvorhaltung in einer Position, danach Verlängerung (wie St. Kilian)
+ *  - 'preisliste': nur die berechneten Positionen einer Preisliste (Titel 01 Technische Bearbeitung, 02 Baustelleneinrichtung, 03 Gerüstbauarbeiten), Nummern, Einheiten und Spalten wie dort (Menge, EH, EP, %, GP)
  *  - 'statiker': Gliederung des Auftraggeber-LV für Turmeinrüstungen (Stück-Pauschalen, Vorhaltung in Wochen, 2 Bauabschnitte; Muster: Wuppertal City-Kirche)
  */
-export type LvStil = 'getrennt' | 'grundstandzeit' | 'statiker'
+export type LvStil = 'getrennt' | 'grundstandzeit' | 'statiker' | 'preisliste'
 
 /** Zusatzleistungen aus den Muster-LVs, die nicht aus dem CAD-Modell kommen: Menge und EP trägt die Firma ein. */
 export type ZusatzArt = 'dachfang' | 'seitenschutz' | 'ueberbrueckung' | 'strahlnetze' | 'aufzug' | 'bauzaun'
@@ -203,6 +204,8 @@ export interface LvTitel {
 }
 
 export interface Leistungsverzeichnis {
+  /** Nachkommastellen der Menge in der Anzeige und im Export (3 bei der Preisliste, sonst 2) */
+  mengeStellen: number
   eingaben: LvEingaben
   kopf: { label: string; wert: string }[]
   titel: LvTitel[]
@@ -607,8 +610,92 @@ export function erzeugeLeistungsverzeichnis(quelle: LvQuelle, e: LvEingaben): Le
     ]
   }
 
+  // ── Stil „preisliste“: nur die berechneten Positionen, Nummern/Einheiten/Spalten wie in der Preisliste (Menge EH, EP, %, GP) ──
+  const preislisteTitel = (): LvTitel[] => {
+    const hoeheText = e.geruestHoeheAusschreibungM && e.geruestHoeheAusschreibungM > 0 ? e.geruestHoeheAusschreibungM : geruestTopM
+    const gueltig = (v: number | undefined): v is number => v !== undefined && Number.isFinite(v) && v > 0
+    const std = (schluessel: string) => standardpreisFuer(e.standardpreise, schluessel)
+    const miet = (matSumme: number) => cent(matSumme * (e.mietsatzProzentJeWoche / 100) * faktor)
+    const zus = (art: ZusatzArt) => zusatzEff.find((z) => z.art === art)
+    interface Opt { schluessel?: string; epCad?: number; faktor?: boolean; gestrichenStandard?: boolean }
+    const liste: LvPosition[] = []
+    const add = (nr: string, titel: string, text: string[], menge: number, einheit: string, ep: number, o: Opt = {}): LvPosition => {
+      const mo = e.mengeUeberschreibung?.[titel]
+      const eo = e.epUeberschreibung?.[titel]
+      const streichen = (e.gestrichen?.[titel] ?? o.gestrichenStandard ?? false) === true
+      const mengeNeu = streichen ? 0 : mo !== undefined && Number.isFinite(mo) && mo >= 0 ? mo : menge
+      const epNeu = eo !== undefined && Number.isFinite(eo) && eo >= 0 ? cent(eo) : cent(ep)
+      const fBerechnet = o.faktor ? [o.schluessel ? std(o.schluessel)?.faktorProzent : undefined, e.pauschalFaktorProzent].find(gueltig) ?? 100 : 100
+      const fo = e.faktorUeberschreibung?.[titel]
+      const fEff = o.faktor && gueltig(fo) ? fo : fBerechnet
+      const faktorP = fEff !== 100 ? fEff : undefined
+      const p: LvPosition = {
+        nr, titel, text, menge: mengeNeu, einheit, ep: epNeu, gp: cent(mengeNeu * epNeu * ((faktorP ?? 100) / 100)),
+        ...(faktorP !== undefined ? { faktorProzent: faktorP } : {}),
+        ...(streichen ? { entfaellt: true } : {}),
+        ...(!streichen && (mengeNeu !== menge || epNeu !== cent(ep) || fEff !== fBerechnet) ? { manuell: { ...(mengeNeu !== menge ? { menge: true } : {}), ...(epNeu !== cent(ep) ? { ep: true } : {}), ...(fEff !== fBerechnet ? { faktor: true } : {}) } } : {}),
+        berechnet: { ep: cent(ep), menge, faktor: fBerechnet },
+      }
+      liste.push(p)
+      return p
+    }
+    // Position mit Preis aus der Datenpflege; ohne Eintrag gilt der CAD-Wert (falls vorhanden)
+    const pos = (nr: string, titel: string, text: string[], menge: number, einheit: string, schluessel: string, epCad = 0, o: Opt = {}) =>
+      add(nr, titel, text, menge, einheit, std(schluessel)?.ep ?? epCad, { ...o, schluessel, faktor: true })
+    // Miete = Menge der Vorposition × Wochen, Preis je Einheit und Woche aus der Datenpflege (sonst CAD/Mietsatz)
+    const miete = (nr: string, bezug: LvPosition, einheit: string, schluessel: string, epCad = 0) => {
+      const menge = bezug.entfaellt ? 0 : r2(bezug.menge * woGesamt)
+      return add(nr, `Miete für ${bezug.titel}`, [`Vorhaltung zur Vorposition ${bezug.nr}: ${de(bezug.menge, 3)} × ${de(woGesamt, 0)} Wochen.`], menge, einheit, std(schluessel)?.epJeWoche ?? epCad)
+    }
+
+    // Titel 01 – Technische Bearbeitung
+    add('01.01', 'Technische Bearbeitung Vorbemerkung', ['Technische Bearbeitung gemäß Punkt 8, 9, 10 nach DIN EN 12811 sowie den Technischen Vorbemerkungen.'], 1, 'Stck', std('Technische Bearbeitung')?.ep ?? cent(e.statikPauschale), { schluessel: 'Technische Bearbeitung', faktor: true, gestrichenStandard: true })
+    const t01 = liste.splice(0)
+
+    // Titel 02 – Baustelleneinrichtung
+    const be = pos('02.01', 'Baustelleneinrichtung', ['Baustelleneinrichtung für den eigenen Bedarf einrichten und später wieder demontieren, An- und Rücklieferung sämtlicher Materialien und Geräte.'], 1, 'Stck', 'Baustelleneinrichtung', cent(e.baustelleneinrichtung))
+    miete('02.02', be, 'StWo', 'Baustelleneinrichtung')
+    const wc = pos('02.03', 'Baustellen WC', ['Baustellen-Container-WC für Damen und Herren.'], 1, 'Stck', 'Baustellen-Container-WC', 0, { gestrichenStandard: true })
+    miete('02.04', wc, 'StWo', 'Baustellen-Container-WC')
+    const zaun = zus('bauzaun')
+    const bz = pos('02.05', 'Bauzaun', ['Schutzzaun zur Sicherung der Baustelle gegen unbefugtes Betreten und zur Sicherung der Baustelleneinrichtung.'], zaun?.menge ?? 0, 'lfdm', 'Bauzaun', cent(zaun?.epAuf ?? 0) + cent(zaun?.epAb ?? 0))
+    miete('02.06', bz, 'lfdmWo', 'Bauzaun', cent(zaun?.epVorh ?? 0))
+    const tor = pos('02.07', 'Bauzauntor bis 4,00 m', ['Bewegliches Tor auf Rollen mit Kette und Zahlenschloss, Öffnungsbreite bis 4 m.'], 1, 'Stck', 'Bauzauntor')
+    miete('02.08', tor, 'StWo', 'Bauzauntor')
+    pos('02.11', 'Beantragung öffentliche-rechtlicher Genehmigungen', ['Antrag auf Sondernutzung der öffentlichen Verkehrsflächen zur Erstellung der Arbeitsgerüste.'], 1, 'Stck', 'Beantragung öffentlich-rechtliche Genehmigung')
+    const vs = pos('02.13', 'Verkehrssicherung', ['Kennzeichnung der Gerüste im öffentlichen Verkehrsraum mit Warnleuchten und Warnbaken.'], 1, 'Stck', 'Verkehrssicherung')
+    miete('02.14', vs, 'StWo', 'Verkehrssicherung')
+    const t02 = liste.splice(0)
+
+    // Titel 03 – Gerüstbauarbeiten
+    const klassen = `Lastklasse ${e.lastklasse} (${de(kn ?? 0, 0)} kN/m²), Breitenklasse ${bk}, Höhenklasse ${e.hoehenklasse}`
+    const gCad = cent(epAufbau('geruest', flaecheM2) * flaecheM2 + epAbbau('geruest', flaecheM2) * flaecheM2 + (konsolenM > 0 ? epAufbau('konsolen', konsolenM) * konsolenM + epAbbau('konsolen', konsolenM) * konsolenM : 0))
+    const g1 = pos('03.01', 'Arbeitsgerüste mit integrierten Traggerüsten', [`Systemgerüst als ${bauart} nach DIN EN 12811, ${klassen}, Höhe bis ${de(hoeheText, 2)} m (oberste Gerüstlage im CAD: ${de(geruestTopM, 2)} m, ${de(flaecheM2, 2)} m² Gerüstfläche).`], 1, 'Stck', 'Arbeitsgerüste mit integrierten', gCad)
+    miete('03.02', g1, 'StWo', 'Arbeitsgerüste mit integrierten', miet(mat.geruest + mat.konsolen))
+    const ub = pos('03.05', 'Überbrückung angrenzender Bauteile', ['Gitterträger und Stahlträger zur Schaffung von Überbrückungen, Abfangungen und als lastenverteilende Unterkonstruktion.'
+      + ((model.building.anbauDaecher ?? []).length ? ` Länge ca. ${de(r2((model.building.anbauDaecher ?? []).reduce((s2, d) => s2 + d.breiteM, 0)), 2)} m (Vorschlag aus dem Modell, bitte prüfen).` : '')], 1, 'Psch', 'Überbrückungen Dachflächen')
+    miete('03.06', ub, 'PschWo', 'Überbrückungen Dachflächen')
+    const sdN = dachRoh.length
+    const sdCad = sdN > 0 ? cent((epAufbau('schutzdach', schutzdachM) * schutzdachM + epAbbau('schutzdach', schutzdachM) * schutzdachM) / sdN) : 0
+    const sd = pos('03.07', 'Schutzdächer Zugang Eingang Kirche', ['Schutzgerüst nach DIN 4420-1 und DGUV-Vorschriften bei turmartigen Bauwerken.'
+      + (sdN > 0 ? ` Aus dem CAD: ${sdN} Schutzdach${sdN > 1 ? 'dächer' : ''}, je ca. ${de(r2(schutzdachM / sdN), 2)} m × ${de(r2(Math.abs(dachRoh[0].scale[2])), 2)} m. Lage ist ein Vorschlag, die Seite des Eingangs bitte prüfen.` : '')], 1, 'Stck', 'Schutzdächer', sdCad)
+    miete('03.08', sd, 'StWo', 'Schutzdächer', miet(mat.schutzdach))
+    const tr = pos('03.13', `Gerüsttreppenturm 1. BA H = ca. ${de(hoeheText, 2)} m`, ['Aufstieg zum Erreichen der Arbeitsplätze als Gerüsttreppe.'], 1, 'Stck', 'Gerüsttreppenturm 1. BA',
+      treppen > 0 ? cent(epAufbau('treppe', treppen) * treppen + epAbbau('treppe', treppen) * treppen) : 0)
+    miete('03.14', tr, 'StWo', 'Gerüsttreppenturm 1. BA', miet(mat.treppe))
+    const az = pos('03.17', 'Personen- und Lastenaufzug 1.BA', [`Transportbühne für Personen und Lasten nach DIN EN 16719, Tragkraft ${de(azOpt?.tragkraftPersonenKg ?? 500, 0)} kg (Personen) / ${de(azOpt?.tragkraftLastKg ?? 800, 0)} kg (Lasten), H = ca. ${de(hoeheText, 0)} m.`], 1, 'Stck', 'Personen- und Lastenaufzug 500/800kg 1.BA')
+    miete('03.18', az, 'StWo', 'Personen- und Lastenaufzug 500/800kg 1.BA')
+    const hAnz = azOpt?.haltestellen && azOpt.haltestellen > 0 ? azOpt.haltestellen : 5
+    const ha = pos('03.21', 'Haltestellenausstattung 1. BA', ['System-Haltestellen für die Transportbühne.' + (azOpt?.haltestellen ? ' Anzahl aus den Gerüst-Einstellungen.' : '')], hAnz, 'Stck', 'Haltestellenausstattung 1. BA')
+    miete('03.22', ha, 'StWo', 'Haltestellenausstattung 1. BA')
+    const t03 = liste.splice(0)
+
+    const ts = (nr: number, nrText: string, name: string, l: LvPosition[]): LvTitel => ({ nr, nrText, titel: name, positionen: l, summe: cent(l.reduce((s2, x) => s2 + x.gp, 0)) })
+    return [ts(1, '01', 'Technische Bearbeitung', t01), ts(2, '02', 'Baustelleneinrichtung', t02), ts(3, '03', 'Gerüstbauarbeiten', t03)]
+  }
+
   const summe = (p: LvPosition[]) => cent(p.reduce((s, x) => s + x.gp, 0))
-  const titel: LvTitel[] = e.stil === 'statiker' ? statikerTitel() : [
+  const titel: LvTitel[] = e.stil === 'preisliste' ? preislisteTitel() : e.stil === 'statiker' ? statikerTitel() : [
     { nr: 1, nrText: T1.nrText, titel: 'Technische Bearbeitung und Baustelleneinrichtung', positionen: T1.liste, summe: summe(T1.liste) },
     { nr: 2, nrText: T2.nrText, titel: `Außeneinrüstung – Fassadengerüst Lastklasse ${e.lastklasse}${kn ? ` (${de(kn, 0)} kN/m²)` : ''}`, positionen: T2.liste, summe: summe(T2.liste) },
     { nr: 3, nrText: T3.nrText, titel: 'Stundenlohnarbeiten', positionen: T3.liste, summe: summe(T3.liste) },
@@ -634,8 +721,29 @@ export function erzeugeLeistungsverzeichnis(quelle: LvQuelle, e: LvEingaben): Le
     if (!(z.epAuf > 0) || !(z.epAb > 0) || !(z.epVorh > 0)) fehlend.push(`Einheitspreise für ${i.name} (Aufbau, Vorhaltung je Woche, Abbau)`)
   }
 
+  if (e.stil === 'preisliste') {
+    // Preisliste: nur offen, was in der Liste wirklich fehlt (Preis oder Menge bei nicht entfallenen Positionen)
+    fehlend.length = 0
+    const alle = titel.flatMap((t) => t.positionen).filter((p) => !p.entfaellt)
+    const ohnePreis = alle.filter((p) => p.menge > 0 && !(p.ep > 0))
+    if (ohnePreis.length > 0) fehlend.push(`Preis fehlt (Datenpflege oder Tabelle): ${ohnePreis.map((p) => `${p.nr} ${p.titel}`).join(', ')}`)
+    const ohneMenge = alle.filter((p) => !(p.menge > 0) && !p.titel.startsWith('Miete für'))
+    if (ohneMenge.length > 0) fehlend.push(`Menge fehlt (Tabelle): ${ohneMenge.map((p) => `${p.nr} ${p.titel}`).join(', ')}`)
+  }
+  const annahmenPreisliste: string[] = [
+    'Preisliste: Es stehen nur die berechneten Positionen (Technische Bearbeitung, Baustelleneinrichtung, Gerüstbauarbeiten); Nummern, Einheiten und Spalten (Menge, EH, EP, %, GP) wie in der Vorlage.',
+    `Miete = Menge der Vorposition × Standzeit (${de(e.gesamtStandzeitWochen, 0)} Wochen), Einheit Stück-Wochen (StWo), laufende Meter-Wochen (lfdmWo) bzw. Pauschal-Wochen (PschWo).`,
+    'Einzelpreise und Mieten je Woche kommen aus der Datenpflege (LV-Standardpreise); ohne Eintrag gilt, wo vorhanden, der Wert aus dem CAD. Mengen aus dem CAD-Modell oder von Hand in der Tabelle.',
+    ...(e.pauschalFaktorProzent && e.pauschalFaktorProzent !== 100 ? [`Auf die Positionen (außer Miete) wird ein Faktor von ${de(e.pauschalFaktorProzent, 0)} % angewendet (Gesamtpreis = Menge × EP × Faktor), sofern in der Datenpflege oder der Tabelle nichts Eigenes steht.`] : []),
+    ...(titel.some((t) => t.positionen.some((p) => p.entfaellt)) ? ['Entfallene Positionen sind mit Menge 0 aufgeführt.'] : []),
+    ...(e.lastklasse >= 4 && breite > 0 && breite < MIN_BREITE_AB_LK4_M - 1e-9 ? [`ACHTUNG Lastklasse ${e.lastklasse}: Nach DIN EN 12811-1 ist ab Lastklasse 4 mindestens die Breitenklasse W09 (0,90 m) erforderlich, das CAD-Gerüst ist ${de(breite, 2)} m breit. Gerüstbreite im CAD erhöhen oder die Klasse klären.`] : []),
+    ...(lagenansatzText(e.lastklasse) ? [lagenansatzText(e.lastklasse)!] : []),
+    'Alle Einheitspreise sind Nettopreise in Euro. Dieses LV ersetzt keine Statik und keine Prüfung durch eine befähigte Person.',
+  ]
+
   return {
     eingaben: e,
+    mengeStellen: e.stil === 'preisliste' ? 3 : 2,
     kopf: [
       { label: 'Gewerk', wert: 'Gerüstarbeiten nach DIN 18451' },
       { label: 'Bauvorhaben', wert: e.bauvorhaben || '–' },
@@ -648,7 +756,7 @@ export function erzeugeLeistungsverzeichnis(quelle: LvQuelle, e: LvEingaben): Le
     summeNetto,
     mwst,
     summeBrutto: cent(summeNetto + mwst),
-    annahmen: [
+    annahmen: e.stil === 'preisliste' ? annahmenPreisliste : [
       ...(e.lastklasse >= 4 && breite > 0 && breite < MIN_BREITE_AB_LK4_M - 1e-9 ? [`ACHTUNG Lastklasse ${e.lastklasse}: Nach DIN EN 12811-1 ist ab Lastklasse 4 mindestens die Breitenklasse W09 (0,90 m) erforderlich, das CAD-Gerüst ist ${de(breite, 2)} m breit (= ${breitenklasse(breite)}). Gerüstbreite im CAD erhöhen oder Lastklasse mit dem Statiker klären.`] : []),
       ...(breitenklasseZuSchmal(e.breitenklasseManuell, breite) ? [`ACHTUNG Breitenklasse: Gefordert ist ${bk}, das CAD-Gerüst ist ${de(breite, 2)} m breit (= ${breitenklasse(breite)}). Das Gerüst im CAD erfüllt die geforderte Breitenklasse nicht – Gerüstbreite im CAD anpassen oder die Klasse klären.`] : []),
       `Mengen aus dem CAD-Modell. Gerüstfläche = Länge × Höhe der eingerüsteten Fassade${e.hoehenZuschlagM > 0 ? ` + Höhenzuschlag ${de(e.hoehenZuschlagM, 2)} m` : ''}${e.oeffnungenAbzugM2 > 0 ? ` − Öffnungen ${de(e.oeffnungenAbzugM2, 2)} m²` : ''}. Höhenzuschlag und Öffnungsabzug sind Eingaben nach deinen vertraglichen Regeln (ATV DIN 18451); der Normtext ist nicht hinterlegt und nicht geprüft.`,
@@ -676,4 +784,4 @@ export function erzeugeLeistungsverzeichnis(quelle: LvQuelle, e: LvEingaben): Le
 }
 
 export const formatEuro = (v: number): string => de(v, 2) + ' €'
-export const formatMenge = (v: number): string => de(v, 2)
+export const formatMenge = (v: number, nk = 2): string => de(v, nk)

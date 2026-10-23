@@ -405,3 +405,51 @@ describe('Stil „Statiker-LV“ (Wuppertal)', () => {
     expect(text).toContain(`Höhe der obersten Gerüstlage ca. ${oben.toLocaleString('de-DE', { minimumFractionDigits: 2 })} m`)
   })
 })
+
+describe('Stil „Preisliste“ (nur berechnete Positionen, Nummern und Summen wie in der Vorlage)', () => {
+  const preise = {
+    'Technische Bearbeitung': { ep: 1000 },
+    Baustelleneinrichtung: { epJeWoche: 1 },
+    'Baustellen-Container-WC': { ep: 250, epJeWoche: 52 },
+    Bauzaun: { ep: 10, epJeWoche: 0.3 },
+    Bauzauntor: { ep: 100, epJeWoche: 1 },
+    'Beantragung öffentlich-rechtliche Genehmigung': { ep: 150 },
+    Verkehrssicherung: { ep: 200, epJeWoche: 6 },
+    'Arbeitsgerüste mit integrierten': { ep: 20160, epJeWoche: 400 },
+    'Überbrückungen Dachflächen': { ep: 4200, epJeWoche: 80 },
+    Schutzdächer: { ep: 400, epJeWoche: 10 },
+    'Gerüsttreppenturm 1. BA': { ep: 2400, epJeWoche: 80 },
+    'Personen- und Lastenaufzug 500/800kg 1.BA': { ep: 4800, epJeWoche: 440 },
+    'Haltestellenausstattung 1. BA': { ep: 30, epJeWoche: 1 },
+  }
+  const eingaben: LvEingaben = { ...mitPreisen, stil: 'preisliste', gesamtStandzeitWochen: 16, pauschalFaktorProzent: 80, baustelleneinrichtung: 100, standardpreise: preise, mengeUeberschreibung: { Bauzaun: 52.5 } }
+  const lv = erzeugeLeistungsverzeichnis(quelle(), eingaben)
+  const alle = lv.titel.flatMap((t) => t.positionen)
+  const nr = (n: string) => alle.find((p) => p.nr === n)!
+
+  it('hat die Titel und Nummern der Vorlage und 3 Nachkommastellen', () => {
+    expect(lv.titel.map((t) => `${t.nrText} ${t.titel}`)).toEqual(['01 Technische Bearbeitung', '02 Baustelleneinrichtung', '03 Gerüstbauarbeiten'])
+    expect(alle.map((p) => p.nr)).toEqual(['01.01', '02.01', '02.02', '02.03', '02.04', '02.05', '02.06', '02.07', '02.08', '02.11', '02.13', '02.14', '03.01', '03.02', '03.05', '03.06', '03.07', '03.08', '03.13', '03.14', '03.17', '03.18', '03.21', '03.22'])
+    expect(lv.mengeStellen).toBe(3)
+    expect([nr('02.06').einheit, nr('03.05').einheit, nr('03.06').einheit, nr('03.22').einheit, nr('02.05').einheit]).toEqual(['lfdmWo', 'Psch', 'PschWo', 'StWo', 'lfdm'])
+  })
+
+  it('rechnet die Gesamtpreise der Vorlage nach (Menge × EP × %, Miete = Menge × 16 Wochen)', () => {
+    const gp: Record<string, number> = { '02.01': 80, '02.02': 16, '02.05': 420, '02.06': 252, '02.07': 80, '02.08': 16, '02.11': 120, '02.13': 160, '02.14': 96, '03.01': 16128, '03.02': 6400, '03.05': 3360, '03.06': 1280, '03.07': 320, '03.08': 160, '03.13': 1920, '03.14': 1280, '03.17': 3840, '03.18': 7040, '03.21': 120, '03.22': 80 }
+    for (const [n, w] of Object.entries(gp)) expect([n, nr(n).gp]).toEqual([n, w])
+    expect(nr('02.06').menge).toBe(840) // 52,5 lfdm × 16 Wochen
+    expect(nr('03.22').menge).toBe(80) // 5 Stück × 16 Wochen
+    expect(nr('02.01').faktorProzent).toBe(80)
+    expect(nr('02.02').faktorProzent).toBeUndefined() // Miete ohne %
+  })
+
+  it('gestrichene Positionen der Vorlage entfallen standardmäßig, lassen sich aber wieder einschalten', () => {
+    expect([nr('01.01').entfaellt, nr('02.03').entfaellt, nr('02.04').menge, nr('02.04').gp]).toEqual([true, true, 0, 0])
+    const an = erzeugeLeistungsverzeichnis(quelle(), { ...eingaben, gestrichen: { 'Baustellen WC': false } }).titel.flatMap((t) => t.positionen)
+    const wc = an.find((p) => p.nr === '02.03')!
+    expect(wc.entfaellt).toBeUndefined()
+    expect(wc.gp).toBe(200) // 250 × 80 %
+    expect(an.find((p) => p.nr === '02.04')!.gp).toBe(832) // 52 € × 16 Wochen
+  })
+})
+
