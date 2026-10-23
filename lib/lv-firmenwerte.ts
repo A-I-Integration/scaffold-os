@@ -20,6 +20,7 @@ export type LvStandardpreise = Record<string, LvStandardpreis>
 
 /** Positionen ohne CAD-Wert, für die ein Standardpreis hinterlegt werden kann. Schlüssel = Anfang des Positionstitels. */
 export const LV_STANDARDPREIS_POSITIONEN: { schluessel: string; name: string; einheit: string; mitWoche: boolean }[] = [
+  { schluessel: 'Baustelleneinrichtung', name: 'Baustelleneinrichtung (Miete je Woche)', einheit: 'Stück', mitWoche: true },
   { schluessel: 'Baustellen-Container-WC', name: 'Baustellen-Container-WC', einheit: 'Stück', mitWoche: true },
   { schluessel: 'Bauzaun', name: 'Bauzaun (Auf- und Abbau)', einheit: 'm', mitWoche: true },
   { schluessel: 'Bauzauntor', name: 'Bauzauntor', einheit: 'Stück', mitWoche: true },
@@ -28,6 +29,9 @@ export const LV_STANDARDPREIS_POSITIONEN: { schluessel: string; name: string; ei
   { schluessel: 'Einrichten Halteverbotszone', name: 'Halteverbotszone', einheit: 'Stck', mitWoche: false },
   { schluessel: 'Verkehrssicherung', name: 'Verkehrssicherung', einheit: 'Stck', mitWoche: true },
   { schluessel: 'Überbrückungen Dachflächen', name: 'Überbrückungen Dachflächen', einheit: 'Stück', mitWoche: true },
+  { schluessel: 'Arbeitsgerüste mit integrierten', name: 'Arbeitsgerüste 1. BA (Miete je Woche; Preis kommt aus dem CAD)', einheit: 'Stück', mitWoche: true },
+  { schluessel: 'Schutzdächer', name: 'Schutzdächer (Preis nur, wenn das CAD keinen liefert)', einheit: 'Stück', mitWoche: true },
+  { schluessel: 'Gerüsttreppenturm 1. BA', name: 'Gerüsttreppenturm 1. BA (Preis nur, wenn das CAD keinen liefert)', einheit: 'Stück', mitWoche: true },
   { schluessel: 'Vertikale Bekleidung der Gerüste 1. BA', name: 'Kederplane 1. BA', einheit: 'm²', mitWoche: true },
   { schluessel: 'Vertikale Bekleidung der Gerüste 2. BA', name: 'Kederplane 2. BA', einheit: 'm²', mitWoche: true },
   { schluessel: 'Personen- und Lastenaufzug 500/800kg 1.BA', name: 'Aufzug 1. BA', einheit: 'Stück', mitWoche: true },
