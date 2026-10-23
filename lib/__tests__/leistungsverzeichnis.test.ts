@@ -91,7 +91,7 @@ describe('Leistungsverzeichnis', () => {
   })
 
   it('Kopf zeigt Lastklasse und Breitenklasse im Langtext', () => {
-    const lv = erzeugeLeistungsverzeichnis(quelle(), { ...mitPreisen, lastklasse: 4 })
+    const lv = erzeugeLeistungsverzeichnis(quelle(), { ...mitPreisen, lastklasse: 4, breitenklasseManuell: undefined })
     const text = g(lv)[0].text.join(' ')
     expect(text).toMatch(/Lastklasse 4/)
     expect(text).toMatch(/SW06/)

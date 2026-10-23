@@ -1010,7 +1010,7 @@ export function generateScaffoldComponents(model: CADModel): ScaffoldComponent3D
     for (let i = 0; i < roofCount; i++) {
       const xPos = (i * 6) - building.lengthM / 2 + 3
       if (abschnittOhneGeruestBeiX(building, xPos)) continue
-      components.push({ id: `roof-${i}`, type: 'protection_roof', articleNumber: 'SD-001', name: 'Schutzdach', position: [xPos, Math.min(SCHUTZDACH_HOEHE_M, hoeheBeiX(xPos)) + 0.5, schutzdachZ + frontVersatzBeiX(xPos)], rotation: [0.3, 0, 0], scale: [6, 0.1, 2], color: colorRoof })
+      components.push({ id: `roof-${i}`, type: 'protection_roof', articleNumber: 'SD-001', name: 'Schutzdach', position: [xPos, Math.min(SCHUTZDACH_HOEHE_M, hoeheBeiX(xPos)) + 0.5, schutzdachZ + frontVersatzBeiX(xPos)], rotation: [-0.3, 0, 0], scale: [6, 0.1, 2], color: colorRoof })
     }
   }
 
@@ -2004,7 +2004,7 @@ function placementToComponentBase(placement: ManualPlacement, model: CADModel): 
         articleNumber: 'SD-001',
         name: 'Schutzdach (manuell)',
         position: [positionX, positionY, positionZ],
-        rotation: [0.3, 0, 0],
+        rotation: [-0.3, 0, 0],
         scale: [6, 0.1, 2],
         color: '#f97316',
       }
