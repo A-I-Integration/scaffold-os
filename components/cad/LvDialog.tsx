@@ -295,13 +295,13 @@ export default function LvDialog({ model, materials, aufbauStunden, abbauStunden
                 <tr className='text-left text-[#86868b] border-b border-black/10'>
                   <th className='py-1 pr-2 font-medium'>Pos.</th><th className='py-1 pr-2 font-medium'>Leistung</th>
                   <th className='py-1 pr-2 font-medium text-right'>Menge</th><th className='py-1 pr-2 font-medium'>Einheit</th>
-                  <th className='py-1 pr-2 font-medium text-right'>EP</th><th className='py-1 font-medium text-right'>GP</th>
+                  <th className='py-1 pr-2 font-medium text-right'>EP</th><th className='py-1 pr-2 font-medium text-right'>%</th><th className='py-1 font-medium text-right'>GP</th>
                 </tr>
               </thead>
               <tbody>
                 {lv.titel.map((t) => (
                   <Fragment key={`titel${t.nr}`}>
-                    <tr><td colSpan={6} className='pt-3 pb-1 font-semibold text-[#e8590c]'>Titel {t.nrText}, {t.titel}</td></tr>
+                    <tr><td colSpan={7} className='pt-3 pb-1 font-semibold text-[#e8590c]'>Titel {t.nrText}, {t.titel}</td></tr>
                     {t.positionen.map((p) => (
                       <tr key={p.nr} className='border-b border-black/5 align-top'>
                         <td className='py-1 pr-2 whitespace-nowrap'>{p.nr}</td>
@@ -324,17 +324,18 @@ export default function LvDialog({ model, materials, aufbauStunden, abbauStunden
                             className={`w-24 rounded border px-1 py-0.5 text-right ${p.manuell?.ep ? 'border-amber-400 bg-amber-50' : 'border-transparent hover:border-black/15'}`}
                             value={p.ep} onChange={(ev) => setzePos('epUeberschreibung', p.titel, ev.target.value, p.berechnet?.ep ?? p.ep)} /> €
                         </td>
-                        <td className='py-1 text-right whitespace-nowrap font-medium'>{formatEuro(p.gp)}{p.faktorProzent ? <div className='text-[10px] font-normal text-[#86868b]'>× {p.faktorProzent.toLocaleString('de-DE')} %</div> : null}</td>
+                        <td className='py-1 pr-2 text-right whitespace-nowrap text-[#86868b]'>{p.faktorProzent ? `${p.faktorProzent.toLocaleString('de-DE')} %` : ''}</td>
+                        <td className='py-1 text-right whitespace-nowrap font-medium'>{formatEuro(p.gp)}</td>
                       </tr>
                     ))}
-                    <tr><td colSpan={5} className='py-1 text-right font-semibold'>Summe Titel {t.nrText}</td><td className='py-1 text-right font-semibold'>{formatEuro(t.summe)}</td></tr>
+                    <tr><td colSpan={6} className='py-1 text-right font-semibold'>Summe Titel {t.nrText}</td><td className='py-1 text-right font-semibold'>{formatEuro(t.summe)}</td></tr>
                   </Fragment>
                 ))}
               </tbody>
               <tfoot>
-                <tr className='border-t border-black/20'><td colSpan={5} className='pt-2 text-right'>Angebotssumme netto</td><td className='pt-2 text-right font-semibold'>{formatEuro(lv.summeNetto)}</td></tr>
-                <tr><td colSpan={5} className='text-right'>zzgl. {e.mwstProzent.toLocaleString('de-DE')} % MwSt</td><td className='text-right'>{formatEuro(lv.mwst)}</td></tr>
-                <tr><td colSpan={5} className='text-right font-semibold'>Angebotssumme brutto</td><td className='text-right font-semibold'>{formatEuro(lv.summeBrutto)}</td></tr>
+                <tr className='border-t border-black/20'><td colSpan={6} className='pt-2 text-right'>Angebotssumme netto</td><td className='pt-2 text-right font-semibold'>{formatEuro(lv.summeNetto)}</td></tr>
+                <tr><td colSpan={6} className='text-right'>zzgl. {e.mwstProzent.toLocaleString('de-DE')} % MwSt</td><td className='text-right'>{formatEuro(lv.mwst)}</td></tr>
+                <tr><td colSpan={6} className='text-right font-semibold'>Angebotssumme brutto</td><td className='text-right font-semibold'>{formatEuro(lv.summeBrutto)}</td></tr>
               </tfoot>
             </table>
             <details className='mt-4 text-[11px] text-[#424245]'>

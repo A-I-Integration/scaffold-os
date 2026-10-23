@@ -145,7 +145,7 @@ export async function erzeugeLvXlsx(lv: Leistungsverzeichnis): Promise<ArrayBuff
   for (const k of lv.kopf.slice(1)) { set(`A${r}`, { t: 's', v: k.label }); set(`B${r}`, { t: 's', v: k.wert }); r += 1 }
   r += 1
   set(`A${r}`, { t: 's', v: 'Pos.' }); set(`B${r}`, { t: 's', v: 'Beschreibung' }); set(`C${r}`, { t: 's', v: 'Menge' })
-  set(`D${r}`, { t: 's', v: 'Einheit' }); set(`E${r}`, { t: 's', v: 'EP netto (€)' }); set(`F${r}`, { t: 's', v: 'GP netto (€)' })
+  set(`D${r}`, { t: 's', v: 'Einheit' }); set(`E${r}`, { t: 's', v: 'EP netto (€)' }); set(`F${r}`, { t: 's', v: '%' }); set(`G${r}`, { t: 's', v: 'GP netto (€)' })
   r += 1
 
   const titelSummenZellen: string[] = []
@@ -158,27 +158,28 @@ export async function erzeugeLvXlsx(lv: Leistungsverzeichnis): Promise<ArrayBuff
       set(`C${r}`, { t: 'n', v: p.menge, z: zahl })
       set(`D${r}`, { t: 's', v: p.einheit })
       set(`E${r}`, { t: 'n', v: p.ep, z: euro })
-      set(`F${r}`, { t: 'n', v: p.gp, f: p.faktorProzent ? `ROUND(C${r}*E${r}*${p.faktorProzent}/100,2)` : `ROUND(C${r}*E${r},2)`, z: euro })
+      set(`F${r}`, { t: 'n', v: p.faktorProzent ?? 100, z: '0.##' })
+      set(`G${r}`, { t: 'n', v: p.gp, f: `ROUND(C${r}*E${r}*F${r}/100,2)`, z: euro })
       r += 1
     }
     const letzte = r - 1
     set(`B${r}`, { t: 's', v: `Summe Titel ${t.nrText}` })
-    set(`F${r}`, { t: 'n', v: t.summe, f: `SUM(F${erste}:F${letzte})`, z: euro })
-    titelSummenZellen.push(`F${r}`)
+    set(`G${r}`, { t: 'n', v: t.summe, f: `SUM(G${erste}:G${letzte})`, z: euro })
+    titelSummenZellen.push(`G${r}`)
     r += 2
   }
-  const nettoRef = `F${r}`
+  const nettoRef = `G${r}`
   set(`B${r}`, { t: 's', v: 'Angebotssumme netto' })
   set(nettoRef, { t: 'n', v: lv.summeNetto, f: titelSummenZellen.join('+') || '0', z: euro }); r += 1
-  const mwstRef = `F${r}`
+  const mwstRef = `G${r}`
   set(`B${r}`, { t: 's', v: `zzgl. ${lv.eingaben.mwstProzent.toLocaleString('de-DE')} % MwSt` })
   set(mwstRef, { t: 'n', v: lv.mwst, f: `ROUND(${nettoRef}*${lv.eingaben.mwstProzent}/100,2)`, z: euro }); r += 1
   set(`B${r}`, { t: 's', v: 'Angebotssumme brutto' })
-  set(`F${r}`, { t: 'n', v: lv.summeBrutto, f: `${nettoRef}+${mwstRef}`, z: euro })
+  set(`G${r}`, { t: 'n', v: lv.summeBrutto, f: `${nettoRef}+${mwstRef}`, z: euro })
   const letzteZeile = r
 
-  const ws: Record<string, unknown> = { ...zellen, '!ref': `A1:F${letzteZeile}` }
-  ws['!cols'] = [{ wch: 8 }, { wch: 80 }, { wch: 12 }, { wch: 10 }, { wch: 14 }, { wch: 14 }]
+  const ws: Record<string, unknown> = { ...zellen, '!ref': `A1:G${letzteZeile}` }
+  ws['!cols'] = [{ wch: 8 }, { wch: 80 }, { wch: 12 }, { wch: 10 }, { wch: 14 }, { wch: 8 }, { wch: 14 }]
 
   const annahmen = [['Grundlagen und Annahmen'], ...lv.annahmen.map((a) => [a]), [], ...(lv.fehlendeAngaben.length ? [['ENTWURF – es fehlen Angaben: ' + lv.fehlendeAngaben.join('; ')]] : [])]
   const ws2 = XLSX.utils.aoa_to_sheet(annahmen)
