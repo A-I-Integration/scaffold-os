@@ -213,6 +213,13 @@ export function breitenklasse(breiteM: number): string {
   return 'kleiner als W06'
 }
 
+/** true, wenn von Hand eine breitere Klasse (z. B. W09) verlangt wird, als das CAD-Gerüst hat (W06 < 0,9 m, W09 ab 0,9 m …) */
+export function breitenklasseZuSchmal(manuell: string | undefined, breiteM: number): boolean {
+  const m = /^W(\d{2})$/.exec((manuell ?? '').trim().toUpperCase())
+  if (!m || !(breiteM > 0)) return false
+  return breiteM < Number(m[1]) / 10 - 1e-9
+}
+
 type Gruppe = 'geruest' | 'konsolen' | 'schutzdach' | 'treppe'
 function gruppeVon(artikel: string): Gruppe {
   if (artikel.startsWith('KO-')) return 'konsolen'
@@ -604,6 +611,7 @@ export function erzeugeLeistungsverzeichnis(quelle: LvQuelle, e: LvEingaben): Le
     mwst,
     summeBrutto: cent(summeNetto + mwst),
     annahmen: [
+      ...(breitenklasseZuSchmal(e.breitenklasseManuell, breite) ? [`ACHTUNG Breitenklasse: Gefordert ist ${bk}, das CAD-Gerüst ist ${de(breite, 2)} m breit (= ${breitenklasse(breite)}). Das Gerüst im CAD erfüllt die geforderte Breitenklasse nicht – Gerüstbreite im CAD anpassen oder die Klasse klären.`] : []),
       `Mengen aus dem CAD-Modell. Gerüstfläche = Länge × Höhe der eingerüsteten Fassade${e.hoehenZuschlagM > 0 ? ` + Höhenzuschlag ${de(e.hoehenZuschlagM, 2)} m` : ''}${e.oeffnungenAbzugM2 > 0 ? ` − Öffnungen ${de(e.oeffnungenAbzugM2, 2)} m²` : ''}. Höhenzuschlag und Öffnungsabzug sind Eingaben nach deinen vertraglichen Regeln (ATV DIN 18451); der Normtext ist nicht hinterlegt und nicht geprüft.`,
       ...(giebelM2 > 0 ? ['Giebelflächen der Dachgauben sind eine Eingabe (nicht im CAD). Der EP der Zulage (Pos. 1.09) entspricht dem EP von Pos. 1.01 – Annahme.'] : []),
       `Einheitspreise abgeleitet aus dem Materialwert der Stückliste (${de(matGesamt, 2)} €), Aufbau-/Abbaustunden (${de(stundenAufAb, 0)} h, nach Materialwert auf die Positionen verteilt) und den eingegebenen Faktoren.`,
