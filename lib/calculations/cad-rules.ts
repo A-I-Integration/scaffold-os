@@ -5,6 +5,12 @@
 
 import { BuildingParams } from './cad-engine'
 import { GeruestSystem } from './geruest-systeme'
+import { mindestBreiteFuerLastklasse } from '../geruestklassen'
+
+/** Wirksame Gerüstbreite: gewählte Option, sonst erste Rahmenbreite des Systems, sonst 0,73 m. */
+function wirksameBreite(p: RuleCheckParams): number {
+  return p.building.geruestOptionen?.breiteM ?? p.system?.rahmenBreitenM[0] ?? 0.73
+}
 
 export type RuleSeverity = 'error' | 'warning' | 'info'
 
@@ -35,6 +41,23 @@ export interface RuleCheckResult {
 }
 
 export const CAD_RULES: CADRule[] = [
+  {
+    id: 'NORM-LK-BREITE',
+    severity: 'error',
+    title: 'Lastklasse 4–6 braucht mindestens W09',
+    message: 'Nach DIN EN 12811-1 ist ab Lastklasse 4 mindestens die Breitenklasse W09 (Belagbreite ab 0,90 m) erforderlich. Gerüstbreite erhöhen oder Lastklasse klären (Statiker).',
+    condition: (p) => {
+      const min = mindestBreiteFuerLastklasse(p.building.lastklasse)
+      return min !== null && wirksameBreite(p) < min - 1e-9
+    },
+    affectedField: 'lastklasse',
+    autoFix: (p) => {
+      const min = mindestBreiteFuerLastklasse(p.building.lastklasse)
+      const passend = p.system?.rahmenBreitenM.filter((b) => min !== null && b >= min - 1e-9).sort((a, b) => a - b)[0]
+      if (!passend) return null
+      return { geruestOptionen: { ...(p.building.geruestOptionen ?? {}), breiteM: passend } }
+    },
+  },
   {
     id: 'GEO-001',
     severity: 'error',

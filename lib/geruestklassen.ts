@@ -47,3 +47,11 @@ export function vorschlagLastklasse(gewerke: string[]): { klasse: number; grund:
   }
   return best ? { klasse: best, grund } : { klasse: 2, grund: '' };
 }
+
+/** DIN EN 12811-1 (laut Baunetz Wissen): Für Lastklasse 4 bis 6 ist mindestens die Breitenklasse W09 erforderlich. */
+export const MIN_BREITE_AB_LK4_M = 0.9
+
+/** Mindest-Belagbreite in m, die die Norm für eine Lastklasse verlangt; null = keine Vorgabe bekannt (LK 1–3). */
+export function mindestBreiteFuerLastklasse(lk: number | undefined): number | null {
+  return lk !== undefined && lk >= 4 ? MIN_BREITE_AB_LK4_M : null
+}
