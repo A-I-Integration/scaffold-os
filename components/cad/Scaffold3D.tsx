@@ -66,6 +66,8 @@ interface Props {
   // ohne diese Prop bleibt die Szene exakt wie vorher.
   showEnvironment?: boolean
   farbModus?: FarbModus
+  /** Teilabbau: Kennungen der zum Abbau markierten Bauteile (rot) */
+  abbauMarkiert?: ReadonlySet<string>
   // NEU: ausgewähltes Bauteil per Knopf entfernen (Seite blendet es aus bzw. löscht es).
   onRemoveComponent?: (id: string) => void
   onReplaceComponent?: (id: string, newType: string) => void
@@ -101,6 +103,8 @@ const HORIZONT_FARBE = '#e9edf2'
 const NEBEL_NAH = 1.6
 const NEBEL_FERN = 2.0
 const FarbModusKontext = createContext<FarbModus>('real')
+/** Teilabbau: Bauteile, die abgebaut werden sollen, werden rot markiert */
+const AbbauMarkKontext = createContext<ReadonlySet<string> | null>(null)
 
 /** Nebel in Himmelsfarbe: der Boden läuft in der Ferne aus. Muss an der Szene hängen (ein <fog> in einer Gruppe wirkt nicht). */
 function HorizontNebel({ an }: { an: boolean }) {
@@ -669,6 +673,7 @@ function InstancedBauteile({
   const zieh = useContext(ZiehKontext)
   const dummy = useMemo(() => new THREE.Object3D(), [])
   const farbModus = useContext(FarbModusKontext)
+  const abbauMarkiert = useContext(AbbauMarkKontext)
   const farbTyp = variant === 'tritt' ? 'stair' : type
   const baseColor = useMemo(() => new THREE.Color(farbModus === 'bauteil' ? bauteilFarbe(farbTyp) : farbModus === 'praesentation' && farbTyp !== 'net' && farbTyp !== 'safety_net' ? PRAESENTATION_ROHR : (COLOR_MAP[farbTyp] || '#888888')), [farbTyp, farbModus])
   const optik = useContext(MjOptikKontext)
@@ -724,13 +729,14 @@ function InstancedBauteile({
       const isSelected = selectedComponent === item.id
       const isHovered = hoveredId === item.id
       const col = baseColor.clone()
-      if (isSelected) col.multiplyScalar(1.5).add(new THREE.Color(0.3, 0.3, 0.3))
+      if (abbauMarkiert?.has(item.id)) col.set('#dc2626')
+      else if (isSelected) col.multiplyScalar(1.5).add(new THREE.Color(0.3, 0.3, 0.3))
       else if (isHovered) col.multiplyScalar(1.2)
       mesh.setColorAt(i, col)
     })
     if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true
     invalidate()
-  }, [items, selectedComponent, hoveredId, baseColor, invalidate])
+  }, [items, selectedComponent, hoveredId, baseColor, invalidate, abbauMarkiert])
 
   const handleClick = useCallback(
     (e: any) => {
@@ -1871,6 +1877,7 @@ function Scaffold3D({
   pendingMeasurePoint,
   showEnvironment,
   farbModus = 'real',
+  abbauMarkiert,
   onRemoveComponent,
   onReplaceComponent,
   systemId,
@@ -1951,6 +1958,7 @@ function Scaffold3D({
         <AdaptiveDpr pixelated />
         <AdaptiveEvents />
         <FarbModusKontext.Provider value={farbModus}>
+        <AbbauMarkKontext.Provider value={abbauMarkiert ?? null}>
         <MjOptikKontext.Provider value={mjOptikFuerSystem(systemId)}>
         <ZiehKontext.Provider value={ziehKontext}>
         <group ref={contentRef}>
@@ -1979,6 +1987,7 @@ function Scaffold3D({
         </group>
         </ZiehKontext.Provider>
         </MjOptikKontext.Provider>
+        </AbbauMarkKontext.Provider>
         </FarbModusKontext.Provider>
         <AutoFraming targetRef={contentRef} modelKey={modelKey} />
         <GroundingShadow targetRef={contentRef} modelKey={modelKey} />
