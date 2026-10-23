@@ -20,6 +20,8 @@ export interface ErkanntesPortal {
   hoeheM: number
   /** Vorsprung vor der Wand (m) */
   tiefeM: number
+  /** Dachfläche des Vorbaus (m², Summe der waagrechten Teilflächen) */
+  flaecheM2: number
 }
 
 const MIN_FLAECHE_M2 = 2
@@ -84,7 +86,7 @@ export function erkennePortale(tris: Dreieck[], lage: SchaftLage, lagenM: number
     let seite: CadTuer['side']
     if (achse === lage.laengenAchse) seite = plus ? 'right' : 'left'
     else seite = plus ? 'front' : 'back'
-    ergebnis.push({ seite, mitteM: r2(portalMitte - mitteWand), breiteM: r2(beste.p1 - beste.p0), hoeheM: r2(beste.hs / beste.n), tiefeM: r2(beste.t1) })
+    ergebnis.push({ seite, mitteM: r2(portalMitte - mitteWand), breiteM: r2(beste.p1 - beste.p0), hoeheM: r2(beste.hs / beste.n), tiefeM: r2(beste.t1), flaecheM2: r2(beste.a) })
   }
   return ergebnis
 }
