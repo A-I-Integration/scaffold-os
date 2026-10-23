@@ -19,7 +19,7 @@ const STANDARD_INPUT: ScaffoldInput = {
   scaffoldType: 'rahmen', deckingType: 'stahl', fieldLengthM: 2.57, groundType: 'beton',
   anchorType: 'fassadenanker', groundCondition: 'beton', hasSlope: false, hasLightShafts: false,
   hasBasement: false, needsLoadDistribution: false,
-  environment: { hasPowerLines: false, hasVegetation: false, hasNeighborProperty: false, hasPublicTraffic: false, needsNoParkingZone: false },
+  environment: { hasPowerLines: false, hasVegetation: false, hasNeighborProperty: false, hasPublicTraffic: false, needsNoParkingZone: false, needsSpecialUse: false, hasStorageArea: false, hasTruckAccess: false, needsCrane: false, needsProtectionRoof: false, needsSafetyNet: false },
   windZone: 2, hazards: [], additionalNotes: '',
 }
 
