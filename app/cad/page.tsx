@@ -22,6 +22,8 @@ import { BAUTEIL_FARBEN, type FarbModus } from '@/lib/cad/bauteil-farben'
 import { useState, useMemo, useCallback, useEffect, useRef } from 'react'
 import StatikDatenPanel from '@/components/cad/StatikDatenPanel'
 import { verlaufNeu, verlaufSetze, verlaufZurueck, verlaufVor } from '@/lib/cad/verlauf'
+import { aussehenAusDatei, type Aussehen } from '@/lib/cad/modell-aussehen'
+import { merkeAussehen, ladeGemerktesAussehen, vergissAussehen } from '@/lib/cad/modell-speicher'
 import AbbauEinplanenDialog from '@/components/cad/AbbauEinplanenDialog'
 import TeilabbauPanel, { TEILABBAU_START, type TeilabbauEingabe } from '@/components/cad/TeilabbauPanel'
 import { berechneTeilabbau, type TeilabbauAuswahl } from '@/lib/cad/teilabbau'
@@ -110,6 +112,38 @@ export default function CADPage() {
   // Teilabbau: Fenster offen? Auswahl/Eingaben
   const [abbauAktiv, setAbbauAktiv] = useState(false)
   const [abbauEinplanen, setAbbauEinplanen] = useState(false)
+  // Echtes Gebäude (GLB mit Texturen / farbige Punktwolke) nur zur Anzeige
+  const [aussehen, setAussehen] = useState<Aussehen | null>(null)
+  const [aussehenEin, setAussehenEin] = useState(true)
+  const [aussehenEinheit, setAussehenEinheit] = useState<'m' | 'cm' | 'mm'>('m')
+  const [aussehenOben, setAussehenOben] = useState<'x' | 'y' | 'z'>('y')
+  const [aussehenHinweis, setAussehenHinweis] = useState('')
+  useEffect(() => {
+    let weg = false
+    ladeGemerktesAussehen().then((m) => {
+      if (weg || !m) return
+      setAussehen((alt) => alt ?? m.aussehen)
+      setAussehenEinheit(m.einheit === 'cm' || m.einheit === 'mm' ? m.einheit : 'm')
+      setAussehenOben(m.oben === 'x' || m.oben === 'z' ? m.oben : 'y')
+    })
+    return () => { weg = true }
+  }, [])
+  useEffect(() => {
+    if (aussehen) void merkeAussehen({ aussehen, einheit: aussehenEinheit, oben: aussehenOben })
+  }, [aussehen, aussehenEinheit, aussehenOben])
+  const ladeAussehen = async (datei: File) => {
+    setAussehenHinweis('')
+    try {
+      const r = aussehenAusDatei(await datei.arrayBuffer(), datei.name)
+      if (!r.ok) { setAussehenHinweis('❌ ' + r.meldung); return }
+      setAussehen(r.aussehen); setAussehenEin(true); setAussehenEinheit('m'); setAussehenOben('y')
+      setAussehenHinweis(r.hinweis ?? '')
+    } catch (e) { setAussehenHinweis('❌ Datei konnte nicht gelesen werden: ' + (e instanceof Error ? e.message : 'Fehler')) }
+  }
+  const echtesGebaeude = useMemo(
+    () => (aussehen && aussehenEin ? { aussehen, faktor: aussehenEinheit === 'cm' ? 0.01 : aussehenEinheit === 'mm' ? 0.001 : 1, oben: aussehenOben } : null),
+    [aussehen, aussehenEin, aussehenEinheit, aussehenOben],
+  )
   const [abbauEin, setAbbauEin] = useState<TeilabbauEingabe>(TEILABBAU_START)
   const [showBuilding, setShowBuilding] = useState(true)
   const [showScaffold, setShowScaffold] = useState(true)
@@ -371,6 +405,7 @@ export default function CADPage() {
   function handleNeuStarten() {
     if (!window.confirm('Wirklich neu starten?\n\nDas 3D-Modell wird geleert und alle Maße auf den Anfangszustand gesetzt. Das Gerüst erscheint erst wieder, wenn du Maße änderst oder „Gerüst neu berechnen“ wählst. Bereits gespeicherte Projekte bleiben unverändert.')) return;
     void vergissModell(); // hochgeladenes 3D-Modell im Browser-Zwischenspeicher ebenfalls entfernen
+    void vergissAussehen(); setAussehen(null); // echtes Gebäude (Aussehen) ebenfalls
     setBuilding(LEERES_GEBAEUDE); // Phase 68-H: wirklich leere Felder statt Demo-Werte
     setSystemId('layher-allround');
     setModel(null);
@@ -835,6 +870,7 @@ export default function CADPage() {
       }
 
       void vergissModell() // Angebot ist dem Kunden zugeordnet → gemerktes Modell darf weg
+      void vergissAussehen()
       router.push(`/kunden/${customerId}`)
     } catch (err: any) {
       alert('❌ ' + err.message)
@@ -911,6 +947,27 @@ export default function CADPage() {
               </select>
             )}
             {viewMode === '3d' && modelWithManual && (
+              <span className='inline-flex flex-wrap items-center gap-1'>
+                <label className='text-xs border rounded-lg px-2 py-1 bg-white text-[#424245] cursor-pointer' title='Zeigt das echte Gebäude (GLB mit Texturen oder PLY-Punktwolke mit Farben) statt des einfachen Baukörpers – nur zur Ansicht, Maße und Gerüst bleiben unverändert'>
+                  🏛️ {aussehen ? 'Anderes Gebäude laden' : 'Echtes Gebäude laden'}
+                  <input type='file' accept='.glb,.ply' className='hidden' onChange={(ev) => { const f = ev.target.files?.[0]; ev.target.value = ''; if (f) void ladeAussehen(f) }} />
+                </label>
+                {aussehen && (
+                  <>
+                    <button type='button' className={`text-xs border rounded-lg px-2 py-1 ${aussehenEin ? 'bg-[#e8590c] text-white' : 'bg-white text-[#424245]'}`} onClick={() => setAussehenEin((a) => !a)}>{aussehenEin ? 'Echt: an' : 'Echt: aus'}</button>
+                    <select className='text-xs border rounded-lg px-1 py-1 bg-white' value={aussehenOben} onChange={(ev) => setAussehenOben(ev.target.value as 'x' | 'y' | 'z')} title='Welche Achse im Modell oben ist'>
+                      <option value='y'>Y oben</option><option value='z'>Z oben</option><option value='x'>X oben</option>
+                    </select>
+                    <select className='text-xs border rounded-lg px-1 py-1 bg-white' value={aussehenEinheit} onChange={(ev) => setAussehenEinheit(ev.target.value as 'm' | 'cm' | 'mm')} title='Einheit der Datei'>
+                      <option value='m'>Meter</option><option value='cm'>cm</option><option value='mm'>mm</option>
+                    </select>
+                    <button type='button' className='text-xs text-[#86868b] underline' onClick={() => { setAussehen(null); void vergissAussehen() }}>entfernen</button>
+                  </>
+                )}
+                {aussehenHinweis && <span className='text-[11px] text-[#424245]'>{aussehenHinweis}</span>}
+              </span>
+            )}
+            {viewMode === '3d' && modelWithManual && (
               <button type='button' className={`text-xs border rounded-lg px-2 py-1 ${abbauAktiv ? 'bg-[#e8590c] text-white' : 'bg-white text-[#424245]'}`} title='Teilabbau planen: Bauteile anklicken oder Lagen/m²/Teile eingeben – rechnet Material, Stunden, Tage und Einsatzplan' onClick={() => setAbbauAktiv((a) => !a)}>🧱 Teilabbau</button>
             )}
             {viewMode === '3d' && modelWithManual && (
@@ -937,7 +994,7 @@ export default function CADPage() {
               <AbbauEinplanenDialog tage={abbauErgebnis.tage} personen={abbauErgebnis.personen} titel={`Teilabbau: ${abbauErgebnis.anzahlTeile} Bauteile, ${abbauErgebnis.stunden} h`} onClose={() => setAbbauEinplanen(false)} />
             )}
             {viewMode === '3d' && modelWithManual && (
-              <Scaffold3D farbModus={farbModus} model={modelWithManual} features={features} showBuilding={showBuilding} showScaffold={showScaffold} showDimensions={showDimensions} selectedComponent={selectedComponent} onSelectComponent={klickImModell} abbauMarkiert={abbauMarkiert} visibleTypes={visibleTypes} viewMode={viewAngle} onCanvasReady={(c) => { canvasRef.current = c }} notes={notes} onAddNote={handleAddNote} hiddenSides={hiddenSides} hiddenLevels={hiddenLevels} measureMode={measureMode} onMeasurePoint={handleMeasurePoint} customDimensions={customDimensions} pendingMeasurePoint={pendingMeasurePoint?.point ?? null} placementType={placementType} onPlacementClick={handlePlacementClick} showEnvironment={showEnvironment} onRemoveComponent={handleRemoveComponent} onReplaceComponent={handleReplaceComponent} systemId={systemId} artikelWahl={artikelWahl} onArtikelWahl={waehleArtikel} onArtikelWahlGleiche={waehleArtikelGleiche} removedCount={removedCount} platzierungIdVon={platzierungIdVonBauteil} onBauteilZiehen={handleBauteilZiehen} />
+              <Scaffold3D farbModus={farbModus} model={modelWithManual} features={features} showBuilding={showBuilding} showScaffold={showScaffold} showDimensions={showDimensions} selectedComponent={selectedComponent} onSelectComponent={klickImModell} abbauMarkiert={abbauMarkiert} echtesGebaeude={echtesGebaeude} visibleTypes={visibleTypes} viewMode={viewAngle} onCanvasReady={(c) => { canvasRef.current = c }} notes={notes} onAddNote={handleAddNote} hiddenSides={hiddenSides} hiddenLevels={hiddenLevels} measureMode={measureMode} onMeasurePoint={handleMeasurePoint} customDimensions={customDimensions} pendingMeasurePoint={pendingMeasurePoint?.point ?? null} placementType={placementType} onPlacementClick={handlePlacementClick} showEnvironment={showEnvironment} onRemoveComponent={handleRemoveComponent} onReplaceComponent={handleReplaceComponent} systemId={systemId} artikelWahl={artikelWahl} onArtikelWahl={waehleArtikel} onArtikelWahlGleiche={waehleArtikelGleiche} removedCount={removedCount} platzierungIdVon={platzierungIdVonBauteil} onBauteilZiehen={handleBauteilZiehen} />
             )}
             {/* Phase 68-G: Leerzustand nach 'Neu starten' */}
             {viewMode === '3d' && !model && (
