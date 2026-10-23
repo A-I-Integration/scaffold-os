@@ -26,6 +26,7 @@ import type { CADModel } from '@/lib/calculations/cad-engine'
 import type { MaterialItem } from '@/types/scaffold'
 import { kappeModellAufHoehe, kappeMaterial } from '@/lib/cad/bauabschnitt'
 import { standardpreisFuer, type LvStandardpreise } from '@/lib/lv-firmenwerte'
+import { MIN_BREITE_AB_LK4_M } from '@/lib/geruestklassen'
 
 export const GRUNDSTANDZEIT_WOCHEN = 4
 
@@ -614,6 +615,7 @@ export function erzeugeLeistungsverzeichnis(quelle: LvQuelle, e: LvEingaben): Le
     mwst,
     summeBrutto: cent(summeNetto + mwst),
     annahmen: [
+      ...(e.lastklasse >= 4 && breite > 0 && breite < MIN_BREITE_AB_LK4_M - 1e-9 ? [`ACHTUNG Lastklasse ${e.lastklasse}: Nach DIN EN 12811-1 ist ab Lastklasse 4 mindestens die Breitenklasse W09 (0,90 m) erforderlich, das CAD-Gerüst ist ${de(breite, 2)} m breit (= ${breitenklasse(breite)}). Gerüstbreite im CAD erhöhen oder Lastklasse mit dem Statiker klären.`] : []),
       ...(breitenklasseZuSchmal(e.breitenklasseManuell, breite) ? [`ACHTUNG Breitenklasse: Gefordert ist ${bk}, das CAD-Gerüst ist ${de(breite, 2)} m breit (= ${breitenklasse(breite)}). Das Gerüst im CAD erfüllt die geforderte Breitenklasse nicht – Gerüstbreite im CAD anpassen oder die Klasse klären.`] : []),
       `Mengen aus dem CAD-Modell. Gerüstfläche = Länge × Höhe der eingerüsteten Fassade${e.hoehenZuschlagM > 0 ? ` + Höhenzuschlag ${de(e.hoehenZuschlagM, 2)} m` : ''}${e.oeffnungenAbzugM2 > 0 ? ` − Öffnungen ${de(e.oeffnungenAbzugM2, 2)} m²` : ''}. Höhenzuschlag und Öffnungsabzug sind Eingaben nach deinen vertraglichen Regeln (ATV DIN 18451); der Normtext ist nicht hinterlegt und nicht geprüft.`,
       ...(giebelM2 > 0 ? ['Giebelflächen der Dachgauben sind eine Eingabe (nicht im CAD). Der EP der Zulage (Pos. 1.09) entspricht dem EP von Pos. 1.01 – Annahme.'] : []),
