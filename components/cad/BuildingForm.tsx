@@ -78,7 +78,9 @@ export default function BuildingForm({ building, systemId, onChange, onSystemCha
   const baukoerper = analyse?.ergebnis ?? null
   const nurTurm = nurTurmWahl ?? !!baukoerper?.nurTurmVorgabe
   // Türvorschläge aus erkannten Portalen; ohne Haken bleiben die bisherigen Türen unverändert
-  const portalTueren = (): Partial<BuildingParams> => (portalAn && analyse?.portale?.length ? { tueren: analyse.portale.map(portalAlsTuer) } : {})
+  const portalTueren = (): Partial<BuildingParams> => (portalAn && analyse?.portale?.length
+    ? { tueren: analyse.portale.map(portalAlsTuer), anbauDaecher: analyse.portale.map((p) => ({ seite: p.seite, flaecheM2: p.flaecheM2, breiteM: p.breiteM, tiefeM: p.tiefeM, hoeheM: p.hoeheM })) }
+    : { anbauDaecher: undefined })
   // Mehrteiliges Gebäude erkannt: Teile sofort übernehmen (Person muss nichts anklicken, kann aber unten prüfen/ändern).
   // Läuft erneut, wenn „oben“/Einheit oder die Turm-Auswahl geändert wird.
   useEffect(() => {
@@ -473,7 +475,7 @@ export default function BuildingForm({ building, systemId, onChange, onSystemCha
                       {analyse?.portale && analyse.portale.length > 0 && (
                         <label className='flex items-start gap-2'>
                           <input type='checkbox' className='mt-0.5' checked={portalAn} onChange={(e) => setPortalAn(e.target.checked)} />
-                          <span>Portal/Vorbau erkannt: {analyse.portale.map((p) => `${p.breiteM} m breit, ${p.hoeheM} m hoch, Seite „${{ front: 'vorne', back: 'hinten', left: 'links', right: 'rechts' }[p.seite]}“`).join('; ')} – als Tür übernehmen (der Durchgang im Gerüst bleibt frei). Näherung aus der Geometrie: Maße und Seite bitte mit Plan oder Foto prüfen.</span>
+                          <span>Portal/Vorbau erkannt: {analyse.portale.map((p) => `${p.breiteM} m breit, ${p.hoeheM} m hoch, Seite „${{ front: 'vorne', back: 'hinten', left: 'links', right: 'rechts' }[p.seite]}“`).join('; ')} – als Tür übernehmen (der Durchgang im Gerüst bleibt frei) und die Dachfläche (Vorbau) für Dachflächenschutz und Überbrückung im LV vormerken. Näherung aus der Geometrie: Maße und Seite bitte mit Plan oder Foto prüfen.</span>
                         </label>
                       )}
                       <button type='button' className='rounded-lg bg-[#e8590c] px-3 py-1 font-semibold text-white'
@@ -842,6 +844,10 @@ export default function BuildingForm({ building, systemId, onChange, onSystemCha
                             </select></div>
                           <div><label className='block text-[11px] text-[#424245] mb-1'>Förderhöhe bis (m)</label>
                             <input type='number' step='0.5' min={0} placeholder='oberste Lage' value={az.bisM ?? ''} onChange={(e) => setzeAz({ bisM: zahlOderLeer(e.target.value) })} className='w-full px-2 py-1.5 border rounded-lg text-xs' /></div>
+                          <div><label className='block text-[11px] text-[#424245] mb-1'>Tragkraft Personen (kg)</label>
+                            <input type='number' step='10' min={0} placeholder='500' value={az.tragkraftPersonenKg ?? ''} onChange={(e) => setzeAz({ tragkraftPersonenKg: zahlOderLeer(e.target.value) })} className='w-full px-2 py-1.5 border rounded-lg text-xs' /></div>
+                          <div><label className='block text-[11px] text-[#424245] mb-1'>Tragkraft Lasten (kg)</label>
+                            <input type='number' step='10' min={0} placeholder='800' value={az.tragkraftLastKg ?? ''} onChange={(e) => setzeAz({ tragkraftLastKg: zahlOderLeer(e.target.value) })} className='w-full px-2 py-1.5 border rounded-lg text-xs' /></div>
                           <div><label className='block text-[11px] text-[#424245] mb-1'>Haltestellen (Anzahl)</label>
                             <input type='number' step='1' min={0} value={az.haltestellen ?? ''} onChange={(e) => setzeAz({ haltestellen: zahlOderLeer(e.target.value) })} className='w-full px-2 py-1.5 border rounded-lg text-xs' /></div>
                           <label className='flex items-center gap-2 text-xs text-[#424245] self-end pb-1.5'>

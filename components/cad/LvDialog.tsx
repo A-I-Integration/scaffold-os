@@ -94,7 +94,7 @@ export default function LvDialog({ model, materials, aufbauStunden, abbauStunden
   const hatManuell = Object.keys(e.epUeberschreibung ?? {}).length + Object.keys(e.mengeUeberschreibung ?? {}).length + Object.keys(e.gestrichen ?? {}).length + Object.keys(e.faktorUeberschreibung ?? {}).length > 0
   const setzeGestrichen = (titel: string, an: boolean) => {
     const neu = { ...(e.gestrichen ?? {}) }
-    if (an) neu[titel] = true; else delete neu[titel]
+    neu[titel] = an
     setze({ gestrichen: neu })
   }
 
@@ -151,6 +151,7 @@ export default function LvDialog({ model, materials, aufbauStunden, abbauStunden
               <option value='getrennt'>Aufbau · Vorhaltung · Abbau getrennt</option>
               <option value='grundstandzeit'>Auf-/Abbau inkl. 4 Wochen Vorhaltung</option>
               <option value='statiker'>Gliederung des Auftraggebers: Stück-Pauschalen, 2 Bauabschnitte (Turmeinrüstung)</option>
+              <option value='preisliste'>Preisliste: nur berechnete Positionen mit Miete (Stück × Wochen) und %-Spalte</option>
             </select>
 
             <label className='block text-[11px] text-[#424245]'>
@@ -252,7 +253,7 @@ export default function LvDialog({ model, materials, aufbauStunden, abbauStunden
               <div><label className={label}>Technische Bearbeitung / Statik (€)</label>{num('statikPauschale')}</div>
               <div><label className={label}>Baustelleneinrichtung (€)</label>{num('baustelleneinrichtung')}</div>
               <div><label className={label}>Anfahrtspauschale je Einsatz (€)</label>{num('anfahrtspauschale')}</div>
-              {e.stil === 'statiker' && (
+              {(e.stil === 'statiker' || e.stil === 'preisliste') && (
                 <div><label className={label}>Faktor auf Positionen (%, 100 = keiner)</label>{num('pauschalFaktorProzent', '1')}</div>
               )}
               <div><label className={label}>Anzahl Anfahrten</label>{num('anfahrtAnzahl', '1')}</div>
@@ -307,14 +308,14 @@ export default function LvDialog({ model, materials, aufbauStunden, abbauStunden
                         <td className='py-1 pr-2 whitespace-nowrap'>{p.nr}</td>
                         <td className='py-1 pr-2'>
                           <span className={p.entfaellt ? 'line-through text-[#86868b]' : ''}>{p.titel}</span>
-                          {e.stil === 'statiker' && !p.titel.startsWith('Vorhaltung') && (
+                          {(e.stil === 'statiker' || e.stil === 'preisliste') && !p.titel.startsWith('Vorhaltung') && !p.titel.startsWith('Miete für') && (
                             <label className='ml-2 inline-flex items-center gap-1 text-[10px] text-[#86868b] whitespace-nowrap'>
                               <input type='checkbox' aria-label={`Position ${p.nr} entfällt`} checked={p.entfaellt === true} onChange={(ev) => setzeGestrichen(p.titel, ev.target.checked)} /> entfällt
                             </label>
                           )}
                         </td>
                         <td className='py-1 pr-2 text-right whitespace-nowrap'>
-                          <input type='number' min={0} step='0.01' aria-label={`Menge ${p.nr}`} title={p.manuell?.menge ? `von Hand geändert, berechnet: ${formatMenge(p.berechnet?.menge ?? 0)}` : 'Menge ändern'}
+                          <input type='number' min={0} step='0.01' aria-label={`Menge ${p.nr}`} title={p.manuell?.menge ? `von Hand geändert, berechnet: ${formatMenge(p.berechnet?.menge ?? 0, lv.mengeStellen)}` : 'Menge ändern'}
                             className={`w-20 rounded border px-1 py-0.5 text-right ${p.manuell?.menge ? 'border-amber-400 bg-amber-50' : 'border-transparent hover:border-black/15'}`}
                             value={p.menge} onChange={(ev) => setzePos('mengeUeberschreibung', p.titel, ev.target.value, p.berechnet?.menge ?? p.menge)} />
                         </td>
@@ -325,7 +326,7 @@ export default function LvDialog({ model, materials, aufbauStunden, abbauStunden
                             value={p.ep} onChange={(ev) => setzePos('epUeberschreibung', p.titel, ev.target.value, p.berechnet?.ep ?? p.ep)} /> €
                         </td>
                         <td className='py-1 pr-2 text-right whitespace-nowrap'>
-                          {e.stil === 'statiker' && !p.titel.startsWith('Vorhaltung') && !p.nr.startsWith('12.') ? (
+                          {(e.stil === 'statiker' || e.stil === 'preisliste') && !p.titel.startsWith('Vorhaltung') && !p.titel.startsWith('Miete für') && !p.nr.startsWith('12.') ? (
                             <input type='number' min={1} step='1' aria-label={`Faktor in Prozent ${p.nr}`} title={p.manuell?.faktor ? `von Hand geändert, berechnet: ${p.berechnet?.faktor ?? 100} %` : 'Faktor in % ändern (100 = keiner)'}
                               className={`w-16 rounded border px-1 py-0.5 text-right ${p.manuell?.faktor ? 'border-amber-400 bg-amber-50' : 'border-transparent hover:border-black/15'}`}
                               value={p.faktorProzent ?? 100} onChange={(ev) => setzePos('faktorUeberschreibung', p.titel, ev.target.value, p.berechnet?.faktor ?? 100)} />

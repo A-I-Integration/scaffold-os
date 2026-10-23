@@ -35,6 +35,8 @@ describe('Portal-Erkennung', () => {
     expect(p[0].hoeheM).toBeCloseTo(3.3, 1)
     expect(p[0].tiefeM).toBeCloseTo(1.2, 1)
     expect(Math.abs(p[0].mitteM)).toBeLessThan(0.1)
+    expect(p[0].flaecheM2).toBeGreaterThan(p[0].breiteM * p[0].tiefeM * 0.8)
+    expect(p[0].flaecheM2).toBeLessThan(p[0].breiteM * p[0].tiefeM * 1.2)
   })
   it('ohne Vorbau kein Vorschlag; Gerüstbeläge und frei stehende Teile zählen nicht', () => {
     const s = erkenneSchaftImGeruest(modell(false))
@@ -42,7 +44,7 @@ describe('Portal-Erkennung', () => {
     expect(erkennePortale(modell(false), s!.schaftLage, s!.geruest.lagenM)).toEqual([])
   })
   it('macht aus dem Portal eine Tür mit denselben Maßen', () => {
-    const t = portalAlsTuer({ seite: 'left', mitteM: 0.5, breiteM: 3.6, hoeheM: 3.3, tiefeM: 1.2 }, 0)
+    const t = portalAlsTuer({ seite: 'left', mitteM: 0.5, breiteM: 3.6, hoeheM: 3.3, tiefeM: 1.2, flaecheM2: 4.3 }, 0)
     expect(t).toEqual({ id: 'portal-1', side: 'left', offsetAlongM: 0.5, widthM: 3.6, heightM: 3.3 })
   })
 })
