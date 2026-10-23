@@ -22,6 +22,8 @@ import { BAUTEIL_FARBEN, type FarbModus } from '@/lib/cad/bauteil-farben'
 import { useState, useMemo, useCallback, useEffect, useRef } from 'react'
 import StatikDatenPanel from '@/components/cad/StatikDatenPanel'
 import { verlaufNeu, verlaufSetze, verlaufZurueck, verlaufVor } from '@/lib/cad/verlauf'
+import TeilabbauPanel, { TEILABBAU_START, type TeilabbauEingabe } from '@/components/cad/TeilabbauPanel'
+import { berechneTeilabbau, type TeilabbauAuswahl } from '@/lib/cad/teilabbau'
 import { ansichtDateiname } from '@/lib/cad/ansicht-bild'
 import { vergissModell } from '@/lib/cad/modell-speicher'
 import { erzeugeProjektdatei, liesProjektdatei } from '@/lib/cad/projektdatei'
@@ -104,6 +106,9 @@ export default function CADPage() {
     fetch('/api/me', { cache: 'no-store' }).then((r) => r.json()).then((j) => { if (j?.success && typeof j.role === 'string') setRolle(j.role) }).catch(() => {})
   }, [])
   const [selectedComponent, setSelectedComponent] = useState<string | null>(null)
+  // Teilabbau: Fenster offen? Auswahl/Eingaben
+  const [abbauAktiv, setAbbauAktiv] = useState(false)
+  const [abbauEin, setAbbauEin] = useState<TeilabbauEingabe>(TEILABBAU_START)
   const [showBuilding, setShowBuilding] = useState(true)
   const [showScaffold, setShowScaffold] = useState(true)
   const [showDimensions, setShowDimensions] = useState(true)
@@ -560,6 +565,25 @@ export default function CADPage() {
   const totalWeight = useMemo(() => materials.reduce((s, i) => s + i.weightKg * i.quantity, 0), [materials])
   const totalPrice = useMemo(() => materials.reduce((s, i) => s + i.totalPrice, 0), [materials])
   const logistik = useMemo(() => (modelWithManual ? calculateLogistics(modelWithManual, materials, hoursPerSqm) : null), [modelWithManual, materials, hoursPerSqm])
+  const abbauErgebnis = useMemo(() => {
+    if (!modelWithManual) return null
+    const zahl = (v: string) => { const n = parseFloat(v.replace(',', '.')); return Number.isFinite(n) && n > 0 ? n : 0 }
+    const auswahl: TeilabbauAuswahl =
+      abbauEin.art === 'klick' ? { art: 'ids', ids: abbauEin.ids }
+      : abbauEin.art === 'lagen' ? { art: 'lagen', anzahl: zahl(abbauEin.wert) }
+      : abbauEin.art === 'flaeche' ? { art: 'flaeche', m2: zahl(abbauEin.wert) }
+      : { art: 'teile', anzahl: zahl(abbauEin.wert) }
+    return berechneTeilabbau(modelWithManual, auswahl, { gesamtAbbauStunden: logistik?.abbauStunden ?? 0, personen: zahl(abbauEin.personen) || 3, stundenJeTag: zahl(abbauEin.stundenJeTag) || 8 })
+  }, [modelWithManual, abbauEin, logistik])
+  const abbauMarkiert = useMemo(() => (abbauAktiv && abbauErgebnis ? new Set(abbauErgebnis.bauteilIds) : undefined), [abbauAktiv, abbauErgebnis])
+  // Klick im Modell: bei offenem Teilabbau-Fenster Bauteil zur Abbau-Auswahl hinzufügen/entfernen
+  const klickImModell = useCallback((id: string | null) => {
+    if (!abbauAktiv || !id) { setSelectedComponent(id); return }
+    setAbbauEin((alt) => {
+      const basis = alt.art === 'klick' ? alt.ids : (abbauErgebnis?.bauteilIds ?? [])
+      return { ...alt, art: 'klick', ids: basis.includes(id) ? basis.filter((x) => x !== id) : [...basis, id] }
+    })
+  }, [abbauAktiv, abbauErgebnis])
 
   const toggleType = useCallback((type: string) => {
     setVisibleTypes((prev) => ({ ...prev, [type]: !prev[type] }))
@@ -885,6 +909,9 @@ export default function CADPage() {
               </select>
             )}
             {viewMode === '3d' && modelWithManual && (
+              <button type='button' className={`text-xs border rounded-lg px-2 py-1 ${abbauAktiv ? 'bg-[#e8590c] text-white' : 'bg-white text-[#424245]'}`} title='Teilabbau planen: Bauteile anklicken oder Lagen/m²/Teile eingeben – rechnet Material, Stunden, Tage und Einsatzplan' onClick={() => setAbbauAktiv((a) => !a)}>🧱 Teilabbau</button>
+            )}
+            {viewMode === '3d' && modelWithManual && (
               <button type='button' className='text-xs border rounded-lg px-2 py-1 bg-white text-[#424245]' title='Speichert die aktuelle 3D-Ansicht als PNG-Bild (für Angebot oder Präsentation). Tipp: Modus „Präsentation“ für weißen Hintergrund.'
                 onClick={() => {
                   const c = canvasRef.current
@@ -900,9 +927,12 @@ export default function CADPage() {
                 }}>📷 Bild speichern</button>
             )}
           </div>
-          <div className='h-[65vh] min-h-[320px] md:h-auto md:flex-1 p-4 md:min-h-0'>
+          <div className='relative h-[65vh] min-h-[320px] md:h-auto md:flex-1 p-4 md:min-h-0'>
+            {abbauAktiv && abbauErgebnis && viewMode === '3d' && (
+              <TeilabbauPanel ein={abbauEin} onChange={setAbbauEin} ergebnis={abbauErgebnis} onClose={() => setAbbauAktiv(false)} />
+            )}
             {viewMode === '3d' && modelWithManual && (
-              <Scaffold3D farbModus={farbModus} model={modelWithManual} features={features} showBuilding={showBuilding} showScaffold={showScaffold} showDimensions={showDimensions} selectedComponent={selectedComponent} onSelectComponent={setSelectedComponent} visibleTypes={visibleTypes} viewMode={viewAngle} onCanvasReady={(c) => { canvasRef.current = c }} notes={notes} onAddNote={handleAddNote} hiddenSides={hiddenSides} hiddenLevels={hiddenLevels} measureMode={measureMode} onMeasurePoint={handleMeasurePoint} customDimensions={customDimensions} pendingMeasurePoint={pendingMeasurePoint?.point ?? null} placementType={placementType} onPlacementClick={handlePlacementClick} showEnvironment={showEnvironment} onRemoveComponent={handleRemoveComponent} onReplaceComponent={handleReplaceComponent} systemId={systemId} artikelWahl={artikelWahl} onArtikelWahl={waehleArtikel} onArtikelWahlGleiche={waehleArtikelGleiche} removedCount={removedCount} platzierungIdVon={platzierungIdVonBauteil} onBauteilZiehen={handleBauteilZiehen} />
+              <Scaffold3D farbModus={farbModus} model={modelWithManual} features={features} showBuilding={showBuilding} showScaffold={showScaffold} showDimensions={showDimensions} selectedComponent={selectedComponent} onSelectComponent={klickImModell} abbauMarkiert={abbauMarkiert} visibleTypes={visibleTypes} viewMode={viewAngle} onCanvasReady={(c) => { canvasRef.current = c }} notes={notes} onAddNote={handleAddNote} hiddenSides={hiddenSides} hiddenLevels={hiddenLevels} measureMode={measureMode} onMeasurePoint={handleMeasurePoint} customDimensions={customDimensions} pendingMeasurePoint={pendingMeasurePoint?.point ?? null} placementType={placementType} onPlacementClick={handlePlacementClick} showEnvironment={showEnvironment} onRemoveComponent={handleRemoveComponent} onReplaceComponent={handleReplaceComponent} systemId={systemId} artikelWahl={artikelWahl} onArtikelWahl={waehleArtikel} onArtikelWahlGleiche={waehleArtikelGleiche} removedCount={removedCount} platzierungIdVon={platzierungIdVonBauteil} onBauteilZiehen={handleBauteilZiehen} />
             )}
             {/* Phase 68-G: Leerzustand nach 'Neu starten' */}
             {viewMode === '3d' && !model && (
