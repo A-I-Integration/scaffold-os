@@ -95,7 +95,24 @@ interface ZiehKontextWert {
   bewegen: (platzierungId: string, position: [number, number, number], side: string, levelIndex: number) => void
 }
 const ZiehKontext = createContext<ZiehKontextWert | null>(null)
+/** Farbe des Himmels am Horizont (Sky bei turbidity 6): in diese Farbe läuft der Boden in der Ferne aus */
+const HORIZONT_FARBE = '#e9edf2'
+const NEBEL_NAH = 1.6
+const NEBEL_FERN = 2.0
 const FarbModusKontext = createContext<FarbModus>('real')
+
+/** Nebel in Himmelsfarbe: der Boden läuft in der Ferne aus. Muss an der Szene hängen (ein <fog> in einer Gruppe wirkt nicht). */
+function HorizontNebel({ an }: { an: boolean }) {
+  const { scene, camera } = useThree()
+  useEffect(() => {
+    if (!an) return
+    // Maßstab = Abstand der Startkamera zum Modell (nicht von `nah` abhängig: der Nebel soll hinter dem Modell beginnen, am Rand des Bodens voll deckend sein)
+    const d = camera.position.length()
+    Object.assign(scene, { fog: new THREE.Fog(HORIZONT_FARBE, d * NEBEL_NAH, d * NEBEL_FERN) })
+    return () => { Object.assign(scene, { fog: null }) }
+  }, [scene, camera, an])
+  return null
+}
 // Optik nach MJ-Katalog: 'modul' (COMBI/OPTIMA: Lochscheibe mit 8 Aussparungen), 'mj' (andere MJ-Systeme: nur Fußspindel), null = bisherige Optik
 type MjOptik = 'modul' | 'mj' | null
 const MjOptikKontext = createContext<MjOptik>(null)
@@ -1763,10 +1780,16 @@ function Scene({
       )}
       <DimensionLines model={model} visible={showDimensions} />
       <CustomDimensionLines dimensions={customDimensions} pendingPoint={pendingMeasurePoint} />
+      {/* Boden. Präsentation: nur der Schattenwurf auf dem weißen Hintergrund (eine beleuchtete weiße Platte wird
+          grau und hebt sich mit harter Kante vom weißen Hintergrund ab). Sonst: großer Boden, der am Horizont
+          über den Nebel in die Himmelsfarbe übergeht statt an einer sichtbaren Kante zu enden. */}
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.02, 0]} receiveShadow>
-        <planeGeometry args={[120, 120]} />
-        <meshStandardMaterial color={praes ? PRAESENTATION_HINTERGRUND : showEnvironment && !bridgeMode ? '#86a173' : '#b9c0c8'} roughness={0.95} />
+        <planeGeometry args={[praes ? 120 : 600, praes ? 120 : 600]} />
+        {praes
+          ? <shadowMaterial transparent opacity={0.22} />
+          : <meshStandardMaterial color={showEnvironment && !bridgeMode ? '#86a173' : '#b9c0c8'} roughness={0.95} />}
       </mesh>
+      <HorizontNebel an={!praes} />
       {praes && <GrasFlaeche model={model} />}
     </group>
   )
