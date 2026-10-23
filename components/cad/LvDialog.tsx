@@ -4,23 +4,23 @@
 // SCAFFOLD OS – Dialog „Leistungsverzeichnis" im CAD
 // Eingaben (Projekt, Standzeit, Klassen, Preisfaktoren) → Vorschau der Positionen
 // mit Einheitspreisen → Export als PDF oder Excel.
-// Firmenwerte (Stundensätze, Mietsatz, Zuschlag, Anbieter) werden im Browser
-// gemerkt; Projektangaben gelten nur für dieses LV.
+// Firmenwerte (Stundensätze, Mietsatz, Zuschlag, Anbieter) liegen in der Datenbank
+// (Einstellungen, für alle Geräte; Browser nur als Reserve); Projektangaben gelten nur für dieses LV.
 // ============================================================
 
-import { Fragment, useMemo, useState } from 'react'
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
 import type { CADModel } from '@/lib/calculations/cad-engine'
 import type { MaterialItem } from '@/types/scaffold'
 import {
   erzeugeLeistungsverzeichnis, formatEuro, formatMenge,
   LV_STANDARD_EINGABEN, LASTKLASSEN, ZUSATZ_INFO, type LvEingaben, type LvStil, type LvZusatz,
 } from '@/lib/leistungsverzeichnis'
+import { FIRMENFELDER, firmenwerteAus, standardpreiseAus, type LvStandardpreise } from '@/lib/lv-firmenwerte'
 import { leseStatikerLvXlsx, type StatikerLvErgebnis } from '@/lib/statiker-lv-einlesen'
 
 const feld = 'w-full px-2 py-1.5 border rounded-lg text-xs bg-white'
 const label = 'block text-[11px] font-medium text-[#424245] mb-0.5'
 const FIRMA_KEY = 'scaffoldos.lv.firma'
-const FIRMENFELDER = ['auftragnehmer', 'stundensatzFach', 'stundensatzHelfer', 'mietsatzProzentJeWoche', 'zuschlagProzent', 'gesamtStandzeitWochen', 'mwstProzent', 'stil', 'statikPauschale', 'baustelleneinrichtung', 'anfahrtspauschale'] as const
 
 interface Props {
   model: CADModel
@@ -41,7 +41,25 @@ export default function LvDialog({ model, materials, aufbauStunden, abbauStunden
     } catch { return LV_STANDARD_EINGABEN }
   })
   const [fehler, setFehler] = useState<string | null>(null)
+  // Firmenwerte und Standardpreise aus der Datenbank (gelten auf allen Geräten)
+  const [standardpreise, setStandardpreise] = useState<LvStandardpreise>({})
+  const dbGeladen = useRef(false)
+  const dbSpeichern = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const [dbHinweis, setDbHinweis] = useState('')
   const [statikerLv, setStatikerLv] = useState<StatikerLvErgebnis | null>(null)
+
+  // Einmal beim Öffnen: Firmenwerte + Standardpreise aus der Datenbank holen
+  useEffect(() => {
+    let aktiv = true
+    fetch('/api/company').then((r) => r.json()).then((j) => {
+      if (!aktiv || !j?.success) return
+      const fw = firmenwerteAus(j.company?.lv_firmenwerte)
+      if (Object.keys(fw).length > 0) setE((alt) => ({ ...alt, ...fw }))
+      setStandardpreise(standardpreiseAus(j.company?.lv_standardpreise))
+      dbGeladen.current = true
+    }).catch(() => { /* ohne Datenbank läuft der Dialog mit den Browser-Werten weiter */ })
+    return () => { aktiv = false }
+  }, [])
 
   const setze = (patch: Partial<LvEingaben>) => {
     setE((alt) => {
@@ -50,6 +68,16 @@ export default function LvDialog({ model, materials, aufbauStunden, abbauStunden
         const firma: Record<string, unknown> = {}
         for (const k of FIRMENFELDER) firma[k] = neu[k]
         localStorage.setItem(FIRMA_KEY, JSON.stringify(firma))
+        // Nur Firmenfelder gehen in die Datenbank (erst nach dem Laden, damit nichts überschrieben wird). Nur Admin darf speichern.
+        if (dbGeladen.current && FIRMENFELDER.some((k) => k in patch)) {
+          if (dbSpeichern.current) clearTimeout(dbSpeichern.current)
+          dbSpeichern.current = setTimeout(() => {
+            fetch('/api/company', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ lv_firmenwerte: firma }) })
+              .then((r) => r.json())
+              .then((j) => setDbHinweis(j?.success ? 'Firmenwerte gespeichert (gelten auf allen Geräten).' : 'Nur im Browser gespeichert – die Firmenwerte für alle Geräte kann nur der Admin ändern.'))
+              .catch(() => setDbHinweis('Nur im Browser gespeichert.'))
+          }, 800)
+        }
       } catch { /* ignorieren */ }
       return neu
     })
@@ -68,8 +96,8 @@ export default function LvDialog({ model, materials, aufbauStunden, abbauStunden
   const setzeZusatz = (i: number, patch: Partial<LvZusatz>) => setze({ zusatz: e.zusatz.map((z, j) => (j === i ? { ...z, ...patch } : z)) })
 
   const lv = useMemo(
-    () => erzeugeLeistungsverzeichnis({ model, materials, aufbauStunden, abbauStunden }, e),
-    [model, materials, aufbauStunden, abbauStunden, e],
+    () => erzeugeLeistungsverzeichnis({ model, materials, aufbauStunden, abbauStunden }, { ...e, standardpreise }),
+    [model, materials, aufbauStunden, abbauStunden, e, standardpreise],
   )
   const dateiBasis = `Leistungsverzeichnis-${new Date().toISOString().split('T')[0]}`
   const speichern = (blob: Blob, name: string) => {
@@ -224,6 +252,7 @@ export default function LvDialog({ model, materials, aufbauStunden, abbauStunden
 
             <div className='text-[11px] font-semibold uppercase text-[#86868b] pt-1'>Preisfaktoren</div>
             <div className='grid grid-cols-2 gap-2'>
+              {dbHinweis && <p className='col-span-2 text-[10px] text-[#86868b]'>{dbHinweis}</p>}
               <div><label className={label}>Stundensatz Fach (€)</label>{num('stundensatzFach')}</div>
               <div><label className={label}>Stundensatz Helfer (€)</label>{num('stundensatzHelfer')}</div>
               <div><label className={label}>Stunden Fach (Titel 2)</label>{num('stundenFach', '1')}</div>
