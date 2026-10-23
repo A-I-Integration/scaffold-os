@@ -22,6 +22,10 @@ interface Props {
   totalWeightKg: number
   totalPrice: number
   logistik?: LogistikDaten | null
+  /** Fahrzeuge aus der Datenpflege + Auswahl ('standard' | 'auto' | Fahrzeug-ID) */
+  fahrzeuge?: { id: string; name: string; nutzlastKg: number }[]
+  fahrzeugWahl?: string
+  onFahrzeugWahl?: (wahl: string) => void
   onExportPDF?: () => void
   onExportCSV?: () => void
   onExportMontageplan?: () => void
@@ -68,7 +72,7 @@ interface Props {
   onSelectPlacementType?: (type: string | null) => void
 }
 
-export default function BillOfMaterials({ materials, ohnePreis = [], ohneGewicht = [], lagerFehler = false, totalWeightKg, totalPrice, logistik, onExportPDF, onExportCSV, onExportMontageplan, onOpenLv, onSpeichereProjektdatei, onExportStatikGeometrie, onExportIFC, onExportStatikerPaket, planModus = 'schematisch', onPlanModusChange, customers, kundenLadeFehler, onRetryKunden, onCreateCustomer, onAssignCustomer, zuordnenLaeuft, disabled = false, notes, onDeleteNote, layerState, onToggleSide, onToggleLevel, onShowAllLayers, onHideAllLayers, customDimensions, onDeleteDimension, measureMode, onToggleMeasureMode, manualPlacements, onRemoveManualPlacement, placementType, onSelectPlacementType }: Props) {
+export default function BillOfMaterials({ materials, ohnePreis = [], ohneGewicht = [], lagerFehler = false, totalWeightKg, totalPrice, logistik, fahrzeuge = [], fahrzeugWahl = 'auto', onFahrzeugWahl, onExportPDF, onExportCSV, onExportMontageplan, onOpenLv, onSpeichereProjektdatei, onExportStatikGeometrie, onExportIFC, onExportStatikerPaket, planModus = 'schematisch', onPlanModusChange, customers, kundenLadeFehler, onRetryKunden, onCreateCustomer, onAssignCustomer, zuordnenLaeuft, disabled = false, notes, onDeleteNote, layerState, onToggleSide, onToggleLevel, onShowAllLayers, onHideAllLayers, customDimensions, onDeleteDimension, measureMode, onToggleMeasureMode, manualPlacements, onRemoveManualPlacement, placementType, onSelectPlacementType }: Props) {
   const [kundenSuche, setKundenSuche] = useState('')
   const [ausgewaehlterKunde, setAusgewaehlterKunde] = useState<{ id: string; name: string } | null>(null)
   const [zeigeDropdown, setZeigeDropdown] = useState(false)
@@ -108,7 +112,17 @@ export default function BillOfMaterials({ materials, ohnePreis = [], ohneGewicht
             {logistikOffen && (
               <div className='px-3 py-2 space-y-1.5 text-xs'>
                 <div className='flex justify-between'><span className='text-[#86868b]'>Transportvolumen</span><span className='font-medium'>{logistik.transportvolumenM3.toLocaleString('de-DE')} m³</span></div>
-                <div className='flex justify-between'><span className='text-[#86868b]'>LKW-Fahrten (7,5 t)</span><span className='font-medium'>{logistik.lkwFahrten}</span></div>
+                <div className='flex justify-between'><span className='text-[#86868b]'>Fahrten ({logistik.fahrzeugName ? `${logistik.fahrzeugName}, ${logistik.nutzlastKg.toLocaleString('de-DE')} kg` : '7,5 t, 3.500 kg'})</span><span className='font-medium'>{logistik.lkwFahrten}</span></div>
+                {onFahrzeugWahl && fahrzeuge.length > 0 && (
+                  <div className='flex items-center justify-between gap-2'>
+                    <label htmlFor='fahrzeugwahl' className='text-[#86868b]'>Fahrzeug</label>
+                    <select id='fahrzeugwahl' value={fahrzeugWahl} onChange={(e) => onFahrzeugWahl(e.target.value)} className='px-2 py-1 border rounded text-xs bg-white max-w-[60%]'>
+                      <option value='auto'>automatisch (wenigste Fahrten)</option>
+                      {fahrzeuge.map((f) => <option key={f.id} value={f.id}>{f.name} ({f.nutzlastKg.toLocaleString('de-DE')} kg)</option>)}
+                      <option value='standard'>feste Annahme 7,5 t (3.500 kg)</option>
+                    </select>
+                  </div>
+                )}
                 <div className='flex justify-between'><span className='text-[#86868b]'>Aufbau</span><span className='font-medium'>{logistik.aufbauStunden} h</span></div>
                 <div className='flex justify-between'><span className='text-[#86868b]'>Abbau</span><span className='font-medium'>{logistik.abbauStunden} h</span></div>
                 <p className='text-[10px] text-[#86868b] pt-1 border-t border-black/5'>Richtwerte für die Angebotsphase, Annahmen: {logistik.annahmen.join(' · ')}</p>
