@@ -29,6 +29,8 @@ import type { CADNote } from '@/types/cad-notes'
 import { passendeArtikel, artikelLabel, katalogListeFuerSystem } from '@/lib/cad/katalog-zuordnung'
 import { baueLochscheibe, baueFussspindel, baueUniRahmen, baueRiegel } from '@/lib/cad/mj-geometrie'
 import type { CustomDimension } from '@/types/cad-dimensions'
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
+import type { Aussehen } from '@/lib/cad/modell-aussehen'
 
 interface Props {
   model: CADModel
@@ -66,6 +68,8 @@ interface Props {
   // ohne diese Prop bleibt die Szene exakt wie vorher.
   showEnvironment?: boolean
   farbModus?: FarbModus
+  /** Echtes Gebäude (GLB mit Texturen oder farbige Punktwolke) statt des einfachen Baukörpers */
+  echtesGebaeude?: EchtesGebaeudeDaten | null
   /** Teilabbau: Kennungen der zum Abbau markierten Bauteile (rot) */
   abbauMarkiert?: ReadonlySet<string>
   // NEU: ausgewähltes Bauteil per Knopf entfernen (Seite blendet es aus bzw. löscht es).
@@ -105,6 +109,8 @@ const NEBEL_FERN = 2.0
 const FarbModusKontext = createContext<FarbModus>('real')
 /** Teilabbau: Bauteile, die abgebaut werden sollen, werden rot markiert */
 const AbbauMarkKontext = createContext<ReadonlySet<string> | null>(null)
+type EchtesGebaeudeDaten = { aussehen: Aussehen; faktor: number; oben: 'x' | 'y' | 'z' }
+const EchtesGebaeudeKontext = createContext<EchtesGebaeudeDaten | null>(null)
 
 /** Nebel in Himmelsfarbe: der Boden läuft in der Ferne aus. Muss an der Szene hängen (ein <fog> in einer Gruppe wirkt nicht). */
 function HorizontNebel({ an }: { an: boolean }) {
@@ -1183,6 +1189,54 @@ export function tuerPlatzierungGestuft(
     : { pos: [sg.mitteX + sg.laengeM / 2 + 0.02, y, zMitte(sg) + f.offsetAlongM], rot: [0, Math.PI / 2, 0] }
 }
 
+
+// ─── Echtes Gebäude: GLB mit Texturen oder farbige Punktwolke, auf Meter, Y oben, Mitte bei x/z = 0, Unterkante y = 0 ───
+function EchtesGebaeude3D({ aussehen, faktor, oben }: { aussehen: Aussehen; faktor: number; oben: 'x' | 'y' | 'z' }) {
+  const { invalidate } = useThree()
+  const [glbSzene, setGlbSzene] = useState<THREE.Object3D | null>(null)
+  useEffect(() => {
+    let aktiv = true
+    if (aussehen.art !== 'glb') return
+    new GLTFLoader().parse(aussehen.daten.slice(0), '', (g) => { if (aktiv) { setGlbSzene(g.scene); invalidate() } }, () => { if (aktiv) setGlbSzene(null) })
+    return () => { aktiv = false }
+  }, [aussehen, invalidate])
+  const punkte = useMemo(() => {
+    if (aussehen.art !== 'punkte') return null
+    const g = new THREE.BufferGeometry()
+    g.setAttribute('position', new THREE.BufferAttribute(aussehen.positionen, 3))
+    g.setAttribute('color', new THREE.BufferAttribute(Float32Array.from(aussehen.farben, (v) => v / 255), 3))
+    return g
+  }, [aussehen])
+  const ausgerichtet = useMemo(() => {
+    const inhalt = aussehen.art === 'glb' ? glbSzene : punkte ? new THREE.Points(punkte, new THREE.PointsMaterial({ size: 0.35, sizeAttenuation: true, vertexColors: true })) : null
+    if (!inhalt) return null
+    const g = new THREE.Group()
+    g.add(inhalt)
+    g.scale.setScalar(faktor > 0 ? faktor : 1)
+    if (oben === 'z') g.rotation.x = -Math.PI / 2
+    else if (oben === 'x') g.rotation.z = Math.PI / 2
+    g.updateMatrixWorld(true)
+    const box = new THREE.Box3().setFromObject(g)
+    if (box.isEmpty()) return null
+    const mitte = box.getCenter(new THREE.Vector3())
+    return { g, pos: [-mitte.x, -box.min.y, -mitte.z] as [number, number, number] }
+  }, [aussehen.art, glbSzene, punkte, faktor, oben])
+  useEffect(() => { invalidate() }, [ausgerichtet, invalidate])
+  if (!ausgerichtet) return null
+  return <group position={ausgerichtet.pos}><primitive object={ausgerichtet.g} /></group>
+}
+
+/** Zeigt das echte Gebäude (falls geladen), sonst den einfachen Baukörper */
+function GebaeudeAnzeige({ building, features, visible }: { building: CADModel['building']; features: BuildingFeature3D[]; visible: boolean }) {
+  const echt = useContext(EchtesGebaeudeKontext)
+  return (
+    <>
+      <Building3D building={building} features={features} visible={visible && !echt} />
+      {visible && echt && <EchtesGebaeude3D aussehen={echt.aussehen} faktor={echt.faktor} oben={echt.oben} />}
+    </>
+  )
+}
+
 function Building3D({
   building,
   features,
@@ -1810,7 +1864,7 @@ function Scene({
           schwarze/unlesbare Schattenseiten am Gerüst, wie es bei echten
           Baustellenfotos durch Streulicht ohnehin nie vorkommt. */}
       <directionalLight position={[-20, 15, -15]} intensity={0.35} color="#dce8f5" />
-      <Building3D building={model.building} features={features || []} visible={showBuilding && !bridgeMode} />
+      <GebaeudeAnzeige building={model.building} features={features || []} visible={showBuilding && !bridgeMode} />
       <BridgeDeck3D building={model.building} visible={showBuilding && !!bridgeMode} />
       <Umgebung3D model={model} visible={!!showEnvironment && !bridgeMode && !weiss} />
       {showScaffold && statik && <Stabwerk3D components={model.components3D} visibleTypes={visibleTypes} />}
@@ -1878,6 +1932,7 @@ function Scaffold3D({
   showEnvironment,
   farbModus = 'real',
   abbauMarkiert,
+  echtesGebaeude,
   onRemoveComponent,
   onReplaceComponent,
   systemId,
@@ -1959,6 +2014,7 @@ function Scaffold3D({
         <AdaptiveEvents />
         <FarbModusKontext.Provider value={farbModus}>
         <AbbauMarkKontext.Provider value={abbauMarkiert ?? null}>
+        <EchtesGebaeudeKontext.Provider value={echtesGebaeude ?? null}>
         <MjOptikKontext.Provider value={mjOptikFuerSystem(systemId)}>
         <ZiehKontext.Provider value={ziehKontext}>
         <group ref={contentRef}>
@@ -1987,6 +2043,7 @@ function Scaffold3D({
         </group>
         </ZiehKontext.Provider>
         </MjOptikKontext.Provider>
+        </EchtesGebaeudeKontext.Provider>
         </AbbauMarkKontext.Provider>
         </FarbModusKontext.Provider>
         <AutoFraming targetRef={contentRef} modelKey={modelKey} />

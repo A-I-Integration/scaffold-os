@@ -163,3 +163,27 @@ export function nwdZwischenspeicher(speicher: Speicher | null = aktiverSpeicher(
     },
   }
 }
+
+// ---------- Aussehen des echten Gebäudes (GLB / farbige Punktwolke) ----------
+
+export interface GemerktesAussehen { aussehen: import('./modell-aussehen').Aussehen; einheit: string; oben: string }
+
+export async function merkeAussehen(a: GemerktesAussehen, speicher: Speicher | null = aktiverSpeicher()): Promise<boolean> {
+  if (!speicher) return false
+  try { await speicher.setzen('aktuell', 'aussehen', { ...a, zeit: Date.now() }); return true } catch { return false }
+}
+
+export async function ladeGemerktesAussehen(speicher: Speicher | null = aktiverSpeicher()): Promise<GemerktesAussehen | null> {
+  if (!speicher) return null
+  try {
+    const w = (await speicher.holen('aktuell', 'aussehen')) as Partial<GemerktesAussehen> | undefined
+    const a = w?.aussehen
+    if (!a || (a.art === 'glb' ? !(a.daten instanceof ArrayBuffer) : !(a.positionen instanceof Float32Array && a.farben instanceof Uint8Array))) return null
+    return { aussehen: a, einheit: typeof w?.einheit === 'string' ? w.einheit : 'm', oben: typeof w?.oben === 'string' ? w.oben : 'y' }
+  } catch { return null }
+}
+
+export async function vergissAussehen(speicher: Speicher | null = aktiverSpeicher()): Promise<void> {
+  if (!speicher) return
+  try { await speicher.loeschen('aktuell', 'aussehen') } catch { /* nichts zu tun */ }
+}
