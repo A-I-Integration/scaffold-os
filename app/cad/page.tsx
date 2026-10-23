@@ -21,6 +21,7 @@
 import { BAUTEIL_FARBEN, type FarbModus } from '@/lib/cad/bauteil-farben'
 import { useState, useMemo, useCallback, useEffect, useRef } from 'react'
 import StatikDatenPanel from '@/components/cad/StatikDatenPanel'
+import { ansichtDateiname } from '@/lib/cad/ansicht-bild'
 import { vergissModell } from '@/lib/cad/modell-speicher'
 import { erzeugeProjektdatei, liesProjektdatei } from '@/lib/cad/projektdatei'
 import LvDialog from '@/components/cad/LvDialog'
@@ -853,6 +854,21 @@ export default function CADPage() {
                 <option value='top'>Draufsicht</option>
                 <option value='bottom'>Unteransicht</option>
               </select>
+            )}
+            {viewMode === '3d' && modelWithManual && (
+              <button type='button' className='text-xs border rounded-lg px-2 py-1 bg-white text-[#424245]' title='Speichert die aktuelle 3D-Ansicht als PNG-Bild (für Angebot oder Präsentation). Tipp: Modus „Präsentation“ für weißen Hintergrund.'
+                onClick={() => {
+                  const c = canvasRef.current
+                  if (!c) { window.alert('Die 3D-Ansicht ist noch nicht bereit.'); return }
+                  c.toBlob((blob) => {
+                    if (!blob) { window.alert('Das Bild konnte nicht erzeugt werden.'); return }
+                    const a = document.createElement('a')
+                    a.href = URL.createObjectURL(blob)
+                    a.download = ansichtDateiname(farbModus, new Date())
+                    a.click()
+                    setTimeout(() => URL.revokeObjectURL(a.href), 10000)
+                  }, 'image/png')
+                }}>📷 Bild speichern</button>
             )}
           </div>
           <div className='h-[65vh] min-h-[320px] md:h-auto md:flex-1 p-4 md:min-h-0'>
