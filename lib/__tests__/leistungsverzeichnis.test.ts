@@ -318,6 +318,22 @@ describe('Stil „Statiker-LV“ (Wuppertal)', () => {
       expect(f80.summeNetto).toBeLessThan(basis.summeNetto)
     })
 
+    it('Faktor je Position: von Hand > Datenpflege > allgemeiner Faktor', () => {
+      const std = { 'Bauzaun': { ep: 10, faktorProzent: 50 } }
+      const lv = alle(erzeugeLeistungsverzeichnis(quelle(), { ...stat, pauschalFaktorProzent: 80, standardpreise: std }))
+      const f = (t: string) => lv.find((p) => p.titel === t)!
+      expect(f('Bauzaun').faktorProzent).toBe(50) // Datenpflege schlägt allgemeinen Faktor
+      expect(f('Verkehrssicherung').faktorProzent).toBe(80) // allgemeiner Faktor
+      const hand = alle(erzeugeLeistungsverzeichnis(quelle(), { ...stat, pauschalFaktorProzent: 80, standardpreise: std, faktorUeberschreibung: { Bauzaun: 90, Verkehrssicherung: 100 } }))
+      const h = (t: string) => hand.find((p) => p.titel === t)!
+      expect(h('Bauzaun').faktorProzent).toBe(90)
+      expect(h('Bauzaun').manuell?.faktor).toBe(true)
+      expect(h('Verkehrssicherung').faktorProzent).toBeUndefined() // 100 von Hand = kein Faktor
+      expect(h('Verkehrssicherung').manuell?.faktor).toBe(true)
+      expect(h('Bauzaun').berechnet?.faktor).toBe(50)
+      expect(lv.find((p) => p.titel.startsWith('Vorhaltung'))!.faktorProzent).toBeUndefined()
+    })
+
     it('Position streichen: Menge 0, Nummer bleibt, Vorhaltung der Position entfällt mit', () => {
       const std: LvEingaben = { ...stat, standardpreise: { 'Baustellen-Container-WC': { ep: 250, epJeWoche: 52 } } }
       const ohne = alle(erzeugeLeistungsverzeichnis(quelle(), std))

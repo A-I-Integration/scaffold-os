@@ -122,6 +122,8 @@ export interface LvEingaben {
   /** Eigene Einheitspreise / Mengen je Position, Schlüssel = Kurztitel der Position (bleibt stabil, wenn sich die Nummern verschieben) */
   epUeberschreibung?: Record<string, number>
   mengeUeberschreibung?: Record<string, number>
+  /** Eigener Faktor in % je Position (Schlüssel = Kurztitel); 100 = kein Faktor */
+  faktorUeberschreibung?: Record<string, number>
   /** Stil „statiker“: Höhe des 2. Bauabschnitts in m (Rückbau); das CAD wird darauf gekappt. Leer = 21,5 m, 0 = Positionen bleiben leer */
   hoeheBa2M?: number
   /** Stil „statiker“: Standzeit des 2. Bauabschnitts in Wochen (leer/0 = in der Tabelle eintragen) */
@@ -186,9 +188,9 @@ export interface LvPosition {
   /** Position entfällt (von Hand gestrichen): Menge 0, Nummer bleibt erhalten */
   entfaellt?: boolean
   /** Was die Person von Hand geändert hat (sonst aus dem CAD / den Faktoren berechnet) */
-  manuell?: { ep?: boolean; menge?: boolean }
+  manuell?: { ep?: boolean; menge?: boolean; faktor?: boolean }
   /** Berechnete Werte vor der Änderung von Hand (zum Zurücksetzen und Anzeigen) */
-  berechnet?: { ep: number; menge: number }
+  berechnet?: { ep: number; menge: number; faktor?: number }
 }
 
 export interface LvTitel {
@@ -449,14 +451,20 @@ export function erzeugeLeistungsverzeichnis(quelle: LvQuelle, e: LvEingaben): Le
         const streichen = e.gestrichen?.[titel] === true
         const mengeNeu = streichen ? 0 : mo !== undefined && Number.isFinite(mo) && mo >= 0 ? mo : menge
         const epNeu = eo !== undefined && Number.isFinite(eo) && eo >= 0 ? cent(eo) : ep
-        const fp = e.pauschalFaktorProzent
-        const faktorP = !titel.startsWith('Vorhaltung') && titelNr !== '12' && fp !== undefined && Number.isFinite(fp) && fp > 0 && fp !== 100 ? fp : undefined
+        const gueltig = (v: number | undefined): v is number => v !== undefined && Number.isFinite(v) && v > 0
+        const ohneFaktor = titel.startsWith('Vorhaltung') || titelNr === '12'
+        // Rangfolge: von Hand je Position > Datenpflege je Position > allgemeiner Faktor > 100
+        const fBerechnet = ohneFaktor ? 100 : [standardpreisFuer(e.standardpreise, titel)?.faktorProzent, e.pauschalFaktorProzent].find(gueltig) ?? 100
+        const fo = e.faktorUeberschreibung?.[titel]
+        const fHand = !ohneFaktor && gueltig(fo) ? fo : undefined
+        const fEff = fHand ?? fBerechnet
+        const faktorP = fEff !== 100 ? fEff : undefined
         const p: LvPosition = {
           nr: nrFmt(titelNr, liste.length + 1, zweistellig), titel, text, menge: mengeNeu, einheit, ep: epNeu, gp: cent(mengeNeu * epNeu * ((faktorP ?? 100) / 100)),
           ...(faktorP !== undefined ? { faktorProzent: faktorP } : {}),
           ...(streichen ? { entfaellt: true } : {}),
-          ...(!streichen && (mengeNeu !== menge || epNeu !== ep) ? { manuell: { ...(mengeNeu !== menge ? { menge: true } : {}), ...(epNeu !== ep ? { ep: true } : {}) } } : {}),
-          berechnet: { ep, menge },
+          ...(!streichen && (mengeNeu !== menge || epNeu !== ep || fEff !== fBerechnet) ? { manuell: { ...(mengeNeu !== menge ? { menge: true } : {}), ...(epNeu !== ep ? { ep: true } : {}), ...(fEff !== fBerechnet ? { faktor: true } : {}) } } : {}),
+          berechnet: { ep, menge, faktor: fBerechnet },
         }
         liste.push(p)
         return p

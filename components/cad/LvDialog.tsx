@@ -84,14 +84,14 @@ export default function LvDialog({ model, materials, aufbauStunden, abbauStunden
   }
   const zahl = (v: string): number => { const n = parseFloat(v.replace(',', '.')); return Number.isFinite(n) && n >= 0 ? n : 0 }
 
-  const setzePos = (feldName: 'epUeberschreibung' | 'mengeUeberschreibung', titel: string, wert: string, berechnet: number) => {
+  const setzePos = (feldName: 'epUeberschreibung' | 'mengeUeberschreibung' | 'faktorUeberschreibung', titel: string, wert: string, berechnet: number) => {
     const alt = { ...(e[feldName] ?? {}) }
     const n = wert.trim() === '' ? NaN : parseFloat(wert.replace(',', '.'))
     if (!Number.isFinite(n) || n < 0 || Math.abs(n - berechnet) < 0.005) delete alt[titel]
     else alt[titel] = n
     setze({ [feldName]: alt } as Partial<LvEingaben>)
   }
-  const hatManuell = Object.keys(e.epUeberschreibung ?? {}).length + Object.keys(e.mengeUeberschreibung ?? {}).length + Object.keys(e.gestrichen ?? {}).length > 0
+  const hatManuell = Object.keys(e.epUeberschreibung ?? {}).length + Object.keys(e.mengeUeberschreibung ?? {}).length + Object.keys(e.gestrichen ?? {}).length + Object.keys(e.faktorUeberschreibung ?? {}).length > 0
   const setzeGestrichen = (titel: string, an: boolean) => {
     const neu = { ...(e.gestrichen ?? {}) }
     if (an) neu[titel] = true; else delete neu[titel]
@@ -287,7 +287,7 @@ export default function LvDialog({ model, materials, aufbauStunden, abbauStunden
             {hatManuell && (
               <div className='mb-2 flex items-center justify-between rounded-lg bg-amber-50 px-3 py-1.5 text-[11px] text-amber-900'>
                 <span>Gelb markierte Mengen/Preise hast du von Hand geändert.</span>
-                <button type='button' className='underline' onClick={() => setze({ epUeberschreibung: {}, mengeUeberschreibung: {}, gestrichen: {} })}>Alle zurücksetzen</button>
+                <button type='button' className='underline' onClick={() => setze({ epUeberschreibung: {}, mengeUeberschreibung: {}, gestrichen: {}, faktorUeberschreibung: {} })}>Alle zurücksetzen</button>
               </div>
             )}
             <table className='w-full text-xs'>
@@ -324,7 +324,13 @@ export default function LvDialog({ model, materials, aufbauStunden, abbauStunden
                             className={`w-24 rounded border px-1 py-0.5 text-right ${p.manuell?.ep ? 'border-amber-400 bg-amber-50' : 'border-transparent hover:border-black/15'}`}
                             value={p.ep} onChange={(ev) => setzePos('epUeberschreibung', p.titel, ev.target.value, p.berechnet?.ep ?? p.ep)} /> €
                         </td>
-                        <td className='py-1 pr-2 text-right whitespace-nowrap text-[#86868b]'>{p.faktorProzent ? `${p.faktorProzent.toLocaleString('de-DE')} %` : ''}</td>
+                        <td className='py-1 pr-2 text-right whitespace-nowrap'>
+                          {e.stil === 'statiker' && !p.titel.startsWith('Vorhaltung') && !p.nr.startsWith('12.') ? (
+                            <input type='number' min={1} step='1' aria-label={`Faktor in Prozent ${p.nr}`} title={p.manuell?.faktor ? `von Hand geändert, berechnet: ${p.berechnet?.faktor ?? 100} %` : 'Faktor in % ändern (100 = keiner)'}
+                              className={`w-16 rounded border px-1 py-0.5 text-right ${p.manuell?.faktor ? 'border-amber-400 bg-amber-50' : 'border-transparent hover:border-black/15'}`}
+                              value={p.faktorProzent ?? 100} onChange={(ev) => setzePos('faktorUeberschreibung', p.titel, ev.target.value, p.berechnet?.faktor ?? 100)} />
+                          ) : null}
+                        </td>
                         <td className='py-1 text-right whitespace-nowrap font-medium'>{formatEuro(p.gp)}</td>
                       </tr>
                     ))}
