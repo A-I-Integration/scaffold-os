@@ -254,7 +254,7 @@ describe('Stil „Statiker-LV“ (Wuppertal)', () => {
 
     it('Standardpreise aus der Datenpflege füllen Positionen ohne CAD-Wert, Handeingaben gewinnen', () => {
       const ohne = erzeugeLeistungsverzeichnis(quelle(), stat)
-      const std: LvEingaben = { ...stat, standardpreise: { 'Haltestellenausstattung 2. BA': { ep: 100, epJeWoche: 2 }, 'Baustellen-Container-WC': { ep: 250 } } }
+      const std: LvEingaben = { ...stat, standzeitBa2Wochen: 50, standardpreise: { 'Haltestellenausstattung 2. BA': { ep: 100, epJeWoche: 2 }, 'Baustellen-Container-WC': { ep: 250 } } }
       const mit = erzeugeLeistungsverzeichnis(quelle(), std)
       const pos = (lv: typeof ohne, t: string) => alle(lv).find((p) => p.titel === t)!
       expect(pos(ohne, 'Haltestellenausstattung 2. BA').ep).toBe(0)
@@ -262,10 +262,24 @@ describe('Stil „Statiker-LV“ (Wuppertal)', () => {
       expect(pos(mit, 'Baustellen-Container-WC').ep).toBe(250)
       const vh = alle(mit).find((p) => p.titel.startsWith('Vorhaltung zur Vorposition') && p.nr === pos(mit, 'Haltestellenausstattung 2. BA').nr.replace(/\.(\d+)$/, (_m, n) => '.' + (Number(n) + 1)))
       expect(vh?.ep).toBe(2)
-      expect(vh?.menge).toBe(500) // 10 Haltestellen × 50 Wochen
+      expect(vh?.menge).toBe(500) // 10 Haltestellen × 50 Wochen (Standzeit 2. BA)
       const hand = erzeugeLeistungsverzeichnis(quelle(), { ...std, epUeberschreibung: { 'Baustellen-Container-WC': 99 } })
       expect(pos(hand, 'Baustellen-Container-WC').ep).toBe(99)
       expect(mit.summeNetto).toBeGreaterThan(ohne.summeNetto)
+    })
+
+    it('Vorhaltung aus Standardpreisen: bei Menge 0 nichts, 2. BA nur mit deren Standzeit', () => {
+      const std: LvEingaben = { ...stat, gesamtStandzeitWochen: 2, standzeitBa2Wochen: 0, standardpreise: { 'Bauzauntor': { ep: 60, epJeWoche: 3 }, 'Personen- und Lastenaufzug 500/800kg 2.BA': { ep: 1800, epJeWoche: 80 }, 'Baustellen-Container-WC': { epJeWoche: 25 } } }
+      const lv = erzeugeLeistungsverzeichnis(quelle(), std)
+      const pos = alle(lv)
+      const nach = (t: string) => { const i = pos.findIndex((p) => p.titel === t); return pos[i + 1] }
+      expect(nach('Bauzauntor').menge).toBe(0) // 0 Tore → keine Vorhaltung
+      expect(nach('Personen- und Lastenaufzug 500/800kg 2.BA H = ca. 21,5m').menge).toBe(0) // Standzeit 2. BA nicht eingetragen
+      expect(nach('Baustellen-Container-WC').menge).toBe(2) // 1 Stück × 2 Wochen
+      expect(nach('Baustellen-Container-WC').ep).toBe(25)
+      const mit = erzeugeLeistungsverzeichnis(quelle(), { ...std, standzeitBa2Wochen: 3 })
+      const p2 = alle(mit); const i = p2.findIndex((p) => p.titel === 'Personen- und Lastenaufzug 500/800kg 2.BA H = ca. 21,5m')
+      expect(p2[i + 1].menge).toBe(3)
     })
 
     it('Gerüst 1. BA = Aufbau + Abbau aus dem CAD, Vorhaltung = Standzeit in Wochen', () => {

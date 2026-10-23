@@ -109,7 +109,7 @@ const NEBEL_FERN = 2.0
 const FarbModusKontext = createContext<FarbModus>('real')
 /** Teilabbau: Bauteile, die abgebaut werden sollen, werden rot markiert */
 const AbbauMarkKontext = createContext<ReadonlySet<string> | null>(null)
-type EchtesGebaeudeDaten = { aussehen: Aussehen; faktor: number; oben: 'x' | 'y' | 'z' }
+type EchtesGebaeudeDaten = { aussehen: Aussehen; faktor: number; oben: 'x' | 'y' | 'z'; versatzX?: number; versatzZ?: number; drehungGrad?: number }
 const EchtesGebaeudeKontext = createContext<EchtesGebaeudeDaten | null>(null)
 
 /** Nebel in Himmelsfarbe: der Boden läuft in der Ferne aus. Muss an der Szene hängen (ein <fog> in einer Gruppe wirkt nicht). */
@@ -1191,7 +1191,7 @@ export function tuerPlatzierungGestuft(
 
 
 // ─── Echtes Gebäude: GLB mit Texturen oder farbige Punktwolke, auf Meter, Y oben, Mitte bei x/z = 0, Unterkante y = 0 ───
-function EchtesGebaeude3D({ aussehen, faktor, oben }: { aussehen: Aussehen; faktor: number; oben: 'x' | 'y' | 'z' }) {
+function EchtesGebaeude3D({ aussehen, faktor, oben, versatzX = 0, versatzZ = 0, drehungGrad = 0 }: EchtesGebaeudeDaten) {
   const { invalidate } = useThree()
   const [glbSzene, setGlbSzene] = useState<THREE.Object3D | null>(null)
   useEffect(() => {
@@ -1208,7 +1208,7 @@ function EchtesGebaeude3D({ aussehen, faktor, oben }: { aussehen: Aussehen; fakt
     return g
   }, [aussehen])
   const ausgerichtet = useMemo(() => {
-    const inhalt = aussehen.art === 'glb' ? glbSzene : punkte ? new THREE.Points(punkte, new THREE.PointsMaterial({ size: 0.35, sizeAttenuation: true, vertexColors: true })) : null
+    const inhalt = aussehen.art === 'glb' ? glbSzene : punkte ? new THREE.Points(punkte, new THREE.PointsMaterial({ size: 0.6, sizeAttenuation: true, vertexColors: true })) : null
     if (!inhalt) return null
     const g = new THREE.Group()
     g.add(inhalt)
@@ -1223,7 +1223,11 @@ function EchtesGebaeude3D({ aussehen, faktor, oben }: { aussehen: Aussehen; fakt
   }, [aussehen.art, glbSzene, punkte, faktor, oben])
   useEffect(() => { invalidate() }, [ausgerichtet, invalidate])
   if (!ausgerichtet) return null
-  return <group position={ausgerichtet.pos}><primitive object={ausgerichtet.g} /></group>
+  return (
+    <group position={[versatzX, 0, versatzZ]} rotation={[0, (drehungGrad * Math.PI) / 180, 0]}>
+      <group position={ausgerichtet.pos}><primitive object={ausgerichtet.g} /></group>
+    </group>
+  )
 }
 
 /** Zeigt das echte Gebäude (falls geladen), sonst den einfachen Baukörper */
@@ -1232,7 +1236,7 @@ function GebaeudeAnzeige({ building, features, visible }: { building: CADModel['
   return (
     <>
       <Building3D building={building} features={features} visible={visible && !echt} />
-      {visible && echt && <EchtesGebaeude3D aussehen={echt.aussehen} faktor={echt.faktor} oben={echt.oben} />}
+      {visible && echt && <EchtesGebaeude3D {...echt} />}
     </>
   )
 }

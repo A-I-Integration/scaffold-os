@@ -37,3 +37,17 @@ describe('Aussehen: PLY', () => {
     expect(aussehenAusDatei(buf(b), 'k.glb').ok).toBe(true)
   })
 })
+
+import { speicherImArbeitsspeicher, merkeAussehen, ladeGemerktesAussehen, vergissAussehen } from '../modell-speicher'
+
+describe('Aussehen merken', () => {
+  it('speichert und lädt Punktwolke samt Versatz, vergisst auf Wunsch', async () => {
+    const sp = speicherImArbeitsspeicher()
+    const a = { art: 'punkte' as const, name: 'k', positionen: new Float32Array([1, 2, 3]), farben: new Uint8Array([1, 2, 3]) }
+    expect(await merkeAussehen({ aussehen: a, einheit: 'cm', oben: 'z', versatz: { x: 5, z: -2, grad: 90 } }, sp)).toBe(true)
+    const g = await ladeGemerktesAussehen(sp)
+    expect(g?.einheit).toBe('cm'); expect(g?.oben).toBe('z'); expect(g?.versatz).toEqual({ x: 5, z: -2, grad: 90 })
+    await vergissAussehen(sp)
+    expect(await ladeGemerktesAussehen(sp)).toBeNull()
+  })
+})

@@ -166,7 +166,7 @@ export function nwdZwischenspeicher(speicher: Speicher | null = aktiverSpeicher(
 
 // ---------- Aussehen des echten Gebäudes (GLB / farbige Punktwolke) ----------
 
-export interface GemerktesAussehen { aussehen: import('./modell-aussehen').Aussehen; einheit: string; oben: string }
+export interface GemerktesAussehen { aussehen: import('./modell-aussehen').Aussehen; einheit: string; oben: string; versatz?: { x: number; z: number; grad: number } }
 
 export async function merkeAussehen(a: GemerktesAussehen, speicher: Speicher | null = aktiverSpeicher()): Promise<boolean> {
   if (!speicher) return false
@@ -179,7 +179,9 @@ export async function ladeGemerktesAussehen(speicher: Speicher | null = aktiverS
     const w = (await speicher.holen('aktuell', 'aussehen')) as Partial<GemerktesAussehen> | undefined
     const a = w?.aussehen
     if (!a || (a.art === 'glb' ? !(a.daten instanceof ArrayBuffer) : !(a.positionen instanceof Float32Array && a.farben instanceof Uint8Array))) return null
-    return { aussehen: a, einheit: typeof w?.einheit === 'string' ? w.einheit : 'm', oben: typeof w?.oben === 'string' ? w.oben : 'y' }
+    const v = w?.versatz
+    const versatz = v && Number.isFinite(v.x) && Number.isFinite(v.z) && Number.isFinite(v.grad) ? v : undefined
+    return { aussehen: a, einheit: typeof w?.einheit === 'string' ? w.einheit : 'm', oben: typeof w?.oben === 'string' ? w.oben : 'y', ...(versatz ? { versatz } : {}) }
   } catch { return null }
 }
 

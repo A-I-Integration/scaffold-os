@@ -453,10 +453,13 @@ export function erzeugeLeistungsverzeichnis(quelle: LvQuelle, e: LvEingaben): Le
       // Standardpreis „je Woche“ aus der Datenpflege: nur, wo das CAD/die Zusatzleistung keinen Preis liefert
       const bezug = b.liste.find((x) => x.nr === bezugNr)
       const woche = ep > 0 || !bezug ? undefined : standardpreisFuer(e.standardpreise, bezug.titel)?.epJeWoche
-      if (woche) {
-        const wochen = /2\. ?BA/.test(bezug!.titel) && (e.standzeitBa2Wochen ?? 0) > 0 ? e.standzeitBa2Wochen! : woGesamt
-        if (!(mengeWo > 0) && bezug!.menge > 0) { mengeWo = bezug!.menge * wochen; einheit = bezug!.einheit === 'Stück' || bezug!.einheit === 'Stck' ? 'StckWo' : `${bezug!.einheit}Wo` }
-        else if (!(mengeWo > 0)) mengeWo = wochen
+      if (woche && bezug) {
+        // Vorhaltung = Menge der Vorposition × Wochen. Menge 0 → nichts berechnen. 2. BA: nur deren Standzeit (leer = 0, in der Tabelle eintragen)
+        const zweiteBa = /2\. ?BA/.test(bezug.titel)
+        const wochen = zweiteBa ? Math.max(0, e.standzeitBa2Wochen ?? 0) : woGesamt
+        const stueck = bezug.einheit === 'Stück' || bezug.einheit === 'Stck'
+        mengeWo = bezug.menge > 0 ? bezug.menge * wochen : 0
+        einheit = stueck ? (bezug.menge > 1 ? 'StckWo' : 'Wo') : `${bezug.einheit.replace('²', '2')}Wo`
         ep = cent(woche)
       }
       return b.add(`Vorhaltung zur Vorposition ${bezugNr}`, [text ?? `Vorhaltung zur Vorposition ${bezugNr} ${bezugTitel}.`], r2(mengeWo), einheit, ep)
