@@ -88,6 +88,8 @@ export function erzeugeLvPdf(lv: Leistungsverzeichnis): jsPDF {
       doc.setFont('helvetica', 'normal'); doc.setFontSize(10)
       doc.text(`${formatMenge(p.menge)} ${p.einheit}`, spMenge, y, { align: 'right' })
       doc.text(`x  ${formatEuro(p.ep)}`, spMenge + 28, y, { align: 'right' })
+      if (p.faktorProzent) doc.text(`x  ${p.faktorProzent.toLocaleString('de-DE')} %`, spMenge + 45, y, { align: 'right' })
+      if (p.entfaellt) doc.text('entfällt', RAND + 24, y)
       doc.setFont('helvetica', 'bold')
       doc.text(`=  ${formatEuro(p.gp)}`, B - RAND, y, { align: 'right' })
       y += 3
@@ -156,7 +158,7 @@ export async function erzeugeLvXlsx(lv: Leistungsverzeichnis): Promise<ArrayBuff
       set(`C${r}`, { t: 'n', v: p.menge, z: zahl })
       set(`D${r}`, { t: 's', v: p.einheit })
       set(`E${r}`, { t: 'n', v: p.ep, z: euro })
-      set(`F${r}`, { t: 'n', v: p.gp, f: `ROUND(C${r}*E${r},2)`, z: euro })
+      set(`F${r}`, { t: 'n', v: p.gp, f: p.faktorProzent ? `ROUND(C${r}*E${r}*${p.faktorProzent}/100,2)` : `ROUND(C${r}*E${r},2)`, z: euro })
       r += 1
     }
     const letzte = r - 1

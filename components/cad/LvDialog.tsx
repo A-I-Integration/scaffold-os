@@ -91,7 +91,12 @@ export default function LvDialog({ model, materials, aufbauStunden, abbauStunden
     else alt[titel] = n
     setze({ [feldName]: alt } as Partial<LvEingaben>)
   }
-  const hatManuell = Object.keys(e.epUeberschreibung ?? {}).length + Object.keys(e.mengeUeberschreibung ?? {}).length > 0
+  const hatManuell = Object.keys(e.epUeberschreibung ?? {}).length + Object.keys(e.mengeUeberschreibung ?? {}).length + Object.keys(e.gestrichen ?? {}).length > 0
+  const setzeGestrichen = (titel: string, an: boolean) => {
+    const neu = { ...(e.gestrichen ?? {}) }
+    if (an) neu[titel] = true; else delete neu[titel]
+    setze({ gestrichen: neu })
+  }
 
   const setzeZusatz = (i: number, patch: Partial<LvZusatz>) => setze({ zusatz: e.zusatz.map((z, j) => (j === i ? { ...z, ...patch } : z)) })
 
@@ -247,6 +252,9 @@ export default function LvDialog({ model, materials, aufbauStunden, abbauStunden
               <div><label className={label}>Technische Bearbeitung / Statik (€)</label>{num('statikPauschale')}</div>
               <div><label className={label}>Baustelleneinrichtung (€)</label>{num('baustelleneinrichtung')}</div>
               <div><label className={label}>Anfahrtspauschale je Einsatz (€)</label>{num('anfahrtspauschale')}</div>
+              {e.stil === 'statiker' && (
+                <div><label className={label}>Faktor auf Positionen (%, 100 = keiner)</label>{num('pauschalFaktorProzent', '1')}</div>
+              )}
               <div><label className={label}>Anzahl Anfahrten</label>{num('anfahrtAnzahl', '1')}</div>
             </div>
 
@@ -279,7 +287,7 @@ export default function LvDialog({ model, materials, aufbauStunden, abbauStunden
             {hatManuell && (
               <div className='mb-2 flex items-center justify-between rounded-lg bg-amber-50 px-3 py-1.5 text-[11px] text-amber-900'>
                 <span>Gelb markierte Mengen/Preise hast du von Hand geändert.</span>
-                <button type='button' className='underline' onClick={() => setze({ epUeberschreibung: {}, mengeUeberschreibung: {} })}>Alle zurücksetzen</button>
+                <button type='button' className='underline' onClick={() => setze({ epUeberschreibung: {}, mengeUeberschreibung: {}, gestrichen: {} })}>Alle zurücksetzen</button>
               </div>
             )}
             <table className='w-full text-xs'>
@@ -297,7 +305,14 @@ export default function LvDialog({ model, materials, aufbauStunden, abbauStunden
                     {t.positionen.map((p) => (
                       <tr key={p.nr} className='border-b border-black/5 align-top'>
                         <td className='py-1 pr-2 whitespace-nowrap'>{p.nr}</td>
-                        <td className='py-1 pr-2'>{p.titel}</td>
+                        <td className='py-1 pr-2'>
+                          <span className={p.entfaellt ? 'line-through text-[#86868b]' : ''}>{p.titel}</span>
+                          {e.stil === 'statiker' && !p.titel.startsWith('Vorhaltung') && (
+                            <label className='ml-2 inline-flex items-center gap-1 text-[10px] text-[#86868b] whitespace-nowrap'>
+                              <input type='checkbox' aria-label={`Position ${p.nr} entfällt`} checked={p.entfaellt === true} onChange={(ev) => setzeGestrichen(p.titel, ev.target.checked)} /> entfällt
+                            </label>
+                          )}
+                        </td>
                         <td className='py-1 pr-2 text-right whitespace-nowrap'>
                           <input type='number' min={0} step='0.01' aria-label={`Menge ${p.nr}`} title={p.manuell?.menge ? `von Hand geändert, berechnet: ${formatMenge(p.berechnet?.menge ?? 0)}` : 'Menge ändern'}
                             className={`w-20 rounded border px-1 py-0.5 text-right ${p.manuell?.menge ? 'border-amber-400 bg-amber-50' : 'border-transparent hover:border-black/15'}`}
@@ -309,7 +324,7 @@ export default function LvDialog({ model, materials, aufbauStunden, abbauStunden
                             className={`w-24 rounded border px-1 py-0.5 text-right ${p.manuell?.ep ? 'border-amber-400 bg-amber-50' : 'border-transparent hover:border-black/15'}`}
                             value={p.ep} onChange={(ev) => setzePos('epUeberschreibung', p.titel, ev.target.value, p.berechnet?.ep ?? p.ep)} /> €
                         </td>
-                        <td className='py-1 text-right whitespace-nowrap font-medium'>{formatEuro(p.gp)}</td>
+                        <td className='py-1 text-right whitespace-nowrap font-medium'>{formatEuro(p.gp)}{p.faktorProzent ? <div className='text-[10px] font-normal text-[#86868b]'>× {p.faktorProzent.toLocaleString('de-DE')} %</div> : null}</td>
                       </tr>
                     ))}
                     <tr><td colSpan={5} className='py-1 text-right font-semibold'>Summe Titel {t.nrText}</td><td className='py-1 text-right font-semibold'>{formatEuro(t.summe)}</td></tr>

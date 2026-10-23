@@ -6,7 +6,7 @@
 // ============================================================
 
 /** Felder des LV-Dialogs, die zur Firma gehören (nicht zum einzelnen Angebot). */
-export const FIRMENFELDER = ['auftragnehmer', 'stundensatzFach', 'stundensatzHelfer', 'mietsatzProzentJeWoche', 'zuschlagProzent', 'gesamtStandzeitWochen', 'mwstProzent', 'stil', 'statikPauschale', 'baustelleneinrichtung', 'anfahrtspauschale'] as const
+export const FIRMENFELDER = ['auftragnehmer', 'stundensatzFach', 'stundensatzHelfer', 'mietsatzProzentJeWoche', 'zuschlagProzent', 'gesamtStandzeitWochen', 'mwstProzent', 'stil', 'statikPauschale', 'baustelleneinrichtung', 'anfahrtspauschale', 'pauschalFaktorProzent'] as const
 
 export type Firmenfeld = (typeof FIRMENFELDER)[number]
 

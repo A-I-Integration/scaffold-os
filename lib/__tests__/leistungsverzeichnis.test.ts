@@ -304,6 +304,31 @@ describe('Stil „Statiker-LV“ (Wuppertal)', () => {
       if (sd.vor.menge > 0) { expect(sd.vorh.ep).toBe(10); expect(sd.vorh.menge).toBe(16 * sd.vor.menge) }
     })
 
+    it('Faktor in % gilt für alle Positionen außer Vorhaltung und Stundenlohn; Standard 100 ändert nichts', () => {
+      const basis = erzeugeLeistungsverzeichnis(quelle(), { ...stat, pauschalFaktorProzent: 100 })
+      const f80 = erzeugeLeistungsverzeichnis(quelle(), { ...stat, pauschalFaktorProzent: 80 })
+      const b = alle(basis); const f = alle(f80)
+      expect(f.length).toBe(b.length)
+      b.forEach((p, i) => {
+        const q = f[i]
+        if (p.titel.startsWith('Vorhaltung') || p.nr.startsWith('12.')) { expect(q.gp).toBe(p.gp); expect(q.faktorProzent).toBeUndefined() }
+        else { expect(q.faktorProzent).toBe(80); expect(q.gp).toBeCloseTo(Math.round(p.menge * p.ep * 0.8 * 100) / 100, 2) }
+      })
+      expect(b.every((p) => p.faktorProzent === undefined)).toBe(true)
+      expect(f80.summeNetto).toBeLessThan(basis.summeNetto)
+    })
+
+    it('Position streichen: Menge 0, Nummer bleibt, Vorhaltung der Position entfällt mit', () => {
+      const std: LvEingaben = { ...stat, standardpreise: { 'Baustellen-Container-WC': { ep: 250, epJeWoche: 52 } } }
+      const ohne = alle(erzeugeLeistungsverzeichnis(quelle(), std))
+      const i0 = ohne.findIndex((p) => p.titel === 'Baustellen-Container-WC')
+      expect(ohne[i0].menge).toBe(1); expect(ohne[i0 + 1].gp).toBeGreaterThan(0)
+      const mit = alle(erzeugeLeistungsverzeichnis(quelle(), { ...std, gestrichen: { 'Baustellen-Container-WC': true } }))
+      expect(mit.map((p) => p.nr)).toEqual(ohne.map((p) => p.nr))
+      expect(mit[i0].menge).toBe(0); expect(mit[i0].gp).toBe(0); expect(mit[i0].entfaellt).toBe(true)
+      expect(mit[i0 + 1].menge).toBe(0); expect(mit[i0 + 1].gp).toBe(0)
+    })
+
     it('Gerüst 1. BA = Aufbau + Abbau aus dem CAD, Vorhaltung = Standzeit in Wochen', () => {
       const q = quelle()
       const lv = erzeugeLeistungsverzeichnis(q, stat)
