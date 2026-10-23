@@ -47,6 +47,15 @@ describe('Abschnitt ohne Gerüst', () => {
     expect(roofs.every((c) => c.position[1] < 6)).toBe(true) // Turm ist 58 m hoch
   })
 
+  it('setzt das Schutzdach über die Eingangstür an der Vorderseite', () => {
+    const b: BuildingParams = { ...basis, tueren: [{ id: 'eingang', side: 'front', offsetAlongM: -15, widthM: 1.5, heightM: 2.5 }] }
+    const roofs = generateCADModel(b, 'layher-allround').components3D.filter((c) => c.type === 'protection_roof')
+    expect(roofs.length).toBe(1)
+    expect(roofs[0].position[0]).toBeCloseTo(-15, 6)
+    expect(roofs[0].scale[0]).toBeCloseTo(5.5, 6)
+    expect(roofs[0].rotation[0]).toBeLessThan(0) // nach außen ansteigend
+  })
+
   it('Turmhelm: Lagen über dem Schaft werden nach innen versetzt und kürzer', () => {
     const b: BuildingParams = { ...basis, sections: [
       { bezeichnung: 'Turm', laengeM: 9, hoeheM: 45, roofForm: 'walmdach', roofHoeheM: 13, helmGeruest: true },

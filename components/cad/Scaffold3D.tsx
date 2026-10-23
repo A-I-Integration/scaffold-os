@@ -157,7 +157,7 @@ const COLOR_MAP: Record<string, string> = {
   sheeting: '#e8eaed',     // Kederplane – helle Plane
   elevator: '#f59e0b',     // Personen-/Lastenaufzug
   board: '#b08a5e',        // Bordbretter – helles Holz
-  protection_roof: '#9aa2a9', // Schutzdach
+  protection_roof: '#c08a4a', // Schutzdach
   load_plate: '#7a6248',   // Lastverteilplatten – Holz
   ladder: '#b9c0c7',       // Leitern – Aluminium (schematisch)
   corner_brace: '#cfd4d9', // Eckverbindungen
