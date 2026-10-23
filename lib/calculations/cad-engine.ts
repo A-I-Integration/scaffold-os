@@ -57,6 +57,18 @@ export interface GeruestOptionen {
   aufzug?: AufzugOptionen
 }
 
+/** Angrenzende Dachfläche (Vorbau/Anbau) neben dem Schaft, aus dem Modell erkannt (Näherung): Grundlage für Dachflächenschutz und Überbrückung im LV. */
+export interface AnbauDach {
+  seite: 'front' | 'back' | 'left' | 'right'
+  flaecheM2: number
+  /** Breite entlang der Wand (m) */
+  breiteM: number
+  /** Tiefe vor der Wand (m) */
+  tiefeM: number
+  /** Höhe der Dachfläche über Gelände (m) */
+  hoeheM: number
+}
+
 /** Eine Tür mit fester Lage im Erdgeschoss. */
 export interface CadTuer {
   id: string
@@ -79,6 +91,9 @@ export interface AufzugOptionen {
   bisM?: number
   /** Anzahl Haltestellen (für das LV) */
   haltestellen?: number
+  /** Tragkraft in kg (für das LV): Personen / Lasten; leer = 500 / 800 */
+  tragkraftPersonenKg?: number
+  tragkraftLastKg?: number
   /** true = wird von einem Fremdunternehmen gemietet (nicht im eigenen Material/Lager, Kosten von Hand); false = aus dem eigenen Inventar */
   gemietet: boolean
   /** Kosten netto, von Hand (Aufbau/Montage, Vorhaltung je Woche, Abbau) */
@@ -124,6 +139,8 @@ export interface BuildingParams {
   // NEU: Einstellungen für die automatische Gerüst-Erzeugung (alles optional;
   // ohne Angabe gelten die bisherigen Standardwerte).
   geruestOptionen?: GeruestOptionen
+  /** Angrenzende Dachflächen aus dem Modell (Vorschlag, siehe AnbauDach) */
+  anbauDaecher?: AnbauDach[]
   // NEU: Lastklasse nach DIN EN 12811-1 (1-6) – bisher nirgends erfasst,
   // aber nötig, um die Regelausführungs-Grenzen einer Zulassung zu prüfen.
   lastklasse?: number

@@ -538,11 +538,15 @@ export function erzeugeLeistungsverzeichnis(quelle: LvQuelle, e: LvEingaben): Le
     const g2 = b2.add(`Arbeitsgerüste mit int. Tragger. am Turmschaft bis ca. 21,5 m Höhe`, g2Text, 1, 'Stück', ba2 ? cent(lohn2('geruest') + lohn2('konsolen')) : 0)
     vorh(b2, g2.nr, 'Arbeitsgerüste 2. BA', ba2 ? miet2(mat2.geruest + mat2.konsolen) : 0, 'Wo', woBa2)
     const ub = zus('ueberbrueckung')
-    const ubp = b2.add('Überbrückungen Dachflächen angrenzende Bauteile', ['Gitterträger und Stahlträger zur Schaffung von Überbrückungen, Abfangungen und als lastenverteilende Unterkonstruktion. ' + (ub && ub.menge > 0 ? 'Preise aus den Zusatzleistungen im LV-Fenster.' : OHNE_CAD)], 1, 'Stück', ub && ub.menge > 0 ? cent(ub.menge * (ub.epAuf + ub.epAb)) : 0)
+    const daecher = model.building.anbauDaecher ?? []
+    const dachSumme = r2(daecher.reduce((s2, d) => s2 + d.flaecheM2, 0))
+    const ueberLaenge = r2(daecher.reduce((s2, d) => s2 + d.breiteM, 0))
+    const DACH_HINWEIS = 'Vorschlag aus dem Modell (Näherung, ANNAHME: Spannweite = Breite des erkannten Vorbaus entlang der Wand; geneigte Anbaudächer sind nicht erfasst): bitte prüfen.'
+    const ubp = b2.add('Überbrückungen Dachflächen angrenzende Bauteile', ['Gitterträger und Stahlträger zur Schaffung von Überbrückungen, Abfangungen und als lastenverteilende Unterkonstruktion. ' + (ueberLaenge > 0 ? `Länge der Überbrückung ca. ${de(ueberLaenge, 2)} m (${daecher.length} angrenzende Dachfläche${daecher.length > 1 ? 'n' : ''}). ${DACH_HINWEIS} Preis bitte eintragen. ` : '') + (ub && ub.menge > 0 ? 'Preise aus den Zusatzleistungen im LV-Fenster.' : ueberLaenge > 0 ? '' : OHNE_CAD)], 1, 'Stück', ub && ub.menge > 0 ? cent(ub.menge * (ub.epAuf + ub.epAb)) : 0)
     vorh(b2, ubp.nr, 'Überbrückungen', ub && ub.menge > 0 ? cent(ub.menge * ub.epVorh) : 0)
     const sdN = dachRoh.length
     const sdAuf = sdN > 0 ? epAufbau('schutzdach', schutzdachM) * schutzdachM + epAbbau('schutzdach', schutzdachM) * schutzdachM : 0
-    const sdp = b2.add('Schutzdächer Zugang Eingang Kirche', ['Schutzgerüst nach DIN 4420-1 und DGUV-Vorschriften bei turmartigen Bauwerken. Anzahl und Lage aus dem CAD sind ein Vorschlag (unten vorne), der Eingang ist im Modell nicht bekannt.'], sdN, 'Stück', sdN > 0 ? cent(sdAuf / sdN) : 0)
+    const sdp = b2.add('Schutzdächer Zugang Eingang Kirche', ['Schutzgerüst nach DIN 4420-1 und DGUV-Vorschriften bei turmartigen Bauwerken. ' + (sdN > 0 ? `Aus dem CAD: ${sdN} Schutzdach${sdN > 1 ? 'dächer' : ''}, je ca. ${de(r2(schutzdachM / sdN), 2)} m × ${de(r2(Math.abs(dachRoh[0].scale[2])), 2)} m (zusammen ${de(schutzdachM, 2)} m Länge). ` : '') + 'Anzahl und Lage aus dem CAD sind ein Vorschlag (unten vorne), der Eingang ist im Modell nicht bekannt.'], sdN, 'Stück', sdN > 0 ? cent(sdAuf / sdN) : 0)
     vorh(b2, sdp.nr, 'Schutzdächer', miet(mat.schutzdach), 'Wo', sdN > 0 ? woGesamt : 0)
     const kd1 = b2.add('Vertikale Bekleidung der Gerüste 1. BA ca. 21,5m bis ca. 32m', ['Vertikale Bekleidung der Außenachse des Gerüstes mit Kederplane zur Eindämmung der Staubentwicklung. ' + (kederplaneFlaecheM2 > 0 ? `Aus dem CAD: ${de(kederplaneFlaecheM2, 2)} m² Plane (Höhenbereich ${de(model.building.geruestOptionen?.kederplane?.vonM ?? 0, 1)}–${de(model.building.geruestOptionen?.kederplane?.bisM ?? 0, 1)} m). Preis bitte eintragen.` : OHNE_CAD)], 1, 'Stück', 0)
     vorh(b2, kd1.nr, 'Vertikale Bekleidung 1. BA', 0, 'Wo', 0)
@@ -556,7 +560,7 @@ export function erzeugeLeistungsverzeichnis(quelle: LvQuelle, e: LvEingaben): Le
     const tr2 = b2.add('Gerüsttreppenturm 2. BA, H = ca. 21,5m', ['Gerüsttreppenturm am Turmschaft wie Pos. ' + tr1.nr + (treppen2 > 0 ? `, auf ca. ${hoeheBa2Text} m gekappt. Preis aus dem CAD (Aufbau + Abbau Treppenaufgang).` : '. ' + OHNE_CAD)], 1, 'Stück', treppen2 > 0 ? lohn2('treppe') : 0)
     vorh(b2, tr2.nr, 'Gerüsttreppenturm 2. BA', treppen2 > 0 ? miet2(mat2.treppe) : 0, 'Wo', treppen2 > 0 ? woBa2 : 0)
     const az = zus('aufzug')
-    const az1 = b2.add(`Personen- und Lastenaufzug 500/800kg 1.BA H = ca. ${de(hoeheText, 0)}m`, ['Transportbühne für Personen und Lasten nach DIN EN 16719. ' + (azOpt ? `${azOpt.gemietet ? 'Gemietet von einem Fremdunternehmen' : 'Aus eigenem Inventar'}, Kosten von Hand aus den Gerüst-Einstellungen.` : az && az.menge > 0 ? 'Preise aus den Zusatzleistungen im LV-Fenster.' : OHNE_CAD)], 1, 'Stück', az && az.menge > 0 ? cent(az.menge * (az.epAuf + az.epAb)) : 0)
+    const az1 = b2.add(`Personen- und Lastenaufzug 500/800kg 1.BA H = ca. ${de(hoeheText, 0)}m`, ['Transportbühne für Personen und Lasten nach DIN EN 16719, Tragkraft ' + de(azOpt?.tragkraftPersonenKg ?? 500, 0) + ' kg (Personen) / ' + de(azOpt?.tragkraftLastKg ?? 800, 0) + ' kg (Lasten). ' + (azOpt ? `${azOpt.gemietet ? 'Gemietet von einem Fremdunternehmen' : 'Aus eigenem Inventar'}, Kosten von Hand aus den Gerüst-Einstellungen.` : az && az.menge > 0 ? 'Preise aus den Zusatzleistungen im LV-Fenster.' : OHNE_CAD)], 1, 'Stück', az && az.menge > 0 ? cent(az.menge * (az.epAuf + az.epAb)) : 0)
     vorh(b2, az1.nr, 'Personen- und Lastenaufzug 1. BA', az && az.menge > 0 ? cent(az.menge * az.epVorh) : 0)
     // Aufzug 2. BA: Höhe aus dem gekappten CAD-Modell (Aufzug reicht höchstens bis zur obersten verbleibenden Lage); Preis bleibt zum Selbsteintragen leer
     const aufzug2 = ba2 ? ba2.model.components3D.find((c) => c.type === 'elevator') : undefined
@@ -568,7 +572,7 @@ export function erzeugeLeistungsverzeichnis(quelle: LvQuelle, e: LvEingaben): Le
     vorh(b2, h1.nr, 'Haltestellenausstattung 1. BA', 0, 'StckWo', hAnz * woGesamt)
     const h2 = b2.add('Haltestellenausstattung 2. BA', ['System-Haltestellen für die Transportbühne. ' + OHNE_CAD], 10, 'Stück', 0)
     vorh(b2, h2.nr, 'Haltestellenausstattung 2. BA', 0, 'StckWo', 10 * woGesamt)
-    const dsch = b2.add('Schutz von Dachflächen', ['Gummischrotmatten und Bohlenbelag als Lastverteilung sowie zum Schutz auf angrenzenden Dachflächen unter dem Gerüst. ' + OHNE_CAD], 1, 'Stück', 0)
+    const dsch = b2.add('Schutz von Dachflächen', ['Gummischrotmatten und Bohlenbelag als Lastverteilung sowie zum Schutz auf angrenzenden Dachflächen unter dem Gerüst. ' + (dachSumme > 0 ? `Dachfläche des erkannten Vorbaus ca. ${de(dachSumme, 2)} m² aus dem Modell (Näherung; geneigte Anbaudächer sind nicht erfasst): bitte prüfen. Preis bitte eintragen.` : OHNE_CAD)], 1, 'Stück', 0)
     vorh(b2, dsch.nr, 'Schutz von Dachflächen', 0, 'Wo', 0)
 
     // Titel 03 – Umbau am Bestandsgerüst (nummeriert wie im LV: 03.01 …)
