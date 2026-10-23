@@ -14,6 +14,7 @@ import { KIRCHE_STANDARD, kircheUebernehmen, pruefeKircheMasse, type KircheMasse
 import { quaderAusObj, quaderAusStl, masseAusQuader, dreieckeAusObj, dreieckeAusStl, draufsichtDreiecke, obenAusObjKopf, type Quader, type Einheit, type Achse, EINHEIT_FAKTOR } from '@/lib/cad/modell-import'
 import { merkeModell, ladeGemerktesModell, vergissModell, nwdZwischenspeicher } from '@/lib/cad/modell-speicher'
 import { erkenneGrundriss, FORM_NAME } from '@/lib/cad/grundriss-erkennung'
+import { portalAlsTuer } from '@/lib/cad/portal-erkennung'
 import { analysiereDreiecke, schaetzeEinheit, spannweiten, nullpunktUeberTiefstem, abschnitteAusTeilen, abschnitteAusTeileListe, vorgabeAchseEinheit, type GebaeudeTeil } from '@/lib/cad/modell-analyse'
 import { umrissBox } from '@/lib/calculations/cad-umriss'
 import { leseDxfUmriss, mitHoehen, DXF_FORM_NAME, type DxfUmrissErgebnis } from '@/lib/cad/dxf-umriss'
@@ -37,6 +38,8 @@ export default function BuildingForm({ building, systemId, onChange, onSystemCha
   const [analyseHinweis, setAnalyseHinweis] = useState<string | null>(null)
   // null = Vorgabe der Erkennung (z. B. bei Modellen mit eingebautem Gerüst: nur der Turm), sonst die Wahl der Person
   const [nurTurmWahl, setNurTurm] = useState<boolean | null>(null)
+  // Portale aus dem Modell als Türvorschlag übernehmen (Vorgabe: ja, die Person kann abwählen)
+  const [portalAn, setPortalAn] = useState(true)
   const [kircheOffen, setKircheOffen] = useState(false)
   const [kirche, setKirche] = useState<KircheMasse>(KIRCHE_STANDARD)
   // 3D-Modell (OBJ/STL, z. B. aus SketchUp): Außenmaße im Browser lesen, Einheit/„oben“ wählt die Person
@@ -74,14 +77,16 @@ export default function BuildingForm({ building, systemId, onChange, onSystemCha
   }, [modellImport])
   const baukoerper = analyse?.ergebnis ?? null
   const nurTurm = nurTurmWahl ?? !!baukoerper?.nurTurmVorgabe
+  // Türvorschläge aus erkannten Portalen; ohne Haken bleiben die bisherigen Türen unverändert
+  const portalTueren = (): Partial<BuildingParams> => (portalAn && analyse?.portale?.length ? { tueren: analyse.portale.map(portalAlsTuer) } : {})
   // Mehrteiliges Gebäude erkannt: Teile sofort übernehmen (Person muss nichts anklicken, kann aber unten prüfen/ändern).
   // Läuft erneut, wenn „oben“/Einheit oder die Turm-Auswahl geändert wird.
   useEffect(() => {
     if (!modellImport || !analyse || !baukoerper?.mehrteilig) return
     const abschnitte = abschnitteAusTeilen(analyse, nurTurm)
-    onChange({ ...building, umriss: undefined, sections: abschnitte, lengthM: Math.round(abschnitte.reduce((t, a) => t + a.laengeM, 0) * 100) / 100, widthM: baukoerper.tiefeMaxM, heightM: baukoerper.gesamtHoeheM, sides: ['front', 'back', 'left', 'right'] })
+    onChange({ ...building, umriss: undefined, sections: abschnitte, lengthM: Math.round(abschnitte.reduce((t, a) => t + a.laengeM, 0) * 100) / 100, widthM: baukoerper.tiefeMaxM, heightM: baukoerper.gesamtHoeheM, sides: ['front', 'back', 'left', 'right'], ...portalTueren() })
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [analyse, nurTurm])
+  }, [analyse, nurTurm, portalAn])
   // Phase 68-E: welche Felder hat die letzte Analyse automatisch befuellt?
   const analyseFelderRef = useRef<string[]>([])
 
@@ -465,10 +470,16 @@ export default function BuildingForm({ building, systemId, onChange, onSystemCha
                           Nur den Turm einrüsten (sonst bekommt jedes Teil ein Gerüst; die übrigen werden dann nur dargestellt)
                         </label>
                       )}
+                      {analyse?.portale && analyse.portale.length > 0 && (
+                        <label className='flex items-start gap-2'>
+                          <input type='checkbox' className='mt-0.5' checked={portalAn} onChange={(e) => setPortalAn(e.target.checked)} />
+                          <span>Portal/Vorbau erkannt: {analyse.portale.map((p) => `${p.breiteM} m breit, ${p.hoeheM} m hoch, Seite „${{ front: 'vorne', back: 'hinten', left: 'links', right: 'rechts' }[p.seite]}“`).join('; ')} – als Tür übernehmen (der Durchgang im Gerüst bleibt frei). Näherung aus der Geometrie: Maße und Seite bitte mit Plan oder Foto prüfen.</span>
+                        </label>
+                      )}
                       <button type='button' className='rounded-lg bg-[#e8590c] px-3 py-1 font-semibold text-white'
                         onClick={() => {
                           const abschnitte = abschnitteAusTeilen(analyse!, nurTurm)
-                          onChange({ ...building, umriss: undefined, sections: abschnitte, lengthM: Math.round(abschnitte.reduce((t, a) => t + a.laengeM, 0) * 100) / 100, widthM: baukoerper.tiefeMaxM, heightM: baukoerper.gesamtHoeheM, sides: ['front', 'back', 'left', 'right'] })
+                          onChange({ ...building, umriss: undefined, sections: abschnitte, lengthM: Math.round(abschnitte.reduce((t, a) => t + a.laengeM, 0) * 100) / 100, widthM: baukoerper.tiefeMaxM, heightM: baukoerper.gesamtHoeheM, sides: ['front', 'back', 'left', 'right'], ...portalTueren() })
                           setModellImport(null)
                           setAnalyseHinweis(`${baukoerper.teile.length} Gebäudeteile übernommen${baukoerper.turmIndex !== null && nurTurm ? ', nur der Turm wird eingerüstet' : ''}. Bitte Maße und Dachformen unter „Mehrteiliges Gebäude“ prüfen.`)
                         }}>Gebäudeteile übernehmen</button>
