@@ -1006,12 +1006,32 @@ export function generateScaffoldComponents(model: CADModel): ScaffoldComponent3D
   if (!building.umriss && (building.heightM > 15 || building.overhangM > 0.5)) {
     // Schutzdach 0,2 m außerhalb der inneren Gerüstlinie der Vorderseite (bisher fest 0,5 bei Innenlinie 0,3)
     const schutzdachZ = (fields.find((f) => f.side === 'front')?.positionZ ?? 0.3) + 0.2
-    const roofCount = Math.max(1, Math.ceil(building.lengthM / 6))
-    for (let i = 0; i < roofCount; i++) {
-      const xPos = (i * 6) - building.lengthM / 2 + 3
-      if (abschnittOhneGeruestBeiX(building, xPos)) continue
-      components.push({ id: `roof-${i}`, type: 'protection_roof', articleNumber: 'SD-001', name: 'Schutzdach', position: [xPos, Math.min(SCHUTZDACH_HOEHE_M, hoeheBeiX(xPos)) + 0.5, schutzdachZ + frontVersatzBeiX(xPos)], rotation: [-0.3, 0, 0], scale: [6, 0.1, 2], color: colorRoof })
+    // Lage: über jedem Eingang an der Vorderseite (Türen aus dem CAD bzw. erkannte Portale), je Tür 2 m Überstand
+    // links und rechts, 3–6 m lang; überlappende Dächer werden zusammengefasst.
+    // Ohne bekannte Tür an der Vorderseite: Notlösung im 6-m-Raster (Eingang unbekannt, Person verschiebt es).
+    const tuerenVorn = generateBuildingFeatures(building).filter((f) => f.type === 'door' && f.side === 'front')
+    const spannen: Array<[number, number]> = []
+    for (const t of tuerenVorn.sort((a, b) => a.offsetAlongM - b.offsetAlongM)) {
+      const laenge = Math.min(6, Math.max(3, t.widthM + 4))
+      const von = t.offsetAlongM - laenge / 2, bis = t.offsetAlongM + laenge / 2
+      const letzte = spannen[spannen.length - 1]
+      if (letzte && von < letzte[1] + 1e-9) letzte[1] = Math.max(letzte[1], bis)
+      else spannen.push([von, bis])
     }
+    const rasterVon = -building.lengthM / 2
+    const dachSpannen: Array<[number, number]> = spannen.length > 0
+      ? spannen.flatMap(([von, bis]) => {
+          // lange (zusammengefasste) Spannen in Dächer à höchstens 6 m teilen
+          const n = Math.max(1, Math.ceil((bis - von) / 6 - 1e-9))
+          const l = (bis - von) / n
+          return Array.from({ length: n }, (_, k): [number, number] => [von + k * l, von + (k + 1) * l])
+        })
+      : Array.from({ length: Math.max(1, Math.ceil(building.lengthM / 6)) }, (_, i): [number, number] => [rasterVon + i * 6, Math.min(rasterVon + (i + 1) * 6, rasterVon + building.lengthM)])
+    dachSpannen.forEach(([von, bis], i) => {
+      const xPos = (von + bis) / 2
+      if (abschnittOhneGeruestBeiX(building, xPos)) return
+      components.push({ id: `roof-${i}`, type: 'protection_roof', articleNumber: 'SD-001', name: 'Schutzdach', position: [xPos, Math.min(SCHUTZDACH_HOEHE_M, hoeheBeiX(xPos)) + 0.5, schutzdachZ + frontVersatzBeiX(xPos)], rotation: [-0.3, 0, 0], scale: [bis - von, 0.1, 2], color: colorRoof })
+    })
   }
 
   // === LASTVERTEILPLATTEN ===
