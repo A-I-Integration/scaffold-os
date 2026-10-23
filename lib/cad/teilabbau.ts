@@ -41,6 +41,8 @@ export interface TeilabbauErgebnis {
   material: MaterialItem[]
   gewichtKg: number
   stunden: number
+  /** berechnete Stunden (vor einer Handkorrektur) */
+  stundenBerechnet: number
   personen: number
   stundenJeTag: number
   /** Arbeitstage (aufgerundet, mindestens 1 bei Stunden > 0) */
@@ -71,7 +73,7 @@ function lagenVonOben(model: CADModel): { index: number; ids: string[]; flaecheM
 export function berechneTeilabbau(
   model: CADModel,
   auswahl: TeilabbauAuswahl,
-  opt: { gesamtAbbauStunden: number; personen?: number; stundenJeTag?: number },
+  opt: { gesamtAbbauStunden: number; personen?: number; stundenJeTag?: number; stundenHand?: number },
 ): TeilabbauErgebnis {
   const personen = Math.max(1, Math.round(opt.personen ?? 3))
   const stundenJeTag = opt.stundenJeTag && opt.stundenJeTag > 0 ? opt.stundenJeTag : 8
@@ -130,7 +132,8 @@ export function berechneTeilabbau(
     anteil = gesamtFlaeche > 0 ? flaecheM2 / gesamtFlaeche : 0
   }
   anteil = Math.min(1, Math.max(0, anteil))
-  const stunden = Math.ceil(opt.gesamtAbbauStunden * anteil)
+  const stundenBerechnet = Math.ceil(opt.gesamtAbbauStunden * anteil)
+  const stunden = opt.stundenHand !== undefined && opt.stundenHand >= 0 ? opt.stundenHand : stundenBerechnet
   const tage = stunden > 0 ? Math.max(1, Math.ceil(stunden / (personen * stundenJeTag))) : 0
 
   // Schritte je Lage (oben → unten), Teile nach Lage, Stunden anteilig nach Fläche
@@ -145,5 +148,5 @@ export function berechneTeilabbau(
     return { schritt: i + 1, lage: l.index + 1, vonM: r2(l.vonM), bisM: r2(l.bisM), teile: t, flaecheM2: r2(l.flaecheM2), stunden: r2((stunden * t) / summeTeile) }
   })
 
-  return { bauteilIds: comps.map((c) => c.id), anzahlTeile: comps.length, flaecheM2: r2(flaecheM2), anteil, material, gewichtKg, stunden, personen, stundenJeTag, tage, schritte, annahmen }
+  return { bauteilIds: comps.map((c) => c.id), anzahlTeile: comps.length, flaecheM2: r2(flaecheM2), anteil, material, gewichtKg, stunden, stundenBerechnet, personen, stundenJeTag, tage, schritte, annahmen }
 }

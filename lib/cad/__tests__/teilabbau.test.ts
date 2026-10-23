@@ -42,6 +42,12 @@ describe('Teilabbau', () => {
     expect(e.bauteilIds).toEqual(ids)
     expect(e.anzahlTeile).toBe(5)
   })
+  it('Stunden von Hand überschreiben die Berechnung und bestimmen die Tage', () => {
+    const e = berechneTeilabbau(m, { art: 'lagen', anzahl: 2 }, { ...opt, personen: 2, stundenHand: 40 })
+    expect(e.stunden).toBe(40)
+    expect(e.stundenBerechnet).not.toBe(40)
+    expect(e.tage).toBe(3) // 40 h / (2 × 8 h)
+  })
   it('alles abbauen = ganze Abbaustunden; nichts gewählt = 0', () => {
     const alle = berechneTeilabbau(m, { art: 'lagen', anzahl: 999 }, opt)
     expect(alle.anteil).toBeCloseTo(1, 5)

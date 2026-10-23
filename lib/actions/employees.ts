@@ -8,6 +8,7 @@ import { createClient } from '@/lib/supabase/server';
 import { revalidatePath } from 'next/cache';
 // NEU (E-Mail-Benachrichtigungen): Versand Fehler brechen die Aktionen nie
 import { notifyAbsenceCreated, notifyAbsenceDecision } from '@/lib/notify';
+import { planeEinsaetzeUm } from '@/lib/einsatz-umplanen';
 import {
   Employee,
   EmployeeWithSkills,
@@ -307,6 +308,11 @@ export async function createAbsence(formData: FormData): Promise<{ success: bool
   const { data: inserted, error } = await supabase.from('absences').insert(absence).select('id').single();
   if (error) return { success: false, error: error.message };
 
+  // Krankmeldung wirkt sofort: Einsätze im Zeitraum automatisch auf freie Kollegen umplanen (Urlaub erst nach Genehmigung)
+  if (absence.type === 'sick') {
+    try { await planeEinsaetzeUm(employeeId, absence.start_date, absence.end_date); } catch (e) { console.error('Umplanung Krankmeldung:', e); }
+  }
+
   // NEU (E-Mail): Chef/Dispo über den neuen Antrag informieren
   if (inserted?.id) {
     try { await notifyAbsenceCreated(inserted.id); } catch (e) { console.error('Mail Antrag:', e); }
@@ -331,6 +337,12 @@ export async function approveAbsence(id: string): Promise<{ success: boolean; er
     .eq('id', id);
 
   if (error) return { success: false, error: error.message };
+
+  // Genehmigter Urlaub: Einsätze im Zeitraum automatisch umplanen
+  try {
+    const { data: a } = await supabase.from('absences').select('employee_id, start_date, end_date').eq('id', id).single();
+    if (a) await planeEinsaetzeUm(a.employee_id, a.start_date, a.end_date);
+  } catch (e) { console.error('Umplanung Genehmigung:', e); }
 
   // NEU (E-Mail): Mitarbeiter über die Genehmigung informieren
   try { await notifyAbsenceDecision(id, 'approved'); } catch (e) { console.error('Mail Genehmigung:', e); }
@@ -399,6 +411,13 @@ export async function updateAbsence(id: string, formData: FormData): Promise<{ s
 
   const { error } = await supabase.from('absences').update(updates).eq('id', id);
   if (error) return { success: false, error: error.message };
+
+  if (status === 'approved') {
+    try {
+      const { data: a } = await supabase.from('absences').select('employee_id, start_date, end_date').eq('id', id).single();
+      if (a) await planeEinsaetzeUm(a.employee_id, a.start_date, a.end_date);
+    } catch (e) { console.error('Umplanung Änderung:', e); }
+  }
 
   if (before?.status !== status && (status === 'approved' || status === 'rejected')) {
     try { await notifyAbsenceDecision(id, status); } catch (e) { console.error('Mail Entscheidung:', e); }

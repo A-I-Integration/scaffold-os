@@ -22,6 +22,7 @@ import { BAUTEIL_FARBEN, type FarbModus } from '@/lib/cad/bauteil-farben'
 import { useState, useMemo, useCallback, useEffect, useRef } from 'react'
 import StatikDatenPanel from '@/components/cad/StatikDatenPanel'
 import { verlaufNeu, verlaufSetze, verlaufZurueck, verlaufVor } from '@/lib/cad/verlauf'
+import AbbauEinplanenDialog from '@/components/cad/AbbauEinplanenDialog'
 import TeilabbauPanel, { TEILABBAU_START, type TeilabbauEingabe } from '@/components/cad/TeilabbauPanel'
 import { berechneTeilabbau, type TeilabbauAuswahl } from '@/lib/cad/teilabbau'
 import { ansichtDateiname } from '@/lib/cad/ansicht-bild'
@@ -108,6 +109,7 @@ export default function CADPage() {
   const [selectedComponent, setSelectedComponent] = useState<string | null>(null)
   // Teilabbau: Fenster offen? Auswahl/Eingaben
   const [abbauAktiv, setAbbauAktiv] = useState(false)
+  const [abbauEinplanen, setAbbauEinplanen] = useState(false)
   const [abbauEin, setAbbauEin] = useState<TeilabbauEingabe>(TEILABBAU_START)
   const [showBuilding, setShowBuilding] = useState(true)
   const [showScaffold, setShowScaffold] = useState(true)
@@ -573,7 +575,7 @@ export default function CADPage() {
       : abbauEin.art === 'lagen' ? { art: 'lagen', anzahl: zahl(abbauEin.wert) }
       : abbauEin.art === 'flaeche' ? { art: 'flaeche', m2: zahl(abbauEin.wert) }
       : { art: 'teile', anzahl: zahl(abbauEin.wert) }
-    return berechneTeilabbau(modelWithManual, auswahl, { gesamtAbbauStunden: logistik?.abbauStunden ?? 0, personen: zahl(abbauEin.personen) || 3, stundenJeTag: zahl(abbauEin.stundenJeTag) || 8 })
+    return berechneTeilabbau(modelWithManual, auswahl, { gesamtAbbauStunden: logistik?.abbauStunden ?? 0, personen: zahl(abbauEin.personen) || 3, stundenJeTag: zahl(abbauEin.stundenJeTag) || 8, ...(zahl(abbauEin.stundenHand) > 0 ? { stundenHand: zahl(abbauEin.stundenHand) } : {}) })
   }, [modelWithManual, abbauEin, logistik])
   const abbauMarkiert = useMemo(() => (abbauAktiv && abbauErgebnis ? new Set(abbauErgebnis.bauteilIds) : undefined), [abbauAktiv, abbauErgebnis])
   // Klick im Modell: bei offenem Teilabbau-Fenster Bauteil zur Abbau-Auswahl hinzufügen/entfernen
@@ -929,7 +931,10 @@ export default function CADPage() {
           </div>
           <div className='relative h-[65vh] min-h-[320px] md:h-auto md:flex-1 p-4 md:min-h-0'>
             {abbauAktiv && abbauErgebnis && viewMode === '3d' && (
-              <TeilabbauPanel ein={abbauEin} onChange={setAbbauEin} ergebnis={abbauErgebnis} onClose={() => setAbbauAktiv(false)} />
+              <TeilabbauPanel ein={abbauEin} onChange={setAbbauEin} ergebnis={abbauErgebnis} onClose={() => setAbbauAktiv(false)} onPlanUebernehmen={() => setAbbauEinplanen(true)} />
+            )}
+            {abbauEinplanen && abbauErgebnis && (
+              <AbbauEinplanenDialog tage={abbauErgebnis.tage} personen={abbauErgebnis.personen} titel={`Teilabbau: ${abbauErgebnis.anzahlTeile} Bauteile, ${abbauErgebnis.stunden} h`} onClose={() => setAbbauEinplanen(false)} />
             )}
             {viewMode === '3d' && modelWithManual && (
               <Scaffold3D farbModus={farbModus} model={modelWithManual} features={features} showBuilding={showBuilding} showScaffold={showScaffold} showDimensions={showDimensions} selectedComponent={selectedComponent} onSelectComponent={klickImModell} abbauMarkiert={abbauMarkiert} visibleTypes={visibleTypes} viewMode={viewAngle} onCanvasReady={(c) => { canvasRef.current = c }} notes={notes} onAddNote={handleAddNote} hiddenSides={hiddenSides} hiddenLevels={hiddenLevels} measureMode={measureMode} onMeasurePoint={handleMeasurePoint} customDimensions={customDimensions} pendingMeasurePoint={pendingMeasurePoint?.point ?? null} placementType={placementType} onPlacementClick={handlePlacementClick} showEnvironment={showEnvironment} onRemoveComponent={handleRemoveComponent} onReplaceComponent={handleReplaceComponent} systemId={systemId} artikelWahl={artikelWahl} onArtikelWahl={waehleArtikel} onArtikelWahlGleiche={waehleArtikelGleiche} removedCount={removedCount} platzierungIdVon={platzierungIdVonBauteil} onBauteilZiehen={handleBauteilZiehen} />

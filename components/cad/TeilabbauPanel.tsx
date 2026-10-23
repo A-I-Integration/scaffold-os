@@ -13,9 +13,11 @@ export interface TeilabbauEingabe {
   ids: string[]
   personen: string
   stundenJeTag: string
+  /** Stunden von Hand (leer = berechnet) */
+  stundenHand: string
 }
 
-export const TEILABBAU_START: TeilabbauEingabe = { art: 'klick', wert: '', ids: [], personen: '3', stundenJeTag: '8' }
+export const TEILABBAU_START: TeilabbauEingabe = { art: 'klick', wert: '', ids: [], personen: '3', stundenJeTag: '8', stundenHand: '' }
 
 const feld = 'w-full px-2 py-1.5 border rounded-lg text-xs bg-white'
 const de = (n: number, d = 1) => n.toLocaleString('de-DE', { maximumFractionDigits: d })
@@ -72,6 +74,7 @@ export default function TeilabbauPanel({
         <label className='block'><span className='text-[10px] text-[#424245]'>Mitarbeiter</span><input className={feld} inputMode='numeric' value={ein.personen} onChange={(ev) => set({ personen: ev.target.value })} /></label>
         <label className='block'><span className='text-[10px] text-[#424245]'>Stunden je Tag</span><input className={feld} inputMode='decimal' value={ein.stundenJeTag} onChange={(ev) => set({ stundenJeTag: ev.target.value })} /></label>
       </div>
+      <label className='block'><span className='text-[10px] text-[#424245]'>Stunden von Hand (leer = berechnet)</span><input className={feld} inputMode='decimal' placeholder={String(ergebnis.stundenBerechnet)} value={ein.stundenHand} onChange={(ev) => set({ stundenHand: ev.target.value })} /></label>
       {ein.art === 'klick' && ein.ids.length > 0 && (
         <button type='button' className='underline text-[11px]' onClick={() => set({ ids: [] })}>Auswahl leeren</button>
       )}
