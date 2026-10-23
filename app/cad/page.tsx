@@ -21,6 +21,7 @@
 import { BAUTEIL_FARBEN, type FarbModus } from '@/lib/cad/bauteil-farben'
 import { useState, useMemo, useCallback, useEffect, useRef } from 'react'
 import StatikDatenPanel from '@/components/cad/StatikDatenPanel'
+import { verlaufNeu, verlaufSetze, verlaufZurueck, verlaufVor } from '@/lib/cad/verlauf'
 import { ansichtDateiname } from '@/lib/cad/ansicht-bild'
 import { vergissModell } from '@/lib/cad/modell-speicher'
 import { erzeugeProjektdatei, liesProjektdatei } from '@/lib/cad/projektdatei'
@@ -85,7 +86,10 @@ export default function CADPage() {
     windowCount: 0, doorCount: 0, balconyCount: 0, overhangM: 0,
     sides: ['front'], setbackM: 0,
   }
-  const [building, setBuilding] = useState<BuildingParams>(LEERES_GEBAEUDE)
+  // Gebäudedaten mit Verlauf: „Zurück“ / „Wiederholen“ (Knöpfe oben, Strg/Cmd+Z). Gilt für Maße, Abschnitte, Dach, Umriss – nicht für Notizen, Statik-Angaben und hochgeladene Dateien.
+  const [verlauf, setVerlauf] = useState(() => verlaufNeu<BuildingParams>(LEERES_GEBAEUDE))
+  const building = verlauf.aktuell
+  const setBuilding = useCallback((b: BuildingParams) => { const jetzt = Date.now(); setVerlauf((v) => verlaufSetze(v, b, jetzt)) }, [])
   const [systemId, setSystemId] = useState<string>('layher-allround')
   const [model, setModel] = useState<CADModel | null>(null)
   const [farbModus, setFarbModus] = useState<FarbModus>('real')
@@ -334,6 +338,24 @@ export default function CADPage() {
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [selectedComponent, handleRemoveComponent])
+
+  const kannZurueck = verlauf.vergangen.length > 0
+  const kannVor = verlauf.zukunft.length > 0
+  const schrittZurueck = useCallback(() => { setAutoGenerate(true); setVerlauf(verlaufZurueck) }, [])
+  const schrittVor = useCallback(() => { setAutoGenerate(true); setVerlauf(verlaufVor) }, [])
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (!(e.metaKey || e.ctrlKey) || e.altKey) return
+      const ziel = e.target as HTMLElement | null
+      // In Eingabefeldern gilt das Rückgängig des Browsers für den Text
+      if (ziel && (ziel.tagName === 'INPUT' || ziel.tagName === 'TEXTAREA' || ziel.tagName === 'SELECT' || ziel.isContentEditable)) return
+      const k = e.key.toLowerCase()
+      if (k === 'z' && !e.shiftKey) { e.preventDefault(); schrittZurueck() }
+      else if ((k === 'z' && e.shiftKey) || k === 'y') { e.preventDefault(); schrittVor() }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [schrittZurueck, schrittVor])
 
   // Phase 68-F: 'Neu starten' — setzt ALLES auf den Anfangszustand
   // zurück (Maße, System, erzeugtes Modell, Auswahl, Stunden).
@@ -807,6 +829,12 @@ export default function CADPage() {
           </p>
         </div>
         <div className='flex items-center gap-2'>
+          <div className='flex rounded-lg border border-black/10 overflow-hidden'>
+            <button type='button' onClick={schrittZurueck} disabled={!kannZurueck} title='Letzte Änderung an den Gebäudedaten rückgängig machen (Strg/Cmd+Z)'
+              className='px-3 py-1.5 text-xs font-medium bg-white text-[#1d1d1f] hover:bg-black/5 disabled:opacity-35 disabled:hover:bg-white'>↶ Zurück</button>
+            <button type='button' onClick={schrittVor} disabled={!kannVor} title='Rückgängig gemachte Änderung wiederholen (Strg/Cmd+Umschalt+Z)'
+              className='px-3 py-1.5 text-xs font-medium bg-white text-[#1d1d1f] hover:bg-black/5 border-l border-black/10 disabled:opacity-35 disabled:hover:bg-white'>↷ Wiederholen</button>
+          </div>
           <button onClick={handleNeuStarten} title='Alle Eingaben zurücksetzen'
             className='px-3 py-1.5 text-xs font-medium rounded-lg border border-red-200 text-red-600 hover:bg-red-50 transition-colors'>
             ↺ Neu starten
