@@ -282,6 +282,28 @@ describe('Stil „Statiker-LV“ (Wuppertal)', () => {
       expect(p2[i + 1].menge).toBe(3)
     })
 
+    it('Wochenmieten für Baustelleneinrichtung, Gerüst, Schutzdach und Treppenturm aus den Standardpreisen (ohne Mietsatz)', () => {
+      const std: LvEingaben = {
+        ...stat, gesamtStandzeitWochen: 16, mietsatzProzentJeWoche: 0,
+        standardpreise: {
+          Baustelleneinrichtung: { epJeWoche: 1 },
+          'Arbeitsgerüste mit integrierten': { epJeWoche: 400 },
+          Schutzdächer: { ep: 400, epJeWoche: 10 },
+          'Gerüsttreppenturm 1. BA': { ep: 2400, epJeWoche: 80 },
+        },
+      }
+      const pos = alle(erzeugeLeistungsverzeichnis(quelle(), std))
+      const nach = (start: string) => { const i = pos.findIndex((p) => p.titel.startsWith(start)); return { vor: pos[i], vorh: pos[i + 1] } }
+      const be = nach('Baustelleneinrichtung')
+      expect(be.vorh.ep).toBe(1); expect(be.vorh.menge).toBe(16)
+      const g = nach('Arbeitsgerüste mit integrierten')
+      expect(g.vorh.ep).toBe(400); expect(g.vorh.menge).toBe(16)
+      const t = nach('Gerüsttreppenturm 1. BA')
+      if (t.vor.menge > 0) { expect(t.vorh.ep).toBe(80); expect(t.vorh.menge).toBe(16 * t.vor.menge) }
+      const sd = nach('Schutzdächer')
+      if (sd.vor.menge > 0) { expect(sd.vorh.ep).toBe(10); expect(sd.vorh.menge).toBe(16 * sd.vor.menge) }
+    })
+
     it('Gerüst 1. BA = Aufbau + Abbau aus dem CAD, Vorhaltung = Standzeit in Wochen', () => {
       const q = quelle()
       const lv = erzeugeLeistungsverzeichnis(q, stat)
