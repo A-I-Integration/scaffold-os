@@ -115,6 +115,10 @@ export interface LvEingaben {
   /** Eigene Aufbau-/Abbaustunden statt der Werte aus dem CAD (leer/undefined = CAD-Wert) */
   aufbauStundenManuell?: number
   abbauStundenManuell?: number
+  /** Stil „statiker“: Faktor in % auf alle Positionen außer Vorhaltung und Stundenlohn (100 = keiner, z. B. 80) */
+  pauschalFaktorProzent?: number
+  /** Positionen, die entfallen (Schlüssel = Kurztitel): Menge 0, Nummer bleibt */
+  gestrichen?: Record<string, boolean>
   /** Eigene Einheitspreise / Mengen je Position, Schlüssel = Kurztitel der Position (bleibt stabil, wenn sich die Nummern verschieben) */
   epUeberschreibung?: Record<string, number>
   mengeUeberschreibung?: Record<string, number>
@@ -149,6 +153,7 @@ export const LV_STANDARD_EINGABEN: LvEingaben = {
   objektadresse: '',
   auftragnehmer: '',
   gesamtStandzeitWochen: 8,
+  pauschalFaktorProzent: 100,
   lastklasse: 3,
   hoehenklasse: 'H1',
   stundensatzFach: 0,
@@ -174,8 +179,12 @@ export interface LvPosition {
   einheit: string
   /** Einheitspreis netto, auf Cent gerundet */
   ep: number
-  /** Gesamtpreis = Menge × EP, auf Cent gerundet */
+  /** Gesamtpreis = Menge × EP × Faktor, auf Cent gerundet */
   gp: number
+  /** Faktor in % auf Menge × EP (nur gesetzt, wenn er von 100 abweicht, z. B. 80 für „Preis × 80 %“) */
+  faktorProzent?: number
+  /** Position entfällt (von Hand gestrichen): Menge 0, Nummer bleibt erhalten */
+  entfaellt?: boolean
   /** Was die Person von Hand geändert hat (sonst aus dem CAD / den Faktoren berechnet) */
   manuell?: { ep?: boolean; menge?: boolean }
   /** Berechnete Werte vor der Änderung von Hand (zum Zurücksetzen und Anzeigen) */
@@ -437,11 +446,16 @@ export function erzeugeLeistungsverzeichnis(quelle: LvQuelle, e: LvEingaben): Le
         const eo = e.epUeberschreibung?.[titel]
         const std = epCad > 0 ? undefined : standardpreisFuer(e.standardpreise, titel)?.ep
         const ep = std ? cent(std) : epCad
-        const mengeNeu = mo !== undefined && Number.isFinite(mo) && mo >= 0 ? mo : menge
+        const streichen = e.gestrichen?.[titel] === true
+        const mengeNeu = streichen ? 0 : mo !== undefined && Number.isFinite(mo) && mo >= 0 ? mo : menge
         const epNeu = eo !== undefined && Number.isFinite(eo) && eo >= 0 ? cent(eo) : ep
+        const fp = e.pauschalFaktorProzent
+        const faktorP = !titel.startsWith('Vorhaltung') && titelNr !== '12' && fp !== undefined && Number.isFinite(fp) && fp > 0 && fp !== 100 ? fp : undefined
         const p: LvPosition = {
-          nr: nrFmt(titelNr, liste.length + 1, zweistellig), titel, text, menge: mengeNeu, einheit, ep: epNeu, gp: cent(mengeNeu * epNeu),
-          ...(mengeNeu !== menge || epNeu !== ep ? { manuell: { ...(mengeNeu !== menge ? { menge: true } : {}), ...(epNeu !== ep ? { ep: true } : {}) } } : {}),
+          nr: nrFmt(titelNr, liste.length + 1, zweistellig), titel, text, menge: mengeNeu, einheit, ep: epNeu, gp: cent(mengeNeu * epNeu * ((faktorP ?? 100) / 100)),
+          ...(faktorP !== undefined ? { faktorProzent: faktorP } : {}),
+          ...(streichen ? { entfaellt: true } : {}),
+          ...(!streichen && (mengeNeu !== menge || epNeu !== ep) ? { manuell: { ...(mengeNeu !== menge ? { menge: true } : {}), ...(epNeu !== ep ? { ep: true } : {}) } } : {}),
           berechnet: { ep, menge },
         }
         liste.push(p)
@@ -454,6 +468,7 @@ export function erzeugeLeistungsverzeichnis(quelle: LvQuelle, e: LvEingaben): Le
     const vorh = (b: ReturnType<typeof baue>, bezugNr: string, bezugTitel: string, ep: number, einheit = 'Wo', mengeWo = woGesamt, text?: string) => {
       // Standardpreis „je Woche“ aus der Datenpflege: nur, wo das CAD/die Zusatzleistung keinen Preis liefert
       const bezug = b.liste.find((x) => x.nr === bezugNr)
+      if (bezug?.entfaellt) mengeWo = 0
       const woche = ep > 0 || !bezug ? undefined : standardpreisFuer(e.standardpreise, bezug.titel)?.epJeWoche
       if (woche && bezug) {
         // Vorhaltung = Menge der Vorposition × Wochen. Menge 0 → nichts berechnen. 2. BA: nur deren Standzeit (leer = 0, in der Tabelle eintragen)
@@ -633,6 +648,7 @@ export function erzeugeLeistungsverzeichnis(quelle: LvQuelle, e: LvEingaben): Le
       : e.stil === 'getrennt'
         ? `Aufbau, Vorhaltung und Abbau sind getrennte Positionen (Aufbau wie in den Muster-LVs). Vorhaltung über die gesamte Standzeit von ${de(e.gesamtStandzeitWochen, 0)} Wochen (Menge × Wochen). Aufbau-EP = Aufbaustunden × Stundensatz Facharbeiter, Abbau-EP = Abbaustunden × Stundensatz (je mit Zuschlag, nach Materialwert verteilt); das Material steckt in der Vorhaltung.`
         : `Gesamt-Standzeit ${de(e.gesamtStandzeitWochen, 0)} Wochen, davon ${GRUNDSTANDZEIT_WOCHEN} Wochen Grundstandzeit in der Aufbauposition, danach Verlängerung der Vorhaltung.`,
+      ...(e.stil === 'statiker' && e.pauschalFaktorProzent && e.pauschalFaktorProzent !== 100 ? [`Auf alle Positionen außer Vorhaltung und Stundenlohn wird ein Faktor von ${de(e.pauschalFaktorProzent, 0)} % angewendet (Gesamtpreis = Menge × EP × Faktor).`] : []),
       ...(aktiveZusatz.length ? ['Dachfanggerüst, Seitenschutz, Überbrückung, Strahlnetze, Aufzug und Bauzaun kommen nicht aus dem CAD-Modell: Menge und Einheitspreise sind Eingaben.'] : []),
       'Gliederung und Wortlaut orientieren sich an üblichen Muster-Leistungsverzeichnissen. Die Bezeichnung „SW“ der Breitenklasse folgt dem Muster-LV; Normtext nicht geprüft. Pauschalen für Statik, Baustelleneinrichtung und Anfahrt sind Eingaben.',
       'Last-, Breiten- und Höhenklasse nach DIN EN 12811-1 (Normtext nicht geprüft). Die Höhenklasse ist eine Eingabe, nicht aus dem CAD berechnet.',
