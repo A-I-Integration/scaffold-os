@@ -1,5 +1,7 @@
 'use client'
 
+import { VERWENDUNGEN, verwendungMitId, breiteVonBreitenklasse } from '@/lib/geruestklassen'
+import { lagenansatz } from '@/lib/lastansatz'
 import Lod2Panel from '@/components/cad/Lod2Panel'
 import { useState, useRef, useMemo, useEffect, type ReactNode } from 'react'
 import { BuildingParams, WANDABSTAND_MIN_M, WANDABSTAND_MAX_M } from '@/lib/calculations/cad-engine'
@@ -760,6 +762,31 @@ export default function BuildingForm({ building, systemId, onChange, onSystemCha
         )}
         {activeTab === 'geruest' && (
           <div className='space-y-3'>
+            <div>
+              <label className='block text-xs font-medium text-[#424245] mb-1'>Verwendung des Gerüsts (Arbeiten)</label>
+              <select value={building.verwendung ?? ''} className='w-full px-3 py-2 border rounded-xl text-sm'
+                onChange={(e) => {
+                  const v = verwendungMitId(e.target.value)
+                  if (!v) { onChange({ ...building, verwendung: undefined }); return }
+                  // Lastklasse und Gerüstbreite aus der Verwendung vorbelegen; beides bleibt darunter änderbar
+                  const min = breiteVonBreitenklasse(v.breitenklasse) ?? 0
+                  const sysV = GERUEST_SYSTEME.find((x) => x.id === systemId)
+                  const opt = building.geruestOptionen ?? {}
+                  const aktuell = opt.breiteM ?? sysV?.rahmenBreitenM[0] ?? 0
+                  const passend = sysV?.rahmenBreitenM.filter((b) => b >= min - 1e-9).sort((a, b) => a - b)[0]
+                  const breiteNeu = min > 0 && aktuell < min - 1e-9 && passend ? { geruestOptionen: { ...opt, breiteM: passend } } : {}
+                  onChange({ ...building, verwendung: v.id, lastklasse: v.lastklasse, ...breiteNeu })
+                }}>
+                <option value=''>– nicht gewählt (Lastklasse von Hand) –</option>
+                {VERWENDUNGEN.map((v) => <option key={v.id} value={v.id}>{v.name}</option>)}
+              </select>
+              {verwendungMitId(building.verwendung) && (
+                <p className='text-[10px] text-[#86868b] mt-1'>Vorbelegt: Lastklasse {verwendungMitId(building.verwendung)!.lastklasse}, Breitenklasse {verwendungMitId(building.verwendung)!.breitenklasse}. {verwendungMitId(building.verwendung)!.grund} Lastklasse und Gerüstbreite darunter sind von Hand änderbar.</p>
+              )}
+              {lagenansatz(building.lastklasse ?? 3) && (
+                <p className='text-[10px] text-[#86868b] mt-1'>Lastansatz längenorientiertes Gerüst: eine Lage zu 100 % ({lagenansatz(building.lastklasse ?? 3)!.lage1KnM2.toLocaleString('de-DE')} kN/m² = {lagenansatz(building.lastklasse ?? 3)!.lage1KgM2.toLocaleString('de-DE')} kg/m²), die zweite Lage zu 50 % ({lagenansatz(building.lastklasse ?? 3)!.lage2KnM2.toLocaleString('de-DE')} kN/m²).</p>
+              )}
+            </div>
             <div>
               <label className='block text-xs font-medium text-[#424245] mb-1'>Lastklasse (DIN EN 12811-1)</label>
               <select value={building.lastklasse ?? 3} onChange={(e) => update('lastklasse', parseInt(e.target.value))} className='w-full px-3 py-2 border rounded-xl text-sm'>

@@ -22,3 +22,24 @@ describe('Gerüstklassen', () => {
   });
   it('sechs Lastklassen', () => { expect(LASTKLASSEN.length).toBe(6); });
 });
+
+describe('Verwendung des Gerüsts → Lastklasse und Breitenklasse', () => {
+  it('Mauerwerk/Lagerung: LK 4 und W09 (0,9 m), schwere Montage mindestens LK 4', async () => {
+    const { verwendungMitId, breiteVonBreitenklasse } = await import('@/lib/geruestklassen')
+    const m = verwendungMitId('mauerwerk')!
+    expect(m.lastklasse).toBe(4)
+    expect(m.breitenklasse).toBe('W09')
+    expect(breiteVonBreitenklasse(m.breitenklasse)).toBe(0.9)
+    expect(verwendungMitId('putz')!.lastklasse).toBe(3)
+    expect(verwendungMitId('schwer')!.lastklasse).toBeGreaterThanOrEqual(4)
+    expect(verwendungMitId('gibt-es-nicht')).toBeNull()
+  })
+  it('Annahmen-Text nennt Verwendung, Klassen und dass sie änderbar sind', async () => {
+    const { verwendungText } = await import('@/lib/geruestklassen')
+    const t = verwendungText('mauerwerk')!
+    expect(t).toContain('Lastklasse 4')
+    expect(t).toContain('W09')
+    expect(t).toContain('änderbar')
+    expect(verwendungText(undefined)).toBeNull()
+  })
+})

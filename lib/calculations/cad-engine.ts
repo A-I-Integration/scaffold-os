@@ -144,6 +144,8 @@ export interface BuildingParams {
   // NEU: Lastklasse nach DIN EN 12811-1 (1-6) – bisher nirgends erfasst,
   // aber nötig, um die Regelausführungs-Grenzen einer Zulassung zu prüfen.
   lastklasse?: number
+  /** Verwendung des Gerüsts (Arbeiten am Mauerwerk, Putz …): Vorbelegung für Lastklasse, Breitenklasse und Gerüstbreite, alles von Hand änderbar */
+  verwendung?: string
   // NEU: einzelne Balkone mit fester Position (Seite, Abstand von der Fassadenmitte,
   // Breite, Auskragung, Geschoss). Wenn gesetzt, ersetzen sie die automatisch
   // gleichmäßig verteilten Balkone aus balconyCount.

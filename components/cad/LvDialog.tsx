@@ -8,6 +8,7 @@
 // (Einstellungen, für alle Geräte; Browser nur als Reserve); Projektangaben gelten nur für dieses LV.
 // ============================================================
 
+import { verwendungMitId } from '@/lib/geruestklassen'
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
 import type { CADModel } from '@/lib/calculations/cad-engine'
 import type { MaterialItem } from '@/types/scaffold'
@@ -37,7 +38,10 @@ export default function LvDialog({ model, materials, aufbauStunden, abbauStunden
       const roh = typeof window !== 'undefined' ? localStorage.getItem(FIRMA_KEY) : null
       const basis: LvEingaben = roh ? { ...LV_STANDARD_EINGABEN, ...JSON.parse(roh) } : LV_STANDARD_EINGABEN
       // Lastklasse kommt aus dem CAD (Gebäude → Gerüst), nicht aus einem festen Standard
-      return model.building.lastklasse ? { ...basis, lastklasse: model.building.lastklasse } : basis
+      const v = verwendungMitId(model.building.verwendung)
+      const ausCad = model.building.lastklasse ? { ...basis, lastklasse: model.building.lastklasse } : basis
+      // Breitenklasse aus der Verwendung vorbelegen (von Hand änderbar)
+      return v && !ausCad.breitenklasseManuell ? { ...ausCad, breitenklasseManuell: v.breitenklasse } : ausCad
     } catch { return LV_STANDARD_EINGABEN }
   })
   const [fehler, setFehler] = useState<string | null>(null)
