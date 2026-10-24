@@ -17,7 +17,7 @@ import {
   LV_STANDARD_EINGABEN, LASTKLASSEN, ZUSATZ_INFO, type LvEingaben, type LvStil, type LvZusatz,
 } from '@/lib/leistungsverzeichnis'
 import { FIRMENFELDER, firmenwerteAus, standardpreiseAus, type LvStandardpreise } from '@/lib/lv-firmenwerte'
-import { leseStatikerLvXlsx, type StatikerLvErgebnis } from '@/lib/statiker-lv-einlesen'
+import { leseStatikerLvXlsx, mengenAusAuftraggeberLv, type StatikerLvErgebnis } from '@/lib/statiker-lv-einlesen'
 
 const feld = 'w-full px-2 py-1.5 border rounded-lg text-xs bg-white'
 const label = 'block text-[11px] font-medium text-[#424245] mb-0.5'
@@ -51,6 +51,7 @@ export default function LvDialog({ model, materials, aufbauStunden, abbauStunden
   const dbSpeichern = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [dbHinweis, setDbHinweis] = useState('')
   const [statikerLv, setStatikerLv] = useState<StatikerLvErgebnis | null>(null)
+  const [mengenInfo, setMengenInfo] = useState<{ nr: string; titel: string; von: number; auf: number }[]>([])
 
   // Einmal beim Öffnen: Firmenwerte + Standardpreise aus der Datenbank holen
   useEffect(() => {
@@ -167,8 +168,13 @@ export default function LvDialog({ model, materials, aufbauStunden, abbauStunden
                 try {
                   setFehler(null)
                   const r = await leseStatikerLvXlsx(await f.arrayBuffer())
-                  setze(r.werte)
+                  // Mengen der Positionen (z. B. Titel 03, Haltestellen, Stunden) mit dem LV nach den neuen Werten abgleichen
+                  const neu = { ...e, ...r.werte, standardpreise }
+                  const lvNeu = erzeugeLeistungsverzeichnis({ model, materials, aufbauStunden, abbauStunden }, neu)
+                  const m = mengenAusAuftraggeberLv(r.positionen, lvNeu.titel.flatMap((t) => t.positionen))
+                  setze({ ...r.werte, ...(Object.keys(m.ueberschreibung).length > 0 ? { mengeUeberschreibung: { ...(e.mengeUeberschreibung ?? {}), ...m.ueberschreibung } } : {}) })
                   setStatikerLv(r)
+                  setMengenInfo(m.angewendet)
                 } catch (err) { setFehler('Excel konnte nicht gelesen werden: ' + (err instanceof Error ? err.message : String(err))) }
               }} />
             </label>
@@ -176,6 +182,7 @@ export default function LvDialog({ model, materials, aufbauStunden, abbauStunden
               <div className='rounded-lg border border-black/10 bg-[#f5f5f7] p-2 text-[11px] text-[#424245] space-y-1'>
                 <div className='font-semibold'>Aus dem Statiker-LV übernommen:</div>
                 {statikerLv.gefunden.map((g) => <div key={g.label}>{g.label}: <b>{g.wert}</b> <span className='text-[#86868b]'>({g.fundstelle})</span></div>)}
+                {mengenInfo.length > 0 && <div>Mengen übernommen: {mengenInfo.map((m) => `${m.nr} ${m.titel}: ${m.von.toLocaleString('de-DE')} → ${m.auf.toLocaleString('de-DE')}`).join('; ')}</div>}
                 {statikerLv.nichtGefunden.length > 0 && <div className='text-[#b45309]'>Nicht gefunden (bitte selbst eintragen): {statikerLv.nichtGefunden.join(', ')}</div>}
               </div>
             )}
