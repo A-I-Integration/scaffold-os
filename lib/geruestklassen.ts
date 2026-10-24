@@ -58,3 +58,42 @@ export const MIN_BREITE_AB_LK4_M = 0.9
 export function mindestBreiteFuerLastklasse(lk: number | undefined): number | null {
   return lk !== undefined && lk >= 4 ? MIN_BREITE_AB_LK4_M : null
 }
+
+// ── Ableitung aus der Verwendung des Gerüsts ──
+// Quellen: Meisterkurs-Unterlage Lastermittlung (Anwendungsbeispiele Lastklassen aus Lehrbuch Lernfeld 2 und DGUV Information 201-011),
+// DIN EN 12811-1 Tabelle 1 (Breitenklassen) und Tabelle 3. Der Vorschlag ist nur eine Vorbelegung; Lastklasse, Breitenklasse
+// und Gerüstbreite bleiben von Hand änderbar, die Statik entscheidet.
+export interface Verwendung {
+  id: string
+  name: string
+  /** vorgeschlagene Lastklasse */
+  lastklasse: number
+  /** erforderliche Mindest-Breitenklasse */
+  breitenklasse: string
+  /** Hinweis zur Herkunft */
+  grund: string
+}
+
+export const VERWENDUNGEN: Verwendung[] = [
+  { id: 'inspektion', name: 'Inspektion (Ablesen, Begutachten, Funktionskontrolle)', lastklasse: 1, breitenklasse: 'W06', grund: 'DGUV 201-011: Lastklasse 1 nur für Inspektionstätigkeiten.' },
+  { id: 'wartung', name: 'Wartung und Reinigung (kein Lagern von Baustoffen)', lastklasse: 2, breitenklasse: 'W06', grund: 'DGUV 201-011: Lastklasse 2 nur für Arbeiten ohne Lagern von Baustoffen und Bauteilen.' },
+  { id: 'putz', name: 'Putz-, Stuck-, Maler-, Beschichtungs-, Dachdeckungs-, Fassadenbekleidungsarbeiten', lastklasse: 3, breitenklasse: 'W06', grund: 'DGUV 201-011: mindestens Lastklasse 3 und Breitenklasse W06 (2,0 kN/m²).' },
+  { id: 'mauerwerk', name: 'Arbeiten am Mauerwerk, Lagerung, große Gewichte', lastklasse: 4, breitenklasse: 'W09', grund: 'Mauerarbeiten und Materiallagerung: Lastklasse 4 (3 kN/m²); ab Lastklasse 4 verlangt die Norm mindestens W09.' },
+  { id: 'schwer', name: 'Schwere Montagearbeiten (Betonfertigteilbau, Stahlbau), Fliesen-/Natursteinarbeiten', lastklasse: 4, breitenklasse: 'W09', grund: 'Lehrbuch: Lastklassen 4 bis 6. Vorbelegung ist die kleinste, LK 5 oder 6 bei Bedarf von Hand wählen und mit der Statik klären.' },
+]
+
+export function verwendungMitId(id: string | undefined): Verwendung | null {
+  return VERWENDUNGEN.find((v) => v.id === id) ?? null
+}
+
+/** Mindest-Belagbreite in m einer Breitenklasse (W09 → 0,9 m). */
+export function breiteVonBreitenklasse(klasse: string | undefined): number | null {
+  const m = /^W(\d{2})$/.exec((klasse ?? '').trim().toUpperCase())
+  return m ? Number(m[1]) / 10 : null
+}
+
+/** Text für die LV-Annahmen. */
+export function verwendungText(id: string | undefined): string | null {
+  const v = verwendungMitId(id)
+  return v ? `Verwendung des Gerüsts: ${v.name}. Daraus abgeleitet: Lastklasse ${v.lastklasse}, Breitenklasse ${v.breitenklasse} (${v.grund}) Die Werte sind eine Vorbelegung und von Hand änderbar.` : null
+}

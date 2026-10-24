@@ -26,7 +26,7 @@ import type { CADModel } from '@/lib/calculations/cad-engine'
 import type { MaterialItem } from '@/types/scaffold'
 import { kappeModellAufHoehe, kappeMaterial } from '@/lib/cad/bauabschnitt'
 import { standardpreisFuer, type LvStandardpreise } from '@/lib/lv-firmenwerte'
-import { MIN_BREITE_AB_LK4_M } from '@/lib/geruestklassen'
+import { MIN_BREITE_AB_LK4_M, verwendungText } from '@/lib/geruestklassen'
 import { lagenansatzText } from '@/lib/lastansatz'
 
 export const GRUNDSTANDZEIT_WOCHEN = 4
@@ -738,6 +738,7 @@ export function erzeugeLeistungsverzeichnis(quelle: LvQuelle, e: LvEingaben): Le
     ...(e.pauschalFaktorProzent && e.pauschalFaktorProzent !== 100 ? [`Auf die Positionen (außer Miete) wird ein Faktor von ${de(e.pauschalFaktorProzent, 0)} % angewendet (Gesamtpreis = Menge × EP × Faktor), sofern in der Datenpflege oder der Tabelle nichts Eigenes steht.`] : []),
     ...(titel.some((t) => t.positionen.some((p) => p.entfaellt)) ? ['Entfallene Positionen sind mit Menge 0 aufgeführt.'] : []),
     ...(e.lastklasse >= 4 && breite > 0 && breite < MIN_BREITE_AB_LK4_M - 1e-9 ? [`ACHTUNG Lastklasse ${e.lastklasse}: Nach DIN EN 12811-1 ist ab Lastklasse 4 mindestens die Breitenklasse W09 (0,90 m) erforderlich, das CAD-Gerüst ist ${de(breite, 2)} m breit. Gerüstbreite im CAD erhöhen oder die Klasse klären.`] : []),
+    ...(verwendungText(model.building.verwendung) ? [verwendungText(model.building.verwendung)!] : []),
     ...(lagenansatzText(e.lastklasse) ? [lagenansatzText(e.lastklasse)!] : []),
     'Alle Einheitspreise sind Nettopreise in Euro. Dieses LV ersetzt keine Statik und keine Prüfung durch eine befähigte Person.',
   ]
@@ -773,7 +774,8 @@ export function erzeugeLeistungsverzeichnis(quelle: LvQuelle, e: LvEingaben): Le
       ...(aktiveZusatz.length ? ['Dachfanggerüst, Seitenschutz, Überbrückung, Strahlnetze, Aufzug und Bauzaun kommen nicht aus dem CAD-Modell: Menge und Einheitspreise sind Eingaben.'] : []),
       'Gliederung und Wortlaut orientieren sich an üblichen Muster-Leistungsverzeichnissen. Die Bezeichnung „SW“ der Breitenklasse folgt dem Muster-LV; Normtext nicht geprüft. Pauschalen für Statik, Baustelleneinrichtung und Anfahrt sind Eingaben.',
       'Last-, Breiten- und Höhenklasse nach DIN EN 12811-1 (Normtext nicht geprüft). Die Höhenklasse ist eine Eingabe, nicht aus dem CAD berechnet.',
-      ...(lagenansatzText(e.lastklasse) ? [lagenansatzText(e.lastklasse)!] : []),
+      ...(verwendungText(model.building.verwendung) ? [verwendungText(model.building.verwendung)!] : []),
+    ...(lagenansatzText(e.lastklasse) ? [lagenansatzText(e.lastklasse)!] : []),
       ...(e.aufbauStundenManuell !== undefined || e.abbauStundenManuell !== undefined
         ? [`Stunden von Hand eingegeben: Aufbau ${de(aufbauStunden, 0)} h, Abbau ${de(abbauStunden, 0)} h (CAD-Wert: ${de(quelle.aufbauStunden, 0)} h / ${de(quelle.abbauStunden, 0)} h).`] : []),
       ...(Object.keys(e.epUeberschreibung ?? {}).length || Object.keys(e.mengeUeberschreibung ?? {}).length
