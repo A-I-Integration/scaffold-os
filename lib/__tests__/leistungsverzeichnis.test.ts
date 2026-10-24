@@ -334,6 +334,15 @@ describe('Stil „Statiker-LV“ (Wuppertal)', () => {
       expect(lv.find((p) => p.titel.startsWith('Vorhaltung'))!.faktorProzent).toBeUndefined()
     })
 
+    it('Entwurf-Hinweis meldet nur Positionen ohne Preis, nicht Eingabefelder, deren Preise aus der Datenpflege kommen', () => {
+      const q = quelle()
+      const lv = erzeugeLeistungsverzeichnis(q, { ...stat, mietsatzProzentJeWoche: 0, statikPauschale: 0, stundensatzHelfer: 0, standardpreise: { 'Technische Bearbeitung': { ep: 1000 }, Baustelleneinrichtung: { epJeWoche: 1 } } })
+      const text = lv.fehlendeAngaben.join(' | ')
+      expect(text).not.toContain('Mietsatz')
+      expect(text).not.toContain('Pauschale technische Bearbeitung')
+      expect(text).toContain('12.3 Helferstunden')
+    })
+
     it('Wortlaut der Positionen wie im Auftraggeber-LV, ohne projektspezifische Namen', () => {
       const q = quelle()
       const lv = alle(erzeugeLeistungsverzeichnis(q, stat))
