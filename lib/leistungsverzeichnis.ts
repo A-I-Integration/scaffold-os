@@ -270,14 +270,6 @@ export function erzeugeLeistungsverzeichnis(quelle: LvQuelle, e: LvEingaben): Le
   const konsolenM = r2(comps.filter((c) => c.type === 'console').reduce((s, c) => s + Math.abs(c.scale[0]), 0))
   const schutzdachM = r2(comps.filter((c) => c.type === 'protection_roof').reduce((s, c) => s + Math.abs(c.scale[0]), 0))
   const treppen = comps.filter((c) => c.type === 'stair').length
-  // Bauzaun: weder das 3D-Modell noch die Datei enthalten die Grundstücksgrenze. ANNAHME als Vorschlag: Zaun rundum im Abstand
-  // BAUZAUN_ABSTAND_M um das Gerüst (Umfang des umschließenden Rechtecks); Menge von Hand oder über die Zusatzleistung änderbar.
-  const BAUZAUN_ABSTAND_M = 1
-  const geruestTeile = comps.filter((c) => c.type === 'frame' || c.type === 'deck')
-  const bauzaunVorschlagM = geruestTeile.length > 0
-    ? r2(2 * ((Math.max(...geruestTeile.map((c) => c.position[0])) - Math.min(...geruestTeile.map((c) => c.position[0])) + 2 * BAUZAUN_ABSTAND_M) + (Math.max(...geruestTeile.map((c) => c.position[2])) - Math.min(...geruestTeile.map((c) => c.position[2])) + 2 * BAUZAUN_ABSTAND_M)))
-    : 0
-  const BAUZAUN_HINWEIS = `Länge ca. ${de(bauzaunVorschlagM, 2)} m: Vorschlag aus dem Modell (ANNAHME: Zaun rundum im Abstand von ${de(BAUZAUN_ABSTAND_M, 0)} m um das Gerüst, die Grundstücksgrenze ist im Modell nicht enthalten). Bitte mit dem Lageplan prüfen.`
 
   // Materialwert je Gruppe
   const mat: Record<Gruppe, number> = { geruest: 0, konsolen: 0, schutzdach: 0, treppe: 0 }
@@ -511,8 +503,8 @@ export function erzeugeLeistungsverzeichnis(quelle: LvQuelle, e: LvEingaben): Le
     const wc = b1.add('Baustellen-Container-WC', [...LV_TEXTE.wc, OHNE_CAD], 1, 'Stück', 0)
     vorh(b1, wc.nr, 'Baustellen-Container-WC', 0)
     const zaun = zus('bauzaun')
-    const bz = b1.add('Bauzaun', [...LV_TEXTE.bauzaun, ...(zaun && zaun.menge > 0 ? [] : bauzaunVorschlagM > 0 ? [BAUZAUN_HINWEIS] : [])], zaun && zaun.menge > 0 ? zaun.menge : bauzaunVorschlagM, 'm', cent(zaun?.epAuf ?? 0) + cent(zaun?.epAb ?? 0))
-    vorh(b1, bz.nr, 'Bauzaun', cent(zaun?.epVorh ?? 0), 'm/Wo', (zaun && zaun.menge > 0 ? zaun.menge : bauzaunVorschlagM) * woGesamt)
+    const bz = b1.add('Bauzaun', [...LV_TEXTE.bauzaun, ...(zaun && zaun.menge > 0 ? [] : ['Länge nicht aus dem CAD (Grundstücksgrenze ist im Modell nicht enthalten): Menge bitte eintragen.'])], zaun?.menge ?? 0, 'm', cent(zaun?.epAuf ?? 0) + cent(zaun?.epAb ?? 0))
+    vorh(b1, bz.nr, 'Bauzaun', cent(zaun?.epVorh ?? 0), 'm/Wo', (zaun?.menge ?? 0) * woGesamt)
     const tor = b1.add('Bauzauntor', [...LV_TEXTE.bauzauntor, OHNE_CAD], 0, 'Stück', 0)
     vorh(b1, tor.nr, 'Bauzauntor', 0)
     const abd = b1.add('Abdecken von Bodenflächen BE', [...LV_TEXTE.bodenabdeckung, OHNE_CAD], 0, 'm²', 0)
@@ -668,7 +660,7 @@ export function erzeugeLeistungsverzeichnis(quelle: LvQuelle, e: LvEingaben): Le
     const wc = pos('02.03', 'Baustellen WC', LV_TEXTE.wc, 1, 'Stck', 'Baustellen-Container-WC', 0, { gestrichenStandard: true })
     miete('02.04', wc, 'StWo', 'Baustellen-Container-WC')
     const zaun = zus('bauzaun')
-    const bz = pos('02.05', 'Bauzaun', [...LV_TEXTE.bauzaun, ...(zaun && zaun.menge > 0 ? [] : bauzaunVorschlagM > 0 ? [BAUZAUN_HINWEIS] : [])], zaun && zaun.menge > 0 ? zaun.menge : bauzaunVorschlagM, 'lfdm', 'Bauzaun', cent(zaun?.epAuf ?? 0) + cent(zaun?.epAb ?? 0))
+    const bz = pos('02.05', 'Bauzaun', LV_TEXTE.bauzaun, zaun?.menge ?? 0, 'lfdm', 'Bauzaun', cent(zaun?.epAuf ?? 0) + cent(zaun?.epAb ?? 0))
     miete('02.06', bz, 'lfdmWo', 'Bauzaun', cent(zaun?.epVorh ?? 0))
     const tor = pos('02.07', 'Bauzauntor bis 4,00 m', LV_TEXTE.bauzauntor, 1, 'Stck', 'Bauzauntor')
     miete('02.08', tor, 'StWo', 'Bauzauntor')
