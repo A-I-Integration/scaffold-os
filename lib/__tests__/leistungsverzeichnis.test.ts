@@ -334,16 +334,29 @@ describe('Stil „Statiker-LV“ (Wuppertal)', () => {
       expect(lv.find((p) => p.titel.startsWith('Vorhaltung'))!.faktorProzent).toBeUndefined()
     })
 
+    it('Wortlaut der Positionen wie im Auftraggeber-LV, ohne projektspezifische Namen', () => {
+      const q = quelle()
+      const lv = alle(erzeugeLeistungsverzeichnis(q, stat))
+      const text = (start: string) => lv.find((p) => p.titel.startsWith(start))!.text.join(' ')
+      expect(text('Abdecken von Bodenflächen BE')).toContain('18 mm OSB-Platten (Nut und Feder)')
+      expect(text('Einrichten Halteverbotszone')).toContain('Gebühr durch die zuständige Behörde')
+      expect(text('Vertikale Bekleidung der Gerüste 1. BA')).toContain('DIN 4102-1 B1')
+      expect(text('Schutzdächer')).toContain('kreuzweise verlegten Bohlen')
+      expect(text('Technische Bearbeitung')).toContain('Verankerungsprotokolls')
+      const alleTexte = lv.map((p) => p.titel + ' ' + p.text.join(' ')).join(' ')
+      expect(alleTexte).not.toMatch(/Kirchturm|Steinmetz|Wuppertal/)
+    })
+
     it('Modelldaten im LV: Dachfläche, Überbrückungslänge, Schutzdach-Größe, Aufzug-Tragkraft', () => {
       const q = quelle()
       const ohne = alle(erzeugeLeistungsverzeichnis(q, stat))
       const text = (lv: typeof ohne, start: string) => lv.find((p) => p.titel.startsWith(start))!.text.join(' ')
       expect(text(ohne, 'Schutz von Dachflächen')).toContain('Nicht aus dem CAD')
-      expect(text(ohne, 'Personen- und Lastenaufzug 500/800kg 1.BA')).toContain('500 kg (Personen) / 800 kg (Lasten)')
+      expect(text(ohne, 'Personen- und Lastenaufzug 500/800kg 1.BA')).toContain('5 Personen / 500 kg oder 800 kg Material')
       const mit = alle(erzeugeLeistungsverzeichnis({ ...q, model: { ...q.model, building: { ...q.model.building, anbauDaecher: [{ seite: 'left', flaecheM2: 12.5, breiteM: 5, tiefeM: 2.5, hoeheM: 4 }], geruestOptionen: { ...(q.model.building.geruestOptionen ?? {}), aufzug: { seite: 'front', gemietet: false, tragkraftPersonenKg: 400, tragkraftLastKg: 600 } } } } } as typeof q, stat))
       expect(text(mit, 'Schutz von Dachflächen')).toContain('12,50 m²')
       expect(text(mit, 'Überbrückungen')).toContain('5,00 m')
-      expect(text(mit, 'Personen- und Lastenaufzug 500/800kg 1.BA')).toContain('400 kg (Personen) / 600 kg (Lasten)')
+      expect(text(mit, 'Personen- und Lastenaufzug 500/800kg 1.BA')).toContain('5 Personen / 400 kg oder 600 kg Material')
       const sd = ohne.find((p) => p.titel.startsWith('Schutzdächer'))!
       if (sd.menge > 0) expect(sd.text.join(' ')).toMatch(/je ca\. \d+,\d\d m × \d+,\d\d m/)
     })
