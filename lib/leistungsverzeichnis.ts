@@ -29,6 +29,7 @@ import { standardpreisFuer, type LvStandardpreise } from '@/lib/lv-firmenwerte'
 import { MIN_BREITE_AB_LK4_M, STANDARD_LASTKLASSE, verwendungText } from '@/lib/geruestklassen'
 import { lagenansatzText } from '@/lib/lastansatz'
 import { LV_TEXTE } from '@/lib/lv-texte'
+import { nachbarDach, nachbarDachHinweis } from '@/lib/cad/nachbardach'
 
 export const GRUNDSTANDZEIT_WOCHEN = 4
 
@@ -545,10 +546,12 @@ export function erzeugeLeistungsverzeichnis(quelle: LvQuelle, e: LvEingaben): Le
     vorh(b2, g2.nr, 'Arbeitsgerüste 2. BA', ba2 ? miet2(mat2.geruest + mat2.konsolen) : 0, 'Wo', woBa2)
     const ub = zus('ueberbrueckung')
     const daecher = model.building.anbauDaecher ?? []
-    const dachSumme = r2(daecher.reduce((s2, d) => s2 + d.flaecheM2, 0))
-    const ueberLaenge = r2(daecher.reduce((s2, d) => s2 + d.breiteM, 0))
-    const DACH_HINWEIS = 'Vorschlag aus dem Modell (Näherung, ANNAHME: Spannweite = Breite des erkannten Vorbaus entlang der Wand; geneigte Anbaudächer sind nicht erfasst): bitte prüfen.'
-    const ubp = b2.add('Überbrückungen Dachflächen angrenzende Bauteile', [...LV_TEXTE.ueberbrueckung, (ueberLaenge > 0 ? `Länge der Überbrückung ca. ${de(ueberLaenge, 2)} m (${daecher.length} angrenzende Dachfläche${daecher.length > 1 ? 'n' : ''}). ${DACH_HINWEIS} Preis bitte eintragen. ` : '') + (ub && ub.menge > 0 ? 'Preise aus den Zusatzleistungen im LV-Fenster.' : ueberLaenge > 0 ? '' : OHNE_CAD)], 1, 'Stück', ub && ub.menge > 0 ? cent(ub.menge * (ub.epAuf + ub.epAb)) : 0)
+    // Gemessener Anbau (Vorbau) hat Vorrang; sonst Rückfall auf das Dach des angrenzenden Gebäudeteils (Wandlänge × 1,5 m ÷ cos Neigung)
+    const ersatzDach = daecher.length === 0 ? nachbarDach(model.building) : null
+    const dachSumme = daecher.length > 0 ? r2(daecher.reduce((s2, d) => s2 + d.flaecheM2, 0)) : ersatzDach?.flaecheM2 ?? 0
+    const ueberLaenge = daecher.length > 0 ? r2(daecher.reduce((s2, d) => s2 + d.breiteM, 0)) : ersatzDach?.laengeM ?? 0
+    const DACH_HINWEIS = ersatzDach ? nachbarDachHinweis(ersatzDach) : 'Vorschlag aus dem Modell (Näherung, ANNAHME: Spannweite = Breite des erkannten Vorbaus entlang der Wand; geneigte Anbaudächer sind nicht erfasst): bitte prüfen.'
+    const ubp = b2.add('Überbrückungen Dachflächen angrenzende Bauteile', [...LV_TEXTE.ueberbrueckung, (ueberLaenge > 0 ? `Länge der Überbrückung ca. ${de(ueberLaenge, 2)} m (${ersatzDach ? ersatzDach.anzahl : daecher.length} angrenzende Dachfläche${(ersatzDach ? ersatzDach.anzahl : daecher.length) > 1 ? 'n' : ''}). ${DACH_HINWEIS} Preis bitte eintragen. ` : '') + (ub && ub.menge > 0 ? 'Preise aus den Zusatzleistungen im LV-Fenster.' : ueberLaenge > 0 ? '' : OHNE_CAD)], 1, 'Stück', ub && ub.menge > 0 ? cent(ub.menge * (ub.epAuf + ub.epAb)) : 0)
     vorh(b2, ubp.nr, 'Überbrückungen', ub && ub.menge > 0 ? cent(ub.menge * ub.epVorh) : 0)
     const sdN = dachRoh.length
     const sdAuf = sdN > 0 ? epAufbau('schutzdach', schutzdachM) * schutzdachM + epAbbau('schutzdach', schutzdachM) * schutzdachM : 0
@@ -578,7 +581,7 @@ export function erzeugeLeistungsverzeichnis(quelle: LvQuelle, e: LvEingaben): Le
     vorh(b2, h1.nr, 'Haltestellenausstattung 1. BA', 0, 'StckWo', hAnz * woGesamt)
     const h2 = b2.add('Haltestellenausstattung 2. BA', [...LV_TEXTE.haltestellen, OHNE_CAD], 10, 'Stück', 0)
     vorh(b2, h2.nr, 'Haltestellenausstattung 2. BA', 0, 'StckWo', 10 * woGesamt)
-    const dsch = b2.add('Schutz von Dachflächen', [...LV_TEXTE.dachschutz, (dachSumme > 0 ? `Dachfläche des erkannten Vorbaus ca. ${de(dachSumme, 2)} m² aus dem Modell (Näherung; geneigte Anbaudächer sind nicht erfasst): bitte prüfen. Preis bitte eintragen.` : OHNE_CAD)], 1, 'Stück', 0)
+    const dsch = b2.add('Schutz von Dachflächen', [...LV_TEXTE.dachschutz, (dachSumme > 0 ? (ersatzDach ? `Dachfläche ca. ${de(dachSumme, 2)} m². ${DACH_HINWEIS} Preis bitte eintragen.` : `Dachfläche des erkannten Vorbaus ca. ${de(dachSumme, 2)} m² aus dem Modell (Näherung; geneigte Anbaudächer sind nicht erfasst): bitte prüfen. Preis bitte eintragen.`) : OHNE_CAD)], 1, 'Stück', 0)
     vorh(b2, dsch.nr, 'Schutz von Dachflächen', 0, 'Wo', 0)
 
     // Titel 03 – Umbau am Bestandsgerüst (nummeriert wie im LV: 03.01 …)
