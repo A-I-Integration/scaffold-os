@@ -270,6 +270,14 @@ export function erzeugeLeistungsverzeichnis(quelle: LvQuelle, e: LvEingaben): Le
   const konsolenM = r2(comps.filter((c) => c.type === 'console').reduce((s, c) => s + Math.abs(c.scale[0]), 0))
   const schutzdachM = r2(comps.filter((c) => c.type === 'protection_roof').reduce((s, c) => s + Math.abs(c.scale[0]), 0))
   const treppen = comps.filter((c) => c.type === 'stair').length
+  // Bauzaun: weder das 3D-Modell noch die Datei enthalten die Grundstücksgrenze. ANNAHME als Vorschlag: Zaun rundum im Abstand
+  // BAUZAUN_ABSTAND_M um das Gerüst (Umfang des umschließenden Rechtecks); Menge von Hand oder über die Zusatzleistung änderbar.
+  const BAUZAUN_ABSTAND_M = 1
+  const geruestTeile = comps.filter((c) => c.type === 'frame' || c.type === 'deck')
+  const bauzaunVorschlagM = geruestTeile.length > 0
+    ? r2(2 * ((Math.max(...geruestTeile.map((c) => c.position[0])) - Math.min(...geruestTeile.map((c) => c.position[0])) + 2 * BAUZAUN_ABSTAND_M) + (Math.max(...geruestTeile.map((c) => c.position[2])) - Math.min(...geruestTeile.map((c) => c.position[2])) + 2 * BAUZAUN_ABSTAND_M)))
+    : 0
+  const BAUZAUN_HINWEIS = `Länge ca. ${de(bauzaunVorschlagM, 2)} m: Vorschlag aus dem Modell (ANNAHME: Zaun rundum im Abstand von ${de(BAUZAUN_ABSTAND_M, 0)} m um das Gerüst, die Grundstücksgrenze ist im Modell nicht enthalten). Bitte mit dem Lageplan prüfen.`
 
   // Materialwert je Gruppe
   const mat: Record<Gruppe, number> = { geruest: 0, konsolen: 0, schutzdach: 0, treppe: 0 }
@@ -503,8 +511,8 @@ export function erzeugeLeistungsverzeichnis(quelle: LvQuelle, e: LvEingaben): Le
     const wc = b1.add('Baustellen-Container-WC', [...LV_TEXTE.wc, OHNE_CAD], 1, 'Stück', 0)
     vorh(b1, wc.nr, 'Baustellen-Container-WC', 0)
     const zaun = zus('bauzaun')
-    const bz = b1.add('Bauzaun', LV_TEXTE.bauzaun, zaun?.menge ?? 0, 'm', cent(zaun?.epAuf ?? 0) + cent(zaun?.epAb ?? 0))
-    vorh(b1, bz.nr, 'Bauzaun', cent(zaun?.epVorh ?? 0), 'm/Wo', (zaun?.menge ?? 0) * woGesamt)
+    const bz = b1.add('Bauzaun', [...LV_TEXTE.bauzaun, ...(zaun && zaun.menge > 0 ? [] : bauzaunVorschlagM > 0 ? [BAUZAUN_HINWEIS] : [])], zaun && zaun.menge > 0 ? zaun.menge : bauzaunVorschlagM, 'm', cent(zaun?.epAuf ?? 0) + cent(zaun?.epAb ?? 0))
+    vorh(b1, bz.nr, 'Bauzaun', cent(zaun?.epVorh ?? 0), 'm/Wo', (zaun && zaun.menge > 0 ? zaun.menge : bauzaunVorschlagM) * woGesamt)
     const tor = b1.add('Bauzauntor', [...LV_TEXTE.bauzauntor, OHNE_CAD], 0, 'Stück', 0)
     vorh(b1, tor.nr, 'Bauzauntor', 0)
     const abd = b1.add('Abdecken von Bodenflächen BE', [...LV_TEXTE.bodenabdeckung, OHNE_CAD], 0, 'm²', 0)
@@ -552,7 +560,7 @@ export function erzeugeLeistungsverzeichnis(quelle: LvQuelle, e: LvEingaben): Le
     vorh(b2, ubp.nr, 'Überbrückungen', ub && ub.menge > 0 ? cent(ub.menge * ub.epVorh) : 0)
     const sdN = dachRoh.length
     const sdAuf = sdN > 0 ? epAufbau('schutzdach', schutzdachM) * schutzdachM + epAbbau('schutzdach', schutzdachM) * schutzdachM : 0
-    const sdp = b2.add('Schutzdächer Zugang Eingang Kirche', [...LV_TEXTE.schutzdach, (sdN > 0 ? `Aus dem CAD: ${sdN} Schutzdach${sdN > 1 ? 'dächer' : ''}, je ca. ${de(r2(schutzdachM / sdN), 2)} m × ${de(r2(Math.abs(dachRoh[0].scale[2])), 2)} m (zusammen ${de(schutzdachM, 2)} m Länge). ` : '') + 'Anzahl und Lage aus dem CAD sind ein Vorschlag (unten vorne), der Eingang ist im Modell nicht bekannt.'], sdN, 'Stück', sdN > 0 ? cent(sdAuf / sdN) : 0)
+    const sdp = b2.add('Schutzdächer Zugang Eingang', [...LV_TEXTE.schutzdach, (sdN > 0 ? `Aus dem CAD: ${sdN} Schutzdach${sdN > 1 ? 'dächer' : ''}, je ca. ${de(r2(schutzdachM / sdN), 2)} m × ${de(r2(Math.abs(dachRoh[0].scale[2])), 2)} m (zusammen ${de(schutzdachM, 2)} m Länge). ` : '') + 'Anzahl und Lage aus dem CAD sind ein Vorschlag (unten vorne), der Eingang ist im Modell nicht bekannt.'], sdN, 'Stück', sdN > 0 ? cent(sdAuf / sdN) : 0)
     vorh(b2, sdp.nr, 'Schutzdächer', miet(mat.schutzdach), 'Wo', sdN > 0 ? woGesamt : 0)
     const kd1 = b2.add('Vertikale Bekleidung der Gerüste 1. BA ca. 21,5m bis ca. 32m', ['Vertikale Bekleidung der Außenachse des Gerüstes mit Kederplane zur Eindämmung der Staubentwicklung, 1. BA.', ...LV_TEXTE.kederplane, (kederplaneFlaecheM2 > 0 ? `Aus dem CAD: ${de(kederplaneFlaecheM2, 2)} m² Plane (Höhenbereich ${de(model.building.geruestOptionen?.kederplane?.vonM ?? 0, 1)}–${de(model.building.geruestOptionen?.kederplane?.bisM ?? 0, 1)} m). Preis bitte eintragen.` : OHNE_CAD)], 1, 'Stück', 0)
     vorh(b2, kd1.nr, 'Vertikale Bekleidung 1. BA', 0, 'Wo', 0)
@@ -660,7 +668,7 @@ export function erzeugeLeistungsverzeichnis(quelle: LvQuelle, e: LvEingaben): Le
     const wc = pos('02.03', 'Baustellen WC', LV_TEXTE.wc, 1, 'Stck', 'Baustellen-Container-WC', 0, { gestrichenStandard: true })
     miete('02.04', wc, 'StWo', 'Baustellen-Container-WC')
     const zaun = zus('bauzaun')
-    const bz = pos('02.05', 'Bauzaun', LV_TEXTE.bauzaun, zaun?.menge ?? 0, 'lfdm', 'Bauzaun', cent(zaun?.epAuf ?? 0) + cent(zaun?.epAb ?? 0))
+    const bz = pos('02.05', 'Bauzaun', [...LV_TEXTE.bauzaun, ...(zaun && zaun.menge > 0 ? [] : bauzaunVorschlagM > 0 ? [BAUZAUN_HINWEIS] : [])], zaun && zaun.menge > 0 ? zaun.menge : bauzaunVorschlagM, 'lfdm', 'Bauzaun', cent(zaun?.epAuf ?? 0) + cent(zaun?.epAb ?? 0))
     miete('02.06', bz, 'lfdmWo', 'Bauzaun', cent(zaun?.epVorh ?? 0))
     const tor = pos('02.07', 'Bauzauntor bis 4,00 m', LV_TEXTE.bauzauntor, 1, 'Stck', 'Bauzauntor')
     miete('02.08', tor, 'StWo', 'Bauzauntor')
@@ -679,7 +687,7 @@ export function erzeugeLeistungsverzeichnis(quelle: LvQuelle, e: LvEingaben): Le
     miete('03.06', ub, 'PschWo', 'Überbrückungen Dachflächen')
     const sdN = dachRoh.length
     const sdCad = sdN > 0 ? cent((epAufbau('schutzdach', schutzdachM) * schutzdachM + epAbbau('schutzdach', schutzdachM) * schutzdachM) / sdN) : 0
-    const sd = pos('03.07', 'Schutzdächer Zugang Eingang Kirche', ['Schutzgerüst nach DIN 4420-1 und DGUV-Vorschriften bei turmartigen Bauwerken.'
+    const sd = pos('03.07', 'Schutzdächer Zugang Eingang', ['Schutzgerüst nach DIN 4420-1 und DGUV-Vorschriften bei turmartigen Bauwerken.'
       + (sdN > 0 ? ` Aus dem CAD: ${sdN} Schutzdach${sdN > 1 ? 'dächer' : ''}, je ca. ${de(r2(schutzdachM / sdN), 2)} m × ${de(r2(Math.abs(dachRoh[0].scale[2])), 2)} m. Lage ist ein Vorschlag, die Seite des Eingangs bitte prüfen.` : '')], 1, 'Stck', 'Schutzdächer', sdCad)
     miete('03.08', sd, 'StWo', 'Schutzdächer', miet(mat.schutzdach))
     const tr = pos('03.13', `Gerüsttreppenturm 1. BA H = ca. ${de(hoeheText, 2)} m`, ['Aufstieg zum Erreichen der Arbeitsplätze als Gerüsttreppe.'], 1, 'Stck', 'Gerüsttreppenturm 1. BA',

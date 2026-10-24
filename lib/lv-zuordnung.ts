@@ -41,7 +41,7 @@ export const LV_VORLAGE_WUPPERTAL: LvVorlagePos[] = [
   { pos: '02.4', titel: 'Vorhaltung zur Vorposition 02.3', einheit: 'Wo' },
   { pos: '02.5', titel: 'Überbrückungen Dachflächen angrenzende Bauteile', einheit: 'Stück', menge: 1, quelle: 'ueberbrueckung' },
   { pos: '02.6', titel: 'Vorhaltung zur Vorposition 02.5', einheit: 'Wo', quelle: 'vorh-ueberbrueckung' },
-  { pos: '02.7', titel: 'Schutzdächer Zugang Eingang Kirche', einheit: 'Stück', quelle: 'schutzdach' },
+  { pos: '02.7', titel: 'Schutzdächer Zugang Eingang', einheit: 'Stück', quelle: 'schutzdach' },
   { pos: '02.8', titel: 'Vorhaltung zur Vorposition 02.7', einheit: 'Wo', quelle: 'vorh-schutzdach' },
   { pos: '02.9', titel: 'Vertikale Bekleidung der Gerüste 1. BA ca. 21,5 m bis ca. 32 m', einheit: 'Stück', menge: 1 },
   { pos: '02.10', titel: 'Vorhaltung zur Vorposition 02.9', einheit: 'Wo' },
