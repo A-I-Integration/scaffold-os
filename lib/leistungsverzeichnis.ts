@@ -26,7 +26,7 @@ import type { CADModel } from '@/lib/calculations/cad-engine'
 import type { MaterialItem } from '@/types/scaffold'
 import { kappeModellAufHoehe, kappeMaterial } from '@/lib/cad/bauabschnitt'
 import { standardpreisFuer, type LvStandardpreise } from '@/lib/lv-firmenwerte'
-import { MIN_BREITE_AB_LK4_M, verwendungText } from '@/lib/geruestklassen'
+import { MIN_BREITE_AB_LK4_M, STANDARD_LASTKLASSE, verwendungText } from '@/lib/geruestklassen'
 import { lagenansatzText } from '@/lib/lastansatz'
 import { LV_TEXTE } from '@/lib/lv-texte'
 
@@ -158,7 +158,7 @@ export const LV_STANDARD_EINGABEN: LvEingaben = {
   auftragnehmer: '',
   gesamtStandzeitWochen: 8,
   pauschalFaktorProzent: 100,
-  lastklasse: 4,
+  lastklasse: STANDARD_LASTKLASSE,
   breitenklasseManuell: 'W09',
   hoehenklasse: 'H1',
   stundensatzFach: 0,
