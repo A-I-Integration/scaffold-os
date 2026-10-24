@@ -5,7 +5,7 @@
 
 import { BuildingParams } from './cad-engine'
 import { GeruestSystem } from './geruest-systeme'
-import { mindestBreiteFuerLastklasse } from '../geruestklassen'
+import { mindestBreiteFuerLastklasse, STANDARD_LASTKLASSE } from '../geruestklassen'
 
 /** Wirksame Gerüstbreite: gewählte Option, sonst erste Rahmenbreite des Systems, sonst 0,73 m. */
 function wirksameBreite(p: RuleCheckParams): number {
@@ -47,12 +47,12 @@ export const CAD_RULES: CADRule[] = [
     title: 'Lastklasse 4–6 braucht mindestens W09',
     message: 'Nach DIN EN 12811-1 ist ab Lastklasse 4 mindestens die Breitenklasse W09 (Belagbreite ab 0,90 m) erforderlich. Gerüstbreite erhöhen oder Lastklasse klären (Statiker).',
     condition: (p) => {
-      const min = mindestBreiteFuerLastklasse(p.building.lastklasse)
+      const min = mindestBreiteFuerLastklasse(p.building.lastklasse ?? STANDARD_LASTKLASSE)
       return min !== null && wirksameBreite(p) < min - 1e-9
     },
     affectedField: 'lastklasse',
     autoFix: (p) => {
-      const min = mindestBreiteFuerLastklasse(p.building.lastklasse)
+      const min = mindestBreiteFuerLastklasse(p.building.lastklasse ?? STANDARD_LASTKLASSE)
       const passend = p.system?.rahmenBreitenM.filter((b) => min !== null && b >= min - 1e-9).sort((a, b) => a - b)[0]
       if (!passend) return null
       return { geruestOptionen: { ...(p.building.geruestOptionen ?? {}), breiteM: passend } }
@@ -206,7 +206,7 @@ export const CAD_RULES: CADRule[] = [
     condition: (p) => {
       if (p.system?.id !== 'layher-allround') return false
       const durchschnFeldweite = p.fieldCount > 0 ? p.totalLengthM / p.fieldCount : 0
-      const lastklasse = p.building.lastklasse ?? 3
+      const lastklasse = p.building.lastklasse ?? STANDARD_LASTKLASSE
       return p.totalHeightM > 24 || durchschnFeldweite > 3.07 || lastklasse > 3
     },
   },
@@ -230,7 +230,7 @@ export const CAD_RULES: CADRule[] = [
     condition: (p) => {
       if (p.system?.id !== 'peri-up-flex') return false
       const durchschnFeldweite = p.fieldCount > 0 ? p.totalLengthM / p.fieldCount : 0
-      const lastklasse = p.building.lastklasse ?? 3
+      const lastklasse = p.building.lastklasse ?? STANDARD_LASTKLASSE
       return p.totalHeightM > 24 || durchschnFeldweite > 3.0 || lastklasse > 3
     },
   },
@@ -252,7 +252,7 @@ export const CAD_RULES: CADRule[] = [
       '0,61 m für Lastklasse ≤ 3 bei Feldweiten bis 3,07 m) – siehe Tabelle 6 der Zulassung für weitere Optionen.',
     condition: (p) => {
       if (p.system?.id !== 'layher-allround') return false
-      const lastklasse = p.building.lastklasse ?? 3
+      const lastklasse = p.building.lastklasse ?? STANDARD_LASTKLASSE
       const durchschnFeldweite = p.fieldCount > 0 ? p.totalLengthM / p.fieldCount : 0
       // Maximale Lastklasse, die das Standard-Stahlboden 0,32 m bei dieser
       // Feldweite laut Tabelle 6 trägt.
@@ -276,7 +276,7 @@ export const CAD_RULES: CADRule[] = [
       'oder einen für diese Lastklasse zugelassenen Belag wählen (Tabelle 30 der Zulassung für weitere Optionen).',
     condition: (p) => {
       if (p.system?.id !== 'peri-up-flex') return false
-      const lastklasse = p.building.lastklasse ?? 3
+      const lastklasse = p.building.lastklasse ?? STANDARD_LASTKLASSE
       const durchschnFeldweite = p.fieldCount > 0 ? p.totalLengthM / p.fieldCount : 0
       let maxLastklasseStahlbelag = 6
       if (durchschnFeldweite > 2.0) maxLastklasseStahlbelag = 5

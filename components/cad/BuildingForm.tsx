@@ -1,6 +1,6 @@
 'use client'
 
-import { VERWENDUNGEN, verwendungMitId, breiteVonBreitenklasse } from '@/lib/geruestklassen'
+import { STANDARD_LASTKLASSE, VERWENDUNGEN, verwendungMitId, breiteVonBreitenklasse } from '@/lib/geruestklassen'
 import { lagenansatz } from '@/lib/lastansatz'
 import Lod2Panel from '@/components/cad/Lod2Panel'
 import { useState, useRef, useMemo, useEffect, type ReactNode } from 'react'
@@ -783,13 +783,13 @@ export default function BuildingForm({ building, systemId, onChange, onSystemCha
               {verwendungMitId(building.verwendung) && (
                 <p className='text-[10px] text-[#86868b] mt-1'>Vorbelegt: Lastklasse {verwendungMitId(building.verwendung)!.lastklasse}, Breitenklasse {verwendungMitId(building.verwendung)!.breitenklasse}. {verwendungMitId(building.verwendung)!.grund} Lastklasse und Gerüstbreite darunter sind von Hand änderbar.</p>
               )}
-              {lagenansatz(building.lastklasse ?? 3) && (
-                <p className='text-[10px] text-[#86868b] mt-1'>Lastansatz längenorientiertes Gerüst: eine Lage zu 100 % ({lagenansatz(building.lastklasse ?? 3)!.lage1KnM2.toLocaleString('de-DE')} kN/m² = {lagenansatz(building.lastklasse ?? 3)!.lage1KgM2.toLocaleString('de-DE')} kg/m²), die zweite Lage zu 50 % ({lagenansatz(building.lastklasse ?? 3)!.lage2KnM2.toLocaleString('de-DE')} kN/m²).</p>
+              {lagenansatz(building.lastklasse ?? STANDARD_LASTKLASSE) && (
+                <p className='text-[10px] text-[#86868b] mt-1'>Lastansatz längenorientiertes Gerüst: eine Lage zu 100 % ({lagenansatz(building.lastklasse ?? STANDARD_LASTKLASSE)!.lage1KnM2.toLocaleString('de-DE')} kN/m² = {lagenansatz(building.lastklasse ?? STANDARD_LASTKLASSE)!.lage1KgM2.toLocaleString('de-DE')} kg/m²), die zweite Lage zu 50 % ({lagenansatz(building.lastklasse ?? STANDARD_LASTKLASSE)!.lage2KnM2.toLocaleString('de-DE')} kN/m²).</p>
               )}
             </div>
             <div>
               <label className='block text-xs font-medium text-[#424245] mb-1'>Lastklasse (DIN EN 12811-1)</label>
-              <select value={building.lastklasse ?? 3} onChange={(e) => update('lastklasse', parseInt(e.target.value))} className='w-full px-3 py-2 border rounded-xl text-sm'>
+              <select value={building.lastklasse ?? STANDARD_LASTKLASSE} onChange={(e) => update('lastklasse', parseInt(e.target.value))} className='w-full px-3 py-2 border rounded-xl text-sm'>
                 {[1, 2, 3, 4, 5, 6].map((lk) => <option key={lk} value={lk}>Lastklasse {lk}</option>)}
               </select>
               <p className='text-[10px] text-[#86868b] mt-1'>Wird für die Prüfung der Regelausführungs-Grenzen genutzt (aktuell nur bei Layher Allround geprüft).</p>

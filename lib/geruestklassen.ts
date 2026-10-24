@@ -97,3 +97,6 @@ export function verwendungText(id: string | undefined): string | null {
   const v = verwendungMitId(id)
   return v ? `Verwendung des Gerüsts: ${v.name}. Daraus abgeleitet: Lastklasse ${v.lastklasse}, Breitenklasse ${v.breitenklasse} (${v.grund}) Die Werte sind eine Vorbelegung und von Hand änderbar.` : null
 }
+
+/** Standard-Lastklasse, wenn weder Verwendung noch Lastklasse gewählt sind (Arbeiten am Mauerwerk mit Lagerung); überall derselbe Wert, von Hand änderbar. */
+export const STANDARD_LASTKLASSE = 4

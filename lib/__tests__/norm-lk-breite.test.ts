@@ -35,7 +35,10 @@ describe('Norm: Lastklasse 4–6 braucht mindestens W09 (DIN EN 12811-1)', () =>
   it('Regel löst nicht aus bei LK 3 oder ausreichender Breite', () => {
     expect(regel(params({ lastklasse: 3 })).triggered).toBe(false)
     expect(regel(params({ lastklasse: 4, geruestOptionen: { breiteM: 1.09 } })).triggered).toBe(false)
-    expect(regel(params({})).triggered).toBe(false)
+  })
+  it('ohne gewählte Lastklasse gilt der Standard (LK 4): schmales Gerüst löst aus, 1,09 m nicht', () => {
+    expect(regel(params({})).triggered).toBe(true)
+    expect(regel(params({ geruestOptionen: { breiteM: 1.09 } })).triggered).toBe(false)
   })
   it('LV warnt bei LK 4 mit schmalem CAD-Gerüst, nicht bei LK 3', () => {
     const model = generateCADModel(gebaeude, 'layher-allround')
