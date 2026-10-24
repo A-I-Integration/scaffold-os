@@ -17,7 +17,13 @@ export interface StatikerLvErgebnis {
   /** was gefunden wurde, mit Fundstelle (zum Anzeigen) */
   gefunden: { label: string; wert: string; fundstelle: string }[]
   nichtGefunden: string[]
+  /** Positionen des Auftraggeber-LV mit vorgegebener Menge (> 0), ohne Vorhaltungen */
+  positionen: LvVorgabePosition[]
 }
+
+export interface LvVorgabePosition { nr: string; titel: string; menge: number; einheit: string }
+
+const EINHEITEN = new Set(['Stück', 'Stck', 'Stk', 'm', 'm²', 'm2', 'Psch', 'Pausch', 'h', 'Einsätze', 'Einsatz', 'lfdm', 'kg', 'to'])
 
 const zahl = (s: string): number => parseFloat(s.replace(',', '.'))
 const de = (n: number): string => n.toLocaleString('de-DE', { maximumFractionDigits: 2 })
@@ -76,7 +82,47 @@ export function leseStatikerLv(blaetter: LvBlatt[]): StatikerLvErgebnis {
     gefunden.push({ label: 'Standzeit gesamt (Wochen angenommen)', wert: `${de(st.wert)}`, fundstelle: st.fundstelle })
   } else nichtGefunden.push('Standzeit gesamt')
 
-  return { werte, gefunden, nichtGefunden }
+  // Positionen mit Menge: Zeile mit Nummer „02.21“ und Titel, danach (bis zur nächsten Nummer) eine Zeile „<Menge> | <Einheit> | …“
+  const positionen: LvVorgabePosition[] = []
+  for (const b of blaetter) {
+    if (/daten\s*projekt|zusammenfassung/i.test(b.name)) continue
+    let aktuell: LvVorgabePosition | null = null
+    for (const z of b.zeilen) {
+      const zellen = z.filter((c) => c !== null && c !== undefined && String(c).trim() !== '')
+      if (zellen.length === 0) continue
+      const erste = String(zellen[0]).trim()
+      if (/^\d{2}\.\d{1,2}$/.test(erste)) {
+        aktuell = { nr: erste, titel: zellen[1] !== undefined ? String(zellen[1]).trim() : '', menge: 0, einheit: '' }
+        positionen.push(aktuell)
+        continue
+      }
+      if (!aktuell || aktuell.menge > 0) continue
+      const i = zellen.findIndex((c) => typeof c === 'string' && EINHEITEN.has(c.trim()))
+      if (i > 0 && typeof zellen[i - 1] === 'number' && (zellen[i - 1] as number) > 0) {
+        aktuell.menge = zellen[i - 1] as number
+        aktuell.einheit = String(zellen[i]).trim()
+      }
+    }
+  }
+  const mitMenge = positionen.filter((p) => p.menge > 0 && !/^Vorhaltung/i.test(p.titel))
+
+  return { werte, gefunden, nichtGefunden, positionen: mitMenge }
+}
+
+/**
+ * Mengen des Auftraggeber-LV auf die Positionen des erzeugten LV übertragen (gleiche Nummer, andere Menge).
+ * Rückgabe: Überschreibungen je Kurztitel (wie `mengeUeberschreibung`) und die Liste zum Anzeigen.
+ */
+export function mengenAusAuftraggeberLv(vorgabe: LvVorgabePosition[], lv: { nr: string; titel: string; menge: number; einheit: string }[]): { ueberschreibung: Record<string, number>; angewendet: { nr: string; titel: string; von: number; auf: number }[] } {
+  const ueberschreibung: Record<string, number> = {}
+  const angewendet: { nr: string; titel: string; von: number; auf: number }[] = []
+  for (const v of vorgabe) {
+    const p = lv.find((x) => x.nr === v.nr && !/^Vorhaltung/i.test(x.titel))
+    if (!p || Math.abs(p.menge - v.menge) < 1e-9) continue
+    ueberschreibung[p.titel] = v.menge
+    angewendet.push({ nr: p.nr, titel: p.titel, von: p.menge, auf: v.menge })
+  }
+  return { ueberschreibung, angewendet }
 }
 
 /** Excel-Datei (xlsx) → Blätter → Angaben. */

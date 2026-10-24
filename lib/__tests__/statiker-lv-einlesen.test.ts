@@ -42,3 +42,39 @@ describe.skipIf(!echt || !existsSync(echt))('Statiker-LV Wuppertal (echte Datei)
     expect(r.werte).toMatchObject({ lastklasse: 4, breitenklasseManuell: 'W09', geruestHoeheAusschreibungM: 32, hoeheBa2M: 21.5, gesamtStandzeitWochen: 50 })
   })
 })
+
+describe('Mengen aus dem Auftraggeber-LV', () => {
+  const blatt = {
+    name: '02 Gerüstarbeiten',
+    zeilen: [
+      ['02.21', 'Haltestellenausstattung 1. BA'],
+      ['System-Haltestellen für die Transportbühne'],
+      [8, 'Stück', 'EP', 'GP', 0],
+      ['02.22', 'Vorhaltung zur Vorposition'],
+      ['StckWo', 'EP', 'GP', 0],
+      ['03.01', 'Ausbau / Umbau Beläge'],
+      ['Text'],
+      [12, 'Einsätze', 'EP', 'GP', 0],
+      ['02.2', 'Vorhaltung zur Vorposition'],
+      [16, 'Wo', 'EP'],
+    ],
+  }
+  it('liest Positionen mit Menge, ohne Vorhaltungen', () => {
+    const r = leseStatikerLv([blatt])
+    expect(r.positionen).toEqual([
+      { nr: '02.21', titel: 'Haltestellenausstattung 1. BA', menge: 8, einheit: 'Stück' },
+      { nr: '03.01', titel: 'Ausbau / Umbau Beläge', menge: 12, einheit: 'Einsätze' },
+    ])
+  })
+  it('überträgt abweichende Mengen auf das LV (gleiche Nummer), gleiche bleiben', async () => {
+    const { mengenAusAuftraggeberLv } = await import('../statiker-lv-einlesen')
+    const r = leseStatikerLv([blatt])
+    const lv = [
+      { nr: '02.21', titel: 'Haltestellenausstattung 1. BA', menge: 5, einheit: 'Stück' },
+      { nr: '03.01', titel: 'Ausbau / Umbau Beläge', menge: 12, einheit: 'Einsätze' },
+    ]
+    const m = mengenAusAuftraggeberLv(r.positionen, lv)
+    expect(m.ueberschreibung).toEqual({ 'Haltestellenausstattung 1. BA': 8 })
+    expect(m.angewendet).toEqual([{ nr: '02.21', titel: 'Haltestellenausstattung 1. BA', von: 5, auf: 8 }])
+  })
+})
