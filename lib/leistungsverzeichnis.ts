@@ -717,6 +717,14 @@ export function erzeugeLeistungsverzeichnis(quelle: LvQuelle, e: LvEingaben): Le
     const HAENDISCH = ['Überbrückungen', 'Schutzdächer', 'Haltestellenausstattung', 'Personen- und Lastenaufzug', 'Schutz von Dachflächen', 'Ausbau / Umbau Beläge', 'Ausbau / Rückbau / Umbau Beläge', 'Ersatz der Bauteile', 'Umbau der Gerüste', 'Umbau der Fachwerkbinder']
     const offen = titel.flatMap((t) => t.positionen).filter((p) => HAENDISCH.some((h) => p.titel.startsWith(h)) && !p.titel.startsWith('Vorhaltung') && (!(p.ep > 0) || !(p.menge > 0)))
     if (offen.length > 0) fehlend.push(`Preis oder Menge von Hand: ${[...new Set(offen.map((p) => `${p.nr} ${p.titel.replace(/ H = ca\..*$/, '')}`))].join(', ')}`)
+    // Allgemeine Angaben nur melden, wenn eine Position sie wirklich braucht: Preise kommen auch aus der Datenpflege (Standardpreise),
+    // deshalb zählen hier die Positionen mit Menge und ohne Preis, nicht die einzelnen Eingabefelder.
+    for (const g of ['Stundensatz Facharbeiter', 'Stundensatz Helfer', 'Mietsatz je Woche (% vom Materialwert)', 'Pauschale technische Bearbeitung / statische Berechnung']) {
+      const i = fehlend.indexOf(g)
+      if (i >= 0) fehlend.splice(i, 1)
+    }
+    const ohnePreis = titel.flatMap((t) => t.positionen).filter((p) => !p.entfaellt && p.menge > 0 && !(p.ep > 0) && !offen.includes(p))
+    if (ohnePreis.length > 0) fehlend.push(`Preis fehlt (Datenpflege oder Tabelle): ${ohnePreis.map((p) => `${p.nr} ${p.titel}`).join(', ')}`)
   }
   for (const z of aktiveZusatz) {
     const i = ZUSATZ_INFO[z.art]
