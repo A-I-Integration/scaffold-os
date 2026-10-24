@@ -305,8 +305,13 @@ export function erzeugeLeistungsverzeichnis(quelle: LvQuelle, e: LvEingaben): Le
       const eo = e.epUeberschreibung?.[titel]
       const mengeNeu = mo !== undefined && Number.isFinite(mo) && mo >= 0 ? mo : menge
       const epNeu = eo !== undefined && Number.isFinite(eo) && eo >= 0 ? cent(eo) : ep
+      // Ist die Position bepreist (und hat Menge), sind die Eintrag-Hinweise überholt und gehören nicht ins gedruckte LV
+      const befuellt = epNeu > 0 && mengeNeu > 0
+      const textNeu = befuellt
+        ? text.map((t) => t.replace(/\s*Nicht aus dem CAD: Menge und Preis bitte in der Tabelle eintragen\./g, '').replace(/\s*Preis bitte eintragen\.\s*/g, ' ').trim()).filter((t) => t.length > 0)
+        : text
       const p: LvPosition = {
-        nr: `${nrText}.${liste.length + 1}`, titel, text, menge: mengeNeu, einheit, ep: epNeu, gp: cent(mengeNeu * epNeu),
+        nr: `${nrText}.${liste.length + 1}`, titel, text: textNeu, menge: mengeNeu, einheit, ep: epNeu, gp: cent(mengeNeu * epNeu),
         ...(mengeNeu !== menge || epNeu !== ep ? { manuell: { ...(mengeNeu !== menge ? { menge: true } : {}), ...(epNeu !== ep ? { ep: true } : {}) }, berechnet: { ep, menge } } : { berechnet: { ep, menge } }),
       }
       liste.push(p)
@@ -555,7 +560,7 @@ export function erzeugeLeistungsverzeichnis(quelle: LvQuelle, e: LvEingaben): Le
     vorh(b2, ubp.nr, 'Überbrückungen', ub && ub.menge > 0 ? cent(ub.menge * ub.epVorh) : 0)
     const sdN = dachRoh.length
     const sdAuf = sdN > 0 ? epAufbau('schutzdach', schutzdachM) * schutzdachM + epAbbau('schutzdach', schutzdachM) * schutzdachM : 0
-    const sdp = b2.add('Schutzdächer Zugang Eingang', [...LV_TEXTE.schutzdach, (sdN > 0 ? `Aus dem CAD: ${sdN} Schutzdach${sdN > 1 ? 'dächer' : ''}, je ca. ${de(r2(schutzdachM / sdN), 2)} m × ${de(r2(Math.abs(dachRoh[0].scale[2])), 2)} m (zusammen ${de(schutzdachM, 2)} m Länge). ` : '') + 'Anzahl und Lage aus dem CAD sind ein Vorschlag (unten vorne), der Eingang ist im Modell nicht bekannt.'], sdN, 'Stück', sdN > 0 ? cent(sdAuf / sdN) : 0)
+    const sdp = b2.add('Schutzdächer Zugang Eingang', [...LV_TEXTE.schutzdach, (sdN > 0 ? `Aus dem CAD: ${sdN > 1 ? `${sdN} Schutzdächer` : '1 Schutzdach'}, je ca. ${de(r2(schutzdachM / sdN), 2)} m × ${de(r2(Math.abs(dachRoh[0].scale[2])), 2)} m (zusammen ${de(schutzdachM, 2)} m Länge). ` : '') + 'Anzahl und Lage aus dem CAD sind ein Vorschlag (unten vorne), der Eingang ist im Modell nicht bekannt.'], sdN, 'Stück', sdN > 0 ? cent(sdAuf / sdN) : 0)
     vorh(b2, sdp.nr, 'Schutzdächer', miet(mat.schutzdach), 'Wo', sdN > 0 ? woGesamt : 0)
     const kd1 = b2.add('Vertikale Bekleidung der Gerüste 1. BA ca. 21,5m bis ca. 32m', ['Vertikale Bekleidung der Außenachse des Gerüstes mit Kederplane zur Eindämmung der Staubentwicklung, 1. BA.', ...LV_TEXTE.kederplane, (kederplaneFlaecheM2 > 0 ? `Aus dem CAD: ${de(kederplaneFlaecheM2, 2)} m² Plane (Höhenbereich ${de(model.building.geruestOptionen?.kederplane?.vonM ?? 0, 1)}–${de(model.building.geruestOptionen?.kederplane?.bisM ?? 0, 1)} m). Preis bitte eintragen.` : OHNE_CAD)], 1, 'Stück', 0)
     vorh(b2, kd1.nr, 'Vertikale Bekleidung 1. BA', 0, 'Wo', 0)
@@ -683,7 +688,7 @@ export function erzeugeLeistungsverzeichnis(quelle: LvQuelle, e: LvEingaben): Le
     const sdN = dachRoh.length
     const sdCad = sdN > 0 ? cent((epAufbau('schutzdach', schutzdachM) * schutzdachM + epAbbau('schutzdach', schutzdachM) * schutzdachM) / sdN) : 0
     const sd = pos('03.07', 'Schutzdächer Zugang Eingang', ['Schutzgerüst nach DIN 4420-1 und DGUV-Vorschriften bei turmartigen Bauwerken.'
-      + (sdN > 0 ? ` Aus dem CAD: ${sdN} Schutzdach${sdN > 1 ? 'dächer' : ''}, je ca. ${de(r2(schutzdachM / sdN), 2)} m × ${de(r2(Math.abs(dachRoh[0].scale[2])), 2)} m. Lage ist ein Vorschlag, die Seite des Eingangs bitte prüfen.` : '')], 1, 'Stck', 'Schutzdächer', sdCad)
+      + (sdN > 0 ? ` Aus dem CAD: ${sdN > 1 ? `${sdN} Schutzdächer` : '1 Schutzdach'}, je ca. ${de(r2(schutzdachM / sdN), 2)} m × ${de(r2(Math.abs(dachRoh[0].scale[2])), 2)} m. Lage ist ein Vorschlag, die Seite des Eingangs bitte prüfen.` : '')], 1, 'Stck', 'Schutzdächer', sdCad)
     miete('03.08', sd, 'StWo', 'Schutzdächer', miet(mat.schutzdach))
     const tr = pos('03.13', `Gerüsttreppenturm 1. BA H = ca. ${de(hoeheText, 2)} m`, ['Aufstieg zum Erreichen der Arbeitsplätze als Gerüsttreppe.'], 1, 'Stck', 'Gerüsttreppenturm 1. BA',
       treppen > 0 ? cent(epAufbau('treppe', treppen) * treppen + epAbbau('treppe', treppen) * treppen) : 0)
@@ -729,7 +734,7 @@ export function erzeugeLeistungsverzeichnis(quelle: LvQuelle, e: LvEingaben): Le
     const ohnePreis = titel.flatMap((t) => t.positionen).filter((p) => !p.entfaellt && p.menge > 0 && !(p.ep > 0) && !offen.includes(p))
     if (ohnePreis.length > 0) fehlend.push(`Preis fehlt (Datenpflege oder Tabelle): ${ohnePreis.map((p) => `${p.nr} ${p.titel}`).join(', ')}`)
   }
-  for (const z of aktiveZusatz) {
+  for (const z of e.stil === 'statiker' ? [] : aktiveZusatz) {
     const i = ZUSATZ_INFO[z.art]
     if (!(z.epAuf > 0) || !(z.epAb > 0) || !(z.epVorh > 0)) fehlend.push(`Einheitspreise für ${i.name} (Aufbau, Vorhaltung je Woche, Abbau)`)
   }
