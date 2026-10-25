@@ -46,3 +46,17 @@ describe('findeLagerartikel', () => {
     expect(findeLagerartikel({ name: 'Z', quantity: 1, articleNumber: 'X-1' }, i2).artikel?.id).toBe('a');
   });
 });
+
+import { einheitenPassen } from '../lager-zuordnung'
+describe('einheitenPassen', () => {
+  it('gleiche Einheit in anderer Schreibweise passt', () => {
+    expect(einheitenPassen('Stück', 'Stk')).toBe(true)
+    expect(einheitenPassen('m²', 'm2')).toBe(true)
+  })
+  it('m² gegen Stück passt nicht', () => {
+    expect(einheitenPassen('m²', 'Stk')).toBe(false)
+  })
+  it('fehlende Einheit blockiert nicht', () => {
+    expect(einheitenPassen(undefined, 'Stk')).toBe(true)
+  })
+})

@@ -59,3 +59,30 @@ export function findeLagerartikel(
   }
   return { artikel: null, via: null };
 }
+
+// ------------------------------------------------------------
+// Einheitenprüfung: gleiche Menge nur buchen, wenn die Einheiten übereinstimmen
+// ------------------------------------------------------------
+const EINHEIT_ALIAS: Record<string, string> = {
+  stk: 'stk', 'stk.': 'stk', st: 'stk', stck: 'stk', stück: 'stk', stueck: 'stk', pcs: 'stk', psch: 'stk',
+  m2: 'm2', 'm²': 'm2', qm: 'm2',
+  m: 'm', lfm: 'm', lfdm: 'm', 'lfd. m': 'm',
+  m3: 'm3', 'm³': 'm3', cbm: 'm3',
+  kg: 'kg', t: 't', h: 'h', satz: 'satz',
+}
+
+export function normEinheit(e: unknown): string {
+  const k = norm(e)
+  return EINHEIT_ALIAS[k] ?? k
+}
+
+/**
+ * Fehlt die Einheit in der Materialzeile oder im Lager, wird nicht blockiert (nichts zum Vergleichen).
+ * Sind beide da und verschieden, ist die Menge nicht eins zu eins buchbar.
+ */
+export function einheitenPassen(zeileEinheit: unknown, lagerEinheit: unknown): boolean {
+  const a = normEinheit(zeileEinheit)
+  const b = normEinheit(lagerEinheit)
+  if (!a || !b) return true
+  return a === b
+}
