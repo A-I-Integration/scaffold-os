@@ -4,6 +4,7 @@ import SymbolIcon from '@/components/aufmaß/SymbolIcon';
 import WizardKopf from '@/components/aufmaß/WizardKopf';
 import { ClipboardList } from 'lucide-react';
 import { useState, useEffect, useRef, Suspense } from 'react';
+import { ansprechpartnerAusKunde } from '@/lib/kunde-vorbelegung';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { vorschlagLastklasse, LASTKLASSEN, BREITENKLASSEN, breitenklasseText } from '@/lib/geruestklassen';
 import { setzeMarkierung, leseSchrittGeladenesProjekt, setzeSchrittGeladenesProjekt, WIZARD_KEYS, gewerkeVonStep1 } from '@/lib/aufmass-projekt-session';
@@ -74,7 +75,7 @@ function Schritt1Content() {
 
   const [form, setForm] = useState({ ...LEERES_FORM });
   // NEU (Phase 34): echte Kunden-Verknüpfung statt reinem Namensvergleich.
-  const [kundenListe, setKundenListe] = useState<{ id: string; name: string; street?: string; zip?: string; city?: string }[]>([]);
+  const [kundenListe, setKundenListe] = useState<{ id: string; name: string; street?: string; zip?: string; city?: string; contact_person?: string | null; phone?: string | null; email?: string | null }[]>([]);
   const [zeigeKundenDropdown, setZeigeKundenDropdown] = useState(false);
   const [neuerKundeLaeuft, setNeuerKundeLaeuft] = useState(false);
 
@@ -92,7 +93,7 @@ function Schritt1Content() {
     const k = kundenListe.find((x) => x.id === kundeParam);
     if (!k) return;
     kundeVorgewaehlt.current = true;
-    setForm((prev) => ({ ...prev, name: k.name, customerId: k.id }));
+    setForm((prev) => ansprechpartnerAusKunde({ ...prev, name: k.name, customerId: k.id }, k));
   }, [kundeParam, projectId, kundenListe]);
 
   const [sessionId, setSessionId] = useState<string>('');
@@ -413,6 +414,7 @@ function Schritt1Content() {
                           onMouseDown={() => {
                             handleChange('name', k.name);
                             handleChange('customerId', k.id);
+                            setForm((prev) => ansprechpartnerAusKunde(prev, k));
                             if (!form.adresse && k.street) {
                               handleChange('adresse', [k.street, [k.zip, k.city].filter(Boolean).join(' ')].filter(Boolean).join(', '));
                             }
