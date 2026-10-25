@@ -105,6 +105,20 @@ function parsePoints(buffer, ext) {
 }
 
 // ─── Achsen, Einheiten, Ausdehnung ───
+// PLY: sagt der Datei-Kopf eindeutig, welche Achse oben ist (Kommentar z. B. „Y oben“ oder „Z up“), gilt diese Angabe.
+// Gleiche Logik wie lib/ply-achse.ts in der App. 0 = x, 1 = y, 2 = z, null = keine eindeutige Angabe.
+function achseAusPlyKopf(buffer) {
+  const text = buffer.subarray(0, 4096).toString('latin1');
+  const ende = text.indexOf('end_header');
+  const kopf = ende >= 0 ? text.slice(0, ende) : text;
+  const treffer = new Set();
+  for (const zeile of kopf.split(/\r?\n/)) {
+    if (!/^\s*comment\b/i.test(zeile)) continue;
+    for (const m of zeile.matchAll(/\b([xyz])\s*[-–]?\s*(?:oben|up)\b/gi)) treffer.add('xyz'.indexOf(m[1].toLowerCase()));
+  }
+  return treffer.size === 1 ? [...treffer][0] : null;
+}
+
 function detectVerticalAxis(pts) {
   let best = 1, bestScore = -1;
   for (const a of [0, 1, 2]) {
@@ -274,7 +288,8 @@ function analysiere(buffer, ext) {
   }
   const workCount = pts.length / 3;
 
-  const vertAxis = detectVerticalAxis(pts);
+  const achseKopf = ext === 'ply' ? achseAusPlyKopf(buffer) : null;
+  const vertAxis = achseKopf !== null ? achseKopf : detectVerticalAxis(pts);
   const axExt = robustExtents(pts);
   const unitScale = detectUnitScale(axExt[vertAxis]);
   const horiz = [0, 1, 2].filter((a) => a !== vertAxis).sort((a, b) => axExt[b] - axExt[a]);
@@ -327,4 +342,4 @@ function analysiere(buffer, ext) {
   return measurements;
 }
 
-module.exports = { analysiere, parsePoints };
+module.exports = { analysiere, parsePoints, achseAusPlyKopf };
