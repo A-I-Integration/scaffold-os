@@ -20,7 +20,7 @@
 // ============================================================
 
 import { bucheAusZentrallager } from '@/lib/inventory/buchung';
-import { baueLagerIndex, findeLagerartikel, type LagerArtikelKurz } from '@/lib/lager-zuordnung';
+import { baueLagerIndex, findeLagerartikel, einheitenPassen, type LagerArtikelKurz } from '@/lib/lager-zuordnung';
 import { legeAutoTourAn, type AutoTourErgebnis } from '@/lib/auto-tour';
 
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
@@ -34,6 +34,8 @@ export interface AngebotsannahmeErgebnis {
   transportAngelegt: string[];
   nichtGefunden: string[];
   nichtGenugBestand: string[];
+  /** Material und Lagerartikel gefunden, aber Einheiten verschieden (z. B. m² gegen Stück): nichts gebucht. */
+  einheitenKonflikt: string[];
   /** Technischer Fehler beim Lauf (sonst nicht sichtbar). */
   fehler?: string;
   /** Hinweis, warum nichts gebucht wurde (z. B. keine Materialliste). */
@@ -43,7 +45,7 @@ export interface AngebotsannahmeErgebnis {
 }
 
 export async function beiAngebotsannahme(projectId: string): Promise<AngebotsannahmeErgebnis> {
-  const ergebnis: AngebotsannahmeErgebnis = { reserviert: [], transportAngelegt: [], nichtGefunden: [], nichtGenugBestand: [] };
+  const ergebnis: AngebotsannahmeErgebnis = { reserviert: [], transportAngelegt: [], nichtGefunden: [], nichtGenugBestand: [], einheitenKonflikt: [] };
 
   const pRes = await fetch(`${url}/rest/v1/projects?id=eq.${projectId}&select=name,adresse,data`, { headers });
   if (!pRes.ok) throw new Error('Projekt konnte nicht gelesen werden (' + pRes.status + ').');
@@ -68,6 +70,10 @@ export async function beiAngebotsannahme(projectId: string): Promise<Angebotsann
     const { artikel: treffer } = findeLagerartikel(zeile, lagerIndex);
     if (!treffer) {
       ergebnis.nichtGefunden.push(zeile.name);
+      continue;
+    }
+    if (!einheitenPassen(zeile.unit, treffer.unit)) {
+      ergebnis.einheitenKonflikt.push(`${zeile.name}: Materialliste ${zeile.quantity} ${zeile.unit}, Lager führt in ${treffer.unit}`);
       continue;
     }
 
@@ -138,7 +144,7 @@ export async function beiAngebotsannahmeSicher(projectId: string): Promise<void>
     await beiAngebotsannahme(projectId);
   } catch (e: any) {
     await speichereErgebnis(projectId, {
-      reserviert: [], transportAngelegt: [], nichtGefunden: [], nichtGenugBestand: [],
+      reserviert: [], transportAngelegt: [], nichtGefunden: [], nichtGenugBestand: [], einheitenKonflikt: [],
       fehler: String(e?.message || e),
     });
   }
