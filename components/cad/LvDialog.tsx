@@ -50,19 +50,30 @@ export default function LvDialog({ model, materials, aufbauStunden, abbauStunden
   const dbGeladen = useRef(false)
   const dbSpeichern = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [dbHinweis, setDbHinweis] = useState('')
+  // true, wenn Firmenwerte/Standardpreise nicht aus der Datenbank kamen (dann wären Preise 0 oder alt)
+  const [dbFehler, setDbFehler] = useState(false)
   const [statikerLv, setStatikerLv] = useState<StatikerLvErgebnis | null>(null)
   const [mengenInfo, setMengenInfo] = useState<{ nr: string; titel: string; von: number; auf: number }[]>([])
 
   // Einmal beim Öffnen: Firmenwerte + Standardpreise aus der Datenbank holen
   useEffect(() => {
     let aktiv = true
-    fetch('/api/company').then((r) => r.json()).then((j) => {
-      if (!aktiv || !j?.success) return
-      const fw = firmenwerteAus(j.company?.lv_firmenwerte)
-      if (Object.keys(fw).length > 0) setE((alt) => ({ ...alt, ...fw }))
-      setStandardpreise(standardpreiseAus(j.company?.lv_standardpreise))
-      dbGeladen.current = true
-    }).catch(() => { /* ohne Datenbank läuft der Dialog mit den Browser-Werten weiter */ })
+    const laden = (versuch: number) => {
+      fetch('/api/company').then((r) => r.json()).then((j) => {
+        if (!aktiv) return
+        if (!j?.success) throw new Error('keine Daten')
+        const fw = firmenwerteAus(j.company?.lv_firmenwerte)
+        if (Object.keys(fw).length > 0) setE((alt) => ({ ...alt, ...fw }))
+        setStandardpreise(standardpreiseAus(j.company?.lv_standardpreise))
+        dbGeladen.current = true
+        setDbFehler(false)
+      }).catch(() => {
+        if (!aktiv) return
+        if (versuch < 2) setTimeout(() => laden(versuch + 1), 1500)
+        else setDbFehler(true)
+      })
+    }
+    laden(0)
     return () => { aktiv = false }
   }, [])
 
@@ -120,6 +131,7 @@ export default function LvDialog({ model, materials, aufbauStunden, abbauStunden
   const alsPdf = async () => {
     try {
       setFehler(null)
+      if (dbFehler) { setFehler('Die Firmenwerte und Standardpreise konnten nicht geladen werden (Anmeldung abgelaufen?). Seite neu laden und erneut anmelden, sonst stehen im PDF Preise von 0 €.'); return }
       const { erzeugeLvPdf } = await import('@/lib/export/lv-export')
       speichern(erzeugeLvPdf(lv).output('blob'), `${dateiBasis}.pdf`)
     } catch (err) { setFehler('PDF konnte nicht erstellt werden: ' + (err instanceof Error ? err.message : String(err))) }
@@ -291,6 +303,11 @@ export default function LvDialog({ model, materials, aufbauStunden, abbauStunden
           </div>
 
           <div className='p-4 overflow-y-auto min-w-0'>
+            {dbFehler && (
+              <div className='mb-3 rounded-lg border border-red-300 bg-red-50 px-3 py-2 text-[11px] text-red-900'>
+                <b>Preise nicht geladen:</b> Firmenwerte und Standardpreise konnten nicht aus der Datenbank geholt werden (Anmeldung abgelaufen?). Seite neu laden und erneut anmelden. Das PDF ist bis dahin gesperrt.
+              </div>
+            )}
             {lv.fehlendeAngaben.length > 0 && (
               <div className='mb-3 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-[11px] text-amber-900'>
                 <b>Entwurf:</b> Es fehlen noch Angaben – {lv.fehlendeAngaben.join('; ')}. Das PDF wird bis dahin als Entwurf gekennzeichnet.
