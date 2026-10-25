@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { serverErrorResponse, requireAuth, unauthorizedResponse } from '@/lib/auth';
 import { istBinaerPly, parsePlyBinary } from '@/lib/ply-binary';
+import { achseAusPlyKopf } from '@/lib/ply-achse';
 
 // ─── Typen ───
 interface Ebene {
@@ -391,7 +392,9 @@ export async function POST(req: NextRequest) {
     const workCount = pts.length / 3;
 
     // ── 3) Vertikale Achse + robuste Ausdehnung + Einheit ──
-    const vertAxis = detectVerticalAxis(pts);
+    // PLY: sagt der Datei-Kopf eindeutig, welche Achse oben ist (z. B. „Y oben“), gilt diese Angabe; sonst die Erkennung über die Punktverteilung
+    const achseKopf = ext === 'ply' ? achseAusPlyKopf(buffer) : null;
+    const vertAxis = achseKopf ?? detectVerticalAxis(pts);
     const axExt = robustExtents(pts);
     const unitScale = detectUnitScale(axExt[vertAxis]);
     const horiz = [0, 1, 2].filter((a) => a !== vertAxis).sort((a, b) => axExt[b] - axExt[a]);
