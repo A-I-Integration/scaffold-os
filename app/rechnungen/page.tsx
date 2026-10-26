@@ -9,9 +9,10 @@ import {
   type Invoice, type Position,
 } from '@/lib/invoice-pdf';
 import {
-  FileText, Plus, X, Download, Trash2, Check, Euro, Mail, AlertTriangle, Link2,
+  FileText, Plus, X, Download, Trash2, Check, Euro, Mail, AlertTriangle, Link2, Paperclip,
 } from 'lucide-react';
 import { lokalesDatumIso, datumPlusTage } from '@/lib/datum';
+import AnhangDialog from '@/components/rechnung/AnhangDialog';
 import { ENTSCHEIDUNG_LABEL, type PruefEntscheidung } from '@/lib/rechnung-pruefung';
 import { POSITION_ARTEN, POSITION_ART_LABEL, preisMitFaktor, type PositionArt } from '@/lib/rechnung-position';
 
@@ -146,6 +147,7 @@ function RechnungenContent() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
+  const [anhangFuer, setAnhangFuer] = useState<Invoice | null>(null);
   const [saving, setSaving] = useState(false);
   const [companyMissing, setCompanyMissing] = useState(false);
   // NEU (Phase 36): Verzugszinssatz/Mahnpauschale für manuell ausgelöste Mahnungen.
@@ -905,6 +907,13 @@ function RechnungenContent() {
                           >
                             <Download className="h-4 w-4" />
                           </button>
+                          <button
+                            onClick={() => setAnhangFuer(inv)}
+                            title="Anhänge (Bilder, PDF, Excel, E-Mails) verwalten"
+                            className="p-2 rounded-xl bg-black/10 hover:bg-black/15 text-[#424245] transition-colors"
+                          >
+                            <Paperclip className="h-4 w-4" />
+                          </button>
                           {inv.status !== 'storniert' && (
                             <button
                               onClick={() => handlePruefLink(inv)}
@@ -1001,6 +1010,7 @@ function RechnungenContent() {
             </div>
           </div>
         )}
+        {anhangFuer && <AnhangDialog invoiceId={anhangFuer.id} rechnungsNr={anhangFuer.invoice_number} onClose={() => setAnhangFuer(null)} />}
       </div>
     </div>
   );
