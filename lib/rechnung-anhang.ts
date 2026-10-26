@@ -3,6 +3,7 @@
 
 export const ANHANG_BUCKET = 'invoice-attachments'
 export const MAX_BYTES = 10 * 1024 * 1024
+export const MAX_VIDEO_BYTES = 50 * 1024 * 1024
 export const MAX_ANHAENGE = 20
 
 export const ERLAUBTE_TYPEN: Record<string, string> = {
@@ -15,6 +16,7 @@ export const ERLAUBTE_TYPEN: Record<string, string> = {
   eml: 'message/rfc822',
   msg: 'application/vnd.ms-outlook',
   txt: 'text/plain',
+  mp4: 'video/mp4', mov: 'video/quicktime', webm: 'video/webm',
 }
 
 export function endung(name: string): string {
@@ -23,6 +25,7 @@ export function endung(name: string): string {
 }
 
 export function istBild(mime: string): boolean { return mime.startsWith('image/') }
+export function istVideo(mime: string): boolean { return mime.startsWith('video/') }
 
 export function sichererName(name: string): string {
   const roh = name.replace(/^.*[\\/]/, '').normalize('NFKD').replace(/[̀-ͯ]/g, '')
@@ -37,10 +40,11 @@ export function pruefeAnhang(datei: { name?: unknown; size?: unknown }): AnhangP
   const name = typeof datei.name === 'string' ? datei.name.trim() : ''
   if (!name) return { ok: false, fehler: 'Dateiname fehlt.' }
   const mime = ERLAUBTE_TYPEN[endung(name)]
-  if (!mime) return { ok: false, fehler: 'Dateityp nicht erlaubt. Erlaubt: Bilder (JPG, PNG, WebP), PDF, Excel, Word, CSV, TXT und E-Mails (EML, MSG).' }
+  if (!mime) return { ok: false, fehler: 'Dateityp nicht erlaubt. Erlaubt: Bilder (JPG, PNG, WebP), Videos (MP4, MOV, WebM), PDF, Excel, Word, CSV, TXT und E-Mails (EML, MSG).' }
   const size = Number(datei.size)
   if (!Number.isFinite(size) || size <= 0) return { ok: false, fehler: 'Datei ist leer.' }
-  if (size > MAX_BYTES) return { ok: false, fehler: `Datei ist zu groß (max. ${MAX_BYTES / 1024 / 1024} MB).` }
+  const grenze = istVideo(mime) ? MAX_VIDEO_BYTES : MAX_BYTES
+  if (size > grenze) return { ok: false, fehler: `Datei ist zu groß (max. ${grenze / 1024 / 1024} MB${istVideo(mime) ? ' für Videos' : ''}).` }
   return { ok: true, name: name.slice(0, 200), mime }
 }
 

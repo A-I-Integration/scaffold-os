@@ -270,13 +270,13 @@ function RechnungenContent() {
   const net = positions.reduce((s, p) => s + (Number(p.menge) || 0) * (Number(p.einzelpreis) || 0), 0);
   const tax = Math.round(net * taxRate) / 100;
 
-  const TEXTFELDER: (keyof Position)[] = ['bezeichnung', 'einheit', 'art', 'mitarbeiter', 'taetigkeit'];
+  const TEXTFELDER: (keyof Position)[] = ['bezeichnung', 'einheit', 'art', 'mitarbeiter', 'taetigkeit', 'geruestId', 'bemerkung'];
   function updatePosition(i: number, field: keyof Position, value: string) {
     setPositions((prev) =>
       prev.map((p, idx) => {
         if (idx !== i) return p;
         const neu: any = { ...p, [field]: TEXTFELDER.includes(field) ? value : Number(value.replace(',', '.')) || 0 };
-        if (field === 'art' && !value) delete neu.art;
+        if ((field === 'art' || field === 'geruestId' || field === 'bemerkung') && !value) delete neu[field];
         // Listenpreis × Faktor ergibt den Einzelpreis (Gesamtpreis bleibt Menge × Einzelpreis)
         if ((field === 'listenpreis' || field === 'faktorProzent') && Number(neu.listenpreis) > 0) {
           neu.einzelpreis = preisMitFaktor(Number(neu.listenpreis), Number(neu.faktorProzent) || 100);
@@ -666,6 +666,9 @@ function RechnungenContent() {
                 </button>
               </div>
               <div className="space-y-2">
+                <datalist id="geruest-ids">
+                  {Array.from(new Set(positions.map((x) => x.geruestId).filter((x): x is string => !!x))).map((g) => <option key={g} value={g} />)}
+                </datalist>
                 {positions.map((p, i) => (
                   <div key={i} className="grid grid-cols-12 gap-2 items-center">
                     <input
@@ -704,11 +707,26 @@ function RechnungenContent() {
                         onClick={() => setDetailOffen((d) => ({ ...d, [i]: !d[i] }))}
                         className="text-xs text-blue-600 hover:text-blue-700"
                       >
-                        {detailOffen[i] ? 'Details ausblenden' : 'Details (Art, Maße, Faktor, Stundenlohn)'}
+                        {detailOffen[i] ? 'Details ausblenden' : 'Details (Gerüst, Bemerkung, Art, Maße, Faktor, Stundenlohn)'}
                       </button>
                     </div>
                     {detailOffen[i] && (
                       <div className="col-span-12 grid grid-cols-12 gap-2 rounded-xl bg-black/5 p-3">
+                        <input
+                          list="geruest-ids"
+                          value={p.geruestId || ''}
+                          onChange={(e) => updatePosition(i, 'geruestId', e.target.value)}
+                          placeholder="Gerüst-ID (z. B. Hauptgebäude Süd, Nebengebäude Ost)"
+                          className="col-span-12 px-3 py-2 bg-black/10 border border-black/10 rounded-xl text-sm text-[#1d1d1f]"
+                        />
+                        <textarea
+                          value={p.bemerkung || ''}
+                          onChange={(e) => updatePosition(i, 'bemerkung', e.target.value)}
+                          placeholder="Bemerkung / Begründung (z. B. Schultertransport, weil der Zugang nicht anfahrbar war). Bilder und Videos dazu über die Büroklammer in der Rechnungsliste."
+                          rows={2}
+                          maxLength={1000}
+                          className="col-span-12 px-3 py-2 bg-black/10 border border-black/10 rounded-xl text-sm text-[#1d1d1f]"
+                        />
                         <select
                           value={p.art || ''}
                           onChange={(e) => updatePosition(i, 'art', e.target.value)}
@@ -1010,7 +1028,7 @@ function RechnungenContent() {
             </div>
           </div>
         )}
-        {anhangFuer && <AnhangDialog invoiceId={anhangFuer.id} rechnungsNr={anhangFuer.invoice_number} onClose={() => setAnhangFuer(null)} />}
+        {anhangFuer && <AnhangDialog invoiceId={anhangFuer.id} rechnungsNr={anhangFuer.invoice_number} positionen={anhangFuer.positions || []} onClose={() => setAnhangFuer(null)} />}
       </div>
     </div>
   );

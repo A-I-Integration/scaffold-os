@@ -19,7 +19,7 @@ const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const key = process.env.SUPABASE_SERVICE_ROLE_KEY!;
 const headers = { 'Content-Type': 'application/json', apikey: key, Authorization: `Bearer ${key}` };
 const ROLES = ['admin', 'disponent'];
-const SPALTEN = 'id,invoice_id,file_name,file_type,size_bytes,created_at';
+const SPALTEN = 'id,invoice_id,file_name,file_type,size_bytes,created_at,position_nr';
 
 async function caller(): Promise<{ role: string; userId: string } | null> {
   try {
@@ -66,9 +66,17 @@ export async function POST(req: NextRequest) {
     if (!UUID_MUSTER.test(invoiceId)) return fehler('invoice_id fehlt oder ist ungültig.');
     const p = pruefeAnhang({ name: body?.file_name, size: body?.size });
     if (!p.ok) return fehler(p.fehler);
-    const iRes = await fetch(`${url}/rest/v1/invoices?id=eq.${invoiceId}&select=id`, { headers });
+    const iRes = await fetch(`${url}/rest/v1/invoices?id=eq.${invoiceId}&select=id,positions`, { headers });
     if (!iRes.ok) throw new Error(await iRes.text());
-    if (!(await iRes.json())?.length) return fehler('Rechnung nicht gefunden.', 404);
+    const inv = (await iRes.json())?.[0];
+    if (!inv) return fehler('Rechnung nicht gefunden.', 404);
+    let positionNr: number | null = null;
+    if (body?.position_nr !== undefined && body.position_nr !== null && body.position_nr !== '') {
+      const n = Number(body.position_nr);
+      const anzahl = Array.isArray(inv.positions) ? inv.positions.length : 0;
+      if (!Number.isInteger(n) || n < 0 || n >= anzahl) return fehler('Diese Position gibt es auf der Rechnung nicht.');
+      positionNr = n;
+    }
     const cRes = await fetch(`${url}/rest/v1/invoice_attachments?invoice_id=eq.${invoiceId}&bestaetigt_am=not.is.null&select=id`, { headers });
     if (!cRes.ok) throw new Error(await cRes.text());
     if ((await cRes.json()).length >= MAX_ANHAENGE) return fehler(`Es sind höchstens ${MAX_ANHAENGE} Anhänge je Rechnung möglich.`, 422);
@@ -77,7 +85,7 @@ export async function POST(req: NextRequest) {
     const storagePath = anhangPfad(invoiceId, id, p.name);
     const ins = await fetch(`${url}/rest/v1/invoice_attachments`, {
       method: 'POST', headers: { ...headers, Prefer: 'return=minimal' },
-      body: JSON.stringify({ id, invoice_id: invoiceId, storage_path: storagePath, file_name: p.name, file_type: p.mime, size_bytes: Math.round(Number(body.size)), uploaded_by: c.userId }),
+      body: JSON.stringify({ id, invoice_id: invoiceId, storage_path: storagePath, file_name: p.name, file_type: p.mime, size_bytes: Math.round(Number(body.size)), uploaded_by: c.userId, position_nr: positionNr }),
     });
     if (!ins.ok) throw new Error(await ins.text());
     return NextResponse.json({ success: true, id, path: storagePath, token: await uploadToken(storagePath), mime: p.mime });

@@ -32,3 +32,12 @@ describe('Namen und Pfade', () => {
     expect(groesseText(1572864)).toBe('1,5 MB')
   })
 })
+
+describe('Videos', () => {
+  it('erlaubt Videos bis 50 MB, andere Dateien nur bis 10 MB', () => {
+    expect(pruefeAnhang({ name: 'Zugang.mp4', size: 40 * 1024 * 1024 })).toMatchObject({ ok: true, mime: 'video/mp4' })
+    expect(pruefeAnhang({ name: 'Zugang.MOV', size: 10 }).ok).toBe(true)
+    expect(pruefeAnhang({ name: 'Zugang.mp4', size: 51 * 1024 * 1024 }).ok).toBe(false)
+    expect(pruefeAnhang({ name: 'a.pdf', size: 11 * 1024 * 1024 }).ok).toBe(false)
+  })
+})

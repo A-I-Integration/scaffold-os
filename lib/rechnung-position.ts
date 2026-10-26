@@ -27,6 +27,10 @@ export interface StrukturPosition {
   listenpreis?: number
   /** Faktor in % (100 = keiner) */
   faktorProzent?: number
+  /** Welches Gerüst (z. B. „Hauptgebäude Süd“, „Nebengebäude Ost“) – ordnet die Position eindeutig zu */
+  geruestId?: string
+  /** Begründung/Zusatzvereinbarung zur Position (z. B. warum eine Sonderleistung nötig war) */
+  bemerkung?: string
   /** Stundenlohn: wer hat gearbeitet */
   mitarbeiter?: string
   /** Stundenlohn: was wurde gemacht */
@@ -62,6 +66,8 @@ export function bereinigePosition(p: any): StrukturPosition {
   const lp = nichtNegativ(p?.listenpreis)
   if (lp) r.listenpreis = lp
   if (faktor !== undefined && faktor > 0 && faktor <= 1000 && faktor !== 100) r.faktorProzent = faktor
+  const g = text(p?.geruestId, 60); if (g) r.geruestId = g
+  const bem = text(p?.bemerkung, 1000); if (bem) r.bemerkung = bem
   const m = text(p?.mitarbeiter, 120); if (m) r.mitarbeiter = m
   const t = text(p?.taetigkeit, 500); if (t) r.taetigkeit = t
   return r
@@ -78,6 +84,7 @@ const eur = (n: number) => n.toLocaleString('de-DE', { minimumFractionDigits: 2,
 /** Zusatzzeilen unter der Bezeichnung (Art, Maße, Faktor, Mitarbeiter, Tätigkeit) – für PDF und Prüfansicht. */
 export function positionDetailZeilen(p: Partial<StrukturPosition>): string[] {
   const z: string[] = []
+  if (p.geruestId) z.push(`Gerüst: ${p.geruestId}`)
   if (p.art && p.art !== 'sonstiges') z.push(POSITION_ART_LABEL[p.art])
   const maße = [p.laengeM, p.breiteM, p.hoeheM].filter((x): x is number => typeof x === 'number' && x > 0)
   if (maße.length) {
@@ -89,5 +96,6 @@ export function positionDetailZeilen(p: Partial<StrukturPosition>): string[] {
   }
   if (p.mitarbeiter) z.push(`Mitarbeiter: ${p.mitarbeiter}`)
   if (p.taetigkeit) z.push(`Tätigkeit: ${p.taetigkeit}`)
+  if (p.bemerkung) z.push(`Bemerkung: ${p.bemerkung}`)
   return z
 }

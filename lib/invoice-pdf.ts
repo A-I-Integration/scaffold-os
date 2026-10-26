@@ -27,6 +27,8 @@ export interface Position {
   faktorProzent?: number;
   mitarbeiter?: string;
   taetigkeit?: string;
+  geruestId?: string;
+  bemerkung?: string;
 }
 
 export interface Invoice {
