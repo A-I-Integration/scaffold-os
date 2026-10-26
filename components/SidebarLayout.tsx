@@ -141,7 +141,7 @@ export default function SidebarLayout({ children }: { children: React.ReactNode 
   useEffect(() => {
     // Auf dem Handy eingeklappt starten
     if (typeof window !== 'undefined' && window.innerWidth < 768) setOpen(false);
-    const pruefeBreite = () => { setGrossBildschirm(window.innerWidth >= 1024); setBreite(window.innerWidth); };
+    const pruefeBreite = () => { setGrossBildschirm(window.innerWidth >= 900); setBreite(window.innerWidth); };
     pruefeBreite();
     window.addEventListener('resize', pruefeBreite);
     try { const a = localStorage.getItem('scaffold_ansicht'); setKlassisch(a === 'klassisch'); setDesktopErzwungen(a === 'desktop'); } catch { /* ohne Speicher: Desktop-Ansicht */ }
