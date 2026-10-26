@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
+import { WIN } from '@/components/win/Win';
 import { Suspense } from 'react';
 import {
   generateInvoicePDF, generateMahnungPDF, fmtEur, fmtDate, holePdfBase64FuerVersand,
@@ -552,8 +553,17 @@ function RechnungenContent() {
   const abschlagSumme = abschlaegeKunde.reduce((s, i) => s + Number(i.gross_amount), 0);
 
   return (
-    <div className="min-h-screen bg-[#fbfbfd] p-4 md:p-8">
-      <div className="max-w-6xl mx-auto space-y-6">
+    <div className="min-h-full" style={{ background: WIN.grund }}>
+      <div className="flex items-center gap-3 px-3 h-9 text-white sticky top-0 z-20" style={{ background: 'linear-gradient(#4a86c8,#2d63a3)' }}>
+        <FileText className="h-4 w-4" />
+        <h1 className="text-[14px] font-bold">Rechnungen</h1>
+        <span className="text-xs opacity-80">{invoices.length} Rechnungen · {fmtEur(summeOffen)} € offen</span>
+        <span className="ml-auto flex gap-1.5">
+          <button onClick={handleDatevExport} className="flex items-center gap-1 rounded px-3 py-1 text-xs font-semibold bg-white/15 hover:bg-white/25"><Download className="h-3.5 w-3.5" /> DATEV-Buchungsstapel</button>
+          <button onClick={() => setShowForm(!showForm)} className="flex items-center gap-1 rounded px-3 py-1 text-xs font-semibold" style={{ background: WIN.akzent }}>{showForm ? <X className="h-3.5 w-3.5" /> : <Plus className="h-3.5 w-3.5" />}{showForm ? 'Abbrechen' : 'Neue Rechnung'}</button>
+        </span>
+      </div>
+      <div className="p-4 space-y-4">
         {/* Phase 14: Firmenprofil-Hinweis */}
         {companyMissing && (
           <div className="rounded-xl border border-[#e8590c]/40 bg-[#e8590c]/10 p-4 text-sm text-amber-800">
@@ -564,34 +574,6 @@ function RechnungenContent() {
             </Link>
           </div>
         )}
-
-        {/* Kopf */}
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="flex items-center gap-3">
-            <FileText className="h-8 w-8 text-[#e8590c]" />
-            <div>
-              <h1 className="text-2xl font-bold text-[#1d1d1f]">Rechnungen</h1>
-              <p className="text-sm text-[#86868b]">
-                {invoices.length} Rechnungen · {fmtEur(summeOffen)} € offen
-              </p>
-            </div>
-          </div>
-          <div className="flex gap-2">
-            <button
-              onClick={handleDatevExport}
-              className="flex items-center gap-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 px-4 py-2 text-sm font-semibold text-white transition-colors"
-            >
-              <Download className="h-4 w-4" /> DATEV-Buchungsstapel
-            </button>
-            <button
-              onClick={() => setShowForm(!showForm)}
-              className="flex items-center gap-2 rounded-xl bg-blue-600 hover:bg-blue-500 px-4 py-2 text-sm font-semibold text-white transition-colors"
-            >
-              {showForm ? <X className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
-              {showForm ? 'Abbrechen' : 'Neue Rechnung'}
-            </button>
-          </div>
-        </div>
 
         {/* Neue Rechnung */}
         {showForm && (
@@ -852,13 +834,13 @@ function RechnungenContent() {
             <div className="overflow-x-auto">
             <table className="w-full min-w-[720px] text-sm">
               <thead>
-                <tr className="text-left text-[#86868b] border-b border-black/10">
-                  <th className="p-4">Nummer</th>
-                  <th className="p-4">Kunde</th>
-                  <th className="p-4">Datum</th>
-                  <th className="p-4 text-right">Betrag</th>
-                  <th className="p-4">Status</th>
-                  <th className="p-4 text-right">Aktionen</th>
+                <tr className="text-left text-[#86868b] border-b" style={{ background: WIN.grund, borderColor: WIN.rand }}>
+                  <th className="px-2 py-1.5">Nummer</th>
+                  <th className="px-2 py-1.5">Kunde</th>
+                  <th className="px-2 py-1.5">Datum</th>
+                  <th className="px-2 py-1.5 text-right">Betrag</th>
+                  <th className="px-2 py-1.5">Status</th>
+                  <th className="px-2 py-1.5 text-right">Aktionen</th>
                 </tr>
               </thead>
               <tbody>
@@ -866,7 +848,7 @@ function RechnungenContent() {
                   const effStatus = isOverdue(inv) ? 'ueberfaellig' : inv.status;
                   return (
                     <tr key={inv.id} className="border-b border-black/10/50 hover:bg-black/10/30">
-                      <td className="p-4 font-mono text-[#e8590c]">
+                      <td className="px-2 py-1.5 font-mono text-[#e8590c]">
                         <Link href={`/rechnungen/${inv.id}`} className="hover:underline">{inv.invoice_number}</Link>
                         {inv.invoice_type && inv.invoice_type !== 'standard' && (
                           <span className="ml-2 text-[10px] font-sans px-1.5 py-0.5 rounded bg-blue-500/20 text-blue-700 border border-blue-500/40">
@@ -898,15 +880,15 @@ function RechnungenContent() {
                           </span>
                         )}
                       </td>
-                      <td className="p-4 text-[#1d1d1f]">{inv.customer_name}</td>
-                      <td className="p-4 text-[#424245]">{fmtDate(inv.invoice_date)}</td>
-                      <td className="p-4 text-right text-[#1d1d1f]">
+                      <td className="px-2 py-1.5 text-[#1d1d1f]">{inv.customer_name}</td>
+                      <td className="px-2 py-1.5 text-[#424245]">{fmtDate(inv.invoice_date)}</td>
+                      <td className="px-2 py-1.5 text-right text-[#1d1d1f]">
                         {fmtEur(Number(inv.gross_amount))} €
                         {Number(inv.paid_amount) > 0 && inv.status !== 'bezahlt' && (
                           <div className="text-[10px] text-blue-700">Teilzahlung {fmtEur(Number(inv.paid_amount))} € · offen {fmtEur(Number(inv.gross_amount) - Number(inv.paid_amount))} €</div>
                         )}
                       </td>
-                      <td className="p-4">
+                      <td className="px-2 py-1.5">
                         <select
                           value={inv.status}
                           onChange={(e) => handleStatus(inv, e.target.value)}
@@ -919,7 +901,7 @@ function RechnungenContent() {
                           ))}
                         </select>
                       </td>
-                      <td className="p-4">
+                      <td className="px-2 py-1.5">
                         <div className="flex justify-end gap-2">
                           <button
                             onClick={() => handlePDF(inv)}

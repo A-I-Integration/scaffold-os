@@ -8,6 +8,7 @@ import {
 import { generateInvoicePDF, fmtEur, fmtDate, holePdfBase64FuerVersand, type Invoice } from '@/lib/invoice-pdf';
 import KundeAuftrag from '@/components/KundeAuftrag';
 import { lokalesDatumIso } from '@/lib/datum'
+import { WIN } from '@/components/win/Win'
 
 // ============================================================
 // SCAFFOLD OS – Kunden (Reiter für Admin/CEO + Disposition)
@@ -284,34 +285,17 @@ export default function KundenPage() {
     'w-full px-3 py-2 bg-black/10 border border-black/10 rounded-xl text-sm text-[#1d1d1f] focus:outline-none focus:border-[#e8590c]';
 
   return (
-    <div className="min-h-screen bg-[#fbfbfd] p-4 md:p-8">
-      <div className="max-w-6xl mx-auto space-y-6">
-        {/* Kopf */}
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="flex items-center gap-3">
-            <Users className="h-8 w-8 text-[#e8590c]" />
-            <div>
-              <h1 className="text-2xl font-bold text-[#1d1d1f]">Kunden</h1>
-              <p className="text-sm text-[#86868b]">
-                {kunden.length} Kunden · {invoices.length} Rechnungen im System
-              </p>
-            </div>
-          </div>
-          <div className="flex gap-2">
-            <a
-              href="/kunden/import"
-              className="flex items-center gap-2 rounded-xl bg-black/5 hover:bg-black/10 px-4 py-2 text-sm font-semibold text-[#1d1d1f] transition-colors"
-            >
-              📥 Import
-            </a>
-            <button
-              onClick={neuAnlegen}
-              className="flex items-center gap-2 rounded-xl bg-blue-600 hover:bg-blue-500 px-4 py-2 text-sm font-semibold text-white transition-colors"
-            >
-              <Plus className="h-4 w-4" /> Neuer Kunde
-            </button>
-          </div>
-        </div>
+    <div className="min-h-full" style={{ background: WIN.grund }}>
+      <div className="flex items-center gap-3 px-3 h-9 text-white sticky top-0 z-20" style={{ background: 'linear-gradient(#4a86c8,#2d63a3)' }}>
+        <Users className="h-4 w-4" />
+        <h1 className="text-[14px] font-bold">Kunden / Adressen</h1>
+        <span className="text-xs opacity-80">{kunden.length} Kunden · {invoices.length} Rechnungen im System</span>
+        <span className="ml-auto flex gap-1.5">
+          <a href="/kunden/import" className="rounded px-3 py-1 text-xs font-semibold bg-white/15 hover:bg-white/25">Import</a>
+          <button onClick={neuAnlegen} className="flex items-center gap-1 rounded px-3 py-1 text-xs font-semibold" style={{ background: WIN.akzent }}><Plus className="h-3.5 w-3.5" /> Neuer Kunde</button>
+        </span>
+      </div>
+      <div className="p-4 space-y-4">
 
         {/* Hinweis, falls die Kundenstamm-Migration noch fehlt */}
         {migrationFehlt && (
@@ -346,7 +330,7 @@ export default function KundenPage() {
               <span className="ml-auto self-center text-[#86868b]">{gefiltert.length} Kunde{gefiltert.length !== 1 ? 'n' : ''}</span>
             </div>
 
-            <div className="bg-[#f5f5f7] rounded-xl border border-blue-500/20 overflow-hidden">
+            <div className="bg-white border overflow-hidden" style={{ borderColor: WIN.rand }}>
               {loading ? (
                 <p className="p-6 text-[#86868b] text-sm">Lade Kunden…</p>
               ) : gefiltert.length === 0 ? (
