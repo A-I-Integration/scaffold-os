@@ -11,19 +11,19 @@ import { useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useParams, useRouter } from 'next/navigation'
 import { generateInvoicePDF, holePdfBase64FuerVersand, fmtEur, fmtDate, TYPE_LABEL, type Invoice, type Position } from '@/lib/invoice-pdf'
+import { Download, FileText, Send, Link2, Pencil, PlusCircle, Scissors, ReceiptText, Euro, CheckCircle2, RotateCcw, Trash2, Paperclip } from 'lucide-react'
+import { Titelleiste, Menueband, BandGruppe, BandKnopf, BaumKnoten, DokumentReiter, Statusleiste, Aufgabenbereich, WIN } from '@/components/win/Win'
 import AnhangDialog from '@/components/rechnung/AnhangDialog'
 import { lokalesDatumIso, datumPlusTage } from '@/lib/datum'
 
 type Tab = 'rechnung' | 'version' | 'bestellwert' | 'teilabbau' | 'gutschrift' | 'zahlung' | 'verlauf'
-const TABS: { key: Tab; label: string }[] = [
-  { key: 'rechnung', label: 'Rechnung' },
-  { key: 'version', label: 'Positionen ändern' },
-  { key: 'bestellwert', label: 'Bestellwerterhöhung' },
-  { key: 'teilabbau', label: 'Teilabbau' },
-  { key: 'gutschrift', label: 'Gutschrift' },
-  { key: 'zahlung', label: 'Zahlungen' },
+const ANSICHTEN = [
+  { key: 'vorschau', label: 'Vorschau' },
+  { key: 'positionen', label: 'Positionen' },
+  { key: 'zahlungen', label: 'Zahlungen' },
   { key: 'verlauf', label: 'Versand & Anhänge' },
 ]
+const AUFGABEN_TITEL: Record<string, string> = { version: 'Positionen ändern', bestellwert: 'Bestellwerterhöhung', teilabbau: 'Teilabbau', gutschrift: 'Gutschrift', zahlung: 'Zahlung erfassen' }
 const LEER: Position = { bezeichnung: '', menge: 1, einheit: 'Stk.', einzelpreis: 0 }
 const feld = 'w-full px-2 py-1.5 border rounded-lg text-sm bg-white'
 const knopf = 'rounded-full px-4 py-2 text-sm font-semibold'
@@ -60,6 +60,9 @@ export default function RechnungAktePage() {
   const [inv, setInv] = useState<Invoice | null>(null)
   const [fehler, setFehler] = useState('')
   const [tab, setTab] = useState<Tab>('rechnung')
+  const [ansicht, setAnsicht] = useState('vorschau')
+  const [belege, setBelege] = useState<Invoice[]>([])
+  const [baustelleName, setBaustelleName] = useState('')
   const [pdfUrl, setPdfUrl] = useState('')
   const [busy, setBusy] = useState(false)
   const [anhangOffen, setAnhangOffen] = useState(false)
@@ -83,6 +86,8 @@ export default function RechnungAktePage() {
       const i = j.invoice as Invoice
       setInv(i); setPositionen(structuredClone(i.positions || [])); setFehler('')
       setZBetrag(String(Math.max(0, Number(i.gross_amount) - Number(i.paid_amount || 0))))
+      fetch('/api/invoices').then((x) => x.json()).then((a) => a?.success && setBelege((a.invoices as Invoice[]).filter((b) => i.project_id ? b.project_id === i.project_id : b.id === i.id))).catch(() => {})
+      if (i.project_id) fetch('/api/projects?id=' + i.project_id).then((x) => x.json()).then((pj) => setBaustelleName(pj?.project?.name || '')).catch(() => {}); else setBaustelleName('')
       fetch(`/api/invoice-payments?invoice_id=${i.id}`).then((x) => x.json()).then((p) => p?.success && setZahlungen(p.payments)).catch(() => {})
       fetch(`/api/email-log?invoice_numbers=${encodeURIComponent(i.invoice_number)}`).then((x) => x.json()).then((m) => m?.success && setMails(m.emails || [])).catch(() => {})
     } catch (e) { setFehler(e instanceof Error ? e.message : 'Laden fehlgeschlagen') }
@@ -114,7 +119,7 @@ export default function RechnungAktePage() {
     throw new Error(j.error || 'Speichern fehlgeschlagen')
   }
   const lauf = async (f: () => Promise<void>) => { setBusy(true); try { await f() } catch (e) { alert('❌ ' + (e instanceof Error ? e.message : 'Fehlgeschlagen')) } finally { setBusy(false) } }
-  const gehZu = (neu: Invoice) => { setTab('rechnung'); router.push(`/rechnungen/${neu.id}`) }
+  const gehZu = (neu: Invoice) => { setTab('rechnung'); setAnsicht('vorschau'); router.push(`/rechnungen/${neu.id}`) }
 
   const basis = () => inv ? {
     project_id: inv.project_id, customer_id: inv.customer_id, customer_name: inv.customer_name, customer_address: inv.customer_address,
@@ -224,134 +229,176 @@ export default function RechnungAktePage() {
   const zurueck = inv.project_id && inv.customer_id ? `/kunden/${inv.customer_id}?baustelle=${inv.project_id}` : inv.customer_id ? `/kunden/${inv.customer_id}` : '/rechnungen'
   const offen = Number(inv.gross_amount) - Number(inv.paid_amount || 0)
   const gesperrt = storniert ? 'Diese Rechnung ist storniert – bitte in der aktuellen Version arbeiten.' : ''
+  const statusText = storniert ? 'storniert' : inv.status === 'bezahlt' ? 'bezahlt' : Number(inv.paid_amount) > 0 && offen > 0 ? 'teilbezahlt' : inv.status === 'ueberfaellig' ? 'überfällig' : 'offen'
+  const ic = 'w-5 h-5'
+  const aufgabe = tab === 'rechnung' ? null : tab
+  const waehle = (t: Tab) => { setTab(tab === t ? 'rechnung' : t); if (t === 'version' || t === 'teilabbau') setPositionen(structuredClone(inv.positions || [])) }
+  const eingabe = 'w-full px-2 py-1.5 border rounded text-sm bg-white'
+  const primaer = 'w-full rounded px-3 py-2 text-sm font-semibold text-white disabled:opacity-40'
 
   return (
-    <div className="min-h-screen bg-[#f5f5f7]">
-      {/* Kopfleiste */}
-      <div className="sticky top-0 z-10 bg-white border-b border-black/10 px-4 py-3 flex flex-wrap items-center gap-3">
-        <Link href={zurueck} className="text-sm text-[#6e6e73]">← Zurück</Link>
-        <h1 className="font-semibold">{typ} <span className="font-mono text-[#e8590c]">{inv.invoice_number}</span></h1>
-        <span className="text-xs px-2 py-0.5 rounded-full border border-black/10">{storniert ? 'storniert' : inv.status === 'bezahlt' ? 'bezahlt' : offen > 0 && inv.paid_amount ? 'teilbezahlt' : inv.status}</span>
-        {inv.importiert && <span className="text-xs px-2 py-0.5 rounded bg-black/5 text-[#6e6e73]">Altbestand</span>}
-        <span className="text-sm text-[#6e6e73]">{inv.customer_name}</span>
-        <div className="ml-auto flex flex-wrap gap-2">
-          <button onClick={pruefLink} disabled={busy || storniert || gutschrift} className={`${knopf} border border-black/15 disabled:opacity-40`}>Prüflink</button>
-          <button onClick={pdfSpeichern} className={`${knopf} border border-black/15`}>PDF speichern</button>
-          <button onClick={zugferd} disabled={busy} className={`${knopf} border border-black/15`}>E-Rechnung laden</button>
-          {!storniert && !gutschrift && <button onClick={bezahltUmschalten} disabled={busy} className={`${knopf} border border-black/15`}>{inv.status === 'bezahlt' ? 'Wieder offen' : 'Als bezahlt'}</button>}
-          <button onClick={loeschen} disabled={busy} className={`${knopf} text-red-600`}>Löschen</button>
-          <button onClick={versenden} disabled={busy || storniert} className={`${knopf} bg-[#e8590c] text-white disabled:opacity-40`}>Per E-Mail versenden</button>
-        </div>
-      </div>
+    <div className="flex flex-col h-screen" style={{ background: WIN.grund, color: WIN.text }}>
+      <Titelleiste titel="SCAFFOLD OS" untertitel={`${typ} ${inv.invoice_number} · ${inv.customer_name}`} rechts={<Link href={zurueck} className="text-xs opacity-80 hover:opacity-100">✕ Schließen</Link>} />
 
-      <div className="grid lg:grid-cols-[190px_360px_1fr] gap-4 p-4">
-        {/* Links: Reiter */}
-        <nav className="flex lg:flex-col gap-1 overflow-x-auto">
-          {TABS.map((t) => (
-            <button key={t.key} onClick={() => setTab(t.key)} className={`text-left whitespace-nowrap rounded-xl px-3 py-2 text-sm ${tab === t.key ? 'bg-white border border-[#e8590c] font-semibold' : 'hover:bg-white/70'}`}>{t.label}</button>
+      {/* Menüband */}
+      <Menueband>
+        <BandGruppe name="Dokument">
+          <BandKnopf icon={<Download className={ic} />} label="PDF speichern" onClick={pdfSpeichern} />
+          <BandKnopf icon={<FileText className={ic} />} label="E-Rechnung laden" onClick={zugferd} disabled={busy} titel="PDF mit eingebetteter E-Rechnung (ZUGFeRD)" />
+          <BandKnopf icon={<Paperclip className={ic} />} label="Anhänge" onClick={() => setAnhangOffen(true)} />
+        </BandGruppe>
+        <BandGruppe name="Versand">
+          <BandKnopf icon={<Send className={ic} />} label="Per E-Mail senden" onClick={versenden} disabled={busy || storniert} titel="Mit E-Rechnung, wenn möglich" />
+          <BandKnopf icon={<Link2 className={ic} />} label="Prüflink" onClick={pruefLink} disabled={busy || storniert || gutschrift} />
+        </BandGruppe>
+        <BandGruppe name="Bearbeiten">
+          <BandKnopf icon={<Pencil className={ic} />} label="Positionen ändern" onClick={() => waehle('version')} aktiv={tab === 'version'} disabled={storniert} />
+          <BandKnopf icon={<PlusCircle className={ic} />} label="Bestellwert-erhöhung" onClick={() => waehle('bestellwert')} aktiv={tab === 'bestellwert'} disabled={storniert} />
+          <BandKnopf icon={<Scissors className={ic} />} label="Teilabbau" onClick={() => waehle('teilabbau')} aktiv={tab === 'teilabbau'} disabled={storniert || gutschrift} />
+          <BandKnopf icon={<ReceiptText className={ic} />} label="Gutschrift" onClick={() => waehle('gutschrift')} aktiv={tab === 'gutschrift'} disabled={storniert || gutschrift} />
+        </BandGruppe>
+        <BandGruppe name="Zahlung">
+          <BandKnopf icon={<Euro className={ic} />} label="Zahlung erfassen" onClick={() => waehle('zahlung')} aktiv={tab === 'zahlung'} disabled={storniert || gutschrift} />
+          <BandKnopf icon={inv.status === 'bezahlt' ? <RotateCcw className={ic} /> : <CheckCircle2 className={ic} />} label={inv.status === 'bezahlt' ? 'Wieder offen' : 'Als bezahlt'} onClick={bezahltUmschalten} disabled={busy || storniert || gutschrift} />
+        </BandGruppe>
+        <BandGruppe name="Verwalten">
+          <BandKnopf icon={<Trash2 className={ic} />} label="Löschen" onClick={loeschen} disabled={busy} gefahr />
+        </BandGruppe>
+      </Menueband>
+
+      <div className={`flex-1 min-h-0 grid lg:grid-cols-[240px_1fr] ${aufgabe ? 'xl:grid-cols-[240px_1fr_340px]' : ''}`}>
+        {/* Links: Baumansicht */}
+        <nav className="hidden lg:block border-r overflow-y-auto bg-white" style={{ borderColor: WIN.rand }}>
+          <div className="px-3 py-2 text-[11px] uppercase tracking-wide" style={{ color: WIN.textGedaempft }}>Navigation</div>
+          <BaumKnoten ebene={0} symbol="👤" label={inv.customer_name} href={inv.customer_id ? `/kunden/${inv.customer_id}` : undefined} />
+          {inv.project_id && <BaumKnoten ebene={1} symbol="🏗" label={baustelleName || 'Baustelle'} href={inv.customer_id ? `/kunden/${inv.customer_id}?baustelle=${inv.project_id}` : undefined} />}
+          <div className="px-3 pt-2 pb-1 text-[11px] uppercase tracking-wide" style={{ color: WIN.textGedaempft, paddingLeft: 8 + 2 * 14 }}>Rechnungen</div>
+          {[...belege].sort((a, b) => a.invoice_number.localeCompare(b.invoice_number)).map((b) => (
+            <BaumKnoten key={b.id} ebene={2} symbol={b.invoice_type === 'gutschrift' ? '↩' : '🧾'} label={`${b.invoice_number}${b.status === 'storniert' ? ' (storniert)' : ''}`} aktiv={b.id === inv.id} href={`/rechnungen/${b.id}`} rechts={`${fmtEur(Number(b.gross_amount))} €`} />
           ))}
+          {inv.project_id && inv.customer_id && <BaumKnoten ebene={1} symbol="📋" label="Leistungsverzeichnis" href={`/kunden/${inv.customer_id}?baustelle=${inv.project_id}&tab=lv`} />}
         </nav>
 
-        {/* Bearbeiten */}
-        <section className="rounded-2xl bg-white border border-black/10 p-4 space-y-3 self-start">
-          {tab !== 'rechnung' && tab !== 'zahlung' && tab !== 'verlauf' && gesperrt && <p className="text-sm text-red-600">{gesperrt}</p>}
+        {/* Mitte: Dokument mit Reitern */}
+        <main className="flex flex-col min-h-0 min-w-0">
+          <DokumentReiter reiter={ANSICHTEN} aktiv={ansicht} onWahl={setAnsicht} />
+          <div className="flex-1 min-h-0 overflow-auto bg-white border-x border-b m-0" style={{ borderColor: WIN.rand }}>
+            {ansicht === 'vorschau' && (pdfUrl
+              ? <iframe title={`${typ} ${inv.invoice_number}`} src={pdfUrl} className="w-full h-full min-h-[60vh]" />
+              : <p className="p-6 text-sm" style={{ color: WIN.textGedaempft }}>Vorschau nicht verfügbar – „PDF speichern“ funktioniert trotzdem.</p>)}
 
-          {tab === 'rechnung' && (
-            <div className="space-y-2 text-sm">
-              <p><span className="text-[#6e6e73]">Kunde</span><br />{inv.customer_name}{inv.customer_address ? `, ${inv.customer_address}` : ''}</p>
-              <p><span className="text-[#6e6e73]">Rechnungsdatum</span> {fmtDate(inv.invoice_date)} · <span className="text-[#6e6e73]">fällig</span> {fmtDate(inv.due_date)}</p>
-              {inv.geruest_nr && <p><span className="text-[#6e6e73]">Gerüst</span> {inv.geruest_nr}</p>}
-              {inv.reference_invoice_number && <p><span className="text-[#6e6e73]">Bezug</span> {inv.reference_invoice_number}</p>}
-              <ul className="divide-y divide-black/5">
-                {(inv.positions || []).map((p, i) => (
-                  <li key={i} className="py-1.5 flex justify-between gap-2"><span>{p.bezeichnung}<br /><span className="text-xs text-[#86868b]">{p.menge} {p.einheit} × {fmtEur(p.einzelpreis)} €</span></span><span className="tabular-nums">{fmtEur(p.menge * p.einzelpreis)} €</span></li>
-                ))}
-              </ul>
-              <p className="text-right">Netto {fmtEur(Number(inv.net_amount))} € · Brutto <strong>{fmtEur(Number(inv.gross_amount))} €</strong></p>
-              {Number(inv.paid_amount) > 0 && <p className="text-right text-[#6e6e73]">Bezahlt {fmtEur(Number(inv.paid_amount))} € · offen {fmtEur(offen)} €</p>}
-              {inv.pruef_status && (
-                <p className="rounded-lg bg-black/5 px-3 py-2">Prüfung durch den Auftraggeber: <strong>{inv.pruef_status === 'akzeptiert' ? 'akzeptiert' : inv.pruef_status === 'aenderung' ? 'Änderung gewünscht' : 'abgelehnt'}</strong>{inv.geprueft_von ? ` von ${inv.geprueft_von}` : ''}{inv.geprueft_am ? ` am ${new Date(inv.geprueft_am).toLocaleDateString("de-DE")}` : ''}</p>
-              )}
-              {inv.notes && <p className="text-xs text-[#6e6e73] whitespace-pre-line">{inv.notes}</p>}
-            </div>
-          )}
-
-          {tab === 'version' && (
-            <>
-              <p className="text-xs text-[#6e6e73]">Positionen ändern: es entsteht eine neue Rechnung, {inv.invoice_number} wird automatisch storniert.</p>
-              <PositionenEditor positionen={positionen} setPositionen={setPositionen} />
-              <button disabled={busy || storniert} onClick={() => neueVersion(positionen, '')} className={`${knopf} bg-[#e8590c] text-white w-full disabled:opacity-40`}>Als neue Version speichern</button>
-            </>
-          )}
-
-          {tab === 'teilabbau' && (
-            <>
-              <p className="text-xs text-[#6e6e73]">Wie viel Prozent sind abgebaut? Alle Mengen werden auf den Rest gekürzt, danach kannst du jede Position noch anpassen. Die alte Rechnung wird storniert.</p>
-              <div className="flex gap-2 items-center">
-                <input className={`${feld} w-24`} value={prozent} onChange={(e) => setProzent(e.target.value)} inputMode="decimal" aria-label="Prozent abgebaut" /> <span className="text-sm">% abgebaut</span>
-                <button type="button" onClick={() => {
-                  const p = zahl(prozent)
-                  if (!(p > 0 && p <= 100)) { alert('Bitte eine Zahl zwischen 1 und 100 eingeben.'); return }
-                  setPositionen((inv.positions || []).map((x) => ({ ...x, menge: Math.round(Number(x.menge) * ((100 - p) / 100) * 100) / 100 })))
-                }} className={`${knopf} border border-black/15`}>Kürzen</button>
+            {ansicht === 'positionen' && (
+              <div className="p-4 text-sm space-y-3">
+                <p><span style={{ color: WIN.textGedaempft }}>Kunde:</span> {inv.customer_name}{inv.customer_address ? `, ${inv.customer_address}` : ''} · <span style={{ color: WIN.textGedaempft }}>Datum:</span> {fmtDate(inv.invoice_date)} · <span style={{ color: WIN.textGedaempft }}>fällig:</span> {fmtDate(inv.due_date)}{inv.geruest_nr ? ` · Gerüst ${inv.geruest_nr}` : ''}{inv.reference_invoice_number ? ` · Bezug ${inv.reference_invoice_number}` : ''}</p>
+                <table className="w-full border-collapse">
+                  <thead><tr className="text-left text-xs" style={{ background: WIN.grund, color: WIN.textGedaempft }}><th className="p-2 border" style={{ borderColor: WIN.rand }}>Bezeichnung</th><th className="p-2 border text-right" style={{ borderColor: WIN.rand }}>Menge</th><th className="p-2 border" style={{ borderColor: WIN.rand }}>Einheit</th><th className="p-2 border text-right" style={{ borderColor: WIN.rand }}>Einzelpreis</th><th className="p-2 border text-right" style={{ borderColor: WIN.rand }}>Gesamt</th></tr></thead>
+                  <tbody>
+                    {(inv.positions || []).map((p, i) => (
+                      <tr key={i} className="hover:bg-[#eef4fa]"><td className="p-2 border" style={{ borderColor: WIN.randHell }}>{p.bezeichnung}{p.geruestId ? <span className="text-xs ml-2" style={{ color: WIN.textGedaempft }}>[{p.geruestId}]</span> : null}</td><td className="p-2 border text-right tabular-nums" style={{ borderColor: WIN.randHell }}>{p.menge}</td><td className="p-2 border" style={{ borderColor: WIN.randHell }}>{p.einheit}</td><td className="p-2 border text-right tabular-nums" style={{ borderColor: WIN.randHell }}>{fmtEur(p.einzelpreis)} €</td><td className="p-2 border text-right tabular-nums" style={{ borderColor: WIN.randHell }}>{fmtEur(p.menge * p.einzelpreis)} €</td></tr>
+                    ))}
+                  </tbody>
+                  <tfoot>
+                    <tr><td colSpan={4} className="p-2 text-right" style={{ color: WIN.textGedaempft }}>Netto</td><td className="p-2 text-right tabular-nums">{fmtEur(Number(inv.net_amount))} €</td></tr>
+                    <tr><td colSpan={4} className="p-2 text-right" style={{ color: WIN.textGedaempft }}>USt {inv.tax_rate} %</td><td className="p-2 text-right tabular-nums">{fmtEur(Number(inv.tax_amount))} €</td></tr>
+                    <tr className="font-semibold"><td colSpan={4} className="p-2 text-right">Brutto</td><td className="p-2 text-right tabular-nums">{fmtEur(Number(inv.gross_amount))} €</td></tr>
+                  </tfoot>
+                </table>
+                {inv.pruef_status && <p className="rounded px-3 py-2" style={{ background: WIN.grund }}>Prüfung durch den Auftraggeber: <strong>{inv.pruef_status === 'akzeptiert' ? 'akzeptiert' : inv.pruef_status === 'aenderung' ? 'Änderung gewünscht' : 'abgelehnt'}</strong>{inv.geprueft_von ? ` von ${inv.geprueft_von}` : ''}{inv.geprueft_am ? ` am ${new Date(inv.geprueft_am).toLocaleDateString('de-DE')}` : ''}</p>}
+                {inv.notes && <p className="text-xs whitespace-pre-line" style={{ color: WIN.textGedaempft }}>{inv.notes}</p>}
               </div>
-              <PositionenEditor positionen={positionen} setPositionen={setPositionen} />
-              <button disabled={busy || storniert} onClick={() => neueVersion(positionen, `Teilabbau: ${zahl(prozent)} % abgebaut.`)} className={`${knopf} bg-[#e8590c] text-white w-full disabled:opacity-40`}>Gekürzte Rechnung speichern</button>
-            </>
-          )}
+            )}
 
-          {tab === 'bestellwert' && (
-            <>
-              <p className="text-xs text-[#6e6e73]">Zusätzliche Leistungen: es entsteht eine eigene Rechnung mit Bezug auf {inv.invoice_number}. Die bestehende Rechnung bleibt unverändert.</p>
-              <PositionenEditor positionen={neuePos} setPositionen={setNeuePos} />
-              <button disabled={busy || storniert} onClick={bestellwert} className={`${knopf} bg-[#e8590c] text-white w-full disabled:opacity-40`}>Rechnung für Mehrleistung anlegen</button>
-            </>
-          )}
+            {ansicht === 'zahlungen' && (
+              <div className="p-4 text-sm space-y-2">
+                <p>Offen: <strong>{fmtEur(Math.max(0, offen))} €</strong> von {fmtEur(Number(inv.gross_amount))} €</p>
+                <table className="w-full border-collapse">
+                  <thead><tr className="text-left text-xs" style={{ background: WIN.grund, color: WIN.textGedaempft }}><th className="p-2 border" style={{ borderColor: WIN.rand }}>Datum</th><th className="p-2 border" style={{ borderColor: WIN.rand }}>Notiz</th><th className="p-2 border text-right" style={{ borderColor: WIN.rand }}>Betrag</th></tr></thead>
+                  <tbody>
+                    {zahlungen.map((z) => <tr key={z.id}><td className="p-2 border" style={{ borderColor: WIN.randHell }}>{fmtDate(z.payment_date)}</td><td className="p-2 border" style={{ borderColor: WIN.randHell }}>{z.note || ''}</td><td className="p-2 border text-right tabular-nums" style={{ borderColor: WIN.randHell }}>{fmtEur(Number(z.amount))} €</td></tr>)}
+                    {zahlungen.length === 0 && <tr><td colSpan={3} className="p-3" style={{ color: WIN.textGedaempft }}>Noch keine Zahlung erfasst.</td></tr>}
+                  </tbody>
+                </table>
+              </div>
+            )}
 
-          {tab === 'gutschrift' && (
-            <>
-              <p className="text-xs text-[#6e6e73]">Betrag gutschreiben (z. B. Rabatt, Korrektur). Eigener Beleg mit Bezug auf {inv.invoice_number}.</p>
-              <input className={feld} placeholder="Grund" value={gsGrund} onChange={(e) => setGsGrund(e.target.value)} />
-              <input className={feld} placeholder="Betrag netto (€)" inputMode="decimal" value={gsBetrag} onChange={(e) => setGsBetrag(e.target.value)} />
-              <button disabled={busy || storniert || gutschrift} onClick={gutschriftAnlegen} className={`${knopf} bg-[#e8590c] text-white w-full disabled:opacity-40`}>Gutschrift anlegen</button>
-            </>
-          )}
+            {ansicht === 'verlauf' && (
+              <div className="p-4 text-sm space-y-2">
+                <button onClick={() => setAnhangOffen(true)} className="rounded border px-3 py-1.5" style={{ borderColor: WIN.rand }}>📎 Anhänge verwalten (Bilder, Videos, Dateien)</button>
+                <table className="w-full border-collapse mt-2">
+                  <thead><tr className="text-left text-xs" style={{ background: WIN.grund, color: WIN.textGedaempft }}><th className="p-2 border" style={{ borderColor: WIN.rand }}>Gesendet am</th><th className="p-2 border" style={{ borderColor: WIN.rand }}>An</th></tr></thead>
+                  <tbody>
+                    {mails.map((m) => <tr key={m.id}><td className="p-2 border" style={{ borderColor: WIN.randHell }}>{new Date(m.sent_at).toLocaleString('de-DE')}</td><td className="p-2 border" style={{ borderColor: WIN.randHell }}>{m.to_email}</td></tr>)}
+                    {mails.length === 0 && <tr><td colSpan={2} className="p-3" style={{ color: WIN.textGedaempft }}>Noch nicht versendet.</td></tr>}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        </main>
 
-          {tab === 'zahlung' && (
-            <>
-              <p className="text-sm">Offen: <strong>{fmtEur(Math.max(0, offen))} €</strong> von {fmtEur(Number(inv.gross_amount))} €</p>
-              <ul className="text-sm divide-y divide-black/5">
-                {zahlungen.map((z) => <li key={z.id} className="py-1 flex justify-between"><span>{fmtDate(z.payment_date)}{z.note ? ` · ${z.note}` : ''}</span><span className="tabular-nums">{fmtEur(Number(z.amount))} €</span></li>)}
-                {zahlungen.length === 0 && <li className="py-1 text-[#86868b]">Noch keine Zahlung erfasst.</li>}
-              </ul>
-              {!storniert && !gutschrift && (
-                <>
-                  <input className={feld} inputMode="decimal" value={zBetrag} onChange={(e) => setZBetrag(e.target.value)} aria-label="Betrag" />
-                  <input className={feld} type="date" value={zDatum} onChange={(e) => setZDatum(e.target.value)} aria-label="Zahlungsdatum" />
-                  <input className={feld} placeholder="Notiz (optional)" value={zNotiz} onChange={(e) => setZNotiz(e.target.value)} />
-                  <button disabled={busy} onClick={zahlungErfassen} className={`${knopf} bg-[#e8590c] text-white w-full disabled:opacity-40`}>Zahlung erfassen</button>
-                </>
-              )}
-            </>
-          )}
+        {/* Rechts: Aufgabenbereich */}
+        {aufgabe && (
+          <Aufgabenbereich titel={AUFGABEN_TITEL[aufgabe]} onZu={() => setTab('rechnung')}>
+            {gesperrt && <p className="text-sm text-red-600">{gesperrt}</p>}
 
-          {tab === 'verlauf' && (
-            <>
-              <button onClick={() => setAnhangOffen(true)} className={`${knopf} border border-black/15 w-full`}>Anhänge verwalten (Bilder, Videos, Dateien)</button>
-              <p className="text-sm font-semibold pt-2">Versandverlauf</p>
-              <ul className="text-sm divide-y divide-black/5">
-                {mails.map((m) => <li key={m.id} className="py-1.5"><span className="block">{m.to_email}</span><span className="text-xs text-[#86868b]">{new Date(m.sent_at).toLocaleString('de-DE')}</span></li>)}
-                {mails.length === 0 && <li className="py-1 text-[#86868b]">Noch nicht versendet.</li>}
-              </ul>
-            </>
-          )}
-        </section>
+            {aufgabe === 'version' && (
+              <>
+                <p className="text-xs" style={{ color: WIN.textGedaempft }}>Es entsteht eine neue Rechnung, {inv.invoice_number} wird automatisch storniert.</p>
+                <PositionenEditor positionen={positionen} setPositionen={setPositionen} />
+                <button disabled={busy || storniert} onClick={() => neueVersion(positionen, '')} className={primaer} style={{ background: WIN.akzent }}>Als neue Version speichern</button>
+              </>
+            )}
 
-        {/* Mitte: Rechnung */}
-        <section className="rounded-2xl bg-white border border-black/10 overflow-hidden min-h-[70vh] lg:min-h-[calc(100vh-110px)]">
-          {pdfUrl ? <iframe title={`${typ} ${inv.invoice_number}`} src={pdfUrl} className="w-full h-full min-h-[70vh] lg:min-h-[calc(100vh-110px)]" /> : <p className="p-6 text-sm text-[#6e6e73]">Vorschau nicht verfügbar – „PDF speichern“ funktioniert trotzdem.</p>}
-        </section>
+            {aufgabe === 'teilabbau' && (
+              <>
+                <p className="text-xs" style={{ color: WIN.textGedaempft }}>Wie viel Prozent sind abgebaut? Die Mengen werden auf den Rest gekürzt, danach kannst du jede Position anpassen. Die alte Rechnung wird storniert.</p>
+                <div className="flex gap-2 items-center">
+                  <input className={`${eingabe} w-20`} value={prozent} onChange={(e) => setProzent(e.target.value)} inputMode="decimal" aria-label="Prozent abgebaut" /> <span className="text-sm">% abgebaut</span>
+                  <button type="button" onClick={() => {
+                    const p = zahl(prozent)
+                    if (!(p > 0 && p <= 100)) { alert('Bitte eine Zahl zwischen 1 und 100 eingeben.'); return }
+                    setPositionen((inv.positions || []).map((x) => ({ ...x, menge: Math.round(Number(x.menge) * ((100 - p) / 100) * 100) / 100 })))
+                  }} className="rounded border px-3 py-1.5 text-sm" style={{ borderColor: WIN.rand }}>Kürzen</button>
+                </div>
+                <PositionenEditor positionen={positionen} setPositionen={setPositionen} />
+                <button disabled={busy || storniert} onClick={() => neueVersion(positionen, `Teilabbau: ${zahl(prozent)} % abgebaut.`)} className={primaer} style={{ background: WIN.akzent }}>Gekürzte Rechnung speichern</button>
+              </>
+            )}
+
+            {aufgabe === 'bestellwert' && (
+              <>
+                <p className="text-xs" style={{ color: WIN.textGedaempft }}>Zusätzliche Leistungen: eigene Rechnung mit Bezug auf {inv.invoice_number}. Die bestehende Rechnung bleibt unverändert.</p>
+                <PositionenEditor positionen={neuePos} setPositionen={setNeuePos} />
+                <button disabled={busy || storniert} onClick={bestellwert} className={primaer} style={{ background: WIN.akzent }}>Rechnung für Mehrleistung anlegen</button>
+              </>
+            )}
+
+            {aufgabe === 'gutschrift' && (
+              <>
+                <p className="text-xs" style={{ color: WIN.textGedaempft }}>Betrag gutschreiben (z. B. Rabatt, Korrektur). Eigener Beleg mit Bezug auf {inv.invoice_number}.</p>
+                <input className={eingabe} placeholder="Grund" value={gsGrund} onChange={(e) => setGsGrund(e.target.value)} />
+                <input className={eingabe} placeholder="Betrag netto (€)" inputMode="decimal" value={gsBetrag} onChange={(e) => setGsBetrag(e.target.value)} />
+                <button disabled={busy || storniert || gutschrift} onClick={gutschriftAnlegen} className={primaer} style={{ background: WIN.akzent }}>Gutschrift anlegen</button>
+              </>
+            )}
+
+            {aufgabe === 'zahlung' && (
+              <>
+                <p className="text-sm">Offen: <strong>{fmtEur(Math.max(0, offen))} €</strong></p>
+                <input className={eingabe} inputMode="decimal" value={zBetrag} onChange={(e) => setZBetrag(e.target.value)} aria-label="Betrag" />
+                <input className={eingabe} type="date" value={zDatum} onChange={(e) => setZDatum(e.target.value)} aria-label="Zahlungsdatum" />
+                <input className={eingabe} placeholder="Notiz (optional)" value={zNotiz} onChange={(e) => setZNotiz(e.target.value)} />
+                <button disabled={busy || storniert || gutschrift} onClick={zahlungErfassen} className={primaer} style={{ background: WIN.akzent }}>Zahlung erfassen</button>
+              </>
+            )}
+          </Aufgabenbereich>
+        )}
       </div>
+
+      <Statusleiste
+        links={<><span>{typ} {inv.invoice_number}</span><span>Status: <strong>{statusText}</strong></span><span>Fällig: {fmtDate(inv.due_date)}</span></>}
+        rechts={<><span>Netto {fmtEur(Number(inv.net_amount))} €</span><span>Brutto <strong>{fmtEur(Number(inv.gross_amount))} €</strong></span>{offen > 0 && !storniert && <span>Offen {fmtEur(offen)} €</span>}</>}
+      />
       {anhangOffen && <AnhangDialog invoiceId={inv.id} rechnungsNr={inv.invoice_number} positionen={inv.positions || []} onClose={() => setAnhangOffen(false)} />}
     </div>
   )

@@ -142,7 +142,10 @@ export default function KundenDetailPage() {
 
   const searchParams = useSearchParams()
   const baustelleParam = searchParams.get('baustelle')
-  const [tab, setTab] = useState<Tab>(baustelleParam ? 'aufmass' : 'baustellen')
+  const [tab, setTab] = useState<Tab>(() => {
+    const t = searchParams.get('tab') as Tab | null
+    return t && TABS.includes(t) ? t : baustelleParam ? 'aufmass' : 'baustellen'
+  })
   const [kunde, setKunde] = useState<Kunde | null>(null)
   const [projects, setProjects] = useState<Project[]>([])
   const [invoices, setInvoices] = useState<Invoice[]>([])
