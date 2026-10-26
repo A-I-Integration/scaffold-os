@@ -40,6 +40,8 @@ interface Measurements {
   abstaende?: Abstand[];
   fassade?: Fassade | null;
   nebenfassade?: { breiteM: number; hoeheM: number; punkte: number } | null;
+  teile?: { id: string; typ: string; laengeM: number; tiefeM: number; traufhoeheM: number; dachForm: string; dachHoeheM: number; versatzM: number }[];
+  mehrteilig?: boolean;
   kalibriert?: boolean;
   referenz?: string;
 }
