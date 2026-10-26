@@ -1283,7 +1283,7 @@ export default function KundenDetailPage() {
                         const gutschrift = inv.invoice_type === 'gutschrift'
                         return (
                           <li key={inv.id} className="py-2 flex flex-wrap items-center gap-2 text-sm">
-                            <span className="font-medium">{inv.invoice_number}</span>
+                            <a href={`/rechnungen/${inv.id}`} className="font-medium text-[#e8590c] hover:underline">{inv.invoice_number}</a>
                             <span className={`text-[10px] px-1.5 py-0.5 rounded border ${verzug ? STATUS_COLOR.ueberfaellig : STATUS_COLOR[inv.status]}`}>{verzug ? 'Überfällig' : STATUS_LABEL[inv.status]}</span>
                             <span className="text-[#86868b]">fällig {fmtDate(inv.due_date)}</span>
                             {Number(inv.paid_amount) > 0 && <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-700">Teilzahlung {fmtEur(Number(inv.paid_amount))} €</span>}
@@ -1507,7 +1507,7 @@ export default function KundenDetailPage() {
                           return (
                             <li key={inv.id} className="py-2">
                             <div className="flex flex-wrap items-center gap-2 text-sm">
-                              <span className="font-medium text-[#1d1d1f]">{inv.invoice_number}</span>
+                              <a href={`/rechnungen/${inv.id}`} className="font-medium text-[#e8590c] hover:underline">{inv.invoice_number}</a>
                               {inv.invoice_type && inv.invoice_type !== 'standard' && (
                                 <span className={`text-[10px] px-1.5 py-0.5 rounded border ${gutschrift ? 'bg-purple-500/10 text-purple-700 border-purple-500/30' : 'bg-blue-500/10 text-blue-700 border-blue-500/30'}`}>{TYPE_LABEL[inv.invoice_type]}</span>
                               )}
