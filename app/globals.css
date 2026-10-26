@@ -54,3 +54,7 @@ body {
 .win-ui input:focus, .win-ui select:focus, .win-ui textarea:focus { outline: 1px solid #4a86c8; border-color: #4a86c8; }
 .win-ui table th { font-weight: 600; }
 .win-ui table tbody tr:hover { background: #eef4fa; }
+
+/* Inhalt nutzt die volle Breite des Fensters (Modale mit max-w-sm … max-w-xl bleiben schmal) */
+.win-ui .max-w-4xl, .win-ui .max-w-5xl, .win-ui .max-w-6xl, .win-ui .max-w-7xl { max-width: none; }
+.win-ui .p-8, .win-ui .md\:p-8 { padding: 16px; }
