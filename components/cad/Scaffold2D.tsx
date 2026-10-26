@@ -204,7 +204,7 @@ export default function Scaffold2D({ model }: Props) {
                 case 'path':
                   return <path key={el.id} d={el.d || ''} fill={el.fill || 'none'} stroke={el.stroke || '#000'} strokeWidth={strokeW} />
                 case 'text':
-                  return <text key={el.id} x={el.x * scaleFactor} y={el.y * scaleFactor} fontSize={scale === '1:50' ? 14 : 12} fill={el.fill || '#000'} textAnchor='middle' fontFamily='sans-serif'>{el.text}</text>
+                  return <text key={el.id} x={el.x * scaleFactor} y={el.y * scaleFactor} fontSize={scale === '1:50' ? 14 : 12} fill={el.fill || '#000'} textAnchor='middle' style={{ fontFamily: 'var(--schrift)' }}>{el.text}</text>
                 default:
                   return null
               }

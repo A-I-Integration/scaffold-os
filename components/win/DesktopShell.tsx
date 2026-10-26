@@ -134,7 +134,7 @@ export default function DesktopShell({ rolle, name, onKlassisch, onLogout, child
   const werkzeuge = [E.dashboard, E.aufmass, E.cad, E.kunden, E.rechnungen, E.email, E.planung, E.lager, E.einstellungen].filter((e) => erlaubt(e, rolle))
 
   return (
-    <div className="flex flex-col h-screen text-[15px]" style={{ fontFamily: '"Segoe UI", Inter, system-ui, sans-serif', background: '#fff', color: '#1b1b1b' }}>
+    <div className="flex flex-col h-screen text-[15px]" style={{ fontFamily: 'var(--schrift)', background: '#fff', color: '#1b1b1b' }}>
       <div className="flex items-center gap-2 px-3 h-8 text-white text-[14px]" style={{ background: 'linear-gradient(#3a3a3a,#232323)' }}>
         <span className="inline-block w-3 h-3 rounded-sm" style={{ background: FARBE.akzent }} />
         <span className="font-semibold">SCAFFOLD OS</span><span className="opacity-60">– {name}</span>
