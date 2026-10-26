@@ -6,7 +6,7 @@ import { usePathname } from 'next/navigation'
 import {
   Home, Ruler, Box, FileText, Users, Euro, Mail, Settings, Truck, Warehouse, CalendarClock, Route, TrendingUp,
   KeyRound, Timer, Navigation, ClipboardList, FolderOpen, Handshake, CreditCard, Database, Upload, HelpCircle, BookOpen,
-  LayoutDashboard, Printer, LogOut, Briefcase, Calculator, BarChart3, Wrench, PanelLeft,
+  LayoutDashboard, Printer, LogOut, Briefcase, Calculator, Wrench, PanelLeft,
 } from 'lucide-react'
 import { starteNeuesAufmass } from '@/lib/aufmass-projekt-session'
 
@@ -55,13 +55,14 @@ const E: Record<string, Eintrag> = {
   hilfe: { href: '/hilfe', label: 'Hilfe', icon: HelpCircle },
 }
 
+// Jede Seite steht in genau einem Bereich (keine Doppelungen), geordnet nach dem Weg eines Auftrags:
+// Kunde → Aufmaß/CAD → Rechnung → Einsatzplanung → Lager → Stammdaten
 const BEREICHE: Bereich[] = [
-  { key: 'projekt', label: 'Projektverwaltung', icon: Briefcase, eintraege: [E.dashboard, E.kunden, E.aufmass, E.cad, E.bruecke, E.traggeruest, E.gaeb, E.dokumente, E.dokumentation, E.nu] },
-  { key: 'kaufm', label: 'Kaufmännische Verwaltung', icon: Calculator, eintraege: [E.rechnungen, E.zahlung, E.miete, E.email] },
-  { key: 'auswertung', label: 'Auswertungen', icon: BarChart3, eintraege: [E.dashboard, E.prognose, E.zahlung, E.miete] },
-  { key: 'dispo', label: 'Disposition', icon: Truck, eintraege: [E.planung, E.touren, E.routen, E.wochen, E.kolonnen, E.zeit, E.meineTouren] },
+  { key: 'projekt', label: 'Projektverwaltung', icon: Briefcase, eintraege: [E.dashboard, E.kunden, E.aufmass, E.cad, E.bruecke, E.traggeruest, E.gaeb, E.dokumente, E.dokumentation] },
+  { key: 'kaufm', label: 'Kaufmännische Verwaltung', icon: Calculator, eintraege: [E.rechnungen, E.neueRechnung, E.zahlung, E.miete, E.email] },
+  { key: 'dispo', label: 'Disposition', icon: Truck, eintraege: [E.planung, E.wochen, E.touren, E.routen, E.kolonnen, E.zeit, E.meineTouren] },
   { key: 'lager', label: 'Lager', icon: Warehouse, eintraege: [E.lager, E.prognose, E.katalog] },
-  { key: 'stamm', label: 'Stammdaten', icon: Wrench, eintraege: [E.kunden, E.zugaenge, E.kolonnen, E.nu, E.einstellungen, E.datenpflege] },
+  { key: 'stamm', label: 'Stammdaten', icon: Wrench, eintraege: [E.zugaenge, E.nu, E.einstellungen, E.datenpflege] },
   { key: 'transfer', label: 'Datentransfer', icon: Upload, eintraege: [E.import] },
   { key: 'hilfe', label: 'Hilfe & Support', icon: HelpCircle, eintraege: [E.hilfe] },
 ]
@@ -70,7 +71,7 @@ type MenueEintrag = Eintrag | '---'
 const MENUES: { label: string; eintraege: MenueEintrag[] }[] = [
   { label: 'Datei', eintraege: [E.aufmass, E.neueRechnung, '---', E.import] },
   { label: 'Erfassen', eintraege: [E.aufmass, E.cad, E.bruecke, E.traggeruest, E.gaeb, '---', E.neueRechnung] },
-  { label: 'Auswerten', eintraege: [E.dashboard, E.prognose, E.zahlung, E.miete] },
+  { label: 'Auswerten', eintraege: [E.dashboard, E.prognose, E.zahlung, E.miete, E.zeit] },
   { label: 'Stammdaten', eintraege: [E.kunden, E.zugaenge, E.kolonnen, E.lager, E.nu, '---', E.einstellungen, E.datenpflege] },
 ]
 
