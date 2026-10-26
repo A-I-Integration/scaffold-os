@@ -11,6 +11,20 @@ const { istBinaerPly, parsePlyBinary } = require('./ply-binary');
 
 const MAX_POINTS = 120000;
 const TRIM_LO = 0.02, TRIM_HI = 0.98;
+// Gesamtmaße: nur 0,5 Prozent je Seite abschneiden (Streupunkte), damit der First nicht mit abgeschnitten wird.
+// Die Achsen-Erkennung bleibt bei 2 Prozent.
+const EXTENT_TRIM_LO = 0.005, EXTENT_TRIM_HI = 0.995;
+// Fester Startwert statt Math.random: dieselbe Datei ergibt dieselben Ebenen.
+function zufall(seed) {
+  let a = seed >>> 0;
+  return () => {
+    a = (a + 0x6d2b79f5) >>> 0;
+    let t = a;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
 const MAX_EBENEN = 4; // vier Fassadenseiten
 
 // ─── Parser ───
@@ -144,8 +158,8 @@ function robustExtents(pts) {
     const vals = [];
     for (let i = a; i < pts.length; i += 3) vals.push(pts[i]);
     vals.sort((p, q) => p - q);
-    const lo = vals[Math.floor(vals.length * TRIM_LO)];
-    const hi = vals[Math.min(vals.length - 1, Math.floor(vals.length * TRIM_HI))];
+    const lo = vals[Math.floor(vals.length * EXTENT_TRIM_LO)];
+    const hi = vals[Math.min(vals.length - 1, Math.floor(vals.length * EXTENT_TRIM_HI))];
     ext.push(hi - lo);
   }
   return ext;
@@ -176,9 +190,10 @@ function findFacadePlane(pts, vertAxis, unitScale) {
   const ITER = 1500;
   const MIN_ABSTAND = 0.5 / unitScale; // Stichprobenpunkte nicht zu nah beieinander
   let bestCount = 0, bestA = 0, bestB = 0, bestD = 0;
+  const rnd = zufall(20260101);
   for (let it = 0; it < ITER; it++) {
-    const i1 = samp[Math.floor(Math.random() * samp.length)];
-    const i2 = samp[Math.floor(Math.random() * samp.length)];
+    const i1 = samp[Math.floor(rnd() * samp.length)];
+    const i2 = samp[Math.floor(rnd() * samp.length)];
     const x1 = pts[i1 * 3 + h[0]], y1 = pts[i1 * 3 + h[1]];
     const dx = pts[i2 * 3 + h[0]] - x1, dy = pts[i2 * 3 + h[1]] - y1;
     const len = Math.hypot(dx, dy);
