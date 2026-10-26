@@ -11,7 +11,7 @@ import type { Leistungsverzeichnis } from '@/lib/leistungsverzeichnis'
 const eur = (n: number) => n.toLocaleString('de-DE', { style: 'currency', currency: 'EUR' })
 const eingabe = 'px-2 py-1 border rounded-lg text-sm bg-white text-right'
 
-export default function ProjektLvBlock({ projectId }: { projectId: string }) {
+export default function ProjektLvBlock({ projectId, kundeName = '', kundeAdresse = '' }: { projectId: string; kundeName?: string; kundeAdresse?: string }) {
   const router = useRouter()
   const [liste, setListe] = useState<ProjektLv[] | null>(null)
   const [offen, setOffen] = useState<string | null>(null)
@@ -65,7 +65,7 @@ export default function ProjektLvBlock({ projectId }: { projectId: string }) {
     const e = rechnungAusLv(lv)
     if (!e.positions.length) { setMeldung('Keine Position mit Menge und Preis – nichts abzurechnen.'); return }
     const notiz = [`Leistungsverzeichnis Version ${v.version} (${LV_ART_LABEL[v.art]})`, e.uebersprungen.length ? `Nicht übernommen: ${e.uebersprungen.join(', ')}` : ''].filter(Boolean).join('\n')
-    try { sessionStorage.setItem('scaffold_invoice_draft', JSON.stringify({ customer_name: '', customer_address: '', notes: notiz, positions: e.positions, project_id: projectId })) }
+    try { sessionStorage.setItem('scaffold_invoice_draft', JSON.stringify({ customer_name: kundeName, customer_address: kundeAdresse, notes: notiz, positions: e.positions, project_id: projectId, lv_id: v.id })) }
     catch { setMeldung('Entwurf konnte nicht zwischengespeichert werden.'); return }
     router.push('/rechnungen?neu=1')
   }
