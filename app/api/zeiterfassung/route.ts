@@ -56,6 +56,21 @@ export async function GET(req: NextRequest) {
     const month = searchParams.get('month'); // 'YYYY-MM'
     const employeeId = searchParams.get('employee_id');
 
+    // Baustellen-Ansicht: alle Zeiten einer Baustelle (ohne Monat) + Mitarbeiterliste zum Nachtragen
+    const projectId = searchParams.get('project_id');
+    if (projectId) {
+      if (!/^[0-9a-f-]{36}$/i.test(projectId)) {
+        return NextResponse.json({ success: false, error: 'project_id ungültig' }, { status: 400 });
+      }
+      const [empRes, entRes] = await Promise.all([
+        fetch(`${url}/rest/v1/employees?select=id,first_name,last_name,status&order=last_name.asc,first_name.asc`, { headers }),
+        fetch(`${url}/rest/v1/time_entries?select=*&project_id=eq.${projectId}&order=work_date.desc,start_time.desc&limit=2000`, { headers }),
+      ]);
+      if (!empRes.ok) throw new Error('employees: ' + await empRes.text());
+      if (!entRes.ok) throw new Error('time_entries: ' + await entRes.text());
+      return NextResponse.json({ success: true, employees: await empRes.json(), entries: await entRes.json() });
+    }
+
     if (!month || !/^\d{4}-\d{2}$/.test(month)) {
       return NextResponse.json({ success: false, error: 'month=YYYY-MM erforderlich' }, { status: 400 });
     }
