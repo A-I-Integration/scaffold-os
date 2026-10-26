@@ -120,11 +120,9 @@ export async function POST(req: NextRequest) {
     // Nur bei Annahme: Lager reservieren + Transportaufträge anlegen (Zusammenspiel Aufmaß→Lager→Tour).
     // Läuft im Hintergrund, blockiert die Antwort an den Kunden nicht bei einem Fehler.
     if (eingabe.art === 'annehmen') after(() => beiAngebotsannahmeSicher(projectId));
-    else {
-      const art = eingabe.art;
-      // E-Mail an die Firma (Einstellungen → E-Mail); darf die Antwort an den Kunden nie blockieren
-      after(() => notifyAngebotRueckmeldung(projectId, art, eingabe.notiz, eingabe.name));
-    }
+    // E-Mail an die Firma (Einstellungen → E-Mail) bei Annahme, Korrektur und Ablehnung; darf die Antwort an den Kunden nie blockieren
+    const art = eingabe.art;
+    after(() => notifyAngebotRueckmeldung(projectId, art, eingabe.notiz, eingabe.name));
 
     return NextResponse.json({ success: true, art: eingabe.art });
   } catch (err: any) {

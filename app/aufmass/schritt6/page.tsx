@@ -143,6 +143,9 @@ function Schritt6Content() {
   const [rechnungSendenLaeuft, setRechnungSendenLaeuft] = useState(false);
   const [rechnungVersendet, setRechnungVersendet] = useState(false);
   const [rechnungFehler, setRechnungFehler] = useState('');
+  const [rgGeruestNr, setRgGeruestNr] = useState('');
+  const [rgLeistungsdatum, setRgLeistungsdatum] = useState('');
+  const [rgBemerkungen, setRgBemerkungen] = useState('');
   // Schlussrechnung-Dialog (Basis Angebot/Aufmaß, bestätigte Nachträge) – Momentaufnahme des Bildschirmstands
   const [schlussDaten, setSchlussDaten] = useState<any | null>(null);
 
@@ -981,7 +984,9 @@ function Schritt6Content() {
           project_id: savedProjectId,
           customer_name: s1.name || '',
           customer_address: s1.adresse || '',
-          notes: anpassungen.skonto ? '2% Skonto bei Zahlung innerhalb von 8 Tagen.' : undefined,
+          notes: [rgBemerkungen.trim(), anpassungen.skonto ? '2% Skonto bei Zahlung innerhalb von 8 Tagen.' : ''].filter(Boolean).join('\n') || undefined,
+          geruest_nr: rgGeruestNr.trim() || undefined,
+          leistungsdatum: rgLeistungsdatum || undefined,
           positions,
           override_grund: overrideGrund || undefined,
         }),
@@ -1345,6 +1350,17 @@ function Schritt6Content() {
                   1 Klick legt die Rechnung direkt an und öffnet den Versand-Dialog hier. */}
               {angebotsStatus === 'angenommen' && savedProjectId && kiResult && !zeigeVersandDialog && (
                 <div className="pt-2 border-t border-black/10">
+                  <div className="grid grid-cols-2 gap-2 mb-2">
+                    <label className="text-xs text-black/60">Gerüst-Nr.
+                      <input value={rgGeruestNr} onChange={e => setRgGeruestNr(e.target.value)} maxLength={60} className="mt-1 w-full rounded-lg border border-black/15 px-2 py-1.5 text-sm text-black" />
+                    </label>
+                    <label className="text-xs text-black/60">Leistungsdatum
+                      <input type="date" value={rgLeistungsdatum} onChange={e => setRgLeistungsdatum(e.target.value)} className="mt-1 w-full rounded-lg border border-black/15 px-2 py-1.5 text-sm text-black" />
+                    </label>
+                    <label className="text-xs text-black/60 col-span-2">Bemerkungen (erscheinen auf der Rechnung)
+                      <textarea value={rgBemerkungen} onChange={e => setRgBemerkungen(e.target.value)} rows={2} className="mt-1 w-full rounded-lg border border-black/15 px-2 py-1.5 text-sm text-black" />
+                    </label>
+                  </div>
                   <button onClick={handleRechnung} disabled={rechnungErstellenLaeuft} className="w-full rounded-xl bg-[#e8590c] hover:bg-[#d9480f] disabled:opacity-50 py-3 font-bold text-white transition-colors">
                     {rechnungErstellenLaeuft ? '⏳ Rechnung wird angelegt…' : '🧾 Rechnung erstellen'}
                   </button>

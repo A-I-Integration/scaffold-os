@@ -26,4 +26,9 @@ describe('rueckmeldungMail', () => {
     expect(m.subject).toContain('Angebot abgelehnt')
     expect(m.html).toContain('Keine Angabe')
   })
+  it('Annahme', () => {
+    const m = rueckmeldungMail({ art: 'annehmen', projektName: 'P', notiz: null, name: 'Max', link: 'https://x.de' })
+    expect(m.subject).toContain('Angebot angenommen')
+    expect(m.html).toContain('Angebot angenommen')
+  })
 })

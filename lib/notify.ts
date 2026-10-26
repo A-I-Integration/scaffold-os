@@ -194,7 +194,7 @@ export async function notifyAbsenceDecision(
 // Empfänger: Firmen-E-Mail aus den Einstellungen, sonst alle admin + disponent.
 export async function notifyAngebotRueckmeldung(
   projectId: string,
-  art: 'korrektur' | 'ablehnen',
+  art: 'annehmen' | 'korrektur' | 'ablehnen',
   notiz: string | null,
   name: string | null,
 ): Promise<void> {
