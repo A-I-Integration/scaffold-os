@@ -36,6 +36,7 @@ import AuftragsTeam from '@/components/AuftragsTeam'
 import VertragsDokumente from '@/components/VertragsDokumente'
 import { DokumentReiter, WIN } from '@/components/win/Win'
 import ProjektZeiten from '@/components/ProjektZeiten'
+import Baustellenmappe from '@/components/Baustellenmappe'
 import ProjektLvBlock from '@/components/ProjektLv'
 import NachtraegeBlock from '@/components/NachtraegeBlock'
 import ZwischenaufmassBlock from '@/components/ZwischenaufmassBlock'
@@ -117,13 +118,13 @@ const DOK_TYPE_LABEL: Record<string, string> = {
 const fmtTimestamp = (d: string | null) => (d ? new Date(d).toLocaleDateString('de-DE') : '–')
 
 const LEER_POSITION = { bezeichnung: '', menge: '1', einheit: 'Stk.', einzelpreis: '' }
-const TABS = ['baustellen', 'kunde', 'aufmass', 'bilder', 'dokumente', 'angebote', 'lv', 'zeiten', 'nachtraege', 'rechnungen', 'emails'] as const
+const TABS = ['baustellen', 'kunde', 'aufmass', 'bilder', 'dokumente', 'mappe', 'angebote', 'lv', 'zeiten', 'nachtraege', 'rechnungen', 'emails'] as const
 type Tab = typeof TABS[number]
 // Zwei Ebenen: Kunde (Übersicht aller Baustellen, Stammdaten, alle Rechnungen/Mails) und Baustelle (alles zu genau diesem Projekt)
 const KUNDEN_TABS: Tab[] = ['baustellen', 'kunde', 'rechnungen', 'emails']
-const BAUSTELLEN_TABS: Tab[] = ['aufmass', 'bilder', 'dokumente', 'angebote', 'lv', 'zeiten', 'nachtraege', 'rechnungen', 'emails']
+const BAUSTELLEN_TABS: Tab[] = ['aufmass', 'bilder', 'dokumente', 'mappe', 'angebote', 'lv', 'zeiten', 'nachtraege', 'rechnungen', 'emails']
 const TAB_LABEL: Record<Tab, string> = {
-  baustellen: 'Baustellen', kunde: 'Kunde', aufmass: 'Aufmaß', bilder: 'Bilder', dokumente: 'Dokumente', angebote: 'Angebote', lv: 'Leistungsverzeichnis', zeiten: 'Zeiten', nachtraege: 'Nachträge / Schluss', rechnungen: 'Rechnungen', emails: 'E-Mails',
+  baustellen: 'Baustellen', kunde: 'Kunde', aufmass: 'Aufmaß', bilder: 'Bilder', dokumente: 'Dokumente', mappe: 'Baustellenmappe (QR)', angebote: 'Angebote', lv: 'Leistungsverzeichnis', zeiten: 'Zeiten', nachtraege: 'Nachträge / Schluss', rechnungen: 'Rechnungen', emails: 'E-Mails',
 }
 
 // Gleicher Namensabgleich wie auf der Kunden-Übersicht (app/kunden/page.tsx):
@@ -1236,6 +1237,8 @@ export default function KundenDetailPage() {
 
         {/* ═══════════ TAB: NACHTRÄGE / SCHLUSSRECHNUNG ═══════════ */}
         {tabAktiv === 'lv' && baustelle && <ProjektLvBlock projectId={baustelle.id} kundeName={kunde.name} kundeAdresse={[kunde.street, [kunde.zip, kunde.city].filter(Boolean).join(' ')].filter(Boolean).join(', ')} />}
+
+        {tabAktiv === 'mappe' && baustelle && <Baustellenmappe projectId={baustelle.id} projektName={baustelle.name || 'Baustelle'} adresse={baustelle.adresse} />}
 
         {tabAktiv === 'zeiten' && baustelle && <ProjektZeiten projectId={baustelle.id} geplantStunden={baustelle.data?.kiResult?.estimatedLaborHours} />}
 
