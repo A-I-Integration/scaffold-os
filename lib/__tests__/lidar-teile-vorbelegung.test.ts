@@ -11,6 +11,8 @@ describe('teileVorbelegung', () => {
     expect(v.dachform).toBe('Walmdach')
     expect(v.garagen).toBe(true)
     expect(v.hinweis).toContain('Nebengebäude')
+    expect(v.laenge).toBe('12.90')
+    expect(v.breite).toBe('9.50')
   })
   it('nur ein Teil → keine Garage', () => {
     expect(teileVorbelegung([haus])!.garagen).toBe(false)

@@ -331,10 +331,10 @@ function leeresFormS2() {
             traufhoehe: tv ? (fresh ? tv.traufhoehe : (prev.traufhoehe || tv.traufhoehe)) : prev.traufhoehe,
             dachform: tv && tv.dachform ? (fresh ? tv.dachform : (prev.dachform || tv.dachform)) : prev.dachform,
             garagen: tv ? (prev.garagen || tv.garagen) : prev.garagen,
-            laenge: fresh
+            laenge: tv && tv.laenge ? (fresh ? tv.laenge : (prev.laenge || tv.laenge)) : fresh
               ? (hauptEbene?.breiteM ? hauptEbene.breiteM.toFixed(2) : (m.lengthM ? m.lengthM.toFixed(2) : prev.laenge))
               : (prev.laenge || (hauptEbene?.breiteM ? hauptEbene.breiteM.toFixed(2) : (m.lengthM ? m.lengthM.toFixed(2) : ''))),
-            breite: fresh ? (m.widthM ? m.widthM.toFixed(2) : prev.breite) : (prev.breite || (m.widthM ? m.widthM.toFixed(2) : '')),
+            breite: tv && tv.breite ? (fresh ? tv.breite : (prev.breite || tv.breite)) : fresh ? (m.widthM ? m.widthM.toFixed(2) : prev.breite) : (prev.breite || (m.widthM ? m.widthM.toFixed(2) : '')),
             hoehe: fresh
               ? (hauptEbene?.hoeheM ? hauptEbene.hoeheM.toFixed(2) : (m.heightM ? m.heightM.toFixed(2) : prev.hoehe))
               : (prev.hoehe || (hauptEbene?.hoeheM ? hauptEbene.hoeheM.toFixed(2) : (m.heightM ? m.heightM.toFixed(2) : ''))),
