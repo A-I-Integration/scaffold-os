@@ -154,7 +154,7 @@ export default function GaebPage() {
       // nicht mit { success }. Diese Prüfung hätte JEDE erfolgreiche
       // Angebotserstellung als Fehler gemeldet.
       if (!res.ok || !json.id) throw new Error(json.error || 'Anlegen fehlgeschlagen');
-      router.push(`/kunden/${ausgewaehlterKunde.id}`);
+      router.push(`/kunden/${ausgewaehlterKunde.id}?baustelle=${json.id}&tab=angebote`);
     } catch (err: any) { alert('❌ ' + err.message); }
     setAnlegenLaeuft(false);
   }
