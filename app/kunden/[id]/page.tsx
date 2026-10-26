@@ -34,6 +34,7 @@ import NeueMailDialog from '@/components/NeueMailDialog'
 import SollIstStunden from '@/components/SollIstStunden'
 import AuftragsTeam from '@/components/AuftragsTeam'
 import VertragsDokumente from '@/components/VertragsDokumente'
+import { DokumentReiter, WIN } from '@/components/win/Win'
 import ProjektLvBlock from '@/components/ProjektLv'
 import NachtraegeBlock from '@/components/NachtraegeBlock'
 import ZwischenaufmassBlock from '@/components/ZwischenaufmassBlock'
@@ -884,48 +885,32 @@ export default function KundenDetailPage() {
   }
 
   return (
-    <div className="min-h-screen bg-[#fbfbfd]">
-      {/* ─── Header ─── */}
-      <div className="sticky top-0 z-30 bg-white/80 backdrop-blur border-b border-black/5">
-        <div className="max-w-5xl mx-auto px-4 sm:px-6 py-3 flex items-center gap-3">
-          <button onClick={() => (baustelle ? waehleBaustelle(null) : router.push('/kunden'))} className="p-2 rounded-xl hover:bg-black/5 text-[#1d1d1f]"><ArrowLeft className="h-5 w-5" /></button>
-          <div className="flex-1 min-w-0">
-            {baustelle ? (
-              <>
-                <h1 className="text-lg font-bold text-[#1d1d1f] truncate">{baustelle.name || 'Unbenannte Baustelle'}</h1>
-                <p className="text-xs text-[#86868b] truncate">Kunde: {kunde.name}{baustelle.adresse ? ` · ${baustelle.adresse}` : ''}</p>
-              </>
-            ) : (
-              <>
-                <h1 className="text-lg font-bold text-[#1d1d1f] truncate">{kunde.name}</h1>
-                <p className="text-xs text-[#86868b]">{kunde.street}{kunde.street && ', '}{kunde.zip} {kunde.city}</p>
-              </>
-            )}
+    <div className="min-h-full flex flex-col" style={{ background: WIN.grund }}>
+      {/* ─── Kopf ─── */}
+      <div className="sticky top-0 z-30">
+        <div className="flex items-center gap-3 px-3 h-9 text-white" style={{ background: 'linear-gradient(#4a86c8,#2d63a3)' }}>
+          <button onClick={() => (baustelle ? waehleBaustelle(null) : router.push('/kunden'))} className="p-1 rounded hover:bg-white/20" title="Zurück"><ArrowLeft className="h-4 w-4" /></button>
+          <div className="flex-1 min-w-0 flex items-baseline gap-3">
+            <h1 className="text-[14px] font-bold truncate">{baustelle ? (baustelle.name || 'Unbenannte Baustelle') : kunde.name}</h1>
+            <span className="text-xs opacity-80 truncate">
+              {baustelle ? `Kunde: ${kunde.name}${baustelle.adresse ? ` · ${baustelle.adresse}` : ''}` : `${kunde.street}${kunde.street ? ', ' : ''}${kunde.zip} ${kunde.city}`}
+            </span>
           </div>
           {sichtOffeneSumme > 0 && (
-            <span className={`text-xs px-2 py-1 rounded-full font-semibold ${sichtUeberfaelligSumme > 0 ? 'bg-red-500/10 text-red-700' : 'bg-amber-500/10 text-amber-700'}`}>
+            <span className="text-xs px-2 py-0.5 rounded font-semibold" style={{ background: sichtUeberfaelligSumme > 0 ? '#fde2e1' : '#fff1d6', color: sichtUeberfaelligSumme > 0 ? '#b42318' : '#8a5a00' }}>
               {fmtEur(sichtOffeneSumme)} € offen{sichtUeberfaelligSumme > 0 ? ` · ${fmtEur(sichtUeberfaelligSumme)} € überfällig` : ''}
             </span>
           )}
         </div>
         {/* ─── Reiter ─── */}
-        <div className="max-w-5xl mx-auto px-4 sm:px-6 flex gap-1 overflow-x-auto">
-          {aktiveTabs.map((t) => (
-            <button
-              key={t}
-              onClick={() => setTab(t)}
-              className={`px-3 py-2 text-sm font-medium border-b-2 whitespace-nowrap transition-colors ${
-                tabAktiv === t ? 'border-[#e8590c] text-[#e8590c]' : 'border-transparent text-[#86868b] hover:text-[#1d1d1f]'
-              }`}
-            >
-              {TAB_LABEL[t]}
-              {t === 'rechnungen' && sichtOffeneSumme > 0 && <span className="ml-1.5 text-[10px]">({sichtOffene.length})</span>}
-            </button>
-          ))}
-        </div>
+        <DokumentReiter
+          reiter={aktiveTabs.map((t) => ({ key: t, label: TAB_LABEL[t] + (t === 'rechnungen' && sichtOffeneSumme > 0 ? ` (${sichtOffene.length})` : '') }))}
+          aktiv={tabAktiv}
+          onWahl={(k) => setTab(k as Tab)}
+        />
       </div>
 
-      <div className="max-w-5xl mx-auto px-4 sm:px-6 py-6">
+      <div className="flex-1 bg-white border-x border-b mx-0 px-4 sm:px-5 py-4" style={{ borderColor: WIN.rand }}>
 
         {/* ═══════════ TAB: KUNDE ═══════════ */}
         {tabAktiv === 'baustellen' && (
@@ -937,29 +922,33 @@ export default function KundenDetailPage() {
                 className={btnPrimary}
               ><Plus className="inline h-3.5 w-3.5 -mt-0.5 mr-1" />Neue Baustelle</button>
             </div>
-            {projects.map((pr) => {
-              const invs = kundenInvoices.filter((i) => i.project_id === pr.id)
-              const offen = invs.filter((i) => i.status === 'offen' || i.status === 'ueberfaellig')
-                .reduce((sum, i) => sum + (Number(i.gross_amount) - Number(i.paid_amount || 0)), 0)
-              const status = pr.data?.angebotsStatus as string | undefined
-              return (
-                <button
-                  key={pr.id}
-                  onClick={() => waehleBaustelle(pr.id)}
-                  className="w-full text-left bg-white rounded-xl border border-black/10 p-4 hover:border-[#e8590c]/50 hover:shadow-sm transition"
-                >
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <p className="font-semibold text-[#1d1d1f]">{pr.name || 'Unbenannte Baustelle'}</p>
-                    <span className="text-xs text-[#86868b]">{status ? (ANGEBOT_LABEL[status] || status) : 'Noch kein Angebot'}</span>
-                  </div>
-                  {pr.adresse && <p className="text-xs text-[#86868b] mt-0.5">{pr.adresse}</p>}
-                  <p className="text-xs text-[#86868b] mt-2">
-                    {invs.length} Rechnung{invs.length === 1 ? '' : 'en'}
-                    {offen > 0 && <span className="ml-2 font-semibold text-red-600">{fmtEur(offen)} € offen</span>}
-                  </p>
-                </button>
-              )
-            })}
+            {projects.length > 0 && (
+              <table className="w-full border-collapse text-[13px]">
+                <thead>
+                  <tr className="text-left text-xs" style={{ background: WIN.grund, color: WIN.textGedaempft }}>
+                    {['Baustelle', 'Adresse', 'Angebot', 'Rechnungen', 'Offen'].map((h, i) => <th key={h} className={`px-2 py-1.5 border font-semibold ${i >= 3 ? 'text-right' : ''}`} style={{ borderColor: WIN.rand }}>{h}</th>)}
+                  </tr>
+                </thead>
+                <tbody>
+                  {projects.map((pr) => {
+                    const invs = kundenInvoices.filter((i) => i.project_id === pr.id)
+                    const offen = invs.filter((i) => i.status === 'offen' || i.status === 'ueberfaellig')
+                      .reduce((sum, i) => sum + (Number(i.gross_amount) - Number(i.paid_amount || 0)), 0)
+                    const status = pr.data?.angebotsStatus as string | undefined
+                    const zelle = 'px-2 py-1.5 border'
+                    return (
+                      <tr key={pr.id} onClick={() => waehleBaustelle(pr.id)} className="cursor-pointer hover:bg-[#e8f1fb]">
+                        <td className={`${zelle} font-semibold`} style={{ borderColor: WIN.randHell, color: '#1f4f8f' }}>{pr.name || 'Unbenannte Baustelle'}</td>
+                        <td className={zelle} style={{ borderColor: WIN.randHell }}>{pr.adresse || ''}</td>
+                        <td className={zelle} style={{ borderColor: WIN.randHell }}>{status ? (ANGEBOT_LABEL[status] || status) : 'Noch kein Angebot'}</td>
+                        <td className={`${zelle} text-right tabular-nums`} style={{ borderColor: WIN.randHell }}>{invs.length}</td>
+                        <td className={`${zelle} text-right tabular-nums font-semibold ${offen > 0 ? 'text-red-600' : ''}`} style={{ borderColor: WIN.randHell }}>{offen > 0 ? `${fmtEur(offen)} €` : ''}</td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            )}
           </div>
         )}
 
