@@ -10,11 +10,23 @@ import autoTable from 'jspdf-autotable';
 // • generateMahnungPDF  → 1. / 2. Mahnung
 // ============================================================
 
+import type { PositionArt } from './rechnung-position';
+import { positionDetailZeilen } from './rechnung-position';
+
 export interface Position {
   bezeichnung: string;
   menge: number;
   einheit: string;
   einzelpreis: number;
+  // Strukturierte Angaben (optional): Art, Maße, Listenpreis × Faktor, Stundenlohn
+  art?: PositionArt;
+  laengeM?: number;
+  breiteM?: number;
+  hoeheM?: number;
+  listenpreis?: number;
+  faktorProzent?: number;
+  mitarbeiter?: string;
+  taetigkeit?: string;
 }
 
 export interface Invoice {
@@ -39,6 +51,8 @@ export interface Invoice {
   reference_invoice_number?: string | null; // Phase 22: bei Gutschriften, Bezug auf Original
   customer_id?: string | null; // Phase 34: echte Kunde-Verknüpfung statt Namensvergleich
   paid_amount?: number; // Phase 38: Teilzahlungen
+  geruest_nr?: string | null; // Gerüstnummer zur eindeutigen Zuordnung
+  leistungsdatum?: string | null; // Datum der Leistung (sonst Rechnungsdatum)
 }
 
 // Phase 15: Bezeichnung je Rechnungstyp
@@ -125,21 +139,27 @@ export function generateInvoicePDF(inv: Invoice) {
     doc.text(doc.splitTextToSize(inv.customer_address, 80), 18, y + 20);
   }
   // Rechnungsdaten-Box
-  doc.setFillColor(248, 250, 252); doc.rect(108, y, 88, 30, 'F');
+  doc.setFillColor(248, 250, 252); doc.rect(108, y, 88, (inv.geruest_nr || inv.leistungsdatum) ? 36 : 30, 'F');
   doc.setTextColor(71, 85, 105); doc.setFontSize(8); doc.setFont('helvetica', 'bold'); doc.text('RECHNUNGSDATEN', 112, y + 6);
   doc.setFont('helvetica', 'normal'); doc.setTextColor(15, 23, 42); doc.setFontSize(9);
   doc.text(`Rechnungs-Nr.: ${inv.invoice_number}`, 112, y + 14);
   doc.text(`Datum: ${fmtDate(inv.invoice_date)}`, 112, y + 20);
   doc.text(`Zahlbar bis: ${fmtDate(inv.due_date)}`, 112, y + 26);
+  if (inv.geruest_nr || inv.leistungsdatum) {
+    doc.setFontSize(8);
+    const extra = [inv.geruest_nr ? `Gerüst-Nr.: ${inv.geruest_nr}` : '', inv.leistungsdatum ? `Leistungsdatum: ${fmtDate(inv.leistungsdatum)}` : ''].filter(Boolean).join('   ');
+    doc.text(extra, 112, y + 32);
+    doc.setFontSize(9);
+  }
 
-  y = 85;
+  y = (inv.geruest_nr || inv.leistungsdatum) ? 91 : 85;
   doc.setTextColor(30, 58, 138); doc.setFontSize(12); doc.setFont('helvetica', 'bold');
   doc.text('Leistungen', 14, y);
 
   // Positions-Tabelle (wie Materialliste im Angebot)
   const tableBody = inv.positions.map((p, i) => [
     (i + 1).toString(),
-    p.bezeichnung,
+    [p.bezeichnung, ...positionDetailZeilen(p)].join('\n'),
     fmtEur(Number(p.menge)),
     p.einheit || 'Stk.',
     fmtEur(Number(p.einzelpreis)) + ' €',

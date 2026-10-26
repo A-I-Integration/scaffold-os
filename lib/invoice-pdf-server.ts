@@ -1,3 +1,4 @@
+import { positionDetailZeilen } from './rechnung-position';
 import { PDFDocument, rgb, StandardFonts } from 'pdf-lib';
 import fontkit from '@pdf-lib/fontkit';
 import { readFile } from 'fs/promises';
@@ -54,17 +55,22 @@ export async function generateInvoicePdfCompliant(inv: Invoice): Promise<Uint8Ar
   if (senderLine) { page.drawText(senderLine, { x: 14, y: y + 5, size: 7, font, color: grauMittel }); }
 
   // Empfänger- und Rechnungsdaten-Box
-  page.drawRectangle({ x: 14, y: y - 30, width: 240, height: 30, color: grauHell });
+  page.drawRectangle({ x: 14, y: y - 46, width: 240, height: 46, color: grauHell });
   page.drawText('RECHNUNGSEMPFÄNGER', { x: 18, y: y - 8, size: 8, font: fontBold, color: grauMittel });
-  page.drawText(inv.customer_name, { x: 18, y: y - 18, size: 9, font, color: grauDunkel });
-  if (inv.customer_address) page.drawText(inv.customer_address.slice(0, 60), { x: 18, y: y - 26, size: 9, font, color: grauDunkel });
+  page.drawText(inv.customer_name, { x: 18, y: y - 20, size: 9, font, color: grauDunkel });
+  if (inv.customer_address) page.drawText(inv.customer_address.slice(0, 60), { x: 18, y: y - 32, size: 9, font, color: grauDunkel });
 
-  page.drawRectangle({ x: 288, y: y - 30, width: 235, height: 30, color: grauHell });
+  const hatKopf = !!(inv.geruest_nr || inv.leistungsdatum);
+  page.drawRectangle({ x: 288, y: y - (hatKopf ? 56 : 46), width: 235, height: hatKopf ? 56 : 46, color: grauHell });
   page.drawText('RECHNUNGSDATEN', { x: 292, y: y - 8, size: 8, font: fontBold, color: grauMittel });
-  page.drawText(`Rechnungs-Nr.: ${inv.invoice_number}`, { x: 292, y: y - 16, size: 9, font, color: grauDunkel });
-  page.drawText(`Datum: ${fmtDate(inv.invoice_date)}`, { x: 292, y: y - 22, size: 9, font, color: grauDunkel });
-  page.drawText(`Zahlbar bis: ${fmtDate(inv.due_date)}`, { x: 292, y: y - 28, size: 9, font, color: grauDunkel });
-  y -= 45;
+  page.drawText(`Rechnungs-Nr.: ${inv.invoice_number}`, { x: 292, y: y - 20, size: 9, font, color: grauDunkel });
+  page.drawText(`Datum: ${fmtDate(inv.invoice_date)}`, { x: 292, y: y - 32, size: 9, font, color: grauDunkel });
+  page.drawText(`Zahlbar bis: ${fmtDate(inv.due_date)}`, { x: 292, y: y - 44, size: 9, font, color: grauDunkel });
+  if (hatKopf) {
+    const extra = [inv.geruest_nr ? `Gerüst-Nr.: ${inv.geruest_nr}` : '', inv.leistungsdatum ? `Leistungsdatum: ${fmtDate(inv.leistungsdatum)}` : ''].filter(Boolean).join('   ');
+    page.drawText(extra, { x: 292, y: y - 53, size: 8, font, color: grauDunkel });
+  }
+  y -= hatKopf ? 70 : 60;
 
   // Leistungen
   page.drawText('Leistungen', { x: 14, y, size: 12, font: fontBold, color: blau });
@@ -96,6 +102,12 @@ export async function generateInvoicePdfCompliant(inv: Invoice): Promise<Uint8Ar
       page.drawText(text, { x: tx, y: y - rowH + 4, size: 8, font, color: grauDunkel });
     });
     y -= rowH;
+    // Detailzeilen (Art, Maße, Faktor, Mitarbeiter, Tätigkeit) klein unter der Bezeichnung
+    positionDetailZeilen(p).forEach((zeile) => {
+      if (i % 2 === 1) page.drawRectangle({ x: 14, y: y - 10, width: tabelleBreite, height: 10, color: grauHell });
+      page.drawText(zeile.slice(0, 90), { x: 38, y: y - 8, size: 7, font, color: grauMittel });
+      y -= 10;
+    });
   });
   y -= 15;
 

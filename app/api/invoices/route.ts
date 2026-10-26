@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { trackImpact } from '@/lib/impact';
 import { serverErrorResponse } from '@/lib/auth';
+import { bereinigePosition } from '@/lib/rechnung-position';
 import { abschlagOhneAuftrag, ABSCHLAG_OHNE_AUFTRAG_FEHLER } from '@/lib/rechnung-regeln';
 
 // ============================================================
@@ -87,6 +88,9 @@ export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
     const { project_id, customer_name, customer_address, positions, tax_rate, invoice_date, due_date, notes, invoice_type, reference_invoice_number, override_grund, customer_id: customerIdBody, replace_invoice_id } = body;
+    // Strukturierte Kopfangaben: Gerüstnummer (frei, z. B. "G-2026-014") und Leistungsdatum
+    const gerüstNr = typeof body.geruest_nr === 'string' && body.geruest_nr.trim() ? body.geruest_nr.trim().slice(0, 60) : null;
+    const leistungsdatum = typeof body.leistungsdatum === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(body.leistungsdatum) ? body.leistungsdatum : null;
 
     if (!customer_name) {
       return NextResponse.json({ success: false, error: 'Kundenname erforderlich.' }, { status: 400 });
@@ -94,6 +98,8 @@ export async function POST(req: NextRequest) {
     if (!Array.isArray(positions) || positions.length === 0) {
       return NextResponse.json({ success: false, error: 'Mindestens eine Position erforderlich.' }, { status: 400 });
     }
+    // Nur bekannte Positionsfelder mit gültigen Werten werden gespeichert (Art, Maße, Faktor, Stundenlohn-Angaben)
+    const positionen = positions.map(bereinigePosition);
 
     // Abschlagsrechnungen nur mit Auftrag: sonst würde die Pflicht-Freigabe unten
     // (nur bei project_id) komplett umgangen. Ersatz-Rechnungen (Ändern) ausgenommen.
@@ -134,7 +140,7 @@ export async function POST(req: NextRequest) {
     // aber als Beleg mit negativem Betrag gebucht – so wirkt sie korrekt auf
     // die offene Summe und ist als Korrektur erkennbar (§14 UStG).
     const vorzeichen = istGutschrift ? -1 : 1;
-    const net = vorzeichen * positions.reduce(
+    const net = vorzeichen * positionen.reduce(
       (s: number, p: any) => s + (Number(p.menge) || 0) * (Number(p.einzelpreis) || 0),
       0
     );
@@ -213,7 +219,7 @@ export async function POST(req: NextRequest) {
       p_customer_id: customerId,
       p_customer_name: customer_name,
       p_customer_address: customer_address || null,
-      p_positions: positions,
+      p_positions: positionen,
       p_net_amount: netRounded,
       p_tax_rate: rate,
       p_tax_amount: tax,
@@ -254,6 +260,20 @@ export async function POST(req: NextRequest) {
     const rows = [invoiceRow]; // ab hier wie zuvor: rows[0] = angelegte Rechnung
     const invoiceNumber = invoiceRow.invoice_number;
 
+    // Gerüstnummer und Leistungsdatum zur angelegten Rechnung speichern (Spalten geruest_nr, leistungsdatum).
+    // Schlägt das fehl, bleibt die Rechnung gültig; die Antwort meldet es, damit die Angaben nachgetragen werden können.
+    let kopfWarnung: string | null = null;
+    if ((gerüstNr || leistungsdatum) && rows[0]?.id) {
+      try {
+        const kr = await fetch(`${url}/rest/v1/invoices?id=eq.${rows[0].id}`, {
+          method: 'PATCH', headers: { ...headers, Prefer: 'return=representation' },
+          body: JSON.stringify({ geruest_nr: gerüstNr, leistungsdatum }),
+        });
+        if (kr.ok) { const kj = await kr.json(); if (kj?.[0]) rows[0] = kj[0]; }
+        else kopfWarnung = 'Gerüstnummer/Leistungsdatum konnten nicht gespeichert werden (Datenbank-Migration ausgeführt?).';
+      } catch { kopfWarnung = 'Gerüstnummer/Leistungsdatum konnten nicht gespeichert werden.'; }
+    }
+
     // Phase 27: Admin-Überschreibung protokollieren
     if (overrideVerwendet && rows[0]?.id) {
       try {
@@ -272,7 +292,7 @@ export async function POST(req: NextRequest) {
       invoice_type: rows[0]?.invoice_type || 'standard',
     });
 
-    return NextResponse.json({ success: true, invoice: rows[0], override_verwendet: overrideVerwendet });
+    return NextResponse.json({ success: true, invoice: rows[0], override_verwendet: overrideVerwendet, ...(kopfWarnung ? { warnung: kopfWarnung } : {}) });
   } catch (err: any) {
     return serverErrorResponse(err);
   }

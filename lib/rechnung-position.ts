@@ -1,0 +1,93 @@
+// Strukturierte Rechnungspositionen: Art, Maße (L×B×H), Listenpreis × Faktor, Stundenlohn mit Mitarbeiter und Tätigkeit.
+// Der Gesamtpreis bleibt überall Menge × Einzelpreis – der Faktor ist ein Nachweis, wie der Einzelpreis zustande kommt
+// (Einzelpreis = Listenpreis × Faktor ÷ 100), kein zweiter Rechenschritt.
+
+export const POSITION_ARTEN = [
+  'geruest', 'zusatzarbeitslage', 'rollgeruest', 'haengegeruest', 'gittertraeger', 'konsolen',
+  'ausleger', 'plane', 'zelt', 'regie', 'miete', 'aufbau', 'abbau', 'sonstiges',
+] as const
+export type PositionArt = (typeof POSITION_ARTEN)[number]
+
+export const POSITION_ART_LABEL: Record<PositionArt, string> = {
+  geruest: 'Gerüst / Modul', zusatzarbeitslage: 'Zusätzliche Arbeitslage', rollgeruest: 'Rollgerüst', haengegeruest: 'Hängegerüst',
+  gittertraeger: 'Gitterträger', konsolen: 'Konsolen', ausleger: 'Ausleger aus Modulgerüst', plane: 'Plane', zelt: 'Zelt',
+  regie: 'Stundenlohn (Regie)', miete: 'Miete', aufbau: 'Aufbau', abbau: 'Abbau', sonstiges: 'Sonstiges',
+}
+
+export interface StrukturPosition {
+  bezeichnung: string
+  menge: number
+  einheit: string
+  einzelpreis: number
+  art?: PositionArt
+  laengeM?: number
+  breiteM?: number
+  hoeheM?: number
+  /** Preis je Einheit vor dem Faktor */
+  listenpreis?: number
+  /** Faktor in % (100 = keiner) */
+  faktorProzent?: number
+  /** Stundenlohn: wer hat gearbeitet */
+  mitarbeiter?: string
+  /** Stundenlohn: was wurde gemacht */
+  taetigkeit?: string
+}
+
+const zahl = (v: unknown): number | undefined => {
+  const n = typeof v === 'string' ? Number(v.replace(',', '.')) : Number(v)
+  return Number.isFinite(n) ? n : undefined
+}
+const text = (v: unknown, max: number): string | undefined => {
+  if (typeof v !== 'string') return undefined
+  const t = v.trim().slice(0, max)
+  return t || undefined
+}
+const nichtNegativ = (v: unknown): number | undefined => { const n = zahl(v); return n !== undefined && n >= 0 ? n : undefined }
+
+/** Nimmt nur bekannte Felder mit gültigen Werten an – der Rest wird verworfen (die Positionen landen als JSON in der Datenbank). */
+export function bereinigePosition(p: any): StrukturPosition {
+  const art = POSITION_ARTEN.includes(p?.art) ? (p.art as PositionArt) : undefined
+  const faktor = zahl(p?.faktorProzent)
+  const r: StrukturPosition = {
+    bezeichnung: String(p?.bezeichnung ?? '').trim().slice(0, 500),
+    menge: zahl(p?.menge) ?? 0,
+    einheit: String(p?.einheit ?? '').trim().slice(0, 20) || 'Stk.',
+    einzelpreis: zahl(p?.einzelpreis) ?? 0,
+  }
+  if (art) r.art = art
+  const l = nichtNegativ(p?.laengeM), b = nichtNegativ(p?.breiteM), h = nichtNegativ(p?.hoeheM)
+  if (l) r.laengeM = l
+  if (b) r.breiteM = b
+  if (h) r.hoeheM = h
+  const lp = nichtNegativ(p?.listenpreis)
+  if (lp) r.listenpreis = lp
+  if (faktor !== undefined && faktor > 0 && faktor <= 1000 && faktor !== 100) r.faktorProzent = faktor
+  const m = text(p?.mitarbeiter, 120); if (m) r.mitarbeiter = m
+  const t = text(p?.taetigkeit, 500); if (t) r.taetigkeit = t
+  return r
+}
+
+/** Einzelpreis aus Listenpreis und Faktor, auf Cent gerundet. */
+export function preisMitFaktor(listenpreis: number, faktorProzent: number): number {
+  return Math.round(listenpreis * faktorProzent) / 100
+}
+
+const kommaZahl = (n: number) => n.toLocaleString('de-DE', { minimumFractionDigits: 0, maximumFractionDigits: 2 })
+const eur = (n: number) => n.toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' €'
+
+/** Zusatzzeilen unter der Bezeichnung (Art, Maße, Faktor, Mitarbeiter, Tätigkeit) – für PDF und Prüfansicht. */
+export function positionDetailZeilen(p: Partial<StrukturPosition>): string[] {
+  const z: string[] = []
+  if (p.art && p.art !== 'sonstiges') z.push(POSITION_ART_LABEL[p.art])
+  const maße = [p.laengeM, p.breiteM, p.hoeheM].filter((x): x is number => typeof x === 'number' && x > 0)
+  if (maße.length) {
+    const namen = [p.laengeM ? 'L' : '', p.breiteM ? 'B' : '', p.hoeheM ? 'H' : ''].filter(Boolean).join('×')
+    z.push(`${namen}: ${maße.map(kommaZahl).join(' × ')} m`)
+  }
+  if (p.faktorProzent && p.faktorProzent !== 100) {
+    z.push(p.listenpreis ? `Listenpreis ${eur(p.listenpreis)} × Faktor ${kommaZahl(p.faktorProzent)} %` : `Faktor ${kommaZahl(p.faktorProzent)} %`)
+  }
+  if (p.mitarbeiter) z.push(`Mitarbeiter: ${p.mitarbeiter}`)
+  if (p.taetigkeit) z.push(`Tätigkeit: ${p.taetigkeit}`)
+  return z
+}
