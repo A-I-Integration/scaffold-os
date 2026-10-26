@@ -338,6 +338,17 @@ export default function SidebarLayout({ children }: { children: React.ReactNode 
               </span>
             </div>
           )}
+          {/* Zurück zur Desktop-Oberfläche (Chef/Disposition am großen Bildschirm) */}
+          {grossBildschirm && klassisch && (role === 'admin' || role === 'disponent') && (
+            <button
+              onClick={() => { try { localStorage.removeItem('scaffold_ansicht'); } catch { /* ignorieren */ } setKlassisch(false); }}
+              className={`flex items-center gap-2 text-xs text-[#e8590c] font-semibold hover:bg-[#e8590c]/10 transition-colors w-full px-2 py-1.5 rounded-full ${!open ? 'justify-center' : ''}`}
+              title="Zur Desktop-Ansicht wechseln"
+            >
+              <LayoutDashboard className="w-4 h-4 shrink-0" />
+              {open && 'Desktop-Ansicht'}
+            </button>
+          )}
           {/* Benutzerhandbuch – ganz unten, für alle Rollen */}
           <a
             href="/handbuch.pdf"
