@@ -159,6 +159,34 @@ export default function RechnungAktePage() {
     setZNotiz(''); await lade()
   })
 
+  const pruefLink = () => lauf(async () => {
+    if (!inv) return
+    const r = await fetch('/api/invoices/pruef-link', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ invoice_id: inv.id, tage: 30 }) })
+    const j = await r.json()
+    if (!j.success) throw new Error(j.error || 'Link konnte nicht erstellt werden.')
+    const link = `${window.location.origin}/rechnung-pruefen/${j.link.token}`
+    try { await navigator.clipboard.writeText(link); alert('✅ Prüflink (30 Tage gültig) in die Zwischenablage kopiert:\n\n' + link) }
+    catch { prompt('Prüflink (30 Tage gültig) – bitte kopieren:', link) }
+  })
+
+  const bezahltUmschalten = () => lauf(async () => {
+    if (!inv) return
+    const neu = inv.status === 'bezahlt' ? 'offen' : 'bezahlt'
+    const r = await fetch('/api/invoices', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: inv.id, status: neu, paid_amount: neu === 'bezahlt' ? Number(inv.gross_amount) : 0 }) })
+    const j = await r.json()
+    if (!j.success) throw new Error(j.error)
+    await lade()
+  })
+
+  const loeschen = () => lauf(async () => {
+    if (!inv) return
+    if (!confirm(`${typ} ${inv.invoice_number} wirklich löschen? Das kann nicht rückgängig gemacht werden.`)) return
+    const r = await fetch(`/api/invoices?id=${inv.id}`, { method: 'DELETE' })
+    const j = await r.json()
+    if (!j.success) throw new Error(j.error)
+    router.push(inv.project_id && inv.customer_id ? `/kunden/${inv.customer_id}?baustelle=${inv.project_id}` : '/rechnungen')
+  })
+
   const pdfSpeichern = () => { if (inv) generateInvoicePDF(inv).save(`${typ}_${inv.invoice_number}.pdf`) }
 
   const zugferd = () => lauf(async () => {
@@ -207,8 +235,11 @@ export default function RechnungAktePage() {
         {inv.importiert && <span className="text-xs px-2 py-0.5 rounded bg-black/5 text-[#6e6e73]">Altbestand</span>}
         <span className="text-sm text-[#6e6e73]">{inv.customer_name}</span>
         <div className="ml-auto flex flex-wrap gap-2">
+          <button onClick={pruefLink} disabled={busy || storniert || gutschrift} className={`${knopf} border border-black/15 disabled:opacity-40`}>Prüflink</button>
           <button onClick={pdfSpeichern} className={`${knopf} border border-black/15`}>PDF speichern</button>
           <button onClick={zugferd} disabled={busy} className={`${knopf} border border-black/15`}>E-Rechnung laden</button>
+          {!storniert && !gutschrift && <button onClick={bezahltUmschalten} disabled={busy} className={`${knopf} border border-black/15`}>{inv.status === 'bezahlt' ? 'Wieder offen' : 'Als bezahlt'}</button>}
+          <button onClick={loeschen} disabled={busy} className={`${knopf} text-red-600`}>Löschen</button>
           <button onClick={versenden} disabled={busy || storniert} className={`${knopf} bg-[#e8590c] text-white disabled:opacity-40`}>Per E-Mail versenden</button>
         </div>
       </div>
@@ -238,6 +269,9 @@ export default function RechnungAktePage() {
               </ul>
               <p className="text-right">Netto {fmtEur(Number(inv.net_amount))} € · Brutto <strong>{fmtEur(Number(inv.gross_amount))} €</strong></p>
               {Number(inv.paid_amount) > 0 && <p className="text-right text-[#6e6e73]">Bezahlt {fmtEur(Number(inv.paid_amount))} € · offen {fmtEur(offen)} €</p>}
+              {inv.pruef_status && (
+                <p className="rounded-lg bg-black/5 px-3 py-2">Prüfung durch den Auftraggeber: <strong>{inv.pruef_status === 'akzeptiert' ? 'akzeptiert' : inv.pruef_status === 'aenderung' ? 'Änderung gewünscht' : 'abgelehnt'}</strong>{inv.geprueft_von ? ` von ${inv.geprueft_von}` : ''}{inv.geprueft_am ? ` am ${new Date(inv.geprueft_am).toLocaleDateString("de-DE")}` : ''}</p>
+              )}
               {inv.notes && <p className="text-xs text-[#6e6e73] whitespace-pre-line">{inv.notes}</p>}
             </div>
           )}
