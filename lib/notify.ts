@@ -189,3 +189,31 @@ export async function notifyAbsenceDecision(
     console.error('notifyAbsenceDecision:', e);
   }
 }
+
+// ─── Kunde lehnt ein Angebot ab oder wünscht eine Korrektur → an die Firma ───
+// Empfänger: Firmen-E-Mail aus den Einstellungen, sonst alle admin + disponent.
+export async function notifyAngebotRueckmeldung(
+  projectId: string,
+  art: 'korrektur' | 'ablehnen',
+  notiz: string | null,
+  name: string | null,
+): Promise<void> {
+  try {
+    const { empfaengerFuer, rueckmeldungMail } = await import('@/lib/angebot-rueckmeldung-mail');
+    const [cRes, pRes, prRes] = await Promise.all([
+      fetch(`${url}/rest/v1/company_settings?id=eq.00000000-0000-0000-0000-000000000001&select=email`, { headers }),
+      fetch(`${url}/rest/v1/profiles?role=in.(admin,disponent)&select=email`, { headers }),
+      fetch(`${url}/rest/v1/projects?id=eq.${encodeURIComponent(projectId)}&select=name`, { headers }),
+    ]);
+    const firmenMail = cRes.ok ? (await cRes.json())?.[0]?.email : null;
+    const admins = pRes.ok ? ((await pRes.json()) || []).map((p: any) => p.email) : [];
+    const empfaenger = empfaengerFuer(firmenMail, admins);
+    if (empfaenger.length === 0) return;
+    const projektName = prRes.ok ? (await prRes.json())?.[0]?.name || 'Angebot' : 'Angebot';
+    const link = `${process.env.NEXT_PUBLIC_APP_URL || ''}/aufmass/schritt6?id=${projectId}`;
+    const { subject, html } = rueckmeldungMail({ art, projektName, notiz, name, link });
+    await sendMail(empfaenger, subject, html);
+  } catch (e) {
+    console.error('notifyAngebotRueckmeldung:', e);
+  }
+}

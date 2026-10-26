@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse, after } from 'next/server';
 import { serverErrorResponse } from '@/lib/auth';
 import { beiAngebotsannahmeSicher } from '@/lib/angebot-annahme';
+import { notifyAngebotRueckmeldung } from '@/lib/notify';
 import { ANTWORT_ZU_STATUS, antwortErlaubt, pruefeRueckmeldung, verlaufMit } from '@/lib/angebot-rueckmeldung';
 
 // ============================================================
@@ -119,6 +120,11 @@ export async function POST(req: NextRequest) {
     // Nur bei Annahme: Lager reservieren + Transportaufträge anlegen (Zusammenspiel Aufmaß→Lager→Tour).
     // Läuft im Hintergrund, blockiert die Antwort an den Kunden nicht bei einem Fehler.
     if (eingabe.art === 'annehmen') after(() => beiAngebotsannahmeSicher(projectId));
+    else {
+      const art = eingabe.art;
+      // E-Mail an die Firma (Einstellungen → E-Mail); darf die Antwort an den Kunden nie blockieren
+      after(() => notifyAngebotRueckmeldung(projectId, art, eingabe.notiz, eingabe.name));
+    }
 
     return NextResponse.json({ success: true, art: eingabe.art });
   } catch (err: any) {
