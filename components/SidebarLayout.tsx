@@ -132,6 +132,8 @@ export default function SidebarLayout({ children }: { children: React.ReactNode 
   // Desktop-Oberfläche (Menüleiste, Schnellstartfenster) für Chef/Disposition am großen Bildschirm; abschaltbar unter Ansicht
   const [grossBildschirm, setGrossBildschirm] = useState(false);
   const [klassisch, setKlassisch] = useState(false);
+  const [desktopErzwungen, setDesktopErzwungen] = useState(false); // Knopf „Desktop-Ansicht“: gilt auch bei schmalem Fenster
+  const [breite, setBreite] = useState(0);
   const pathname = usePathname();
   const router = useRouter();
   const supabase = createClient();
@@ -139,10 +141,10 @@ export default function SidebarLayout({ children }: { children: React.ReactNode 
   useEffect(() => {
     // Auf dem Handy eingeklappt starten
     if (typeof window !== 'undefined' && window.innerWidth < 768) setOpen(false);
-    const pruefeBreite = () => setGrossBildschirm(window.innerWidth >= 1024);
+    const pruefeBreite = () => { setGrossBildschirm(window.innerWidth >= 1024); setBreite(window.innerWidth); };
     pruefeBreite();
     window.addEventListener('resize', pruefeBreite);
-    try { setKlassisch(localStorage.getItem('scaffold_ansicht') === 'klassisch'); } catch { /* ohne Speicher: Desktop-Ansicht */ }
+    try { const a = localStorage.getItem('scaffold_ansicht'); setKlassisch(a === 'klassisch'); setDesktopErzwungen(a === 'desktop'); } catch { /* ohne Speicher: Desktop-Ansicht */ }
 
     async function getUser() {
       const { data: { user } } = await supabase.auth.getUser();
@@ -201,7 +203,7 @@ export default function SidebarLayout({ children }: { children: React.ReactNode 
 
   const role = (profile?.role || 'mitarbeiter') as RoleKey;
 
-  if (grossBildschirm && !klassisch && (role === 'admin' || role === 'disponent')) {
+  if ((grossBildschirm || desktopErzwungen) && !klassisch && (role === 'admin' || role === 'disponent')) {
     return (
       <>
         <DesktopShell rolle={role} name={profile?.full_name || user.email || ''} onLogout={handleLogout}
@@ -337,6 +339,17 @@ export default function SidebarLayout({ children }: { children: React.ReactNode 
                 {role.toUpperCase()}
               </span>
             </div>
+          )}
+          {/* Zur Desktop-Oberfläche wechseln (Chef/Disposition) – auch wenn das Fenster schmal ist */}
+          {(role === 'admin' || role === 'disponent') && (
+            <button
+              onClick={() => { try { localStorage.setItem('scaffold_ansicht', 'desktop'); } catch { /* ignorieren */ } setKlassisch(false); setDesktopErzwungen(true); }}
+              className={`flex items-center gap-2 text-xs text-[#e8590c] font-semibold hover:bg-[#e8590c]/10 transition-colors w-full px-2 py-1.5 rounded-full ${!open ? 'justify-center' : ''}`}
+              title={`Zur Desktop-Ansicht wechseln (Fensterbreite ${breite} px)`}
+            >
+              <LayoutDashboard className="w-4 h-4 shrink-0" />
+              {open && <span>Desktop-Ansicht <span className="font-normal opacity-60">({breite} px)</span></span>}
+            </button>
           )}
           {/* Benutzerhandbuch – ganz unten, für alle Rollen */}
           <a
