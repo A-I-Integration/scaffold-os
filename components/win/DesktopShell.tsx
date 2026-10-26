@@ -118,6 +118,11 @@ export default function DesktopShell({ rolle, name, onKlassisch, onLogout, child
   const vonPfad = bereiche.find((b) => b.eintraege.some((e) => istAktiv(e.href)))?.key
   const [gewaehlt, setGewaehlt] = useState<string | null>(null)
   const aktiv = bereiche.find((b) => b.key === (gewaehlt || vonPfad)) || bereiche[0]
+  // Gemeinsame Titelzeile für alle Bereiche (Seiten mit eigener Titelzeile oder Vollbild-Werkzeuge ausgenommen)
+  const EIGENE_KOPFZEILE = ['/kunden', '/rechnungen', '/cad', '/aufmass']
+  const seitenTitel = EIGENE_KOPFZEILE.some((x) => pathname === x || pathname.startsWith(x + '/'))
+    ? null
+    : bereiche.flatMap((b) => b.eintraege).find((e) => istAktiv(e.href))
   const [datum, setDatum] = useState('')
   useEffect(() => { setDatum(new Date().toLocaleDateString('de-DE')) }, [])
   // Beim Seitenwechsel wieder dem Bereich der Seite folgen
@@ -172,7 +177,15 @@ export default function DesktopShell({ rolle, name, onKlassisch, onLogout, child
           </div>
         </aside>
 
-        <main className="win-ui flex-1 min-w-0 overflow-auto bg-[#fbfbfd]">{children}</main>
+        <main className="win-ui flex-1 min-w-0 overflow-auto bg-[#fbfbfd]">
+          {seitenTitel && (
+            <div className="flex items-center gap-2 px-3 h-9 text-white sticky top-0 z-20" style={{ background: `linear-gradient(${FARBE.kopf1},${FARBE.kopf2})` }}>
+              <seitenTitel.icon className="w-4 h-4" /><span className="text-[14px] font-bold">{seitenTitel.label}</span>
+              <span className="text-xs opacity-80">{aktiv.label}</span>
+            </div>
+          )}
+          {children}
+        </main>
       </div>
 
       <div className="flex items-center gap-4 px-3 h-6 text-[12px] border-t" style={{ background: FARBE.menue, borderColor: FARBE.rand, color: '#444' }}>
