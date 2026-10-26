@@ -1,5 +1,6 @@
 'use client';
 
+import { notizMitUstHinweis } from '@/lib/ust-hinweis';
 import { useState, useEffect, useCallback } from 'react';
 import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
@@ -203,6 +204,7 @@ function RechnungenContent() {
     datumPlusTage(14)
   );
   const [notes, setNotes] = useState('');
+  const [reverseCharge, setReverseCharge] = useState(false);
   const [geruestNr, setGeruestNr] = useState('');
   const [leistungsdatum, setLeistungsdatum] = useState('');
   const [detailOffen, setDetailOffen] = useState<Record<number, boolean>>({});
@@ -306,7 +308,7 @@ function RechnungenContent() {
           tax_rate: taxRate,
           invoice_date: invoiceDate,
           due_date: dueDate,
-          notes: notes.trim() || null,
+          notes: notizMitUstHinweis(notes, taxRate, reverseCharge),
           geruest_nr: geruestNr.trim() || undefined,
           leistungsdatum: leistungsdatum || undefined,
           invoice_type: invoiceType,
@@ -330,7 +332,7 @@ function RechnungenContent() {
         setLvId(null);
       }
       setShowForm(false);
-      setCustomerName(''); setCustomerAddress(''); setNotes(''); setProjectId(null); setGeruestNr(''); setLeistungsdatum(''); setDetailOffen({});
+      setCustomerName(''); setCustomerAddress(''); setNotes(''); setReverseCharge(false); setProjectId(null); setGeruestNr(''); setLeistungsdatum(''); setDetailOffen({});
       setInvoiceType('standard');
       setPositions([{ bezeichnung: '', menge: 1, einheit: 'Stk.', einzelpreis: 0 }]);
       await load();
@@ -790,6 +792,12 @@ function RechnungenContent() {
                   <option value={7}>7 %</option>
                   <option value={0}>0 %</option>
                 </select>
+                {taxRate === 0 && (
+                  <label className="flex items-center gap-2 text-xs text-[#1d1d1f] max-w-xs" title="Nur wenn der Kunde selbst Bauleistungen erbringt (USt 1 TG vorliegt). Im Zweifel Steuerberater fragen.">
+                    <input type="checkbox" checked={reverseCharge} onChange={(e) => setReverseCharge(e.target.checked)} />
+                    Steuerschuldner ist der Leistungsempfänger (§ 13b UStG) – Hinweis auf die Rechnung
+                  </label>
+                )}
                 <input
                   value={notes}
                   onChange={(e) => setNotes(e.target.value)}
