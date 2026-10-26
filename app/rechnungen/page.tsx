@@ -9,9 +9,10 @@ import {
   type Invoice, type Position,
 } from '@/lib/invoice-pdf';
 import {
-  FileText, Plus, X, Download, Trash2, Check, Euro, Mail, AlertTriangle,
+  FileText, Plus, X, Download, Trash2, Check, Euro, Mail, AlertTriangle, Link2,
 } from 'lucide-react';
 import { lokalesDatumIso, datumPlusTage } from '@/lib/datum';
+import { ENTSCHEIDUNG_LABEL, type PruefEntscheidung } from '@/lib/rechnung-pruefung';
 import { POSITION_ARTEN, POSITION_ART_LABEL, preisMitFaktor, type PositionArt } from '@/lib/rechnung-position';
 
 // ============================================================
@@ -418,6 +419,21 @@ function RechnungenContent() {
       // Auch hier: kein Fehler nach außen, nur keine Vorbelegung.
     }
     return '';
+  }
+
+  // Prüflink für den Auftraggeber anlegen und in die Zwischenablage kopieren
+  async function handlePruefLink(inv: Invoice) {
+    try {
+      const res = await fetch('/api/invoices/pruef-link', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ invoice_id: inv.id, tage: 30 }),
+      });
+      const json = await res.json();
+      if (!json.success) throw new Error(json.error || 'Link konnte nicht erstellt werden.');
+      const link = `${window.location.origin}/rechnung-pruefen/${json.link.token}`;
+      try { await navigator.clipboard.writeText(link); alert('✅ Prüflink (30 Tage gültig) in die Zwischenablage kopiert:\n\n' + link); }
+      catch { prompt('Prüflink (30 Tage gültig) – bitte kopieren:', link); }
+    } catch (err: any) { alert('❌ ' + err.message); }
   }
 
   async function handleSendMail(inv: Invoice) {
@@ -842,6 +858,14 @@ function RechnungenContent() {
                             {inv.reminder_level}. Mahnung
                           </span>
                         )}
+                        {inv.pruef_status && (
+                          <span
+                            className={`ml-1 text-[10px] font-sans px-1.5 py-0.5 rounded border ${inv.pruef_status === 'akzeptiert' ? 'bg-emerald-500/15 text-emerald-700 border-emerald-500/40' : 'bg-amber-500/15 text-amber-700 border-amber-500/40'}`}
+                            title={`Geprüft von ${inv.geprueft_von || '–'}${inv.geprueft_am ? ' am ' + new Date(inv.geprueft_am).toLocaleDateString('de-DE') : ''}`}
+                          >
+                            {ENTSCHEIDUNG_LABEL[inv.pruef_status as PruefEntscheidung] || inv.pruef_status}
+                          </span>
+                        )}
                         {opens[inv.invoice_number] && (
                           <span
                             className="ml-1 text-[10px] font-sans px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-700 border border-emerald-500/40"
@@ -881,6 +905,15 @@ function RechnungenContent() {
                           >
                             <Download className="h-4 w-4" />
                           </button>
+                          {inv.status !== 'storniert' && (
+                            <button
+                              onClick={() => handlePruefLink(inv)}
+                              title="Prüflink für den Auftraggeber erstellen und kopieren"
+                              className="p-2 rounded-xl bg-black/10 hover:bg-black/15 text-[#424245] transition-colors"
+                            >
+                              <Link2 className="h-4 w-4" />
+                            </button>
+                          )}
                           {inv.status !== 'storniert' && (
                             <button
                               onClick={() => handleSendMail(inv)}
