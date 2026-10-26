@@ -206,7 +206,8 @@ export function generateInvoicePDF(inv: Invoice) {
       theme: 'plain',
       headStyles: { fontSize: 8, fontStyle: 'bold', textColor: [30, 58, 138] },
       bodyStyles: { fontSize: 8, textColor: 15 },
-      columnStyles: { 1: { halign: 'right', cellWidth: 30 } },
+      columnStyles: { 0: { cellWidth: 70 }, 1: { halign: 'right', cellWidth: 40 } },
+      didParseCell: (d: any) => { if (d.section === 'head' && d.column.index === 1) d.cell.styles.halign = 'right' },
       tableWidth: 110,
       margin: { left: 14, right: 14 },
     });
