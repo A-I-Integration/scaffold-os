@@ -7,6 +7,9 @@ export interface TeileVorbelegung {
   traufhoehe: string; // '' = unbekannt
   dachform: '' | 'Satteldach' | 'Flachdach' | 'Walmdach';
   garagen: boolean;
+  /** Haupthaus: längere Seite / kürzere Seite in m ('' = unbekannt) */
+  laenge: string;
+  breite: string;
   hinweis: string;
 }
 
@@ -30,5 +33,10 @@ export function teileVorbelegung(teile: unknown): TeileVorbelegung | null {
     (dach ? `, ${dach} (Dachhöhe ${komma(haupt.dachHoeheM ?? 0)} m)` : '') +
     (teile2.length ? `; Nebengebäude: ${teile2.join('; ')}` : '') +
     '. Die Dachform wird aus Punkten geschätzt – bitte prüfen.';
-  return { traufhoehe: (haupt.traufhoeheM as number).toFixed(2), dachform: dach, garagen: weitere.length > 0, hinweis };
+  const a = ok(haupt.laengeM) ? haupt.laengeM : 0, b = ok(haupt.tiefeM) ? haupt.tiefeM : 0;
+  const lang = a && b ? Math.max(a, b) : 0, kurz = a && b ? Math.min(a, b) : 0;
+  return {
+    traufhoehe: (haupt.traufhoeheM as number).toFixed(2), dachform: dach, garagen: weitere.length > 0,
+    laenge: lang ? lang.toFixed(2) : '', breite: kurz ? kurz.toFixed(2) : '', hinweis,
+  };
 }
