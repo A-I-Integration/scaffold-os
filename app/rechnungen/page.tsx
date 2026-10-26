@@ -12,6 +12,7 @@ import {
   FileText, Plus, X, Download, Trash2, Check, Euro, Mail, AlertTriangle,
 } from 'lucide-react';
 import { lokalesDatumIso, datumPlusTage } from '@/lib/datum';
+import { POSITION_ARTEN, POSITION_ART_LABEL, preisMitFaktor, type PositionArt } from '@/lib/rechnung-position';
 
 // ============================================================
 // SCAFFOLD OS – Rechnungsmodul (Phase 13)
@@ -198,6 +199,9 @@ function RechnungenContent() {
     datumPlusTage(14)
   );
   const [notes, setNotes] = useState('');
+  const [geruestNr, setGeruestNr] = useState('');
+  const [leistungsdatum, setLeistungsdatum] = useState('');
+  const [detailOffen, setDetailOffen] = useState<Record<number, boolean>>({});
   const [projectId, setProjectId] = useState<string | null>(null);
 
   // Phase 18: E-Mail-Öffnungen (Tracking-Pixel)
@@ -263,13 +267,19 @@ function RechnungenContent() {
   const net = positions.reduce((s, p) => s + (Number(p.menge) || 0) * (Number(p.einzelpreis) || 0), 0);
   const tax = Math.round(net * taxRate) / 100;
 
+  const TEXTFELDER: (keyof Position)[] = ['bezeichnung', 'einheit', 'art', 'mitarbeiter', 'taetigkeit'];
   function updatePosition(i: number, field: keyof Position, value: string) {
     setPositions((prev) =>
-      prev.map((p, idx) =>
-        idx === i
-          ? { ...p, [field]: field === 'bezeichnung' || field === 'einheit' ? value : Number(value.replace(',', '.')) || 0 }
-          : p
-      )
+      prev.map((p, idx) => {
+        if (idx !== i) return p;
+        const neu: any = { ...p, [field]: TEXTFELDER.includes(field) ? value : Number(value.replace(',', '.')) || 0 };
+        if (field === 'art' && !value) delete neu.art;
+        // Listenpreis × Faktor ergibt den Einzelpreis (Gesamtpreis bleibt Menge × Einzelpreis)
+        if ((field === 'listenpreis' || field === 'faktorProzent') && Number(neu.listenpreis) > 0) {
+          neu.einzelpreis = preisMitFaktor(Number(neu.listenpreis), Number(neu.faktorProzent) || 100);
+        }
+        return neu;
+      })
     );
   }
 
@@ -291,6 +301,8 @@ function RechnungenContent() {
           invoice_date: invoiceDate,
           due_date: dueDate,
           notes: notes.trim() || null,
+          geruest_nr: geruestNr.trim() || undefined,
+          leistungsdatum: leistungsdatum || undefined,
           invoice_type: invoiceType,
           override_grund: overrideGrund || undefined,
         }),
@@ -307,11 +319,11 @@ function RechnungenContent() {
         throw new Error(json.error || 'Speichern fehlgeschlagen');
       }
       setShowForm(false);
-      setCustomerName(''); setCustomerAddress(''); setNotes(''); setProjectId(null);
+      setCustomerName(''); setCustomerAddress(''); setNotes(''); setProjectId(null); setGeruestNr(''); setLeistungsdatum(''); setDetailOffen({});
       setInvoiceType('standard');
       setPositions([{ bezeichnung: '', menge: 1, einheit: 'Stk.', einzelpreis: 0 }]);
       await load();
-      alert('✅ Rechnung ' + json.invoice.invoice_number + ' angelegt!');
+      alert('✅ Rechnung ' + json.invoice.invoice_number + ' angelegt!' + (json.warnung ? '\n\n⚠️ ' + json.warnung : ''));
     } catch (err: any) {
       alert('❌ ' + err.message);
     } finally {
@@ -604,6 +616,24 @@ function RechnungenContent() {
                   className="w-full px-3 py-2 bg-black/10 border border-black/10 rounded-xl text-sm text-[#1d1d1f] focus:outline-none focus:border-[#e8590c]"
                 />
               </div>
+              <div>
+                <label className="block text-xs text-[#86868b] mb-1">Gerüstnummer</label>
+                <input
+                  value={geruestNr}
+                  onChange={(e) => setGeruestNr(e.target.value)}
+                  placeholder="z. B. G-2026-014"
+                  className="w-full px-3 py-2 bg-black/10 border border-black/10 rounded-xl text-sm text-[#1d1d1f] focus:outline-none focus:border-[#e8590c]"
+                />
+              </div>
+              <div>
+                <label className="block text-xs text-[#86868b] mb-1">Leistungsdatum</label>
+                <input
+                  type="date"
+                  value={leistungsdatum}
+                  onChange={(e) => setLeistungsdatum(e.target.value)}
+                  className="w-full px-3 py-2 bg-black/10 border border-black/10 rounded-xl text-sm text-[#1d1d1f] focus:outline-none focus:border-[#e8590c]"
+                />
+              </div>
             </div>
 
             {/* Positionen */}
@@ -650,6 +680,64 @@ function RechnungenContent() {
                     >
                       <Trash2 className="h-4 w-4" />
                     </button>
+                    <div className="col-span-12 -mt-1">
+                      <button
+                        type="button"
+                        onClick={() => setDetailOffen((d) => ({ ...d, [i]: !d[i] }))}
+                        className="text-xs text-blue-600 hover:text-blue-700"
+                      >
+                        {detailOffen[i] ? 'Details ausblenden' : 'Details (Art, Maße, Faktor, Stundenlohn)'}
+                      </button>
+                    </div>
+                    {detailOffen[i] && (
+                      <div className="col-span-12 grid grid-cols-12 gap-2 rounded-xl bg-black/5 p-3">
+                        <select
+                          value={p.art || ''}
+                          onChange={(e) => updatePosition(i, 'art', e.target.value)}
+                          className="col-span-12 sm:col-span-4 px-3 py-2 bg-black/10 border border-black/10 rounded-xl text-sm text-[#1d1d1f]"
+                        >
+                          <option value="">Art der Position</option>
+                          {POSITION_ARTEN.map((a: PositionArt) => <option key={a} value={a}>{POSITION_ART_LABEL[a]}</option>)}
+                        </select>
+                        {([['laengeM', 'L (m)'], ['breiteM', 'B (m)'], ['hoeheM', 'H (m)']] as [keyof Position, string][]).map(([feld, label]) => (
+                          <input
+                            key={feld}
+                            value={p[feld] != null ? String(p[feld]) : ''}
+                            onChange={(e) => updatePosition(i, feld, e.target.value)}
+                            placeholder={label}
+                            className="col-span-4 sm:col-span-2 px-3 py-2 bg-black/10 border border-black/10 rounded-xl text-sm text-[#1d1d1f] text-right"
+                          />
+                        ))}
+                        <input
+                          value={p.listenpreis != null ? String(p.listenpreis) : ''}
+                          onChange={(e) => updatePosition(i, 'listenpreis', e.target.value)}
+                          placeholder="Listenpreis €"
+                          className="col-span-6 sm:col-span-3 px-3 py-2 bg-black/10 border border-black/10 rounded-xl text-sm text-[#1d1d1f] text-right"
+                        />
+                        <input
+                          value={p.faktorProzent != null ? String(p.faktorProzent) : ''}
+                          onChange={(e) => updatePosition(i, 'faktorProzent', e.target.value)}
+                          placeholder="Faktor % (z. B. 80)"
+                          className="col-span-6 sm:col-span-3 px-3 py-2 bg-black/10 border border-black/10 rounded-xl text-sm text-[#1d1d1f] text-right"
+                        />
+                        {p.art === 'regie' && (
+                          <>
+                            <input
+                              value={p.mitarbeiter || ''}
+                              onChange={(e) => updatePosition(i, 'mitarbeiter', e.target.value)}
+                              placeholder="Mitarbeiter (Name)"
+                              className="col-span-12 sm:col-span-4 px-3 py-2 bg-black/10 border border-black/10 rounded-xl text-sm text-[#1d1d1f]"
+                            />
+                            <input
+                              value={p.taetigkeit || ''}
+                              onChange={(e) => updatePosition(i, 'taetigkeit', e.target.value)}
+                              placeholder="Beschreibung der Tätigkeit"
+                              className="col-span-12 sm:col-span-8 px-3 py-2 bg-black/10 border border-black/10 rounded-xl text-sm text-[#1d1d1f]"
+                            />
+                          </>
+                        )}
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>

@@ -76,10 +76,8 @@ export async function POST(req: NextRequest) {
         issueDate: String(inv.invoice_date),
         typeCode: inv.invoice_type === 'gutschrift' ? DocumentTypeCode.CREDIT_NOTE : DocumentTypeCode.COMMERCIAL_INVOICE,
       },
-      // Leistungsdatum: mangels eigenem Feld wird das Rechnungsdatum
-      // verwendet (bei den meisten Gerüstbau-Rechnungen ohnehin nah am
-      // tatsächlichen Leistungszeitpunkt).
-      delivery: { date: String(inv.invoice_date) },
+      // Leistungsdatum: das gespeicherte Feld, sonst das Rechnungsdatum
+      delivery: { date: String(inv.leistungsdatum || inv.invoice_date) },
       seller: {
         name: cs.company_name,
         address: { line1: cs.street, city: cs.city, postalCode: cs.zip, country: 'DE' },
