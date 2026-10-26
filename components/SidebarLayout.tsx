@@ -6,6 +6,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { useState, useEffect } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import ProductTour from './ProductTour';
+import DesktopShell from './win/DesktopShell';
 import { starteNeuesAufmass } from '@/lib/aufmass-projekt-session';
 import {
   HardHat, LayoutDashboard, Warehouse, CalendarClock, Truck,
@@ -128,6 +129,9 @@ export default function SidebarLayout({ children }: { children: React.ReactNode 
   const [open, setOpen] = useState(true);
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({});
   const [zeigeTour, setZeigeTour] = useState(false);
+  // Desktop-Oberfläche (Menüleiste, Schnellstartfenster) für Chef/Disposition am großen Bildschirm; abschaltbar unter Ansicht
+  const [grossBildschirm, setGrossBildschirm] = useState(false);
+  const [klassisch, setKlassisch] = useState(false);
   const pathname = usePathname();
   const router = useRouter();
   const supabase = createClient();
@@ -135,6 +139,10 @@ export default function SidebarLayout({ children }: { children: React.ReactNode 
   useEffect(() => {
     // Auf dem Handy eingeklappt starten
     if (typeof window !== 'undefined' && window.innerWidth < 768) setOpen(false);
+    const pruefeBreite = () => setGrossBildschirm(window.innerWidth >= 1024);
+    pruefeBreite();
+    window.addEventListener('resize', pruefeBreite);
+    try { setKlassisch(localStorage.getItem('scaffold_ansicht') === 'klassisch'); } catch { /* ohne Speicher: Desktop-Ansicht */ }
 
     async function getUser() {
       const { data: { user } } = await supabase.auth.getUser();
@@ -164,7 +172,7 @@ export default function SidebarLayout({ children }: { children: React.ReactNode 
         setProfile(null);
       }
     });
-    return () => subscription.unsubscribe();
+    return () => { subscription.unsubscribe(); window.removeEventListener('resize', pruefeBreite); };
   }, []);
 
   const isActive = (href: string) => {
@@ -192,6 +200,20 @@ export default function SidebarLayout({ children }: { children: React.ReactNode 
   }
 
   const role = (profile?.role || 'mitarbeiter') as RoleKey;
+
+  if (grossBildschirm && !klassisch && (role === 'admin' || role === 'disponent')) {
+    return (
+      <>
+        <DesktopShell rolle={role} name={profile?.full_name || user.email || ''} onLogout={handleLogout}
+          onKlassisch={() => { try { localStorage.setItem('scaffold_ansicht', 'klassisch'); } catch { /* ignorieren */ } setKlassisch(true); }}>
+          {children}
+        </DesktopShell>
+        {zeigeTour && user && (
+          <ProductTour onClose={() => { localStorage.setItem(`scaffold_tour_seen_${user.id}`, 'true'); setZeigeTour(false); }} />
+        )}
+      </>
+    );
+  }
 
   function toggleGroup(key: string) {
     if (!open) { setOpen(true); setOpenGroups((prev) => ({ ...prev, [key]: true })); return; }

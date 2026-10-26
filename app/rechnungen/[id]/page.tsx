@@ -237,8 +237,8 @@ export default function RechnungAktePage() {
   const primaer = 'w-full rounded px-3 py-2 text-sm font-semibold text-white disabled:opacity-40'
 
   return (
-    <div className="flex flex-col h-screen" style={{ background: WIN.grund, color: WIN.text }}>
-      <Titelleiste titel="SCAFFOLD OS" untertitel={`${typ} ${inv.invoice_number} · ${inv.customer_name}`} rechts={<Link href={zurueck} className="text-xs opacity-80 hover:opacity-100">✕ Schließen</Link>} />
+    <div className="flex flex-col h-full min-h-[600px]" style={{ background: WIN.grund, color: WIN.text }}>
+      <Titelleiste titel="Rechnung" untertitel={`${typ} ${inv.invoice_number} · ${inv.customer_name}`} rechts={<Link href={zurueck} className="text-xs opacity-80 hover:opacity-100">✕ Schließen</Link>} />
 
       {/* Menüband */}
       <Menueband>

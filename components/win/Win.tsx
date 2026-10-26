@@ -11,9 +11,8 @@ export const WIN = {
 
 export function Titelleiste({ titel, untertitel, rechts }: { titel: string; untertitel?: string; rechts?: ReactNode }) {
   return (
-    <div className="flex items-center gap-3 px-3 h-9 text-white text-[13px]" style={{ background: WIN.titel }}>
-      <span className="inline-block w-3 h-3 rounded-sm" style={{ background: WIN.akzent }} />
-      <span className="font-semibold">{titel}</span>
+    <div className="flex items-center gap-3 px-3 h-7 text-white text-[13px]" style={{ background: 'linear-gradient(#4a86c8,#2d63a3)' }}>
+      <span className="font-bold">{titel}</span>
       {untertitel && <span className="opacity-70 truncate">– {untertitel}</span>}
       <span className="ml-auto flex items-center gap-2">{rechts}</span>
     </div>
