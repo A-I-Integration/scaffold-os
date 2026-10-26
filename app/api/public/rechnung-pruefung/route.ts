@@ -33,9 +33,10 @@ export async function GET(req: NextRequest) {
     if (!TOKEN_MUSTER.test(token)) return nein();
     const link = await linkZuToken(token);
     if (!link) return nein();
-    const [iRes, pRes] = await Promise.all([
+    const [iRes, pRes, aRes] = await Promise.all([
       fetch(`${url}/rest/v1/invoices?id=eq.${link.invoice_id}&select=invoice_number,invoice_type,invoice_date,leistungsdatum,due_date,geruest_nr,customer_name,positions,net_amount,tax_rate,tax_amount,gross_amount,status,notes,company_snapshot`, { headers }),
       fetch(`${url}/rest/v1/invoice_pruefungen?invoice_id=eq.${link.invoice_id}&select=entscheidung,geprueft_von,kommentar,geprueft_am&order=geprueft_am.desc&limit=20`, { headers }),
+      fetch(`${url}/rest/v1/invoice_attachments?invoice_id=eq.${link.invoice_id}&bestaetigt_am=not.is.null&select=id,file_name,file_type,size_bytes&order=created_at.asc`, { headers }),
     ]);
     if (!iRes.ok) throw new Error(await iRes.text());
     const inv = (await iRes.json())?.[0];
@@ -47,6 +48,7 @@ export async function GET(req: NextRequest) {
       rechnung,
       firma: { name: cs.company_name || null, ort: [cs.zip, cs.city].filter(Boolean).join(' ') || null },
       pruefungen: pRes.ok ? await pRes.json() : [],
+      anhaenge: aRes.ok ? await aRes.json() : [],
       gueltigBis: link.expires_at,
     }, { headers: kein_cache });
   } catch (err) { return serverErrorResponse(err, 'public/rechnung-pruefung GET'); }

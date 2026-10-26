@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
+import { groesseText } from '@/lib/rechnung-anhang';
 import { positionDetailZeilen } from '@/lib/rechnung-position';
 import { ENTSCHEIDUNG_LABEL, type PruefEntscheidung } from '@/lib/rechnung-pruefung';
 
@@ -106,6 +107,20 @@ export default function RechnungPruefenPage() {
             <p className="text-lg font-bold">Rechnungsbetrag {eur(r.gross_amount)}</p>
           </div>
         </div>
+
+        {daten.anhaenge?.length > 0 && (
+          <div className="rounded-2xl bg-white p-4 text-sm shadow-sm">
+            <p className="mb-2 text-xs text-[#86868b]">Anlagen zur Rechnung</p>
+            <ul className="space-y-1">
+              {daten.anhaenge.map((a: any) => (
+                <li key={a.id}>
+                  <a className="text-[#e8590c] hover:underline" href={`/api/public/rechnung-pruefung/anhang?token=${encodeURIComponent(token)}&id=${a.id}`}>{a.file_name}</a>
+                  <span className="ml-2 text-[11px] text-[#86868b]">{groesseText(Number(a.size_bytes))}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
 
         {daten.pruefungen?.length > 0 && (
           <div className="rounded-2xl bg-white p-4 text-sm shadow-sm">
