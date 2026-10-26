@@ -13,6 +13,7 @@ import { useParams, useRouter } from 'next/navigation'
 import { generateInvoicePDF, holePdfBase64FuerVersand, fmtEur, fmtDate, TYPE_LABEL, type Invoice, type Position } from '@/lib/invoice-pdf'
 import { Download, FileText, Send, Link2, Pencil, PlusCircle, Scissors, ReceiptText, Euro, CheckCircle2, RotateCcw, Trash2, Paperclip } from 'lucide-react'
 import { Titelleiste, Menueband, BandGruppe, BandKnopf, BaumKnoten, DokumentReiter, Statusleiste, Aufgabenbereich, WIN } from '@/components/win/Win'
+import { ENTSCHEIDUNG_LABEL } from '@/lib/rechnung-pruefung'
 import AnhangDialog from '@/components/rechnung/AnhangDialog'
 import { lokalesDatumIso, datumPlusTage } from '@/lib/datum'
 
@@ -30,6 +31,8 @@ const knopf = 'rounded-full px-4 py-2 text-sm font-semibold'
 const zahl = (v: unknown) => Number(String(v ?? '').replace(',', '.')) || 0
 
 interface Zahlung { id: string; amount: number; payment_date: string; note: string | null }
+interface PruefLink { id: string; token: string; label: string | null; created_at: string; expires_at: string; status: 'aktiv' | 'abgelaufen' | 'widerrufen' }
+interface Pruefung { id: string; entscheidung: string; geprueft_von: string | null; kommentar: string | null; geprueft_am: string }
 interface Mail { id: string; to_email: string; subject: string; sent_at: string }
 
 function PositionenEditor({ positionen, setPositionen }: { positionen: Position[]; setPositionen: (p: Position[]) => void }) {
@@ -68,6 +71,8 @@ export default function RechnungAktePage() {
   const [anhangOffen, setAnhangOffen] = useState(false)
   const [zahlungen, setZahlungen] = useState<Zahlung[]>([])
   const [mails, setMails] = useState<Mail[]>([])
+  const [pruefLinks, setPruefLinks] = useState<PruefLink[]>([])
+  const [pruefungen, setPruefungen] = useState<Pruefung[]>([])
   // Formularzustände
   const [positionen, setPositionen] = useState<Position[]>([])
   const [prozent, setProzent] = useState('50')
@@ -89,6 +94,7 @@ export default function RechnungAktePage() {
       fetch('/api/invoices').then((x) => x.json()).then((a) => a?.success && setBelege((a.invoices as Invoice[]).filter((b) => i.project_id ? b.project_id === i.project_id : b.id === i.id))).catch(() => {})
       if (i.project_id) fetch('/api/projects?id=' + i.project_id).then((x) => x.json()).then((pj) => setBaustelleName(pj?.project?.name || '')).catch(() => {}); else setBaustelleName('')
       fetch(`/api/invoice-payments?invoice_id=${i.id}`).then((x) => x.json()).then((p) => p?.success && setZahlungen(p.payments)).catch(() => {})
+      fetch(`/api/invoices/pruef-link?invoice_id=${i.id}`).then((x) => x.json()).then((p) => { if (p?.success) { setPruefLinks(p.links || []); setPruefungen(p.pruefungen || []) } }).catch(() => {})
       fetch(`/api/email-log?invoice_numbers=${encodeURIComponent(i.invoice_number)}`).then((x) => x.json()).then((m) => m?.success && setMails(m.emails || [])).catch(() => {})
     } catch (e) { setFehler(e instanceof Error ? e.message : 'Laden fehlgeschlagen') }
   }, [id])
@@ -170,8 +176,21 @@ export default function RechnungAktePage() {
     const j = await r.json()
     if (!j.success) throw new Error(j.error || 'Link konnte nicht erstellt werden.')
     const link = `${window.location.origin}/rechnung-pruefen/${j.link.token}`
+    void lade()
     try { await navigator.clipboard.writeText(link); alert('✅ Prüflink (30 Tage gültig) in die Zwischenablage kopiert:\n\n' + link) }
     catch { prompt('Prüflink (30 Tage gültig) – bitte kopieren:', link) }
+  })
+
+  const linkKopieren = async (token: string) => {
+    const link = `${window.location.origin}/rechnung-pruefen/${token}`
+    try { await navigator.clipboard.writeText(link); alert('✅ Link kopiert:\n\n' + link) } catch { prompt('Link bitte kopieren:', link) }
+  }
+  const linkWiderrufen = (linkId: string) => lauf(async () => {
+    if (!confirm('Prüflink widerrufen? Der Auftraggeber kann die Rechnung damit nicht mehr öffnen.')) return
+    const r = await fetch(`/api/invoices/pruef-link?id=${linkId}`, { method: 'DELETE' })
+    const j = await r.json()
+    if (!j.success) throw new Error(j.error || 'Widerruf fehlgeschlagen.')
+    await lade()
   })
 
   const bezahltUmschalten = () => lauf(async () => {
@@ -331,6 +350,43 @@ export default function RechnungAktePage() {
                     {mails.length === 0 && <tr><td colSpan={2} className="p-3" style={{ color: WIN.textGedaempft }}>Noch nicht versendet.</td></tr>}
                   </tbody>
                 </table>
+
+                <h3 className="font-semibold pt-4">Prüflinks</h3>
+                <table className="w-full border-collapse">
+                  <thead><tr className="text-left text-xs" style={{ background: WIN.grund, color: WIN.textGedaempft }}>
+                    <th className="p-2 border" style={{ borderColor: WIN.rand }}>Erstellt</th><th className="p-2 border" style={{ borderColor: WIN.rand }}>Gültig bis</th><th className="p-2 border" style={{ borderColor: WIN.rand }}>Status</th><th className="p-2 border" style={{ borderColor: WIN.rand }}></th>
+                  </tr></thead>
+                  <tbody>
+                    {pruefLinks.map((l) => (
+                      <tr key={l.id}>
+                        <td className="p-2 border" style={{ borderColor: WIN.randHell }}>{new Date(l.created_at).toLocaleDateString('de-DE')}{l.label ? ` · ${l.label}` : ''}</td>
+                        <td className="p-2 border" style={{ borderColor: WIN.randHell }}>{new Date(l.expires_at).toLocaleDateString('de-DE')}</td>
+                        <td className="p-2 border" style={{ borderColor: WIN.randHell }}>{l.status === 'aktiv' ? 'Aktiv' : l.status === 'abgelaufen' ? 'Abgelaufen' : 'Widerrufen'}</td>
+                        <td className="p-2 border text-right whitespace-nowrap" style={{ borderColor: WIN.randHell }}>
+                          {l.status === 'aktiv' && <>
+                            <button onClick={() => linkKopieren(l.token)} className="rounded border px-2 py-1 mr-1" style={{ borderColor: WIN.rand }}>Link kopieren</button>
+                            <button disabled={busy} onClick={() => linkWiderrufen(l.id)} className="rounded border px-2 py-1 text-red-600" style={{ borderColor: WIN.rand }}>Widerrufen</button>
+                          </>}
+                        </td>
+                      </tr>
+                    ))}
+                    {pruefLinks.length === 0 && <tr><td colSpan={4} className="p-3" style={{ color: WIN.textGedaempft }}>Noch kein Prüflink erstellt (oben im Menüband „Prüflink“).</td></tr>}
+                  </tbody>
+                </table>
+
+                {pruefungen.length > 0 && (
+                  <>
+                    <h3 className="font-semibold pt-4">Rückmeldungen des Auftraggebers</h3>
+                    <ul className="space-y-1">
+                      {pruefungen.map((p) => (
+                        <li key={p.id} className="rounded border p-2" style={{ borderColor: WIN.randHell }}>
+                          <span className="font-medium">{(ENTSCHEIDUNG_LABEL as Record<string, string>)[p.entscheidung] || p.entscheidung}</span>{p.geprueft_von ? ` · ${p.geprueft_von}` : ''} · {new Date(p.geprueft_am).toLocaleString('de-DE')}
+                          {p.kommentar && <p className="text-xs mt-1" style={{ color: WIN.textGedaempft }}>{p.kommentar}</p>}
+                        </li>
+                      ))}
+                    </ul>
+                  </>
+                )}
               </div>
             )}
           </div>
