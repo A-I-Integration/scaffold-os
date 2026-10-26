@@ -3,6 +3,9 @@
 import { useState, useEffect, useCallback } from 'react';
 import { uploadEventPhotoClient, EventPhoto } from '@/lib/project-events-client';
 import { generatePruefprotokollPDF, type PruefungDetails } from '@/lib/pruefprotokoll-pdf';
+import { PRUEFPUNKTE, LASTKLASSEN, BREITENKLASSEN, STATUS_LABEL, fehlendeAngaben, klasseText, type PunktStatus } from '@/lib/pruefcheckliste';
+import { uploadVertragsdokument } from '@/lib/vertrag-upload-client';
+import SignaturePad from '@/components/aufmaß/SignaturePad';
 
 // ============================================================
 // SCAFFOLD OS – Projekt-Dokumentation (Phase 18)
@@ -63,10 +66,14 @@ export default function ProjektDokumentation({ projectId, employeeId }: Props) {
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
 
   // Prüfprotokoll-Angaben (Phase 24) – nur relevant bei type = pruefung_freigabe
-  const [pruefung, setPruefung] = useState<PruefungDetails>({
+  const leerePruefung = (): PruefungDetails => ({
     geruestklasse: '', maengel_festgestellt: false, maengel_text: '', maengel_behoben: false,
     kennzeichnung_angebracht: false, freigegeben: false, freigegeben_durch: '', nutzungsende_geplant: '',
+    bauart: '', lastklasse: '', breitenklasse: '', pruefdatum: new Date().toISOString().slice(0, 10), naechste_pruefung: '', checkliste: {}, unterschrift: '',
   });
+  const [pruefung, setPruefung] = useState<PruefungDetails>(leerePruefung);
+  const [mappeAblegen, setMappeAblegen] = useState(true);
+  const [zeigeUnterschrift, setZeigeUnterschrift] = useState(false);
 
   // Material-Rückgabe (Phase 23) – schließt die Lücke zwischen
   // Demontage/Rücktransport-Dokumentation und dem Lagerbestand.
@@ -118,9 +125,9 @@ export default function ProjektDokumentation({ projectId, employeeId }: Props) {
       setMsg({ ok: false, text: 'Bitte Text eingeben oder mindestens ein Foto hinzufügen.' });
       return;
     }
-    if (istPruefung && !pruefung.freigegeben_durch?.trim()) {
-      setMsg({ ok: false, text: 'Bitte "Freigegeben durch (Name)" ausfüllen.' });
-      return;
+    if (istPruefung) {
+      const fehlt = fehlendeAngaben(pruefung);
+      if (fehlt.length) { setMsg({ ok: false, text: 'Bitte ergänzen: ' + fehlt.join('; ') + '.' }); return; }
     }
     setSaving(true);
     try {
@@ -133,15 +140,21 @@ export default function ProjektDokumentation({ projectId, employeeId }: Props) {
           text_note: text.trim() || null,
           photos: pendingPhotos,
           employee_id: employeeId || null,
-          pruefung_details: istPruefung ? pruefung : undefined,
+          pruefung_details: istPruefung ? { ...pruefung, geruestklasse: klasseText(pruefung.lastklasse, pruefung.breitenklasse) || pruefung.geruestklasse } : undefined,
         }),
       });
       const json = await res.json();
       if (!json.success) throw new Error(json.error);
+      // Protokoll-PDF in die Baustellenmappe (QR-Code) legen; der Eintrag selbst ist schon gespeichert
+      let mappeHinweis = '';
+      if (istPruefung && mappeAblegen) {
+        try { await protokollInMappe({ ...pruefung, geruestklasse: klasseText(pruefung.lastklasse, pruefung.breitenklasse) || pruefung.geruestklasse }, text.trim() || null); mappeHinweis = ' Das Protokoll liegt jetzt in der Baustellenmappe (QR).'; }
+        catch (err: any) { mappeHinweis = ' Das PDF konnte nicht in die Baustellenmappe gelegt werden: ' + err.message; }
+      }
       setText('');
       setPendingPhotos([]);
-      setPruefung({ geruestklasse: '', maengel_festgestellt: false, maengel_text: '', maengel_behoben: false, kennzeichnung_angebracht: false, freigegeben: false, freigegeben_durch: '', nutzungsende_geplant: '' });
-      setMsg({ ok: true, text: '✅ Eintrag gespeichert.' });
+      setPruefung(leerePruefung());
+      setMsg({ ok: true, text: '✅ Eintrag gespeichert.' + mappeHinweis });
       load();
     } catch (e: any) {
       setMsg({ ok: false, text: '❌ ' + e.message });
@@ -205,6 +218,25 @@ export default function ProjektDokumentation({ projectId, employeeId }: Props) {
     setMaterialSaving(false);
   }
 
+  async function protokollInMappe(details: PruefungDetails, notiz: string | null) {
+    const [pRes, cRes] = await Promise.all([
+      fetch(`/api/projects?id=${projectId}`).then(r => r.json()),
+      fetch('/api/company').then(r => r.json()),
+    ]);
+    const projekt = pRes.success ? pRes.project : {};
+    const company = cRes.success ? cRes.company : null;
+    const datum = details.pruefdatum || new Date().toISOString().slice(0, 10);
+    const doc = generatePruefprotokollPDF(details, projekt, company, datum, notiz);
+    const datei = new File([doc.output('blob')], `Pruefprotokoll_${datum}.pdf`, { type: 'application/pdf' });
+    const up = await uploadVertragsdokument(datei, projectId, 'mappe');
+    const r = await fetch('/api/baustellenmappe', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'dokument', project_id: projectId, storage_path: up.storage_path, file_name: up.file_name, file_type: up.file_type, kategorie: 'Prüfprotokoll', bezeichnung: `Prüfprotokoll vom ${new Date(datum + 'T00:00:00').toLocaleDateString('de-DE')}`, mappe: true }),
+    });
+    const j = await r.json();
+    if (!j.success) throw new Error(j.error || 'Ablage fehlgeschlagen');
+  }
+
   async function downloadPruefprotokoll(ev: ProjectEvent) {
     try {
       const [pRes, cRes] = await Promise.all([
@@ -254,7 +286,32 @@ export default function ProjektDokumentation({ projectId, employeeId }: Props) {
         {type === 'pruefung_freigabe' && (
           <div className="bg-[#f5f5f7] rounded-xl p-4 space-y-3 border border-black/5">
             <p className="text-xs font-semibold text-[#1d1d1f]">📋 Angaben für das Prüfprotokoll</p>
-            <input value={pruefung.geruestklasse} onChange={e => setPruefung({ ...pruefung, geruestklasse: e.target.value })} placeholder="Gerüstklasse (z.B. Lastklasse 3, Breitenklasse W06)" className={inputCls} />
+            <div className="grid grid-cols-3 gap-2">
+              <input value={pruefung.bauart} onChange={e => setPruefung({ ...pruefung, bauart: e.target.value })} placeholder="Bauart (z. B. Fassadengerüst)" className={inputCls} />
+              <select value={pruefung.lastklasse} onChange={e => setPruefung({ ...pruefung, lastklasse: e.target.value })} className={inputCls} aria-label="Lastklasse"><option value="">Lastklasse</option>{LASTKLASSEN.map(k => <option key={k} value={k}>Lastklasse {k}</option>)}</select>
+              <select value={pruefung.breitenklasse} onChange={e => setPruefung({ ...pruefung, breitenklasse: e.target.value })} className={inputCls} aria-label="Breitenklasse"><option value="">Breitenklasse</option>{BREITENKLASSEN.map(k => <option key={k} value={k}>{k}</option>)}</select>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <div><label className="block text-xs text-[#86868b] mb-1">Prüfdatum</label><input type="date" value={pruefung.pruefdatum} onChange={e => setPruefung({ ...pruefung, pruefdatum: e.target.value })} className={inputCls} /></div>
+              <div><label className="block text-xs text-[#86868b] mb-1">Nächste Prüfung (optional)</label><input type="date" value={pruefung.naechste_pruefung} onChange={e => setPruefung({ ...pruefung, naechste_pruefung: e.target.value })} className={inputCls} /></div>
+            </div>
+
+            <div className="rounded-lg border border-black/10 bg-white">
+              <p className="text-xs font-semibold px-3 py-2 border-b border-black/10">Prüfpunkte (je Punkt eine Auswahl)</p>
+              {PRUEFPUNKTE.map(p => (
+                <div key={p.key} className="px-3 py-2 border-b border-black/5 last:border-0">
+                  <p className="text-sm">{p.label}</p>
+                  <div className="flex gap-4 mt-1 text-sm">
+                    {(['ok', 'mangel', 'entfaellt'] as PunktStatus[]).map(st => (
+                      <label key={st} className="flex items-center gap-1.5">
+                        <input type="radio" name={`pp-${p.key}`} checked={pruefung.checkliste?.[p.key] === st} onChange={() => setPruefung({ ...pruefung, checkliste: { ...pruefung.checkliste, [p.key]: st }, ...(st === 'mangel' ? { maengel_festgestellt: true } : {}) })} />
+                        {STATUS_LABEL[st]}
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
 
             <label className="flex items-center gap-2 text-sm">
               <input type="checkbox" checked={!!pruefung.maengel_festgestellt} onChange={e => setPruefung({ ...pruefung, maengel_festgestellt: e.target.checked })} />
@@ -285,7 +342,24 @@ export default function ProjektDokumentation({ projectId, employeeId }: Props) {
                 <input type="checkbox" checked={!!pruefung.freigegeben} onChange={e => setPruefung({ ...pruefung, freigegeben: e.target.checked })} />
                 Gerüst freigegeben
               </label>
-              <input value={pruefung.freigegeben_durch} onChange={e => setPruefung({ ...pruefung, freigegeben_durch: e.target.value })} placeholder="Freigegeben durch (Name) *" className={`${inputCls} mt-2`} />
+              <input value={pruefung.freigegeben_durch} onChange={e => setPruefung({ ...pruefung, freigegeben_durch: e.target.value })} placeholder="Prüfende (befähigte) Person – Name *" className={`${inputCls} mt-2`} />
+            </div>
+
+            <div className="border-t border-black/10 pt-3 space-y-2">
+              {pruefung.unterschrift ? (
+                <div className="flex items-center gap-3">
+                  <img src={pruefung.unterschrift} alt="Unterschrift" className="h-16 bg-white border border-black/10 rounded" />
+                  <button type="button" onClick={() => setPruefung({ ...pruefung, unterschrift: '' })} className="text-xs text-[#e8590c]">Neu unterschreiben</button>
+                </div>
+              ) : zeigeUnterschrift ? (
+                <SignaturePad onSave={(d) => { setPruefung({ ...pruefung, unterschrift: d }); setZeigeUnterschrift(false); }} onCancel={() => setZeigeUnterschrift(false)} />
+              ) : (
+                <button type="button" onClick={() => setZeigeUnterschrift(true)} className="rounded-lg border border-black/20 bg-white px-3 py-2 text-sm font-medium">✍️ Unterschreiben *</button>
+              )}
+              <label className="flex items-center gap-2 text-sm">
+                <input type="checkbox" checked={mappeAblegen} onChange={e => setMappeAblegen(e.target.checked)} />
+                Protokoll-PDF automatisch in die Baustellenmappe (QR-Code) legen
+              </label>
             </div>
           </div>
         )}

@@ -20,6 +20,8 @@ const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const key = process.env.SUPABASE_SERVICE_ROLE_KEY!;
 const headers = { 'Content-Type': 'application/json', apikey: key, Authorization: `Bearer ${key}` };
 const ROLLEN = ['admin', 'disponent'];
+// Dokumente ablegen darf zusätzlich die Bauleitung (z. B. Prüfprotokoll nach dem Aufbau)
+const ROLLEN_ABLEGEN = ['admin', 'disponent', 'bauleiter'];
 const BUCKET_URL = `${url}/storage/v1/object/public/project-media/`;
 
 async function rolle(): Promise<string | null> {
@@ -67,10 +69,11 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   const r = await rolle();
-  if (!r || !ROLLEN.includes(r)) return verboten();
+  if (!r) return verboten();
   try {
     const body = await req.json().catch(() => ({}));
     const aktion = String(body?.action || '');
+    if (!(aktion === 'dokument' ? ROLLEN_ABLEGEN : ROLLEN).includes(r)) return verboten();
     const projectId = String(body?.project_id || '');
 
     if (aktion === 'link') {
@@ -89,7 +92,7 @@ export async function POST(req: NextRequest) {
       const sp = String(body?.storage_path || '');
       if (!sp.startsWith(ordner) || sp.includes('..') || !body?.file_name) return ungueltig('Ungültige Datei-Angaben.');
       const metadata: Record<string, unknown> = { kind: 'dokument' };
-      if (aktion === 'vorlage') metadata.vorlage = true; else metadata.mappe = false;
+      if (aktion === 'vorlage') metadata.vorlage = true; else metadata.mappe = body?.mappe === true;
       const kat = kategorieOk(body?.kategorie); if (kat) metadata.kategorie = kat;
       const bez = bereinigeText(body?.bezeichnung, 120); if (bez) metadata.bezeichnung = bez;
       const ins = await fetch(`${url}/rest/v1/project_media`, {
