@@ -285,7 +285,7 @@ export default function RechnungAktePage() {
         </BandGruppe>
       </Menueband>
 
-      <div className={`flex-1 min-h-0 grid lg:grid-cols-[240px_1fr] ${aufgabe ? 'xl:grid-cols-[240px_1fr_340px]' : ''}`}>
+      <div className={`flex-1 min-h-0 grid lg:grid-cols-[340px_1fr] ${aufgabe ? 'xl:grid-cols-[340px_1fr_400px]' : ''}`}>
         {/* Links: Baumansicht */}
         <nav className="hidden lg:block border-r overflow-y-auto bg-white" style={{ borderColor: WIN.rand }}>
           <div className="px-3 py-2 text-[11px] uppercase tracking-wide" style={{ color: WIN.textGedaempft }}>Navigation</div>
