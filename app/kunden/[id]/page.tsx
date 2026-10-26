@@ -12,6 +12,7 @@
 //                         automatische rote Kennzeichnung bei Zahlungsverzug
 // ============================================================
 
+import AngebotRueckmeldungHinweis from '@/components/AngebotRueckmeldungHinweis'
 import { geruestPositionen } from '@/lib/aufmass-rechnung'
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useParams, useRouter } from 'next/navigation'
@@ -98,6 +99,7 @@ const TYPE_LABEL: Record<string, string> = {
 const ANGEBOT_LABEL: Record<string, string> = {
   erstellt: '✏️ Angebot erstellt', versendet: '📧 Angebot versendet',
   gelesen: '👁️ Angebot gelesen', angenommen: '✅ Angebot angenommen',
+  korrektur: '✍️ Korrektur gewünscht', abgelehnt: '❌ Angebot abgelehnt',
 }
 const DOK_TYPE_LABEL: Record<string, string> = {
   pruefung_freigabe: 'Prüfung / Freigabe', standzeit: 'Standzeit / Nutzung',
@@ -1162,6 +1164,7 @@ export default function KundenDetailPage() {
                     </div>
                     <a href={`/aufmass/schritt6?id=${project.id}`} className={btnPrimary}>{angebotsStatus ? 'Angebot öffnen' : 'Angebot erstellen'}</a>
                   </div>
+                  <AngebotRueckmeldungHinweis verlauf={project.data?.angebotRueckmeldungen} />
                   <VertragsDokumente projectId={project.id} />
                 </div>
               )

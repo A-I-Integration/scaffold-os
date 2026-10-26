@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse, after } from 'next/server';
 import { serverErrorResponse } from '@/lib/auth';
 import { beiAngebotsannahmeSicher } from '@/lib/angebot-annahme';
+import { ANTWORT_ZU_STATUS, antwortErlaubt, pruefeRueckmeldung, verlaufMit } from '@/lib/angebot-rueckmeldung';
 
 // ============================================================
 // SCAFFOLD OS – Öffentliche Angebots-Ansicht/Annahme (Phase 33)
@@ -8,8 +9,10 @@ import { beiAngebotsannahmeSicher } from '@/lib/angebot-annahme';
 // GET  ?token=... → Angebotsdaten für die Fern-Annahme-Seite
 //                    (NUR das eine, zum Token passende Projekt –
 //                    nie eine Liste, nie interne IDs im Klartext)
-// POST { token }   → Angebot annehmen (setzt angebotsStatus, ohne
-//                     Unterschrift – Vermerk "per Link angenommen")
+// POST { token, art?, notiz?, name? } → Antwort des Kunden:
+//        art 'annehmen' (Standard, ohne Unterschrift – Vermerk "per Link angenommen"),
+//        'korrektur' (Notiz Pflicht: was nicht passt / fehlt) oder 'ablehnen' (Notiz optional).
+//        Jede Antwort landet im Verlauf data.angebotRueckmeldungen.
 //
 // KEIN Login nötig – der Empfänger ist der Kunde selbst. Zugriff
 // ausschließlich über den unerratbaren Token, nie über die Projekt-ID.
@@ -60,6 +63,9 @@ export async function GET(req: NextRequest) {
         projektName: projekt.name,
         adresse: projekt.adresse,
         angebotsStatus: d.angebotsStatus || 'versendet',
+        letzteRueckmeldung: Array.isArray(d.angebotRueckmeldungen) && d.angebotRueckmeldungen.length
+          ? (({ art, notiz, am }: any) => ({ art, notiz, am }))(d.angebotRueckmeldungen[d.angebotRueckmeldungen.length - 1])
+          : null,
         endpreis: ki?.suggestedPrice ?? null,
         gerüstklasse: ki?.scaffoldClass ?? null,
         flaecheM2: ki?.totalAreaM2 ?? null,
@@ -73,8 +79,11 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
-    const { token } = await req.json();
-    if (!token) return NextResponse.json({ success: false, error: 'Kein Token angegeben.' }, { status: 400 });
+    const body = await req.json().catch(() => ({}));
+    const token = body?.token;
+    if (!token || typeof token !== 'string') return NextResponse.json({ success: false, error: 'Kein Token angegeben.' }, { status: 400 });
+    const eingabe = pruefeRueckmeldung(body);
+    if (!eingabe.ok) return NextResponse.json({ success: false, error: eingabe.fehler }, { status: 400 });
 
     const projectId = await projektZuToken(token);
     if (!projectId) return NextResponse.json({ success: false, error: 'Ungültiger oder abgelaufener Link.' }, { status: 404 });
@@ -86,24 +95,32 @@ export async function POST(req: NextRequest) {
     if (!projekt) return NextResponse.json({ success: false, error: 'Projekt nicht gefunden.' }, { status: 404 });
 
     const d = projekt.data || {};
-    if (d.angebotsStatus === 'angenommen') {
-      return NextResponse.json({ success: true, bereitsAngenommen: true });
+    if (!antwortErlaubt(d.angebotsStatus)) {
+      if (eingabe.art === 'annehmen') return NextResponse.json({ success: true, bereitsAngenommen: true });
+      return NextResponse.json({ success: false, error: 'Dieses Angebot wurde bereits angenommen. Bitte melden Sie sich direkt bei uns.' }, { status: 409 });
     }
 
+    const jetzt = new Date().toISOString();
+    const neueDaten: Record<string, unknown> = {
+      ...d,
+      angebotsStatus: ANTWORT_ZU_STATUS[eingabe.art],
+      angebotRueckmeldungen: verlaufMit(d.angebotRueckmeldungen, { art: eingabe.art, notiz: eingabe.notiz, name: eingabe.name, am: jetzt }),
+    };
+    if (eingabe.art === 'annehmen') {
+      neueDaten.angebotAngenommenAm = jetzt;
+      neueDaten.angebotAngenommenVia = 'link';
+    }
     const updRes = await fetch(`${url}/rest/v1/projects?id=eq.${projectId}`, {
       method: 'PATCH', headers,
-      body: JSON.stringify({
-        data: { ...d, angebotsStatus: 'angenommen', angebotAngenommenAm: new Date().toISOString(), angebotAngenommenVia: 'link' },
-      }),
+      body: JSON.stringify({ data: neueDaten }),
     });
     if (!updRes.ok) throw new Error(await updRes.text());
 
-    // NEU: Bei Annahme automatisch Lager reservieren + Transportaufträge
-    // anlegen (Zusammenspiel Aufmaß→Lager→Tour). Läuft im Hintergrund,
-    // blockiert die Antwort an den Kunden nicht bei einem Fehler.
-    after(() => beiAngebotsannahmeSicher(projectId));
+    // Nur bei Annahme: Lager reservieren + Transportaufträge anlegen (Zusammenspiel Aufmaß→Lager→Tour).
+    // Läuft im Hintergrund, blockiert die Antwort an den Kunden nicht bei einem Fehler.
+    if (eingabe.art === 'annehmen') after(() => beiAngebotsannahmeSicher(projectId));
 
-    return NextResponse.json({ success: true });
+    return NextResponse.json({ success: true, art: eingabe.art });
   } catch (err: any) {
     return serverErrorResponse(err);
   }

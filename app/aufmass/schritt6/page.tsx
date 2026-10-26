@@ -1,5 +1,7 @@
 'use client';
 
+import type { AngebotStatus } from '@/lib/angebot-rueckmeldung';
+import AngebotRueckmeldungHinweis from '@/components/AngebotRueckmeldungHinweis';
 import { geruestPositionen } from '@/lib/aufmass-rechnung';
 import type { StrukturPosition } from '@/lib/rechnung-position';
 import { useState, useEffect, useRef, Suspense } from 'react';
@@ -93,7 +95,8 @@ function Schritt6Content() {
   const [aufmassAblageHinweis, setAufmassAblageHinweis] = useState<{ ok: boolean; text: string } | null>(null);
   const [emailStatus, setEmailStatus] = useState<'idle' | 'sending' | 'sent' | 'error'>('idle');
   const [showQR, setShowQR] = useState(false);
-  const [angebotsStatus, setAngebotsStatus] = useState<'erstellt' | 'versendet' | 'gelesen' | 'angenommen'>('erstellt');
+  const [angebotsStatus, setAngebotsStatus] = useState<AngebotStatus>('erstellt');
+  const [angebotRueckmeldungen, setAngebotRueckmeldungen] = useState<unknown>(null);
   const [pdfBase64, setPdfBase64] = useState<string | null>(null);
   const [customerEmail, setCustomerEmail] = useState('')
   // Phase 82: E-Mail-Formular standardmäßig zugeklappt (war nach jedem
@@ -228,6 +231,7 @@ function Schritt6Content() {
     setStepData({});
     setKiResult(null);
     setAngebotsStatus('erstellt');
+    setAngebotRueckmeldungen(null);
     (async () => {
       try {
         const res = await fetch('/api/projects?id=' + projectId);
@@ -235,7 +239,7 @@ function Schritt6Content() {
         if (!json.success || !json.project) throw new Error(json.error || 'Projekt nicht gefunden');
         const p = json.project;
         const d = p.data || {};
-        const { angebotAnpassungen, kiResult: savedKi, angebotsStatus: savedStatus, preisModus: savedPreisModus, festpreisProM2: savedFestpreis, ...steps } = d;
+        const { angebotAnpassungen, kiResult: savedKi, angebotsStatus: savedStatus, angebotRueckmeldungen: savedRueckmeldungen, preisModus: savedPreisModus, festpreisProM2: savedFestpreis, ...steps } = d;
         // Phase 81 (jetzt zentral in leiteStepsAusKiResultAb, siehe dort):
         // Fehlende step2/step3 aus kiResult ableiten (CAD-Projekte, deren
         // Frontend step2/3 nicht mitschrieb - z. B. veraltetes Bundle).
@@ -257,6 +261,7 @@ function Schritt6Content() {
         // NEU (Prio-2-Sprint): KI-Ergebnis und Angebotsstatus wiederherstellen
         if (savedKi) setKiResult(savedKi);
         if (savedStatus) setAngebotsStatus(savedStatus);
+        setAngebotRueckmeldungen(savedRueckmeldungen ?? null);
         // NEU (Phase 30): gewählte Preisbasis wiederherstellen
         if (savedPreisModus) setPreisModus(savedPreisModus);
         if (savedFestpreis) setFestpreisProM2(savedFestpreis);
@@ -564,7 +569,7 @@ function Schritt6Content() {
       // Aktualisierung. Jetzt: existiert savedProjectId schon, wird PATCH verwendet
       // (aktualisiert das bestehende Projekt UND sichert automatisch eine Version
       // des bisherigen Stands, siehe /api/projects PATCH).
-      const gespeicherteDaten = { ...stepData, angebotAnpassungen: anpassungen, entwurf: false, kiResult, angebotsStatus, preisModus, festpreisProM2 };
+      const gespeicherteDaten = { ...stepData, angebotAnpassungen: anpassungen, entwurf: false, kiResult, angebotsStatus, ...(angebotRueckmeldungen ? { angebotRueckmeldungen } : {}), preisModus, festpreisProM2 };
       let result: any;
       if (projektId) {
         const response = await fetch('/api/projects', {
@@ -1109,8 +1114,10 @@ function Schritt6Content() {
   const kopfFlaeche = berechneAufmass(kopfAbschnitte).gesamtM2;
   const kopfWert = kiResult ? calcAngebot().endpreis : null;
   const kopfEur = (n: number) => n.toLocaleString('de-DE', { style: 'currency', currency: 'EUR' });
-  const zustandText = angebotsStatus === 'erstellt' ? 'Angebot erstellt' : angebotsStatus === 'versendet' ? 'Angebot versendet' : angebotsStatus === 'gelesen' ? 'Angebot gelesen' : 'Angebot angenommen';
+  const zustandText = angebotsStatus === 'erstellt' ? 'Angebot erstellt' : angebotsStatus === 'versendet' ? 'Angebot versendet' : angebotsStatus === 'gelesen' ? 'Angebot gelesen' : angebotsStatus === 'korrektur' ? 'Korrektur gewünscht' : angebotsStatus === 'abgelehnt' ? 'Angebot abgelehnt' : 'Angebot angenommen';
   const zustandCls = angebotsStatus === 'angenommen' ? 'border-green-600/30 bg-green-50 text-green-800'
+    : angebotsStatus === 'abgelehnt' ? 'border-red-600/30 bg-red-50 text-red-800'
+    : angebotsStatus === 'korrektur' ? 'border-amber-600/30 bg-amber-50 text-amber-900'
     : angebotsStatus === 'gelesen' ? 'border-blue-600/30 bg-blue-50 text-blue-800'
     : angebotsStatus === 'versendet' ? 'border-amber-600/30 bg-amber-50 text-amber-800'
     : 'border-black/10 bg-black/5 text-[#424245]';
@@ -1153,6 +1160,8 @@ function Schritt6Content() {
               <h3 className="text-sm font-bold text-[#e8590c] uppercase tracking-wider">Angebotsstatus</h3>
               <span className={`px-3 py-1 rounded-full text-xs font-bold ${
                 angebotsStatus === 'angenommen' ? 'bg-green-500 text-green-950' :
+                angebotsStatus === 'abgelehnt' ? 'bg-red-500 text-red-950' :
+                angebotsStatus === 'korrektur' ? 'bg-amber-400 text-amber-950' :
                 angebotsStatus === 'gelesen' ? 'bg-blue-500 text-blue-950' :
                 angebotsStatus === 'versendet' ? 'bg-amber-500 text-amber-950' :
                 'bg-black/10 text-[#424245]'
@@ -1160,6 +1169,8 @@ function Schritt6Content() {
                 {angebotsStatus === 'erstellt' ? 'Erstellt' :
                  angebotsStatus === 'versendet' ? 'Versendet' :
                  angebotsStatus === 'gelesen' ? 'Gelesen' :
+                 angebotsStatus === 'korrektur' ? 'Korrektur gewünscht' :
+                 angebotsStatus === 'abgelehnt' ? 'Abgelehnt' :
                  'Angenommen'}
               </span>
             </div>
@@ -1178,6 +1189,7 @@ function Schritt6Content() {
             <div className="flex justify-between mt-1 text-xs text-[#86868b]">
               <span>Erstellt</span><span>Versendet</span><span>Gelesen</span><span>Angenommen</span>
             </div>
+            <AngebotRueckmeldungHinweis verlauf={angebotRueckmeldungen} />
           </div>
         )}
 

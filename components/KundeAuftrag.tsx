@@ -35,6 +35,7 @@ const EMAIL_TYPE_LABEL: Record<string, string> = {
 const ANGEBOT_LABEL: Record<string, string> = {
   erstellt: '✏️ Angebot erstellt', versendet: '📧 Angebot versendet',
   gelesen: '👁️ Angebot gelesen', angenommen: '✅ Angebot angenommen',
+  korrektur: '✍️ Korrektur gewünscht', abgelehnt: '❌ Angebot abgelehnt',
 };
 const DOK_TYPE_LABEL: Record<string, string> = {
   pruefung_freigabe: 'Prüfung / Freigabe', standzeit: 'Standzeit / Nutzung',
