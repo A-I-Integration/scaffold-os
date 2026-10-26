@@ -883,7 +883,7 @@ export default function CADPage() {
 
       void vergissModell() // Angebot ist dem Kunden zugeordnet → gemerktes Modell darf weg
       void vergissAussehen()
-      router.push(`/kunden/${customerId}`)
+      router.push(`/kunden/${customerId}?baustelle=${json.id}&tab=angebote`)
     } catch (err: any) {
       alert('❌ ' + err.message)
     }
