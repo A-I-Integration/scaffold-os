@@ -58,12 +58,22 @@ async function hatFreigabe(projectId: string): Promise<boolean> {
 }
 
 // ─── GET: alle Rechnungen laden ───
-export async function GET() {
+export async function GET(req: NextRequest) {
   const { role } = await callerRole();
   if (!role) {
     return NextResponse.json({ success: false, error: 'Nicht angemeldet.' }, { status: 401 });
   }
   try {
+    // Einzelne Rechnung (Rechnungsakte): ?id=<uuid>
+    const einzelId = req.nextUrl.searchParams.get('id');
+    if (einzelId) {
+      if (!/^[0-9a-f-]{36}$/i.test(einzelId)) return NextResponse.json({ success: false, error: 'id ungültig' }, { status: 400 });
+      const r1 = await fetch(`${url}/rest/v1/invoices?id=eq.${einzelId}&select=*`, { headers });
+      if (!r1.ok) throw new Error(await r1.text());
+      const eine = await r1.json();
+      if (!eine?.length) return NextResponse.json({ success: false, error: 'Rechnung nicht gefunden.' }, { status: 404 });
+      return NextResponse.json({ success: true, invoice: eine[0] });
+    }
     const res = await fetch(
       `${url}/rest/v1/invoices?select=*&order=created_at.desc&limit=3000`,
       { headers }

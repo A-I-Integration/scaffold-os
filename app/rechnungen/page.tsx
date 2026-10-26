@@ -867,7 +867,7 @@ function RechnungenContent() {
                   return (
                     <tr key={inv.id} className="border-b border-black/10/50 hover:bg-black/10/30">
                       <td className="p-4 font-mono text-[#e8590c]">
-                        {inv.invoice_number}
+                        <Link href={`/rechnungen/${inv.id}`} className="hover:underline">{inv.invoice_number}</Link>
                         {inv.invoice_type && inv.invoice_type !== 'standard' && (
                           <span className="ml-2 text-[10px] font-sans px-1.5 py-0.5 rounded bg-blue-500/20 text-blue-700 border border-blue-500/40">
                             {inv.invoice_type === 'abschlag' ? 'Abschlag' : 'Schluss'}
