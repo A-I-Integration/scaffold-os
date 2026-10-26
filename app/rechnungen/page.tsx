@@ -513,7 +513,7 @@ function RechnungenContent() {
   }
 
   function handleDatevExport() {
-    const exportable = invoices.filter((i) => i.status !== 'storniert');
+    const exportable = invoices.filter((i) => i.status !== 'storniert' && !i.importiert); // Altbestand wurde im Altsystem verbucht
     if (!exportable.length) { alert('Keine Rechnungen zum Exportieren vorhanden.'); return; }
     const { csv, uebersprungen } = buildDatevEXTF(exportable, kundenKonten);
     // FIX (Bug-Report): vorher wurden 0%-Rechnungen mitexportiert, aber
@@ -872,6 +872,9 @@ function RechnungenContent() {
                           <span className="ml-2 text-[10px] font-sans px-1.5 py-0.5 rounded bg-blue-500/20 text-blue-700 border border-blue-500/40">
                             {inv.invoice_type === 'abschlag' ? 'Abschlag' : 'Schluss'}
                           </span>
+                        )}
+                        {inv.importiert && (
+                          <span className="ml-2 text-[10px] font-sans px-1.5 py-0.5 rounded bg-black/5 text-[#6e6e73] border border-black/10">Altbestand</span>
                         )}
                         {(inv.reminder_level || 0) > 0 && (
                           <span className="ml-1 text-[10px] font-sans px-1.5 py-0.5 rounded bg-red-500/20 text-red-700 border border-red-500/40">

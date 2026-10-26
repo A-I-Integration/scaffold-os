@@ -1,7 +1,7 @@
 'use client';
 
 import { useRef, useState } from 'react';
-import { Upload, FileSpreadsheet, ClipboardPaste, Download, Loader2, CheckCircle2, AlertTriangle, Users, Package } from 'lucide-react';
+import { Upload, FileSpreadsheet, ClipboardPaste, Download, Loader2, CheckCircle2, AlertTriangle, Users, Package, HardHat, Receipt } from 'lucide-react';
 
 // ============================================================
 // SCAFFOLD OS – Datenimport (CSV)
@@ -10,9 +10,11 @@ import { Upload, FileSpreadsheet, ClipboardPaste, Download, Loader2, CheckCircle
 //
 // Ablauf: Datei wählen/einfügen → Spalten zuordnen (auto-erraten)
 // → Vorschau → Importieren → Ergebnis mit Fehlerliste.
-// Server: /api/import/kunden bzw. /api/import/material
+// Server: /api/import/{kunden|material|baustellen|rechnungen}
 // (nur admin/disponent, Dubletten werden übersprungen).
 // ============================================================
+
+type ImportArt = 'kunden' | 'material' | 'baustellen' | 'rechnungen';
 
 interface FeldDef {
   key: string;
@@ -47,12 +49,37 @@ const MATERIAL_FELDER: FeldDef[] = [
   { key: 'description', label: 'Beschreibung', raten: ['beschreibung', 'description', 'langtext', 'text'] },
 ];
 
-const VORLAGEN: Record<'kunden' | 'material', string> = {
+const BAUSTELLEN_FELDER: FeldDef[] = [
+  { key: 'kunde', label: 'Kunde (Name wie im Kundenstamm)', pflicht: true, raten: ['kunde', 'kundenname', 'auftraggeber', 'firma', 'name1'] },
+  { key: 'name', label: 'Baustelle / Bauvorhaben', pflicht: true, raten: ['baustelle', 'bauvorhaben', 'projekt', 'objekt', 'projektname', 'bv', 'bezeichnung'] },
+  { key: 'adresse', label: 'Adresse der Baustelle', raten: ['adresse', 'baustellenadresse', 'objektadresse', 'anschrift', 'strasse'] },
+  { key: 'beginn', label: 'Beginn', raten: ['beginn', 'start', 'von', 'baubeginn', 'aufbau'] },
+  { key: 'ende', label: 'Ende', raten: ['ende', 'bis', 'bauende', 'abbau'] },
+  { key: 'status', label: 'Status (abgeschlossen / aktiv)', raten: ['status', 'zustand', 'erledigt', 'abgeschlossen'] },
+];
+
+const RECHNUNGEN_FELDER: FeldDef[] = [
+  { key: 'nummer', label: 'Rechnungsnummer', pflicht: true, raten: ['rechnungsnummer', 'rechnungsnr', 'rechnung', 'renr', 're-nr', 'nummer', 'belegnummer', 'belegnr'] },
+  { key: 'kunde', label: 'Kunde (Name wie im Kundenstamm)', pflicht: true, raten: ['kunde', 'kundenname', 'firma', 'name1', 'debitor'] },
+  { key: 'datum', label: 'Rechnungsdatum', pflicht: true, raten: ['datum', 'rechnungsdatum', 'belegdatum', 'redatum'] },
+  { key: 'netto', label: 'Netto', raten: ['netto', 'nettobetrag', 'summe netto', 'nettosumme'] },
+  { key: 'brutto', label: 'Brutto', raten: ['brutto', 'bruttobetrag', 'gesamt', 'endbetrag', 'rechnungsbetrag'] },
+  { key: 'steuersatz', label: 'USt-Satz (%)', raten: ['ust', 'mwst', 'steuersatz', 'ust-satz', 'mwst-satz'] },
+  { key: 'faelligkeit', label: 'Fällig am', raten: ['faelligkeit', 'fallig', 'falligkeit', 'zahlungsziel', 'falligam'] },
+  { key: 'offen', label: 'Offener Betrag', raten: ['offen', 'offenerbetrag', 'restbetrag', 'saldo', 'op'] },
+  { key: 'bezahlt', label: 'Bezahlt (Betrag)', raten: ['bezahlt', 'gezahlt', 'zahlung', 'zahlbetrag'] },
+  { key: 'status', label: 'Status (bezahlt / offen / storniert)', raten: ['status', 'zahlstatus', 'zustand'] },
+  { key: 'baustelle', label: 'Baustelle', raten: ['baustelle', 'bauvorhaben', 'projekt', 'objekt'] },
+  { key: 'bezeichnung', label: 'Leistungstext', raten: ['leistung', 'bezeichnung', 'text', 'betreff'] },
+];
+
+const VORLAGEN: Record<ImportArt, string> = {
   kunden: 'Name;Ansprechpartner;E-Mail;Telefon;Straße;PLZ;Ort;Notizen\nMusterbau GmbH;Herr Müller;info@musterbau.de;02561/12345;Musterstraße 12;48691;Vreden;Stammkunde seit 2020',
   material: 'Bezeichnung;Artikelnummer;Kategorie;Bestand;Einheit;Preis;Mindestbestand;Lieferant;Lagerort\nStahlrahmen 73 1,00 m;SR-73-100;Rahmen;500;Stk;18,50;50;Layher;Halle 1 / Regal A',
+  baustellen: 'Kunde;Baustelle;Adresse;Beginn;Ende;Status\nMusterbau GmbH;Wohnanlage Nord;Hauptstraße 5, 48691 Vreden;01.03.2026;30.06.2026;aktiv',
+  rechnungen: 'Rechnungsnummer;Kunde;Datum;Netto;USt;Fällig am;Offen;Baustelle;Leistung\n2025-0412;Musterbau GmbH;15.11.2025;12500,00;19;15.12.2025;14875,00;Wohnanlage Nord;Gerüstarbeiten gemäß Auftrag',
 };
 
-type ImportArt = 'kunden' | 'material';
 type Schritt = 'datei' | 'zuordnung' | 'ergebnis';
 
 // ─── CSV-Hilfsfunktionen ───
@@ -119,6 +146,9 @@ async function dateiLesen(datei: File): Promise<string> {
   return utf8;
 }
 
+const FELDER: Record<ImportArt, FeldDef[]> = { kunden: KUNDEN_FELDER, material: MATERIAL_FELDER, baustellen: BAUSTELLEN_FELDER, rechnungen: RECHNUNGEN_FELDER };
+const NAMEN: Record<ImportArt, string> = { kunden: 'Kunden', material: 'Artikel', baustellen: 'Baustellen', rechnungen: 'Rechnungen' };
+
 export default function DatenimportPage() {
   const [art, setArt] = useState<ImportArt>('kunden');
   const [schritt, setSchritt] = useState<Schritt>('datei');
@@ -131,7 +161,7 @@ export default function DatenimportPage() {
   const [ergebnis, setErgebnis] = useState<{ importiert: number; uebersprungen: number; fehler: { zeile: number; grund: string }[] } | null>(null);
   const dateiInput = useRef<HTMLInputElement>(null);
 
-  const felder = art === 'kunden' ? KUNDEN_FELDER : MATERIAL_FELDER;
+  const felder = FELDER[art];
 
   function zuruecksetzen(neueArt?: ImportArt) {
     if (neueArt) setArt(neueArt);
@@ -188,7 +218,7 @@ export default function DatenimportPage() {
     const blob = new Blob(['﻿' + VORLAGEN[art]], { type: 'text/csv;charset=utf-8' });
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
-    a.download = art === 'kunden' ? 'kunden-import-vorlage.csv' : 'material-import-vorlage.csv';
+    a.download = `${art}-import-vorlage.csv`;
     a.click();
     URL.revokeObjectURL(a.href);
   }
@@ -266,6 +296,28 @@ export default function DatenimportPage() {
           <span>
             <span className="block font-semibold">Material / Lager</span>
             <span className="block text-sm text-[#86868b]">Artikel mit Bestand, Preis, Lieferant</span>
+          </span>
+        </button>
+        <button
+          onClick={() => zuruecksetzen('baustellen')}
+          className={`flex items-center gap-3 rounded-2xl border p-5 text-left transition
+            ${art === 'baustellen' ? 'border-[#e8590c] ring-2 ring-[#e8590c]/20 bg-white' : 'border-black/10 bg-white hover:border-black/25'}`}
+        >
+          <HardHat className={`w-6 h-6 ${art === 'baustellen' ? 'text-[#e8590c]' : 'text-[#86868b]'}`} />
+          <span>
+            <span className="block font-semibold">Baustellen</span>
+            <span className="block text-sm text-[#86868b]">Bauvorhaben je Kunde (Kunden zuerst importieren)</span>
+          </span>
+        </button>
+        <button
+          onClick={() => zuruecksetzen('rechnungen')}
+          className={`flex items-center gap-3 rounded-2xl border p-5 text-left transition
+            ${art === 'rechnungen' ? 'border-[#e8590c] ring-2 ring-[#e8590c]/20 bg-white' : 'border-black/10 bg-white hover:border-black/25'}`}
+        >
+          <Receipt className={`w-6 h-6 ${art === 'rechnungen' ? 'text-[#e8590c]' : 'text-[#86868b]'}`} />
+          <span>
+            <span className="block font-semibold">Alte Rechnungen</span>
+            <span className="block text-sm text-[#86868b]">Rechnungen und offene Posten als Altbestand</span>
           </span>
         </button>
       </div>
@@ -381,10 +433,10 @@ export default function DatenimportPage() {
             className="mt-6 w-full rounded-full bg-[#e8590c] hover:bg-[#d14e06] disabled:opacity-60 text-white font-semibold py-3.5 transition flex items-center justify-center gap-2"
           >
             {laden && <Loader2 className="w-4 h-4 animate-spin" />}
-            {daten.length.toLocaleString('de-DE')} {art === 'kunden' ? 'Kunden' : 'Artikel'} importieren
+            {daten.length.toLocaleString('de-DE')} {NAMEN[art]} importieren
           </button>
           <p className="mt-3 text-center text-xs text-[#86868b]">
-            Bereits vorhandene Einträge (gleiche Artikelnummer bzw. gleicher Name+PLZ+Ort) werden automatisch übersprungen.
+            Bereits vorhandene Einträge (Artikelnummer, Name+PLZ+Ort, Kunde+Baustelle bzw. Rechnungsnummer) werden automatisch übersprungen.
           </p>
         </div>
       )}
