@@ -9,6 +9,8 @@
 // ============================================================
 
 import { verwendungMitId } from '@/lib/geruestklassen'
+import { useRouter } from 'next/navigation'
+import { rechnungAusLv } from '@/lib/lv-zu-rechnung'
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
 import type { CADModel } from '@/lib/calculations/cad-engine'
 import type { MaterialItem } from '@/types/scaffold'
@@ -120,6 +122,20 @@ export default function LvDialog({ model, materials, aufbauStunden, abbauStunden
     () => erzeugeLeistungsverzeichnis({ model, materials, aufbauStunden, abbauStunden }, { ...e, standardpreise }),
     [model, materials, aufbauStunden, abbauStunden, e, standardpreise],
   )
+  const router = useRouter()
+  const alsRechnung = () => {
+    const entwurf = rechnungAusLv(lv)
+    if (!entwurf.positions.length) { setFehler('Keine Position mit Menge und Preis im Leistungsverzeichnis – es gibt nichts abzurechnen.'); return }
+    const hinweise = [
+      e.bauvorhaben ? `Bauvorhaben: ${e.bauvorhaben}` : '',
+      e.projektnummer ? `Projekt-Nr.: ${e.projektnummer}` : '',
+      entwurf.uebersprungen.length ? `Nicht übernommen (Menge oder Preis 0 / entfällt): ${entwurf.uebersprungen.join(', ')}` : '',
+    ].filter(Boolean).join('\n')
+    try {
+      sessionStorage.setItem('scaffold_invoice_draft', JSON.stringify({ customer_name: '', customer_address: '', notes: hinweise, positions: entwurf.positions, project_id: null }))
+    } catch { setFehler('Der Entwurf konnte nicht zwischengespeichert werden.'); return }
+    router.push('/rechnungen?neu=1')
+  }
   const dateiBasis = `Leistungsverzeichnis-${new Date().toISOString().split('T')[0]}`
   const speichern = (blob: Blob, name: string) => {
     const a = document.createElement('a')
@@ -383,6 +399,7 @@ export default function LvDialog({ model, materials, aufbauStunden, abbauStunden
         <div className='flex items-center justify-between gap-3 px-5 py-3 border-t border-black/10'>
           <span className='text-[11px] text-red-600'>{fehler}</span>
           <div className='flex gap-2'>
+            <button type='button' onClick={alsRechnung} className='px-4 py-2 bg-[#1d1d1f] text-white text-sm font-medium rounded-xl hover:bg-black' title='Jede LV-Position wird eine Rechnungsposition (Listenpreis × Faktor)'>🧾 Rechnung daraus</button>
             <button type='button' onClick={alsExcel} className='px-4 py-2 bg-emerald-600 text-white text-sm font-medium rounded-xl hover:bg-emerald-700'>📊 Excel</button>
             <button type='button' onClick={alsPdf} className='px-4 py-2 bg-[#e8590c] text-white text-sm font-medium rounded-xl hover:bg-[#d24f08]'>📄 PDF</button>
           </div>
