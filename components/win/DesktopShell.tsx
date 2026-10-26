@@ -172,7 +172,7 @@ export default function DesktopShell({ rolle, name, onKlassisch, onLogout, child
           </div>
         </aside>
 
-        <main className="flex-1 min-w-0 overflow-auto bg-[#fbfbfd]">{children}</main>
+        <main className="win-ui flex-1 min-w-0 overflow-auto bg-[#fbfbfd]">{children}</main>
       </div>
 
       <div className="flex items-center gap-4 px-3 h-6 text-[12px] border-t" style={{ background: FARBE.menue, borderColor: FARBE.rand, color: '#444' }}>

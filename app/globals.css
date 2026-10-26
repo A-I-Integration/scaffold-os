@@ -35,3 +35,22 @@ body {
 ::selection {
   background: rgba(232, 89, 12, 0.15);
 }
+
+/* ───────── Desktop-Oberfläche (Büro, großer Bildschirm): eckiger, flacher, dichter ─────────
+   Gilt nur innerhalb von .win-ui (DesktopShell) – Handy, Fahrer und öffentliche Seiten bleiben unverändert. */
+.win-ui { font-family: "Segoe UI", Inter, system-ui, sans-serif; font-size: 13px; }
+.win-ui [class*="rounded-xl"], .win-ui [class*="rounded-2xl"], .win-ui [class*="rounded-3xl"], .win-ui [class*="rounded-lg"], .win-ui [class*="rounded-md"] { border-radius: 3px; }
+.win-ui button.rounded-full, .win-ui a.rounded-full, .win-ui input.rounded-full, .win-ui select.rounded-full,
+.win-ui span.rounded-full[class*="px-"] { border-radius: 3px; }
+.win-ui .shadow-sm, .win-ui .shadow, .win-ui .shadow-md, .win-ui .shadow-lg { box-shadow: none; }
+.win-ui .text-sm { font-size: 13px; line-height: 1.35; }
+.win-ui .text-lg { font-size: 15px; }
+.win-ui .text-xl { font-size: 16px; }
+.win-ui .text-2xl { font-size: 18px; }
+.win-ui .text-3xl { font-size: 20px; }
+.win-ui .min-h-screen { min-height: 100%; }
+.win-ui .h-screen { height: 100%; }
+.win-ui input:not([type="checkbox"]):not([type="radio"]), .win-ui select, .win-ui textarea { border-color: #b8b8b8; }
+.win-ui input:focus, .win-ui select:focus, .win-ui textarea:focus { outline: 1px solid #4a86c8; border-color: #4a86c8; }
+.win-ui table th { font-weight: 600; }
+.win-ui table tbody tr:hover { background: #eef4fa; }
