@@ -24,3 +24,12 @@ describe('Punktwolken-Worker: Achse aus dem PLY-Kopf', () => {
     expect(m.verticalAxis).toBe('x')
   })
 })
+
+describe('Punktwolken-Worker: reproduzierbar', () => {
+  it('dieselbe Datei zweimal ausgewertet ergibt identische Messwerte', () => {
+    const w = wolke('comment Haus, Meter, Y oben')
+    const a = analysiere(w, 'ply')
+    const b = analysiere(w, 'ply')
+    expect(JSON.stringify(b)).toBe(JSON.stringify(a))
+  })
+})
