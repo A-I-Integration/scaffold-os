@@ -38,16 +38,37 @@ body {
 
 /* ───────── Desktop-Oberfläche (Büro, großer Bildschirm): eckiger, flacher, dichter ─────────
    Gilt nur innerhalb von .win-ui (DesktopShell) – Handy, Fahrer und öffentliche Seiten bleiben unverändert. */
-.win-ui { font-family: "Segoe UI", Inter, system-ui, sans-serif; font-size: 13px; }
+.win-ui { font-family: "Segoe UI", Inter, system-ui, sans-serif; font-size: 15px; color: #1b1b1b; -webkit-font-smoothing: auto; -moz-osx-font-smoothing: auto; text-rendering: optimizeLegibility; }
 .win-ui [class*="rounded-xl"], .win-ui [class*="rounded-2xl"], .win-ui [class*="rounded-3xl"], .win-ui [class*="rounded-lg"], .win-ui [class*="rounded-md"] { border-radius: 3px; }
 .win-ui button.rounded-full, .win-ui a.rounded-full, .win-ui input.rounded-full, .win-ui select.rounded-full,
 .win-ui span.rounded-full[class*="px-"] { border-radius: 3px; }
 .win-ui .shadow-sm, .win-ui .shadow, .win-ui .shadow-md, .win-ui .shadow-lg { box-shadow: none; }
-.win-ui .text-sm { font-size: 13px; line-height: 1.35; }
-.win-ui .text-lg { font-size: 15px; }
-.win-ui .text-xl { font-size: 16px; }
-.win-ui .text-2xl { font-size: 18px; }
-.win-ui .text-3xl { font-size: 20px; }
+.win-ui .text-sm { font-size: 15px; line-height: 1.4; }
+.win-ui .text-xs { font-size: 13.5px; line-height: 1.4; }
+.win-ui .text-base { font-size: 16px; }
+.win-ui .text-\[9px\], .win-ui .text-\[10px\], .win-ui .text-\[11px\], .win-ui .text-\[12px\] { font-size: 13px; }
+.win-ui .text-\[13px\] { font-size: 14.5px; }
+.win-ui .text-\[14px\] { font-size: 15px; }
+/* blasse Grautöne kräftiger, damit Text nicht verschwommen wirkt */
+.win-ui .text-\[\#86868b\], .win-ui .text-\[\#6e6e73\], .win-ui .text-gray-400, .win-ui .text-gray-500, .win-ui .text-slate-400, .win-ui .text-slate-500 { color: #4a4a4f; }
+.win-ui .text-black\/40, .win-ui .text-black\/50, .win-ui .text-black\/60, .win-ui .text-black\/70 { color: #333; }
+.win-ui .text-white\/50, .win-ui .text-white\/60 { color: rgba(255,255,255,.85); }
+.win-ui .text-lg { font-size: 17px; }
+.win-ui .text-xl { font-size: 18px; }
+.win-ui .text-2xl { font-size: 20px; }
+.win-ui .text-3xl { font-size: 22px; }
+/* Kennzahlen und Zwischenüberschriften neutral statt bunt (Rot bleibt für Warnwerte) */
+.win-ui p[class*="text-blue-"], .win-ui p[class*="text-violet-"], .win-ui p[class*="text-purple-"], .win-ui p[class*="text-emerald-"],
+.win-ui p[class*="text-green-"], .win-ui p[class*="text-sky-"], .win-ui p[class*="text-teal-"], .win-ui p[class*="text-indigo-"], .win-ui p[class*="text-\[\#e8590c\]"] { color: #1b1b1b; }
+/* Keine bunten Kacheln: farbige Flächen (außer Warn-/Fehlerhinweise) werden neutral weiß mit dünnem Rand */
+.win-ui div[class*="bg-emerald-"], .win-ui div[class*="bg-green-"], .win-ui div[class*="bg-blue-"], .win-ui div[class*="bg-sky-"],
+.win-ui div[class*="bg-purple-"], .win-ui div[class*="bg-violet-"], .win-ui div[class*="bg-indigo-"], .win-ui div[class*="bg-orange-"],
+.win-ui div[class*="bg-teal-"], .win-ui div[class*="bg-cyan-"], .win-ui div[class*="bg-pink-"], .win-ui div[class*="bg-rose-"],
+.win-ui div[class*="bg-gradient"], .win-ui a[class*="bg-gradient"], .win-ui button[class*="bg-gradient"] {
+  background: #fff; background-image: none; border-color: #d6d6d6; color: #1b1b1b;
+}
+.win-ui div[class*="bg-emerald-"] *, .win-ui div[class*="bg-green-"] *, .win-ui div[class*="bg-blue-"] *, .win-ui div[class*="bg-purple-"] *,
+.win-ui div[class*="bg-orange-"] *, .win-ui div[class*="bg-sky-"] *, .win-ui div[class*="bg-teal-"] * { text-shadow: none; }
 .win-ui .min-h-screen { min-height: 100%; }
 .win-ui .h-screen { height: 100%; }
 .win-ui input:not([type="checkbox"]):not([type="radio"]), .win-ui select, .win-ui textarea { border-color: #b8b8b8; }
