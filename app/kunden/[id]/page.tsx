@@ -15,7 +15,7 @@
 import AngebotRueckmeldungHinweis from '@/components/AngebotRueckmeldungHinweis'
 import { geruestPositionen } from '@/lib/aufmass-rechnung'
 import { useState, useEffect, useCallback, useMemo } from 'react'
-import { useParams, useRouter } from 'next/navigation'
+import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import {
   ArrowLeft, FileText, Mail, Download, Trash2, Plus,
   Send, Euro, AlertCircle, ChevronDown, ChevronUp, X, Ruler,
@@ -67,6 +67,7 @@ interface Project {
 
 interface EmailLog {
   id: string
+  project_id?: string | null
   type: string
   to_email: string
   subject: string
@@ -113,10 +114,13 @@ const DOK_TYPE_LABEL: Record<string, string> = {
 const fmtTimestamp = (d: string | null) => (d ? new Date(d).toLocaleDateString('de-DE') : '–')
 
 const LEER_POSITION = { bezeichnung: '', menge: '1', einheit: 'Stk.', einzelpreis: '' }
-const TABS = ['kunde', 'aufmass', 'bilder', 'dokumente', 'angebote', 'nachtraege', 'rechnungen', 'emails'] as const
+const TABS = ['baustellen', 'kunde', 'aufmass', 'bilder', 'dokumente', 'angebote', 'nachtraege', 'rechnungen', 'emails'] as const
 type Tab = typeof TABS[number]
+// Zwei Ebenen: Kunde (Übersicht aller Baustellen, Stammdaten, alle Rechnungen/Mails) und Baustelle (alles zu genau diesem Projekt)
+const KUNDEN_TABS: Tab[] = ['baustellen', 'kunde', 'rechnungen', 'emails']
+const BAUSTELLEN_TABS: Tab[] = ['aufmass', 'bilder', 'dokumente', 'angebote', 'nachtraege', 'rechnungen', 'emails']
 const TAB_LABEL: Record<Tab, string> = {
-  kunde: 'Kunde', aufmass: 'Aufmaß', bilder: 'Bilder', dokumente: 'Dokumente', angebote: 'Angebote', nachtraege: 'Nachträge / Schluss', rechnungen: 'Rechnungen', emails: 'E-Mails',
+  baustellen: 'Baustellen', kunde: 'Kunde', aufmass: 'Aufmaß', bilder: 'Bilder', dokumente: 'Dokumente', angebote: 'Angebote', nachtraege: 'Nachträge / Schluss', rechnungen: 'Rechnungen', emails: 'E-Mails',
 }
 
 // Gleicher Namensabgleich wie auf der Kunden-Übersicht (app/kunden/page.tsx):
@@ -135,7 +139,9 @@ export default function KundenDetailPage() {
   const { id } = useParams<{ id: string }>()
   const router = useRouter()
 
-  const [tab, setTab] = useState<Tab>('kunde')
+  const searchParams = useSearchParams()
+  const baustelleParam = searchParams.get('baustelle')
+  const [tab, setTab] = useState<Tab>(baustelleParam ? 'aufmass' : 'baustellen')
   const [kunde, setKunde] = useState<Kunde | null>(null)
   const [projects, setProjects] = useState<Project[]>([])
   const [invoices, setInvoices] = useState<Invoice[]>([])
@@ -839,6 +845,24 @@ export default function KundenDetailPage() {
   const offeneSumme = offeneInvoices.reduce((s, i) => s + (Number(i.gross_amount) - Number(i.paid_amount || 0)), 0)
   const ueberfaelligeSumme = offeneInvoices.filter(istUeberfaellig).reduce((s, i) => s + (Number(i.gross_amount) - Number(i.paid_amount || 0)), 0)
 
+  // ── Baustellen-Ebene: alles unterhalb gilt nur für das gewählte Projekt ──
+  const baustelle = baustelleParam ? projects.find((p) => p.id === baustelleParam) : undefined
+  const projektSicht = baustelle ? [baustelle] : projects
+  const aktiveTabs = baustelle ? BAUSTELLEN_TABS : KUNDEN_TABS
+  const tabAktiv: Tab = aktiveTabs.includes(tab) ? tab : aktiveTabs[0]
+  const waehleBaustelle = (pid: string | null) => {
+    setTab(pid ? 'aufmass' : 'baustellen')
+    router.push(pid ? `/kunden/${id}?baustelle=${pid}` : `/kunden/${id}`)
+  }
+  const sichtInvoices = baustelle ? kundenInvoices.filter((i) => i.project_id === baustelle.id) : kundenInvoices
+  const sichtRechnungsNr = new Set(sichtInvoices.map((i) => i.invoice_number).filter(Boolean))
+  const sichtEmails = baustelle
+    ? alleEmails.filter((m) => m.project_id === baustelle.id || (!!m.invoice_number && sichtRechnungsNr.has(m.invoice_number)))
+    : alleEmails
+  const sichtOffene = sichtInvoices.filter((i) => i.status === 'offen' || i.status === 'ueberfaellig')
+  const sichtOffeneSumme = sichtOffene.reduce((sum, i) => sum + (Number(i.gross_amount) - Number(i.paid_amount || 0)), 0)
+  const sichtUeberfaelligSumme = sichtOffene.filter(istUeberfaellig).reduce((sum, i) => sum + (Number(i.gross_amount) - Number(i.paid_amount || 0)), 0)
+
   const inputCls = 'w-full px-3 py-2 bg-white border border-black/10 rounded-lg text-sm text-[#1d1d1f] focus:outline-none focus:border-[#e8590c]'
   const btnPrimary = 'px-3 py-1.5 rounded-lg bg-[#e8590c] hover:bg-[#d9480f] text-white text-xs font-semibold transition-colors disabled:opacity-50'
   const btnSecondary = 'px-3 py-1.5 rounded-lg bg-black/5 hover:bg-black/10 text-[#1d1d1f] text-xs font-medium transition-colors'
@@ -860,29 +884,38 @@ export default function KundenDetailPage() {
       {/* ─── Header ─── */}
       <div className="sticky top-0 z-30 bg-white/80 backdrop-blur border-b border-black/5">
         <div className="max-w-5xl mx-auto px-4 sm:px-6 py-3 flex items-center gap-3">
-          <button onClick={() => router.push('/kunden')} className="p-2 rounded-xl hover:bg-black/5 text-[#1d1d1f]"><ArrowLeft className="h-5 w-5" /></button>
+          <button onClick={() => (baustelle ? waehleBaustelle(null) : router.push('/kunden'))} className="p-2 rounded-xl hover:bg-black/5 text-[#1d1d1f]"><ArrowLeft className="h-5 w-5" /></button>
           <div className="flex-1 min-w-0">
-            <h1 className="text-lg font-bold text-[#1d1d1f] truncate">{kunde.name}</h1>
-            <p className="text-xs text-[#86868b]">{kunde.street}{kunde.street && ', '}{kunde.zip} {kunde.city}</p>
+            {baustelle ? (
+              <>
+                <h1 className="text-lg font-bold text-[#1d1d1f] truncate">{baustelle.name || 'Unbenannte Baustelle'}</h1>
+                <p className="text-xs text-[#86868b] truncate">Kunde: {kunde.name}{baustelle.adresse ? ` · ${baustelle.adresse}` : ''}</p>
+              </>
+            ) : (
+              <>
+                <h1 className="text-lg font-bold text-[#1d1d1f] truncate">{kunde.name}</h1>
+                <p className="text-xs text-[#86868b]">{kunde.street}{kunde.street && ', '}{kunde.zip} {kunde.city}</p>
+              </>
+            )}
           </div>
-          {offeneSumme > 0 && (
-            <span className={`text-xs px-2 py-1 rounded-full font-semibold ${ueberfaelligeSumme > 0 ? 'bg-red-500/10 text-red-700' : 'bg-amber-500/10 text-amber-700'}`}>
-              {fmtEur(offeneSumme)} € offen{ueberfaelligeSumme > 0 ? ` · ${fmtEur(ueberfaelligeSumme)} € überfällig` : ''}
+          {sichtOffeneSumme > 0 && (
+            <span className={`text-xs px-2 py-1 rounded-full font-semibold ${sichtUeberfaelligSumme > 0 ? 'bg-red-500/10 text-red-700' : 'bg-amber-500/10 text-amber-700'}`}>
+              {fmtEur(sichtOffeneSumme)} € offen{sichtUeberfaelligSumme > 0 ? ` · ${fmtEur(sichtUeberfaelligSumme)} € überfällig` : ''}
             </span>
           )}
         </div>
         {/* ─── Reiter ─── */}
         <div className="max-w-5xl mx-auto px-4 sm:px-6 flex gap-1 overflow-x-auto">
-          {TABS.map((t) => (
+          {aktiveTabs.map((t) => (
             <button
               key={t}
               onClick={() => setTab(t)}
               className={`px-3 py-2 text-sm font-medium border-b-2 whitespace-nowrap transition-colors ${
-                tab === t ? 'border-[#e8590c] text-[#e8590c]' : 'border-transparent text-[#86868b] hover:text-[#1d1d1f]'
+                tabAktiv === t ? 'border-[#e8590c] text-[#e8590c]' : 'border-transparent text-[#86868b] hover:text-[#1d1d1f]'
               }`}
             >
               {TAB_LABEL[t]}
-              {t === 'rechnungen' && offeneSumme > 0 && <span className="ml-1.5 text-[10px]">({offeneInvoices.length})</span>}
+              {t === 'rechnungen' && sichtOffeneSumme > 0 && <span className="ml-1.5 text-[10px]">({sichtOffene.length})</span>}
             </button>
           ))}
         </div>
@@ -891,7 +924,42 @@ export default function KundenDetailPage() {
       <div className="max-w-5xl mx-auto px-4 sm:px-6 py-6">
 
         {/* ═══════════ TAB: KUNDE ═══════════ */}
-        {tab === 'kunde' && (
+        {tabAktiv === 'baustellen' && (
+          <div className="space-y-3">
+            <div className="flex items-center justify-between gap-3">
+              <p className="text-sm text-[#86868b]">{projects.length === 0 ? 'Noch keine Baustelle für diesen Kunden.' : `${projects.length} Baustelle${projects.length === 1 ? '' : 'n'} – zum Öffnen anklicken.`}</p>
+              <button
+                onClick={() => { starteNeuesAufmass(); router.push(`/aufmass/schritt1?kunde=${kunde.id}`) }}
+                className={btnPrimary}
+              ><Plus className="inline h-3.5 w-3.5 -mt-0.5 mr-1" />Neue Baustelle</button>
+            </div>
+            {projects.map((pr) => {
+              const invs = kundenInvoices.filter((i) => i.project_id === pr.id)
+              const offen = invs.filter((i) => i.status === 'offen' || i.status === 'ueberfaellig')
+                .reduce((sum, i) => sum + (Number(i.gross_amount) - Number(i.paid_amount || 0)), 0)
+              const status = pr.data?.angebotsStatus as string | undefined
+              return (
+                <button
+                  key={pr.id}
+                  onClick={() => waehleBaustelle(pr.id)}
+                  className="w-full text-left bg-white rounded-xl border border-black/10 p-4 hover:border-[#e8590c]/50 hover:shadow-sm transition"
+                >
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <p className="font-semibold text-[#1d1d1f]">{pr.name || 'Unbenannte Baustelle'}</p>
+                    <span className="text-xs text-[#86868b]">{status ? (ANGEBOT_LABEL[status] || status) : 'Noch kein Angebot'}</span>
+                  </div>
+                  {pr.adresse && <p className="text-xs text-[#86868b] mt-0.5">{pr.adresse}</p>}
+                  <p className="text-xs text-[#86868b] mt-2">
+                    {invs.length} Rechnung{invs.length === 1 ? '' : 'en'}
+                    {offen > 0 && <span className="ml-2 font-semibold text-red-600">{fmtEur(offen)} € offen</span>}
+                  </p>
+                </button>
+              )
+            })}
+          </div>
+        )}
+
+        {tabAktiv === 'kunde' && (
           <div className="bg-white rounded-xl border border-black/10 p-5 space-y-3 max-w-xl">
             <h3 className="text-sm font-semibold text-[#1d1d1f] flex items-center gap-1.5"><User className="h-4 w-4 text-[#e8590c]" /> Stammdaten</h3>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -965,20 +1033,20 @@ export default function KundenDetailPage() {
           </div>
         )}
 
-        {tab === 'kunde' && <div className="max-w-xl mt-4"><KundenKontakte customerId={kunde.id} /></div>}
-        {tab === 'emails' && (
+        {tabAktiv === 'kunde' && <div className="max-w-xl mt-4"><KundenKontakte customerId={kunde.id} /></div>}
+        {tabAktiv === 'emails' && (
           <div className="max-w-4xl space-y-4">
             {/* Alles, was SCAFFOLD OS an diesen Kunden verschickt hat (Angebote + Rechnungen) – unabhängig von einer Kunden-E-Mail/Postfach */}
             <div className="bg-white rounded-xl border border-black/10 overflow-hidden">
               <div className="px-5 py-3 border-b border-black/5 flex items-center justify-between gap-2">
-                <h2 className="text-sm font-semibold text-[#1d1d1f] flex items-center gap-1.5"><Mail className="h-4 w-4 text-[#e8590c]" /> Von SCAFFOLD OS gesendet ({alleEmails.length})</h2>
+                <h2 className="text-sm font-semibold text-[#1d1d1f] flex items-center gap-1.5"><Mail className="h-4 w-4 text-[#e8590c]" /> Von SCAFFOLD OS gesendet ({sichtEmails.length})</h2>
                 <button onClick={() => setNeueMailOffen(true)} className={btnPrimary}>+ Neue Mail</button>
               </div>
-              {alleEmails.length === 0 ? (
+              {sichtEmails.length === 0 ? (
                 <p className="px-5 py-4 text-xs text-[#86868b]">Noch keine Angebote oder Rechnungen per Mail über SCAFFOLD OS versendet.</p>
               ) : (
                 <ul className="divide-y divide-black/5">
-                  {alleEmails.map((m) => (
+                  {sichtEmails.map((m) => (
                     <li key={m.id} onClick={() => setOffeneMail(m)} title="Mail ansehen / erneut senden" className="px-5 py-2 text-xs flex flex-wrap items-center gap-2 cursor-pointer hover:bg-black/[0.03]">
                       <span>{EMAIL_TYPE_LABEL[m.type] || m.type}</span>
                       {m.attachment_path && <span title="Mit Anhang">📎</span>}
@@ -991,26 +1059,19 @@ export default function KundenDetailPage() {
                 </ul>
               )}
             </div>
-            {/* Postfach-Ansicht (IMAP): braucht die E-Mail-Adresse des Kunden */}
-            {kunde.email
+            {/* Postfach-Ansicht (IMAP): nur auf Kundenebene, braucht die E-Mail-Adresse des Kunden */}
+            {!baustelle && (kunde.email
               ? <KundeEmails customerId={kunde.id} kundenEmail={kunde.email} />
-              : <p className="text-xs text-[#86868b]">Postfach-Ansicht (eingegangene Mails): Für diesen Kunden ist keine E-Mail-Adresse hinterlegt – im Reiter „Kunde“ ergänzen.</p>}
+              : <p className="text-xs text-[#86868b]">Postfach-Ansicht (eingegangene Mails): Für diesen Kunden ist keine E-Mail-Adresse hinterlegt – im Reiter „Kunde“ ergänzen.</p>)}
+            {baustelle && <p className="text-xs text-[#86868b]">Hier stehen die Mails zu dieser Baustelle (Angebot und Rechnungen). Alle Mails des Kunden, auch frei verfasste und eingegangene, findest du beim Kunden im Reiter „E-Mails“.</p>}
           </div>
         )}
 
         {/* ═══════════ TAB: AUFMASS ═══════════ */}
-        {tab === 'aufmass' && (
+        {tabAktiv === 'aufmass' && (
           <div className="space-y-4">
-            {kunde && (
-              <div className="flex justify-end">
-                <button
-                  onClick={() => { starteNeuesAufmass(); router.push(`/aufmass/schritt1?kunde=${kunde.id}`) }}
-                  className={btnPrimary}
-                ><Plus className="inline h-3.5 w-3.5 -mt-0.5 mr-1" />Neue Baustelle für {kunde.name}</button>
-              </div>
-            )}
-            {projects.length === 0 && <p className="text-sm text-[#86868b]">Noch keine Aufträge für diesen Kunden.</p>}
-            {projects.map((project) => {
+            {projektSicht.length === 0 && <p className="text-sm text-[#86868b]">Noch keine Aufträge für diesen Kunden.</p>}
+            {projektSicht.map((project) => {
               const s1 = project.data?.step1 || {}
               const s2 = project.data?.step2 || {}
               const s3 = project.data?.step3 || {}
@@ -1050,10 +1111,10 @@ export default function KundenDetailPage() {
         )}
 
         {/* ═══════════ TAB: BILDER & DOKU ═══════════ */}
-        {tab === 'bilder' && (
+        {tabAktiv === 'bilder' && (
           <div className="space-y-4">
-            {projects.length === 0 && <p className="text-sm text-[#86868b]">Noch keine Aufträge für diesen Kunden.</p>}
-            {projects.map((project) => {
+            {projektSicht.length === 0 && <p className="text-sm text-[#86868b]">Noch keine Aufträge für diesen Kunden.</p>}
+            {projektSicht.map((project) => {
               const projBilder = (fotos[project.id] || []).filter((f) => !f.file_type || f.file_type.startsWith('image/'))
               const laedt = uploadLaeuft === `${project.id}-bilder`
               return (
@@ -1083,10 +1144,10 @@ export default function KundenDetailPage() {
           </div>
         )}
 
-        {tab === 'dokumente' && (
+        {tabAktiv === 'dokumente' && (
           <div className="space-y-4">
-            {projects.length === 0 && <p className="text-sm text-[#86868b]">Noch keine Aufträge für diesen Kunden.</p>}
-            {projects.map((project) => {
+            {projektSicht.length === 0 && <p className="text-sm text-[#86868b]">Noch keine Aufträge für diesen Kunden.</p>}
+            {projektSicht.map((project) => {
               const projDok = dokEintraege[project.id] || []
               const projDateien = (fotos[project.id] || []).filter((f) => (f.file_type && !f.file_type.startsWith('image/')) || (f.metadata?.kind && ['dokument', 'vertrag', 'grundriss'].includes(f.metadata.kind)))
               const laedt = uploadLaeuft === `${project.id}-dokumente`
@@ -1146,10 +1207,10 @@ export default function KundenDetailPage() {
         )}
 
         {/* ═══════════ TAB: ANGEBOTE ═══════════ */}
-        {tab === 'angebote' && (
+        {tabAktiv === 'angebote' && (
           <div className="space-y-4">
-            {projects.length === 0 && <p className="text-sm text-[#86868b]">Noch keine Aufträge für diesen Kunden.</p>}
-            {projects.map((project) => {
+            {projektSicht.length === 0 && <p className="text-sm text-[#86868b]">Noch keine Aufträge für diesen Kunden.</p>}
+            {projektSicht.map((project) => {
               const angebotsStatus = project.data?.angebotsStatus || null
               const angebotMails = emails.filter((e) => e.type === 'angebot')
               return (
@@ -1173,10 +1234,10 @@ export default function KundenDetailPage() {
         )}
 
         {/* ═══════════ TAB: NACHTRÄGE / SCHLUSSRECHNUNG ═══════════ */}
-        {tab === 'nachtraege' && (
+        {tabAktiv === 'nachtraege' && (
           <div className="space-y-4">
-            {projects.length === 0 && <p className="text-sm text-[#86868b]">Noch keine Aufträge für diesen Kunden.</p>}
-            {projects.map((project) => (
+            {projektSicht.length === 0 && <p className="text-sm text-[#86868b]">Noch keine Aufträge für diesen Kunden.</p>}
+            {projektSicht.map((project) => (
               <div key={project.id} className="bg-white rounded-xl border border-black/10 p-5 space-y-3">
                 <p className="font-semibold text-[#1d1d1f] flex items-center gap-1.5"><FileSignature className="h-4 w-4 text-[#e8590c]" /> {project.name || 'Unbenanntes Projekt'}</p>
                 <NachtraegeBlock project={project} kunde={kunde} />
@@ -1199,22 +1260,22 @@ export default function KundenDetailPage() {
         )}
 
         {/* ═══════════ TAB: RECHNUNGEN ═══════════ */}
-        {tab === 'rechnungen' && (
+        {tabAktiv === 'rechnungen' && (
           <div className="space-y-6">
             {/* Offene Posten */}
             <div className="bg-white rounded-xl border border-black/10 overflow-hidden">
               <button onClick={() => setOffenePostenOpen(!offenePostenOpen)} className="w-full px-5 py-3 flex items-center justify-between text-sm font-semibold text-[#1d1d1f] hover:bg-black/5 transition-colors">
                 <span className="flex items-center gap-1.5">
                   <AlertCircle className="h-4 w-4 text-red-500" /> Offene Posten
-                  {offeneSumme > 0 && <span className="text-xs font-normal text-red-600">({fmtEur(offeneSumme)} €{ueberfaelligeSumme > 0 ? `, davon ${fmtEur(ueberfaelligeSumme)} € überfällig` : ''})</span>}
+                  {sichtOffeneSumme > 0 && <span className="text-xs font-normal text-red-600">({fmtEur(sichtOffeneSumme)} €{sichtUeberfaelligSumme > 0 ? `, davon ${fmtEur(sichtUeberfaelligSumme)} € überfällig` : ''})</span>}
                 </span>
                 {offenePostenOpen ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
               </button>
               {offenePostenOpen && (
                 <div className="px-5 pb-4">
-                  {offeneInvoices.length === 0 ? <p className="text-xs text-[#86868b]">Keine offenen Posten. 👍</p> : (
+                  {sichtOffene.length === 0 ? <p className="text-xs text-[#86868b]">Keine offenen Posten. 👍</p> : (
                     <ul className="divide-y divide-black/5">
-                      {offeneInvoices.map((inv) => {
+                      {sichtOffene.map((inv) => {
                         const verzug = istUeberfaellig(inv)
                         const gutschrift = inv.invoice_type === 'gutschrift'
                         return (
@@ -1259,12 +1320,12 @@ export default function KundenDetailPage() {
             </div>
 
             {/* Je Auftrag: Rechnungen + Zusatzrechnung + Gutschrift */}
-            {projects.length === 0 && kundenInvoices.length === 0 && <p className="text-sm text-[#86868b]">Noch keine Aufträge oder Rechnungen.</p>}
+            {projektSicht.length === 0 && sichtInvoices.length === 0 && <p className="text-sm text-[#86868b]">Noch keine Aufträge oder Rechnungen.</p>}
 
-            {(projects.length > 0 ? projects : [{ id: '__ohne__', name: null } as Project]).map((project) => {
+            {(projektSicht.length > 0 ? projektSicht : [{ id: '__ohne__', name: null } as Project]).map((project) => {
               const projInvoices = project.id === '__ohne__'
-                ? kundenInvoices.filter((i) => !i.project_id)
-                : kundenInvoices.filter((i) => i.project_id === project.id)
+                ? sichtInvoices.filter((i) => !i.project_id)
+                : sichtInvoices.filter((i) => i.project_id === project.id)
               if (project.id === '__ohne__' && projInvoices.length === 0) return null
               const projOffen = projInvoices.filter((i) => i.status === 'offen' || i.status === 'ueberfaellig').reduce((s, i) => s + (Number(i.gross_amount) - Number(i.paid_amount || 0)), 0)
 
