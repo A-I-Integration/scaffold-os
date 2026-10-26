@@ -51,6 +51,9 @@ export interface Invoice {
   reference_invoice_number?: string | null; // Phase 22: bei Gutschriften, Bezug auf Original
   customer_id?: string | null; // Phase 34: echte Kunde-Verknüpfung statt Namensvergleich
   paid_amount?: number; // Phase 38: Teilzahlungen
+  pruef_status?: 'akzeptiert' | 'aenderung' | 'abgelehnt' | null; // Prüfung durch den Auftraggeber
+  geprueft_von?: string | null;
+  geprueft_am?: string | null;
   geruest_nr?: string | null; // Gerüstnummer zur eindeutigen Zuordnung
   leistungsdatum?: string | null; // Datum der Leistung (sonst Rechnungsdatum)
 }
