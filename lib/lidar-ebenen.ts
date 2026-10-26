@@ -7,13 +7,14 @@ export type EbenenVorschlag = { bezeichnung: string; laenge: string; hoehe: stri
 
 const zwei = (n?: number): string => (typeof n === 'number' && isFinite(n) && n > 0 ? n.toFixed(2) : '');
 
-export function ebenenZuVorschlaegen(ebenen: unknown): EbenenVorschlag[] {
+/** `vorausgewaehlt` false: Wände sind angeboten, aber nicht angehakt (z. B. wenn der Scan schon Gebäudeteile liefert – sonst würden Wände doppelt gezählt). */
+export function ebenenZuVorschlaegen(ebenen: unknown, vorausgewaehlt = true): EbenenVorschlag[] {
   if (!Array.isArray(ebenen)) return [];
   return (ebenen as LidarEbene[]).slice(1).map((e, i) => ({
     bezeichnung: `Ebene ${i + 2}`,
     laenge: zwei(e?.breiteM),
     hoehe: zwei(e?.hoeheM),
-    aktiv: true,
+    aktiv: vorausgewaehlt,
   }));
 }
 

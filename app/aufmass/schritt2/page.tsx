@@ -9,6 +9,7 @@ import { setzeMarkierung, leseSchrittGeladenesProjekt, setzeSchrittGeladenesProj
 import { leseLidarFuerProjekt } from '@/lib/aufmass-eigentuemer';
 import { speichereEntwurf } from '@/lib/aufmass-entwurf';
 import { speichereSchrittAuto } from '@/lib/aufmass-autosave';
+import { teileVorbelegung } from '@/lib/lidar-teile-vorbelegung';
 import { ebenenZuVorschlaegen, ebenenSignatur, flaecheM2, type EbenenVorschlag } from '@/lib/lidar-ebenen';
 import KIWarnings from '@/components/aufmaß/KIWarnings';
 import { useKIValidation } from '@/hooks/useKIValidation';
@@ -33,6 +34,7 @@ function Schritt2Content() {
   const [dbLadungAbgeschlossen, setDbLadungAbgeschlossen] = useState(false);
   const [step1Data, setStep1Data] = useState<any>(null);
   const [lidarUebernommen, setLidarUebernommen] = useState(false);
+  const [teileHinweis, setTeileHinweis] = useState('');
   const [kiUebernommen, setKiUebernommen] = useState(false);
   const [grundrissUebernommen, setGrundrissUebernommen] = useState(false);
   const [hoeheGeschaetzt, setHoeheGeschaetzt] = useState(false);
@@ -320,9 +322,15 @@ function leeresFormS2() {
         let scanEntschieden = false;
         try { scanEntschieden = !!signatur && localStorage.getItem('scaffold_lidar_ebenen_entschieden') === signatur; } catch { /* ignore */ }
 
+        // Gebäudeteile aus dem Scan (Haus, Garage …) → Traufhöhe, Dachform, Garage als Vorschlag
+        const tv = teileVorbelegung(m.teile);
+        setTeileHinweis(tv ? tv.hinweis : '');
         setForm((prev) => {
           const next = {
             ...prev,
+            traufhoehe: tv ? (fresh ? tv.traufhoehe : (prev.traufhoehe || tv.traufhoehe)) : prev.traufhoehe,
+            dachform: tv && tv.dachform ? (fresh ? tv.dachform : (prev.dachform || tv.dachform)) : prev.dachform,
+            garagen: tv ? (prev.garagen || tv.garagen) : prev.garagen,
             laenge: fresh
               ? (hauptEbene?.breiteM ? hauptEbene.breiteM.toFixed(2) : (m.lengthM ? m.lengthM.toFixed(2) : prev.laenge))
               : (prev.laenge || (hauptEbene?.breiteM ? hauptEbene.breiteM.toFixed(2) : (m.lengthM ? m.lengthM.toFixed(2) : ''))),
@@ -351,7 +359,7 @@ function leeresFormS2() {
         // Höhe zur Hauptfassade – reine Seitenwände mit gleicher Höhe werden
         // NICHT vorgeschlagen (wären fälschlich zusätzliche Gebäude).
         // Auswahlliste für weitere Wände (ersetzt die frühere Höhen-Heuristik).
-        if (fresh && !scanEntschieden) setEbenenVorschlag((alt) => (alt.length ? alt : ebenenZuVorschlaegen(m.ebenen)));
+        if (fresh && !scanEntschieden) setEbenenVorschlag((alt) => (alt.length ? alt : ebenenZuVorschlaegen(m.ebenen, !tv)));
         else setEbenenVorschlag([]);
         setLidarUebernommen(true);
         return true;
@@ -685,6 +693,7 @@ function leeresFormS2() {
             <div className="rounded-xl bg-purple-50 border border-purple-200 p-3 text-sm text-purple-700">
               Maße wurden aus dem LiDAR-Scan übernommen – bitte prüfen und bei Bedarf anpassen.
               {form.abschnitte.length > 0 && ` Der Scan hat ${form.abschnitte.length + 1} Ebenen erkannt – als Abschnitte weiter unten eingetragen.`}
+              {teileHinweis && ` ${teileHinweis}`}
               {ebenenVorschlag.length > 0 && ` Der Scan hat ${ebenenVorschlag.length + 1} Ebenen erkannt – bitte unten auswählen, welche als Abschnitte übernommen werden.`}
             </div>
           )}

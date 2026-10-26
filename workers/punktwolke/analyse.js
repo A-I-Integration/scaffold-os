@@ -290,9 +290,20 @@ function analyzeDistances(pts, hits, vertAxis, unitScale) {
   return abstaende;
 }
 
+// Gebäudeteile brauchen mehr Punkte als die Ebenen (kleine Bauteile wie Garagen): bis 300 000 Punkte
+function ptsFuerTeile(voll) {
+  const n = voll.length / 3;
+  const MAX_TEILE = 300000;
+  if (n <= MAX_TEILE) return voll;
+  const stride = Math.ceil(n / MAX_TEILE), out = [];
+  for (let i = 0; i < voll.length; i += stride * 3) out.push(voll[i], voll[i + 1], voll[i + 2]);
+  return out;
+}
+
 // ─── Hauptfunktion: Buffer + Endung rein, measurements raus ───
 function analysiere(buffer, ext) {
   let pts = parsePoints(buffer, ext);
+  const ptsVoll = pts; // für die Gebäudeteile: feinere Abtastung als für die Ebenen
   const totalCount = pts.length / 3;
 
   if (totalCount > MAX_POINTS) {
@@ -354,6 +365,11 @@ function analysiere(buffer, ext) {
     measurements.ebenen = [];
     measurements.fassade = null;
   }
+  // Gebäudeteile (Haus, Garage …) mit Traufhöhe, Dachform, Versatz – gleiche Erkennung wie im Browser; Fehler dürfen die Maße nie verhindern
+  try {
+    const t = require('./teile.js').teileAusLidarPunkten(ptsFuerTeile(ptsVoll), vertAxis, unitScale);
+    if (t) { measurements.teile = t.teile; measurements.mehrteilig = t.mehrteilig; }
+  } catch (e) { /* ohne Teile weiter */ }
   return measurements;
 }
 

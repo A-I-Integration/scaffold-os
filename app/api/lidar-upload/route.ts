@@ -3,6 +3,17 @@ import { createClient } from '@/lib/supabase/server';
 import { serverErrorResponse, requireAuth, unauthorizedResponse } from '@/lib/auth';
 import { istBinaerPly, parsePlyBinary } from '@/lib/ply-binary';
 import { achseAusPlyKopf } from '@/lib/ply-achse';
+import { teileAusLidarPunkten, type LidarTeil } from '@/lib/cad/lidar-teile';
+
+// Gebäudeteile brauchen mehr Punkte als die Ebenen (kleine Bauteile wie Garagen): bis 300 000 Punkte
+function ptsFuerTeile(voll: number[]): number[] {
+  const n = voll.length / 3;
+  const MAX_TEILE = 300000;
+  if (n <= MAX_TEILE) return voll;
+  const stride = Math.ceil(n / MAX_TEILE), out: number[] = [];
+  for (let i = 0; i < voll.length; i += stride * 3) out.push(voll[i], voll[i + 1], voll[i + 2]);
+  return out;
+}
 
 // ─── Typen ───
 interface Ebene {
@@ -35,6 +46,8 @@ interface Measurements {
   // Kompatibilität zu bestehenden Aufrufern
   fassade?: Ebene | null;
   nebenfassade?: { breiteM: number; hoeheM: number; punkte: number } | null;
+  teile?: LidarTeil[];
+  mehrteilig?: boolean;
 }
 
 const MAX_POINTS = 120_000;   // Arbeitsmenge (Stride-Sampling)
@@ -395,6 +408,7 @@ export async function POST(req: NextRequest) {
     } catch (parseErr: any) {
       return NextResponse.json({ error: parseErr?.message || 'Datei konnte nicht gelesen werden' }, { status: 400 });
     }
+    const ptsVoll = pts; // Gebäudeteile: feinere Abtastung als für die Ebenen
     const totalCount = pts.length / 3;
 
     // ── 2) Downsample auf Arbeitsmenge ──
@@ -461,6 +475,10 @@ export async function POST(req: NextRequest) {
       measurements.ebenen = [];
       measurements.fassade = null;
     }
+
+    // Gebäudeteile (Haus, Garage …) mit Traufhöhe, Dachform, Versatz; Fehler dürfen die Maße nie verhindern
+    const teileErgebnis = teileAusLidarPunkten(ptsFuerTeile(ptsVoll), vertAxis, unitScale);
+    if (teileErgebnis) { measurements.teile = teileErgebnis.teile; measurements.mehrteilig = teileErgebnis.mehrteilig; }
 
     // ── 5) Datei speichern ──
     const supabase = await createClient();
