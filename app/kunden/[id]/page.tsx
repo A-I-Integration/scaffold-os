@@ -35,6 +35,7 @@ import SollIstStunden from '@/components/SollIstStunden'
 import AuftragsTeam from '@/components/AuftragsTeam'
 import VertragsDokumente from '@/components/VertragsDokumente'
 import { DokumentReiter, WIN } from '@/components/win/Win'
+import ProjektZeiten from '@/components/ProjektZeiten'
 import ProjektLvBlock from '@/components/ProjektLv'
 import NachtraegeBlock from '@/components/NachtraegeBlock'
 import ZwischenaufmassBlock from '@/components/ZwischenaufmassBlock'
@@ -116,13 +117,13 @@ const DOK_TYPE_LABEL: Record<string, string> = {
 const fmtTimestamp = (d: string | null) => (d ? new Date(d).toLocaleDateString('de-DE') : '–')
 
 const LEER_POSITION = { bezeichnung: '', menge: '1', einheit: 'Stk.', einzelpreis: '' }
-const TABS = ['baustellen', 'kunde', 'aufmass', 'bilder', 'dokumente', 'angebote', 'lv', 'nachtraege', 'rechnungen', 'emails'] as const
+const TABS = ['baustellen', 'kunde', 'aufmass', 'bilder', 'dokumente', 'angebote', 'lv', 'zeiten', 'nachtraege', 'rechnungen', 'emails'] as const
 type Tab = typeof TABS[number]
 // Zwei Ebenen: Kunde (Übersicht aller Baustellen, Stammdaten, alle Rechnungen/Mails) und Baustelle (alles zu genau diesem Projekt)
 const KUNDEN_TABS: Tab[] = ['baustellen', 'kunde', 'rechnungen', 'emails']
-const BAUSTELLEN_TABS: Tab[] = ['aufmass', 'bilder', 'dokumente', 'angebote', 'lv', 'nachtraege', 'rechnungen', 'emails']
+const BAUSTELLEN_TABS: Tab[] = ['aufmass', 'bilder', 'dokumente', 'angebote', 'lv', 'zeiten', 'nachtraege', 'rechnungen', 'emails']
 const TAB_LABEL: Record<Tab, string> = {
-  baustellen: 'Baustellen', kunde: 'Kunde', aufmass: 'Aufmaß', bilder: 'Bilder', dokumente: 'Dokumente', angebote: 'Angebote', lv: 'Leistungsverzeichnis', nachtraege: 'Nachträge / Schluss', rechnungen: 'Rechnungen', emails: 'E-Mails',
+  baustellen: 'Baustellen', kunde: 'Kunde', aufmass: 'Aufmaß', bilder: 'Bilder', dokumente: 'Dokumente', angebote: 'Angebote', lv: 'Leistungsverzeichnis', zeiten: 'Zeiten', nachtraege: 'Nachträge / Schluss', rechnungen: 'Rechnungen', emails: 'E-Mails',
 }
 
 // Gleicher Namensabgleich wie auf der Kunden-Übersicht (app/kunden/page.tsx):
@@ -1095,6 +1096,13 @@ export default function KundenDetailPage() {
                     <div><p className="text-[10px] text-[#86868b] uppercase">Risiko</p><p className={ki?.riskLevel === 'red' ? 'text-red-600' : ki?.riskLevel === 'yellow' ? 'text-amber-600' : 'text-emerald-600'}>{ki?.riskLevel === 'red' ? 'Hoch' : ki?.riskLevel === 'yellow' ? 'Mittel' : ki ? 'Niedrig' : '–'}</p></div>
                   </div>
                   {!project.data?.step1 && <p className="text-xs text-[#86868b] mt-3">Für diesen Auftrag liegen noch keine Aufmaß-Detaildaten vor.</p>}
+                  <div className="mt-3 flex flex-wrap items-center gap-1.5 text-xs">
+                    <span className="text-[#86868b]">Ändern:</span>
+                    {[[1, 'Auftrag & Zeitraum'], [2, 'Maße'], [3, 'System'], [4, ''], [5, '']].map(([n, t]) => (
+                      <a key={String(n)} href={`/aufmass/schritt${n}?id=${project.id}`} className="rounded border border-black/15 px-2 py-1 hover:bg-[#e8f1fb]">Schritt {n}{t ? ` – ${t}` : ''}</a>
+                    ))}
+                    <a href={`/aufmass/schritt6?id=${project.id}`} className="rounded border border-black/15 px-2 py-1 hover:bg-[#e8f1fb]">Angebot (Schritt 6)</a>
+                  </div>
                   <AuftragsTeam projectId={project.id} />
                   <VersionsHistorie projectId={project.id} onRestored={ladeDaten} />
                 </div>
@@ -1228,6 +1236,8 @@ export default function KundenDetailPage() {
 
         {/* ═══════════ TAB: NACHTRÄGE / SCHLUSSRECHNUNG ═══════════ */}
         {tabAktiv === 'lv' && baustelle && <ProjektLvBlock projectId={baustelle.id} />}
+
+        {tabAktiv === 'zeiten' && baustelle && <ProjektZeiten projectId={baustelle.id} geplantStunden={baustelle.data?.kiResult?.estimatedLaborHours} />}
 
         {tabAktiv === 'nachtraege' && (
           <div className="space-y-4">
