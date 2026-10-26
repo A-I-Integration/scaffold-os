@@ -6,6 +6,7 @@ import { jsPDF } from 'jspdf'
 import { uploadVertragsdokument } from '@/lib/vertrag-upload-client'
 import { KATEGORIEN, mappeUrl } from '@/lib/baustellenmappe'
 import Verankerungsprotokoll from '@/components/Verankerungsprotokoll'
+import Pruefschild from '@/components/Pruefschild'
 
 // ============================================================
 // SCAFFOLD OS – Baustellenmappe (Reiter in der Baustelle)
@@ -159,6 +160,7 @@ export default function Baustellenmappe({ projectId, projektName, adresse }: { p
         <p className="text-sm text-black/70">Der Link läuft nicht ab, damit ein gedruckter Code hält. Wer den Code scannt, sieht nur die freigegebenen Unterlagen dieser Baustelle. Bei Verlust oder Missbrauch den Link widerrufen und einen neuen erstellen.</p>
       </section>
       <Verankerungsprotokoll projectId={projectId} onAbgelegt={() => void lade()} />
+      <Pruefschild projectId={projectId} onAbgelegt={() => void lade()} />
     </div>
   )
 }
