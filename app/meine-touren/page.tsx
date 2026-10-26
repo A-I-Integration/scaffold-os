@@ -7,6 +7,7 @@ import type { EmployeeWithSkills } from '@/types/employees';
 import ProjektDokumentation from '@/components/ProjektDokumentation';
 import Link from 'next/link';
 import { Wrench, Navigation } from 'lucide-react';
+import { FreigabeBadge, useFreigabeStatus } from '@/components/FreigabeBadge';
 import { gruppiereStopps, routenAdressen, uhrzeitKurz, type StoppGruppe } from '@/lib/touren/stopp-gruppen';
 import { baueTourPackliste, alleKeys } from '@/lib/touren/packliste';
 import { legeNachtragVorOrtAn } from '@/lib/nachtrag-client';
@@ -520,6 +521,7 @@ export default function MeineTourenPage() {
   }
 
   const stoppGruppen = myTour ? gruppiereStopps(myTour.stops) : [];
+  const freigaben = useFreigabeStatus(stoppGruppen.map(g => g.project_id));
 
   // Packliste: aus dem Lager mitnehmen vs. unterwegs abholen
   const packliste = baueTourPackliste(myTour ? myTour.stops : []);
@@ -808,6 +810,7 @@ export default function MeineTourenPage() {
                         <div className="font-medium">
                           {g.istAbholung && <span className="mr-2 rounded-full bg-sky-100 text-sky-800 px-2 py-0.5 text-[11px] font-semibold">🔄 Abholung / Abbau</span>}
                           {g.address}
+                          {g.project_id && freigaben[g.project_id] && <span className="ml-2 bg-white rounded"><FreigabeBadge status={freigaben[g.project_id]} /></span>}
                         </div>
                         {g.material.length > 0 && (
                           <ul className="text-[#86868b] text-sm mt-0.5 space-y-0.5">

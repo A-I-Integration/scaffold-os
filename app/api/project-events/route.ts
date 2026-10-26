@@ -25,7 +25,7 @@ const headers = {
   Authorization: `Bearer ${key}`,
 };
 
-const TYPES = ['pruefung_freigabe', 'standzeit', 'geruest_aenderung', 'demontage', 'ruecktransport', 'sonstiges'];
+const TYPES = ['pruefung_freigabe', 'standzeit', 'geruest_aenderung', 'demontage', 'ruecktransport', 'ereignis', 'sonstiges'];
 
 async function currentUserId(): Promise<string | null> {
   try {

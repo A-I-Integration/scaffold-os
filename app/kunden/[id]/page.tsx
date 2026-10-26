@@ -44,6 +44,7 @@ import SchlussrechnungDialog from '@/components/SchlussrechnungDialog'
 import { lokalesDatumIso, datumPlusTage } from '@/lib/datum'
 import AnsichtLinkBox from '@/components/AnsichtLinkBox'
 import StatikerFreigabeBox from '@/components/StatikerFreigabeBox'
+import { FreigabeBadge, useFreigabeStatus } from '@/components/FreigabeBadge'
 
 interface Kunde {
   id: string
@@ -107,7 +108,7 @@ const ANGEBOT_LABEL: Record<string, string> = {
   korrektur: '✍️ Korrektur gewünscht', abgelehnt: '❌ Angebot abgelehnt',
 }
 const DOK_TYPE_LABEL: Record<string, string> = {
-  pruefung_freigabe: 'Prüfung / Freigabe', standzeit: 'Standzeit / Nutzung',
+  pruefung_freigabe: 'Prüfung / Freigabe', ereignis: 'Außergewöhnliches Ereignis', standzeit: 'Standzeit / Nutzung',
   geruest_aenderung: 'Gerüständerung', demontage: 'Demontage',
   ruecktransport: 'Rücktransport', sonstiges: 'Sonstiges',
 }
@@ -854,6 +855,7 @@ export default function KundenDetailPage() {
 
   // ── Baustellen-Ebene: alles unterhalb gilt nur für das gewählte Projekt ──
   const baustelle = baustelleParam ? projects.find((p) => p.id === baustelleParam) : undefined
+  const freigaben = useFreigabeStatus(projects.map((p) => p.id))
   const projektSicht = baustelle ? [baustelle] : projects
   const aktiveTabs = baustelle ? BAUSTELLEN_TABS : KUNDEN_TABS
   const tabAktiv: Tab = aktiveTabs.includes(tab) ? tab : aktiveTabs[0]
@@ -894,6 +896,7 @@ export default function KundenDetailPage() {
           <button onClick={() => (baustelle ? waehleBaustelle(null) : router.push('/kunden'))} className="p-1 rounded hover:bg-white/20" title="Zurück"><ArrowLeft className="h-4 w-4" /></button>
           <div className="flex-1 min-w-0 flex items-baseline gap-3">
             <h1 className="text-[14px] font-bold truncate">{baustelle ? (baustelle.name || 'Unbenannte Baustelle') : kunde.name}</h1>
+            {baustelle && freigaben[baustelle.id] && <span className="bg-white rounded"><FreigabeBadge status={freigaben[baustelle.id]} /></span>}
             <span className="text-xs opacity-80 truncate">
               {baustelle ? `Kunde: ${kunde.name}${baustelle.adresse ? ` · ${baustelle.adresse}` : ''}` : `${kunde.street}${kunde.street ? ', ' : ''}${kunde.zip} ${kunde.city}`}
             </span>
@@ -928,7 +931,7 @@ export default function KundenDetailPage() {
               <table className="w-full border-collapse text-[13px]">
                 <thead>
                   <tr className="text-left text-xs" style={{ background: WIN.grund, color: WIN.textGedaempft }}>
-                    {['Baustelle', 'Adresse', 'Angebot', 'Rechnungen', 'Offen'].map((h, i) => <th key={h} className={`px-2 py-1.5 border font-semibold ${i >= 3 ? 'text-right' : ''}`} style={{ borderColor: WIN.rand }}>{h}</th>)}
+                    {['Baustelle', 'Adresse', 'Angebot', 'Freigabe', 'Rechnungen', 'Offen'].map((h, i) => <th key={h} className={`px-2 py-1.5 border font-semibold ${i >= 4 ? 'text-right' : ''}`} style={{ borderColor: WIN.rand }}>{h}</th>)}
                   </tr>
                 </thead>
                 <tbody>
@@ -943,6 +946,7 @@ export default function KundenDetailPage() {
                         <td className={`${zelle} font-semibold`} style={{ borderColor: WIN.randHell, color: '#1f4f8f' }}>{pr.name || 'Unbenannte Baustelle'}</td>
                         <td className={zelle} style={{ borderColor: WIN.randHell }}>{pr.adresse || ''}</td>
                         <td className={zelle} style={{ borderColor: WIN.randHell }}>{status ? (ANGEBOT_LABEL[status] || status) : 'Noch kein Angebot'}</td>
+                        <td className={zelle} style={{ borderColor: WIN.randHell }}><FreigabeBadge status={freigaben[pr.id]} /></td>
                         <td className={`${zelle} text-right tabular-nums`} style={{ borderColor: WIN.randHell }}>{invs.length}</td>
                         <td className={`${zelle} text-right tabular-nums font-semibold ${offen > 0 ? 'text-red-600' : ''}`} style={{ borderColor: WIN.randHell }}>{offen > 0 ? `${fmtEur(offen)} €` : ''}</td>
                       </tr>
