@@ -1,11 +1,9 @@
 import type { Metadata, Viewport } from "next"
-import { Inter } from "next/font/google"
 import Script from "next/script"
 import "./globals.css"
 import SidebarLayout from "@/components/SidebarLayout"
 import CookieBannerWrapper from "@/components/CookieBannerWrapper"
 
-const inter = Inter({ subsets: ["latin"] })
 
 // Google-Ads-Tag (Conversion-Tracking) – lädt NUR dort, wo die Env-Var
 // NEXT_PUBLIC_GOOGLE_ADS_ID gesetzt ist (= ausschließlich Master-Instanz
@@ -40,7 +38,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="de">
-      <body className={inter.className}>
+      <body>
         {googleAdsId && (
           <>
             <Script

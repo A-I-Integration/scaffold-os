@@ -20,12 +20,12 @@ html {
 }
 
 body {
+  --schrift: "Microsoft Sans Serif", "MS Sans Serif", Tahoma, Arial, "Liberation Sans", Helvetica, sans-serif;
   background: var(--background);
   color: var(--foreground);
-  /* Apple-Systemfont-Stack: San Francisco auf Apple-Geräten,
-     saubere Fallbacks überall sonst */
-  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI",
-    Roboto, "Helvetica Neue", Arial, sans-serif;
+  /* Einheitliche Schrift in der ganzen Software: Microsoft Sans Serif (Windows/Office-Systemschrift).
+     Ist sie nicht installiert, greifen die metrisch ähnlichen Ersatzschriften Arial / Liberation Sans. */
+  font-family: var(--schrift);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;
@@ -38,7 +38,7 @@ body {
 
 /* ───────── Desktop-Oberfläche (Büro, großer Bildschirm): eckiger, flacher, dichter ─────────
    Gilt nur innerhalb von .win-ui (DesktopShell) – Handy, Fahrer und öffentliche Seiten bleiben unverändert. */
-.win-ui { font-family: "Segoe UI", Inter, system-ui, sans-serif; font-size: 15px; color: #1b1b1b; -webkit-font-smoothing: auto; -moz-osx-font-smoothing: auto; text-rendering: optimizeLegibility; }
+.win-ui { font-family: var(--schrift); font-size: 15px; color: #1b1b1b; -webkit-font-smoothing: auto; -moz-osx-font-smoothing: auto; text-rendering: optimizeLegibility; }
 .win-ui [class*="rounded-xl"], .win-ui [class*="rounded-2xl"], .win-ui [class*="rounded-3xl"], .win-ui [class*="rounded-lg"], .win-ui [class*="rounded-md"] { border-radius: 3px; }
 .win-ui button.rounded-full, .win-ui a.rounded-full, .win-ui input.rounded-full, .win-ui select.rounded-full,
 .win-ui span.rounded-full[class*="px-"] { border-radius: 3px; }
