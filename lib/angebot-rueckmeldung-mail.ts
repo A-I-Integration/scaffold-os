@@ -12,7 +12,7 @@ const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replac
 const einzeilig = (s: string, max: number) => s.replace(/[\r\n\t]+/g, ' ').trim().slice(0, max)
 
 export function rueckmeldungMail(p: {
-  art: Exclude<AngebotAntwort, 'annehmen'>
+  art: AngebotAntwort
   projektName: string
   notiz: string | null
   name: string | null
@@ -20,15 +20,18 @@ export function rueckmeldungMail(p: {
 }): { subject: string; html: string } {
   const projekt = einzeilig(p.projektName || 'Angebot', 80)
   const korrektur = p.art === 'korrektur'
-  const subject = `[SCAFFOLD OS] ${korrektur ? 'Korrektur gewünscht' : 'Angebot abgelehnt'}: ${projekt}`
+  const annahme = p.art === 'annehmen'
+  const titel = annahme ? '✅ Angebot angenommen' : korrektur ? '✍️ Korrektur gewünscht' : '❌ Angebot abgelehnt'
+  const notizLabel = annahme ? 'Hinweis des Kunden:' : korrektur ? 'Was nicht passt oder fehlt:' : 'Begründung:'
+  const subject = `[SCAFFOLD OS] ${annahme ? 'Angebot angenommen' : korrektur ? 'Korrektur gewünscht' : 'Angebot abgelehnt'}: ${projekt}`
   const html = `
     <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
       <h2 style="color: #f59e0b; margin-bottom: 4px;">SCAFFOLD OS</h2>
-      <h3 style="color: #0f172a; margin-top: 0;">${korrektur ? '✍️ Korrektur gewünscht' : '❌ Angebot abgelehnt'}</h3>
+      <h3 style="color: #0f172a; margin-top: 0;">${titel}</h3>
       <div style="background: #f8fafc; padding: 16px 20px; border-radius: 8px; margin: 16px 0;">
         <p style="margin: 0 0 8px;"><strong>Projekt:</strong> ${esc(projekt)}</p>
         ${p.name ? `<p style="margin: 0 0 8px;"><strong>Von:</strong> ${esc(einzeilig(p.name, 120))}</p>` : ''}
-        <p style="margin: 0 0 4px;"><strong>${korrektur ? 'Was nicht passt oder fehlt:' : 'Begründung:'}</strong></p>
+        <p style="margin: 0 0 4px;"><strong>${notizLabel}</strong></p>
         <p style="margin: 0; white-space: pre-wrap;">${p.notiz ? esc(p.notiz) : '<em>Keine Angabe</em>'}</p>
       </div>
       <p><a href="${esc(p.link)}" style="display: inline-block; background: #f59e0b; color: white; padding: 10px 20px; text-decoration: none; border-radius: 6px;">Angebot öffnen</a></p>

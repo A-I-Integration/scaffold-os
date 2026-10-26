@@ -191,6 +191,27 @@ export function generateInvoicePDF(inv: Invoice) {
   });
 
   let cy = (doc as any).lastAutoTable.finalY + 12;
+
+  // Zwischensummen je Gerüst (nur wenn mehrere Gerüste vorkommen)
+  const gruppen = new Map<string, number>();
+  inv.positions.forEach(p => {
+    if (!p.geruestId) return;
+    gruppen.set(p.geruestId, (gruppen.get(p.geruestId) || 0) + Number(p.menge) * Number(p.einzelpreis));
+  });
+  if (gruppen.size >= 2) {
+    autoTable(doc, {
+      startY: cy - 4,
+      head: [['Zwischensumme je Gerüst', 'Netto']],
+      body: [...gruppen.entries()].map(([id, sum]) => [id, fmtEur(sum) + ' €']),
+      theme: 'plain',
+      headStyles: { fontSize: 8, fontStyle: 'bold', textColor: [30, 58, 138] },
+      bodyStyles: { fontSize: 8, textColor: 15 },
+      columnStyles: { 1: { halign: 'right', cellWidth: 30 } },
+      tableWidth: 110,
+      margin: { left: 14, right: 14 },
+    });
+    cy = (doc as any).lastAutoTable.finalY + 12;
+  }
   if (cy > 220) { doc.addPage(); cy = 30; }
 
   // Summen-Block (§ 14 Abs. 4: Netto, Steuersatz, Steuerbetrag, Brutto)
@@ -220,7 +241,12 @@ export function generateInvoicePDF(inv: Invoice) {
     14, Math.min(cy + 8, 262), { maxWidth: 120 }
   );
   if (inv.notes) {
-    doc.text(doc.splitTextToSize('Hinweis: ' + inv.notes, 90), 14, Math.min(cy + 18, 274));
+    // Bemerkungen als eigener Block über volle Breite; bei Platzmangel auf neuer Seite
+    const zeilen: string[] = doc.splitTextToSize(inv.notes, 182);
+    let ny = Math.max(cy + 18, 0);
+    if (ny + zeilen.length * 4 + 6 > 272) { doc.addPage(); ny = 30; }
+    doc.setFont('helvetica', 'bold'); doc.text('Bemerkungen', 14, ny); ny += 5;
+    doc.setFont('helvetica', 'normal'); doc.text(zeilen, 14, ny);
   }
 
   // Fußzeile: § 14 UStG Pflichtangaben aus dem Firmenprofil (Phase 14)
