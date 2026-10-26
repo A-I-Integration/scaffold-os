@@ -12,6 +12,7 @@
 //                         automatische rote Kennzeichnung bei Zahlungsverzug
 // ============================================================
 
+import { geruestPositionen } from '@/lib/aufmass-rechnung'
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import {
@@ -523,7 +524,12 @@ export default function KundenDetailPage() {
           project_id: project.id, customer_name: kunde.name,
           customer_address: [kunde.street, [kunde.zip, kunde.city].filter(Boolean).join(', ')].filter(Boolean).join(', ') || undefined,
           due_date: datumPlusTage(14),
-          positions: [{ bezeichnung: `Gerüstbau gemäß Angebot${ki?.totalAreaM2 ? ` (${ki.totalAreaM2} m²)` : ''}`, menge: 1, einheit: 'Pauschale', einzelpreis: Math.round(preis * 100) / 100 }],
+          positions: geruestPositionen({
+            basis: preis, flaecheM2: ki?.totalAreaM2 ?? 0,
+            festpreisProM2: project.data?.preisModus === 'festpreis' ? parseFloat(String(project.data?.festpreisProM2 ?? '').replace(',', '.')) || undefined : undefined,
+            abschnitte: ki?.sectionBreakdown,
+            pauschaleText: `Gerüstbau gemäß Angebot${ki?.totalAreaM2 ? ` (${ki.totalAreaM2} m²)` : ''}`,
+          }),
           override_grund: overrideGrund || undefined,
         }),
       })

@@ -1,5 +1,7 @@
 'use client';
 
+import { geruestPositionen } from '@/lib/aufmass-rechnung';
+import type { StrukturPosition } from '@/lib/rechnung-position';
 import { useState, useEffect, useRef, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import dynamic from 'next/dynamic';
@@ -937,14 +939,17 @@ function Schritt6Content() {
     if (!kiResult || !savedProjectId) return;
     const ang = calcAngebot();
     const flaeche = kiResult.totalAreaM2;
-    const positions: { bezeichnung: string; menge: number; einheit: string; einzelpreis: number }[] = [];
-
-    positions.push({
-      bezeichnung: preisModus === 'festpreis'
+    // Gerüst nach Abschnitten/m² aufgeschlüsselt (Summe = Angebotspreis); ohne Aufteilung eine Sammelposition
+    const positions: StrukturPosition[] = geruestPositionen({
+      basis: ang.basis,
+      flaecheM2: flaeche ?? 0,
+      festpreisProM2: preisModus === 'festpreis' ? parseFloat(festpreisProM2.replace(',', '.')) || undefined : undefined,
+      abschnitte: kiResult.sectionBreakdown,
+      pauschaleText: preisModus === 'festpreis'
         ? `Gerüstbau gemäß Angebot (${flaeche ?? '–'} m² × ${festpreisProM2.replace('.', ',')} €/m²)`
         : 'Gerüstbau gemäß Angebot (Material, Arbeit, Transport)',
-      menge: 1, einheit: 'Pauschale', einzelpreis: Math.round(ang.basis * 100) / 100,
     });
+
     if (ang.kranBetrag > 0) {
       positions.push({ bezeichnung: `Kran (${ang.kranTage} Tage à ${ang.kranTagessatz} €)`, menge: 1, einheit: 'Pauschale', einzelpreis: ang.kranBetrag });
     }
