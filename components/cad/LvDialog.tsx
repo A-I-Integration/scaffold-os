@@ -11,6 +11,7 @@
 import { verwendungMitId } from '@/lib/geruestklassen'
 import { useRouter } from 'next/navigation'
 import { rechnungAusLv } from '@/lib/lv-zu-rechnung'
+import { LV_ARTEN, LV_ART_LABEL, type LvArt } from '@/lib/projekt-lv'
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
 import type { CADModel } from '@/lib/calculations/cad-engine'
 import type { MaterialItem } from '@/types/scaffold'
@@ -123,6 +124,31 @@ export default function LvDialog({ model, materials, aufbauStunden, abbauStunden
     [model, materials, aufbauStunden, abbauStunden, e, standardpreise],
   )
   const router = useRouter()
+  // Zur Baustelle speichern: Baustelle und Art wählen, das LV wird als neue Version abgelegt
+  const [speicherOffen, setSpeicherOffen] = useState(false)
+  const [baustellen, setBaustellen] = useState<{ id: string; name: string | null }[]>([])
+  const [zielId, setZielId] = useState('')
+  const [zielArt, setZielArt] = useState<LvArt>('auftrag')
+  const [gespeichert, setGespeichert] = useState('')
+  const oeffneSpeichern = () => {
+    setSpeicherOffen(true); setGespeichert('')
+    if (baustellen.length) return
+    fetch('/api/projects').then((r) => r.json()).then((j) => {
+      if (j?.success) setBaustellen((j.projects as { id: string; name: string | null }[]).map((p) => ({ id: p.id, name: p.name })))
+      else setFehler('Baustellen konnten nicht geladen werden.')
+    }).catch(() => setFehler('Baustellen konnten nicht geladen werden.'))
+  }
+  const zurBaustelle = async () => {
+    if (!zielId) { setFehler('Bitte eine Baustelle wählen.'); return }
+    setFehler('')
+    try {
+      const r = await fetch('/api/projekt-lv', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ project_id: zielId, art: zielArt, titel: e.bauvorhaben || '', lv }) })
+      const j = await r.json()
+      if (!j.success) throw new Error(j.error)
+      setGespeichert(`Gespeichert als Version ${j.eintrag.version} (${LV_ART_LABEL[zielArt]}) – zu finden in der Kundenakte unter Baustelle → Leistungsverzeichnis.`)
+      setSpeicherOffen(false)
+    } catch (err) { setFehler(err instanceof Error ? err.message : 'Speichern fehlgeschlagen') }
+  }
   const alsRechnung = () => {
     const entwurf = rechnungAusLv(lv)
     if (!entwurf.positions.length) { setFehler('Keine Position mit Menge und Preis im Leistungsverzeichnis – es gibt nichts abzurechnen.'); return }
@@ -397,8 +423,21 @@ export default function LvDialog({ model, materials, aufbauStunden, abbauStunden
         </div>
 
         <div className='flex items-center justify-between gap-3 px-5 py-3 border-t border-black/10'>
-          <span className='text-[11px] text-red-600'>{fehler}</span>
+          <span className='text-[11px] text-red-600'>{fehler}{gespeichert && <span className='text-emerald-700'>{gespeichert}</span>}</span>
           <div className='flex gap-2'>
+            {speicherOffen && (
+              <>
+                <select value={zielId} onChange={(ev) => setZielId(ev.target.value)} className='px-2 py-2 border rounded-xl text-sm max-w-[220px]'>
+                  <option value=''>Baustelle wählen …</option>
+                  {baustellen.map((b) => <option key={b.id} value={b.id}>{b.name || '(ohne Namen)'}</option>)}
+                </select>
+                <select value={zielArt} onChange={(ev) => setZielArt(ev.target.value as LvArt)} className='px-2 py-2 border rounded-xl text-sm'>
+                  {LV_ARTEN.map((a) => <option key={a} value={a}>{LV_ART_LABEL[a]}</option>)}
+                </select>
+                <button type='button' onClick={zurBaustelle} className='px-4 py-2 bg-[#e8590c] text-white text-sm font-medium rounded-xl'>Speichern</button>
+              </>
+            )}
+            {!speicherOffen && <button type='button' onClick={oeffneSpeichern} className='px-4 py-2 border border-black/20 text-sm font-medium rounded-xl hover:bg-black/5'>💾 Zur Baustelle speichern</button>}
             <button type='button' onClick={alsRechnung} className='px-4 py-2 bg-[#1d1d1f] text-white text-sm font-medium rounded-xl hover:bg-black' title='Jede LV-Position wird eine Rechnungsposition (Listenpreis × Faktor)'>🧾 Rechnung daraus</button>
             <button type='button' onClick={alsExcel} className='px-4 py-2 bg-emerald-600 text-white text-sm font-medium rounded-xl hover:bg-emerald-700'>📊 Excel</button>
             <button type='button' onClick={alsPdf} className='px-4 py-2 bg-[#e8590c] text-white text-sm font-medium rounded-xl hover:bg-[#d24f08]'>📄 PDF</button>

@@ -34,6 +34,7 @@ import NeueMailDialog from '@/components/NeueMailDialog'
 import SollIstStunden from '@/components/SollIstStunden'
 import AuftragsTeam from '@/components/AuftragsTeam'
 import VertragsDokumente from '@/components/VertragsDokumente'
+import ProjektLvBlock from '@/components/ProjektLv'
 import NachtraegeBlock from '@/components/NachtraegeBlock'
 import ZwischenaufmassBlock from '@/components/ZwischenaufmassBlock'
 import SchlussrechnungDialog from '@/components/SchlussrechnungDialog'
@@ -114,13 +115,13 @@ const DOK_TYPE_LABEL: Record<string, string> = {
 const fmtTimestamp = (d: string | null) => (d ? new Date(d).toLocaleDateString('de-DE') : '–')
 
 const LEER_POSITION = { bezeichnung: '', menge: '1', einheit: 'Stk.', einzelpreis: '' }
-const TABS = ['baustellen', 'kunde', 'aufmass', 'bilder', 'dokumente', 'angebote', 'nachtraege', 'rechnungen', 'emails'] as const
+const TABS = ['baustellen', 'kunde', 'aufmass', 'bilder', 'dokumente', 'angebote', 'lv', 'nachtraege', 'rechnungen', 'emails'] as const
 type Tab = typeof TABS[number]
 // Zwei Ebenen: Kunde (Übersicht aller Baustellen, Stammdaten, alle Rechnungen/Mails) und Baustelle (alles zu genau diesem Projekt)
 const KUNDEN_TABS: Tab[] = ['baustellen', 'kunde', 'rechnungen', 'emails']
-const BAUSTELLEN_TABS: Tab[] = ['aufmass', 'bilder', 'dokumente', 'angebote', 'nachtraege', 'rechnungen', 'emails']
+const BAUSTELLEN_TABS: Tab[] = ['aufmass', 'bilder', 'dokumente', 'angebote', 'lv', 'nachtraege', 'rechnungen', 'emails']
 const TAB_LABEL: Record<Tab, string> = {
-  baustellen: 'Baustellen', kunde: 'Kunde', aufmass: 'Aufmaß', bilder: 'Bilder', dokumente: 'Dokumente', angebote: 'Angebote', nachtraege: 'Nachträge / Schluss', rechnungen: 'Rechnungen', emails: 'E-Mails',
+  baustellen: 'Baustellen', kunde: 'Kunde', aufmass: 'Aufmaß', bilder: 'Bilder', dokumente: 'Dokumente', angebote: 'Angebote', lv: 'Leistungsverzeichnis', nachtraege: 'Nachträge / Schluss', rechnungen: 'Rechnungen', emails: 'E-Mails',
 }
 
 // Gleicher Namensabgleich wie auf der Kunden-Übersicht (app/kunden/page.tsx):
@@ -1234,6 +1235,8 @@ export default function KundenDetailPage() {
         )}
 
         {/* ═══════════ TAB: NACHTRÄGE / SCHLUSSRECHNUNG ═══════════ */}
+        {tabAktiv === 'lv' && baustelle && <ProjektLvBlock projectId={baustelle.id} />}
+
         {tabAktiv === 'nachtraege' && (
           <div className="space-y-4">
             {projektSicht.length === 0 && <p className="text-sm text-[#86868b]">Noch keine Aufträge für diesen Kunden.</p>}
