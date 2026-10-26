@@ -207,6 +207,7 @@ function RechnungenContent() {
   const [leistungsdatum, setLeistungsdatum] = useState('');
   const [detailOffen, setDetailOffen] = useState<Record<number, boolean>>({});
   const [projectId, setProjectId] = useState<string | null>(null);
+  const [lvId, setLvId] = useState<string | null>(null); // Rechnung aus gespeichertem LV → danach „abgerechnet“
 
   // Phase 18: E-Mail-Öffnungen (Tracking-Pixel)
   const [opens, setOpens] = useState<Record<string, { anzahl: number; zuletzt: string }>>({});
@@ -257,6 +258,7 @@ function RechnungenContent() {
         setPositions(draft.positions);
       }
       setProjectId(draft.project_id || null);
+      setLvId(draft.lv_id || null);
       setShowForm(true);
       sessionStorage.removeItem('scaffold_invoice_draft');
     } catch {
@@ -321,6 +323,11 @@ function RechnungenContent() {
           setSaving(false); return;
         }
         throw new Error(json.error || 'Speichern fehlgeschlagen');
+      }
+      if (lvId) {
+        // Leistungsverzeichnis als abgerechnet markieren (Fehler hier verhindern die Rechnung nicht)
+        try { await fetch('/api/projekt-lv', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: lvId, status: 'abgerechnet' }) }); } catch { /* Status lässt sich im LV-Reiter nachtragen */ }
+        setLvId(null);
       }
       setShowForm(false);
       setCustomerName(''); setCustomerAddress(''); setNotes(''); setProjectId(null); setGeruestNr(''); setLeistungsdatum(''); setDetailOffen({});

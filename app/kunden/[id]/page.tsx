@@ -1235,7 +1235,7 @@ export default function KundenDetailPage() {
         )}
 
         {/* ═══════════ TAB: NACHTRÄGE / SCHLUSSRECHNUNG ═══════════ */}
-        {tabAktiv === 'lv' && baustelle && <ProjektLvBlock projectId={baustelle.id} />}
+        {tabAktiv === 'lv' && baustelle && <ProjektLvBlock projectId={baustelle.id} kundeName={kunde.name} kundeAdresse={[kunde.street, [kunde.zip, kunde.city].filter(Boolean).join(' ')].filter(Boolean).join(', ')} />}
 
         {tabAktiv === 'zeiten' && baustelle && <ProjektZeiten projectId={baustelle.id} geplantStunden={baustelle.data?.kiResult?.estimatedLaborHours} />}
 
