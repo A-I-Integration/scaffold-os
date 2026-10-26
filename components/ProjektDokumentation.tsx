@@ -37,6 +37,7 @@ interface ProjectEvent {
 
 const TYPE_LABELS: Record<string, string> = {
   pruefung_freigabe: '✅ Prüfung / Freigabe',
+  ereignis: '⚠️ Außergewöhnliches Ereignis (z. B. Sturm)',
   standzeit: '📅 Standzeit / Nutzung',
   geruest_aenderung: '🔧 Gerüständerung',
   demontage: '📦 Demontage',
