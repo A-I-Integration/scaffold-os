@@ -27,7 +27,7 @@ export function geruestPositionen(p: {
 
   if (ab.length > 1 && gesamt > 0) {
     if (preis) {
-      const pos: StrukturPosition[] = ab.map((a) => ({ bezeichnung: `Gerüst ${a.bezeichnung}`.slice(0, 500), menge: cent(a.areaM2), einheit: 'm²', einzelpreis: preis, art: 'geruest' }))
+      const pos: StrukturPosition[] = ab.map((a) => ({ bezeichnung: `Gerüst ${a.bezeichnung}`.slice(0, 500), menge: cent(a.areaM2), einheit: 'm²', einzelpreis: preis, art: 'geruest', geruestId: a.bezeichnung.slice(0, 60) }))
       if (Math.abs(pos.reduce((s, x) => s + x.menge * x.einzelpreis, 0) - basis) < 0.005) return pos
     }
     // Aufteilung des Angebotspreises nach Flächenanteil; der letzte Abschnitt nimmt den Cent-Rest
@@ -35,7 +35,7 @@ export function geruestPositionen(p: {
     return ab.map((a, i) => {
       const anteil = i === ab.length - 1 ? cent(rest) : cent((basis * a.areaM2) / gesamt)
       rest -= anteil
-      return { bezeichnung: `Gerüst ${a.bezeichnung} (${m2(a.areaM2)} m²)`.slice(0, 500), menge: 1, einheit: 'Pauschale', einzelpreis: anteil, art: 'geruest' as const }
+      return { bezeichnung: `Gerüst ${a.bezeichnung} (${m2(a.areaM2)} m²)`.slice(0, 500), menge: 1, einheit: 'Pauschale', einzelpreis: anteil, art: 'geruest' as const, geruestId: a.bezeichnung.slice(0, 60) }
     })
   }
 

@@ -96,7 +96,7 @@ export async function POST(req: NextRequest) {
       },
       lines: (inv.positions || []).map((p: any, i: number) => ({
         id: String(i + 1),
-        name: p.bezeichnung,
+        name: p.geruestId ? `${p.bezeichnung} [Gerüst: ${p.geruestId}]` : p.bezeichnung,
         quantity: Math.abs(Number(p.menge)) || 1,
         unitCode: UnitCode.PIECE,
         unitPrice: Math.abs(Number(p.einzelpreis)) || 0,

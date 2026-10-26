@@ -92,6 +92,12 @@ export default function RechnungPruefenPage() {
                   <td className="p-3">
                     <p>{p.bezeichnung}</p>
                     {positionDetailZeilen(p).map((z, k) => <p key={k} className="text-xs text-[#86868b]">{z}</p>)}
+                    {(daten.anhaenge || []).filter((a: any) => a.position_nr === i).map((a: any) => (
+                      <p key={a.id} className="text-xs">
+                        <a className="text-[#e8590c] hover:underline" href={`/api/public/rechnung-pruefung/anhang?token=${encodeURIComponent(token)}&id=${a.id}`}>📎 {a.file_name}</a>
+                        <span className="ml-2 text-[#86868b]">{groesseText(Number(a.size_bytes))}</span>
+                      </p>
+                    ))}
                   </td>
                   <td className="p-3 text-right">{zahl(p.menge)}</td>
                   <td className="p-3">{p.einheit}</td>
@@ -108,11 +114,11 @@ export default function RechnungPruefenPage() {
           </div>
         </div>
 
-        {daten.anhaenge?.length > 0 && (
+        {(daten.anhaenge || []).some((a: any) => a.position_nr == null) && (
           <div className="rounded-2xl bg-white p-4 text-sm shadow-sm">
             <p className="mb-2 text-xs text-[#86868b]">Anlagen zur Rechnung</p>
             <ul className="space-y-1">
-              {daten.anhaenge.map((a: any) => (
+              {daten.anhaenge.filter((a: any) => a.position_nr == null).map((a: any) => (
                 <li key={a.id}>
                   <a className="text-[#e8590c] hover:underline" href={`/api/public/rechnung-pruefung/anhang?token=${encodeURIComponent(token)}&id=${a.id}`}>{a.file_name}</a>
                   <span className="ml-2 text-[11px] text-[#86868b]">{groesseText(Number(a.size_bytes))}</span>

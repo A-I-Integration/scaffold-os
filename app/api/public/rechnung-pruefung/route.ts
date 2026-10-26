@@ -36,7 +36,7 @@ export async function GET(req: NextRequest) {
     const [iRes, pRes, aRes] = await Promise.all([
       fetch(`${url}/rest/v1/invoices?id=eq.${link.invoice_id}&select=invoice_number,invoice_type,invoice_date,leistungsdatum,due_date,geruest_nr,customer_name,positions,net_amount,tax_rate,tax_amount,gross_amount,status,notes,company_snapshot`, { headers }),
       fetch(`${url}/rest/v1/invoice_pruefungen?invoice_id=eq.${link.invoice_id}&select=entscheidung,geprueft_von,kommentar,geprueft_am&order=geprueft_am.desc&limit=20`, { headers }),
-      fetch(`${url}/rest/v1/invoice_attachments?invoice_id=eq.${link.invoice_id}&bestaetigt_am=not.is.null&select=id,file_name,file_type,size_bytes&order=created_at.asc`, { headers }),
+      fetch(`${url}/rest/v1/invoice_attachments?invoice_id=eq.${link.invoice_id}&bestaetigt_am=not.is.null&select=id,file_name,file_type,size_bytes,position_nr&order=created_at.asc`, { headers }),
     ]);
     if (!iRes.ok) throw new Error(await iRes.text());
     const inv = (await iRes.json())?.[0];
