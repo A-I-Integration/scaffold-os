@@ -1,5 +1,5 @@
 import type { Nachtrag } from './nachtrag';
-import { nachtragNummer } from './nachtrag';
+import { nachtragPositionen } from './nachtrag';
 
 // ============================================================
 // SCAFFOLD OS – Schlussrechnung aus Auftrag (reine Logik)
@@ -94,11 +94,7 @@ export function baueRechnungsPositionen(args: {
     pos.push({ bezeichnung: a.statik.text?.trim() || 'Statik (Fremdleistung)', menge: 1, einheit: 'Pauschale', einzelpreis: b.statikBetrag });
   }
   for (const n of args.nachtraege ?? []) {
-    if (n.betrag > 0) {
-      const d = new Date(n.datum + 'T12:00:00');
-      const datum = Number.isNaN(d.getTime()) ? n.datum : d.toLocaleDateString('de-DE');
-      pos.push({ bezeichnung: `Nachtrag ${nachtragNummer(n)} vom ${datum}: ${n.titel}`, menge: 1, einheit: 'Pauschale', einzelpreis: runde(n.betrag) });
-    }
+    for (const p of nachtragPositionen(n)) pos.push(p);
   }
   if (a.rabatt?.aktiv && b.rabattBetrag > 0) {
     pos.push({ bezeichnung: 'Sonderrabatt', menge: 1, einheit: 'Pauschale', einzelpreis: -b.rabattBetrag });

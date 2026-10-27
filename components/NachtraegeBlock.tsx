@@ -5,6 +5,7 @@ import { Plus, FileText, Check, X, Trash2, Camera } from 'lucide-react';
 import {
   type Nachtrag, type NachtragStatus, NACHTRAG_STATUS_LABEL, nachtragNummer, normalisiereNachtraege,
   neuerNachtrag, setzeNachtragStatus, setzeNachtragBetrag, nachtragBraeuchteBetrag, nachtragSummen, parseBetrag,
+  type NachtragArt, type RegieZeile, verlaengerungBetrag, regieBetrag, regieStunden, artFehlt,
 } from '@/lib/nachtrag';
 import { erzeugeNachtragPdf } from '@/lib/nachtrag-pdf';
 import { ladeNachtragFotosHoch, ladeFotosFuerPdf, legeNachtragPdfAmProjektAb } from '@/lib/nachtrag-client';
@@ -39,6 +40,9 @@ export default function NachtraegeBlock({ project, kunde }: Props) {
   const [dateien, setDateien] = useState<File[]>([]);
   const [laeuft, setLaeuft] = useState(false);
   const [meldung, setMeldung] = useState<{ ok: boolean; text: string } | null>(null);
+  const [art, setArt] = useState<'' | NachtragArt>('');
+  const [verl, setVerl] = useState({ wochen: '', preis: '', bis: '' });
+  const [regie, setRegie] = useState<{ bezeichnung: string; personen: string; stunden: string; satz: string }[]>([{ bezeichnung: '', personen: '', stunden: '', satz: '' }]);
   const [betragEingabe, setBetragEingabe] = useState<Record<string, string>>({});
 
   const summen = nachtragSummen(liste);
@@ -60,7 +64,11 @@ export default function NachtraegeBlock({ project, kunde }: Props) {
   }
 
   async function anlegen() {
-    const betrag = parseBetrag(form.betrag);
+    const verlaengerung = { wochen: parseBetrag(verl.wochen), preisProWoche: parseBetrag(verl.preis), ...(verl.bis ? { bis: verl.bis } : {}) };
+    const regieZeilen: RegieZeile[] = regie.map((z) => ({ bezeichnung: z.bezeichnung.trim(), personen: parseBetrag(z.personen), stunden: parseBetrag(z.stunden), satz: parseBetrag(z.satz) }));
+    const fehltArt = artFehlt(art || undefined, verlaengerung, regieZeilen);
+    const betrag = art === 'verlaengerung' ? verlaengerungBetrag(verlaengerung) : art === 'regie' ? regieBetrag(regieZeilen) : parseBetrag(form.betrag);
+    if (fehltArt.length > 0) { setMeldung({ ok: false, text: 'Noch offen: ' + fehltArt.join(' · ') }); return; }
     if (!form.titel.trim()) { setMeldung({ ok: false, text: 'Bitte die zusätzliche Leistung kurz beschreiben.' }); return; }
     if (!form.grund.trim()) { setMeldung({ ok: false, text: 'Bitte den Grund des Nachtrags angeben.' }); return; }
     if (!(betrag > 0)) { setMeldung({ ok: false, text: 'Bitte einen Betrag größer 0 eingeben.' }); return; }
@@ -68,8 +76,9 @@ export default function NachtraegeBlock({ project, kunde }: Props) {
     try {
       const fotos = await ladeNachtragFotosHoch(dateien, project.id);
       const id = crypto.randomUUID();
-      await speichere((aktuell) => [...aktuell, neuerNachtrag(aktuell, { datum: form.datum || heute(), titel: form.titel, grund: form.grund, betrag, fotos }, id)]);
+      await speichere((aktuell) => [...aktuell, neuerNachtrag(aktuell, { datum: form.datum || heute(), titel: form.titel, grund: form.grund, betrag, fotos, ...(art === 'verlaengerung' ? { art, verlaengerung } : art === 'regie' ? { art, regie: regieZeilen } : {}) }, id)]);
       setForm({ datum: heute(), titel: '', grund: '', betrag: '' });
+      setArt(''); setVerl({ wochen: '', preis: '', bis: '' }); setRegie([{ bezeichnung: '', personen: '', stunden: '', satz: '' }]);
       setDateien([]); setOffen(false);
       setMeldung({ ok: true, text: 'Nachtrag gespeichert.' });
     } catch (e: any) {
@@ -155,6 +164,13 @@ export default function NachtraegeBlock({ project, kunde }: Props) {
               </div>
               <p className="text-[#1d1d1f]">{n.titel}</p>
               <p className="text-[#86868b]"><span className="font-medium">Grund:</span> {n.grund}</p>
+              {n.art === 'verlaengerung' && n.verlaengerung && <p className="text-[#1d1d1f]">Verlängerung: {n.verlaengerung.wochen.toLocaleString('de-DE')} Wochen × {eur(n.verlaengerung.preisProWoche)}{n.verlaengerung.bis ? ` · Standzeit bis ${datumDe(n.verlaengerung.bis)}` : ''}</p>}
+              {n.art === 'regie' && n.regie && (
+                <ul className="text-[#1d1d1f]">
+                  {n.regie.map((z, i) => <li key={i}>Regie: {z.bezeichnung}, {z.personen.toLocaleString('de-DE')} Mitarbeiter × {z.stunden.toLocaleString('de-DE')} Std. × {eur(z.satz)}</li>)}
+                  <li className="text-[#86868b]">Gesamt {regieStunden(n.regie).toLocaleString('de-DE')} Arbeitsstunden</li>
+                </ul>
+              )}
               {n.fotos.length > 0 && (
                 <div className="flex flex-wrap gap-1.5">
                   {n.fotos.map((f, i) => (
@@ -195,6 +211,14 @@ export default function NachtraegeBlock({ project, kunde }: Props) {
         </button>
       ) : (
         <div className="bg-[#f5f5f7] rounded-xl p-3 space-y-2">
+          <div>
+            <label className="block text-[11px] text-[#86868b] mb-1">Art</label>
+            <select value={art} onChange={(e) => setArt(e.target.value as '' | NachtragArt)} className={inputCls}>
+              <option value="">Zusatzleistung mit Pauschalbetrag</option>
+              <option value="verlaengerung">Verlängerung der Standzeit (Wochen)</option>
+              <option value="regie">Abrechnung nach Arbeitsstunden (Regie)</option>
+            </select>
+          </div>
           <div className="grid grid-cols-3 gap-2">
             <div>
               <label className="block text-[11px] text-[#86868b] mb-1">Datum</label>
@@ -202,9 +226,36 @@ export default function NachtraegeBlock({ project, kunde }: Props) {
             </div>
             <div className="col-span-2">
               <label className="block text-[11px] text-[#86868b] mb-1">Betrag netto (€)</label>
-              <input value={form.betrag} onChange={(e) => setForm({ ...form, betrag: e.target.value })} placeholder="z. B. 480,00" inputMode="decimal" className={inputCls} />
+              {art === '' ? (
+                <input value={form.betrag} onChange={(e) => setForm({ ...form, betrag: e.target.value })} placeholder="z. B. 480,00" inputMode="decimal" className={inputCls} />
+              ) : (
+                <div className={`${inputCls} bg-[#f5f5f7] font-semibold`}>{eur(art === 'verlaengerung'
+                  ? verlaengerungBetrag({ wochen: parseBetrag(verl.wochen), preisProWoche: parseBetrag(verl.preis) })
+                  : regieBetrag(regie.map((z) => ({ bezeichnung: z.bezeichnung, personen: parseBetrag(z.personen), stunden: parseBetrag(z.stunden), satz: parseBetrag(z.satz) }))))} <span className="font-normal text-[#86868b]">wird berechnet</span></div>
+              )}
             </div>
           </div>
+          {art === 'verlaengerung' && (
+            <div className="grid grid-cols-3 gap-2">
+              <div><label className="block text-[11px] text-[#86868b] mb-1">Wochen</label><input value={verl.wochen} onChange={(e) => setVerl({ ...verl, wochen: e.target.value })} inputMode="decimal" placeholder="z. B. 6" className={inputCls} /></div>
+              <div><label className="block text-[11px] text-[#86868b] mb-1">Preis je Woche (netto, €)</label><input value={verl.preis} onChange={(e) => setVerl({ ...verl, preis: e.target.value })} inputMode="decimal" className={inputCls} /></div>
+              <div><label className="block text-[11px] text-[#86868b] mb-1">Standzeit bis (optional)</label><input type="date" value={verl.bis} onChange={(e) => setVerl({ ...verl, bis: e.target.value })} className={inputCls} /></div>
+            </div>
+          )}
+          {art === 'regie' && (
+            <div className="space-y-1.5">
+              {regie.map((z, i) => (
+                <div key={i} className="grid grid-cols-12 gap-1.5 items-end">
+                  <div className="col-span-5"><label className="block text-[11px] text-[#86868b] mb-1">{i === 0 ? 'Tätigkeit' : ''}</label><input value={z.bezeichnung} onChange={(e) => setRegie((r) => r.map((x, j) => (j === i ? { ...x, bezeichnung: e.target.value } : x)))} placeholder="z. B. Umbau oben" className={inputCls} /></div>
+                  <div className="col-span-2"><label className="block text-[11px] text-[#86868b] mb-1">{i === 0 ? 'Mitarbeiter' : ''}</label><input value={z.personen} onChange={(e) => setRegie((r) => r.map((x, j) => (j === i ? { ...x, personen: e.target.value } : x)))} inputMode="decimal" className={inputCls} /></div>
+                  <div className="col-span-2"><label className="block text-[11px] text-[#86868b] mb-1">{i === 0 ? 'Std. je MA' : ''}</label><input value={z.stunden} onChange={(e) => setRegie((r) => r.map((x, j) => (j === i ? { ...x, stunden: e.target.value } : x)))} inputMode="decimal" className={inputCls} /></div>
+                  <div className="col-span-2"><label className="block text-[11px] text-[#86868b] mb-1">{i === 0 ? '€/Std. netto' : ''}</label><input value={z.satz} onChange={(e) => setRegie((r) => r.map((x, j) => (j === i ? { ...x, satz: e.target.value } : x)))} inputMode="decimal" className={inputCls} /></div>
+                  <div className="col-span-1">{regie.length > 1 && <button type="button" onClick={() => setRegie((r) => r.filter((_, j) => j !== i))} className="w-full rounded-lg bg-black/10 py-2 text-xs" title="Zeile entfernen">✕</button>}</div>
+                </div>
+              ))}
+              <button type="button" onClick={() => setRegie((r) => [...r, { bezeichnung: '', personen: '', stunden: '', satz: '' }])} className="text-xs text-[#e8590c] font-semibold hover:underline">+ Zeile</button>
+            </div>
+          )}
           <div>
             <label className="block text-[11px] text-[#86868b] mb-1">Zusätzliche Leistung</label>
             <input value={form.titel} onChange={(e) => setForm({ ...form, titel: e.target.value })} placeholder="z. B. Gerüstverlängerung Giebelseite um 6 m" className={inputCls} />
