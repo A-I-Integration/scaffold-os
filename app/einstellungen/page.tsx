@@ -114,6 +114,9 @@ export default function EinstellungenPage() {
   const [fahrtDauerStd, setFahrtDauerStd] = useState('3')
   const [letzterStart, setLetzterStart] = useState('15:00')
   const [planungGeaendert, setPlanungGeaendert] = useState(false)
+  // Zahlungserinnerung: Tage nach Fälligkeit (leer = aus). Wird nur gespeichert, wenn angefasst (DB-Spalte kommt per SQL).
+  const [erinnerungTage, setErinnerungTage] = useState('')
+  const [erinnerungGeaendert, setErinnerungGeaendert] = useState(false)
 
   useEffect(() => {
     (async () => {
@@ -130,6 +133,7 @@ export default function EinstellungenPage() {
           setCompany(c);
           setAngeboten(leseAngeboteneTypen(json.company.angebotene_geruesttypen) || [])
           setStandortAn(json.company.tour_standort_erfassen !== false)
+          if (json.company.mahnung_erinnerung_tage != null) setErinnerungTage(String(json.company.mahnung_erinnerung_tage))
           const dm = Number(json.company.tour_fahrt_dauer_min)
           if (Number.isFinite(dm) && dm >= 30) setFahrtDauerStd(String(Math.round((dm / 60) * 100) / 100).replace('.', ','))
           const lm = Number(json.company.tour_letzter_start_min)
@@ -171,6 +175,13 @@ export default function EinstellungenPage() {
         delete payload.angebotene_geruesttypen;
       }
       if (standortGeaendert) payload.tour_standort_erfassen = standortAn;
+      if (erinnerungGeaendert) {
+        const t = erinnerungTage.trim() === '' ? null : parseInt(erinnerungTage, 10);
+        if (t !== null && (!Number.isFinite(t) || t < 1 || t > 13)) {
+          alert('Bitte für die Zahlungserinnerung 1 bis 13 Tage eintragen (die 1. Mahnung folgt nach 14 Tagen) oder das Feld leer lassen.'); setSaving(false); return;
+        }
+        payload.mahnung_erinnerung_tage = t;
+      }
       if (planungGeaendert) {
         const std = parseFloat(fahrtDauerStd.replace(',', '.'));
         const lm = /^(\d{1,2}):(\d{2})$/.exec(letzterStart);
@@ -456,6 +467,20 @@ export default function EinstellungenPage() {
                   <p className="text-[11px] text-[#86868b] mt-1">{f.hint}</p>
                 </div>
               ))}
+            </div>
+            <div>
+              <label className="block text-xs text-[#86868b] mb-1">Freundliche Zahlungserinnerung nach (Tagen nach Fälligkeit)</label>
+              <input
+                type="number"
+                step="1"
+                min="1"
+                max="13"
+                value={erinnerungTage}
+                onChange={(e) => { setErinnerungTage(e.target.value); setErinnerungGeaendert(true) }}
+                placeholder="leer = aus"
+                className="w-full md:w-1/2 px-3 py-2 bg-black/10 border border-black/10 rounded-xl text-sm text-[#1d1d1f] focus:outline-none focus:border-amber-500"
+              />
+              <p className="text-[11px] text-[#86868b] mt-1">Ist hier eine Zahl eingetragen, bekommt der Kunde automatisch einmal eine Zahlungserinnerung ohne Gebühren, bevor nach 14 Tagen die 1. Mahnung folgt. Leer lassen schaltet sie aus. Setzt voraus, dass die SQL „phase-mahnung-steuerung" ausgeführt wurde.</p>
             </div>
             <button
               onClick={handleSave}

@@ -22,6 +22,10 @@ export interface StandRechnung {
   net_amount: number
   gross_amount: number
   paid_amount?: number | null
+  reminder_level?: number | null
+  erinnerung_am?: string | null
+  mahnung_pausiert?: boolean | null
+  mahnung_pause_grund?: string | null
 }
 
 export interface StandNachtrag { betrag: number; status: string }
