@@ -945,11 +945,16 @@ export function generateScaffoldComponents(model: CADModel): ScaffoldComponent3D
   // === KEDERPLANE (vertikale Bekleidung der Außenachse) ===
   const kp = building.geruestOptionen?.kederplane
   if (kp && Number.isFinite(kp.vonM) && Number.isFinite(kp.bisM) && kp.bisM > kp.vonM) {
+    // Jedes Feld nur einmal bekleiden: die Lagenliste enthält denselben Lagenindex mehrfach
+    // (je Seite), sonst würde die Plane pro Feld mehrfach gezählt und gezeichnet.
+    const bekleidet = new Set<string>()
     for (const level of levels) {
       // nur Lagen, die ganz im gewählten Höhenbereich liegen (Planen werden lagenweise gehängt)
       if (level.bottomY < kp.vonM - 0.01 || level.topY > kp.bisM + 0.01) continue
       for (const field of fields) {
         if (field.levelIndex !== level.index) continue
+        if (bekleidet.has(field.id)) continue
+        bekleidet.add(field.id)
         const rf = feldRahmen(field, building)
         const [lx, lz] = rf.toLocal(field.positionX, field.positionZ)
         const [wx, wz] = rf.toWorld(lx, lz + field.widthM / 2 + 0.08)
