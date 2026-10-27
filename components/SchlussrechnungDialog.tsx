@@ -8,7 +8,9 @@ import {
   baueRechnungsPositionen, eingabeAusProjektData, summeNetto, abschlagAbzug, baueAbzugsPositionen, abzugsHinweis, istAbzugZuHoch, istAbschlagZuHoch,
   type RechnungsBasis, type RechnungsEingabe,
 } from '@/lib/schlussrechnung';
-import type { Invoice } from '@/lib/invoice-pdf';
+import type { Invoice, Position } from '@/lib/invoice-pdf';
+import { aktualisierePosition, bereinigePosition } from '@/lib/rechnung-position';
+import PositionDetails from '@/components/rechnung/PositionDetails';
 import { normalisiereZwischenaufmasse, baueTeilleistungsPosition, markiereAbgerechnet, zwischenaufmassNr, neueMengeM2, type Zwischenaufmass } from '@/lib/zwischenaufmass';
 
 // ============================================================
@@ -62,6 +64,9 @@ export default function SchlussrechnungDialog({ projectId, customerName, custome
   const [leistungsdatum, setLeistungsdatum] = useState('');
   const [bemerkung, setBemerkung] = useState('');
   const [danachAnhaenge, setDanachAnhaenge] = useState(false);
+  // Weitere Einzelpositionen (Modul, Zusatzarbeitslage, Rollgerüst, Hängegerüst, Gitterträger, Konsolen, Plane, Zelt …)
+  const [extra, setExtra] = useState<Position[]>([]);
+  const [extraDetail, setExtraDetail] = useState<Record<number, boolean>>({});
 
   const [laeuft, setLaeuft] = useState(false);
   const [angelegt, setAngelegt] = useState(false);
@@ -143,7 +148,8 @@ export default function SchlussrechnungDialog({ projectId, customerName, custome
     () => (art === 'schluss' ? abschlagKandidaten.filter((i) => gewaehlteAbschlaege.has(i.id)).map((i) => abschlagAbzug(i)) : []),
     [art, abschlagKandidaten, gewaehlteAbschlaege],
   );
-  const gesamtNetto = summeNetto(leistungsPositionen);
+  const extraGueltig = useMemo(() => extra.filter((e) => e.bezeichnung.trim() && e.menge > 0).map((e) => bereinigePosition(e) as Position), [extra]);
+  const gesamtNetto = summeNetto([...leistungsPositionen, ...extraGueltig]);
   // Abschlagsrechnung: Betrag netto direkt ODER Prozent der Gesamtleistung (netto)
   const zahl = (v: string) => parseFloat(String(v).replace(',', '.')) || 0;
   const zaModus = art === 'abschlag' && abschlagModus === 'zwischenaufmass';
@@ -164,9 +170,9 @@ export default function SchlussrechnungDialog({ projectId, customerName, custome
       const pct = zahl(abschlagBetrag) > 0 ? '' : ` (${zahl(abschlagProzent).toLocaleString('de-DE')} % der Gesamtleistung)`;
       return [{ bezeichnung: `Abschlagszahlung Gerüstbau${pct}`, menge: 1, einheit: 'Pauschale', einzelpreis: abschlagNetto }];
     }
-    return [...leistungsPositionen, ...baueAbzugsPositionen(abzuege)];
+    return [...leistungsPositionen, ...extraGueltig, ...baueAbzugsPositionen(abzuege)];
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [art, zaModus, teilleistung, abschlagNetto, abschlagBetrag, abschlagProzent, leistungsPositionen, abzuege]);
+  }, [art, zaModus, teilleistung, abschlagNetto, abschlagBetrag, abschlagProzent, leistungsPositionen, extraGueltig, abzuege]);
   const netto = summeNetto(positionen);
   const abzugNetto = Math.round(abzuege.reduce((s, a) => s + a.netto, 0) * 100) / 100;
   const ustRest = Math.round(netto * 19) / 100;
@@ -177,7 +183,7 @@ export default function SchlussrechnungDialog({ projectId, customerName, custome
   const basisOk = basis === 'angebot' ? hatAngebotspreis : aufmassMoeglich && preisM2Zahl > 0;
   // Abschlag mit festem Betrag braucht keine Kalkulationsbasis, mit Prozent schon
   const kannAnlegen = !laeuft && !angelegt && positionen.length > 0 && netto > 0 && !abschlagZuHoch
-    && (zaModus ? !!teilleistung.position : art === 'abschlag' && zahl(abschlagBetrag) > 0 ? true : basisOk);
+    && (zaModus ? !!teilleistung.position : art === 'abschlag' && zahl(abschlagBetrag) > 0 ? true : basisOk || (art !== 'abschlag' && extraGueltig.length > 0));
 
   async function anlegen(overrideGrund?: string) {
     if (!eingabe) return;
@@ -414,6 +420,36 @@ export default function SchlussrechnungDialog({ projectId, customerName, custome
                 <label className="block text-[11px] text-[#86868b] mb-1">Bemerkungen (zusätzliche Vereinbarungen, erscheinen auf der Rechnung)</label>
                 <textarea value={bemerkung} onChange={(e) => setBemerkung(e.target.value)} rows={3} maxLength={1500} placeholder="z. B. Schultertransport aus Grund X, war nicht vorgesehen. Alu-Podesttreppe unter 5 m aus sicherheitstechnischen Gründen vereinbart." className={inputCls} />
               </div>
+            </div>
+
+            <div className="rounded-lg bg-[#f5f5f7] p-3 space-y-2">
+              <div className="flex items-center justify-between">
+                <p className="text-xs font-semibold text-[#1d1d1f]">Weitere Einzelpositionen</p>
+                <button type="button" onClick={() => setExtra([...extra, { bezeichnung: '', menge: 1, einheit: 'Stk.', einzelpreis: 0 }])} className="text-xs text-[#e8590c] font-semibold hover:underline">+ Position</button>
+              </div>
+              <p className="text-[11px] text-[#86868b]">Zusätzlich zur Hauptleistung, z. B. Gerüst/Modul mit Maßen, zusätzliche Arbeitslage, Rollgerüst, Hängegerüst, Gitterträger, Konsolen, Plane oder Zelt. Unter „Details" wählst du die Art und trägst Maße ein.</p>
+              <datalist id="geruest-ids-dialog">
+                {Array.from(new Set(extra.map((x) => x.geruestId).filter((x): x is string => !!x))).map((g) => <option key={g} value={g} />)}
+              </datalist>
+              {extra.map((p, i) => (
+                <div key={i} className="grid grid-cols-12 gap-2 items-center">
+                  <input value={p.bezeichnung} onChange={(e) => setExtra(extra.map((x, n) => (n === i ? aktualisierePosition(x, 'bezeichnung', e.target.value) : x)))} placeholder="Bezeichnung" className={`${inputCls} col-span-12`} />
+                  <input value={String(p.menge)} onChange={(e) => setExtra(extra.map((x, n) => (n === i ? aktualisierePosition(x, 'menge', e.target.value) : x)))} aria-label="Menge" className={`${inputCls} col-span-3 text-right`} />
+                  <input value={p.einheit} onChange={(e) => setExtra(extra.map((x, n) => (n === i ? aktualisierePosition(x, 'einheit', e.target.value) : x)))} aria-label="Einheit" className={`${inputCls} col-span-3`} />
+                  <input value={String(p.einzelpreis)} onChange={(e) => setExtra(extra.map((x, n) => (n === i ? aktualisierePosition(x, 'einzelpreis', e.target.value) : x)))} aria-label="Einzelpreis netto" className={`${inputCls} col-span-4 text-right`} />
+                  <button type="button" onClick={() => setExtra(extra.filter((_, n) => n !== i))} className="col-span-2 text-xs text-red-600 hover:underline">Entfernen</button>
+                  <div className="col-span-12">
+                    <button type="button" onClick={() => setExtraDetail((d) => ({ ...d, [i]: !d[i] }))} className="text-xs text-blue-600 hover:underline">{extraDetail[i] ? 'Details ausblenden' : 'Details (Art, Maße L × B × H, Gerüst-ID, Faktor, Bemerkung)'}</button>
+                  </div>
+                  {extraDetail[i] && (
+                    <PositionDetails p={p} geruestListeId="geruest-ids-dialog"
+                      onFeld={(f, w) => setExtra(extra.map((x, n) => (n === i ? aktualisierePosition(x, f, w) : x)))}
+                      onMenge={(menge, einheit) => setExtra(extra.map((x, n) => (n === i ? { ...x, menge, einheit } : x)))} />
+                  )}
+                </div>
+              ))}
+              {art !== 'abschlag' && extra.some((e) => e.bezeichnung.trim() && !(e.menge > 0)) && <p className="text-[11px] text-red-600">Eine Position ohne Menge wird nicht auf die Rechnung übernommen.</p>}
+              {art === 'abschlag' && extraGueltig.length > 0 && <p className="text-[11px] text-[#86868b]">Bei einer Abschlagsrechnung zählen die Einzelpositionen zur Gesamtleistung, auf die sich der Prozentwert bezieht. Die Rechnung selbst zeigt nur die Abschlagszahlung.</p>}
             </div>
 
             <div>

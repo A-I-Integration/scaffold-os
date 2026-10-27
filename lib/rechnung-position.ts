@@ -99,3 +99,32 @@ export function positionDetailZeilen(p: Partial<StrukturPosition>): string[] {
   if (p.bemerkung) z.push(`Bemerkung: ${p.bemerkung}`)
   return z
 }
+
+// ─── Bearbeiten im Formular (gemeinsam für „Neue Rechnung“, Rechnungsdialog und Rechnungsakte) ───
+
+const TEXTFELDER = ['bezeichnung', 'einheit', 'art', 'mitarbeiter', 'taetigkeit', 'geruestId', 'bemerkung']
+
+/** Ändert ein Feld einer Position. Listenpreis × Faktor ergibt den Einzelpreis; leere Textfelder werden entfernt. Gibt eine neue Position zurück. */
+export function aktualisierePosition<T extends Partial<StrukturPosition>>(p: T, feld: keyof StrukturPosition, wert: string): T {
+  const neu: any = { ...p, [feld]: TEXTFELDER.includes(feld) ? wert : Number(String(wert).replace(',', '.')) || 0 }
+  if ((feld === 'art' || feld === 'geruestId' || feld === 'bemerkung') && !wert) delete neu[feld]
+  if ((feld === 'listenpreis' || feld === 'faktorProzent') && Number(neu.listenpreis) > 0) {
+    neu.einzelpreis = preisMitFaktor(Number(neu.listenpreis), Number(neu.faktorProzent) || 100)
+  }
+  return neu
+}
+
+export interface MengenVorschlag { label: string; menge: number; einheit: string }
+
+const rund = (n: number) => Math.round(n * 100) / 100
+
+/** Vorschläge für die Menge aus den Maßen. Es wird nichts automatisch übernommen: Ob nach Fläche (L × H) oder Volumen abgerechnet wird, entscheidet der Betrieb. */
+export function mengenVorschlaege(p: Partial<StrukturPosition>): MengenVorschlag[] {
+  const l = p.laengeM || 0, b = p.breiteM || 0, h = p.hoeheM || 0
+  const v: MengenVorschlag[] = []
+  if (l > 0 && h > 0) v.push({ label: `L × H = ${kommaZahl(rund(l * h))} m²`, menge: rund(l * h), einheit: 'm²' })
+  if (l > 0 && b > 0 && h > 0) v.push({ label: `L × B × H = ${kommaZahl(rund(l * b * h))} m³`, menge: rund(l * b * h), einheit: 'm³' })
+  if (l > 0 && b > 0 && !(h > 0)) v.push({ label: `L × B = ${kommaZahl(rund(l * b))} m²`, menge: rund(l * b), einheit: 'm²' })
+  if (l > 0 && !(b > 0) && !(h > 0)) v.push({ label: `Länge = ${kommaZahl(rund(l))} m`, menge: rund(l), einheit: 'm' })
+  return v
+}

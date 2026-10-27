@@ -15,8 +15,9 @@ import {
 } from 'lucide-react';
 import { lokalesDatumIso, datumPlusTage } from '@/lib/datum';
 import AnhangDialog from '@/components/rechnung/AnhangDialog';
+import PositionDetails from '@/components/rechnung/PositionDetails';
 import { ENTSCHEIDUNG_LABEL, type PruefEntscheidung } from '@/lib/rechnung-pruefung';
-import { POSITION_ARTEN, POSITION_ART_LABEL, preisMitFaktor, type PositionArt } from '@/lib/rechnung-position';
+import { preisMitFaktor } from '@/lib/rechnung-position';
 
 // ============================================================
 // SCAFFOLD OS – Rechnungsmodul (Phase 13)
@@ -702,68 +703,7 @@ function RechnungenContent() {
                       </button>
                     </div>
                     {detailOffen[i] && (
-                      <div className="col-span-12 grid grid-cols-12 gap-2 rounded-xl bg-black/5 p-3">
-                        <input
-                          list="geruest-ids"
-                          value={p.geruestId || ''}
-                          onChange={(e) => updatePosition(i, 'geruestId', e.target.value)}
-                          placeholder="Gerüst-ID (z. B. Hauptgebäude Süd, Nebengebäude Ost)"
-                          className="col-span-12 px-3 py-2 bg-black/10 border border-black/10 rounded-xl text-sm text-[#1d1d1f]"
-                        />
-                        <textarea
-                          value={p.bemerkung || ''}
-                          onChange={(e) => updatePosition(i, 'bemerkung', e.target.value)}
-                          placeholder="Bemerkung / Begründung (z. B. Schultertransport, weil der Zugang nicht anfahrbar war). Bilder und Videos dazu über die Büroklammer in der Rechnungsliste."
-                          rows={2}
-                          maxLength={1000}
-                          className="col-span-12 px-3 py-2 bg-black/10 border border-black/10 rounded-xl text-sm text-[#1d1d1f]"
-                        />
-                        <select
-                          value={p.art || ''}
-                          onChange={(e) => updatePosition(i, 'art', e.target.value)}
-                          className="col-span-12 sm:col-span-4 px-3 py-2 bg-black/10 border border-black/10 rounded-xl text-sm text-[#1d1d1f]"
-                        >
-                          <option value="">Art der Position</option>
-                          {POSITION_ARTEN.map((a: PositionArt) => <option key={a} value={a}>{POSITION_ART_LABEL[a]}</option>)}
-                        </select>
-                        {([['laengeM', 'L (m)'], ['breiteM', 'B (m)'], ['hoeheM', 'H (m)']] as [keyof Position, string][]).map(([feld, label]) => (
-                          <input
-                            key={feld}
-                            value={p[feld] != null ? String(p[feld]) : ''}
-                            onChange={(e) => updatePosition(i, feld, e.target.value)}
-                            placeholder={label}
-                            className="col-span-4 sm:col-span-2 px-3 py-2 bg-black/10 border border-black/10 rounded-xl text-sm text-[#1d1d1f] text-right"
-                          />
-                        ))}
-                        <input
-                          value={p.listenpreis != null ? String(p.listenpreis) : ''}
-                          onChange={(e) => updatePosition(i, 'listenpreis', e.target.value)}
-                          placeholder="Listenpreis €"
-                          className="col-span-6 sm:col-span-3 px-3 py-2 bg-black/10 border border-black/10 rounded-xl text-sm text-[#1d1d1f] text-right"
-                        />
-                        <input
-                          value={p.faktorProzent != null ? String(p.faktorProzent) : ''}
-                          onChange={(e) => updatePosition(i, 'faktorProzent', e.target.value)}
-                          placeholder="Faktor % (z. B. 80)"
-                          className="col-span-6 sm:col-span-3 px-3 py-2 bg-black/10 border border-black/10 rounded-xl text-sm text-[#1d1d1f] text-right"
-                        />
-                        {p.art === 'regie' && (
-                          <>
-                            <input
-                              value={p.mitarbeiter || ''}
-                              onChange={(e) => updatePosition(i, 'mitarbeiter', e.target.value)}
-                              placeholder="Mitarbeiter (Name)"
-                              className="col-span-12 sm:col-span-4 px-3 py-2 bg-black/10 border border-black/10 rounded-xl text-sm text-[#1d1d1f]"
-                            />
-                            <input
-                              value={p.taetigkeit || ''}
-                              onChange={(e) => updatePosition(i, 'taetigkeit', e.target.value)}
-                              placeholder="Beschreibung der Tätigkeit"
-                              className="col-span-12 sm:col-span-8 px-3 py-2 bg-black/10 border border-black/10 rounded-xl text-sm text-[#1d1d1f]"
-                            />
-                          </>
-                        )}
-                      </div>
+                      <PositionDetails p={p} geruestListeId="geruest-ids" onFeld={(f, w) => updatePosition(i, f as keyof Position, w)} onMenge={(menge, einheit) => setPositions((prev) => prev.map((x, idx) => (idx === i ? { ...x, menge, einheit } : x)))} />
                     )}
                   </div>
                 ))}
