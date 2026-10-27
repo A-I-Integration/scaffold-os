@@ -98,3 +98,15 @@ describe('Aufzug', () => {
     expect(k.text.join(' ')).toMatch(/Aus dem CAD: [\d.,]+ m² Plane/)
   })
 })
+
+describe('Kederplane: keine Mehrfachzählung', () => {
+  it('jedes Feld hat genau eine Plane, Fläche entspricht der Fassade', () => {
+    const b: BuildingParams = { ...basis, lengthM: 9.15, widthM: 9.15, heightM: 31, eavesHeightM: 31, floors: 1, floorHeightsM: [31] }
+    const m = generateCADModel({ ...b, geruestOptionen: { kederplane: { vonM: 0, bisM: 31 } } }, 'layher-allround')
+    const planen = m.components3D.filter((c) => c.type === 'sheeting')
+    expect(new Set(planen.map((c) => c.fieldId)).size).toBe(planen.length)
+    const flaeche = planen.reduce((s, c) => s + Math.abs(c.scale[0]) * Math.abs(c.scale[1]), 0)
+    expect(flaeche).toBeLessThan(4 * 9.15 * 31 * 1.1)
+    expect(flaeche).toBeGreaterThan(4 * 9.15 * 31 * 0.8)
+  })
+})
