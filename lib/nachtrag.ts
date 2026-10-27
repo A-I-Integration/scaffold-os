@@ -9,6 +9,14 @@
 
 export type NachtragStatus = 'offen' | 'bestaetigt' | 'abgelehnt';
 
+export type NachtragArt = 'verlaengerung' | 'regie';
+
+/** Standzeit-Verlängerung: Wochen × Preis je Woche (netto). */
+export interface Verlaengerung { wochen: number; preisProWoche: number; bis?: string }
+
+/** Stundenabrechnung (Regie): je Zeile Personen × Stunden × Satz (netto). */
+export interface RegieZeile { bezeichnung: string; personen: number; stunden: number; satz: number }
+
 export interface NachtragFoto { url: string; file_name: string }
 
 export interface Nachtrag {
@@ -29,6 +37,10 @@ export interface Nachtrag {
   erstelltAm: string;
   /** Auf der Baustelle gemeldet (Meine Touren); Betrag darf zunächst 0 sein und wird vom Büro ergänzt. */
   vorOrt?: boolean;
+  /** Art der Zusatzleistung; ohne Angabe ein frei erfasster Nachtrag mit Pauschalbetrag. */
+  art?: NachtragArt;
+  verlaengerung?: Verlaengerung;
+  regie?: RegieZeile[];
 }
 
 export const NACHTRAG_STATUS_LABEL: Record<NachtragStatus, string> = {
@@ -66,7 +78,65 @@ export function normalisiereNachtraege(raw: unknown): Nachtrag[] {
       statusDatum: x.statusDatum ? String(x.statusDatum) : undefined,
       erstelltAm: String(x.erstelltAm || ''),
       ...(x.vorOrt === true ? { vorOrt: true } : {}),
+      ...(x.art === 'verlaengerung' && x.verlaengerung ? { art: 'verlaengerung' as const, verlaengerung: normVerlaengerung(x.verlaengerung) } : {}),
+      ...(x.art === 'regie' && Array.isArray(x.regie) ? { art: 'regie' as const, regie: x.regie.map(normRegie) } : {}),
     }));
+}
+
+const zahl0 = (v: unknown) => { const n = Number(v); return Number.isFinite(n) && n > 0 ? n : 0 };
+const runde2 = (n: number) => Math.round(n * 100) / 100;
+
+function normVerlaengerung(v: any): Verlaengerung {
+  return { wochen: zahl0(v?.wochen), preisProWoche: zahl0(v?.preisProWoche), ...(v?.bis ? { bis: String(v.bis) } : {}) };
+}
+function normRegie(z: any): RegieZeile {
+  return { bezeichnung: String(z?.bezeichnung || ''), personen: zahl0(z?.personen), stunden: zahl0(z?.stunden), satz: zahl0(z?.satz) };
+}
+
+export function verlaengerungBetrag(v: Verlaengerung): number { return runde2(zahl0(v.wochen) * zahl0(v.preisProWoche)); }
+export function regieBetrag(zeilen: RegieZeile[]): number { return runde2(zeilen.reduce((s, z) => s + zahl0(z.personen) * zahl0(z.stunden) * zahl0(z.satz), 0)); }
+export function regieStunden(zeilen: RegieZeile[]): number { return runde2(zeilen.reduce((s, z) => s + zahl0(z.personen) * zahl0(z.stunden), 0)); }
+
+/** Fehlende Angaben einer Verlängerung bzw. Stundenabrechnung (leer = vollständig). */
+export function artFehlt(art: NachtragArt | undefined, v?: Verlaengerung, regie?: RegieZeile[]): string[] {
+  const f: string[] = [];
+  if (art === 'verlaengerung') {
+    if (!(zahl0(v?.wochen) > 0)) f.push('Wochen');
+    if (!(zahl0(v?.preisProWoche) > 0)) f.push('Preis je Woche');
+  }
+  if (art === 'regie') {
+    if (!regie || regie.length === 0) f.push('mindestens eine Zeile');
+    (regie || []).forEach((z, i) => {
+      const m: string[] = [];
+      if (!z.bezeichnung.trim()) m.push('Bezeichnung');
+      if (!(zahl0(z.personen) > 0)) m.push('Personen');
+      if (!(zahl0(z.stunden) > 0)) m.push('Stunden');
+      if (!(zahl0(z.satz) > 0)) m.push('Satz');
+      if (m.length) f.push(`Zeile ${i + 1}: ${m.join(', ')}`);
+    });
+  }
+  return f;
+}
+
+export interface NachtragRechnungsPosition { bezeichnung: string; menge: number; einheit: string; einzelpreis: number }
+
+/** Positionen für die Rechnung: Verlängerung als Wochen × Preis, Regie je Zeile als Stunden × Satz, sonst Pauschale. */
+export function nachtragPositionen(n: Nachtrag): NachtragRechnungsPosition[] {
+  const d = new Date(n.datum + 'T12:00:00');
+  const datum = Number.isNaN(d.getTime()) ? n.datum : d.toLocaleDateString('de-DE');
+  const kopf = `Nachtrag ${nachtragNummer(n)} vom ${datum}`;
+  if (n.art === 'verlaengerung' && n.verlaengerung && verlaengerungBetrag(n.verlaengerung) > 0) {
+    const v = n.verlaengerung;
+    const bis = v.bis ? ` bis ${new Date(v.bis + 'T12:00:00').toLocaleDateString('de-DE')}` : '';
+    return [{ bezeichnung: `${kopf}: ${n.titel} (${v.wochen.toLocaleString('de-DE')} Wochen${bis})`, menge: v.wochen, einheit: 'Wo.', einzelpreis: v.preisProWoche }];
+  }
+  if (n.art === 'regie' && n.regie && regieBetrag(n.regie) > 0) {
+    return n.regie.filter((z) => z.personen > 0 && z.stunden > 0 && z.satz > 0).map((z) => ({
+      bezeichnung: `${kopf}: ${n.titel} – ${z.bezeichnung} (${z.personen.toLocaleString('de-DE')} Mitarbeiter × ${z.stunden.toLocaleString('de-DE')} Std.)`,
+      menge: runde2(z.personen * z.stunden), einheit: 'Std.', einzelpreis: z.satz,
+    }));
+  }
+  return n.betrag > 0 ? [{ bezeichnung: `${kopf}: ${n.titel}`, menge: 1, einheit: 'Pauschale', einzelpreis: runde2(n.betrag) }] : [];
 }
 
 export function parseBetrag(s: string): number {
@@ -78,7 +148,7 @@ export function parseBetrag(s: string): number {
 
 export function neuerNachtrag(
   liste: Nachtrag[],
-  eingabe: { datum: string; titel: string; grund: string; betrag: number; fotos: NachtragFoto[]; vorOrt?: boolean },
+  eingabe: { datum: string; titel: string; grund: string; betrag: number; fotos: NachtragFoto[]; vorOrt?: boolean; art?: NachtragArt; verlaengerung?: Verlaengerung; regie?: RegieZeile[] },
   id: string,
   jetzt: Date = new Date(),
 ): Nachtrag {
@@ -93,6 +163,8 @@ export function neuerNachtrag(
     status: 'offen',
     erstelltAm: jetzt.toISOString(),
     ...(eingabe.vorOrt ? { vorOrt: true } : {}),
+    ...(eingabe.art === 'verlaengerung' && eingabe.verlaengerung ? { art: 'verlaengerung' as const, verlaengerung: eingabe.verlaengerung } : {}),
+    ...(eingabe.art === 'regie' && eingabe.regie ? { art: 'regie' as const, regie: eingabe.regie } : {}),
   };
 }
 

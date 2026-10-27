@@ -83,6 +83,22 @@ export function erzeugeNachtragPdf(input: NachtragPdfInput): jsPDF {
   const grund = doc.splitTextToSize(n.grund || '–', w - 28);
   doc.text(grund, 14, y); y += grund.length * 5 + 8;
 
+  const berechnung: string[] = [];
+  if (n.art === 'verlaengerung' && n.verlaengerung) {
+    const v = n.verlaengerung;
+    berechnung.push(`${v.wochen.toLocaleString('de-DE')} Wochen × ${fmt(v.preisProWoche)} € je Woche${v.bis ? ` (Standzeit bis ${datumDe(v.bis)})` : ''}`);
+  }
+  if (n.art === 'regie' && n.regie) {
+    for (const z of n.regie) berechnung.push(`${z.bezeichnung}: ${z.personen.toLocaleString('de-DE')} Mitarbeiter × ${z.stunden.toLocaleString('de-DE')} Std. × ${fmt(z.satz)} €/Std.`);
+  }
+  if (berechnung.length > 0) {
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(11); doc.setTextColor(...NAVY);
+    doc.text(n.art === 'regie' ? 'Abrechnung nach Aufwand' : 'Berechnung', 14, y); y += 7;
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(10); doc.setTextColor(...DUNKEL);
+    for (const b of berechnung) { const t = doc.splitTextToSize(b, w - 28); doc.text(t, 14, y); y += t.length * 5 + 1; }
+    y += 6;
+  }
+
   doc.setFillColor(244, 246, 250);
   doc.rect(110, y - 5, w - 124, 18, 'F');
   doc.setFont('helvetica', 'normal'); doc.setFontSize(9); doc.setTextColor(...GRAU);
