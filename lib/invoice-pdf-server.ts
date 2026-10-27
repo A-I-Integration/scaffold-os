@@ -1,4 +1,4 @@
-import { positionDetailZeilen } from './rechnung-position';
+import { positionDetailZeilen, regieSummeText } from './rechnung-position';
 import { PDFDocument, rgb, StandardFonts } from 'pdf-lib';
 import fontkit from '@pdf-lib/fontkit';
 import { readFile } from 'fs/promises';
@@ -110,6 +110,11 @@ export async function generateInvoicePdfCompliant(inv: Invoice): Promise<Uint8Ar
     });
   });
   y -= 15;
+  const regieText = regieSummeText(inv.positions || []);
+  if (regieText) {
+    page.drawText(regieText, { x: 14, y: y + 4, size: 8, font, color: grauMittel });
+    y -= 10;
+  }
 
   // Summenblock
   page.drawRectangle({ x: 310, y: y - 42, width: 195, height: 42, color: grauHell });

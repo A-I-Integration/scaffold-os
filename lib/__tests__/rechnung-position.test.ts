@@ -66,3 +66,32 @@ describe('mengenVorschlaege', () => {
     expect(mengenVorschlaege({ laengeM: 8 })).toEqual([{ label: 'Länge = 8 m', menge: 8, einheit: 'm' }])
   })
 })
+
+import { regieSumme, regieSummeText } from '@/lib/rechnung-position'
+
+describe('Stundenlohn: Einheit und Summe', () => {
+  it('setzt bei Art Stundenlohn/Miete die passende Einheit, solange noch Stk. steht', () => {
+    expect(aktualisierePosition({ bezeichnung: 'x', menge: 1, einheit: 'Stk.', einzelpreis: 0 } as any, 'art', 'regie').einheit).toBe('Std.')
+    expect(aktualisierePosition({ bezeichnung: 'x', menge: 1, einheit: 'Stk.', einzelpreis: 0 } as any, 'art', 'miete').einheit).toBe('Tag')
+    expect(aktualisierePosition({ bezeichnung: 'x', menge: 1, einheit: 'Woche', einzelpreis: 0 } as any, 'art', 'miete').einheit).toBe('Woche')
+    expect(aktualisierePosition({ bezeichnung: 'x', menge: 1, einheit: 'Stk.', einzelpreis: 0 } as any, 'art', 'konsolen').einheit).toBe('Stk.')
+  })
+  it('summiert nur Stundenlohn-Positionen und zeigt die Zeile erst ab zwei', () => {
+    const pos = [
+      { art: 'regie', menge: 2, einzelpreis: 60 }, { art: 'regie', menge: 3.5, einzelpreis: 60 }, { art: 'geruest', menge: 100, einzelpreis: 8 },
+    ] as any[]
+    expect(regieSumme(pos)).toEqual({ anzahl: 2, stunden: 5.5, netto: 330 })
+    expect(regieSummeText(pos)).toContain('5,5 Std.')
+    expect(regieSummeText(pos)).toContain('330,00')
+    expect(regieSummeText([pos[0], pos[2]])).toBeNull()
+    expect(regieSummeText([])).toBeNull()
+  })
+})
+
+describe('positionDetailZeilen: Art nicht doppelt', () => {
+  it('lässt die Art weg, wenn die Bezeichnung sie schon ist', () => {
+    expect(positionDetailZeilen({ bezeichnung: 'Aufbau', art: 'aufbau' })).toEqual([])
+    expect(positionDetailZeilen({ bezeichnung: 'Aufbau Nordseite', art: 'aufbau' })).toEqual(['Aufbau'])
+    expect(positionDetailZeilen({ bezeichnung: 'Miete', art: 'miete' })).toEqual([])
+  })
+})

@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import { groesseText } from '@/lib/rechnung-anhang';
-import { positionDetailZeilen } from '@/lib/rechnung-position';
+import { positionDetailZeilen, regieSummeText } from '@/lib/rechnung-position';
 import { ENTSCHEIDUNG_LABEL, type PruefEntscheidung } from '@/lib/rechnung-pruefung';
 
 // ============================================================
@@ -108,6 +108,7 @@ export default function RechnungPruefenPage() {
             </tbody>
           </table>
           <div className="space-y-1 p-4 text-right text-sm">
+            {regieSummeText(positionen) && <p className="text-[#86868b]">{regieSummeText(positionen)}</p>}
             <p className="text-[#86868b]">Netto {eur(r.net_amount)}</p>
             <p className="text-[#86868b]">zzgl. {zahl(r.tax_rate)} % USt {eur(r.tax_amount)}</p>
             <p className="text-lg font-bold">Rechnungsbetrag {eur(r.gross_amount)}</p>
