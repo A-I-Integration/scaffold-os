@@ -32,3 +32,10 @@ describe('auftragsstand', () => {
   it('bezahltBrutto Teilzahlung und Obergrenze', () => { expect(bezahltBrutto(r({ paid_amount: 100 }) as any)).toBe(100); expect(bezahltBrutto(r({ paid_amount: 9999 }) as any)).toBe(833) })
   it('sortiert nach Datum', () => expect(sortiereRechnungen([{ invoice_date: '2026-10-05', invoice_number: 'B' }, { invoice_date: '2026-10-01', invoice_number: 'A' }]).map(x => x.invoice_number)).toEqual(['A', 'B']))
 })
+
+import { angebotNettoAusProjekt, auftragUrl } from '../auftragsstand'
+describe('Angebotswert und Link', () => {
+  it('ohne Angebot 0', () => expect(angebotNettoAusProjekt({}, 850)).toBe(0))
+  it('Festpreis × Fläche', () => expect(angebotNettoAusProjekt({ preisModus: 'festpreis', festpreisProM2: '10', kiResult: { totalAreaM2: 200 } }, 850)).toBe(2000))
+  it('Link ohne doppelten Schrägstrich', () => expect(auftragUrl('https://x.de/', 'a'.repeat(48))).toBe('https://x.de/auftrag/' + 'a'.repeat(48)))
+})
