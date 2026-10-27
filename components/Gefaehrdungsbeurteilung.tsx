@@ -59,7 +59,7 @@ export default function Gefaehrdungsbeurteilung({ projectId, onAbgelegt }: { pro
               </div>
               <div className="flex flex-wrap items-center gap-2">
                 <input className={`${feld} sm:w-64`} placeholder="Verantwortlich" value={z.verantwortlich} onChange={e => setZeile(i, { verantwortlich: e.target.value })} />
-                <select className={`${feld} sm:w-56`} value={z.wirksam} onChange={e => setZeile(i, { wirksam: e.target.value as Wirksamkeit })}>
+                <select className={`${feld} sm:w-80`} value={z.wirksam} onChange={e => setZeile(i, { wirksam: e.target.value as Wirksamkeit })}>
                   {(Object.keys(WIRKSAM_LABEL) as Wirksamkeit[]).map(k => <option key={k} value={k}>Wirksamkeit geprüft: {WIRKSAM_LABEL[k]}</option>)}
                 </select>
                 {g.zeilen.length > 1 && <button className={`${knopf} text-red-700`} onClick={() => setG(x => ({ ...x, zeilen: x.zeilen.filter((_, j) => j !== i) }))}>Zeile entfernen</button>}
