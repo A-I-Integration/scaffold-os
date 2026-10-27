@@ -28,6 +28,8 @@ export function generatePruefschildPDF(d: SchildDaten, projekt: ProjektInfo, com
   y = zeile('Adresse', projekt.adresse || '', y)
   y = zeile('Gerüstklasse', d.geruestklasse, y)
   if (d.bauart) y = zeile('Bauart', d.bauart, y)
+  if (d.belastung) y = zeile('Zulässige Belastung', d.belastung, y)
+  if (d.bereich) y = zeile('Freigegebener Bereich', d.bereich, y)
   y = zeile('Geprüft am', fmt(d.pruefdatum), y)
   y = zeile('Nächste Prüfung', fmt(d.naechste_pruefung), y)
   y = zeile('Prüfende Person', d.pruefer, y)
@@ -38,5 +40,27 @@ export function generatePruefschildPDF(d: SchildDaten, projekt: ProjektInfo, com
   const adr = [company?.street, [company?.zip, company?.city].filter(Boolean).join(' ')].filter(Boolean).join(', ')
   for (const t of [company?.company_name, adr, company?.phone && `Tel. ${company.phone}`].filter(Boolean) as string[]) { doc.text(t, 22, y); y += 7 }
 
+  return doc
+}
+
+// Rotes Sperrschild: für Montage, Demontage, Umbau oder gesperrte Gerüste.
+export function generateSperrschildPDF(projekt: ProjektInfo, company: Company | null, grund?: string) {
+  const doc = new jsPDF()
+  const w = doc.internal.pageSize.getWidth()
+  doc.setFillColor(200, 0, 0); doc.rect(0, 0, w, 297, 'F')
+  doc.setFillColor(255, 255, 255); doc.rect(12, 12, w - 24, 273, 'F')
+  doc.setLineWidth(2); doc.setDrawColor(200, 0, 0); doc.rect(16, 16, w - 32, 265)
+  doc.setFont('helvetica', 'bold'); doc.setTextColor(200, 0, 0)
+  doc.setFontSize(40); doc.text('GERÜST', w / 2, 60, { align: 'center' })
+  doc.setFontSize(34); doc.text('GESPERRT', w / 2, 80, { align: 'center' })
+  doc.setFontSize(26); doc.text('BETRETEN VERBOTEN', w / 2, 105, { align: 'center' })
+  doc.setTextColor(0); doc.setFontSize(16)
+  let y = 135
+  if (grund?.trim()) { const t = doc.splitTextToSize(grund.trim(), w - 50); doc.text(t, w / 2, y, { align: 'center' }); y += t.length * 8 + 10 }
+  doc.setFont('helvetica', 'normal'); doc.setFontSize(13)
+  const adr = [company?.street, [company?.zip, company?.city].filter(Boolean).join(' ')].filter(Boolean).join(', ')
+  const zeilen = [projekt.name && `Baustelle: ${projekt.name}`, projekt.adresse, '', company?.company_name, adr, company?.phone && `Tel. ${company.phone}`].filter((x): x is string => typeof x === 'string')
+  y = Math.max(y, 190)
+  for (const t of zeilen) { doc.text(doc.splitTextToSize(t, w - 50), w / 2, y, { align: 'center' }); y += 7 }
   return doc
 }
