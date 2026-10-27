@@ -331,6 +331,46 @@ export function generateMahnungPDF(inv: Invoice, stufe: 1 | 2, mahnkosten?: { pa
   return doc;
 }
 
+// ─── Freundliche Zahlungserinnerung (Vorstufe vor der 1. Mahnung, ohne Gebühren und Zinsen) ───
+export function generateZahlungserinnerungPDF(inv: Invoice) {
+  const doc = new jsPDF();
+  const pageWidth = doc.internal.pageSize.getWidth();
+  const cs = inv.company_snapshot || {};
+
+  doc.setFillColor(30, 58, 138); doc.rect(0, 0, pageWidth, 35, 'F');
+  doc.setTextColor(255, 255, 255); doc.setFontSize(18); doc.setFont('helvetica', 'bold'); doc.text('SCAFFOLD OS', 14, 18);
+  doc.setFontSize(20); doc.text('ZAHLUNGSERINNERUNG', pageWidth - 14, 18, { align: 'right' });
+
+  const senderLine = [cs.company_name, [cs.street, [cs.zip, cs.city].filter(Boolean).join(' ')].filter(Boolean).join(', ')].filter(Boolean).join(' • ');
+  if (senderLine) { doc.setFontSize(7); doc.setTextColor(100, 116, 139); doc.text(senderLine, 14, 40); }
+
+  let y = 50;
+  doc.setFillColor(248, 250, 252); doc.rect(14, y, 90, 30, 'F');
+  doc.setTextColor(71, 85, 105); doc.setFontSize(8); doc.setFont('helvetica', 'bold'); doc.text('EMPFÄNGER', 18, y + 6);
+  doc.setFont('helvetica', 'normal'); doc.setTextColor(15, 23, 42); doc.setFontSize(9);
+  doc.text(inv.customer_name, 18, y + 14);
+  if (inv.customer_address) doc.text(doc.splitTextToSize(inv.customer_address, 80), 18, y + 20);
+
+  doc.setFillColor(248, 250, 252); doc.rect(108, y, 88, 30, 'F');
+  doc.setTextColor(71, 85, 105); doc.setFontSize(8); doc.setFont('helvetica', 'bold'); doc.text('BEZUG', 112, y + 6);
+  doc.setFont('helvetica', 'normal'); doc.setTextColor(15, 23, 42); doc.setFontSize(9);
+  doc.text(`Rechnung: ${inv.invoice_number}`, 112, y + 14);
+  doc.text(`Rechnungsdatum: ${fmtDate(inv.invoice_date)}`, 112, y + 20);
+  doc.text(`Fällig seit: ${fmtDate(inv.due_date)}`, 112, y + 26);
+
+  y = 92;
+  doc.setFontSize(10);
+  const offen = Math.round((Number(inv.gross_amount) - (Number(inv.paid_amount) || 0)) * 100) / 100;
+  const text = `Sehr geehrte Damen und Herren,\n\nfür die oben genannte Rechnung über ${fmtEur(Number(inv.gross_amount))} € haben wir bis heute noch keinen vollständigen Zahlungseingang festgestellt. Möglicherweise hat sich unsere Rechnung mit Ihrer Zahlung überschnitten oder sie ist Ihnen entgangen.\n\nOffener Betrag: ${fmtEur(offen)} €\n\nWir bitten Sie, den offenen Betrag innerhalb von 7 Tagen unter Angabe der Rechnungsnummer zu überweisen.${cs.iban ? `\n\nBankverbindung: ${cs.bank_name || ''}, IBAN ${cs.iban}${cs.bic ? ', BIC ' + cs.bic : ''}` : ''}\n\nSollten Sie die Zahlung bereits veranlasst haben, betrachten Sie dieses Schreiben als gegenstandslos.\n\nMit freundlichen Grüßen\n${cs.company_name || ''}`;
+  doc.text(doc.splitTextToSize(text, 180), 14, y);
+
+  doc.setTextColor(148, 163, 184); doc.setFontSize(7);
+  const footer = [cs.company_name, cs.street, [cs.zip, cs.city].filter(Boolean).join(' ')].filter(Boolean).join(' • ');
+  if (footer) doc.text(footer, pageWidth / 2, 285, { align: 'center' });
+
+  return doc;
+}
+
 // ============================================================
 // Lieferschein (Phase 37) – bestätigt Auf-/Abbau vor der
 // Rechnungsstellung, mit Materialliste und optionaler Unterschrift.

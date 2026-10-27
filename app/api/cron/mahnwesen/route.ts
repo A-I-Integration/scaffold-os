@@ -1,16 +1,20 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { pruefeCronAufruf } from '@/lib/cron-auth';
-import { generateMahnungPDF, type Invoice } from '@/lib/invoice-pdf';
+import type { Invoice } from '@/lib/invoice-pdf';
+import { naechsteAutoAktion, tageUeberfaellig, AKTION_LABEL } from '@/lib/mahnung-steuerung';
+import { sendeMahnschritt, ladeMahnEinstellungen } from '@/lib/mahnung-versand';
 
 // ============================================================
 // SCAFFOLD OS – Cron: Automatisches Mahnwesen (Phase 24)
 //
 // Läuft täglich (vercel.json). Prüft alle offenen Rechnungen:
+//   - optional (Einstellung): Zahlungserinnerung ohne Gebühren
 //   - 14 Tage nach Fälligkeit  → 1. Mahnung
 //   - weitere 14 Tage später (28 Tage insgesamt) → 2. Mahnung
 //   - danach: keine automatische Eskalation mehr (Inkasso/Anwalt
 //     bleibt eine bewusste, manuelle Entscheidung)
 //
+// Pausierte Rechnungen (mahnung_pausiert) werden übersprungen.
 // Gutschriften werden NIE gemahnt (invoice_type = 'gutschrift').
 // Ohne hinterlegte Kunden-E-Mail wird übersprungen und im
 // Ergebnis als "ohne_email" gemeldet, statt stillschweigend zu
@@ -24,9 +28,6 @@ import { generateMahnungPDF, type Invoice } from '@/lib/invoice-pdf';
 
 export const maxDuration = 120;
 
-const FRIST_STUFE_1_TAGE = 14;
-const FRIST_STUFE_2_TAGE = 28;
-
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const key = process.env.SUPABASE_SERVICE_ROLE_KEY!;
 const headers = {
@@ -35,34 +36,20 @@ const headers = {
   Authorization: `Bearer ${key}`,
 };
 
-function tageUeberfaellig(dueDate: string): number {
-  const heute = new Date(new Date().toDateString());
-  const faellig = new Date(dueDate + 'T00:00:00');
-  return Math.floor((heute.getTime() - faellig.getTime()) / 86400000);
-}
-
 export async function GET(req: NextRequest) {
   const cronFehler = pruefeCronAufruf(req);
   if (cronFehler) return cronFehler;
 
   const ergebnis = { versendet: [] as string[], ohne_email: [] as string[], fehler: [] as string[], uebersprungen: 0 };
 
-  // NEU (Phase 36): Verzugszinssatz + Mahnpauschale aus den Firmeneinstellungen.
-  // Sinnvolle gesetzliche Defaults, falls noch nichts hinterlegt ist.
-  let mahnPauschale = 5.0;
-  let mahnZinssatz = 10.52;
-  try {
-    const cRes = await fetch(`${url}/rest/v1/company_settings?select=mahnung_pauschale,mahnung_verzugszinssatz&limit=1`, { headers });
-    if (cRes.ok) {
-      const rows = await cRes.json();
-      if (rows?.[0]?.mahnung_pauschale != null) mahnPauschale = Number(rows[0].mahnung_pauschale);
-      if (rows?.[0]?.mahnung_verzugszinssatz != null) mahnZinssatz = Number(rows[0].mahnung_verzugszinssatz);
-    }
-  } catch { /* Defaults greifen */ }
+  // Verzugszinssatz, Mahnpauschale und (optional) Tage bis zur Zahlungserinnerung aus den Firmeneinstellungen
+  const cfg = await ladeMahnEinstellungen();
 
   try {
+    // Offen UND bereits als überfällig markiert: nach der 1. Mahnung steht die Rechnung auf "ueberfaellig",
+    // die 2. Mahnung muss sie trotzdem noch erreichen.
     const res = await fetch(
-      `${url}/rest/v1/invoices?status=eq.offen&invoice_type=neq.gutschrift&select=*`,
+      `${url}/rest/v1/invoices?status=in.(offen,ueberfaellig)&invoice_type=neq.gutschrift&select=*`,
       { headers }
     );
     if (!res.ok) throw new Error(await res.text());
@@ -70,63 +57,21 @@ export async function GET(req: NextRequest) {
 
     for (const inv of invoices) {
       if (!inv.due_date) { ergebnis.uebersprungen++; continue; }
-      const tage = tageUeberfaellig(inv.due_date);
-      const aktuelleStufe = Number(inv.reminder_level) || 0;
+      const aktion = naechsteAutoAktion({
+        tageUeberfaellig: tageUeberfaellig(inv.due_date),
+        stufe: Number(inv.reminder_level) || 0,
+        erinnerungAm: (inv as any).erinnerung_am,
+        pausiert: (inv as any).mahnung_pausiert,
+        // Ohne die Datenbank-Spalte kann der Versand nicht vermerkt werden, daher dann keine Erinnerung
+        erinnerungTage: 'erinnerung_am' in (inv as object) ? cfg.erinnerungTage : null,
+      });
+      if (!aktion) { ergebnis.uebersprungen++; continue; }
 
-      let stufe: 1 | 2 | null = null;
-      if (aktuelleStufe === 0 && tage >= FRIST_STUFE_1_TAGE) stufe = 1;
-      else if (aktuelleStufe === 1 && tage >= FRIST_STUFE_2_TAGE) stufe = 2;
-      if (!stufe) { ergebnis.uebersprungen++; continue; }
-
-      try {
-        // NEU (Phase 34/36): E-Mail zuerst über die echte customer_id-Verknüpfung
-        // suchen, Namensvergleich nur noch als Rückfalloption für alte Rechnungen.
-        let email: string | undefined;
-        if ((inv as any).customer_id) {
-          const kRes = await fetch(`${url}/rest/v1/customers?id=eq.${(inv as any).customer_id}&select=email&limit=1`, { headers });
-          const kRows = kRes.ok ? await kRes.json() : [];
-          email = kRows?.[0]?.email;
-        }
-        if (!email) {
-          const kRes = await fetch(
-            `${url}/rest/v1/customers?name=ilike.${encodeURIComponent(inv.customer_name)}&select=email&limit=1`,
-            { headers }
-          );
-          const kRows = kRes.ok ? await kRes.json() : [];
-          email = kRows?.[0]?.email;
-        }
-        if (!email) { ergebnis.ohne_email.push(inv.invoice_number); continue; }
-
-        const doc = generateMahnungPDF(inv, stufe, { pauschale: mahnPauschale, zinssatz: mahnZinssatz, tageUeberfaellig: tage });
-        const pdfBase64 = doc.output('datauristring');
-
-        const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://scaffold-os.vercel.app';
-        const mailRes = await fetch(`${appUrl}/api/email`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            type: 'mahnung',
-            to: email,
-            projectId: inv.project_id || undefined,
-            projectName: inv.customer_name,
-            customerName: inv.customer_name,
-            invoiceNumber: inv.invoice_number,
-            grossAmount: Number(inv.gross_amount),
-            pdfBase64,
-          }),
-        });
-        const mailJson = await mailRes.json();
-        if (!mailJson.success) throw new Error(mailJson.error || 'E-Mail-Versand fehlgeschlagen');
-
-        await fetch(`${url}/rest/v1/invoices?id=eq.${inv.id}`, {
-          method: 'PATCH', headers,
-          body: JSON.stringify({ status: 'ueberfaellig', reminder_level: stufe }),
-        });
-
-        ergebnis.versendet.push(`${inv.invoice_number} (${stufe}. Mahnung)`);
-      } catch (err: any) {
-        ergebnis.fehler.push(`${inv.invoice_number}: ${err.message}`);
-      }
+      const e = await sendeMahnschritt(inv, aktion, cfg);
+      const name = `${inv.invoice_number} (${AKTION_LABEL[String(aktion)]})`;
+      if (e.ok) ergebnis.versendet.push(name);
+      else if (e.ohneEmail) ergebnis.ohne_email.push(inv.invoice_number);
+      else ergebnis.fehler.push(`${inv.invoice_number}: ${e.error}`);
     }
 
     return NextResponse.json({ success: true, ...ergebnis });

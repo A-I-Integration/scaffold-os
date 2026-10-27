@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { normalisiereNachtraege, nachtragNummer, NACHTRAG_STATUS_LABEL } from '@/lib/nachtrag'
+import { manuelleAktionen, mahnStatusText, tageUeberfaellig, AKTION_LABEL } from '@/lib/mahnung-steuerung'
 import { berechneAuftragsstand, bezahltBrutto, sortiereRechnungen, angebotNettoAusProjekt, auftragUrl, TYP_LABEL, type StandRechnung } from '@/lib/auftragsstand'
 
 // Gesamtübersicht einer Baustelle: Auftragswert, Teilrechnungen (z. B. 70/30), Nachträge/Verlängerungen,
@@ -15,9 +16,11 @@ interface Props {
   invoices: (StandRechnung & { project_id?: string | null })[]
   /** Öffnet den Rechnungsdialog mit vorbelegter Art/Prozent. Ohne Angabe werden die Knöpfe nicht gezeigt. */
   onRechnungStellen?: (art: 'abschlag' | 'schluss', prozent?: number) => void
+  /** Wird nach Erinnerung/Mahnung/Pause aufgerufen, damit die Rechnungen neu geladen werden. Ohne Angabe: keine Mahn-Spalte. */
+  onGeaendert?: () => void
 }
 
-export default function Auftragsstand({ project, invoices, onRechnungStellen }: Props) {
+export default function Auftragsstand({ project, invoices, onRechnungStellen, onGeaendert }: Props) {
   const [kranSatz, setKranSatz] = useState(850)
   useEffect(() => {
     let aktiv = true
@@ -57,6 +60,30 @@ export default function Auftragsstand({ project, invoices, onRechnungStellen }: 
   const stand = useMemo(() => berechneAuftragsstand({ angebotNetto, nachtraege, rechnungen: invoices }), [angebotNetto, nachtraege, invoices])
   const liste = sortiereRechnungen(invoices)
 
+
+  // Mahnwesen von Hand: Zahlungserinnerung/Mahnung senden, Pause setzen
+  const [mahnBusy, setMahnBusy] = useState<string | null>(null)
+  const [mahnMeldung, setMahnMeldung] = useState<{ text: string; fehler: boolean } | null>(null)
+  const mahnPost = async (id: string, body: object, ok: (j: any) => string) => {
+    setMahnBusy(id); setMahnMeldung(null)
+    try {
+      const j = await (await fetch('/api/mahnung', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ invoice_id: id, ...body }) })).json()
+      if (!j.success) throw new Error(j.error || 'Fehlgeschlagen')
+      setMahnMeldung({ text: ok(j), fehler: false }); onGeaendert?.()
+    } catch (e) { setMahnMeldung({ text: e instanceof Error ? e.message : 'Fehlgeschlagen', fehler: true }) }
+    finally { setMahnBusy(null) }
+  }
+  const mahnSenden = (r: StandRechnung, a: 'erinnerung' | 1 | 2) => {
+    if (!confirm(`${AKTION_LABEL[String(a)]} für Rechnung ${r.invoice_number} jetzt per E-Mail an den Kunden senden?`)) return
+    void mahnPost(r.id, { aktion: a }, j => `${AKTION_LABEL[String(a)]} an ${j.an} gesendet.`)
+  }
+  const mahnPause = (r: StandRechnung) => {
+    if (r.mahnung_pausiert) { void mahnPost(r.id, { pause: false }, () => `Mahnung für ${r.invoice_number} läuft wieder automatisch.`); return }
+    const grund = prompt('Mahnung für diese Rechnung pausieren. Grund (nur intern sichtbar, optional):')
+    if (grund === null) return
+    void mahnPost(r.id, { pause: true, grund }, () => `Mahnung für ${r.invoice_number} ist pausiert.`)
+  }
+
   const kachel = (titel: string, wert: string, hinweis?: string, rot = false) => (
     <div className="rounded border border-black/30 bg-white p-3">
       <div className="text-xs text-black/70">{titel}</div>
@@ -90,9 +117,10 @@ export default function Auftragsstand({ project, invoices, onRechnungStellen }: 
 
       <div>
         <h4 className="font-semibold text-sm mb-1">Rechnungen dieser Baustelle</h4>
+        {mahnMeldung && <p className={`text-sm mb-1 ${mahnMeldung.fehler ? 'text-red-700' : ''}`} role="status">{mahnMeldung.text}</p>}
         {liste.length === 0 ? <p className="text-sm text-black/70">Noch keine Rechnung.</p> : (
           <table className="w-full border-collapse text-sm">
-            <thead><tr className="text-left bg-[#f0f0f0]">{['Datum', 'Art', 'Nummer', 'Status', 'Netto', 'Brutto', 'Offen'].map((h, i) => <th key={h} className={`px-2 py-1 border border-black/20 ${i >= 4 ? 'text-right' : ''}`}>{h}</th>)}</tr></thead>
+            <thead><tr className="text-left bg-[#f0f0f0]">{['Datum', 'Art', 'Nummer', 'Status', 'Netto', 'Brutto', 'Offen', ...(onGeaendert ? ['Mahnung'] : [])].map((h, i) => <th key={h} className={`px-2 py-1 border border-black/20 ${i >= 4 && i <= 6 ? 'text-right' : ''}`}>{h}</th>)}</tr></thead>
             <tbody>
               {liste.map(r => {
                 const offen = r.status === 'storniert' ? 0 : Math.round((Number(r.gross_amount) - bezahltBrutto(r)) * 100) / 100
@@ -105,6 +133,23 @@ export default function Auftragsstand({ project, invoices, onRechnungStellen }: 
                     <td className="px-2 py-1 border border-black/20 text-right tabular-nums">{eur(Number(r.net_amount))}</td>
                     <td className="px-2 py-1 border border-black/20 text-right tabular-nums">{eur(Number(r.gross_amount))}</td>
                     <td className="px-2 py-1 border border-black/20 text-right tabular-nums">{offen > 0 ? eur(offen) : ''}</td>
+                    {onGeaendert && (
+                      <td className="px-2 py-1 border border-black/20 align-top">
+                        {offen > 0 && r.invoice_type !== 'gutschrift' && r.status !== 'storniert' && r.status !== 'bezahlt' ? (
+                          <div className="space-y-1">
+                            {(() => { const t = tageUeberfaellig(r.due_date); return t > 0 ? <div className="text-xs">{t} Tage überfällig</div> : null })()}
+                            {mahnStatusText({ stufe: r.reminder_level, erinnerungAm: r.erinnerung_am, pausiert: r.mahnung_pausiert }) && <div className="text-xs font-semibold">{mahnStatusText({ stufe: r.reminder_level, erinnerungAm: r.erinnerung_am, pausiert: r.mahnung_pausiert })}</div>}
+                            {r.mahnung_pausiert && r.mahnung_pause_grund && <div className="text-xs text-black/70">Grund: {r.mahnung_pause_grund}</div>}
+                            <div className="flex flex-wrap gap-1">
+                              {tageUeberfaellig(r.due_date) > 0 && manuelleAktionen({ stufe: r.reminder_level || 0, erinnerungAm: r.erinnerung_am }).map(a => (
+                                <button key={String(a)} type="button" disabled={mahnBusy === r.id} onClick={() => mahnSenden(r, a)} className="px-2 py-0.5 text-xs rounded border border-black/40 bg-white hover:bg-[#f0f0f0] disabled:opacity-50">{AKTION_LABEL[String(a)]} senden</button>
+                              ))}
+                              <button type="button" disabled={mahnBusy === r.id} onClick={() => mahnPause(r)} className="px-2 py-0.5 text-xs rounded border border-black/40 bg-white hover:bg-[#f0f0f0] disabled:opacity-50">{r.mahnung_pausiert ? 'Mahnung fortsetzen' : 'Mahnung pausieren'}</button>
+                            </div>
+                          </div>
+                        ) : null}
+                      </td>
+                    )}
                   </tr>
                 )
               })}
