@@ -275,6 +275,9 @@ export default function LvDialog({ model, materials, aufbauStunden, abbauStunden
                 <div><label className={label}>2. Bauabschnitt: Standzeit (Wochen)</label>
                   <input type='number' min={0} step='1' className={feld} value={e.standzeitBa2Wochen ?? ''}
                     onChange={(ev) => setze({ standzeitBa2Wochen: ev.target.value === '' ? undefined : zahl(ev.target.value) })} /></div>
+                <div className='col-span-2'><label className={label}>2. Bauabschnitt: Reserve über der Höhe (m, Teilung wird vor Ort an die Fugen angepasst)</label>
+                  <input type='number' min={0} step='0.5' className={feld} placeholder='0' value={e.reserveBa2M ?? ''}
+                    onChange={(ev) => setze({ reserveBa2M: ev.target.value === '' ? undefined : zahl(ev.target.value) })} /></div>
                 <div className='col-span-2'><label className={label}>Plane 1. BA: Überlappung nach unten (m, Vorgabe Architekt)</label>
                   <input type='number' min={0} step='0.5' className={feld} placeholder='0' value={e.planeUeberlappungM ?? ''}
                     onChange={(ev) => setze({ planeUeberlappungM: ev.target.value === '' ? undefined : zahl(ev.target.value) })} /></div>

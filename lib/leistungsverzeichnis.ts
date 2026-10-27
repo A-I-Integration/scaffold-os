@@ -131,6 +131,8 @@ export interface LvEingaben {
   hoeheBa2M?: number
   /** Stil „statiker“: Überlappung der Plane des 1. BA nach unten in m (Vorgabe des Architekten; leer = 0). Die Plane des 1. BA beginnt dann bei Höhe 2. BA minus Überlappung */
   planeUeberlappungM?: number
+  /** Stil „statiker“: Reserve über der angegebenen Höhe des 2. BA in m. Das Gerüst bleibt so viel höher stehen (dann auf die nächste Lagenoberkante gerundet), weil die Fugen des Mauerwerks nicht auf einer festen Höhe liegen und die Teilung vor Ort angepasst wird. Leer = 0 */
+  reserveBa2M?: number
   /** Stil „statiker“: Standzeit des 2. Bauabschnitts in Wochen (leer/0 = in der Tabelle eintragen) */
   standzeitBa2Wochen?: number
   /** Standardpreise aus der Datenpflege für Positionen ohne CAD-Wert (füllen nur, wo sonst 0 € stehen würde) */
@@ -536,7 +538,8 @@ export function erzeugeLeistungsverzeichnis(quelle: LvQuelle, e: LvEingaben): Le
     vorh(b2, g1.nr, 'Arbeitsgerüste am Turmschaft 1. BA', miet(matGerKo))
     // 2. Bauabschnitt: das CAD-Gerüst auf die Höhe des Rückbaus kappen (Annahme: gleiche Berechnung wie 1. BA, Aufbau + Abbau + Vorhaltung)
     const hBa2 = e.hoeheBa2M === undefined ? 21.5 : e.hoeheBa2M
-    const ba2 = hBa2 > 0 ? kappeModellAufHoehe(model, hBa2) : null
+    const reserveBa2 = Math.max(0, e.reserveBa2M ?? 0)
+    const ba2 = hBa2 > 0 ? kappeModellAufHoehe(model, hBa2 + reserveBa2) : null
     const woBa2 = Math.max(0, e.standzeitBa2Wochen ?? 0)
     const mat2: Record<Gruppe, number> = { geruest: 0, konsolen: 0, schutzdach: 0, treppe: 0 }
     if (ba2) for (const m of kappeMaterial(materials, model, ba2.model)) mat2[gruppeVon(m.articleNumber)] += m.totalPrice
@@ -547,7 +550,7 @@ export function erzeugeLeistungsverzeichnis(quelle: LvQuelle, e: LvEingaben): Le
     const hoeheBa2Text = ba2 ? de(ba2.obenM, 2) : de(hBa2 > 0 ? hBa2 : 21.5, 1)
     const g2Text = ba2
       ? [`Arbeitsgerüste am Turmschaft wie Pos. ${g1.nr}, Teil Rückbau der Gerüste 1. BA von ca. ${de(hoeheText, 0)} m bis ca. ${hoeheBa2Text} m inklusive Abtransport.`,
-        `Aus dem CAD auf ${ba2.lagenBehalten} von ${ba2.lagenGesamt} Lagen gekappt (oberste Lage ${hoeheBa2Text} m, ${de(r2(flaecheM2 * ba2.flaechenAnteil), 2)} m² Gerüstfläche). Preis = Aufbau + Abbau wie 1. BA, auf die gekappte Fläche und Stückliste gerechnet; ein bereits stehender Gerüstteil aus dem 1. BA ist nicht abgezogen, bitte prüfen.`]
+        `Aus dem CAD auf ${ba2.lagenBehalten} von ${ba2.lagenGesamt} Lagen gekappt${reserveBa2 > 0 ? ` (angegebene Höhe ca. ${de(hBa2, 1)} m plus ${de(reserveBa2, 1)} m Reserve, da die Teilung vor Ort an die Fugen angepasst wird)` : ''} (oberste Lage ${hoeheBa2Text} m, ${de(r2(flaecheM2 * ba2.flaechenAnteil), 2)} m² Gerüstfläche). Preis = Aufbau + Abbau wie 1. BA, auf die gekappte Fläche und Stückliste gerechnet; ein bereits stehender Gerüstteil aus dem 1. BA ist nicht abgezogen, bitte prüfen.`]
       : [`Arbeitsgerüste am Turmschaft wie Pos. ${g1.nr}, Teil Rückbau der Gerüste 1. BA von ca. ${de(hoeheText, 0)} m bis ca. 21,5 m inklusive Abtransport.`, OHNE_CAD]
     const g2 = b2.add(`Arbeitsgerüste mit int. Tragger. am Turmschaft bis ca. 21,5 m Höhe`, g2Text, 1, 'Stück', ba2 ? cent(lohn2('geruest') + lohn2('konsolen')) : 0)
     vorh(b2, g2.nr, 'Arbeitsgerüste 2. BA', ba2 ? miet2(mat2.geruest + mat2.konsolen) : 0, 'Wo', woBa2)
