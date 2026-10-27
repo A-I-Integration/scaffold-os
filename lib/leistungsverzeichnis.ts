@@ -576,11 +576,10 @@ export function erzeugeLeistungsverzeichnis(quelle: LvQuelle, e: LvEingaben): Le
     const az = zus('aufzug')
     const az1 = b2.add(`Personen- und Lastenaufzug 500/800kg 1.BA H = ca. ${de(hoeheText, 0)}m`, [...LV_TEXTE.aufzug(de(azOpt?.tragkraftPersonenKg ?? 500, 0), de(azOpt?.tragkraftLastKg ?? 800, 0), de(hoeheText, 2)), (azOpt ? `${azOpt.gemietet ? 'Gemietet von einem Fremdunternehmen' : 'Aus eigenem Inventar'}, Kosten von Hand aus den Gerüst-Einstellungen.` : az && az.menge > 0 ? 'Preise aus den Zusatzleistungen im LV-Fenster.' : OHNE_CAD)], 1, 'Stück', az && az.menge > 0 ? cent(az.menge * (az.epAuf + az.epAb)) : 0)
     vorh(b2, az1.nr, 'Personen- und Lastenaufzug 1. BA', az && az.menge > 0 ? cent(az.menge * az.epVorh) : 0)
-    // Aufzug 2. BA: Höhe aus dem gekappten CAD-Modell (Aufzug reicht höchstens bis zur obersten verbleibenden Lage); Preis bleibt zum Selbsteintragen leer
-    const aufzug2 = ba2 ? ba2.model.components3D.find((c) => c.type === 'elevator') : undefined
-    const aufzug2HoeheM = aufzug2 ? r2(Math.abs(aufzug2.scale[1])) : 0
-    const az2 = b2.add('Personen- und Lastenaufzug 500/800kg 2.BA H = ca. 21,5m', [`Aufzug am Turmschaft wie Pos. ${az1.nr}, Teil Rückbau des Aufzuges 1. BA von ca. ${de(hoeheText, 0)} m bis ca. ${hoeheBa2Text} m inklusive Abtransport.`, `Gesamthöhe: bis ca. ${hoeheBa2Text} m, 2. BA.`, aufzug2HoeheM > 0 ? `Aus dem CAD auf ${de(aufzug2HoeheM, 2)} m gekappt. Preis bitte eintragen.` : OHNE_CAD], 1, 'Stück', 0)
-    vorh(b2, az2.nr, 'Personen- und Lastenaufzug 2. BA', 0, 'Wo', 0)
+    // Aufzug 2. BA: bleibt zu 100 % stehen (Antwort Auftraggeber-Planung: Aufzug und Schutzdächer entfallen im 2. BA nicht anteilig).
+    // Anders als Gerüst, Treppenturm und Haltestellen wird er deshalb nicht gekappt: Vorhaltung wie im 1. BA, nur mit der Standzeit des 2. BA.
+    const az2 = b2.add('Personen- und Lastenaufzug 500/800kg 2.BA H = ca. 21,5m', [`Aufzug am Turmschaft wie Pos. ${az1.nr}.`, 'Der Aufzug bleibt im 2. BA vollständig (100 %) stehen und wird nicht anteilig zurückgebaut; Vorhaltung wie 1. BA für die Standzeit des 2. BA.', (az && az.menge > 0 ? 'Vorhaltungspreis aus dem 1. BA übernommen.' : OHNE_CAD)], 1, 'Stück', 0)
+    vorh(b2, az2.nr, 'Personen- und Lastenaufzug 2. BA', az && az.menge > 0 ? cent(az.menge * az.epVorh) : 0, 'Wo', woBa2)
     const hAnz = azOpt?.haltestellen && azOpt.haltestellen > 0 ? azOpt.haltestellen : 5
     const h1 = b2.add('Haltestellenausstattung 1. BA', [...LV_TEXTE.haltestellen, azOpt?.haltestellen ? 'Anzahl aus den Gerüst-Einstellungen, Preis bitte eintragen.' : OHNE_CAD], hAnz, 'Stück', 0)
     vorh(b2, h1.nr, 'Haltestellenausstattung 1. BA', 0, 'StckWo', hAnz * woGesamt)

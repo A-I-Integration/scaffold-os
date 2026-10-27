@@ -84,20 +84,15 @@ describe('2. Bauabschnitt im LV (Stil statiker)', () => {
     expect(pos(leer, 'bis ca. 21,5 m Höhe').ep).toBe(0)
   })
 
-  it('Aufzug 2. BA: Höhe aus dem gekappten CAD, Preis bleibt leer; ohne Aufzug im CAD unverändert', () => {
+  it('Aufzug 2. BA bleibt zu 100 % stehen (nicht gekappt), Vorhaltung wie 1. BA', () => {
     const mitAufzug = generateCADModel({ ...turm, geruestOptionen: { ...turm.geruestOptionen, aufzug: { seite: 'front', gemietet: false } } } as BuildingParams, 'layher-allround')
     const materials: MaterialItem[] = generateBillOfMaterials(mitAufzug).map((m) => ({ ...m, unitPrice: 10, totalPrice: m.quantity * 10 }))
     const log = calculateLogistics(mitAufzug, materials, 2.0)
     const lv = erzeugeLeistungsverzeichnis({ model: mitAufzug, materials, aufbauStunden: log.aufbauStunden, abbauStunden: log.abbauStunden }, eing)
     const az2 = pos(lv, 'Personen- und Lastenaufzug 500/800kg 2.BA')
-    const k = kappeModellAufHoehe(mitAufzug, 21.5)!
-    const hoehe = k.model.components3D.find((c) => c.type === 'elevator')!.scale[1]
-    expect(hoehe).toBeLessThanOrEqual(k.obenM + 1e-6)
-    expect(az2.text.join(' ')).toContain('gekappt')
-    expect(az2.text.join(' ')).toContain(hoehe.toFixed(2).replace('.', ','))
+    expect(az2.text.join(' ')).toContain('100 %')
+    expect(az2.text.join(' ')).not.toContain('gekappt')
     expect(az2.ep).toBe(0)
-    const ohne = erzeugeLeistungsverzeichnis(quelle(), eing)
-    expect(pos(ohne, 'Personen- und Lastenaufzug 500/800kg 2.BA').text.join(' ')).not.toContain('gekappt')
   })
 
   it('höhere gewählte Höhe → höherer Preis (monoton)', () => {
