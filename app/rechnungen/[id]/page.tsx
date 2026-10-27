@@ -308,7 +308,7 @@ export default function RechnungAktePage() {
 
             {ansicht === 'positionen' && (
               <div className="p-4 text-sm space-y-3">
-                <p><span style={{ color: WIN.textGedaempft }}>Kunde:</span> {inv.customer_name}{inv.customer_address ? `, ${inv.customer_address}` : ''} · <span style={{ color: WIN.textGedaempft }}>Datum:</span> {fmtDate(inv.invoice_date)} · <span style={{ color: WIN.textGedaempft }}>fällig:</span> {fmtDate(inv.due_date)}{inv.geruest_nr ? ` · Gerüst ${inv.geruest_nr}` : ''}{inv.reference_invoice_number ? ` · Bezug ${inv.reference_invoice_number}` : ''}</p>
+                <p><span style={{ color: WIN.textGedaempft }}>Kunde:</span> {inv.customer_name}{inv.customer_address ? `, ${inv.customer_address}` : ''} · <span style={{ color: WIN.textGedaempft }}>Datum:</span> {fmtDate(inv.invoice_date)} · <span style={{ color: WIN.textGedaempft }}>fällig:</span> {fmtDate(inv.due_date)}{inv.geruest_nr ? ` · Gerüst ${inv.geruest_nr}` : ''}{inv.leistungsdatum ? ` · Leistungsdatum ${fmtDate(inv.leistungsdatum)}` : ''}{inv.reference_invoice_number ? ` · Bezug ${inv.reference_invoice_number}` : ''}</p>
                 <table className="w-full border-collapse">
                   <thead><tr className="text-left text-xs" style={{ background: WIN.grund, color: WIN.textGedaempft }}><th className="p-2 border" style={{ borderColor: WIN.rand }}>Bezeichnung</th><th className="p-2 border text-right" style={{ borderColor: WIN.rand }}>Menge</th><th className="p-2 border" style={{ borderColor: WIN.rand }}>Einheit</th><th className="p-2 border text-right" style={{ borderColor: WIN.rand }}>Einzelpreis</th><th className="p-2 border text-right" style={{ borderColor: WIN.rand }}>Gesamt</th></tr></thead>
                   <tbody>

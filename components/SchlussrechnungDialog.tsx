@@ -55,6 +55,11 @@ export default function SchlussrechnungDialog({ projectId, customerName, custome
   const [preisM2, setPreisM2] = useState('');
   const [gewaehlteNachtraege, setGewaehlteNachtraege] = useState<Set<string>>(new Set());
 
+  // Kopfdaten der Rechnung
+  const [geruestNr, setGeruestNr] = useState('');
+  const [leistungsdatum, setLeistungsdatum] = useState('');
+  const [bemerkung, setBemerkung] = useState('');
+
   const [laeuft, setLaeuft] = useState(false);
   const [angelegt, setAngelegt] = useState(false);
   const [fehler, setFehler] = useState('');
@@ -86,7 +91,11 @@ export default function SchlussrechnungDialog({ projectId, customerName, custome
         }
         if (iRes?.success) {
           const alle: Invoice[] = iRes.invoices || [];
-          setBestehende(alle.filter((i) => i.project_id === projectId && i.status !== 'storniert'));
+          const dieser = alle.filter((i) => i.project_id === projectId && i.status !== 'storniert');
+          setBestehende(dieser);
+          // Gerüst-Nr. der letzten Rechnung dieser Baustelle vorschlagen (bleibt änderbar)
+          const letzte = [...dieser].reverse().find((i) => i.geruest_nr);
+          if (letzte?.geruest_nr) setGeruestNr(letzte.geruest_nr);
           // Abschlagsrechnungen dieses Auftrags (§ 14 Abs. 5 UStG: in der Endrechnung abzusetzen);
           // Abschläge ohne Auftragszuordnung nur bei gleichem Kundennamen und nie vorausgewählt.
           const kn = customerName.trim().toLowerCase();
@@ -178,7 +187,9 @@ export default function SchlussrechnungDialog({ projectId, customerName, custome
           customer_name: customerName,
           customer_address: customerAddress || undefined,
           invoice_type: art,
-          notes: [eingabe.anpassungen?.skonto ? '2% Skonto bei Zahlung innerhalb von 8 Tagen.' : '', abzugsText || ''].filter(Boolean).join(' ') || undefined,
+          notes: [bemerkung.trim(), [eingabe.anpassungen?.skonto ? '2% Skonto bei Zahlung innerhalb von 8 Tagen.' : '', abzugsText || ''].filter(Boolean).join(' ')].filter(Boolean).join('\n') || undefined,
+          geruest_nr: geruestNr.trim() || undefined,
+          leistungsdatum: leistungsdatum || undefined,
           positions: positionen,
           override_grund: overrideGrund || undefined,
         }),
@@ -375,6 +386,25 @@ export default function SchlussrechnungDialog({ projectId, customerName, custome
                 )}
               </div>
             )}
+
+            <div className="rounded-lg bg-[#f5f5f7] p-3 space-y-2">
+              <p className="text-xs font-semibold text-[#1d1d1f]">Kopfdaten der Rechnung</p>
+              <p className="text-[11px] text-[#86868b]">Die Rechnungsnummer wird beim Anlegen automatisch vergeben.</p>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="block text-[11px] text-[#86868b] mb-1">Gerüst-Nr. (ID zur eindeutigen Zuordnung)</label>
+                  <input value={geruestNr} onChange={(e) => setGeruestNr(e.target.value)} maxLength={60} placeholder="z. B. G-2026-014" className={inputCls} />
+                </div>
+                <div>
+                  <label className="block text-[11px] text-[#86868b] mb-1">Leistungsdatum</label>
+                  <input type="date" value={leistungsdatum} onChange={(e) => setLeistungsdatum(e.target.value)} className={inputCls} />
+                </div>
+              </div>
+              <div>
+                <label className="block text-[11px] text-[#86868b] mb-1">Bemerkungen (zusätzliche Vereinbarungen, erscheinen auf der Rechnung)</label>
+                <textarea value={bemerkung} onChange={(e) => setBemerkung(e.target.value)} rows={3} maxLength={1500} placeholder="z. B. Schultertransport aus Grund X, war nicht vorgesehen. Alu-Podesttreppe unter 5 m aus sicherheitstechnischen Gründen vereinbart." className={inputCls} />
+              </div>
+            </div>
 
             <div>
               <p className="text-xs font-semibold text-[#1d1d1f] mb-1">Positionen der Rechnung</p>
