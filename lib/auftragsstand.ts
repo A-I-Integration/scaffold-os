@@ -10,6 +10,8 @@
 // Stornierte Rechnungen zählen nicht; Gutschriften mindern (Betrag ist dort negativ gespeichert).
 // ============================================================
 
+import { baueRechnungsPositionen, eingabeAusProjektData, summeNetto } from './schlussrechnung'
+
 export interface StandRechnung {
   id: string
   invoice_number: string
@@ -96,3 +98,11 @@ export const TYP_LABEL: Record<string, string> = { standard: 'Rechnung', abschla
 export function sortiereRechnungen<T extends Pick<StandRechnung, 'invoice_date' | 'invoice_number'>>(liste: T[]): T[] {
   return [...liste].sort((a, b) => String(a.invoice_date).localeCompare(String(b.invoice_date)) || String(a.invoice_number).localeCompare(String(b.invoice_number)))
 }
+
+/** Angebotswert netto aus den gespeicherten Projektdaten (0, wenn kein Angebot hinterlegt ist). */
+export function angebotNettoAusProjekt(data: any, kranTagessatz: number): number {
+  if (!data?.kiResult && !data?.festpreisProM2) return 0
+  try { return summeNetto(baueRechnungsPositionen({ eingabe: eingabeAusProjektData(data, kranTagessatz), basis: 'angebot' })) } catch { return 0 }
+}
+
+export const auftragUrl = (origin: string, token: string): string => `${origin.replace(/\/$/, '')}/auftrag/${token}`

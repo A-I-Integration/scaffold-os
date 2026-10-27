@@ -1,9 +1,8 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
-import { baueRechnungsPositionen, eingabeAusProjektData, summeNetto } from '@/lib/schlussrechnung'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { normalisiereNachtraege, nachtragNummer, NACHTRAG_STATUS_LABEL } from '@/lib/nachtrag'
-import { berechneAuftragsstand, bezahltBrutto, sortiereRechnungen, TYP_LABEL, type StandRechnung } from '@/lib/auftragsstand'
+import { berechneAuftragsstand, bezahltBrutto, sortiereRechnungen, angebotNettoAusProjekt, auftragUrl, TYP_LABEL, type StandRechnung } from '@/lib/auftragsstand'
 
 // Gesamtübersicht einer Baustelle: Auftragswert, Teilrechnungen (z. B. 70/30), Nachträge/Verlängerungen,
 // bezahlt/offen. Alle Rechnungen sind anklickbar. Die Zahlen kommen aus den vorhandenen Daten; es wird nichts doppelt gepflegt.
@@ -24,11 +23,34 @@ export default function Auftragsstand({ project, invoices }: Props) {
     return () => { aktiv = false }
   }, [])
 
+  // Link für den Auftraggeber (Live-Ansicht, nur lesen)
+  interface StandLink { id: string; token: string; label: string | null; created_at: string; status: 'aktiv' | 'abgelaufen' | 'widerrufen' }
+  const [links, setLinks] = useState<StandLink[]>([])
+  const [tabelleFehlt, setTabelleFehlt] = useState(false)
+  const [linkFehler, setLinkFehler] = useState('')
+  const [linkBusy, setLinkBusy] = useState(false)
+  const [linkLabel, setLinkLabel] = useState('')
+  const ladeLinks = useCallback(async () => {
+    try {
+      const j = await (await fetch(`/api/auftrag-link?project_id=${project.id}`, { cache: 'no-store' })).json()
+      if (!j.success) throw new Error(j.error)
+      setLinks(j.links); setTabelleFehlt(!!j.tabelleFehlt); setLinkFehler('')
+    } catch (e) { setLinkFehler(e instanceof Error ? e.message : 'Laden fehlgeschlagen') }
+  }, [project.id])
+  useEffect(() => { void ladeLinks() }, [ladeLinks])
+  const linkLauf = async (f: () => Promise<void>) => { setLinkBusy(true); setLinkFehler(''); try { await f(); await ladeLinks() } catch (e) { setLinkFehler(e instanceof Error ? e.message : 'Fehlgeschlagen') } finally { setLinkBusy(false) } }
+  const linkAnlegen = () => linkLauf(async () => {
+    const j = await (await fetch('/api/auftrag-link', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ project_id: project.id, label: linkLabel }) })).json()
+    if (!j.success) throw new Error(j.error); setLinkLabel('')
+  })
+  const linkWiderrufen = (id: string) => linkLauf(async () => {
+    if (!confirm('Link widerrufen? Der Auftraggeber sieht dann nichts mehr über diesen Link.')) return
+    const j = await (await fetch(`/api/auftrag-link?id=${id}`, { method: 'DELETE' })).json()
+    if (!j.success) throw new Error(j.error)
+  })
+
   const nachtraege = useMemo(() => normalisiereNachtraege(project.data?.nachtraege), [project.data])
-  const angebotNetto = useMemo(() => {
-    if (!project.data?.kiResult && !project.data?.festpreisProM2) return 0
-    try { return summeNetto(baueRechnungsPositionen({ eingabe: eingabeAusProjektData(project.data, kranSatz), basis: 'angebot' })) } catch { return 0 }
-  }, [project.data, kranSatz])
+  const angebotNetto = useMemo(() => angebotNettoAusProjekt(project.data, kranSatz), [project.data, kranSatz])
 
   const stand = useMemo(() => berechneAuftragsstand({ angebotNetto, nachtraege, rechnungen: invoices }), [angebotNetto, nachtraege, invoices])
   const liste = sortiereRechnungen(invoices)
@@ -93,6 +115,32 @@ export default function Auftragsstand({ project, invoices }: Props) {
           </ul>
         </div>
       )}
+    
+      <div className="space-y-2">
+        <h4 className="font-semibold text-sm">Link für den Auftraggeber</h4>
+        <p className="text-xs text-black/70">Der Auftraggeber sieht damit immer den aktuellen Stand dieser Baustelle (Auftragswert, Teilrechnungen, Schlussrechnung, Nachträge) und kann jede Rechnung öffnen. Nur lesen, ohne Login. Wer den Link hat, sieht den Stand. Bei Verlust den Link widerrufen und einen neuen erstellen.</p>
+        {tabelleFehlt && <p className="text-sm rounded border border-amber-400 bg-amber-50 px-3 py-2">Die Link-Tabelle fehlt noch. Bitte die SQL „phase-auftrag-links.sql“ einmalig im Supabase SQL-Editor ausführen.</p>}
+        {linkFehler && <p className="text-sm text-red-600">❌ {linkFehler}</p>}
+        <div className="flex flex-wrap items-center gap-2">
+          <input className="border border-black/30 rounded px-2 py-1.5 bg-white text-black" placeholder="Bezeichnung, z. B. Bauherr Müller" value={linkLabel} onChange={(e) => setLinkLabel(e.target.value)} maxLength={80} />
+          <button className="rounded border border-black/30 px-3 py-1.5 bg-[#f0f0f0] hover:bg-[#e4e4e4] disabled:opacity-50" disabled={linkBusy || tabelleFehlt} onClick={linkAnlegen}>Link erstellen</button>
+        </div>
+        <ul className="space-y-1">
+          {links.map((l) => (
+            <li key={l.id} className="flex flex-wrap items-center justify-between gap-2 rounded border border-black/20 px-3 py-2 text-sm">
+              <span>{l.label || 'Link'} · {datum(l.created_at)} · {l.status === 'aktiv' ? 'aktiv' : l.status === 'abgelaufen' ? 'abgelaufen' : 'widerrufen'}</span>
+              {l.status === 'aktiv' && (
+                <span className="flex gap-2">
+                  <button className="rounded border border-black/30 px-3 py-1 bg-[#f0f0f0] hover:bg-[#e4e4e4]" onClick={async () => { const u = auftragUrl(window.location.origin, l.token); try { await navigator.clipboard.writeText(u); alert('Link kopiert:\n' + u) } catch { prompt('Link bitte kopieren:', u) } }}>Link kopieren</button>
+                  <a className="rounded border border-black/30 px-3 py-1 bg-[#f0f0f0] hover:bg-[#e4e4e4]" href={auftragUrl(window.location.origin, l.token)} target="_blank" rel="noreferrer">Ansehen</a>
+                  <button className="rounded border border-black/30 px-3 py-1 bg-[#f0f0f0] text-red-700 hover:bg-[#e4e4e4]" disabled={linkBusy} onClick={() => linkWiderrufen(l.id)}>Widerrufen</button>
+                </span>
+              )}
+            </li>
+          ))}
+          {links.length === 0 && !tabelleFehlt && <li className="text-sm text-black/70">Noch kein Link.</li>}
+        </ul>
+      </div>
     </section>
   )
 }
