@@ -46,6 +46,7 @@ import AnsichtLinkBox from '@/components/AnsichtLinkBox'
 import StatikerFreigabeBox from '@/components/StatikerFreigabeBox'
 import { FreigabeBadge, useFreigabeStatus } from '@/components/FreigabeBadge'
 import Auftragsstand from '@/components/Auftragsstand'
+import AnhangDialog from '@/components/rechnung/AnhangDialog'
 
 interface Kunde {
   id: string
@@ -175,6 +176,7 @@ export default function KundenDetailPage() {
 
   // Zusatzrechnung
   const [schlussProjectId, setSchlussProjectId] = useState<string | null>(null)
+  const [neueRechnungAnhang, setNeueRechnungAnhang] = useState<{ id: string; invoice_number: string; positions?: any[] } | null>(null)
   const [schlussStart, setSchlussStart] = useState<{ art?: 'abschlag' | 'schluss'; prozent?: number }>({})
   const [zusatzProjectId, setZusatzProjectId] = useState<string | null>(null)
   const [zusatzPos, setZusatzPos] = useState({ ...LEER_POSITION })
@@ -1273,8 +1275,10 @@ export default function KundenDetailPage() {
             customerAddress={[kunde.street, [kunde.zip, kunde.city].filter(Boolean).join(' ')].filter(Boolean).join(', ') || undefined}
             onClose={() => setSchlussProjectId(null)}
             onCreated={() => ladeDaten()}
+            onAnhaengeHinzufuegen={(inv) => setNeueRechnungAnhang(inv as any)}
           />
         )}
+        {neueRechnungAnhang && <AnhangDialog invoiceId={neueRechnungAnhang.id} rechnungsNr={neueRechnungAnhang.invoice_number} positionen={neueRechnungAnhang.positions || []} onClose={() => { setNeueRechnungAnhang(null); ladeDaten() }} />}
 
         {/* ═══════════ TAB: RECHNUNGEN ═══════════ */}
         {tabAktiv === 'rechnungen' && (

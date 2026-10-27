@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { serverErrorResponse } from '@/lib/auth';
-import { TOKEN_MUSTER, mappeLinkStatus } from '@/lib/baustellenmappe';
+import { TOKEN_MUSTER, UUID_MUSTER, mappeLinkStatus } from '@/lib/baustellenmappe';
 import { normalisiereNachtraege, nachtragNummer } from '@/lib/nachtrag';
 import { angebotNettoAusProjekt, berechneAuftragsstand, bezahltBrutto, sortiereRechnungen } from '@/lib/auftragsstand';
 
@@ -33,6 +33,15 @@ export async function GET(req: NextRequest) {
     if (!projekt) return nein();
     const firma = cRes.ok ? (await cRes.json())?.[0] || null : null;
     const rechnungen: any[] = await iRes.json();
+
+    // Freigegebene Anhänge (nur mit Häkchen „Live-Link“, nur bestätigte Uploads, nur Rechnungen dieser Baustelle).
+    // Fehlt die Spalte noch (SQL nicht ausgeführt), erscheint einfach nichts.
+    const anhaenge = new Map<string, { id: string; name: string; groesse: number }[]>();
+    const ids = rechnungen.map((r) => r.id).filter((x) => UUID_MUSTER.test(String(x)));
+    if (ids.length > 0) {
+      const aRes = await fetch(`${url}/rest/v1/invoice_attachments?invoice_id=in.(${ids.join(',')})&fuer_auftraggeber=eq.true&bestaetigt_am=not.is.null&select=id,invoice_id,file_name,size_bytes&order=created_at.asc`, { headers });
+      if (aRes.ok) for (const a of await aRes.json()) anhaenge.set(a.invoice_id, [...(anhaenge.get(a.invoice_id) || []), { id: a.id, name: a.file_name, groesse: Number(a.size_bytes) || 0 }]);
+    }
     const nachtraege = normalisiereNachtraege(projekt.data?.nachtraege);
 
     const stand = berechneAuftragsstand({
@@ -47,7 +56,7 @@ export async function GET(req: NextRequest) {
       rechnungen: sortiereRechnungen(rechnungen).map((r) => ({
         id: r.id, nummer: r.invoice_number, art: r.invoice_type || 'standard', status: r.status, datum: r.invoice_date, faellig: r.due_date,
         leistungsdatum: r.leistungsdatum, geruestNr: r.geruest_nr, netto: Number(r.net_amount), steuersatz: Number(r.tax_rate), steuer: Number(r.tax_amount),
-        brutto: Number(r.gross_amount), bezahlt: bezahltBrutto(r), positionen: Array.isArray(r.positions) ? r.positions : [], bemerkung: r.notes || null,
+        brutto: Number(r.gross_amount), bezahlt: bezahltBrutto(r), positionen: Array.isArray(r.positions) ? r.positions : [], bemerkung: r.notes || null, anhaenge: anhaenge.get(r.id) || [],
       })),
       nachtraege: nachtraege.map((n) => ({ nummer: nachtragNummer(n), datum: n.datum, titel: n.titel, notiz: n.grund, betrag: n.betrag, status: n.status, art: n.art || null })),
     }, { headers: { 'Cache-Control': 'no-store' } });

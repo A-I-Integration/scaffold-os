@@ -29,12 +29,14 @@ interface Props {
   startProzent?: number;
   onClose: () => void;
   onCreated: (invoice: Invoice) => void;
+  /** Wenn gesetzt, erscheint die Option „Danach Dokumente hinzufügen“; die Seite öffnet dann den Anhänge-Dialog zur neuen Rechnung. */
+  onAnhaengeHinzufuegen?: (invoice: Invoice) => void;
 }
 
 const eur = (n: number) => n.toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' €';
 const inputCls = 'w-full px-3 py-2 bg-white border border-black/10 rounded-lg text-sm text-[#1d1d1f] focus:outline-none focus:border-[#e8590c]';
 
-export default function SchlussrechnungDialog({ projectId, customerName, customerAddress, daten, startArt, startProzent, onClose, onCreated }: Props) {
+export default function SchlussrechnungDialog({ projectId, customerName, customerAddress, daten, startArt, startProzent, onClose, onCreated, onAnhaengeHinzufuegen }: Props) {
   const [laden, setLaden] = useState(true);
   const [fehlerLaden, setFehlerLaden] = useState('');
   const [projektDaten, setProjektDaten] = useState<any>(null);
@@ -59,6 +61,7 @@ export default function SchlussrechnungDialog({ projectId, customerName, custome
   const [geruestNr, setGeruestNr] = useState('');
   const [leistungsdatum, setLeistungsdatum] = useState('');
   const [bemerkung, setBemerkung] = useState('');
+  const [danachAnhaenge, setDanachAnhaenge] = useState(false);
 
   const [laeuft, setLaeuft] = useState(false);
   const [angelegt, setAngelegt] = useState(false);
@@ -216,6 +219,7 @@ export default function SchlussrechnungDialog({ projectId, customerName, custome
         }
       }
       onCreated(json.invoice);
+      if (danachAnhaenge && onAnhaengeHinzufuegen && json.invoice?.id) onAnhaengeHinzufuegen(json.invoice);
       if (warnung) { setAngelegt(true); setFehler(warnung); return; }
       onClose();
     } catch (e: any) {
@@ -400,6 +404,12 @@ export default function SchlussrechnungDialog({ projectId, customerName, custome
                   <input type="date" value={leistungsdatum} onChange={(e) => setLeistungsdatum(e.target.value)} className={inputCls} />
                 </div>
               </div>
+              {onAnhaengeHinzufuegen && (
+                <label className="flex items-center gap-2 text-xs text-[#1d1d1f]">
+                  <input type="checkbox" checked={danachAnhaenge} onChange={(e) => setDanachAnhaenge(e.target.checked)} />
+                  Nach dem Anlegen Dokumente hinzufügen (Bilder, PDF, Excel, E-Mails zu Zusatzvereinbarungen)
+                </label>
+              )}
               <div>
                 <label className="block text-[11px] text-[#86868b] mb-1">Bemerkungen (zusätzliche Vereinbarungen, erscheinen auf der Rechnung)</label>
                 <textarea value={bemerkung} onChange={(e) => setBemerkung(e.target.value)} rows={3} maxLength={1500} placeholder="z. B. Schultertransport aus Grund X, war nicht vorgesehen. Alu-Podesttreppe unter 5 m aus sicherheitstechnischen Gründen vereinbart." className={inputCls} />

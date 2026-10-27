@@ -10,7 +10,7 @@ import { useParams } from 'next/navigation';
 // ============================================================
 
 interface Pos { bezeichnung?: string; menge?: number | string; einheit?: string; einzelpreis?: number | string }
-interface Rech { id: string; nummer: string; art: string; status: string; datum: string; faellig: string | null; leistungsdatum: string | null; geruestNr: string | null; netto: number; steuersatz: number; steuer: number; brutto: number; bezahlt: number; positionen: Pos[]; bemerkung: string | null }
+interface Rech { id: string; nummer: string; art: string; status: string; datum: string; faellig: string | null; leistungsdatum: string | null; geruestNr: string | null; netto: number; steuersatz: number; steuer: number; brutto: number; bezahlt: number; positionen: Pos[]; bemerkung: string | null; anhaenge?: { id: string; name: string; groesse: number }[] }
 interface Nacht { nummer: string; datum: string; titel: string; notiz: string; betrag: number; status: string; art: string | null }
 interface Daten {
   projekt: { name: string; adresse: string | null }
@@ -104,6 +104,16 @@ export default function AuftragPage() {
                       <p className="text-sm text-right tabular-nums">Netto {eur(r.netto)} · USt {r.steuersatz.toLocaleString('de-DE')} % {eur(r.steuer)} · <b>Brutto {eur(r.brutto)}</b></p>
                       {r.faellig && <p className="text-sm">Fällig am {datum(r.faellig)}</p>}
                       {r.bemerkung && <p className="text-sm whitespace-pre-line">{r.bemerkung}</p>}
+                      {(r.anhaenge?.length ?? 0) > 0 && (
+                        <div>
+                          <p className="text-sm font-semibold">Dokumente zu dieser Rechnung</p>
+                          <ul className="text-sm list-disc pl-5">
+                            {r.anhaenge!.map((a) => (
+                              <li key={a.id}><a className="underline" href={`/api/public/auftrag/anhang?token=${encodeURIComponent(token)}&id=${a.id}`} target="_blank" rel="noreferrer">{a.name}</a></li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
                       <a href={`/api/public/auftrag/rechnung?token=${encodeURIComponent(token)}&id=${r.id}`} target="_blank" rel="noreferrer" className="inline-block rounded border border-black/30 px-4 py-2 bg-[#f0f0f0] font-semibold hover:bg-[#e4e4e4]">Rechnung als PDF öffnen</a>
                     </div>
                   )}
