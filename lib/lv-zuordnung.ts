@@ -45,7 +45,7 @@ export const LV_VORLAGE_WUPPERTAL: LvVorlagePos[] = [
   { pos: '02.8', titel: 'Vorhaltung zur Vorposition 02.7', einheit: 'Wo', quelle: 'vorh-schutzdach' },
   { pos: '02.9', titel: 'Vertikale Bekleidung der Gerüste 1. BA ca. 21,5 m bis ca. 32 m', einheit: 'Stück', menge: 1 },
   { pos: '02.10', titel: 'Vorhaltung zur Vorposition 02.9', einheit: 'Wo' },
-  { pos: '02.11', titel: 'Vertikale Bekleidung der Gerüste 2. BA bis ca. 17,5 m', einheit: 'Stück', menge: 1 },
+  { pos: '02.11', titel: 'Vertikale Bekleidung der Gerüste 2. BA bis ca. 21,5 m', einheit: 'Stück', menge: 1 },
   { pos: '02.12', titel: 'Vorhaltung zur Vorposition 02.11', einheit: 'Wo' },
   { pos: '02.13', titel: 'Gerüsttreppenturm 1. BA, H = ca. 32 m', einheit: 'Stück', menge: 1, quelle: 'treppe' },
   { pos: '02.14', titel: 'Vorhaltung zur Vorposition 02.13', einheit: 'Wo', quelle: 'vorh-treppe' },

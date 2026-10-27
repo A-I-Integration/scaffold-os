@@ -518,7 +518,7 @@ export function erzeugeLeistungsverzeichnis(quelle: LvQuelle, e: LvEingaben): Le
     b1.add('Beantragung öffentlich-rechtliche Genehmigung', [...LV_TEXTE.genehmigung, OHNE_CAD], 1, 'Stck', 0)
     b1.add('Einrichten Halteverbotszone', [...LV_TEXTE.halteverbot, OHNE_CAD], 1, 'Stck', 0)
     const vs = b1.add('Verkehrssicherung', [...LV_TEXTE.verkehrssicherung, OHNE_CAD], 1, 'Stck', 0)
-    vorh(b1, vs.nr, 'Verkehrssicherung', 0, 'm²/Wo', 0)
+    vorh(b1, vs.nr, 'Verkehrssicherung', 0, 'StckWo', 0)
 
     // Titel 02 – Gerüstarbeiten Turmschaft
     const b2 = baue('02')
@@ -565,7 +565,7 @@ export function erzeugeLeistungsverzeichnis(quelle: LvQuelle, e: LvEingaben): Le
     const kd1 = b2.add('Vertikale Bekleidung der Gerüste 1. BA ca. 21,5m bis ca. 32m', ['Vertikale Bekleidung der Außenachse des Gerüstes mit Kederplane zur Eindämmung der Staubentwicklung, 1. BA.', ...LV_TEXTE.kederplane, (kederplaneFlaecheM2 > 0 ? `Aus dem CAD: ${de(kederplaneFlaecheM2, 2)} m² Plane (Höhenbereich ${de(model.building.geruestOptionen?.kederplane?.vonM ?? 0, 1)}–${de(model.building.geruestOptionen?.kederplane?.bisM ?? 0, 1)} m). Preis bitte eintragen.` : OHNE_CAD)], 1, 'Stück', 0)
     vorh(b2, kd1.nr, 'Vertikale Bekleidung 1. BA', 0, 'Wo', 0)
     const kederplane2M2 = ba2 ? r2(ba2.model.components3D.filter((c) => c.type === 'sheeting').reduce((sum, c) => sum + Math.abs(c.scale[0]) * Math.abs(c.scale[1]), 0)) : 0
-    const kd2 = b2.add('Vertikale Bekleidung der Gerüste 2. BA bis ca. 17,5m', ['Vertikale Bekleidung der Außenachse des Gerüstes mit Kederplane zur Eindämmung der Staubentwicklung, 2. BA.', ...LV_TEXTE.kederplane, (kederplane2M2 > 0 ? `Aus dem CAD (2. BA, bis ${hoeheBa2Text} m gekappt): ${de(kederplane2M2, 2)} m² Plane. Preis bitte eintragen.` : OHNE_CAD)], 1, 'Stück', 0)
+    const kd2 = b2.add(`Vertikale Bekleidung der Gerüste 2. BA bis ca. ${de(hBa2 > 0 ? hBa2 : 21.5, 1)} m`, ['Vertikale Bekleidung der Außenachse des Gerüstes mit Kederplane zur Eindämmung der Staubentwicklung, 2. BA.', ...LV_TEXTE.kederplane, (kederplane2M2 > 0 ? `Aus dem CAD (2. BA, bis ${hoeheBa2Text} m gekappt): ${de(kederplane2M2, 2)} m² Plane. Preis bitte eintragen.` : OHNE_CAD)], 1, 'Stück', 0)
     vorh(b2, kd2.nr, 'Vertikale Bekleidung 2. BA', 0, 'Wo', 0)
     const tr1 = b2.add(`Gerüsttreppenturm 1. BA, H = ca. ${de(hoeheText, 0)} m`, [...LV_TEXTE.treppenturm, `Gesamthöhe: bis ca. ${de(hoeheText, 2)} m, 1. BA.`, 'Preis aus dem CAD (Aufbau + Abbau Treppenaufgang).'], 1, 'Stück',
       treppen > 0 ? cent(epAufbau('treppe', treppen) * treppen + epAbbau('treppe', treppen) * treppen) : 0)
