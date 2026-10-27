@@ -7,6 +7,7 @@ import { uploadVertragsdokument } from '@/lib/vertrag-upload-client'
 import { KATEGORIEN, mappeUrl } from '@/lib/baustellenmappe'
 import Verankerungsprotokoll from '@/components/Verankerungsprotokoll'
 import Pruefschild from '@/components/Pruefschild'
+import Uebergabeprotokoll from '@/components/Uebergabeprotokoll'
 
 // ============================================================
 // SCAFFOLD OS – Baustellenmappe (Reiter in der Baustelle)
@@ -161,6 +162,7 @@ export default function Baustellenmappe({ projectId, projektName, adresse }: { p
       </section>
       <Verankerungsprotokoll projectId={projectId} onAbgelegt={() => void lade()} />
       <Pruefschild projectId={projectId} onAbgelegt={() => void lade()} />
+      <Uebergabeprotokoll projectId={projectId} onAbgelegt={() => void lade()} />
     </div>
   )
 }
