@@ -175,6 +175,7 @@ export default function KundenDetailPage() {
 
   // Zusatzrechnung
   const [schlussProjectId, setSchlussProjectId] = useState<string | null>(null)
+  const [schlussStart, setSchlussStart] = useState<{ art?: 'abschlag' | 'schluss'; prozent?: number }>({})
   const [zusatzProjectId, setZusatzProjectId] = useState<string | null>(null)
   const [zusatzPos, setZusatzPos] = useState({ ...LEER_POSITION })
   const [zusatzNotiz, setZusatzNotiz] = useState('')
@@ -1255,27 +1256,30 @@ export default function KundenDetailPage() {
                 <p className="font-semibold text-[#1d1d1f] flex items-center gap-1.5"><FileSignature className="h-4 w-4 text-[#e8590c]" /> {project.name || 'Unbenanntes Projekt'}</p>
                 <NachtraegeBlock project={project} kunde={kunde} />
                 <ZwischenaufmassBlock project={project} />
-                <button onClick={() => setSchlussProjectId(project.id)} className="flex items-center gap-1.5 text-xs text-[#e8590c] font-semibold hover:underline">
+                <button onClick={() => { setSchlussStart({}); setSchlussProjectId(project.id) }} className="flex items-center gap-1.5 text-xs text-[#e8590c] font-semibold hover:underline">
                   <FileText className="h-3.5 w-3.5" /> Schlussrechnung erstellen (nach Angebot oder Aufmaß, mit Nachträgen)
                 </button>
               </div>
             ))}
-            {schlussProjectId && (
-              <SchlussrechnungDialog
-                projectId={schlussProjectId}
-                customerName={kunde.name}
-                customerAddress={[kunde.street, [kunde.zip, kunde.city].filter(Boolean).join(' ')].filter(Boolean).join(', ') || undefined}
-                onClose={() => setSchlussProjectId(null)}
-                onCreated={() => ladeDaten()}
-              />
-            )}
           </div>
+        )}
+
+        {schlussProjectId && (
+          <SchlussrechnungDialog
+            projectId={schlussProjectId}
+            startArt={schlussStart.art}
+            startProzent={schlussStart.prozent}
+            customerName={kunde.name}
+            customerAddress={[kunde.street, [kunde.zip, kunde.city].filter(Boolean).join(' ')].filter(Boolean).join(', ') || undefined}
+            onClose={() => setSchlussProjectId(null)}
+            onCreated={() => ladeDaten()}
+          />
         )}
 
         {/* ═══════════ TAB: RECHNUNGEN ═══════════ */}
         {tabAktiv === 'rechnungen' && (
           <div className="space-y-6">
-            {baustelle && <Auftragsstand project={baustelle} invoices={sichtInvoices as any} />}
+            {baustelle && <Auftragsstand project={baustelle} invoices={sichtInvoices as any} onRechnungStellen={(art, prozent) => { setSchlussStart({ art, prozent }); setSchlussProjectId(baustelle.id) }} />}
             {/* Offene Posten */}
             <div className="bg-white rounded-xl border border-black/10 overflow-hidden">
               <button onClick={() => setOffenePostenOpen(!offenePostenOpen)} className="w-full px-5 py-3 flex items-center justify-between text-sm font-semibold text-[#1d1d1f] hover:bg-black/5 transition-colors">
