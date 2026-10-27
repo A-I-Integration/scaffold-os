@@ -15,6 +15,8 @@ import { Download, FileText, Send, Link2, Pencil, PlusCircle, Scissors, ReceiptT
 import { Titelleiste, Menueband, BandGruppe, BandKnopf, BaumKnoten, DokumentReiter, Statusleiste, Aufgabenbereich, WIN } from '@/components/win/Win'
 import { ENTSCHEIDUNG_LABEL } from '@/lib/rechnung-pruefung'
 import AnhangDialog from '@/components/rechnung/AnhangDialog'
+import PositionDetails from '@/components/rechnung/PositionDetails'
+import { aktualisierePosition } from '@/lib/rechnung-position'
 import { lokalesDatumIso, datumPlusTage } from '@/lib/datum'
 
 type Tab = 'rechnung' | 'version' | 'bestellwert' | 'teilabbau' | 'gutschrift' | 'zahlung' | 'verlauf'
@@ -36,10 +38,14 @@ interface Pruefung { id: string; entscheidung: string; geprueft_von: string | nu
 interface Mail { id: string; to_email: string; subject: string; sent_at: string }
 
 function PositionenEditor({ positionen, setPositionen }: { positionen: Position[]; setPositionen: (p: Position[]) => void }) {
+  const [detail, setDetail] = useState<Record<number, boolean>>({})
   const set = (i: number, k: keyof Position, v: string) =>
-    setPositionen(positionen.map((p, n) => (n === i ? { ...p, [k]: k === 'bezeichnung' || k === 'einheit' ? v : zahl(v) } : p)))
+    setPositionen(positionen.map((p, n) => (n === i ? aktualisierePosition(p, k, v) : p)))
   return (
     <div className="space-y-2">
+      <datalist id="geruest-ids-akte">
+        {Array.from(new Set(positionen.map((x) => x.geruestId).filter((x): x is string => !!x))).map((g) => <option key={g} value={g} />)}
+      </datalist>
       {positionen.map((p, i) => (
         <div key={i} className="rounded-xl border border-black/10 p-2 space-y-1.5">
           <input className={feld} placeholder="Bezeichnung" value={p.bezeichnung} onChange={(e) => set(i, 'bezeichnung', e.target.value)} />
@@ -49,7 +55,16 @@ function PositionenEditor({ positionen, setPositionen }: { positionen: Position[
             <input className={feld} type="number" step="0.01" value={p.einzelpreis} onChange={(e) => set(i, 'einzelpreis', e.target.value)} aria-label="Einzelpreis" />
             <button type="button" onClick={() => setPositionen(positionen.filter((_, n) => n !== i))} className="text-red-600 text-sm px-1" aria-label="Position entfernen">✕</button>
           </div>
-          <p className="text-right text-xs text-[#6e6e73]">{fmtEur(p.menge * p.einzelpreis)} €</p>
+          <div className="flex items-center justify-between">
+            <button type="button" onClick={() => setDetail((d) => ({ ...d, [i]: !d[i] }))} className="text-xs text-blue-600">{detail[i] ? 'Details ausblenden' : 'Details (Art, Maße, Gerüst-ID, Faktor)'}</button>
+            <p className="text-xs text-[#6e6e73]">{fmtEur(p.menge * p.einzelpreis)} €</p>
+          </div>
+          {detail[i] && (
+            <div className="grid grid-cols-12 gap-2">
+              <PositionDetails p={p} geruestListeId="geruest-ids-akte" onFeld={(f, w) => set(i, f as keyof Position, w)}
+                onMenge={(menge, einheit) => setPositionen(positionen.map((x, n) => (n === i ? { ...x, menge, einheit } : x)))} />
+            </div>
+          )}
         </div>
       ))}
       <button type="button" onClick={() => setPositionen([...positionen, { ...LEER }])} className="text-sm text-[#e8590c] font-medium">+ Position</button>

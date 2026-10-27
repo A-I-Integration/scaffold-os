@@ -37,3 +37,32 @@ describe('positionDetailZeilen', () => {
     expect(positionDetailZeilen({ art: 'sonstiges' })).toEqual([])
   })
 })
+
+import { aktualisierePosition, mengenVorschlaege } from '@/lib/rechnung-position'
+
+describe('aktualisierePosition', () => {
+  it('rechnet Einzelpreis aus Listenpreis × Faktor und entfernt leere Felder', () => {
+    let p: any = { bezeichnung: 'Modul', menge: 10, einheit: 'm²', einzelpreis: 0 }
+    p = aktualisierePosition(p, 'listenpreis', '12,50')
+    expect(p.einzelpreis).toBe(12.5)
+    p = aktualisierePosition(p, 'faktorProzent', '80')
+    expect(p.einzelpreis).toBe(10)
+    p = aktualisierePosition(p, 'art', 'konsolen'); expect(p.art).toBe('konsolen')
+    p = aktualisierePosition(p, 'art', ''); expect('art' in p).toBe(false)
+    p = aktualisierePosition(p, 'laengeM', '12,5'); expect(p.laengeM).toBe(12.5)
+    expect(p.bezeichnung).toBe('Modul')
+  })
+})
+
+describe('mengenVorschlaege', () => {
+  it('schlägt Fläche und Volumen vor, übernimmt nichts selbst', () => {
+    const v = mengenVorschlaege({ laengeM: 12, breiteM: 2, hoeheM: 6 })
+    expect(v.map((x) => x.einheit)).toEqual(['m²', 'm³'])
+    expect(v[0].menge).toBe(72)
+    expect(v[1].menge).toBe(144)
+  })
+  it('ohne Maße kein Vorschlag, nur Länge → Meter', () => {
+    expect(mengenVorschlaege({})).toEqual([])
+    expect(mengenVorschlaege({ laengeM: 8 })).toEqual([{ label: 'Länge = 8 m', menge: 8, einheit: 'm' }])
+  })
+})
