@@ -11,7 +11,7 @@ import autoTable from 'jspdf-autotable';
 // ============================================================
 
 import type { PositionArt } from './rechnung-position';
-import { positionDetailZeilen } from './rechnung-position';
+import { positionDetailZeilen, regieSummeText } from './rechnung-position';
 
 export interface Position {
   bezeichnung: string;
@@ -212,6 +212,12 @@ export function generateInvoicePDF(inv: Invoice) {
       margin: { left: 14, right: 14 },
     });
     cy = (doc as any).lastAutoTable.finalY + 12;
+  }
+  const regieText = regieSummeText(inv.positions);
+  if (regieText) {
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(8); doc.setTextColor(71, 85, 105);
+    doc.text(regieText, 14, cy - 4);
+    cy += 6;
   }
   if (cy > 220) { doc.addPage(); cy = 30; }
 

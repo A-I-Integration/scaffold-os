@@ -85,7 +85,8 @@ const eur = (n: number) => n.toLocaleString('de-DE', { minimumFractionDigits: 2,
 export function positionDetailZeilen(p: Partial<StrukturPosition>): string[] {
   const z: string[] = []
   if (p.geruestId) z.push(`Gerüst: ${p.geruestId}`)
-  if (p.art && p.art !== 'sonstiges') z.push(POSITION_ART_LABEL[p.art])
+  // Art nur nennen, wenn die Bezeichnung sie nicht schon ist (sonst steht „Aufbau“ doppelt untereinander)
+  if (p.art && p.art !== 'sonstiges' && String(p.bezeichnung || '').trim().toLowerCase() !== POSITION_ART_LABEL[p.art].toLowerCase()) z.push(POSITION_ART_LABEL[p.art])
   const maße = [p.laengeM, p.breiteM, p.hoeheM].filter((x): x is number => typeof x === 'number' && x > 0)
   if (maße.length) {
     const namen = [p.laengeM ? 'L' : '', p.breiteM ? 'B' : '', p.hoeheM ? 'H' : ''].filter(Boolean).join('×')
@@ -102,12 +103,15 @@ export function positionDetailZeilen(p: Partial<StrukturPosition>): string[] {
 
 // ─── Bearbeiten im Formular (gemeinsam für „Neue Rechnung“, Rechnungsdialog und Rechnungsakte) ───
 
+const EINHEIT_ZU_ART: Record<string, string> = { regie: 'Std.', miete: 'Tag' }
 const TEXTFELDER = ['bezeichnung', 'einheit', 'art', 'mitarbeiter', 'taetigkeit', 'geruestId', 'bemerkung']
 
 /** Ändert ein Feld einer Position. Listenpreis × Faktor ergibt den Einzelpreis; leere Textfelder werden entfernt. Gibt eine neue Position zurück. */
 export function aktualisierePosition<T extends Partial<StrukturPosition>>(p: T, feld: keyof StrukturPosition, wert: string): T {
   const neu: any = { ...p, [feld]: TEXTFELDER.includes(feld) ? wert : Number(String(wert).replace(',', '.')) || 0 }
   if ((feld === 'art' || feld === 'geruestId' || feld === 'bemerkung') && !wert) delete neu[feld]
+  // Passende Einheit vorschlagen, solange noch die Standardeinheit steht (Stundenlohn → Std., Miete → Tag)
+  if (feld === 'art' && (!neu.einheit || neu.einheit === 'Stk.') && EINHEIT_ZU_ART[wert]) neu.einheit = EINHEIT_ZU_ART[wert]
   if ((feld === 'listenpreis' || feld === 'faktorProzent') && Number(neu.listenpreis) > 0) {
     neu.einzelpreis = preisMitFaktor(Number(neu.listenpreis), Number(neu.faktorProzent) || 100)
   }
@@ -127,4 +131,21 @@ export function mengenVorschlaege(p: Partial<StrukturPosition>): MengenVorschlag
   if (l > 0 && b > 0 && !(h > 0)) v.push({ label: `L × B = ${kommaZahl(rund(l * b))} m²`, menge: rund(l * b), einheit: 'm²' })
   if (l > 0 && !(b > 0) && !(h > 0)) v.push({ label: `Länge = ${kommaZahl(rund(l))} m`, menge: rund(l), einheit: 'm' })
   return v
+}
+
+/** Summe der Stundenlohn-Positionen (Art „Stundenlohn“): Stunden und Netto. Für die Zusammenfassung auf Rechnung und Prüfseite. */
+export function regieSumme(positionen: Partial<StrukturPosition>[]): { anzahl: number; stunden: number; netto: number } {
+  let anzahl = 0, stunden = 0, netto = 0
+  for (const p of positionen || []) {
+    if (p?.art !== 'regie') continue
+    const m = Number(p.menge) || 0, e = Number(p.einzelpreis) || 0
+    anzahl++; stunden += m; netto += m * e
+  }
+  return { anzahl, stunden: rund(stunden), netto: rund(netto) }
+}
+
+/** Zeile für die Zusammenfassung, oder null bei weniger als zwei Stundenlohn-Positionen (sonst doppelt zur Position selbst). */
+export function regieSummeText(positionen: Partial<StrukturPosition>[]): string | null {
+  const r = regieSumme(positionen)
+  return r.anzahl >= 2 ? `Stundenlohnarbeiten gesamt: ${kommaZahl(r.stunden)} Std. · ${eur(r.netto)} netto` : null
 }
