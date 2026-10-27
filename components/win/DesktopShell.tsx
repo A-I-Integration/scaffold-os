@@ -32,6 +32,7 @@ const E: Record<string, Eintrag> = {
   traggeruest: { href: '/cad/traggeruest', label: 'Traggerüst-Anfrage', icon: Box, roles: BAU },
   gaeb: { href: '/gaeb', label: 'GAEB', icon: FileText, roles: ['admin', 'disponent', 'mitarbeiter'] },
   dokumente: { href: '/dokumente', label: 'Dokumente', icon: FolderOpen, roles: BUERO },
+  arbeitsschutz: { href: '/arbeitsschutz', label: 'Arbeitsschutz', icon: FolderOpen, roles: BUERO },
   dokumentation: { href: '/dokumentation', label: 'Dokumentation', icon: ClipboardList },
   nu: { href: '/nachunternehmer', label: 'Nachunternehmer', icon: Handshake, roles: BUERO },
   rechnungen: { href: '/rechnungen', label: 'Rechnungen', icon: FileText, roles: BUERO },
@@ -59,7 +60,7 @@ const E: Record<string, Eintrag> = {
 // Jede Seite steht in genau einem Bereich (keine Doppelungen), geordnet nach dem Weg eines Auftrags:
 // Kunde → Aufmaß/CAD → Rechnung → Einsatzplanung → Lager → Stammdaten
 const BEREICHE: Bereich[] = [
-  { key: 'projekt', label: 'Projektverwaltung', icon: Briefcase, eintraege: [E.dashboard, E.kunden, E.aufmass, E.cad, E.bruecke, E.traggeruest, E.gaeb, E.dokumente, E.dokumentation] },
+  { key: 'projekt', label: 'Projektverwaltung', icon: Briefcase, eintraege: [E.dashboard, E.kunden, E.aufmass, E.cad, E.bruecke, E.traggeruest, E.gaeb, E.dokumente, E.arbeitsschutz, E.dokumentation] },
   { key: 'kaufm', label: 'Kaufmännische Verwaltung', icon: Calculator, eintraege: [E.rechnungen, E.neueRechnung, E.zahlung, E.miete, E.email] },
   { key: 'dispo', label: 'Disposition', icon: Truck, eintraege: [E.planung, E.wochen, E.touren, E.routen, E.kolonnen, E.zeit, E.meineTouren] },
   { key: 'lager', label: 'Lager', icon: Warehouse, eintraege: [E.lager, E.prognose, E.katalog] },

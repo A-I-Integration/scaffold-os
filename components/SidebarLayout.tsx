@@ -73,6 +73,7 @@ const NAV_GROUPS: NavGroup[] = [
       { href: '/zahlungsabgleich', label: 'Zahlungsabgleich', icon: CreditCard, roles: ['admin', 'disponent'] },
       { href: '/mietabrechnung', label: 'Mietabrechnung', icon: Euro,          roles: ['admin', 'disponent'] },
       { href: '/dokumente',     label: 'Dokumente',      icon: FolderOpen,    roles: ['admin', 'disponent'] },
+      { href: '/arbeitsschutz', label: 'Arbeitsschutz',  icon: FolderOpen,    roles: ['admin', 'disponent'] },
       { href: '/nachunternehmer', label: 'Nachunternehmer', icon: Handshake,   roles: ['admin', 'disponent'] },
     ],
   },

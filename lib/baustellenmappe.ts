@@ -18,8 +18,14 @@ export const KATEGORIEN = [
   'Verankerungsprotokoll',
   'Statik / Aufbau- und Verwendungsanleitung',
   'Genehmigung / Erlaubnis',
+  'Gefährdungsbeurteilung',
+  'Betriebsanweisung / Unterweisung',
+  'Pflichtenübertragung',
   'Sonstiges',
 ] as const
+
+// Kategorien, die im Reiter „Arbeitsschutz“ (Firmen-Ablage) angeboten werden
+export const ARBEITSSCHUTZ_KATEGORIEN = ['Gefährdungsbeurteilung', 'Betriebsanweisung / Unterweisung', 'Pflichtenübertragung', 'Genehmigung / Erlaubnis', 'Sonstiges'] as const
 
 export interface MediaMeta { kind?: string; bezeichnung?: string; mappe?: boolean; kategorie?: string; vorlage?: boolean }
 export interface MediaRow {

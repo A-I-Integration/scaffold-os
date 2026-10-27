@@ -42,6 +42,13 @@ export async function GET(req: NextRequest) {
   const r = await rolle();
   if (!r || !ROLLEN.includes(r)) return verboten();
   try {
+    // ?vorlagen=1 → nur die Firmen-Ablage (Reiter Arbeitsschutz), ohne Baustelle
+    if (req.nextUrl.searchParams.get('vorlagen') === '1') {
+      const vRes = await fetch(`${url}/rest/v1/project_media?project_id=is.null&select=id,project_id,file_name,file_type,created_at,storage_path,metadata&order=created_at.desc&limit=2000`, { headers });
+      if (!vRes.ok) throw new Error(await vRes.text());
+      const rows: MediaRow[] = (await vRes.json()).filter(istVorlage);
+      return NextResponse.json({ success: true, vorlagen: rows.map((m) => ({ id: m.id, name: m.file_name, typ: m.file_type, datum: m.created_at, url: BUCKET_URL + m.storage_path, bezeichnung: m.metadata?.bezeichnung || null, kategorie: m.metadata?.kategorie || null })) });
+    }
     const projectId = req.nextUrl.searchParams.get('project_id') || '';
     if (!UUID_MUSTER.test(projectId)) return ungueltig('project_id fehlt oder ist ungültig.');
     const [mRes, vRes, lRes] = await Promise.all([

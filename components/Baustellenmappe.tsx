@@ -8,6 +8,7 @@ import { KATEGORIEN, mappeUrl } from '@/lib/baustellenmappe'
 import Verankerungsprotokoll from '@/components/Verankerungsprotokoll'
 import Pruefschild from '@/components/Pruefschild'
 import Uebergabeprotokoll from '@/components/Uebergabeprotokoll'
+import Gefaehrdungsbeurteilung from '@/components/Gefaehrdungsbeurteilung'
 
 // ============================================================
 // SCAFFOLD OS – Baustellenmappe (Reiter in der Baustelle)
@@ -163,6 +164,7 @@ export default function Baustellenmappe({ projectId, projektName, adresse }: { p
       <Verankerungsprotokoll projectId={projectId} onAbgelegt={() => void lade()} />
       <Pruefschild projectId={projectId} onAbgelegt={() => void lade()} />
       <Uebergabeprotokoll projectId={projectId} onAbgelegt={() => void lade()} />
+      <Gefaehrdungsbeurteilung projectId={projectId} onAbgelegt={() => void lade()} />
     </div>
   )
 }
