@@ -45,6 +45,7 @@ const ROLE_ACCESS: Record<string, string[]> = {
   // CAD (inkl. /cad/bruecke, /cad/traggeruest): Admin, Disposition, Bauleiter (Entscheidung 13.10.)
   '/cad':              ['admin', 'disponent', 'bauleiter'],
   '/kunden':           ['admin', 'disponent'],
+  '/arbeitsschutz':    ['admin', 'disponent'],
   '/rechnungen':       ['admin', 'disponent'],
   '/zahlungsabgleich': ['admin', 'disponent'],
   '/mietabrechnung':   ['admin', 'disponent'],
