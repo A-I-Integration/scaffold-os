@@ -203,8 +203,8 @@ export default function LvDialog({ model, materials, aufbauStunden, abbauStunden
           <button type='button' onClick={onClose} className='text-sm text-[#86868b] hover:text-[#1d1d1f]'>Schließen ✕</button>
         </div>
 
-        <div className='grid md:grid-cols-[300px_1fr] gap-0 overflow-hidden flex-1 min-h-0'>
-          <div className='p-4 space-y-3 overflow-y-auto border-r border-black/10'>
+        <div className='grid md:grid-cols-[300px_minmax(0,1fr)] gap-0 overflow-hidden flex-1 min-h-0'>
+          <div className='p-4 space-y-3 overflow-y-auto overflow-x-hidden [&_input]:min-w-0 [&_select]:min-w-0 [&_label]:min-w-0 border-r border-black/10'>
             <div className='text-[11px] font-semibold uppercase text-[#86868b]'>Aufbau des LV</div>
             <select className={feld} value={e.stil} onChange={(ev) => setze({ stil: ev.target.value as LvStil })}>
               <option value='getrennt'>Aufbau · Vorhaltung · Abbau getrennt</option>
