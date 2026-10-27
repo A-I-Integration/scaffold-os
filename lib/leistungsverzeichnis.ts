@@ -129,6 +129,8 @@ export interface LvEingaben {
   faktorUeberschreibung?: Record<string, number>
   /** Stil „statiker“: Höhe des 2. Bauabschnitts in m (Rückbau); das CAD wird darauf gekappt. Leer = 21,5 m, 0 = Positionen bleiben leer */
   hoeheBa2M?: number
+  /** Stil „statiker“: Überlappung der Plane des 1. BA nach unten in m (Vorgabe des Architekten; leer = 0). Die Plane des 1. BA beginnt dann bei Höhe 2. BA minus Überlappung */
+  planeUeberlappungM?: number
   /** Stil „statiker“: Standzeit des 2. Bauabschnitts in Wochen (leer/0 = in der Tabelle eintragen) */
   standzeitBa2Wochen?: number
   /** Standardpreise aus der Datenpflege für Positionen ohne CAD-Wert (füllen nur, wo sonst 0 € stehen würde) */
@@ -562,7 +564,13 @@ export function erzeugeLeistungsverzeichnis(quelle: LvQuelle, e: LvEingaben): Le
     const sdAuf = sdN > 0 ? epAufbau('schutzdach', schutzdachM) * schutzdachM + epAbbau('schutzdach', schutzdachM) * schutzdachM : 0
     const sdp = b2.add('Schutzdächer Zugang Eingang', [...LV_TEXTE.schutzdach, (sdN > 0 ? `Aus dem CAD: ${sdN > 1 ? `${sdN} Schutzdächer` : '1 Schutzdach'}, je ca. ${de(r2(schutzdachM / sdN), 2)} m × ${de(r2(Math.abs(dachRoh[0].scale[2])), 2)} m (zusammen ${de(schutzdachM, 2)} m Länge). ` : '') + 'Anzahl und Lage aus dem CAD sind ein Vorschlag (unten vorne), der Eingang ist im Modell nicht bekannt.'], sdN, 'Stück', sdN > 0 ? cent(sdAuf / sdN) : 0)
     vorh(b2, sdp.nr, 'Schutzdächer', miet(mat.schutzdach), 'Wo', sdN > 0 ? woGesamt : 0)
-    const kd1 = b2.add('Vertikale Bekleidung der Gerüste 1. BA ca. 21,5m bis ca. 32m', ['Vertikale Bekleidung der Außenachse des Gerüstes mit Kederplane zur Eindämmung der Staubentwicklung, 1. BA.', ...LV_TEXTE.kederplane, (kederplaneFlaecheM2 > 0 ? `Aus dem CAD: ${de(kederplaneFlaecheM2, 2)} m² Plane (Höhenbereich ${de(model.building.geruestOptionen?.kederplane?.vonM ?? 0, 1)}–${de(model.building.geruestOptionen?.kederplane?.bisM ?? 0, 1)} m). Preis bitte eintragen.` : OHNE_CAD)], 1, 'Stück', 0)
+    // Plane: 1. BA nur oberhalb der Teilungshöhe (minus Überlappung), 2. BA darunter – so wird die Fläche nicht doppelt gerechnet
+    const planeUeberl = Math.max(0, e.planeUeberlappungM ?? 0)
+    const planeVonM = ba2 ? Math.max(0, r2(ba2.obenM - planeUeberl)) : (model.building.geruestOptionen?.kederplane?.vonM ?? 0)
+    const kederplane1M2 = ba2
+      ? r2(comps.filter((c) => c.type === 'sheeting' && c.position[1] >= planeVonM - 1e-6).reduce((sum, c) => sum + Math.abs(c.scale[0]) * Math.abs(c.scale[1]), 0))
+      : kederplaneFlaecheM2
+    const kd1 = b2.add('Vertikale Bekleidung der Gerüste 1. BA ca. 21,5m bis ca. 32m', ['Vertikale Bekleidung der Außenachse des Gerüstes mit Kederplane zur Eindämmung der Staubentwicklung, 1. BA.', ...LV_TEXTE.kederplane, (kederplane1M2 > 0 ? `Aus dem CAD: ${de(kederplane1M2, 2)} m² Plane (Höhenbereich ${de(planeVonM, 1)}–${de(model.building.geruestOptionen?.kederplane?.bisM ?? 0, 1)} m${ba2 ? `, unterhalb davon gehört die Plane zum 2. BA; Überlappung ${de(planeUeberl, 1)} m, Vorgabe des Architekten` : ''}). Preis bitte eintragen.` : OHNE_CAD)], 1, 'Stück', 0)
     vorh(b2, kd1.nr, 'Vertikale Bekleidung 1. BA', 0, 'Wo', 0)
     const kederplane2M2 = ba2 ? r2(ba2.model.components3D.filter((c) => c.type === 'sheeting').reduce((sum, c) => sum + Math.abs(c.scale[0]) * Math.abs(c.scale[1]), 0)) : 0
     const kd2 = b2.add(`Vertikale Bekleidung der Gerüste 2. BA bis ca. ${de(hBa2 > 0 ? hBa2 : 21.5, 1)} m`, ['Vertikale Bekleidung der Außenachse des Gerüstes mit Kederplane zur Eindämmung der Staubentwicklung, 2. BA.', ...LV_TEXTE.kederplane, (kederplane2M2 > 0 ? `Aus dem CAD (2. BA, bis ${hoeheBa2Text} m gekappt): ${de(kederplane2M2, 2)} m² Plane. Preis bitte eintragen.` : OHNE_CAD)], 1, 'Stück', 0)

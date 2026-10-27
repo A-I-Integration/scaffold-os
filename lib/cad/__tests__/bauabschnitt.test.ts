@@ -95,6 +95,24 @@ describe('2. Bauabschnitt im LV (Stil statiker)', () => {
     expect(az2.ep).toBe(0)
   })
 
+  it('Plane: 1. BA nur oberhalb der Teilungshöhe, 2. BA darunter – Summe = ganze Plane, keine Doppelzählung', () => {
+    const m = voll()
+    const materials: MaterialItem[] = generateBillOfMaterials(m).map((x) => ({ ...x, unitPrice: 10, totalPrice: x.quantity * 10 }))
+    const log = calculateLogistics(m, materials, 2.0)
+    const flaecheAlle = m.components3D.filter((c) => c.type === 'sheeting').reduce((s2, c) => s2 + Math.abs(c.scale[0]) * Math.abs(c.scale[1]), 0)
+    const plane = (ueberl: number) => {
+      const lv = erzeugeLeistungsverzeichnis({ model: m, materials, aufbauStunden: log.aufbauStunden, abbauStunden: log.abbauStunden }, { ...eing, planeUeberlappungM: ueberl })
+      const zahl = (t: string) => Number(/([\d.]+,\d+) m² Plane/.exec(t)![1].replace('.', '').replace(',', '.'))
+      return { ba1: zahl(pos(lv, 'Vertikale Bekleidung der Gerüste 1. BA').text.join(' ')), ba2: zahl(pos(lv, 'Vertikale Bekleidung der Gerüste 2. BA').text.join(' ')) }
+    }
+    const o = plane(0)
+    expect(o.ba1 + o.ba2).toBeCloseTo(flaecheAlle, 0)
+    expect(o.ba1).toBeLessThan(flaecheAlle * 0.6)
+    const mit = plane(4)
+    expect(mit.ba1).toBeGreaterThan(o.ba1)
+    expect(mit.ba2).toBeCloseTo(o.ba2, 5)
+  })
+
   it('höhere gewählte Höhe → höherer Preis (monoton)', () => {
     const q = quelle()
     const ep = (h: number) => pos(erzeugeLeistungsverzeichnis(q, { ...eing, hoeheBa2M: h }), 'bis ca. 21,5 m Höhe').ep
