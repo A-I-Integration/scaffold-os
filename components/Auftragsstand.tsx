@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { normalisiereNachtraege, nachtragNummer, NACHTRAG_STATUS_LABEL } from '@/lib/nachtrag'
+import { berechneBaustellenErgebnis, type PersonalZeile } from '@/lib/baustellen-ergebnis'
 import AnhangDialog from '@/components/rechnung/AnhangDialog'
 import { manuelleAktionen, mahnStatusText, tageUeberfaellig, AKTION_LABEL } from '@/lib/mahnung-steuerung'
 import { berechneAuftragsstand, bezahltBrutto, sortiereRechnungen, angebotNettoAusProjekt, auftragUrl, TYP_LABEL, type StandRechnung } from '@/lib/auftragsstand'
@@ -62,6 +63,21 @@ export default function Auftragsstand({ project, invoices, onRechnungStellen, on
   const liste = sortiereRechnungen(invoices)
 
 
+  // Ergebnis der Baustelle: Erlös minus Personalkosten (nur in der internen Ansicht)
+  const [personal, setPersonal] = useState<{ zeilen: PersonalZeile[]; ohneStunden: number } | null>(null)
+  const [ergebnisFehler, setErgebnisFehler] = useState('')
+  const [zuschlag, setZuschlag] = useState('0')
+  useEffect(() => {
+    if (!onGeaendert) return
+    let aktiv = true
+    fetch(`/api/baustellen-ergebnis?project_id=${project.id}`, { cache: 'no-store' }).then(r => r.json()).then(j => {
+      if (!aktiv) return
+      if (!j.success) { setErgebnisFehler(j.error || 'Nicht verfügbar'); return }
+      setPersonal({ zeilen: j.zeilen, ohneStunden: j.eintraegeOhneStunden || 0 }); setErgebnisFehler('')
+    }).catch(() => { if (aktiv) setErgebnisFehler('Laden fehlgeschlagen') })
+    return () => { aktiv = false }
+  }, [project.id, onGeaendert])
+
   // Dokumente (Bilder, PDF, Excel, E-Mails …) an einer Rechnung
   const [anhangFuer, setAnhangFuer] = useState<(StandRechnung & { positions?: any[] | null }) | null>(null)
 
@@ -88,6 +104,11 @@ export default function Auftragsstand({ project, invoices, onRechnungStellen, on
     void mahnPost(r.id, { pause: true, grund }, () => `Mahnung für ${r.invoice_number} ist pausiert.`)
   }
 
+  const ergebnis = useMemo(() => personal ? berechneBaustellenErgebnis({
+    erloesNetto: stand.abgerechnet, auftragswertNetto: stand.auftragswert, zeilen: personal.zeilen,
+    zuschlagProzent: parseFloat(zuschlag.replace(',', '.')) || 0,
+  }) : null, [personal, stand, zuschlag])
+
   const kachel = (titel: string, wert: string, hinweis?: string, rot = false) => (
     <div className="rounded border border-black/30 bg-white p-3">
       <div className="text-xs text-black/70">{titel}</div>
@@ -108,6 +129,42 @@ export default function Auftragsstand({ project, invoices, onRechnungStellen, on
       </div>
       {stand.auftragswert > 0 && stand.abgerechnet > stand.auftragswert && <p className="text-sm text-red-700">Es ist mehr abgerechnet als der Auftragswert. Bitte prüfen, ob ein Nachtrag fehlt oder eine Rechnung doppelt gestellt wurde.</p>}
       {stand.ueberfaellig > 0 && <p className="text-sm text-red-700">Davon überfällig: {eur(stand.ueberfaellig)}</p>}
+
+      {onGeaendert && (
+        <div className="rounded border border-black/30 bg-white p-3 space-y-2">
+          <h4 className="font-semibold text-sm">Ergebnis der Baustelle (Erlös minus Personalkosten)</h4>
+          {ergebnisFehler && <p className="text-sm text-black/70">{ergebnisFehler}</p>}
+          {ergebnis && (
+            <>
+              <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+                {kachel('Erlös bisher (netto)', eur(ergebnis.erloes))}
+                {kachel('Personalkosten', eur(ergebnis.personalkosten + ergebnis.spesen), `${ergebnis.stunden.toLocaleString('de-DE')} Std.${ergebnis.spesen > 0 ? ` · davon Spesen ${eur(ergebnis.spesen)}` : ''}`)}
+                {kachel('Ergebnis bisher', eur(ergebnis.ergebnis), ergebnis.margeProzent === null ? 'Noch nichts abgerechnet' : `${ergebnis.margeProzent.toLocaleString('de-DE')} % vom Erlös`, ergebnis.ergebnis < 0)}
+                {kachel('Bei voller Abrechnung', ergebnis.ergebnisBeiVollerAbrechnung === null ? '–' : eur(ergebnis.ergebnisBeiVollerAbrechnung), ergebnis.ergebnisBeiVollerAbrechnung === null ? 'Kein Auftragswert hinterlegt' : 'Auftragswert minus bisherige Kosten', (ergebnis.ergebnisBeiVollerAbrechnung ?? 0) < 0)}
+              </div>
+              {ergebnis.ohneSatz.length > 0 && <p className="text-sm text-red-700">Für {ergebnis.ohneSatz.join(', ')} ist kein Stundensatz hinterlegt ({ergebnis.stundenOhneSatz.toLocaleString('de-DE')} Std. sind nicht bewertet). Bitte in der Mitarbeiterverwaltung nachtragen.</p>}
+              {personal && personal.ohneStunden > 0 && <p className="text-sm text-black/70">{personal.ohneStunden} Zeiteintrag/Zeiteinträge ohne Stunden (z. B. noch eingestempelt) sind nicht eingerechnet.</p>}
+              {ergebnis.je.length > 0 && (
+                <details className="text-sm">
+                  <summary className="cursor-pointer font-semibold">Aufteilung nach Mitarbeitern</summary>
+                  <table className="w-full border-collapse mt-1">
+                    <thead><tr className="text-left bg-[#f0f0f0]">{['Mitarbeiter', 'Stunden', 'Satz', 'Kosten'].map((h, i) => <th key={h} className={`px-2 py-1 border border-black/20 ${i > 0 ? 'text-right' : ''}`}>{h}</th>)}</tr></thead>
+                    <tbody>{ergebnis.je.map(m => (
+                      <tr key={m.id}><td className="px-2 py-1 border border-black/20">{m.name}</td><td className="px-2 py-1 border border-black/20 text-right tabular-nums">{m.stunden.toLocaleString('de-DE')}</td><td className="px-2 py-1 border border-black/20 text-right tabular-nums">{m.satz === null ? '–' : eur(m.satz)}</td><td className="px-2 py-1 border border-black/20 text-right tabular-nums">{m.kosten === null ? 'nicht bewertet' : eur(m.kosten)}</td></tr>
+                    ))}</tbody>
+                  </table>
+                </details>
+              )}
+              <div className="flex flex-wrap items-center gap-2 text-sm">
+                <label htmlFor="lnk-zuschlag">Zuschlag Lohnnebenkosten auf den Stundensatz (%)</label>
+                <input id="lnk-zuschlag" value={zuschlag} onChange={e => setZuschlag(e.target.value)} inputMode="decimal" className="w-20 rounded border border-black/40 px-2 py-1 text-right" />
+                <span className="text-black/70">nur für diese Ansicht, wird nicht gespeichert</span>
+              </div>
+              <p className="text-xs text-black/70">Grundlage: gebuchte Stunden mit Projektbezug × Stundensatz aus der Mitarbeiterverwaltung (Annahme: das ist der Kostensatz, nicht der Verrechnungssatz). Nicht enthalten: Material, Fahrzeuge, Kran, Fremdleistungen und Gemeinkosten. Das Ergebnis ist ein Deckungsbeitrag nach Personal, kein Gewinn.</p>
+            </>
+          )}
+        </div>
+      )}
 
       {onRechnungStellen && (
         <div className="flex flex-wrap items-center gap-2">
