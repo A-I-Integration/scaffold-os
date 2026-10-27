@@ -4,6 +4,7 @@
 // SCAFFOLD OS – Mitarbeiter-Planung Server Actions
 // ============================================================
 
+import { istAbsenceType, planeNachGenehmigungUm } from '@/lib/abwesenheit';
 import { createClient } from '@/lib/supabase/server';
 import { revalidatePath } from 'next/cache';
 // NEU (E-Mail-Benachrichtigungen): Versand Fehler brechen die Aktionen nie
@@ -294,6 +295,13 @@ export async function createAbsence(formData: FormData): Promise<{ success: bool
   const auth = await checkOwnEmployeeOrAdmin(supabase, employeeId);
   if (!auth.allowed) return { success: false, error: auth.error };
 
+  const typ = formData.get('type');
+  if (!istAbsenceType(typ)) return { success: false, error: 'Ungültige Art der Abwesenheit.' };
+  const von = formData.get('start_date') as string;
+  const bis = formData.get('end_date') as string;
+  if (!von || !bis) return { success: false, error: 'Von und Bis sind erforderlich.' };
+  if (bis < von) return { success: false, error: '„Bis" darf nicht vor „Von" liegen.' };
+
   const absence = {
     employee_id: employeeId,
     start_date: formData.get('start_date') as string,
@@ -340,8 +348,8 @@ export async function approveAbsence(id: string): Promise<{ success: boolean; er
 
   // Genehmigter Urlaub: Einsätze im Zeitraum automatisch umplanen
   try {
-    const { data: a } = await supabase.from('absences').select('employee_id, start_date, end_date').eq('id', id).single();
-    if (a) await planeEinsaetzeUm(a.employee_id, a.start_date, a.end_date);
+    const { data: a } = await supabase.from('absences').select('employee_id, start_date, end_date, type').eq('id', id).single();
+    if (a && planeNachGenehmigungUm(a.type)) await planeEinsaetzeUm(a.employee_id, a.start_date, a.end_date);
   } catch (e) { console.error('Umplanung Genehmigung:', e); }
 
   // NEU (E-Mail): Mitarbeiter über die Genehmigung informieren
@@ -386,7 +394,7 @@ export async function updateAbsence(id: string, formData: FormData): Promise<{ s
   if (end < start) {
     return { success: false, error: '„Bis" darf nicht vor „Von" liegen.' };
   }
-  if (!['vacation', 'sick', 'training', 'other'].includes(type)) {
+  if (!istAbsenceType(type)) {
     return { success: false, error: 'Ungültiger Typ.' };
   }
   if (!['pending', 'approved', 'rejected'].includes(status)) {
