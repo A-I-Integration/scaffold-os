@@ -45,6 +45,7 @@ import { lokalesDatumIso, datumPlusTage } from '@/lib/datum'
 import AnsichtLinkBox from '@/components/AnsichtLinkBox'
 import StatikerFreigabeBox from '@/components/StatikerFreigabeBox'
 import { FreigabeBadge, useFreigabeStatus } from '@/components/FreigabeBadge'
+import Auftragsstand from '@/components/Auftragsstand'
 
 interface Kunde {
   id: string
@@ -1274,6 +1275,7 @@ export default function KundenDetailPage() {
         {/* ═══════════ TAB: RECHNUNGEN ═══════════ */}
         {tabAktiv === 'rechnungen' && (
           <div className="space-y-6">
+            {baustelle && <Auftragsstand project={baustelle} invoices={sichtInvoices as any} />}
             {/* Offene Posten */}
             <div className="bg-white rounded-xl border border-black/10 overflow-hidden">
               <button onClick={() => setOffenePostenOpen(!offenePostenOpen)} className="w-full px-5 py-3 flex items-center justify-between text-sm font-semibold text-[#1d1d1f] hover:bg-black/5 transition-colors">
