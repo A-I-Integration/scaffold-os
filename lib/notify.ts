@@ -33,6 +33,8 @@ const TYPE_LABEL: Record<string, string> = {
   sick: 'Krankmeldung',
   training: 'Schulung',
   other: 'Abwesenheit',
+  weather: 'Schlechtwetter',
+  flextime: 'Gleitzeit',
 };
 
 function fmtDate(d: string): string {

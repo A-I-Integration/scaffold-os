@@ -102,7 +102,7 @@ export default function MeineTourenPage() {
   const [meineFahrerIds, setMeineFahrerIds] = useState<string[]>([]);
 
   // Abwesenheit-Formular
-  const [absType, setAbsType] = useState<'sick' | 'vacation'>('sick');
+  const [absType, setAbsType] = useState<'sick' | 'vacation' | 'weather' | 'flextime'>('sick');
   const [absFrom, setAbsFrom] = useState(todayISO());
   const [absTo, setAbsTo] = useState(todayISO());
   const [absReason, setAbsReason] = useState('');
@@ -567,6 +567,7 @@ export default function MeineTourenPage() {
   async function submitAbsence() {
     if (!meId) { setAbsMsg('Bitte zuerst oben deinen Namen wählen.'); return; }
     if (absTo < absFrom) { setAbsMsg('„Bis" darf nicht vor „Von" liegen.'); return; }
+    if (absType === 'weather' && !absReason.trim()) { setAbsMsg('Bitte den Grund angeben, z. B. Sturm, Glatteis oder Starkregen.'); return; }
     setAbsSaving(true); setAbsMsg('');
     try {
       const fd = new FormData();
@@ -577,7 +578,9 @@ export default function MeineTourenPage() {
       fd.set('reason', absReason);
       const result = await createAbsence(fd);
       if (!result.success) throw new Error(result.error);
-      setAbsMsg('✅ Gemeldet – die Disposition sieht die Meldung jetzt in der Planung und kann umplanen.');
+      setAbsMsg(absType === 'weather' || absType === 'flextime'
+        ? '✅ Antrag gesendet – die Disposition sieht ihn in der Planung und entscheidet. Du bekommst eine E-Mail mit der Antwort.'
+        : '✅ Gemeldet – die Disposition sieht die Meldung jetzt in der Planung und kann umplanen.');
       setAbsReason('');
     } catch (e: any) { setAbsMsg('Fehler: ' + e.message); }
     setAbsSaving(false);
@@ -864,7 +867,7 @@ export default function MeineTourenPage() {
                                 <input
                                   value={nachtragForm.grund}
                                   onChange={(e) => setNachtragForm({ ...nachtragForm, grund: e.target.value })}
-                                  placeholder="Grund (optional)"
+                                  placeholder={absType === 'weather' ? 'Grund, z. B. Sturm, Glatteis, Starkregen (Pflicht)' : 'Grund (optional)'}
                                   className="w-full rounded-lg border border-black/10 px-2 py-1.5 text-sm"
                                 />
                                 <label className="inline-flex items-center gap-1.5 text-xs text-[#86868b] cursor-pointer">
@@ -1070,7 +1073,7 @@ export default function MeineTourenPage() {
 
             {/* ═══ KRANK / URLAUB MELDEN ═══ */}
             <section className="bg-[#f5f5f7] border border-black/10 rounded-xl p-4 space-y-3">
-              <h2 className="font-semibold">🩺 Krank / Urlaub melden</h2>
+              <h2 className="font-semibold">🩺 Krank / Urlaub / Gleitzeit melden</h2>
               <div className="grid grid-cols-2 gap-2">
                 <button
                   onClick={() => setAbsType('sick')}
@@ -1083,6 +1086,18 @@ export default function MeineTourenPage() {
                   className={`rounded-xl border px-3 py-2 text-sm transition ${absType === 'vacation' ? 'border-blue-500 bg-blue-50' : 'border-black/10 bg-white/50'}`}
                 >
                   🏖️ Urlaub
+                </button>
+                <button
+                  onClick={() => setAbsType('weather')}
+                  className={`rounded-xl border px-3 py-2 text-sm transition ${absType === 'weather' ? 'border-sky-500 bg-sky-50' : 'border-black/10 bg-white/50'}`}
+                >
+                  🌧️ Schlechtwetter
+                </button>
+                <button
+                  onClick={() => setAbsType('flextime')}
+                  className={`rounded-xl border px-3 py-2 text-sm transition ${absType === 'flextime' ? 'border-teal-500 bg-teal-50' : 'border-black/10 bg-white/50'}`}
+                >
+                  🕒 Gleitzeit
                 </button>
               </div>
               <div className="grid grid-cols-2 gap-3">
@@ -1114,7 +1129,9 @@ export default function MeineTourenPage() {
                 {absSaving ? 'Sende…' : 'Meldung absenden'}
               </button>
               <p className="text-[#86868b] text-xs">
-                Die Meldung erscheint sofort in der Planung – die Disposition kann Personal und Fahrten umplanen.
+                {absType === 'weather' || absType === 'flextime'
+                  ? 'Das ist ein Antrag: Die Disposition genehmigt oder lehnt ab. Wie der Tag verbucht wird (Gleitzeit, bezahlt oder anders), entscheidet dein Betrieb.'
+                  : 'Die Meldung erscheint sofort in der Planung – die Disposition kann Personal und Fahrten umplanen.'}
               </p>
             </section>
 

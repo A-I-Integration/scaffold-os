@@ -5,7 +5,7 @@
 export type EmployeeRole = 'monteur' | 'fahrer' | 'teamleiter' | 'bauleiter';
 export type EmployeeStatus = 'active' | 'inactive' | 'on_leave';
 export type SkillLevel = 'basic' | 'advanced' | 'expert';
-export type AbsenceType = 'vacation' | 'sick' | 'training' | 'other';
+export type AbsenceType = 'vacation' | 'sick' | 'training' | 'other' | 'weather' | 'flextime';
 export type AbsenceStatus = 'pending' | 'approved' | 'rejected';
 export type TourStatus = 'planned' | 'confirmed' | 'in_progress' | 'completed' | 'cancelled';
 export type TourRole = 'driver' | 'worker' | 'teamlead';

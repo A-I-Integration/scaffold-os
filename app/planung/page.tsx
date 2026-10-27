@@ -1,5 +1,6 @@
 'use client';
 
+import { absenceBadge, absenceLabel } from '@/lib/abwesenheit'
 import { useState, useEffect, useCallback, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import AuftragsTeam from '@/components/AuftragsTeam';
@@ -533,13 +534,8 @@ function PlanungContent() {
                         {abs.employee?.first_name} {abs.employee?.last_name}
                       </td>
                       <td className="px-6 py-4">
-                        <span className={`px-2 py-1 rounded-full text-xs font-semibold ${
-                          abs.type === 'vacation' ? 'bg-blue-100 text-blue-800' :
-                          abs.type === 'sick' ? 'bg-red-100 text-red-800' :
-                          abs.type === 'training' ? 'bg-purple-100 text-purple-800' :
-                          'bg-gray-100 text-gray-800'
-                        }`}>
-                          {abs.type === 'vacation' ? 'Urlaub' : abs.type === 'sick' ? 'Krank' : abs.type === 'training' ? 'Schulung' : 'Sonstiges'}
+                        <span className={`px-2 py-1 rounded-full text-xs font-semibold ${absenceBadge(abs.type)}`}>
+                          {absenceLabel(abs.type)}
                         </span>
                       </td>
                       <td className="px-6 py-4 text-gray-600">{new Date(abs.start_date).toLocaleDateString('de-DE')}</td>
@@ -759,6 +755,8 @@ function PlanungContent() {
                   <option value="vacation">Urlaub</option>
                   <option value="sick">Krankheit</option>
                   <option value="training">Schulung</option>
+                  <option value="weather">Schlechtwetter</option>
+                  <option value="flextime">Gleitzeit</option>
                   <option value="other">Sonstiges</option>
                 </select>
               </div>
@@ -802,6 +800,8 @@ function PlanungContent() {
                     <option value="vacation">Urlaub</option>
                     <option value="sick">Krankheit</option>
                     <option value="training">Schulung</option>
+                    <option value="weather">Schlechtwetter</option>
+                    <option value="flextime">Gleitzeit</option>
                     <option value="other">Sonstiges</option>
                   </select>
                 </div>

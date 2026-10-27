@@ -21,6 +21,8 @@ const ABSENCE_LABEL: Record<string, { label: string; farbe: string }> = {
   sick: { label: '🤒 Krank', farbe: 'bg-red-100 text-red-800 border-red-300' },
   training: { label: '📚 Schulung', farbe: 'bg-purple-100 text-purple-800 border-purple-300' },
   other: { label: '⏸️ Abwesend', farbe: 'bg-gray-100 text-gray-700 border-gray-300' },
+  weather: { label: '🌧️ Schlechtwetter', farbe: 'bg-sky-100 text-sky-800 border-sky-300' },
+  flextime: { label: '🕒 Gleitzeit', farbe: 'bg-teal-100 text-teal-800 border-teal-300' },
 }
 
 function montagDerWoche(datum: Date): Date {
