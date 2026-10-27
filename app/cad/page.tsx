@@ -1039,7 +1039,7 @@ export default function CADPage() {
             ))}
           </div>
         </div>
-        <div className='w-full md:w-72 md:shrink-0'>
+        <div className='w-full md:w-72 lg:w-80 xl:w-96 md:shrink-0 min-w-0'>
           {rolle === 'admin' && model && <M2Abrechnung flaecheM2={modelWithManual?.totalAreaM2 ?? model.totalAreaM2} onChange={setM2Wahl} />}
           <KatalogWahlListe artikelWahl={artikelWahl} liste={katalogListeFuerSystem(systemId)} onZuruecksetzen={() => setArtikelWahl({})} />
           <BillOfMaterials
