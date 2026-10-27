@@ -8,11 +8,13 @@ export interface SchildDaten {
   naechste_pruefung: string // YYYY-MM-DD
   pruefer: string
   freigegeben: boolean
+  belastung: string         // zulässige Belastung, wie vom Prüfer angegeben (Freitext)
+  bereich: string           // freigegebene Abschnitte/Ebenen (Freitext)
 }
 
 interface Ereignis { type: string; created_at: string; pruefung_details?: Record<string, unknown> | null }
 
-export const leeresSchild = (): SchildDaten => ({ geruestklasse: '', bauart: '', pruefdatum: '', naechste_pruefung: '', pruefer: '', freigegeben: false })
+export const leeresSchild = (): SchildDaten => ({ geruestklasse: '', bauart: '', pruefdatum: '', naechste_pruefung: '', pruefer: '', freigegeben: false, belastung: '', bereich: '' })
 
 const s = (x: unknown) => (typeof x === 'string' ? x : '')
 
@@ -28,6 +30,8 @@ export function schildAusEreignissen(ereignisse: Ereignis[]): SchildDaten {
     naechste_pruefung: s(d.naechste_pruefung),
     pruefer: s(d.freigegeben_durch),
     freigegeben: d.freigegeben === true,
+    belastung: '',
+    bereich: '',
   }
 }
 

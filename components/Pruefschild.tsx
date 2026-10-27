@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { uploadVertragsdokument } from '@/lib/vertrag-upload-client'
-import { generatePruefschildPDF } from '@/lib/pruefschild-pdf'
+import { generatePruefschildPDF, generateSperrschildPDF } from '@/lib/pruefschild-pdf'
 import { leeresSchild, schildAusEreignissen, schildFehlt, type SchildDaten } from '@/lib/pruefschild'
 
 const feld = 'border border-black/30 rounded px-2 py-1.5 bg-white text-black w-full'
@@ -11,6 +11,7 @@ const knopf = 'rounded border border-black/30 px-3 py-1.5 bg-[#f0f0f0] text-blac
 export default function Pruefschild({ projectId, onAbgelegt }: { projectId: string; onAbgelegt?: () => void }) {
   const [d, setD] = useState<SchildDaten | null>(null)
   const [busy, setBusy] = useState(false)
+  const [grundSperre, setGrundSperre] = useState('')
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null)
 
   const laden = async () => {
@@ -54,6 +55,15 @@ export default function Pruefschild({ projectId, onAbgelegt }: { projectId: stri
     <section className="space-y-2">
       <h3 className="font-bold text-base">5. Prüfschild erstellen</h3>
       {!d && <button className={knopf} disabled={busy} onClick={laden}>{busy ? 'Lädt …' : 'Aus letzter Prüfung übernehmen'}</button>}
+      <div className="flex flex-wrap items-center gap-2">
+        <button className={knopf} disabled={busy} onClick={async () => {
+          try {
+            const [pRes, cRes] = await Promise.all([fetch(`/api/projects?id=${projectId}`).then(r => r.json()), fetch('/api/company').then(r => r.json())])
+            generateSperrschildPDF(pRes.success ? pRes.project : {}, cRes.success ? cRes.company : null, grundSperre).save('Sperrschild.pdf')
+          } catch (e) { setMsg({ ok: false, text: e instanceof Error ? e.message : 'PDF fehlgeschlagen' }) }
+        }}>Rotes Sperrschild (PDF)</button>
+        <input className={`${feld} sm:w-80`} placeholder="Grund, z. B. Aufbau läuft (optional)" value={grundSperre} onChange={e => setGrundSperre(e.target.value)} maxLength={120} />
+      </div>
       {msg && <p className={msg.ok ? '' : 'text-red-600'}>{msg.ok ? '✅' : '❌'} {msg.text}</p>}
       {d && (
         <div className="space-y-3 rounded border border-black/30 p-3">
@@ -63,6 +73,8 @@ export default function Pruefschild({ projectId, onAbgelegt }: { projectId: stri
             <label className="text-sm">Bauart<input className={feld} value={d.bauart} onChange={e => set({ bauart: e.target.value })} /></label>
             <label className="text-sm">Geprüft am<input type="date" className={feld} value={d.pruefdatum} onChange={e => set({ pruefdatum: e.target.value })} /></label>
             <label className="text-sm">Nächste Prüfung<input type="date" className={feld} value={d.naechste_pruefung} onChange={e => set({ naechste_pruefung: e.target.value })} /></label>
+            <label className="text-sm">Zulässige Belastung (laut Prüfer)<input className={feld} value={d.belastung} onChange={e => set({ belastung: e.target.value })} /></label>
+            <label className="text-sm">Freigegebener Bereich (Abschnitte/Ebenen)<input className={feld} value={d.bereich} onChange={e => set({ bereich: e.target.value })} /></label>
             <label className="text-sm sm:col-span-2">Prüfende Person<input className={feld} value={d.pruefer} onChange={e => set({ pruefer: e.target.value })} /></label>
           </div>
           {fehlt.length > 0 && <p className="text-sm text-black/70">Noch offen: {fehlt.join(' · ')}</p>}
