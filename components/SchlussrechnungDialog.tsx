@@ -29,12 +29,14 @@ interface Props {
   startProzent?: number;
   onClose: () => void;
   onCreated: (invoice: Invoice) => void;
+  /** Wenn gesetzt, erscheint die Option „Danach Dokumente hinzufügen“; die Seite öffnet dann den Anhänge-Dialog zur neuen Rechnung. */
+  onAnhaengeHinzufuegen?: (invoice: Invoice) => void;
 }
 
 const eur = (n: number) => n.toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' €';
 const inputCls = 'w-full px-3 py-2 bg-white border border-black/10 rounded-lg text-sm text-[#1d1d1f] focus:outline-none focus:border-[#e8590c]';
 
-export default function SchlussrechnungDialog({ projectId, customerName, customerAddress, daten, startArt, startProzent, onClose, onCreated }: Props) {
+export default function SchlussrechnungDialog({ projectId, customerName, customerAddress, daten, startArt, startProzent, onClose, onCreated, onAnhaengeHinzufuegen }: Props) {
   const [laden, setLaden] = useState(true);
   const [fehlerLaden, setFehlerLaden] = useState('');
   const [projektDaten, setProjektDaten] = useState<any>(null);
@@ -54,6 +56,12 @@ export default function SchlussrechnungDialog({ projectId, customerName, custome
   const [gewaehltesZA, setGewaehltesZA] = useState('');
   const [preisM2, setPreisM2] = useState('');
   const [gewaehlteNachtraege, setGewaehlteNachtraege] = useState<Set<string>>(new Set());
+
+  // Kopfdaten der Rechnung
+  const [geruestNr, setGeruestNr] = useState('');
+  const [leistungsdatum, setLeistungsdatum] = useState('');
+  const [bemerkung, setBemerkung] = useState('');
+  const [danachAnhaenge, setDanachAnhaenge] = useState(false);
 
   const [laeuft, setLaeuft] = useState(false);
   const [angelegt, setAngelegt] = useState(false);
@@ -86,7 +94,11 @@ export default function SchlussrechnungDialog({ projectId, customerName, custome
         }
         if (iRes?.success) {
           const alle: Invoice[] = iRes.invoices || [];
-          setBestehende(alle.filter((i) => i.project_id === projectId && i.status !== 'storniert'));
+          const dieser = alle.filter((i) => i.project_id === projectId && i.status !== 'storniert');
+          setBestehende(dieser);
+          // Gerüst-Nr. der letzten Rechnung dieser Baustelle vorschlagen (bleibt änderbar)
+          const letzte = [...dieser].reverse().find((i) => i.geruest_nr);
+          if (letzte?.geruest_nr) setGeruestNr(letzte.geruest_nr);
           // Abschlagsrechnungen dieses Auftrags (§ 14 Abs. 5 UStG: in der Endrechnung abzusetzen);
           // Abschläge ohne Auftragszuordnung nur bei gleichem Kundennamen und nie vorausgewählt.
           const kn = customerName.trim().toLowerCase();
@@ -178,7 +190,9 @@ export default function SchlussrechnungDialog({ projectId, customerName, custome
           customer_name: customerName,
           customer_address: customerAddress || undefined,
           invoice_type: art,
-          notes: [eingabe.anpassungen?.skonto ? '2% Skonto bei Zahlung innerhalb von 8 Tagen.' : '', abzugsText || ''].filter(Boolean).join(' ') || undefined,
+          notes: [bemerkung.trim(), [eingabe.anpassungen?.skonto ? '2% Skonto bei Zahlung innerhalb von 8 Tagen.' : '', abzugsText || ''].filter(Boolean).join(' ')].filter(Boolean).join('\n') || undefined,
+          geruest_nr: geruestNr.trim() || undefined,
+          leistungsdatum: leistungsdatum || undefined,
           positions: positionen,
           override_grund: overrideGrund || undefined,
         }),
@@ -205,6 +219,7 @@ export default function SchlussrechnungDialog({ projectId, customerName, custome
         }
       }
       onCreated(json.invoice);
+      if (danachAnhaenge && onAnhaengeHinzufuegen && json.invoice?.id) onAnhaengeHinzufuegen(json.invoice);
       if (warnung) { setAngelegt(true); setFehler(warnung); return; }
       onClose();
     } catch (e: any) {
@@ -375,6 +390,31 @@ export default function SchlussrechnungDialog({ projectId, customerName, custome
                 )}
               </div>
             )}
+
+            <div className="rounded-lg bg-[#f5f5f7] p-3 space-y-2">
+              <p className="text-xs font-semibold text-[#1d1d1f]">Kopfdaten der Rechnung</p>
+              <p className="text-[11px] text-[#86868b]">Die Rechnungsnummer wird beim Anlegen automatisch vergeben.</p>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="block text-[11px] text-[#86868b] mb-1">Gerüst-Nr. (ID zur eindeutigen Zuordnung)</label>
+                  <input value={geruestNr} onChange={(e) => setGeruestNr(e.target.value)} maxLength={60} placeholder="z. B. G-2026-014" className={inputCls} />
+                </div>
+                <div>
+                  <label className="block text-[11px] text-[#86868b] mb-1">Leistungsdatum</label>
+                  <input type="date" value={leistungsdatum} onChange={(e) => setLeistungsdatum(e.target.value)} className={inputCls} />
+                </div>
+              </div>
+              {onAnhaengeHinzufuegen && (
+                <label className="flex items-center gap-2 text-xs text-[#1d1d1f]">
+                  <input type="checkbox" checked={danachAnhaenge} onChange={(e) => setDanachAnhaenge(e.target.checked)} />
+                  Nach dem Anlegen Dokumente hinzufügen (Bilder, PDF, Excel, E-Mails zu Zusatzvereinbarungen)
+                </label>
+              )}
+              <div>
+                <label className="block text-[11px] text-[#86868b] mb-1">Bemerkungen (zusätzliche Vereinbarungen, erscheinen auf der Rechnung)</label>
+                <textarea value={bemerkung} onChange={(e) => setBemerkung(e.target.value)} rows={3} maxLength={1500} placeholder="z. B. Schultertransport aus Grund X, war nicht vorgesehen. Alu-Podesttreppe unter 5 m aus sicherheitstechnischen Gründen vereinbart." className={inputCls} />
+              </div>
+            </div>
 
             <div>
               <p className="text-xs font-semibold text-[#1d1d1f] mb-1">Positionen der Rechnung</p>

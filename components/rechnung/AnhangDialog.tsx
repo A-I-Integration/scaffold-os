@@ -4,12 +4,13 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { ANHANG_BUCKET, ERLAUBTE_TYPEN, groesseText, istBild, istVideo, pruefeAnhang } from '@/lib/rechnung-anhang'
 
-interface Anhang { id: string; file_name: string; file_type: string; size_bytes: number; created_at: string; position_nr: number | null }
+interface Anhang { id: string; file_name: string; file_type: string; size_bytes: number; created_at: string; position_nr: number | null; fuer_auftraggeber?: boolean }
 
 export default function AnhangDialog({ invoiceId, rechnungsNr, positionen = [], onClose }: { invoiceId: string; rechnungsNr: string; positionen?: { bezeichnung: string; geruestId?: string }[]; onClose: () => void }) {
   const [positionNr, setPositionNr] = useState<string>('')
   const posLabel = (i: number) => `Pos. ${i + 1}: ${positionen[i]?.bezeichnung ?? ''}${positionen[i]?.geruestId ? ` (${positionen[i].geruestId})` : ''}`.slice(0, 80)
   const [liste, setListe] = useState<Anhang[]>([])
+  const [sichtbarkeitMoeglich, setSichtbarkeitMoeglich] = useState(false)
   const [laedt, setLaedt] = useState(true)
   const [fehler, setFehler] = useState<string | null>(null)
   const [aktiv, setAktiv] = useState<string | null>(null)
@@ -21,6 +22,7 @@ export default function AnhangDialog({ invoiceId, rechnungsNr, positionen = [], 
       const j = await r.json()
       if (!j.success) throw new Error(j.error || 'Anhänge konnten nicht geladen werden.')
       setListe(j.anhaenge)
+      setSichtbarkeitMoeglich(j.sichtbarkeitMoeglich === true)
     } catch (e: any) { setFehler(e.message) } finally { setLaedt(false) }
   }, [invoiceId])
   useEffect(() => { laden() }, [laden])
@@ -63,6 +65,16 @@ export default function AnhangDialog({ invoiceId, rechnungsNr, positionen = [], 
     } catch (e: any) { setFehler(e.message) }
   }
 
+  async function sichtbarSetzen(a: Anhang, wert: boolean) {
+    setFehler(null)
+    try {
+      const r = await fetch('/api/invoices/anhang', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: a.id, fuer_auftraggeber: wert }) })
+      const j = await r.json()
+      if (!j.success) throw new Error(j.error || 'Speichern fehlgeschlagen.')
+      setListe((l) => l.map((x) => (x.id === a.id ? { ...x, fuer_auftraggeber: wert } : x)))
+    } catch (e: any) { setFehler(e.message) }
+  }
+
   async function entfernen(a: Anhang) {
     if (!confirm(`„${a.file_name}“ von der Rechnung entfernen?`)) return
     try {
@@ -80,7 +92,7 @@ export default function AnhangDialog({ invoiceId, rechnungsNr, positionen = [], 
       <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg max-h-[85vh] overflow-hidden flex flex-col">
         <div className="px-5 py-3 border-b border-black/10">
           <h2 className="text-base font-semibold text-[#1d1d1f]">Anhänge zu Rechnung {rechnungsNr}</h2>
-          <p className="text-[11px] text-[#86868b]">Bilder, Videos (bis 50 MB), PDF, Excel, Word, CSV, E-Mails (EML/MSG) · sonst max. 10 MB je Datei. Der Auftraggeber sieht die Anhänge auf der Prüfseite.</p>
+          <p className="text-[11px] text-[#86868b]">Bilder, Videos (bis 50 MB), PDF, Excel, Word, CSV, E-Mails (EML/MSG) · sonst max. 10 MB je Datei. Der Auftraggeber sieht die Anhänge auf der Prüfseite. Im Live-Link erscheinen nur Dateien mit Häkchen „Live-Link“.</p>
         </div>
         <div className="p-5 overflow-y-auto flex-1">
           {laedt ? <p className="text-sm text-[#86868b]">Lädt …</p> : liste.length === 0 ? <p className="text-sm text-[#86868b]">Noch keine Anhänge.</p> : (
@@ -89,6 +101,11 @@ export default function AnhangDialog({ invoiceId, rechnungsNr, positionen = [], 
                 <li key={a.id} className="py-2 flex items-center gap-3 text-sm">
                   <span aria-hidden>{icon(a.file_type)}</span>
                   <button type="button" onClick={() => oeffnen(a)} className="flex-1 min-w-0 text-left truncate text-[#1d1d1f] hover:underline" title="Öffnen / herunterladen">{a.file_name}{a.position_nr != null && <span className="ml-2 text-[11px] text-[#86868b]">{posLabel(a.position_nr)}</span>}</button>
+                  {sichtbarkeitMoeglich && (
+                    <label className="flex items-center gap-1 text-[11px] text-[#86868b] shrink-0" title="Im Live-Link des Auftraggebers zum Download anzeigen">
+                      <input type="checkbox" checked={a.fuer_auftraggeber === true} onChange={(e) => sichtbarSetzen(a, e.target.checked)} /> Live-Link
+                    </label>
+                  )}
                   <span className="text-[11px] text-[#86868b] shrink-0">{groesseText(a.size_bytes)}</span>
                   <button type="button" onClick={() => entfernen(a)} className="text-[11px] text-red-600 hover:underline shrink-0">Entfernen</button>
                 </li>

@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { normalisiereNachtraege, nachtragNummer, NACHTRAG_STATUS_LABEL } from '@/lib/nachtrag'
+import AnhangDialog from '@/components/rechnung/AnhangDialog'
 import { manuelleAktionen, mahnStatusText, tageUeberfaellig, AKTION_LABEL } from '@/lib/mahnung-steuerung'
 import { berechneAuftragsstand, bezahltBrutto, sortiereRechnungen, angebotNettoAusProjekt, auftragUrl, TYP_LABEL, type StandRechnung } from '@/lib/auftragsstand'
 
@@ -13,7 +14,7 @@ const datum = (d?: string | null) => { if (!d) return '–'; const x = new Date(
 
 interface Props {
   project: { id: string; name: string | null; data: any }
-  invoices: (StandRechnung & { project_id?: string | null })[]
+  invoices: (StandRechnung & { project_id?: string | null; positions?: any[] | null })[]
   /** Öffnet den Rechnungsdialog mit vorbelegter Art/Prozent. Ohne Angabe werden die Knöpfe nicht gezeigt. */
   onRechnungStellen?: (art: 'abschlag' | 'schluss', prozent?: number) => void
   /** Wird nach Erinnerung/Mahnung/Pause aufgerufen, damit die Rechnungen neu geladen werden. Ohne Angabe: keine Mahn-Spalte. */
@@ -60,6 +61,9 @@ export default function Auftragsstand({ project, invoices, onRechnungStellen, on
   const stand = useMemo(() => berechneAuftragsstand({ angebotNetto, nachtraege, rechnungen: invoices }), [angebotNetto, nachtraege, invoices])
   const liste = sortiereRechnungen(invoices)
 
+
+  // Dokumente (Bilder, PDF, Excel, E-Mails …) an einer Rechnung
+  const [anhangFuer, setAnhangFuer] = useState<(StandRechnung & { positions?: any[] | null }) | null>(null)
 
   // Mahnwesen von Hand: Zahlungserinnerung/Mahnung senden, Pause setzen
   const [mahnBusy, setMahnBusy] = useState<string | null>(null)
@@ -120,7 +124,7 @@ export default function Auftragsstand({ project, invoices, onRechnungStellen, on
         {mahnMeldung && <p className={`text-sm mb-1 ${mahnMeldung.fehler ? 'text-red-700' : ''}`} role="status">{mahnMeldung.text}</p>}
         {liste.length === 0 ? <p className="text-sm text-black/70">Noch keine Rechnung.</p> : (
           <table className="w-full border-collapse text-sm">
-            <thead><tr className="text-left bg-[#f0f0f0]">{['Datum', 'Art', 'Nummer', 'Status', 'Netto', 'Brutto', 'Offen', ...(onGeaendert ? ['Mahnung'] : [])].map((h, i) => <th key={h} className={`px-2 py-1 border border-black/20 ${i >= 4 && i <= 6 ? 'text-right' : ''}`}>{h}</th>)}</tr></thead>
+            <thead><tr className="text-left bg-[#f0f0f0]">{['Datum', 'Art', 'Nummer', 'Status', 'Netto', 'Brutto', 'Offen', ...(onGeaendert ? ['Dokumente', 'Mahnung'] : [])].map((h, i) => <th key={h} className={`px-2 py-1 border border-black/20 ${i >= 4 && i <= 6 ? 'text-right' : ''}`}>{h}</th>)}</tr></thead>
             <tbody>
               {liste.map(r => {
                 const offen = r.status === 'storniert' ? 0 : Math.round((Number(r.gross_amount) - bezahltBrutto(r)) * 100) / 100
@@ -133,6 +137,11 @@ export default function Auftragsstand({ project, invoices, onRechnungStellen, on
                     <td className="px-2 py-1 border border-black/20 text-right tabular-nums">{eur(Number(r.net_amount))}</td>
                     <td className="px-2 py-1 border border-black/20 text-right tabular-nums">{eur(Number(r.gross_amount))}</td>
                     <td className="px-2 py-1 border border-black/20 text-right tabular-nums">{offen > 0 ? eur(offen) : ''}</td>
+                    {onGeaendert && (
+                      <td className="px-2 py-1 border border-black/20 align-top">
+                        <button type="button" onClick={() => setAnhangFuer(r as any)} className="px-2 py-0.5 text-xs rounded border border-black/40 bg-white hover:bg-[#f0f0f0]">📎 Dokumente</button>
+                      </td>
+                    )}
                     {onGeaendert && (
                       <td className="px-2 py-1 border border-black/20 align-top">
                         {offen > 0 && r.invoice_type !== 'gutschrift' && r.status !== 'storniert' && r.status !== 'bezahlt' ? (
@@ -198,6 +207,7 @@ export default function Auftragsstand({ project, invoices, onRechnungStellen, on
           {links.length === 0 && !tabelleFehlt && <li className="text-sm text-black/70">Noch kein Link.</li>}
         </ul>
       </div>
+      {anhangFuer && <AnhangDialog invoiceId={anhangFuer.id} rechnungsNr={anhangFuer.invoice_number} positionen={(anhangFuer.positions || []) as any} onClose={() => setAnhangFuer(null)} />}
     </section>
   )
 }

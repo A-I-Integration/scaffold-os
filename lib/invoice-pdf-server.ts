@@ -139,9 +139,27 @@ export async function generateInvoicePdfCompliant(inv: Invoice): Promise<Uint8Ar
     if (current) lines.push(current);
     return lines;
   };
-  wrapText(hinweis, 500, 8).forEach((line, i) => {
+  const hinweisZeilen = wrapText(hinweis, 500, 8);
+  hinweisZeilen.forEach((line, i) => {
     page.drawText(line, { x: 14, y: y - i * 10, size: 8, font, color: grauMittel });
   });
+  y -= hinweisZeilen.length * 10 + 8;
+
+  // Bemerkungen (zusätzliche Vereinbarungen). Passt der Block nicht über die Fußzeile, kommt er auf eine Folgeseite.
+  const bemerkung = String(inv.notes || '').replace(/[^\n\u0020-\u007E\u00A0-\u00FF€–—‘’“”•…]/g, '?').trim();
+  if (bemerkung) {
+    const zeilen = bemerkung.split('\n').flatMap((z) => (z.trim() ? wrapText(z, 500, 8) : ['']));
+    let seite = page;
+    let ny = y;
+    if (ny - 14 - zeilen.length * 10 < 80) { seite = doc.addPage([595.28, 841.89]); ny = 800; }
+    seite.drawText('Bemerkungen', { x: 14, y: ny, size: 9, font: fontBold, color: grauDunkel });
+    ny -= 12;
+    for (const z of zeilen) {
+      if (ny < 80) { seite = doc.addPage([595.28, 841.89]); ny = 800; }
+      if (z) seite.drawText(z, { x: 14, y: ny, size: 8, font, color: grauMittel });
+      ny -= 10;
+    }
+  }
 
   // Fußzeile: § 14 UStG Pflichtangaben
   let fy = 40;
