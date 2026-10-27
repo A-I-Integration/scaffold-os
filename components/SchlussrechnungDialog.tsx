@@ -24,6 +24,9 @@ interface Props {
   customerAddress?: string;
   /** Optional: aktueller Stand (z. B. Schritt 6, auch ungespeichert). Ohne Angabe: gespeicherter Stand aus der Datenbank. */
   daten?: any;
+  /** Optional: Rechnungsart und Prozentwert vorbelegen (z. B. Teilrechnung aus der Auftragsübersicht). */
+  startArt?: 'schluss' | 'standard' | 'abschlag';
+  startProzent?: number;
   onClose: () => void;
   onCreated: (invoice: Invoice) => void;
 }
@@ -31,7 +34,7 @@ interface Props {
 const eur = (n: number) => n.toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' €';
 const inputCls = 'w-full px-3 py-2 bg-white border border-black/10 rounded-lg text-sm text-[#1d1d1f] focus:outline-none focus:border-[#e8590c]';
 
-export default function SchlussrechnungDialog({ projectId, customerName, customerAddress, daten, onClose, onCreated }: Props) {
+export default function SchlussrechnungDialog({ projectId, customerName, customerAddress, daten, startArt, startProzent, onClose, onCreated }: Props) {
   const [laden, setLaden] = useState(true);
   const [fehlerLaden, setFehlerLaden] = useState('');
   const [projektDaten, setProjektDaten] = useState<any>(null);
@@ -43,8 +46,8 @@ export default function SchlussrechnungDialog({ projectId, customerName, custome
   const [gewaehlteAbschlaege, setGewaehlteAbschlaege] = useState<Set<string>>(new Set());
 
   const [basis, setBasis] = useState<RechnungsBasis>('angebot');
-  const [art, setArt] = useState<'schluss' | 'standard' | 'abschlag'>('schluss');
-  const [abschlagProzent, setAbschlagProzent] = useState('');
+  const [art, setArt] = useState<'schluss' | 'standard' | 'abschlag'>(startArt ?? 'schluss');
+  const [abschlagProzent, setAbschlagProzent] = useState(startProzent ? String(startProzent).replace('.', ',') : '');
   const [abschlagBetrag, setAbschlagBetrag] = useState('');
   const [zwischenaufmasse, setZwischenaufmasse] = useState<Zwischenaufmass[]>([]);
   const [abschlagModus, setAbschlagModus] = useState<'betrag' | 'zwischenaufmass'>('betrag');

@@ -13,9 +13,11 @@ const datum = (d?: string | null) => { if (!d) return '–'; const x = new Date(
 interface Props {
   project: { id: string; name: string | null; data: any }
   invoices: (StandRechnung & { project_id?: string | null })[]
+  /** Öffnet den Rechnungsdialog mit vorbelegter Art/Prozent. Ohne Angabe werden die Knöpfe nicht gezeigt. */
+  onRechnungStellen?: (art: 'abschlag' | 'schluss', prozent?: number) => void
 }
 
-export default function Auftragsstand({ project, invoices }: Props) {
+export default function Auftragsstand({ project, invoices, onRechnungStellen }: Props) {
   const [kranSatz, setKranSatz] = useState(850)
   useEffect(() => {
     let aktiv = true
@@ -75,6 +77,16 @@ export default function Auftragsstand({ project, invoices }: Props) {
       </div>
       {stand.auftragswert > 0 && stand.abgerechnet > stand.auftragswert && <p className="text-sm text-red-700">Es ist mehr abgerechnet als der Auftragswert. Bitte prüfen, ob ein Nachtrag fehlt oder eine Rechnung doppelt gestellt wurde.</p>}
       {stand.ueberfaellig > 0 && <p className="text-sm text-red-700">Davon überfällig: {eur(stand.ueberfaellig)}</p>}
+
+      {onRechnungStellen && (
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-sm font-semibold">Rechnung stellen:</span>
+          {[70, 30].map(p => <button key={p} type="button" onClick={() => onRechnungStellen('abschlag', p)} className="px-3 py-1.5 text-sm rounded border border-black/40 bg-white hover:bg-[#f0f0f0]">Teilrechnung {p} %</button>)}
+          <button type="button" onClick={() => onRechnungStellen('abschlag')} className="px-3 py-1.5 text-sm rounded border border-black/40 bg-white hover:bg-[#f0f0f0]">Teilrechnung (Prozent oder Betrag frei)</button>
+          <button type="button" onClick={() => onRechnungStellen('schluss')} className="px-3 py-1.5 text-sm rounded border border-black/40 bg-white hover:bg-[#f0f0f0]">Schlussrechnung</button>
+          <span className="text-xs text-black/70 w-full">Die Prozente beziehen sich auf die Gesamtleistung im Dialog und lassen sich dort ändern. Es wird erst gespeichert, wenn Sie die Rechnung dort anlegen.</span>
+        </div>
+      )}
 
       <div>
         <h4 className="font-semibold text-sm mb-1">Rechnungen dieser Baustelle</h4>
