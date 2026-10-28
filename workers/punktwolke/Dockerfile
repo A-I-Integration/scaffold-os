@@ -4,7 +4,7 @@
 #           -e TENANTS='[{"name":"master","url":"https://XYZ.supabase.co","key":"SERVICE_ROLE_KEY"}]' \
 #           -e POLL_INTERVAL=15 \
 #           scaffold-punktwolke
-FROM node:20-alpine
+FROM node:22-alpine
 
 WORKDIR /app
 COPY package.json ./
