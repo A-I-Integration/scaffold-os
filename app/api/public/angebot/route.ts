@@ -2,6 +2,7 @@ import { NextRequest, NextResponse, after } from 'next/server';
 import { serverErrorResponse } from '@/lib/auth';
 import { beiAngebotsannahmeSicher } from '@/lib/angebot-annahme';
 import { notifyAngebotRueckmeldung } from '@/lib/notify';
+import { waehleCadAnsicht } from '@/lib/angebot-3d-ansicht';
 import { ANTWORT_ZU_STATUS, antwortErlaubt, pruefeRueckmeldung, verlaufMit } from '@/lib/angebot-rueckmeldung';
 
 // ============================================================
@@ -53,6 +54,15 @@ export async function GET(req: NextRequest) {
     if (!projekt) return NextResponse.json({ success: false, error: 'Projekt nicht gefunden.' }, { status: 404 });
 
     const company = cRes.ok ? (await cRes.json())?.[0] || null : null;
+    // 3D-Ansicht des Objekts mit Gerüst (neuestes "CAD-Ansicht-…"-Bild dieses Projekts, falls vorhanden)
+    let ansichtUrl: string | null = null;
+    try {
+      const mRes = await fetch(`${url}/rest/v1/project_media?project_id=eq.${projectId}&file_name=like.CAD-Ansicht*&select=file_name,file_type,storage_path,created_at&order=created_at.desc&limit=20`, { headers });
+      if (mRes.ok) {
+        const treffer = waehleCadAnsicht(await mRes.json());
+        if (treffer) ansichtUrl = `${url}/storage/v1/object/public/project-media/${treffer.storage_path}`;
+      }
+    } catch { /* Bild ist optional – das Angebot funktioniert auch ohne */ }
     const d = projekt.data || {};
     const ki = d.kiResult || null;
 
@@ -70,6 +80,7 @@ export async function GET(req: NextRequest) {
         endpreis: ki?.suggestedPrice ?? null,
         gerüstklasse: ki?.scaffoldClass ?? null,
         flaecheM2: ki?.totalAreaM2 ?? null,
+        ansichtUrl,
         company,
       },
     });
