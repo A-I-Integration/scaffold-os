@@ -26,6 +26,7 @@ import { verlaufNeu, verlaufSetze, verlaufZurueck, verlaufVor } from '@/lib/cad/
 import { type Aussehen } from '@/lib/cad/modell-aussehen'
 import { aussehenAusDateien } from '@/lib/cad/obj-mtl-zu-glb'
 import { CAD_UEBERNAHME_KEY, leseCadUebergabe } from '@/lib/cad/aufmass-zu-cad'
+import { ladeArbeitsstand, speichereArbeitsstand, vergissArbeitsstand } from '@/lib/cad/arbeitsstand'
 import { merkeAussehen, ladeGemerktesAussehen, vergissAussehen } from '@/lib/cad/modell-speicher'
 import AbbauEinplanenDialog from '@/components/cad/AbbauEinplanenDialog'
 import TeilabbauPanel, { TEILABBAU_START, type TeilabbauEingabe } from '@/components/cad/TeilabbauPanel'
@@ -129,8 +130,8 @@ export default function CADPage() {
   const [aussehenVersatz, setAussehenVersatz] = useState<{ x: number; z: number; grad: number }>({ x: 0, z: 0, grad: 0 })
   useEffect(() => {
     let weg = false
-    // Kommt man aus dem Aufmaß, gehört ein im Browser gemerktes 3D-Modell einer früheren Sitzung nicht zu diesem Projekt → nicht automatisch laden.
-    if (new URLSearchParams(window.location.search).get('aus') === 'aufmass') return
+    // Übernahme aus dem Aufmaß = etwas Neues: das gemerkte 3D-Modell einer früheren Sitzung gehört nicht zu diesem Projekt → verwerfen.
+    try { if (sessionStorage.getItem(CAD_UEBERNAHME_KEY)) { void vergissAussehen(); return } } catch { /* Speicher gesperrt */ }
     ladeGemerktesAussehen().then((m) => {
       if (weg || !m) return
       setAussehenHinweis('Gemerktes 3D-Modell aus der letzten Sitzung geladen – mit „entfernen“ löschen.')
@@ -186,6 +187,15 @@ export default function CADPage() {
   const [autoGenerate, setAutoGenerate] = useState(false)
   // Katalogwahl: Bauteil-ID → Artikelnummer des Herstellers (gilt nur für das gewählte System)
   const [artikelWahl, setArtikelWahl] = useState<Record<string, string>>({})
+  // Arbeitsstand wiederherstellen: der CAD-Stand bleibt, bis etwas Neues kommt (neue Datei, Neu starten, Zuordnen, Übernahme aus dem Aufmaß).
+  useEffect(() => {
+    try { if (sessionStorage.getItem(CAD_UEBERNAHME_KEY)) return } catch { /* Speicher gesperrt */ }
+    const a = ladeArbeitsstand()
+    if (!a) return
+    setSystemId(a.systemId); setArtikelWahl(a.artikelWahl); setNotes(a.notizen as CADNote[]); setStatikDaten(a.statikDaten as StatikDaten)
+    setAutoGenerate(true); setBuilding(a.building)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
   // Aufmaß → CAD: Maße und System aus Schritt 6 übernehmen (einmalig, dann aus dem Zwischenspeicher entfernen)
   const [aufmassHinweise, setAufmassHinweise] = useState<string[]>([])
   useEffect(() => {
@@ -197,6 +207,7 @@ export default function CADPage() {
     setAutoGenerate(true); setBuilding(u.building)
     if (u.notizen) setNotes(u.notizen as CADNote[])
     if (u.statikDaten) setStatikDaten(bereinigeStatikDaten(u.statikDaten as StatikDaten))
+    speichereArbeitsstand({ building: u.building, systemId: u.systemId, notizen: u.notizen ?? [], statikDaten: (u.statikDaten ?? {}) as Record<string, unknown>, artikelWahl: {} })
     setAufmassHinweise(['Maße aus dem Aufmaß' + (u.projektName ? ` „${u.projektName}“` : '') + ' übernommen.', ...u.hinweise])
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
@@ -211,6 +222,10 @@ export default function CADPage() {
   // geänderte Planung ungültig, bleibt die Notiz einfach ungenutzt
   // (kein Fehler, keine Auswirkung auf Stückliste/Statik/IFC).
   const [notes, setNotes] = useState<CADNote[]>([])
+  // Jede Änderung merken (nur gültige Stände, siehe lib/cad/arbeitsstand.ts)
+  useEffect(() => {
+    speichereArbeitsstand({ building, systemId, notizen: notes, statikDaten: statikDaten as Record<string, unknown>, artikelWahl })
+  }, [building, systemId, notes, statikDaten, artikelWahl])
   const handleAddNote = useCallback((componentId: string, componentName: string, componentType: string, text: string) => {
     setNotes((prev) => [...prev, {
       id: `notiz-${Date.now()}-${Math.round(Math.random() * 1000)}`,
@@ -433,6 +448,7 @@ export default function CADPage() {
     if (!window.confirm('Wirklich neu starten?\n\nDas 3D-Modell wird geleert und alle Maße auf den Anfangszustand gesetzt. Das Gerüst erscheint erst wieder, wenn du Maße änderst oder „Gerüst neu berechnen“ wählst. Bereits gespeicherte Projekte bleiben unverändert.')) return;
     void vergissModell(); // hochgeladenes 3D-Modell im Browser-Zwischenspeicher ebenfalls entfernen
     void vergissAussehen(); setAussehen(null); // echtes Gebäude (Aussehen) ebenfalls
+    vergissArbeitsstand(); // gemerkter CAD-Stand ebenfalls
     setBuilding(LEERES_GEBAEUDE); // Phase 68-H: wirklich leere Felder statt Demo-Werte
     setSystemId('layher-allround');
     setModel(null);
@@ -902,6 +918,7 @@ export default function CADPage() {
 
       void vergissModell() // Angebot ist dem Kunden zugeordnet → gemerktes Modell darf weg
       void vergissAussehen()
+      vergissArbeitsstand()
       router.push(`/kunden/${customerId}?baustelle=${json.id}&tab=angebote`)
     } catch (err: any) {
       alert('❌ ' + err.message)
