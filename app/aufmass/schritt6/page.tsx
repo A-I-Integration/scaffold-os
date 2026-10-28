@@ -10,6 +10,7 @@ import dynamic from 'next/dynamic';
 import { jsPDF } from 'jspdf';
 import WizardKopf from '@/components/aufmaß/WizardKopf';
 import { aufmassZuCad, CAD_UEBERNAHME_KEY } from '@/lib/cad/aufmass-zu-cad';
+import { waehleCadAnsicht, passeBildEin, ladeBild, type GeladenesBild } from '@/lib/angebot-3d-ansicht';
 import autoTable from 'jspdf-autotable';
 import KIMaterialResult from '@/components/aufmaß/KIMaterialResult';
 import KiHinweis from '@/components/KiHinweis';
@@ -473,6 +474,22 @@ function Schritt6Content() {
   // ═══════════════════════════════════════════════════════════
   // Aufmaß → CAD: Gebäude + System aus den Aufmaß-Daten ins CAD übergeben (3D-Ansicht)
   const [cadFehler, setCadFehler] = useState<string | null>(null);
+  // 3D-Ansicht aus dem CAD (neuestes Bild "CAD-Ansicht-…") für eine eigene Seite im Angebots-PDF
+  const [cadAnsicht, setCadAnsicht] = useState<GeladenesBild | null>(null);
+  useEffect(() => {
+    if (!savedProjectId) { setCadAnsicht(null); return; }
+    let weg = false;
+    (async () => {
+      try {
+        const medien = await getProjectMediaClient('', savedProjectId);
+        const m = waehleCadAnsicht(medien);
+        if (!m) { if (!weg) setCadAnsicht(null); return; }
+        const bild = await ladeBild(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/project-media/${m.storage_path}`);
+        if (!weg) setCadAnsicht(bild);
+      } catch { if (!weg) setCadAnsicht(null); }
+    })();
+    return () => { weg = true; };
+  }, [savedProjectId]);
   function handleImCadOeffnen() {
     const r = aufmassZuCad({ step2: s2, step3: s3, kiResult: kiResult as object | null });
     if (!r.ok || !r.building) { setCadFehler('Für das CAD fehlen noch: ' + r.fehlend.join(', ') + '. Bitte in Schritt 2 ergänzen.'); return; }
@@ -823,6 +840,16 @@ function Schritt6Content() {
       }
     }
     if (kiResult.warnings.length > 0 || kiResult.tips.length > 0) { let wy = finalY + 8; doc.setTextColor(30, 58, 138); doc.setFontSize(10); doc.setFont('helvetica', 'bold'); doc.text('Hinweise & Risiken', 14, wy); wy += 10; kiResult.warnings.forEach((w) => { doc.setTextColor(180, 83, 9); doc.setFontSize(8); doc.text('! ' + w, 14, wy, { maxWidth: 90 }); wy += 14; }); kiResult.tips.forEach((t) => { doc.setTextColor(3, 105, 161); doc.setFontSize(8); doc.text('> ' + t, 14, wy, { maxWidth: 90 }); wy += 14; }); }
+    // 3D-Ansicht des Objekts mit Gerüst (aus dem CAD), eigene Seite vor den AGB
+    if (cadAnsicht) {
+      const f = passeBildEin(cadAnsicht.breite, cadAnsicht.hoehe, pageWidth - 28, 170);
+      if (f.w > 0) {
+        doc.addPage(); doc.setTextColor(30, 58, 138); doc.setFontSize(12); doc.setFont('helvetica', 'bold'); doc.text('3D-Ansicht des Objekts mit Gerüst', 14, 30);
+        doc.addImage(cadAnsicht.dataUrl, 'PNG', 14, 38, f.w, f.h);
+        doc.setTextColor(100, 116, 139); doc.setFontSize(8); doc.setFont('helvetica', 'normal');
+        doc.text('Schematische Darstellung auf Grundlage des Aufmaßes. Maßgeblich sind die Angaben im Angebot.', 14, 38 + f.h + 8, { maxWidth: pageWidth - 28 });
+      }
+    }
     doc.addPage(); doc.setTextColor(30, 58, 138); doc.setFontSize(12); doc.setFont('helvetica', 'bold'); doc.text('Allgemeine Geschäftsbedingungen', 14, 30); doc.setTextColor(71, 85, 105); doc.setFontSize(9); doc.setFont('helvetica', 'normal');
     const agbText = '1. Das Angebot ist 30 Tage ab Ausstellungsdatum gültig.\n2. Preise verstehen sich zuzüglich der gesetzlichen Mehrwertsteuer.\n3. Liefer- und Leistungszeitpunkt wird individuell vereinbart.\n4. Zahlungsziel: 14 Tage nach Rechnungsstellung.\n5. Gerüstbau erfolgt nach aktuellen Sicherheitsvorschriften (DGUV).\n6. Bei Änderungen der Baustellenverhältnisse behalten wir uns Preisanpassungen vor.'
       + (anpassungen.skonto ? '\n7. Bei Zahlung innerhalb von 14 Tagen ab Rechnungsdatum gewähren wir 2 % Skonto auf den Endpreis.' : '');
