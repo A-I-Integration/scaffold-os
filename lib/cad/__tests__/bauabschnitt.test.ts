@@ -113,6 +113,21 @@ describe('2. Bauabschnitt im LV (Stil statiker)', () => {
     expect(mit.ba2).toBeCloseTo(o.ba2, 5)
   })
 
+  it('Reserve über der Höhe: Gerüst bleibt höher stehen (auf Lagenoberkante gerundet), Plane-Summe bleibt', () => {
+    const m = voll()
+    const materials: MaterialItem[] = generateBillOfMaterials(m).map((x) => ({ ...x, unitPrice: 10, totalPrice: x.quantity * 10 }))
+    const log = calculateLogistics(m, materials, 2.0)
+    const lvMit = (r: number) => erzeugeLeistungsverzeichnis({ model: m, materials, aufbauStunden: log.aufbauStunden, abbauStunden: log.abbauStunden }, { ...eing, reserveBa2M: r })
+    const g0 = pos(lvMit(0), 'bis ca. 21,5 m Höhe')
+    const g2 = pos(lvMit(2), 'bis ca. 21,5 m Höhe')
+    expect(g2.ep).toBeGreaterThan(g0.ep)
+    expect(g2.text.join(' ')).toContain('Reserve')
+    const zahl = (lv: ReturnType<typeof lvMit>, t: string) => Number(/([\d.]+,\d+) m² Plane/.exec(pos(lv, t).text.join(' '))![1].replace('.', '').replace(',', '.'))
+    const a = lvMit(0), b = lvMit(2)
+    const sum = (lv: ReturnType<typeof lvMit>) => zahl(lv, 'Vertikale Bekleidung der Gerüste 1. BA') + zahl(lv, 'Vertikale Bekleidung der Gerüste 2. BA')
+    expect(sum(b)).toBeCloseTo(sum(a), 0)
+  })
+
   it('höhere gewählte Höhe → höherer Preis (monoton)', () => {
     const q = quelle()
     const ep = (h: number) => pos(erzeugeLeistungsverzeichnis(q, { ...eing, hoeheBa2M: h }), 'bis ca. 21,5 m Höhe').ep

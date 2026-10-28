@@ -131,6 +131,8 @@ export interface LvEingaben {
   hoeheBa2M?: number
   /** Stil „statiker“: Überlappung der Plane des 1. BA nach unten in m (Vorgabe des Architekten; leer = 0). Die Plane des 1. BA beginnt dann bei Höhe 2. BA minus Überlappung */
   planeUeberlappungM?: number
+  /** Stil „statiker“: Reserve über der angegebenen Höhe des 2. BA in m. Das Gerüst bleibt so viel höher stehen (dann auf die nächste Lagenoberkante gerundet), weil die Fugen des Mauerwerks nicht auf einer festen Höhe liegen und die Teilung vor Ort angepasst wird. Leer = 0 */
+  reserveBa2M?: number
   /** Stil „statiker“: Standzeit des 2. Bauabschnitts in Wochen (leer/0 = in der Tabelle eintragen) */
   standzeitBa2Wochen?: number
   /** Standardpreise aus der Datenpflege für Positionen ohne CAD-Wert (füllen nur, wo sonst 0 € stehen würde) */
@@ -536,7 +538,8 @@ export function erzeugeLeistungsverzeichnis(quelle: LvQuelle, e: LvEingaben): Le
     vorh(b2, g1.nr, 'Arbeitsgerüste am Turmschaft 1. BA', miet(matGerKo))
     // 2. Bauabschnitt: das CAD-Gerüst auf die Höhe des Rückbaus kappen (Annahme: gleiche Berechnung wie 1. BA, Aufbau + Abbau + Vorhaltung)
     const hBa2 = e.hoeheBa2M === undefined ? 21.5 : e.hoeheBa2M
-    const ba2 = hBa2 > 0 ? kappeModellAufHoehe(model, hBa2) : null
+    const reserveBa2 = Math.max(0, e.reserveBa2M ?? 0)
+    const ba2 = hBa2 > 0 ? kappeModellAufHoehe(model, hBa2 + reserveBa2) : null
     const woBa2 = Math.max(0, e.standzeitBa2Wochen ?? 0)
     const mat2: Record<Gruppe, number> = { geruest: 0, konsolen: 0, schutzdach: 0, treppe: 0 }
     if (ba2) for (const m of kappeMaterial(materials, model, ba2.model)) mat2[gruppeVon(m.articleNumber)] += m.totalPrice
@@ -547,7 +550,7 @@ export function erzeugeLeistungsverzeichnis(quelle: LvQuelle, e: LvEingaben): Le
     const hoeheBa2Text = ba2 ? de(ba2.obenM, 2) : de(hBa2 > 0 ? hBa2 : 21.5, 1)
     const g2Text = ba2
       ? [`Arbeitsgerüste am Turmschaft wie Pos. ${g1.nr}, Teil Rückbau der Gerüste 1. BA von ca. ${de(hoeheText, 0)} m bis ca. ${hoeheBa2Text} m inklusive Abtransport.`,
-        `Aus dem CAD auf ${ba2.lagenBehalten} von ${ba2.lagenGesamt} Lagen gekappt (oberste Lage ${hoeheBa2Text} m, ${de(r2(flaecheM2 * ba2.flaechenAnteil), 2)} m² Gerüstfläche). Preis = Aufbau + Abbau wie 1. BA, auf die gekappte Fläche und Stückliste gerechnet; ein bereits stehender Gerüstteil aus dem 1. BA ist nicht abgezogen, bitte prüfen.`]
+        `Aus dem CAD auf ${ba2.lagenBehalten} von ${ba2.lagenGesamt} Lagen gekappt${reserveBa2 > 0 ? ` (angegebene Höhe ca. ${de(hBa2, 1)} m plus ${de(reserveBa2, 1)} m Reserve, da die Teilung vor Ort an die Fugen angepasst wird)` : ''} (oberste Lage ${hoeheBa2Text} m, ${de(r2(flaecheM2 * ba2.flaechenAnteil), 2)} m² Gerüstfläche). Preis = Aufbau + Abbau wie 1. BA, auf die gekappte Fläche und Stückliste gerechnet; ein bereits stehender Gerüstteil aus dem 1. BA ist nicht abgezogen, bitte prüfen.`]
       : [`Arbeitsgerüste am Turmschaft wie Pos. ${g1.nr}, Teil Rückbau der Gerüste 1. BA von ca. ${de(hoeheText, 0)} m bis ca. 21,5 m inklusive Abtransport.`, OHNE_CAD]
     const g2 = b2.add(`Arbeitsgerüste mit int. Tragger. am Turmschaft bis ca. 21,5 m Höhe`, g2Text, 1, 'Stück', ba2 ? cent(lohn2('geruest') + lohn2('konsolen')) : 0)
     vorh(b2, g2.nr, 'Arbeitsgerüste 2. BA', ba2 ? miet2(mat2.geruest + mat2.konsolen) : 0, 'Wo', woBa2)
@@ -790,7 +793,7 @@ export function erzeugeLeistungsverzeichnis(quelle: LvQuelle, e: LvEingaben): Le
       `Einheitspreise abgeleitet aus dem Materialwert der Stückliste (${de(matGesamt, 2)} €), Aufbau-/Abbaustunden (${de(stundenAufAb, 0)} h, nach Materialwert auf die Positionen verteilt) und den eingegebenen Faktoren.`,
       `Vorhaltung je Woche = Materialwert × Mietsatz × (1 + Zuschlag), geteilt durch die Menge.${e.stil === 'grundstandzeit' ? ` Grundposition = (Stunden × Stundensatz Facharbeiter + Materialwert × Mietsatz × ${GRUNDSTANDZEIT_WOCHEN} Wochen) × (1 + Zuschlag), geteilt durch die Menge.` : ''}`,
       e.stil === 'statiker'
-        ? `Gliederung wie im LV des Auftraggebers (Turmeinrüstung): Stück-Pauschalen mit Vorhaltung in Wochen (Standzeit ${de(e.gesamtStandzeitWochen, 0)} Wochen). Preis der Gerüstposition = Aufbau + Abbau (Stunden × Stundensatz, mit Zuschlag) aus dem CAD; Vorhaltung je Woche = Materialwert × Mietsatz × (1 + Zuschlag). Annahme: 1. Bauabschnitt = gesamtes CAD-Gerüst; 2. Bauabschnitt (Gerüst, Treppenturm, Plane-Menge) = dasselbe CAD, gekappt auf die eingestellte Höhe (Standard 21,5 m, oberste Lage = nächstgelegene Lagenoberkante), Preis wie 1. BA (Aufbau + Abbau + Vorhaltung); Aufzug 2. BA: Höhe aus dem gekappten CAD (falls dort ein Aufzug eingestellt ist), Preis zum Selbsteintragen; Haltestellen 2. BA bleiben ohne Wert. Positionen ohne Wert im CAD (Kederplane-Preis, Haltestellen, Dachschutz, Umbau am Bestandsgerüst, Baustelleneinrichtung außer der Pauschale) haben Menge und Preis zum Selbsteintragen in der Tabelle.`
+        ? `Gliederung wie im LV des Auftraggebers (Turmeinrüstung): Stück-Pauschalen mit Vorhaltung in Wochen (Standzeit ${de(e.gesamtStandzeitWochen, 0)} Wochen). Preis der Gerüstposition = Aufbau + Abbau (Stunden × Stundensatz, mit Zuschlag) aus dem CAD; Vorhaltung je Woche = Materialwert × Mietsatz × (1 + Zuschlag). Annahme: 1. Bauabschnitt = gesamtes CAD-Gerüst; 2. Bauabschnitt (Gerüst, Treppenturm) = dasselbe CAD, gekappt auf die eingestellte Höhe (Standard 21,5 m, oberste Lage = nächstgelegene Lagenoberkante), Preis wie 1. BA (Aufbau + Abbau + Vorhaltung); Plane: 1. BA nur oberhalb der Teilungshöhe (minus Überlappung), 2. BA darunter; Aufzug 2. BA: bleibt zu 100 % stehen, Vorhaltung wie 1. BA für die Standzeit des 2. BA; Haltestellen 2. BA bleiben ohne Wert. Positionen ohne Wert im CAD (Kederplane-Preis, Haltestellen, Dachschutz, Umbau am Bestandsgerüst, Baustelleneinrichtung außer der Pauschale) haben Menge und Preis zum Selbsteintragen in der Tabelle.`
       : e.stil === 'getrennt'
         ? `Aufbau, Vorhaltung und Abbau sind getrennte Positionen (Aufbau wie in den Muster-LVs). Vorhaltung über die gesamte Standzeit von ${de(e.gesamtStandzeitWochen, 0)} Wochen (Menge × Wochen). Aufbau-EP = Aufbaustunden × Stundensatz Facharbeiter, Abbau-EP = Abbaustunden × Stundensatz (je mit Zuschlag, nach Materialwert verteilt); das Material steckt in der Vorhaltung.`
         : `Gesamt-Standzeit ${de(e.gesamtStandzeitWochen, 0)} Wochen, davon ${GRUNDSTANDZEIT_WOCHEN} Wochen Grundstandzeit in der Aufbauposition, danach Verlängerung der Vorhaltung.`,
