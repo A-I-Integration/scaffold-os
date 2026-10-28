@@ -23,7 +23,8 @@ import { BAUTEIL_FARBEN, type FarbModus } from '@/lib/cad/bauteil-farben'
 import { useState, useMemo, useCallback, useEffect, useRef } from 'react'
 import StatikDatenPanel from '@/components/cad/StatikDatenPanel'
 import { verlaufNeu, verlaufSetze, verlaufZurueck, verlaufVor } from '@/lib/cad/verlauf'
-import { aussehenAusDatei, type Aussehen } from '@/lib/cad/modell-aussehen'
+import { type Aussehen } from '@/lib/cad/modell-aussehen'
+import { aussehenAusDateien } from '@/lib/cad/obj-mtl-zu-glb'
 import { merkeAussehen, ladeGemerktesAussehen, vergissAussehen } from '@/lib/cad/modell-speicher'
 import AbbauEinplanenDialog from '@/components/cad/AbbauEinplanenDialog'
 import TeilabbauPanel, { TEILABBAU_START, type TeilabbauEingabe } from '@/components/cad/TeilabbauPanel'
@@ -139,10 +140,10 @@ export default function CADPage() {
   useEffect(() => {
     if (aussehen) void merkeAussehen({ aussehen, einheit: aussehenEinheit, oben: aussehenOben, versatz: aussehenVersatz })
   }, [aussehen, aussehenEinheit, aussehenOben, aussehenVersatz])
-  const ladeAussehen = async (datei: File) => {
+  const ladeAussehen = async (dateien: File[]) => {
     setAussehenHinweis('')
     try {
-      const r = aussehenAusDatei(await datei.arrayBuffer(), datei.name)
+      const r = await aussehenAusDateien(dateien)
       if (!r.ok) { setAussehenHinweis('❌ ' + r.meldung); return }
       setAussehen(r.aussehen); setAussehenEin(true); setAussehenEinheit('m'); setAussehenOben('y'); setAussehenVersatz({ x: 0, z: 0, grad: 0 })
       setAussehenHinweis(r.hinweis ?? '')
@@ -960,9 +961,9 @@ export default function CADPage() {
             )}
             {viewMode === '3d' && modelWithManual && (
               <span className='inline-flex flex-wrap items-center gap-1'>
-                <label className='text-xs border rounded-lg px-2 py-1 bg-white text-[#424245] cursor-pointer' title='Zeigt das echte Gebäude (GLB mit Texturen oder PLY-Punktwolke mit Farben) statt des einfachen Baukörpers – nur zur Ansicht, Maße und Gerüst bleiben unverändert'>
+                <label className='text-xs border rounded-lg px-2 py-1 bg-white text-[#424245] cursor-pointer' title='Zeigt das echte Gebäude (GLB mit Texturen, OBJ mit MTL und Bildern oder PLY-Punktwolke mit Farben) statt des einfachen Baukörpers – nur zur Ansicht, Maße und Gerüst bleiben unverändert'>
                   🏛️ {aussehen ? 'Anderes Gebäude laden' : 'Echtes Gebäude laden'}
-                  <input type='file' accept='.glb,.ply' className='hidden' onChange={(ev) => { const f = ev.target.files?.[0]; ev.target.value = ''; if (f) void ladeAussehen(f) }} />
+                  <input type='file' multiple accept='.glb,.ply,.obj,.mtl,.jpg,.jpeg,.png,.webp' className='hidden' onChange={(ev) => { const fs = Array.from(ev.target.files ?? []); ev.target.value = ''; if (fs.length) void ladeAussehen(fs) }} />
                 </label>
                 {aussehen && (
                   <>
