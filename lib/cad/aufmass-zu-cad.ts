@@ -52,9 +52,37 @@ export function aufmassZuCad(a: AufmassFuerCad): CadUebernahme {
   const ki = a.kiResult as { building?: Record<string, unknown>; systemId?: string } | null | undefined
   const sysId = (id: unknown) => (typeof id === 'string' && GERUEST_SYSTEME.some((s) => s.id === id) ? id : '')
 
-  // 1) Projekt kam aus dem CAD → Gebäude unverändert zurück
+  // 1) Projekt kam aus dem CAD → das gespeicherte Gebäude ist die Grundlage (enthält Umriss, Optionen, Balkone, Türen …).
+  //    Wurde das Aufmaß danach geändert, haben die Aufmaß-Werte Vorrang – sonst käme die Änderung nie im CAD an.
   if (ki?.building && zahl(ki.building.lengthM) > 0 && zahl(ki.building.widthM) > 0 && zahl(ki.building.heightM) > 0) {
-    return { ok: true, building: ki.building as unknown as BuildingParams, systemId: sysId(ki.systemId) || sysId(a.step3?.system) || 'layher-allround', fehlend: [], hinweise: ['Gebäude unverändert aus der CAD-Planung dieses Projekts übernommen.'] }
+    const gespeichert = ki.building as unknown as BuildingParams
+    const sid = sysId(ki.systemId) || sysId(a.step3?.system) || 'layher-allround'
+    const s2k = (a.step2 || {}) as Record<string, unknown>
+    const b: BuildingParams = { ...gespeichert }
+    const hw: string[] = []
+    const mitUmriss = (gespeichert.umriss?.length ?? 0) >= 3
+    const setze = (feld: 'lengthM' | 'widthM' | 'heightM' | 'eavesHeightM' | 'overhangM', wert: number, name: string) => {
+      if (!(wert > 0) || Math.abs((gespeichert[feld] ?? 0) - wert) < 0.005) return
+      hw.push(`${name}: CAD ${gespeichert[feld] ?? 0} m → Aufmaß ${wert} m`)
+      b[feld] = wert
+    }
+    if (!mitUmriss) {
+      setze('lengthM', zahl(s2k.laenge), 'Länge'); setze('widthM', zahl(s2k.breite), 'Breite/Tiefe'); setze('heightM', zahl(s2k.hoehe), 'Höhe')
+    }
+    setze('eavesHeightM', zahl(s2k.traufhoehe), 'Traufhöhe'); setze('overhangM', zahl(s2k.dachueberstand), 'Dachüberstand')
+    const df = DACH[String(s2k.dachform || '').toLowerCase()]
+    if (df && df !== gespeichert.roofForm) { hw.push(`Dachform: CAD ${gespeichert.roofForm} → Aufmaß ${df}`); b.roofForm = df }
+    const zus = (Array.isArray(s2k.abschnitte) ? (s2k.abschnitte as Record<string, unknown>[]) : []).filter((x) => zahl(x?.laenge) > 0 && zahl(x?.hoehe) > 0)
+    if (zus.length > 0 && !mitUmriss) {
+      b.sections = [{ bezeichnung: 'Abschnitt 1', laengeM: b.lengthM, hoeheM: b.heightM }, ...zus.map((x, i) => ({ bezeichnung: (x.bezeichnung as string) || `Abschnitt ${i + 2}`, laengeM: zahl(x.laenge), hoeheM: zahl(x.hoehe) }))]
+      hw.push('Abschnitte aus dem Aufmaß übernommen (die CAD-Abschnitte wurden ersetzt).')
+    }
+    return {
+      ok: true, building: b, systemId: sid, fehlend: [],
+      hinweise: hw.length > 0
+        ? ['Gebäude aus der CAD-Planung dieses Projekts übernommen. Geänderte Aufmaß-Werte haben Vorrang:', ...hw]
+        : ['Gebäude unverändert aus der CAD-Planung dieses Projekts übernommen (Aufmaß und CAD stimmen überein).'],
+    }
   }
 
   // 2) Aus Schritt 2 aufbauen
@@ -104,7 +132,7 @@ export function aufmassZuCad(a: AufmassFuerCad): CadUebernahme {
 /** Zwischenablage zwischen Aufmaß-Seite und CAD (nur dieser Browser-Tab). */
 export const CAD_UEBERNAHME_KEY = 'scaffold_cad_aus_aufmass'
 
-export interface CadUebergabe { building: BuildingParams; systemId: string; hinweise: string[]; projektName?: string }
+export interface CadUebergabe { building: BuildingParams; systemId: string; hinweise: string[]; projektName?: string; notizen?: unknown[]; statikDaten?: Record<string, unknown> }
 
 export function leseCadUebergabe(roh: string | null): CadUebergabe | null {
   if (!roh) return null
@@ -112,6 +140,6 @@ export function leseCadUebergabe(roh: string | null): CadUebergabe | null {
     const j = JSON.parse(roh) as Record<string, unknown> & { building?: BuildingParams }
     const b = j?.building
     if (!b || !(b.lengthM > 0) || !(b.widthM > 0) || !(b.heightM > 0)) return null
-    return { building: b, systemId: typeof j.systemId === 'string' ? j.systemId : 'layher-allround', hinweise: Array.isArray(j.hinweise) ? (j.hinweise as unknown[]).map(String) : [], projektName: typeof j.projektName === 'string' ? j.projektName : undefined }
+    return { building: b, systemId: typeof j.systemId === 'string' ? j.systemId : 'layher-allround', hinweise: Array.isArray(j.hinweise) ? (j.hinweise as unknown[]).map(String) : [], projektName: typeof j.projektName === 'string' ? j.projektName : undefined, notizen: Array.isArray(j.notizen) ? j.notizen : undefined, statikDaten: j.statikDaten && typeof j.statikDaten === 'object' && !Array.isArray(j.statikDaten) ? (j.statikDaten as Record<string, unknown>) : undefined }
   } catch { return null }
 }

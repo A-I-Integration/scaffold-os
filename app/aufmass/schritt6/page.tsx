@@ -495,7 +495,7 @@ function Schritt6Content() {
     if (!r.ok || !r.building) { setCadFehler('Für das CAD fehlen noch: ' + r.fehlend.join(', ') + '. Bitte in Schritt 2 ergänzen.'); return; }
     setCadFehler(null);
     try {
-      sessionStorage.setItem(CAD_UEBERNAHME_KEY, JSON.stringify({ building: r.building, systemId: r.systemId, hinweise: r.hinweise, projektName: s1.name || '' }));
+      sessionStorage.setItem(CAD_UEBERNAHME_KEY, JSON.stringify({ building: r.building, systemId: r.systemId, hinweise: r.hinweise, projektName: s1.name || '', notizen: Array.isArray((stepData as Record<string, unknown>).cadNotizen) ? (stepData as Record<string, unknown>).cadNotizen : undefined, statikDaten: (stepData as Record<string, unknown>).statikDaten }));
     } catch { setCadFehler('Die Daten konnten nicht für das CAD zwischengespeichert werden (Browser-Speicher gesperrt).'); return; }
     router.push('/cad?aus=aufmass');
   }

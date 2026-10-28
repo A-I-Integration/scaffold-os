@@ -26,10 +26,22 @@ describe('Aufmaß → CAD', () => {
     expect(r.hinweise.join(' ')).toMatch(/Layher Allround/)
     expect(r.hinweise.join(' ')).toMatch(/Tonnendach/)
   })
-  it('CAD-Projekt: gespeichertes Gebäude kommt unverändert zurück', () => {
-    const b = { lengthM: 20, widthM: 10, heightM: 12, sides: ['front', 'left'] }
+  it('CAD-Projekt: stimmt das Aufmaß überein, bleibt das gespeicherte Gebäude erhalten', () => {
+    const b = { lengthM: 12.5, widthM: 9, heightM: 10, eavesHeightM: 7, overhangM: 0.5, roofForm: 'satteldach', sides: ['front', 'left'], tueren: [1] }
     const r = aufmassZuCad({ step2: s2, kiResult: { building: b, systemId: 'layher-allround' } })
-    expect(r.building).toBe(b)
+    expect(r.building).toMatchObject(b)
+    expect(r.hinweise[0]).toMatch(/stimmen überein/)
+  })
+  it('CAD-Projekt: später geändertes Aufmaß hat Vorrang, Rest bleibt', () => {
+    const b = { lengthM: 20, widthM: 10, heightM: 12, eavesHeightM: 9, roofForm: 'flachdach', sides: ['front', 'left'], geruestOptionen: { x: 1 } }
+    const r = aufmassZuCad({ step2: { laenge: '22', breite: '10', hoehe: '15', traufhoehe: '9', dachform: 'Flachdach' }, kiResult: { building: b } })
+    expect(r.building).toMatchObject({ lengthM: 22, heightM: 15, widthM: 10, sides: ['front', 'left'], geruestOptionen: { x: 1 } })
+    expect(r.hinweise.join(' ')).toMatch(/Länge: CAD 20 m → Aufmaß 22 m/)
+  })
+  it('CAD-Projekt mit Umriss: Maße des Umrisses bleiben', () => {
+    const b = { lengthM: 20, widthM: 10, heightM: 12, umriss: [{ x: 0, z: 0 }, { x: 1, z: 0 }, { x: 1, z: 1 }] }
+    const r = aufmassZuCad({ step2: { laenge: '99', breite: '99', hoehe: '12' }, kiResult: { building: b } })
+    expect(r.building?.lengthM).toBe(20)
   })
   it('leseCadUebergabe prüft die Daten', () => {
     expect(leseCadUebergabe(null)).toBeNull()
