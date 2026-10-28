@@ -26,7 +26,7 @@ import { verlaufNeu, verlaufSetze, verlaufZurueck, verlaufVor } from '@/lib/cad/
 import { type Aussehen } from '@/lib/cad/modell-aussehen'
 import { aussehenAusDateien } from '@/lib/cad/obj-mtl-zu-glb'
 import { CAD_UEBERNAHME_KEY, leseCadUebergabe } from '@/lib/cad/aufmass-zu-cad'
-import { ladeArbeitsstand, speichereArbeitsstand, vergissArbeitsstand } from '@/lib/cad/arbeitsstand'
+import { ladeArbeitsstand, speichereArbeitsstand, vergissArbeitsstand, holeStempel, neuerStempel } from '@/lib/cad/arbeitsstand'
 import { merkeAussehen, ladeGemerktesAussehen, vergissAussehen } from '@/lib/cad/modell-speicher'
 import AbbauEinplanenDialog from '@/components/cad/AbbauEinplanenDialog'
 import TeilabbauPanel, { TEILABBAU_START, type TeilabbauEingabe } from '@/components/cad/TeilabbauPanel'
@@ -131,9 +131,11 @@ export default function CADPage() {
   useEffect(() => {
     let weg = false
     // Übernahme aus dem Aufmaß = etwas Neues: das gemerkte 3D-Modell einer früheren Sitzung gehört nicht zu diesem Projekt → verwerfen.
-    try { if (sessionStorage.getItem(CAD_UEBERNAHME_KEY)) { void vergissAussehen(); return } } catch { /* Speicher gesperrt */ }
+    try { if (sessionStorage.getItem(CAD_UEBERNAHME_KEY)) { neuerStempel(); void vergissAussehen(); return } } catch { /* Speicher gesperrt */ }
     ladeGemerktesAussehen().then((m) => {
       if (weg || !m) return
+      // Nur laden, wenn es zu DIESEM CAD-Stand gehört (gleicher Stempel); Altes aus früheren Sitzungen wird verworfen.
+      if (m.stempel !== holeStempel()) { void vergissAussehen(); return }
       setAussehenHinweis('Gemerktes 3D-Modell aus der letzten Sitzung geladen – mit „entfernen“ löschen.')
       setAussehen((alt) => alt ?? m.aussehen)
       setAussehenEinheit(m.einheit === 'cm' || m.einheit === 'mm' ? m.einheit : 'm')
@@ -143,7 +145,7 @@ export default function CADPage() {
     return () => { weg = true }
   }, [])
   useEffect(() => {
-    if (aussehen) void merkeAussehen({ aussehen, einheit: aussehenEinheit, oben: aussehenOben, versatz: aussehenVersatz })
+    if (aussehen) void merkeAussehen({ aussehen, einheit: aussehenEinheit, oben: aussehenOben, versatz: aussehenVersatz, stempel: holeStempel() })
   }, [aussehen, aussehenEinheit, aussehenOben, aussehenVersatz])
   const ladeAussehen = async (dateien: File[]) => {
     setAussehenHinweis('')
@@ -207,6 +209,7 @@ export default function CADPage() {
     setAutoGenerate(true); setBuilding(u.building)
     if (u.notizen) setNotes(u.notizen as CADNote[])
     if (u.statikDaten) setStatikDaten(bereinigeStatikDaten(u.statikDaten as StatikDaten))
+    try { window.history.replaceState(null, '', '/cad') } catch { /* nur Anzeige */ }
     speichereArbeitsstand({ building: u.building, systemId: u.systemId, notizen: u.notizen ?? [], statikDaten: (u.statikDaten ?? {}) as Record<string, unknown>, artikelWahl: {} })
     setAufmassHinweise(['Maße aus dem Aufmaß' + (u.projektName ? ` „${u.projektName}“` : '') + ' übernommen.', ...u.hinweise])
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -448,7 +451,7 @@ export default function CADPage() {
     if (!window.confirm('Wirklich neu starten?\n\nDas 3D-Modell wird geleert und alle Maße auf den Anfangszustand gesetzt. Das Gerüst erscheint erst wieder, wenn du Maße änderst oder „Gerüst neu berechnen“ wählst. Bereits gespeicherte Projekte bleiben unverändert.')) return;
     void vergissModell(); // hochgeladenes 3D-Modell im Browser-Zwischenspeicher ebenfalls entfernen
     void vergissAussehen(); setAussehen(null); // echtes Gebäude (Aussehen) ebenfalls
-    vergissArbeitsstand(); // gemerkter CAD-Stand ebenfalls
+    vergissArbeitsstand(); neuerStempel(); // gemerkter CAD-Stand ebenfalls
     setBuilding(LEERES_GEBAEUDE); // Phase 68-H: wirklich leere Felder statt Demo-Werte
     setSystemId('layher-allround');
     setModel(null);
@@ -918,7 +921,7 @@ export default function CADPage() {
 
       void vergissModell() // Angebot ist dem Kunden zugeordnet → gemerktes Modell darf weg
       void vergissAussehen()
-      vergissArbeitsstand()
+      vergissArbeitsstand(); neuerStempel()
       router.push(`/kunden/${customerId}?baustelle=${json.id}&tab=angebote`)
     } catch (err: any) {
       alert('❌ ' + err.message)

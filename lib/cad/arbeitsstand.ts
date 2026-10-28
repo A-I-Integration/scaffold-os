@@ -49,3 +49,22 @@ export function ladeArbeitsstand(): Arbeitsstand | null {
 export function vergissArbeitsstand(): void {
   try { localStorage.removeItem(ARBEITSSTAND_KEY) } catch { /* nichts zu tun */ }
 }
+
+// Stempel: kennzeichnet "diesen CAD-Stand". Alles, was nur zu ihm gehört (z. B. das 3D-Modell des echten Gebäudes),
+// wird mit dem Stempel gespeichert und nur geladen, wenn er noch stimmt. Ein neuer Stand (Aufmaß-Übernahme,
+// „Neu starten“, Zuordnen) bekommt einen neuen Stempel – Altes aus früheren Sitzungen taucht dann nicht mehr auf.
+const STEMPEL_KEY = 'scaffold_cad_stempel_v1'
+
+export function holeStempel(): string {
+  try {
+    let s = localStorage.getItem(STEMPEL_KEY)
+    if (!s) { s = neuerStempel() }
+    return s
+  } catch { return 'ohne-speicher' }
+}
+
+export function neuerStempel(): string {
+  const s = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`
+  try { localStorage.setItem(STEMPEL_KEY, s) } catch { /* Speicher gesperrt */ }
+  return s
+}
