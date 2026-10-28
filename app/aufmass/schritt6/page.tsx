@@ -9,6 +9,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import dynamic from 'next/dynamic';
 import { jsPDF } from 'jspdf';
 import WizardKopf from '@/components/aufmaß/WizardKopf';
+import { aufmassZuCad, CAD_UEBERNAHME_KEY } from '@/lib/cad/aufmass-zu-cad';
 import autoTable from 'jspdf-autotable';
 import KIMaterialResult from '@/components/aufmaß/KIMaterialResult';
 import KiHinweis from '@/components/KiHinweis';
@@ -470,6 +471,17 @@ function Schritt6Content() {
   // ═══════════════════════════════════════════════════════════
   // BESTEHENDE HANDLER (unverändert)
   // ═══════════════════════════════════════════════════════════
+  // Aufmaß → CAD: Gebäude + System aus den Aufmaß-Daten ins CAD übergeben (3D-Ansicht)
+  const [cadFehler, setCadFehler] = useState<string | null>(null);
+  function handleImCadOeffnen() {
+    const r = aufmassZuCad({ step2: s2, step3: s3, kiResult: kiResult as object | null });
+    if (!r.ok || !r.building) { setCadFehler('Für das CAD fehlen noch: ' + r.fehlend.join(', ') + '. Bitte in Schritt 2 ergänzen.'); return; }
+    setCadFehler(null);
+    try {
+      sessionStorage.setItem(CAD_UEBERNAHME_KEY, JSON.stringify({ building: r.building, systemId: r.systemId, hinweise: r.hinweise, projektName: s1.name || '' }));
+    } catch { setCadFehler('Die Daten konnten nicht für das CAD zwischengespeichert werden (Browser-Speicher gesperrt).'); return; }
+    router.push('/cad?aus=aufmass');
+  }
   async function handleKIBerechnung() {
     setKiLoading(true); setKiError(null);
     try {
@@ -1460,6 +1472,10 @@ function Schritt6Content() {
               <button onClick={handleKIBerechnung} disabled={kiLoading} className="w-full rounded-xl bg-[#e8590c] hover:bg-[#d9480f] disabled:opacity-50 disabled:cursor-not-allowed py-3.5 font-semibold text-white transition-colors">
                 {kiLoading ? <span className="flex items-center justify-center gap-2"><span className="h-5 w-5 animate-spin rounded-full border-2 border-white border-t-transparent"></span>KI berechnet Materialliste...</span> : <span className="inline-flex items-center justify-center gap-2"><Sparkles className="w-4 h-4" />KI Planung starten</span>}
               </button>
+              <button onClick={handleImCadOeffnen} className="mt-3 w-full rounded-xl border border-[#0071e3] text-[#0071e3] hover:bg-[#0071e3]/5 py-3 font-semibold transition-colors">
+                Im CAD öffnen (3D-Ansicht mit diesen Maßen)
+              </button>
+              {cadFehler && <div className="mt-3 rounded-xl border border-red-500/30 bg-red-500/10 p-3"><p className="text-sm text-red-700">{cadFehler}</p></div>}
               {kiError && <div className="mt-4 rounded-xl border border-red-500/30 bg-red-500/10 p-4"><p className="text-sm font-medium text-red-700">Fehler: {kiError}</p></div>}
             </div>
 
