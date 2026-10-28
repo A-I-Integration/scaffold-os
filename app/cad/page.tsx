@@ -129,8 +129,11 @@ export default function CADPage() {
   const [aussehenVersatz, setAussehenVersatz] = useState<{ x: number; z: number; grad: number }>({ x: 0, z: 0, grad: 0 })
   useEffect(() => {
     let weg = false
+    // Kommt man aus dem Aufmaß, gehört ein im Browser gemerktes 3D-Modell einer früheren Sitzung nicht zu diesem Projekt → nicht automatisch laden.
+    if (new URLSearchParams(window.location.search).get('aus') === 'aufmass') return
     ladeGemerktesAussehen().then((m) => {
       if (weg || !m) return
+      setAussehenHinweis('Gemerktes 3D-Modell aus der letzten Sitzung geladen – mit „entfernen“ löschen.')
       setAussehen((alt) => alt ?? m.aussehen)
       setAussehenEinheit(m.einheit === 'cm' || m.einheit === 'mm' ? m.einheit : 'm')
       setAussehenOben(m.oben === 'x' || m.oben === 'z' ? m.oben : 'y')
