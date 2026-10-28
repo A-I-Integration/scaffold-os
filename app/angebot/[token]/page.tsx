@@ -14,7 +14,7 @@ import { MIN_KORREKTUR_NOTIZ, MAX_NOTIZ, type AngebotAntwort } from '@/lib/angeb
 
 interface AngebotDaten {
   projektName: string; adresse: string; angebotsStatus: string;
-  endpreis: number | null; gerüstklasse: string | null; flaecheM2: number | null;
+  endpreis: number | null; gerüstklasse: string | null; flaecheM2: number | null; ansichtUrl?: string | null;
   letzteRueckmeldung?: { art: string; notiz: string | null; am: string } | null;
   company: { company_name: string; street: string; zip: string; city: string; phone: string; email: string } | null;
 }
@@ -93,6 +93,14 @@ export default function OeffentlichesAngebotPage() {
               <p className="text-[#1d1d1f] font-medium">{daten.projektName}</p>
               <p className="text-sm text-[#86868b]">{daten.adresse}</p>
             </div>
+
+            {daten.ansichtUrl && (
+              <figure>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={daten.ansichtUrl} alt="3D-Ansicht des Objekts mit Gerüst" className="w-full rounded-xl border border-black/5 bg-[#f5f5f7]" loading="lazy" />
+                <figcaption className="text-[11px] text-[#86868b] mt-1">Schematische Darstellung Ihres Objekts mit Gerüst.</figcaption>
+              </figure>
+            )}
 
             {(daten.gerüstklasse || daten.flaecheM2) && (
               <div className="grid grid-cols-2 gap-3">
