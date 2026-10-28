@@ -260,7 +260,9 @@ body {
 .win-ui :is(button,a)[class~="bg-lime-700"]:hover,
 .win-ui :is(button,a)[class~="bg-lime-800"]:hover,
 .win-ui :is(button,a)[class~="bg-lime-900"]:hover { background: #24518a; }
-.win-ui :is(button,a)[class*="bg-orange-"], .win-ui :is(button,a)[class*="bg-[#e8590c]"], .win-ui :is(button,a)[class*="bg-[#d9480f]"] { color: #fff; }
+/* Nur volle Hintergrundfarbe (exakte Klasse). Helle Töne wie "bg-[#e8590c]/10" oder "hover:bg-…/5" behalten ihre Schriftfarbe, sonst steht weiße Schrift auf hellem Grund. */
+.win-ui :is(button,a)[class~="bg-[#e8590c]"], .win-ui :is(button,a)[class~="bg-[#d9480f]"],
+.win-ui :is(button,a)[class*=" bg-orange-"], .win-ui :is(button,a)[class^="bg-orange-"] { color: #fff; }
 /* Helle Farb-Knöpfe: neutral grau mit schwarzer Schrift */
 .win-ui :is(button,a)[class~="bg-green-50"],
 .win-ui :is(button,a)[class~="bg-green-100"],

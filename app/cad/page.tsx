@@ -192,6 +192,8 @@ export default function CADPage() {
     if (!u) return
     setSystemId(u.systemId); setArtikelWahl({})
     setAutoGenerate(true); setBuilding(u.building)
+    if (u.notizen) setNotes(u.notizen as CADNote[])
+    if (u.statikDaten) setStatikDaten(bereinigeStatikDaten(u.statikDaten as StatikDaten))
     setAufmassHinweise(['Maße aus dem Aufmaß' + (u.projektName ? ` „${u.projektName}“` : '') + ' übernommen.', ...u.hinweise])
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
