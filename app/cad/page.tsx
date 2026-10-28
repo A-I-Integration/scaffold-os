@@ -25,6 +25,7 @@ import StatikDatenPanel from '@/components/cad/StatikDatenPanel'
 import { verlaufNeu, verlaufSetze, verlaufZurueck, verlaufVor } from '@/lib/cad/verlauf'
 import { type Aussehen } from '@/lib/cad/modell-aussehen'
 import { aussehenAusDateien } from '@/lib/cad/obj-mtl-zu-glb'
+import { CAD_UEBERNAHME_KEY, leseCadUebergabe } from '@/lib/cad/aufmass-zu-cad'
 import { merkeAussehen, ladeGemerktesAussehen, vergissAussehen } from '@/lib/cad/modell-speicher'
 import AbbauEinplanenDialog from '@/components/cad/AbbauEinplanenDialog'
 import TeilabbauPanel, { TEILABBAU_START, type TeilabbauEingabe } from '@/components/cad/TeilabbauPanel'
@@ -182,6 +183,18 @@ export default function CADPage() {
   const [autoGenerate, setAutoGenerate] = useState(false)
   // Katalogwahl: Bauteil-ID → Artikelnummer des Herstellers (gilt nur für das gewählte System)
   const [artikelWahl, setArtikelWahl] = useState<Record<string, string>>({})
+  // Aufmaß → CAD: Maße und System aus Schritt 6 übernehmen (einmalig, dann aus dem Zwischenspeicher entfernen)
+  const [aufmassHinweise, setAufmassHinweise] = useState<string[]>([])
+  useEffect(() => {
+    let roh: string | null = null
+    try { roh = sessionStorage.getItem(CAD_UEBERNAHME_KEY); sessionStorage.removeItem(CAD_UEBERNAHME_KEY) } catch { return }
+    const u = leseCadUebergabe(roh)
+    if (!u) return
+    setSystemId(u.systemId); setArtikelWahl({})
+    setAutoGenerate(true); setBuilding(u.building)
+    setAufmassHinweise(['Maße aus dem Aufmaß' + (u.projektName ? ` „${u.projektName}“` : '') + ' übernommen.', ...u.hinweise])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
   const waehleArtikel = useCallback((id: string, nr: string | null) => {
     setArtikelWahl((alt) => { const neu = { ...alt }; if (nr) neu[id] = nr; else delete neu[id]; return neu })
   }, [])
@@ -922,6 +935,12 @@ export default function CADPage() {
       </div>
       <div className='flex-1 flex flex-col md:flex-row md:overflow-hidden'>
         <div className='w-full md:w-72 md:shrink-0 md:overflow-y-auto'>
+          {aufmassHinweise.length > 0 && (
+            <div className='mb-3 rounded-xl border border-[#0071e3]/30 bg-[#0071e3]/5 p-3 text-xs text-[#1d1d1f]'>
+              <div className='flex justify-between gap-2'><span className='font-semibold'>Aus dem Aufmaß übernommen</span><button type='button' className='text-[#86868b] underline' onClick={() => setAufmassHinweise([])}>schließen</button></div>
+              <ul className='mt-1 list-disc pl-4 space-y-0.5'>{aufmassHinweise.map((h, i) => <li key={i}>{h}</li>)}</ul>
+            </div>
+          )}
           <BuildingForm building={building} systemId={systemId} onChange={(b) => { setAutoGenerate(true); setBuilding(b); }} onSystemChange={aendereSystem} onGenerate={() => { setAutoGenerate(true); generate(); }} onLadeProjektdatei={ladeProjektdatei} warnings={allWarnings}
             zusatz={<StatikDatenPanel daten={statikDaten} onChange={setStatikDaten} model={modelWithManual} />} />
         </div>
