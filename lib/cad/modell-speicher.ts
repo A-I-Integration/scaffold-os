@@ -166,7 +166,7 @@ export function nwdZwischenspeicher(speicher: Speicher | null = aktiverSpeicher(
 
 // ---------- Aussehen des echten Gebäudes (GLB / farbige Punktwolke) ----------
 
-export interface GemerktesAussehen { aussehen: import('./modell-aussehen').Aussehen; einheit: string; oben: string; versatz?: { x: number; z: number; grad: number } }
+export interface GemerktesAussehen { aussehen: import('./modell-aussehen').Aussehen; einheit: string; oben: string; versatz?: { x: number; z: number; grad: number }; /** gehört zu diesem CAD-Stand (siehe arbeitsstand.ts); ohne Stempel oder mit anderem wird es nicht geladen */ stempel?: string }
 
 export async function merkeAussehen(a: GemerktesAussehen, speicher: Speicher | null = aktiverSpeicher()): Promise<boolean> {
   if (!speicher) return false
@@ -181,7 +181,7 @@ export async function ladeGemerktesAussehen(speicher: Speicher | null = aktiverS
     if (!a || (a.art === 'glb' ? !(a.daten instanceof ArrayBuffer) : !(a.positionen instanceof Float32Array && a.farben instanceof Uint8Array))) return null
     const v = w?.versatz
     const versatz = v && Number.isFinite(v.x) && Number.isFinite(v.z) && Number.isFinite(v.grad) ? v : undefined
-    return { aussehen: a, einheit: typeof w?.einheit === 'string' ? w.einheit : 'm', oben: typeof w?.oben === 'string' ? w.oben : 'y', ...(versatz ? { versatz } : {}) }
+    return { aussehen: a, einheit: typeof w?.einheit === 'string' ? w.einheit : 'm', oben: typeof w?.oben === 'string' ? w.oben : 'y', ...(versatz ? { versatz } : {}), ...(typeof w?.stempel === 'string' ? { stempel: w.stempel } : {}) }
   } catch { return null }
 }
 
