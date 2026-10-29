@@ -774,7 +774,7 @@ function Schritt1Content() {
             <div className="bg-black/10/30 rounded-xl p-6 border border-black/10">
               <h3 className="text-lg font-bold text-[#1d1d1f] mb-2 flex items-center gap-2"><SymbolIcon e="📐" className="w-5 h-5 shrink-0 text-[#e8590c]" />LiDAR / 3D-Scan</h3>
               <p className="text-sm text-[#86868b] mb-4">
-                OBJ oder PLY-Datei hochladen für automatische Maßextraktion.
+                Punktwolke oder 3D-Modell hochladen (Drohne: .laz/.las, Polycam: .ply/.las, 3D-Modell: .glb/.obj) für automatische Maßextraktion.
               </p>
               <LiDARUpload
                 sessionId={sessionId}
