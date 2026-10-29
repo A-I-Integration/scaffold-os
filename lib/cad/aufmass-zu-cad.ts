@@ -19,6 +19,7 @@
 
 import type { BuildingParams, BuildingSection } from '@/lib/calculations/cad-engine'
 import { GERUEST_SYSTEME } from '@/lib/calculations/geruest-systeme'
+import { breiteVonBreitenklasse } from '@/lib/geruestklassen'
 
 export interface AufmassFuerCad {
   step2?: Record<string, unknown>
@@ -45,6 +46,24 @@ const DACH: Record<string, BuildingParams['roofForm']> = {
 const zahl = (v: unknown): number => {
   const n = parseFloat(String(v ?? '').replace(',', '.'))
   return Number.isFinite(n) && n > 0 ? n : 0
+}
+
+/** Lastklasse (1–6) und Breitenklasse (W06 …) aus Schritt 2 → Gebäudeparameter des CAD.
+ *  Die Gerüstbreite wird nur gesetzt, wenn das System eine Breite hat, die mindestens der Breitenklasse entspricht. */
+function klassenUebernehmen(s2: Record<string, unknown>, systemId: string, b: BuildingParams, hinweise: string[]): void {
+  const lk = Math.round(Number(s2.lastklasse))
+  if (Number.isFinite(lk) && lk >= 1 && lk <= 6) {
+    if (b.lastklasse !== undefined && b.lastklasse !== lk) hinweise.push(`Lastklasse: CAD ${b.lastklasse} → Aufmaß ${lk}`)
+    b.lastklasse = lk
+  }
+  const bk = typeof s2.breitenklasse === 'string' ? s2.breitenklasse.trim().toUpperCase() : ''
+  const min = breiteVonBreitenklasse(bk)
+  if (min) {
+    const sys = GERUEST_SYSTEME.find((x) => x.id === systemId)
+    const passend = sys?.rahmenBreitenM.filter((w) => w >= min - 1e-9).sort((x, y) => x - y)[0]
+    if (passend) b.geruestOptionen = { ...(b.geruestOptionen ?? {}), breiteM: passend }
+    else hinweise.push(`Breitenklasse ${bk} aus dem Aufmaß: Das gewählte System hat keine passende Gerüstbreite – bitte im CAD prüfen.`)
+  }
 }
 
 export function aufmassZuCad(a: AufmassFuerCad): CadUebernahme {
@@ -77,6 +96,7 @@ export function aufmassZuCad(a: AufmassFuerCad): CadUebernahme {
       b.sections = [{ bezeichnung: 'Abschnitt 1', laengeM: b.lengthM, hoeheM: b.heightM }, ...zus.map((x, i) => ({ bezeichnung: (x.bezeichnung as string) || `Abschnitt ${i + 2}`, laengeM: zahl(x.laenge), hoeheM: zahl(x.hoehe) }))]
       hw.push('Abschnitte aus dem Aufmaß übernommen (die CAD-Abschnitte wurden ersetzt).')
     }
+    klassenUebernehmen(s2k, sid, b, hw)
     return {
       ok: true, building: b, systemId: sid, fehlend: [],
       hinweise: hw.length > 0
@@ -96,7 +116,7 @@ export function aufmassZuCad(a: AufmassFuerCad): CadUebernahme {
   if (!hoehe) fehlend.push('Höhe')
 
   const systemId = sysId(a.step3?.system) || 'layher-allround'
-  if (!sysId(a.step3?.system)) hinweise.push('Das Gerüstsystem aus dem Aufmaß ist im CAD nicht hinterlegt – es wurde Layher Allround gesetzt, bitte prüfen.')
+  if (!sysId(a.step3?.system)) hinweise.push(a.step3?.system ? 'Das Gerüstsystem aus dem Aufmaß ist im CAD nicht hinterlegt – es wurde Layher Allround gesetzt, bitte prüfen.' : 'Im Aufmaß ist kein Gerüstsystem gewählt (herstellerneutral) – im CAD wurde Layher Allround gesetzt, bitte prüfen.')
   if (fehlend.length) return { ok: false, systemId, fehlend, hinweise }
 
   const traufe = zahl(s2.traufhoehe)
@@ -120,12 +140,13 @@ export function aufmassZuCad(a: AufmassFuerCad): CadUebernahme {
     lengthM: laenge, widthM: breite, heightM: hoehe,
     eavesHeightM: traufe || hoehe, roofHeightM, roofForm: dachform,
     floors: 0, floorHeightsM: [],
-    windowCount: 0, doorCount: 0, balconyCount: balkone,
+    windowCount: 0, doorCount: Math.max(0, Math.round(zahl(s2.hauseingaenge))), balconyCount: balkone,
     overhangM: zahl(s2.dachueberstand) || 0, setbackM: 0,
     sides: ['front'],
     ...(sections ? { sections } : {}),
   }
-  hinweise.push('Das Gerüst steht wie im Aufmaß auf einer Seite (Länge × Höhe). Weitere Seiten im CAD zuschalten. Fenster und Türen sind im Aufmaß nicht erfasst – bei Bedarf im CAD ergänzen.')
+  klassenUebernehmen(s2, systemId, building, hinweise)
+  hinweise.push('Das Gerüst steht wie im Aufmaß auf einer Seite (Länge × Höhe). Weitere Seiten im CAD zuschalten. Fenster sind im Aufmaß nicht erfasst – bei Bedarf im CAD ergänzen.')
   return { ok: true, building, systemId, fehlend: [], hinweise }
 }
 

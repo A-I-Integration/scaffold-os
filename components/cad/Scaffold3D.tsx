@@ -104,8 +104,6 @@ interface ZiehKontextWert {
 const ZiehKontext = createContext<ZiehKontextWert | null>(null)
 /** Farbe des Himmels am Horizont (Sky bei turbidity 6): in diese Farbe läuft der Boden in der Ferne aus */
 const HORIZONT_FARBE = '#e9edf2'
-const NEBEL_NAH = 1.6
-const NEBEL_FERN = 2.0
 const FarbModusKontext = createContext<FarbModus>('real')
 /** Teilabbau: Bauteile, die abgebaut werden sollen, werden rot markiert */
 const AbbauMarkKontext = createContext<ReadonlySet<string> | null>(null)
@@ -114,14 +112,21 @@ const EchtesGebaeudeKontext = createContext<EchtesGebaeudeDaten | null>(null)
 
 /** Nebel in Himmelsfarbe: der Boden läuft in der Ferne aus. Muss an der Szene hängen (ein <fog> in einer Gruppe wirkt nicht). */
 function HorizontNebel({ an }: { an: boolean }) {
-  const { scene, camera } = useThree()
+  const { scene } = useThree()
   useEffect(() => {
     if (!an) return
-    // Maßstab = Abstand der Startkamera zum Modell (nicht von `nah` abhängig: der Nebel soll hinter dem Modell beginnen, am Rand des Bodens voll deckend sein)
-    const d = camera.position.length()
-    Object.assign(scene, { fog: new THREE.Fog(HORIZONT_FARBE, d * NEBEL_NAH, d * NEBEL_FERN) })
+    Object.assign(scene, { fog: new THREE.Fog(HORIZONT_FARBE, 100, 150) })
     return () => { Object.assign(scene, { fog: null }) }
-  }, [scene, camera, an])
+  }, [scene, an])
+  // Der Nebel folgt dem aktuellen Kameraabstand: Beim Herauszoomen darf er das Modell nicht verschleiern (früher lag er fest
+  // bei 1,6–2-fachem Startabstand, dahinter war alles weiß). Nur der ferne Boden läuft in die Himmelsfarbe aus.
+  useFrame(({ scene: sz, camera }) => {
+    const f = sz.fog as THREE.Fog | null
+    if (!f) return
+    const c = camera.position.length()
+    f.near = c + 100
+    f.far = c + 150
+  })
   return null
 }
 // Optik nach MJ-Katalog: 'modul' (COMBI/OPTIMA: Lochscheibe mit 8 Aussparungen), 'mj' (andere MJ-Systeme: nur Fußspindel), null = bisherige Optik

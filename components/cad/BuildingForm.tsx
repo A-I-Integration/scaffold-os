@@ -15,6 +15,8 @@ import { uploadVertragsdokument } from '@/lib/vertrag-upload-client'
 import { KIRCHE_STANDARD, kircheUebernehmen, pruefeKircheMasse, type KircheMasse } from '@/lib/cad/kirche-vorlage'
 import { quaderAusObj, quaderAusStl, masseAusQuader, dreieckeAusObj, dreieckeAusStl, draufsichtDreiecke, obenAusObjKopf, type Quader, type Einheit, type Achse, EINHEIT_FAKTOR } from '@/lib/cad/modell-import'
 import { merkeModell, ladeGemerktesModell, vergissModell, nwdZwischenspeicher } from '@/lib/cad/modell-speicher'
+import { CAD_UEBERNAHME_KEY } from '@/lib/cad/aufmass-zu-cad'
+import { holeStempel } from '@/lib/cad/arbeitsstand'
 import { erkenneGrundriss, FORM_NAME } from '@/lib/cad/grundriss-erkennung'
 import { portalAlsTuer } from '@/lib/cad/portal-erkennung'
 import { analysiereDreiecke, schaetzeEinheit, spannweiten, nullpunktUeberTiefstem, abschnitteAusTeilen, abschnitteAusTeileListe, vorgabeAchseEinheit, type GebaeudeTeil } from '@/lib/cad/modell-analyse'
@@ -50,15 +52,18 @@ export default function BuildingForm({ building, systemId, onChange, onSystemCha
   // „Verwerfen“, „Neu starten“, Kunden-Zuordnung oder einem neuen Upload.
   useEffect(() => {
     let abgebrochen = false
+    // Kommt der Stand frisch aus dem Aufmaß, gilt das alte Modell (z. B. ein früherer Kirchturm) nicht mehr.
+    try { if (sessionStorage.getItem(CAD_UEBERNAHME_KEY)) { void vergissModell(); return } } catch { /* Speicher gesperrt */ }
     ladeGemerktesModell().then((m) => {
       if (abgebrochen || !m) return
+      if (m.stempel !== holeStempel()) { void vergissModell(); return }
       setModellImport((aktuell) => aktuell ?? (m as unknown as NonNullable<typeof aktuell>))
       setAnalyseHinweis((h) => h ?? `Dein zuletzt hochgeladenes 3D-Modell „${m.name}“ wurde wiederhergestellt. Mit „Verwerfen“ entfernst du es.`)
     }).catch(() => undefined)
     return () => { abgebrochen = true }
   }, [])
   useEffect(() => {
-    if (modellImport) void merkeModell(modellImport)
+    if (modellImport) void merkeModell({ ...modellImport, stempel: holeStempel() })
   }, [modellImport])
   // DXF-Zeichnung: Gebäudeumriss aus den Linien gelesen (lib/cad/dxf-umriss.ts); Höhen trägt die Person ein
   // Dasselbe Feld trägt auch den IFC-Import (`ifc` gesetzt): gleiche Formerkennung, gleiche Teile, gleicher Prüfschritt

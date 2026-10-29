@@ -32,6 +32,8 @@ export interface GemerktesModell {
   einheitGeschaetzt: boolean
   quelle?: 'nwd'
   obenAusKopf?: boolean
+  /** gehört zu diesem CAD-Stand (siehe arbeitsstand.ts); ohne Stempel oder mit anderem wird es nicht geladen */
+  stempel?: string
 }
 
 export interface NwdErgebnisEintrag {
