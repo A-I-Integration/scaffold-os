@@ -169,6 +169,17 @@ export default function DatenschutzPage() {
               Marketing-Website) binden dieses Tag nicht ein.
             </p>
             <p>
+              Zusätzlich zählen wir auf der Marketing-Website scaffoldos.de die Seitenaufrufe
+              mit einem eigenen, cookielosen Zähler auf unseren eigenen Servern. Gespeichert
+              werden nur Datum, aufgerufene Seite, Herkunftsseite (sofern vorhanden),
+              Gerätetyp (Computer, Tablet oder Smartphone) und eine anonyme Tageskennung.
+              Die Kennung wird aus technischen Verbindungsdaten gebildet, ändert sich täglich
+              und lässt sich nicht auf eine Person zurückführen; die IP-Adresse selbst wird
+              nicht gespeichert. Es werden keine Daten an Dritte weitergegeben. Rechtsgrundlage
+              ist unser berechtigtes Interesse an der Reichweitenmessung (Art. 6 Abs. 1
+              lit. f DSGVO).
+            </p>
+            <p>
               Es werden keine Meta-, LinkedIn-, Sentry-, Clarity- oder vergleichbaren
               Trackingdienste eingesetzt.
             </p>

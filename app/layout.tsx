@@ -3,6 +3,7 @@ import Script from "next/script"
 import "./globals.css"
 import SidebarLayout from "@/components/SidebarLayout"
 import CookieBannerWrapper from "@/components/CookieBannerWrapper"
+import BesucherZaehler from "@/components/BesucherZaehler"
 
 
 // Google-Ads-Tag (Conversion-Tracking) – lädt NUR dort, wo die Env-Var
@@ -64,6 +65,8 @@ export default function RootLayout({
         {/* Cookie-/Einwilligungs-Banner nur auf der Master-Website
             (überall dort, wo das Ads-Tag aktiv ist). */}
         {googleAdsId && <CookieBannerWrapper />}
+        {/* Eigener cookieloser Besucherzähler – nur Master-Website (MASTER_INSTANCE=true). */}
+        {process.env.MASTER_INSTANCE === 'true' && <BesucherZaehler />}
         <SidebarLayout>{children}</SidebarLayout>
       </body>
     </html>
