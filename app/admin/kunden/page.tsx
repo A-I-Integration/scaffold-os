@@ -169,10 +169,16 @@ export default function KundenAdminPage() {
               <p className="text-sm text-[#86868b]">Neue Kunden-Installationen automatisiert anlegen</p>
             </div>
           </div>
-          <Link href="/admin/wirkung"
-            className="inline-flex items-center gap-1.5 px-4 py-2 bg-[#e8590c] hover:bg-[#d9480f] text-white rounded-full text-sm font-semibold transition-colors">
-            Pilot-Wirkung →
-          </Link>
+          <div className="flex flex-wrap gap-2">
+            <Link href="/admin/besucher"
+              className="inline-flex items-center gap-1.5 px-4 py-2 bg-white border border-black/10 hover:border-[#e8590c] rounded-full text-sm font-semibold transition-colors">
+              Besucher →
+            </Link>
+            <Link href="/admin/wirkung"
+              className="inline-flex items-center gap-1.5 px-4 py-2 bg-[#e8590c] hover:bg-[#d9480f] text-white rounded-full text-sm font-semibold transition-colors">
+              Pilot-Wirkung →
+            </Link>
+          </div>
         </div>
 
         {msg && (
