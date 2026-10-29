@@ -19,7 +19,7 @@
 // Sicherheit: Service-Keys liegen nur in der Container-Umgebung, nie im Image.
 // ─────────────────────────────────────────────────────────────────────────────
 
-const { analysiere } = require('./analyse');
+const { analysiereAsync } = require('./analyse');
 
 const POLL_INTERVAL = (parseInt(process.env.POLL_INTERVAL || '15', 10)) * 1000;
 
@@ -47,7 +47,7 @@ async function holeOffeneJobs(t) {
 async function ladeDatei(t, pfad) {
   const res = await fetch(`${t.url}/storage/v1/object/project-media/${pfad}`, {
     headers: headers(t),
-    signal: AbortSignal.timeout(120000), // große Dateien: 2 min Download-Budget
+    signal: AbortSignal.timeout(600000), // große Dateien (bis 500 MB): 10 min Download-Budget
   });
   if (!res.ok) throw new Error(`Storage ${res.status}`);
   return Buffer.from(await res.arrayBuffer());
@@ -72,7 +72,7 @@ async function verarbeiteJob(t, job) {
 
   try {
     const buffer = await ladeDatei(t, job.storage_path);
-    const measurements = analysiere(buffer, ext);
+    const measurements = await analysiereAsync(buffer, ext);
     await schreibeErgebnis(t, job.id, {
       ...job.metadata,
       status: 'done',

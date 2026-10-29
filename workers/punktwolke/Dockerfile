@@ -8,8 +8,9 @@ FROM node:22-alpine
 
 WORKDIR /app
 COPY package.json ./
-# Keine externen Dependencies – Analyse ist reines Node.js (kein npm install nötig)
-COPY analyse.js ply-binary.js teile.js index.js ./
+# Einzige Abhängigkeit: laz-perf (WebAssembly zum Entpacken von LAZ-Dateien aus Drohnen-Software)
+RUN npm install --omit=dev --no-audit --no-fund
+COPY analyse.js las-laz.js ply-binary.js teile.js index.js ./
 
 # Healthcheck: Prozess lebt?
 HEALTHCHECK --interval=60s --timeout=5s --retries=3 \
