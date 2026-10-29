@@ -335,7 +335,7 @@ function leeresFormS2() {
               ? (hauptEbene?.breiteM ? hauptEbene.breiteM.toFixed(2) : (m.lengthM ? m.lengthM.toFixed(2) : prev.laenge))
               : (prev.laenge || (hauptEbene?.breiteM ? hauptEbene.breiteM.toFixed(2) : (m.lengthM ? m.lengthM.toFixed(2) : ''))),
             breite: tv && tv.breite ? (fresh ? tv.breite : (prev.breite || tv.breite)) : fresh ? (m.widthM ? m.widthM.toFixed(2) : prev.breite) : (prev.breite || (m.widthM ? m.widthM.toFixed(2) : '')),
-            hoehe: fresh
+            hoehe: tv && tv.hoehe ? (fresh ? tv.hoehe : (prev.hoehe || tv.hoehe)) : fresh
               ? (hauptEbene?.hoeheM ? hauptEbene.hoeheM.toFixed(2) : (m.heightM ? m.heightM.toFixed(2) : prev.hoehe))
               : (prev.hoehe || (hauptEbene?.hoeheM ? hauptEbene.hoeheM.toFixed(2) : (m.heightM ? m.heightM.toFixed(2) : ''))),
             // Weitere Wände werden nicht mehr automatisch eingetragen, sondern

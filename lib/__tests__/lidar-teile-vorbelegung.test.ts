@@ -23,3 +23,16 @@ describe('teileVorbelegung', () => {
     expect(teileVorbelegung([{ traufhoeheM: 0 }])).toBeNull()
   })
 })
+
+describe('Gesamthöhe aus dem Haupthaus', () => {
+  it('Höhe = Traufhöhe + Dachhöhe des größten Teils (nicht die größte Fläche der ganzen Szene)', () => {
+    const v = teileVorbelegung([
+      { typ: 'schiff', laengeM: 14.5, tiefeM: 8.1, traufhoeheM: 6.6, dachForm: 'satteldach', dachHoeheM: 2.6 },
+      { typ: 'schiff', laengeM: 6, tiefeM: 4, traufhoeheM: 3, dachForm: 'flachdach', dachHoeheM: 0 },
+    ])
+    expect(v?.hoehe).toBe('9.20')
+  })
+  it('ohne Dachhöhe = Traufhöhe', () => {
+    expect(teileVorbelegung([{ laengeM: 10, tiefeM: 8, traufhoeheM: 7, dachForm: 'flachdach' }])?.hoehe).toBe('7.00')
+  })
+})
