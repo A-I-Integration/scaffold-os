@@ -50,3 +50,20 @@ describe('Aufmaß → CAD', () => {
     expect(leseCadUebergabe(JSON.stringify({ building: { lengthM: 1, widthM: 1, heightM: 1 }, systemId: 'a' }))?.systemId).toBe('a')
   })
 })
+
+describe('Aufmaß → CAD: Klassen und Eingänge', () => {
+  const s2 = { laenge: '12', breite: '8', hoehe: '9', lastklasse: 3, breitenklasse: 'W09', hauseingaenge: '2' }
+  it('übernimmt Lastklasse, Gerüstbreite und Hauseingänge', () => {
+    const r = aufmassZuCad({ step2: s2, step3: { system: 'layher-allround' } })
+    expect(r.ok).toBe(true)
+    expect(r.building?.lastklasse).toBe(3)
+    expect(r.building?.doorCount).toBe(2)
+    expect(r.building?.geruestOptionen?.breiteM).toBeGreaterThanOrEqual(0.9)
+  })
+  it('Aufmaß-Lastklasse hat bei CAD-Projekten Vorrang', () => {
+    const ki = { building: { lengthM: 12, widthM: 8, heightM: 9, eavesHeightM: 9, roofHeightM: 0, roofForm: 'flachdach', floors: 0, floorHeightsM: [], windowCount: 0, doorCount: 0, balconyCount: 0, overhangM: 0, setbackM: 0, sides: ['front'], lastklasse: 4 }, systemId: 'layher-allround' }
+    const r = aufmassZuCad({ step2: s2, step3: {}, kiResult: ki })
+    expect(r.building?.lastklasse).toBe(3)
+    expect(r.hinweise.join(' ')).toContain('Lastklasse: CAD 4 → Aufmaß 3')
+  })
+})
