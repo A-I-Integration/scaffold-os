@@ -35,10 +35,12 @@ const mb = (b) => (b / 1024 / 1024).toFixed(b < 10 * 1024 * 1024 ? 1 : 0).replac
 
 /**
  * Für das Properties-JSON: Dreiecke ohne Fläche in der Grundrissebene (senkrechte Wandflächen) tragen zum Umriss nichts
- * bei und werden weggelassen; Koordinaten auf 0,1 mm gerundet. Das hält das JSON auch bei großen Modellen klein.
+ * bei und werden weggelassen; Koordinaten auf 9 gültige Stellen (float32-genau). Das hält das JSON auch bei großen Modellen klein.
  */
 function verdichteRoh(roh) {
-  const r = (v) => Math.round(v * 10000) / 10000
+  // 9 gültige Stellen = float32 verlustfrei. Gröberes Runden (auch 1e-6 m) verschiebt Werte, die genau auf einer Rasterkante
+  // liegen, und der Umriss weicht um eine Zelle (4 cm) vom Browser-Import ab (am echten FZK-Haus gemessen).
+  const r = (v) => Number(v.toPrecision(9))
   return {
     ...roh,
     bauteile: roh.bauteile.map((b) => {

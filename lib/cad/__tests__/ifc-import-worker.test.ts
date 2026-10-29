@@ -121,3 +121,12 @@ describe('Fehler pro Bauteil → Teilergebnis statt Abbruch', () => {
     expect(a.ok).toBe(true)
   })
 })
+
+describe('verdichteRoh', () => {
+  it('lässt float32-Koordinaten verlustfrei (sonst weicht der Umriss vom Browser-Import ab)', () => {
+    const tris = [5.96, -4.99, 5.9600001, 4.99, -5.96, 4.99, 0.1, 0.2, 0.3, 0.2, 0.3, 0.9].map(Math.fround)
+    const roh = { bauteile: [{ id: 1, art: 'wand', geschoss: 0, tris, yMin: Math.fround(0.123456), yMax: 2.7 }] }
+    const aus = arbeiter.verdichteRoh(roh).bauteile[0].tris as number[]
+    expect(aus.map(Math.fround)).toEqual(tris)
+  })
+})
