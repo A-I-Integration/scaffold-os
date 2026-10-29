@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import dynamic from 'next/dynamic';
 import LandingHeader from '@/components/LandingHeader';
+import StartFilm from '@/components/landing/StartFilm';
 
 // Aufmaß-Demo wird als eigener JS-Chunk nachgeladen (Code-Splitting) –
 // entlastet die mobile Startladephase, HTML bleibt server-seitig gerendert.
@@ -286,6 +287,9 @@ export default function HomePage() {
 
       {/* ─── Navigation (ausgeblendet, sobald eingeloggt – Sidebar hat das Logo) ─── */}
       <LandingHeader />
+
+      {/* ─── Film: Scroll-Story in 3D vom Drohnenscan bis zum Dashboard (Demo-Daten gekennzeichnet) ─── */}
+      <StartFilm />
 
       {/* ─── Hero ─── */}
       <section className="px-6 pt-20 pb-16 md:pt-28 md:pb-24 text-center">
