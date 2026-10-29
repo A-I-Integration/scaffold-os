@@ -46,33 +46,37 @@ export function starteSzene(slots: Slot[], reduce: boolean, kopfHoehe: () => num
   const set = (id: string, v: string) => { const e = $(id); if (e && e.textContent !== v) e.textContent = v }
 
   const scene = new THREE.Scene()
-  scene.background = new THREE.Color(0x0a0d11)
-  scene.fog = new THREE.Fog(0x0a0d11, 55, 150)
+  scene.background = new THREE.Color(0xf1f3f7)
+  scene.fog = new THREE.Fog(0xf1f3f7, 45, 140)
   const camera = new THREE.PerspectiveCamera(42, 1, 0.1, 400)
   const k = Math.PI // Lichtstärke wie im Entwurf (ohne die frühere π-Umrechnung)
-  scene.add(new THREE.HemisphereLight(0x9fb4d0, 0x1a1f26, 0.9 * k))
-  const sun = new THREE.DirectionalLight(0xfff0e0, 1.1 * k); sun.position.set(30, 40, 20); scene.add(sun)
-  const rim = new THREE.DirectionalLight(0x4f7bd6, 0.5 * k); rim.position.set(-30, 15, -25); scene.add(rim)
+  renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap
+  scene.add(new THREE.HemisphereLight(0xffffff, 0xbcc4d0, 0.68 * k))
+  const sun = new THREE.DirectionalLight(0xfff4e6, 0.8 * k); sun.position.set(30, 40, 20); sun.castShadow = true
+  sun.shadow.mapSize.set(2048, 2048); sun.shadow.bias = -0.0004; sun.shadow.normalBias = 0.04
+  Object.assign(sun.shadow.camera, { left: -34, right: 34, top: 34, bottom: -34, near: 1, far: 140 })
+  scene.add(sun); scene.add(sun.target)
+  const rim = new THREE.DirectionalLight(0xffd9bd, 0.18 * k); rim.position.set(-30, 15, -25); scene.add(rim)
 
-  const ground = new THREE.Mesh(new THREE.PlaneGeometry(600, 600), new THREE.MeshStandardMaterial({ color: 0x10161d, roughness: 1 }))
-  ground.rotation.x = -Math.PI / 2; scene.add(ground)
-  const grid = new THREE.GridHelper(300, 150, 0x1d2836, 0x151d27); grid.position.y = 0.01; scene.add(grid)
+  const ground = new THREE.Mesh(new THREE.PlaneGeometry(600, 600), new THREE.MeshStandardMaterial({ color: 0xdde2e9, roughness: 1 }))
+  ground.rotation.x = -Math.PI / 2; ground.receiveShadow = true; scene.add(ground)
 
   // Gebäude: Wände, Satteldach, Fenster. Eine Schnittebene lässt es beim Scan von unten nach oben entstehen.
   const plane = new THREE.Plane(new THREE.Vector3(0, -1, 0), 0)
   const house = new THREE.Group()
-  const walls = new THREE.Mesh(new THREE.BoxGeometry(W, HE, D), new THREE.MeshStandardMaterial({ color: 0x2b3643, roughness: 0.9, clippingPlanes: [plane] }))
-  walls.position.y = HE / 2; house.add(walls)
+  const walls = new THREE.Mesh(new THREE.BoxGeometry(W, HE, D), new THREE.MeshStandardMaterial({ color: 0xf3efe8, roughness: 0.92, clippingPlanes: [plane] }))
+  walls.position.y = HE / 2; walls.castShadow = true; walls.receiveShadow = true; house.add(walls)
   const shape = new THREE.Shape(); shape.moveTo(-D / 2 - 0.3, 0); shape.lineTo(D / 2 + 0.3, 0); shape.lineTo(0, HR); shape.closePath()
   const rg = new THREE.ExtrudeGeometry(shape, { depth: W + 0.6, bevelEnabled: false })
-  const roof = new THREE.Mesh(rg, new THREE.MeshStandardMaterial({ color: 0x3a2a26, roughness: 0.9, clippingPlanes: [plane] }))
+  const roof = new THREE.Mesh(rg, new THREE.MeshStandardMaterial({ color: 0xa9482a, roughness: 0.85, clippingPlanes: [plane] }))
+  roof.castShadow = true
   roof.rotation.y = Math.PI / 2; roof.position.set(-(W + 0.6) / 2, HE, 0); house.add(roof)
-  const winMat = new THREE.MeshStandardMaterial({ color: 0x0f1620, emissive: 0x3d5878, emissiveIntensity: 0.5, roughness: 0.3, clippingPlanes: [plane] })
+  const winMat = new THREE.MeshStandardMaterial({ color: 0x2c3a4c, emissive: 0x3d5878, emissiveIntensity: 0.18, roughness: 0.2, metalness: 0.3, clippingPlanes: [plane] })
   for (let f = 0; f < 2; f++) for (let kk = 0; kk < 5; kk++) {
     const wf = new THREE.Mesh(new THREE.BoxGeometry(1.3, 1.5, 0.1), winMat); wf.position.set(-5.4 + kk * 2.7, 2 + f * 3.3, D / 2 + 0.02); house.add(wf)
     const wb = wf.clone(); wb.position.z = -D / 2 - 0.02; house.add(wb)
   }
-  const door = new THREE.Mesh(new THREE.BoxGeometry(1.4, 2.2, 0.12), new THREE.MeshStandardMaterial({ color: 0x1a222c, clippingPlanes: [plane] })); door.position.set(0, 1.1, D / 2 + 0.03); house.add(door)
+  const door = new THREE.Mesh(new THREE.BoxGeometry(1.4, 2.2, 0.12), new THREE.MeshStandardMaterial({ color: 0x5a4636, clippingPlanes: [plane] })); door.position.set(0, 1.1, D / 2 + 0.03); house.add(door)
   const edgeMat = new THREE.LineBasicMaterial({ color: 0xe8590c, transparent: true, opacity: 0.9 })
   const e1 = new THREE.LineSegments(new THREE.EdgesGeometry(walls.geometry), edgeMat); e1.position.copy(walls.position); house.add(e1)
   const e2 = new THREE.LineSegments(new THREE.EdgesGeometry(rg), edgeMat); e2.position.copy(roof.position); e2.rotation.copy(roof.rotation); house.add(e2)
@@ -129,13 +133,13 @@ export function starteSzene(slots: Slot[], reduce: boolean, kopfHoehe: () => num
   const counts = { post: 0, tube: 0, deck: 0, diag: 0 }
   teile.forEach((it) => { it.k = counts[it.t]++; it.j = Math.random() * 0.12 })
   const unit = new THREE.BoxGeometry(1, 1, 1)
-  const steel = new THREE.MeshStandardMaterial({ color: 0xc9d3de, roughness: 0.45, metalness: 0.75, transparent: true })
-  const wood = new THREE.MeshStandardMaterial({ color: 0xa8784a, roughness: 0.9, transparent: true })
+  const steel = new THREE.MeshStandardMaterial({ color: 0x77828f, roughness: 0.42, metalness: 0.55, transparent: true })
+  const wood = new THREE.MeshStandardMaterial({ color: 0xc08a52, roughness: 0.9, transparent: true })
   const pools = {
     post: new THREE.InstancedMesh(unit, steel, counts.post), tube: new THREE.InstancedMesh(unit, steel, counts.tube),
     diag: new THREE.InstancedMesh(unit, steel, counts.diag), deck: new THREE.InstancedMesh(unit, wood, counts.deck),
   }
-  ;(Object.values(pools)).forEach((p) => { p.frustumCulled = false; scene.add(p) })
+  ;(Object.values(pools)).forEach((p) => { p.frustumCulled = false; p.castShadow = true; scene.add(p) })
   const dummy = new THREE.Object3D()
   const updateGeruest = (buildP: number, blueprint: boolean) => {
     const cnt = { post: 0, deck: 0, rail: 0 }
@@ -149,16 +153,16 @@ export function starteSzene(slots: Slot[], reduce: boolean, kopfHoehe: () => num
       if (u >= 1) { if (it.t === 'post') cnt.post++; else if (it.t === 'deck') cnt.deck++; else cnt.rail++ }
     }
     Object.values(pools).forEach((p) => { p.instanceMatrix.needsUpdate = true })
-    if (blueprint) { steel.color.set(0x5aa9ff); steel.opacity = 0.55; wood.color.set(0x5aa9ff); wood.opacity = 0.35 }
-    else { steel.color.set(0xc9d3de); steel.opacity = 1; wood.color.set(0xa8784a); wood.opacity = 1 }
+    if (blueprint) { steel.color.set(0x2f7de1); steel.opacity = 0.6; wood.color.set(0x2f7de1); wood.opacity = 0.35 }
+    else { steel.color.set(0x77828f); steel.opacity = 1; wood.color.set(0xc08a52); wood.opacity = 1 }
     return cnt
   }
 
   // Lager
   const lager = new THREE.Group(); lager.position.set(56, 0, 0)
-  const floor = new THREE.Mesh(new THREE.BoxGeometry(34, 0.2, 22), new THREE.MeshStandardMaterial({ color: 0x151c25, roughness: 0.9 })); floor.position.y = 0.1; lager.add(floor)
+  const floor = new THREE.Mesh(new THREE.BoxGeometry(34, 0.2, 22), new THREE.MeshStandardMaterial({ color: 0xd9dfe7, roughness: 0.9 })); floor.position.y = 0.1; floor.receiveShadow = true; lager.add(floor)
   const frameMat = new THREE.MeshStandardMaterial({ color: 0x2f6fd0, roughness: 0.5, metalness: 0.4 })
-  const palMat = new THREE.MeshStandardMaterial({ color: 0xc9d3de, roughness: 0.5, metalness: 0.7 })
+  const palMat = new THREE.MeshStandardMaterial({ color: 0x9aa6b4, roughness: 0.5, metalness: 0.6 })
   const orangeMat = new THREE.MeshStandardMaterial({ color: 0xe8590c, roughness: 0.6 })
   for (let r = 0; r < 3; r++) {
     const z = -7 + r * 7
@@ -170,7 +174,7 @@ export function starteSzene(slots: Slot[], reduce: boolean, kopfHoehe: () => num
         const beam2 = beam.clone(); beam2.position.z = z - 0.6; lager.add(beam2)
         if ((b + lv + r) % 4 !== 0) {
           const pal = box(4.4, 1.3, 1.0, 0xc9d3de); pal.material = palMat; pal.position.set(x, 1.8 + lv * 2, z); lager.add(pal)
-          for (let q = 0; q < 6; q++) { const tube = box(0.06, 1.2, 0.06, 0x9fb0c2); tube.position.set(x - 2 + q * 0.8, 1.8 + lv * 2, z + 0.52); lager.add(tube) }
+          for (let q = 0; q < 6; q++) { const tube = box(0.06, 1.2, 0.06, 0x6f7c8b); tube.position.set(x - 2 + q * 0.8, 1.8 + lv * 2, z + 0.52); lager.add(tube) }
         }
       }
     }
@@ -181,6 +185,7 @@ export function starteSzene(slots: Slot[], reduce: boolean, kopfHoehe: () => num
   const fork = box(0.9, 0.08, 1.3, 0x2a323d); fork.position.set(0, 0.3, 1.7)
   const load = box(0.9, 0.9, 0.9, 0xc9d3de); load.position.set(0, 0.85, 1.7)
   forklift.add(fb, cab, mast, fork, load); fb.position.y = 0.55; lager.add(forklift); scene.add(lager)
+  lager.traverse((o) => { if ((o as THREE.Mesh).isMesh && o !== floor) o.castShadow = true })
 
   // Mitarbeiter
   const worker = new THREE.Group()
@@ -188,7 +193,7 @@ export function starteSzene(slots: Slot[], reduce: boolean, kopfHoehe: () => num
   const legs = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.18, 0.6, 12), new THREE.MeshStandardMaterial({ color: 0x1c232c })); legs.position.y = 0.3
   const head = new THREE.Mesh(new THREE.SphereGeometry(0.17, 14, 14), new THREE.MeshStandardMaterial({ color: 0xd9b99b })); head.position.y = 1.65
   const helm = new THREE.Mesh(new THREE.SphereGeometry(0.2, 14, 10, 0, Math.PI * 2, 0, Math.PI / 2), new THREE.MeshStandardMaterial({ color: 0xf2f2f2 })); helm.position.y = 1.7
-  worker.add(torso, legs, head, helm); worker.position.set(10.4, 0, 6.4); worker.scale.setScalar(0); scene.add(worker)
+  worker.add(torso, legs, head, helm); worker.position.set(10.4, 0, 6.4); worker.scale.setScalar(0); worker.traverse((o) => { o.castShadow = true }); scene.add(worker)
 
   // ---------- Steuerung ----------
   const clampT = (x: number) => clamp(x, 0, 0.99999)
@@ -215,21 +220,24 @@ export function starteSzene(slots: Slot[], reduce: boolean, kopfHoehe: () => num
       const r = s.abschnitt.getBoundingClientRect()
       const stand = Math.max(1, r.height - s.pin.clientHeight)
       const vor = vh * 0.35
-      return clamp((kopfHoehe() + vor - r.top) / (stand + vor), 0, 1)
+      return clamp((kopfHoehe() + vor - r.top) / ((stand + vor) * 0.78), 0, 1)
     }
-    const r = s.rahmen.getBoundingClientRect()
-    return clamp((vh * 0.85 - r.top) / (vh * 0.75), 0, 1)
+    const r = s.canvas.getBoundingClientRect()
+    return clamp((vh * 0.9 - r.top) / (vh * 0.6), 0, 1)
   }
 
   const zeichneSlot = (s: Slot, p: number): void => {
-    const ci = s.ci, t = clampT(p), rahmen = s.rahmen
-    const w = Math.round(s.rahmen.clientWidth), h = Math.round(s.rahmen.clientHeight)
+    const ci = s.ci, t = clampT(p), rahmen = s.canvas
+    const w = Math.round(s.canvas.clientWidth), h = Math.round(s.canvas.clientHeight)
     if (!w || !h) return
     const dpr = Math.min(window.devicePixelRatio || 1, window.innerWidth < 700 ? 1.5 : 2)
     const pw = Math.round(w * dpr), ph = Math.round(h * dpr)
     if (glCanvas.width !== pw || glCanvas.height !== ph) renderer.setSize(pw, ph, false)
     renderer.setPixelRatio(1)
     camera.aspect = w / h; camera.fov = w / h < 0.8 ? 58 : 42; camera.updateProjectionMatrix()
+    // Sonne und Schattenfeld folgen dem Ort der Szene (Lager liegt weit rechts)
+    const sx = ci === 4 || ci === 5 ? 56 : 0
+    sun.position.set(30 + sx, 40, 20); sun.target.position.set(sx, 0, 0); sun.target.updateMatrixWorld()
 
     // Kamera
     if (ci === 0) {
@@ -241,7 +249,7 @@ export function starteSzene(slots: Slot[], reduce: boolean, kopfHoehe: () => num
       if (ci === 6) { const a2 = t * 1.2; camera.position.set(lerp(camera.position.x, Math.sin(a2 + 0.8) * 44, 0.5), camera.position.y, lerp(camera.position.z, Math.cos(a2 + 0.8) * 44, 0.5)); camera.lookAt(0, 3.5, 0) }
     }
     if (camera.aspect < 0.8) { camera.getWorldDirection(back); camera.position.addScaledVector(back, -14) } // Hochformat: Kamera zurück
-    else if (camera.aspect < 1.3) { camera.getWorldDirection(back); camera.position.addScaledVector(back, (ci === 4 || ci === 5) ? -13 : -5) } // fast quadratisches Feld: etwas zurück (Lager breiter)
+    else if (camera.aspect < 1.3) { camera.getWorldDirection(back); camera.position.addScaledVector(back, ci === 0 ? -13 : (ci === 4 || ci === 5) ? -13 : -5) } // fast quadratisches Feld: etwas zurück (Lager breiter)
 
     // Scan und Gebäude
     const scanY = ci === 0 ? clamp(t / 0.8, 0, 1) * (HE + HR + 0.2) : 99
@@ -319,7 +327,9 @@ export function starteSzene(slots: Slot[], reduce: boolean, kopfHoehe: () => num
   }
 
   // ---------- Schleife: nur solange mindestens ein Abschnitt im Bild ist ----------
-  const geglaettet = slots.map(() => -1)
+  // Kein Nachlaufen: das Bild gehört immer genau zum aktuellen Scrollstand. Gezeichnet wird nur, wenn sich etwas geändert hat.
+  const zuletzt = slots.map(() => -1)
+  const groesse = slots.map(() => '')
   const imBild = new Set<number>()
   let raf = 0, läuft = false, weg = false
   const frame = () => {
@@ -327,15 +337,17 @@ export function starteSzene(slots: Slot[], reduce: boolean, kopfHoehe: () => num
     raf = requestAnimationFrame(frame)
     imBild.forEach((i) => {
       const s = slots[i], ziel = fortschritt(s)
-      geglaettet[i] = geglaettet[i] < 0 || reduce ? ziel : geglaettet[i] + (ziel - geglaettet[i]) * 0.18
-      zeichneSlot(s, geglaettet[i])
+      const g = s.canvas.clientWidth + 'x' + s.canvas.clientHeight + '@' + (window.devicePixelRatio || 1)
+      if (Math.abs(ziel - zuletzt[i]) < 0.0004 && g === groesse[i]) return
+      zuletzt[i] = ziel; groesse[i] = g
+      zeichneSlot(s, ziel)
     })
   }
   const io = new IntersectionObserver((es) => {
     for (const e of es) {
       const i = slots.findIndex((s) => s.abschnitt === e.target)
       if (i < 0) continue
-      if (e.isIntersecting) imBild.add(i); else imBild.delete(i)
+      if (e.isIntersecting) { imBild.add(i); zuletzt[i] = -1 } else imBild.delete(i)
     }
     if (imBild.size > 0 && !läuft && !weg) { läuft = true; raf = requestAnimationFrame(frame) }
     if (imBild.size === 0) { läuft = false; cancelAnimationFrame(raf) }
@@ -352,6 +364,6 @@ export function starteSzene(slots: Slot[], reduce: boolean, kopfHoehe: () => num
     })
     renderer.dispose()
   }
-  const resize = () => { slots.forEach((_, i) => { geglaettet[i] = -1 }) }
+  const resize = () => { slots.forEach((_, i) => { zuletzt[i] = -1 }) }
   return { dispose, resize }
 }
