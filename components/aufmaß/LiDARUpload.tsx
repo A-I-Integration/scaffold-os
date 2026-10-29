@@ -7,7 +7,7 @@ import { uploadScanClient, getScanStatusClient, getScanClient } from '@/lib/medi
 // Ab dieser Größe geht der Scan direkt zu Supabase Storage und wird vom
 // Punktwolken-Worker (Docker) analysiert – umgeht das Vercel-Upload-Limit.
 const WORKER_AB_BYTES = 4 * 1024 * 1024;
-const ERLAUBTE_EXT = ['obj', 'ply', 'las', 'glb'];
+const ERLAUBTE_EXT = ['obj', 'ply', 'las', 'laz', 'glb'];
 
 interface Fassade {
   breiteM: number;
@@ -127,7 +127,7 @@ export default function LiDARUpload({ sessionId, projectId, onMeasurements }: Pr
 
     const ext = file.name.split('.').pop()?.toLowerCase() || '';
     if (!ERLAUBTE_EXT.includes(ext)) {
-      alert('Nur .ply (ASCII), .las, .obj oder .glb erlaubt.');
+      alert('Nur .ply, .las, .laz, .obj oder .glb erlaubt.');
       e.target.value = '';
       return;
     }
@@ -135,7 +135,8 @@ export default function LiDARUpload({ sessionId, projectId, onMeasurements }: Pr
     setUploading(true);
 
     try {
-      if (file.size >= WORKER_AB_BYTES) {
+      // LAZ (Drohnen-Software) ist komprimiert und wird immer auf dem Worker entpackt
+      if (file.size >= WORKER_AB_BYTES || ext === 'laz') {
         // ── Großer Scan: Direkt-Upload + Worker-Analyse ──
         setPhase(`Lade hoch (${(file.size / 1e6).toFixed(0)} MB, direkt zum Speicher)…`);
         const media = await uploadScanClient(file, sessionId, ext, projectId);
@@ -220,7 +221,7 @@ export default function LiDARUpload({ sessionId, projectId, onMeasurements }: Pr
       <div className="relative">
         <input
           type="file"
-          accept=".obj,.ply,.las,.glb"
+          accept=".obj,.ply,.las,.laz,.glb"
           onChange={handleFile}
           disabled={uploading}
           className="absolute inset-0 h-full w-full cursor-pointer opacity-0 disabled:cursor-not-allowed"
@@ -238,7 +239,7 @@ export default function LiDARUpload({ sessionId, projectId, onMeasurements }: Pr
             <span>
               <span className="text-lg">📱</span> <span className="font-medium">Punktwolke / 3D-Modell hochladen</span>
               <br />
-              <span className="text-[11px] text-[#86868b]">Polycam: .ply (ASCII) oder .las als Punktwolke, .glb / .obj als 3D-Modell · Großscans bis 500 MB</span>
+              <span className="text-[11px] text-[#86868b]">Drohne (DJI Terra, Pix4D, WebODM): .laz oder .las · Polycam: .ply oder .las · .glb / .obj als 3D-Modell · bis 500 MB</span>
             </span>
           )}
         </button>

@@ -7,6 +7,7 @@
 // Erkennung + iterative RANSAC-Ebenen-Erkennung + Abstands-Analyse.
 // ─────────────────────────────────────────────────────────────────────────────
 
+const { parseLasGross, parseLaz } = require('./las-laz');
 const { istBinaerPly, parsePlyBinary } = require('./ply-binary');
 
 const MAX_POINTS = 120000;
@@ -107,7 +108,7 @@ function parseGLB(buf) {
 
 function parsePoints(buffer, ext) {
   let pts;
-  if (ext === 'las') pts = parseLAS(buffer);
+  if (ext === 'las') pts = parseLasGross(buffer);
   else if (ext === 'glb') pts = parseGLB(buffer);
   else if (ext === 'ply' && istBinaerPly(buffer)) pts = parsePlyBinary(buffer);
   else {
@@ -301,8 +302,8 @@ function ptsFuerTeile(voll) {
 }
 
 // ─── Hauptfunktion: Buffer + Endung rein, measurements raus ───
-function analysiere(buffer, ext) {
-  let pts = parsePoints(buffer, ext);
+function analysiere(buffer, ext, vorgelesen) {
+  let pts = vorgelesen || parsePoints(buffer, ext);
   const ptsVoll = pts; // für die Gebäudeteile: feinere Abtastung als für die Ebenen
   const totalCount = pts.length / 3;
 
@@ -373,4 +374,13 @@ function analysiere(buffer, ext) {
   return measurements;
 }
 
-module.exports = { analysiere, parsePoints, achseAusPlyKopf };
+/** Wie analysiere, liest aber auch LAZ (die Dekompression ist asynchron). */
+async function analysiereAsync(buffer, ext) {
+  if (ext === 'laz') {
+    const pts = await parseLaz(buffer);
+    return analysiere(buffer, 'las', pts);
+  }
+  return analysiere(buffer, ext);
+}
+
+module.exports = { analysiereAsync, analysiere, parsePoints, achseAusPlyKopf };
