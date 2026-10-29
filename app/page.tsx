@@ -1,10 +1,6 @@
 import Link from 'next/link';
 import type { Metadata } from 'next';
-import {
-  ArrowRight, Ruler, FileText, Route, Timer, Warehouse, ShieldCheck, Check,
-  Users, Package, Clock, Camera, QrCode, PenLine, MapPin, CalendarCheck,
-  Sparkles, Globe, HardHat,
-} from 'lucide-react';
+import { ArrowRight, Check, CalendarCheck, Globe, HardHat } from 'lucide-react';
 import dynamic from 'next/dynamic';
 import LandingHeader from '@/components/LandingHeader';
 import StartFilm from '@/components/landing/StartFilm';
@@ -65,67 +61,6 @@ export const metadata: Metadata = {
     images: ['/og-share.png'],
   },
 };
-
-const PROZESS = [
-  'Aufmaß', 'Angebot', 'Disposition', 'Lager', 'Touren', 'Zeiterfassung', 'Rechnung',
-];
-
-const KERNBEREICHE = [
-  {
-    icon: Ruler,
-    titel: 'Aufmaß',
-    claim: 'Vom Foto zum fertigen Angebot – in Minuten statt Stunden.',
-    punkte: [
-      'Baustelle in 6 geführten Schritten erfassen – am Handy, direkt vor Ort',
-      'Fotos, Drohnen-Upload und GPS-Position automatisch verknüpft',
-      'Punktwolken-Auswertung (3D-Scans): Maße direkt aus dem Scan, mit Genauigkeitsangabe',
-      'Hersteller-Systeme mit echten Maßen: Layher, MJ, Plettac, Alfix u. a.',
-      'KI rechnet Materialliste und Kalkulation, DIN-EN-12811-Hinweis-Check (KI-gestützt, ersetzt keine Statik)',
-      'Angebots-PDF mit QR-Code und Unterschrift – direkt per Mail an den Kunden',
-    ],
-  },
-  {
-    icon: Users,
-    titel: 'Mitarbeiter',
-    claim: 'Jeder Kollege hat seinen Zugang – und du hast den Überblick.',
-    punkte: [
-      'Zugänge mit Rollen: Admin, Disponent, Bauleiter, Mitarbeiter, Lager',
-      'Zeiterfassung per Handy: stempeln, Pausen laufen automatisch',
-      'Krank und Urlaub landen direkt in der Tagesplanung',
-      'Soll-Ist-Vergleich und Überstunden auf einen Blick',
-      'Jeder Monteur sieht nur seine Touren – der Chef sieht alles',
-      'Onboarding-Assistent: Neuer Mitarbeiter ist in 2 Minuten angelegt',
-    ],
-  },
-  {
-    icon: Package,
-    titel: 'Lager',
-    claim: 'Du weißt immer, was wo liegt – bevor Material fehlt.',
-    punkte: [
-      'Alle Bestände digital erfasst – vom Rahmen bis zur Klemme',
-      'Automatische Stückliste aus jedem Aufmaß: Was muss auf den Lkw?',
-      'Reservierung pro Baustelle – kein Material wird doppelt verplant',
-      'Prognose-KI warnt, bevor Bestände knapp werden',
-      'Baustellenbestand im Blick: Was ist verbaut, was kommt zurück?',
-      'Platz für 10.000, 20.000 oder unbegrenzt viele Teile – je nach Paket',
-    ],
-  },
-];
-
-const ALLE_FUNKTIONEN = [
-  { icon: Ruler, titel: 'Aufmaß & KI-Angebot', text: (<>Baustelle in 6 Schritten erfassen – die <strong>KI</strong> liefert Materialliste, Kalkulation und Angebots-PDF.</>) },
-  { icon: Camera, titel: 'Foto, Drohne & 3D-Scan', text: 'Fotos am Handy, Drohnen-Upload bis 20 MB, Punktwolken-Auswertung für Großscans.' },
-  { icon: QrCode, titel: 'QR & Unterschrift', text: 'Angebot mit QR-Code und digitaler Unterschrift – der Kunde unterschreibt auf dem Handy.' },
-  { icon: Route, titel: 'Touren & Disposition', text: 'Routen-KI plant den Tag, GPS zeigt die Fahrzeuge, Umdisposition bei Krankheit oder Wetter.' },
-  { icon: MapPin, titel: 'Fahrer-Navigation & GPS', text: 'Fahrer navigieren direkt aus der App, die Zentrale sieht jede Position live.' },
-  { icon: Timer, titel: 'Zeiterfassung', text: 'Stempeln am Handy, Pausen-Automatik, Soll-Ist-Vergleich, Überstunden – ohne Zettelwirtschaft.' },
-  { icon: CalendarCheck, titel: 'Planung & Abwesenheiten', text: 'Krank und Urlaub direkt im Plan – Konflikte werden sofort sichtbar.' },
-  { icon: Warehouse, titel: 'Lager & Prognose', text: 'Bestände im Blick, automatische Stückliste, KI warnt, bevor Material knapp wird.' },
-  { icon: FileText, titel: 'Rechnungen & DATEV', text: (<><strong>Rechnungen nach GoBD-Grundsätzen</strong> (lückenlose Nummern, Storno statt Löschen) mit Mahnwesen – Buchungsstapel und Lohndaten direkt für den Steuerberater.</>) },
-  { icon: Sparkles, titel: 'KI überall', text: 'Materialberechnung, Routen-Vorschläge, Sprachnotizen, Foto-Analyse – die KI arbeitet im Hintergrund mit.' },
-  { icon: PenLine, titel: 'Digitaler Zwilling', text: 'Jede Baustelle als digitales Modell – Änderungen am Gerüst bleiben dokumentiert.' },
-  { icon: ShieldCheck, titel: 'Datenschutz aus Frankfurt', text: 'Eigene Datenbank pro Betrieb, EU-Hosting, Datenschutz nach DSGVO.' },
-];
 
 const PAKETE = [
   {
@@ -288,46 +223,8 @@ export default function HomePage() {
       {/* ─── Navigation (ausgeblendet, sobald eingeloggt – Sidebar hat das Logo) ─── */}
       <LandingHeader />
 
-      {/* ─── Film: Scroll-Story in 3D vom Drohnenscan bis zum Dashboard (Demo-Daten gekennzeichnet) ─── */}
+      {/* ─── Sieben Abschnitte: 3D-Animation im Wechsel links/rechts mit den Texten (Hero, Funktionen, Säulen; Demo-Daten gekennzeichnet) ─── */}
       <StartFilm />
-
-      {/* ─── Hero ─── */}
-      <section className="px-6 pt-20 pb-16 md:pt-28 md:pb-24 text-center">
-        <p className="text-sm font-semibold tracking-widest text-[#e8590c] uppercase mb-4">
-          Software für Gerüstbau-Betriebe
-        </p>
-        <h1 className="text-4xl md:text-6xl font-semibold tracking-tight leading-[1.08] max-w-3xl mx-auto">
-          Die Gerüstbau-Software
-          <span className="text-[#86868b]"> vom Aufmaß bis zur Rechnung.</span>
-        </h1>
-        <p className="mt-5 text-xl md:text-2xl font-medium text-[#424245] tracking-tight">
-          Vom Kundenanruf bis zur Rechnung. Ein System.
-        </p>
-        <p className="mt-6 text-lg md:text-xl text-[#6e6e73] max-w-2xl mx-auto leading-relaxed">
-          SCAFFOLD OS ersetzt Zettel, Excel und Telefonkette. Ein System für alles:
-          <strong> KI-Aufmaß & CAD-Planung</strong>, Angebot in Minuten, Touren mit
-          GPS, Zeiterfassung und <strong>GoBD-Rechnung</strong>. Alles läuft im
-          Browser – auf Handy, Tablet und PC.
-        </p>
-        <div className="mt-10 flex flex-col sm:flex-row items-center justify-center gap-4">
-          <Link
-            href="/anfrage?art=demo"
-            className="inline-flex items-center gap-2 bg-[#e8590c] hover:bg-[#d9480f] text-white font-medium text-lg px-8 py-3.5 rounded-full transition-all hover:scale-[1.02] shadow-lg shadow-orange-600/20"
-          >
-            Demo anfordern
-            <ArrowRight className="w-5 h-5" />
-          </Link>
-          <Link
-            href="/login"
-            className="inline-flex items-center gap-2 text-[#1d1d1f] font-medium text-lg px-8 py-3.5 rounded-full border border-black/10 hover:bg-black/5 transition-colors"
-          >
-            Zum Login
-          </Link>
-        </div>
-        <p className="mt-6 text-sm text-[#86868b]">
-          Keine Installation · Läuft auf Handy, Tablet & PC · Daten in Frankfurt am Main
-        </p>
-      </section>
 
       {/* ─── Aufmaß-Demo zum Durchklicken ─── */}
       <section className="px-6 pb-24">
@@ -344,84 +241,6 @@ export default function HomePage() {
           </p>
         </div>
         <AufmassDemo />
-      </section>
-
-      {/* ─── Was ist SCAFFOLD OS? (Aufklärung) ─── */}
-      <section className="px-6 pb-20">
-        <div className="max-w-4xl mx-auto">
-          <h2 className="text-2xl md:text-4xl font-semibold tracking-tight text-center">
-            Was ist SCAFFOLD OS?
-          </h2>
-          <p className="mt-6 text-lg text-[#6e6e73] leading-relaxed text-center max-w-3xl mx-auto">
-            <strong>Gerüstbau</strong> bedeutet Büroarbeit. Aufmaß per Hand. Angebot in Word.
-            Stundenzettel auf Papier. SCAFFOLD OS macht Schluss damit. Du erfasst
-            jede Info <strong>nur einmal</strong> – und hast sie überall: auf der Baustelle,
-            im Büro, unterwegs.
-          </p>
-
-          {/* Prozesskette */}
-          <div className="mt-10 flex flex-wrap items-center justify-center gap-2">
-            {PROZESS.map((schritt, i) => (
-              <span key={schritt} className="flex items-center gap-2">
-                <span className="bg-white border border-black/10 rounded-full px-4 py-2 text-sm font-medium shadow-sm">
-                  {schritt}
-                </span>
-                {i < PROZESS.length - 1 && (
-                  <ArrowRight className="w-4 h-4 text-[#e8590c]" />
-                )}
-              </span>
-            ))}
-          </div>
-
-          {/* Zeitersparnis */}
-          <div className="mt-12 rounded-3xl bg-[#1d1d1f] text-white px-8 py-10 md:px-14 text-center shadow-2xl shadow-black/10">
-            <Clock className="w-8 h-8 text-[#ff922b] mx-auto" strokeWidth={1.5} />
-            <p className="mt-4 text-2xl md:text-3xl font-semibold tracking-tight">
-              Bis zu 2 Stunden gespart. Jeden Tag.
-            </p>
-            <p className="mt-4 text-white/70 leading-relaxed max-w-2xl mx-auto">
-              Ein Aufmaß mit fertigem Angebot dauert nach unserer Einschätzung etwa{' '}
-              <strong>15 Minuten</strong>. Früher waren es oft 2 bis 3 Stunden. Zettel,
-              Telefonate und doppelte Eingaben fallen weg. Das kann bis zu{' '}
-              <strong>40 Stunden im Monat</strong> sparen.
-              Dein Team arbeitet auf der Baustelle – nicht im Büro.
-            </p>
-            <p className="mt-4 text-xs text-white/40 max-w-2xl mx-auto">
-              Richtwerte aus eigener Einschätzung, keine Kundenstudie. Die tatsächliche
-              Zeitersparnis hängt vom Betrieb ab.
-            </p>
-          </div>
-        </div>
-      </section>
-
-      {/* ─── 3 Kernbereiche im Detail ─── */}
-      <section className="px-6 pb-24">
-        <div className="max-w-6xl mx-auto">
-          <h2 className="text-2xl md:text-4xl font-semibold tracking-tight text-center">
-            Die drei Säulen.{' '}
-            <span className="text-[#86868b]">Aufmaß, Mitarbeiter, Lager.</span>
-          </h2>
-          <div className="mt-12 grid md:grid-cols-3 gap-6">
-            {KERNBEREICHE.map((bereich) => (
-              <div
-                key={bereich.titel}
-                className="bg-white rounded-3xl border border-black/5 p-8 shadow-sm"
-              >
-                <bereich.icon className="w-8 h-8 text-[#e8590c]" strokeWidth={1.5} />
-                <p className="mt-4 text-xl font-semibold tracking-tight">{bereich.titel}</p>
-                <p className="mt-2 text-[#6e6e73] text-[15px] leading-relaxed">{bereich.claim}</p>
-                <ul className="mt-5 space-y-2.5">
-                  {bereich.punkte.map((punkt) => (
-                    <li key={punkt} className="flex gap-2.5 text-sm text-[#424245] leading-relaxed">
-                      <Check className="w-4 h-4 text-[#e8590c] shrink-0 mt-0.5" />
-                      {punkt}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            ))}
-          </div>
-        </div>
       </section>
 
       {/* ─── Pakete ─── */}
@@ -518,37 +337,6 @@ export default function HomePage() {
           <p className="mt-6 text-xs text-[#86868b]">
             Die Buchung läuft über unseren Online-Kalender – du bekommst sofort eine Bestätigung per E-Mail.
           </p>
-        </div>
-      </section>
-
-      {/* ─── Alle Funktionen im Überblick ─── */}
-      <section className="px-6 pb-24">
-        <div className="max-w-6xl mx-auto">
-          <h2 className="text-2xl md:text-4xl font-semibold tracking-tight text-center">
-            Alles drin. <span className="text-[#86868b]">Nichts doppelt.</span>
-          </h2>
-          <div className="mt-12 grid sm:grid-cols-2 lg:grid-cols-3 gap-x-10 gap-y-12">
-            {ALLE_FUNKTIONEN.map((f) => (
-              <div key={f.titel}>
-                <f.icon className="w-7 h-7 text-[#e8590c] mb-4" strokeWidth={1.5} />
-                <p className="font-semibold text-lg tracking-tight">{f.titel}</p>
-                <p className="mt-2 text-[#6e6e73] leading-relaxed text-[15px]">{f.text}</p>
-              </div>
-            ))}
-          </div>
-          <nav aria-label="Funktionen im Detail" className="mt-14 flex flex-wrap justify-center gap-3 text-sm">
-            <span className="text-[#86868b] self-center">Im Detail:</span>
-            <Link href="/aufmass-geruestbau" className="rounded-full border border-black/10 px-4 py-1.5 hover:bg-black/5 transition-colors">Aufmaß Gerüstbau</Link>
-            <Link href="/angebot-geruestbau" className="rounded-full border border-black/10 px-4 py-1.5 hover:bg-black/5 transition-colors">Angebot Gerüstbau</Link>
-            <Link href="/rechnung-geruestbau" className="rounded-full border border-black/10 px-4 py-1.5 hover:bg-black/5 transition-colors">Rechnung &amp; DATEV</Link>
-            <Link href="/disposition-geruestbau" className="rounded-full border border-black/10 px-4 py-1.5 hover:bg-black/5 transition-colors">Disposition &amp; Touren</Link>
-            <Link href="/lager-geruestbau" className="rounded-full border border-black/10 px-4 py-1.5 hover:bg-black/5 transition-colors">Lager</Link>
-          </nav>
-          <div className="mt-10 text-center">
-            <Link href="/eignungscheck" className="inline-flex items-center gap-2 text-[#e8590c] font-medium hover:underline">
-              Ist SCAFFOLD OS für Ihren Betrieb geeignet? Kurz-Umfrage <ArrowRight className="w-4 h-4" />
-            </Link>
-          </div>
         </div>
       </section>
 
