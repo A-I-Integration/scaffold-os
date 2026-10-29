@@ -12,6 +12,8 @@
 // als dass wir bei Mistral 429er fahren und nichts fertig wird.
 // Parallelität kommt später horizontal (2. Worker-Container).
 //
+// Phase 89: Jobtyp cad-import (IFC → glTF/Draco + Properties-JSON) in ifc-import.js, ifc-lesen.js, ifc-rahmen.js.
+//
 // Env (auf Hetzner, pro Container):
 //   TENANTS=[{"name":"kunde1","supabaseUrl":"https://….supabase.co","serviceKey":"eyJ…"}]
 //   KI_BASE_URL=https://api.mistral.ai/v1
@@ -727,6 +729,10 @@ function jobConfig(job) {
 }
 
 async function verarbeiteJob(tenant, job) {
+  // Phase 89: IFC-Import (web-ifc → glTF mit Draco + Properties-JSON) – eigene Pipeline, keine KI.
+  if (job.type === 'cad-import') {
+    return require('./ifc-import.js').verarbeiteCadImportJob(tenant, job, restHeaders);
+  }
   // Phase 68-M: CAD-Analyse laeuft komplett im Worker (Download, OCR,
   // deterministisch, Vision, Validierung) - eigenes Ergebnisformat.
   if (job.type === 'cad-analyse' && job.payload?.input?.files && !job.payload?.request) {

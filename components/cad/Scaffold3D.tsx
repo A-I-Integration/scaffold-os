@@ -30,6 +30,7 @@ import { passendeArtikel, artikelLabel, katalogListeFuerSystem } from '@/lib/cad
 import { baueLochscheibe, baueFussspindel, baueUniRahmen, baueRiegel } from '@/lib/cad/mj-geometrie'
 import type { CustomDimension } from '@/types/cad-dimensions'
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
+import { DRACOLoader } from 'three/examples/jsm/loaders/DRACOLoader.js'
 import type { Aussehen } from '@/lib/cad/modell-aussehen'
 
 interface Props {
@@ -1202,8 +1203,11 @@ function EchtesGebaeude3D({ aussehen, faktor, oben, versatzX = 0, versatzZ = 0, 
   useEffect(() => {
     let aktiv = true
     if (aussehen.art !== 'glb') return
-    new GLTFLoader().parse(aussehen.daten.slice(0), '', (g) => { if (aktiv) { setGlbSzene(g.scene); invalidate() } }, () => { if (aktiv) setGlbSzene(null) })
-    return () => { aktiv = false }
+    // Draco-Decoder (aus dem IFC-Import des Workers, Phase 89) liegt unter /draco/gltf/; ohne Draco-Daten wird er nicht geladen.
+    const draco = new DRACOLoader().setDecoderPath('/draco/gltf/')
+    const lader = new GLTFLoader().setDRACOLoader(draco)
+    lader.parse(aussehen.daten.slice(0), '', (g) => { if (aktiv) { setGlbSzene(g.scene); invalidate() } }, () => { if (aktiv) setGlbSzene(null) })
+    return () => { aktiv = false; draco.dispose() }
   }, [aussehen, invalidate])
   const punkte = useMemo(() => {
     if (aussehen.art !== 'punkte') return null

@@ -31,12 +31,14 @@ interface Props {
   onSystemChange: (systemId: string) => void
   onGenerate: () => void
   onLadeProjektdatei?: (datei: File) => void
+  /** Phase 89: 3D-Modell (glTF) aus dem Worker-IFC-Import zur Anzeige übergeben */
+  onAussehen?: (a: import('@/lib/cad/modell-aussehen').Aussehen, hinweis?: string) => void
   warnings: { type: string; message: string }[]
   /** Zusätzlicher Bereich am Ende der scrollenden Liste, also über dem Button „Gerüst neu berechnen“ (z. B. Projektdaten für die Statik) */
   zusatz?: ReactNode
 }
 
-export default function BuildingForm({ building, systemId, onChange, onSystemChange, onGenerate, onLadeProjektdatei, warnings, zusatz }: Props) {
+export default function BuildingForm({ building, systemId, onChange, onSystemChange, onGenerate, onLadeProjektdatei, onAussehen, warnings, zusatz }: Props) {
   const [activeTab, setActiveTab] = useState<'gebaeude' | 'geruest' | 'system'>('gebaeude')
   const [analyseLaeuft, setAnalyseLaeuft] = useState(false)
   const [analyseHinweis, setAnalyseHinweis] = useState<string | null>(null)
@@ -68,6 +70,7 @@ export default function BuildingForm({ building, systemId, onChange, onSystemCha
   // DXF-Zeichnung: Gebäudeumriss aus den Linien gelesen (lib/cad/dxf-umriss.ts); Höhen trägt die Person ein
   // Dasselbe Feld trägt auch den IFC-Import (`ifc` gesetzt): gleiche Formerkennung, gleiche Teile, gleicher Prüfschritt
   const [dxfImport, setDxfImport] = useState<{ name: string; inhalt: string; ergebnis: DxfUmrissErgebnis; hoehen: string[]; gezeichnet?: boolean; ifc?: IfcZusatz } | null>(null)
+  const ifcSitzung = useRef<string>('')
   const [ifcFortschritt, setIfcFortschritt] = useState<{ anteil: number; text: string } | null>(null)
   // NWD (Navisworks): Konvertierung in der Autodesk-Cloud, gestaffelte Anzeige Upload → Konvertierung → Einlesen
   const [nwdFortschritt, setNwdFortschritt] = useState<{ phase: 'upload' | 'konvertierung' | 'einlesen'; anteil: number; text: string } | null>(null)
@@ -167,6 +170,19 @@ export default function BuildingForm({ building, systemId, onChange, onSystemCha
       setAnalyseLaeuft(true)
       setIfcFortschritt({ anteil: 0, text: 'IFC wird vorbereitet …' })
       try {
+        // Phase 89: mit NEXT_PUBLIC_IFC_WORKER=1 liest der Hetzner-Worker die Datei (bis 150 MB); sonst wie bisher im Browser.
+        // Der Browser-Pfad bleibt im Code und wird erst nach Test + Merge per Schalter aus der Oberfläche genommen.
+        if (process.env.NEXT_PUBLIC_IFC_WORKER === '1') {
+          const { importiereIfcImWorker } = await import('@/lib/cad/ifc-import-client')
+          if (!ifcSitzung.current) ifcSitzung.current = (globalThis.crypto?.randomUUID?.() ?? String(Date.now())).replace(/[^A-Za-z0-9_-]/g, '')
+          const w = await importiereIfcImWorker(file, { sessionId: ifcSitzung.current, onFortschritt: (anteil, text) => setIfcFortschritt({ anteil, text }) })
+          if (w.ok) {
+            setDxfImport({ name: file.name, inhalt: '', ergebnis: w.ergebnis, hoehen: dxfHoehenVorbelegung(w.ergebnis), ifc: w.ergebnis })
+            if (w.aussehen) onAussehen?.(w.aussehen, w.teilweise ? `${w.fehlerAnzahl} Bauteile konnten nicht gelesen werden – das Modell ist unvollständig.` : w.hinweis)
+            else if (w.hinweis) setAnalyseHinweis(w.hinweis)
+          } else setAnalyseHinweis('❌ ' + w.meldung)
+          return
+        }
         const { leseIfc } = await import('@/lib/cad/ifc-einleser')
         const r = await leseIfc(file, { onFortschritt: (anteil, text) => setIfcFortschritt({ anteil, text }) })
         if (r.ok) setDxfImport({ name: file.name, inhalt: '', ergebnis: r, hoehen: dxfHoehenVorbelegung(r), ifc: r })

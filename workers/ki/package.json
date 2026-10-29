@@ -4,6 +4,10 @@
   "private": true,
   "description": "SCAFFOLD OS KI-Queue-Worker (Phase 68-M: CAD-Pipeline inkl. PDF-Text)",
   "dependencies": {
-    "pdf-parse": "^1.1.1"
+    "@gltf-transform/core": "4.5.1",
+    "@gltf-transform/extensions": "4.5.1",
+    "draco3dgltf": "1.5.7",
+    "pdf-parse": "^1.1.1",
+    "web-ifc": "0.0.77"
   }
 }
