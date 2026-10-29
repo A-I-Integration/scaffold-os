@@ -93,3 +93,31 @@ describe('importiereIfcImWorker (Ablauf mit Attrappen)', () => {
     expect(r.ok).toBe(false)
   })
 })
+
+describe('Fehler pro Bauteil → Teilergebnis statt Abbruch', () => {
+  it('ein Bauteil schlägt fehl: nur dieses fehlt, der Rest bleibt, Import läuft durch', async () => {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const W = require('web-ifc')
+    const api = new W.IfcAPI()
+    await api.Init()
+    const m = api.OpenModel(bytes(hausZweiGeschosse()), { COORDINATE_TO_ORIGIN: false })
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const lesen = require('../../../workers/ki/ifc-lesen.js')
+    const ersteWand = api.GetLineIDsWithType(m, W.IFCWALLSTANDARDCASE, false).get(0) ?? api.GetLineIDsWithType(m, W.IFCWALL, false).get(0)
+    const echt = api.StreamMeshes.bind(api)
+    const kaputt = new Proxy(api, {
+      get: (z, k) => k === 'StreamMeshes'
+        ? (mm: number, liste: number[], cb: unknown) => { if (liste.includes(ersteWand)) throw new Error('Geometrie kaputt'); return echt(mm, liste, cb) }
+        : (z as unknown as Record<string | symbol, unknown>)[k] instanceof Function ? ((z as unknown as Record<string | symbol, (...a: unknown[]) => unknown>)[k]).bind(z) : (z as unknown as Record<string | symbol, unknown>)[k],
+    })
+    const r = await lesen.leseRohmodell(W, kaputt, m, 1000, { stapel: 40 })
+    expect(r.ok).toBe(true)
+    expect(r.fehlerElemente).toHaveLength(1)
+    expect(r.fehlerElemente[0].id).toBe(ersteWand)
+    expect(r.roh.bauteile.length).toBeGreaterThan(0)
+    expect(r.roh.bauteile.some((b: { id: number }) => b.id === ersteWand)).toBe(false)
+    expect(r.roh.hinweise.join(' ')).toMatch(/konnten nicht gelesen werden/)
+    const a = await leiteIfcAb(r.roh)
+    expect(a.ok).toBe(true)
+  })
+})
