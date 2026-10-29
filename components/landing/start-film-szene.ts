@@ -1,17 +1,20 @@
 // ============================================================
-// SCAFFOLD OS – Startseiten-Film: 3D-Szene und Scroll-Steuerung
+// SCAFFOLD OS – Startseite: 3D-Szene für die Wechsel-Abschnitte (Scroll-Animation)
 //
-// Eine Bühne bleibt stehen, der Scrollfortschritt (0–1) steuert Kamera, Drohne, Scan, Gerüstaufbau, Lager und die Zahlen
-// der Karten. Alle Zahlen sind Demo-Daten (im Text der Karten so gekennzeichnet).
+// Eine einzige WebGL-Szene bedient alle sieben Abschnitte: Jeder Abschnitt hat ein eigenes 2D-Zeichenfeld (Slot). Je Bild
+// wird die Szene für jeden sichtbaren Abschnitt mit dessen Scrollfortschritt (0–1) gezeichnet und in das Zeichenfeld kopiert.
+// So gibt es nur einen WebGL-Kontext (wichtig für Handys), und das Bild scrollt ohne Versatz mit der Seite.
+// Alle Zahlen in den Karten sind Demo-Daten (im Text der Karten so gekennzeichnet).
 //
-// Läuft nur im Browser und wird erst geladen, wenn die Startseite den Film zeigt (dynamischer Import in StartFilm.tsx).
-// Das Zeichnen läuft nur, solange der Film im Bild ist.
+// Läuft nur im Browser und wird erst geladen, wenn die Abschnitte im Bild sind (dynamischer Import in StartFilm.tsx).
+// Gezeichnet wird nur, solange mindestens ein Abschnitt im Bild ist.
 // ============================================================
 import * as THREE from 'three'
 
-export interface Szene { dispose: () => void; resize: () => void; sichtbar: (an: boolean) => void }
+export interface Szene { dispose: () => void; resize: () => void }
+/** Ein Abschnitt: Kapitelnummer 0–6, das Zeichenfeld, sein Rahmen und der Abschnitt selbst (für den Scrollfortschritt) */
+export interface Slot { ci: number; canvas: HTMLCanvasElement; rahmen: HTMLElement; abschnitt: HTMLElement; pin: HTMLElement }
 
-const N = 7
 const W = 14.2, D = 8, HE = 7.2, HR = 2.6, OFF = 0.9, LEV = 4, LH = 2
 const clamp = (x: number, a: number, b: number) => Math.max(a, Math.min(b, x))
 const smooth = (x: number) => { x = clamp(x, 0, 1); return x * x * (3 - 2 * x) }
@@ -31,17 +34,16 @@ const WP = [
   { p: [34, 26, 34], t: [0, 3.5, 0] },
 ]
 
-export function starteSzene(story: HTMLElement, stage: HTMLElement, canvas: HTMLCanvasElement, reduce: boolean): Szene | null {
+export function starteSzene(slots: Slot[], reduce: boolean, kopfHoehe: () => number): Szene | null {
   let renderer: THREE.WebGLRenderer
-  try { renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' }) } catch { return null }
+  const glCanvas = document.createElement('canvas')
+  try { renderer = new THREE.WebGLRenderer({ canvas: glCanvas, antialias: true, powerPreference: 'high-performance' }) } catch { return null }
   // Farben wie entworfen (Hexwerte direkt), Lichter entsprechend kräftiger
   THREE.ColorManagement.enabled = false
   renderer.outputColorSpace = THREE.LinearSRGBColorSpace
   renderer.localClippingEnabled = true
   const $ = (id: string) => document.getElementById(id) as HTMLElement
   const set = (id: string, v: string) => { const e = $(id); if (e && e.textContent !== v) e.textContent = v }
-  const chaps = Array.from(stage.querySelectorAll<HTMLElement>('.sf-chap'))
-  const dots = Array.from(stage.querySelectorAll<HTMLElement>('.sf-rail span'))
 
   const scene = new THREE.Scene()
   scene.background = new THREE.Color(0x0a0d11)
@@ -189,12 +191,7 @@ export function starteSzene(story: HTMLElement, stage: HTMLElement, canvas: HTML
   worker.add(torso, legs, head, helm); worker.position.set(10.4, 0, 6.4); worker.scale.setScalar(0); scene.add(worker)
 
   // ---------- Steuerung ----------
-  let target = 0, pc = 0, lastCh = -1, raf = 0, läuft = false, weg = false
-  const readScroll = () => {
-    const r = story.getBoundingClientRect()
-    const span = r.height - stage.clientHeight
-    target = span > 0 ? clamp(-r.top / span, 0, 1) : 0
-  }
+  const clampT = (x: number) => clamp(x, 0, 0.99999)
   const camP = new THREE.Vector3(), camT = new THREE.Vector3(), v3 = new THREE.Vector3(), back = new THREE.Vector3()
   const placeCamera = (ci: number, t: number) => {
     const a = WP[ci], b = WP[ci + 1], e = smooth(ci === 4 ? clamp(t / 0.35, 0, 1) : ci === 5 ? clamp(t / 0.5, 0, 1) : t)
@@ -203,33 +200,36 @@ export function starteSzene(story: HTMLElement, stage: HTMLElement, canvas: HTML
     if (ci === 5) camP.y += Math.sin(t * Math.PI) * 4
     camera.position.copy(camP); camera.lookAt(camT)
   }
-  const pin = (el: HTMLElement, x: number, y: number, z: number, show: boolean) => {
+  const pin = (el: HTMLElement | null, rahmen: HTMLElement, x: number, y: number, z: number, show: boolean) => {
+    if (!el) return
     v3.set(x, y, z).project(camera)
     const vis = show && v3.z < 1 && Math.abs(v3.x) < 1.1 && Math.abs(v3.y) < 1.1
     el.style.opacity = vis ? '1' : '0'
-    if (vis) { el.style.left = ((v3.x + 1) / 2 * stage.clientWidth) + 'px'; el.style.top = ((1 - v3.y) / 2 * stage.clientHeight) + 'px' }
-  }
-  const markChapter = (ci: number) => {
-    if (ci === lastCh) return; lastCh = ci
-    chaps.forEach((c, i) => c.classList.toggle('sf-on', i === ci))
-    dots.forEach((d, i) => d.classList.toggle('sf-on', i === ci))
-    const h = $('sf-hint'); if (h) h.style.opacity = ci === 0 ? '1' : '0'
-  }
-  const resize = () => {
-    const w = stage.clientWidth, h = stage.clientHeight
-    if (!w || !h) return
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, window.innerWidth < 700 ? 1.5 : 2))
-    renderer.setSize(w, h, false)
-    camera.aspect = w / h; camera.fov = w / h < 0.8 ? 58 : 42; camera.updateProjectionMatrix()
+    if (vis) { el.style.left = ((v3.x + 1) / 2 * rahmen.clientWidth) + 'px'; el.style.top = ((1 - v3.y) / 2 * rahmen.clientHeight) + 'px' }
   }
 
-  const frame = () => {
-    if (weg || !läuft) return
-    raf = requestAnimationFrame(frame)
-    readScroll()
-    pc = reduce ? target : pc + (target - pc) * 0.09
-    const x = clamp(pc, 0, 0.99999) * N, ci = Math.floor(x), t = x - ci
-    markChapter(ci)
+  /** Scrollfortschritt 0–1 eines Abschnitts. Breit: der Abschnitt bleibt stehen (sticky), der Fortschritt läuft über die Standstrecke. Schmal: nach der Lage des Feldes im Fenster. */
+  const fortschritt = (s: Slot): number => {
+    const vh = window.innerHeight
+    if (window.matchMedia('(min-width: 900px)').matches) {
+      const r = s.abschnitt.getBoundingClientRect()
+      const stand = Math.max(1, r.height - s.pin.clientHeight)
+      const vor = vh * 0.35
+      return clamp((kopfHoehe() + vor - r.top) / (stand + vor), 0, 1)
+    }
+    const r = s.rahmen.getBoundingClientRect()
+    return clamp((vh * 0.85 - r.top) / (vh * 0.75), 0, 1)
+  }
+
+  const zeichneSlot = (s: Slot, p: number): void => {
+    const ci = s.ci, t = clampT(p), rahmen = s.rahmen
+    const w = Math.round(s.rahmen.clientWidth), h = Math.round(s.rahmen.clientHeight)
+    if (!w || !h) return
+    const dpr = Math.min(window.devicePixelRatio || 1, window.innerWidth < 700 ? 1.5 : 2)
+    const pw = Math.round(w * dpr), ph = Math.round(h * dpr)
+    if (glCanvas.width !== pw || glCanvas.height !== ph) renderer.setSize(pw, ph, false)
+    renderer.setPixelRatio(1)
+    camera.aspect = w / h; camera.fov = w / h < 0.8 ? 58 : 42; camera.updateProjectionMatrix()
 
     // Kamera
     if (ci === 0) {
@@ -241,6 +241,7 @@ export function starteSzene(story: HTMLElement, stage: HTMLElement, canvas: HTML
       if (ci === 6) { const a2 = t * 1.2; camera.position.set(lerp(camera.position.x, Math.sin(a2 + 0.8) * 44, 0.5), camera.position.y, lerp(camera.position.z, Math.cos(a2 + 0.8) * 44, 0.5)); camera.lookAt(0, 3.5, 0) }
     }
     if (camera.aspect < 0.8) { camera.getWorldDirection(back); camera.position.addScaledVector(back, -14) } // Hochformat: Kamera zurück
+    else if (camera.aspect < 1.3) { camera.getWorldDirection(back); camera.position.addScaledVector(back, (ci === 4 || ci === 5) ? -13 : -5) } // fast quadratisches Feld: etwas zurück (Lager breiter)
 
     // Scan und Gebäude
     const scanY = ci === 0 ? clamp(t / 0.8, 0, 1) * (HE + HR + 0.2) : 99
@@ -305,18 +306,44 @@ export function starteSzene(story: HTMLElement, stage: HTMLElement, canvas: HTML
 
     // Maßketten nur im ersten Kapitel
     camera.updateMatrixWorld()
-    pin($('sf-dimL'), 0, 0.2, D / 2 + 1.6, ci === 0 && t > 0.5)
-    pin($('sf-dimH'), -W / 2 - 1.4, HE / 2, D / 2 + 0.6, ci === 0 && t > 0.65)
+    if (ci === 0) {
+    pin($('sf-dimL'), rahmen, 0, 0.2, D / 2 + 1.6, ci === 0 && t > 0.5)
+    pin($('sf-dimH'), rahmen, -W / 2 - 1.4, HE / 2, D / 2 + 0.6, ci === 0 && t > 0.65)
+    }
 
     renderer.render(scene, camera)
+    const ctx = s.canvas.getContext('2d')
+    if (!ctx) return
+    if (s.canvas.width !== pw || s.canvas.height !== ph) { s.canvas.width = pw; s.canvas.height = ph }
+    ctx.drawImage(glCanvas, 0, 0)
   }
 
-  const sichtbar = (an: boolean) => {
-    if (an && !läuft && !weg) { läuft = true; resize(); readScroll(); pc = target; raf = requestAnimationFrame(frame) }
-    if (!an) { läuft = false; cancelAnimationFrame(raf) }
+  // ---------- Schleife: nur solange mindestens ein Abschnitt im Bild ist ----------
+  const geglaettet = slots.map(() => -1)
+  const imBild = new Set<number>()
+  let raf = 0, läuft = false, weg = false
+  const frame = () => {
+    if (weg || !läuft) return
+    raf = requestAnimationFrame(frame)
+    imBild.forEach((i) => {
+      const s = slots[i], ziel = fortschritt(s)
+      geglaettet[i] = geglaettet[i] < 0 || reduce ? ziel : geglaettet[i] + (ziel - geglaettet[i]) * 0.18
+      zeichneSlot(s, geglaettet[i])
+    })
   }
+  const io = new IntersectionObserver((es) => {
+    for (const e of es) {
+      const i = slots.findIndex((s) => s.abschnitt === e.target)
+      if (i < 0) continue
+      if (e.isIntersecting) imBild.add(i); else imBild.delete(i)
+    }
+    if (imBild.size > 0 && !läuft && !weg) { läuft = true; raf = requestAnimationFrame(frame) }
+    if (imBild.size === 0) { läuft = false; cancelAnimationFrame(raf) }
+  }, { rootMargin: '150px 0px' })
+  slots.forEach((s) => io.observe(s.abschnitt))
+
   const dispose = () => {
-    weg = true; läuft = false; cancelAnimationFrame(raf)
+    weg = true; läuft = false; cancelAnimationFrame(raf); io.disconnect()
     scene.traverse((o) => {
       const m = o as THREE.Mesh
       if (m.geometry) m.geometry.dispose()
@@ -325,6 +352,6 @@ export function starteSzene(story: HTMLElement, stage: HTMLElement, canvas: HTML
     })
     renderer.dispose()
   }
-  resize()
-  return { dispose, resize, sichtbar }
+  const resize = () => { slots.forEach((_, i) => { geglaettet[i] = -1 }) }
+  return { dispose, resize }
 }
