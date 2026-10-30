@@ -74,8 +74,11 @@ export async function GET(req: NextRequest) {
       if (!eine?.length) return NextResponse.json({ success: false, error: 'Rechnung nicht gefunden.' }, { status: 404 });
       return NextResponse.json({ success: true, invoice: eine[0] });
     }
+    // Nur die Rechnungen eines Projekts: ?project_id=<uuid>
+    const projektId = req.nextUrl.searchParams.get('project_id');
+    if (projektId && !/^[0-9a-f-]{36}$/i.test(projektId)) return NextResponse.json({ success: false, error: 'project_id ungültig' }, { status: 400 });
     const res = await fetch(
-      `${url}/rest/v1/invoices?select=*&order=created_at.desc&limit=3000`,
+      `${url}/rest/v1/invoices?select=*${projektId ? `&project_id=eq.${projektId}` : ''}&order=created_at.desc&limit=3000`,
       { headers }
     );
     if (!res.ok) throw new Error(await res.text());
