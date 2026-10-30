@@ -6,7 +6,7 @@ import { CalendarClock, Loader2 } from "lucide-react";
 // ============================================================
 // SCAFFOLD OS – Dashboard: Mietende in den nächsten 14 Tagen
 // Zeigt aktive Projekte, deren Mietende bald erreicht ist, mit
-// Ein-Klick-Verlängerung um 1 Woche. Blendet sich aus, wenn nichts
+// Verlängerung um frei wählbare Wochen (Standard 1) oder bis zu einem Datum. Blendet sich aus, wenn nichts
 // ansteht oder der Nutzer keine Berechtigung hat (nur admin/disponent).
 // Das ursprüngliche Projektende bleibt unverändert, die automatische
 // Standzeit-Nachberechnung läuft wie bisher (siehe lib/miete.ts).
@@ -31,6 +31,9 @@ export default function MieteEndeCard() {
   const [liste, setListe] = useState<Eintrag[]>([]);
   const [laedt, setLaedt] = useState<string | null>(null);
   const [fehler, setFehler] = useState<string | null>(null);
+  const [wahl, setWahl] = useState<Record<string, { modus: 'wochen' | 'datum'; wochen: string; bis: string }>>({});
+  const holeWahl = (id: string) => wahl[id] || { modus: 'wochen' as const, wochen: '1', bis: '' };
+  const setzeWahl = (id: string, teil: Partial<{ modus: 'wochen' | 'datum'; wochen: string; bis: string }>) => setWahl((w) => ({ ...w, [id]: { ...holeWahl(id), ...teil } }));
 
   const laden = useCallback(async () => {
     try {
@@ -45,13 +48,17 @@ export default function MieteEndeCard() {
   useEffect(() => { laden(); }, [laden]);
 
   async function verlaengern(id: string) {
+    const eingabe = wahl[id] || { modus: 'wochen' as const, wochen: '1', bis: '' };
+    const wochen = Math.round(Number(eingabe.wochen.replace(',', '.')));
+    if (eingabe.modus === 'wochen' && !(wochen >= 1 && wochen <= 52)) { setFehler('Bitte 1 bis 52 Wochen eingeben.'); return; }
+    if (eingabe.modus === 'datum' && !eingabe.bis) { setFehler('Bitte ein Datum wählen.'); return; }
     setLaedt(id);
     setFehler(null);
     try {
       const res = await fetch("/api/miete/verlaengern", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ project_id: id, wochen: 1 }),
+        body: JSON.stringify(eingabe.modus === 'datum' ? { project_id: id, bis: eingabe.bis } : { project_id: id, wochen }),
       });
       const json = await res.json();
       if (!json.success) throw new Error(json.error || "Verlängern fehlgeschlagen.");
@@ -83,14 +90,26 @@ export default function MieteEndeCard() {
                 {e.verlaengert ? " · bereits verlängert" : ""}
               </p>
             </div>
-            <button
-              onClick={() => verlaengern(e.id)}
-              disabled={laedt === e.id}
-              className="shrink-0 px-3 py-2 rounded-xl bg-[#E8590C] text-white text-sm font-medium disabled:opacity-50 flex items-center gap-1.5"
-            >
-              {laedt === e.id && <Loader2 className="w-4 h-4 animate-spin" />}
-              +1 Woche verlängern
-            </button>
+            <div className="shrink-0 flex flex-wrap items-center justify-end gap-1.5">
+              {holeWahl(e.id).modus === 'wochen' ? (
+                <label className="flex items-center gap-1 text-sm text-[#424245]">
+                  <input type="number" min={1} max={52} value={holeWahl(e.id).wochen} onChange={(ev) => setzeWahl(e.id, { wochen: ev.target.value })} className="w-16 rounded-lg border border-[#d2d2d7] px-2 py-1.5 text-sm" aria-label="Wochen" /> Wochen
+                </label>
+              ) : (
+                <input type="date" min={e.ende} value={holeWahl(e.id).bis} onChange={(ev) => setzeWahl(e.id, { bis: ev.target.value })} className="rounded-lg border border-[#d2d2d7] px-2 py-1.5 text-sm" aria-label="Neues Mietende" />
+              )}
+              <button type="button" onClick={() => setzeWahl(e.id, { modus: holeWahl(e.id).modus === 'wochen' ? 'datum' : 'wochen' })} className="text-xs text-[#86868b] underline">
+                {holeWahl(e.id).modus === 'wochen' ? 'oder Datum' : 'oder Wochen'}
+              </button>
+              <button
+                onClick={() => verlaengern(e.id)}
+                disabled={laedt === e.id}
+                className="px-3 py-2 rounded-xl bg-[#E8590C] text-white text-sm font-medium disabled:opacity-50 flex items-center gap-1.5"
+              >
+                {laedt === e.id && <Loader2 className="w-4 h-4 animate-spin" />}
+                Verlängern
+              </button>
+            </div>
           </div>
         ))}
       </div>

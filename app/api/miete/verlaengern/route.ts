@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { serverErrorResponse } from '@/lib/auth';
-import { wirksamesMietende, verlaengertesEnde } from '@/lib/miete';
+import { wirksamesMietende, verlaengertesEnde, verlaengertesEndeBis } from '@/lib/miete';
 
 // ============================================================
 // SCAFFOLD OS – Mietende verlängern (ein Klick)
-// POST { project_id, wochen? (Standard 1) } → setzt
+// POST { project_id, wochen? (Standard 1) oder bis? (Datum JJJJ-MM-TT, frei gewählt) } → setzt
 // projects.data.mietVerlaengertBis (ab wirksamem Ende, mind. ab heute)
 // und protokolliert in data.mietVerlaengerungen.
 //
@@ -58,8 +58,15 @@ export async function POST(req: NextRequest) {
     }
 
     const heute = heuteIso();
-    const neu = verlaengertesEnde(wirksam, heute, wochen);
-    const eintrag = { am: heute, von: wirksam, bis: neu, wochen: Math.round((Date.parse(neu) - Date.parse(wirksam > heute ? wirksam : heute)) / (7 * 86400000)), user: user.id };
+    let neu: string;
+    if (body?.bis !== undefined && body?.bis !== null && body?.bis !== '') {
+      const frei = verlaengertesEndeBis(wirksam, body.bis);
+      if (!frei) return NextResponse.json({ success: false, error: 'Das Datum muss nach dem aktuellen Mietende liegen (höchstens 52 Wochen darüber hinaus).' }, { status: 400 });
+      neu = frei;
+    } else {
+      neu = verlaengertesEnde(wirksam, heute, wochen);
+    }
+    const eintrag = { am: heute, von: wirksam, bis: neu, wochen: Math.max(1, Math.round((Date.parse(neu) - Date.parse(wirksam > heute ? wirksam : heute)) / (7 * 86400000))), user: user.id };
     const verlauf = Array.isArray(data.mietVerlaengerungen) ? data.mietVerlaengerungen : [];
 
     const upd = await fetch(`${url}/rest/v1/projects?id=eq.${projectId}`, {

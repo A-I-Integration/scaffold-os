@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { wirksamesMietende, tageBis, plusTageIso, faelligeErinnerung, verlaengertesEnde } from '../miete'
+import { wirksamesMietende, tageBis, plusTageIso, faelligeErinnerung, verlaengertesEnde, verlaengertesEndeBis } from '../miete'
 
 describe('wirksamesMietende', () => {
   it('nimmt das spätere Datum', () => {
@@ -54,5 +54,18 @@ describe('verlaengertesEnde', () => {
   it('begrenzt Wochen auf 1..52', () => {
     expect(verlaengertesEnde('2026-10-10', '2026-10-01', 0)).toBe('2026-10-17')
     expect(verlaengertesEnde('2026-10-10', '2026-10-01', 999)).toBe(plusTageIso('2026-10-10', 7 * 52))
+  })
+})
+
+describe('verlaengertesEndeBis', () => {
+  it('nimmt ein Datum nach dem wirksamen Ende', () => {
+    expect(verlaengertesEndeBis('2026-10-10', '2026-10-31')).toBe('2026-10-31')
+  })
+  it('lehnt Datum am oder vor dem Ende, ungültige Werte und über 52 Wochen ab', () => {
+    expect(verlaengertesEndeBis('2026-10-10', '2026-10-10')).toBeNull()
+    expect(verlaengertesEndeBis('2026-10-10', '2026-10-01')).toBeNull()
+    expect(verlaengertesEndeBis('2026-10-10', 'morgen')).toBeNull()
+    expect(verlaengertesEndeBis('2026-10-10', undefined)).toBeNull()
+    expect(verlaengertesEndeBis('2026-10-10', '2028-01-01')).toBeNull()
   })
 })
