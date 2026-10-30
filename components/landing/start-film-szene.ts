@@ -246,11 +246,19 @@ export function starteSzene(slots: Slot[], reduce: boolean, kopfHoehe: () => num
       if (t > 0.85) { const kk = smooth((t - 0.85) / 0.15); const a0 = camera.position.clone(); camera.position.lerpVectors(a0, new THREE.Vector3(WP[1].p[0], WP[1].p[1], WP[1].p[2]), kk); camera.lookAt(0, 4.2, 0) }
     } else {
       placeCamera(ci, t)
+      if (ci >= 1 && ci <= 5) {
+        // Kamera kreist während des Scrollens um das Motiv (je Kapitel ca. 80°) und fährt dabei näher heran
+        const dir = ci % 2 ? 1 : -1, ang = dir * lerp(-0.7, 0.7, smooth(t)), zoom = lerp(1.08, 0.88, smooth(t))
+        v3.copy(camera.position).sub(camT); const c = Math.cos(ang), sn = Math.sin(ang)
+        camera.position.set(camT.x + (v3.x * c + v3.z * sn) * zoom, camera.position.y, camT.z + (-v3.x * sn + v3.z * c) * zoom)
+        camera.lookAt(camT)
+      }
       if (ci === 6) { const a2 = t * 1.2; camera.position.set(lerp(camera.position.x, Math.sin(a2 + 0.8) * 44, 0.5), camera.position.y, lerp(camera.position.z, Math.cos(a2 + 0.8) * 44, 0.5)); camera.lookAt(0, 3.5, 0) }
     }
     if (camera.aspect < 0.8) { camera.getWorldDirection(back); camera.position.addScaledVector(back, -14) } // Hochformat: Kamera zurück
     else if (camera.aspect < 1.3) { camera.getWorldDirection(back); camera.position.addScaledVector(back, ci === 0 ? -13 : (ci === 4 || ci === 5) ? -13 : -5) } // fast quadratisches Feld: etwas zurück (Lager breiter)
 
+    lager.visible = ci >= 4 // Lager nur dort zeigen, wo es gebraucht wird (sonst taucht es beim Kreisen der Kamera im Hintergrund auf)
     // Scan und Gebäude
     const scanY = ci === 0 ? clamp(t / 0.8, 0, 1) * (HE + HR + 0.2) : 99
     plane.constant = scanY; sweep.position.y = Math.min(scanY, HE + HR + 0.2); sweep.visible = ci === 0 && t < 0.8
