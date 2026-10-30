@@ -68,3 +68,11 @@ export function verlaengertesEnde(wirksam: string, heuteIso: string, wochen: num
   const basis = wirksam > heuteIso ? wirksam : heuteIso
   return plusTageIso(basis, 7 * w)
 }
+
+/** Neues Mietende, frei als Datum gewählt: muss nach dem wirksamen Ende liegen und höchstens 52 Wochen darüber hinaus. Sonst null. */
+export function verlaengertesEndeBis(wirksam: string, bis: unknown): string | null {
+  if (!istIso(bis)) return null
+  if (bis <= wirksam) return null
+  if (bis > plusTageIso(wirksam, 7 * 52)) return null
+  return bis
+}
