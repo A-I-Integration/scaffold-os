@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import Link from 'next/link';
 import { Plus, FileText, Check, X, Trash2, Camera } from 'lucide-react';
 import {
   type Nachtrag, type NachtragStatus, NACHTRAG_STATUS_LABEL, nachtragNummer, normalisiereNachtraege,
@@ -8,6 +9,7 @@ import {
   type NachtragArt, type RegieZeile, verlaengerungBetrag, regieBetrag, regieStunden, artFehlt,
 } from '@/lib/nachtrag';
 import { erzeugeNachtragPdf } from '@/lib/nachtrag-pdf';
+import { unversendeteRechnungen, type RechnungKurz } from '@/lib/rechnung-versand';
 import { ladeNachtragFotosHoch, ladeFotosFuerPdf, legeNachtragPdfAmProjektAb } from '@/lib/nachtrag-client';
 
 // ============================================================
@@ -44,6 +46,22 @@ export default function NachtraegeBlock({ project, kunde }: Props) {
   const [verl, setVerl] = useState({ wochen: '', preis: '', bis: '' });
   const [regie, setRegie] = useState<{ bezeichnung: string; personen: string; stunden: string; satz: string }[]>([{ bezeichnung: '', personen: '', stunden: '', satz: '' }]);
   const [betragEingabe, setBetragEingabe] = useState<Record<string, string>>({});
+  const [offeneRechnungen, setOffeneRechnungen] = useState<RechnungKurz[]>([]);
+
+  /** Beim Schließen des Nachtrag-Fensters: gibt es zu diesem Auftrag Rechnungen, die noch nicht per Mail verschickt wurden? */
+  async function pruefeVersand() {
+    try {
+      const rRes = await fetch(`/api/invoices?project_id=${project.id}`);
+      const rJson = await rRes.json();
+      const rechnungen: RechnungKurz[] = rRes.ok && rJson.success ? rJson.invoices || [] : [];
+      if (rechnungen.length === 0) { setOffeneRechnungen([]); return; }
+      const nummern = rechnungen.map((r) => r.invoice_number).join(',');
+      const mRes = await fetch(`/api/email-log?invoice_numbers=${encodeURIComponent(nummern)}`);
+      const mJson = await mRes.json();
+      if (!mRes.ok || !mJson.success) { setOffeneRechnungen(rechnungen.filter((r) => r.status !== 'storniert' && r.status !== 'bezahlt')); return; }
+      setOffeneRechnungen(unversendeteRechnungen(rechnungen, mJson.emails || []));
+    } catch { setOffeneRechnungen([]); }
+  }
 
   const summen = nachtragSummen(liste);
 
@@ -81,6 +99,7 @@ export default function NachtraegeBlock({ project, kunde }: Props) {
       setArt(''); setVerl({ wochen: '', preis: '', bis: '' }); setRegie([{ bezeichnung: '', personen: '', stunden: '', satz: '' }]);
       setDateien([]); setOffen(false);
       setMeldung({ ok: true, text: 'Nachtrag gespeichert.' });
+      void pruefeVersand();
     } catch (e: any) {
       setMeldung({ ok: false, text: e?.message || 'Fehler beim Speichern' });
     } finally {
@@ -278,11 +297,21 @@ export default function NachtraegeBlock({ project, kunde }: Props) {
           </div>
           <div className="flex gap-2">
             <button onClick={anlegen} disabled={laeuft} className="flex-1 rounded-lg bg-[#e8590c] hover:bg-[#d9480f] disabled:opacity-50 py-2 text-sm font-semibold text-white">{laeuft ? 'Speichert…' : 'Nachtrag speichern'}</button>
-            <button onClick={() => { setOffen(false); setDateien([]); }} disabled={laeuft} className="rounded-lg bg-black/10 hover:bg-black/20 px-3 py-2 text-sm text-[#1d1d1f]">Abbrechen</button>
+            <button onClick={() => { setOffen(false); setDateien([]); void pruefeVersand(); }} disabled={laeuft} className="rounded-lg bg-black/10 hover:bg-black/20 px-3 py-2 text-sm text-[#1d1d1f]">Abbrechen</button>
           </div>
         </div>
       )}
       {meldung && <p className={`text-[11px] ${meldung.ok ? 'text-emerald-600' : 'text-red-600'}`}>{meldung.text}</p>}
+      {!offen && offeneRechnungen.length > 0 && (
+        <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900 space-y-1.5" role="alert">
+          <p className="font-semibold">Sind die Rechnungen schon verschickt?</p>
+          <p>Zu diesem Auftrag gibt es noch keine verschickte Mail für: {offeneRechnungen.map((r) => r.invoice_number).join(', ')}.</p>
+          <div className="flex flex-wrap gap-1.5">
+            <Link href="/rechnungen" className="rounded-lg bg-[#e8590c] px-2.5 py-1 font-semibold text-white">Zu den Rechnungen</Link>
+            <button onClick={() => setOffeneRechnungen([])} className="rounded-lg border border-amber-300 px-2.5 py-1 font-semibold hover:bg-amber-100">Schon verschickt</button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
