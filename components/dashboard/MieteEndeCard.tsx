@@ -116,16 +116,16 @@ export default function MieteEndeCard() {
           // Bis wann abgerechnet ist: verhindert, dass die automatische Standzeit-Nachberechnung dieselben Wochen noch einmal berechnet
           const patch = await fetch("/api/projects", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id, data: { mietAbgerechnetBis: neuesEnde } }) });
           if (!patch.ok) throw new Error("Rechnung angelegt, aber der Abrechnungs-Merker konnte nicht gespeichert werden – bitte unter „Mietabrechnung“ prüfen, damit nichts doppelt berechnet wird.");
-        } catch (err: any) {
-          setFehler(`Mietende verlängert, aber: ${err.message || "Rechnung nicht angelegt."} Bitte im Auftrag eine Zusatzrechnung anlegen.`);
+        } catch (err) {
+          setFehler(`Mietende verlängert, aber: ${err instanceof Error ? err.message : "Rechnung nicht angelegt."} Bitte im Auftrag eine Zusatzrechnung anlegen.`);
           await laden();
           return;
         }
       }
       if (e.customer_id) { router.push(`/kunden/${e.customer_id}?baustelle=${id}`); return; }
       await laden();
-    } catch (err: any) {
-      setFehler(err.message || "Verlängern fehlgeschlagen.");
+    } catch (err) {
+      setFehler(err instanceof Error ? err.message : "Verlängern fehlgeschlagen.");
     } finally {
       setLaedt(null);
     }
