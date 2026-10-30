@@ -1,15 +1,21 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { CalendarClock, Loader2 } from "lucide-react";
+import { tageBis, plusTageIso } from "@/lib/miete";
 
 // ============================================================
 // SCAFFOLD OS – Dashboard: Mietende in den nächsten 14 Tagen
 // Zeigt aktive Projekte, deren Mietende bald erreicht ist, mit
 // Verlängerung um frei wählbare Wochen (Standard 1) oder bis zu einem Datum. Blendet sich aus, wenn nichts
 // ansteht oder der Nutzer keine Berechtigung hat (nur admin/disponent).
-// Das ursprüngliche Projektende bleibt unverändert, die automatische
-// Standzeit-Nachberechnung läuft wie bisher (siehe lib/miete.ts).
+// Beim Verlängern wird – wenn im Angebot ein Wochenpreis steht – direkt eine
+// Rechnung (Entwurf, status "offen") für die verlängerten Wochen angelegt, mit
+// einer Rückfrage vorab. data.mietAbgerechnetBis wird auf das neue Ende gesetzt,
+// damit die automatische Standzeit-Nachberechnung (lib/miete.ts, Cron) dieselben
+// Wochen nicht noch einmal berechnet. Danach öffnet sich der Auftrag des Kunden.
+// Das ursprüngliche Projektende (step1.projektende) bleibt unverändert.
 // ============================================================
 
 interface Eintrag {
@@ -17,6 +23,8 @@ interface Eintrag {
   name: string;
   kunde: string;
   adresse: string | null;
+  customer_id: string | null;
+  wochenpreis: number;
   ende: string;
   tage: number;
   verlaengert: boolean;
@@ -28,6 +36,7 @@ function deutsch(iso: string): string {
 }
 
 export default function MieteEndeCard() {
+  const router = useRouter();
   const [liste, setListe] = useState<Eintrag[]>([]);
   const [laedt, setLaedt] = useState<string | null>(null);
   const [fehler, setFehler] = useState<string | null>(null);
@@ -47,24 +56,76 @@ export default function MieteEndeCard() {
 
   useEffect(() => { laden(); }, [laden]);
 
+  const eur = (n: number) => n.toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " €";
+  const heuteIso = () => new Intl.DateTimeFormat("sv-SE", { timeZone: "Europe/Berlin" }).format(new Date());
+
+  /** Legt die Rechnung für die verlängerten Wochen an (mit Prüfung/Freigabe wie auf der Seite Mietabrechnung). */
+  async function rechnungAnlegen(e: Eintrag, neuesEnde: string, wochen: number, overrideGrund?: string): Promise<string> {
+    const heute = heuteIso();
+    const res = await fetch("/api/invoices", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        project_id: e.id,
+        customer_name: e.kunde,
+        customer_address: e.adresse || undefined,
+        due_date: plusTageIso(heute, 14),
+        notes: `Mietverlängerung: Standzeit „${e.name}“ um ${wochen} Wo. verlängert (${deutsch(e.ende)} bis ${deutsch(neuesEnde)}).`,
+        positions: [{ bezeichnung: `Mietverlängerung ${e.name} – ${wochen} Wo. (${deutsch(e.ende)} bis ${deutsch(neuesEnde)})`, menge: wochen, einheit: "Wo.", einzelpreis: e.wochenpreis }],
+        override_grund: overrideGrund || undefined,
+      }),
+    });
+    const antwort = await res.json();
+    if (!res.ok) {
+      if (antwort.code === "FREIGABE_FEHLT_OVERRIDE_MOEGLICH") {
+        const grund = prompt(antwort.error + "\n\nBegründung für die Überschreibung eingeben:");
+        if (grund && grund.trim()) return rechnungAnlegen(e, neuesEnde, wochen, grund.trim());
+        throw new Error("Ohne Freigabe oder Begründung wurde keine Rechnung angelegt.");
+      }
+      throw new Error(antwort.error || "Rechnung konnte nicht angelegt werden.");
+    }
+    return antwort.invoice?.invoice_number || "";
+  }
+
   async function verlaengern(id: string) {
-    const eingabe = wahl[id] || { modus: 'wochen' as const, wochen: '1', bis: '' };
-    const wochen = Math.round(Number(eingabe.wochen.replace(',', '.')));
-    if (eingabe.modus === 'wochen' && !(wochen >= 1 && wochen <= 52)) { setFehler('Bitte 1 bis 52 Wochen eingeben.'); return; }
-    if (eingabe.modus === 'datum' && !eingabe.bis) { setFehler('Bitte ein Datum wählen.'); return; }
+    const e = liste.find((x) => x.id === id);
+    if (!e) return;
+    const eingabe = holeWahl(id);
+    const wochenEingabe = Math.round(Number(eingabe.wochen.replace(",", ".")));
+    if (eingabe.modus === "wochen" && !(wochenEingabe >= 1 && wochenEingabe <= 52)) { setFehler("Bitte 1 bis 52 Wochen eingeben."); return; }
+    if (eingabe.modus === "datum" && !eingabe.bis) { setFehler("Bitte ein Datum wählen."); return; }
+    // Vorschau: neues Ende und Betrag, damit nichts versehentlich berechnet wird
+    const vorschauEnde = eingabe.modus === "datum" ? eingabe.bis : plusTageIso(e.ende, 7 * wochenEingabe);
+    const vorschauWochen = Math.max(1, Math.ceil(tageBis(vorschauEnde, e.ende) / 7));
+    if (e.wochenpreis > 0 && !window.confirm(`Mietende bis ${deutsch(vorschauEnde)} verlängern und direkt eine Rechnung über ${vorschauWochen} Wo. à ${eur(e.wochenpreis)} netto anlegen?`)) return;
     setLaedt(id);
     setFehler(null);
     try {
       const res = await fetch("/api/miete/verlaengern", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(eingabe.modus === 'datum' ? { project_id: id, bis: eingabe.bis } : { project_id: id, wochen }),
+        body: JSON.stringify(eingabe.modus === "datum" ? { project_id: id, bis: eingabe.bis } : { project_id: id, wochen: wochenEingabe }),
       });
       const json = await res.json();
       if (!json.success) throw new Error(json.error || "Verlängern fehlgeschlagen.");
+      const neuesEnde: string = json.ende;
+      if (e.wochenpreis > 0) {
+        const wochen = Math.max(1, Math.ceil(tageBis(neuesEnde, e.ende) / 7));
+        try {
+          await rechnungAnlegen(e, neuesEnde, wochen);
+          // Bis wann abgerechnet ist: verhindert, dass die automatische Standzeit-Nachberechnung dieselben Wochen noch einmal berechnet
+          const patch = await fetch("/api/projects", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id, data: { mietAbgerechnetBis: neuesEnde } }) });
+          if (!patch.ok) throw new Error("Rechnung angelegt, aber der Abrechnungs-Merker konnte nicht gespeichert werden – bitte unter „Mietabrechnung“ prüfen, damit nichts doppelt berechnet wird.");
+        } catch (err: any) {
+          setFehler(`Mietende verlängert, aber: ${err.message || "Rechnung nicht angelegt."} Bitte im Auftrag eine Zusatzrechnung anlegen.`);
+          await laden();
+          return;
+        }
+      }
+      if (e.customer_id) { router.push(`/kunden/${e.customer_id}?baustelle=${id}`); return; }
       await laden();
-    } catch (e: any) {
-      setFehler(e.message || "Verlängern fehlgeschlagen.");
+    } catch (err: any) {
+      setFehler(err.message || "Verlängern fehlgeschlagen.");
     } finally {
       setLaedt(null);
     }

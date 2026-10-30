@@ -34,7 +34,7 @@ export async function GET() {
       return NextResponse.json({ success: false, error: 'Keine Berechtigung.' }, { status: 403 });
     }
 
-    const res = await fetch(`${url}/rest/v1/projects?status=eq.active&select=id,name,adresse,data`, { headers });
+    const res = await fetch(`${url}/rest/v1/projects?status=eq.active&select=id,name,adresse,customer_id,data`, { headers });
     if (!res.ok) throw new Error(await res.text());
     const projekte = await res.json();
     const heute = heuteIso();
@@ -51,6 +51,8 @@ export async function GET() {
           name: p.name || '–',
           kunde: data?.step1?.name || p.name || '–',
           adresse: p.adresse || null,
+          customer_id: p.customer_id || null,
+          wochenpreis: Number(data?.angebotAnpassungen?.miete?.preisProWoche) || 0,
           ende,
           tage,
           verlaengert: !!data?.mietVerlaengertBis && data.mietVerlaengertBis >= (data?.step1?.projektende || ''),
