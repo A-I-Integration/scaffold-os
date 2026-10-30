@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import Link from 'next/link';
 import { Plus, FileText, Check, X, Trash2, Camera } from 'lucide-react';
 import {
   type Nachtrag, type NachtragStatus, NACHTRAG_STATUS_LABEL, nachtragNummer, normalisiereNachtraege,
@@ -306,7 +307,7 @@ export default function NachtraegeBlock({ project, kunde }: Props) {
           <p className="font-semibold">Sind die Rechnungen schon verschickt?</p>
           <p>Zu diesem Auftrag gibt es noch keine verschickte Mail für: {offeneRechnungen.map((r) => r.invoice_number).join(', ')}.</p>
           <div className="flex flex-wrap gap-1.5">
-            <a href="/rechnungen" className="rounded-lg bg-[#e8590c] px-2.5 py-1 font-semibold text-white">Zu den Rechnungen</a>
+            <Link href="/rechnungen" className="rounded-lg bg-[#e8590c] px-2.5 py-1 font-semibold text-white">Zu den Rechnungen</Link>
             <button onClick={() => setOffeneRechnungen([])} className="rounded-lg border border-amber-300 px-2.5 py-1 font-semibold hover:bg-amber-100">Schon verschickt</button>
           </div>
         </div>
