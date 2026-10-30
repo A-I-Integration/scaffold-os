@@ -11,26 +11,17 @@
   --sf-gray: #86868b;
   --sf-accent: #e8590c;
   --sf-top: 0px;
-  background: var(--sf-bg); color: var(--sf-fg); position: relative;
+  background: #f4f5f8; color: var(--sf-fg); position: relative;
 }
 .sf-root *, .sf-root *::before, .sf-root *::after { box-sizing: border-box; }
 
-/* Abschnitte: breit = große Animation und Text nebeneinander, im Wechsel; der Abschnitt bleibt beim Scrollen stehen (sticky) */
-.sf-sec { position: relative; height: 185vh; }
-.sf-sec:nth-child(even) { background: var(--sf-alt); }
-.sf-pin { position: sticky; top: var(--sf-top); height: calc(100vh - var(--sf-top)); height: calc(100svh - var(--sf-top)); max-width: 1380px; margin: 0 auto; padding: 28px 32px; display: grid; grid-template-columns: minmax(0, 1.28fr) minmax(0, 1fr); gap: clamp(32px, 4.5vw, 72px); align-items: center; }
-.sf-vis { position: relative; width: 100%; height: 100%; max-height: 800px; border-radius: 28px; overflow: hidden; background: #eef1f5; border: 1px solid var(--sf-line); box-shadow: 0 30px 80px rgba(20, 30, 50, .16), 0 2px 6px rgba(20, 30, 50, .06); }
+/* Eine Bühne: das Zeichenfeld steht beim Scrollen fest (sticky), die Textabschnitte laufen darüber. Kein Rahmen, kein Kasten. */
+.sf-stage { position: sticky; top: var(--sf-top); height: calc(100vh - var(--sf-top)); height: calc(100svh - var(--sf-top)); overflow: hidden; z-index: 0; }
 .sf-gl { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
-.sf-txt { display: flex; flex-direction: column; gap: 22px; min-width: 0; }
-.sf-sec.sf-flip .sf-pin { grid-template-columns: minmax(0, 1fr) minmax(0, 1.28fr); }
-.sf-sec.sf-flip .sf-vis { order: 2; }
-
-/* Text und Karte gleiten von ihrer Seite herein, sobald der Abschnitt im Bild ist */
-.sf-txt .sf-copy { opacity: 0; transform: translateX(60px); transition: opacity .7s ease, transform .85s cubic-bezier(.2,.7,.2,1); }
-.sf-sec.sf-flip .sf-txt .sf-copy { transform: translateX(-60px); }
-.sf-sec.sf-in .sf-txt .sf-copy { opacity: 1; transform: none; }
-.sf-vis .sf-card { opacity: 0; transform: translateY(20px); transition: opacity .7s ease .25s, transform .85s cubic-bezier(.2,.7,.2,1) .25s; }
-.sf-sec.sf-in .sf-vis .sf-card { opacity: 1; transform: none; }
+.sf-sections { position: relative; z-index: 1; margin-top: calc(-1 * (100vh - var(--sf-top))); margin-top: calc(-1 * (100svh - var(--sf-top))); }
+.sf-sec { height: 125vh; height: 125svh; display: flex; align-items: center; justify-content: flex-end; padding: 0 max(32px, 6vw); }
+.sf-sec.sf-flip { justify-content: flex-start; }
+.sf-sec .sf-copy { width: min(540px, 42vw); opacity: var(--v, 1); transform: translateY(var(--dy, 0px)); will-change: opacity, transform; }
 
 /* Typografie wie auf der übrigen Seite */
 .sf-copy { max-width: 600px; }
@@ -51,23 +42,6 @@
 .sf-chip { background: #fff; border: 1px solid var(--sf-line); border-radius: 999px; padding: 6px 13px; font-size: 13px; font-weight: 500; box-shadow: 0 1px 2px rgba(0,0,0,.04); }
 .sf-chiparrow { width: 14px; height: 14px; color: var(--sf-accent); }
 
-/* Karten mit Demo-Daten */
-/* Die Karte liegt im Bildfeld unten links (breit) bzw. unter dem Bild (Handy) */
-.sf-card { position: absolute; z-index: 5; left: 18px; bottom: 18px; background: rgba(255,255,255,.94); border: 1px solid var(--sf-line); border-radius: 18px; padding: 14px 18px; width: min(calc(100% - 36px), 340px); box-shadow: 0 12px 34px rgba(20, 30, 50, .14); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); }
-.sf-card .sf-tag { float: right; font-size: 10px; font-weight: 600; letter-spacing: .1em; text-transform: uppercase; color: var(--sf-gray); border: 1px solid var(--sf-line); padding: 4px 7px; border-radius: 6px; }
-.sf-root .sf-card h3 { margin: 0 0 8px; font-size: 12px; font-weight: 600; letter-spacing: .12em; text-transform: uppercase; color: var(--sf-mute); }
-.sf-row { display: flex; justify-content: space-between; gap: 12px; padding: 6px 0; border-top: 1px solid var(--sf-line); font-size: 14px; color: var(--sf-body); }
-.sf-row:first-of-type { border-top: 0; }
-.sf-row b { font-weight: 600; font-variant-numeric: tabular-nums; color: var(--sf-fg); text-align: right; }
-.sf-row.sf-total { font-weight: 600; }
-.sf-row.sf-total b { color: var(--sf-accent); font-size: 19px; }
-.sf-bar { height: 6px; border-radius: 3px; background: rgba(0,0,0,.07); overflow: hidden; margin-top: 6px; }
-.sf-bar i { display: block; height: 100%; background: var(--sf-accent); width: 0; }
-.sf-grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-.sf-tile { border: 1px solid var(--sf-line); border-radius: 14px; padding: 12px; background: var(--sf-bg); }
-.sf-tile small { display: block; font-size: 10px; font-weight: 600; line-height: 1.2; letter-spacing: .08em; text-transform: uppercase; color: var(--sf-mute); margin-bottom: 8px; }
-.sf-tile strong { font-weight: 600; font-size: 28px; line-height: 1; font-variant-numeric: tabular-nums; }
-
 /* Maßketten im ersten Bild */
 .sf-dim { position: absolute; z-index: 12; font-size: 12px; font-weight: 600; color: var(--sf-fg); background: rgba(255,255,255,.92); border: 1px solid var(--sf-accent); padding: 4px 9px; border-radius: 6px; transform: translate(-50%, -50%); pointer-events: none; opacity: 0; transition: opacity .4s; white-space: nowrap; }
 
@@ -80,21 +54,15 @@
 .sf-btn.sf-ghost:hover { background: rgba(0,0,0,.05); transform: none; }
 .sf-arrow { width: 18px; height: 18px; }
 
-.sf-nogl .sf-vis { background: radial-gradient(ellipse at 50% 30%, #ffffff, #e4e8ee 80%); }
+.sf-nogl .sf-stage { background: radial-gradient(ellipse at 50% 30%, #ffffff, #e4e8ee 80%); }
 
-@media (max-width: 1100px) and (min-width: 900px) {
-  .sf-pin { padding: 20px 24px; gap: 28px; }
-}
 @media (max-width: 899px) {
-  /* Handy: kein Stehenbleiben, Animation mit Karte über dem Text */
-  .sf-sec { height: auto; padding: 36px 0 36px; }
-  .sf-pin, .sf-sec.sf-flip .sf-pin { position: static; height: auto; display: flex; flex-direction: column; gap: 22px; padding: 0 20px; }
-  .sf-vis { height: auto; max-height: none; border-radius: 22px; display: flex; flex-direction: column; background: var(--sf-card); }
-  .sf-sec.sf-flip .sf-vis { order: 0; }
-  .sf-gl { position: relative; inset: auto; height: min(52svh, 400px); background: #eef1f5; }
-  .sf-card { position: static; width: 100%; border: 0; border-top: 1px solid var(--sf-line); border-radius: 0; box-shadow: none; padding: 14px 16px; backdrop-filter: none; -webkit-backdrop-filter: none; }
-  .sf-txt .sf-copy, .sf-sec.sf-flip .sf-txt .sf-copy { transform: translateY(28px); }
-  .sf-sec.sf-in .sf-txt .sf-copy { transform: none; }
-  .sf-row { font-size: 13px; }
+  /* Handy: Motiv oben, Text unten über dem Bild mit weichem Hintergrund */
+  .sf-sec, .sf-sec.sf-flip { height: 100vh; height: 100svh; align-items: flex-end; justify-content: stretch; padding: 0 20px 4svh; }
+  .sf-sec .sf-copy { width: 100%; max-width: none; padding: 26px 18px 18px; margin: 0 -18px; border-radius: 22px; background: linear-gradient(to top, rgba(244,245,248,.97) 72%, rgba(244,245,248,0)); }
+  .sf-root h1 { font-size: clamp(26px, 7vw, 34px); }
+  .sf-root h2 { font-size: clamp(24px, 6.4vw, 32px); }
+  .sf-root .sf-lead { font-size: 14px; }
+  .sf-list li { font-size: 13.5px; }
 }
-@media (prefers-reduced-motion: reduce) { .sf-dim, .sf-txt .sf-copy, .sf-vis .sf-card { transition: none; } .sf-txt .sf-copy, .sf-vis .sf-card { transform: none !important; opacity: 1 !important; } }
+@media (prefers-reduced-motion: reduce) { .sf-dim { transition: none; } }
