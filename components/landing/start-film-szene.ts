@@ -257,11 +257,11 @@ export function starteSzene(buehne: Buehne, reduce: boolean, kopfHoehe: () => nu
     const pw = Math.round(w * dpr), ph = Math.round(h * dpr)
     if (buehne.canvas.width !== pw || buehne.canvas.height !== ph) renderer.setSize(pw, ph, false)
     renderer.setPixelRatio(1)
-    camera.aspect = w / h; camera.fov = w / h < 0.8 ? 58 : 42
+    camera.aspect = w / h; camera.fov = w / h < 0.8 ? 64 : 42
     // Das Motiv wechselt die Seite wie der Text: Kapitel 0 links, 1 rechts, … (sanft, ohne Sprung). Auf dem Handy rutscht es nach oben, der Text steht unten.
     const schmal = w < 900
     const seite = -Math.cos(Math.PI * (g - 0.5))
-    camera.setViewOffset(w, h, schmal ? 0 : -seite * w * 0.2, schmal ? h * 0.2 : 0, w, h)
+    camera.setViewOffset(w, h, schmal ? 0 : -seite * w * 0.2, schmal ? h * 0.27 : 0, w, h)
     // Sonne und Schattenfeld folgen dem Ort der Szene (Lager liegt weit rechts)
     const sx = 56 * (smooth((g - 4.1) / 0.3) - smooth((g - 5.0) / 0.5))
     sun.position.set(30 + sx, 40, 20); sun.target.position.set(sx, 0, 0); sun.target.updateMatrixWorld()

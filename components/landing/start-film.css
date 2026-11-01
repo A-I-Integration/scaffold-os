@@ -58,11 +58,12 @@
 
 @media (max-width: 899px) {
   /* Handy: Motiv oben, Text unten über dem Bild mit weichem Hintergrund */
-  .sf-sec, .sf-sec.sf-flip { height: 100vh; height: 100svh; align-items: flex-end; justify-content: stretch; padding: 0 20px 4svh; }
-  .sf-sec .sf-copy { width: 100%; max-width: none; padding: 26px 18px 18px; margin: 0 -18px; border-radius: 22px; background: linear-gradient(to top, rgba(244,245,248,.97) 72%, rgba(244,245,248,0)); }
+  .sf-sec, .sf-sec.sf-flip { height: calc(100vh - var(--sf-top)); height: calc(100svh - var(--sf-top)); align-items: flex-end; justify-content: stretch; padding: 0 20px 4svh; }
+  .sf-sec .sf-copy { width: 100%; max-width: none; padding: 40px 18px 14px; margin: 0 -18px; border-radius: 22px; background: linear-gradient(to top, rgba(244,245,248,.97) 72%, rgba(244,245,248,0)); }
   .sf-root h1 { font-size: clamp(26px, 7vw, 34px); }
   .sf-root h2 { font-size: clamp(24px, 6.4vw, 32px); }
-  .sf-root .sf-lead { font-size: 14px; }
-  .sf-list li { font-size: 13.5px; }
+  .sf-root .sf-lead { display: none; }
+  .sf-list li { font-size: 13px; line-height: 1.45; }
+  .sf-list { gap: 6px; }
 }
 @media (prefers-reduced-motion: reduce) { .sf-dim { transition: none; } }

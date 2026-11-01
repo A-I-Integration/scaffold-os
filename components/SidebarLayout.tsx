@@ -188,6 +188,7 @@ export default function SidebarLayout({ children }: { children: React.ReactNode 
   useEffect(() => {
     const aktiveGruppe = NAV_GROUPS.find((g) => g.items.some((i) => isActive(i.href)));
     if (aktiveGruppe) setOpenGroups((prev) => ({ ...prev, [aktiveGruppe.key]: true }));
+    if (typeof window !== 'undefined' && window.innerWidth < 768) setOpen(false);
   }, [pathname]);
 
   async function handleLogout() {
@@ -223,10 +224,28 @@ export default function SidebarLayout({ children }: { children: React.ReactNode 
     setOpenGroups((prev) => ({ ...prev, [key]: !prev[key] }));
   }
 
+  // Handy: kein fester Streifen links, sondern eine schmale Kopfzeile und ein Menü, das über die Seite fährt.
+  // Die Seite selbst scrollt dann normal (kein verschachtelter Scrollbereich).
+  const handy = breite > 0 && breite < 768;
+
   return (
-    <div className="flex h-screen bg-[#fbfbfd]">
+    <div className={handy ? 'min-h-dvh bg-[#fbfbfd]' : 'flex h-screen bg-[#fbfbfd]'}>
+      {handy && (
+        <header data-landing-kopf className="sticky top-0 z-40 flex h-12 items-center gap-3 border-b border-black/5 bg-white/90 px-3 backdrop-blur" style={{ paddingTop: 'env(safe-area-inset-top)' }}>
+          <button onClick={() => setOpen(true)} className="rounded-full p-2 text-[#424245] hover:bg-black/5" aria-label="Menü öffnen">
+            <Menu className="h-5 w-5" />
+          </button>
+          <Link href="/" className="flex items-center gap-2">
+            <HardHat className="h-5 w-5 text-[#e8590c]" />
+            <span className="text-base font-semibold tracking-tight">SCAFFOLD OS</span>
+          </Link>
+        </header>
+      )}
+      {handy && open && <div className="fixed inset-0 z-40 bg-black/40" onClick={() => setOpen(false)} />}
       {/* ─── Sidebar ─── */}
-      <aside className={`bg-white/90 backdrop-blur border-r border-black/5 text-[#1d1d1f] flex flex-col transition-all duration-300 shrink-0 ${open ? 'w-64' : 'w-16'}`}>
+      <aside className={handy
+        ? `fixed inset-y-0 left-0 z-50 flex w-72 max-w-[85vw] flex-col border-r border-black/5 bg-white text-[#1d1d1f] shadow-xl transition-transform duration-300 ${open ? 'translate-x-0' : '-translate-x-full'}`
+        : `bg-white/90 backdrop-blur border-r border-black/5 text-[#1d1d1f] flex flex-col transition-all duration-300 shrink-0 ${open ? 'w-64' : 'w-16'}`}>
         <div className="p-4 flex items-center justify-between border-b border-black/5">
           {open && (
             <Link href="/" className="flex items-center gap-2">
@@ -375,7 +394,7 @@ export default function SidebarLayout({ children }: { children: React.ReactNode 
       </aside>
 
       {/* ─── Inhalt ─── */}
-      <main className="flex-1 overflow-auto">
+      <main className={handy ? 'min-w-0' : 'flex-1 overflow-auto'}>
         {children}
       </main>
 
