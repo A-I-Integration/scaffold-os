@@ -395,7 +395,7 @@ export default function HomePage() {
 
       {/* ─── Footer ─── */}
       <footer className="mt-auto border-t border-black/5 pt-10 pb-16 text-center text-sm text-[#86868b]">
-        <div className="flex items-center justify-center gap-3 mb-4 text-[13px]">
+        <div className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1 mb-4 px-4 text-[13px]">
           <Link href="/wechseln" className="hover:text-[#1d1d1f] transition-colors">Softwarewechsel</Link>
           <span className="text-black/10">·</span>
           <Link href="/impressum" className="hover:text-[#1d1d1f] transition-colors">Impressum</Link>
@@ -403,6 +403,8 @@ export default function HomePage() {
           <Link href="/datenschutz" className="hover:text-[#1d1d1f] transition-colors">Datenschutz</Link>
           <span className="text-black/10">·</span>
           <Link href="/agb" className="hover:text-[#1d1d1f] transition-colors">AGB</Link>
+          <span className="text-black/10">·</span>
+          <Link href="/open-source" className="hover:text-[#1d1d1f] transition-colors">Open Source</Link>
         </div>
         powered by <span className="font-semibold text-[#6e6e73]">AI Integration</span>
       </footer>
