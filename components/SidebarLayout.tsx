@@ -62,6 +62,7 @@ const NAV_GROUPS: NavGroup[] = [
       { href: '/cad',              label: 'CAD',    icon: Ruler, roles: ['admin', 'disponent', 'bauleiter'] },
       { href: '/cad/bruecke',      label: 'Brücke', icon: Ruler, roles: ['admin', 'disponent', 'bauleiter'] },
       { href: '/cad/traggeruest',  label: 'Traggerüst-Anfrage', icon: Ruler, roles: ['admin', 'disponent', 'bauleiter'] },
+      { href: '/cad/pylon',        label: 'Geneigter Körper', icon: Ruler, roles: ['admin', 'disponent', 'bauleiter'] },
       { href: '/gaeb',             label: 'GAEB',   icon: FileText, roles: ['admin', 'disponent', 'mitarbeiter'] },
     ],
   },
