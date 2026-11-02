@@ -22,6 +22,7 @@ import {
 import { FIRMENFELDER, firmenwerteAus, standardpreiseAus, type LvStandardpreise } from '@/lib/lv-firmenwerte'
 import { leseStatikerLvXlsx, mengenAusAuftraggeberLv, type StatikerLvErgebnis } from '@/lib/statiker-lv-einlesen'
 import { wochenZwischen } from '@/lib/miete';
+import PlanKontrolle from '@/components/cad/PlanKontrolle';
 
 const feld = 'w-full px-2 py-1.5 border rounded-lg text-xs bg-white'
 const label = 'block text-[11px] font-medium text-[#424245] mb-0.5'
@@ -281,6 +282,7 @@ export default function LvDialog({ model, materials, aufbauStunden, abbauStunden
                 <input type='number' min={0} step='0.5' className={feld} placeholder={String(model.levels?.length ? Math.max(...model.levels.map((l) => l.topY)) : model.totalHeightM)} value={e.geruestHoeheAusschreibungM ?? ''}
                   onChange={(ev) => setze({ geruestHoeheAusschreibungM: ev.target.value === '' ? undefined : zahl(ev.target.value) })} /></div>
             </div>
+            {e.stil === 'statiker' && <PlanKontrolle />}
             {e.stil === 'statiker' && (
               <div className='grid grid-cols-2 gap-2'>
                 <div><label className={label}>2. Bauabschnitt: Höhe (m)</label>
