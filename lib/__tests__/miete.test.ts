@@ -95,3 +95,18 @@ describe('standzeitNachberechnung', () => {
     expect(standzeitNachberechnung('2026-10-01', '2026-10-20', undefined, '2026-10-21')).toMatchObject({ abgerechnetBis: '2026-10-20', wochen: 1 })
   })
 })
+
+import { wochenZwischen } from '../miete'
+describe('wochenZwischen', () => {
+  it('volle und angefangene Wochen', () => {
+    expect(wochenZwischen('2026-03-02', '2026-03-09')).toBe(1)
+    expect(wochenZwischen('2026-03-02', '2026-03-10')).toBe(2)
+    expect(wochenZwischen('2026-03-02', '2026-05-25')).toBe(12)
+  })
+  it('ungültig oder rückwärts: null', () => {
+    expect(wochenZwischen('2026-03-02', '2026-03-02')).toBeNull()
+    expect(wochenZwischen('2026-03-09', '2026-03-02')).toBeNull()
+    expect(wochenZwischen('', '2026-03-02')).toBeNull()
+    expect(wochenZwischen(undefined, undefined)).toBeNull()
+  })
+})

@@ -29,6 +29,11 @@ import { standardpreisFuer, type LvStandardpreise } from '@/lib/lv-firmenwerte'
 import { MIN_BREITE_AB_LK4_M, STANDARD_LASTKLASSE, verwendungText } from '@/lib/geruestklassen'
 import { lagenansatzText } from '@/lib/lastansatz'
 import { LV_TEXTE } from '@/lib/lv-texte'
+
+function datumDe(iso: string): string {
+  const [j, m, t] = iso.split('-')
+  return `${t}.${m}.${j}`
+}
 import { nachbarDach, nachbarDachHinweis } from '@/lib/cad/nachbardach'
 
 export const GRUNDSTANDZEIT_WOCHEN = 4
@@ -135,6 +140,12 @@ export interface LvEingaben {
   reserveBa2M?: number
   /** Stil „statiker“: Standzeit des 2. Bauabschnitts in Wochen (leer/0 = in der Tabelle eintragen) */
   standzeitBa2Wochen?: number
+  /** Standzeit mit Datum (optional): Beginn Aufbau / Ende des gesamten Rückbaus. Sind beide gesetzt, wurden die Wochen daraus berechnet. */
+  standzeitVon?: string
+  standzeitBis?: string
+  /** Standzeit 2. BA mit Datum (optional): Beginn / Ende des 2. Bauabschnitts */
+  standzeitBa2Von?: string
+  standzeitBa2Bis?: string
   /** Standardpreise aus der Datenpflege für Positionen ohne CAD-Wert (füllen nur, wo sonst 0 € stehen würde) */
   standardpreise?: LvStandardpreise
 }
@@ -162,6 +173,8 @@ export const LV_STANDARD_EINGABEN: LvEingaben = {
   objektadresse: '',
   auftragnehmer: '',
   gesamtStandzeitWochen: 8,
+  // Statiker-Stil: Das Gerüst bleibt 2 m höher stehen als angegeben (Antwort des Statikers: „immer 2 m mehr stehen lassen“)
+  reserveBa2M: 2,
   pauschalFaktorProzent: 100,
   lastklasse: STANDARD_LASTKLASSE,
   breitenklasseManuell: 'W09',
@@ -515,7 +528,7 @@ export function erzeugeLeistungsverzeichnis(quelle: LvQuelle, e: LvEingaben): Le
     const zaun = zus('bauzaun')
     const bz = b1.add('Bauzaun', [...LV_TEXTE.bauzaun, ...(zaun && zaun.menge > 0 ? [] : ['Länge nicht aus dem CAD (Grundstücksgrenze ist im Modell nicht enthalten): Menge bitte eintragen.'])], zaun?.menge ?? 0, 'm', cent(zaun?.epAuf ?? 0) + cent(zaun?.epAb ?? 0))
     vorh(b1, bz.nr, 'Bauzaun', cent(zaun?.epVorh ?? 0), 'm/Wo', (zaun?.menge ?? 0) * woGesamt)
-    const tor = b1.add('Bauzauntor', [...LV_TEXTE.bauzauntor, OHNE_CAD], 0, 'Stück', 0)
+    const tor = b1.add('Bauzauntor', [...LV_TEXTE.bauzauntor], 1, 'Stück', 0)
     vorh(b1, tor.nr, 'Bauzauntor', 0)
     const abd = b1.add('Abdecken von Bodenflächen BE', [...LV_TEXTE.bodenabdeckung, OHNE_CAD], 0, 'm²', 0)
     vorh(b1, abd.nr, 'Abdecken von Bodenflächen BE', 0, 'm²/Wo', 0)
@@ -797,6 +810,8 @@ export function erzeugeLeistungsverzeichnis(quelle: LvQuelle, e: LvEingaben): Le
       : e.stil === 'getrennt'
         ? `Aufbau, Vorhaltung und Abbau sind getrennte Positionen (Aufbau wie in den Muster-LVs). Vorhaltung über die gesamte Standzeit von ${de(e.gesamtStandzeitWochen, 0)} Wochen (Menge × Wochen). Aufbau-EP = Aufbaustunden × Stundensatz Facharbeiter, Abbau-EP = Abbaustunden × Stundensatz (je mit Zuschlag, nach Materialwert verteilt); das Material steckt in der Vorhaltung.`
         : `Gesamt-Standzeit ${de(e.gesamtStandzeitWochen, 0)} Wochen, davon ${GRUNDSTANDZEIT_WOCHEN} Wochen Grundstandzeit in der Aufbauposition, danach Verlängerung der Vorhaltung.`,
+      ...(e.standzeitVon && e.standzeitBis ? [`Standzeit gesamt: ${datumDe(e.standzeitVon)} bis ${datumDe(e.standzeitBis)} (${de(e.gesamtStandzeitWochen, 0)} Wochen, angefangene Woche voll).`] : []),
+      ...(e.stil === 'statiker' && e.standzeitBa2Von && e.standzeitBa2Bis ? [`Standzeit 2. BA: ${datumDe(e.standzeitBa2Von)} bis ${datumDe(e.standzeitBa2Bis)} (${de(e.standzeitBa2Wochen ?? 0, 0)} Wochen).`] : []),
       ...(e.stil === 'statiker' && e.pauschalFaktorProzent && e.pauschalFaktorProzent !== 100 ? [`Auf alle Positionen außer Vorhaltung und Stundenlohn wird ein Faktor von ${de(e.pauschalFaktorProzent, 0)} % angewendet (Gesamtpreis = Menge × EP × Faktor).`] : []),
       ...(aktiveZusatz.length ? ['Dachfanggerüst, Seitenschutz, Überbrückung, Strahlnetze, Aufzug und Bauzaun kommen nicht aus dem CAD-Modell: Menge und Einheitspreise sind Eingaben.'] : []),
       'Gliederung und Wortlaut orientieren sich an üblichen Muster-Leistungsverzeichnissen. Die Bezeichnung „SW“ der Breitenklasse folgt dem Muster-LV; Normtext nicht geprüft. Pauschalen für Statik, Baustelleneinrichtung und Anfahrt sind Eingaben.',
