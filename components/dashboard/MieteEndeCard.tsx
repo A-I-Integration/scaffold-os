@@ -97,7 +97,19 @@ export default function MieteEndeCard() {
     // Vorschau: neues Ende und Betrag, damit nichts versehentlich berechnet wird
     const vorschauEnde = eingabe.modus === "datum" ? eingabe.bis : plusTageIso(e.ende, 7 * wochenEingabe);
     const vorschauWochen = Math.max(1, Math.ceil(tageBis(vorschauEnde, e.ende) / 7));
-    if (e.wochenpreis > 0 && !window.confirm(`Mietende bis ${deutsch(vorschauEnde)} verlängern und direkt eine Rechnung über ${vorschauWochen} Wo. à ${eur(e.wochenpreis)} netto anlegen?`)) return;
+    // Lager: Würde Material, das für eine andere Baustelle vorgesehen ist, durch die Verlängerung zu spät frei?
+    let lagerText = "";
+    try {
+      const w = await fetch(`/api/miete/lagerwarnung?project_id=${encodeURIComponent(id)}&bis=${encodeURIComponent(vorschauEnde)}`);
+      const wj = await w.json();
+      if (wj?.success) {
+        const zeilen: string[] = (wj.konflikte || []).map((k: { menge: number; artikel: string; zielName: string; datum: string }) => `• ${k.menge} × ${k.artikel} für ${k.zielName} (gebraucht ab ${deutsch(k.datum)})`);
+        if (zeilen.length > 0) lagerText = `\n\nAchtung, Material für andere Baustellen:\n${zeilen.join("\n")}\nDiese Transportaufträge müssen neu geplant werden.`;
+        if (wj.undatiert > 0) lagerText += `\n\n${wj.undatiert} offene(r) Transportauftrag/-aufträge ohne Datum, Auswirkung nicht prüfbar.`;
+      }
+    } catch { /* Warnung ist optional, Verlängern bleibt möglich */ }
+    const rechnungText = e.wochenpreis > 0 ? `Mietende bis ${deutsch(vorschauEnde)} verlängern und direkt eine Rechnung über ${vorschauWochen} Wo. à ${eur(e.wochenpreis)} netto anlegen?` : `Mietende bis ${deutsch(vorschauEnde)} verlängern?`;
+    if ((e.wochenpreis > 0 || lagerText) && !window.confirm(rechnungText + lagerText)) return;
     setLaedt(id);
     setFehler(null);
     try {

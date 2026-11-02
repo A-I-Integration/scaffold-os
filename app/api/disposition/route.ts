@@ -8,6 +8,7 @@ import { optimizeDisposition } from '@/lib/calculations/disposition';
 import { createClient } from '@/lib/supabase/server';
 import { requireAuth, unauthorizedResponse } from '@/lib/auth';
 import { distanceMatrixKm } from '@/lib/google-distance';
+import { wirksamesMietende } from '@/lib/miete';
 import { ordneZentralbestand, ordneBaustellenbestand, type LagerMitOrt, type BaustellenInfo } from '@/lib/disposition-bestand';
 
 export async function POST(request: Request) {
@@ -71,7 +72,8 @@ export async function POST(request: Request) {
           id: p.id,
           name: p.name,
           adresse: p.adresse || null,
-          projektende: typeof p.data?.step1?.projektende === 'string' ? p.data.step1.projektende.slice(0, 10) : null,
+          // wirksames Ende: eine Verlängerung im Dashboard (mietVerlaengertBis) zählt, sonst würde Material zu früh als frei gelten
+          projektende: wirksamesMietende(p.data?.step1?.projektende, p.data?.mietVerlaengertBis)?.slice(0, 10) ?? null,
         }));
 
         const zeilen = ordneBaustellenbestand(materialList, lager, data as any[], projekte, String(targetStart).slice(0, 10));
