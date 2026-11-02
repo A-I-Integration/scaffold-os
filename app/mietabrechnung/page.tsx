@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { CalendarClock, CheckCircle2, Euro, Loader2, AlertTriangle, Info } from 'lucide-react';
+import { standzeitNachberechnung } from '@/lib/miete';
 
 // ============================================================
 // SCAFFOLD OS – Mietabrechnung (automatische Standzeit-Nachberechnung)
@@ -99,14 +100,12 @@ export default function MietabrechnungPage() {
 
         if (tageBisEnde < 0) {
           // Überzogen: Nachberechnung läuft ab projektende bzw. ab letzter Abrechnung
-          const abgerechnetBis = p.data?.mietAbgerechnetBis && p.data.mietAbgerechnetBis > ende
-            ? p.data.mietAbgerechnetBis
-            : ende;
-          const tageUeber = Math.floor((new Date(heute + 'T12:00:00').getTime() - new Date(abgerechnetBis + 'T12:00:00').getTime()) / MS_TAG);
-          if (tageUeber < 1) continue; // heute bereits abgerechnet
+          const nach = standzeitNachberechnung(ende, p.data?.mietVerlaengertBis, p.data?.mietAbgerechnetBis, heute);
+          if (!nach) continue; // schon abgerechnet
+          const { abgerechnetBis, tageUeber } = nach;
           ueber.push({
             projekt: p, kunde, ende, abgerechnetBis, tageUeber,
-            wochen: Math.ceil(tageUeber / 7),
+            wochen: nach.wochen,
             preisProWoche: vorschlag,
           });
         } else if (tageBisEnde <= 14) {
@@ -172,7 +171,7 @@ export default function MietabrechnungPage() {
       const patch = await fetch('/api/projects', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: zeile.projekt.id, data: { mietAbgerechnetBis: heute } }),
+        body: JSON.stringify({ id: zeile.projekt.id, data: { mietAbgerechnetBis: plusTageIso(zeile.abgerechnetBis, zeile.wochen * 7) } }),
       });
       if (!patch.ok) {
         const p = await patch.json().catch(() => ({}));

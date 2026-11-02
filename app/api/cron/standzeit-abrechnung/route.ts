@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { pruefeCronAufruf } from '@/lib/cron-auth';
+import { standzeitNachberechnung } from '@/lib/miete';
 
 // ============================================================
 // SCAFFOLD OS – Cron: Automatische Standzeit-Nachberechnung (Phase 26)
@@ -34,8 +35,6 @@ const headers = {
   Authorization: `Bearer ${key}`,
 };
 
-const MS_TAG = 1000 * 60 * 60 * 24;
-
 function heuteIso(): string {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -64,17 +63,9 @@ export async function GET(req: NextRequest) {
 
     for (const p of projekte) {
       const s1 = p.data?.step1 || {};
-      const ende: string | undefined = s1.projektende;
-      if (!ende || !/^\d{4}-\d{2}-\d{2}$/.test(ende)) continue;
-
-      const tageBisEnde = Math.floor((new Date(ende + 'T12:00:00').getTime() - new Date(heute + 'T12:00:00').getTime()) / MS_TAG);
-      if (tageBisEnde >= 0) continue; // noch nicht überzogen
-
-      const abgerechnetBis = p.data?.mietAbgerechnetBis && p.data.mietAbgerechnetBis > ende ? p.data.mietAbgerechnetBis : ende;
-      const tageUeber = Math.floor((new Date(heute + 'T12:00:00').getTime() - new Date(abgerechnetBis + 'T12:00:00').getTime()) / MS_TAG);
-      if (tageUeber < 1) continue; // heute bereits abgerechnet
-
-      const wochen = Math.ceil(tageUeber / 7);
+      const nach = standzeitNachberechnung(s1.projektende, p.data?.mietVerlaengertBis, p.data?.mietAbgerechnetBis, heute);
+      if (!nach) continue; // nicht überzogen oder schon abgerechnet
+      const { abgerechnetBis, wochen, neuAbgerechnetBis } = nach;
       const preis = Number(p.data?.angebotAnpassungen?.miete?.preisProWoche) || 0;
       const kunde = s1.name || p.name || '–';
 
@@ -137,7 +128,7 @@ export async function GET(req: NextRequest) {
 
         await fetch(`${url}/rest/v1/projects?id=eq.${p.id}`, {
           method: 'PATCH', headers,
-          body: JSON.stringify({ data: { ...p.data, mietAbgerechnetBis: heute } }),
+          body: JSON.stringify({ data: { ...p.data, mietAbgerechnetBis: neuAbgerechnetBis } }),
         });
 
         ergebnis.erstellt.push(`${invoiceNumber} (${p.name}, ${wochen} Wo.)`);
