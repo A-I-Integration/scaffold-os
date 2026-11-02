@@ -273,7 +273,8 @@ describe('Stil „Statiker-LV“ (Wuppertal)', () => {
       const lv = erzeugeLeistungsverzeichnis(quelle(), std)
       const pos = alle(lv)
       const nach = (t: string) => { const i = pos.findIndex((p) => p.titel === t); return pos[i + 1] }
-      expect(nach('Bauzauntor').menge).toBe(0) // 0 Tore → keine Vorhaltung
+      expect(nach('Bauzaun').menge).toBe(0) // 0 m Zaun → keine Vorhaltung
+      expect(nach('Bauzauntor').menge).toBe(2) // Standard ist 1 Tor (Antwort des Statikers) × 2 Wochen
       expect(nach('Personen- und Lastenaufzug 500/800kg 2.BA H = ca. 21,5m').menge).toBe(0) // Standzeit 2. BA nicht eingetragen
       expect(nach('Baustellen-Container-WC').menge).toBe(2) // 1 Stück × 2 Wochen
       expect(nach('Baustellen-Container-WC').ep).toBe(25)
