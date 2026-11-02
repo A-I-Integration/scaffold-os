@@ -76,3 +76,34 @@ export function verlaengertesEndeBis(wirksam: string, bis: unknown): string | nu
   if (bis > plusTageIso(wirksam, 7 * 52)) return null
   return bis
 }
+
+export interface StandzeitNachberechnung {
+  /** Ab wann ist noch nicht abgerechnet (= Beginn der neuen Rechnung). */
+  abgerechnetBis: string
+  tageUeber: number
+  wochen: number
+  /** Bis wann die neue Rechnung abdeckt: abgerechnetBis + volle Wochen. Das ist der neue Merker. */
+  neuAbgerechnetBis: string
+}
+
+/**
+ * Nachberechnung einer überzogenen Standzeit. Es werden volle Wochen berechnet (angefangene Woche zählt voll).
+ * Der Merker muss auf das Ende der berechneten Wochen gesetzt werden, NICHT auf heute:
+ * Sonst wären die schon bezahlten Resttage der letzten Woche am nächsten Tag wieder "überzogen"
+ * und würden erneut berechnet. `null`, wenn nichts (mehr) abzurechnen ist.
+ */
+export function standzeitNachberechnung(
+  projektende: unknown,
+  verlaengertBis: unknown,
+  mietAbgerechnetBis: unknown,
+  heuteIso: string,
+): StandzeitNachberechnung | null {
+  const ende = wirksamesMietende(projektende, verlaengertBis)
+  if (!ende) return null
+  const merker = istIso(mietAbgerechnetBis) ? mietAbgerechnetBis : null
+  const abgerechnetBis = merker && merker > ende ? merker : ende
+  const tageUeber = tageBis(heuteIso, abgerechnetBis)
+  if (tageUeber < 1) return null
+  const wochen = Math.ceil(tageUeber / 7)
+  return { abgerechnetBis, tageUeber, wochen, neuAbgerechnetBis: plusTageIso(abgerechnetBis, wochen * 7) }
+}

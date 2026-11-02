@@ -69,3 +69,29 @@ describe('verlaengertesEndeBis', () => {
     expect(verlaengertesEndeBis('2026-10-10', '2028-01-01')).toBeNull()
   })
 })
+
+import { standzeitNachberechnung } from '../miete'
+describe('standzeitNachberechnung', () => {
+  it('9 Tage überzogen: 2 Wochen, Merker = Ende der 2 Wochen', () => {
+    const r = standzeitNachberechnung('2026-10-01', undefined, undefined, '2026-10-10')
+    expect(r).toMatchObject({ abgerechnetBis: '2026-10-01', tageUeber: 9, wochen: 2, neuAbgerechnetBis: '2026-10-15' })
+  })
+  it('am Folgetag keine zweite Rechnung (der Fehler vorher: Merker = heute)', () => {
+    const erste = standzeitNachberechnung('2026-10-01', undefined, undefined, '2026-10-10')!
+    for (const tag of ['2026-10-11', '2026-10-12', '2026-10-15']) {
+      expect(standzeitNachberechnung('2026-10-01', undefined, erste.neuAbgerechnetBis, tag)).toBeNull()
+    }
+  })
+  it('nach Ablauf der bezahlten Wochen: nächste Woche wird fällig', () => {
+    const r = standzeitNachberechnung('2026-10-01', undefined, '2026-10-15', '2026-10-16')
+    expect(r).toMatchObject({ abgerechnetBis: '2026-10-15', tageUeber: 1, wochen: 1, neuAbgerechnetBis: '2026-10-22' })
+  })
+  it('nicht überzogen oder ohne Ende: null', () => {
+    expect(standzeitNachberechnung('2026-10-10', undefined, undefined, '2026-10-10')).toBeNull()
+    expect(standzeitNachberechnung(undefined, undefined, undefined, '2026-10-10')).toBeNull()
+  })
+  it('kostenlos verlängertes Ende zählt als Mietende', () => {
+    expect(standzeitNachberechnung('2026-10-01', '2026-10-20', undefined, '2026-10-15')).toBeNull()
+    expect(standzeitNachberechnung('2026-10-01', '2026-10-20', undefined, '2026-10-21')).toMatchObject({ abgerechnetBis: '2026-10-20', wochen: 1 })
+  })
+})
