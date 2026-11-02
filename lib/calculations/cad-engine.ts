@@ -51,6 +51,8 @@ export interface GeruestOptionen {
   treppe?: boolean
   /** Vertikale Bekleidung mit Kederplane an der Außenachse zwischen zwei Höhen (m über Gelände), an allen Gerüstseiten; nur ganze Lagen im Bereich werden bekleidet */
   kederplane?: { vonM: number; bisM: number }
+  /** Schutzdächer von Hand: ersetzt die automatische Lage über den Türen (leere Liste = keine Schutzdächer). `vonM` = Abstand vom Anfang der Gerüstseite, `hoeheM` = Höhe der Unterkante über Gelände (Standard 4 m) */
+  schutzdaecher?: Array<{ seite?: 'front' | 'back' | 'left' | 'right'; vonM: number; laengeM: number; hoeheM?: number }>
   /** false = Türen nicht freihalten. Standard (leer/true): vor jeder Tür im Erdgeschoss entsteht in der untersten Lage ein Durchgang (kein Fuß-Querriegel, keine Diagonale, Durchgangsrahmen-Binder). */
   tuerenFreihalten?: boolean
   /** Personen-/Lastenaufzug an einer Gerüstseite (außen vor dem Gerüst) */
@@ -1010,7 +1012,25 @@ export function generateScaffoldComponents(model: CADModel): ScaffoldComponent3D
   // Schutzdach unten an der Vorderseite (Schutz von Zugang/Gehweg), nicht oben auf dem Dach.
   // ANNAHME: Unterkante ca. 4 m über Boden – Eingang und tatsächliche Höhe kennt das Modell nicht; die Person verschiebt es bei Bedarf.
   const SCHUTZDACH_HOEHE_M = 4
-  if (!building.umriss && (building.heightM > 15 || building.overhangM > 0.5)) {
+  const manuelleDaecher = building.geruestOptionen?.schutzdaecher
+  if (manuelleDaecher) {
+    // Von Hand festgelegt (Lageplan/Dachaufsicht): Seite, Anfang, Länge, Höhe je Schutzdach. Nichts wird automatisch ergänzt.
+    manuelleDaecher.forEach((d, i) => {
+      if (!(Number.isFinite(d.vonM) && Number.isFinite(d.laengeM) && d.laengeM > 0)) return
+      const unten = fields.filter((f) => f.side === (d.seite ?? 'front') && f.levelIndex === 0)
+      if (unten.length === 0) return
+      const rf = feldRahmen(unten[0], building)
+      const lokal = unten.map((f) => { const [lx, lz] = rf.toLocal(f.positionX, f.positionZ); return { lx, lz, l: f.lengthM } })
+      const start = Math.min(...lokal.map((q) => q.lx - q.l / 2))
+      const ende = Math.max(...lokal.map((q) => q.lx + q.l / 2))
+      const von = Math.max(0, d.vonM)
+      const bis = Math.min(ende - start, d.vonM + d.laengeM)
+      if (bis - von < 0.1) return
+      const [wx, wz] = rf.toWorld(start + (von + bis) / 2, lokal[0].lz + 0.2)
+      const hoehe = typeof d.hoeheM === 'number' && Number.isFinite(d.hoeheM) && d.hoeheM > 0 ? d.hoeheM : SCHUTZDACH_HOEHE_M
+      components.push({ id: `roof-${i}`, type: 'protection_roof', articleNumber: 'SD-001', name: 'Schutzdach', position: [wx, hoehe + 0.5, wz], rotation: eulerMitYaw([-0.3, 0, 0], rf.yaw), scale: [bis - von, 0.1, 2], color: colorRoof })
+    })
+  } else if (!building.umriss && (building.heightM > 15 || building.overhangM > 0.5)) {
     // Schutzdach 0,2 m außerhalb der inneren Gerüstlinie der Vorderseite (bisher fest 0,5 bei Innenlinie 0,3)
     const schutzdachZ = (fields.find((f) => f.side === 'front')?.positionZ ?? 0.3) + 0.2
     // Lage: über jedem Eingang an der Vorderseite (Türen aus dem CAD bzw. erkannte Portale), je Tür 2 m Überstand
