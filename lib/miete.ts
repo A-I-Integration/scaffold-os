@@ -76,3 +76,13 @@ export function verlaengertesEndeBis(wirksam: string, bis: unknown): string | nu
   if (bis > plusTageIso(wirksam, 7 * 52)) return null
   return bis
 }
+
+/**
+ * Standzeit in Wochen zwischen zwei Daten (von inklusive, bis exklusive; angefangene Woche zählt voll, wie bei der Miete).
+ * `null`, wenn ein Datum fehlt/ungültig ist oder `bis` nicht nach `von` liegt.
+ */
+export function wochenZwischen(vonIso: unknown, bisIso: unknown): number | null {
+  if (!istIso(vonIso) || !istIso(bisIso)) return null
+  const tage = tageBis(bisIso, vonIso)
+  return tage >= 1 ? Math.ceil(tage / 7) : null
+}

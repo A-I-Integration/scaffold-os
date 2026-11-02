@@ -21,6 +21,7 @@ import {
 } from '@/lib/leistungsverzeichnis'
 import { FIRMENFELDER, firmenwerteAus, standardpreiseAus, type LvStandardpreise } from '@/lib/lv-firmenwerte'
 import { leseStatikerLvXlsx, mengenAusAuftraggeberLv, type StatikerLvErgebnis } from '@/lib/statiker-lv-einlesen'
+import { wochenZwischen } from '@/lib/miete';
 
 const feld = 'w-full px-2 py-1.5 border rounded-lg text-xs bg-white'
 const label = 'block text-[11px] font-medium text-[#424245] mb-0.5'
@@ -117,6 +118,11 @@ export default function LvDialog({ model, materials, aufbauStunden, abbauStunden
     setze({ gestrichen: neu })
   }
 
+  // Standzeit per Datum: Sind beide Daten gesetzt, werden die Wochen daraus berechnet (angefangene Woche voll)
+  const setzeStandzeit = (vonKey: 'standzeitVon' | 'standzeitBa2Von', bisKey: 'standzeitBis' | 'standzeitBa2Bis', wochenKey: 'gesamtStandzeitWochen' | 'standzeitBa2Wochen', von: string | undefined, bis: string | undefined) => {
+    const w = wochenZwischen(von, bis)
+    setze({ [vonKey]: von || undefined, [bisKey]: bis || undefined, ...(w !== null ? { [wochenKey]: w } : {}) } as Partial<LvEingaben>)
+  }
   const setzeZusatz = (i: number, patch: Partial<LvZusatz>) => setze({ zusatz: e.zusatz.map((z, j) => (j === i ? { ...z, ...patch } : z)) })
 
   const lv = useMemo(
@@ -250,7 +256,15 @@ export default function LvDialog({ model, materials, aufbauStunden, abbauStunden
 
             <div className='text-[11px] font-semibold uppercase text-[#86868b] pt-1'>Gerüst</div>
             <div className='grid grid-cols-2 gap-2'>
-              <div><label className={label}>Standzeit gesamt (Wochen)</label>{num('gesamtStandzeitWochen', '1')}</div>
+              <div><label className={label}>Standzeit gesamt (Wochen)</label>
+                <input type='number' min={0} step='1' className={feld} value={e.gesamtStandzeitWochen === 0 ? '' : e.gesamtStandzeitWochen}
+                  onChange={(ev) => setze({ gesamtStandzeitWochen: zahl(ev.target.value), standzeitVon: undefined, standzeitBis: undefined })} /></div>
+              <div className='col-span-2 grid grid-cols-2 gap-2'>
+                <div><label className={label}>oder: Aufbau ab (Datum)</label>
+                  <input type='date' className={feld} value={e.standzeitVon ?? ''} onChange={(ev) => setzeStandzeit('standzeitVon', 'standzeitBis', 'gesamtStandzeitWochen', ev.target.value, e.standzeitBis)} /></div>
+                <div><label className={label}>Rückbau fertig bis (Datum)</label>
+                  <input type='date' className={feld} value={e.standzeitBis ?? ''} onChange={(ev) => setzeStandzeit('standzeitVon', 'standzeitBis', 'gesamtStandzeitWochen', e.standzeitVon, ev.target.value)} /></div>
+              </div>
               <div><label className={label}>Höhenklasse</label>
                 <select className={feld} value={e.hoehenklasse} onChange={(ev) => setze({ hoehenklasse: ev.target.value as 'H1' | 'H2' })}>
                   <option>H1</option><option>H2</option>
@@ -274,9 +288,15 @@ export default function LvDialog({ model, materials, aufbauStunden, abbauStunden
                     onChange={(ev) => setze({ hoeheBa2M: ev.target.value === '' ? undefined : zahl(ev.target.value) })} /></div>
                 <div><label className={label}>2. Bauabschnitt: Standzeit (Wochen)</label>
                   <input type='number' min={0} step='1' className={feld} value={e.standzeitBa2Wochen ?? ''}
-                    onChange={(ev) => setze({ standzeitBa2Wochen: ev.target.value === '' ? undefined : zahl(ev.target.value) })} /></div>
+                    onChange={(ev) => setze({ standzeitBa2Wochen: ev.target.value === '' ? undefined : zahl(ev.target.value), standzeitBa2Von: undefined, standzeitBa2Bis: undefined })} /></div>
+                <div className='col-span-2 grid grid-cols-2 gap-2'>
+                  <div><label className={label}>oder: 2. BA ab (Datum)</label>
+                    <input type='date' className={feld} value={e.standzeitBa2Von ?? ''} onChange={(ev) => setzeStandzeit('standzeitBa2Von', 'standzeitBa2Bis', 'standzeitBa2Wochen', ev.target.value, e.standzeitBa2Bis)} /></div>
+                  <div><label className={label}>2. BA fertig bis (Datum)</label>
+                    <input type='date' className={feld} value={e.standzeitBa2Bis ?? ''} onChange={(ev) => setzeStandzeit('standzeitBa2Von', 'standzeitBa2Bis', 'standzeitBa2Wochen', e.standzeitBa2Von, ev.target.value)} /></div>
+                </div>
                 <div className='col-span-2'><label className={label}>2. Bauabschnitt: Reserve über der Höhe (m, Teilung wird vor Ort an die Fugen angepasst)</label>
-                  <input type='number' min={0} step='0.5' className={feld} placeholder='0' value={e.reserveBa2M ?? ''}
+                  <input type='number' min={0} step='0.5' className={feld} placeholder='2' value={e.reserveBa2M ?? ''}
                     onChange={(ev) => setze({ reserveBa2M: ev.target.value === '' ? undefined : zahl(ev.target.value) })} /></div>
                 <div className='col-span-2'><label className={label}>Plane 1. BA: Überlappung nach unten (m, Vorgabe Architekt)</label>
                   <input type='number' min={0} step='0.5' className={feld} placeholder='0' value={e.planeUeberlappungM ?? ''}
