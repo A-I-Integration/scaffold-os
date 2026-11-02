@@ -1,0 +1,2564 @@
+[
+{
+"paket": "@babel/code-frame",
+"version": "7.29.7",
+"lizenz": "MIT",
+"repo": "https://github.com/babel/babel"
+},
+{
+"paket": "@babel/compat-data",
+"version": "7.29.7",
+"lizenz": "MIT",
+"repo": "https://github.com/babel/babel"
+},
+{
+"paket": "@babel/core",
+"version": "7.29.7",
+"lizenz": "MIT",
+"repo": "https://github.com/babel/babel"
+},
+{
+"paket": "@babel/generator",
+"version": "7.29.7",
+"lizenz": "MIT",
+"repo": "https://github.com/babel/babel"
+},
+{
+"paket": "@babel/helper-compilation-targets",
+"version": "7.29.7",
+"lizenz": "MIT",
+"repo": "https://github.com/babel/babel"
+},
+{
+"paket": "@babel/helper-globals",
+"version": "7.29.7",
+"lizenz": "MIT",
+"repo": "https://github.com/babel/babel"
+},
+{
+"paket": "@babel/helper-module-imports",
+"version": "7.29.7",
+"lizenz": "MIT",
+"repo": "https://github.com/babel/babel"
+},
+{
+"paket": "@babel/helper-module-transforms",
+"version": "7.29.7",
+"lizenz": "MIT",
+"repo": "https://github.com/babel/babel"
+},
+{
+"paket": "@babel/helper-string-parser",
+"version": "7.29.7",
+"lizenz": "MIT",
+"repo": "https://github.com/babel/babel"
+},
+{
+"paket": "@babel/helper-validator-identifier",
+"version": "7.29.7",
+"lizenz": "MIT",
+"repo": "https://github.com/babel/babel"
+},
+{
+"paket": "@babel/helper-validator-option",
+"version": "7.29.7",
+"lizenz": "MIT",
+"repo": "https://github.com/babel/babel"
+},
+{
+"paket": "@babel/helpers",
+"version": "7.29.7",
+"lizenz": "MIT",
+"repo": "https://github.com/babel/babel"
+},
+{
+"paket": "@babel/parser",
+"version": "7.29.7",
+"lizenz": "MIT",
+"repo": "https://github.com/babel/babel"
+},
+{
+"paket": "@babel/runtime",
+"version": "7.29.7",
+"lizenz": "MIT",
+"repo": "https://github.com/babel/babel"
+},
+{
+"paket": "@babel/template",
+"version": "7.29.7",
+"lizenz": "MIT",
+"repo": "https://github.com/babel/babel"
+},
+{
+"paket": "@babel/traverse",
+"version": "7.29.7",
+"lizenz": "MIT",
+"repo": "https://github.com/babel/babel"
+},
+{
+"paket": "@babel/types",
+"version": "7.29.7",
+"lizenz": "MIT",
+"repo": "https://github.com/babel/babel"
+},
+{
+"paket": "@dimforge/rapier3d-compat",
+"version": "0.12.0",
+"lizenz": "Apache-2.0",
+"repo": "https://github.com/dimforge/rapier.js"
+},
+{
+"paket": "@img/colour",
+"version": "1.1.0",
+"lizenz": "MIT",
+"repo": "https://github.com/lovell/colour"
+},
+{
+"paket": "@img/sharp-libvips-linux-x64",
+"version": "1.2.4",
+"lizenz": "LGPL-3.0-or-later",
+"repo": "https://github.com/lovell/sharp-libvips"
+},
+{
+"paket": "@img/sharp-libvips-linuxmusl-x64",
+"version": "1.2.4",
+"lizenz": "LGPL-3.0-or-later",
+"repo": "https://github.com/lovell/sharp-libvips"
+},
+{
+"paket": "@img/sharp-linux-x64",
+"version": "0.34.5",
+"lizenz": "Apache-2.0",
+"repo": "https://github.com/lovell/sharp"
+},
+{
+"paket": "@img/sharp-linuxmusl-x64",
+"version": "0.34.5",
+"lizenz": "Apache-2.0",
+"repo": "https://github.com/lovell/sharp"
+},
+{
+"paket": "@jridgewell/gen-mapping",
+"version": "0.3.13",
+"lizenz": "MIT",
+"repo": "https://github.com/jridgewell/sourcemaps"
+},
+{
+"paket": "@jridgewell/remapping",
+"version": "2.3.5",
+"lizenz": "MIT",
+"repo": "https://github.com/jridgewell/sourcemaps"
+},
+{
+"paket": "@jridgewell/resolve-uri",
+"version": "3.1.2",
+"lizenz": "MIT",
+"repo": "https://github.com/jridgewell/resolve-uri"
+},
+{
+"paket": "@jridgewell/source-map",
+"version": "0.3.11",
+"lizenz": "MIT",
+"repo": "https://github.com/jridgewell/sourcemaps"
+},
+{
+"paket": "@jridgewell/sourcemap-codec",
+"version": "1.6.0",
+"lizenz": "MIT",
+"repo": "https://github.com/jridgewell/sourcemaps"
+},
+{
+"paket": "@jridgewell/trace-mapping",
+"version": "0.3.31",
+"lizenz": "MIT",
+"repo": "https://github.com/jridgewell/sourcemaps"
+},
+{
+"paket": "@mediapipe/tasks-vision",
+"version": "0.10.17",
+"lizenz": "Apache-2.0",
+"repo": ""
+},
+{
+"paket": "@monogrid/gainmap-js",
+"version": "3.4.0",
+"lizenz": "MIT",
+"repo": "https://github.com/MONOGRID/gainmap-js"
+},
+{
+"paket": "@napi-rs/canvas",
+"version": "0.1.80",
+"lizenz": "MIT",
+"repo": "https://github.com/Brooooooklyn/canvas"
+},
+{
+"paket": "@napi-rs/canvas-linux-x64-gnu",
+"version": "0.1.80",
+"lizenz": "MIT",
+"repo": "https://github.com/Brooooooklyn/canvas"
+},
+{
+"paket": "@napi-rs/canvas-linux-x64-musl",
+"version": "0.1.80",
+"lizenz": "MIT",
+"repo": "https://github.com/Brooooooklyn/canvas"
+},
+{
+"paket": "@napi-rs/lzma-linux-x64-gnu",
+"version": "1.5.1",
+"lizenz": "MIT",
+"repo": "https://github.com/Brooooooklyn/lzma"
+},
+{
+"paket": "@next/env",
+"version": "16.2.12",
+"lizenz": "MIT",
+"repo": "https://github.com/vercel/next.js"
+},
+{
+"paket": "@next/swc-linux-x64-gnu",
+"version": "16.2.12",
+"lizenz": "MIT",
+"repo": "https://github.com/vercel/next.js"
+},
+{
+"paket": "@next/swc-linux-x64-musl",
+"version": "16.2.12",
+"lizenz": "MIT",
+"repo": "https://github.com/vercel/next.js"
+},
+{
+"paket": "@nodable/entities",
+"version": "3.0.0",
+"lizenz": "MIT",
+"repo": "https://github.com/nodable/val-parsers"
+},
+{
+"paket": "@opentelemetry/api",
+"version": "1.9.1",
+"lizenz": "Apache-2.0",
+"repo": "https://github.com/open-telemetry/opentelemetry-js"
+},
+{
+"paket": "@opentelemetry/api-logs",
+"version": "0.220.0",
+"lizenz": "Apache-2.0",
+"repo": "https://github.com/open-telemetry/opentelemetry-js"
+},
+{
+"paket": "@opentelemetry/core",
+"version": "2.11.0",
+"lizenz": "Apache-2.0",
+"repo": "https://github.com/open-telemetry/opentelemetry-js"
+},
+{
+"paket": "@opentelemetry/instrumentation",
+"version": "0.220.0",
+"lizenz": "Apache-2.0",
+"repo": "https://github.com/open-telemetry/opentelemetry-js"
+},
+{
+"paket": "@opentelemetry/resources",
+"version": "2.11.0",
+"lizenz": "Apache-2.0",
+"repo": "https://github.com/open-telemetry/opentelemetry-js"
+},
+{
+"paket": "@opentelemetry/sdk-trace",
+"version": "2.11.0",
+"lizenz": "Apache-2.0",
+"repo": "https://github.com/open-telemetry/opentelemetry-js"
+},
+{
+"paket": "@opentelemetry/sdk-trace-base",
+"version": "2.11.0",
+"lizenz": "Apache-2.0",
+"repo": "https://github.com/open-telemetry/opentelemetry-js"
+},
+{
+"paket": "@opentelemetry/semantic-conventions",
+"version": "1.43.0",
+"lizenz": "Apache-2.0",
+"repo": "https://github.com/open-telemetry/opentelemetry-js"
+},
+{
+"paket": "@pdf-lib/fontkit",
+"version": "1.1.1",
+"lizenz": "MIT",
+"repo": "https://github.com/Hopding/fontkit"
+},
+{
+"paket": "@pdf-lib/standard-fonts",
+"version": "1.0.0",
+"lizenz": "MIT",
+"repo": "https://github.com/Hopding/standard-fonts"
+},
+{
+"paket": "@pdf-lib/upng",
+"version": "1.0.1",
+"lizenz": "MIT",
+"repo": "https://github.com/Hopding/upng"
+},
+{
+"paket": "@pinojs/redact",
+"version": "0.4.0",
+"lizenz": "MIT",
+"repo": "https://github.com/pinojs/redact"
+},
+{
+"paket": "@react-three/drei",
+"version": "10.7.7",
+"lizenz": "MIT",
+"repo": "https://github.com/pmndrs/drei"
+},
+{
+"paket": "@react-three/fiber",
+"version": "9.7.0",
+"lizenz": "MIT",
+"repo": "https://github.com/pmndrs/react-three-fiber"
+},
+{
+"paket": "@rollup/plugin-commonjs",
+"version": "28.0.1",
+"lizenz": "MIT",
+"repo": "https://github.com/rollup/plugins"
+},
+{
+"paket": "@rollup/pluginutils",
+"version": "5.4.0",
+"lizenz": "MIT",
+"repo": "https://github.com/rollup/plugins"
+},
+{
+"paket": "@rollup/rollup-linux-x64-gnu",
+"version": "4.63.1",
+"lizenz": "MIT",
+"repo": "https://github.com/rollup/rollup"
+},
+{
+"paket": "@rollup/rollup-linux-x64-musl",
+"version": "4.63.1",
+"lizenz": "MIT",
+"repo": "https://github.com/rollup/rollup"
+},
+{
+"paket": "@selderee/plugin-htmlparser2",
+"version": "0.12.0",
+"lizenz": "MIT",
+"repo": "https://github.com/mxxii/selderee"
+},
+{
+"paket": "@sentry/babel-plugin-component-annotate",
+"version": "5.3.0",
+"lizenz": "MIT",
+"repo": "https://github.com/getsentry/sentry-javascript-bundler-plugins"
+},
+{
+"paket": "@sentry/browser",
+"version": "10.74.0",
+"lizenz": "MIT",
+"repo": "https://github.com/getsentry/sentry-javascript"
+},
+{
+"paket": "@sentry/browser-utils",
+"version": "10.74.0",
+"lizenz": "MIT",
+"repo": "https://github.com/getsentry/sentry-javascript"
+},
+{
+"paket": "@sentry/bundler-plugin-core",
+"version": "5.3.0",
+"lizenz": "MIT",
+"repo": "https://github.com/getsentry/sentry-javascript-bundler-plugins"
+},
+{
+"paket": "@sentry/bundler-plugins",
+"version": "10.74.0",
+"lizenz": "MIT",
+"repo": "https://github.com/getsentry/sentry-javascript"
+},
+{
+"paket": "@sentry/cli",
+"version": "2.58.6",
+"lizenz": "FSL-1.1-MIT",
+"repo": "https://github.com/getsentry/sentry-cli"
+},
+{
+"paket": "@sentry/cli-linux-x64",
+"version": "2.58.6",
+"lizenz": "FSL-1.1-MIT",
+"repo": "https://github.com/getsentry/sentry-cli"
+},
+{
+"paket": "@sentry/conventions",
+"version": "0.16.0",
+"lizenz": "MIT",
+"repo": "https://github.com/getsentry/sentry-conventions"
+},
+{
+"paket": "@sentry/core",
+"version": "10.74.0",
+"lizenz": "MIT",
+"repo": "https://github.com/getsentry/sentry-javascript"
+},
+{
+"paket": "@sentry/feedback",
+"version": "10.74.0",
+"lizenz": "MIT",
+"repo": "https://github.com/getsentry/sentry-javascript"
+},
+{
+"paket": "@sentry/nextjs",
+"version": "10.74.0",
+"lizenz": "MIT",
+"repo": "https://github.com/getsentry/sentry-javascript"
+},
+{
+"paket": "@sentry/node",
+"version": "10.74.0",
+"lizenz": "MIT",
+"repo": "https://github.com/getsentry/sentry-javascript"
+},
+{
+"paket": "@sentry/node-core",
+"version": "10.74.0",
+"lizenz": "MIT",
+"repo": "https://github.com/getsentry/sentry-javascript"
+},
+{
+"paket": "@sentry/opentelemetry",
+"version": "10.74.0",
+"lizenz": "MIT",
+"repo": "https://github.com/getsentry/sentry-javascript"
+},
+{
+"paket": "@sentry/react",
+"version": "10.74.0",
+"lizenz": "MIT",
+"repo": "https://github.com/getsentry/sentry-javascript"
+},
+{
+"paket": "@sentry/replay",
+"version": "10.74.0",
+"lizenz": "MIT",
+"repo": "https://github.com/getsentry/sentry-javascript"
+},
+{
+"paket": "@sentry/replay-canvas",
+"version": "10.74.0",
+"lizenz": "MIT",
+"repo": "https://github.com/getsentry/sentry-javascript"
+},
+{
+"paket": "@sentry/server-utils",
+"version": "10.74.0",
+"lizenz": "MIT",
+"repo": "https://github.com/getsentry/sentry-javascript"
+},
+{
+"paket": "@sentry/vercel-edge",
+"version": "10.74.0",
+"lizenz": "MIT",
+"repo": "https://github.com/getsentry/sentry-javascript"
+},
+{
+"paket": "@sentry/webpack-plugin",
+"version": "5.4.0",
+"lizenz": "MIT",
+"repo": "https://github.com/getsentry/sentry-javascript-bundler-plugins"
+},
+{
+"paket": "@stablelib/base64",
+"version": "1.0.1",
+"lizenz": "MIT",
+"repo": "https://github.com/StableLib/stablelib"
+},
+{
+"paket": "@stackforge-eu/factur-x",
+"version": "1.4.0",
+"lizenz": "EUPL-1.2",
+"repo": "https://github.com/StackForge-EU/factur-x"
+},
+{
+"paket": "@supabase/auth-js",
+"version": "2.111.0",
+"lizenz": "MIT",
+"repo": "https://github.com/supabase/supabase-js"
+},
+{
+"paket": "@supabase/functions-js",
+"version": "2.111.0",
+"lizenz": "MIT",
+"repo": "https://github.com/supabase/supabase-js"
+},
+{
+"paket": "@supabase/phoenix",
+"version": "0.4.5",
+"lizenz": "MIT",
+"repo": "https://github.com/supabase/phoenix"
+},
+{
+"paket": "@supabase/postgrest-js",
+"version": "2.111.0",
+"lizenz": "MIT",
+"repo": "https://github.com/supabase/supabase-js"
+},
+{
+"paket": "@supabase/realtime-js",
+"version": "2.111.0",
+"lizenz": "MIT",
+"repo": "https://github.com/supabase/supabase-js"
+},
+{
+"paket": "@supabase/ssr",
+"version": "0.12.4",
+"lizenz": "MIT",
+"repo": "https://github.com/supabase/ssr"
+},
+{
+"paket": "@supabase/storage-js",
+"version": "2.111.0",
+"lizenz": "MIT",
+"repo": "https://github.com/supabase/supabase-js"
+},
+{
+"paket": "@supabase/supabase-js",
+"version": "2.111.0",
+"lizenz": "MIT",
+"repo": "https://github.com/supabase/supabase-js"
+},
+{
+"paket": "@swc/helpers",
+"version": "0.5.15",
+"lizenz": "Apache-2.0",
+"repo": "https://github.com/swc-project/swc"
+},
+{
+"paket": "@tesseract.js-data/deu",
+"version": "1.0.0",
+"lizenz": "MIT",
+"repo": "https://github.com/naptha/tessdata"
+},
+{
+"paket": "@tweenjs/tween.js",
+"version": "23.1.3",
+"lizenz": "MIT",
+"repo": "https://github.com/tweenjs/tween.js"
+},
+{
+"paket": "@types/draco3d",
+"version": "1.4.10",
+"lizenz": "MIT",
+"repo": "https://github.com/DefinitelyTyped/DefinitelyTyped"
+},
+{
+"paket": "@types/estree",
+"version": "1.0.9",
+"lizenz": "MIT",
+"repo": "https://github.com/DefinitelyTyped/DefinitelyTyped"
+},
+{
+"paket": "@types/json-schema",
+"version": "7.0.15",
+"lizenz": "MIT",
+"repo": "https://github.com/DefinitelyTyped/DefinitelyTyped"
+},
+{
+"paket": "@types/node",
+"version": "20.19.43",
+"lizenz": "MIT",
+"repo": "https://github.com/DefinitelyTyped/DefinitelyTyped"
+},
+{
+"paket": "@types/offscreencanvas",
+"version": "2019.7.3",
+"lizenz": "MIT",
+"repo": "https://github.com/DefinitelyTyped/DefinitelyTyped"
+},
+{
+"paket": "@types/pako",
+"version": "2.0.4",
+"lizenz": "MIT",
+"repo": "https://github.com/DefinitelyTyped/DefinitelyTyped"
+},
+{
+"paket": "@types/papaparse",
+"version": "5.5.2",
+"lizenz": "MIT",
+"repo": "https://github.com/DefinitelyTyped/DefinitelyTyped"
+},
+{
+"paket": "@types/raf",
+"version": "3.4.3",
+"lizenz": "MIT",
+"repo": "https://github.com/DefinitelyTyped/DefinitelyTyped"
+},
+{
+"paket": "@types/react",
+"version": "19.2.17",
+"lizenz": "MIT",
+"repo": "https://github.com/DefinitelyTyped/DefinitelyTyped"
+},
+{
+"paket": "@types/react-reconciler",
+"version": "0.28.9",
+"lizenz": "MIT",
+"repo": "https://github.com/DefinitelyTyped/DefinitelyTyped"
+},
+{
+"paket": "@types/signature_pad",
+"version": "2.3.6",
+"lizenz": "MIT",
+"repo": "https://github.com/DefinitelyTyped/DefinitelyTyped"
+},
+{
+"paket": "@types/stats.js",
+"version": "0.17.4",
+"lizenz": "MIT",
+"repo": "https://github.com/DefinitelyTyped/DefinitelyTyped"
+},
+{
+"paket": "@types/three",
+"version": "0.185.3",
+"lizenz": "MIT",
+"repo": "https://github.com/DefinitelyTyped/DefinitelyTyped"
+},
+{
+"paket": "@types/trusted-types",
+"version": "2.0.7",
+"lizenz": "MIT",
+"repo": "https://github.com/DefinitelyTyped/DefinitelyTyped"
+},
+{
+"paket": "@types/webxr",
+"version": "0.5.24",
+"lizenz": "MIT",
+"repo": "https://github.com/DefinitelyTyped/DefinitelyTyped"
+},
+{
+"paket": "@use-gesture/core",
+"version": "10.3.1",
+"lizenz": "MIT",
+"repo": "https://github.com/pmndrs/use-gesture"
+},
+{
+"paket": "@use-gesture/react",
+"version": "10.3.1",
+"lizenz": "MIT",
+"repo": "https://github.com/pmndrs/use-gesture"
+},
+{
+"paket": "@webassemblyjs/ast",
+"version": "1.14.1",
+"lizenz": "MIT",
+"repo": "https://github.com/xtuc/webassemblyjs"
+},
+{
+"paket": "@webassemblyjs/floating-point-hex-parser",
+"version": "1.13.2",
+"lizenz": "MIT",
+"repo": "https://github.com/xtuc/webassemblyjs"
+},
+{
+"paket": "@webassemblyjs/helper-api-error",
+"version": "1.13.2",
+"lizenz": "MIT",
+"repo": "https://github.com/xtuc/webassemblyjs"
+},
+{
+"paket": "@webassemblyjs/helper-buffer",
+"version": "1.14.1",
+"lizenz": "MIT",
+"repo": "https://github.com/xtuc/webassemblyjs"
+},
+{
+"paket": "@webassemblyjs/helper-numbers",
+"version": "1.13.2",
+"lizenz": "MIT",
+"repo": "https://github.com/xtuc/webassemblyjs"
+},
+{
+"paket": "@webassemblyjs/helper-wasm-bytecode",
+"version": "1.13.2",
+"lizenz": "MIT",
+"repo": "https://github.com/xtuc/webassemblyjs"
+},
+{
+"paket": "@webassemblyjs/helper-wasm-section",
+"version": "1.14.1",
+"lizenz": "MIT",
+"repo": "https://github.com/xtuc/webassemblyjs"
+},
+{
+"paket": "@webassemblyjs/ieee754",
+"version": "1.13.2",
+"lizenz": "MIT",
+"repo": "https://github.com/xtuc/webassemblyjs"
+},
+{
+"paket": "@webassemblyjs/leb128",
+"version": "1.13.2",
+"lizenz": "Apache-2.0",
+"repo": "https://github.com/xtuc/webassemblyjs"
+},
+{
+"paket": "@webassemblyjs/utf8",
+"version": "1.13.2",
+"lizenz": "MIT",
+"repo": "https://github.com/xtuc/webassemblyjs"
+},
+{
+"paket": "@webassemblyjs/wasm-edit",
+"version": "1.14.1",
+"lizenz": "MIT",
+"repo": "https://github.com/xtuc/webassemblyjs"
+},
+{
+"paket": "@webassemblyjs/wasm-gen",
+"version": "1.14.1",
+"lizenz": "MIT",
+"repo": "https://github.com/xtuc/webassemblyjs"
+},
+{
+"paket": "@webassemblyjs/wasm-opt",
+"version": "1.14.1",
+"lizenz": "MIT",
+"repo": "https://github.com/xtuc/webassemblyjs"
+},
+{
+"paket": "@webassemblyjs/wasm-parser",
+"version": "1.14.1",
+"lizenz": "MIT",
+"repo": "https://github.com/xtuc/webassemblyjs"
+},
+{
+"paket": "@webassemblyjs/wast-printer",
+"version": "1.14.1",
+"lizenz": "MIT",
+"repo": "https://github.com/xtuc/webassemblyjs"
+},
+{
+"paket": "@xtuc/ieee754",
+"version": "1.2.0",
+"lizenz": "BSD-3-Clause",
+"repo": "https://github.com/feross/ieee754"
+},
+{
+"paket": "@xtuc/long",
+"version": "4.2.2",
+"lizenz": "Apache-2.0",
+"repo": "https://github.com/dcodeIO/long.js"
+},
+{
+"paket": "@zone-eu/mailsplit",
+"version": "5.4.16",
+"lizenz": "(MIT OR EUPL-1.1+)",
+"repo": "https://github.com/zone-eu/mailsplit"
+},
+{
+"paket": "acorn",
+"version": "8.18.0",
+"lizenz": "MIT",
+"repo": "https://github.com/acornjs/acorn"
+},
+{
+"paket": "adler-32",
+"version": "1.3.1",
+"lizenz": "Apache-2.0",
+"repo": "https://github.com/SheetJS/js-adler32"
+},
+{
+"paket": "agent-base",
+"version": "6.0.2",
+"lizenz": "MIT",
+"repo": "https://github.com/TooTallNate/node-agent-base"
+},
+{
+"paket": "ajv",
+"version": "8.20.0",
+"lizenz": "MIT",
+"repo": "https://github.com/ajv-validator/ajv"
+},
+{
+"paket": "ajv-formats",
+"version": "3.0.1",
+"lizenz": "MIT",
+"repo": "https://github.com/ajv-validator/ajv-formats"
+},
+{
+"paket": "ajv-keywords",
+"version": "5.1.0",
+"lizenz": "MIT",
+"repo": "https://github.com/epoberezkin/ajv-keywords"
+},
+{
+"paket": "ansi-regex",
+"version": "5.0.1",
+"lizenz": "MIT",
+"repo": "https://github.com/chalk/ansi-regex"
+},
+{
+"paket": "ansi-styles",
+"version": "4.3.0",
+"lizenz": "MIT",
+"repo": "https://github.com/chalk/ansi-styles"
+},
+{
+"paket": "anynum",
+"version": "1.0.1",
+"lizenz": "MIT",
+"repo": "https://github.com/NaturalIntelligence/anynum"
+},
+{
+"paket": "atomic-sleep",
+"version": "1.0.0",
+"lizenz": "MIT",
+"repo": "https://github.com/davidmarkclements/atomic-sleep"
+},
+{
+"paket": "balanced-match",
+"version": "4.0.4",
+"lizenz": "MIT",
+"repo": "https://github.com/juliangruber/balanced-match"
+},
+{
+"paket": "base64-arraybuffer",
+"version": "1.0.2",
+"lizenz": "MIT",
+"repo": "https://github.com/niklasvh/base64-arraybuffer"
+},
+{
+"paket": "base64-js",
+"version": "1.5.1",
+"lizenz": "MIT",
+"repo": "https://github.com/beatgammit/base64-js"
+},
+{
+"paket": "baseline-browser-mapping",
+"version": "2.11.8",
+"lizenz": "Apache-2.0",
+"repo": "https://github.com/web-platform-dx/baseline-browser-mapping"
+},
+{
+"paket": "bidi-js",
+"version": "1.0.3",
+"lizenz": "MIT",
+"repo": "https://github.com/lojjic/bidi-js"
+},
+{
+"paket": "bmp-js",
+"version": "0.1.0",
+"lizenz": "MIT",
+"repo": "https://github.com/shaozilee/bmp-js"
+},
+{
+"paket": "brace-expansion",
+"version": "5.0.9",
+"lizenz": "MIT",
+"repo": "https://github.com/juliangruber/brace-expansion"
+},
+{
+"paket": "browserslist",
+"version": "4.28.7",
+"lizenz": "MIT",
+"repo": "https://github.com/browserslist/browserslist"
+},
+{
+"paket": "buffer",
+"version": "6.0.3",
+"lizenz": "MIT",
+"repo": "https://github.com/feross/buffer"
+},
+{
+"paket": "buffer-from",
+"version": "1.1.2",
+"lizenz": "MIT",
+"repo": "https://github.com/LinusU/buffer-from"
+},
+{
+"paket": "call-bind-apply-helpers",
+"version": "1.0.2",
+"lizenz": "MIT",
+"repo": "https://github.com/ljharb/call-bind-apply-helpers"
+},
+{
+"paket": "call-bound",
+"version": "1.0.4",
+"lizenz": "MIT",
+"repo": "https://github.com/ljharb/call-bound"
+},
+{
+"paket": "camelcase",
+"version": "5.3.1",
+"lizenz": "MIT",
+"repo": "https://github.com/sindresorhus/camelcase"
+},
+{
+"paket": "camera-controls",
+"version": "3.1.0",
+"lizenz": "MIT",
+"repo": "https://github.com/yomotsu/camera-controls"
+},
+{
+"paket": "caniuse-lite",
+"version": "1.0.30001806",
+"lizenz": "CC-BY-4.0",
+"repo": "https://github.com/browserslist/caniuse-lite"
+},
+{
+"paket": "canvg",
+"version": "3.0.11",
+"lizenz": "MIT",
+"repo": "https://github.com/canvg/canvg"
+},
+{
+"paket": "cfb",
+"version": "1.2.2",
+"lizenz": "Apache-2.0",
+"repo": "https://github.com/SheetJS/js-cfb"
+},
+{
+"paket": "chrome-trace-event",
+"version": "1.0.4",
+"lizenz": "MIT",
+"repo": "https://github.com/samccone/chrome-trace-event"
+},
+{
+"paket": "cjs-module-lexer",
+"version": "2.2.1",
+"lizenz": "MIT",
+"repo": "https://github.com/nodejs/cjs-module-lexer"
+},
+{
+"paket": "client-only",
+"version": "0.0.1",
+"lizenz": "MIT",
+"repo": ""
+},
+{
+"paket": "cliui",
+"version": "6.0.0",
+"lizenz": "ISC",
+"repo": "https://github.com/yargs/cliui"
+},
+{
+"paket": "codepage",
+"version": "1.15.0",
+"lizenz": "Apache-2.0",
+"repo": "https://github.com/SheetJS/js-codepage"
+},
+{
+"paket": "color-convert",
+"version": "2.0.1",
+"lizenz": "MIT",
+"repo": "https://github.com/Qix-/color-convert"
+},
+{
+"paket": "color-name",
+"version": "1.1.4",
+"lizenz": "MIT",
+"repo": "https://github.com/colorjs/color-name"
+},
+{
+"paket": "commander",
+"version": "2.20.3",
+"lizenz": "MIT",
+"repo": "https://github.com/tj/commander.js"
+},
+{
+"paket": "commondir",
+"version": "1.0.1",
+"lizenz": "MIT",
+"repo": "https://github.com/substack/node-commondir"
+},
+{
+"paket": "convert-source-map",
+"version": "2.0.0",
+"lizenz": "MIT",
+"repo": "https://github.com/thlorenz/convert-source-map"
+},
+{
+"paket": "cookie",
+"version": "1.1.1",
+"lizenz": "MIT",
+"repo": "https://github.com/jshttp/cookie"
+},
+{
+"paket": "core-js",
+"version": "3.49.0",
+"lizenz": "MIT",
+"repo": "https://github.com/zloirock/core-js"
+},
+{
+"paket": "crc-32",
+"version": "1.2.2",
+"lizenz": "Apache-2.0",
+"repo": "https://github.com/SheetJS/js-crc32"
+},
+{
+"paket": "cross-env",
+"version": "7.0.3",
+"lizenz": "MIT",
+"repo": "https://github.com/kentcdodds/cross-env"
+},
+{
+"paket": "cross-spawn",
+"version": "7.0.6",
+"lizenz": "MIT",
+"repo": "https://github.com/moxystudio/node-cross-spawn"
+},
+{
+"paket": "css-line-break",
+"version": "2.1.0",
+"lizenz": "MIT",
+"repo": "https://github.com/niklasvh/css-line-break"
+},
+{
+"paket": "csstype",
+"version": "3.2.3",
+"lizenz": "MIT",
+"repo": "https://github.com/frenic/csstype"
+},
+{
+"paket": "debug",
+"version": "4.4.3",
+"lizenz": "MIT",
+"repo": "https://github.com/debug-js/debug"
+},
+{
+"paket": "decamelize",
+"version": "1.2.0",
+"lizenz": "MIT",
+"repo": "https://github.com/sindresorhus/decamelize"
+},
+{
+"paket": "deepmerge-ts",
+"version": "8.0.2",
+"lizenz": "BSD-3-Clause",
+"repo": "https://github.com/RebeccaStevens/deepmerge-ts"
+},
+{
+"paket": "detect-gpu",
+"version": "5.0.70",
+"lizenz": "MIT",
+"repo": "https://github.com/pmndrs/detect-gpu"
+},
+{
+"paket": "detect-libc",
+"version": "2.1.2",
+"lizenz": "Apache-2.0",
+"repo": "https://github.com/lovell/detect-libc"
+},
+{
+"paket": "dijkstrajs",
+"version": "1.0.3",
+"lizenz": "MIT",
+"repo": "https://github.com/tcort/dijkstrajs"
+},
+{
+"paket": "dom-serializer",
+"version": "2.0.0",
+"lizenz": "MIT",
+"repo": "https://github.com/cheeriojs/dom-serializer"
+},
+{
+"paket": "domelementtype",
+"version": "2.3.0",
+"lizenz": "BSD-2-Clause",
+"repo": "https://github.com/fb55/domelementtype"
+},
+{
+"paket": "domhandler",
+"version": "5.0.3",
+"lizenz": "BSD-2-Clause",
+"repo": "https://github.com/fb55/domhandler"
+},
+{
+"paket": "dompurify",
+"version": "3.4.12",
+"lizenz": "(MPL-2.0 OR Apache-2.0)",
+"repo": "https://github.com/cure53/DOMPurify"
+},
+{
+"paket": "domutils",
+"version": "3.2.2",
+"lizenz": "BSD-2-Clause",
+"repo": "https://github.com/fb55/domutils"
+},
+{
+"paket": "dotenv",
+"version": "16.6.1",
+"lizenz": "BSD-2-Clause",
+"repo": "https://github.com/motdotla/dotenv"
+},
+{
+"paket": "dotenv",
+"version": "17.4.2",
+"lizenz": "BSD-2-Clause",
+"repo": "https://github.com/motdotla/dotenv"
+},
+{
+"paket": "draco3d",
+"version": "1.5.7",
+"lizenz": "Apache-2.0",
+"repo": "https://github.com/google/draco"
+},
+{
+"paket": "dunder-proto",
+"version": "1.0.1",
+"lizenz": "MIT",
+"repo": "https://github.com/es-shims/dunder-proto"
+},
+{
+"paket": "electron-to-chromium",
+"version": "1.5.398",
+"lizenz": "ISC",
+"repo": "https://github.com/Kilian/electron-to-chromium"
+},
+{
+"paket": "emoji-regex",
+"version": "8.0.0",
+"lizenz": "MIT",
+"repo": "https://github.com/mathiasbynens/emoji-regex"
+},
+{
+"paket": "encoding-japanese",
+"version": "2.3.0",
+"lizenz": "MIT",
+"repo": "https://github.com/polygonplanet/encoding.js"
+},
+{
+"paket": "enhanced-resolve",
+"version": "5.25.1",
+"lizenz": "MIT",
+"repo": "https://github.com/webpack/enhanced-resolve"
+},
+{
+"paket": "entities",
+"version": "4.5.0",
+"lizenz": "BSD-2-Clause",
+"repo": "https://github.com/fb55/entities"
+},
+{
+"paket": "entities",
+"version": "7.0.1",
+"lizenz": "BSD-2-Clause",
+"repo": "https://github.com/fb55/entities"
+},
+{
+"paket": "es-define-property",
+"version": "1.0.1",
+"lizenz": "MIT",
+"repo": "https://github.com/ljharb/es-define-property"
+},
+{
+"paket": "es-errors",
+"version": "1.3.0",
+"lizenz": "MIT",
+"repo": "https://github.com/ljharb/es-errors"
+},
+{
+"paket": "es-module-lexer",
+"version": "2.3.2",
+"lizenz": "MIT",
+"repo": "https://github.com/guybedford/es-module-lexer"
+},
+{
+"paket": "es-module-lexer",
+"version": "3.0.2",
+"lizenz": "MIT",
+"repo": "https://github.com/guybedford/es-module-lexer"
+},
+{
+"paket": "es-object-atoms",
+"version": "1.1.2",
+"lizenz": "MIT",
+"repo": "https://github.com/ljharb/es-object-atoms"
+},
+{
+"paket": "escalade",
+"version": "3.2.0",
+"lizenz": "MIT",
+"repo": "https://github.com/lukeed/escalade"
+},
+{
+"paket": "estree-walker",
+"version": "2.0.2",
+"lizenz": "MIT",
+"repo": "https://github.com/Rich-Harris/estree-walker"
+},
+{
+"paket": "events",
+"version": "3.3.0",
+"lizenz": "MIT",
+"repo": "https://github.com/Gozala/events"
+},
+{
+"paket": "fast-deep-equal",
+"version": "3.1.3",
+"lizenz": "MIT",
+"repo": "https://github.com/epoberezkin/fast-deep-equal"
+},
+{
+"paket": "fast-png",
+"version": "6.4.0",
+"lizenz": "MIT",
+"repo": "https://github.com/image-js/fast-png"
+},
+{
+"paket": "fast-sha256",
+"version": "1.3.0",
+"lizenz": "Unlicense",
+"repo": "https://github.com/dchest/fast-sha256-js"
+},
+{
+"paket": "fast-uri",
+"version": "3.1.7",
+"lizenz": "BSD-3-Clause",
+"repo": "https://github.com/fastify/fast-uri"
+},
+{
+"paket": "fast-xml-builder",
+"version": "1.3.1",
+"lizenz": "MIT",
+"repo": "https://github.com/NaturalIntelligence/fast-xml-builder"
+},
+{
+"paket": "fast-xml-parser",
+"version": "5.11.1",
+"lizenz": "MIT",
+"repo": "https://github.com/NaturalIntelligence/fast-xml-parser"
+},
+{
+"paket": "fdir",
+"version": "6.5.0",
+"lizenz": "MIT",
+"repo": "https://github.com/thecodrr/fdir"
+},
+{
+"paket": "fflate",
+"version": "0.6.11",
+"lizenz": "MIT",
+"repo": "https://github.com/101arrowz/fflate"
+},
+{
+"paket": "fflate",
+"version": "0.8.3",
+"lizenz": "MIT",
+"repo": "https://github.com/101arrowz/fflate"
+},
+{
+"paket": "find-up",
+"version": "4.1.0",
+"lizenz": "MIT",
+"repo": "https://github.com/sindresorhus/find-up"
+},
+{
+"paket": "find-up",
+"version": "5.0.0",
+"lizenz": "MIT",
+"repo": "https://github.com/sindresorhus/find-up"
+},
+{
+"paket": "frac",
+"version": "1.1.2",
+"lizenz": "Apache-2.0",
+"repo": "https://github.com/SheetJS/frac"
+},
+{
+"paket": "function-bind",
+"version": "1.1.2",
+"lizenz": "MIT",
+"repo": "https://github.com/Raynos/function-bind"
+},
+{
+"paket": "gensync",
+"version": "1.0.0-beta.2",
+"lizenz": "MIT",
+"repo": "https://github.com/loganfsmyth/gensync"
+},
+{
+"paket": "get-caller-file",
+"version": "2.0.5",
+"lizenz": "ISC",
+"repo": "https://github.com/stefanpenner/get-caller-file"
+},
+{
+"paket": "get-intrinsic",
+"version": "1.3.0",
+"lizenz": "MIT",
+"repo": "https://github.com/ljharb/get-intrinsic"
+},
+{
+"paket": "get-proto",
+"version": "1.0.1",
+"lizenz": "MIT",
+"repo": "https://github.com/ljharb/get-proto"
+},
+{
+"paket": "glob",
+"version": "13.0.6",
+"lizenz": "BlueOak-1.0.0",
+"repo": "https://github.com/isaacs/node-glob"
+},
+{
+"paket": "glsl-noise",
+"version": "0.0.0",
+"lizenz": "MIT",
+"repo": "https://github.com/hughsk/glsl-noise"
+},
+{
+"paket": "gopd",
+"version": "1.2.0",
+"lizenz": "MIT",
+"repo": "https://github.com/ljharb/gopd"
+},
+{
+"paket": "graceful-fs",
+"version": "4.2.11",
+"lizenz": "ISC",
+"repo": "https://github.com/isaacs/node-graceful-fs"
+},
+{
+"paket": "has-flag",
+"version": "4.0.0",
+"lizenz": "MIT",
+"repo": "https://github.com/sindresorhus/has-flag"
+},
+{
+"paket": "has-symbols",
+"version": "1.1.0",
+"lizenz": "MIT",
+"repo": "https://github.com/inspect-js/has-symbols"
+},
+{
+"paket": "hasown",
+"version": "2.0.4",
+"lizenz": "MIT",
+"repo": "https://github.com/inspect-js/hasOwn"
+},
+{
+"paket": "he",
+"version": "1.2.0",
+"lizenz": "MIT",
+"repo": "https://github.com/mathiasbynens/he"
+},
+{
+"paket": "hls.js",
+"version": "1.6.16",
+"lizenz": "Apache-2.0",
+"repo": "https://github.com/video-dev/hls.js"
+},
+{
+"paket": "html-to-text",
+"version": "10.0.1",
+"lizenz": "MIT",
+"repo": "https://github.com/html-to-text/node-html-to-text"
+},
+{
+"paket": "html2canvas",
+"version": "1.4.1",
+"lizenz": "MIT",
+"repo": "https://github.com/niklasvh/html2canvas"
+},
+{
+"paket": "htmlparser2",
+"version": "10.1.0",
+"lizenz": "MIT",
+"repo": "https://github.com/fb55/htmlparser2"
+},
+{
+"paket": "https-proxy-agent",
+"version": "5.0.1",
+"lizenz": "MIT",
+"repo": "https://github.com/TooTallNate/node-https-proxy-agent"
+},
+{
+"paket": "iceberg-js",
+"version": "0.8.1",
+"lizenz": "MIT",
+"repo": "https://github.com/supabase/iceberg-js"
+},
+{
+"paket": "iconv-lite",
+"version": "0.7.3",
+"lizenz": "MIT",
+"repo": "https://github.com/pillarjs/iconv-lite"
+},
+{
+"paket": "idb-keyval",
+"version": "6.3.0",
+"lizenz": "Apache-2.0",
+"repo": "https://github.com/jakearchibald/idb-keyval"
+},
+{
+"paket": "ieee754",
+"version": "1.2.1",
+"lizenz": "BSD-3-Clause",
+"repo": "https://github.com/feross/ieee754"
+},
+{
+"paket": "imapflow",
+"version": "2.0.0",
+"lizenz": "MIT",
+"repo": "https://github.com/postalsys/imapflow"
+},
+{
+"paket": "immediate",
+"version": "3.0.6",
+"lizenz": "MIT",
+"repo": "https://github.com/calvinmetcalf/immediate"
+},
+{
+"paket": "import-in-the-middle",
+"version": "3.5.1",
+"lizenz": "Apache-2.0",
+"repo": "https://github.com/nodejs/import-in-the-middle"
+},
+{
+"paket": "iobuffer",
+"version": "5.4.0",
+"lizenz": "MIT",
+"repo": "https://github.com/image-js/iobuffer"
+},
+{
+"paket": "ip-address",
+"version": "10.7.0",
+"lizenz": "MIT",
+"repo": "https://github.com/beaugunderson/ip-address"
+},
+{
+"paket": "is-fullwidth-code-point",
+"version": "3.0.0",
+"lizenz": "MIT",
+"repo": "https://github.com/sindresorhus/is-fullwidth-code-point"
+},
+{
+"paket": "is-promise",
+"version": "2.2.2",
+"lizenz": "MIT",
+"repo": "https://github.com/then/is-promise"
+},
+{
+"paket": "is-reference",
+"version": "1.2.1",
+"lizenz": "MIT",
+"repo": "https://github.com/Rich-Harris/is-reference"
+},
+{
+"paket": "is-unsafe",
+"version": "2.0.2",
+"lizenz": "MIT",
+"repo": "https://github.com/NaturalIntelligence/is-unsafe"
+},
+{
+"paket": "is-url",
+"version": "1.2.4",
+"lizenz": "MIT",
+"repo": "https://github.com/segmentio/is-url"
+},
+{
+"paket": "isexe",
+"version": "2.0.0",
+"lizenz": "ISC",
+"repo": "https://github.com/isaacs/isexe"
+},
+{
+"paket": "its-fine",
+"version": "2.0.0",
+"lizenz": "MIT",
+"repo": "https://github.com/pmndrs/its-fine"
+},
+{
+"paket": "jest-worker",
+"version": "27.5.1",
+"lizenz": "MIT",
+"repo": "https://github.com/facebook/jest"
+},
+{
+"paket": "js-tokens",
+"version": "4.0.0",
+"lizenz": "MIT",
+"repo": "https://github.com/lydell/js-tokens"
+},
+{
+"paket": "jsesc",
+"version": "3.1.0",
+"lizenz": "MIT",
+"repo": "https://github.com/mathiasbynens/jsesc"
+},
+{
+"paket": "json-schema-traverse",
+"version": "1.0.0",
+"lizenz": "MIT",
+"repo": "https://github.com/epoberezkin/json-schema-traverse"
+},
+{
+"paket": "json5",
+"version": "2.2.3",
+"lizenz": "MIT",
+"repo": "https://github.com/json5/json5"
+},
+{
+"paket": "jspdf",
+"version": "4.2.1",
+"lizenz": "MIT",
+"repo": "https://github.com/parallax/jsPDF"
+},
+{
+"paket": "jspdf-autotable",
+"version": "5.0.8",
+"lizenz": "MIT",
+"repo": "https://github.com/simonbengtsson/jsPDF-AutoTable"
+},
+{
+"paket": "leac",
+"version": "0.7.0",
+"lizenz": "MIT",
+"repo": "https://github.com/mxxii/leac"
+},
+{
+"paket": "libbase64",
+"version": "1.3.0",
+"lizenz": "MIT",
+"repo": "https://github.com/nodemailer/libbase64"
+},
+{
+"paket": "libmime",
+"version": "5.4.3",
+"lizenz": "MIT",
+"repo": "https://github.com/nodemailer/libmime"
+},
+{
+"paket": "libqp",
+"version": "2.1.1",
+"lizenz": "MIT",
+"repo": "https://github.com/nodemailer/libqp"
+},
+{
+"paket": "libxml2-wasm",
+"version": "0.6.0",
+"lizenz": "MIT",
+"repo": "https://github.com/jameslan/libxml2-wasm"
+},
+{
+"paket": "lie",
+"version": "3.3.0",
+"lizenz": "MIT",
+"repo": "https://github.com/calvinmetcalf/lie"
+},
+{
+"paket": "linkify-it",
+"version": "5.0.2",
+"lizenz": "MIT",
+"repo": "https://github.com/markdown-it/linkify-it"
+},
+{
+"paket": "locate-path",
+"version": "5.0.0",
+"lizenz": "MIT",
+"repo": "https://github.com/sindresorhus/locate-path"
+},
+{
+"paket": "locate-path",
+"version": "6.0.0",
+"lizenz": "MIT",
+"repo": "https://github.com/sindresorhus/locate-path"
+},
+{
+"paket": "loose-envify",
+"version": "1.4.0",
+"lizenz": "MIT",
+"repo": "https://github.com/zertosh/loose-envify"
+},
+{
+"paket": "lru-cache",
+"version": "11.5.2",
+"lizenz": "BlueOak-1.0.0",
+"repo": "https://github.com/isaacs/node-lru-cache"
+},
+{
+"paket": "lru-cache",
+"version": "5.1.1",
+"lizenz": "ISC",
+"repo": "https://github.com/isaacs/node-lru-cache"
+},
+{
+"paket": "lucide-react",
+"version": "0.545.0",
+"lizenz": "ISC",
+"repo": "https://github.com/lucide-icons/lucide"
+},
+{
+"paket": "maath",
+"version": "0.10.8",
+"lizenz": "MIT",
+"repo": ""
+},
+{
+"paket": "magic-string",
+"version": "0.30.21",
+"lizenz": "MIT",
+"repo": "https://github.com/Rich-Harris/magic-string"
+},
+{
+"paket": "mailparser",
+"version": "3.9.23",
+"lizenz": "MIT",
+"repo": "https://github.com/nodemailer/mailparser"
+},
+{
+"paket": "math-intrinsics",
+"version": "1.1.0",
+"lizenz": "MIT",
+"repo": "https://github.com/es-shims/math-intrinsics"
+},
+{
+"paket": "merge-stream",
+"version": "2.0.0",
+"lizenz": "MIT",
+"repo": "https://github.com/grncdr/merge-stream"
+},
+{
+"paket": "meshline",
+"version": "3.3.1",
+"lizenz": "MIT",
+"repo": ""
+},
+{
+"paket": "meshoptimizer",
+"version": "1.1.1",
+"lizenz": "MIT",
+"repo": "https://github.com/zeux/meshoptimizer"
+},
+{
+"paket": "mime-db",
+"version": "1.54.0",
+"lizenz": "MIT",
+"repo": "https://github.com/jshttp/mime-db"
+},
+{
+"paket": "minimatch",
+"version": "10.2.6",
+"lizenz": "BlueOak-1.0.0",
+"repo": "https://github.com/isaacs/minimatch"
+},
+{
+"paket": "minimizer-webpack-plugin",
+"version": "5.10.1",
+"lizenz": "MIT",
+"repo": "https://github.com/webpack/minimizer-webpack-plugin"
+},
+{
+"paket": "minipass",
+"version": "7.1.3",
+"lizenz": "BlueOak-1.0.0",
+"repo": "https://github.com/isaacs/minipass"
+},
+{
+"paket": "module-details-from-path",
+"version": "1.0.4",
+"lizenz": "MIT",
+"repo": "https://github.com/watson/module-details-from-path"
+},
+{
+"paket": "ms",
+"version": "2.1.3",
+"lizenz": "MIT",
+"repo": "https://github.com/vercel/ms"
+},
+{
+"paket": "nanoid",
+"version": "3.3.18",
+"lizenz": "MIT",
+"repo": "https://github.com/ai/nanoid"
+},
+{
+"paket": "next",
+"version": "16.2.12",
+"lizenz": "MIT",
+"repo": "https://github.com/vercel/next.js"
+},
+{
+"paket": "node-fetch",
+"version": "2.7.0",
+"lizenz": "MIT",
+"repo": "https://github.com/bitinn/node-fetch"
+},
+{
+"paket": "node-releases",
+"version": "2.0.51",
+"lizenz": "MIT",
+"repo": "https://github.com/chicoxyzzy/node-releases"
+},
+{
+"paket": "nodemailer",
+"version": "10.0.1",
+"lizenz": "MIT-0",
+"repo": "https://github.com/nodemailer/nodemailer"
+},
+{
+"paket": "object-assign",
+"version": "4.1.1",
+"lizenz": "MIT",
+"repo": "https://github.com/sindresorhus/object-assign"
+},
+{
+"paket": "object-inspect",
+"version": "1.13.4",
+"lizenz": "MIT",
+"repo": "https://github.com/inspect-js/object-inspect"
+},
+{
+"paket": "on-exit-leak-free",
+"version": "2.1.2",
+"lizenz": "MIT",
+"repo": "https://github.com/mcollina/on-exit-or-gc"
+},
+{
+"paket": "opencollective-postinstall",
+"version": "2.0.3",
+"lizenz": "MIT",
+"repo": "https://github.com/opencollective/opencollective-postinstall"
+},
+{
+"paket": "p-limit",
+"version": "2.3.0",
+"lizenz": "MIT",
+"repo": "https://github.com/sindresorhus/p-limit"
+},
+{
+"paket": "p-limit",
+"version": "3.1.0",
+"lizenz": "MIT",
+"repo": "https://github.com/sindresorhus/p-limit"
+},
+{
+"paket": "p-locate",
+"version": "4.1.0",
+"lizenz": "MIT",
+"repo": "https://github.com/sindresorhus/p-locate"
+},
+{
+"paket": "p-locate",
+"version": "5.0.0",
+"lizenz": "MIT",
+"repo": "https://github.com/sindresorhus/p-locate"
+},
+{
+"paket": "p-try",
+"version": "2.2.0",
+"lizenz": "MIT",
+"repo": "https://github.com/sindresorhus/p-try"
+},
+{
+"paket": "pako",
+"version": "1.0.11",
+"lizenz": "(MIT AND Zlib)",
+"repo": "https://github.com/nodeca/pako"
+},
+{
+"paket": "pako",
+"version": "2.2.0",
+"lizenz": "(MIT AND Zlib)",
+"repo": "https://github.com/nodeca/pako"
+},
+{
+"paket": "papaparse",
+"version": "5.7.0",
+"lizenz": "MIT",
+"repo": "https://github.com/mholt/PapaParse"
+},
+{
+"paket": "parseley",
+"version": "0.13.1",
+"lizenz": "MIT",
+"repo": "https://github.com/mxxii/parseley"
+},
+{
+"paket": "path-exists",
+"version": "4.0.0",
+"lizenz": "MIT",
+"repo": "https://github.com/sindresorhus/path-exists"
+},
+{
+"paket": "path-expression-matcher",
+"version": "1.6.2",
+"lizenz": "MIT",
+"repo": "https://github.com/NaturalIntelligence/path-expression-matcher"
+},
+{
+"paket": "path-key",
+"version": "3.1.1",
+"lizenz": "MIT",
+"repo": "https://github.com/sindresorhus/path-key"
+},
+{
+"paket": "path-scurry",
+"version": "2.0.2",
+"lizenz": "BlueOak-1.0.0",
+"repo": "https://github.com/isaacs/path-scurry"
+},
+{
+"paket": "pdf-lib",
+"version": "1.17.1",
+"lizenz": "MIT",
+"repo": "https://github.com/Hopding/pdf-lib"
+},
+{
+"paket": "pdf-parse",
+"version": "2.4.5",
+"lizenz": "Apache-2.0",
+"repo": "https://github.com/mehmet-kozan/pdf-parse"
+},
+{
+"paket": "pdfjs-dist",
+"version": "5.4.296",
+"lizenz": "Apache-2.0",
+"repo": "https://github.com/mozilla/pdf.js"
+},
+{
+"paket": "peberminta",
+"version": "0.10.0",
+"lizenz": "MIT",
+"repo": "https://github.com/mxxii/peberminta"
+},
+{
+"paket": "performance-now",
+"version": "2.1.0",
+"lizenz": "MIT",
+"repo": "https://github.com/braveg1rl/performance-now"
+},
+{
+"paket": "picocolors",
+"version": "1.1.1",
+"lizenz": "ISC",
+"repo": "https://github.com/alexeyraspopov/picocolors"
+},
+{
+"paket": "picomatch",
+"version": "4.0.7",
+"lizenz": "MIT",
+"repo": "https://github.com/micromatch/picomatch"
+},
+{
+"paket": "pino",
+"version": "10.3.1",
+"lizenz": "MIT",
+"repo": "https://github.com/pinojs/pino"
+},
+{
+"paket": "pino-abstract-transport",
+"version": "3.0.0",
+"lizenz": "MIT",
+"repo": "https://github.com/pinojs/pino-abstract-transport"
+},
+{
+"paket": "pino-std-serializers",
+"version": "7.1.0",
+"lizenz": "MIT",
+"repo": "https://github.com/pinojs/pino-std-serializers"
+},
+{
+"paket": "pngjs",
+"version": "5.0.0",
+"lizenz": "MIT",
+"repo": "https://github.com/lukeapage/pngjs"
+},
+{
+"paket": "postal-mime",
+"version": "2.7.5",
+"lizenz": "MIT-0",
+"repo": "https://github.com/postalsys/postal-mime"
+},
+{
+"paket": "postcss",
+"version": "8.4.31",
+"lizenz": "MIT",
+"repo": "https://github.com/postcss/postcss"
+},
+{
+"paket": "potpack",
+"version": "1.0.2",
+"lizenz": "ISC",
+"repo": "https://github.com/mapbox/potpack"
+},
+{
+"paket": "process-warning",
+"version": "5.1.0",
+"lizenz": "MIT",
+"repo": "https://github.com/fastify/process-warning"
+},
+{
+"paket": "progress",
+"version": "2.0.3",
+"lizenz": "MIT",
+"repo": "https://github.com/visionmedia/node-progress"
+},
+{
+"paket": "promise-worker-transferable",
+"version": "1.0.4",
+"lizenz": "Apache-2.0",
+"repo": "https://github.com/terikon/promise-worker-transferable"
+},
+{
+"paket": "prop-types",
+"version": "15.8.1",
+"lizenz": "MIT",
+"repo": "https://github.com/facebook/prop-types"
+},
+{
+"paket": "proxy-from-env",
+"version": "1.1.0",
+"lizenz": "MIT",
+"repo": "https://github.com/Rob--W/proxy-from-env"
+},
+{
+"paket": "punycode.js",
+"version": "2.3.1",
+"lizenz": "MIT",
+"repo": "https://github.com/mathiasbynens/punycode.js"
+},
+{
+"paket": "qrcode",
+"version": "1.5.4",
+"lizenz": "MIT",
+"repo": "https://github.com/soldair/node-qrcode"
+},
+{
+"paket": "qs",
+"version": "6.15.3",
+"lizenz": "BSD-3-Clause",
+"repo": "https://github.com/ljharb/qs"
+},
+{
+"paket": "quick-format-unescaped",
+"version": "4.0.4",
+"lizenz": "MIT",
+"repo": "https://github.com/davidmarkclements/quick-format"
+},
+{
+"paket": "raf",
+"version": "3.4.1",
+"lizenz": "MIT",
+"repo": "https://github.com/chrisdickinson/raf"
+},
+{
+"paket": "react",
+"version": "19.2.4",
+"lizenz": "MIT",
+"repo": "https://github.com/facebook/react"
+},
+{
+"paket": "react-dom",
+"version": "19.2.4",
+"lizenz": "MIT",
+"repo": "https://github.com/facebook/react"
+},
+{
+"paket": "react-is",
+"version": "16.13.1",
+"lizenz": "MIT",
+"repo": "https://github.com/facebook/react"
+},
+{
+"paket": "react-signature-canvas",
+"version": "1.1.0-alpha.2",
+"lizenz": "Apache-2.0",
+"repo": "https://github.com/agilgur5/react-signature-canvas"
+},
+{
+"paket": "react-use-measure",
+"version": "2.1.7",
+"lizenz": "MIT",
+"repo": "https://github.com/pmndrs/react-use-measure"
+},
+{
+"paket": "real-require",
+"version": "0.2.0",
+"lizenz": "MIT",
+"repo": "https://github.com/pinojs/real-require"
+},
+{
+"paket": "real-require",
+"version": "1.0.0",
+"lizenz": "MIT",
+"repo": "https://github.com/pinojs/real-require"
+},
+{
+"paket": "regenerator-runtime",
+"version": "0.13.11",
+"lizenz": "MIT",
+"repo": "https://github.com/facebook/regenerator.git#main"
+},
+{
+"paket": "require-directory",
+"version": "2.1.1",
+"lizenz": "MIT",
+"repo": "https://github.com/troygoode/node-require-directory"
+},
+{
+"paket": "require-from-string",
+"version": "2.0.2",
+"lizenz": "MIT",
+"repo": "https://github.com/floatdrop/require-from-string"
+},
+{
+"paket": "require-in-the-middle",
+"version": "8.0.1",
+"lizenz": "MIT",
+"repo": "https://github.com/nodejs/require-in-the-middle"
+},
+{
+"paket": "require-main-filename",
+"version": "2.0.0",
+"lizenz": "ISC",
+"repo": "https://github.com/yargs/require-main-filename"
+},
+{
+"paket": "resend",
+"version": "6.18.1",
+"lizenz": "MIT",
+"repo": "https://github.com/resend/resend-node"
+},
+{
+"paket": "rgbcolor",
+"version": "1.0.1",
+"lizenz": "MIT*",
+"repo": "https://github.com/yetzt/node-rgbcolor"
+},
+{
+"paket": "rollup",
+"version": "4.63.1",
+"lizenz": "MIT",
+"repo": "https://github.com/rollup/rollup"
+},
+{
+"paket": "safe-stable-stringify",
+"version": "2.5.0",
+"lizenz": "MIT",
+"repo": "https://github.com/BridgeAR/safe-stable-stringify"
+},
+{
+"paket": "safer-buffer",
+"version": "2.1.2",
+"lizenz": "MIT",
+"repo": "https://github.com/ChALkeR/safer-buffer"
+},
+{
+"paket": "scheduler",
+"version": "0.27.0",
+"lizenz": "MIT",
+"repo": "https://github.com/facebook/react"
+},
+{
+"paket": "schema-utils",
+"version": "4.5.0",
+"lizenz": "MIT",
+"repo": "https://github.com/webpack/schema-utils"
+},
+{
+"paket": "selderee",
+"version": "0.12.0",
+"lizenz": "MIT",
+"repo": "https://github.com/mxxii/selderee"
+},
+{
+"paket": "semver",
+"version": "6.3.1",
+"lizenz": "ISC",
+"repo": "https://github.com/npm/node-semver"
+},
+{
+"paket": "semver",
+"version": "7.8.5",
+"lizenz": "ISC",
+"repo": "https://github.com/npm/node-semver"
+},
+{
+"paket": "set-blocking",
+"version": "2.0.0",
+"lizenz": "ISC",
+"repo": "https://github.com/yargs/set-blocking"
+},
+{
+"paket": "sharp",
+"version": "0.34.5",
+"lizenz": "Apache-2.0",
+"repo": "https://github.com/lovell/sharp"
+},
+{
+"paket": "shebang-command",
+"version": "2.0.0",
+"lizenz": "MIT",
+"repo": "https://github.com/kevva/shebang-command"
+},
+{
+"paket": "shebang-regex",
+"version": "3.0.0",
+"lizenz": "MIT",
+"repo": "https://github.com/sindresorhus/shebang-regex"
+},
+{
+"paket": "side-channel",
+"version": "1.1.1",
+"lizenz": "MIT",
+"repo": "https://github.com/ljharb/side-channel"
+},
+{
+"paket": "side-channel-list",
+"version": "1.0.1",
+"lizenz": "MIT",
+"repo": "https://github.com/ljharb/side-channel-list"
+},
+{
+"paket": "side-channel-map",
+"version": "1.0.1",
+"lizenz": "MIT",
+"repo": "https://github.com/ljharb/side-channel-map"
+},
+{
+"paket": "side-channel-weakmap",
+"version": "1.0.2",
+"lizenz": "MIT",
+"repo": "https://github.com/ljharb/side-channel-weakmap"
+},
+{
+"paket": "signature_pad",
+"version": "2.3.2",
+"lizenz": "MIT",
+"repo": "https://github.com/szimek/signature_pad"
+},
+{
+"paket": "smart-buffer",
+"version": "4.2.0",
+"lizenz": "MIT",
+"repo": "https://github.com/JoshGlazebrook/smart-buffer"
+},
+{
+"paket": "socks",
+"version": "2.8.10",
+"lizenz": "MIT",
+"repo": "https://github.com/JoshGlazebrook/socks"
+},
+{
+"paket": "sonic-boom",
+"version": "4.2.1",
+"lizenz": "MIT",
+"repo": "https://github.com/pinojs/sonic-boom"
+},
+{
+"paket": "source-map",
+"version": "0.6.1",
+"lizenz": "BSD-3-Clause",
+"repo": "https://github.com/mozilla/source-map"
+},
+{
+"paket": "source-map-js",
+"version": "1.2.1",
+"lizenz": "BSD-3-Clause",
+"repo": "https://github.com/7rulnik/source-map-js"
+},
+{
+"paket": "source-map-support",
+"version": "0.5.21",
+"lizenz": "MIT",
+"repo": "https://github.com/evanw/node-source-map-support"
+},
+{
+"paket": "split2",
+"version": "4.2.0",
+"lizenz": "ISC",
+"repo": "https://github.com/mcollina/split2"
+},
+{
+"paket": "ssf",
+"version": "0.11.2",
+"lizenz": "Apache-2.0",
+"repo": "https://github.com/SheetJS/ssf"
+},
+{
+"paket": "stackblur-canvas",
+"version": "2.7.0",
+"lizenz": "MIT",
+"repo": "https://github.com/flozz/StackBlur"
+},
+{
+"paket": "stacktrace-parser",
+"version": "0.1.11",
+"lizenz": "MIT",
+"repo": "https://github.com/errwischt/stacktrace-parser"
+},
+{
+"paket": "standardwebhooks",
+"version": "1.0.0",
+"lizenz": "MIT",
+"repo": "https://github.com/standard-webhooks/standard-webhooks"
+},
+{
+"paket": "stats-gl",
+"version": "2.4.2",
+"lizenz": "MIT",
+"repo": "https://github.com/RenaudRohlinger/stats-gl"
+},
+{
+"paket": "stats.js",
+"version": "0.17.0",
+"lizenz": "MIT",
+"repo": "https://github.com/mrdoob/stats.js"
+},
+{
+"paket": "string-width",
+"version": "4.2.3",
+"lizenz": "MIT",
+"repo": "https://github.com/sindresorhus/string-width"
+},
+{
+"paket": "strip-ansi",
+"version": "6.0.1",
+"lizenz": "MIT",
+"repo": "https://github.com/chalk/strip-ansi"
+},
+{
+"paket": "stripe",
+"version": "18.5.0",
+"lizenz": "MIT",
+"repo": "https://github.com/stripe/stripe-node"
+},
+{
+"paket": "strnum",
+"version": "2.4.2",
+"lizenz": "MIT",
+"repo": "https://github.com/NaturalIntelligence/strnum"
+},
+{
+"paket": "styled-jsx",
+"version": "5.1.6",
+"lizenz": "MIT",
+"repo": "https://github.com/vercel/styled-jsx"
+},
+{
+"paket": "supports-color",
+"version": "8.1.1",
+"lizenz": "MIT",
+"repo": "https://github.com/chalk/supports-color"
+},
+{
+"paket": "suspend-react",
+"version": "0.1.3",
+"lizenz": "MIT",
+"repo": "https://github.com/pmndrs/suspend-react"
+},
+{
+"paket": "svg-pathdata",
+"version": "6.0.3",
+"lizenz": "MIT",
+"repo": "https://github.com/nfroidure/svg-pathdata"
+},
+{
+"paket": "tapable",
+"version": "2.3.3",
+"lizenz": "MIT",
+"repo": "https://github.com/webpack/tapable"
+},
+{
+"paket": "terser",
+"version": "5.51.2",
+"lizenz": "BSD-2-Clause",
+"repo": "https://github.com/terser/terser"
+},
+{
+"paket": "tesseract.js",
+"version": "7.0.0",
+"lizenz": "Apache-2.0",
+"repo": "https://github.com/naptha/tesseract.js"
+},
+{
+"paket": "tesseract.js-core",
+"version": "7.0.0",
+"lizenz": "Apache-2.0",
+"repo": "https://github.com/naptha/tesseract.js-core"
+},
+{
+"paket": "text-segmentation",
+"version": "1.0.3",
+"lizenz": "MIT",
+"repo": "https://github.com/niklasvh/text-segmentation"
+},
+{
+"paket": "thread-stream",
+"version": "4.2.0",
+"lizenz": "MIT",
+"repo": "https://github.com/mcollina/thread-stream"
+},
+{
+"paket": "three",
+"version": "0.170.0",
+"lizenz": "MIT",
+"repo": "https://github.com/mrdoob/three.js"
+},
+{
+"paket": "three",
+"version": "0.185.1",
+"lizenz": "MIT",
+"repo": "https://github.com/mrdoob/three.js"
+},
+{
+"paket": "three-mesh-bvh",
+"version": "0.8.3",
+"lizenz": "MIT",
+"repo": "https://github.com/gkjohnson/three-mesh-bvh"
+},
+{
+"paket": "three-stdlib",
+"version": "2.36.1",
+"lizenz": "MIT",
+"repo": "https://github.com/pmndrs/three-stdlib"
+},
+{
+"paket": "tlds",
+"version": "1.261.0",
+"lizenz": "MIT",
+"repo": "https://github.com/stephenmathieson/node-tlds"
+},
+{
+"paket": "tr46",
+"version": "0.0.3",
+"lizenz": "MIT",
+"repo": "https://github.com/Sebmaster/tr46.js"
+},
+{
+"paket": "trim-canvas",
+"version": "0.1.2",
+"lizenz": "Apache-2.0",
+"repo": "https://github.com/agilgur5/trim-canvas"
+},
+{
+"paket": "troika-three-text",
+"version": "0.52.5",
+"lizenz": "MIT",
+"repo": "https://github.com/protectwise/troika"
+},
+{
+"paket": "troika-three-utils",
+"version": "0.52.5",
+"lizenz": "MIT",
+"repo": "https://github.com/protectwise/troika"
+},
+{
+"paket": "troika-worker-utils",
+"version": "0.52.0",
+"lizenz": "MIT",
+"repo": "https://github.com/protectwise/troika"
+},
+{
+"paket": "tslib",
+"version": "1.14.1",
+"lizenz": "0BSD",
+"repo": "https://github.com/Microsoft/tslib"
+},
+{
+"paket": "tslib",
+"version": "2.8.1",
+"lizenz": "0BSD",
+"repo": "https://github.com/Microsoft/tslib"
+},
+{
+"paket": "tunnel-rat",
+"version": "0.1.2",
+"lizenz": "MIT",
+"repo": "https://github.com/pmndrs/tunnel-rat"
+},
+{
+"paket": "type-fest",
+"version": "0.7.1",
+"lizenz": "(MIT OR CC0-1.0)",
+"repo": "https://github.com/sindresorhus/type-fest"
+},
+{
+"paket": "uc.micro",
+"version": "2.1.0",
+"lizenz": "MIT",
+"repo": "https://github.com/markdown-it/uc.micro"
+},
+{
+"paket": "undici-types",
+"version": "6.21.0",
+"lizenz": "MIT",
+"repo": "https://github.com/nodejs/undici"
+},
+{
+"paket": "update-browserslist-db",
+"version": "1.2.3",
+"lizenz": "MIT",
+"repo": "https://github.com/browserslist/update-db"
+},
+{
+"paket": "use-sync-external-store",
+"version": "1.6.0",
+"lizenz": "MIT",
+"repo": "https://github.com/facebook/react"
+},
+{
+"paket": "utility-types",
+"version": "3.11.0",
+"lizenz": "MIT",
+"repo": "https://github.com/piotrwitek/utility-types"
+},
+{
+"paket": "utrie",
+"version": "1.0.2",
+"lizenz": "MIT",
+"repo": "https://github.com/niklasvh/utrie"
+},
+{
+"paket": "wasm-feature-detect",
+"version": "1.9.0",
+"lizenz": "Apache-2.0",
+"repo": "https://github.com/GoogleChromeLabs/wasm-feature-detect"
+},
+{
+"paket": "watchpack",
+"version": "2.5.2",
+"lizenz": "MIT",
+"repo": "https://github.com/webpack/watchpack"
+},
+{
+"paket": "web-ifc",
+"version": "0.0.77",
+"lizenz": "MPL-2.0",
+"repo": "https://github.com/ThatOpen/engine_web-ifc"
+},
+{
+"paket": "webgl-constants",
+"version": "1.1.1",
+"lizenz": "MIT*",
+"repo": ""
+},
+{
+"paket": "webgl-sdf-generator",
+"version": "1.1.1",
+"lizenz": "MIT",
+"repo": "https://github.com/lojjic/webgl-sdf-generator"
+},
+{
+"paket": "webidl-conversions",
+"version": "3.0.1",
+"lizenz": "BSD-2-Clause",
+"repo": "https://github.com/jsdom/webidl-conversions"
+},
+{
+"paket": "webpack",
+"version": "5.111.0",
+"lizenz": "MIT",
+"repo": "https://github.com/webpack/webpack"
+},
+{
+"paket": "webpack-sources",
+"version": "3.5.1",
+"lizenz": "MIT",
+"repo": "https://github.com/webpack/webpack-sources"
+},
+{
+"paket": "whatwg-url",
+"version": "5.0.0",
+"lizenz": "MIT",
+"repo": "https://github.com/jsdom/whatwg-url"
+},
+{
+"paket": "which",
+"version": "2.0.2",
+"lizenz": "ISC",
+"repo": "https://github.com/isaacs/node-which"
+},
+{
+"paket": "which-module",
+"version": "2.0.1",
+"lizenz": "ISC",
+"repo": "https://github.com/nexdrew/which-module"
+},
+{
+"paket": "wmf",
+"version": "1.0.2",
+"lizenz": "Apache-2.0",
+"repo": "https://github.com/SheetJS/js-wmf"
+},
+{
+"paket": "word",
+"version": "0.3.0",
+"lizenz": "Apache-2.0",
+"repo": "https://github.com/SheetJS/js-word"
+},
+{
+"paket": "wrap-ansi",
+"version": "6.2.0",
+"lizenz": "MIT",
+"repo": "https://github.com/chalk/wrap-ansi"
+},
+{
+"paket": "xlsx",
+"version": "0.18.5",
+"lizenz": "Apache-2.0",
+"repo": "https://github.com/SheetJS/sheetjs"
+},
+{
+"paket": "xml-naming",
+"version": "0.3.0",
+"lizenz": "MIT",
+"repo": "https://github.com/NaturalIntelligence/xml-naming"
+},
+{
+"paket": "y18n",
+"version": "4.0.3",
+"lizenz": "ISC",
+"repo": "https://github.com/yargs/y18n"
+},
+{
+"paket": "yallist",
+"version": "3.1.1",
+"lizenz": "ISC",
+"repo": "https://github.com/isaacs/yallist"
+},
+{
+"paket": "yargs",
+"version": "15.4.1",
+"lizenz": "MIT",
+"repo": "https://github.com/yargs/yargs"
+},
+{
+"paket": "yargs-parser",
+"version": "18.1.3",
+"lizenz": "ISC",
+"repo": "https://github.com/yargs/yargs-parser"
+},
+{
+"paket": "yocto-queue",
+"version": "0.1.0",
+"lizenz": "MIT",
+"repo": "https://github.com/sindresorhus/yocto-queue"
+},
+{
+"paket": "zlibjs",
+"version": "0.3.1",
+"lizenz": "MIT",
+"repo": "https://github.com/imaya/zlib.js"
+},
+{
+"paket": "zod",
+"version": "4.6.5",
+"lizenz": "MIT",
+"repo": "https://github.com/colinhacks/zod"
+},
+{
+"paket": "zustand",
+"version": "4.5.7",
+"lizenz": "MIT",
+"repo": "https://github.com/pmndrs/zustand"
+},
+{
+"paket": "zustand",
+"version": "5.0.14",
+"lizenz": "MIT",
+"repo": "https://github.com/pmndrs/zustand"
+}
+]
