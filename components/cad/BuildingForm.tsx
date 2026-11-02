@@ -873,6 +873,39 @@ export default function BuildingForm({ building, systemId, onChange, onSystemCha
                   </div>
                   <div className='border-t border-black/10 pt-2 space-y-1.5'>
                     <label className='flex items-center gap-2 text-xs font-medium text-[#1d1d1f]'>
+                      <input type='checkbox' checked={!!opt.schutzdaecher} onChange={(e) => setzeOpt({ schutzdaecher: e.target.checked ? [{ seite: 'front', vonM: 0, laengeM: 4 }] : undefined })} />
+                      Schutzdächer von Hand festlegen (statt automatisch über den Türen)
+                    </label>
+                    {opt.schutzdaecher && (
+                      <div className='space-y-1.5'>
+                        {opt.schutzdaecher.map((d, i) => {
+                          const aendere = (patch: Partial<NonNullable<typeof opt.schutzdaecher>[number]>) => setzeOpt({ schutzdaecher: opt.schutzdaecher!.map((x, j) => (j === i ? { ...x, ...patch } : x)) })
+                          const zahl = (v: string) => { const n = parseFloat(v.replace(',', '.')); return Number.isFinite(n) ? n : 0 }
+                          return (
+                            <div key={i} className='grid grid-cols-5 gap-1.5 items-end'>
+                              <div className='col-span-2'><label className='block text-[11px] text-[#424245] mb-1'>Seite</label>
+                                <select value={d.seite ?? 'front'} onChange={(e) => aendere({ seite: e.target.value as 'front' | 'back' | 'left' | 'right' })} className='w-full px-1.5 py-1.5 border rounded-lg text-xs bg-white'>
+                                  <option value='front'>Vorne</option><option value='back'>Hinten</option><option value='left'>Links</option><option value='right'>Rechts</option>
+                                </select></div>
+                              <div><label className='block text-[11px] text-[#424245] mb-1'>ab (m)</label>
+                                <input type='number' step='0.5' min={0} value={d.vonM} onChange={(e) => aendere({ vonM: zahl(e.target.value) })} className='w-full px-1.5 py-1.5 border rounded-lg text-xs' /></div>
+                              <div><label className='block text-[11px] text-[#424245] mb-1'>Länge (m)</label>
+                                <input type='number' step='0.5' min={0} value={d.laengeM} onChange={(e) => aendere({ laengeM: zahl(e.target.value) })} className='w-full px-1.5 py-1.5 border rounded-lg text-xs' /></div>
+                              <div className='flex items-end gap-1'>
+                                <div className='min-w-0 flex-1'><label className='block text-[11px] text-[#424245] mb-1'>Höhe (m)</label>
+                                  <input type='number' step='0.5' min={0} placeholder='4' value={d.hoeheM ?? ''} onChange={(e) => aendere({ hoeheM: e.target.value === '' ? undefined : zahl(e.target.value) })} className='w-full px-1.5 py-1.5 border rounded-lg text-xs' /></div>
+                                <button type='button' aria-label='Schutzdach entfernen' onClick={() => setzeOpt({ schutzdaecher: opt.schutzdaecher!.filter((_, j) => j !== i) })} className='px-1.5 py-1.5 text-sm text-[#86868b] hover:text-red-600'>✕</button>
+                              </div>
+                            </div>
+                          )
+                        })}
+                        <button type='button' onClick={() => setzeOpt({ schutzdaecher: [...opt.schutzdaecher!, { seite: 'front', vonM: 0, laengeM: 4 }] })} className='text-xs font-semibold text-[#e8590c] hover:underline'>+ Schutzdach hinzufügen</button>
+                        <p className='text-[10px] text-[#86868b]'>Maße aus Lageplan oder Dachaufsicht. „ab“ = Abstand vom Anfang der Gerüstseite, Höhe = Unterkante über Gelände (Standard 4 m). Eine leere Liste heißt: keine Schutzdächer.</p>
+                      </div>
+                    )}
+                  </div>
+                  <div className='border-t border-black/10 pt-2 space-y-1.5'>
+                    <label className='flex items-center gap-2 text-xs font-medium text-[#1d1d1f]'>
                       <input type='checkbox' checked={!!opt.aufzug} onChange={(e) => setzeOpt({ aufzug: e.target.checked ? { seite: 'front', gemietet: true } : undefined })} />
                       Personen-/Lastenaufzug (an einer Seite)
                     </label>
