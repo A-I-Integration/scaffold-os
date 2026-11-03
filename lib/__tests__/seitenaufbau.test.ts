@@ -18,8 +18,8 @@ describe('Seitenaufbau: volle und teilweise verdeckte Seiten', () => {
     expect(m.seitenAufbau?.teilSeiten).toHaveLength(1)
     expect(m.seitenAufbau!.teilSeiten[0].seite).toBe('left')
     // Kanten des Satteldachs: Traufe 10,9 m + Dachhöhe 11,47 m × (1 − Tiefe/Halbtiefe-Anteil) – hier mindestens die Traufhöhe
-    expect(m.seitenAufbau!.teilSeiten[0].abM).toBeGreaterThanOrEqual(10.9)
-    expect(m.seitenAufbau!.teilSeiten[0].abM).toBeLessThan(22.4)
+    // Turmkante liegt 4,57 m neben der Dachmitte: 10,9 + 11,47 × (1 − 4,57 / 10,325) = 17,29 m (Wert an der Kante, nicht an der Feldmitte)
+    expect(Math.abs(m.seitenAufbau!.teilSeiten[0].abM - 17.29)).toBeLessThan(0.1)
   })
   it('ohne Anbau: vier volle Seiten, keine Teilseite', () => {
     const m = generateCADModel({ ...kirche, sections: [{ laengeM: 9.18, hoeheM: 31, tiefeM: 9.14 }, { laengeM: 5, hoeheM: 31, tiefeM: 9.14 }] }, 'layher-allround')
