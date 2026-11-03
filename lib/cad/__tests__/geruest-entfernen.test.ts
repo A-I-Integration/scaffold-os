@@ -77,6 +77,16 @@ describe('Gerüst beim Anzeigen entfernen', () => {
       expect(m.entfernt + Array.from(m.behalten).filter((b) => b === 1).length).toBe(m.gesamt)
     }
   })
+  it('Anker: Schaftmitte, Längsachse auf +x, Ziel wie in unseren Abschnitten', () => {
+    for (const grad of [0, 25]) {
+      const m = geruestMaske(alsFloat(drehe([...turm(), ...anbau(), ...geruest(0, 0, 9, 7, 30)], grad)), { einheit: 'm', oben: 'z' })!
+      // Turm 9 × 7 m, Anbau 21 m lang → Gesamtlänge 9 + 21 (Anbau liegt auf der Schaftseite, Länge je nach Erkennung)
+      const c = Math.cos((grad * Math.PI) / 180), s = Math.sin((grad * Math.PI) / 180)
+      expect(m.anker.wx).toBeCloseTo(4.5 * c - 3.5 * s, 1)
+      expect(m.anker.wz).toBeCloseTo(-(4.5 * s + 3.5 * c), 1) // Welt-z = −y bei „Z oben“
+      expect(Math.abs(m.anker.zielX)).toBeGreaterThan(0)
+    }
+  })
   it('ohne Gerüst im Modell wird nichts entfernt', () => {
     expect(geruestMaske(alsFloat([...turm(), ...anbau()]), { einheit: 'm', oben: 'z' })).toBeNull()
   })

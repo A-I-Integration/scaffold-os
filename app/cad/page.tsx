@@ -127,6 +127,7 @@ export default function CADPage() {
   const [aussehenEinheit, setAussehenEinheit] = useState<'m' | 'cm' | 'mm'>('m')
   const [aussehenOben, setAussehenOben] = useState<'x' | 'y' | 'z'>('y')
   const [aussehenHinweis, setAussehenHinweis] = useState('')
+  const [aussehenAnker, setAussehenAnker] = useState<{ wx: number; wz: number; drehungGrad: number; zielX: number } | null>(null)
   const [aussehenVersatz, setAussehenVersatz] = useState<{ x: number; z: number; grad: number }>({ x: 0, z: 0, grad: 0 })
   useEffect(() => {
     let weg = false
@@ -152,13 +153,13 @@ export default function CADPage() {
     try {
       const r = await aussehenAusDateien(dateien)
       if (!r.ok) { setAussehenHinweis('❌ ' + r.meldung); return }
-      setAussehen(r.aussehen); setAussehenEin(true); setAussehenEinheit('m'); setAussehenOben(r.oben ?? 'y'); setAussehenVersatz({ x: 0, z: 0, grad: 0 })
+      setAussehen(r.aussehen); setAussehenEin(true); setAussehenEinheit('m'); setAussehenOben(r.oben ?? 'y'); setAussehenAnker(r.anker ?? null); setAussehenVersatz({ x: 0, z: 0, grad: 0 })
       setAussehenHinweis(r.hinweis ?? '')
     } catch (e) { setAussehenHinweis('❌ Datei konnte nicht gelesen werden: ' + (e instanceof Error ? e.message : 'Fehler')) }
   }
   const echtesGebaeude = useMemo(
-    () => (aussehen && aussehenEin ? { aussehen, faktor: aussehenEinheit === 'cm' ? 0.01 : aussehenEinheit === 'mm' ? 0.001 : 1, oben: aussehenOben, versatzX: aussehenVersatz.x, versatzZ: aussehenVersatz.z, drehungGrad: aussehenVersatz.grad } : null),
-    [aussehen, aussehenEin, aussehenEinheit, aussehenOben, aussehenVersatz],
+    () => (aussehen && aussehenEin ? { aussehen, faktor: aussehenEinheit === 'cm' ? 0.01 : aussehenEinheit === 'mm' ? 0.001 : 1, oben: aussehenOben, versatzX: aussehenVersatz.x, versatzZ: aussehenVersatz.z, drehungGrad: aussehenVersatz.grad, anker: aussehenAnker } : null),
+    [aussehen, aussehenEin, aussehenEinheit, aussehenOben, aussehenVersatz, aussehenAnker],
   )
   const [abbauEin, setAbbauEin] = useState<TeilabbauEingabe>(TEILABBAU_START)
   const [showBuilding, setShowBuilding] = useState(true)

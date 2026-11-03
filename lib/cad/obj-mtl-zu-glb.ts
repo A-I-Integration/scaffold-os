@@ -13,7 +13,7 @@ import { GLTFExporter } from 'three/examples/jsm/exporters/GLTFExporter.js'
 import { aussehenAusDatei, AUSSEHEN_MAX_BYTES, type AussehenErgebnis } from '@/lib/cad/modell-aussehen'
 import { dreieckeAusObj, obenAusObjKopf } from '@/lib/cad/modell-import'
 import { schaetzeEinheit, spannweiten, vorgabeAchseEinheit } from '@/lib/cad/modell-analyse'
-import { geruestMaske, ansichtsDaten } from '@/lib/cad/geruest-entfernen'
+import { geruestMaske, ansichtsDaten, type GebaeudeAnker } from '@/lib/cad/geruest-entfernen'
 
 export interface DateiSatz { obj: File | null; mtl: File | null; bilder: File[]; andere: File[] }
 
@@ -96,6 +96,7 @@ export async function aussehenAusDateien(dateien: File[]): Promise<AussehenErgeb
     }
     // Ohne MTL (nur Geometrie, z. B. aus NWD): vorhandenes Gerüst im Modell ausblenden, Wand und Dach einfärben
     let objektOben: 'x' | 'y' | 'z' | undefined
+    let objektAnker: GebaeudeAnker | undefined
     let objekt: THREE.Object3D
     if (s.mtl === null) {
       const roh = dreieckeAusObj(objText)
@@ -103,6 +104,7 @@ export async function aussehenAusDateien(dateien: File[]): Promise<AussehenErgeb
       objektOben = oben
       let maske: ReturnType<typeof geruestMaske> = null
       try { maske = geruestMaske(roh, { einheit: schaetzeEinheit(spannweiten(roh), oben).einheit, oben }) } catch { maske = null }
+      objektAnker = maske?.anker
       const a = ansichtsDaten(roh, maske?.behalten ?? null, oben)
       const geo = new THREE.BufferGeometry()
       geo.setAttribute('position', new THREE.BufferAttribute(a.positionen, 3))
@@ -130,7 +132,7 @@ export async function aussehenAusDateien(dateien: File[]): Promise<AussehenErgeb
     if (!(glb instanceof ArrayBuffer)) return { ok: false, meldung: 'Die OBJ-Datei konnte nicht umgewandelt werden.' }
     const name = objDatei.name.replace(/\.obj$/i, '') + '.glb'
     const r = aussehenAusDatei(glb, name)
-    if (r.ok) return { ...r, ...(hinweis ? { hinweis } : {}), ...(objektOben ? { oben: objektOben } : {}) }
+    if (r.ok) return { ...r, ...(hinweis ? { hinweis } : {}), ...(objektOben ? { oben: objektOben } : {}), ...(objektAnker ? { anker: objektAnker } : {}) }
     return r
   } finally {
     urls.forEach((u) => URL.revokeObjectURL(u))
