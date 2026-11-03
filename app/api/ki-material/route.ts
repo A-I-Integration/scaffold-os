@@ -4,7 +4,7 @@
 
 import { NextResponse } from 'next/server';
 import { calculateScaffoldMaterial, CostSettings } from '@/lib/calculations/scaffold-engine';
-import { loadArticlePrices } from '@/lib/calculations/article-prices';
+import { loadArticlePricesMitQuelle } from '@/lib/calculations/article-prices';
 import { requireAuth, unauthorizedResponse, pruefeRolle } from '@/lib/auth';
 import { ROLLEN } from '@/lib/rollen';
 
@@ -54,10 +54,12 @@ export async function POST(request: Request) {
     }
 
     // Preise + Kalkulations-Grundlagen laden (DB oder Fallback/Standardwerte)
-    const [articlePrices, settings] = await Promise.all([
-      loadArticlePrices(),
+    const [preisErgebnis, settings] = await Promise.all([
+      loadArticlePricesMitQuelle(),
       loadCostSettings(),
     ]);
+
+    const articlePrices = preisErgebnis.preise;
 
     // Mitarbeiter-Stundensatz hat Vorrang: Wenn der Aufruf einen Satz
     // mitliefert (z. B. vom zugeordneten Mitarbeiter), schlägt er den
@@ -72,6 +74,7 @@ export async function POST(request: Request) {
     return NextResponse.json({
       success: true,
       data: result,
+      ...(preisErgebnis.hinweis ? { preisHinweis: preisErgebnis.hinweis } : {}),
     });
   } catch (error: any) {
     console.error('KI-Fehler:', error);
