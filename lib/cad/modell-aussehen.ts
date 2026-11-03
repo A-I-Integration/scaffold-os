@@ -14,7 +14,7 @@ export type Aussehen =
   | { art: 'glb'; name: string; daten: ArrayBuffer }
   | { art: 'punkte'; name: string; positionen: Float32Array; farben: Uint8Array }
 
-export type AussehenErgebnis = { ok: true; aussehen: Aussehen; hinweis?: string } | { ok: false; meldung: string }
+export type AussehenErgebnis = { ok: true; aussehen: Aussehen; hinweis?: string; /** aus dem Dateikopf erkannte Achse „oben“ */ oben?: 'x' | 'y' | 'z' } | { ok: false; meldung: string }
 
 const GROESSE: Record<string, number> = { char: 1, int8: 1, uchar: 1, uint8: 1, short: 2, int16: 2, ushort: 2, uint16: 2, int: 4, int32: 4, uint: 4, uint32: 4, float: 4, float32: 4, double: 8, float64: 8 }
 

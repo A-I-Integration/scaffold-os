@@ -152,7 +152,7 @@ export default function CADPage() {
     try {
       const r = await aussehenAusDateien(dateien)
       if (!r.ok) { setAussehenHinweis('❌ ' + r.meldung); return }
-      setAussehen(r.aussehen); setAussehenEin(true); setAussehenEinheit('m'); setAussehenOben('y'); setAussehenVersatz({ x: 0, z: 0, grad: 0 })
+      setAussehen(r.aussehen); setAussehenEin(true); setAussehenEinheit('m'); setAussehenOben(r.oben ?? 'y'); setAussehenVersatz({ x: 0, z: 0, grad: 0 })
       setAussehenHinweis(r.hinweis ?? '')
     } catch (e) { setAussehenHinweis('❌ Datei konnte nicht gelesen werden: ' + (e instanceof Error ? e.message : 'Fehler')) }
   }

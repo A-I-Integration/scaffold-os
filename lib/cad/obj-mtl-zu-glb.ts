@@ -11,6 +11,9 @@ import { OBJLoader } from 'three/examples/jsm/loaders/OBJLoader.js'
 import { MTLLoader } from 'three/examples/jsm/loaders/MTLLoader.js'
 import { GLTFExporter } from 'three/examples/jsm/exporters/GLTFExporter.js'
 import { aussehenAusDatei, AUSSEHEN_MAX_BYTES, type AussehenErgebnis } from '@/lib/cad/modell-aussehen'
+import { dreieckeAusObj, obenAusObjKopf } from '@/lib/cad/modell-import'
+import { schaetzeEinheit, spannweiten, vorgabeAchseEinheit } from '@/lib/cad/modell-analyse'
+import { geruestMaske, ansichtsDaten } from '@/lib/cad/geruest-entfernen'
 
 export interface DateiSatz { obj: File | null; mtl: File | null; bilder: File[]; andere: File[] }
 
@@ -90,10 +93,27 @@ export async function aussehenAusDateien(dateien: File[]): Promise<AussehenErgeb
       objLader.setMaterials(materialien)
       const fehlend = [...mtlText.matchAll(/^\s*map_(?:Kd|Ka)\s+(.+)$/gim)].map((m) => texturDateiname(m[1].trim().split(/\s+/).pop() ?? '')).filter((n) => n && !bildUrl.has(n))
       if (fehlend.length) hinweis = `Fehlende Bilder zur MTL-Datei: ${[...new Set(fehlend)].slice(0, 3).join(', ')}${new Set(fehlend).size > 3 ? ' …' : ''}. Diese Flächen erscheinen ohne Foto.`
-    } else {
-      hinweis = 'Ohne MTL-Datei hat das Modell keine Farben und Fotos. Bitte die MTL-Datei und die Bilder mit auswählen.'
     }
-    const objekt = objLader.parse(objText)
+    // Ohne MTL (nur Geometrie, z. B. aus NWD): vorhandenes Gerüst im Modell ausblenden, Wand und Dach einfärben
+    let objektOben: 'x' | 'y' | 'z' | undefined
+    let objekt: THREE.Object3D
+    if (s.mtl === null) {
+      const roh = dreieckeAusObj(objText)
+      const oben = obenAusObjKopf(objText) ?? vorgabeAchseEinheit(roh, 'obj').oben
+      objektOben = oben
+      let maske: ReturnType<typeof geruestMaske> = null
+      try { maske = geruestMaske(roh, { einheit: schaetzeEinheit(spannweiten(roh), oben).einheit, oben }) } catch { maske = null }
+      const a = ansichtsDaten(roh, maske?.behalten ?? null, oben)
+      const geo = new THREE.BufferGeometry()
+      geo.setAttribute('position', new THREE.BufferAttribute(a.positionen, 3))
+      geo.setAttribute('color', new THREE.BufferAttribute(a.farben, 3))
+      geo.computeVertexNormals()
+      objekt = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, side: THREE.DoubleSide }))
+      hinweis = (maske ? `Das Gerüst im Modell wurde ausgeblendet (${maske.entfernt.toLocaleString('de-DE')} von ${maske.gesamt.toLocaleString('de-DE')} Flächen). ` : '') +
+        'Ohne MTL-Datei und Fotos sind Wand (Sandstein) und Dach (Schiefer) nur nach Neigung eingefärbt, keine echten Materialien.'
+    } else {
+      objekt = objLader.parse(objText)
+    }
     let hatFlaeche = false
     objekt.traverse((o) => { if ((o as THREE.Mesh).isMesh) hatFlaeche = true })
     if (!hatFlaeche) return { ok: false, meldung: 'In der OBJ-Datei wurden keine Flächen gefunden (nur Punkte oder Linien).' }
@@ -110,7 +130,7 @@ export async function aussehenAusDateien(dateien: File[]): Promise<AussehenErgeb
     if (!(glb instanceof ArrayBuffer)) return { ok: false, meldung: 'Die OBJ-Datei konnte nicht umgewandelt werden.' }
     const name = objDatei.name.replace(/\.obj$/i, '') + '.glb'
     const r = aussehenAusDatei(glb, name)
-    if (r.ok && hinweis) return { ...r, hinweis }
+    if (r.ok) return { ...r, ...(hinweis ? { hinweis } : {}), ...(objektOben ? { oben: objektOben } : {}) }
     return r
   } finally {
     urls.forEach((u) => URL.revokeObjectURL(u))
