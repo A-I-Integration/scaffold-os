@@ -151,7 +151,7 @@ function mjOptikFuerSystem(systemId?: string): MjOptik {
 // (Riegel/Belagskanten) wie im Referenz-Rendering, Holz heller.
 const COLOR_MAP: Record<string, string> = {
   frame: '#dde2e7',        // Rahmen – helles verzinktes Rohr
-  deck: '#c9402e',         // Beläge – rot (Riegel-Akzent wie Referenz)
+  deck: '#e6b91e',         // Beläge – gelb (wie bei gebauten Gerüsten vor Ort)
   railing: '#d5dade',      // Geländer – verzinkt
   diagonal: '#cfd4d9',     // Diagonalen – verzinkt
   footplate: '#aab0b6',    // Fußplatten – etwas dunkler

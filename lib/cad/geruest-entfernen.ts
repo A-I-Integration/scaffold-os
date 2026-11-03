@@ -113,8 +113,8 @@ export function geruestMaske(dreiecke: Float32Array, opt: { einheit: Einheit; ob
 export interface AnsichtsDaten { positionen: Float32Array; farben: Float32Array; dreiecke: number }
 
 // Anzeigefarben ohne Fotos (Annäherung, keine Materialangabe aus der Datei): Wand Sandstein, Dach/Haube Schiefer, Boden grau-grün
-const FARBE_WAND: [number, number, number] = [0.78, 0.71, 0.56]
-const FARBE_DACH: [number, number, number] = [0.33, 0.35, 0.39]
+const FARBE_WAND: [number, number, number] = [0.66, 0.58, 0.46]
+const FARBE_DACH: [number, number, number] = [0.25, 0.27, 0.31]
 const FARBE_BODEN: [number, number, number] = [0.62, 0.65, 0.57]
 const HOEHEN_ACHSE: Record<Achse, number> = { x: 0, y: 1, z: 2 }
 
