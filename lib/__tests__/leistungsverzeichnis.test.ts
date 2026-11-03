@@ -357,6 +357,18 @@ describe('Stil „Statiker-LV“ (Wuppertal)', () => {
       expect(alleTexte).not.toMatch(/Kirchturm|Steinmetz|Wuppertal/)
     })
 
+    it('Dachflächen von Hand: Maße im LV ohne Hinweis auf einen Modell-Vorschlag', () => {
+      const q = quelle()
+      const lv = alle(erzeugeLeistungsverzeichnis({ ...q, model: { ...q.model, building: { ...q.model.building, anbauDaecher: [
+        { seite: 'left', flaecheM2: 12.5, breiteM: 5, tiefeM: 2.5, hoeheM: 4, vonHand: true },
+        { seite: 'right', flaecheM2: 20, breiteM: 4, tiefeM: 5, hoeheM: 4, vonHand: true },
+      ] } } }, stat))
+      const text = (start: string) => lv.find((p) => p.titel.startsWith(start))!.text.join(' ')
+      expect(text('Schutz von Dachflächen')).toContain('32,50 m²')
+      expect(text('Überbrückungen')).toContain('9,00 m')
+      expect(text('Schutz von Dachflächen')).not.toContain('Modell')
+      expect(text('Überbrückungen')).not.toContain('Modell')
+    })
     it('Modelldaten im LV: Dachfläche, Überbrückungslänge, Schutzdach-Größe, Aufzug-Tragkraft', () => {
       const q = quelle()
       const ohne = alle(erzeugeLeistungsverzeichnis(q, stat))

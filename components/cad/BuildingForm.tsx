@@ -906,6 +906,43 @@ export default function BuildingForm({ building, systemId, onChange, onSystemCha
                   </div>
                   <div className='border-t border-black/10 pt-2 space-y-1.5'>
                     <label className='flex items-center gap-2 text-xs font-medium text-[#1d1d1f]'>
+                      <input type='checkbox' checked={!!building.anbauDaecher?.length} onChange={(e) => update('anbauDaecher', e.target.checked ? [{ seite: 'front', breiteM: 5, tiefeM: 3, flaecheM2: 15, hoeheM: 4, vonHand: true }] : undefined)} />
+                      Angrenzende Dachflächen von Hand eingeben (Überbrückung und Dachschutz)
+                    </label>
+                    {!!building.anbauDaecher?.length && (
+                      <div className='space-y-1.5'>
+                        {building.anbauDaecher.map((d, i) => {
+                          const liste = building.anbauDaecher!
+                          const aendere = (patch: Partial<typeof d>) => update('anbauDaecher', liste.map((x, j) => (j === i ? { ...x, ...patch } : x)))
+                          const zahl = (v: string) => { const n = parseFloat(v.replace(',', '.')); return Number.isFinite(n) && n > 0 ? n : 0 }
+                          const rund = (n: number) => Math.round(n * 100) / 100
+                          // Fläche folgt Breite × Tiefe, solange sie nicht von Hand (z. B. wegen Dachneigung) geändert wurde
+                          const auto = Math.abs(d.flaecheM2 - rund(d.breiteM * d.tiefeM)) < 0.01
+                          return (
+                            <div key={i} className='grid grid-cols-5 gap-1.5 items-end'>
+                              <div className='col-span-2'><label className='block text-[11px] text-[#424245] mb-1'>Seite</label>
+                                <select value={d.seite} onChange={(e) => aendere({ seite: e.target.value as 'front' | 'back' | 'left' | 'right' })} className='w-full px-1.5 py-1.5 border rounded-lg text-xs bg-white'>
+                                  <option value='front'>Vorne</option><option value='back'>Hinten</option><option value='left'>Links</option><option value='right'>Rechts</option>
+                                </select></div>
+                              <div><label className='block text-[11px] text-[#424245] mb-1'>Breite (m)</label>
+                                <input type='number' step='0.5' min={0} value={d.breiteM} onChange={(e) => { const b = zahl(e.target.value); aendere({ breiteM: b, ...(auto ? { flaecheM2: rund(b * d.tiefeM) } : {}) }) }} className='w-full px-1.5 py-1.5 border rounded-lg text-xs' /></div>
+                              <div><label className='block text-[11px] text-[#424245] mb-1'>Tiefe (m)</label>
+                                <input type='number' step='0.5' min={0} value={d.tiefeM} onChange={(e) => { const t = zahl(e.target.value); aendere({ tiefeM: t, ...(auto ? { flaecheM2: rund(d.breiteM * t) } : {}) }) }} className='w-full px-1.5 py-1.5 border rounded-lg text-xs' /></div>
+                              <div className='flex items-end gap-1'>
+                                <div className='min-w-0 flex-1'><label className='block text-[11px] text-[#424245] mb-1'>Fläche (m²)</label>
+                                  <input type='number' step='0.5' min={0} value={d.flaecheM2} onChange={(e) => aendere({ flaecheM2: zahl(e.target.value) })} className='w-full px-1.5 py-1.5 border rounded-lg text-xs' /></div>
+                                <button type='button' aria-label='Dachfläche entfernen' onClick={() => { const rest = liste.filter((_, j) => j !== i); update('anbauDaecher', rest.length ? rest : undefined) }} className='px-1.5 py-1.5 text-sm text-[#86868b] hover:text-red-600'>✕</button>
+                              </div>
+                            </div>
+                          )
+                        })}
+                        <button type='button' onClick={() => update('anbauDaecher', [...building.anbauDaecher!, { seite: 'front', breiteM: 5, tiefeM: 3, flaecheM2: 15, hoeheM: 4, vonHand: true }])} className='text-xs font-semibold text-[#e8590c] hover:underline'>+ Dachfläche hinzufügen</button>
+                        <p className='text-[10px] text-[#86868b]'>Breite = Länge entlang der Wand (Spannweite der Überbrückung), Tiefe = Abstand von der Wand. Die Fläche folgt Breite × Tiefe; bei geneigtem Dach die tatsächliche Dachfläche eintragen. Ohne Haken gilt der Vorschlag aus dem Modell.</p>
+                      </div>
+                    )}
+                  </div>
+                  <div className='border-t border-black/10 pt-2 space-y-1.5'>
+                    <label className='flex items-center gap-2 text-xs font-medium text-[#1d1d1f]'>
                       <input type='checkbox' checked={!!opt.aufzug} onChange={(e) => setzeOpt({ aufzug: e.target.checked ? { seite: 'front', gemietet: true } : undefined })} />
                       Personen-/Lastenaufzug (an einer Seite)
                     </label>

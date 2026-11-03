@@ -573,7 +573,8 @@ export function erzeugeLeistungsverzeichnis(quelle: LvQuelle, e: LvEingaben): Le
     const ersatzDach = daecher.length === 0 ? nachbarDach(model.building) : null
     const dachSumme = daecher.length > 0 ? r2(daecher.reduce((s2, d) => s2 + d.flaecheM2, 0)) : ersatzDach?.flaecheM2 ?? 0
     const ueberLaenge = daecher.length > 0 ? r2(daecher.reduce((s2, d) => s2 + d.breiteM, 0)) : ersatzDach?.laengeM ?? 0
-    const DACH_HINWEIS = ersatzDach ? nachbarDachHinweis(ersatzDach) : 'Vorschlag aus dem Modell (Näherung, ANNAHME: Spannweite = Breite des erkannten Vorbaus entlang der Wand; geneigte Anbaudächer sind nicht erfasst): bitte prüfen.'
+    const vonHand = daecher.length > 0 && daecher.every((d) => d.vonHand)
+    const DACH_HINWEIS = ersatzDach ? nachbarDachHinweis(ersatzDach) : vonHand ? 'Maße von Hand eingegeben.' : 'Vorschlag aus dem Modell (Näherung, ANNAHME: Spannweite = Breite des erkannten Vorbaus entlang der Wand; geneigte Anbaudächer sind nicht erfasst): bitte prüfen.'
     const ubp = b2.add('Überbrückungen Dachflächen angrenzende Bauteile', [...LV_TEXTE.ueberbrueckung, (ueberLaenge > 0 ? `Länge der Überbrückung ca. ${de(ueberLaenge, 2)} m (${ersatzDach ? ersatzDach.anzahl : daecher.length} angrenzende Dachfläche${(ersatzDach ? ersatzDach.anzahl : daecher.length) > 1 ? 'n' : ''}). ${DACH_HINWEIS} Preis bitte eintragen. ` : '') + (ub && ub.menge > 0 ? 'Preise aus den Zusatzleistungen im LV-Fenster.' : ueberLaenge > 0 ? '' : OHNE_CAD)], 1, 'Stück', ub && ub.menge > 0 ? cent(ub.menge * (ub.epAuf + ub.epAb)) : 0)
     vorh(b2, ubp.nr, 'Überbrückungen', ub && ub.menge > 0 ? cent(ub.menge * ub.epVorh) : 0)
     const sdN = dachRoh.length
@@ -609,7 +610,7 @@ export function erzeugeLeistungsverzeichnis(quelle: LvQuelle, e: LvEingaben): Le
     vorh(b2, h1.nr, 'Haltestellenausstattung 1. BA', 0, 'StckWo', hAnz * woGesamt)
     const h2 = b2.add('Haltestellenausstattung 2. BA', [...LV_TEXTE.haltestellen, OHNE_CAD], 10, 'Stück', 0)
     vorh(b2, h2.nr, 'Haltestellenausstattung 2. BA', 0, 'StckWo', 10 * woGesamt)
-    const dsch = b2.add('Schutz von Dachflächen', [...LV_TEXTE.dachschutz, (dachSumme > 0 ? (ersatzDach ? `Dachfläche ca. ${de(dachSumme, 2)} m². ${DACH_HINWEIS} Preis bitte eintragen.` : `Dachfläche des erkannten Vorbaus ca. ${de(dachSumme, 2)} m² aus dem Modell (Näherung; geneigte Anbaudächer sind nicht erfasst): bitte prüfen. Preis bitte eintragen.`) : OHNE_CAD)], 1, 'Stück', 0)
+    const dsch = b2.add('Schutz von Dachflächen', [...LV_TEXTE.dachschutz, (dachSumme > 0 ? (ersatzDach ? `Dachfläche ca. ${de(dachSumme, 2)} m². ${DACH_HINWEIS} Preis bitte eintragen.` : (vonHand ? `Dachfläche ca. ${de(dachSumme, 2)} m². Preis bitte eintragen.` : `Dachfläche des erkannten Vorbaus ca. ${de(dachSumme, 2)} m² aus dem Modell (Näherung; geneigte Anbaudächer sind nicht erfasst): bitte prüfen. Preis bitte eintragen.`)) : OHNE_CAD)], 1, 'Stück', 0)
     vorh(b2, dsch.nr, 'Schutz von Dachflächen', 0, 'Wo', 0)
 
     // Titel 03 – Umbau am Bestandsgerüst (nummeriert wie im LV: 03.01 …)
@@ -706,7 +707,7 @@ export function erzeugeLeistungsverzeichnis(quelle: LvQuelle, e: LvEingaben): Le
     const g1 = pos('03.01', 'Arbeitsgerüste mit integrierten Traggerüsten', [`Systemgerüst als ${bauart} nach DIN EN 12811, ${klassen}, Höhe bis ${de(hoeheText, 2)} m (oberste Gerüstlage im CAD: ${de(geruestTopM, 2)} m, ${de(flaecheM2, 2)} m² Gerüstfläche).`], 1, 'Stck', 'Arbeitsgerüste mit integrierten', gCad)
     miete('03.02', g1, 'StWo', 'Arbeitsgerüste mit integrierten', miet(mat.geruest + mat.konsolen))
     const ub = pos('03.05', 'Überbrückung angrenzender Bauteile', ['Gitterträger und Stahlträger zur Schaffung von Überbrückungen, Abfangungen und als lastenverteilende Unterkonstruktion.'
-      + ((model.building.anbauDaecher ?? []).length ? ` Länge ca. ${de(r2((model.building.anbauDaecher ?? []).reduce((s2, d) => s2 + d.breiteM, 0)), 2)} m (Vorschlag aus dem Modell, bitte prüfen).` : '')], 1, 'Psch', 'Überbrückungen Dachflächen')
+      + ((model.building.anbauDaecher ?? []).length ? ` Länge ca. ${de(r2((model.building.anbauDaecher ?? []).reduce((s2, d) => s2 + d.breiteM, 0)), 2)} m${(model.building.anbauDaecher ?? []).every((d) => d.vonHand) ? '' : ' (Vorschlag aus dem Modell, bitte prüfen)'}.` : '')], 1, 'Psch', 'Überbrückungen Dachflächen')
     miete('03.06', ub, 'PschWo', 'Überbrückungen Dachflächen')
     const sdN = dachRoh.length
     const sdCad = sdN > 0 ? cent((epAufbau('schutzdach', schutzdachM) * schutzdachM + epAbbau('schutzdach', schutzdachM) * schutzdachM) / sdN) : 0

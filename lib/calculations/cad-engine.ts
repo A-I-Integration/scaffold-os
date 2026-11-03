@@ -69,6 +69,8 @@ export interface AnbauDach {
   tiefeM: number
   /** Höhe der Dachfläche über Gelände (m) */
   hoeheM: number
+  /** true, wenn von Hand eingetragen (kein Modell-Vorschlag) */
+  vonHand?: boolean
 }
 
 /** Eine Tür mit fester Lage im Erdgeschoss. */
