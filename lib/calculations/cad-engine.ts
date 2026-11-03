@@ -210,13 +210,15 @@ export function berechneGebaeudeSegmente(sections: BuildingSection[]): GebaeudeS
  * bei Ecken (Winkel ≠ 0) wird es weiter aus Länge/Höhe erzeugt.
  */
 /** Gerüstfläche (Länge × Höhe) aller eingerüsteten Abschnitte für die aktiven Seiten: vorne/hinten je Abschnitt, links/rechts am ersten/letzten Abschnitt. */
-export function stufenFlaecheM2(abschnitte: BuildingSection[], seiten: string[], breiteM: number): number {
+export function stufenFlaecheM2(abschnitte: BuildingSection[], seiten: string[], breiteM: number, rasterM?: number): number {
+  // Mit Raster: jede Höhe wird auf die Oberkante der obersten Gerüstlage aufgerundet (gebautes Gerüst statt Gebäudehöhe)
+  const hoehe = (h: number) => (rasterM && rasterM > 0 ? Math.max(1, Math.ceil(h / rasterM - 1e-9)) * rasterM : h)
   let sum = 0
   for (const s of seiten) {
-    if (s === 'front' || s === 'back') sum += abschnitte.filter((a) => a.geruest !== false).reduce((t, a) => t + a.laengeM * a.hoeheM, 0)
+    if (s === 'front' || s === 'back') sum += abschnitte.filter((a) => a.geruest !== false).reduce((t, a) => t + a.laengeM * hoehe(a.hoeheM), 0)
     else {
       const a = s === 'left' ? abschnitte[0] : abschnitte[abschnitte.length - 1]
-      if (a.geruest !== false) sum += (a.tiefeM ?? breiteM) * a.hoeheM
+      if (a.geruest !== false) sum += (a.tiefeM ?? breiteM) * hoehe(a.hoeheM)
     }
   }
   return sum
@@ -342,6 +344,8 @@ export interface CADModel {
   totalLengthM: number
   totalHeightM: number
   totalAreaM2: number
+  /** Fläche des tatsächlich gebauten Gerüsts (bis Oberkante der obersten Lage); Grundlage der Arbeitsstunden. Fehlt sie, gilt totalAreaM2. */
+  gebauteFlaecheM2?: number
   fieldCount: number
   levelCount: number
   warnings: CADWarning[]
@@ -1577,6 +1581,12 @@ export function generateCADModel(
     warnings
   }
 
+  // Gebaute Fläche: nur der Höhenanteil über der Gebäudehöhe kommt dazu (Lücken, verdeckte Wände usw. bleiben abgezogen)
+  const rasterM = levelCalc.levelHeightM
+  const obersteLageM = levelCalc.levels * rasterM
+  preliminaryModel.gebauteFlaecheM2 = abschnitte
+    ? preliminaryModel.totalAreaM2 + stufenFlaecheM2(abschnitte, activeSides, building.widthM || 0, rasterM) - stufenFlaecheM2(abschnitte, activeSides, building.widthM || 0)
+    : preliminaryModel.totalAreaM2 + building.lengthM * Math.max(0, obersteLageM - building.heightM)
   const components3D = generateScaffoldComponents(preliminaryModel)
   return { ...preliminaryModel, components3D }
 }
@@ -1718,6 +1728,7 @@ function generiereUmrissModell(
     totalLengthM: unten.reduce((sum, f) => sum + f.lengthM, 0),
     totalHeightM: building.heightM,
     totalAreaM2: kanten.filter((k) => aktiveIdx.has(k.index)).reduce((sum, k) => sum + k.laengeM, 0) * building.heightM,
+    gebauteFlaecheM2: kanten.filter((k) => aktiveIdx.has(k.index)).reduce((sum, k) => sum + k.laengeM, 0) * Math.max(building.heightM, levelCalc.levels * levelCalc.levelHeightM),
     fieldCount: unten.length,
     levelCount: levelCalc.levels,
     warnings,
@@ -2495,7 +2506,8 @@ export function calculateLogistics(
   const transportvolumenM3 = gesamtgewichtKg / 250
   const nutzlastKg = fahrzeug && fahrzeug.nutzlastKg > 0 ? fahrzeug.nutzlastKg : 3500
   const lkwFahrten = Math.max(1, Math.ceil(gesamtgewichtKg / nutzlastKg))
-  const aufbauStunden = Math.ceil(model.totalAreaM2 * hoursPerSqm)
+  // Stunden folgen dem gebauten Gerüst (bis Oberkante der obersten Lage), nicht der Gebäudehöhe
+  const aufbauStunden = Math.ceil((model.gebauteFlaecheM2 ?? model.totalAreaM2) * hoursPerSqm)
   // Abbau typischerweise ~60 % der Aufbauzeit
   const abbauStunden = Math.ceil(aufbauStunden * 0.6)
   return {

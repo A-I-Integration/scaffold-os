@@ -83,6 +83,7 @@ export function kappeModellAufHoehe(model: CADModel, hoeheM: number): GekapptesM
     anchors: model.anchors.filter((a) => a.positionY <= obenM + 1e-6),
     totalHeightM: r2(Math.min(model.totalHeightM, obenM)),
     totalAreaM2: r2(model.totalAreaM2 * flaechenAnteil),
+    gebauteFlaecheM2: model.gebauteFlaecheM2 !== undefined ? r2(model.gebauteFlaecheM2 * flaechenAnteil) : undefined,
     levelCount: anzahlBehalten,
     fieldCount: levels.reduce((s, l) => s + l.fields.length, 0),
   }
