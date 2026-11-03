@@ -357,6 +357,20 @@ describe('Stil „Statiker-LV“ (Wuppertal)', () => {
       expect(alleTexte).not.toMatch(/Kirchturm|Steinmetz|Wuppertal/)
     })
 
+    it('Seite mit verdeckter Wand: Text nennt volle Seiten und die Seite „von ca. … m“, ohne Namen und Herkunft', () => {
+      const b = { ...gebaeude, umriss: undefined, sides: ['front', 'back', 'left', 'right'] as ('front' | 'back' | 'left' | 'right')[], lengthM: 13.04, widthM: 20.65, heightM: 31, eavesHeightM: 31, sections: [
+        { laengeM: 3.86, hoeheM: 10.9, tiefeM: 20.65, roofForm: 'satteldach' as const, roofHoeheM: 11.47, geruest: false },
+        { laengeM: 9.18, hoeheM: 31, tiefeM: 9.14 },
+      ] }
+      const model = generateCADModel(b, 'layher-allround')
+      const materials: MaterialItem[] = generateBillOfMaterials(model).map((m) => ({ ...m, unitPrice: 10, totalPrice: m.quantity * 10 }))
+      const log = calculateLogistics(model, materials, 2.0)
+      const lv = alle(erzeugeLeistungsverzeichnis({ model, materials, aufbauStunden: log.aufbauStunden, abbauStunden: log.abbauStunden }, stat))
+      const t = lv.find((p) => p.titel.startsWith('Arbeitsgerüste mit integrierten Traggerüsten am Turmschaft bis'))!.text.join(' ')
+      expect(t).toMatch(/Komplett am Turm, 3 Seiten bis 32,00 m Höhe, eine Seite von ca\. \d+,\d\d m bis 32,00 m Höhe/)
+      expect(t).not.toMatch(/4 Seiten/)
+    })
+
     it('Dachflächen von Hand: Maße im LV ohne Hinweis auf einen Modell-Vorschlag', () => {
       const q = quelle()
       const lv = alle(erzeugeLeistungsverzeichnis({ ...q, model: { ...q.model, building: { ...q.model.building, anbauDaecher: [

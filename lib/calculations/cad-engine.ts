@@ -346,6 +346,8 @@ export interface CADModel {
   totalAreaM2: number
   /** Fläche des tatsächlich gebauten Gerüsts (bis Oberkante der obersten Lage); Grundlage der Arbeitsstunden. Fehlt sie, gilt totalAreaM2. */
   gebauteFlaecheM2?: number
+  /** Seiten mit eingerüsteter Wand: ganz (vollSeiten) oder erst ab einer Höhe (teilSeiten, z. B. Turmwand neben einem niedrigeren Anbau); nur bei mehrteiligen Gebäuden */
+  seitenAufbau?: { vollSeiten: number; teilSeiten: { seite: 'front' | 'back' | 'left' | 'right'; abM: number }[] }
   fieldCount: number
   levelCount: number
   warnings: CADWarning[]
@@ -1237,6 +1239,9 @@ export function generateCADModel(
   const abschnittsAnker: ScaffoldAnchor[] = []
   let helmFlaecheM2 = 0
   let verdecktFlaecheM2 = 0
+  // Seiten mit eingerüsteter Wand: ganz oder erst ab einer Höhe (Wand verdeckt, z. B. durch einen Anbau) – für den LV-Text
+  let vollSeitenAnzahl = 0
+  const teilSeitenListe: { seite: 'front' | 'back' | 'left' | 'right'; abM: number }[] = []
   let innenFlaecheM2 = 0
   let innenFelder = 0
   const abschnittDivs = abschnitte
@@ -1300,6 +1305,20 @@ export function generateCADModel(
         : side === 'back' ? -distanceToBuildingM - w - 1
         : side === 'left' ? -building.lengthM / 2 - 0.5 - distanceToBuildingM
         : building.lengthM / 2 + 0.5 + distanceToBuildingM
+      // Tiefste Höhe, ab der die Wand eingerüstet wird (an den Kanten); 0 = ganze Wand
+      let seiteVoll = false
+      for (const run of runs) {
+        if (!run.aktiv) continue
+        let cumL = 0, abMin = Infinity
+        for (const fl of run.div.distribution) {
+          const ab = run.dachAb ? run.dachAb(run.along + cumL + fl / 2) : run.abHoehe
+          cumL += fl
+          if (ab > 0) abMin = Math.min(abMin, ab)
+        }
+        if (Number.isFinite(abMin)) teilSeitenListe.push({ seite: side, abM: Math.round(abMin * 100) / 100 })
+        else if (!run.innen) seiteVoll = true
+      }
+      if (seiteVoll) vollSeitenAnzahl++
       const proLage = new Map<number, ScaffoldField[]>()
       runs.forEach((run, ri) => {
         if (!run.aktiv) return
@@ -1584,6 +1603,7 @@ export function generateCADModel(
   // Gebaute Fläche: nur der Höhenanteil über der Gebäudehöhe kommt dazu (Lücken, verdeckte Wände usw. bleiben abgezogen)
   const rasterM = levelCalc.levelHeightM
   const obersteLageM = levelCalc.levels * rasterM
+  if (abschnitte) preliminaryModel.seitenAufbau = { vollSeiten: vollSeitenAnzahl, teilSeiten: teilSeitenListe }
   preliminaryModel.gebauteFlaecheM2 = abschnitte
     ? preliminaryModel.totalAreaM2 + stufenFlaecheM2(abschnitte, activeSides, building.widthM || 0, rasterM) - stufenFlaecheM2(abschnitte, activeSides, building.widthM || 0)
     : preliminaryModel.totalAreaM2 + building.lengthM * Math.max(0, obersteLageM - building.heightM)
