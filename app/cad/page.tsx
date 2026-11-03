@@ -142,12 +142,13 @@ export default function CADPage() {
       setAussehenEinheit(m.einheit === 'cm' || m.einheit === 'mm' ? m.einheit : 'm')
       setAussehenOben(m.oben === 'x' || m.oben === 'z' ? m.oben : 'y')
       if (m.versatz) setAussehenVersatz(m.versatz)
+      setAussehenAnker(m.anker ?? null)
     })
     return () => { weg = true }
   }, [])
   useEffect(() => {
-    if (aussehen) void merkeAussehen({ aussehen, einheit: aussehenEinheit, oben: aussehenOben, versatz: aussehenVersatz, stempel: holeStempel() })
-  }, [aussehen, aussehenEinheit, aussehenOben, aussehenVersatz])
+    if (aussehen) void merkeAussehen({ aussehen, einheit: aussehenEinheit, oben: aussehenOben, versatz: aussehenVersatz, ...(aussehenAnker ? { anker: aussehenAnker } : {}), stempel: holeStempel() })
+  }, [aussehen, aussehenEinheit, aussehenOben, aussehenVersatz, aussehenAnker])
   const ladeAussehen = async (dateien: File[]) => {
     setAussehenHinweis('')
     try {
