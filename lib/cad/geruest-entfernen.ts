@@ -30,6 +30,23 @@ export interface GeruestMaske {
   gesamt: number
   /** Höhe der obersten Gerüstlage (m über Unterkante des Bauwerks) */
   obersteLageM: number
+  /** Lage des Turmschafts für die Ausrichtung auf unser Gerüst (Weltkoordinaten der Anzeige, Meter) */
+  anker: GebaeudeAnker
+}
+
+export interface GebaeudeAnker {
+  /** Mitte des Schafts im Modell (Weltachsen der Anzeige, in Einheiten der Datei, vor dem Verschieben) */
+  wx: number
+  wz: number
+  /** Drehung um die Hochachse in Grad, damit die Längsrichtung des Schafts auf +x zeigt (wie in unserem Modell) */
+  drehungGrad: number
+  /** Soll-Position der Schaftmitte in unserem Modell (x), z ist 0 */
+  zielX: number
+}
+
+// Abbildung der Analyse-Achsen (Ost, −Nord) auf die Weltachsen der Anzeige, je nach „oben“-Achse (reine Drehungen, keine Spiegelung)
+function weltVon(oben: Achse, cx: number, cy: number): [number, number] {
+  return oben === 'y' ? [-cy, cx] : oben === 'z' ? [cx, cy] : [-cx, -cy]
 }
 
 export function geruestMaske(dreiecke: Float32Array, opt: { einheit: Einheit; oben: Achse }): GeruestMaske | null {
@@ -85,7 +102,18 @@ export function geruestMaske(dreiecke: Float32Array, opt: { einheit: Einheit; ob
     behalten[i] = 0
     entfernt++
   }
-  return { behalten, entfernt, gesamt: n, obersteLageM }
+  // Ausrichtung: Schaftmitte aus den Rechtecken des Turms, Längsachse (u oder v) auf +x, Zielposition wie bei unseren Abschnitten
+  const um = (u0 + u1) / 2, vm = (v0 + v1) / 2
+  const [wx, wz] = weltVon(opt.oben, um * c - vm * s, um * s + vm * c)
+  const achse: [number, number] = laengenAchse === 'u' ? [c, s] : [-s, c]
+  const [dx, dz] = weltVon(opt.oben, achse[0], achse[1])
+  const drehungGrad = (Math.atan2(dz, dx) * 180) / Math.PI
+  const teile = schaft.ergebnis.teile
+  const gesamtL = teile.reduce((x, t) => x + t.laengeM, 0)
+  const schaftL = teile[schaft.ergebnis.turmIndex ?? 0].laengeM
+  const zielX = anbauSeite === 'minus' ? gesamtL / 2 - schaftL / 2 : -gesamtL / 2 + schaftL / 2
+  const fe = { m: 1, cm: 0.01, mm: 0.001, inch: 0.0254 }[opt.einheit]
+  return { behalten, entfernt, gesamt: n, obersteLageM, anker: { wx: wx / fe, wz: wz / fe, drehungGrad, zielX } }
 }
 
 export interface AnsichtsDaten { positionen: Float32Array; farben: Float32Array; dreiecke: number }

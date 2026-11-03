@@ -108,7 +108,7 @@ const HORIZONT_FARBE = '#e9edf2'
 const FarbModusKontext = createContext<FarbModus>('real')
 /** Teilabbau: Bauteile, die abgebaut werden sollen, werden rot markiert */
 const AbbauMarkKontext = createContext<ReadonlySet<string> | null>(null)
-type EchtesGebaeudeDaten = { aussehen: Aussehen; faktor: number; oben: 'x' | 'y' | 'z'; versatzX?: number; versatzZ?: number; drehungGrad?: number }
+type EchtesGebaeudeDaten = { aussehen: Aussehen; faktor: number; oben: 'x' | 'y' | 'z'; versatzX?: number; versatzZ?: number; drehungGrad?: number; anker?: { wx: number; wz: number; drehungGrad: number; zielX: number } | null }
 const EchtesGebaeudeKontext = createContext<EchtesGebaeudeDaten | null>(null)
 
 /** Nebel in Himmelsfarbe: der Boden läuft in der Ferne aus. Muss an der Szene hängen (ein <fog> in einer Gruppe wirkt nicht). */
@@ -1197,7 +1197,7 @@ export function tuerPlatzierungGestuft(
 
 
 // ─── Echtes Gebäude: GLB mit Texturen oder farbige Punktwolke, auf Meter, Y oben, Mitte bei x/z = 0, Unterkante y = 0 ───
-function EchtesGebaeude3D({ aussehen, faktor, oben, versatzX = 0, versatzZ = 0, drehungGrad = 0 }: EchtesGebaeudeDaten) {
+function EchtesGebaeude3D({ aussehen, faktor, oben, versatzX = 0, versatzZ = 0, drehungGrad = 0, anker = null }: EchtesGebaeudeDaten) {
   const { invalidate } = useThree()
   const [glbSzene, setGlbSzene] = useState<THREE.Object3D | null>(null)
   useEffect(() => {
@@ -1228,12 +1228,14 @@ function EchtesGebaeude3D({ aussehen, faktor, oben, versatzX = 0, versatzZ = 0, 
     const box = new THREE.Box3().setFromObject(g)
     if (box.isEmpty()) return null
     const mitte = box.getCenter(new THREE.Vector3())
-    return { g, pos: [-mitte.x, -box.min.y, -mitte.z] as [number, number, number] }
-  }, [aussehen.art, glbSzene, punkte, faktor, oben])
+    // Mit erkanntem Turmschaft: dessen Mitte in den Ursprung (wie unser Gerüst), sonst die Mitte der Gesamtbox
+    const fx = anker ? anker.wx * faktor : mitte.x, fz = anker ? anker.wz * faktor : mitte.z
+    return { g, pos: [-fx, -box.min.y, -fz] as [number, number, number] }
+  }, [aussehen.art, glbSzene, punkte, faktor, oben, anker])
   useEffect(() => { invalidate() }, [ausgerichtet, invalidate])
   if (!ausgerichtet) return null
   return (
-    <group position={[versatzX, 0, versatzZ]} rotation={[0, (drehungGrad * Math.PI) / 180, 0]}>
+    <group position={[versatzX + (anker?.zielX ?? 0), 0, versatzZ]} rotation={[0, ((drehungGrad + (anker?.drehungGrad ?? 0)) * Math.PI) / 180, 0]}>
       <group position={ausgerichtet.pos}><primitive object={ausgerichtet.g} /></group>
     </group>
   )
