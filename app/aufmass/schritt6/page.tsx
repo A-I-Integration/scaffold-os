@@ -53,6 +53,7 @@ function Schritt6Content() {
   const [kiResult, setKiResult] = useState<KIAnalysis | null>(null);
   const [kiLoading, setKiLoading] = useState(false);
   const [kiError, setKiError] = useState<string | null>(null);
+  const [preisHinweis, setPreisHinweis] = useState<string | null>(null);
   const [dispResult, setDispResult] = useState<DispositionData | null>(null);
   const [dispLoading, setDispLoading] = useState(false);
   const [dispError, setDispError] = useState<string | null>(null);
@@ -500,7 +501,7 @@ function Schritt6Content() {
     router.push('/cad?aus=aufmass');
   }
   async function handleKIBerechnung() {
-    setKiLoading(true); setKiError(null);
+    setKiLoading(true); setKiError(null); setPreisHinweis(null);
     try {
       const payload = buildScaffoldInput();
       if (!payload.lengthM || !payload.heightM) throw new Error('Länge und Höhe fehlen. Bitte zuerst Schritt 2 ausfüllen.');
@@ -508,6 +509,7 @@ function Schritt6Content() {
       if (!response.ok) { const err = await response.json(); throw new Error(err.error || 'Berechnung fehlgeschlagen'); }
       const json = await response.json();
       setKiResult(json.data);
+      setPreisHinweis(typeof json.preisHinweis === 'string' ? json.preisHinweis : null);
       // NEU: Disposition (Lager + andere Baustellen prüfen, bevor neu
       // gekauft wird) läuft jetzt automatisch direkt im Anschluss an die
       // Materialberechnung - kein extra Klick mehr nötig. Nutzt json.data
@@ -1503,6 +1505,7 @@ function Schritt6Content() {
                 Im CAD öffnen (3D-Ansicht mit diesen Maßen)
               </button>
               {cadFehler && <div className="mt-3 rounded-xl border border-red-500/30 bg-red-500/10 p-3"><p className="text-sm text-red-700">{cadFehler}</p></div>}
+              {preisHinweis && <div className="mt-4 rounded-xl border border-amber-500/30 bg-amber-500/10 p-4"><p className="text-sm font-medium text-amber-800">{preisHinweis}</p></div>}
               {kiError && <div className="mt-4 rounded-xl border border-red-500/30 bg-red-500/10 p-4"><p className="text-sm font-medium text-red-700">Fehler: {kiError}</p></div>}
             </div>
 

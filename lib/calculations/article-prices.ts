@@ -49,11 +49,27 @@ const FALLBACK_PRICES: Record<string, ArticleMaster> = {
   'FN-001': { articleNumber: 'FN-001', name: 'Fangnetz', category: 'Sicherheit', unit: 'm²', unitPrice: 4.20, weightKg: 0.5, riskLevel: 'medium', aiRecommendation: 'Unterhalb von Brüstungen' },
 };
 
+export interface ArticlePricesErgebnis {
+  preise: Record<string, ArticleMaster>
+  /** 'lager' = Preise aus dem Lager; 'ersatz' = feste Ersatzpreise (Lager nicht erreichbar oder leer) */
+  quelle: 'lager' | 'ersatz'
+  /** Hinweis für die Oberfläche, nur bei Ersatzpreisen */
+  hinweis?: string
+}
+
 export async function loadArticlePrices(): Promise<Record<string, ArticleMaster>> {
+  return (await loadArticlePricesMitQuelle()).preise
+}
+
+const ERSATZ_HINWEIS = 'Es werden feste Ersatzpreise statt der Lagerpreise verwendet. Bitte Preise im Lager prüfen, bevor ein Angebot daraus entsteht.'
+const ersatz = (grund: string): ArticlePricesErgebnis => ({ preise: FALLBACK_PRICES, quelle: 'ersatz', hinweis: `${ERSATZ_HINWEIS} (${grund})` })
+
+/** Wie loadArticlePrices, sagt aber zusätzlich, ob echte Lagerpreise oder feste Ersatzpreise verwendet wurden. */
+export async function loadArticlePricesMitQuelle(): Promise<ArticlePricesErgebnis> {
   try {
     const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
     const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
-    if (!url || !key) return FALLBACK_PRICES;
+    if (!url || !key) return ersatz('keine Verbindung zum Lager eingerichtet');
 
     // select=* ist absichtlich defensiv: weight_kg existiert erst nach der
     // Migration „Kalkulations-Grundlagen" – so läuft es vorher wie nachher.
@@ -63,12 +79,12 @@ export async function loadArticlePrices(): Promise<Record<string, ArticleMaster>
     });
     if (!res.ok) {
       console.warn('[ArticlePrices] REST-Fehler:', await res.text());
-      return FALLBACK_PRICES;
+      return ersatz('Lager nicht erreichbar');
     }
     const data: any[] = await res.json();
     if (!data || data.length === 0) {
       console.warn('[ArticlePrices] Keine DB-Daten gefunden, verwende Fallback.');
-      return FALLBACK_PRICES;
+      return ersatz('im Lager sind keine aktiven Artikel');
     }
 
     // Lager-Artikel überschreiben die Fallback-Preise per SKU-Match.
@@ -93,9 +109,9 @@ export async function loadArticlePrices(): Promise<Record<string, ArticleMaster>
       if (fb) treffer++;
     }
     console.warn(`[ArticlePrices] ${data.length} Lager-Artikel geladen, ${treffer} System-SKU-Treffer.`);
-    return prices;
+    return { preise: prices, quelle: 'lager' };
   } catch (err) {
     console.error('[ArticlePrices] Fehler beim Laden:', err);
-    return FALLBACK_PRICES;
+    return ersatz('Fehler beim Laden');
   }
 }
