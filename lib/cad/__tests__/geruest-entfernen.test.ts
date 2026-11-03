@@ -84,7 +84,7 @@ describe('Gerüst beim Anzeigen entfernen', () => {
       const c = Math.cos((grad * Math.PI) / 180), s = Math.sin((grad * Math.PI) / 180)
       expect(m.anker.wx).toBeCloseTo(4.5 * c - 3.5 * s, 1)
       expect(m.anker.wz).toBeCloseTo(-(4.5 * s + 3.5 * c), 1) // Welt-z = −y bei „Z oben“
-      expect(Math.abs(m.anker.zielX)).toBeGreaterThan(0)
+      expect(m.anker.drehungGrad).toBeCloseTo(90 - grad, 0) // Längsachse des Schafts ist hier die Richtung zum Anbau (y); Drehung im Modell wirkt in der Anzeige gegenläufig (Welt-z = −y)
     }
   })
   it('ohne Gerüst im Modell wird nichts entfernt', () => {
