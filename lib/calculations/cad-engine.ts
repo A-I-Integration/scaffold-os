@@ -1233,7 +1233,7 @@ export function generateCADModel(
   const istInLuecke = (side: SeitenId, a: number, len: number) => luecken[side].some((l) => ueberdeckt(l.von, l.bis, a, len))
   let lueckeFelder = 0, lueckeLaengeM = 0, lueckeFlaecheM2 = 0
   const merkeLuecke = (side: SeitenId, levelIndex: number, fieldLength: number, hoeheM: number) => {
-    if (levelIndex === 0 && side === activeSides[0]) { lueckeFelder += 1; lueckeLaengeM += fieldLength; lueckeFlaecheM2 += fieldLength * hoeheM }
+    if (levelIndex === 0) { lueckeFelder += 1; lueckeLaengeM += fieldLength; lueckeFlaecheM2 += fieldLength * hoeheM }
   }
 
   const abschnittsAnker: ScaffoldAnchor[] = []
@@ -1244,6 +1244,10 @@ export function generateCADModel(
   const teilSeitenListe: { seite: 'front' | 'back' | 'left' | 'right'; abM: number }[] = []
   let innenFlaecheM2 = 0
   let innenFelder = 0
+  // Einfaches Gebäude (ohne Abschnitte): Länge, Felder und Fläche zählen ALLE gewählten Seiten
+  // (vorne/hinten = Gebäudelänge, links/rechts = Gebäudebreite), so wie auch die Felder im Modell.
+  const seitenLaengeM = (sd: 'front' | 'back' | 'left' | 'right') => (sd === 'front' || sd === 'back' ? building.lengthM : building.widthM || 0)
+  const einfachSeitenDivs = activeSides.map((sd) => teile(seitenLaengeM(sd)))
   const abschnittDivs = abschnitte
     ? abschnitte.map((sec) => teile(sec.laengeM))
     : null
@@ -1591,10 +1595,10 @@ export function generateCADModel(
     levels,
     anchors,
     components3D: [],
-    totalLengthM: (abschnitte ? abschnitte.filter((a) => a.geruest !== false).reduce((sum, a) => sum + a.laengeM, 0) : fieldDiv.fields * fieldDiv.fieldLengthM) - lueckeLaengeM,
+    totalLengthM: (abschnitte ? abschnitte.filter((a) => a.geruest !== false).reduce((sum, a) => sum + a.laengeM, 0) : einfachSeitenDivs.reduce((sum, d) => sum + d.fields * d.fieldLengthM, 0)) - lueckeLaengeM,
     totalHeightM: building.heightM,
-    totalAreaM2: (abschnitte ? stufenFlaecheM2(abschnitte, activeSides, building.widthM || 0) + helmFlaecheM2 + innenFlaecheM2 - verdecktFlaecheM2 : building.lengthM * building.heightM) - lueckeFlaecheM2,
-    fieldCount: (abschnittDivs ? abschnittDivs.reduce((sum, d, i) => sum + (abschnitte![i].geruest === false ? 0 : d.fields), 0) + innenFelder : fieldDiv.fields) - lueckeFelder,
+    totalAreaM2: (abschnitte ? stufenFlaecheM2(abschnitte, activeSides, building.widthM || 0) + helmFlaecheM2 + innenFlaecheM2 - verdecktFlaecheM2 : activeSides.reduce((sum, sd) => sum + seitenLaengeM(sd) * building.heightM, 0)) - lueckeFlaecheM2,
+    fieldCount: (abschnittDivs ? abschnittDivs.reduce((sum, d, i) => sum + (abschnitte![i].geruest === false ? 0 : d.fields), 0) + innenFelder : einfachSeitenDivs.reduce((sum, d) => sum + d.fields, 0)) - lueckeFelder,
     levelCount: levelCalc.levels,
     warnings
   }
@@ -1605,7 +1609,7 @@ export function generateCADModel(
   if (abschnitte) preliminaryModel.seitenAufbau = { vollSeiten: vollSeitenAnzahl, teilSeiten: teilSeitenListe }
   preliminaryModel.gebauteFlaecheM2 = abschnitte
     ? preliminaryModel.totalAreaM2 + stufenFlaecheM2(abschnitte, activeSides, building.widthM || 0, rasterM) - stufenFlaecheM2(abschnitte, activeSides, building.widthM || 0)
-    : preliminaryModel.totalAreaM2 + building.lengthM * Math.max(0, obersteLageM - building.heightM)
+    : preliminaryModel.totalAreaM2 + activeSides.reduce((sum, sd) => sum + seitenLaengeM(sd), 0) * Math.max(0, obersteLageM - building.heightM)
   const components3D = generateScaffoldComponents(preliminaryModel)
   return { ...preliminaryModel, components3D }
 }
