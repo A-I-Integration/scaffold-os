@@ -1310,11 +1310,10 @@ export function generateCADModel(
       for (const run of runs) {
         if (!run.aktiv) continue
         let cumL = 0, abMin = Infinity
-        for (const fl of run.div.distribution) {
-          const ab = run.dachAb ? run.dachAb(run.along + cumL + fl / 2) : run.abHoehe
-          cumL += fl
-          if (ab > 0) abMin = Math.min(abMin, ab)
-        }
+        const probe = (x: number) => { const ab = run.dachAb ? run.dachAb(x) : run.abHoehe; if (ab > 0) abMin = Math.min(abMin, ab) }
+        probe(run.along) // Kante am Anfang der Wand
+        for (const fl of run.div.distribution) { probe(run.along + cumL + fl / 2); cumL += fl }
+        probe(run.along + cumL) // Kante am Ende der Wand
         if (Number.isFinite(abMin)) teilSeitenListe.push({ seite: side, abM: Math.round(abMin * 100) / 100 })
         else if (!run.innen) seiteVoll = true
       }
