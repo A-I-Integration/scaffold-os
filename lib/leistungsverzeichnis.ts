@@ -543,9 +543,14 @@ export function erzeugeLeistungsverzeichnis(quelle: LvQuelle, e: LvEingaben): Le
     const gGeruest = (epAufbau('geruest', flaecheM2) * flaecheM2 + epAbbau('geruest', flaecheM2) * flaecheM2)
     const gKonsolen = konsolenM > 0 ? epAufbau('konsolen', konsolenM) * konsolenM + epAbbau('konsolen', konsolenM) * konsolenM : 0
     const matGerKo = mat.geruest + mat.konsolen
+    // Seiten: ganze Seiten bis zur Höhe; Seiten mit verdeckter Wand (z. B. neben einem Anbau) erst ab ihrer Höhe
+    const sa = model.seitenAufbau
+    const seitenText = sa && sa.teilSeiten.length > 0
+      ? `${de(sa.vollSeiten, 0)} ${sa.vollSeiten === 1 ? 'Seite' : 'Seiten'} bis ${de(hoeheText, 2)} m Höhe, ${sa.teilSeiten.length === 1 ? 'eine Seite' : `${de(sa.teilSeiten.length, 0)} Seiten`} von ca. ${de(Math.min(...sa.teilSeiten.map((t) => t.abM)), 2)} m bis ${de(hoeheText, 2)} m Höhe`
+      : `${model.building.sides?.length ?? 4} Seiten, bis ${de(hoeheText, 2)} m Höhe`
     const g1 = b2.add(`Arbeitsgerüste mit integrierten Traggerüsten am Turmschaft bis ${de(hoeheText, 0)} m Höhe`, [
       `Systemgerüst als ${bauart} nach DIN EN 12811, entsprechend ${klassen}, 1. Bauabschnitt montieren und in zwei Bauabschnitten demontieren. Zu erstellen am Turm bis zur Traufe, der Ausbildung als Dachfanggerüst, einschließlich Anpassung aller Gerüstlagen an das Bauwerk, Umbauung bzw. Einrüstung Fenster, Nischen, Wasserspeier etc.`,
-      `Komplett am Turm, ${model.building.sides?.length ?? 4} Seiten, bis ${de(hoeheText, 2)} m Höhe (oberste Gerüstlage im CAD: ${de(geruestTopM, 2)} m, Gebäudehöhe ${de(model.totalHeightM, 2)} m, ${de(flaecheM2, 2)} m² Gerüstfläche).`,
+      `Komplett am Turm, ${seitenText} (oberste Gerüstlage im CAD: ${de(geruestTopM, 2)} m, Gebäudehöhe ${de(model.totalHeightM, 2)} m, ${de(flaecheM2, 2)} m² Gerüstfläche).`,
       'Preis = Aufbau + Abbau aus dem CAD (Stunden × Stundensatz, mit Zuschlag), Vorhaltung in der Folgeposition.',
     ], 1, 'Stück', cent(gGeruest + gKonsolen))
     vorh(b2, g1.nr, 'Arbeitsgerüste am Turmschaft 1. BA', miet(matGerKo))
