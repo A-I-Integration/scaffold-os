@@ -11,9 +11,10 @@ describe('Stunden folgen dem gebauten Gerüst', () => {
   it('Höhe 31 m, Raster 2 m: oberste Lage 32 m, Stunden mit gebauter Fläche, Abrechnungsfläche unverändert', () => {
     const m = generateCADModel(basis, 'layher-allround')
     expect(m.levelCount).toBe(16)
-    expect(m.totalAreaM2).toBeCloseTo(20 * 31, 2)
-    expect(m.gebauteFlaecheM2).toBeCloseTo(20 * 32, 2)
-    expect(calculateLogistics(m, [], 2).aufbauStunden).toBe(Math.ceil(20 * 32 * 2))
+    // vier Seiten: 2 × 20 m (vorne/hinten) + 2 × 10 m (links/rechts) = 60 m Wandlänge
+    expect(m.totalAreaM2).toBeCloseTo(60 * 31, 2)
+    expect(m.gebauteFlaecheM2).toBeCloseTo(60 * 32, 2)
+    expect(calculateLogistics(m, [], 2).aufbauStunden).toBe(Math.ceil(60 * 32 * 2))
   })
   it('Höhe passt genau auf das Raster: kein Unterschied', () => {
     const m = generateCADModel({ ...basis, heightM: 30, eavesHeightM: 30 }, 'layher-allround')
