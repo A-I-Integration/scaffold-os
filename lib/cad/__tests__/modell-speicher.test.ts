@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest'
-import { speicherImArbeitsspeicher, merkeModell, ladeGemerktesModell, vergissModell, nwdZwischenspeicher, dateiHash, NWD_CACHE_MAX_EINTRAEGE, type GemerktesModell } from '../modell-speicher'
+import { merkeAussehen, ladeGemerktesAussehen, speicherImArbeitsspeicher, merkeModell, ladeGemerktesModell, vergissModell, nwdZwischenspeicher, dateiHash, NWD_CACHE_MAX_EINTRAEGE, type GemerktesModell } from '../modell-speicher'
 import { konvertiereNwd } from '../nwd-client'
 
 const ant = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status })
@@ -25,6 +25,19 @@ describe('aktuelles Modell', () => {
     expect(await ladeGemerktesModell(sp)).toBeNull()
     const kaputt = { ...sp, setzen: async () => { throw new Error('voll') } }
     expect(await merkeModell(modell(), kaputt)).toBe(false)
+  })
+})
+
+describe('gemerktes Aussehen', () => {
+  it('behält die Lage des Turmschafts (Anker) über einen Neustart', async () => {
+    const sp = speicherImArbeitsspeicher()
+    const aussehen = { art: 'glb' as const, name: 'x.glb', daten: new ArrayBuffer(8) }
+    await merkeAussehen({ aussehen, einheit: 'm', oben: 'z', anker: { wx: -12.3, wz: -5.2, drehungGrad: 90 } }, sp)
+    expect((await ladeGemerktesAussehen(sp))?.anker).toEqual({ wx: -12.3, wz: -5.2, drehungGrad: 90 })
+    await merkeAussehen({ aussehen, einheit: 'm', oben: 'z' }, sp)
+    expect((await ladeGemerktesAussehen(sp))?.anker).toBeUndefined()
+    await sp.setzen('aktuell', 'aussehen', { aussehen, einheit: 'm', oben: 'z', anker: { wx: 'x', wz: 1, drehungGrad: 2 } })
+    expect((await ladeGemerktesAussehen(sp))?.anker).toBeUndefined()
   })
 })
 
