@@ -108,7 +108,7 @@ const HORIZONT_FARBE = '#e9edf2'
 const FarbModusKontext = createContext<FarbModus>('real')
 /** Teilabbau: Bauteile, die abgebaut werden sollen, werden rot markiert */
 const AbbauMarkKontext = createContext<ReadonlySet<string> | null>(null)
-type EchtesGebaeudeDaten = { aussehen: Aussehen; faktor: number; oben: 'x' | 'y' | 'z'; versatzX?: number; versatzZ?: number; drehungGrad?: number; anker?: { wx: number; wz: number; drehungGrad: number; zielX: number } | null }
+type EchtesGebaeudeDaten = { aussehen: Aussehen; faktor: number; oben: 'x' | 'y' | 'z'; versatzX?: number; versatzZ?: number; drehungGrad?: number; anker?: { wx: number; wz: number; drehungGrad: number } | null; /** Lage des Turms (höchster Abschnitt) in unserem Gebäude: dorthin kommt die Schaftmitte */ ziel?: { x: number; z: number; drehungGrad: number } }
 const EchtesGebaeudeKontext = createContext<EchtesGebaeudeDaten | null>(null)
 
 /** Nebel in Himmelsfarbe: der Boden läuft in der Ferne aus. Muss an der Szene hängen (ein <fog> in einer Gruppe wirkt nicht). */
@@ -1197,7 +1197,7 @@ export function tuerPlatzierungGestuft(
 
 
 // ─── Echtes Gebäude: GLB mit Texturen oder farbige Punktwolke, auf Meter, Y oben, Mitte bei x/z = 0, Unterkante y = 0 ───
-function EchtesGebaeude3D({ aussehen, faktor, oben, versatzX = 0, versatzZ = 0, drehungGrad = 0, anker = null }: EchtesGebaeudeDaten) {
+function EchtesGebaeude3D({ aussehen, faktor, oben, versatzX = 0, versatzZ = 0, drehungGrad = 0, anker = null, ziel = { x: 0, z: 0, drehungGrad: 0 } }: EchtesGebaeudeDaten) {
   const { invalidate } = useThree()
   const [glbSzene, setGlbSzene] = useState<THREE.Object3D | null>(null)
   useEffect(() => {
@@ -1235,10 +1235,23 @@ function EchtesGebaeude3D({ aussehen, faktor, oben, versatzX = 0, versatzZ = 0, 
   useEffect(() => { invalidate() }, [ausgerichtet, invalidate])
   if (!ausgerichtet) return null
   return (
-    <group position={[versatzX + (anker?.zielX ?? 0), 0, versatzZ]} rotation={[0, ((drehungGrad + (anker?.drehungGrad ?? 0)) * Math.PI) / 180, 0]}>
+    <group position={[versatzX + (anker ? ziel.x : 0), 0, versatzZ + (anker ? ziel.z : 0)]} rotation={[0, ((drehungGrad + (anker ? anker.drehungGrad + ziel.drehungGrad : 0)) * Math.PI) / 180, 0]}>
       <group position={ausgerichtet.pos}><primitive object={ausgerichtet.g} /></group>
     </group>
   )
+}
+
+/** Lage des Turms (höchster Abschnitt) in unserem Gebäude, genau wie Building3D es aufstellt (Weltkoordinaten, Drehung in Grad) */
+function turmLage(building: CADModel['building']): { x: number; z: number; drehungGrad: number } {
+  const w = building.widthM || 6
+  const sections = building.sections
+  if (!sections || sections.length < 2) return { x: 0, z: -w / 2 - 0.5, drehungGrad: 0 }
+  const segmente = berechneGebaeudeSegmente(sections)
+  const gerade = hatGeradeAbschnitte(building)
+  const gesamtL = sections.reduce((sum, sc) => sum + sc.laengeM, 0)
+  const turm = segmente.reduce((b, sg) => (sg.hoeheM > b.hoeheM ? sg : b), segmente[0])
+  const ox = gerade ? -gesamtL / 2 : 0, oz = gerade ? -w / 2 - 0.5 : 0
+  return { x: ox + turm.mitteX, z: oz + turm.mitteZ + (gerade ? (turm.versatzM ?? 0) : 0), drehungGrad: (turm.rotationYRad * 180) / Math.PI }
 }
 
 /** Zeigt das echte Gebäude (falls geladen), sonst den einfachen Baukörper */
@@ -1247,7 +1260,7 @@ function GebaeudeAnzeige({ building, features, visible }: { building: CADModel['
   return (
     <>
       <Building3D building={building} features={features} visible={visible && !echt} />
-      {visible && echt && <EchtesGebaeude3D {...echt} />}
+      {visible && echt && <EchtesGebaeude3D {...echt} ziel={turmLage(building)} />}
     </>
   )
 }

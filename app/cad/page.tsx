@@ -127,7 +127,7 @@ export default function CADPage() {
   const [aussehenEinheit, setAussehenEinheit] = useState<'m' | 'cm' | 'mm'>('m')
   const [aussehenOben, setAussehenOben] = useState<'x' | 'y' | 'z'>('y')
   const [aussehenHinweis, setAussehenHinweis] = useState('')
-  const [aussehenAnker, setAussehenAnker] = useState<{ wx: number; wz: number; drehungGrad: number; zielX: number } | null>(null)
+  const [aussehenAnker, setAussehenAnker] = useState<{ wx: number; wz: number; drehungGrad: number } | null>(null)
   const [aussehenVersatz, setAussehenVersatz] = useState<{ x: number; z: number; grad: number }>({ x: 0, z: 0, grad: 0 })
   useEffect(() => {
     let weg = false
