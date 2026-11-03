@@ -194,6 +194,16 @@ export default function LvDialog({ model, materials, aufbauStunden, abbauStunden
     } catch (err) { setFehler('Excel konnte nicht erstellt werden: ' + (err instanceof Error ? err.message : String(err))) }
   }
 
+  // GAEB X83 (Ausschreibung ohne Preise): Positionen, Texte, Mengen und Einheiten für Planer und Auftraggeber
+  const alsGaeb = async () => {
+    try {
+      setFehler(null)
+      const { erzeugeGaebX83 } = await import('@/lib/gaeb-export')
+      const xml = erzeugeGaebX83(lv, { bauvorhaben: e.bauvorhaben, projektnummer: e.projektnummer })
+      speichern(new Blob([xml], { type: 'application/xml' }), `${dateiBasis}.x83`)
+    } catch (err) { setFehler('GAEB-Datei konnte nicht erstellt werden: ' + (err instanceof Error ? err.message : String(err))) }
+  }
+
   const num = (k: keyof LvEingaben, step = '0.01') => (
     <input type='number' min={0} step={step} className={feld} value={(e[k] as number) === 0 ? '' : (e[k] as number)}
       onChange={(ev) => setze({ [k]: zahl(ev.target.value) } as Partial<LvEingaben>)} />
@@ -468,6 +478,7 @@ export default function LvDialog({ model, materials, aufbauStunden, abbauStunden
             {!speicherOffen && <button type='button' onClick={oeffneSpeichern} className='px-4 py-2 border border-black/20 text-sm font-medium rounded-xl hover:bg-black/5'>💾 Zur Baustelle speichern</button>}
             <button type='button' onClick={alsRechnung} className='px-4 py-2 bg-[#1d1d1f] text-white text-sm font-medium rounded-xl hover:bg-black' title='Jede LV-Position wird eine Rechnungsposition (Listenpreis × Faktor)'>🧾 Rechnung daraus</button>
             <button type='button' onClick={alsExcel} className='px-4 py-2 bg-emerald-600 text-white text-sm font-medium rounded-xl hover:bg-emerald-700'>📊 Excel</button>
+            <button type='button' onClick={alsGaeb} title='GAEB DA XML 3.3, X83 (Ausschreibung ohne Preise)' className='px-4 py-2 bg-slate-700 text-white text-sm font-medium rounded-xl hover:bg-slate-800'>🏗️ GAEB X83</button>
             <button type='button' onClick={alsPdf} className='px-4 py-2 bg-[#e8590c] text-white text-sm font-medium rounded-xl hover:bg-[#d24f08]'>📄 PDF</button>
           </div>
         </div>
