@@ -36,12 +36,17 @@ interface Props {
   onClose: () => void
 }
 
+/** Höhe des 2. Bauabschnitts der Turm-Gliederung: darunter passt sie nicht zum Gebäude */
+const TURM_LV_AB_M = 21.5
+
 export default function LvDialog({ model, materials, aufbauStunden, abbauStunden, onClose }: Props) {
   // Firmenwerte aus dem Browser holen (nur Komfort – ohne Speicher läuft alles weiter)
   const [e, setE] = useState<LvEingaben>(() => {
     try {
       const roh = typeof window !== 'undefined' ? localStorage.getItem(FIRMA_KEY) : null
-      const basis: LvEingaben = roh ? { ...LV_STANDARD_EINGABEN, ...JSON.parse(roh) } : LV_STANDARD_EINGABEN
+      const gespeichert: LvEingaben = roh ? { ...LV_STANDARD_EINGABEN, ...JSON.parse(roh) } : LV_STANDARD_EINGABEN
+      // Die Turm-Gliederung (Bauabschnitte 21,5 m / 32 m) gilt nur für hohe Gebäude: aus einem früheren Projekt gemerkt, würde sie bei einem Haus Positionen für Höhen enthalten, die es nicht gibt
+      const basis: LvEingaben = gespeichert.stil === 'statiker' && model.building.heightM <= TURM_LV_AB_M ? { ...gespeichert, stil: LV_STANDARD_EINGABEN.stil } : gespeichert
       // Lastklasse kommt aus dem CAD (Gebäude → Gerüst), nicht aus einem festen Standard
       const v = verwendungMitId(model.building.verwendung)
       const ausCad = model.building.lastklasse ? { ...basis, lastklasse: model.building.lastklasse } : basis
@@ -229,6 +234,12 @@ export default function LvDialog({ model, materials, aufbauStunden, abbauStunden
               <option value='statiker'>Gliederung des Auftraggebers: Stück-Pauschalen, 2 Bauabschnitte (Turmeinrüstung)</option>
               <option value='preisliste'>Preisliste: nur berechnete Positionen mit Miete (Stück × Wochen) und %-Spalte</option>
             </select>
+            {e.stil === 'statiker' && model.building.heightM <= TURM_LV_AB_M && (
+              <p className='rounded-lg border border-amber-300 bg-amber-50 px-2 py-1.5 text-[11px] text-amber-900'>
+                Diese Gliederung gehört zu einer Turmeinrüstung (Bauabschnitte bis 21,5 m und 32 m). Dein Gebäude ist {model.building.heightM.toFixed(1).replace('.', ',')} m hoch – die Positionen für größere Höhen passen nicht.{' '}
+                <button type='button' className='underline font-semibold' onClick={() => setze({ stil: 'getrennt' })}>Auf „Aufbau · Vorhaltung · Abbau getrennt“ umstellen</button>
+              </p>
+            )}
 
             <label className='block text-[11px] text-[#424245]'>
               <span className={label}>Angaben aus dem Statiker-LV (Excel) übernehmen</span>
