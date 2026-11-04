@@ -1176,6 +1176,25 @@ function FassadenMerkmal({ f, pos, rot }: { f: BuildingFeature3D; pos: [number, 
         <boxGeometry args={[f.widthM + 0.08, f.heightM + 0.08, 0.02]} />
         <meshStandardMaterial color="#f4f1ea" roughness={0.6} />
       </mesh>
+      {/* Fensterbank bzw. Türvordach mit Stufe */}
+      {!istTuer && (
+        <mesh position={[0, -f.heightM / 2 - 0.06, 0.07]} castShadow>
+          <boxGeometry args={[f.widthM + 0.22, 0.05, 0.16]} />
+          <meshStandardMaterial color="#cfc8ba" roughness={0.8} />
+        </mesh>
+      )}
+      {istTuer && (
+        <>
+          <mesh position={[0, f.heightM / 2 + 0.12, 0.3]} castShadow>
+            <boxGeometry args={[f.widthM + 0.5, 0.07, 0.62]} />
+            <meshStandardMaterial color="#6e7378" roughness={0.6} metalness={0.2} />
+          </mesh>
+          <mesh position={[0, -f.heightM / 2 + 0.05, 0.22]} receiveShadow>
+            <boxGeometry args={[f.widthM + 0.3, 0.1, 0.4]} />
+            <meshStandardMaterial color="#9a958b" roughness={0.95} />
+          </mesh>
+        </>
+      )}
       {/* Fensterkreuz */}
       {!istTuer && (
         <>
@@ -1296,6 +1315,33 @@ function GebaeudeAnzeige({ building, features, visible }: { building: CADModel['
   )
 }
 
+/** Sockel, Traufgesims und Dachrinne um einen Baukörper (nur Darstellung, keine Mengen). Mitte des Körpers bei x/z = 0, Unterkante y = 0. */
+function Gesimse({ laengeM, tiefeM, hoeheM }: { laengeM: number; tiefeM: number; hoeheM: number }) {
+  if (!(hoeheM > 2.5) || !(laengeM > 0.5) || !(tiefeM > 0.5)) return null
+  const sockelH = Math.min(0.6, hoeheM * 0.08), gesH = Math.min(0.22, hoeheM * 0.03)
+  return (
+    <group>
+      {/* Sockel: leicht vorspringend, dunkler */}
+      <mesh position={[0, sockelH / 2, 0]} receiveShadow>
+        <boxGeometry args={[laengeM + 0.1, sockelH, tiefeM + 0.1]} />
+        <meshStandardMaterial color="#8d8679" roughness={0.95} />
+      </mesh>
+      {/* Traufgesims */}
+      <mesh position={[0, hoeheM - gesH / 2, 0]} castShadow>
+        <boxGeometry args={[laengeM + 0.3, gesH, tiefeM + 0.3]} />
+        <meshStandardMaterial color="#ddd6c8" roughness={0.85} />
+      </mesh>
+      {/* Dachrinne an den Längsseiten */}
+      {[1, -1].map((s) => (
+        <mesh key={s} position={[0, hoeheM - gesH - 0.04, s * (tiefeM / 2 + 0.2)]} rotation={[0, 0, Math.PI / 2]}>
+          <cylinderGeometry args={[0.05, 0.05, laengeM + 0.2, 8]} />
+          <meshStandardMaterial color="#6e7378" roughness={0.5} metalness={0.4} />
+        </mesh>
+      ))}
+    </group>
+  )
+}
+
 function Building3D({
   building,
   features,
@@ -1349,6 +1395,7 @@ function Building3D({
               <Edges threshold={15} color="#8f8676" />
               <WandMaterial praes={praes} />
             </mesh>
+            <Gesimse laengeM={seg.laengeM} tiefeM={seg.tiefeM ?? w} hoeheM={seg.hoeheM} />
             {/* NEU: Dach je Abschnitt – eigene Dachform, falls angegeben,
                 sonst die globale Dachform des Gebäudes. Vorher hatte ein
                 mehrteiliges Gebäude überhaupt kein Dach. */}
@@ -1388,6 +1435,8 @@ function Building3D({
         <Edges threshold={15} color="#8f8676" />
         <WandMaterial praes={praes} />
       </mesh>
+
+      <Gesimse laengeM={lengthM} tiefeM={w} hoeheM={heightM} />
 
       {/* Fenster / Türen / Balkone */}
       {features.map((f) => {
