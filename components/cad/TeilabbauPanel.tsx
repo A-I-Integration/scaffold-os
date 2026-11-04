@@ -5,19 +5,21 @@
 
 import type { TeilabbauErgebnis } from '@/lib/cad/teilabbau'
 
-export type TeilabbauArt = 'klick' | 'lagen' | 'flaeche' | 'teile'
+export type TeilabbauArt = 'klick' | 'lagen' | 'flaeche' | 'teile' | 'seite'
 
 export interface TeilabbauEingabe {
   art: TeilabbauArt
   wert: string
   ids: string[]
+  /** Bei Auswahl „Seite“: gewählte Seiten */
+  seiten: ('front' | 'back' | 'left' | 'right')[]
   personen: string
   stundenJeTag: string
   /** Stunden von Hand (leer = berechnet) */
   stundenHand: string
 }
 
-export const TEILABBAU_START: TeilabbauEingabe = { art: 'klick', wert: '', ids: [], personen: '3', stundenJeTag: '8', stundenHand: '' }
+export const TEILABBAU_START: TeilabbauEingabe = { art: 'klick', wert: '', ids: [], seiten: [], personen: '3', stundenJeTag: '8', stundenHand: '' }
 
 const feld = 'w-full px-2 py-1.5 border rounded-lg text-xs bg-white'
 const de = (n: number, d = 1) => n.toLocaleString('de-DE', { maximumFractionDigits: d })
@@ -53,6 +55,7 @@ export default function TeilabbauPanel({
     ? 'Klick auf Bauteile im 3D-Modell markiert sie rot (nochmal klicken = abwählen).'
     : ein.art === 'lagen' ? 'Oberste N Lagen werden abgebaut.'
     : ein.art === 'flaeche' ? 'Ganze Lagen von oben, bis die m² erreicht sind.'
+    : ein.art === 'seite' ? 'Die gewählte(n) Seite(n) ganz abbauen (alle Lagen).'
     : 'Die obersten N Bauteile (von oben nach unten).'
   return (
     <div className='absolute right-3 top-3 z-20 w-72 max-h-[85%] overflow-y-auto rounded-xl border border-black/10 bg-white/95 p-3 shadow-lg text-xs space-y-2'>
@@ -60,13 +63,21 @@ export default function TeilabbauPanel({
         <b className='text-sm'>🧱 Teilabbau</b>
         <button type='button' className='text-[#86868b] hover:text-[#1d1d1f]' onClick={onClose} aria-label='Schließen'>✕</button>
       </div>
-      <div className='grid grid-cols-4 gap-1'>
-        {([['klick', 'Klick'], ['lagen', 'Lagen'], ['flaeche', 'm²'], ['teile', 'Teile']] as [TeilabbauArt, string][]).map(([a, name]) => (
+      <div className='grid grid-cols-5 gap-1'>
+        {([['klick', 'Klick'], ['seite', 'Seite'], ['lagen', 'Lagen'], ['flaeche', 'm²'], ['teile', 'Teile']] as [TeilabbauArt, string][]).map(([a, name]) => (
           <button key={a} type='button' onClick={() => set({ art: a, ...(a === 'klick' ? { ids: ergebnis.bauteilIds } : {}) })}
             className={`rounded-lg border px-1 py-1 ${ein.art === a ? 'bg-[#e8590c] text-white border-[#e8590c]' : 'bg-white text-[#424245]'}`}>{name}</button>
         ))}
       </div>
-      {ein.art !== 'klick' && (
+      {ein.art === 'seite' && (
+        <div className='grid grid-cols-2 gap-1'>
+          {([['front', 'Vorne'], ['back', 'Hinten'], ['left', 'Links'], ['right', 'Rechts']] as const).map(([s, name]) => (
+            <button key={s} type='button' onClick={() => set({ seiten: ein.seiten.includes(s) ? ein.seiten.filter((x) => x !== s) : [...ein.seiten, s] })}
+              className={`rounded-lg border px-1 py-1 ${ein.seiten.includes(s) ? 'bg-[#e8590c] text-white border-[#e8590c]' : 'bg-white text-[#424245]'}`}>{name}</button>
+          ))}
+        </div>
+      )}
+      {ein.art !== 'klick' && ein.art !== 'seite' && (
         <input className={feld} inputMode='decimal' placeholder={ein.art === 'lagen' ? 'Anzahl Lagen' : ein.art === 'flaeche' ? 'Fläche in m²' : 'Anzahl Teile'} value={ein.wert} onChange={(ev) => set({ wert: ev.target.value })} />
       )}
       <p className='text-[10px] text-[#86868b]'>{hinweis}</p>

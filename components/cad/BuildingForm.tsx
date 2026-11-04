@@ -1026,6 +1026,19 @@ export default function BuildingForm({ building, systemId, onChange, onSystemCha
                   </button>
                 ))}
               </div>
+              {(building.sections?.length ?? 0) > 1 && (
+                <div className='mt-2 space-y-1 rounded-xl bg-[#f5f5f7] p-2'>
+                  <p className='text-[11px] font-medium text-[#424245]'>Wand zum Nachbarabschnitt (z. B. Turm am Schiff)</p>
+                  {(['left', 'right'] as const).map((side) => (
+                    <label key={side} className='flex items-center gap-2 text-[11px] text-[#424245]'>
+                      <input type='checkbox' checked={!!building.seitenAbBoden?.includes(side)}
+                        onChange={(e) => { const rest = (building.seitenAbBoden ?? []).filter((x) => x !== side); const neu = e.target.checked ? [...rest, side] : rest; onChange({ ...building, seitenAbBoden: neu.length ? neu : undefined }) }} />
+                      {side === 'left' ? 'Links' : 'Rechts'} ganz einrüsten, ab Boden (sonst erst über dem Dach des Nachbarn)
+                    </label>
+                  ))}
+                  <p className='text-[10px] text-[#86868b]'>Der Lastabtrag über dem Nachbargebäude ist Sache des Statikers.</p>
+                </div>
+              )}
             </div>
           </div>
         )}

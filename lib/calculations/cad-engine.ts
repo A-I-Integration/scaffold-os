@@ -129,6 +129,8 @@ export interface BuildingParams {
   balconyCount: number
   overhangM: number
   setbackM: number
+  /** Seiten (links/rechts), deren Wand zum Nachbarabschnitt (z. B. Turm am Kirchenschiff) ab Boden eingerüstet wird, statt erst über dem Dach des Nachbarn. Handentscheidung: Lastabtrag über dem Nachbargebäude muss der Statiker prüfen. */
+  seitenAbBoden?: ('front' | 'back' | 'left' | 'right')[]
   // Optional: Dachrand-Absturzschutz (nur Flachdach, nicht bei gestuften Gebäuden):
   // zusätzliches Geländer 1,0 m über der Dachkante auf der obersten Lage.
   dachrandSchutz?: boolean
@@ -1303,7 +1305,8 @@ export function generateCADModel(
             }
             return nbTop
           }
-          runs.push({ div: divTiefe(tiefe(a)), hoeheM: a.hoeheM, along: rueckZ(a), aktiv: true, helm: helmVon(a), abHoehe: nbTop, dachAb, innen: true, tiefeM: tiefe(a),
+          const abBoden = !!building.seitenAbBoden?.includes(side)
+          runs.push({ div: divTiefe(tiefe(a)), hoeheM: a.hoeheM, along: rueckZ(a), aktiv: true, helm: helmVon(a), abHoehe: abBoden ? 0 : nbTop, dachAb: abBoden ? undefined : dachAb, innen: true, tiefeM: tiefe(a),
             fixedO: side === 'right' ? xIf + 0.5 + distanceToBuildingM : xIf - 0.5 - distanceToBuildingM })
         })
       }

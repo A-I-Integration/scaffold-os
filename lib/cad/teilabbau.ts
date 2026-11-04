@@ -20,6 +20,7 @@ export type TeilabbauAuswahl =
   | { art: 'lagen'; anzahl: number }
   | { art: 'flaeche'; m2: number }
   | { art: 'teile'; anzahl: number }
+  | { art: 'seite'; seiten: ('front' | 'back' | 'left' | 'right')[] }
 
 export interface TeilabbauSchritt {
   schritt: number
@@ -97,6 +98,12 @@ export function berechneTeilabbau(
   if (auswahl.art === 'ids') {
     const ids = new Set(auswahl.ids)
     comps = model.components3D.filter((c) => ids.has(c.id))
+  } else if (auswahl.art === 'seite') {
+    // Ganze Seite(n): alle Bauteile in Feldern dieser Seite(n), über alle Lagen
+    const seitenFelder = new Set<string>()
+    for (const l of model.levels ?? []) for (const fld of l.fields) if (auswahl.seiten.includes(fld.side)) seitenFelder.add(fld.id)
+    comps = model.components3D.filter((c) => c.fieldId && seitenFelder.has(c.fieldId))
+    annahmen.push('Abgebaut wird die gesamte gewählte Seite (alle Lagen, von oben nach unten). Die Fläche wird nach der Zahl der Bauteile je Lage geschätzt.')
   } else if (auswahl.art === 'lagen') {
     gewaehlteLagen = lagen.slice(0, Math.max(0, Math.round(auswahl.anzahl)))
     comps = nachLagen(gewaehlteLagen)
@@ -116,7 +123,7 @@ export function berechneTeilabbau(
   // Fläche & Anteil
   let flaecheM2: number
   let anteil: number
-  if (auswahl.art === 'ids' || auswahl.art === 'teile') {
+  if (auswahl.art === 'ids' || auswahl.art === 'teile' || auswahl.art === 'seite') {
     // Fläche der berührten Lagen anteilig nach Teilen dieser Lage
     const levelVon = new Map<string, number>()
     lagen.forEach((l) => l.ids.forEach((id) => levelVon.set(id, l.index)))
