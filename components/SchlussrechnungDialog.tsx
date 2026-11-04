@@ -11,6 +11,7 @@ import {
 import type { Invoice, Position } from '@/lib/invoice-pdf';
 import { aktualisierePosition, bereinigePosition } from '@/lib/rechnung-position';
 import PositionDetails from '@/components/rechnung/PositionDetails';
+import { normalisiereBauphasen, berechneBauphasen, baueBauphasenPosition, markiereBauphaseAbgerechnet, type Bauphase, type BauphasenEinstellung } from '@/lib/bauphasen';
 import { normalisiereZwischenaufmasse, baueTeilleistungsPosition, markiereAbgerechnet, zwischenaufmassNr, neueMengeM2, type Zwischenaufmass } from '@/lib/zwischenaufmass';
 
 // ============================================================
@@ -54,7 +55,10 @@ export default function SchlussrechnungDialog({ projectId, customerName, custome
   const [abschlagProzent, setAbschlagProzent] = useState(startProzent ? String(startProzent).replace('.', ',') : '');
   const [abschlagBetrag, setAbschlagBetrag] = useState('');
   const [zwischenaufmasse, setZwischenaufmasse] = useState<Zwischenaufmass[]>([]);
-  const [abschlagModus, setAbschlagModus] = useState<'betrag' | 'zwischenaufmass'>('betrag');
+  const [abschlagModus, setAbschlagModus] = useState<'betrag' | 'zwischenaufmass' | 'bauphase'>('betrag');
+  const [bauphasen, setBauphasen] = useState<Bauphase[]>([]);
+  const [bauphasenEinst, setBauphasenEinst] = useState<Partial<BauphasenEinstellung>>({});
+  const [gewaehltePhase, setGewaehltePhase] = useState('');
   const [gewaehltesZA, setGewaehltesZA] = useState('');
   const [preisM2, setPreisM2] = useState('');
   const [gewaehlteNachtraege, setGewaehlteNachtraege] = useState<Set<string>>(new Set());
@@ -89,6 +93,11 @@ export default function SchlussrechnungDialog({ projectId, customerName, custome
         setNachtraege(n);
         const za = normalisiereZwischenaufmasse(pRes.project?.data?.zwischenaufmasse);
         setZwischenaufmasse(za);
+        const bp = normalisiereBauphasen(pRes.project?.data?.bauphasen?.phasen);
+        setBauphasen(bp);
+        setBauphasenEinst((pRes.project?.data?.bauphasen?.einstellung ?? {}) as Partial<BauphasenEinstellung>);
+        const bpOffen = bp.filter((x) => !x.rechnungId);
+        if (bpOffen.length > 0) setGewaehltePhase(bpOffen[0].id);
         const offen = za.filter((z) => !z.rechnungId);
         if (offen.length > 0) setGewaehltesZA(offen[offen.length - 1].id);
         setGewaehlteNachtraege(new Set(n.map((x) => x.id)));
@@ -158,12 +167,21 @@ export default function SchlussrechnungDialog({ projectId, customerName, custome
     () => (zaModus && zaAuswahl ? baueTeilleistungsPosition({ z: zaAuswahl, liste: zwischenaufmasse, preisProM2: preisM2Zahl }) : { position: null, fehler: null }),
     [zaModus, zaAuswahl, zwischenaufmasse, preisM2Zahl],
   );
+  const bpModus = art === 'abschlag' && abschlagModus === 'bauphase';
+  const bpErgebnis = useMemo(() => berechneBauphasen(bauphasen, bauphasenEinst), [bauphasen, bauphasenEinst]);
+  const bpAuswahl = bauphasen.find((x) => x.id === gewaehltePhase) || null;
+  const bpPosition = useMemo(() => {
+    const e = bpAuswahl ? bpErgebnis.phasen.find((x) => x.id === bpAuswahl.id) : undefined;
+    return bpModus && bpAuswahl && e ? baueBauphasenPosition(bpAuswahl, e) : { position: null, fehler: null };
+  }, [bpModus, bpAuswahl, bpErgebnis]);
   const abschlagNetto = art !== 'abschlag' ? 0
+    : bpModus ? Math.round((bpPosition.position ? bpPosition.position.menge * bpPosition.position.einzelpreis : 0) * 100) / 100
     : zaModus ? Math.round((teilleistung.position ? teilleistung.position.menge * teilleistung.position.einzelpreis : 0) * 100) / 100
     : zahl(abschlagBetrag) > 0 ? Math.round(zahl(abschlagBetrag) * 100) / 100
     : Math.round(gesamtNetto * zahl(abschlagProzent)) / 100;
-  const abschlagZuHoch = art === 'abschlag' && !zaModus && istAbschlagZuHoch(abschlagNetto, gesamtNetto);
+  const abschlagZuHoch = art === 'abschlag' && !zaModus && !bpModus && istAbschlagZuHoch(abschlagNetto, gesamtNetto);
   const positionen = useMemo(() => {
+    if (bpModus) return bpPosition.position ? [bpPosition.position] : [];
     if (zaModus) return teilleistung.position ? [teilleistung.position] : [];
     if (art === 'abschlag') {
       if (abschlagNetto <= 0) return [];
@@ -222,6 +240,18 @@ export default function SchlussrechnungDialog({ projectId, customerName, custome
           if (!pr?.success) throw new Error(pr?.error || 'unbekannt');
         } catch (e: any) {
           warnung = `Die Rechnung ${json.invoice.invoice_number || ''} wurde angelegt, aber ${zwischenaufmassNr(zaAuswahl)} konnte nicht als abgerechnet markiert werden (${e?.message || 'Fehler'}). Bitte NICHT erneut anlegen, sonst wird doppelt berechnet.`;
+        }
+      }
+      if (bpModus && bpAuswahl && json.invoice?.id) {
+        // Bauphase als abgerechnet markieren (frisch lesen, damit nichts überschrieben wird)
+        try {
+          const fr = await fetch(`/api/projects?id=${projectId}`).then((r) => r.json());
+          const alt = fr?.project?.data?.bauphasen ?? {};
+          const neu = markiereBauphaseAbgerechnet(normalisiereBauphasen(alt.phasen), bpAuswahl.id, { id: json.invoice.id, nummer: json.invoice.invoice_number || '' }, new Date().toISOString().slice(0, 10));
+          const pr = await fetch('/api/projects', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: projectId, data: { bauphasen: { ...alt, phasen: neu } } }) }).then((r) => r.json());
+          if (!pr?.success) throw new Error(pr?.error || 'unbekannt');
+        } catch (e) {
+          warnung = `Die Rechnung ${json.invoice.invoice_number || ''} wurde angelegt, aber die Bauphase konnte nicht als abgerechnet markiert werden (${e instanceof Error ? e.message : 'Fehler'}). Bitte NICHT erneut anlegen, sonst wird doppelt berechnet.`;
         }
       }
       onCreated(json.invoice);
@@ -295,16 +325,32 @@ export default function SchlussrechnungDialog({ projectId, customerName, custome
 
             {art === 'abschlag' && (
               <div className="rounded-lg bg-[#f5f5f7] p-3 space-y-2">
-                {zwischenaufmasse.length > 0 && (
+                {(zwischenaufmasse.length > 0 || bauphasen.length > 0) && (
                   <div>
                     <label className="block text-[11px] text-[#86868b] mb-1">Berechnung</label>
-                    <select value={abschlagModus} onChange={(e) => setAbschlagModus(e.target.value as 'betrag' | 'zwischenaufmass')} className={inputCls}>
+                    <select value={abschlagModus} onChange={(e) => setAbschlagModus(e.target.value as 'betrag' | 'zwischenaufmass' | 'bauphase')} className={inputCls}>
                       <option value="betrag">Betrag oder Prozent</option>
-                      <option value="zwischenaufmass">Nach Zwischenaufmaß (nur neue Menge)</option>
+                      {zwischenaufmasse.length > 0 && <option value="zwischenaufmass">Nach Zwischenaufmaß (nur neue Menge)</option>}
+                      {bauphasen.length > 0 && <option value="bauphase">Nach Bauphase (Aufbau / Abbau / Teilrückbau)</option>}
                     </select>
                   </div>
                 )}
-                {zaModus ? (
+                {bpModus ? (
+                  <div className="space-y-2">
+                    <div>
+                      <label className="block text-[11px] text-[#86868b] mb-1">Bauphase</label>
+                      <select value={gewaehltePhase} onChange={(e) => setGewaehltePhase(e.target.value)} className={inputCls}>
+                        {bpErgebnis.phasen.map((e) => {
+                          const ph = bauphasen.find((x) => x.id === e.id);
+                          return <option key={e.id} value={e.id} disabled={!!ph?.rechnungId}>{e.art === 'aufbau' ? 'Aufbau' : 'Abbau'} · {new Date(e.datum + 'T12:00:00').toLocaleDateString('de-DE')} · {e.flaecheM2.toLocaleString('de-DE')} m² · {eur(e.betrag)}{ph?.rechnungId ? ` · schon abgerechnet (${ph.rechnungNr || ''})` : ''}</option>;
+                        })}
+                      </select>
+                    </div>
+                    {bpPosition.fehler && <p className="text-xs text-red-600">{bpPosition.fehler}</p>}
+                    {bpPosition.position && <p className="text-xs text-[#1d1d1f]">{bpPosition.position.bezeichnung} = <b>{eur(abschlagNetto)}</b> netto</p>}
+                    <p className="text-[11px] text-[#86868b]">Beträge, Prozentsätze und Mengen stellst du beim Auftrag unter „Bauphasen“ ein.</p>
+                  </div>
+                ) : zaModus ? (
                   <div className="space-y-2">
                     <div>
                       <label className="block text-[11px] text-[#86868b] mb-1">Zwischenaufmaß</label>
