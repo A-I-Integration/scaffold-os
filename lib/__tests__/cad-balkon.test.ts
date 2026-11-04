@@ -14,6 +14,8 @@ const bk = (p: Partial<CadBalkon> = {}): CadBalkon => ({
   id: 'b1', side: 'front', offsetAlongM: 0, widthM: 3, depthM: 1.0, floorIndex: 1, alleLagen: true, modus: 'durchlaufend', ...p,
 })
 const ko = (m: ReturnType<typeof generateCADModel>) => generateBillOfMaterials(m).find((x) => x.articleNumber === 'KO-001')?.quantity ?? 0
+/** Tatsächliche Lagenzahl der Vorderseite (Satteldach: Traufseite endet an der Traufe, nicht am First) */
+const lagenVorne = (m: ReturnType<typeof generateCADModel>) => Math.max(...m.fields.filter((f) => f.side === 'front').map((f) => f.levelIndex)) + 1
 const fieldsOf = (m: ReturnType<typeof generateCADModel>, side: string, level = 0) => m.fields.filter((f) => f.side === side && f.levelIndex === level)
 
 describe('CAD – Gebäudemerkmale: Balkone mit fester Position', () => {
@@ -48,7 +50,7 @@ describe('CAD – ausgesparte Balkone', () => {
     expect(entfernt).toBeGreaterThanOrEqual(2) // 3 m Breite bei ~2 m Feldern
     expect(fieldsOf(mit, 'front').length).toBeGreaterThan(0)
     // in jeder Lage gleich viele Felder entfernt
-    for (let l = 0; l < ohne.levelCount; l++) expect(ohne.fields.filter((f) => f.levelIndex === l).length - mit.fields.filter((f) => f.levelIndex === l).length).toBe(entfernt)
+    for (let l = 0; l < lagenVorne(ohne); l++) expect(ohne.fields.filter((f) => f.levelIndex === l).length - mit.fields.filter((f) => f.levelIndex === l).length).toBe(entfernt)
   })
   it('Stückliste, Länge, Fläche und Feldanzahl werden gekürzt', () => {
     const rahmen = (m: typeof ohne) => generateBillOfMaterials(m).filter((x) => x.articleNumber.startsWith('RA-')).reduce((s, x) => s + x.quantity, 0)
@@ -88,7 +90,7 @@ describe('CAD – durchlaufende Balkone (Konsolen)', () => {
       return Math.min(a + f.lengthM / 2, 1.5) - Math.max(a - f.lengthM / 2, -1.5) > 0.02
     }).length
     expect(spalten).toBeGreaterThanOrEqual(2)
-    expect(ko(m)).toBe(ohne.levelCount * konsolenJeLage(spalten, 1.0))
+    expect(ko(m)).toBe(lagenVorne(ohne) * konsolenJeLage(spalten, 1.0))
     expect(m.fields.length).toBe(ohne.fields.length) // Felder bleiben
     expect(m.warnings.some((w) => w.code === 'BALKON_KONSOLEN')).toBe(true)
   })
