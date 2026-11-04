@@ -52,7 +52,7 @@ export default function Uebergabeprotokoll({ projectId, onAbgelegt }: { projectI
 
   return (
     <section className="space-y-2">
-      <h3 className="font-bold text-base">6. Übergabeprotokoll erstellen</h3>
+      <h3 className="font-bold text-base">7. Übergabeprotokoll erstellen</h3>
       {!offen && <button className={knopf} onClick={() => { setOffen(true); setMsg(null) }}>Neues Übergabeprotokoll</button>}
       {msg && <p className={msg.ok ? '' : 'text-red-600'}>{msg.ok ? '✅' : '❌'} {msg.text}</p>}
       {offen && (
