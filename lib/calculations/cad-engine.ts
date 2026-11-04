@@ -1233,14 +1233,15 @@ export function generateCADModel(
     ? { traufe: building.eavesHeightM, first: building.heightM, firstEntlangLaenge: building.lengthM >= (building.widthM || 0) }
     : null
   const rasterLagenH = levelCalc.levelHeightM
-  /** Anzahl Lagen an einer Wandstelle (Spanne [vonM, bisM], von der Wandmitte aus gemessen). */
+  /** Anzahl Lagen an einer Wandstelle (Spanne [vonM, bisM], von der Wandmitte aus gemessen; Giebelseite: Dachhöhe in der Feldmitte). */
   const lagenAn = (sd: 'front' | 'back' | 'left' | 'right', vonM: number, bisM: number): number => {
     if (!giebel) return levelCalc.levels
     const istGiebelSeite = giebel.firstEntlangLaenge ? (sd === 'left' || sd === 'right') : (sd === 'front' || sd === 'back')
     let h = giebel.traufe
     if (istGiebelSeite) {
       const halb = (sd === 'front' || sd === 'back' ? building.lengthM : building.widthM || 0) / 2
-      const naechster = vonM <= 0 && bisM >= 0 ? 0 : Math.min(Math.abs(vonM), Math.abs(bisM))
+      // Höhe in der Feldmitte: so stufen sich die Lagen wie das Dach-Dreieck ab (Randfelder eine Lage niedriger als die Mitte)
+      const naechster = Math.abs((vonM + bisM) / 2)
       h = halb > 0 ? giebel.traufe + (giebel.first - giebel.traufe) * Math.max(0, 1 - naechster / halb) : giebel.first
     }
     return Math.min(levelCalc.levels, Math.max(1, Math.ceil(h / rasterLagenH - 1e-6)))
