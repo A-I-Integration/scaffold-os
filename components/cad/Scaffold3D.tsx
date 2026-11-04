@@ -18,6 +18,7 @@ import { OrbitControls, Grid, Text, Sky, AdaptiveDpr, AdaptiveEvents, Environmen
 import * as THREE from 'three'
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 import { treppenTeile } from '@/lib/cad/treppen-geometrie'
+import { HAUBEN_PROFIL } from '@/lib/cad/haube'
 import { CADModel, ScaffoldComponent3D, BuildingFeature3D, berechneGebaeudeSegmente, hatGeradeAbschnitte } from '@/lib/calculations/cad-engine'
 import { CATALOG_ITEMS } from './ComponentCatalog'
 import Umgebung3D from './Umgebung3D'
@@ -1063,6 +1064,21 @@ function DachMaterial({ praes, doubleSide = false }: { praes: boolean; doubleSid
   return <meshStandardMaterial color="#8a5a3c" roughness={0.9} side={doubleSide ? THREE.DoubleSide : THREE.FrontSide} />
 }
 
+/** Turmhaube (Zwiebel mit Laterne): Drehkörper aus dem Profil, nur Ansicht */
+function HaubeMesh({ form }: { form: keyof typeof HAUBEN_PROFIL }) {
+  const praes = useContext(FarbModusKontext) === 'praesentation'
+  const geo = useMemo(() => {
+    const pts = HAUBEN_PROFIL[form].map(([h, r]) => new THREE.Vector2(r, h))
+    return new THREE.LatheGeometry(pts, 32)
+  }, [form])
+  useEffect(() => () => geo.dispose(), [geo])
+  return (
+    <mesh geometry={geo} castShadow>
+      <DachMaterial praes={praes} doubleSide />
+    </mesh>
+  )
+}
+
 function RoofMesh({ roofForm, laengeM, breiteM, roofH }: { roofForm: string; laengeM: number; breiteM: number; roofH: number }) {
   const praes = useContext(FarbModusKontext) === 'praesentation'
   if (roofForm === 'kein' || roofForm === 'flachdach' || roofH <= 0) return null
@@ -1323,6 +1339,7 @@ function Building3D({
                 mehrteiliges Gebäude überhaupt kein Dach. */}
             <group position={[0, seg.hoeheM, 0]}>
               <RoofMesh roofForm={seg.roofForm || roofForm} laengeM={seg.laengeM} breiteM={seg.tiefeM ?? w} roofH={seg.roofHoeheM ?? roofH} />
+              {seg.haube && <HaubeMesh form={seg.haube} />}
             </group>
           </group>
         ))}
