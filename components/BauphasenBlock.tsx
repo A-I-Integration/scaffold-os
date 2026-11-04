@@ -16,7 +16,7 @@ import { BAUPHASEN_STANDARD, berechneBauphasen, normalisiereBauphasen, type Baup
 
 interface MatZeile { articleNumber?: string | null; name?: string; quantity?: number; unit?: string }
 interface BauData { bauphasen?: { einstellung?: Partial<BauphasenEinstellung>; phasen?: unknown }; step2?: Parameters<typeof abschnitteAusSchritt2>[0]; kiResult?: { materialList?: MatZeile[] } }
-interface Props { project: { id: string; name: string | null; adresse: string | null; data: BauData | null } }
+interface Props { project: { id: string; name: string | null; adresse: string | null; data: BauData | null }; /** im eigenen Reiter sofort aufgeklappt */ startOffen?: boolean }
 
 const heute = () => new Date().toLocaleDateString('sv-SE');
 const fmt = (n: number) => n.toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -27,7 +27,7 @@ const neueId = () => `bp-${Date.now().toString(36)}${Math.random().toString(36).
 
 type Einst = Omit<BauphasenEinstellung, 'material'>;
 
-export default function BauphasenBlock({ project }: Props) {
+export default function BauphasenBlock({ project, startOffen = false }: Props) {
   const gespeichert = project.data?.bauphasen;
   const gesamtAufmass = useMemo(() => berechneAufmass(abschnitteAusSchritt2(project.data?.step2)).gesamtM2, [project.data]);
   const material = useMemo(() => {
@@ -45,7 +45,7 @@ export default function BauphasenBlock({ project }: Props) {
     stundenJeTag: gespeichert?.einstellung?.stundenJeTag ?? BAUPHASEN_STANDARD.stundenJeTag,
   }));
   const [phasen, setPhasen] = useState<Bauphase[]>(() => normalisiereBauphasen(gespeichert?.phasen));
-  const [offen, setOffen] = useState(false);
+  const [offen, setOffen] = useState(startOffen);
   const [laeuft, setLaeuft] = useState(false);
   const [meldung, setMeldung] = useState<{ ok: boolean; text: string } | null>(null);
 
