@@ -117,7 +117,7 @@ export default function BuildingForm({ building, systemId, onChange, onSystemCha
   const NEU_ERLAUBT = ['.dxf', '.ply'];
   const DXF_ARTEN = ['.dwg', '.dwt', '.step', '.stp', '.igs', '.skp']; // .ifc wird seit dem IFC-Import gelesen (unten)
 
-  async function handlePlanUpload(file: File) {
+  async function handlePlanUpload(file: File, weitere: File[] = []) {
     setAnalyseHinweis(null);
     setModellImport(null);
     void vergissModell(); // neuer Upload ersetzt das gemerkte Modell
@@ -138,6 +138,22 @@ export default function BuildingForm({ building, systemId, onChange, onSystemCha
         setAnalyseHinweis('❌ Datei konnte nicht gelesen werden: ' + (err?.message || 'Fehler'));
       }
       return;
+    }
+    // GLB (glTF binär): wie ein OBJ-Modell auswerten (glTF ist per Definition Y oben und Meter). Ein mitgeliefertes Gerüst
+    // und der Sockel werden nicht mitgezählt, sonst wäre das Gebäude zu hoch bzw. zu breit.
+    if (ext === '.glb') {
+      if (file.size > 100 * 1024 * 1024) { setAnalyseHinweis('❌ Datei zu groß (max. 100 MB). Bitte das Modell vereinfachen oder nur das Gebäude exportieren.'); return; }
+      try {
+        const [{ dreieckeAusGltf }, { sollEntfallen }, { spannweiten }] = await Promise.all([import('@/lib/cad/gltf-dreiecke'), import('@/lib/cad/glb-teile'), import('@/lib/cad/modell-analyse')])
+        const r = await dreieckeAusGltf(await file.arrayBuffer(), sollEntfallen)
+        if (!r.ok) { setAnalyseHinweis('❌ ' + r.meldung); return }
+        const [x, y, z] = spannweiten(r.dreiecke)
+        setModellImport({ name: file.name, format: 'obj', quader: { groesse: { x, y, z }, punkte: r.dreiecke.length / 3 }, dreiecke: r.dreiecke, einheit: 'm', oben: 'y', einheitGeschaetzt: false })
+        setAnalyseHinweis('GLB gelesen (Y oben, Meter). Ein mitgeliefertes Gerüst und der Sockel wurden nicht mitgezählt. Maße aus KI-erzeugten Modellen bitte mit dem Plan prüfen.')
+      } catch (err: any) {
+        setAnalyseHinweis('❌ Datei konnte nicht gelesen werden: ' + (err?.message || 'Fehler'))
+      }
+      return
     }
     // NWD (Navisworks): wird in der Autodesk-Cloud (APS) in ein 3D-Format umgewandelt und danach wie OBJ eingelesen.
     // Gelingt etwas nicht, kommt eine ehrliche Meldung samt Hinweis auf den schnelleren IFC/OBJ-Export.
@@ -209,6 +225,13 @@ export default function BuildingForm({ building, systemId, onChange, onSystemCha
         dxfVorspann = 'Aus den Linien der DXF ließ sich kein geschlossener Gebäudeumriss lesen – stattdessen werden die Beschriftungen ausgewertet. '
       } catch { /* bisheriger Weg */ }
     }
+    const alleDateien = [file, ...weitere]
+    const unpassend = alleDateien.filter((d) => { const e = '.' + (d.name.split('.').pop() || '').toLowerCase(); return !ERLAUBT.includes(d.type) || DXF_ARTEN.includes(e) })
+    if (weitere.length > 0 && unpassend.length > 0) {
+      setAnalyseHinweis('❌ Mehrere Dateien gemeinsam geht nur mit Plänen und Fotos (JPG, PNG, Webp, PDF), höchstens 5. 3D-Modelle (OBJ, GLB, IFC, STL), DXF und PLY bitte einzeln laden.')
+      return
+    }
+    if (alleDateien.length > 5) { setAnalyseHinweis('❌ Höchstens 5 Dateien gemeinsam.'); return }
     if ((!ERLAUBT.includes(file.type) && !NEU_ERLAUBT.includes(ext)) || DXF_ARTEN.includes(ext)) {
       setAnalyseHinweis(
         DXF_ARTEN.includes(ext)
@@ -219,10 +242,11 @@ export default function BuildingForm({ building, systemId, onChange, onSystemCha
     }
     setAnalyseLaeuft(true)
     try {
-      const hochgeladen = await uploadVertragsdokument(file, 'cad-uploads', 'plaene')
+      const hochgeladenListe = []
+      for (const d of alleDateien) hochgeladenListe.push(await uploadVertragsdokument(d, 'cad-uploads', 'plaene'))
       const res = await fetch('/api/cad/analyze-plan', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ files: [{ storage_path: hochgeladen.storage_path, file_type: hochgeladen.file_type }] }),
+        body: JSON.stringify({ files: hochgeladenListe.map((h) => ({ storage_path: h.storage_path, file_type: h.file_type })) }),
       })
       const json = await res.json()
       if (!json.success) throw new Error(json.error)
@@ -418,15 +442,15 @@ export default function BuildingForm({ building, systemId, onChange, onSystemCha
             <label className={`flex flex-col items-center justify-center gap-1 rounded-xl border-2 border-dashed p-4 text-center cursor-pointer transition-colors ${analyseLaeuft ? 'border-black/10 bg-black/5' : 'border-[#e8590c]/40 hover:bg-[#fff4ed]'}`}>
               <span className='text-xl'>{analyseLaeuft ? '⏳' : '📐'}</span>
               <span className='text-xs font-semibold text-[#424245]'>{nwdFortschritt ? 'NWD wird umgewandelt (ohne KI)…' : ifcFortschritt ? 'IFC wird gelesen (ohne KI)…' : analyseLaeuft ? 'KI wertet aus…' : 'Grundriss/Foto hochladen (KI-Auswertung)'}</span>
-              <span className='text-[10px] text-[#86868b]'>Erlaubt: JPG, PNG, Webp, PDF, DXF (Beschriftungen werden gelesen), PLY (Punktwolke), OBJ/STL (3D-Modell, z. B. aus SketchUp: nur Außenmaße), IFC (BIM-Modell: Geschosse, Umriss und Teile werden ohne KI gelesen, bis 200 MB), NWD (Navisworks, bis 200 MB: Umwandlung in der Autodesk-Cloud, begrenzt auf 1 pro Minute und ein Tageslimit; IFC/OBJ ist schneller). DWG/SKP: bitte als DXF/OBJ/STL/IFC/PDF exportieren. Maße werden nur übernommen, wo eindeutig belegt; bitte prüfen</span>
+              <span className='text-[10px] text-[#86868b]'>Erlaubt: JPG, PNG, Webp, PDF, DXF (Beschriftungen werden gelesen), PLY (Punktwolke), OBJ/STL/GLB (3D-Modell, z. B. aus SketchUp: nur Außenmaße; GLB: Y oben, Meter), mehrere Pläne/Fotos gemeinsam (bis 5), IFC (BIM-Modell: Geschosse, Umriss und Teile werden ohne KI gelesen, bis 200 MB), NWD (Navisworks, bis 200 MB: Umwandlung in der Autodesk-Cloud, begrenzt auf 1 pro Minute und ein Tageslimit; IFC/OBJ ist schneller). DWG/SKP: bitte als DXF/OBJ/STL/IFC/PDF exportieren. Maße werden nur übernommen, wo eindeutig belegt; bitte prüfen</span>
               {/* Phase 75: 'accept' komplett entfernt. Der macOS-Dialog hat
                     DXF/PLY trotz Eintrag im accept-Attribut ausgegraut
                     (Safari-Filter + Cache). Jetzt zeigt der Dialog ALLE
                     Dateien an - die erlaubten Typen entscheidet allein
                     unsere Validierung direkt darunter (klare deutsche
                     Meldung bei unbekanntem Format). */}
-              <input type='file' className='hidden' disabled={analyseLaeuft}
-                onChange={(e) => { const f = e.target.files?.[0]; if (f) handlePlanUpload(f); e.target.value = '' }} />
+              <input type='file' multiple className='hidden' disabled={analyseLaeuft}
+                onChange={(e) => { const fs = Array.from(e.target.files ?? []); e.target.value = ''; if (fs.length) void handlePlanUpload(fs[0], fs.slice(1)) }} />
               {nwdFortschritt && (
                 <span className='w-full space-y-1'>
                   <span className='flex justify-between text-[10px] font-semibold text-[#424245]'>

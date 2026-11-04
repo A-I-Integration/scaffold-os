@@ -77,3 +77,20 @@ describe('glTF → Dreiecke (Brücke zum OBJ-Weg)', () => {
     if (!r.ok) expect(r.grund).toBe('leer')
   })
 })
+
+import { Group, Mesh, BoxGeometry } from 'three'
+import { dreieckeAusSzene as ausSzene } from '../gltf-dreiecke'
+import { sollEntfallen } from '../glb-teile'
+describe('dreieckeAusSzene mit Ausschluss', () => {
+  it('Gerüst-Knoten (samt Kindern) und Sockel zählen nicht mit', () => {
+    const w = new Group()
+    const haus = new Mesh(new BoxGeometry(1, 1, 1)); haus.name = 'Kirchturm_Baukörper'
+    const geruest = new Group(); geruest.name = 'Geruest_Rahmen'
+    const stange = new Mesh(new BoxGeometry(1, 30, 1)); stange.name = 'Stange'; geruest.add(stange)
+    const sockel = new Mesh(new BoxGeometry(50, 0.1, 50)); sockel.name = 'Modellsockel'
+    w.add(haus, geruest, sockel)
+    const alles = ausSzene(w); const ohne = ausSzene(w, sollEntfallen)
+    expect(alles.ok && ohne.ok).toBe(true)
+    if (alles.ok && ohne.ok) { expect(alles.anzahl).toBe(36); expect(ohne.anzahl).toBe(12) }
+  })
+})
