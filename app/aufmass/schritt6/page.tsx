@@ -1,6 +1,7 @@
 'use client';
 
 import type { AngebotStatus } from '@/lib/angebot-rueckmeldung';
+import { normalisiereKatalog, type LeistungKatalogEintrag } from '@/lib/leistungskatalog';
 import AngebotRueckmeldungHinweis from '@/components/AngebotRueckmeldungHinweis';
 import { geruestPositionen } from '@/lib/aufmass-rechnung';
 import type { StrukturPosition } from '@/lib/rechnung-position';
@@ -65,7 +66,14 @@ function Schritt6Content() {
   // NEU: Sonderteile – frei eintragbare Zusatzpositionen, die es in der
   // parametrischen Berechnung nicht gibt (z.B. Sonderanfertigung,
   // ungewöhnliche Verbinder, Fremdleistung als Materialposition).
-  const [neuesSonderteil, setNeuesSonderteil] = useState({ name: '', menge: '1', einzelpreis: '' });
+  const [neuesSonderteil, setNeuesSonderteil] = useState({ name: '', menge: '1', einzelpreis: '', einheit: 'Stk' });
+  // Leistungskatalog der Firma (Datenpflege): Auswahl füllt das Sonderteil-Formular mit Bezeichnung, Einheit und Preis
+  const [leistungskatalog, setLeistungskatalog] = useState<LeistungKatalogEintrag[]>([]);
+  useEffect(() => {
+    fetch('/api/leistungskatalog', { cache: 'no-store' }).then((r) => r.json()).then((j) => {
+      if (j?.success) setLeistungskatalog(normalisiereKatalog(j.eintraege).filter((k) => k.is_active !== false));
+    }).catch(() => {});
+  }, []);
 
   function sonderteilHinzufuegen() {
     if (!neuesSonderteil.name.trim() || !neuesSonderteil.einzelpreis) {
@@ -78,11 +86,11 @@ function Schritt6Content() {
       ...prev,
       {
         articleNumber: 'SONDER', name: neuesSonderteil.name.trim(), category: 'Sonderteil',
-        quantity: menge, unit: 'Stk', unitPrice: einzelpreis, totalPrice: menge * einzelpreis,
+        quantity: menge, unit: neuesSonderteil.einheit.trim() || 'Stk', unitPrice: einzelpreis, totalPrice: menge * einzelpreis,
         weightKg: 0, riskLevel: 'green', aiRecommendation: 'Manuell als Sonderteil hinzugefügt',
       },
     ]);
-    setNeuesSonderteil({ name: '', menge: '1', einzelpreis: '' });
+    setNeuesSonderteil({ name: '', menge: '1', einzelpreis: '', einheit: 'Stk' });
   }
 
   function sonderteilEntfernen(index: number) {
@@ -1776,6 +1784,12 @@ function Schritt6Content() {
                     parametrische Berechnung nicht kennt. */}
                 <div className="mt-4 pt-4 border-t border-black/10">
                   <p className="text-sm font-semibold text-[#1d1d1f] mb-2">➕ Sonderteil hinzufügen</p>
+                  {leistungskatalog.length > 0 && (
+                    <select value="" aria-label="Aus Leistungskatalog" onChange={(e) => { const k = leistungskatalog.find((x) => x.id === e.target.value); if (k) setNeuesSonderteil({ name: k.bezeichnung, menge: '1', einzelpreis: k.preis === null ? '' : String(k.preis).replace('.', ','), einheit: k.einheit }); }} className="mb-2 w-full px-3 py-2 border rounded-xl text-sm bg-white">
+                      <option value="">Aus Leistungskatalog wählen …</option>
+                      {leistungskatalog.map((k) => <option key={k.id} value={k.id}>{k.bezeichnung} ({k.einheit}{k.preis !== null ? `, ${k.preis.toFixed(2).replace('.', ',')} €` : ', nach Aufwand'})</option>)}
+                    </select>
+                  )}
                   <div className="flex gap-2 items-end">
                     <div className="flex-1">
                       <label className="text-xs text-[#86868b]">Bezeichnung</label>
@@ -1784,6 +1798,10 @@ function Schritt6Content() {
                     <div className="w-20">
                       <label className="text-xs text-[#86868b]">Menge</label>
                       <input value={neuesSonderteil.menge} onChange={(e) => setNeuesSonderteil({ ...neuesSonderteil, menge: e.target.value })} className="w-full px-3 py-2 border rounded-xl text-sm" />
+                    </div>
+                    <div className="w-20">
+                      <label className="text-xs text-[#86868b]">Einheit</label>
+                      <input value={neuesSonderteil.einheit} onChange={(e) => setNeuesSonderteil({ ...neuesSonderteil, einheit: e.target.value })} className="w-full px-3 py-2 border rounded-xl text-sm" />
                     </div>
                     <div className="w-28">
                       <label className="text-xs text-[#86868b]">Einzelpreis (€)</label>
