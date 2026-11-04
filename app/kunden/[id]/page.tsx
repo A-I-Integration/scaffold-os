@@ -14,7 +14,7 @@
 
 import AngebotRueckmeldungHinweis from '@/components/AngebotRueckmeldungHinweis'
 import { geruestPositionen } from '@/lib/aufmass-rechnung'
-import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useState, useEffect, useCallback, useMemo, type ComponentProps } from 'react'
 import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import {
   ArrowLeft, FileText, Mail, Download, Trash2, Plus,
@@ -124,7 +124,8 @@ const LEER_POSITION = { bezeichnung: '', menge: '1', einheit: 'Stk.', einzelprei
 const TABS = ['baustellen', 'kunde', 'aufmass', 'bilder', 'dokumente', 'mappe', 'angebote', 'lv', 'zeiten', 'nachtraege', 'rechnungen', 'emails'] as const
 type Tab = typeof TABS[number]
 // Zwei Ebenen: Kunde (Übersicht aller Baustellen, Stammdaten, alle Rechnungen/Mails) und Baustelle (alles zu genau diesem Projekt)
-const KUNDEN_TABS: Tab[] = ['baustellen', 'kunde', 'rechnungen', 'emails']
+// Alle Reiter gibt es auch auf Kundenebene: Reiter, die zu genau einer Baustelle gehören (Leistungsverzeichnis, Mappe, Zeiten), fragen dort die Baustelle ab.
+const KUNDEN_TABS: Tab[] = ['baustellen', 'kunde', 'aufmass', 'bilder', 'dokumente', 'mappe', 'angebote', 'lv', 'zeiten', 'nachtraege', 'rechnungen', 'emails']
 const BAUSTELLEN_TABS: Tab[] = ['aufmass', 'bilder', 'dokumente', 'mappe', 'angebote', 'lv', 'zeiten', 'nachtraege', 'rechnungen', 'emails']
 const TAB_LABEL: Record<Tab, string> = {
   baustellen: 'Baustellen', kunde: 'Kunde', aufmass: 'Aufmaß', bilder: 'Bilder', dokumente: 'Dokumente', mappe: 'Baustellenmappe (QR)', angebote: 'Angebote', lv: 'Leistungsverzeichnis', zeiten: 'Zeiten', nachtraege: 'Nachträge / Schluss', rechnungen: 'Rechnungen', emails: 'E-Mails',
@@ -863,10 +864,21 @@ export default function KundenDetailPage() {
   const projektSicht = baustelle ? [baustelle] : projects
   const aktiveTabs = baustelle ? BAUSTELLEN_TABS : KUNDEN_TABS
   const tabAktiv: Tab = aktiveTabs.includes(tab) ? tab : aktiveTabs[0]
-  const waehleBaustelle = (pid: string | null) => {
-    setTab(pid ? 'aufmass' : 'baustellen')
+  const waehleBaustelle = (pid: string | null, ziel?: Tab) => {
+    setTab(pid ? (ziel ?? 'aufmass') : 'baustellen')
     router.push(pid ? `/kunden/${id}?baustelle=${pid}` : `/kunden/${id}`)
   }
+  // Reiter, die nur für eine einzelne Baustelle gelten, fragen auf Kundenebene die Baustelle ab
+  const baustellenWahl = (ziel: Tab) => (
+    <div className="bg-white rounded-xl border border-black/10 p-4 space-y-2">
+      <p className="text-sm font-semibold text-[#1d1d1f]">Für welche Baustelle?</p>
+      {projects.length === 0 ? <p className="text-xs text-[#86868b]">Dieser Kunde hat noch keine Baustelle.</p> : (
+        <div className="flex flex-wrap gap-2">
+          {projects.map((p) => <button key={p.id} onClick={() => waehleBaustelle(p.id, ziel)} className="px-3 py-1.5 rounded-lg border border-black/10 text-xs text-[#1d1d1f] hover:bg-black/5">{p.name || 'Unbenannte Baustelle'}{p.adresse ? ` · ${p.adresse}` : ''}</button>)}
+        </div>
+      )}
+    </div>
+  )
   const sichtInvoices = baustelle ? kundenInvoices.filter((i) => i.project_id === baustelle.id) : kundenInvoices
   const sichtRechnungsNr = new Set(sichtInvoices.map((i) => i.invoice_number).filter(Boolean))
   const sichtEmails = baustelle
@@ -1244,10 +1256,13 @@ export default function KundenDetailPage() {
         )}
 
         {/* ═══════════ TAB: NACHTRÄGE / SCHLUSSRECHNUNG ═══════════ */}
+        {tabAktiv === 'lv' && !baustelle && baustellenWahl('lv')}
         {tabAktiv === 'lv' && baustelle && <ProjektLvBlock projectId={baustelle.id} kundeName={kunde.name} kundeAdresse={[kunde.street, [kunde.zip, kunde.city].filter(Boolean).join(' ')].filter(Boolean).join(', ')} />}
 
+        {tabAktiv === 'mappe' && !baustelle && baustellenWahl('mappe')}
         {tabAktiv === 'mappe' && baustelle && <Baustellenmappe projectId={baustelle.id} projektName={baustelle.name || 'Baustelle'} adresse={baustelle.adresse} />}
 
+        {tabAktiv === 'zeiten' && !baustelle && baustellenWahl('zeiten')}
         {tabAktiv === 'zeiten' && baustelle && <ProjektZeiten projectId={baustelle.id} geplantStunden={baustelle.data?.kiResult?.estimatedLaborHours} />}
 
         {tabAktiv === 'nachtraege' && (
@@ -1283,6 +1298,7 @@ export default function KundenDetailPage() {
         {/* ═══════════ TAB: RECHNUNGEN ═══════════ */}
         {tabAktiv === 'rechnungen' && (
           <div className="space-y-6">
+            {!baustelle && projects.map((p) => <Auftragsstand key={p.id} project={p} invoices={kundenInvoices.filter((i) => i.project_id === p.id) as unknown as ComponentProps<typeof Auftragsstand>['invoices']} onRechnungStellen={(art, prozent) => { setSchlussStart({ art, prozent }); setSchlussProjectId(p.id) }} onGeaendert={() => ladeDaten()} />)}
             {baustelle && <Auftragsstand project={baustelle} invoices={sichtInvoices as any} onRechnungStellen={(art, prozent) => { setSchlussStart({ art, prozent }); setSchlussProjectId(baustelle.id) }} onGeaendert={() => ladeDaten()} />}
             {/* Offene Posten */}
             <div className="bg-white rounded-xl border border-black/10 overflow-hidden">
