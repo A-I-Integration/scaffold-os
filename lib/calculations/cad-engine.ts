@@ -1227,6 +1227,31 @@ export function generateCADModel(
   const fieldDivWidth = teile(building.widthM)
   const levelCalc = system ? calculateLevels(building.heightM, system) : { levels: 1, levelHeightM: 2.0, levelsData: [{ index: 0, bottomY: 0, topY: 2.0 }] }
 
+  // Satteldach (einfaches Gebäude): Traufseiten enden an der Traufe, Giebelseiten folgen dem Dach-Dreieck.
+  // heightM = höchster Punkt (First), eavesHeightM = Traufe. Der First läuft entlang der längeren Gebäudeseite.
+  const giebel = !abschnitte && building.roofForm === 'satteldach' && building.eavesHeightM > 0 && building.eavesHeightM < building.heightM - 0.3
+    ? { traufe: building.eavesHeightM, first: building.heightM, firstEntlangLaenge: building.lengthM >= (building.widthM || 0) }
+    : null
+  const rasterLagenH = levelCalc.levelHeightM
+  /** Anzahl Lagen an einer Wandstelle (Spanne [vonM, bisM], von der Wandmitte aus gemessen). */
+  const lagenAn = (sd: 'front' | 'back' | 'left' | 'right', vonM: number, bisM: number): number => {
+    if (!giebel) return levelCalc.levels
+    const istGiebelSeite = giebel.firstEntlangLaenge ? (sd === 'left' || sd === 'right') : (sd === 'front' || sd === 'back')
+    let h = giebel.traufe
+    if (istGiebelSeite) {
+      const halb = (sd === 'front' || sd === 'back' ? building.lengthM : building.widthM || 0) / 2
+      const naechster = vonM <= 0 && bisM >= 0 ? 0 : Math.min(Math.abs(vonM), Math.abs(bisM))
+      h = halb > 0 ? giebel.traufe + (giebel.first - giebel.traufe) * Math.max(0, 1 - naechster / halb) : giebel.first
+    }
+    return Math.min(levelCalc.levels, Math.max(1, Math.ceil(h / rasterLagenH - 1e-6)))
+  }
+  /** Wandfläche einer Seite (m²): Traufseite = Länge × Traufe, Giebelseite = Rechteck + Dreieck. */
+  const seitenWandFlaecheM2 = (sd: 'front' | 'back' | 'left' | 'right', laenge: number): number => {
+    if (!giebel) return laenge * building.heightM
+    const istGiebelSeite = giebel.firstEntlangLaenge ? (sd === 'left' || sd === 'right') : (sd === 'front' || sd === 'back')
+    return laenge * giebel.traufe + (istGiebelSeite ? 0.5 * laenge * (giebel.first - giebel.traufe) : 0)
+  }
+
   const fields: ScaffoldField[] = []
   const levels: ScaffoldLevel[] = []
 
@@ -1479,6 +1504,10 @@ export function generateCADModel(
           zPos = vorherLaenge - totalLength / 2 + fieldLength / 2 - (building.widthM || 0) / 2 - 0.5
         }
 
+        if (giebel) {
+          const mitteAlong = side === 'front' || side === 'back' ? xPos : zPos + (building.widthM || 0) / 2 + 0.5
+          if (levelData.index >= lagenAn(side, mitteAlong - fieldLength / 2, mitteAlong + fieldLength / 2)) return
+        }
         if (istInLuecke(side, side === 'front' || side === 'back' ? xPos : zPos + (building.widthM || 0) / 2 + 0.5, fieldLength)) { merkeLuecke(side, levelData.index, fieldLength, building.heightM); return }
         const isCorner = fieldIndex === 0 || fieldIndex === useLengthDiv.distribution.length - 1
 
@@ -1515,6 +1544,7 @@ export function generateCADModel(
           const totalLength = div.distribution.reduce((a, b) => a + b, 0)
           const pos = f * div.fieldLengthM - totalLength / 2 + div.fieldLengthM / 2
           if (istInLuecke(side, pos, 0)) continue
+          if (giebel && yAnchor > lagenAn(side, pos - div.fieldLengthM / 2, pos + div.fieldLengthM / 2) * rasterLagenH) continue
 
           let xPos = 0
           let zPos = 0
@@ -1603,7 +1633,7 @@ export function generateCADModel(
     components3D: [],
     totalLengthM: (abschnitte ? abschnitte.filter((a) => a.geruest !== false).reduce((sum, a) => sum + a.laengeM, 0) : einfachSeitenDivs.reduce((sum, d) => sum + d.fields * d.fieldLengthM, 0)) - lueckeLaengeM,
     totalHeightM: building.heightM,
-    totalAreaM2: (abschnitte ? stufenFlaecheM2(abschnitte, activeSides, building.widthM || 0) + helmFlaecheM2 + innenFlaecheM2 - verdecktFlaecheM2 : activeSides.reduce((sum, sd) => sum + seitenLaengeM(sd) * building.heightM, 0)) - lueckeFlaecheM2,
+    totalAreaM2: (abschnitte ? stufenFlaecheM2(abschnitte, activeSides, building.widthM || 0) + helmFlaecheM2 + innenFlaecheM2 - verdecktFlaecheM2 : activeSides.reduce((sum, sd) => sum + seitenWandFlaecheM2(sd, seitenLaengeM(sd)), 0)) - lueckeFlaecheM2,
     fieldCount: (abschnittDivs ? abschnittDivs.reduce((sum, d, i) => sum + (abschnitte![i].geruest === false ? 0 : d.fields), 0) + innenFelder : einfachSeitenDivs.reduce((sum, d) => sum + d.fields, 0)) - lueckeFelder,
     levelCount: levelCalc.levels,
     warnings
@@ -1615,7 +1645,9 @@ export function generateCADModel(
   if (abschnitte) preliminaryModel.seitenAufbau = { vollSeiten: vollSeitenAnzahl, teilSeiten: teilSeitenListe }
   preliminaryModel.gebauteFlaecheM2 = abschnitte
     ? preliminaryModel.totalAreaM2 + stufenFlaecheM2(abschnitte, activeSides, building.widthM || 0, rasterM) - stufenFlaecheM2(abschnitte, activeSides, building.widthM || 0)
-    : preliminaryModel.totalAreaM2 + activeSides.reduce((sum, sd) => sum + seitenLaengeM(sd), 0) * Math.max(0, obersteLageM - building.heightM)
+    : giebel
+      ? fields.reduce((sum, f) => sum + f.lengthM * rasterM, 0)
+      : preliminaryModel.totalAreaM2 + activeSides.reduce((sum, sd) => sum + seitenLaengeM(sd), 0) * Math.max(0, obersteLageM - building.heightM)
   const components3D = generateScaffoldComponents(preliminaryModel)
   return { ...preliminaryModel, components3D }
 }
@@ -1823,7 +1855,7 @@ export function checkCollisions(model: CADModel): CADWarning[] {
     }
   }
   if (model.fieldCount > 0 && model.building.lengthM > 0) {
-    const actualLength = model.fields.reduce((sum, f) => sum + f.lengthM, 0) / model.levelCount
+    const actualLength = model.fields.filter((f) => f.levelIndex === 0).reduce((sum, f) => sum + f.lengthM, 0)
     const diff = Math.abs(actualLength - model.building.lengthM)
     if (diff > (model.fields[0]?.lengthM || 0)) {
       warnings.push({ type: 'warning', code: 'FIELD_MISMATCH', message: 'Feldaufteilung weicht von Gebäudelänge ab.' })
