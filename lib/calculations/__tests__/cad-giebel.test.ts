@@ -11,6 +11,15 @@ const lagen = (m: ReturnType<typeof generateCADModel>, side: string) => {
   return idx.length ? Math.max(...idx) + 1 : 0
 }
 
+describe('Satteldach: Giebel-Lagen nach Feldmitte', () => {
+  it('Standard-Felder (3 m): Mitte bis zum First, Randfelder eine Lage niedriger', () => {
+    const m = generateCADModel(haus(), 'rux-super65')
+    const proFeld = m.fields.filter((f) => f.side === 'left').reduce<Record<string, number>>((a, f) => ({ ...a, [f.positionZ.toFixed(2)]: Math.max(a[f.positionZ.toFixed(2)] ?? 0, f.levelIndex + 1) }), {})
+    const werte = Object.entries(proFeld).sort((a, b) => Number(a[0]) - Number(b[0])).map(([, v]) => v)
+    expect(werte).toEqual([4, 5, 4])
+  })
+})
+
 describe('Satteldach: Traufseiten kürzer, Giebelseiten folgen dem Dreieck', () => {
   it('First entlang der Länge: vorne/hinten enden an der Traufe, links/rechts stufen sich bis zum First', () => {
     const m = generateCADModel(haus({ geruestOptionen: { feldlaengeM: 2.07 } }), 'layher-allround')
