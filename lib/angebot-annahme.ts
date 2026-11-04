@@ -27,7 +27,10 @@ const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const key = process.env.SUPABASE_SERVICE_ROLE_KEY!;
 const headers = { apikey: key, Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' };
 
-interface MaterialZeile { name: string; quantity: number; unit?: string; articleNumber?: string | null }
+interface MaterialZeile { name: string; quantity: number; unit?: string; articleNumber?: string | null; category?: string | null }
+
+/** Frei eingetragene Leistung (Sonderteil, z. B. aus dem Leistungskatalog): kein Lagerartikel, wird nicht gebucht. */
+export const istLeistungsZeile = (z: { category?: string | null; articleNumber?: string | null }) => z.category === 'Sonderteil' || z.articleNumber === 'SONDER';
 
 export interface AngebotsannahmeErgebnis {
   reserviert: string[];
@@ -36,6 +39,8 @@ export interface AngebotsannahmeErgebnis {
   nichtGenugBestand: string[];
   /** Material und Lagerartikel gefunden, aber Einheiten verschieden (z. B. m² gegen Stück): nichts gebucht. */
   einheitenKonflikt: string[];
+  /** Leistungen/Sonderteile im Angebot: bewusst nicht ans Lager gebucht (keine Meldung „nicht gefunden“). */
+  leistungen?: string[];
   /** Technischer Fehler beim Lauf (sonst nicht sichtbar). */
   fehler?: string;
   /** Hinweis, warum nichts gebucht wurde (z. B. keine Materialliste). */
@@ -67,6 +72,7 @@ export async function beiAngebotsannahme(projectId: string): Promise<Angebotsann
   const positionen: { sku: string; quantity: number }[] = [];
 
   for (const zeile of materialList) {
+    if (istLeistungsZeile(zeile)) { (ergebnis.leistungen ??= []).push(zeile.name); continue; }
     const { artikel: treffer } = findeLagerartikel(zeile, lagerIndex);
     if (!treffer) {
       ergebnis.nichtGefunden.push(zeile.name);
