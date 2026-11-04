@@ -659,6 +659,7 @@ export default function CADPage() {
     const zahl = (v: string) => { const n = parseFloat(v.replace(',', '.')); return Number.isFinite(n) && n > 0 ? n : 0 }
     const auswahl: TeilabbauAuswahl =
       abbauEin.art === 'klick' ? { art: 'ids', ids: abbauEin.ids }
+      : abbauEin.art === 'seite' ? { art: 'seite', seiten: abbauEin.seiten }
       : abbauEin.art === 'lagen' ? { art: 'lagen', anzahl: zahl(abbauEin.wert) }
       : abbauEin.art === 'flaeche' ? { art: 'flaeche', m2: zahl(abbauEin.wert) }
       : { art: 'teile', anzahl: zahl(abbauEin.wert) }

@@ -93,6 +93,7 @@ export function liesProjektdatei(text: string): LeseErgebnis {
     sides: Array.isArray(g.sides) ? SEITEN.filter((s) => (g.sides as unknown[]).includes(s)) : ['front'],
   }
   if (gebaeude.sides.length === 0) gebaeude.sides = ['front']
+  if (Array.isArray(g.seitenAbBoden)) { const ab = SEITEN.filter((s) => (g.seitenAbBoden as unknown[]).includes(s)); if (ab.length) gebaeude.seitenAbBoden = ab }
   const lk = zahl(g.lastklasse, 1, 6)
   if (lk != null) gebaeude.lastklasse = Math.round(lk)
   if (g.dachrandSchutz === true) gebaeude.dachrandSchutz = true
