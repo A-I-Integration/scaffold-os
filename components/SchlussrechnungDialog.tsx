@@ -10,6 +10,7 @@ import {
 } from '@/lib/schlussrechnung';
 import type { Invoice, Position } from '@/lib/invoice-pdf';
 import { aktualisierePosition, bereinigePosition } from '@/lib/rechnung-position';
+import { katalogAlsPosition, normalisiereKatalog, type LeistungKatalogEintrag } from '@/lib/leistungskatalog';
 import PositionDetails from '@/components/rechnung/PositionDetails';
 import { normalisiereBauphasen, berechneBauphasen, baueBauphasenPosition, markiereBauphaseAbgerechnet, type Bauphase, type BauphasenEinstellung } from '@/lib/bauphasen';
 import { normalisiereZwischenaufmasse, baueTeilleistungsPosition, markiereAbgerechnet, zwischenaufmassNr, neueMengeM2, type Zwischenaufmass } from '@/lib/zwischenaufmass';
@@ -70,6 +71,10 @@ export default function SchlussrechnungDialog({ projectId, customerName, custome
   const [danachAnhaenge, setDanachAnhaenge] = useState(false);
   // Weitere Einzelpositionen (Modul, Zusatzarbeitslage, Rollgerüst, Hängegerüst, Gitterträger, Konsolen, Plane, Zelt …)
   const [extra, setExtra] = useState<Position[]>([]);
+  const [katalog, setKatalog] = useState<LeistungKatalogEintrag[]>([]);
+  useEffect(() => {
+    fetch('/api/leistungskatalog', { cache: 'no-store' }).then((r) => r.json()).then((j) => { if (j?.success) setKatalog(normalisiereKatalog(j.eintraege).filter((k) => k.is_active !== false)) }).catch(() => {});
+  }, []);
   const [extraDetail, setExtraDetail] = useState<Record<number, boolean>>({});
 
   const [laeuft, setLaeuft] = useState(false);
@@ -471,7 +476,15 @@ export default function SchlussrechnungDialog({ projectId, customerName, custome
             <div className="rounded-lg bg-[#f5f5f7] p-3 space-y-2">
               <div className="flex items-center justify-between">
                 <p className="text-xs font-semibold text-[#1d1d1f]">Weitere Einzelpositionen</p>
-                <button type="button" onClick={() => setExtra([...extra, { bezeichnung: '', menge: 1, einheit: 'Stk.', einzelpreis: 0 }])} className="text-xs text-[#e8590c] font-semibold hover:underline">+ Position</button>
+                <div className="flex items-center gap-3">
+                  {katalog.length > 0 && (
+                    <select value="" onChange={(e) => { const k = katalog.find((x) => x.id === e.target.value); if (k) setExtra([...extra, katalogAlsPosition(k)]) }} aria-label="Aus Leistungskatalog" className="text-xs rounded border border-black/10 bg-white px-1 py-0.5 max-w-[14rem]">
+                      <option value="">Aus Leistungskatalog …</option>
+                      {katalog.map((k) => <option key={k.id} value={k.id}>{k.bezeichnung} ({k.einheit}{k.preis !== null ? `, ${k.preis.toFixed(2).replace('.', ',')} €` : ''})</option>)}
+                    </select>
+                  )}
+                  <button type="button" onClick={() => setExtra([...extra, { bezeichnung: '', menge: 1, einheit: 'Stk.', einzelpreis: 0 }])} className="text-xs text-[#e8590c] font-semibold hover:underline">+ Position</button>
+                </div>
               </div>
               <p className="text-[11px] text-[#86868b]">Zusätzlich zur Hauptleistung, z. B. Gerüst/Modul mit Maßen, zusätzliche Arbeitslage, Rollgerüst, Hängegerüst, Gitterträger, Konsolen, Plane oder Zelt. Unter „Details" wählst du die Art und trägst Maße ein.</p>
               <datalist id="geruest-ids-dialog">
