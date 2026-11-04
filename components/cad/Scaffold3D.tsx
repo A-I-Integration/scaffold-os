@@ -23,6 +23,7 @@ import { CADModel, ScaffoldComponent3D, BuildingFeature3D, berechneGebaeudeSegme
 import { CATALOG_ITEMS } from './ComponentCatalog'
 import Umgebung3D from './Umgebung3D'
 import { bauteilFarbe, type FarbModus } from '@/lib/cad/bauteil-farben'
+import { sollEntfallen, istTurmKoerperKnoten } from '@/lib/cad/glb-teile'
 import { baueStabwerk, STAB_FARBEN, type StabArt } from '@/lib/cad/stabwerk'
 import { baueBacksteinMaterial, getGrasTex, getSchieferTex, PRAESENTATION_ROHR, PRAESENTATION_HINTERGRUND } from '@/lib/cad/praesentation-material'
 import { kantenSchluessel } from '@/types/cad-layers'
@@ -1222,7 +1223,14 @@ function EchtesGebaeude3D({ aussehen, faktor, oben, versatzX = 0, versatzZ = 0, 
     // Draco-Decoder (aus dem IFC-Import des Workers, Phase 89) liegt unter /draco/gltf/; ohne Draco-Daten wird er nicht geladen.
     const draco = new DRACOLoader().setDecoderPath('/draco/gltf/')
     const lader = new GLTFLoader().setDRACOLoader(draco)
-    lader.parse(aussehen.daten.slice(0), '', (g) => { if (aktiv) { setGlbSzene(g.scene); invalidate() } }, () => { if (aktiv) setGlbSzene(null) })
+    lader.parse(aussehen.daten.slice(0), '', (g) => {
+      if (!aktiv) return
+      // Eigenes Gerüst und Sockel des Modells entfernen (unser Gerüst wird gezeichnet und berechnet)
+      const weg: THREE.Object3D[] = []
+      g.scene.traverse((o) => { if (o.name && sollEntfallen(o.name)) weg.push(o) })
+      weg.forEach((o) => o.removeFromParent())
+      setGlbSzene(g.scene); invalidate()
+    }, () => { if (aktiv) setGlbSzene(null) })
     return () => { aktiv = false; draco.dispose() }
   }, [aussehen, invalidate])
   const punkte = useMemo(() => {
@@ -1244,14 +1252,21 @@ function EchtesGebaeude3D({ aussehen, faktor, oben, versatzX = 0, versatzZ = 0, 
     const box = new THREE.Box3().setFromObject(g)
     if (box.isEmpty()) return null
     const mitte = box.getCenter(new THREE.Vector3())
+    // GLB mit benanntem Turmkörper: dessen Mitte als Anker (wie beim erkannten Turmschaft in OBJ-Dateien)
+    let turm: THREE.Vector3 | null = null
+    if (!anker && aussehen.art === 'glb') {
+      let tb: THREE.Box3 | null = null
+      g.traverse((o) => { if (!tb && o.name && istTurmKoerperKnoten(o.name)) { const b = new THREE.Box3().setFromObject(o); if (!b.isEmpty()) tb = b } })
+      if (tb) turm = (tb as THREE.Box3).getCenter(new THREE.Vector3())
+    }
     // Mit erkanntem Turmschaft: dessen Mitte in den Ursprung (wie unser Gerüst), sonst die Mitte der Gesamtbox
-    const fx = anker ? anker.wx * faktor : mitte.x, fz = anker ? anker.wz * faktor : mitte.z
-    return { g, pos: [-fx, -box.min.y, -fz] as [number, number, number] }
+    const fx = anker ? anker.wx * faktor : turm ? turm.x : mitte.x, fz = anker ? anker.wz * faktor : turm ? turm.z : mitte.z
+    return { g, pos: [-fx, -box.min.y, -fz] as [number, number, number], verankert: !!anker || !!turm }
   }, [aussehen.art, glbSzene, punkte, faktor, oben, anker])
   useEffect(() => { invalidate() }, [ausgerichtet, invalidate])
   if (!ausgerichtet) return null
   return (
-    <group position={[versatzX + (anker ? ziel.x : 0), 0, versatzZ + (anker ? ziel.z : 0)]} rotation={[0, ((drehungGrad + (anker ? anker.drehungGrad + ziel.drehungGrad : 0)) * Math.PI) / 180, 0]}>
+    <group position={[versatzX + (ausgerichtet.verankert ? ziel.x : 0), 0, versatzZ + (ausgerichtet.verankert ? ziel.z : 0)]} rotation={[0, ((drehungGrad + (ausgerichtet.verankert ? (anker ? anker.drehungGrad : 0) + ziel.drehungGrad : 0)) * Math.PI) / 180, 0]}>
       <group position={ausgerichtet.pos}><primitive object={ausgerichtet.g} /></group>
     </group>
   )
