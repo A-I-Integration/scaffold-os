@@ -40,3 +40,22 @@ describe('berechneBauphasen', () => {
     expect(normalisiereBauphasen([{ id: 'x', art: 'aufbau', datum: '2026-11-02', flaecheM2: 5 }, { art: 'foo' }, null])).toHaveLength(1)
   })
 })
+
+import { baueBauphasenPosition, markiereBauphaseAbgerechnet } from '@/lib/bauphasen'
+describe('Rechnungsposition aus Bauphase', () => {
+  it('Aufbau 600 m² bei 65 % → 600 m² × 6,50 €', () => {
+    const phasen = [p('a1', 'aufbau', '2026-11-02', 600)]
+    const r = berechneBauphasen(phasen, einst)
+    const pos = baueBauphasenPosition(phasen[0], r.phasen[0]).position!
+    expect(pos.menge).toBe(600); expect(pos.einheit).toBe('m²'); expect(pos.einzelpreis).toBe(6.5)
+  })
+  it('fester Betrag und Rundung → Pauschale; abgerechnete Phase gesperrt', () => {
+    const phasen = [p('b', 'abbau', '2026-12-01', 250, { betragManuell: 1234.57 })]
+    const r = berechneBauphasen(phasen, einst)
+    const pos = baueBauphasenPosition(phasen[0], r.phasen[0]).position!
+    expect(pos.einheit === 'Pauschale' ? pos.einzelpreis : pos.menge * pos.einzelpreis).toBeCloseTo(1234.57, 2)
+    const neu = markiereBauphaseAbgerechnet(phasen, 'b', { id: 'r1', nummer: 'RE-1' }, '2026-12-02')
+    expect(baueBauphasenPosition(neu[0], r.phasen[0]).fehler).toContain('RE-1')
+    expect(normalisiereBauphasen(neu)[0].rechnungNr).toBe('RE-1')
+  })
+})

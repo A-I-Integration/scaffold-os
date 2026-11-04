@@ -29,6 +29,10 @@ export interface Bauphase {
   /** fester Betrag netto (überschreibt alles andere) */
   betragManuell?: number
   notiz?: string
+  /** gesetzt, sobald die Phase abgerechnet wurde */
+  rechnungId?: string
+  rechnungNr?: string
+  abgerechnetAm?: string
 }
 
 export interface BauphasenEinstellung {
@@ -191,7 +195,27 @@ export function normalisiereBauphasen(raw: unknown): Bauphase[] {
     const o = r as Record<string, unknown>
     if ((o.art !== 'aufbau' && o.art !== 'abbau') || typeof o.datum !== 'string' || typeof o.id !== 'string') continue
     const num = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) ? v : undefined)
-    aus.push({ id: o.id, art: o.art, datum: o.datum, flaecheM2: num(o.flaecheM2) ?? 0, tageManuell: num(o.tageManuell), personen: num(o.personen), anteilProzentManuell: num(o.anteilProzentManuell), betragManuell: num(o.betragManuell), notiz: typeof o.notiz === 'string' ? o.notiz : undefined })
+    aus.push({ id: o.id, art: o.art, datum: o.datum, flaecheM2: num(o.flaecheM2) ?? 0, tageManuell: num(o.tageManuell), personen: num(o.personen), anteilProzentManuell: num(o.anteilProzentManuell), betragManuell: num(o.betragManuell), notiz: typeof o.notiz === 'string' ? o.notiz : undefined,
+      ...(typeof o.rechnungId === 'string' ? { rechnungId: o.rechnungId } : {}), ...(typeof o.rechnungNr === 'string' ? { rechnungNr: o.rechnungNr } : {}), ...(typeof o.abgerechnetAm === 'string' ? { abgerechnetAm: o.abgerechnetAm } : {}) })
   }
   return aus
+}
+
+const fmtDe = (n: number) => n.toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+const datumDe = (iso: string) => { const d = new Date(iso + 'T12:00:00'); return Number.isNaN(d.getTime()) ? iso : d.toLocaleDateString('de-DE') }
+
+/** Rechnungsposition für eine Phase (Abschlagsrechnung nach Bauphase). Genau der berechnete Betrag; bei Rundungsdifferenz als Pauschale. */
+export function baueBauphasenPosition(phase: Bauphase, erg: PhaseErgebnis): { position: { bezeichnung: string; menge: number; einheit: string; einzelpreis: number } | null; fehler: string | null } {
+  if (phase.rechnungId) return { position: null, fehler: `Diese Phase ist bereits mit Rechnung ${phase.rechnungNr || ''} abgerechnet.`.replace('  ', ' ') }
+  if (!(erg.betrag > 0)) return { position: null, fehler: 'Für diese Phase gibt es keinen Betrag (Preis je m², Menge oder Betrag prüfen).' }
+  const art = phase.art === 'aufbau' ? 'Aufbau' : 'Abbau / Teilrückbau'
+  const anteil = erg.anteilProzent === null ? 'fester Betrag' : `${erg.anteilProzent.toLocaleString('de-DE')} % des Preises`
+  const bez = `${art} ab ${datumDe(phase.datum)}: ${fmtDe(erg.flaecheM2)} m² (${anteil})`
+  const einzel = erg.flaecheM2 > 0 ? Math.round((erg.betrag / erg.flaecheM2) * 100) / 100 : 0
+  if (erg.flaecheM2 > 0 && Math.abs(Math.round(erg.flaecheM2 * einzel * 100) / 100 - erg.betrag) < 0.005) return { position: { bezeichnung: bez, menge: erg.flaecheM2, einheit: 'm²', einzelpreis: einzel }, fehler: null }
+  return { position: { bezeichnung: bez, menge: 1, einheit: 'Pauschale', einzelpreis: erg.betrag }, fehler: null }
+}
+
+export function markiereBauphaseAbgerechnet(phasen: Bauphase[], id: string, rechnung: { id: string; nummer: string }, heute: string): Bauphase[] {
+  return phasen.map((p) => (p.id === id ? { ...p, rechnungId: rechnung.id, rechnungNr: rechnung.nummer, abgerechnetAm: heute } : p))
 }

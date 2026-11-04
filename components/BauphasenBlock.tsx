@@ -97,13 +97,13 @@ export default function BauphasenBlock({ project }: Props) {
                     <div><label className='block text-[11px] text-[#86868b] mb-1'>Menge (m²)</label><input className={inputCls} inputMode='decimal' value={p.flaecheM2 ? String(p.flaecheM2).replace('.', ',') : ''} onChange={(e) => setP(p.id, { flaecheM2: zahl(e.target.value) ?? 0 })} /></div>
                     <div><label className='block text-[11px] text-[#86868b] mb-1'>Tage (leer = berechnet)</label><input className={inputCls} inputMode='numeric' value={p.tageManuell ?? ''} onChange={(e) => setP(p.id, { tageManuell: zahl(e.target.value) })} /></div>
                     <div><label className='block text-[11px] text-[#86868b] mb-1'>Personen</label><input className={inputCls} inputMode='numeric' value={p.personen ?? ''} placeholder={String(einst.standardPersonen)} onChange={(e) => setP(p.id, { personen: zahl(e.target.value) })} /></div>
-                    <div className='flex justify-end'><button type='button' aria-label='Phase entfernen' onClick={() => setPhasen((l) => l.filter((x) => x.id !== p.id))} className='px-2 py-1.5 text-[#86868b] hover:text-red-600'><Trash2 className='h-3.5 w-3.5' /></button></div>
+                    <div className='flex justify-end'><button type='button' aria-label='Phase entfernen' disabled={!!p.rechnungId} title={p.rechnungId ? 'Schon abgerechnet' : undefined} onClick={() => setPhasen((l) => l.filter((x) => x.id !== p.id))} className='px-2 py-1.5 text-[#86868b] hover:text-red-600 disabled:opacity-30'><Trash2 className='h-3.5 w-3.5' /></button></div>
                   </div>
                   <div className='grid grid-cols-2 gap-1.5'>
                     <div><label className='block text-[11px] text-[#86868b] mb-1'>Anteil am Preis in % (leer = {p.art === 'aufbau' ? einst.aufbauAnteilProzent : 100 - einst.aufbauAnteilProzent})</label><input className={inputCls} inputMode='decimal' value={p.anteilProzentManuell ?? ''} onChange={(e) => setP(p.id, { anteilProzentManuell: zahl(e.target.value) })} /></div>
                     <div><label className='block text-[11px] text-[#86868b] mb-1'>Fester Betrag € (leer = berechnet)</label><input className={inputCls} inputMode='decimal' value={p.betragManuell ?? ''} onChange={(e) => setP(p.id, { betragManuell: zahl(e.target.value) })} /></div>
                   </div>
-                  {r && <p className='text-[11px] text-[#424245]'><b>{fmt(r.betrag)} €</b> netto · {r.stunden ? `${fmt(r.stunden)} h, ` : ''}{r.tage ? `${r.tage} Arbeitstage ab ${datumDe(r.datum)} mit ${r.personen} Pers.` : 'keine Dauer (Stunden oder Tage eingeben)'}</p>}
+                  {r && <p className='text-[11px] text-[#424245]'>{p.rechnungId && <span className='mr-1 rounded bg-green-100 px-1 text-green-800'>abgerechnet {p.rechnungNr}</span>}<b>{fmt(r.betrag)} €</b> netto · {r.stunden ? `${fmt(r.stunden)} h, ` : ''}{r.tage ? `${r.tage} Arbeitstage ab ${datumDe(r.datum)} mit ${r.personen} Pers.` : 'keine Dauer (Stunden oder Tage eingeben)'}</p>}
                 </div>
               );
             })}
