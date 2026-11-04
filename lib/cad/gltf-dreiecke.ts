@@ -19,7 +19,8 @@ export type GltfErgebnis =
 
 const ZUSATZ = 'Bitte die Datei als IFC oder OBJ exportieren.'
 
-export function dreieckeAusSzene(wurzel: Object3D): GltfErgebnis {
+/** ausschliessen: Namen von Knoten (samt allem darunter), die nicht mitgezählt werden, z. B. ein mitgeliefertes Gerüst. */
+export function dreieckeAusSzene(wurzel: Object3D, ausschliessen?: (name: string) => boolean): GltfErgebnis {
   wurzel.updateMatrixWorld(true)
   const teile: Float32Array[] = []
   let anzahl = 0
@@ -28,6 +29,7 @@ export function dreieckeAusSzene(wurzel: Object3D): GltfErgebnis {
   wurzel.traverse((o) => {
     const m = o as Mesh
     if (!m.isMesh || !m.geometry) return
+    if (ausschliessen) { for (let k: Object3D | null = o; k; k = k.parent) { if (k.name && ausschliessen(k.name)) return } }
     const g = m.geometry as BufferGeometry
     const pos = g.getAttribute('position')
     if (!pos || pos.itemSize < 3) return
@@ -58,11 +60,11 @@ export function dreieckeAusSzene(wurzel: Object3D): GltfErgebnis {
   return { ok: true, dreiecke, anzahl }
 }
 
-export function dreieckeAusGltf(daten: ArrayBuffer | string): Promise<GltfErgebnis> {
+export function dreieckeAusGltf(daten: ArrayBuffer | string, ausschliessen?: (name: string) => boolean): Promise<GltfErgebnis> {
   return new Promise((resolve) => {
     try {
       new GLTFLoader().parse(daten, '', (gltf) => {
-        try { resolve(dreieckeAusSzene(gltf.scene)) } catch (e) { resolve({ ok: false, grund: 'defekt', meldung: `Die konvertierte Datei konnte nicht gelesen werden (${(e as Error).message}). ${ZUSATZ}` }) }
+        try { resolve(dreieckeAusSzene(gltf.scene, ausschliessen)) } catch (e) { resolve({ ok: false, grund: 'defekt', meldung: `Die konvertierte Datei konnte nicht gelesen werden (${(e as Error).message}). ${ZUSATZ}` }) }
       }, (err) => {
         const text = (err as unknown as { message?: string })?.message
         resolve({ ok: false, grund: 'defekt', meldung: `Die konvertierte Datei ist beschädigt oder unvollständig${text ? ` (${text})` : ''}. ${ZUSATZ}` })
