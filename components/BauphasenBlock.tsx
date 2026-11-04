@@ -4,6 +4,7 @@ import { useMemo, useState } from 'react';
 import { Plus, Trash2, CalendarRange } from 'lucide-react';
 import { parseBetrag } from '@/lib/nachtrag';
 import { abschnitteAusSchritt2, berechneAufmass } from '@/lib/aufmassblatt-pdf';
+import { lagerCheck, personalVorschlag, type LagerCheckZeile, type PersonalVorschlagTag } from '@/lib/bauphasen-planung';
 import { BAUPHASEN_STANDARD, berechneBauphasen, normalisiereBauphasen, type Bauphase, type BauphasenEinstellung } from '@/lib/bauphasen';
 
 // ============================================================
@@ -48,7 +49,38 @@ export default function BauphasenBlock({ project }: Props) {
   const [laeuft, setLaeuft] = useState(false);
   const [meldung, setMeldung] = useState<{ ok: boolean; text: string } | null>(null);
 
+  const [planung, setPlanung] = useState<{ lager: LagerCheckZeile[]; personal: PersonalVorschlagTag[]; namen: Record<string, string>; fehler?: string } | null>(null);
+  const [planLaeuft, setPlanLaeuft] = useState(false);
   const erg = useMemo(() => berechneBauphasen(phasen, { ...einst, material }), [phasen, einst, material]);
+  async function planungPruefen() {
+    setPlanLaeuft(true); setMeldung(null);
+    try {
+      const tage = erg.phasen.flatMap((x) => x.einsatzTage).sort();
+      const start = tage[0] ?? heute(), ende = tage[tage.length - 1] ?? start;
+      const [wp, inv] = await Promise.all([
+        fetch(`/api/wochenplanung?start=${start}&end=${ende}`).then((r) => r.json()),
+        fetch('/api/inventory').then((r) => r.json()),
+      ]);
+      const lager = inv?.success ? lagerCheck(erg, inv.items ?? []) : [];
+      const ma: { id: string; first_name: string; last_name: string }[] = wp?.success ? wp.employees ?? [] : [];
+      const namen = Object.fromEntries(ma.map((m) => [m.id, `${m.first_name} ${m.last_name}`.trim()]));
+      const personal = wp?.success ? personalVorschlag(erg, ma.map((m) => ({ id: m.id, name: namen[m.id] })), wp.einsaetze ?? [], wp.absences ?? []) : [];
+      setPlanung({ lager, personal, namen, fehler: !wp?.success ? (wp?.error || 'Wochenplanung konnte nicht geladen werden.') : !inv?.success ? (inv?.error || 'Lager konnte nicht geladen werden.') : undefined });
+    } catch (e) { setMeldung({ ok: false, text: e instanceof Error ? e.message : 'Fehler' }); } finally { setPlanLaeuft(false); }
+  }
+
+  async function personalEintragen() {
+    if (!planung) return;
+    setPlanLaeuft(true); setMeldung(null);
+    try {
+      const eintraege = planung.personal.flatMap((t) => t.ids.map((id) => ({ employee_id: id, einsatz_datum: t.datum })));
+      const res = await fetch('/api/bauphasen-einsatz', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ project_id: project.id, eintraege }) });
+      const j = await res.json().catch(() => ({}));
+      if (!res.ok || j.success === false) throw new Error(j.error || 'Eintragen fehlgeschlagen');
+      setMeldung({ ok: true, text: `${j.eingetragen} Einsatztage in die Wochenplanung eingetragen${j.uebersprungen?.length ? `, ${j.uebersprungen.length} übersprungen (schon woanders eingeplant)` : ''}.` });
+    } catch (e) { setMeldung({ ok: false, text: e instanceof Error ? e.message : 'Fehler' }); } finally { setPlanLaeuft(false); }
+  }
+
   const setE = (k: keyof Einst, v: string) => setEinst((e) => ({ ...e, [k]: zahl(v) ?? 0 }));
   const setP = (id: string, patch: Partial<Bauphase>) => setPhasen((l) => l.map((p) => (p.id === id ? { ...p, ...patch } : p)));
 
@@ -118,6 +150,33 @@ export default function BauphasenBlock({ project }: Props) {
               {erg.lager.length > 0 && <p><b>Lager (draußen nach letzter Phase):</b> {(() => { const l = erg.lager.filter((x) => x.datum === erg.lager[erg.lager.length - 1].datum); return `${l.length} Artikel, ${l.filter((x) => x.draussen > 0).length} noch auf der Baustelle`; })()}</p>}
               {erg.warnungen.map((w, i) => <p key={i} className='text-red-600'>⚠ {w}</p>)}
               <details><summary className='cursor-pointer text-[#86868b]'>So wird gerechnet</summary><ul className='list-disc pl-4 mt-1'>{erg.annahmen.map((a, i) => <li key={i}>{a}</li>)}</ul></details>
+            </div>
+          )}
+          {phasen.length > 0 && (
+            <div className='rounded-lg border border-black/10 p-2 space-y-2'>
+              <div className='flex flex-wrap items-center gap-2'>
+                <button type='button' disabled={planLaeuft} onClick={planungPruefen} className='px-3 py-1.5 rounded-lg border border-black/10 text-xs font-semibold text-[#1d1d1f] hover:bg-black/5 disabled:opacity-50'>{planLaeuft ? 'Prüft …' : 'Lager und Personal prüfen'}</button>
+                <span className='text-[10px] text-[#86868b]'>Liest den aktuellen Lagerbestand und die Wochenplanung. Es wird nichts gebucht.</span>
+              </div>
+              {planung?.fehler && <p className='text-[11px] text-red-600'>⚠ {planung.fehler}</p>}
+              {planung && planung.lager.length > 0 && (
+                <div className='text-[11px] text-[#424245]'>
+                  <p className='font-semibold'>Lager (größter Bedarf gleichzeitig draußen gegen aktuellen Bestand):</p>
+                  <ul className='list-disc pl-4'>
+                    {planung.lager.filter((l) => l.fehlt > 0 || l.hinweis).slice(0, 12).map((l) => <li key={l.artikel} className={l.fehlt > 0 ? 'text-red-600' : ''}>{l.name}: Bedarf {fmt(l.bedarfMax)} {l.einheit}{l.bestand !== null ? `, Bestand ${fmt(l.bestand)}` : ''}{l.fehlt > 0 ? ` – es fehlen ${fmt(l.fehlt)}` : ''}{l.hinweis ? ` – ${l.hinweis}` : ''}</li>)}
+                  </ul>
+                  {planung.lager.every((l) => l.fehlt === 0 && !l.hinweis) && <p>Alles im Lager vorhanden (andere Baustellen zur selben Zeit sind nicht berücksichtigt).</p>}
+                </div>
+              )}
+              {planung && planung.personal.length > 0 && (
+                <div className='text-[11px] text-[#424245] space-y-1'>
+                  <p className='font-semibold'>Personalvorschlag (nur Verfügbare, ohne Urlaub und Doppelbelegung):</p>
+                  <ul className='max-h-40 overflow-auto'>
+                    {planung.personal.map((t, i) => <li key={i} className={t.luecke > 0 ? 'text-red-600' : ''}>{datumDe(t.datum)}: {t.ids.map((id) => planung.namen[id] || id).join(', ') || '–'}{t.luecke > 0 ? ` (es fehlen ${t.luecke})` : ''}</li>)}
+                  </ul>
+                  <button type='button' disabled={planLaeuft} onClick={personalEintragen} className='px-3 py-1.5 rounded-lg bg-[#e8590c] text-white text-xs font-semibold disabled:opacity-50'>Vorschlag in die Wochenplanung eintragen</button>
+                </div>
+              )}
             </div>
           )}
           <div className='flex items-center gap-2'>
