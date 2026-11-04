@@ -1,3 +1,4 @@
+import { haubenHoehe, walmSockelHoehe } from '@/lib/cad/haube'
 import type { BuildingParams, BuildingSection } from '@/lib/calculations/cad-engine'
 
 /** Eingaben für die Vorlage „Kirche mit Turm": Turm links am Kirchenschiff, optional ein Chor am anderen Ende. */
@@ -12,6 +13,7 @@ export interface KircheMasse {
   turmSchaftM: number      // Höhe bis zum Helmansatz
   helmM: number            // Höhe des spitzen Helms (Pyramide); 0 = flaches Turmdach
   helmEinruesten: boolean
+  haube?: boolean          // Zwiebelhaube mit Laterne und Spitze darstellen (nur Ansicht); der Helm ist dann der Walm-Sockel darunter
   chorLaengeM: number      // 0 = kein Chor
   chorTraufeM: number
   chorDachM: number
@@ -47,12 +49,12 @@ const tiefe = (t: number, basis: number): { tiefeM?: number } => (Number.isFinit
 /** Baut aus den Kirchenmaßen die Gebäudedaten: Turm eingerüstet (links), Schiff und Chor nur dargestellt. */
 export function kircheAlsGebaeude(m: KircheMasse): BuildingParams {
   const abschnitte: BuildingSection[] = [
-    { bezeichnung: 'Turm', laengeM: m.turmLaengeM, hoeheM: m.turmSchaftM, ...tiefe(m.turmBreiteM, m.breiteM), roofForm: m.helmM > 0 ? 'walmdach' : 'flachdach', roofHoeheM: m.helmM, ...(m.helmM > 0 && m.helmEinruesten ? { helmGeruest: true } : {}) },
+    { bezeichnung: 'Turm', laengeM: m.turmLaengeM, hoeheM: m.turmSchaftM, ...tiefe(m.turmBreiteM, m.breiteM), roofForm: m.helmM > 0 ? 'walmdach' : 'flachdach', roofHoeheM: m.helmM > 0 && m.haube ? walmSockelHoehe(Math.min(m.turmLaengeM, Number.isFinite(m.turmBreiteM) ? m.turmBreiteM : m.breiteM) / 2) : m.helmM, ...(m.helmM > 0 && m.helmEinruesten ? { helmGeruest: true } : {}), ...(m.helmM > 0 && m.haube ? { haube: 'zwiebel-laterne' as const } : {}) },
     { bezeichnung: 'Kirchenschiff', laengeM: m.schiffLaengeM, hoeheM: m.schiffTraufeM, roofForm: 'satteldach', roofHoeheM: m.schiffDachM, geruest: false },
   ]
   if (m.chorLaengeM > 0) abschnitte.push({ bezeichnung: 'Chor', laengeM: m.chorLaengeM, hoeheM: m.chorTraufeM, roofForm: 'satteldach', roofHoeheM: m.chorDachM, geruest: false, ...tiefe(m.chorBreiteM, m.breiteM) })
   const laenge = abschnitte.reduce((s, a) => s + a.laengeM, 0)
-  const gesamtH = m.turmSchaftM + m.helmM
+  const gesamtH = m.turmSchaftM + (m.helmM > 0 && m.haube ? haubenHoehe('zwiebel-laterne') : m.helmM)
   const geschosse = Math.max(1, Math.round(m.turmSchaftM / 3.5))
   return {
     lengthM: laenge, widthM: m.breiteM, heightM: gesamtH, eavesHeightM: m.turmSchaftM, roofHeightM: m.helmM, roofForm: 'flachdach',

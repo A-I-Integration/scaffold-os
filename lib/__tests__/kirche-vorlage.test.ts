@@ -39,3 +39,24 @@ describe('Kirchenvorlage', () => {
     expect(Math.max(...m.fields.map((f) => f.positionX))).toBeLessThan(-8)
   })
 })
+
+import { haubenHoehe, walmSockelHoehe, HAUBEN_PROFIL } from '@/lib/cad/haube'
+describe('Turmhaube', () => {
+  it('Profil: Radien ≥ 0, Höhen nicht fallend', () => {
+    const p = HAUBEN_PROFIL['zwiebel-laterne']
+    for (let i = 0; i < p.length; i++) { expect(p[i][1]).toBeGreaterThanOrEqual(0); if (i) expect(p[i][0]).toBeGreaterThanOrEqual(p[i - 1][0]) }
+    expect(haubenHoehe('zwiebel-laterne')).toBeCloseTo(18.8, 5)
+  })
+  it('Walm-Sockel passt zum Zwiebelradius', () => {
+    expect(walmSockelHoehe(4.57)).toBeCloseTo(5.3, 1)
+    expect(walmSockelHoehe(2)).toBe(2.5)
+  })
+  it('Vorlage mit Haube: nur Darstellung, Gerüst unverändert', () => {
+    const ohne = kircheAlsGebaeude({ ...KIRCHE_STANDARD, turmLaengeM: 9.14, turmBreiteM: 9.18, turmSchaftM: 31, helmM: 3, helmEinruesten: false })
+    const mit = kircheAlsGebaeude({ ...KIRCHE_STANDARD, turmLaengeM: 9.14, turmBreiteM: 9.18, turmSchaftM: 31, helmM: 3, helmEinruesten: false, haube: true })
+    expect(ohne.sections![0].haube).toBeUndefined()
+    expect(mit.sections![0].haube).toBe('zwiebel-laterne')
+    expect(mit.sections![0].hoeheM).toBe(ohne.sections![0].hoeheM)
+    expect(mit.heightM).toBeCloseTo(31 + 18.8, 5)
+  })
+})

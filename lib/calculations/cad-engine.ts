@@ -26,6 +26,8 @@ export interface BuildingSection {
   geruest?: boolean
   /** true = auch den (Walm-)Dachhelm dieses Abschnitts einrüsten: Die Lagen über dem Schaft werden nach innen versetzt und kürzer, so wie die Dachfläche schmaler wird (Annahme: alle Dachflächen gleich geneigt). */
   helmGeruest?: boolean
+  /** Nur Darstellung: Turmhaube (Zwiebel mit Laterne) über dem Schaft; verändert Gerüst und Mengen nicht. */
+  haube?: 'zwiebel-laterne'
   /** Je Seite: Gerüst erst ab dieser Höhe (m über Gelände), weil darunter ein anderes Gebäude davorsteht (z. B. Nachbarhaus vor der Turmwand). Annahme: Das Gerüst steht dort auf dem verdeckenden Gebäude – Lastabtrag muss der Statiker prüfen. */
   geruestAbHoeheM?: Partial<Record<'front' | 'back' | 'left' | 'right', number>>
   /** Eigene Tiefe dieses Abschnitts in m (z. B. Turm 9 m tief an einem 12 m tiefen Schiff). Fehlt sie, gilt die Gebäudetiefe (widthM). */
@@ -172,6 +174,7 @@ export interface GebaeudeSegment {
   // NEU: eigene Dachform/-höhe je Abschnitt, durchgereicht aus BuildingSection
   roofForm?: BuildingSection['roofForm']
   roofHoeheM?: number
+  haube?: BuildingSection['haube']
   tiefeM?: number
   versatzM?: number
 }
@@ -196,7 +199,7 @@ export function berechneGebaeudeSegmente(sections: BuildingSection[]): GebaeudeS
       bezeichnung: s.bezeichnung, laengeM: s.laengeM, hoeheM: s.hoeheM,
       startX: x, startZ: z, endX: x + dx, endZ: z + dz,
       mitteX, mitteZ, rotationYRad: -winkelRad,
-      roofForm: s.roofForm, roofHoeheM: s.roofHoeheM, tiefeM: s.tiefeM, versatzM: s.versatzM,
+      roofForm: s.roofForm, roofHoeheM: s.roofHoeheM, tiefeM: s.tiefeM, versatzM: s.versatzM, haube: s.haube,
     })
     x += dx
     z += dz

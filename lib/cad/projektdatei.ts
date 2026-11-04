@@ -7,6 +7,7 @@
 // übernommen. Die Datei enthält KEINE Berechnung und keinen Standsicherheitsnachweis.
 // ============================================================
 
+import { istHaubenForm } from '@/lib/cad/haube'
 import type { BuildingParams, BuildingSection, CadTuer } from '@/lib/calculations/cad-engine'
 import { findeSystem } from '@/lib/calculations/geruest-systeme'
 import { bereinigeStatikDaten, type StatikDaten } from '@/lib/statik-daten'
@@ -119,6 +120,7 @@ export function liesProjektdatei(text: string): LeseErgebnis {
       const td = zahl(o.tiefeM, 1, MAX_MASS_M); if (td != null) a.tiefeM = td
       const vs = zahl(o.versatzM, -MAX_MASS_M, MAX_MASS_M); if (vs != null) a.versatzM = vs
       if (o.helmGeruest === true) a.helmGeruest = true
+      if (istHaubenForm(o.haube)) a.haube = o.haube
       if (o.geruestAbHoeheM && typeof o.geruestAbHoeheM === 'object') {
         const ab: NonNullable<BuildingSection['geruestAbHoeheM']> = {}
         for (const k of ['front', 'back', 'left', 'right'] as const) { const v = zahl((o.geruestAbHoeheM as Record<string, unknown>)[k], 0.1, MAX_MASS_M); if (v != null) ab[k] = v }

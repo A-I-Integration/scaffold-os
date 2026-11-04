@@ -620,6 +620,10 @@ export default function BuildingForm({ building, systemId, onChange, onSystemCha
                       <input type='checkbox' checked={kirche.helmEinruesten} onChange={(e) => setKirche({ ...kirche, helmEinruesten: e.target.checked })} />
                       Turmhelm mit einrüsten
                     </label>
+                    <label className='flex items-center gap-2 text-[11px] text-[#424245]'>
+                      <input type='checkbox' checked={!!kirche.haube} onChange={(e) => setKirche({ ...kirche, haube: e.target.checked })} />
+                      Zwiebelhaube mit Laterne darstellen (nur Ansicht, ca. 19 m hoch; der Walm-Sockel darunter wird automatisch angepasst, „Helmhöhe“ muss nur größer 0 sein)
+                    </label>
                     {fehler && <p className='text-[10px] text-red-600'>{fehler}</p>}
                     <button type='button' disabled={!!fehler} onClick={() => { onChange(kircheUebernehmen(building, kirche)); setKircheOffen(false) }}
                       className='w-full px-2 py-1.5 rounded-lg bg-[#1d1d1f] text-white text-xs disabled:opacity-40'>Kirche übernehmen</button>
