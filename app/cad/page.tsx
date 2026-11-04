@@ -25,9 +25,8 @@ import StatikDatenPanel from '@/components/cad/StatikDatenPanel'
 import { verlaufNeu, verlaufSetze, verlaufZurueck, verlaufVor } from '@/lib/cad/verlauf'
 import { type Aussehen } from '@/lib/cad/modell-aussehen'
 import { aussehenAusDateien } from '@/lib/cad/obj-mtl-zu-glb'
-import { dreieckeAusGltf } from '@/lib/cad/gltf-dreiecke'
-import { sollEntfallen, istTurmKoerperKnoten } from '@/lib/cad/glb-teile'
-import { masseAusDreiecken, glbHatTurmKoerper } from '@/lib/cad/glb-masse'
+import { glbHatTurmKoerper } from '@/lib/cad/glb-masse'
+import { istTurmKoerperKnoten } from '@/lib/cad/glb-teile'
 import { CAD_UEBERNAHME_KEY, leseCadUebergabe } from '@/lib/cad/aufmass-zu-cad'
 import { ladeArbeitsstand, speichereArbeitsstand, vergissArbeitsstand, holeStempel, neuerStempel } from '@/lib/cad/arbeitsstand'
 import { merkeAussehen, ladeGemerktesAussehen, vergissAussehen } from '@/lib/cad/modell-speicher'
@@ -130,6 +129,8 @@ export default function CADPage() {
   const [aussehenEinheit, setAussehenEinheit] = useState<'m' | 'cm' | 'mm'>('m')
   const [aussehenOben, setAussehenOben] = useState<'x' | 'y' | 'z'>('y')
   const [aussehenHinweis, setAussehenHinweis] = useState('')
+  const planUploadRef = useRef<((datei: File) => Promise<void>) | null>(null)
+  const registrierePlanUpload = useCallback((fn: ((datei: File) => Promise<void>) | null) => { planUploadRef.current = fn }, [])
   const [autoGenerate, setAutoGenerate] = useState(false)
   const [aussehenAnker, setAussehenAnker] = useState<{ wx: number; wz: number; drehungGrad: number } | null>(null)
   const [aussehenVersatz, setAussehenVersatz] = useState<{ x: number; z: number; grad: number }>({ x: 0, z: 0, grad: 0 })
@@ -155,22 +156,19 @@ export default function CADPage() {
   }, [aussehen, aussehenEinheit, aussehenOben, aussehenVersatz, aussehenAnker])
   const ladeAussehen = async (dateien: File[]) => {
     setAussehenHinweis('')
+    // Eine einzelne GLB (ohne benannten Turmkörper) läuft durch denselben Import wie links im Gebäude-Upload:
+    // Maße + Gerüst + Anzeige mit EINEM Upload. Turm-Modelle behalten die bisherige Ausrichtung.
+    const einzeln = dateien.length === 1 ? dateien[0] : null
+    if (einzeln && /\.glb$/i.test(einzeln.name) && planUploadRef.current) {
+      try {
+        if (!glbHatTurmKoerper(await einzeln.arrayBuffer(), istTurmKoerperKnoten)) { await planUploadRef.current(einzeln); return }
+      } catch { /* fällt auf den normalen Pfad zurück */ }
+    }
     try {
       const r = await aussehenAusDateien(dateien)
       if (!r.ok) { setAussehenHinweis('❌ ' + r.meldung); return }
       setAussehen(r.aussehen); setAussehenEin(true); setAussehenEinheit('m'); setAussehenOben(r.oben ?? 'y'); setAussehenAnker(r.anker ?? null); setAussehenVersatz({ x: 0, z: 0, grad: 0 })
       setAussehenHinweis(r.hinweis ?? '')
-      // Einzelnes Haus als GLB (ohne benannten Turm): Gerüst auf die gemessenen Maße des Hauses setzen
-      if (r.aussehen.art === 'glb' && !r.anker && !glbHatTurmKoerper(r.aussehen.daten, istTurmKoerperKnoten)) {
-        const g = await dreieckeAusGltf(r.aussehen.daten.slice(0), sollEntfallen)
-        const m = g.ok ? masseAusDreiecken(g.dreiecke, 'y', 1) : null
-        if (m) {
-          setAutoGenerate(true)
-          setBuilding({ ...building, lengthM: m.lengthM, widthM: m.widthM, heightM: m.heightM, eavesHeightM: m.eavesHeightM, roofHeightM: m.roofHeightM, roofForm: m.roofForm, floors: Math.max(1, Math.round(m.eavesHeightM / 3)), floorHeightsM: [], sections: undefined, umriss: undefined })
-          if (m.drehen90) setAussehenVersatz({ x: 0, z: 0, grad: 90 })
-          setAussehenHinweis(`Gerüst an das Haus angepasst: ${m.lengthM} × ${m.widthM} m, Traufe ${m.eavesHeightM} m, First ${m.heightM} m, ${m.roofForm}. Aus der Hülle gemessen – bitte prüfen; Fenster/Türen bitte selbst eintragen.`)
-        }
-      }
     } catch (e) { setAussehenHinweis('❌ Datei konnte nicht gelesen werden: ' + (e instanceof Error ? e.message : 'Fehler')) }
   }
   const echtesGebaeude = useMemo(
@@ -983,7 +981,7 @@ export default function CADPage() {
               <ul className='mt-1 list-disc pl-4 space-y-0.5'>{aufmassHinweise.map((h, i) => <li key={i}>{h}</li>)}</ul>
             </div>
           )}
-          <BuildingForm building={building} systemId={systemId} onChange={(b) => { setAutoGenerate(true); setBuilding(b); }} onSystemChange={aendereSystem} onGenerate={() => { setAutoGenerate(true); generate(); }} onLadeProjektdatei={ladeProjektdatei} onAussehen={(a, h) => { setAussehen(a); setAussehenEin(true); setAussehenEinheit('m'); setAussehenOben('y'); setAussehenVersatz({ x: 0, z: 0, grad: 0 }); setAussehenHinweis(h ?? '') }} warnings={allWarnings}
+          <BuildingForm building={building} systemId={systemId} onChange={(b) => { setAutoGenerate(true); setBuilding(b); }} onSystemChange={aendereSystem} onGenerate={() => { setAutoGenerate(true); generate(); }} onLadeProjektdatei={ladeProjektdatei} onAussehen={(a, h, v) => { setAussehen(a); setAussehenEin(true); setAussehenEinheit('m'); setAussehenOben('y'); setAussehenAnker(null); setAussehenVersatz(v ?? { x: 0, z: 0, grad: 0 }); setAussehenHinweis(h ?? '') }} onModellUebernehmen={(b) => { setAutoGenerate(true); setBuilding(b); setModel(null) }} registrierePlanUpload={registrierePlanUpload} warnings={allWarnings}
             zusatz={<StatikDatenPanel daten={statikDaten} onChange={setStatikDaten} model={modelWithManual} />} />
         </div>
         <div className='flex-1 flex flex-col min-w-0'>

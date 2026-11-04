@@ -32,13 +32,17 @@ interface Props {
   onGenerate: () => void
   onLadeProjektdatei?: (datei: File) => void
   /** Phase 89: 3D-Modell (glTF) aus dem Worker-IFC-Import zur Anzeige übergeben */
-  onAussehen?: (a: import('@/lib/cad/modell-aussehen').Aussehen, hinweis?: string) => void
+  onAussehen?: (a: import('@/lib/cad/modell-aussehen').Aussehen, hinweis?: string, versatz?: { x: number; z: number; grad: number }) => void
+  /** 3D-Modell wurde als neue CAD-Gebäudegrundlage übernommen: Elternebene verwirft das alte Gerüst und rechnet neu. */
+  onModellUebernehmen?: (building: BuildingParams) => void
+  /** Der obere „Echtes Gebäude laden“-Knopf schickt eine einzelne GLB damit durch denselben Import (ein Upload genügt). */
+  registrierePlanUpload?: (fn: ((datei: File) => Promise<void>) | null) => void
   warnings: { type: string; message: string }[]
   /** Zusätzlicher Bereich am Ende der scrollenden Liste, also über dem Button „Gerüst neu berechnen“ (z. B. Projektdaten für die Statik) */
   zusatz?: ReactNode
 }
 
-export default function BuildingForm({ building, systemId, onChange, onSystemChange, onGenerate, onLadeProjektdatei, onAussehen, warnings, zusatz }: Props) {
+export default function BuildingForm({ building, systemId, onChange, onSystemChange, onGenerate, onLadeProjektdatei, onAussehen, onModellUebernehmen, registrierePlanUpload, warnings, zusatz }: Props) {
   const [activeTab, setActiveTab] = useState<'gebaeude' | 'geruest' | 'system'>('gebaeude')
   const [analyseLaeuft, setAnalyseLaeuft] = useState(false)
   const [analyseHinweis, setAnalyseHinweis] = useState<string | null>(null)
@@ -144,10 +148,37 @@ export default function BuildingForm({ building, systemId, onChange, onSystemCha
     if (ext === '.glb') {
       if (file.size > 100 * 1024 * 1024) { setAnalyseHinweis('❌ Datei zu groß (max. 100 MB). Bitte das Modell vereinfachen oder nur das Gebäude exportieren.'); return; }
       try {
-        const [{ dreieckeAusGltf }, { sollEntfallen }, { spannweiten }] = await Promise.all([import('@/lib/cad/gltf-dreiecke'), import('@/lib/cad/glb-teile'), import('@/lib/cad/modell-analyse')])
-        const r = await dreieckeAusGltf(await file.arrayBuffer(), sollEntfallen)
+        const [{ dreieckeAusGltf }, { sollEntfallen, istTurmKoerperKnoten }, { spannweiten }, { masseAusDreiecken, glbHatTurmKoerper }] = await Promise.all([import('@/lib/cad/gltf-dreiecke'), import('@/lib/cad/glb-teile'), import('@/lib/cad/modell-analyse'), import('@/lib/cad/glb-masse')])
+        const daten = await file.arrayBuffer()
+        const r = await dreieckeAusGltf(daten, sollEntfallen)
         if (!r.ok) { setAnalyseHinweis('❌ ' + r.meldung); return }
         const [x, y, z] = spannweiten(r.dreiecke)
+        const komma = (n: number) => n.toString().replace('.', ',')
+        const uebernehmen = (b: BuildingParams) => { if (onModellUebernehmen) onModellUebernehmen(b); else onChange(b) }
+        const basis = { ...building, umriss: undefined, sections: undefined, sides: ['front', 'back', 'left', 'right'] as BuildingParams['sides'] }
+        // 1. Belegte Maße aus den GLB-Metadaten (exakt) – schlagen jede Messung an der Geometrie
+        if (r.gebaeude) {
+          const m = r.gebaeude
+          const trauf = m.eavesHeightM ?? m.heightM
+          const dachH = m.roofHeightM ?? Math.max(0, m.heightM - trauf)
+          const gb: BuildingParams = { ...basis, lengthM: m.lengthM, widthM: m.widthM, heightM: m.heightM, eavesHeightM: trauf, roofHeightM: dachH, roofForm: m.roofForm ?? (dachH > 0 ? 'satteldach' : 'flachdach'), floors: Math.max(1, Math.round(trauf / 3)), floorHeightsM: [] }
+          const text = `Exakte Gebäudemaße aus der GLB übernommen: ${komma(m.lengthM)} × ${komma(m.widthM)} m, Traufe ${komma(trauf)} m, Höhe ${komma(m.heightM)} m. Das Gerüst wird daraus neu berechnet; Fenster und Türen bitte selbst eintragen.`
+          uebernehmen(gb)
+          onAussehen?.({ art: 'glb', name: file.name, daten, zentriert: 'datei' }, text, { x: 0, z: -0.5 - m.widthM / 2, grad: 0 })
+          setAnalyseHinweis(text)
+          return
+        }
+        // 2. Einzelnes Haus ohne Metadaten (kein benannter Turmkörper): aus der Hülle vermessen (Wandmaß, Traufe, First, Dachform)
+        const hm = glbHatTurmKoerper(daten, istTurmKoerperKnoten) ? null : masseAusDreiecken(r.dreiecke, 'y', 1)
+        if (hm) {
+          const gb: BuildingParams = { ...basis, lengthM: hm.lengthM, widthM: hm.widthM, heightM: hm.heightM, eavesHeightM: hm.eavesHeightM, roofHeightM: hm.roofHeightM, roofForm: hm.roofForm, floors: Math.max(1, Math.round(hm.eavesHeightM / 3)), floorHeightsM: [] }
+          const text = `Gerüst an das Haus angepasst: ${komma(hm.lengthM)} × ${komma(hm.widthM)} m, Traufe ${komma(hm.eavesHeightM)} m, Höhe ${komma(hm.heightM)} m, ${hm.roofForm}. Aus der Hülle gemessen (keine Maße in der Datei) – bitte prüfen; Fenster und Türen bitte selbst eintragen.`
+          uebernehmen(gb)
+          onAussehen?.({ art: 'glb', name: file.name, daten, zentriert: 'geometrie' }, text, { x: 0, z: -0.5 - hm.widthM / 2, grad: hm.drehen90 ? 90 : 0 })
+          setAnalyseHinweis(text)
+          return
+        }
+        // 3. Mehrteiliges Modell (z. B. Kirche mit Turm): wie bisher als Analyse zur Prüfung anbieten
         setModellImport({ name: file.name, format: 'obj', quader: { groesse: { x, y, z }, punkte: r.dreiecke.length / 3 }, dreiecke: r.dreiecke, einheit: 'm', oben: 'y', einheitGeschaetzt: false })
         setAnalyseHinweis('GLB gelesen (Y oben, Meter). Ein mitgeliefertes Gerüst und der Sockel wurden nicht mitgezählt. Maße aus KI-erzeugten Modellen bitte mit dem Plan prüfen.')
       } catch (err: any) {
@@ -422,6 +453,14 @@ export default function BuildingForm({ building, systemId, onChange, onSystemCha
     onChange({ ...building, sides: newSides })
   }
 
+  // Der obere „Echtes Gebäude laden“-Knopf nutzt denselben Import (Ref wird nach dem Render geschrieben)
+  const planUploadRef = useRef<((datei: File) => Promise<void>) | null>(null)
+  useEffect(() => { planUploadRef.current = (d) => handlePlanUpload(d) })
+  useEffect(() => {
+    if (!registrierePlanUpload) return
+    registrierePlanUpload(async (datei) => { await planUploadRef.current?.(datei) })
+    return () => registrierePlanUpload(null)
+  }, [registrierePlanUpload])
   return (
     <div className='h-full flex flex-col bg-white border-r border-black/5'>
       <div className='p-4 border-b border-black/5'>

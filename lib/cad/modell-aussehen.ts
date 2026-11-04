@@ -12,7 +12,7 @@ export const PUNKTE_MAX = 400_000
 export const AUSSEHEN_MAX_BYTES = 120 * 1024 * 1024
 
 export type Aussehen =
-  | { art: 'glb'; name: string; daten: ArrayBuffer }
+  | { art: 'glb'; name: string; daten: ArrayBuffer; /** 'datei': Der Datei-Ursprung ist bereits die Gebäudemitte (belegte Maße aus den GLB-Metadaten); sonst wird die sichtbare Geometrie zentriert. */ zentriert?: 'datei' | 'geometrie' }
   | { art: 'punkte'; name: string; positionen: Float32Array; farben: Uint8Array }
 
 export type AussehenErgebnis = { ok: true; aussehen: Aussehen; hinweis?: string; /** aus dem Dateikopf erkannte Achse „oben“ */ oben?: 'x' | 'y' | 'z'; /** Lage des erkannten Turmschafts zur Ausrichtung auf unser Gerüst */ anker?: GebaeudeAnker } | { ok: false; meldung: string }

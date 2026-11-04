@@ -1279,9 +1279,12 @@ function EchtesGebaeude3D({ aussehen, faktor, oben, versatzX = 0, versatzZ = 0, 
       if (tb) turm = (tb as THREE.Box3).getCenter(new THREE.Vector3())
     }
     // Mit erkanntem Turmschaft: dessen Mitte in den Ursprung (wie unser Gerüst), sonst die Mitte der Gesamtbox
-    const fx = anker ? anker.wx * faktor : turm ? turm.x : mitte.x, fz = anker ? anker.wz * faktor : turm ? turm.z : mitte.z
+    // Belegte Gebäudemaße (GLB-Metadaten): Datei-Ursprung = Grundflächenmitte, NICHT an der Sichtbox nachzentrieren
+    // (Treppe, Dachüberstand, Rinnen oder Schornstein würden das Haus sonst gegenüber dem Gerüst verschieben)
+    const ausDatei = aussehen.art === 'glb' && aussehen.zentriert === 'datei' && !anker && !turm
+    const fx = ausDatei ? 0 : anker ? anker.wx * faktor : turm ? turm.x : mitte.x, fz = ausDatei ? 0 : anker ? anker.wz * faktor : turm ? turm.z : mitte.z
     return { g, pos: [-fx, -box.min.y, -fz] as [number, number, number], verankert: !!anker || !!turm }
-  }, [aussehen.art, glbSzene, punkte, faktor, oben, anker])
+  }, [aussehen.art, aussehen.art === 'glb' ? aussehen.zentriert : undefined, glbSzene, punkte, faktor, oben, anker])
   useEffect(() => { invalidate() }, [ausgerichtet, invalidate])
   if (!ausgerichtet) return null
   return (

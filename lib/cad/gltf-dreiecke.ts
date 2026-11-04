@@ -13,11 +13,73 @@ import { Mesh, Vector3, type BufferGeometry, type Object3D } from 'three'
 
 export const GLTF_MAX_DREIECKE = 20_000_000
 
+export type GltfDachForm = 'flachdach' | 'satteldach' | 'walmdach' | 'pultdach' | 'mansardendach' | 'kein'
+
+/** Exakte CAD-Maße aus den Metadaten einer GLB (falls der Export sie enthält). Diese Werte schlagen die grobe Sichtbox. */
+export interface GltfGebaeudeMasse {
+  lengthM: number
+  widthM: number
+  heightM: number
+  eavesHeightM?: number
+  roofHeightM?: number
+  roofForm?: GltfDachForm
+}
+
 export type GltfErgebnis =
-  | { ok: true; dreiecke: Float32Array; anzahl: number }
+  | { ok: true; dreiecke: Float32Array; anzahl: number; gebaeude?: GltfGebaeudeMasse }
   | { ok: false; grund: 'defekt' | 'leer' | 'zu-gross'; meldung: string }
 
 const ZUSATZ = 'Bitte die Datei als IFC oder OBJ exportieren.'
+const DACH_FORMEN = new Set<GltfDachForm>(['flachdach', 'satteldach', 'walmdach', 'pultdach', 'mansardendach', 'kein'])
+
+function zahlAus(v: unknown): number | null {
+  if (typeof v === 'number') return Number.isFinite(v) ? v : null
+  if (typeof v !== 'string') return null
+  const n = Number(v.trim().replace(',', '.'))
+  return Number.isFinite(n) ? n : null
+}
+
+function grundflaecheAus(v: unknown): { lengthM: number; widthM: number } | null {
+  if (typeof v !== 'string') return null
+  const m = /(\d+(?:[.,]\d+)?)\s*(?:x|×|\*)\s*(\d+(?:[.,]\d+)?)/i.exec(v)
+  if (!m) return null
+  const a = zahlAus(m[1]), b = zahlAus(m[2])
+  return a !== null && b !== null ? { lengthM: a, widthM: b } : null
+}
+
+/** Liest belegte Maße aus glTF-Extras/userData. Unvollständige oder widersprüchliche Angaben werden verworfen. */
+export function gebaeudeMasseAusUserData(daten: Record<string, unknown>): GltfGebaeudeMasse | null {
+  const grund = grundflaecheAus(daten.Grundflaeche_m ?? daten.grundflaeche_m)
+  const lengthM = zahlAus(daten.Gebaeudelaenge_m ?? daten.Laenge_m ?? daten.laenge_m) ?? grund?.lengthM
+  const widthM = zahlAus(daten.Gebaeudebreite_m ?? daten.Breite_m ?? daten.breite_m) ?? grund?.widthM
+  const heightM = zahlAus(daten.Firsthoehe_m ?? daten.Gesamthoehe_m ?? daten.Gebaeudehoehe_m ?? daten.Hoehe_m)
+  const eavesHeightM = zahlAus(daten.Traufhoehe_m ?? daten.traufhoehe_m)
+  if (lengthM == null || widthM == null || heightM === null) return null
+  if (!(lengthM > 0 && widthM > 0 && heightM > 0)) return null
+  if (!(lengthM <= 300 && widthM <= 200 && heightM <= 150)) return null
+  if (eavesHeightM !== null && (!(eavesHeightM > 0) || eavesHeightM > heightM)) return null
+  const dachVonForm = typeof daten.Dachform === 'string' ? daten.Dachform.trim().toLowerCase() : null
+  const roofForm = dachVonForm && DACH_FORMEN.has(dachVonForm as GltfDachForm) ? dachVonForm as GltfDachForm : undefined
+  const roofHeightM = zahlAus(daten.Dachhoehe_m ?? daten.dachhoehe_m) ?? (eavesHeightM !== null ? Math.max(0, heightM - eavesHeightM) : undefined)
+  return {
+    lengthM: Math.round(lengthM * 100) / 100,
+    widthM: Math.round(widthM * 100) / 100,
+    heightM: Math.round(heightM * 100) / 100,
+    ...(eavesHeightM !== null ? { eavesHeightM: Math.round(eavesHeightM * 100) / 100 } : {}),
+    ...(roofHeightM !== undefined ? { roofHeightM: Math.round(roofHeightM * 100) / 100 } : {}),
+    ...(roofForm ? { roofForm } : {}),
+  }
+}
+
+function gebaeudeMasseAusSzene(wurzel: Object3D): GltfGebaeudeMasse | undefined {
+  let gefunden: GltfGebaeudeMasse | undefined
+  wurzel.traverse((o) => {
+    if (gefunden || !o.userData) return
+    gefunden = gebaeudeMasseAusUserData(o.userData as Record<string, unknown>) ?? undefined
+  })
+  return gefunden
+}
+
 
 /** ausschliessen: Namen von Knoten (samt allem darunter), die nicht mitgezählt werden, z. B. ein mitgeliefertes Gerüst. */
 export function dreieckeAusSzene(wurzel: Object3D, ausschliessen?: (name: string) => boolean): GltfErgebnis {
@@ -57,7 +119,8 @@ export function dreieckeAusSzene(wurzel: Object3D, ausschliessen?: (name: string
   for (let i = 0; i < dreiecke.length; i++) {
     if (!Number.isFinite(dreiecke[i])) return { ok: false, grund: 'defekt', meldung: `Die konvertierte Datei enthält ungültige Koordinaten. ${ZUSATZ}` }
   }
-  return { ok: true, dreiecke, anzahl }
+  const gebaeude = gebaeudeMasseAusSzene(wurzel)
+  return { ok: true, dreiecke, anzahl, ...(gebaeude ? { gebaeude } : {}) }
 }
 
 export function dreieckeAusGltf(daten: ArrayBuffer | string, ausschliessen?: (name: string) => boolean): Promise<GltfErgebnis> {
