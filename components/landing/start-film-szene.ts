@@ -11,6 +11,7 @@
 // ============================================================
 import * as THREE from 'three'
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js'
+import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 
 export interface Szene { dispose: () => void; resize: () => void }
 /** Die eine Bühne: das Zeichenfeld (steht beim Scrollen fest im Bild), sein Behälter (für die Maßketten), der Behälter aller Textabschnitte und die Abschnitte selbst */
@@ -37,9 +38,10 @@ const WP = [
 export function starteSzene(buehne: Buehne, reduce: boolean, kopfHoehe: () => number): Szene | null {
   let renderer: THREE.WebGLRenderer
   try { renderer = new THREE.WebGLRenderer({ canvas: buehne.canvas, antialias: true, powerPreference: 'high-performance' }) } catch { return null }
-  // Farben wie entworfen (Hexwerte direkt), Lichter entsprechend kräftiger
-  THREE.ColorManagement.enabled = false
-  renderer.outputColorSpace = THREE.LinearSRGBColorSpace
+  // Physikalische Farben und Tone-Mapping sorgen für glaubwürdige Materialien statt flacher CAD-Flächen.
+  renderer.outputColorSpace = THREE.SRGBColorSpace
+  renderer.toneMapping = THREE.ACESFilmicToneMapping
+  renderer.toneMappingExposure = 1.08
   renderer.localClippingEnabled = true
   const $ = (id: string) => document.getElementById(id) as HTMLElement
 
@@ -47,67 +49,192 @@ export function starteSzene(buehne: Buehne, reduce: boolean, kopfHoehe: () => nu
   scene.background = new THREE.Color(0xf4f5f8)
   scene.fog = new THREE.Fog(0xf4f5f8, 28, 105)
   const camera = new THREE.PerspectiveCamera(42, 1, 0.1, 400)
-  const k = Math.PI // Lichtstärke wie im Entwurf (ohne die frühere π-Umrechnung)
   renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap
   // Umgebungsreflexionen (weiches Studiolicht) für Glas, Metall und Putz
   const pmrem = new THREE.PMREMGenerator(renderer)
   const envRT = pmrem.fromScene(new RoomEnvironment(), 0.04)
-  scene.environment = envRT.texture; scene.environmentIntensity = 0.3
-  // Prozedurale Oberflächen: Putz, Dachziegel, Boden
+  scene.environment = envRT.texture; scene.environmentIntensity = 0.48
+
+  // Prozedurale, reproduzierbare Oberflächen: keine externen Downloads, keine zufällig wechselnden Bilder.
   const zufall = (() => { let z = 7; return () => { z = (z * 16807) % 2147483647; return z / 2147483647 } })()
-  const leinwand = (w: number, h: number, malen: (c: CanvasRenderingContext2D) => void) => {
+  const anisotropie = Math.min(8, renderer.capabilities.getMaxAnisotropy())
+  const leinwand = (w: number, h: number, malen: (c: CanvasRenderingContext2D) => void, farbe = true) => {
     const cv = document.createElement('canvas'); cv.width = w; cv.height = h
     const c = cv.getContext('2d'); if (c) malen(c)
-    const t = new THREE.CanvasTexture(cv); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.anisotropy = 4; return t
+    const t = new THREE.CanvasTexture(cv); t.wrapS = t.wrapT = THREE.RepeatWrapping
+    t.anisotropy = anisotropie; t.colorSpace = farbe ? THREE.SRGBColorSpace : THREE.NoColorSpace
+    return t
   }
   const rauschen = (c: CanvasRenderingContext2D, w: number, h: number, n: number, a: number) => {
     for (let i = 0; i < n; i++) { const g = Math.round(zufall() * 255); c.fillStyle = `rgba(${g},${g},${g},${a})`; c.fillRect(zufall() * w, zufall() * h, 1 + zufall() * 2, 1 + zufall() * 2) }
   }
-  const putzBump = leinwand(512, 512, (c) => { c.fillStyle = '#808080'; c.fillRect(0, 0, 512, 512); rauschen(c, 512, 512, 9000, 0.5) })
-  const putzMap = leinwand(512, 512, (c) => { c.fillStyle = '#f3efe8'; c.fillRect(0, 0, 512, 512); rauschen(c, 512, 512, 5000, 0.035) })
-  const ziegelMap = leinwand(256, 256, (c) => {
-    for (let r = 0; r < 8; r++) for (let q = 0; q < 8; q++) {
-      const x = q * 32 + (r % 2 ? 16 : 0), y = r * 32, v = Math.round(150 + zufall() * 40 - 20)
-      c.fillStyle = `rgb(${v + 20},${Math.round(v * 0.42)},${Math.round(v * 0.28)})`; c.fillRect(x - 32, y, 31, 31); c.fillRect(x, y, 31, 31)
+  const putzBump = leinwand(512, 512, (c) => { c.fillStyle = '#808080'; c.fillRect(0, 0, 512, 512); rauschen(c, 512, 512, 11000, 0.34) }, false)
+  const putzMap = leinwand(512, 512, (c) => { c.fillStyle = '#e7e2d8'; c.fillRect(0, 0, 512, 512); rauschen(c, 512, 512, 6500, 0.026) })
+  const ziegelMap = leinwand(512, 512, (c) => {
+    c.fillStyle = '#67382c'; c.fillRect(0, 0, 512, 512)
+    for (let r = 0; r < 8; r++) for (let q = -1; q < 9; q++) {
+      const x = q * 64 + (r % 2 ? 32 : 0), y = r * 64, v = Math.round(139 + zufall() * 35)
+      const g = c.createLinearGradient(0, y, 0, y + 64)
+      g.addColorStop(0, `rgb(${v + 30},${Math.round(v * 0.50)},${Math.round(v * 0.35)})`)
+      g.addColorStop(0.82, `rgb(${v + 12},${Math.round(v * 0.40)},${Math.round(v * 0.28)})`)
+      g.addColorStop(1, '#573128')
+      c.fillStyle = g; c.fillRect(x + 1, y + 1, 62, 62)
+      c.fillStyle = 'rgba(255,220,190,.12)'; c.fillRect(x + 3, y + 3, 57, 2)
     }
   })
-  const ziegelBump = leinwand(256, 256, (c) => {
-    c.fillStyle = '#9a9a9a'; c.fillRect(0, 0, 256, 256)
-    for (let r = 0; r < 8; r++) for (let q = 0; q < 8; q++) { const x = q * 32 + (r % 2 ? 16 : 0), y = r * 32; const g = c.createLinearGradient(0, y, 0, y + 32); g.addColorStop(0, '#d0d0d0'); g.addColorStop(1, '#404040'); c.fillStyle = g; c.fillRect(x - 32, y, 30, 31); c.fillRect(x, y, 30, 31) }
-  })
+  const ziegelBump = leinwand(512, 512, (c) => {
+    c.fillStyle = '#353535'; c.fillRect(0, 0, 512, 512)
+    for (let r = 0; r < 8; r++) for (let q = -1; q < 9; q++) {
+      const x = q * 64 + (r % 2 ? 32 : 0), y = r * 64, g = c.createLinearGradient(0, y, 0, y + 64)
+      g.addColorStop(0, '#d8d8d8'); g.addColorStop(0.72, '#a8a8a8'); g.addColorStop(1, '#424242')
+      c.fillStyle = g; c.fillRect(x + 1, y + 1, 62, 62)
+    }
+  }, false)
   const bodenMap = leinwand(512, 512, (c) => { c.fillStyle = '#c4cad4'; c.fillRect(0, 0, 512, 512); rauschen(c, 512, 512, 7000, 0.05) })
-  bodenMap.repeat.set(80, 80)
-  scene.add(new THREE.HemisphereLight(0xffffff, 0xbcc4d0, 0.34 * k))
-  const sun = new THREE.DirectionalLight(0xfff4e6, 0.5 * k); sun.position.set(30, 40, 20); sun.castShadow = true
-  sun.shadow.mapSize.set(2048, 2048); sun.shadow.bias = -0.0004; sun.shadow.normalBias = 0.04
+  const bodenBump = leinwand(512, 512, (c) => { c.fillStyle = '#808080'; c.fillRect(0, 0, 512, 512); rauschen(c, 512, 512, 9000, 0.12) }, false)
+  bodenMap.repeat.set(80, 80); bodenBump.repeat.set(80, 80)
+  putzMap.repeat.set(5, 3); putzBump.repeat.set(5, 3)
+  ziegelMap.repeat.set(2.4, 1.3); ziegelBump.repeat.set(2.4, 1.3)
+
+  scene.add(new THREE.HemisphereLight(0xf5f8ff, 0x9b9387, 1.15))
+  const sun = new THREE.DirectionalLight(0xfff1dc, 3.1); sun.position.set(30, 40, 20); sun.castShadow = true
+  sun.shadow.mapSize.set(2048, 2048); sun.shadow.bias = -0.00025; sun.shadow.normalBias = 0.025; sun.shadow.radius = 3
   Object.assign(sun.shadow.camera, { left: -34, right: 34, top: 34, bottom: -34, near: 1, far: 140 })
   scene.add(sun); scene.add(sun.target)
-  const rim = new THREE.DirectionalLight(0xffd9bd, 0.18 * k); rim.position.set(-30, 15, -25); scene.add(rim)
+  const rim = new THREE.DirectionalLight(0xdbe8ff, 0.65); rim.position.set(-30, 15, -25); scene.add(rim)
 
-  const ground = new THREE.Mesh(new THREE.PlaneGeometry(600, 600), new THREE.MeshStandardMaterial({ map: bodenMap, roughness: 0.95 }))
+  const ground = new THREE.Mesh(new THREE.PlaneGeometry(600, 600), new THREE.MeshStandardMaterial({ map: bodenMap, bumpMap: bodenBump, bumpScale: 0.018, roughness: 0.96 }))
   ground.rotation.x = -Math.PI / 2; ground.receiveShadow = true; scene.add(ground)
 
-  // Gebäude: Wände, Satteldach, Fenster. Eine Schnittebene lässt es beim Scan von unten nach oben entstehen.
+  // Gebäude: echte Dachhaut statt dreieckigem Vollblock, Laibungen, Fensterrahmen, Sockel,
+  // Eingang, Dachrinnen und Nebengebäude-Details. Alle Teile reagieren auf die Scan-Schnittebene.
   const plane = new THREE.Plane(new THREE.Vector3(0, -1, 0), 0)
   const house = new THREE.Group()
-  const walls = new THREE.Mesh(new THREE.BoxGeometry(W, HE, D), new THREE.MeshStandardMaterial({ map: putzMap, bumpMap: putzBump, bumpScale: 0.6, roughness: 0.94, clippingPlanes: [plane] }))
-  walls.position.y = HE / 2; walls.castShadow = true; walls.receiveShadow = true; house.add(walls)
-  const shape = new THREE.Shape(); shape.moveTo(-D / 2 - 0.3, 0); shape.lineTo(D / 2 + 0.3, 0); shape.lineTo(0, HR); shape.closePath()
-  const rg = new THREE.ExtrudeGeometry(shape, { depth: W + 0.6, bevelEnabled: false })
-  const roof = new THREE.Mesh(rg, new THREE.MeshStandardMaterial({ map: ziegelMap, bumpMap: ziegelBump, bumpScale: 1.4, roughness: 0.78, clippingPlanes: [plane] }))
-  roof.castShadow = true
-  putzMap.repeat.set(5, 3); putzBump.repeat.set(5, 3)
-  ziegelMap.repeat.set(0.9, 0.9); ziegelBump.repeat.set(0.9, 0.9)
-  roof.rotation.y = Math.PI / 2; roof.position.set(-(W + 0.6) / 2, HE, 0); house.add(roof)
-  const winMat = new THREE.MeshStandardMaterial({ color: 0x24303f, emissive: 0x3d5878, emissiveIntensity: 0.1, roughness: 0.06, metalness: 0.85, envMapIntensity: 1.6, clippingPlanes: [plane] })
-  for (let f = 0; f < 2; f++) for (let kk = 0; kk < 5; kk++) {
-    const wf = new THREE.Mesh(new THREE.BoxGeometry(1.3, 1.5, 0.1), winMat); wf.position.set(-5.4 + kk * 2.7, 2 + f * 3.3, D / 2 + 0.02); house.add(wf)
-    const wb = wf.clone(); wb.position.z = -D / 2 - 0.02; house.add(wb)
+  const archMat = <T extends THREE.Material>(m: T): T => { m.clippingPlanes = [plane]; return m }
+  const putz = archMat(new THREE.MeshStandardMaterial({ map: putzMap, bumpMap: putzBump, bumpScale: 0.022, roughness: 0.91 }))
+  const materialen = {
+    putz,
+    dach: archMat(new THREE.MeshStandardMaterial({ map: ziegelMap, bumpMap: ziegelBump, bumpScale: 0.055, roughness: 0.76 })),
+    rahmen: archMat(new THREE.MeshStandardMaterial({ color: 0xf2f0e9, roughness: 0.38, metalness: 0.04 })),
+    glas: archMat(new THREE.MeshPhysicalMaterial({ color: 0x293d4b, roughness: 0.10, metalness: 0.28, clearcoat: 1, clearcoatRoughness: 0.08, envMapIntensity: 0.95 })),
+    laibung: archMat(new THREE.MeshStandardMaterial({ color: 0x343b40, roughness: 0.82 })),
+    rollo: archMat(new THREE.MeshStandardMaterial({ color: 0xb4a993, roughness: 0.94 })),
+    sockel: archMat(new THREE.MeshStandardMaterial({ color: 0x777973, bumpMap: putzBump, bumpScale: 0.035, roughness: 0.93 })),
+    beton: archMat(new THREE.MeshStandardMaterial({ color: 0xb7b5ad, bumpMap: putzBump, bumpScale: 0.018, roughness: 0.88 })),
+    metall: archMat(new THREE.MeshStandardMaterial({ color: 0x50585b, roughness: 0.34, metalness: 0.72 })),
+    tuer: archMat(new THREE.MeshStandardMaterial({ color: 0x493b32, roughness: 0.48, metalness: 0.03 })),
+    licht: archMat(new THREE.MeshStandardMaterial({ color: 0xffd39a, emissive: 0xffa43a, emissiveIntensity: 0.65, roughness: 0.35 })),
   }
-  const door = new THREE.Mesh(new THREE.BoxGeometry(1.4, 2.2, 0.12), new THREE.MeshStandardMaterial({ color: 0x5a4636, clippingPlanes: [plane] })); door.position.set(0, 1.1, D / 2 + 0.03); house.add(door)
+  type ArchKey = keyof typeof materialen
+  const archGeometrien = new Map<ArchKey, THREE.BufferGeometry[]>()
+  const archGeo = (key: ArchKey, original: THREE.BufferGeometry, pos: [number, number, number], rot: [number, number, number] = [0, 0, 0]) => {
+    const geo = original.index ? original.toNonIndexed() : original
+    if (geo !== original) original.dispose()
+    const matrix = new THREE.Matrix4().compose(
+      new THREE.Vector3(...pos),
+      new THREE.Quaternion().setFromEuler(new THREE.Euler(...rot)),
+      new THREE.Vector3(1, 1, 1),
+    )
+    geo.applyMatrix4(matrix)
+    const liste = archGeometrien.get(key) || []; liste.push(geo); archGeometrien.set(key, liste)
+  }
+  const archBox = (key: ArchKey, w: number, h: number, d: number, x: number, y: number, z: number, rx = 0, ry = 0, rz = 0) =>
+    archGeo(key, new THREE.BoxGeometry(w, h, d), [x, y, z], [rx, ry, rz])
+  const archZylinder = (key: ArchKey, r: number, laenge: number, x: number, y: number, z: number, rx = 0, ry = 0, rz = 0) =>
+    archGeo(key, new THREE.CylinderGeometry(r, r, laenge, 16), [x, y, z], [rx, ry, rz])
+
+  const walls = new THREE.Mesh(new THREE.BoxGeometry(W, HE, D), putz)
+  walls.position.y = HE / 2; walls.castShadow = true; walls.receiveShadow = true; house.add(walls)
+
+  // Fundament, umlaufende Belagsplatte und eine zurückhaltende Gesimsgliederung.
+  archBox('beton', W + 1.7, 0.12, D + 1.7, 0, 0.06, 0)
+  archBox('sockel', W + 0.07, 0.48, D + 0.07, 0, 0.29, 0)
+  for (const y of [3.62, HE - 0.10]) {
+    archBox('beton', W + 0.10, 0.12, 0.10, 0, y, D / 2 + 0.035)
+    archBox('beton', W + 0.10, 0.12, 0.10, 0, y, -D / 2 - 0.035)
+    archBox('beton', 0.10, 0.12, D, W / 2 + 0.035, y, 0)
+    archBox('beton', 0.10, 0.12, D, -W / 2 - 0.035, y, 0)
+  }
+
+  // Fenster werden als komplette Familie erzeugt und anschließend nach Material zusammengeführt.
+  const fenster = (x: number, y: number, z: number, ry: number, w = 1.30, h = 1.56) => {
+    const co = Math.cos(ry), si = Math.sin(ry)
+    const b = (key: ArchKey, bw: number, bh: number, bd: number, lx: number, ly: number, lz: number) =>
+      archBox(key, bw, bh, bd, x + lx * co + lz * si, y + ly, z - lx * si + lz * co, 0, ry, 0)
+    b('laibung', w + 0.16, h + 0.16, 0.045, 0, 0, 0.015)
+    b('glas', w - 0.12, h - 0.12, 0.035, 0, 0, 0.055)
+    if (zufall() > 0.48) {
+      const rh = h * (0.16 + zufall() * 0.30)
+      b('rollo', w - 0.19, rh, 0.018, 0, h / 2 - 0.10 - rh / 2, 0.038)
+    }
+    for (const sx of [-1, 1]) b('rahmen', 0.065, h, 0.085, sx * (w / 2 - 0.033), 0, 0.095)
+    for (const sy of [-1, 1]) b('rahmen', w, 0.065, 0.085, 0, sy * (h / 2 - 0.033), 0.095)
+    b('rahmen', 0.045, h - 0.12, 0.075, 0, 0, 0.105)
+    b('rahmen', w - 0.12, 0.042, 0.07, 0, 0.17, 0.105)
+    b('beton', w + 0.28, 0.09, 0.30, 0, -h / 2 - 0.075, 0.11)
+  }
+  for (let f = 0; f < 2; f++) for (const x of [-5.4, -2.7, 0, 2.7, 5.4]) {
+    if (!(f === 0 && x === 0)) fenster(x, 2.02 + f * 3.28, D / 2 + 0.012, 0)
+    fenster(x, 2.02 + f * 3.28, -D / 2 - 0.012, Math.PI)
+  }
+  for (const seite of [-1, 1]) {
+    for (let f = 0; f < 2; f++) for (const z of [-2.15, 2.15]) fenster(seite * (W / 2 + 0.012), 2.02 + f * 3.28, z, seite * Math.PI / 2, 1.18, 1.50)
+    fenster(seite * (W / 2 + 0.018), HE + 0.78, 0, seite * Math.PI / 2, 0.92, 0.92)
+  }
+
+  // Hauseingang mit Rahmen, Paneelen, Verglasung, Griff, Vordach und zwei Stufen.
+  archBox('laibung', 1.58, 2.42, 0.07, 0, 1.25, D / 2 + 0.025)
+  archBox('tuer', 1.34, 2.26, 0.10, 0, 1.20, D / 2 + 0.085)
+  for (const x of [-0.72, 0.72]) archBox('rahmen', 0.08, 2.38, 0.10, x, 1.24, D / 2 + 0.105)
+  archBox('rahmen', 1.52, 0.08, 0.10, 0, 2.43, D / 2 + 0.105)
+  archBox('glas', 0.88, 0.76, 0.025, 0, 1.77, D / 2 + 0.145)
+  for (const y of [0.48, 0.92]) archBox('tuer', 0.98, 0.31, 0.025, 0, y, D / 2 + 0.15)
+  archZylinder('metall', 0.025, 0.42, 0.47, 1.19, D / 2 + 0.19)
+  archBox('beton', 2.15, 0.13, 0.96, 0, 2.63, D / 2 + 0.46)
+  archBox('beton', 1.92, 0.13, 0.72, 0, 0.13, D / 2 + 0.53)
+  archBox('beton', 2.12, 0.12, 0.94, 0, 0.06, D / 2 + 0.72)
+  archBox('metall', 0.20, 0.27, 0.15, 1.12, 2.12, D / 2 + 0.11)
+  archBox('licht', 0.13, 0.17, 0.025, 1.12, 2.12, D / 2 + 0.20)
+
+  // Zwei separate Dachflächen mit Überstand; die Giebel bleiben verputzt.
+  const dachUeberstand = 0.34, dachLauf = D / 2 + dachUeberstand, dachAnstieg = HR + 0.02
+  const dachWinkel = Math.atan2(dachAnstieg, dachLauf), dachLaenge = Math.hypot(dachLauf, dachAnstieg) + 0.08
+  archBox('dach', W + 0.76, 0.15, dachLaenge, 0, HE + HR / 2, dachLauf / 2, dachWinkel)
+  archBox('dach', W + 0.76, 0.15, dachLaenge, 0, HE + HR / 2, -dachLauf / 2, -dachWinkel)
+  for (const seite of [-1, 1]) {
+    const giebel = new THREE.Shape(); giebel.moveTo(-D / 2, 0); giebel.lineTo(D / 2, 0); giebel.lineTo(0, HR - 0.08); giebel.closePath()
+    archGeo('putz', new THREE.ExtrudeGeometry(giebel, { depth: 0.16, bevelEnabled: false }), [seite === 1 ? W / 2 : -W / 2 - 0.16, HE, 0], [0, Math.PI / 2, 0])
+    archBox('rahmen', 0.13, 0.16, dachLaenge, seite * (W / 2 + 0.38), HE + HR / 2, dachLauf / 2, dachWinkel)
+    archBox('rahmen', 0.13, 0.16, dachLaenge, seite * (W / 2 + 0.38), HE + HR / 2, -dachLauf / 2, -dachWinkel)
+  }
+  archZylinder('dach', 0.12, W + 0.80, 0, HE + HR + 0.045, 0, 0, 0, Math.PI / 2)
+  for (const z of [-dachLauf, dachLauf]) {
+    archBox('rahmen', W + 0.76, 0.17, 0.10, 0, HE - 0.07, z)
+    archZylinder('metall', 0.075, W + 0.78, 0, HE - 0.10, z + Math.sign(z) * 0.08, 0, 0, Math.PI / 2)
+  }
+  for (const x of [-W / 2 + 0.17, W / 2 - 0.17]) for (const z of [-D / 2 - 0.13, D / 2 + 0.13]) {
+    archZylinder('metall', 0.052, HE - 0.32, x, HE / 2, z)
+    for (const y of [1.1, 3.6, 6.1]) archBox('metall', 0.16, 0.035, 0.12, x, y, z)
+  }
+
+  // Schornstein mit Dachanschluss, Kappe und zwei Abgasrohren.
+  const schornsteinZ = -1.05, schornsteinY = HE + HR * (1 - Math.abs(schornsteinZ) / dachLauf)
+  archBox('putz', 0.76, 1.48, 0.70, -3.25, schornsteinY + 0.63, schornsteinZ)
+  archBox('sockel', 0.90, 0.16, 0.84, -3.25, schornsteinY - 0.02, schornsteinZ)
+  archBox('beton', 0.91, 0.13, 0.85, -3.25, schornsteinY + 1.40, schornsteinZ)
+  for (const x of [-3.43, -3.08]) archZylinder('metall', 0.085, 0.29, x, schornsteinY + 1.58, schornsteinZ)
+
+  // Wenige zusammengeführte Meshes statt Hunderter einzelner Fenster- und Rahmen-Drawcalls.
+  archGeometrien.forEach((geos, key) => {
+    const merged = mergeGeometries(geos, false); geos.forEach((g) => g.dispose())
+    if (!merged) return
+    const mesh = new THREE.Mesh(merged, materialen[key]); mesh.castShadow = key !== 'glas' && key !== 'licht'; mesh.receiveShadow = true; house.add(mesh)
+  })
   const edgeMat = new THREE.LineBasicMaterial({ color: 0xe8590c, transparent: true, opacity: 0.9 })
   const e1 = new THREE.LineSegments(new THREE.EdgesGeometry(walls.geometry), edgeMat); e1.position.copy(walls.position); house.add(e1)
-  const e2 = new THREE.LineSegments(new THREE.EdgesGeometry(rg), edgeMat); e2.position.copy(roof.position); e2.rotation.copy(roof.rotation); house.add(e2)
+  const outline = new THREE.Shape(); outline.moveTo(-D / 2 - 0.3, 0); outline.lineTo(D / 2 + 0.3, 0); outline.lineTo(0, HR); outline.closePath()
+  const rg = new THREE.ExtrudeGeometry(outline, { depth: W + 0.6, bevelEnabled: false })
+  const e2 = new THREE.LineSegments(new THREE.EdgesGeometry(rg), edgeMat); e2.position.set(-(W + 0.6) / 2, HE, 0); e2.rotation.y = Math.PI / 2; house.add(e2)
   scene.add(house)
 
   // Scan-Ebene
@@ -159,7 +286,7 @@ export function starteSzene(buehne: Buehne, reduce: boolean, kopfHoehe: () => nu
     }
   })
   const counts = { post: 0, tube: 0, deck: 0, diag: 0 }
-  teile.forEach((it) => { it.k = counts[it.t]++; it.j = Math.random() * 0.12 })
+  teile.forEach((it) => { it.k = counts[it.t]++; it.j = zufall() * 0.12 })
   const unit = new THREE.BoxGeometry(1, 1, 1)
   const steel = new THREE.MeshStandardMaterial({ color: 0x77828f, roughness: 0.42, metalness: 0.55, transparent: true })
   const wood = new THREE.MeshStandardMaterial({ color: 0xc08a52, roughness: 0.9, transparent: true })
@@ -257,11 +384,11 @@ export function starteSzene(buehne: Buehne, reduce: boolean, kopfHoehe: () => nu
     const pw = Math.round(w * dpr), ph = Math.round(h * dpr)
     if (buehne.canvas.width !== pw || buehne.canvas.height !== ph) renderer.setSize(pw, ph, false)
     renderer.setPixelRatio(1)
-    camera.aspect = w / h; camera.fov = w / h < 0.8 ? 64 : 42
+    camera.aspect = w / h; camera.fov = w / h < 0.8 ? 58 : 42
     // Das Motiv wechselt die Seite wie der Text: Kapitel 0 links, 1 rechts, … (sanft, ohne Sprung). Auf dem Handy rutscht es nach oben, der Text steht unten.
     const schmal = w < 900
     const seite = -Math.cos(Math.PI * (g - 0.5))
-    camera.setViewOffset(w, h, schmal ? 0 : -seite * w * 0.2, schmal ? h * 0.27 : 0, w, h)
+    camera.setViewOffset(w, h, schmal ? 0 : -seite * w * 0.2, schmal ? h * 0.2 : 0, w, h)
     // Sonne und Schattenfeld folgen dem Ort der Szene (Lager liegt weit rechts)
     const sx = 56 * (smooth((g - 4.1) / 0.3) - smooth((g - 5.0) / 0.5))
     sun.position.set(30 + sx, 40, 20); sun.target.position.set(sx, 0, 0); sun.target.updateMatrixWorld()
