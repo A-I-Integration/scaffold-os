@@ -53,7 +53,7 @@ export default function Pruefschild({ projectId, onAbgelegt }: { projectId: stri
 
   return (
     <section className="space-y-2">
-      <h3 className="font-bold text-base">5. Prüfschild erstellen</h3>
+      <h3 className="font-bold text-base">6. Prüfschild erstellen</h3>
       {!d && <button className={knopf} disabled={busy} onClick={laden}>{busy ? 'Lädt …' : 'Aus letzter Prüfung übernehmen'}</button>}
       <div className="flex flex-wrap items-center gap-2">
         <button className={knopf} disabled={busy} onClick={async () => {

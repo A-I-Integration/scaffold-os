@@ -56,7 +56,7 @@ export function Pflichtenuebertragung({ projectId, onAbgelegt }: { projectId: st
   }
   return (
     <section className="space-y-2">
-      <h3 className="font-bold text-base">9. Pflichtenübertragung</h3>
+      <h3 className="font-bold text-base">10. Pflichtenübertragung</h3>
       {!offen && <button className={knopf} onClick={() => { setOffen(true); setMsg(null) }}>Neue Pflichtenübertragung</button>}
       {msg && <p className={msg.ok ? '' : 'text-red-600'}>{msg.ok ? '✅' : '❌'} {msg.text}</p>}
       {offen && (
@@ -106,7 +106,7 @@ export function Betriebsanweisung({ projectId, onAbgelegt }: { projectId: string
   )
   return (
     <section className="space-y-2">
-      <h3 className="font-bold text-base">10. Betriebsanweisung</h3>
+      <h3 className="font-bold text-base">11. Betriebsanweisung</h3>
       {!offen && <button className={knopf} onClick={() => { setOffen(true); setMsg(null) }}>Neue Betriebsanweisung</button>}
       {msg && <p className={msg.ok ? '' : 'text-red-600'}>{msg.ok ? '✅' : '❌'} {msg.text}</p>}
       {offen && (

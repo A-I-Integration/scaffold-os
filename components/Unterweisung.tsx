@@ -39,7 +39,7 @@ export default function Unterweisung({ projectId, onAbgelegt }: { projectId: str
 
   return (
     <section className="space-y-2">
-      <h3 className="font-bold text-base">8. Unterweisungsnachweis</h3>
+      <h3 className="font-bold text-base">9. Unterweisungsnachweis</h3>
       {!offen && <button className={knopf} onClick={() => { setOffen(true); setMsg(null) }}>Neuer Unterweisungsnachweis</button>}
       {msg && <p className={msg.ok ? '' : 'text-red-600'}>{msg.ok ? '✅' : '❌'} {msg.text}</p>}
       {offen && (
