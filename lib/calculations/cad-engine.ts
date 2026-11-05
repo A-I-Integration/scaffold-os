@@ -6,6 +6,7 @@
 
 import { GeruestSystem, findeSystem } from './geruest-systeme'
 import { MaterialItem } from '@/types/scaffold'
+import { modellHash } from './modell-stand'
 import { type UmrissPunkt, pruefeUmriss, normalisiereUmriss, umrissKanten, umrissEcken, geruestEckpunkt, umrissBox, zentriereUmriss } from './cad-umriss'
 import { KONSOLE_BREITE_M, type CadBalkon } from '../balkon'
 
@@ -1803,6 +1804,7 @@ function generiereUmrissModell(
 export const LEITER_ARTIKELNUMMER = 'LE-001'
 
 export function generateBillOfMaterials(model: CADModel): MaterialItem[] {
+  const stand = modellHash(model)
   const counts: Record<string, { name: string; category: string; quantity: number; unit: string; unitPrice: number; weightKg: number; articleNumber: string }> = {}
   model.components3D.forEach((comp) => {
     if (comp.extern) return // Fremdleistung (z. B. gemieteter Aufzug): nicht im eigenen Material
@@ -1812,7 +1814,7 @@ export function generateBillOfMaterials(model: CADModel): MaterialItem[] {
     }
     counts[key].quantity += 1
   })
-  return Object.values(counts).map((item) => ({ ...item, totalPrice: Math.round(item.quantity * item.unitPrice * 100) / 100, riskLevel: 'low', aiRecommendation: getRecommendation(item.articleNumber) }))
+  return Object.values(counts).map((item) => ({ ...item, modellHash: stand, totalPrice: Math.round(item.quantity * item.unitPrice * 100) / 100, riskLevel: 'low', aiRecommendation: getRecommendation(item.articleNumber) }))
 }
 
 function getCategoryFromType(type: ScaffoldComponent3D['type']): string {
@@ -1972,6 +1974,8 @@ export function addManualPlacement(
   model: CADModel,
   placement: Omit<ManualPlacement, 'id'> & { id?: string }
 ): CADModel {
+  // Das übergebene Modell bleibt unverändert: Arbeit an einer flachen Kopie (Bauteil- und Ankerlisten)
+  model = { ...model, components3D: [...model.components3D], anchors: [...model.anchors] }
   // Eine mitgegebene ID bleibt erhalten, damit das Bauteil im 3D-Modell
   // dieselbe ID hat wie die Platzierung (nötig zum Auswählen/Entfernen).
   const newPlacement: ManualPlacement = {
@@ -2546,6 +2550,8 @@ export function detectFeatureCollisions(model: CADModel, features: BuildingFeatu
 // Annahmen sind bewusst konservativ und hier zentral änderbar – KEINE
 // herstellerspezifischen Angaben, sondern Richtwerte für die Angebotsphase.
 export interface LogistikDaten {
+  /** Modellstand (`modellHash`), aus dem die Stunden berechnet wurden */
+  modellHash: string
   gesamtgewichtKg: number
   transportvolumenM3: number
   lkwFahrten: number            // ohne Fahrzeugwahl: 7,5-t-LKW (Nutzlast ~3,5 t)
@@ -2573,6 +2579,7 @@ export function calculateLogistics(
   // Abbau typischerweise ~60 % der Aufbauzeit
   const abbauStunden = Math.ceil(aufbauStunden * 0.6)
   return {
+    modellHash: modellHash(model),
     gesamtgewichtKg: Math.round(gesamtgewichtKg),
     transportvolumenM3: Math.round(transportvolumenM3 * 10) / 10,
     lkwFahrten,

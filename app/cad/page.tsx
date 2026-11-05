@@ -947,7 +947,7 @@ export default function CADPage() {
   return (
     <div className='min-h-screen md:h-screen flex flex-col bg-[#fbfbfd]'>
       {lvOffen && modelWithManual && (
-        <LvDialog model={modelWithManual} materials={materials} aufbauStunden={logistik?.aufbauStunden ?? 0} abbauStunden={logistik?.abbauStunden ?? 0} onClose={() => setLvOffen(false)} />
+        <LvDialog model={modelWithManual} materials={materials} aufbauStunden={logistik?.aufbauStunden ?? 0} abbauStunden={logistik?.abbauStunden ?? 0} stundenModellHash={logistik?.modellHash} onClose={() => setLvOffen(false)} />
       )}
       <div className='bg-white border-b border-black/5 px-4 py-3 flex flex-wrap gap-2 items-center justify-between'>
         <div>

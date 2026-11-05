@@ -49,8 +49,7 @@ describe('Leiter im CAD-Modell', () => {
   const basis = () => generateCADModel({ lengthM: 18, widthM: 14, heightM: 8, eavesHeightM: 8, roofForm: 'flachdach', overhangM: 0.5 } as any, 'layher-allround')
 
   it('ist ein einzelnes Bauteil LE-001 in der Kategorie Leitern, ohne erfundenen Preis', () => {
-    const m = basis()
-    addManualPlacement(m, { id: 'manual-ladder-1', type: 'ladder', positionX: 1, positionY: 1, positionZ: 7, side: 'front', levelIndex: 0 })
+    const m = addManualPlacement(basis(), { id: 'manual-ladder-1', type: 'ladder', positionX: 1, positionY: 1, positionZ: 7, side: 'front', levelIndex: 0 })
     const leiter = m.components3D.filter((c) => c.articleNumber === LEITER_ARTIKELNUMMER)
     expect(leiter).toHaveLength(1)
     expect(leiter[0].type).toBe('ladder')
@@ -58,14 +57,12 @@ describe('Leiter im CAD-Modell', () => {
     expect(bom).toMatchObject({ category: 'Leitern', quantity: 1, unitPrice: 0, weightKg: 0, totalPrice: 0 })
   })
   it('zwei Leitern ergeben Menge 2', () => {
-    const m = basis()
-    addManualPlacement(m, { id: 'manual-ladder-1', type: 'ladder', positionX: 1, positionY: 1, positionZ: 7, side: 'front', levelIndex: 0 })
-    addManualPlacement(m, { id: 'manual-ladder-2', type: 'ladder', positionX: 4, positionY: 1, positionZ: 7, side: 'front', levelIndex: 0 })
+    let m = addManualPlacement(basis(), { id: 'manual-ladder-1', type: 'ladder', positionX: 1, positionY: 1, positionZ: 7, side: 'front', levelIndex: 0 })
+    m = addManualPlacement(m, { id: 'manual-ladder-2', type: 'ladder', positionX: 4, positionY: 1, positionZ: 7, side: 'front', levelIndex: 0 })
     expect(generateBillOfMaterials(m).find((x) => x.articleNumber === LEITER_ARTIKELNUMMER)!.quantity).toBe(2)
   })
   it('Leiter an der Seitenfläche wird um 90° gedreht', () => {
-    const m = basis()
-    addManualPlacement(m, { id: 'manual-ladder-3', type: 'ladder', positionX: 9, positionY: 1, positionZ: 3, side: 'right', levelIndex: 0 })
+    const m = addManualPlacement(basis(), { id: 'manual-ladder-3', type: 'ladder', positionX: 9, positionY: 1, positionZ: 3, side: 'right', levelIndex: 0 })
     expect(m.components3D.find((c) => c.id === 'manual-ladder-3')!.rotation[1]).toBeCloseTo(Math.PI / 2)
   })
 })
