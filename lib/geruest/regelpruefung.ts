@@ -31,6 +31,8 @@ import { checkRules } from '@/lib/calculations/cad-rules'
 import { fehlendeStatikAngaben, type StatikDaten } from '@/lib/statik-daten'
 import { TYPENSTATIK_HOEHE_HINWEIS_M } from '@/lib/statik-pruefpunkte'
 import { richtwertErgebnisse, type RichtwertOptionen } from '@/lib/geruest/richtwert-regeln'
+import type { Netz } from '@/lib/cad/netz'
+import { pruefeGeruestGegenGebaeude, pruefeGeruestUntereinander, type Kollision } from '@/lib/cad/kollision'
 
 /** 'verletzt' = Richtwert aus den Zulassungs-Eckdaten des Katalogs überschritten (rot, keine Sperre) */
 export type PruefStatus = 'ok' | 'warnung' | 'fehler' | 'verletzt'
@@ -86,7 +88,39 @@ export function abschnittsListe(model: CADModel): { name: string; laengeM: numbe
   return [{ name: `Gebäude (${m(model.building.lengthM)} m × ${m(model.building.heightM)} m)`, laengeM: model.building.lengthM, hoeheM: model.building.heightM, eingeruestet: true }]
 }
 
-export function pruefeGeruest(model: CADModel, statik: StatikDaten = {}, richtwert: RichtwertOptionen = {}): Pruefprotokoll {
+/** Zusätzliche geometrische Prüfungen; ohne Angabe läuft keine davon. */
+export interface KollisionsOptionen {
+  /** Gebäudehülle (z. B. aus der Punktwolke): Gerüstbauteile in der Hülle werden gemeldet */
+  huelle?: Netz | null
+  /** tragende Gerüstteile, die sich gegenseitig durchdringen */
+  untereinander?: boolean
+}
+
+const TYP_NAME: Record<string, string> = { frame: 'Rahmen', deck: 'Belag', console: 'Konsole', ladder: 'Leiter', elevator: 'Aufzug', protection_roof: 'Schutzdach', railing: 'Geländer', diagonal: 'Diagonale', stair: 'Treppe' }
+function zaehlText(liste: Kollision[]): string {
+  const z = new Map<string, number>()
+  for (const k of liste) z.set(TYP_NAME[k.typ] ?? k.typ, (z.get(TYP_NAME[k.typ] ?? k.typ) ?? 0) + 1)
+  return [...z.entries()].sort((a, b) => b[1] - a[1]).map(([n, c]) => `${n} ${c}×`).join(', ')
+}
+
+function kollisionsErgebnisse(model: CADModel, opt: KollisionsOptionen): Pruefergebnis[] {
+  const r: Pruefergebnis[] = []
+  if (opt.huelle && opt.huelle.dreiecke.length > 0) {
+    const k = pruefeGeruestGegenGebaeude(model.components3D, opt.huelle)
+    r.push(k.kollisionen.length === 0
+      ? { id: 'KOLLISION_GEBAEUDE', regel: 'Gerüst gegen Gebäude', status: 'ok', art: 'hinweis', begruendung: `Kein Gerüstbauteil liegt in der Gebäudehülle aus der Punktwolke (${k.geprueft} Bauteile geprüft).`, quelle: 'Geometrische Prüfung gegen die vereinfachte Hülle der angezeigten Punktwolke' }
+      : { id: 'KOLLISION_GEBAEUDE', regel: 'Gerüst gegen Gebäude', status: 'warnung', art: 'hinweis', begruendung: `${k.kollisionen.length} Bauteile liegen in der Gebäudehülle: ${zaehlText(k.kollisionen)}. Die Hülle ist vereinfacht (Raster 0,3 m, Dachüberstand und Vorsprünge gehören dazu). Bitte Lage und Maße des Gebäudes gegen das Gerüst prüfen.`, quelle: 'Geometrische Prüfung gegen die vereinfachte Hülle der angezeigten Punktwolke; Annahme: Anzeige und Gerüst liegen übereinander' })
+  }
+  if (opt.untereinander) {
+    const k = pruefeGeruestUntereinander(model.components3D)
+    r.push(k.kollisionen.length === 0
+      ? { id: 'KOLLISION_GERUEST', regel: 'Gerüstteile untereinander', status: 'ok', art: 'hinweis', begruendung: `Keine tragenden Gerüstteile durchdringen sich (${k.geprueft} Teile geprüft).`, quelle: 'Geometrische Prüfung der Bauteilquader (Rahmen, Beläge, Konsolen, Leitern, Aufzug, Schutzdach)' }
+      : { id: 'KOLLISION_GERUEST', regel: 'Gerüstteile untereinander', status: 'warnung', art: 'hinweis', begruendung: `${k.kollisionen.length} Paare tragender Teile durchdringen sich deutlich (mehr als ein Viertel des kleineren Teils): ${zaehlText(k.kollisionen.map((x) => ({ ...x, typ: x.typ })))}. Bitte die Stelle im 3D-Modell prüfen.`, quelle: 'Geometrische Prüfung der Bauteilquader (Rahmen, Beläge, Konsolen, Leitern, Aufzug, Schutzdach)' })
+  }
+  return r
+}
+
+export function pruefeGeruest(model: CADModel, statik: StatikDaten = {}, richtwert: RichtwertOptionen = {}, kollision: KollisionsOptionen = {}): Pruefprotokoll {
   const e: Pruefergebnis[] = []
   const sysId = model.system?.id
   const abschnitte = abschnittsListe(model)
@@ -180,6 +214,9 @@ export function pruefeGeruest(model: CADModel, statik: StatikDaten = {}, richtwe
 
   // 10. Richtwerte aus den Zulassungs-Eckdaten der gewählten Katalogserie (nur befüllte Felder)
   e.push(...richtwertErgebnisse(model, richtwert))
+
+  // 11. Kollisionen (nur auf Anforderung): Gerüst gegen Gebäudehülle, tragende Gerüstteile untereinander. Immer 'hinweis', nie eine Sperre.
+  e.push(...kollisionsErgebnisse(model, kollision))
 
   const anzahl = { ok: 0, warnung: 0, fehler: 0, verletzt: 0 }
   let ampel: PruefStatus = 'ok'
