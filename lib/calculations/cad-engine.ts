@@ -48,6 +48,8 @@ export interface GeruestOptionen {
   breiteM?: number
   /** Abstand Wand → innere Gerüstlinie in m (Standard 0,30) */
   wandabstandM?: number
+  /** Abstand Wand → innere Gerüstlinie je Seite in m; fehlende Seiten nehmen `wandabstandM`. Gilt bei Rechteck und abgestuftem Gebäude, nicht im Umriss-Modus. */
+  wandabstandSeiteM?: Partial<Record<'front' | 'back' | 'left' | 'right', number>>
   /** feste Feldlänge in m – muss eine der Feldlängen des Systems sein (sonst automatisch) */
   feldlaengeM?: number
   /** false = keine automatische Treppe */
@@ -1192,7 +1194,10 @@ export function generateCADModel(
   // Umriss-Modus: Gerüst folgt dem Vieleck. Ungültiger Umriss → Fehlermeldung, dann normale Rechteck-Logik.
   if (building.umriss && building.umriss.length > 0) {
     const fehler = pruefeUmriss(building.umriss)
-    if (fehler.length === 0) return generiereUmrissModell(building, system, scaffoldWidthM, distanceToBuildingM, warnings, teile)
+    if (fehler.length === 0) {
+      if (opt?.wandabstandSeiteM && Object.values(opt.wandabstandSeiteM).some((v) => v !== undefined)) warnings.push({ type: 'warning', code: 'WANDABSTAND_SEITE_UMRISS', message: 'Der Wandabstand je Seite gilt nur bei Rechteck und abgestuftem Gebäude. Im Umriss-Modus gilt der eine Wandabstand für alle Kanten.' })
+      return generiereUmrissModell(building, system, scaffoldWidthM, distanceToBuildingM, warnings, teile)
+    }
     fehler.forEach((m) => warnings.push({ type: 'error', code: 'UMRISS_UNGUELTIG', message: `Umriss ungültig: ${m} Es wird ersatzweise das Rechteck verwendet.` }))
     building = { ...building, umriss: undefined }
   }
@@ -1202,6 +1207,18 @@ export function generateCADModel(
   // Damit der eingestellte Wandabstand der tatsächliche Abstand Wand → Innenlinie ist (wie im Umriss-Modus),
   // wird der Versatz hier einmal abgezogen. Vorher stand das Gerüst 0,5 m weiter von der Wand weg als eingestellt.
   distanceToBuildingM -= GEBAEUDE_SZENEN_VERSATZ_M
+  // Wandabstand je Seite (gleiche Umrechnung wie oben). Ohne Eintrag gilt der gemeinsame Wert – dann ist das Ergebnis exakt wie bisher.
+  const seitenAbstandM: Partial<Record<'front' | 'back' | 'left' | 'right', number>> = {}
+  for (const sd of ['front', 'back', 'left', 'right'] as const) {
+    const v = opt?.wandabstandSeiteM?.[sd]
+    if (v === undefined) continue
+    const seitenName = { front: 'vorne', back: 'hinten', left: 'links', right: 'rechts' }[sd]
+    if (Number.isFinite(v) && v >= WANDABSTAND_MIN_M && v <= WANDABSTAND_MAX_M) {
+      seitenAbstandM[sd] = v - GEBAEUDE_SZENEN_VERSATZ_M
+      if (v > WANDABSTAND_HINWEIS_AB_M) warnings.push({ type: 'warning', code: 'WANDABSTAND_GROSS', message: `Wandabstand ${seitenName} ${v.toFixed(2)} m ist größer als ${WANDABSTAND_HINWEIS_AB_M.toFixed(2)} m – Annahme: dann sind meist Zusatzmaßnahmen (z. B. Lückenschluss/Konsolbelag) nötig. Bitte mit der Aufbau- und Verwendungsanleitung des Systems prüfen.` })
+    } else warnings.push({ type: 'warning', code: 'OPT_WANDABSTAND_UNGUELTIG', message: `Wandabstand ${seitenName} muss zwischen ${WANDABSTAND_MIN_M} und ${WANDABSTAND_MAX_M} m liegen – es gilt der gemeinsame Wert.` })
+  }
+  const dSeite = (sd: 'front' | 'back' | 'left' | 'right'): number => seitenAbstandM[sd] ?? distanceToBuildingM
 
   if (building.lengthM <= 0) warnings.push({ type: 'error', code: 'BUILDING_LENGTH_ZERO', message: 'Gebäudelänge muss größer als 0 sein.' })
   // Mehrteiliges Gebäude: bei geraden Abschnitten (Höhenstufen) folgt das
@@ -1292,9 +1309,9 @@ export function generateCADModel(
       const tiefe = (sec: BuildingSection) => sec.tiefeM && sec.tiefeM > 0 ? sec.tiefeM : w
       const mitteZ = (sec: BuildingSection) => -w / 2 - 0.5 + (sec.versatzM ?? 0)
       const rueckZ = (sec: BuildingSection) => mitteZ(sec) - tiefe(sec) / 2
-      const wandAbst = distanceToBuildingM + GEBAEUDE_SZENEN_VERSATZ_M // Wand → Mitte der inneren Gerüstlinie (= eingestellter Wandabstand)
-      const fzVorne = (sec: BuildingSection) => mitteZ(sec) + tiefe(sec) / 2 + wandAbst
-      const fzHinten = (sec: BuildingSection) => rueckZ(sec) - wandAbst
+      const wandAbst = (sd: 'front' | 'back' | 'left' | 'right') => dSeite(sd) + GEBAEUDE_SZENEN_VERSATZ_M // Wand → Mitte der inneren Gerüstlinie (= eingestellter Wandabstand)
+      const fzVorne = (sec: BuildingSection) => mitteZ(sec) + tiefe(sec) / 2 + wandAbst('front')
+      const fzHinten = (sec: BuildingSection) => rueckZ(sec) - wandAbst('back')
       const tiefeDivs = new Map<number, typeof fieldDiv>()
       const divTiefe = (t: number) => { if (!tiefeDivs.has(t)) tiefeDivs.set(t, t === w ? fieldDivWidth : teile(t)); return tiefeDivs.get(t)! }
       type HelmInfo = { roofH: number; laengeM: number }
@@ -1334,14 +1351,14 @@ export function generateCADModel(
           }
           const abBoden = !!building.seitenAbBoden?.includes(side)
           runs.push({ div: divTiefe(tiefe(a)), hoeheM: a.hoeheM, along: rueckZ(a), aktiv: true, helm: helmVon(a), abHoehe: abBoden ? 0 : nbTop, dachAb: abBoden ? undefined : dachAb, innen: true, tiefeM: tiefe(a),
-            fixedO: side === 'right' ? xIf + 0.5 + distanceToBuildingM : xIf - 0.5 - distanceToBuildingM })
+            fixedO: side === 'right' ? xIf + 0.5 + dSeite('right') : xIf - 0.5 - dSeite('left') })
         })
       }
       // Lage der inneren Gerüstlinie je Seite (Gebäude ist 0,5 m nach hinten versetzt)
-      const fixed = side === 'front' ? distanceToBuildingM
-        : side === 'back' ? -distanceToBuildingM - w - 1
-        : side === 'left' ? -building.lengthM / 2 - 0.5 - distanceToBuildingM
-        : building.lengthM / 2 + 0.5 + distanceToBuildingM
+      const fixed = side === 'front' ? dSeite('front')
+        : side === 'back' ? -dSeite('back') - w - 1
+        : side === 'left' ? -building.lengthM / 2 - 0.5 - dSeite('left')
+        : building.lengthM / 2 + 0.5 + dSeite('right')
       // Tiefste Höhe, ab der die Wand eingerüstet wird (an den Kanten); 0 = ganze Wand
       let seiteVoll = false
       for (const run of runs) {
@@ -1465,20 +1482,20 @@ export function generateCADModel(
 
     switch (side) {
       case 'front':
-        zOffset = distanceToBuildingM
+        zOffset = dSeite('front')
         useLengthDiv = fieldDiv
         break
       case 'back':
-        zOffset = -distanceToBuildingM - (building.widthM || 0) - 1
+        zOffset = -dSeite('back') - (building.widthM || 0) - 1
         useLengthDiv = fieldDiv
         break
       case 'left':
-        xOffset = -building.lengthM / 2 - 0.5 - distanceToBuildingM
+        xOffset = -building.lengthM / 2 - 0.5 - dSeite('left')
         useLengthDiv = fieldDivWidth
         rotation = Math.PI / 2
         break
       case 'right':
-        xOffset = building.lengthM / 2 + 0.5 + distanceToBuildingM
+        xOffset = building.lengthM / 2 + 0.5 + dSeite('right')
         useLengthDiv = fieldDivWidth
         rotation = Math.PI / 2
         break
@@ -1550,10 +1567,10 @@ export function generateCADModel(
 
           let xPos = 0
           let zPos = 0
-          if (side === 'front') { xPos = pos; zPos = distanceToBuildingM + scaffoldWidthM / 2 }
-          else if (side === 'back') { xPos = pos; zPos = -distanceToBuildingM - scaffoldWidthM / 2 - (building.widthM || 0) - 1 }
-          else if (side === 'left') { xPos = -building.lengthM / 2 - 0.5 - distanceToBuildingM - scaffoldWidthM / 2; zPos = pos - (building.widthM || 0) / 2 - 0.5 }
-          else if (side === 'right') { xPos = building.lengthM / 2 + 0.5 + distanceToBuildingM + scaffoldWidthM / 2; zPos = pos - (building.widthM || 0) / 2 - 0.5 }
+          if (side === 'front') { xPos = pos; zPos = dSeite('front') + scaffoldWidthM / 2 }
+          else if (side === 'back') { xPos = pos; zPos = -dSeite('back') - scaffoldWidthM / 2 - (building.widthM || 0) - 1 }
+          else if (side === 'left') { xPos = -building.lengthM / 2 - 0.5 - dSeite('left') - scaffoldWidthM / 2; zPos = pos - (building.widthM || 0) / 2 - 0.5 }
+          else if (side === 'right') { xPos = building.lengthM / 2 + 0.5 + dSeite('right') + scaffoldWidthM / 2; zPos = pos - (building.widthM || 0) / 2 - 0.5 }
 
           anchors.push({ id: `anchor-${side}-${al}-${f}`, positionX: xPos, positionY: yAnchor, positionZ: zPos, side: side as 'front' | 'back' | 'left' | 'right', type: 'fassadenanker' })
         }

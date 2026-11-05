@@ -23,10 +23,16 @@ import { BAUTEIL_FARBEN, type FarbModus } from '@/lib/cad/bauteil-farben'
 import { useState, useMemo, useCallback, useEffect, useRef } from 'react'
 import StatikDatenPanel from '@/components/cad/StatikDatenPanel'
 import { huelleAusAnzeigePunkten } from '@/lib/cad/huelle'
-import { passeWandabstandAn } from '@/lib/cad/fassade-anpassung'
+import { passeWandabstandAn, passeWandabstandJeSeiteAn } from '@/lib/cad/fassade-anpassung'
+import { erkenneOeffnungen, oeffnungenAlsTueren, type OeffnungsErgebnis } from '@/lib/cad/oeffnungen'
+import { platziereAnzeigePunkte } from '@/lib/cad/huelle'
 import { verlaufNeu, verlaufSetze, verlaufZurueck, verlaufVor } from '@/lib/cad/verlauf'
 import { type Aussehen } from '@/lib/cad/modell-aussehen'
 import { aussehenAusDateien } from '@/lib/cad/obj-mtl-zu-glb'
+import ScanZusammenfuehren from '@/components/cad/ScanZusammenfuehren'
+import PunktwolkeWerkzeug from '@/components/cad/PunktwolkeWerkzeug'
+import HuelleWerkzeug from '@/components/cad/HuelleWerkzeug'
+import OeffnungenFenster from '@/components/cad/OeffnungenFenster'
 import { glbHatTurmKoerper } from '@/lib/cad/glb-masse'
 import { istTurmKoerperKnoten } from '@/lib/cad/glb-teile'
 import { CAD_UEBERNAHME_KEY, leseCadUebergabe } from '@/lib/cad/aufmass-zu-cad'
@@ -127,6 +133,11 @@ export default function CADPage() {
   const [abbauEinplanen, setAbbauEinplanen] = useState(false)
   // Echtes Gebäude (GLB mit Texturen / farbige Punktwolke) nur zur Anzeige
   const [aussehen, setAussehen] = useState<Aussehen | null>(null)
+  const [scanFensterOffen, setScanFensterOffen] = useState(false)
+  const [werkzeugOffen, setWerkzeugOffen] = useState(false)
+  const [huelleOffen, setHuelleOffen] = useState(false)
+  const [oeffnungen, setOeffnungen] = useState<OeffnungsErgebnis | null>(null)
+  const [huelleRasterM, setHuelleRasterM] = useState(0.3)
   const [aussehenEin, setAussehenEin] = useState(true)
   const [aussehenEinheit, setAussehenEinheit] = useState<'m' | 'cm' | 'mm'>('m')
   const [aussehenOben, setAussehenOben] = useState<'x' | 'y' | 'z'>('y')
@@ -181,8 +192,8 @@ export default function CADPage() {
   // Nur ohne Turm-Anker; GLB und OBJ liefern keine Hülle.
   const gebaeudeHuelle = useMemo(() => {
     if (!aussehen || !aussehenEin || aussehen.art !== 'punkte' || aussehenAnker) return null
-    return huelleAusAnzeigePunkten(aussehen.positionen, { faktor: aussehenEinheit === 'cm' ? 0.01 : aussehenEinheit === 'mm' ? 0.001 : 1, oben: aussehenOben, versatzX: aussehenVersatz.x, versatzZ: aussehenVersatz.z, drehungGrad: aussehenVersatz.grad })?.netz ?? null
-  }, [aussehen, aussehenEin, aussehenEinheit, aussehenOben, aussehenVersatz, aussehenAnker])
+    return huelleAusAnzeigePunkten(aussehen.positionen, { faktor: aussehenEinheit === 'cm' ? 0.01 : aussehenEinheit === 'mm' ? 0.001 : 1, oben: aussehenOben, versatzX: aussehenVersatz.x, versatzZ: aussehenVersatz.z, drehungGrad: aussehenVersatz.grad }, { rasterM: huelleRasterM })?.netz ?? null
+  }, [aussehen, aussehenEin, aussehenEinheit, aussehenOben, aussehenVersatz, aussehenAnker, huelleRasterM])
   const [abbauEin, setAbbauEin] = useState<TeilabbauEingabe>(TEILABBAU_START)
   const [showBuilding, setShowBuilding] = useState(true)
   const [showScaffold, setShowScaffold] = useState(true)
@@ -954,6 +965,37 @@ export default function CADPage() {
 
   return (
     <div className='min-h-screen md:h-screen flex flex-col bg-[#fbfbfd]'>
+      {oeffnungen && (
+        <OeffnungenFenster ergebnis={oeffnungen} anzahlBestehendeTueren={building.tueren?.length ?? 0}
+          onSchliessen={() => setOeffnungen(null)}
+          onTuerenUebernehmen={(auswahl, ersetzen) => {
+            const neu = oeffnungenAlsTueren(auswahl).map((t, i) => ({ ...t, id: `scan-${Date.now().toString(36)}-${i + 1}` }))
+            const alt = ersetzen ? [] : building.tueren ?? []
+            setBuilding({ ...building, tueren: [...alt, ...neu] })
+            setAussehenHinweis(`${neu.length} Tür${neu.length === 1 ? '' : 'en'} aus der Punktwolke übernommen${ersetzen ? ' (bestehende ersetzt)' : ''}.`)
+            setOeffnungen(null)
+          }} />
+      )}
+      {huelleOffen && aussehen && aussehen.art === 'punkte' && (
+        <HuelleWerkzeug aussehen={aussehen} oben={aussehenOben} faktor={aussehenEinheit === 'cm' ? 0.01 : aussehenEinheit === 'mm' ? 0.001 : 1}
+          platzierung={{ faktor: aussehenEinheit === 'cm' ? 0.01 : aussehenEinheit === 'mm' ? 0.001 : 1, oben: aussehenOben, versatzX: aussehenVersatz.x, versatzZ: aussehenVersatz.z, drehungGrad: aussehenVersatz.grad }}
+          rasterM={huelleRasterM} setRasterM={setHuelleRasterM}
+          onPunkteGekappt={(a, text) => { setAussehen(a); setAussehenHinweis(text); setHuelleOffen(false) }}
+          onSchliessen={() => setHuelleOffen(false)} />
+      )}
+      {werkzeugOffen && aussehen && aussehen.art === 'punkte' && (
+        <PunktwolkeWerkzeug aussehen={aussehen} oben={aussehenOben} faktor={aussehenEinheit === 'cm' ? 0.01 : aussehenEinheit === 'mm' ? 0.001 : 1}
+          onSchliessen={() => setWerkzeugOffen(false)}
+          onUebernehmen={(a) => { setAussehen(a); setAussehenHinweis(`Punktwolke bereinigt: ${(a.positionen.length / 3).toLocaleString('de-DE')} Punkte.`); setWerkzeugOffen(false) }} />
+      )}
+      {scanFensterOffen && (
+        <ScanZusammenfuehren
+          onSchliessen={() => setScanFensterOffen(false)}
+          onFertig={(r) => {
+            setAussehen(r.aussehen); setAussehenEin(true); setAussehenEinheit('m'); setAussehenOben(r.oben ?? 'z'); setAussehenAnker(null); setAussehenVersatz({ x: 0, z: 0, grad: 0 })
+            setAussehenHinweis(r.hinweis ?? ''); setScanFensterOffen(false)
+          }} />
+      )}
       {lvOffen && modelWithManual && (
         <LvDialog model={modelWithManual} materials={materials} aufbauStunden={logistik?.aufbauStunden ?? 0} abbauStunden={logistik?.abbauStunden ?? 0} stundenModellHash={logistik?.modellHash} onClose={() => setLvOffen(false)} />
       )}
@@ -1028,10 +1070,11 @@ export default function CADPage() {
             )}
             {viewMode === '3d' && modelWithManual && (
               <span className='inline-flex flex-wrap items-center gap-1'>
-                <label className='text-xs border rounded-lg px-2 py-1 bg-white text-[#424245] cursor-pointer' title='Zeigt das echte Gebäude (GLB mit Texturen, OBJ mit MTL und Bildern oder PLY-Punktwolke mit Farben) statt des einfachen Baukörpers – nur zur Ansicht, Maße und Gerüst bleiben unverändert'>
+                <label className='text-xs border rounded-lg px-2 py-1 bg-white text-[#424245] cursor-pointer' title='Zeigt das echte Gebäude (GLB mit Texturen, OBJ mit MTL und Bildern, PLY-Punktwolke mit Farben oder Scan-Dateien E57/PTX/LAS/XYZ) statt des einfachen Baukörpers – nur zur Ansicht, Maße und Gerüst bleiben unverändert'>
                   🏛️ {aussehen ? 'Anderes Gebäude laden' : 'Echtes Gebäude laden'}
-                  <input type='file' multiple accept='.glb,.ply,.obj,.mtl,.jpg,.jpeg,.png,.webp' className='hidden' onChange={(ev) => { const fs = Array.from(ev.target.files ?? []); ev.target.value = ''; if (fs.length) void ladeAussehen(fs) }} />
+                  <input type='file' multiple accept='.glb,.ply,.obj,.mtl,.jpg,.jpeg,.png,.webp,.e57,.ptx,.las,.xyz,.pts,.txt,.csv' className='hidden' onChange={(ev) => { const fs = Array.from(ev.target.files ?? []); ev.target.value = ''; if (fs.length) void ladeAussehen(fs) }} />
                 </label>
+                <button type='button' className='text-xs border rounded-lg px-2 py-1 bg-white text-[#424245]' title='Mehrere Scans (E57, PTX, LAS) zu einer Punktwolke zusammenführen: Lage bekannt, automatisch oder von Hand über Punktpaare' onClick={() => setScanFensterOffen(true)}>🧩 Scans zusammenführen</button>
                 {aussehen && (
                   <>
                     <button type='button' className={`text-xs border rounded-lg px-2 py-1 ${aussehenEin ? 'bg-[#e8590c] text-white' : 'bg-white text-[#424245]'}`} onClick={() => setAussehenEin((a) => !a)}>{aussehenEin ? 'Echt: an' : 'Echt: aus'}</button>
@@ -1046,6 +1089,12 @@ export default function CADPage() {
                     </select>
                     <label className='text-[11px] text-[#424245]' title='Gebäude nach links/rechts schieben (m)'>X <input type='number' step='1' className='w-14 text-xs border rounded px-1 py-0.5 bg-white' value={aussehenVersatz.x} onChange={(ev) => setAussehenVersatz((v) => ({ ...v, x: Number(ev.target.value) || 0 }))} /></label>
                     <label className='text-[11px] text-[#424245]' title='Gebäude nach vorn/hinten schieben (m)'>Z <input type='number' step='1' className='w-14 text-xs border rounded px-1 py-0.5 bg-white' value={aussehenVersatz.z} onChange={(ev) => setAussehenVersatz((v) => ({ ...v, z: Number(ev.target.value) || 0 }))} /></label>
+                    {aussehen.art === 'punkte' && (
+                      <button type='button' className='text-xs border rounded-lg px-2 py-1 bg-white text-[#424245]' title='Strecken und Flächen in der Punktwolke messen, Streupunkte und Überstände entfernen, Rechteck zuschneiden' onClick={() => setWerkzeugOffen(true)}>📏 Messen / Bereinigen</button>
+                    )}
+                    {aussehen.art === 'punkte' && !aussehenAnker && (
+                      <button type='button' className='text-xs border rounded-lg px-2 py-1 bg-white text-[#424245]' title='Hülle auf eine Höhe kappen (Volumen oben und unten), Detailstufe wählen, Hülle als OBJ speichern' onClick={() => setHuelleOffen(true)}>✂️ Kappen / OBJ</button>
+                    )}
                     {gebaeudeHuelle && (
                       <button type='button' className='text-xs border rounded-lg px-2 py-1 bg-white text-[#424245]' title='Erhöht den Wandabstand schrittweise, bis kein Gerüstbauteil mehr in der Gebäudehülle der Punktwolke liegt (Vorsprünge, Erker). Der Wert gilt für alle Seiten.'
                         onClick={() => {
@@ -1053,6 +1102,23 @@ export default function CADPage() {
                           if (r.wandabstandM !== r.startM) setBuilding({ ...building, geruestOptionen: { ...building.geruestOptionen, wandabstandM: r.wandabstandM } })
                           setAussehenHinweis(r.hinweise.join(' '))
                         }}>📐 Wandabstand anpassen</button>
+                    )}
+                    {aussehen.art === 'punkte' && !aussehenAnker && (
+                      <button type='button' className='text-xs border rounded-lg px-2 py-1 bg-white text-[#424245]' title='Sucht Türen und Fenster als Lücken in den Fassaden der Punktwolke (nur Vorschläge, nur Rechteck-Gebäude)'
+                        onClick={() => {
+                          const q = platziereAnzeigePunkte(aussehen.positionen, { faktor: aussehenEinheit === 'cm' ? 0.01 : aussehenEinheit === 'mm' ? 0.001 : 1, oben: aussehenOben, versatzX: aussehenVersatz.x, versatzZ: aussehenVersatz.z, drehungGrad: aussehenVersatz.grad })
+                          if (!q) { setAussehenHinweis('Zu wenige Punkte für die Erkennung von Öffnungen.'); return }
+                          setOeffnungen(erkenneOeffnungen(q.px, q.py, q.pz, building))
+                        }}>🚪 Öffnungen erkennen</button>
+                    )}
+                    {gebaeudeHuelle && (
+                      <button type='button' className='text-xs border rounded-lg px-2 py-1 bg-white text-[#424245]' title='Wie „Wandabstand anpassen“, aber jede Gerüstseite bekommt ihren eigenen Wert: Nur Seiten mit Kollision rücken von der Wand ab, glatte Fassaden bleiben nah dran. Gilt bei Rechteck und abgestuftem Gebäude.'
+                        onClick={() => {
+                          const r = passeWandabstandJeSeiteAn(building, systemId, gebaeudeHuelle)
+                          const geaendert = Object.entries(r.seitenM).some(([sd, v]) => v !== (building.geruestOptionen?.wandabstandSeiteM?.[sd as 'front'] ?? building.geruestOptionen?.wandabstandM ?? 0.3))
+                          if (geaendert) setBuilding({ ...building, geruestOptionen: { ...building.geruestOptionen, wandabstandSeiteM: r.seitenM } })
+                          setAussehenHinweis(r.hinweise.join(' '))
+                        }}>📐 Wandabstand je Seite</button>
                     )}
                     <button type='button' className='text-xs text-[#86868b] underline' onClick={() => { setAussehen(null); void vergissAussehen() }}>entfernen</button>
                   </>

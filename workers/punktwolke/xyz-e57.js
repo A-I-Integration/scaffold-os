@@ -18,7 +18,8 @@
 // Datei dann mit Hinweis, sie als LAZ/LAS zu exportieren. Die Prüfsummen (CRC) der Seiten werden nicht geprüft.
 // ============================================================
 
-const { MAX_PUNKTE } = require('./las-laz');
+// Gleicher Wert wie in las-laz.js; hier getrennt definiert, damit dieses Modul auch im Browser (CAD-Import) ohne laz-perf geladen werden kann.
+const MAX_PUNKTE = 8_000_000;
 
 // ─── Textlisten ───────────────────────────────────────────────────────────────
 

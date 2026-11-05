@@ -367,6 +367,12 @@ export function erzeugeLeistungsverzeichnis(quelle: LvQuelle, e: LvEingaben): Le
   const traufe = model.building.eavesHeightM || model.building.heightM
   const first = model.building.heightM + (model.building.roofHeightM || 0)
   const wandabstand = model.building.geruestOptionen?.wandabstandM ?? 0.3
+  // Je Seite abweichender Wandabstand: im Text alle eingerüsteten Seiten nennen, sonst bleibt der Text wie bisher
+  const abstandSeiten = model.building.geruestOptionen?.wandabstandSeiteM
+  const abstandAbweichend = !!abstandSeiten && (['front', 'back', 'left', 'right'] as const).some((sd) => model.building.sides.includes(sd) && abstandSeiten[sd] !== undefined && abstandSeiten[sd] !== wandabstand)
+  const abstandText = abstandAbweichend
+    ? (['front', 'back', 'left', 'right'] as const).filter((sd) => model.building.sides.includes(sd)).map((sd) => `${{ front: 'vorne', back: 'hinten', left: 'links', right: 'rechts' }[sd]} ${de(abstandSeiten?.[sd] ?? wandabstand, 2)} m`).join(', ')
+    : `${de(wandabstand, 2)} m`
   const bauart = model.system?.bauart === 'rahmen' ? 'Rahmengerüst' : 'Modulgerüst'
   const ankerAnzahl = model.anchors?.length ?? 0
   const woGesamt = Math.max(0, e.gesamtStandzeitWochen)
@@ -378,7 +384,7 @@ export function erzeugeLeistungsverzeichnis(quelle: LvQuelle, e: LvEingaben): Le
       : 'Arbeits- und Schutzgerüst DIN EN 12811-1 und DIN 4420-1 als Fassadengerüst an lotrechter Fassade erstellen, Abbau und Vorhaltung werden gesondert vergütet.',
     `Standgerüst, längenorientiert, Fassadengerüst DIN EN 12810-1 als ${bauart}, Lastklasse ${e.lastklasse} (${de(kn ?? 0, 0)} kN/m²), Breitenklasse ${bk.replace(/^W/, 'SW')}, Höhenklasse ${e.hoehenklasse}.`,
     `${e.lagen === 'alle' ? 'Alle' : 'Obere'} Gerüstlagen genutzt, Einrüstung für Fassadenarbeiten und Dacharbeiten, an senkrechten Bauwerksaußenflächen.`,
-    `Abstand zum Gebäude ${de(wandabstand, 2)} m, verankern nach Wahl des Auftragnehmers am Bauwerk${ankerAnzahl > 0 ? ` (laut CAD-Modell ca. ${ankerAnzahl} Anker)` : ''}, Untergrund der Befestigung ${e.untergrundBefestigung || 'laut Angabe'}.`,
+    `Abstand zum Gebäude ${abstandText}, verankern nach Wahl des Auftragnehmers am Bauwerk${ankerAnzahl > 0 ? ` (laut CAD-Modell ca. ${ankerAnzahl} Anker)` : ''}, Untergrund der Befestigung ${e.untergrundBefestigung || 'laut Angabe'}.`,
     `Aufstellung: ${e.aufstellung || 'laut Angabe'}, Standfläche waagerecht, über Lastverteiler belastbar.`,
     `Traufe des Gebäudes bei ca. ${de(traufe, 2)} m, Höhe der obersten Gerüstlage ca. ${de(geruestTopM, 2)} m über dem Gelände${first > traufe ? `, First bei ca. ${de(first, 2)} m` : ''}.`,
     'Ankerlöcher sind nach Fertigstellung fachgerecht zu verschließen.',
