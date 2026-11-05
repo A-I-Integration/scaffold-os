@@ -33,13 +33,15 @@ interface Props {
   materials: MaterialItem[]
   aufbauStunden: number
   abbauStunden: number
+  /** Modellstand, aus dem die Stunden berechnet wurden (aus der Logistik) */
+  stundenModellHash?: string
   onClose: () => void
 }
 
 /** Höhe des 2. Bauabschnitts der Turm-Gliederung: darunter passt sie nicht zum Gebäude */
 const TURM_LV_AB_M = 21.5
 
-export default function LvDialog({ model, materials, aufbauStunden, abbauStunden, onClose }: Props) {
+export default function LvDialog({ model, materials, aufbauStunden, abbauStunden, stundenModellHash, onClose }: Props) {
   // Firmenwerte aus dem Browser holen (nur Komfort – ohne Speicher läuft alles weiter)
   const [e, setE] = useState<LvEingaben>(() => {
     try {
@@ -133,8 +135,8 @@ export default function LvDialog({ model, materials, aufbauStunden, abbauStunden
   const setzeZusatz = (i: number, patch: Partial<LvZusatz>) => setze({ zusatz: e.zusatz.map((z, j) => (j === i ? { ...z, ...patch } : z)) })
 
   const lv = useMemo(
-    () => erzeugeLeistungsverzeichnis({ model, materials, aufbauStunden, abbauStunden }, { ...e, standardpreise }),
-    [model, materials, aufbauStunden, abbauStunden, e, standardpreise],
+    () => erzeugeLeistungsverzeichnis({ model, materials, aufbauStunden, abbauStunden, stundenModellHash }, { ...e, standardpreise }),
+    [model, materials, aufbauStunden, abbauStunden, stundenModellHash, e, standardpreise],
   )
   const router = useRouter()
   // Zur Baustelle speichern: Baustelle und Art wählen, das LV wird als neue Version abgelegt
@@ -253,7 +255,7 @@ export default function LvDialog({ model, materials, aufbauStunden, abbauStunden
                   const r = await leseStatikerLvXlsx(await f.arrayBuffer())
                   // Mengen der Positionen (z. B. Titel 03, Haltestellen, Stunden) mit dem LV nach den neuen Werten abgleichen
                   const neu = { ...e, ...r.werte, standardpreise }
-                  const lvNeu = erzeugeLeistungsverzeichnis({ model, materials, aufbauStunden, abbauStunden }, neu)
+                  const lvNeu = erzeugeLeistungsverzeichnis({ model, materials, aufbauStunden, abbauStunden, stundenModellHash }, neu)
                   const m = mengenAusAuftraggeberLv(r.positionen, lvNeu.titel.flatMap((t) => t.positionen))
                   setze({ ...r.werte, ...(Object.keys(m.ueberschreibung).length > 0 ? { mengeUeberschreibung: { ...(e.mengeUeberschreibung ?? {}), ...m.ueberschreibung } } : {}) })
                   setStatikerLv(r)

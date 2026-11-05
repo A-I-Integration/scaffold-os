@@ -26,6 +26,7 @@ import type { CADModel } from '@/lib/calculations/cad-engine'
 import type { MaterialItem } from '@/types/scaffold'
 import { kappeModellAufHoehe, kappeMaterial } from '@/lib/cad/bauabschnitt'
 import { standardpreisFuer, type LvStandardpreise } from '@/lib/lv-firmenwerte'
+import { modellHash, pruefeHerkunft, eingabeFingerprint, stuecklisteFingerprint, stundenFingerprint, type HerkunftStatus } from '@/lib/calculations/modell-stand'
 import { MIN_BREITE_AB_LK4_M, STANDARD_LASTKLASSE, verwendungText } from '@/lib/geruestklassen'
 import { lagenansatzText } from '@/lib/lastansatz'
 import { LV_TEXTE } from '@/lib/lv-texte'
@@ -233,8 +234,10 @@ export interface Leistungsverzeichnis {
   mwst: number
   summeBrutto: number
   annahmen: string[]
-  /** Pflichtangaben, die für ein vollständiges LV noch fehlen */
+  /** Pflichtangaben, die für ein vollständiges LV noch fehlen (auch: Stückliste/Stunden passen nicht zum Modell) */
   fehlendeAngaben: string[]
+  /** Herkunftsnachweis. Bei neu erzeugten LV immer gesetzt; früher gespeicherte LV haben keinen. */
+  herkunft?: LvHerkunft
 }
 
 const cent = (v: number): number => Math.round((Number.isFinite(v) ? v : 0) * 100) / 100
@@ -269,6 +272,21 @@ export interface LvQuelle {
   materials: MaterialItem[]
   aufbauStunden: number
   abbauStunden: number
+  /** Modellstand, aus dem die Stunden berechnet wurden (`LogistikDaten.modellHash`). Fehlt bei von Hand eingegebenen Stunden. */
+  stundenModellHash?: string
+}
+
+/** Herkunftsnachweis eines LV: aus welchem Modellstand und welchen Eingaben es entstanden ist. */
+export interface LvHerkunft {
+  /** Modellstand, auf dem die Mengen beruhen */
+  modellHash: string
+  /** 'ok': Stückliste/Stunden gehören zum Modell · 'abweichung': sie gehören zu einem anderen Stand · 'unbekannt': keine Herkunftsangabe vorhanden */
+  status: HerkunftStatus
+  hinweise: string[]
+  /** Fingerabdruck von Stückliste (inkl. Preise/Katalogwahl), Stunden und LV-Einstellungen; ändert sich bei jeder geänderten Eingabe */
+  eingabeFingerprint: string
+  stuecklisteFingerprint: string
+  stundenFingerprint: string
 }
 
 export function erzeugeLeistungsverzeichnis(quelle: LvQuelle, e: LvEingaben): Leistungsverzeichnis {
@@ -278,6 +296,10 @@ export function erzeugeLeistungsverzeichnis(quelle: LvQuelle, e: LvEingaben): Le
   const abbauStunden = e.abbauStundenManuell !== undefined && e.abbauStundenManuell >= 0 ? e.abbauStundenManuell : quelle.abbauStunden
   const comps = model.components3D
   const faktor = 1 + Math.max(0, e.zuschlagProzent) / 100
+
+  // Herkunft prüfen: gehören Stückliste und Stunden zu diesem Modellstand? (Stunden von Hand eingegeben: keine Prüfung)
+  const stundenVonHand = (e.aufbauStundenManuell !== undefined && e.aufbauStundenManuell >= 0) && (e.abbauStundenManuell !== undefined && e.abbauStundenManuell >= 0)
+  const herkunftPruefung = pruefeHerkunft({ model, materials, stundenModellHash: quelle.stundenModellHash, stundenVonHand })
 
   // Mengen aus dem CAD
   const zuschlagFlaecheM2 = (e.hoehenZuschlagM || 0) * (model.totalLengthM || 0)
@@ -743,6 +765,7 @@ export function erzeugeLeistungsverzeichnis(quelle: LvQuelle, e: LvEingaben): Le
   const mwst = cent(summeNetto * (e.mwstProzent / 100))
 
   const fehlend: string[] = []
+  for (const h of herkunftPruefung.hinweise) fehlend.push(h)
   if (!(matGesamt > 0)) fehlend.push('Materialwert der Stückliste ist 0 – Preise im Lager pflegen')
   if (!(e.stundensatzFach > 0)) fehlend.push('Stundensatz Facharbeiter')
   if (!(e.stundensatzHelfer > 0)) fehlend.push('Stundensatz Helfer')
@@ -831,6 +854,14 @@ export function erzeugeLeistungsverzeichnis(quelle: LvQuelle, e: LvEingaben): Le
       'Dieses LV ersetzt keine Statik und keine Prüfung durch eine befähigte Person.',
     ],
     fehlendeAngaben: fehlend,
+    herkunft: {
+      modellHash: modellHash(model),
+      status: herkunftPruefung.status,
+      hinweise: herkunftPruefung.hinweise,
+      eingabeFingerprint: eingabeFingerprint({ materials, aufbauStunden, abbauStunden, einstellungen: e }),
+      stuecklisteFingerprint: stuecklisteFingerprint(materials),
+      stundenFingerprint: stundenFingerprint(aufbauStunden, abbauStunden),
+    },
   }
 }
 
