@@ -267,7 +267,7 @@ export function erzeugeVorderansicht(model: CADModel, modus: PlanModus = 'schema
   }
 
   // Kopfzeile
-  const kopf = `Wandabstand ${de(wandabstand)} m · Gerüstbreite ${de(breite)} m · System ${model.system ? `${model.system.hersteller} ${model.system.systemName}` : 'nicht gewählt'}`
+  const kopf = `Wandabstand ${de(wandabstand)} m${b.geruestOptionen?.wandabstandSeiteM && Object.keys(b.geruestOptionen.wandabstandSeiteM).length > 0 ? ' (je Seite abweichend, siehe Grundriss)' : ''} · Gerüstbreite ${de(breite)} m · System ${model.system ? `${model.system.hersteller} ${model.system.systemName}` : 'nicht gewählt'}`
   p.text(xMin, hMax + th * 3.2, 'Vorderansicht', 'TEXTE', 'links', 0, 1.6)
   p.text(xMin, hMax + th * 2.0, kopf, 'TEXTE', 'links')
   if (hatWinkel) p.text(xMin, yUnten2 - th * 2.2, 'Hinweis: Abschnitte mit Winkel sind abgewickelt dargestellt (Länge entlang des Gebäudes).', 'TEXTE', 'links')
@@ -286,7 +286,9 @@ export function erzeugeGrundriss(model: CADModel, modus: PlanModus = 'schematisc
   const W = b.widthM
   const wandabstand = b.geruestOptionen?.wandabstandM ?? 0.3
   const breite = b.geruestOptionen?.breiteM ?? model.system?.rahmenBreitenM[0] ?? 0.73
-  const aussen = wandabstand + breite
+  const abst = (sd: 'front' | 'back' | 'left' | 'right'): number => b.geruestOptionen?.wandabstandSeiteM?.[sd] ?? wandabstand
+  const aussenS = (sd: 'front' | 'back' | 'left' | 'right'): number => abst(sd) + breite
+  const aussen = Math.max(...(['front', 'back', 'left', 'right'] as const).map(aussenS))
   const xMin = segs[0].x0
   const xMax = segs[segs.length - 1].x1
 
@@ -309,12 +311,12 @@ export function erzeugeGrundriss(model: CADModel, modus: PlanModus = 'schematisc
   const geruest = walls.filter((w) => w.s.eingeruestet)
   const teileGrundriss = modus === 'komponenten' ? grundrissBauteile(model) : []
   if (modus === 'komponenten') zeichneBauteile(p, teileGrundriss, true, symbolStilVon(model))
-  if (modus === 'schematisch' && seiten.has('front')) geruest.forEach(({ s, yVorne }) => { p.linie(s.x0, yVorne - wandabstand, s.x1, yVorne - wandabstand, 'GERUEST'); p.linie(s.x0, yVorne - aussen, s.x1, yVorne - aussen, 'GERUEST') })
-  if (modus === 'schematisch' && seiten.has('back')) geruest.forEach(({ s, yHinten }) => { p.linie(s.x0, yHinten + wandabstand, s.x1, yHinten + wandabstand, 'GERUEST'); p.linie(s.x0, yHinten + aussen, s.x1, yHinten + aussen, 'GERUEST') })
+  if (modus === 'schematisch' && seiten.has('front')) geruest.forEach(({ s, yVorne }) => { p.linie(s.x0, yVorne - abst('front'), s.x1, yVorne - abst('front'), 'GERUEST'); p.linie(s.x0, yVorne - aussenS('front'), s.x1, yVorne - aussenS('front'), 'GERUEST') })
+  if (modus === 'schematisch' && seiten.has('back')) geruest.forEach(({ s, yHinten }) => { p.linie(s.x0, yHinten + abst('back'), s.x1, yHinten + abst('back'), 'GERUEST'); p.linie(s.x0, yHinten + aussenS('back'), s.x1, yHinten + aussenS('back'), 'GERUEST') })
   if (modus === 'schematisch' && geruest.length > 0) {
     const erst = geruest[0]; const letzt = geruest[geruest.length - 1]
-    if (seiten.has('left')) { const xs = erst.s.x0; p.linie(xs - wandabstand, erst.yVorne, xs - wandabstand, erst.yHinten, 'GERUEST'); p.linie(xs - aussen, erst.yVorne, xs - aussen, erst.yHinten, 'GERUEST') }
-    if (seiten.has('right')) { const xs = letzt.s.x1; p.linie(xs + wandabstand, letzt.yVorne, xs + wandabstand, letzt.yHinten, 'GERUEST'); p.linie(xs + aussen, letzt.yVorne, xs + aussen, letzt.yHinten, 'GERUEST') }
+    if (seiten.has('left')) { const xs = erst.s.x0; p.linie(xs - abst('left'), erst.yVorne, xs - abst('left'), erst.yHinten, 'GERUEST'); p.linie(xs - aussenS('left'), erst.yVorne, xs - aussenS('left'), erst.yHinten, 'GERUEST') }
+    if (seiten.has('right')) { const xs = letzt.s.x1; p.linie(xs + abst('right'), letzt.yVorne, xs + abst('right'), letzt.yHinten, 'GERUEST'); p.linie(xs + aussenS('right'), letzt.yVorne, xs + aussenS('right'), letzt.yHinten, 'GERUEST') }
   }
 
   // Beschriftung
@@ -328,7 +330,9 @@ export function erzeugeGrundriss(model: CADModel, modus: PlanModus = 'schematisc
   const spalte = th * 2.2
   walls.forEach(({ s, yVorne, yHinten }, i) => p.masseV(xMax + aussen + th * 3 + i * spalte, yVorne, yHinten, `${s.name}: Tiefe ${de(s.tiefeM)} m`))
 
-  const kopf = `Wandabstand ${de(wandabstand)} m · Gerüstbreite ${de(breite)} m · eingerüstete Seiten: ${b.sides.map((x) => ({ front: 'Vorne', back: 'Hinten', left: 'Links', right: 'Rechts' }[x])).join(', ') || 'keine'}`
+  const jeSeite = b.geruestOptionen?.wandabstandSeiteM && Object.keys(b.geruestOptionen.wandabstandSeiteM).length > 0
+  const abstandText = jeSeite ? `Wandabstand ${(['front', 'back', 'left', 'right'] as const).filter((sd) => seiten.has(sd)).map((sd) => `${{ front: 'vorne', back: 'hinten', left: 'links', right: 'rechts' }[sd]} ${de(abst(sd))}`).join(', ')} m` : `Wandabstand ${de(wandabstand)} m`
+  const kopf = `${abstandText} · Gerüstbreite ${de(breite)} m · eingerüstete Seiten: ${b.sides.map((x) => ({ front: 'Vorne', back: 'Hinten', left: 'Links', right: 'Rechts' }[x])).join(', ') || 'keine'}`
   p.text(xMin, yMax + th * 3.2, 'Grundriss', 'TEXTE', 'links', 0, 1.6)
   p.text(xMin, yMax + th * 2.0, kopf, 'TEXTE', 'links')
   if (modus === 'komponenten') {

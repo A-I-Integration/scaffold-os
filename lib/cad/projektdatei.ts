@@ -137,6 +137,12 @@ export function liesProjektdatei(text: string): LeseErgebnis {
     const opt: NonNullable<BuildingParams['geruestOptionen']> = {}
     const bm = zahl(o.breiteM, 0.1, 5); if (bm != null) opt.breiteM = bm
     const wa = zahl(o.wandabstandM, 0, 5); if (wa != null) opt.wandabstandM = wa
+    if (o.wandabstandSeiteM && typeof o.wandabstandSeiteM === 'object') {
+      const m = o.wandabstandSeiteM as Record<string, unknown>
+      const sm: NonNullable<typeof opt.wandabstandSeiteM> = {}
+      for (const sd of ['front', 'back', 'left', 'right'] as const) { const v = zahl(m[sd], 0, 5); if (v != null) sm[sd] = v }
+      if (Object.keys(sm).length > 0) opt.wandabstandSeiteM = sm
+    }
     const fl = zahl(o.feldlaengeM, 0.1, 10); if (fl != null) opt.feldlaengeM = fl
     if (typeof o.treppe === 'boolean') opt.treppe = o.treppe
     if (typeof o.tuerenFreihalten === 'boolean') opt.tuerenFreihalten = o.tuerenFreihalten

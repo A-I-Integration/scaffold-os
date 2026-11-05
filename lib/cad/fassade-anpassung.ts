@@ -67,3 +67,82 @@ export function passeWandabstandAn(building: BuildingParams, systemId: string, h
   if (b.w > WANDABSTAND_HINWEIS_AB_M + 1e-9) hinweise.push(`Wandabstand über ${WANDABSTAND_HINWEIS_AB_M.toString().replace('.', ',')} m: dann sind meist Zusatzmaßnahmen (z. B. Lückenschluss oder Konsolbelag) nötig. Bitte mit der Aufbau- und Verwendungsanleitung des Systems prüfen.`)
   return { wandabstandM: b.w, gefunden, startM: start, kollisionenVorher: erste, kollisionenNachher: b.k.length, schritte, verbleibend: b.k, hinweise }
 }
+
+// ─── je Fassadenseite ────────────────────────────────────────────────────────
+
+export type Seite = 'front' | 'back' | 'left' | 'right'
+const SEITEN: Seite[] = ['front', 'back', 'left', 'right']
+const SEITE_NAME: Record<Seite, string> = { front: 'vorne', back: 'hinten', left: 'links', right: 'rechts' }
+const kommaM = (v: number): string => v.toString().replace('.', ',')
+
+export interface SeitenAnpassungErgebnis {
+  /** gewählter Wandabstand je eingerüsteter Seite (m, auf cm gerundet) */
+  seitenM: Partial<Record<Seite, number>>
+  gefunden: boolean
+  startM: number
+  kollisionenVorher: number
+  kollisionenNachher: number
+  verbleibend: Kollision[]
+  hinweise: string[]
+}
+
+/**
+ * Wie `passeWandabstandAn`, aber jede Gerüstseite bekommt ihren eigenen Wandabstand: Nur Seiten mit Kollision rücken (5 cm je Schritt),
+ * glatte Fassaden bleiben beim Startwert. Die Seite eines Bauteils ergibt sich aus seinem Feld; Bauteile ohne Feld (Zuordnung unbekannt)
+ * lassen alle Seiten, die noch Spielraum haben, weiterrücken. Nicht für den Umriss-Modus (dort gilt ein Wert für alle Kanten).
+ */
+export function passeWandabstandJeSeiteAn(building: BuildingParams, systemId: string, huelle: Netz, opt: { schrittM?: number; maxM?: number } = {}): SeitenAnpassungErgebnis {
+  const schritt = Math.max(0.01, opt.schrittM ?? WANDABSTAND_SCHRITT_M)
+  const maxM = Math.min(WANDABSTAND_MAX_M, opt.maxM ?? WANDABSTAND_MAX_M)
+  const basis = runde(Math.min(Math.max(building.geruestOptionen?.wandabstandM ?? STANDARD_WANDABSTAND_M, WANDABSTAND_MIN_M), WANDABSTAND_MAX_M))
+  const aktiv = SEITEN.filter((s) => building.sides.includes(s))
+  const start: Partial<Record<Seite, number>> = {}
+  for (const s of aktiv) start[s] = runde(Math.min(Math.max(building.geruestOptionen?.wandabstandSeiteM?.[s] ?? basis, WANDABSTAND_MIN_M), WANDABSTAND_MAX_M))
+  const leer: SeitenAnpassungErgebnis = { seitenM: start, gefunden: false, startM: basis, kollisionenVorher: 0, kollisionenNachher: 0, verbleibend: [], hinweise: [] }
+  if (huelle.dreiecke.length === 0) return { ...leer, hinweise: ['Es gibt keine Gebäudehülle (Punktwolke laden und anzeigen), deshalb wurde nichts angepasst.'] }
+  if (building.umriss && building.umriss.length > 0) return { ...leer, hinweise: ['Im Umriss-Modus gilt ein Wandabstand für alle Kanten: bitte „Wandabstand anpassen“ (alle Seiten) verwenden.'] }
+
+  const wert = { ...start } as Record<Seite, number>
+  const pruefe = (w: Record<Seite, number>) => {
+    const modell = generateCADModel({ ...building, geruestOptionen: { ...building.geruestOptionen, wandabstandSeiteM: { ...w } } }, systemId)
+    const seiteVonFeld = new Map(modell.fields.map((f) => [f.id, f.side as Seite]))
+    const teile = modell.components3D.filter((c) => !NICHT_GEPRUEFT.has(c.type))
+    const k = pruefeGeruestGegenGebaeude(teile, huelle).kollisionen
+    const nachId = new Map(teile.map((c) => [c.id, c]))
+    const seiten = new Set<Seite>()
+    let unbekannt = false
+    for (const x of k) {
+      const fid = nachId.get(x.id)?.fieldId
+      const sd = fid ? seiteVonFeld.get(fid) : undefined
+      if (sd) seiten.add(sd); else unbekannt = true
+    }
+    return { k, seiten, unbekannt }
+  }
+
+  let beste: { w: Record<Seite, number>; k: Kollision[] } | null = null
+  let erste = -1
+  for (let runde_ = 0; runde_ < 40; runde_++) {
+    const r = pruefe(wert)
+    if (erste < 0) erste = r.k.length
+    if (!beste || r.k.length < beste.k.length) beste = { w: { ...wert }, k: r.k }
+    if (r.k.length === 0) break
+    const kandidaten = r.unbekannt ? aktiv : [...r.seiten]
+    let bewegt = false
+    for (const s of kandidaten) if (wert[s] + schritt <= maxM + 1e-9) { wert[s] = runde(wert[s] + schritt); bewegt = true }
+    if (!bewegt) break
+  }
+  const b = beste!
+  const gefunden = b.k.length === 0
+  const hinweise: string[] = []
+  const geaendert = aktiv.filter((s) => b.w[s] !== start[s])
+  if (gefunden && geaendert.length === 0) hinweise.push('Kein Gerüstbauteil liegt in der Gebäudehülle, alle Seiten bleiben beim eingestellten Wandabstand.')
+  else if (gefunden) hinweise.push(`Wandabstand angepasst: ${geaendert.map((s) => `${SEITE_NAME[s]} ${kommaM(start[s] ?? basis)} → ${kommaM(b.w[s])} m`).join(', ')}. Damit liegt kein Gerüstbauteil mehr in der Gebäudehülle; die übrigen Seiten bleiben unverändert.`)
+  else {
+    const z = new Map<string, number>()
+    for (const k of b.k) z.set(TYP_NAME[k.typ] ?? k.typ, (z.get(TYP_NAME[k.typ] ?? k.typ) ?? 0) + 1)
+    hinweise.push(`Auch mit ${geaendert.length ? geaendert.map((s) => `${SEITE_NAME[s]} ${kommaM(b.w[s])} m`).join(', ') : 'den eingestellten Werten'} bleiben ${b.k.length} Bauteile in der Hülle (${[...z.entries()].map(([n, c]) => `${n} ${c}×`).join(', ')}). Das sind meist Dachüberstand oder größere Vorsprünge: Konsolen, Lückenschluss oder Handarbeit am Modell prüfen.`)
+  }
+  const gross = aktiv.filter((s) => b.w[s] > WANDABSTAND_HINWEIS_AB_M + 1e-9)
+  if (gross.length) hinweise.push(`Wandabstand über ${kommaM(WANDABSTAND_HINWEIS_AB_M)} m (${gross.map((s) => SEITE_NAME[s]).join(', ')}): dann sind meist Zusatzmaßnahmen (z. B. Lückenschluss oder Konsolbelag) nötig. Bitte mit der Aufbau- und Verwendungsanleitung des Systems prüfen.`)
+  return { seitenM: b.w, gefunden, startM: basis, kollisionenVorher: erste, kollisionenNachher: b.k.length, verbleibend: b.k, hinweise }
+}

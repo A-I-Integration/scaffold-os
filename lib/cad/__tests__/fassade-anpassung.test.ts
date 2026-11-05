@@ -54,3 +54,38 @@ describe('Wandabstand an die Fassade anpassen', () => {
     expect(r.hinweise[0]).toMatch(/keine Gebäudehülle/)
   })
 })
+
+describe('Wandabstand je Fassadenseite anpassen', () => {
+  it('Erker nur hinten: nur die Rückseite rückt auf 0,45 m, die anderen Seiten bleiben bei 0,3 m', async () => {
+    const { passeWandabstandJeSeiteAn } = await import('@/lib/cad/fassade-anpassung')
+    const r = passeWandabstandJeSeiteAn(HAUS, 'layher-allround', mitErker(0.4))
+    expect(r.gefunden).toBe(true)
+    expect(r.seitenM).toEqual({ front: 0.3, back: 0.45, left: 0.3, right: 0.3 })
+    expect(r.kollisionenVorher).toBeGreaterThan(0)
+    expect(r.kollisionenNachher).toBe(0)
+    expect(r.hinweise.join(' ')).toMatch(/hinten 0,3 → 0,45 m/)
+  })
+  it('glatte Wand: nichts ändert sich', async () => {
+    const { passeWandabstandJeSeiteAn } = await import('@/lib/cad/fassade-anpassung')
+    const r = passeWandabstandJeSeiteAn(HAUS, 'layher-allround', wand())
+    expect(r.gefunden).toBe(true)
+    expect(r.seitenM).toEqual({ front: 0.3, back: 0.3, left: 0.3, right: 0.3 })
+  })
+  it('Vorsprung über der Obergrenze: bester Stand gemeldet, nicht gefunden', async () => {
+    const { passeWandabstandJeSeiteAn } = await import('@/lib/cad/fassade-anpassung')
+    const r = passeWandabstandJeSeiteAn(HAUS, 'layher-allround', mitErker(0.9))
+    expect(r.gefunden).toBe(false)
+    expect(r.kollisionenNachher).toBeLessThanOrEqual(r.kollisionenVorher)
+    expect(r.hinweise.join(' ')).toMatch(/bleiben \d+ Bauteile in der Hülle/)
+  })
+  it('Startwerte je Seite werden respektiert, das Gebäude-Objekt bleibt unverändert; Umriss-Modus wird abgelehnt', async () => {
+    const { passeWandabstandJeSeiteAn } = await import('@/lib/cad/fassade-anpassung')
+    const b = { ...HAUS, geruestOptionen: { wandabstandM: 0.3, wandabstandSeiteM: { left: 0.4 } } } as BuildingParams
+    const vorher = JSON.stringify(b)
+    const r = passeWandabstandJeSeiteAn(b, 'layher-allround', wand())
+    expect(r.seitenM.left).toBe(0.4)
+    expect(JSON.stringify(b)).toBe(vorher)
+    const u = passeWandabstandJeSeiteAn({ ...HAUS, umriss: [{ x: 0, z: 0 }, { x: 1, z: 0 }, { x: 1, z: 1 }] } as BuildingParams, 'layher-allround', wand())
+    expect(u.hinweise[0]).toMatch(/Umriss/)
+  })
+})

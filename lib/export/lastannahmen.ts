@@ -127,6 +127,9 @@ export function baueLastannahmenDaten(model: CADModel, statik: StatikDaten, opt:
         { label: 'Anker im Modell', wert: String(model.anchors.length) },
         { label: 'Gebäude (L × B × H)', wert: `${zahl(b.lengthM, 1)} × ${zahl(b.widthM, 1)} × ${zahl(b.heightM, 1)} m` },
         { label: 'Wandabstand', wert: b.geruestOptionen?.wandabstandM !== undefined ? `${zahl(b.geruestOptionen.wandabstandM)} m` : 'Standardwert des Systems' },
+        ...(b.geruestOptionen?.wandabstandSeiteM && Object.keys(b.geruestOptionen.wandabstandSeiteM).length > 0
+          ? [{ label: 'Wandabstand je Seite', wert: (['front', 'back', 'left', 'right'] as const).filter((sd) => b.geruestOptionen?.wandabstandSeiteM?.[sd] !== undefined).map((sd) => `${{ front: 'vorne', back: 'hinten', left: 'links', right: 'rechts' }[sd]} ${zahl(b.geruestOptionen?.wandabstandSeiteM?.[sd] ?? 0)} m`).join(', ') }]
+          : []),
       ],
       ...(abschnitte ? { tabelle: { kopf: ['Abschnitt', 'Länge', 'Höhe', 'Eingerüstet'], zeilen: abschnitte.map((a, i) => [String(i + 1), `${zahl(a.laengeM, 1)} m`, `${zahl(a.hoeheM, 1)} m`, a.eingeruestet ? 'ja' : 'nein']) } } : {}),
     },

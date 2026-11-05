@@ -914,6 +914,24 @@ export default function BuildingForm({ building, systemId, onChange, onSystemCha
                       <label className='block text-[11px] text-[#424245] mb-1'>Wandabstand (m)</label>
                       <input type='number' step='0.01' min={WANDABSTAND_MIN_M} max={WANDABSTAND_MAX_M} placeholder='0,30' value={opt.wandabstandM ?? ''} onChange={(e) => setzeOpt({ wandabstandM: e.target.value === '' ? undefined : parseFloat(e.target.value) })} className='w-full px-2 py-1.5 border rounded-lg text-xs' />
                     </div>
+                    <div className='col-span-2'>
+                      <label className='block text-[11px] text-[#424245] mb-1'>Wandabstand je Seite (m) – leer = gemeinsamer Wert{building.umriss && building.umriss.length > 0 ? ' · gilt nicht im Umriss-Modus' : ''}</label>
+                      <div className='grid grid-cols-4 gap-1'>
+                        {(['front', 'back', 'left', 'right'] as const).map((sd) => (
+                          <label key={sd} className='text-[10px] text-[#86868b]'>{{ front: 'Vorne', back: 'Hinten', left: 'Links', right: 'Rechts' }[sd]}
+                            <input type='number' step='0.01' min={WANDABSTAND_MIN_M} max={WANDABSTAND_MAX_M} placeholder={String(opt.wandabstandM ?? 0.3).replace('.', ',')} value={opt.wandabstandSeiteM?.[sd] ?? ''}
+                              disabled={!building.sides.includes(sd)}
+                              onChange={(e) => {
+                                const v = e.target.value === '' ? undefined : parseFloat(e.target.value)
+                                const neuSeiten = { ...(opt.wandabstandSeiteM ?? {}), [sd]: v }
+                                if (v === undefined || !Number.isFinite(v)) delete neuSeiten[sd]
+                                setzeOpt({ wandabstandSeiteM: Object.keys(neuSeiten).length > 0 ? neuSeiten : undefined })
+                              }}
+                              className='w-full px-1 py-1 border rounded-lg text-xs disabled:opacity-40' />
+                          </label>
+                        ))}
+                      </div>
+                    </div>
                     <label className='flex items-center gap-2 text-xs text-[#424245] self-end pb-1.5'>
                       <input type='checkbox' checked={opt.treppe !== false} onChange={(e) => setzeOpt({ treppe: e.target.checked ? undefined : false })} />
                       Treppe automatisch

@@ -128,6 +128,11 @@ export default function LiDARUpload({ sessionId, projectId, onMeasurements }: Pr
     if (!file) return;
 
     const ext = file.name.split('.').pop()?.toLowerCase() || '';
+    if (['lgs', 'lgsx', 'rcp', 'rcs'].includes(ext)) {
+      alert(`${ext.toUpperCase()} ist ein herstellereigenes Projektformat und kann hier nicht gelesen werden. Bitte in Leica Cyclone REGISTER 360 (bzw. in ReCap) als E57 exportieren und die E57-Datei hochladen. PTX oder LAZ gehen ebenfalls.`);
+      e.target.value = '';
+      return;
+    }
     if (!ERLAUBTE_EXT.includes(ext)) {
       alert('Erlaubt: .laz, .las, .e57, .ptx, .xyz, .pts, .ply, .obj oder .glb. DWG, FBX und GeoTIFF bitte als LAZ/E57 bzw. OBJ/GLB exportieren.');
       e.target.value = '';

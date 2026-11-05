@@ -16,7 +16,8 @@ export interface HuellePlatzierung {
   drehungGrad?: number
 }
 
-export function huelleAusAnzeigePunkten(positionen: ArrayLike<number>, p: HuellePlatzierung, opt: PunktwolkeNetzOptionen = {}): PunktwolkeNetz | null {
+/** Anzeige-Punkte so ins Modell legen wie die Anzeige: px = x, py = waagerecht (wird im Modell z), pz = Höhe über der Unterkante (Meter). */
+export function platziereAnzeigePunkte(positionen: ArrayLike<number>, p: HuellePlatzierung): { px: Float64Array; py: Float64Array; pz: Float64Array } | null {
   const n = Math.floor(positionen.length / 3)
   if (n < 20) return null
   const f = p.faktor > 0 ? p.faktor : 1
@@ -40,7 +41,13 @@ export function huelleAusAnzeigePunkten(positionen: ArrayLike<number>, p: Huelle
     py[i] = -x * s + z * c + (p.versatzZ ?? 0)         // netzAusPunktwolke: py = waagerecht (wird zu z im Modell)
     pz[i] = ay[i] - minY                               // Höhe über der Unterkante
   }
-  return netzAusPunktwolke(px, py, pz, { ...opt, bodenHoeheM: 0 })
+  return { px, py, pz }
+}
+
+export function huelleAusAnzeigePunkten(positionen: ArrayLike<number>, p: HuellePlatzierung, opt: PunktwolkeNetzOptionen = {}): PunktwolkeNetz | null {
+  const q = platziereAnzeigePunkte(positionen, p)
+  if (!q) return null
+  return netzAusPunktwolke(q.px, q.py, q.pz, { ...opt, bodenHoeheM: 0 })
 }
 
 // ─── Kappen auf Höhe ─────────────────────────────────────────────────────────
