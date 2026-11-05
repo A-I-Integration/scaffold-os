@@ -19,7 +19,7 @@ import {
   erzeugeLeistungsverzeichnis, formatEuro, formatMenge,
   LV_STANDARD_EINGABEN, LASTKLASSEN, ZUSATZ_INFO, type LvEingaben, type LvStil, type LvZusatz,
 } from '@/lib/leistungsverzeichnis'
-import { FIRMENFELDER, firmenwerteAus, standardpreiseAus, type LvStandardpreise } from '@/lib/lv-firmenwerte'
+import { FIRMENFELDER, firmenwerteAus, standardpreiseAus, lvStilFuerGebaeude, type LvStandardpreise } from '@/lib/lv-firmenwerte'
 import { leseStatikerLvXlsx, mengenAusAuftraggeberLv, type StatikerLvErgebnis } from '@/lib/statiker-lv-einlesen'
 import { wochenZwischen } from '@/lib/miete';
 import PlanKontrolle from '@/components/cad/PlanKontrolle';
@@ -44,9 +44,10 @@ export default function LvDialog({ model, materials, aufbauStunden, abbauStunden
   const [e, setE] = useState<LvEingaben>(() => {
     try {
       const roh = typeof window !== 'undefined' ? localStorage.getItem(FIRMA_KEY) : null
-      const gespeichert: LvEingaben = roh ? { ...LV_STANDARD_EINGABEN, ...JSON.parse(roh) } : LV_STANDARD_EINGABEN
-      // Die Turm-Gliederung (Bauabschnitte 21,5 m / 32 m) gilt nur für hohe Gebäude: aus einem früheren Projekt gemerkt, würde sie bei einem Haus Positionen für Höhen enthalten, die es nicht gibt
-      const basis: LvEingaben = gespeichert.stil === 'statiker' && model.building.heightM <= TURM_LV_AB_M ? { ...gespeichert, stil: LV_STANDARD_EINGABEN.stil } : gespeichert
+      // Gemerkt werden nur Firmenwerte. Ein früher gemerkter Stil (z. B. Turm-Gliederung der City-Kirche) wird ignoriert: der Stil richtet sich nach dem aktuellen Gebäude.
+      const gespeichert = roh ? JSON.parse(roh) as Record<string, unknown> : {}
+      delete gespeichert.stil
+      const basis: LvEingaben = { ...LV_STANDARD_EINGABEN, ...gespeichert, stil: lvStilFuerGebaeude(model.building, TURM_LV_AB_M) as LvEingaben['stil'] }
       // Lastklasse kommt aus dem CAD (Gebäude → Gerüst), nicht aus einem festen Standard
       const v = verwendungMitId(model.building.verwendung)
       const ausCad = model.building.lastklasse ? { ...basis, lastklasse: model.building.lastklasse } : basis
