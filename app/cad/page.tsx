@@ -22,6 +22,7 @@ import { fahrzeugeAus, waehleFahrzeug, type LogistikFahrzeug } from '@/lib/logis
 import { BAUTEIL_FARBEN, type FarbModus } from '@/lib/cad/bauteil-farben'
 import { useState, useMemo, useCallback, useEffect, useRef } from 'react'
 import StatikDatenPanel from '@/components/cad/StatikDatenPanel'
+import { huelleAusAnzeigePunkten } from '@/lib/cad/huelle'
 import { verlaufNeu, verlaufSetze, verlaufZurueck, verlaufVor } from '@/lib/cad/verlauf'
 import { type Aussehen } from '@/lib/cad/modell-aussehen'
 import { aussehenAusDateien } from '@/lib/cad/obj-mtl-zu-glb'
@@ -175,6 +176,12 @@ export default function CADPage() {
     () => (aussehen && aussehenEin ? { aussehen, faktor: aussehenEinheit === 'cm' ? 0.01 : aussehenEinheit === 'mm' ? 0.001 : 1, oben: aussehenOben, versatzX: aussehenVersatz.x, versatzZ: aussehenVersatz.z, drehungGrad: aussehenVersatz.grad, anker: aussehenAnker } : null),
     [aussehen, aussehenEin, aussehenEinheit, aussehenOben, aussehenVersatz, aussehenAnker],
   )
+  // Gebäudehülle aus der angezeigten PLY-Punktwolke (gleiche Platzierung wie die Anzeige) für die Kollisionsprüfung im Regelcheck.
+  // Nur ohne Turm-Anker; GLB und OBJ liefern keine Hülle.
+  const gebaeudeHuelle = useMemo(() => {
+    if (!aussehen || !aussehenEin || aussehen.art !== 'punkte' || aussehenAnker) return null
+    return huelleAusAnzeigePunkten(aussehen.positionen, { faktor: aussehenEinheit === 'cm' ? 0.01 : aussehenEinheit === 'mm' ? 0.001 : 1, oben: aussehenOben, versatzX: aussehenVersatz.x, versatzZ: aussehenVersatz.z, drehungGrad: aussehenVersatz.grad })?.netz ?? null
+  }, [aussehen, aussehenEin, aussehenEinheit, aussehenOben, aussehenVersatz, aussehenAnker])
   const [abbauEin, setAbbauEin] = useState<TeilabbauEingabe>(TEILABBAU_START)
   const [showBuilding, setShowBuilding] = useState(true)
   const [showScaffold, setShowScaffold] = useState(true)
@@ -947,7 +954,7 @@ export default function CADPage() {
   return (
     <div className='min-h-screen md:h-screen flex flex-col bg-[#fbfbfd]'>
       {lvOffen && modelWithManual && (
-        <LvDialog model={modelWithManual} materials={materials} aufbauStunden={logistik?.aufbauStunden ?? 0} abbauStunden={logistik?.abbauStunden ?? 0} onClose={() => setLvOffen(false)} />
+        <LvDialog model={modelWithManual} materials={materials} aufbauStunden={logistik?.aufbauStunden ?? 0} abbauStunden={logistik?.abbauStunden ?? 0} stundenModellHash={logistik?.modellHash} onClose={() => setLvOffen(false)} />
       )}
       <div className='bg-white border-b border-black/5 px-4 py-3 flex flex-wrap gap-2 items-center justify-between'>
         <div>
@@ -982,7 +989,7 @@ export default function CADPage() {
             </div>
           )}
           <BuildingForm building={building} systemId={systemId} onChange={(b) => { setAutoGenerate(true); setBuilding(b); }} onSystemChange={aendereSystem} onGenerate={() => { setAutoGenerate(true); generate(); }} onLadeProjektdatei={ladeProjektdatei} onAussehen={(a, h, v) => { setAussehen(a); setAussehenEin(true); setAussehenEinheit('m'); setAussehenOben('y'); setAussehenAnker(null); setAussehenVersatz(v ?? { x: 0, z: 0, grad: 0 }); setAussehenHinweis(h ?? '') }} onModellUebernehmen={(b) => { setAutoGenerate(true); setBuilding(b); setModel(null) }} registrierePlanUpload={registrierePlanUpload} warnings={allWarnings}
-            zusatz={<StatikDatenPanel daten={statikDaten} onChange={setStatikDaten} model={modelWithManual} />} />
+            zusatz={<StatikDatenPanel daten={statikDaten} onChange={setStatikDaten} model={modelWithManual} huelle={gebaeudeHuelle} />} />
         </div>
         <div className='flex-1 flex flex-col min-w-0'>
           <SystemLeiste systemId={systemId} onSystemChange={aendereSystem} gewaehlteArtikel={Object.keys(artikelWahl).length} />

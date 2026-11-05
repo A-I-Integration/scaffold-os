@@ -1,6 +1,7 @@
 'use client'
 
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
+import type { Netz } from '@/lib/cad/netz'
 import type { CADModel } from '@/lib/calculations/cad-engine'
 import { statikPruefpunkte } from '@/lib/statik-pruefpunkte'
 import { pruefeGeruest, type PruefStatus } from '@/lib/geruest/regelpruefung'
@@ -15,13 +16,14 @@ const AMPEL: Record<PruefStatus, { punkt: string; text: string }> = {
 }
 const label = 'block text-[11px] font-medium text-[#424245] mb-0.5'
 
-export default function StatikDatenPanel({ daten, onChange, model }: { daten: StatikDaten; onChange: (d: StatikDaten) => void; model?: CADModel | null }) {
+export default function StatikDatenPanel({ daten, onChange, model, huelle }: { daten: StatikDaten; onChange: (d: StatikDaten) => void; model?: CADModel | null; /** Gebäudehülle aus der angezeigten Punktwolke (optional) */ huelle?: Netz | null }) {
   const [offen, setOffen] = useState(false)
   const setze = (patch: Partial<StatikDaten>) => onChange(bereinigeStatikDaten({ ...daten, ...patch }))
   const fehler = pruefeStatikDaten(daten)
   const fehlt = fehlendeStatikAngaben(daten)
   const punkte = statikPruefpunkte(model ?? null, daten)
-  const protokoll = model ? pruefeGeruest(model, daten) : null
+  const protokoll = useMemo(() => (model ? pruefeGeruest(model, daten, {}, { huelle, untereinander: true }) : null), [model, daten, huelle])
+  const kollisionen = protokoll ? protokoll.ergebnisse.filter((r) => r.id.startsWith('KOLLISION_') && r.status !== 'ok') : []
   const auffaellig = protokoll ? protokoll.ergebnisse.filter((r) => r.art === 'geprueft' && r.status !== 'ok') : []
   const richtwert = windzonenRichtwertMs(daten.windzone)
 
@@ -89,7 +91,7 @@ export default function StatikDatenPanel({ daten, onChange, model }: { daten: St
           {protokoll && (
             <div className='rounded-lg border border-black/10 p-2'>
               <p className='text-[11px] font-semibold text-[#1d1d1f] flex items-center gap-1.5'><span className={`inline-block h-2.5 w-2.5 rounded-full ${AMPEL[protokoll.ampel].punkt}`} />{AMPEL[protokoll.ampel].text}</p>
-              {auffaellig.length > 0 && <ul className='list-disc pl-4 mt-1 space-y-0.5 text-[11px] text-[#424245]'>{auffaellig.map((r) => <li key={r.id + (r.abschnitt ?? '')}><b>{r.regel}{r.abschnitt ? ` (${r.abschnitt})` : ''}:</b> {r.begruendung}</li>)}</ul>}
+              {(auffaellig.length > 0 || kollisionen.length > 0) && <ul className='list-disc pl-4 mt-1 space-y-0.5 text-[11px] text-[#424245]'>{[...auffaellig, ...kollisionen].map((r) => <li key={r.id + (r.abschnitt ?? '')}><b>{r.regel}{r.abschnitt ? ` (${r.abschnitt})` : ''}:</b> {r.begruendung}</li>)}</ul>}
               <p className='text-[10px] text-[#86868b] mt-1'>Plausibilitätsprüfung aus den Modelldaten, kein Nachweis. Das Prüfprotokoll steht im Statiker-Paket.</p>
             </div>
           )}

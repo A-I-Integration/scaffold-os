@@ -293,6 +293,7 @@ export function wendeKatalogwahlAn(
         weightKg: gew ?? 0,
         riskLevel: 'low',
         aiRecommendation: 'Hersteller-Katalogartikel, Listenpreis netto',
+        ...(std.modellHash ? { modellHash: std.modellHash } : {}),
       })
     }
     ersetzt++

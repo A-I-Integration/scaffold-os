@@ -5,11 +5,11 @@
 // Leistungsverzeichnis aus demselben Modellstand abgeleitet werden. Es laufen die echten
 // Produktionsfunktionen; nachgebaut wird nur die Erwartung (Zählen, Vergleichen).
 //
-// Bekannte Lücken stehen als `it.fails(...)`: der Test beschreibt das gewünschte Verhalten
-// und besteht erst, wenn die Lücke geschlossen ist. Bis dahin ist die Lücke dokumentiert.
+// Der Modellstand ist `modellHash(model)` aus lib/calculations/modell-stand.ts (die Produktionsfunktion, nicht nachgebaut).
+// Die früheren Lückentests (`it.fails`) sind echte Tests: Modellstand, Herkunftsprüfung im LV, unverändertes Eingabemodell.
 // ============================================================
 import { describe, it, expect, vi, beforeAll } from 'vitest'
-import { createHash } from 'crypto'
+import { modellHash } from '@/lib/calculations/modell-stand'
 import { readFileSync } from 'fs'
 import { join } from 'path'
 
@@ -39,13 +39,6 @@ const GEBAEUDE: BuildingParams = {
 const SYSTEM = 'layher-allround'
 const PREISE: LvEingaben = { ...LV_STANDARD_EINGABEN, stundensatzFach: 60, stundensatzHelfer: 40, mietsatzProzentJeWoche: 2, zuschlagProzent: 10 }
 
-/** Hash über das, was fachlich zum Modellstand gehört (Bauteile, Lagen, Kennzahlen). */
-function modellHash(m: CADModel): string {
-  const teile = m.components3D.map((c) => [c.id, c.type, c.articleNumber, !!c.extern, c.levelId ?? '', c.fieldId ?? '', ...c.position.map((v) => Math.round(v * 1000)), ...c.scale.map((v) => Math.round(v * 1000))])
-  const lagen = m.levels.map((l) => [l.id, l.index, Math.round(l.topY * 1000), l.fields.map((f) => f.id).join(',')])
-  return createHash('sha256').update(JSON.stringify({ teile, lagen, k: [m.fieldCount, m.levelCount, Math.round(m.totalAreaM2 * 100), Math.round(m.totalHeightM * 100)] })).digest('hex')
-}
-
 /** Menge je Artikelnummer, unabhängig von der Produktionsfunktion gezählt (extern zählt nicht). */
 function zaehleArtikel(comps: ScaffoldComponent3D[]): Record<string, number> {
   const z: Record<string, number> = {}
@@ -54,7 +47,7 @@ function zaehleArtikel(comps: ScaffoldComponent3D[]): Record<string, number> {
 }
 const bomMap = (m: CADModel): Record<string, number> => Object.fromEntries(generateBillOfMaterials(m).map((x) => [x.articleNumber, x.quantity]))
 const mitBauteilen = (m: CADModel, comps: ScaffoldComponent3D[]): CADModel => ({ ...m, components3D: comps })
-/** Wie im CAD (app/cad/page.tsx): addManualPlacement verändert das übergebene Modell, deshalb vorher flach kopieren. */
+/** Manuelle Konsole wie im CAD; addManualPlacement arbeitet auf einer Kopie, das Ausgangsmodell bleibt unverändert. */
 const mitKonsole = (m: CADModel): CADModel => {
   const f = m.fields[0]
   return addManualPlacement({ ...m, components3D: [...m.components3D], anchors: [...m.anchors] }, { type: 'console', positionX: f.positionX, positionY: 4, positionZ: f.positionZ, side: f.side, levelIndex: 1, fieldId: f.id })
@@ -117,9 +110,13 @@ describe('1. Modellidentität: alle Verbraucher arbeiten auf dem übergebenen Mo
     expect(kapp.model.components3D.length).toBeGreaterThan(0)
     for (const c of kapp.model.components3D) expect(alle.has(c.id), c.id).toBe(true)
   })
-  it.fails('BEKANNTE LÜCKE: das Modell trägt keine eigene Kennung (ID/Stand), an der Verbraucher den Modellstand erkennen könnten', () => {
-    const m = modell as unknown as Record<string, unknown>
-    expect(m.modellId ?? m.stand ?? m.hash).toBeTruthy()
+  it('Modellstand: wird aus dem Inhalt berechnet (nicht am Modell gespeichert), ist stabil und hängt nicht an Reihenfolge oder Bauteil-IDs', () => {
+    const h = modellHash(modell)
+    expect(h).toMatch(/^[0-9a-f]{28}$/)
+    expect(modellHash(modell)).toBe(h)
+    const umgekehrt = mitBauteilen(modell, [...modell.components3D].reverse())
+    expect(modellHash(umgekehrt)).toBe(h)
+    expect(Object.keys(modell)).not.toContain('modellHash')
   })
 })
 
@@ -315,12 +312,15 @@ describe('6b. addManualPlacement', () => {
     mitKonsole(modell)
     expect(modellHash(modell)).toBe(vorher)
   })
-  it.fails('BEKANNTE LÜCKE: addManualPlacement verändert das übergebene Modell selbst (nur der einzige Aufrufer in app/cad/page.tsx kopiert vorher)', () => {
-    const kopie = { ...modell, components3D: [...modell.components3D], anchors: [...modell.anchors] }
-    const vorher = modellHash(kopie)
-    const f = kopie.fields[0]
-    addManualPlacement(kopie, { type: 'console', positionX: f.positionX, positionY: 4, positionZ: f.positionZ, side: f.side, levelIndex: 1, fieldId: f.id })
-    expect(modellHash(kopie)).toBe(vorher)
+  it('addManualPlacement verändert das übergebene Modell nicht (Bauteil- und Ankerliste bleiben unverändert), liefert aber ein neues Modell mit dem Bauteil', () => {
+    const f = modell.fields[0]
+    const vorher = modellHash(modell), anzahl = modell.components3D.length, anker = modell.anchors.length
+    const neu = addManualPlacement(modell, { type: 'console', positionX: f.positionX, positionY: 4, positionZ: f.positionZ, side: f.side, levelIndex: 1, fieldId: f.id })
+    expect(modellHash(modell)).toBe(vorher)
+    expect(modell.components3D).toHaveLength(anzahl)
+    expect(modell.anchors).toHaveLength(anker)
+    expect(neu.components3D.length).toBeGreaterThan(anzahl)
+    expect(modellHash(neu)).not.toBe(vorher)
   })
 })
 
@@ -340,22 +340,20 @@ describe('7. Veraltete Ergebnisse', () => {
     generateBillOfMaterials(neu); pruefeGeruest(neu)
     expect(generateBillOfMaterials(modell)).toEqual(vorher)
   })
-  it.fails('BEKANNTE LÜCKE: das LV erkennt nicht, dass die übergebene Stückliste zu einem anderen Modellstand gehört', () => {
+  it('Das LV erkennt eine Stückliste aus einem anderen Modellstand: Abweichung, verständlicher Hinweis, Entwurf – kein Fehler, keine stille Vermischung', () => {
     const alt = modell
-    const neu = mitBauteilen(modell, modell.components3D.filter((c) => c.type !== 'diagonal'))   // anderer Modellstand
+    const neuM = mitBauteilen(modell, modell.components3D.filter((c) => c.type !== 'diagonal'))   // anderer Modellstand
     const materialAlt = generateBillOfMaterials(alt)
-    const lg = calculateLogistics(neu, materialAlt, 2)
-    let meldung = ''
-    try {
-      const lv = erzeugeLeistungsverzeichnis({ model: neu, materials: materialAlt, aufbauStunden: lg.aufbauStunden, abbauStunden: lg.abbauStunden }, PREISE)
-      meldung = [...lv.fehlendeAngaben, ...lv.annahmen].join(' ')
-    } catch (e) { meldung = String(e) }
-    // gewünscht: Fehler oder Hinweis auf nicht passenden Modellstand
-    expect(meldung).toMatch(/Modellstand|passt nicht|veraltet|andere[mn]? Modell/i)
+    const lg = calculateLogistics(neuM, materialAlt, 2)
+    const lv = erzeugeLeistungsverzeichnis({ model: neuM, materials: materialAlt, aufbauStunden: lg.aufbauStunden, abbauStunden: lg.abbauStunden }, PREISE)
+    expect(lv.herkunft?.status).toBe('abweichung')
+    expect(lv.herkunft?.hinweise.join(' ')).toMatch(/anderen Modellstand/)
+    expect(lv.fehlendeAngaben.join(' ')).toMatch(/anderen Modellstand/)
   })
-  it.fails('BEKANNTE LÜCKE: ein erzeugtes LV trägt keinen Modellstand, an dem man seine Aktualität prüfen könnte', () => {
-    const lv = lvAus(modell).lv as unknown as Record<string, unknown>
-    expect(lv.modellStand ?? lv.stand ?? lv.modellHash).toBeTruthy()
+  it('Ein erzeugtes LV trägt den Modellstand, aus dem es entstand', () => {
+    const { lv } = lvAus(modell)
+    expect(lv.herkunft?.modellHash).toBe(modellHash(modell))
+    expect(lv.herkunft?.status).toBe('ok')
   })
 })
 
