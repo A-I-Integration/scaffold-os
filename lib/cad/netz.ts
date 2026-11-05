@@ -104,6 +104,8 @@ export interface PunktwolkeNetzOptionen {
   bodenM?: number
   /** Mindestzahl Punkte je Rasterzelle, Standard 1 */
   minPunkte?: number
+  /** Höhe des Bodens in den Höhenwerten der Punkte; ohne Angabe das 0,5-%-Perzentil */
+  bodenHoeheM?: number
 }
 
 export interface PunktwolkeNetz {
@@ -127,7 +129,7 @@ export function netzAusPunktwolke(px: ArrayLike<number>, py: ArrayLike<number>, 
 
   // Boden: 0,5-%-Perzentil der Höhen (wie in der Gebäudeerkennung)
   const hoehen = Float64Array.from({ length: n }, (_, i) => pz[i]).sort()
-  const boden = hoehen[Math.min(n - 1, Math.floor(n * 0.005))]
+  const boden = opt.bodenHoeheM ?? hoehen[Math.min(n - 1, Math.floor(n * 0.005))]
   let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity
   for (let i = 0; i < n; i++) {
     if (!Number.isFinite(px[i]) || !Number.isFinite(py[i]) || !Number.isFinite(pz[i])) continue
