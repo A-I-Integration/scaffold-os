@@ -23,6 +23,7 @@ import { BAUTEIL_FARBEN, type FarbModus } from '@/lib/cad/bauteil-farben'
 import { useState, useMemo, useCallback, useEffect, useRef } from 'react'
 import StatikDatenPanel from '@/components/cad/StatikDatenPanel'
 import { huelleAusAnzeigePunkten } from '@/lib/cad/huelle'
+import { passeWandabstandAn } from '@/lib/cad/fassade-anpassung'
 import { verlaufNeu, verlaufSetze, verlaufZurueck, verlaufVor } from '@/lib/cad/verlauf'
 import { type Aussehen } from '@/lib/cad/modell-aussehen'
 import { aussehenAusDateien } from '@/lib/cad/obj-mtl-zu-glb'
@@ -1045,6 +1046,14 @@ export default function CADPage() {
                     </select>
                     <label className='text-[11px] text-[#424245]' title='Gebäude nach links/rechts schieben (m)'>X <input type='number' step='1' className='w-14 text-xs border rounded px-1 py-0.5 bg-white' value={aussehenVersatz.x} onChange={(ev) => setAussehenVersatz((v) => ({ ...v, x: Number(ev.target.value) || 0 }))} /></label>
                     <label className='text-[11px] text-[#424245]' title='Gebäude nach vorn/hinten schieben (m)'>Z <input type='number' step='1' className='w-14 text-xs border rounded px-1 py-0.5 bg-white' value={aussehenVersatz.z} onChange={(ev) => setAussehenVersatz((v) => ({ ...v, z: Number(ev.target.value) || 0 }))} /></label>
+                    {gebaeudeHuelle && (
+                      <button type='button' className='text-xs border rounded-lg px-2 py-1 bg-white text-[#424245]' title='Erhöht den Wandabstand schrittweise, bis kein Gerüstbauteil mehr in der Gebäudehülle der Punktwolke liegt (Vorsprünge, Erker). Der Wert gilt für alle Seiten.'
+                        onClick={() => {
+                          const r = passeWandabstandAn(building, systemId, gebaeudeHuelle)
+                          if (r.wandabstandM !== r.startM) setBuilding({ ...building, geruestOptionen: { ...building.geruestOptionen, wandabstandM: r.wandabstandM } })
+                          setAussehenHinweis(r.hinweise.join(' '))
+                        }}>📐 Wandabstand anpassen</button>
+                    )}
                     <button type='button' className='text-xs text-[#86868b] underline' onClick={() => { setAussehen(null); void vergissAussehen() }}>entfernen</button>
                   </>
                 )}
