@@ -6,7 +6,7 @@
 // damit die Hülle genau dort liegt, wo die Person das Gebäude sieht (Scaffold3D → EchtesGebaeude3D).
 // Nur für Punktwolken ohne Turm-Anker; Dateien mit Anker (OBJ-Turmschaft) und GLB liefern keine Hülle.
 // ============================================================
-import { netzAusPunktwolke, type PunktwolkeNetz, type PunktwolkeNetzOptionen } from '@/lib/cad/netz'
+import { netzAusPunktwolke, netzVolumenM3, type PunktwolkeNetz, type PunktwolkeNetzOptionen } from '@/lib/cad/netz'
 
 export interface HuellePlatzierung {
   faktor: number
@@ -16,7 +16,8 @@ export interface HuellePlatzierung {
   drehungGrad?: number
 }
 
-export function huelleAusAnzeigePunkten(positionen: ArrayLike<number>, p: HuellePlatzierung, opt: PunktwolkeNetzOptionen = {}): PunktwolkeNetz | null {
+/** Anzeige-Punkte so ins Modell legen wie die Anzeige: px = x, py = waagerecht (wird im Modell z), pz = Höhe über der Unterkante (Meter). */
+export function platziereAnzeigePunkte(positionen: ArrayLike<number>, p: HuellePlatzierung): { px: Float64Array; py: Float64Array; pz: Float64Array } | null {
   const n = Math.floor(positionen.length / 3)
   if (n < 20) return null
   const f = p.faktor > 0 ? p.faktor : 1
@@ -40,5 +41,39 @@ export function huelleAusAnzeigePunkten(positionen: ArrayLike<number>, p: Huelle
     py[i] = -x * s + z * c + (p.versatzZ ?? 0)         // netzAusPunktwolke: py = waagerecht (wird zu z im Modell)
     pz[i] = ay[i] - minY                               // Höhe über der Unterkante
   }
-  return netzAusPunktwolke(px, py, pz, { ...opt, bodenHoeheM: 0 })
+  return { px, py, pz }
+}
+
+export function huelleAusAnzeigePunkten(positionen: ArrayLike<number>, p: HuellePlatzierung, opt: PunktwolkeNetzOptionen = {}): PunktwolkeNetz | null {
+  const q = platziereAnzeigePunkte(positionen, p)
+  if (!q) return null
+  return netzAusPunktwolke(q.px, q.py, q.pz, { ...opt, bodenHoeheM: 0 })
+}
+
+// ─── Kappen auf Höhe ─────────────────────────────────────────────────────────
+
+export interface KappenErgebnis {
+  gesamt: PunktwolkeNetz
+  gekappt: PunktwolkeNetz
+  hoeheM: number
+  gesamtHoeheM: number
+  volumenGesamtM3: number
+  volumenUntenM3: number
+  volumenObenM3: number
+}
+
+/**
+ * Schneidet die Gebäudehülle auf `hoeheM` über der Unterkante ab und liefert die Volumen unten und oben.
+ * Die Hülle besteht aus Höhensäulen; das Kappen ist deshalb exakt (Säulenhöhe begrenzen), ohne Netzschnitt und ohne Größenlimit.
+ * Das Volumen ist das der vereinfachten Hülle (Raster), nicht das des echten Gebäudes.
+ */
+export function kappeHuelle(positionen: ArrayLike<number>, p: HuellePlatzierung, hoeheM: number, opt: PunktwolkeNetzOptionen = {}): KappenErgebnis | null {
+  const gesamt = huelleAusAnzeigePunkten(positionen, p, opt)
+  if (!gesamt || !(hoeheM > 0)) return null
+  const gekappt = huelleAusAnzeigePunkten(positionen, p, { ...opt, kappeHoeheM: hoeheM })
+  if (!gekappt) return null
+  let hMax = 0
+  for (let i = 1; i < gesamt.netz.punkte.length; i += 3) if (gesamt.netz.punkte[i] > hMax) hMax = gesamt.netz.punkte[i]
+  const vg = netzVolumenM3(gesamt.netz), vu = netzVolumenM3(gekappt.netz)
+  return { gesamt, gekappt, hoeheM, gesamtHoeheM: hMax, volumenGesamtM3: vg, volumenUntenM3: vu, volumenObenM3: Math.max(0, vg - vu) }
 }

@@ -106,6 +106,8 @@ export interface PunktwolkeNetzOptionen {
   minPunkte?: number
   /** Höhe des Bodens in den Höhenwerten der Punkte; ohne Angabe das 0,5-%-Perzentil */
   bodenHoeheM?: number
+  /** Alles über dieser Höhe (über dem Boden) abschneiden: die Hülle endet dort mit einer ebenen Fläche */
+  kappeHoeheM?: number
 }
 
 export interface PunktwolkeNetz {
@@ -179,7 +181,8 @@ export function netzAusPunktwolke(px: ArrayLike<number>, py: ArrayLike<number>, 
   if (besteMarke < 0 || besteGroesse < 4) return null
   if (m > 1) hinweise.push(`${m - 1} getrennte Bereiche der Punktwolke wurden verworfen (nur das größte zusammenhängende Gebäude bleibt).`)
   const aktiv = (c: number): boolean => marke[c] === besteMarke
-  const hoeheAn = (x: number, y: number): number => (x < 0 || y < 0 || x >= nx || y >= ny || !aktiv(x + nx * y) ? 0 : Math.round(hoch[x + nx * y] * 1000) / 1000)
+  const kappe = opt.kappeHoeheM !== undefined && opt.kappeHoeheM > 0 ? opt.kappeHoeheM : Infinity
+  const hoeheAn = (x: number, y: number): number => (x < 0 || y < 0 || x >= nx || y >= ny || !aktiv(x + nx * y) ? 0 : Math.round(Math.min(hoch[x + nx * y], kappe) * 1000) / 1000)
 
   const punkte: number[] = [], dreiecke: number[] = []
   const quad = (a: number[], b: number[], c: number[], d: number[]): void => {

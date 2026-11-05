@@ -24,6 +24,7 @@
     "@supabase/supabase-js": "^2.109.0",
     "@tesseract.js-data/deu": "^1.0.0",
     "@types/papaparse": "^5.5.2",
+    "buffer": "^6.0.3",
     "fast-xml-parser": "^5.11.1",
     "imapflow": "^2.0.0",
     "jspdf": "^4.2.1",

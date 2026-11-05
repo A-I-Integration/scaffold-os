@@ -88,6 +88,12 @@ export function ansichtAusProjektdaten(daten: unknown): { building: BuildingPara
   const geruestOptionen: NonNullable<BuildingParams['geruestOptionen']> = {
     ...(num(go.breiteM) !== null ? { breiteM: num(go.breiteM) as number } : {}),
     ...(num(go.wandabstandM) !== null ? { wandabstandM: num(go.wandabstandM) as number } : {}),
+    ...(() => {
+      const m = (go.wandabstandSeiteM ?? {}) as Record<string, unknown>
+      const sm: Partial<Record<'front' | 'back' | 'left' | 'right', number>> = {}
+      for (const sd of ['front', 'back', 'left', 'right'] as const) { const v = num(m[sd]); if (v !== null) sm[sd] = v }
+      return Object.keys(sm).length > 0 ? { wandabstandSeiteM: sm } : {}
+    })(),
     ...(num(go.feldlaengeM) !== null ? { feldlaengeM: num(go.feldlaengeM) as number } : {}),
     ...(go.treppe === false ? { treppe: false } : {}),
   }

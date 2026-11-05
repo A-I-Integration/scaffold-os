@@ -10,6 +10,7 @@ import * as THREE from 'three'
 import { OBJLoader } from 'three/examples/jsm/loaders/OBJLoader.js'
 import { MTLLoader } from 'three/examples/jsm/loaders/MTLLoader.js'
 import { GLTFExporter } from 'three/examples/jsm/exporters/GLTFExporter.js'
+import { istScanEndung, aussehenAusScanDatei } from '@/lib/cad/punktwolke-lesen'
 import { aussehenAusDatei, AUSSEHEN_MAX_BYTES, type AussehenErgebnis } from '@/lib/cad/modell-aussehen'
 import { dreieckeAusObj, obenAusObjKopf } from '@/lib/cad/modell-import'
 import { schaetzeEinheit, spannweiten, vorgabeAchseEinheit } from '@/lib/cad/modell-analyse'
@@ -58,6 +59,7 @@ export async function aussehenAusDateien(dateien: File[]): Promise<AussehenErgeb
   if (s.obj === null) {
     const f = dateien[s.andere[0] ?? 0]
     if (!f) return { ok: false, meldung: 'Bitte eine GLB-, PLY- oder OBJ-Datei wählen (OBJ am besten zusammen mit der MTL-Datei und den Bildern).' }
+    if (istScanEndung(f.name)) return aussehenAusScanDatei(await f.arrayBuffer(), f.name)
     return aussehenAusDatei(await f.arrayBuffer(), f.name)
   }
   if (s.mehrereObj) return { ok: false, meldung: 'Es wurden mehrere OBJ-Dateien gewählt. Bitte nur eine OBJ-Datei mit ihrer MTL-Datei und den Bildern wählen.' }

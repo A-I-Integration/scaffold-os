@@ -20,3 +20,10 @@ export function dreieckeZuObj(d: Float32Array, kopf = ''): string {
   }
   return (kopf ? `# ${kopf}\n` : '') + v.join('\n') + '\n' + f.join('\n') + '\n'
 }
+
+/** Dreiecksnetz (x, y = Höhe, z; Meter) als OBJ-Text – für CAD- und Statik-Programme. Normalen zeigen nach außen. */
+export function netzZuObj(n: { punkte: number[]; dreiecke: number[] }, kopf = ''): string {
+  const soup = new Float32Array(n.dreiecke.length * 3)
+  for (let i = 0; i < n.dreiecke.length; i++) for (let k = 0; k < 3; k++) soup[i * 3 + k] = n.punkte[n.dreiecke[i] * 3 + k]
+  return dreieckeZuObj(soup, kopf)
+}
