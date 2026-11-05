@@ -27,6 +27,8 @@ import { passeWandabstandAn } from '@/lib/cad/fassade-anpassung'
 import { verlaufNeu, verlaufSetze, verlaufZurueck, verlaufVor } from '@/lib/cad/verlauf'
 import { type Aussehen } from '@/lib/cad/modell-aussehen'
 import { aussehenAusDateien } from '@/lib/cad/obj-mtl-zu-glb'
+import ScanZusammenfuehren from '@/components/cad/ScanZusammenfuehren'
+import PunktwolkeWerkzeug from '@/components/cad/PunktwolkeWerkzeug'
 import { glbHatTurmKoerper } from '@/lib/cad/glb-masse'
 import { istTurmKoerperKnoten } from '@/lib/cad/glb-teile'
 import { CAD_UEBERNAHME_KEY, leseCadUebergabe } from '@/lib/cad/aufmass-zu-cad'
@@ -127,6 +129,8 @@ export default function CADPage() {
   const [abbauEinplanen, setAbbauEinplanen] = useState(false)
   // Echtes Gebäude (GLB mit Texturen / farbige Punktwolke) nur zur Anzeige
   const [aussehen, setAussehen] = useState<Aussehen | null>(null)
+  const [scanFensterOffen, setScanFensterOffen] = useState(false)
+  const [werkzeugOffen, setWerkzeugOffen] = useState(false)
   const [aussehenEin, setAussehenEin] = useState(true)
   const [aussehenEinheit, setAussehenEinheit] = useState<'m' | 'cm' | 'mm'>('m')
   const [aussehenOben, setAussehenOben] = useState<'x' | 'y' | 'z'>('y')
@@ -954,6 +958,19 @@ export default function CADPage() {
 
   return (
     <div className='min-h-screen md:h-screen flex flex-col bg-[#fbfbfd]'>
+      {werkzeugOffen && aussehen && aussehen.art === 'punkte' && (
+        <PunktwolkeWerkzeug aussehen={aussehen} oben={aussehenOben} faktor={aussehenEinheit === 'cm' ? 0.01 : aussehenEinheit === 'mm' ? 0.001 : 1}
+          onSchliessen={() => setWerkzeugOffen(false)}
+          onUebernehmen={(a) => { setAussehen(a); setAussehenHinweis(`Punktwolke bereinigt: ${(a.positionen.length / 3).toLocaleString('de-DE')} Punkte.`); setWerkzeugOffen(false) }} />
+      )}
+      {scanFensterOffen && (
+        <ScanZusammenfuehren
+          onSchliessen={() => setScanFensterOffen(false)}
+          onFertig={(r) => {
+            setAussehen(r.aussehen); setAussehenEin(true); setAussehenEinheit('m'); setAussehenOben(r.oben ?? 'z'); setAussehenAnker(null); setAussehenVersatz({ x: 0, z: 0, grad: 0 })
+            setAussehenHinweis(r.hinweis ?? ''); setScanFensterOffen(false)
+          }} />
+      )}
       {lvOffen && modelWithManual && (
         <LvDialog model={modelWithManual} materials={materials} aufbauStunden={logistik?.aufbauStunden ?? 0} abbauStunden={logistik?.abbauStunden ?? 0} stundenModellHash={logistik?.modellHash} onClose={() => setLvOffen(false)} />
       )}
@@ -1032,6 +1049,7 @@ export default function CADPage() {
                   🏛️ {aussehen ? 'Anderes Gebäude laden' : 'Echtes Gebäude laden'}
                   <input type='file' multiple accept='.glb,.ply,.obj,.mtl,.jpg,.jpeg,.png,.webp,.e57,.ptx,.las,.xyz,.pts,.txt,.csv' className='hidden' onChange={(ev) => { const fs = Array.from(ev.target.files ?? []); ev.target.value = ''; if (fs.length) void ladeAussehen(fs) }} />
                 </label>
+                <button type='button' className='text-xs border rounded-lg px-2 py-1 bg-white text-[#424245]' title='Mehrere Scans (E57, PTX, LAS) zu einer Punktwolke zusammenführen: Lage bekannt, automatisch oder von Hand über Punktpaare' onClick={() => setScanFensterOffen(true)}>🧩 Scans zusammenführen</button>
                 {aussehen && (
                   <>
                     <button type='button' className={`text-xs border rounded-lg px-2 py-1 ${aussehenEin ? 'bg-[#e8590c] text-white' : 'bg-white text-[#424245]'}`} onClick={() => setAussehenEin((a) => !a)}>{aussehenEin ? 'Echt: an' : 'Echt: aus'}</button>
@@ -1046,6 +1064,9 @@ export default function CADPage() {
                     </select>
                     <label className='text-[11px] text-[#424245]' title='Gebäude nach links/rechts schieben (m)'>X <input type='number' step='1' className='w-14 text-xs border rounded px-1 py-0.5 bg-white' value={aussehenVersatz.x} onChange={(ev) => setAussehenVersatz((v) => ({ ...v, x: Number(ev.target.value) || 0 }))} /></label>
                     <label className='text-[11px] text-[#424245]' title='Gebäude nach vorn/hinten schieben (m)'>Z <input type='number' step='1' className='w-14 text-xs border rounded px-1 py-0.5 bg-white' value={aussehenVersatz.z} onChange={(ev) => setAussehenVersatz((v) => ({ ...v, z: Number(ev.target.value) || 0 }))} /></label>
+                    {aussehen.art === 'punkte' && (
+                      <button type='button' className='text-xs border rounded-lg px-2 py-1 bg-white text-[#424245]' title='Strecken und Flächen in der Punktwolke messen, Streupunkte und Überstände entfernen, Rechteck zuschneiden' onClick={() => setWerkzeugOffen(true)}>📏 Messen / Bereinigen</button>
+                    )}
                     {gebaeudeHuelle && (
                       <button type='button' className='text-xs border rounded-lg px-2 py-1 bg-white text-[#424245]' title='Erhöht den Wandabstand schrittweise, bis kein Gerüstbauteil mehr in der Gebäudehülle der Punktwolke liegt (Vorsprünge, Erker). Der Wert gilt für alle Seiten.'
                         onClick={() => {
