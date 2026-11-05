@@ -57,6 +57,72 @@ function parseXyz(buf) {
   return aus.subarray(0, n);
 }
 
+
+// ─── PTX (Leica) ───────────────────────────────────────────────────────────────
+// Aufbau je Scan (Quelle: Paul Bourke, ptx plain text data format): Spalten, Zeilen, Scannerposition, drei Scannerachsen,
+// vier Zeilen der 4×4-Matrix, dann Spalten × Zeilen Punktzeilen „x y z Intensität [r g b]“. Mehrere Scans folgen hintereinander.
+// Annahme (die Quelle nennt sie nur als Ableitung): Die Matrix gilt für Zeilenvektoren [x y z 1] · M, die Verschiebung steht in der letzten Zeile.
+// Punkte „0 0 0“ sind ungültige Messungen und werden übersprungen.
+function parsePtx(buf) {
+  const st = { pos: 0 };
+  const zeile = () => {
+    if (st.pos > buf.length) return null;
+    let e = buf.indexOf(10, st.pos);
+    if (e < 0) e = buf.length;
+    const t = buf.toString('latin1', st.pos, e).trim();
+    st.pos = e + 1;
+    return t;
+  };
+  const zahlen = (t, n) => {
+    const w = (t || '').split(/\s+/).map(Number);
+    if (w.length < n || w.slice(0, n).some((v) => !Number.isFinite(v))) return null;
+    return w.slice(0, n);
+  };
+  const scans = [];
+  for (;;) {
+    let z;
+    do { z = zeile(); } while (z === '');
+    if (z === null) break;
+    const spalten = parseInt(z, 10), zeilen = parseInt(zeile(), 10);
+    if (!(spalten > 0 && zeilen > 0)) throw new Error('PTX: Kopf nicht lesbar (Spalten und Zeilen erwartet)');
+    for (let i = 0; i < 4; i++) zeile(); // Scannerposition und -achsen (Lage steckt in der Matrix)
+    const M = [];
+    for (let i = 0; i < 4; i++) {
+      const r = zahlen(zeile(), 4);
+      if (!r) throw new Error('PTX: Matrix im Kopf nicht lesbar');
+      M.push(r);
+    }
+    const anzahl = spalten * zeilen;
+    scans.push({ anzahl, M, start: st.pos });
+    for (let i = 0; i < anzahl; i++) {
+      const e = buf.indexOf(10, st.pos);
+      if (e < 0) { st.pos = buf.length + 1; break; }
+      st.pos = e + 1;
+    }
+  }
+  if (!scans.length) throw new Error('PTX: keine Scans gefunden');
+  const gesamt = scans.reduce((a, s) => a + s.anzahl, 0);
+  const schritt = Math.max(1, Math.ceil(gesamt / MAX_PUNKTE));
+  const aus = new Float64Array(Math.ceil(gesamt / schritt) * 3 + 3);
+  let n = 0, nr = 0;
+  for (const sc of scans) {
+    st.pos = sc.start;
+    for (let i = 0; i < sc.anzahl && st.pos <= buf.length; i++) {
+      const t = zeile();
+      if (nr++ % schritt !== 0 || !t) continue;
+      const p = zahlen(t, 3);
+      if (!p || (p[0] === 0 && p[1] === 0 && p[2] === 0)) continue;
+      const [x, y, zz] = p, M = sc.M;
+      if (n + 3 > aus.length) break;
+      aus[n++] = x * M[0][0] + y * M[1][0] + zz * M[2][0] + M[3][0];
+      aus[n++] = x * M[0][1] + y * M[1][1] + zz * M[2][1] + M[3][1];
+      aus[n++] = x * M[0][2] + y * M[1][2] + zz * M[2][2] + M[3][2];
+    }
+  }
+  if (n < 9) throw new Error('PTX: keine gültigen Punkte gefunden');
+  return aus.subarray(0, n);
+}
+
 // ─── Mini-XML (nur das, was E57 braucht) ───────────────────────────────────────
 
 function parseXml(text) {
@@ -229,4 +295,4 @@ function parseE57(buf) {
   return aus.subarray(0, n);
 }
 
-module.exports = { parseXyz, parseE57, parseXml, bits };
+module.exports = { parseXyz, parseE57, parsePtx, parseXml, bits };

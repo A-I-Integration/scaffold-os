@@ -3,13 +3,13 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // SCAFFOLD OS – Punktwolken-Analyse (Worker-Version)
 // Identische Algorithmik wie app/api/lidar-upload/route.ts:
-// Parser (PLY ASCII + binär, LAS/LAZ, E57, XYZ/PTS/TXT/CSV, OBJ, GLB) + Ausreißer-Filter + Achsen-/Einheiten-
+// Parser (PLY ASCII + binär, LAS/LAZ, E57, PTX, XYZ/PTS/TXT/CSV, OBJ, GLB) + Ausreißer-Filter + Achsen-/Einheiten-
 // Erkennung + iterative RANSAC-Ebenen-Erkennung + Abstands-Analyse.
 // ─────────────────────────────────────────────────────────────────────────────
 
 const { parseLasGross, parseLaz } = require('./las-laz');
 const { istBinaerPly, parsePlyBinary } = require('./ply-binary');
-const { parseXyz, parseE57 } = require('./xyz-e57');
+const { parseXyz, parseE57, parsePtx } = require('./xyz-e57');
 
 const MAX_POINTS = 120000;
 const TRIM_LO = 0.02, TRIM_HI = 0.98;
@@ -112,6 +112,7 @@ function parsePoints(buffer, ext) {
   if (ext === 'las') pts = parseLasGross(buffer);
   else if (ext === 'glb') pts = parseGLB(buffer);
   else if (ext === 'e57') pts = parseE57(buffer);
+  else if (ext === 'ptx') pts = parsePtx(buffer);
   else if (['xyz', 'pts', 'txt', 'csv'].includes(ext)) pts = parseXyz(buffer);
   else if (ext === 'ply' && istBinaerPly(buffer)) pts = parsePlyBinary(buffer);
   else {
