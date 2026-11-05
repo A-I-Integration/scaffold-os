@@ -5,8 +5,8 @@
 // Der Browser-Speicher bleibt nur als Notlösung, falls die Datenbank-Spalten noch fehlen.
 // ============================================================
 
-/** Felder des LV-Dialogs, die zur Firma gehören (nicht zum einzelnen Angebot). */
-export const FIRMENFELDER = ['auftragnehmer', 'stundensatzFach', 'stundensatzHelfer', 'mietsatzProzentJeWoche', 'zuschlagProzent', 'gesamtStandzeitWochen', 'mwstProzent', 'stil', 'statikPauschale', 'baustelleneinrichtung', 'anfahrtspauschale', 'pauschalFaktorProzent'] as const
+/** Felder des LV-Dialogs, die zur Firma gehören (nicht zum einzelnen Angebot). Der LV-Stil gehört NICHT dazu: er richtet sich nach dem Gebäude (Turm → Turm-Gliederung), sonst bliebe die Gliederung eines früheren Projekts bei jeder neuen Datei hängen. */
+export const FIRMENFELDER = ['auftragnehmer', 'stundensatzFach', 'stundensatzHelfer', 'mietsatzProzentJeWoche', 'zuschlagProzent', 'gesamtStandzeitWochen', 'mwstProzent', 'statikPauschale', 'baustelleneinrichtung', 'anfahrtspauschale', 'pauschalFaktorProzent'] as const
 
 export type Firmenfeld = (typeof FIRMENFELDER)[number]
 
@@ -85,4 +85,10 @@ export function firmenwerteAus(roh: unknown): Record<string, unknown> {
   if (!roh || typeof roh !== 'object' || Array.isArray(roh)) return aus
   for (const k of FIRMENFELDER) if (k in (roh as object)) aus[k] = (roh as Record<string, unknown>)[k]
   return aus
+}
+
+/** Vorbelegung des LV-Stils nach dem Gebäude: Turm-Gliederung nur bei einem Gebäude mit Turm (Abschnitt „Turm“ oder Helmgerüst) über der Grenzhöhe, sonst „getrennt“. */
+export function lvStilFuerGebaeude(b: { heightM: number; sections?: { helmGeruest?: boolean; bezeichnung?: string }[] }, grenzeM = 21.5): 'statiker' | 'getrennt' {
+  const hatTurm = !!b.sections?.some((s) => s.helmGeruest || s.bezeichnung === 'Turm')
+  return hatTurm && b.heightM > grenzeM ? 'statiker' : 'getrennt'
 }
