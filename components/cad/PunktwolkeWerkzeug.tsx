@@ -6,23 +6,12 @@
 import { useMemo, useState } from 'react'
 import Karte from '@/components/cad/DraufsichtKarte'
 import { erzeugeDraufsicht, hoeheAn } from '@/lib/cad/scan-zusammenfuehren'
-import { formatM, maskeAusreisser, maskeBox, maskeHoeheBis, messeFlaeche, messeStrecke, wendeMaskeAn, zaehleMaske } from '@/lib/cad/punktwolke-werkzeuge'
+import { anzeigeInMeterZOben, formatM, maskeAusreisser, maskeBox, maskeHoeheBis, messeFlaeche, messeStrecke, wendeMaskeAn, zaehleMaske } from '@/lib/cad/punktwolke-werkzeuge'
 import type { Aussehen } from '@/lib/cad/modell-aussehen'
 import type { V3 } from '@/lib/cad/registrierung'
 
 type Punkte = Extract<Aussehen, { art: 'punkte' }>
 type Modus = 'strecke' | 'flaeche' | 'zuschnitt'
-
-/** Anzeige-Punkte (Achse „oben“ der Datei, Einheit der Datei) → Meter mit z = oben */
-function inMeterZOben(a: Punkte, oben: 'x' | 'y' | 'z', faktor: number): Float64Array {
-  const n = a.positionen.length / 3, aus = new Float64Array(n * 3)
-  for (let i = 0; i < n; i++) {
-    const x = a.positionen[i * 3] * faktor, y = a.positionen[i * 3 + 1] * faktor, z = a.positionen[i * 3 + 2] * faktor
-    const [wx, wy, wz] = oben === 'z' ? [x, y, z] : oben === 'y' ? [x, z, y] : [y, z, x]
-    aus[i * 3] = wx; aus[i * 3 + 1] = wy; aus[i * 3 + 2] = wz
-  }
-  return aus
-}
 
 export default function PunktwolkeWerkzeug({ aussehen, oben, faktor, onUebernehmen, onSchliessen }: { aussehen: Punkte; oben: 'x' | 'y' | 'z'; faktor: number; onUebernehmen: (a: Punkte) => void; onSchliessen: () => void }) {
   const [aktuell, setAktuell] = useState<Punkte>(aussehen)
@@ -33,7 +22,7 @@ export default function PunktwolkeWerkzeug({ aussehen, oben, faktor, onUebernehm
   const [meldung, setMeldung] = useState('')
   const [empfindlich, setEmpfindlich] = useState<'mittel' | 'stark' | 'schwach'>('mittel')
 
-  const meter = useMemo(() => inMeterZOben(aktuell, oben, faktor), [aktuell, oben, faktor])
+  const meter = useMemo(() => anzeigeInMeterZOben(aktuell.positionen, oben, faktor), [aktuell, oben, faktor])
   const sicht = useMemo(() => erzeugeDraufsicht(meter, 0.1), [meter])
   const anzahl = meter.length / 3
 

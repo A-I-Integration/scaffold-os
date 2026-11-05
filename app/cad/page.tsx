@@ -29,6 +29,7 @@ import { type Aussehen } from '@/lib/cad/modell-aussehen'
 import { aussehenAusDateien } from '@/lib/cad/obj-mtl-zu-glb'
 import ScanZusammenfuehren from '@/components/cad/ScanZusammenfuehren'
 import PunktwolkeWerkzeug from '@/components/cad/PunktwolkeWerkzeug'
+import HuelleWerkzeug from '@/components/cad/HuelleWerkzeug'
 import { glbHatTurmKoerper } from '@/lib/cad/glb-masse'
 import { istTurmKoerperKnoten } from '@/lib/cad/glb-teile'
 import { CAD_UEBERNAHME_KEY, leseCadUebergabe } from '@/lib/cad/aufmass-zu-cad'
@@ -131,6 +132,8 @@ export default function CADPage() {
   const [aussehen, setAussehen] = useState<Aussehen | null>(null)
   const [scanFensterOffen, setScanFensterOffen] = useState(false)
   const [werkzeugOffen, setWerkzeugOffen] = useState(false)
+  const [huelleOffen, setHuelleOffen] = useState(false)
+  const [huelleRasterM, setHuelleRasterM] = useState(0.3)
   const [aussehenEin, setAussehenEin] = useState(true)
   const [aussehenEinheit, setAussehenEinheit] = useState<'m' | 'cm' | 'mm'>('m')
   const [aussehenOben, setAussehenOben] = useState<'x' | 'y' | 'z'>('y')
@@ -185,8 +188,8 @@ export default function CADPage() {
   // Nur ohne Turm-Anker; GLB und OBJ liefern keine Hülle.
   const gebaeudeHuelle = useMemo(() => {
     if (!aussehen || !aussehenEin || aussehen.art !== 'punkte' || aussehenAnker) return null
-    return huelleAusAnzeigePunkten(aussehen.positionen, { faktor: aussehenEinheit === 'cm' ? 0.01 : aussehenEinheit === 'mm' ? 0.001 : 1, oben: aussehenOben, versatzX: aussehenVersatz.x, versatzZ: aussehenVersatz.z, drehungGrad: aussehenVersatz.grad })?.netz ?? null
-  }, [aussehen, aussehenEin, aussehenEinheit, aussehenOben, aussehenVersatz, aussehenAnker])
+    return huelleAusAnzeigePunkten(aussehen.positionen, { faktor: aussehenEinheit === 'cm' ? 0.01 : aussehenEinheit === 'mm' ? 0.001 : 1, oben: aussehenOben, versatzX: aussehenVersatz.x, versatzZ: aussehenVersatz.z, drehungGrad: aussehenVersatz.grad }, { rasterM: huelleRasterM })?.netz ?? null
+  }, [aussehen, aussehenEin, aussehenEinheit, aussehenOben, aussehenVersatz, aussehenAnker, huelleRasterM])
   const [abbauEin, setAbbauEin] = useState<TeilabbauEingabe>(TEILABBAU_START)
   const [showBuilding, setShowBuilding] = useState(true)
   const [showScaffold, setShowScaffold] = useState(true)
@@ -958,6 +961,13 @@ export default function CADPage() {
 
   return (
     <div className='min-h-screen md:h-screen flex flex-col bg-[#fbfbfd]'>
+      {huelleOffen && aussehen && aussehen.art === 'punkte' && (
+        <HuelleWerkzeug aussehen={aussehen} oben={aussehenOben} faktor={aussehenEinheit === 'cm' ? 0.01 : aussehenEinheit === 'mm' ? 0.001 : 1}
+          platzierung={{ faktor: aussehenEinheit === 'cm' ? 0.01 : aussehenEinheit === 'mm' ? 0.001 : 1, oben: aussehenOben, versatzX: aussehenVersatz.x, versatzZ: aussehenVersatz.z, drehungGrad: aussehenVersatz.grad }}
+          rasterM={huelleRasterM} setRasterM={setHuelleRasterM}
+          onPunkteGekappt={(a, text) => { setAussehen(a); setAussehenHinweis(text); setHuelleOffen(false) }}
+          onSchliessen={() => setHuelleOffen(false)} />
+      )}
       {werkzeugOffen && aussehen && aussehen.art === 'punkte' && (
         <PunktwolkeWerkzeug aussehen={aussehen} oben={aussehenOben} faktor={aussehenEinheit === 'cm' ? 0.01 : aussehenEinheit === 'mm' ? 0.001 : 1}
           onSchliessen={() => setWerkzeugOffen(false)}
@@ -1066,6 +1076,9 @@ export default function CADPage() {
                     <label className='text-[11px] text-[#424245]' title='Gebäude nach vorn/hinten schieben (m)'>Z <input type='number' step='1' className='w-14 text-xs border rounded px-1 py-0.5 bg-white' value={aussehenVersatz.z} onChange={(ev) => setAussehenVersatz((v) => ({ ...v, z: Number(ev.target.value) || 0 }))} /></label>
                     {aussehen.art === 'punkte' && (
                       <button type='button' className='text-xs border rounded-lg px-2 py-1 bg-white text-[#424245]' title='Strecken und Flächen in der Punktwolke messen, Streupunkte und Überstände entfernen, Rechteck zuschneiden' onClick={() => setWerkzeugOffen(true)}>📏 Messen / Bereinigen</button>
+                    )}
+                    {aussehen.art === 'punkte' && !aussehenAnker && (
+                      <button type='button' className='text-xs border rounded-lg px-2 py-1 bg-white text-[#424245]' title='Hülle auf eine Höhe kappen (Volumen oben und unten), Detailstufe wählen, Hülle als OBJ speichern' onClick={() => setHuelleOffen(true)}>✂️ Kappen / OBJ</button>
                     )}
                     {gebaeudeHuelle && (
                       <button type='button' className='text-xs border rounded-lg px-2 py-1 bg-white text-[#424245]' title='Erhöht den Wandabstand schrittweise, bis kein Gerüstbauteil mehr in der Gebäudehülle der Punktwolke liegt (Vorsprünge, Erker). Der Wert gilt für alle Seiten.'

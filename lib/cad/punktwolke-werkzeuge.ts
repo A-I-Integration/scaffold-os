@@ -99,3 +99,14 @@ export function messeFlaeche(eckpunkte: [number, number][]): { flaecheM2: number
 
 /** Deutsche Schreibweise mit Komma, z. B. 12,35 m */
 export const formatM = (v: number, stellen = 2): string => v.toFixed(stellen).replace('.', ',')
+
+/** Anzeige-Punkte (Achse „oben“ und Einheit der Datei) → Meter mit z = oben */
+export function anzeigeInMeterZOben(positionen: ArrayLike<number>, oben: 'x' | 'y' | 'z', faktor: number): Float64Array {
+  const n = Math.floor(positionen.length / 3), aus = new Float64Array(n * 3)
+  for (let i = 0; i < n; i++) {
+    const x = positionen[i * 3] * faktor, y = positionen[i * 3 + 1] * faktor, z = positionen[i * 3 + 2] * faktor
+    const [wx, wy, wz] = oben === 'z' ? [x, y, z] : oben === 'y' ? [x, z, y] : [y, z, x]
+    aus[i * 3] = wx; aus[i * 3 + 1] = wy; aus[i * 3 + 2] = wz
+  }
+  return aus
+}
