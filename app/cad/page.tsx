@@ -1028,9 +1028,9 @@ export default function CADPage() {
             )}
             {viewMode === '3d' && modelWithManual && (
               <span className='inline-flex flex-wrap items-center gap-1'>
-                <label className='text-xs border rounded-lg px-2 py-1 bg-white text-[#424245] cursor-pointer' title='Zeigt das echte Gebäude (GLB mit Texturen, OBJ mit MTL und Bildern oder PLY-Punktwolke mit Farben) statt des einfachen Baukörpers – nur zur Ansicht, Maße und Gerüst bleiben unverändert'>
+                <label className='text-xs border rounded-lg px-2 py-1 bg-white text-[#424245] cursor-pointer' title='Zeigt das echte Gebäude (GLB mit Texturen, OBJ mit MTL und Bildern, PLY-Punktwolke mit Farben oder Scan-Dateien E57/PTX/LAS/XYZ) statt des einfachen Baukörpers – nur zur Ansicht, Maße und Gerüst bleiben unverändert'>
                   🏛️ {aussehen ? 'Anderes Gebäude laden' : 'Echtes Gebäude laden'}
-                  <input type='file' multiple accept='.glb,.ply,.obj,.mtl,.jpg,.jpeg,.png,.webp' className='hidden' onChange={(ev) => { const fs = Array.from(ev.target.files ?? []); ev.target.value = ''; if (fs.length) void ladeAussehen(fs) }} />
+                  <input type='file' multiple accept='.glb,.ply,.obj,.mtl,.jpg,.jpeg,.png,.webp,.e57,.ptx,.las,.xyz,.pts,.txt,.csv' className='hidden' onChange={(ev) => { const fs = Array.from(ev.target.files ?? []); ev.target.value = ''; if (fs.length) void ladeAussehen(fs) }} />
                 </label>
                 {aussehen && (
                   <>
