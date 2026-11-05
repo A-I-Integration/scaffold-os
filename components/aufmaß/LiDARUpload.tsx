@@ -7,7 +7,9 @@ import { uploadScanClient, getScanStatusClient, getScanClient } from '@/lib/medi
 // Ab dieser Größe geht der Scan direkt zu Supabase Storage und wird vom
 // Punktwolken-Worker (Docker) analysiert – umgeht das Vercel-Upload-Limit.
 const WORKER_AB_BYTES = 4 * 1024 * 1024;
-const ERLAUBTE_EXT = ['obj', 'ply', 'las', 'laz', 'glb'];
+const ERLAUBTE_EXT = ['obj', 'ply', 'las', 'laz', 'e57', 'xyz', 'pts', 'txt', 'csv', 'glb'];
+// Diese Formate liest nur der Worker (komprimiert oder Textliste); sie gehen immer den Weg über den Direkt-Upload
+const NUR_WORKER_EXT = ['laz', 'e57', 'xyz', 'pts', 'txt', 'csv'];
 
 interface Fassade {
   breiteM: number;
@@ -127,7 +129,7 @@ export default function LiDARUpload({ sessionId, projectId, onMeasurements }: Pr
 
     const ext = file.name.split('.').pop()?.toLowerCase() || '';
     if (!ERLAUBTE_EXT.includes(ext)) {
-      alert('Nur .ply, .las, .laz, .obj oder .glb erlaubt.');
+      alert('Erlaubt: .laz, .las, .e57, .xyz, .pts, .ply, .obj oder .glb. DWG, FBX und GeoTIFF bitte als LAZ/E57 bzw. OBJ/GLB exportieren.');
       e.target.value = '';
       return;
     }
@@ -135,8 +137,8 @@ export default function LiDARUpload({ sessionId, projectId, onMeasurements }: Pr
     setUploading(true);
 
     try {
-      // LAZ (Drohnen-Software) ist komprimiert und wird immer auf dem Worker entpackt
-      if (file.size >= WORKER_AB_BYTES || ext === 'laz') {
+      // LAZ, E57 und Textlisten (Drohnen-Software) liest nur der Worker
+      if (file.size >= WORKER_AB_BYTES || NUR_WORKER_EXT.includes(ext)) {
         // ── Großer Scan: Direkt-Upload + Worker-Analyse ──
         setPhase(`Lade hoch (${(file.size / 1e6).toFixed(0)} MB, direkt zum Speicher)…`);
         const media = await uploadScanClient(file, sessionId, ext, projectId);
@@ -221,7 +223,7 @@ export default function LiDARUpload({ sessionId, projectId, onMeasurements }: Pr
       <div className="relative">
         <input
           type="file"
-          accept=".obj,.ply,.las,.laz,.glb"
+          accept=".obj,.ply,.las,.laz,.e57,.xyz,.pts,.txt,.csv,.glb"
           onChange={handleFile}
           disabled={uploading}
           className="absolute inset-0 h-full w-full cursor-pointer opacity-0 disabled:cursor-not-allowed"
@@ -239,7 +241,7 @@ export default function LiDARUpload({ sessionId, projectId, onMeasurements }: Pr
             <span>
               <span className="text-lg">📱</span> <span className="font-medium">Punktwolke / 3D-Modell hochladen</span>
               <br />
-              <span className="text-[11px] text-[#86868b]">Drohne (DJI Terra, Pix4D, WebODM): .laz oder .las · Polycam: .ply oder .las · .glb / .obj als 3D-Modell · bis 500 MB</span>
+              <span className="text-[11px] text-[#86868b]">Drohne (DJI Terra, Pix4D, WebODM, RealityCapture): .laz, .las oder .e57 · Textliste: .xyz / .pts · Polycam: .ply oder .las · .glb / .obj als 3D-Modell · bis 500 MB</span>
             </span>
           )}
         </button>

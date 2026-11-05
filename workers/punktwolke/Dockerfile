@@ -10,7 +10,7 @@ WORKDIR /app
 COPY package.json ./
 # Einzige Abhängigkeit: laz-perf (WebAssembly zum Entpacken von LAZ-Dateien aus Drohnen-Software)
 RUN npm install --omit=dev --no-audit --no-fund
-COPY analyse.js las-laz.js ply-binary.js teile.js index.js ./
+COPY analyse.js las-laz.js ply-binary.js xyz-e57.js teile.js index.js ./
 
 # Healthcheck: Prozess lebt?
 HEALTHCHECK --interval=60s --timeout=5s --retries=3 \
