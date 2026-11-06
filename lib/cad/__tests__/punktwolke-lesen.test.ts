@@ -53,4 +53,36 @@ describe('Scan-Dateien im Browser lesen', () => {
     let mx = 0; for (const v of a.positionen) mx = Math.max(mx, Math.abs(v))
     expect(mx).toBeLessThan(1)
   })
+
+  it('Farbe: LAS-Format 2 mit RGB (16 Bit) wird übernommen; 8 Bit in 16-Bit-Feldern ebenso; Format 0 bleibt grau', () => {
+    const bau = (farben: number[][]): ArrayBuffer => {
+      const kopf = 227, rec = 26, n = farben.length
+      const b = Buffer.alloc(kopf + n * rec)
+      b.write('LASF', 0, 'latin1'); b.writeUInt8(1, 24); b.writeUInt8(2, 25)
+      b.writeUInt16LE(kopf, 94); b.writeUInt32LE(kopf, 96); b.writeUInt8(2, 104); b.writeUInt16LE(rec, 105); b.writeUInt32LE(n, 107)
+      ;[0.001, 0.001, 0.001, 0, 0, 0].forEach((v, i) => b.writeDoubleLE(v, 131 + i * 8))
+      farben.forEach((c, i) => { for (let k = 0; k < 3; k++) { b.writeInt32LE(1000 * (i + 1), kopf + i * rec + k * 4); b.writeUInt16LE(c[k], kopf + i * rec + 20 + k * 2) } })
+      return ab(b)
+    }
+    const p16 = parseLasEinfach(bau([[65535, 0, 0], [0, 65535, 0], [0, 0, 65535]]))
+    expect(Array.from(p16.farben!)).toEqual([255, 0, 0, 0, 255, 0, 0, 0, 255])
+    const p8 = parseLasEinfach(bau([[200, 100, 0], [10, 20, 30], [0, 0, 255]]))
+    expect(Array.from(p8.farben!.slice(0, 3))).toEqual([200, 100, 0])
+    expect(parseLasEinfach(lasDatei(wuerfel())).farben).toBeUndefined()
+  })
+  it('Farbe: kommt bis in die Anzeige (Aussehen) und bleibt beim Ausdünnen beim richtigen Punkt', () => {
+    const t = Array.from({ length: 40 }, (_, i) => `${i} 0 0 ${i * 6} 0 0`).join('\n')
+    const r = aussehenAusScanDatei(ab(Buffer.from(t)), 'a.xyz')
+    expect(r.ok).toBe(true)
+    if (r.ok && r.aussehen.art === 'punkte') {
+      expect(r.hinweis).toMatch(/mit Farbe/)
+      // x-Koordinate relativ zum Schwerpunkt; Rot = i*6 → rot wächst mit x
+      const x = r.aussehen.positionen, f = r.aussehen.farben
+      expect(f[1]).toBe(0)
+      expect(f[(39) * 3]).toBeGreaterThan(f[0])
+      expect(x[39 * 3]).toBeGreaterThan(x[0])
+    }
+    const grau = aussehenAusScanDatei(ab(Buffer.from(Array.from({ length: 40 }, (_, i) => `${i} 0 0`).join('\n'))), 'a.xyz')
+    if (grau.ok && grau.aussehen.art === 'punkte') { expect(grau.hinweis).toMatch(/grau/); expect(grau.aussehen.farben[0]).toBe(190) }
+  })
 })
