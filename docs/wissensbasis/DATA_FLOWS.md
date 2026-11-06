@@ -126,9 +126,25 @@ Stil "statiker" (Gliederung eines Auftraggeber-LV für Turmeinrüstungen, Zeilen
 
 ## 4. Befunde
 
-**F1 – Zwei getrennte Material-Engines (mittel).** Der CAD-Weg rechnet in lib/calculations/cad-engine.ts (2.704 Zeilen, generateBillOfMaterials). Der Aufmaß-Weg rechnet Material in lib/calculations/scaffold-engine.ts (calculateScaffoldMaterial, aufgerufen aus app/api/ki-material/route.ts und lib/gaeb.ts). Der Kommentar in aufmass-zu-cad.ts behauptet, dass nach der Übernahme Fläche und Stückliste mit dem Aufmaß übereinstimmen. **Kein Test importiert beide Engines** (geprüft per Textsuche), und der Test aufmass-zu-cad.test.ts prüft nach seinen Testnamen die Übernahme der Maße, nicht die Gleichheit der Stücklisten. Ob die Zahlen übereinstimmen, ist damit nicht belegt (Annahme: nicht durch Tests gesichert).
+**F1 – Zwei getrennte Material-Engines liefern verschiedene Stücklisten (hoch, gemessen).** Der CAD-Weg rechnet in lib/calculations/cad-engine.ts (generateBillOfMaterials), der Aufmaß-Weg in lib/calculations/scaffold-engine.ts (calculateScaffoldMaterial, aufgerufen aus app/api/ki-material/route.ts und lib/gaeb.ts). Beide Engines wurden am 06.11.2026 mit denselben Gebäuden ausgeführt (flaches Dach, eine Seite; CAD-Weg über aufmassZuCad mit System layher-allround; Ausführung in Node mit dem TypeScript-Compiler, nicht in Vitest):
+
+| Gebäude | Fläche beide | Material Aufmaß | Material CAD | CAD/Aufmaß | Gewicht Aufmaß / CAD | Rahmen A / C | Diagonalen A / C | Kupplungen A / C | Anker A / C |
+|---|---|---|---|---|---|---|---|---|---|
+| 8 × 4,5 m | 36 m² | 5.700 € | 4.853 € | 0,85 | 1.474 / 1.242 kg | 24 / 18 | 24 / 6 | 48 / 18 | 4 / 0 |
+| 12 × 7,5 m | 90 m² | 9.760 € | 7.804 € | 0,80 | 2.498 / 2.044 kg | 40 / 32 | 40 / 8 | 80 / 32 | 7 / 4 |
+| 20 × 10,5 m | 210 m² | 22.131 € | 17.667 € | 0,80 | 5.752 / 4.753 kg | 96 / 84 | 96 / 21 | 192 / 84 | 16 / 12 |
+| 30 × 15 m | 450 m² | 44.484 € | 31.839 € | 0,72 | 11.498 / 8.680 kg | 192 / 160 | 192 / 40 | 384 / 160 | 32 / 20 |
+| 40 × 19,5 m | 780 m² | 73.843 € | 59.774 € | 0,81 | 19.096 / 15.647 kg | 320 / 280 | 320 / 70 | 640 / 280 | 54 / 35 |
+
+Ergebnis: **Die Fläche stimmt in allen fünf Größen exakt überein** (der Kommentar in aufmass-zu-cad.ts trifft dafür zu). **Die Stücklisten stimmen nicht überein:** Das Material im CAD-Weg ist 15 bis 28 % günstiger, das Gewicht 12 bis 24 % geringer. Der Aufmaß-Weg rechnet pro Feld und Lage 2 Diagonalen (aFields × aLevels × 2), der CAD-Weg erzeugt deutlich weniger. Im CAD-Weg fehlen Kupplungen im gleichen Umfang; dafür hat er Teile, die der Aufmaß-Weg nicht hat (Querriegel, Eckverbindungen, Lastverteilplatten, Treppenstufen und -podeste), und der Aufmaß-Weg hat Seitenschutznetz und Spindeltreppen. Die Rahmen- und Belagsartikel haben bei gleicher Artikelnummer unterschiedliche Namen (z. B. RA-002: "Rahmen 1,09 m" im Aufmaß-Weg, "Rahmen 2.79m" im CAD-Weg). Für denselben Auftrag kann der Preis je nach Weg um ein Fünftel abweichen. **Welche Stückliste fachlich stimmt, kann ich nicht beurteilen;** das gehört zur Statik und zur Zulassung des Systems.
+
+Anker (Beispiel mit möglichem Sicherheitsbezug): Bei 8 × 4,5 m listet der CAD-Weg keinen Anker, der Aufmaß-Weg 4. Ein Kommentar in cad-engine.ts (Zeile 1801) nennt "Verankerungen: ab 6 m Gebäudehöhe, jedes zweite Feld, jede zweite Lage". Ob die Regel zulässig ist, ist nicht geprüft und nicht meine Entscheidung.
+
+Abgesichert ist jetzt: Fläche gleich und gleicher Preis je Artikelnummer (Test lib/calculations/__tests__/engine-abgleich.test.ts auf dem Branch test/engine-abgleich); die Gleichheit der Stücklisten steht als it.todo.
 
 **F2 – Preise im Code (mittel, Produktregel).** scaffold-engine.ts hat eine feste Artikeltabelle (26 Artikel, 27 unitPrice-Zeilen, z. B. Rahmen 0,73 m mit 45,00 €), und lib/calculations/article-prices.ts nutzt "Fallback auf statische Preise, wenn DB leer". loadArticlePricesMitQuelle meldet, ob echte Lagerpreise oder feste Ersatzpreise verwendet wurden. Das widerspricht der Produktregel, dass Preise nur in den Firmendaten liegen und nicht im App-Code. Nicht geprüft: wie die Oberfläche den Fall "Ersatzpreise" zeigt und ob neue Kundeninstanzen ein gefülltes Lager haben.
+
+Nachtrag (06.11.2026): Die Preise stehen an mindestens **drei Stellen im Code**: scaffold-engine.ts (ARTICLE_DB, 26 Artikel), article-prices.ts (FALLBACK_PRICES) und cad-engine.ts (getUnitPrice, getWeightKg, getRecommendation ab Zeile 1875). Für alle gemeinsamen Artikelnummern sind die Preise heute gleich (durch Test belegt); die Gleichheit hängt aber an Handarbeit. In cad-engine.ts gilt für unbekannte Artikelnummern ein Vorgabewert (10 € und 5 kg); in der geprüften Standard-Stückliste (19 Artikel, 12 × 7,5 m) griff er nicht, ob andere Gebäude (Brücke, Turm, Aufzug) ihn auslösen, ist nicht geprüft.
 
 **F3 – Übergabe Aufmaß → CAD über den Browser-Tab (niedrig).** Die Zwischenablage ist sessionStorage (CAD_UEBERNAHME_KEY, "nur dieser Browser-Tab"). Ein anderer Tab oder ein anderes Gerät hat sie nicht.
 
@@ -139,6 +155,8 @@ Stil "statiker" (Gliederung eines Auftraggeber-LV für Turmeinrüstungen, Zeilen
 **F6 – Fehlgeschlagener Transportauftrag wird nicht gemeldet (mittel).** In angebot-annahme.ts wird nach erfolgreicher Reservierung der Transportauftrag per POST angelegt; nur bei Erfolg (`transRes.ok`) wird er vermerkt. Schlägt der POST fehl, gibt es keinen else-Zweig und keine Meldung: Das Material ist reserviert, aber kein Transportauftrag existiert und die Tour enthält die Position nicht. (Aus dem Code gelesen, nicht ausgeführt.)
 
 **F7 – Keine Rückabwicklung bei Teilfehlern (niedrig, Schlussfolgerung).** Die Reservierungen laufen zeilenweise. Wird die Annahme später widerrufen oder bricht der Lauf mitten in der Liste ab, bleiben bereits gebuchte Zeilen bestehen. Dass es keine Rückabwicklung gibt, ist aus dem Code abgeleitet (keine solche Funktion in angebot-annahme.ts gelesen), nicht durch Test belegt. Offen: Was passiert, wenn der Status von "angenommen" auf etwas anderes und wieder zurück auf "angenommen" gesetzt wird; die Bedingung (Zeile 209) löst dann erneut aus, ob doppelt gebucht wird, ist nicht geprüft.
+
+**F8 – Das Ergebnis der Annahme-Automatik wird nirgends angezeigt (mittel).** projects.data.lagerAutomatikErgebnis (reserviert, nichtGefunden, nichtGenugBestand, einheitenKonflikt, tour, hinweis, fehler) wird gespeichert, aber keine Datei in app/, components/ oder hooks/ liest es (Textsuche im ganzen Repo: nur lib/angebot-annahme.ts, lib/auto-tour.ts und ein Lesezugriff in app/api/projects/route.ts für das Nachholen der Fahrt). Der Kommentar in angebot-annahme.ts behauptet, das Ergebnis sei im Kunden-Detail sichtbar. Damit bleiben nicht gefundene Artikel, fehlender Bestand und Einheitenkonflikte unbemerkt, solange niemand die Datenbank liest. Fix vorbereitet auf dem Branch fix/annahme-ergebnis-sichtbar (Anzeige an der Auftrags-Karte); Vitest-Lauf steht noch aus.
 
 ## 5. Nicht gelesen (Etappe 3)
 
