@@ -140,6 +140,8 @@ Stil "statiker" (Gliederung eines Auftraggeber-LV für Turmeinrüstungen, Zeilen
 
 **F7 – Keine Rückabwicklung bei Teilfehlern (niedrig, Schlussfolgerung).** Die Reservierungen laufen zeilenweise. Wird die Annahme später widerrufen oder bricht der Lauf mitten in der Liste ab, bleiben bereits gebuchte Zeilen bestehen. Dass es keine Rückabwicklung gibt, ist aus dem Code abgeleitet (keine solche Funktion in angebot-annahme.ts gelesen), nicht durch Test belegt. Offen: Was passiert, wenn der Status von "angenommen" auf etwas anderes und wieder zurück auf "angenommen" gesetzt wird; die Bedingung (Zeile 209) löst dann erneut aus, ob doppelt gebucht wird, ist nicht geprüft.
 
+**F8 – Das Ergebnis der Annahme-Automatik wird nirgends angezeigt (mittel).** projects.data.lagerAutomatikErgebnis (reserviert, nichtGefunden, nichtGenugBestand, einheitenKonflikt, tour, hinweis, fehler) wird gespeichert, aber keine Datei in app/, components/ oder hooks/ liest es (Textsuche im ganzen Repo: nur lib/angebot-annahme.ts, lib/auto-tour.ts und ein Lesezugriff in app/api/projects/route.ts für das Nachholen der Fahrt). Der Kommentar in angebot-annahme.ts behauptet, das Ergebnis sei im Kunden-Detail sichtbar. Damit bleiben nicht gefundene Artikel, fehlender Bestand und Einheitenkonflikte unbemerkt, solange niemand die Datenbank liest. Fix vorbereitet auf dem Branch fix/annahme-ergebnis-sichtbar (Anzeige an der Auftrags-Karte); Vitest-Lauf steht noch aus.
+
 ## 5. Nicht gelesen (Etappe 3)
 
 - Statiker- und Preislisten-Stil des LV im Detail (Zeilen 496 bis 840), Stundenlohn-Titel, geruestText, Kopfzeilen

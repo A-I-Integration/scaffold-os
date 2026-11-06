@@ -159,3 +159,9 @@ lib/angebot-annahme.ts: Schlägt das Anlegen des Transportauftrags nach einer er
 
 ### R23 – Keine Rückabwicklung der automatischen Reservierung (niedrig, Schlussfolgerung, siehe DATA_FLOWS.md F7)
 Teilfehler und Statuswechsel nach "angenommen" haben keine erkennbare Rückabwicklung; erneute Annahme könnte erneut auslösen (nicht geprüft).
+
+### R24 – Ergebnis der Annahme-Automatik wird nicht angezeigt (mittel, siehe DATA_FLOWS.md F8)
+Gespeichert in projects.data.lagerAutomatikErgebnis, aber keine Anzeige im Code; entgegen dem Kommentar in lib/angebot-annahme.ts.
+
+Status R22 und R24 (06.11.2026): Fix vorbereitet auf Branch fix/annahme-ergebnis-sichtbar (neues Feld transportFehler, try/catch um den Transportauftrag, Anzeige an components/KundeAuftrag.tsx über components/LagerAutomatikHinweis.tsx,
+2 neue Testdateien). Syntax geprüft, die Anzeige-Funktion in Node ausgeführt; die Vitest-Läufe und tsc stehen auf dem Mac der Nutzerin noch aus.
