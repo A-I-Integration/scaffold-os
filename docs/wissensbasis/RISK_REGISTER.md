@@ -176,3 +176,8 @@ Präzisierung R19 (06.11.2026): Die Route /api/stueckliste (nur POST, Rolle admi
 Die Tabelle fehlt in allen SQL-Dateien des Repos. Auf einer Instanz ohne diese Tabelle meldet die Seite beim Klick auf den Knopf nur "Fehler" (Alert), der Server liefert Status 500.
 Ob die Tabelle in den bestehenden Instanzen existiert und Zeilen enthält, ist offen; Prüfung im SQL-Editor: select count(*) from stuecklisten;
 Möglicher Weg: Knopf und Route entfernen (Daten liegen in projects.data), statt eine weitere Tabelle in jede Instanz einzuspielen (siehe R15). Entscheidung offen.
+
+Status R19 (06.11.2026): Bestätigt. In der Instanz der Nutzerin liefert "select count(*) from stuecklisten;" den Fehler "relation stuecklisten does not exist" (42P01); der Knopf "Stückliste speichern" (Aufmaß Schritt 6, zwei Stellen) schlägt dort immer fehl.
+Entscheidung: Knopf und Route /api/stueckliste entfernen, weil die Materialliste mit dem Projekt in projects.data.kiResult gespeichert wird. Umsetzung auf Branch fix/stuecklisten-knopf (3 Dateien: schritt6/page.tsx, KIMaterialResult.tsx, Route gelöscht).
+Typprüfung (tsc, strict) über den Gesamtstand aus main plus den Branches fix/annahme-ergebnis-sichtbar, test/engine-abgleich und fix/stuecklisten-knopf: fehlerfrei (Exit 0, Gegenprobe mit absichtlichem Typfehler schlägt an). Vitest steht auf dem Mac der Nutzerin noch aus.
+Nach dem Merge entfällt die Route /api/stueckliste in API_MAP.md (127 auf 126 Routen).
