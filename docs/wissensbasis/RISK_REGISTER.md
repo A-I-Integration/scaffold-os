@@ -170,3 +170,9 @@ Ergänzung R20 (06.11.2026, gemessen): Dasselbe Gebäude ergibt im CAD-Weg 15 bi
 
 ### R25 – Verschiedene Regeln für Anker, Diagonalen und Kupplungen (hoch, fachliche Entscheidung nötig)
 Gleiches Gebäude, verschiedene Stückliste (siehe DATA_FLOWS.md F1): z. B. bei 8 × 4,5 m im CAD-Weg 0 Anker, im Aufmaß-Weg 4; Diagonalen im Aufmaß-Weg 4- bis 5-mal so viele. Welche Regel gilt, entscheidet nicht der Code, sondern Statik und Zulassung (offen). Solange das offen ist, hängt Angebotspreis und Materialplanung davon ab, ob der Auftrag über das Aufmaß oder das CAD gerechnet wurde.
+
+Präzisierung R19 (06.11.2026): Die Route /api/stueckliste (nur POST, Rolle admin oder bauleiter) wird von genau einer Stelle aufgerufen: handleSaveStueckliste in app/aufmass/schritt6/page.tsx
+(Schreiben von project_id und material_list in die Tabelle stuecklisten). Im ganzen Code liest niemand diese Tabelle; die Materialliste steht ohnehin in projects.data.kiResult.materialList.
+Die Tabelle fehlt in allen SQL-Dateien des Repos. Auf einer Instanz ohne diese Tabelle meldet die Seite beim Klick auf den Knopf nur "Fehler" (Alert), der Server liefert Status 500.
+Ob die Tabelle in den bestehenden Instanzen existiert und Zeilen enthält, ist offen; Prüfung im SQL-Editor: select count(*) from stuecklisten;
+Möglicher Weg: Knopf und Route entfernen (Daten liegen in projects.data), statt eine weitere Tabelle in jede Instanz einzuspielen (siehe R15). Entscheidung offen.
