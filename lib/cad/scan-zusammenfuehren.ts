@@ -55,26 +55,26 @@ export function hoeheAn(d: Draufsicht, x: number, y: number, suchM = 0.3): numbe
 }
 
 export type Weg = 'bekannt' | 'automatisch' | 'handpunkte'
-export interface ScanZuordnung { name: string; punkte: Float64Array; weg: Weg; paare?: { von: V3; nach: V3 }[] }
+export interface ScanZuordnung { name: string; punkte: Float64Array; /** Farben R G B je Punkt (0–255), falls die Datei welche hatte */ farben?: Uint8Array; weg: Weg; paare?: { von: V3; nach: V3 }[] }
 export type ScanErgebnis = { name: string; ok: boolean; qualitaet: 'gut' | 'pruefen' | 'unbrauchbar' | 'bekannt'; rmsM?: number; ueberdeckung?: number; hinweise: string[]; starr: Starr }
 
 /**
  * Legt alle Scans ab dem zweiten auf den ersten und fügt sie zusammen.
  * Scans mit Ergebnis 'unbrauchbar' oder Fehler werden NICHT übernommen (ok: false), die übrigen schon.
  */
-export function fuehreScansZusammen(scans: ScanZuordnung[]): { punkte: Float64Array; ergebnisse: ScanErgebnis[]; uebernommen: number } {
+export function fuehreScansZusammen(scans: ScanZuordnung[]): { punkte: Float64Array; farben?: Uint8Array; ergebnisse: ScanErgebnis[]; uebernommen: number } {
   const ergebnisse: ScanErgebnis[] = []
-  const eingabe: { name: string; punkte: Float64Array; starr?: Starr }[] = []
+  const eingabe: { name: string; punkte: Float64Array; farben?: Uint8Array; starr?: Starr }[] = []
   scans.forEach((s, i) => {
-    if (i === 0) { ergebnisse.push({ name: s.name, ok: true, qualitaet: 'bekannt', hinweise: ['Erster Scan: bildet das Koordinatensystem.'], starr: identitaet() }); eingabe.push({ name: s.name, punkte: s.punkte }); return }
+    if (i === 0) { ergebnisse.push({ name: s.name, ok: true, qualitaet: 'bekannt', hinweise: ['Erster Scan: bildet das Koordinatensystem.'], starr: identitaet() }); eingabe.push({ name: s.name, punkte: s.punkte, farben: s.farben }); return }
     if (s.weg === 'bekannt') {
       ergebnisse.push({ name: s.name, ok: true, qualitaet: 'bekannt', hinweise: ['Lage unverändert übernommen (gleiches Koordinatensystem angenommen).'], starr: identitaet() })
-      eingabe.push({ name: s.name, punkte: s.punkte }); return
+      eingabe.push({ name: s.name, punkte: s.punkte, farben: s.farben }); return
     }
     if (s.weg === 'automatisch') {
       const r = richteAutomatischAus(scans[0].punkte, s.punkte)
       ergebnisse.push({ name: s.name, ok: r.ok, qualitaet: r.qualitaet, rmsM: r.rmsM, ueberdeckung: r.ueberdeckung, hinweise: r.hinweise, starr: r.starr })
-      if (r.ok) eingabe.push({ name: s.name, punkte: s.punkte, starr: r.starr })
+      if (r.ok) eingabe.push({ name: s.name, punkte: s.punkte, farben: s.farben, starr: r.starr })
       return
     }
     const paare = s.paare ?? []
@@ -86,8 +86,19 @@ export function fuehreScansZusammen(scans: ScanZuordnung[]): { punkte: Float64Ar
       hinweise: [`Restfehler der Punktpaare ${(r.rmsM * 100).toFixed(1).replace('.', ',')} cm${gut ? '' : ' – größer als 5 cm, bitte die Punkte genauer setzen oder prüfen'}.`],
       starr: r.starr,
     })
-    eingabe.push({ name: s.name, punkte: s.punkte, starr: r.starr })
+    eingabe.push({ name: s.name, punkte: s.punkte, farben: s.farben, starr: r.starr })
   })
   const { punkte } = fuehreZusammen(eingabe)
-  return { punkte, ergebnisse, uebernommen: eingabe.length }
+  // Farben in derselben Reihenfolge wie die Punkte (fuehreZusammen hängt die Scans der Reihe nach an). Scans ohne Farbe → Grau,
+  // sobald mindestens ein Scan Farbe hat; stimmt die Länge eines Scans nicht, gibt es lieber gar keine Farbe als falsche.
+  let farben: Uint8Array | undefined
+  if (eingabe.some((e) => e.farben)) {
+    const ok = eingabe.every((e) => !e.farben || e.farben.length === e.punkte.length)
+    if (ok) {
+      farben = new Uint8Array(punkte.length)
+      let o = 0
+      for (const e of eingabe) { if (e.farben) farben.set(e.farben, o); else farben.fill(190, o, o + e.punkte.length); o += e.punkte.length }
+    }
+  }
+  return { punkte, farben, ergebnisse, uebernommen: eingabe.length }
 }

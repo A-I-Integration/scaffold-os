@@ -49,4 +49,19 @@ describe('fuehreScansZusammen', () => {
     expect(r.ergebnisse[1].ok).toBe(false)
     expect(r.uebernommen).toBe(1)
   })
+
+  it('Farben: bleiben beim Zusammenführen in der Reihenfolge der Punkte; Scan ohne Farbe wird grau; nicht übernommener Scan bringt keine Farben mit', () => {
+    const n = A.length / 3
+    const rot = new Uint8Array(n * 3); for (let i = 0; i < n; i++) rot[i * 3] = 255
+    const r = fuehreScansZusammen([{ name: 'A', punkte: A, farben: rot, weg: 'bekannt' }, { name: 'B', punkte: A, weg: 'bekannt' },
+      { name: 'C', punkte: Float64Array.from([0, 0, 0, 1, 1, 1]), farben: new Uint8Array([1, 2, 3, 4, 5, 6]), weg: 'automatisch' }])
+    expect(r.uebernommen).toBe(2)
+    expect(r.farben!.length).toBe(r.punkte.length)
+    expect(Array.from(r.farben!.slice(0, 3))).toEqual([255, 0, 0])
+    expect(Array.from(r.farben!.slice(A.length, A.length + 3))).toEqual([190, 190, 190])
+  })
+  it('Farben: keine Farbe in keinem Scan → keine Farben im Ergebnis; falsche Länge → lieber keine als verrutschte', () => {
+    expect(fuehreScansZusammen([{ name: 'A', punkte: A, weg: 'bekannt' }, { name: 'B', punkte: A, weg: 'bekannt' }]).farben).toBeUndefined()
+    expect(fuehreScansZusammen([{ name: 'A', punkte: A, farben: new Uint8Array(6), weg: 'bekannt' }, { name: 'B', punkte: A, weg: 'bekannt' }]).farben).toBeUndefined()
+  })
 })
