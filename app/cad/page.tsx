@@ -1118,6 +1118,19 @@ export default function CADPage() {
                           setOeffnungen(erkenneOeffnungen(q.px, q.py, q.pz, building))
                         }}>🚪 Öffnungen erkennen</button>
                     )}
+                    {aussehen.art === 'glb' && !aussehenAnker && (
+                      <button type='button' className='text-xs border rounded-lg px-2 py-1 bg-white text-[#424245]' title='Misst Türen und Fenster am 3D-Modell: Lücken oder Rücksprünge in den Fassaden, mit Seite (vorn/hinten/links/rechts), Lage ab Fassadenmitte und Maßen. Nur Vorschläge, nur Rechteck-Gebäude.'
+                        onClick={async () => {
+                          try {
+                            const [{ dreieckeAusGltf }, { sollEntfallen }, { punkteAusDreiecken }] = await Promise.all([import('@/lib/cad/gltf-dreiecke'), import('@/lib/cad/glb-teile'), import('@/lib/cad/glb-oeffnungen')])
+                            const r = await dreieckeAusGltf(aussehen.daten.slice(0), sollEntfallen)
+                            if (!r.ok) { setAussehenHinweis(r.meldung); return }
+                            const q = punkteAusDreiecken(r.dreiecke, { zentriert: aussehen.zentriert ?? 'geometrie', versatzX: aussehenVersatz.x, versatzZ: aussehenVersatz.z, drehungGrad: aussehenVersatz.grad })
+                            if (!q) { setAussehenHinweis('Im Modell wurden keine Flächen gefunden.'); return }
+                            setOeffnungen(erkenneOeffnungen(q.px, q.py, q.pz, building))
+                          } catch (e) { setAussehenHinweis('Öffnungen konnten nicht gemessen werden: ' + ((e as Error).message || 'Fehler')) }
+                        }}>🚪 Öffnungen messen</button>
+                    )}
                     {gebaeudeHuelle && (
                       <button type='button' className='text-xs border rounded-lg px-2 py-1 bg-white text-[#424245]' title='Wie „Wandabstand anpassen“, aber jede Gerüstseite bekommt ihren eigenen Wert: Nur Seiten mit Kollision rücken von der Wand ab, glatte Fassaden bleiben nah dran. Gilt bei Rechteck und abgestuftem Gebäude.'
                         onClick={() => {
