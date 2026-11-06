@@ -1,6 +1,6 @@
 # DATA_FLOWS – SCAFFOLD OS
 
-Stand: 06.11.2026, Etappe 1: Kette Aufmaß → CAD → Stückliste → LV → Angebot → Lager/Tour → Rechnung.
+Stand: 06.11.2026, Etappe 1 und 2 (LV-Rechenkern, Lager/Tour): Kette Aufmaß → CAD → Stückliste → LV → Angebot → Lager/Tour → Rechnung.
 Quelle ist der Code (Dateiköpfe, Kommentare, Funktionen). **Gelesen** heißt: die genannte Stelle wurde gelesen. **Nicht gelesen** wird ausdrücklich genannt.
 Kommentare im Code beschreiben die Absicht der Entwickler, nicht automatisch das tatsächliche Verhalten; wo Tests fehlen, steht das dabei.
 
@@ -69,7 +69,7 @@ Parallel dazu gibt es einen zweiten Rechenweg für Material aus dem Aufmaß (sie
 - Manuell geänderte Mengen werden ins Ergebnis übernommen, Gesamtkosten = Material + Lohn + Transport + Fahrt.
 - Der Verkaufspreis behält das **bisherige Verhältnis zu den Gesamtkosten**. Nur ohne brauchbaren Ausgangswert gilt 25 % Aufschlag (Faktor 1,25). Früher wurde immer × 1,25 gesetzt, auch bei CAD-Angeboten, wo der Aufschlag 0 ist (reine Materialkosten).
 
-### 3.4 Leistungsverzeichnis (lib/leistungsverzeichnis.ts, Kopf und Signaturen gelesen; Rumpf der 876 Zeilen nicht gelesen)
+### 3.4 Leistungsverzeichnis (lib/leistungsverzeichnis.ts, Kopf, Signaturen und Rechenkern gelesen; Statiker- und Preislisten-Stil nur über Kommentare)
 - Ein LV rechnet nach **Fläche (m²), Länge (m), Stück und Zeit (Wochen)**, nicht nach Teilen.
 - **Mengen kommen aus dem CAD-Modell.** Einheitspreise werden aus dem Materialwert der Stückliste und firmeneigenen Faktoren abgeleitet (Stundensatz, Mietsatz je Woche, Zuschlag). **Es gibt keine eingebauten Preise;** fehlt eine Angabe, meldet fehlendeAngaben das.
 - Annahmen laut Kommentar: Fläche = Länge × Höhe ohne Abrechnungsregeln der ATV DIN 18451 (Mindestlängen, Abzüge; das regelt der Vertrag); Aufbau-/Abbaustunden wie in der Logistik-Anzeige, verteilt nach Materialwert; Vorhaltung je Woche = Materialwert × Mietsatz; Klassen nach DIN EN 12811-1 (Normtext nicht geprüft).
@@ -80,16 +80,45 @@ Parallel dazu gibt es einen zweiten Rechenweg für Material aus dem Aufmaß (sie
 - Standardpreise (EP, EP je Woche, Faktor %) gibt es für Positionen ohne CAD-Wert, z. B. Baustelleneinrichtung, Bauzaun, Genehmigung, Aufzug, Kederplane.
 - Fremde LVs (z. B. eines Statikers): lib/lv-zuordnung.ts ordnet CAD-Werte einem fremden LV zu (nicht gelesen); lib/statiker-lv-einlesen.ts liest Angaben aus dessen Excel (nicht gelesen).
 
+**Rechenkern von erzeugeLeistungsverzeichnis (Zeilen 292 bis 874 teils gelesen: Mengen, Materialwert, Preisformeln, Aufbau/Vorhaltung/Abbau, Faktor-Rangfolge; die Statiker- und Preislisten-Stile nur über ihre Kommentare)**
+
+Mengen aus dem CAD-Modell:
+- **Fläche (m²)** = CAD-Gesamtfläche + Höhenzuschlag (m) × Gesamtlänge − Öffnungsabzug (m²), nicht kleiner als 0, auf 2 Stellen gerundet. Höhenzuschlag und Öffnungsabzug gibt der Nutzer ein; **es sind keine Normwerte voreingestellt**.
+- Giebelflächen der Dachgauben (m²) sind eine **Zulage**, nicht im CAD. Konsolen (m) und Schutzdach (m) = Summe der Komponentenlängen im Modell; Treppen (Stück) = Anzahl der Treppen-Komponenten.
+
+Materialwert je Gruppe (aus der Stückliste, nach Artikelnummer): KO- = Konsolen, SD- = Schutzdach, SP-001, ST-001, ST-002 = Treppe, alles andere = Gerüst. Die Aufbau- und Abbaustunden werden **im Verhältnis des Materialwerts** auf die Gruppen verteilt.
+
+Preisformeln (alle auf Cent gerundet; faktor = 1 + Zuschlag in %):
+- EP Aufbau bzw. Abbau = Stunden der Gruppe × Stundensatz Fach × faktor ÷ Menge (in diesen Formeln wird nur der Stundensatz Fach verwendet; wo der Stundensatz Helfer eingeht, steht in den nicht gelesenen Zeilen)
+- EP Vorhaltung je Woche = Materialwert der Gruppe × Mietsatz (% je Woche) ÷ 100 × faktor ÷ Menge
+- Stil grundstandzeit: EP = (Stunden × Stundensatz Fach + Materialwert × Mietsatz × 4 Wochen) × faktor ÷ Menge
+- Vorhaltungsmenge = Menge × Gesamtstandzeit in Wochen; entfällt bei Menge 0 oder Standzeit 0
+- GP = Menge × EP × Faktor ÷ 100. **Vorhaltung und Stundenlohn (Titel 12) bekommen keinen Faktor.**
+
+Anpassen von Hand (Schlüssel = Kurztitel der Position, "bleibt stabil, wenn sich die Nummern verschieben"): Menge, EP, Faktor, Streichen (Menge 0, Nummer bleibt). Die Position merkt sich `manuell` und die berechneten Werte (`berechnet`) zum Zurücksetzen.
+**Rangfolge des Faktors:** von Hand je Position > Standardpreis-Faktor aus der Datenpflege je Position > allgemeiner Pauschalfaktor > 100.
+
+Fehlende Preise: Standardpreise aus der Datenpflege füllen nur dort, wo sonst 0 € stehen würde. Positionen mit Menge und ohne Preis bleiben "offen" und stehen in fehlendeAngaben (Stil preisliste: nur, was in der Liste wirklich fehlt).
+
+Herkunftsnachweis (`herkunft`): Modellstand-Hash plus Fingerabdrücke von Stückliste, Stunden und LV-Einstellungen. Status ok, abweichung oder unbekannt; bei Abweichung (Stückliste oder Stunden gehören zu einem anderen Modellstand) erscheint eine Meldung in fehlendeAngaben. Bei von Hand eingegebenen Stunden gibt es keine Prüfung.
+
+Stil "statiker" (Gliederung eines Auftraggeber-LV für Turmeinrüstungen, Zeilen 496 bis 679, nur Kommentare gelesen): Das CAD wird für den 2. Bauabschnitt auf die Rückbauhöhe gekappt (Standard 21,5 m, wenn leer; Reserve darüber auf die nächste Lagenoberkante gerundet); die Plane des 1. BA zählt nur oberhalb der Teilungshöhe minus Überlappung, damit keine Fläche doppelt gerechnet wird; ein gemessener Anbau hat Vorrang, sonst Rückfall auf das Dach des angrenzenden Gebäudeteils (Wandlänge × 1,5 m ÷ cos Neigung, Annahme laut Kommentar); der Aufzug im 2. BA wird nicht gekappt (Vorhaltung wie im 1. BA, nur mit der Standzeit des 2. BA).
+
 ### 3.5 LV → Rechnung (lib/lv-zu-rechnung.ts, gelesen)
 - Jede LV-Position wird eine Rechnungsposition. **Übersprungen** werden Positionen, die entfallen oder Menge 0 oder EP 0 haben; sie werden in einer Liste gemeldet.
 - Mit Faktor in % (ungleich 100): Einzelpreis = Listenpreis × Faktor (preisMitFaktor), Gesamtpreis bleibt Menge × Einzelpreis. Wegen der **Cent-Rundung des Einzelpreises** kann die Rechnungssumme von der LV-Summe abweichen; die Differenz wird als rundungsDifferenz ausgewiesen.
 - Die Rechnungsart (Miete, Regie, Konsolen, Auf-/Abbau, Gerüst ...) wird aus **Schlüsselwörtern im Kurztitel** abgeleitet (Reihenfolge = Vorrang). Titeländerungen können die Art ändern.
 
-### 3.6 Angebotsannahme → Lager und Tour (lib/angebot-annahme.ts, die ersten 70 von 158 Zeilen gelesen)
-- Wird **erst bei Annahme** ausgelöst, nicht beim Speichern, damit für nicht zustande gekommene Aufträge nichts reserviert wird (Entscheidung im Kommentar).
-- Ausgelöst von app/api/public/angebot/route.ts (Kunde nimmt per Link an) und app/api/projects/route.ts (bei "echter Neu-Annahme"; dort auch Nachholen der Fahrt).
-- Material (data.kiResult.materialList) wird nur bei **genauem Namens-Treffer** (ohne Groß-/Kleinschreibung) einem aktiven Lagerartikel zugeordnet, **kein unscharfes Raten**; Nicht-Treffer, zu wenig Bestand und verschiedene Einheiten werden gemeldet und nicht gebucht; Leistungen/Sonderteile (category Sonderteil oder articleNumber SONDER) werden bewusst nicht gebucht.
-- Danach legt lib/auto-tour.ts eine Fahrt an. Die manuellen Knöpfe "Material reservieren" und "Transportauftrag anlegen" bleiben für Fälle ohne Treffer.
+### 3.6 Angebotsannahme → Lager und Tour (lib/angebot-annahme.ts vollständig, lib/lager-zuordnung.ts vollständig, Köpfe von lib/inventory/buchung.ts und lib/auto-tour.ts gelesen)
+- **Auslöser:** (a) Kunde nimmt per Link an (app/api/public/angebot/route.ts, nur bei art "annehmen"; eine zweite Antwort auf ein angenommenes Angebot wird mit 409 abgelehnt); (b) app/api/projects/route.ts, wenn data.angebotsStatus von "nicht angenommen" auf "angenommen" wechselt (Zeile 209), nicht bei jedem weiteren Speichern. Es läuft nach der Antwort (after()) und fängt Fehler ab (beiAngebotsannahmeSicher).
+- **Erst bei Annahme**, nicht beim Speichern: damit für nicht zustande gekommene Aufträge nichts reserviert wird (Entscheidung im Kommentar).
+- **Zuordnung Materialzeile → Lagerartikel (lager-zuordnung.ts):** erst über die **Artikelnummer** (materialList.articleNumber = inventory.sku), dann nur bei genau gleichem Namen (ohne Groß-/Kleinschreibung, getrimmt). **Kein unscharfes Raten.** Hinweis: Der Kopfkommentar von angebot-annahme.ts nennt nur den Namen, die Funktion prüft zuerst die Artikelnummer; ein früherer Stand dieses Dokuments hat dem Kopfkommentar geglaubt.
+- **Einheiten:** Sind beide Einheiten vorhanden und verschieden (nach Normalisierung, z. B. Stk, Stück, St = Stück; m², qm = m²), wird nichts gebucht, die Zeile erscheint unter einheitenKonflikt. Fehlt eine Einheit, wird nicht blockiert.
+- **Leistungen und Sonderteile** (category Sonderteil oder articleNumber SONDER) werden bewusst nicht gebucht.
+- **Buchung je Zeile** über lib/inventory/buchung.ts (eine zentrale Funktion für die manuelle Reservierung, den Transportauftrag und die Annahme-Automatik): Bestand prüfen, **atomar verringern** (optimistic lock laut Kopf), site_stock-Reservierung anlegen, in inventory_transactions protokollieren. Zu wenig Bestand → Zeile unter nichtGenugBestand, nichts gebucht.
+- **Transportauftrag je gebuchter Zeile** (transport_orders, Status pending). Danach legt lib/auto-tour.ts **eine Tour** an (Status planned, am Projektbeginn aus data.step1.projektbeginn, Fahrzeug nach Gewicht, Fahrer = freier Mitarbeiter; Regeln in lib/auto-tour-wahl.ts, nicht gelesen). Findet sich nichts Passendes, gibt es keine Tour, sondern einen Hinweis.
+- **Ergebnis** wird in projects.data.lagerAutomatikErgebnis gespeichert (reserviert, transportAngelegt, nichtGefunden, nichtGenugBestand, einheitenKonflikt, leistungen, tour, hinweis, fehler); laut Kommentar sichtbar im Kunden-Detail. Das Speichern ist "best-effort": schlägt es fehl, wird der Fehler verschluckt.
+- Die manuellen Knöpfe "Material reservieren" und "Transportauftrag anlegen" bleiben für Fälle ohne Treffer.
 
 ### 3.7 Schlussrechnung und Zwischenaufmaß (lib/schlussrechnung.ts, lib/zwischenaufmass.ts, je ca. die ersten 40 bis 55 Zeilen gelesen)
 - Schlussrechnung: Basis "angebot" (Hauptposition = Angebotspreis: KI-/CAD-Kalkulation oder Festpreis × Fläche) oder "aufmass" (aufgemessene Fläche × Preis/m²), dazu Kran, Mietverlängerung, Nachtrag, Statik, Sonderrabatt und optional bestätigte Nachträge. Beträge netto; Rundung auf Cent.
@@ -103,14 +132,18 @@ Parallel dazu gibt es einen zweiten Rechenweg für Material aus dem Aufmaß (sie
 
 **F3 – Übergabe Aufmaß → CAD über den Browser-Tab (niedrig).** Die Zwischenablage ist sessionStorage (CAD_UEBERNAHME_KEY, "nur dieser Browser-Tab"). Ein anderer Tab oder ein anderes Gerät hat sie nicht.
 
-**F4 – Zuordnung Material → Lager über den genauen Namen (mittel, Schlussfolgerung).** Die Namen der Stückliste (aus cad-engine bzw. der Artikeltabelle in scaffold-engine) müssen exakt mit den Namen in der Lagertabelle der Firma übereinstimmen. Wird ein Lagerartikel umbenannt, bleibt die automatische Reservierung für diese Position aus; sie erscheint nur in der Rückmeldung (nichtGefunden). Die Schlussfolgerung beruht auf der Beschreibung im Kopf von angebot-annahme.ts; die Zuordnungslogik selbst (lib/lager-zuordnung.ts) wurde nicht gelesen.
+**F4 – Zuordnung Material → Lager (niedrig, korrigiert).** Die Zuordnung läuft zuerst über die Artikelnummer und erst danach über den genauen Namen. Voraussetzung für die automatische Reservierung ist also, dass die Artikelnummern der Stückliste (z. B. RA-001) mit den SKUs im Lager der Firma übereinstimmen oder die Namen exakt gleich sind. Eine Firma mit eigenen SKUs und abweichenden Namen bekommt keine automatische Reservierung; das erscheint nur in der Rückmeldung (nichtGefunden). Das ist ein Zusammenhang mit F2 (feste Artikelnummern und Namen aus scaffold-engine.ts).
 
 **F5 – Rundung (niedrig).** LV-Summe und Rechnungssumme können wegen der Cent-Rundung des Einzelpreises abweichen; der Code weist die Differenz aus (rundungsDifferenz). Nicht geprüft: ob sie in der Oberfläche sichtbar ist.
 
-## 5. Nicht gelesen (Etappe 2)
+**F6 – Fehlgeschlagener Transportauftrag wird nicht gemeldet (mittel).** In angebot-annahme.ts wird nach erfolgreicher Reservierung der Transportauftrag per POST angelegt; nur bei Erfolg (`transRes.ok`) wird er vermerkt. Schlägt der POST fehl, gibt es keinen else-Zweig und keine Meldung: Das Material ist reserviert, aber kein Transportauftrag existiert und die Tour enthält die Position nicht. (Aus dem Code gelesen, nicht ausgeführt.)
 
-- Rumpf von lib/leistungsverzeichnis.ts (Zeilen 76 bis 876), Rumpf von cad-engine.ts, scaffold-engine.ts und alle Prüfregeln (cad-rules, DIN-Check, Statik-Prüfung)
+**F7 – Keine Rückabwicklung bei Teilfehlern (niedrig, Schlussfolgerung).** Die Reservierungen laufen zeilenweise. Wird die Annahme später widerrufen oder bricht der Lauf mitten in der Liste ab, bleiben bereits gebuchte Zeilen bestehen. Dass es keine Rückabwicklung gibt, ist aus dem Code abgeleitet (keine solche Funktion in angebot-annahme.ts gelesen), nicht durch Test belegt. Offen: Was passiert, wenn der Status von "angenommen" auf etwas anderes und wieder zurück auf "angenommen" gesetzt wird; die Bedingung (Zeile 209) löst dann erneut aus, ob doppelt gebucht wird, ist nicht geprüft.
+
+## 5. Nicht gelesen (Etappe 3)
+
+- Statiker- und Preislisten-Stil des LV im Detail (Zeilen 496 bis 840), Stundenlohn-Titel, geruestText, Kopfzeilen
+- cad-engine.ts-Rumpf (Geometrie, Stückliste, Logistik-Stunden, Statik-Export), scaffold-engine.ts-Rumpf, Prüfregeln (cad-rules, DIN-Check)
 - Aufmaß-Seiten Schritt 1 bis 6 im Detail, API-Routen /api/ki-material, /api/invoices, /api/projekt-lv
-- lib/auto-tour.ts, lib/lager-zuordnung.ts, lib/inventory/buchung.ts (Lager- und Tourenlogik)
-- lib/export (PDF/Excel/E-Rechnung), lib/gaeb.ts, lib/lv-zuordnung.ts, lib/statiker-lv-einlesen.ts
+- lib/auto-tour-wahl.ts, lib/touren, lib/export (PDF/Excel/E-Rechnung), lib/gaeb.ts, lib/lv-zuordnung.ts, lib/statiker-lv-einlesen.ts
 - Mietabrechnung, Standzeit-Abrechnung (Cron), Nachträge, Lohnabrechnung

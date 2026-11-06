@@ -153,3 +153,9 @@ cad-engine.ts (CAD) und scaffold-engine.ts (Aufmaß/KI-Material) berechnen Mater
 
 ### R21 – Feste Artikelpreise im Code als Fallback (mittel, siehe DATA_FLOWS.md F2)
 26 Artikel mit Preisen in scaffold-engine.ts und ein statischer Fallback in article-prices.ts. Widerspricht der Produktregel "Preise gehören in die Firmendaten, nicht in den App-Code"; Wirkung auf neue Kundeninstanzen mit leerem Lager ungeprüft.
+
+### R22 – Transportauftrag-Fehler bei der Annahme-Automatik bleibt unbemerkt (mittel, siehe DATA_FLOWS.md F6)
+lib/angebot-annahme.ts: Schlägt das Anlegen des Transportauftrags nach einer erfolgreichen Reservierung fehl, gibt es keine Meldung. Material reserviert, aber ohne Transportauftrag und ohne Tourposition.
+
+### R23 – Keine Rückabwicklung der automatischen Reservierung (niedrig, Schlussfolgerung, siehe DATA_FLOWS.md F7)
+Teilfehler und Statuswechsel nach "angenommen" haben keine erkennbare Rückabwicklung; erneute Annahme könnte erneut auslösen (nicht geprüft).
