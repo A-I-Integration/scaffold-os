@@ -7,6 +7,11 @@
 //  • E57 (ASTM E2807): Herstellerneutral, z. B. aus RealityCapture, Faro, Leica, Trimble, Agisoft.
 //  • XYZ / PTS / TXT / CSV: Textlisten, eine Zeile je Punkt (x y z, danach beliebig viele Spalten wie Intensität oder Farbe).
 //
+// Farbe: Wo die Datei Farbwerte (R G B) oder nur Intensität enthält, hängt das Ergebnis die Farben als Eigenschaft `.farben`
+// (Uint8Array, 3 Werte je Punkt, gleiche Reihenfolge wie die Punkte) an. Ohne Farbe fehlt die Eigenschaft (Anzeige dann grau).
+// Annahmen bei Textdateien: 6 Spalten = x y z r g b; 7 oder mehr = x y z Intensität r g b; genau 4 = x y z Intensität (→ Grau).
+// Enthält eine Spalte negative Werte (z. B. Normalen), gilt sie nicht als Farbe.
+//
 // Regeln (gleich wie las-laz.js):
 //  • Sehr große Wolken werden gleichmäßig ausgedünnt (jeder n-te Punkt, höchstens MAX_PUNKTE). Das ändert die Maße nicht.
 //  • Koordinaten bleiben wie in der Datei (oft UTM); gerechnet wird in doppelter Genauigkeit.
@@ -20,6 +25,31 @@
 
 // Gleicher Wert wie in las-laz.js; hier getrennt definiert, damit dieses Modul auch im Browser (CAD-Import) ohne laz-perf geladen werden kann.
 const MAX_PUNKTE = 8_000_000;
+
+// ─── Farben ──────────────────────────────────────────────────────────────────
+
+/** Rohwerte (beliebiger Bereich) → 0–255. Bereich 0–1 → ×255; bis 255 → unverändert; größer (z. B. 16 Bit) → auf 255 skaliert. */
+function auf255(roh, n) {
+  let max = 0;
+  for (let i = 0; i < n; i++) if (roh[i] > max) max = roh[i];
+  const f = max <= 0 ? 0 : max <= 1 ? 255 : max <= 255 ? 1 : 255 / max;
+  const aus = new Uint8Array(n);
+  for (let i = 0; i < n; i++) aus[i] = Math.max(0, Math.min(255, Math.round(roh[i] * f)));
+  return aus;
+}
+
+/** Sammelt Farbwerte Punkt für Punkt; `grau` = nur Intensität (ein Wert je Punkt, wird zu R = G = B). */
+function farbSammler(kapazitaet) {
+  const roh = new Float32Array(kapazitaet * 3);
+  let n = 0, ok = true;
+  return {
+    rgb(r, g, b) { if (!(r >= 0 && g >= 0 && b >= 0)) { ok = false; return; } roh[n++] = r; roh[n++] = g; roh[n++] = b; },
+    grau(i) { if (!(i >= 0)) { ok = false; return; } roh[n++] = i; roh[n++] = i; roh[n++] = i; },
+    ungueltig() { ok = false; },
+    ergebnis(anzahlPunkte) { return ok && n === anzahlPunkte * 3 && n > 0 ? auf255(roh, n) : null; },
+  };
+}
+const mitFarben = (punkte, farben) => { if (farben) punkte.farben = farben; return punkte; };
 
 // ─── Textlisten ───────────────────────────────────────────────────────────────
 
@@ -38,6 +68,8 @@ function parseXyz(buf) {
   const schritt = Math.max(1, Math.ceil(zeilen / MAX_PUNKTE));
   const aus = new Float64Array(Math.ceil(zeilen / schritt) * 3 + 3);
   let n = 0, nr = 0, start = 0;
+  const fs = farbSammler(Math.ceil(zeilen / schritt) + 1);
+  let modus = null; // 'rgb3' | 'rgb4' | 'grau' | 'keine' – wird an der ersten Datenzeile festgelegt
   while (start <= buf.length) {
     let ende = buf.indexOf(10, start);
     if (ende < 0) ende = buf.length;
@@ -52,10 +84,16 @@ function parseXyz(buf) {
     if (!(Number.isFinite(x) && Number.isFinite(y) && Number.isFinite(z))) continue; // Kopfzeile (z. B. CSV-Spaltennamen)
     if (zeileNr % schritt !== 0) continue;
     if (n + 3 > aus.length) break;
+    if (modus === null) modus = teile.length === 6 ? 'rgb3' : teile.length >= 7 ? 'rgb4' : teile.length === 4 ? 'grau' : 'keine';
+    if (modus === 'rgb3' || modus === 'rgb4') {
+      const o = modus === 'rgb3' ? 3 : 4;
+      fs.rgb(zahl(teile[o]), zahl(teile[o + 1]), zahl(teile[o + 2]));
+    } else if (modus === 'grau') fs.grau(zahl(teile[3]));
+    else fs.ungueltig();
     aus[n++] = x; aus[n++] = y; aus[n++] = z;
   }
   if (n < 9) throw new Error('Textdatei: keine Punkte gefunden (erwartet: je Zeile x y z, durch Leerzeichen, Komma oder Semikolon getrennt)');
-  return aus.subarray(0, n);
+  return mitFarben(aus.subarray(0, n), fs.ergebnis(n / 3));
 }
 
 
@@ -106,6 +144,7 @@ function parsePtx(buf) {
   const schritt = Math.max(1, Math.ceil(gesamt / MAX_PUNKTE));
   const aus = new Float64Array(Math.ceil(gesamt / schritt) * 3 + 3);
   let n = 0, nr = 0;
+  const fs = farbSammler(Math.ceil(gesamt / schritt) + 1);
   for (const sc of scans) {
     st.pos = sc.start;
     for (let i = 0; i < sc.anzahl && st.pos <= buf.length; i++) {
@@ -115,13 +154,16 @@ function parsePtx(buf) {
       if (!p || (p[0] === 0 && p[1] === 0 && p[2] === 0)) continue;
       const [x, y, zz] = p, M = sc.M;
       if (n + 3 > aus.length) break;
+      const w = zahlen(t, 7);
+      if (w) fs.rgb(w[4], w[5], w[6]); // x y z Intensität r g b
+      else { const g = zahlen(t, 4); if (g) fs.grau(g[3]); else fs.ungueltig(); }
       aus[n++] = x * M[0][0] + y * M[1][0] + zz * M[2][0] + M[3][0];
       aus[n++] = x * M[0][1] + y * M[1][1] + zz * M[2][1] + M[3][1];
       aus[n++] = x * M[0][2] + y * M[1][2] + zz * M[2][2] + M[3][2];
     }
   }
   if (n < 9) throw new Error('PTX: keine gültigen Punkte gefunden');
-  return aus.subarray(0, n);
+  return mitFarben(aus.subarray(0, n), fs.ergebnis(n / 3));
 }
 
 // ─── Mini-XML (nur das, was E57 braucht) ───────────────────────────────────────
@@ -191,7 +233,7 @@ function feldInfo(k) {
     const n = spanne <= 0 ? 0 : Math.ceil(Math.log2(spanne + 1));
     if (n > 45) throw new Error('E57: Zahlenbreite über 45 Bit wird nicht unterstützt – bitte als LAZ/LAS exportieren');
     const skala = typ === 'ScaledInteger' ? Number(k.attrs.scale ?? 1) : 1, versatz = typ === 'ScaledInteger' ? Number(k.attrs.offset ?? 0) : 0;
-    return { art: 'int', bits: n, min, skala, versatz };
+    return { art: 'int', bits: n, min, max, skala, versatz };
   }
   throw new Error(`E57: Feldtyp ${typ} wird nicht unterstützt – bitte als LAZ/LAS exportieren`);
 }
@@ -254,6 +296,7 @@ function parseE57(buf) {
   const schritt = Math.max(1, Math.ceil(gesamt / MAX_PUNKTE));
   const aus = new Float64Array(Math.ceil(gesamt / schritt) * 3 + 3);
   let n = 0;
+  const fs = farbSammler(Math.ceil(gesamt / schritt) + 1);
   for (const sc of info) {
     // Abschnittskopf (32 Byte), dann die Pakete
     let p = logisch(sc.fileOffset);
@@ -282,6 +325,11 @@ function parseE57(buf) {
     const ströme = teile.map((t) => Buffer.concat(t));
     sc.felder.forEach((f, s) => { if (ströme[s].length < stromLaenge(f, sc.anzahl)) throw new Error('E57-Datei ist abgeschnitten oder beschädigt (zu wenige Messwerte)'); });
     const ix = sc.idx('cartesianX'), iy = sc.idx('cartesianY'), iz = sc.idx('cartesianZ'), iv = sc.idx('cartesianInvalidState');
+    const ir = sc.idx('colorRed'), ig = sc.idx('colorGreen'), ib = sc.idx('colorBlue'), ii = sc.idx('intensity');
+    const hatRgb = ir >= 0 && ig >= 0 && ib >= 0;
+    // Ganzzahl-Farben: Wertebereich aus der Datei (z. B. 0–255 oder 0–65535) auf 0–1 bringen; Float-Farben bleiben roh (auf255 entscheidet)
+    const norm = (f) => (f.art === 'int' && f.max > f.min ? 1 / (f.max - f.min) : 1);
+    const wertNorm = (fi, i) => { const f = sc.felder[fi]; const v = lies(f, ströme[fi], i); return f.art === 'int' ? (v - f.min * f.skala - f.versatz) * norm(f) / (f.skala || 1) : v; };
     for (let i = 0; i < sc.anzahl; i += schritt) {
       if (iv >= 0 && lies(sc.felder[iv], ströme[iv], i) !== 0) continue;
       let x = lies(sc.felder[ix], ströme[ix], i), y = lies(sc.felder[iy], ströme[iy], i), z = lies(sc.felder[iz], ströme[iz], i);
@@ -289,11 +337,14 @@ function parseE57(buf) {
       if (sc.R) { const R = sc.R; const a = R[0] * x + R[1] * y + R[2] * z, b = R[3] * x + R[4] * y + R[5] * z, c = R[6] * x + R[7] * y + R[8] * z; x = a; y = b; z = c; }
       if (sc.T) { x += sc.T[0]; y += sc.T[1]; z += sc.T[2]; }
       if (n + 3 > aus.length) break;
+      if (hatRgb) fs.rgb(wertNorm(ir, i), wertNorm(ig, i), wertNorm(ib, i));
+      else if (ii >= 0) fs.grau(wertNorm(ii, i));
+      else fs.ungueltig();
       aus[n++] = x; aus[n++] = y; aus[n++] = z;
     }
   }
   if (n < 9) throw new Error('E57: keine gültigen Punkte gefunden');
-  return aus.subarray(0, n);
+  return mitFarben(aus.subarray(0, n), fs.ergebnis(n / 3));
 }
 
 module.exports = { parseXyz, parseE57, parsePtx, parseXml, bits };

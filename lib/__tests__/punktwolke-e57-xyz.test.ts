@@ -135,3 +135,63 @@ describe('Textlisten (XYZ, PTS, TXT, CSV) lesen', () => {
     expect(m.heightM).toBeGreaterThan(8.0); expect(m.heightM).toBeLessThan(9.0)
   })
 })
+
+describe('Farbe lesen (E57, Textlisten, PTX)', () => {
+  const zeilen = (...z: string[]) => Buffer.from(z.join('\n'), 'latin1')
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const { parsePtx } = require('../../workers/punktwolke/xyz-e57.js')
+
+  it('E57 mit colorRed/Green/Blue (8 Bit, 0–255): Farben stehen in gleicher Reihenfolge wie die Punkte; ungültiger Punkt fällt samt Farbe weg', () => {
+    const xs = [1, 2, 3, 4], f = (name: string, raw: number[]): Feld => ({ name, bits: 8, raw, xml: `<${name} type="Integer" minimum="0" maximum="255"/>` })
+    const koord = (name: string, raw: number[]): Feld => ({ name, bits: 3, raw, xml: `<${name} type="Integer" minimum="0" maximum="7"/>` })
+    const ungueltig: Feld = { name: 'cartesianInvalidState', bits: 2, raw: [0, 1, 0, 0], xml: '<cartesianInvalidState type="Integer" minimum="0" maximum="2"/>' }
+    const datei = baueE57([koord('cartesianX', xs), koord('cartesianY', xs), koord('cartesianZ', xs), ungueltig,
+      f('colorRed', [255, 9, 0, 40]), f('colorGreen', [0, 9, 128, 50]), f('colorBlue', [0, 9, 64, 60])], 4)
+    const p = parseE57(datei) as Float64Array & { farben?: Uint8Array }
+    expect(p.length / 3).toBe(3)
+    expect(Array.from(p.farben!)).toEqual([255, 0, 0, 0, 128, 64, 40, 50, 60])
+  })
+
+  it('E57 mit 16-Bit-Farbe (0–65535) wird auf 0–255 gebracht; ohne Farbfelder gibt es keine Farben', () => {
+    const k = (name: string): Feld => ({ name, bits: 3, raw: [1, 2, 3], xml: `<${name} type="Integer" minimum="0" maximum="7"/>` })
+    const c = (name: string, raw: number[]): Feld => ({ name, bits: 16, raw, xml: `<${name} type="Integer" minimum="0" maximum="65535"/>` })
+    const mit = parseE57(baueE57([k('cartesianX'), k('cartesianY'), k('cartesianZ'), c('colorRed', [65535, 0, 32768]), c('colorGreen', [0, 0, 0]), c('colorBlue', [0, 0, 0])], 3)) as Float64Array & { farben?: Uint8Array }
+    expect(Array.from(mit.farben!.slice(0, 3))).toEqual([255, 0, 0])
+    expect(mit.farben![6]).toBeGreaterThanOrEqual(127); expect(mit.farben![6]).toBeLessThanOrEqual(128)
+    const ohne = parseE57(baueE57([k('cartesianX'), k('cartesianY'), k('cartesianZ')], 3)) as Float64Array & { farben?: Uint8Array }
+    expect(ohne.farben).toBeUndefined()
+  })
+
+  it('Textlisten: 6 Spalten = x y z r g b; 7 Spalten = Intensität dazwischen; 4 Spalten = Intensität als Grau', () => {
+    const a = parseXyz(zeilen('0 0 0 255 0 0', '1 1 1 0 255 0', '2 2 2 0 0 255')) as Float64Array & { farben?: Uint8Array }
+    expect(Array.from(a.farben!)).toEqual([255, 0, 0, 0, 255, 0, 0, 0, 255])
+    const b = parseXyz(zeilen('0 0 0 0.5 10 20 30', '1 1 1 0.5 40 50 60', '2 2 2 0.5 70 80 90')) as Float64Array & { farben?: Uint8Array }
+    expect(Array.from(b.farben!.slice(0, 3))).toEqual([10, 20, 30])
+    const c = parseXyz(zeilen('0 0 0 0', '1 1 1 0.5', '2 2 2 1')) as Float64Array & { farben?: Uint8Array }
+    expect(Array.from(c.farben!)).toEqual([0, 0, 0, 128, 128, 128, 255, 255, 255])
+  })
+
+  it('Textlisten: Normalen (negative Werte) oder fehlende Spalten gelten nicht als Farbe; 3 Spalten = keine Farbe', () => {
+    const n = parseXyz(zeilen('0 0 0 0.1 -0.5 0.8', '1 1 1 0.0 0.0 1.0', '2 2 2 -1 0 0')) as Float64Array & { farben?: Uint8Array }
+    expect(n.farben).toBeUndefined()
+    const l = parseXyz(zeilen('0 0 0 1 2 3', '1 1 1 4 5 6', '2 2 2')) as Float64Array & { farben?: Uint8Array }
+    expect(l.farben).toBeUndefined() // Zeile ohne Farbspalten → nicht durchgehend → keine Farbe (lieber grau als falsch)
+    const d = parseXyz(zeilen('0 0 0', '1 1 1', '2 2 2')) as Float64Array & { farben?: Uint8Array }
+    expect(d.farben).toBeUndefined()
+  })
+
+  it('Textlisten: beim Ausdünnen bleiben Farbe und Punkt zusammen', () => {
+    // genug Zeilen, damit nicht ausgedünnt wird: Farbe = Index → muss zur x-Koordinate passen
+    const z = Array.from({ length: 50 }, (_, i) => `${i} 0 0 ${i} ${i} ${i}`)
+    const p = parseXyz(zeilen(...z)) as Float64Array & { farben?: Uint8Array }
+    for (let i = 0; i < 50; i++) expect(p.farben![i * 3]).toBe(p[i * 3])
+  })
+
+  it('PTX: 7 Spalten (Intensität + RGB) → Farbe; 4 Spalten → Grau aus Intensität', () => {
+    const kopf = ['3', '1', '0 0 0', '1 0 0', '0 1 0', '0 0 1', '1 0 0 0', '0 1 0 0', '0 0 1 0', '0 0 0 1']
+    const mit = parsePtx(zeilen(...kopf, '1 2 3 0.5 255 0 0', '4 5 6 0.5 0 255 0', '7 8 9 0.5 0 0 255')) as Float64Array & { farben?: Uint8Array }
+    expect(Array.from(mit.farben!)).toEqual([255, 0, 0, 0, 255, 0, 0, 0, 255])
+    const grau = parsePtx(zeilen(...kopf, '1 2 3 0', '4 5 6 0.5', '7 8 9 1')) as Float64Array & { farben?: Uint8Array }
+    expect(Array.from(grau.farben!)).toEqual([0, 0, 0, 128, 128, 128, 255, 255, 255])
+  })
+})
