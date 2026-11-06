@@ -1643,6 +1643,17 @@ export function generateCADModel(
       warnings.push({ type: 'info', code: 'TUER_AUFSCHLAG', message: `${aussenTueren.size} Tür(en) öffnen nach außen: der Freiraum umfasst Türbreite plus Flügelweite auf der Anschlagseite (Annahme: der Flügel schlägt bis zur Wand zurück). Seitliche Absicherung an den Enden der Öffnung bitte prüfen.` })
     }
   }
+  // Option „Türen freihalten“ aus: Das Gerüst wird durch die Türen gebaut. Das ist erlaubt (z. B. Tür wird nicht benutzt), aber sonst
+  // ein Fehler mit Sicherheitsfolgen (Zugang versperrt, bei Aufschlag nach außen sogar Tür nicht zu öffnen) – deshalb deutlich melden.
+  else if (opt?.tuerenFreihalten === false && !(building.umriss && building.umriss.length >= 3)) {
+    const zugebaut = generateBuildingFeatures(building).filter((f) => f.type === 'door').filter((t) => {
+      const spec = building.tueren?.find((x) => `door-${x.id}` === t.id)
+      const flWeite = spec?.aufschlag === 'aussen' ? t.widthM / (spec?.fluegel === 2 ? 2 : 1) : 0
+      return fields.some((f) => f.side === t.side && f.levelIndex === 0 && ueberdeckt(t.offsetAlongM - t.widthM / 2 - flWeite, t.offsetAlongM + t.widthM / 2 + flWeite, feldEntlangFassade(f.side, f.positionX, f.positionZ, building), f.lengthM))
+    })
+    if (zugebaut.length > 0) warnings.push({ type: 'warning', code: 'TUER_ZUGEBAUT', message: `${zugebaut.length} Tür(en) werden vom Gerüst überbaut (Belag, Rahmen und Geländer laufen durch die Türöffnung), weil „Türen freihalten“ ausgeschaltet ist. Die Tür ist so nicht benutzbar${zugebaut.some((t) => building.tueren?.find((x) => `door-${x.id}` === t.id)?.aufschlag === 'aussen') ? '; bei Aufschlag nach außen lässt sie sich auch nicht öffnen' : ''}. Bitte „Türen freihalten“ einschalten, wenn die Tür gebraucht wird.` })
+  }
+
 
   if (lueckeFelder > 0 || luecken.front.length + luecken.back.length + luecken.left.length + luecken.right.length > 0) {
     const nAus = (building.balconies ?? []).filter((b) => b.modus === 'ausgespart').length

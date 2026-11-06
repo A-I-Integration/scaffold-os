@@ -43,6 +43,15 @@ export default function TuerEditor({ building, onChange }: Props) {
         Die Mitte wird ab Fassadenmitte gemessen (0 = Mitte, minus = links). Wenn „Türen freihalten“ an ist, bleibt die Türöffnung frei von Stangen: Die Felder davor entfallen über so viele Lagen, bis der Durchgangsrahmen-Binder über der Tür liegt, und die Randfelder links und rechts werden verstärkt. Bei Aufschlag nach außen wird zusätzlich Platz für den Flügel freigehalten.
         {imUmriss && ' Im Umriss-Modus gilt die Einzelplanung noch nicht.'}
       </p>
+      {tueren.length > 0 && !imUmriss && building.geruestOptionen?.tuerenFreihalten === false && (
+        <div role='alert' className='rounded-lg border border-red-200 bg-red-50 p-2 text-[11px] text-red-800 space-y-1.5'>
+          <div>„Türen freihalten“ ist ausgeschaltet: Das Gerüst wird durch die Türen gebaut, die Türen sind so nicht benutzbar.</div>
+          <button type='button' className='rounded-lg bg-[#e8590c] px-2.5 py-1 text-[11px] font-medium text-white hover:bg-[#d04f0b]'
+            onClick={() => { const { tuerenFreihalten: _weg, ...rest } = building.geruestOptionen ?? {}; void _weg; onChange({ ...building, geruestOptionen: Object.keys(rest).length ? rest : undefined }) }}>
+            Türen freihalten einschalten
+          </button>
+        </div>
+      )}
       {tueren.map((t, idx) => (
         <div key={t.id} className='rounded-lg border border-black/10 bg-white/70 p-2 space-y-1.5'>
           <div className='grid grid-cols-2 gap-1.5'>
