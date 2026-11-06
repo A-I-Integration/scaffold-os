@@ -39,6 +39,8 @@ export interface AngebotsannahmeErgebnis {
   nichtGenugBestand: string[];
   /** Material und Lagerartikel gefunden, aber Einheiten verschieden (z. B. m² gegen Stück): nichts gebucht. */
   einheitenKonflikt: string[];
+  /** Material ist reserviert, aber der Transportauftrag konnte nicht angelegt werden (Fehlertext je Zeile). */
+  transportFehler?: string[];
   /** Leistungen/Sonderteile im Angebot: bewusst nicht ans Lager gebucht (keine Meldung „nicht gefunden“). */
   leistungen?: string[];
   /** Technischer Fehler beim Lauf (sonst nicht sichtbar). */
@@ -102,15 +104,23 @@ export async function beiAngebotsannahme(projectId: string): Promise<Angebotsann
     }
     ergebnis.reserviert.push(zeile.name);
 
-    // Transportauftrag anlegen (gleiche Logik wie /api/transport-orders POST)
-    const transRes = await fetch(`${url}/rest/v1/transport_orders`, {
-      method: 'POST', headers: { ...headers, Prefer: 'return=representation' },
-      body: JSON.stringify({ inventory_id: treffer.id, quantity: zeile.quantity, to_project_id: projectId, status: 'pending' }),
-    });
-    if (transRes.ok) {
-      ergebnis.transportAngelegt.push(zeile.name);
-      const neu = (await transRes.json().catch(() => null))?.[0];
-      if (neu?.id) { transportIds.push(neu.id); positionen.push({ sku: treffer.sku || '', quantity: zeile.quantity }); }
+    // Transportauftrag anlegen (gleiche Logik wie /api/transport-orders POST).
+    // Schlägt das fehl, ist das Material schon reserviert: Das muss sichtbar werden (transportFehler),
+    // damit keine Position reserviert ist, aber ohne Transportauftrag und ohne Tour bleibt.
+    try {
+      const transRes = await fetch(`${url}/rest/v1/transport_orders`, {
+        method: 'POST', headers: { ...headers, Prefer: 'return=representation' },
+        body: JSON.stringify({ inventory_id: treffer.id, quantity: zeile.quantity, to_project_id: projectId, status: 'pending' }),
+      });
+      if (transRes.ok) {
+        ergebnis.transportAngelegt.push(zeile.name);
+        const neu = (await transRes.json().catch(() => null))?.[0];
+        if (neu?.id) { transportIds.push(neu.id); positionen.push({ sku: treffer.sku || '', quantity: zeile.quantity }); }
+      } else {
+        (ergebnis.transportFehler ??= []).push(`${zeile.name}: Transportauftrag nicht angelegt (Status ${transRes.status})`);
+      }
+    } catch (e: unknown) {
+      (ergebnis.transportFehler ??= []).push(`${zeile.name}: Transportauftrag nicht angelegt (${e instanceof Error ? e.message : String(e)})`);
     }
   }
 
