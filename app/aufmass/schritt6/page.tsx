@@ -675,11 +675,6 @@ function Schritt6Content() {
       alert('✅ Projekt gespeichert! ID: ' + result.id);
     } catch (err: any) { alert('❌ Speichern fehlgeschlagen: ' + err.message); } finally { setIsSaving(false); }
   }
-  async function handleSaveStueckliste() {
-    if (!kiResult) { alert('Bitte zuerst KI-Berechnung durchführen!'); return; }
-    if (!savedProjectId) { alert('Bitte zuerst "Projekt speichern" klicken!'); return; }
-    try { const res = await fetch('/api/stueckliste', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ projectId: savedProjectId, materialList: kiResult.materialList }) }); if (!res.ok) throw new Error('Fehler'); alert('✅ Stückliste gespeichert!'); } catch { alert('❌ Fehler beim Speichern der Stückliste'); }
-  }
   function handleManualEdit() {
     if (!kiResult) { alert('Bitte zuerst KI-Berechnung durchführen!'); return; }
     if (!editMode) { setEditedMaterials(kiResult.materialList.map((item: any) => ({ ...item }))); } else {
@@ -1450,8 +1445,7 @@ function Schritt6Content() {
               )}
 
               {kiResult && (
-                <div className="grid grid-cols-3 gap-2 mt-3 pt-3 border-t border-black/10">
-                  <button onClick={handleSaveStueckliste} className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-black/10 bg-white hover:bg-black/5 py-2 text-xs font-semibold text-[#1d1d1f] transition-colors"><Save className="w-3.5 h-3.5" />Stückliste</button>
+                <div className="grid grid-cols-2 gap-2 mt-3 pt-3 border-t border-black/10">
                   <button onClick={handlePDF} className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-black/10 bg-white hover:bg-black/5 py-2 text-xs font-semibold text-[#1d1d1f] transition-colors"><FileText className="w-3.5 h-3.5" />Angebot PDF</button>
                   <button onClick={handleManualEdit} className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-black/10 bg-white hover:bg-black/5 py-2 text-xs font-semibold text-[#1d1d1f] transition-colors">{editMode ? <Check className="w-3.5 h-3.5" /> : <Pencil className="w-3.5 h-3.5" />}{editMode ? 'Fertig' : 'Manuell'}</button>
                 </div>
@@ -1532,7 +1526,7 @@ function Schritt6Content() {
                     </div>
                   </div>
                 )}
-                <KIMaterialResult result={kiResult} loading={kiLoading} onSaveStueckliste={handleSaveStueckliste} onGeneratePDF={handlePDF} onManualEdit={handleManualEdit} />
+                <KIMaterialResult result={kiResult} loading={kiLoading} onGeneratePDF={handlePDF} onManualEdit={handleManualEdit} />
               </div>
             )}
 

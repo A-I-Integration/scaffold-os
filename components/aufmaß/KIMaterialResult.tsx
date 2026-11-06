@@ -11,12 +11,11 @@ import { KIAnalysis, MaterialItem } from '@/types/scaffold';
 interface Props {
   result: KIAnalysis | null;
   loading?: boolean;
-  onSaveStueckliste?: () => void;
   onGeneratePDF?: () => void;
   onManualEdit?: () => void;
 }
 
-export default function KIMaterialResult({ result, loading, onSaveStueckliste, onGeneratePDF, onManualEdit }: Props) {
+export default function KIMaterialResult({ result, loading, onGeneratePDF, onManualEdit }: Props) {
   const [expandedCategories, setExpandedCategories] = useState<Set<string>>(
     new Set()
   );
@@ -324,13 +323,6 @@ export default function KIMaterialResult({ result, loading, onSaveStueckliste, o
 
       {/* --- AKTIONEN --- */}
       <div className="flex flex-col gap-3 sm:flex-row">
-        <button 
-          onClick={onSaveStueckliste}
-          className="flex-1 rounded-xl bg-blue-600 py-3 font-semibold text-white transition-colors hover:bg-blue-500 disabled:opacity-50"
-          disabled={!onSaveStueckliste}
-        >
-          📋 Als Stückliste speichern
-        </button>
         <button 
           onClick={onGeneratePDF}
           className="flex-1 rounded-xl bg-orange-600 py-3 font-semibold text-white transition-colors hover:bg-orange-500 disabled:opacity-50"
