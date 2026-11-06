@@ -61,7 +61,7 @@ describe('Service Worker – Regeln', () => {
   })
   it('API, Anmeldung und Überwachung gehen nie durch den Worker; POST auch nicht', async () => {
     const w = baue(netz)
-    for (const p of ['/api/projects', '/login', '/auth/callback', '/monitoring', '/statiker']) expect(await w.anfrage(p, { navigate: p !== '/api/projects' })).toBeNull()
+    for (const p of ['/api/invoices', '/api/email', '/login', '/auth/callback', '/monitoring', '/statiker']) expect(await w.anfrage(p, { navigate: !p.startsWith('/api/') })).toBeNull()
     expect(await w.anfrage('/cad', { navigate: true, method: 'POST' })).toBeNull()
   })
   it('CAD-Seite: online geladen und abgelegt; offline kommt die Kopie; Skriptdateien der Seite sind danach auch offline da', async () => {
@@ -107,5 +107,34 @@ describe('Service Worker – Regeln', () => {
     const n = w.abrufe.length
     await (await w.anfrage('/draco/draco_decoder.wasm'))!
     expect(w.abrufe.length).toBe(n)
+  })
+
+  it('Stufe 2: Kundenliste online geladen → offline kommt die letzte Kopie mit Hinweis-Kopfzeile', async () => {
+    const json = (t: unknown) => basic(new Response(JSON.stringify(t), { status: 200, headers: { 'content-type': 'application/json' } }))
+    const w = baue((u) => (new URL(u, 'https://app.test').pathname === '/api/kunden' ? (online ? json({ success: true, kunden: [{ id: 1 }] }) : Promise.reject(new Error('offline'))) : html('x')))
+    const a = await (await w.anfrage('/api/kunden'))!
+    expect((await a.json()).kunden).toHaveLength(1)
+    expect(a.headers.get('x-offline-kopie')).toBeNull()
+    online = false
+    const b = await (await w.anfrage('/api/kunden'))!
+    expect(b.headers.get('x-offline-kopie')).toBe('1')
+    expect((await b.json()).kunden[0].id).toBe(1)
+  })
+  it('Stufe 2: Projekt nach ID wird je Adresse einzeln abgelegt; unbekannte Adresse offline = Fehler (kein erfundenes Ergebnis)', async () => {
+    const json = (t: unknown) => basic(new Response(JSON.stringify(t), { status: 200, headers: { 'content-type': 'application/json' } }))
+    const w = baue((u) => (online ? json({ url: u }) : Promise.reject(new Error('offline'))))
+    await (await w.anfrage('/api/projects?id=7'))!
+    online = false
+    const ok = await (await w.anfrage('/api/projects?id=7'))!
+    expect((await ok.json()).url).toContain('id=7')
+    await expect(w.anfrage('/api/projects?id=8')).rejects.toBeTruthy()
+  })
+  it('Stufe 2: Fehlerantworten (401, 500) und Nicht-JSON werden nicht als Kopie abgelegt; Schreibzugriffe gehen nie durch', async () => {
+    const w = baue(() => basic(new Response('<html>Login</html>', { status: 200, headers: { 'content-type': 'text/html' } })))
+    await (await w.anfrage('/api/kunden'))!
+    const w2 = baue(() => basic(new Response('{"error":"x"}', { status: 401, headers: { 'content-type': 'application/json' } })))
+    await (await w2.anfrage('/api/kunden'))!
+    for (const x of [w, w2]) expect([...x.speicher.values()].some((c) => c.has('/api/kunden'))).toBe(false)
+    expect(await w.anfrage('/api/kunden', { method: 'POST' })).toBeNull()
   })
 })
