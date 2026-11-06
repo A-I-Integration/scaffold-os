@@ -26,7 +26,7 @@ export interface GltfGebaeudeMasse {
 }
 
 export type GltfErgebnis =
-  | { ok: true; dreiecke: Float32Array; anzahl: number; gebaeude?: GltfGebaeudeMasse }
+  | { ok: true; dreiecke: Float32Array; anzahl: number; /** Eckfarben (RGB 0–255, 9 Werte je Dreieck), nur wenn alle Teile Vertex-Farben haben */ farben?: Uint8Array; gebaeude?: GltfGebaeudeMasse }
   | { ok: false; grund: 'defekt' | 'leer' | 'zu-gross'; meldung: string }
 
 const ZUSATZ = 'Bitte die Datei als IFC oder OBJ exportieren.'
@@ -85,6 +85,8 @@ function gebaeudeMasseAusSzene(wurzel: Object3D): GltfGebaeudeMasse | undefined 
 export function dreieckeAusSzene(wurzel: Object3D, ausschliessen?: (name: string) => boolean): GltfErgebnis {
   wurzel.updateMatrixWorld(true)
   const teile: Float32Array[] = []
+  const farbTeile: Uint8Array[] = []
+  let alleMitFarbe = true
   let anzahl = 0
   const p = new Vector3()
   let kaputt = false
@@ -102,13 +104,18 @@ export function dreieckeAusSzene(wurzel: Object3D, ausschliessen?: (name: string
     anzahl += n
     if (anzahl > GLTF_MAX_DREIECKE) return
     const aus = new Float32Array(n * 9)
+    const col = g.getAttribute('color')
+    const fa = col && col.itemSize >= 3 ? new Uint8Array(n * 9) : null
+    if (!fa) alleMitFarbe = false
     for (let i = 0; i < n * 3; i++) {
       const vi = index ? index.getX(i) : i
       if (vi >= pos.count) { kaputt = true; return }
+      if (fa && col) { fa[i * 3] = Math.round(col.getX(vi) * 255); fa[i * 3 + 1] = Math.round(col.getY(vi) * 255); fa[i * 3 + 2] = Math.round(col.getZ(vi) * 255) }
       p.fromBufferAttribute(pos, vi).applyMatrix4(m.matrixWorld)
       aus[i * 3] = p.x; aus[i * 3 + 1] = p.y; aus[i * 3 + 2] = p.z
     }
     teile.push(aus)
+    farbTeile.push(fa ?? new Uint8Array(n * 9))
   })
   if (anzahl > GLTF_MAX_DREIECKE) return { ok: false, grund: 'zu-gross', meldung: `Das Modell hat mehr als ${GLTF_MAX_DREIECKE / 1e6} Mio. Dreiecke und ist zu groß für den Import. ${ZUSATZ}` }
   if (kaputt) return { ok: false, grund: 'defekt', meldung: `Die konvertierte Datei ist beschädigt (ungültige Verweise auf Eckpunkte). ${ZUSATZ}` }
@@ -116,11 +123,13 @@ export function dreieckeAusSzene(wurzel: Object3D, ausschliessen?: (name: string
   const dreiecke = new Float32Array(anzahl * 9)
   let o = 0
   for (const t of teile) { dreiecke.set(t, o); o += t.length }
+  const farben = alleMitFarbe ? new Uint8Array(anzahl * 9) : null
+  if (farben) { let fo = 0; for (const t of farbTeile) { farben.set(t, fo); fo += t.length } }
   for (let i = 0; i < dreiecke.length; i++) {
     if (!Number.isFinite(dreiecke[i])) return { ok: false, grund: 'defekt', meldung: `Die konvertierte Datei enthält ungültige Koordinaten. ${ZUSATZ}` }
   }
   const gebaeude = gebaeudeMasseAusSzene(wurzel)
-  return { ok: true, dreiecke, anzahl, ...(gebaeude ? { gebaeude } : {}) }
+  return { ok: true, dreiecke, anzahl, ...(farben ? { farben } : {}), ...(gebaeude ? { gebaeude } : {}) }
 }
 
 export function dreieckeAusGltf(daten: ArrayBuffer | string, ausschliessen?: (name: string) => boolean): Promise<GltfErgebnis> {
