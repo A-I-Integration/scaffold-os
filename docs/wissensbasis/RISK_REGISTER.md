@@ -165,3 +165,8 @@ Gespeichert in projects.data.lagerAutomatikErgebnis, aber keine Anzeige im Code;
 
 Status R22 und R24 (06.11.2026): Fix vorbereitet auf Branch fix/annahme-ergebnis-sichtbar (neues Feld transportFehler, try/catch um den Transportauftrag, Anzeige an components/KundeAuftrag.tsx über components/LagerAutomatikHinweis.tsx,
 2 neue Testdateien). Syntax geprüft, die Anzeige-Funktion in Node ausgeführt; die Vitest-Läufe und tsc stehen auf dem Mac der Nutzerin noch aus.
+
+Ergänzung R20 (06.11.2026, gemessen): Dasselbe Gebäude ergibt im CAD-Weg 15 bis 28 % geringere Materialkosten und 12 bis 24 % weniger Gewicht als im Aufmaß-Weg (fünf Größen von 8 × 4,5 m bis 40 × 19,5 m, Fläche jeweils identisch). Siehe DATA_FLOWS.md F1. Absicherung der Gleichheit von Fläche und Artikelpreisen: Test auf Branch test/engine-abgleich.
+
+### R25 – Verschiedene Regeln für Anker, Diagonalen und Kupplungen (hoch, fachliche Entscheidung nötig)
+Gleiches Gebäude, verschiedene Stückliste (siehe DATA_FLOWS.md F1): z. B. bei 8 × 4,5 m im CAD-Weg 0 Anker, im Aufmaß-Weg 4; Diagonalen im Aufmaß-Weg 4- bis 5-mal so viele. Welche Regel gilt, entscheidet nicht der Code, sondern Statik und Zulassung (offen). Solange das offen ist, hängt Angebotspreis und Materialplanung davon ab, ob der Auftrag über das Aufmaß oder das CAD gerechnet wurde.
