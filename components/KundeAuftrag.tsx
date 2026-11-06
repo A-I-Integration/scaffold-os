@@ -4,6 +4,7 @@ import { useState, useCallback } from 'react';
 import { FileText, Download, Mail, Check, RotateCcw, Image as ImageIcon, ClipboardList, Plus, ChevronDown, ChevronUp } from 'lucide-react';
 import NachtraegeBlock from '@/components/NachtraegeBlock';
 import ZwischenaufmassBlock from '@/components/ZwischenaufmassBlock';
+import LagerAutomatikHinweis from '@/components/LagerAutomatikHinweis';
 import SchlussrechnungDialog from '@/components/SchlussrechnungDialog';
 import EmailVerlaufDialog, { type EmailVerlaufEintrag } from '@/components/EmailVerlaufDialog';
 import { generateInvoicePDF, fmtEur, fmtDate, holePdfBase64FuerVersand, type Invoice } from '@/lib/invoice-pdf';
@@ -194,6 +195,9 @@ export default function KundeAuftrag({
           </a>
         </div>
       </div>
+
+      {/* ─── Lager und Fahrt nach Angebots-Annahme (Ergebnis der Automatik) ─── */}
+      <LagerAutomatikHinweis ergebnis={project.data?.lagerAutomatikErgebnis} />
 
       {/* ─── Rechnungen dieses Auftrags ─── */}
       <div className="px-5 py-3">
