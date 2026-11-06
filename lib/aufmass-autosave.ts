@@ -1,4 +1,5 @@
 // Client-Teil des Auto-Speicherns bei Bestandsprojekten (siehe aufmass-autosave-regeln.ts).
+import { merkeSchritt, schrittErledigt, istNetzFehler } from '@/lib/offline/nachsenden';
 import { type AutosaveSchritt, istSchrittGeaendert, stabilJson } from '@/lib/aufmass-autosave-regeln';
 
 // Zuletzt erfolgreich gespeicherter Stand je Projekt+Schritt (nur in dieser Browser-Sitzung).
@@ -9,14 +10,20 @@ let kette: Promise<unknown> = Promise.resolve();
 async function einmal(projectId: string, schritt: AutosaveSchritt, form: unknown): Promise<void> {
   const key = `${projectId}:${schritt}`;
   if (!istSchrittGeaendert(basen.get(key), form)) return;
-  const res = await fetch('/api/projects', {
-    method: 'PATCH',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ id: projectId, autosave: true, data: { [schritt]: form } }),
-  });
+  let res: Response;
+  try {
+    res = await fetch('/api/projects', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: projectId, autosave: true, data: { [schritt]: form } }),
+    });
+  } catch (e) {
+    if (istNetzFehler(e)) merkeSchritt(projectId, schritt, form); // kein Netz → merken, beim nächsten Netz erneut senden
+    throw e;
+  }
   // Basis nur nach Erfolg setzen – bei Fehler versucht das nächste "Weiter" es erneut.
   // 409 (Projekt abgeschlossen) ist endgültig → nicht jedes Mal erneut anfragen.
-  if (res.ok || res.status === 409) basen.set(key, stabilJson(form));
+  if (res.ok || res.status === 409) { basen.set(key, stabilJson(form)); schrittErledigt(projectId, schritt); }
 }
 
 /** Speichert data.<schritt> eines Bestandsprojekts still im Hintergrund. Wirft nie, blockiert nie. */

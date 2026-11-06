@@ -12,6 +12,8 @@
 // setzt entwurf auf false und räumt den Schlüssel auf.
 // ============================================================
 
+import { merkeEntwurf, entwurfErledigt, istNetzFehler } from '@/lib/offline/nachsenden';
+
 export const ENTWURF_ID_KEY = 'scaffold_entwurf_id';
 // Eigener Status, damit Entwürfe nicht in Wochenplanung, Miete, Abrechnung
 // u. Ä. auftauchen (alle filtern auf status = 'active').
@@ -77,7 +79,9 @@ async function speichereEntwurfEinmal(): Promise<void> {
 
 /** Speichert den aktuellen Stand von Schritt 1–5 als Entwurf. Wirft nie. */
 export function speichereEntwurf(): Promise<void> {
-  const lauf = kette.then(() => speichereEntwurfEinmal()).catch(() => { /* Entwurf ist best-effort */ });
+  const lauf = kette
+    .then(async () => { await speichereEntwurfEinmal(); entwurfErledigt(); })
+    .catch((e) => { if (istNetzFehler(e)) merkeEntwurf(); /* sonst: Entwurf ist best-effort */ });
   kette = lauf;
   return lauf;
 }
