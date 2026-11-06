@@ -11,12 +11,12 @@ import type { Draufsicht } from '@/lib/cad/scan-zusammenfuehren'
 import type { V3 } from '@/lib/cad/registrierung'
 import type { AussehenErgebnis } from '@/lib/cad/modell-aussehen'
 
-interface Geladen { name: string; punkte: Float64Array; weg: Weg; paare: { von: V3; nach: V3 }[]; sicht: Draufsicht | null }
+interface Geladen { name: string; punkte: Float64Array; farben?: Uint8Array; weg: Weg; paare: { von: V3; nach: V3 }[]; sicht: Draufsicht | null }
 export default function ScanZusammenfuehren({ onFertig, onSchliessen }: { onFertig: (e: Extract<AussehenErgebnis, { ok: true }>) => void; onSchliessen: () => void }) {
   const [scans, setScans] = useState<Geladen[]>([])
   const [meldung, setMeldung] = useState('')
   const [laedt, setLaedt] = useState(false)
-  const [ergebnis, setErgebnis] = useState<{ punkte: Float64Array; liste: ScanErgebnis[]; uebernommen: number } | null>(null)
+  const [ergebnis, setErgebnis] = useState<{ punkte: Float64Array; farben?: Uint8Array; liste: ScanErgebnis[]; uebernommen: number } | null>(null)
   const [wahl, setWahl] = useState(1)                       // welcher Scan wird von Hand ausgerichtet
   const [offenNach, setOffenNach] = useState<V3 | null>(null) // Punkt im ersten Scan, wartet auf den Gegenpunkt
 
@@ -28,7 +28,7 @@ export default function ScanZusammenfuehren({ onFertig, onSchliessen }: { onFert
       if (!istScanEndung(f.name)) { fehler.push(`${f.name}: kein Scan-Format (E57, PTX, LAS, XYZ/PTS)`); continue }
       try {
         const punkte = punkteAusScanDaten(await f.arrayBuffer(), f.name)
-        neu.push({ name: f.name, punkte, weg: 'automatisch', paare: [], sicht: erzeugeDraufsicht(punkte, 0.1) })
+        neu.push({ name: f.name, punkte, farben: punkte.farben, weg: 'automatisch', paare: [], sicht: erzeugeDraufsicht(punkte, 0.1) })
       } catch (e) { fehler.push(`${f.name}: ${e instanceof Error ? e.message : 'nicht lesbar'}`) }
     }
     setScans((alt) => [...alt, ...neu])
@@ -58,15 +58,15 @@ export default function ScanZusammenfuehren({ onFertig, onSchliessen }: { onFert
   function rechne() {
     setMeldung('')
     try {
-      const r = fuehreScansZusammen(scans.map((s) => ({ name: s.name, punkte: s.punkte, weg: s.weg, paare: s.paare })))
-      setErgebnis({ punkte: r.punkte, liste: r.ergebnisse, uebernommen: r.uebernommen })
+      const r = fuehreScansZusammen(scans.map((s) => ({ name: s.name, punkte: s.punkte, farben: s.farben, weg: s.weg, paare: s.paare })))
+      setErgebnis({ punkte: r.punkte, farben: r.farben, liste: r.ergebnisse, uebernommen: r.uebernommen })
     } catch (e) { setMeldung('Zusammenführen fehlgeschlagen: ' + (e instanceof Error ? e.message : 'Fehler')) }
   }
 
   function uebernehmen() {
     if (!ergebnis) return
-    const { positionen, anzahl } = fuerAnzeige(ergebnis.punkte)
-    const farben = new Uint8Array(positionen.length).fill(190)
+    const { positionen, anzahl, farben: echte } = fuerAnzeige(ergebnis.punkte, undefined, ergebnis.farben)
+    const farben = echte ?? new Uint8Array(positionen.length).fill(190)
     onFertig({
       ok: true, oben: 'z',
       aussehen: { art: 'punkte', name: `Zusammengeführt (${ergebnis.uebernommen} Scans)`, positionen, farben },
