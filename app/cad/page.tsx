@@ -1127,7 +1127,9 @@ export default function CADPage() {
                             if (!r.ok) { setAussehenHinweis(r.meldung); return }
                             const q = punkteAusDreiecken(r.dreiecke, { zentriert: aussehen.zentriert ?? 'geometrie', versatzX: aussehenVersatz.x, versatzZ: aussehenVersatz.z, drehungGrad: aussehenVersatz.grad })
                             if (!q) { setAussehenHinweis('Im Modell wurden keine Flächen gefunden.'); return }
-                            setOeffnungen(erkenneOeffnungen(q.px, q.py, q.pz, building))
+                            const erg = erkenneOeffnungen(q.px, q.py, q.pz, building, { minAbdeckung: 0.6 })
+                            if (!erg.waende.some((w) => w.ausgewertet)) erg.hinweise.push('Das 3D-Modell passt nicht zu den Gebäudemaßen oder enthält mehr als nur dieses Haus (Nachbarhaus, Bäume, Straße): Die Fassaden liegen nicht dort, wo das Gerüst steht. Messen ist hier nicht möglich; bitte Türen von Hand eintragen oder ein Modell nur mit dem Gebäude laden.')
+                            setOeffnungen(erg)
                           } catch (e) { setAussehenHinweis('Öffnungen konnten nicht gemessen werden: ' + ((e as Error).message || 'Fehler')) }
                         }}>🚪 Öffnungen messen</button>
                     )}
