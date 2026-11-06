@@ -28,7 +28,7 @@ export interface WandBefund { seite: OeffnungsSeite; ebeneM: number; abdeckung: 
 export interface OeffnungsErgebnis { oeffnungen: Oeffnung[]; waende: WandBefund[]; hinweise: string[] }
 
 export interface OeffnungsGebaeude { lengthM: number; widthM: number; heightM: number; sides: OeffnungsSeite[]; sections?: unknown[]; umriss?: unknown[] }
-export interface OeffnungsOptionen { zelleM?: number; ebeneToleranzM?: number; minAbdeckung?: number }
+export interface OeffnungsOptionen { zelleM?: number; ebeneToleranzM?: number; minAbdeckung?: number; /** RGB (0–255, 3 Werte je Punkt): Öffnungen auch an abweichender Farbe in der Wandebene erkennen (Tür, Fenster, Glas) */ farben?: ArrayLike<number> }
 
 const SEITEN_NAME: Record<OeffnungsSeite, string> = { front: 'vorne', back: 'hinten', left: 'links', right: 'rechts' }
 const r05 = (v: number): number => Math.round(v / 0.05) * 0.05
@@ -69,12 +69,33 @@ export function erkenneOeffnungen(px: ArrayLike<number>, py: ArrayLike<number>, 
     const nx = Math.max(1, Math.round(laenge / zelle)), ny = Math.max(1, Math.round(H / zelle))
     const dx = laenge / nx, dy = H / ny
     const wand = new Uint8Array(nx * ny)
+    const fa = opt.farben
+    const qf = (i: number): number => ((fa![i * 3] >> 5) << 6) | ((fa![i * 3 + 1] >> 5) << 3) | (fa![i * 3 + 2] >> 5)
+    // Farbmodus: Wandfarben = Farben, die in der Wandebene oft vorkommen (Putz, Sockel); alles andere (Tür, Fenster) zählt als Öffnung
+    let wandFarbe: Set<number> | null = null
+    if (fa) {
+      const zaehl = new Map<number, number>(); let gesamt = 0
+      for (let i = 0; i < n; i++) {
+        const { nn, a, h } = hole(i)
+        if (Math.abs(nn - ebene) > tol || Math.abs(a) > laenge / 2 || h < 0 || h > H) continue
+        const q = qf(i); zaehl.set(q, (zaehl.get(q) ?? 0) + 1); gesamt++
+      }
+      wandFarbe = new Set<number>()
+      for (const [q, c] of zaehl) if (c >= gesamt * 0.05) wandFarbe.add(q)
+    }
+    const zellFarbe = wandFarbe ? new Map<number, Map<number, number>>() : null
     for (let i = 0; i < n; i++) {
       const { nn, a, h } = hole(i)
       if (Math.abs(nn - ebene) > tol) continue
       const cx = Math.floor((a + laenge / 2) / dx), cy = Math.floor(h / dy)
-      if (cx >= 0 && cx < nx && cy >= 0 && cy < ny) wand[cy * nx + cx] = 1
+      if (cx >= 0 && cx < nx && cy >= 0 && cy < ny) {
+        if (zellFarbe && wandFarbe) {
+          const k = cy * nx + cx, q = qf(i), m = zellFarbe.get(k) ?? new Map<number, number>()
+          m.set(q, (m.get(q) ?? 0) + 1); zellFarbe.set(k, m)
+        } else wand[cy * nx + cx] = 1
+      }
     }
+    if (zellFarbe) for (const [k, m] of zellFarbe) { let w = 0, a = 0; for (const [q, c] of m) { if (wandFarbe!.has(q)) w += c; else a += c } if (w > a) wand[k] = 1 }
     let belegt = 0
     for (let k = 0; k < wand.length; k++) belegt += wand[k]
     const abdeckung = belegt / wand.length
@@ -82,6 +103,8 @@ export function erkenneOeffnungen(px: ArrayLike<number>, py: ArrayLike<number>, 
     waende.push({ seite, ebeneM: r2(ebene), abdeckung: r2(abdeckung), ausgewertet: true })
 
     // Leere Zellen zu Gruppen zusammenfassen (4er-Nachbarschaft); Randzellen der Wand zählen nicht mit
+    // Farbmodus: Rahmen und Sprossen trennen Flächen, deshalb 5×5-Umgebung statt direkter Nachbarn
+    const nachbarn = (cx: number, cy: number): number[][] => { if (!fa) return [[cx - 1, cy], [cx + 1, cy], [cx, cy - 1], [cx, cy + 1]]; const r: number[][] = []; for (let u = -2; u <= 2; u++) for (let v = -2; v <= 2; v++) if (u || v) r.push([cx + u, cy + v]); return r }
     const marke = new Int32Array(nx * ny).fill(-1)
     for (let sy = 0; sy < ny; sy++) for (let sx = 0; sx < nx; sx++) {
       const s0 = sy * nx + sx
@@ -92,7 +115,7 @@ export function erkenneOeffnungen(px: ArrayLike<number>, py: ArrayLike<number>, 
         const c = stapel.pop()!, cx = c % nx, cy = Math.floor(c / nx)
         anz++
         if (cx < x0) x0 = cx; if (cx > x1) x1 = cx; if (cy < y0) y0 = cy; if (cy > y1) y1 = cy
-        for (const [ex, ey] of [[cx - 1, cy], [cx + 1, cy], [cx, cy - 1], [cx, cy + 1]]) {
+        for (const [ex, ey] of nachbarn(cx, cy)) {
           if (ex < 0 || ey < 0 || ex >= nx || ey >= ny) continue
           const k = ey * nx + ex
           if (!wand[k] && marke[k] < 0) { marke[k] = s0; stapel.push(k) }
@@ -102,11 +125,31 @@ export function erkenneOeffnungen(px: ArrayLike<number>, py: ArrayLike<number>, 
       const fuell = anz / ((x1 - x0 + 1) * (y1 - y0 + 1))
       // Wand zu Ende (Rand, Traufe) oder unförmig: keine Öffnung
       if (x0 === 0 || x1 === nx - 1 || y1 === ny - 1) continue
-      if (fuell < 0.75 || breite < 0.4 || hoehe < 0.4) continue
+      if (fuell < (fa ? 0.45 : 0.75) || breite < 0.4 || hoehe < 0.4) continue
       const unten = y0 * dy, mitte = ((x0 + x1 + 1) / 2) * dx - laenge / 2
-      if (unten <= 0.3 + 1e-9 && hoehe >= 1.7 && hoehe <= 3.0 && breite >= 0.6 && breite <= 3.0) oeffnungen.push({ seite, typ: 'tuer', mitteM: r05(mitte), breiteM: r05(breite), hoeheM: r05(hoehe), unterkanteM: 0 })
-      else if (unten > 0.3 && breite <= 4 && hoehe <= 3) oeffnungen.push({ seite, typ: 'fenster', mitteM: r05(mitte), breiteM: r05(breite), hoeheM: r05(hoehe), unterkanteM: r05(unten) })
+      if (unten <= (fa ? 0.6 : 0.3) + 1e-9 && hoehe >= (fa ? 1.5 : 1.7) && hoehe <= 3.0 && breite >= 0.6 && breite <= 3.0) oeffnungen.push({ seite, typ: 'tuer', mitteM: r05(mitte), breiteM: r05(breite), hoeheM: r05(hoehe), unterkanteM: 0 })
+      else if (unten > (fa ? 0.6 : 0.3) && breite <= 4 && hoehe <= 3) oeffnungen.push({ seite, typ: 'fenster', mitteM: r05(mitte), breiteM: r05(breite), hoeheM: r05(hoehe), unterkanteM: r05(unten) })
     }
+  }
+  // Farbmodus: Türen sind oft in Stücke zerfallen (Füllung, Rahmen, Oberlicht). Übereinanderliegende Stücke gleicher Mitte, die am Boden beginnen, zu einer Tür zusammenfassen.
+  if (opt.farben) {
+    const rest: Oeffnung[] = []
+    for (const seite of b.sides) {
+      const teile = oeffnungen.filter((o) => o.seite === seite).sort((a, c) => a.unterkanteM - c.unterkanteM)
+      const benutzt = new Set<Oeffnung>()
+      for (const start of teile) {
+        if (benutzt.has(start) || start.unterkanteM > 1.0) continue
+        const kette = [start]; let oben = start.unterkanteM + start.hoeheM
+        for (const t of teile) if (!benutzt.has(t) && t !== start && Math.abs(t.mitteM - start.mitteM) <= 0.2 && t.unterkanteM >= start.unterkanteM && t.unterkanteM - oben <= 0.5) { kette.push(t); oben = Math.max(oben, t.unterkanteM + t.hoeheM) }
+        if (oben >= 1.7 && oben <= 3.0) {
+          kette.forEach((k) => benutzt.add(k))
+          const breite = Math.max(...kette.map((k) => k.breiteM)), mitte = kette.reduce((m, k) => m + k.mitteM * k.breiteM, 0) / kette.reduce((m, k) => m + k.breiteM, 0)
+          rest.push({ seite, typ: 'tuer', mitteM: r05(mitte), breiteM: r05(breite), hoeheM: r05(oben), unterkanteM: 0 })
+        }
+      }
+      for (const t of teile) if (!benutzt.has(t)) rest.push(t)
+    }
+    oeffnungen.length = 0; oeffnungen.push(...rest)
   }
   oeffnungen.sort((a, b) => (a.seite === b.seite ? a.mitteM - b.mitteM : a.seite.localeCompare(b.seite)))
   if (oeffnungen.length === 0 && waende.some((w) => w.ausgewertet)) hinweise.push('Keine Öffnungen gefunden. Das ist normal, wenn die Fassade keine Lücken im Scan hat (Glas liefert oft Punkte); es kann auch heißen, dass Fenster nicht erkannt wurden.')

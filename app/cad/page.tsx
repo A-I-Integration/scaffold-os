@@ -1125,9 +1125,11 @@ export default function CADPage() {
                             const [{ dreieckeAusGltf }, { sollEntfallen }, { punkteAusDreiecken }] = await Promise.all([import('@/lib/cad/gltf-dreiecke'), import('@/lib/cad/glb-teile'), import('@/lib/cad/glb-oeffnungen')])
                             const r = await dreieckeAusGltf(aussehen.daten.slice(0), sollEntfallen)
                             if (!r.ok) { setAussehenHinweis(r.meldung); return }
-                            const q = punkteAusDreiecken(r.dreiecke, { zentriert: aussehen.zentriert ?? 'geometrie', versatzX: aussehenVersatz.x, versatzZ: aussehenVersatz.z, drehungGrad: aussehenVersatz.grad })
+                            const q = punkteAusDreiecken(r.dreiecke, { zentriert: aussehen.zentriert ?? 'geometrie', versatzX: aussehenVersatz.x, versatzZ: aussehenVersatz.z, drehungGrad: aussehenVersatz.grad }, 4_000_000, r.farben)
                             if (!q) { setAussehenHinweis('Im Modell wurden keine Flächen gefunden.'); return }
-                            const erg = erkenneOeffnungen(q.px, q.py, q.pz, building, { minAbdeckung: 0.6 })
+                            const erg = erkenneOeffnungen(q.px, q.py, q.pz, building, { minAbdeckung: 0.6, ...(q.farben ? { ebeneToleranzM: 0.15, farben: q.farben } : {}) })
+                            // Aus Modellfarben sind nur Türen verlässlich; Fenster würden in Teile zerfallen
+                            if (q.farben) { erg.oeffnungen = erg.oeffnungen.filter((o) => o.typ === 'tuer'); erg.hinweise.push('Gemessen werden Türen an Farbe und Lage in der Fassade; Fenster werden aus dem Modell nicht bestimmt.') }
                             if (!erg.waende.some((w) => w.ausgewertet)) erg.hinweise.push('Das 3D-Modell passt nicht zu den Gebäudemaßen oder enthält mehr als nur dieses Haus (Nachbarhaus, Bäume, Straße): Die Fassaden liegen nicht dort, wo das Gerüst steht. Messen ist hier nicht möglich; bitte Türen von Hand eintragen oder ein Modell nur mit dem Gebäude laden.')
                             setOeffnungen(erg)
                           } catch (e) { setAussehenHinweis('Öffnungen konnten nicht gemessen werden: ' + ((e as Error).message || 'Fehler')) }

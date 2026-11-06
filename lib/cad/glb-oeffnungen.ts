@@ -8,7 +8,7 @@
 // ============================================================
 export interface GlbPlatzierung { zentriert: 'datei' | 'geometrie'; versatzX?: number; versatzZ?: number; drehungGrad?: number }
 
-export function punkteAusDreiecken(tris: ArrayLike<number>, p: GlbPlatzierung, maxPunkte = 4_000_000): { px: Float64Array; py: Float64Array; pz: Float64Array } | null {
+export function punkteAusDreiecken(tris: ArrayLike<number>, p: GlbPlatzierung, maxPunkte = 4_000_000, farben?: ArrayLike<number>): { px: Float64Array; py: Float64Array; pz: Float64Array; farben?: Uint8Array } | null {
   const nt = Math.floor(tris.length / 9)
   if (nt < 1) return null
   let minX = Infinity, maxX = -Infinity, minY = Infinity, minZ = Infinity, maxZ = -Infinity, flaeche = 0
@@ -25,9 +25,10 @@ export function punkteAusDreiecken(tris: ArrayLike<number>, p: GlbPlatzierung, m
   const h = Math.max(0.03, Math.sqrt(flaeche / maxPunkte))
   const fx = p.zentriert === 'datei' ? 0 : (minX + maxX) / 2, fz = p.zentriert === 'datei' ? 0 : (minZ + maxZ) / 2
   const th = ((p.drehungGrad ?? 0) * Math.PI) / 180, c = Math.cos(th), s = Math.sin(th)
-  const ox: number[] = [], oy: number[] = [], oz: number[] = []
-  const setze = (x: number, y: number, z: number) => {
+  const ox: number[] = [], oy: number[] = [], oz: number[] = [], of: number[] = []
+  const setze = (x: number, y: number, z: number, cr = 0, cg = 0, cb = 0) => {
     const a = x - fx, b = z - fz
+    if (farben) of.push(cr, cg, cb)
     ox.push(a * c + b * s + (p.versatzX ?? 0)); oy.push(-a * s + b * c + (p.versatzZ ?? 0)); oz.push(y - minY)
   }
   for (let t = 0; t < nt; t++) {
@@ -40,9 +41,11 @@ export function punkteAusDreiecken(tris: ArrayLike<number>, p: GlbPlatzierung, m
     for (let i = 0; i <= nu; i++) for (let j = 0; j <= nv - Math.floor((i * nv) / nu); j++) {
       const a = i / nu, b = j / nv
       if (a + b > 1 + 1e-9) continue
-      setze(ax + ux * a + vx * b, ay + uy * a + vy * b, az + uz * a + vz * b)
+      const w0 = 1 - a - b
+      const f = (k: number) => farben ? w0 * farben[o + k] + a * farben[o + 3 + k] + b * farben[o + 6 + k] : 0
+      setze(ax + ux * a + vx * b, ay + uy * a + vy * b, az + uz * a + vz * b, f(0), f(1), f(2))
     }
     if (ox.length > maxPunkte * 1.5) break
   }
-  return { px: Float64Array.from(ox), py: Float64Array.from(oy), pz: Float64Array.from(oz) }
+  return { px: Float64Array.from(ox), py: Float64Array.from(oy), pz: Float64Array.from(oz), ...(farben ? { farben: Uint8Array.from(of) } : {}) }
 }
