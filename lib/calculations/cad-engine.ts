@@ -407,6 +407,9 @@ export function calculateFieldDivision(
   return { fields, fieldLengthM: bestLength, remainderM: remainder, distribution }
 }
 
+/** Mindestabstand: oberster Belag unter der Rinne (Traufe) bzw. der Dachkante, in m. Vorgabe aus der Praxis – Dacharbeiten (Fanggerüst) brauchen ein eigenes, höheres Gerüst. */
+export const RINNE_ABSTAND_M = 1.5
+
 export function calculateLevels(
   buildingHeightM: number,
   system: GeruestSystem,
@@ -1251,9 +1254,15 @@ export function generateCADModel(
     ? { traufe: building.eavesHeightM, first: building.heightM, firstEntlangLaenge: building.lengthM >= (building.widthM || 0) }
     : null
   const rasterLagenH = levelCalc.levelHeightM
+  // Geneigtes Dach ohne Satteldach-Sonderfall (Walm-, Mansardendach/Zelt): alle Seiten sind Traufseiten und enden an der Traufe.
+  // (Pultdach bleibt unverändert: dort ist nicht gespeichert, welche Seite die Traufe ist.)
+  const traufeAllseitig = !abschnitte && !giebel && (building.roofForm === 'walmdach' || building.roofForm === 'mansardendach') && building.eavesHeightM > 0 && building.eavesHeightM < building.heightM - 0.3
+  const dachRegel = !!giebel || traufeAllseitig
+  /** Regel: Der oberste Belag liegt mindestens RINNE_ABSTAND_M unter der Rinne bzw. Dachkante – ein Gerüst wird nicht bis ans Dach hochgezogen. Mindestens eine Lage. */
+  const lagenBisRinne = (rinneM: number): number => Math.min(levelCalc.levels, Math.max(1, Math.floor((rinneM - RINNE_ABSTAND_M) / rasterLagenH + 1e-6)))
   /** Anzahl Lagen an einer Wandstelle (Spanne [vonM, bisM], von der Wandmitte aus gemessen; Giebelseite: Dachhöhe in der Feldmitte). */
   const lagenAn = (sd: 'front' | 'back' | 'left' | 'right', vonM: number, bisM: number): number => {
-    if (!giebel) return levelCalc.levels
+    if (!giebel) return traufeAllseitig ? lagenBisRinne(building.eavesHeightM) : levelCalc.levels
     const istGiebelSeite = giebel.firstEntlangLaenge ? (sd === 'left' || sd === 'right') : (sd === 'front' || sd === 'back')
     let h = giebel.traufe
     if (istGiebelSeite) {
@@ -1262,11 +1271,11 @@ export function generateCADModel(
       const naechster = Math.abs((vonM + bisM) / 2)
       h = halb > 0 ? giebel.traufe + (giebel.first - giebel.traufe) * Math.max(0, 1 - naechster / halb) : giebel.first
     }
-    return Math.min(levelCalc.levels, Math.max(1, Math.ceil(h / rasterLagenH - 1e-6)))
+    return lagenBisRinne(h)
   }
   /** Wandfläche einer Seite (m²): Traufseite = Länge × Traufe, Giebelseite = Rechteck + Dreieck. */
   const seitenWandFlaecheM2 = (sd: 'front' | 'back' | 'left' | 'right', laenge: number): number => {
-    if (!giebel) return laenge * building.heightM
+    if (!giebel) return laenge * (traufeAllseitig ? building.eavesHeightM : building.heightM)
     const istGiebelSeite = giebel.firstEntlangLaenge ? (sd === 'left' || sd === 'right') : (sd === 'front' || sd === 'back')
     return laenge * giebel.traufe + (istGiebelSeite ? 0.5 * laenge * (giebel.first - giebel.traufe) : 0)
   }
@@ -1523,7 +1532,7 @@ export function generateCADModel(
           zPos = vorherLaenge - totalLength / 2 + fieldLength / 2 - (building.widthM || 0) / 2 - 0.5
         }
 
-        if (giebel) {
+        if (dachRegel) {
           const mitteAlong = side === 'front' || side === 'back' ? xPos : zPos + (building.widthM || 0) / 2 + 0.5
           if (levelData.index >= lagenAn(side, mitteAlong - fieldLength / 2, mitteAlong + fieldLength / 2)) return
         }
@@ -1563,7 +1572,7 @@ export function generateCADModel(
           const totalLength = div.distribution.reduce((a, b) => a + b, 0)
           const pos = f * div.fieldLengthM - totalLength / 2 + div.fieldLengthM / 2
           if (istInLuecke(side, pos, 0)) continue
-          if (giebel && yAnchor > lagenAn(side, pos - div.fieldLengthM / 2, pos + div.fieldLengthM / 2) * rasterLagenH) continue
+          if (dachRegel && yAnchor > lagenAn(side, pos - div.fieldLengthM / 2, pos + div.fieldLengthM / 2) * rasterLagenH) continue
 
           let xPos = 0
           let zPos = 0
@@ -1643,18 +1652,25 @@ export function generateCADModel(
     warnings.push({ type: 'info', code: 'BALKON_KONSOLEN', message: 'Durchlaufende Balkone: Konsolen sind eingeplant (Näherung wie im Aufmaß: (Felder + 1) × aufgerundet(Auskragung ÷ 0,73 m) je Lage). Die Gerüstlinie wird nicht um die Auskragung verschoben – bitte mit der Aufbau- und Verwendungsanleitung des Systems prüfen.' })
   }
 
+  if (dachRegel) {
+    const rinneM = giebel ? giebel.traufe : building.eavesHeightM
+    const obersterBelagM = lagenBisRinne(rinneM) * rasterLagenH
+    warnings.push({ type: 'info', code: 'OBERSTER_BELAG_RINNE', message: `Geneigtes Dach: Das Gerüst endet an der Rinne (Traufe ${rinneM.toFixed(2)} m) mit dem obersten Belag bei ${obersterBelagM.toFixed(2)} m – das sind ${(rinneM - obersterBelagM).toFixed(2)} m unter der Rinne (Regel: mindestens ${RINNE_ABSTAND_M.toFixed(1)} m). Für Dacharbeiten ist ein höheres Gerüst bzw. Fanggerüst gesondert zu planen.` })
+  }
+  // Bei geneigtem Dach (Rinnen-Regel): nur die tatsächlich gebauten Lagen führen und zählen, nicht die Lagen bis zum First
+  const maxLagenDach = dachRegel && fields.length ? Math.max(...fields.map((f) => f.levelIndex + 1)) : levelCalc.levels
   const preliminaryModel: CADModel = {
     building,
     system,
     fields,
-    levels,
+    levels: dachRegel ? levels.filter((l) => l.index < maxLagenDach) : levels,
     anchors,
     components3D: [],
     totalLengthM: (abschnitte ? abschnitte.filter((a) => a.geruest !== false).reduce((sum, a) => sum + a.laengeM, 0) : einfachSeitenDivs.reduce((sum, d) => sum + d.fields * d.fieldLengthM, 0)) - lueckeLaengeM,
     totalHeightM: building.heightM,
     totalAreaM2: (abschnitte ? stufenFlaecheM2(abschnitte, activeSides, building.widthM || 0) + helmFlaecheM2 + innenFlaecheM2 - verdecktFlaecheM2 : activeSides.reduce((sum, sd) => sum + seitenWandFlaecheM2(sd, seitenLaengeM(sd)), 0)) - lueckeFlaecheM2,
     fieldCount: (abschnittDivs ? abschnittDivs.reduce((sum, d, i) => sum + (abschnitte![i].geruest === false ? 0 : d.fields), 0) + innenFelder : einfachSeitenDivs.reduce((sum, d) => sum + d.fields, 0)) - lueckeFelder,
-    levelCount: levelCalc.levels,
+    levelCount: dachRegel ? maxLagenDach : levelCalc.levels,
     warnings
   }
 
@@ -1664,7 +1680,7 @@ export function generateCADModel(
   if (abschnitte) preliminaryModel.seitenAufbau = { vollSeiten: vollSeitenAnzahl, teilSeiten: teilSeitenListe }
   preliminaryModel.gebauteFlaecheM2 = abschnitte
     ? preliminaryModel.totalAreaM2 + stufenFlaecheM2(abschnitte, activeSides, building.widthM || 0, rasterM) - stufenFlaecheM2(abschnitte, activeSides, building.widthM || 0)
-    : giebel
+    : dachRegel
       ? fields.reduce((sum, f) => sum + f.lengthM * rasterM, 0)
       : preliminaryModel.totalAreaM2 + activeSides.reduce((sum, sd) => sum + seitenLaengeM(sd), 0) * Math.max(0, obersteLageM - building.heightM)
   const components3D = generateScaffoldComponents(preliminaryModel)
