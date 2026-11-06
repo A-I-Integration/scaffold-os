@@ -13,6 +13,8 @@ const nextConfig: NextConfig = {
   // blockiert.
   async headers() {
     return [
+      // Service Worker: nie veraltet aus dem Browser-Cache, damit Aktualisierungen ankommen
+      { source: '/sw.js', headers: [{ key: 'Cache-Control', value: 'no-cache, no-store, must-revalidate' }, { key: 'Service-Worker-Allowed', value: '/' }] },
       {
         source: '/:path*',
         headers: [
