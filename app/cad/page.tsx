@@ -71,6 +71,7 @@ import SystemLeiste from '@/components/cad/SystemLeiste'
 import KatalogWahlListe from '@/components/cad/KatalogWahlListe'
 import { katalogListeFuerSystem, wendeKatalogwahlAn, uebertrageAufGleiche } from '@/lib/cad/katalog-zuordnung'
 import Scaffold2D from '@/components/cad/Scaffold2D'
+import { eingabeStandGeruest, istGeruestVeraltet } from '@/lib/cad/modell-veraltet'
 
 const Scaffold3D = dynamic(() => import('@/components/cad/Scaffold3D'), {
   ssr: false,
@@ -532,6 +533,11 @@ export default function CADPage() {
 
   const features = useMemo(() => generateBuildingFeatures(building), [building])
 
+  // Stand der Eingaben beim letzten Erzeugen des Gerüsts (siehe lib/cad/modell-veraltet.ts)
+  const [geruestStand, setGeruestStand] = useState<string | null>(null)
+  const eingabeStandJetzt = useMemo(() => eingabeStandGeruest(building, systemId), [building, systemId])
+  const geruestVeraltet = istGeruestVeraltet(!!model, geruestStand, eingabeStandJetzt)
+
   // Ohne diese Grundmaße entsteht bewusst kein Modell (siehe generate). Damit es nicht
   // still bleibt (z. B. wenn die Plan-Auswertung nur Teile erkannt hat), wird gesagt, was fehlt.
   const fehlendeMasse = useMemo(() => {
@@ -580,6 +586,7 @@ export default function CADPage() {
       : []
     newModel.warnings = [...newModel.warnings, ...collisionWarnings, ...featureWarnings, ...geometrieWarnings, ...knotenWarnings]
     setModel(newModel)
+    setGeruestStand(eingabeStandGeruest(building, systemId))
     setRemovedGroups([])
     setSelectedComponent(null)
     // Ebenen-State aus dem frisch erzeugten Modell ableiten
@@ -1146,6 +1153,12 @@ export default function CADPage() {
             )}
           </div>
           <div className='relative h-[65vh] min-h-[320px] md:h-auto md:flex-1 p-4 md:min-h-0'>
+            {geruestVeraltet && (
+              <div role='alert' className='absolute top-6 left-1/2 -translate-x-1/2 z-30 max-w-[92%] flex flex-wrap items-center gap-3 rounded-xl border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900 shadow'>
+                <span>Die Eingaben (z. B. Tür oder System) haben sich geändert – das Gerüst zeigt noch den alten Stand.</span>
+                <button type='button' onClick={() => { setAutoGenerate(true); generate() }} className='rounded-lg bg-[#e8590c] px-3 py-1 font-medium text-white hover:bg-[#d04f0b]'>Gerüst neu berechnen</button>
+              </div>
+            )}
             {abbauAktiv && abbauErgebnis && viewMode === '3d' && (
               <TeilabbauPanel ein={abbauEin} onChange={setAbbauEin} ergebnis={abbauErgebnis} onClose={() => setAbbauAktiv(false)} onPlanUebernehmen={() => setAbbauEinplanen(true)} />
             )}
