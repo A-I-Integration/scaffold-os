@@ -174,7 +174,7 @@ export default function DesktopShell({ rolle, name, onKlassisch, onLogout, child
               return (
                 <button key={b.key} type="button" onClick={() => setGewaehlt(b.key)}
                   className="flex w-full items-center gap-2 px-2.5 h-[38px] text-left text-[18px] font-semibold border-b whitespace-nowrap overflow-hidden"
-                  style={ist ? { background: 'linear-gradient(#ffc27a,#f28a2e)', color: '#3b1d00', borderColor: '#d9791f' } : { background: `linear-gradient(${FARBE.kopf1},${FARBE.kopf2})`, color: '#fff', borderColor: '#244f85' }}>
+                  style={ist ? { background: `linear-gradient(#e6f0fb,${FARBE.auswahl})`, color: '#1f4f8f', borderColor: '#7eb4ea' } : { background: `linear-gradient(${FARBE.kopf1},${FARBE.kopf2})`, color: '#fff', borderColor: '#244f85' }}>
                   <b.icon className="w-3.5 h-3.5" />{b.label}
                 </button>
               )
