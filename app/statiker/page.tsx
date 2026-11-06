@@ -1,5 +1,6 @@
 'use client'
 
+import { loescheOfflineKopien } from '@/lib/offline/cache-leeren'
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
@@ -33,6 +34,7 @@ export default function StatikerStartseite() {
   }, [])
 
   async function abmelden() {
+    await loescheOfflineKopien()
     await createClient().auth.signOut()
     router.push('/login')
     router.refresh()

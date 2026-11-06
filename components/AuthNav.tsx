@@ -1,5 +1,6 @@
 'use client';
 
+import { loescheOfflineKopien } from '@/lib/offline/cache-leeren'
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useState, useEffect } from 'react';
@@ -57,6 +58,7 @@ export default function AuthNav() {
   }, []);
 
   async function handleLogout() {
+    await loescheOfflineKopien();
     await supabase.auth.signOut();
     router.push('/login');
     router.refresh();

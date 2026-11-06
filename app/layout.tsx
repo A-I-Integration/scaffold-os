@@ -4,6 +4,7 @@ import "./globals.css"
 import SidebarLayout from "@/components/SidebarLayout"
 import CookieBannerWrapper from "@/components/CookieBannerWrapper"
 import BesucherZaehler from "@/components/BesucherZaehler"
+import OfflineUnterstuetzung from "@/components/OfflineUnterstuetzung"
 
 
 // Google-Ads-Tag (Conversion-Tracking) – lädt NUR dort, wo die Env-Var
@@ -68,6 +69,7 @@ export default function RootLayout({
         {/* Eigener cookieloser Besucherzähler – nur Master-Website (MASTER_INSTANCE=true). */}
         {process.env.MASTER_INSTANCE === 'true' && <BesucherZaehler />}
         <SidebarLayout>{children}</SidebarLayout>
+        <OfflineUnterstuetzung />
       </body>
     </html>
   )

@@ -1,5 +1,6 @@
 'use client';
 
+import { loescheOfflineKopien } from '@/lib/offline/cache-leeren'
 import { istStatiker } from '@/lib/statiker';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
@@ -193,6 +194,7 @@ export default function SidebarLayout({ children }: { children: React.ReactNode 
   }, [pathname]);
 
   async function handleLogout() {
+    await loescheOfflineKopien();
     await supabase.auth.signOut();
     router.push('/login');
     router.refresh();
