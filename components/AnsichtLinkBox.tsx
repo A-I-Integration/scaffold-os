@@ -1,6 +1,7 @@
 'use client'
 
 import { useCallback, useState } from 'react'
+import QRCode from 'qrcode'
 
 // 3D-Link (nur lesend) für ein CAD-Projekt: anlegen, kopieren, widerrufen.
 // Der Link zeigt nur Modell, Kennzahlen und Stückliste OHNE Preise.
@@ -20,6 +21,7 @@ export default function AnsichtLinkBox({ projectId }: { projectId: string }) {
   const [label, setLabel] = useState('')
   const [laeuft, setLaeuft] = useState(false)
   const [meldung, setMeldung] = useState<string | null>(null)
+  const [qr, setQr] = useState<{ token: string; bild: string } | null>(null)
 
   const laden = useCallback(async () => {
     try {
@@ -61,6 +63,20 @@ export default function AnsichtLinkBox({ projectId }: { projectId: string }) {
     } catch (e) { setMeldung('❌ ' + (e instanceof Error ? e.message : 'Widerruf fehlgeschlagen.')) }
   }
 
+  async function qrZeigen(token: string) {
+    if (qr?.token === token) { setQr(null); return }
+    try { setQr({ token, bild: await QRCode.toDataURL(adresse(token), { width: 320, margin: 2, errorCorrectionLevel: 'M' }) }) } catch { setMeldung('❌ QR-Code konnte nicht erzeugt werden.') }
+  }
+
+  function qrDrucken(l: Link) {
+    if (!qr) return
+    const w = window.open('', '_blank', 'width=480,height=640')
+    if (!w) { setMeldung('Pop-up wurde blockiert: bitte erlauben oder den QR-Code mit Rechtsklick speichern.'); return }
+    const titel = (l.label || 'Gerüst 3D-Ansicht').replace(/[<>&"]/g, '')
+    w.document.write(`<!doctype html><title>QR-Code</title><body style="font-family:sans-serif;text-align:center;margin:24px"><h2>${titel}</h2><img src="${qr.bild}" width="320" height="320"><p>Mit der Handy-Kamera scannen: 3D-Ansicht des Gerüsts</p><p style="font-size:12px;color:#666">gültig bis ${new Date(l.expires_at).toLocaleDateString('de-DE')}</p><script>window.onload=function(){window.print()}<\/script></body>`)
+    w.document.close()
+  }
+
   async function kopieren(token: string) {
     try { await navigator.clipboard.writeText(adresse(token)); setMeldung('Link kopiert.') } catch { setMeldung(adresse(token)) }
   }
@@ -91,8 +107,19 @@ export default function AnsichtLinkBox({ projectId }: { projectId: string }) {
                   {l.status === 'aktiv' && (
                     <span className="ml-auto flex gap-3">
                       <button onClick={() => kopieren(l.token)} className="text-[#e8590c] hover:underline">Link kopieren</button>
+                      <button onClick={() => qrZeigen(l.token)} className="text-[#e8590c] hover:underline">{qr?.token === l.token ? 'QR-Code schließen' : 'QR-Code'}</button>
                       <button onClick={() => widerrufen(l.id)} className="text-red-600 hover:underline">Widerrufen</button>
                     </span>
+                  )}
+                  {qr?.token === l.token && (
+                    <div className="basis-full flex items-center gap-3 pt-1">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={qr.bild} alt="QR-Code zum 3D-Link" width={160} height={160} className="border border-black/10 rounded-lg" />
+                      <div className="space-y-1">
+                        <p className="text-[11px] text-[#86868b]">Mit der Handy-Kamera scannen, dann öffnet sich die 3D-Ansicht. Für die Baustelle ausdrucken oder ins Montageblatt legen.</p>
+                        <button onClick={() => qrDrucken(l)} className="text-[#e8590c] hover:underline">QR-Code drucken</button>
+                      </div>
+                    </div>
                   )}
                 </li>
               ))}
