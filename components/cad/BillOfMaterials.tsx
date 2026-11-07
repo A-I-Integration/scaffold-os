@@ -35,6 +35,7 @@ interface Props {
   onSpeichereProjektdatei?: () => void
   onExportStatikGeometrie?: () => void
   onExportIFC?: () => void
+  onExportDXF?: () => void
   /** Statiker-Paket: ZIP mit Lastannahmen-Blatt, Geometrie, Stückliste ohne Preise und IFC */
   onExportStatikerPaket?: () => void
   /** Darstellung des Gerüstplans im Statiker-Paket */
@@ -72,7 +73,7 @@ interface Props {
   onSelectPlacementType?: (type: string | null) => void
 }
 
-export default function BillOfMaterials({ materials, ohnePreis = [], ohneGewicht = [], lagerFehler = false, totalWeightKg, totalPrice, logistik, fahrzeuge = [], fahrzeugWahl = 'auto', onFahrzeugWahl, onExportPDF, onExportCSV, onExportMontageplan, onOpenLv, onSpeichereProjektdatei, onExportStatikGeometrie, onExportIFC, onExportStatikerPaket, planModus = 'schematisch', onPlanModusChange, customers, kundenLadeFehler, onRetryKunden, onCreateCustomer, onAssignCustomer, zuordnenLaeuft, disabled = false, notes, onDeleteNote, layerState, onToggleSide, onToggleLevel, onShowAllLayers, onHideAllLayers, customDimensions, onDeleteDimension, measureMode, onToggleMeasureMode, manualPlacements, onRemoveManualPlacement, placementType, onSelectPlacementType }: Props) {
+export default function BillOfMaterials({ materials, ohnePreis = [], ohneGewicht = [], lagerFehler = false, totalWeightKg, totalPrice, logistik, fahrzeuge = [], fahrzeugWahl = 'auto', onFahrzeugWahl, onExportPDF, onExportCSV, onExportMontageplan, onOpenLv, onSpeichereProjektdatei, onExportStatikGeometrie, onExportIFC, onExportDXF, onExportStatikerPaket, planModus = 'schematisch', onPlanModusChange, customers, kundenLadeFehler, onRetryKunden, onCreateCustomer, onAssignCustomer, zuordnenLaeuft, disabled = false, notes, onDeleteNote, layerState, onToggleSide, onToggleLevel, onShowAllLayers, onHideAllLayers, customDimensions, onDeleteDimension, measureMode, onToggleMeasureMode, manualPlacements, onRemoveManualPlacement, placementType, onSelectPlacementType }: Props) {
   const [kundenSuche, setKundenSuche] = useState('')
   const [ausgewaehlterKunde, setAusgewaehlterKunde] = useState<{ id: string; name: string } | null>(null)
   const [zeigeDropdown, setZeigeDropdown] = useState(false)
@@ -290,7 +291,7 @@ export default function BillOfMaterials({ materials, ohnePreis = [], ohneGewicht
           ))}
         </div>
       </div>
-      {(onExportPDF || onExportCSV || onExportMontageplan || onOpenLv || onSpeichereProjektdatei || onExportStatikGeometrie || onExportIFC || onExportStatikerPaket) && !disabled && (
+      {(onExportPDF || onExportCSV || onExportMontageplan || onOpenLv || onSpeichereProjektdatei || onExportStatikGeometrie || onExportIFC || onExportDXF || onExportStatikerPaket) && !disabled && (
         <div className='p-4 border-t border-black/5 grid grid-cols-2 gap-2'>
           {onExportCSV && (
             <button onClick={onExportCSV} className='py-2.5 bg-emerald-600 text-white text-sm font-medium rounded-xl hover:bg-emerald-700 transition-colors'>
@@ -334,6 +335,11 @@ export default function BillOfMaterials({ materials, ohnePreis = [], ohneGewicht
           {onExportStatikGeometrie && (
             <button onClick={onExportStatikGeometrie} title="Nur Geometriedaten – kein Standsicherheitsnachweis, für externen Statiker" className='col-span-2 py-2.5 bg-black/5 text-[#1d1d1f] text-sm font-medium rounded-xl hover:bg-black/10 transition-colors'>
               📐 Geometriedaten für Statiker (JSON)
+            </button>
+          )}
+          {onExportDXF && (
+            <button onClick={onExportDXF} title="2D-Gerüstplan (Vorderansicht und Grundriss) für AutoCAD, BricsCAD und andere CAD-Programme. Layer GEBAEUDE, GERUEST, MASSE, TEXTE; Einheit Meter." className='col-span-2 py-2.5 bg-black/5 text-[#1d1d1f] text-sm font-medium rounded-xl hover:bg-black/10 transition-colors'>
+              📐 Gerüstplan für CAD (DXF)
             </button>
           )}
           {onExportIFC && (
