@@ -181,3 +181,7 @@ Status R19 (06.11.2026): Bestätigt. In der Instanz der Nutzerin liefert "select
 Entscheidung: Knopf und Route /api/stueckliste entfernen, weil die Materialliste mit dem Projekt in projects.data.kiResult gespeichert wird. Umsetzung auf Branch fix/stuecklisten-knopf (3 Dateien: schritt6/page.tsx, KIMaterialResult.tsx, Route gelöscht).
 Typprüfung (tsc, strict) über den Gesamtstand aus main plus den Branches fix/annahme-ergebnis-sichtbar, test/engine-abgleich und fix/stuecklisten-knopf: fehlerfrei (Exit 0, Gegenprobe mit absichtlichem Typfehler schlägt an). Vitest steht auf dem Mac der Nutzerin noch aus.
 Nach dem Merge entfällt die Route /api/stueckliste in API_MAP.md (127 auf 126 Routen).
+
+Messung R5/R15 (06.11.2026, siehe SCHEMA_LUECKE.md): Neue Kundeninstanzen erhalten nur den Dump vom 27.08.2026 (supabase/kunden-schema.sql). 58 von 77 anderen SQL-Dateien sind jünger; im Dump fehlen 34 Tabellen (vermutlich 5 davon nur für die Master-Datenbank), 50 Spalten und 7 Funktionen.
+Nach der Provisionierung findet keine Schema-Prüfung statt. Vorschläge: Dump neu erzeugen (braucht Zugriff auf die Master-Datenbank), Protokoll-Tabelle schema_migrationen (supabase/phase-105-schema-migrationen.sql, Branch chore/schema-luecke), Prüfung nach der Provisionierung.
+Werkzeug zum erneuten Messen: scripts/schema-luecke.mjs (Branch chore/schema-luecke).
