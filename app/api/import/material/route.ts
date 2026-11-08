@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { aktuellerPlan, UPGRADE_HINWEIS } from '@/lib/plan-limits';
+import { importProtokollieren } from '@/lib/import-auth';
 
 // ============================================================
 // SCAFFOLD OS – CSV-Import: Material/Lager
@@ -58,7 +59,7 @@ export async function POST(req: NextRequest) {
   const denied = await checkCaller();
   if (denied) return denied;
 
-  let body: { rows?: unknown[] };
+  let body: { rows?: unknown[]; dryRun?: unknown; quelle?: unknown; dateiname?: unknown };
   try {
     body = await req.json();
   } catch {
@@ -152,9 +153,10 @@ export async function POST(req: NextRequest) {
     });
   });
 
-  // In Blöcken à 100 einfügen
+  // In Blöcken à 100 einfügen (Trockenlauf: nur zählen)
+  const trockenlauf = body.dryRun === true;
   let importiert = 0;
-  for (let von = 0; von < eintraege.length; von += 100) {
+  for (let von = 0; !trockenlauf && von < eintraege.length; von += 100) {
     const block = eintraege.slice(von, von + 100);
     try {
       const res = await fetch(`${url}/rest/v1/inventory`, {
@@ -175,5 +177,12 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  return NextResponse.json({ success: true, importiert, uebersprungen, fehler });
+  const hinweise: { zeile: number; text: string }[] = [];
+  const t = (v: unknown, max: number) => (typeof v === 'string' && v.trim() ? v.trim().slice(0, max) : null);
+  await importProtokollieren({
+    art: 'material',
+    anfrage: { rows: rows as Record<string, unknown>[], trockenlauf, quelle: t(body.quelle, 60), dateiname: t(body.dateiname, 200) },
+    importiert, uebersprungen, neu: eintraege.length, fehler, hinweise,
+  });
+  return NextResponse.json({ success: true, trockenlauf, neu: eintraege.length, importiert, uebersprungen, fehler, hinweise });
 }

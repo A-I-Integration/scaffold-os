@@ -18,13 +18,45 @@ export async function importPruefeRolle(): Promise<NextResponse | null> {
   return null
 }
 
-export async function importLeseZeilen(req: Request): Promise<{ rows: Record<string, unknown>[] } | NextResponse> {
-  let body: { rows?: unknown[] }
+export interface ImportAnfrage { rows: Record<string, unknown>[]; trockenlauf: boolean; quelle: string | null; dateiname: string | null }
+
+/** Zeilen und Optionen der Anfrage: `dryRun: true` = nur prüfen, nichts schreiben (Trockenlauf). */
+export async function importLeseZeilen(req: Request): Promise<ImportAnfrage | NextResponse> {
+  let body: { rows?: unknown[]; dryRun?: unknown; quelle?: unknown; dateiname?: unknown }
   try { body = await req.json() } catch { return NextResponse.json({ success: false, error: 'Ungültige Anfrage' }, { status: 400 }) }
   const rows = Array.isArray(body.rows) ? (body.rows as Record<string, unknown>[]) : []
   if (rows.length === 0) return NextResponse.json({ success: false, error: 'Keine Zeilen übergeben' }, { status: 400 })
   if (rows.length > MAX_IMPORT_ZEILEN) return NextResponse.json({ success: false, error: `Maximal ${MAX_IMPORT_ZEILEN.toLocaleString('de-DE')} Zeilen pro Import` }, { status: 400 })
-  return { rows }
+  const t = (v: unknown, max: number) => (typeof v === 'string' && v.trim() ? v.trim().slice(0, max) : null)
+  return { rows, trockenlauf: body.dryRun === true, quelle: t(body.quelle, 60), dateiname: t(body.dateiname, 200) }
+}
+
+export interface ImportErgebnisDaten {
+  art: string
+  anfrage: ImportAnfrage
+  importiert: number
+  uebersprungen: number
+  neu: number
+  fehler: { zeile: number; grund: string }[]
+  hinweise: { zeile: number; text: string }[]
+}
+
+/** Import-Protokoll speichern (best effort: fehlt die Tabelle, läuft der Import trotzdem). */
+export async function importProtokollieren(d: ImportErgebnisDaten): Promise<void> {
+  if (d.anfrage.trockenlauf) return
+  try {
+    let userId: string | null = null
+    try { const supabase = await createClient(); userId = (await supabase.auth.getUser()).data.user?.id ?? null } catch { /* ohne Benutzer */ }
+    const res = await fetch(`${importUrl}/rest/v1/import_protokolle`, {
+      method: 'POST', headers: { ...importHeaders, Prefer: 'return=minimal' },
+      body: JSON.stringify({
+        art: d.art, quelle: d.anfrage.quelle, dateiname: d.anfrage.dateiname, angelegt_von: userId,
+        gesamt: d.anfrage.rows.length, importiert: d.importiert, uebersprungen: d.uebersprungen,
+        fehler: d.fehler.slice(0, 500), hinweise: d.hinweise.slice(0, 500),
+      }),
+    })
+    if (!res.ok) console.error('import_protokolle:', res.status, await res.text())
+  } catch (e) { console.error('import_protokolle:', e) }
 }
 
 export async function importHole<T>(pfad: string): Promise<T[]> {
