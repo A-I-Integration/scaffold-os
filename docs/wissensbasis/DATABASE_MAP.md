@@ -129,6 +129,6 @@ Nur nicht-Test-Dateien. Dynamisch gebildete Tabellennamen werden nicht erkannt. 
 
 Tabellen ohne Treffer der Textsuche: 4 (invoice_counters, delivery_note_counters, nwd_jobs, projekt_lv). Nachgeprüft: nwd_jobs (lib/nwd/job.ts) und projekt_lv (app/api/projekt-lv/route.ts) werden im Code genannt, die Suche hat sie nur nicht erkannt; die beiden Zähler-Tabellen werden über Datenbankfunktionen angesprochen (rest/v1/rpc/next_invoice_number, next_delivery_note_number), nicht direkt.
 
-Im Code genannt, aber ohne CREATE TABLE in den SQL-Dateien: stuecklisten (app/api/stueckliste/route.ts ruft /rest/v1/stuecklisten). Die Tabelle steht in keiner SQL-Datei des Repos, auch nicht in kunden-schema.sql. Ob sie in bestehenden Instanzen existiert, ist offen. (Der Treffer "rpc" ist nur der Pfadteil rest/v1/rpc.)
+Im Code genannt, aber ohne CREATE TABLE: stuecklisten (frühere Route /api/stueckliste). Geklärt am 06.11.2026: Die Tabelle existiert in der Instanz der Nutzerin nicht; Knopf und Route wurden entfernt (gemergt in main, PR #662). Der Treffer "rpc" ist nur der Pfadteil rest/v1/rpc.
 
 RPC-Aufrufe (rest/v1/rpc/...): besucher_statistik, next_invoice_number, next_delivery_note_number.
