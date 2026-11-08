@@ -7,7 +7,8 @@
 //   * entfernt Master-Tabellen (Standard: tenants, subscriptions) samt Policies,
 //     Indizes, Constraints und Triggern
 //   * entfernt Anweisungen, die der Supabase-SQL-Editor nicht versteht
-//     (\restrict / \unrestrict, SET transaction_timeout, search_path-Leerung, CREATE SCHEMA, CREATE EXTENSION)
+//     (\restrict / \unrestrict, SET transaction_timeout, search_path-Leerung, CREATE SCHEMA, CREATE EXTENSION,
+//     COMMENT ON SCHEMA/EXTENSION)
 //   * hängt den Storage-Teil (Policies auf storage.objects, Bucket project-media)
 //     aus der bisherigen kunden-schema.sql wieder an
 //
@@ -66,6 +67,7 @@ const gehoertMaster = (b) => ohne.includes(zielTabelle(b)) || ohne.some((t) => b
 const entfernt = [], warnungen = [], behalten = [];
 for (const b of bloecke) {
   if (['SCHEMA', 'EXTENSION'].includes(b.typ)) { entfernt.push(`${b.typ}: ${b.name}`); continue; }
+  if (b.typ === 'COMMENT' && /^(SCHEMA|EXTENSION) /.test(b.name || '')) { entfernt.push(`${b.typ}: ${b.name}`); continue; } // braucht Eigentümerrechte am Schema, bringt nichts
   if (b.schema === 'storage') continue; // Storage kommt aus dem alten Stand
   if (gehoertMaster(b)) { entfernt.push(`${b.typ}: ${b.name}`); continue; }
   if (nenntMaster(b)) { warnungen.push(`${b.typ}: ${b.name} verweist auf eine Master-Tabelle und wurde ENTFERNT`); entfernt.push(`${b.typ}: ${b.name} (Fremdverweis)`); continue; }
