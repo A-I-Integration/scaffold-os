@@ -291,10 +291,10 @@ body {
 
 
 /* ───────── Navigation (components/shell/AppShell.tsx) ───────── */
-.os-nav-kopf { padding: 14px 10px 6px; font-size: 11px; letter-spacing: 1.1px; text-transform: uppercase; color: #87929e; font-weight: 600; }
-.os-nav-punkt { display: flex; align-items: center; gap: 10px; padding: 7px 10px; border-radius: 4px; font-size: 14px; color: var(--os-nav-text); cursor: pointer; transition: background .12s, color .12s; }
+.os-nav-kopf { padding: 16px 12px 8px; font-size: 12.5px; letter-spacing: 1.1px; text-transform: uppercase; color: #87929e; font-weight: 600; }
+.os-nav-punkt { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: 4px; font-size: 16px; color: var(--os-nav-text); cursor: pointer; transition: background .12s, color .12s; }
 .os-nav-punkt:hover { background: rgba(255,255,255,.06); color: #fff; }
-.os-nav-unterpunkt { display: flex; align-items: center; gap: 9px; padding: 6px 10px; border-radius: 4px; font-size: 13px; color: #aeb7c0; transition: background .12s, color .12s; }
+.os-nav-unterpunkt { display: flex; align-items: center; gap: 11px; padding: 8px 12px; border-radius: 4px; font-size: 15px; color: #aeb7c0; transition: background .12s, color .12s; }
 .os-nav-unterpunkt:hover { background: rgba(255,255,255,.06); color: #fff; }
 .os-nav-aktiv, .os-nav-aktiv:hover { background: var(--os-nav-aktiv); color: #fff; font-weight: 500; }
 .os-nav-aktiv.os-nav-unterpunkt { box-shadow: inset 2px 0 0 var(--os-akzent); border-radius: 0 4px 4px 0; }
