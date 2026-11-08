@@ -9,6 +9,7 @@
 
 import { istHaubenForm } from '@/lib/cad/haube'
 import type { BereichsAenderung } from '@/lib/cad/bereiche'
+import { leseFiguren, type Figur } from '@/lib/cad/zeichnung'
 import type { BuildingParams, BuildingSection, CadTuer } from '@/lib/calculations/cad-engine'
 import { findeSystem } from '@/lib/calculations/geruest-systeme'
 import { bereinigeStatikDaten, type StatikDaten } from '@/lib/statik-daten'
@@ -39,6 +40,8 @@ export interface Projektdatei {
   artikelWahl?: Record<string, string>
   /** Von Hand geänderte Gerüstbereiche (Felder angehängt, Bereich aufgestockt) – ältere Dateien haben sie nicht */
   bereiche?: BereichsAenderung[]
+  /** Freie Zeichnung im Grundriss (Linien, Kreise, Maße) */
+  zeichnung?: Figur[]
 }
 
 export type LeseErgebnis =
@@ -48,7 +51,7 @@ export type LeseErgebnis =
 const zahl = (v: unknown, min: number, max: number): number | null =>
   typeof v === 'number' && Number.isFinite(v) && v >= min && v <= max ? v : null
 
-export function erzeugeProjektdatei(p: { name?: string; building: BuildingParams; systemId: string; statikDaten: StatikDaten; notizen: CADNote[]; artikelWahl?: Record<string, string>; bereiche?: BereichsAenderung[]; testdaten?: boolean }): Projektdatei {
+export function erzeugeProjektdatei(p: { name?: string; building: BuildingParams; systemId: string; statikDaten: StatikDaten; notizen: CADNote[]; artikelWahl?: Record<string, string>; bereiche?: BereichsAenderung[]; zeichnung?: Figur[]; testdaten?: boolean }): Projektdatei {
   return {
     format: PROJEKTDATEI_FORMAT,
     version: PROJEKTDATEI_VERSION,
@@ -61,6 +64,7 @@ export function erzeugeProjektdatei(p: { name?: string; building: BuildingParams
     notizen: p.notizen,
     ...(p.artikelWahl && Object.keys(p.artikelWahl).length ? { artikelWahl: p.artikelWahl } : {}),
     ...(p.bereiche && p.bereiche.length ? { bereiche: p.bereiche } : {}),
+    ...(p.zeichnung && p.zeichnung.length ? { zeichnung: p.zeichnung } : {}),
   }
 }
 
@@ -238,6 +242,7 @@ export function liesProjektdatei(text: string): LeseErgebnis {
       notizen,
       ...(Object.keys(artikelWahl).length ? { artikelWahl } : {}),
       ...(bereiche.length ? { bereiche } : {}),
+      ...(leseFiguren(r.zeichnung).length ? { zeichnung: leseFiguren(r.zeichnung) } : {}),
     },
   }
 }

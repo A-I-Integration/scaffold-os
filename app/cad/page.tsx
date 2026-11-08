@@ -43,6 +43,7 @@ import TeilabbauPanel, { TEILABBAU_START, type TeilabbauEingabe } from '@/compon
 import { berechneTeilabbau, type TeilabbauAuswahl } from '@/lib/cad/teilabbau'
 import { waehleBereich, wendeAenderungenAn, type BereichsAenderung } from '@/lib/cad/bereiche'
 import EigenschaftenLeiste from '@/components/cad/EigenschaftenLeiste'
+import { beschreibeFigur, type Figur, type FigurArt } from '@/lib/cad/zeichnung'
 import CadBand from '@/components/cad/CadBand'
 import BereichePanel, { BEREICHS_START, eingabeZuAenderung, type BereichsEingabe } from '@/components/cad/BereichePanel'
 import { ansichtDateiname } from '@/lib/cad/ansicht-bild'
@@ -336,6 +337,8 @@ export default function CADPage() {
   const [pendingMeasurePoint, setPendingMeasurePoint] = useState<{ point: [number, number, number]; label?: string } | null>(null)
   // NEU (CP-Pro-Marktvergleich, "Drag & Drop"-Lücke): manuell platzierte Bauteile
   const [manualPlacements, setManualPlacements] = useState<ManualPlacement[]>([])
+  const [figuren, setFiguren] = useState<Figur[]>([])
+  const [zeichenWerkzeug, setZeichenWerkzeug] = useState<FigurArt | null>(null)
   // Ausgewählter Bauteiltyp für die Klick-Platzierung (null = Modus aus)
   const [placementType, setPlacementType] = useState<string | null>(null)
   // Manuell entfernte Bauteile (z. B. eine Treppe, die weg soll). Jeder Eintrag
@@ -506,7 +509,7 @@ export default function CADPage() {
     setCustomDimensions([]);
     setPendingMeasurePoint(null);
     setManualPlacements([]); // Manuelle Bauteile gehören zum verworfenen Modell
-    setBereichsListe([]); setBereicheOffen(false)
+    setBereichsListe([]); setFiguren([]); setZeichenWerkzeug(null); setBereicheOffen(false)
     setPlacementType(null);
     // Phase 68-G: Auto-Generierung sperren -> Leinwand bleibt leer,
     // bis der Nutzer erneut handelt (sonst baut der Effekt unten das
@@ -758,7 +761,7 @@ export default function CADPage() {
   // Phase 68-J: Statt toter Buttons ohne Modell -> klarer Hinweis beim Klick.
   // Projektdatei: speichern und wieder laden (Gebäude, System, Statik-Angaben, Notizen)
   const speichereProjektdatei = () => {
-    const daten = erzeugeProjektdatei({ name: `CAD-Projekt ${new Date().toLocaleDateString('de-DE')}`, building, systemId, statikDaten, notizen: notes, artikelWahl, bereiche: bereichsListe })
+    const daten = erzeugeProjektdatei({ name: `CAD-Projekt ${new Date().toLocaleDateString('de-DE')}`, building, systemId, statikDaten, notizen: notes, artikelWahl, bereiche: bereichsListe, zeichnung: figuren })
     const a = document.createElement('a')
     a.href = URL.createObjectURL(new Blob([JSON.stringify(daten, null, 2)], { type: 'application/json' }))
     a.download = `CAD-Projekt-${new Date().toISOString().split('T')[0]}.scaffold.json`
@@ -769,7 +772,7 @@ export default function CADPage() {
     const e = liesProjektdatei(text)
     if (!e.ok) { window.alert(`„${name}“ konnte nicht geladen werden:\n${e.fehler}`); return }
     if (!window.confirm(`Projektdatei „${e.daten.name}“ laden?\n\nDas aktuelle Modell, die Notizen und die manuell gesetzten Teile werden ersetzt.${e.daten.testdaten ? '\n\nHinweis: Das sind erfundene Testdaten.' : ''}${e.verworfen.length ? `\n\nNicht übernommen (ungültig oder nicht unterstützt): ${e.verworfen.join(', ')}.` : ''}`)) return
-    setSelectedComponent(null); setManualPlacements([]); setBereichsListe(e.daten.bereiche ?? []); setNotes(e.daten.notizen)
+    setSelectedComponent(null); setManualPlacements([]); setBereichsListe(e.daten.bereiche ?? []); setFiguren(e.daten.zeichnung ?? []); setNotes(e.daten.notizen)
     setStatikDaten(e.daten.statikDaten); setSystemId(e.daten.systemId); setArtikelWahl(e.daten.artikelWahl ?? {})
     setAutoGenerate(true); setBuilding(e.daten.building)
   }
@@ -1095,6 +1098,7 @@ export default function CADPage() {
           <SystemLeiste systemId={systemId} onSystemChange={aendereSystem} gewaehlteArtikel={Object.keys(artikelWahl).length} />
           <CadBand
             hatModell={!!modelWithManual} viewMode={viewMode} onViewMode={setViewMode}
+            zeichenWerkzeug={zeichenWerkzeug} onZeichenWerkzeug={setZeichenWerkzeug} figurenAnzahl={figuren.length} onFigurenLoeschen={() => setFiguren([])}
             bereicheOffen={bereicheOffen} bereichWerkzeug={bereichEin.werkzeug}
             onBereichWerkzeug={(w) => { setBereichEin((e) => ({ ...e, werkzeug: w })); setBereicheOffen(true); setAbbauAktiv(false); setViewMode('3d') }}
             abbauAktiv={abbauAktiv} onAbbau={() => { setAbbauAktiv((a) => !a); setBereicheOffen(false); setViewMode('3d') }}
@@ -1225,7 +1229,20 @@ export default function CADPage() {
                 <button onClick={() => { setAutoGenerate(true); generate(); }} className='px-4 py-2 text-sm font-medium rounded-xl bg-[#0071e3] text-white hover:bg-[#0077ed]'>Gerüst neu berechnen</button>
               </div>
             )}
-            {viewMode === '2d' && modelWithManual && <Scaffold2D model={modelWithManual} />}
+            {viewMode === '2d' && modelWithManual && <Scaffold2D model={modelWithManual} zeichnung={{ figuren, werkzeug: zeichenWerkzeug, onNeu: (f) => setFiguren((l) => [...l, f]), onWerkzeug: setZeichenWerkzeug }} />}
+            {viewMode === '2d' && modelWithManual && figuren.length > 0 && (
+              <aside className='absolute right-3 top-3 z-20 w-[300px] max-h-[60%] overflow-hidden rounded-md border bg-white shadow-xl' style={{ borderColor: 'var(--os-linie)' }} aria-label='Zeichnung'>
+                <div className='px-3 py-2 text-[14px] font-bold text-white' style={{ background: 'var(--os-nav)' }}>Zeichnung ({figuren.length})</div>
+                <ul className='max-h-[40vh] space-y-1 overflow-y-auto p-2'>
+                  {figuren.map((f) => (
+                    <li key={f.id} className='flex items-start gap-2 rounded border px-2 py-1.5 text-[13px]' style={{ borderColor: 'var(--os-linie)' }}>
+                      <span className='flex-1'>{beschreibeFigur(f)}</span>
+                      <button type='button' aria-label='Figur löschen' className='rounded px-1 hover:bg-black/5' onClick={() => setFiguren((l) => l.filter((x) => x.id !== f.id))}>✕</button>
+                    </li>
+                  ))}
+                </ul>
+              </aside>
+            )}
             {viewMode === '2d' && !model && (
               <div className='h-full flex items-center justify-center'>
                 <p className='text-sm text-[#86868b] text-center max-w-xs'>Kein Modell – zuerst „Gerüst neu berechnen“.{fehlendeMasse.length > 0 ? ` Es fehlen noch: ${fehlendeMasse.join(', ')}.` : ''}</p>
