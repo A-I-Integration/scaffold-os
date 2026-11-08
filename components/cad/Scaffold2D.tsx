@@ -6,7 +6,7 @@ import Zeichenschicht from './Zeichenschicht'
 import type { Figur, FigurArt } from '@/lib/cad/zeichnung'
 
 type ViewType = 'grundriss' | 'ansicht-vorne' | 'ansicht-seite' | 'schnitt-aa' | 'detail-fusspunkt' | 'detail-anker'
-type ScaleType = '1:50' | '1:100' | '1:200'
+type ScaleType = '1:25' | '1:50' | '1:100' | '1:200'
 
 interface Props {
   model: CADModel
@@ -15,6 +15,7 @@ interface Props {
 }
 
 const SCALE_FACTORS: Record<ScaleType, number> = {
+  '1:25': 40,
   '1:50': 20,
   '1:100': 10,
   '1:200': 5,
@@ -22,7 +23,7 @@ const SCALE_FACTORS: Record<ScaleType, number> = {
 
 export default function Scaffold2D({ model, zeichnung }: Props) {
   const [activeView, setActiveView] = useState<ViewType>('grundriss')
-  const [scale, setScale] = useState<ScaleType>('1:100')
+  const [scale, setScale] = useState<ScaleType>('1:50')
   const [showDimensions, setShowDimensions] = useState(true)
   const [showBuilding, setShowBuilding] = useState(true)
   const [showScaffold, setShowScaffold] = useState(true)
@@ -80,6 +81,7 @@ export default function Scaffold2D({ model, zeichnung }: Props) {
         </div>
         <div className='flex items-center gap-3'>
           <select value={scale} onChange={(e) => setScale(e.target.value as ScaleType)} className='text-xs border rounded-lg px-2 py-1'>
+            <option value='1:25'>1:25</option>
             <option value='1:50'>1:50</option>
             <option value='1:100'>1:100</option>
             <option value='1:200'>1:200</option>
@@ -177,7 +179,7 @@ export default function Scaffold2D({ model, zeichnung }: Props) {
               if (!showBuilding && el.id.startsWith('building')) return null
               if (!showScaffold && el.id.startsWith('field')) return null
 
-              const strokeW = (el.strokeWidth || 1) * (scale === '1:50' ? 1.5 : scale === '1:100' ? 1 : 0.8)
+              const strokeW = (el.strokeWidth || 1) * (scale === '1:50' || scale === '1:25' ? 1.5 : scale === '1:100' ? 1 : 0.8)
 
               switch (el.type) {
                 case 'rect':
@@ -208,7 +210,7 @@ export default function Scaffold2D({ model, zeichnung }: Props) {
                 case 'path':
                   return <path key={el.id} d={el.d || ''} fill={el.fill || 'none'} stroke={el.stroke || '#000'} strokeWidth={strokeW} />
                 case 'text':
-                  return <text key={el.id} x={el.x * scaleFactor} y={el.y * scaleFactor} fontSize={scale === '1:50' ? 14 : 12} fill={el.fill || '#000'} textAnchor='middle' style={{ fontFamily: 'var(--schrift)' }}>{el.text}</text>
+                  return <text key={el.id} x={el.x * scaleFactor} y={el.y * scaleFactor} fontSize={scale === '1:50' || scale === '1:25' ? 14 : 12} fill={el.fill || '#000'} textAnchor='middle' style={{ fontFamily: 'var(--schrift)' }}>{el.text}</text>
                 default:
                   return null
               }
@@ -235,7 +237,7 @@ export default function Scaffold2D({ model, zeichnung }: Props) {
                 <text
                   x={((dim.fromX + dim.toX) / 2 + (dim.offsetX || 0)) * scaleFactor}
                   y={((dim.fromY + dim.toY) / 2 + (dim.offsetY || 0)) * scaleFactor - 8}
-                  fontSize={scale === '1:50' ? 13 : 11}
+                  fontSize={scale === '1:50' || scale === '1:25' ? 13 : 11}
                   fill='#f59e0b'
                   fontWeight='bold'
                   textAnchor='middle'
