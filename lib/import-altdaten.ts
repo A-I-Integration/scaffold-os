@@ -47,19 +47,62 @@ const s = (v: unknown, max: number): string | null => {
 const norm = (v: unknown) => String(v ?? '').toLowerCase().trim()
 
 // ─── Baustellen ───
-export interface BaustelleZeile { kunde: string; name: string; adresse: string | null; beginn: string | null; ende: string | null; abgeschlossen: boolean }
+export interface BaustelleZeile {
+  kunde: string; name: string; adresse: string | null; beginn: string | null; ende: string | null; abgeschlossen: boolean
+  /** Kundennummer aus der Altsoftware (zum sicheren Verknüpfen statt über den Namen) */
+  kundeNr: string | null
+  /** Projekt-/Baustellennummer aus der Altsoftware */
+  nummer: string | null
+  aufbau: string | null; mietbeginn: string | null; mietende: string | null; vertragsende: string | null
+  zeitklasse: Zeitklasse
+  hinweise: string[]
+}
+export type Zeitklasse = 'historisch' | 'aktiv' | 'geplant' | 'unbekannt'
+
+/** Einordnung einer Baustelle nach Zeitraum: vorbei, läuft gerade oder liegt in der Zukunft. Alle Daten als YYYY-MM-DD. */
+export function zeitklasse(beginn: string | null, ende: string | null, heute: string, abgeschlossen = false): Zeitklasse {
+  if (abgeschlossen) return 'historisch'
+  if (!beginn && !ende) return 'unbekannt'
+  if (beginn && beginn > heute) return 'geplant'
+  if (ende && ende < heute) return 'historisch'
+  return 'aktiv'
+}
 export type BaustellePruefung = { ok: true; wert: BaustelleZeile } | { ok: false; grund: string }
 
-export function pruefeBaustelle(r: Record<string, unknown>): BaustellePruefung {
-  const kunde = s(r.kunde, 200), name = s(r.name, 200)
-  if (!kunde) return { ok: false, grund: 'Kunde fehlt' }
+export function pruefeBaustelle(r: Record<string, unknown>, heute: string = new Date().toISOString().slice(0, 10)): BaustellePruefung {
+  const kunde = s(r.kunde, 200), kundeNr = s(r.kunde_nr, 60), name = s(r.name, 200)
+  if (!kunde && !kundeNr) return { ok: false, grund: 'Kunde fehlt (Name oder Kundennummer angeben)' }
   if (!name) return { ok: false, grund: 'Baustellenname fehlt' }
-  const beginn = s(r.beginn, 40) ? parseDatum(r.beginn) : null
-  const ende = s(r.ende, 40) ? parseDatum(r.ende) : null
-  if (s(r.beginn, 40) && !beginn) return { ok: false, grund: `Beginn nicht lesbar: ${s(r.beginn, 40)}` }
-  if (s(r.ende, 40) && !ende) return { ok: false, grund: `Ende nicht lesbar: ${s(r.ende, 40)}` }
+  const datum = (feld: string, bez: string): string | null | 'fehler' => {
+    const roh = s(r[feld], 40)
+    if (!roh) return null
+    return parseDatum(roh) ?? 'fehler'
+  }
+  const werte: Record<string, string | null> = {}
+  for (const [feld, bez] of [['beginn', 'Beginn'], ['ende', 'Ende'], ['aufbau', 'Aufbau'], ['mietbeginn', 'Mietbeginn'], ['mietende', 'Mietende'], ['vertragsende', 'Vertragsende']] as const) {
+    const d = datum(feld, bez)
+    if (d === 'fehler') return { ok: false, grund: `${bez} nicht lesbar: ${s(r[feld], 40)}` }
+    werte[feld] = d
+  }
+  const hinweise: string[] = []
+  if (werte.beginn && werte.ende && werte.ende < werte.beginn) return { ok: false, grund: `Ende (${werte.ende}) liegt vor dem Beginn (${werte.beginn})` }
+  if (werte.mietbeginn && werte.mietende && werte.mietende < werte.mietbeginn) return { ok: false, grund: `Mietende liegt vor dem Mietbeginn` }
+  if (werte.mietende && werte.vertragsende && werte.vertragsende < werte.mietende) hinweise.push('Vertragsende liegt vor dem Mietende')
   const st = norm(r.status)
-  return { ok: true, wert: { kunde, name, adresse: s(r.adresse, 300), beginn, ende, abgeschlossen: /abgeschlossen|erledigt|fertig|beendet|completed|^ja$/.test(st) } }
+  const abgeschlossen = /abgeschlossen|erledigt|fertig|beendet|completed|^ja$/.test(st)
+  const von = werte.mietbeginn ?? werte.beginn ?? werte.aufbau
+  const bis = werte.mietende ?? werte.ende ?? werte.vertragsende
+  const klasse = zeitklasse(von, bis, heute, abgeschlossen)
+  if (abgeschlossen && bis && bis > heute) hinweise.push('Als abgeschlossen markiert, obwohl das Ende in der Zukunft liegt')
+  return {
+    ok: true,
+    wert: {
+      kunde: kunde ?? '', kundeNr, nummer: s(r.nummer, 60), name, adresse: s(r.adresse, 300),
+      beginn: werte.beginn, ende: werte.ende, abgeschlossen,
+      aufbau: werte.aufbau, mietbeginn: werte.mietbeginn, mietende: werte.mietende, vertragsende: werte.vertragsende,
+      zeitklasse: klasse, hinweise,
+    },
+  }
 }
 
 // ─── Alte Rechnungen ───
@@ -67,13 +110,16 @@ export interface AltrechnungZeile {
   nummer: string; kunde: string; baustelle: string | null; datum: string; faelligkeit: string | null
   netto: number; steuersatz: number; steuer: number; brutto: number
   bezahlt: number; status: 'offen' | 'bezahlt' | 'storniert'; art: 'standard' | 'gutschrift'; bezeichnung: string
+  /** Kundennummer und Baustellennummer aus der Altsoftware (sichere Verknüpfung) */
+  kundeNr: string | null; projektNr: string | null
+  hinweise: string[]
 }
 export type AltrechnungPruefung = { ok: true; wert: AltrechnungZeile } | { ok: false; grund: string }
 
 export function pruefeAltrechnung(r: Record<string, unknown>): AltrechnungPruefung {
-  const nummer = s(r.nummer, 60), kunde = s(r.kunde, 200)
+  const nummer = s(r.nummer, 60), kunde = s(r.kunde, 200), kundeNr = s(r.kunde_nr, 60)
   if (!nummer) return { ok: false, grund: 'Rechnungsnummer fehlt' }
-  if (!kunde) return { ok: false, grund: 'Kunde fehlt' }
+  if (!kunde && !kundeNr) return { ok: false, grund: 'Kunde fehlt (Name oder Kundennummer angeben)' }
   const datum = parseDatum(r.datum)
   if (!datum) return { ok: false, grund: `Rechnungsdatum fehlt oder nicht lesbar: ${s(r.datum, 40) ?? '–'}` }
   const faelligRoh = s(r.faelligkeit, 40)
@@ -81,12 +127,14 @@ export function pruefeAltrechnung(r: Record<string, unknown>): AltrechnungPruefu
   if (faelligRoh && !faelligkeit) return { ok: false, grund: `Fälligkeit nicht lesbar: ${faelligRoh}` }
 
   let netto = parseZahl(r.netto), brutto = parseZahl(r.brutto)
+  const hinweise: string[] = []
   if (netto === null && brutto === null) return { ok: false, grund: 'Weder Netto- noch Bruttobetrag angegeben' }
   let satz = parseZahl(r.steuersatz)
   if (satz !== null && (satz < 0 || satz > 30)) return { ok: false, grund: `Steuersatz unplausibel: ${satz}` }
   let steuer: number
   if (netto !== null && brutto !== null) {
     steuer = r2(brutto - netto)
+    if (satz !== null && Math.abs(steuer - r2(netto * satz / 100)) > 0.05) hinweise.push(`Brutto − Netto (${steuer.toLocaleString('de-DE')}) passt nicht zu ${satz} % USt auf Netto`)
     satz = satz ?? (netto !== 0 ? r2((steuer / netto) * 100) : 19)
   } else {
     satz = satz ?? 19
@@ -110,7 +158,7 @@ export function pruefeAltrechnung(r: Record<string, unknown>): AltrechnungPruefu
   return {
     ok: true,
     wert: {
-      nummer, kunde, baustelle: s(r.baustelle, 200), datum, faelligkeit, netto, steuersatz: satz, steuer, brutto,
+      nummer, kunde: kunde ?? '', kundeNr, projektNr: s(r.projekt_nr, 60), hinweise, baustelle: s(r.baustelle, 200), datum, faelligkeit, netto, steuersatz: satz, steuer, brutto,
       bezahlt: storniert ? 0 : bezahlt, status, art, bezeichnung: s(r.bezeichnung, 500) ?? 'Leistung gemäß Rechnung',
     },
   }

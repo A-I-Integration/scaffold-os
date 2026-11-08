@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { parseZahl, parseDatum, pruefeBaustelle, pruefeAltrechnung } from '@/lib/import-altdaten'
+import { parseZahl, parseDatum, pruefeBaustelle, pruefeAltrechnung, zeitklasse } from '@/lib/import-altdaten'
 
 describe('parseZahl', () => {
   it('liest deutsche und englische Schreibweisen', () => {
@@ -33,10 +33,11 @@ describe('parseDatum', () => {
 describe('pruefeBaustelle', () => {
   it('nimmt eine vollständige Zeile an', () => {
     const r = pruefeBaustelle({ kunde: ' Müller GmbH ', name: 'Neubau Süd', adresse: 'Hauptstr. 1', beginn: '01.03.2026', ende: '30.04.2026', status: 'abgeschlossen' })
-    expect(r).toEqual({ ok: true, wert: { kunde: 'Müller GmbH', name: 'Neubau Süd', adresse: 'Hauptstr. 1', beginn: '2026-03-01', ende: '2026-04-30', abgeschlossen: true } })
+    expect(r.ok).toBe(true)
+    if (r.ok) expect(r.wert).toMatchObject({ kunde: 'Müller GmbH', name: 'Neubau Süd', adresse: 'Hauptstr. 1', beginn: '2026-03-01', ende: '2026-04-30', abgeschlossen: true, zeitklasse: 'historisch' })
   })
   it('meldet Pflichtfelder und unlesbare Daten', () => {
-    expect(pruefeBaustelle({ name: 'x' })).toMatchObject({ ok: false, grund: 'Kunde fehlt' })
+    expect(pruefeBaustelle({ name: 'x' })).toMatchObject({ ok: false, grund: expect.stringContaining('Kunde fehlt') })
     expect(pruefeBaustelle({ kunde: 'k' })).toMatchObject({ ok: false })
     expect(pruefeBaustelle({ kunde: 'k', name: 'n', beginn: 'bald' }).ok).toBe(false)
   })
@@ -66,5 +67,43 @@ describe('pruefeAltrechnung', () => {
     expect(pruefeAltrechnung({ ...basis, datum: 'x', netto: '1' }).ok).toBe(false)
     expect(pruefeAltrechnung({ nummer: '', kunde: 'k', datum: '1.1.2026', netto: '1' }).ok).toBe(false)
     expect(pruefeAltrechnung({ ...basis, netto: '1', steuersatz: '99' }).ok).toBe(false)
+  })
+})
+
+describe('Wechsel-Import: Zeitachse und Alt-Nummern', () => {
+  const heute = '2026-11-08'
+  it('ordnet Baustellen nach Zeitraum ein', () => {
+    expect(zeitklasse('2026-03-01', '2026-06-30', heute)).toBe('historisch')
+    expect(zeitklasse('2026-03-01', '2032-06-30', heute)).toBe('aktiv')
+    expect(zeitklasse('2027-01-01', '2032-06-30', heute)).toBe('geplant')
+    expect(zeitklasse(null, null, heute)).toBe('unbekannt')
+    expect(zeitklasse('2026-03-01', '2032-06-30', heute, true)).toBe('historisch')
+  })
+  it('Baustelle: Mietzeitraum bis 2032 ist aktiv, nicht abgeschlossen', () => {
+    const p = pruefeBaustelle({ kunde: 'A', name: 'B', beginn: '01.03.2026', mietbeginn: '01.07.2026', mietende: '30.06.2032', vertragsende: '31.12.2032', kunde_nr: '4711', nummer: 'P-1' }, heute)
+    expect(p.ok).toBe(true)
+    if (p.ok) {
+      expect(p.wert.zeitklasse).toBe('aktiv')
+      expect(p.wert.mietende).toBe('2032-06-30')
+      expect(p.wert.kundeNr).toBe('4711')
+      expect(p.wert.nummer).toBe('P-1')
+    }
+  })
+  it('Baustelle: Kunde per Nummer reicht, Ende vor Beginn ist ein Fehler', () => {
+    expect(pruefeBaustelle({ kunde_nr: '4711', name: 'B' }, heute).ok).toBe(true)
+    const f = pruefeBaustelle({ kunde: 'A', name: 'B', beginn: '01.05.2026', ende: '01.04.2026' }, heute)
+    expect(f.ok).toBe(false)
+    expect(pruefeBaustelle({ kunde: 'A', name: 'B', mietbeginn: 'bald' }, heute).ok).toBe(false)
+  })
+  it('Baustelle: abgeschlossen mit Ende in der Zukunft gibt einen Hinweis', () => {
+    const p = pruefeBaustelle({ kunde: 'A', name: 'B', ende: '01.01.2030', status: 'abgeschlossen' }, heute)
+    expect(p.ok && p.wert.hinweise.length).toBe(1)
+  })
+  it('Rechnung: Kundennummer reicht; Brutto/Netto passt nicht zur USt gibt einen Hinweis', () => {
+    const p = pruefeAltrechnung({ nummer: 'R1', kunde_nr: '4711', datum: '01.02.2025', netto: '100', brutto: '125', steuersatz: '19', projekt_nr: 'P-1' })
+    expect(p.ok).toBe(true)
+    if (p.ok) { expect(p.wert.kundeNr).toBe('4711'); expect(p.wert.projektNr).toBe('P-1'); expect(p.wert.hinweise.length).toBe(1) }
+    const ok = pruefeAltrechnung({ nummer: 'R2', kunde: 'A', datum: '01.02.2025', netto: '100', brutto: '119', steuersatz: '19' })
+    expect(ok.ok && ok.wert.hinweise.length).toBe(0)
   })
 })
