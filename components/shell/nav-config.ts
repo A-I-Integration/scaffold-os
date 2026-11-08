@@ -1,7 +1,7 @@
 import {
   LayoutDashboard, Users, Ruler, Box, FileText, FolderOpen, Handshake, CreditCard, Euro, Mail, CalendarClock,
   Truck, Route, Timer, Navigation, ClipboardList, Warehouse, TrendingUp, BookOpen, KeyRound, Settings, Database,
-  Upload, HelpCircle, ShieldCheck, Triangle, Receipt, FilePlus2,
+  Upload, Scale, HelpCircle, ShieldCheck, Triangle, Receipt, FilePlus2,
 } from 'lucide-react'
 
 // ============================================================
@@ -86,6 +86,7 @@ export const NAV_GRUPPEN: NavGruppe[] = [
     key: 'betrieb', label: 'Betrieb',
     eintraege: [
       { href: '/lager', label: 'Lager', icon: Warehouse, roles: ['admin', 'disponent', 'bauleiter', 'lager'] },
+      { href: '/gestell-simulator', label: 'Gestell-Waage (Test)', icon: Scale, roles: ['admin', 'disponent', 'lager'] },
       { href: '/prognose', label: 'Prognose', icon: TrendingUp, roles: ['admin', 'disponent', 'lager'] },
       { href: '/mitarbeiter', label: 'Mitarbeiter & Zugänge', icon: KeyRound, roles: BUERO },
       { href: '/datenimport', label: 'Datenimport', icon: Upload, roles: BUERO },
