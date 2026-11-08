@@ -81,6 +81,24 @@ describe('Felder anhängen', () => {
   })
 })
 
+describe('Anker neuer Felder', () => {
+  it('angehängte Felder bekommen Anker nach der Regel der Hauptplanung', () => {
+    const m = modell()
+    const n = erweitereSeite(m, { art: 'erweitern', seite: 'front', ende: 'ende', anzahl: 3 })
+    const neu = n.anchors.filter((a) => !m.anchors.some((b) => b.id === a.id))
+    expect(neu.length).toBeGreaterThan(0)
+    expect(neu.every((a) => a.side === 'front' && a.positionY > 0)).toBe(true)
+    // gleicher Abstand quer zur Fassade wie bei den vorhandenen Ankern
+    const alt = m.anchors.find((a) => a.side === 'front')!
+    expect(neu[0].positionZ).toBeCloseTo(alt.positionZ, 2)
+  })
+  it('niedriges Gebäude (bis 6 m) bekommt keine Anker', () => {
+    const m = generateCADModel({ ...basis, heightM: 5, eavesHeightM: 5, floors: 2, floorHeightsM: [2.5, 2.5] }, 'layher-allround')
+    const n = erweitereSeite(m, { art: 'erweitern', seite: 'front', ende: 'ende', anzahl: 2 })
+    expect(n.anchors.length).toBe(m.anchors.length)
+  })
+})
+
 describe('Bereich aufstocken', () => {
   it('setzt über dem Bereich weitere Lagen auf', () => {
     const m = modell()
