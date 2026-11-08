@@ -48,6 +48,8 @@ interface Props {
   // NEU (Marktvergleich-Lücke 3): erlaubt der aufrufenden Seite, die
   // 3D-Ansicht als Bild für die Angebots-Anlage zu erfassen.
   onCanvasReady?: (canvas: HTMLCanvasElement) => void
+  // Inhaltsgruppe (Gerüst + Gebäude) für den AR-/GLB-Export der Ansichtsseite
+  onInhaltBereit?: (inhalt: THREE.Object3D) => void
   // NEU: Brücken-Zugangsgerüst – ersetzt den Gebäude-Baukörper durch
   // eine Brückendeck-Kante mit Hängekonsolen (siehe BridgeDeck3D).
   bridgeMode?: boolean
@@ -2030,6 +2032,7 @@ function Scaffold3D({
   visibleTypes,
   viewMode,
   onCanvasReady,
+  onInhaltBereit,
   bridgeMode,
   notes,
   onAddNote,
@@ -2089,6 +2092,7 @@ function Scaffold3D({
     Math.max(model.building.lengthM, model.building.heightM) * 2 + 8
 
   const contentRef = useRef<THREE.Group>(null)
+  useEffect(() => { if (contentRef.current) onInhaltBereit?.(contentRef.current) }, [onInhaltBereit])
 
   const modelKeyLive = useMemo(
     // Manuell gesetzte Bauteile (id beginnt mit "manual-") zählen nicht mit: Sonst richtet sich die

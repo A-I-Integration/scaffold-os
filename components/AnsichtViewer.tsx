@@ -1,6 +1,8 @@
 'use client'
 
-import { useMemo, useState, type ReactNode } from 'react'
+import { useCallback, useMemo, useState, type ReactNode } from 'react'
+import type { Object3D } from 'three'
+import ArAnsicht from '@/components/ArAnsicht'
 import dynamic from 'next/dynamic'
 import {
   generateCADModel, generateBuildingFeatures, generateBillOfMaterials,
@@ -45,6 +47,8 @@ const fmt = (n: number, d = 1) => n.toLocaleString('de-DE', { minimumFractionDig
 
 export default function AnsichtViewer({ daten, kopfAktion }: { daten: AnsichtDaten; kopfAktion?: ReactNode }) {
   const [auswahl, setAuswahl] = useState<string | null>(null)
+  const [inhalt, setInhalt] = useState<Object3D | null>(null)
+  const inhaltBereit = useCallback((g: Object3D) => setInhalt(g), [])
   const [ansicht, setAnsicht] = useState<'perspective' | 'front' | 'back' | 'left' | 'right' | 'top'>('perspective')
 
   const modell = useMemo(() => {
@@ -101,9 +105,10 @@ export default function AnsichtViewer({ daten, kopfAktion }: { daten: AnsichtDat
             <Scaffold3D
               model={modell} features={features} showBuilding showScaffold showDimensions={false}
               selectedComponent={auswahl} onSelectComponent={setAuswahl}
-              visibleTypes={ALLE_TYPEN} viewMode={ansicht} showEnvironment={false}
+              visibleTypes={ALLE_TYPEN} viewMode={ansicht} showEnvironment={false} onInhaltBereit={inhaltBereit}
             />
           </div>
+          <ArAnsicht inhalt={inhalt} name={daten.projektName} />
           <p className='px-3 py-2 text-xs text-[#86868b]'>
             {gewaehlt ? `Ausgewählt: ${gewaehlt.name} (${gewaehlt.articleNumber})` : 'Mit der Maus oder dem Finger drehen und zoomen, Bauteil antippen für Details.'}
           </p>
