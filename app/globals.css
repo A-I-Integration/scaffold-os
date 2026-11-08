@@ -320,3 +320,7 @@ body {
 .os-ui .bg-white { border-color: var(--os-linie); }
 .os-ui input:not([type="checkbox"]):not([type="radio"]), .os-ui select, .os-ui textarea { border-radius: 4px; background-color: #fff; }
 .os-ui a:focus-visible, .os-ui button:focus-visible { outline: 2px solid var(--os-akzent); outline-offset: 1px; }
+
+/* Orange Hauptknöpfe: dunkle Schrift (Kontrast ca. 5:1 statt 3,6:1 mit weißer Schrift) */
+.os-ui :is(button, a)[class~="bg-[#e8590c]"], .os-ui :is(button, a)[class~="bg-[#d9480f]"], .os-ui :is(button, a)[class~="hover:bg-[#d9480f]"]:hover { color: #171b20; }
+.os-ui :is(button, a)[class~="bg-[#e8590c]"] * { color: inherit; }

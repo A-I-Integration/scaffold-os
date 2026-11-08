@@ -14,7 +14,7 @@
 
 import {
   feldEntlangFassade, generateScaffoldComponents,
-  type CADModel, type ScaffoldComponent3D, type ScaffoldField, type ScaffoldLevel,
+  type CADModel, type ScaffoldAnchor, type ScaffoldComponent3D, type ScaffoldField, type ScaffoldLevel,
 } from '@/lib/calculations/cad-engine'
 
 export type Seite = 'front' | 'back' | 'left' | 'right'
@@ -111,8 +111,48 @@ function kopiere(model: CADModel): CADModel {
     fields: [...model.fields],
     levels: model.levels.map((l) => ({ ...l, fields: [...l.fields] })),
     components3D: [...model.components3D],
+    anchors: [...model.anchors],
     warnings: [...model.warnings],
   }
+}
+
+/**
+ * Anker für neue Felder nach derselben Regel wie die Hauptplanung: ab 6 m Gebäudehöhe, jedes zweite Feld,
+ * jede zweite Lage (Oberkante der Lagen 2, 4, 6 …). Der Abstand des Ankers zur Feldmitte quer zur Seite
+ * wird aus den vorhandenen Ankern derselben Seite übernommen (sonst 0,365 m nach außen).
+ */
+function ankerFuerFelder(m: CADModel, neue: ScaffoldField[]): ScaffoldAnchor[] {
+  if (!(m.building.heightM > 6)) return []
+  const aus: ScaffoldAnchor[] = []
+  const quer = (f: { side: Seite; positionX: number; positionZ: number }) => (f.side === 'front' || f.side === 'back' ? f.positionZ : f.positionX)
+  const versatz = (seite: Seite): number => {
+    const a = m.anchors.find((x) => x.side === seite)
+    const f = a && m.fields.find((g) => g.side === seite && !neue.includes(g) && Math.abs(entlang(g, m) - feldEntlangFassade(seite, a.positionX, a.positionZ, m.building)) < 0.01)
+    if (a && f) return Math.round((quer(a as { side: Seite; positionX: number; positionZ: number }) - quer(f)) * 1000) / 1000
+    return seite === 'front' || seite === 'right' ? 0.365 : -0.365
+  }
+  const nachSpalte = new Map<string, ScaffoldField[]>()
+  for (const f of neue) {
+    if (f.levelIndex % 2 !== 1) continue
+    const key = `${f.side}|${f.levelIndex}`
+    nachSpalte.set(key, [...(nachSpalte.get(key) ?? []), f])
+  }
+  for (const liste of nachSpalte.values()) {
+    liste.sort((a, b) => entlang(a, m) - entlang(b, m)).forEach((f, i) => {
+      if (i % 2 !== 0) return
+      const lage = lageDerSeite(m, f.side, f.levelIndex)
+      if (!lage) return
+      const v = versatz(f.side)
+      aus.push({
+        id: `anchor-${f.id}`,
+        positionX: f.side === 'front' || f.side === 'back' ? f.positionX : r2(f.positionX + v),
+        positionY: lage.topY,
+        positionZ: f.side === 'front' || f.side === 'back' ? r2(f.positionZ + v) : f.positionZ,
+        side: f.side, type: 'fassadenanker',
+      })
+    })
+  }
+  return aus
 }
 
 /** Neue Felder in das Modell einfügen und ihre Bauteile mit der vorhandenen Erzeugung bauen. */
@@ -135,6 +175,7 @@ function fuegeFelderEin(model: CADModel, neue: ScaffoldField[], neueLagen: Scaff
   }
   const bauteile: ScaffoldComponent3D[] = generateScaffoldComponents(hilfs)
   m.components3D.push(...bauteile)
+  m.anchors.push(...ankerFuerFelder(m, neue))
   m.fieldCount = m.fields.filter((f) => f.levelIndex === 0).length
   m.levelCount = new Set(m.levels.map((l) => l.index)).size
   m.totalLengthM = r2(m.fields.filter((f) => f.levelIndex === 0).reduce((s, f) => s + f.lengthM, 0))
@@ -177,7 +218,7 @@ export function erweitereSeite(model: CADModel, a: Extract<BereichsAenderung, { 
     }
   }
   const m = fuegeFelderEin(model, neue, [])
-  m.warnings.push({ type: 'info', code: 'BEREICH_ERWEITERT', message: `${beschreibeAenderung(a)}: Verankerung und Zugang für die neuen Felder bitte prüfen.` })
+  m.warnings.push({ type: 'info', code: 'BEREICH_ERWEITERT', message: `${beschreibeAenderung(a)}: Anker nach der üblichen Regel (jedes zweite Feld, jede zweite Lage) sind gesetzt, Verankerung und Zugang bitte prüfen.` })
   return m
 }
 
