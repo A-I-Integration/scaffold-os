@@ -56,7 +56,7 @@ export default function AuftragPage() {
 
   return (
     <div className="min-h-screen bg-white text-black">
-      <header className="px-4 py-5 border-b border-black/20" style={{ background: '#2d63a3', color: '#fff' }}>
+      <header className="px-4 py-5 border-b border-black/20" style={{ background: '#171b20', color: '#fff' }}>
         <p className="text-sm opacity-90">Auftragsstand · Stand {new Date().toLocaleDateString('de-DE')}</p>
         <h1 className="text-2xl font-bold">{d.projekt.name}</h1>
         {d.projekt.adresse && <p className="text-base mt-1">{d.projekt.adresse}</p>}
@@ -78,7 +78,7 @@ export default function AuftragPage() {
               const rest = r.status === 'storniert' ? 0 : Math.round((r.brutto - r.bezahlt) * 100) / 100;
               return (
                 <li key={r.id} className="rounded border border-black/30">
-                  <button onClick={() => setOffen(auf ? null : r.id)} aria-expanded={auf} className={`w-full text-left px-4 py-3 hover:bg-[#eef4fa] ${r.status === 'storniert' ? 'line-through text-black/50' : ''}`}>
+                  <button onClick={() => setOffen(auf ? null : r.id)} aria-expanded={auf} className={`w-full text-left px-4 py-3 hover:bg-[#f3f5f7] ${r.status === 'storniert' ? 'line-through text-black/50' : ''}`}>
                     <span className="flex flex-wrap items-baseline justify-between gap-2">
                       <span className="text-lg font-semibold">{ART[r.art] || 'Rechnung'} {r.nummer}</span>
                       <span className="tabular-nums font-semibold">{eur(r.brutto)}</span>

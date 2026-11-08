@@ -909,7 +909,7 @@ export default function KundenDetailPage() {
     <div className="min-h-full flex flex-col" style={{ background: WIN.grund }}>
       {/* ─── Kopf ─── */}
       <div className="sticky top-0 z-30">
-        <div className="flex items-center gap-3 px-3 h-9 text-white" style={{ background: 'linear-gradient(#4a86c8,#2d63a3)' }}>
+        <div className="flex items-center gap-3 px-3 h-9 text-white" style={{ background: '#171b20' }}>
           <button onClick={() => (baustelle ? waehleBaustelle(null) : router.push('/kunden'))} className="p-1 rounded hover:bg-white/20" title="Zurück"><ArrowLeft className="h-4 w-4" /></button>
           <div className="flex-1 min-w-0 flex items-baseline gap-3">
             <h1 className="text-[14px] font-bold truncate">{baustelle ? (baustelle.name || 'Unbenannte Baustelle') : kunde.name}</h1>
@@ -959,8 +959,8 @@ export default function KundenDetailPage() {
                     const status = pr.data?.angebotsStatus as string | undefined
                     const zelle = 'px-2 py-1.5 border'
                     return (
-                      <tr key={pr.id} onClick={() => waehleBaustelle(pr.id)} className="cursor-pointer hover:bg-[#e8f1fb]">
-                        <td className={`${zelle} font-semibold`} style={{ borderColor: WIN.randHell, color: '#1f4f8f' }}>{pr.name || 'Unbenannte Baustelle'}</td>
+                      <tr key={pr.id} onClick={() => waehleBaustelle(pr.id)} className="cursor-pointer hover:bg-[#f3f5f7]">
+                        <td className={`${zelle} font-semibold`} style={{ borderColor: WIN.randHell, color: '#171b20' }}>{pr.name || 'Unbenannte Baustelle'}</td>
                         <td className={zelle} style={{ borderColor: WIN.randHell }}>{pr.adresse || ''}</td>
                         <td className={zelle} style={{ borderColor: WIN.randHell }}>{status ? (ANGEBOT_LABEL[status] || status) : 'Noch kein Angebot'}</td>
                         <td className={zelle} style={{ borderColor: WIN.randHell }}><FreigabeBadge status={freigaben[pr.id]} /></td>
@@ -1121,9 +1121,9 @@ export default function KundenDetailPage() {
                   <div className="mt-3 flex flex-wrap items-center gap-1.5 text-xs">
                     <span className="text-[#86868b]">Ändern:</span>
                     {[[1, 'Auftrag & Zeitraum'], [2, 'Maße'], [3, 'System'], [4, ''], [5, '']].map(([n, t]) => (
-                      <a key={String(n)} href={`/aufmass/schritt${n}?id=${project.id}`} className="rounded border border-black/15 px-2 py-1 hover:bg-[#e8f1fb]">Schritt {n}{t ? ` – ${t}` : ''}</a>
+                      <a key={String(n)} href={`/aufmass/schritt${n}?id=${project.id}`} className="rounded border border-black/15 px-2 py-1 hover:bg-[#f3f5f7]">Schritt {n}{t ? ` – ${t}` : ''}</a>
                     ))}
-                    <a href={`/aufmass/schritt6?id=${project.id}`} className="rounded border border-black/15 px-2 py-1 hover:bg-[#e8f1fb]">Angebot (Schritt 6)</a>
+                    <a href={`/aufmass/schritt6?id=${project.id}`} className="rounded border border-black/15 px-2 py-1 hover:bg-[#f3f5f7]">Angebot (Schritt 6)</a>
                   </div>
                   <AuftragsTeam projectId={project.id} />
                   <VersionsHistorie projectId={project.id} onRestored={ladeDaten} />
