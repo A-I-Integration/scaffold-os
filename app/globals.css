@@ -299,3 +299,12 @@ body {
 .os-nav-aktiv, .os-nav-aktiv:hover { background: var(--os-nav-aktiv); color: #fff; font-weight: 500; }
 .os-nav-aktiv.os-nav-unterpunkt { box-shadow: inset 2px 0 0 var(--os-akzent); border-radius: 0 4px 4px 0; }
 .os-shell :focus-visible { outline: 2px solid var(--os-akzent); outline-offset: 1px; }
+
+/* ───────── Lesbarkeit im Arbeitsbereich: kleine Schriften etwas größer, damit Werkzeuge (CAD) gut bedienbar sind ───────── */
+.os-ui .text-xs { font-size: 13.5px; line-height: 1.45; }
+.os-ui .text-sm { font-size: 14.5px; line-height: 1.5; }
+.os-ui .text-\[10px\] { font-size: 12px; }
+.os-ui .text-\[11px\] { font-size: 12.5px; }
+.os-ui .text-\[12px\] { font-size: 13px; }
+.os-ui button:not(:disabled), .os-ui [role="button"], .os-ui select { cursor: pointer; }
+.os-ui input:not([type="checkbox"]):not([type="radio"]), .os-ui select { min-height: 32px; }

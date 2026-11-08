@@ -41,6 +41,9 @@ import { merkeAussehen, ladeGemerktesAussehen, vergissAussehen } from '@/lib/cad
 import AbbauEinplanenDialog from '@/components/cad/AbbauEinplanenDialog'
 import TeilabbauPanel, { TEILABBAU_START, type TeilabbauEingabe } from '@/components/cad/TeilabbauPanel'
 import { berechneTeilabbau, type TeilabbauAuswahl } from '@/lib/cad/teilabbau'
+import { waehleBereich, wendeAenderungenAn, type BereichsAenderung } from '@/lib/cad/bereiche'
+import CadBand from '@/components/cad/CadBand'
+import BereichePanel, { BEREICHS_START, eingabeZuAenderung, type BereichsEingabe } from '@/components/cad/BereichePanel'
 import { ansichtDateiname } from '@/lib/cad/ansicht-bild'
 import { vergissModell } from '@/lib/cad/modell-speicher'
 import { erzeugeProjektdatei, liesProjektdatei } from '@/lib/cad/projektdatei'
@@ -196,6 +199,10 @@ export default function CADPage() {
     return huelleAusAnzeigePunkten(aussehen.positionen, { faktor: aussehenEinheit === 'cm' ? 0.01 : aussehenEinheit === 'mm' ? 0.001 : 1, oben: aussehenOben, versatzX: aussehenVersatz.x, versatzZ: aussehenVersatz.z, drehungGrad: aussehenVersatz.grad }, { rasterM: huelleRasterM })?.netz ?? null
   }, [aussehen, aussehenEin, aussehenEinheit, aussehenOben, aussehenVersatz, aussehenAnker, huelleRasterM])
   const [abbauEin, setAbbauEin] = useState<TeilabbauEingabe>(TEILABBAU_START)
+  // Gerüst-Bereiche von Hand ändern (Stück entfernen, Felder anhängen, aufstocken)
+  const [bereicheOffen, setBereicheOffen] = useState(false)
+  const [bereichEin, setBereichEin] = useState<BereichsEingabe>(BEREICHS_START)
+  const [bereichsListe, setBereichsListe] = useState<BereichsAenderung[]>([])
   const [showBuilding, setShowBuilding] = useState(true)
   const [showScaffold, setShowScaffold] = useState(true)
   const [showDimensions, setShowDimensions] = useState(true)
@@ -498,6 +505,7 @@ export default function CADPage() {
     setCustomDimensions([]);
     setPendingMeasurePoint(null);
     setManualPlacements([]); // Manuelle Bauteile gehören zum verworfenen Modell
+    setBereichsListe([]); setBereicheOffen(false)
     setPlacementType(null);
     // Phase 68-G: Auto-Generierung sperren -> Leinwand bleibt leer,
     // bis der Nutzer erneut handelt (sonst baut der Effekt unten das
@@ -611,9 +619,11 @@ export default function CADPage() {
   // Shallow-Copy hinzugefügt – so überleben sie jede Re-Generierung.
   const modelWithManual = useMemo(() => {
     if (!model) return null
-    if (manualPlacements.length === 0 && removedGroups.length === 0) return model
+    // Von Hand angehängte/aufgestockte Bereiche zuerst (Grundlage für alles Weitere)
+    const basis = bereichsListe.length > 0 ? wendeAenderungenAn(model, bereichsListe) : model
+    if (manualPlacements.length === 0 && removedGroups.length === 0) return basis
     // Shallow Copy, damit das originale model-Objekt nicht mutiert wird
-    let merged: CADModel = { ...model, components3D: [...model.components3D], anchors: [...model.anchors] }
+    let merged: CADModel = { ...basis, components3D: [...basis.components3D], anchors: [...basis.anchors] }
     for (const pl of manualPlacements) {
       merged = addManualPlacement(merged, pl)
     }
@@ -626,7 +636,7 @@ export default function CADPage() {
       }
     }
     return merged
-  }, [model, manualPlacements, removedGroups])
+  }, [model, manualPlacements, removedGroups, bereichsListe])
   const removedCount = useMemo(() => removedGroups.reduce((n, g) => n + g.length, 0), [removedGroups])
 
   // Auf alle gleichen Bauteile (gleicher Typ + gleicher Standard-Artikel) übertragen
@@ -703,7 +713,34 @@ export default function CADPage() {
       : { art: 'teile', anzahl: zahl(abbauEin.wert) }
     return berechneTeilabbau(modelWithManual, auswahl, { gesamtAbbauStunden: logistik?.abbauStunden ?? 0, personen: zahl(abbauEin.personen) || 3, stundenJeTag: zahl(abbauEin.stundenJeTag) || 8, ...(zahl(abbauEin.stundenHand) > 0 ? { stundenHand: zahl(abbauEin.stundenHand) } : {}) })
   }, [modelWithManual, abbauEin, logistik])
-  const abbauMarkiert = useMemo(() => (abbauAktiv && abbauErgebnis ? new Set(abbauErgebnis.bauteilIds) : undefined), [abbauAktiv, abbauErgebnis])
+  // Vorschau der Bereichs-Auswahl (rot markiert), nur beim Werkzeug „Stück entfernen“
+  const bereichVorschau = useMemo(() => {
+    if (!bereicheOffen || !modelWithManual) return null
+    const n = (t: string): number | undefined => { const v = Number(t.replace(',', '.')); return t.trim() !== '' && Number.isFinite(v) ? v : undefined }
+    return waehleBereich(modelWithManual, { seite: bereichEin.seite, vonM: n(bereichEin.vonM), bisM: n(bereichEin.bisM), vonLage: n(bereichEin.vonLage), bisLage: n(bereichEin.bisLage) })
+  }, [bereicheOffen, modelWithManual, bereichEin])
+  const abbauMarkiert = useMemo(() => (abbauAktiv && abbauErgebnis ? new Set(abbauErgebnis.bauteilIds) : bereichVorschau && bereichEin.werkzeug === 'entfernen' ? new Set(bereichVorschau.bauteilIds) : undefined), [abbauAktiv, abbauErgebnis, bereichVorschau, bereichEin.werkzeug])
+  const speichereBild = useCallback(() => {
+    const c = canvasRef.current
+    if (!c) { window.alert('Die 3D-Ansicht ist noch nicht bereit. Bitte zuerst auf „3D“ stellen.'); return }
+    c.toBlob((blob) => {
+      if (!blob) { window.alert('Das Bild konnte nicht erzeugt werden.'); return }
+      const a = document.createElement('a')
+      a.href = URL.createObjectURL(blob)
+      a.download = ansichtDateiname(farbModus, new Date())
+      a.click()
+      setTimeout(() => URL.revokeObjectURL(a.href), 10000)
+    }, 'image/png')
+  }, [farbModus])
+  const bereichEntfernen = useCallback(() => {
+    if (!bereichVorschau || bereichVorschau.bauteilIds.length === 0) return
+    setRemovedGroups((prev) => [...prev, bereichVorschau.bauteilIds])
+  }, [bereichVorschau])
+  const bereichHinzufuegen = useCallback(() => {
+    const a = eingabeZuAenderung(bereichEin)
+    if (!a) { window.alert('Bitte die Angaben prüfen (Anzahl muss mindestens 1 sein).'); return }
+    setBereichsListe((l) => [...l, a])
+  }, [bereichEin])
   // Klick im Modell: bei offenem Teilabbau-Fenster Bauteil zur Abbau-Auswahl hinzufügen/entfernen
   const klickImModell = useCallback((id: string | null) => {
     if (!abbauAktiv || !id) { setSelectedComponent(id); return }
@@ -720,7 +757,7 @@ export default function CADPage() {
   // Phase 68-J: Statt toter Buttons ohne Modell -> klarer Hinweis beim Klick.
   // Projektdatei: speichern und wieder laden (Gebäude, System, Statik-Angaben, Notizen)
   const speichereProjektdatei = () => {
-    const daten = erzeugeProjektdatei({ name: `CAD-Projekt ${new Date().toLocaleDateString('de-DE')}`, building, systemId, statikDaten, notizen: notes, artikelWahl })
+    const daten = erzeugeProjektdatei({ name: `CAD-Projekt ${new Date().toLocaleDateString('de-DE')}`, building, systemId, statikDaten, notizen: notes, artikelWahl, bereiche: bereichsListe })
     const a = document.createElement('a')
     a.href = URL.createObjectURL(new Blob([JSON.stringify(daten, null, 2)], { type: 'application/json' }))
     a.download = `CAD-Projekt-${new Date().toISOString().split('T')[0]}.scaffold.json`
@@ -731,7 +768,7 @@ export default function CADPage() {
     const e = liesProjektdatei(text)
     if (!e.ok) { window.alert(`„${name}“ konnte nicht geladen werden:\n${e.fehler}`); return }
     if (!window.confirm(`Projektdatei „${e.daten.name}“ laden?\n\nDas aktuelle Modell, die Notizen und die manuell gesetzten Teile werden ersetzt.${e.daten.testdaten ? '\n\nHinweis: Das sind erfundene Testdaten.' : ''}${e.verworfen.length ? `\n\nNicht übernommen (ungültig oder nicht unterstützt): ${e.verworfen.join(', ')}.` : ''}`)) return
-    setSelectedComponent(null); setManualPlacements([]); setNotes(e.daten.notizen)
+    setSelectedComponent(null); setManualPlacements([]); setBereichsListe(e.daten.bereiche ?? []); setNotes(e.daten.notizen)
     setStatikDaten(e.daten.statikDaten); setSystemId(e.daten.systemId); setArtikelWahl(e.daten.artikelWahl ?? {})
     setAutoGenerate(true); setBuilding(e.daten.building)
   }
@@ -1040,14 +1077,10 @@ export default function CADPage() {
             className='px-3 py-1.5 text-xs font-medium rounded-lg border border-red-200 text-red-600 hover:bg-red-50 transition-colors'>
             ↺ Neu starten
           </button>
-          <div className='flex bg-black/5 rounded-lg p-0.5'>
-            <button onClick={() => setViewMode('3d')} className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${viewMode === '3d' ? 'bg-white text-[#1d1d1f] shadow-sm' : 'text-[#86868b]'}`}>3D</button>
-            <button onClick={() => setViewMode('2d')} className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${viewMode === '2d' ? 'bg-white text-[#1d1d1f] shadow-sm' : 'text-[#86868b]'}`}>2D</button>
-          </div>
         </div>
       </div>
       <div className='flex-1 flex flex-col md:flex-row md:overflow-hidden'>
-        <div className='w-full md:w-72 md:shrink-0 md:overflow-y-auto'>
+        <div className='w-full md:w-80 md:shrink-0 md:overflow-y-auto'>
           {aufmassHinweise.length > 0 && (
             <div className='mb-3 rounded-xl border border-[#0071e3]/30 bg-[#0071e3]/5 p-3 text-xs text-[#1d1d1f]'>
               <div className='flex justify-between gap-2'><span className='font-semibold'>Aus dem Aufmaß übernommen</span><button type='button' className='text-[#86868b] underline' onClick={() => setAufmassHinweise([])}>schließen</button></div>
@@ -1059,38 +1092,23 @@ export default function CADPage() {
         </div>
         <div className='flex-1 flex flex-col min-w-0'>
           <SystemLeiste systemId={systemId} onSystemChange={aendereSystem} gewaehlteArtikel={Object.keys(artikelWahl).length} />
+          <CadBand
+            hatModell={!!modelWithManual} viewMode={viewMode} onViewMode={setViewMode}
+            bereicheOffen={bereicheOffen} bereichWerkzeug={bereichEin.werkzeug}
+            onBereichWerkzeug={(w) => { setBereichEin((e) => ({ ...e, werkzeug: w })); setBereicheOffen(true); setAbbauAktiv(false); setViewMode('3d') }}
+            abbauAktiv={abbauAktiv} onAbbau={() => { setAbbauAktiv((a) => !a); setBereicheOffen(false); setViewMode('3d') }}
+            kannZurueck={kannZurueck} kannVor={kannVor} onZurueck={schrittZurueck} onVor={schrittVor}
+            entferntAnzahl={removedCount} onEntferntZurueck={() => setRemovedGroups((prev) => prev.slice(0, -1))} onEntferntAlleZurueck={() => setRemovedGroups([])}
+            placementType={placementType} onPlacement={handleSelectPlacementType} measureMode={measureMode} onMeasure={handleToggleMeasureMode}
+            showBuilding={showBuilding} onShowBuilding={setShowBuilding} showScaffold={showScaffold} onShowScaffold={setShowScaffold}
+            showDimensions={showDimensions} onShowDimensions={setShowDimensions} showEnvironment={showEnvironment} onShowEnvironment={setShowEnvironment}
+            viewAngle={viewAngle} onViewAngle={(a) => setViewAngle(a)} farbModus={farbModus} onFarbModus={setFarbModus}
+            onPdf={model ? handleExportPDF : exportOhneModellHinweis} onMontageplan={model ? handleExportMontageplan : exportOhneModellHinweis}
+            onDxf={!model ? exportOhneModellHinweis : handleExportDXF} onIfc={!model ? exportOhneModellHinweis : (ifcExportLaeuft ? undefined : handleExportIFC)}
+            onSpeichern={speichereProjektdatei} onLv={rolle === 'admin' || istStatikerLogin ? (model ? () => setLvOffen(true) : exportOhneModellHinweis) : undefined}
+            onBild={speichereBild}
+          />
           <div className='flex flex-wrap gap-2 items-center justify-between px-4 py-2 bg-white/50 border-b border-black/5'>
-            <div className='flex flex-wrap items-center gap-2'>
-              <label className='flex items-center gap-1 text-xs text-[#424245]'><input type='checkbox' checked={showBuilding} onChange={(e) => setShowBuilding(e.target.checked)} className='accent-[#e8590c]' />Gebäude</label>
-              <label className='flex items-center gap-1 text-xs text-[#424245]'><input type='checkbox' checked={showScaffold} onChange={(e) => setShowScaffold(e.target.checked)} className='accent-[#e8590c]' />Gerüst</label>
-              <label className='flex items-center gap-1 text-xs text-[#424245]'><input type='checkbox' checked={showDimensions} onChange={(e) => setShowDimensions(e.target.checked)} className='accent-[#e8590c]' />Bemaßung</label>
-              <label className='flex items-center gap-1 text-xs text-[#424245]'><input type='checkbox' checked={showEnvironment} onChange={(e) => setShowEnvironment(e.target.checked)} className='accent-[#e8590c]' />Umgebung</label>
-              {removedGroups.length > 0 && (
-                <span className='flex items-center gap-1 ml-2 text-xs text-[#424245]'>
-                  <button onClick={() => setRemovedGroups((prev) => prev.slice(0, -1))} className='px-2 py-0.5 rounded-md border border-black/10 hover:bg-black/5' title='Zuletzt entferntes Bauteil zurückholen'>↩ Rückgängig</button>
-                  <button onClick={() => setRemovedGroups([])} className='px-2 py-0.5 rounded-md border border-black/10 hover:bg-black/5' title='Alle entfernten Bauteile zurückholen'>Alle zurück ({removedCount})</button>
-                </span>
-              )}
-            </div>
-            {viewMode === '3d' && (
-              <div className='flex rounded-lg border border-black/10 overflow-hidden text-xs' role='group' aria-label='Farbmodus'>
-                <button type='button' onClick={() => setFarbModus('real')} className={`px-2 py-1 ${farbModus === 'real' ? 'bg-[#1d1d1f] text-white' : 'bg-white text-[#424245]'}`} title='Verzinkte Optik wie in der Praxis'>Real</button>
-                <button type='button' onClick={() => setFarbModus('bauteil')} className={`px-2 py-1 ${farbModus === 'bauteil' ? 'bg-[#1d1d1f] text-white' : 'bg-white text-[#424245]'}`} title='Jede Bauteilart in eigener Farbe (mit Legende unten)'>Nach Bauteil</button>
-                <button type='button' onClick={() => setFarbModus('praesentation')} className={`px-2 py-1 ${farbModus === 'praesentation' ? 'bg-[#1d1d1f] text-white' : 'bg-white text-[#424245]'}`} title='Weißer Hintergrund, dunkle Gerüstrohre, Backstein/Schiefer/Rasen (schematisch, nicht aus einem Scan)'>Präsentation</button>
-                <button type='button' onClick={() => setFarbModus('statik')} className={`px-2 py-1 ${farbModus === 'statik' ? 'bg-[#1d1d1f] text-white' : 'bg-white text-[#424245]'}`} title='Statik: Gerüst nur als Stabwerk – Linien (Stiele, Riegel, Diagonalen, Geländer, Anker), Knotenpunkte und Flächen (Beläge). Reine Geometrie, keine Standsicherheitsaussage. Anklicken und Messen sind in dieser Ansicht aus.'>Statik</button>
-              </div>
-            )}
-            {viewMode === '3d' && (
-              <select value={viewAngle} onChange={(e) => setViewAngle(e.target.value as any)} className='text-xs border rounded-lg px-2 py-1'>
-                <option value='perspective'>3D Perspektive</option>
-                <option value='front'>Vorderansicht</option>
-                <option value='back'>Rückansicht</option>
-                <option value='left'>Seite links</option>
-                <option value='right'>Seite rechts</option>
-                <option value='top'>Draufsicht</option>
-                <option value='bottom'>Unteransicht</option>
-              </select>
-            )}
             {viewMode === '3d' && modelWithManual && (
               <span className='inline-flex flex-wrap items-center gap-1'>
                 <label className='text-xs border rounded-lg px-2 py-1 bg-white text-[#424245] cursor-pointer' title='Zeigt das echte Gebäude (GLB mit Texturen, OBJ mit MTL und Bildern, PLY-Punktwolke mit Farben oder Scan-Dateien E57/PTX/LAS/XYZ) statt des einfachen Baukörpers – nur zur Ansicht, Maße und Gerüst bleiben unverändert'>
@@ -1166,24 +1184,6 @@ export default function CADPage() {
                 {aussehenHinweis && <span className='text-[11px] text-[#424245]'>{aussehenHinweis}</span>}
               </span>
             )}
-            {viewMode === '3d' && modelWithManual && (
-              <button type='button' className={`text-xs border rounded-lg px-2 py-1 ${abbauAktiv ? 'bg-[#e8590c] text-white' : 'bg-white text-[#424245]'}`} title='Teilabbau planen: Bauteile anklicken oder Lagen/m²/Teile eingeben – rechnet Material, Stunden, Tage und Einsatzplan' onClick={() => setAbbauAktiv((a) => !a)}>🧱 Teilabbau</button>
-            )}
-            {viewMode === '3d' && modelWithManual && (
-              <button type='button' className='text-xs border rounded-lg px-2 py-1 bg-white text-[#424245]' title='Speichert die aktuelle 3D-Ansicht als PNG-Bild (für Angebot oder Präsentation). Tipp: Modus „Präsentation“ für weißen Hintergrund.'
-                onClick={() => {
-                  const c = canvasRef.current
-                  if (!c) { window.alert('Die 3D-Ansicht ist noch nicht bereit.'); return }
-                  c.toBlob((blob) => {
-                    if (!blob) { window.alert('Das Bild konnte nicht erzeugt werden.'); return }
-                    const a = document.createElement('a')
-                    a.href = URL.createObjectURL(blob)
-                    a.download = ansichtDateiname(farbModus, new Date())
-                    a.click()
-                    setTimeout(() => URL.revokeObjectURL(a.href), 10000)
-                  }, 'image/png')
-                }}>📷 Bild speichern</button>
-            )}
           </div>
           <div className='relative h-[65vh] min-h-[320px] md:h-auto md:flex-1 p-4 md:min-h-0'>
             {geruestVeraltet && (
@@ -1191,6 +1191,11 @@ export default function CADPage() {
                 <span>Die Eingaben (z. B. Tür oder System) haben sich geändert – das Gerüst zeigt noch den alten Stand.</span>
                 <button type='button' onClick={() => { setAutoGenerate(true); generate() }} className='rounded-lg bg-[#e8590c] px-3 py-1 font-medium text-white hover:bg-[#d04f0b]'>Gerüst neu berechnen</button>
               </div>
+            )}
+            {bereicheOffen && modelWithManual && viewMode === '3d' && (
+              <BereichePanel ein={bereichEin} onChange={setBereichEin} vorschau={bereichVorschau} liste={bereichsListe}
+                onEntfernen={bereichEntfernen} onAnhaengen={bereichHinzufuegen} onAufstocken={bereichHinzufuegen}
+                onLoescheAenderung={(i) => setBereichsListe((l) => l.filter((_, j) => j !== i))} onZu={() => setBereicheOffen(false)} entferntAnzahl={removedCount} />
             )}
             {abbauAktiv && abbauErgebnis && viewMode === '3d' && (
               <TeilabbauPanel ein={abbauEin} onChange={setAbbauEin} ergebnis={abbauErgebnis} onClose={() => setAbbauAktiv(false)} onPlanUebernehmen={() => setAbbauEinplanen(true)} />
