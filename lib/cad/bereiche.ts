@@ -21,6 +21,8 @@ export type Seite = 'front' | 'back' | 'left' | 'right'
 
 export interface BereichsAuswahl {
   seite: Seite
+  /** Nur Umriss-Modus: Nummer der Gebäudekante (0 = erste). Dann gilt `seite` nicht. */
+  kante?: number
   /** Abstand vom Seitenanfang in m; leer = ab Anfang */
   vonM?: number
   /** Abstand vom Seitenanfang in m; leer = bis Ende */
@@ -51,8 +53,34 @@ const lageDerSeite = (m: CADModel, seite: Seite, index: number): ScaffoldLevel |
 
 const entlang = (f: ScaffoldField, m: CADModel): number => feldEntlangFassade(f.side, f.positionX, f.positionZ, m.building)
 
-/** Seitenanfang (m, Modell-Koordinate entlang der Seite) und Seitenlänge, aus der untersten Lage. */
-export function seitenMasse(model: CADModel, seite: Seite): { start: number; laenge: number } | null {
+/** Umriss-Modus: Liegt das Gerüst entlang eines Gebäude-Vielecks (Felder gehören zu Kanten statt zu Seiten)? */
+export const istUmrissModell = (m: CADModel): boolean => m.fields.some((f) => f.kante !== undefined)
+
+/** Nummern der Gebäudekanten, an denen Gerüst steht (nur Umriss-Modus). */
+export const kantenListe = (m: CADModel): number[] =>
+  [...new Set(m.fields.filter((f) => f.kante !== undefined).map((f) => f.kante as number))].sort((a, b) => a - b)
+
+const spaltenKey = (f: ScaffoldField): string => `${f.positionX}|${f.positionZ}`
+
+/**
+ * Umriss-Modus: Abstand vom Kantenanfang (m) je Feldspalte, aus der untersten Lage (Felder in Reihenfolge ihres Index).
+ * Alle Lagen derselben Spalte haben dieselbe Position und damit denselben Abstand.
+ */
+function kantenSpalten(model: CADModel, kante: number): { spalten: Map<string, { x0: number; laenge: number }>; laenge: number } | null {
+  const unten = model.fields.filter((f) => f.kante === kante && f.levelIndex === 0).sort((a, b) => a.index - b.index)
+  if (unten.length === 0) return null
+  const spalten = new Map<string, { x0: number; laenge: number }>()
+  let x = 0
+  for (const f of unten) { spalten.set(spaltenKey(f), { x0: x, laenge: f.lengthM }); x += f.lengthM }
+  return { spalten, laenge: r2(x) }
+}
+
+/** Seitenanfang (m, Modell-Koordinate entlang der Seite) und Seitenlänge, aus der untersten Lage. Mit `kante`: Umriss-Kante. */
+export function seitenMasse(model: CADModel, seite: Seite, kante?: number): { start: number; laenge: number } | null {
+  if (kante !== undefined) {
+    const k = kantenSpalten(model, kante)
+    return k ? { start: 0, laenge: k.laenge } : null
+  }
   const unten = model.fields.filter((f) => f.side === seite && f.levelIndex === 0 && f.kante === undefined)
   if (unten.length === 0) return null
   const von = Math.min(...unten.map((f) => entlang(f, model) - f.lengthM / 2))
@@ -60,21 +88,31 @@ export function seitenMasse(model: CADModel, seite: Seite): { start: number; lae
   return { start: von, laenge: r2(bis - von) }
 }
 
+/** Felder einer Seite bzw. Kante, deren Bereichsanteil mindestens die halbe Feldlänge ausmacht (Abstände vom Anfang). */
+function feldImBereich(model: CADModel, f: ScaffoldField, a: { seite: Seite; kante?: number }, mass: { start: number }, vonM: number, bisM: number, kSp: ReturnType<typeof kantenSpalten>): boolean {
+  if (a.kante !== undefined) {
+    if (f.kante !== a.kante) return false
+    const sp = kSp?.spalten.get(spaltenKey(f))
+    if (!sp) return false
+    return Math.min(sp.x0 + sp.laenge, bisM) - Math.max(sp.x0, vonM) >= sp.laenge / 2 - 1e-6
+  }
+  if (f.side !== a.seite || f.kante !== undefined) return false
+  const x0 = entlang(f, model) - f.lengthM / 2 - mass.start
+  return Math.min(x0 + f.lengthM, bisM) - Math.max(x0, vonM) >= f.lengthM / 2 - 1e-6
+}
+
 /** Felder einer Seite im Bereich: ein Feld zählt, wenn mindestens die Hälfte seiner Länge im Bereich liegt. */
 export function waehleBereich(model: CADModel, a: BereichsAuswahl): BereichsErgebnis | null {
-  const mass = seitenMasse(model, a.seite)
+  const mass = seitenMasse(model, a.seite, a.kante)
   if (!mass) return null
+  const kSp = a.kante !== undefined ? kantenSpalten(model, a.kante) : null
   const vonM = Math.max(0, a.vonM ?? 0)
   const bisM = Math.min(mass.laenge, a.bisM ?? mass.laenge)
   const vonLage = Math.max(1, Math.floor(a.vonLage ?? 1))
   const bisLage = Math.max(vonLage, Math.floor(a.bisLage ?? 9999))
   const felder = model.fields.filter((f) => {
-    if (f.side !== a.seite || f.kante !== undefined) return false
     if (f.levelIndex + 1 < vonLage || f.levelIndex + 1 > bisLage) return false
-    const x0 = entlang(f, model) - f.lengthM / 2 - mass.start
-    const x1 = x0 + f.lengthM
-    const innen = Math.min(x1, bisM) - Math.max(x0, vonM)
-    return innen >= f.lengthM / 2 - 1e-6
+    return feldImBereich(model, f, a, mass, vonM, bisM, kSp)
   })
   const ids = new Set(felder.map((f) => f.id))
   const lagen = new Map(model.levels.map((l) => [l.index, l]))
@@ -96,13 +134,13 @@ export function waehleBereich(model: CADModel, a: BereichsAuswahl): BereichsErge
 
 export type BereichsAenderung =
   | { art: 'erweitern'; seite: Seite; ende: 'anfang' | 'ende'; anzahl: number; feldlaengeM?: number; lagen?: number }
-  | { art: 'aufstocken'; seite: Seite; vonM?: number; bisM?: number; lagen: number }
+  | { art: 'aufstocken'; seite: Seite; /** Umriss-Modus: Gebäudekante statt Seite */ kante?: number; vonM?: number; bisM?: number; lagen: number }
 
 export function beschreibeAenderung(a: BereichsAenderung): string {
   const seiten: Record<Seite, string> = { front: 'Vorderseite', back: 'Rückseite', left: 'linke Seite', right: 'rechte Seite' }
   if (a.art === 'erweitern') return `${a.anzahl} Feld${a.anzahl > 1 ? 'er' : ''} ${a.ende === 'anfang' ? 'am Anfang' : 'am Ende'} der ${seiten[a.seite]} anhängen${a.lagen ? ` (unterste ${a.lagen} Lagen)` : ''}`
   const bereich = a.vonM !== undefined || a.bisM !== undefined ? ` von ${a.vonM ?? 0} bis ${a.bisM ?? 'Ende'} m` : ''
-  return `${seiten[a.seite]}${bereich}: ${a.lagen} Lage${a.lagen > 1 ? 'n' : ''} aufstocken`
+  return `${a.kante !== undefined ? `Kante ${a.kante + 1}` : seiten[a.seite]}${bereich}: ${a.lagen} Lage${a.lagen > 1 ? 'n' : ''} aufstocken`
 }
 
 function kopiere(model: CADModel): CADModel {
@@ -123,6 +161,7 @@ function kopiere(model: CADModel): CADModel {
  */
 function ankerFuerFelder(m: CADModel, neue: ScaffoldField[]): ScaffoldAnchor[] {
   if (!(m.building.heightM > 6)) return []
+  neue = neue.filter((f) => f.kante === undefined) // Umriss-Modus: Ankerrichtung hängt von der Kante ab, hier nicht automatisch
   const aus: ScaffoldAnchor[] = []
   const quer = (f: { side: Seite; positionX: number; positionZ: number }) => (f.side === 'front' || f.side === 'back' ? f.positionZ : f.positionX)
   const versatz = (seite: Seite): number => {
@@ -224,16 +263,13 @@ export function erweitereSeite(model: CADModel, a: Extract<BereichsAenderung, { 
 
 export function stockeAuf(model: CADModel, a: Extract<BereichsAenderung, { art: 'aufstocken' }>, praefix = 'erw0'): CADModel {
   const lagen = Math.max(1, Math.min(10, Math.floor(a.lagen)))
-  const mass = seitenMasse(model, a.seite)
+  const mass = seitenMasse(model, a.seite, a.kante)
   if (!mass) return model
+  const kSp = a.kante !== undefined ? kantenSpalten(model, a.kante) : null
   const vonM = a.vonM ?? 0
   const bisM = a.bisM ?? mass.laenge
   // oberste vorhandene Lage jedes Feldes im Bereich (Spalte = gleiche Position)
-  const imBereich = model.fields.filter((f) => {
-    if (f.side !== a.seite || f.kante !== undefined) return false
-    const x0 = entlang(f, model) - f.lengthM / 2 - mass.start
-    return Math.min(x0 + f.lengthM, bisM) - Math.max(x0, vonM) >= f.lengthM / 2 - 1e-6
-  })
+  const imBereich = model.fields.filter((f) => feldImBereich(model, f, a, mass, vonM, bisM, kSp))
   const spalten = new Map<string, ScaffoldField>()
   for (const f of imBereich) {
     const key = `${f.positionX}|${f.positionZ}`
@@ -253,7 +289,7 @@ export function stockeAuf(model: CADModel, a: Extract<BereichsAenderung, { art: 
       if (!vorhanden) neueLagen.push({ id: `level-${a.seite}-${idx}`, index: idx, heightM: basis.heightM, bottomY, topY: r2(bottomY + basis.heightM), fields: [] })
       neue.push({
         ...oben,
-        id: `${praefix}-${oben.side}-${oben.positionX}-${oben.positionZ}-l${idx}`.replace(/\./g, '_'),
+        id: `${praefix}-${oben.side}${oben.kante !== undefined ? `-k${oben.kante}` : ''}-${oben.positionX}-${oben.positionZ}-l${idx}`.replace(/\./g, '_'),
         levelIndex: idx,
         positionY: bottomY,
         durchgang: undefined, durchgangOffen: undefined, durchgangOben: undefined, verstaerkt: undefined,
@@ -262,7 +298,7 @@ export function stockeAuf(model: CADModel, a: Extract<BereichsAenderung, { art: 
   }
   if (neue.length === 0) return model
   const m = fuegeFelderEin(model, neue, neueLagen)
-  m.warnings.push({ type: 'info', code: 'BEREICH_AUFGESTOCKT', message: `${beschreibeAenderung(a)}: Verankerung, Standsicherheit und Zugang der höheren Lagen bitte prüfen.` })
+  m.warnings.push({ type: 'info', code: 'BEREICH_AUFGESTOCKT', message: `${beschreibeAenderung(a)}: Verankerung, Standsicherheit und Zugang der höheren Lagen bitte prüfen${a.kante !== undefined ? '; im Umriss-Modus setzt das Programm für die neuen Felder keine Anker selbst' : ''}.` })
   return m
 }
 

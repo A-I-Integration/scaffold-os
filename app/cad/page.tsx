@@ -41,7 +41,7 @@ import { merkeAussehen, ladeGemerktesAussehen, vergissAussehen } from '@/lib/cad
 import AbbauEinplanenDialog from '@/components/cad/AbbauEinplanenDialog'
 import TeilabbauPanel, { TEILABBAU_START, type TeilabbauEingabe } from '@/components/cad/TeilabbauPanel'
 import { berechneTeilabbau, type TeilabbauAuswahl } from '@/lib/cad/teilabbau'
-import { waehleBereich, wendeAenderungenAn, type BereichsAenderung } from '@/lib/cad/bereiche'
+import { kantenListe, istUmrissModell, waehleBereich, wendeAenderungenAn, type BereichsAenderung } from '@/lib/cad/bereiche'
 import EigenschaftenLeiste from '@/components/cad/EigenschaftenLeiste'
 import { beschreibeFigur, type Figur, type FigurArt } from '@/lib/cad/zeichnung'
 import CadBand from '@/components/cad/CadBand'
@@ -717,12 +717,15 @@ export default function CADPage() {
       : { art: 'teile', anzahl: zahl(abbauEin.wert) }
     return berechneTeilabbau(modelWithManual, auswahl, { gesamtAbbauStunden: logistik?.abbauStunden ?? 0, personen: zahl(abbauEin.personen) || 3, stundenJeTag: zahl(abbauEin.stundenJeTag) || 8, ...(zahl(abbauEin.stundenHand) > 0 ? { stundenHand: zahl(abbauEin.stundenHand) } : {}) })
   }, [modelWithManual, abbauEin, logistik])
+  // Umriss-Modus: Bereiche gelten je Gebäudekante statt je Seite
+  const kantenImModell = useMemo(() => (modelWithManual && istUmrissModell(modelWithManual) ? kantenListe(modelWithManual) : []), [modelWithManual])
+  const kanteWirksam = kantenImModell.length > 0 ? (bereichEin.kante ?? kantenImModell[0]) : undefined
   // Vorschau der Bereichs-Auswahl (rot markiert), nur beim Werkzeug „Stück entfernen“
   const bereichVorschau = useMemo(() => {
     if (!bereicheOffen || !modelWithManual) return null
     const n = (t: string): number | undefined => { const v = Number(t.replace(',', '.')); return t.trim() !== '' && Number.isFinite(v) ? v : undefined }
-    return waehleBereich(modelWithManual, { seite: bereichEin.seite, vonM: n(bereichEin.vonM), bisM: n(bereichEin.bisM), vonLage: n(bereichEin.vonLage), bisLage: n(bereichEin.bisLage) })
-  }, [bereicheOffen, modelWithManual, bereichEin])
+    return waehleBereich(modelWithManual, { seite: bereichEin.seite, kante: kanteWirksam, vonM: n(bereichEin.vonM), bisM: n(bereichEin.bisM), vonLage: n(bereichEin.vonLage), bisLage: n(bereichEin.bisLage) })
+  }, [bereicheOffen, modelWithManual, bereichEin, kanteWirksam])
   const abbauMarkiert = useMemo(() => (abbauAktiv && abbauErgebnis ? new Set(abbauErgebnis.bauteilIds) : bereichVorschau && bereichEin.werkzeug === 'entfernen' ? new Set(bereichVorschau.bauteilIds) : undefined), [abbauAktiv, abbauErgebnis, bereichVorschau, bereichEin.werkzeug])
   const speichereBild = useCallback(() => {
     const c = canvasRef.current
@@ -741,10 +744,10 @@ export default function CADPage() {
     setRemovedGroups((prev) => [...prev, bereichVorschau.bauteilIds])
   }, [bereichVorschau])
   const bereichHinzufuegen = useCallback(() => {
-    const a = eingabeZuAenderung(bereichEin)
+    const a = eingabeZuAenderung({ ...bereichEin, kante: kanteWirksam ?? null })
     if (!a) { window.alert('Bitte die Angaben prüfen (Anzahl muss mindestens 1 sein).'); return }
     setBereichsListe((l) => [...l, a])
-  }, [bereichEin])
+  }, [bereichEin, kanteWirksam])
   // Klick im Modell: bei offenem Teilabbau-Fenster Bauteil zur Abbau-Auswahl hinzufügen/entfernen
   const klickImModell = useCallback((id: string | null) => {
     if (!abbauAktiv || !id) { setSelectedComponent(id); return }
@@ -1100,7 +1103,7 @@ export default function CADPage() {
             hatModell={!!modelWithManual} viewMode={viewMode} onViewMode={setViewMode}
             zeichenWerkzeug={zeichenWerkzeug} onZeichenWerkzeug={setZeichenWerkzeug} figurenAnzahl={figuren.length} onFigurenLoeschen={() => setFiguren([])}
             bereicheOffen={bereicheOffen} bereichWerkzeug={bereichEin.werkzeug}
-            onBereichWerkzeug={(w) => { setBereichEin((e) => ({ ...e, werkzeug: w })); setBereicheOffen(true); setAbbauAktiv(false); setViewMode('3d') }}
+            onBereichWerkzeug={(w) => { if (w === 'erweitern' && kantenImModell.length > 0) { window.alert('Felder anhängen gibt es nur bei Rechteck-Gebäuden. Im Umriss-Modus bitte „Aufstocken“ oder „Stück entfernen“ nutzen.'); return } setBereichEin((e) => ({ ...e, werkzeug: w })); setBereicheOffen(true); setAbbauAktiv(false); setViewMode('3d') }}
             abbauAktiv={abbauAktiv} onAbbau={() => { setAbbauAktiv((a) => !a); setBereicheOffen(false); setViewMode('3d') }}
             kannZurueck={kannZurueck} kannVor={kannVor} onZurueck={schrittZurueck} onVor={schrittVor}
             entferntAnzahl={removedCount} onEntferntZurueck={() => setRemovedGroups((prev) => prev.slice(0, -1))} onEntferntAlleZurueck={() => setRemovedGroups([])}
@@ -1206,7 +1209,7 @@ export default function CADPage() {
                 onPositionAendern={(p) => { const pid = platzierungIdVonBauteil(selectedComponent); if (pid) setManualPlacements((prev) => prev.map((x) => (x.id === pid ? { ...x, positionX: p[0], positionY: p[1], positionZ: p[2] } : x))) }} onZu={() => setSelectedComponent(null)} />
             )}
             {bereicheOffen && modelWithManual && viewMode === '3d' && (
-              <BereichePanel ein={bereichEin} onChange={setBereichEin} vorschau={bereichVorschau} liste={bereichsListe}
+              <BereichePanel ein={bereichEin} kanten={kantenImModell} onChange={setBereichEin} vorschau={bereichVorschau} liste={bereichsListe}
                 onEntfernen={bereichEntfernen} onAnhaengen={bereichHinzufuegen} onAufstocken={bereichHinzufuegen}
                 onLoescheAenderung={(i) => setBereichsListe((l) => l.filter((_, j) => j !== i))} onZu={() => setBereicheOffen(false)} entferntAnzahl={removedCount} />
             )}

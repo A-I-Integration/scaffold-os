@@ -225,7 +225,9 @@ export function liesProjektdatei(text: string): LeseErgebnis {
         const von = o.vonM === undefined ? undefined : zahl(o.vonM, 0, MAX_MASS_M)
         const bis = o.bisM === undefined ? undefined : zahl(o.bisM, 0, MAX_MASS_M)
         if (lagen == null || von === null || bis === null) { verworfen.push('Bereichsänderung (ungültige Angaben)'); continue }
-        bereiche.push({ art: 'aufstocken', seite, lagen: Math.floor(lagen), ...(von !== undefined ? { vonM: von } : {}), ...(bis !== undefined ? { bisM: bis } : {}) })
+        const kante = o.kante === undefined ? undefined : zahl(o.kante, 0, 199)
+        if (kante === null) { verworfen.push('Bereichsänderung (ungültige Kante)'); continue }
+        bereiche.push({ art: 'aufstocken', seite, ...(kante !== undefined ? { kante: Math.floor(kante) } : {}), lagen: Math.floor(lagen), ...(von !== undefined ? { vonM: von } : {}), ...(bis !== undefined ? { bisM: bis } : {}) })
       } else verworfen.push('Bereichsänderung (unbekannte Art)')
     }
   }
