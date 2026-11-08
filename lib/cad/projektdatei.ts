@@ -8,6 +8,7 @@
 // ============================================================
 
 import { istHaubenForm } from '@/lib/cad/haube'
+import type { BereichsAenderung } from '@/lib/cad/bereiche'
 import type { BuildingParams, BuildingSection, CadTuer } from '@/lib/calculations/cad-engine'
 import { findeSystem } from '@/lib/calculations/geruest-systeme'
 import { bereinigeStatikDaten, type StatikDaten } from '@/lib/statik-daten'
@@ -36,6 +37,8 @@ export interface Projektdatei {
   notizen: CADNote[]
   /** Katalogwahl: Bauteil-ID → Artikelnummer (optional, ältere Dateien haben sie nicht) */
   artikelWahl?: Record<string, string>
+  /** Von Hand geänderte Gerüstbereiche (Felder angehängt, Bereich aufgestockt) – ältere Dateien haben sie nicht */
+  bereiche?: BereichsAenderung[]
 }
 
 export type LeseErgebnis =
@@ -45,7 +48,7 @@ export type LeseErgebnis =
 const zahl = (v: unknown, min: number, max: number): number | null =>
   typeof v === 'number' && Number.isFinite(v) && v >= min && v <= max ? v : null
 
-export function erzeugeProjektdatei(p: { name?: string; building: BuildingParams; systemId: string; statikDaten: StatikDaten; notizen: CADNote[]; artikelWahl?: Record<string, string>; testdaten?: boolean }): Projektdatei {
+export function erzeugeProjektdatei(p: { name?: string; building: BuildingParams; systemId: string; statikDaten: StatikDaten; notizen: CADNote[]; artikelWahl?: Record<string, string>; bereiche?: BereichsAenderung[]; testdaten?: boolean }): Projektdatei {
   return {
     format: PROJEKTDATEI_FORMAT,
     version: PROJEKTDATEI_VERSION,
@@ -57,6 +60,7 @@ export function erzeugeProjektdatei(p: { name?: string; building: BuildingParams
     statikDaten: bereinigeStatikDaten(p.statikDaten),
     notizen: p.notizen,
     ...(p.artikelWahl && Object.keys(p.artikelWahl).length ? { artikelWahl: p.artikelWahl } : {}),
+    ...(p.bereiche && p.bereiche.length ? { bereiche: p.bereiche } : {}),
   }
 }
 
@@ -200,6 +204,27 @@ export function liesProjektdatei(text: string): LeseErgebnis {
     }
   }
 
+  const bereiche: BereichsAenderung[] = []
+  if (Array.isArray(r.bereiche)) {
+    for (const x of r.bereiche.slice(0, 100)) {
+      const o = x as Record<string, unknown>
+      const seite = o?.seite
+      if (seite !== 'front' && seite !== 'back' && seite !== 'left' && seite !== 'right') { verworfen.push('Bereichsänderung (ungültige Seite)'); continue }
+      if (o.art === 'erweitern') {
+        const anzahl = zahl(o.anzahl, 1, 40)
+        const fl = o.feldlaengeM === undefined ? undefined : zahl(o.feldlaengeM, 0.5, 5)
+        const lg = o.lagen === undefined ? undefined : zahl(o.lagen, 1, 100)
+        if (anzahl == null || (o.ende !== 'anfang' && o.ende !== 'ende') || fl === null || lg === null) { verworfen.push('Bereichsänderung (ungültige Angaben)'); continue }
+        bereiche.push({ art: 'erweitern', seite, ende: o.ende, anzahl: Math.floor(anzahl), ...(fl ? { feldlaengeM: fl } : {}), ...(lg ? { lagen: Math.floor(lg) } : {}) })
+      } else if (o.art === 'aufstocken') {
+        const lagen = zahl(o.lagen, 1, 10)
+        const von = o.vonM === undefined ? undefined : zahl(o.vonM, 0, MAX_MASS_M)
+        const bis = o.bisM === undefined ? undefined : zahl(o.bisM, 0, MAX_MASS_M)
+        if (lagen == null || von === null || bis === null) { verworfen.push('Bereichsänderung (ungültige Angaben)'); continue }
+        bereiche.push({ art: 'aufstocken', seite, lagen: Math.floor(lagen), ...(von !== undefined ? { vonM: von } : {}), ...(bis !== undefined ? { bisM: bis } : {}) })
+      } else verworfen.push('Bereichsänderung (unbekannte Art)')
+    }
+  }
   return {
     ok: true,
     verworfen,
@@ -212,6 +237,7 @@ export function liesProjektdatei(text: string): LeseErgebnis {
       statikDaten: bereinigeStatikDaten(r.statikDaten),
       notizen,
       ...(Object.keys(artikelWahl).length ? { artikelWahl } : {}),
+      ...(bereiche.length ? { bereiche } : {}),
     },
   }
 }
