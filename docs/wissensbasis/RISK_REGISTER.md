@@ -185,3 +185,20 @@ Nach dem Merge entfällt die Route /api/stueckliste in API_MAP.md (127 auf 126 R
 Messung R5/R15 (06.11.2026, siehe SCHEMA_LUECKE.md): Neue Kundeninstanzen erhalten nur den Dump vom 27.08.2026 (supabase/kunden-schema.sql). 58 von 77 anderen SQL-Dateien sind jünger; im Dump fehlen 34 Tabellen (vermutlich 5 davon nur für die Master-Datenbank), 50 Spalten und 7 Funktionen.
 Nach der Provisionierung findet keine Schema-Prüfung statt. Vorschläge: Dump neu erzeugen (braucht Zugriff auf die Master-Datenbank), Protokoll-Tabelle schema_migrationen (supabase/phase-105-schema-migrationen.sql, Branch chore/schema-luecke), Prüfung nach der Provisionierung.
 Werkzeug zum erneuten Messen: scripts/schema-luecke.mjs (Branch chore/schema-luecke).
+
+## Stand 08.11.2026 (nach den Merges in main, origin/main 712f6ca)
+
+Gemergt (Pull Requests der Nutzerin): chore/sicherheits-updates, fix/annahme-ergebnis-sichtbar, fix/stuecklisten-knopf, test/engine-abgleich, chore/schema-luecke, docs/wissensbasis.
+Geprüft auf dem Stand von origin/main: 921 Dateien, next 16.4.5, 126 API-Routen, tsc (strict, ganzes Projekt) fehlerfrei (Exit 0). Nicht geprüft: Vitest-Lauf über den Gesamtstand, Browser, Vercel-Deployment.
+
+| Risiko | Stand |
+|---|---|
+| R9 Schwachstellen in Abhängigkeiten | In main gemergt (Produktion: vorher 19, nach dem Update 6 laut npm audit der Nutzerin; Rest u. a. xlsx ohne Fix). Browser-Test des Updates (Login, Rollenumleitung, Sentry-Tunnel) steht aus. |
+| R19 Route auf fehlende Tabelle stuecklisten | Behoben (Knopf und Route entfernt). |
+| R22 Transportauftrag-Fehler unbemerkt | Behoben in main (Meldung transportFehler), Tests liefen bei der Nutzerin grün (8 von 8). |
+| R24 Ergebnis der Annahme-Automatik nicht sichtbar | Behoben in main (Anzeige an der Auftrags-Karte); Wirkung im Browser nicht geprüft. |
+| R20 / R25 Engines uneinig | Offen. Test sichert Fläche und Artikelpreis ab; Sollwerte der Statik fehlen. Fragen liegen als Dokument vor. |
+| R5 / R15 Schema-Stand je Instanz | Teilweise: Messskript und Protokoll-SQL (phase-105) liegen in main. Offen: neuer Dump von kunden-schema.sql, Einspielen der phase-105 je Instanz, Prüfung nach der Provisionierung. |
+| R1 keine CI | Offen. |
+| R16 Tests für auth, provision, supabase | Offen. |
+| R21 feste Preise im Code | Offen. |

@@ -3,9 +3,9 @@
 Erzeugt am 06.11.2026 per Skript aus den versionierten Dateien app/**/route.ts.
 Erkannt werden exportierte Handler (GET, POST, ...). Geprüft werden hier weder Authentifizierung noch Fachlogik.
 
-Anzahl Routen: 127
+Anzahl Routen: 126 (Stand 08.11.2026 nach Entfernen von /api/stueckliste; die Tabelle unten ist auf diesen Stand gekürzt)
 
-Methoden: DELETE 23, GET 78, PATCH 12, POST 95, PUT 8
+Methoden: DELETE 23, GET 78, PATCH 12, POST 94, PUT 8
 
 | URL | Methoden | Datei | Zeilen |
 |---|---|---|---|
@@ -120,7 +120,6 @@ Methoden: DELETE 23, GET 78, PATCH 12, POST 95, PUT 8
 | /api/stripe/checkout | POST | app/api/stripe/checkout/route.ts | 108 |
 | /api/stripe/portal | POST | app/api/stripe/portal/route.ts | 55 |
 | /api/stripe/webhook | POST | app/api/stripe/webhook/route.ts | 329 |
-| /api/stueckliste | POST | app/api/stueckliste/route.ts | 38 |
 | /api/team-vorschlag | POST | app/api/team-vorschlag/route.ts | 26 |
 | /api/time-entries | GET, POST, PUT | app/api/time-entries/route.ts | 167 |
 | /api/tour-stops/nicht-fertig | POST | app/api/tour-stops/nicht-fertig/route.ts | 118 |
