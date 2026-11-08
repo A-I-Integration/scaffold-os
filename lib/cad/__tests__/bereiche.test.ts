@@ -197,3 +197,12 @@ describe('Umriss-Modus (Gebäudekanten)', () => {
     expect(new Set(neu.components3D.map((c) => c.id)).size).toBe(neu.components3D.length)
   })
 })
+
+describe('Keine doppelten Bauteile', () => {
+  it('Felder anhängen im Rechteck erzeugt keine doppelten Bauteil-IDs und je Anker genau ein Ankerbauteil', () => {
+    const m = modell()
+    const neu = erweitereSeite(m, { art: 'erweitern', seite: 'front', ende: 'ende', anzahl: 2 })
+    expect(new Set(neu.components3D.map((c) => c.id)).size).toBe(neu.components3D.length)
+    expect(neu.components3D.filter((c) => c.type === 'anchor').length).toBe(neu.anchors.length)
+  })
+})

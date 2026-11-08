@@ -204,17 +204,27 @@ function fuegeFelderEin(model: CADModel, neue: ScaffoldField[], neueLagen: Scaff
     lageDerSeite(m, f.side, f.levelIndex)?.fields.push(f)
   }
   // Bauteile nur für die neuen Felder: Hilfsmodell ohne Treppe und Türdurchgänge (die gehören zur Hauptplanung)
+  const neueAnker = ankerFuerFelder(m, neue)
   const hilfs: CADModel = {
     ...m,
     fields: neue,
     levels: m.levels.map((l) => ({ ...l, fields: l.fields.filter((f) => neue.includes(f)) })).filter((l) => l.fields.length > 0),
     components3D: [],
+    anchors: neueAnker, // nur die neuen Anker, sonst würden alle vorhandenen Ankerbauteile doppelt erzeugt
     warnings: [],
     building: { ...m.building, geruestOptionen: { ...m.building.geruestOptionen, treppe: false, tuerenFreihalten: false } },
   }
   const bauteile: ScaffoldComponent3D[] = generateScaffoldComponents(hilfs)
-  m.components3D.push(...bauteile)
-  m.anchors.push(...ankerFuerFelder(m, neue))
+  // Bauteile mit laufender Nummer (Eckpfosten je Lage, Lastverteilplatten) tragen in der Hilfserzeugung dieselbe ID wie
+  // vorhandene: eindeutig machen, damit nichts doppelt ist und Auswahl/Entfernen stabil bleibt
+  const vergeben = new Set(m.components3D.map((c) => c.id))
+  const marke = neue[0]?.id ?? 'neu'
+  for (const c of bauteile) {
+    const id = vergeben.has(c.id) ? `${c.id}-${marke}` : c.id
+    vergeben.add(id)
+    m.components3D.push(id === c.id ? c : { ...c, id })
+  }
+  m.anchors.push(...neueAnker)
   m.fieldCount = m.fields.filter((f) => f.levelIndex === 0).length
   m.levelCount = new Set(m.levels.map((l) => l.index)).size
   m.totalLengthM = r2(m.fields.filter((f) => f.levelIndex === 0).reduce((s, f) => s + f.lengthM, 0))
