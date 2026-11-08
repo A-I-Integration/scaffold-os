@@ -13,6 +13,9 @@ export function baueFakeRest(daten: Tabellen) {
       const v = rest.join('.')
       if (op === 'eq') return String(z[spalte]) === v
       if (op === 'gt') return Number(z[spalte]) > Number(v)
+      if (op === 'gte') return String(z[spalte]) >= v
+      if (op === 'lte') return String(z[spalte]) <= v
+      if (op === 'is') return v === 'null' ? z[spalte] === null || z[spalte] === undefined : String(z[spalte]) === v
       return true
     })
 
@@ -20,7 +23,7 @@ export function baueFakeRest(daten: Tabellen) {
     const u = new URL(String(eingabe))
     const tabelle = u.pathname.split('/rest/v1/')[1]
     daten[tabelle] = daten[tabelle] ?? []
-    const filter = [...u.searchParams.entries()].filter(([k]) => !['select', 'order', 'limit'].includes(k))
+    const filter = [...u.searchParams.entries()].filter(([k]) => !['select', 'order', 'limit', 'on_conflict'].includes(k))
     const methode = (init?.method ?? 'GET').toUpperCase()
     const json = (b: unknown) => new Response(JSON.stringify(b), { status: 200, headers: { 'Content-Type': 'application/json' } })
 
@@ -31,6 +34,13 @@ export function baueFakeRest(daten: Tabellen) {
     }
     if (methode === 'POST') {
       const body = JSON.parse(String(init?.body ?? '{}'))
+      // Upsert: on_conflict=a,b + Prefer resolution=merge-duplicates aktualisiert eine vorhandene Zeile
+      const konflikt = u.searchParams.get('on_conflict')
+      if (konflikt && String((init?.headers as Record<string, string> | undefined)?.Prefer ?? '').includes('merge-duplicates')) {
+        const spalten = konflikt.split(',')
+        const alt = daten[tabelle].find((z) => spalten.every((c) => String(z[c]) === String(body[c])))
+        if (alt) { Object.assign(alt, body); return json([{ ...alt }]) }
+      }
       const neu = { id: `${tabelle}-${++zaehler}`, created_at: new Date(2026, 0, 1, 0, 0, zaehler).toISOString(), ...body }
       daten[tabelle].push(neu)
       return json([neu])
