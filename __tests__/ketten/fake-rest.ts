@@ -1,6 +1,6 @@
 // Minimaler Nachbau der Supabase-REST-Schnittstelle (PostgREST) im Speicher,
 // damit Kettentests die echten Buchungsfunktionen ohne Datenbank durchlaufen lassen können.
-// Unterstützt nur, was die Lager-Routen brauchen: GET/POST/PATCH, Filter eq./gt., order=…asc.
+// Unterstützt nur, was die Routen brauchen: GET/POST/PATCH/DELETE, Filter eq./gt., order=…asc.
 
 type Zeile = Record<string, unknown>
 export type Tabellen = Record<string, Zeile[]>
@@ -40,6 +40,11 @@ export function baueFakeRest(daten: Tabellen) {
       const treffer = daten[tabelle].filter((z) => passt(z, filter))
       treffer.forEach((z) => Object.assign(z, body))
       return json(treffer.map((z) => ({ ...z })))
+    }
+    if (methode === 'DELETE') {
+      const treffer = daten[tabelle].filter((z) => passt(z, filter))
+      daten[tabelle] = daten[tabelle].filter((z) => !treffer.includes(z))
+      return json(treffer)
     }
     return new Response('nicht unterstützt', { status: 400 })
   }

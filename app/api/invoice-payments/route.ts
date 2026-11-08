@@ -77,19 +77,12 @@ export async function POST(req: NextRequest) {
       }, { status: 400 });
     }
 
-    // Zahlung protokollieren
-    const payRes = await fetch(`${url}/rest/v1/invoice_payments`, {
-      method: 'POST',
-      headers: { ...headers, Prefer: 'return=representation' },
-      body: JSON.stringify({ invoice_id, amount: betrag, payment_date: payment_date || new Date().toISOString().slice(0, 10), note: note || null }),
-    });
-    if (!payRes.ok) throw new Error(await payRes.text());
-
-    // Rechnung aktualisieren: paid_amount hochzählen, Status nur bei
-    // vollständigem Ausgleich auf "bezahlt" setzen.
+    // Rechnung zuerst aktualisieren – nur, wenn der bezahlte Betrag seit dem Lesen unverändert ist.
+    // So gehen zwei gleichzeitige Zahlungen nicht verloren (die zweite bekommt eine Meldung statt den Betrag zu überschreiben).
+    // Status wird nur bei vollständigem Ausgleich auf "bezahlt" gesetzt.
     const vollstaendigBezahlt = Number(inv.gross_amount) - neuerBezahlterBetrag <= 0.01;
-    const invUpdRes = await fetch(`${url}/rest/v1/invoices?id=eq.${invoice_id}`, {
-      method: 'PATCH', headers,
+    const invUpdRes = await fetch(`${url}/rest/v1/invoices?id=eq.${invoice_id}&paid_amount=eq.${Number(inv.paid_amount)}`, {
+      method: 'PATCH', headers: { ...headers, Prefer: 'return=representation' },
       body: JSON.stringify({
         paid_amount: neuerBezahlterBetrag,
         status: vollstaendigBezahlt ? 'bezahlt' : (inv.status === 'bezahlt' ? 'offen' : inv.status),
@@ -97,6 +90,23 @@ export async function POST(req: NextRequest) {
       }),
     });
     if (!invUpdRes.ok) throw new Error(await invUpdRes.text());
+    if (!(await invUpdRes.json()).length) {
+      return NextResponse.json({ success: false, error: 'Die Rechnung wurde gerade von einer anderen Buchung geändert. Bitte die Seite neu laden und erneut buchen.' }, { status: 409 });
+    }
+
+    // Zahlung protokollieren; schlägt das fehl, wird der Betrag der Rechnung zurückgesetzt
+    const payRes = await fetch(`${url}/rest/v1/invoice_payments`, {
+      method: 'POST',
+      headers: { ...headers, Prefer: 'return=representation' },
+      body: JSON.stringify({ invoice_id, amount: betrag, payment_date: payment_date || new Date().toISOString().slice(0, 10), note: note || null }),
+    });
+    if (!payRes.ok) {
+      await fetch(`${url}/rest/v1/invoices?id=eq.${invoice_id}`, {
+        method: 'PATCH', headers,
+        body: JSON.stringify({ paid_amount: Number(inv.paid_amount), status: inv.status }),
+      }).catch(() => {});
+      throw new Error(await payRes.text());
+    }
 
     return NextResponse.json({ success: true, paid_amount: neuerBezahlterBetrag, vollstaendig_bezahlt: vollstaendigBezahlt });
   } catch (err: any) {
