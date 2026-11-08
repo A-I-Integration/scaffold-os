@@ -1197,7 +1197,9 @@ export default function CADPage() {
             )}
             {selectedComponent && modelWithManual && viewMode === '3d' && !abbauAktiv && !placementType && !measureMode && (
               <EigenschaftenLeiste model={modelWithManual} id={selectedComponent} artikelWahl={artikelWahl} manuell={!!platzierungIdVonBauteil(selectedComponent)}
-                onEntfernen={() => handleRemoveComponent(selectedComponent)} onFeldEntfernen={(ids) => { setRemovedGroups((prev) => [...prev, ids]); setSelectedComponent(null) }} onZu={() => setSelectedComponent(null)} />
+                onEntfernen={() => handleRemoveComponent(selectedComponent)} onFeldEntfernen={(ids) => { setRemovedGroups((prev) => [...prev, ids]); setSelectedComponent(null) }}
+                platzierungPosition={(() => { const pid = platzierungIdVonBauteil(selectedComponent); const pl = manualPlacements.find((x) => x.id === pid); return pl ? [pl.positionX, pl.positionY, pl.positionZ] as [number, number, number] : undefined })()}
+                onPositionAendern={(p) => { const pid = platzierungIdVonBauteil(selectedComponent); if (pid) setManualPlacements((prev) => prev.map((x) => (x.id === pid ? { ...x, positionX: p[0], positionY: p[1], positionZ: p[2] } : x))) }} onZu={() => setSelectedComponent(null)} />
             )}
             {bereicheOffen && modelWithManual && viewMode === '3d' && (
               <BereichePanel ein={bereichEin} onChange={setBereichEin} vorschau={bereichVorschau} liste={bereichsListe}

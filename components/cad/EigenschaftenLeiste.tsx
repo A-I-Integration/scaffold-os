@@ -1,8 +1,9 @@
 'use client'
 
-// Eigenschaften des angeklickten Bauteils im 3D-Modell (nur Anzeige und Entfernen).
+// Eigenschaften des angeklickten Bauteils im 3D-Modell (Anzeige, Entfernen; von Hand gesetzte Bauteile auch Position ändern).
 // Alle Werte kommen aus dem Modell; es wird nichts berechnet oder erfunden.
 
+import { useState } from 'react'
 import type { CADModel } from '@/lib/calculations/cad-engine'
 import { waehleFeld, type FeldUmfang } from '@/lib/cad/bereiche'
 
@@ -14,8 +15,8 @@ const ARTEN: Record<string, string> = {
 const SEITEN: Record<string, string> = { front: 'Vorderseite', back: 'Rückseite', left: 'Links', right: 'Rechts' }
 const m = (v: number) => `${v.toLocaleString('de-DE', { maximumFractionDigits: 2 })} m`
 
-export default function EigenschaftenLeiste({ model, id, artikelWahl, manuell, onEntfernen, onFeldEntfernen, onZu }: {
-  model: CADModel; id: string; artikelWahl: Record<string, string>; manuell: boolean; onEntfernen: () => void; onFeldEntfernen?: (bauteilIds: string[]) => void; onZu: () => void
+export default function EigenschaftenLeiste({ model, id, artikelWahl, manuell, onEntfernen, onFeldEntfernen, onPositionAendern, platzierungPosition, onZu }: {
+  model: CADModel; id: string; artikelWahl: Record<string, string>; manuell: boolean; onEntfernen: () => void; onFeldEntfernen?: (bauteilIds: string[]) => void; onPositionAendern?: (position: [number, number, number]) => void; platzierungPosition?: [number, number, number]; onZu: () => void
 }) {
   const c = model.components3D.find((x) => x.id === id)
   if (!c) return null
@@ -44,6 +45,7 @@ export default function EigenschaftenLeiste({ model, id, artikelWahl, manuell, o
           </div>
         ))}
       </dl>
+      {manuell && onPositionAendern && platzierungPosition && <PositionFelder key={platzierungPosition.join(',')} start={platzierungPosition} onUebernehmen={onPositionAendern} />}
       <div className='space-y-1.5 border-t p-2' style={{ borderColor: 'var(--os-linie)' }}>
         <button type='button' onClick={onEntfernen} className='w-full rounded border px-3 py-1.5 text-[13px] hover:bg-red-50' style={{ borderColor: '#e7b4b0', color: '#b42318' }}>Bauteil entfernen (Entf)</button>
         {feld && onFeldEntfernen && (
@@ -65,5 +67,30 @@ export default function EigenschaftenLeiste({ model, id, artikelWahl, manuell, o
         )}
       </div>
     </aside>
+  )
+}
+
+const zahl = (t: string): number | null => { const v = Number(t.trim().replace(',', '.')); return t.trim() !== '' && Number.isFinite(v) ? v : null }
+
+// Position eines von Hand gesetzten Bauteils per Zahl ändern (Meter, wie im Modell).
+function PositionFelder({ start, onUebernehmen }: { start: [number, number, number]; onUebernehmen: (p: [number, number, number]) => void }) {
+  const [w, setW] = useState(start.map((v) => v.toFixed(2).replace('.', ',')))
+  const neu = w.map(zahl)
+  const gueltig = neu.every((v) => v !== null)
+  const geaendert = gueltig && neu.some((v, i) => Math.abs((v as number) - start[i]) > 0.0049)
+  return (
+    <div className='border-t px-3 py-2' style={{ borderColor: 'var(--os-linie)' }}>
+      <div className='mb-1 text-[11px] uppercase tracking-wider' style={{ color: 'var(--os-text-leise)' }}>Position ändern (m)</div>
+      <div className='grid grid-cols-3 gap-1'>
+        {['x', 'y', 'z'].map((n, i) => (
+          <label key={n} className='text-[12px]'>{n}
+            <input value={w[i]} inputMode='decimal' onChange={(e) => setW((alt) => alt.map((v, j) => (j === i ? e.target.value : v)))}
+              className='mt-0.5 w-full rounded border bg-white px-1.5 py-1 text-[13px]' style={{ borderColor: gueltig ? 'var(--os-linie)' : '#e7b4b0' }} />
+          </label>
+        ))}
+      </div>
+      <button type='button' disabled={!geaendert} onClick={() => onUebernehmen(neu as [number, number, number])}
+        className='mt-1.5 w-full rounded px-3 py-1.5 text-[13px] font-semibold disabled:opacity-40' style={{ background: 'var(--os-akzent)', color: '#171b20' }}>Position übernehmen</button>
+    </div>
   )
 }
