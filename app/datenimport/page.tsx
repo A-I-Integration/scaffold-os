@@ -207,6 +207,15 @@ export default function DatenimportPage() {
     const datei = e.target.files?.[0];
     if (!datei) return;
     try {
+      if (/\.xlsx?$/i.test(datei.name)) {
+        // Excel-Datei (z. B. Listenexport aus der Altsoftware): erstes Blatt wie angezeigt als Text lesen
+        const XLSX = await import('xlsx');
+        const mappe = XLSX.read(await datei.arrayBuffer(), { type: 'array' });
+        const blatt = mappe.Sheets[mappe.SheetNames[0]];
+        if (!blatt) { setFehler('Die Excel-Datei enthält kein Tabellenblatt.'); return; }
+        csvVerarbeiten(XLSX.utils.sheet_to_csv(blatt, { FS: ';', blankrows: false }));
+        return;
+      }
       const text = await dateiLesen(datei);
       csvVerarbeiten(text);
     } catch {
@@ -333,12 +342,12 @@ export default function DatenimportPage() {
         <div className="mt-6 grid md:grid-cols-2 gap-4">
           <div className="rounded-2xl bg-white border border-black/10 p-6">
             <h2 className="font-semibold flex items-center gap-2">
-              <Upload className="w-5 h-5 text-[#e8590c]" /> CSV-Datei hochladen
+              <Upload className="w-5 h-5 text-[#e8590c]" /> CSV- oder Excel-Datei hochladen
             </h2>
             <input
               ref={dateiInput}
               type="file"
-              accept=".csv,text/csv,text/plain"
+              accept=".csv,.xlsx,.xls,text/csv,text/plain"
               onChange={dateiGewaehlt}
               className="mt-4 block w-full text-sm text-[#6e6e73] file:mr-4 file:rounded-full file:border-0 file:bg-[#e8590c] file:px-5 file:py-2.5 file:text-sm file:font-semibold file:text-white hover:file:bg-[#d14e06] file:cursor-pointer"
             />
