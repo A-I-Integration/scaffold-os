@@ -66,20 +66,21 @@ export async function POST(req: Request) {
     let vorgemerkt: string | null = null;
     const heute = new Date();
     for (let i = 1; i <= 30 && !vorgemerkt; i++) {
-      const kandidat = new Date(heute);
-      kandidat.setDate(kandidat.getDate() + i);
-      const wochentag = kandidat.getDay();
+      // UTC rechnen, damit das Datum nicht von der Zeitzone des Servers abhängt
+      const kandidat = new Date(Date.UTC(heute.getUTCFullYear(), heute.getUTCMonth(), heute.getUTCDate() + i));
+      const wochentag = kandidat.getUTCDay();
       if (wochentag === 0 || wochentag === 6) continue;
       const iso = kandidat.toISOString().slice(0, 10);
 
       const [einsatzRes, abwesenheitRes] = await Promise.all([
         fetch(`${url}/rest/v1/taeglicher_einsatz?employee_id=eq.${employeeId}&einsatz_datum=eq.${iso}&select=employee_id&limit=1`, { headers }),
-        fetch(`${url}/rest/v1/absences?employee_id=eq.${employeeId}&status=eq.approved&start_date=lte.${iso}&end_date=gte.${iso}&select=id&limit=1`, { headers }),
+        fetch(`${url}/rest/v1/absences?employee_id=eq.${employeeId}&start_date=lte.${iso}&end_date=gte.${iso}&select=type,status`, { headers }),
       ]);
       // Im Zweifel (Fehler beim Prüfen) diesen Tag NICHT belegen - lieber
       // einen Tag später erneut versuchen, als versehentlich doppelt planen.
       const belegt = einsatzRes.ok ? (await einsatzRes.json()).length > 0 : true;
-      const abwesend = abwesenheitRes.ok ? (await abwesenheitRes.json()).length > 0 : false;
+      // wie in der Wochenplanung: genehmigte Abwesenheit ODER Krankmeldung
+      const abwesend = abwesenheitRes.ok ? (await abwesenheitRes.json()).some((a: { type: string; status: string }) => a.status === 'approved' || a.type === 'sick') : false;
       if (belegt || abwesend) continue;
 
       const upsertRes = await fetch(`${url}/rest/v1/taeglicher_einsatz?on_conflict=employee_id,einsatz_datum`, {
