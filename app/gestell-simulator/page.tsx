@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import { Scale, ArrowRight, AlertTriangle, CheckCircle2, RotateCcw, Info } from 'lucide-react';
+import { bewerteEreignis, type Messwert } from '@/lib/gestell-ereignis';
 import {
   stueckAusGewicht, wendeBewegungenAn, buchungenFuerAbbau, sollIstVergleich,
   type Bestand, type GestellLadung,
@@ -44,6 +45,13 @@ export default function GestellSimulatorPage() {
   const [baustelle, setBaustelle] = useState('Baustelle A');
   const [soll, setSoll] = useState('belag:180');
   const [gebucht, setGebucht] = useState('');
+  // Ereignisprüfung (für Gestell 1): Gewicht vorher und die Rahmenbedingungen
+  const [vorherKg, setVorherKg] = useState('500');
+  const [ruhig, setRuhig] = useState(true);
+  const [fahrzeug, setFahrzeug] = useState(true);
+  const [standortOk, setStandortOk] = useState(true);
+  const [auftragAktiv, setAuftragAktiv] = useState(true);
+  const [sollStueck, setSollStueck] = useState('20');
 
   const tol = zahl(toleranz) >= 0 ? zahl(toleranz) : 0;
   const rechnung = useMemo(() => gestelle.map((g) => {
@@ -59,6 +67,27 @@ export default function GestellSimulatorPage() {
   const vergleich = sollIstVergleich(sollMap, ladungen);
   const unsicher = rechnung.some((r) => r.e.sicherheit !== 'sicher');
   const name = (id: string) => ARTIKEL.find((a) => a.id === id)?.name ?? id;
+
+  const reihe = (kg: number, start: number, ruhigGemessen: boolean): Messwert[] =>
+    Array.from({ length: 8 }, (_, i) => ({ t: start + i * 500, kg: kg + (i % 2 ? 0.2 : -0.2) * (ruhigGemessen ? 1 : 40) }));
+  const g1 = gestelle[0];
+  const g1art = g1 ? ARTIKEL.find((a) => a.id === g1.artikelId) : undefined;
+  const ereignis = g1 && g1art ? bewerteEreignis({
+    vorher: reihe(zahl(vorherKg) || 0, 0, true),
+    nachher: reihe(zahl(g1.bruttoKg) || 0, 60000, ruhig),
+    maxSpanneKg: 1,
+    toleranzKg: tol,
+    gestell: { leerKg: zahl(g1.leerKg) || 0, artikelId: g1.artikelId, stueckKg: g1art.kg },
+    fahrzeug: { erkanntId: fahrzeug ? 'lkw1' : null, erwartetId: 'lkw1' },
+    standort: { ortId: standortOk ? 'baustelle' : 'woanders', erlaubteOrtIds: ['baustelle'] },
+    auftrag: { aktiv: auftragAktiv, richtung: 'entnahme', erlaubteArtikelIds: [g1.artikelId], sollStueck: Number(sollStueck) > 0 ? Number(sollStueck) : null },
+  }) : null;
+  const EINSTUFUNG = {
+    sicher: { text: 'Sicher – Buchungsvorschlag', farbe: 'text-emerald-700' },
+    bestaetigung: { text: 'Bestätigung nötig', farbe: 'text-amber-800' },
+    abwarten: { text: 'Abwarten – Messung nicht stabil', farbe: 'text-[#5d6873]' },
+    kein_ereignis: { text: 'Keine Bewegung (Rauschen der Waage)', farbe: 'text-[#5d6873]' },
+  } as const;
 
   function setze(id: string, teil: Partial<GestellEingabe>) { setGestelle((l) => l.map((g) => (g.id === id ? { ...g, ...teil } : g))); setGebucht(''); }
 
@@ -118,6 +147,29 @@ export default function GestellSimulatorPage() {
         <button onClick={() => setGestelle((l) => [...l, { id: `g${Date.now()}`, name: `Gestell ${l.length + 1}`, artikelId: 'belag', ziel: 'Lager', leerKg: '200', bruttoKg: '200' }])}
           className="rounded border border-[var(--os-linie)] bg-white px-4 py-2 text-sm font-semibold hover:bg-[#eef0f3]">+ Gestell hinzufügen</button>
       </div>
+
+      {ereignis && (
+        <div className="mt-8 rounded-md border border-[var(--os-linie)] bg-white p-5">
+          <h2 className="font-semibold">Ereignisprüfung für Gestell 1</h2>
+          <p className="mt-1 text-sm text-[#5d6873]">Eine Gewichtsänderung wird nie blind gebucht. Gewicht „vorher“ gegen das gemessene Gewicht oben, dazu die Rahmenbedingungen:</p>
+          <div className="mt-3 grid gap-3 text-sm sm:grid-cols-3">
+            <label className="block">Gewicht vorher (kg)<input value={vorherKg} onChange={(e) => setVorherKg(e.target.value)} inputMode="decimal" className="mt-1 w-full rounded border border-[var(--os-linie)] px-3 py-2" /></label>
+            <label className="block">Geplante Menge laut Auftrag<input value={sollStueck} onChange={(e) => setSollStueck(e.target.value)} inputMode="numeric" className="mt-1 w-full rounded border border-[var(--os-linie)] px-3 py-2" /></label>
+            <div className="space-y-1.5 pt-1">
+              <label className="flex items-center gap-2"><input type="checkbox" checked={ruhig} onChange={(e) => setRuhig(e.target.checked)} /> Waage ruhig nach der Änderung</label>
+              <label className="flex items-center gap-2"><input type="checkbox" checked={fahrzeug} onChange={(e) => setFahrzeug(e.target.checked)} /> Richtiger LKW erkannt</label>
+              <label className="flex items-center gap-2"><input type="checkbox" checked={standortOk} onChange={(e) => setStandortOk(e.target.checked)} /> Standort passt zum Auftrag</label>
+              <label className="flex items-center gap-2"><input type="checkbox" checked={auftragAktiv} onChange={(e) => setAuftragAktiv(e.target.checked)} /> Transportauftrag aktiv</label>
+            </div>
+          </div>
+          <p className={`mt-4 font-semibold ${EINSTUFUNG[ereignis.einstufung].farbe}`}>{EINSTUFUNG[ereignis.einstufung].text}{ereignis.stueck > 0 && ` – ${ereignis.stueck} Stück ${ereignis.richtung === 'entnahme' ? 'entnommen' : 'dazugekommen'}`}</p>
+          <ul className="mt-2 space-y-1 text-sm">
+            {ereignis.pruefungen.map((x) => (
+              <li key={x.name} className="flex gap-2">{x.ok ? <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" /> : <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-700" />}<span><b>{x.name}:</b> {x.text}</span></li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       <div className="mt-8 grid gap-4 md:grid-cols-2">
         <div className="rounded-md border border-[var(--os-linie)] bg-white p-5">
