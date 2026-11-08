@@ -233,7 +233,7 @@ export default function DashboardPage() {
 
   if (loading && !stats) {
     return (
-      <div className="min-h-screen bg-[#fbfbfd] text-[#1d1d1f] flex items-center justify-center">
+      <div className="min-h-screen bg-[var(--os-grund)] text-[#1d1d1f] flex items-center justify-center">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#e8590c] mx-auto mb-4" />
           <p className="text-[#86868b]">Dashboard wird geladen …</p>
@@ -243,22 +243,22 @@ export default function DashboardPage() {
   }
 
   return (
-    <div className="min-h-screen bg-[#fbfbfd] text-[#1d1d1f] p-4 md:p-8">
-      <div className="max-w-7xl mx-auto">
+    <div className="min-h-screen bg-[var(--os-grund)] text-[#1d1d1f] p-4 md:p-8">
+      <div className="max-w-[1400px] mx-auto">
 
         {/* ─── Kopf ─── */}
         <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
           <div>
-            <h1 className="text-2xl md:text-3xl font-semibold tracking-tight">Dashboard</h1>
+            <h1 className="text-[22px] font-semibold tracking-tight">Übersicht</h1>
             <p className="text-[#86868b] text-sm mt-1">Live-Übersicht · aktualisiert alle 45 s</p>
           </div>
           <div className="flex gap-3">
             <button onClick={loadDashboard} disabled={refreshing}
-              className="inline-flex items-center gap-1.5 px-4 py-2 bg-white border border-black/10 hover:border-[#e8590c] text-[#1d1d1f] rounded-full text-sm transition-colors disabled:opacity-60 disabled:cursor-wait">
+              className="inline-flex items-center gap-1.5 px-4 py-2 bg-white border border-[var(--os-linie)] hover:border-[#e8590c] text-[#1d1d1f] rounded text-sm transition-colors disabled:opacity-60 disabled:cursor-wait">
               <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} /> {refreshing ? 'Aktualisiert …' : 'Aktualisieren'}
             </button>
             <button onClick={() => { starteNeuesAufmass(); router.push("/aufmass/schritt1"); }}
-              className="inline-flex items-center gap-1.5 px-4 py-2 bg-[#e8590c] hover:bg-[#d9480f] text-white rounded-full text-sm font-semibold transition-colors shadow-sm">
+              className="inline-flex items-center gap-1.5 px-4 py-2 bg-[#e8590c] hover:bg-[#d9480f] text-[#171b20] rounded text-sm font-semibold transition-colors">
               <Plus className="w-4 h-4" /> Neues Aufmaß
             </button>
           </div>
@@ -266,25 +266,25 @@ export default function DashboardPage() {
 
         {/* ─── Onboarding-Hinweis (nur Admin, bis Ersteinrichtung fertig) ─── */}
         {zeigeOnboarding && (
-          <div className="bg-blue-50 border border-blue-200 rounded-2xl p-4 mb-6 flex flex-wrap items-center justify-between gap-3">
+          <div className="bg-blue-50 border border-blue-200 rounded-md p-4 mb-6 flex flex-wrap items-center justify-between gap-3">
             <div>
               <div className="font-semibold text-blue-900">Ersteinrichtung noch nicht abgeschlossen</div>
               <div className="text-sm text-blue-700">Firmenprofil, Stammdaten und Demo-Daten – der Assistent führt Sie in 3 Schritten durch.</div>
             </div>
             <button onClick={() => router.push('/onboarding')}
-              className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-full text-sm font-semibold transition-colors">
+              className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded text-sm font-semibold transition-colors">
               Einrichtung starten →
             </button>
           </div>
         )}
 
         {error && (
-          <div className="bg-red-50 border border-red-200 rounded-2xl p-4 mb-6 text-red-700">
+          <div className="bg-red-50 border border-red-200 rounded-md p-4 mb-6 text-red-700">
             Fehler: {error}
           </div>
         )}
         {msg && (
-          <div className={`rounded-2xl p-3 text-sm mb-6 ${msg.startsWith('✅') ? 'bg-emerald-50 border border-emerald-200 text-emerald-700' : 'bg-red-50 border border-red-200 text-red-700'}`}>
+          <div className={`rounded-md p-3 text-sm mb-6 ${msg.startsWith('✅') ? 'bg-emerald-50 border border-emerald-200 text-emerald-700' : 'bg-red-50 border border-red-200 text-red-700'}`}>
             {msg}
           </div>
         )}
@@ -297,7 +297,7 @@ export default function DashboardPage() {
           <Section icon={<AlertTriangle className="w-5 h-5 text-red-500" />} title="Handlungsbedarf">
             <div className="space-y-2">
               {alerts.map((a, i) => (
-                <div key={i} className={`flex items-center justify-between gap-3 p-4 rounded-2xl border ${
+                <div key={i} className={`flex items-center justify-between gap-3 p-4 rounded-md border ${
                   a.severity === "critical" ? "bg-red-50 border-red-200" : "bg-amber-50 border-amber-200"
                 }`}>
                   <div className="flex items-center gap-3 min-w-0">
@@ -317,7 +317,7 @@ export default function DashboardPage() {
                     if (a.action.startsWith('/aufmass/schritt1') && !a.action.includes('?id=')) starteNeuesAufmass();
                     router.push(a.action);
                   }}
-                    className="shrink-0 px-3 py-1.5 bg-white border border-black/10 hover:border-[#e8590c] text-[#1d1d1f] rounded-full text-sm transition-colors">
+                    className="shrink-0 px-3 py-1.5 bg-white border border-[var(--os-linie)] hover:border-[#e8590c] text-[#1d1d1f] rounded text-sm transition-colors">
                     {a.actionLabel}
                   </button>
                 </div>
@@ -379,7 +379,7 @@ export default function DashboardPage() {
         {charts && (
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
             {/* Umsatz pro Monat */}
-            <div className="bg-white border border-black/5 shadow-sm rounded-2xl p-6">
+            <div className="bg-white border border-[var(--os-linie)] rounded-md p-6">
               <h3 className="text-lg font-semibold text-[#1d1d1f] mb-4">📊 Umsatz pro Monat</h3>
               {charts.revenueByMonth.length === 0 ? (
                 <p className="text-[#86868b] text-sm">Noch keine Umsatzdaten – erscheint, sobald ein Aufmaß mit KI-Preis (Schritt 6) fertig ist.</p>
@@ -392,10 +392,10 @@ export default function DashboardPage() {
                       <div className={`w-16 text-xs text-right shrink-0 ${selectedMonth === d.month ? 'text-[#e8590c] font-semibold' : 'text-[#86868b]'}`}>
                         {formatMonth(d.month)}
                       </div>
-                      <div className={`flex-1 h-8 bg-[#f5f5f7] rounded-full overflow-hidden relative transition-all ${
+                      <div className={`flex-1 h-8 bg-[#f5f5f7] rounded overflow-hidden relative transition-all ${
                         selectedMonth === d.month ? 'ring-2 ring-[#e8590c]' : 'group-hover:ring-1 group-hover:ring-[#e8590c]/40'
                       }`}>
-                        <div className="h-full bg-[#e8590c]/85 rounded-full transition-all duration-700"
+                        <div className="h-full bg-[#e8590c]/85 rounded transition-all duration-700"
                           style={{ width: `${Math.max(5, (d.revenue / maxRevenue) * 100)}%` }} />
                         <span className="absolute inset-0 flex items-center px-3 text-xs font-medium text-[#1d1d1f]">
                           {formatCurrency(d.revenue)} ({d.count} Proj{d.count === 1 ? 'ekt' : 'ekte'})
@@ -419,7 +419,7 @@ export default function DashboardPage() {
             </div>
 
             {/* Margen-Verteilung */}
-            <div className="bg-white border border-black/5 shadow-sm rounded-2xl p-6">
+            <div className="bg-white border border-[var(--os-linie)] rounded-md p-6">
               <h3 className="text-lg font-semibold text-[#1d1d1f] mb-4">📈 Margen-Verteilung</h3>
               {marginTotal === 0 ? (
                 <p className="text-[#86868b] text-sm">Noch keine Marge-Daten vorhanden.</p>
@@ -437,8 +437,8 @@ export default function DashboardPage() {
                     return (
                       <div key={label} className="flex items-center gap-3">
                         <div className="w-20 text-xs text-[#86868b] text-right shrink-0">{label}</div>
-                        <div className="flex-1 h-8 bg-[#f5f5f7] rounded-full overflow-hidden relative">
-                          <div className={`h-full ${barColor}/80 rounded-full transition-all duration-700`} style={{ width: `${Math.max(5, pct)}%` }} />
+                        <div className="flex-1 h-8 bg-[#f5f5f7] rounded overflow-hidden relative">
+                          <div className={`h-full ${barColor}/80 rounded transition-all duration-700`} style={{ width: `${Math.max(5, pct)}%` }} />
                           <span className="absolute inset-0 flex items-center px-3 text-xs font-medium text-[#1d1d1f]">
                             {count} Projekt{count !== 1 ? 'e' : ''} ({Math.round(pct)}%)
                           </span>
@@ -454,12 +454,12 @@ export default function DashboardPage() {
 
         {/* Top-Gewinn-Projekte */}
         {charts && charts.topProfitProjects.length > 0 && (
-          <div className="bg-white border border-black/5 shadow-sm rounded-2xl p-6 mb-8">
+          <div className="bg-white border border-[var(--os-linie)] rounded-md p-6 mb-8">
             <h3 className="text-lg font-semibold text-[#1d1d1f] mb-4">🏆 Top-Gewinn-Projekte</h3>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
               {charts.topProfitProjects.map((p) => (
                 <div key={p.id}
-                  className="bg-[#f5f5f7] rounded-2xl p-4 hover:ring-1 hover:ring-[#e8590c]/40 transition cursor-pointer"
+                  className="bg-[#f5f5f7] rounded-md p-4 hover:ring-1 hover:ring-[#e8590c]/40 transition cursor-pointer"
                   onClick={() => router.push(`/aufmass/schritt1?id=${p.id}`)}>
                   <div className="text-sm font-medium text-[#1d1d1f] truncate">{p.name}</div>
                   <div className="text-xs text-[#86868b] mt-1">Umsatz: {formatCurrency(p.revenue)}</div>
@@ -473,24 +473,24 @@ export default function DashboardPage() {
 
         {/* ═══ 6) PROJEKTE – mit Abschließen / Löschen ═══ */}
         <div id="projekte">
-          <h2 className="text-lg font-semibold text-[#1d1d1f] mb-3 flex items-center gap-2">
+          <h2 className="text-[13px] font-semibold uppercase tracking-wider text-[var(--os-text-leise)] mb-3 flex items-center gap-2 border-b border-[var(--os-linie)] pb-2">
             <Warehouse className="w-5 h-5 text-[#e8590c]" /> Letzte Projekte {letzteProjekteListe.length > 0 && `(${letzteProjekteListe.length})`}
           </h2>
 
           {(stats?.totalProjects ?? 0) === 0 ? (
-            <div className="bg-white border border-black/5 shadow-sm rounded-2xl p-8 text-center">
+            <div className="bg-white border border-[var(--os-linie)] rounded-md p-8 text-center">
               <p className="text-[#86868b] mb-4">Keine Projekte gefunden.</p>
               <button onClick={() => { starteNeuesAufmass(); router.push("/aufmass/schritt1"); }}
-                className="px-4 py-2 bg-[#e8590c] hover:bg-[#d9480f] text-white rounded-full text-sm font-semibold transition-colors shadow-sm">
+                className="px-4 py-2 bg-[#e8590c] hover:bg-[#d9480f] text-[#171b20] rounded text-sm font-semibold transition-colors">
                 Erstes Aufmaß anlegen
               </button>
             </div>
           ) : letzteProjekteListe.length === 0 ? (
-            <div className="bg-white border border-black/5 shadow-sm rounded-2xl p-8 text-center">
+            <div className="bg-white border border-[var(--os-linie)] rounded-md p-8 text-center">
               <p className="text-[#86868b]">Keine Projekte im gewählten Monat ({formatMonthLong(letzteProjekteMonat)}).</p>
             </div>
           ) : (
-            <div className="bg-white border border-black/5 shadow-sm rounded-2xl overflow-x-auto">
+            <div className="bg-white border border-[var(--os-linie)] rounded-md overflow-x-auto">
               <table className="w-full text-left min-w-[720px]">
                 <thead className="bg-[#f5f5f7] text-[#86868b] text-xs uppercase">
                   <tr>
@@ -514,7 +514,7 @@ export default function DashboardPage() {
                       </td>
                       <td className="px-4 py-3">
                         {p.margin > 0 ? (
-                          <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
+                          <span className={`px-2 py-0.5 rounded text-xs font-medium ${
                             p.margin >= 25 ? "bg-emerald-50 text-emerald-700" :
                             p.margin >= 15 ? "bg-amber-50 text-amber-700" :
                             "bg-red-50 text-red-600"
@@ -526,7 +526,7 @@ export default function DashboardPage() {
                         )}
                       </td>
                       <td className="px-4 py-3">
-                        <span className={`px-2 py-0.5 rounded-full text-xs ${
+                        <span className={`px-2 py-0.5 rounded text-xs ${
                           p.status === "active" ? "bg-orange-50 text-[#e8590c]" :
                           p.status === "completed" ? "bg-emerald-50 text-emerald-700" :
                           "bg-[#f5f5f7] text-[#86868b]"
@@ -544,7 +544,7 @@ export default function DashboardPage() {
                               disabled={busyId === p.id}
                               onClick={() => setProjectStatus(p, 'completed')}
                               title="Projekt abschließen"
-                              className="inline-flex items-center gap-1 text-xs border border-black/10 hover:border-emerald-500 text-[#424245] hover:text-emerald-600 px-2.5 py-1.5 rounded-full transition-colors disabled:opacity-40">
+                              className="inline-flex items-center gap-1 text-xs border border-[var(--os-linie)] hover:border-emerald-500 text-[#424245] hover:text-emerald-600 px-2.5 py-1.5 rounded transition-colors disabled:opacity-40">
                               <CheckCircle2 className="w-3.5 h-3.5" /> Abschließen
                             </button>
                           ) : p.status === "entwurf" ? null : (
@@ -552,7 +552,7 @@ export default function DashboardPage() {
                               disabled={busyId === p.id}
                               onClick={() => setProjectStatus(p, 'active')}
                               title="Projekt wieder öffnen"
-                              className="inline-flex items-center gap-1 text-xs border border-black/10 hover:border-[#e8590c] text-[#424245] hover:text-[#e8590c] px-2.5 py-1.5 rounded-full transition-colors disabled:opacity-40">
+                              className="inline-flex items-center gap-1 text-xs border border-[var(--os-linie)] hover:border-[#e8590c] text-[#424245] hover:text-[#e8590c] px-2.5 py-1.5 rounded transition-colors disabled:opacity-40">
                               <RotateCcw className="w-3.5 h-3.5" /> Öffnen
                             </button>
                           )}
@@ -560,7 +560,7 @@ export default function DashboardPage() {
                             disabled={busyId === p.id}
                             onClick={() => deleteProject(p)}
                             title="Projekt löschen"
-                            className="inline-flex items-center gap-1 text-xs border border-black/10 hover:border-red-500 text-[#424245] hover:text-red-600 px-2.5 py-1.5 rounded-full transition-colors disabled:opacity-40">
+                            className="inline-flex items-center gap-1 text-xs border border-[var(--os-linie)] hover:border-red-500 text-[#424245] hover:text-red-600 px-2.5 py-1.5 rounded transition-colors disabled:opacity-40">
                             <Trash2 className="w-3.5 h-3.5" /> Löschen
                           </button>
                         </div>
@@ -581,7 +581,7 @@ export default function DashboardPage() {
               id="letzte-projekte-monat"
               value={letzteProjekteMonat}
               onChange={(e) => setLetzteProjekteMonat(e.target.value)}
-              className="bg-white border border-black/10 rounded-full px-3 py-1.5 text-sm text-[#1d1d1f] focus:outline-none focus:border-[#e8590c]"
+              className="bg-white border border-[var(--os-linie)] rounded px-3 py-1.5 text-sm text-[#1d1d1f] focus:outline-none focus:border-[#e8590c]"
             >
               {letzteProjekteMonate.map((m) => (
                 <option key={m} value={m}>
@@ -600,7 +600,7 @@ export default function DashboardPage() {
 function Section({ icon, title, children }: { icon: React.ReactNode; title: string; children: React.ReactNode }) {
   return (
     <div className="mb-8">
-      <h2 className="text-lg font-semibold text-[#1d1d1f] mb-3 flex items-center gap-2">{icon} {title}</h2>
+      <h2 className="text-[13px] font-semibold uppercase tracking-wider text-[var(--os-text-leise)] mb-3 flex items-center gap-2 border-b border-[var(--os-linie)] pb-2">{icon} {title}</h2>
       {children}
     </div>
   );
@@ -621,7 +621,7 @@ function MonthDrilldown({
   }
 
   return (
-    <div className="mt-5 border-t border-black/5 pt-5">
+    <div className="mt-5 border-t border-[var(--os-linie)] pt-5">
       {/* Nur dieser Bereich wird gedruckt (Browser-Druckdialog = "Drucken" oder "Als PDF speichern") */}
       <style>{`
         @media print {
@@ -639,11 +639,11 @@ function MonthDrilldown({
           </h4>
           <div className="no-print flex gap-2">
             <button onClick={drucken}
-              className="px-3 py-1.5 bg-white border border-black/10 hover:border-[#e8590c] text-[#1d1d1f] rounded-full text-xs transition-colors">
+              className="px-3 py-1.5 bg-white border border-[var(--os-linie)] hover:border-[#e8590c] text-[#1d1d1f] rounded text-xs transition-colors">
               🖨️ Drucken / Als PDF speichern
             </button>
             <button onClick={onClose}
-              className="px-3 py-1.5 bg-white border border-black/10 hover:border-red-400 text-[#1d1d1f] rounded-full text-xs transition-colors">
+              className="px-3 py-1.5 bg-white border border-[var(--os-linie)] hover:border-red-400 text-[#1d1d1f] rounded text-xs transition-colors">
               Schließen
             </button>
           </div>
@@ -682,7 +682,7 @@ function MonthDrilldown({
                 ))}
               </tbody>
               <tfoot>
-                <tr className="border-t border-black/10 font-semibold">
+                <tr className="border-t border-[var(--os-linie)] font-semibold">
                   <td className="px-3 py-2" colSpan={3}>Summe</td>
                   <td className="px-3 py-2 text-emerald-700">{gesamt.toLocaleString("de-DE")} €</td>
                   <td className="px-3 py-2" colSpan={2} />
@@ -703,8 +703,8 @@ function KpiCard({ label, value, color, href }: { label: string; value: string |
   return (
     <div
       onClick={clickable ? () => router.push(href!) : undefined}
-      className={`bg-white border border-black/5 shadow-sm rounded-2xl p-4 transition ${
-        clickable ? 'cursor-pointer hover:shadow-md hover:ring-1 hover:ring-[#e8590c]/40' : ''
+      className={`bg-white border border-[var(--os-linie)] border-t-2 border-t-[#171b20] rounded-md p-4 transition ${
+        clickable ? 'cursor-pointer hover:border-[var(--os-akzent)]' : ''
       }`}
       title={clickable ? 'Bereich öffnen' : undefined}
     >
