@@ -6,6 +6,15 @@
   /* SCAFFOLD OS Markenfarbe (Sicherheits-Orange) */
   --brand: #e8590c;
   --brand-hover: #d9480f;
+  /* Oberfläche "Industrial": dunkle Navigation, helle Arbeitsfläche, Orange nur als Akzent */
+  --os-nav: #171b20;
+  --os-nav-text: #c9d0d7;
+  --os-nav-linie: #303944;
+  --os-nav-aktiv: #303944;
+  --os-grund: #eef0f3;
+  --os-linie: #d5dae0;
+  --os-text-leise: #5d6873;
+  --os-akzent: #f07832;
 }
 
 @theme inline {
@@ -20,7 +29,7 @@ html {
 }
 
 body {
-  --schrift: "Microsoft Sans Serif", "MS Sans Serif", Tahoma, Arial, "Liberation Sans", Helvetica, sans-serif;
+  --schrift: "Geist", "Inter", system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   background: var(--background);
   color: var(--foreground);
   /* Einheitliche Schrift in der ganzen Software: Microsoft Sans Serif (Windows/Office-Systemschrift).
@@ -37,260 +46,256 @@ body {
 }
 
 /* ───────── Desktop-Oberfläche (Büro, großer Bildschirm): eckiger, flacher, dichter ─────────
-   Gilt nur innerhalb von .win-ui (DesktopShell) – Handy, Fahrer und öffentliche Seiten bleiben unverändert. */
-.win-ui { font-family: var(--schrift); font-size: 19px; color: #1b1b1b; -webkit-font-smoothing: auto; -moz-osx-font-smoothing: auto; text-rendering: optimizeLegibility; }
-.win-ui [class*="rounded-xl"], .win-ui [class*="rounded-2xl"], .win-ui [class*="rounded-3xl"], .win-ui [class*="rounded-lg"], .win-ui [class*="rounded-md"] { border-radius: 3px; }
-.win-ui button.rounded-full, .win-ui a.rounded-full, .win-ui input.rounded-full, .win-ui select.rounded-full,
-.win-ui span.rounded-full[class*="px-"] { border-radius: 3px; }
-.win-ui .shadow-sm, .win-ui .shadow, .win-ui .shadow-md, .win-ui .shadow-lg { box-shadow: none; }
-.win-ui .text-sm { font-size: 19px; line-height: 1.4; }
-.win-ui .text-xs { font-size: 17.5px; line-height: 1.4; }
-.win-ui .text-base { font-size: 20px; }
-.win-ui .text-\[9px\], .win-ui .text-\[10px\], .win-ui .text-\[11px\], .win-ui .text-\[12px\] { font-size: 17px; }
-.win-ui .text-\[15px\] { font-size: 19px; }
-.win-ui .text-\[16px\] { font-size: 20px; }
-.win-ui .text-\[17px\] { font-size: 21px; }
-.win-ui .text-\[18px\] { font-size: 22px; }
-.win-ui .text-\[20px\] { font-size: 24px; }
-.win-ui .text-\[13px\] { font-size: 18.5px; }
-.win-ui .text-\[14px\] { font-size: 19px; }
+   Gilt nur innerhalb von .os-ui (components/shell/AppShell.tsx) – Handy, Fahrer und öffentliche Seiten bleiben unverändert. */
+.os-ui { font-family: var(--schrift); font-size: 15px; color: #171b20; background: var(--os-grund); -webkit-font-smoothing: auto; -moz-osx-font-smoothing: auto; text-rendering: optimizeLegibility; }
+.os-ui [class*="rounded-xl"], .os-ui [class*="rounded-2xl"], .os-ui [class*="rounded-3xl"], .os-ui [class*="rounded-lg"], .os-ui [class*="rounded-md"] { border-radius: 3px; }
+.os-ui button.rounded-full, .os-ui a.rounded-full, .os-ui input.rounded-full, .os-ui select.rounded-full,
+.os-ui span.rounded-full[class*="px-"] { border-radius: 3px; }
+.os-ui .shadow-sm, .os-ui .shadow, .os-ui .shadow-md, .os-ui .shadow-lg { box-shadow: none; }
 /* blasse Grautöne kräftiger, damit Text nicht verschwommen wirkt */
-.win-ui .text-\[\#86868b\], .win-ui .text-\[\#6e6e73\], .win-ui .text-gray-400, .win-ui .text-gray-500, .win-ui .text-slate-400, .win-ui .text-slate-500 { color: #222; }
-.win-ui .text-black\/40, .win-ui .text-black\/50, .win-ui .text-black\/60, .win-ui .text-black\/70 { color: #1a1a1a; }
-.win-ui .text-white\/50, .win-ui .text-white\/60 { color: rgba(255,255,255,.85); }
-.win-ui .text-lg { font-size: 21px; }
-.win-ui .text-xl { font-size: 22px; }
-.win-ui .text-2xl { font-size: 24px; }
-.win-ui .text-3xl { font-size: 26px; }
+.os-ui .text-\[\#86868b\], .os-ui .text-\[\#6e6e73\], .os-ui .text-gray-400, .os-ui .text-gray-500, .os-ui .text-slate-400, .os-ui .text-slate-500 { color: #222; }
+.os-ui .text-black\/40, .os-ui .text-black\/50, .os-ui .text-black\/60, .os-ui .text-black\/70 { color: #1a1a1a; }
+.os-ui .text-white\/50, .os-ui .text-white\/60 { color: rgba(255,255,255,.85); }
 /* Kennzahlen und Zwischenüberschriften neutral statt bunt (Rot bleibt für Warnwerte) */
-.win-ui p[class*="text-blue-"], .win-ui p[class*="text-violet-"], .win-ui p[class*="text-purple-"], .win-ui p[class*="text-emerald-"],
-.win-ui p[class*="text-green-"], .win-ui p[class*="text-sky-"], .win-ui p[class*="text-teal-"], .win-ui p[class*="text-indigo-"], .win-ui p[class*="text-\[\#e8590c\]"] { color: #1b1b1b; }
+.os-ui p[class*="text-blue-"], .os-ui p[class*="text-violet-"], .os-ui p[class*="text-purple-"], .os-ui p[class*="text-emerald-"],
+.os-ui p[class*="text-green-"], .os-ui p[class*="text-sky-"], .os-ui p[class*="text-teal-"], .os-ui p[class*="text-indigo-"], .os-ui p[class*="text-\[\#e8590c\]"] { color: #1b1b1b; }
 /* Keine bunten Kacheln: farbige Flächen (außer Warn-/Fehlerhinweise) werden neutral weiß mit dünnem Rand */
-.win-ui div[class*="bg-emerald-"], .win-ui div[class*="bg-green-"], .win-ui div[class*="bg-blue-"], .win-ui div[class*="bg-sky-"],
-.win-ui div[class*="bg-purple-"], .win-ui div[class*="bg-violet-"], .win-ui div[class*="bg-indigo-"], .win-ui div[class*="bg-orange-"],
-.win-ui div[class*="bg-teal-"], .win-ui div[class*="bg-cyan-"], .win-ui div[class*="bg-pink-"], .win-ui div[class*="bg-rose-"],
-.win-ui div[class*="bg-gradient"], .win-ui a[class*="bg-gradient"], .win-ui button[class*="bg-gradient"] {
+.os-ui div[class*="bg-emerald-"], .os-ui div[class*="bg-green-"], .os-ui div[class*="bg-blue-"], .os-ui div[class*="bg-sky-"],
+.os-ui div[class*="bg-purple-"], .os-ui div[class*="bg-violet-"], .os-ui div[class*="bg-indigo-"], .os-ui div[class*="bg-orange-"],
+.os-ui div[class*="bg-teal-"], .os-ui div[class*="bg-cyan-"], .os-ui div[class*="bg-pink-"], .os-ui div[class*="bg-rose-"],
+.os-ui div[class*="bg-gradient"], .os-ui a[class*="bg-gradient"], .os-ui button[class*="bg-gradient"] {
   background: #fff; background-image: none; border-color: #d6d6d6; color: #1b1b1b;
 }
-.win-ui div[class*="bg-emerald-"] *, .win-ui div[class*="bg-green-"] *, .win-ui div[class*="bg-blue-"] *, .win-ui div[class*="bg-purple-"] *,
-.win-ui div[class*="bg-orange-"] *, .win-ui div[class*="bg-sky-"] *, .win-ui div[class*="bg-teal-"] * { text-shadow: none; }
-.win-ui .min-h-screen { min-height: 100%; }
-.win-ui .h-screen { height: 100%; }
-.win-ui input:not([type="checkbox"]):not([type="radio"]), .win-ui select, .win-ui textarea { border-color: #b8b8b8; }
-.win-ui input:focus, .win-ui select:focus, .win-ui textarea:focus { outline: 1px solid #4a86c8; border-color: #4a86c8; }
-.win-ui table th { font-weight: 600; }
-.win-ui table tbody tr:hover { background: #eef4fa; }
+.os-ui div[class*="bg-emerald-"] *, .os-ui div[class*="bg-green-"] *, .os-ui div[class*="bg-blue-"] *, .os-ui div[class*="bg-purple-"] *,
+.os-ui div[class*="bg-orange-"] *, .os-ui div[class*="bg-sky-"] *, .os-ui div[class*="bg-teal-"] * { text-shadow: none; }
+.os-ui .min-h-screen { min-height: 100%; }
+.os-ui .h-screen { height: 100%; }
+.os-ui input:not([type="checkbox"]):not([type="radio"]), .os-ui select, .os-ui textarea { border-color: #b8b8b8; }
+.os-ui input:focus, .os-ui select:focus, .os-ui textarea:focus { outline: 2px solid rgba(240,120,50,.35); border-color: #f07832; }
+.os-ui table th { font-weight: 600; }
+.os-ui table tbody tr:hover { background: #f3f5f7; }
 
 /* Inhalt nutzt die volle Breite des Fensters (Modale mit max-w-sm … max-w-xl bleiben schmal) */
-.win-ui .max-w-4xl, .win-ui .max-w-5xl, .win-ui .max-w-6xl, .win-ui .max-w-7xl { max-width: none; }
-.win-ui .p-8, .win-ui .md\:p-8 { padding: 16px; }
+.os-ui .max-w-4xl, .os-ui .max-w-5xl, .os-ui .max-w-6xl, .os-ui .max-w-7xl { max-width: none; }
+.os-ui .p-8, .os-ui .md\:p-8 { padding: 16px; }
 
 /* ===== Einheitliche, ruhige Farben (Desktop-Ansicht) ===== */
-.win-ui { color: #000; }
-.win-ui :is(div,p,td,th,h1,h2,h3,h4,li,dd,dt,strong,b)[class*="text-gray-"], .win-ui :is(div,p,td,th,h1,h2,h3,h4,li,dd,dt,strong,b)[class*="text-slate-"], .win-ui :is(div,p,td,th,li)[class*="text-zinc-"] { color: #1a1a1a; }
+.os-ui { color: #000; }
+.os-ui :is(div,p,td,th,h1,h2,h3,h4,li,dd,dt,strong,b)[class*="text-gray-"], .os-ui :is(div,p,td,th,h1,h2,h3,h4,li,dd,dt,strong,b)[class*="text-slate-"], .os-ui :is(div,p,td,th,li)[class*="text-zinc-"] { color: #1a1a1a; }
 /* Zahlen und Texte nicht bunt (Links und Knöpfe ausgenommen) */
-.win-ui :is(div,p,td,th,h1,h2,h3,h4,li,dd,dt,strong,b)[class*="text-green-"],
-.win-ui :is(div,p,td,th,h1,h2,h3,h4,li,dd,dt,strong,b)[class*="text-emerald-"],
-.win-ui :is(div,p,td,th,h1,h2,h3,h4,li,dd,dt,strong,b)[class*="text-amber-"],
-.win-ui :is(div,p,td,th,h1,h2,h3,h4,li,dd,dt,strong,b)[class*="text-yellow-"],
-.win-ui :is(div,p,td,th,h1,h2,h3,h4,li,dd,dt,strong,b)[class*="text-purple-"],
-.win-ui :is(div,p,td,th,h1,h2,h3,h4,li,dd,dt,strong,b)[class*="text-violet-"],
-.win-ui :is(div,p,td,th,h1,h2,h3,h4,li,dd,dt,strong,b)[class*="text-indigo-"],
-.win-ui :is(div,p,td,th,h1,h2,h3,h4,li,dd,dt,strong,b)[class*="text-blue-"],
-.win-ui :is(div,p,td,th,h1,h2,h3,h4,li,dd,dt,strong,b)[class*="text-sky-"],
-.win-ui :is(div,p,td,th,h1,h2,h3,h4,li,dd,dt,strong,b)[class*="text-teal-"],
-.win-ui :is(div,p,td,th,h1,h2,h3,h4,li,dd,dt,strong,b)[class*="text-cyan-"],
-.win-ui :is(div,p,td,th,h1,h2,h3,h4,li,dd,dt,strong,b)[class*="text-pink-"],
-.win-ui :is(div,p,td,th,h1,h2,h3,h4,li,dd,dt,strong,b)[class*="text-rose-"],
-.win-ui :is(div,p,td,th,h1,h2,h3,h4,li,dd,dt,strong,b)[class*="text-fuchsia-"],
-.win-ui :is(div,p,td,th,h1,h2,h3,h4,li,dd,dt,strong,b)[class*="text-lime-"],
-.win-ui :is(div,p,td,th,h1,h2,h3,h4,li,dd,dt,strong,b)[class*="text-orange-"] { color: #000; }
-.win-ui :is(div,p,span,td,strong,b)[class*="text-red-"][class*="text-xl"],
-.win-ui :is(div,p,span,td,strong,b)[class*="text-red-"][class*="text-2xl"],
-.win-ui :is(div,p,span,td,strong,b)[class*="text-red-"][class*="text-3xl"],
-.win-ui :is(div,p,span,td,strong,b)[class*="text-red-"][class*="text-4xl"] { color: #000; }
+.os-ui :is(div,p,td,th,h1,h2,h3,h4,li,dd,dt,strong,b)[class*="text-green-"],
+.os-ui :is(div,p,td,th,h1,h2,h3,h4,li,dd,dt,strong,b)[class*="text-emerald-"],
+.os-ui :is(div,p,td,th,h1,h2,h3,h4,li,dd,dt,strong,b)[class*="text-amber-"],
+.os-ui :is(div,p,td,th,h1,h2,h3,h4,li,dd,dt,strong,b)[class*="text-yellow-"],
+.os-ui :is(div,p,td,th,h1,h2,h3,h4,li,dd,dt,strong,b)[class*="text-purple-"],
+.os-ui :is(div,p,td,th,h1,h2,h3,h4,li,dd,dt,strong,b)[class*="text-violet-"],
+.os-ui :is(div,p,td,th,h1,h2,h3,h4,li,dd,dt,strong,b)[class*="text-indigo-"],
+.os-ui :is(div,p,td,th,h1,h2,h3,h4,li,dd,dt,strong,b)[class*="text-blue-"],
+.os-ui :is(div,p,td,th,h1,h2,h3,h4,li,dd,dt,strong,b)[class*="text-sky-"],
+.os-ui :is(div,p,td,th,h1,h2,h3,h4,li,dd,dt,strong,b)[class*="text-teal-"],
+.os-ui :is(div,p,td,th,h1,h2,h3,h4,li,dd,dt,strong,b)[class*="text-cyan-"],
+.os-ui :is(div,p,td,th,h1,h2,h3,h4,li,dd,dt,strong,b)[class*="text-pink-"],
+.os-ui :is(div,p,td,th,h1,h2,h3,h4,li,dd,dt,strong,b)[class*="text-rose-"],
+.os-ui :is(div,p,td,th,h1,h2,h3,h4,li,dd,dt,strong,b)[class*="text-fuchsia-"],
+.os-ui :is(div,p,td,th,h1,h2,h3,h4,li,dd,dt,strong,b)[class*="text-lime-"],
+.os-ui :is(div,p,td,th,h1,h2,h3,h4,li,dd,dt,strong,b)[class*="text-orange-"] { color: #000; }
+.os-ui :is(div,p,span,td,strong,b)[class*="text-red-"][class*="text-xl"],
+.os-ui :is(div,p,span,td,strong,b)[class*="text-red-"][class*="text-2xl"],
+.os-ui :is(div,p,span,td,strong,b)[class*="text-red-"][class*="text-3xl"],
+.os-ui :is(div,p,span,td,strong,b)[class*="text-red-"][class*="text-4xl"] { color: #000; }
 /* Alle farbigen Vollton-Knöpfe einheitlich: blau mit weißer Schrift (Orange = Hauptaktion bleibt) */
-.win-ui :is(button,a)[class~="bg-green-500"],
-.win-ui :is(button,a)[class~="bg-green-600"],
-.win-ui :is(button,a)[class~="bg-green-700"],
-.win-ui :is(button,a)[class~="bg-green-800"],
-.win-ui :is(button,a)[class~="bg-green-900"],
-.win-ui :is(button,a)[class~="bg-emerald-500"],
-.win-ui :is(button,a)[class~="bg-emerald-600"],
-.win-ui :is(button,a)[class~="bg-emerald-700"],
-.win-ui :is(button,a)[class~="bg-emerald-800"],
-.win-ui :is(button,a)[class~="bg-emerald-900"],
-.win-ui :is(button,a)[class~="bg-amber-500"],
-.win-ui :is(button,a)[class~="bg-amber-600"],
-.win-ui :is(button,a)[class~="bg-amber-700"],
-.win-ui :is(button,a)[class~="bg-amber-800"],
-.win-ui :is(button,a)[class~="bg-amber-900"],
-.win-ui :is(button,a)[class~="bg-yellow-500"],
-.win-ui :is(button,a)[class~="bg-yellow-600"],
-.win-ui :is(button,a)[class~="bg-yellow-700"],
-.win-ui :is(button,a)[class~="bg-yellow-800"],
-.win-ui :is(button,a)[class~="bg-yellow-900"],
-.win-ui :is(button,a)[class~="bg-purple-500"],
-.win-ui :is(button,a)[class~="bg-purple-600"],
-.win-ui :is(button,a)[class~="bg-purple-700"],
-.win-ui :is(button,a)[class~="bg-purple-800"],
-.win-ui :is(button,a)[class~="bg-purple-900"],
-.win-ui :is(button,a)[class~="bg-violet-500"],
-.win-ui :is(button,a)[class~="bg-violet-600"],
-.win-ui :is(button,a)[class~="bg-violet-700"],
-.win-ui :is(button,a)[class~="bg-violet-800"],
-.win-ui :is(button,a)[class~="bg-violet-900"],
-.win-ui :is(button,a)[class~="bg-indigo-500"],
-.win-ui :is(button,a)[class~="bg-indigo-600"],
-.win-ui :is(button,a)[class~="bg-indigo-700"],
-.win-ui :is(button,a)[class~="bg-indigo-800"],
-.win-ui :is(button,a)[class~="bg-indigo-900"],
-.win-ui :is(button,a)[class~="bg-blue-500"],
-.win-ui :is(button,a)[class~="bg-blue-600"],
-.win-ui :is(button,a)[class~="bg-blue-700"],
-.win-ui :is(button,a)[class~="bg-blue-800"],
-.win-ui :is(button,a)[class~="bg-blue-900"],
-.win-ui :is(button,a)[class~="bg-sky-500"],
-.win-ui :is(button,a)[class~="bg-sky-600"],
-.win-ui :is(button,a)[class~="bg-sky-700"],
-.win-ui :is(button,a)[class~="bg-sky-800"],
-.win-ui :is(button,a)[class~="bg-sky-900"],
-.win-ui :is(button,a)[class~="bg-teal-500"],
-.win-ui :is(button,a)[class~="bg-teal-600"],
-.win-ui :is(button,a)[class~="bg-teal-700"],
-.win-ui :is(button,a)[class~="bg-teal-800"],
-.win-ui :is(button,a)[class~="bg-teal-900"],
-.win-ui :is(button,a)[class~="bg-cyan-500"],
-.win-ui :is(button,a)[class~="bg-cyan-600"],
-.win-ui :is(button,a)[class~="bg-cyan-700"],
-.win-ui :is(button,a)[class~="bg-cyan-800"],
-.win-ui :is(button,a)[class~="bg-cyan-900"],
-.win-ui :is(button,a)[class~="bg-pink-500"],
-.win-ui :is(button,a)[class~="bg-pink-600"],
-.win-ui :is(button,a)[class~="bg-pink-700"],
-.win-ui :is(button,a)[class~="bg-pink-800"],
-.win-ui :is(button,a)[class~="bg-pink-900"],
-.win-ui :is(button,a)[class~="bg-rose-500"],
-.win-ui :is(button,a)[class~="bg-rose-600"],
-.win-ui :is(button,a)[class~="bg-rose-700"],
-.win-ui :is(button,a)[class~="bg-rose-800"],
-.win-ui :is(button,a)[class~="bg-rose-900"],
-.win-ui :is(button,a)[class~="bg-fuchsia-500"],
-.win-ui :is(button,a)[class~="bg-fuchsia-600"],
-.win-ui :is(button,a)[class~="bg-fuchsia-700"],
-.win-ui :is(button,a)[class~="bg-fuchsia-800"],
-.win-ui :is(button,a)[class~="bg-fuchsia-900"],
-.win-ui :is(button,a)[class~="bg-lime-500"],
-.win-ui :is(button,a)[class~="bg-lime-600"],
-.win-ui :is(button,a)[class~="bg-lime-700"],
-.win-ui :is(button,a)[class~="bg-lime-800"],
-.win-ui :is(button,a)[class~="bg-lime-900"] { background: #2d63a3; border-color: #2d63a3; color: #fff; }
-.win-ui :is(button,a)[class~="bg-green-500"]:hover,
-.win-ui :is(button,a)[class~="bg-green-600"]:hover,
-.win-ui :is(button,a)[class~="bg-green-700"]:hover,
-.win-ui :is(button,a)[class~="bg-green-800"]:hover,
-.win-ui :is(button,a)[class~="bg-green-900"]:hover,
-.win-ui :is(button,a)[class~="bg-emerald-500"]:hover,
-.win-ui :is(button,a)[class~="bg-emerald-600"]:hover,
-.win-ui :is(button,a)[class~="bg-emerald-700"]:hover,
-.win-ui :is(button,a)[class~="bg-emerald-800"]:hover,
-.win-ui :is(button,a)[class~="bg-emerald-900"]:hover,
-.win-ui :is(button,a)[class~="bg-amber-500"]:hover,
-.win-ui :is(button,a)[class~="bg-amber-600"]:hover,
-.win-ui :is(button,a)[class~="bg-amber-700"]:hover,
-.win-ui :is(button,a)[class~="bg-amber-800"]:hover,
-.win-ui :is(button,a)[class~="bg-amber-900"]:hover,
-.win-ui :is(button,a)[class~="bg-yellow-500"]:hover,
-.win-ui :is(button,a)[class~="bg-yellow-600"]:hover,
-.win-ui :is(button,a)[class~="bg-yellow-700"]:hover,
-.win-ui :is(button,a)[class~="bg-yellow-800"]:hover,
-.win-ui :is(button,a)[class~="bg-yellow-900"]:hover,
-.win-ui :is(button,a)[class~="bg-purple-500"]:hover,
-.win-ui :is(button,a)[class~="bg-purple-600"]:hover,
-.win-ui :is(button,a)[class~="bg-purple-700"]:hover,
-.win-ui :is(button,a)[class~="bg-purple-800"]:hover,
-.win-ui :is(button,a)[class~="bg-purple-900"]:hover,
-.win-ui :is(button,a)[class~="bg-violet-500"]:hover,
-.win-ui :is(button,a)[class~="bg-violet-600"]:hover,
-.win-ui :is(button,a)[class~="bg-violet-700"]:hover,
-.win-ui :is(button,a)[class~="bg-violet-800"]:hover,
-.win-ui :is(button,a)[class~="bg-violet-900"]:hover,
-.win-ui :is(button,a)[class~="bg-indigo-500"]:hover,
-.win-ui :is(button,a)[class~="bg-indigo-600"]:hover,
-.win-ui :is(button,a)[class~="bg-indigo-700"]:hover,
-.win-ui :is(button,a)[class~="bg-indigo-800"]:hover,
-.win-ui :is(button,a)[class~="bg-indigo-900"]:hover,
-.win-ui :is(button,a)[class~="bg-blue-500"]:hover,
-.win-ui :is(button,a)[class~="bg-blue-600"]:hover,
-.win-ui :is(button,a)[class~="bg-blue-700"]:hover,
-.win-ui :is(button,a)[class~="bg-blue-800"]:hover,
-.win-ui :is(button,a)[class~="bg-blue-900"]:hover,
-.win-ui :is(button,a)[class~="bg-sky-500"]:hover,
-.win-ui :is(button,a)[class~="bg-sky-600"]:hover,
-.win-ui :is(button,a)[class~="bg-sky-700"]:hover,
-.win-ui :is(button,a)[class~="bg-sky-800"]:hover,
-.win-ui :is(button,a)[class~="bg-sky-900"]:hover,
-.win-ui :is(button,a)[class~="bg-teal-500"]:hover,
-.win-ui :is(button,a)[class~="bg-teal-600"]:hover,
-.win-ui :is(button,a)[class~="bg-teal-700"]:hover,
-.win-ui :is(button,a)[class~="bg-teal-800"]:hover,
-.win-ui :is(button,a)[class~="bg-teal-900"]:hover,
-.win-ui :is(button,a)[class~="bg-cyan-500"]:hover,
-.win-ui :is(button,a)[class~="bg-cyan-600"]:hover,
-.win-ui :is(button,a)[class~="bg-cyan-700"]:hover,
-.win-ui :is(button,a)[class~="bg-cyan-800"]:hover,
-.win-ui :is(button,a)[class~="bg-cyan-900"]:hover,
-.win-ui :is(button,a)[class~="bg-pink-500"]:hover,
-.win-ui :is(button,a)[class~="bg-pink-600"]:hover,
-.win-ui :is(button,a)[class~="bg-pink-700"]:hover,
-.win-ui :is(button,a)[class~="bg-pink-800"]:hover,
-.win-ui :is(button,a)[class~="bg-pink-900"]:hover,
-.win-ui :is(button,a)[class~="bg-rose-500"]:hover,
-.win-ui :is(button,a)[class~="bg-rose-600"]:hover,
-.win-ui :is(button,a)[class~="bg-rose-700"]:hover,
-.win-ui :is(button,a)[class~="bg-rose-800"]:hover,
-.win-ui :is(button,a)[class~="bg-rose-900"]:hover,
-.win-ui :is(button,a)[class~="bg-fuchsia-500"]:hover,
-.win-ui :is(button,a)[class~="bg-fuchsia-600"]:hover,
-.win-ui :is(button,a)[class~="bg-fuchsia-700"]:hover,
-.win-ui :is(button,a)[class~="bg-fuchsia-800"]:hover,
-.win-ui :is(button,a)[class~="bg-fuchsia-900"]:hover,
-.win-ui :is(button,a)[class~="bg-lime-500"]:hover,
-.win-ui :is(button,a)[class~="bg-lime-600"]:hover,
-.win-ui :is(button,a)[class~="bg-lime-700"]:hover,
-.win-ui :is(button,a)[class~="bg-lime-800"]:hover,
-.win-ui :is(button,a)[class~="bg-lime-900"]:hover { background: #24518a; }
+.os-ui :is(button,a)[class~="bg-green-500"],
+.os-ui :is(button,a)[class~="bg-green-600"],
+.os-ui :is(button,a)[class~="bg-green-700"],
+.os-ui :is(button,a)[class~="bg-green-800"],
+.os-ui :is(button,a)[class~="bg-green-900"],
+.os-ui :is(button,a)[class~="bg-emerald-500"],
+.os-ui :is(button,a)[class~="bg-emerald-600"],
+.os-ui :is(button,a)[class~="bg-emerald-700"],
+.os-ui :is(button,a)[class~="bg-emerald-800"],
+.os-ui :is(button,a)[class~="bg-emerald-900"],
+.os-ui :is(button,a)[class~="bg-amber-500"],
+.os-ui :is(button,a)[class~="bg-amber-600"],
+.os-ui :is(button,a)[class~="bg-amber-700"],
+.os-ui :is(button,a)[class~="bg-amber-800"],
+.os-ui :is(button,a)[class~="bg-amber-900"],
+.os-ui :is(button,a)[class~="bg-yellow-500"],
+.os-ui :is(button,a)[class~="bg-yellow-600"],
+.os-ui :is(button,a)[class~="bg-yellow-700"],
+.os-ui :is(button,a)[class~="bg-yellow-800"],
+.os-ui :is(button,a)[class~="bg-yellow-900"],
+.os-ui :is(button,a)[class~="bg-purple-500"],
+.os-ui :is(button,a)[class~="bg-purple-600"],
+.os-ui :is(button,a)[class~="bg-purple-700"],
+.os-ui :is(button,a)[class~="bg-purple-800"],
+.os-ui :is(button,a)[class~="bg-purple-900"],
+.os-ui :is(button,a)[class~="bg-violet-500"],
+.os-ui :is(button,a)[class~="bg-violet-600"],
+.os-ui :is(button,a)[class~="bg-violet-700"],
+.os-ui :is(button,a)[class~="bg-violet-800"],
+.os-ui :is(button,a)[class~="bg-violet-900"],
+.os-ui :is(button,a)[class~="bg-indigo-500"],
+.os-ui :is(button,a)[class~="bg-indigo-600"],
+.os-ui :is(button,a)[class~="bg-indigo-700"],
+.os-ui :is(button,a)[class~="bg-indigo-800"],
+.os-ui :is(button,a)[class~="bg-indigo-900"],
+.os-ui :is(button,a)[class~="bg-blue-500"],
+.os-ui :is(button,a)[class~="bg-blue-600"],
+.os-ui :is(button,a)[class~="bg-blue-700"],
+.os-ui :is(button,a)[class~="bg-blue-800"],
+.os-ui :is(button,a)[class~="bg-blue-900"],
+.os-ui :is(button,a)[class~="bg-sky-500"],
+.os-ui :is(button,a)[class~="bg-sky-600"],
+.os-ui :is(button,a)[class~="bg-sky-700"],
+.os-ui :is(button,a)[class~="bg-sky-800"],
+.os-ui :is(button,a)[class~="bg-sky-900"],
+.os-ui :is(button,a)[class~="bg-teal-500"],
+.os-ui :is(button,a)[class~="bg-teal-600"],
+.os-ui :is(button,a)[class~="bg-teal-700"],
+.os-ui :is(button,a)[class~="bg-teal-800"],
+.os-ui :is(button,a)[class~="bg-teal-900"],
+.os-ui :is(button,a)[class~="bg-cyan-500"],
+.os-ui :is(button,a)[class~="bg-cyan-600"],
+.os-ui :is(button,a)[class~="bg-cyan-700"],
+.os-ui :is(button,a)[class~="bg-cyan-800"],
+.os-ui :is(button,a)[class~="bg-cyan-900"],
+.os-ui :is(button,a)[class~="bg-pink-500"],
+.os-ui :is(button,a)[class~="bg-pink-600"],
+.os-ui :is(button,a)[class~="bg-pink-700"],
+.os-ui :is(button,a)[class~="bg-pink-800"],
+.os-ui :is(button,a)[class~="bg-pink-900"],
+.os-ui :is(button,a)[class~="bg-rose-500"],
+.os-ui :is(button,a)[class~="bg-rose-600"],
+.os-ui :is(button,a)[class~="bg-rose-700"],
+.os-ui :is(button,a)[class~="bg-rose-800"],
+.os-ui :is(button,a)[class~="bg-rose-900"],
+.os-ui :is(button,a)[class~="bg-fuchsia-500"],
+.os-ui :is(button,a)[class~="bg-fuchsia-600"],
+.os-ui :is(button,a)[class~="bg-fuchsia-700"],
+.os-ui :is(button,a)[class~="bg-fuchsia-800"],
+.os-ui :is(button,a)[class~="bg-fuchsia-900"],
+.os-ui :is(button,a)[class~="bg-lime-500"],
+.os-ui :is(button,a)[class~="bg-lime-600"],
+.os-ui :is(button,a)[class~="bg-lime-700"],
+.os-ui :is(button,a)[class~="bg-lime-800"],
+.os-ui :is(button,a)[class~="bg-lime-900"] { background: #2d63a3; border-color: #2d63a3; color: #fff; }
+.os-ui :is(button,a)[class~="bg-green-500"]:hover,
+.os-ui :is(button,a)[class~="bg-green-600"]:hover,
+.os-ui :is(button,a)[class~="bg-green-700"]:hover,
+.os-ui :is(button,a)[class~="bg-green-800"]:hover,
+.os-ui :is(button,a)[class~="bg-green-900"]:hover,
+.os-ui :is(button,a)[class~="bg-emerald-500"]:hover,
+.os-ui :is(button,a)[class~="bg-emerald-600"]:hover,
+.os-ui :is(button,a)[class~="bg-emerald-700"]:hover,
+.os-ui :is(button,a)[class~="bg-emerald-800"]:hover,
+.os-ui :is(button,a)[class~="bg-emerald-900"]:hover,
+.os-ui :is(button,a)[class~="bg-amber-500"]:hover,
+.os-ui :is(button,a)[class~="bg-amber-600"]:hover,
+.os-ui :is(button,a)[class~="bg-amber-700"]:hover,
+.os-ui :is(button,a)[class~="bg-amber-800"]:hover,
+.os-ui :is(button,a)[class~="bg-amber-900"]:hover,
+.os-ui :is(button,a)[class~="bg-yellow-500"]:hover,
+.os-ui :is(button,a)[class~="bg-yellow-600"]:hover,
+.os-ui :is(button,a)[class~="bg-yellow-700"]:hover,
+.os-ui :is(button,a)[class~="bg-yellow-800"]:hover,
+.os-ui :is(button,a)[class~="bg-yellow-900"]:hover,
+.os-ui :is(button,a)[class~="bg-purple-500"]:hover,
+.os-ui :is(button,a)[class~="bg-purple-600"]:hover,
+.os-ui :is(button,a)[class~="bg-purple-700"]:hover,
+.os-ui :is(button,a)[class~="bg-purple-800"]:hover,
+.os-ui :is(button,a)[class~="bg-purple-900"]:hover,
+.os-ui :is(button,a)[class~="bg-violet-500"]:hover,
+.os-ui :is(button,a)[class~="bg-violet-600"]:hover,
+.os-ui :is(button,a)[class~="bg-violet-700"]:hover,
+.os-ui :is(button,a)[class~="bg-violet-800"]:hover,
+.os-ui :is(button,a)[class~="bg-violet-900"]:hover,
+.os-ui :is(button,a)[class~="bg-indigo-500"]:hover,
+.os-ui :is(button,a)[class~="bg-indigo-600"]:hover,
+.os-ui :is(button,a)[class~="bg-indigo-700"]:hover,
+.os-ui :is(button,a)[class~="bg-indigo-800"]:hover,
+.os-ui :is(button,a)[class~="bg-indigo-900"]:hover,
+.os-ui :is(button,a)[class~="bg-blue-500"]:hover,
+.os-ui :is(button,a)[class~="bg-blue-600"]:hover,
+.os-ui :is(button,a)[class~="bg-blue-700"]:hover,
+.os-ui :is(button,a)[class~="bg-blue-800"]:hover,
+.os-ui :is(button,a)[class~="bg-blue-900"]:hover,
+.os-ui :is(button,a)[class~="bg-sky-500"]:hover,
+.os-ui :is(button,a)[class~="bg-sky-600"]:hover,
+.os-ui :is(button,a)[class~="bg-sky-700"]:hover,
+.os-ui :is(button,a)[class~="bg-sky-800"]:hover,
+.os-ui :is(button,a)[class~="bg-sky-900"]:hover,
+.os-ui :is(button,a)[class~="bg-teal-500"]:hover,
+.os-ui :is(button,a)[class~="bg-teal-600"]:hover,
+.os-ui :is(button,a)[class~="bg-teal-700"]:hover,
+.os-ui :is(button,a)[class~="bg-teal-800"]:hover,
+.os-ui :is(button,a)[class~="bg-teal-900"]:hover,
+.os-ui :is(button,a)[class~="bg-cyan-500"]:hover,
+.os-ui :is(button,a)[class~="bg-cyan-600"]:hover,
+.os-ui :is(button,a)[class~="bg-cyan-700"]:hover,
+.os-ui :is(button,a)[class~="bg-cyan-800"]:hover,
+.os-ui :is(button,a)[class~="bg-cyan-900"]:hover,
+.os-ui :is(button,a)[class~="bg-pink-500"]:hover,
+.os-ui :is(button,a)[class~="bg-pink-600"]:hover,
+.os-ui :is(button,a)[class~="bg-pink-700"]:hover,
+.os-ui :is(button,a)[class~="bg-pink-800"]:hover,
+.os-ui :is(button,a)[class~="bg-pink-900"]:hover,
+.os-ui :is(button,a)[class~="bg-rose-500"]:hover,
+.os-ui :is(button,a)[class~="bg-rose-600"]:hover,
+.os-ui :is(button,a)[class~="bg-rose-700"]:hover,
+.os-ui :is(button,a)[class~="bg-rose-800"]:hover,
+.os-ui :is(button,a)[class~="bg-rose-900"]:hover,
+.os-ui :is(button,a)[class~="bg-fuchsia-500"]:hover,
+.os-ui :is(button,a)[class~="bg-fuchsia-600"]:hover,
+.os-ui :is(button,a)[class~="bg-fuchsia-700"]:hover,
+.os-ui :is(button,a)[class~="bg-fuchsia-800"]:hover,
+.os-ui :is(button,a)[class~="bg-fuchsia-900"]:hover,
+.os-ui :is(button,a)[class~="bg-lime-500"]:hover,
+.os-ui :is(button,a)[class~="bg-lime-600"]:hover,
+.os-ui :is(button,a)[class~="bg-lime-700"]:hover,
+.os-ui :is(button,a)[class~="bg-lime-800"]:hover,
+.os-ui :is(button,a)[class~="bg-lime-900"]:hover { background: #24518a; }
 /* Nur volle Hintergrundfarbe (exakte Klasse). Helle Töne wie "bg-[#e8590c]/10" oder "hover:bg-…/5" behalten ihre Schriftfarbe, sonst steht weiße Schrift auf hellem Grund. */
-.win-ui :is(button,a)[class~="bg-[#e8590c]"], .win-ui :is(button,a)[class~="bg-[#d9480f]"],
-.win-ui :is(button,a)[class*=" bg-orange-"], .win-ui :is(button,a)[class^="bg-orange-"] { color: #fff; }
+.os-ui :is(button,a)[class~="bg-[#e8590c]"], .os-ui :is(button,a)[class~="bg-[#d9480f]"],
+.os-ui :is(button,a)[class*=" bg-orange-"], .os-ui :is(button,a)[class^="bg-orange-"] { color: #fff; }
 /* Helle Farb-Knöpfe: neutral grau mit schwarzer Schrift */
-.win-ui :is(button,a)[class~="bg-green-50"],
-.win-ui :is(button,a)[class~="bg-green-100"],
-.win-ui :is(button,a)[class~="bg-emerald-50"],
-.win-ui :is(button,a)[class~="bg-emerald-100"],
-.win-ui :is(button,a)[class~="bg-amber-50"],
-.win-ui :is(button,a)[class~="bg-amber-100"],
-.win-ui :is(button,a)[class~="bg-yellow-50"],
-.win-ui :is(button,a)[class~="bg-yellow-100"],
-.win-ui :is(button,a)[class~="bg-purple-50"],
-.win-ui :is(button,a)[class~="bg-purple-100"],
-.win-ui :is(button,a)[class~="bg-violet-50"],
-.win-ui :is(button,a)[class~="bg-violet-100"],
-.win-ui :is(button,a)[class~="bg-indigo-50"],
-.win-ui :is(button,a)[class~="bg-indigo-100"],
-.win-ui :is(button,a)[class~="bg-blue-50"],
-.win-ui :is(button,a)[class~="bg-blue-100"],
-.win-ui :is(button,a)[class~="bg-sky-50"],
-.win-ui :is(button,a)[class~="bg-sky-100"],
-.win-ui :is(button,a)[class~="bg-teal-50"],
-.win-ui :is(button,a)[class~="bg-teal-100"],
-.win-ui :is(button,a)[class~="bg-cyan-50"],
-.win-ui :is(button,a)[class~="bg-cyan-100"],
-.win-ui :is(button,a)[class~="bg-pink-50"],
-.win-ui :is(button,a)[class~="bg-pink-100"],
-.win-ui :is(button,a)[class~="bg-rose-50"],
-.win-ui :is(button,a)[class~="bg-rose-100"],
-.win-ui :is(button,a)[class~="bg-fuchsia-50"],
-.win-ui :is(button,a)[class~="bg-fuchsia-100"],
-.win-ui :is(button,a)[class~="bg-lime-50"],
-.win-ui :is(button,a)[class~="bg-lime-100"] { background: #f0f0f0; border-color: #c4c4c4; color: #000; }
+.os-ui :is(button,a)[class~="bg-green-50"],
+.os-ui :is(button,a)[class~="bg-green-100"],
+.os-ui :is(button,a)[class~="bg-emerald-50"],
+.os-ui :is(button,a)[class~="bg-emerald-100"],
+.os-ui :is(button,a)[class~="bg-amber-50"],
+.os-ui :is(button,a)[class~="bg-amber-100"],
+.os-ui :is(button,a)[class~="bg-yellow-50"],
+.os-ui :is(button,a)[class~="bg-yellow-100"],
+.os-ui :is(button,a)[class~="bg-purple-50"],
+.os-ui :is(button,a)[class~="bg-purple-100"],
+.os-ui :is(button,a)[class~="bg-violet-50"],
+.os-ui :is(button,a)[class~="bg-violet-100"],
+.os-ui :is(button,a)[class~="bg-indigo-50"],
+.os-ui :is(button,a)[class~="bg-indigo-100"],
+.os-ui :is(button,a)[class~="bg-blue-50"],
+.os-ui :is(button,a)[class~="bg-blue-100"],
+.os-ui :is(button,a)[class~="bg-sky-50"],
+.os-ui :is(button,a)[class~="bg-sky-100"],
+.os-ui :is(button,a)[class~="bg-teal-50"],
+.os-ui :is(button,a)[class~="bg-teal-100"],
+.os-ui :is(button,a)[class~="bg-cyan-50"],
+.os-ui :is(button,a)[class~="bg-cyan-100"],
+.os-ui :is(button,a)[class~="bg-pink-50"],
+.os-ui :is(button,a)[class~="bg-pink-100"],
+.os-ui :is(button,a)[class~="bg-rose-50"],
+.os-ui :is(button,a)[class~="bg-rose-100"],
+.os-ui :is(button,a)[class~="bg-fuchsia-50"],
+.os-ui :is(button,a)[class~="bg-fuchsia-100"],
+.os-ui :is(button,a)[class~="bg-lime-50"],
+.os-ui :is(button,a)[class~="bg-lime-100"] { background: #f0f0f0; border-color: #c4c4c4; color: #000; }
+
+
+/* ───────── Navigation (components/shell/AppShell.tsx) ───────── */
+.os-nav-kopf { padding: 14px 10px 6px; font-size: 11px; letter-spacing: 1.1px; text-transform: uppercase; color: #87929e; font-weight: 600; }
+.os-nav-punkt { display: flex; align-items: center; gap: 10px; padding: 7px 10px; border-radius: 4px; font-size: 14px; color: var(--os-nav-text); cursor: pointer; transition: background .12s, color .12s; }
+.os-nav-punkt:hover { background: rgba(255,255,255,.06); color: #fff; }
+.os-nav-unterpunkt { display: flex; align-items: center; gap: 9px; padding: 6px 10px; border-radius: 4px; font-size: 13px; color: #aeb7c0; transition: background .12s, color .12s; }
+.os-nav-unterpunkt:hover { background: rgba(255,255,255,.06); color: #fff; }
+.os-nav-aktiv, .os-nav-aktiv:hover { background: var(--os-nav-aktiv); color: #fff; font-weight: 500; }
+.os-nav-aktiv.os-nav-unterpunkt { box-shadow: inset 2px 0 0 var(--os-akzent); border-radius: 0 4px 4px 0; }
+.os-shell :focus-visible { outline: 2px solid var(--os-akzent); outline-offset: 1px; }

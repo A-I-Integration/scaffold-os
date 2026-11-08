@@ -33,7 +33,7 @@ export default function BaustellePage() {
 
   return (
     <div className="min-h-screen bg-white text-black">
-      <header className="px-4 py-5 border-b border-black/20" style={{ background: '#2d63a3', color: '#fff' }}>
+      <header className="px-4 py-5 border-b border-black/20" style={{ background: '#171b20', color: '#fff' }}>
         <p className="text-sm opacity-90">Baustellenunterlagen</p>
         <h1 className="text-2xl font-bold">{daten.projekt.name}</h1>
         {daten.projekt.adresse && <p className="text-base mt-1">{daten.projekt.adresse}</p>}
@@ -47,7 +47,7 @@ export default function BaustellePage() {
               {liste.map((d) => (
                 <li key={d.id}>
                   <a href={`/api/public/baustelle/datei?token=${encodeURIComponent(token)}&id=${d.id}`} target="_blank" rel="noreferrer"
-                    className="block rounded border border-black/30 px-4 py-3 hover:bg-[#eef4fa]">
+                    className="block rounded border border-black/30 px-4 py-3 hover:bg-[#f3f5f7]">
                     <span className="block text-lg font-semibold">{d.bezeichnung || d.name}</span>
                     <span className="block text-sm text-black/70">{d.bezeichnung ? d.name + ' · ' : ''}Stand {datum(d.datum)}</span>
                   </a>

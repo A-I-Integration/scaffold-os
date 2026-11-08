@@ -286,7 +286,7 @@ export default function KundenPage() {
 
   return (
     <div className="min-h-full" style={{ background: WIN.grund }}>
-      <div className="flex items-center gap-3 px-3 h-9 text-white sticky top-0 z-20" style={{ background: 'linear-gradient(#4a86c8,#2d63a3)' }}>
+      <div className="flex items-center gap-3 px-3 h-9 text-white sticky top-0 z-20" style={{ background: '#171b20' }}>
         <Users className="h-4 w-4" />
         <h1 className="text-[14px] font-bold">Kunden / Adressen</h1>
         <span className="text-xs opacity-80">{kunden.length} Kunden · {invoices.length} Rechnungen im System</span>

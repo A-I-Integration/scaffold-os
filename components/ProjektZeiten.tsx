@@ -99,7 +99,7 @@ export default function ProjektZeiten({ projectId, geplantStunden }: { projectId
               <td className={`${zeile} text-right tabular-nums`}>{e.break_minutes ?? ''}</td>
               <td className={`${zeile} text-right tabular-nums font-semibold`}>{e.hours != null ? e.hours : ''}</td>
               <td className={zeile}>{e.note || ''}</td>
-              <td className={zeile}><button onClick={() => oeffne(e)} className="text-[#1f4f8f] hover:underline">Ändern</button></td>
+              <td className={zeile}><button onClick={() => oeffne(e)} className="text-[#c2531a] hover:underline">Ändern</button></td>
             </tr>
           ))}
           {eintraege.length === 0 && <tr><td colSpan={7} className={`${zeile} text-[#86868b]`}>Für diese Baustelle sind noch keine Zeiten erfasst.</td></tr>}

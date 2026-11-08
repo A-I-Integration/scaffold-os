@@ -2,7 +2,7 @@
 
 import { useEffect } from 'react'
 
-// Entfernt führende bunte Emoji vor Reitern, Knöpfen und Überschriften in der Desktop-Ansicht
+// Entfernt führende bunte Emoji vor Reitern, Knöpfen und Überschriften im Arbeitsbereich
 // (ruhigere, sachliche Optik). Statussymbole (✅ ❌ ⚠️ ⏳ und farbige Punkte) bleiben, weil sie eine Bedeutung tragen.
 const BEHALTEN = /^[\s]*(✅|❌|⚠️?|⏳|🔴|🟢|🟡|🟠|✓|✗|•)/u
 const EMOJI_VORNE = /^\s*(?:\p{Extended_Pictographic}️?(?:‍\p{Extended_Pictographic}️?)*)\s*/u
