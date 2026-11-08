@@ -308,3 +308,15 @@ body {
 .os-ui .text-\[12px\] { font-size: 13px; }
 .os-ui button:not(:disabled), .os-ui [role="button"], .os-ui select { cursor: pointer; }
 .os-ui input:not([type="checkbox"]):not([type="radio"]), .os-ui select { min-height: 32px; }
+
+/* ───────── Einheitliche Seitenköpfe, Tabellen und Flächen (alle Seiten im Arbeitsbereich) ───────── */
+.os-ui h1 { font-size: 22px; line-height: 1.25; font-weight: 600; letter-spacing: 0; color: #171b20; }
+.os-ui :is(h1, h2, h3)[class*="text-[#e8590c]"], .os-ui :is(h1, h2, h3)[class*="text-orange-"] { color: #171b20; }
+.os-ui h2 { font-weight: 600; }
+.os-ui table thead th, .os-ui table th { font-size: 12px; letter-spacing: .6px; text-transform: uppercase; color: #5d6873; font-weight: 600; background: #f6f7f9; }
+.os-ui table th, .os-ui table td { border-color: #e3e7ec; }
+.os-ui .bg-\[\#f5f5f7\] { background-color: #f3f5f7; }
+.os-ui .bg-\[\#fbfbfd\] { background-color: var(--os-grund); }
+.os-ui .bg-white { border-color: var(--os-linie); }
+.os-ui input:not([type="checkbox"]):not([type="radio"]), .os-ui select, .os-ui textarea { border-radius: 4px; background-color: #fff; }
+.os-ui a:focus-visible, .os-ui button:focus-visible { outline: 2px solid var(--os-akzent); outline-offset: 1px; }
