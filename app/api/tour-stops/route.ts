@@ -17,6 +17,9 @@ const headers = { apikey: key, Authorization: `Bearer ${key}`, 'Content-Type': '
 // statt direkt über employee_id. (Phase 90: nach lib/touren/berechtigung.ts
 // ausgelagert, da /api/tour-stops/nicht-fertig dieselbe Prüfung braucht.)
 
+// Erlaubte Stopp-Status (die Spalte ist ein freier Text, deshalb wird hier geprüft)
+const STOPP_STATUS = ['pending', 'planned', 'in_progress', 'completed', 'skipped', 'cancelled'];
+
 // GET /api/tour-stops?tour_id=... – Stopps einer Tour
 export async function GET(req: Request) {
   if (!(await requireAuth())) return unauthorizedResponse();
@@ -44,6 +47,9 @@ export async function PUT(req: Request) {
 
     if (!id || !status) {
       return NextResponse.json({ success: false, error: 'id und status erforderlich' }, { status: 400 });
+    }
+    if (!STOPP_STATUS.includes(status)) {
+      return NextResponse.json({ success: false, error: `Ungültiger Status. Erlaubt: ${STOPP_STATUS.join(', ')}.` }, { status: 400 });
     }
 
     // FIX (Sicherheitslücke): erst Zuständigkeit prüfen, bevor irgendetwas
