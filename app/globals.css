@@ -324,3 +324,13 @@ body {
 /* Orange Hauptknöpfe: dunkle Schrift (Kontrast ca. 5:1 statt 3,6:1 mit weißer Schrift) */
 .os-ui :is(button, a)[class~="bg-[#e8590c]"], .os-ui :is(button, a)[class~="bg-[#d9480f]"], .os-ui :is(button, a)[class~="hover:bg-[#d9480f]"]:hover { color: #171b20; }
 .os-ui :is(button, a)[class~="bg-[#e8590c]"] * { color: inherit; }
+
+/* ───────── Eckige Industrie-Optik auch auf Seiten, die noch alte Weichzeichner-Klassen nutzen ───────── */
+.os-ui :is(.rounded-xl, .rounded-2xl, .rounded-3xl, .rounded-lg) { border-radius: 6px; }
+.os-ui :is(button, a, select, input):is(.rounded-full) { border-radius: 4px; }
+.os-ui :is(.shadow-sm, .shadow-md, .shadow-lg, .shadow-xl) { box-shadow: none; }
+.os-ui .min-h-screen { min-height: 100%; }
+/* blaue Hauptknöpfe → Graphit (Orange bleibt der einzige Akzent) */
+.os-ui :is(button, a)[class~="bg-blue-600"], .os-ui :is(button, a)[class~="bg-blue-500"] { background-color: #171b20; color: #fff; }
+.os-ui :is(button, a)[class~="bg-blue-600"]:hover, .os-ui :is(button, a)[class~="hover:bg-blue-700"]:hover { background-color: #303944; }
+.os-ui :is(.text-blue-600, .text-blue-500, .text-blue-700) { color: #303944; }
