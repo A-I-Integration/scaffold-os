@@ -795,10 +795,26 @@ export default function CADPage() {
     setIfcExportLaeuft(false)
   }, [model])
 
+  const [planModus, setPlanModus] = useState<'schematisch' | 'komponenten'>('schematisch')
+  // 2D-Gerüstplan als DXF (dieselben Zeichnungen wie im Statiker-Paket), Plan-Modus wie dort gewählt
+  const handleExportDXF = useCallback(async () => {
+    if (!model) return
+    try {
+      const [{ erzeugeZeichnungen }, { erzeugeDxf }] = await Promise.all([import('@/lib/geruest/plan-zeichnung'), import('@/lib/export/dxf-export')])
+      const dxf = erzeugeDxf(erzeugeZeichnungen(modelWithManual ?? model, planModus))
+      const a = document.createElement('a')
+      a.href = URL.createObjectURL(new Blob([dxf], { type: 'application/dxf' }))
+      a.download = `Geruestplan-${new Date().toISOString().split('T')[0]}.dxf`
+      a.click()
+      URL.revokeObjectURL(a.href)
+    } catch (err) {
+      alert('❌ DXF-Export fehlgeschlagen: ' + (err instanceof Error ? err.message : String(err)))
+    }
+  }, [model, modelWithManual, planModus])
+
   // Statiker-Paket: eine ZIP mit Lastannahmen-Blatt, Geometrie (JSON), Stückliste
   // ohne Preise und IFC. Nur Angaben und Geometrie, kein Nachweis.
   const [statikerPaketLaeuft, setStatikerPaketLaeuft] = useState(false)
-  const [planModus, setPlanModus] = useState<'schematisch' | 'komponenten'>('schematisch')
   const handleExportStatikerPaket = useCallback(async () => {
     if (!model) return
     setStatikerPaketLaeuft(true)
@@ -1231,6 +1247,7 @@ export default function CADPage() {
             onOpenLv={rolle === 'admin' || istStatikerLogin ? (model ? () => setLvOffen(true) : exportOhneModellHinweis) : undefined}
             onExportStatikGeometrie={model ? handleExportStatik : exportOhneModellHinweis}
             onExportIFC={!model ? exportOhneModellHinweis : (ifcExportLaeuft ? undefined : handleExportIFC)}
+            onExportDXF={!model ? exportOhneModellHinweis : handleExportDXF}
             onExportStatikerPaket={!model ? exportOhneModellHinweis : (statikerPaketLaeuft ? undefined : handleExportStatikerPaket)}
             planModus={planModus}
             onPlanModusChange={setPlanModus}
