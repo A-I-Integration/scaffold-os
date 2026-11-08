@@ -1197,7 +1197,7 @@ export default function CADPage() {
             )}
             {selectedComponent && modelWithManual && viewMode === '3d' && !abbauAktiv && !placementType && !measureMode && (
               <EigenschaftenLeiste model={modelWithManual} id={selectedComponent} artikelWahl={artikelWahl} manuell={!!platzierungIdVonBauteil(selectedComponent)}
-                onEntfernen={() => handleRemoveComponent(selectedComponent)} onZu={() => setSelectedComponent(null)} />
+                onEntfernen={() => handleRemoveComponent(selectedComponent)} onFeldEntfernen={(ids) => { setRemovedGroups((prev) => [...prev, ids]); setSelectedComponent(null) }} onZu={() => setSelectedComponent(null)} />
             )}
             {bereicheOffen && modelWithManual && viewMode === '3d' && (
               <BereichePanel ein={bereichEin} onChange={setBereichEin} vorschau={bereichVorschau} liste={bereichsListe}

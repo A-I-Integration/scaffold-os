@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { generateCADModel, generateBillOfMaterials, type BuildingParams } from '../../calculations/cad-engine'
-import { waehleBereich, erweitereSeite, stockeAuf, wendeAenderungenAn, seitenMasse } from '../bereiche'
+import { waehleFeld, waehleBereich, erweitereSeite, stockeAuf, wendeAenderungenAn, seitenMasse } from '../bereiche'
 
 const basis: BuildingParams = {
   lengthM: 12, widthM: 9, heightM: 9, eavesHeightM: 9, roofHeightM: 0, roofForm: 'flachdach',
@@ -147,5 +147,23 @@ describe('Projektdatei', () => {
     const e = liesProjektdatei(JSON.stringify(roh))
     expect(e.ok).toBe(true)
     if (e.ok) { expect(e.daten.bereiche).toBeUndefined(); expect(e.verworfen.length).toBe(2) }
+  })
+})
+
+describe('Feld per Klick wählen', () => {
+  const m = modell()
+  const bauteil = m.components3D.find((c) => c.id.startsWith('deck-field-front-1-'))!
+  it('dieses Feld ist kleiner als Spalte, Spalte kleiner als ganze Lage', () => {
+    const feld = waehleFeld(m, bauteil.id, 'feld')!
+    const spalte = waehleFeld(m, bauteil.id, 'spalte')!
+    const lage = waehleFeld(m, bauteil.id, 'lage')!
+    expect(feld.anzahlFelder).toBe(1)
+    expect(spalte.anzahlFelder).toBe(new Set(m.fields.filter((f) => f.side === 'front').map((f) => f.levelIndex)).size)
+    expect(lage.anzahlFelder).toBe(m.fields.filter((f) => f.side === 'front' && f.levelIndex === 1).length)
+    expect(feld.bauteilIds.length).toBeLessThan(spalte.bauteilIds.length)
+    expect(feld.bauteilIds).toContain(bauteil.id)
+  })
+  it('Bauteil ohne Feld liefert null', () => {
+    expect(waehleFeld(m, 'gibt-es-nicht', 'feld')).toBeNull()
   })
 })
