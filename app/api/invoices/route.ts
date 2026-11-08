@@ -348,7 +348,13 @@ export async function PATCH(req: NextRequest) {
     // NEU (Phase 38): paid_amount – reflektiert den tatsächlichen Zahlungs-
     // eingang, kein Eingriff in den ursprünglich ausgestellten Rechnungs-
     // inhalt (Positionen/Beträge bleiben unveränderbar, siehe oben).
-    if (paid_amount != null) patch.paid_amount = Number(paid_amount);
+    if (paid_amount != null) {
+      const pa = Number(paid_amount);
+      if (!Number.isFinite(pa) || pa < 0) {
+        return NextResponse.json({ success: false, error: 'Der bezahlte Betrag muss eine Zahl von 0 oder mehr sein.' }, { status: 400 });
+      }
+      patch.paid_amount = Math.round(pa * 100) / 100;
+    }
     if (!status && reminder_level == null && notes === undefined && paid_amount == null) {
       return NextResponse.json({ success: false, error: 'Nichts zu ändern.' }, { status: 400 });
     }
@@ -357,6 +363,19 @@ export async function PATCH(req: NextRequest) {
     // muss nach Erstellung unveränderbar bleiben. Änderungen laufen jetzt über
     // "Neue Version anlegen" (POST einer neuen Rechnung mit Bezug + diese hier
     // auf "storniert" setzen), siehe Kunden-Detail.
+
+    // Betrag gegen den Rechnungsbetrag prüfen; "bezahlt" ohne Betrag verbucht den vollen Rechnungsbetrag,
+    // damit Status und offener Betrag zusammenpassen.
+    if (patch.paid_amount !== undefined || status === 'bezahlt') {
+      const gr = await fetch(`${url}/rest/v1/invoices?id=eq.${id}&select=gross_amount`, { headers });
+      const brutto = gr.ok ? Number((await gr.json())?.[0]?.gross_amount) : NaN;
+      if (Number.isFinite(brutto)) {
+        if (patch.paid_amount !== undefined && patch.paid_amount - brutto > 0.01) {
+          return NextResponse.json({ success: false, error: `Der bezahlte Betrag (${patch.paid_amount.toFixed(2)} €) liegt über dem Rechnungsbetrag (${brutto.toFixed(2)} €).` }, { status: 400 });
+        }
+        if (patch.paid_amount === undefined && status === 'bezahlt') patch.paid_amount = brutto;
+      }
+    }
 
     const res = await fetch(`${url}/rest/v1/invoices?id=eq.${id}`, {
       method: 'PATCH',
