@@ -4,6 +4,7 @@
 // Alle Werte kommen aus dem Modell; es wird nichts berechnet oder erfunden.
 
 import type { CADModel } from '@/lib/calculations/cad-engine'
+import { waehleFeld, type FeldUmfang } from '@/lib/cad/bereiche'
 
 const ARTEN: Record<string, string> = {
   frame: 'Rahmen / Riegel', deck: 'Belag', railing: 'Geländer', diagonal: 'Diagonale', footplate: 'Fußplatte', coupling: 'Kupplung',
@@ -13,8 +14,8 @@ const ARTEN: Record<string, string> = {
 const SEITEN: Record<string, string> = { front: 'Vorderseite', back: 'Rückseite', left: 'Links', right: 'Rechts' }
 const m = (v: number) => `${v.toLocaleString('de-DE', { maximumFractionDigits: 2 })} m`
 
-export default function EigenschaftenLeiste({ model, id, artikelWahl, manuell, onEntfernen, onZu }: {
-  model: CADModel; id: string; artikelWahl: Record<string, string>; manuell: boolean; onEntfernen: () => void; onZu: () => void
+export default function EigenschaftenLeiste({ model, id, artikelWahl, manuell, onEntfernen, onFeldEntfernen, onZu }: {
+  model: CADModel; id: string; artikelWahl: Record<string, string>; manuell: boolean; onEntfernen: () => void; onFeldEntfernen?: (bauteilIds: string[]) => void; onZu: () => void
 }) {
   const c = model.components3D.find((x) => x.id === id)
   if (!c) return null
@@ -43,8 +44,25 @@ export default function EigenschaftenLeiste({ model, id, artikelWahl, manuell, o
           </div>
         ))}
       </dl>
-      <div className='flex gap-2 border-t p-2' style={{ borderColor: 'var(--os-linie)' }}>
-        <button type='button' onClick={onEntfernen} className='flex-1 rounded border px-3 py-1.5 text-[13px] hover:bg-red-50' style={{ borderColor: '#e7b4b0', color: '#b42318' }}>Bauteil entfernen (Entf)</button>
+      <div className='space-y-1.5 border-t p-2' style={{ borderColor: 'var(--os-linie)' }}>
+        <button type='button' onClick={onEntfernen} className='w-full rounded border px-3 py-1.5 text-[13px] hover:bg-red-50' style={{ borderColor: '#e7b4b0', color: '#b42318' }}>Bauteil entfernen (Entf)</button>
+        {feld && onFeldEntfernen && (
+          <div>
+            <div className='mb-1 text-[11px] uppercase tracking-wider' style={{ color: 'var(--os-text-leise)' }}>Ganzes Feld entfernen</div>
+            <div className='grid grid-cols-3 gap-1'>
+              {([['feld', 'Dieses Feld'], ['spalte', 'Alle Lagen'], ['lage', 'Ganze Lage']] as [FeldUmfang, string][]).map(([u, name]) => {
+                const w = waehleFeld(model, id, u)
+                return (
+                  <button key={u} type='button' disabled={!w || w.bauteilIds.length === 0} onClick={() => w && onFeldEntfernen(w.bauteilIds)}
+                    title={w ? `${w.anzahlFelder} Feld${w.anzahlFelder === 1 ? '' : 'er'}, ${w.flaecheM2.toLocaleString('de-DE')} m²` : undefined}
+                    className='rounded border px-1 py-1.5 text-[12.5px] leading-tight hover:bg-red-50 disabled:opacity-40' style={{ borderColor: '#e7b4b0', color: '#b42318' }}>
+                    {name}{w ? <span className='block text-[11px] opacity-70'>{w.anzahlFelder} Feld{w.anzahlFelder === 1 ? '' : 'er'}</span> : null}
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+        )}
       </div>
     </aside>
   )

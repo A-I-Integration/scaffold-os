@@ -272,3 +272,35 @@ export function wendeAenderungenAn(model: CADModel, liste: BereichsAenderung[]):
   liste.forEach((a, i) => { m = a.art === 'erweitern' ? erweitereSeite(m, a, `erw${i}`) : stockeAuf(m, a, `erw${i}`) })
   return m
 }
+
+export type FeldUmfang = 'feld' | 'spalte' | 'lage'
+
+export interface FeldWahl {
+  feldIds: string[]
+  bauteilIds: string[]
+  anzahlFelder: number
+  flaecheM2: number
+}
+
+/**
+ * Bauteile eines angeklickten Bauteils: nur dessen Feld, dasselbe Feld in allen Lagen (Spalte)
+ * oder die ganze Lage dieser Seite. Gibt null zurück, wenn das Bauteil an keinem Feld hängt.
+ */
+export function waehleFeld(model: CADModel, bauteilId: string, umfang: FeldUmfang): FeldWahl | null {
+  const c = model.components3D.find((x) => x.id === bauteilId)
+  const feld = c?.fieldId ? model.fields.find((f) => f.id === c.fieldId) : undefined
+  if (!feld) return null
+  const gleicheSpalte = (f: ScaffoldField) => f.side === feld.side && f.kante === feld.kante && Math.abs(entlang(f, model) - entlang(feld, model)) < 0.02
+  const felder = model.fields.filter((f) =>
+    umfang === 'feld' ? f.id === feld.id
+    : umfang === 'spalte' ? gleicheSpalte(f)
+    : f.side === feld.side && f.kante === feld.kante && f.levelIndex === feld.levelIndex)
+  const ids = new Set(felder.map((f) => f.id))
+  const hoehe = (f: ScaffoldField) => lageDerSeite(model, f.side, f.levelIndex)?.heightM ?? model.levels.find((l) => l.index === f.levelIndex)?.heightM ?? 0
+  return {
+    feldIds: felder.map((f) => f.id),
+    bauteilIds: model.components3D.filter((x) => !!x.fieldId && ids.has(x.fieldId)).map((x) => x.id),
+    anzahlFelder: felder.length,
+    flaecheM2: r2(felder.reduce((s, f) => s + f.lengthM * hoehe(f), 0)),
+  }
+}
