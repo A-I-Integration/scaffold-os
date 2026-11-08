@@ -158,7 +158,9 @@ export async function POST(req: NextRequest) {
       0
     );
     const rate = tax_rate != null ? Number(tax_rate) : 19;
-    const tax = Math.round(net * rate) / 100;
+    // Steuer immer vom Betrag ohne Vorzeichen runden, damit eine Gutschrift genau das Spiegelbild der Rechnung ist
+    // (Math.round rundet -0,5 sonst anders als +0,5).
+    const tax = vorzeichen * (Math.round(Math.abs(net) * rate) / 100);
     const gross = Math.round((net + tax) * 100) / 100;
     const netRounded = Math.round(net * 100) / 100;
 
@@ -207,8 +209,9 @@ export async function POST(req: NextRequest) {
     // wenn kein due_date übergeben wurde.
     const resolvedInvoiceDate = invoice_date || new Date().toISOString().slice(0, 10);
     const resolvedDueDate = due_date || (() => {
-      const d = new Date(resolvedInvoiceDate + 'T00:00:00');
-      d.setDate(d.getDate() + 14);
+      // UTC rechnen: lokale Zeit + toISOString verschob das Datum je nach Zeitzone des Servers um einen Tag.
+      const d = new Date(resolvedInvoiceDate + 'T00:00:00Z');
+      d.setUTCDate(d.getUTCDate() + 14);
       return d.toISOString().slice(0, 10);
     })();
 
