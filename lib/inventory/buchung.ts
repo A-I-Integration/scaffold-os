@@ -104,20 +104,39 @@ export async function bucheAusZentrallager(p: BucheParams): Promise<BucheErgebni
     };
   }
 
-  // 3. site_stock-Reservierung anlegen
-  const stockRes = await fetch(`${url}/rest/v1/site_stock`, {
-    method: 'POST',
-    headers: { ...headers, Prefer: 'return=representation' },
-    body: JSON.stringify({
-      inventory_id,
-      project_id,
-      quantity: 0, // physisch noch nicht auf der Baustelle
-      reserved_quantity: quantity,
-      min_stock: 0,
-      status: 'ok',
-    }),
-  });
-  if (!stockRes.ok) {
+  // 3. site_stock-Reservierung: je Baustelle und Artikel gibt es EINE Zeile.
+  // Existiert schon eine (ältere Daten können mehrere haben: die erste nehmen), wird die Reservierung dort erhöht,
+  // sonst wird eine angelegt. Dadurch bleibt der Baustellenbestand je Artikel an einer Stelle lesbar.
+  let stockOk = false;
+  const vorhanden = await fetch(
+    `${url}/rest/v1/site_stock?inventory_id=eq.${inventory_id}&project_id=eq.${project_id}&select=id,reserved_quantity&order=created_at.asc`,
+    { headers }
+  );
+  const zeilen: { id: string; reserved_quantity: number }[] = vorhanden.ok ? await vorhanden.json() : [];
+  if (vorhanden.ok && zeilen.length > 0) {
+    const z = zeilen[0];
+    const upd = await fetch(`${url}/rest/v1/site_stock?id=eq.${z.id}&reserved_quantity=eq.${z.reserved_quantity ?? 0}`, {
+      method: 'PATCH',
+      headers: { ...headers, Prefer: 'return=representation' },
+      body: JSON.stringify({ reserved_quantity: (z.reserved_quantity ?? 0) + quantity }),
+    });
+    stockOk = upd.ok && (await upd.json()).length > 0;
+  } else if (vorhanden.ok) {
+    const stockRes = await fetch(`${url}/rest/v1/site_stock`, {
+      method: 'POST',
+      headers: { ...headers, Prefer: 'return=representation' },
+      body: JSON.stringify({
+        inventory_id,
+        project_id,
+        quantity: 0, // physisch noch nicht auf der Baustelle
+        reserved_quantity: quantity,
+        min_stock: 0,
+        status: 'ok',
+      }),
+    });
+    stockOk = stockRes.ok;
+  }
+  if (!stockOk) {
     // Bestand ist schon abgebucht (Schritt 2), site_stock schlug fehl:
     // Rueckbuchung statt inkonsistentem Zustand.
     await fetch(`${url}/rest/v1/inventory?id=eq.${inventory_id}`, {
