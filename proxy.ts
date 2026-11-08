@@ -25,7 +25,7 @@ import { istStatiker, statikerEntscheidung, STATIKER_STARTSEITE } from '@/lib/st
 // Welche Rolle darf welchen Bereich sehen?
 const ROLE_ACCESS: Record<string, string[]> = {
   '/dashboard':    ['admin', 'disponent'],
-  '/aufmass':      ['admin', 'bauleiter'],
+  '/aufmass':      ['admin', 'bauleiter', 'mitarbeiter'],  // Mitarbeiter messen auf: wie im Menü und in /api/projects (AUFMASS_ROLES)
   '/stueckliste':  ['admin', 'bauleiter'],
   '/lager':        ['admin', 'disponent', 'bauleiter', 'lager'],
   '/prognose':     ['admin', 'disponent', 'lager'],

@@ -98,6 +98,14 @@ describe('Proxy: normale Rollen bleiben unverändert', () => {
     expect(new URL(ziel(r)!).pathname).toBe('/meine-touren')
   })
 
+  it('Mitarbeiter darf das Aufmaß öffnen (Menü zeigt es, API erlaubt es), Lager nicht', async () => {
+    aktuellerNutzer = { id: 'u5', email: 'm@firma.de', app_metadata: {} }
+    aktuelleRolle = 'mitarbeiter'
+    expect((await proxy(anfrage('/aufmass/schritt1'))).status).toBe(200)
+    aktuelleRolle = 'lager'
+    expect((await proxy(anfrage('/aufmass/schritt1'))).status).toBe(307)
+  })
+
   it('Normale Rollen dürfen /statiker nicht öffnen', async () => {
     for (const rolle of ['admin', 'disponent', 'bauleiter', 'mitarbeiter', 'lager']) {
       aktuellerNutzer = { id: 'u4', email: 'x@firma.de', app_metadata: {} }
