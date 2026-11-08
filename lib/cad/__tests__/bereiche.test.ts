@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { generateCADModel, generateBillOfMaterials, type BuildingParams } from '../../calculations/cad-engine'
-import { waehleFeld, waehleBereich, erweitereSeite, stockeAuf, wendeAenderungenAn, seitenMasse } from '../bereiche'
+import { waehleFeld, waehleBereich, erweitereSeite, stockeAuf, wendeAenderungenAn, seitenMasse, istUmrissModell, kantenListe } from '../bereiche'
+import { lFormUmriss } from '../../calculations/cad-umriss'
 
 const basis: BuildingParams = {
   lengthM: 12, widthM: 9, heightM: 9, eavesHeightM: 9, roofHeightM: 0, roofForm: 'flachdach',
@@ -165,5 +166,43 @@ describe('Feld per Klick wählen', () => {
   })
   it('Bauteil ohne Feld liefert null', () => {
     expect(waehleFeld(m, 'gibt-es-nicht', 'feld')).toBeNull()
+  })
+})
+
+describe('Umriss-Modus (Gebäudekanten)', () => {
+  const u = () => generateCADModel({ ...basis, sides: ['front'], umriss: lFormUmriss(12, 9, 5, 4) }, 'layher-allround')
+  it('erkennt den Umriss-Modus und listet die Kanten', () => {
+    const m = u()
+    expect(istUmrissModell(m)).toBe(true)
+    expect(istUmrissModell(modell())).toBe(false)
+    expect(kantenListe(m)).toEqual([0, 1, 2, 3, 4, 5])
+  })
+  it('ein Stück einer Kante entfernen wählt weniger als die ganze Kante', () => {
+    const m = u()
+    const ganz = waehleBereich(m, { seite: 'front', kante: 0 })!
+    const teil = waehleBereich(m, { seite: 'front', kante: 0, vonM: 0, bisM: 4 })!
+    expect(ganz.anzahlFelder).toBe(m.fields.filter((f) => f.kante === 0).length)
+    expect(teil.anzahlFelder).toBeGreaterThan(0)
+    expect(teil.anzahlFelder).toBeLessThan(ganz.anzahlFelder)
+    expect(teil.feldIds.every((id) => m.fields.find((f) => f.id === id)?.kante === 0)).toBe(true)
+  })
+  it('Aufstocken einer Kante setzt Felder nur auf dieser Kante und verändert andere nicht', () => {
+    const m = u()
+    const hoechst = Math.max(...m.fields.map((f) => f.levelIndex))
+    const neu = stockeAuf(m, { art: 'aufstocken', seite: 'front', kante: 2, lagen: 1 })
+    const dazu = neu.fields.filter((f) => !m.fields.includes(f))
+    expect(dazu.length).toBe(m.fields.filter((f) => f.kante === 2 && f.levelIndex === hoechst).length)
+    expect(dazu.every((f) => f.kante === 2 && f.levelIndex === hoechst + 1)).toBe(true)
+    expect(neu.components3D.length).toBeGreaterThan(m.components3D.length)
+    expect(new Set(neu.components3D.map((c) => c.id)).size).toBe(neu.components3D.length)
+  })
+})
+
+describe('Keine doppelten Bauteile', () => {
+  it('Felder anhängen im Rechteck erzeugt keine doppelten Bauteil-IDs und je Anker genau ein Ankerbauteil', () => {
+    const m = modell()
+    const neu = erweitereSeite(m, { art: 'erweitern', seite: 'front', ende: 'ende', anzahl: 2 })
+    expect(new Set(neu.components3D.map((c) => c.id)).size).toBe(neu.components3D.length)
+    expect(neu.components3D.filter((c) => c.type === 'anchor').length).toBe(neu.anchors.length)
   })
 })

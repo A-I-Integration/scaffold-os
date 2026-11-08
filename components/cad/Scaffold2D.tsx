@@ -2,12 +2,16 @@
 
 import { useState, useMemo } from 'react'
 import { CADModel, generateGrundriss, generateAnsicht } from '@/lib/calculations/cad-engine'
+import Zeichenschicht from './Zeichenschicht'
+import type { Figur, FigurArt } from '@/lib/cad/zeichnung'
 
 type ViewType = 'grundriss' | 'ansicht-vorne' | 'ansicht-seite' | 'schnitt-aa' | 'detail-fusspunkt' | 'detail-anker'
 type ScaleType = '1:50' | '1:100' | '1:200'
 
 interface Props {
   model: CADModel
+  /** Freie Zeichnung (Linie, Kreis, Polylinie, Maß) – wird im Grundriss über den Plan gelegt */
+  zeichnung?: { figuren: Figur[]; werkzeug: FigurArt | null; onNeu: (f: Figur) => void; onWerkzeug: (w: FigurArt | null) => void }
 }
 
 const SCALE_FACTORS: Record<ScaleType, number> = {
@@ -16,7 +20,7 @@ const SCALE_FACTORS: Record<ScaleType, number> = {
   '1:200': 5,
 }
 
-export default function Scaffold2D({ model }: Props) {
+export default function Scaffold2D({ model, zeichnung }: Props) {
   const [activeView, setActiveView] = useState<ViewType>('grundriss')
   const [scale, setScale] = useState<ScaleType>('1:100')
   const [showDimensions, setShowDimensions] = useState(true)
@@ -242,6 +246,12 @@ export default function Scaffold2D({ model }: Props) {
                 </text>
               </g>
             ))}
+
+            {activeView === 'grundriss' && zeichnung && (
+              <Zeichenschicht figuren={zeichnung.figuren} werkzeug={zeichnung.werkzeug} massstab={scaleFactor}
+                minX={viewBox.minX * scaleFactor} minY={viewBox.minY * scaleFactor} breite={viewBox.width * scaleFactor} hoehe={viewBox.height * scaleFactor}
+                onNeu={zeichnung.onNeu} onWerkzeug={zeichnung.onWerkzeug} />
+            )}
 
             {/* Nordpfeil (nur Grundriss) */}
             {activeView === 'grundriss' && (

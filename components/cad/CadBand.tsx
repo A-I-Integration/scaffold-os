@@ -7,10 +7,11 @@
 import { useState, type ReactNode } from 'react'
 import {
   Scissors, PlusSquare, ChevronsUp, Layers, Undo2, Redo2, RotateCcw, Ruler, Box, Grid2x2, Eye, Home, Building2, Leaf,
-  FileText, FileDown, Printer, Save, Package, CalendarClock, Download, Camera, type LucideIcon,
+  FileText, FileDown, Printer, Save, Package, CalendarClock, Download, Camera, Minus, Spline, Circle, Trash2, type LucideIcon,
 } from 'lucide-react'
 import { CATALOG_ITEMS } from './ComponentCatalog'
 import type { BereichsWerkzeug } from './BereichePanel'
+import type { FigurArt } from '@/lib/cad/zeichnung'
 import { seitenBezeichnung, type CADLayerState } from '@/types/cad-layers'
 
 export type AnsichtWinkel = 'perspective' | 'front' | 'back' | 'left' | 'right' | 'top' | 'bottom'
@@ -32,6 +33,11 @@ export interface CadBandProps {
   entferntAnzahl: number
   onEntferntZurueck: () => void
   onEntferntAlleZurueck: () => void
+  // Zeichnen (Grundriss)
+  zeichenWerkzeug: FigurArt | null
+  onZeichenWerkzeug: (w: FigurArt | null) => void
+  figurenAnzahl: number
+  onFigurenLoeschen: () => void
   // Bauteile setzen / messen
   placementType: string | null
   onPlacement: (t: string | null) => void
@@ -64,8 +70,8 @@ export interface CadBandProps {
   onBild: () => void
 }
 
-type Reiter = 'bearbeiten' | 'bauteile' | 'ebenen' | 'anzeige' | 'ausgabe'
-const REITER: [Reiter, string][] = [['bearbeiten', 'Bearbeiten'], ['bauteile', 'Bauteile & Messen'], ['ebenen', 'Ebenen'], ['anzeige', 'Anzeige'], ['ausgabe', 'Ausgabe']]
+type Reiter = 'bearbeiten' | 'zeichnen' | 'bauteile' | 'ebenen' | 'anzeige' | 'ausgabe'
+const REITER: [Reiter, string][] = [['bearbeiten', 'Bearbeiten'], ['zeichnen', 'Zeichnen'], ['bauteile', 'Bauteile & Messen'], ['ebenen', 'Ebenen'], ['anzeige', 'Anzeige'], ['ausgabe', 'Ausgabe']]
 export const BAUTEIL_ARTEN: [string, string][] = [
   ['frame', 'Rahmen'], ['deck', 'Beläge'], ['railing', 'Geländer'], ['diagonal', 'Diagonalen'], ['footplate', 'Fußplatten'],
   ['coupling', 'Kupplungen'], ['anchor', 'Anker'], ['console', 'Konsolen'], ['stair', 'Treppen'], ['net', 'Netze'],
@@ -116,6 +122,23 @@ export default function CadBand(p: CadBandProps) {
       </div>
 
       <div className='flex min-h-[104px] overflow-x-auto'>
+        {reiter === 'zeichnen' && (
+          <>
+            <Gruppe name='Zeichnen im Grundriss'>
+              {([['linie', Minus, 'Linie'], ['polylinie', Spline, 'Polylinie'], ['kreis', Circle, 'Kreis'], ['mass', Ruler, 'Maßlinie']] as const).map(([art, Icon, name]) => (
+                <Knopf key={art} icon={Icon} label={name} aus={aus} aktiv={p.zeichenWerkzeug === art}
+                  onClick={() => { p.onZeichenWerkzeug(p.zeichenWerkzeug === art ? null : art); if (p.viewMode !== '2d') p.onViewMode('2d') }}
+                  titel={art === 'polylinie' ? 'Punkte anklicken, Doppelklick oder Enter beendet, Esc bricht ab' : art === 'kreis' ? 'Mitte anklicken, dann einen Punkt auf dem Kreis' : 'Zwei Punkte anklicken (rastet an Punkten, Achsen und 10-cm-Raster ein)'} />
+              ))}
+            </Gruppe>
+            <Gruppe name='Zeichnung'>
+              <Knopf icon={Trash2} label={p.figurenAnzahl > 0 ? `Alles löschen (${p.figurenAnzahl})` : 'Alles löschen'} aus={p.figurenAnzahl === 0} onClick={p.onFigurenLoeschen} titel='Alle gezeichneten Figuren entfernen' />
+            </Gruppe>
+            <div className='flex items-center px-4 text-[13px]' style={{ color: 'var(--os-text-leise)' }}>
+              Die Zeichnung liegt im 2D-Grundriss über dem Plan. Sie dient als Hilfslinie und Bemaßung und ändert Gerüst und Stückliste nicht.
+            </div>
+          </>
+        )}
         {reiter === 'bearbeiten' && (
           <>
             <Gruppe name='Gerüstbereich'>

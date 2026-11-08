@@ -10,6 +10,8 @@ export type BereichsWerkzeug = 'entfernen' | 'erweitern' | 'aufstocken'
 export interface BereichsEingabe {
   werkzeug: BereichsWerkzeug
   seite: Seite
+  /** Nur Umriss-Modus: Gebäudekante (0 = erste); null = noch nicht gewählt */
+  kante: number | null
   vonM: string
   bisM: string
   vonLage: string
@@ -21,7 +23,7 @@ export interface BereichsEingabe {
 }
 
 export const BEREICHS_START: BereichsEingabe = {
-  werkzeug: 'entfernen', seite: 'front', vonM: '', bisM: '', vonLage: '', bisLage: '',
+  werkzeug: 'entfernen', seite: 'front', kante: null, vonM: '', bisM: '', vonLage: '', bisLage: '',
   ende: 'ende', anzahl: '1', feldlaenge: '', lagenAnzahl: '1',
 }
 
@@ -45,7 +47,7 @@ export function eingabeZuAenderung(e: BereichsEingabe): BereichsAenderung | null
     const lagen = num(e.lagenAnzahl)
     if (!lagen || lagen < 1) return null
     const von = num(e.vonM), bis = num(e.bisM)
-    return { art: 'aufstocken', seite: e.seite, lagen: Math.floor(lagen), ...(von !== undefined ? { vonM: von } : {}), ...(bis !== undefined ? { bisM: bis } : {}) }
+    return { art: 'aufstocken', seite: e.seite, ...(e.kante !== null ? { kante: e.kante } : {}), lagen: Math.floor(lagen), ...(von !== undefined ? { vonM: von } : {}), ...(bis !== undefined ? { bisM: bis } : {}) }
   }
   return null
 }
@@ -54,9 +56,11 @@ const feld = 'w-full rounded border border-[var(--os-linie)] bg-white px-2 py-1.
 const label = 'block text-[12px] text-[var(--os-text-leise)] mb-0.5'
 
 export default function BereichePanel({
-  ein, onChange, vorschau, liste, onEntfernen, onAnhaengen, onAufstocken, onLoescheAenderung, onZu, entferntAnzahl,
+  ein, onChange, kanten, vorschau, liste, onEntfernen, onAnhaengen, onAufstocken, onLoescheAenderung, onZu, entferntAnzahl,
 }: {
   ein: BereichsEingabe
+  /** Umriss-Modus: Nummern der Gebäudekanten mit Gerüst; leer = Rechteck mit vier Seiten */
+  kanten: number[]
   onChange: (e: BereichsEingabe) => void
   vorschau: BereichsErgebnis | null
   liste: BereichsAenderung[]
@@ -79,8 +83,8 @@ export default function BereichePanel({
         <button type='button' onClick={onZu} aria-label='Schließen' className='rounded px-1.5 hover:bg-white/10'>✕</button>
       </div>
       <div className='space-y-3 overflow-y-auto p-3'>
-        <div className='grid grid-cols-3 gap-1'>
-          {WERKZEUGE.map(([w, name, tipp]) => (
+        <div className={`grid gap-1 ${kanten.length === 0 ? 'grid-cols-3' : 'grid-cols-2'}`}>
+          {WERKZEUGE.filter(([w]) => kanten.length === 0 || w !== 'erweitern').map(([w, name, tipp]) => (
             <button key={w} type='button' title={tipp} onClick={() => set({ werkzeug: w })}
               className={`rounded border px-1.5 py-2 text-[12.5px] leading-tight ${ein.werkzeug === w ? 'border-[var(--os-akzent)] bg-[#fff3ea] font-semibold' : 'bg-white hover:bg-black/[0.03]'}`}
               style={ein.werkzeug === w ? undefined : { borderColor: 'var(--os-linie)' }}>{name}</button>
@@ -88,7 +92,16 @@ export default function BereichePanel({
         </div>
 
         <div>
-          <span className={label}>Seite</span>
+          <span className={label}>{kanten.length > 0 ? 'Gebäudekante' : 'Seite'}</span>
+          {kanten.length > 0 ? (
+            <div className='grid grid-cols-5 gap-1'>
+              {kanten.map((k) => (
+                <button key={k} type='button' onClick={() => set({ kante: k })}
+                  className={`rounded border px-1 py-1.5 text-[13px] ${(ein.kante ?? kanten[0]) === k ? 'border-[var(--os-nav)] bg-[var(--os-nav)] text-white' : 'bg-white hover:bg-black/[0.03]'}`}
+                  style={(ein.kante ?? kanten[0]) === k ? undefined : { borderColor: 'var(--os-linie)' }}>{k + 1}</button>
+              ))}
+            </div>
+          ) : (
           <div className='grid grid-cols-4 gap-1'>
             {SEITEN.map(([s, name]) => (
               <button key={s} type='button' onClick={() => set({ seite: s })}
@@ -96,7 +109,8 @@ export default function BereichePanel({
                 style={ein.seite === s ? undefined : { borderColor: 'var(--os-linie)' }}>{name}</button>
             ))}
           </div>
-          {vorschau && <p className='mt-1 text-[12px]' style={{ color: 'var(--os-text-leise)' }}>Seitenlänge {de(vorschau.seitenLaengeM)} m, gemessen vom Seitenanfang (bei Blick von außen: links).</p>}
+          )}
+          {vorschau && <p className='mt-1 text-[12px]' style={{ color: 'var(--os-text-leise)' }}>{kanten.length > 0 ? 'Kantenlänge' : 'Seitenlänge'} {de(vorschau.seitenLaengeM)} m, gemessen vom {kanten.length > 0 ? 'Kantenanfang (in Umriss-Richtung)' : 'Seitenanfang (bei Blick von außen: links)'}.</p>}
         </div>
 
         {ein.werkzeug === 'erweitern' ? (
