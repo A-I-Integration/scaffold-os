@@ -11,6 +11,7 @@ import {
 } from 'lucide-react'
 import { CATALOG_ITEMS } from './ComponentCatalog'
 import type { BereichsWerkzeug } from './BereichePanel'
+import { seitenBezeichnung, type CADLayerState } from '@/types/cad-layers'
 
 export type AnsichtWinkel = 'perspective' | 'front' | 'back' | 'left' | 'right' | 'top' | 'bottom'
 
@@ -45,6 +46,14 @@ export interface CadBandProps {
   onViewAngle: (a: AnsichtWinkel) => void
   farbModus: 'real' | 'bauteil' | 'praesentation' | 'statik'
   onFarbModus: (m: 'real' | 'bauteil' | 'praesentation' | 'statik') => void
+  // Ebenen: Seiten, Lagen, Bauteilarten ein-/ausblenden
+  layerState: CADLayerState | null
+  onToggleSide: (side: string) => void
+  onToggleLevel: (index: number) => void
+  onAlleEin: () => void
+  onAlleAus: () => void
+  visibleTypes: Record<string, boolean>
+  onToggleType: (t: string) => void
   // Ausgabe
   onPdf: () => void
   onMontageplan: () => void
@@ -55,8 +64,14 @@ export interface CadBandProps {
   onBild: () => void
 }
 
-type Reiter = 'bearbeiten' | 'bauteile' | 'anzeige' | 'ausgabe'
-const REITER: [Reiter, string][] = [['bearbeiten', 'Bearbeiten'], ['bauteile', 'Bauteile & Messen'], ['anzeige', 'Anzeige'], ['ausgabe', 'Ausgabe']]
+type Reiter = 'bearbeiten' | 'bauteile' | 'ebenen' | 'anzeige' | 'ausgabe'
+const REITER: [Reiter, string][] = [['bearbeiten', 'Bearbeiten'], ['bauteile', 'Bauteile & Messen'], ['ebenen', 'Ebenen'], ['anzeige', 'Anzeige'], ['ausgabe', 'Ausgabe']]
+export const BAUTEIL_ARTEN: [string, string][] = [
+  ['frame', 'Rahmen'], ['deck', 'Beläge'], ['railing', 'Geländer'], ['diagonal', 'Diagonalen'], ['footplate', 'Fußplatten'],
+  ['coupling', 'Kupplungen'], ['anchor', 'Anker'], ['console', 'Konsolen'], ['stair', 'Treppen'], ['net', 'Netze'],
+  ['board', 'Bordbretter'], ['protection_roof', 'Schutzdächer'], ['safety_net', 'Fangnetze'], ['load_plate', 'Lastplatten'],
+  ['corner_brace', 'Eckstreben'], ['ladder', 'Leitern'],
+]
 
 function Gruppe({ name, children }: { name: string; children: ReactNode }) {
   return (
@@ -129,6 +144,34 @@ export default function CadBand(p: CadBandProps) {
             </Gruppe>
             <Gruppe name='Messen'>
               <Knopf icon={Ruler} label='Bemaßen' aus={aus} aktiv={p.measureMode} onClick={p.onMeasure} titel='Zwei Punkte im Modell anklicken: Abstand wird eingetragen' />
+            </Gruppe>
+          </>
+        )}
+
+        {reiter === 'ebenen' && (
+          <>
+            <Gruppe name='Seiten'>
+              {p.layerState ? Object.keys(p.layerState.sides).map((k) => (
+                <Knopf key={k} icon={Eye} label={seitenBezeichnung(k)} aktiv={p.layerState!.sides[k]} onClick={() => p.onToggleSide(k)} titel={`${seitenBezeichnung(k)} ein- oder ausblenden`} />
+              )) : <span className='self-center px-3 text-[13px]' style={{ color: 'var(--os-text-leise)' }}>Erst Gerüst berechnen.</span>}
+            </Gruppe>
+            <Gruppe name='Lagen (1 = unten)'>
+              {p.layerState && Object.keys(p.layerState.levels).map(Number).sort((a, b) => a - b).map((i) => (
+                <Knopf key={i} icon={Layers} label={`Lage ${i + 1}`} aktiv={p.layerState!.levels[i]} onClick={() => p.onToggleLevel(i)} titel={`Lage ${i + 1} ein- oder ausblenden`} />
+              ))}
+            </Gruppe>
+            <Gruppe name='Alle'>
+              <Knopf icon={Eye} label='Alles zeigen' aus={aus} onClick={p.onAlleEin} />
+              <Knopf icon={Eye} label='Alles ausblenden' aus={aus} onClick={p.onAlleAus} />
+            </Gruppe>
+            <Gruppe name='Bauteilarten'>
+              <div className='grid max-w-[640px] grid-cols-4 gap-1 pt-0.5'>
+                {BAUTEIL_ARTEN.map(([t, name]) => (
+                  <button key={t} type='button' disabled={aus} onClick={() => p.onToggleType(t)} aria-pressed={p.visibleTypes[t] !== false}
+                    className={`rounded border px-2 py-1 text-[12.5px] disabled:opacity-40 ${p.visibleTypes[t] !== false ? 'font-medium' : 'line-through opacity-60'}`}
+                    style={{ borderColor: 'var(--os-linie)', background: p.visibleTypes[t] !== false ? '#fff3ea' : '#fff' }}>{name}</button>
+                ))}
+              </div>
             </Gruppe>
           </>
         )}

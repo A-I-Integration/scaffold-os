@@ -42,6 +42,7 @@ import AbbauEinplanenDialog from '@/components/cad/AbbauEinplanenDialog'
 import TeilabbauPanel, { TEILABBAU_START, type TeilabbauEingabe } from '@/components/cad/TeilabbauPanel'
 import { berechneTeilabbau, type TeilabbauAuswahl } from '@/lib/cad/teilabbau'
 import { waehleBereich, wendeAenderungenAn, type BereichsAenderung } from '@/lib/cad/bereiche'
+import EigenschaftenLeiste from '@/components/cad/EigenschaftenLeiste'
 import CadBand from '@/components/cad/CadBand'
 import BereichePanel, { BEREICHS_START, eingabeZuAenderung, type BereichsEingabe } from '@/components/cad/BereichePanel'
 import { ansichtDateiname } from '@/lib/cad/ansicht-bild'
@@ -1107,6 +1108,8 @@ export default function CADPage() {
             onDxf={!model ? exportOhneModellHinweis : handleExportDXF} onIfc={!model ? exportOhneModellHinweis : (ifcExportLaeuft ? undefined : handleExportIFC)}
             onSpeichern={speichereProjektdatei} onLv={rolle === 'admin' || istStatikerLogin ? (model ? () => setLvOffen(true) : exportOhneModellHinweis) : undefined}
             onBild={speichereBild}
+            layerState={layerState} onToggleSide={(k) => handleToggleSide(k as keyof SideVisibility)} onToggleLevel={handleToggleLevel}
+            onAlleEin={handleShowAllLayers} onAlleAus={handleHideAllLayers} visibleTypes={visibleTypes} onToggleType={toggleType}
           />
           <div className='flex flex-wrap gap-2 items-center justify-between px-4 py-2 bg-white/50 border-b border-black/5'>
             {viewMode === '3d' && modelWithManual && (
@@ -1191,6 +1194,10 @@ export default function CADPage() {
                 <span>Die Eingaben (z. B. Tür oder System) haben sich geändert – das Gerüst zeigt noch den alten Stand.</span>
                 <button type='button' onClick={() => { setAutoGenerate(true); generate() }} className='rounded-lg bg-[#e8590c] px-3 py-1 font-medium text-white hover:bg-[#d04f0b]'>Gerüst neu berechnen</button>
               </div>
+            )}
+            {selectedComponent && modelWithManual && viewMode === '3d' && !abbauAktiv && !placementType && !measureMode && (
+              <EigenschaftenLeiste model={modelWithManual} id={selectedComponent} artikelWahl={artikelWahl} manuell={!!platzierungIdVonBauteil(selectedComponent)}
+                onEntfernen={() => handleRemoveComponent(selectedComponent)} onZu={() => setSelectedComponent(null)} />
             )}
             {bereicheOffen && modelWithManual && viewMode === '3d' && (
               <BereichePanel ein={bereichEin} onChange={setBereichEin} vorschau={bereichVorschau} liste={bereichsListe}
