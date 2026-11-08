@@ -790,12 +790,12 @@ function RechnungenContent() {
             <table className="w-full min-w-[720px] text-sm">
               <thead>
                 <tr className="text-left text-[#86868b] border-b" style={{ background: WIN.grund, borderColor: WIN.rand }}>
-                  <th className="px-2 py-1.5">Nummer</th>
-                  <th className="px-2 py-1.5">Kunde</th>
-                  <th className="px-2 py-1.5">Datum</th>
-                  <th className="px-2 py-1.5 text-right">Betrag</th>
-                  <th className="px-2 py-1.5">Status</th>
-                  <th className="px-2 py-1.5 text-right">Aktionen</th>
+                  <th className="px-3 py-2.5">Nummer</th>
+                  <th className="px-3 py-2.5">Kunde</th>
+                  <th className="px-3 py-2.5">Datum</th>
+                  <th className="px-3 py-2.5 text-right">Betrag</th>
+                  <th className="px-3 py-2.5">Status</th>
+                  <th className="px-3 py-2.5 text-right">Aktionen</th>
                 </tr>
               </thead>
               <tbody>
@@ -803,7 +803,7 @@ function RechnungenContent() {
                   const effStatus = isOverdue(inv) ? 'ueberfaellig' : inv.status;
                   return (
                     <tr key={inv.id} className="border-b border-black/10/50 hover:bg-black/10/30">
-                      <td className="px-2 py-1.5 font-mono text-[#e8590c]">
+                      <td className="px-3 py-2.5 font-mono text-[#e8590c]">
                         <Link href={`/rechnungen/${inv.id}`} className="hover:underline">{inv.invoice_number}</Link>
                         {inv.invoice_type && inv.invoice_type !== 'standard' && (
                           <span className="ml-2 text-[10px] font-sans px-1.5 py-0.5 rounded bg-blue-500/20 text-blue-700 border border-blue-500/40">
@@ -835,15 +835,15 @@ function RechnungenContent() {
                           </span>
                         )}
                       </td>
-                      <td className="px-2 py-1.5 text-[#1d1d1f]">{inv.customer_name}</td>
-                      <td className="px-2 py-1.5 text-[#424245]">{fmtDate(inv.invoice_date)}</td>
-                      <td className="px-2 py-1.5 text-right text-[#1d1d1f]">
+                      <td className="px-3 py-2.5 text-[#1d1d1f]">{inv.customer_name}</td>
+                      <td className="px-3 py-2.5 text-[#424245]">{fmtDate(inv.invoice_date)}</td>
+                      <td className="px-3 py-2.5 text-right text-[#1d1d1f]">
                         {fmtEur(Number(inv.gross_amount))} €
                         {Number(inv.paid_amount) > 0 && inv.status !== 'bezahlt' && (
                           <div className="text-[10px] text-blue-700">Teilzahlung {fmtEur(Number(inv.paid_amount))} € · offen {fmtEur(Number(inv.gross_amount) - Number(inv.paid_amount))} €</div>
                         )}
                       </td>
-                      <td className="px-2 py-1.5">
+                      <td className="px-3 py-2.5">
                         <select
                           value={inv.status}
                           onChange={(e) => handleStatus(inv, e.target.value)}
@@ -856,19 +856,19 @@ function RechnungenContent() {
                           ))}
                         </select>
                       </td>
-                      <td className="px-2 py-1.5">
-                        <div className="flex justify-end gap-2">
+                      <td className="px-3 py-2.5">
+                        <div className="flex justify-end gap-1.5">
                           <button
                             onClick={() => handlePDF(inv)}
                             title="Rechnungs-PDF herunterladen"
-                            className="p-2 rounded-xl bg-black/10 hover:bg-black/15 text-[#424245] transition-colors"
+                            className="rounded border border-[var(--os-linie)] bg-white p-2 text-[#303944] hover:bg-[#eef0f3] transition-colors"
                           >
                             <Download className="h-4 w-4" />
                           </button>
                           <button
                             onClick={() => setAnhangFuer(inv)}
                             title="Anhänge (Bilder, PDF, Excel, E-Mails) verwalten"
-                            className="p-2 rounded-xl bg-black/10 hover:bg-black/15 text-[#424245] transition-colors"
+                            className="rounded border border-[var(--os-linie)] bg-white p-2 text-[#303944] hover:bg-[#eef0f3] transition-colors"
                           >
                             <Paperclip className="h-4 w-4" />
                           </button>
@@ -876,7 +876,7 @@ function RechnungenContent() {
                             <button
                               onClick={() => handlePruefLink(inv)}
                               title="Prüflink für den Auftraggeber erstellen und kopieren"
-                              className="p-2 rounded-xl bg-black/10 hover:bg-black/15 text-[#424245] transition-colors"
+                              className="rounded border border-[var(--os-linie)] bg-white p-2 text-[#303944] hover:bg-[#eef0f3] transition-colors"
                             >
                               <Link2 className="h-4 w-4" />
                             </button>
@@ -885,7 +885,7 @@ function RechnungenContent() {
                             <button
                               onClick={() => handleSendMail(inv)}
                               title="Rechnung per E-Mail versenden"
-                              className="p-2 rounded-xl bg-blue-600/30 hover:bg-blue-600/50 text-blue-700 transition-colors"
+                              className="rounded border border-[var(--os-linie)] bg-white p-2 text-[#303944] hover:bg-[#eef0f3] transition-colors"
                             >
                               <Mail className="h-4 w-4" />
                             </button>
@@ -894,7 +894,7 @@ function RechnungenContent() {
                             <button
                               onClick={() => handleMahnung(inv)}
                               title="Mahnung erstellen (PDF + optional E-Mail)"
-                              className="p-2 rounded-xl bg-amber-600/30 hover:bg-amber-600/50 text-[#e8590c] transition-colors"
+                              className="rounded border border-[#f0b48f] bg-[#fff3ea] p-2 text-[#b8470a] hover:bg-[#ffe6d4] transition-colors"
                             >
                               <AlertTriangle className="h-4 w-4" />
                             </button>
@@ -904,21 +904,21 @@ function RechnungenContent() {
                               <button
                                 onClick={() => { setZahlungOffen(inv); setZahlungBetrag(String(Number(inv.gross_amount) - Number(inv.paid_amount || 0))); setZahlungDatum(lokalesDatumIso()) }}
                                 title="Zahlung erfassen (auch teilweise)"
-                                className="p-2 rounded-xl bg-blue-600/30 hover:bg-blue-600/50 text-blue-700 transition-colors"
+                                className="rounded border border-[var(--os-linie)] bg-white p-2 text-[#303944] hover:bg-[#eef0f3] transition-colors"
                               >
                                 <Euro className="h-4 w-4" />
                               </button>
                               <button
                                 onClick={() => handleStatus(inv, 'bezahlt')}
                                 title="Als bezahlt markieren"
-                                className="p-2 rounded-xl bg-emerald-600/30 hover:bg-emerald-600/50 text-emerald-700 transition-colors"
+                                className="rounded border border-[var(--os-linie)] bg-white p-2 text-emerald-700 hover:bg-emerald-50 transition-colors"
                               >
                                 <Check className="h-4 w-4" />
                               </button>
                               <button
                                 onClick={() => handleDelete(inv)}
                                 title="Rechnung löschen"
-                                className="p-2 rounded-xl bg-red-600/30 hover:bg-red-600/50 text-red-700 transition-colors"
+                                className="rounded border border-[var(--os-linie)] bg-white p-2 text-red-700 hover:bg-red-50 transition-colors"
                               >
                                 <Trash2 className="h-4 w-4" />
                               </button>
