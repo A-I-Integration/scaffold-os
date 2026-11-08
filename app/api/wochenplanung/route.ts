@@ -105,57 +105,71 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ success: false, error: 'Dieser Mitarbeiter gehört nicht zu deiner Kolonne.' }, { status: 403 });
       }
     }
-    // NEU: Läuft der Auftrag über mehrere Tage/Wochen, wird der Mitarbeiter
-    // automatisch für die gesamte Dauer eingetragen (Mo-Fr), nicht nur für
-    // den einen Tag, auf den gezogen wurde – ausgehend vom gezogenen Tag als
-    // Start für DIESEN Mitarbeiter.
+    // Abwesenheiten des Mitarbeiters laden (genehmigter Urlaub/Abwesenheit und Krankmeldungen, wie in der Wochenplan-Ansicht).
+    const absRes = await fetch(`${url}/rest/v1/absences?employee_id=eq.${employee_id}&select=type,status,start_date,end_date`, { headers });
+    const absenzen: { type: string; status: string; start_date: string; end_date: string }[] = absRes.ok ? await absRes.json() : [];
+    const abwesend = (tag: string) => absenzen.some((a) => (a.status === 'approved' || a.type === 'sick') && a.start_date <= tag && tag <= a.end_date);
+
+    // Der gezogene Tag selbst: an einem Abwesenheitstag wird nicht eingeplant (die Oberfläche sperrt das schon, der Server auch).
+    if (project_id && abwesend(einsatz_datum)) {
+      return NextResponse.json({ success: false, error: 'Der Mitarbeiter ist an diesem Tag abwesend (Urlaub oder Krankheit).' }, { status: 409 });
+    }
+
+    // Läuft der Auftrag über mehrere Tage/Wochen, wird der Mitarbeiter für die gesamte Dauer eingetragen (Mo–Fr),
+    // ausgehend vom gezogenen Tag. Regeln:
+    //  - Projektende ist der letzte Tag (eingeschlossen), gezählt werden nur Werktage Mo–Fr.
+    //  - "dauer" (Wochen) ergibt Wochen × 5 Werktage.
+    //  - Abwesenheitstage werden übersprungen (zählen aber zur Dauer), ebenso Tage, an denen der Mitarbeiter schon auf
+    //    einer ANDEREN Baustelle eingeplant ist (nur der gezogene Tag selbst wird bewusst überschrieben).
     const erstellteTage: string[] = [einsatz_datum];
+    const uebersprungeneTage: { datum: string; grund: 'abwesend' | 'andere_baustelle' }[] = [];
     if (project_id) {
       const projRes = await fetch(`${url}/rest/v1/projects?id=eq.${project_id}&select=data`, { headers });
       const projRows = projRes.ok ? await projRes.json() : [];
       const step1 = projRows?.[0]?.data?.step1;
-      let anzahlWerktage = 0;
-      if (step1?.projektende) {
-        const start = new Date(einsatz_datum);
-        const ende = new Date(step1.projektende);
-        const tageDiff = Math.round((ende.getTime() - start.getTime()) / 86400000);
-        if (tageDiff > 0) anzahlWerktage = tageDiff;
-      } else if (step1?.dauer) {
-        // Fallback: "dauer" ist bei Aufmaß-Projekten in WOCHEN hinterlegt.
-        // Bei CAD/GAEB/Brücken-Angeboten ist der Wert weniger einheitlich
-        // gepflegt – bewusst als grobe Näherung behandelt, nicht als exakt.
-        const wochen = parseFloat(step1.dauer);
-        if (!isNaN(wochen) && wochen > 0) anzahlWerktage = Math.round(wochen * 5);
-      }
-      if (anzahlWerktage > 1) {
-        // FIX: erst hier selbst getestet – die einfache Schleife hätte bei
-        // Wochenenden innerhalb der Dauer zu WENIGE Werktage erzeugt (das
-        // Wochenende wurde übersprungen, aber nicht durch einen weiteren
-        // Tag ausgeglichen). Jetzt: so lange Kalendertage weitergehen, bis
-        // wirklich genug Werktage erreicht sind.
-        const startDatum = new Date(einsatz_datum);
-        let hinzugefuegt = 1; // Starttag zählt schon als 1. Werktag
-        let i = 1;
-        while (hinzugefuegt < anzahlWerktage && i < 120) { // Sicherheitsgrenze
-          const naechsterTag = new Date(startDatum);
-          naechsterTag.setDate(naechsterTag.getDate() + i);
-          const wochentag = naechsterTag.getDay();
-          i++;
-          if (wochentag === 0 || wochentag === 6) continue; // Wochenende überspringen, zählt nicht mit
-          const iso = naechsterTag.toISOString().slice(0, 10);
-          // FIX: "resolution=merge-duplicates" wirkt bei PostgREST nur mit
-          // explizitem on_conflict-Parameter, der die Spalten des
-          // UNIQUE-Index nennt - ohne ihn wird stillschweigend eine normale
-          // INSERT versucht, die bei einem bestehenden Eintrag mit 409/23505
-          // (unique_violation) fehlschlägt, statt zu aktualisieren.
-          await fetch(`${url}/rest/v1/taeglicher_einsatz?on_conflict=employee_id,einsatz_datum`, {
-            method: 'POST',
-            headers: { ...headers, Prefer: 'resolution=merge-duplicates' },
-            body: JSON.stringify({ employee_id, einsatz_datum: iso, project_id, notiz: notiz || null, updated_at: new Date().toISOString() }),
-          }).catch(() => { /* einzelnen Tag überspringen, Rest weiterlaufen lassen */ });
-          erstellteTage.push(iso);
-          hinzugefuegt++;
+      const MAX_TAGE = 120;
+      const tagPlus = (start: string, n: number) => {
+        const d = new Date(`${start}T00:00:00Z`);
+        d.setUTCDate(d.getUTCDate() + n);
+        return d;
+      };
+      // Folgetage (ohne den Starttag), die zu bearbeiten sind
+      const folgetage: string[] = [];
+      if (step1?.projektende && /^\d{4}-\d{2}-\d{2}/.test(String(step1.projektende))) {
+        const ende = String(step1.projektende).slice(0, 10);
+        for (let i = 1; i < MAX_TAGE; i++) {
+          const d = tagPlus(einsatz_datum, i);
+          const iso = d.toISOString().slice(0, 10);
+          if (iso > ende) break;
+          if (d.getUTCDay() === 0 || d.getUTCDay() === 6) continue;
+          folgetage.push(iso);
         }
+      } else if (step1?.dauer) {
+        // "dauer" ist bei Aufmaß-Projekten in WOCHEN hinterlegt. Bei CAD/GAEB/Brücken-Angeboten ist der Wert weniger
+        // einheitlich gepflegt – bewusst als grobe Näherung behandelt.
+        const wochen = parseFloat(step1.dauer);
+        const anzahlWerktage = !isNaN(wochen) && wochen > 0 ? Math.round(wochen * 5) : 0;
+        for (let i = 1; folgetage.length < anzahlWerktage - 1 && i < MAX_TAGE; i++) {
+          const d = tagPlus(einsatz_datum, i);
+          if (d.getUTCDay() === 0 || d.getUTCDay() === 6) continue;
+          folgetage.push(d.toISOString().slice(0, 10));
+        }
+      }
+      for (const iso of folgetage) {
+        if (abwesend(iso)) { uebersprungeneTage.push({ datum: iso, grund: 'abwesend' }); continue; }
+        const belegtRes = await fetch(`${url}/rest/v1/taeglicher_einsatz?employee_id=eq.${employee_id}&einsatz_datum=eq.${iso}&select=project_id`, { headers });
+        const belegt = belegtRes.ok ? await belegtRes.json() : [];
+        if (belegt.length > 0 && belegt[0].project_id && belegt[0].project_id !== project_id) {
+          uebersprungeneTage.push({ datum: iso, grund: 'andere_baustelle' });
+          continue;
+        }
+        // "resolution=merge-duplicates" wirkt bei PostgREST nur mit explizitem on_conflict-Parameter (UNIQUE-Index).
+        await fetch(`${url}/rest/v1/taeglicher_einsatz?on_conflict=employee_id,einsatz_datum`, {
+          method: 'POST',
+          headers: { ...headers, Prefer: 'resolution=merge-duplicates' },
+          body: JSON.stringify({ employee_id, einsatz_datum: iso, project_id, notiz: notiz || null, updated_at: new Date().toISOString() }),
+        }).catch(() => { /* einzelnen Tag überspringen, Rest weiterlaufen lassen */ });
+        erstellteTage.push(iso);
       }
     }
 
@@ -226,7 +240,7 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    return NextResponse.json({ success: true, einsatz: rows[0], erstellteTage });
+    return NextResponse.json({ success: true, einsatz: rows[0], erstellteTage, uebersprungeneTage });
   } catch (err: any) {
     return serverErrorResponse(err);
   }

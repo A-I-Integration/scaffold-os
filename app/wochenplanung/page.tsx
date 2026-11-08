@@ -73,8 +73,10 @@ export default function WochenplanungPage() {
     })
     const json = await res.json()
     if (json.success) {
-      if (json.erstellteTage?.length > 1) {
-        alert(`✅ Für die gesamte Auftragsdauer eingetragen: ${json.erstellteTage.length} Werktage (${json.erstellteTage[0]} bis ${json.erstellteTage[json.erstellteTage.length - 1]}).`)
+      const frei: { datum: string; grund: string }[] = json.uebersprungeneTage ?? []
+      if (json.erstellteTage?.length > 1 || frei.length > 0) {
+        const hinweis = frei.length ? `\nNicht eingetragen (${frei.length}): ${frei.map((f) => `${f.datum} (${f.grund === 'abwesend' ? 'abwesend' : 'schon auf anderer Baustelle'})`).join(', ')}.` : ''
+        alert(`✅ Eingetragen: ${json.erstellteTage.length} Werktage (${json.erstellteTage[0]} bis ${json.erstellteTage[json.erstellteTage.length - 1]}).${hinweis}`)
       }
       laden_fn()
     }
