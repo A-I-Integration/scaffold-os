@@ -7,8 +7,6 @@ import { baueFakeRest, type Tabellen } from './fake-rest'
 // gegen einen Nachbau der Datenbank. Nach jedem Schritt wird geprüft, was sich im Lager, auf der Baustelle
 // und im Protokoll geändert hat.
 //
-// "it.fails" = bekannte Lücke: Der Test beschreibt das gewünschte Verhalten und schlägt heute fehl.
-// Wird die Lücke behoben, meldet vitest das – dann bitte "it.fails" zu "it" machen.
 // ============================================================
 
 process.env.NEXT_PUBLIC_SUPABASE_URL = 'http://db.test'
@@ -102,28 +100,28 @@ describe('Kette Material: reservieren → anliefern → zurückgeben', () => {
     expect(Number(db.inventory[0].quantity) + summeBaustelle() + verlust).toBe(100)
   })
 
-  // --- bekannte Lücken -------------------------------------------------
+  // --- früher gefundene Lücken (behoben) ------------------------------
 
-  it.fails('LÜCKE: Zwei Reservierungen derselben Position ergeben eine Zeile je Baustelle und Artikel (heute: eine Zeile je Buchung)', async () => {
+  it('Zwei Reservierungen derselben Position ergeben eine Zeile je Baustelle und Artikel (heute: eine Zeile je Buchung)', async () => {
     await reservieren(30)
     await reservieren(20)
     expect(db.site_stock).toHaveLength(1)
   })
 
-  it.fails('LÜCKE: Rückgabe nach zwei Anlieferungen räumt den gesamten Baustellenbestand (heute nur die erste Zeile)', async () => {
+  it('Rückgabe nach zwei Anlieferungen räumt den gesamten Baustellenbestand (heute nur die erste Zeile)', async () => {
     await reservieren(30); await anliefern(30)
     await reservieren(20); await anliefern(20)
     await zurueckgeben(40, 0)
     expect(summeBaustelle()).toBe(10) // 50 angeliefert − 40 zurück
   })
 
-  it.fails('LÜCKE: Rückgabe vor der Anlieferung lässt keine Reservierung stehen, die nie physisch da war', async () => {
+  it('Rückgabe vor der Anlieferung lässt keine Reservierung stehen, die nie physisch da war', async () => {
     await reservieren(30)
     await zurueckgeben(30, 0)
     expect(summeReserviert()).toBe(0)
   })
 
-  it.fails('LÜCKE: Rückgabe von mehr als auf der Baustelle liegt wird abgelehnt (heute: Lager steigt trotzdem)', async () => {
+  it('Rückgabe von mehr als auf der Baustelle liegt wird abgelehnt (heute: Lager steigt trotzdem)', async () => {
     await reservieren(30); await anliefern(30)
     const res = await zurueckgeben(50, 0)
     expect(res.status).toBe(400)
