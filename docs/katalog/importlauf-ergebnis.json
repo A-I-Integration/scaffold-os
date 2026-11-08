@@ -1,0 +1,108 @@
+{
+  "gesamt": 6666,
+  "proHersteller": {
+    "mj-geruest": {
+      "gesamt": 3268,
+      "neu": 3230,
+      "unsicher": 37,
+      "dubletten": 1,
+      "fehler": 0
+    },
+    "scafom-rux": {
+      "gesamt": 1746,
+      "neu": 1695,
+      "unsicher": 50,
+      "dubletten": 1,
+      "fehler": 0
+    },
+    "layher": {
+      "gesamt": 1652,
+      "neu": 1618,
+      "unsicher": 34,
+      "dubletten": 0,
+      "fehler": 0
+    }
+  },
+  "gewichtsarten": {
+    "herstellerangabe_unklar": 4696,
+    "herstellerangabe_unklar:ohne": 377,
+    "ca": 1593
+  },
+  "kategorien": {
+    "sonstige": 1880,
+    "gelaender": 488,
+    "vertikalrahmen": 305,
+    "belaege": 837,
+    "konsolen": 229,
+    "horizontalriegel": 389,
+    "diagonalen": 525,
+    "treppen": 334,
+    "kupplungen": 361,
+    "zubehoer": 403,
+    "transportmaterial": 161,
+    "spindeln": 244,
+    "schutzsysteme": 493,
+    "psa": 17
+  },
+  "kategorieSicherheit": {
+    "unbekannt": 1880,
+    "sicher": 3279,
+    "unsicher": 1507
+  },
+  "meldungen": [
+    [
+      "Kein Gewicht in der Quelle#",
+      377
+    ],
+    [
+      "Keine Bezeichnung/Gruppe vorhanden#",
+      44
+    ],
+    [
+      "Länge (m): # m ist ungewöhnlich groß# Einheit prüfen#",
+      35
+    ],
+    [
+      "Mehrere Artikelnummern in einer Zeile (\"…\") – nicht automatisch aufgeteilt# bitte prüfen#",
+      34
+    ],
+    [
+      "Breite (m): Keine Zahl: \"…\"",
+      13
+    ],
+    [
+      "Gewicht (kg): # kg pro Stück ist ungewöhnlich hoch# bitte prüfen#",
+      10
+    ],
+    [
+      "ca# kg: Keine Zahl: \"…\"",
+      9
+    ],
+    [
+      "ca# kg: # kg pro Stück ist ungewöhnlich hoch# bitte prüfen#",
+      6
+    ],
+    [
+      "Länge (mm): \"…\" kann Tausendertrenner oder Dezimaltrenner sein",
+      5
+    ],
+    [
+      "Breite (mm): \"…\" kann Tausendertrenner oder Dezimaltrenner sein",
+      3
+    ],
+    [
+      "Höhe (mm): \"…\" kann Tausendertrenner oder Dezimaltrenner sein",
+      3
+    ],
+    [
+      "Länge (m): Keine Zahl: \"…\"",
+      2
+    ]
+  ],
+  "eindeutigkeit": {
+    "nummernBeiMehrerenHerstellern": 0,
+    "beispiele": [],
+    "nummernInMehrerenDokumenten": 1292,
+    "davonMitAbweichendemGewicht": 78
+  }
+}
