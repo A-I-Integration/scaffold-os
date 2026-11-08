@@ -14,6 +14,11 @@
 // Aufruf im Hauptordner des Repos (der pg_dump liegt zum Beispiel als master-schema-roh.sql dort):
 //     node scripts/kunden-schema-bereinigen.mjs master-schema-roh.sql
 //     node scripts/kunden-schema-bereinigen.mjs master-schema-roh.sql supabase/kunden-schema.sql --ohne=tenants,subscriptions
+//     node scripts/kunden-schema-bereinigen.mjs master-schema-roh.sql supabase/kunden-schema.sql --anhang=supabase/phase-statiker.sql
+//
+// --anhang=Datei1,Datei2 hängt idempotente SQL-Dateien ans Ende (nach allen Tabellen). Gedacht für Phasen,
+// die in der Master-Instanz noch nicht eingespielt sind, aber jede neue Kundeninstanz bekommen soll
+// (zum Beispiel phase-statiker.sql: Rolle statiker, project_statiker, is_statiker() und die Sperren no_statiker).
 //
 // Danach: node scripts/build-kunden-schema.mjs  (erzeugt lib/provision/kunden-schema.ts)
 // ============================================================
@@ -26,6 +31,7 @@ const opt = Object.fromEntries(args.filter((a) => a.startsWith('--')).map((a) =>
 const pos = args.filter((a) => !a.startsWith('--'));
 const roh = pos[0];
 const ziel = pos[1] || 'supabase/kunden-schema.sql';
+const anhang = (opt.anhang || '').split(',').map((x) => x.trim()).filter(Boolean);
 const ohne = (opt.ohne || 'tenants,subscriptions').split(',').map((s) => s.trim()).filter(Boolean);
 if (!roh || !fs.existsSync(roh)) {
   console.error('Aufruf: node scripts/kunden-schema-bereinigen.mjs master-schema-roh.sql [supabase/kunden-schema.sql] [--ohne=tenants,subscriptions]');
@@ -96,6 +102,14 @@ const header = `-- ============================================================
 const vor = vorspann.zeilen.filter((l) => !/^--/.test(l) || false).join('\n').replace(/\n{3,}/g, '\n\n').trim();
 const teile = [header, vor, ...behalten.map((b) => b.zeilen.join('\n').replace(/\n{3,}/g, '\n\n').trimEnd()), ...storageBloecke.map((b) => b.zeilen.join('\n').trimEnd())];
 if (bucket) teile.push(bucket);
+const anhangFehlt = [];
+for (const f of anhang) {
+  if (!fs.existsSync(f)) { anhangFehlt.push(f); continue; }
+  teile.push(`-- ============================================================\n-- ANHANG: ${path.basename(f)}\n-- (idempotent; läuft nach allen Tabellen, damit Schleifen über alle Tabellen auch die neuen erfassen)\n-- ============================================================\n` + fs.readFileSync(f, 'utf8').trim());
+}
+if (teile.some((t) => /CREATE TABLE (IF NOT EXISTS )?public\.schema_migrationen/i.test(t))) {
+  teile.push(`-- Basis-Eintrag im Protokoll: Stand, mit dem diese Instanz angelegt wurde (Basis-Eintrag, damit spätere phase-N-Dateien eindeutig nachvollziehbar sind)\ninsert into public.schema_migrationen (name, bemerkung)\nvalues ('kunden-schema-${heute}', 'Instanz aus supabase/kunden-schema.sql angelegt')\non conflict (name) do nothing;`);
+}
 fs.writeFileSync(ziel, teile.join('\n\n') + '\n');
 
 const tabellen = (fs.readFileSync(ziel, 'utf8').match(/^CREATE TABLE (?:IF NOT EXISTS )?public\.[a-z0-9_]+/gim) || []).length;
@@ -104,4 +118,6 @@ console.log(`Blöcke behalten: ${behalten.length} | entfernt: ${entfernt.length}
 console.log(`Tabellen (CREATE TABLE public.…): ${tabellen}`);
 if (entfernt.length) console.log('Entfernt:\n  ' + entfernt.join('\n  '));
 if (warnungen.length) console.log('WARNUNG:\n  ' + warnungen.join('\n  '));
+if (anhang.length) console.log(`Anhang: ${anhang.filter((f) => !anhangFehlt.includes(f)).join(', ') || 'keiner'}`);
+if (anhangFehlt.length) console.log('WARNUNG: Anhang-Datei nicht gefunden: ' + anhangFehlt.join(', '));
 if (!bucket || !storageBloecke.length) console.log('WARNUNG: Storage-Teil im alten Stand nicht gefunden – bitte prüfen.');
