@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { computeNetHours } from '@/lib/worktime';
 import { serverErrorResponse } from '@/lib/auth';
+import { pruefeZeitFelder, leseAlleZeilen } from '@/lib/zeit-validierung';
 
 // ============================================================
 // SCAFFOLD OS – Monatsübersicht Zeiterfassung (Nr. 6)
@@ -62,13 +63,11 @@ export async function GET(req: NextRequest) {
       if (!/^[0-9a-f-]{36}$/i.test(projectId)) {
         return NextResponse.json({ success: false, error: 'project_id ungültig' }, { status: 400 });
       }
-      const [empRes, entRes] = await Promise.all([
-        fetch(`${url}/rest/v1/employees?select=id,first_name,last_name,status&order=last_name.asc,first_name.asc`, { headers }),
-        fetch(`${url}/rest/v1/time_entries?select=*&project_id=eq.${projectId}&order=work_date.desc,start_time.desc&limit=2000`, { headers }),
+      const [employees, entries] = await Promise.all([
+        leseAlleZeilen(`${url}/rest/v1/employees?select=id,first_name,last_name,status&order=last_name.asc,first_name.asc,id.asc`, headers),
+        leseAlleZeilen(`${url}/rest/v1/time_entries?select=*&project_id=eq.${projectId}&order=work_date.desc,start_time.desc,id.asc`, headers),
       ]);
-      if (!empRes.ok) throw new Error('employees: ' + await empRes.text());
-      if (!entRes.ok) throw new Error('time_entries: ' + await entRes.text());
-      return NextResponse.json({ success: true, employees: await empRes.json(), entries: await entRes.json() });
+      return NextResponse.json({ success: true, employees, entries });
     }
 
     if (!month || !/^\d{4}-\d{2}$/.test(month)) {
@@ -79,21 +78,19 @@ export async function GET(req: NextRequest) {
     const from = `${month}-01`;
     const to = `${month}-${String(new Date(y, m, 0).getDate()).padStart(2, '0')}`;
 
-    let empEndpoint = `${url}/rest/v1/employees?select=id,first_name,last_name,weekly_hours,status&order=last_name.asc,first_name.asc`;
+    let empEndpoint = `${url}/rest/v1/employees?select=id,first_name,last_name,weekly_hours,status`;
     if (employeeId) empEndpoint += `&id=eq.${employeeId}`;
+    empEndpoint += '&order=last_name.asc,first_name.asc,id.asc';
 
-    let entEndpoint = `${url}/rest/v1/time_entries?select=*,project:project_id(id,name)&work_date=gte.${from}&work_date=lte.${to}&order=work_date.asc,start_time.asc`;
+    let entEndpoint = `${url}/rest/v1/time_entries?select=*,project:project_id(id,name)&work_date=gte.${from}&work_date=lte.${to}`;
     if (employeeId) entEndpoint += `&employee_id=eq.${employeeId}`;
+    entEndpoint += '&order=work_date.asc,start_time.asc,id.asc';
 
-    const [empRes, entRes] = await Promise.all([
-      fetch(empEndpoint, { headers }),
-      fetch(entEndpoint, { headers }),
+    // Seitenweise lesen: Die Datenbank liefert je Anfrage höchstens 1000 Zeilen, sonst wären die Monatssummen bei vielen Mitarbeitern zu klein.
+    const [employees, entries] = await Promise.all([
+      leseAlleZeilen<any>(empEndpoint, headers),
+      leseAlleZeilen<any>(entEndpoint, headers),
     ]);
-    if (!empRes.ok) throw new Error('employees: ' + await empRes.text());
-    if (!entRes.ok) throw new Error('time_entries: ' + await entRes.text());
-
-    const employees = await empRes.json();
-    const entries = await entRes.json();
 
     // Einträge pro Mitarbeiter gruppieren + Summen bilden
     const byEmployee: Record<string, any[]> = {};
@@ -136,6 +133,8 @@ export async function PUT(req: NextRequest) {
     if (!id) {
       return NextResponse.json({ success: false, error: 'id erforderlich' }, { status: 400 });
     }
+    const feldFehler = pruefeZeitFelder({ hours, break_minutes, work_date, spesen_euro, fahrzeit_minuten });
+    if (feldFehler) return NextResponse.json({ success: false, error: feldFehler }, { status: 400 });
 
     const updates: any = { updated_at: new Date().toISOString() };
     if (note !== undefined) updates.note = note;
@@ -207,6 +206,9 @@ export async function POST(req: NextRequest) {
         { status: 400 }
       );
     }
+
+    const feldFehler = pruefeZeitFelder({ hours, break_minutes, work_date, spesen_euro, fahrzeit_minuten });
+    if (feldFehler) return NextResponse.json({ success: false, error: feldFehler }, { status: 400 });
 
     const entry: any = {
       employee_id,
