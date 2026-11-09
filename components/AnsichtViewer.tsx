@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useMemo, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
 import type { Object3D } from 'three'
 import ArAnsicht from '@/components/ArAnsicht'
 import dynamic from 'next/dynamic'
@@ -26,6 +26,9 @@ const Scaffold3D = dynamic(() => import('@/components/cad/Scaffold3D'), {
 
 import type { StatikDaten } from '@/lib/statik-daten'
 import { statikPruefpunkte } from '@/lib/statik-pruefpunkte'
+import {
+  seitenUndLagen, seitenName, istSichtbar, zaehleMarkierung, ladeMarkierung, speichereMarkierung,
+} from '@/lib/montage-ansicht'
 
 export type AnsichtDaten = {
   projektName: string
@@ -45,7 +48,7 @@ const ALLE_TYPEN = Object.fromEntries(
 
 const fmt = (n: number, d = 1) => n.toLocaleString('de-DE', { minimumFractionDigits: d, maximumFractionDigits: d })
 
-export default function AnsichtViewer({ daten, kopfAktion }: { daten: AnsichtDaten; kopfAktion?: ReactNode }) {
+export default function AnsichtViewer({ daten, kopfAktion, speicherKey }: { daten: AnsichtDaten; kopfAktion?: ReactNode; /** Schlüssel (z. B. Link-Token), unter dem die Markierung im Browser gemerkt wird; ohne Angabe nur bis zum Neuladen */ speicherKey?: string }) {
   const [auswahl, setAuswahl] = useState<string | null>(null)
   const [inhalt, setInhalt] = useState<Object3D | null>(null)
   const inhaltBereit = useCallback((g: Object3D) => setInhalt(g), [])
@@ -58,6 +61,22 @@ export default function AnsichtViewer({ daten, kopfAktion }: { daten: AnsichtDat
   const features = useMemo(() => (daten ? generateBuildingFeatures(daten.building) : []), [daten])
   const stueckliste = useMemo(() => (modell ? generateBillOfMaterials(modell) : []), [modell])
   const gewaehlt = modell?.components3D.find((c) => c.id === auswahl) ?? null
+
+  // Montage: Schnitt (Seiten/Lagen) und Markierung (nur in diesem Browser)
+  const teile = useMemo(() => modell?.components3D ?? [], [modell])
+  const { seiten, lagen } = useMemo(() => seitenUndLagen(teile), [teile])
+  const [versteckteSeiten, setVersteckteSeiten] = useState<ReadonlySet<string>>(new Set())
+  const [versteckteLagen, setVersteckteLagen] = useState<ReadonlySet<number>>(new Set())
+  const [markiert, setMarkiert] = useState<ReadonlySet<string>>(new Set())
+  useEffect(() => {
+    if (!speicherKey) return
+    Promise.resolve().then(() => setMarkiert(ladeMarkierung(speicherKey, teile)))
+  }, [speicherKey, teile])
+  const markierungAendern = (neu: Set<string>) => { setMarkiert(neu); if (speicherKey) speichereMarkierung(speicherKey, neu) }
+  const hiddenSides = useMemo(() => new Set(seiten.filter((x) => versteckteSeiten.has(x))), [seiten, versteckteSeiten])
+  const hiddenLevels = useMemo(() => new Set(lagen.filter((x) => versteckteLagen.has(x))), [lagen, versteckteLagen])
+  const zaehlung = useMemo(() => zaehleMarkierung(teile, markiert), [teile, markiert])
+  const umschalten = <T,>(menge: ReadonlySet<T>, wert: T): Set<T> => { const n = new Set(menge); if (n.has(wert)) n.delete(wert); else n.add(wert); return n }
 
   if (!modell) {
     return (
@@ -105,7 +124,7 @@ export default function AnsichtViewer({ daten, kopfAktion }: { daten: AnsichtDat
             <Scaffold3D
               model={modell} features={features} showBuilding showScaffold showDimensions={false}
               selectedComponent={auswahl} onSelectComponent={setAuswahl}
-              visibleTypes={ALLE_TYPEN} viewMode={ansicht} showEnvironment={false} onInhaltBereit={inhaltBereit}
+              visibleTypes={ALLE_TYPEN} viewMode={ansicht} hiddenSides={hiddenSides} hiddenLevels={hiddenLevels} abbauMarkiert={markiert} showEnvironment={false} onInhaltBereit={inhaltBereit}
             />
           </div>
           <ArAnsicht inhalt={inhalt} name={daten.projektName} />
@@ -115,6 +134,52 @@ export default function AnsichtViewer({ daten, kopfAktion }: { daten: AnsichtDat
         </section>
 
         <aside className='space-y-4'>
+          <div className='rounded-2xl border border-black/5 bg-white p-4'>
+            <h2 className='text-sm font-semibold mb-2'>Montage</h2>
+            {(seiten.length > 1 || lagen.length > 1) && (
+              <div className='mb-3'>
+                <div className='flex items-center justify-between mb-1'>
+                  <span className='text-xs text-[#86868b]'>Schnitt: Ausgeblendetes antippen zum Einblenden</span>
+                  {(versteckteSeiten.size > 0 || versteckteLagen.size > 0) && (
+                    <button onClick={() => { setVersteckteSeiten(new Set()); setVersteckteLagen(new Set()) }} className='text-xs underline'>Alles zeigen</button>
+                  )}
+                </div>
+                <div className='flex flex-wrap gap-1.5'>
+                  {seiten.length > 1 && seiten.map((x) => (
+                    <button key={x} onClick={() => setVersteckteSeiten(umschalten(versteckteSeiten, x))} aria-pressed={!versteckteSeiten.has(x)}
+                      className={`min-h-9 px-3 rounded-lg text-xs font-medium ${versteckteSeiten.has(x) ? 'bg-black/5 text-[#86868b] line-through' : 'bg-[#e8590c]/10 text-[#e8590c]'}`}>{seitenName(x)}</button>
+                  ))}
+                  {lagen.length > 1 && lagen.map((x) => (
+                    <button key={x} onClick={() => setVersteckteLagen(umschalten(versteckteLagen, x))} aria-pressed={!versteckteLagen.has(x)}
+                      className={`min-h-9 px-3 rounded-lg text-xs font-medium ${versteckteLagen.has(x) ? 'bg-black/5 text-[#86868b] line-through' : 'bg-[#e8590c]/10 text-[#e8590c]'}`}>Lage {x + 1}</button>
+                  ))}
+                </div>
+              </div>
+            )}
+            <div className='text-xs text-[#86868b] mb-1'>Markierung (rot) – nur auf diesem Gerät gespeichert</div>
+            <div className='flex flex-wrap gap-1.5 mb-2'>
+              <button disabled={!gewaehlt} onClick={() => gewaehlt && markierungAendern(umschalten(markiert, gewaehlt.id) as Set<string>)}
+                className='min-h-9 px-3 rounded-lg text-xs font-medium bg-black/5 disabled:opacity-40'>{gewaehlt && markiert.has(gewaehlt.id) ? 'Markierung aufheben' : 'Ausgewähltes markieren'}</button>
+              <button onClick={() => markierungAendern(new Set([...markiert, ...teile.filter((t) => istSichtbar(t, hiddenSides, hiddenLevels)).map((t) => t.id)]))}
+                className='min-h-9 px-3 rounded-lg text-xs font-medium bg-black/5'>Sichtbares markieren</button>
+              <button disabled={markiert.size === 0} onClick={() => markierungAendern(new Set())} className='min-h-9 px-3 rounded-lg text-xs font-medium bg-black/5 disabled:opacity-40'>Markierung löschen</button>
+            </div>
+            <p className='text-sm font-medium'>{zaehlung.markiert} von {zaehlung.gesamt} Bauteilen markiert</p>
+            <details className='mt-2'>
+              <summary className='text-xs text-[#86868b] cursor-pointer'>Je Artikel</summary>
+              <table className='w-full text-xs mt-1'>
+                <tbody>
+                  {zaehlung.zeilen.map((z) => (
+                    <tr key={z.schluessel} className='border-t border-black/5'>
+                      <td className='py-1 pr-2'>{z.articleNumber ? `${z.articleNumber} · ` : ''}{z.name}</td>
+                      <td className='py-1 text-right font-medium whitespace-nowrap'>{z.markiert} / {z.gesamt}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </details>
+          </div>
+
           <div className='rounded-2xl border border-black/5 bg-white p-4'>
             <h2 className='text-sm font-semibold mb-2'>Kennzahlen</h2>
             <dl className='space-y-1.5 text-sm'>
