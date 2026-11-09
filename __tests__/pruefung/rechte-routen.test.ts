@@ -11,7 +11,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 // ============================================================
 
 const h = vi.hoisted(() => ({
-  user: null as null | { id: string; app_metadata?: Record<string, unknown> },
+  user: null as null | { id: string; email?: string; app_metadata?: Record<string, unknown> },
   rolle: 'mitarbeiter' as string,
   fetchAufrufe: [] as string[],
 }))
@@ -56,6 +56,7 @@ const OEFFENTLICH = [
   /^\/app\/api\/umfrage\//,
   /^\/app\/api\/nwd\/webhook\//,
   /^\/app\/api\/stripe\/webhook\//,
+  /^\/app\/api\/stripe\/checkout\//, // Kauf vor der Anmeldung (/kaufen): öffentlich, mit Rate-Limit
   /^\/app\/api\/auth\/demo-gate\//,
   /^\/app\/api\/cron\//,
 ]
@@ -317,6 +318,119 @@ describe('Prüfung 4: Admin-Zugang anlegen', () => {
   it('Admin darf einen Admin anlegen', async () => {
     h.user = { id: ID }; h.rolle = 'admin'; fakeDb(() => [])
     const res = await anlegen('admin')
+    expect(res.status).not.toBe(403)
+  })
+})
+
+// ---- Entscheidungen: keine Preise für Mitarbeiter/Lager, Kauf ohne Login, Portal nur für die eigene E-Mail ----
+describe('Prüfung 4: Projekte ohne Preise für Mitarbeiter und Lager', () => {
+  const PROJEKT = {
+    id: ID, name: 'Haus A', adresse: 'Weg 1', status: 'active', customer_id: null,
+    data: {
+      step1: { name: 'Haus A', hoehe: 12 },
+      step2: { abschnitte: [{ laenge: 10 }] },
+      lidarMeasurements: { flaeche: 120 },
+      kiResult: { materialien: [{ name: 'Rahmen', menge: 10, unitPrice: 9.5, totalPrice: 95 }], hinweis: 'ok' },
+      materialList: [{ name: 'Rahmen', unitPrice: 9.5 }],
+      angebotsStatus: 'angenommen',
+      angebot: { summeNetto: 5000 },
+    },
+  }
+  const lies = async (query = '') => {
+    const { GET } = (await module_['/app/api/projects/route.ts']()) as { GET: (r: Request) => Promise<Response> }
+    return GET(new Request(`http://localhost/api/projects${query}`) as never)
+  }
+  const rolleSieht = async (rolle: string, query = '') => {
+    h.user = { id: ID }; h.rolle = rolle
+    fakeDb((u) => (u.includes('/projects') ? [PROJEKT] : []))
+    return (await (await lies(query)).json()) as { project?: typeof PROJEKT; projects?: (typeof PROJEKT)[] }
+  }
+
+  for (const r of ['mitarbeiter', 'lager']) {
+    it(`${r}: Einzelprojekt ohne Angebot und Preise, Aufmaß-Schritte vollständig`, async () => {
+      const p = (await rolleSieht(r, `?id=${ID}`)).project!
+      expect(Object.keys(p.data).sort()).toEqual(['kiResult', 'lidarMeasurements', 'step1', 'step2'])
+      expect(p.data.step2).toEqual(PROJEKT.data.step2)
+      expect(JSON.stringify(p)).not.toMatch(/unitPrice|totalPrice|summeNetto|angebot/)
+      expect((p.data.kiResult as { materialien: { menge: number }[] }).materialien[0].menge).toBe(10)
+    })
+    it(`${r}: Projektliste ohne Preise`, async () => {
+      const liste = (await rolleSieht(r)).projects!
+      expect(JSON.stringify(liste)).not.toMatch(/unitPrice|totalPrice|summeNetto|angebot/)
+      expect(liste[0].name).toBe('Haus A')
+    })
+  }
+  for (const r of ['admin', 'disponent', 'bauleiter']) {
+    it(`${r} sieht das Projekt vollständig`, async () => {
+      const p = (await rolleSieht(r, `?id=${ID}`)).project!
+      expect(p.data).toEqual(PROJEKT.data)
+    })
+  }
+
+  const speichern = async (rolle: string, body: unknown) => {
+    h.user = { id: ID }; h.rolle = rolle
+    const geschrieben: unknown[] = []
+    vi.stubGlobal('fetch', vi.fn(async (u: unknown, init?: RequestInit) => {
+      const url = String(u)
+      if (init?.method === 'PATCH' && url.includes('/projects?id=')) geschrieben.push(JSON.parse(String(init.body)))
+      if (init?.method === 'PATCH') return new Response(JSON.stringify([{ ...PROJEKT, data: { ...PROJEKT.data, ...(JSON.parse(String(init.body)).data || {}) } }]), { status: 200 })
+      return new Response(JSON.stringify(url.includes('/projects?id=') ? [PROJEKT] : []), { status: 200 })
+    }))
+    const { PATCH } = (await module_['/app/api/projects/route.ts']()) as { PATCH: (r: Request) => Promise<Response> }
+    const res = await PATCH(new Request('http://localhost/api/projects', { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }) as never)
+    return { res, geschrieben }
+  }
+
+  it('Mitarbeiter kann Angebot und Preise NICHT überschreiben (nur Schritte 1–5)', async () => {
+    const { res, geschrieben } = await speichern('mitarbeiter', {
+      id: ID, data: { step3: { x: 1 }, angebot: { summeNetto: 1 }, materialList: [], angebotsStatus: 'angenommen' },
+    })
+    expect(res.status).toBe(200)
+    const patch = geschrieben[0] as { data: Record<string, unknown> }
+    expect(patch.data.step3).toEqual({ x: 1 })
+    expect(patch.data.angebot).toEqual(PROJEKT.data.angebot)        // unverändert vom Server
+    expect(patch.data.materialList).toEqual(PROJEKT.data.materialList)
+    expect(JSON.stringify(await res.json())).not.toMatch(/unitPrice|summeNetto/)   // Antwort ohne Preise
+  })
+  it('Bauleiter darf das Angebot weiterhin speichern', async () => {
+    const { geschrieben } = await speichern('bauleiter', { id: ID, data: { angebot: { summeNetto: 1 } } })
+    expect((geschrieben[0] as { data: { angebot: unknown } }).data.angebot).toEqual({ summeNetto: 1 })
+  })
+})
+
+describe('Prüfung 4: Kauf ohne Login (/kaufen)', () => {
+  it('ist ohne Login erreichbar (kein 401) und hat ein Rate-Limit', async () => {
+    delete process.env.STRIPE_SECRET_KEY
+    const { POST } = (await module_['/app/api/stripe/checkout/route.ts']()) as { POST: (r: Request) => Promise<Response> }
+    const ruf = () => POST(Object.assign(new Request('http://localhost/api/stripe/checkout', {
+      method: 'POST', headers: { 'content-type': 'application/json', 'x-forwarded-for': '203.0.113.77' },
+      body: JSON.stringify({ company_name: 'Muster Bau', admin_email: 'chef@musterbau.de', plan: 'starter' }),
+    }), { nextUrl: new URL('http://localhost/api/stripe/checkout') }))
+    h.user = null
+    const status: number[] = []
+    for (let i = 0; i < 11; i++) status.push((await ruf()).status)
+    expect(status.slice(0, 10).every((s) => s !== 401 && s !== 403 && s !== 429)).toBe(true)  // 503: Stripe hier nicht konfiguriert
+    expect(status[10]).toBe(429)
+  })
+})
+
+describe('Prüfung 4: Kundenportal nur für die eigene E-Mail', () => {
+  const portal = async (rolle: string, loginMail: string, body: unknown) => {
+    h.user = { id: ID, email: loginMail }; h.rolle = rolle
+    process.env.STRIPE_SECRET_KEY = 'sk_test_unbenutzt'
+    const { POST } = (await module_['/app/api/stripe/portal/route.ts']()) as { POST: (r: Request) => Promise<Response> }
+    const res = await POST(Object.assign(new Request('http://localhost/api/stripe/portal', {
+      method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body),
+    }), { nextUrl: new URL('http://localhost/api/stripe/portal') }))
+    delete process.env.STRIPE_SECRET_KEY
+    return res
+  }
+  it('Admin darf das Portal NICHT für eine fremde E-Mail öffnen', async () => {
+    expect((await portal('admin', 'chef@musterbau.de', { email: 'anderer@kunde.de' })).status).toBe(403)
+  })
+  it('Groß-/Kleinschreibung der eigenen E-Mail spielt keine Rolle (kommt bis zu Stripe)', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => new Response('{}', { status: 200 })))
+    const res = await portal('admin', 'Chef@Musterbau.de', { email: 'chef@musterbau.de' })
     expect(res.status).not.toBe(403)
   })
 })

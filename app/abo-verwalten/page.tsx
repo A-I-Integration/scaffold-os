@@ -48,7 +48,7 @@ export default function AboVerwaltenPage() {
 
         <form onSubmit={absenden} className="bg-[#f5f5f7] rounded-xl p-6 space-y-4">
           <div>
-            <label className="block text-sm font-medium mb-2 text-[#424245]">E-Mail-Adresse aus dem Kauf *</label>
+            <label className="block text-sm font-medium mb-2 text-[#424245]">E-Mail-Adresse aus dem Kauf (= deine Login-Adresse) *</label>
             <input
               type="email"
               value={email}
