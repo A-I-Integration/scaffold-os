@@ -7,6 +7,7 @@ import { ROLLEN } from '@/lib/rollen';
 
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const key = process.env.SUPABASE_SERVICE_ROLE_KEY!;
+const MAX_NEU = 100 // neue Nachrichten je Postfach und Ordner pro Durchlauf
 const headers = { 'Content-Type': 'application/json', apikey: key, Authorization: `Bearer ${key}` };
 
 // GET /api/kunden/[id]/emails – durchsucht ALLE zugänglichen Postfächer
@@ -60,7 +61,13 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
                 client.search({ from: kunde.email }, { uid: true }),
                 client.search({ to: kunde.email }, { uid: true }),
               ]);
-              const uids = Array.from(new Set([...(vonKunde || []), ...(anKunde || [])])).slice(-50);
+              const alleUids = Array.from(new Set([...(vonKunde || []), ...(anKunde || [])])).sort((a, b) => a - b)
+              // Schon gespeicherte Nachrichten überspringen und pro Durchlauf höchstens MAX_NEU der NEUESTEN neuen laden.
+              // So holt jede weitere Synchronisierung den Rest der älteren Historie nach (früher: nur die letzten 50, ältere nie).
+              const bekanntRes = await fetch(`${url}/rest/v1/customer_emails?customer_id=eq.${id}&email_account_id=eq.${konto.id}&imap_mailbox=eq.${encodeURIComponent(ordner)}&select=imap_uid&limit=100000`, { headers })
+              if (!bekanntRes.ok) throw new Error(await bekanntRes.text())
+              const bekannt = new Set<number>((await bekanntRes.json()).map((r: any) => Number(r.imap_uid)))
+              const uids = alleUids.filter((u) => !bekannt.has(u)).slice(-MAX_NEU)
               if (uids.length > 0) {
                 const neueDatensaetze: any[] = [];
                 for await (const msg of client.fetch(uids, { envelope: true, uid: true, source: true }, { uid: true })) {
@@ -80,11 +87,13 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
                   // Dauerhaft speichern – Duplikate (gleiches Postfach+UID,
                   // schon vorher gespeichert) werden über den UNIQUE-Index
                   // in der Datenbank automatisch übersprungen.
-                  await fetch(`${url}/rest/v1/customer_emails`, {
+                  const speichern = await fetch(`${url}/rest/v1/customer_emails`, {
                     method: 'POST',
                     headers: { ...headers, Prefer: 'resolution=ignore-duplicates' },
                     body: JSON.stringify(neueDatensaetze),
                   })
+                  // Nicht gespeichert heißt: beim nächsten Durchlauf erneut versuchen und dem Nutzer melden.
+                  if (!speichern.ok) throw new Error('E-Mails speichern fehlgeschlagen: ' + (await speichern.text()))
                 }
               }
             } finally {

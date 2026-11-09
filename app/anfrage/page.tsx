@@ -71,6 +71,7 @@ function AnfrageFormular() {
         setFehler(json.error || 'Senden fehlgeschlagen – bitte später erneut versuchen.');
       } else {
         setFertig(true);
+        meldeAdsConversion();
       }
     } catch {
       setFehler('Keine Verbindung – bitte später erneut versuchen.');
@@ -193,6 +194,14 @@ function AnfrageFormular() {
       )}
     </div>
   );
+}
+
+// Google Ads: Conversion nur melden, wenn Tag und Label konfiguriert sind (die Einwilligung steuert gtag selbst über Consent Mode)
+function meldeAdsConversion() {
+  const id = process.env.NEXT_PUBLIC_GOOGLE_ADS_ID;
+  const label = process.env.NEXT_PUBLIC_GOOGLE_ADS_CONVERSION_LABEL;
+  const gtag = (window as unknown as { gtag?: (...a: unknown[]) => void }).gtag;
+  if (id && label && typeof gtag === 'function') gtag('event', 'conversion', { send_to: `${id}/${label}` });
 }
 
 export default function AnfragePage() {

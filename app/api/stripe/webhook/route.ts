@@ -52,7 +52,8 @@ async function freienSlugFinden(base: string): Promise<string> {
       `${masterUrl}/rest/v1/tenants?slug=eq.${encodeURIComponent(kandidat)}&select=id,status`,
       { headers }
     );
-    const rows = res.ok ? await res.json() : [];
+    if (!res.ok) throw new Error('tenants lesen fehlgeschlagen: ' + (await res.text()));
+    const rows = await res.json();
     if (!rows?.length || rows[0].status === 'cancelled') return kandidat;
   }
   return `${base}-${Date.now().toString(36)}`;
@@ -233,7 +234,9 @@ async function aboStatusNachziehen(sub: Stripe.Subscription): Promise<void> {
     `${masterUrl}/rest/v1/subscriptions?stripe_subscription_id=eq.${encodeURIComponent(sub.id)}&select=tenant_id`,
     { headers }
   );
-  const rows = res.ok ? await res.json() : [];
+  // Nicht lesbar heißt NICHT "kein Tenant": sonst bliebe z. B. eine Kündigung ohne Wirkung und Stripe bekäme "erfolgreich".
+  if (!res.ok) throw new Error('subscriptions lesen fehlgeschlagen: ' + (await res.text()));
+  const rows = await res.json();
   const tenantId = rows?.[0]?.tenant_id || null;
 
   // tenant-Datensatz mit Projekt-Ref holen (für Kill-Switch)
@@ -244,7 +247,8 @@ async function aboStatusNachziehen(sub: Stripe.Subscription): Promise<void> {
       `${masterUrl}/rest/v1/tenants?id=eq.${tenantId}&select=status,supabase_project_ref`,
       { headers }
     );
-    const tRows = tRes.ok ? await tRes.json() : [];
+    if (!tRes.ok) throw new Error('tenants lesen fehlgeschlagen: ' + (await tRes.text()));
+    const tRows = await tRes.json();
     projektRef = tRows?.[0]?.supabase_project_ref || null;
     tenantStatus = tRows?.[0]?.status || '';
   }
