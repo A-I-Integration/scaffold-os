@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { computeNetHours } from '@/lib/worktime';
 import { requireAuth, unauthorizedResponse, serverErrorResponse, requireOwnEmployeeOrAdmin, forbiddenResponse, pruefeRolle } from '@/lib/auth';
 import { ROLLEN } from '@/lib/rollen';
+import { pruefeZeitFelder } from '@/lib/zeit-validierung';
 
 // ============================================================
 // SCAFFOLD OS – Zeiterfassung API (Stempeln)
@@ -64,6 +65,8 @@ export async function POST(req: Request) {
     if (!employee_id) {
       return NextResponse.json({ success: false, error: 'employee_id erforderlich' }, { status: 400 });
     }
+    const feldFehler = pruefeZeitFelder({ hours, break_minutes, work_date });
+    if (feldFehler) return NextResponse.json({ success: false, error: feldFehler }, { status: 400 });
 
     // FIX (Mitarbeiter-Bereich-Audit): ohne diese Prüfung konnte jeder
     // eingeloggte Nutzer für eine beliebige employee_id stempeln.
@@ -117,6 +120,8 @@ export async function PUT(req: Request) {
     if (!id) {
       return NextResponse.json({ success: false, error: 'id erforderlich' }, { status: 400 });
     }
+    const feldFehler = pruefeZeitFelder({ hours, break_minutes, work_date });
+    if (feldFehler) return NextResponse.json({ success: false, error: feldFehler }, { status: 400 });
 
     // FIX (Mitarbeiter-Bereich-Audit): ohne diese Prüfung konnte jeder
     // eingeloggte Nutzer JEDEN Zeiteintrag per id ändern (fremde Stunden,
