@@ -1,6 +1,8 @@
 'use client';
 
 import UmbuchenTab from '@/components/lager/UmbuchenTab';
+import BewegungenTab from '@/components/lager/BewegungenTab';
+import LagerorteTab from '@/components/lager/LagerorteTab';
 import { useState, useEffect, useCallback } from 'react';
 import AbbauDialog from '@/components/lager/AbbauDialog';
 import { abbauFaellig } from '@/lib/abbau-faellig';
@@ -21,7 +23,7 @@ import {
   TransportRecommendation,
 } from '@/types/inventory';
 
-type Tab = 'overview' | 'warehouse' | 'sites' | 'transports' | 'inventur' | 'umbuchen';
+type Tab = 'overview' | 'warehouse' | 'sites' | 'transports' | 'inventur' | 'umbuchen' | 'bewegungen' | 'lagerorte';
 
 interface CountedItem {
   inventory_id: string;
@@ -332,6 +334,8 @@ export default function LagerPage() {
             <button onClick={() => setActiveTab('transports')} className={tabClass('transports')}>Transporte</button>
             {canCount && <button onClick={() => setActiveTab('inventur')} className={tabClass('inventur')}>📋 Inventur</button>}
             {canManage && <button onClick={() => setActiveTab('umbuchen')} className={tabClass('umbuchen')}>Umbuchen</button>}
+            {canCount && <button onClick={() => setActiveTab('bewegungen')} className={tabClass('bewegungen')}>Bewegungen</button>}
+            {canManage && <button onClick={() => setActiveTab('lagerorte')} className={tabClass('lagerorte')}>Lagerorte</button>}
           </nav>
         </div>
       </div>
@@ -592,6 +596,8 @@ export default function LagerPage() {
 
         {/* ═══════════════════════════════════════════════════════════ */}
         {/* INVENTUR */}
+        {activeTab === 'bewegungen' && canCount && <BewegungenTab darfStornieren={canManage} />}
+        {activeTab === 'lagerorte' && canManage && <LagerorteTab />}
         {activeTab === 'umbuchen' && canManage && <UmbuchenTab darfVerlust={userRole === 'admin' || userRole === 'disponent'} />}
 
         {activeTab === 'inventur' && canCount && (
