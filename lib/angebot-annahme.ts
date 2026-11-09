@@ -73,6 +73,9 @@ export async function beiAngebotsannahme(projectId: string): Promise<Angebotsann
   const transportIds: string[] = [];
   const positionen: { sku: string; quantity: number }[] = [];
 
+  // Erst zuordnen und je Lagerartikel zusammenzählen (derselbe Artikel kann mehrfach in der Materialliste stehen),
+  // dann je Artikel EINMAL buchen.
+  const bedarf = new Map<string, { treffer: LagerArtikelKurz; menge: number; namen: string[] }>();
   for (const zeile of materialList) {
     if (istLeistungsZeile(zeile)) { (ergebnis.leistungen ??= []).push(zeile.name); continue; }
     const { artikel: treffer } = findeLagerartikel(zeile, lagerIndex);
@@ -84,25 +87,42 @@ export async function beiAngebotsannahme(projectId: string): Promise<Angebotsann
       ergebnis.einheitenKonflikt.push(`${zeile.name}: Materialliste ${zeile.quantity} ${zeile.unit}, Lager führt in ${treffer.unit}`);
       continue;
     }
+    const b = bedarf.get(treffer.id) ?? { treffer, menge: 0, namen: [] };
+    b.menge += Number(zeile.quantity) || 0;
+    b.namen.push(zeile.name);
+    bedarf.set(treffer.id, b);
+  }
 
-    // Zentrale Buchungsfunktion (lib/inventory/buchung.ts) – prüft
-    // Bestand, bucht atomar ab, legt site_stock-Reservierung an,
-    // loggt in inventory_transactions. Liest den Bestand bei jedem
-    // Aufruf frisch aus der DB, daher kein manuelles Nachführen eines
-    // lokalen Zwischenstands mehr nötig, auch wenn derselbe Lagerartikel
-    // mehrfach in der Materialliste vorkommt.
+  for (const { treffer, menge, namen } of bedarf.values()) {
+    const bezeichnung = namen.length > 1 ? `${namen[0]} (+${namen.length - 1} weitere Zeile${namen.length > 2 ? 'n' : ''})` : namen[0];
+
+    // Schon früher für dieses Projekt über die Annahme reserviert (z. B. Angebot nach einer Korrektur erneut angenommen,
+    // oder zwei Annahmen kurz hintereinander)? Dann nur die FEHLENDE Menge buchen, sonst würde der Bestand doppelt abgebucht.
+    const bereits = await schonReserviert(projectId, treffer.id);
+    if (bereits === null) {
+      ergebnis.nichtGenugBestand.push(`${bezeichnung}: Bisherige Reservierung konnte nicht gelesen werden, es wurde nichts gebucht.`);
+      continue;
+    }
+    const fehlt = menge - bereits;
+    if (fehlt <= 0) {
+      ergebnis.reserviert.push(`${bezeichnung} (bereits reserviert)`);
+      continue;
+    }
+
+    // Zentrale Buchungsfunktion (lib/inventory/buchung.ts) – prüft Bestand, bucht atomar ab, legt die Reservierung an
+    // und loggt in inventory_transactions. Liest den Bestand bei jedem Aufruf frisch aus der DB.
     const buchung = await bucheAusZentrallager({
       inventory_id: treffer.id,
       project_id: projectId,
-      quantity: zeile.quantity,
+      quantity: fehlt,
       reason: 'Automatisch bei Angebots-Annahme reserviert',
       reference_type: 'angebot_annahme',
     });
     if (!buchung.success) {
-      ergebnis.nichtGenugBestand.push(`${zeile.name}: ${buchung.error}`);
+      ergebnis.nichtGenugBestand.push(`${bezeichnung}: ${buchung.error}`);
       continue;
     }
-    ergebnis.reserviert.push(zeile.name);
+    ergebnis.reserviert.push(bezeichnung);
 
     // Transportauftrag anlegen (gleiche Logik wie /api/transport-orders POST).
     // Schlägt das fehl, ist das Material schon reserviert: Das muss sichtbar werden (transportFehler),
@@ -110,17 +130,17 @@ export async function beiAngebotsannahme(projectId: string): Promise<Angebotsann
     try {
       const transRes = await fetch(`${url}/rest/v1/transport_orders`, {
         method: 'POST', headers: { ...headers, Prefer: 'return=representation' },
-        body: JSON.stringify({ inventory_id: treffer.id, quantity: zeile.quantity, to_project_id: projectId, status: 'pending' }),
+        body: JSON.stringify({ inventory_id: treffer.id, quantity: fehlt, to_project_id: projectId, status: 'pending' }),
       });
       if (transRes.ok) {
-        ergebnis.transportAngelegt.push(zeile.name);
+        ergebnis.transportAngelegt.push(bezeichnung);
         const neu = (await transRes.json().catch(() => null))?.[0];
-        if (neu?.id) { transportIds.push(neu.id); positionen.push({ sku: treffer.sku || '', quantity: zeile.quantity }); }
+        if (neu?.id) { transportIds.push(neu.id); positionen.push({ sku: treffer.sku || '', quantity: fehlt }); }
       } else {
-        (ergebnis.transportFehler ??= []).push(`${zeile.name}: Transportauftrag nicht angelegt (Status ${transRes.status})`);
+        (ergebnis.transportFehler ??= []).push(`${bezeichnung}: Transportauftrag nicht angelegt (Status ${transRes.status})`);
       }
     } catch (e: unknown) {
-      (ergebnis.transportFehler ??= []).push(`${zeile.name}: Transportauftrag nicht angelegt (${e instanceof Error ? e.message : String(e)})`);
+      (ergebnis.transportFehler ??= []).push(`${bezeichnung}: Transportauftrag nicht angelegt (${e instanceof Error ? e.message : String(e)})`);
     }
   }
 
@@ -138,6 +158,14 @@ export async function beiAngebotsannahme(projectId: string): Promise<Angebotsann
   await speichereErgebnis(projectId, ergebnis);
 
   return ergebnis;
+}
+
+/** Menge, die für dieses Projekt und diesen Artikel schon über die Angebots-Annahme reserviert wurde (null = nicht lesbar). */
+async function schonReserviert(projectId: string, inventoryId: string): Promise<number | null> {
+  const r = await fetch(`${url}/rest/v1/inventory_transactions?project_id=eq.${projectId}&inventory_id=eq.${inventoryId}&reference_type=eq.angebot_annahme&type=eq.out&select=quantity`, { headers });
+  if (!r.ok) return null;
+  const rows: { quantity: number }[] = await r.json();
+  return rows.reduce((summe, z) => summe + Math.abs(Number(z.quantity) || 0), 0);
 }
 
 async function speichereErgebnis(projectId: string, ergebnis: AngebotsannahmeErgebnis): Promise<void> {

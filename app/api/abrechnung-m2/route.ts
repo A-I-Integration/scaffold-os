@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { serverErrorResponse } from '@/lib/auth'
 import { pruefeAbrechnungEintrag } from '@/lib/calculations/m2-abrechnung'
+import { zahlAusEingabeStreng } from '@/lib/zahl-eingabe'
 
 // ============================================================
 // SCAFFOLD OS – Abrechnung nach m² (Preise je m² und Aufpreise)
@@ -52,7 +53,8 @@ export async function POST(req: NextRequest) {
     const body = await req.json()
     const fehler = pruefeAbrechnungEintrag(body)
     if (fehler) return NextResponse.json({ success: false, error: fehler }, { status: 400 })
-    const preis = typeof body.preis_m2 === 'string' ? parseFloat(body.preis_m2.replace(',', '.')) : body.preis_m2
+    // Dieselbe Regel wie beim Prüfen ("1.250,50" = 1250,5), sonst würde ein anderer Preis gespeichert als geprüft wurde
+    const preis = typeof body.preis_m2 === 'string' ? zahlAusEingabeStreng(body.preis_m2) : body.preis_m2
     const res = await fetch(`${url}/rest/v1/abrechnung_m2`, {
       method: 'POST',
       headers: { ...headers, Prefer: 'return=representation' },
