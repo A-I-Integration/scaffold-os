@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { serverErrorResponse } from '@/lib/auth';
+import { hauptlagerId, rpc } from '@/lib/inventory/buchung';
 
 // ============================================================
 // SCAFFOLD OS – Material-Rückgabe nach Demontage (Phase 23)
@@ -68,22 +69,23 @@ export async function POST(req: NextRequest) {
     }
 
     // ---- 1. Alles prüfen und planen, BEVOR irgendetwas gebucht wird ----
-    // Auf der Baustelle zurückgeben kann man höchstens, was dort gebucht ist: physischer Bestand + noch reserviertes Material
-    // (Rückgabe vor der Anlieferung gibt die Reservierung frei). Je Baustelle und Artikel kann es mehrere Zeilen geben (ältere Daten);
-    // der Abzug läuft über alle Zeilen, erst vom physischen Bestand, dann von der Reservierung.
-    type Zeile = { id: string; quantity: number; reserved_quantity: number };
+    // Auf der Baustelle zurückgeben kann man höchstens, was dort gebucht ist: physischer Bestand ("frei") + noch reserviertes Material
+    // (Rückgabe vor der Anlieferung gibt die Reservierung frei). Der Abzug läuft erst vom physischen Bestand, dann von der Reservierung.
     interface Plan {
-      inventory_id: string; name: string; unit: string; lagerMenge: number;
-      zurueck: number; verlust: number; grund?: string;
-      zeilen: { id: string; quantity: number; reserved_quantity: number }[];
+      inventory_id: string; name: string; unit: string; zurueck: number; verlust: number; grund?: string; frei: number; reserviert: number;
     }
     const plaene: Plan[] = [];
+    const ortRes = await rpc('lagerort_fuer_projekt', { p_project: project_id });
+    if (!ortRes.ok || typeof ortRes.daten !== 'string') {
+      return NextResponse.json({ success: false, error: 'Lagerort der Baustelle konnte nicht bestimmt werden.' }, { status: 400 });
+    }
+    const baustellenOrt = ortRes.daten;
 
     for (const pos of items) {
       const { inventory_id, zurueck, fehlt_beschaedigt, grund } = pos;
       if (!inventory_id) continue;
-      const menzeZurueck = Math.max(0, Number(zurueck) || 0);
-      const menzeVerlust = Math.max(0, Number(fehlt_beschaedigt) || 0);
+      const menzeZurueck = Math.max(0, Math.floor(Number(zurueck) || 0));
+      const menzeVerlust = Math.max(0, Math.floor(Number(fehlt_beschaedigt) || 0));
       if (menzeZurueck === 0 && menzeVerlust === 0) continue;
 
       const getRes = await fetch(`${url}/rest/v1/inventory?id=eq.${inventory_id}&select=quantity,name,unit`, { headers });
@@ -91,12 +93,12 @@ export async function POST(req: NextRequest) {
       const artikel = (await getRes.json())?.[0];
       if (!artikel) continue;
 
-      const siteGet = await fetch(
-        `${url}/rest/v1/site_stock?project_id=eq.${project_id}&inventory_id=eq.${inventory_id}&select=id,quantity,reserved_quantity&order=created_at.asc`,
-        { headers },
-      );
-      const zeilen: Zeile[] = siteGet.ok ? await siteGet.json() : [];
-      const aufBaustelle = zeilen.reduce((sum, z) => sum + (Number(z.quantity) || 0) + (Number(z.reserved_quantity) || 0), 0);
+      const bRes = await fetch(`${url}/rest/v1/bestand?inventory_id=eq.${inventory_id}&lagerort_id=eq.${baustellenOrt}&select=zustand,menge`, { headers });
+      if (!bRes.ok) throw new Error(await bRes.text());
+      const zeilen: { zustand: string; menge: number }[] = await bRes.json();
+      const frei = zeilen.filter((z) => z.zustand === 'frei').reduce((n, z) => n + (Number(z.menge) || 0), 0);
+      const reserviert = zeilen.filter((z) => z.zustand === 'reserviert').reduce((n, z) => n + (Number(z.menge) || 0), 0);
+      const aufBaustelle = frei + reserviert;
       const verlassen = menzeZurueck + menzeVerlust;
       if (verlassen > aufBaustelle) {
         return NextResponse.json(
@@ -104,66 +106,62 @@ export async function POST(req: NextRequest) {
           { status: 400 },
         );
       }
-      plaene.push({ inventory_id, name: artikel.name, unit: artikel.unit, lagerMenge: Number(artikel.quantity) || 0, zurueck: menzeZurueck, verlust: menzeVerlust, grund, zeilen });
+      plaene.push({ inventory_id, name: artikel.name, unit: artikel.unit, zurueck: menzeZurueck, verlust: menzeVerlust, grund, frei, reserviert });
     }
 
-    // ---- 2. Buchen ----
+    // ---- 2. Buchen: Rücknahme (RN: Baustelle → Hauptlager) und Verlust (VL: Baustelle → ausgebucht) als Belege ----
     const ergebnisse: any[] = [];
-    for (const pl of plaene) {
-      if (pl.zurueck > 0) {
-        // Bestand nur ändern, wenn er seit dem Lesen unverändert ist (sonst Fehler statt stilles Überschreiben)
-        const updRes = await fetch(`${url}/rest/v1/inventory?id=eq.${pl.inventory_id}&quantity=eq.${pl.lagerMenge}`, {
-          method: 'PATCH', headers: { ...headers, Prefer: 'return=representation' },
-          body: JSON.stringify({ quantity: pl.lagerMenge + pl.zurueck, updated_at: new Date().toISOString() }),
-        });
-        if (!updRes.ok) throw new Error(await updRes.text());
-        if (!(await updRes.json()).length) {
-          return NextResponse.json({ success: false, error: `${pl.name}: Der Lagerbestand wurde zwischenzeitlich geändert. Bitte erneut versuchen.` }, { status: 409 });
+    if (plaene.length > 0) {
+      const haupt = await hauptlagerId();
+      if (!haupt) throw new Error('Hauptlager nicht gefunden');
+      const rn: Record<string, unknown>[] = [];
+      const vl: Record<string, unknown>[] = [];
+      for (const pl of plaene) {
+        let frei = pl.frei, res = pl.reserviert;
+        const nimm = (menge: number) => { const f = Math.min(menge, frei); frei -= f; const r = menge - f; res -= r; return { f, r }; };
+        const z = nimm(pl.zurueck);
+        if (z.f) rn.push({ inventory_id: pl.inventory_id, menge: z.f, von_lagerort: baustellenOrt, von_zustand: 'frei', nach_lagerort: haupt, nach_zustand: 'frei' });
+        if (z.r) rn.push({ inventory_id: pl.inventory_id, menge: z.r, von_lagerort: baustellenOrt, von_zustand: 'reserviert', nach_lagerort: haupt, nach_zustand: 'frei' });
+        const v = nimm(pl.verlust);
+        if (v.f) vl.push({ inventory_id: pl.inventory_id, menge: v.f, von_lagerort: baustellenOrt, von_zustand: 'frei' });
+        if (v.r) vl.push({ inventory_id: pl.inventory_id, menge: v.r, von_lagerort: baustellenOrt, von_zustand: 'reserviert' });
+      }
+      const bem = event_id ? `Rückgabe nach Demontage (Ereignis ${event_id})` : 'Rückgabe nach Demontage';
+      const fehlerAntwort = (msg: string) => /Nicht genug Bestand/.test(msg)
+        ? NextResponse.json({ success: false, error: 'Der Baustellenbestand wurde zwischenzeitlich geändert. Bitte erneut versuchen.' }, { status: 409 })
+        : null;
+
+      let rnBeleg: string | null = null;
+      if (rn.length > 0) {
+        const r = await rpc('buche_lager', { p_bewegungsart: 'RN', p_positionen: rn, p_project: project_id, p_bemerkung: bem, p_referenz_typ: 'demontage_rueckgabe' });
+        if (!r.ok) return fehlerAntwort(r.meldung) ?? serverErrorResponse(new Error(r.meldung));
+        rnBeleg = String(r.daten);
+      }
+      if (vl.length > 0) {
+        const r = await rpc('buche_lager', { p_bewegungsart: 'VL', p_positionen: vl, p_project: project_id, p_bemerkung: 'Fehlmenge/Schaden bei Rücktransport', p_referenz_typ: 'demontage_verlust' });
+        if (!r.ok) {
+          // Beide Teile gehören zusammen: scheitert der zweite, wird der erste storniert.
+          if (rnBeleg) await rpc('storniere_lager', { p_beleg: rnBeleg, p_grund: 'Rückgabe abgebrochen (Verlustbuchung fehlgeschlagen)' });
+          return fehlerAntwort(r.meldung) ?? serverErrorResponse(new Error(r.meldung));
         }
-
-        await fetch(`${url}/rest/v1/inventory_transactions`, {
-          method: 'POST', headers,
-          body: JSON.stringify({
-            inventory_id: pl.inventory_id, project_id, type: 'in', quantity: pl.zurueck,
-            reason: pl.grund || `Rückgabe nach Demontage`,
-            reference_type: 'demontage_rueckgabe',
-            reference_id: event_id || null,
-          }),
-        });
       }
 
-      if (pl.verlust > 0) {
-        // Bewusst KEINE Zentrallager-Änderung – das Material war schon
-        // "draußen", es kommt nur nicht zurück. Reine Protokollierung
-        // für Auswertung/Nachbelastung.
-        await fetch(`${url}/rest/v1/inventory_transactions`, {
-          method: 'POST', headers,
-          body: JSON.stringify({
-            inventory_id: pl.inventory_id, project_id, type: 'loss', quantity: -pl.verlust,
-            reason: pl.grund || `Fehlmenge/Schaden bei Rücktransport`,
-            reference_type: 'demontage_verlust',
-            reference_id: event_id || null,
-          }),
-        });
+      // Altes Protokoll (Berichte lesen es noch)
+      for (const pl of plaene) {
+        if (pl.zurueck > 0) {
+          await fetch(`${url}/rest/v1/inventory_transactions`, {
+            method: 'POST', headers,
+            body: JSON.stringify({ inventory_id: pl.inventory_id, project_id, type: 'in', quantity: pl.zurueck, reason: pl.grund || `Rückgabe nach Demontage`, reference_type: 'demontage_rueckgabe', reference_id: event_id || null }),
+          });
+        }
+        if (pl.verlust > 0) {
+          await fetch(`${url}/rest/v1/inventory_transactions`, {
+            method: 'POST', headers,
+            body: JSON.stringify({ inventory_id: pl.inventory_id, project_id, type: 'loss', quantity: -pl.verlust, reason: pl.grund || `Fehlmenge/Schaden bei Rücktransport`, reference_type: 'demontage_verlust', reference_id: event_id || null }),
+          });
+        }
+        ergebnisse.push({ inventory_id: pl.inventory_id, name: pl.name, unit: pl.unit, zurueck: pl.zurueck, verlust: pl.verlust });
       }
-
-      // Baustellenbestand verringern (zurück + Verlust verlassen beide die Baustelle):
-      // erst vom physischen Bestand, dann von der Reservierung, über alle Zeilen.
-      let rest = pl.zurueck + pl.verlust;
-      for (const z of pl.zeilen) {
-        if (rest <= 0) break;
-        const ausPhysisch = Math.min(rest, Number(z.quantity) || 0);
-        rest -= ausPhysisch;
-        const ausReserviert = Math.min(rest, Number(z.reserved_quantity) || 0);
-        rest -= ausReserviert;
-        if (ausPhysisch === 0 && ausReserviert === 0) continue;
-        await fetch(`${url}/rest/v1/site_stock?id=eq.${z.id}`, {
-          method: 'PATCH', headers,
-          body: JSON.stringify({ quantity: (Number(z.quantity) || 0) - ausPhysisch, reserved_quantity: (Number(z.reserved_quantity) || 0) - ausReserviert }),
-        });
-      }
-
-      ergebnisse.push({ inventory_id: pl.inventory_id, name: pl.name, unit: pl.unit, zurueck: pl.zurueck, verlust: pl.verlust });
     }
 
     if (ergebnisse.length === 0) {
