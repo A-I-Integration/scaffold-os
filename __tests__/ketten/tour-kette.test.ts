@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
-import { baueFakeRest, type Tabellen } from './fake-rest'
+import { type Tabellen } from './fake-rest'
+import { baueFakeRestMitLager } from './fake-lager'
 
 // ============================================================
 // Kettentest: Tour → Fahrer schließt Stopp ab → Lieferung wird verbucht / "nicht fertig geworden" → Folgetag
@@ -42,7 +43,7 @@ beforeEach(async () => {
     project_assignments: [],
     absences: [],
   }
-  vi.stubGlobal('fetch', baueFakeRest(db))
+  vi.stubGlobal('fetch', baueFakeRestMitLager(db))
   // Material für den Transport ist reserviert (wie beim Anlegen des Transportauftrags)
   const { bucheAusZentrallager } = await import('@/lib/inventory/buchung')
   await bucheAusZentrallager({ inventory_id: 'inv1', project_id: P1, quantity: 30, reason: 'test', reference_type: 'transport' })
