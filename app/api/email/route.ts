@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { requireAuth, unauthorizedResponse, serverErrorResponse, pruefeRolle } from '@/lib/auth';
 import { ROLLEN } from '@/lib/rollen';
+import { sichereAngebotToken } from '@/lib/angebot-link';
 
 export async function POST(req: Request) {
   const rollenPruefung = await pruefeRolle(ROLLEN.ADMIN_DISPO);
@@ -35,18 +36,7 @@ export async function POST(req: Request) {
     let projectUrl = `${appUrl}/aufmass/schritt6?id=${projectId}`;
     if (mailType === 'angebot' && projectId) {
       try {
-        const supaUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-        const supaKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
-        const supaHeaders = { 'Content-Type': 'application/json', apikey: supaKey, Authorization: `Bearer ${supaKey}` };
-        const getRes = await fetch(`${supaUrl}/rest/v1/project_access_tokens?project_id=eq.${projectId}&select=token`, { headers: supaHeaders });
-        let token = getRes.ok ? (await getRes.json())?.[0]?.token : null;
-        if (!token) {
-          const insRes = await fetch(`${supaUrl}/rest/v1/project_access_tokens`, {
-            method: 'POST', headers: { ...supaHeaders, Prefer: 'return=representation' },
-            body: JSON.stringify({ project_id: projectId }),
-          });
-          if (insRes.ok) token = (await insRes.json())?.[0]?.token;
-        }
+        const token = await sichereAngebotToken(projectId);
         if (token) projectUrl = `${appUrl}/angebot/${token}`;
       } catch { /* Fällt zurück auf die interne Seite, falls Token-Erzeugung fehlschlägt */ }
     }

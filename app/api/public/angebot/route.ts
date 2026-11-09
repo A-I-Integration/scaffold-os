@@ -2,6 +2,7 @@ import { NextRequest, NextResponse, after } from 'next/server';
 import { serverErrorResponse } from '@/lib/auth';
 import { beiAngebotsannahmeSicher } from '@/lib/angebot-annahme';
 import { notifyAngebotRueckmeldung } from '@/lib/notify';
+import { holeAngebotLink } from '@/lib/angebot-link';
 import { waehleCadAnsicht } from '@/lib/angebot-3d-ansicht';
 import { ANTWORT_ZU_STATUS, antwortErlaubt, pruefeRueckmeldung, verlaufMit } from '@/lib/angebot-rueckmeldung';
 
@@ -30,10 +31,8 @@ const headers = {
 const SINGLETON_ID = '00000000-0000-0000-0000-000000000001';
 
 async function projektZuToken(token: string) {
-  const tRes = await fetch(`${url}/rest/v1/project_access_tokens?token=eq.${encodeURIComponent(token)}&select=project_id`, { headers });
-  if (!tRes.ok) return null;
-  const tRows = await tRes.json();
-  return tRows?.[0]?.project_id || null;
+  const link = await holeAngebotLink(token);
+  return link && link.status === 'aktiv' ? link.projectId : null;
 }
 
 export async function GET(req: NextRequest) {
@@ -42,7 +41,7 @@ export async function GET(req: NextRequest) {
     if (!token) return NextResponse.json({ success: false, error: 'Kein Token angegeben.' }, { status: 400 });
 
     const projectId = await projektZuToken(token);
-    if (!projectId) return NextResponse.json({ success: false, error: 'Ungültiger oder abgelaufener Link.' }, { status: 404 });
+    if (!projectId) return NextResponse.json({ success: false, error: 'Dieser Link ist ungültig, abgelaufen oder wurde widerrufen. Bitte beim Absender ein neues Angebot anfordern.' }, { status: 404 });
 
     const [pRes, cRes] = await Promise.all([
       fetch(`${url}/rest/v1/projects?id=eq.${projectId}&select=id,name,adresse,data`, { headers }),
@@ -98,7 +97,7 @@ export async function POST(req: NextRequest) {
     if (!eingabe.ok) return NextResponse.json({ success: false, error: eingabe.fehler }, { status: 400 });
 
     const projectId = await projektZuToken(token);
-    if (!projectId) return NextResponse.json({ success: false, error: 'Ungültiger oder abgelaufener Link.' }, { status: 404 });
+    if (!projectId) return NextResponse.json({ success: false, error: 'Dieser Link ist ungültig, abgelaufen oder wurde widerrufen. Bitte beim Absender ein neues Angebot anfordern.' }, { status: 404 });
 
     const pRes = await fetch(`${url}/rest/v1/projects?id=eq.${projectId}&select=data`, { headers });
     if (!pRes.ok) throw new Error(await pRes.text());
