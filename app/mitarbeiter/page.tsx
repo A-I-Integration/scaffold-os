@@ -1,5 +1,6 @@
 'use client';
 
+import { zufallsPasswort } from '@/lib/passwort';
 import { useState, useEffect, useCallback } from 'react';
 
 // ============================================================
@@ -37,10 +38,7 @@ const ROLES = [
 ];
 
 function randomPassword(): string {
-  const chars = 'abcdefghjkmnpqrstuvwxyzABCDEFGHJKMNPQRSTUVWXYZ23456789';
-  let pw = '';
-  for (let i = 0; i < 10; i++) pw += chars[Math.floor(Math.random() * chars.length)];
-  return pw;
+  return zufallsPasswort(12);
 }
 
 export default function MitarbeiterPage() {
