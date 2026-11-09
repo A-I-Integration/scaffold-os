@@ -1,5 +1,6 @@
 'use client';
 
+import UmbuchenTab from '@/components/lager/UmbuchenTab';
 import { useState, useEffect, useCallback } from 'react';
 import AbbauDialog from '@/components/lager/AbbauDialog';
 import { abbauFaellig } from '@/lib/abbau-faellig';
@@ -20,7 +21,7 @@ import {
   TransportRecommendation,
 } from '@/types/inventory';
 
-type Tab = 'overview' | 'warehouse' | 'sites' | 'transports' | 'inventur';
+type Tab = 'overview' | 'warehouse' | 'sites' | 'transports' | 'inventur' | 'umbuchen';
 
 interface CountedItem {
   inventory_id: string;
@@ -330,6 +331,7 @@ export default function LagerPage() {
             <button onClick={() => setActiveTab('sites')} className={tabClass('sites')}>Baustellen</button>
             <button onClick={() => setActiveTab('transports')} className={tabClass('transports')}>Transporte</button>
             {canCount && <button onClick={() => setActiveTab('inventur')} className={tabClass('inventur')}>📋 Inventur</button>}
+            {canManage && <button onClick={() => setActiveTab('umbuchen')} className={tabClass('umbuchen')}>Umbuchen</button>}
           </nav>
         </div>
       </div>
@@ -590,6 +592,8 @@ export default function LagerPage() {
 
         {/* ═══════════════════════════════════════════════════════════ */}
         {/* INVENTUR */}
+        {activeTab === 'umbuchen' && canManage && <UmbuchenTab darfVerlust={userRole === 'admin' || userRole === 'disponent'} />}
+
         {activeTab === 'inventur' && canCount && (
           <div className="space-y-6">
             <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
