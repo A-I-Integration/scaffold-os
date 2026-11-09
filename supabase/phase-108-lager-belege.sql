@@ -305,6 +305,11 @@ create or replace view public.v_bestand_abgleich as
 with lager as (
   select b.inventory_id, sum(b.menge) filter (where l.typ in ('standort', 'lagerbereich', 'lagerplatz') and b.zustand = 'frei') as neu_lager_frei
   from public.bestand b join public.lagerorte l on l.id = b.lagerort_id group by b.inventory_id
+),
+-- site_stock kann je Artikel+Projekt mehrere Zeilen haben (kein Unique-Schlüssel) → zusammenzählen
+baustelle as (
+  select inventory_id, project_id, sum(quantity)::integer as quantity, sum(reserved_quantity)::integer as reserved_quantity
+  from public.site_stock group by inventory_id, project_id
 )
 select 'lager'::text as bereich, i.id as inventory_id, i.sku, null::uuid as project_id,
        i.quantity as alt_menge, coalesce(lager.neu_lager_frei, 0)::integer as neu_menge,
@@ -314,14 +319,14 @@ where i.quantity <> coalesce(lager.neu_lager_frei, 0)
 union all
 select 'baustelle_frei', s.inventory_id, i.sku, s.project_id, s.quantity,
        coalesce(b.menge, 0), s.quantity - coalesce(b.menge, 0)
-from public.site_stock s join public.inventory i on i.id = s.inventory_id
+from baustelle s join public.inventory i on i.id = s.inventory_id
 left join public.lagerorte l on l.typ = 'baustelle' and l.project_id = s.project_id
 left join public.bestand b on b.inventory_id = s.inventory_id and b.lagerort_id = l.id and b.zustand = 'frei'
 where s.quantity <> coalesce(b.menge, 0)
 union all
 select 'baustelle_reserviert', s.inventory_id, i.sku, s.project_id, s.reserved_quantity,
        coalesce(b.menge, 0), s.reserved_quantity - coalesce(b.menge, 0)
-from public.site_stock s join public.inventory i on i.id = s.inventory_id
+from baustelle s join public.inventory i on i.id = s.inventory_id
 left join public.lagerorte l on l.typ = 'baustelle' and l.project_id = s.project_id
 left join public.bestand b on b.inventory_id = s.inventory_id and b.lagerort_id = l.id and b.zustand = 'reserviert'
 where s.reserved_quantity <> coalesce(b.menge, 0);
