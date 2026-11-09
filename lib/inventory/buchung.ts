@@ -55,114 +55,91 @@ export interface BucheErgebnis {
  * gelassen: bei einem site_stock-Fehler wird der Bestand aus Schritt 2
  * zurueckgebucht.
  */
+// ------------------------------------------------------------
+// Neues Lager (Belegprinzip, phase-108/109): gebucht wird über buche_lager() – ein Beleg, eine Transaktion,
+// Zeilensperren, kein negativer Bestand. Die Altfelder inventory.quantity / site_stock führt die Datenbank selbst nach.
+// ------------------------------------------------------------
+
+const LAGER_TYPEN = ['standort', 'lagerbereich', 'lagerplatz'];
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+async function rpc(name: string, args: Record<string, unknown>): Promise<{ ok: boolean; daten?: unknown; meldung: string }> {
+  const res = await fetch(`${url}/rest/v1/rpc/${name}`, { method: 'POST', headers, body: JSON.stringify(args) });
+  const text = await res.text();
+  if (res.ok) { try { return { ok: true, daten: JSON.parse(text), meldung: '' }; } catch { return { ok: true, daten: text, meldung: '' }; } }
+  let meldung = text;
+  try { meldung = JSON.parse(text).message || text; } catch { /* kein JSON */ }
+  return { ok: false, meldung };
+}
+
+/** Freier Bestand eines Artikels in allen Lagern (Standort/Bereich/Platz), größte Mengen zuerst. */
+async function freierLagerbestand(inventory_id: string): Promise<{ lagerort_id: string; menge: number }[] | null> {
+  const [orteRes, bestRes] = await Promise.all([
+    fetch(`${url}/rest/v1/lagerorte?aktiv=eq.true&select=id,typ`, { headers }),
+    fetch(`${url}/rest/v1/bestand?inventory_id=eq.${inventory_id}&zustand=eq.frei&menge=gt.0&select=lagerort_id,menge`, { headers }),
+  ]);
+  if (!orteRes.ok || !bestRes.ok) return null;
+  const lager = new Set((await orteRes.json() as { id: string; typ: string }[]).filter((o) => LAGER_TYPEN.includes(o.typ)).map((o) => o.id));
+  const zeilen = (await bestRes.json() as { lagerort_id: string; menge: number }[]).filter((z) => lager.has(z.lagerort_id));
+  return zeilen.sort((a, b) => b.menge - a.menge);
+}
+
+/**
+ * Bucht `quantity` eines Lagerartikels aus dem Lager auf ein Projekt (Bewegungsart AU, "Ausgabe/Zuteilung"):
+ * Lager/frei → Lagerort der Baustelle/reserviert (physisch noch nicht da, bis eine Tour anliefert).
+ * Reicht der Bestand nicht, wird nichts gebucht. Reicht er in einem Lagerort nicht, wird auf mehrere Orte verteilt.
+ */
 export async function bucheAusZentrallager(p: BucheParams): Promise<BucheErgebnis> {
   const { inventory_id, project_id, quantity, reason, reference_type } = p;
   if (!inventory_id || !project_id) {
     return { success: false, error: 'inventory_id und project_id erforderlich.' };
   }
-  if (!(quantity > 0)) {
-    return { success: false, error: 'Menge muss größer als 0 sein.' };
+  if (!(quantity > 0) || !Number.isInteger(quantity)) {
+    return { success: false, error: 'Menge muss eine ganze Zahl größer als 0 sein.' };
   }
 
-  // 1. Bestand lesen
-  const getRes = await fetch(
-    `${url}/rest/v1/inventory?id=eq.${inventory_id}&select=id,name,unit,quantity`,
-    { headers }
-  );
+  const getRes = await fetch(`${url}/rest/v1/inventory?id=eq.${inventory_id}&select=id,name,unit,quantity`, { headers });
   if (!getRes.ok) return { success: false, error: 'Lagerartikel konnte nicht gelesen werden.' };
   const items = await getRes.json();
   if (!items.length) return { success: false, error: 'Lagerartikel nicht gefunden.' };
   const item = items[0];
 
-  if (quantity > item.quantity) {
-    return {
-      success: false,
-      error: `Nur ${item.quantity} ${item.unit || ''} verfügbar (angefragt: ${quantity}).`,
-      itemName: item.name,
-      unit: item.unit,
-    };
+  const quellen = await freierLagerbestand(inventory_id);
+  if (!quellen) return { success: false, error: 'Lagerbestand konnte nicht gelesen werden.' };
+  const verfuegbar = quellen.reduce((s, z) => s + z.menge, 0);
+  if (quantity > verfuegbar) {
+    return { success: false, error: `Nur ${verfuegbar} ${item.unit || ''} verfügbar (angefragt: ${quantity}).`, itemName: item.name, unit: item.unit };
   }
 
-  // 2. Atomarer Abzug: PATCH nur, wenn der Bestand seit dem Lesen oben
-  // unveraendert ist (quantity=eq.<gelesener Wert> als Filter macht
-  // das zur DB-seitig atomaren Bedingung, kein Lesen-dann-Schreiben-
-  // Wettlauf mehr moeglich).
-  const patchRes = await fetch(
-    `${url}/rest/v1/inventory?id=eq.${inventory_id}&quantity=eq.${item.quantity}`,
-    {
-      method: 'PATCH',
-      headers: { ...headers, Prefer: 'return=representation' },
-      body: JSON.stringify({ quantity: item.quantity - quantity }),
+  const ziel = await rpc('lagerort_fuer_projekt', { p_project: project_id });
+  if (!ziel.ok || typeof ziel.daten !== 'string') return { success: false, error: 'Lagerort der Baustelle konnte nicht bestimmt werden.' };
+
+  let rest = quantity;
+  const positionen: Record<string, unknown>[] = [];
+  for (const q of quellen) {
+    if (rest <= 0) break;
+    const nimm = Math.min(rest, q.menge);
+    positionen.push({ inventory_id, menge: nimm, von_lagerort: q.lagerort_id, von_zustand: 'frei', nach_lagerort: ziel.daten, nach_zustand: 'reserviert' });
+    rest -= nimm;
+  }
+
+  const gebucht = await rpc('buche_lager', {
+    p_bewegungsart: 'AU', p_positionen: positionen, p_project: project_id, p_bemerkung: reason, p_referenz_typ: reference_type,
+  });
+  if (!gebucht.ok) {
+    if (/Nicht genug Bestand/.test(gebucht.meldung)) {
+      return { success: false, error: 'Bestand wurde zwischenzeitlich von einer anderen Buchung geändert. Bitte erneut versuchen.' };
     }
-  );
-  if (!patchRes.ok) return { success: false, error: 'Bestand konnte nicht aktualisiert werden.' };
-  const patched = await patchRes.json();
-  if (!patched.length) {
-    return {
-      success: false,
-      error: 'Bestand wurde zwischenzeitlich von einer anderen Buchung geändert. Bitte erneut versuchen.',
-    };
+    return { success: false, error: 'Bestand konnte nicht gebucht werden.' };
   }
 
-  // 3. site_stock-Reservierung: je Baustelle und Artikel gibt es EINE Zeile.
-  // Existiert schon eine (ältere Daten können mehrere haben: die erste nehmen), wird die Reservierung dort erhöht,
-  // sonst wird eine angelegt. Dadurch bleibt der Baustellenbestand je Artikel an einer Stelle lesbar.
-  let stockOk = false;
-  const vorhanden = await fetch(
-    `${url}/rest/v1/site_stock?inventory_id=eq.${inventory_id}&project_id=eq.${project_id}&select=id,reserved_quantity&order=created_at.asc`,
-    { headers }
-  );
-  const zeilen: { id: string; reserved_quantity: number }[] = vorhanden.ok ? await vorhanden.json() : [];
-  if (vorhanden.ok && zeilen.length > 0) {
-    const z = zeilen[0];
-    const upd = await fetch(`${url}/rest/v1/site_stock?id=eq.${z.id}&reserved_quantity=eq.${z.reserved_quantity ?? 0}`, {
-      method: 'PATCH',
-      headers: { ...headers, Prefer: 'return=representation' },
-      body: JSON.stringify({ reserved_quantity: (z.reserved_quantity ?? 0) + quantity }),
-    });
-    stockOk = upd.ok && (await upd.json()).length > 0;
-  } else if (vorhanden.ok) {
-    const stockRes = await fetch(`${url}/rest/v1/site_stock`, {
-      method: 'POST',
-      headers: { ...headers, Prefer: 'return=representation' },
-      body: JSON.stringify({
-        inventory_id,
-        project_id,
-        quantity: 0, // physisch noch nicht auf der Baustelle
-        reserved_quantity: quantity,
-        min_stock: 0,
-        status: 'ok',
-      }),
-    });
-    stockOk = stockRes.ok;
-  }
-  if (!stockOk) {
-    // Bestand ist schon abgebucht (Schritt 2), site_stock schlug fehl:
-    // Rueckbuchung statt inkonsistentem Zustand.
-    await fetch(`${url}/rest/v1/inventory?id=eq.${inventory_id}`, {
-      method: 'PATCH',
-      headers,
-      body: JSON.stringify({ quantity: item.quantity }),
-    }).catch(() => {});
-    return { success: false, error: 'Reservierung konnte nicht angelegt werden, Buchung wurde rückgängig gemacht.' };
-  }
-
-  // 4. Audit-Log (best effort – ein Fehler hier macht die Buchung
-  // selbst nicht rueckgaengig, sie ist bereits korrekt/konsistent)
+  // Altes Protokoll (Berichte lesen es noch) – best effort, der Beleg ist die maßgebliche Buchung
   await fetch(`${url}/rest/v1/inventory_transactions`, {
-    method: 'POST',
-    headers,
-    body: JSON.stringify({
-      inventory_id,
-      project_id,
-      type: 'out',
-      quantity: -quantity,
-      reason,
-      reference_type,
-    }),
+    method: 'POST', headers,
+    body: JSON.stringify({ inventory_id, project_id, type: 'out', quantity: -quantity, reason, reference_type }),
   }).catch(() => {});
 
-  return { success: true, itemName: item.name, unit: item.unit, remaining: item.quantity - quantity };
+  return { success: true, itemName: item.name, unit: item.unit, remaining: verfuegbar - quantity };
 }
 
 /**
@@ -195,58 +172,44 @@ export async function bestaetigeAnlieferung(transportOrderId: string): Promise<B
   const order = orders[0];
 
   if (order.completed_at) {
-    // Bereits verbucht (z.B. Stopp wurde zweimal auf "completed" gesetzt) –
-    // nicht nochmal Bestand verschieben.
+    // Bereits verbucht (z.B. Stopp wurde zweimal auf "completed" gesetzt) – nicht nochmal Bestand verschieben.
     return { success: true };
   }
 
-  let offen = order.quantity as number;
-
-  const stockRes = await fetch(
-    `${url}/rest/v1/site_stock?inventory_id=eq.${order.inventory_id}&project_id=eq.${order.to_project_id}&reserved_quantity=gt.0&select=id,quantity,reserved_quantity&order=created_at.asc`,
-    { headers }
-  );
-  if (stockRes.ok) {
-    const rows: { id: string; quantity: number; reserved_quantity: number }[] = await stockRes.json();
-    for (const row of rows) {
-      if (offen <= 0) break;
-      const verschiebe = Math.min(offen, row.reserved_quantity);
-      if (verschiebe <= 0) continue;
-      await fetch(`${url}/rest/v1/site_stock?id=eq.${row.id}`, {
-        method: 'PATCH',
-        headers,
-        body: JSON.stringify({
-          quantity: row.quantity + verschiebe,
-          reserved_quantity: row.reserved_quantity - verschiebe,
-        }),
-      }).catch(() => {});
-      offen -= verschiebe;
+  // Bewegungsart AN: auf der Baustelle reserviert → frei (physisch da). Gebucht wird höchstens, was dort reserviert ist;
+  // fehlt eine Reservierung (z.B. von Hand korrigiert), gilt die Lieferung trotzdem als erfolgt (das Material ist real angekommen).
+  let gebucht = 0;
+  const ort = await rpc('lagerort_fuer_projekt', { p_project: order.to_project_id });
+  if (ort.ok && typeof ort.daten === 'string') {
+    const bRes = await fetch(
+      `${url}/rest/v1/bestand?inventory_id=eq.${order.inventory_id}&lagerort_id=eq.${ort.daten}&zustand=eq.reserviert&select=menge`,
+      { headers }
+    );
+    const reserviert = bRes.ok ? ((await bRes.json()) as { menge: number }[]).reduce((s, z) => s + z.menge, 0) : 0;
+    const menge = Math.min(order.quantity as number, reserviert);
+    if (menge > 0) {
+      const r = await rpc('buche_lager', {
+        p_bewegungsart: 'AN',
+        p_positionen: [{ inventory_id: order.inventory_id, menge, von_lagerort: ort.daten, von_zustand: 'reserviert', nach_lagerort: ort.daten, nach_zustand: 'frei' }],
+        p_project: order.to_project_id,
+        p_bemerkung: 'Anlieferung bestätigt (Tour-Stopp abgeschlossen)',
+        p_referenz_typ: 'transport_order',
+        p_referenz_id: UUID.test(transportOrderId) ? transportOrderId : null,
+      });
+      if (!r.ok) return { success: false, error: 'Anlieferung konnte nicht gebucht werden.' };
+      gebucht = menge;
     }
   }
-  // Bekannte Grenze: findet sich keine (ausreichende) reservierte
-  // site_stock-Zeile mehr (z.B. weil die Reservierung manuell im Lager-
-  // Bereich korrigiert wurde), bleibt "offen" > 0 – die Anlieferung wird
-  // trotzdem als abgeschlossen markiert (das Material ist real
-  // angekommen), aber ohne vollstaendige site_stock-Abbildung. Sichtbar
-  // ueber inventory_transactions und die completed_at-Markierung selbst.
 
   await fetch(`${url}/rest/v1/transport_orders?id=eq.${transportOrderId}`, {
-    method: 'PATCH',
-    headers,
-    body: JSON.stringify({ completed_at: new Date().toISOString() }),
+    method: 'PATCH', headers, body: JSON.stringify({ completed_at: new Date().toISOString() }),
   }).catch(() => {});
 
   await fetch(`${url}/rest/v1/inventory_transactions`, {
-    method: 'POST',
-    headers,
+    method: 'POST', headers,
     body: JSON.stringify({
-      inventory_id: order.inventory_id,
-      project_id: order.to_project_id,
-      type: 'in',
-      quantity: order.quantity - offen,
-      reason: 'Anlieferung bestätigt (Tour-Stopp abgeschlossen)',
-      reference_type: 'transport',
-      reference_id: transportOrderId,
+      inventory_id: order.inventory_id, project_id: order.to_project_id, type: 'in', quantity: gebucht,
+      reason: 'Anlieferung bestätigt (Tour-Stopp abgeschlossen)', reference_type: 'transport', reference_id: transportOrderId,
     }),
   }).catch(() => {});
 

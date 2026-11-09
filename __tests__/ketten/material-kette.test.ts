@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
-import { baueFakeRest, type Tabellen } from './fake-rest'
+import { type Tabellen } from './fake-rest'
+import { baueFakeRestMitLager } from './fake-lager'
 
 // ============================================================
 // Kettentest: Material reservieren → anliefern → zurückgeben
@@ -28,7 +29,7 @@ beforeEach(() => {
     inventory_transactions: [],
     transport_orders: [],
   }
-  vi.stubGlobal('fetch', baueFakeRest(db))
+  vi.stubGlobal('fetch', baueFakeRestMitLager(db))
 })
 
 const summeBaustelle = () => db.site_stock.reduce((s, z) => s + Number(z.quantity), 0)
@@ -65,6 +66,22 @@ describe('Kette Material: reservieren → anliefern → zurückgeben', () => {
     expect(db.inventory[0].quantity).toBe(100)
     expect(db.site_stock).toHaveLength(0)
     expect(db.inventory_transactions).toHaveLength(0)
+  })
+
+  it('Reservieren und Anliefern schreiben echte Belege (Ausgabe AU, Anlieferung AN)', async () => {
+    await reservieren(30)
+    await anliefern(30)
+    const arten = (db.materialbelege ?? []).map((b) => b.bewegungsart)
+    expect(arten).toEqual(['AU', 'AN'])
+    const au = (db.materialbelege![0].positionen as { von_zustand: string; nach_zustand: string; menge: number }[])[0]
+    expect([au.von_zustand, au.nach_zustand, au.menge]).toEqual(['frei', 'reserviert', 30])
+  })
+
+  it('Zu große Menge: kein Beleg, nichts verändert', async () => {
+    const r = await reservieren(101)
+    expect(r.success).toBe(false)
+    expect(r.error).toContain('Nur 100')
+    expect(db.materialbelege ?? []).toHaveLength(0)
   })
 
   it('Schritt 2 Anliefern: Reservierung wird physischer Bestand, Auftrag erledigt, Protokoll "in"', async () => {
