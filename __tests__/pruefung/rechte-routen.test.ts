@@ -123,6 +123,8 @@ const OHNE_BAULEITER = ['mitarbeiter', 'lager']
 
 /** [Route, Methode, Rollen, die abgewiesen werden müssen] */
 const VERBOTEN: [string, (typeof METHODEN)[number], string[]][] = [
+  ['materialmanager', 'GET', ['mitarbeiter']],
+  ['materialmanager', 'PUT', OHNE_BAULEITER],
   ['project-assignments', 'POST', OHNE_BAULEITER],
   ['project-assignments', 'DELETE', OHNE_BAULEITER],
   ['email-log', 'GET', BUERO],
