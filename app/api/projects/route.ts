@@ -151,6 +151,8 @@ export async function PATCH(req: NextRequest) {
     const customer_id = autosave ? undefined : body.customer_id;
     // Mitarbeiter/Lager: nie Angebot, Stückliste oder Preise schreiben – nur die Aufmaß-Schritte 1–5
     const data = autosave ? filtereAutosaveData(body.data) : schreibdatenFuerRolle(body.data, role) as Record<string, any>;
+    // Nachträge werden nur über /api/nachtraege geschrieben (Versionsprüfung). Ein veralteter Browser-Stand darf sie hier nie überschreiben.
+    if (data && typeof data === 'object' && 'nachtraege' in data) delete (data as Record<string, unknown>).nachtraege;
     if (autosave && Object.keys(data).length === 0) {
       return NextResponse.json({ success: false, error: 'Auto-Speichern: kein gültiger Schritt (step1–step5).' }, { status: 400 });
     }

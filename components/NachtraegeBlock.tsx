@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { Plus, FileText, Check, X, Trash2, Camera } from 'lucide-react';
 import {
   type Nachtrag, type NachtragStatus, NACHTRAG_STATUS_LABEL, nachtragNummer, normalisiereNachtraege,
-  neuerNachtrag, setzeNachtragStatus, setzeNachtragBetrag, nachtragBraeuchteBetrag, nachtragSummen, parseBetrag,
+  nachtragBraeuchteBetrag, nachtragSummen, parseBetrag,
   type NachtragArt, type RegieZeile, verlaengerungBetrag, regieBetrag, regieStunden, artFehlt,
 } from '@/lib/nachtrag';
 import { erzeugeNachtragPdf } from '@/lib/nachtrag-pdf';
@@ -65,18 +65,15 @@ export default function NachtraegeBlock({ project, kunde }: Props) {
 
   const summen = nachtragSummen(liste);
 
-  /** Frischen Stand lesen, ändern, zurückschreiben (verhindert, dass ein veralteter Stand Nachträge überschreibt). */
-  async function speichere(aendere: (aktuell: Nachtrag[]) => Nachtrag[]): Promise<Nachtrag[]> {
-    const gRes = await fetch(`/api/projects?id=${project.id}`);
-    const gJson = await gRes.json();
-    if (!gRes.ok || !gJson.success) throw new Error(gJson.error || 'Auftrag konnte nicht geladen werden');
-    const neu = aendere(normalisiereNachtraege(gJson.project?.data?.nachtraege));
-    const pRes = await fetch('/api/projects', {
-      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id: project.id, data: { nachtraege: neu } }),
+  /** Änderung läuft auf dem Server mit Versionsprüfung (gleichzeitige Änderungen anderer gehen nicht verloren). */
+  async function speichere(aenderung: Record<string, unknown>): Promise<Nachtrag[]> {
+    const pRes = await fetch('/api/nachtraege', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ project_id: project.id, aenderung }),
     });
     const pJson = await pRes.json().catch(() => ({}));
     if (!pRes.ok || pJson.success === false) throw new Error(pJson.error || 'Speichern fehlgeschlagen');
+    const neu = normalisiereNachtraege(pJson.nachtraege);
     setListe(neu);
     return neu;
   }
@@ -94,7 +91,7 @@ export default function NachtraegeBlock({ project, kunde }: Props) {
     try {
       const fotos = await ladeNachtragFotosHoch(dateien, project.id);
       const id = crypto.randomUUID();
-      await speichere((aktuell) => [...aktuell, neuerNachtrag(aktuell, { datum: form.datum || heute(), titel: form.titel, grund: form.grund, betrag, fotos, ...(art === 'verlaengerung' ? { art, verlaengerung } : art === 'regie' ? { art, regie: regieZeilen } : {}) }, id)]);
+      await speichere({ op: 'anlegen', id, datum: form.datum || heute(), titel: form.titel, grund: form.grund, betrag, fotos, ...(art === 'verlaengerung' ? { art, verlaengerung } : art === 'regie' ? { art, regie: regieZeilen } : {}) });
       setForm({ datum: heute(), titel: '', grund: '', betrag: '' });
       setArt(''); setVerl({ wochen: '', preis: '', bis: '' }); setRegie([{ bezeichnung: '', personen: '', stunden: '', satz: '' }]);
       setDateien([]); setOffen(false);
@@ -111,7 +108,7 @@ export default function NachtraegeBlock({ project, kunde }: Props) {
     const frage = neu === 'bestaetigt' ? `Nachtrag ${nachtragNummer(n)} als „vom Kunden bestätigt“ markieren?` : neu === 'abgelehnt' ? `Nachtrag ${nachtragNummer(n)} als „abgelehnt“ markieren?` : `Nachtrag ${nachtragNummer(n)} wieder auf „offen“ setzen?`;
     if (!window.confirm(frage)) return;
     setLaeuft(true); setMeldung(null);
-    try { await speichere((a) => setzeNachtragStatus(a, n.id, neu, heute())); }
+    try { await speichere({ op: 'status', id: n.id, status: neu }); }
     catch (e: any) { setMeldung({ ok: false, text: e?.message || 'Fehler' }); }
     finally { setLaeuft(false); }
   }
@@ -120,7 +117,7 @@ export default function NachtraegeBlock({ project, kunde }: Props) {
     const b = parseBetrag(betragEingabe[n.id] || '');
     if (!(b > 0)) { setMeldung({ ok: false, text: 'Bitte einen Betrag größer 0 eingeben.' }); return; }
     setLaeuft(true); setMeldung(null);
-    try { await speichere((a) => setzeNachtragBetrag(a, n.id, b)); setBetragEingabe((m) => ({ ...m, [n.id]: '' })); }
+    try { await speichere({ op: 'betrag', id: n.id, betrag: b }); setBetragEingabe((m) => ({ ...m, [n.id]: '' })); }
     catch (e: any) { setMeldung({ ok: false, text: e?.message || 'Fehler' }); }
     finally { setLaeuft(false); }
   }
@@ -129,7 +126,7 @@ export default function NachtraegeBlock({ project, kunde }: Props) {
     if (n.status !== 'offen') return;
     if (!window.confirm(`Offenen Nachtrag ${nachtragNummer(n)} wirklich löschen?`)) return;
     setLaeuft(true); setMeldung(null);
-    try { await speichere((a) => a.filter((x) => x.id !== n.id)); }
+    try { await speichere({ op: 'loeschen', id: n.id }); }
     catch (e: any) { setMeldung({ ok: false, text: e?.message || 'Fehler' }); }
     finally { setLaeuft(false); }
   }

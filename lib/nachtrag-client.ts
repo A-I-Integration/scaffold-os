@@ -3,7 +3,7 @@
 import { uploadVertragsdokument } from '@/lib/vertrag-upload-client';
 import { ladeBildVerkleinert } from '@/lib/aufmassblatt-fotos';
 import type { Nachtrag, NachtragFoto } from '@/lib/nachtrag';
-import { normalisiereNachtraege, neuerNachtrag } from '@/lib/nachtrag';
+import { normalisiereNachtraege } from '@/lib/nachtrag';
 
 // Browser-Helfer für Nachträge: Fotos verkleinern + hochladen, PDF am Projekt ablegen.
 
@@ -64,24 +64,22 @@ export async function legeNachtragPdfAmProjektAb(pdf: Blob, projectId: string, d
 
 /**
  * Meldung von der Baustelle (Meine Touren): legt einen offenen Nachtrag OHNE Betrag an.
- * Liest den frischen Stand, hängt an, schreibt zurück (wie NachtraegeBlock).
+ * Der Server hängt an die frisch gelesene Liste an (gleichzeitige Änderungen anderer gehen nicht verloren).
  */
 export async function legeNachtragVorOrtAn(
   projectId: string,
   eingabe: { titel: string; grund: string; dateien: File[] },
 ): Promise<Nachtrag> {
   const fotos = await ladeNachtragFotosHoch(eingabe.dateien, projectId);
-  const gRes = await fetch(`/api/projects?id=${projectId}`);
-  const gJson = await gRes.json();
-  if (!gRes.ok || !gJson.success) throw new Error(gJson.error || 'Auftrag konnte nicht geladen werden');
-  const aktuell = normalisiereNachtraege(gJson.project?.data?.nachtraege);
+  const id = crypto.randomUUID();
   const heute = new Date().toISOString().slice(0, 10);
-  const neu = neuerNachtrag(aktuell, { datum: heute, titel: eingabe.titel, grund: eingabe.grund, betrag: 0, fotos, vorOrt: true }, crypto.randomUUID());
-  const pRes = await fetch('/api/projects', {
-    method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ id: projectId, data: { nachtraege: [...aktuell, neu] } }),
+  const pRes = await fetch('/api/nachtraege', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ project_id: projectId, aenderung: { op: 'anlegen', id, datum: heute, titel: eingabe.titel, grund: eingabe.grund, betrag: 0, fotos, vorOrt: true } }),
   });
   const pJson = await pRes.json().catch(() => ({}));
   if (!pRes.ok || pJson.success === false) throw new Error(pJson.error || 'Speichern fehlgeschlagen');
+  const neu = normalisiereNachtraege(pJson.nachtraege).find((n) => n.id === id);
+  if (!neu) throw new Error('Speichern fehlgeschlagen');
   return neu;
 }
