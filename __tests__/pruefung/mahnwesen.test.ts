@@ -114,13 +114,42 @@ describe('Regeln des Versands', () => {
     expect(db.invoices[0].reminder_level).toBe(0)
     expect((await sende(1)).ok).toBe(true)
   })
-  it('Mail ging raus, Speichern schlug fehl: klare Warnung gegen Doppelversand', async () => {
+  it('Stand lässt sich nicht speichern: es wird NICHTS gesendet (erst sichern, dann senden)', async () => {
     const echt = fetch
     vi.stubGlobal('fetch', async (u: RequestInfo | URL, init?: RequestInit) =>
       init?.method === 'PATCH' ? new Response('boom', { status: 500 }) : echt(u, init))
     const r = await sende(1)
     expect(r).toMatchObject({ ok: false })
-    expect((r as { error: string }).error).toMatch(/nicht erneut senden/i)
+    expect((r as { error: string }).error).toMatch(/nichts gesendet/i)
+    expect(mail.send).not.toHaveBeenCalled()
+  })
+  it('zwei gleichzeitige Aufrufe (Cron-Wiederholung + Knopf): nur EINE Mahnung geht raus', async () => {
+    const [a, b] = await Promise.all([sende(1), sende(1)])
+    expect([a.ok, b.ok].sort()).toEqual([false, true])
+    expect(mail.send).toHaveBeenCalledTimes(1)
+    expect(db.invoices[0].reminder_level).toBe(1)
+  })
+  it('Stand hat sich zwischen Lesen und Sichern geändert (anderer Vorgang war schneller): nichts wird gesendet', async () => {
+    const zeile = { ...db.invoices[0] }
+    db.invoices[0].reminder_level = 1               // der andere Vorgang hat schon gemahnt
+    const { sendeMahnschritt } = await import('@/lib/mahnung-versand')
+    const r = await sendeMahnschritt(zeile as never, 1)
+    expect(r).toMatchObject({ ok: false })
+    expect(mail.send).not.toHaveBeenCalled()
+  })
+  it('Mail-Versand wirft eine Ausnahme: Stand wird zurückgesetzt', async () => {
+    mail.send.mockRejectedValueOnce(new Error('Netzwerk'))
+    expect((await sende(1)).ok).toBe(false)
+    expect(db.invoices[0]).toMatchObject({ reminder_level: 0, status: 'offen' })
+  })
+  it('Mail-Fehler und Zurücksetzen scheitert: laute Meldung statt stiller falscher Stand', async () => {
+    mail.send.mockResolvedValueOnce({ error: { message: 'down' } })
+    const echt = fetch
+    let patches = 0
+    vi.stubGlobal('fetch', async (u: RequestInfo | URL, init?: RequestInit) =>
+      init?.method === 'PATCH' && ++patches === 2 ? new Response('boom', { status: 500 }) : echt(u, init))
+    const r = await sende(1)
+    expect((r as { error: string }).error).toMatch(/Mahnstand von Hand prüfen/)
   })
 })
 

@@ -88,25 +88,45 @@ export async function sendeMahnschritt(
         <p style="margin: 8px 0 0;"><strong>Offener Betrag:</strong> ${eur(offenerBetrag(inv))} €</p></div>
       <p style="color: #64748b; font-size: 12px; margin-top: 30px;">Diese E-Mail wurde automatisch von SCAFFOLD OS versendet. Bei Fragen antworten Sie einfach auf diese E-Mail.</p></div>`
 
-    const { Resend } = await import('resend')
-    const { error } = await new Resend(process.env.RESEND_API_KEY).emails.send({
-      from: process.env.MAIL_FROM || 'SCAFFOLD OS <onboarding@resend.dev>',
-      to: [email], subject, html,
-      attachments: [{ filename: `${aktion === 'erinnerung' ? 'Zahlungserinnerung' : `${aktion}_Mahnung`}_${inv.invoice_number.replace(/\s+/g, '_')}.pdf`, content: pdf }],
-    })
-    if (error) return { ok: false, error: `E-Mail-Versand fehlgeschlagen: ${error.message}` }
+    // ERST den Stand sichern (mit Bedingung auf den bisherigen Stand), DANN senden. So kann eine Rechnung auch bei
+    // gleichzeitigen Aufrufen (Cron-Wiederholung, Knopf in der Übersicht) nur von EINEM Vorgang gemahnt werden.
+    const stufeAlt = Number(inv.reminder_level) || 0
+    const claim = aktion === 'erinnerung'
+      ? { filter: `id=eq.${inv.id}&reminder_level=eq.0&erinnerung_am=is.null&status=in.(offen,ueberfaellig)`, setze: { erinnerung_am: new Date().toISOString().slice(0, 10) }, zurueck: { erinnerung_am: null } }
+      : { filter: `id=eq.${inv.id}&reminder_level=eq.${stufeAlt}&status=in.(offen,ueberfaellig)`, setze: { status: 'ueberfaellig', reminder_level: aktion }, zurueck: { status: inv.status, reminder_level: stufeAlt } }
+    const cr = await fetch(`${url()}/rest/v1/invoices?${claim.filter}`, { method: 'PATCH', headers: { ...hdr(), Prefer: 'return=representation' }, body: JSON.stringify(claim.setze) })
+    if (!cr.ok) return { ok: false, error: 'Der Stand der Rechnung konnte nicht gespeichert werden, es wurde nichts gesendet. Bitte die SQL für das Mahnwesen prüfen.' }
+    const geclaimt = await cr.json().catch(() => [])
+    if (!Array.isArray(geclaimt) || geclaimt.length === 0) return { ok: false, error: 'Diese Rechnung wurde gerade von einem anderen Vorgang gemahnt, bezahlt oder geändert. Es wurde nichts gesendet.' }
+
+    // Schlägt der Versand fehl, den alten Stand wiederherstellen, damit die Mahnung später erneut möglich ist.
+    const zuruecksetzen = async (grund: string): Promise<VersandErgebnis> => {
+      try {
+        const rr = await fetch(`${url()}/rest/v1/invoices?id=eq.${inv.id}`, { method: 'PATCH', headers: hdr(), body: JSON.stringify(claim.zurueck) })
+        if (rr.ok) return { ok: false, error: grund }
+      } catch { /* unten gemeldet */ }
+      return { ok: false, error: `${grund} Außerdem konnte der Stand nicht zurückgesetzt werden: Die Rechnung gilt jetzt als gemahnt, obwohl nichts gesendet wurde. Bitte den Mahnstand von Hand prüfen.` }
+    }
+
+    let sendefehler: string | null = null
+    try {
+      const { Resend } = await import('resend')
+      const { error } = await new Resend(process.env.RESEND_API_KEY).emails.send({
+        from: process.env.MAIL_FROM || 'SCAFFOLD OS <onboarding@resend.dev>',
+        to: [email], subject, html,
+        attachments: [{ filename: `${aktion === 'erinnerung' ? 'Zahlungserinnerung' : `${aktion}_Mahnung`}_${inv.invoice_number.replace(/\s+/g, '_')}.pdf`, content: pdf }],
+      })
+      if (error) sendefehler = `E-Mail-Versand fehlgeschlagen: ${error.message}`
+    } catch (e) {
+      console.error('[mahnung-versand] Versand', e)
+      sendefehler = 'E-Mail-Versand fehlgeschlagen.'
+    }
+    if (sendefehler) return zuruecksetzen(sendefehler)
 
     // Protokoll (Versand ist raus, deshalb best effort)
     try {
       await fetch(`${url()}/rest/v1/email_log`, { method: 'POST', headers: { ...hdr(), Prefer: 'return=minimal' }, body: JSON.stringify({ invoice_number: inv.invoice_number, type: 'mahnung', to_email: email, subject }) })
     } catch { /* Protokoll optional */ }
-
-    // Stand speichern. Schlägt das fehl, wäre die Mail trotzdem raus – dann Fehler melden, damit nicht doppelt gesendet wird.
-    const patch = aktion === 'erinnerung'
-      ? { erinnerung_am: new Date().toISOString().slice(0, 10) }
-      : { status: 'ueberfaellig', reminder_level: aktion }
-    const pr = await fetch(`${url()}/rest/v1/invoices?id=eq.${inv.id}`, { method: 'PATCH', headers: hdr(), body: JSON.stringify(patch) })
-    if (!pr.ok) return { ok: false, error: `Gesendet an ${email}, aber der Stand konnte nicht gespeichert werden. Bitte nicht erneut senden und die SQL für das Mahnwesen prüfen.` }
     return { ok: true, an: email, nummer: inv.invoice_number }
   } catch (e) {
     console.error('[mahnung-versand]', e)

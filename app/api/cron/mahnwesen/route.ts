@@ -40,38 +40,53 @@ export async function GET(req: NextRequest) {
   const cronFehler = pruefeCronAufruf(req);
   if (cronFehler) return cronFehler;
 
-  const ergebnis = { versendet: [] as string[], ohne_email: [] as string[], fehler: [] as string[], uebersprungen: 0 };
+  const ergebnis = { versendet: [] as string[], ohne_email: [] as string[], fehler: [] as string[], uebersprungen: 0, abgebrochen: false };
 
   // Verzugszinssatz, Mahnpauschale und (optional) Tage bis zur Zahlungserinnerung aus den Firmeneinstellungen
   const cfg = await ladeMahnEinstellungen();
 
+  // Zeitbudget: Die Funktion läuft höchstens maxDuration Sekunden. Was nicht mehr geschafft wird, bleibt offen und kommt
+  // beim nächsten täglichen Lauf dran (der Stand wird je Rechnung gespeichert).
+  const ende = Date.now() + (maxDuration - 20) * 1000;
+  const SEITE = 500;
+
   try {
-    // Offen UND bereits als überfällig markiert: nach der 1. Mahnung steht die Rechnung auf "ueberfaellig",
-    // die 2. Mahnung muss sie trotzdem noch erreichen.
-    const res = await fetch(
-      `${url}/rest/v1/invoices?status=in.(offen,ueberfaellig)&invoice_type=neq.gutschrift&select=*`,
-      { headers }
-    );
-    if (!res.ok) throw new Error(await res.text());
-    const invoices: Invoice[] = await res.json();
+    // Seitenweise nach id: PostgREST liefert je Anfrage höchstens 1000 Zeilen (Standard). Ohne Seiten würden bei mehr
+    // offenen Rechnungen die übrigen nie gemahnt.
+    let letzteId = '';
+    seiten: for (;;) {
+      // Offen UND bereits als überfällig markiert: nach der 1. Mahnung steht die Rechnung auf "ueberfaellig",
+      // die 2. Mahnung muss sie trotzdem noch erreichen.
+      const res = await fetch(
+        `${url}/rest/v1/invoices?status=in.(offen,ueberfaellig)&invoice_type=neq.gutschrift&select=*&order=id.asc&limit=${SEITE}${letzteId ? `&id=gt.${letzteId}` : ''}`,
+        { headers }
+      );
+      if (!res.ok) throw new Error(await res.text());
+      const invoices: Invoice[] = await res.json();
+      if (invoices.length === 0) break;
 
-    for (const inv of invoices) {
-      if (!inv.due_date) { ergebnis.uebersprungen++; continue; }
-      const aktion = naechsteAutoAktion({
-        tageUeberfaellig: tageUeberfaellig(inv.due_date),
-        stufe: Number(inv.reminder_level) || 0,
-        erinnerungAm: (inv as any).erinnerung_am,
-        pausiert: (inv as any).mahnung_pausiert,
-        // Ohne die Datenbank-Spalte kann der Versand nicht vermerkt werden, daher dann keine Erinnerung
-        erinnerungTage: 'erinnerung_am' in (inv as object) ? cfg.erinnerungTage : null,
-      });
-      if (!aktion) { ergebnis.uebersprungen++; continue; }
+      for (const inv of invoices) {
+        if (Date.now() > ende) { ergebnis.abgebrochen = true; break seiten; }
+        if (!inv.due_date) { ergebnis.uebersprungen++; continue; }
+        const aktion = naechsteAutoAktion({
+          tageUeberfaellig: tageUeberfaellig(inv.due_date),
+          stufe: Number(inv.reminder_level) || 0,
+          erinnerungAm: (inv as any).erinnerung_am,
+          pausiert: (inv as any).mahnung_pausiert,
+          // Ohne die Datenbank-Spalte kann der Versand nicht vermerkt werden, daher dann keine Erinnerung
+          erinnerungTage: 'erinnerung_am' in (inv as object) ? cfg.erinnerungTage : null,
+        });
+        if (!aktion) { ergebnis.uebersprungen++; continue; }
 
-      const e = await sendeMahnschritt(inv, aktion, cfg);
-      const name = `${inv.invoice_number} (${AKTION_LABEL[String(aktion)]})`;
-      if (e.ok) ergebnis.versendet.push(name);
-      else if (e.ohneEmail) ergebnis.ohne_email.push(inv.invoice_number);
-      else ergebnis.fehler.push(`${inv.invoice_number}: ${e.error}`);
+        const e = await sendeMahnschritt(inv, aktion, cfg);
+        const name = `${inv.invoice_number} (${AKTION_LABEL[String(aktion)]})`;
+        if (e.ok) ergebnis.versendet.push(name);
+        else if (e.ohneEmail) ergebnis.ohne_email.push(inv.invoice_number);
+        else ergebnis.fehler.push(`${inv.invoice_number}: ${e.error}`);
+      }
+
+      if (invoices.length < SEITE) break;
+      letzteId = String(invoices[invoices.length - 1].id);
     }
 
     return NextResponse.json({ success: true, ...ergebnis });
