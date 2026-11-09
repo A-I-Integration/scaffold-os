@@ -125,11 +125,19 @@ export async function GET(req: NextRequest) {
           }),
         });
         if (!insRes.ok) throw new Error(await insRes.text());
+        const angelegt = (await insRes.json())?.[0];
 
-        await fetch(`${url}/rest/v1/projects?id=eq.${p.id}`, {
+        // Merker "bis wann abgerechnet" speichern. Gelingt das nicht, würde der nächste Lauf dieselben Wochen erneut berechnen.
+        // Dann wird die gerade angelegte (nie versendete) Rechnung zurückgenommen, statt eine Doppelabrechnung zu riskieren.
+        const merkRes = await fetch(`${url}/rest/v1/projects?id=eq.${p.id}`, {
           method: 'PATCH', headers,
           body: JSON.stringify({ data: { ...p.data, mietAbgerechnetBis: neuAbgerechnetBis } }),
         });
+        if (!merkRes.ok) {
+          const grund = await merkRes.text();
+          if (angelegt?.id) await fetch(`${url}/rest/v1/invoices?id=eq.${angelegt.id}`, { method: 'DELETE', headers });
+          throw new Error(`Rechnung ${invoiceNumber} zurückgenommen, weil der Abrechnungsstand nicht gespeichert werden konnte (${grund})`);
+        }
 
         ergebnis.erstellt.push(`${invoiceNumber} (${p.name}, ${wochen} Wo.)`);
       } catch (err: any) {
