@@ -4,6 +4,8 @@
 // Alle Preise netto.
 // ============================================================
 
+import { zahlAusEingabeStreng } from '@/lib/zahl-eingabe'
+
 export type AbrechnungArt = 'grundpreis' | 'aufpreis'
 
 export interface AbrechnungEintrag {
@@ -23,7 +25,7 @@ export function pruefeAbrechnungEintrag(e: { art?: unknown; name?: unknown; prei
   if (e.art !== 'grundpreis' && e.art !== 'aufpreis') return 'Art muss „grundpreis“ oder „aufpreis“ sein.'
   if (typeof e.name !== 'string' || e.name.trim().length === 0) return 'Bezeichnung fehlt.'
   if (e.name.trim().length > 120) return 'Bezeichnung ist zu lang (höchstens 120 Zeichen).'
-  const p = typeof e.preis_m2 === 'string' ? parseFloat(e.preis_m2.replace(',', '.')) : e.preis_m2
+  const p = typeof e.preis_m2 === 'string' ? zahlAusEingabeStreng(e.preis_m2) : e.preis_m2
   if (typeof p !== 'number' || !Number.isFinite(p)) return 'Preis je m² fehlt oder ist keine Zahl.'
   if (p < 0 || p > MAX_PREIS_M2) return `Preis je m² muss zwischen 0 und ${MAX_PREIS_M2} € liegen.`
   return null
