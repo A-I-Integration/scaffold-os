@@ -15,6 +15,8 @@ export const ROLLEN = {
   ADMIN_DISPO_BAULEITER: ['admin', 'disponent', 'bauleiter'],
   /** Alle eingeloggten Betriebsrollen (ohne externe Statiker) */
   ALLE: ['admin', 'disponent', 'bauleiter', 'mitarbeiter', 'lager'],
+  /** Dürfen Artikelpreise (Stückpreis im Artikelstamm) sehen: alle anderen sehen die Artikel ohne Preis */
+  ARTIKELPREISE: ['admin', 'disponent', 'lager'],
   /** Lager-Bereich */
   LAGER: ['admin', 'disponent', 'bauleiter', 'lager'],
 } as const satisfies Record<string, readonly string[]>;
