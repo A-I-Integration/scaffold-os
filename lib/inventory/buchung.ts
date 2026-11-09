@@ -63,7 +63,7 @@ export interface BucheErgebnis {
 const LAGER_TYPEN = ['standort', 'lagerbereich', 'lagerplatz'];
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-async function rpc(name: string, args: Record<string, unknown>): Promise<{ ok: boolean; daten?: unknown; meldung: string }> {
+export async function rpc(name: string, args: Record<string, unknown>): Promise<{ ok: boolean; daten?: unknown; meldung: string }> {
   const res = await fetch(`${url}/rest/v1/rpc/${name}`, { method: 'POST', headers, body: JSON.stringify(args) });
   const text = await res.text();
   if (res.ok) { try { return { ok: true, daten: JSON.parse(text), meldung: '' }; } catch { return { ok: true, daten: text, meldung: '' }; } }
@@ -72,8 +72,16 @@ async function rpc(name: string, args: Record<string, unknown>): Promise<{ ok: b
   return { ok: false, meldung };
 }
 
+/** Lagerort "Hauptlager" (Ziel für Rücknahmen und Mehrbestände). */
+export async function hauptlagerId(): Promise<string | null> {
+  const r = await fetch(`${url}/rest/v1/lagerorte?schluessel=eq.HAUPTLAGER&select=id`, { headers });
+  if (!r.ok) return null;
+  const z = await r.json();
+  return z[0]?.id ?? null;
+}
+
 /** Freier Bestand eines Artikels in allen Lagern (Standort/Bereich/Platz), größte Mengen zuerst. */
-async function freierLagerbestand(inventory_id: string): Promise<{ lagerort_id: string; menge: number }[] | null> {
+export async function freierLagerbestand(inventory_id: string): Promise<{ lagerort_id: string; menge: number }[] | null> {
   const [orteRes, bestRes] = await Promise.all([
     fetch(`${url}/rest/v1/lagerorte?aktiv=eq.true&select=id,typ`, { headers }),
     fetch(`${url}/rest/v1/bestand?inventory_id=eq.${inventory_id}&zustand=eq.frei&menge=gt.0&select=lagerort_id,menge`, { headers }),

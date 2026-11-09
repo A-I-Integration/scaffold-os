@@ -9,7 +9,7 @@ export function baueFakeRestMitLager(daten: Tabellen) {
   const basis = baueFakeRest(daten)
   const HAUPT = 'ort-haupt'
   const bestand = new Map<string, number>() // `${inv}|${ort}|${zustand}`
-  const orte: { id: string; typ: string; project_id?: string }[] = [{ id: HAUPT, typ: 'standort' }]
+  const orte: { id: string; typ: string; schluessel?: string; project_id?: string }[] = [{ id: HAUPT, typ: 'standort', schluessel: 'HAUPTLAGER' }]
   const k = (i: string, o: string, z: string) => `${i}|${o}|${z}`
   const ortFuer = (p: string) => {
     let o = orte.find((x) => x.project_id === p)
@@ -44,11 +44,14 @@ export function baueFakeRestMitLager(daten: Tabellen) {
   }
 
   const json = (b: unknown, status = 200) => new Response(JSON.stringify(b), { status, headers: { 'Content-Type': 'application/json' } })
-  return async (eingabe: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
+  const handler = async (eingabe: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
     const u = new URL(String(eingabe))
     const pfad = u.pathname.split('/rest/v1/')[1]
     const methode = (init?.method ?? 'GET').toUpperCase()
-    if (pfad === 'lagerorte' && methode === 'GET') return json(orte.map((o) => ({ id: o.id, typ: o.typ })))
+    if (pfad === 'lagerorte' && methode === 'GET') {
+      const sk = u.searchParams.get('schluessel')?.replace(/^eq\./, '')
+      return json(orte.filter((o) => !sk || o.schluessel === sk).map((o) => ({ id: o.id, typ: o.typ })))
+    }
     if (pfad === 'bestand' && methode === 'GET') {
       const f = (n: string) => u.searchParams.get(n)?.replace(/^eq\./, '')
       const rows = [...bestand.entries()].map(([key, menge]) => { const [inventory_id, lagerort_id, zustand] = key.split('|'); return { inventory_id, lagerort_id, zustand, menge } })
@@ -74,6 +77,14 @@ export function baueFakeRestMitLager(daten: Tabellen) {
       ;(daten.materialbelege = daten.materialbelege ?? []).push({ bewegungsart: a.p_bewegungsart, project_id: a.p_project, positionen: pos, referenz_typ: a.p_referenz_typ })
       return json('beleg-' + daten.materialbelege.length)
     }
+    if (pfad === 'rpc/storniere_lager') {
+      const a = JSON.parse(String(init?.body))
+      const b = (daten.materialbelege ?? [])[Number(String(a.p_beleg).replace('beleg-', '')) - 1]
+      if (!b) return json({ message: 'Beleg nicht gefunden.' }, 400)
+      const umgekehrt = (b.positionen as Pos[]).map((p) => ({ inventory_id: p.inventory_id, menge: p.menge, von_lagerort: p.nach_lagerort, von_zustand: p.nach_zustand, nach_lagerort: p.von_lagerort, nach_zustand: p.von_zustand }))
+      return handler('http://x/rest/v1/rpc/buche_lager', { method: 'POST', body: JSON.stringify({ p_bewegungsart: 'ST', p_positionen: umgekehrt, p_project: b.project_id }) })
+    }
     return basis(eingabe, init)
   }
+  return handler
 }

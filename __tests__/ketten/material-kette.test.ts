@@ -144,4 +144,49 @@ describe('Kette Material: reservieren → anliefern → zurückgeben', () => {
     expect(res.status).toBe(400)
     expect(db.inventory[0].quantity).toBe(70)
   })
+
+  it('Rückgabe schreibt Belege: Rücknahme RN (zurück) und Verlust VL (fehlt/beschädigt)', async () => {
+    await reservieren(30); await anliefern(30)
+    await zurueckgeben(20, 10)
+    const arten = (db.materialbelege ?? []).map((b) => b.bewegungsart)
+    expect(arten).toEqual(['AU', 'AN', 'RN', 'VL'])
+    expect(db.inventory[0].quantity).toBe(90)
+  })
+
+  it('Rückgabe reservierten, noch nicht angelieferten Materials nimmt aus "reserviert"', async () => {
+    await reservieren(30)
+    await zurueckgeben(30, 0)
+    const rn = db.materialbelege!.find((b) => b.bewegungsart === 'RN')!
+    expect((rn.positionen as { von_zustand: string }[])[0].von_zustand).toBe('reserviert')
+    expect(db.inventory[0].quantity).toBe(100)
+  })
+})
+
+async function inventur(gezaehlt: number) {
+  const { POST } = await import('@/app/api/inventory/count/route')
+  return POST(new Request('http://x/api/inventory/count', { method: 'POST', body: JSON.stringify({ inventory_id: 'inv1', counted_quantity: gezaehlt }) }) as never)
+}
+
+describe('Inventur über Belege', () => {
+  it('Mehrbestand wird als IP ins Hauptlager gebucht', async () => {
+    const r = await inventur(104)
+    expect((await r.json()).difference).toBe(4)
+    expect(db.materialbelege!.map((b) => b.bewegungsart)).toEqual(['IP'])
+    expect(db.inventory[0].quantity).toBe(104)
+  })
+  it('Fehlbestand wird als IM gebucht', async () => {
+    const r = await inventur(95)
+    expect((await r.json()).difference).toBe(-5)
+    expect(db.materialbelege!.map((b) => b.bewegungsart)).toEqual(['IM'])
+    expect(db.inventory[0].quantity).toBe(95)
+  })
+  it('Stimmt der Bestand, wird kein Beleg gebucht', async () => {
+    await inventur(100)
+    expect(db.materialbelege ?? []).toHaveLength(0)
+  })
+  it('lehnt negative und gebrochene Zählwerte ab', async () => {
+    expect((await inventur(-1)).status).toBe(400)
+    expect((await inventur(2.5)).status).toBe(400)
+    expect(db.materialbelege ?? []).toHaveLength(0)
+  })
 })
