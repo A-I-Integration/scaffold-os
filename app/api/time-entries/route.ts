@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { computeNetHours } from '@/lib/worktime';
-import { requireAuth, unauthorizedResponse, serverErrorResponse, requireOwnEmployeeOrAdmin, forbiddenResponse, pruefeRolle } from '@/lib/auth';
+import { serverErrorResponse, requireOwnEmployeeOrAdmin, forbiddenResponse, pruefeRolle } from '@/lib/auth';
 import { ROLLEN } from '@/lib/rollen';
 import { pruefeZeitFelder } from '@/lib/zeit-validierung';
 
@@ -9,7 +9,7 @@ import { pruefeZeitFelder } from '@/lib/zeit-validierung';
 //
 // NEU (Zeiterfassung-Feinschliff, Nr. 6):
 //   • Beim Ausstempeln wird jetzt die automatische Pause
-//     abgezogen (30 min ab 6 h, 45 min ab 9 h – lib/worktime.ts)
+//     abgezogen (30 min bei mehr als 6 h, 45 min bei mehr als 9 h – lib/worktime.ts)
 //     und in break_minutes gespeichert.
 //   • PUT akzeptiert zusätzlich start_time, work_date und
 //     break_minutes (für Korrekturen durch Admin/Dispo).
@@ -57,10 +57,16 @@ export async function GET(req: Request) {
 // Einstempeln: { employee_id, tour_id?, project_id?, note? } → start_time = jetzt
 // Manuell:     { employee_id, work_date, hours, break_minutes?, note? }
 export async function POST(req: Request) {
-  if (!(await requireAuth())) return unauthorizedResponse();
+  const rolle = await pruefeRolle(ROLLEN.ALLE);
+  if (!rolle.ok) return rolle.response;
+  const buero = ROLLEN.ADMIN_DISPO.includes(rolle.role as never);
   try {
     const body = await req.json();
     const { employee_id, work_date, hours, break_minutes, tour_id, project_id, note } = body;
+    // Eigene Zeiten selbst eintragen/ändern dürfen nur Admin und Disposition. Alle anderen können nur einstempeln (Zeit = jetzt).
+    if (!buero && (hours !== undefined || break_minutes !== undefined || work_date !== undefined)) {
+      return forbiddenResponse('Zeiten nachtragen dürfen nur Admin und Disposition. Du kannst nur ein- und ausstempeln.');
+    }
 
     if (!employee_id) {
       return NextResponse.json({ success: false, error: 'employee_id erforderlich' }, { status: 400 });
@@ -112,10 +118,16 @@ export async function POST(req: Request) {
 // Start + Ende bekannt sind (aus Update oder Bestand), werden Pause
 // (30/45-Regel) und Netto-Stunden automatisch gesetzt.
 export async function PUT(req: Request) {
-  if (!(await requireAuth())) return unauthorizedResponse();
+  const rolle = await pruefeRolle(ROLLEN.ALLE);
+  if (!rolle.ok) return rolle.response;
+  const buero = ROLLEN.ADMIN_DISPO.includes(rolle.role as never);
   try {
     const body = await req.json();
     const { id, start_time, end_time, work_date, hours, break_minutes, note } = body;
+    // Alle außer Admin/Disposition dürfen nur ausstempeln: nichts anderes ändern (Start, Datum, Stunden, Pause, Notiz).
+    if (!buero && (start_time !== undefined || work_date !== undefined || hours !== undefined || break_minutes !== undefined || note !== undefined)) {
+      return forbiddenResponse('Zeiten ändern dürfen nur Admin und Disposition. Du kannst nur ausstempeln.');
+    }
 
     if (!id) {
       return NextResponse.json({ success: false, error: 'id erforderlich' }, { status: 400 });
@@ -134,12 +146,19 @@ export async function PUT(req: Request) {
     }
     const auth = await requireOwnEmployeeOrAdmin(ownerRows[0].employee_id);
     if (!auth.allowed) return forbiddenResponse(auth.error);
+    if (!buero) {
+      // Nur ein noch offener Eintrag kann ausgestempelt werden; die Endzeit setzt der Server (jetzt), nicht der Browser.
+      const offen = await fetch(`${url}/rest/v1/time_entries?id=eq.${id}&select=end_time`, { headers });
+      if (!offen.ok) throw new Error(await offen.text());
+      if ((await offen.json())?.[0]?.end_time) return forbiddenResponse('Dieser Eintrag ist schon abgeschlossen. Änderungen nur durch Admin oder Disposition.');
+      body.end_time = new Date().toISOString();
+    }
 
     const updates: any = { updated_at: new Date().toISOString() };
     if (note !== undefined) updates.note = note;
     if (work_date) updates.work_date = work_date;
     if (start_time) updates.start_time = start_time;
-    if (end_time) updates.end_time = end_time;
+    if (body.end_time) updates.end_time = body.end_time;
 
     if (hours !== undefined && hours !== null) {
       // Manuelle (Netto-)Stunden → keine Auto-Berechnung
@@ -147,7 +166,7 @@ export async function PUT(req: Request) {
       if (break_minutes !== undefined && break_minutes !== null) {
         updates.break_minutes = break_minutes;
       }
-    } else if (start_time || end_time) {
+    } else if (start_time || body.end_time) {
       // Start/Ende geändert oder Ausstempeln → Pause + Netto automatisch
       const existing = await fetch(
         `${url}/rest/v1/time_entries?id=eq.${id}&select=start_time,end_time`,
@@ -156,7 +175,7 @@ export async function PUT(req: Request) {
       if (existing.ok) {
         const rows = await existing.json();
         const finalStart = start_time || rows?.[0]?.start_time;
-        const finalEnd = end_time || rows?.[0]?.end_time;
+        const finalEnd = body.end_time || rows?.[0]?.end_time;
         if (finalStart && finalEnd) {
           const net = computeNetHours(finalStart, finalEnd);
           if (net) {

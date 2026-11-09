@@ -6,16 +6,17 @@
 // /api/zeiterfassung (Korrektur/Nachtragen) genutzt.
 //
 // Regel (gesetzliches Standardmodell, ArbZG § 4):
-//   ab 6 h brutto → 30 min Pause
-//   ab 9 h brutto → 45 min Pause
+//   mehr als 6 h brutto → 30 min Pause
+//   mehr als 9 h brutto → 45 min Pause
+// (genau 6:00 bzw. 9:00 Stunden lösen die nächste Stufe noch nicht aus)
 // ============================================================
 
-export const BREAK_RULE_TEXT = '30 min ab 6 h, 45 min ab 9 h';
+export const BREAK_RULE_TEXT = '30 min bei mehr als 6 h, 45 min bei mehr als 9 h';
 
 export function autoBreakMinutes(grossMs: number): number {
   const grossHours = grossMs / 3600000;
-  if (grossHours >= 9) return 45;
-  if (grossHours >= 6) return 30;
+  if (grossHours > 9) return 45;
+  if (grossHours > 6) return 30;
   return 0;
 }
 
