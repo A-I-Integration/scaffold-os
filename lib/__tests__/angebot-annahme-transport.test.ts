@@ -21,6 +21,7 @@ function installiereFetch(transport: () => Promise<Antwort>) {
     const u = String(input)
     const methode = init?.method ?? 'GET'
     if (u.includes('/rest/v1/transport_orders') && methode === 'POST') return transport()
+    if (u.includes('/rest/v1/inventory_transactions')) return antwort([]) // noch nichts reserviert
     if (u.includes('/rest/v1/inventory')) return antwort(LAGER)
     if (u.includes('/rest/v1/projects') && methode === 'GET') return antwort(u.includes('select=name,adresse,data') ? PROJEKT : [{ data: {} }])
     if (u.includes('/rest/v1/projects') && methode === 'PATCH') { gespeichert.push(JSON.parse(String(init?.body))); return antwort([]) }
