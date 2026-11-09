@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
 import { entschluesseln } from '@/lib/email-crypto';
 import { ImapFlow } from 'imapflow';
 import { simpleParser } from 'mailparser';
-import { serverErrorResponse } from '@/lib/auth';
+import { serverErrorResponse, pruefeRolle } from '@/lib/auth';
+import { ROLLEN } from '@/lib/rollen';
 
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const key = process.env.SUPABASE_SERVICE_ROLE_KEY!;
@@ -16,10 +16,11 @@ const headers = { 'Content-Type': 'application/json', apikey: key, Authorization
 // Historie für diesen Kunden zurück – nicht nur den aktuellen IMAP-Stand.
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
+  // Postfächer und Kundenkorrespondenz: nur Büro (wie der Mail-Versand)
+  const rolle = await pruefeRolle(ROLLEN.ADMIN_DISPO);
+  if (!rolle.ok) return rolle.response;
   try {
-    const supabase = await createClient();
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return NextResponse.json({ success: false, error: 'Nicht eingeloggt' }, { status: 401 });
+    const user = { id: rolle.userId };
 
     const kundeRes = await fetch(`${url}/rest/v1/customers?id=eq.${id}&select=email`, { headers });
     if (!kundeRes.ok) throw new Error(await kundeRes.text());

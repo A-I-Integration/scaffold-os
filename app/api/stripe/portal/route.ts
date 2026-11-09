@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import Stripe from 'stripe';
-import { requireAuth, unauthorizedResponse, serverErrorResponse } from '@/lib/auth';
+import { pruefeRolle, serverErrorResponse } from '@/lib/auth';
 
 // ============================================================
 // SCAFFOLD OS – Stripe: Kundenportal öffnen (NUR Master-Instanz)
@@ -14,7 +14,9 @@ import { requireAuth, unauthorizedResponse, serverErrorResponse } from '@/lib/au
 // ============================================================
 
 export async function POST(req: NextRequest) {
-  if (!(await requireAuth())) return unauthorizedResponse();
+  // Das Portal erlaubt Kündigung und Zahlungsänderung: nur Admin.
+  const rolle = await pruefeRolle(['admin']);
+  if (!rolle.ok) return rolle.response;
   try {
     const key = process.env.STRIPE_SECRET_KEY;
     if (!key) {

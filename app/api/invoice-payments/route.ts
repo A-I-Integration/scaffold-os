@@ -36,6 +36,7 @@ async function callerRole(): Promise<string | null> {
 export async function GET(req: NextRequest) {
   const role = await callerRole();
   if (!role) return NextResponse.json({ success: false, error: 'Nicht angemeldet.' }, { status: 401 });
+  if (!WRITE_ROLES.includes(role)) return NextResponse.json({ success: false, error: 'Dafür hast du keine Berechtigung.' }, { status: 403 });
 
   try {
     const { searchParams } = new URL(req.url);

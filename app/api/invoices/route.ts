@@ -63,6 +63,10 @@ export async function GET(req: NextRequest) {
   if (!role) {
     return NextResponse.json({ success: false, error: 'Nicht angemeldet.' }, { status: 401 });
   }
+  // Rechnungen (Beträge, Kunden) sieht nur das Büro – wie die Seiten /rechnungen und /kunden.
+  if (!['admin', 'disponent'].includes(role)) {
+    return NextResponse.json({ success: false, error: 'Dafür hast du keine Berechtigung.' }, { status: 403 });
+  }
   try {
     // Einzelne Rechnung (Rechnungsakte): ?id=<uuid>
     const einzelId = req.nextUrl.searchParams.get('id');

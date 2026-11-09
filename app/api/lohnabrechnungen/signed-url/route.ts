@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { requireOwnEmployeeOrAdmin, forbiddenResponse, serverErrorResponse } from '@/lib/auth';
+import { requireAuth, unauthorizedResponse, requireOwnEmployeeOrAdmin, forbiddenResponse, serverErrorResponse } from '@/lib/auth';
 
 // ============================================================
 // SCAFFOLD OS – Lohnabrechnung ansehen/als PDF speichern
@@ -16,6 +16,7 @@ const key = process.env.SUPABASE_SERVICE_ROLE_KEY!;
 const headers = { apikey: key, Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' };
 
 export async function GET(req: NextRequest) {
+  if (!(await requireAuth())) return unauthorizedResponse();
   try {
     const params = new URL(req.url).searchParams;
     const id = params.get('id');
