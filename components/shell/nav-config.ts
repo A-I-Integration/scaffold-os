@@ -63,6 +63,7 @@ export const NAV_GRUPPEN: NavGruppe[] = [
       { href: '/planung', label: 'Planung', icon: CalendarClock, roles: BAU },
       { href: '/wochenplanung', label: 'Wochenplanung', icon: CalendarClock, roles: BAU },
       { href: '/touren', label: 'Touren', icon: Truck, roles: BUERO },
+      { href: '/materialmanager', label: 'Materialmanager', icon: ClipboardList, roles: ['admin', 'disponent', 'bauleiter', 'lager'], stichwoerter: 'verladeliste materialliste bauabschnitt stückliste verladen' },
       { href: '/routenoptimierung', label: 'Routen-KI', icon: Route, roles: BUERO },
       { href: '/meine-touren', label: 'Meine Touren', icon: Navigation },
       { href: '/kolonnen', label: 'Kolonnen', icon: Users, roles: BAU },

@@ -15,6 +15,7 @@ const ROLE_ACCESS: Record<string, string[]> = {
   '/planung':      ['admin', 'disponent', 'bauleiter'],
   '/zeiterfassung': ['admin', 'disponent', 'bauleiter'],  // NEU: Monatsübersicht (Nr. 6)
   '/touren':       ['admin', 'disponent'],
+  '/materialmanager': ['admin', 'disponent', 'bauleiter', 'lager'],  // Verladeliste je Bauabschnitt (Lager nur lesen/exportieren)
   '/routenoptimierung': ['admin', 'disponent'],  // NEU: KI-Tourenplan (Nr. 7)
   '/mitarbeiter':  ['admin', 'disponent'],
   '/datenpflege':  ['admin'],
