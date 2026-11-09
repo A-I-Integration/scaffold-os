@@ -47,15 +47,24 @@ mit denselben Rollen wie im Menü. Ein Test gleicht Menü und Sperre ab, damit b
 - Alle 73 Tabellen haben RLS aktiviert. Keine Geheimnisse im Quellcode, keine `NEXT_PUBLIC_`-Geheimnisse.
 - Statiker-Logins: nur eigene Seiten und Statiker-Routen.
 
-## Offen (nicht geändert, Entscheidung nötig)
-1. `projects` GET liefert allen Rollen die kompletten Projektdaten (auch Preise und LV). Einschränken
-   erfordert, dass Fahrer-/Mitarbeiter-Seiten nur noch das Nötige bekommen.
-2. `stripe/checkout` verlangt Login. Falls `/kaufen` für Neukunden ohne Login gedacht ist, geht der Kauf so nicht.
-3. `stripe/portal`: Ein Admin kann die E-Mail frei wählen. Sicherer wäre, sie an die eigene Login-Adresse zu binden;
-   das geht nur, wenn die Stripe-Adresse der Login-Adresse entspricht.
-4. KI-Routen (Plan-Analyse, IFC, Foto, Grundriss) stehen jeder Rolle offen (Kostenrisiko; teils mit Rate-Limit pro Nutzer).
-5. `nwd/[id]`: jeder Eingeloggte kann jeden Auftrag ansehen und löschen.
-6. In der Datenbank bleiben für Eingeloggte lesbar: alle Mitarbeiter (inkl. Lohnfelder, falls vorhanden),
+## Entschieden und umgesetzt (Nachtrag)
+1. **Keine Preise für Mitarbeiter und Lager.** `GET /api/projects` (Liste und Einzelprojekt) und die Antwort von `PATCH`
+   liefern diesen Rollen nur noch die Aufmaß-Schritte 1–5, die Lidar-Messung, das Entwurf-Flag und das KI-Ergebnis ohne
+   Preisfelder (`lib/projekt-sicht.ts`). Sie können außerdem nur noch die Schritte 1–5 speichern, nie Angebot, Stückliste
+   oder Preise – damit überschreibt ein gekürztes Projekt beim Speichern keine Preise. Die Seite Aufmaß Schritt 6
+   (Angebot mit Preisen) ist für Mitarbeiter gesperrt. Folge: Ein Mitarbeiter kann ein neues Aufmaß nicht mehr selbst
+   in Schritt 6 abschließen und anlegen; er arbeitet an bestehenden Projekten (Auto-Speichern der Schritte 1–5).
+2. **Kauf ohne Login (`/kaufen`).** `POST /api/stripe/checkout` ist öffentlich, mit Rate-Limit (10 Versuche je IP in 10 Minuten)
+   und Längenbegrenzung der Eingaben.
+3. **Kundenportal nur für die eigene E-Mail.** `POST /api/stripe/portal`: nur Admin, und die E-Mail muss die Login-Adresse sein
+   (fehlt sie im Aufruf, gilt die Login-Adresse). Die Adresse im Stripe-Konto muss also der Login-Adresse des Admins entsprechen.
+
+## Offen (nicht geändert)
+1. Die Artikelstammdaten (`inventory`) liefern Mitarbeitern und Lager weiterhin den Artikelpreis (`unit_price`); das Lager braucht
+   die Artikel, die Preisspalte ließe sich ausblenden. Gleiches gilt für Lieferscheine.
+2. KI-Routen (Plan-Analyse, IFC, Foto, Grundriss) stehen jeder Rolle offen (Kostenrisiko; teils mit Rate-Limit pro Nutzer).
+3. `nwd/[id]`: jeder Eingeloggte kann jeden Auftrag ansehen und löschen.
+4. In der Datenbank bleiben für Eingeloggte lesbar: alle Mitarbeiter (inkl. Lohnfelder, falls vorhanden),
    Abwesenheiten, Bestände; `site_stock` ist von jedem Eingeloggten änderbar, weil die Server-Aktionen
    in `lib/actions/` den Nutzer-Schlüssel nutzen. Ein späterer Umbau auf den Service-Schlüssel mit Rollenprüfung würde das schließen.
-7. Die Seite Rechnungen verlinkt auf `/einstellungen`; für Disposition führt das jetzt zur Startseite.
+5. Die Seite Rechnungen verlinkt auf `/einstellungen`; für Disposition führt das jetzt zur Startseite.

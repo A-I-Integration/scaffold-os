@@ -28,6 +28,10 @@ describe('Seitensperren passen zum Menü', () => {
       expect(zuEng, `${e.href}: Menü zeigt es für ${zuEng.join(', ')}, die Sperre lässt sie nicht durch`).toEqual([])
     })
   }
+  it('Aufmaß Schritt 6 (Angebot mit Preisen) ist für Mitarbeiter gesperrt', () => {
+    expect(sperre('/aufmass/schritt6')).toEqual(['admin', 'bauleiter'])
+    expect(sperre('/aufmass/schritt5')).toContain('mitarbeiter')
+  })
   it('interne Verwaltungsseiten ohne Menüpunkt sind nur für Admin', () => {
     expect(sperre('/admin/besucher')).toEqual(['admin'])
   })

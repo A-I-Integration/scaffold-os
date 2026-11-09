@@ -4,6 +4,7 @@ import { trackImpact } from '@/lib/impact';
 import { requireAuth, unauthorizedResponse, serverErrorResponse } from '@/lib/auth';
 import { beiAngebotsannahmeSicher } from '@/lib/angebot-annahme';
 import { fahrtNachholenSicher } from '@/lib/auto-tour';
+import { projektFuerRolle, schreibdatenFuerRolle } from '@/lib/projekt-sicht';
 import { autosaveGesperrt, filtereAutosaveData, AUTOSAVE_PROJEKT_ABGESCHLOSSEN_FEHLER } from '@/lib/aufmass-autosave-regeln';
 
 // ============================================================
@@ -73,9 +74,10 @@ export async function GET(req: NextRequest) {
       if (!rows?.length) {
         return NextResponse.json({ success: false, error: 'Projekt nicht gefunden.' }, { status: 404 });
       }
-      return NextResponse.json({ success: true, project: rows[0] });
+      return NextResponse.json({ success: true, project: projektFuerRolle(rows[0], role) });
     }
-    return NextResponse.json({ success: true, projects: rows });
+    // Mitarbeiter und Lager sehen keine Preise (siehe lib/projekt-sicht.ts)
+    return NextResponse.json({ success: true, projects: rows.map((r: { data?: unknown }) => projektFuerRolle(r, role)) });
   } catch (err: any) {
     return serverErrorResponse(err);
   }
@@ -147,7 +149,8 @@ export async function PATCH(req: NextRequest) {
     const name = autosave ? undefined : body.name;
     const adresse = autosave ? undefined : body.adresse;
     const customer_id = autosave ? undefined : body.customer_id;
-    const data = autosave ? filtereAutosaveData(body.data) : body.data;
+    // Mitarbeiter/Lager: nie Angebot, Stückliste oder Preise schreiben – nur die Aufmaß-Schritte 1–5
+    const data = autosave ? filtereAutosaveData(body.data) : schreibdatenFuerRolle(body.data, role) as Record<string, any>;
     if (autosave && Object.keys(data).length === 0) {
       return NextResponse.json({ success: false, error: 'Auto-Speichern: kein gültiger Schritt (step1–step5).' }, { status: 400 });
     }
@@ -280,7 +283,7 @@ export async function PATCH(req: NextRequest) {
       });
     }
 
-    return NextResponse.json({ success: true, project: rows[0] });
+    return NextResponse.json({ success: true, project: projektFuerRolle(rows[0], role) });
   } catch (err: any) {
     return serverErrorResponse(err);
   }

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import Stripe from 'stripe';
-import { requireAuth, unauthorizedResponse, serverErrorResponse } from '@/lib/auth';
+import { serverErrorResponse } from '@/lib/auth';
+import { oeffentlichRateLimitPruefen } from '@/lib/rate-limit';
 
 // ============================================================
 // SCAFFOLD OS – Stripe: Checkout starten (NUR Master-Instanz)
@@ -41,7 +42,9 @@ function preisIdFuerPlan(plan: string): string | undefined {
 }
 
 export async function POST(req: NextRequest) {
-  if (!(await requireAuth())) return unauthorizedResponse();
+  // Öffentlich (Kauf vor der Anmeldung, /kaufen): kein Login, dafür Rate-Limit pro IP gegen Missbrauch.
+  const rl = oeffentlichRateLimitPruefen(req, 'stripe-checkout', { max: 10, fensterMs: 10 * 60_000 });
+  if (!rl.ok) return rl.response;
   try {
     const stripe = getStripe();
     if (!stripe) {
@@ -52,9 +55,9 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json();
-    const companyName = String(body.company_name || '').trim();
-    const adminName = String(body.admin_name || '').trim();
-    const adminEmail = String(body.admin_email || '').trim().toLowerCase();
+    const companyName = String(body.company_name || '').trim().slice(0, 200);
+    const adminName = String(body.admin_name || '').trim().slice(0, 200);
+    const adminEmail = String(body.admin_email || '').trim().toLowerCase().slice(0, 200);
     // Enterprise ist "auf Anfrage" und wird nicht online gekauft.
     if (body.plan === 'enterprise') {
       return NextResponse.json(

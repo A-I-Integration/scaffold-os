@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import Stripe from 'stripe';
-import { pruefeRolle, serverErrorResponse } from '@/lib/auth';
+import { pruefeRolle, serverErrorResponse, forbiddenResponse } from '@/lib/auth';
+import { createClient } from '@/lib/supabase/server';
 
 // ============================================================
 // SCAFFOLD OS – Stripe: Kundenportal öffnen (NUR Master-Instanz)
@@ -18,20 +19,26 @@ export async function POST(req: NextRequest) {
   const rolle = await pruefeRolle(['admin']);
   if (!rolle.ok) return rolle.response;
   try {
+    // Nur für die eigene Login-Adresse: sonst könnte ein Admin das Abo eines anderen Kunden kündigen.
+    const { data: { user } } = await (await createClient()).auth.getUser();
+    const eigene = (user?.email || '').trim().toLowerCase();
+    const body = await req.json();
+    const email = String(body.email || eigene).trim().toLowerCase();
+    if (!eigene || email !== eigene) {
+      return forbiddenResponse('Das Kundenportal lässt sich nur für deine eigene Login-E-Mail-Adresse öffnen.');
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      return NextResponse.json(
+        { success: false, error: 'Bitte eine gültige E-Mail-Adresse angeben.' },
+        { status: 400 }
+      );
+    }
+
     const key = process.env.STRIPE_SECRET_KEY;
     if (!key) {
       return NextResponse.json(
         { success: false, error: 'Stripe ist auf dieser Instanz nicht konfiguriert.' },
         { status: 503 }
-      );
-    }
-
-    const body = await req.json();
-    const email = String(body.email || '').trim().toLowerCase();
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-      return NextResponse.json(
-        { success: false, error: 'Bitte eine gültige E-Mail-Adresse angeben.' },
-        { status: 400 }
       );
     }
 
