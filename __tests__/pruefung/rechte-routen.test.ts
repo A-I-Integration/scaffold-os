@@ -168,6 +168,7 @@ const VERBOTEN: [string, (typeof METHODEN)[number], string[]][] = [
   ['admin/data', 'DELETE', NUR_ADMIN],
   ['admin/impersonate', 'POST', NUR_ADMIN],
   ['admin/wirkung', 'GET', NUR_ADMIN],
+  ['admin/sentry-test', 'GET', NUR_ADMIN],
   ['admin/users', 'GET', BUERO],
   ['admin/users', 'POST', BUERO],
   ['statiker-zuordnung', 'POST', OHNE_BAULEITER],
