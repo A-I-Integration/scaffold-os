@@ -44,6 +44,7 @@ import ZwischenaufmassBlock from '@/components/ZwischenaufmassBlock'
 import SchlussrechnungDialog from '@/components/SchlussrechnungDialog'
 import { lokalesDatumIso, datumPlusTage } from '@/lib/datum'
 import AnsichtLinkBox from '@/components/AnsichtLinkBox'
+import AngebotLinkBox from '@/components/AngebotLinkBox'
 import StatikerFreigabeBox from '@/components/StatikerFreigabeBox'
 import { FreigabeBadge, useFreigabeStatus } from '@/components/FreigabeBadge'
 import Auftragsstand from '@/components/Auftragsstand'
@@ -1515,6 +1516,7 @@ export default function KundenDetailPage() {
                     </div>
                   )}
 
+                  <AngebotLinkBox projectId={project.id} />
                   {project.data?.kiResult?.building && <AnsichtLinkBox projectId={project.id} />}
                   {project.data?.kiResult?.building && <StatikerFreigabeBox projectId={project.id} />}
 

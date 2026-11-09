@@ -1,62 +1,56 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
-import { serverErrorResponse } from '@/lib/auth';
+import { pruefeRolle, serverErrorResponse } from '@/lib/auth';
+import { ROLLEN } from '@/lib/rollen';
+import { UUID_MUSTER } from '@/lib/ansicht-link';
+import { angebotLinkAnzeige, sichereAngebotToken, widerrufeAngebotLink, ANGEBOT_LINK_TAGE } from '@/lib/angebot-link';
 
 // ============================================================
-// SCAFFOLD OS – Zugangs-Token für Fern-Annahme (Phase 33)
+// SCAFFOLD OS – Angebots-Link (Fern-Annahme) verwalten
 //
-// POST { project_id } → erzeugt (falls nicht vorhanden) und liefert
-// den Token, der im "Angebot online ansehen"-Link verwendet wird.
+// GET    ?project_id=… → Status des Links (aktiv / abgelaufen / widerrufen, gültig bis)
+// POST   { project_id } → Link bereitstellen: bestehenden verlängern (60 Tage) oder – nach Widerruf – einen neuen anlegen
+// DELETE ?project_id=… → Link widerrufen (sofort gesperrt)
+// Admin, Disposition, Bauleiter. Der Link selbst ist öffentlich (/angebot/[token], /api/public/angebot).
 // ============================================================
 
-const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const key = process.env.SUPABASE_SERVICE_ROLE_KEY!;
-const headers = {
-  'Content-Type': 'application/json',
-  apikey: key,
-  Authorization: `Bearer ${key}`,
-};
+const ungueltig = () => NextResponse.json({ success: false, error: 'project_id fehlt oder ist ungültig.' }, { status: 400 });
 
-const ROLES = ['admin', 'disponent', 'bauleiter'];
-
-async function callerRole(): Promise<string | null> {
+export async function GET(req: NextRequest) {
+  const r = await pruefeRolle(ROLLEN.ADMIN_DISPO_BAULEITER);
+  if (!r.ok) return r.response;
   try {
-    const supabase = await createClient();
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return null;
-    const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single();
-    return profile?.role || null;
-  } catch {
-    return null;
+    const id = req.nextUrl.searchParams.get('project_id') || '';
+    if (!UUID_MUSTER.test(id)) return ungueltig();
+    return NextResponse.json({ success: true, link: await angebotLinkAnzeige(id), tage: ANGEBOT_LINK_TAGE });
+  } catch (err) {
+    return serverErrorResponse(err, 'access-token GET');
   }
 }
 
 export async function POST(req: NextRequest) {
-  const role = await callerRole();
-  if (!role || !ROLES.includes(role)) {
-    return NextResponse.json({ success: false, error: 'Keine Berechtigung.' }, { status: 403 });
-  }
-
+  const r = await pruefeRolle(ROLLEN.ADMIN_DISPO_BAULEITER);
+  if (!r.ok) return r.response;
   try {
-    const { project_id } = await req.json();
-    if (!project_id) return NextResponse.json({ success: false, error: 'project_id erforderlich' }, { status: 400 });
+    const body = await req.json().catch(() => ({}));
+    const id = String(body?.project_id || '');
+    if (!UUID_MUSTER.test(id)) return ungueltig();
+    const token = await sichereAngebotToken(id);
+    return NextResponse.json({ success: true, token });
+  } catch (err) {
+    return serverErrorResponse(err, 'access-token POST');
+  }
+}
 
-    // Existiert schon ein Token? (project_id ist UNIQUE)
-    const getRes = await fetch(`${url}/rest/v1/project_access_tokens?project_id=eq.${project_id}&select=token`, { headers });
-    if (getRes.ok) {
-      const rows = await getRes.json();
-      if (rows?.[0]?.token) return NextResponse.json({ success: true, token: rows[0].token });
-    }
-
-    const insRes = await fetch(`${url}/rest/v1/project_access_tokens`, {
-      method: 'POST',
-      headers: { ...headers, Prefer: 'return=representation' },
-      body: JSON.stringify({ project_id }),
-    });
-    if (!insRes.ok) throw new Error(await insRes.text());
-    const rows = await insRes.json();
-    return NextResponse.json({ success: true, token: rows[0].token });
-  } catch (err: any) {
-    return serverErrorResponse(err);
+export async function DELETE(req: NextRequest) {
+  const r = await pruefeRolle(ROLLEN.ADMIN_DISPO_BAULEITER);
+  if (!r.ok) return r.response;
+  try {
+    const id = req.nextUrl.searchParams.get('project_id') || '';
+    if (!UUID_MUSTER.test(id)) return ungueltig();
+    const gab = await widerrufeAngebotLink(id);
+    if (!gab) return NextResponse.json({ success: false, error: 'Für dieses Projekt gibt es keinen Angebots-Link.' }, { status: 404 });
+    return NextResponse.json({ success: true });
+  } catch (err) {
+    return serverErrorResponse(err, 'access-token DELETE');
   }
 }
