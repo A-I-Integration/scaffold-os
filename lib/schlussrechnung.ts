@@ -1,4 +1,5 @@
 import type { Nachtrag } from './nachtrag';
+import { zahlAusEingabe } from '@/lib/zahl-eingabe';
 import { nachtragPositionen } from './nachtrag';
 
 // ============================================================
@@ -37,12 +38,7 @@ export type RechnungsBasis = 'angebot' | 'aufmass';
 
 const runde = (n: number) => Math.round(n * 100) / 100;
 
-/** Zahl aus einer Eingabe: "1500.5", "1500,5" und "1.500,50" ergeben jeweils den richtigen Wert; Unlesbares ergibt 0. */
-export function zahlAusEingabe(v: unknown): number {
-  const t = String(v ?? '').trim();
-  const n = parseFloat(t.includes(',') ? t.replace(/\./g, '').replace(',', '.') : t);
-  return Number.isFinite(n) ? n : 0;
-}
+export { zahlAusEingabe };
 
 export function berechneAngebotBetraege(e: RechnungsEingabe) {
   const a = e.anpassungen || {};

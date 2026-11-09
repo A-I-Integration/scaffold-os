@@ -1,3 +1,4 @@
+import { zahlAusEingabe, zahlAusEingabeStreng } from '@/lib/zahl-eingabe'
 // Strukturierte Rechnungspositionen: Art, Maße (L×B×H), Listenpreis × Faktor, Stundenlohn mit Mitarbeiter und Tätigkeit.
 // Der Gesamtpreis bleibt überall Menge × Einzelpreis – der Faktor ist ein Nachweis, wie der Einzelpreis zustande kommt
 // (Einzelpreis = Listenpreis × Faktor ÷ 100), kein zweiter Rechenschritt.
@@ -38,7 +39,7 @@ export interface StrukturPosition {
 }
 
 const zahl = (v: unknown): number | undefined => {
-  const n = typeof v === 'string' ? Number(v.replace(',', '.')) : Number(v)
+  const n = typeof v === 'string' ? zahlAusEingabeStreng(v) : Number(v)
   return Number.isFinite(n) ? n : undefined
 }
 const text = (v: unknown, max: number): string | undefined => {
@@ -108,7 +109,7 @@ const TEXTFELDER = ['bezeichnung', 'einheit', 'art', 'mitarbeiter', 'taetigkeit'
 
 /** Ändert ein Feld einer Position. Listenpreis × Faktor ergibt den Einzelpreis; leere Textfelder werden entfernt. Gibt eine neue Position zurück. */
 export function aktualisierePosition<T extends Partial<StrukturPosition>>(p: T, feld: keyof StrukturPosition, wert: string): T {
-  const neu: any = { ...p, [feld]: TEXTFELDER.includes(feld) ? wert : Number(String(wert).replace(',', '.')) || 0 }
+  const neu: any = { ...p, [feld]: TEXTFELDER.includes(feld) ? wert : zahlAusEingabe(wert) }
   if ((feld === 'art' || feld === 'geruestId' || feld === 'bemerkung') && !wert) delete neu[feld]
   // Passende Einheit vorschlagen, solange noch die Standardeinheit steht (Stundenlohn → Std., Miete → Tag)
   if (feld === 'art' && (!neu.einheit || neu.einheit === 'Stk.') && EINHEIT_ZU_ART[wert]) neu.einheit = EINHEIT_ZU_ART[wert]

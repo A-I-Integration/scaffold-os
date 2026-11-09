@@ -37,7 +37,9 @@ export function rechneLvNeu(lv: Leistungsverzeichnis): Leistungsverzeichnis {
     return { ...t, positionen, summe: cent(positionen.reduce((s, p) => s + p.gp, 0)) }
   })
   const summeNetto = cent(titel.reduce((s, t) => s + t.summe, 0))
-  const mwst = cent(summeNetto * 0.19)
+  // MwSt-Satz des LV (z. B. 7 %), sonst 19 %
+  const satz = Number.isFinite(lv.eingaben?.mwstProzent) && lv.eingaben.mwstProzent >= 0 ? lv.eingaben.mwstProzent : 19
+  const mwst = cent(summeNetto * (satz / 100))
   return { ...lv, titel, summeNetto, mwst, summeBrutto: cent(summeNetto + mwst) }
 }
 
