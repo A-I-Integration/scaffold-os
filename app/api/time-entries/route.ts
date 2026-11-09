@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { computeNetHours } from '@/lib/worktime';
-import { requireAuth, unauthorizedResponse, serverErrorResponse, requireOwnEmployeeOrAdmin, forbiddenResponse } from '@/lib/auth';
+import { requireAuth, unauthorizedResponse, serverErrorResponse, requireOwnEmployeeOrAdmin, forbiddenResponse, pruefeRolle } from '@/lib/auth';
+import { ROLLEN } from '@/lib/rollen';
 
 // ============================================================
 // SCAFFOLD OS – Zeiterfassung API (Stempeln)
@@ -21,10 +22,20 @@ const headers = { apikey: key, Authorization: `Bearer ${key}`, 'Content-Type': '
 
 // GET /api/time-entries?employee_id=...&from=YYYY-MM-DD&to=YYYY-MM-DD
 export async function GET(req: Request) {
-  if (!(await requireAuth())) return unauthorizedResponse();
+  const rolle = await pruefeRolle(ROLLEN.ALLE);
+  if (!rolle.ok) return rolle.response;
   try {
     const { searchParams } = new URL(req.url);
-    const employeeId = searchParams.get('employee_id');
+    let employeeId = searchParams.get('employee_id');
+    // Alle Zeiten sehen nur Büro und Bauleiter (Monatsübersicht). Alle anderen sehen nur die eigenen.
+    if (!ROLLEN.ADMIN_DISPO_BAULEITER.includes(rolle.role as never)) {
+      const eRes = await fetch(`${url}/rest/v1/employees?select=id&user_id=eq.${rolle.userId}&limit=1`, { headers });
+      const eRows = eRes.ok ? await eRes.json() : [];
+      const eigene = eRows?.[0]?.id as string | undefined;
+      if (!eigene) return NextResponse.json({ success: true, entries: [] });
+      if (employeeId && employeeId !== eigene) return forbiddenResponse('Du darfst nur deine eigenen Zeiten sehen.');
+      employeeId = eigene;
+    }
     const from = searchParams.get('from');
     const to = searchParams.get('to');
 

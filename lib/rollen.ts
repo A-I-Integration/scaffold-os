@@ -11,6 +11,10 @@ export const ROLLEN = {
   ADMIN_DISPO: ['admin', 'disponent'],
   /** Aufmaß-Bereich (Schritt 6: Stückliste, KI-Material) */
   ADMIN_BAULEITER: ['admin', 'bauleiter'],
+  /** Büro plus Bauleiter (Einsatzplanung, Zeiten der Kolonne) */
+  ADMIN_DISPO_BAULEITER: ['admin', 'disponent', 'bauleiter'],
+  /** Alle eingeloggten Betriebsrollen (ohne externe Statiker) */
+  ALLE: ['admin', 'disponent', 'bauleiter', 'mitarbeiter', 'lager'],
   /** Lager-Bereich */
   LAGER: ['admin', 'disponent', 'bauleiter', 'lager'],
 } as const satisfies Record<string, readonly string[]>;

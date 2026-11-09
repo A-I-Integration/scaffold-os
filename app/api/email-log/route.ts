@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
-import { serverErrorResponse } from '@/lib/auth';
+import { serverErrorResponse, pruefeRolle } from '@/lib/auth';
+import { ROLLEN } from '@/lib/rollen';
 
 // ============================================================
 // SCAFFOLD OS – E-Mail-Verlauf abrufen (Phase 20)
@@ -22,21 +22,10 @@ const headers = {
   Authorization: `Bearer ${key}`,
 };
 
-async function currentUserId(): Promise<string | null> {
-  try {
-    const supabase = await createClient();
-    const { data: { user } } = await supabase.auth.getUser();
-    return user?.id || null;
-  } catch {
-    return null;
-  }
-}
-
 export async function GET(req: NextRequest) {
-  const userId = await currentUserId();
-  if (!userId) {
-    return NextResponse.json({ success: false, error: 'Nicht angemeldet.' }, { status: 401 });
-  }
+  // Mailverlauf enthält Kundenkorrespondenz: nur Büro (wie der Versand, Entscheidung 13.10.)
+  const rolle = await pruefeRolle(ROLLEN.ADMIN_DISPO);
+  if (!rolle.ok) return rolle.response;
 
   try {
     const { searchParams } = new URL(req.url);

@@ -27,6 +27,15 @@ const ALLOWED_CALLERS = ['admin', 'disponent'];
 const VALID_ROLES = ['admin', 'disponent', 'bauleiter', 'mitarbeiter', 'lager', 'statiker'];
 
 // Prüft, ob der Aufrufer admin/disponent ist. Gibt null zurück wenn ok, sonst Response.
+/** Rolle des Aufrufers (nach checkCaller gültig); fehlt sie, gilt nichts. */
+async function callerRolle(): Promise<string | null> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return null;
+  const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single();
+  return profile?.role ?? null;
+}
+
 async function checkCaller(): Promise<NextResponse | null> {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
@@ -80,6 +89,10 @@ export async function POST(req: NextRequest) {
     }
     if (!VALID_ROLES.includes(role)) {
       return NextResponse.json({ success: false, error: 'Ungültige Rolle' }, { status: 400 });
+    }
+    // Rechte-Ausweitung verhindern: nur ein Admin darf weitere Admin-Zugänge anlegen.
+    if (role === 'admin' && (await callerRolle()) !== 'admin') {
+      return NextResponse.json({ success: false, error: 'Nur ein Admin darf einen Admin-Zugang anlegen.' }, { status: 403 });
     }
     if (String(password).length < 6) {
       return NextResponse.json({ success: false, error: 'Passwort muss mindestens 6 Zeichen haben' }, { status: 400 });

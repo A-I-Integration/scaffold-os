@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
-import { serverErrorResponse } from '@/lib/auth';
+import { serverErrorResponse, pruefeRolle } from '@/lib/auth';
+import { ROLLEN } from '@/lib/rollen';
 
 // ============================================================
 // SCAFFOLD OS – Mitarbeiter-Auftrags-Zuordnung (Phase 28)
@@ -48,9 +49,26 @@ export async function GET(req: NextRequest) {
   }
 }
 
+/** Bauleiter dürfen nur Mitarbeiter ihrer eigenen Kolonne (oder sich selbst) betreuen. Fehlt der Bauleiter-Datensatz: nein. */
+async function bauleiterDarfMitarbeiter(userId: string, employeeId: string): Promise<boolean> {
+  const meRes = await fetch(`${url}/rest/v1/employees?select=id&user_id=eq.${userId}&limit=1`, { headers });
+  const meRows = meRes.ok ? await meRes.json() : [];
+  const meineEmployeeId = meRows?.[0]?.id;
+  if (!meineEmployeeId) return false;
+  if (employeeId === meineEmployeeId) return true;
+  const zielRes = await fetch(`${url}/rest/v1/employees?id=eq.${employeeId}&select=kolonne_id`, { headers });
+  const zielRows = zielRes.ok ? await zielRes.json() : [];
+  const zielKolonne = zielRows?.[0]?.kolonne_id;
+  if (!zielKolonne) return false;
+  const kRes = await fetch(`${url}/rest/v1/kolonnen?bauleiter_id=eq.${meineEmployeeId}&select=id`, { headers });
+  const kolonnen = kRes.ok ? await kRes.json() : [];
+  return kolonnen.some((k: { id: string }) => k.id === zielKolonne);
+}
+
 export async function POST(req: NextRequest) {
-  const userId = await currentUserId();
-  if (!userId) return NextResponse.json({ success: false, error: 'Nicht angemeldet.' }, { status: 401 });
+  const pruefung = await pruefeRolle(ROLLEN.ADMIN_DISPO_BAULEITER);
+  if (!pruefung.ok) return pruefung.response;
+  const userId = pruefung.userId;
 
   try {
     const { project_id, employee_id, rolle } = await req.json();
@@ -58,26 +76,10 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: false, error: 'project_id und employee_id erforderlich' }, { status: 400 });
     }
 
-    // NEU: Bauleiter darf nur Mitarbeiter seiner eigenen Kolonne zuweisen
-    // (gleiche Absicherung wie bei der Wochenplanung) – Admin/Disposition
-    // weiterhin uneingeschränkt.
-    const supabase = await createClient();
-    const { data: profile } = await supabase.from('profiles').select('role').eq('id', userId).single();
-    if (profile?.role === 'bauleiter') {
-      const meRes = await fetch(`${url}/rest/v1/employees?select=id&user_id=eq.${userId}&limit=1`, { headers });
-      const meRows = meRes.ok ? await meRes.json() : [];
-      const meineEmployeeId = meRows?.[0]?.id;
-      if (meineEmployeeId && employee_id !== meineEmployeeId) {
-        const zielRes = await fetch(`${url}/rest/v1/employees?id=eq.${employee_id}&select=kolonne_id`, { headers });
-        const zielRows = zielRes.ok ? await zielRes.json() : [];
-        const zielKolonne = zielRows?.[0]?.kolonne_id;
-        const eigeneKolonnenRes = await fetch(`${url}/rest/v1/kolonnen?bauleiter_id=eq.${meineEmployeeId}&select=id`, { headers });
-        const eigeneKolonnen = eigeneKolonnenRes.ok ? await eigeneKolonnenRes.json() : [];
-        const istEigen = eigeneKolonnen.some((k: any) => k.id === zielKolonne);
-        if (!istEigen) {
-          return NextResponse.json({ success: false, error: 'Dieser Mitarbeiter gehört nicht zu deiner Kolonne.' }, { status: 403 });
-        }
-      }
+    // Bauleiter darf nur Mitarbeiter seiner eigenen Kolonne zuweisen (wie bei der Wochenplanung);
+    // Admin/Disposition uneingeschränkt.
+    if (pruefung.role === 'bauleiter' && !(await bauleiterDarfMitarbeiter(userId, employee_id))) {
+      return NextResponse.json({ success: false, error: 'Dieser Mitarbeiter gehört nicht zu deiner Kolonne.' }, { status: 403 });
     }
 
     const res = await fetch(`${url}/rest/v1/project_assignments`, {
@@ -94,14 +96,23 @@ export async function POST(req: NextRequest) {
 }
 
 export async function DELETE(req: NextRequest) {
-  const userId = await currentUserId();
-  if (!userId) return NextResponse.json({ success: false, error: 'Nicht angemeldet.' }, { status: 401 });
+  const pruefung = await pruefeRolle(ROLLEN.ADMIN_DISPO_BAULEITER);
+  if (!pruefung.ok) return pruefung.response;
 
   try {
     const { searchParams } = new URL(req.url);
     const id = searchParams.get('id');
     if (!id) return NextResponse.json({ success: false, error: 'id erforderlich' }, { status: 400 });
 
+    if (!/^[0-9a-f-]{36}$/i.test(id)) return NextResponse.json({ success: false, error: 'Ungültige id' }, { status: 400 });
+    if (pruefung.role === 'bauleiter') {
+      const zRes = await fetch(`${url}/rest/v1/project_assignments?id=eq.${id}&select=employee_id`, { headers });
+      const zRows = zRes.ok ? await zRes.json() : [];
+      if (!zRows?.[0]) return NextResponse.json({ success: false, error: 'Nicht gefunden.' }, { status: 404 });
+      if (!(await bauleiterDarfMitarbeiter(pruefung.userId, zRows[0].employee_id))) {
+        return NextResponse.json({ success: false, error: 'Dieser Mitarbeiter gehört nicht zu deiner Kolonne.' }, { status: 403 });
+      }
+    }
     const res = await fetch(`${url}/rest/v1/project_assignments?id=eq.${id}`, { method: 'DELETE', headers });
     if (!res.ok) throw new Error(await res.text());
     return NextResponse.json({ success: true });

@@ -1,5 +1,6 @@
 import { createServerClient, type CookieOptions } from '@supabase/ssr';
 import { NextResponse, type NextRequest } from 'next/server';
+import { ROLE_ACCESS } from '@/lib/seiten-rollen';
 import { istStatiker, statikerEntscheidung, STATIKER_STARTSEITE } from '@/lib/statiker';
 
 // ============================================================
@@ -21,37 +22,6 @@ import { istStatiker, statikerEntscheidung, STATIKER_STARTSEITE } from '@/lib/st
 // sb-*-Session-Cookies und das demo_login_at-Cookie werden
 // gelöscht. Auf Instanzen ohne DEMO_LOGIN_EMAIL ein No-Op.
 // ============================================================
-
-// Welche Rolle darf welchen Bereich sehen?
-const ROLE_ACCESS: Record<string, string[]> = {
-  '/dashboard':    ['admin', 'disponent'],
-  '/aufmass':      ['admin', 'bauleiter', 'mitarbeiter'],  // Mitarbeiter messen auf: wie im Menü und in /api/projects (AUFMASS_ROLES)
-  '/stueckliste':  ['admin', 'bauleiter'],
-  '/lager':        ['admin', 'disponent', 'bauleiter', 'lager'],
-  '/prognose':     ['admin', 'disponent', 'lager'],
-  '/mj-katalog':   ['admin', 'disponent', 'bauleiter', 'lager'],
-  '/planung':      ['admin', 'disponent', 'bauleiter'],
-  '/zeiterfassung': ['admin', 'disponent', 'bauleiter'],  // NEU: Monatsübersicht (Nr. 6)
-  '/touren':       ['admin', 'disponent'],
-  '/routenoptimierung': ['admin', 'disponent'],  // NEU: KI-Tourenplan (Nr. 7)
-  '/mitarbeiter':  ['admin', 'disponent'],
-  '/datenpflege':  ['admin'],
-  '/meine-touren': ['admin', 'disponent', 'bauleiter', 'mitarbeiter', 'lager'],
-  '/fahrer':       ['admin', 'disponent', 'bauleiter', 'mitarbeiter', 'lager'],
-  // Sicherheitscheck 13.10.: bisher NUR per Menü versteckt, per Adresse für jeden Eingeloggten offen.
-  // Gleiche Rollen wie im Menü (components/SidebarLayout.tsx).
-  // Feldtest (internes Messwerkzeug): nur Admin. MUSS vor '/cad' stehen: die Prüfung nimmt den ersten passenden Pfad.
-  '/cad/feldtest':     ['admin'],
-  // CAD (inkl. /cad/bruecke, /cad/traggeruest): Admin, Disposition, Bauleiter (Entscheidung 13.10.)
-  '/cad':              ['admin', 'disponent', 'bauleiter'],
-  '/kunden':           ['admin', 'disponent'],
-  '/arbeitsschutz':    ['admin', 'disponent'],
-  '/rechnungen':       ['admin', 'disponent'],
-  '/zahlungsabgleich': ['admin', 'disponent'],
-  '/mietabrechnung':   ['admin', 'disponent'],
-  // Statiker (extern): nur die eigene Startseite. Alles andere sperrt der Statiker-Block unten.
-  '/statiker':         ['statiker'],
-};
 
 // Wohin gehört eine Rolle? (Startbereich + Ziel bei „kein Zugriff")
 // WICHTIG: Das Ziel muss ein Bereich sein, den die Rolle auch
