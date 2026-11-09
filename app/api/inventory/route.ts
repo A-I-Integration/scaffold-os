@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { aktuellerPlan, UPGRADE_HINWEIS } from '@/lib/plan-limits';
-import { requireAuth, unauthorizedResponse, serverErrorResponse, pruefeRolle } from '@/lib/auth';
+import { serverErrorResponse, pruefeRolle } from '@/lib/auth';
 import { ROLLEN } from '@/lib/rollen';
 
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
@@ -27,12 +27,16 @@ async function lagerLimitVerletzt(delta: number): Promise<string | null> {
 
 // GET /api/inventory
 export async function GET() {
-  if (!(await requireAuth())) return unauthorizedResponse();
+  const rolle = await pruefeRolle(ROLLEN.ALLE);
+  if (!rolle.ok) return rolle.response;
   try {
     const res = await fetch(`${url}/rest/v1/inventory?select=*&is_active=eq.true&order=name`, { headers });
     if (!res.ok) throw new Error(await res.text());
     const data = await res.json();
-    return NextResponse.json({ success: true, items: data });
+    // Den Stückpreis sehen nur Admin, Disposition und Lager (Entscheidung Prüfung 4).
+    const mitPreis = (ROLLEN.ARTIKELPREISE as readonly string[]).includes(rolle.role);
+    const items = mitPreis ? data : data.map(({ unit_price: _preis, ...rest }: Record<string, unknown>) => rest);
+    return NextResponse.json({ success: true, items });
   } catch (err: any) {
     return serverErrorResponse(err);
   }

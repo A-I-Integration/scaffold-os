@@ -434,3 +434,23 @@ describe('Prüfung 4: Kundenportal nur für die eigene E-Mail', () => {
     expect(res.status).not.toBe(403)
   })
 })
+
+describe('Prüfung 4: Artikelpreis nur für Admin, Disposition und Lager', () => {
+  const ARTIKEL = [{ id: ID, sku: 'RF-1', name: 'Rahmen', quantity: 40, unit: 'Stk', unit_price: 9.5, weight_kg: 12 }]
+  const liste = async (rolle: string) => {
+    h.user = { id: ID }; h.rolle = rolle
+    fakeDb(() => ARTIKEL)
+    const { GET } = (await module_['/app/api/inventory/route.ts']()) as { GET: () => Promise<Response> }
+    return ((await (await GET()).json()) as { items: Record<string, unknown>[] }).items[0]
+  }
+  for (const r of ['admin', 'disponent', 'lager']) {
+    it(`${r} sieht den Stückpreis`, async () => { expect((await liste(r)).unit_price).toBe(9.5) })
+  }
+  for (const r of ['mitarbeiter', 'bauleiter']) {
+    it(`${r} sieht den Artikel ohne Stückpreis (Menge, Name, Gewicht bleiben)`, async () => {
+      const a = await liste(r)
+      expect('unit_price' in a).toBe(false)
+      expect(a).toMatchObject({ name: 'Rahmen', quantity: 40, weight_kg: 12 })
+    })
+  }
+})

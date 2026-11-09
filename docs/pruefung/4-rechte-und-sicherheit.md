@@ -60,8 +60,10 @@ mit denselben Rollen wie im Menü. Ein Test gleicht Menü und Sperre ab, damit b
    (fehlt sie im Aufruf, gilt die Login-Adresse). Die Adresse im Stripe-Konto muss also der Login-Adresse des Admins entsprechen.
 
 ## Offen (nicht geändert)
-1. Die Artikelstammdaten (`inventory`) liefern Mitarbeitern und Lager weiterhin den Artikelpreis (`unit_price`); das Lager braucht
-   die Artikel, die Preisspalte ließe sich ausblenden. Gleiches gilt für Lieferscheine.
+1. Artikelpreise: `GET /api/inventory` liefert den Stückpreis nur noch an Admin, Disposition und Lager (Entscheidung). Bauleiter und
+   Mitarbeiter bekommen die Artikel ohne Preis. Folge: Das CAD rechnet für einen Bauleiter mit den eingebauten Standardpreisen statt mit den
+   Firmenpreisen. Lieferscheine enthalten nur Name, Menge und Einheit (keine Preise). Über die Datenbank-Schnittstelle
+   (Server-Aktionen in `lib/actions/inventory.ts`) bleibt `unit_price` für Eingeloggte lesbar.
 2. KI-Routen (Plan-Analyse, IFC, Foto, Grundriss) stehen jeder Rolle offen (Kostenrisiko; teils mit Rate-Limit pro Nutzer).
 3. `nwd/[id]`: jeder Eingeloggte kann jeden Auftrag ansehen und löschen.
 4. In der Datenbank bleiben für Eingeloggte lesbar: alle Mitarbeiter (inkl. Lohnfelder, falls vorhanden),
