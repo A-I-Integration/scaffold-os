@@ -43,5 +43,5 @@ export default function AnsichtSeite() {
       </div>
     )
   }
-  return <AnsichtViewer daten={daten} />
+  return <AnsichtViewer daten={daten} speicherKey={token} />
 }
