@@ -37,16 +37,23 @@ export type RechnungsBasis = 'angebot' | 'aufmass';
 
 const runde = (n: number) => Math.round(n * 100) / 100;
 
+/** Zahl aus einer Eingabe: "1500.5", "1500,5" und "1.500,50" ergeben jeweils den richtigen Wert; Unlesbares ergibt 0. */
+export function zahlAusEingabe(v: unknown): number {
+  const t = String(v ?? '').trim();
+  const n = parseFloat(t.includes(',') ? t.replace(/\./g, '').replace(',', '.') : t);
+  return Number.isFinite(n) ? n : 0;
+}
+
 export function berechneAngebotBetraege(e: RechnungsEingabe) {
   const a = e.anpassungen || {};
   const flaeche = e.kiResult?.totalAreaM2 ?? 0;
   const basis = e.preisModus === 'festpreis'
-    ? (parseFloat(String(e.festpreisProM2 || '').replace(',', '.')) || 0) * flaeche
+    ? zahlAusEingabe(e.festpreisProM2) * flaeche
     : (e.kiResult?.suggestedPrice ?? 0);
-  const mieteBetrag = a.miete?.aktiv ? (parseFloat(a.miete.wochen || '') || 0) * (parseFloat(a.miete.preisProWoche || '') || 0) : 0;
-  const nachtragBetrag = a.nachtrag?.aktiv ? parseFloat(a.nachtrag.betrag || '') || 0 : 0;
-  const statikBetrag = a.statik?.aktiv ? parseFloat(String(a.statik.betrag ?? '').replace(',', '.')) || 0 : 0;
-  const rabattBetrag = a.rabatt?.aktiv ? parseFloat(a.rabatt.betrag || '') || 0 : 0;
+  const mieteBetrag = a.miete?.aktiv ? zahlAusEingabe(a.miete.wochen) * zahlAusEingabe(a.miete.preisProWoche) : 0;
+  const nachtragBetrag = a.nachtrag?.aktiv ? zahlAusEingabe(a.nachtrag.betrag) : 0;
+  const statikBetrag = a.statik?.aktiv ? zahlAusEingabe(a.statik.betrag) : 0;
+  const rabattBetrag = a.rabatt?.aktiv ? zahlAusEingabe(a.rabatt.betrag) : 0;
   const kranBetrag = e.kranAktiv ? runde(e.kranTagessatz * e.kranTage) : 0;
   return { flaeche, basis, mieteBetrag, nachtragBetrag, statikBetrag, rabattBetrag, kranBetrag };
 }

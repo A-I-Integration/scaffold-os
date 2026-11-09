@@ -1,5 +1,5 @@
 import { generateMahnungPDF, generateZahlungserinnerungPDF, type Invoice } from '@/lib/invoice-pdf'
-import { tageUeberfaellig, AKTION_LABEL, type MahnAktion } from '@/lib/mahnung-steuerung'
+import { tageUeberfaellig, offenerBetrag, AKTION_LABEL, type MahnAktion } from '@/lib/mahnung-steuerung'
 
 // ============================================================
 // SCAFFOLD OS – Zahlungserinnerung/Mahnung für eine Rechnung versenden (nur Server)
@@ -59,6 +59,7 @@ export async function sendeMahnschritt(
     if (inv.invoice_type === 'gutschrift') return { ok: false, error: 'Gutschriften werden nicht gemahnt.' }
     if (inv.status === 'bezahlt' || inv.status === 'storniert') return { ok: false, error: 'Die Rechnung ist bezahlt oder storniert.' }
     if (!inv.due_date) return { ok: false, error: 'Die Rechnung hat kein Fälligkeitsdatum.' }
+    if (offenerBetrag(inv) <= 0.01) return { ok: false, error: 'Es ist nichts mehr offen (Zahlungen decken den Rechnungsbetrag). Bitte den Status der Rechnung prüfen.' }
     if (aktion !== 'erinnerung' && aktion !== ((Number(inv.reminder_level) || 0) + 1)) return { ok: false, error: `Als Nächstes folgt die ${(Number(inv.reminder_level) || 0) + 1}. Mahnung.` }
     if (aktion === 'erinnerung' && ((Number(inv.reminder_level) || 0) > 0 || (inv as any).erinnerung_am)) return { ok: false, error: 'Es wurde bereits eine Erinnerung oder Mahnung gesendet.' }
     if (aktion === 'erinnerung' && !('erinnerung_am' in (inv as object))) return { ok: false, error: 'Die Datenbank-Erweiterung für das Mahnwesen fehlt noch (phase-mahnung-steuerung.sql ausführen).' }
@@ -84,7 +85,7 @@ export async function sendeMahnschritt(
       <p>Hallo ${esc(inv.customer_name || 'Kunde')},</p><p>${text}</p>
       <div style="background: #f8fafc; padding: 20px; border-radius: 8px; margin: 20px 0;">
         <p style="margin: 0;"><strong>Rechnungsnummer:</strong> ${esc(inv.invoice_number)}</p>
-        <p style="margin: 8px 0 0;"><strong>Betrag:</strong> ${eur(Number(inv.gross_amount))} €</p></div>
+        <p style="margin: 8px 0 0;"><strong>Offener Betrag:</strong> ${eur(offenerBetrag(inv))} €</p></div>
       <p style="color: #64748b; font-size: 12px; margin-top: 30px;">Diese E-Mail wurde automatisch von SCAFFOLD OS versendet. Bei Fragen antworten Sie einfach auf diese E-Mail.</p></div>`
 
     const { Resend } = await import('resend')

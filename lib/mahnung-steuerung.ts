@@ -58,3 +58,12 @@ export function mahnStatusText(z: { stufe?: number | null; erinnerungAm?: string
   if (z.pausiert) teile.push('Mahnung pausiert')
   return teile.join(', ')
 }
+
+/**
+ * Noch offener Betrag einer Rechnung (brutto) nach Teilzahlungen, auf Cent gerundet, nie negativ.
+ * Grundlage für Mahnung, Verzugszinsen und Zahlungserinnerung: gemahnt wird nur, was wirklich offen ist.
+ */
+export function offenerBetrag(inv: { gross_amount: number | string; paid_amount?: number | string | null }): number {
+  const offen = Math.round((Number(inv.gross_amount) - (Number(inv.paid_amount) || 0)) * 100) / 100
+  return Number.isFinite(offen) ? Math.max(0, offen) : 0
+}

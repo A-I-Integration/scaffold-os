@@ -1,5 +1,6 @@
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import { offenerBetrag } from '@/lib/mahnung-steuerung';
 
 // ============================================================
 // SCAFFOLD OS – Rechnungs-PDFs (aus app/rechnungen/page.tsx
@@ -285,8 +286,10 @@ export function generateMahnungPDF(inv: Invoice, stufe: 1 | 2, mahnkosten?: { pa
   const pauschale = mahnkosten?.pauschale ?? 0;
   const zinssatz = mahnkosten?.zinssatz ?? 0;
   const tage = mahnkosten?.tageUeberfaellig ?? 0;
-  const zinsen = Math.round(Number(inv.gross_amount) * (zinssatz / 100) * (tage / 365) * 100) / 100;
-  const gesamtMitZinsen = Math.round((Number(inv.gross_amount) + zinsen + pauschale) * 100) / 100;
+  // Basis ist der noch OFFENE Betrag (nach Teilzahlungen), nicht der volle Rechnungsbetrag.
+  const offen = offenerBetrag(inv);
+  const zinsen = Math.round(offen * (zinssatz / 100) * (tage / 365) * 100) / 100;
+  const gesamtMitZinsen = Math.round((offen + zinsen + pauschale) * 100) / 100;
 
   doc.setFillColor(30, 58, 138); doc.rect(0, 0, pageWidth, 35, 'F');
   doc.setTextColor(255, 255, 255); doc.setFontSize(18); doc.setFont('helvetica', 'bold'); doc.text('SCAFFOLD OS', 14, 18);
@@ -324,7 +327,7 @@ export function generateMahnungPDF(inv: Invoice, stufe: 1 | 2, mahnkosten?: { pa
   doc.setDrawColor(226, 232, 240); doc.setFillColor(254, 252, 232); doc.roundedRect(14, y, 182, 38, 2, 2, 'FD');
   doc.setFontSize(8); doc.setTextColor(120, 53, 15); doc.setFont('helvetica', 'bold'); doc.text('FÄLLIGER GESAMTBETRAG', 20, y + 8);
   doc.setFont('helvetica', 'normal'); doc.setFontSize(9); doc.setTextColor(15, 23, 42);
-  doc.text('Offener Rechnungsbetrag', 20, y + 16); doc.text(betrag, 190, y + 16, { align: 'right' });
+  doc.text('Offener Rechnungsbetrag', 20, y + 16); doc.text(fmtEur(offen) + ' €', 190, y + 16, { align: 'right' });
   doc.text(`Verzugszinsen (${zinssatz.toFixed(2)} % p.a., ${tage} Tage seit Fälligkeit, § 288 BGB)`, 20, y + 23); doc.text(fmtEur(zinsen) + ' €', 190, y + 23, { align: 'right' });
   doc.text(`Mahnpauschale (§ 288 Abs. 5 BGB)`, 20, y + 30); doc.text(fmtEur(pauschale) + ' €', 190, y + 30, { align: 'right' });
   doc.setFont('helvetica', 'bold'); doc.setDrawColor(120, 53, 15); doc.line(150, y + 33, 190, y + 33);

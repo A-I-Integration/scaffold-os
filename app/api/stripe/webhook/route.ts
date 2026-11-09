@@ -65,29 +65,24 @@ async function upsertSubscription(fields: Record<string, any>): Promise<void> {
     `${masterUrl}/rest/v1/subscriptions?stripe_subscription_id=eq.${encodeURIComponent(subId)}&select=id`,
     { headers }
   );
-  const rows = check.ok ? await check.json() : [];
-  if (rows?.length) {
-    await fetch(`${masterUrl}/rest/v1/subscriptions?id=eq.${rows[0].id}`, {
-      method: 'PATCH',
-      headers,
-      body: JSON.stringify(fields),
-    });
-  } else {
-    await fetch(`${masterUrl}/rest/v1/subscriptions`, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify(fields),
-    });
-  }
+  // Schreibfehler werden geworfen: Der Webhook antwortet dann mit 500, und Stripe wiederholt die Zustellung.
+  // (Früher wurden sie verschluckt: Stripe bekam "erfolgreich", obwohl Abo/Kundenzugang nicht gespeichert war.)
+  if (!check.ok) throw new Error('subscriptions lesen fehlgeschlagen: ' + (await check.text()));
+  const rows = await check.json();
+  const antwort = rows?.length
+    ? await fetch(`${masterUrl}/rest/v1/subscriptions?id=eq.${rows[0].id}`, { method: 'PATCH', headers, body: JSON.stringify(fields) })
+    : await fetch(`${masterUrl}/rest/v1/subscriptions`, { method: 'POST', headers, body: JSON.stringify(fields) });
+  if (!antwort.ok) throw new Error('subscriptions schreiben fehlgeschlagen: ' + (await antwort.text()));
 }
 
 async function tenantStatusSetzen(tenantId: string | null, status: string, msg: string): Promise<void> {
   if (!tenantId) return;
-  await fetch(`${masterUrl}/rest/v1/tenants?id=eq.${tenantId}`, {
+  const r = await fetch(`${masterUrl}/rest/v1/tenants?id=eq.${tenantId}`, {
     method: 'PATCH',
     headers,
     body: JSON.stringify({ status }),
   });
+  if (!r.ok) throw new Error('tenant-Status schreiben fehlgeschlagen: ' + (await r.text()));
   console.log(`[stripe-webhook] tenant ${tenantId}: ${msg}`);
 }
 
@@ -166,7 +161,9 @@ async function kaufAbgeschlossen(session: Stripe.Checkout.Session): Promise<void
     `${masterUrl}/rest/v1/subscriptions?stripe_subscription_id=eq.${encodeURIComponent(stripeSubscriptionId)}&select=tenant_id`,
     { headers }
   );
-  const vorhandenRows = vorhanden.ok ? await vorhanden.json() : [];
+  // Nicht lesbar heißt NICHT "kein Tenant": sonst entstünde bei einem Datenbankfehler ein zweiter Kundenzugang.
+  if (!vorhanden.ok) throw new Error('subscriptions lesen fehlgeschlagen: ' + (await vorhanden.text()));
+  const vorhandenRows = await vorhanden.json();
   if (vorhandenRows?.[0]?.tenant_id) {
     console.log('[stripe-webhook] tenant existiert bereits – kein zweiter Durchlauf');
     return;
