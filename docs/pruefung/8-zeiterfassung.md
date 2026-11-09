@@ -8,8 +8,10 @@
 - Pausenregel (30 min ab 6 h, 45 min ab 9 h), Netto-Rechnung, Schicht über Mitternacht, Ende vor Start wird abgewiesen.
 - Rechte: Bauleiter dürfen lesen, aber nicht nachtragen; Mitarbeiter sehen nur eigene Zeiten (aus Prüfung 4).
 
-## Offen / zur Entscheidung
-- **Pausenregel am Rand:** Das Arbeitszeitgesetz verlangt Pause bei "mehr als 6 Stunden"; hier greift sie ab genau 6:00. Das entspricht dem Text in der App ("ab 6 h"). Nur relevant bei Schichten von exakt 6:00 oder 9:00 Stunden.
-- **Mehrere offene Einstempelungen:** Wer zweimal einstempelt, bekommt zwei offene Einträge. Vergessene Ausstempelungen bleiben ohne Stunden stehen. Eine Sperre könnte Mitarbeiter blockieren, die gestern vergessen haben auszustempeln; Entscheidung nötig.
-- **Eigene Zeiten selbst ändern:** Mitarbeiter dürfen ihre eigenen Einträge nachträglich ändern (Stunden, Zeiten). Ob das so gewollt ist, ist eine fachliche Entscheidung.
+## Entschieden und umgesetzt
+- **Eigene Zeiten:** Nur Admin und Disposition dürfen Zeiten nachtragen oder ändern. Alle anderen (Mitarbeiter, Lager, Bauleiter) können nur einstempeln und ausstempeln; die Endzeit setzt der Server, ein bereits abgeschlossener Eintrag lässt sich nicht mehr ändern.
+- **Pausenregel nach Gesetz:** 30 min bei mehr als 6 h, 45 min bei mehr als 9 h brutto (genau 6:00 bzw. 9:00 h lösen die Stufe noch nicht aus).
+- **Doppeltes Einstempeln:** Keine Sperre. Wer vergessen hat auszustempeln, stempelt aus und neu ein; das Büro korrigiert bei Bedarf.
+
+## Offen
 - Feiertage werden bei den Arbeitstagen nicht abgezogen (bekannt).

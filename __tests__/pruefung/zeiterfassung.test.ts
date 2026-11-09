@@ -19,7 +19,7 @@ vi.mock('@/lib/auth', async () => {
     ...echt,
     requireAuth: async () => true,
     requireOwnEmployeeOrAdmin: async () => ({ allowed: true }),
-    pruefeRolle: async () => ({ ok: true, userId: 'u1', role: 'admin' }),
+    pruefeRolle: async () => ({ ok: true, userId: 'u1', role: rolle.wert }),
   }
 })
 
@@ -29,10 +29,11 @@ beforeEach(() => { rolle.wert = 'admin'; db = { employees: [{ id: 'e1', first_na
 describe('Pausen- und Stundenrechnung', () => {
   const iso = (h: number, m = 0) => new Date(Date.UTC(2026, 0, 5, h, m)).toISOString()
   it.each([
-    [5.99, 0], [6, 30], [8.99, 30], [9, 45], [12, 45],
-  ])('brutto %s h → Pause %s min', (h, pause) => expect(autoBreakMinutes(h * 3600000)).toBe(pause))
+    [5.99, 0], [6, 0], [6.01, 30], [9, 30], [9.01, 45], [12, 45],
+  ])('brutto %s h → Pause %s min (Gesetz: mehr als 6 h / mehr als 9 h)', (h, pause) => expect(autoBreakMinutes(h * 3600000)).toBe(pause))
   it('8 Stunden brutto → 7,5 Stunden netto', () => expect(computeNetHours(iso(7), iso(15))).toEqual({ hours: 7.5, breakMinutes: 30 }))
-  it('9 Stunden brutto → 8,25 Stunden netto', () => expect(computeNetHours(iso(7), iso(16))).toEqual({ hours: 8.25, breakMinutes: 45 }))
+  it('genau 9 Stunden brutto → 8,5 Stunden netto (30 min)', () => expect(computeNetHours(iso(7), iso(16))).toEqual({ hours: 8.5, breakMinutes: 30 }))
+  it('9:30 Stunden brutto → 8,75 Stunden netto (45 min)', () => expect(computeNetHours(iso(7), iso(16, 30))).toEqual({ hours: 8.75, breakMinutes: 45 }))
   it('7:00–7:20 → 0,33 Stunden, keine Pause', () => expect(computeNetHours(iso(7), iso(7, 20))).toEqual({ hours: 0.33, breakMinutes: 0 }))
   it('Ende vor oder gleich Start → null', () => { expect(computeNetHours(iso(8), iso(7))).toBeNull(); expect(computeNetHours(iso(8), iso(8))).toBeNull() })
   it('Schicht über Mitternacht wird als Dauer gerechnet', () => {
@@ -81,10 +82,10 @@ describe('Zeiterfassung (Büro): Eingaben werden geprüft', () => {
 })
 
 describe('Stempeln (Mitarbeiter): Eingaben werden geprüft', () => {
-  beforeEach(() => vi.stubGlobal('fetch', baueFakeRest(db)))
+  beforeEach(() => { rolle.wert = 'disponent'; vi.stubGlobal('fetch', baueFakeRest(db)) })
   const post = async (body: object) => (await import('@/app/api/time-entries/route')).POST(new Request('http://x', { method: 'POST', body: JSON.stringify(body) }))
   const put = async (body: object) => (await import('@/app/api/time-entries/route')).PUT(new Request('http://x', { method: 'PUT', body: JSON.stringify(body) }))
-  it('manuelle Stunden außerhalb 0–24 werden abgewiesen', async () => {
+  it('manuelle Stunden außerhalb 0–24 werden abgewiesen (Büro)', async () => {
     expect((await post({ employee_id: 'e1', hours: -1 })).status).toBe(400)
     expect((await post({ employee_id: 'e1', hours: 30 })).status).toBe(400)
     expect(db.time_entries).toHaveLength(0)
@@ -121,5 +122,54 @@ describe('Monatsübersicht: mehr als 1000 Einträge', () => {
     const gesamt = Object.values(j.summary as Record<string, { ist_hours: number }>).reduce((s, x) => s + x.ist_hours, 0)
     expect(gesamt).toBe(60 * 20 * 8)
     expect(Object.keys(j.summary)).toHaveLength(60)
+  })
+})
+
+describe('Eigene Zeiten: nur Admin und Disposition dürfen ändern', () => {
+  beforeEach(() => vi.stubGlobal('fetch', baueFakeRest(db)))
+  const post = async (body: object) => (await import('@/app/api/time-entries/route')).POST(new Request('http://x', { method: 'POST', body: JSON.stringify(body) }))
+  const put = async (body: object) => (await import('@/app/api/time-entries/route')).PUT(new Request('http://x', { method: 'PUT', body: JSON.stringify(body) }))
+
+  it.each(['mitarbeiter', 'lager', 'bauleiter'])('%s kann einstempeln', async (r) => {
+    rolle.wert = r
+    const res = await post({ employee_id: 'e1', note: 'Tour: A' })
+    expect(res.status).toBe(200)
+    expect(db.time_entries[0].start_time).toBeTruthy()
+    expect(db.time_entries[0].hours).toBeUndefined()
+  })
+  it.each(['mitarbeiter', 'lager', 'bauleiter'])('%s kann KEINE Stunden, Pause oder Datum nachtragen', async (r) => {
+    rolle.wert = r
+    for (const extra of [{ hours: 8 }, { break_minutes: 0 }, { work_date: '2026-01-05' }]) {
+      expect((await post({ employee_id: 'e1', ...extra })).status).toBe(403)
+    }
+    expect(db.time_entries).toHaveLength(0)
+  })
+  it('Mitarbeiter kann ausstempeln; die Endzeit setzt der Server (nicht der Browser)', async () => {
+    rolle.wert = 'mitarbeiter'
+    db.time_entries.push({ id: 't1', employee_id: 'e1', start_time: new Date(Date.now() - 2 * 3600000).toISOString(), end_time: null })
+    const res = await put({ id: 't1', end_time: '2020-01-01T00:00:00Z' })
+    expect(res.status).toBe(200)
+    expect(new Date(String(db.time_entries[0].end_time)).getFullYear()).toBeGreaterThanOrEqual(2026)
+    expect(db.time_entries[0].hours).toBeCloseTo(2, 1)
+  })
+  it('Mitarbeiter kann Start, Datum, Stunden, Pause oder Notiz NICHT ändern', async () => {
+    rolle.wert = 'mitarbeiter'
+    db.time_entries.push({ id: 't1', employee_id: 'e1', start_time: '2026-01-05T07:00:00Z', end_time: null, hours: null })
+    for (const extra of [{ start_time: '2026-01-05T05:00:00Z' }, { work_date: '2026-01-01' }, { hours: 10 }, { break_minutes: 0 }, { note: 'x' }]) {
+      expect((await put({ id: 't1', ...extra })).status).toBe(403)
+    }
+    expect(db.time_entries[0].hours).toBeNull()
+  })
+  it('Mitarbeiter kann einen schon abgeschlossenen Eintrag nicht mehr ausstempeln/ändern', async () => {
+    rolle.wert = 'mitarbeiter'
+    db.time_entries.push({ id: 't1', employee_id: 'e1', start_time: '2026-01-05T07:00:00Z', end_time: '2026-01-05T15:00:00Z', hours: 7.5 })
+    expect((await put({ id: 't1', end_time: '2026-01-05T20:00:00Z' })).status).toBe(403)
+    expect(db.time_entries[0].hours).toBe(7.5)
+  })
+  it('Disposition darf nachtragen und korrigieren', async () => {
+    rolle.wert = 'disponent'
+    expect((await post({ employee_id: 'e1', work_date: '2026-01-05', hours: 8 })).status).toBe(200)
+    db.time_entries.push({ id: 't9', employee_id: 'e1', start_time: '2026-01-05T07:00:00Z', end_time: '2026-01-05T15:00:00Z', hours: 7.5 })
+    expect((await put({ id: 't9', hours: 8 })).status).toBe(200)
   })
 })
