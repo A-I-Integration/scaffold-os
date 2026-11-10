@@ -459,6 +459,8 @@ Antworte AUSSCHLIESSLICH als JSON-Objekt mit genau diesen Feldern:
   "breite": <Außenmaß Gebäudebreite in Metern als Zahl – gleiche Regel wie laenge>,
   "hoehe": <Gebäudehöhe in Metern als Zahl – wenn vermaßt oder aus Achsen/Z-Werten direkt ablesbar, sonst null>,
   "hoehe_geschaetzt": <Gebäudehöhe in Metern – wenn NICHT vermaßt, aber aus Achsen, Z-Werten oder Ebenen-Beschriftungen eindeutig ableitbar, sonst null>,
+  "first_neubau": <First-/Höchstpunkt-Kote des NEUBAUS in Metern (nur Neubau, niemals Abbruch/Bestand), sonst null>,
+  "ignorierte_werte": [<alle Höhen-/Maßzahlen in Metern, die du als Abbruch, Bestand, Garage oder Vordach bewusst NICHT verwendest – oder leeres Array>],
   "traufhoehe": <Traufhöhe in Metern als Zahl – NUR wenn vermaßt, sonst null>,
   "geschosse": <Anzahl Geschosse als Zahl, wenn erkennbar, sonst null>,
   "dachform": "<Satteldach, Flachdach, Pultdach, Walmdach, Mansarddach, Zeltdach — oder null>",
@@ -487,6 +489,12 @@ STRENGE REGELN:
    Ansichten/Schnitten, auch wenn sie auf ±0,00 (Erdgeschoss-Fußboden) bezogen
    ist. Weise im Feld "hinweise" darauf hin, wenn das Gelände abfällt und die
    Gerüsthöhe dadurch größer ist als die Kote.
+   Gelb umrandete oder gestrichelte Linien in Ansichten und Schnitten sind
+   meist der ABBRUCH bzw. Bestand. Trage jede Zahl, die du deshalb weglässt, in
+   "ignorierte_werte" ein. Prüfe vor der Antwort: Kommt dein Wert für "hoehe"
+   oder "first_neubau" in "ignorierte_werte" vor, ist er falsch – dann nimm den
+   Wert des Neubaus. Ein Dach mit EINER geneigten Fläche ist ein Pultdach, ein
+   Dach mit zwei geneigten Flächen und mittigem First ein Satteldach.
 10. Bei mehreren Bildern/Kacheln: sie zeigen verschiedene Plan-Ausschnitte.
     Lies Grundrisse (Länge/Breite), Ansichten und Schnitte (Höhen).
 11. Maße, die du nicht eindeutig dem Neubau zuordnen kannst: null und im Feld
@@ -681,6 +689,21 @@ async function verarbeiteCadAnalyseJob(tenant, job) {
   try { structured = JSON.parse(raw); } catch { structured = { zusammenfassung: raw }; }
   if (structured.geschosse == null && (structured.hoehe != null || structured.hoehe_geschaetzt != null)) structured.geschosse = 1; // Phase 78
   const verworfen = pruefeUndFiltere(structured, ocrText);
+  // Harte Pruefung: ein Wert, den die KI selbst als Abbruch/Bestand/Garage
+  // benennt, darf nicht als Mass des Neubaus gelten. Stattdessen gilt die
+  // First-Kote des Neubaus, falls geliefert und plausibel.
+  const ignoriert = new Set((Array.isArray(structured.ignorierte_werte) ? structured.ignorierte_werte : []).map((x) => Number(String(x).replace(',', '.'))).filter((x) => !isNaN(x)));
+  const wertHinweise = [];
+  for (const k of ['hoehe', 'hoehe_geschaetzt', 'traufhoehe', 'laenge', 'breite']) {
+    if (structured[k] != null && ignoriert.has(Number(structured[k]))) {
+      wertHinweise.push(`${String(structured[k]).replace('.', ',')} m gehört laut Plan zu Abbruch/Bestand und wurde nicht übernommen.`);
+      structured[k] = null;
+    }
+  }
+  const firstNeu = structured.first_neubau != null ? Number(structured.first_neubau) : null;
+  if (firstNeu != null && !isNaN(firstNeu) && firstNeu >= 2 && firstNeu <= 40 && !ignoriert.has(firstNeu) && (!ocrText || valueInText(firstNeu, ocrText))) {
+    if (structured.hoehe == null) structured.hoehe = firstNeu;
+  }
   const antwort = {
     laenge: structured.laenge ?? null, breite: structured.breite ?? null,
     hoehe: structured.hoehe ?? structured.hoehe_geschaetzt ?? null,
@@ -688,7 +711,7 @@ async function verarbeiteCadAnalyseJob(tenant, job) {
     traufhoehe: structured.traufhoehe ?? null, dachform: structured.dachform ?? null,
     geschosse: structured.geschosse ?? null,
     zusammenfassung: structured.zusammenfassung || '',
-    hinweise: Array.isArray(structured.hinweise) ? structured.hinweise.filter((h) => typeof h === 'string' && h.trim()).slice(0, 5) : [],
+    hinweise: [...wertHinweise, ...(Array.isArray(structured.hinweise) ? structured.hinweise.filter((h) => typeof h === 'string' && h.trim()).slice(0, 5) : [])],
     verworfen, ohneKi: false,
   };
   // Phase 71: Deterministischer Höhen-Fallback. Das Vision-Modell ist
