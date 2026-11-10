@@ -359,7 +359,7 @@ export default function BuildingForm({ building, systemId, onChange, onSystemCha
             if (pl.firstKoteM) { patch.heightM = pl.firstKoteM; aus.push('Höhe') }
             if (pl.traufKoteM) { patch.eavesHeightM = pl.traufKoteM; aus.push('Traufhöhe') }
             if (pl.dachform) { patch.roofForm = dachMap[pl.dachform]; aus.push('Dachform') }
-            if (aus.length) planVorspann = `Aus den Zeichenlinien des Plans gelesen (Maßstab 1:${pl.massstab}): ${aus.join(', ')}. `
+            if (aus.length) planVorspann = `Aus den Zeichenlinien des Plans gelesen (Maßstab 1:${pl.massstab}): ${aus.join(', ')}.${haupt?.vorbauten?.length ? ` Vorbauten (ca. ${String(Math.round(haupt.vorbauten.reduce((a, v) => a + v.flaecheM2, 0) * 10) / 10).replace('.', ',')} m²) sind in Länge/Breite nicht enthalten – bitte prüfen.` : ''} `
           }
         } catch { /* kein lesbarer Vektor-Plan: es bleibt bei den KI-Werten */ }
       }

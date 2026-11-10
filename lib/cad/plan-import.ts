@@ -7,9 +7,13 @@ import type { GefundenerGrundriss, PlanText } from './grundriss-finden'
 import type { VektorFlaeche } from './pdf-vektoren'
 import { oeffnungenFinden } from './oeffnungen-aus-plan'
 import { gelaendeAusPlan, type GelaendeAusPlan } from './gelaende-aus-plan'
+import { hauptkoerperAusKontur, type Vorbau } from './hauptkoerper'
 import { dachAusPlan, dachKotenAusPlan, pultdachNeigung, type PlanDachform } from './dachform-aus-plan'
 
-export interface PlanImportGeschoss { titel: string; ebene: number; laengeM: number; breiteM: number; flaecheM2: number; fenster?: number; tueren?: number }
+export interface PlanImportGeschoss { titel: string; ebene: number; laengeM: number; breiteM: number; flaecheM2: number; fenster?: number; tueren?: number
+  /** Vorsprünge (z. B. WC-Erker), die nicht in Länge/Breite stecken – diese beschreiben den Hauptkörper */
+  vorbauten?: Vorbau[]
+}
 
 export interface PlanImport {
   dateiname: string
@@ -33,17 +37,25 @@ const runde = (v: number) => Math.round(v * 100) / 100
 /** Aus den gefundenen Grundrissen die Maße je Geschoss bilden (Länge = längere Seite) und das Hauptgeschoss wählen. */
 export function planImportAus(dateiname: string, massstab: number, gefunden: GefundenerGrundriss[], texte: PlanText[] = [], flaechen: VektorFlaeche[] = []): PlanImport | null {
   if (!gefunden.length) return null
-  const geschosse: PlanImportGeschoss[] = gefunden.map((g) => ({
-    titel: g.titel,
-    ebene: g.ebene,
-    laengeM: runde(Math.max(g.breiteM, g.tiefeM)),
-    breiteM: runde(Math.min(g.breiteM, g.tiefeM)),
-    flaecheM2: Math.round(g.flaecheM2 * 10) / 10,
-    ...(flaechen.length ? (() => {
-      const o = oeffnungenFinden(flaechen, g, texte, (0.0254 / 72) * massstab)
-      return { fenster: o.filter((x) => x.typ === 'fenster').length, tueren: o.filter((x) => x.typ === 'tuer').length }
-    })() : {}),
-  }))
+  const mpp = (0.0254 / 72) * massstab
+  const geschosse: PlanImportGeschoss[] = gefunden.map((g) => {
+    // Hauptkörper statt umschließendem Rechteck, wenn nur kleine Vorbauten abstehen
+    const hk = hauptkoerperAusKontur(g.kontur, mpp)
+    const laenge = hk ? hk.laengeM : Math.max(g.breiteM, g.tiefeM)
+    const breite = hk ? hk.breiteM : Math.min(g.breiteM, g.tiefeM)
+    return {
+      titel: g.titel,
+      ebene: g.ebene,
+      laengeM: runde(laenge),
+      breiteM: runde(breite),
+      flaecheM2: Math.round(g.flaecheM2 * 10) / 10,
+      ...(hk && hk.vorbauten.length ? { vorbauten: hk.vorbauten } : {}),
+      ...(flaechen.length ? (() => {
+        const o = oeffnungenFinden(flaechen, g, texte, mpp)
+        return { fenster: o.filter((x) => x.typ === 'fenster').length, tueren: o.filter((x) => x.typ === 'tuer').length }
+      })() : {}),
+    }
+  })
   const ueberGelaende = geschosse.filter((g) => g.ebene >= 0)
   if (!ueberGelaende.length) return null // nur Keller gefunden: kein Gerüst-Grundriss
   const haupt = ueberGelaende.reduce((a, b) => (b.flaecheM2 > a.flaecheM2 ? b : a))
