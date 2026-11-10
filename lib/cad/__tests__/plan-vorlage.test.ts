@@ -25,3 +25,15 @@ describe('Plan-Vorlage: Maßstab', () => {
     expect(korrekturFaktor(1, 50)).toBeNull()
   })
 })
+
+import { massstabAusTexten } from '../plan-vorlage'
+describe('massstabAusTexten', () => {
+  it('liest den häufigsten Maßstab', () => {
+    expect(massstabAusTexten(['M 1:100', 'Schnitt 1:100', 'Detail 1:20'])).toBe(100)
+    expect(massstabAusTexten(['Grundriss 1 : 50'])).toBe(50)
+  })
+  it('ignoriert Uhrzeiten und Zahlen ohne Maßstab', () => {
+    expect(massstabAusTexten(['EZ 290', '11:30', 'Höhe 6,94'])).toBeNull()
+    expect(massstabAusTexten([])).toBeNull()
+  })
+})

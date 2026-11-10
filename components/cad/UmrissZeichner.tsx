@@ -7,7 +7,8 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { fangePunkt, figurPruefen, kantenLaenge, type FangArt, type ZPunkt } from '@/lib/cad/dxf-zeichnen'
-import { korrekturFaktor, massstabNenner, meterJePunkt } from '@/lib/cad/plan-vorlage'
+import { korrekturFaktor, massstabAusTexten, massstabNenner, meterJePunkt } from '@/lib/cad/plan-vorlage'
+import { grundrisseFinden, type GefundenerGrundriss } from '@/lib/cad/grundriss-finden'
 import { ladePlanQuelle, type PlanQuelle, type PlanSeite } from '@/lib/cad/plan-rendern'
 import { aussenkonturMeter } from '@/lib/cad/wand-kontur'
 import type { VektorFlaeche } from '@/lib/cad/pdf-vektoren'
@@ -50,6 +51,7 @@ export default function UmrissZeichner({ planDatei, onUebernehmen, onAbbrechen }
   const [bekanntText, setBekanntText] = useState('')
   const [wandModus, setWandModus] = useState(false)
   const [planInfo, setPlanInfo] = useState<string | null>(null)
+  const [gefunden, setGefunden] = useState<(GefundenerGrundriss & { figur: ZPunkt[] })[] | null>(null)
   const vektorCache = useRef(new Map<string, VektorFlaeche[]>())
   const nenner = massstabNenner(nennerText)
   const mJeSkala = nenner ? meterJePunkt(nenner) * korrektur : 0 // Meter je PDF-Punkt
@@ -77,7 +79,7 @@ export default function UmrissZeichner({ planDatei, onUebernehmen, onAbbrechen }
       quelleRef.current?.freigeben()
       const q = await ladePlanQuelle(datei)
       quelleRef.current = q
-      vektorCache.current.clear(); setWandModus(false); setPlanInfo(null)
+      vektorCache.current.clear(); setWandModus(false); setPlanInfo(null); setGefunden(null)
       setQuelle(q); setSeitenNr(1); setDrehung(0); setKorrektur(1)
     } catch (e) {
       setPlanFehler(e instanceof Error ? e.message : 'Der Plan konnte nicht geladen werden.')
@@ -125,6 +127,31 @@ export default function UmrissZeichner({ planDatei, onUebernehmen, onAbbrechen }
       setPlanFehler(e instanceof Error ? e.message : 'Die Wand konnte nicht ausgewertet werden.')
     } finally { setPlanLaedt(false) }
   }, [quelle, mJeSkala, seitenNr, drehung])
+
+  const grundrisseSuchen = useCallback(async () => {
+    if (!quelle) return
+    setPlanFehler(null); setPlanInfo(null); setGefunden(null); setPlanLaedt(true)
+    try {
+      const key = `${seitenNr}:${drehung}`
+      let fl = vektorCache.current.get(key)
+      if (!fl) { fl = await quelle.vektoren(seitenNr, drehung); vektorCache.current.set(key, fl) }
+      if (fl.length === 0) { setPlanFehler('In dieser Seite liegen keine Zeichenlinien (Scan oder Foto). Bitte die Kontur von Hand nachzeichnen.'); return }
+      const texte = await quelle.texte(seitenNr, drehung)
+      const ms = massstabAusTexten(texte.map((t) => t.s))
+      const m = ms ? meterJePunkt(ms) * korrektur : mJeSkala
+      if (!m) { setPlanFehler('Im Plan steht kein Maßstab (z. B. „1:100“). Bitte oben den Maßstab eintragen und nochmal suchen.'); return }
+      if (ms && ms !== nenner) setNennerText(String(ms))
+      const liste = grundrisseFinden(fl, texte, m).flatMap((g) => {
+        const figur: ZPunkt[] = g.kontur.map((q) => ({ x: Math.round(q.x * m * 100) / 100, z: Math.round(q.y * m * 100) / 100 }))
+        return figurPruefen(figur) ? [] : [{ ...g, figur }]
+      })
+      if (!liste.length) { setPlanFehler('Im Plan wurden keine Grundrisse mit Geschoss-Überschrift gefunden. Bitte „Außenwand anklicken“ nutzen oder von Hand zeichnen.'); return }
+      setGefunden(liste)
+      setPlanInfo(`${liste.length} Grundriss${liste.length > 1 ? 'e' : ''} gefunden${ms ? ` (Maßstab 1:${ms} aus dem Plan)` : ''}. Bitte mit dem Plan vergleichen und übernehmen.`)
+    } catch (e) {
+      setPlanFehler(e instanceof Error ? e.message : 'Die Grundrisse konnten nicht gesucht werden.')
+    } finally { setPlanLaedt(false) }
+  }, [quelle, mJeSkala, korrektur, nenner, seitenNr, drehung])
 
   const messLaenge = messPunkte.length === 2 ? kantenLaenge(messPunkte[0], messPunkte[1]) : 0
   const massstabKorrigieren = () => {
@@ -261,6 +288,7 @@ export default function UmrissZeichner({ planDatei, onUebernehmen, onAbbrechen }
                 <label className='flex items-center gap-1'>Plan sichtbar
                   <input type='range' min={0.2} max={1} step={0.05} value={deckkraft} onChange={(e) => setDeckkraft(parseFloat(e.target.value))} />
                 </label>
+                <button type='button' disabled={planLaedt} className='rounded-lg border border-violet-500 bg-violet-50 px-2 py-1 font-semibold text-violet-800 disabled:opacity-40' onClick={() => { setWandModus(false); void grundrisseSuchen() }} title='Funktioniert bei Vektor-PDFs aus dem CAD, nicht bei Scans'>🔎 Grundrisse im Plan suchen</button>
                 <button type='button' disabled={planLaedt} className={`rounded-lg border px-2 py-1 disabled:opacity-40 ${wandModus ? 'border-orange-500 bg-orange-50 text-orange-800' : 'border-black/10 bg-white'}`} onClick={() => { setWandModus((w) => !w); setMessen(false); setMessPunkte([]); setPlanInfo(null) }} title='Funktioniert bei Vektor-PDFs aus dem CAD, nicht bei Scans'>🧱 Außenwand anklicken</button>
                 <button type='button' className={`rounded-lg border px-2 py-1 ${messen ? 'border-violet-500 bg-violet-50 text-violet-800' : 'border-black/10 bg-white'}`} onClick={() => { setMessen((m) => !m); setMessPunkte([]); setWandModus(false) }}>📏 Maß prüfen</button>
               </>
@@ -268,6 +296,20 @@ export default function UmrissZeichner({ planDatei, onUebernehmen, onAbbrechen }
           </div>
           {bild && wandModus && <p className='text-orange-900'>Einmal auf die äußerste Wandschicht im Grundriss klicken (die ausgefüllte Farbe ganz außen). Die App nimmt die Farbe dieser Wand und berechnet daraus die Außenkontur des Geschosses. Liegt die Kontur innen, den Punkt links unten mit × löschen und die äußere Schicht anklicken.</p>}
           {planInfo && <p className='rounded-lg bg-emerald-50 p-2 text-emerald-800'>{planInfo}</p>}
+          {gefunden && gefunden.length > 0 && (
+            <ul className='space-y-1'>
+              {gefunden.map((g, i) => {
+                const schon = figuren.some((f) => f.length === g.figur.length && f.every((q, k) => q.x === g.figur[k].x && q.z === g.figur[k].z))
+                return (
+                  <li key={i} className='flex items-center justify-between gap-2 rounded-lg border border-black/10 bg-white p-2'>
+                    <span><b>{g.titel}</b>: {fm(g.breiteM)} × {fm(g.tiefeM)} m, {g.kontur.length} Ecken, {Math.round(g.flaecheM2)} m²</span>
+                    <button type='button' disabled={schon} className='rounded-lg bg-violet-600 px-2 py-1 font-semibold text-white disabled:opacity-40' onClick={() => { setFiguren((a) => [...a, g.figur]); setFehler(null) }}>{schon ? 'übernommen' : 'Übernehmen'}</button>
+                  </li>
+                )
+              })}
+              <li className='text-[#86868b]'>Für das Gerüst meist das größte Geschoss über dem Gelände übernehmen. Ein Keller steht meist unter dem Gelände.</li>
+            </ul>
+          )}
           {bild && messen && (
             <div className='flex flex-wrap items-center gap-2 text-violet-900'>
               {messPunkte.length < 2

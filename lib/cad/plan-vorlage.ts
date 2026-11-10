@@ -31,3 +31,22 @@ export function korrekturFaktor(gemessenM: number, bekanntM: number): number | n
   const f = bekanntM / gemessenM
   return f >= 0.2 && f <= 5 ? f : null
 }
+
+/**
+ * Maßstab aus den Texten einer Plan-Seite lesen („M 1:100“, „1:50“ …). Bei mehreren Angaben zählt die häufigste;
+ * bei Gleichstand die größere Zahl (Detailmaßstäbe wie 1:20 stehen meist nur einmal). null, wenn nichts gefunden wird.
+ */
+export function massstabAusTexten(texte: string[]): number | null {
+  const zaehler = new Map<number, number>()
+  for (const t of texte) {
+    const re = /(?:^|[^\d:])1\s*:\s*(\d{2,4})(?!\d)/g
+    let m: RegExpExecArray | null
+    while ((m = re.exec(t))) {
+      const n = parseInt(m[1], 10)
+      if (n >= 20 && n <= 500) zaehler.set(n, (zaehler.get(n) ?? 0) + 1)
+    }
+  }
+  let best: number | null = null, bestN = 0
+  for (const [n, c] of zaehler) if (c > bestN || (c === bestN && best !== null && n > best)) { best = n; bestN = c }
+  return best
+}
