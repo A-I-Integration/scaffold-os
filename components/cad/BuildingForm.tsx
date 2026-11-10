@@ -20,6 +20,7 @@ import { holeStempel } from '@/lib/cad/arbeitsstand'
 import { erkenneGrundriss, FORM_NAME } from '@/lib/cad/grundriss-erkennung'
 import { portalAlsTuer } from '@/lib/cad/portal-erkennung'
 import { analysiereDreiecke, schaetzeEinheit, spannweiten, nullpunktUeberTiefstem, abschnitteAusTeilen, abschnitteAusTeileListe, vorgabeAchseEinheit, type GebaeudeTeil } from '@/lib/cad/modell-analyse'
+import { planLesen } from '@/lib/cad/plan-import'
 import { umrissBox } from '@/lib/calculations/cad-umriss'
 import { leseDxfUmriss, mitHoehen, DXF_FORM_NAME, type DxfUmrissErgebnis } from '@/lib/cad/dxf-umriss'
 import type { IfcZusatz } from '@/lib/cad/ifc-einleser'
@@ -345,6 +346,24 @@ export default function BuildingForm({ building, systemId, onChange, onSystemCha
         }
       }
 
+      // Vektor-PDF aus dem CAD: Maße, Höhen und Dachform stehen auf den Zentimeter im Plan und schlagen die KI-Werte
+      // (die KI mischt gern Geschosse und rät die Dachform). Fehlt etwas, bleibt der KI-Wert stehen.
+      let planVorspann = ''
+      if (/\.pdf$/i.test(file.name)) {
+        try {
+          const pl = await planLesen(file)
+          if (pl) {
+            const haupt = pl.geschosse.find((g) => g.ebene === pl.hauptEbene)
+            const aus: string[] = []
+            if (haupt) { patch.lengthM = haupt.laengeM; patch.widthM = haupt.breiteM; aus.push('Länge/Breite') }
+            if (pl.firstKoteM) { patch.heightM = pl.firstKoteM; aus.push('Höhe') }
+            if (pl.traufKoteM) { patch.eavesHeightM = pl.traufKoteM; aus.push('Traufhöhe') }
+            if (pl.dachform) { patch.roofForm = dachMap[pl.dachform]; aus.push('Dachform') }
+            if (aus.length) planVorspann = `Aus den Zeichenlinien des Plans gelesen (Maßstab 1:${pl.massstab}): ${aus.join(', ')}. `
+          }
+        } catch { /* kein lesbarer Vektor-Plan: es bleibt bei den KI-Werten */ }
+      }
+
       if (Object.keys(patch).length === 0) {
         setAnalyseHinweis(dxfVorspann + 'Keine eindeutig belegten Maße gefunden – bitte Werte manuell eintragen.')
       } else {
@@ -367,7 +386,7 @@ export default function BuildingForm({ building, systemId, onChange, onSystemCha
         if (vorherigeAutoFelder.includes('sections') && !('sections' in patch)) delete neuesGebaeude.sections
         onChange(neuesGebaeude)
         const uebernommen = Object.keys(patch).length
-        setAnalyseHinweis(`${dxfVorspann}${ergebnis.ohneKi ? 'Direkt aus dem Plan erkannt (ohne KI)' : 'KI-Vorschlag (aus der Queue)'}: ${uebernommen} Angabe(n) übernommen, bitte prüfen.${ergebnis.hoeheGeschaetzt ? ' Höhe geschätzt aus Geschosszahl.' : ''}${ergebnis.abschnitte?.length >= 2 ? ` ${ergebnis.abschnitte.length} Höhenabschnitte erkannt (siehe „Mehrteiliges Gebäude“).` : ''}${ergebnis.abschnitte?.some((a: any) => a.spitzeM) ? ' Spitzer Aufbau (z. B. Turmhelm) erkannt und als Walmdach/Pyramide eingetragen – Schafthöhe und Spitze bitte prüfen; welche Abschnitte eingerüstet werden, wählst du unter „Mehrteiliges Gebäude“.' : ''}${Array.isArray(ergebnis.hinweise) && ergebnis.hinweise.length ? ' Hinweise: ' + ergebnis.hinweise.join(' ') : ''}${ergebnis.verworfen?.length ? ' Verworfen (unbelegt): ' + ergebnis.verworfen.join('; ') : ''}`)
+        setAnalyseHinweis(`${dxfVorspann}${planVorspann}${ergebnis.ohneKi ? 'Direkt aus dem Plan erkannt (ohne KI)' : 'KI-Vorschlag (aus der Queue)'}: ${uebernommen} Angabe(n) übernommen, bitte prüfen.${ergebnis.hoeheGeschaetzt ? ' Höhe geschätzt aus Geschosszahl.' : ''}${ergebnis.abschnitte?.length >= 2 ? ` ${ergebnis.abschnitte.length} Höhenabschnitte erkannt (siehe „Mehrteiliges Gebäude“).` : ''}${ergebnis.abschnitte?.some((a: any) => a.spitzeM) ? ' Spitzer Aufbau (z. B. Turmhelm) erkannt und als Walmdach/Pyramide eingetragen – Schafthöhe und Spitze bitte prüfen; welche Abschnitte eingerüstet werden, wählst du unter „Mehrteiliges Gebäude“.' : ''}${Array.isArray(ergebnis.hinweise) && ergebnis.hinweise.length ? ' Hinweise: ' + ergebnis.hinweise.join(' ') : ''}${ergebnis.verworfen?.length ? ' Verworfen (unbelegt): ' + ergebnis.verworfen.join('; ') : ''}`)
       }
     } catch (err: any) {
       setAnalyseHinweis('❌ ' + err.message)
