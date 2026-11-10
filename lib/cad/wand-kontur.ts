@@ -106,7 +106,7 @@ function luecke(a: Teil['bbox'], b: Teil['bbox']): number {
 /** Alle gleichfarbigen Teilpfade, die über Lücken ≤ abstand mit dem Startstück zusammenhängen (mit Gitter-Index). */
 function wandCluster(teile: Teil[], start: Teil, abstand: number, mitte: Pt, radius: number): Teil[] {
   const imKreis = (t: Teil) => t.bbox[2] >= mitte.x - radius && t.bbox[0] <= mitte.x + radius && t.bbox[3] >= mitte.y - radius && t.bbox[1] <= mitte.y + radius
-  const gleich = teile.filter((t) => t.fill === start.fill && t.linie === start.linie && imKreis(t))
+  const gleich = teile.filter((t) => t.fill === start.fill && t.linie === start.linie && imKreis(t) && Math.max(t.bbox[2] - t.bbox[0], t.bbox[3] - t.bbox[1]) <= radius)
   const zelle = Math.max(abstand, 1)
   const index = new Map<string, Teil[]>()
   const schluessel = (cx: number, cy: number) => cx + ',' + cy
