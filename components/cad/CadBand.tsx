@@ -6,7 +6,7 @@
 
 import { useState, type ReactNode } from 'react'
 import {
-  Scissors, PlusSquare, ChevronsUp, Layers, Undo2, Redo2, RotateCcw, Ruler, Box, Grid2x2, Eye, Home, Building2, Leaf,
+  Scissors, PlusSquare, ChevronsUp, Layers, Undo2, Redo2, RotateCcw, Ruler, Box, Grid2x2, Eye, Home, Building2, Leaf, Sparkles,
   FileText, FileDown, Printer, Save, Package, CalendarClock, Download, Camera, Minus, Spline, Circle, Trash2, type LucideIcon,
 } from 'lucide-react'
 import { CATALOG_ITEMS } from './ComponentCatalog'
@@ -48,6 +48,7 @@ export interface CadBandProps {
   showScaffold: boolean; onShowScaffold: (v: boolean) => void
   showDimensions: boolean; onShowDimensions: (v: boolean) => void
   showEnvironment: boolean; onShowEnvironment: (v: boolean) => void
+  hoheQualitaet: boolean; onHoheQualitaet: (v: boolean) => void
   viewAngle: AnsichtWinkel
   onViewAngle: (a: AnsichtWinkel) => void
   farbModus: 'real' | 'bauteil' | 'praesentation' | 'statik'
@@ -206,6 +207,7 @@ export default function CadBand(p: CadBandProps) {
               <Knopf icon={Box} label='Gerüst' aktiv={p.showScaffold} onClick={() => p.onShowScaffold(!p.showScaffold)} />
               <Knopf icon={Ruler} label='Bemaßung' aktiv={p.showDimensions} onClick={() => p.onShowDimensions(!p.showDimensions)} />
               <Knopf icon={Leaf} label='Umgebung' aktiv={p.showEnvironment} onClick={() => p.onShowEnvironment(!p.showEnvironment)} />
+              <Knopf icon={Sparkles} label='Hohe Qualität' aktiv={p.hoheQualitaet} onClick={() => p.onHoheQualitaet(!p.hoheQualitaet)} />
             </Gruppe>
             <Gruppe name='Blickrichtung'>
               {([['perspective', 'Perspektive', Building2], ['front', 'Vorne', Grid2x2], ['back', 'Hinten', Grid2x2], ['left', 'Links', Grid2x2], ['right', 'Rechts', Grid2x2], ['top', 'Oben', Eye]] as [AnsichtWinkel, string, LucideIcon][]).map(([a, name, I]) => (

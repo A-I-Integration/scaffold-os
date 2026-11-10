@@ -15,6 +15,7 @@
 import { useMemo, useState, useRef, useEffect, useCallback, memo, createContext, useContext } from 'react'
 import { Canvas, useThree, useFrame } from '@react-three/fiber'
 import { OrbitControls, Grid, Text, Sky, AdaptiveDpr, AdaptiveEvents, ContactShadows, Edges } from '@react-three/drei'
+import { lazy, Suspense } from 'react'
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js'
 import * as THREE from 'three'
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
@@ -73,6 +74,8 @@ interface Props {
   // NEU (Umgebung, Schritt 1): Bäume um das Gebäude. Optional, rein additiv;
   // ohne diese Prop bleibt die Szene exakt wie vorher.
   showEnvironment?: boolean
+  /** Hohe Qualität: Kontaktschatten (SSAO) und filmischer Farbton; belastet die Grafik */
+  hoheQualitaet?: boolean
   farbModus?: FarbModus
   /** Echtes Gebäude (GLB mit Texturen oder farbige Punktwolke) statt des einfachen Baukörpers */
   echtesGebaeude?: EchtesGebaeudeDaten | null
@@ -604,6 +607,8 @@ function getNetTex(): THREE.CanvasTexture | null {
   }
   return netTexCache
 }
+
+const Nachbearbeitung3D = lazy(() => import('./Nachbearbeitung3D'))
 
 // Umgebungslicht für die Metallreflexionen, selbst erzeugt (RoomEnvironment).
 // Vorher kam es als HDR-Datei von einem fremden Server: ohne Netz (Baustelle,
@@ -2067,6 +2072,7 @@ function Scaffold3D({
   customDimensions,
   pendingMeasurePoint,
   showEnvironment,
+  hoheQualitaet,
   farbModus = 'real',
   abbauMarkiert,
   echtesGebaeude,
@@ -2184,6 +2190,11 @@ function Scaffold3D({
         </EchtesGebaeudeKontext.Provider>
         </AbbauMarkKontext.Provider>
         </FarbModusKontext.Provider>
+        {hoheQualitaet && (
+          <Suspense fallback={null}>
+            <Nachbearbeitung3D />
+          </Suspense>
+        )}
         <AutoFraming targetRef={contentRef} modelKey={modelKey} />
         <GroundingShadow targetRef={contentRef} modelKey={modelKey} />
         {!(showEnvironment && !bridgeMode) && (
