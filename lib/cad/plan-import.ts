@@ -64,7 +64,7 @@ export function planImportAus(dateiname: string, massstab: number, gefunden: Gef
   const dach = dachAusPlan(gefunden, texte, (0.0254 / 72) * massstab)
   const koten = dachKotenAusPlan(texte)
   const neigung = dach?.dachform === 'Pultdach' && koten.firstM !== undefined && koten.traufeM !== undefined
-    ? pultdachNeigung(koten.firstM, koten.traufeM, dach.tiefeM) : null
+    ? pultdachNeigung(koten.firstM, koten.traufeM, dachTiefeOhneVorbau(dach.tiefeM, haupt)) : null
   return {
     dateiname, massstab, geschosse, hauptEbene: haupt.ebene,
     ...(dach ? { dachform: dach.dachform } : {}),
@@ -73,6 +73,12 @@ export function planImportAus(dateiname: string, massstab: number, gefunden: Gef
     ...(neigung !== null ? { dachneigungGrad: neigung } : {}),
     ...(gelaende ? { gelaende } : {}),
   }
+}
+
+/** Die Dachtiefe stammt aus dem umschließenden Rechteck; ragt ein Vorbau heraus, zählt die Seite des Hauptkörpers, die ihr am nächsten liegt. */
+function dachTiefeOhneVorbau(tiefeM: number, g: PlanImportGeschoss): number {
+  if (!g.vorbauten?.length) return tiefeM
+  return Math.abs(g.laengeM - tiefeM) <= Math.abs(g.breiteM - tiefeM) ? g.laengeM : g.breiteM
 }
 
 /** Geschosse über dem Gelände, die deutlich (> 1 m) kürzer sind als das Hauptgeschoss: Rücksprünge. */
