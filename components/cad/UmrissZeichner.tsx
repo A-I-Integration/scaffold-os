@@ -9,7 +9,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { fangePunkt, figurPruefen, kantenLaenge, type FangArt, type ZPunkt } from '@/lib/cad/dxf-zeichnen'
 import { korrekturFaktor, massstabAusTexten, massstabNenner, meterJePunkt } from '@/lib/cad/plan-vorlage'
 import { grundrisseFinden, type GefundenerGrundriss } from '@/lib/cad/grundriss-finden'
-import { dachformAusPlan } from '@/lib/cad/dachform-aus-plan'
+import { dachAusPlan, dachKotenAusPlan, pultdachNeigung } from '@/lib/cad/dachform-aus-plan'
 import { ladePlanQuelle, type PlanQuelle, type PlanSeite } from '@/lib/cad/plan-rendern'
 import { aussenkonturMeter } from '@/lib/cad/wand-kontur'
 import type { VektorFlaeche } from '@/lib/cad/pdf-vektoren'
@@ -143,14 +143,18 @@ export default function UmrissZeichner({ planDatei, onUebernehmen, onAbbrechen }
       if (!m) { setPlanFehler('Im Plan steht kein Maßstab (z. B. „1:100“). Bitte oben den Maßstab eintragen und nochmal suchen.'); return }
       if (ms && ms !== nenner) setNennerText(String(ms))
       const roh = grundrisseFinden(fl, texte, m)
-      const dach = dachformAusPlan(roh, texte, m)
+      const da = dachAusPlan(roh, texte, m)
+      const dach = da?.dachform ?? null
+      const koten = dachKotenAusPlan(texte)
+      const neigung = da?.dachform === 'Pultdach' && koten.firstM !== undefined && koten.traufeM !== undefined ? pultdachNeigung(koten.firstM, koten.traufeM, da.tiefeM) : null
+      const kotenText = [koten.firstM !== undefined ? `First +${koten.firstM.toFixed(2).replace('.', ',')} m` : '', koten.traufeM !== undefined ? `Traufe +${koten.traufeM.toFixed(2).replace('.', ',')} m` : ''].filter(Boolean).join(', ')
       const liste = roh.flatMap((g) => {
         const figur: ZPunkt[] = g.kontur.map((q) => ({ x: Math.round(q.x * m * 100) / 100, z: Math.round(q.y * m * 100) / 100 }))
         return figurPruefen(figur) ? [] : [{ ...g, figur }]
       })
       if (!liste.length) { setPlanFehler('Im Plan wurden keine Grundrisse mit Geschoss-Überschrift gefunden. Bitte „Außenwand anklicken“ nutzen oder von Hand zeichnen.'); return }
       setGefunden(liste)
-      setPlanInfo(`${liste.length} Grundriss${liste.length > 1 ? 'e' : ''} gefunden${ms ? ` (Maßstab 1:${ms} aus dem Plan)` : ''}.${dach ? ` Dachform laut Plan: ${dach} (bitte unter „Dach“ einstellen).` : ''} Bitte mit dem Plan vergleichen und übernehmen.`)
+      setPlanInfo(`${liste.length} Grundriss${liste.length > 1 ? 'e' : ''} gefunden${ms ? ` (Maßstab 1:${ms} aus dem Plan)` : ''}.${dach ? ` Dachform laut Plan: ${dach} (bitte unter „Dach“ einstellen).` : ''}${kotenText ? ` Höhen laut Schnitt (±0,00 = Erdgeschoss-Fußboden): ${kotenText}.` : ''}${neigung !== null ? ` Dachneigung ca. ${String(neigung).replace('.', ',')}° (ohne Überstand).` : ''} Bitte mit dem Plan vergleichen und übernehmen.`)
     } catch (e) {
       setPlanFehler(e instanceof Error ? e.message : 'Die Grundrisse konnten nicht gesucht werden.')
     } finally { setPlanLaedt(false) }

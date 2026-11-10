@@ -4,7 +4,7 @@
 // ============================================================
 
 import type { GefundenerGrundriss, PlanText } from './grundriss-finden'
-import { dachformAusPlan, type PlanDachform } from './dachform-aus-plan'
+import { dachAusPlan, dachKotenAusPlan, pultdachNeigung, type PlanDachform } from './dachform-aus-plan'
 
 export interface PlanImportGeschoss { titel: string; ebene: number; laengeM: number; breiteM: number; flaecheM2: number }
 
@@ -16,6 +16,11 @@ export interface PlanImport {
   hauptEbene: number
   /** Aus First-/Traufe-Beschriftungen gelesen; fehlt, wenn der Plan es nicht eindeutig zeigt */
   dachform?: PlanDachform
+  /** Kote der First-/Traufkante laut Beschriftung im Schnitt (Meter, bezogen auf ±0,00 = Erdgeschoss-Fußboden) */
+  firstKoteM?: number
+  traufKoteM?: number
+  /** Nur bei Pultdach mit beiden Koten: atan(Höhenunterschied / Tiefe), ohne Dachüberstand */
+  dachneigungGrad?: number
 }
 
 const runde = (v: number) => Math.round(v * 100) / 100
@@ -33,8 +38,17 @@ export function planImportAus(dateiname: string, massstab: number, gefunden: Gef
   const ueberGelaende = geschosse.filter((g) => g.ebene >= 0)
   if (!ueberGelaende.length) return null // nur Keller gefunden: kein Gerüst-Grundriss
   const haupt = ueberGelaende.reduce((a, b) => (b.flaecheM2 > a.flaecheM2 ? b : a))
-  const dachform = dachformAusPlan(gefunden, texte, 0.0254 / 72 * massstab) ?? undefined
-  return { dateiname, massstab, geschosse, hauptEbene: haupt.ebene, ...(dachform ? { dachform } : {}) }
+  const dach = dachAusPlan(gefunden, texte, (0.0254 / 72) * massstab)
+  const koten = dachKotenAusPlan(texte)
+  const neigung = dach?.dachform === 'Pultdach' && koten.firstM !== undefined && koten.traufeM !== undefined
+    ? pultdachNeigung(koten.firstM, koten.traufeM, dach.tiefeM) : null
+  return {
+    dateiname, massstab, geschosse, hauptEbene: haupt.ebene,
+    ...(dach ? { dachform: dach.dachform } : {}),
+    ...(koten.firstM !== undefined ? { firstKoteM: koten.firstM } : {}),
+    ...(koten.traufeM !== undefined ? { traufKoteM: koten.traufeM } : {}),
+    ...(neigung !== null ? { dachneigungGrad: neigung } : {}),
+  }
 }
 
 /** Geschosse über dem Gelände, die deutlich (> 1 m) kürzer sind als das Hauptgeschoss: Rücksprünge. */
