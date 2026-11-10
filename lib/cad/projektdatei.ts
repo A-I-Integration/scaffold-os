@@ -159,6 +159,14 @@ export function liesProjektdatei(text: string): LeseErgebnis {
       const von = zahl(k.vonM, 0, MAX_MASS_M), bis = zahl(k.bisM, 0, MAX_MASS_M)
       if (von != null && bis != null) opt.kederplane = { vonM: von, bisM: bis }
     }
+    if (o.dachfang && typeof o.dachfang === 'object') {
+      const d = o.dachfang as Record<string, unknown>
+      const h = zahl(d.hoeheM, 0.1, 10)
+      if (h != null) {
+        opt.dachfang = { hoeheM: h }
+        const ab = zahl(d.abTraufeM, 0, MAX_MASS_M); if (ab != null) opt.dachfang.abTraufeM = ab
+      }
+    }
     if (o.aufzug && typeof o.aufzug === 'object') {
       const z = o.aufzug as Record<string, unknown>
       if (z.seite === 'front' || z.seite === 'back' || z.seite === 'left' || z.seite === 'right') {
