@@ -26,3 +26,25 @@ describe('dachformAusPlan', () => {
     expect(dachformAusPlan([og(-1)], [t('First', 150, 20), t('Traufe', 150, 320)], M)).toBeNull()
   })
 })
+
+import { dachKotenAusPlan, pultdachNeigung, dachAusPlan } from '../dachform-aus-plan'
+describe('Dach-Koten', () => {
+  it('liest die Kote unter FIRST und Traufe', () => {
+    expect(dachKotenAusPlan([t('FIRST', 624, 836), t('+6,94', 620, 845), t('Traufe', 291, 865), t('+5,92', 290, 874)])).toEqual({ firstM: 6.94, traufeM: 5.92 })
+  })
+  it('lässt widersprüchliche Koten weg', () => {
+    expect(dachKotenAusPlan([t('First', 0, 0), t('+6,94', 0, 9), t('First', 300, 0), t('+8,44', 300, 9)])).toEqual({})
+  })
+  it('ABBRUCH FIRST zählt nicht', () => {
+    expect(dachKotenAusPlan([t('ABBRUCH FIRST', 0, 0), t('+8,44', 0, 9)])).toEqual({})
+  })
+  it('Neigung = atan(Höhenunterschied / Tiefe)', () => {
+    expect(pultdachNeigung(6.94, 5.92, 10.34)).toBeCloseTo(5.6, 1)
+    expect(pultdachNeigung(5, 6, 10)).toBeNull()
+  })
+  it('liefert die Tiefe quer zum First', () => {
+    const r = dachAusPlan([og()], [t('First', -10, 20), t('First', 310, 20), t('Traufe', 0, 330), t('Traufe', 280, 330)], M)
+    expect(r?.dachform).toBe('Pultdach')
+    expect(r?.tiefeM).toBeCloseTo(300 * M, 1)
+  })
+})

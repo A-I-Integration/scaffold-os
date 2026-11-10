@@ -6,11 +6,13 @@
 // DXF-Datei Gebäudeteile mit Höhenabfrage (lib/cad/dxf-zeichnen.ts → lib/cad/dxf-umriss.ts).
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { fangePunkt, figurPruefen, kantenLaenge, type FangArt, type ZPunkt } from '@/lib/cad/dxf-zeichnen'
+import { fangePunkt, figurenZuDxf, figurPruefen, kantenLaenge, type FangArt, type ZPunkt } from '@/lib/cad/dxf-zeichnen'
 import { korrekturFaktor, massstabAusTexten, massstabNenner, meterJePunkt } from '@/lib/cad/plan-vorlage'
 import { grundrisseFinden, type GefundenerGrundriss } from '@/lib/cad/grundriss-finden'
-import { dachformAusPlan } from '@/lib/cad/dachform-aus-plan'
+import { oeffnungenFinden } from '@/lib/cad/oeffnungen-aus-plan'
+import { dachAusPlan, dachKotenAusPlan, pultdachNeigung } from '@/lib/cad/dachform-aus-plan'
 import { ladePlanQuelle, type PlanQuelle, type PlanSeite } from '@/lib/cad/plan-rendern'
+import { gelaendeAusPlan } from '@/lib/cad/gelaende-aus-plan'
 import { aussenkonturMeter } from '@/lib/cad/wand-kontur'
 import type { VektorFlaeche } from '@/lib/cad/pdf-vektoren'
 
@@ -52,7 +54,7 @@ export default function UmrissZeichner({ planDatei, onUebernehmen, onAbbrechen }
   const [bekanntText, setBekanntText] = useState('')
   const [wandModus, setWandModus] = useState(false)
   const [planInfo, setPlanInfo] = useState<string | null>(null)
-  const [gefunden, setGefunden] = useState<(GefundenerGrundriss & { figur: ZPunkt[] })[] | null>(null)
+  const [gefunden, setGefunden] = useState<(GefundenerGrundriss & { figur: ZPunkt[]; fenster: number; tueren: number; gelaendeText: string })[] | null>(null)
   const vektorCache = useRef(new Map<string, VektorFlaeche[]>())
   const nenner = massstabNenner(nennerText)
   const mJeSkala = nenner ? meterJePunkt(nenner) * korrektur : 0 // Meter je PDF-Punkt
@@ -143,14 +145,20 @@ export default function UmrissZeichner({ planDatei, onUebernehmen, onAbbrechen }
       if (!m) { setPlanFehler('Im Plan steht kein Maßstab (z. B. „1:100“). Bitte oben den Maßstab eintragen und nochmal suchen.'); return }
       if (ms && ms !== nenner) setNennerText(String(ms))
       const roh = grundrisseFinden(fl, texte, m)
-      const dach = dachformAusPlan(roh, texte, m)
+      const da = dachAusPlan(roh, texte, m)
+      const dach = da?.dachform ?? null
+      const koten = dachKotenAusPlan(texte)
+      const neigung = da?.dachform === 'Pultdach' && koten.firstM !== undefined && koten.traufeM !== undefined ? pultdachNeigung(koten.firstM, koten.traufeM, da.tiefeM) : null
+      const kotenText = [koten.firstM !== undefined ? `First +${koten.firstM.toFixed(2).replace('.', ',')} m` : '', koten.traufeM !== undefined ? `Traufe +${koten.traufeM.toFixed(2).replace('.', ',')} m` : ''].filter(Boolean).join(', ')
       const liste = roh.flatMap((g) => {
         const figur: ZPunkt[] = g.kontur.map((q) => ({ x: Math.round(q.x * m * 100) / 100, z: Math.round(q.y * m * 100) / 100 }))
-        return figurPruefen(figur) ? [] : [{ ...g, figur }]
+        const o = oeffnungenFinden(fl, g, texte, m)
+        const gel = g.ebene >= 0 ? gelaendeAusPlan(g, texte, m) : null
+        return figurPruefen(figur) ? [] : [{ ...g, figur, fenster: o.filter((x) => x.typ === 'fenster').length, tueren: o.filter((x) => x.typ === 'tuer').length, gelaendeText: gel ? `Gelände ${gel.minM.toFixed(2).replace('.', ',')} bis ${gel.maxM >= 0 ? '+' : ''}${gel.maxM.toFixed(2).replace('.', ',')} m` : '' }]
       })
       if (!liste.length) { setPlanFehler('Im Plan wurden keine Grundrisse mit Geschoss-Überschrift gefunden. Bitte „Außenwand anklicken“ nutzen oder von Hand zeichnen.'); return }
       setGefunden(liste)
-      setPlanInfo(`${liste.length} Grundriss${liste.length > 1 ? 'e' : ''} gefunden${ms ? ` (Maßstab 1:${ms} aus dem Plan)` : ''}.${dach ? ` Dachform laut Plan: ${dach} (bitte unter „Dach“ einstellen).` : ''} Bitte mit dem Plan vergleichen und übernehmen.`)
+      setPlanInfo(`${liste.length} Grundriss${liste.length > 1 ? 'e' : ''} gefunden${ms ? ` (Maßstab 1:${ms} aus dem Plan)` : ''}.${dach ? ` Dachform laut Plan: ${dach} (bitte unter „Dach“ einstellen).` : ''}${kotenText ? ` Höhen laut Schnitt (±0,00 = Erdgeschoss-Fußboden): ${kotenText}.` : ''}${neigung !== null ? ` Dachneigung ca. ${String(neigung).replace('.', ',')}° (ohne Überstand).` : ''} Bitte mit dem Plan vergleichen und übernehmen.`)
     } catch (e) {
       setPlanFehler(e instanceof Error ? e.message : 'Die Grundrisse konnten nicht gesucht werden.')
     } finally { setPlanLaedt(false) }
@@ -305,11 +313,16 @@ export default function UmrissZeichner({ planDatei, onUebernehmen, onAbbrechen }
                 const schon = figuren.some((f) => f.length === g.figur.length && f.every((q, k) => q.x === g.figur[k].x && q.z === g.figur[k].z))
                 return (
                   <li key={i} className='flex items-center justify-between gap-2 rounded-lg border border-black/10 bg-white p-2'>
-                    <span><b>{g.titel}</b>: {fm(g.breiteM)} × {fm(g.tiefeM)} m, {g.kontur.length} Ecken, {Math.round(g.flaecheM2)} m²</span>
+                    <span><b>{g.titel}</b>: {fm(g.breiteM)} × {fm(g.tiefeM)} m, {g.kontur.length} Ecken, {Math.round(g.flaecheM2)} m², {g.fenster} Fenster, {g.tueren} Türen{g.gelaendeText ? `, ${g.gelaendeText}` : ''}</span>
                     <button type='button' disabled={schon} className='rounded-lg bg-violet-600 px-2 py-1 font-semibold text-white disabled:opacity-40' onClick={() => { setFiguren((a) => [...a, g.figur]); setFehler(null) }}>{schon ? 'übernommen' : 'Übernehmen'}</button>
                   </li>
                 )
               })}
+              <li><button type='button' disabled={figuren.length === 0} className='rounded-lg border border-black/10 bg-white px-2 py-1 disabled:opacity-40' onClick={() => {
+                const url = URL.createObjectURL(new Blob([figurenZuDxf(figuren)], { type: 'application/dxf' }))
+                const a = document.createElement('a'); a.href = url; a.download = 'grundriss-aus-plan.dxf'; a.click()
+                setTimeout(() => URL.revokeObjectURL(url), 1000)
+              }}>Übernommene Konturen als DXF speichern (Meter)</button></li>
               <li className='text-[#86868b]'>Für das Gerüst meist das größte Geschoss über dem Gelände übernehmen. Ein Keller steht meist unter dem Gelände.</li>
             </ul>
           )}

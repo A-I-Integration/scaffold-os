@@ -4,9 +4,12 @@
 // ============================================================
 
 import type { GefundenerGrundriss, PlanText } from './grundriss-finden'
-import { dachformAusPlan, type PlanDachform } from './dachform-aus-plan'
+import type { VektorFlaeche } from './pdf-vektoren'
+import { oeffnungenFinden } from './oeffnungen-aus-plan'
+import { gelaendeAusPlan, type GelaendeAusPlan } from './gelaende-aus-plan'
+import { dachAusPlan, dachKotenAusPlan, pultdachNeigung, type PlanDachform } from './dachform-aus-plan'
 
-export interface PlanImportGeschoss { titel: string; ebene: number; laengeM: number; breiteM: number; flaecheM2: number }
+export interface PlanImportGeschoss { titel: string; ebene: number; laengeM: number; breiteM: number; flaecheM2: number; fenster?: number; tueren?: number }
 
 export interface PlanImport {
   dateiname: string
@@ -16,12 +19,19 @@ export interface PlanImport {
   hauptEbene: number
   /** Aus First-/Traufe-Beschriftungen gelesen; fehlt, wenn der Plan es nicht eindeutig zeigt */
   dachform?: PlanDachform
+  /** Kote der First-/Traufkante laut Beschriftung im Schnitt (Meter, bezogen auf ±0,00 = Erdgeschoss-Fußboden) */
+  firstKoteM?: number
+  traufKoteM?: number
+  /** Nur bei Pultdach mit beiden Koten: atan(Höhenunterschied / Tiefe), ohne Dachüberstand */
+  dachneigungGrad?: number
+  /** Geländekoten rund um das Hauptgeschoss (±0,00 = dessen Fußboden); fehlt bei weniger als 2 Punkten */
+  gelaende?: GelaendeAusPlan
 }
 
 const runde = (v: number) => Math.round(v * 100) / 100
 
 /** Aus den gefundenen Grundrissen die Maße je Geschoss bilden (Länge = längere Seite) und das Hauptgeschoss wählen. */
-export function planImportAus(dateiname: string, massstab: number, gefunden: GefundenerGrundriss[], texte: PlanText[] = []): PlanImport | null {
+export function planImportAus(dateiname: string, massstab: number, gefunden: GefundenerGrundriss[], texte: PlanText[] = [], flaechen: VektorFlaeche[] = []): PlanImport | null {
   if (!gefunden.length) return null
   const geschosse: PlanImportGeschoss[] = gefunden.map((g) => ({
     titel: g.titel,
@@ -29,12 +39,28 @@ export function planImportAus(dateiname: string, massstab: number, gefunden: Gef
     laengeM: runde(Math.max(g.breiteM, g.tiefeM)),
     breiteM: runde(Math.min(g.breiteM, g.tiefeM)),
     flaecheM2: Math.round(g.flaecheM2 * 10) / 10,
+    ...(flaechen.length ? (() => {
+      const o = oeffnungenFinden(flaechen, g, texte, (0.0254 / 72) * massstab)
+      return { fenster: o.filter((x) => x.typ === 'fenster').length, tueren: o.filter((x) => x.typ === 'tuer').length }
+    })() : {}),
   }))
   const ueberGelaende = geschosse.filter((g) => g.ebene >= 0)
   if (!ueberGelaende.length) return null // nur Keller gefunden: kein Gerüst-Grundriss
   const haupt = ueberGelaende.reduce((a, b) => (b.flaecheM2 > a.flaecheM2 ? b : a))
-  const dachform = dachformAusPlan(gefunden, texte, 0.0254 / 72 * massstab) ?? undefined
-  return { dateiname, massstab, geschosse, hauptEbene: haupt.ebene, ...(dachform ? { dachform } : {}) }
+  const hauptG = gefunden.find((g) => g.ebene === haupt.ebene)
+  const gelaende = hauptG ? gelaendeAusPlan(hauptG, texte, (0.0254 / 72) * massstab) : null
+  const dach = dachAusPlan(gefunden, texte, (0.0254 / 72) * massstab)
+  const koten = dachKotenAusPlan(texte)
+  const neigung = dach?.dachform === 'Pultdach' && koten.firstM !== undefined && koten.traufeM !== undefined
+    ? pultdachNeigung(koten.firstM, koten.traufeM, dach.tiefeM) : null
+  return {
+    dateiname, massstab, geschosse, hauptEbene: haupt.ebene,
+    ...(dach ? { dachform: dach.dachform } : {}),
+    ...(koten.firstM !== undefined ? { firstKoteM: koten.firstM } : {}),
+    ...(koten.traufeM !== undefined ? { traufKoteM: koten.traufeM } : {}),
+    ...(neigung !== null ? { dachneigungGrad: neigung } : {}),
+    ...(gelaende ? { gelaende } : {}),
+  }
 }
 
 /** Geschosse über dem Gelände, die deutlich (> 1 m) kürzer sind als das Hauptgeschoss: Rücksprünge. */
@@ -58,7 +84,7 @@ export async function planLesen(datei: File): Promise<PlanImport | null> {
       if (!ms) continue
       const fl = await q.vektoren(nr, 0)
       if (!fl.length) continue
-      const r = planImportAus(datei.name, ms, grundrisseFinden(fl, texte, meterJePunkt(ms)), texte)
+      const r = planImportAus(datei.name, ms, grundrisseFinden(fl, texte, meterJePunkt(ms)), texte, fl)
       if (r) return r
     }
     return null

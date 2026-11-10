@@ -66,7 +66,7 @@ export default function GrundrissUpload({ sessionId, projectId }: Props) {
     if (!haupt) return;
     let alt: Record<string, unknown> = {};
     try { alt = JSON.parse(localStorage.getItem('scaffold_grundriss_daten') || '{}') || {}; } catch { /* ignore */ }
-    const neu = { ...alt, laenge: haupt.laengeM, breite: haupt.breiteM, ...(p.dachform ? { dachform: p.dachform } : {}) };
+    const neu = { ...alt, laenge: haupt.laengeM, breite: haupt.breiteM, ...(p.dachform ? { dachform: p.dachform } : {}), ...(p.firstKoteM ? { hoehe: p.firstKoteM } : {}), ...(p.traufKoteM ? { traufhoehe: p.traufKoteM } : {}) };
     localStorage.setItem('scaffold_plan_import', JSON.stringify(p));
     localStorage.setItem('scaffold_grundriss_daten', JSON.stringify(neu));
     ['scaffold_step2', 'scaffold_step3', 'scaffold_step4', 'scaffold_step5',
@@ -132,7 +132,7 @@ export default function GrundrissUpload({ sessionId, projectId }: Props) {
       try {
         const pl: PlanImport | null = JSON.parse(localStorage.getItem('scaffold_plan_import') || 'null');
         const haupt = pl?.geschosse.find((g) => g.ebene === pl.hauptEbene);
-        if (haupt && pl) strukt = { ...(strukt || {}), laenge: haupt.laengeM, breite: haupt.breiteM, ...(pl.dachform ? { dachform: pl.dachform } : {}) };
+        if (haupt && pl) strukt = { ...(strukt || {}), laenge: haupt.laengeM, breite: haupt.breiteM, ...(pl.dachform ? { dachform: pl.dachform } : {}), ...(pl.firstKoteM ? { hoehe: pl.firstKoteM } : {}), ...(pl.traufKoteM ? { traufhoehe: pl.traufKoteM } : {}) };
       } catch { /* ignore */ }
       json.structured = strukt;
       setResult(json.analysis);
@@ -216,13 +216,27 @@ export default function GrundrissUpload({ sessionId, projectId }: Props) {
           <p className="font-medium">📐 Maße aus dem Plan gelesen (Maßstab 1:{plan.massstab})</p>
           {plan.geschosse.map((g) => (
             <p key={g.titel}>
-              {g.titel}: {String(g.laengeM).replace('.', ',')} × {String(g.breiteM).replace('.', ',')} m{g.ebene === plan.hauptEbene ? ' ← als Länge und Breite eingetragen' : ''}
+              {g.titel}: {String(g.laengeM).replace('.', ',')} × {String(g.breiteM).replace('.', ',')} m{g.fenster !== undefined && g.tueren !== undefined ? `, ${g.fenster} Fenster, ${g.tueren} Türen` : ''}{g.ebene === plan.hauptEbene ? ' ← als Länge und Breite eingetragen' : ''}
             </p>
           ))}
           {ruecksprunge(plan).length > 0 && (
             <p>Das {ruecksprunge(plan).map((g) => g.titel).join(', ')} ist kürzer als das Hauptgeschoss – in Schritt 2 bitte prüfen, ob es einen eigenen Abschnitt braucht.</p>
           )}
           {plan.dachform && <p>Dachform laut First-/Traufe-Beschriftung im Plan: {plan.dachform}</p>}
+          {(plan.firstKoteM !== undefined || plan.traufKoteM !== undefined) && (
+            <p>
+              Höhen laut Schnitt (±0,00 = Erdgeschoss-Fußboden): {plan.firstKoteM !== undefined && <>First +{String(plan.firstKoteM.toFixed(2)).replace('.', ',')} m</>}
+              {plan.firstKoteM !== undefined && plan.traufKoteM !== undefined && ', '}
+              {plan.traufKoteM !== undefined && <>Traufe +{String(plan.traufKoteM.toFixed(2)).replace('.', ',')} m</>}
+              {plan.dachneigungGrad !== undefined && <> · Dachneigung ca. {String(plan.dachneigungGrad).replace('.', ',')}° (ohne Überstand gerechnet)</>}. Am Hang ist die Gerüsthöhe auf der Talseite größer.
+            </p>
+          )}
+          {plan.gelaende && (
+            <p>
+              Gelände am Erdgeschoss laut Höhenpunkten im Grundriss: {plan.gelaende.minM.toFixed(2).replace('.', ',')} bis {plan.gelaende.maxM >= 0 ? '+' : ''}{plan.gelaende.maxM.toFixed(2).replace('.', ',')} m,
+              {' '}Unterschied {String(plan.gelaende.unterschiedM).replace('.', ',')} m{plan.gelaende.unterschiedM >= 1 ? ' – Hanglage, die Gerüsthöhe ist je Seite verschieden.' : '.'}
+            </p>
+          )}
           <p className="text-violet-700">Bitte mit dem Plan vergleichen, bevor es weitergeht.</p>
         </div>
       )}
