@@ -155,14 +155,14 @@ function mjOptikFuerSystem(systemId?: string): MjOptik {
 // ist HELL silbrig und MATT - nicht dunkel spiegelnd. Rote Horizontale
 // (Riegel/Belagskanten) wie im Referenz-Rendering, Holz heller.
 const COLOR_MAP: Record<string, string> = {
-  frame: '#dde2e7',        // Rahmen – helles verzinktes Rohr
+  frame: '#8d97a3',        // Rahmen – verzinktes Rohr, mittelgrau, damit das Linienwerk vor hellen Fassaden lesbar bleibt
   deck: '#d9c37c',         // Beläge – gedecktes Gelb, ruhiger als zuvor, damit das Gebäude lesbar bleibt
-  railing: '#d5dade',      // Geländer – verzinkt
-  diagonal: '#cfd4d9',     // Diagonalen – verzinkt
+  railing: '#a0a9b3',      // Geländer – verzinkt
+  diagonal: '#88929e',     // Diagonalen – verzinkt
   footplate: '#aab0b6',    // Fußplatten – etwas dunkler
   coupling: '#8d9399',     // Kupplungen – Gussgrau
   anchor: '#8d9399',       // Anker
-  console: '#dde2e7',      // Konsolen – verzinkt
+  console: '#8d97a3',      // Konsolen – verzinkt
   stair: '#c2c7cc',        // Treppen
   net: '#4a80b8',          // Schutznetz – Blau, halbtransparent
   sheeting: '#e8eaed',     // Kederplane – helle Plane

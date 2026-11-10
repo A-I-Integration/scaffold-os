@@ -139,7 +139,7 @@ export function berechneUmgebung(model: CADModel): Umgebung {
     if (Math.abs(x) > 55 || Math.abs(z) > 55) continue
     if (baeume.some((p) => Math.hypot(p.x - x, p.z - z) < A.baumZuBaum)) continue
     const nadel = rnd() < 0.28
-    const hoehe = nadel ? 9 + rnd() * 6 : 8 + rnd() * 5.5
+    const hoehe = nadel ? 7 + rnd() * 5 : 6 + rnd() * 4.5
     baeume.push({
       x, z, art: nadel ? 'nadel' : 'laub', hoeheM: hoehe,
       kronenRadiusM: nadel ? hoehe * 0.2 : hoehe * (0.27 + rnd() * 0.05),
@@ -155,7 +155,7 @@ export function berechneUmgebung(model: CADModel): Umgebung {
   const heckeZ = gehweg.z0 - 0.45
   for (let x = grundstueck.x0 + 1; x < grundstueck.x1 - 1; x += 0.95 + rndB() * 0.25) {
     if (x > weg.x0 - 0.5 && x < weg.x1 + 0.5) continue
-    hecke.push({ x, z: heckeZ + (rndB() - 0.5) * 0.25, radiusM: 0.55 + rndB() * 0.3, farbe: 0.27 + rndB() * 0.05, hell: 0.2 + rndB() * 0.08 })
+    hecke.push({ x, z: heckeZ + (rndB() - 0.5) * 0.25, radiusM: 0.38 + rndB() * 0.2, farbe: 0.27 + rndB() * 0.05, hell: 0.2 + rndB() * 0.08 })
   }
 
   // ── Laternen am Bordstein
