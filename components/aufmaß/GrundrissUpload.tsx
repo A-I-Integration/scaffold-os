@@ -231,6 +231,12 @@ export default function GrundrissUpload({ sessionId, projectId }: Props) {
               {plan.dachneigungGrad !== undefined && <> · Dachneigung ca. {String(plan.dachneigungGrad).replace('.', ',')}° (ohne Überstand gerechnet)</>}. Am Hang ist die Gerüsthöhe auf der Talseite größer.
             </p>
           )}
+          {plan.gelaende && (
+            <p>
+              Gelände am Erdgeschoss laut Höhenpunkten im Grundriss: {plan.gelaende.minM.toFixed(2).replace('.', ',')} bis {plan.gelaende.maxM >= 0 ? '+' : ''}{plan.gelaende.maxM.toFixed(2).replace('.', ',')} m,
+              {' '}Unterschied {String(plan.gelaende.unterschiedM).replace('.', ',')} m{plan.gelaende.unterschiedM >= 1 ? ' – Hanglage, die Gerüsthöhe ist je Seite verschieden.' : '.'}
+            </p>
+          )}
           <p className="text-violet-700">Bitte mit dem Plan vergleichen, bevor es weitergeht.</p>
         </div>
       )}
