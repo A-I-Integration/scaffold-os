@@ -79,6 +79,7 @@ export default function BuildingForm({ building, systemId, onChange, onSystemCha
   // NWD (Navisworks): Konvertierung in der Autodesk-Cloud, gestaffelte Anzeige Upload → Konvertierung → Einlesen
   const [nwdFortschritt, setNwdFortschritt] = useState<{ phase: 'upload' | 'konvertierung' | 'einlesen'; anteil: number; text: string } | null>(null)
   const [zeichnerOffen, setZeichnerOffen] = useState(false)
+  const [letzterPlan, setLetzterPlan] = useState<File | null>(null) // Plan (PDF/Bild) als Vorlage im Umriss-Zeichner
   // Grundriss (Rechteck, L-Form, Ecken …) automatisch aus dem 3D-Modell erkennen
   const grundriss = useMemo(() => {
     if (!modellImport) return null
@@ -126,6 +127,7 @@ export default function BuildingForm({ building, systemId, onChange, onSystemCha
     setModellImport(null);
     void vergissModell(); // neuer Upload ersetzt das gemerkte Modell
     const ext = '.' + (file.name.split('.').pop() || '').toLowerCase();
+    setLetzterPlan(['.pdf', '.png', '.jpg', '.jpeg', '.webp'].includes(ext) ? file : null);
     if (ext === '.obj' || ext === '.stl') {
       if (file.size > 100 * 1024 * 1024) { setAnalyseHinweis('❌ Datei zu groß (max. 100 MB). Bitte das Modell vereinfachen oder nur das Gebäude exportieren.'); return; }
       try {
@@ -605,7 +607,7 @@ export default function BuildingForm({ building, systemId, onChange, onSystemCha
                 </div>
               )
             })()}
-            {zeichnerOffen && <UmrissZeichner onUebernehmen={zeichnungUebernehmen} onAbbrechen={() => setZeichnerOffen(false)} />}
+            {zeichnerOffen && <UmrissZeichner planDatei={letzterPlan} onUebernehmen={zeichnungUebernehmen} onAbbrechen={() => setZeichnerOffen(false)} />}
             {dxfImport && (() => {
               const e = dxfImport.ergebnis
               const wahl = 'rounded-lg border border-black/10 bg-white px-2 py-1 text-[11px]'

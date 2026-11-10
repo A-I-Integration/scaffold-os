@@ -7,17 +7,21 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { fangePunkt, figurPruefen, kantenLaenge, type FangArt, type ZPunkt } from '@/lib/cad/dxf-zeichnen'
+import { korrekturFaktor, massstabNenner, meterJePunkt } from '@/lib/cad/plan-vorlage'
+import { ladePlanQuelle, type PlanQuelle, type PlanSeite } from '@/lib/cad/plan-rendern'
 
 interface Props {
+  /** Zuletzt hochgeladener Plan (PDF/Bild): wird als Vorlage hinter die Zeichnung gelegt. */
+  planDatei?: File | null
   onUebernehmen: (figuren: ZPunkt[][]) => void
   onAbbrechen: () => void
 }
 
-const RASTER = [0.1, 0.25, 0.5, 1]
+const RASTER = [0.01, 0.05, 0.1, 0.25, 0.5, 1]
 const fm = (v: number) => (Math.round(v * 100) / 100).toLocaleString('de-DE')
 const flaeche = (f: ZPunkt[]) => { let s = 0; for (let i = 0; i < f.length; i++) { const a = f[i], b = f[(i + 1) % f.length]; s += a.x * b.z - b.x * a.z } return Math.abs(s) / 2 }
 
-export default function UmrissZeichner({ onUebernehmen, onAbbrechen }: Props) {
+export default function UmrissZeichner({ planDatei, onUebernehmen, onAbbrechen }: Props) {
   const svgRef = useRef<SVGSVGElement>(null)
   const [figuren, setFiguren] = useState<ZPunkt[][]>([])
   const [aktuell, setAktuell] = useState<ZPunkt[]>([])
@@ -28,6 +32,80 @@ export default function UmrissZeichner({ onUebernehmen, onAbbrechen }: Props) {
   const [fehler, setFehler] = useState<string | null>(null)
   const [laengeText, setLaengeText] = useState('')
   const zieh = useRef<{ px: number; pz: number; ax: number; az: number; bewegt: boolean } | null>(null)
+
+  // ── Plan als Vorlage (PDF/Bild hinter der Zeichnung) ──
+  const [quelle, setQuelle] = useState<PlanQuelle | null>(null)
+  const [seitenNr, setSeitenNr] = useState(1)
+  const [drehung, setDrehung] = useState(0)
+  const [bild, setBild] = useState<PlanSeite | null>(null)
+  const [nennerText, setNennerText] = useState('100')
+  const [korrektur, setKorrektur] = useState(1)
+  const [deckkraft, setDeckkraft] = useState(0.7)
+  const [planFehler, setPlanFehler] = useState<string | null>(null)
+  const [planLaedt, setPlanLaedt] = useState(false)
+  const [messen, setMessen] = useState(false)
+  const [messPunkte, setMessPunkte] = useState<ZPunkt[]>([])
+  const [bekanntText, setBekanntText] = useState('')
+  const nenner = massstabNenner(nennerText)
+  const mJeSkala = nenner ? meterJePunkt(nenner) * korrektur : 0 // Meter je PDF-Punkt
+  const mJeSkalaRef = useRef(mJeSkala)
+  const planBreiteM = bild && mJeSkala ? bild.breitePt * mJeSkala : 0
+  const planHoeheM = bild && mJeSkala ? bild.hoehePt * mJeSkala : 0
+
+  // Wird der Maßstab geändert, wandern die schon gezeichneten Punkte mit (Plan-Ursprung = oben links bleibt fest).
+  useEffect(() => {
+    const alt = mJeSkalaRef.current
+    mJeSkalaRef.current = mJeSkala
+    if (!alt || !mJeSkala || alt === mJeSkala) return
+    const f = mJeSkala / alt
+    const sk = (pt: ZPunkt): ZPunkt => ({ x: Math.round(pt.x * f * 1000) / 1000, z: Math.round(pt.z * f * 1000) / 1000 })
+    setFiguren((a) => a.map((fig) => fig.map(sk)))
+    setAktuell((a) => a.map(sk))
+    setMessPunkte((a) => a.map(sk))
+    setAnsicht((v) => ({ x: v.x * f, z: v.z * f, b: Math.min(500, Math.max(3, v.b * f)) })) // Sichtfeld bleibt auf demselben Planausschnitt
+  }, [mJeSkala])
+
+  const quelleRef = useRef<PlanQuelle | null>(null)
+  const ladePlan = useCallback(async (datei: File) => {
+    setPlanFehler(null); setPlanLaedt(true)
+    try {
+      quelleRef.current?.freigeben()
+      const q = await ladePlanQuelle(datei)
+      quelleRef.current = q
+      setQuelle(q); setSeitenNr(1); setDrehung(0); setKorrektur(1)
+    } catch (e) {
+      setPlanFehler(e instanceof Error ? e.message : 'Der Plan konnte nicht geladen werden.')
+      setQuelle(null); setBild(null)
+    } finally { setPlanLaedt(false) }
+  }, [])
+  useEffect(() => { if (planDatei && /\.(pdf|png|jpe?g|webp)$/i.test(planDatei.name)) void Promise.resolve().then(() => ladePlan(planDatei)) }, [planDatei, ladePlan])
+  useEffect(() => () => { quelleRef.current?.freigeben() }, [])
+  const ersteAnsicht = useRef(true)
+  useEffect(() => {
+    if (!quelle) return
+    let aktiv = true
+    Promise.resolve()
+      .then(() => { if (aktiv) setPlanLaedt(true); return quelle.zeige(seitenNr, drehung) })
+      .then((b) => { if (aktiv) { setBild(b); setPlanFehler(null) } })
+      .catch((e) => { if (aktiv) setPlanFehler(e instanceof Error ? e.message : 'Die Seite konnte nicht dargestellt werden.') })
+      .finally(() => { if (aktiv) setPlanLaedt(false) })
+    return () => { aktiv = false }
+  }, [quelle, seitenNr, drehung])
+  useEffect(() => {
+    // Beim ersten Plan: ganze Seite zeigen, freies Klicken (cm) statt Raster
+    if (!bild || !planBreiteM || !ersteAnsicht.current) return
+    ersteAnsicht.current = false
+    setRasterM(0.01)
+    setAnsicht({ x: -planBreiteM * 0.02, z: -planBreiteM * 0.02, b: Math.min(500, Math.max(3, planBreiteM * 1.04)) })
+  }, [bild, planBreiteM])
+
+  const messLaenge = messPunkte.length === 2 ? kantenLaenge(messPunkte[0], messPunkte[1]) : 0
+  const massstabKorrigieren = () => {
+    const bekannt = parseFloat(bekanntText.replace(',', '.'))
+    const f = korrekturFaktor(messLaenge, bekannt)
+    if (f === null) { setPlanFehler('Prüfmaß nicht plausibel: Strecke und bekannte Länge dürfen höchstens um den Faktor 5 abweichen.'); return }
+    setPlanFehler(null); setKorrektur((k) => k * f); setMessPunkte([]); setBekanntText(''); setMessen(false)
+  }
 
   const ASPEKT = 0.66
   const h = ansicht.b * ASPEKT
@@ -133,6 +211,51 @@ export default function UmrissZeichner({ onUebernehmen, onAbbrechen }: Props) {
           Tipp: Nach dem ersten Punkt eine <b>Länge tippen</b> und Enter drücken, dann geht die Kante exakt so lang in Richtung Maus.
         </p>
 
+        <div className='space-y-2 rounded-xl bg-[#f5f5f7] p-2 text-[11px]'>
+          <div className='flex flex-wrap items-center gap-2'>
+            <label className='cursor-pointer rounded-lg border border-black/10 bg-white px-2 py-1 font-medium'>
+              {quelle ? 'Anderen Plan laden' : '📄 Plan als Vorlage laden (PDF/Bild)'}
+              <input type='file' accept='.pdf,image/png,image/jpeg,image/webp' className='hidden' onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; if (f) { ersteAnsicht.current = true; void ladePlan(f) } }} />
+            </label>
+            {planLaedt && <span className='text-[#86868b]'>Plan wird dargestellt …</span>}
+            {quelle && quelle.seiten > 1 && (
+              <label>Seite{' '}
+                <select value={seitenNr} onChange={(e) => setSeitenNr(parseInt(e.target.value, 10))} className='rounded-lg border border-black/10 px-2 py-1'>
+                  {Array.from({ length: quelle.seiten }, (_, i) => <option key={i} value={i + 1}>{i + 1}</option>)}
+                </select>
+              </label>
+            )}
+            {bild && (
+              <>
+                <label>Maßstab 1:{' '}
+                  <input inputMode='numeric' value={nennerText} onChange={(e) => setNennerText(e.target.value)} className={`w-16 rounded-lg border px-2 py-1 ${nenner ? 'border-black/10' : 'border-red-400'}`} aria-label='Maßstab Nenner' />
+                </label>
+                <button type='button' className='rounded-lg border border-black/10 bg-white px-2 py-1' onClick={() => { ersteAnsicht.current = false; setDrehung((d) => (d + 90) % 360) }} aria-label='Plan drehen'>↻ Drehen</button>
+                <label className='flex items-center gap-1'>Plan sichtbar
+                  <input type='range' min={0.2} max={1} step={0.05} value={deckkraft} onChange={(e) => setDeckkraft(parseFloat(e.target.value))} />
+                </label>
+                <button type='button' className={`rounded-lg border px-2 py-1 ${messen ? 'border-violet-500 bg-violet-50 text-violet-800' : 'border-black/10 bg-white'}`} onClick={() => { setMessen((m) => !m); setMessPunkte([]) }}>📏 Maß prüfen</button>
+              </>
+            )}
+          </div>
+          {bild && messen && (
+            <div className='flex flex-wrap items-center gap-2 text-violet-900'>
+              {messPunkte.length < 2
+                ? <span>Zwei Punkte einer Strecke anklicken, deren Länge im Plan steht (zum Beispiel eine Maßkette).</span>
+                : (
+                  <>
+                    <span>Gemessen: <b>{fm(messLaenge)} m</b>. Im Plan steht:</span>
+                    <input inputMode='decimal' value={bekanntText} onChange={(e) => setBekanntText(e.target.value)} placeholder='z. B. 13,79' className='w-20 rounded-lg border border-black/10 px-2 py-1' aria-label='Länge laut Plan in Metern' />
+                    <span>m</span>
+                    <button type='button' className='rounded-lg bg-violet-600 px-2 py-1 font-semibold text-white disabled:opacity-40' disabled={!bekanntText.trim()} onClick={massstabKorrigieren}>Maßstab angleichen</button>
+                  </>
+                )}
+            </div>
+          )}
+          {bild && <p className='text-[10px] text-[#86868b]'>Der Plan wird im gewählten Maßstab maßstäblich hinterlegt. Stimmt eine bekannte Maßkette nicht, mit „Maß prüfen“ angleichen. Danach Ecken wie gewohnt anklicken; Raster 1 cm ist voreingestellt. Sichtfeld verschieben: ziehen, zoomen: Mausrad.{korrektur !== 1 ? ` Angleichung aktiv: Faktor ${korrektur.toFixed(4).replace('.', ',')}.` : ''}</p>}
+          {planFehler && <p className='rounded-lg bg-red-50 p-2 text-red-700'>{planFehler}</p>}
+        </div>
+
         <div className='flex flex-wrap items-center gap-2 text-[11px]'>
           <label>Raster{' '}
             <select value={rasterM} onChange={(e) => setRasterM(parseFloat(e.target.value))} className='rounded-lg border border-black/10 px-2 py-1'>
@@ -165,11 +288,15 @@ export default function UmrissZeichner({ onUebernehmen, onAbbrechen }: Props) {
           onPointerDown={(e) => { (e.target as Element).setPointerCapture?.(e.pointerId); zieh.current = { px: e.clientX, pz: e.clientY, ax: ansicht.x, az: ansicht.z, bewegt: false } }}
           onPointerUp={(e) => {
             const z = zieh.current; zieh.current = null
-            if (z && !z.bewegt) setzePunkt(fange(zuMeter(e)).punkt)
+            if (z && !z.bewegt) {
+              if (messen) { const q = fange(zuMeter(e)).punkt; setMessPunkte((a) => (a.length >= 2 ? [q] : [...a, q])) }
+              else setzePunkt(fange(zuMeter(e)).punkt)
+            }
           }}
           onPointerLeave={() => setMaus(null)}
           onWheel={(e) => zoom(e.deltaY > 0 ? 1.15 : 1 / 1.15, zuMeter(e))}
         >
+          {bild && planBreiteM > 0 && <image href={bild.url} x={0} y={0} width={planBreiteM} height={planHoeheM} opacity={deckkraft} preserveAspectRatio='none' style={{ pointerEvents: 'none' }} />}
           {linien.map((l, i) => <line key={i} x1={l.x1} y1={l.z1} x2={l.x2} y2={l.z2} stroke={l.dick ? '#cbd5e1' : '#e5e7eb'} strokeWidth={px * (l.dick ? 1.1 : 0.7)} />)}
           {figuren.map((f, i) => (
             <g key={i}>
@@ -178,6 +305,13 @@ export default function UmrissZeichner({ onUebernehmen, onAbbrechen }: Props) {
               <text x={f.reduce((s, p) => s + p.x, 0) / f.length} y={f.reduce((s, p) => s + p.z, 0) / f.length} fontSize={px * 14} textAnchor='middle' dominantBaseline='middle' fill='#475569'>{i + 1}</text>
             </g>
           ))}
+          {messPunkte.length > 0 && (
+            <g>
+              {messPunkte.length === 2 && <line x1={messPunkte[0].x} y1={messPunkte[0].z} x2={messPunkte[1].x} y2={messPunkte[1].z} stroke='#7c3aed' strokeWidth={px * 2} />}
+              {messPunkte.map((q, k) => <circle key={k} cx={q.x} cy={q.z} r={px * 4} fill='#7c3aed' />)}
+              {messPunkte.length === 2 && <text x={(messPunkte[0].x + messPunkte[1].x) / 2} y={(messPunkte[0].z + messPunkte[1].z) / 2 - px * 8} fontSize={px * 13} textAnchor='middle' fill='#6d28d9'>{fm(messLaenge)} m</text>}
+            </g>
+          )}
           {aktuell.length > 0 && (
             <g>
               <polyline points={aktuell.map((p) => `${p.x},${p.z}`).join(' ')} fill='none' stroke='#e8590c' strokeWidth={px * 2} />
