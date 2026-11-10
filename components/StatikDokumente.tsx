@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import {
   DOKUMENT_ARTEN, ERLAUBTE_ENDUNGEN, MAX_DATEI_BYTES, SCHRITTE, darfSchrittSetzen, dateiErlaubt, fristHinweis,
@@ -18,7 +18,7 @@ const de = (iso: string | null | undefined) => (iso ? new Date(iso + 'T12:00:00Z
 const groesse = (b: number | null) => (b == null ? '' : b >= 1048576 ? `${(b / 1048576).toFixed(1).replace('.', ',')} MB` : `${Math.max(1, Math.round(b / 1024))} KB`)
 const FARBE = { rot: 'bg-red-50 text-red-700', gelb: 'bg-amber-50 text-amber-800', gruen: 'bg-emerald-50 text-emerald-700', grau: 'bg-[#f5f5f7] text-[#86868b]' }
 
-export default function StatikDokumente({ projectId, modus }: { projectId: string; modus: Absender }) {
+export default function StatikDokumente({ projectId, modus, onAnzahl }: { projectId: string; modus: Absender; onAnzahl?: (anzahl: number) => void }) {
   const [dokumente, setDokumente] = useState<Dok[]>([])
   const [status, setStatus] = useState<Status>(null)
   const [art, setArt] = useState<DokumentArt>(modus === 'statiker' ? 'berechnung' : 'entwurfsplan')
@@ -26,6 +26,8 @@ export default function StatikDokumente({ projectId, modus }: { projectId: strin
   const [laeuft, setLaeuft] = useState(false)
   const [meldung, setMeldung] = useState<{ ok: boolean; text: string } | null>(null)
 
+  const anzahlRef = useRef(onAnzahl)
+  useEffect(() => { anzahlRef.current = onAnzahl })
   const basis = modus === 'buero' ? '/api/statik-dokumente' : `/api/statiker/projekte/${encodeURIComponent(projectId)}/dokumente`
   const senden = useCallback(async (body: Record<string, unknown>) => {
     const res = await fetch(basis, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(modus === 'buero' ? { project_id: projectId, ...body } : body) })
@@ -39,7 +41,7 @@ export default function StatikDokumente({ projectId, modus }: { projectId: strin
       const res = await fetch(modus === 'buero' ? `${basis}?project_id=${projectId}` : basis, { cache: 'no-store' })
       const j = await res.json()
       if (!res.ok || !j.success) throw new Error(j.error || 'Dokumente konnten nicht geladen werden.')
-      setDokumente(j.dokumente || []); setStatus(j.status || null)
+      setDokumente(j.dokumente || []); setStatus(j.status || null); anzahlRef.current?.((j.dokumente || []).length)
     } catch (e) { setMeldung({ ok: false, text: e instanceof Error ? e.message : 'Dokumente konnten nicht geladen werden.' }) }
   }, [basis, modus, projectId])
   useEffect(() => { Promise.resolve().then(laden) }, [laden])
@@ -117,7 +119,7 @@ export default function StatikDokumente({ projectId, modus }: { projectId: strin
 
       {meldung && <p className={`text-sm ${meldung.ok ? 'text-emerald-700' : 'text-red-700'}`}>{meldung.text}</p>}
 
-      {dokumente.length === 0 ? <p className='text-sm text-[#86868b]'>Noch keine Dokumente.</p> : (
+      {dokumente.length === 0 ? <p className='text-sm text-[#86868b]'>Noch keine Statik-Unterlagen.</p> : (
         <ul className='divide-y divide-black/5'>
           {dokumente.map((d) => (
             <li key={d.id} className='py-2 flex items-start gap-3 text-sm'>

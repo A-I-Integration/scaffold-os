@@ -169,6 +169,7 @@ export default function KundenDetailPage() {
   const [kundenMails, setKundenMails] = useState<EmailLog[]>([])
   const [fotos, setFotos] = useState<Record<string, Media[]>>({})
   // NEU: Upload für Bilder/Dokumente direkt in Kunden-Detail
+  const [statikAnzahl, setStatikAnzahl] = useState<Record<string, number>>({})
   const [uploadLaeuft, setUploadLaeuft] = useState<string | null>(null) // "<projectId>-bilder" oder "<projectId>-dokumente"
   const [dokEintraege, setDokEintraege] = useState<Record<string, DokEvent[]>>({})
   const [loading, setLoading] = useState(true)
@@ -1222,10 +1223,10 @@ export default function KundenDetailPage() {
                     </div>
                   )}
 
-                  {projDateien.length === 0 && projDok.length === 0 && (
+                  {projDateien.length === 0 && projDok.length === 0 && !(statikAnzahl[project.id] > 0) && (
                     <p className="text-xs text-[#86868b]">Noch keine Dokumente. Ein gescanntes Papier lässt sich z.B. über die Kamera-/Scan-App des Handys als PDF speichern und hier hochladen.</p>
                   )}
-                  <StatikDokumente projectId={project.id} modus="buero" />
+                  <StatikDokumente projectId={project.id} modus="buero" onAnzahl={(n) => setStatikAnzahl((a) => (a[project.id] === n ? a : { ...a, [project.id]: n }))} />
                 </div>
               )
             })}
