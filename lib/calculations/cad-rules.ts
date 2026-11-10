@@ -376,7 +376,7 @@ export function runPhase2Checks(model: CADModel): Phase2RuleResult[] {
   })
 
   // Höhenabhängige Regeln
-  if (model.building.heightM > 12 && model.components3D.filter(c => c.type === 'net').length === 0) {
+  if (model.building.heightM > 12 && model.components3D.filter(c => c.type === 'net' && c.articleNumber !== 'DF-001').length === 0) {
     results.push({
       ruleId: 'SAFETY-NET',
       severity: 'warning',
