@@ -106,7 +106,7 @@ function baumInstanzen(baeume: ReturnType<typeof berechneUmgebung>['baeume']) {
         const rad = R * k * (0.95 + r() * 0.12)
         laub.push({
           m: mat4(b.x + (ox + jx) * R, cy + oy * R, b.z + (oz + jz) * R, rad * 1.05, rad * 0.88, rad * 1.05, r() * Math.PI),
-          c: hsl(b.farbe + (r() - 0.5) * 0.03, 0.4 + r() * 0.12, Math.min(0.5, Math.max(0.16, b.hell + oy * 0.12 + (r() - 0.5) * 0.05))),
+          c: hsl(b.farbe + (r() - 0.5) * 0.03, 0.2 + r() * 0.08, Math.min(0.5, Math.max(0.16, b.hell + oy * 0.12 + (r() - 0.5) * 0.05))),
         })
       }
     } else {
@@ -117,7 +117,7 @@ function baumInstanzen(baeume: ReturnType<typeof berechneUmgebung>['baeume']) {
         const h = b.hoeheM * 0.27
         const rad = R * (1.05 - i * 0.2)
         const base = stammH * 0.55 + i * b.hoeheM * 0.17
-        nadel.push({ m: mat4(b.x, base + h / 2, b.z, rad, h, rad, r() * Math.PI), c: hsl(b.farbe, 0.45, Math.max(0.12, b.hell - i * 0.012 + (r() - 0.5) * 0.02)) })
+        nadel.push({ m: mat4(b.x, base + h / 2, b.z, rad, h, rad, r() * Math.PI), c: hsl(b.farbe, 0.26, Math.max(0.12, b.hell - i * 0.012 + (r() - 0.5) * 0.02)) })
       }
     }
   }
@@ -260,7 +260,7 @@ export default function Umgebung3D({ model, visible }: { model: CADModel; visibl
   const { geo, mat } = ressourcen()
 
   const { staemme, laub, nadel } = useMemo(() => baumInstanzen(U.baeume), [U])
-  const hecke = useMemo<Inst[]>(() => U.hecke.map((b) => ({ m: mat4(b.x, b.radiusM * 0.78, b.z, b.radiusM * 1.1, b.radiusM * 0.85, b.radiusM * 1.1), c: hsl(b.farbe, 0.42, b.hell) })), [U])
+  const hecke = useMemo<Inst[]>(() => U.hecke.map((b) => ({ m: mat4(b.x, b.radiusM * 0.78, b.z, b.radiusM * 1.1, b.radiusM * 0.85, b.radiusM * 1.1), c: hsl(b.farbe, 0.24, b.hell) })), [U])
   const fugenItems = useMemo<Inst[]>(() => [
     ...fugen(U.gehweg, 1.0, -0.0155), ...fugen(U.gegenGehweg, 1.0, -0.0155), ...fugen(U.pave, 1.25, -0.0155),
   ], [U])
@@ -284,7 +284,7 @@ export default function Umgebung3D({ model, visible }: { model: CADModel; visibl
   return (
     <group>
       {/* Rasen des Grundstücks, Zufahrt, Gehwege, Bordstein, Fahrbahn */}
-      <Flaeche r={U.grundstueck} y={-0.0195} farbe="#819f6e" offset={-0.5} rau={0.98} />
+      <Flaeche r={U.grundstueck} y={-0.0195} farbe="#9aa88f" offset={-0.5} rau={0.98} />
       <Flaeche r={U.pave} y={-0.017} farbe="#cfcbc2" />
       <Flaeche r={U.weg} y={-0.0165} farbe="#c9c5bb" offset={-2} />
       <Flaeche r={U.gehweg} y={-0.0165} farbe="#c4bfb5" offset={-2} />

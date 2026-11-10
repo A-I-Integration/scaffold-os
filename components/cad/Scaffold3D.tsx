@@ -156,7 +156,7 @@ function mjOptikFuerSystem(systemId?: string): MjOptik {
 // (Riegel/Belagskanten) wie im Referenz-Rendering, Holz heller.
 const COLOR_MAP: Record<string, string> = {
   frame: '#dde2e7',        // Rahmen – helles verzinktes Rohr
-  deck: '#e6b91e',         // Beläge – gelb (wie bei gebauten Gerüsten vor Ort)
+  deck: '#d9c37c',         // Beläge – gedecktes Gelb, ruhiger als zuvor, damit das Gebäude lesbar bleibt
   railing: '#d5dade',      // Geländer – verzinkt
   diagonal: '#cfd4d9',     // Diagonalen – verzinkt
   footplate: '#aab0b6',    // Fußplatten – etwas dunkler
@@ -2029,7 +2029,7 @@ function Scene({
         <planeGeometry args={[weiss ? 120 : 600, weiss ? 120 : 600]} />
         {weiss
           ? <shadowMaterial transparent opacity={0.22} />
-          : <meshStandardMaterial color={showEnvironment && !bridgeMode ? '#86a173' : '#b9c0c8'} roughness={0.95} />}
+          : <meshStandardMaterial color={showEnvironment && !bridgeMode ? '#a3ae9b' : '#b9c0c8'} roughness={0.95} />}
       </mesh>
       <HorizontNebel an={!weiss} />
       {praes && <GrasFlaeche model={model} />}
