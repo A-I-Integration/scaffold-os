@@ -178,6 +178,12 @@ export default function CADPage() {
     // Eine einzelne GLB (ohne benannten Turmkörper) läuft durch denselben Import wie links im Gebäude-Upload:
     // Maße + Gerüst + Anzeige mit EINEM Upload. Turm-Modelle behalten die bisherige Ausrichtung.
     const einzeln = dateien.length === 1 ? dateien[0] : null
+    // Ein Plan-PDF ist kein 3D-Modell: es läuft durch denselben Weg wie der Plan-Upload links (KI-Analyse, Umriss-Zeichner mit Plan).
+    if (einzeln && /\.pdf$/i.test(einzeln.name) && planUploadRef.current) {
+      setAussehenHinweis('Ein PDF ist ein Plan und kein 3D-Modell – es wurde wie ein Plan-Upload behandelt (Maße links prüfen; echtes Aussehen braucht GLB, OBJ, PLY oder einen Scan).')
+      await planUploadRef.current(einzeln)
+      return
+    }
     if (einzeln && /\.glb$/i.test(einzeln.name) && planUploadRef.current) {
       try {
         if (!glbHatTurmKoerper(await einzeln.arrayBuffer(), istTurmKoerperKnoten)) { await planUploadRef.current(einzeln); return }
@@ -1124,7 +1130,7 @@ export default function CADPage() {
               <span className='inline-flex flex-wrap items-center gap-1'>
                 <label className='text-xs border rounded-lg px-2 py-1 bg-white text-[#424245] cursor-pointer' title='Zeigt das echte Gebäude (GLB mit Texturen, OBJ mit MTL und Bildern, PLY-Punktwolke mit Farben oder Scan-Dateien E57/PTX/LAS/XYZ) statt des einfachen Baukörpers – nur zur Ansicht, Maße und Gerüst bleiben unverändert'>
                   🏛️ {aussehen ? 'Anderes Gebäude laden' : 'Echtes Gebäude laden'}
-                  <input type='file' multiple accept='.glb,.ply,.obj,.mtl,.jpg,.jpeg,.png,.webp,.e57,.ptx,.las,.xyz,.pts,.txt,.csv' className='hidden' onChange={(ev) => { const fs = Array.from(ev.target.files ?? []); ev.target.value = ''; if (fs.length) void ladeAussehen(fs) }} />
+                  <input type='file' multiple accept='.pdf,.glb,.ply,.obj,.mtl,.jpg,.jpeg,.png,.webp,.e57,.ptx,.las,.xyz,.pts,.txt,.csv' className='hidden' onChange={(ev) => { const fs = Array.from(ev.target.files ?? []); ev.target.value = ''; if (fs.length) void ladeAussehen(fs) }} />
                 </label>
                 <button type='button' className='text-xs border rounded-lg px-2 py-1 bg-white text-[#424245]' title='Mehrere Scans (E57, PTX, LAS) zu einer Punktwolke zusammenführen: Lage bekannt, automatisch oder von Hand über Punktpaare' onClick={() => setScanFensterOffen(true)}>🧩 Scans zusammenführen</button>
                 {aussehen && (
