@@ -10,6 +10,16 @@ const SYS = 'layher-allround'
 const dachfang = (m: ReturnType<typeof generateCADModel>) => m.components3D.filter((c) => c.articleNumber === 'DF-001')
 
 describe('Dachfangwand', () => {
+  it('ersetzt nicht das Fangnetz: Regel „Fangnetz fehlt" bleibt bei hohem Gebäude bestehen', async () => {
+    const { runPhase2Checks } = await import('../cad-rules')
+    const hoch = { ...sattel, heightM: 14, eavesHeightM: 12, floors: 4, floorHeightsM: [3.5, 3.5, 3.5, 3.5], geruestOptionen: { dachfang: { hoeheM: 1 } } }
+    const m = generateCADModel(hoch, SYS)
+    // Nur die Dachfangwand ist ein „net"-Bauteil, kein echtes Fangnetz
+    m.components3D = m.components3D.filter((c) => !(c.type === 'net' && c.articleNumber !== 'DF-001'))
+    expect(dachfang(m).length).toBeGreaterThan(0)
+    expect(runPhase2Checks(m).some((r) => r.ruleId === 'SAFETY-NET')).toBe(true)
+  })
+
   it('ohne Einstellung gibt es keine Dachfangwand', () => {
     expect(dachfang(generateCADModel(sattel, SYS)).length).toBe(0)
   })
