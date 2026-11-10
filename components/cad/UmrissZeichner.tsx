@@ -9,6 +9,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { fangePunkt, figurPruefen, kantenLaenge, type FangArt, type ZPunkt } from '@/lib/cad/dxf-zeichnen'
 import { korrekturFaktor, massstabNenner, meterJePunkt } from '@/lib/cad/plan-vorlage'
 import { ladePlanQuelle, type PlanQuelle, type PlanSeite } from '@/lib/cad/plan-rendern'
+import { aussenkonturMeter } from '@/lib/cad/wand-kontur'
+import type { VektorFlaeche } from '@/lib/cad/pdf-vektoren'
 
 interface Props {
   /** Zuletzt hochgeladener Plan (PDF/Bild): wird als Vorlage hinter die Zeichnung gelegt. */
@@ -46,6 +48,9 @@ export default function UmrissZeichner({ planDatei, onUebernehmen, onAbbrechen }
   const [messen, setMessen] = useState(false)
   const [messPunkte, setMessPunkte] = useState<ZPunkt[]>([])
   const [bekanntText, setBekanntText] = useState('')
+  const [wandModus, setWandModus] = useState(false)
+  const [planInfo, setPlanInfo] = useState<string | null>(null)
+  const vektorCache = useRef(new Map<string, VektorFlaeche[]>())
   const nenner = massstabNenner(nennerText)
   const mJeSkala = nenner ? meterJePunkt(nenner) * korrektur : 0 // Meter je PDF-Punkt
   const mJeSkalaRef = useRef(mJeSkala)
@@ -72,6 +77,7 @@ export default function UmrissZeichner({ planDatei, onUebernehmen, onAbbrechen }
       quelleRef.current?.freigeben()
       const q = await ladePlanQuelle(datei)
       quelleRef.current = q
+      vektorCache.current.clear(); setWandModus(false); setPlanInfo(null)
       setQuelle(q); setSeitenNr(1); setDrehung(0); setKorrektur(1)
     } catch (e) {
       setPlanFehler(e instanceof Error ? e.message : 'Der Plan konnte nicht geladen werden.')
@@ -98,6 +104,27 @@ export default function UmrissZeichner({ planDatei, onUebernehmen, onAbbrechen }
     setRasterM(0.01)
     setAnsicht({ x: -planBreiteM * 0.02, z: -planBreiteM * 0.02, b: Math.min(500, Math.max(3, planBreiteM * 1.04)) })
   }, [bild, planBreiteM])
+
+  const wandAnklicken = useCallback(async (klickM: ZPunkt) => {
+    if (!quelle || !mJeSkala) return
+    setPlanFehler(null); setPlanInfo(null); setPlanLaedt(true)
+    try {
+      const key = `${seitenNr}:${drehung}`
+      let fl = vektorCache.current.get(key)
+      if (!fl) { fl = await quelle.vektoren(seitenNr, drehung); vektorCache.current.set(key, fl) }
+      if (fl.length === 0) { setPlanFehler('In dieser Seite liegen keine Zeichenlinien (Scan oder Foto). Bitte die Kontur von Hand nachzeichnen.'); return }
+      const r = aussenkonturMeter(fl, { x: klickM.x / mJeSkala, y: klickM.z / mJeSkala }, mJeSkala)
+      if (!r) { setPlanFehler('Dort liegt keine farbige Wandfläche. Bitte direkt auf eine ausgefüllte Außenwand klicken (nicht auf eine Linie, Maßzahl oder leere Fläche).'); return }
+      const fig: ZPunkt[] = r.kontur.map((q) => ({ x: Math.round(q.x * mJeSkala * 100) / 100, z: Math.round(q.y * mJeSkala * 100) / 100 }))
+      const f = figurPruefen(fig)
+      if (f) { setPlanFehler(`Die erkannte Kontur ist nicht brauchbar: ${f}`); return }
+      const xs = fig.map((q) => q.x), zs = fig.map((q) => q.z)
+      setFiguren((a) => [...a, fig]); setFehler(null); setWandModus(false)
+      setPlanInfo(`Kontur übernommen: ${fm(Math.max(...xs) - Math.min(...xs))} × ${fm(Math.max(...zs) - Math.min(...zs))} m, ${fig.length} Ecken. Bitte mit dem Plan vergleichen.`)
+    } catch (e) {
+      setPlanFehler(e instanceof Error ? e.message : 'Die Wand konnte nicht ausgewertet werden.')
+    } finally { setPlanLaedt(false) }
+  }, [quelle, mJeSkala, seitenNr, drehung])
 
   const messLaenge = messPunkte.length === 2 ? kantenLaenge(messPunkte[0], messPunkte[1]) : 0
   const massstabKorrigieren = () => {
@@ -234,10 +261,13 @@ export default function UmrissZeichner({ planDatei, onUebernehmen, onAbbrechen }
                 <label className='flex items-center gap-1'>Plan sichtbar
                   <input type='range' min={0.2} max={1} step={0.05} value={deckkraft} onChange={(e) => setDeckkraft(parseFloat(e.target.value))} />
                 </label>
-                <button type='button' className={`rounded-lg border px-2 py-1 ${messen ? 'border-violet-500 bg-violet-50 text-violet-800' : 'border-black/10 bg-white'}`} onClick={() => { setMessen((m) => !m); setMessPunkte([]) }}>📏 Maß prüfen</button>
+                <button type='button' disabled={planLaedt} className={`rounded-lg border px-2 py-1 disabled:opacity-40 ${wandModus ? 'border-orange-500 bg-orange-50 text-orange-800' : 'border-black/10 bg-white'}`} onClick={() => { setWandModus((w) => !w); setMessen(false); setMessPunkte([]); setPlanInfo(null) }} title='Funktioniert bei Vektor-PDFs aus dem CAD, nicht bei Scans'>🧱 Außenwand anklicken</button>
+                <button type='button' className={`rounded-lg border px-2 py-1 ${messen ? 'border-violet-500 bg-violet-50 text-violet-800' : 'border-black/10 bg-white'}`} onClick={() => { setMessen((m) => !m); setMessPunkte([]); setWandModus(false) }}>📏 Maß prüfen</button>
               </>
             )}
           </div>
+          {bild && wandModus && <p className='text-orange-900'>Einmal auf die äußerste Wandschicht im Grundriss klicken (die ausgefüllte Farbe ganz außen). Die App nimmt die Farbe dieser Wand und berechnet daraus die Außenkontur des Geschosses. Liegt die Kontur innen, den Punkt links unten mit × löschen und die äußere Schicht anklicken.</p>}
+          {planInfo && <p className='rounded-lg bg-emerald-50 p-2 text-emerald-800'>{planInfo}</p>}
           {bild && messen && (
             <div className='flex flex-wrap items-center gap-2 text-violet-900'>
               {messPunkte.length < 2
@@ -289,7 +319,8 @@ export default function UmrissZeichner({ planDatei, onUebernehmen, onAbbrechen }
           onPointerUp={(e) => {
             const z = zieh.current; zieh.current = null
             if (z && !z.bewegt) {
-              if (messen) { const q = fange(zuMeter(e)).punkt; setMessPunkte((a) => (a.length >= 2 ? [q] : [...a, q])) }
+              if (wandModus) void wandAnklicken(zuMeter(e))
+              else if (messen) { const q = fange(zuMeter(e)).punkt; setMessPunkte((a) => (a.length >= 2 ? [q] : [...a, q])) }
               else setzePunkt(fange(zuMeter(e)).punkt)
             }
           }}
