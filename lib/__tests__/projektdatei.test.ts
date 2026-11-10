@@ -65,12 +65,12 @@ describe('Projektdatei: Türen, Kederplane, Aufzug', () => {
     const r = liesProjektdatei(datei({
       ...basisGebaeude,
       tueren: [{ id: 'a', side: 'front', offsetAlongM: -2, widthM: 1.1, heightM: 2.2 }],
-      geruestOptionen: { tuerenFreihalten: false, kederplane: { vonM: 4, bisM: 12 }, aufzug: { seite: 'right', gemietet: true, bisM: 12, haltestellen: 3, kostenAufbauEur: 100 } },
+      geruestOptionen: { tuerenFreihalten: false, kederplane: { vonM: 4, bisM: 12 }, dachfang: { hoeheM: 1.2, abTraufeM: 5 }, aufzug: { seite: 'right', gemietet: true, bisM: 12, haltestellen: 3, kostenAufbauEur: 100 } },
     }))
     expect(r.ok).toBe(true)
     if (!r.ok) return
     expect(r.daten.building.tueren).toEqual([{ id: 'a', side: 'front', offsetAlongM: -2, widthM: 1.1, heightM: 2.2 }])
-    expect(r.daten.building.geruestOptionen).toMatchObject({ tuerenFreihalten: false, kederplane: { vonM: 4, bisM: 12 }, aufzug: { seite: 'right', gemietet: true, bisM: 12, haltestellen: 3, kostenAufbauEur: 100 } })
+    expect(r.daten.building.geruestOptionen).toMatchObject({ tuerenFreihalten: false, kederplane: { vonM: 4, bisM: 12 }, dachfang: { hoeheM: 1.2, abTraufeM: 5 }, aufzug: { seite: 'right', gemietet: true, bisM: 12, haltestellen: 3, kostenAufbauEur: 100 } })
   })
 
   it('behält Aufschlag, Flügel und Anschlag der Tür', () => {

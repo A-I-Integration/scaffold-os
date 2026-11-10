@@ -958,6 +958,21 @@ export default function BuildingForm({ building, systemId, onChange, onSystemCha
                   </div>
                   <div className='border-t border-black/10 pt-2 space-y-1.5'>
                     <label className='flex items-center gap-2 text-xs font-medium text-[#1d1d1f]'>
+                      <input type='checkbox' checked={!!opt.dachfang} onChange={(e) => setzeOpt({ dachfang: e.target.checked ? { hoeheM: 1, abTraufeM: 0 } : undefined })} />
+                      Dachfangwand (Traufseiten geneigter Dächer, oberste Lage)
+                    </label>
+                    {opt.dachfang && (
+                      <div className='grid grid-cols-2 gap-2'>
+                        <div><label className='block text-[11px] text-[#424245] mb-1'>Wandhöhe (m)</label>
+                          <input type='number' step='0.1' min={0.1} value={opt.dachfang.hoeheM} onChange={(e) => setzeOpt({ dachfang: { ...opt.dachfang!, hoeheM: parseFloat(e.target.value) } })} className='w-full px-2 py-1.5 border rounded-lg text-xs' /></div>
+                        <div><label className='block text-[11px] text-[#424245] mb-1'>erst ab Traufhöhe (m, 0 = immer)</label>
+                          <input type='number' step='0.5' min={0} value={opt.dachfang.abTraufeM ?? 0} onChange={(e) => setzeOpt({ dachfang: { ...opt.dachfang!, abTraufeM: parseFloat(e.target.value) } })} className='w-full px-2 py-1.5 border rounded-lg text-xs' /></div>
+                        <p className='col-span-2 text-[10px] text-[#86868b]'>Beide Werte sind Eingaben der Firma, bitte mit Vorschrift und Statik abstimmen. Preis aus dem Lager (Artikel DF-001).</p>
+                      </div>
+                    )}
+                  </div>
+                  <div className='border-t border-black/10 pt-2 space-y-1.5'>
+                    <label className='flex items-center gap-2 text-xs font-medium text-[#1d1d1f]'>
                       <input type='checkbox' checked={!!opt.schutzdaecher} onChange={(e) => setzeOpt({ schutzdaecher: e.target.checked ? [{ seite: 'front', vonM: 0, laengeM: 4 }] : undefined })} />
                       Schutzdächer von Hand festlegen (statt automatisch über den Türen)
                     </label>

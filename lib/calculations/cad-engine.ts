@@ -56,6 +56,8 @@ export interface GeruestOptionen {
   treppe?: boolean
   /** Vertikale Bekleidung mit Kederplane an der Außenachse zwischen zwei Höhen (m über Gelände), an allen Gerüstseiten; nur ganze Lagen im Bereich werden bekleidet */
   kederplane?: { vonM: number; bisM: number }
+  /** Dachfangwand: Schutzwand auf dem obersten Belag an den Traufseiten geneigter Dächer. `hoeheM` = Wandhöhe, `abTraufeM` = erst ab dieser Traufhöhe (0 = immer). Die Werte legt die Firma selbst fest (Vorschrift/Statik prüfen), es gibt keine festen Vorgaben im Code. */
+  dachfang?: { hoeheM: number; abTraufeM?: number }
   /** Schutzdächer von Hand: ersetzt die automatische Lage über den Türen (leere Liste = keine Schutzdächer). `vonM` = Abstand vom Anfang der Gerüstseite, `hoeheM` = Höhe der Unterkante über Gelände (Standard 4 m) */
   schutzdaecher?: Array<{ seite?: 'front' | 'back' | 'left' | 'right'; vonM: number; laengeM: number; hoeheM?: number }>
   /** false = Türen nicht freihalten. Standard (leer/true): vor jeder Tür im Erdgeschoss entsteht in der untersten Lage ein Durchgang (kein Fuß-Querriegel, keine Diagonale, Durchgangsrahmen-Binder). */
@@ -984,6 +986,38 @@ export function generateScaffoldComponents(model: CADModel): ScaffoldComponent3D
     }
   }
 
+  // === DACHFANG (Schutzwand auf dem obersten Belag an den Traufseiten) ===
+  const df = building.geruestOptionen?.dachfang
+  if (df && Number.isFinite(df.hoeheM) && df.hoeheM > 0 && levels.length > 0) {
+    const geneigt = building.roofForm === 'satteldach' || building.roofForm === 'walmdach' || building.roofForm === 'mansardendach'
+    const schwelle = Number.isFinite(df.abTraufeM) ? (df.abTraufeM as number) : 0
+    const traufe = building.eavesHeightM > 0 ? building.eavesHeightM : building.heightM
+    if (!geneigt) {
+      model.warnings.push({ type: 'info', code: 'DACHFANG_DACHFORM', message: 'Dachfang: Nur bei Sattel-, Walm- und Mansardendach wird die Dachfangwand automatisch gesetzt. Bei anderen Dachformen bitte von Hand planen.' })
+    } else if (traufe >= schwelle) {
+      // Satteldach: Traufe liegt an den Seiten parallel zum First (First läuft entlang der längeren Gebäudeseite)
+      const firstEntlangLaenge = building.lengthM >= (building.widthM || 0)
+      const seiten: string[] = building.roofForm === 'satteldach'
+        ? (firstEntlangLaenge ? ['front', 'back'] : ['left', 'right'])
+        : ['front', 'back', 'left', 'right']
+      // Je Seite die oberste Lage dieser Seite (beim Satteldach reichen die Giebelseiten höher als die Traufseiten)
+      const obenJeSeite = new Map<string, number>()
+      for (const f of fields) if (seiten.includes(f.side)) obenJeSeite.set(f.side, Math.max(obenJeSeite.get(f.side) ?? -1, f.levelIndex))
+      const gesetzt = new Set<string>()
+      for (const field of fields) {
+        if (!seiten.includes(field.side) || field.levelIndex !== obenJeSeite.get(field.side) || gesetzt.has(field.id)) continue
+        const oben = levels.find((l) => l.index === field.levelIndex)
+        if (!oben) continue
+        gesetzt.add(field.id)
+        const rf = feldRahmen(field, building)
+        const [lx, lz] = rf.toLocal(field.positionX, field.positionZ)
+        const [wx, wz] = rf.toWorld(lx, lz + field.widthM / 2 + 0.08)
+        components.push({ id: `dachfang-${field.id}`, type: 'net', articleNumber: 'DF-001', name: 'Dachfangwand', position: [wx, oben.topY + df.hoeheM / 2, wz], rotation: eulerMitYaw([0, 0, 0], rf.yaw), scale: [field.lengthM, df.hoeheM, 0.01], color: colorNet, fieldId: field.id, levelId: oben.id })
+      }
+      if (gesetzt.size > 0) model.warnings.push({ type: 'info', code: 'DACHFANG', message: `Dachfangwand ${df.hoeheM} m hoch an ${gesetzt.size} Feldern der obersten Lage (Traufseiten). Die Bemessung und Zulässigkeit ist mit dem Statiker/der Vorschrift zu prüfen.` })
+    }
+  }
+
   // === AUFZUG (eine Seite, außen vor dem Gerüst) ===
   const az = building.geruestOptionen?.aufzug
   if (az) {
@@ -1876,7 +1910,7 @@ function getUnitPrice(articleNumber: string): number {
   // Leiter: bewusst KEIN Fantasiepreis – Preis kommt aus dem Lager der Firma (Artikel LE-001).
   if (articleNumber === LEITER_ARTIKELNUMMER) return 0
   // Kederplane und Aufzug: kein Fantasiepreis – Preis kommt aus dem Lager der Firma (bei gemietetem Aufzug von Hand im LV)
-  if (articleNumber === 'KP-001' || articleNumber === 'AZ-001' || articleNumber === DURCHGANG_ARTIKELNUMMER) return 0
+  if (articleNumber === 'KP-001' || articleNumber === 'DF-001' || articleNumber === 'AZ-001' || articleNumber === DURCHGANG_ARTIKELNUMMER) return 0
   return prices[articleNumber] || 10
 }
 
