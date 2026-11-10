@@ -14,7 +14,8 @@
 
 import { useMemo, useState, useRef, useEffect, useCallback, memo, createContext, useContext } from 'react'
 import { Canvas, useThree, useFrame } from '@react-three/fiber'
-import { OrbitControls, Grid, Text, Sky, AdaptiveDpr, AdaptiveEvents, Environment, ContactShadows, Edges } from '@react-three/drei'
+import { OrbitControls, Grid, Text, Sky, AdaptiveDpr, AdaptiveEvents, ContactShadows, Edges } from '@react-three/drei'
+import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js'
 import * as THREE from 'three'
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 import { treppenTeile } from '@/lib/cad/treppen-geometrie'
@@ -602,6 +603,27 @@ function getNetTex(): THREE.CanvasTexture | null {
     netTexCache.anisotropy = 4
   }
   return netTexCache
+}
+
+// Umgebungslicht für die Metallreflexionen, selbst erzeugt (RoomEnvironment).
+// Vorher kam es als HDR-Datei von einem fremden Server: ohne Netz (Baustelle,
+// Offline-Betrieb) brach die ganze 3D-Ansicht mit „Failed to fetch" ab.
+function LokaleUmgebung() {
+  const gl = useThree((s) => s.gl)
+  const scene = useThree((s) => s.scene)
+  useEffect(() => {
+    const pmrem = new THREE.PMREMGenerator(gl)
+    const raum = new RoomEnvironment()
+    const ziel = pmrem.fromScene(raum, 0.04)
+    Object.assign(scene, { environment: ziel.texture, environmentIntensity: 0.6 })
+    return () => {
+      Object.assign(scene, { environment: null })
+      ziel.dispose()
+      pmrem.dispose()
+      raum.dispose()
+    }
+  }, [gl, scene])
+  return null
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -1957,7 +1979,7 @@ function Scene({
           dem verzinkten Stahl – ohne das sieht Metall matt/plastikartig aus,
           egal wie gut die Grundfarbe gewählt ist. background={false}: nur
           für Reflexionen/Beleuchtung genutzt, der sichtbare Himmel bleibt <Sky>. */}
-      <Environment preset="city" background={false} resolution={256} environmentIntensity={0.6} />
+      <LokaleUmgebung />
       <ambientLight intensity={0.55} />
       <hemisphereLight args={['#dfe9f5', '#8c7a63', 0.35]} />
       <directionalLight
