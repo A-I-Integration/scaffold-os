@@ -45,6 +45,7 @@ import SchlussrechnungDialog from '@/components/SchlussrechnungDialog'
 import { lokalesDatumIso, datumPlusTage } from '@/lib/datum'
 import AnsichtLinkBox from '@/components/AnsichtLinkBox'
 import AngebotLinkBox from '@/components/AngebotLinkBox'
+import StatikDokumente from '@/components/StatikDokumente'
 import StatikerFreigabeBox from '@/components/StatikerFreigabeBox'
 import { FreigabeBadge, useFreigabeStatus } from '@/components/FreigabeBadge'
 import Auftragsstand from '@/components/Auftragsstand'
@@ -1224,6 +1225,7 @@ export default function KundenDetailPage() {
                   {projDateien.length === 0 && projDok.length === 0 && (
                     <p className="text-xs text-[#86868b]">Noch keine Dokumente. Ein gescanntes Papier lässt sich z.B. über die Kamera-/Scan-App des Handys als PDF speichern und hier hochladen.</p>
                   )}
+                  <StatikDokumente projectId={project.id} modus="buero" />
                 </div>
               )
             })}

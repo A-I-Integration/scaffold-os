@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useParams } from 'next/navigation'
 import AnsichtViewer, { type AnsichtDaten } from '@/components/AnsichtViewer'
+import StatikDokumente from '@/components/StatikDokumente'
 
 // ============================================================
 // SCAFFOLD OS – Statiker-Bereich: ein freigegebenes Projekt ansehen
@@ -44,5 +45,10 @@ export default function StatikerProjektSeite() {
       </div>
     )
   }
-  return <AnsichtViewer daten={daten} kopfAktion={zurueck} />
+  return (
+    <>
+      <AnsichtViewer daten={daten} kopfAktion={zurueck} />
+      <div className='max-w-6xl mx-auto px-4 pb-10'><StatikDokumente projectId={id} modus='statiker' /></div>
+    </>
+  )
 }
