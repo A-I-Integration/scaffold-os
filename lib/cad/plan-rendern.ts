@@ -11,8 +11,12 @@ export interface PlanSeite {
   hoehePt: number
 }
 
+import { flaechenAusOperatoren, type VektorFlaeche } from './pdf-vektoren'
+
 export interface PlanQuelle {
   seiten: number
+  /** Gefüllte Flächen und Linien einer PDF-Seite in Seiten-Punkten (leer bei Bildern/Scans) */
+  vektoren: (nr: number, drehungGrad: number) => Promise<VektorFlaeche[]>
   zeige: (nr: number, drehungGrad: number) => Promise<PlanSeite>
   freigeben: () => void
 }
@@ -29,6 +33,7 @@ export async function ladePlanQuelle(datei: File): Promise<PlanQuelle> {
   if (datei.type.startsWith('image/') || /\.(png|jpe?g|webp)$/.test(name)) {
     return {
       seiten: 1,
+      vektoren: async () => [],
       freigeben,
       zeige: async (_nr, drehung) => {
         const bildUrl = merke(URL.createObjectURL(datei))
@@ -49,8 +54,21 @@ export async function ladePlanQuelle(datei: File): Promise<PlanQuelle> {
   const pdfjs = await import('pdfjs-dist')
   pdfjs.GlobalWorkerOptions.workerSrc = new URL('pdfjs-dist/build/pdf.worker.min.mjs', import.meta.url).toString()
   const dok = await pdfjs.getDocument({ data: new Uint8Array(await datei.arrayBuffer()) }).promise
+  const O = pdfjs.OPS
   return {
     seiten: dok.numPages,
+    vektoren: async (nr, drehung) => {
+      const seite = await dok.getPage(Math.min(Math.max(1, nr), dok.numPages))
+      const rot = (((seite.rotate + drehung) % 360) + 360) % 360
+      const vp = seite.getViewport({ scale: 1, rotation: rot })
+      const ol = await seite.getOperatorList()
+      return flaechenAusOperatoren(ol.fnArray, ol.argsArray, {
+        save: O.save, restore: O.restore, transform: O.transform, constructPath: O.constructPath,
+        fill: O.fill, eoFill: O.eoFill, fillStroke: O.fillStroke, eoFillStroke: O.eoFillStroke, closePath: O.closePath,
+        setFillRGBColor: O.setFillRGBColor, stroke: O.stroke, closeStroke: O.closeStroke,
+        closeFillStroke: O.closeFillStroke, closeEOFillStroke: O.closeEOFillStroke, setStrokeRGBColor: O.setStrokeRGBColor,
+      }, vp.transform)
+    },
     freigeben: () => { freigeben(); void dok.destroy() },
     zeige: async (nr, drehung) => {
       const seite = await dok.getPage(Math.min(Math.max(1, nr), dok.numPages))
