@@ -216,7 +216,7 @@ export default function GrundrissUpload({ sessionId, projectId }: Props) {
           <p className="font-medium">📐 Maße aus dem Plan gelesen (Maßstab 1:{plan.massstab})</p>
           {plan.geschosse.map((g) => (
             <p key={g.titel}>
-              {g.titel}: {String(g.laengeM).replace('.', ',')} × {String(g.breiteM).replace('.', ',')} m{g.ebene === plan.hauptEbene ? ' ← als Länge und Breite eingetragen' : ''}
+              {g.titel}: {String(g.laengeM).replace('.', ',')} × {String(g.breiteM).replace('.', ',')} m{g.fenster !== undefined && g.tueren !== undefined ? `, ${g.fenster} Fenster, ${g.tueren} Türen` : ''}{g.ebene === plan.hauptEbene ? ' ← als Länge und Breite eingetragen' : ''}
             </p>
           ))}
           {ruecksprunge(plan).length > 0 && (

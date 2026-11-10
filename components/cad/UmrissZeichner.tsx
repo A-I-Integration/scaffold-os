@@ -9,6 +9,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { fangePunkt, figurPruefen, kantenLaenge, type FangArt, type ZPunkt } from '@/lib/cad/dxf-zeichnen'
 import { korrekturFaktor, massstabAusTexten, massstabNenner, meterJePunkt } from '@/lib/cad/plan-vorlage'
 import { grundrisseFinden, type GefundenerGrundriss } from '@/lib/cad/grundriss-finden'
+import { oeffnungenFinden } from '@/lib/cad/oeffnungen-aus-plan'
 import { dachAusPlan, dachKotenAusPlan, pultdachNeigung } from '@/lib/cad/dachform-aus-plan'
 import { ladePlanQuelle, type PlanQuelle, type PlanSeite } from '@/lib/cad/plan-rendern'
 import { aussenkonturMeter } from '@/lib/cad/wand-kontur'
@@ -52,7 +53,7 @@ export default function UmrissZeichner({ planDatei, onUebernehmen, onAbbrechen }
   const [bekanntText, setBekanntText] = useState('')
   const [wandModus, setWandModus] = useState(false)
   const [planInfo, setPlanInfo] = useState<string | null>(null)
-  const [gefunden, setGefunden] = useState<(GefundenerGrundriss & { figur: ZPunkt[] })[] | null>(null)
+  const [gefunden, setGefunden] = useState<(GefundenerGrundriss & { figur: ZPunkt[]; fenster: number; tueren: number })[] | null>(null)
   const vektorCache = useRef(new Map<string, VektorFlaeche[]>())
   const nenner = massstabNenner(nennerText)
   const mJeSkala = nenner ? meterJePunkt(nenner) * korrektur : 0 // Meter je PDF-Punkt
@@ -150,7 +151,8 @@ export default function UmrissZeichner({ planDatei, onUebernehmen, onAbbrechen }
       const kotenText = [koten.firstM !== undefined ? `First +${koten.firstM.toFixed(2).replace('.', ',')} m` : '', koten.traufeM !== undefined ? `Traufe +${koten.traufeM.toFixed(2).replace('.', ',')} m` : ''].filter(Boolean).join(', ')
       const liste = roh.flatMap((g) => {
         const figur: ZPunkt[] = g.kontur.map((q) => ({ x: Math.round(q.x * m * 100) / 100, z: Math.round(q.y * m * 100) / 100 }))
-        return figurPruefen(figur) ? [] : [{ ...g, figur }]
+        const o = oeffnungenFinden(fl, g, texte, m)
+        return figurPruefen(figur) ? [] : [{ ...g, figur, fenster: o.filter((x) => x.typ === 'fenster').length, tueren: o.filter((x) => x.typ === 'tuer').length }]
       })
       if (!liste.length) { setPlanFehler('Im Plan wurden keine Grundrisse mit Geschoss-Überschrift gefunden. Bitte „Außenwand anklicken“ nutzen oder von Hand zeichnen.'); return }
       setGefunden(liste)
@@ -309,7 +311,7 @@ export default function UmrissZeichner({ planDatei, onUebernehmen, onAbbrechen }
                 const schon = figuren.some((f) => f.length === g.figur.length && f.every((q, k) => q.x === g.figur[k].x && q.z === g.figur[k].z))
                 return (
                   <li key={i} className='flex items-center justify-between gap-2 rounded-lg border border-black/10 bg-white p-2'>
-                    <span><b>{g.titel}</b>: {fm(g.breiteM)} × {fm(g.tiefeM)} m, {g.kontur.length} Ecken, {Math.round(g.flaecheM2)} m²</span>
+                    <span><b>{g.titel}</b>: {fm(g.breiteM)} × {fm(g.tiefeM)} m, {g.kontur.length} Ecken, {Math.round(g.flaecheM2)} m², {g.fenster} Fenster, {g.tueren} Türen</span>
                     <button type='button' disabled={schon} className='rounded-lg bg-violet-600 px-2 py-1 font-semibold text-white disabled:opacity-40' onClick={() => { setFiguren((a) => [...a, g.figur]); setFehler(null) }}>{schon ? 'übernommen' : 'Übernehmen'}</button>
                   </li>
                 )

@@ -4,9 +4,11 @@
 // ============================================================
 
 import type { GefundenerGrundriss, PlanText } from './grundriss-finden'
+import type { VektorFlaeche } from './pdf-vektoren'
+import { oeffnungenFinden } from './oeffnungen-aus-plan'
 import { dachAusPlan, dachKotenAusPlan, pultdachNeigung, type PlanDachform } from './dachform-aus-plan'
 
-export interface PlanImportGeschoss { titel: string; ebene: number; laengeM: number; breiteM: number; flaecheM2: number }
+export interface PlanImportGeschoss { titel: string; ebene: number; laengeM: number; breiteM: number; flaecheM2: number; fenster?: number; tueren?: number }
 
 export interface PlanImport {
   dateiname: string
@@ -26,7 +28,7 @@ export interface PlanImport {
 const runde = (v: number) => Math.round(v * 100) / 100
 
 /** Aus den gefundenen Grundrissen die Maße je Geschoss bilden (Länge = längere Seite) und das Hauptgeschoss wählen. */
-export function planImportAus(dateiname: string, massstab: number, gefunden: GefundenerGrundriss[], texte: PlanText[] = []): PlanImport | null {
+export function planImportAus(dateiname: string, massstab: number, gefunden: GefundenerGrundriss[], texte: PlanText[] = [], flaechen: VektorFlaeche[] = []): PlanImport | null {
   if (!gefunden.length) return null
   const geschosse: PlanImportGeschoss[] = gefunden.map((g) => ({
     titel: g.titel,
@@ -34,6 +36,10 @@ export function planImportAus(dateiname: string, massstab: number, gefunden: Gef
     laengeM: runde(Math.max(g.breiteM, g.tiefeM)),
     breiteM: runde(Math.min(g.breiteM, g.tiefeM)),
     flaecheM2: Math.round(g.flaecheM2 * 10) / 10,
+    ...(flaechen.length ? (() => {
+      const o = oeffnungenFinden(flaechen, g, texte, (0.0254 / 72) * massstab)
+      return { fenster: o.filter((x) => x.typ === 'fenster').length, tueren: o.filter((x) => x.typ === 'tuer').length }
+    })() : {}),
   }))
   const ueberGelaende = geschosse.filter((g) => g.ebene >= 0)
   if (!ueberGelaende.length) return null // nur Keller gefunden: kein Gerüst-Grundriss
@@ -72,7 +78,7 @@ export async function planLesen(datei: File): Promise<PlanImport | null> {
       if (!ms) continue
       const fl = await q.vektoren(nr, 0)
       if (!fl.length) continue
-      const r = planImportAus(datei.name, ms, grundrisseFinden(fl, texte, meterJePunkt(ms)), texte)
+      const r = planImportAus(datei.name, ms, grundrisseFinden(fl, texte, meterJePunkt(ms)), texte, fl)
       if (r) return r
     }
     return null
