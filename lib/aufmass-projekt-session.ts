@@ -40,6 +40,7 @@ export const WIZARD_KEYS = [
   'scaffold_grundriss_daten',
   'scaffold_grundriss_analyse',
   'scaffold_grundriss_fresh',
+  'scaffold_plan_import',
   'scaffold_schritt_geladenes_projekt_1',
   'scaffold_schritt_geladenes_projekt_2',
   'scaffold_schritt_geladenes_projekt_3',

@@ -8,6 +8,7 @@ import {
   ProjectMedia,
 } from '@/lib/media-client';
 import KiHinweis from '@/components/KiHinweis';
+import { planLesen, ruecksprunge, type PlanImport } from '@/lib/cad/plan-import';
 
 // ============================================================
 // SCAFFOLD OS – Grundriss-Upload + KI-Analyse
@@ -33,11 +34,18 @@ export default function GrundrissUpload({ sessionId, projectId }: Props) {
   const [result, setResult] = useState<string | null>(null);
   const [structured, setStructured] = useState<Record<string, any> | null>(null);
   const [discarded, setDiscarded] = useState<string[]>([]);
+  // Maße direkt aus den Zeichenlinien eines Vektor-Plans (genauer als die KI) – siehe lib/cad/plan-import.ts
+  const [plan, setPlan] = useState<PlanImport | null>(null);
+  const [planLiest, setPlanLiest] = useState(false);
 
   // Gespeicherte Ergebnisse wiederherstellen (z. B. nach Zurück-Navigation)
   useEffect(() => {
     const saved = localStorage.getItem('scaffold_grundriss_analyse');
     if (saved) setResult(saved);
+    const savedP = localStorage.getItem('scaffold_plan_import');
+    if (savedP) {
+      try { setPlan(JSON.parse(savedP)); } catch { /* ignore */ }
+    }
     const savedS = localStorage.getItem('scaffold_grundriss_daten');
     if (savedS) {
       try { setStructured(JSON.parse(savedS)); } catch { /* ignore */ }
@@ -52,6 +60,23 @@ export default function GrundrissUpload({ sessionId, projectId }: Props) {
       .finally(() => setLoading(false));
   }, [sessionId, projectId]);
 
+  // Plan-Maße in die Grundriss-Daten schreiben (Länge/Breite des Hauptgeschosses). Danach gelten sie als frisch analysiert.
+  const planUebernehmen = useCallback((p: PlanImport) => {
+    const haupt = p.geschosse.find((g) => g.ebene === p.hauptEbene);
+    if (!haupt) return;
+    let alt: Record<string, unknown> = {};
+    try { alt = JSON.parse(localStorage.getItem('scaffold_grundriss_daten') || '{}') || {}; } catch { /* ignore */ }
+    const neu = { ...alt, laenge: haupt.laengeM, breite: haupt.breiteM };
+    localStorage.setItem('scaffold_plan_import', JSON.stringify(p));
+    localStorage.setItem('scaffold_grundriss_daten', JSON.stringify(neu));
+    ['scaffold_step2', 'scaffold_step3', 'scaffold_step4', 'scaffold_step5',
+     'scaffold_foto_daten', 'scaffold_foto_analyse', 'scaffold_lidar_measurements',
+    ].forEach((k) => localStorage.removeItem(k));
+    localStorage.setItem('scaffold_grundriss_fresh', '1');
+    setPlan(p);
+    setStructured(neu);
+  }, []);
+
   const handleFileSelect = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const selected = e.target.files;
     if (!selected?.length) return;
@@ -65,13 +90,21 @@ export default function GrundrissUpload({ sessionId, projectId }: Props) {
       try {
         const media = await uploadGrundrissClient(file, sessionId, projectId);
         setFiles((prev) => [media, ...prev]);
+        if (file.type === 'application/pdf') {
+          setPlanLiest(true);
+          try {
+            const p = await planLesen(file);
+            if (p) planUebernehmen(p);
+          } catch { /* kein lesbarer Vektor-Plan: die KI-Analyse bleibt der Weg */ }
+          finally { setPlanLiest(false); }
+        }
       } catch (err: any) {
         alert(`Upload fehlgeschlagen: ${err.message}`);
       }
     }
     setUploading(false);
     e.target.value = '';
-  }, [sessionId, projectId]);
+  }, [sessionId, projectId, planUebernehmen]);
 
   const handleDelete = useCallback(async (media: ProjectMedia) => {
     if (!confirm(`"${media.file_name}" löschen?`)) return;
@@ -94,8 +127,16 @@ export default function GrundrissUpload({ sessionId, projectId }: Props) {
       const json = await res.json();
       if (!res.ok || !json.success) throw new Error(json.error || 'Analyse fehlgeschlagen');
 
+      // Maße aus den Zeichenlinien des Plans schlagen die Werte der KI (die mischt gern Geschosse)
+      let strukt = json.structured || null;
+      try {
+        const pl: PlanImport | null = JSON.parse(localStorage.getItem('scaffold_plan_import') || 'null');
+        const haupt = pl?.geschosse.find((g) => g.ebene === pl.hauptEbene);
+        if (haupt) strukt = { ...(strukt || {}), laenge: haupt.laengeM, breite: haupt.breiteM };
+      } catch { /* ignore */ }
+      json.structured = strukt;
       setResult(json.analysis);
-      setStructured(json.structured || null);
+      setStructured(strukt);
       setDiscarded(json.verworfen || []);
       localStorage.setItem('scaffold_grundriss_analyse', json.analysis);
       localStorage.setItem('scaffold_grundriss_daten', JSON.stringify(json.structured || {}));
@@ -168,6 +209,22 @@ export default function GrundrissUpload({ sessionId, projectId }: Props) {
           )}
         </button>
       </div>
+
+      {planLiest && <p className="text-center text-xs text-[#86868b]">Plan wird gelesen …</p>}
+      {plan && (
+        <div className="rounded-xl border border-violet-200 bg-violet-50 p-3 text-xs text-violet-900 space-y-1">
+          <p className="font-medium">📐 Maße aus dem Plan gelesen (Maßstab 1:{plan.massstab})</p>
+          {plan.geschosse.map((g) => (
+            <p key={g.titel}>
+              {g.titel}: {String(g.laengeM).replace('.', ',')} × {String(g.breiteM).replace('.', ',')} m{g.ebene === plan.hauptEbene ? ' ← als Länge und Breite eingetragen' : ''}
+            </p>
+          ))}
+          {ruecksprunge(plan).length > 0 && (
+            <p>Das {ruecksprunge(plan).map((g) => g.titel).join(', ')} ist kürzer als das Hauptgeschoss – in Schritt 2 bitte prüfen, ob es einen eigenen Abschnitt braucht.</p>
+          )}
+          <p className="text-violet-700">Bitte mit dem Plan vergleichen, bevor es weitergeht.</p>
+        </div>
+      )}
 
       {/* ─── Dateiliste ─── */}
       {loading ? (
