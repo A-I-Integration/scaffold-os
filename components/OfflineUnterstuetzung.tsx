@@ -3,10 +3,11 @@
 // SCAFFOLD OS – Offline-Unterstützung: meldet den Service Worker an (nur Produktion) und zeigt eine Leiste, solange kein Netz da ist.
 // Die Leiste sagt ehrlich, was geht: CAD-Rechnen ja, Server-Funktionen (Speichern im Projekt, KI, Mail) erst wieder mit Netz.
 // ============================================================
-import { useEffect, useSyncExternalStore } from 'react'
+import { useEffect, useState, useSyncExternalStore } from 'react'
 import { speichereEntwurf } from '@/lib/aufmass-entwurf'
 import { speichereSchrittAuto } from '@/lib/aufmass-autosave'
 import { anzahlAusstehend, leseAusstehend, sendeAusstehend, NACHSENDEN_EREIGNIS } from '@/lib/offline/nachsenden'
+import { sendeBefehl } from '@/lib/offline/befehle-senden'
 import type { AutosaveSchritt } from '@/lib/aufmass-autosave-regeln'
 
 function abonniere(rueckruf: () => void): () => void {
@@ -22,6 +23,7 @@ function abonniereOffen(rueckruf: () => void): () => void {
 const sendeOffenes = () => sendeAusstehend({
   entwurf: () => speichereEntwurf(),
   schritt: (id, schritt, form) => speichereSchrittAuto(id, schritt as AutosaveSchritt, form),
+  befehl: (b) => sendeBefehl(b),
 })
 
 export default function OfflineUnterstuetzung() {
@@ -31,9 +33,15 @@ export default function OfflineUnterstuetzung() {
   // Zahl der noch nicht gesendeten Auto-Speicherungen (als Text, damit der Vergleich stabil bleibt)
   const offen = useSyncExternalStore(abonniereOffen, () => String(anzahlAusstehend(leseAusstehend())), () => '0')
 
+  // Was der Server endgültig abgelehnt hat (z. B. Nachtrag existiert nicht mehr): sichtbar melden, damit nichts still verschwindet
+  const [abgelehnt, setAbgelehnt] = useState<string[]>([])
+
   // Beim Start und sobald wieder Netz da ist: Offenes nachsenden
   useEffect(() => {
-    const los = () => { if (navigator.onLine) void sendeOffenes() }
+    const los = () => {
+      if (!navigator.onLine) return
+      void sendeOffenes().then((r) => { if (r.verworfen.length) setAbgelehnt((a) => [...a, ...r.verworfen.map((v) => `${v.titel}: ${v.grund}`)]) })
+    }
     los()
     window.addEventListener('online', los)
     return () => window.removeEventListener('online', los)
@@ -45,17 +53,30 @@ export default function OfflineUnterstuetzung() {
     }
   }, [])
 
-  if (!offline && offen === '0') return null
+  const abgelehntBox = abgelehnt.length > 0 && (
+    <div role='alert' className='fixed bottom-14 left-1/2 -translate-x-1/2 z-[60] max-w-[92vw] rounded-xl bg-[#b42318] text-white text-xs px-3 py-2 shadow-lg'>
+      <p className='font-semibold'>Diese Änderungen konnten nicht übernommen werden:</p>
+      {abgelehnt.map((t, i) => <p key={i}>• {t}</p>)}
+      <button type='button' className='mt-1 underline' onClick={() => setAbgelehnt([])}>Verstanden</button>
+    </div>
+  )
+  if (!offline && offen === '0') return abgelehntBox || null
   if (!offline) {
     return (
-      <div role='status' className='fixed bottom-3 left-1/2 -translate-x-1/2 z-[60] max-w-[92vw] rounded-xl bg-[#1d1d1f] text-white text-xs px-3 py-2 shadow-lg'>
-        Änderungen werden gesendet …
-      </div>
+      <>
+        {abgelehntBox}
+        <div role='status' className='fixed bottom-3 left-1/2 -translate-x-1/2 z-[60] max-w-[92vw] rounded-xl bg-[#1d1d1f] text-white text-xs px-3 py-2 shadow-lg'>
+          {offen} Änderung{offen === '1' ? '' : 'en'} wird{offen === '1' ? '' : 'en'} gesendet …
+        </div>
+      </>
     )
   }
   return (
-    <div role='status' className='fixed bottom-3 left-1/2 -translate-x-1/2 z-[60] max-w-[92vw] rounded-xl bg-[#1d1d1f] text-white text-xs px-3 py-2 shadow-lg'>
-      Kein Netz – CAD und Berechnungen laufen weiter. Auto-Speichern im Aufmaß wird nachgesendet; endgültiges Speichern, KI und E-Mail gehen erst wieder mit Verbindung.
-    </div>
+    <>
+      {abgelehntBox}
+      <div role='status' className='fixed bottom-3 left-1/2 -translate-x-1/2 z-[60] max-w-[92vw] rounded-xl bg-[#1d1d1f] text-white text-xs px-3 py-2 shadow-lg'>
+        Kein Netz – CAD und Berechnungen laufen weiter. Auto-Speichern, Speichern in Schritt 6, Nachträge (ohne Fotos) und Materialabschnitte werden gemerkt{offen !== '0' ? ` (${offen} offen)` : ''} und mit Verbindung gesendet; KI und E-Mail gehen erst wieder mit Netz.
+      </div>
+    </>
   )
 }
