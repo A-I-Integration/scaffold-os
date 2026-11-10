@@ -522,11 +522,17 @@ async function rendereAlsBilder(buffer) {
   try {
     const pdf = path.join(dir, 'plan.pdf');
     fs.writeFileSync(pdf, buffer);
-    const info = await run('pdfinfo', ['-f', '1', '-l', '4', '-box', pdf]);
-    const seiten = [...info.matchAll(/Page\s+(\d+)\s+size:\s+([\d.]+)\s+x\s+([\d.]+)\s+pts/g)].map((m) => ({ nr: Number(m[1]), w: Number(m[2]), h: Number(m[3]) }));
+    // Bis 6 Seiten: alle. Bei mehr Seiten die ersten 4 und die letzten 2 (Skizzen und Maßangaben stehen oft hinten – bei einem
+    // Plan mit Fotos auf den ersten Seiten lag die einzige Maßskizze auf Seite 6 und wurde früher nie angesehen).
+    const info0 = await run('pdfinfo', [pdf]);
+    const gesamt = Number((info0.match(/Pages:\s+(\d+)/) || [])[1]) || 1;
+    const gewaehlt = gesamt <= 6 ? Array.from({ length: gesamt }, (_, i) => i + 1) : [1, 2, 3, 4, gesamt - 1, gesamt];
+    const info = await run('pdfinfo', ['-f', '1', '-l', String(Math.min(gesamt, 200)), '-box', pdf]);
+    const alleSeiten = [...info.matchAll(/Page\s+(\d+)\s+size:\s+([\d.]+)\s+x\s+([\d.]+)\s+pts/g)].map((m) => ({ nr: Number(m[1]), w: Number(m[2]), h: Number(m[3]) }));
+    const seiten = alleSeiten.filter((x) => gewaehlt.includes(x.nr));
     if (!seiten.length) { const m = info.match(/Page size:\s+([\d.]+)\s+x\s+([\d.]+)/); if (m) seiten.push({ nr: 1, w: Number(m[1]), h: Number(m[2]) }); }
     const lesen = (datei) => 'data:image/jpeg;base64,' + fs.readFileSync(datei).toString('base64');
-    for (const sx of seiten.slice(0, 4)) {
+    for (const sx of seiten) {
       const out = path.join(dir, `u${sx.nr}`);
       await run('pdftoppm', ['-jpeg', '-jpegopt', 'quality=80', '-scale-to', '1800', '-f', String(sx.nr), '-l', String(sx.nr), '-singlefile', pdf, out]);
       bilder.push(lesen(out + '.jpg'));
