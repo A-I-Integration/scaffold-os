@@ -1,5 +1,6 @@
 'use client';
 
+import { merkeBefehl } from '@/lib/offline/nachsenden';
 import type { AngebotStatus } from '@/lib/angebot-rueckmeldung';
 import { normalisiereKatalog, type LeistungKatalogEintrag } from '@/lib/leistungskatalog';
 import AngebotRueckmeldungHinweis from '@/components/AngebotRueckmeldungHinweis';
@@ -572,6 +573,18 @@ function Schritt6Content() {
       // endgültigen Projekt (PATCH) – sonst entstünde ein Duplikat.
       let projektId = savedProjectId;
       if (!projektId) { await speichereEntwurf(); projektId = leseEntwurfId(); }
+      // KI-Ergebnis und Angebotsstatus mit ins Projekt speichern (siehe Kommentar weiter unten)
+      const gespeicherteDaten = { ...stepData, angebotAnpassungen: anpassungen, entwurf: false, kiResult, angebotsStatus, ...(angebotRueckmeldungen ? { angebotRueckmeldungen } : {}), preisModus, festpreisProM2 };
+      // Offline (Stufe 4): Ist das Projekt schon angelegt, wird der ganze Stand gemerkt und mit Verbindung gesendet (der letzte Stand gewinnt).
+      // Einen neuen Kunden legt erst das nächste Speichern mit Netz an; Fotos hängen ebenfalls erst dann am Projekt.
+      if (typeof navigator !== 'undefined' && !navigator.onLine) {
+        if (!projektId) { alert('Kein Netz: Das allererste Speichern braucht einmal Verbindung, weil das Projekt dort seine Nummer bekommt. Deine Eingaben bleiben hier erhalten – bitte mit Netz erneut speichern.'); setIsSaving(false); return; }
+        const gemerkt = merkeBefehl('schritt6', projektId, { id: projektId, name: s1.name || 'Unbenanntes Projekt', adresse: s1.adresse || '', data: gespeicherteDaten, customer_id: s1.customerId || null }, 'Aufmaß speichern');
+        if (!gemerkt) { alert('Kein Netz und das Gerät hat keinen Speicherplatz mehr für das Aufmaß – es wurde NICHT gemerkt. Bitte mit Netz speichern.'); return; }
+        alert('Kein Netz – das Aufmaß ist gemerkt und wird gesendet, sobald wieder Verbindung da ist. Bitte die Seite bis dahin nicht leeren.');
+        setIsSaving(false);
+        return;
+      }
       // NEU (Zusammenspiel-Kette): Wurde in Schritt 1 kein bestehender Kunde
       // ausgewählt, sondern nur ein Name eingetippt, blieb das Projekt bisher
       // KOMPLETT ohne Kundenverknüpfung – das Projekt tauchte dann nirgends
@@ -611,7 +624,6 @@ function Schritt6Content() {
       // Aktualisierung. Jetzt: existiert savedProjectId schon, wird PATCH verwendet
       // (aktualisiert das bestehende Projekt UND sichert automatisch eine Version
       // des bisherigen Stands, siehe /api/projects PATCH).
-      const gespeicherteDaten = { ...stepData, angebotAnpassungen: anpassungen, entwurf: false, kiResult, angebotsStatus, ...(angebotRueckmeldungen ? { angebotRueckmeldungen } : {}), preisModus, festpreisProM2 };
       let result: any;
       if (projektId) {
         const response = await fetch('/api/projects', {

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import Link from 'next/link';
 import { Plus, FileText, Check, X, Trash2, Camera } from 'lucide-react';
 import {
@@ -10,6 +10,8 @@ import {
 } from '@/lib/nachtrag';
 import { erzeugeNachtragPdf } from '@/lib/nachtrag-pdf';
 import { unversendeteRechnungen, type RechnungKurz } from '@/lib/rechnung-versand';
+import { merkeBefehl, istNetzFehler } from '@/lib/offline/nachsenden';
+import { wendeNachtragOpAn, type NachtragOp } from '@/lib/nachtraege-aendern';
 import { ladeNachtragFotosHoch, ladeFotosFuerPdf, legeNachtragPdfAmProjektAb } from '@/lib/nachtrag-client';
 
 // ============================================================
@@ -64,13 +66,30 @@ export default function NachtraegeBlock({ project, kunde }: Props) {
   }
 
   const summen = nachtragSummen(liste);
+  const gemerktRef = useRef(false); // letzte Änderung wurde ohne Netz nur gemerkt
 
   /** Änderung läuft auf dem Server mit Versionsprüfung (gleichzeitige Änderungen anderer gehen nicht verloren). */
   async function speichere(aenderung: Record<string, unknown>): Promise<Nachtrag[]> {
-    const pRes = await fetch('/api/nachtraege', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ project_id: project.id, aenderung }),
-    });
+    gemerktRef.current = false;
+    let pRes: Response;
+    try {
+      pRes = await fetch('/api/nachtraege', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ project_id: project.id, aenderung }),
+      });
+    } catch (e) {
+      if (!istNetzFehler(e)) throw e;
+      // Kein Netz: die Änderung wird gemerkt und beim nächsten Netz gesendet (feste ID, der Server legt nichts doppelt an).
+      // Die Liste hier wird sofort wie vom Server verändert (gleiche Regeln), damit man weiterarbeiten kann.
+      const op = aenderung as NachtragOp;
+      const neu = wendeNachtragOpAn(liste, op, heute());
+      const titel = op.op === 'anlegen' ? `Nachtrag „${op.titel}“` : op.op === 'status' ? 'Nachtrag-Status' : op.op === 'betrag' ? 'Nachtrag-Betrag' : 'Nachtrag löschen';
+      if (!merkeBefehl('nachtrag', project.id, aenderung, titel)) throw new Error('Kein Netz und kein Speicherplatz auf dem Gerät – nicht gemerkt. Bitte mit Netz erneut versuchen.');
+      gemerktRef.current = true;
+      setListe(neu);
+      setMeldung({ ok: true, text: 'Kein Netz – die Änderung ist gemerkt und wird gesendet, sobald wieder Verbindung da ist.' });
+      return neu;
+    }
     const pJson = await pRes.json().catch(() => ({}));
     if (!pRes.ok || pJson.success === false) throw new Error(pJson.error || 'Speichern fehlgeschlagen');
     const neu = normalisiereNachtraege(pJson.nachtraege);
@@ -89,13 +108,15 @@ export default function NachtraegeBlock({ project, kunde }: Props) {
     if (!(betrag > 0)) { setMeldung({ ok: false, text: 'Bitte einen Betrag größer 0 eingeben.' }); return; }
     setLaeuft(true); setMeldung(null);
     try {
-      const fotos = await ladeNachtragFotosHoch(dateien, project.id);
+      // Ohne Netz lassen sich Fotos nicht hochladen: der Nachtrag wird ohne Fotos gemerkt (siehe Meldung unten)
+      const ohneNetz = typeof navigator !== 'undefined' && !navigator.onLine;
+      const fotos = ohneNetz ? [] : await ladeNachtragFotosHoch(dateien, project.id);
       const id = crypto.randomUUID();
       await speichere({ op: 'anlegen', id, datum: form.datum || heute(), titel: form.titel, grund: form.grund, betrag, fotos, ...(art === 'verlaengerung' ? { art, verlaengerung } : art === 'regie' ? { art, regie: regieZeilen } : {}) });
       setForm({ datum: heute(), titel: '', grund: '', betrag: '' });
       setArt(''); setVerl({ wochen: '', preis: '', bis: '' }); setRegie([{ bezeichnung: '', personen: '', stunden: '', satz: '' }]);
       setDateien([]); setOffen(false);
-      setMeldung({ ok: true, text: 'Nachtrag gespeichert.' });
+      setMeldung({ ok: true, text: gemerktRef.current ? `Kein Netz – der Nachtrag ist gemerkt und wird gesendet, sobald wieder Verbindung da ist.${ohneNetz && dateien.length > 0 ? ' Die Fotos wurden NICHT übernommen und müssen später noch hinzugefügt werden.' : ''}` : 'Nachtrag gespeichert.' });
       void pruefeVersand();
     } catch (e: any) {
       setMeldung({ ok: false, text: e?.message || 'Fehler beim Speichern' });

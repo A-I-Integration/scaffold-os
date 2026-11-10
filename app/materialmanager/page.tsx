@@ -2,6 +2,7 @@
 
 /* eslint-disable @next/next/no-img-element -- kleine Data-URL-Vorschaubilder, next/image bringt hier nichts */
 
+import { merkeBefehl, istNetzFehler } from '@/lib/offline/nachsenden'
 import { useEffect, useMemo, useState, useCallback } from 'react'
 import {
   fasseZusammen, teileStueckliste, verteileAufAbschnitte, restInAbschnitt,
@@ -85,7 +86,16 @@ export default function MaterialmanagerPage() {
 
   async function speichern() {
     setFehler(''); setMeldung('')
-    const res = await fetch('/api/materialmanager', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ project_id: projektId, abschnitte }) })
+    let res: Response
+    try {
+      res = await fetch('/api/materialmanager', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ project_id: projektId, abschnitte }) })
+    } catch (e) {
+      if (!istNetzFehler(e)) { setFehler('Speichern fehlgeschlagen.'); return }
+      // Kein Netz: ganzer Stand der Abschnitte wird gemerkt (der letzte gewinnt) und mit Verbindung gesendet
+      if (!merkeBefehl('material', projektId, abschnitte, 'Materialabschnitte')) { setFehler('Kein Netz und kein Speicherplatz auf dem Gerät – nicht gemerkt. Bitte mit Netz speichern.'); return }
+      setUngespeichert(false); setMeldung('Kein Netz – gemerkt, wird mit Verbindung gesendet.')
+      return
+    }
     const j = await res.json().catch(() => ({}))
     if (!res.ok || !j.success) { setFehler(j.error || 'Speichern fehlgeschlagen.'); return }
     setUngespeichert(false); setMeldung('Gespeichert.')

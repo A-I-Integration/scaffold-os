@@ -37,3 +37,53 @@ describe('Nachsenden (Stufe 3)', () => {
     expect(istNetzFehler(new Error('HTTP 500'))).toBe(false)
   })
 })
+
+import { merkeBefehl, befehlErledigt, befehleFuer } from '../nachsenden'
+describe('Befehle (Stufe 4)', () => {
+  const sender = (f: (b: { art: string; projectId: string }) => { ergebnis: 'erledigt' | 'verworfen' | 'netz'; grund?: string }) =>
+    ({ entwurf: async () => {}, schritt: async () => {}, befehl: async (b: { art: string; projectId: string }) => f(b) })
+
+  it('Nachträge bleiben einzeln und in Reihenfolge, Materialstand und Schritt 6 ersetzen sich', () => {
+    const s = speicher()
+    merkeBefehl('nachtrag', 'p1', { op: 'anlegen', id: 'a' }, 'Nachtrag A', s)
+    merkeBefehl('nachtrag', 'p1', { op: 'status', id: 'a' }, 'Status A', s)
+    merkeBefehl('material', 'p1', [1], 'Material', s); merkeBefehl('material', 'p1', [1, 2], 'Material', s)
+    merkeBefehl('schritt6', 'p1', { v: 1 }, 'Aufmaß', s); merkeBefehl('schritt6', 'p1', { v: 2 }, 'Aufmaß', s)
+    const a = leseAusstehend(s)
+    expect(a.befehle.map((b) => b.art)).toEqual(['nachtrag', 'nachtrag', 'material', 'schritt6'])
+    expect(a.befehle[2].daten).toEqual([1, 2])
+    expect(a.befehle[3].daten).toEqual({ v: 2 })
+    expect(anzahlAusstehend(a)).toBe(4)
+    expect(befehleFuer('nachtrag', 'p1', a)).toHaveLength(2)
+  })
+  it('sendet in Reihenfolge und räumt erledigte und verworfene auf', async () => {
+    const s = speicher(); const log: string[] = []
+    merkeBefehl('nachtrag', 'p1', 1, 'N1', s); merkeBefehl('nachtrag', 'p1', 2, 'N2', s); merkeBefehl('material', 'p2', 3, 'M', s)
+    const r = await sendeAusstehend(sender((b) => { log.push(b.art + ':' + b.projectId); return log.length === 2 ? { ergebnis: 'verworfen', grund: 'nicht mehr vorhanden' } : { ergebnis: 'erledigt' } }), s)
+    expect(log).toEqual(['nachtrag:p1', 'nachtrag:p1', 'material:p2'])
+    expect(r.verworfen).toEqual([{ titel: 'N2', grund: 'nicht mehr vorhanden' }])
+    expect(s.m.has(NACHSENDEN_KEY)).toBe(false)
+  })
+  it('bei Netzfehler stoppt der Durchlauf und alles Übrige bleibt gemerkt', async () => {
+    const s = speicher(); let n = 0
+    merkeBefehl('nachtrag', 'p1', 1, 'N1', s); merkeBefehl('nachtrag', 'p1', 2, 'N2', s); merkeBefehl('nachtrag', 'p1', 3, 'N3', s)
+    await sendeAusstehend(sender(() => (++n === 2 ? { ergebnis: 'netz' } : { ergebnis: 'erledigt' })), s)
+    expect(n).toBe(2)
+    expect(leseAusstehend(s).befehle.map((b) => b.titel)).toEqual(['N2', 'N3'])
+  })
+  it('befehlErledigt entfernt gezielt; alte Speicherstände ohne befehle bleiben lesbar', () => {
+    const s = speicher()
+    s.setItem(NACHSENDEN_KEY, JSON.stringify({ entwurf: true, schritte: {} }))
+    expect(leseAusstehend(s).befehle).toEqual([])
+    const id = merkeBefehl('material', 'p1', [], 'M', s)
+    befehlErledigt(id as string, s)
+    expect(leseAusstehend(s).befehle).toEqual([])
+  })
+})
+
+describe('Speicher voll', () => {
+  it('merkeBefehl gibt null zurück, wenn der Speicher das Schreiben verweigert', () => {
+    const voll = { getItem: () => null, setItem: () => { throw new Error('QuotaExceededError') }, removeItem: () => {} }
+    expect(merkeBefehl('schritt6', 'p1', { x: 1 }, 'Aufmaß', voll)).toBeNull()
+  })
+})
