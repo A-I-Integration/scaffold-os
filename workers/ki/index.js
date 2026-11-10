@@ -67,8 +67,11 @@ function deterministicFromText(text) {
   if (trauf) found.traufhoehe = parsePlanNumber(trauf[1]);
   const first = text.match(/firsth(?:[oö]|oe)he[^\d]{0,15}(\d{1,2}[.,]\d{1,2})/i);
   if (first && !found.hoehe) found.hoehe = parsePlanNumber(first[1]);
-  const dach = text.match(/\b(Satteldach|Flachdach|Pultdach|Walmdach|Mansarddach|Zeltdach)\b/i);
-  if (dach) found.dachform = dach[1][0].toUpperCase() + dach[1].slice(1).toLowerCase();
+  // Nur wenn der Text genau EINE Dachform nennt. Pläne nennen oft mehrere
+  // (Hauptdach, Garage, Vordach) - dann ist der Text nicht eindeutig und die
+  // Zeichnung entscheidet.
+  const dachWoerter = new Set((text.match(/\b(Satteldach|Flachdach|Pultdach|Walmdach|Mansarddach|Zeltdach)\b/gi) || []).map((w) => w.toLowerCase()));
+  if (dachWoerter.size === 1) { const w = [...dachWoerter][0]; found.dachform = w[0].toUpperCase() + w.slice(1); }
   // Phase 78: Geschosszahl ('2 Geschosse', 'Geschosse: 3')
   const ges = text.match(/(\d{1,2})\s*geschoss/i) || text.match(/geschoss(?:e|zahl)?\s*:?\s*(\d{1,2})/i);
   if (ges) found.geschosse = parseInt(ges[1], 10);
@@ -460,6 +463,7 @@ Antworte AUSSCHLIESSLICH als JSON-Objekt mit genau diesen Feldern:
   "geschosse": <Anzahl Geschosse als Zahl, wenn erkennbar, sonst null>,
   "dachform": "<Satteldach, Flachdach, Pultdach, Walmdach, Mansarddach, Zeltdach — oder null>",
   "belege": { "laenge": "<wörtliches Zitat aus dem Plan oder null>", "breite": "<...>", "hoehe": "<...>", "hoehe_geschaetzt": "<...>", "traufhoehe": "<...>", "dachform": "<...>" },
+  "hinweise": ["<kurze Hinweise: was unklar ist, Abbruch/Bestand ignoriert, Hanglage – oder leeres Array>"],
   "zusammenfassung": "<2-3 Sätze: Gebäudeform, Maße, Besonderheiten>"
 }
 
@@ -472,6 +476,22 @@ STRENGE REGELN:
 6. Achsenbeschriftungen, Z-Werte und Ebenen-Hinweise (z. B. "Dach (Z=9,0m)", "OG1 (Z=3,0m)") gelten ALS vermaßt – daraus darf "hoehe" direkt gelesen werden.
 7. Der ENDWERT der Höhenachse (Z) ist die Gebäudehöhe – z. B. zeigt die Skala 0-12 eine Höhe von 12 m an. Ebenso: Der höchste beschriftete Z-Wert gilt als "hoehe".
 
+8. NEUBAU, BESTAND, ABBRUCH: Gerüstet wird der NEUE Baukörper. Alles, was als
+   "Abbruch", "Bestand", "bestehend" oder "abzubrechen" gekennzeichnet ist (auch
+   Höhenkoten wie "+8,44 First Abbruch"), gehört NICHT zu den Maßen. Beziehe dich
+   auf den Neubau.
+9. DACH: Gib die Dachform des HAUPTBAUKÖRPERS an. Garage, Vordach, Anbau und
+   Gaube zählen nicht (z. B. "extensiv begrüntes Flachdach" der Garage ist NICHT
+   die Dachform des Hauses). Bei Pult-, Sattel- und Walmdach ist "hoehe" die
+   First-Kote des Neubaus und "traufhoehe" die Trauf-Kote – wörtlich aus den
+   Ansichten/Schnitten, auch wenn sie auf ±0,00 (Erdgeschoss-Fußboden) bezogen
+   ist. Weise im Feld "hinweise" darauf hin, wenn das Gelände abfällt und die
+   Gerüsthöhe dadurch größer ist als die Kote.
+10. Bei mehreren Bildern/Kacheln: sie zeigen verschiedene Plan-Ausschnitte.
+    Lies Grundrisse (Länge/Breite), Ansichten und Schnitte (Höhen).
+11. Maße, die du nicht eindeutig dem Neubau zuordnen kannst: null und im Feld
+    "hinweise" begründen, statt zu raten.
+
 SPEZIALFALL GERÜSTPLAN / FASSADENZEICHNUNG (Seitenansicht statt Grundriss):
 - Horizontale Ausdehnung: "Gerüstlänge", "Gerüstbreite: X m", "X,XX m gesamt"
   -> laenge. Feldweite und Feldanzahl sind NUR Detailmaße – sie NICHT
@@ -479,6 +499,56 @@ SPEZIALFALL GERÜSTPLAN / FASSADENZEICHNUNG (Seitenansicht statt Grundriss):
 - Vertikale Ausdehnung: "Gerüsthöhe", "X,XX m Gesamthöhe" -> hoehe.
 - Gebäudebreite/Tiefe ist in einer Fassadenansicht meist NICHT erkennbar:
   dann breite: null liefern (korrekt – nicht 0, nicht raten).${ocrText ? `\n\nEXTRAHIERTER PLAN-TEXT (OCR):${ocrText}` : ''}`;
+
+// Plan-PDF als Bilder rendern (poppler im Container). Uebersicht je Seite (max. 4)
+// plus Kacheln der groessten Seite, damit Zahlen auf A0-Plaenen lesbar bleiben.
+// Faellt still auf [] zurueck, wenn poppler fehlt - dann bleibt es beim Text.
+async function rendereAlsBilder(buffer) {
+  const fs = require('fs');
+  const os = require('os');
+  const path = require('path');
+  const { execFile } = require('child_process');
+  const run = (cmd, args) => new Promise((resolve, reject) => execFile(cmd, args, { maxBuffer: 20 * 1024 * 1024, timeout: 60000 }, (e, out) => (e ? reject(e) : resolve(out))));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'plan-'));
+  const bilder = [];
+  try {
+    const pdf = path.join(dir, 'plan.pdf');
+    fs.writeFileSync(pdf, buffer);
+    const info = await run('pdfinfo', ['-f', '1', '-l', '4', '-box', pdf]);
+    const seiten = [...info.matchAll(/Page\s+(\d+)\s+size:\s+([\d.]+)\s+x\s+([\d.]+)\s+pts/g)].map((m) => ({ nr: Number(m[1]), w: Number(m[2]), h: Number(m[3]) }));
+    if (!seiten.length) { const m = info.match(/Page size:\s+([\d.]+)\s+x\s+([\d.]+)/); if (m) seiten.push({ nr: 1, w: Number(m[1]), h: Number(m[2]) }); }
+    const lesen = (datei) => 'data:image/jpeg;base64,' + fs.readFileSync(datei).toString('base64');
+    for (const sx of seiten.slice(0, 4)) {
+      const out = path.join(dir, `u${sx.nr}`);
+      await run('pdftoppm', ['-jpeg', '-jpegopt', 'quality=80', '-scale-to', '1800', '-f', String(sx.nr), '-l', String(sx.nr), '-singlefile', pdf, out]);
+      bilder.push(lesen(out + '.jpg'));
+    }
+    const gross = [...seiten].sort((a, b) => b.w * b.h - a.w * a.h)[0];
+    if (gross) {
+      const dpi = 100;
+      const pxW = Math.round(gross.w * dpi / 72);
+      const pxH = Math.round(gross.h * dpi / 72);
+      if (pxW > 2400 || pxH > 2400) {
+        const kachel = 1800;
+        const cols = Math.min(2, Math.ceil(pxW / kachel));
+        const rows = Math.min(2, Math.ceil(pxH / kachel));
+        const kw = Math.ceil(pxW / cols);
+        const kh = Math.ceil(pxH / rows);
+        for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) {
+          const out = path.join(dir, `k${gross.nr}_${r}_${c}`);
+          await run('pdftoppm', ['-jpeg', '-jpegopt', 'quality=80', '-r', String(dpi), '-x', String(c * kw), '-y', String(r * kh), '-W', String(kw), '-H', String(kh), '-f', String(gross.nr), '-l', String(gross.nr), '-singlefile', pdf, out]);
+          bilder.push(lesen(out + '.jpg'));
+        }
+      }
+    }
+  } catch (e) {
+    console.warn('[ki-worker] PDF-Rendern nicht moeglich:', e.message);
+    return [];
+  } finally {
+    try { fs.rmSync(dir, { recursive: true, force: true }); } catch {}
+  }
+  return bilder.slice(0, 8);
+}
 
 async function extrahierePdfText(buffer) {
   try {
@@ -511,6 +581,7 @@ async function verarbeiteCadAnalyseJob(tenant, job) {
           text = (ocrJson.pages || []).map((p) => p.markdown || p.text || '').join('\n').trim();
         }
         if (text) ocrText += (ocrText ? '\n' : '') + text;
+        for (const b of await rendereAlsBilder(buf)) imageUrls.push(b);
       }
     } else if (f.storage_path.toLowerCase().endsWith('.dxf')) {
       // Phase 73: DXF -> Beschriftungen extrahieren, dann derselbe Weg
@@ -601,7 +672,7 @@ async function verarbeiteCadAnalyseJob(tenant, job) {
   const res = await kiFetch(`${KI_BASE_URL}/chat/completions`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${KI_API_KEY}` },
-    body: JSON.stringify({ model: VISION_MODEL, messages: [{ role: 'user', content }], temperature: 0.2, max_tokens: 1000, response_format: { type: 'json_object' } }),
+    body: JSON.stringify({ model: VISION_MODEL, messages: [{ role: 'user', content }], temperature: 0.2, max_tokens: 1500, response_format: { type: 'json_object' } }),
   });
   const data = await res.json();
   const raw = (data.choices?.[0]?.message?.content || '').trim();
@@ -617,6 +688,7 @@ async function verarbeiteCadAnalyseJob(tenant, job) {
     traufhoehe: structured.traufhoehe ?? null, dachform: structured.dachform ?? null,
     geschosse: structured.geschosse ?? null,
     zusammenfassung: structured.zusammenfassung || '',
+    hinweise: Array.isArray(structured.hinweise) ? structured.hinweise.filter((h) => typeof h === 'string' && h.trim()).slice(0, 5) : [],
     verworfen, ohneKi: false,
   };
   // Phase 71: Deterministischer Höhen-Fallback. Das Vision-Modell ist
