@@ -3,7 +3,8 @@
 // Das Lesen (Browser, pdf.js) und die Aufbereitung (rein) sind getrennt, damit die Aufbereitung testbar bleibt.
 // ============================================================
 
-import type { GefundenerGrundriss } from './grundriss-finden'
+import type { GefundenerGrundriss, PlanText } from './grundriss-finden'
+import { dachformAusPlan, type PlanDachform } from './dachform-aus-plan'
 
 export interface PlanImportGeschoss { titel: string; ebene: number; laengeM: number; breiteM: number; flaecheM2: number }
 
@@ -13,12 +14,14 @@ export interface PlanImport {
   geschosse: PlanImportGeschoss[]
   /** Geschoss, dessen Maße als Länge/Breite des Gebäudes gelten: das flächengrößte über dem Gelände (ab Erdgeschoss) */
   hauptEbene: number
+  /** Aus First-/Traufe-Beschriftungen gelesen; fehlt, wenn der Plan es nicht eindeutig zeigt */
+  dachform?: PlanDachform
 }
 
 const runde = (v: number) => Math.round(v * 100) / 100
 
 /** Aus den gefundenen Grundrissen die Maße je Geschoss bilden (Länge = längere Seite) und das Hauptgeschoss wählen. */
-export function planImportAus(dateiname: string, massstab: number, gefunden: GefundenerGrundriss[]): PlanImport | null {
+export function planImportAus(dateiname: string, massstab: number, gefunden: GefundenerGrundriss[], texte: PlanText[] = []): PlanImport | null {
   if (!gefunden.length) return null
   const geschosse: PlanImportGeschoss[] = gefunden.map((g) => ({
     titel: g.titel,
@@ -30,7 +33,8 @@ export function planImportAus(dateiname: string, massstab: number, gefunden: Gef
   const ueberGelaende = geschosse.filter((g) => g.ebene >= 0)
   if (!ueberGelaende.length) return null // nur Keller gefunden: kein Gerüst-Grundriss
   const haupt = ueberGelaende.reduce((a, b) => (b.flaecheM2 > a.flaecheM2 ? b : a))
-  return { dateiname, massstab, geschosse, hauptEbene: haupt.ebene }
+  const dachform = dachformAusPlan(gefunden, texte, 0.0254 / 72 * massstab) ?? undefined
+  return { dateiname, massstab, geschosse, hauptEbene: haupt.ebene, ...(dachform ? { dachform } : {}) }
 }
 
 /** Geschosse über dem Gelände, die deutlich (> 1 m) kürzer sind als das Hauptgeschoss: Rücksprünge. */
@@ -54,7 +58,7 @@ export async function planLesen(datei: File): Promise<PlanImport | null> {
       if (!ms) continue
       const fl = await q.vektoren(nr, 0)
       if (!fl.length) continue
-      const r = planImportAus(datei.name, ms, grundrisseFinden(fl, texte, meterJePunkt(ms)))
+      const r = planImportAus(datei.name, ms, grundrisseFinden(fl, texte, meterJePunkt(ms)), texte)
       if (r) return r
     }
     return null
