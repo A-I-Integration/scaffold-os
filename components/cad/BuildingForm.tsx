@@ -373,6 +373,11 @@ export default function BuildingForm({ building, systemId, onChange, onSystemCha
         } catch { /* kein lesbarer Vektor-Plan: es bleibt bei den KI-Werten */ }
       }
 
+      // Dachhöhe = First − Traufe, sonst bleibt das Dach im 3D unsichtbar (Dachhöhe 0) – gilt auch für KI-Werte
+      if (patch.roofHeightM === undefined && typeof patch.heightM === 'number' && typeof patch.eavesHeightM === 'number'
+        && patch.heightM > patch.eavesHeightM && patch.roofForm !== 'flachdach' && patch.roofForm !== 'kein' && (patch.roofForm !== undefined || building.roofForm !== 'flachdach')) {
+        patch.roofHeightM = Math.round((patch.heightM - patch.eavesHeightM) * 100) / 100
+      }
       if (Object.keys(patch).length === 0) {
         setAnalyseHinweis(dxfVorspann + 'Keine eindeutig belegten Maße gefunden – bitte Werte manuell eintragen.')
       } else {
