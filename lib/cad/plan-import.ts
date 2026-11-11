@@ -6,7 +6,7 @@
 import type { GefundenerGrundriss, PlanText } from './grundriss-finden'
 import type { VektorFlaeche } from './pdf-vektoren'
 import { oeffnungenFinden } from './oeffnungen-aus-plan'
-import { gelaendeAusPlan, type GelaendeAusPlan } from './gelaende-aus-plan'
+import { gelaendeAusPlan, gelaendeJeKante, type GelaendeAusPlan, type GelaendeJeKante } from './gelaende-aus-plan'
 import { hauptkoerperAusKontur, type Vorbau } from './hauptkoerper'
 import { oeffnungenAnKanten, vorbautenAnKanten, type PlanOeffnungAnKante, type PlanVorbauAnKante } from './plan-oeffnungen-modell'
 import { dachAusPlan, dachKotenAusPlan, pultdachNeigung, type PlanDachform } from './dachform-aus-plan'
@@ -39,6 +39,8 @@ export interface PlanImport {
   dachneigungGrad?: number
   /** Geländekoten rund um das Hauptgeschoss (±0,00 = dessen Fußboden); fehlt bei weniger als 2 Punkten */
   gelaende?: GelaendeAusPlan
+  /** Geländekoten je Kante des Hauptkörpers (Plan-Kanten); nur Kanten mit Kote. Dient als Vorlage, der Mensch korrigiert. */
+  gelaendeJeKante?: GelaendeJeKante[]
 }
 
 const runde = (v: number) => Math.round(v * 100) / 100
@@ -77,6 +79,8 @@ export function planImportAus(dateiname: string, massstab: number, gefunden: Gef
   const haupt = ueberGelaende.reduce((a, b) => (b.flaecheM2 > a.flaecheM2 ? b : a))
   const hauptG = gefunden.find((g) => g.ebene === haupt.ebene)
   const gelaende = hauptG ? gelaendeAusPlan(hauptG, texte, (0.0254 / 72) * massstab) : null
+  const hkHaupt = hauptG ? hauptkoerperAusKontur(hauptG.kontur, mpp) : null
+  const jeKante = hkHaupt ? gelaendeJeKante(hkHaupt.rechteck, texte, mpp) : []
   const dach = dachAusPlan(gefunden, texte, (0.0254 / 72) * massstab)
   const koten = dachKotenAusPlan(texte)
   const neigung = dach?.dachform === 'Pultdach' && koten.firstM !== undefined && koten.traufeM !== undefined
@@ -88,6 +92,7 @@ export function planImportAus(dateiname: string, massstab: number, gefunden: Gef
     ...(koten.traufeM !== undefined ? { traufKoteM: koten.traufeM } : {}),
     ...(neigung !== null ? { dachneigungGrad: neigung } : {}),
     ...(gelaende ? { gelaende } : {}),
+    ...(jeKante.length ? { gelaendeJeKante: jeKante } : {}),
   }
 }
 
@@ -117,6 +122,10 @@ export function planHinweiseFuerAufmass(p: PlanImport): string[] {
   }
   for (const g of ruecksprunge(p)) h.push(`Das ${g.titel} ist kürzer (${kom(g.laengeM)} m statt ${kom(haupt.laengeM)} m) – bei Bedarf als eigenen Abschnitt eintragen.`)
   if (p.gelaende && p.gelaende.unterschiedM >= 1) h.push(`Hanglage: Geländeunterschied ca. ${kom(p.gelaende.unterschiedM)} m – die Gerüsthöhe ist je Seite verschieden (Talseite höher).`)
+  if (p.gelaendeJeKante && p.gelaende && p.gelaende.unterschiedM >= 1) {
+    const name: Record<string, string> = { unten: 'unten im Plan', oben: 'oben im Plan', links: 'links im Plan', rechts: 'rechts im Plan' }
+    h.push(`Geländekoten je Seite (±0,00 = Fußboden ${haupt.titel}): ` + p.gelaendeJeKante.map((k) => `${name[k.kante]} ${k.minM === k.maxM ? kom(k.minM) : `${kom(k.minM)} bis ${kom(k.maxM)}`} m`).join(', ') + ' – bitte prüfen.')
+  }
   return h
 }
 
