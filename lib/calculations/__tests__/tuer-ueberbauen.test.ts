@@ -19,3 +19,13 @@ describe('Tür überbauen', () => {
     expect(m.fields.some((f) => f.side === 'back' && f.durchgang)).toBe(true)
   })
 })
+
+describe('Durchfahrt', () => {
+  it('große Öffnung hält mehrere Lagen frei und meldet die Überbrückung als nicht bemessen', () => {
+    const b = { lengthM: 14, widthM: 9, heightM: 10, eavesHeightM: 0, roofHeightM: 0, roofForm: 'flachdach', floors: 3, sides: ['front', 'back', 'left', 'right'],
+      tueren: [{ id: 'd', side: 'front', offsetAlongM: 0, widthM: 3.5, heightM: 4.5, durchfahrt: true }] } as BuildingParams
+    const m = generateCADModel(b, 'layher-allround')
+    expect(m.warnings.map((w) => w.code)).toContain('DURCHFAHRT_BRUECKE')
+    expect(m.fields.filter((f) => f.durchgang && f.levelIndex >= 1).length).toBeGreaterThan(0)
+  })
+})

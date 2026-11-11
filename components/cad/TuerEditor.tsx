@@ -54,6 +54,7 @@ export default function TuerEditor({ building, onChange }: Props) {
       )}
       {tueren.map((t, idx) => (
         <div key={t.id} className='rounded-lg border border-black/10 bg-white/70 p-2 space-y-1.5'>
+          {t.durchfahrt && <div className='text-[10px] font-semibold text-[#e8590c] mb-1'>Durchfahrt</div>}
           <div className='grid grid-cols-2 gap-1.5'>
             <label className='text-[10px] text-[#86868b]'>Seite
               <select className={eingaben} value={t.side} onChange={(e) => aendere(idx, { side: e.target.value as CadTuer['side'] })}>
@@ -104,6 +105,10 @@ export default function TuerEditor({ building, onChange }: Props) {
         </div>
       ))}
       <button type='button' onClick={hinzufuegen} className='text-xs font-semibold text-[#e8590c] hover:underline'>+ Tür hinzufügen</button>
+      <button type='button' className='ml-3 text-xs font-semibold text-[#e8590c] hover:underline'
+        onClick={() => setTueren([...tueren, { id: `m${Date.now().toString(36)}${tueren.length}`, side: building.sides?.[0] ?? 'front', offsetAlongM: 0, widthM: 3.5, heightM: 4.5, durchfahrt: true }])}>
+        + Durchfahrt hinzufügen (Startwerte 3,50 × 4,50 m, bitte anpassen)
+      </button>
     </div>
   )
 }
