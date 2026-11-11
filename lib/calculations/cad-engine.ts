@@ -2290,7 +2290,7 @@ export function generateAnsicht(model: CADModel, seite: 'front' | 'back' | 'left
     elements.push({ id: 'teile-titel', type: 'text', x: legendeX, y: y(oben) + zeile, text: `Teile dieser Ansicht (${nameSeite})`, fill: '#0f172a', anker: 'start' })
     liste.forEach((g, i) => elements.push({ id: `teile-${i}`, type: 'text', x: legendeX, y: y(oben) + zeile * (i + 2), text: `${i + 1}  ${g.name.replace(/(\d)\.(\d)/g, '$1,$2')} · ${g.art} · ${g.n}×`, fill: '#334155', anker: 'start' }))
   }
-  const minX = -margin - 1.6, maxX = (liste.length ? legendeX + 17 : laenge + margin + 3.2)
+  const minX = -margin - 4.2, maxX = (liste.length ? legendeX + 17 : laenge + margin + 3.2)
   return { type: 'ansicht', viewBox: { minX, minY: y(oben) - margin, width: maxX - minX, height: Math.max(oben - unten, legendeHoehe) + margin * 2 }, elements, dimensions }
 }
 
