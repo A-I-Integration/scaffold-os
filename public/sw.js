@@ -11,6 +11,7 @@
    Was er NICHT tut:
    • Keine anderen Server-Daten (/api sonst, Anmeldung, Überwachung) zwischenspeichern – die laufen immer übers Netz. Nur GET, nie Schreibzugriffe.
    • Keine Änderungen nachsenden (kommt in Stufe 3).
+   • Wird eine gespeicherte Kopie statt Serverdaten gezeigt, bekommen die offenen Fenster die Nachricht { typ: 'offline-kopie', stand } (Anzeige in der Offline-Leiste).
    • Beim Abmelden werden alle Kopien gelöscht (Nachricht { typ: 'cache-leeren' } von der Seite).
    ============================================================ */
 'use strict'
@@ -93,6 +94,17 @@ async function seiteNetzZuerst(request, url) {
   }
 }
 
+// Den offenen Fenstern sagen, dass gerade eine gespeicherte Kopie (statt Serverdaten) angezeigt wird – damit die App den Stand zeigen kann
+function meldeKopie(pfad, stand) {
+  try {
+    if (self.clients && self.clients.matchAll) {
+      self.clients.matchAll({ type: 'window' }).then(function (fenster) {
+        fenster.forEach(function (f) { f.postMessage({ typ: 'offline-kopie', pfad: pfad, stand: Number(stand) || 0 }) })
+      })
+    }
+  } catch (e) { /* nicht kritisch */ }
+}
+
 async function datenNetzZuerst(request, url) {
   const cache = await caches.open(CACHE_DATEN)
   const schluessel = url.pathname + url.search
@@ -109,7 +121,9 @@ async function datenNetzZuerst(request, url) {
     const alt = await cache.match(schluessel)
     if (!alt) throw e
     const text = await alt.text()
-    return new Response(text, { status: 200, headers: { 'content-type': 'application/json', 'x-offline-kopie': '1', 'x-stand': alt.headers.get('x-stand') || '' } })
+    const stand = alt.headers.get('x-stand') || ''
+    meldeKopie(url.pathname, stand)
+    return new Response(text, { status: 200, headers: { 'content-type': 'application/json', 'x-offline-kopie': '1', 'x-stand': stand } })
   }
 }
 

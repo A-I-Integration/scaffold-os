@@ -13,6 +13,31 @@ export interface Hauptkoerper { laengeM: number; breiteM: number; flaecheM2: num
 const ZELLE_M = 0.05
 const MIN_ANTEIL = 0.85
 const MIN_VORBAU_M2 = 1
+const DUENN_M = 0.5
+
+/** Morphologisches Öffnen mit k×k-Quadrat: behält nur Teile, in die ein k×k-Quadrat passt. */
+function oeffnen(m: Uint8Array, w: number, h: number, k: number): Uint8Array {
+  const integral = new Int32Array((w + 1) * (h + 1))
+  for (let r = 0; r < h; r++) { let zeile = 0; for (let q = 0; q < w; q++) { zeile += m[r * w + q]; integral[(r + 1) * (w + 1) + q + 1] = integral[r * (w + 1) + q + 1] + zeile } }
+  const summe = (r0: number, q0: number, r1: number, q1: number) => integral[r1 * (w + 1) + q1] - integral[r0 * (w + 1) + q1] - integral[r1 * (w + 1) + q0] + integral[r0 * (w + 1) + q0]
+  // Anker (r,q): Quadrat [r,r+k) × [q,q+k) komplett gefüllt
+  const voll = new Uint8Array(w * h)
+  for (let r = 0; r + k <= h; r++) for (let q = 0; q + k <= w; q++) if (summe(r, q, r + k, q + k) === k * k) voll[r * w + q] = 1
+  // Dilatation: jede Zelle, die in einem vollen Quadrat liegt
+  const aus = new Uint8Array(w * h)
+  const diff = new Int32Array((w + 1) * (h + 1))
+  for (let r = 0; r < h; r++) for (let q = 0; q < w; q++) if (voll[r * w + q]) {
+    diff[r * (w + 1) + q] += 1; diff[r * (w + 1) + Math.min(q + k, w)] -= 1
+    diff[Math.min(r + k, h) * (w + 1) + q] -= 1; diff[Math.min(r + k, h) * (w + 1) + Math.min(q + k, w)] += 1
+  }
+  const acc = new Int32Array((w + 1) * (h + 1))
+  for (let r = 0; r < h; r++) for (let q = 0; q < w; q++) {
+    const v = diff[r * (w + 1) + q] + (r ? acc[(r - 1) * (w + 1) + q] : 0) + (q ? acc[r * (w + 1) + q - 1] : 0) - (r && q ? acc[(r - 1) * (w + 1) + q - 1] : 0)
+    acc[r * (w + 1) + q] = v
+    if (v > 0 && m[r * w + q]) aus[r * w + q] = 1
+  }
+  return aus
+}
 
 const imPolygon = (k: Pt[], px: number, py: number) => {
   let inn = false
@@ -56,26 +81,41 @@ export function hauptkoerperAusKontur(kontur: Pt[], meterJePunkt: number): Haupt
   }
   if (best.a / anzahl < MIN_ANTEIL) return null
 
-  // Rest = Vorbauten (zusammenhängende Gruppen außerhalb des Rechtecks)
+  // Rest = alles in der Kontur außerhalb des Rechtecks. Dünne Streifen (< 0,5 m, z. B. ein Wandversatz oder eine Putz-/Dämmstufe)
+  // gehören zum Hauptkörper und verlängern ihn bis höchstens 0,5 m; dicke Teile (≥ 0,5 m, z. B. WC-Erker) sind Vorbauten.
   const rest = new Uint8Array(w * h)
   for (let r = 0; r < h; r++) for (let q = 0; q < w; q++) {
     const imRechteck = r >= best.r0 && r <= best.r1 && q >= best.q0 && q <= best.q1
     if (innen[r * w + q] && !imRechteck) rest[r * w + q] = 1
   }
+  const k = Math.round(DUENN_M / ZELLE_M) // Kantenlänge des Prüfquadrats in Zellen
+  const dick = oeffnen(rest, w, h, k)
+  let ra0 = best.r0, ra1 = best.r1, qa0 = best.q0, qa1 = best.q1
+  const MAX_EXT = k
+  for (let r = 0; r < h; r++) for (let q = 0; q < w; q++) {
+    const i = r * w + q
+    if (!rest[i] || dick[i]) continue
+    if (r < best.r0 && best.r0 - r <= MAX_EXT) ra0 = Math.min(ra0, r)
+    if (r > best.r1 && r - best.r1 <= MAX_EXT) ra1 = Math.max(ra1, r)
+    if (q < best.q0 && best.q0 - q <= MAX_EXT) qa0 = Math.min(qa0, q)
+    if (q > best.q1 && q - best.q1 <= MAX_EXT) qa1 = Math.max(qa1, q)
+  }
+  // Zellen, die nach der Verlängerung im Hauptkörper liegen, zählen nicht mehr als Vorbau (nur der Teil darüber hinaus)
+  for (let r = ra0; r <= ra1; r++) for (let q = qa0; q <= qa1; q++) dick[r * w + q] = 0
   const vorbauten: Vorbau[] = []
   const gesehen = new Uint8Array(w * h)
-  for (let s = 0; s < w * h; s++) {
-    if (!rest[s] || gesehen[s]) continue
-    const fifo = [s]; gesehen[s] = 1
+  for (let s0 = 0; s0 < w * h; s0++) {
+    if (!dick[s0] || gesehen[s0]) continue
+    const fifo = [s0]; gesehen[s0] = 1
     let n = 0, qa = w, qb = 0, ra = h, rb = 0
     for (let i = 0; i < fifo.length; i++) {
-      const p = fifo[i], r = Math.floor(p / w), q = p % w
+      const p0 = fifo[i], r = Math.floor(p0 / w), q = p0 % w
       n++; qa = Math.min(qa, q); qb = Math.max(qb, q); ra = Math.min(ra, r); rb = Math.max(rb, r)
       for (const [dr, dq] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
         const r2 = r + dr, q2 = q + dq
         if (r2 < 0 || q2 < 0 || r2 >= h || q2 >= w) continue
         const p2 = r2 * w + q2
-        if (rest[p2] && !gesehen[p2]) { gesehen[p2] = 1; fifo.push(p2) }
+        if (dick[p2] && !gesehen[p2]) { gesehen[p2] = 1; fifo.push(p2) }
       }
     }
     const flaeche = n * ZELLE_M * ZELLE_M
@@ -83,7 +123,7 @@ export function hauptkoerperAusKontur(kontur: Pt[], meterJePunkt: number): Haupt
     const a = (qb - qa + 1) * ZELLE_M, b = (rb - ra + 1) * ZELLE_M
     vorbauten.push({ laengeM: Math.round(Math.max(a, b) * 100) / 100, tiefeM: Math.round(Math.min(a, b) * 100) / 100, flaecheM2: Math.round(flaeche * 10) / 10 })
   }
-  const rb = (best.r1 - best.r0 + 1) * ZELLE_M, rl = (best.q1 - best.q0 + 1) * ZELLE_M
+  const rb = (ra1 - ra0 + 1) * ZELLE_M, rl = (qa1 - qa0 + 1) * ZELLE_M
   return {
     laengeM: Math.round(Math.max(rb, rl) * 100) / 100,
     breiteM: Math.round(Math.min(rb, rl) * 100) / 100,
