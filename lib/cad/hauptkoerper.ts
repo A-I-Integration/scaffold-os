@@ -7,7 +7,7 @@
 
 import type { Pt } from './wand-kontur'
 
-export interface Vorbau { laengeM: number; tiefeM: number; flaecheM2: number }
+export interface Vorbau { laengeM: number; tiefeM: number; flaecheM2: number; /** umschließendes Rechteck in Seiten-Punkten (Koordinaten der Kontur) */ lage?: { x0: number; y0: number; x1: number; y1: number } }
 /** Lage des Hauptkörper-Rechtecks in den Koordinaten der Kontur (Seiten-Punkte) */
 export interface Rechteck { x0: number; y0: number; x1: number; y1: number }
 export interface Hauptkoerper { laengeM: number; breiteM: number; flaecheM2: number; vorbauten: Vorbau[]; rechteck: Rechteck }
@@ -123,7 +123,7 @@ export function hauptkoerperAusKontur(kontur: Pt[], meterJePunkt: number): Haupt
     const flaeche = n * ZELLE_M * ZELLE_M
     if (flaeche < MIN_VORBAU_M2) continue
     const a = (qb - qa + 1) * ZELLE_M, b = (rb - ra + 1) * ZELLE_M
-    vorbauten.push({ laengeM: Math.round(Math.max(a, b) * 100) / 100, tiefeM: Math.round(Math.min(a, b) * 100) / 100, flaecheM2: Math.round(flaeche * 10) / 10 })
+    vorbauten.push({ laengeM: Math.round(Math.max(a, b) * 100) / 100, tiefeM: Math.round(Math.min(a, b) * 100) / 100, flaecheM2: Math.round(flaeche * 10) / 10, lage: { x0: x0 + qa * c, y0: y0 + ra * c, x1: x0 + (qb + 1) * c, y1: y0 + (rb + 1) * c } })
   }
   const rb = (ra1 - ra0 + 1) * ZELLE_M, rl = (qa1 - qa0 + 1) * ZELLE_M
   return {

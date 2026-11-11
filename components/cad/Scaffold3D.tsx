@@ -1470,6 +1470,32 @@ function Building3D({
 
       <Gesimse laengeM={lengthM} tiefeM={w} hoeheM={heightM} />
 
+      {/* Vorbauten (nur Ansicht) */}
+      {(building.vorbauten ?? []).map((v) => {
+        const hf = Math.min(v.hoeheM, heightM)
+        const t = (() => {
+          switch (v.side) {
+            case 'front': return { pos: [v.offsetAlongM, 0, w / 2 + v.tiefeM / 2] as [number, number, number], rot: [0, 0, 0] as [number, number, number] }
+            case 'back':  return { pos: [v.offsetAlongM, 0, -w / 2 - v.tiefeM / 2] as [number, number, number], rot: [0, Math.PI, 0] as [number, number, number] }
+            case 'left':  return { pos: [-lengthM / 2 - v.tiefeM / 2, 0, v.offsetAlongM] as [number, number, number], rot: [0, -Math.PI / 2, 0] as [number, number, number] }
+            case 'right': return { pos: [lengthM / 2 + v.tiefeM / 2, 0, v.offsetAlongM] as [number, number, number], rot: [0, Math.PI / 2, 0] as [number, number, number] }
+          }
+        })()
+        return (
+          <group key={`vorbau-${v.id}`} position={t.pos} rotation={t.rot}>
+            <mesh position={[0, hf / 2, 0]} castShadow receiveShadow>
+              <boxGeometry args={[v.breiteM, hf, v.tiefeM]} />
+              <Edges threshold={15} color="#8f8676" />
+              <WandMaterial praes={praes} />
+            </mesh>
+            <mesh position={[0, hf + 0.04, 0]} castShadow>
+              <boxGeometry args={[v.breiteM + 0.2, 0.08, v.tiefeM + 0.2]} />
+              <DachMaterial praes={praes} />
+            </mesh>
+          </group>
+        )
+      })}
+
       {/* Fenster / Türen / Balkone */}
       {features.map((f) => {
         const { pos, rot } = featureTransform(f)

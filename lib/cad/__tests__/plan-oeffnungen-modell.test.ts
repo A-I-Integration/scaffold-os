@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { oeffnungenAnKanten, oeffnungenFuerModell, type PlanOeffnungAnKante } from '../plan-oeffnungen-modell'
+import { oeffnungenAnKanten, oeffnungenFuerModell, vorbautenAnKanten, vorbautenFuerModell, type PlanOeffnungAnKante } from '../plan-oeffnungen-modell'
 import { generateBuildingFeatures, type BuildingParams } from '../../calculations/cad-engine'
 
 const MPP = 0.05 // 1 Punkt = 5 cm
@@ -84,5 +84,35 @@ describe('Fenster mit fester Lage im Modell', () => {
     expect(w).toHaveLength(2)
     expect(w[0]).toMatchObject({ side: 'back', offsetAlongM: 2, bottomY: 0.9 })
     expect(w[1]).toMatchObject({ side: 'right', offsetAlongM: -1, floorIndex: 1 })
+  })
+})
+
+describe('Vorbauten', () => {
+  const vb = (x0: number, y0: number, x1: number, y1: number) => ({ laengeM: 4, tiefeM: 1.5, flaecheM2: 6, lage: { x0, y0, x1, y1 } })
+  it('ordnet den Vorbau der Kante zu, über die er hinausragt, mit Tiefe und Lage ab Kantenmitte', () => {
+    // Rechteck 20 × 10 m (je 5 cm je Punkt); Vorbau 6 m breit, 1,5 m tief über der Oberkante, 2 m rechts von der Mitte
+    const r = vorbautenAnKanten([vb(260, -30, 380, 0)], rechteck, MPP)
+    expect(r).toEqual([{ kante: 'oben', alongM: 6, breiteM: 6, tiefeM: 1.5 }])
+  })
+  it('erkennt Vorbauten an allen vier Kanten, ignoriert kleine Überstände und fehlende Lage', () => {
+    const r = vorbautenAnKanten([vb(100, 200, 160, 240), vb(-40, 80, 0, 140), vb(400, 60, 440, 120), vb(10, 195, 50, 205), { laengeM: 1, tiefeM: 1, flaecheM2: 1 }], rechteck, MPP)
+    expect(r.map((v) => v.kante)).toEqual(['unten', 'links', 'rechts'])
+  })
+  it('dreht den Vorbau mit dem Plan: Vorderseite oben macht aus der Oberkante die Vorderseite', () => {
+    const v = [{ kante: 'oben' as const, alongM: 6, breiteM: 6, tiefeM: 1.5 }]
+    expect(vorbautenFuerModell([{ ebene: 0, vorbauten: v }], 'unten', 3)[0]).toMatchObject({ side: 'back', offsetAlongM: 6, tiefeM: 1.5 })
+    expect(vorbautenFuerModell([{ ebene: 0, vorbauten: v }], 'oben', 3)[0]).toMatchObject({ side: 'front', offsetAlongM: -6 })
+  })
+  it('derselbe Vorbau in zwei Geschossen ist ein Körper mit der Höhe beider Geschosse', () => {
+    const e = [{ kante: 'oben' as const, alongM: 6, breiteM: 4.4, tiefeM: 1.5 }]
+    const o = [{ kante: 'oben' as const, alongM: 2, breiteM: 4.4, tiefeM: 1.5 }]
+    const r = vorbautenFuerModell([{ ebene: 0, vorbauten: e }, { ebene: 1, vorbauten: o }], 'unten', 2.96)
+    expect(r).toHaveLength(1)
+    expect(r[0]).toMatchObject({ offsetAlongM: 6, hoeheM: 5.92 })
+  })
+  it('ein Vorbau nur im Erdgeschoss ist ein Geschoss hoch; Keller zählt nicht', () => {
+    const e = [{ kante: 'links' as const, alongM: 0, breiteM: 3, tiefeM: 1 }]
+    expect(vorbautenFuerModell([{ ebene: 0, vorbauten: e }], 'unten', 2.9)[0].hoeheM).toBe(2.9)
+    expect(vorbautenFuerModell([{ ebene: -1, vorbauten: e }], 'unten', 2.9)).toEqual([])
   })
 })

@@ -107,3 +107,16 @@ describe('Projektdatei: Fenster mit fester Lage', () => {
     expect(r.verworfen.some((v) => v.startsWith('Fenster'))).toBe(true)
   })
 })
+
+describe('Projektdatei: Vorbauten', () => {
+  const basis = { lengthM: 10, widthM: 8, heightM: 12, eavesHeightM: 12, roofHeightM: 0, roofForm: 'flachdach', floors: 3, windowCount: 0, doorCount: 0, balconyCount: 0, overhangM: 0, setbackM: 0, sides: ['front'] }
+  const datei = (building: Record<string, unknown>) => JSON.stringify({ format: PROJEKTDATEI_FORMAT, version: PROJEKTDATEI_VERSION, name: 'x', building, systemId: 'layher-allround', statikDaten: {}, notizen: [] })
+  it('behält Vorbauten und verwirft ungültige', () => {
+    const v = [{ id: 'v0', side: 'back', offsetAlongM: 2, breiteM: 4.4, tiefeM: 1.5, hoeheM: 5.9 }]
+    const r = liesProjektdatei(datei({ ...basis, vorbauten: v }))
+    expect(r.ok && r.daten.building.vorbauten).toEqual(v)
+    const k = liesProjektdatei(datei({ ...basis, vorbauten: [{ id: 'v0', side: 'oben', offsetAlongM: 2, breiteM: 4, tiefeM: 1, hoeheM: 3 }] }))
+    expect(k.ok && k.daten.building.vorbauten).toBeUndefined()
+    expect(k.ok && k.verworfen.some((x) => x.startsWith('Vorbauten'))).toBe(true)
+  })
+})
