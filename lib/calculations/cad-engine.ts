@@ -94,6 +94,8 @@ export interface CadTuer {
   fluegel?: 1 | 2
   /** Einflügelig, Aufschlag nach außen: Flügel klappt beim Öffnen bis zur Wand zurück – in Richtung der kleineren (minus, Standard) oder größeren (plus) Koordinate ab Fassadenmitte */
   anschlag?: 'minus' | 'plus'
+  /** Gerüst läuft vor dieser Tür durch (Tür wird nicht benutzt, z. B. Nebentür). Standard: Durchgang freihalten. */
+  ueberbauen?: boolean
 }
 
 /** Ein Vorbau (WC-Erker, Windfang, Treppenhaus) vor einer Wand. An Vorder- und Rückseite führt das Gerüst um ihn herum; an linker und rechter Seite ist er nur Ansicht. */
@@ -1763,7 +1765,9 @@ export function generateCADModel(
     const lagenTop = (i: number): number | undefined => levels.find((l) => l.index === i)?.topY
     const lagenAnzahl = levels.reduce((m, l) => Math.max(m, l.index + 1), 0)
     let maxK = 0
+    const ueberbaut: string[] = []
     for (const t of tueren) {
+      if (building.tueren?.find((x) => `door-${x.id}` === t.id)?.ueberbauen) { ueberbaut.push(t.id); continue }
       // Aufschlag nach außen: der Flügel schlägt ins Gerüst; Freiraum = Türbreite + Flügelweite dort, wohin der Flügel zurückklappt (Annahme: bis 180°)
       const spec = building.tueren?.find((x) => `door-${x.id}` === t.id)
       const aussen = spec?.aufschlag === 'aussen'
@@ -1786,6 +1790,7 @@ export function generateCADModel(
         }
       }
     }
+    if (ueberbaut.length > 0) warnings.push({ type: 'warning', code: 'TUER_ZUGEBAUT', message: `${ueberbaut.length} Tür(en) werden vom Gerüst überbaut (so gewählt): Belag, Rahmen und Geländer laufen durch die Türöffnung, die Tür ist nicht benutzbar. Der Zugang muss an anderer Stelle liegen.` })
     // Randfelder verstärken
     const along = (f: ScaffoldField) => feldEntlangFassade(f.side, f.positionX, f.positionZ, building)
     let nVerstaerkt = 0
