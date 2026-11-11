@@ -34,11 +34,11 @@ export default function Scaffold2D({ model, zeichnung }: Props) {
   const projection = useMemo(() => {
     switch (activeView) {
       case 'grundriss': return generateGrundriss(model)
-      case 'ansicht-vorne': return generateAnsicht(model)
-      case 'ansicht-seite': return generateAnsicht(model)
-      case 'schnitt-aa': return generateAnsicht(model)
+      case 'ansicht-vorne': return generateAnsicht(model, 'front')
+      case 'ansicht-seite': return generateAnsicht(model, 'right')
+      case 'schnitt-aa': return generateAnsicht(model, 'front')
       case 'detail-fusspunkt': return generateGrundriss(model)
-      case 'detail-anker': return generateAnsicht(model)
+      case 'detail-anker': return generateAnsicht(model, 'front')
       default: return generateGrundriss(model)
     }
   }, [activeView, model])
@@ -266,9 +266,9 @@ export default function Scaffold2D({ model, zeichnung }: Props) {
             {/* Schnittlinie A-A (nur Ansicht) */}
             {(activeView === 'ansicht-vorne' || activeView === 'ansicht-seite') && (
               <g>
-                <line x1={0} y1={model.building.heightM * scaleFactor + 1 * scaleFactor} x2={model.building.lengthM * scaleFactor} y2={model.building.heightM * scaleFactor + 1 * scaleFactor} stroke='#dc2626' strokeWidth='1.5' strokeDasharray='8,4' />
-                <text x={model.building.lengthM / 2 * scaleFactor} y={model.building.heightM * scaleFactor + 2 * scaleFactor} fontSize={12} fill='#dc2626' textAnchor='middle' fontWeight='bold'>A</text>
-                <text x={model.building.lengthM / 2 * scaleFactor - 10} y={model.building.heightM * scaleFactor + 2 * scaleFactor} fontSize={12} fill='#dc2626' textAnchor='end' fontWeight='bold'>A</text>
+                <line x1={0} y1={-(model.building.heightM + 1.2) * scaleFactor} x2={model.building.lengthM * scaleFactor} y2={-(model.building.heightM + 1.2) * scaleFactor} stroke='#dc2626' strokeWidth='1.5' strokeDasharray='8,4' />
+                <text x={model.building.lengthM / 2 * scaleFactor} y={-(model.building.heightM + 1.6) * scaleFactor} fontSize={12} fill='#dc2626' textAnchor='middle' fontWeight='bold'>A</text>
+                <text x={model.building.lengthM / 2 * scaleFactor - 10} y={-(model.building.heightM + 1.6) * scaleFactor} fontSize={12} fill='#dc2626' textAnchor='end' fontWeight='bold'>A</text>
               </g>
             )}
           </svg>
