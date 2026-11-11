@@ -359,6 +359,15 @@ export default function BuildingForm({ building, systemId, onChange, onSystemCha
             if (pl.firstKoteM) { patch.heightM = pl.firstKoteM; aus.push('Höhe') }
             if (pl.traufKoteM) { patch.eavesHeightM = pl.traufKoteM; aus.push('Traufhöhe') }
             if (pl.dachform) { patch.roofForm = dachMap[pl.dachform]; aus.push('Dachform') }
+            // Dachhöhe = First − Traufe, sonst bleibt das 3D-Dach unsichtbar (Dachhöhe 0)
+            if (pl.firstKoteM && pl.traufKoteM && pl.firstKoteM > pl.traufKoteM) patch.roofHeightM = Math.round((pl.firstKoteM - pl.traufKoteM) * 100) / 100
+            // Fenster/Türen der Geschosse über dem Gelände (Keller zählt nicht für das Gerüst)
+            const ueber = pl.geschosse.filter((g) => g.ebene >= 0 && g.fenster !== undefined && g.tueren !== undefined)
+            if (ueber.length) {
+              patch.windowCount = ueber.reduce((a, g) => a + (g.fenster ?? 0), 0)
+              patch.doorCount = ueber.reduce((a, g) => a + (g.tueren ?? 0), 0)
+              aus.push('Fenster/Türen')
+            }
             if (aus.length) planVorspann = `Aus den Zeichenlinien des Plans gelesen (Maßstab 1:${pl.massstab}): ${aus.join(', ')}.${haupt?.vorbauten?.length ? ` Vorbauten (ca. ${String(Math.round(haupt.vorbauten.reduce((a, v) => a + v.flaecheM2, 0) * 10) / 10).replace('.', ',')} m²) sind in Länge/Breite nicht enthalten – bitte prüfen.` : ''} `
           }
         } catch { /* kein lesbarer Vektor-Plan: es bleibt bei den KI-Werten */ }
