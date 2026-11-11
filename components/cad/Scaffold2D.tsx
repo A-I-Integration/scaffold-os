@@ -212,7 +212,8 @@ export default function Scaffold2D({ model, zeichnung }: Props) {
                 case 'circle':
                   return <circle key={el.id} cx={el.x * scaleFactor} cy={el.y * scaleFactor} r={(el.r || 0) * scaleFactor} fill={el.fill || 'none'} stroke={el.stroke || '#000'} strokeWidth={strokeW} />
                 case 'path':
-                  return <path key={el.id} d={el.d || ''} fill={el.fill || 'none'} stroke={el.stroke || '#000'} strokeWidth={strokeW} />
+                  // d in Metern: auf den Maßstab skalieren, Strichstärke bleibt in Pixeln
+                  return <path key={el.id} d={el.d || ''} transform={`scale(${scaleFactor})`} vectorEffect='non-scaling-stroke' fill={el.fill || 'none'} stroke={el.stroke || '#000'} strokeWidth={strokeW} />
                 case 'text':
                   return <text key={el.id} x={el.x * scaleFactor} y={el.y * scaleFactor} fontSize={scale === '1:50' || scale === '1:25' ? 14 : 12} fill={el.fill || '#000'} textAnchor={el.anker ?? 'middle'} style={{ fontFamily: 'var(--schrift)' }}>{el.text}</text>
                 default:
