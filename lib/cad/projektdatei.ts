@@ -10,7 +10,7 @@
 import { istHaubenForm } from '@/lib/cad/haube'
 import type { BereichsAenderung } from '@/lib/cad/bereiche'
 import { leseFiguren, type Figur } from '@/lib/cad/zeichnung'
-import type { BuildingParams, BuildingSection, CadTuer } from '@/lib/calculations/cad-engine'
+import type { BuildingParams, BuildingSection, CadTuer, CadFenster } from '@/lib/calculations/cad-engine'
 import { findeSystem } from '@/lib/calculations/geruest-systeme'
 import { bereinigeStatikDaten, type StatikDaten } from '@/lib/statik-daten'
 import type { CADNote } from '@/types/cad-notes'
@@ -195,6 +195,18 @@ export function liesProjektdatei(text: string): LeseErgebnis {
     })
     if (liste.length === g.tueren.length) gebaeude.tueren = liste
     else verworfen.push('Türen (ungültige Angaben)')
+  }
+  if (Array.isArray(g.fensterFest) && g.fensterFest.length > 0 && g.fensterFest.length <= 500) {
+    const liste = g.fensterFest.flatMap((t, i): CadFenster[] => {
+      const o = t as Record<string, unknown>
+      const side = o?.side
+      const off = zahl(o?.offsetAlongM, -MAX_MASS_M, MAX_MASS_M), unten = zahl(o?.bottomY, -5, MAX_MASS_M)
+      const b = zahl(o?.widthM, 0.2, 10), h = zahl(o?.heightM, 0.2, 10), fl = zahl(o?.floorIndex, 0, 100)
+      if ((side !== 'front' && side !== 'back' && side !== 'left' && side !== 'right') || off == null || unten == null || b == null || h == null || fl == null) return []
+      return [{ id: typeof o.id === 'string' && o.id.length <= 40 ? o.id : `f${i}`, side, offsetAlongM: off, bottomY: unten, widthM: b, heightM: h, floorIndex: Math.round(fl) }]
+    })
+    if (liste.length === g.fensterFest.length) gebaeude.fensterFest = liste
+    else verworfen.push('Fenster (ungültige Angaben)')
   }
   for (const k of ['balconies']) if (g[k] != null) verworfen.push('Balkone')
 

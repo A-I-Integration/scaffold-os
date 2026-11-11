@@ -21,6 +21,7 @@ import { erkenneGrundriss, FORM_NAME } from '@/lib/cad/grundriss-erkennung'
 import { portalAlsTuer } from '@/lib/cad/portal-erkennung'
 import { analysiereDreiecke, schaetzeEinheit, spannweiten, nullpunktUeberTiefstem, abschnitteAusTeilen, abschnitteAusTeileListe, vorgabeAchseEinheit, type GebaeudeTeil } from '@/lib/cad/modell-analyse'
 import { planLesen } from '@/lib/cad/plan-import'
+import { oeffnungenFuerModell } from '@/lib/cad/plan-oeffnungen-modell'
 import { umrissBox } from '@/lib/calculations/cad-umriss'
 import { leseDxfUmriss, mitHoehen, DXF_FORM_NAME, type DxfUmrissErgebnis } from '@/lib/cad/dxf-umriss'
 import type { IfcZusatz } from '@/lib/cad/ifc-einleser'
@@ -349,6 +350,7 @@ export default function BuildingForm({ building, systemId, onChange, onSystemCha
       // Vektor-PDF aus dem CAD: Maße, Höhen und Dachform stehen auf den Zentimeter im Plan und schlagen die KI-Werte
       // (die KI mischt gern Geschosse und rät die Dachform). Fehlt etwas, bleibt der KI-Wert stehen.
       let planVorspann = ''
+      let oeffnungenHinweis = ''
       if (/\.pdf$/i.test(file.name)) {
         try {
           const pl = await planLesen(file)
@@ -367,8 +369,19 @@ export default function BuildingForm({ building, systemId, onChange, onSystemCha
               patch.windowCount = ueber.reduce((a, g) => a + (g.fenster ?? 0), 0)
               patch.doorCount = ueber.reduce((a, g) => a + (g.tueren ?? 0), 0)
               aus.push('Fenster/Türen')
+              // Lage der Öffnungen: an den Kanten des Hauptkörpers, nicht gleichmäßig verteilt
+              const mitLage = ueber.filter((g) => g.oeffnungen && g.oeffnungen.length)
+              if (haupt?.langeAchse && mitLage.length) {
+                const geschossHoehe = (patch.eavesHeightM ?? patch.heightM ?? building.eavesHeightM) / Math.max(1, ueber.length)
+                const modell = oeffnungenFuerModell(mitLage.map((g) => ({ ebene: g.ebene, oeffnungen: g.oeffnungen! })), haupt.langeAchse, geschossHoehe)
+                if (modell) {
+                  patch.tueren = modell.tueren
+                  patch.fensterFest = modell.fenster
+                  oeffnungenHinweis = ` Fenster und Türen sind an den Stellen aus dem Plan eingezeichnet (${modell.fenster.length} Fenster, ${modell.tueren.length} Türen im Erdgeschoss; Vorderseite = ${modell.vorderseite === 'unten' ? 'Plan-Unterkante' : modell.vorderseite === 'oben' ? 'Plan-Oberkante' : modell.vorderseite === 'links' ? 'linke Plan-Kante' : 'rechte Plan-Kante'}).${mitLage.some((g) => Math.abs(g.laengeM - haupt.laengeM) > 0.3) ? ' Obergeschosse mit anderer Länge sind mittig zur Fassade eingezeichnet.' : ''}${ueber.some((g) => g.oeffnungenAbseits) ? ` ${ueber.reduce((a, g) => a + (g.oeffnungenAbseits ?? 0), 0)} Öffnung(en) an Vorbauten sind nur gezählt, nicht eingezeichnet.` : ''}`
+                }
+              }
             }
-            if (aus.length) planVorspann = `Aus den Zeichenlinien des Plans gelesen (Maßstab 1:${pl.massstab}): ${aus.join(', ')}.${haupt?.vorbauten?.length ? ` Vorbauten (ca. ${String(Math.round(haupt.vorbauten.reduce((a, v) => a + v.flaecheM2, 0) * 10) / 10).replace('.', ',')} m²) sind in Länge/Breite nicht enthalten – bitte prüfen.` : ''} `
+            if (aus.length) planVorspann = `Aus den Zeichenlinien des Plans gelesen (Maßstab 1:${pl.massstab}): ${aus.join(', ')}.${haupt?.vorbauten?.length ? ` Vorbauten (ca. ${String(Math.round(haupt.vorbauten.reduce((a, v) => a + v.flaecheM2, 0) * 10) / 10).replace('.', ',')} m²) sind in Länge/Breite nicht enthalten – bitte prüfen.` : ''}${oeffnungenHinweis} `
           }
         } catch { /* kein lesbarer Vektor-Plan: es bleibt bei den KI-Werten */ }
       }
@@ -398,6 +411,8 @@ export default function BuildingForm({ building, systemId, onChange, onSystemCha
         const neuesGebaeude: BuildingParams = { ...building, ...zurueck, ...patch }
         // Abschnitte einer frueheren Analyse entfernen, wenn die neue keine liefert
         if (vorherigeAutoFelder.includes('sections') && !('sections' in patch)) delete neuesGebaeude.sections
+        // Fenster/Türen aus einem früheren Plan nicht an den neuen hängen
+        for (const f of ['tueren', 'fensterFest'] as const) if (vorherigeAutoFelder.includes(f) && !(f in patch)) delete neuesGebaeude[f]
         onChange(neuesGebaeude)
         const uebernommen = Object.keys(patch).length
         setAnalyseHinweis(`${dxfVorspann}${planVorspann}${ergebnis.ohneKi ? 'Direkt aus dem Plan erkannt (ohne KI)' : 'KI-Vorschlag (aus der Queue)'}: ${uebernommen} Angabe(n) übernommen, bitte prüfen.${!ergebnis.ohneKi && !planVorspann && /\.(pdf|jpe?g|png|webp)$/i.test(file.name) ? ' Aus einem Scan oder Foto gelesen: einzelne Ziffern (z. B. halbe Zentimeter hochgestellt) können um einige Zentimeter abweichen und bei einem zweiten Lauf anders ausfallen – Länge, Breite und Höhen bitte mit den Maßketten im Plan abgleichen.' : ''}${ergebnis.hoeheGeschaetzt ? ' Höhe geschätzt aus Geschosszahl.' : ''}${ergebnis.abschnitte?.length >= 2 ? ` ${ergebnis.abschnitte.length} Höhenabschnitte erkannt (siehe „Mehrteiliges Gebäude“).` : ''}${ergebnis.abschnitte?.some((a: any) => a.spitzeM) ? ' Spitzer Aufbau (z. B. Turmhelm) erkannt und als Walmdach/Pyramide eingetragen – Schafthöhe und Spitze bitte prüfen; welche Abschnitte eingerüstet werden, wählst du unter „Mehrteiliges Gebäude“.' : ''}${Array.isArray(ergebnis.hinweise) && ergebnis.hinweise.length ? ' Hinweise: ' + ergebnis.hinweise.join(' ') : ''}${ergebnis.verworfen?.length ? ' Verworfen (unbelegt): ' + ergebnis.verworfen.join('; ') : ''}`)

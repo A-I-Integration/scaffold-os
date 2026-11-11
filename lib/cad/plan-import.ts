@@ -8,11 +8,18 @@ import type { VektorFlaeche } from './pdf-vektoren'
 import { oeffnungenFinden } from './oeffnungen-aus-plan'
 import { gelaendeAusPlan, type GelaendeAusPlan } from './gelaende-aus-plan'
 import { hauptkoerperAusKontur, type Vorbau } from './hauptkoerper'
+import { oeffnungenAnKanten, type PlanOeffnungAnKante } from './plan-oeffnungen-modell'
 import { dachAusPlan, dachKotenAusPlan, pultdachNeigung, type PlanDachform } from './dachform-aus-plan'
 
 export interface PlanImportGeschoss { titel: string; ebene: number; laengeM: number; breiteM: number; flaecheM2: number; fenster?: number; tueren?: number
   /** Vorsprünge (z. B. WC-Erker), die nicht in Länge/Breite stecken – diese beschreiben den Hauptkörper */
   vorbauten?: Vorbau[]
+  /** Fenster und Türen an den Kanten des Hauptkörpers (für das 3D-Modell); fehlt bei Konturen ohne klaren Hauptkörper */
+  oeffnungen?: PlanOeffnungAnKante[]
+  /** Öffnungen, die an keiner Kante des Hauptkörpers liegen (z. B. an einem Vorbau) und nicht eingezeichnet werden */
+  oeffnungenAbseits?: number
+  /** Längere Seite des Hauptkörpers im Plan: 'x' = waagerecht, 'y' = senkrecht */
+  langeAchse?: 'x' | 'y'
 }
 
 export interface PlanImport {
@@ -52,7 +59,14 @@ export function planImportAus(dateiname: string, massstab: number, gefunden: Gef
       ...(hk && hk.vorbauten.length ? { vorbauten: hk.vorbauten } : {}),
       ...(flaechen.length ? (() => {
         const o = oeffnungenFinden(flaechen, g, texte, mpp)
-        return { fenster: o.filter((x) => x.typ === 'fenster').length, tueren: o.filter((x) => x.typ === 'tuer').length }
+        const lage = hk ? oeffnungenAnKanten(o, hk.rechteck, mpp) : null
+        return {
+          fenster: o.filter((x) => x.typ === 'fenster').length, tueren: o.filter((x) => x.typ === 'tuer').length,
+          ...(hk && lage ? {
+            oeffnungen: lage.an, oeffnungenAbseits: lage.abseits,
+            langeAchse: (hk.rechteck.x1 - hk.rechteck.x0 >= hk.rechteck.y1 - hk.rechteck.y0 ? 'x' : 'y') as 'x' | 'y',
+          } : {}),
+        }
       })() : {}),
     }
   })
