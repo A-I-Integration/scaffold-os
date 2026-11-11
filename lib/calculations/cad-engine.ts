@@ -96,7 +96,7 @@ export interface CadTuer {
   anschlag?: 'minus' | 'plus'
 }
 
-/** Ein Vorbau (WC-Erker, Windfang, Treppenhaus) vor einer Wand. Nur Ansicht: das Gerüst wird nicht um ihn herumgeführt. */
+/** Ein Vorbau (WC-Erker, Windfang, Treppenhaus) vor einer Wand. An Vorder- und Rückseite führt das Gerüst um ihn herum; an linker und rechter Seite ist er nur Ansicht. */
 export interface CadVorbau {
   id: string
   side: 'front' | 'back' | 'left' | 'right'
@@ -1017,6 +1017,10 @@ export function generateScaffoldComponents(model: CADModel): ScaffoldComponent3D
         components.push({ id: `kederplane-${field.id}`, type: 'sheeting', articleNumber: 'KP-001', name: 'Kederplane (Feld)', position: [wx, level.bottomY + level.heightM / 2, wz], rotation: eulerMitYaw([0, 0, 0], rf.yaw), scale: [field.lengthM, level.heightM, 0.01], color: '#e5e7eb', fieldId: field.id, levelId: level.id })
       }
     }
+  }
+
+  if (kp && Number.isFinite(kp.vonM) && Number.isFinite(kp.bisM) && kp.bisM > kp.vonM && components.some((c) => c.type === 'sheeting')) {
+    warnEinmal('PLANE_WIND', 'info', 'Planen bzw. Vollverkleidung: Das Gerüst wird zur geschlossenen Fläche, Windlast und Ankerkräfte steigen dadurch deutlich gegenüber dem offenen Gerüst. Das CAD rechnet keine Windlast – Verankerung, Ankerraster und Standsicherheit sind durch die Statik (Windlast nach Eurocode 1) nachzuweisen.')
   }
 
   // === DACHFANG (Schutzwand auf dem obersten Belag an den Traufseiten) ===
