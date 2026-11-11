@@ -96,6 +96,20 @@ export interface CadTuer {
   anschlag?: 'minus' | 'plus'
 }
 
+/** Ein Vorbau (WC-Erker, Windfang, Treppenhaus) vor einer Wand. Nur Ansicht: das Gerüst wird nicht um ihn herumgeführt. */
+export interface CadVorbau {
+  id: string
+  side: 'front' | 'back' | 'left' | 'right'
+  /** Mitte des Vorbaus, gemessen ab Fassadenmitte (m) */
+  offsetAlongM: number
+  /** Breite entlang der Wand (m) */
+  breiteM: number
+  /** Tiefe vor der Wand (m) */
+  tiefeM: number
+  /** Höhe über Gelände (m) */
+  hoeheM: number
+}
+
 /** Ein Fenster mit fester Lage (z. B. aus dem Plan gelesen). */
 export interface CadFenster {
   id: string
@@ -181,6 +195,8 @@ export interface BuildingParams {
   tueren?: CadTuer[]
   /** Fenster einzeln mit fester Lage (aus dem Plan). Wenn gesetzt, ersetzen sie die gleichmäßig verteilten Fenster aus windowCount (nicht im Umriss-Modus). */
   fensterFest?: CadFenster[]
+  /** Vorbauten (aus dem Plan gelesen), nur zur Ansicht im 3D-Modell */
+  vorbauten?: CadVorbau[]
 }
 
 export interface GebaeudeSegment {

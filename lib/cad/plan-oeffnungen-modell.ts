@@ -6,8 +6,8 @@
 //  2. die Vorderseite wählen (die lange Kante mit den meisten Öffnungen, Türen zählen doppelt) und den Plan so drehen, dass diese Seite vorne liegt.
 // ============================================================
 
-import type { CadFenster, CadTuer } from '@/lib/calculations/cad-engine'
-import type { Rechteck } from './hauptkoerper'
+import type { CadFenster, CadTuer, CadVorbau } from '@/lib/calculations/cad-engine'
+import type { Rechteck, Vorbau } from './hauptkoerper'
 import type { PlanOeffnung } from './oeffnungen-aus-plan'
 
 export type PlanKante = 'unten' | 'oben' | 'links' | 'rechts'
@@ -105,4 +105,56 @@ export function oeffnungenFuerModell(geschosse: PlanGeschossOeffnungen[], langeA
     fenster.push({ id, side, offsetAlongM: offset, bottomY: r2(basis + unten), widthM: o.breiteM, heightM: hoehe, floorIndex: o.ebene })
   }
   return { tueren, fenster, vorderseite: vorne }
+}
+
+/** Ein Vorbau an einer Kante des Hauptkörpers. alongM: ab Kantenmitte in Plan-Richtung (x nach rechts bzw. y nach unten). */
+export interface PlanVorbauAnKante { kante: PlanKante; alongM: number; breiteM: number; tiefeM: number }
+
+const MIN_VORSPRUNG_M = 0.5
+
+/** Ordnet jeden Vorbau der Kante zu, über die er hinausragt (größter Überstand). Vorbauten ohne Lage oder ohne Überstand fallen weg. */
+export function vorbautenAnKanten(vorbauten: Vorbau[], r: Rechteck, meterJePunkt: number): PlanVorbauAnKante[] {
+  const out: PlanVorbauAnKante[] = []
+  const cx = (r.x0 + r.x1) / 2, cy = (r.y0 + r.y1) / 2
+  for (const v of vorbauten) {
+    const l = v.lage
+    if (!l) continue
+    const ueber: { k: PlanKante; m: number }[] = [
+      { k: 'unten', m: (l.y1 - r.y1) * meterJePunkt }, { k: 'oben', m: (r.y0 - l.y0) * meterJePunkt },
+      { k: 'rechts', m: (l.x1 - r.x1) * meterJePunkt }, { k: 'links', m: (r.x0 - l.x0) * meterJePunkt },
+    ]
+    ueber.sort((a, b) => b.m - a.m)
+    const best = ueber[0]
+    if (best.m < MIN_VORSPRUNG_M) continue
+    const waagerecht = best.k === 'unten' || best.k === 'oben'
+    const breite = ((waagerecht ? l.x1 - l.x0 : l.y1 - l.y0) * meterJePunkt)
+    const mitte = waagerecht ? (l.x0 + l.x1) / 2 - cx : (l.y0 + l.y1) / 2 - cy
+    out.push({ kante: best.k, alongM: r2(mitte * meterJePunkt), breiteM: r2(breite), tiefeM: r2(best.m) })
+  }
+  return out
+}
+
+/**
+ * Vorbauten der Geschosse zu Modell-Vorbauten zusammenfassen: derselbe Vorbau in mehreren Geschossen (gleiche Kante,
+ * ähnliche Breite und Tiefe) ist ein durchgehender Körper, dessen Höhe die Geschosse zusammenzählt. Lage nach dem untersten Geschoss.
+ */
+export function vorbautenFuerModell(geschosse: { ebene: number; vorbauten: PlanVorbauAnKante[] }[], vorderseite: PlanKante, geschossHoeheM: number): CadVorbau[] {
+  const n = NORMALE[vorderseite]
+  const xhat: [number, number] = [n[1], -n[0]]
+  const gruppen: { v: PlanVorbauAnKante; anzahl: number }[] = []
+  for (const g of geschosse.filter((q) => q.ebene >= 0).sort((a, b) => a.ebene - b.ebene)) {
+    for (const v of g.vorbauten) {
+      const gleich = gruppen.find((q) => q.v.kante === v.kante && Math.abs(q.v.breiteM - v.breiteM) < 0.4 && Math.abs(q.v.tiefeM - v.tiefeM) < 0.4)
+      if (gleich) gleich.anzahl++
+      else gruppen.push({ v, anzahl: 1 })
+    }
+  }
+  return gruppen.map(({ v, anzahl }, i) => {
+    const w = NORMALE[v.kante]
+    const dotN = w[0] * n[0] + w[1] * n[1], dotX = w[0] * xhat[0] + w[1] * xhat[1]
+    const side: CadVorbau['side'] = dotN === 1 ? 'front' : dotN === -1 ? 'back' : dotX === 1 ? 'right' : 'left'
+    const richtung: [number, number] = v.kante === 'unten' || v.kante === 'oben' ? [1, 0] : [0, 1]
+    const entlang = side === 'front' || side === 'back' ? richtung[0] * xhat[0] + richtung[1] * xhat[1] : richtung[0] * n[0] + richtung[1] * n[1]
+    return { id: `v${i}`, side, offsetAlongM: r2(v.alongM * entlang), breiteM: v.breiteM, tiefeM: v.tiefeM, hoeheM: r2(anzahl * geschossHoeheM) }
+  })
 }

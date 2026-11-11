@@ -21,7 +21,7 @@ import { erkenneGrundriss, FORM_NAME } from '@/lib/cad/grundriss-erkennung'
 import { portalAlsTuer } from '@/lib/cad/portal-erkennung'
 import { analysiereDreiecke, schaetzeEinheit, spannweiten, nullpunktUeberTiefstem, abschnitteAusTeilen, abschnitteAusTeileListe, vorgabeAchseEinheit, type GebaeudeTeil } from '@/lib/cad/modell-analyse'
 import { planLesen } from '@/lib/cad/plan-import'
-import { oeffnungenFuerModell } from '@/lib/cad/plan-oeffnungen-modell'
+import { oeffnungenFuerModell, vorbautenFuerModell } from '@/lib/cad/plan-oeffnungen-modell'
 import { umrissBox } from '@/lib/calculations/cad-umriss'
 import { leseDxfUmriss, mitHoehen, DXF_FORM_NAME, type DxfUmrissErgebnis } from '@/lib/cad/dxf-umriss'
 import type { IfcZusatz } from '@/lib/cad/ifc-einleser'
@@ -371,13 +371,25 @@ export default function BuildingForm({ building, systemId, onChange, onSystemCha
               aus.push('Fenster/Türen')
               // Lage der Öffnungen: an den Kanten des Hauptkörpers, nicht gleichmäßig verteilt
               const mitLage = ueber.filter((g) => g.oeffnungen && g.oeffnungen.length)
+              const geschossHoehe = (patch.eavesHeightM ?? patch.heightM ?? building.eavesHeightM) / Math.max(1, ueber.length)
+              const kantenName = (k: string) => (k === 'unten' ? 'Plan-Unterkante' : k === 'oben' ? 'Plan-Oberkante' : k === 'links' ? 'linke Plan-Kante' : 'rechte Plan-Kante')
+              let vorne: 'unten' | 'oben' | 'links' | 'rechts' | null = haupt?.langeAchse ? (haupt.langeAchse === 'x' ? 'unten' : 'links') : null
               if (haupt?.langeAchse && mitLage.length) {
-                const geschossHoehe = (patch.eavesHeightM ?? patch.heightM ?? building.eavesHeightM) / Math.max(1, ueber.length)
                 const modell = oeffnungenFuerModell(mitLage.map((g) => ({ ebene: g.ebene, oeffnungen: g.oeffnungen! })), haupt.langeAchse, geschossHoehe)
                 if (modell) {
+                  vorne = modell.vorderseite
                   patch.tueren = modell.tueren
                   patch.fensterFest = modell.fenster
-                  oeffnungenHinweis = ` Fenster und Türen sind an den Stellen aus dem Plan eingezeichnet (${modell.fenster.length} Fenster, ${modell.tueren.length} Türen im Erdgeschoss; Vorderseite = ${modell.vorderseite === 'unten' ? 'Plan-Unterkante' : modell.vorderseite === 'oben' ? 'Plan-Oberkante' : modell.vorderseite === 'links' ? 'linke Plan-Kante' : 'rechte Plan-Kante'}).${mitLage.some((g) => Math.abs(g.laengeM - haupt.laengeM) > 0.3) ? ' Obergeschosse mit anderer Länge sind mittig zur Fassade eingezeichnet.' : ''}${ueber.some((g) => g.oeffnungenAbseits) ? ` ${ueber.reduce((a, g) => a + (g.oeffnungenAbseits ?? 0), 0)} Öffnung(en) an Vorbauten sind nur gezählt, nicht eingezeichnet.` : ''}`
+                  oeffnungenHinweis = ` Fenster und Türen sind an den Stellen aus dem Plan eingezeichnet (${modell.fenster.length} Fenster, ${modell.tueren.length} Türen im Erdgeschoss; Vorderseite = ${kantenName(modell.vorderseite)}).${mitLage.some((g) => Math.abs(g.laengeM - haupt.laengeM) > 0.3) ? ' Obergeschosse mit anderer Länge sind mittig zur Fassade eingezeichnet.' : ''}${ueber.some((g) => g.oeffnungenAbseits) ? ` ${ueber.reduce((a, g) => a + (g.oeffnungenAbseits ?? 0), 0)} Öffnung(en) an Vorbauten sind nur gezählt, nicht eingezeichnet.` : ''}`
+                }
+              }
+              // Vorbauten (WC-Erker, Windfang): als Körper vor der Wand, nur zur Ansicht
+              const mitVorbau = ueber.filter((g) => g.vorbautenAnKante && g.vorbautenAnKante.length)
+              if (vorne && mitVorbau.length) {
+                const vb = vorbautenFuerModell(mitVorbau.map((g) => ({ ebene: g.ebene, vorbauten: g.vorbautenAnKante! })), vorne, geschossHoehe)
+                if (vb.length) {
+                  patch.vorbauten = vb
+                  oeffnungenHinweis += ` ${vb.length === 1 ? 'Ein Vorbau' : `${vb.length} Vorbauten`} (${vb.map((v) => `${String(v.breiteM).replace('.', ',')} × ${String(v.tiefeM).replace('.', ',')} m, ${String(v.hoeheM).replace('.', ',')} m hoch`).join('; ')}) nur in der Ansicht eingezeichnet, das Gerüst führt nicht darum herum.`
                 }
               }
             }
@@ -412,7 +424,7 @@ export default function BuildingForm({ building, systemId, onChange, onSystemCha
         // Abschnitte einer frueheren Analyse entfernen, wenn die neue keine liefert
         if (vorherigeAutoFelder.includes('sections') && !('sections' in patch)) delete neuesGebaeude.sections
         // Fenster/Türen aus einem früheren Plan nicht an den neuen hängen
-        for (const f of ['tueren', 'fensterFest'] as const) if (vorherigeAutoFelder.includes(f) && !(f in patch)) delete neuesGebaeude[f]
+        for (const f of ['tueren', 'fensterFest', 'vorbauten'] as const) if (vorherigeAutoFelder.includes(f) && !(f in patch)) delete neuesGebaeude[f]
         onChange(neuesGebaeude)
         const uebernommen = Object.keys(patch).length
         setAnalyseHinweis(`${dxfVorspann}${planVorspann}${ergebnis.ohneKi ? 'Direkt aus dem Plan erkannt (ohne KI)' : 'KI-Vorschlag (aus der Queue)'}: ${uebernommen} Angabe(n) übernommen, bitte prüfen.${!ergebnis.ohneKi && !planVorspann && /\.(pdf|jpe?g|png|webp)$/i.test(file.name) ? ' Aus einem Scan oder Foto gelesen: einzelne Ziffern (z. B. halbe Zentimeter hochgestellt) können um einige Zentimeter abweichen und bei einem zweiten Lauf anders ausfallen – Länge, Breite und Höhen bitte mit den Maßketten im Plan abgleichen.' : ''}${ergebnis.hoeheGeschaetzt ? ' Höhe geschätzt aus Geschosszahl.' : ''}${ergebnis.abschnitte?.length >= 2 ? ` ${ergebnis.abschnitte.length} Höhenabschnitte erkannt (siehe „Mehrteiliges Gebäude“).` : ''}${ergebnis.abschnitte?.some((a: any) => a.spitzeM) ? ' Spitzer Aufbau (z. B. Turmhelm) erkannt und als Walmdach/Pyramide eingetragen – Schafthöhe und Spitze bitte prüfen; welche Abschnitte eingerüstet werden, wählst du unter „Mehrteiliges Gebäude“.' : ''}${Array.isArray(ergebnis.hinweise) && ergebnis.hinweise.length ? ' Hinweise: ' + ergebnis.hinweise.join(' ') : ''}${ergebnis.verworfen?.length ? ' Verworfen (unbelegt): ' + ergebnis.verworfen.join('; ') : ''}`)

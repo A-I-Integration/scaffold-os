@@ -8,7 +8,7 @@ import type { VektorFlaeche } from './pdf-vektoren'
 import { oeffnungenFinden } from './oeffnungen-aus-plan'
 import { gelaendeAusPlan, type GelaendeAusPlan } from './gelaende-aus-plan'
 import { hauptkoerperAusKontur, type Vorbau } from './hauptkoerper'
-import { oeffnungenAnKanten, type PlanOeffnungAnKante } from './plan-oeffnungen-modell'
+import { oeffnungenAnKanten, vorbautenAnKanten, type PlanOeffnungAnKante, type PlanVorbauAnKante } from './plan-oeffnungen-modell'
 import { dachAusPlan, dachKotenAusPlan, pultdachNeigung, type PlanDachform } from './dachform-aus-plan'
 
 export interface PlanImportGeschoss { titel: string; ebene: number; laengeM: number; breiteM: number; flaecheM2: number; fenster?: number; tueren?: number
@@ -18,6 +18,8 @@ export interface PlanImportGeschoss { titel: string; ebene: number; laengeM: num
   oeffnungen?: PlanOeffnungAnKante[]
   /** Öffnungen, die an keiner Kante des Hauptkörpers liegen (z. B. an einem Vorbau) und nicht eingezeichnet werden */
   oeffnungenAbseits?: number
+  /** Vorbauten an den Kanten des Hauptkörpers (für das 3D-Modell) */
+  vorbautenAnKante?: PlanVorbauAnKante[]
   /** Längere Seite des Hauptkörpers im Plan: 'x' = waagerecht, 'y' = senkrecht */
   langeAchse?: 'x' | 'y'
 }
@@ -56,7 +58,7 @@ export function planImportAus(dateiname: string, massstab: number, gefunden: Gef
       laengeM: runde(laenge),
       breiteM: runde(breite),
       flaecheM2: Math.round(g.flaecheM2 * 10) / 10,
-      ...(hk && hk.vorbauten.length ? { vorbauten: hk.vorbauten } : {}),
+      ...(hk && hk.vorbauten.length ? { vorbauten: hk.vorbauten.map((v) => ({ laengeM: v.laengeM, tiefeM: v.tiefeM, flaecheM2: v.flaecheM2 })), vorbautenAnKante: vorbautenAnKanten(hk.vorbauten, hk.rechteck, mpp) } : {}),
       ...(flaechen.length ? (() => {
         const o = oeffnungenFinden(flaechen, g, texte, mpp)
         const lage = hk ? oeffnungenAnKanten(o, hk.rechteck, mpp) : null
