@@ -96,6 +96,8 @@ export interface CadTuer {
   anschlag?: 'minus' | 'plus'
   /** Gerüst läuft vor dieser Tür durch (Tür wird nicht benutzt, z. B. Nebentür). Standard: Durchgang freihalten. */
   ueberbauen?: boolean
+  /** Durchfahrt statt Tür (Fahrzeug- oder Gassendurchfahrt): gleiche Freihaltung, aber eigener Hinweis zur Überbrückung. */
+  durchfahrt?: boolean
 }
 
 /** Ein Vorbau (WC-Erker, Windfang, Treppenhaus) vor einer Wand. An Vorder- und Rückseite führt das Gerüst um ihn herum; an linker und rechter Seite ist er nur Ansicht. */
@@ -1790,6 +1792,8 @@ export function generateCADModel(
         }
       }
     }
+    const durchfahrten = tueren.filter((t) => building.tueren?.find((x) => `door-${x.id}` === t.id)?.durchfahrt && betroffeneTueren.has(t.id))
+    if (durchfahrten.length > 0) warnings.push({ type: 'warning', code: 'DURCHFAHRT_BRUECKE', message: `${durchfahrten.length} Durchfahrt(en): Die Felder darunter sind frei, darüber überbrückt der Binder in ${(lagenTop(maxK - 1) ?? 0).toFixed(1).replace('.', ',')} m Höhe. Die Überbrückung (Träger, Auflager, Lastabtrag) wird NICHT bemessen – nach Herstellerunterlage bzw. Statik ergänzen. Die Stückliste enthält nur die Regelteile der Felder.` })
     if (ueberbaut.length > 0) warnings.push({ type: 'warning', code: 'TUER_ZUGEBAUT', message: `${ueberbaut.length} Tür(en) werden vom Gerüst überbaut (so gewählt): Belag, Rahmen und Geländer laufen durch die Türöffnung, die Tür ist nicht benutzbar. Der Zugang muss an anderer Stelle liegen.` })
     // Randfelder verstärken
     const along = (f: ScaffoldField) => feldEntlangFassade(f.side, f.positionX, f.positionZ, building)
