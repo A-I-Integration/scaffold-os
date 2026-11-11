@@ -2169,8 +2169,23 @@ export function generateGrundriss(model: CADModel): Projection2D {
   elements.push({ id: 'building', type: 'rect', x: 0, y: 0, width: building.lengthM, height: building.widthM || 6, fill: '#e2e8f0', stroke: '#475569', strokeWidth: 2 })
 
   const scaffoldWidth = model.system?.rahmenBreitenM[0] || 0.73
+  // Felder im Plan: Gebäude liegt bei x 0..L, y 0..B (vorne unten). Seitenfelder liegen mittig um x = 0 bzw. z = -(B/2 + 0,5).
+  const tiefe = building.widthM || 6
   fields.filter((f) => f.levelIndex === 0).forEach((field) => {
-    elements.push({ id: `field-${field.id}`, type: 'rect', x: field.positionX - field.lengthM / 2, y: field.positionZ, width: field.lengthM, height: scaffoldWidth, fill: 'none', stroke: '#3b82f6', strokeWidth: 1.5 })
+    if (field.kante !== undefined) {
+      elements.push({ id: `field-${field.id}`, type: 'rect', x: field.positionX - field.lengthM / 2, y: field.positionZ, width: field.lengthM, height: scaffoldWidth, fill: 'none', stroke: '#3b82f6', strokeWidth: 1.5 })
+      return
+    }
+    const cx = field.positionX + building.lengthM / 2
+    const cy = field.positionZ + tiefe + 0.5
+    const laengs = field.side === 'front' || field.side === 'back'
+    const w = field.widthM || scaffoldWidth
+    elements.push({
+      id: `field-${field.id}`, type: 'rect',
+      x: laengs ? cx - field.lengthM / 2 : cx - w / 2, y: laengs ? cy - w / 2 : cy - field.lengthM / 2,
+      width: laengs ? field.lengthM : w, height: laengs ? w : field.lengthM,
+      fill: 'none', stroke: field.durchgang ? '#ea580c' : '#3b82f6', strokeWidth: 1.5,
+    })
   })
 
   dimensions.push({ id: 'dim-length', fromX: 0, fromY: (building.widthM || 6) + 0.5, toX: building.lengthM, toY: (building.widthM || 6) + 0.5, value: `${building.lengthM.toFixed(2)} m`, label: 'Gebäudelänge', offsetY: 0.5 })

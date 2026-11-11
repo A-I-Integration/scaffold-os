@@ -32,3 +32,18 @@ describe('Ansicht mit Höhenkoten', () => {
     expect(n('right')).toBe(m.fields.filter((f) => f.side === 'right').length)
   })
 })
+
+import { generateGrundriss } from '../cad-engine'
+describe('Grundriss: Felder um das Gebäude', () => {
+  it('Felder aller vier Seiten liegen um das Gebäude (x 0..L, y 0..B), Durchgang orange', () => {
+    const m = generateCADModel(b({ tueren: [{ id: 'd', side: 'front', offsetAlongM: 0, widthM: 1, heightM: 2.1 }] } as Partial<BuildingParams>), 'layher-allround')
+    const felder = generateGrundriss(m).elements.filter((e) => e.id.startsWith('field-'))
+    expect(felder.length).toBe(m.fields.filter((f) => f.levelIndex === 0).length)
+    const minX = Math.min(...felder.map((e) => e.x)), maxX = Math.max(...felder.map((e) => e.x + (e.width ?? 0)))
+    expect(minX).toBeGreaterThan(-1.2); expect(minX).toBeLessThan(0.1)
+    expect(maxX).toBeGreaterThan(11.9); expect(maxX).toBeLessThan(13.2)
+    const vorne = felder.filter((e) => e.id.includes('front'))
+    expect(Math.min(...vorne.map((e) => e.y))).toBeGreaterThan(8) // vorne = unten im Plan
+    expect(felder.some((e) => e.stroke === '#ea580c')).toBe(true)
+  })
+})
