@@ -33,6 +33,26 @@ export default function OfflineUnterstuetzung() {
   // Zahl der noch nicht gesendeten Auto-Speicherungen (als Text, damit der Vergleich stabil bleibt)
   const offen = useSyncExternalStore(abonniereOffen, () => String(anzahlAusstehend(leseAusstehend())), () => '0')
 
+  // Der Service Worker meldet, wenn statt Serverdaten eine gespeicherte Kopie gezeigt wird (ältester Stand zählt)
+  const [kopieStand, setKopieStand] = useState<number | null>(null)
+  useEffect(() => {
+    if (!('serviceWorker' in navigator)) return
+    const bei = (e: MessageEvent) => {
+      if (e.data?.typ !== 'offline-kopie') return
+      const t = Number(e.data.stand) || 0
+      setKopieStand((alt) => (alt === null ? t : Math.min(alt, t || alt)))
+    }
+    navigator.serviceWorker.addEventListener('message', bei)
+    return () => navigator.serviceWorker.removeEventListener('message', bei)
+  }, [])
+  // Sobald wieder Netz da ist, gilt der Hinweis nicht mehr
+  useEffect(() => {
+    const online = () => setKopieStand(null)
+    window.addEventListener('online', online)
+    return () => window.removeEventListener('online', online)
+  }, [])
+  const kopieText = kopieStand === null ? '' : ` Projektdaten stammen vom gespeicherten Stand${kopieStand ? ` (${new Date(kopieStand).toLocaleString('de-DE', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })})` : ''} – Änderungen anderer Geräte fehlen.`
+
   // Was der Server endgültig abgelehnt hat (z. B. Nachtrag existiert nicht mehr): sichtbar melden, damit nichts still verschwindet
   const [abgelehnt, setAbgelehnt] = useState<string[]>([])
 
@@ -75,7 +95,7 @@ export default function OfflineUnterstuetzung() {
     <>
       {abgelehntBox}
       <div role='status' className='fixed bottom-3 left-1/2 -translate-x-1/2 z-[60] max-w-[92vw] rounded-xl bg-[#1d1d1f] text-white text-xs px-3 py-2 shadow-lg'>
-        Kein Netz – CAD und Berechnungen laufen weiter. Auto-Speichern, Speichern in Schritt 6, Nachträge (ohne Fotos) und Materialabschnitte werden gemerkt{offen !== '0' ? ` (${offen} offen)` : ''} und mit Verbindung gesendet; KI und E-Mail gehen erst wieder mit Netz.
+        Kein Netz – CAD und Berechnungen laufen weiter. Auto-Speichern, Speichern in Schritt 6, Nachträge (ohne Fotos) und Materialabschnitte werden gemerkt{offen !== '0' ? ` (${offen} offen)` : ''} und mit Verbindung gesendet; KI und E-Mail gehen erst wieder mit Netz.{kopieText}
       </div>
     </>
   )

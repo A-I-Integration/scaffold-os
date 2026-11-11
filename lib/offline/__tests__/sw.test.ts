@@ -4,6 +4,7 @@ import vm from 'node:vm'
 
 // Service Worker in einer nachgebauten Umgebung ausführen (ohne Browser): Cache-Speicher, fetch und Ereignisse sind Attrappen.
 type Handler = (e: unknown) => void
+const nachrichten: unknown[] = []
 function baue(netz: (url: string) => Response | Promise<Response>) {
   const handler: Record<string, Handler> = {}
   const speicher = new Map<string, Map<string, Response>>()
@@ -23,7 +24,8 @@ function baue(netz: (url: string) => Response | Promise<Response>) {
   const abrufe: string[] = []
   const self = {
     location: { origin: 'https://app.test' }, addEventListener: (t: string, h: Handler) => { handler[t] = h },
-    skipWaiting: () => Promise.resolve(), clients: { claim: () => Promise.resolve() },
+    skipWaiting: () => Promise.resolve(),
+    clients: { claim: () => Promise.resolve(), matchAll: async () => [{ postMessage: (m: unknown) => { nachrichten.push(m) } }] },
   }
   const fetchAttrappe = async (r: Request | string) => { const url = typeof r === 'string' ? r : r.url; abrufe.push(url); zaehler++; return netz(url) }
   vm.runInNewContext(readFileSync('public/sw.js', 'utf8'), { self, caches, fetch: fetchAttrappe, URL, Response, Promise, Set, Array, setTimeout, clearTimeout, Error })
@@ -119,6 +121,19 @@ describe('Service Worker – Regeln', () => {
     const b = await (await w.anfrage('/api/kunden'))!
     expect(b.headers.get('x-offline-kopie')).toBe('1')
     expect((await b.json()).kunden[0].id).toBe(1)
+  })
+  it('Stufe 2b: Wird eine gespeicherte Kopie gezeigt, bekommen die offenen Fenster die Nachricht mit dem Stand', async () => {
+    const json = (t: unknown) => basic(new Response(JSON.stringify(t), { status: 200, headers: { 'content-type': 'application/json' } }))
+    const w = baue((u) => (new URL(u, 'https://app.test').pathname === '/api/projects' ? (online ? json({ success: true, projects: [{ id: 'p1' }] }) : Promise.reject(new Error('offline'))) : html('x')))
+    nachrichten.length = 0
+    await (await w.anfrage('/api/projects?id=p1'))!
+    expect(nachrichten).toHaveLength(0) // online: keine Meldung
+    online = false
+    await (await w.anfrage('/api/projects?id=p1'))!
+    await warten(10)
+    expect(nachrichten).toHaveLength(1)
+    expect(nachrichten[0]).toMatchObject({ typ: 'offline-kopie', pfad: '/api/projects' })
+    expect((nachrichten[0] as { stand: number }).stand).toBeGreaterThan(0)
   })
   it('Stufe 2: Projekt nach ID wird je Adresse einzeln abgelegt; unbekannte Adresse offline = Fehler (kein erfundenes Ergebnis)', async () => {
     const json = (t: unknown) => basic(new Response(JSON.stringify(t), { status: 200, headers: { 'content-type': 'application/json' } }))

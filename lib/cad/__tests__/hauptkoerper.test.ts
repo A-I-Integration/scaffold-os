@@ -21,4 +21,14 @@ describe('hauptkoerperAusKontur', () => {
     const k = [{ x: 0, y: 0 }, { x: 1000, y: 0 }, { x: 1000, y: 400 }, { x: 500, y: 400 }, { x: 500, y: 1000 }, { x: 0, y: 1000 }]
     expect(hauptkoerperAusKontur(k, mpp)).toBeNull()
   })
+
+  it('Wandversatz von 0,3 m zählt zum Hauptkörper, der dicke Erker bleibt Vorbau', () => {
+    // Haus 13,8 breit; links reicht die Nordkante bis y=150, rechts (ab x=800) nur bis y=180; Erker 4,3 × 1,5 über der linken Hälfte; Süden y=1020
+    const k = [{ x: 0, y: 150 }, { x: 200, y: 150 }, { x: 200, y: 0 }, { x: 630, y: 0 }, { x: 630, y: 150 }, { x: 800, y: 150 }, { x: 800, y: 180 }, { x: 1380, y: 180 }, { x: 1380, y: 1020 }, { x: 0, y: 1020 }]
+    const h = hauptkoerperAusKontur(k, mpp)!
+    expect(h.laengeM).toBeCloseTo(13.8, 1)
+    expect(h.breiteM).toBeCloseTo(8.7, 1) // 150 → 1020, nicht 180 → 1020
+    expect(h.vorbauten).toHaveLength(1)
+    expect(h.vorbauten[0].tiefeM).toBeCloseTo(1.5, 1)
+  })
 })
