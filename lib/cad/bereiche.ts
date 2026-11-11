@@ -134,10 +134,13 @@ export function waehleBereich(model: CADModel, a: BereichsAuswahl): BereichsErge
 
 export type BereichsAenderung =
   | { art: 'erweitern'; seite: Seite; ende: 'anfang' | 'ende'; anzahl: number; feldlaengeM?: number; lagen?: number }
+  /** Länge einer Feldspalte (alle Lagen) ändern: `spalte` = Nummer der Spalte in der untersten Lage (0 = erste, nach Lage entlang der Seite). Der Rest der Seite rückt nach. */
+  | { art: 'laenge'; seite: Seite; spalte: number; feldlaengeM: number }
   | { art: 'aufstocken'; seite: Seite; /** Umriss-Modus: Gebäudekante statt Seite */ kante?: number; vonM?: number; bisM?: number; lagen: number }
 
 export function beschreibeAenderung(a: BereichsAenderung): string {
   const seiten: Record<Seite, string> = { front: 'Vorderseite', back: 'Rückseite', left: 'linke Seite', right: 'rechte Seite' }
+  if (a.art === 'laenge') return `${seiten[a.seite]}: Feld ${a.spalte + 1} auf ${String(a.feldlaengeM).replace('.', ',')} m Länge`
   if (a.art === 'erweitern') return `${a.anzahl} Feld${a.anzahl > 1 ? 'er' : ''} ${a.ende === 'anfang' ? 'am Anfang' : 'am Ende'} der ${seiten[a.seite]} anhängen${a.lagen ? ` (unterste ${a.lagen} Lagen)` : ''}`
   const bereich = a.vonM !== undefined || a.bisM !== undefined ? ` von ${a.vonM ?? 0} bis ${a.bisM ?? 'Ende'} m` : ''
   return `${a.kante !== undefined ? `Kante ${a.kante + 1}` : seiten[a.seite]}${bereich}: ${a.lagen} Lage${a.lagen > 1 ? 'n' : ''} aufstocken`
@@ -312,10 +315,74 @@ export function stockeAuf(model: CADModel, a: Extract<BereichsAenderung, { art: 
   return m
 }
 
+/** Felder derselben Reihe (Seite, gleiche Lage quer zur Wand) wie `feld`, alle Lagen, ohne Umriss-Kanten. */
+const reiheDerSeite = (model: CADModel, seite: Seite, quer: number): ScaffoldField[] =>
+  model.fields.filter((f) => f.side === seite && f.kante === undefined && Math.abs((seite === 'front' || seite === 'back' ? f.positionZ : f.positionX) - quer) < 0.011)
+
+const querVon = (f: ScaffoldField): number => (f.side === 'front' || f.side === 'back' ? f.positionZ : f.positionX)
+
+/** Spalten (Felder der untersten Lage der Reihe, entlang der Seite geordnet). */
+function untereSpalten(model: CADModel, seite: Seite, quer: number): ScaffoldField[] {
+  return reiheDerSeite(model, seite, quer).filter((f) => f.levelIndex === 0).sort((a, b) => entlang(a, model) - entlang(b, model))
+}
+
+/**
+ * Zu einem angeklickten Bauteil: an welcher Seite und in welcher Spalte liegt sein Feld, wie lang ist es,
+ * und in welche Richtung (Anfang/Ende der Seite) liegen „links“ und „rechts“ bei Blick von außen auf die Wand?
+ */
+export function feldSpalteVonBauteil(model: CADModel, bauteilId: string): { seite: Seite; spalte: number; laengeM: number; anzahl: number; links: 'anfang' | 'ende'; rechts: 'anfang' | 'ende' } | null {
+  const c = model.components3D.find((x) => x.id === bauteilId)
+  const feld = c?.fieldId ? model.fields.find((f) => f.id === c.fieldId) : undefined
+  if (!feld || feld.kante !== undefined || feld.id.includes('-bein')) return null
+  const unten = untereSpalten(model, feld.side, querVon(feld))
+  const e = entlang(feld, model)
+  const spalte = unten.findIndex((f) => Math.abs(entlang(f, model) - e) < 0.02)
+  if (spalte < 0) return null
+  // Blick von außen auf die Wand: vorn und links schauen in +x bzw. −z-Richtung der Szene → „rechts“ ist dort das Seitenende (+); hinten und rechts umgekehrt
+  const rechtsAmEnde = feld.side === 'front' || feld.side === 'left'
+  return { seite: feld.side, spalte, laengeM: unten[spalte].lengthM, anzahl: unten.length, links: rechtsAmEnde ? 'anfang' : 'ende', rechts: rechtsAmEnde ? 'ende' : 'anfang' }
+}
+
+/** Länge einer Feldspalte ändern: der Anfang der Spalte bleibt stehen, alles dahinter rückt nach. Bauteile werden neu gebaut. */
+export function setzeFeldLaenge(model: CADModel, a: Extract<BereichsAenderung, { art: 'laenge' }>): CADModel {
+  const alle = model.fields.filter((f) => f.side === a.seite && f.kante === undefined && !f.id.includes('-bein'))
+  if (alle.length === 0 || !(a.feldlaengeM > 0.3)) return model
+  // Reihe wählen: die mit den meisten Feldern der untersten Lage (die Außenlinie der Seite)
+  const quers = [...new Set(alle.map((f) => Math.round(querVon(f) * 100) / 100))]
+  const quer = quers.map((q) => ({ q, n: untereSpalten(model, a.seite, q).length })).sort((x, y) => y.n - x.n)[0].q
+  const unten = untereSpalten(model, a.seite, quer)
+  const ziel = unten[a.spalte]
+  if (!ziel) return model
+  const mitte = entlang(ziel, model)
+  const delta = r2(a.feldlaengeM - ziel.lengthM)
+  if (Math.abs(delta) < 0.005) return model
+  const m = kopiere(model)
+  const aendern = (f: ScaffoldField): ScaffoldField => {
+    const e = entlang(f, m)
+    if (Math.abs(e - mitte) < 0.02) return { ...f, lengthM: a.feldlaengeM, ...verschiebe(f, delta / 2) }
+    return e > mitte ? { ...f, ...verschiebe(f, delta) } : f
+  }
+  const reihe = new Set(reiheDerSeite(model, a.seite, quer).map((f) => f.id))
+  const neu = new Map<string, ScaffoldField>()
+  for (const f of m.fields) if (reihe.has(f.id)) neu.set(f.id, aendern(f))
+  m.fields = m.fields.map((f) => neu.get(f.id) ?? f)
+  m.levels = m.levels.map((l) => ({ ...l, fields: l.fields.map((f) => neu.get(f.id) ?? f) }))
+  // Länge und Fläche: die geänderte Spalte zählt in allen Lagen mit ihrer Lagenhöhe
+  const hoehen = m.fields.filter((f) => reihe.has(f.id) && Math.abs(entlang(f, m) - (mitte + delta / 2)) < 0.02).reduce((s, f) => s + (lageDerSeite(m, f.side, f.levelIndex)?.heightM ?? 0), 0)
+  m.totalLengthM = r2(m.totalLengthM + delta)
+  m.totalAreaM2 = r2(m.totalAreaM2 + delta * hoehen)
+  if (m.gebauteFlaecheM2 !== undefined) m.gebauteFlaecheM2 = r2(m.gebauteFlaecheM2 + delta * hoehen)
+  // Bauteile aller Felder neu bauen (Rahmen, Beläge, Treppe, Durchgänge folgen den neuen Längen)
+  m.components3D = []
+  m.components3D = generateScaffoldComponents({ ...m, components3D: [] })
+  m.warnings.push({ type: 'info', code: 'FELD_LAENGE', message: `${beschreibeAenderung(a)}: Die Felder dahinter rücken nach. Anker bleiben an ihrer Stelle – Verankerung und Länge der Seite bitte prüfen.` })
+  return m
+}
+
 export function wendeAenderungenAn(model: CADModel, liste: BereichsAenderung[]): CADModel {
   let m = model
   // feste Kennung je Eintrag der Liste: gleiche Eingaben ergeben immer gleiche Bauteil-IDs (Auswahl und Entfernen bleiben stabil)
-  liste.forEach((a, i) => { m = a.art === 'erweitern' ? erweitereSeite(m, a, `erw${i}`) : stockeAuf(m, a, `erw${i}`) })
+  liste.forEach((a, i) => { m = a.art === 'erweitern' ? erweitereSeite(m, a, `erw${i}`) : a.art === 'laenge' ? setzeFeldLaenge(m, a) : stockeAuf(m, a, `erw${i}`) })
   return m
 }
 
