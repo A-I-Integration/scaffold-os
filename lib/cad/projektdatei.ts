@@ -251,6 +251,11 @@ export function liesProjektdatei(text: string): LeseErgebnis {
         const lg = o.lagen === undefined ? undefined : zahl(o.lagen, 1, 100)
         if (anzahl == null || (o.ende !== 'anfang' && o.ende !== 'ende') || fl === null || lg === null) { verworfen.push('Bereichsänderung (ungültige Angaben)'); continue }
         bereiche.push({ art: 'erweitern', seite, ende: o.ende, anzahl: Math.floor(anzahl), ...(fl ? { feldlaengeM: fl } : {}), ...(lg ? { lagen: Math.floor(lg) } : {}) })
+      } else if (o.art === 'laenge') {
+        const spalte = zahl(o.spalte, 0, 199)
+        const fl = zahl(o.feldlaengeM, 0.5, 5)
+        if (spalte == null || fl == null) { verworfen.push('Bereichsänderung (ungültige Angaben)'); continue }
+        bereiche.push({ art: 'laenge', seite, spalte: Math.floor(spalte), feldlaengeM: fl })
       } else if (o.art === 'aufstocken') {
         const lagen = zahl(o.lagen, 1, 10)
         const von = o.vonM === undefined ? undefined : zahl(o.vonM, 0, MAX_MASS_M)

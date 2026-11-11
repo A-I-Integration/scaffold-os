@@ -5,7 +5,7 @@
 
 import { useState } from 'react'
 import type { CADModel } from '@/lib/calculations/cad-engine'
-import { waehleFeld, type FeldUmfang } from '@/lib/cad/bereiche'
+import { waehleFeld, feldSpalteVonBauteil, type FeldUmfang, type Seite } from '@/lib/cad/bereiche'
 
 const ARTEN: Record<string, string> = {
   frame: 'Rahmen / Riegel', deck: 'Belag', railing: 'Geländer', diagonal: 'Diagonale', footplate: 'Fußplatte', coupling: 'Kupplung',
@@ -15,13 +15,15 @@ const ARTEN: Record<string, string> = {
 const SEITEN: Record<string, string> = { front: 'Vorderseite', back: 'Rückseite', left: 'Links', right: 'Rechts' }
 const m = (v: number) => `${v.toLocaleString('de-DE', { maximumFractionDigits: 2 })} m`
 
-export default function EigenschaftenLeiste({ model, id, artikelWahl, manuell, onEntfernen, onFeldEntfernen, onPositionAendern, platzierungPosition, onZu }: {
-  model: CADModel; id: string; artikelWahl: Record<string, string>; manuell: boolean; onEntfernen: () => void; onFeldEntfernen?: (bauteilIds: string[]) => void; onPositionAendern?: (position: [number, number, number]) => void; platzierungPosition?: [number, number, number]; onZu: () => void
+export default function EigenschaftenLeiste({ model, id, artikelWahl, manuell, onEntfernen, onFeldEntfernen, onFeldLaenge, onFeldAnhaengen, onPositionAendern, platzierungPosition, onZu }: {
+  model: CADModel; id: string; artikelWahl: Record<string, string>; manuell: boolean; onEntfernen: () => void; onFeldEntfernen?: (bauteilIds: string[]) => void; onFeldLaenge?: (seite: Seite, spalte: number, laengeM: number) => void; onFeldAnhaengen?: (seite: Seite, ende: 'anfang' | 'ende', laengeM: number) => void; onPositionAendern?: (position: [number, number, number]) => void; platzierungPosition?: [number, number, number]; onZu: () => void
 }) {
   const c = model.components3D.find((x) => x.id === id)
   if (!c) return null
   const feld = c.fieldId ? model.fields.find((f) => f.id === c.fieldId) : undefined
   const lage = c.levelId ? model.levels.find((l) => l.id === c.levelId) : feld ? model.levels.find((l) => l.index === feld.levelIndex && l.fields.some((f) => f.id === feld.id)) : undefined
+  const spalteInfo = onFeldLaenge || onFeldAnhaengen ? feldSpalteVonBauteil(model, id) : null
+  const laengen = model.system?.feldlangenM ?? []
   const zeilen: [string, string][] = [
     ['Art', ARTEN[c.type] ?? c.type],
     ['Bezeichnung', c.name],
@@ -46,6 +48,32 @@ export default function EigenschaftenLeiste({ model, id, artikelWahl, manuell, o
         ))}
       </dl>
       {manuell && onPositionAendern && platzierungPosition && <PositionFelder key={platzierungPosition.join(',')} start={platzierungPosition} onUebernehmen={onPositionAendern} />}
+      {spalteInfo && (
+        <div className='space-y-1.5 border-t px-3 py-2' style={{ borderColor: 'var(--os-linie)' }}>
+          {onFeldLaenge && laengen.length > 0 && (
+            <div>
+              <div className='mb-1 text-[11px] uppercase tracking-wider' style={{ color: 'var(--os-text-leise)' }}>Länge dieses Feldes</div>
+              <div className='flex flex-wrap gap-1'>
+                {laengen.map((l) => {
+                  const aktiv = Math.abs(l - spalteInfo.laengeM) < 0.005
+                  return (
+                    <button key={l} type='button' disabled={aktiv} onClick={() => onFeldLaenge(spalteInfo.seite, spalteInfo.spalte, l)}
+                      className='rounded border px-2 py-1 text-[12.5px] disabled:font-semibold' style={{ borderColor: aktiv ? 'var(--os-akzent)' : 'var(--os-linie)', background: aktiv ? 'var(--os-akzent)' : 'white', color: aktiv ? '#171b20' : undefined }}>
+                      {l.toLocaleString('de-DE', { minimumFractionDigits: 2 })} m
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+          )}
+          {onFeldAnhaengen && (
+            <div className='grid grid-cols-2 gap-1'>
+              <button type='button' onClick={() => onFeldAnhaengen(spalteInfo.seite, spalteInfo.links, spalteInfo.laengeM)} className='rounded border px-2 py-1.5 text-[12.5px] hover:bg-gray-50' style={{ borderColor: 'var(--os-linie)' }}>+ links anhängen</button>
+              <button type='button' onClick={() => onFeldAnhaengen(spalteInfo.seite, spalteInfo.rechts, spalteInfo.laengeM)} className='rounded border px-2 py-1.5 text-[12.5px] hover:bg-gray-50' style={{ borderColor: 'var(--os-linie)' }}>+ rechts anhängen</button>
+            </div>
+          )}
+        </div>
+      )}
       <div className='space-y-1.5 border-t p-2' style={{ borderColor: 'var(--os-linie)' }}>
         <button type='button' onClick={onEntfernen} className='w-full rounded border px-3 py-1.5 text-[13px] hover:bg-red-50' style={{ borderColor: '#e7b4b0', color: '#b42318' }}>Bauteil entfernen (Entf)</button>
         {feld && onFeldEntfernen && (
