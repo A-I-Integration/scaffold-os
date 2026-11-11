@@ -70,7 +70,7 @@ export function platzierungAusTreffer(
         p.positionX = best.positionX + (best.side === 'right' ? aussen : -aussen)
         p.rotationY = Math.PI / 2
       }
-      const stufe = model.levels?.find((l) => l.index === best.levelIndex)
+      const stufe = model.levels?.find((l) => l.index === best.levelIndex && l.id === `level-${best.side}-${best.levelIndex}`) ?? model.levels?.find((l) => l.index === best.levelIndex)
       p.positionY = (stufe ? stufe.bottomY : best.positionY) + 1.0
     }
   }

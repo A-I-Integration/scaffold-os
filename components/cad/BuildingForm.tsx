@@ -994,6 +994,24 @@ export default function BuildingForm({ building, systemId, onChange, onSystemCha
                         ))}
                       </div>
                     </div>
+                    <div className='col-span-2'>
+                      <label className='block text-[11px] text-[#424245] mb-1'>Gelände je Seite (m, bezogen auf ±0,00 = Fußboden EG) – Hang: minus = Gelände liegt tiefer{building.umriss && building.umriss.length > 0 ? ' · gilt nicht im Umriss-Modus' : ''}</label>
+                      <div className='grid grid-cols-4 gap-1'>
+                        {(['front', 'back', 'left', 'right'] as const).map((sd) => (
+                          <label key={sd} className='text-[10px] text-[#86868b]'>{{ front: 'Vorne', back: 'Hinten', left: 'Links', right: 'Rechts' }[sd]}
+                            <input type='number' step='0.1' min={-15} max={15} placeholder='0' value={opt.gelaendeSeiteM?.[sd] ?? ''}
+                              disabled={!building.sides.includes(sd)}
+                              onChange={(e) => {
+                                const v = e.target.value === '' ? undefined : parseFloat(e.target.value)
+                                const neu = { ...(opt.gelaendeSeiteM ?? {}), [sd]: v }
+                                if (v === undefined || !Number.isFinite(v)) delete neu[sd]
+                                setzeOpt({ gelaendeSeiteM: Object.keys(neu).length > 0 ? neu : undefined })
+                              }}
+                              className='w-full px-1 py-1 border rounded-lg text-xs disabled:opacity-40' />
+                          </label>
+                        ))}
+                      </div>
+                    </div>
                     <label className='flex items-center gap-2 text-xs text-[#424245] self-end pb-1.5'>
                       <input type='checkbox' checked={opt.treppe !== false} onChange={(e) => setzeOpt({ treppe: e.target.checked ? undefined : false })} />
                       Treppe automatisch

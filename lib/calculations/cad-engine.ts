@@ -62,6 +62,8 @@ export interface GeruestOptionen {
   schutzdaecher?: Array<{ seite?: 'front' | 'back' | 'left' | 'right'; vonM: number; laengeM: number; hoeheM?: number }>
   /** false = Türen nicht freihalten. Standard (leer/true): vor jeder Tür im Erdgeschoss entsteht in der untersten Lage ein Durchgang (kein Fuß-Querriegel, keine Diagonale, Durchgangsrahmen-Binder). */
   tuerenFreihalten?: boolean
+  /** Höhe des Geländes am Fuß jeder Seite in m, bezogen auf ±0,00 (Fußboden Erdgeschoss): negativ = Gelände liegt tiefer (Hang, Talseite). Der Fußpunkt der Seite folgt dem Gelände; Lagen und Anker rechnen ab dort. Nur beim einfachen Gebäude (nicht Abschnitte/Umriss). */
+  gelaendeSeiteM?: Partial<Record<'front' | 'back' | 'left' | 'right', number>>
   /** Personen-/Lastenaufzug an einer Gerüstseite (außen vor dem Gerüst) */
   aufzug?: AufzugOptionen
 }
@@ -663,10 +665,12 @@ export function generateScaffoldComponents(model: CADModel): ScaffoldComponent3D
     return fields.some((g) => g.id !== f.id && g.durchgang && g.side === f.side && g.levelIndex === f.levelIndex && Math.abs(entlang(g) - richtung * g.lengthM / 2 - grenze) < 0.05)
   }
 
+  // Lage einer Seite: bei Hang hat jede Seite ihren eigenen Fußpunkt (Lagen-Kennung `level-<seite>-<nr>`)
+  const lage = (sd: string, idx: number) => levels.find((l) => l.index === idx && l.id === `level-${sd}-${idx}`) ?? levels.find((l) => l.index === idx)
   // === BASIS-BAUTEILE (pro Feld) ===
   fields.forEach((field) => {
     const { lengthM, widthM, levelIndex, side } = field
-    const level = levels.find((l) => l.index === levelIndex)
+    const level = lage(side, levelIndex)
     if (!level) return
     // Lokale Position im Vorne-System; am Ende der Schleife wird gedreht.
     const rahmen = feldRahmen(field, building)
@@ -771,7 +775,7 @@ export function generateScaffoldComponents(model: CADModel): ScaffoldComponent3D
         if (!aktiveSeiten.has(fb) || !aktiveSeiten.has(lr)) continue
         const lageIdxs = [...new Set(fields.filter((f) => f.side === fb).map((f) => f.levelIndex))]
         for (const idx of lageIdxs) {
-          const level = levels.find((l) => l.index === idx)
+          const level = lage(fb, idx)
           const fbF = fields.filter((f) => f.side === fb && f.levelIndex === idx)
           const lrF = fields.filter((f) => f.side === lr && f.levelIndex === idx)
           if (!level || fbF.length === 0 || lrF.length === 0) continue
@@ -844,7 +848,7 @@ export function generateScaffoldComponents(model: CADModel): ScaffoldComponent3D
     uniqueLevels.forEach(levelIdx => {
       const levelFields = sideFields.filter(f => f.levelIndex === levelIdx)
       if (levelFields.length === 0) return
-      const level = levels.find(l => l.index === levelIdx)
+      const level = lage(side, levelIdx)
       if (!level) return
 
       // Erstes und letztes Feld jeder Seite bekommen Eckdiagonale
@@ -940,7 +944,7 @@ export function generateScaffoldComponents(model: CADModel): ScaffoldComponent3D
     const L = xR - xL, cx = (xL + xR) / 2
     const W = TREPPEN_BREITE_M
     const zS = az + fa.widthM - 0.045 + TREPPEN_ABSTAND_M + W / 2 // Mitte der Treppe, vor der Belag-Außenkante
-    const lv = (j: number) => levels.find((l) => l.index === j)!
+    const lv = (j: number) => lage(fa.side, j)!
     const y0 = lv(0).bottomY
     const hGes = lv(lagen - 1).topY - y0
     // Steighöhe je Lauf aus den tatsächlichen Lagenhöhen (Lauf f endet auf dem Belag der Lage f)
@@ -1047,7 +1051,7 @@ export function generateScaffoldComponents(model: CADModel): ScaffoldComponent3D
       const gesetzt = new Set<string>()
       for (const field of fields) {
         if (!seiten.includes(field.side) || field.levelIndex !== obenJeSeite.get(field.side) || gesetzt.has(field.id)) continue
-        const oben = levels.find((l) => l.index === field.levelIndex)
+        const oben = lage(field.side, field.levelIndex)
         if (!oben) continue
         gesetzt.add(field.id)
         const rf = feldRahmen(field, building)
@@ -1414,15 +1418,28 @@ export function generateCADModel(
     ? { traufe: building.eavesHeightM, first: building.heightM, firstEntlangLaenge: building.lengthM >= (building.widthM || 0) }
     : null
   const rasterLagenH = levelCalc.levelHeightM
+  // Hang: Gelände je Seite (nur einfaches Gebäude mit bekanntem System)
+  const hangSeiteM: Partial<Record<SeitenId, number>> = {}
+  if (system && !abschnitte && !(building.umriss && building.umriss.length >= 3)) {
+    for (const sd of ['front', 'back', 'left', 'right'] as const) {
+      const v = opt?.gelaendeSeiteM?.[sd]
+      if (typeof v === 'number' && Number.isFinite(v) && Math.abs(v) >= 0.01) {
+        if (Math.abs(v) > 15) warnings.push({ type: 'warning', code: 'HANG_UNGUELTIG', message: `Gelände ${v} m an einer Seite ist unrealistisch (mehr als 15 m) – wird ignoriert.` })
+        else hangSeiteM[sd] = Math.round(v * 100) / 100
+      }
+    }
+  }
+  const gSeite = (sd: SeitenId): number => hangSeiteM[sd] ?? 0
+  const levelCalcSeite = (sd: SeitenId) => (system && gSeite(sd) !== 0 ? calculateLevels(building.heightM - gSeite(sd), system, gSeite(sd)) : levelCalc)
   // Geneigtes Dach ohne Satteldach-Sonderfall (Walm-, Mansardendach/Zelt): alle Seiten sind Traufseiten und enden an der Traufe.
   // (Pultdach bleibt unverändert: dort ist nicht gespeichert, welche Seite die Traufe ist.)
   const traufeAllseitig = !abschnitte && !giebel && (building.roofForm === 'walmdach' || building.roofForm === 'mansardendach') && building.eavesHeightM > 0 && building.eavesHeightM < building.heightM - 0.3
   const dachRegel = !!giebel || traufeAllseitig
   /** Regel: Der oberste Belag liegt mindestens RINNE_ABSTAND_M unter der Rinne bzw. Dachkante – ein Gerüst wird nicht bis ans Dach hochgezogen. Mindestens eine Lage. */
-  const lagenBisRinne = (rinneM: number): number => Math.min(levelCalc.levels, Math.max(1, Math.floor((rinneM - RINNE_ABSTAND_M) / rasterLagenH + 1e-6)))
+  const lagenBisRinne = (rinneM: number, sd: SeitenId): number => Math.min(levelCalcSeite(sd).levels, Math.max(1, Math.floor((rinneM - gSeite(sd) - RINNE_ABSTAND_M) / rasterLagenH + 1e-6)))
   /** Anzahl Lagen an einer Wandstelle (Spanne [vonM, bisM], von der Wandmitte aus gemessen; Giebelseite: Dachhöhe in der Feldmitte). */
   const lagenAn = (sd: 'front' | 'back' | 'left' | 'right', vonM: number, bisM: number): number => {
-    if (!giebel) return traufeAllseitig ? lagenBisRinne(building.eavesHeightM) : levelCalc.levels
+    if (!giebel) return traufeAllseitig ? lagenBisRinne(building.eavesHeightM, sd) : levelCalcSeite(sd).levels
     const istGiebelSeite = giebel.firstEntlangLaenge ? (sd === 'left' || sd === 'right') : (sd === 'front' || sd === 'back')
     let h = giebel.traufe
     if (istGiebelSeite) {
@@ -1431,7 +1448,7 @@ export function generateCADModel(
       const naechster = Math.abs((vonM + bisM) / 2)
       h = halb > 0 ? giebel.traufe + (giebel.first - giebel.traufe) * Math.max(0, 1 - naechster / halb) : giebel.first
     }
-    return lagenBisRinne(h)
+    return lagenBisRinne(h, sd)
   }
   /** Wandfläche einer Seite (m²): Traufseite = Länge × Traufe, Giebelseite = Rechteck + Dreieck. */
   const seitenWandFlaecheM2 = (sd: 'front' | 'back' | 'left' | 'right', laenge: number): number => {
@@ -1678,7 +1695,7 @@ export function generateCADModel(
         break
     }
 
-    levelCalc.levelsData.forEach((levelData) => {
+    levelCalcSeite(side as SeitenId).levelsData.forEach((levelData) => {
       const levelId = `level-${side}-${levelData.index}`
       const levelFields: ScaffoldField[] = []
 
@@ -1733,16 +1750,16 @@ export function generateCADModel(
   const anchors: ScaffoldAnchor[] = []
   if (abschnitte) anchors.push(...abschnittsAnker)
   else if (building.heightM > 6) {
-    const anchorLevels = Math.floor(levelCalc.levelsData.length / 2)
     for (const side of activeSides) {
+      const anchorLevels = Math.floor(levelCalcSeite(side as SeitenId).levelsData.length / 2)
       for (let al = 0; al < anchorLevels; al++) {
-        const yAnchor = (al * 2 + 2) * levelCalc.levelHeightM
+        const yAnchor = gSeite(side as SeitenId) + (al * 2 + 2) * levelCalc.levelHeightM
         const div = side === 'front' || side === 'back' ? fieldDiv : fieldDivWidth
         for (let f = 0; f < div.fields; f += 2) {
           const totalLength = div.distribution.reduce((a, b) => a + b, 0)
           const pos = f * div.fieldLengthM - totalLength / 2 + div.fieldLengthM / 2
           if (istInLuecke(side, pos, 0)) continue
-          if (dachRegel && yAnchor > lagenAn(side, pos - div.fieldLengthM / 2, pos + div.fieldLengthM / 2) * rasterLagenH) continue
+          if (dachRegel && yAnchor > gSeite(side as SeitenId) + lagenAn(side, pos - div.fieldLengthM / 2, pos + div.fieldLengthM / 2) * rasterLagenH) continue
 
           let xPos = 0
           let zPos = 0
@@ -1764,7 +1781,7 @@ export function generateCADModel(
     const tueren = generateBuildingFeatures(building).filter((f) => f.type === 'door')
     const betroffeneTueren = new Set<string>()
     const aussenTueren = new Set<string>()
-    const lagenTop = (i: number): number | undefined => levels.find((l) => l.index === i)?.topY
+    const lagenTop = (i: number, sd?: string): number | undefined => (sd ? (levels.find((l) => l.index === i && l.id === `level-${sd}-${i}`) ?? levels.find((l) => l.index === i)) : levels.find((l) => l.index === i))?.topY
     const lagenAnzahl = levels.reduce((m, l) => Math.max(m, l.index + 1), 0)
     let maxK = 0
     const ueberbaut: string[] = []
@@ -1778,7 +1795,7 @@ export function generateCADModel(
       const extraPlus = aussen ? (spec?.fluegel === 2 || spec?.anschlag === 'plus' ? flWeite : 0) : 0
       // Anzahl freizuhaltender Lagen: erste Lage, deren Oberkante minus Binder über der Türoberkante liegt
       let K = 1
-      while (K < lagenAnzahl && (lagenTop(K - 1) ?? Infinity) - BINDER_UNTERKANTE_M < t.heightM) K++
+      while (K < lagenAnzahl && (lagenTop(K - 1, t.side) ?? Infinity) - BINDER_UNTERKANTE_M < t.heightM) K++
       maxK = Math.max(maxK, K)
       for (const f of fields) {
         if (f.side !== t.side || f.levelIndex >= K) continue
@@ -1840,7 +1857,8 @@ export function generateCADModel(
 
   if (dachRegel) {
     const rinneM = giebel ? giebel.traufe : building.eavesHeightM
-    const obersterBelagM = lagenBisRinne(rinneM) * rasterLagenH
+    const seite0 = (activeSides[0] ?? 'front') as SeitenId
+    const obersterBelagM = gSeite(seite0) + lagenBisRinne(rinneM, seite0) * rasterLagenH
     warnings.push({ type: 'info', code: 'OBERSTER_BELAG_RINNE', message: `Geneigtes Dach: Das Gerüst endet an der Rinne (Traufe ${rinneM.toFixed(2)} m) mit dem obersten Belag bei ${obersterBelagM.toFixed(2)} m – das sind ${(rinneM - obersterBelagM).toFixed(2)} m unter der Rinne (Regel: mindestens ${RINNE_ABSTAND_M.toFixed(1)} m). Für Dacharbeiten ist ein höheres Gerüst bzw. Fanggerüst gesondert zu planen.` })
   }
   // Bei geneigtem Dach (Rinnen-Regel): nur die tatsächlich gebauten Lagen führen und zählen, nicht die Lagen bis zum First
@@ -1856,6 +1874,13 @@ export function generateCADModel(
       flaeche: activeSides.reduce((t, sd) => t + seitenLaengeM(sd) * hoehe, 0) + beine.reduce((t, b) => t + b.laengeM * hoehe, 0),
     }
   })() : null
+  if (Object.keys(hangSeiteM).length > 0) {
+    const nameSeite: Record<string, string> = { front: 'vorne', back: 'hinten', left: 'links', right: 'rechts' }
+    const teile = (Object.entries(hangSeiteM) as [SeitenId, number][]).filter(([sd]) => activeSides.includes(sd)).map(([sd, g]) => `${nameSeite[sd]} ${g > 0 ? '+' : ''}${String(g).replace('.', ',')} m`)
+    if (teile.length) warnings.push({ type: 'info', code: 'HANG_GERUEST', message: `Gelände je Seite (bezogen auf ±0,00): ${teile.join(', ')}. Fußpunkt, Lagen, Anker und Fläche folgen dem Gelände; die Lagen liegen dadurch nicht mehr auf den Geschosshöhen. Spindelauszug, Untergrund und Zugang (Treppe) am tiefsten Punkt bitte vor Ort prüfen.` })
+    const tuerAmHang = (building.tueren ?? []).filter((t) => (hangSeiteM[t.side] ?? 0) <= -rasterLagenH)
+    if (tuerAmHang.length) warnings.push({ type: 'warning', code: 'HANG_TUER', message: `${tuerAmHang.length} Tür(en) an Seiten, deren Gelände mehr als eine Lage tiefer liegt: Die Freihaltung rechnet ab ±0,00, die unteren Lagen davor sind geschlossen. Zugang bitte prüfen.` })
+  }
   const preliminaryModel: CADModel = {
     building,
     system,
@@ -1865,9 +1890,9 @@ export function generateCADModel(
     components3D: [],
     totalLengthM: vorbauKennzahlen ? vorbauKennzahlen.laenge : (abschnitte ? abschnitte.filter((a) => a.geruest !== false).reduce((sum, a) => sum + a.laengeM, 0) : einfachSeitenDivs.reduce((sum, d) => sum + d.fields * d.fieldLengthM, 0)) - lueckeLaengeM,
     totalHeightM: building.heightM,
-    totalAreaM2: vorbauKennzahlen ? vorbauKennzahlen.flaeche - lueckeFlaecheM2 : (abschnitte ? stufenFlaecheM2(abschnitte, activeSides, building.widthM || 0) + helmFlaecheM2 + innenFlaecheM2 - verdecktFlaecheM2 : activeSides.reduce((sum, sd) => sum + seitenWandFlaecheM2(sd, seitenLaengeM(sd)), 0)) - lueckeFlaecheM2,
+    totalAreaM2: vorbauKennzahlen ? vorbauKennzahlen.flaeche - lueckeFlaecheM2 : (abschnitte ? stufenFlaecheM2(abschnitte, activeSides, building.widthM || 0) + helmFlaecheM2 + innenFlaecheM2 - verdecktFlaecheM2 : activeSides.reduce((sum, sd) => sum + seitenWandFlaecheM2(sd, seitenLaengeM(sd)) - gSeite(sd as SeitenId) * seitenLaengeM(sd), 0)) - lueckeFlaecheM2,
     fieldCount: vorbauKennzahlen ? vorbauKennzahlen.felder : (abschnittDivs ? abschnittDivs.reduce((sum, d, i) => sum + (abschnitte![i].geruest === false ? 0 : d.fields), 0) + innenFelder : einfachSeitenDivs.reduce((sum, d) => sum + d.fields, 0)) - lueckeFelder,
-    levelCount: dachRegel ? maxLagenDach : levelCalc.levels,
+    levelCount: dachRegel ? maxLagenDach : (Object.keys(hangSeiteM).length ? Math.max(...activeSides.map((sd) => levelCalcSeite(sd as SeitenId).levels)) : levelCalc.levels),
     warnings
   }
 
@@ -1877,7 +1902,7 @@ export function generateCADModel(
   if (abschnitte) preliminaryModel.seitenAufbau = { vollSeiten: vollSeitenAnzahl, teilSeiten: teilSeitenListe }
   preliminaryModel.gebauteFlaecheM2 = abschnitte
     ? preliminaryModel.totalAreaM2 + stufenFlaecheM2(abschnitte, activeSides, building.widthM || 0, rasterM) - stufenFlaecheM2(abschnitte, activeSides, building.widthM || 0)
-    : dachRegel
+    : dachRegel || Object.keys(hangSeiteM).length > 0
       ? fields.reduce((sum, f) => sum + f.lengthM * rasterM, 0)
       : preliminaryModel.totalAreaM2 + activeSides.reduce((sum, sd) => sum + seitenLaengeM(sd), 0) * Math.max(0, obersteLageM - building.heightM)
   const components3D = generateScaffoldComponents(preliminaryModel)
@@ -2217,7 +2242,7 @@ export function addManualPlacement(
   const component = placementToComponent(newPlacement, model)
   // Treppe in ein Feld gesetzt: richtiger Zickzack-Lauf statt Einzelteil
   const feld = placement.type === 'stair' && placement.fieldId ? model.fields.find((f) => f.id === placement.fieldId) : undefined
-  const feldLage = feld ? model.levels.find((l) => l.index === feld.levelIndex) : undefined
+  const feldLage = feld ? (model.levels.find((l) => l.index === feld.levelIndex && l.id === `level-${feld.side}-${feld.levelIndex}`) ?? model.levels.find((l) => l.index === feld.levelIndex)) : undefined
   if (feld && feldLage) {
     model.components3D.push(...treppenlaufInFeld(model, feld, feldLage, newPlacement.id))
     // Treppenöffnung: der Belag des Feldes direkt darüber (gleiche Seite und Lage,

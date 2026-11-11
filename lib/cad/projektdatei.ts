@@ -151,6 +151,12 @@ export function liesProjektdatei(text: string): LeseErgebnis {
       for (const sd of ['front', 'back', 'left', 'right'] as const) { const v = zahl(m[sd], 0, 5); if (v != null) sm[sd] = v }
       if (Object.keys(sm).length > 0) opt.wandabstandSeiteM = sm
     }
+    if (o.gelaendeSeiteM && typeof o.gelaendeSeiteM === 'object') {
+      const m = o.gelaendeSeiteM as Record<string, unknown>
+      const gm: NonNullable<typeof opt.gelaendeSeiteM> = {}
+      for (const sd of ['front', 'back', 'left', 'right'] as const) { const v = zahl(m[sd], -15, 15); if (v != null && v !== 0) gm[sd] = v }
+      if (Object.keys(gm).length > 0) opt.gelaendeSeiteM = gm
+    }
     const fl = zahl(o.feldlaengeM, 0.1, 10); if (fl != null) opt.feldlaengeM = fl
     if (typeof o.treppe === 'boolean') opt.treppe = o.treppe
     if (typeof o.tuerenFreihalten === 'boolean') opt.tuerenFreihalten = o.tuerenFreihalten
