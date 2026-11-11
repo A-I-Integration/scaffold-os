@@ -511,6 +511,11 @@ SPEZIALFALL GERÜSTPLAN / FASSADENZEICHNUNG (Seitenansicht statt Grundriss):
 // Plan-PDF als Bilder rendern (poppler im Container). Uebersicht je Seite (max. 4)
 // plus Kacheln der groessten Seite, damit Zahlen auf A0-Plaenen lesbar bleiben.
 // Faellt still auf [] zurueck, wenn poppler fehlt - dann bleibt es beim Text.
+function seitenWahl(gesamt) {
+  if (gesamt <= 8) return Array.from({ length: gesamt }, (_, i) => i + 1);
+  return [1, 2, 3, 4, gesamt - 3, gesamt - 2, gesamt - 1, gesamt];
+}
+
 async function rendereAlsBilder(buffer) {
   const fs = require('fs');
   const os = require('os');
@@ -522,11 +527,12 @@ async function rendereAlsBilder(buffer) {
   try {
     const pdf = path.join(dir, 'plan.pdf');
     fs.writeFileSync(pdf, buffer);
-    // Bis 6 Seiten: alle. Bei mehr Seiten die ersten 4 und die letzten 2 (Skizzen und Maßangaben stehen oft hinten – bei einem
-    // Plan mit Fotos auf den ersten Seiten lag die einzige Maßskizze auf Seite 6 und wurde früher nie angesehen).
+    // Bis 8 Seiten (das Bildlimit der KI): alle – Schnitte mit Koten und Maßketten stehen oft mitten im Satz (bei einem Musterplan-Satz
+    // mit 8 Seiten lagen die Schnitte auf Seite 5 und 6 und wären mit "erste 4 + letzte 2" nie angesehen worden). Bei mehr Seiten die
+    // ersten 4 und die letzten 4.
     const info0 = await run('pdfinfo', [pdf]);
     const gesamt = Number((info0.match(/Pages:\s+(\d+)/) || [])[1]) || 1;
-    const gewaehlt = gesamt <= 6 ? Array.from({ length: gesamt }, (_, i) => i + 1) : [1, 2, 3, 4, gesamt - 1, gesamt];
+    const gewaehlt = seitenWahl(gesamt);
     const info = await run('pdfinfo', ['-f', '1', '-l', String(Math.min(gesamt, 200)), '-box', pdf]);
     const alleSeiten = [...info.matchAll(/Page\s+(\d+)\s+size:\s+([\d.]+)\s+x\s+([\d.]+)\s+pts/g)].map((m) => ({ nr: Number(m[1]), w: Number(m[2]), h: Number(m[3]) }));
     const seiten = alleSeiten.filter((x) => gewaehlt.includes(x.nr));
