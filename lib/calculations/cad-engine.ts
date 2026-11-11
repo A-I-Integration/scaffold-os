@@ -642,9 +642,9 @@ export function generateScaffoldComponents(model: CADModel): ScaffoldComponent3D
   if (stairSpan) {
     for (let j = 0; j < stairSpan.lagen; j++) {
       const feldJ = fields.find((f) => istTreppenFeld(f) && f.levelIndex === j && gleicherPlatz(f, stairSpan!.a, 0.01))
-      if (feldJ) durchgang.set(feldJ.id, { links: j < stairSpan.lagen - 1, rechts: true })
+      if (feldJ) durchgang.set(feldJ.id, { links: j % 2 === 1, rechts: j % 2 === 0 }) // Zickzack: gerade Läufe enden rechts, ungerade links
     }
-    warnEinmal('TREPPE_AUSSEN', 'info', 'Die Treppe steht als Außentreppe vor dem Gerüst (ein Feld lang, alle Läufe in dieselbe Richtung; auf jeder Lage Podest und Durchgang an beiden Enden – von einem Lauf geht man auf dem Gerüstbelag zum Anfang des nächsten). Anschluss an das Gerüst und Standsicherheit der Treppe sind in der Statik zu prüfen.')
+    warnEinmal('TREPPE_AUSSEN', 'info', 'Die Treppe steht als Außentreppe vor dem Gerüst (ein Feld lang, Läufe im Zickzack; auf jeder Lage ein Podest mit Durchgang zum Gerüstbelag am jeweiligen Ende). Anschluss an das Gerüst und Standsicherheit der Treppe sind in der Statik zu prüfen.')
   }
 
   // Dachrand-Schutz nur bei Flachdach und einheitlicher Gebäudehöhe (keine Stufen)
@@ -943,7 +943,7 @@ export function generateScaffoldComponents(model: CADModel): ScaffoldComponent3D
     const rises = Array.from({ length: lagen }, (_, j) => lv(j).topY - (j === 0 ? y0 : lv(j - 1).topY))
     const gleicheHoehe = rises.every((r) => Math.abs(r - rises[0]) < 0.005)
     const erster = components.length
-    components.push({ id: 'stair-frame-0', type: 'stair', articleNumber: 'SP-001', name: 'Außentreppe', position: [cx, y0 + hGes / 2, zS], rotation: [0, 0, 0], scale: [L, hGes, W], color: colorStair, levelId: lv(0).id, flights: lagen, flightStartDir: 1, podestM: TREPPEN_PODEST_M, gleichlauf: true, ...(gleicheHoehe ? {} : { lagenHoehenM: rises }) })
+    components.push({ id: 'stair-frame-0', type: 'stair', articleNumber: 'SP-001', name: 'Außentreppe', position: [cx, y0 + hGes / 2, zS], rotation: [0, 0, 0], scale: [L, hGes, W], color: colorStair, levelId: lv(0).id, flights: lagen, flightStartDir: 1, podestM: TREPPEN_PODEST_M, gleichlauf: false, ...(gleicheHoehe ? {} : { lagenHoehenM: rises }) })
     const run = L - 2 * TREPPEN_PODEST_M
     let stepNo = 0
     const podest = (id: string, xp: number, yTop: number, xEnde: number, ende: 1 | -1, levelId: string) => {
@@ -951,22 +951,23 @@ export function generateScaffoldComponents(model: CADModel): ScaffoldComponent3D
       components.push({ id: `stair-podest-${id}-gel-aussen`, type: 'railing', articleNumber: 'SG-001', name: 'Podestgeländer', position: [xp, yTop + 0.5, zS + W / 2 - 0.02], rotation: [0, 0, 0], scale: [TREPPEN_PODEST_M, 1.0, 0.04], color: colorRailing, levelId })
       components.push({ id: `stair-podest-${id}-gel-ende`, type: 'railing', articleNumber: 'SG-001', name: 'Podestgeländer', position: [xEnde - ende * 0.02, yTop + 0.5, zS], rotation: [0, Math.PI / 2, 0], scale: [W, 1.0, 0.04], color: colorRailing, levelId })
     }
-    // Alle Läufe steigen von links nach rechts, jeder eine Lage hoch (wie bei der Außentreppe in der Praxis):
-    // Lauf f beginnt links auf Höhe des Belags der Lage f-1 (Lauf 0: am Boden) und endet rechts auf dem Podest der Lage f.
-    // Vom Podest rechts geht man über den Gerüstbelag zurück nach links zum Anfang des nächsten Laufs.
+    // Zickzack-Läufe (Treppenturm): jeder Lauf steigt eine Lage hoch. Lauf 0 geht von links nach rechts, Lauf 1 zurück
+    // von rechts nach links usw. Das Podest am Ende von Lauf f ist zugleich der Anfang von Lauf f+1 und schließt an den Gerüstbelag der Lage f an.
     for (let fl = 0; fl < lagen; fl++) {
       const x0 = xL + TREPPEN_PODEST_M
       const yBasis = fl === 0 ? y0 : lv(fl - 1).topY
       const perFlight = Math.max(1, Math.round(rises[fl] / 0.25))
       const tread = run / perFlight
       const rs = rises[fl] / perFlight
+      const nachRechts = fl % 2 === 0
       for (let k = 0; k < perFlight; k++) {
         const oberkante = yBasis + (k + 1) * rs + 0.01
-        components.push({ id: `stair-step-0-${stepNo++}`, type: 'deck', articleNumber: 'ST-001', name: 'Treppenstufe', position: [x0 + (k + 0.5) * tread, oberkante - 0.02, zS], rotation: [0, 0, 0], scale: [tread * 0.92, 0.04, W - 0.08], color: '#a0a0a0', levelId: lv(fl).id })
+        const xs = nachRechts ? x0 + (k + 0.5) * tread : xR - TREPPEN_PODEST_M - (k + 0.5) * tread
+        components.push({ id: `stair-step-0-${stepNo++}`, type: 'deck', articleNumber: 'ST-001', name: 'Treppenstufe', position: [xs, oberkante - 0.02, zS], rotation: [0, 0, 0], scale: [tread * 0.92, 0.04, W - 0.08], color: '#a0a0a0', levelId: lv(fl).id })
       }
       const yTop = lv(fl).topY
-      podest(`r${fl}`, xR - TREPPEN_PODEST_M / 2, yTop, xR, 1, lv(fl).id)                       // Ende von Lauf fl
-      if (fl < lagen - 1) podest(`l${fl}`, xL + TREPPEN_PODEST_M / 2, yTop, xL, -1, lv(fl).id)  // Anfang von Lauf fl+1
+      if (nachRechts) podest(`r${fl}`, xR - TREPPEN_PODEST_M / 2, yTop, xR, 1, lv(fl).id)       // Ende von Lauf fl rechts
+      else podest(`l${fl}`, xL + TREPPEN_PODEST_M / 2, yTop, xL, -1, lv(fl).id)                // Ende von Lauf fl links
     }
     // Pfosten und Fußplatten an den vier Ecken des Turms
     const hPfosten = hGes + 1.0

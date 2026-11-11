@@ -150,43 +150,41 @@ describe('Außentreppe vor dem Gerüst', () => {
     expect(treppe.position[2]).toBeGreaterThan(unten[1].positionZ + unten[1].widthM)
     // jedes Feld behält seinen Belag
     for (const f of m.fields.filter((x) => x.side === 'front')) expect(m.components3D.some((c) => c.id === `deck-${f.id}`)).toBe(true)
-    // Podest rechts auf jeder Lage, links auf jeder Lage außer der obersten
+    // Zickzack: ein Podest je Lage, abwechselnd rechts (gerade Lagen) und links
     const lagen = treppe.flights!
     const podeste = m.components3D.filter((c) => /^stair-podest-[lr]\d+$/.test(c.id))
-    expect(podeste).toHaveLength(2 * lagen - 1)
+    expect(podeste).toHaveLength(lagen)
+    for (let j = 0; j < lagen; j++) expect(podeste.some((p) => p.id === `stair-podest-${j % 2 === 0 ? 'r' : 'l'}${j}`)).toBe(true)
     // Durchgänge im Geländer
     const geland = (feld: typeof unten[number], lage: number) => {
       const f = m.fields.find((x) => x.side === 'front' && x.levelIndex === lage && Math.abs(x.positionX - feld.positionX) < 0.01)!
       return m.components3D.find((c) => c.id === `railing-${f.id}-top`)!
     }
-    // beide Enden des Treppenfelds haben einen Durchgang (Lage 0), die Nachbarfelder nicht
-    expect(geland(unten[1], 0).scale[0]).toBeCloseTo(unten[1].lengthM - 2 * TREPPEN_PODEST_M, 2)
+    // je Lage ein Durchgang am Podest-Ende (Lage 0 rechts, Lage 1 links ...), die Nachbarfelder nicht
+    for (let j = 0; j < lagen; j++) expect(geland(unten[1], j).scale[0]).toBeCloseTo(unten[1].lengthM - TREPPEN_PODEST_M, 2)
     expect(geland(unten[0], 0).scale[0]).toBeCloseTo(unten[0].lengthM, 2)
     expect(geland(unten[2], 0).scale[0]).toBeCloseTo(unten[2].lengthM, 2)
-    // oberste Lage: nur rechts ein Durchgang
-    expect(geland(unten[1], lagen - 1).scale[0]).toBeCloseTo(unten[1].lengthM - TREPPEN_PODEST_M, 2)
   })
-  it('alle Läufe steigen in dieselbe Richtung, jeder eine Lage hoch (kein Zickzack, nichts übereinander in einer Kehre)', () => {
+  it('Läufe im Zickzack: Lauf 0 steigt nach rechts, Lauf 1 nach links, jeder eine Lage hoch', () => {
     const m = generateCADModel(basis, 'layher-allround')
     const treppe = m.components3D.find((c) => c.type === 'stair')!
     const lagen = treppe.flights!
     expect(lagen).toBeGreaterThanOrEqual(2)
-    expect(treppe.gleichlauf).toBe(true)
+    expect(treppe.gleichlauf).toBeFalsy()
     const stufen = m.components3D.filter((c) => c.id.startsWith('stair-step-0-'))
     const proLauf = stufen.length / lagen
     const lauf = (f: number) => stufen.slice(f * proLauf, (f + 1) * proLauf)
     for (let f = 0; f < lagen; f++) {
       const l = lauf(f)
-      // x steigt innerhalb des Laufs, y steigt
       for (let k = 1; k < l.length; k++) {
-        expect(l[k].position[0]).toBeGreaterThan(l[k - 1].position[0])
         expect(l[k].position[1]).toBeGreaterThan(l[k - 1].position[1])
+        if (f % 2 === 0) expect(l[k].position[0]).toBeGreaterThan(l[k - 1].position[0])
+        else expect(l[k].position[0]).toBeLessThan(l[k - 1].position[0])
       }
-      // jeder Lauf beginnt an derselben Stelle (links) und liegt in derselben Flucht
-      expect(l[0].position[0]).toBeCloseTo(lauf(0)[0].position[0], 3)
       expect(l[0].position[2]).toBeCloseTo(lauf(0)[0].position[2], 3)
     }
-    // Lauf f+1 beginnt genau eine Lage über Lauf f
+    // Lauf 1 beginnt am Ende von Lauf 0 (gleiche Seite) eine Lage höher
+    expect(Math.abs(lauf(1)[0].position[0] - lauf(0)[proLauf - 1].position[0])).toBeLessThan(0.5)
     expect(lauf(1)[0].position[1] - lauf(0)[0].position[1]).toBeCloseTo(m.levels[0].heightM, 1)
   })
   it('Treppe ist steil genug: Steigung der Läufe mindestens 40 Grad', () => {
@@ -234,9 +232,9 @@ describe('Außentreppe vor dem Gerüst', () => {
     const stufen = c.filter((x) => x.id.startsWith('stair-step-0-'))
     expect(stufen.length).toBeGreaterThan(0)
     const tops = m.levels.map((l) => l.topY)
-    // Jede Lage hat ein Podest rechts auf Belaghöhe; die höchste Stufe jedes Laufs liegt knapp darunter
+    // Jede Lage hat ein Podest auf Belaghöhe; die höchste Stufe jedes Laufs liegt knapp darunter
     for (const top of tops) {
-      const podest = c.find((x) => x.id.startsWith('stair-podest-r') && Math.abs(x.position[1] + 0.01 - top) < 0.005)
+      const podest = c.find((x) => x.id.startsWith('stair-podest-') && !x.id.includes('-gel') && Math.abs(x.position[1] + 0.01 - top) < 0.005)
       expect(podest).toBeDefined()
       const naechste = stufen.map((x) => x.position[1] + 0.02 - 0.01).filter((y) => y <= top + 0.005)
       expect(Math.max(...naechste)).toBeCloseTo(top, 1)
