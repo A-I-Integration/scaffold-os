@@ -25,4 +25,9 @@ describe('Gerüst um Vorbau', () => {
     expect(mit.fields.some((f) => f.id.includes('bein'))).toBe(true)
     expect(mit.warnings.some((w) => w.code === 'VORBAU_GERUEST')).toBe(true)
   })
+  it('Kederplane: Hinweis auf Windlast und Statik', () => {
+    const m = generateCADModel(basis({ geruestOptionen: { kederplane: { vonM: 0, bisM: 8 } } }), sys)
+    expect(m.warnings.some((w) => w.code === 'PLANE_WIND')).toBe(true)
+    expect(generateCADModel(basis(), sys).warnings.some((w) => w.code === 'PLANE_WIND')).toBe(false)
+  })
 })
