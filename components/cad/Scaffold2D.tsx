@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useMemo } from 'react'
-import { CADModel, generateGrundriss, generateAnsicht } from '@/lib/calculations/cad-engine'
+import { CADModel, generateGrundriss, generateAnsicht, generateSchnitt } from '@/lib/calculations/cad-engine'
 import Zeichenschicht from './Zeichenschicht'
 import type { Figur, FigurArt } from '@/lib/cad/zeichnung'
 
@@ -38,7 +38,7 @@ export default function Scaffold2D({ model, zeichnung }: Props) {
       case 'ansicht-hinten': return generateAnsicht(model, 'back')
       case 'ansicht-links': return generateAnsicht(model, 'left')
       case 'ansicht-seite': return generateAnsicht(model, 'right')
-      case 'schnitt-aa': return generateAnsicht(model, 'front')
+      case 'schnitt-aa': return generateSchnitt(model)
       case 'detail-fusspunkt': return generateGrundriss(model)
       case 'detail-anker': return generateAnsicht(model, 'front')
       default: return generateGrundriss(model)
