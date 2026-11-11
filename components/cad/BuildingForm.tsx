@@ -21,7 +21,7 @@ import { erkenneGrundriss, FORM_NAME } from '@/lib/cad/grundriss-erkennung'
 import { portalAlsTuer } from '@/lib/cad/portal-erkennung'
 import { analysiereDreiecke, schaetzeEinheit, spannweiten, nullpunktUeberTiefstem, abschnitteAusTeilen, abschnitteAusTeileListe, vorgabeAchseEinheit, type GebaeudeTeil } from '@/lib/cad/modell-analyse'
 import { planLesen } from '@/lib/cad/plan-import'
-import { oeffnungenFuerModell, vorbautenFuerModell } from '@/lib/cad/plan-oeffnungen-modell'
+import { oeffnungenFuerModell, vorbautenFuerModell, seiteVonKante } from '@/lib/cad/plan-oeffnungen-modell'
 import { umrissBox } from '@/lib/calculations/cad-umriss'
 import { leseDxfUmriss, mitHoehen, DXF_FORM_NAME, type DxfUmrissErgebnis } from '@/lib/cad/dxf-umriss'
 import type { IfcZusatz } from '@/lib/cad/ifc-einleser'
@@ -390,6 +390,15 @@ export default function BuildingForm({ building, systemId, onChange, onSystemCha
                 if (vb.length) {
                   patch.vorbauten = vb
                   oeffnungenHinweis += ` ${vb.length === 1 ? 'Ein Vorbau' : `${vb.length} Vorbauten`} (${vb.map((v) => `${String(v.breiteM).replace('.', ',')} × ${String(v.tiefeM).replace('.', ',')} m, ${String(v.hoeheM).replace('.', ',')} m hoch`).join('; ')}) nur in der Ansicht eingezeichnet, das Gerüst führt nicht darum herum.`
+                }
+              }
+              // Hang: Geländekoten je Kante auf die Modell-Seiten übertragen (tiefster Wert je Seite); nur bei deutlichem Gefälle
+              if (vorne && pl.gelaendeJeKante?.length && pl.gelaende && pl.gelaende.unterschiedM >= 1) {
+                const gm: Partial<Record<'front' | 'back' | 'left' | 'right', number>> = {}
+                for (const k of pl.gelaendeJeKante) { const sd = seiteVonKante(k.kante, vorne); if (Math.abs(k.minM) >= 0.01) gm[sd] = k.minM }
+                if (Object.keys(gm).length) {
+                  patch.geruestOptionen = { ...(building.geruestOptionen ?? {}), gelaendeSeiteM: gm }
+                  oeffnungenHinweis += ` Hang: Gelände je Seite aus den Koten im Plan übernommen (${(Object.entries(gm) as [string, number][]).map(([sd, v]) => `${({ front: 'vorne', back: 'hinten', left: 'links', right: 'rechts' } as Record<string, string>)[sd]} ${String(v).replace('.', ',')} m`).join(', ')}; jeweils der tiefste Wert der Seite) – bitte unter Gerüst-Optionen prüfen.`
                 }
               }
             }
