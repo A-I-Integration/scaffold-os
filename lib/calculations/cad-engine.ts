@@ -2264,8 +2264,8 @@ export function generateAnsicht(model: CADModel, seite: 'front' | 'back' | 'left
   }
   // Traufe und First rechts
   if (hatDach) {
-    elements.push({ id: 'kote-traufe', type: 'text', x: laenge + 1.9, y: y(wandHoehe) - 0.12, text: `Traufe ${formatKote(wandHoehe)}`, fill: '#0f172a' })
-    if (dachSpitze > wandHoehe + 0.05) elements.push({ id: 'kote-first', type: 'text', x: laenge + 1.9, y: y(dachSpitze) - 0.12, text: `First ${formatKote(dachSpitze)}`, fill: '#0f172a' })
+    elements.push({ id: 'kote-traufe', type: 'text', x: laenge + 2.4, y: y(wandHoehe) - 0.12, text: `Traufe ${formatKote(wandHoehe)}`, fill: '#0f172a', anker: 'start' })
+    if (dachSpitze > wandHoehe + 0.05) elements.push({ id: 'kote-first', type: 'text', x: laenge + 2.4, y: y(dachSpitze) - 0.12, text: `First ${formatKote(dachSpitze)}`, fill: '#0f172a', anker: 'start' })
   }
 
   dimensions.push({ id: 'dim-total-height', fromX: -0.5, fromY: y(0), toX: -0.5, toY: y(wandHoehe), value: `${wandHoehe.toFixed(2).replace('.', ',')} m`, label: 'Wandhöhe', offsetX: -2.8 })
@@ -2347,7 +2347,7 @@ export function generateSchnitt(model: CADModel): Projection2D {
   // Koten: vorne links, hinten rechts
   const kote = (id: string, x: number, h: number, text: string, anker: number) => {
     elements.push({ id: `kote-${id}`, type: 'line', x: anker, y: y(h), x2: x, y2: y(h), stroke: '#0f172a', strokeWidth: 1 })
-    elements.push({ id: `kote-text-${id}`, type: 'text', x: anker < x ? anker - 0.9 : anker + 0.9, y: y(h) - 0.12, text, fill: '#0f172a' })
+    elements.push({ id: `kote-text-${id}`, type: 'text', x: anker < x ? anker - 0.1 : anker + 0.1, y: y(h) - 0.12, text, fill: '#0f172a', anker: anker < x ? 'end' : 'start' })
   }
   const vorneX = (rF ? rF.mitte - rF.breite / 2 : 0) - 0.2
   const hintenX = (rB ? rB.mitte + rB.breite / 2 : tiefe) + 0.2
@@ -2360,8 +2360,8 @@ export function generateSchnitt(model: CADModel): Projection2D {
   if (rF) bel(rF, 'v', gesehenV, vorneX, vorneX - 1.0)
   if (rB) { if (gB !== 0) kote('gel-h', hintenX, gB, `Gelände ${formatKote(gB)}`, hintenX + 1.0); bel(rB, 'h', gesehenH, hintenX, hintenX + 1.0) }
   if (hatDach) {
-    elements.push({ id: 'kote-traufe', type: 'text', x: tiefe + 5.8, y: y(wandHoehe) - 0.12, text: `Traufe ${formatKote(wandHoehe)}`, fill: '#0f172a' })
-    if (dachSpitze > wandHoehe + 0.05) elements.push({ id: 'kote-first', type: 'text', x: tiefe + 5.8, y: y(dachSpitze) - 0.12, text: `First ${formatKote(dachSpitze)}`, fill: '#0f172a' })
+    elements.push({ id: 'kote-traufe', type: 'text', x: tiefe + 5.0, y: y(wandHoehe) - 0.12, text: `Traufe ${formatKote(wandHoehe)}`, fill: '#0f172a', anker: 'start' })
+    if (dachSpitze > wandHoehe + 0.05) elements.push({ id: 'kote-first', type: 'text', x: tiefe + 5.0, y: y(dachSpitze) - 0.12, text: `First ${formatKote(dachSpitze)}`, fill: '#0f172a', anker: 'start' })
   }
   dimensions.push({ id: 'dim-tiefe', fromX: 0, fromY: y(unten), toX: tiefe, toY: y(unten), value: `${tiefe.toFixed(2).replace('.', ',')} m`, label: 'Gebäudetiefe', offsetY: 1.2 })
 
