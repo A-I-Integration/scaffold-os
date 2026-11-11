@@ -132,7 +132,15 @@ export default function GrundrissUpload({ sessionId, projectId }: Props) {
       try {
         const pl: PlanImport | null = JSON.parse(localStorage.getItem('scaffold_plan_import') || 'null');
         const haupt = pl?.geschosse.find((g) => g.ebene === pl.hauptEbene);
-        if (haupt && pl) strukt = { ...(strukt || {}), laenge: haupt.laengeM, breite: haupt.breiteM, ...(pl.dachform ? { dachform: pl.dachform } : {}), ...(pl.firstKoteM ? { hoehe: pl.firstKoteM } : {}), ...(pl.traufKoteM ? { traufhoehe: pl.traufKoteM } : {}) };
+        if (haupt && pl) {
+          strukt = { ...(strukt || {}), laenge: haupt.laengeM, breite: haupt.breiteM, ...(pl.dachform ? { dachform: pl.dachform } : {}), ...(pl.firstKoteM ? { hoehe: pl.firstKoteM } : {}), ...(pl.traufKoteM ? { traufhoehe: pl.traufKoteM } : {}) };
+          // Der Freitext der KI behauptet bei Vektor-Plänen gern „keine Außenmaße ableitbar" – das widerspräche den Planwerten daneben.
+          json.analysis = [
+            `Länge, Breite, Höhen und Dachform stammen aus den Zeichenlinien des Plans (Maßstab 1:${pl.massstab}), nicht aus einer KI-Schätzung.`,
+            `Erkannte Geschosse: ${pl.geschosse.map((g) => g.titel).join(', ')}.`,
+            'Garagen, Durchfahrten und Hindernisse sind daraus nicht erkennbar – bitte am Plan prüfen.',
+          ].join('\n');
+        }
       } catch { /* ignore */ }
       json.structured = strukt;
       setResult(json.analysis);
