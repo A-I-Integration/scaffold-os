@@ -2144,6 +2144,8 @@ export interface SVGElement2D {
   stroke?: string
   fill?: string
   strokeWidth?: number
+  /** Nur Text: Ausrichtung am Punkt x (Standard mittig) */
+  anker?: 'start' | 'middle' | 'end'
 }
 
 export interface Dimension2D {
@@ -2269,8 +2271,27 @@ export function generateAnsicht(model: CADModel, seite: 'front' | 'back' | 'left
   dimensions.push({ id: 'dim-total-height', fromX: -0.5, fromY: y(0), toX: -0.5, toY: y(wandHoehe), value: `${wandHoehe.toFixed(2).replace('.', ',')} m`, label: 'Wandhöhe', offsetX: -2.8 })
   dimensions.push({ id: 'dim-scaffold-height', fromX: laenge + 0.5, fromY: y(gelaende), toX: laenge + 0.5, toY: y(obenGeruest), value: `${(obenGeruest - gelaende).toFixed(2).replace('.', ',')} m`, label: 'Gerüsthöhe ab Gelände', offsetX: 0.8 })
 
-  const minX = -margin - 1.6, maxX = laenge + margin + 3.2
-  return { type: 'ansicht', viewBox: { minX, minY: y(oben) - margin, width: maxX - minX, height: oben - unten + margin * 2 }, elements, dimensions }
+  // Teile dieser Ansicht: Zusammenstellung der Bauteile der Seite (Artikelnummer, Bezeichnung, Anzahl), links ausgerichtet rechts neben der Zeichnung
+  const idsSeite = new Set(seitenFelder.map((f) => f.id))
+  const gruppen = new Map<string, { art: string; name: string; typ: string; n: number }>()
+  for (const c of model.components3D ?? []) {
+    if (!c.fieldId || !idsSeite.has(c.fieldId) || c.extern) continue
+    const key = `${c.articleNumber}|${c.name}`
+    const g = gruppen.get(key)
+    if (g) g.n++
+    else gruppen.set(key, { art: c.articleNumber, name: c.name, typ: c.type, n: 1 })
+  }
+  const reihenfolge = ['frame', 'deck', 'railing', 'diagonal', 'stair', 'footplate', 'anchor']
+  const liste = [...gruppen.values()].sort((a, b) => (reihenfolge.indexOf(a.typ) + 100) % 100 - (reihenfolge.indexOf(b.typ) + 100) % 100 || a.name.localeCompare(b.name, 'de'))
+  const legendeX = laenge + 7.5, zeile = 0.75
+  const legendeHoehe = (liste.length + 2) * zeile
+  if (liste.length) {
+    const nameSeite = { front: 'vorne', back: 'hinten', left: 'links', right: 'rechts' }[seite]
+    elements.push({ id: 'teile-titel', type: 'text', x: legendeX, y: y(oben) + zeile, text: `Teile dieser Ansicht (${nameSeite})`, fill: '#0f172a', anker: 'start' })
+    liste.forEach((g, i) => elements.push({ id: `teile-${i}`, type: 'text', x: legendeX, y: y(oben) + zeile * (i + 2), text: `${i + 1}  ${g.name.replace(/(\d)\.(\d)/g, '$1,$2')} · ${g.art} · ${g.n}×`, fill: '#334155', anker: 'start' }))
+  }
+  const minX = -margin - 1.6, maxX = (liste.length ? legendeX + 17 : laenge + margin + 3.2)
+  return { type: 'ansicht', viewBox: { minX, minY: y(oben) - margin, width: maxX - minX, height: Math.max(oben - unten, legendeHoehe) + margin * 2 }, elements, dimensions }
 }
 
 /**
