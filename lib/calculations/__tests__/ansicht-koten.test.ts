@@ -47,3 +47,18 @@ describe('Grundriss: Felder um das Gebäude', () => {
     expect(felder.some((e) => e.stroke === '#ea580c')).toBe(true)
   })
 })
+
+import { generateSchnitt } from '../cad-engine'
+describe('Schnitt A-A', () => {
+  it('zeigt Vorder- und Rückseite mit eigenem Gelände und Koten', () => {
+    const m = generateCADModel(b({ geruestOptionen: { gelaendeSeiteM: { front: -1.4, back: 1 } } }), 'layher-allround')
+    const p = generateSchnitt(m)
+    const t = p.elements.filter((e) => e.type === 'text').map((e) => e.text)
+    expect(t).toContain('Gelände −1,40'); expect(t).toContain('Gelände +1,00'); expect(t).toContain('±0,00'); expect(t).toContain('First +9,00')
+    const vorne = p.elements.filter((e) => e.id.startsWith('field-schnitt-front')), hinten = p.elements.filter((e) => e.id.startsWith('field-schnitt-back'))
+    expect(vorne.length).toBeGreaterThan(hinten.length) // Talseite hat mehr Lagen
+    expect(Math.max(...vorne.map((e) => e.y + (e.height ?? 0)))).toBeCloseTo(1.4, 2)
+    expect(Math.max(...hinten.map((e) => e.y + (e.height ?? 0)))).toBeCloseTo(-1, 2)
+    expect(Math.max(...vorne.map((e) => e.x))).toBeLessThan(Math.min(...hinten.map((e) => e.x))) // vorne links, hinten rechts
+  })
+})

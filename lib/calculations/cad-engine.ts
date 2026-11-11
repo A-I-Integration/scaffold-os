@@ -2273,6 +2273,82 @@ export function generateAnsicht(model: CADModel, seite: 'front' | 'back' | 'left
   return { type: 'ansicht', viewBox: { minX, minY: y(oben) - margin, width: maxX - minX, height: oben - unten + margin * 2 }, elements, dimensions }
 }
 
+/**
+ * Schnitt A-A: senkrecht zur Längsrichtung in der Gebäudemitte, Blick von rechts (Vorderseite links im Bild).
+ * Zeigt Gebäudequerschnitt (schematisch, ohne Wandstärken), das Gerüst an Vorder- und Rückseite mit seinen Lagen
+ * und das Gelände beider Seiten – bei Hang liegen die Fußpunkte verschieden hoch. Höhen als negative y-Werte (oben = oben).
+ */
+export function generateSchnitt(model: CADModel): Projection2D {
+  const { building, fields, levels } = model
+  const tiefe = building.widthM || 6
+  const y = (h: number) => -h
+  const elements: SVGElement2D[] = []
+  const dimensions: Dimension2D[] = []
+  const gF = building.geruestOptionen?.gelaendeSeiteM?.front ?? 0
+  const gB = building.geruestOptionen?.gelaendeSeiteM?.back ?? 0
+  const hatDach = building.roofForm !== 'kein' && building.roofForm !== 'flachdach'
+  const echteTraufe = building.eavesHeightM > 0 && building.eavesHeightM < building.heightM - 0.3
+  const wandHoehe = hatDach && echteTraufe ? building.eavesHeightM : building.heightM
+  const dachSpitze = hatDach ? building.heightM + (echteTraufe ? 0 : 1.5) : wandHoehe
+  const lageDer = (sd: string, idx: number) => levels.find((l) => l.index === idx && l.id === `level-${sd}-${idx}`) ?? levels.find((l) => l.index === idx)
+  const reihe = (sd: 'front' | 'back') => {
+    const fs = fields.filter((f) => f.side === sd)
+    if (!fs.length) return null
+    const idxs = [...new Set(fs.map((f) => f.levelIndex))].sort((a, b) => a - b)
+    const z = fs[0].positionZ
+    const mitte = tiefe - (z + tiefe + 0.5) // Blick von rechts: Vorderseite links
+    return { breite: fs[0].widthM, mitte, lagen: idxs.map((i) => lageDer(sd, i)).filter((l): l is ScaffoldLevel => !!l), felder: fs }
+  }
+  const rF = reihe('front'), rB = reihe('back')
+  const obenGeruest = Math.max(0, ...(rF?.lagen ?? []).map((l) => l.topY), ...(rB?.lagen ?? []).map((l) => l.topY))
+  const unten = Math.min(0, gF, gB)
+  const oben = Math.max(dachSpitze, obenGeruest)
+
+  // Gelände vor und hinter dem Haus, ±0,00 im Haus
+  elements.push({ id: 'building-gelaende-vorne', type: 'line', x: -3.2, y: y(gF), x2: 0, y2: y(gF), stroke: '#15803d', strokeWidth: 2 })
+  elements.push({ id: 'building-gelaende-hinten', type: 'line', x: tiefe, y: y(gB), x2: tiefe + 3.2, y2: y(gB), stroke: '#15803d', strokeWidth: 2 })
+  elements.push({ id: 'building-null', type: 'line', x: 0, y: y(0), x2: tiefe, y2: y(0), stroke: '#64748b', strokeWidth: 1 })
+  // Gebäudequerschnitt (schematisch)
+  const wandUnten = Math.min(0, gF, gB)
+  elements.push({ id: 'building-face', type: 'rect', x: 0, y: y(wandHoehe), width: tiefe, height: wandHoehe - wandUnten, fill: '#f1f5f9', stroke: '#64748b', strokeWidth: 1.5 })
+  if (hatDach) {
+    const firstEntlangLaenge = building.lengthM >= (building.widthM || 0)
+    if (building.roofForm === 'satteldach' && firstEntlangLaenge) elements.push({ id: 'building-roof', type: 'path', x: 0, y: 0, d: `M 0,${y(wandHoehe)} L ${tiefe / 2},${y(dachSpitze)} L ${tiefe},${y(wandHoehe)} Z`, fill: '#94a3b8', stroke: '#475569', strokeWidth: 1.5 })
+    else elements.push({ id: 'building-roof', type: 'path', x: 0, y: 0, d: `M 0,${y(wandHoehe)} L ${tiefe},${y(wandHoehe)} L ${tiefe},${y(dachSpitze)} L 0,${y(dachSpitze)} Z`, fill: '#94a3b8', stroke: '#475569', strokeWidth: 1.5 })
+  }
+  // Gerüstreihen
+  const zeichne = (r: NonNullable<ReturnType<typeof reihe>>, sd: 'front' | 'back') => {
+    r.lagen.forEach((l) => elements.push({ id: `field-schnitt-${sd}-${l.index}`, type: 'rect', x: r.mitte - r.breite / 2, y: y(l.topY), width: r.breite, height: l.heightM, fill: 'none', stroke: '#3b82f6', strokeWidth: 1.5 }))
+  }
+  if (rF) zeichne(rF, 'front')
+  if (rB) zeichne(rB, 'back')
+
+  // Koten: vorne links, hinten rechts
+  const kote = (id: string, x: number, h: number, text: string, anker: number) => {
+    elements.push({ id: `kote-${id}`, type: 'line', x: anker, y: y(h), x2: x, y2: y(h), stroke: '#0f172a', strokeWidth: 1 })
+    elements.push({ id: `kote-text-${id}`, type: 'text', x: anker < x ? anker - 0.9 : anker + 0.9, y: y(h) - 0.12, text, fill: '#0f172a' })
+  }
+  const vorneX = (rF ? rF.mitte - rF.breite / 2 : 0) - 0.2
+  const hintenX = (rB ? rB.mitte + rB.breite / 2 : tiefe) + 0.2
+  const gesehenV = new Set<number>(), gesehenH = new Set<number>()
+  const bel = (r: NonNullable<ReturnType<typeof reihe>>, nameId: string, gesehen: Set<number>, x: number, anker: number) => {
+    for (const l of r.lagen) { const k = Math.round(l.topY * 100) / 100; if (!gesehen.has(k)) { gesehen.add(k); kote(`${nameId}-${k}`, x, k, formatKote(k), anker) } }
+  }
+  kote('null-v', vorneX, 0, formatKote(0), vorneX - 1.0)
+  if (gF !== 0) kote('gel-v', vorneX, gF, `Gelände ${formatKote(gF)}`, vorneX - 1.0)
+  if (rF) bel(rF, 'v', gesehenV, vorneX, vorneX - 1.0)
+  if (rB) { if (gB !== 0) kote('gel-h', hintenX, gB, `Gelände ${formatKote(gB)}`, hintenX + 1.0); bel(rB, 'h', gesehenH, hintenX, hintenX + 1.0) }
+  if (hatDach) {
+    elements.push({ id: 'kote-traufe', type: 'text', x: tiefe + 5.8, y: y(wandHoehe) - 0.12, text: `Traufe ${formatKote(wandHoehe)}`, fill: '#0f172a' })
+    if (dachSpitze > wandHoehe + 0.05) elements.push({ id: 'kote-first', type: 'text', x: tiefe + 5.8, y: y(dachSpitze) - 0.12, text: `First ${formatKote(dachSpitze)}`, fill: '#0f172a' })
+  }
+  dimensions.push({ id: 'dim-tiefe', fromX: 0, fromY: y(unten), toX: tiefe, toY: y(unten), value: `${tiefe.toFixed(2).replace('.', ',')} m`, label: 'Gebäudetiefe', offsetY: 1.2 })
+
+  const minX = -3.2 - 3.2, maxX = tiefe + 3.2 + 6.8
+  const margin = 2.5
+  return { type: 'ansicht', viewBox: { minX, minY: y(oben) - margin, width: maxX - minX, height: oben - unten + margin * 2 + 1.2 }, elements, dimensions }
+}
+
 // ============================================================
 // PHASE 2 ERWEITERUNGEN
 // ============================================================
