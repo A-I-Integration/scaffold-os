@@ -26,3 +26,29 @@ export function gelaendeAusPlan(g: GefundenerGrundriss, texte: PlanText[], meter
   const minM = Math.min(...werte), maxM = Math.max(...werte)
   return { minM, maxM, anzahl: werte.length, unterschiedM: Math.round((maxM - minM) * 100) / 100 }
 }
+
+export type GelaendeKante = 'unten' | 'oben' | 'links' | 'rechts'
+export interface GelaendeJeKante { kante: GelaendeKante; minM: number; maxM: number; anzahl: number }
+
+/**
+ * Geländekoten je Kante des Hauptkörper-Rechtecks (Seiten-Punkte, y nach unten): Jede Kote im Streifen von 4 m außen
+ * (und 0,5 m innen) um das Rechteck zählt zur nächsten Kante. Kanten ohne Kote fehlen im Ergebnis.
+ * Die Koten sind bezogen auf ±0,00 = Fußboden des Geschosses; ob sie zur Kante gehören, ist eine Lagefrage im Plan, kein Gutachten.
+ */
+export function gelaendeJeKante(r: { x0: number; y0: number; x1: number; y1: number }, texte: PlanText[], meterJePunkt: number): GelaendeJeKante[] {
+  if (!(meterJePunkt > 0)) return []
+  const aussen = 4 / meterJePunkt, innen = 0.5 / meterJePunkt
+  const je = new Map<GelaendeKante, number[]>()
+  for (const t of texte) {
+    const m = t.s.trim().match(/^([+±-])\s?(\d{1,2}),(\d{2})$/)
+    if (!m) continue
+    if (t.x < r.x0 - aussen || t.x > r.x1 + aussen || t.y < r.y0 - aussen || t.y > r.y1 + aussen) continue
+    if (t.x > r.x0 + innen && t.x < r.x1 - innen && t.y > r.y0 + innen && t.y < r.y1 - innen) continue // mitten im Haus: keine Geländekote
+    const d: [GelaendeKante, number][] = [['links', Math.abs(t.x - r.x0)], ['rechts', Math.abs(t.x - r.x1)], ['oben', Math.abs(t.y - r.y0)], ['unten', Math.abs(t.y - r.y1)]]
+    d.sort((a, b) => a[1] - b[1])
+    const v = (parseInt(m[2], 10) * 100 + parseInt(m[3], 10)) / 100
+    const k = d[0][0]
+    je.set(k, [...(je.get(k) ?? []), m[1] === '-' ? -v : v])
+  }
+  return [...je.entries()].map(([kante, w]) => ({ kante, minM: Math.min(...w), maxM: Math.max(...w), anzahl: w.length }))
+}

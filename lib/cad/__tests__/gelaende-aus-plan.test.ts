@@ -14,3 +14,15 @@ describe('gelaendeAusPlan', () => {
     expect(gelaendeAusPlan(g, [t('-0,43', 1050, 100)], 0.01)).toBeNull()
   })
 })
+
+import { gelaendeJeKante } from '../gelaende-aus-plan'
+describe('gelaendeJeKante', () => {
+  const r = { x0: 0, y0: 0, x1: 1000, y1: 800 }
+  it('ordnet Koten der nächsten Kante zu, ignoriert Koten im Haus und weit draußen', () => {
+    const je = gelaendeJeKante(r, [t('-0,43', 500, 850), t('-0,10', 300, 820), t('+1,37', 500, -100), t('+0,50', 500, 400), t('+9,99', 9000, 9000)], 0.01)
+    const unten = je.find((k) => k.kante === 'unten'), oben = je.find((k) => k.kante === 'oben')
+    expect(unten).toMatchObject({ minM: -0.43, maxM: -0.1, anzahl: 2 })
+    expect(oben).toMatchObject({ minM: 1.37, anzahl: 1 })
+    expect(je).toHaveLength(2)
+  })
+})
