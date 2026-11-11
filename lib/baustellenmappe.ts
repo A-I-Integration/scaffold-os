@@ -21,6 +21,7 @@ export const KATEGORIEN = [
   'Gefährdungsbeurteilung',
   'Betriebsanweisung / Unterweisung',
   'Pflichtenübertragung',
+  'Vorbereitung vor dem Aufbau',
   'Sonstiges',
 ] as const
 

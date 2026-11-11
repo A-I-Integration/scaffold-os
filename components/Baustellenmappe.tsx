@@ -9,6 +9,7 @@ import Verankerungsprotokoll from '@/components/Verankerungsprotokoll'
 import Geruestpruefung from '@/components/Geruestpruefung'
 import Pruefschild from '@/components/Pruefschild'
 import Uebergabeprotokoll from '@/components/Uebergabeprotokoll'
+import Aufbauvorbereitung from '@/components/Aufbauvorbereitung'
 import Gefaehrdungsbeurteilung from '@/components/Gefaehrdungsbeurteilung'
 import Unterweisung from '@/components/Unterweisung'
 import { Pflichtenuebertragung, Betriebsanweisung } from '@/components/ArbeitsschutzFormulare'
@@ -172,6 +173,7 @@ export default function Baustellenmappe({ projectId, projektName, adresse }: { p
       <Unterweisung projectId={projectId} onAbgelegt={() => void lade()} />
       <Pflichtenuebertragung projectId={projectId} onAbgelegt={() => void lade()} />
       <Betriebsanweisung projectId={projectId} onAbgelegt={() => void lade()} />
+      <Aufbauvorbereitung projectId={projectId} onAbgelegt={() => void lade()} />
     </div>
   )
 }
