@@ -2179,30 +2179,83 @@ export function generateGrundriss(model: CADModel): Projection2D {
   return { type: 'grundriss', viewBox: { minX: -margin, minY: -margin, width, height: depth }, elements, dimensions }
 }
 
-export function generateAnsicht(model: CADModel): Projection2D {
+/** Höhenkote im Plan: ±0,00 / +2,00 / −0,45 (deutsches Komma, Bezug = Fußboden Erdgeschoss). */
+export function formatKote(h: number): string {
+  const r = Math.round(h * 100) / 100
+  if (Math.abs(r) < 0.005) return '±0,00'
+  return `${r > 0 ? '+' : '−'}${Math.abs(r).toFixed(2).replace('.', ',')}`
+}
+
+/**
+ * Ansicht einer Gebäudeseite von außen. Höhen (m, bezogen auf ±0,00) werden als negative y-Werte gezeichnet, damit oben oben ist
+ * (SVG-y zeigt nach unten). Gezeichnet werden nur die Felder dieser Seite; bei Hang liegt der Fußpunkt auf dem Gelände der Seite.
+ * Höhenkoten stehen links an ±0,00, am Gelände und an jedem Belag, rechts an Traufe und First.
+ */
+export function generateAnsicht(model: CADModel, seite: 'front' | 'back' | 'left' | 'right' = 'front'): Projection2D {
   const { building, fields, levels } = model
-  const margin = 2
-  const width = building.lengthM + margin * 2
-  const height = building.heightM + margin * 2
+  const quer = seite === 'left' || seite === 'right'
+  const laenge = quer ? (building.widthM || 6) : building.lengthM
+  const margin = 2.5
   const elements: SVGElement2D[] = []
   const dimensions: Dimension2D[] = []
+  const y = (h: number) => -h
+  const entlang = (f: ScaffoldField): number => {
+    // Seitenfelder liegen mittig um z = -(Breite/2 + 0,5) (Vorderkante des Gebäudes bei z = -0,5); von vorn gesehen läuft x nach rechts
+    const a = quer ? f.positionZ + (building.widthM || 0) + 0.5 : f.positionX + building.lengthM / 2
+    return seite === 'back' || seite === 'right' ? laenge - a : a // Rückseite und rechte Seite von außen gesehen: Vorderseite links bzw. Spiegelung
+  }
+  const seitenFelder = fields.filter((f) => f.side === seite)
+  const lageDer = (idx: number) => levels.find((l) => l.index === idx && l.id === `level-${seite}-${idx}`) ?? levels.find((l) => l.index === idx)
+  const gelaende = building.geruestOptionen?.gelaendeSeiteM?.[seite] ?? 0
+  const obenGeruest = seitenFelder.reduce((m, f) => Math.max(m, lageDer(f.levelIndex)?.topY ?? 0), 0)
+  const hatDach = building.roofForm !== 'kein' && building.roofForm !== 'flachdach'
+  const traufe = building.eavesHeightM > 0 && building.eavesHeightM < building.heightM - 0.3 ? building.eavesHeightM : building.heightM
+  const wandHoehe = hatDach ? traufe : building.heightM
+  const dachSpitze = hatDach ? building.heightM + (building.eavesHeightM > 0 && building.eavesHeightM < building.heightM - 0.3 ? 0 : 1.5) : wandHoehe
+  const unten = Math.min(0, gelaende, ...seitenFelder.map((f) => lageDer(f.levelIndex)?.bottomY ?? 0))
+  const oben = Math.max(dachSpitze, obenGeruest)
 
-  elements.push({ id: 'building-face', type: 'rect', x: 0, y: 0, width: building.lengthM, height: building.heightM, fill: '#f1f5f9', stroke: '#64748b', strokeWidth: 1 })
-
-  if (building.roofForm !== 'kein') {
-    elements.push({ id: 'roof', type: 'path', x: 0, y: 0, d: `M 0,${building.heightM} L ${building.lengthM / 2},${building.heightM + 1.5} L ${building.lengthM},${building.heightM} Z`, fill: '#94a3b8', stroke: '#475569', strokeWidth: 1 })
+  // Gelände dieser Seite und ±0,00
+  elements.push({ id: 'building-gelaende', type: 'line', x: -1, y: y(gelaende), x2: laenge + 1, y2: y(gelaende), stroke: '#15803d', strokeWidth: 2 })
+  if (gelaende !== 0) elements.push({ id: 'building-null', type: 'line', x: -1, y: y(0), x2: laenge + 1, y2: y(0), stroke: '#64748b', strokeWidth: 1 })
+  // Gebäude: Wand von ±0,00 bis Traufe bzw. Gebäudehöhe, darunter bis zum Gelände (Sockel), darüber Dach
+  const wandUnten = Math.min(0, gelaende)
+  elements.push({ id: 'building-face', type: 'rect', x: 0, y: y(wandHoehe), width: laenge, height: wandHoehe - wandUnten, fill: '#f1f5f9', stroke: '#64748b', strokeWidth: 1 })
+  if (hatDach) {
+    const giebelSeite = building.roofForm === 'satteldach' && (building.lengthM >= (building.widthM || 0) ? quer : !quer)
+    if (building.roofForm === 'satteldach' && giebelSeite) elements.push({ id: 'building-roof', type: 'path', x: 0, y: 0, d: `M 0,${y(wandHoehe)} L ${laenge / 2},${y(dachSpitze)} L ${laenge},${y(wandHoehe)} Z`, fill: '#94a3b8', stroke: '#475569', strokeWidth: 1 })
+    else elements.push({ id: 'building-roof', type: 'path', x: 0, y: 0, d: `M 0,${y(wandHoehe)} L ${laenge},${y(wandHoehe)} L ${laenge},${y(dachSpitze)} L 0,${y(dachSpitze)} Z`, fill: '#94a3b8', stroke: '#475569', strokeWidth: 1 })
   }
 
-  levels.forEach((level) => {
-    level.fields.forEach((field) => {
-      elements.push({ id: `scaffold-${field.id}`, type: 'rect', x: field.positionX - field.lengthM / 2, y: level.bottomY, width: field.lengthM, height: level.heightM, fill: 'none', stroke: '#3b82f6', strokeWidth: 1.5 })
-    })
+  // Gerüstfelder dieser Seite
+  seitenFelder.forEach((f) => {
+    const lage = lageDer(f.levelIndex)
+    if (!lage) return
+    const mitte = entlang(f)
+    elements.push({ id: `field-${f.id}`, type: 'rect', x: mitte - f.lengthM / 2, y: y(lage.topY), width: f.lengthM, height: lage.heightM, fill: 'none', stroke: f.durchgang ? '#ea580c' : '#3b82f6', strokeWidth: 1 })
   })
 
-  dimensions.push({ id: 'dim-total-height', fromX: -0.5, fromY: 0, toX: -0.5, toY: building.heightM, value: `${building.heightM.toFixed(2)} m`, label: 'Gebäudehöhe', offsetX: -0.8 })
-  dimensions.push({ id: 'dim-scaffold-height', fromX: building.lengthM + 0.5, fromY: 0, toX: building.lengthM + 0.5, toY: levels[levels.length - 1]?.topY || building.heightM, value: `${(levels[levels.length - 1]?.topY || building.heightM).toFixed(2)} m`, label: 'Gerüsthöhe', offsetX: 0.8 })
+  // Höhenkoten links: ±0,00, Gelände, jeder Belag (Oberkante der Lage)
+  const koten = new Map<number, string>()
+  koten.set(0, formatKote(0))
+  if (gelaende !== 0) koten.set(gelaende, `Gelände ${formatKote(gelaende)}`)
+  const lagenSeite = [...new Set(seitenFelder.map((f) => f.levelIndex))].sort((a, b) => a - b)
+  for (const idx of lagenSeite) { const l = lageDer(idx); if (l) { const k = Math.round(l.topY * 100) / 100; if (!koten.has(k)) koten.set(k, formatKote(k)) } }
+  for (const [h, t] of koten) {
+    elements.push({ id: `kote-${h}`, type: 'line', x: -1.3, y: y(h), x2: -0.2, y2: y(h), stroke: '#0f172a', strokeWidth: 1 })
+    elements.push({ id: `kote-text-${h}`, type: 'text', x: -2.1, y: y(h) - 0.12, text: t, fill: '#0f172a' })
+  }
+  // Traufe und First rechts
+  if (hatDach) {
+    elements.push({ id: 'kote-traufe', type: 'text', x: laenge + 1.9, y: y(wandHoehe) - 0.12, text: `Traufe ${formatKote(wandHoehe)}`, fill: '#0f172a' })
+    if (dachSpitze > wandHoehe + 0.05) elements.push({ id: 'kote-first', type: 'text', x: laenge + 1.9, y: y(dachSpitze) - 0.12, text: `First ${formatKote(dachSpitze)}`, fill: '#0f172a' })
+  }
 
-  return { type: 'ansicht', viewBox: { minX: -margin, minY: -margin, width, height }, elements, dimensions }
+  dimensions.push({ id: 'dim-total-height', fromX: -0.5, fromY: y(0), toX: -0.5, toY: y(wandHoehe), value: `${wandHoehe.toFixed(2).replace('.', ',')} m`, label: 'Wandhöhe', offsetX: -2.8 })
+  dimensions.push({ id: 'dim-scaffold-height', fromX: laenge + 0.5, fromY: y(gelaende), toX: laenge + 0.5, toY: y(obenGeruest), value: `${(obenGeruest - gelaende).toFixed(2).replace('.', ',')} m`, label: 'Gerüsthöhe ab Gelände', offsetX: 0.8 })
+
+  const minX = -margin - 1.6, maxX = laenge + margin + 3.2
+  return { type: 'ansicht', viewBox: { minX, minY: y(oben) - margin, width: maxX - minX, height: oben - unten + margin * 2 }, elements, dimensions }
 }
 
 // ============================================================
