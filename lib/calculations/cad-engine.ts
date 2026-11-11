@@ -96,6 +96,20 @@ export interface CadTuer {
   anschlag?: 'minus' | 'plus'
 }
 
+/** Ein Fenster mit fester Lage (z. B. aus dem Plan gelesen). */
+export interface CadFenster {
+  id: string
+  side: 'front' | 'back' | 'left' | 'right'
+  /** Mitte des Fensters, gemessen ab Fassadenmitte (m) */
+  offsetAlongM: number
+  /** Unterkante über dem Gelände (m) */
+  bottomY: number
+  widthM: number
+  heightM: number
+  /** Geschoss, 0 = Erdgeschoss */
+  floorIndex: number
+}
+
 export interface AufzugOptionen {
   seite: 'front' | 'back' | 'left' | 'right'
   /** Förderhöhe bis (m über Gelände); leer = oberste Gerüstlage */
@@ -165,6 +179,8 @@ export interface BuildingParams {
   balconies?: CadBalkon[]
   /** Türen einzeln planen (Seite, Lage, Maße). Wenn gesetzt, ersetzen sie die gleichmäßig verteilten Türen aus doorCount (nicht im Umriss-Modus). */
   tueren?: CadTuer[]
+  /** Fenster einzeln mit fester Lage (aus dem Plan). Wenn gesetzt, ersetzen sie die gleichmäßig verteilten Fenster aus windowCount (nicht im Umriss-Modus). */
+  fensterFest?: CadFenster[]
 }
 
 export interface GebaeudeSegment {
@@ -2530,7 +2546,13 @@ export function generateBuildingFeatures(building: BuildingParams): BuildingFeat
   const facadeLength = (side: string) => (side === 'front' || side === 'back') ? building.lengthM : building.widthM
 
   // Fenster: gleichmäßig über alle Seiten und Geschosse verteilt
-  const windowsPerSideFloor = Math.max(0, Math.round((building.windowCount || 0) / (sides.length * floors)))
+  const festeFenster = building.fensterFest && building.fensterFest.length > 0 ? building.fensterFest : null
+  if (festeFenster) {
+    for (const w of festeFenster) {
+      features.push({ id: `win-${w.id}`, type: 'window', side: w.side, offsetAlongM: w.offsetAlongM, bottomY: w.bottomY, widthM: w.widthM, heightM: w.heightM, depthM: 0, floorIndex: w.floorIndex })
+    }
+  }
+  const windowsPerSideFloor = festeFenster ? 0 : Math.max(0, Math.round((building.windowCount || 0) / (sides.length * floors)))
   sides.forEach((side) => {
     const len = facadeLength(side)
     for (let f = 0; f < floors; f++) {

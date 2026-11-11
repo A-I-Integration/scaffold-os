@@ -88,3 +88,22 @@ describe('Projektdatei: Türen, Kederplane, Aufzug', () => {
     expect(r.verworfen.some((v) => v.startsWith('Türen'))).toBe(true)
   })
 })
+
+describe('Projektdatei: Fenster mit fester Lage', () => {
+  const basis = { lengthM: 10, widthM: 8, heightM: 12, eavesHeightM: 12, roofHeightM: 0, roofForm: 'flachdach', floors: 3, windowCount: 2, doorCount: 0, balconyCount: 0, overhangM: 0, setbackM: 0, sides: ['front'] }
+  const datei = (building: Record<string, unknown>) => JSON.stringify({ format: PROJEKTDATEI_FORMAT, version: PROJEKTDATEI_VERSION, name: 'x', building, systemId: 'layher-allround', statikDaten: {}, notizen: [] })
+  it('behält Fenster mit fester Lage', () => {
+    const f = [{ id: 'p0', side: 'back', offsetAlongM: 1.5, bottomY: 3.8, widthM: 1.1, heightM: 1.35, floorIndex: 1 }]
+    const r = liesProjektdatei(datei({ ...basis, fensterFest: f }))
+    expect(r.ok).toBe(true)
+    if (!r.ok) return
+    expect(r.daten.building.fensterFest).toEqual(f)
+  })
+  it('verwirft ungültige Fenster mit Hinweis', () => {
+    const r = liesProjektdatei(datei({ ...basis, fensterFest: [{ id: 'p0', side: 'oben', offsetAlongM: 1, bottomY: 1, widthM: 1, heightM: 1, floorIndex: 0 }] }))
+    expect(r.ok).toBe(true)
+    if (!r.ok) return
+    expect(r.daten.building.fensterFest).toBeUndefined()
+    expect(r.verworfen.some((v) => v.startsWith('Fenster'))).toBe(true)
+  })
+})

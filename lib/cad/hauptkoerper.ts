@@ -8,7 +8,9 @@
 import type { Pt } from './wand-kontur'
 
 export interface Vorbau { laengeM: number; tiefeM: number; flaecheM2: number }
-export interface Hauptkoerper { laengeM: number; breiteM: number; flaecheM2: number; vorbauten: Vorbau[] }
+/** Lage des Hauptkörper-Rechtecks in den Koordinaten der Kontur (Seiten-Punkte) */
+export interface Rechteck { x0: number; y0: number; x1: number; y1: number }
+export interface Hauptkoerper { laengeM: number; breiteM: number; flaecheM2: number; vorbauten: Vorbau[]; rechteck: Rechteck }
 
 const ZELLE_M = 0.05
 const MIN_ANTEIL = 0.85
@@ -129,5 +131,6 @@ export function hauptkoerperAusKontur(kontur: Pt[], meterJePunkt: number): Haupt
     breiteM: Math.round(Math.min(rb, rl) * 100) / 100,
     flaecheM2: Math.round(best.a * ZELLE_M * ZELLE_M * 10) / 10,
     vorbauten,
+    rechteck: { x0: x0 + qa0 * c, y0: y0 + ra0 * c, x1: x0 + (qa1 + 1) * c, y1: y0 + (ra1 + 1) * c },
   }
 }
