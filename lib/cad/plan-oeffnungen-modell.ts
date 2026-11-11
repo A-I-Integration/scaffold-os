@@ -62,6 +62,13 @@ export interface ModellOeffnungen {
 // Plan-Koordinaten: x nach rechts, y nach unten. Außennormale je Kante.
 const NORMALE: Record<PlanKante, [number, number]> = { unten: [0, 1], oben: [0, -1], links: [-1, 0], rechts: [1, 0] }
 
+/** Modell-Seite einer Plan-Kante, wenn `vorne` die Plan-Kante der Vorderseite ist (Blick von außen auf die Vorderseite: rechts = rechts). */
+export function seiteVonKante(kante: PlanKante, vorne: PlanKante): 'front' | 'back' | 'left' | 'right' {
+  const n = NORMALE[vorne], xhat: [number, number] = [n[1], -n[0]], w = NORMALE[kante]
+  const dotN = w[0] * n[0] + w[1] * n[1], dotX = w[0] * xhat[0] + w[1] * xhat[1]
+  return dotN === 1 ? 'front' : dotN === -1 ? 'back' : dotX === 1 ? 'right' : 'left'
+}
+
 /**
  * Plan-Öffnungen in Modell-Öffnungen umsetzen.
  * `langeAchse` = Richtung der längeren Hauptkörper-Seite im Plan ('x' = waagerecht); vorne/hinten sind die langen Kanten.
@@ -81,9 +88,7 @@ export function oeffnungenFuerModell(geschosse: PlanGeschossOeffnungen[], langeA
   const fenster: CadFenster[] = []
   let nr = 0
   for (const o of alle) {
-    const w = NORMALE[o.kante]
-    const dotN = w[0] * n[0] + w[1] * n[1], dotX = w[0] * xhat[0] + w[1] * xhat[1]
-    const side: 'front' | 'back' | 'left' | 'right' = dotN === 1 ? 'front' : dotN === -1 ? 'back' : dotX === 1 ? 'right' : 'left'
+    const side = seiteVonKante(o.kante, vorne)
     // Lage entlang der Wand: Plan-Richtung der Kante auf die Modell-Richtung (x bzw. z) übertragen
     const richtung: [number, number] = o.kante === 'unten' || o.kante === 'oben' ? [1, 0] : [0, 1]
     const entlang = side === 'front' || side === 'back'
