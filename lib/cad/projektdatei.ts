@@ -191,6 +191,7 @@ export function liesProjektdatei(text: string): LeseErgebnis {
       if (o.aufschlag === 'innen' || o.aufschlag === 'aussen') tuer.aufschlag = o.aufschlag
       if (o.fluegel === 1 || o.fluegel === 2) tuer.fluegel = o.fluegel
       if (o.anschlag === 'minus' || o.anschlag === 'plus') tuer.anschlag = o.anschlag
+      if (o.ueberbauen === true) tuer.ueberbauen = true
       return [tuer]
     })
     if (liste.length === g.tueren.length) gebaeude.tueren = liste

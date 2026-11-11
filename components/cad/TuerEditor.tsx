@@ -94,6 +94,12 @@ export default function TuerEditor({ building, onChange }: Props) {
               </>
             )}
           </div>
+          <label className='text-[10px] text-[#86868b] block'>Gerüst vor dieser Tür
+            <select className={eingaben} value={t.ueberbauen ? 'zu' : 'frei'} onChange={(e) => aendere(idx, { ueberbauen: e.target.value === 'zu' ? true : undefined })}>
+              <option value='frei'>Durchgang freihalten (Eingang)</option>
+              <option value='zu'>überbauen (Tür wird nicht benutzt)</option>
+            </select>
+          </label>
           <button type='button' onClick={() => setTueren(tueren.filter((_, i) => i !== idx))} className='text-[11px] text-red-600 hover:underline'>Tür entfernen</button>
         </div>
       ))}
