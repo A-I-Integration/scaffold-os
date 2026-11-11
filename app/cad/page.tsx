@@ -1126,7 +1126,7 @@ export default function CADPage() {
             onAlleEin={handleShowAllLayers} onAlleAus={handleHideAllLayers} visibleTypes={visibleTypes} onToggleType={toggleType}
           />
           <div className='flex flex-wrap gap-2 items-center justify-between px-4 py-2 bg-white/50 border-b border-black/5'>
-            {viewMode === '3d' && modelWithManual && (
+            {viewMode === '3d' && (
               <span className='inline-flex flex-wrap items-center gap-1'>
                 <label className='text-xs border rounded-lg px-2 py-1 bg-white text-[#424245] cursor-pointer' title='Zeigt das echte Gebäude (GLB mit Texturen, OBJ mit MTL und Bildern, PLY-Punktwolke mit Farben oder Scan-Dateien E57/PTX/LAS/XYZ) statt des einfachen Baukörpers – nur zur Ansicht, Maße und Gerüst bleiben unverändert'>
                   🏛️ {aussehen ? 'Anderes Gebäude laden' : 'Echtes Gebäude laden'}
