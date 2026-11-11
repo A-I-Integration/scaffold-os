@@ -11,6 +11,7 @@ import { speichereEntwurf } from '@/lib/aufmass-entwurf';
 import { speichereSchrittAuto } from '@/lib/aufmass-autosave';
 import { teileVorbelegung } from '@/lib/lidar-teile-vorbelegung';
 import { ebenenZuVorschlaegen, ebenenSignatur, flaecheM2, type EbenenVorschlag } from '@/lib/lidar-ebenen';
+import { planHinweiseFuerAufmass, type PlanImport } from '@/lib/cad/plan-import';
 import KIWarnings from '@/components/aufmaß/KIWarnings';
 import { useKIValidation } from '@/hooks/useKIValidation';
 import { PartialScaffoldInput } from '@/types/scaffold';
@@ -38,6 +39,8 @@ function Schritt2Content() {
   const [kiUebernommen, setKiUebernommen] = useState(false);
   const [grundrissUebernommen, setGrundrissUebernommen] = useState(false);
   const [hoeheGeschaetzt, setHoeheGeschaetzt] = useState(false);
+  const [planHinweise, setPlanHinweise] = useState<string[]>([]);
+  const [planGelesen, setPlanGelesen] = useState(false);
   // NEU: Vorschläge für weitere Abschnitte aus LiDAR-Ebenen mit deutlich
   // abweichender Höhe (z.B. Anbau) – wird NICHT automatisch übernommen,
   // nur vorgeschlagen. Einfache Wände desselben Gebäudes (gleiche Höhe)
@@ -445,6 +448,11 @@ function leeresFormS2() {
           if (!vorhandeneHoehe && !g.hoehe && g.hoehe_geschaetzt) setHoeheGeschaetzt(true);
         }
         setGrundrissUebernommen(true);
+        try {
+          const pl: PlanImport | null = JSON.parse(localStorage.getItem('scaffold_plan_import') || 'null');
+          setPlanHinweise(pl ? planHinweiseFuerAufmass(pl) : []);
+          setPlanGelesen(!!pl);
+        } catch { setPlanHinweise([]); }
       } catch {
         // ignore
       }
@@ -700,7 +708,13 @@ function leeresFormS2() {
 
           {grundrissUebernommen && (
             <div className="rounded-xl bg-teal-50 border border-teal-200 p-3 text-sm text-teal-700">
-              Werte wurden aus der KI-Grundriss-Analyse übernommen – bitte prüfen und bei Bedarf anpassen.
+              {planGelesen ? 'Werte wurden aus den Zeichenlinien des Plans übernommen – bitte prüfen und bei Bedarf anpassen.' : 'Werte wurden aus der KI-Grundriss-Analyse übernommen – bitte prüfen und bei Bedarf anpassen.'}
+            </div>
+          )}
+
+          {grundrissUebernommen && planHinweise.length > 0 && (
+            <div className="rounded-xl bg-violet-50 border border-violet-200 p-3 text-sm text-violet-800 space-y-1">
+              {planHinweise.map((t) => <p key={t}>{t}</p>)}
             </div>
           )}
 

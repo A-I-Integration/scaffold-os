@@ -40,3 +40,27 @@ describe('Dachneigung mit Vorbau', () => {
     if (r?.dachneigungGrad !== undefined) expect(r.dachneigungGrad).toBeCloseTo((Math.atan(1.02 / 8.7) * 180) / Math.PI, 0)
   })
 })
+
+describe('planHinweiseFuerAufmass', () => {
+  it('nennt Vorbau, kürzeres Geschoss und Hanglage – sonst nichts', async () => {
+    const { planHinweiseFuerAufmass } = await import('../plan-import')
+    const p = {
+      dateiname: 'x.pdf', massstab: 100, hauptEbene: 0,
+      geschosse: [
+        { titel: 'ERDGESCHOSS', ebene: 0, laengeM: 13.8, breiteM: 8.65, flaecheM2: 127, vorbauten: [{ laengeM: 4.3, tiefeM: 1.5, flaecheM2: 7.7 }] },
+        { titel: '1. OBERGESCHOSS', ebene: 1, laengeM: 10.15, breiteM: 8.85, flaecheM2: 96 },
+      ],
+      gelaende: { minM: -0.43, maxM: 1.37, unterschiedM: 1.8, anzahl: 5 },
+    } as unknown as Parameters<typeof planHinweiseFuerAufmass>[0]
+    const h = planHinweiseFuerAufmass(p)
+    expect(h).toHaveLength(3)
+    expect(h[0]).toContain('Vorbau'); expect(h[0]).toContain('7,7')
+    expect(h[1]).toContain('1. OBERGESCHOSS'); expect(h[1]).toContain('10,15')
+    expect(h[2]).toContain('Hanglage')
+  })
+  it('einfaches Haus ohne Besonderheiten: keine Hinweise', async () => {
+    const { planHinweiseFuerAufmass } = await import('../plan-import')
+    const p = { dateiname: 'x.pdf', massstab: 100, hauptEbene: 0, geschosse: [{ titel: 'ERDGESCHOSS', ebene: 0, laengeM: 10, breiteM: 8, flaecheM2: 80 }] } as unknown as Parameters<typeof planHinweiseFuerAufmass>[0]
+    expect(planHinweiseFuerAufmass(p)).toEqual([])
+  })
+})

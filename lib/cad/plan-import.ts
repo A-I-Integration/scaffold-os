@@ -88,6 +88,22 @@ export function ruecksprunge(p: PlanImport): PlanImportGeschoss[] {
   return p.geschosse.filter((g) => g.ebene >= 0 && g.ebene !== p.hauptEbene && g.laengeM < haupt.laengeM - 1)
 }
 
+const kom = (n: number) => String(Math.round(n * 100) / 100).replace('.', ',')
+
+/** Hinweise aus dem Plan für Schritt 2: was in Länge/Breite/Höhe NICHT steckt und vom Menschen zu prüfen ist. */
+export function planHinweiseFuerAufmass(p: PlanImport): string[] {
+  const haupt = p.geschosse.find((g) => g.ebene === p.hauptEbene)
+  if (!haupt) return []
+  const h: string[] = []
+  if (haupt.vorbauten?.length) {
+    const m2 = Math.round(haupt.vorbauten.reduce((a, v) => a + v.flaecheM2, 0) * 10) / 10
+    h.push(`Das ${haupt.titel} hat ${haupt.vorbauten.length === 1 ? 'einen Vorbau' : `${haupt.vorbauten.length} Vorbauten`} (ca. ${kom(m2)} m²), der in Länge und Breite nicht enthalten ist – bei Bedarf als Abschnitt eintragen.`)
+  }
+  for (const g of ruecksprunge(p)) h.push(`Das ${g.titel} ist kürzer (${kom(g.laengeM)} m statt ${kom(haupt.laengeM)} m) – bei Bedarf als eigenen Abschnitt eintragen.`)
+  if (p.gelaende && p.gelaende.unterschiedM >= 1) h.push(`Hanglage: Geländeunterschied ca. ${kom(p.gelaende.unterschiedM)} m – die Gerüsthöhe ist je Seite verschieden (Talseite höher).`)
+  return h
+}
+
 /** Browser: Plan-PDF lesen (erste 3 Seiten), bis Grundrisse gefunden werden. null bei Bildern, Scans und Plänen ohne Geschoss-Überschrift. */
 export async function planLesen(datei: File): Promise<PlanImport | null> {
   if (!/\.pdf$/i.test(datei.name) && datei.type !== 'application/pdf') return null
