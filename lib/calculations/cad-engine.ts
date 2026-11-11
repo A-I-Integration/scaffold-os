@@ -1229,6 +1229,86 @@ function geschossUnterkanten(building: BuildingParams): { floors: number; floorH
   return { floors, floorHeights, bottom: (i: number) => floorHeights.slice(0, i).reduce((sum, h) => sum + h, 0) }
 }
 
+/** Ein Seitenstück des Gerüsts an der Flanke eines Vorbaus: verbindet die Gerüstlinie der Wand mit der Linie vor dem Vorbau. */
+export interface VorbauBein {
+  /** Seite des Feldes im Modell: Westflanke = 'left', Ostflanke = 'right' (bei Blick auf die Vorderseite) */
+  seite: 'left' | 'right'
+  /** An welcher Gebäudeseite der Vorbau sitzt */
+  vorbauSeite: 'front' | 'back'
+  /** Lage der Gerüstlinie (x in Szenen-Koordinaten, Gebäudemitte = 0) */
+  xM: number
+  /** Beginn entlang z und Länge (m) */
+  vonZ: number
+  laengeM: number
+}
+
+/**
+ * Vorbauten an der Vorder- oder Rückseite (WC-Erker, Windfang) in Gebäudeabschnitte übersetzen, damit das Gerüst dort
+ * nach außen springt: je Abschnitt eigene Tiefe und Verschiebung. Dazu kommen die Seitenstücke (Beine) an den Flanken.
+ * `abstandWest`/`abstandOst` = Abstand Wand → Mitte der inneren Gerüstlinie links/rechts (Beine stehen so weit neben dem Vorbau).
+ * null, wenn nichts zu tun ist (kein Vorbau vorne/hinten, Umriss oder bereits Abschnitte).
+ */
+export function vorbautenAlsAbschnitte(b: BuildingParams, abstandWest: number, abstandOst: number): { sections: BuildingSection[]; beine: VorbauBein[]; seiten: ('front' | 'back')[] } | null {
+  if ((b.umriss && b.umriss.length >= 3) || (b.sections && b.sections.length > 0)) return null
+  const L = b.lengthM, w = b.widthM || 0
+  if (!(L > 0) || !(w > 0)) return null
+  type V = { seite: 'front' | 'back'; a: number; c: number; t: number }
+  const roh: V[] = []
+  for (const v of b.vorbauten ?? []) {
+    if (v.side !== 'front' && v.side !== 'back') continue
+    if (!(v.breiteM >= 0.5) || !(v.tiefeM > 0.1)) continue
+    // Das Gerüst springt schon vor dem Vorbau nach außen: die Strecke reicht bis zum Bein neben dem Vorbau
+    const a = Math.max(-L / 2, v.offsetAlongM - v.breiteM / 2 - abstandWest)
+    const c = Math.min(L / 2, v.offsetAlongM + v.breiteM / 2 + abstandOst)
+    if (c - a >= 0.5) roh.push({ seite: v.side, a, c, t: v.tiefeM })
+  }
+  // je Seite überlappende Vorbauten nicht doppelt zählen (der erste gilt)
+  const vorbauten: V[] = []
+  for (const seite of ['front', 'back'] as const) {
+    let ende = -Infinity
+    for (const v of roh.filter((q) => q.seite === seite).sort((x, y) => x.a - y.a)) {
+      if (v.a < ende - 1e-6) continue
+      vorbauten.push(v); ende = v.c
+    }
+  }
+  if (!vorbauten.length) return null
+
+  const schnitte = Array.from(new Set([-L / 2, L / 2, ...vorbauten.flatMap((v) => [v.a, v.c])].map((x) => Math.round(x * 1000) / 1000))).sort((x, y) => x - y)
+  // Streifen unter 0,5 m (zu kurz für ein Feld) verschwinden: den inneren Schnittpunkt weglassen
+  const sauber = [schnitte[0]]
+  for (let i = 1; i < schnitte.length; i++) {
+    const letzter = i === schnitte.length - 1
+    if (schnitte[i] - sauber[sauber.length - 1] >= 0.5 || letzter) {
+      if (letzter && schnitte[i] - sauber[sauber.length - 1] < 0.5 && sauber.length > 1) sauber.pop()
+      sauber.push(schnitte[i])
+    }
+  }
+  // Wandhöhe, bis zu der eingerüstet wird: bei geneigtem Dach mit Traufe bis zur Traufe, sonst Gebäudehöhe
+  const geneigt = (b.roofForm === 'satteldach' || b.roofForm === 'walmdach' || b.roofForm === 'mansardendach') && b.eavesHeightM > 0 && b.eavesHeightM < b.heightM - 0.3
+  const hoehe = geneigt ? b.eavesHeightM : b.heightM
+  const sections: BuildingSection[] = []
+  for (let i = 0; i < sauber.length - 1; i++) {
+    const von = sauber[i], bis = sauber[i + 1], mitte = (von + bis) / 2
+    const tf = Math.max(0, ...vorbauten.filter((v) => v.seite === 'front' && mitte >= v.a && mitte <= v.c).map((v) => v.t))
+    const tb = Math.max(0, ...vorbauten.filter((v) => v.seite === 'back' && mitte >= v.a && mitte <= v.c).map((v) => v.t))
+    const sec: BuildingSection = { bezeichnung: tf || tb ? 'Vorbau' : `Wand ${sections.length + 1}`, laengeM: Math.round((bis - von) * 1000) / 1000, hoeheM: hoehe, winkelGrad: 0 }
+    if (tf || tb) { sec.tiefeM = Math.round((w + tf + tb) * 1000) / 1000; sec.versatzM = Math.round(((tf - tb) / 2) * 1000) / 1000 }
+    sections.push(sec)
+  }
+  // Rundungsrest in den letzten Abschnitt, damit die Summe genau die Gebäudelänge ist
+  const summe = sections.reduce((t, x) => t + x.laengeM, 0)
+  sections[sections.length - 1].laengeM = Math.round((sections[sections.length - 1].laengeM + (L - summe)) * 1000) / 1000
+
+  // Seitenstücke an beiden Flanken jedes Vorbaus (nur wo der Vorbau nicht bis zur Gebäudeecke reicht)
+  const beine: VorbauBein[] = []
+  for (const v of vorbauten) {
+    const vonZ = v.seite === 'back' ? -w - 0.5 - v.t : -0.5
+    if (v.a > -L / 2 + 1e-6) beine.push({ seite: 'left', vorbauSeite: v.seite, xM: Math.round(v.a * 1000) / 1000, vonZ, laengeM: v.t })
+    if (v.c < L / 2 - 1e-6) beine.push({ seite: 'right', vorbauSeite: v.seite, xM: Math.round(v.c * 1000) / 1000, vonZ, laengeM: v.t })
+  }
+  return { sections, beine, seiten: Array.from(new Set(vorbauten.map((v) => v.seite))) }
+}
+
 export function generateCADModel(
   building: BuildingParams,
   systemId: string,
@@ -1293,6 +1373,10 @@ export function generateCADModel(
   // Mehrteiliges Gebäude: bei geraden Abschnitten (Höhenstufen) folgt das
   // Gerüst den Abschnitten. Länge/Höhe des Modells werden dann aus den
   // Abschnitten abgeleitet (Summe / höchster Abschnitt).
+  // Vorbauten vorne/hinten: das Gerüst springt dort nach außen und läuft seitlich um den Vorbau herum
+  const ursprungGebaeude = building
+  const vorbauPlan = vorbautenAlsAbschnitte(building, dSeite('left') + GEBAEUDE_SZENEN_VERSATZ_M, dSeite('right') + GEBAEUDE_SZENEN_VERSATZ_M)
+  if (vorbauPlan) building = { ...building, sections: vorbauPlan.sections }
   const abschnitte: BuildingSection[] | null = hatGeradeAbschnitte(building) ? building.sections! : null
   if (abschnitte) {
     building = {
@@ -1303,7 +1387,8 @@ export function generateCADModel(
     }
     if (abschnitte.every((a) => a.geruest === false)) warnings.push({ type: 'error', code: 'SECTIONS_KEIN_GERUEST', message: 'Alle Abschnitte sind als „nicht einrüsten“ markiert – es entsteht kein Gerüst.' })
     else if (abschnitte.some((a) => a.geruest === false)) warnings.push({ type: 'info', code: 'SECTIONS_TEIL_GERUEST', message: `Eingerüstet werden nur ${abschnitte.filter((a) => a.geruest !== false).map((a, i) => a.bezeichnung || `Abschnitt ${i + 1}`).join(', ')}. Die übrigen Abschnitte sind nur zur Darstellung da; die Stirnseiten zum Nachbarabschnitt werden nicht gesondert eingerüstet.` })
-    warnings.push({ type: 'info', code: 'SECTIONS_SCAFFOLD_STEPPED', message: 'Das Gerüst folgt den Höhenstufen der Abschnitte (je Abschnitt eigene Lagenzahl). Die senkrechten Stirnseiten der Stufen und die Seitenflächen sind nicht gesondert eingerüstet.' })
+    if (vorbauPlan) warnings.push({ type: 'info', code: 'VORBAU_GERUEST', message: `Vorbau: Das Gerüst springt vor dem Vorbau nach außen und führt seitlich um ihn herum (${vorbauPlan.beine.length} Seitenstück${vorbauPlan.beine.length === 1 ? '' : 'e'}). Die Höhe folgt ${building.heightM.toFixed(2).replace('.', ',')} m; der Anschluss am Vorbaudach und die Verankerung sind nach Aufbauanleitung zu prüfen.` })
+    else warnings.push({ type: 'info', code: 'SECTIONS_SCAFFOLD_STEPPED', message: 'Das Gerüst folgt den Höhenstufen der Abschnitte (je Abschnitt eigene Lagenzahl). Die senkrechten Stirnseiten der Stufen und die Seitenflächen sind nicht gesondert eingerüstet.' })
   } else if (building.sections && building.sections.length >= 2) {
     warnings.push({ type: 'info', code: 'SECTIONS_SCAFFOLD_NOT_YET', message: 'Die Gebäudeform zeigt alle Abschnitte. Das Gerüst folgt aber nur geraden Abschnitten (Höhensprünge ohne Winkel). Bei Ecken (Winkel ≠ 0) wird das Gerüst noch anhand der einzelnen Länge/Höhe-Felder erzeugt.' })
   }
@@ -1390,11 +1475,16 @@ export function generateCADModel(
       const tiefeDivs = new Map<number, typeof fieldDiv>()
       const divTiefe = (t: number) => { if (!tiefeDivs.has(t)) tiefeDivs.set(t, t === w ? fieldDivWidth : teile(t)); return tiefeDivs.get(t)! }
       type HelmInfo = { roofH: number; laengeM: number }
-      const runs: { div: typeof fieldDiv; hoeheM: number; along: number; aktiv: boolean; helm?: HelmInfo; abHoehe: number; dachAb?: (along: number) => number; fixedO?: number; innen?: boolean; fz?: number; tiefeM: number }[] = []
+      const runs: { div: typeof fieldDiv; hoeheM: number; along: number; aktiv: boolean; helm?: HelmInfo; abHoehe: number; dachAb?: (along: number) => number; fixedO?: number; innen?: boolean; fz?: number; tiefeM: number; bein?: 'left' | 'right' }[] = []
       const helmVon = (sec: BuildingSection): HelmInfo | undefined => (helmAktiv(sec, building) ? { roofH: sec.roofHoeheM!, laengeM: sec.laengeM } : undefined)
       if (side === 'front' || side === 'back') {
         let cursor = -building.lengthM / 2
         abschnitte.forEach((sec, si) => { runs.push({ div: abschnittDivs[si], hoeheM: sec.hoeheM, along: cursor, aktiv: sec.geruest !== false, helm: helmVon(sec), abHoehe: sec.geruestAbHoeheM?.[side] ?? 0, fz: side === 'front' ? fzVorne(sec) : fzHinten(sec), tiefeM: tiefe(sec) }); cursor += sec.laengeM })
+        // Seitenstücke an den Flanken der Vorbauten dieser Seite
+        for (const bein of vorbauPlan?.beine ?? []) {
+          if (bein.vorbauSeite !== side) continue
+          runs.push({ div: divTiefe(bein.laengeM), hoeheM: abschnitte[0].hoeheM, along: bein.vonZ, aktiv: true, abHoehe: 0, innen: true, tiefeM: bein.laengeM, fixedO: bein.xM, bein: bein.seite })
+        }
       } else {
         const sec = side === 'left' ? abschnitte[0] : abschnitte[abschnitte.length - 1]
         runs.push({ div: divTiefe(tiefe(sec)), hoeheM: sec.hoeheM, along: rueckZ(sec), aktiv: sec.geruest !== false, helm: helmVon(sec), abHoehe: sec.geruestAbHoeheM?.[side] ?? 0, tiefeM: tiefe(sec) })
@@ -1448,6 +1538,7 @@ export function generateCADModel(
       }
       if (seiteVoll) vollSeitenAnzahl++
       const proLage = new Map<number, ScaffoldField[]>()
+      const hauptRuns = runs.filter((r) => !r.bein).length
       runs.forEach((run, ri) => {
         if (!run.aktiv) return
         const fixedRun = run.fz ?? fixed
@@ -1462,19 +1553,20 @@ export function generateCADModel(
             cum += fieldLength
             const abFeld = run.dachAb ? run.dachAb(along) : run.abHoehe
             if (abFeld > 0 && levelData.topY <= abFeld + 0.01) { verdecktFlaecheM2 += fieldLength * (levelData.topY - levelData.bottomY); return }
-            const isFB = side === 'front' || side === 'back'
-            if (istInLuecke(side, isFB ? along : along + w / 2 + 0.5, fieldLength)) { merkeLuecke(side, levelData.index, fieldLength, run.hoeheM); return }
+            const fs = run.bein ?? side
+            const isFB = fs === 'front' || fs === 'back'
+            if (istInLuecke(fs, isFB ? along : along + w / 2 + 0.5, fieldLength)) { merkeLuecke(fs, levelData.index, fieldLength, run.hoeheM); return }
             const field: ScaffoldField = {
-              id: `field-${side}-${levelData.index}-${list.length}`,
+              id: `field-${side}-${run.bein ? 'bein' + run.bein + '-' : ''}${levelData.index}-${list.length}`,
               index: list.length,
               lengthM: fieldLength,
               widthM: scaffoldWidthM,
               positionX: parseFloat((isFB ? along : fx).toFixed(3)),
               positionY: levelData.bottomY,
               positionZ: parseFloat((isFB ? fixedRun : along).toFixed(3)),
-              side: side as 'front' | 'back' | 'left' | 'right',
+              side: fs as 'front' | 'back' | 'left' | 'right',
               levelIndex: levelData.index,
-              isCorner: (ri === 0 && fi === 0) || (ri === runs.length - 1 && fi === run.div.distribution.length - 1),
+              isCorner: !run.bein && ((ri === 0 && fi === 0) || (ri === hauptRuns - 1 && fi === run.div.distribution.length - 1)),
             }
             list.push(field)
             proLage.set(levelData.index, list)
@@ -1490,12 +1582,13 @@ export function generateCADModel(
               const along = run.along + f * run.div.fieldLengthM + run.div.fieldLengthM / 2
               const abA = run.dachAb ? run.dachAb(along) : run.abHoehe
               if (abA > 0 && yAnchor < abA) continue
-              if (istInLuecke(side, side === 'front' || side === 'back' ? along : along + w / 2 + 0.5, 0)) continue
+              const fs = run.bein ?? side
+              if (istInLuecke(fs, fs === 'front' || fs === 'back' ? along : along + w / 2 + 0.5, 0)) continue
               let xPos = 0, zPos = 0
-              if (side === 'front') { xPos = along; zPos = fixedRun + scaffoldWidthM / 2 }
-              else if (side === 'back') { xPos = along; zPos = fixedRun - scaffoldWidthM / 2 }
-              else { xPos = side === 'left' ? fx - scaffoldWidthM / 2 : fx + scaffoldWidthM / 2; zPos = along }
-              abschnittsAnker.push({ id: `anchor-${side}-${ri}-${al}-${f}`, positionX: xPos, positionY: yAnchor, positionZ: zPos, side: side as 'front' | 'back' | 'left' | 'right', type: 'fassadenanker' })
+              if (fs === 'front') { xPos = along; zPos = fixedRun + scaffoldWidthM / 2 }
+              else if (fs === 'back') { xPos = along; zPos = fixedRun - scaffoldWidthM / 2 }
+              else { xPos = fs === 'left' ? fx - scaffoldWidthM / 2 : fx + scaffoldWidthM / 2; zPos = along }
+              abschnittsAnker.push({ id: `anchor-${side}-${ri}-${al}-${f}`, positionX: xPos, positionY: yAnchor, positionZ: zPos, side: fs as 'front' | 'back' | 'left' | 'right', type: 'fassadenanker' })
             }
           }
         }
@@ -1625,6 +1718,8 @@ export function generateCADModel(
     })
   }
 
+  // Mit Vorbauten wurde nur für die Gerüstberechnung in Abschnitte zerlegt: das Gebäude selbst bleibt das einfache Gebäude
+  if (vorbauPlan) building = ursprungGebaeude
   // Verankerungen (alle Seiten)
   const anchors: ScaffoldAnchor[] = []
   if (abschnitte) anchors.push(...abschnittsAnker)
@@ -1736,6 +1831,17 @@ export function generateCADModel(
   }
   // Bei geneigtem Dach (Rinnen-Regel): nur die tatsächlich gebauten Lagen führen und zählen, nicht die Lagen bis zum First
   const maxLagenDach = dachRegel && fields.length ? Math.max(...fields.map((f) => f.levelIndex + 1)) : levelCalc.levels
+  // Mit Vorbau: Kennzahlen wie beim einfachen Gebäude über alle gewählten Seiten (Abschnittsrechnung zählt nur eine Seite)
+  const vorbauKennzahlen = vorbauPlan && abschnitte ? (() => {
+    const hoehe = abschnitte[0].hoeheM
+    const beine = vorbauPlan.beine.filter((b) => activeSides.includes(b.vorbauSeite))
+    const ebene0 = fields.filter((f) => f.levelIndex === 0)
+    return {
+      laenge: ebene0.reduce((t, f) => t + f.lengthM, 0),
+      felder: ebene0.length,
+      flaeche: activeSides.reduce((t, sd) => t + seitenLaengeM(sd) * hoehe, 0) + beine.reduce((t, b) => t + b.laengeM * hoehe, 0),
+    }
+  })() : null
   const preliminaryModel: CADModel = {
     building,
     system,
@@ -1743,10 +1849,10 @@ export function generateCADModel(
     levels: dachRegel ? levels.filter((l) => l.index < maxLagenDach) : levels,
     anchors,
     components3D: [],
-    totalLengthM: (abschnitte ? abschnitte.filter((a) => a.geruest !== false).reduce((sum, a) => sum + a.laengeM, 0) : einfachSeitenDivs.reduce((sum, d) => sum + d.fields * d.fieldLengthM, 0)) - lueckeLaengeM,
+    totalLengthM: vorbauKennzahlen ? vorbauKennzahlen.laenge : (abschnitte ? abschnitte.filter((a) => a.geruest !== false).reduce((sum, a) => sum + a.laengeM, 0) : einfachSeitenDivs.reduce((sum, d) => sum + d.fields * d.fieldLengthM, 0)) - lueckeLaengeM,
     totalHeightM: building.heightM,
-    totalAreaM2: (abschnitte ? stufenFlaecheM2(abschnitte, activeSides, building.widthM || 0) + helmFlaecheM2 + innenFlaecheM2 - verdecktFlaecheM2 : activeSides.reduce((sum, sd) => sum + seitenWandFlaecheM2(sd, seitenLaengeM(sd)), 0)) - lueckeFlaecheM2,
-    fieldCount: (abschnittDivs ? abschnittDivs.reduce((sum, d, i) => sum + (abschnitte![i].geruest === false ? 0 : d.fields), 0) + innenFelder : einfachSeitenDivs.reduce((sum, d) => sum + d.fields, 0)) - lueckeFelder,
+    totalAreaM2: vorbauKennzahlen ? vorbauKennzahlen.flaeche - lueckeFlaecheM2 : (abschnitte ? stufenFlaecheM2(abschnitte, activeSides, building.widthM || 0) + helmFlaecheM2 + innenFlaecheM2 - verdecktFlaecheM2 : activeSides.reduce((sum, sd) => sum + seitenWandFlaecheM2(sd, seitenLaengeM(sd)), 0)) - lueckeFlaecheM2,
+    fieldCount: vorbauKennzahlen ? vorbauKennzahlen.felder : (abschnittDivs ? abschnittDivs.reduce((sum, d, i) => sum + (abschnitte![i].geruest === false ? 0 : d.fields), 0) + innenFelder : einfachSeitenDivs.reduce((sum, d) => sum + d.fields, 0)) - lueckeFelder,
     levelCount: dachRegel ? maxLagenDach : levelCalc.levels,
     warnings
   }
