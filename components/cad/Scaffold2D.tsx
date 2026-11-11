@@ -5,7 +5,7 @@ import { CADModel, generateGrundriss, generateAnsicht } from '@/lib/calculations
 import Zeichenschicht from './Zeichenschicht'
 import type { Figur, FigurArt } from '@/lib/cad/zeichnung'
 
-type ViewType = 'grundriss' | 'ansicht-vorne' | 'ansicht-seite' | 'schnitt-aa' | 'detail-fusspunkt' | 'detail-anker'
+type ViewType = 'grundriss' | 'ansicht-vorne' | 'ansicht-hinten' | 'ansicht-links' | 'ansicht-seite' | 'schnitt-aa' | 'detail-fusspunkt' | 'detail-anker'
 type ScaleType = '1:25' | '1:50' | '1:100' | '1:200'
 
 interface Props {
@@ -35,6 +35,8 @@ export default function Scaffold2D({ model, zeichnung }: Props) {
     switch (activeView) {
       case 'grundriss': return generateGrundriss(model)
       case 'ansicht-vorne': return generateAnsicht(model, 'front')
+      case 'ansicht-hinten': return generateAnsicht(model, 'back')
+      case 'ansicht-links': return generateAnsicht(model, 'left')
       case 'ansicht-seite': return generateAnsicht(model, 'right')
       case 'schnitt-aa': return generateAnsicht(model, 'front')
       case 'detail-fusspunkt': return generateGrundriss(model)
@@ -50,7 +52,9 @@ export default function Scaffold2D({ model, zeichnung }: Props) {
   const viewButtons: { key: ViewType; label: string }[] = [
     { key: 'grundriss', label: 'Grundriss' },
     { key: 'ansicht-vorne', label: 'Ansicht vorne' },
-    { key: 'ansicht-seite', label: 'Ansicht Seite' },
+    { key: 'ansicht-hinten', label: 'Ansicht hinten' },
+    { key: 'ansicht-links', label: 'Ansicht links' },
+    { key: 'ansicht-seite', label: 'Ansicht rechts' },
     { key: 'schnitt-aa', label: 'Schnitt A-A' },
     { key: 'detail-fusspunkt', label: 'Detail: Fußpunkt' },
     { key: 'detail-anker', label: 'Detail: Anker' },
@@ -112,7 +116,7 @@ export default function Scaffold2D({ model, zeichnung }: Props) {
           <div className='px-4 py-2 border-b border-black/5 flex justify-between items-center'>
             <div>
               <h3 className='text-sm font-semibold text-[#1d1d1f]'>
-                {activeView === 'grundriss' ? 'Grundriss' : activeView === 'ansicht-vorne' ? 'Ansicht von vorne' : activeView === 'ansicht-seite' ? 'Ansicht von der Seite' : activeView === 'schnitt-aa' ? 'Schnitt A-A' : activeView === 'detail-fusspunkt' ? 'Detail: Fußpunkt' : 'Detail: Fassadenanker'}
+                {activeView === 'grundriss' ? 'Grundriss' : activeView === 'ansicht-vorne' ? 'Ansicht von vorne' : activeView === 'ansicht-hinten' ? 'Ansicht von hinten' : activeView === 'ansicht-links' ? 'Ansicht von links' : activeView === 'ansicht-seite' ? 'Ansicht von rechts' : activeView === 'schnitt-aa' ? 'Schnitt A-A' : activeView === 'detail-fusspunkt' ? 'Detail: Fußpunkt' : 'Detail: Fassadenanker'}
               </h3>
               <p className='text-[10px] text-[#86868b]'>M 1:{scale.split(':')[1]} · SCAFFOLD OS CAD</p>
             </div>
@@ -264,7 +268,7 @@ export default function Scaffold2D({ model, zeichnung }: Props) {
             )}
 
             {/* Schnittlinie A-A (nur Ansicht) */}
-            {(activeView === 'ansicht-vorne' || activeView === 'ansicht-seite') && (
+            {(activeView === 'ansicht-vorne' || activeView === 'ansicht-hinten' || activeView === 'ansicht-links' || activeView === 'ansicht-seite') && (
               <g>
                 <line x1={0} y1={-(model.building.heightM + 1.2) * scaleFactor} x2={model.building.lengthM * scaleFactor} y2={-(model.building.heightM + 1.2) * scaleFactor} stroke='#dc2626' strokeWidth='1.5' strokeDasharray='8,4' />
                 <text x={model.building.lengthM / 2 * scaleFactor} y={-(model.building.heightM + 1.6) * scaleFactor} fontSize={12} fill='#dc2626' textAnchor='middle' fontWeight='bold'>A</text>
