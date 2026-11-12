@@ -36,3 +36,25 @@ describe('Schräger Hang: Fuß treppt je Feld ab', () => {
     expect(m.warnings.some((w) => w.code === 'HANG_ABTREPPUNG')).toBe(false)
   })
 })
+
+describe('Vier Eckhöhen (gelaendeEckenM): Gerüst folgt an allen Seiten', () => {
+  const haus2 = (ec: { fl: number; fr: number; bl: number; br: number }): BuildingParams => ({
+    lengthM: 12, widthM: 8, heightM: 8, eavesHeightM: 8, roofHeightM: 0, roofForm: 'flachdach',
+    floors: 2, floorHeightsM: [], windowCount: 0, doorCount: 0, balconyCount: 0, overhangM: 0.3, setbackM: 0,
+    sides: ['front', 'back', 'left', 'right'], geruestOptionen: { feldlaengeM: 2.07, gelaendeEckenM: ec },
+  } as BuildingParams)
+  it('Hang quer (vorne tief, hinten hoch): Seiten links/rechts treppen ab', () => {
+    const m = generateCADModel(haus2({ fl: -2.95, fr: -2.95, bl: 0, br: 0 }), 'layher-allround')
+    const links = m.fields.filter((f) => f.side === 'left')
+    const vorn = links.filter((f) => f.positionZ > Math.max(...links.map((q) => q.positionZ)) - 1)
+    const hinten = links.filter((f) => f.positionZ < Math.min(...links.map((q) => q.positionZ)) + 1)
+    const tiefe = (a: typeof links) => Math.min(...a.map((f) => f.positionY))
+    expect(tiefe(vorn)).toBeLessThan(tiefe(hinten)) // vorne (tief) reicht weiter runter
+    expect(m.warnings.some((w) => w.code === 'HANG_ABTREPPUNG')).toBe(true)
+  })
+  it('alle Ecken gleich tief: gleichmäßig tiefer, kein Abtreppen', () => {
+    const m = generateCADModel(haus2({ fl: -2, fr: -2, bl: -2, br: -2 }), 'layher-allround')
+    const front = m.fields.filter((f) => f.side === 'front')
+    expect(Math.min(...front.map((f) => f.positionY))).toBeCloseTo(-2, 1)
+  })
+})

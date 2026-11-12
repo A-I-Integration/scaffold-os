@@ -1064,6 +1064,28 @@ export default function BuildingForm({ building, systemId, onChange, onSystemCha
                         <p className='text-[10px] text-[#86868b]'>Beispiel Vorne: Anfang 0, Ende −2,95 → der Fuß treppt je Feld ab (Ausgleichsstiel + Spindel). Überschreibt „Gelände je Seite“ für diese Seite.</p>
                       </div>
                     </details>
+                    <details className='col-span-2'>
+                      <summary className='text-[11px] text-[#424245] cursor-pointer'>Hang über vier Eckhöhen (Gerüst und Gelände folgen an allen Seiten)</summary>
+                      <div className='mt-1'>
+                        <div className='grid grid-cols-2 gap-1 max-w-[220px]'>
+                          {(['bl', 'br', 'fl', 'fr'] as const).map((k) => {
+                            const ec = opt.gelaendeEckenM
+                            const setEcke = (val: string) => {
+                              const num = val === '' ? undefined : parseFloat(val)
+                              const cur = { ...(ec ?? { fl: 0, fr: 0, bl: 0, br: 0 }), [k]: Number.isFinite(num as number) ? num : 0 }
+                              const leer = cur.fl === 0 && cur.fr === 0 && cur.bl === 0 && cur.br === 0
+                              setzeOpt({ gelaendeEckenM: leer ? undefined : cur })
+                            }
+                            return (
+                              <label key={k} className='text-[10px] text-[#86868b]'>{{ bl: 'Hinten-links', br: 'Hinten-rechts', fl: 'Vorne-links', fr: 'Vorne-rechts' }[k]}
+                                <input type='number' step='0.1' placeholder='0' value={ec?.[k] ?? ''} onChange={(ev) => setEcke(ev.target.value)} className='w-full px-1 py-0.5 border rounded text-xs' />
+                              </label>
+                            )
+                          })}
+                        </div>
+                        <p className='text-[10px] text-[#86868b] mt-1'>Höhe je Ecke in m (±0,00 = EG-Boden, minus = tiefer). Beispiel Hang nach vorn: hinten 0/0, vorne −2,95/−2,95. Überschreibt die anderen Hang-Felder.</p>
+                      </div>
+                    </details>
                     <label className='flex items-center gap-2 text-xs text-[#424245] self-end pb-1.5'>
                       <input type='checkbox' checked={opt.treppe !== false} onChange={(e) => setzeOpt({ treppe: e.target.checked ? undefined : false })} />
                       Treppe automatisch
