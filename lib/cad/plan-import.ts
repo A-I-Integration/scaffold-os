@@ -9,6 +9,7 @@ import { oeffnungenFinden } from './oeffnungen-aus-plan'
 import { gelaendeAusPlan, gelaendeJeKante, type GelaendeAusPlan, type GelaendeJeKante } from './gelaende-aus-plan'
 import { hauptkoerperAusKontur, type Vorbau } from './hauptkoerper'
 import { oeffnungenAnKanten, vorbautenAnKanten, type PlanOeffnungAnKante, type PlanVorbauAnKante } from './plan-oeffnungen-modell'
+import { kotenJeAnsicht, pultNiedrigeRichtung, type Himmelsrichtung } from './koten-je-ansicht'
 import { dachAusPlan, dachKotenAusPlan, pultdachNeigung, type PlanDachform } from './dachform-aus-plan'
 
 export interface PlanImportGeschoss { titel: string; ebene: number; laengeM: number; breiteM: number; flaecheM2: number; fenster?: number; tueren?: number
@@ -37,6 +38,8 @@ export interface PlanImport {
   traufKoteM?: number
   /** Nur bei Pultdach mit beiden Koten: atan(Höhenunterschied / Tiefe), ohne Dachüberstand */
   dachneigungGrad?: number
+  /** Pultdach: Himmelsrichtung der niedrigen Seite (Traufe), aus den Nord-/Südansichten; fehlt, wenn nicht eindeutig lesbar */
+  pultNiedrigeRichtung?: Himmelsrichtung
   /** Geländekoten rund um das Hauptgeschoss (±0,00 = dessen Fußboden); fehlt bei weniger als 2 Punkten */
   gelaende?: GelaendeAusPlan
   /** Geländekoten je Kante des Hauptkörpers (Plan-Kanten); nur Kanten mit Kote. Dient als Vorlage, der Mensch korrigiert. */
@@ -85,12 +88,15 @@ export function planImportAus(dateiname: string, massstab: number, gefunden: Gef
   const koten = dachKotenAusPlan(texte)
   const neigung = dach?.dachform === 'Pultdach' && koten.firstM !== undefined && koten.traufeM !== undefined
     ? pultdachNeigung(koten.firstM, koten.traufeM, dachTiefeOhneVorbau(dach.tiefeM, haupt)) : null
+  const pultRichtung = dach?.dachform === 'Pultdach' && koten.firstM !== undefined && koten.traufeM !== undefined
+    ? pultNiedrigeRichtung(kotenJeAnsicht(texte), koten.traufeM, koten.firstM) : null
   return {
     dateiname, massstab, geschosse, hauptEbene: haupt.ebene,
     ...(dach ? { dachform: dach.dachform } : {}),
     ...(koten.firstM !== undefined ? { firstKoteM: koten.firstM } : {}),
     ...(koten.traufeM !== undefined ? { traufKoteM: koten.traufeM } : {}),
     ...(neigung !== null ? { dachneigungGrad: neigung } : {}),
+    ...(pultRichtung ? { pultNiedrigeRichtung: pultRichtung } : {}),
     ...(gelaende ? { gelaende } : {}),
     ...(jeKante.length ? { gelaendeJeKante: jeKante } : {}),
   }
@@ -121,6 +127,10 @@ export function planHinweiseFuerAufmass(p: PlanImport): string[] {
     h.push(`Das ${haupt.titel} hat ${haupt.vorbauten.length === 1 ? 'einen Vorbau' : `${haupt.vorbauten.length} Vorbauten`} (ca. ${kom(m2)} m²), der in Länge und Breite nicht enthalten ist – bei Bedarf als Abschnitt eintragen.`)
   }
   for (const g of ruecksprunge(p)) h.push(`Das ${g.titel} ist kürzer (${kom(g.laengeM)} m statt ${kom(haupt.laengeM)} m) – bei Bedarf als eigenen Abschnitt eintragen.`)
+  if (p.pultNiedrigeRichtung) {
+    const r = { nord: 'Norden', ost: 'Osten', sued: 'Süden', west: 'Westen' }[p.pultNiedrigeRichtung]
+    h.push(`Pultdach: Laut den Ansichten fällt das Dach nach ${r} (niedrige Traufe${p.traufKoteM !== undefined ? ` +${kom(p.traufKoteM)} m` : ''}). Im Tab Gebäude die Seite mit der niedrigen Traufe wählen, die nach ${r} zeigt – das Gerüst endet dort an der Traufe und steigt mit dem Dach.`)
+  }
   if (p.gelaende && p.gelaende.unterschiedM >= 1) h.push(`Hanglage: Geländeunterschied ca. ${kom(p.gelaende.unterschiedM)} m – die Gerüsthöhe ist je Seite verschieden (Talseite höher).`)
   if (p.gelaendeJeKante && p.gelaende && p.gelaende.unterschiedM >= 1) {
     const name: Record<string, string> = { unten: 'unten im Plan', oben: 'oben im Plan', links: 'links im Plan', rechts: 'rechts im Plan' }
