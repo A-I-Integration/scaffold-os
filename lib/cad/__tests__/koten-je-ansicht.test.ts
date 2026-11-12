@@ -65,3 +65,13 @@ describe('gelaendeTiefeJeAnsicht', () => {
     expect(gelaendeTiefeJeAnsicht([an('schnitt', [-3.36, -2.9])])).toEqual([])
   })
 })
+
+import { eckenAusTalseite } from '../koten-je-ansicht'
+describe('eckenAusTalseite', () => {
+  it('Westhang: beide Westecken tief, Ostecken 0', () => {
+    expect(eckenAusTalseite('west', -2.95)).toEqual({ tl: -2.95, bl: -2.95, tr: 0, br: 0 })
+  })
+  it('kein Hang bei kleinem Gefälle', () => {
+    expect(eckenAusTalseite('nord', -0.1)).toBeNull()
+  })
+})

@@ -95,3 +95,19 @@ export function gelaendeTiefeJeAnsicht(ansichten: AnsichtKoten[]): GelaendeTiefe
   }
   return out.sort((p, q) => p.tiefsteM - q.tiefsteM)
 }
+
+/**
+ * Vier Geländehöhen an den Plan-Ecken aus der Talseite: Auf der Talseite liegt das Gelände an beiden Ecken bei der tiefsten
+ * Kote der Ansicht, auf der gegenüberliegenden Seite bei ±0,00 (Annahme: Hang fällt gleichmäßig). Dazwischen verläuft das
+ * Gelände linear. Plan oben = Norden, rechts = Osten (übliche Lage; die Person prüft). Nur ein Vorschlag.
+ */
+export function eckenAusTalseite(talseite: Himmelsrichtung, tiefsteM: number): { tl: number; tr: number; bl: number; br: number } | null {
+  if (!(tiefsteM < -0.3)) return null
+  const t = Math.round(tiefsteM * 100) / 100
+  switch (talseite) {
+    case 'west': return { tl: t, bl: t, tr: 0, br: 0 }
+    case 'ost': return { tr: t, br: t, tl: 0, bl: 0 }
+    case 'nord': return { tl: t, tr: t, bl: 0, br: 0 }
+    case 'sued': return { bl: t, br: t, tl: 0, tr: 0 }
+  }
+}
