@@ -30,3 +30,19 @@ describe('Umriss: eigene Höhe je Kante', () => {
     expect(m.warnings.some((w) => w.code === 'UMRISS_KANTENHOEHEN')).toBe(true)
   })
 })
+
+describe('Umriss mit gerader Kante, an der sich die Höhe ändert', () => {
+  it('liefert ein Gerüst ohne Fehler und mit beiden Höhen', () => {
+    const u = [{ x: 0, z: 0 }, { x: 10, z: 0 }, { x: 10, z: 8 }, { x: 6, z: 8 }, { x: 6, z: 13 }, { x: 0, z: 13 }, { x: 0, z: 8 }]
+    const b = {
+      lengthM: 10, widthM: 13, heightM: 6, eavesHeightM: 6, roofHeightM: 0, roofForm: 'flachdach', floors: 2, floorHeightsM: [],
+      windowCount: 0, doorCount: 0, balconyCount: 0, overhangM: 0.3, setbackM: 0, sides: ['front', 'back', 'left', 'right'],
+      umriss: u, umrissKantenHoeheM: [6, 6, 6, 3, 3, 3, 6], geruestOptionen: { feldlaengeM: 2.07 },
+    } as BuildingParams
+    const m = generateCADModel(b, 'layher-allround')
+    expect(m.warnings.filter((w) => w.type === 'error')).toEqual([])
+    expect(m.fields.length).toBeGreaterThan(0)
+    const lagen = new Set(m.fields.map((f) => f.levelIndex))
+    expect(lagen.size).toBeGreaterThan(1)
+  })
+})

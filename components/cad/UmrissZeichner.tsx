@@ -20,6 +20,8 @@ interface Props {
   /** Zuletzt hochgeladener Plan (PDF/Bild): wird als Vorlage hinter die Zeichnung gelegt. */
   planDatei?: File | null
   onUebernehmen: (figuren: ZPunkt[][]) => void
+  /** Figuren als Geschoss-Grundrisse mit Oberkante (m über ±0,00): werden zu EINEM Umriss mit Höhe je Kante vereint */
+  onGeschosse?: (geschosse: { name: string; obenM: number; umriss: ZPunkt[] }[]) => void
   onAbbrechen: () => void
 }
 
@@ -27,7 +29,8 @@ const RASTER = [0.01, 0.05, 0.1, 0.25, 0.5, 1]
 const fm = (v: number) => (Math.round(v * 100) / 100).toLocaleString('de-DE')
 const flaeche = (f: ZPunkt[]) => { let s = 0; for (let i = 0; i < f.length; i++) { const a = f[i], b = f[(i + 1) % f.length]; s += a.x * b.z - b.x * a.z } return Math.abs(s) / 2 }
 
-export default function UmrissZeichner({ planDatei, onUebernehmen, onAbbrechen }: Props) {
+export default function UmrissZeichner({ planDatei, onUebernehmen, onGeschosse, onAbbrechen }: Props) {
+  const [oberkanten, setOberkanten] = useState<Record<number, string>>({})
   const svgRef = useRef<SVGSVGElement>(null)
   const [figuren, setFiguren] = useState<ZPunkt[][]>([])
   const [aktuell, setAktuell] = useState<ZPunkt[]>([])
@@ -441,6 +444,13 @@ export default function UmrissZeichner({ planDatei, onUebernehmen, onAbbrechen }
             {figuren.map((f, i) => (
               <li key={i} className='flex items-center gap-1 rounded-lg bg-[#f5f5f7] px-2 py-1'>
                 Figur {i + 1}: {f.length} Ecken, {fm(flaeche(f))} m²
+                {onGeschosse && (
+                  <input
+                    inputMode='decimal' aria-label={`Oberkante Figur ${i + 1} (m)`} placeholder='OK (m)' title='Oberkante dieses Geschosses/Bauteils in m über ±0,00'
+                    value={oberkanten[i] ?? ''} onChange={(e) => setOberkanten({ ...oberkanten, [i]: e.target.value })}
+                    className='w-16 rounded border border-black/10 px-1 py-0.5'
+                  />
+                )}
                 <button type='button' aria-label={`Figur ${i + 1} löschen`} className='text-red-600' onClick={() => setFiguren(figuren.filter((_, k) => k !== i))}>×</button>
               </li>
             ))}
@@ -455,6 +465,14 @@ export default function UmrissZeichner({ planDatei, onUebernehmen, onAbbrechen }
             className='rounded-lg bg-[#0071e3] px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-40'
             onClick={() => onUebernehmen(aktuell.length >= 3 && !figurPruefen(aktuell) ? [...figuren, aktuell] : figuren)}
           >Übernehmen</button>
+          {onGeschosse && (
+            <button
+              type='button' title='Jede Figur braucht eine Oberkante (m über ±0,00). Die Figuren werden zu einem Umriss vereint, jede Kante bekommt die Höhe des höchsten Teils dort.'
+              disabled={figuren.length === 0 || figuren.some((_, i) => !(parseFloat((oberkanten[i] ?? '').replace(',', '.')) > 0))}
+              className='rounded-lg border border-[#0071e3] px-3 py-1.5 text-xs font-semibold text-[#0071e3] disabled:opacity-40'
+              onClick={() => onGeschosse(figuren.map((f, i) => ({ name: `Figur ${i + 1}`, obenM: parseFloat((oberkanten[i] ?? '').replace(',', '.')), umriss: f })))}
+            >Als Umriss mit Kantenhöhen übernehmen</button>
+          )}
           <button type='button' onClick={onAbbrechen} className='rounded-lg bg-black/10 px-3 py-1.5 text-xs'>Abbrechen</button>
         </div>
         <p className='text-[10px] text-[#86868b]'>Die Zeichnung wird wie eine DXF-Datei gelesen: Du bekommst danach die Gebäudeteile zu sehen und gibst die Höhe je Teil ein. Maße gelten in Metern.</p>
