@@ -129,3 +129,25 @@ describe('Pultdach mit bekannter niedriger Seite', () => {
     expect(lagen(m, 'back')).toBe(lagen(m, 'front'))
   })
 })
+
+describe('Seitenprofil aus den Ansichten', () => {
+  const mit = (seitenProfil: NonNullable<NonNullable<BuildingParams['geruestOptionen']>['seitenProfil']>) =>
+    generateCADModel(haus({ roofForm: 'flachdach', geruestOptionen: { feldlaengeM: 2.07, seitenProfil } }), 'layher-allround')
+  it('Dachkante je Position bestimmt die Lagen je Feld (Treppe von 6,3 auf 9,2 m)', () => {
+    const m = mit({ front: [{ posM: -6, dachkanteM: 6.3 }, { posM: 6, dachkanteM: 9.2 }] })
+    const raster = m.levels[0].heightM
+    const hoechste = (a: (typeof m.fields)) => Math.max(...a.map((f) => f.levelIndex + 1))
+    const links = m.fields.filter((f) => f.side === 'front' && f.positionX < -3), rechts = m.fields.filter((f) => f.side === 'front' && f.positionX > 3)
+    expect(hoechste(links)).toBeLessThan(hoechste(rechts))
+    expect(hoechste(rechts)).toBeLessThanOrEqual(bisRinne(9.2, raster))
+  })
+  it('Profil hat Vorrang vor der Dachform; andere Seiten bleiben unberührt', () => {
+    const m = mit({ front: [{ posM: 0, dachkanteM: 4 }] })
+    expect(lagen(m, 'front')).toBeLessThan(lagen(m, 'back'))
+  })
+  it('kein Gerüst über der Dachkante des Profils', () => {
+    const m = mit({ back: [{ posM: -5, dachkanteM: 5 }, { posM: 5, dachkanteM: 5 }] })
+    const raster = m.levels[0].heightM
+    expect(lagen(m, 'back')).toBe(bisRinne(5, raster))
+  })
+})
