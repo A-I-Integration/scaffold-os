@@ -376,7 +376,7 @@ export interface ScaffoldComponent3D {
   /** Nur Rahmen: Rahmenbreite (Abstand Innen-/Außenstütze) in m – die Darstellung zeichnet dann einen echten Leiterrahmen mit zwei Stützen. */
   rahmenBreiteM?: number
   id: string
-  type: 'frame' | 'deck' | 'railing' | 'diagonal' | 'footplate' | 'coupling' | 'anchor' | 'console' | 'stair' | 'net' | 'board' | 'protection_roof' | 'safety_net' | 'load_plate' | 'corner_brace' | 'ladder' | 'sheeting' | 'elevator'
+  type: 'frame' | 'deck' | 'railing' | 'diagonal' | 'footplate' | 'coupling' | 'anchor' | 'console' | 'stair' | 'net' | 'board' | 'protection_roof' | 'safety_net' | 'load_plate' | 'corner_brace' | 'ladder' | 'sheeting' | 'elevator' | 'ausgleich'
   articleNumber: string
   name: string
   /** true = Fremdleistung (z. B. gemieteter Aufzug): kommt nicht in die Stückliste des eigenen Materials */
@@ -789,8 +789,11 @@ export function generateScaffoldComponents(model: CADModel): ScaffoldComponent3D
       fuesse.forEach(([tag, dx, dz]) => {
         if ((tag.startsWith('left') && dgLinks) || (tag.startsWith('right') && dgRechts)) return
         const yStielUnten = yBottom - fu.stielM
-        if (fu.stielM > 0) components.push({ id: `ausgleich-${field.id}-${tag}`, type: 'footplate', articleNumber: agArt, name: agName, position: [positionX + dx, yBottom - fu.stielM / 2, positionZ + dz], rotation: [0, 0, 0], scale: [0.06, fu.stielM, 0.06], color: colorFoot, fieldId: field.id, levelId: level.id })
-        components.push({ id: `spindel-${field.id}-${tag}`, type: 'footplate', articleNumber: spArt, name: spName, position: [positionX + dx, yStielUnten - 0.02 - fu.spindelM / 2, positionZ + dz], rotation: [0, 0, 0], scale: [0.15, 0.04 + fu.spindelM, 0.15], color: colorFoot, fieldId: field.id, levelId: level.id })
+        // Stiel und Spindel-Auszug werden als ein durchgehender Pfosten bis zur Fußplatte gezeichnet (Stückliste: beide Teile getrennt)
+        const pfostenH = fu.stielM + fu.spindelM
+        if (fu.stielM > 0) components.push({ id: `ausgleich-${field.id}-${tag}`, type: 'ausgleich', articleNumber: agArt, name: agName, position: [positionX + dx, yBottom - pfostenH / 2, positionZ + dz], rotation: [0, 0, 0], scale: [0.05, pfostenH, 0.05], color: colorFoot, fieldId: field.id, levelId: level.id })
+        if (fu.stielM <= 0 && fu.spindelM > 0.01) components.push({ id: `spindelschaft-${field.id}-${tag}`, type: 'ausgleich', articleNumber: spArt, name: spName, extern: true, position: [positionX + dx, yBottom - fu.spindelM / 2, positionZ + dz], rotation: [0, 0, 0], scale: [0.04, fu.spindelM, 0.04], color: colorFoot, fieldId: field.id, levelId: level.id }) // nur Darstellung, nicht in der Stückliste
+        components.push({ id: `spindel-${field.id}-${tag}`, type: 'footplate', articleNumber: spArt, name: spName, position: [positionX + dx, yStielUnten - fu.spindelM - 0.02, positionZ + dz], rotation: [0, 0, 0], scale: [0.15, 0.04, 0.15], color: colorFoot, fieldId: field.id, levelId: level.id })
       })
     } else if (levelIndex === 0) {
       if (!dgLinks) components.push({ id: `foot-${field.id}-left`, type: 'footplate', articleNumber: 'FP-001', name: 'Fußplatte', position: [positionX - lengthM / 2 + 0.02, yBottom - 0.02, positionZ], rotation: [0, 0, 0], scale: [0.15, 0.04, 0.15], color: colorFoot, fieldId: field.id, levelId: level.id })
@@ -2281,7 +2284,7 @@ export function generateBillOfMaterials(model: CADModel): MaterialItem[] {
 }
 
 function getCategoryFromType(type: ScaffoldComponent3D['type']): string {
-  const map: Record<string, string> = { frame: 'Rahmen', deck: 'Belag', railing: 'Geländer', diagonal: 'Diagonalen', footplate: 'Fundamente', coupling: 'Kupplungen', anchor: 'Anker', console: 'Konsolen', stair: 'Treppen', sheeting: 'Sicherheit', elevator: 'Aufzug', net: 'Sicherheit', board: 'Bordbretter', protection_roof: 'Sicherheit', safety_net: 'Sicherheit', load_plate: 'Fundamente', corner_brace: 'Eckverbindungen', ladder: 'Leitern' }
+  const map: Record<string, string> = { frame: 'Rahmen', deck: 'Belag', railing: 'Geländer', diagonal: 'Diagonalen', footplate: 'Fundamente', coupling: 'Kupplungen', anchor: 'Anker', console: 'Konsolen', stair: 'Treppen', sheeting: 'Sicherheit', elevator: 'Aufzug', net: 'Sicherheit', board: 'Bordbretter', protection_roof: 'Sicherheit', safety_net: 'Sicherheit', load_plate: 'Fundamente', corner_brace: 'Eckverbindungen', ladder: 'Leitern', ausgleich: 'Fundamente' }
   return map[type] || 'Sonstiges'
 }
 
