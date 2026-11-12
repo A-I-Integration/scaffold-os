@@ -18,6 +18,7 @@ import type { MaterialItem } from '@/types/scaffold'
 import {
   erzeugeLeistungsverzeichnis, formatEuro, formatMenge,
   LV_STANDARD_EINGABEN, LASTKLASSEN, ZUSATZ_INFO, type LvEingaben, type LvStil, type LvZusatz,
+  aussenEckenAnzahl,
 } from '@/lib/leistungsverzeichnis'
 import { FIRMENFELDER, firmenwerteAus, standardpreiseAus, lvStilFuerGebaeude, type LvStandardpreise } from '@/lib/lv-firmenwerte'
 import { leseStatikerLvXlsx, mengenAusAuftraggeberLv, type StatikerLvErgebnis } from '@/lib/statiker-lv-einlesen'
@@ -213,7 +214,7 @@ export default function LvDialog({ model, materials, aufbauStunden, abbauStunden
   }
 
   const num = (k: keyof LvEingaben, step = '0.01') => (
-    <input type='number' min={0} step={step} className={feld} value={(e[k] as number) === 0 ? '' : (e[k] as number)}
+    <input type='number' min={0} step={step} className={feld} value={(e[k] as number | undefined) === 0 || (e[k] as number | undefined) === undefined ? '' : (e[k] as number)}
       onChange={(ev) => setze({ [k]: zahl(ev.target.value) } as Partial<LvEingaben>)} />
   )
 
@@ -342,6 +343,8 @@ export default function LvDialog({ model, materials, aufbauStunden, abbauStunden
             <div className='grid grid-cols-2 gap-2'>
               <div><label className={label}>Höhenzuschlag (m)</label>{num('hoehenZuschlagM')}</div>
               <div><label className={label}>Öffnungen abziehen (m²)</label>{num('oeffnungenAbzugM2')}</div>
+              <div><label className={label}>Ecken-Zuschlag je Außenecke (m)</label>{num('eckenZuschlagM')}</div>
+              <div><label className={label}>Außenecken (leer = {aussenEckenAnzahl(model)} aus dem CAD)</label>{num('eckenAnzahlManuell', '1')}</div>
               <div><label className={label}>Giebel Dachgauben (m²)</label>{num('giebelflaecheM2')}</div>
               <div><label className={label}>Höhe Fanggerüst (m)</label>{num('fanggeruestHoeheM')}</div>
             </div>
