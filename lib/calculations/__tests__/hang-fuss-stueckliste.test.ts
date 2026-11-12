@@ -39,3 +39,16 @@ describe('Hang: Pfosten bis zum Gelände gezeichnet', () => {
     expect(spindeln).toBe(m.fields.filter((f) => f.fuss).length * 4)
   })
 })
+
+describe('Hang: Lücke zwischen Gelände und unterster Lage hat Riegel und Diagonale', () => {
+  it('Felder mit großer Lücke bekommen Querriegel und Diagonale', () => {
+    const m = generateCADModel(haus({ gelaendeLinieSeiteM: { front: { vonM: 0, bisM: -3.7 } } }), 'layher-allround')
+    const gross = m.fields.filter((f) => f.fuss && f.fuss.stielM + f.fuss.spindelM >= 0.5)
+    expect(gross.length).toBeGreaterThan(0)
+    for (const f of gross) {
+      expect(m.components3D.filter((c) => c.id.startsWith(`ausgleich-riegel-${f.id}-`))).toHaveLength(2)
+    }
+    const hoch = gross.filter((f) => f.fuss!.stielM + f.fuss!.spindelM >= 1.0)
+    for (const f of hoch) expect(m.components3D.some((c) => c.id === `ausgleich-diagonale-${f.id}`)).toBe(true)
+  })
+})

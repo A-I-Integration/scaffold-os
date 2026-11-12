@@ -795,6 +795,17 @@ export function generateScaffoldComponents(model: CADModel): ScaffoldComponent3D
         if (fu.stielM <= 0 && fu.spindelM > 0.01) components.push({ id: `spindelschaft-${field.id}-${tag}`, type: 'ausgleich', articleNumber: spArt, name: spName, extern: true, position: [positionX + dx, yBottom - fu.spindelM / 2, positionZ + dz], rotation: [0, 0, 0], scale: [0.04, fu.spindelM, 0.04], color: colorFoot, fieldId: field.id, levelId: level.id }) // nur Darstellung, nicht in der Stückliste
         components.push({ id: `spindel-${field.id}-${tag}`, type: 'footplate', articleNumber: spArt, name: spName, position: [positionX + dx, yStielUnten - fu.spindelM - 0.02, positionZ + dz], rotation: [0, 0, 0], scale: [0.15, 0.04, 0.15], color: colorFoot, fieldId: field.id, levelId: level.id })
       })
+      // Tiefe Lücke bis zum Gelände: der Stiel-Abschnitt braucht wie eine Lage Riegel (innen/außen) und ab 1 m Höhe eine Diagonale
+      const gapM = fu.stielM + fu.spindelM
+      if (gapM >= 0.5 && !field.durchgang) {
+        const yR = yBottom - gapM + 0.5
+        ;[0, widthM - 0.075].forEach((dz, k) => components.push({ id: `ausgleich-riegel-${field.id}-${k}`, type: 'frame', articleNumber: 'QR-001', name: 'Querriegel', position: [positionX, yR, positionZ + dz], rotation: [0, 0, 0], scale: [lengthM, 0.04, 0.04], color: colorFrame, fieldId: field.id, levelId: level.id }))
+        const hD = yBottom - yR
+        if (hD >= 0.5) {
+          const dl = Math.sqrt(lengthM * lengthM + hD * hD)
+          components.push({ id: `ausgleich-diagonale-${field.id}`, type: 'diagonal', articleNumber: getDiagonalArticle(lengthM), name: `Diagonale ${lengthM}m`, position: [positionX, yR + hD / 2, positionZ], rotation: [0, 0, Math.atan2(hD, lengthM)], scale: [0.03, dl, 0.03], color: colorDiagonal, fieldId: field.id, levelId: level.id })
+        }
+      }
     } else if (levelIndex === 0) {
       if (!dgLinks) components.push({ id: `foot-${field.id}-left`, type: 'footplate', articleNumber: 'FP-001', name: 'Fußplatte', position: [positionX - lengthM / 2 + 0.02, yBottom - 0.02, positionZ], rotation: [0, 0, 0], scale: [0.15, 0.04, 0.15], color: colorFoot, fieldId: field.id, levelId: level.id })
       if (!dgRechts) components.push({ id: `foot-${field.id}-right`, type: 'footplate', articleNumber: 'FP-001', name: 'Fußplatte', position: [positionX + lengthM / 2 - 0.02, yBottom - 0.02, positionZ], rotation: [0, 0, 0], scale: [0.15, 0.04, 0.15], color: colorFoot, fieldId: field.id, levelId: level.id })
