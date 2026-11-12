@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { generateCADModel, generateBillOfMaterials, calculateLogistics, type BuildingParams } from '../calculations/cad-engine'
 import { rechteckUmriss } from '../calculations/cad-umriss'
-import { erzeugeLeistungsverzeichnis, breitenklasse, breitenklasseZuSchmal, LV_STANDARD_EINGABEN, LASTKLASSEN, type LvEingaben } from '../leistungsverzeichnis'
+import { erzeugeLeistungsverzeichnis, aussenEckenAnzahl, breitenklasse, breitenklasseZuSchmal, LV_STANDARD_EINGABEN, LASTKLASSEN, type LvEingaben } from '../leistungsverzeichnis'
 import type { MaterialItem } from '@/types/scaffold'
 
 const gebaeude: BuildingParams = {
@@ -96,6 +96,18 @@ describe('Leistungsverzeichnis', () => {
     expect(text).toMatch(/Lastklasse 4/)
     expect(text).toMatch(/SW06/)
     expect(LASTKLASSEN[4]).toBe(3)
+  })
+
+  it('Ecken-Zuschlag: Fläche + Zuschlag × Außenecken × Höhe; leer = nichts; Anzahl von Hand überschreibt', () => {
+    const q = quelle()
+    const f0 = g(erzeugeLeistungsverzeichnis(q, grund))[0].menge
+    expect(g(erzeugeLeistungsverzeichnis(q, { ...grund, eckenZuschlagM: 0 }))[0].menge).toBe(f0)
+    const n = aussenEckenAnzahl(q.model)
+    expect(n).toBeGreaterThan(0)
+    const lv = erzeugeLeistungsverzeichnis(q, { ...grund, eckenZuschlagM: 0.5 })
+    expect(g(lv)[0].menge).toBeCloseTo(f0 + 0.5 * n * q.model.totalHeightM, 1)
+    const lv2 = erzeugeLeistungsverzeichnis(q, { ...grund, eckenZuschlagM: 0.5, eckenAnzahlManuell: 2 })
+    expect(g(lv2)[0].menge).toBeCloseTo(f0 + 0.5 * 2 * q.model.totalHeightM, 1)
   })
 
   it('Abrechnungsregeln: Höhenzuschlag, Öffnungsabzug, Giebel-Zulage, Einbauhöhe', () => {

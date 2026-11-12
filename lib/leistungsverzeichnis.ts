@@ -111,6 +111,10 @@ export interface LvEingaben {
   /** Abrechnungsregeln (vom Nutzer einzustellen, keine Normwerte voreingestellt): */
   /** Höhenzuschlag auf die Gerüstfläche in m (z. B. Überstand über Traufe/Attika, wie im Vertrag/ATV vereinbart) */
   hoehenZuschlagM: number
+  /** Ecken-Zuschlag: Breite in m je Außenecke, die zur Gerüstfläche zählt (Fläche = Anzahl Ecken × Zuschlag × Gerüsthöhe). Der Wert kommt aus deinem Vertrag/der ATV; 0 oder leer = kein Zuschlag. */
+  eckenZuschlagM?: number
+  /** Anzahl Außenecken von Hand (leer oder 0 = aus dem CAD: Umriss = konvexe Ecken, Rechteck = Ecken zwischen eingerüsteten Seiten) */
+  eckenAnzahlManuell?: number
   /** Abzug für Öffnungen in m² (Summe der Öffnungen, die nach Vertrag/ATV abzuziehen sind) */
   oeffnungenAbzugM2: number
   /** Giebelflächen der Dachgauben in m² (Zulage, nicht im CAD) */
@@ -289,6 +293,13 @@ export interface LvHerkunft {
   stundenFingerprint: string
 }
 
+/** Außenecken des Gerüsts aus dem CAD: Umriss = konvexe Ecken mit Gerüst an beiden Kanten; sonst Ecken zwischen zwei benachbarten eingerüsteten Seiten (Rechteck). Vorbauten/Abschnitte: nur die Hauptecken – bitte von Hand prüfen. */
+export function aussenEckenAnzahl(model: CADModel): number {
+  if (model.umrissEcken && model.umrissEcken.length > 0) return model.umrissEcken.filter((x) => x.konvex).length
+  const sd = new Set(model.building.sides ?? [])
+  return [['front', 'left'], ['front', 'right'], ['back', 'left'], ['back', 'right']].filter(([a, b]) => sd.has(a as never) && sd.has(b as never)).length
+}
+
 export function erzeugeLeistungsverzeichnis(quelle: LvQuelle, e: LvEingaben): Leistungsverzeichnis {
   const { model, materials } = quelle
   // Stunden: eigene Eingabe geht vor dem CAD-Wert
@@ -303,7 +314,9 @@ export function erzeugeLeistungsverzeichnis(quelle: LvQuelle, e: LvEingaben): Le
 
   // Mengen aus dem CAD
   const zuschlagFlaecheM2 = (e.hoehenZuschlagM || 0) * (model.totalLengthM || 0)
-  const flaecheM2 = r2(Math.max(0, model.totalAreaM2 + zuschlagFlaecheM2 - (e.oeffnungenAbzugM2 || 0)))
+  const eckenAnzahl = e.eckenAnzahlManuell !== undefined && e.eckenAnzahlManuell > 0 ? Math.round(e.eckenAnzahlManuell) : aussenEckenAnzahl(model)
+  const eckenFlaecheM2 = Math.max(0, e.eckenZuschlagM || 0) * eckenAnzahl * (model.totalHeightM || 0)
+  const flaecheM2 = r2(Math.max(0, model.totalAreaM2 + zuschlagFlaecheM2 + eckenFlaecheM2 - (e.oeffnungenAbzugM2 || 0)))
   const giebelM2 = r2(Math.max(0, e.giebelflaecheM2 || 0))
   const dachRoh = comps.filter((c) => c.type === 'protection_roof')
   const einbauhoeheM = dachRoh.length ? r2(Math.min(...dachRoh.map((c) => c.position[1]))) : 0
@@ -836,7 +849,7 @@ export function erzeugeLeistungsverzeichnis(quelle: LvQuelle, e: LvEingaben): Le
     annahmen: e.stil === 'preisliste' ? annahmenPreisliste : [
       ...(e.lastklasse >= 4 && breite > 0 && breite < MIN_BREITE_AB_LK4_M - 1e-9 ? [`ACHTUNG Lastklasse ${e.lastklasse}: Nach DIN EN 12811-1 ist ab Lastklasse 4 mindestens die Breitenklasse W09 (0,90 m) erforderlich, das CAD-Gerüst ist ${de(breite, 2)} m breit (= ${breitenklasse(breite)}). Gerüstbreite im CAD erhöhen oder Lastklasse mit dem Statiker klären.`] : []),
       ...(breitenklasseZuSchmal(e.breitenklasseManuell, breite) ? [`ACHTUNG Breitenklasse: Gefordert ist ${bk}, das CAD-Gerüst ist ${de(breite, 2)} m breit (= ${breitenklasse(breite)}). Das Gerüst im CAD erfüllt die geforderte Breitenklasse nicht – Gerüstbreite im CAD anpassen oder die Klasse klären.`] : []),
-      `Mengen aus dem CAD-Modell. Gerüstfläche = Länge × Höhe der eingerüsteten Fassade${e.hoehenZuschlagM > 0 ? ` + Höhenzuschlag ${de(e.hoehenZuschlagM, 2)} m` : ''}${e.oeffnungenAbzugM2 > 0 ? ` − Öffnungen ${de(e.oeffnungenAbzugM2, 2)} m²` : ''}. Höhenzuschlag und Öffnungsabzug sind Eingaben nach deinen vertraglichen Regeln (ATV DIN 18451); der Normtext ist nicht hinterlegt und nicht geprüft.`,
+      `Mengen aus dem CAD-Modell. Gerüstfläche = Länge × Höhe der eingerüsteten Fassade${e.hoehenZuschlagM > 0 ? ` + Höhenzuschlag ${de(e.hoehenZuschlagM, 2)} m` : ''}${(e.eckenZuschlagM ?? 0) > 0 ? ` + Ecken-Zuschlag ${de(e.eckenZuschlagM as number, 2)} m × ${eckenAnzahl} Außenecken × ${de(model.totalHeightM || 0, 2)} m Höhe` : ''}${e.oeffnungenAbzugM2 > 0 ? ` − Öffnungen ${de(e.oeffnungenAbzugM2, 2)} m²` : ''}. Höhenzuschlag, Ecken-Zuschlag und Öffnungsabzug sind Eingaben nach deinen vertraglichen Regeln (ATV DIN 18451); der Normtext ist nicht hinterlegt und nicht geprüft.`,
       ...(giebelM2 > 0 ? ['Giebelflächen der Dachgauben sind eine Eingabe (nicht im CAD). Der EP der Zulage (Pos. 1.09) entspricht dem EP von Pos. 1.01 – Annahme.'] : []),
       `Einheitspreise abgeleitet aus dem Materialwert der Stückliste (${de(matGesamt, 2)} €), Aufbau-/Abbaustunden (${de(stundenAufAb, 0)} h, nach Materialwert auf die Positionen verteilt) und den eingegebenen Faktoren.`,
       `Vorhaltung je Woche = Materialwert × Mietsatz × (1 + Zuschlag), geteilt durch die Menge.${e.stil === 'grundstandzeit' ? ` Grundposition = (Stunden × Stundensatz Facharbeiter + Materialwert × Mietsatz × ${GRUNDSTANDZEIT_WOCHEN} Wochen) × (1 + Zuschlag), geteilt durch die Menge.` : ''}`,
