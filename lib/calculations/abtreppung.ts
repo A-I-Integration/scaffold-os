@@ -28,6 +28,32 @@ export interface FeldAbtreppung {
 
 const r2 = (x: number) => Math.round(x * 100) / 100
 
+export interface AusgleichTeil { stielM: number; spindelM: number; spindel80: boolean }
+
+/**
+ * Für eine einzelne Fußlücke `ausgleichM` (0 .. < Rasterhöhe) den größten Standard-Ausgleichsstiel plus Fußspindel wählen.
+ * Null, wenn das System keine Ausgleichsdaten hat. Nutzt den Standard-Spindelweg; markiert spindel80, wenn die verstärkte Spindel nötig ist.
+ */
+export function ausgleichTeile(ausgleichM: number, system: GeruestSystem): AusgleichTeil | null {
+  const ha = system.hoehenausgleich
+  if (!ha || !ha.stielLaengenM?.length || !(ha.fussspindelWegM > 0)) return null
+  const raster = system.rasterHoeheM
+  const stiele = [...ha.stielLaengenM].filter((x) => x > 0 && x < raster + 1e-9).sort((a, b) => a - b)
+  const a = Math.max(0, ausgleichM)
+  const spindel60 = ha.fussspindelWegM
+  const spindel80 = 0.55
+  let stiel = 0
+  for (const sM of stiele) if (sM <= a + 1e-9) stiel = sM
+  let spindel = r2(a - stiel)
+  let gross = false
+  if (spindel > spindel60 + 1e-9) {
+    const groesser = stiele.find((sM) => sM > stiel && sM <= a + spindel80 + 1e-9)
+    if (groesser && a - groesser >= -1e-9) { stiel = groesser; spindel = r2(a - stiel) }
+    if (spindel > spindel60 + 1e-9) gross = true
+  }
+  return { stielM: stiel, spindelM: Math.max(0, spindel), spindel80: gross }
+}
+
 /** Gelände an einer Stelle t∈[0,1] entlang der Seite (linear von vonM nach bisM). */
 export function gelaendeAn(vonM: number, bisM: number, t: number): number {
   const tt = Math.min(1, Math.max(0, t))
