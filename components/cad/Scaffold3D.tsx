@@ -14,7 +14,7 @@
 
 import { useMemo, useState, useRef, useEffect, useCallback, memo, createContext, useContext } from 'react'
 import { Canvas, useThree, useFrame } from '@react-three/fiber'
-import { OrbitControls, Grid, Text, Sky, AdaptiveDpr, AdaptiveEvents, ContactShadows, Edges } from '@react-three/drei'
+import { OrbitControls, Grid, Text, Sky, AdaptiveDpr, AdaptiveEvents, ContactShadows, Edges, Html } from '@react-three/drei'
 import { lazy, Suspense } from 'react'
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js'
 import * as THREE from 'three'
@@ -99,6 +99,8 @@ interface Props {
   // zu der ein 3D-Bauteil gehört (null = nicht verschiebbar).
   platzierungIdVon?: (componentId: string) => string | null
   onBauteilZiehen?: (platzierungId: string, position: [number, number, number], side: string, levelIndex: number) => void
+  /** Klick auf eine Gebäudeseite im 3D: Seite ein-/ausrüsten. Aktive Seiten stehen in model.building.sides. */
+  onSeiteUmschalten?: (side: 'front' | 'back' | 'left' | 'right') => void
 }
 
 // Ziehen: geteilt über einen Kontext, damit die Eigenschaften nicht durch
@@ -1337,11 +1339,11 @@ function turmLage(building: CADModel['building']): { x: number; z: number; drehu
 }
 
 /** Zeigt das echte Gebäude (falls geladen), sonst den einfachen Baukörper */
-function GebaeudeAnzeige({ building, features, visible }: { building: CADModel['building']; features: BuildingFeature3D[]; visible: boolean }) {
+function GebaeudeAnzeige({ building, features, visible, onSeiteUmschalten }: { building: CADModel['building']; features: BuildingFeature3D[]; visible: boolean; onSeiteUmschalten?: (side: 'front' | 'back' | 'left' | 'right') => void }) {
   const echt = useContext(EchtesGebaeudeKontext)
   return (
     <>
-      <Building3D building={building} features={features} visible={visible && !echt} />
+      <Building3D building={building} features={features} visible={visible && !echt} onSeiteUmschalten={echt ? undefined : onSeiteUmschalten} />
       {visible && echt && <EchtesGebaeude3D {...echt} ziel={turmLage(building)} />}
     </>
   )
@@ -1420,14 +1422,76 @@ function Gesimse({ laengeM, tiefeM, hoeheM }: { laengeM: number; tiefeM: number;
   )
 }
 
+/**
+ * Klickbare Gebäudeseiten im 3D: über jede Wand legt sich eine unsichtbare Fläche. Beim Überfahren hebt sie sich
+ * leicht hervor, beim Klick öffnet sich ein kleiner Kasten „Einrüsten“ bzw. „Gerüst entfernen“ für genau diese Seite.
+ * Koordinaten wie der Baukörper (Mitte x/z = 0, Höhe lokal von −hangM bis heightM).
+ */
+function SeitenKlick({ lengthM, widthM, heightM, hangM, sides, onToggle }: {
+  lengthM: number; widthM: number; heightM: number; hangM: number
+  sides: ('front' | 'back' | 'left' | 'right')[]; onToggle: (s: 'front' | 'back' | 'left' | 'right') => void
+}) {
+  const [offen, setOffen] = useState<'front' | 'back' | 'left' | 'right' | null>(null)
+  const [hover, setHover] = useState<'front' | 'back' | 'left' | 'right' | null>(null)
+  const gesamt = heightM + hangM
+  const yc = heightM / 2 - hangM / 2
+  const halbL = lengthM / 2, halbW = widthM / 2
+  const flaechen: { s: 'front' | 'back' | 'left' | 'right'; pos: [number, number, number]; rotY: number; breite: number }[] = [
+    { s: 'front', pos: [0, yc, halbW + 0.02], rotY: 0, breite: lengthM },
+    { s: 'back', pos: [0, yc, -halbW - 0.02], rotY: Math.PI, breite: lengthM },
+    { s: 'right', pos: [halbL + 0.02, yc, 0], rotY: Math.PI / 2, breite: widthM },
+    { s: 'left', pos: [-halbL - 0.02, yc, 0], rotY: -Math.PI / 2, breite: widthM },
+  ]
+  const name = (s: string) => (s === 'front' ? 'Vorderseite' : s === 'back' ? 'Rückseite' : s === 'left' ? 'linke Seite' : 'rechte Seite')
+  return (
+    <group>
+      {flaechen.map((f) => {
+        const aktiv = sides.includes(f.s)
+        return (
+          <mesh
+            key={f.s}
+            position={f.pos}
+            rotation={[0, f.rotY, 0]}
+            onClick={(e) => { e.stopPropagation(); setOffen((o) => (o === f.s ? null : f.s)) }}
+            onPointerOver={(e) => { e.stopPropagation(); setHover(f.s); document.body.style.cursor = 'pointer' }}
+            onPointerOut={() => { setHover((h) => (h === f.s ? null : h)); document.body.style.cursor = 'auto' }}
+          >
+            <planeGeometry args={[f.breite, gesamt]} />
+            <meshBasicMaterial color={aktiv ? '#2f7d32' : '#0071e3'} transparent opacity={hover === f.s ? 0.16 : 0.0} depthWrite={false} side={THREE.DoubleSide} />
+          </mesh>
+        )
+      })}
+      {offen && (() => {
+        const f = flaechen.find((x) => x.s === offen)!
+        const aktiv = sides.includes(offen)
+        return (
+          <Html position={[f.pos[0], heightM + 0.6, f.pos[2]]} center distanceFactor={12} zIndexRange={[100, 0]}>
+            <div style={{ background: 'white', border: '1px solid #d2d2d7', borderRadius: 10, padding: 8, boxShadow: '0 4px 14px rgba(0,0,0,0.18)', width: 150, fontFamily: 'system-ui', textAlign: 'center' }}>
+              <div style={{ fontSize: 11, color: '#6e6e73', marginBottom: 6 }}>{name(offen)}</div>
+              <button
+                onClick={() => { onToggle(offen); setOffen(null) }}
+                style={{ width: '100%', padding: '7px 10px', borderRadius: 8, border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 600, color: 'white', background: aktiv ? '#c0392b' : '#0071e3' }}
+              >
+                {aktiv ? 'Gerüst entfernen' : 'Einrüsten'}
+              </button>
+            </div>
+          </Html>
+        )
+      })()}
+    </group>
+  )
+}
+
 function Building3D({
   building,
   features,
   visible,
+  onSeiteUmschalten,
 }: {
   building: CADModel['building']
   features: BuildingFeature3D[]
   visible: boolean
+  onSeiteUmschalten?: (side: 'front' | 'back' | 'left' | 'right') => void
 }) {
   const praes = useContext(FarbModusKontext) === 'praesentation'
   if (!visible) return null
@@ -1520,6 +1584,11 @@ function Building3D({
 
       {/* Erdböschung an den bergseitigen Wänden; Talseite bleibt offen */}
       <Hangboeschung lengthM={lengthM} widthM={w} hangM={hangM} g={hangG} />
+
+      {/* Klickbare Seiten: Seite anklicken → „Einrüsten“ / „Gerüst entfernen“ */}
+      {onSeiteUmschalten && (
+        <SeitenKlick lengthM={lengthM} widthM={w} heightM={heightM} hangM={hangM} sides={(building.sides ?? ['front']) as ('front' | 'back' | 'left' | 'right')[]} onToggle={onSeiteUmschalten} />
+      )}
 
       <Gesimse laengeM={lengthM} tiefeM={w} hoeheM={heightM} />
 
@@ -2037,6 +2106,7 @@ function Scene({
   onPlacementClick,
   showEnvironment,
   removedCount,
+  onSeiteUmschalten,
 }: Props) {
   const praes = useContext(FarbModusKontext) === 'praesentation'
   const statik = useContext(FarbModusKontext) === 'statik'
@@ -2089,7 +2159,7 @@ function Scene({
       <BridgeDeck3D building={model.building} visible={showBuilding && !!bridgeMode} />
       <Umgebung3D model={model} visible={!!showEnvironment && !bridgeMode && !weiss} />
       <group position={[0, hangHebung, 0]}>
-        <GebaeudeAnzeige building={model.building} features={features || []} visible={showBuilding && !bridgeMode} />
+        <GebaeudeAnzeige building={model.building} features={features || []} visible={showBuilding && !bridgeMode} onSeiteUmschalten={!measureMode && !placementType ? onSeiteUmschalten : undefined} />
         {showScaffold && statik && <Stabwerk3D components={model.components3D} visibleTypes={visibleTypes} />}
         {showScaffold && !statik && (
           <AllScaffoldComponents
@@ -2168,6 +2238,7 @@ function Scaffold3D({
   removedCount,
   platzierungIdVon,
   onBauteilZiehen,
+  onSeiteUmschalten,
 }: Props) {
   // Esc schließt den Bauteil-Kasten
   useEffect(() => {
@@ -2247,6 +2318,7 @@ function Scaffold3D({
         <group ref={contentRef}>
           <Scene
             model={model}
+            onSeiteUmschalten={onSeiteUmschalten}
             features={features}
             showBuilding={showBuilding}
             showScaffold={showScaffold}
