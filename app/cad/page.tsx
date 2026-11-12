@@ -252,6 +252,8 @@ export default function CADPage() {
   const [aufmassHinweise, setAufmassHinweise] = useState<string[]>([])
   // Projektname aus dem Aufmaß (nur für den Kopf der Gerüstplan-PDF; bleibt nicht über ein Neuladen erhalten)
   const [aufmassProjektName, setAufmassProjektName] = useState<string | undefined>(undefined)
+  // Firmenname aus den Einstellungen (für Köpfe der Exporte); fehlt er, bleibt der bisherige Platzhalter
+  const [firmenName, setFirmenName] = useState<string | undefined>(undefined)
   useEffect(() => {
     let roh: string | null = null
     try { roh = sessionStorage.getItem(CAD_UEBERNAHME_KEY); sessionStorage.removeItem(CAD_UEBERNAHME_KEY) } catch { return }
@@ -541,7 +543,7 @@ export default function CADPage() {
 
   useEffect(() => {
     loadKunden()
-    fetch('/api/company').then(r => r.json()).then(j => { const v = Number(j.company?.calc_hours_per_sqm); if (v > 0) setHoursPerSqm(v) }).catch(() => {})
+    fetch('/api/company').then(r => r.json()).then(j => { const v = Number(j.company?.calc_hours_per_sqm); if (v > 0) setHoursPerSqm(v); const n = typeof j.company?.company_name === 'string' ? j.company.company_name.trim() : ''; if (n) setFirmenName(n) }).catch(() => {})
     // Dasselbe Lager wie im normalen Aufmaß: Preise/Gewichte/Namen der Firma (Abgleich über die Artikelnummer).
     // Statiker (extern) bekommt die Lagerpreise über eine eigene, nur lesende Route (ohne Bestände).
     const ladeLager = (quelle: string) => fetch(quelle).then(r => r.json())
@@ -802,22 +804,22 @@ export default function CADPage() {
     if (!model) return
     const html = generatePDFHTML(modelWithManual ?? model, materials, {
       include3D: true, include2D: true, includeBOM: true, includeChecks: true,
-      companyName: 'Ihr Unternehmen', projectName: 'Gerüstprojekt',
+      companyName: firmenName || 'Ihr Unternehmen', projectName: aufmassProjektName || 'Gerüstprojekt',
       date: new Date().toLocaleDateString('de-DE'),
     })
     downloadPDF(html, `Geruestbau-Dokumentation-${new Date().toISOString().split('T')[0]}.html`)
-  }, [model, materials])
+  }, [model, materials, firmenName, aufmassProjektName])
 
   // NEU (Marktvergleich-Lücke 1): Montageplan – Aufbaureihenfolge je Ebene,
   // getrennt von der reinen Stückliste.
   const handleExportMontageplan = useCallback(() => {
     if (!model) return
     const html = generateMontageplanHTML(modelWithManual ?? model, {
-      companyName: 'Ihr Unternehmen', projectName: 'Gerüstprojekt',
+      companyName: firmenName || 'Ihr Unternehmen', projectName: aufmassProjektName || 'Gerüstprojekt',
       date: new Date().toLocaleDateString('de-DE'),
     })
     downloadPDF(html, `Montageplan-${new Date().toISOString().split('T')[0]}.html`)
-  }, [model])
+  }, [model, firmenName, aufmassProjektName])
 
   // NEU (Marktvergleich-Lücke 4): reine Geometriedaten für einen externen
   // Statiker – kein eigener Standsicherheitsnachweis.
@@ -882,7 +884,7 @@ export default function CADPage() {
       const { erzeugeStatikerPaket } = await import('@/lib/export/statiker-paket')
       const zip = erzeugeStatikerPaket({
         model: m, materials, statik: bereinigeStatikDaten(statikDaten),
-        projektName: 'Gerüstprojekt', firma: 'Ihr Unternehmen',
+        projektName: aufmassProjektName || 'Gerüstprojekt', firma: firmenName || 'Ihr Unternehmen',
         datum: new Date().toLocaleDateString('de-DE'), ifc, planModus,
       })
       const a = document.createElement('a')
@@ -894,7 +896,7 @@ export default function CADPage() {
       alert('❌ Statiker-Paket fehlgeschlagen: ' + (err instanceof Error ? err.message : String(err)))
     }
     setStatikerPaketLaeuft(false)
-  }, [model, modelWithManual, materials, statikDaten, planModus])
+  }, [model, modelWithManual, materials, statikDaten, planModus, firmenName, aufmassProjektName])
 
   // Stückliste als CSV (öffnet direkt in Excel, kein Zusatzpaket nötig)
   const handleExportCSV = useCallback(() => {
@@ -1244,7 +1246,7 @@ export default function CADPage() {
                 <button onClick={() => { setAutoGenerate(true); generate(); }} className='px-4 py-2 text-sm font-medium rounded-xl bg-[#0071e3] text-white hover:bg-[#0077ed]'>Gerüst neu berechnen</button>
               </div>
             )}
-            {viewMode === '2d' && modelWithManual && <Scaffold2D model={modelWithManual} projektName={aufmassProjektName} zeichnung={{ figuren, werkzeug: zeichenWerkzeug, onNeu: (f) => setFiguren((l) => [...l, f]), onWerkzeug: setZeichenWerkzeug }} />}
+            {viewMode === '2d' && modelWithManual && <Scaffold2D model={modelWithManual} projektName={aufmassProjektName} firma={firmenName} zeichnung={{ figuren, werkzeug: zeichenWerkzeug, onNeu: (f) => setFiguren((l) => [...l, f]), onWerkzeug: setZeichenWerkzeug }} />}
             {viewMode === '2d' && modelWithManual && figuren.length > 0 && (
               <aside className='absolute right-3 top-3 z-20 w-[300px] max-h-[60%] overflow-hidden rounded-md border bg-white shadow-xl' style={{ borderColor: 'var(--os-linie)' }} aria-label='Zeichnung'>
                 <div className='px-3 py-2 text-[14px] font-bold text-white' style={{ background: 'var(--os-nav)' }}>Zeichnung ({figuren.length})</div>
