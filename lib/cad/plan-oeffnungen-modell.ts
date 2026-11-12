@@ -59,6 +59,8 @@ export interface ModellOeffnungen {
   vorderseite: PlanKante
 }
 
+const MAX_EINGANG_BREITE_M = 1.4
+
 // Plan-Koordinaten: x nach rechts, y nach unten. Außennormale je Kante.
 const NORMALE: Record<PlanKante, [number, number]> = { unten: [0, 1], oben: [0, -1], links: [-1, 0], rechts: [1, 0] }
 
@@ -97,7 +99,8 @@ export function oeffnungenFuerModell(geschosse: PlanGeschossOeffnungen[], langeA
     const offset = r2(o.alongM * entlang)
     const basis = o.ebene * geschossHoeheM
     const id = `p${nr++}`
-    if (o.typ === 'tuer' && o.ebene === 0) {
+    // Breite Türen (Terrassen-/Schiebetüren) werden wie Fenster behandelt: das Gerüst darf davor stehen, nur schmale Türen (Eingänge) bleiben frei
+    if (o.typ === 'tuer' && o.ebene === 0 && o.breiteM <= MAX_EINGANG_BREITE_M) {
       const unten = Math.max(0, o.bruestungM ?? 0)
       const hoehe = o.sturzM !== undefined && o.sturzM - unten >= 1.7 ? r2(o.sturzM - unten) : 2.1
       tueren.push({ id, side, offsetAlongM: offset, widthM: o.breiteM, heightM: hoehe })

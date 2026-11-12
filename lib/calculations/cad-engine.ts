@@ -13,6 +13,8 @@ import { KONSOLE_BREITE_M, type CadBalkon } from '../balkon'
 /** Länge der Podeste der Außentreppe an den Turmenden (m) – zugleich Breite des Durchgangs im Gerüstgeländer. */
 export const TREPPEN_PODEST_M = 0.6
 
+export interface SeitenProfilPunkt { posM: number; dachkanteM: number; gelaendeM?: number }
+
 export interface BuildingSection {
   bezeichnung?: string
   laengeM: number
@@ -64,6 +66,10 @@ export interface GeruestOptionen {
   tuerenFreihalten?: boolean
   /** Höhe des Geländes am Fuß jeder Seite in m, bezogen auf ±0,00 (Fußboden Erdgeschoss): negativ = Gelände liegt tiefer (Hang, Talseite). Der Fußpunkt der Seite folgt dem Gelände; Lagen und Anker rechnen ab dort. Nur beim einfachen Gebäude (nicht Abschnitte/Umriss). */
   gelaendeSeiteM?: Partial<Record<'front' | 'back' | 'left' | 'right', number>>
+  /** Pultdach: Seite mit der niedrigen Traufe (dort endet das Dach bei `eavesHeightM`, gegenüber beim First `heightM`, an den Seitenwänden steigt es gleichmäßig). Fehlt die Angabe, gilt die Traufe vorsichtig für alle Seiten. */
+  pultNiedrigeSeite?: 'front' | 'back' | 'left' | 'right'
+  /** Profil je Gerüstseite aus den Ansichten: Dachkante (und Gelände) in m über ±0,00 an Stützstellen entlang der Wand. `posM` = Lage ab Wandmitte (vorne/hinten: + nach rechts, links/rechts: + Richtung Vorderseite). Hat Vorrang vor Giebel-/Pult-/Traufe-Regeln. Gelände: das Gerüst steht am tiefsten Punkt und wird dort höher. */
+  seitenProfil?: Partial<Record<'front' | 'back' | 'left' | 'right', SeitenProfilPunkt[]>>
   /** Personen-/Lastenaufzug an einer Gerüstseite (außen vor dem Gerüst) */
   aufzug?: AufzugOptionen
 }
@@ -1422,7 +1428,8 @@ export function generateCADModel(
   const hangSeiteM: Partial<Record<SeitenId, number>> = {}
   if (system && !abschnitte && !(building.umriss && building.umriss.length >= 3)) {
     for (const sd of ['front', 'back', 'left', 'right'] as const) {
-      const v = opt?.gelaendeSeiteM?.[sd]
+      const prof = opt?.seitenProfil?.[sd]?.map((q) => q.gelaendeM).filter((g): g is number => typeof g === 'number' && Number.isFinite(g))
+      const v = opt?.gelaendeSeiteM?.[sd] ?? (prof && prof.length ? Math.min(...prof) : undefined)
       if (typeof v === 'number' && Number.isFinite(v) && Math.abs(v) >= 0.01) {
         if (Math.abs(v) > 15) warnings.push({ type: 'warning', code: 'HANG_UNGUELTIG', message: `Gelände ${v} m an einer Seite ist unrealistisch (mehr als 15 m) – wird ignoriert.` })
         else hangSeiteM[sd] = Math.round(v * 100) / 100
@@ -1433,13 +1440,42 @@ export function generateCADModel(
   const gSeite = (sd: SeitenId): number => hangSeiteM[sd] ?? 0
   const levelCalcSeite = (sd: SeitenId) => (system && gSeite(sd) !== 0 ? calculateLevels(building.heightM - gSeite(sd), system, gSeite(sd)) : levelCalc)
   // Geneigtes Dach ohne Satteldach-Sonderfall (Walm-, Mansardendach/Zelt): alle Seiten sind Traufseiten und enden an der Traufe.
-  // (Pultdach bleibt unverändert: dort ist nicht gespeichert, welche Seite die Traufe ist.)
-  const traufeAllseitig = !abschnitte && !giebel && (building.roofForm === 'walmdach' || building.roofForm === 'mansardendach') && building.eavesHeightM > 0 && building.eavesHeightM < building.heightM - 0.3
-  const dachRegel = !!giebel || traufeAllseitig
+  // Pultdach: gespeichert ist nicht, welche Seite die niedrige Traufe hat – vorsichtig gilt die Traufe für alle Seiten, damit nie ein Belag über das Dach ragt.
+  const pult = !abschnitte && !giebel && building.roofForm === 'pultdach' && building.eavesHeightM > 0 && building.eavesHeightM < building.heightM - 0.3 && opt?.pultNiedrigeSeite
+    ? { traufe: building.eavesHeightM, first: building.heightM, niedrig: opt.pultNiedrigeSeite }
+    : null
+  const traufeAllseitig = !abschnitte && !giebel && !pult && (building.roofForm === 'walmdach' || building.roofForm === 'mansardendach' || building.roofForm === 'pultdach') && building.eavesHeightM > 0 && building.eavesHeightM < building.heightM - 0.3
+  const profilAn = (sd: SeitenId): SeitenProfilPunkt[] | null => {
+    const q = opt?.seitenProfil?.[sd]?.filter((x) => Number.isFinite(x.posM) && Number.isFinite(x.dachkanteM)).sort((a, b) => a.posM - b.posM)
+    return !abschnitte && q && q.length ? q : null
+  }
+  const profilKanteM = (q: SeitenProfilPunkt[], p: number): number => {
+    if (p <= q[0].posM) return q[0].dachkanteM
+    for (let i = 1; i < q.length; i++) if (p <= q[i].posM) { const a = q[i - 1], b = q[i]; const d = b.posM - a.posM; return d > 0 ? a.dachkanteM + (b.dachkanteM - a.dachkanteM) * (p - a.posM) / d : b.dachkanteM }
+    return q[q.length - 1].dachkanteM
+  }
+  const hatProfil = (['front', 'back', 'left', 'right'] as const).some((sd) => !!profilAn(sd))
+  const dachRegel = !!giebel || !!pult || traufeAllseitig || hatProfil
   /** Regel: Der oberste Belag liegt mindestens RINNE_ABSTAND_M unter der Rinne bzw. Dachkante – ein Gerüst wird nicht bis ans Dach hochgezogen. Mindestens eine Lage. */
   const lagenBisRinne = (rinneM: number, sd: SeitenId): number => Math.min(levelCalcSeite(sd).levels, Math.max(1, Math.floor((rinneM - gSeite(sd) - RINNE_ABSTAND_M) / rasterLagenH + 1e-6)))
+  /** Pultdach: Wandhöhe an einer Stelle der Seite `sd` (p = Lage entlang der Wand ab Wandmitte; links/rechts: + = Richtung Vorderseite, vorne/hinten: + = nach rechts). */
+  const pultWandHoeheM = (sd: SeitenId, p: number): number => {
+    if (!pult) return building.heightM
+    const gegenueber: Record<SeitenId, SeitenId> = { front: 'back', back: 'front', left: 'right', right: 'left' }
+    if (sd === pult.niedrig) return pult.traufe
+    if (sd === gegenueber[pult.niedrig]) return pult.first
+    // Seitenwand: Dach steigt gleichmäßig von der niedrigen zur hohen Seite
+    const tiefe = (pult.niedrig === 'front' || pult.niedrig === 'back' ? building.widthM : building.lengthM) || 0
+    if (!(tiefe > 0)) return pult.first
+    const vorzeichen = pult.niedrig === 'back' || pult.niedrig === 'left' ? 1 : -1
+    const t = Math.min(1, Math.max(0, 0.5 + vorzeichen * p / tiefe))
+    return pult.traufe + (pult.first - pult.traufe) * t
+  }
   /** Anzahl Lagen an einer Wandstelle (Spanne [vonM, bisM], von der Wandmitte aus gemessen; Giebelseite: Dachhöhe in der Feldmitte). */
   const lagenAn = (sd: 'front' | 'back' | 'left' | 'right', vonM: number, bisM: number): number => {
+    const prof = profilAn(sd)
+    if (prof) return lagenBisRinne(profilKanteM(prof, (vonM + bisM) / 2), sd)
+    if (pult) return lagenBisRinne(pultWandHoeheM(sd, (vonM + bisM) / 2), sd)
     if (!giebel) return traufeAllseitig ? lagenBisRinne(building.eavesHeightM, sd) : levelCalcSeite(sd).levels
     const istGiebelSeite = giebel.firstEntlangLaenge ? (sd === 'left' || sd === 'right') : (sd === 'front' || sd === 'back')
     let h = giebel.traufe
@@ -1453,6 +1489,9 @@ export function generateCADModel(
   }
   /** Wandfläche einer Seite (m²): Traufseite = Länge × Traufe, Giebelseite = Rechteck + Dreieck. */
   const seitenWandFlaecheM2 = (sd: 'front' | 'back' | 'left' | 'right', laenge: number): number => {
+    const prof = profilAn(sd)
+    if (prof) { const n = 20; let sum = 0; for (let i = 0; i < n; i++) sum += profilKanteM(prof, -laenge / 2 + laenge * (i + 0.5) / n); return laenge * sum / n }
+    if (pult) return laenge * (pultWandHoeheM(sd, 0))
     if (!giebel) return laenge * (traufeAllseitig ? building.eavesHeightM : building.heightM)
     const istGiebelSeite = giebel.firstEntlangLaenge ? (sd === 'left' || sd === 'right') : (sd === 'front' || sd === 'back')
     return laenge * giebel.traufe + (istGiebelSeite ? 0.5 * laenge * (giebel.first - giebel.traufe) : 0)
@@ -1857,8 +1896,9 @@ export function generateCADModel(
   }
 
   if (dachRegel) {
-    const rinneM = giebel ? giebel.traufe : building.eavesHeightM
     const seite0 = (activeSides[0] ?? 'front') as SeitenId
+    const prof0 = profilAn(seite0)
+    const rinneM = prof0 ? profilKanteM(prof0, 0) : giebel ? giebel.traufe : pult ? pultWandHoeheM(seite0, 0) : building.eavesHeightM
     const obersterBelagM = gSeite(seite0) + lagenBisRinne(rinneM, seite0) * rasterLagenH
     warnings.push({ type: 'info', code: 'OBERSTER_BELAG_RINNE', message: `Geneigtes Dach: Das Gerüst endet an der Rinne (Traufe ${rinneM.toFixed(2)} m) mit dem obersten Belag bei ${obersterBelagM.toFixed(2)} m – das sind ${(rinneM - obersterBelagM).toFixed(2)} m unter der Rinne (Regel: mindestens ${RINNE_ABSTAND_M.toFixed(1)} m). Für Dacharbeiten ist ein höheres Gerüst bzw. Fanggerüst gesondert zu planen.` })
   }

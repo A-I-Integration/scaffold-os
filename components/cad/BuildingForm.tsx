@@ -908,6 +908,26 @@ export default function BuildingForm({ building, systemId, onChange, onSystemCha
             <div><label className='block text-xs font-medium text-[#424245] mb-1'>Traufenhöhe (m)</label><input type='number' step='0.01' value={building.eavesHeightM} onChange={(e) => update('eavesHeightM', parseFloat(e.target.value))} className='w-full px-3 py-2 border rounded-xl text-sm' /></div>
             <div><label className='block text-xs font-medium text-[#424245] mb-1'>Dachhöhe (m)</label><input type='number' step='0.01' value={building.roofHeightM} onChange={(e) => update('roofHeightM', parseFloat(e.target.value))} className='w-full px-3 py-2 border rounded-xl text-sm' /></div>
             <div><label className='block text-xs font-medium text-[#424245] mb-1'>Dachform</label><select value={building.roofForm} onChange={(e) => update('roofForm', e.target.value)} className='w-full px-3 py-2 border rounded-xl text-sm'><option value='flachdach'>Flachdach</option><option value='satteldach'>Satteldach</option><option value='walmdach'>Walmdach</option><option value='pultdach'>Pultdach</option><option value='mansardendach'>Mansardendach</option><option value='kein'>Kein Dach</option></select></div>
+            {building.roofForm === 'pultdach' && !(building.sections && building.sections.length >= 1) && !building.umriss && (
+              <div className='col-span-2'>
+                <label className='block text-xs font-medium text-[#424245] mb-1'>Pultdach: Seite mit der niedrigen Traufe</label>
+                <select
+                  value={building.geruestOptionen?.pultNiedrigeSeite ?? ''}
+                  onChange={(e) => {
+                    const v = e.target.value as 'front' | 'back' | 'left' | 'right' | ''
+                    const rest = { ...(building.geruestOptionen ?? {}) }
+                    if (v) rest.pultNiedrigeSeite = v; else delete rest.pultNiedrigeSeite
+                    onChange({ ...building, geruestOptionen: rest })
+                  }}
+                  className='w-full px-3 py-2 border rounded-xl text-sm'
+                >
+                  <option value=''>Unbekannt – Traufe gilt vorsichtig für alle Seiten</option>
+                  <option value='front'>Vorderseite</option><option value='back'>Rückseite</option>
+                  <option value='left'>Linke Seite</option><option value='right'>Rechte Seite</option>
+                </select>
+                <p className='text-[11px] text-[#86868b] mt-1'>Dort endet das Gerüst an der Traufe, gegenüber am First, an den Seitenwänden steigt es mit dem Dach.</p>
+              </div>
+            )}
             {building.roofForm === 'flachdach' && !(building.sections && building.sections.length >= 1) && (
               <label className='flex items-center gap-2 text-xs text-[#424245] col-span-2'><input type='checkbox' checked={!!building.dachrandSchutz} onChange={(e) => update('dachrandSchutz', e.target.checked)} />Dachrand-Absturzschutz (Geländer 1,0 m über Dachkante, oberste Lage)</label>
             )}

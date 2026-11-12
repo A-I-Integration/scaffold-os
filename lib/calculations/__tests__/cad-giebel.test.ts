@@ -83,8 +83,13 @@ describe('Oberster Belag mindestens 1,5 m unter der Rinne', () => {
       expect(m.warnings.some((w) => w.code === 'OBERSTER_BELAG_RINNE')).toBe(true)
     }
   })
-  it('Flachdach, Pultdach und Dach ohne Traufangabe bleiben unverändert (volle Höhe)', () => {
-    for (const patch of [{ roofForm: 'flachdach' as const, eavesHeightM: 9.2, roofHeightM: 0 }, { roofForm: 'pultdach' as const }, { roofForm: 'walmdach' as const, eavesHeightM: 9.2, roofHeightM: 0 }]) {
+  it('Pultdach: kein Belag über der Traufe (alle Seiten), ohne Traufangabe volle Höhe', () => {
+    const m = generateCADModel(haus({ roofForm: 'pultdach' }), 'rux-super65')
+    for (const sd of ['front', 'back', 'left', 'right']) expect(lagen(m, sd), `pult ${sd}`).toBe(2)
+    expect(m.warnings.some((w) => w.code === 'OBERSTER_BELAG_RINNE')).toBe(true)
+  })
+  it('Flachdach und Dach ohne Traufangabe bleiben unverändert (volle Höhe)', () => {
+    for (const patch of [{ roofForm: 'flachdach' as const, eavesHeightM: 9.2, roofHeightM: 0 }, { roofForm: 'pultdach' as const, eavesHeightM: 0 }, { roofForm: 'walmdach' as const, eavesHeightM: 9.2, roofHeightM: 0 }]) {
       const m = generateCADModel(haus(patch), 'rux-super65')
       expect(lagen(m, 'front')).toBe(m.levelCount)
       expect(m.warnings.some((w) => w.code === 'OBERSTER_BELAG_RINNE')).toBe(false)
@@ -99,5 +104,50 @@ describe('Oberster Belag mindestens 1,5 m unter der Rinne', () => {
     const m = generateCADModel(haus(), 'rux-super65')
     expect(m.levelCount).toBe(3)
     expect(Math.max(...m.levels.map((l) => l.index))).toBe(2)
+  })
+})
+
+describe('Pultdach mit bekannter niedriger Seite', () => {
+  const pult = (niedrig: 'front' | 'back' | 'left' | 'right') => generateCADModel(haus({ roofForm: 'pultdach', geruestOptionen: { feldlaengeM: 2.07, pultNiedrigeSeite: niedrig } }), 'layher-allround')
+  it('niedrige Seite endet an der Traufe, hohe Seite am First', () => {
+    const m = pult('front')
+    const raster = m.levels[0].heightM
+    expect(lagen(m, 'front')).toBe(bisRinne(6.3, raster))
+    expect(lagen(m, 'back')).toBe(bisRinne(9.2, raster))
+  })
+  it('Seitenwände steigen zur hohen Seite an, nie höher als der First', () => {
+    const m = pult('front')
+    const raster = m.levels[0].heightM
+    const links = m.fields.filter((f) => f.side === 'left')
+    const hoechste = (f: typeof links) => Math.max(...f.map((x) => x.levelIndex + 1))
+    const vorn = links.filter((f) => f.positionZ > 0 - 4.5), hinten = links.filter((f) => f.positionZ <= -4.5)
+    expect(hoechste(vorn)).toBeLessThanOrEqual(hoechste(hinten))
+    expect(hoechste(links)).toBeLessThanOrEqual(bisRinne(9.2, raster))
+  })
+  it('ohne Angabe der Seite gilt die Traufe vorsichtig für alle Seiten', () => {
+    const m = generateCADModel(haus({ roofForm: 'pultdach', geruestOptionen: { feldlaengeM: 2.07 } }), 'layher-allround')
+    expect(lagen(m, 'back')).toBe(lagen(m, 'front'))
+  })
+})
+
+describe('Seitenprofil aus den Ansichten', () => {
+  const mit = (seitenProfil: NonNullable<NonNullable<BuildingParams['geruestOptionen']>['seitenProfil']>) =>
+    generateCADModel(haus({ roofForm: 'flachdach', geruestOptionen: { feldlaengeM: 2.07, seitenProfil } }), 'layher-allround')
+  it('Dachkante je Position bestimmt die Lagen je Feld (Treppe von 6,3 auf 9,2 m)', () => {
+    const m = mit({ front: [{ posM: -6, dachkanteM: 6.3 }, { posM: 6, dachkanteM: 9.2 }] })
+    const raster = m.levels[0].heightM
+    const hoechste = (a: (typeof m.fields)) => Math.max(...a.map((f) => f.levelIndex + 1))
+    const links = m.fields.filter((f) => f.side === 'front' && f.positionX < -3), rechts = m.fields.filter((f) => f.side === 'front' && f.positionX > 3)
+    expect(hoechste(links)).toBeLessThan(hoechste(rechts))
+    expect(hoechste(rechts)).toBeLessThanOrEqual(bisRinne(9.2, raster))
+  })
+  it('Profil hat Vorrang vor der Dachform; andere Seiten bleiben unberührt', () => {
+    const m = mit({ front: [{ posM: 0, dachkanteM: 4 }] })
+    expect(lagen(m, 'front')).toBeLessThan(lagen(m, 'back'))
+  })
+  it('kein Gerüst über der Dachkante des Profils', () => {
+    const m = mit({ back: [{ posM: -5, dachkanteM: 5 }, { posM: 5, dachkanteM: 5 }] })
+    const raster = m.levels[0].heightM
+    expect(lagen(m, 'back')).toBe(bisRinne(5, raster))
   })
 })
