@@ -53,3 +53,25 @@ export function kotenJeAnsicht(texte: PlanText[]): AnsichtKoten[] {
   for (const a of ergebnis) a.koten.sort((p, q) => p.x - q.x)
   return ergebnis
 }
+
+export type Himmelsrichtung = 'nord' | 'ost' | 'sued' | 'west'
+
+/**
+ * Pultdach: Himmelsrichtung der niedrigen Seite (Traufe) aus einer Nord- oder Südansicht.
+ * Blick von außen: Südansicht schaut nach Norden (rechts = Osten), Nordansicht nach Süden (rechts = Westen).
+ * Steht die Traufkote weiter rechts als die Firstkote, fällt das Dach nach rechts. In Ost-/Westansichten ist die Neigung nicht zu sehen.
+ * Null, wenn beide Koten in keiner Nord-/Südansicht stehen oder gleich weit rechts liegen (< 20 Punkte Unterschied).
+ */
+export function pultNiedrigeRichtung(ansichten: AnsichtKoten[], traufeM: number, firstM: number): Himmelsrichtung | null {
+  const mittel = (a: AnsichtKoten, h: number) => { const v = a.koten.filter((k) => Math.abs(k.hoeheM - h) < 0.005).map((k) => k.x); return v.length ? v.reduce((s, x) => s + x, 0) / v.length : null }
+  const stimmen: Himmelsrichtung[] = []
+  for (const a of ansichten) {
+    if (a.art !== 'nord' && a.art !== 'sued') continue
+    const tx = mittel(a, traufeM), fx = mittel(a, firstM)
+    if (tx === null || fx === null || Math.abs(tx - fx) < 20) continue
+    const rechts = tx > fx
+    stimmen.push(a.art === 'sued' ? (rechts ? 'ost' : 'west') : (rechts ? 'west' : 'ost'))
+  }
+  if (!stimmen.length || new Set(stimmen).size > 1) return null
+  return stimmen[0]
+}

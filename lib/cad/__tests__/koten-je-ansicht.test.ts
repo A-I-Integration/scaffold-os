@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { kotenJeAnsicht, koteWert } from '../koten-je-ansicht'
+import { kotenJeAnsicht, koteWert, pultNiedrigeRichtung } from '../koten-je-ansicht'
 
 const t = (s: string, x: number, y: number) => ({ s, x, y })
 
@@ -33,4 +33,20 @@ describe('kotenJeAnsicht', () => {
     expect(von('schnitt').koten.find((k) => k.hoeheM === 5.92)?.bezeichnung).toBe('Traufe')
   })
   it('ohne Titel nichts', () => { expect(kotenJeAnsicht([t('+1,00', 1, 1)])).toEqual([]) })
+})
+
+describe('pultNiedrigeRichtung', () => {
+  // Werte wie im Einreichplan: Südansicht +6,94 links, +5,92 rechts; Nordansicht +6,81 (Solar) rechts, +5,15 weiter links
+  const su = { titel: 'SÜDANSICHT', art: 'sued' as const, x: 1784, y: 401, koten: [{ hoeheM: 6.94, x: 2075, y: 429 }, { hoeheM: 5.92, x: 2228, y: 458 }] }
+  it('Südansicht: Traufe rechts = Osten', () => { expect(pultNiedrigeRichtung([su], 5.92, 6.94)).toBe('ost') })
+  it('Nordansicht: Traufe links = Osten (Blick nach Süden)', () => {
+    const no = { titel: 'NORDANSICHT', art: 'nord' as const, x: 198, y: 401, koten: [{ hoeheM: 5.92, x: 300, y: 458 }, { hoeheM: 6.94, x: 700, y: 430 }] }
+    expect(pultNiedrigeRichtung([no], 5.92, 6.94)).toBe('ost')
+    expect(pultNiedrigeRichtung([su, no], 5.92, 6.94)).toBe('ost')
+  })
+  it('widersprüchliche oder fehlende Angaben: null', () => {
+    const no = { titel: 'NORDANSICHT', art: 'nord' as const, x: 198, y: 401, koten: [{ hoeheM: 5.92, x: 700, y: 458 }, { hoeheM: 6.94, x: 300, y: 430 }] }
+    expect(pultNiedrigeRichtung([su, no], 5.92, 6.94)).toBeNull()
+    expect(pultNiedrigeRichtung([], 5.92, 6.94)).toBeNull()
+  })
 })
