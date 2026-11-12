@@ -9,7 +9,7 @@ import { oeffnungenFinden } from './oeffnungen-aus-plan'
 import { gelaendeAusPlan, gelaendeJeKante, type GelaendeAusPlan, type GelaendeJeKante } from './gelaende-aus-plan'
 import { hauptkoerperAusKontur, type Vorbau } from './hauptkoerper'
 import { oeffnungenAnKanten, vorbautenAnKanten, type PlanOeffnungAnKante, type PlanVorbauAnKante } from './plan-oeffnungen-modell'
-import { kotenJeAnsicht, pultNiedrigeRichtung, type Himmelsrichtung } from './koten-je-ansicht'
+import { kotenJeAnsicht, pultNiedrigeRichtung, gelaendeTiefeJeAnsicht, type Himmelsrichtung, type GelaendeTiefe } from './koten-je-ansicht'
 import { dachAusPlan, dachKotenAusPlan, pultdachNeigung, type PlanDachform } from './dachform-aus-plan'
 
 export interface PlanImportGeschoss { titel: string; ebene: number; laengeM: number; breiteM: number; flaecheM2: number; fenster?: number; tueren?: number
@@ -40,6 +40,8 @@ export interface PlanImport {
   dachneigungGrad?: number
   /** Pultdach: Himmelsrichtung der niedrigen Seite (Traufe), aus den Nord-/Südansichten; fehlt, wenn nicht eindeutig lesbar */
   pultNiedrigeRichtung?: Himmelsrichtung
+  /** Hanglage: tiefste Geländekote je Ansicht (freiliegendes Untergeschoss auf der Talseite), aus den Ansichten; leer ohne nennenswerten Abfall */
+  gelaendeTiefe?: GelaendeTiefe[]
   /** Geländekoten rund um das Hauptgeschoss (±0,00 = dessen Fußboden); fehlt bei weniger als 2 Punkten */
   gelaende?: GelaendeAusPlan
   /** Geländekoten je Kante des Hauptkörpers (Plan-Kanten); nur Kanten mit Kote. Dient als Vorlage, der Mensch korrigiert. */
@@ -88,8 +90,10 @@ export function planImportAus(dateiname: string, massstab: number, gefunden: Gef
   const koten = dachKotenAusPlan(texte)
   const neigung = dach?.dachform === 'Pultdach' && koten.firstM !== undefined && koten.traufeM !== undefined
     ? pultdachNeigung(koten.firstM, koten.traufeM, dachTiefeOhneVorbau(dach.tiefeM, haupt)) : null
+  const ansichten = kotenJeAnsicht(texte)
   const pultRichtung = dach?.dachform === 'Pultdach' && koten.firstM !== undefined && koten.traufeM !== undefined
-    ? pultNiedrigeRichtung(kotenJeAnsicht(texte), koten.traufeM, koten.firstM) : null
+    ? pultNiedrigeRichtung(ansichten, koten.traufeM, koten.firstM) : null
+  const gelTiefe = gelaendeTiefeJeAnsicht(ansichten)
   return {
     dateiname, massstab, geschosse, hauptEbene: haupt.ebene,
     ...(dach ? { dachform: dach.dachform } : {}),
@@ -97,6 +101,7 @@ export function planImportAus(dateiname: string, massstab: number, gefunden: Gef
     ...(koten.traufeM !== undefined ? { traufKoteM: koten.traufeM } : {}),
     ...(neigung !== null ? { dachneigungGrad: neigung } : {}),
     ...(pultRichtung ? { pultNiedrigeRichtung: pultRichtung } : {}),
+    ...(gelTiefe.length ? { gelaendeTiefe: gelTiefe } : {}),
     ...(gelaende ? { gelaende } : {}),
     ...(jeKante.length ? { gelaendeJeKante: jeKante } : {}),
   }
@@ -130,6 +135,11 @@ export function planHinweiseFuerAufmass(p: PlanImport): string[] {
   if (p.pultNiedrigeRichtung) {
     const r = { nord: 'Norden', ost: 'Osten', sued: 'Süden', west: 'Westen' }[p.pultNiedrigeRichtung]
     h.push(`Pultdach: Laut den Ansichten fällt das Dach nach ${r} (niedrige Traufe${p.traufKoteM !== undefined ? ` +${kom(p.traufKoteM)} m` : ''}). Im Tab Gebäude die Seite mit der niedrigen Traufe wählen, die nach ${r} zeigt – das Gerüst endet dort an der Traufe und steigt mit dem Dach.`)
+  }
+  if (p.gelaendeTiefe?.length) {
+    const name: Record<string, string> = { nord: 'Nordseite', ost: 'Ostseite', sued: 'Südseite', west: 'Westseite' }
+    const tal = p.gelaendeTiefe[0]
+    h.push(`Hanglage mit freiliegendem Untergeschoss: Auf der ${name[tal.art] ?? tal.titel} reicht das Gebäude laut Ansicht bis ${kom(tal.tiefsteM)} m (Talseite). Dort ist das Gerüst rund ${kom((p.firstKoteM ?? p.traufKoteM ?? 0) - tal.tiefsteM)} m hoch – als Hang auf der Talseite eintragen (Grundriss zeigt nur das Gelände am Erdgeschoss).`)
   }
   if (p.gelaende && p.gelaende.unterschiedM >= 1) h.push(`Hanglage: Geländeunterschied ca. ${kom(p.gelaende.unterschiedM)} m – die Gerüsthöhe ist je Seite verschieden (Talseite höher).`)
   if (p.gelaendeJeKante && p.gelaende && p.gelaende.unterschiedM >= 1) {
