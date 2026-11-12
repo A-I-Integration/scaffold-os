@@ -2066,7 +2066,13 @@ function generiereUmrissModell(
   teile: (laengeM: number) => { distribution: number[]; fields: number; fieldLengthM: number }
 ): CADModel {
   const warnings: CADWarning[] = [...vorWarnungen]
-  { const h = hangIgnoriert(gebaeude.geruestOptionen); if (h) warnings.push(h) }
+  // Hang im Umriss-Modus: wenn Eckhöhen gesetzt sind, steht das Gerüst gleichmäßig auf dem tiefsten Punkt (sicher, über-
+  // deckt den ganzen Umriss). Das feldweise Abtreppen entlang der Polygonkanten kommt als nächster Schritt.
+  const eckU = eckenGelaendeM(gebaeude)
+  const minEckeU = Math.min(eckU.fl, eckU.fr, eckU.bl, eckU.br, 0)
+  const hangU = system && gebaeude.geruestOptionen?.gelaendeEckenM && minEckeU < -0.3 ? Math.round(minEckeU * 100) / 100 : 0
+  if (!hangU) { const h = hangIgnoriert(gebaeude.geruestOptionen); if (h) warnings.push(h) }
+  else warnings.push({ type: 'info', code: 'UMRISS_HANG_GLEICH', message: `Hang im Umriss-Modus: Das Gerüst steht gleichmäßig auf dem tiefsten Punkt (${minEckeU.toFixed(2).replace('.', ',')} m). Das feldweise Abtreppen entlang der Kanten folgt noch.` })
   const umriss = zentriereUmriss(normalisiereUmriss(gebaeude.umriss!))
   const box = umrissBox(umriss)
   const building: BuildingParams = {
@@ -2096,7 +2102,7 @@ function generiereUmrissModell(
     return p ?? { x: k.bis.x + k.n[0] * abstandM, z: k.bis.z + k.n[1] * abstandM }
   })
 
-  const levelCalc = system ? calculateLevels(building.heightM, system) : { levels: 1, levelHeightM: 2.0, levelsData: [{ index: 0, bottomY: 0, topY: 2.0 }] }
+  const levelCalc = system ? calculateLevels(building.heightM - hangU, system, hangU) : { levels: 1, levelHeightM: 2.0, levelsData: [{ index: 0, bottomY: 0, topY: 2.0 }] }
 
   // Feldstränge je Kante (Länge = Abstand der beiden Gerüst-Eckpunkte entlang der Kante)
   const straenge = kanten.map((k, i) => {
