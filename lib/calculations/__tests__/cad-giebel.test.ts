@@ -106,3 +106,26 @@ describe('Oberster Belag mindestens 1,5 m unter der Rinne', () => {
     expect(Math.max(...m.levels.map((l) => l.index))).toBe(2)
   })
 })
+
+describe('Pultdach mit bekannter niedriger Seite', () => {
+  const pult = (niedrig: 'front' | 'back' | 'left' | 'right') => generateCADModel(haus({ roofForm: 'pultdach', geruestOptionen: { feldlaengeM: 2.07, pultNiedrigeSeite: niedrig } }), 'layher-allround')
+  it('niedrige Seite endet an der Traufe, hohe Seite am First', () => {
+    const m = pult('front')
+    const raster = m.levels[0].heightM
+    expect(lagen(m, 'front')).toBe(bisRinne(6.3, raster))
+    expect(lagen(m, 'back')).toBe(bisRinne(9.2, raster))
+  })
+  it('Seitenwände steigen zur hohen Seite an, nie höher als der First', () => {
+    const m = pult('front')
+    const raster = m.levels[0].heightM
+    const links = m.fields.filter((f) => f.side === 'left')
+    const hoechste = (f: typeof links) => Math.max(...f.map((x) => x.levelIndex + 1))
+    const vorn = links.filter((f) => f.positionZ > 0 - 4.5), hinten = links.filter((f) => f.positionZ <= -4.5)
+    expect(hoechste(vorn)).toBeLessThanOrEqual(hoechste(hinten))
+    expect(hoechste(links)).toBeLessThanOrEqual(bisRinne(9.2, raster))
+  })
+  it('ohne Angabe der Seite gilt die Traufe vorsichtig für alle Seiten', () => {
+    const m = generateCADModel(haus({ roofForm: 'pultdach', geruestOptionen: { feldlaengeM: 2.07 } }), 'layher-allround')
+    expect(lagen(m, 'back')).toBe(lagen(m, 'front'))
+  })
+})
