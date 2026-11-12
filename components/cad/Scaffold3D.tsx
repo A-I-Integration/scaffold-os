@@ -1158,16 +1158,33 @@ function RoofMesh({ roofForm, laengeM, breiteM, roofH }: { roofForm: string; lae
 }
 
 /** Gebäude mit Umriss: Vieleck-Grundfläche, nach oben gezogen (flaches Dach). */
-function UmrissGebaeude({ punkte, heightM }: { punkte: { x: number; z: number }[]; heightM: number }) {
+function UmrissGebaeude({ punkte, heightM, kantenHoeheM }: { punkte: { x: number; z: number }[]; heightM: number; kantenHoeheM?: number[] }) {
   const praes = useContext(FarbModusKontext) === 'praesentation'
   const geometrie = useMemo(() => {
     // Shape liegt in der x/y-Ebene; nach dem Drehen um -90° um x wird shape-y zu -z.
     // Darum die z-Werte negiert eintragen, dann landen die Punkte bei (x, z).
     const form = new THREE.Shape(punkte.map((p) => new THREE.Vector2(p.x, -p.z)))
-    const g = new THREE.ExtrudeGeometry(form, { depth: heightM, bevelEnabled: false })
+    // Eigene Höhe je Kante: Körper bis zur niedrigsten Kante, höhere Kanten bekommen eine Wandfläche darüber
+    const hat = !!kantenHoeheM && kantenHoeheM.length === punkte.length && kantenHoeheM.every((h) => h > 0)
+    const tief = hat ? Math.min(...kantenHoeheM!) : heightM
+    const g = new THREE.ExtrudeGeometry(form, { depth: tief, bevelEnabled: false })
     g.rotateX(-Math.PI / 2)
-    return g
-  }, [punkte, heightM])
+    if (!hat) return g
+    const pos: number[] = []
+    punkte.forEach((a, i) => {
+      const b = punkte[(i + 1) % punkte.length]
+      const h = kantenHoeheM![i]
+      if (h <= tief + 1e-6) return
+      pos.push(a.x, tief, a.z, b.x, tief, b.z, b.x, h, b.z, a.x, tief, a.z, b.x, h, b.z, a.x, h, a.z)
+    })
+    if (!pos.length) return g
+    const w = new THREE.BufferGeometry()
+    w.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3))
+    w.computeVertexNormals()
+    const alle = mergeGeometries([g.toNonIndexed(), w.toNonIndexed()].map((q) => { q.deleteAttribute('uv'); q.deleteAttribute('normal'); return q }))
+    alle?.computeVertexNormals()
+    return alle ?? g
+  }, [punkte, heightM, kantenHoeheM])
   useEffect(() => () => geometrie.dispose(), [geometrie])
   return (
     <mesh geometry={geometrie} castShadow receiveShadow>
@@ -1511,7 +1528,7 @@ function Building3D({
   if (building.umriss && building.umriss.length >= 3) {
     return (
       <group>
-        <UmrissGebaeude punkte={building.umriss} heightM={heightM} />
+        <UmrissGebaeude punkte={building.umriss} heightM={heightM} kantenHoeheM={building.umrissKantenHoeheM} />
         {features.filter((f) => f.umriss).map((f) => {
           const u = f.umriss!
           const y = f.bottomY + f.heightM / 2

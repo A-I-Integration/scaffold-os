@@ -23,7 +23,7 @@ export default function UmrissEditor({ building, onChange }: Props) {
 
   const setzeUmriss = (punkte: UmrissPunkt[] | undefined) => {
     if (!punkte) {
-      onChange({ ...building, umriss: undefined })
+      onChange({ ...building, umriss: undefined, umrissKantenHoeheM: undefined })
       return
     }
     // Länge/Breite folgen dem umschließenden Rechteck (nur wenn der Umriss gültig ist)
@@ -32,6 +32,7 @@ export default function UmrissEditor({ building, onChange }: Props) {
     onChange({
       ...building,
       umriss: punkte,
+      umrissKantenHoeheM: building.umrissKantenHoeheM && building.umrissKantenHoeheM.length === punkte.length ? building.umrissKantenHoeheM : undefined,
       ...(box ? { lengthM: Math.round(box.lengthM * 100) / 100, widthM: Math.round(box.widthM * 100) / 100 } : {}),
     })
   }
@@ -54,6 +55,28 @@ export default function UmrissEditor({ building, onChange }: Props) {
           <div className='flex flex-wrap gap-2'>
             <button type='button' className='text-xs px-2 py-1 border rounded-lg bg-white' onClick={() => setzeUmriss(rechteckUmriss(building.lengthM > 0 ? building.lengthM : 10, building.widthM > 0 ? building.widthM : 8))}>Rechteck</button>
             <button type='button' className='text-xs px-2 py-1 border rounded-lg bg-white' onClick={() => setzeUmriss(lFormUmriss(12, 9, 5, 4))}>L-Form (Beispiel)</button>
+          </div>
+          <div className='rounded-lg border border-[#e5e5ea] p-2 space-y-1'>
+            <div className='text-[11px] font-semibold text-[#1d1d1f]'>Höhe je Kante (m) – z. B. Garage oder Anbau niedriger</div>
+            <div className='text-[11px] text-[#6e6e73]'>Kante 1 läuft von Ecke 1 zu Ecke 2, die letzte Kante zurück zu Ecke 1. Leer = Gebäudehöhe von oben.</div>
+            <div className='flex flex-wrap gap-2'>
+              {umriss.map((_, i) => (
+                <label key={i} className='text-[11px] text-[#424245]'>
+                  Kante {i + 1}
+                  <input
+                    type='number' step='0.01' className={eingabe + ' w-20 block'}
+                    value={building.umrissKantenHoeheM?.length === umriss.length ? building.umrissKantenHoeheM[i] : ''}
+                    placeholder={String(building.heightM).replace('.', ',')}
+                    onChange={(e) => {
+                      const v = parseFloat(e.target.value)
+                      const alt = building.umrissKantenHoeheM?.length === umriss.length ? building.umrissKantenHoeheM.slice() : umriss.map(() => building.heightM)
+                      alt[i] = v > 0 ? v : building.heightM
+                      onChange({ ...building, umrissKantenHoeheM: alt.every((h) => h === building.heightM) ? undefined : alt })
+                    }}
+                  />
+                </label>
+              ))}
+            </div>
           </div>
           <div className='rounded-lg border border-[#e5e5ea] p-2 space-y-1'>
             <div className='text-[11px] font-semibold text-[#1d1d1f]'>Rundes Gebäude (als Vieleck)</div>
