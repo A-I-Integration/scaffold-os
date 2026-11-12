@@ -2072,7 +2072,6 @@ function generiereUmrissModell(
   const minEckeU = Math.min(eckU.fl, eckU.fr, eckU.bl, eckU.br, 0)
   const hangU = system && gebaeude.geruestOptionen?.gelaendeEckenM && minEckeU < -0.3 ? Math.round(minEckeU * 100) / 100 : 0
   if (!hangU) { const h = hangIgnoriert(gebaeude.geruestOptionen); if (h) warnings.push(h) }
-  else warnings.push({ type: 'info', code: 'UMRISS_HANG_GLEICH', message: `Hang im Umriss-Modus: Das Gerüst steht gleichmäßig auf dem tiefsten Punkt (${minEckeU.toFixed(2).replace('.', ',')} m). Das feldweise Abtreppen entlang der Kanten folgt noch.` })
   const umriss = zentriereUmriss(normalisiereUmriss(gebaeude.umriss!))
   const box = umrissBox(umriss)
   const building: BuildingParams = {
@@ -2117,6 +2116,14 @@ function generiereUmrissModell(
   const divs = new Map<number, { distribution: number[]; fields: number; fieldLengthM: number }>()
   aktive.forEach((s) => divs.set(s.k.index, teile(s.laenge)))
 
+  // Hang-Gelände über die vier Eck-Höhen bilinear über den Umriss interpolieren (Fuß je Feld folgt dem Hang)
+  const terrainAn = (x: number, z: number): number => {
+    const u = box.lengthM > 0 ? Math.min(1, Math.max(0, (x + box.lengthM / 2) / box.lengthM)) : 0.5
+    const v = box.widthM > 0 ? Math.min(1, Math.max(0, (z + box.widthM / 2) / box.widthM)) : 0.5
+    return (1 - u) * (1 - v) * eckU.bl + u * (1 - v) * eckU.br + (1 - u) * v * eckU.fl + u * v * eckU.fr
+  }
+  const abtreppFuesseU: { ausgleichM: number; stielM: number; spindelM: number; spindel80: boolean }[] = []
+
   const fields: ScaffoldField[] = []
   const levels: ScaffoldLevel[] = []
   levelCalc.levelsData.forEach((ld) => {
@@ -2127,14 +2134,25 @@ function generiereUmrissModell(
       div.distribution.forEach((fl, fi) => {
         const t = cum + fl / 2
         cum += fl
+        const px = parseFloat((s.start.x + s.k.u[0] * t).toFixed(3))
+        const pz = parseFloat((s.start.z + s.k.u[1] * t).toFixed(3))
+        if (hangU && system) {
+          // Abtreppung: unterhalb der Geländelinie dieses Feldes kein Belag; am untersten Belag ein Fußausgleich
+          const fuss = terrainAn(px, pz)
+          if (ld.bottomY < fuss - 1e-6) return
+          if (ld.bottomY - levelCalc.levelHeightM < fuss - 1e-6) {
+            const te = ausgleichTeile(ld.bottomY - fuss, system)
+            if (te) abtreppFuesseU.push({ ausgleichM: Math.round((ld.bottomY - fuss) * 100) / 100, ...te })
+          }
+        }
         const field: ScaffoldField = {
           id: `field-front-${ld.index}-${lageFelder.length}`,
           index: lageFelder.length,
           lengthM: fl,
           widthM: scaffoldWidthM,
-          positionX: parseFloat((s.start.x + s.k.u[0] * t).toFixed(3)),
+          positionX: px,
           positionY: ld.bottomY,
-          positionZ: parseFloat((s.start.z + s.k.u[1] * t).toFixed(3)),
+          positionZ: pz,
           side: 'front',
           levelIndex: ld.index,
           isCorner: fi === 0 || fi === div.distribution.length - 1,
@@ -2147,6 +2165,13 @@ function generiereUmrissModell(
     })
     levels.push({ id: `level-umriss-${ld.index}`, index: ld.index, heightM: levelCalc.levelHeightM, bottomY: ld.bottomY, topY: ld.topY, fields: lageFelder })
   })
+  if (hangU && abtreppFuesseU.length) {
+    const stielZahl = new Map<number, number>()
+    let s80 = 0
+    for (const f of abtreppFuesseU) { if (f.stielM > 0) stielZahl.set(f.stielM, (stielZahl.get(f.stielM) ?? 0) + 1); if (f.spindel80) s80++ }
+    const stielTxt = [...stielZahl.entries()].sort((a, b) => b[0] - a[0]).map(([mM, nn]) => `${nn}× Ausgleichsstiel ${String(mM).replace('.', ',')} m`).join(', ')
+    warnings.push({ type: 'info', code: 'UMRISS_HANG_ABGETREPPT', message: `Hang im Umriss-Modus: Der Gerüstfuß treppt je Feld entlang der Kanten ab (tiefster Punkt ${minEckeU.toFixed(2).replace('.', ',')} m). Fußausgleich: ${stielTxt || 'nur Fußspindel'}.${s80 ? ` ${s80} Fuß(e) mit verstärkter Fußspindel 80.` : ''} Nach Layher-Standardlängen; vor Ort prüfen.` })
+  }
 
   // Eckpunkte für den Eckbelag (nur wenn beide Nachbarkanten ein Gerüst haben)
   const aktiveIdx = new Set(aktive.map((s) => s.k.index))

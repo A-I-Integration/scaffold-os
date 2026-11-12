@@ -12,9 +12,12 @@ describe('Hang im Umriss-Modus', () => {
     const m = generateCADModel(lShape(), 'layher-allround')
     expect(Math.min(...m.fields.map((f) => f.positionY))).toBeCloseTo(0, 1)
   })
-  it('mit Eckhöhen: Gerüst steht gleichmäßig tiefer (auf dem tiefsten Punkt)', () => {
+  it('mit Eckhöhen: Fuß treppt entlang der Kanten ab (links tief, rechts hoch)', () => {
     const m = generateCADModel(lShape({ gelaendeEckenM: { fl: -3, fr: 0, bl: -3, br: 0 } }), 'layher-allround')
-    expect(Math.min(...m.fields.map((f) => f.positionY))).toBeLessThan(-2.5)
-    expect(m.warnings.some((w) => w.code === 'UMRISS_HANG_GLEICH')).toBe(true)
+    const xMin = Math.min(...m.fields.map((f) => f.positionX)), xMax = Math.max(...m.fields.map((f) => f.positionX))
+    const links = m.fields.filter((f) => f.positionX < xMin + 1), rechts = m.fields.filter((f) => f.positionX > xMax - 1)
+    expect(Math.min(...links.map((f) => f.positionY))).toBeLessThan(-2.5) // linke (tiefe) Seite reicht runter
+    expect(Math.min(...rechts.map((f) => f.positionY))).toBeGreaterThanOrEqual(-0.01) // rechte (hohe) Seite bleibt oben
+    expect(m.warnings.some((w) => w.code === 'UMRISS_HANG_ABGETREPPT')).toBe(true)
   })
 })
