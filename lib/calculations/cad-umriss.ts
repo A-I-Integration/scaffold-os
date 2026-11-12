@@ -91,6 +91,19 @@ export function normalisiereUmriss(p: UmrissPunkt[]): UmrissPunkt[] {
 }
 
 /**
+ * Höhe je Kante (Eintrag i = Kante von Punkt i zu Punkt i+1 im ORIGINAL-Umriss) auf die Reihenfolge des normalisierten
+ * Umrisses übertragen (normalisiereUmriss dreht den Umlauf ggf. um). null, wenn die Angabe nicht zum Umriss passt.
+ */
+export function kantenHoehenNormalisiert(original: UmrissPunkt[], hoehenM: number[] | undefined): number[] | null {
+  const n = original.length
+  if (!hoehenM || hoehenM.length !== n || n < 3) return null
+  if (hoehenM.some((h) => !(h > 0))) return null
+  const gedreht = umrissFlaecheSigned(original.map((q) => ({ x: Math.round(q.x * 100) / 100, z: Math.round(q.z * 100) / 100 }))) > 0
+  if (!gedreht) return hoehenM.slice()
+  return hoehenM.map((_, j) => hoehenM[(n - 2 - j + 2 * n) % n])
+}
+
+/**
  * Verschiebt den Umriss in die Lage, die der Rest des CAD für ein Gebäude erwartet:
  * x symmetrisch um 0, Vorderkante (größtes z) des umschließenden Rechtecks bei z = -0,5
  * (Gebäude liegt hinter der Nulllinie, das Gerüst davor – Boden, Kamera und

@@ -8,7 +8,7 @@ import { GeruestSystem, findeSystem } from './geruest-systeme'
 import { ausgleichTeile } from './abtreppung'
 import { MaterialItem } from '@/types/scaffold'
 import { modellHash } from './modell-stand'
-import { type UmrissPunkt, pruefeUmriss, normalisiereUmriss, umrissKanten, umrissEcken, geruestEckpunkt, umrissBox, zentriereUmriss } from './cad-umriss'
+import { type UmrissPunkt, pruefeUmriss, normalisiereUmriss, umrissKanten, umrissEcken, geruestEckpunkt, umrissBox, zentriereUmriss, kantenHoehenNormalisiert } from './cad-umriss'
 import { KONSOLE_BREITE_M, type CadBalkon } from '../balkon'
 
 /** Länge der Podeste der Außentreppe an den Turmenden (m) – zugleich Breite des Durchgangs im Gerüstgeländer. */
@@ -194,6 +194,8 @@ export interface BuildingParams {
   // folgt das Gerüst dem Umriss Kante für Kante; lengthM/widthM sind dann nur
   // das umschließende Rechteck. Balkone/Fenster/Türen sind im Umriss-Modus noch aus.
   umriss?: UmrissPunkt[]
+  /** Nur Umriss-Modus: eigene Höhe je Kante (m), Eintrag i = Kante von Punkt i zu Punkt i+1 (z. B. Garage/Terrasse niedriger als der Hauptbau). Ohne Angabe gilt heightM. */
+  umrissKantenHoeheM?: number[]
   // NEU: Einstellungen für die automatische Gerüst-Erzeugung (alles optional;
   // ohne Angabe gelten die bisherigen Standardwerte).
   geruestOptionen?: GeruestOptionen
@@ -2085,13 +2087,23 @@ function generiereUmrissModell(
   }
   if (building.heightM <= 0) warnings.push({ type: 'error', code: 'BUILDING_HEIGHT_ZERO', message: 'Gebäudehöhe muss größer als 0 sein.' })
   if (building.heightM > 40) warnings.push({ type: 'warning', code: 'HEIGHT_VERY_HIGH', message: 'Gebäudehöhe > 40m – Statik prüfen lassen!' })
-  warnings.push({ type: 'info', code: 'UMRISS_MODUS', message: `Gebäude mit Umriss (${umriss.length} Ecken): Das Gerüst läuft um alle Kanten. Balkone sowie die Höhenabschnitte werden im Umriss-Modus noch nicht berücksichtigt (Fenster und Türen werden nach Kantenlänge verteilt); die Treppe steht an der längsten Kante.` })
+  warnings.push({ type: 'info', code: 'UMRISS_MODUS', message: `Gebäude mit Umriss (${umriss.length} Ecken): Das Gerüst läuft um alle Kanten. Balkone werden im Umriss-Modus noch nicht berücksichtigt (Fenster und Türen werden nach Kantenlänge verteilt); die Treppe steht an der längsten Kante.` })
   if ((gebaeude.sections?.length ?? 0) >= 2) warnings.push({ type: 'info', code: 'UMRISS_OHNE_ABSCHNITTE', message: 'Im Umriss-Modus gilt eine einheitliche Gebäudehöhe – die Abschnitte werden ignoriert.' })
   if ((gebaeude.balconies?.length ?? 0) > 0) warnings.push({ type: 'warning', code: 'UMRISS_OHNE_BALKONE', message: 'Balkone werden im Umriss-Modus noch nicht berücksichtigt (nicht ausgespart, keine Konsolen).' })
 
   const kanten = umrissKanten(umriss)
   const ecken = umrissEcken(kanten)
   const n = kanten.length
+  // Eigene Höhe je Kante (z. B. niedrigerer Anbau): die Lagen enden dort an der jeweiligen Kantenhöhe
+  const kHoeheNorm = kantenHoehenNormalisiert(gebaeude.umriss!, gebaeude.umrissKantenHoeheM)
+  if (gebaeude.umrissKantenHoeheM && !kHoeheNorm) warnings.push({ type: 'warning', code: 'UMRISS_KANTENHOEHE_UNGUELTIG', message: 'Die Höhen je Kante passen nicht zum Umriss (Anzahl oder Wert) und werden ignoriert – es gilt die einheitliche Gebäudehöhe.' })
+  building.umriss && (building.umrissKantenHoeheM = kHoeheNorm ?? undefined) // ab hier in der Reihenfolge des normalisierten Umrisses
+  const kanteHoehe = (idx: number): number => kHoeheNorm ? kHoeheNorm[idx] : building.heightM
+  const kanteLagen = (idx: number): number => system ? calculateLevels(kanteHoehe(idx) - hangU, system, hangU).levels : 1
+  if (kHoeheNorm) {
+    const hh = [...new Set(kHoeheNorm.map((h) => String(h).replace('.', ',')))]
+    if (hh.length > 1) warnings.push({ type: 'info', code: 'UMRISS_KANTENHOEHEN', message: `Gebäudeteile mit unterschiedlicher Höhe (${hh.join(' m, ')} m): Das Gerüst endet je Kante an deren Höhe. Übergänge, Aufstieg und Verankerung an den Höhensprüngen bitte vor Ort prüfen.` })
+  }
 
   // Gerüst-Eckpunkte (Schnitt der Innenlinien); bei fast gegenläufigen Kanten einfach nach außen versetzt
   const eckPunkte = kanten.map((k, i) => {
@@ -2131,6 +2143,7 @@ function generiereUmrissModell(
     aktive.forEach((s) => {
       const div = divs.get(s.k.index)!
       let cum = 0
+      if (kHoeheNorm && ld.index >= kanteLagen(s.k.index)) return
       div.distribution.forEach((fl, fi) => {
         const t = cum + fl / 2
         cum += fl
@@ -2192,6 +2205,7 @@ function generiereUmrissModell(
       aktive.forEach((s) => {
         const div = divs.get(s.k.index)!
         let cum = 0
+        if (kHoeheNorm && (kanteHoehe(s.k.index) <= 6 || yAnchor > kanteHoehe(s.k.index))) return
         div.distribution.forEach((fl, f) => {
           const t = cum + fl / 2
           cum += fl
