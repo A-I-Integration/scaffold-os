@@ -14,6 +14,7 @@ interface Props {
   /** Für den Kopf der Gerüstplan-PDF; fehlt der Name, steht dort „Gerüstplan“ */
   projektName?: string
   objektadresse?: string
+  firma?: string
   zeichnung?: { figuren: Figur[]; werkzeug: FigurArt | null; onNeu: (f: Figur) => void; onWerkzeug: (w: FigurArt | null) => void }
 }
 
@@ -24,7 +25,7 @@ const SCALE_FACTORS: Record<ScaleType, number> = {
   '1:200': 5,
 }
 
-export default function Scaffold2D({ model, zeichnung, projektName, objektadresse }: Props) {
+export default function Scaffold2D({ model, zeichnung, projektName, objektadresse, firma }: Props) {
   const [activeView, setActiveView] = useState<ViewType>('grundriss')
   const [scale, setScale] = useState<ScaleType>('1:50')
   const [showDimensions, setShowDimensions] = useState(true)
@@ -38,7 +39,7 @@ export default function Scaffold2D({ model, zeichnung, projektName, objektadress
     setPdfFehler(null)
     try {
       const { erzeugeGeruestplanPdf } = await import('@/lib/export/geruestplan-pdf')
-      const daten = erzeugeGeruestplanPdf(model, { projektName: projektName || 'Gerüstplan', objektadresse, datum: new Date().toLocaleDateString('de-DE') })
+      const daten = erzeugeGeruestplanPdf(model, { projektName: projektName || 'Gerüstplan', objektadresse, firma, datum: new Date().toLocaleDateString('de-DE') })
       const url = URL.createObjectURL(new Blob([daten as BlobPart], { type: 'application/pdf' }))
       const a = document.createElement('a')
       a.href = url; a.download = 'Geruestplan.pdf'; a.click()
