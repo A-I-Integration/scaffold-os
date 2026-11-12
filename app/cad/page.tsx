@@ -250,6 +250,8 @@ export default function CADPage() {
   }, [])
   // Aufmaß → CAD: Maße und System aus Schritt 6 übernehmen (einmalig, dann aus dem Zwischenspeicher entfernen)
   const [aufmassHinweise, setAufmassHinweise] = useState<string[]>([])
+  // Projektname aus dem Aufmaß (nur für den Kopf der Gerüstplan-PDF; bleibt nicht über ein Neuladen erhalten)
+  const [aufmassProjektName, setAufmassProjektName] = useState<string | undefined>(undefined)
   useEffect(() => {
     let roh: string | null = null
     try { roh = sessionStorage.getItem(CAD_UEBERNAHME_KEY); sessionStorage.removeItem(CAD_UEBERNAHME_KEY) } catch { return }
@@ -261,6 +263,7 @@ export default function CADPage() {
     if (u.statikDaten) setStatikDaten(bereinigeStatikDaten(u.statikDaten as StatikDaten))
     try { window.history.replaceState(null, '', '/cad') } catch { /* nur Anzeige */ }
     speichereArbeitsstand({ building: u.building, systemId: u.systemId, notizen: u.notizen ?? [], statikDaten: (u.statikDaten ?? {}) as Record<string, unknown>, artikelWahl: {} })
+    setAufmassProjektName(u.projektName)
     setAufmassHinweise(['Maße aus dem Aufmaß' + (u.projektName ? ` „${u.projektName}“` : '') + ' übernommen.', ...u.hinweise])
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
@@ -1241,7 +1244,7 @@ export default function CADPage() {
                 <button onClick={() => { setAutoGenerate(true); generate(); }} className='px-4 py-2 text-sm font-medium rounded-xl bg-[#0071e3] text-white hover:bg-[#0077ed]'>Gerüst neu berechnen</button>
               </div>
             )}
-            {viewMode === '2d' && modelWithManual && <Scaffold2D model={modelWithManual} zeichnung={{ figuren, werkzeug: zeichenWerkzeug, onNeu: (f) => setFiguren((l) => [...l, f]), onWerkzeug: setZeichenWerkzeug }} />}
+            {viewMode === '2d' && modelWithManual && <Scaffold2D model={modelWithManual} projektName={aufmassProjektName} zeichnung={{ figuren, werkzeug: zeichenWerkzeug, onNeu: (f) => setFiguren((l) => [...l, f]), onWerkzeug: setZeichenWerkzeug }} />}
             {viewMode === '2d' && modelWithManual && figuren.length > 0 && (
               <aside className='absolute right-3 top-3 z-20 w-[300px] max-h-[60%] overflow-hidden rounded-md border bg-white shadow-xl' style={{ borderColor: 'var(--os-linie)' }} aria-label='Zeichnung'>
                 <div className='px-3 py-2 text-[14px] font-bold text-white' style={{ background: 'var(--os-nav)' }}>Zeichnung ({figuren.length})</div>
