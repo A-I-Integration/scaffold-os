@@ -257,3 +257,27 @@ describe('Außentreppe vor dem Gerüst', () => {
   })
 })
 
+
+describe('rundUmriss (rundes Gebäude als Vieleck)', () => {
+  it('liefert gültigen Umriss mit n Ecken auf dem Kreis', async () => {
+    const { rundUmriss, rundKantenLaengeM } = await import('../cad-umriss')
+    const u = rundUmriss(10, 12)
+    expect(u).toHaveLength(12)
+    expect(pruefeUmriss(u)).toEqual([])
+    u.forEach((p) => expect(Math.hypot(p.x - 5, p.z - 5)).toBeCloseTo(5, 1))
+    expect(rundKantenLaengeM(10, 12)).toBeCloseTo(10 * Math.sin(Math.PI / 12), 5)
+  })
+  it('begrenzt die Kantenzahl und fängt ungültige Werte ab', async () => {
+    const { rundUmriss } = await import('../cad-umriss')
+    expect(rundUmriss(10, 3)).toHaveLength(6)
+    expect(rundUmriss(10, 500)).toHaveLength(60)
+    expect(rundUmriss(NaN, NaN)).toHaveLength(12)
+  })
+  it('erzeugt ein Gerüst um alle Kanten', async () => {
+    const { rundUmriss } = await import('../cad-umriss')
+    const m = generateCADModel({ lengthM: 10, widthM: 10, heightM: 8, eavesHeightM: 0, roofHeightM: 0, roofForm: 'flachdach', floors: 3, sides: ['front', 'back', 'left', 'right'], umriss: rundUmriss(10, 12) } as never, 'layher-allround')
+    expect(m.umrissEcken?.length).toBe(12)
+    expect(new Set(m.fields.map((f) => f.kante)).size).toBe(12)
+    expect(m.warnings.some((w) => w.code === 'UMRISS_KANTE_ZU_KURZ')).toBe(false)
+  })
+})
