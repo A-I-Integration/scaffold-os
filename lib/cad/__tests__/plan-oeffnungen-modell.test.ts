@@ -115,4 +115,9 @@ describe('Vorbauten', () => {
     expect(vorbautenFuerModell([{ ebene: 0, vorbauten: e }], 'unten', 2.9)[0].hoeheM).toBe(2.9)
     expect(vorbautenFuerModell([{ ebene: -1, vorbauten: e }], 'unten', 2.9)).toEqual([])
   })
+  it('breite Terrassentür im EG wird wie ein Fenster behandelt (überbaubar), schmale Haustür bleibt frei', () => {
+    const m = oeffnungenFuerModell([{ ebene: 0, oeffnungen: [a('unten', 0, 'tuer'), a('unten', 3, 'tuer', { breiteM: 2.4 })] }], 'x', 3)!
+    expect(m.tueren.length).toBe(1)
+    expect(m.fenster.length).toBe(1)
+  })
 })

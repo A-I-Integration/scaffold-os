@@ -1433,8 +1433,8 @@ export function generateCADModel(
   const gSeite = (sd: SeitenId): number => hangSeiteM[sd] ?? 0
   const levelCalcSeite = (sd: SeitenId) => (system && gSeite(sd) !== 0 ? calculateLevels(building.heightM - gSeite(sd), system, gSeite(sd)) : levelCalc)
   // Geneigtes Dach ohne Satteldach-Sonderfall (Walm-, Mansardendach/Zelt): alle Seiten sind Traufseiten und enden an der Traufe.
-  // (Pultdach bleibt unverändert: dort ist nicht gespeichert, welche Seite die Traufe ist.)
-  const traufeAllseitig = !abschnitte && !giebel && (building.roofForm === 'walmdach' || building.roofForm === 'mansardendach') && building.eavesHeightM > 0 && building.eavesHeightM < building.heightM - 0.3
+  // Pultdach: gespeichert ist nicht, welche Seite die niedrige Traufe hat – vorsichtig gilt die Traufe für alle Seiten, damit nie ein Belag über das Dach ragt.
+  const traufeAllseitig = !abschnitte && !giebel && (building.roofForm === 'walmdach' || building.roofForm === 'mansardendach' || building.roofForm === 'pultdach') && building.eavesHeightM > 0 && building.eavesHeightM < building.heightM - 0.3
   const dachRegel = !!giebel || traufeAllseitig
   /** Regel: Der oberste Belag liegt mindestens RINNE_ABSTAND_M unter der Rinne bzw. Dachkante – ein Gerüst wird nicht bis ans Dach hochgezogen. Mindestens eine Lage. */
   const lagenBisRinne = (rinneM: number, sd: SeitenId): number => Math.min(levelCalcSeite(sd).levels, Math.max(1, Math.floor((rinneM - gSeite(sd) - RINNE_ABSTAND_M) / rasterLagenH + 1e-6)))

@@ -83,8 +83,13 @@ describe('Oberster Belag mindestens 1,5 m unter der Rinne', () => {
       expect(m.warnings.some((w) => w.code === 'OBERSTER_BELAG_RINNE')).toBe(true)
     }
   })
-  it('Flachdach, Pultdach und Dach ohne Traufangabe bleiben unverändert (volle Höhe)', () => {
-    for (const patch of [{ roofForm: 'flachdach' as const, eavesHeightM: 9.2, roofHeightM: 0 }, { roofForm: 'pultdach' as const }, { roofForm: 'walmdach' as const, eavesHeightM: 9.2, roofHeightM: 0 }]) {
+  it('Pultdach: kein Belag über der Traufe (alle Seiten), ohne Traufangabe volle Höhe', () => {
+    const m = generateCADModel(haus({ roofForm: 'pultdach' }), 'rux-super65')
+    for (const sd of ['front', 'back', 'left', 'right']) expect(lagen(m, sd), `pult ${sd}`).toBe(2)
+    expect(m.warnings.some((w) => w.code === 'OBERSTER_BELAG_RINNE')).toBe(true)
+  })
+  it('Flachdach und Dach ohne Traufangabe bleiben unverändert (volle Höhe)', () => {
+    for (const patch of [{ roofForm: 'flachdach' as const, eavesHeightM: 9.2, roofHeightM: 0 }, { roofForm: 'pultdach' as const, eavesHeightM: 0 }, { roofForm: 'walmdach' as const, eavesHeightM: 9.2, roofHeightM: 0 }]) {
       const m = generateCADModel(haus(patch), 'rux-super65')
       expect(lagen(m, 'front')).toBe(m.levelCount)
       expect(m.warnings.some((w) => w.code === 'OBERSTER_BELAG_RINNE')).toBe(false)
