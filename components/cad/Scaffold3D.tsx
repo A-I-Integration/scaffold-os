@@ -21,7 +21,7 @@ import * as THREE from 'three'
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 import { treppenTeile } from '@/lib/cad/treppen-geometrie'
 import { HAUBEN_PROFIL } from '@/lib/cad/haube'
-import { CADModel, ScaffoldComponent3D, BuildingFeature3D, berechneGebaeudeSegmente, hatGeradeAbschnitte } from '@/lib/calculations/cad-engine'
+import { CADModel, ScaffoldComponent3D, BuildingFeature3D, berechneGebaeudeSegmente, hatGeradeAbschnitte, eckenGelaendeM } from '@/lib/calculations/cad-engine'
 import { CATALOG_ITEMS } from './ComponentCatalog'
 import Umgebung3D from './Umgebung3D'
 import { bauteilFarbe, type FarbModus } from '@/lib/cad/bauteil-farben'
@@ -1357,38 +1357,11 @@ function GebaeudeAnzeige({ building, features, visible, onSeiteUmschalten }: { b
 function hangDaten(building: CADModel['building']): { hangM: number; g: Record<'front' | 'back' | 'left' | 'right', number> } {
   const leer = { front: 0, back: 0, left: 0, right: 0 }
   if ((building.sections && building.sections.length >= 2) || (building.umriss && building.umriss.length >= 3)) return { hangM: 0, g: leer }
-  const gm = building.geruestOptionen?.gelaendeSeiteM ?? {}
-  const lm = building.geruestOptionen?.gelaendeLinieSeiteM ?? {}
-  const seite = (sd: 'front' | 'back' | 'left' | 'right') => {
-    const l = lm[sd]
-    if (l && Number.isFinite(l.vonM) && Number.isFinite(l.bisM)) return Math.min(l.vonM, l.bisM)
-    return gm[sd] ?? 0
-  }
-  const g = { front: seite('front'), back: seite('back'), left: seite('left'), right: seite('right') }
-  const min = Math.min(g.front, g.back, g.left, g.right, 0)
+  // Tiefster Punkt aus demselben Ecken-Modell wie die Gerüstberechnung
+  const e = eckenGelaendeM(building)
+  const min = Math.min(e.fl, e.fr, e.bl, e.br, 0)
+  const g = { front: Math.min(e.fl, e.fr), back: Math.min(e.bl, e.br), left: Math.min(e.bl, e.fl), right: Math.min(e.br, e.fr) }
   return { hangM: Math.round(Math.max(0, -min) * 100) / 100, g }
-}
-
-/**
- * Geländekote an den vier Gebäudeecken (lokal, ±0,00 = 0; negativ = tiefer). Aus „Gelände je Seite“ bzw. der
- * schrägen Geländelinie (vonM/bisM). Je Ecke der tiefere der beiden anliegenden Seitenwerte.
- */
-function eckGelaende(building: CADModel['building']): { fl: number; fr: number; bl: number; br: number } {
-  const o = building.geruestOptionen
-  const lm = o?.gelaendeLinieSeiteM ?? {}
-  const gm = o?.gelaendeSeiteM ?? {}
-  const ende = (sd: 'front' | 'back' | 'left' | 'right', which: 'von' | 'bis') => {
-    const l = lm[sd]
-    if (l && Number.isFinite(l.vonM) && Number.isFinite(l.bisM)) return which === 'von' ? l.vonM : l.bisM
-    return gm[sd] ?? 0
-  }
-  const tief = (...v: number[]) => Math.min(...v)
-  return {
-    fl: tief(ende('front', 'von'), ende('left', 'bis')),
-    fr: tief(ende('front', 'bis'), ende('right', 'bis')),
-    bl: tief(ende('back', 'von'), ende('left', 'von')),
-    br: tief(ende('back', 'bis'), ende('right', 'von')),
-  }
 }
 
 /**
@@ -1617,7 +1590,7 @@ function Building3D({
       </mesh>
 
       {/* Schräges Hanggelände durch die vier Eckhöhen; Talseite bleibt offen */}
-      <Hanggelaende lengthM={lengthM} widthM={w} hangM={hangM} ecken={eckGelaende(building)} />
+      <Hanggelaende lengthM={lengthM} widthM={w} hangM={hangM} ecken={eckenGelaendeM(building)} />
 
       {/* Klickbare Seiten: Seite anklicken → „Einrüsten“ / „Gerüst entfernen“ */}
       {onSeiteUmschalten && (

@@ -69,6 +69,8 @@ export interface GeruestOptionen {
   gelaendeSeiteM?: Partial<Record<'front' | 'back' | 'left' | 'right', number>>
   /** Schräger Hang je Seite: Geländekote am Anfang (vonM) und Ende (bisM) der Seite in m, bezogen auf ±0,00. Der Gerüstfuß treppt je Feld ab (Ausgleichsstiel + Spindel). Hat Vorrang vor gelaendeSeiteM. */
   gelaendeLinieSeiteM?: Partial<Record<'front' | 'back' | 'left' | 'right', { vonM: number; bisM: number }>>
+  /** Geländehöhe an den vier Gebäudeecken (m, bezogen auf ±0,00): fl=vorne-links, fr=vorne-rechts, bl=hinten-links, br=hinten-rechts. Steuert Gerüst UND 3D-Gelände aus einer Quelle; alle Seiten treppen entsprechend ab. Höchste Priorität. */
+  gelaendeEckenM?: { fl: number; fr: number; bl: number; br: number }
   /** Pultdach: Seite mit der niedrigen Traufe (dort endet das Dach bei `eavesHeightM`, gegenüber beim First `heightM`, an den Seitenwänden steigt es gleichmäßig). Fehlt die Angabe, gilt die Traufe vorsichtig für alle Seiten. */
   pultNiedrigeSeite?: 'front' | 'back' | 'left' | 'right'
   /** Profil je Gerüstseite aus den Ansichten: Dachkante (und Gelände) in m über ±0,00 an Stützstellen entlang der Wand. `posM` = Lage ab Wandmitte (vorne/hinten: + nach rechts, links/rechts: + Richtung Vorderseite). Hat Vorrang vor Giebel-/Pult-/Traufe-Regeln. Gelände: das Gerüst steht am tiefsten Punkt und wird dort höher. */
@@ -458,6 +460,39 @@ export function calculateFieldDivision(
 
 /** Mindestabstand: oberster Belag unter der Rinne (Traufe) bzw. der Dachkante, in m. Vorgabe aus der Praxis – Dacharbeiten (Fanggerüst) brauchen ein eigenes, höheres Gerüst. */
 export const RINNE_ABSTAND_M = 1.5
+
+/**
+ * Geländekote an den vier Gebäudeecken (m, bezogen auf ±0,00; negativ = tiefer), aus „Gelände je Seite“,
+ * der schrägen Geländelinie (vonM/bisM) und – als Rückfall – dem Seitenprofil. Je Ecke der tiefere der beiden
+ * anliegenden Seitenwerte. Gemeinsame Quelle für Gerüstberechnung (cad-engine) und 3D-Darstellung (Scaffold3D),
+ * damit Gelände und Gerüst immer zusammenpassen. front = +z, back = −z, left = −x, right = +x.
+ */
+export function eckenGelaendeM(building: BuildingParams): { fl: number; fr: number; bl: number; br: number } {
+  const o = building.geruestOptionen
+  const ec = o?.gelaendeEckenM
+  if (ec && (['fl', 'fr', 'bl', 'br'] as const).every((k) => Number.isFinite(ec[k]))) {
+    return { fl: ec.fl, fr: ec.fr, bl: ec.bl, br: ec.br }
+  }
+  const lm = o?.gelaendeLinieSeiteM ?? {}
+  const gm = o?.gelaendeSeiteM ?? {}
+  const flach = (sd: 'front' | 'back' | 'left' | 'right'): number => {
+    if (typeof gm[sd] === 'number' && Number.isFinite(gm[sd])) return gm[sd] as number
+    const prof = o?.seitenProfil?.[sd]?.map((q) => q.gelaendeM).filter((g): g is number => typeof g === 'number' && Number.isFinite(g))
+    return prof && prof.length ? Math.min(...prof) : 0
+  }
+  const ende = (sd: 'front' | 'back' | 'left' | 'right', which: 'von' | 'bis'): number => {
+    const l = lm[sd]
+    if (l && Number.isFinite(l.vonM) && Number.isFinite(l.bisM)) return which === 'von' ? l.vonM : l.bisM
+    return flach(sd)
+  }
+  const tief = (a: number, b: number) => Math.min(a, b)
+  return {
+    fl: tief(ende('front', 'von'), ende('left', 'bis')),
+    fr: tief(ende('front', 'bis'), ende('right', 'bis')),
+    bl: tief(ende('back', 'von'), ende('left', 'von')),
+    br: tief(ende('back', 'bis'), ende('right', 'von')),
+  }
+}
 
 export function calculateLevels(
   buildingHeightM: number,
@@ -1440,14 +1475,30 @@ export function generateCADModel(
     }
   }
   if (system && (abschnitte || (building.umriss && building.umriss.length >= 3))) { const h = hangIgnoriert(opt); if (h) warnings.push(h) }
-  // Schräger Hang je Seite (vonM/bisM): der Fuß treppt je Feld ab. gilt nur beim einfachen Gebäude mit System.
+  // Schräger Hang je Seite (vonM/bisM): der Fuß treppt je Feld ab. Die 3D-Geländefläche nutzt dieselben Ecken.
   const gLinieSeite: Partial<Record<SeitenId, { vonM: number; bisM: number }>> = {}
   if (system && !abschnitte && !(building.umriss && building.umriss.length >= 3)) {
-    for (const sd of ['front', 'back', 'left', 'right'] as const) {
-      const l = opt?.gelaendeLinieSeiteM?.[sd]
-      if (l && Number.isFinite(l.vonM) && Number.isFinite(l.bisM) && Math.abs(l.vonM) <= 15 && Math.abs(l.bisM) <= 15 && Math.abs(l.vonM - l.bisM) >= 0.01) {
-        gLinieSeite[sd] = { vonM: Math.round(l.vonM * 100) / 100, bisM: Math.round(l.bisM * 100) / 100 }
-        hangSeiteM[sd] = Math.min(gLinieSeite[sd]!.vonM, gLinieSeite[sd]!.bisM) // tiefster Punkt: Lagen reichen bis dorthin
+    if (opt?.gelaendeEckenM) {
+      // Vier Eckhöhen: jede Seite bekommt ihre Linie aus den beiden Eckwerten (Richtung wie tAlong in der Feldschleife).
+      const E = eckenGelaendeM(building)
+      const r = (x: number) => Math.round(Math.max(-15, Math.min(15, x)) * 100) / 100
+      const linieOf: Record<SeitenId, { vonM: number; bisM: number }> = {
+        front: { vonM: r(E.fl), bisM: r(E.fr) }, back: { vonM: r(E.bl), bisM: r(E.br) },
+        left: { vonM: r(E.bl), bisM: r(E.fl) }, right: { vonM: r(E.br), bisM: r(E.fr) },
+      }
+      for (const sd of ['front', 'back', 'left', 'right'] as const) {
+        const { vonM, bisM } = linieOf[sd]
+        const min = Math.min(vonM, bisM)
+        if (Math.abs(min) >= 0.01 || Math.abs(vonM - bisM) >= 0.01) hangSeiteM[sd] = min
+        if (Math.abs(vonM - bisM) >= 0.01) gLinieSeite[sd] = { vonM, bisM }
+      }
+    } else {
+      for (const sd of ['front', 'back', 'left', 'right'] as const) {
+        const l = opt?.gelaendeLinieSeiteM?.[sd]
+        if (l && Number.isFinite(l.vonM) && Number.isFinite(l.bisM) && Math.abs(l.vonM) <= 15 && Math.abs(l.bisM) <= 15 && Math.abs(l.vonM - l.bisM) >= 0.01) {
+          gLinieSeite[sd] = { vonM: Math.round(l.vonM * 100) / 100, bisM: Math.round(l.bisM * 100) / 100 }
+          hangSeiteM[sd] = Math.min(gLinieSeite[sd]!.vonM, gLinieSeite[sd]!.bisM)
+        }
       }
     }
   }
