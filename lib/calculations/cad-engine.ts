@@ -5,7 +5,7 @@
 // ============================================================
 
 import { GeruestSystem, findeSystem } from './geruest-systeme'
-import { ausgleichTeile } from './abtreppung'
+import { ausgleichTeile, type AusgleichTeil } from './abtreppung'
 import { MaterialItem } from '@/types/scaffold'
 import { modellHash } from './modell-stand'
 import { type UmrissPunkt, pruefeUmriss, normalisiereUmriss, umrissKanten, umrissEcken, geruestEckpunkt, umrissBox, zentriereUmriss, kantenHoehenNormalisiert } from './cad-umriss'
@@ -324,6 +324,8 @@ export function bereinigeAbschnitte(b: BuildingParams): BuildingParams {
 
 export interface ScaffoldField {
   id: string
+  /** Nur am Hang: unterstes Feld einer Spalte steht auf dem Gelände – Ausgleichsstiel und Fußspindel dieses Feldes (je Rahmenstiel) */
+  fuss?: { stielM: number; spindelM: number; spindel80: boolean }
   index: number
   lengthM: number
   widthM: number
@@ -776,8 +778,21 @@ export function generateScaffoldComponents(model: CADModel): ScaffoldComponent3D
       components.push({ id: `diagonal-${field.id}`, type: 'diagonal', articleNumber: getDiagonalArticle(lengthM), name: `Diagonale ${lengthM}m`, position: [positionX, yBottom + levelH / 2, positionZ], rotation: [0, 0, Math.atan2(levelH, lengthM)], scale: [0.03, diagLen, 0.03], color: colorDiagonal, fieldId: field.id, levelId: level.id })
     }
 
-    // Fußplatten (nur unterste Lage)
-    if (levelIndex === 0) {
+    // Fußplatten (nur unterste Lage). Am Hang steht das unterste Feld einer Spalte mit Ausgleichsstiel und Fußspindel auf dem Gelände.
+    if (field.fuss) {
+      const fu = field.fuss
+      const spArt = fu.spindel80 ? 'FS-080' : 'FS-060'
+      const spName = fu.spindel80 ? 'Fußspindel 80 (Auszug bis 0,55 m)' : 'Fußspindel 60 (Auszug bis 0,41 m)'
+      const agArt = `AG-${String(Math.round(fu.stielM * 100)).padStart(3, '0')}`
+      const agName = `Ausgleichsstiel ${fu.stielM.toFixed(2).replace('.', ',')} m`
+      const fuesse: [string, number, number][] = [['left', -lengthM / 2 + 0.02, 0], ['right', lengthM / 2 - 0.02, 0], ['left-aussen', -lengthM / 2 + 0.02, widthM - 0.075], ['right-aussen', lengthM / 2 - 0.02, widthM - 0.075]]
+      fuesse.forEach(([tag, dx, dz]) => {
+        if ((tag.startsWith('left') && dgLinks) || (tag.startsWith('right') && dgRechts)) return
+        const yStielUnten = yBottom - fu.stielM
+        if (fu.stielM > 0) components.push({ id: `ausgleich-${field.id}-${tag}`, type: 'footplate', articleNumber: agArt, name: agName, position: [positionX + dx, yBottom - fu.stielM / 2, positionZ + dz], rotation: [0, 0, 0], scale: [0.06, fu.stielM, 0.06], color: colorFoot, fieldId: field.id, levelId: level.id })
+        components.push({ id: `spindel-${field.id}-${tag}`, type: 'footplate', articleNumber: spArt, name: spName, position: [positionX + dx, yStielUnten - 0.02 - fu.spindelM / 2, positionZ + dz], rotation: [0, 0, 0], scale: [0.15, 0.04 + fu.spindelM, 0.15], color: colorFoot, fieldId: field.id, levelId: level.id })
+      })
+    } else if (levelIndex === 0) {
       if (!dgLinks) components.push({ id: `foot-${field.id}-left`, type: 'footplate', articleNumber: 'FP-001', name: 'Fußplatte', position: [positionX - lengthM / 2 + 0.02, yBottom - 0.02, positionZ], rotation: [0, 0, 0], scale: [0.15, 0.04, 0.15], color: colorFoot, fieldId: field.id, levelId: level.id })
       if (!dgRechts) components.push({ id: `foot-${field.id}-right`, type: 'footplate', articleNumber: 'FP-001', name: 'Fußplatte', position: [positionX + lengthM / 2 - 0.02, yBottom - 0.02, positionZ], rotation: [0, 0, 0], scale: [0.15, 0.04, 0.15], color: colorFoot, fieldId: field.id, levelId: level.id })
       // Außenstützen des Rahmens (Rahmenbreite abzüglich Rand): eigene Fußplatten
@@ -1836,13 +1851,14 @@ export function generateCADModel(
           if (levelData.index >= lagenAn(side, mitteAlong - fieldLength / 2, mitteAlong + fieldLength / 2)) return
         }
         // Schräger Hang: unterhalb der Geländelinie dieses Feldes steht kein Belag (Abtreppung). Am untersten Belag entsteht ein Fußausgleich.
+        let fussT: AusgleichTeil | null = null
         if (gLinieSeite[side as SeitenId]) {
           const tAlong = totalLength > 0 ? (vorherLaenge + fieldLength / 2) / totalLength : 0.5
           const fussM = gFussFeld(side as SeitenId, tAlong)
           if (levelData.bottomY < fussM - 1e-6) return // Belag läge unter dem Gelände → weglassen
           if (levelData.bottomY - rasterLagenH < fussM - 1e-6) { // unterster Belag dieses Feldes: Ausgleich bis zum Gelände
             const t = system ? ausgleichTeile(levelData.bottomY - fussM, system) : null
-            if (t) abtreppFuesse.push({ side: side as SeitenId, feldIndex: fieldIndex, ausgleichM: Math.round((levelData.bottomY - fussM) * 100) / 100, ...t })
+            if (t) { fussT = t; abtreppFuesse.push({ side: side as SeitenId, feldIndex: fieldIndex, ausgleichM: Math.round((levelData.bottomY - fussM) * 100) / 100, ...t }) }
           }
         }
         if (istInLuecke(side, side === 'front' || side === 'back' ? xPos : zPos + (building.widthM || 0) / 2 + 0.5, fieldLength)) { merkeLuecke(side, levelData.index, fieldLength, building.heightM); return }
@@ -1858,7 +1874,8 @@ export function generateCADModel(
           positionZ: parseFloat(zPos.toFixed(3)),
           side: side as 'front' | 'back' | 'left' | 'right',
           levelIndex: levelData.index,
-          isCorner
+          isCorner,
+          ...(fussT ? { fuss: fussT } : {}),
         }
         fields.push(field)
         levelFields.push(field)
@@ -2149,12 +2166,14 @@ function generiereUmrissModell(
         cum += fl
         const px = parseFloat((s.start.x + s.k.u[0] * t).toFixed(3))
         const pz = parseFloat((s.start.z + s.k.u[1] * t).toFixed(3))
+        let fussTU: AusgleichTeil | null = null
         if (hangU && system) {
           // Abtreppung: unterhalb der Geländelinie dieses Feldes kein Belag; am untersten Belag ein Fußausgleich
           const fuss = terrainAn(px, pz)
           if (ld.bottomY < fuss - 1e-6) return
           if (ld.bottomY - levelCalc.levelHeightM < fuss - 1e-6) {
             const te = ausgleichTeile(ld.bottomY - fuss, system)
+            if (te) fussTU = te
             if (te) abtreppFuesseU.push({ ausgleichM: Math.round((ld.bottomY - fuss) * 100) / 100, ...te })
           }
         }
@@ -2171,6 +2190,7 @@ function generiereUmrissModell(
           isCorner: fi === 0 || fi === div.distribution.length - 1,
           kante: s.k.index,
           yaw: s.k.yaw,
+          ...(fussTU ? { fuss: fussTU } : {}),
         }
         lageFelder.push(field)
         fields.push(field)
@@ -2273,7 +2293,7 @@ function getUnit(type: ScaffoldComponent3D['type']): string {
 function getUnitPrice(articleNumber: string): number {
   const prices: Record<string, number> = { 'RA-001': 45, 'RA-002': 52, 'RA-003': 58, 'AB-001': 85, 'AB-002': 98, 'AB-003': 112, 'DI-001': 28, 'DI-002': 32, 'DI-003': 36, 'GE-001': 35, 'GE-002': 40, 'GE-003': 45, 'FP-001': 18, 'KU-001': 4.5, 'AN-001': 15, 'QR-001': 12, 'KO-001': 32, 'SP-001': 450, 'FN-001': 4.2, 'SD-001': 850, 'BB-001': 22, 'LV-001': 45, 'EW-001': 25, 'ST-001': 15, 'ST-002': 38, 'SG-001': 28 }
   // Leiter: bewusst KEIN Fantasiepreis – Preis kommt aus dem Lager der Firma (Artikel LE-001).
-  if (articleNumber === LEITER_ARTIKELNUMMER) return 0
+  if (articleNumber === LEITER_ARTIKELNUMMER || /^(AG|FS)-\d{3}$/.test(articleNumber)) return 0 // Hang-Fußausgleich: Preis kommt aus dem Lager der Firma
   // Kederplane und Aufzug: kein Fantasiepreis – Preis kommt aus dem Lager der Firma (bei gemietetem Aufzug von Hand im LV)
   if (articleNumber === 'KP-001' || articleNumber === 'DF-001' || articleNumber === 'AZ-001' || articleNumber === DURCHGANG_ARTIKELNUMMER) return 0
   return prices[articleNumber] || 10
@@ -2281,13 +2301,13 @@ function getUnitPrice(articleNumber: string): number {
 
 function getWeightKg(articleNumber: string): number {
   const weights: Record<string, number> = { 'RA-001': 12.5, 'RA-002': 15.2, 'RA-003': 18.0, 'AB-001': 22, 'AB-002': 26, 'AB-003': 31, 'DI-001': 8.5, 'DI-002': 9.8, 'DI-003': 11.2, 'GE-001': 7.2, 'GE-002': 8.5, 'GE-003': 9.8, 'FP-001': 5.5, 'KU-001': 0.8, 'AN-001': 2.5, 'QR-001': 3.5, 'KO-001': 9.0, 'SP-001': 85.0, 'FN-001': 0.5, 'SD-001': 120.0, 'BB-001': 6.5, 'LV-001': 18.0, 'EW-001': 4.2, 'ST-001': 2.8, 'ST-002': 7.5, 'SG-001': 5.5 }
-  if (articleNumber === LEITER_ARTIKELNUMMER) return 0
+  if (articleNumber === LEITER_ARTIKELNUMMER || /^(AG|FS)-\d{3}$/.test(articleNumber)) return 0
   if (articleNumber === 'KP-001' || articleNumber === 'AZ-001' || articleNumber === DURCHGANG_ARTIKELNUMMER) return 0 // Gewicht kommt aus dem Lager
   return weights[articleNumber] || 5
 }
 
 function getRecommendation(articleNumber: string): string {
-  const recs: Record<string, string> = { 'RA-001': 'Standard-Rahmen für Feldlänge 2,07 m', 'RA-002': 'Für breitere Felder', 'RA-003': 'Für große Feldlängen', 'AB-001': 'Standard-Arbeitsbühne', 'AB-002': 'Für 2,50 m Feldlänge', 'AB-003': 'Für 3,00 m Feldlänge', 'DI-001': 'Stabilisierung je Feld', 'DI-002': 'Stabilisierung 2,50 m', 'DI-003': 'Stabilisierung 3,00 m', 'GE-001': 'Brüstungsgeländer', 'GE-002': 'Geländer 2,50 m', 'GE-003': 'Geländer 3,00 m', 'FP-001': 'Grundplatte je Standfuß', 'KU-001': 'Verbindung Rahmen/Diagonale', 'AN-001': 'Standard-Fassadenanker', 'QR-001': 'Querriegel', 'KO-001': 'Für Überstände und Dacharbeiten', 'SP-001': 'Zugang je 3–4 Ebenen', 'FN-001': 'Fangnetz bei Höhe > 12m', 'SD-001': 'Schutzdach öffentlicher Raum', 'BB-001': 'Seitenschutz/Absturzsicherung', 'LV-001': 'Bei weichem Untergrund', 'EW-001': 'Eckverstrebung', 'ST-001': 'Treppenstufe', 'ST-002': 'Treppenpodest', 'SG-001': 'Treppengeländer', 'LE-001': 'Schematische Leiter – Preis, Gewicht und Name im Lager pflegen' }
+  const recs: Record<string, string> = { 'RA-001': 'Standard-Rahmen für Feldlänge 2,07 m', 'RA-002': 'Für breitere Felder', 'RA-003': 'Für große Feldlängen', 'AB-001': 'Standard-Arbeitsbühne', 'AB-002': 'Für 2,50 m Feldlänge', 'AB-003': 'Für 3,00 m Feldlänge', 'DI-001': 'Stabilisierung je Feld', 'DI-002': 'Stabilisierung 2,50 m', 'DI-003': 'Stabilisierung 3,00 m', 'GE-001': 'Brüstungsgeländer', 'GE-002': 'Geländer 2,50 m', 'GE-003': 'Geländer 3,00 m', 'FP-001': 'Grundplatte je Standfuß', 'KU-001': 'Verbindung Rahmen/Diagonale', 'AN-001': 'Standard-Fassadenanker', 'QR-001': 'Querriegel', 'KO-001': 'Für Überstände und Dacharbeiten', 'SP-001': 'Zugang je 3–4 Ebenen', 'FN-001': 'Fangnetz bei Höhe > 12m', 'SD-001': 'Schutzdach öffentlicher Raum', 'BB-001': 'Seitenschutz/Absturzsicherung', 'LV-001': 'Bei weichem Untergrund', 'EW-001': 'Eckverstrebung', 'ST-001': 'Treppenstufe', 'ST-002': 'Treppenpodest', 'SG-001': 'Treppengeländer', 'FS-060': 'Fußspindel am Hang – Preis und Gewicht im Lager pflegen', 'FS-080': 'Verstärkte Fußspindel am Hang – Preis und Gewicht im Lager pflegen', 'LE-001': 'Schematische Leiter – Preis, Gewicht und Name im Lager pflegen' }
   return recs[articleNumber] || 'Standard-Bauteil'
 }
 
