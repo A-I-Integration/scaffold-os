@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { kotenJeAnsicht, koteWert, pultNiedrigeRichtung } from '../koten-je-ansicht'
+import { kotenJeAnsicht, koteWert, pultNiedrigeRichtung, gelaendeTiefeJeAnsicht } from '../koten-je-ansicht'
 
 const t = (s: string, x: number, y: number) => ({ s, x, y })
 
@@ -48,5 +48,20 @@ describe('pultNiedrigeRichtung', () => {
     const no = { titel: 'NORDANSICHT', art: 'nord' as const, x: 198, y: 401, koten: [{ hoeheM: 5.92, x: 700, y: 458 }, { hoeheM: 6.94, x: 300, y: 430 }] }
     expect(pultNiedrigeRichtung([su, no], 5.92, 6.94)).toBeNull()
     expect(pultNiedrigeRichtung([], 5.92, 6.94)).toBeNull()
+  })
+})
+
+describe('gelaendeTiefeJeAnsicht', () => {
+  const an = (art: any, koten: number[]) => ({ titel: art, art, x: 0, y: 0, koten: koten.map((h) => ({ hoeheM: h, x: 0, y: 0 })) })
+  it('findet die Talseite (tiefste Kote) und sortiert sie nach unten', () => {
+    const r = gelaendeTiefeJeAnsicht([an('nord', [1.55, -2.55]), an('sued', [0.9, -0.1]), an('west', [6.94, -2.95, -0.29])])
+    expect(r.map((x) => x.art)).toEqual(['west', 'nord'])
+    expect(r[0].tiefsteM).toBe(-2.95)
+  })
+  it('Seiten ohne freiliegendes Untergeschoss (alles über −0,5 m) fallen weg', () => {
+    expect(gelaendeTiefeJeAnsicht([an('sued', [0.9, -0.1, 2.95])])).toEqual([])
+  })
+  it('Schnitte zählen nicht (zeigen Innenraum, nicht die Fassade)', () => {
+    expect(gelaendeTiefeJeAnsicht([an('schnitt', [-3.36, -2.9])])).toEqual([])
   })
 })

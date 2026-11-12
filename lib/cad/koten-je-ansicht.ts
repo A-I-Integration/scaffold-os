@@ -75,3 +75,23 @@ export function pultNiedrigeRichtung(ansichten: AnsichtKoten[], traufeM: number,
   if (!stimmen.length || new Set(stimmen).size > 1) return null
   return stimmen[0]
 }
+
+export interface GelaendeTiefe { art: AnsichtArt; titel: string; tiefsteM: number; hoechsteM: number }
+
+/**
+ * Tiefste und höchste Kote je Ansicht – für Hanglagen, bei denen das Untergeschoss auf der Talseite freiliegt.
+ * Der Grundriss zeigt nur das Gelände an den Erdgeschoss-Ecken; der volle Abfall (z. B. bis zum UG-Boden −2,90)
+ * steht nur in den Ansichten/Schnitten. Ergebnis ist ein VORSCHLAG: welche Ansicht die Talseite ist, bestätigt die Person.
+ * Nur Ansichten (nicht Schnitte), die mindestens eine Kote unter −0,5 m haben (sonst keine freiliegende Talseite).
+ */
+export function gelaendeTiefeJeAnsicht(ansichten: AnsichtKoten[]): GelaendeTiefe[] {
+  const out: GelaendeTiefe[] = []
+  for (const a of ansichten) {
+    if (a.art === 'schnitt' || !a.koten.length) continue
+    const hoehen = a.koten.map((k) => k.hoeheM)
+    const tief = Math.min(...hoehen)
+    if (tief > -0.5) continue
+    out.push({ art: a.art, titel: a.titel, tiefsteM: tief, hoechsteM: Math.max(...hoehen) })
+  }
+  return out.sort((p, q) => p.tiefsteM - q.tiefsteM)
+}

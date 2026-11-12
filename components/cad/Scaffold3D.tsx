@@ -1347,6 +1347,52 @@ function GebaeudeAnzeige({ building, features, visible }: { building: CADModel['
   )
 }
 
+/**
+ * Hanglage für die 3D-Darstellung: tiefste Geländekote (Talseite) und Gelände je Seite.
+ * `hangM` ist der Betrag, um den die Talseite unter ±0,00 (Erdgeschoss-Fußboden) liegt.
+ * Nur beim einfachen Rechteck-Gebäude; Abschnitte/Umriss bleiben vorerst flach.
+ */
+function hangDaten(building: CADModel['building']): { hangM: number; g: Record<'front' | 'back' | 'left' | 'right', number> } {
+  const leer = { front: 0, back: 0, left: 0, right: 0 }
+  if ((building.sections && building.sections.length >= 2) || (building.umriss && building.umriss.length >= 3)) return { hangM: 0, g: leer }
+  const gm = building.geruestOptionen?.gelaendeSeiteM ?? {}
+  const g = { front: gm.front ?? 0, back: gm.back ?? 0, left: gm.left ?? 0, right: gm.right ?? 0 }
+  const min = Math.min(g.front, g.back, g.left, g.right, 0)
+  return { hangM: Math.round(Math.max(0, -min) * 100) / 100, g }
+}
+
+/**
+ * Erdböschung an den höher liegenden Seiten eines Hang-Gebäudes (nur Darstellung).
+ * Im angehobenen Gelände-Koordinatensystem (±0,00 liegt bei y = hangM über dem Boden) reicht die Böschung
+ * je Seite von der Talsohle (lokal −hangM = Weltboden 0) bis zur Geländekote dieser Seite. Die Talseite (tiefste
+ * Kote) bleibt offen, dort zeigt das Gebäude sein Untergeschoss.
+ */
+function Hangboeschung({ lengthM, widthM, hangM, g }: { lengthM: number; widthM: number; hangM: number; g: Record<'front' | 'back' | 'left' | 'right', number> }) {
+  if (!(hangM > 0.05)) return null
+  const R = Math.max(1.6, Math.min(4, hangM * 1.3)) // Auslauf der Böschung nach außen
+  const seiten: { k: 'front' | 'back' | 'left' | 'right'; pos: [number, number, number]; args: [number, number, number] }[] = []
+  const add = (k: 'front' | 'back' | 'left' | 'right') => {
+    const Hb = Math.round((g[k] + hangM) * 100) / 100 // Höhe der Böschung von der Talsohle bis zur Geländekote
+    if (Hb <= 0.05) return // Talseite oder gleich tief: offen lassen
+    const yc = -hangM + Hb / 2
+    if (k === 'front') seiten.push({ k, pos: [0, yc, widthM / 2 + R / 2], args: [lengthM + 0.6, Hb, R] })
+    else if (k === 'back') seiten.push({ k, pos: [0, yc, -widthM / 2 - R / 2], args: [lengthM + 0.6, Hb, R] })
+    else if (k === 'right') seiten.push({ k, pos: [lengthM / 2 + R / 2, yc, 0], args: [R, Hb, widthM + 0.6] })
+    else seiten.push({ k, pos: [-lengthM / 2 - R / 2, yc, 0], args: [R, Hb, widthM + 0.6] })
+  }
+  ;(['front', 'back', 'left', 'right'] as const).forEach(add)
+  return (
+    <group>
+      {seiten.map((s) => (
+        <mesh key={s.k} position={s.pos} receiveShadow castShadow>
+          <boxGeometry args={s.args} />
+          <meshStandardMaterial color="#97a089" roughness={0.98} />
+        </mesh>
+      ))}
+    </group>
+  )
+}
+
 /** Sockel, Traufgesims und Dachrinne um einen Baukörper (nur Darstellung, keine Mengen). Mitte des Körpers bei x/z = 0, Unterkante y = 0. */
 function Gesimse({ laengeM, tiefeM, hoeheM }: { laengeM: number; tiefeM: number; hoeheM: number }) {
   if (!(hoeheM > 2.5) || !(laengeM > 0.5) || !(tiefeM > 0.5)) return null
@@ -1459,14 +1505,21 @@ function Building3D({
     }
   }
 
+  // Hanglage: Baukörper reicht auf der Talseite bis zum freiliegenden Untergeschoss (−hangM) hinunter.
+  const { hangM, g: hangG } = hangDaten(building)
+  const gesamtHoeheM = heightM + hangM
+
   return (
     <group position={[0, 0, -w / 2 - 0.5]}>
-      {/* Baukörper */}
-      <mesh position={[0, heightM / 2, 0]} castShadow receiveShadow>
-        <boxGeometry args={[lengthM, heightM, w]} />
+      {/* Baukörper (bei Hang nach unten bis zur Talsohle verlängert) */}
+      <mesh position={[0, heightM / 2 - hangM / 2, 0]} castShadow receiveShadow>
+        <boxGeometry args={[lengthM, gesamtHoeheM, w]} />
         <Edges threshold={15} color="#8f8676" />
         <WandMaterial praes={praes} />
       </mesh>
+
+      {/* Erdböschung an den bergseitigen Wänden; Talseite bleibt offen */}
+      <Hangboeschung lengthM={lengthM} widthM={w} hangM={hangM} g={hangG} />
 
       <Gesimse laengeM={lengthM} tiefeM={w} hoeheM={heightM} />
 
@@ -1993,6 +2046,8 @@ function Scene({
   // und verschwenden Auflösung).
   const extent = Math.max(model.building.lengthM, model.building.widthM || 6, model.totalHeightM) * 0.8 + 5
   const modelKey = `${model.fieldCount}-${model.levelCount}-${model.totalHeightM}-${(features || []).length}-${removedCount || 0}`
+  // Hanglage: Gebäude und Gerüst werden um die Tieflage der Talseite angehoben, so dass die Talsohle auf dem Boden (y=0) sitzt.
+  const hangHebung = bridgeMode ? 0 : hangDaten(model.building).hangM
   const [lodLevel, setLodLevel] = useState<0 | 1 | 2>(0)
   // Umriss-Modus: jedes Feld gehört zu einer Kante (Schlüssel "k0" …); sonst leer
   const seitenVonFeld = useMemo(() => {
@@ -2031,27 +2086,29 @@ function Scene({
           schwarze/unlesbare Schattenseiten am Gerüst, wie es bei echten
           Baustellenfotos durch Streulicht ohnehin nie vorkommt. */}
       <directionalLight position={[-20, 15, -15]} intensity={0.35} color="#dce8f5" />
-      <GebaeudeAnzeige building={model.building} features={features || []} visible={showBuilding && !bridgeMode} />
       <BridgeDeck3D building={model.building} visible={showBuilding && !!bridgeMode} />
       <Umgebung3D model={model} visible={!!showEnvironment && !bridgeMode && !weiss} />
-      {showScaffold && statik && <Stabwerk3D components={model.components3D} visibleTypes={visibleTypes} />}
-      {showScaffold && !statik && (
-        <AllScaffoldComponents
-          components={model.components3D}
-          visibleTypes={visibleTypes}
-          selectedComponent={selectedComponent}
-          onSelectComponent={onSelectComponent}
-          lodLevel={lodLevel}
-          hiddenSides={hiddenSides}
-          hiddenLevels={hiddenLevels}
-          seitenVonFeld={seitenVonFeld}
-          measureMode={measureMode}
-          onMeasurePoint={onMeasurePoint}
-          placementType={placementType}
-          onPlacementClick={onPlacementClick}
-        />
-      )}
-      <DimensionLines model={model} visible={showDimensions} />
+      <group position={[0, hangHebung, 0]}>
+        <GebaeudeAnzeige building={model.building} features={features || []} visible={showBuilding && !bridgeMode} />
+        {showScaffold && statik && <Stabwerk3D components={model.components3D} visibleTypes={visibleTypes} />}
+        {showScaffold && !statik && (
+          <AllScaffoldComponents
+            components={model.components3D}
+            visibleTypes={visibleTypes}
+            selectedComponent={selectedComponent}
+            onSelectComponent={onSelectComponent}
+            lodLevel={lodLevel}
+            hiddenSides={hiddenSides}
+            hiddenLevels={hiddenLevels}
+            seitenVonFeld={seitenVonFeld}
+            measureMode={measureMode}
+            onMeasurePoint={onMeasurePoint}
+            placementType={placementType}
+            onPlacementClick={onPlacementClick}
+          />
+        )}
+        <DimensionLines model={model} visible={showDimensions} />
+      </group>
       <CustomDimensionLines dimensions={customDimensions} pendingPoint={pendingMeasurePoint} />
       {/* Boden. Präsentation: nur der Schattenwurf auf dem weißen Hintergrund (eine beleuchtete weiße Platte wird
           grau und hebt sich mit harter Kante vom weißen Hintergrund ab). Sonst: großer Boden, der am Horizont
