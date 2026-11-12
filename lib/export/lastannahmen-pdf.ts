@@ -30,6 +30,7 @@ const AMPEL_TEXT: Record<PruefStatus, string> = {
 /** Standardschrift (Helvetica/WinAnsi) kennt einige Zeichen nicht: ersetzen statt Kauderwelsch zu drucken. */
 export function pdfText(s: string): string {
   return s
+    .replace(/[−–]/g, '-')
     .replace(/≤/g, '<=').replace(/≥/g, '>=').replace(/→/g, '->').replace(/≈/g, 'ca.').replace(/✓|✅/g, 'OK')
     .replace(/⛔|⚠️|⚠|ℹ️|ℹ/g, '').replace(/[←-⯿\u{1F000}-\u{1FFFF}]/gu, '')
 }
