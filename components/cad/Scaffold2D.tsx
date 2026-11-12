@@ -11,6 +11,9 @@ type ScaleType = '1:25' | '1:50' | '1:100' | '1:200'
 interface Props {
   model: CADModel
   /** Freie Zeichnung (Linie, Kreis, Polylinie, Maß) – wird im Grundriss über den Plan gelegt */
+  /** Für den Kopf der Gerüstplan-PDF; fehlt der Name, steht dort „Gerüstplan“ */
+  projektName?: string
+  objektadresse?: string
   zeichnung?: { figuren: Figur[]; werkzeug: FigurArt | null; onNeu: (f: Figur) => void; onWerkzeug: (w: FigurArt | null) => void }
 }
 
@@ -21,7 +24,7 @@ const SCALE_FACTORS: Record<ScaleType, number> = {
   '1:200': 5,
 }
 
-export default function Scaffold2D({ model, zeichnung }: Props) {
+export default function Scaffold2D({ model, zeichnung, projektName, objektadresse }: Props) {
   const [activeView, setActiveView] = useState<ViewType>('grundriss')
   const [scale, setScale] = useState<ScaleType>('1:50')
   const [showDimensions, setShowDimensions] = useState(true)
@@ -30,6 +33,20 @@ export default function Scaffold2D({ model, zeichnung }: Props) {
   const [showLegend, setShowLegend] = useState(true)
 
   const scaleFactor = SCALE_FACTORS[scale]
+  const [pdfFehler, setPdfFehler] = useState<string | null>(null)
+  const planPdf = async () => {
+    setPdfFehler(null)
+    try {
+      const { erzeugeGeruestplanPdf } = await import('@/lib/export/geruestplan-pdf')
+      const daten = erzeugeGeruestplanPdf(model, { projektName: projektName || 'Gerüstplan', objektadresse, datum: new Date().toLocaleDateString('de-DE') })
+      const url = URL.createObjectURL(new Blob([daten as BlobPart], { type: 'application/pdf' }))
+      const a = document.createElement('a')
+      a.href = url; a.download = 'Geruestplan.pdf'; a.click()
+      setTimeout(() => URL.revokeObjectURL(url), 5000)
+    } catch (err) {
+      setPdfFehler(err instanceof Error ? err.message : 'PDF konnte nicht erzeugt werden.')
+    }
+  }
 
   const projection = useMemo(() => {
     switch (activeView) {
@@ -102,6 +119,8 @@ export default function Scaffold2D({ model, zeichnung }: Props) {
             <input type='checkbox' checked={showDimensions} onChange={(e) => setShowDimensions(e.target.checked)} className='w-3.5 h-3.5 accent-[#e8590c]' />
             Bemaßung
           </label>
+          <button type='button' onClick={planPdf} className='px-3 py-1.5 text-xs font-medium rounded-lg bg-black/5 text-[#424245] hover:bg-black/10' title='Grundriss, vier Ansichten und Schnitt A-A als PDF (A4 quer, mit Maßstab)'>Gerüstplan (PDF)</button>
+          {pdfFehler && <span className='text-[11px] text-red-600'>{pdfFehler}</span>}
           <label className='flex items-center gap-1.5 text-xs text-[#424245] cursor-pointer'>
             <input type='checkbox' checked={showLegend} onChange={(e) => setShowLegend(e.target.checked)} className='w-3.5 h-3.5 accent-[#e8590c]' />
             Legend
