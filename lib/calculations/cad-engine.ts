@@ -5,6 +5,7 @@
 // ============================================================
 
 import { GeruestSystem, findeSystem } from './geruest-systeme'
+import { ausgleichTeile } from './abtreppung'
 import { MaterialItem } from '@/types/scaffold'
 import { modellHash } from './modell-stand'
 import { type UmrissPunkt, pruefeUmriss, normalisiereUmriss, umrissKanten, umrissEcken, geruestEckpunkt, umrissBox, zentriereUmriss } from './cad-umriss'
@@ -66,6 +67,8 @@ export interface GeruestOptionen {
   tuerenFreihalten?: boolean
   /** Höhe des Geländes am Fuß jeder Seite in m, bezogen auf ±0,00 (Fußboden Erdgeschoss): negativ = Gelände liegt tiefer (Hang, Talseite). Der Fußpunkt der Seite folgt dem Gelände; Lagen und Anker rechnen ab dort. Nur beim einfachen Gebäude (nicht Abschnitte/Umriss). */
   gelaendeSeiteM?: Partial<Record<'front' | 'back' | 'left' | 'right', number>>
+  /** Schräger Hang je Seite: Geländekote am Anfang (vonM) und Ende (bisM) der Seite in m, bezogen auf ±0,00. Der Gerüstfuß treppt je Feld ab (Ausgleichsstiel + Spindel). Hat Vorrang vor gelaendeSeiteM. */
+  gelaendeLinieSeiteM?: Partial<Record<'front' | 'back' | 'left' | 'right', { vonM: number; bisM: number }>>
   /** Pultdach: Seite mit der niedrigen Traufe (dort endet das Dach bei `eavesHeightM`, gegenüber beim First `heightM`, an den Seitenwänden steigt es gleichmäßig). Fehlt die Angabe, gilt die Traufe vorsichtig für alle Seiten. */
   pultNiedrigeSeite?: 'front' | 'back' | 'left' | 'right'
   /** Profil je Gerüstseite aus den Ansichten: Dachkante (und Gelände) in m über ±0,00 an Stützstellen entlang der Wand. `posM` = Lage ab Wandmitte (vorne/hinten: + nach rechts, links/rechts: + Richtung Vorderseite). Hat Vorrang vor Giebel-/Pult-/Traufe-Regeln. Gelände: das Gerüst steht am tiefsten Punkt und wird dort höher. */
@@ -1437,7 +1440,23 @@ export function generateCADModel(
     }
   }
   if (system && (abschnitte || (building.umriss && building.umriss.length >= 3))) { const h = hangIgnoriert(opt); if (h) warnings.push(h) }
+  // Schräger Hang je Seite (vonM/bisM): der Fuß treppt je Feld ab. gilt nur beim einfachen Gebäude mit System.
+  const gLinieSeite: Partial<Record<SeitenId, { vonM: number; bisM: number }>> = {}
+  if (system && !abschnitte && !(building.umriss && building.umriss.length >= 3)) {
+    for (const sd of ['front', 'back', 'left', 'right'] as const) {
+      const l = opt?.gelaendeLinieSeiteM?.[sd]
+      if (l && Number.isFinite(l.vonM) && Number.isFinite(l.bisM) && Math.abs(l.vonM) <= 15 && Math.abs(l.bisM) <= 15 && Math.abs(l.vonM - l.bisM) >= 0.01) {
+        gLinieSeite[sd] = { vonM: Math.round(l.vonM * 100) / 100, bisM: Math.round(l.bisM * 100) / 100 }
+        hangSeiteM[sd] = Math.min(gLinieSeite[sd]!.vonM, gLinieSeite[sd]!.bisM) // tiefster Punkt: Lagen reichen bis dorthin
+      }
+    }
+  }
   const gSeite = (sd: SeitenId): number => hangSeiteM[sd] ?? 0
+  /** Geländekote in der Feldmitte (tAlong 0..1 ab Seitenanfang). Schräger Hang: interpoliert; sonst der Seitenwert. */
+  const gFussFeld = (sd: SeitenId, tAlong: number): number => {
+    const l = gLinieSeite[sd]
+    return l ? l.vonM + (l.bisM - l.vonM) * Math.min(1, Math.max(0, tAlong)) : gSeite(sd)
+  }
   const levelCalcSeite = (sd: SeitenId) => (system && gSeite(sd) !== 0 ? calculateLevels(building.heightM - gSeite(sd), system, gSeite(sd)) : levelCalc)
   // Geneigtes Dach ohne Satteldach-Sonderfall (Walm-, Mansardendach/Zelt): alle Seiten sind Traufseiten und enden an der Traufe.
   // Pultdach: gespeichert ist nicht, welche Seite die niedrige Traufe hat – vorsichtig gilt die Traufe für alle Seiten, damit nie ein Belag über das Dach ragt.
@@ -1499,6 +1518,8 @@ export function generateCADModel(
 
   const fields: ScaffoldField[] = []
   const levels: ScaffoldLevel[] = []
+  // Fußausgleich je Feld bei schrägem Hang (Ausgleichsstiel + Spindel), für Hinweis und Stückliste
+  const abtreppFuesse: { side: SeitenId; feldIndex: number; ausgleichM: number; stielM: number; spindelM: number; spindel80: boolean }[] = []
 
   // Bestimme zu bebauende Seiten
   const activeSides: ('front' | 'back' | 'left' | 'right')[] = building.sides && building.sides.length > 0 ? building.sides : ['front']
@@ -1761,6 +1782,16 @@ export function generateCADModel(
           const mitteAlong = side === 'front' || side === 'back' ? xPos : zPos + (building.widthM || 0) / 2 + 0.5
           if (levelData.index >= lagenAn(side, mitteAlong - fieldLength / 2, mitteAlong + fieldLength / 2)) return
         }
+        // Schräger Hang: unterhalb der Geländelinie dieses Feldes steht kein Belag (Abtreppung). Am untersten Belag entsteht ein Fußausgleich.
+        if (gLinieSeite[side as SeitenId]) {
+          const tAlong = totalLength > 0 ? (vorherLaenge + fieldLength / 2) / totalLength : 0.5
+          const fussM = gFussFeld(side as SeitenId, tAlong)
+          if (levelData.bottomY < fussM - 1e-6) return // Belag läge unter dem Gelände → weglassen
+          if (levelData.bottomY - rasterLagenH < fussM - 1e-6) { // unterster Belag dieses Feldes: Ausgleich bis zum Gelände
+            const t = system ? ausgleichTeile(levelData.bottomY - fussM, system) : null
+            if (t) abtreppFuesse.push({ side: side as SeitenId, feldIndex: fieldIndex, ausgleichM: Math.round((levelData.bottomY - fussM) * 100) / 100, ...t })
+          }
+        }
         if (istInLuecke(side, side === 'front' || side === 'back' ? xPos : zPos + (building.widthM || 0) / 2 + 0.5, fieldLength)) { merkeLuecke(side, levelData.index, fieldLength, building.heightM); return }
         const isCorner = fieldIndex === 0 || fieldIndex === useLengthDiv.distribution.length - 1
 
@@ -1919,6 +1950,20 @@ export function generateCADModel(
     const nameSeite: Record<string, string> = { front: 'vorne', back: 'hinten', left: 'links', right: 'rechts' }
     const teile = (Object.entries(hangSeiteM) as [SeitenId, number][]).filter(([sd]) => activeSides.includes(sd)).map(([sd, g]) => `${nameSeite[sd]} ${g > 0 ? '+' : ''}${String(g).replace('.', ',')} m`)
     if (teile.length) warnings.push({ type: 'info', code: 'HANG_GERUEST', message: `Gelände je Seite (bezogen auf ±0,00): ${teile.join(', ')}. Fußpunkt, Lagen, Anker und Fläche folgen dem Gelände; die Lagen liegen dadurch nicht mehr auf den Geschosshöhen. Spindelauszug, Untergrund und Zugang (Treppe) am tiefsten Punkt bitte vor Ort prüfen.` })
+    // Schräger Hang: Fuß-Abtreppung je Feld mit Ausgleichsstiel + Spindel
+    const fuesseAktiv = abtreppFuesse.filter((f) => activeSides.includes(f.side))
+    if (fuesseAktiv.length) {
+      const stielZahl = new Map<number, number>()
+      let mitSpindel = 0, mitS80 = 0
+      for (const f of fuesseAktiv) {
+        if (f.stielM > 0) stielZahl.set(f.stielM, (stielZahl.get(f.stielM) ?? 0) + 1)
+        if (f.spindelM > 0.01) mitSpindel++
+        if (f.spindel80) mitS80++
+      }
+      const stielTxt = [...stielZahl.entries()].sort((a, b) => b[0] - a[0]).map(([m, n]) => `${n}× Ausgleichsstiel ${String(m).replace('.', ',')} m`).join(', ')
+      const s80 = mitS80 > 0 ? ` ${mitS80} Fuß(e) brauchen die verstärkte Fußspindel 80 (bis 0,55 m), da die Standardspindel (0,41 m) nicht reicht.` : ''
+      warnings.push({ type: 'info', code: 'HANG_ABTREPPUNG', message: `Schräger Hang: Der Gerüstfuß treppt je Feld ab. Ausgleich am Fuß: ${stielTxt || 'nur Fußspindel'}, dazu ${mitSpindel} Fußspindel-Auszüge.${s80} Werte nach Layher-Standardlängen; vor Ort und mit der Zulassung prüfen.` })
+    }
     const tuerAmHang = (building.tueren ?? []).filter((t) => (hangSeiteM[t.side] ?? 0) <= -rasterLagenH)
     if (tuerAmHang.length) warnings.push({ type: 'warning', code: 'HANG_TUER', message: `${tuerAmHang.length} Tür(en) an Seiten, deren Gelände mehr als eine Lage tiefer liegt: Die Freihaltung rechnet ab ±0,00, die unteren Lagen davor sind geschlossen. Zugang bitte prüfen.` })
   }

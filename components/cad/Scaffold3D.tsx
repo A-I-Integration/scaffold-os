@@ -1358,7 +1358,13 @@ function hangDaten(building: CADModel['building']): { hangM: number; g: Record<'
   const leer = { front: 0, back: 0, left: 0, right: 0 }
   if ((building.sections && building.sections.length >= 2) || (building.umriss && building.umriss.length >= 3)) return { hangM: 0, g: leer }
   const gm = building.geruestOptionen?.gelaendeSeiteM ?? {}
-  const g = { front: gm.front ?? 0, back: gm.back ?? 0, left: gm.left ?? 0, right: gm.right ?? 0 }
+  const lm = building.geruestOptionen?.gelaendeLinieSeiteM ?? {}
+  const seite = (sd: 'front' | 'back' | 'left' | 'right') => {
+    const l = lm[sd]
+    if (l && Number.isFinite(l.vonM) && Number.isFinite(l.bisM)) return Math.min(l.vonM, l.bisM)
+    return gm[sd] ?? 0
+  }
+  const g = { front: seite('front'), back: seite('back'), left: seite('left'), right: seite('right') }
   const min = Math.min(g.front, g.back, g.left, g.right, 0)
   return { hangM: Math.round(Math.max(0, -min) * 100) / 100, g }
 }

@@ -1041,6 +1041,29 @@ export default function BuildingForm({ building, systemId, onChange, onSystemCha
                         ))}
                       </div>
                     </div>
+                    <details className='col-span-2'>
+                      <summary className='text-[11px] text-[#424245] cursor-pointer'>Schräger Hang: Gelände am Anfang/Ende je Seite (treppt den Fuß ab)</summary>
+                      <div className='mt-1 space-y-1'>
+                        {(['front', 'back', 'left', 'right'] as const).filter((sd) => building.sides.includes(sd)).map((sd) => {
+                          const l = opt.gelaendeLinieSeiteM?.[sd]
+                          const setTeil = (teil: 'vonM' | 'bisM', val: string) => {
+                            const num = val === '' ? 0 : parseFloat(val)
+                            const cur = { ...(opt.gelaendeLinieSeiteM ?? {}) }
+                            const e = { vonM: cur[sd]?.vonM ?? 0, bisM: cur[sd]?.bisM ?? 0, [teil]: Number.isFinite(num) ? num : 0 }
+                            if (e.vonM === 0 && e.bisM === 0) delete cur[sd]; else cur[sd] = e
+                            setzeOpt({ gelaendeLinieSeiteM: Object.keys(cur).length ? cur : undefined })
+                          }
+                          return (
+                            <div key={sd} className='flex items-center gap-1 text-[10px] text-[#86868b]'>
+                              <span className='w-12'>{{ front: 'Vorne', back: 'Hinten', left: 'Links', right: 'Rechts' }[sd]}</span>
+                              <input type='number' step='0.1' placeholder='Anfang' value={l?.vonM ?? ''} onChange={(ev) => setTeil('vonM', ev.target.value)} className='w-16 px-1 py-0.5 border rounded' />
+                              <input type='number' step='0.1' placeholder='Ende' value={l?.bisM ?? ''} onChange={(ev) => setTeil('bisM', ev.target.value)} className='w-16 px-1 py-0.5 border rounded' />
+                            </div>
+                          )
+                        })}
+                        <p className='text-[10px] text-[#86868b]'>Beispiel Vorne: Anfang 0, Ende −2,95 → der Fuß treppt je Feld ab (Ausgleichsstiel + Spindel). Überschreibt „Gelände je Seite“ für diese Seite.</p>
+                      </div>
+                    </details>
                     <label className='flex items-center gap-2 text-xs text-[#424245] self-end pb-1.5'>
                       <input type='checkbox' checked={opt.treppe !== false} onChange={(e) => setzeOpt({ treppe: e.target.checked ? undefined : false })} />
                       Treppe automatisch
