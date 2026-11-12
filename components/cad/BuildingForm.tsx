@@ -9,6 +9,7 @@ import BalkonEditor from './BalkonEditor'
 import TuerEditor from './TuerEditor'
 import UmrissEditor from './UmrissEditor'
 import UmrissZeichner from './UmrissZeichner'
+import { vereinigeGeschosse } from '@/lib/cad/geschoss-umriss'
 import { figurenZuDxf, type ZPunkt } from '@/lib/cad/dxf-zeichnen'
 import { GERUEST_SYSTEME } from '@/lib/calculations/geruest-systeme'
 import { uploadVertragsdokument } from '@/lib/vertrag-upload-client'
@@ -481,6 +482,20 @@ export default function BuildingForm({ building, systemId, onChange, onSystemCha
     else setAnalyseHinweis('❌ Aus der Zeichnung ließ sich kein brauchbarer Umriss lesen: ' + r.hinweise.join(' '))
   }
 
+  // Figuren mit Oberkante (Geschosse/Bauteile) → ein Umriss mit eigener Höhe je Kante
+  function geschosseUebernehmen(geschosse: { name: string; obenM: number; umriss: ZPunkt[] }[]) {
+    const v = vereinigeGeschosse(geschosse)
+    setZeichnerOffen(false)
+    if (!v.ok) { setAnalyseHinweis('❌ ' + v.fehler); return }
+    const box = umrissBox(v.umriss)
+    onChange({
+      ...building, umriss: v.umriss, umrissKantenHoeheM: v.kantenHoeheM, sections: undefined,
+      lengthM: Math.round(box.lengthM * 100) / 100, widthM: Math.round(box.widthM * 100) / 100,
+      heightM: v.hoechsteM, eavesHeightM: v.hoechsteM,
+    })
+    setAnalyseHinweis(`Umriss aus ${geschosse.length} Figuren übernommen: ${v.umriss.length} Ecken, höchste Kante ${String(v.hoechsteM).replace('.', ',')} m. Höhe je Kante unter „Gebäude mit Umriss“ prüfen. ${v.hinweise.join(' ')}`)
+  }
+
   function dxfNeuLesen(einheit: Einheit) {
     if (!dxfImport) return
     const r = leseDxfUmriss(dxfImport.inhalt, { einheit })
@@ -698,7 +713,7 @@ export default function BuildingForm({ building, systemId, onChange, onSystemCha
                 </div>
               )
             })()}
-            {zeichnerOffen && <UmrissZeichner planDatei={letzterPlan} onUebernehmen={zeichnungUebernehmen} onAbbrechen={() => setZeichnerOffen(false)} />}
+            {zeichnerOffen && <UmrissZeichner planDatei={letzterPlan} onUebernehmen={zeichnungUebernehmen} onGeschosse={geschosseUebernehmen} onAbbrechen={() => setZeichnerOffen(false)} />}
             {dxfImport && (() => {
               const e = dxfImport.ergebnis
               const wahl = 'rounded-lg border border-black/10 bg-white px-2 py-1 text-[11px]'
