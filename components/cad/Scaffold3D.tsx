@@ -1370,34 +1370,62 @@ function hangDaten(building: CADModel['building']): { hangM: number; g: Record<'
 }
 
 /**
- * Erdböschung an den höher liegenden Seiten eines Hang-Gebäudes (nur Darstellung).
- * Im angehobenen Gelände-Koordinatensystem (±0,00 liegt bei y = hangM über dem Boden) reicht die Böschung
- * je Seite von der Talsohle (lokal −hangM = Weltboden 0) bis zur Geländekote dieser Seite. Die Talseite (tiefste
- * Kote) bleibt offen, dort zeigt das Gebäude sein Untergeschoss.
+ * Geländekote an den vier Gebäudeecken (lokal, ±0,00 = 0; negativ = tiefer). Aus „Gelände je Seite“ bzw. der
+ * schrägen Geländelinie (vonM/bisM). Je Ecke der tiefere der beiden anliegenden Seitenwerte.
  */
-function Hangboeschung({ lengthM, widthM, hangM, g }: { lengthM: number; widthM: number; hangM: number; g: Record<'front' | 'back' | 'left' | 'right', number> }) {
-  if (!(hangM > 0.05)) return null
-  const R = Math.max(1.6, Math.min(4, hangM * 1.3)) // Auslauf der Böschung nach außen
-  const seiten: { k: 'front' | 'back' | 'left' | 'right'; pos: [number, number, number]; args: [number, number, number] }[] = []
-  const add = (k: 'front' | 'back' | 'left' | 'right') => {
-    const Hb = Math.round((g[k] + hangM) * 100) / 100 // Höhe der Böschung von der Talsohle bis zur Geländekote
-    if (Hb <= 0.05) return // Talseite oder gleich tief: offen lassen
-    const yc = -hangM + Hb / 2
-    if (k === 'front') seiten.push({ k, pos: [0, yc, widthM / 2 + R / 2], args: [lengthM + 0.6, Hb, R] })
-    else if (k === 'back') seiten.push({ k, pos: [0, yc, -widthM / 2 - R / 2], args: [lengthM + 0.6, Hb, R] })
-    else if (k === 'right') seiten.push({ k, pos: [lengthM / 2 + R / 2, yc, 0], args: [R, Hb, widthM + 0.6] })
-    else seiten.push({ k, pos: [-lengthM / 2 - R / 2, yc, 0], args: [R, Hb, widthM + 0.6] })
+function eckGelaende(building: CADModel['building']): { fl: number; fr: number; bl: number; br: number } {
+  const o = building.geruestOptionen
+  const lm = o?.gelaendeLinieSeiteM ?? {}
+  const gm = o?.gelaendeSeiteM ?? {}
+  const ende = (sd: 'front' | 'back' | 'left' | 'right', which: 'von' | 'bis') => {
+    const l = lm[sd]
+    if (l && Number.isFinite(l.vonM) && Number.isFinite(l.bisM)) return which === 'von' ? l.vonM : l.bisM
+    return gm[sd] ?? 0
   }
-  ;(['front', 'back', 'left', 'right'] as const).forEach(add)
+  const tief = (...v: number[]) => Math.min(...v)
+  return {
+    fl: tief(ende('front', 'von'), ende('left', 'bis')),
+    fr: tief(ende('front', 'bis'), ende('right', 'bis')),
+    bl: tief(ende('back', 'von'), ende('left', 'von')),
+    br: tief(ende('back', 'bis'), ende('right', 'von')),
+  }
+}
+
+/**
+ * Schräges Hanggelände (nur Darstellung): eine Fläche durch die vier Eckhöhen des Grundstücks, nach außen verbreitert,
+ * mit Erdschürze nach unten, so dass das Haus im Hang sitzt. Lokale Koordinaten wie der Baukörper (±0,00 = 0).
+ * Die Talseite (tiefste Ecke) bleibt offen und zeigt das Untergeschoss.
+ */
+function Hanggelaende({ lengthM, widthM, hangM, ecken }: { lengthM: number; widthM: number; hangM: number; ecken: { fl: number; fr: number; bl: number; br: number } }) {
+  const geo = useMemo(() => {
+    const m = Math.max(2, Math.min(6, hangM * 1.5)) // Auslauf nach außen
+    const hx = lengthM / 2 + m, hz = widthM / 2 + m
+    const unten = -hangM - 0.4 // Erdschürze endet knapp unter der Talsohle
+    // Ecken: front = +z, back = -z, left = -x, right = +x
+    const FL: [number, number, number] = [-hx, ecken.fl, hz]
+    const FR: [number, number, number] = [hx, ecken.fr, hz]
+    const BR: [number, number, number] = [hx, ecken.br, -hz]
+    const BL: [number, number, number] = [-hx, ecken.bl, -hz]
+    const pos: number[] = []
+    const tri = (a: number[], b: number[], c: number[]) => { pos.push(...a, ...b, ...c) }
+    // Oberfläche (zwei Dreiecke)
+    tri(FL, FR, BR); tri(FL, BR, BL)
+    // Erdschürze an den vier Rändern (von Oberkante bis `unten`)
+    const schuerze = (a: [number, number, number], b: [number, number, number]) => {
+      const a2 = [a[0], unten, a[2]], b2 = [b[0], unten, b[2]]
+      tri(a, b, b2 as number[]); tri(a, b2 as number[], a2 as number[])
+    }
+    schuerze(FR, FL); schuerze(BR, FR); schuerze(BL, BR); schuerze(FL, BL)
+    const g = new THREE.BufferGeometry()
+    g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3))
+    g.computeVertexNormals()
+    return g
+  }, [lengthM, widthM, hangM, ecken.fl, ecken.fr, ecken.bl, ecken.br])
+  if (!(hangM > 0.05)) return null
   return (
-    <group>
-      {seiten.map((s) => (
-        <mesh key={s.k} position={s.pos} receiveShadow castShadow>
-          <boxGeometry args={s.args} />
-          <meshStandardMaterial color="#97a089" roughness={0.98} />
-        </mesh>
-      ))}
-    </group>
+    <mesh geometry={geo} receiveShadow castShadow>
+      <meshStandardMaterial color="#97a089" roughness={0.98} side={THREE.DoubleSide} flatShading />
+    </mesh>
   )
 }
 
@@ -1576,7 +1604,7 @@ function Building3D({
   }
 
   // Hanglage: Baukörper reicht auf der Talseite bis zum freiliegenden Untergeschoss (−hangM) hinunter.
-  const { hangM, g: hangG } = hangDaten(building)
+  const { hangM } = hangDaten(building)
   const gesamtHoeheM = heightM + hangM
 
   return (
@@ -1588,8 +1616,8 @@ function Building3D({
         <WandMaterial praes={praes} />
       </mesh>
 
-      {/* Erdböschung an den bergseitigen Wänden; Talseite bleibt offen */}
-      <Hangboeschung lengthM={lengthM} widthM={w} hangM={hangM} g={hangG} />
+      {/* Schräges Hanggelände durch die vier Eckhöhen; Talseite bleibt offen */}
+      <Hanggelaende lengthM={lengthM} widthM={w} hangM={hangM} ecken={eckGelaende(building)} />
 
       {/* Klickbare Seiten: Seite anklicken → „Einrüsten“ / „Gerüst entfernen“ */}
       {onSeiteUmschalten && (
