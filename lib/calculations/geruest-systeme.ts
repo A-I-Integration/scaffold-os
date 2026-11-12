@@ -31,6 +31,8 @@ export interface GeruestSystem {
     fussspindelWegM: number;
     /** Anschlagraster am Stiel (Lochscheiben) in m: so fein lässt sich ein Fuß-/Riegelpunkt versetzen */
     anschlagRasterM: number;
+    /** Standard-Stiellängen (m) für den Höhenausgleich am Fuß, aus der Herstellerliste */
+    stielLaengenM?: number[];
     /** Fundstelle in den Herstellerunterlagen */
     quelle: string;
   };
@@ -61,7 +63,7 @@ export const GERUEST_SYSTEME: GeruestSystem[] = [
     hinweis: 'Marktführer-Modulsystem, keilbolzenloses Aufsteckprinzip',
     // Layher Preisliste Allround (Gerüstspindeln): Fußspindel 60 Standard „max. Spindelweg 41 cm“ (verstärkte Spindeln 80/110: 55/79 cm); Lochscheiben im Rastermaß 50 cm.
     // Die Zulassung/Aufbau- und Verwendungsanleitung kann den zulässigen Auszug im Einsatz enger fassen – dort gegenprüfen.
-    hoehenausgleich: { fussspindelWegM: 0.41, anschlagRasterM: 0.5, quelle: 'Layher Preisliste Allround, Abschnitt Gerüstspindeln' },
+    hoehenausgleich: { fussspindelWegM: 0.41, anschlagRasterM: 0.5, stielLaengenM: [0.5, 1.0, 1.5, 2.0, 3.0], quelle: 'Layher Preisliste Allround (Gerüstspindeln; Stiel LW Stahl 0,50/1,00/1,50/2,00/3,00 m)' },
   },
   {
     id: 'layher-allround-alu',
