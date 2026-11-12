@@ -160,3 +160,21 @@ export function lFormUmriss(laengeM: number, breiteM: number, schenkelLaengeM: n
     { x: schenkelLaengeM, z: breiteM }, { x: 0, z: breiteM },
   ])
 }
+
+/**
+ * Rundes Gebäude (Turm, Silo, Rundbau) als regelmäßiges Vieleck: Die Eckpunkte liegen auf dem Kreis mit dem Durchmesser `durchmesserM`.
+ * Das ist eine Näherung – das Gerüst läuft in geraden Feldern von Kante zu Kante, die Kantenlänge ist d · sin(π/n).
+ * `kanten` wird auf 6 bis UMRISS_MAX_PUNKTE begrenzt (bei weniger als 6 Kanten ist die Näherung zu grob).
+ */
+export function rundUmriss(durchmesserM: number, kanten: number): UmrissPunkt[] {
+  const d = Number.isFinite(durchmesserM) && durchmesserM > 0 ? durchmesserM : 10
+  const n = Math.min(UMRISS_MAX_PUNKTE, Math.max(6, Math.round(Number.isFinite(kanten) ? kanten : 12)))
+  const r = d / 2
+  return normalisiereUmriss(Array.from({ length: n }, (_, i) => ({ x: r + r * Math.cos((2 * Math.PI * i) / n), z: r + r * Math.sin((2 * Math.PI * i) / n) })))
+}
+
+/** Länge einer Kante des Näherungs-Vielecks aus `rundUmriss` in m. */
+export function rundKantenLaengeM(durchmesserM: number, kanten: number): number {
+  const n = Math.min(UMRISS_MAX_PUNKTE, Math.max(6, Math.round(kanten)))
+  return durchmesserM * Math.sin(Math.PI / n)
+}

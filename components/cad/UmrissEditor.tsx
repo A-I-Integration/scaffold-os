@@ -4,8 +4,9 @@
 // Eckpunkte in Metern (x nach rechts, z nach unten in der Vorschau), im Kreis eingeben.
 // Reine Eingabehilfe – die Prüfung und die Geometrie liegen in lib/calculations/cad-umriss.ts.
 
+import { useState } from 'react'
 import type { BuildingParams } from '@/lib/calculations/cad-engine'
-import { pruefeUmriss, rechteckUmriss, lFormUmriss, umrissBox, type UmrissPunkt } from '@/lib/calculations/cad-umriss'
+import { pruefeUmriss, rechteckUmriss, lFormUmriss, rundUmriss, rundKantenLaengeM, UMRISS_MAX_PUNKTE, umrissBox, type UmrissPunkt } from '@/lib/calculations/cad-umriss'
 
 interface Props {
   building: BuildingParams
@@ -17,6 +18,8 @@ const eingabe = 'w-full px-2 py-1 border rounded-lg text-xs'
 export default function UmrissEditor({ building, onChange }: Props) {
   const umriss = building.umriss
   const aktiv = !!umriss
+  const [rundD, setRundD] = useState(10)
+  const [rundN, setRundN] = useState(12)
 
   const setzeUmriss = (punkte: UmrissPunkt[] | undefined) => {
     if (!punkte) {
@@ -51,6 +54,17 @@ export default function UmrissEditor({ building, onChange }: Props) {
           <div className='flex flex-wrap gap-2'>
             <button type='button' className='text-xs px-2 py-1 border rounded-lg bg-white' onClick={() => setzeUmriss(rechteckUmriss(building.lengthM > 0 ? building.lengthM : 10, building.widthM > 0 ? building.widthM : 8))}>Rechteck</button>
             <button type='button' className='text-xs px-2 py-1 border rounded-lg bg-white' onClick={() => setzeUmriss(lFormUmriss(12, 9, 5, 4))}>L-Form (Beispiel)</button>
+          </div>
+          <div className='rounded-lg border border-[#e5e5ea] p-2 space-y-1'>
+            <div className='text-[11px] font-semibold text-[#1d1d1f]'>Rundes Gebäude (als Vieleck)</div>
+            <div className='flex flex-wrap items-end gap-2'>
+              <label className='text-[10px] text-[#86868b]'>Durchmesser (m)
+                <input type='number' min={2} step='0.1' className={eingabe} value={rundD} onChange={(e) => setRundD(parseFloat(e.target.value))} /></label>
+              <label className='text-[10px] text-[#86868b]'>Kanten (6–{UMRISS_MAX_PUNKTE})
+                <input type='number' min={6} max={UMRISS_MAX_PUNKTE} step='1' className={eingabe} value={rundN} onChange={(e) => setRundN(parseInt(e.target.value, 10))} /></label>
+              <button type='button' className='text-xs px-2 py-1 border rounded-lg bg-white' onClick={() => setzeUmriss(rundUmriss(rundD, rundN))}>Übernehmen</button>
+            </div>
+            <p className='text-[10px] text-[#86868b]'>Kantenlänge ca. {rundKantenLaengeM(rundD > 0 ? rundD : 10, Number.isFinite(rundN) ? rundN : 12).toFixed(2).replace('.', ',')} m. Das Gerüst läuft in geraden Feldern von Kante zu Kante, eine Näherung der Rundung. Bogen-/Winkelverbindungen und Feldlängen nach der Aufbauanleitung deines Systems prüfen.</p>
           </div>
 
           <UmrissVorschau punkte={umriss} gueltig={fehler.length === 0} />
