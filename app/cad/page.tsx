@@ -947,8 +947,10 @@ export default function CADPage() {
   // GAEB-Import: die Stückliste wird als kiResult.materialList abgelegt,
   // damit ab der Kunden-Detail-Seite alles Bestehende weiterläuft
   // (Rechnung erstellen, Freigabe-Pflicht, E-Rechnung).
-  const handleAssignCustomer = useCallback(async (customerId: string, customerName: string) => {
+  const handleAssignCustomer = useCallback(async (customerId: string, customerName: string, angaben?: { projektName?: string; adresse?: string }) => {
     if (!model) return
+    const projektTitel = angaben?.projektName?.trim() || `CAD-Planung ${customerName}`
+    const objektAdresse = angaben?.adresse?.trim() ?? ''
     setZuordnenLaeuft(true)
     try {
       // Lohn + Transport wie in der normalen Berechnung, mit den Werten aus
@@ -974,12 +976,12 @@ export default function CADPage() {
       const res = await fetch('/api/projects', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          name: `CAD-Planung ${customerName}`, adresse: '', customer_id: customerId,
+          name: projektTitel, adresse: objektAdresse, customer_id: customerId,
           // Phase 80: Auch step2 (Gebäude) und step3 (Gerüstplanung)
           // mitschreiben - Schritt 6 liest genau diese und zeigte sonst
           // alles als '–' an. Werte kommen 1:1 aus dem CAD-Modell.
           data: {
-            step1: { name: customerName, adresse: '', gewerke: ['allgemein'], dauer: '30' },
+            step1: { name: customerName, adresse: objektAdresse, gewerke: ['allgemein'], dauer: '30' },
             step2: {
               laenge: String(building.lengthM || ''), breite: String(building.widthM || ''),
               hoehe: String(building.heightM || ''), traufhoehe: String(building.eavesHeightM || ''),
