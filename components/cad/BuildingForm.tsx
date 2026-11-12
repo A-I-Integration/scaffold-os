@@ -23,6 +23,7 @@ import { portalAlsTuer } from '@/lib/cad/portal-erkennung'
 import { analysiereDreiecke, schaetzeEinheit, spannweiten, nullpunktUeberTiefstem, abschnitteAusTeilen, abschnitteAusTeileListe, vorgabeAchseEinheit, type GebaeudeTeil } from '@/lib/cad/modell-analyse'
 import { planLesen } from '@/lib/cad/plan-import'
 import { oeffnungenFuerModell, vorbautenFuerModell, seiteVonKante } from '@/lib/cad/plan-oeffnungen-modell'
+import { eckenAusTalseite } from '@/lib/cad/koten-je-ansicht'
 import { umrissBox } from '@/lib/calculations/cad-umriss'
 import { leseDxfUmriss, mitHoehen, DXF_FORM_NAME, type DxfUmrissErgebnis } from '@/lib/cad/dxf-umriss'
 import type { IfcZusatz } from '@/lib/cad/ifc-einleser'
@@ -413,6 +414,29 @@ export default function BuildingForm({ building, systemId, onChange, onSystemCha
                   const ec = { fl: modellEcke.fl!, fr: modellEcke.fr!, bl: modellEcke.bl!, br: modellEcke.br! }
                   patch.geruestOptionen = { ...(building.geruestOptionen ?? {}), gelaendeEckenM: ec }
                   oeffnungenHinweis += ` Hang: Geländehöhe an den vier Ecken aus dem Plan übernommen (hinten ${String(ec.bl).replace(".",",")}/${String(ec.br).replace(".",",")}, vorne ${String(ec.fl).replace(".",",")}/${String(ec.fr).replace(".",",")} m) – bitte prüfen und ggf. drehen.`
+                }
+              }
+              // Weniger als vier Eckkoten im Grundriss: Talseite aus den Ansichten (tiefste Kote) → vier Eckhöhen vorschlagen
+              if (vorne && !(patch.geruestOptionen as { gelaendeEckenM?: unknown } | undefined)?.gelaendeEckenM && pl.gelaendeTiefe?.length) {
+                const tal = pl.gelaendeTiefe[0]
+                const plan = tal.art !== 'schnitt' ? eckenAusTalseite(tal.art, tal.tiefsteM) : null
+                if (plan) {
+                  const kantenDerEcke: Record<'tl' | 'tr' | 'bl' | 'br', ['links' | 'rechts', 'oben' | 'unten']> = {
+                    tl: ['links', 'oben'], tr: ['rechts', 'oben'], bl: ['links', 'unten'], br: ['rechts', 'unten'],
+                  }
+                  const m: Partial<Record<'fl' | 'fr' | 'bl' | 'br', number>> = {}
+                  for (const [pe, [k1, k2]] of Object.entries(kantenDerEcke) as ['tl' | 'tr' | 'bl' | 'br', ['links' | 'rechts', 'oben' | 'unten']][]) {
+                    const s1 = seiteVonKante(k1, vorne), s2 = seiteVonKante(k2, vorne)
+                    const fb = [s1, s2].find((x) => x === 'front' || x === 'back')
+                    const lr = [s1, s2].find((x) => x === 'left' || x === 'right')
+                    if (fb && lr) m[`${fb === 'front' ? 'f' : 'b'}${lr === 'left' ? 'l' : 'r'}` as 'fl' | 'fr' | 'bl' | 'br'] = plan[pe]
+                  }
+                  if (Object.keys(m).length === 4) {
+                    const ec = { fl: m.fl!, fr: m.fr!, bl: m.bl!, br: m.br! }
+                    patch.geruestOptionen = { ...(building.geruestOptionen ?? {}), gelaendeEckenM: ec }
+                    const nm = ({ nord: 'Norden', ost: 'Osten', sued: 'Süden', west: 'Westen' } as Record<string, string>)[tal.art]
+                    oeffnungenHinweis += ` Hang als Vorschlag: Talseite ${nm} (tiefste Kote ${String(tal.tiefsteM).replace('.', ',')} m laut Ansicht), gegenüberliegende Seite auf ±0,00 angenommen, dazwischen gleichmäßiger Verlauf. Ggf. in „Hang über vier Eckhöhen“ nachstellen; Annahme: Plan oben = Norden.`
+                  }
                 }
               }
               // Rückfall: Geländekoten je Kante → tiefster Wert je Seite (nur bei deutlichem Gefälle, wenn keine Eckhöhen)
