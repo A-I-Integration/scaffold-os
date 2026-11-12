@@ -1429,6 +1429,7 @@ export function generateCADModel(
       }
     }
   }
+  if (system && (abschnitte || (building.umriss && building.umriss.length >= 3))) { const h = hangIgnoriert(opt); if (h) warnings.push(h) }
   const gSeite = (sd: SeitenId): number => hangSeiteM[sd] ?? 0
   const levelCalcSeite = (sd: SeitenId) => (system && gSeite(sd) !== 0 ? calculateLevels(building.heightM - gSeite(sd), system, gSeite(sd)) : levelCalc)
   // Geneigtes Dach ohne Satteldach-Sonderfall (Walm-, Mansardendach/Zelt): alle Seiten sind Traufseiten und enden an der Traufe.
@@ -1909,6 +1910,11 @@ export function generateCADModel(
   return { ...preliminaryModel, components3D }
 }
 
+const hangIgnoriert = (o: GeruestOptionen | undefined): CADWarning | null => {
+  const werte = (['front', 'back', 'left', 'right'] as const).filter((sd) => Math.abs(o?.gelaendeSeiteM?.[sd] ?? 0) >= 0.01)
+  return werte.length ? { type: 'warning', code: 'HANG_NICHT_UNTERSTUETZT', message: 'Gelände je Seite (Hang) ist eingetragen, wird aber bei Gebäuden mit Umriss, Höhenabschnitten oder Vorbau noch nicht berücksichtigt: Das Gerüst steht hier auf einheitlichem Gelände (±0,00). Höhen, Lagen und Mengen bitte von Hand prüfen.' } : null
+}
+
 /**
  * Gerüst für ein Gebäude mit frei gezeichnetem Umriss (Vieleck).
  * Jede Kante bekommt einen eigenen Feldstrang auf der Innenlinie (Abstand
@@ -1924,6 +1930,7 @@ function generiereUmrissModell(
   teile: (laengeM: number) => { distribution: number[]; fields: number; fieldLengthM: number }
 ): CADModel {
   const warnings: CADWarning[] = [...vorWarnungen]
+  { const h = hangIgnoriert(gebaeude.geruestOptionen); if (h) warnings.push(h) }
   const umriss = zentriereUmriss(normalisiereUmriss(gebaeude.umriss!))
   const box = umrissBox(umriss)
   const building: BuildingParams = {

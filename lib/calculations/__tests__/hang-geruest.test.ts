@@ -44,3 +44,19 @@ describe('Hang: Gelände je Seite', () => {
     expect(m.fields.find((f) => f.side === 'front' && f.levelIndex === 0)!.positionY).toBeCloseTo(-2, 2)
   })
 })
+
+describe('Hang: nicht unterstützte Gebäudeformen', () => {
+  const hang = { gelaendeSeiteM: { front: -2 } }
+  it('Umriss: Warnung statt stillem Ignorieren, Gerüst unverändert', () => {
+    const u = [{ x: 0, z: 0 }, { x: 12, z: 0 }, { x: 12, z: 9 }, { x: 0, z: 9 }]
+    const a = generateCADModel(basis({ umriss: u }), sys)
+    const m = generateCADModel(basis({ umriss: u, geruestOptionen: hang }), sys)
+    expect(m.warnings.some((w) => w.code === 'HANG_NICHT_UNTERSTUETZT')).toBe(true)
+    expect(a.warnings.some((w) => w.code === 'HANG_NICHT_UNTERSTUETZT')).toBe(false)
+    expect(m.fieldCount).toBe(a.fieldCount)
+  })
+  it('Höhenabschnitte: Warnung', () => {
+    const m = generateCADModel(basis({ lengthM: 30, sections: [{ laengeM: 10, hoeheM: 10, roofForm: 'flachdach', roofHoeheM: 0 }, { laengeM: 20, hoeheM: 6, roofForm: 'flachdach', roofHoeheM: 0 }] as never, geruestOptionen: hang }), sys)
+    expect(m.warnings.some((w) => w.code === 'HANG_NICHT_UNTERSTUETZT')).toBe(true)
+  })
+})
