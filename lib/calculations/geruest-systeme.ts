@@ -25,6 +25,15 @@ export interface GeruestSystem {
   standardFeldlangeM: number;  // empfohlene Standard-Feldlänge
   rahmenBreitenM: number[];    // Gerüstbreiten (0,73 / 1,09 / 1,40)
   hinweis: string;             // Kurzinfo für die Auswahl
+  /** Höhenausgleich am Fuß (Gelände/Hang), nur wo aus Herstellerunterlagen belegt; fehlt = unbekannt, nicht 0. */
+  hoehenausgleich?: {
+    /** größter Spindelweg der Standard-Fußspindel in m */
+    fussspindelWegM: number;
+    /** Anschlagraster am Stiel (Lochscheiben) in m: so fein lässt sich ein Fuß-/Riegelpunkt versetzen */
+    anschlagRasterM: number;
+    /** Fundstelle in den Herstellerunterlagen */
+    quelle: string;
+  };
 }
 
 export const GERUEST_SYSTEME: GeruestSystem[] = [
@@ -50,6 +59,9 @@ export const GERUEST_SYSTEME: GeruestSystem[] = [
     standardFeldlangeM: 2.57,
     rahmenBreitenM: [0.73, 1.09],
     hinweis: 'Marktführer-Modulsystem, keilbolzenloses Aufsteckprinzip',
+    // Layher Preisliste Allround (Gerüstspindeln): Fußspindel 60 Standard „max. Spindelweg 41 cm“ (verstärkte Spindeln 80/110: 55/79 cm); Lochscheiben im Rastermaß 50 cm.
+    // Die Zulassung/Aufbau- und Verwendungsanleitung kann den zulässigen Auszug im Einsatz enger fassen – dort gegenprüfen.
+    hoehenausgleich: { fussspindelWegM: 0.41, anschlagRasterM: 0.5, quelle: 'Layher Preisliste Allround, Abschnitt Gerüstspindeln' },
   },
   {
     id: 'layher-allround-alu',
