@@ -52,3 +52,29 @@ export function gelaendeJeKante(r: { x0: number; y0: number; x1: number; y1: num
   }
   return [...je.entries()].map(([kante, w]) => ({ kante, minM: Math.min(...w), maxM: Math.max(...w), anzahl: w.length }))
 }
+
+/** Geländehöhe nahe den vier Rechteck-Ecken (Plan-Koordinaten, y nach unten): tl=(x0,y0), tr=(x1,y0), bl=(x0,y1), br=(x1,y1).
+ *  Je Ecke die nächste Geländekote im Umkreis (bis 3,5 m). Fehlt eine Ecke, bleibt sie undefined. Nur Vorschlag; der Mensch prüft/dreht. */
+export function gelaendeEckenAusPlan(
+  r: { x0: number; y0: number; x1: number; y1: number }, texte: PlanText[], meterJePunkt: number,
+): { tl?: number; tr?: number; bl?: number; br?: number } {
+  if (!(meterJePunkt > 0)) return {}
+  const nah = 3.5 / meterJePunkt
+  const ecken: Record<'tl' | 'tr' | 'bl' | 'br', [number, number]> = {
+    tl: [r.x0, r.y0], tr: [r.x1, r.y0], bl: [r.x0, r.y1], br: [r.x1, r.y1],
+  }
+  const best: Record<string, { d: number; v: number }> = {}
+  for (const t of texte) {
+    const m = t.s.trim().match(/^([+±-])\s?(\d{1,2}),(\d{2})$/)
+    if (!m) continue
+    const v = (parseInt(m[2], 10) * 100 + parseInt(m[3], 10)) / 100
+    const wert = m[1] === '-' ? -v : v
+    for (const [k, [cx, cy]] of Object.entries(ecken)) {
+      const d = Math.hypot(t.x - cx, t.y - cy)
+      if (d <= nah && (!best[k] || d < best[k].d)) best[k] = { d, v: wert }
+    }
+  }
+  const out: { tl?: number; tr?: number; bl?: number; br?: number } = {}
+  for (const k of ['tl', 'tr', 'bl', 'br'] as const) if (best[k]) out[k] = Math.round(best[k].v * 100) / 100
+  return out
+}

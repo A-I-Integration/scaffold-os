@@ -6,7 +6,7 @@
 import type { GefundenerGrundriss, PlanText } from './grundriss-finden'
 import type { VektorFlaeche } from './pdf-vektoren'
 import { oeffnungenFinden } from './oeffnungen-aus-plan'
-import { gelaendeAusPlan, gelaendeJeKante, type GelaendeAusPlan, type GelaendeJeKante } from './gelaende-aus-plan'
+import { gelaendeAusPlan, gelaendeJeKante, gelaendeEckenAusPlan, type GelaendeAusPlan, type GelaendeJeKante } from './gelaende-aus-plan'
 import { hauptkoerperAusKontur, type Vorbau } from './hauptkoerper'
 import { oeffnungenAnKanten, vorbautenAnKanten, type PlanOeffnungAnKante, type PlanVorbauAnKante } from './plan-oeffnungen-modell'
 import { kotenJeAnsicht, pultNiedrigeRichtung, gelaendeTiefeJeAnsicht, type Himmelsrichtung, type GelaendeTiefe } from './koten-je-ansicht'
@@ -46,6 +46,8 @@ export interface PlanImport {
   gelaende?: GelaendeAusPlan
   /** Geländekoten je Kante des Hauptkörpers (Plan-Kanten); nur Kanten mit Kote. Dient als Vorlage, der Mensch korrigiert. */
   gelaendeJeKante?: GelaendeJeKante[]
+  /** Geländehöhe an den Plan-Ecken des Hauptkörpers (tl/tr/bl/br, Plan-Koordinaten); Vorschlag zum Füllen der Eckhöhen. */
+  gelaendeEckenPlan?: { tl?: number; tr?: number; bl?: number; br?: number }
 }
 
 const runde = (v: number) => Math.round(v * 100) / 100
@@ -86,6 +88,7 @@ export function planImportAus(dateiname: string, massstab: number, gefunden: Gef
   const gelaende = hauptG ? gelaendeAusPlan(hauptG, texte, (0.0254 / 72) * massstab) : null
   const hkHaupt = hauptG ? hauptkoerperAusKontur(hauptG.kontur, mpp) : null
   const jeKante = hkHaupt ? gelaendeJeKante(hkHaupt.rechteck, texte, mpp) : []
+  const eckenPlan = hkHaupt ? gelaendeEckenAusPlan(hkHaupt.rechteck, texte, mpp) : {}
   const dach = dachAusPlan(gefunden, texte, (0.0254 / 72) * massstab)
   const koten = dachKotenAusPlan(texte)
   const neigung = dach?.dachform === 'Pultdach' && koten.firstM !== undefined && koten.traufeM !== undefined
@@ -104,6 +107,7 @@ export function planImportAus(dateiname: string, massstab: number, gefunden: Gef
     ...(gelTiefe.length ? { gelaendeTiefe: gelTiefe } : {}),
     ...(gelaende ? { gelaende } : {}),
     ...(jeKante.length ? { gelaendeJeKante: jeKante } : {}),
+    ...(Object.keys(eckenPlan).length ? { gelaendeEckenPlan: eckenPlan } : {}),
   }
 }
 

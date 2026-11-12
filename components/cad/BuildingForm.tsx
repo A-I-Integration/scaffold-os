@@ -392,8 +392,30 @@ export default function BuildingForm({ building, systemId, onChange, onSystemCha
                   oeffnungenHinweis += ` ${vb.length === 1 ? 'Ein Vorbau' : `${vb.length} Vorbauten`} (${vb.map((v) => `${String(v.breiteM).replace('.', ',')} × ${String(v.tiefeM).replace('.', ',')} m, ${String(v.hoeheM).replace('.', ',')} m hoch`).join('; ')}) nur in der Ansicht eingezeichnet, das Gerüst führt nicht darum herum.`
                 }
               }
-              // Hang: Geländekoten je Kante auf die Modell-Seiten übertragen (tiefster Wert je Seite); nur bei deutlichem Gefälle
-              if (vorne && pl.gelaendeJeKante?.length && pl.gelaende && pl.gelaende.unterschiedM >= 1) {
+              // Hang: Geländehöhe an den vier Ecken aus dem Plan → Eckhöhen (Gerüst und Gelände folgen dem Hang)
+              if (vorne && pl.gelaendeEckenPlan && Object.keys(pl.gelaendeEckenPlan).length === 4) {
+                // Plan-Ecke (tl/tr/bl/br) → Modell-Ecke (fl/fr/bl/br) über die Vorderseite
+                const kantenDerEcke: Record<'tl' | 'tr' | 'bl' | 'br', ['links' | 'rechts', 'oben' | 'unten']> = {
+                  tl: ['links', 'oben'], tr: ['rechts', 'oben'], bl: ['links', 'unten'], br: ['rechts', 'unten'],
+                }
+                const modellEcke: Partial<Record<'fl' | 'fr' | 'bl' | 'br', number>> = {}
+                for (const [pe, [k1, k2]] of Object.entries(kantenDerEcke) as ['tl' | 'tr' | 'bl' | 'br', ['links' | 'rechts', 'oben' | 'unten']][]) {
+                  const v = pl.gelaendeEckenPlan[pe]
+                  if (v === undefined) continue
+                  const s1 = seiteVonKante(k1, vorne), s2 = seiteVonKante(k2, vorne)
+                  const fb = [s1, s2].find((s) => s === 'front' || s === 'back')
+                  const lr = [s1, s2].find((s) => s === 'left' || s === 'right')
+                  if (!fb || !lr) continue
+                  modellEcke[`${fb === 'front' ? 'f' : 'b'}${lr === 'left' ? 'l' : 'r'}` as 'fl' | 'fr' | 'bl' | 'br'] = v
+                }
+                if (Object.keys(modellEcke).length === 4) {
+                  const ec = { fl: modellEcke.fl!, fr: modellEcke.fr!, bl: modellEcke.bl!, br: modellEcke.br! }
+                  patch.geruestOptionen = { ...(building.geruestOptionen ?? {}), gelaendeEckenM: ec }
+                  oeffnungenHinweis += ` Hang: Geländehöhe an den vier Ecken aus dem Plan übernommen (hinten ${String(ec.bl).replace(".",",")}/${String(ec.br).replace(".",",")}, vorne ${String(ec.fl).replace(".",",")}/${String(ec.fr).replace(".",",")} m) – bitte prüfen und ggf. drehen.`
+                }
+              }
+              // Rückfall: Geländekoten je Kante → tiefster Wert je Seite (nur bei deutlichem Gefälle, wenn keine Eckhöhen)
+              if (vorne && !(patch.geruestOptionen as { gelaendeEckenM?: unknown } | undefined)?.gelaendeEckenM && pl.gelaendeJeKante?.length && pl.gelaende && pl.gelaende.unterschiedM >= 1) {
                 const gm: Partial<Record<'front' | 'back' | 'left' | 'right', number>> = {}
                 for (const k of pl.gelaendeJeKante) { const sd = seiteVonKante(k.kante, vorne); if (Math.abs(k.minM) >= 0.01) gm[sd] = k.minM }
                 if (Object.keys(gm).length) {
