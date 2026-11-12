@@ -45,7 +45,7 @@ interface Props {
   kundenLadeFehler?: boolean
   onRetryKunden?: () => void
   onCreateCustomer?: (name: string) => Promise<{ id: string; name: string } | null>
-  onAssignCustomer?: (customerId: string, customerName: string) => void
+  onAssignCustomer?: (customerId: string, customerName: string, angaben?: { projektName?: string; adresse?: string }) => void
   zuordnenLaeuft?: boolean
   // Phase 68-J: ohne Gerüst-Modell werden Exporte optisch ausgegraut
   disabled?: boolean
@@ -77,6 +77,8 @@ export default function BillOfMaterials({ materials, ohnePreis = [], ohneGewicht
   const [kundenSuche, setKundenSuche] = useState('')
   const [ausgewaehlterKunde, setAusgewaehlterKunde] = useState<{ id: string; name: string } | null>(null)
   const [zeigeDropdown, setZeigeDropdown] = useState(false)
+  const [projektNameEingabe, setProjektNameEingabe] = useState('')
+  const [adresseEingabe, setAdresseEingabe] = useState('')
   const [neuerKundeLaeuft, setNeuerKundeLaeuft] = useState(false)
   const [logistikOffen, setLogistikOffen] = useState(true)
   const grouped = materials.reduce((acc, item) => {
@@ -244,8 +246,12 @@ export default function BillOfMaterials({ materials, ohnePreis = [], ohneGewicht
                 )
               })()}
             </div>
+            <div className='grid grid-cols-1 gap-1.5 mt-2'>
+              <input value={projektNameEingabe} onChange={(e) => setProjektNameEingabe(e.target.value)} placeholder='Projektname (optional, sonst „CAD-Planung <Kunde>“)' className='w-full px-2 py-1.5 text-xs border rounded-lg' />
+              <input value={adresseEingabe} onChange={(e) => setAdresseEingabe(e.target.value)} placeholder='Objektadresse (optional)' className='w-full px-2 py-1.5 text-xs border rounded-lg' />
+            </div>
             <button
-              onClick={() => ausgewaehlterKunde && onAssignCustomer(ausgewaehlterKunde.id, ausgewaehlterKunde.name)}
+              onClick={() => ausgewaehlterKunde && onAssignCustomer(ausgewaehlterKunde.id, ausgewaehlterKunde.name, { projektName: projektNameEingabe, adresse: adresseEingabe })}
               disabled={!ausgewaehlterKunde || zuordnenLaeuft}
               className='w-full mt-2 py-1.5 bg-blue-600 text-white text-xs font-medium rounded-lg hover:bg-blue-700 disabled:bg-gray-300 transition-colors'
             >
