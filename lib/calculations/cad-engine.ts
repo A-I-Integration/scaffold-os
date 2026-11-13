@@ -1379,7 +1379,10 @@ export function vorbautenAlsAbschnitte(b: BuildingParams, abstandWest: number, a
   }
   // Wandhöhe, bis zu der eingerüstet wird: bei geneigtem Dach mit Traufe bis zur Traufe, sonst Gebäudehöhe
   const geneigt = (b.roofForm === 'satteldach' || b.roofForm === 'walmdach' || b.roofForm === 'mansardendach') && b.eavesHeightM > 0 && b.eavesHeightM < b.heightM - 0.3
-  const hoehe = geneigt ? b.eavesHeightM : b.heightM
+  // Pultdach: wie ohne Vorbau gilt die Rinnen-Regel (oberster Belag mindestens RINNE_ABSTAND_M unter der Traufe; Seite der niedrigen Traufe
+  // unbekannt → Traufe für alle Seiten). Rasterhöhe 2,0 m (Allround), mindestens eine Lage.
+  const pultTraufe = b.roofForm === 'pultdach' && b.eavesHeightM > 0 && b.eavesHeightM < b.heightM - 0.3
+  const hoehe = pultTraufe ? Math.max(1, Math.floor((b.eavesHeightM - RINNE_ABSTAND_M) / 2 + 1e-6)) * 2 : geneigt ? b.eavesHeightM : b.heightM
   const sections: BuildingSection[] = []
   for (let i = 0; i < sauber.length - 1; i++) {
     const von = sauber[i], bis = sauber[i + 1], mitte = (von + bis) / 2
