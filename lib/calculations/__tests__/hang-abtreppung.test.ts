@@ -58,3 +58,12 @@ describe('Vier Eckhöhen (gelaendeEckenM): Gerüst folgt an allen Seiten', () =>
     expect(Math.min(...front.map((f) => f.positionY))).toBeCloseTo(-2, 1)
   })
 })
+
+describe('Prüfung: Fuß schwebt nicht über dem Gelände', () => {
+  it('bei normalem Hang keine Schwebe-Warnung, und kein Fuß liegt tiefer als das Gelände', () => {
+    for (const bis of [-1.3, -2.7, -4.1]) {
+      const m = generateCADModel(haus({ geruestOptionen: { feldlaengeM: 2.07, gelaendeLinieSeiteM: { front: { vonM: 0, bisM: bis } } } }), 'layher-allround')
+      expect(m.warnings.some((w) => w.code === 'HANG_FUSS_SCHWEBT')).toBe(false)
+    }
+  })
+})
