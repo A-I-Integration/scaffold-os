@@ -62,3 +62,28 @@ describe('Profil in Metern', () => {
     expect(p.length).toBe(8)
   })
 })
+
+import { fassadenAusdehnung } from '../gelaende-linie-raster'
+import { ohneAusreisser } from '../gelaende-aus-ansichten'
+
+describe('Fassadenausdehnung und Ausreißer', () => {
+  function putz(b: number, h: number, x1: number, x2: number) {
+    const data = new Uint8ClampedArray(b * h * 4).fill(255)
+    for (let y = 0; y < h; y++) for (let x = x1; x < x2; x++) { const i = (y * b + x) * 4; data[i] = 245; data[i + 1] = 240; data[i + 2] = 180 }
+    return { data, width: b, height: h }
+  }
+  it('erkennt die Breite und bestätigt sie gegen eine bekannte Seitenlänge', () => {
+    const r = fassadenAusdehnung(putz(600, 150, 100, 500), { pxProPt: 1, x0Pt: 0, y0Pt: 0 }, 28.35, [14.1, 8.85])
+    expect(r?.sicher).toBe(true)
+  })
+  it('passt die Breite nicht, wird um die Mitte geschätzt und als unsicher markiert', () => {
+    const r = fassadenAusdehnung(putz(600, 150, 100, 500), { pxProPt: 1, x0Pt: 0, y0Pt: 0 }, 28.35, [10, 8])
+    expect(r?.sicher).toBe(false)
+    expect(((r!.xLinksPt + r!.xRechtsPt) / 2)).toBeCloseTo(300, 0)
+  })
+  it('entfernt einzelne Ausreißer im Profil', () => {
+    const p = [0, 1, 2, 3, 4].map((x) => ({ posM: x, hoeheM: -x * 0.2 }))
+    p[2] = { posM: 2, hoeheM: 1.5 }
+    expect(ohneAusreisser(p).length).toBe(4)
+  })
+})

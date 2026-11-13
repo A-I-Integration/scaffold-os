@@ -21,6 +21,8 @@ export interface PlanQuelle {
   /** Texte einer PDF-Seite mit Position in Seiten-Punkten (leer bei Bildern/Scans) */
   texte: (nr: number, drehungGrad: number) => Promise<PlanText[]>
   zeige: (nr: number, drehungGrad: number) => Promise<PlanSeite>
+  /** Ausschnitt (Seiten-Punkte) in höherer Auflösung als Bildpunkte; null bei Bildern/Scans ohne Vektorseite */
+  ausschnitt: (nr: number, drehungGrad: number, x: number, y: number, w: number, h: number, pxProPt: number) => Promise<{ data: Uint8ClampedArray; width: number; height: number } | null>
   freigeben: () => void
 }
 
@@ -38,6 +40,7 @@ export async function ladePlanQuelle(datei: File): Promise<PlanQuelle> {
       seiten: 1,
       vektoren: async () => [],
       texte: async () => [],
+      ausschnitt: async () => null,
       freigeben,
       zeige: async (_nr, drehung) => {
         const bildUrl = merke(URL.createObjectURL(datei))
@@ -85,6 +88,18 @@ export async function ladePlanQuelle(datei: File): Promise<PlanQuelle> {
         out.push({ s: it.str, x, y, h: it.height })
       }
       return out
+    },
+    ausschnitt: async (nr, drehung, x, y, w, h, pxProPt) => {
+      const seite = await dok.getPage(Math.min(Math.max(1, nr), dok.numPages))
+      const rot = (((seite.rotate + drehung) % 360) + 360) % 360
+      const vp = seite.getViewport({ scale: pxProPt, rotation: rot })
+      const c = document.createElement('canvas'); c.width = Math.max(1, Math.ceil(w * pxProPt)); c.height = Math.max(1, Math.ceil(h * pxProPt))
+      if (c.width * c.height > 40_000_000) return null
+      const g = c.getContext('2d', { willReadFrequently: true })!
+      g.fillStyle = '#ffffff'; g.fillRect(0, 0, c.width, c.height)
+      await seite.render({ canvas: c, canvasContext: g, viewport: vp, transform: [1, 0, 0, 1, -x * pxProPt, -y * pxProPt] }).promise
+      const d = g.getImageData(0, 0, c.width, c.height)
+      return { data: d.data, width: d.width, height: d.height }
     },
     freigeben: () => { freigeben(); void dok.destroy() },
     zeige: async (nr, drehung) => {
