@@ -22,6 +22,7 @@ import { erkenneGrundriss, FORM_NAME } from '@/lib/cad/grundriss-erkennung'
 import { portalAlsTuer } from '@/lib/cad/portal-erkennung'
 import { analysiereDreiecke, schaetzeEinheit, spannweiten, nullpunktUeberTiefstem, abschnitteAusTeilen, abschnitteAusTeileListe, vorgabeAchseEinheit, type GebaeudeTeil } from '@/lib/cad/modell-analyse'
 import { planLesen } from '@/lib/cad/plan-import'
+import { parseGelaendeLinie, formatGelaendeLinie } from '@/lib/calculations/gelaende'
 import { oeffnungenFuerModell, vorbautenFuerModell, seiteVonKante, seiteVonHimmelsrichtung } from '@/lib/cad/plan-oeffnungen-modell'
 import { eckenAusTalseite } from '@/lib/cad/koten-je-ansicht'
 import { umrissBox } from '@/lib/calculations/cad-umriss'
@@ -49,6 +50,7 @@ interface Props {
 export default function BuildingForm({ building, systemId, onChange, onSystemChange, onGenerate, onLadeProjektdatei, onAussehen, onModellUebernehmen, registrierePlanUpload, warnings, zusatz }: Props) {
   const [activeTab, setActiveTab] = useState<'gebaeude' | 'geruest' | 'system'>('gebaeude')
   const [analyseLaeuft, setAnalyseLaeuft] = useState(false)
+  const [profilFehler, setProfilFehler] = useState<Partial<Record<'front' | 'back' | 'left' | 'right', boolean>>>({})
   const [analyseHinweis, setAnalyseHinweis] = useState<string | null>(null)
   // null = Vorgabe der Erkennung (z. B. bei Modellen mit eingebautem Gerüst: nur der Turm), sonst die Wahl der Person
   const [nurTurmWahl, setNurTurm] = useState<boolean | null>(null)
@@ -1152,6 +1154,34 @@ export default function BuildingForm({ building, systemId, onChange, onSystemCha
                           })}
                         </div>
                         <p className='text-[10px] text-[#86868b] mt-1'>Höhe je Ecke in m (±0,00 = EG-Boden, minus = tiefer). Beispiel Hang nach vorn: hinten 0/0, vorne −2,95/−2,95. Überschreibt die anderen Hang-Felder.</p>
+                      </div>
+                    </details>
+                    <details className='col-span-2'>
+                      <summary className='text-[11px] text-[#424245] cursor-pointer'>Geländeprofil je Seite (Position : Höhe)</summary>
+                      <div className='mt-1 space-y-1'>
+                        {(['front', 'back', 'left', 'right'] as const).map((sd) => {
+                          const aktuell = formatGelaendeLinie(opt.gelaendeProfilM?.[sd])
+                          const ungueltig = profilFehler[sd]
+                          return (
+                            <label key={sd} className='block text-[10px] text-[#86868b]'>{{ front: 'Vorne (links → rechts)', back: 'Hinten (links → rechts)', left: 'Links (hinten → vorne)', right: 'Rechts (hinten → vorne)' }[sd]}
+                              <input type='text' key={aktuell} defaultValue={aktuell} placeholder='0:+1,55; 6:-0,20; 13,8:-2,55'
+                                onBlur={(ev) => {
+                                  const t = ev.target.value.trim()
+                                  const neu = { ...(opt.gelaendeProfilM ?? {}) }
+                                  if (t === '') { delete neu[sd]; setProfilFehler((f) => ({ ...f, [sd]: false })) }
+                                  else {
+                                    const l = parseGelaendeLinie(t)
+                                    if (!l) { setProfilFehler((f) => ({ ...f, [sd]: true })); return }
+                                    neu[sd] = l; setProfilFehler((f) => ({ ...f, [sd]: false }))
+                                  }
+                                  setzeOpt({ gelaendeProfilM: Object.keys(neu).length > 0 ? neu : undefined })
+                                }}
+                                className={`w-full px-1 py-0.5 border rounded text-xs ${ungueltig ? 'border-red-400' : ''}`} />
+                              {ungueltig && <span className='text-red-600'>Format: Position:Höhe, mindestens zwei Punkte, z. B. 0:+1,55; 13,8:-2,55</span>}
+                            </label>
+                          )
+                        })}
+                        <p className='text-[10px] text-[#86868b]'>Position in m ab Seitenanfang, Höhe in m (±0,00 = EG-Boden, minus = tiefer), dazwischen linear. Jedes Feld gründet auf dieser Linie; die Beläge bleiben waagerecht. Hat je Seite Vorrang vor Eckhöhen und Gelände je Seite.</p>
                       </div>
                     </details>
                     <label className='flex items-center gap-2 text-xs text-[#424245] self-end pb-1.5'>

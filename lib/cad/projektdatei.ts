@@ -157,6 +157,17 @@ export function liesProjektdatei(text: string): LeseErgebnis {
       for (const sd of ['front', 'back', 'left', 'right'] as const) { const v = zahl(m[sd], -15, 15); if (v != null && v !== 0) gm[sd] = v }
       if (Object.keys(gm).length > 0) opt.gelaendeSeiteM = gm
     }
+    if (o.gelaendeProfilM && typeof o.gelaendeProfilM === 'object') {
+      const m = o.gelaendeProfilM as Record<string, unknown>
+      const gp: NonNullable<typeof opt.gelaendeProfilM> = {}
+      for (const sd of ['front', 'back', 'left', 'right'] as const) {
+        const arr = Array.isArray(m[sd]) ? (m[sd] as unknown[]) : []
+        const pts = arr.map((q) => (q && typeof q === 'object' ? { posM: zahl((q as Record<string, unknown>).posM, -MAX_MASS_M, MAX_MASS_M), hoeheM: zahl((q as Record<string, unknown>).hoeheM, -15, 15) } : null))
+          .filter((q): q is { posM: number; hoeheM: number } => !!q && q.posM != null && q.hoeheM != null)
+        if (pts.length >= 2) gp[sd] = pts
+      }
+      if (Object.keys(gp).length > 0) opt.gelaendeProfilM = gp
+    }
     const fl = zahl(o.feldlaengeM, 0.1, 10); if (fl != null) opt.feldlaengeM = fl
     if (typeof o.treppe === 'boolean') opt.treppe = o.treppe
     if (typeof o.tuerenFreihalten === 'boolean') opt.tuerenFreihalten = o.tuerenFreihalten
