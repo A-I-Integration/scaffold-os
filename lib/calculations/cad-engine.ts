@@ -504,6 +504,30 @@ export function eckenGelaendeM(building: BuildingParams): { fl: number; fr: numb
   }
 }
 
+/**
+ * Geländehöhe an einer Stelle (x, z) im Koordinatensystem des Baukörpers (Mitte 0/0; front = +z, back = −z, left = −x, right = +x) für die 3D-Fläche.
+ * Die vier Seitenlinien (Geländeprofil, sonst linear aus den Eckhöhen) werden über das Rechteck gespannt (Coons-Fläche);
+ * außerhalb des Hauses gelten die Randwerte weiter. Gerüst und Darstellung nutzen dieselben Eckhöhen und Profile.
+ */
+export function gelaendeHoeheFn(building: BuildingParams): (x: number, z: number) => number {
+  const E = eckenGelaendeM(building)
+  const terr = new Terrain(building.geruestOptionen?.gelaendeProfilM)
+  const L = building.lengthM || 1, W = building.widthM || 1
+  const linie = (sd: 'front' | 'back' | 'left' | 'right', von: number, bis: number, laenge: number) => (t: number): number => {
+    const h = terr.heightAt(sd, Math.min(1, Math.max(0, t)) * laenge)
+    return h !== undefined ? h : von + (bis - von) * Math.min(1, Math.max(0, t))
+  }
+  const hF = linie('front', E.fl, E.fr, L), hB = linie('back', E.bl, E.br, L)
+  // Seiten ohne eigene Linie laufen linear zwischen den Ecken, die vorne/hinten vorgeben (so passen alle vier Kanten an den Ecken zusammen)
+  const hL = linie('left', hB(0), hF(0), W), hR = linie('right', hB(1), hF(1), W)
+  return (x, z) => {
+    const u = Math.min(1, Math.max(0, x / L + 0.5)), v = Math.min(1, Math.max(0, z / W + 0.5)) // v: 0 = hinten, 1 = vorne
+    const kante = (1 - v) * hB(u) + v * hF(u) + (1 - u) * hL(v) + u * hR(v)
+    const ecke = (1 - u) * (1 - v) * hB(0) + u * (1 - v) * hB(1) + (1 - u) * v * hF(0) + u * v * hF(1)
+    return kante - ecke
+  }
+}
+
 export function calculateLevels(
   buildingHeightM: number,
   system: GeruestSystem,

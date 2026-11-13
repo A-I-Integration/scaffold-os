@@ -21,7 +21,7 @@ import * as THREE from 'three'
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 import { treppenTeile } from '@/lib/cad/treppen-geometrie'
 import { HAUBEN_PROFIL } from '@/lib/cad/haube'
-import { CADModel, ScaffoldComponent3D, BuildingFeature3D, berechneGebaeudeSegmente, hatGeradeAbschnitte, eckenGelaendeM } from '@/lib/calculations/cad-engine'
+import { CADModel, ScaffoldComponent3D, BuildingFeature3D, berechneGebaeudeSegmente, hatGeradeAbschnitte, eckenGelaendeM, gelaendeHoeheFn } from '@/lib/calculations/cad-engine'
 import { CATALOG_ITEMS } from './ComponentCatalog'
 import Umgebung3D from './Umgebung3D'
 import { bauteilFarbe, type FarbModus } from '@/lib/cad/bauteil-farben'
@@ -1376,7 +1376,9 @@ function hangDaten(building: CADModel['building']): { hangM: number; g: Record<'
   if ((building.sections && building.sections.length >= 2) || (building.umriss && building.umriss.length >= 3)) return { hangM: 0, g: leer }
   // Tiefster Punkt aus demselben Ecken-Modell wie die Gerüstberechnung
   const e = eckenGelaendeM(building)
-  const min = Math.min(e.fl, e.fr, e.bl, e.br, 0)
+  const prof = building.geruestOptionen?.gelaendeProfilM
+  const profMin = prof ? Object.values(prof).flatMap((l) => (l ?? []).map((q) => q.hoeheM)) : []
+  const min = Math.min(e.fl, e.fr, e.bl, e.br, 0, ...profMin)
   const g = { front: Math.min(e.fl, e.fr), back: Math.min(e.bl, e.br), left: Math.min(e.bl, e.fl), right: Math.min(e.br, e.fr) }
   return { hangM: Math.round(Math.max(0, -min) * 100) / 100, g }
 }
@@ -1386,31 +1388,38 @@ function hangDaten(building: CADModel['building']): { hangM: number; g: Record<'
  * mit Erdschürze nach unten, so dass das Haus im Hang sitzt. Lokale Koordinaten wie der Baukörper (±0,00 = 0).
  * Die Talseite (tiefste Ecke) bleibt offen und zeigt das Untergeschoss.
  */
-function Hanggelaende({ lengthM, widthM, hangM, ecken }: { lengthM: number; widthM: number; hangM: number; ecken: { fl: number; fr: number; bl: number; br: number } }) {
+function Hanggelaende({ lengthM, widthM, hangM, building }: { lengthM: number; widthM: number; hangM: number; building: CADModel['building'] }) {
   const geo = useMemo(() => {
+    const hoehe = gelaendeHoeheFn(building)
     const m = Math.max(2, Math.min(6, hangM * 1.5)) // Auslauf nach außen
     const hx = lengthM / 2 + m, hz = widthM / 2 + m
     const unten = -hangM - 0.4 // Erdschürze endet knapp unter der Talsohle
-    // Ecken: front = +z, back = -z, left = -x, right = +x
-    const FL: [number, number, number] = [-hx, ecken.fl, hz]
-    const FR: [number, number, number] = [hx, ecken.fr, hz]
-    const BR: [number, number, number] = [hx, ecken.br, -hz]
-    const BL: [number, number, number] = [-hx, ecken.bl, -hz]
+    const N = 28
+    const pt = (i: number, j: number): [number, number, number] => {
+      const x = -hx + (2 * hx * i) / N, z = -hz + (2 * hz * j) / N
+      return [x, hoehe(x, z), z]
+    }
     const pos: number[] = []
     const tri = (a: number[], b: number[], c: number[]) => { pos.push(...a, ...b, ...c) }
-    // Oberfläche (zwei Dreiecke)
-    tri(FL, FR, BR); tri(FL, BR, BL)
+    // Oberfläche als Raster, damit die Geländelinien (Zwischenpunkte) sichtbar werden
+    for (let i = 0; i < N; i++) for (let j = 0; j < N; j++) {
+      const a = pt(i, j), b = pt(i + 1, j), c = pt(i + 1, j + 1), d = pt(i, j + 1)
+      tri(a, d, c); tri(a, c, b)
+    }
     // Erdschürze an den vier Rändern (von Oberkante bis `unten`)
     const schuerze = (a: [number, number, number], b: [number, number, number]) => {
       const a2 = [a[0], unten, a[2]], b2 = [b[0], unten, b[2]]
       tri(a, b, b2 as number[]); tri(a, b2 as number[], a2 as number[])
     }
-    schuerze(FR, FL); schuerze(BR, FR); schuerze(BL, BR); schuerze(FL, BL)
+    for (let k = 0; k < N; k++) {
+      schuerze(pt(k, 0), pt(k + 1, 0)); schuerze(pt(k + 1, N), pt(k, N))
+      schuerze(pt(0, k + 1), pt(0, k)); schuerze(pt(N, k), pt(N, k + 1))
+    }
     const g = new THREE.BufferGeometry()
     g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3))
     g.computeVertexNormals()
     return g
-  }, [lengthM, widthM, hangM, ecken.fl, ecken.fr, ecken.bl, ecken.br])
+  }, [lengthM, widthM, hangM, building])
   if (!(hangM > 0.05)) return null
   return (
     <mesh geometry={geo} receiveShadow castShadow>
@@ -1607,7 +1616,7 @@ function Building3D({
       </mesh>
 
       {/* Schräges Hanggelände durch die vier Eckhöhen; Talseite bleibt offen */}
-      <Hanggelaende lengthM={lengthM} widthM={w} hangM={hangM} ecken={eckenGelaendeM(building)} />
+      <Hanggelaende lengthM={lengthM} widthM={w} hangM={hangM} building={building} />
 
       {/* Klickbare Seiten: Seite anklicken → „Einrüsten“ / „Gerüst entfernen“ */}
       {onSeiteUmschalten && (

@@ -42,3 +42,16 @@ describe('Gerüst gründet je Feld auf der Geländelinie', () => {
     expect(Math.abs(top('back') - top('front'))).toBeLessThan(0.01)
   })
 })
+
+import { gelaendeHoeheFn } from '@/lib/calculations/cad-engine'
+describe('3D-Gelände aus den Seitenlinien', () => {
+  it('trifft die Ecken und die Zwischenpunkte der Linie', () => {
+    const b = haus()
+    const f = gelaendeHoeheFn(b)
+    const L = b.lengthM, W = b.widthM
+    expect(f(-L / 2, -W / 2)).toBeCloseTo(1.55, 2) // hinten-links
+    expect(f(L / 2, -W / 2)).toBeCloseTo(-2.55, 2) // hinten-rechts
+    expect(f(-L / 2, W / 2)).toBeCloseTo(1.5, 2) // vorne-links
+    expect(f(L / 2, W / 2)).toBeCloseTo(-0.1, 2)
+  })
+})
