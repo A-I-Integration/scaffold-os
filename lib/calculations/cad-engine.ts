@@ -6,6 +6,7 @@
 
 import { GeruestSystem, findeSystem } from './geruest-systeme'
 import { ausgleichTeile, type AusgleichTeil } from './abtreppung'
+import { Terrain, type GelaendeProfil } from './gelaende'
 import { MaterialItem } from '@/types/scaffold'
 import { modellHash } from './modell-stand'
 import { type UmrissPunkt, pruefeUmriss, normalisiereUmriss, umrissKanten, umrissEcken, geruestEckpunkt, umrissBox, zentriereUmriss, kantenHoehenNormalisiert } from './cad-umriss'
@@ -71,6 +72,8 @@ export interface GeruestOptionen {
   gelaendeLinieSeiteM?: Partial<Record<'front' | 'back' | 'left' | 'right', { vonM: number; bisM: number }>>
   /** Geländehöhe an den vier Gebäudeecken (m, bezogen auf ±0,00): fl=vorne-links, fr=vorne-rechts, bl=hinten-links, br=hinten-rechts. Steuert Gerüst UND 3D-Gelände aus einer Quelle; alle Seiten treppen entsprechend ab. Höchste Priorität. */
   gelaendeEckenM?: { fl: number; fr: number; bl: number; br: number }
+  /** Geländelinie je Seite als Stützpunkte (posM ab Seitenanfang in Feldrichtung: vorne/hinten links→rechts, links hinten→vorne, rechts hinten→vorne; hoeheM bezogen auf ±0,00). Zwischen den Punkten linear. Hat Vorrang vor Eck-, Linien- und Seitenwerten der jeweiligen Seite. */
+  gelaendeProfilM?: GelaendeProfil
   /** Pultdach: Seite mit der niedrigen Traufe (dort endet das Dach bei `eavesHeightM`, gegenüber beim First `heightM`, an den Seitenwänden steigt es gleichmäßig). Fehlt die Angabe, gilt die Traufe vorsichtig für alle Seiten. */
   pultNiedrigeSeite?: 'front' | 'back' | 'left' | 'right'
   /** Profil je Gerüstseite aus den Ansichten: Dachkante (und Gelände) in m über ±0,00 an Stützstellen entlang der Wand. `posM` = Lage ab Wandmitte (vorne/hinten: + nach rechts, links/rechts: + Richtung Vorderseite). Hat Vorrang vor Giebel-/Pult-/Traufe-Regeln. Gelände: das Gerüst steht am tiefsten Punkt und wird dort höher. */
@@ -484,7 +487,10 @@ export function eckenGelaendeM(building: BuildingParams): { fl: number; fr: numb
     const prof = o?.seitenProfil?.[sd]?.map((q) => q.gelaendeM).filter((g): g is number => typeof g === 'number' && Number.isFinite(g))
     return prof && prof.length ? Math.min(...prof) : 0
   }
+  const terr = new Terrain(o?.gelaendeProfilM)
   const ende = (sd: 'front' | 'back' | 'left' | 'right', which: 'von' | 'bis'): number => {
+    const pl = terr.linie(sd)
+    if (pl) return which === 'von' ? pl[0].hoeheM : pl[pl.length - 1].hoeheM
     const l = lm[sd]
     if (l && Number.isFinite(l.vonM) && Number.isFinite(l.bisM)) return which === 'von' ? l.vonM : l.bisM
     return flach(sd)
@@ -1542,9 +1548,21 @@ export function generateCADModel(
       }
     }
   }
+  // Geländeprofil je Seite (Stützpunkte): hat Vorrang; die Fußhöhe je Feld folgt der Linie
+  const terrain = new Terrain(system && !abschnitte && !(building.umriss && building.umriss.length >= 3) ? opt?.gelaendeProfilM : undefined)
+  const seitenLaengeProfil = (sd: SeitenId) => (sd === 'front' || sd === 'back' ? building.lengthM : building.widthM || 0)
+  for (const sd of ['front', 'back', 'left', 'right'] as const) {
+    const l = terrain.linie(sd)
+    if (!l) continue
+    const min = terrain.tiefsteM(sd)!
+    hangSeiteM[sd] = min
+    gLinieSeite[sd] = { vonM: l[0].hoeheM, bisM: l[l.length - 1].hoeheM }
+  }
   const gSeite = (sd: SeitenId): number => hangSeiteM[sd] ?? 0
   /** Geländekote in der Feldmitte (tAlong 0..1 ab Seitenanfang). Schräger Hang: interpoliert; sonst der Seitenwert. */
   const gFussFeld = (sd: SeitenId, tAlong: number): number => {
+    const pl = terrain.hatLinie(sd) ? terrain.heightAt(sd, Math.min(1, Math.max(0, tAlong)) * seitenLaengeProfil(sd)) : undefined
+    if (pl !== undefined) return pl
     const l = gLinieSeite[sd]
     return l ? l.vonM + (l.bisM - l.vonM) * Math.min(1, Math.max(0, tAlong)) : gSeite(sd)
   }
