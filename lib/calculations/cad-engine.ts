@@ -2158,7 +2158,7 @@ export function generateCADModel(
     totalHeightM: building.heightM,
     totalAreaM2: vorbauKennzahlen ? vorbauKennzahlen.flaeche - lueckeFlaecheM2 : (abschnitte ? stufenFlaecheM2(abschnitte, activeSides, building.widthM || 0) + helmFlaecheM2 + innenFlaecheM2 - verdecktFlaecheM2 : activeSides.reduce((sum, sd) => sum + seitenWandFlaecheM2(sd, seitenLaengeM(sd)) - gSeite(sd as SeitenId) * seitenLaengeM(sd), 0)) - lueckeFlaecheM2,
     fieldCount: vorbauKennzahlen ? vorbauKennzahlen.felder : (abschnittDivs ? abschnittDivs.reduce((sum, d, i) => sum + (abschnitte![i].geruest === false ? 0 : d.fields), 0) + innenFelder : einfachSeitenDivs.reduce((sum, d) => sum + d.fields, 0)) - lueckeFelder,
-    levelCount: dachRegel ? maxLagenDach : (Object.keys(hangSeiteM).length ? Math.max(...activeSides.map((sd) => levelCalcSeite(sd as SeitenId).levels)) : levelCalc.levels),
+    levelCount: system && ankerAktiv() ? Math.max(...activeSides.map((sd) => levelCalcSeite(sd as SeitenId).levels)) : dachRegel ? maxLagenDach : (Object.keys(hangSeiteM).length ? Math.max(...activeSides.map((sd) => levelCalcSeite(sd as SeitenId).levels)) : levelCalc.levels),
     warnings
   }
 
