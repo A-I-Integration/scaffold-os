@@ -21,6 +21,11 @@
 //   KI_MODEL=mistral-large-latest
 //   POLL_INTERVAL_S=15
 //   VISION_MODEL=mistral-medium-latest
+//   Optional eigene Bild-Auswertung (Text und OCR bleiben bei KI_BASE_URL), z. B. Kimi von Moonshot (OpenAI-kompatibel):
+//   VISION_BASE_URL=https://api.moonshot.ai/v1
+//   VISION_API_KEY=…
+//   VISION_MODEL=kimi-k3
+//   VISION_TEMPERATURE=-        („-“ lässt die Temperatur weg, falls das Modell nur den Standardwert erlaubt; leer = 0,2)
 // ============================================================
 
 // Phase 66b: Tenant-Format-Normalisierung. Der punktwolke-Worker nutzt
@@ -35,6 +40,19 @@ const KI_BASE_URL = process.env.KI_BASE_URL || 'https://api.mistral.ai/v1';
 const KI_API_KEY = process.env.KI_API_KEY || '';
 const KI_MODEL = process.env.KI_MODEL || 'mistral-large-latest';
 const VISION_MODEL = process.env.VISION_MODEL || 'mistral-medium-latest';
+const VISION_BASE_URL = process.env.VISION_BASE_URL || KI_BASE_URL;
+const VISION_API_KEY = process.env.VISION_API_KEY || KI_API_KEY;
+const VISION_EXTERN = VISION_BASE_URL !== KI_BASE_URL; // eigener Anbieter für Bilder: nur Base64-Bilder, keine Links
+const VISION_TEMPERATURE = process.env.VISION_TEMPERATURE === '-' ? null : (process.env.VISION_TEMPERATURE ? parseFloat(process.env.VISION_TEMPERATURE) : 0.2);
+
+// Manche Anbieter (z. B. Moonshot/Kimi) nehmen Bilder nur als Base64, nicht als Link.
+async function bildFuerVision(url) {
+  if (!VISION_EXTERN || url.startsWith('data:')) return url;
+  const r = await fetch(url);
+  if (!r.ok) throw new Error(`Bild nicht ladbar (${r.status})`);
+  const typ = (r.headers.get('content-type') || 'image/png').split(';')[0];
+  return `data:${typ};base64,${Buffer.from(await r.arrayBuffer()).toString('base64')}`;
+}
 const POLL_INTERVAL_S = parseInt(process.env.POLL_INTERVAL_S || '15', 10);
 const OCR_MODEL = process.env.KI_OCR_MODEL || 'mistral-ocr-latest';
 
@@ -687,12 +705,12 @@ async function verarbeiteCadAnalyseJob(tenant, job) {
   // Vision-KI-Pfad
   const prompt = CAD_PROMPT(ocrText);
   const content = [{ type: 'text', text: prompt }];
-  for (const url of imageUrls) content.push({ type: 'image_url', image_url: { url } });
+  for (const url of imageUrls) content.push({ type: 'image_url', image_url: { url: await bildFuerVision(url) } });
 
-  const res = await kiFetch(`${KI_BASE_URL}/chat/completions`, {
+  const res = await kiFetch(`${VISION_BASE_URL}/chat/completions`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${KI_API_KEY}` },
-    body: JSON.stringify({ model: VISION_MODEL, messages: [{ role: 'user', content }], temperature: 0.2, max_tokens: 1500, response_format: { type: 'json_object' } }),
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${VISION_API_KEY}` },
+    body: JSON.stringify({ model: VISION_MODEL, messages: [{ role: 'user', content }], ...(VISION_TEMPERATURE != null ? { temperature: VISION_TEMPERATURE } : {}), max_tokens: 1500, response_format: { type: 'json_object' } }),
   });
   const data = await res.json();
   const raw = (data.choices?.[0]?.message?.content || '').trim();
@@ -851,13 +869,14 @@ async function verarbeiteJob(tenant, job) {
   // fertigen Request übernehmen, Defaults als Fallback.
   const extras = cfg.requestExtras || {};
 
-  const res = await kiFetch(`${KI_BASE_URL}/chat/completions`, {
+  const istVision = cfg.model === VISION_MODEL && VISION_MODEL !== KI_MODEL
+  const res = await kiFetch(`${istVision ? VISION_BASE_URL : KI_BASE_URL}/chat/completions`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${KI_API_KEY}` },
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${istVision ? VISION_API_KEY : KI_API_KEY}` },
     body: JSON.stringify({
       model: cfg.model,
       messages,
-      temperature: extras.temperature ?? 0.3,
+      ...(istVision && VISION_TEMPERATURE === null ? {} : { temperature: extras.temperature ?? 0.3 }),
       max_tokens: extras.max_tokens ?? 4096,
       ...(extras.response_format ? { response_format: extras.response_format } : {}),
     }),
