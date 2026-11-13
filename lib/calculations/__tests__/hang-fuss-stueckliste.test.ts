@@ -52,3 +52,16 @@ describe('Hang: Lücke zwischen Gelände und unterster Lage hat Riegel und Diago
     for (const f of hoch) expect(m.components3D.some((c) => c.id === `ausgleich-diagonale-${f.id}`)).toBe(true)
   })
 })
+
+describe('Hang: Anfangslage bei Lücke ab 1 m', () => {
+  it('Belag und Geländer auf Rahmenunterkante, sonst keiner', () => {
+    const m = generateCADModel(haus({ gelaendeLinieSeiteM: { front: { vonM: 0, bisM: -3.7 } } }), 'layher-allround')
+    const hoch = m.fields.filter((f) => f.fuss && f.fuss.stielM + f.fuss.spindelM >= 1.0)
+    const klein = m.fields.filter((f) => f.fuss && f.fuss.stielM + f.fuss.spindelM < 1.0)
+    for (const f of hoch) {
+      expect(m.components3D.some((c) => c.id === `ausgleich-deck-${f.id}`)).toBe(true)
+      expect(m.components3D.some((c) => c.id === `ausgleich-gelaender-${f.id}`)).toBe(true)
+    }
+    for (const f of klein) expect(m.components3D.some((c) => c.id === `ausgleich-deck-${f.id}`)).toBe(false)
+  })
+})
