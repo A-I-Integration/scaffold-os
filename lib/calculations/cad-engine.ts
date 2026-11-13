@@ -680,7 +680,10 @@ export function generateScaffoldComponents(model: CADModel): ScaffoldComponent3D
   let treppenKante: number | undefined
   kantenLaenge.forEach((len, k) => { if (treppenKante === undefined || len > (kantenLaenge.get(treppenKante) ?? 0) + 1e-9) treppenKante = k })
   const istTreppenFeld = (f: ScaffoldField): boolean => f.side === 'front' && (f.kante === undefined || f.kante === treppenKante)
-  const treppenFelder0 = fields.filter((f) => istTreppenFeld(f) && f.levelIndex === 0).sort((a, b) => a.index - b.index)
+  // Am Hang kann die unterste Lage der Treppenseite fehlen (liegt unter dem Gelände): die Treppe beginnt an der untersten vorhandenen Lage
+  const treppeU = fields.reduce((m, f) => (istTreppenFeld(f) ? Math.min(m, f.levelIndex) : m), Infinity)
+  const treppeUnten = Number.isFinite(treppeU) ? treppeU : 0
+  const treppenFelder0 = fields.filter((f) => istTreppenFeld(f) && f.levelIndex === treppeUnten).sort((a, b) => a.index - b.index)
   const warnEinmal = (code: string, type: CADWarning['type'], message: string) => {
     if (!model.warnings.some((w) => w.code === code)) model.warnings.push({ type, code, message })
   }
@@ -695,7 +698,7 @@ export function generateScaffoldComponents(model: CADModel): ScaffoldComponent3D
     // durchgehenden Lagen; bei Gleichstand gilt die bisherige Vorliebe (zweites Feld, dann erstes, dann die übrigen).
     const lagenAn = (f: ScaffoldField): number => {
       let n = 0
-      while (n < levels.length && fields.some((g) => istTreppenFeld(g) && g.levelIndex === n && gleicherPlatz(g, f, 0.01))) n++
+      while (n < levels.length - treppeUnten && fields.some((g) => istTreppenFeld(g) && g.levelIndex === treppeUnten + n && gleicherPlatz(g, f, 0.01))) n++
       return n
     }
     const reihenfolge = [kandidaten[1], kandidaten[0], ...kandidaten.slice(2)].filter((f): f is ScaffoldField => !!f)
@@ -712,12 +715,12 @@ export function generateScaffoldComponents(model: CADModel): ScaffoldComponent3D
   if (stairSpan) {
     const { a, b } = stairSpan
     let lagen = 0
-    while (lagen < levels.length &&
-      fields.some((f) => istTreppenFeld(f) && f.levelIndex === lagen && gleicherPlatz(f, a, 0.01)) &&
-      fields.some((f) => istTreppenFeld(f) && f.levelIndex === lagen && gleicherPlatz(f, b, 0.01))) lagen++
+    while (lagen < levels.length - treppeUnten &&
+      fields.some((f) => istTreppenFeld(f) && f.levelIndex === treppeUnten + lagen && gleicherPlatz(f, a, 0.01)) &&
+      fields.some((f) => istTreppenFeld(f) && f.levelIndex === treppeUnten + lagen && gleicherPlatz(f, b, 0.01))) lagen++
     stairSpan.lagen = lagen
     if (lagen === 0) stairSpan = undefined
-    else if (lagen < levels.length) warnEinmal('TREPPE_ENDET', 'info', `Die Treppe führt bis Lage ${lagen}: darüber fehlen die Gerüstfelder an ihrer Stelle. Weiter oben bitte einen Zugang von Hand ergänzen.`)
+    else if (lagen < levels.length - treppeUnten) warnEinmal('TREPPE_ENDET', 'info', `Die Treppe führt bis Lage ${lagen}: darüber fehlen die Gerüstfelder an ihrer Stelle. Weiter oben bitte einen Zugang von Hand ergänzen.`)
   }
   // Durchgänge im Geländer: Feld-ID (in der jeweiligen Lage) → Durchgang am linken und/oder rechten Feldende.
   // Alle Läufe steigen von links nach rechts: auf jeder Lage endet ein Lauf am rechten Podest (Durchgang rechts)
@@ -725,7 +728,7 @@ export function generateScaffoldComponents(model: CADModel): ScaffoldComponent3D
   const durchgang = new Map<string, { links: boolean; rechts: boolean }>()
   if (stairSpan) {
     for (let j = 0; j < stairSpan.lagen; j++) {
-      const feldJ = fields.find((f) => istTreppenFeld(f) && f.levelIndex === j && gleicherPlatz(f, stairSpan!.a, 0.01))
+      const feldJ = fields.find((f) => istTreppenFeld(f) && f.levelIndex === treppeUnten + j && gleicherPlatz(f, stairSpan!.a, 0.01))
       if (feldJ) durchgang.set(feldJ.id, { links: j % 2 === 1, rechts: j % 2 === 0 }) // Zickzack: gerade Läufe enden rechts, ungerade links
     }
     warnEinmal('TREPPE_AUSSEN', 'info', 'Die Treppe steht als Außentreppe vor dem Gerüst (ein Feld lang, Läufe im Zickzack; auf jeder Lage ein Podest mit Durchgang zum Gerüstbelag am jeweiligen Ende). Anschluss an das Gerüst und Standsicherheit der Treppe sind in der Statik zu prüfen.')
@@ -1055,8 +1058,11 @@ export function generateScaffoldComponents(model: CADModel): ScaffoldComponent3D
     const L = xR - xL, cx = (xL + xR) / 2
     const W = TREPPEN_BREITE_M
     const zS = az + fa.widthM - 0.045 + TREPPEN_ABSTAND_M + W / 2 // Mitte der Treppe, vor der Belag-Außenkante
-    const lv = (j: number) => lage(fa.side, j)!
-    const y0 = lv(0).bottomY
+    const lv = (j: number) => lage(fa.side, treppeUnten + j)!
+    // Am Hang steht der Gerüstfuß unter der untersten Lage (Ausgleichsstiel + Spindel): die Treppe beginnt auf dem Gelände, nicht auf dem Belag
+    const fussUnter = (f: ScaffoldField) => (f.fuss ? f.fuss.stielM + f.fuss.spindelM : 0)
+    const fussLuecke = Math.max(0, Math.min(fussUnter(fa), fussUnter(fb)))
+    const y0 = lv(0).bottomY - fussLuecke
     const hGes = lv(lagen - 1).topY - y0
     // Steighöhe je Lauf aus den tatsächlichen Lagenhöhen (Lauf f endet auf dem Belag der Lage f)
     const rises = Array.from({ length: lagen }, (_, j) => lv(j).topY - (j === 0 ? y0 : lv(j - 1).topY))

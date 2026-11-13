@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { generateCADModel, type BuildingParams } from '@/lib/calculations/cad-engine'
+import { generateCADModel, generateScaffoldComponents, type BuildingParams } from '@/lib/calculations/cad-engine'
 import { Terrain, parseGelaendeLinie, formatGelaendeLinie } from '@/lib/calculations/gelaende'
 
 describe('Terrain / Geländelinie', () => {
@@ -53,5 +53,17 @@ describe('3D-Gelände aus den Seitenlinien', () => {
     expect(f(L / 2, -W / 2)).toBeCloseTo(-2.55, 2) // hinten-rechts
     expect(f(-L / 2, W / 2)).toBeCloseTo(1.5, 2) // vorne-links
     expect(f(L / 2, W / 2)).toBeCloseTo(-0.1, 2)
+  })
+})
+
+describe('Treppe beginnt auf dem Gelände', () => {
+  it('Unterkante der Treppe liegt auf dem Gelände vorne (gleichmäßiger Hang −1,4 m)', () => {
+    const b = haus()
+    b.geruestOptionen = { gelaendeProfilM: { front: [{ posM: 0, hoeheM: -1.4 }, { posM: 13.79, hoeheM: -1.4 }], back: [{ posM: 0, hoeheM: -1.4 }, { posM: 13.79, hoeheM: -1.4 }], left: [{ posM: 0, hoeheM: -1.4 }, { posM: 10.68, hoeheM: -1.4 }], right: [{ posM: 0, hoeheM: -1.4 }, { posM: 10.68, hoeheM: -1.4 }] } }
+    const m = generateCADModel(b, 'layher-allround')
+    const st = generateScaffoldComponents(m).find((c) => c.type === 'stair')
+    expect(st).toBeTruthy()
+    const unten = st!.position[1] - st!.scale[1] / 2
+    expect(unten).toBeCloseTo(-1.4, 1)
   })
 })
