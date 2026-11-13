@@ -22,7 +22,7 @@ import { erkenneGrundriss, FORM_NAME } from '@/lib/cad/grundriss-erkennung'
 import { portalAlsTuer } from '@/lib/cad/portal-erkennung'
 import { analysiereDreiecke, schaetzeEinheit, spannweiten, nullpunktUeberTiefstem, abschnitteAusTeilen, abschnitteAusTeileListe, vorgabeAchseEinheit, type GebaeudeTeil } from '@/lib/cad/modell-analyse'
 import { planLesen } from '@/lib/cad/plan-import'
-import { oeffnungenFuerModell, vorbautenFuerModell, seiteVonKante } from '@/lib/cad/plan-oeffnungen-modell'
+import { oeffnungenFuerModell, vorbautenFuerModell, seiteVonKante, seiteVonHimmelsrichtung } from '@/lib/cad/plan-oeffnungen-modell'
 import { eckenAusTalseite } from '@/lib/cad/koten-je-ansicht'
 import { umrissBox } from '@/lib/calculations/cad-umriss'
 import { leseDxfUmriss, mitHoehen, DXF_FORM_NAME, type DxfUmrissErgebnis } from '@/lib/cad/dxf-umriss'
@@ -438,6 +438,13 @@ export default function BuildingForm({ building, systemId, onChange, onSystemCha
                     oeffnungenHinweis += ` Hang als Vorschlag: Talseite ${nm} (tiefste Kote ${String(tal.tiefsteM).replace('.', ',')} m laut Ansicht), gegenüberliegende Seite auf ±0,00 angenommen, dazwischen gleichmäßiger Verlauf. Ggf. in „Hang über vier Eckhöhen“ nachstellen; Annahme: Plan oben = Norden.`
                   }
                 }
+              }
+              // Pultdach: Seite mit der niedrigen Traufe aus den Ansichten (Dach fällt nach …) – sonst gälte die Traufe nur „vorsichtig für alle Seiten“
+              if (vorne && pl.pultNiedrigeRichtung && (patch.roofForm ?? building.roofForm) === 'pultdach') {
+                const sd = seiteVonHimmelsrichtung(pl.pultNiedrigeRichtung, vorne)
+                patch.geruestOptionen = { ...(patch.geruestOptionen ?? building.geruestOptionen ?? {}), pultNiedrigeSeite: sd }
+                const nm = ({ nord: 'Norden', ost: 'Osten', sued: 'Süden', west: 'Westen' } as Record<string, string>)[pl.pultNiedrigeRichtung]
+                oeffnungenHinweis += ` Pultdach: niedrige Traufe im ${nm} laut Ansichten (Annahme: Plan oben = Norden) – im Tab Gebäude „Seite mit der niedrigen Traufe“ prüfen.`
               }
               // Rückfall: Geländekoten je Kante → tiefster Wert je Seite (nur bei deutlichem Gefälle, wenn keine Eckhöhen)
               if (vorne && !(patch.geruestOptionen as { gelaendeEckenM?: unknown } | undefined)?.gelaendeEckenM && pl.gelaendeJeKante?.length && pl.gelaende && pl.gelaende.unterschiedM >= 1) {
