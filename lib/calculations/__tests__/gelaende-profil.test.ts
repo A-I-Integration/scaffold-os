@@ -67,3 +67,24 @@ describe('Treppe beginnt auf dem Gelände', () => {
     expect(unten).toBeCloseTo(-1.4, 1)
   })
 })
+
+describe('Jeder Ständer steht auf seinem Geländepunkt', () => {
+  it('Front: Fußplatten liegen höchstens 4 cm neben der Geländelinie (4 m Gefälle über die Hausbreite)', () => {
+    const b = haus()
+    b.sides = ['front']
+    const prof = [{ posM: 0, hoeheM: 1.5 }, { posM: 13.79, hoeheM: -2.5 }]
+    b.geruestOptionen = { gelaendeProfilM: { front: prof, back: prof, left: [{ posM: 0, hoeheM: 1.5 }, { posM: 10.68, hoeheM: 1.5 }], right: [{ posM: 0, hoeheM: -2.5 }, { posM: 10.68, hoeheM: -2.5 }] } }
+    const m = generateCADModel(b, 'layher-allround')
+    const felder = m.fields.filter((f) => f.side === 'front')
+    const total = Math.max(...felder.map((f) => f.positionX + f.lengthM / 2)) - Math.min(...felder.map((f) => f.positionX - f.lengthM / 2))
+    const t = new Terrain({ front: prof })
+    const platten = generateScaffoldComponents(m).filter((c) => c.type === 'footplate' && c.position[2] < 3 && !c.id.startsWith('stair'))
+    expect(platten.length).toBeGreaterThan(6)
+    let schlecht = 0
+    for (const p of platten) {
+      const gelaende = t.heightAt('front', ((p.position[0] + total / 2) / total) * 13.79)!
+      if (Math.abs(p.position[1] + 0.02 - gelaende) > 0.04) schlecht++
+    }
+    expect(schlecht).toBe(0)
+  })
+})
