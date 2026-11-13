@@ -805,6 +805,12 @@ export function generateScaffoldComponents(model: CADModel): ScaffoldComponent3D
           const dl = Math.sqrt(lengthM * lengthM + hD * hD)
           components.push({ id: `ausgleich-diagonale-${field.id}`, type: 'diagonal', articleNumber: getDiagonalArticle(lengthM), name: `Diagonale ${lengthM}m`, position: [positionX, yR + hD / 2, positionZ], rotation: [0, 0, Math.atan2(hD, lengthM)], scale: [0.03, dl, 0.03], color: colorDiagonal, fieldId: field.id, levelId: level.id })
         }
+        // Ab 1 m Höhe über dem Gelände ist der Stiel-Abschnitt eine Anfangslage: Belag und Geländer auf Höhe der Rahmenunterkante,
+        // sonst stünde über dem Boden eine Lücke ohne Arbeitsplatz (Zugang dorthin: Leiter, nicht Teil des Modells)
+        if (gapM >= 1.0) {
+          components.push({ id: `ausgleich-deck-${field.id}`, type: 'deck', articleNumber: getDeckArticle(lengthM), name: `Arbeitsbühne ${lengthM}m`, position: [positionX, yBottom, positionZ + widthM / 2 - 0.02], rotation: [-Math.PI / 2, 0, 0], scale: [lengthM - 0.05, widthM - 0.05, 0.02], color: colorDeck, fieldId: field.id, levelId: level.id })
+          components.push({ id: `ausgleich-gelaender-${field.id}`, type: 'railing', articleNumber: getRailingArticle(lengthM), name: `Geländer ${lengthM}m`, position: [positionX, yBottom + 0.5, positionZ + widthM - 0.045], rotation: [0, 0, 0], scale: [lengthM, 1.0, 0.04], color: colorRailing, fieldId: field.id, levelId: level.id })
+        }
       }
     } else if (levelIndex === 0) {
       if (!dgLinks) components.push({ id: `foot-${field.id}-left`, type: 'footplate', articleNumber: 'FP-001', name: 'Fußplatte', position: [positionX - lengthM / 2 + 0.02, yBottom - 0.02, positionZ], rotation: [0, 0, 0], scale: [0.15, 0.04, 0.15], color: colorFoot, fieldId: field.id, levelId: level.id })
