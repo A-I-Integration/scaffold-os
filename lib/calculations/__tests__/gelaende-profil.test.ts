@@ -99,3 +99,24 @@ describe('Lagenzahl am Hang mit Dach', () => {
     expect(lagenSeite('back')).toBeLessThanOrEqual(m.levelCount)
   })
 })
+
+describe('Referenz EFH-Hang (Eckkoten NW −2,55 / NO +1,55 / SW −0,10 / SO +1,50)', () => {
+  it('Füße an der Tiefecke ≈ −2,55, an der Hochecke ≈ +1,55; Lagen 5 an der Tiefecke; keine Warnung', () => {
+    const b = haus()
+    b.geruestOptionen = { gelaendeProfilM: {
+      back: [{ posM: 0, hoeheM: -2.55 }, { posM: 13.79, hoeheM: 1.55 }],
+      front: [{ posM: 0, hoeheM: -0.1 }, { posM: 13.79, hoeheM: 1.5 }],
+      left: [{ posM: 0, hoeheM: -2.55 }, { posM: 10.68, hoeheM: -0.1 }],
+      right: [{ posM: 0, hoeheM: 1.55 }, { posM: 10.68, hoeheM: 1.5 }],
+    } }
+    const m = generateCADModel(b, 'layher-allround')
+    expect(m.warnings.filter((w) => w.type === 'error')).toEqual([])
+    const platten = generateScaffoldComponents(m).filter((c) => c.type === 'footplate' && !c.id.startsWith('stair'))
+    const grund = platten.map((c) => c.position[1] + 0.02)
+    expect(Math.min(...grund)).toBeLessThan(-2.3)
+    expect(Math.min(...grund)).toBeGreaterThan(-2.7)
+    expect(Math.max(...grund)).toBeGreaterThan(1.2)
+    expect(Math.max(...grund)).toBeLessThan(1.7)
+    expect(m.levelCount).toBeGreaterThanOrEqual(5)
+  })
+})
