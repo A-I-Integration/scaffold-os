@@ -2071,6 +2071,9 @@ export function generateCADModel(
       const s80 = mitS80 > 0 ? ` ${mitS80} Fuß(e) brauchen die verstärkte Fußspindel 80 (bis 0,55 m), da die Standardspindel (0,41 m) nicht reicht.` : ''
       warnings.push({ type: 'info', code: 'HANG_ABTREPPUNG', message: `Schräger Hang: Der Gerüstfuß treppt je Feld ab. Ausgleich am Fuß: ${stielTxt || 'nur Fußspindel'}, dazu ${mitSpindel} Fußspindel-Auszüge.${s80} Werte nach Layher-Standardlängen; vor Ort und mit der Zulassung prüfen.` })
     }
+    // Prüfung: Fuß schwebt über dem Gelände, wenn Ausgleichsstiel + Fußspindel (max. 0,55 m mit Spindel 80) die Lücke nicht schließen
+    const schwebend = fuesseAktiv.filter((f) => f.spindelM > 0.55 + 1e-6)
+    if (schwebend.length) warnings.push({ type: 'error', code: 'HANG_FUSS_SCHWEBT', message: `${schwebend.length} Ständer stehen nicht auf dem Gelände: Die Lücke ist größer als Ausgleichsstiel plus Fußspindel (größte Lücke ${Math.max(...schwebend.map((f) => f.stielM + f.spindelM)).toFixed(2)} m). Längeren Ausgleichsstiel oder eine Lage tiefer ansetzen.` })
     const tuerAmHang = (building.tueren ?? []).filter((t) => (hangSeiteM[t.side] ?? 0) <= -rasterLagenH)
     if (tuerAmHang.length) warnings.push({ type: 'warning', code: 'HANG_TUER', message: `${tuerAmHang.length} Tür(en) an Seiten, deren Gelände mehr als eine Lage tiefer liegt: Die Freihaltung rechnet ab ±0,00, die unteren Lagen davor sind geschlossen. Zugang bitte prüfen.` })
   }
