@@ -328,7 +328,8 @@ export function bereinigeAbschnitte(b: BuildingParams): BuildingParams {
 export interface ScaffoldField {
   id: string
   /** Nur am Hang: unterstes Feld einer Spalte steht auf dem Gelände – Ausgleichsstiel und Fußspindel dieses Feldes (je Rahmenstiel) */
-  fuss?: { stielM: number; spindelM: number; spindel80: boolean }
+  /** Fußausgleich am untersten Belag dieses Feldes (Feldmitte). `von`/`bis`: Ausgleich der beiden Ständer am Feldanfang/-ende (in Richtung der Seite wie die Geländelinie), da das Gelände unter dem Feld abfällt. */
+  fuss?: { stielM: number; spindelM: number; spindel80: boolean; von?: AusgleichTeil; bis?: AusgleichTeil }
   index: number
   lengthM: number
   widthM: number
@@ -818,18 +819,28 @@ export function generateScaffoldComponents(model: CADModel): ScaffoldComponent3D
       const spName = fu.spindel80 ? 'Fußspindel 80 (Auszug bis 0,55 m)' : 'Fußspindel 60 (Auszug bis 0,41 m)'
       const agArt = `AG-${String(Math.round(fu.stielM * 100)).padStart(3, '0')}`
       const agName = `Ausgleichsstiel ${fu.stielM.toFixed(2).replace('.', ',')} m`
+      // Ständer links/rechts im lokalen Seitenrahmen → Feldanfang/-ende in Richtung der Geländelinie
+      const rfSeite = seitenRahmen(field.side, building)
+      const [lwx, lwz] = rfSeite.toWorld(-1, 0), [rwx, rwz] = rfSeite.toWorld(1, 0)
+      const linksIstVon = feldEntlangFassade(field.side, lwx, lwz, building) < feldEntlangFassade(field.side, rwx, rwz, building)
+      const teilFuer = (tag: string): AusgleichTeil => (tag.startsWith('left') === linksIstVon ? fu.von : fu.bis) ?? fu
       const fuesse: [string, number, number][] = [['left', -lengthM / 2 + 0.02, 0], ['right', lengthM / 2 - 0.02, 0], ['left-aussen', -lengthM / 2 + 0.02, widthM - 0.075], ['right-aussen', lengthM / 2 - 0.02, widthM - 0.075]]
       fuesse.forEach(([tag, dx, dz]) => {
         if ((tag.startsWith('left') && dgLinks) || (tag.startsWith('right') && dgRechts)) return
-        const yStielUnten = yBottom - fu.stielM
+        const fp = teilFuer(tag)
+        const spArtP = fp.spindel80 ? 'FS-080' : 'FS-060'
+        const spNameP = fp.spindel80 ? 'Fußspindel 80 (Auszug bis 0,55 m)' : 'Fußspindel 60 (Auszug bis 0,41 m)'
+        const agArtP = `AG-${String(Math.round(fp.stielM * 100)).padStart(3, '0')}`
+        const agNameP = `Ausgleichsstiel ${fp.stielM.toFixed(2).replace('.', ',')} m`
+        const yStielUnten = yBottom - fp.stielM
         // Stiel und Spindel-Auszug werden als ein durchgehender Pfosten bis zur Fußplatte gezeichnet (Stückliste: beide Teile getrennt)
-        const pfostenH = fu.stielM + fu.spindelM
-        if (fu.stielM > 0) components.push({ id: `ausgleich-${field.id}-${tag}`, type: 'ausgleich', articleNumber: agArt, name: agName, position: [positionX + dx, yBottom - pfostenH / 2, positionZ + dz], rotation: [0, 0, 0], scale: [0.05, pfostenH, 0.05], color: colorFoot, fieldId: field.id, levelId: level.id })
-        if (fu.stielM <= 0 && fu.spindelM > 0.01) components.push({ id: `spindelschaft-${field.id}-${tag}`, type: 'ausgleich', articleNumber: spArt, name: spName, extern: true, position: [positionX + dx, yBottom - fu.spindelM / 2, positionZ + dz], rotation: [0, 0, 0], scale: [0.04, fu.spindelM, 0.04], color: colorFoot, fieldId: field.id, levelId: level.id }) // nur Darstellung, nicht in der Stückliste
-        components.push({ id: `spindel-${field.id}-${tag}`, type: 'footplate', articleNumber: spArt, name: spName, position: [positionX + dx, yStielUnten - fu.spindelM - 0.02, positionZ + dz], rotation: [0, 0, 0], scale: [0.15, 0.04, 0.15], color: colorFoot, fieldId: field.id, levelId: level.id })
+        const pfostenH = fp.stielM + fp.spindelM
+        if (fp.stielM > 0) components.push({ id: `ausgleich-${field.id}-${tag}`, type: 'ausgleich', articleNumber: agArtP, name: agNameP, position: [positionX + dx, yBottom - pfostenH / 2, positionZ + dz], rotation: [0, 0, 0], scale: [0.05, pfostenH, 0.05], color: colorFoot, fieldId: field.id, levelId: level.id })
+        if (fp.stielM <= 0 && fp.spindelM > 0.01) components.push({ id: `spindelschaft-${field.id}-${tag}`, type: 'ausgleich', articleNumber: spArtP, name: spNameP, extern: true, position: [positionX + dx, yBottom - fp.spindelM / 2, positionZ + dz], rotation: [0, 0, 0], scale: [0.04, fp.spindelM, 0.04], color: colorFoot, fieldId: field.id, levelId: level.id }) // nur Darstellung, nicht in der Stückliste
+        components.push({ id: `spindel-${field.id}-${tag}`, type: 'footplate', articleNumber: spArtP, name: spNameP, position: [positionX + dx, yStielUnten - fp.spindelM - 0.02, positionZ + dz], rotation: [0, 0, 0], scale: [0.15, 0.04, 0.15], color: colorFoot, fieldId: field.id, levelId: level.id })
       })
       // Tiefe Lücke bis zum Gelände: der Stiel-Abschnitt braucht wie eine Lage Riegel (innen/außen) und ab 1 m Höhe eine Diagonale
-      const gapM = fu.stielM + fu.spindelM
+      const gapM = Math.max(fu.stielM + fu.spindelM, fu.von ? fu.von.stielM + fu.von.spindelM : 0, fu.bis ? fu.bis.stielM + fu.bis.spindelM : 0)
       if (gapM >= 0.5 && !field.durchgang) {
         const yR = yBottom - gapM + 0.5
         ;[0, widthM - 0.075].forEach((dz, k) => components.push({ id: `ausgleich-riegel-${field.id}-${k}`, type: 'frame', articleNumber: 'QR-001', name: 'Querriegel', position: [positionX, yR, positionZ + dz], rotation: [0, 0, 0], scale: [lengthM, 0.04, 0.04], color: colorFrame, fieldId: field.id, levelId: level.id }))
@@ -1060,8 +1071,10 @@ export function generateScaffoldComponents(model: CADModel): ScaffoldComponent3D
     const zS = az + fa.widthM - 0.045 + TREPPEN_ABSTAND_M + W / 2 // Mitte der Treppe, vor der Belag-Außenkante
     const lv = (j: number) => lage(fa.side, treppeUnten + j)!
     // Am Hang steht der Gerüstfuß unter der untersten Lage (Ausgleichsstiel + Spindel): die Treppe beginnt auf dem Gelände, nicht auf dem Belag
-    const fussUnter = (f: ScaffoldField) => (f.fuss ? f.fuss.stielM + f.fuss.spindelM : 0)
-    const fussLuecke = Math.max(0, Math.min(fussUnter(fa), fussUnter(fb)))
+    const tiefe = (t?: { stielM: number; spindelM: number }) => (t ? t.stielM + t.spindelM : 0)
+    const fussUnter = (f: ScaffoldField) => (f.fuss ? Math.max(tiefe(f.fuss), tiefe(f.fuss.von), tiefe(f.fuss.bis)) : 0)
+    // Die Treppe ist ein starres Teil: sie steht am tiefsten Geländepunkt ihrer Felder auf (am höheren Ende steckt sie leicht im Boden, schwebt aber nirgends)
+    const fussLuecke = Math.max(0, fussUnter(fa), fussUnter(fb))
     const y0 = lv(0).bottomY - fussLuecke
     const hGes = lv(lagen - 1).topY - y0
     // Steighöhe je Lauf aus den tatsächlichen Lagenhöhen (Lauf f endet auf dem Belag der Lage f)
@@ -1936,14 +1949,23 @@ export function generateCADModel(
           if (levelData.index >= lagenAn(side, mitteAlong - fieldLength / 2, mitteAlong + fieldLength / 2)) return
         }
         // Schräger Hang: unterhalb der Geländelinie dieses Feldes steht kein Belag (Abtreppung). Am untersten Belag entsteht ein Fußausgleich.
-        let fussT: AusgleichTeil | null = null
+        let fussT: (AusgleichTeil & { von?: AusgleichTeil; bis?: AusgleichTeil }) | null = null
         if (gLinieSeite[side as SeitenId] || ankerAktiv()) {
           const tAlong = totalLength > 0 ? (vorherLaenge + fieldLength / 2) / totalLength : 0.5
           const fussM = gFussFeld(side as SeitenId, tAlong)
           if (levelData.bottomY < fussM - 1e-6) return // Belag läge unter dem Gelände → weglassen
           if (levelData.bottomY - rasterLagenH < fussM - 1e-6) { // unterster Belag dieses Feldes: Ausgleich bis zum Gelände
             const t = system ? ausgleichTeile(levelData.bottomY - fussM, system) : null
-            if (t) { fussT = t; abtreppFuesse.push({ side: side as SeitenId, feldIndex: fieldIndex, ausgleichM: Math.round((levelData.bottomY - fussM) * 100) / 100, ...t }) }
+            if (t) {
+              fussT = { ...t }
+              // Jeder Ständer steht auf seinem eigenen Geländepunkt (Feldanfang / Feldende), nicht nur auf dem der Feldmitte
+              const gEnde = (tt: number) => levelData.bottomY - gFussFeld(side as SeitenId, tt)
+              const tv = totalLength > 0 ? vorherLaenge / totalLength : 0, tb = totalLength > 0 ? (vorherLaenge + fieldLength) / totalLength : 1
+              const tvT = system ? ausgleichTeile(Math.max(0, gEnde(tv)), system) : null, tbT = system ? ausgleichTeile(Math.max(0, gEnde(tb)), system) : null
+              if (tvT) fussT.von = tvT
+              if (tbT) fussT.bis = tbT
+            }
+            if (t) { abtreppFuesse.push({ side: side as SeitenId, feldIndex: fieldIndex, ausgleichM: Math.round((levelData.bottomY - fussM) * 100) / 100, ...t }) }
           }
         }
         if (istInLuecke(side, side === 'front' || side === 'back' ? xPos : zPos + (building.widthM || 0) / 2 + 0.5, fieldLength)) { merkeLuecke(side, levelData.index, fieldLength, building.heightM); return }
