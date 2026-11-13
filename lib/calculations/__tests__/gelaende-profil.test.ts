@@ -88,3 +88,14 @@ describe('Jeder Ständer steht auf seinem Geländepunkt', () => {
     expect(schlecht).toBe(0)
   })
 })
+
+describe('Lagenzahl am Hang mit Dach', () => {
+  it('levelCount zeigt die höchste Lagenzahl (Talseite), nicht die der ebenen Seite', () => {
+    const b = haus()
+    b.geruestOptionen = { gelaendeProfilM: { back: [{ posM: 0, hoeheM: 1.55 }, { posM: 13.79, hoeheM: -2.55 }], front: [{ posM: 0, hoeheM: 1.5 }, { posM: 13.79, hoeheM: -2.55 }], left: [{ posM: 0, hoeheM: 1.55 }, { posM: 10.68, hoeheM: 1.5 }], right: [{ posM: 0, hoeheM: -2.55 }, { posM: 10.68, hoeheM: -2.55 }] } }
+    const m = generateCADModel(b, 'layher-allround')
+    expect(m.levelCount).toBeGreaterThanOrEqual(5)
+    const lagenSeite = (sd: string) => new Set(m.fields.filter((f) => f.side === sd).map((f) => f.levelIndex)).size
+    expect(lagenSeite('back')).toBeLessThanOrEqual(m.levelCount)
+  })
+})
