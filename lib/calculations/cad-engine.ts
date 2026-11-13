@@ -463,7 +463,7 @@ export function calculateFieldDivision(
 }
 
 /** Mindestabstand: oberster Belag unter der Rinne (Traufe) bzw. der Dachkante, in m. Vorgabe aus der Praxis – Dacharbeiten (Fanggerüst) brauchen ein eigenes, höheres Gerüst. */
-export const RINNE_ABSTAND_M = 1.5
+export const RINNE_ABSTAND_M = 1.0
 
 /**
  * Geländekote an den vier Gebäudeecken (m, bezogen auf ±0,00; negativ = tiefer), aus „Gelände je Seite“,
@@ -1941,7 +1941,7 @@ export function generateCADModel(
   // Türen freihalten: In der Türöffnung darf keine Stange stehen. Alle Felder vor der Tür (bei Aufschlag nach außen
   // inklusive Flügelweite) werden über so viele Lagen freigehalten, dass der Durchgangsrahmen-Binder oberhalb der Tür liegt;
   // die Randfelder links und rechts der Öffnung werden verstärkt (zweiter Rahmen am Rand, zusätzliche Diagonale).
-  if (opt?.tuerenFreihalten !== false && !(building.umriss && building.umriss.length >= 3)) {
+  if (opt?.tuerenFreihalten === true && !(building.umriss && building.umriss.length >= 3)) {
     const tueren = generateBuildingFeatures(building).filter((f) => f.type === 'door')
     const betroffeneTueren = new Set<string>()
     const aussenTueren = new Set<string>()

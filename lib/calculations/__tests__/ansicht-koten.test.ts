@@ -36,7 +36,7 @@ describe('Ansicht mit Höhenkoten', () => {
 import { generateGrundriss } from '../cad-engine'
 describe('Grundriss: Felder um das Gebäude', () => {
   it('Felder aller vier Seiten liegen um das Gebäude (x 0..L, y 0..B), Durchgang orange', () => {
-    const m = generateCADModel(b({ tueren: [{ id: 'd', side: 'front', offsetAlongM: 0, widthM: 1, heightM: 2.1 }] } as Partial<BuildingParams>), 'layher-allround')
+    const m = generateCADModel(b({ geruestOptionen: { tuerenFreihalten: true }, tueren: [{ id: 'd', side: 'front', offsetAlongM: 0, widthM: 1, heightM: 2.1 }] } as Partial<BuildingParams>), 'layher-allround')
     const felder = generateGrundriss(m).elements.filter((e) => e.id.startsWith('field-'))
     expect(felder.length).toBe(m.fields.filter((f) => f.levelIndex === 0).length)
     const minX = Math.min(...felder.map((e) => e.x)), maxX = Math.max(...felder.map((e) => e.x + (e.width ?? 0)))

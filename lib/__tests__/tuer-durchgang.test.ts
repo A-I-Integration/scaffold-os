@@ -8,7 +8,7 @@ const basis: BuildingParams = {
 }
 type Tuer = NonNullable<BuildingParams['tueren']>[number]
 const mitTuer = (t: Partial<Tuer> = {}, extra: Partial<BuildingParams> = {}): BuildingParams =>
-  ({ ...basis, doorCount: 0, ...extra, tueren: [{ id: 't', side: 'front', offsetAlongM: 0, widthM: 1.0, heightM: 2.1, ...t }] })
+  ({ ...basis, doorCount: 0, ...extra, geruestOptionen: { tuerenFreihalten: true, ...(extra.geruestOptionen ?? {}) }, tueren: [{ id: 't', side: 'front', offsetAlongM: 0, widthM: 1.0, heightM: 2.1, ...t }] })
 
 /** Erwartete Anzahl freigehaltener Lagen: erste Lage, deren Oberkante minus Binder über der Türoberkante liegt. */
 function erwarteteLagen(m: CADModel, hoehe: number): number {
@@ -114,7 +114,7 @@ describe('Türen im Gerüst freihalten', () => {
 
 describe('Türen einzeln planen', () => {
   const mitTueren: BuildingParams = {
-    ...basis, doorCount: 5,
+    ...basis, doorCount: 5, geruestOptionen: { tuerenFreihalten: true },
     tueren: [
       { id: 'a', side: 'front', offsetAlongM: -3, widthM: 1.2, heightM: 2.2 },
       { id: 'b', side: 'left', offsetAlongM: 1, widthM: 0.9, heightM: 2.1 },
@@ -149,7 +149,7 @@ describe('Türen einzeln planen', () => {
 })
 
 describe('Treppe und Türen', () => {
-  const ohneTuer: BuildingParams = { ...basis, doorCount: 0 }
+  const ohneTuer: BuildingParams = { ...basis, doorCount: 0, geruestOptionen: { tuerenFreihalten: true } }
   // Die Treppe hat kein eigenes Feld-Merkmal: ihre Mitte (x) entspricht der Mitte des Treppenfelds (Vorderseite, Lage 0).
   const treppenFeld = (m: CADModel) => {
     const x = m.components3D.find((c) => c.id === 'stair-frame-0')!.position[0]
@@ -177,7 +177,7 @@ describe('Treppe und Türen', () => {
 
 describe('Gestuftes Gebäude (Turm + Anbau) mit Tür in der Mitte', () => {
   const turm: BuildingParams = {
-    ...basis, lengthM: 20, widthM: 9, heightM: 32, eavesHeightM: 11, floors: 8, floorHeightsM: Array(8).fill(4), doorCount: 0,
+    ...basis, lengthM: 20, widthM: 9, heightM: 32, eavesHeightM: 11, floors: 8, floorHeightsM: Array(8).fill(4), doorCount: 0, geruestOptionen: { tuerenFreihalten: true },
     sections: [{ laengeM: 9, hoeheM: 32 }, { laengeM: 11, hoeheM: 11 }],
     tueren: [{ id: 'a', side: 'front', offsetAlongM: 0, widthM: 2.1, heightM: 3.5 }],
   }

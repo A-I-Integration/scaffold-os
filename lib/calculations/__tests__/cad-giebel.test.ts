@@ -6,7 +6,7 @@ const haus = (patch: Partial<BuildingParams> = {}): BuildingParams => ({
   floors: 0, floorHeightsM: [], windowCount: 0, doorCount: 0, balconyCount: 0, overhangM: 0.5, setbackM: 0,
   sides: ['front', 'back', 'left', 'right'], ...patch,
 })
-/** Erwartete Lagenzahl: oberster Belag mindestens 1,5 m unter der Rinne/Dachkante, mindestens eine Lage */
+/** Erwartete Lagenzahl: oberster Belag mindestens 1,0 m unter der Rinne/Dachkante, mindestens eine Lage */
 const bisRinne = (h: number, raster: number) => Math.max(1, Math.floor((h - RINNE_ABSTAND_M) / raster + 1e-6))
 const lagen = (m: ReturnType<typeof generateCADModel>, side: string) => {
   const idx = m.fields.filter((f) => f.side === side).map((f) => f.levelIndex)
@@ -18,8 +18,8 @@ describe('Satteldach: Giebel-Lagen nach Feldmitte', () => {
     const m = generateCADModel(haus(), 'rux-super65')
     const proFeld = m.fields.filter((f) => f.side === 'left').reduce<Record<string, number>>((a, f) => ({ ...a, [f.positionZ.toFixed(2)]: Math.max(a[f.positionZ.toFixed(2)] ?? 0, f.levelIndex + 1) }), {})
     const werte = Object.entries(proFeld).sort((a, b) => Number(a[0]) - Number(b[0])).map(([, v]) => v)
-    // Rinne/Dachkante in Feldmitte: Randfelder 7,27 m → 2 Lagen, Mitte 9,2 m → 3 Lagen (Belag mind. 1,5 m darunter)
-    expect(werte).toEqual([2, 3, 2])
+    // Rinne/Dachkante in Feldmitte: Randfelder 7,27 m → 3 Lagen, Mitte 9,2 m → 4 Lagen (Belag mind. 1,0 m darunter)
+    expect(werte).toEqual([3, 4, 3])
   })
 })
 
@@ -30,9 +30,10 @@ describe('Satteldach: Traufseiten kürzer, Giebelseiten folgen dem Dreieck', () 
     const trauflagen = bisRinne(6.3, raster)
     expect(lagen(m, 'front')).toBe(trauflagen)
     expect(lagen(m, 'back')).toBe(trauflagen)
-    expect(lagen(m, 'left')).toBe(bisRinne(9.2, raster))
+    // das mittlere Feld liegt nicht exakt auf dem First (Feldmitte, 4 Felder à 2,07 m): Höhe dort ≈ 8,5 m
+    expect(lagen(m, 'left')).toBe(bisRinne(8.5, raster))
     // Ecken der Giebelseite sind niedriger als die Mitte
-    const links = m.fields.filter((f) => f.side === 'left' && f.levelIndex === bisRinne(9.2, raster) - 1)
+    const links = m.fields.filter((f) => f.side === 'left' && f.levelIndex === bisRinne(8.5, raster) - 1)
     expect(links.length).toBeGreaterThan(0)
     expect(links.length).toBeLessThan(m.fields.filter((f) => f.side === 'left' && f.levelIndex === 0).length)
   })
@@ -50,11 +51,12 @@ describe('Satteldach: Traufseiten kürzer, Giebelseiten folgen dem Dreieck', () 
     const m = generateCADModel(haus({ lengthM: 8, widthM: 11 }), 'layher-allround')
     const raster = m.levels[0].heightM
     expect(lagen(m, 'left')).toBe(bisRinne(6.3, raster))
-    expect(lagen(m, 'front')).toBe(bisRinne(9.2, raster))
+    // Feldmitte des mittleren Feldes liegt knapp unter dem First
+    expect(lagen(m, 'front')).toBe(bisRinne(8.5, raster))
   })
 })
 
-describe('Oberster Belag mindestens 1,5 m unter der Rinne', () => {
+describe('Oberster Belag mindestens 1,0 m unter der Rinne', () => {
   const belagOben = (m: ReturnType<typeof generateCADModel>, side: string) => Math.max(...m.levels.filter((l) => l.id.includes(`-${side}-`) && l.fields.length > 0).map((l) => l.topY))
   it('Beispiel Traufe 6,3 m (Lage 2,0 m): oberster Belag bei 4,0 m, nicht 8,0 m über der Rinne', () => {
     const m = generateCADModel(haus(), 'rux-super65')
@@ -63,7 +65,7 @@ describe('Oberster Belag mindestens 1,5 m unter der Rinne', () => {
     expect(belagOben(m, 'front')).toBeCloseTo(4, 5)
     expect(6.3 - belagOben(m, 'front')).toBeGreaterThanOrEqual(RINNE_ABSTAND_M)
   })
-  it('gilt für jede Traufhöhe: Abstand zur Rinne nie unter 1,5 m (solange mehr als eine Lage nötig wäre)', () => {
+  it('gilt für jede Traufhöhe: Abstand zur Rinne nie unter 1,0 m (solange mehr als eine Lage nötig wäre)', () => {
     for (const traufe of [4.2, 5.0, 5.4, 6.3, 7.4, 8.0, 9.5]) {
       const m = generateCADModel(haus({ heightM: traufe + 2.9, eavesHeightM: traufe }), 'rux-super65')
       const oben = belagOben(m, 'front')
@@ -100,10 +102,10 @@ describe('Oberster Belag mindestens 1,5 m unter der Rinne', () => {
     expect(m.gebauteFlaecheM2).toBeCloseTo(m.fields.reduce((s, f) => s + f.lengthM * 2, 0), 5)
     expect(m.gebauteFlaecheM2!).toBeLessThan(m.totalAreaM2)
   })
-  it('Lagenzahl und Lagenliste zählen nur das gebaute Gerüst (Beispiel: 3 statt 5 Lagen)', () => {
+  it('Lagenzahl und Lagenliste zählen nur das gebaute Gerüst (Beispiel: 4 statt 5 Lagen)', () => {
     const m = generateCADModel(haus(), 'rux-super65')
-    expect(m.levelCount).toBe(3)
-    expect(Math.max(...m.levels.map((l) => l.index))).toBe(2)
+    expect(m.levelCount).toBe(4)
+    expect(Math.max(...m.levels.map((l) => l.index))).toBe(3)
   })
 })
 

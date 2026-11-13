@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest'
 import { generateCADModel, type BuildingParams } from '../cad-engine'
 
 const basis = (ueberbauen: boolean): BuildingParams => ({
-  lengthM: 12, widthM: 9, heightM: 7, eavesHeightM: 0, roofHeightM: 0, roofForm: 'flachdach', floors: 2, sides: ['front', 'back', 'left', 'right'],
+  lengthM: 12, widthM: 9, heightM: 7, eavesHeightM: 0, roofHeightM: 0, roofForm: 'flachdach', floors: 2, sides: ['front', 'back', 'left', 'right'], geruestOptionen: { tuerenFreihalten: true },
   tueren: [{ id: 'a', side: 'front', offsetAlongM: 0, widthM: 1, heightM: 2.1 }, { id: 'b', side: 'back', offsetAlongM: 0, widthM: 1, heightM: 2.1, ...(ueberbauen ? { ueberbauen: true } : {}) }],
 } as BuildingParams)
 
@@ -22,7 +22,7 @@ describe('Tür überbauen', () => {
 
 describe('Durchfahrt', () => {
   it('große Öffnung hält mehrere Lagen frei und meldet die Überbrückung als nicht bemessen', () => {
-    const b = { lengthM: 14, widthM: 9, heightM: 10, eavesHeightM: 0, roofHeightM: 0, roofForm: 'flachdach', floors: 3, sides: ['front', 'back', 'left', 'right'],
+    const b = { lengthM: 14, widthM: 9, heightM: 10, eavesHeightM: 0, roofHeightM: 0, roofForm: 'flachdach', floors: 3, sides: ['front', 'back', 'left', 'right'], geruestOptionen: { tuerenFreihalten: true },
       tueren: [{ id: 'd', side: 'front', offsetAlongM: 0, widthM: 3.5, heightM: 4.5, durchfahrt: true }] } as BuildingParams
     const m = generateCADModel(b, 'layher-allround')
     expect(m.warnings.map((w) => w.code)).toContain('DURCHFAHRT_BRUECKE')
