@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { generateCADModel, type BuildingParams } from '@/lib/calculations/cad-engine'
+import { generateCADModel, generateScaffoldComponents, type BuildingParams } from '@/lib/calculations/cad-engine'
 import { Terrain, parseGelaendeLinie, formatGelaendeLinie } from '@/lib/calculations/gelaende'
 
 describe('Terrain / Geländelinie', () => {
@@ -40,5 +40,30 @@ describe('Gerüst gründet je Feld auf der Geländelinie', () => {
   it('Oberkante Belag liegt auf allen Seiten gleich (Traufe + 1,0 m)', () => {
     const top = (sd: string) => Math.max(...m.fields.filter((f) => f.side === sd).map((f) => f.positionY + 2))
     expect(Math.abs(top('back') - top('front'))).toBeLessThan(0.01)
+  })
+})
+
+import { gelaendeHoeheFn } from '@/lib/calculations/cad-engine'
+describe('3D-Gelände aus den Seitenlinien', () => {
+  it('trifft die Ecken und die Zwischenpunkte der Linie', () => {
+    const b = haus()
+    const f = gelaendeHoeheFn(b)
+    const L = b.lengthM, W = b.widthM
+    expect(f(-L / 2, -W / 2)).toBeCloseTo(1.55, 2) // hinten-links
+    expect(f(L / 2, -W / 2)).toBeCloseTo(-2.55, 2) // hinten-rechts
+    expect(f(-L / 2, W / 2)).toBeCloseTo(1.5, 2) // vorne-links
+    expect(f(L / 2, W / 2)).toBeCloseTo(-0.1, 2)
+  })
+})
+
+describe('Treppe beginnt auf dem Gelände', () => {
+  it('Unterkante der Treppe liegt auf dem Gelände vorne (gleichmäßiger Hang −1,4 m)', () => {
+    const b = haus()
+    b.geruestOptionen = { gelaendeProfilM: { front: [{ posM: 0, hoeheM: -1.4 }, { posM: 13.79, hoeheM: -1.4 }], back: [{ posM: 0, hoeheM: -1.4 }, { posM: 13.79, hoeheM: -1.4 }], left: [{ posM: 0, hoeheM: -1.4 }, { posM: 10.68, hoeheM: -1.4 }], right: [{ posM: 0, hoeheM: -1.4 }, { posM: 10.68, hoeheM: -1.4 }] } }
+    const m = generateCADModel(b, 'layher-allround')
+    const st = generateScaffoldComponents(m).find((c) => c.type === 'stair')
+    expect(st).toBeTruthy()
+    const unten = st!.position[1] - st!.scale[1] / 2
+    expect(unten).toBeCloseTo(-1.4, 1)
   })
 })
