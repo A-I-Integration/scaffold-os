@@ -20,10 +20,10 @@ describe('Ansicht mit Höhenkoten', () => {
     const m = generateCADModel(b({ geruestOptionen: { gelaendeSeiteM: { front: -1.4 } } }), 'layher-allround')
     const p = generateAnsicht(m, 'front')
     const t = p.elements.filter((e) => e.type === 'text').map((e) => e.text)
-    expect(t).toContain('Gelände −1,40'); expect(t).toContain('+0,60')
+    expect(t).toContain('Gelände −1,40'); expect(t).toContain('+1,00') // Beläge liegen auf den Ebenen Traufe + 1,0 m, nach unten gestuft
     const felder = p.elements.filter((e) => e.id.startsWith('field-'))
     expect(felder.length).toBeGreaterThan(0)
-    expect(Math.max(...felder.map((e) => e.y + (e.height ?? 0)))).toBeCloseTo(1.4, 2) // unterste Kante = Gelände
+    expect(Math.max(...felder.map((e) => e.y + (e.height ?? 0)))).toBeCloseTo(1, 2) // unterste Rahmenkante: Raster ab Traufe + 1,0 m; bis zum Gelände (−1,40) reicht die Spindel
   })
   it('nur Felder der gewählten Seite', () => {
     const m = generateCADModel(b(), 'layher-allround')
@@ -57,7 +57,7 @@ describe('Schnitt A-A', () => {
     expect(t).toContain('Gelände −1,40'); expect(t).toContain('Gelände +1,00'); expect(t).toContain('±0,00'); expect(t).toContain('First +9,00')
     const vorne = p.elements.filter((e) => e.id.startsWith('field-schnitt-front')), hinten = p.elements.filter((e) => e.id.startsWith('field-schnitt-back'))
     expect(vorne.length).toBeGreaterThan(hinten.length) // Talseite hat mehr Lagen
-    expect(Math.max(...vorne.map((e) => e.y + (e.height ?? 0)))).toBeCloseTo(1.4, 2)
+    expect(Math.max(...vorne.map((e) => e.y + (e.height ?? 0)))).toBeCloseTo(1, 2)
     expect(Math.max(...hinten.map((e) => e.y + (e.height ?? 0)))).toBeCloseTo(-1, 2)
     expect(Math.max(...vorne.map((e) => e.x))).toBeLessThan(Math.min(...hinten.map((e) => e.x))) // vorne links, hinten rechts
   })
