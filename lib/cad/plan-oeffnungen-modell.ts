@@ -72,6 +72,15 @@ export function seiteVonKante(kante: PlanKante, vorne: PlanKante): 'front' | 'ba
 }
 
 /**
+ * Modell-Seite zu einer Himmelsrichtung. ANNAHME: Plan oben = Norden (Ost = rechts, Süd = unten, West = links) – ohne Nordpfeil im Plan
+ * ist das die übliche Zeichnungsrichtung, die Person bestätigt sie.
+ */
+export function seiteVonHimmelsrichtung(richtung: 'nord' | 'ost' | 'sued' | 'west', vorne: PlanKante): 'front' | 'back' | 'left' | 'right' {
+  const kante: PlanKante = richtung === 'nord' ? 'oben' : richtung === 'ost' ? 'rechts' : richtung === 'sued' ? 'unten' : 'links'
+  return seiteVonKante(kante, vorne)
+}
+
+/**
  * Plan-Öffnungen in Modell-Öffnungen umsetzen.
  * `langeAchse` = Richtung der längeren Hauptkörper-Seite im Plan ('x' = waagerecht); vorne/hinten sind die langen Kanten.
  * `geschossHoeheM` bestimmt die Höhe, auf der die Obergeschosse beginnen.
