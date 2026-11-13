@@ -47,7 +47,7 @@ export default function TuerEditor({ building, onChange }: Props) {
         <div role='alert' className='rounded-lg border border-red-200 bg-red-50 p-2 text-[11px] text-red-800 space-y-1.5'>
           <div>„Türen freihalten“ ist ausgeschaltet: Das Gerüst wird durch die Türen gebaut, die Türen sind so nicht benutzbar.</div>
           <button type='button' className='rounded-lg bg-[#e8590c] px-2.5 py-1 text-[11px] font-medium text-white hover:bg-[#d04f0b]'
-            onClick={() => { const { tuerenFreihalten: _weg, ...rest } = building.geruestOptionen ?? {}; void _weg; onChange({ ...building, geruestOptionen: Object.keys(rest).length ? rest : undefined }) }}>
+            onClick={() => onChange({ ...building, geruestOptionen: { ...building.geruestOptionen, tuerenFreihalten: true } })}>
             Türen freihalten einschalten
           </button>
         </div>

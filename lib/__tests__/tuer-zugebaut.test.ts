@@ -6,7 +6,7 @@ const haus = (opt: BuildingParams['geruestOptionen'] = {}, tuer: Record<string, 
   lengthM: 12, widthM: 9, heightM: 9.2, eavesHeightM: 6.3, roofHeightM: 2.9, roofForm: 'satteldach', floors: 2, floorHeightsM: [],
   windowCount: 0, doorCount: 0, balconyCount: 0, overhangM: 0, setbackM: 0, sides: ['front', 'back', 'left', 'right'],
   tueren: [{ id: 'portal-1', side: 'right', offsetAlongM: -0.01, widthM: 1.2, heightM: 2.1, ...tuer } as never],
-  geruestOptionen: { breiteM: 1.09, ...opt },
+  geruestOptionen: { breiteM: 1.09, tuerenFreihalten: true, ...opt },
 })
 /** Bauteile (ohne Fußplatten/Anker) im Türbereich der rechten Wand: Wand x = 6,5, Tür mittig bei z = −5,01, 1,20 m breit, 2,10 m hoch */
 const imTuerbereich = (m: ReturnType<typeof generateCADModel>) => m.components3D.filter((c) => {

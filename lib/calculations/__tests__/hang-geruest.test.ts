@@ -41,7 +41,10 @@ describe('Hang: Gelände je Seite', () => {
     const b = basis({ roofForm: 'satteldach', eavesHeightM: 6, heightM: 9, geruestOptionen: { gelaendeSeiteM: { front: -2 } } })
     const m = generateCADModel(b, sys)
     expect(m.fields.length).toBeGreaterThan(0)
-    expect(m.fields.find((f) => f.side === 'front' && f.levelIndex === 0)!.positionY).toBeCloseTo(-2, 2)
+    // Raster ab Traufe + 1,0 m (waagerechte Beläge): die unterste Lage steht höchstens eine Lage über dem Gelände, der Rest ist Ausgleich
+    const unten = Math.min(...m.fields.filter((f) => f.side === 'front').map((f) => f.positionY))
+    expect(unten).toBeGreaterThanOrEqual(-2 - 1e-6)
+    expect(unten).toBeLessThan(0)
   })
 })
 

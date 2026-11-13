@@ -1159,7 +1159,7 @@ export default function BuildingForm({ building, systemId, onChange, onSystemCha
                       Treppe automatisch
                     </label>
                     <label className='flex items-center gap-2 text-xs text-[#424245] col-span-2' title='Vor jeder Tür im Erdgeschoss entsteht in der untersten Lage ein Durchgang (kein Fuß-Querriegel, keine Diagonale, Durchgangsrahmen-Binder).'>
-                      <input type='checkbox' checked={opt.tuerenFreihalten !== false} onChange={(e) => setzeOpt({ tuerenFreihalten: e.target.checked ? undefined : false })} />
+                      <input type='checkbox' checked={opt.tuerenFreihalten === true} onChange={(e) => setzeOpt({ tuerenFreihalten: e.target.checked ? true : undefined })} />
                       Türen freihalten (Durchgang)
                     </label>
                   </div>

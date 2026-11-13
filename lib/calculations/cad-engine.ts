@@ -462,8 +462,8 @@ export function calculateFieldDivision(
   return { fields, fieldLengthM: bestLength, remainderM: remainder, distribution }
 }
 
-/** Mindestabstand: oberster Belag unter der Rinne (Traufe) bzw. der Dachkante, in m. Vorgabe aus der Praxis – Dacharbeiten (Fanggerüst) brauchen ein eigenes, höheres Gerüst. */
-export const RINNE_ABSTAND_M = 1.5
+/** Der oberste Belag liegt höchstens so weit ÜBER der Rinne (Traufe) bzw. der Dachkante, in m (Vorgabe: Oberkante Belag = Traufe + 1,00 m; alle Beläge waagerecht). */
+export const BELAG_UEBER_RINNE_M = 1.0
 
 /**
  * Geländekote an den vier Gebäudeecken (m, bezogen auf ±0,00; negativ = tiefer), aus „Gelände je Seite“,
@@ -1379,10 +1379,10 @@ export function vorbautenAlsAbschnitte(b: BuildingParams, abstandWest: number, a
   }
   // Wandhöhe, bis zu der eingerüstet wird: bei geneigtem Dach mit Traufe bis zur Traufe, sonst Gebäudehöhe
   const geneigt = (b.roofForm === 'satteldach' || b.roofForm === 'walmdach' || b.roofForm === 'mansardendach') && b.eavesHeightM > 0 && b.eavesHeightM < b.heightM - 0.3
-  // Pultdach: wie ohne Vorbau gilt die Rinnen-Regel (oberster Belag mindestens RINNE_ABSTAND_M unter der Traufe; Seite der niedrigen Traufe
+  // Pultdach: wie ohne Vorbau gilt die Rinnen-Regel (oberster Belag höchstens BELAG_UEBER_RINNE_M über der Traufe; Seite der niedrigen Traufe
   // unbekannt → Traufe für alle Seiten). Rasterhöhe 2,0 m (Allround), mindestens eine Lage.
   const pultTraufe = b.roofForm === 'pultdach' && b.eavesHeightM > 0 && b.eavesHeightM < b.heightM - 0.3
-  const hoehe = pultTraufe ? Math.max(1, Math.floor((b.eavesHeightM - RINNE_ABSTAND_M) / 2 + 1e-6)) * 2 : geneigt ? b.eavesHeightM : b.heightM
+  const hoehe = pultTraufe ? Math.max(1, Math.floor((b.eavesHeightM + BELAG_UEBER_RINNE_M) / 2 + 1e-6)) * 2 : geneigt ? b.eavesHeightM : b.heightM
   const sections: BuildingSection[] = []
   for (let i = 0; i < sauber.length - 1; i++) {
     const von = sauber[i], bis = sauber[i + 1], mitte = (von + bis) / 2
@@ -1548,7 +1548,21 @@ export function generateCADModel(
     const l = gLinieSeite[sd]
     return l ? l.vonM + (l.bisM - l.vonM) * Math.min(1, Math.max(0, tAlong)) : gSeite(sd)
   }
-  const levelCalcSeite = (sd: SeitenId) => (system && gSeite(sd) !== 0 ? calculateLevels(building.heightM - gSeite(sd), system, gSeite(sd)) : levelCalc)
+  // Geneigtes Dach mit Hang: alle Beläge liegen auf denselben waagerechten Ebenen, verankert an Traufe + BELAG_UEBER_RINNE_M (die Dachkante führt,
+  // nicht das Gelände). Der Ausgleich zum Gelände läuft je Feld nach unten über Ständer und Spindeln (siehe Fußausgleich).
+  const traufeAnker = (): number | null => (giebel ? giebel.traufe : pult ? pult.traufe : traufeAllseitig ? building.eavesHeightM : null)
+  const hangVorhanden = (): boolean => Object.keys(hangSeiteM).length > 0 || Object.keys(gLinieSeite).length > 0
+  const ankerAktiv = (): boolean => !!system && traufeAnker() !== null && hangVorhanden()
+  const levelCalcSeite = (sd: SeitenId) => {
+    if (system && ankerAktiv()) {
+      const ok = traufeAnker()! + BELAG_UEBER_RINNE_M
+      const r = system.rasterHoeheM
+      const n0 = Math.max(1, Math.ceil((ok - gSeite(sd)) / r - 1e-6))
+      const offset = Math.round((ok - n0 * r) * 100) / 100
+      return calculateLevels(building.heightM + BELAG_UEBER_RINNE_M - offset, system, offset)
+    }
+    return system && gSeite(sd) !== 0 ? calculateLevels(building.heightM - gSeite(sd), system, gSeite(sd)) : levelCalc
+  }
   // Geneigtes Dach ohne Satteldach-Sonderfall (Walm-, Mansardendach/Zelt): alle Seiten sind Traufseiten und enden an der Traufe.
   // Pultdach: gespeichert ist nicht, welche Seite die niedrige Traufe hat – vorsichtig gilt die Traufe für alle Seiten, damit nie ein Belag über das Dach ragt.
   const pult = !abschnitte && !giebel && building.roofForm === 'pultdach' && building.eavesHeightM > 0 && building.eavesHeightM < building.heightM - 0.3 && opt?.pultNiedrigeSeite
@@ -1566,8 +1580,8 @@ export function generateCADModel(
   }
   const hatProfil = (['front', 'back', 'left', 'right'] as const).some((sd) => !!profilAn(sd))
   const dachRegel = !!giebel || !!pult || traufeAllseitig || hatProfil
-  /** Regel: Der oberste Belag liegt mindestens RINNE_ABSTAND_M unter der Rinne bzw. Dachkante – ein Gerüst wird nicht bis ans Dach hochgezogen. Mindestens eine Lage. */
-  const lagenBisRinne = (rinneM: number, sd: SeitenId): number => Math.min(levelCalcSeite(sd).levels, Math.max(1, Math.floor((rinneM - gSeite(sd) - RINNE_ABSTAND_M) / rasterLagenH + 1e-6)))
+  /** Regel: Der oberste Belag liegt höchstens BELAG_UEBER_RINNE_M über der Rinne bzw. Dachkante. Mindestens eine Lage. */
+  const lagenBisRinne = (rinneM: number, sd: SeitenId): number => { const lc = levelCalcSeite(sd); const basis = lc.levelsData[0]?.bottomY ?? gSeite(sd); return Math.min(lc.levels, Math.max(1, Math.floor((rinneM + BELAG_UEBER_RINNE_M - basis) / rasterLagenH + 1e-6))) }
   /** Pultdach: Wandhöhe an einer Stelle der Seite `sd` (p = Lage entlang der Wand ab Wandmitte; links/rechts: + = Richtung Vorderseite, vorne/hinten: + = nach rechts). */
   const pultWandHoeheM = (sd: SeitenId, p: number): number => {
     if (!pult) return building.heightM
@@ -1875,7 +1889,7 @@ export function generateCADModel(
         }
         // Schräger Hang: unterhalb der Geländelinie dieses Feldes steht kein Belag (Abtreppung). Am untersten Belag entsteht ein Fußausgleich.
         let fussT: AusgleichTeil | null = null
-        if (gLinieSeite[side as SeitenId]) {
+        if (gLinieSeite[side as SeitenId] || ankerAktiv()) {
           const tAlong = totalLength > 0 ? (vorherLaenge + fieldLength / 2) / totalLength : 0.5
           const fussM = gFussFeld(side as SeitenId, tAlong)
           if (levelData.bottomY < fussM - 1e-6) return // Belag läge unter dem Gelände → weglassen
@@ -1941,7 +1955,7 @@ export function generateCADModel(
   // Türen freihalten: In der Türöffnung darf keine Stange stehen. Alle Felder vor der Tür (bei Aufschlag nach außen
   // inklusive Flügelweite) werden über so viele Lagen freigehalten, dass der Durchgangsrahmen-Binder oberhalb der Tür liegt;
   // die Randfelder links und rechts der Öffnung werden verstärkt (zweiter Rahmen am Rand, zusätzliche Diagonale).
-  if (opt?.tuerenFreihalten !== false && !(building.umriss && building.umriss.length >= 3)) {
+  if (opt?.tuerenFreihalten === true && !(building.umriss && building.umriss.length >= 3)) {
     const tueren = generateBuildingFeatures(building).filter((f) => f.type === 'door')
     const betroffeneTueren = new Set<string>()
     const aussenTueren = new Set<string>()
@@ -2023,8 +2037,8 @@ export function generateCADModel(
     const seite0 = (activeSides[0] ?? 'front') as SeitenId
     const prof0 = profilAn(seite0)
     const rinneM = prof0 ? profilKanteM(prof0, 0) : giebel ? giebel.traufe : pult ? pultWandHoeheM(seite0, 0) : building.eavesHeightM
-    const obersterBelagM = gSeite(seite0) + lagenBisRinne(rinneM, seite0) * rasterLagenH
-    warnings.push({ type: 'info', code: 'OBERSTER_BELAG_RINNE', message: `Geneigtes Dach: Das Gerüst endet an der Rinne (Traufe ${rinneM.toFixed(2)} m) mit dem obersten Belag bei ${obersterBelagM.toFixed(2)} m – das sind ${(rinneM - obersterBelagM).toFixed(2)} m unter der Rinne (Regel: mindestens ${RINNE_ABSTAND_M.toFixed(1)} m). Für Dacharbeiten ist ein höheres Gerüst bzw. Fanggerüst gesondert zu planen.` })
+    const obersterBelagM = (levelCalcSeite(seite0).levelsData[0]?.bottomY ?? gSeite(seite0)) + lagenBisRinne(rinneM, seite0) * rasterLagenH
+    warnings.push({ type: 'info', code: 'OBERSTER_BELAG_RINNE', message: `Geneigtes Dach: Das Gerüst endet an der Rinne (Traufe ${rinneM.toFixed(2)} m) mit dem obersten Belag bei ${obersterBelagM.toFixed(2)} m – das sind ${Math.abs(obersterBelagM - rinneM).toFixed(2)} m ${obersterBelagM >= rinneM ? 'über' : 'unter'} der Rinne (Regel: höchstens ${BELAG_UEBER_RINNE_M.toFixed(1)} m darüber, alle Beläge waagerecht). Für Dacharbeiten ist ein höheres Gerüst bzw. Fanggerüst gesondert zu planen.` })
   }
   // Bei geneigtem Dach (Rinnen-Regel): nur die tatsächlich gebauten Lagen führen und zählen, nicht die Lagen bis zum First
   const maxLagenDach = dachRegel && fields.length ? Math.max(...fields.map((f) => f.levelIndex + 1)) : levelCalc.levels
