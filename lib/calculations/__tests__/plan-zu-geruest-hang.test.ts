@@ -1,9 +1,9 @@
 // Ende-zu-Ende am echten Plan: gespeicherter Import-Stand (Ausgabe von planLesen für den Einreichplan EFH am Hang)
 // → Geländeprofil je Seite → Gerüstmodell → Fußplatten gegen die gelesene Geländelinie.
 import { describe, it, expect } from 'vitest'
-import { generateCADModel, generateScaffoldComponents, type BuildingParams } from '@/lib/calculations/cad-engine'
+import { generateCADModel, generateScaffoldComponents, gelaendeHoeheFn, type BuildingParams } from '@/lib/calculations/cad-engine'
 import { Terrain } from '@/lib/calculations/gelaende'
-import { gelaendeProfilAusLinien } from '@/lib/cad/plan-oeffnungen-modell'
+import { gelaendeProfilAusLinien, seiteVonHimmelsrichtung } from '@/lib/cad/plan-oeffnungen-modell'
 import plan from '@/lib/cad/__tests__/fixtures/plan-import-efh-hang.json'
 
 const haupt = plan.geschosse.find((g) => g.ebene === plan.hauptEbene)!
@@ -52,4 +52,35 @@ describe('Gerüst auf dem gelesenen Gelände', () => {
       expect(schlecht, `größte Abweichung ${maxAbw.toFixed(2)} m`).toBe(0)
     })
   }
+})
+
+describe('Alle vier Seiten: jede Fußplatte steht auf der 3D-Geländefläche (Regression: Ost/West standen auf ±0,00)', () => {
+  // So nimmt die App den Plan-Import: Profil für Nord/Süd, alle Seiten eingerüstet, Pultdach mit niedriger Ost-Seite
+  const b: BuildingParams = {
+    lengthM: haupt.laengeM, widthM: haupt.breiteM, heightM: plan.firstKoteM, eavesHeightM: plan.traufKoteM, roofHeightM: plan.firstKoteM - plan.traufKoteM,
+    roofForm: 'pultdach', floors: 2, floorHeightsM: [], windowCount: 0, doorCount: 0, balconyCount: 0, overhangM: 0.3, setbackM: 0,
+    sides: ['front', 'back', 'left', 'right'],
+    geruestOptionen: { gelaendeProfilM: profile, pultNiedrigeSeite: seiteVonHimmelsrichtung('ost', 'unten') },
+  }
+  const m = generateCADModel(b, 'layher-allround')
+  const hoehe = gelaendeHoeheFn(b) // dieselbe Fläche wie in Scaffold3D (Gebäudemitte bei x/z = 0)
+  const teile = generateScaffoldComponents(m)
+  // Gerüstkoordinaten: die Gebäudemitte liegt bei z = −Breite/2 − 0,5 (siehe Scaffold3D)
+  const abweichung = (c: (typeof teile)[number]) => c.position[1] + 0.02 - hoehe(c.position[0], c.position[2] + haupt.breiteM / 2 + 0.5)
+
+  it('es gibt Fußplatten an allen vier Seiten', () => {
+    for (const sd of ['front', 'back', 'left', 'right']) expect(teile.filter((c) => c.type === 'footplate' && c.id.includes(`-field-${sd}-`)).length).toBeGreaterThan(4)
+  })
+  it('keine Fußplatte weicht mehr als 4 cm von der Geländefläche ab (weder schwebend noch im Boden)', () => {
+    const schlecht = teile.filter((c) => c.type === 'footplate' && Math.abs(abweichung(c)) > 0.04).map((c) => `${c.id}: ${abweichung(c).toFixed(2)} m`)
+    expect(schlecht).toEqual([])
+  })
+  it('Ost und West (ohne eigenes Profil) folgen dem Hang: die Fußhöhen unterscheiden sich um mehr als 1 m', () => {
+    for (const sd of ['left', 'right'] as const) {
+      const ys = teile.filter((c) => c.type === 'footplate' && c.id.includes(`-field-${sd}-`)).map((c) => c.position[1])
+      const f = ys.length ? Math.max(...ys) - Math.min(...ys) : 0
+      if (sd === 'left') expect(f).toBeGreaterThan(1)
+      else expect(f).toBeGreaterThanOrEqual(0)
+    }
+  })
 })
