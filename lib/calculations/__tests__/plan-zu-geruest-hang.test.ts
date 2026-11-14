@@ -138,3 +138,37 @@ describe('Wie die Darstellung: Fußplatten gegen das gezeichnete Geländenetz (R
     expect(schlecht).toBe(0)
   })
 })
+
+describe('Mit Vorbau (Abschnitts-Pfad der Engine): jeder Ständer steht auf dem gezeichneten Gelände, höchstens 1 cm', () => {
+  // Gespeicherter Arbeitsstand der Nutzerin: Pultdach, Vorbau hinten, Türen/Fenster, Eckhöhen NEBEN Profilen
+  const profil = {
+    back: [-2.45, -2.28, -2.1, -1.92, -1.74, -1.56, -1.38, -1.2, -1.02, -0.84, -0.66, -0.48, -0.3, 0.39].map((h, i) => ({ posM: i < 13 ? i * 1.0108 : 13.14, hoeheM: h })),
+    front: [-1.02, -0.88, -0.73, -0.59, -0.44, -0.29, -0.15, -0.09, -0.08, -0.08, -0.07, -0.06, -0.06, 0.43].map((h, i) => ({ posM: i < 13 ? 0.98 + i * 0.98 : 13.75, hoeheM: h })),
+  }
+  const basis: BuildingParams = {
+    lengthM: 13.8, widthM: 8.85, heightM: 6.94, eavesHeightM: 5.92, roofHeightM: 1.02, roofForm: 'pultdach', floors: 3, floorHeightsM: [],
+    windowCount: 12, doorCount: 7, balconyCount: 0, overhangM: 0, setbackM: 0, sides: ['front', 'left', 'right'],
+    tueren: [{ id: 'p4', side: 'front', offsetAlongM: 5.28, widthM: 1, heightM: 2.1 }, { id: 'p7', side: 'front', offsetAlongM: -1.22, widthM: 1.1, heightM: 2.1 }],
+    vorbauten: [{ id: 'v0', side: 'back', offsetAlongM: -1.6, breiteM: 4.4, tiefeM: 1.5, hoeheM: 5.92 }],
+    geruestOptionen: { gelaendeEckenM: { fl: -2.95, fr: 0, bl: -2.95, br: 0 }, pultNiedrigeSeite: 'right', gelaendeProfilM: profil },
+  } as BuildingParams
+  for (const sides of [['front', 'left', 'right'], ['front', 'back', 'left', 'right']] as const) {
+    it(`Seiten ${sides.join('/')}: Plattenunterseite ≤ 1 cm vom Geländenetz`, () => {
+      const m = generateCADModel({ ...basis, sides: [...sides] }, 'layher-allround')
+      const { hangM } = hangDaten(m.building)
+      const mesh = new THREE.Mesh(baueHangFlaeche(m.building, 13.8, 8.85, hangM), new THREE.MeshBasicMaterial({ side: THREE.DoubleSide }))
+      const g = new THREE.Group(); g.position.set(0, 0, -8.85 / 2 - 0.5); g.add(mesh); g.updateMatrixWorld(true)
+      const rc = new THREE.Raycaster()
+      const teile = generateScaffoldComponents(m).filter((c) => c.type === 'footplate')
+      expect(teile.length).toBeGreaterThan(40)
+      const schlecht: string[] = []
+      for (const c of teile) {
+        rc.set(new THREE.Vector3(c.position[0], 100, c.position[2]), new THREE.Vector3(0, -1, 0))
+        const t = rc.intersectObject(mesh, false)[0]
+        const d = t ? c.position[1] + FUSSPLATTE_UNTERKANTE_REL_M - t.point.y : NaN
+        if (!(Math.abs(d) <= 0.01)) schlecht.push(`${c.id} x=${c.position[0].toFixed(2)} z=${c.position[2].toFixed(2)}: ${d.toFixed(3)}`)
+      }
+      expect(schlecht).toEqual([])
+    })
+  }
+})

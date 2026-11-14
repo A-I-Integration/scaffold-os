@@ -329,7 +329,7 @@ export interface ScaffoldField {
   id: string
   /** Nur am Hang: unterstes Feld einer Spalte steht auf dem Gelände – Ausgleichsstiel und Fußspindel dieses Feldes (je Rahmenstiel) */
   /** Fußausgleich am untersten Belag dieses Feldes (Feldmitte). `von`/`bis`: Ausgleich der beiden Ständer am Feldanfang/-ende (in Richtung der Seite wie die Geländelinie), da das Gelände unter dem Feld abfällt. */
-  fuss?: { stielM: number; spindelM: number; spindel80: boolean; von?: AusgleichTeil; bis?: AusgleichTeil }
+  fuss?: { stielM: number; spindelM: number; spindel80: boolean; von?: AusgleichTeil; bis?: AusgleichTeil; /** äußere Ständerreihe, wenn dort anderes Gelände liegt als innen */ vonAussen?: AusgleichTeil; bisAussen?: AusgleichTeil }
   index: number
   lengthM: number
   widthM: number
@@ -837,7 +837,11 @@ export function generateScaffoldComponents(model: CADModel): ScaffoldComponent3D
       const rfSeite = seitenRahmen(field.side, building)
       const [lwx, lwz] = rfSeite.toWorld(-1, 0), [rwx, rwz] = rfSeite.toWorld(1, 0)
       const linksIstVon = feldEntlangFassade(field.side, lwx, lwz, building) < feldEntlangFassade(field.side, rwx, rwz, building)
-      const teilFuer = (tag: string): AusgleichTeil => (tag.startsWith('left') === linksIstVon ? fu.von : fu.bis) ?? fu
+      const teilFuer = (tag: string): AusgleichTeil => {
+        const vonSeite = tag.startsWith('left') === linksIstVon
+        const aussen = tag.endsWith('-aussen') ? (vonSeite ? fu.vonAussen : fu.bisAussen) : undefined
+        return aussen ?? (vonSeite ? fu.von : fu.bis) ?? fu
+      }
       const fuesse: [string, number, number][] = [['left', -lengthM / 2 + 0.02, 0], ['right', lengthM / 2 - 0.02, 0], ['left-aussen', -lengthM / 2 + 0.02, widthM - 0.075], ['right-aussen', lengthM / 2 - 0.02, widthM - 0.075]]
       fuesse.forEach(([tag, dx, dz]) => {
         if ((tag.startsWith('left') && dgLinks) || (tag.startsWith('right') && dgRechts)) return
@@ -1592,7 +1596,26 @@ export function generateCADModel(
       }
     }
   }
-  if (system && (abschnitte || (building.umriss && building.umriss.length >= 3))) { const h = hangIgnoriert(opt); if (h) warnings.push(h) }
+  // Vorbau (Gerüst in Abschnitten): Das Gelände folgt derselben Fläche wie die 3D-Darstellung (gelaendeHoeheFn über das ursprüngliche Gebäude).
+  // Sie ist über das Rechteck des Hauses definiert und läuft außerhalb mit den Randwerten weiter; Gerüstfüße und Fläche teilen damit eine Quelle.
+  const hangA: { boden: (x: number, z: number) => number; off: number; levelCalc: ReturnType<typeof calculateLevels> } | null = (() => {
+    if (!system || !abschnitte || !vorbauPlan || abschnitte.some((a) => helmAktiv(a, building))) return null
+    const gf = gelaendeHoeheFn(ursprungGebaeude)
+    const Lu = ursprungGebaeude.lengthM, Wu = ursprungGebaeude.widthM || 0
+    if (!(Lu > 0) || !(Wu > 0)) return null
+    let mn = Infinity, mx = -Infinity
+    const sd = building.sides && building.sides.length > 0 ? building.sides : ['front']
+    const n = 120
+    for (const seite of sd) for (let i = 0; i <= n; i++) {
+      const t = i / n
+      const h = seite === 'front' ? gf(-Lu / 2 + t * Lu, Wu / 2) : seite === 'back' ? gf(-Lu / 2 + t * Lu, -Wu / 2) : seite === 'left' ? gf(-Lu / 2, -Wu / 2 + t * Wu) : gf(Lu / 2, -Wu / 2 + t * Wu)
+      if (Number.isFinite(h)) { mn = Math.min(mn, h); mx = Math.max(mx, h) }
+    }
+    if (!Number.isFinite(mn) || (mx - mn < 0.01 && Math.abs(mn) < 0.01)) return null
+    const off = Math.round(Math.max(-15, Math.min(15, mn)) * 100) / 100
+    return { boden: (x, z) => gf(x, z + Wu / 2 + GEBAEUDE_SZENEN_VERSATZ_M), off, levelCalc: calculateLevels(building.heightM - off, system, off) }
+  })()
+  if (system && !hangA && (abschnitte || (building.umriss && building.umriss.length >= 3))) { const h = hangIgnoriert(opt); if (h) warnings.push(h) }
   // Schräger Hang je Seite (vonM/bisM): der Fuß treppt je Feld ab. Die 3D-Geländefläche nutzt dieselben Ecken.
   const gLinieSeite: Partial<Record<SeitenId, { vonM: number; bisM: number }>> = {}
   if (system && !abschnitte && !(building.umriss && building.umriss.length >= 3)) {
@@ -1843,7 +1866,7 @@ export function generateCADModel(
         const fixedRun = run.fz ?? fixed
         const fx = run.fixedO ?? fixedRun
         if (run.innen) { innenFlaecheM2 += run.tiefeM * run.hoeheM; innenFelder += run.div.fields }
-        const rl = system ? calculateLevels(run.hoeheM, system) : levelCalc
+        const rl = system ? (hangA ? calculateLevels(run.hoeheM - hangA.off, system, hangA.off) : calculateLevels(run.hoeheM, system)) : levelCalc
         rl.levelsData.forEach((levelData) => {
           let cum = 0
           run.div.distribution.forEach((fieldLength, fi) => {
@@ -1855,6 +1878,35 @@ export function generateCADModel(
             const fs = run.bein ?? side
             const isFB = fs === 'front' || fs === 'back'
             if (istInLuecke(fs, isFB ? along : along + w / 2 + 0.5, fieldLength)) { merkeLuecke(fs, levelData.index, fieldLength, run.hoeheM); return }
+            // Gelände (Vorbau + Hang): unterhalb der Geländelinie kein Belag; am untersten Belag Ausgleichsstiel + Fußspindel je Ständer
+            let fussA: (AusgleichTeil & { von?: AusgleichTeil; bis?: AusgleichTeil; vonAussen?: AusgleichTeil; bisAussen?: AusgleichTeil }) | null = null
+            if (hangA && system) {
+              const px = isFB ? along : fx, pz = isFB ? fixedRun : along
+              const pA = isFB ? [px - fieldLength / 2, pz] : [px, pz - fieldLength / 2], pB = isFB ? [px + fieldLength / 2, pz] : [px, pz + fieldLength / 2]
+              const gA = hangA.boden(pA[0], pA[1]), gB = hangA.boden(pB[0], pB[1]), gM = hangA.boden(px, pz)
+              // Äußere Ständerreihe: eine Gerüstbreite weiter außen (anderes Gelände, z. B. an den Flanken eines Vorbaus)
+              const nrm = fs === 'front' ? [0, 1] : fs === 'back' ? [0, -1] : fs === 'left' ? [-1, 0] : [1, 0]
+              const bAussen = scaffoldWidthM - 0.075
+              const gAo = hangA.boden(pA[0] + nrm[0] * bAussen, pA[1] + nrm[1] * bAussen), gBo = hangA.boden(pB[0] + nrm[0] * bAussen, pB[1] + nrm[1] * bAussen)
+              const fussHoch = Math.max(gA, gB, gM, gAo, gBo)
+              if (levelData.bottomY < fussHoch - 1e-6) return
+              if (levelData.bottomY - rasterLagenH < fussHoch - 1e-6) {
+                const t = ausgleichTeile(levelData.bottomY - gM, system)
+                if (t) {
+                  fussA = { ...t }
+                  const aA = feldEntlangFassade(fs as SeitenId, pA[0], pA[1], ursprungGebaeude), aB = feldEntlangFassade(fs as SeitenId, pB[0], pB[1], ursprungGebaeude)
+                  const [gVon, gBis] = aA <= aB ? [gA, gB] : [gB, gA]
+                  const tv = ausgleichTeile(Math.max(0, levelData.bottomY - gVon), system), tb = ausgleichTeile(Math.max(0, levelData.bottomY - gBis), system)
+                  if (tv) fussA.von = tv
+                  if (tb) fussA.bis = tb
+                  const [goVon, goBis] = aA <= aB ? [gAo, gBo] : [gBo, gAo]
+                  const tvo = ausgleichTeile(Math.max(0, levelData.bottomY - goVon), system), tbo = ausgleichTeile(Math.max(0, levelData.bottomY - goBis), system)
+                  if (tvo) fussA.vonAussen = tvo
+                  if (tbo) fussA.bisAussen = tbo
+                  abtreppFuesse.push({ side: fs as SeitenId, feldIndex: list.length, ausgleichM: Math.round((levelData.bottomY - gM) * 100) / 100, ...t })
+                }
+              }
+            }
             const field: ScaffoldField = {
               id: `field-${side}-${run.bein ? 'bein' + run.bein + '-' : ''}${levelData.index}-${list.length}`,
               index: list.length,
@@ -1866,6 +1918,7 @@ export function generateCADModel(
               side: fs as 'front' | 'back' | 'left' | 'right',
               levelIndex: levelData.index,
               isCorner: !run.bein && ((ri === 0 && fi === 0) || (ri === hauptRuns - 1 && fi === run.div.distribution.length - 1)),
+              ...(fussA ? { fuss: fussA } : {}),
             }
             list.push(field)
             proLage.set(levelData.index, list)
@@ -1876,7 +1929,7 @@ export function generateCADModel(
         if (run.hoeheM > 6) {
           const anchorLevels = Math.floor(rl.levels / 2)
           for (let al = 0; al < anchorLevels; al++) {
-            const yAnchor = (al * 2 + 2) * levelCalc.levelHeightM
+            const yAnchor = (al * 2 + 2) * levelCalc.levelHeightM + (hangA?.off ?? 0)
             for (let f = 0; f < run.div.fields; f += 2) {
               const along = run.along + f * run.div.fieldLengthM + run.div.fieldLengthM / 2
               const abA = run.dachAb ? run.dachAb(along) : run.abHoehe
@@ -1936,7 +1989,7 @@ export function generateCADModel(
           }
         }
       })
-      levelCalc.levelsData.forEach((levelData) => {
+      ;(hangA ? hangA.levelCalc : levelCalc).levelsData.forEach((levelData) => {
         levels.push({ id: `level-${side}-${levelData.index}`, index: levelData.index, heightM: levelCalc.levelHeightM, bottomY: levelData.bottomY, topY: levelData.topY, fields: proLage.get(levelData.index) || [] })
       })
       continue
