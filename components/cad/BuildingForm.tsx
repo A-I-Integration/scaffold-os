@@ -448,6 +448,20 @@ export default function BuildingForm({ building, systemId, onChange, onSystemCha
                 const nm = ({ nord: 'Norden', ost: 'Osten', sued: 'Süden', west: 'Westen' } as Record<string, string>)[pl.pultNiedrigeRichtung]
                 oeffnungenHinweis += ` Pultdach: niedrige Traufe im ${nm} laut Ansichten (Annahme: Plan oben = Norden) – im Tab Gebäude „Seite mit der niedrigen Traufe“ prüfen.`
               }
+              // Geländelinie je Ansicht (aus dem Bild gelesen) → Geländeprofil je Seite; die Nullhöhe ist der Fußboden des Erdgeschosses wie in den Koten
+              if (vorne && pl.gelaendeLinien?.length) {
+                const gp: NonNullable<NonNullable<typeof building.geruestOptionen>['gelaendeProfilM']> = {}
+                const rund = (v: number) => Math.round(v * 100) / 100
+                for (const l of pl.gelaendeLinien) {
+                  const sd = seiteVonHimmelsrichtung(l.art, vorne)
+                  const ges = l.profil[l.profil.length - 1].posM
+                  // Von außen gesehen läuft die Ansicht links → rechts; vorne und links laufen im Modell genauso, hinten und rechts entgegengesetzt
+                  gp[sd] = sd === 'back' || sd === 'right' ? l.profil.map((q) => ({ posM: rund(ges - q.posM), hoeheM: q.hoeheM })).reverse() : l.profil
+                }
+                patch.geruestOptionen = { ...(patch.geruestOptionen ?? building.geruestOptionen ?? {}), gelaendeProfilM: gp }
+                const unsicher = pl.gelaendeLinien.some((l) => !l.sicher)
+                oeffnungenHinweis += ` Hang: Geländelinie aus ${pl.gelaendeLinien.length} Ansicht${pl.gelaendeLinien.length === 1 ? '' : 'en'} gelesen (Höhen über die Koten-Dreiecke, ±0,00 = Erdgeschoss-Fußboden)${unsicher ? '; bei mindestens einer Ansicht ist die Lage der Hausecken geschätzt' : ''} – im Tab Gerüst unter „Geländeprofil je Seite“ prüfen.`
+              }
               // Rückfall: Geländekoten je Kante → tiefster Wert je Seite (nur bei deutlichem Gefälle, wenn keine Eckhöhen)
               if (vorne && !(patch.geruestOptionen as { gelaendeEckenM?: unknown } | undefined)?.gelaendeEckenM && pl.gelaendeJeKante?.length && pl.gelaende && pl.gelaende.unterschiedM >= 1) {
                 const gm: Partial<Record<'front' | 'back' | 'left' | 'right', number>> = {}

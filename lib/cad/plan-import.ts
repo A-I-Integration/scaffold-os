@@ -6,6 +6,7 @@
 import type { GefundenerGrundriss, PlanText } from './grundriss-finden'
 import type { VektorFlaeche } from './pdf-vektoren'
 import { oeffnungenFinden } from './oeffnungen-aus-plan'
+import type { GelaendeLinieAnsicht } from './gelaende-aus-ansichten'
 import { gelaendeAusPlan, gelaendeJeKante, gelaendeEckenAusPlan, type GelaendeAusPlan, type GelaendeJeKante } from './gelaende-aus-plan'
 import { hauptkoerperAusKontur, type Vorbau } from './hauptkoerper'
 import { oeffnungenAnKanten, vorbautenAnKanten, type PlanOeffnungAnKante, type PlanVorbauAnKante } from './plan-oeffnungen-modell'
@@ -48,6 +49,8 @@ export interface PlanImport {
   gelaendeJeKante?: GelaendeJeKante[]
   /** Geländehöhe an den Plan-Ecken des Hauptkörpers (tl/tr/bl/br, Plan-Koordinaten); Vorschlag zum Füllen der Eckhöhen. */
   gelaendeEckenPlan?: { tl?: number; tr?: number; bl?: number; br?: number }
+  /** Geländelinie je Ansicht (aus dem Bild gelesen, Höhenbezug über die Koten-Dreiecke); Vorschlag zum Füllen des Geländeprofils je Seite. */
+  gelaendeLinien?: GelaendeLinieAnsicht[]
 }
 
 const runde = (v: number) => Math.round(v * 100) / 100
@@ -168,7 +171,14 @@ export async function planLesen(datei: File): Promise<PlanImport | null> {
       const fl = await q.vektoren(nr, 0)
       if (!fl.length) continue
       const r = planImportAus(datei.name, ms, grundrisseFinden(fl, texte, meterJePunkt(ms)), texte, fl)
-      if (r) return r
+      if (r) {
+        try {
+          const { gelaendeLinienAusAnsichten } = await import('./gelaende-aus-ansichten')
+          const linien = await gelaendeLinienAusAnsichten(q, nr, texte, fl, ms, (() => { const hg = r.geschosse.find((g) => g.ebene === r.hauptEbene) ?? r.geschosse[0]; return [hg.laengeM, hg.breiteM] })())
+          if (linien.length) r.gelaendeLinien = linien
+        } catch { /* Geländelinie ist ein Vorschlag: ohne sie bleibt der Import wie bisher */ }
+        return r
+      }
     }
     return null
   } finally {

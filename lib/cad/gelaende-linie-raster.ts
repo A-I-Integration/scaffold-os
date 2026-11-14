@@ -98,3 +98,27 @@ export function profilAusLinie(linie: GelaendePunktPt[], k: number, ptJeM: numbe
   }
   return out
 }
+
+/** Wandfarbe (Putz hell-gelb/creme) */
+const istPutz = (r: number, g: number, b: number): boolean => r > 215 && g > 215 && b < 215 && b > 120 && r - b >= 25
+
+/**
+ * Ausdehnung der Fassade in der Ansicht aus den Putz-Pixeln (Spalten mit mindestens 1,4 m Putz).
+ * `sicher`: Die Breite weicht höchstens 6 % von einer bekannten Gebäudeseite (Länge oder Breite) ab. Sonst: Mitte der Putz-Spalten ± halbe Länge (unsicher).
+ */
+export function fassadenAusdehnung(bild: PixelBild, a: Bildausschnitt, ptJeM: number, moeglicheLaengenM: number[]): { xLinksPt: number; xRechtsPt: number; sicher: boolean } | null {
+  const spalten: number[] = []
+  const mind = 1.4 * ptJeM * a.pxProPt
+  for (let x = 0; x < bild.width; x++) {
+    let n = 0
+    for (let y = 0; y < bild.height; y++) { const i = (y * bild.width + x) * 4; if (istPutz(bild.data[i], bild.data[i + 1], bild.data[i + 2])) n++ }
+    if (n >= mind) spalten.push(a.x0Pt + (x + 0.5) / a.pxProPt)
+  }
+  if (spalten.length < 20 || !moeglicheLaengenM.length) return null
+  const min = spalten[0], max = spalten[spalten.length - 1]
+  const breiteM = (max - min) / ptJeM
+  const naechste = moeglicheLaengenM.reduce((p, q) => (Math.abs(q - breiteM) < Math.abs(p - breiteM) ? q : p))
+  if (Math.abs(breiteM - naechste) <= 0.06 * naechste) return { xLinksPt: min, xRechtsPt: max, sicher: true }
+  const mitte = (min + max) / 2, halb = (naechste * ptJeM) / 2
+  return { xLinksPt: mitte - halb, xRechtsPt: mitte + halb, sicher: false }
+}
