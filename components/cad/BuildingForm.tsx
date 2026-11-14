@@ -22,6 +22,7 @@ import { erkenneGrundriss, FORM_NAME } from '@/lib/cad/grundriss-erkennung'
 import { portalAlsTuer } from '@/lib/cad/portal-erkennung'
 import { analysiereDreiecke, schaetzeEinheit, spannweiten, nullpunktUeberTiefstem, abschnitteAusTeilen, abschnitteAusTeileListe, vorgabeAchseEinheit, type GebaeudeTeil } from '@/lib/cad/modell-analyse'
 import { planLesen } from '@/lib/cad/plan-import'
+import { pruefePlanImport, formatHinweis } from '@/lib/cad/datenqualitaet'
 import { parseGelaendeLinie, formatGelaendeLinie } from '@/lib/calculations/gelaende'
 import { oeffnungenFuerModell, vorbautenFuerModell } from '@/lib/cad/plan-oeffnungen-modell'
 import { gelaendeOptionenAusPlan } from '@/lib/cad/gelaende-optionen-aus-plan'
@@ -355,9 +356,11 @@ export default function BuildingForm({ building, systemId, onChange, onSystemCha
       // (die KI mischt gern Geschosse und rät die Dachform). Fehlt etwas, bleibt der KI-Wert stehen.
       let planVorspann = ''
       let oeffnungenHinweis = ''
+      { const fh = formatHinweis(file.name); if (fh && !/\.pdf$/i.test(file.name)) planVorspann = `Format: ${fh} Datenqualität: gelb, bis die Maße bestätigt sind. ` }
       if (/\.pdf$/i.test(file.name)) {
         try {
           const pl = await planLesen(file)
+          if (!pl) planVorspann = 'Kein Vektor-Grundriss im PDF lesbar (Raster- oder Kurvenzeichnung): Die Werte stammen aus der KI-Auswertung und sind nicht maßhaltig – Datenqualität gelb bis rot, bitte mit den Maßketten abgleichen. '
           if (pl) {
             const haupt = pl.geschosse.find((g) => g.ebene === pl.hauptEbene)
             const aus: string[] = []
@@ -401,6 +404,7 @@ export default function BuildingForm({ building, systemId, onChange, onSystemCha
               if (gel.geruestOptionen) patch.geruestOptionen = gel.geruestOptionen
               oeffnungenHinweis += gel.hinweis
             }
+            { const pb = pruefePlanImport(pl); const auff = pb.befunde.filter((x) => x.ampel !== 'gruen'); oeffnungenHinweis += ` Datenqualität: ${pb.ampel === 'gruen' ? 'grün' : pb.ampel === 'gelb' ? 'gelb' : 'rot'}.${auff.length ? ' ' + auff.map((x) => `${x.titel}: ${x.detail}`).join(' ') : ''}` }
             if (aus.length) planVorspann = `Aus den Zeichenlinien des Plans gelesen (Maßstab 1:${pl.massstab}): ${aus.join(', ')}.${haupt?.vorbauten?.length ? ` Vorbauten (ca. ${String(Math.round(haupt.vorbauten.reduce((a, v) => a + v.flaecheM2, 0) * 10) / 10).replace('.', ',')} m²) sind in Länge/Breite nicht enthalten – bitte prüfen.` : ''}${oeffnungenHinweis} `
           }
         } catch { /* kein lesbarer Vektor-Plan: es bleibt bei den KI-Werten */ }

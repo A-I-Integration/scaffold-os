@@ -1612,7 +1612,7 @@ export function generateCADModel(
       if (Number.isFinite(h)) { mn = Math.min(mn, h); mx = Math.max(mx, h) }
     }
     if (!Number.isFinite(mn) || (mx - mn < 0.01 && Math.abs(mn) < 0.01)) return null
-    const off = Math.round(Math.max(-15, Math.min(15, mn)) * 100) / 100
+    const off = Math.ceil(Math.max(-15, Math.min(15, mn)) * 100 - 1e-9) / 100 // nicht unter dem tiefsten Gelände beginnen: die unterste Lage liegt sonst im Boden und entfällt
     return { boden: (x, z) => gf(x, z + Wu / 2 + GEBAEUDE_SZENEN_VERSATZ_M), off, levelCalc: calculateLevels(building.heightM - off, system, off) }
   })()
   if (system && !hangA && (abschnitte || (building.umriss && building.umriss.length >= 3))) { const h = hangIgnoriert(opt); if (h) warnings.push(h) }
@@ -2218,7 +2218,10 @@ export function generateCADModel(
   const vorbauKennzahlen = vorbauPlan && abschnitte ? (() => {
     const hoehe = abschnitte[0].hoeheM
     const beine = vorbauPlan.beine.filter((b) => activeSides.includes(b.vorbauSeite))
-    const ebene0 = fields.filter((f) => f.levelIndex === 0)
+    // Am Hang beginnt das Gerüst nicht in Lage 0: gezählt wird die Lage mit den meisten Feldern (Grundlinie des Gerüsts)
+    const jeLage = new Map<number, ScaffoldField[]>()
+    fields.forEach((f) => jeLage.set(f.levelIndex, [...(jeLage.get(f.levelIndex) ?? []), f]))
+    const ebene0 = [...jeLage.entries()].sort((a, b) => b[1].length - a[1].length || a[0] - b[0])[0]?.[1] ?? []
     return {
       laenge: ebene0.reduce((t, f) => t + f.lengthM, 0),
       felder: ebene0.length,
@@ -2260,7 +2263,7 @@ export function generateCADModel(
     totalHeightM: building.heightM,
     totalAreaM2: vorbauKennzahlen ? vorbauKennzahlen.flaeche - lueckeFlaecheM2 : (abschnitte ? stufenFlaecheM2(abschnitte, activeSides, building.widthM || 0) + helmFlaecheM2 + innenFlaecheM2 - verdecktFlaecheM2 : activeSides.reduce((sum, sd) => sum + seitenWandFlaecheM2(sd, seitenLaengeM(sd)) - gSeite(sd as SeitenId) * seitenLaengeM(sd), 0)) - lueckeFlaecheM2,
     fieldCount: vorbauKennzahlen ? vorbauKennzahlen.felder : (abschnittDivs ? abschnittDivs.reduce((sum, d, i) => sum + (abschnitte![i].geruest === false ? 0 : d.fields), 0) + innenFelder : einfachSeitenDivs.reduce((sum, d) => sum + d.fields, 0)) - lueckeFelder,
-    levelCount: system && ankerAktiv() ? Math.max(...activeSides.map((sd) => levelCalcSeite(sd as SeitenId).levels)) : dachRegel ? maxLagenDach : (Object.keys(hangSeiteM).length ? Math.max(...activeSides.map((sd) => levelCalcSeite(sd as SeitenId).levels)) : levelCalc.levels),
+    levelCount: hangA ? new Set(fields.map((f) => f.levelIndex)).size : system && ankerAktiv() ? Math.max(...activeSides.map((sd) => levelCalcSeite(sd as SeitenId).levels)) : dachRegel ? maxLagenDach : (Object.keys(hangSeiteM).length ? Math.max(...activeSides.map((sd) => levelCalcSeite(sd as SeitenId).levels)) : levelCalc.levels),
     warnings
   }
 
