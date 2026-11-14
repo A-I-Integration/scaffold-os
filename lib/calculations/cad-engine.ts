@@ -1953,8 +1953,11 @@ export function generateCADModel(
         if (gLinieSeite[side as SeitenId] || ankerAktiv()) {
           const tAlong = totalLength > 0 ? (vorherLaenge + fieldLength / 2) / totalLength : 0.5
           const fussM = gFussFeld(side as SeitenId, tAlong)
-          if (levelData.bottomY < fussM - 1e-6) return // Belag läge unter dem Gelände → weglassen
-          if (levelData.bottomY - rasterLagenH < fussM - 1e-6) { // unterster Belag dieses Feldes: Ausgleich bis zum Gelände
+          // Maßgeblich ist das höchste Gelände unter dem Feld (bergseitiges Ende), nicht die Feldmitte: sonst steckt dort der Ständer im Boden
+          const tvF = totalLength > 0 ? vorherLaenge / totalLength : 0, tbF = totalLength > 0 ? (vorherLaenge + fieldLength) / totalLength : 1
+          const fussHoch = Math.max(fussM, gFussFeld(side as SeitenId, tvF), gFussFeld(side as SeitenId, tbF))
+          if (levelData.bottomY < fussHoch - 1e-6) return // Belag läge unter dem Gelände → weglassen
+          if (levelData.bottomY - rasterLagenH < fussHoch - 1e-6) { // unterster Belag dieses Feldes: Ausgleich bis zum Gelände
             const t = system ? ausgleichTeile(levelData.bottomY - fussM, system) : null
             if (t) {
               fussT = { ...t }
