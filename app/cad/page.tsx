@@ -18,6 +18,7 @@
 //   mit Zulassungen, Statik-Export, IFC-Export, VR.
 // ============================================================
 
+import { alsWarnungen, pruefeModell3D } from '@/lib/cad/datenqualitaet'
 import { fahrzeugeAus, waehleFahrzeug, type LogistikFahrzeug } from '@/lib/logistik-fahrzeug'
 import { BAUTEIL_FARBEN, type FarbModus } from '@/lib/cad/bauteil-farben'
 import { useState, useMemo, useCallback, useEffect, useRef } from 'react'
@@ -95,6 +96,13 @@ const COMPONENT_LABELS: Record<string, string> = {
   stair: 'Treppen', net: 'Netze', board: 'Bordbretter', protection_roof: 'Schutzdächer',
   safety_net: 'Fangnetze', load_plate: 'Lastplatten', corner_brace: 'Eckverbindungen', ladder: 'Leitern',
 }
+
+const pruefAmpel = (w?: { type: string; code: string }[]): 'gruen' | 'gelb' | 'rot' => {
+  const p = (w ?? []).filter((x) => x.code.startsWith('PRUEF_'))
+  return p.some((x) => x.type === 'error') ? 'rot' : p.length ? 'gelb' : 'gruen'
+}
+const pruefAmpelText = (w?: { type: string; code: string }[]) => ({ gruen: 'Prüfung grün', gelb: 'Prüfung gelb', rot: 'Prüfung rot' })[pruefAmpel(w)]
+const pruefAmpelFarbe = (w?: { type: string; code: string }[]) => ({ gruen: '#15803d', gelb: '#b45309', rot: '#b91c1c' })[pruefAmpel(w)]
 
 export default function CADPage() {
   const router = useRouter()
@@ -608,7 +616,9 @@ export default function CADPage() {
           message: `${isolierteKnoten.length} Knotenpunkt(e) ohne Querriegel-/Diagonalen-Anbindung gefunden (${graph.nodes.length} Knoten, ${graph.edges.length} Kanten insgesamt) – ungewöhnlich bei einer regulär generierten Planung, bitte prüfen.`,
         }]
       : []
-    newModel.warnings = [...newModel.warnings, ...collisionWarnings, ...featureWarnings, ...geometrieWarnings, ...knotenWarnings]
+    // Zentrale 3D-Prüfung vor der Freigabe (Geometrie, Seiten, Füße auf dem Gelände, Feldzahl/Fläche/Bauteilliste)
+    const pruefWarnings = alsWarnungen(pruefeModell3D(newModel))
+    newModel.warnings = [...newModel.warnings, ...collisionWarnings, ...featureWarnings, ...geometrieWarnings, ...knotenWarnings, ...pruefWarnings]
     setModel(newModel)
     setGeruestStand(eingabeStandGeruest(building, systemId))
     setRemovedGroups([])
@@ -1084,7 +1094,7 @@ export default function CADPage() {
         <div>
           <h1 className='text-lg font-semibold text-[#1d1d1f]'>Gerüstbau-CAD</h1>
           <p className='text-xs text-[#86868b]'>
-            {modelWithManual?.system ? `${modelWithManual.system.hersteller} ${modelWithManual.system.systemName}` : 'Kein System'} · {modelWithManual?.fieldCount} Felder · {modelWithManual?.levelCount} Lagen · {modelWithManual?.totalAreaM2.toFixed(1)} m² · {modelWithManual?.components3D.length || 0} Bauteile · {features.length} Gebäudemerkmale
+            {modelWithManual?.system ? `${modelWithManual.system.hersteller} ${modelWithManual.system.systemName}` : 'Kein System'} · {modelWithManual?.fieldCount} Felder · {modelWithManual?.levelCount} Lagen · {modelWithManual?.totalAreaM2.toFixed(1)} m² · {modelWithManual?.components3D.length || 0} Bauteile · {features.length} Gebäudemerkmale · <span title='3D-Prüfung: Geometrie, Seiten, Füße auf dem Gelände, Feldzahl, Fläche, Bauteilliste' style={{ fontWeight: 600, color: pruefAmpelFarbe(modelWithManual?.warnings) }}>{pruefAmpelText(modelWithManual?.warnings)}</span>
           </p>
         </div>
         <div className='flex items-center gap-2'>
