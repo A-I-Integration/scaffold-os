@@ -24,14 +24,6 @@ export function ohneAusreisser(p: { posM: number; hoeheM: number }[], tolM = 0.7
     const nb = p.slice(Math.max(0, i - 2), i + 3).map((x) => x.hoeheM).sort((a, b) => a - b)
     return Math.abs(q.hoeheM - nb[Math.floor(nb.length / 2)]) <= tolM
   })
-  // Endpunkte (Bewuchs am Rand): nur wenn das Gelände davor annähernd eben ist (Nachbarn < 0,1 m Unterschied) und der Randpunkt um mehr als 0,35 m abspringt, fällt er weg; ein steiler Verlauf bleibt unangetastet
-  const springt = (e: { posM: number; hoeheM: number }, n1: { posM: number; hoeheM: number }, n2: { posM: number; hoeheM: number }) => {
-    const d = n1.posM - n2.posM
-    const erw = d === 0 ? n1.hoeheM : n1.hoeheM + ((n1.hoeheM - n2.hoeheM) / d) * (e.posM - n1.posM)
-    return Math.abs(n1.hoeheM - n2.hoeheM) < 0.1 && Math.abs(e.hoeheM - erw) > 0.35
-  }
-  if (r.length >= 5 && springt(r[r.length - 1], r[r.length - 2], r[r.length - 3])) r.pop()
-  if (r.length >= 5 && springt(r[0], r[1], r[2])) r.shift()
   return r
 }
 
