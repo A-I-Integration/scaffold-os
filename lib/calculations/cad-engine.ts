@@ -489,19 +489,25 @@ export function eckenGelaendeM(building: BuildingParams): { fl: number; fr: numb
     return prof && prof.length ? Math.min(...prof) : 0
   }
   const terr = new Terrain(o?.gelaendeProfilM)
-  const ende = (sd: 'front' | 'back' | 'left' | 'right', which: 'von' | 'bis'): number => {
+  /** Bekannte Geländehöhe am Anfang/Ende einer Seite; undefined, wenn für diese Seite nichts angegeben ist. */
+  const endeBekannt = (sd: 'front' | 'back' | 'left' | 'right', which: 'von' | 'bis'): number | undefined => {
     const pl = terr.linie(sd)
     if (pl) return which === 'von' ? pl[0].hoeheM : pl[pl.length - 1].hoeheM
     const l = lm[sd]
     if (l && Number.isFinite(l.vonM) && Number.isFinite(l.bisM)) return which === 'von' ? l.vonM : l.bisM
-    return flach(sd)
+    if (typeof gm[sd] === 'number' && Number.isFinite(gm[sd])) return gm[sd] as number
+    const prof = o?.seitenProfil?.[sd]?.map((q) => q.gelaendeM).filter((g): g is number => typeof g === 'number' && Number.isFinite(g))
+    return prof && prof.length ? Math.min(...prof) : undefined
   }
-  const tief = (a: number, b: number) => Math.min(a, b)
+  const ende = (sd: 'front' | 'back' | 'left' | 'right', which: 'von' | 'bis'): number => endeBekannt(sd, which) ?? flach(sd)
+  // Eine Seite ohne Angabe sagt nichts über die Ecke: es zählen nur die Seiten, für die das Gelände bekannt ist (sonst zöge „unbekannt = 0“ die Ecke zur Nulllinie)
+  const tief = (a: number, b: number, bekanntA = true, bekanntB = true) => (bekanntA && bekanntB ? Math.min(a, b) : bekanntA ? a : bekanntB ? b : Math.min(a, b))
+  const k = (sd: 'front' | 'back' | 'left' | 'right', w: 'von' | 'bis') => endeBekannt(sd, w) !== undefined
   return {
-    fl: tief(ende('front', 'von'), ende('left', 'bis')),
-    fr: tief(ende('front', 'bis'), ende('right', 'bis')),
-    bl: tief(ende('back', 'von'), ende('left', 'von')),
-    br: tief(ende('back', 'bis'), ende('right', 'von')),
+    fl: tief(ende('front', 'von'), ende('left', 'bis'), k('front', 'von'), k('left', 'bis')),
+    fr: tief(ende('front', 'bis'), ende('right', 'bis'), k('front', 'bis'), k('right', 'bis')),
+    bl: tief(ende('back', 'von'), ende('left', 'von'), k('back', 'von'), k('left', 'von')),
+    br: tief(ende('back', 'bis'), ende('right', 'von'), k('back', 'bis'), k('right', 'von')),
   }
 }
 
@@ -1073,9 +1079,22 @@ export function generateScaffoldComponents(model: CADModel): ScaffoldComponent3D
     // Am Hang steht der Gerüstfuß unter der untersten Lage (Ausgleichsstiel + Spindel): die Treppe beginnt auf dem Gelände, nicht auf dem Belag
     const tiefe = (t?: { stielM: number; spindelM: number }) => (t ? t.stielM + t.spindelM : 0)
     const fussUnter = (f: ScaffoldField) => (f.fuss ? Math.max(tiefe(f.fuss), tiefe(f.fuss.von), tiefe(f.fuss.bis)) : 0)
-    // Die Treppe ist ein starres Teil: sie steht am tiefsten Geländepunkt ihrer Felder auf (am höheren Ende steckt sie leicht im Boden, schwebt aber nirgends)
-    const fussLuecke = Math.max(0, fussUnter(fa), fussUnter(fb))
-    const y0 = lv(0).bottomY - fussLuecke
+    // Die Treppe ist ein starres Teil mit waagerechten Podesten: Sie steht am bergseitigen (höheren) Ende auf dem Gelände.
+    // Die Pfosten am tieferen Ende werden bis zu ihrem Geländepunkt verlängert (Ausgleich), damit nichts im Boden steckt oder schwebt.
+    const vonIstLinks = (f: ScaffoldField): boolean => {
+      const r = feldRahmen(f, building)
+      const [lx, lz] = r.toWorld(-1, 0), [rx, rz] = r.toWorld(1, 0)
+      return feldEntlangFassade(f.side, lx, lz, building) < feldEntlangFassade(f.side, rx, rz, building)
+    }
+    const tiefeEnde = (f: ScaffoldField, links: boolean): number => {
+      if (!f.fuss) return 0
+      const t = (links === vonIstLinks(f) ? f.fuss.von : f.fuss.bis) ?? f.fuss
+      return tiefe(t)
+    }
+    const fussTiefe = { l: tiefeEnde(fa, true), r: tiefeEnde(fb, false) }
+    const dBerg = Math.max(0, Math.min(fussTiefe.l, fussTiefe.r))
+    const y0 = lv(0).bottomY - dBerg
+    if (Math.abs(fussTiefe.l - fussTiefe.r) > 0.55 + 1e-6) warnEinmal('TREPPE_FUSS_AUSGLEICH', 'info', `Das Gelände fällt unter der Treppe um ${Math.abs(fussTiefe.l - fussTiefe.r).toFixed(2).replace('.', ',')} m: die Pfosten am tieferen Ende brauchen mehr Ausgleich als eine Fußspindel (Stiel ergänzen).`)
     const hGes = lv(lagen - 1).topY - y0
     // Steighöhe je Lauf aus den tatsächlichen Lagenhöhen (Lauf f endet auf dem Belag der Lage f)
     const rises = Array.from({ length: lagen }, (_, j) => lv(j).topY - (j === 0 ? y0 : lv(j - 1).topY))
@@ -1114,7 +1133,9 @@ export function generateScaffoldComponents(model: CADModel): ScaffoldComponent3D
         const z = zS + dz * (W / 2 - 0.03)
         const tag = `${x < cx ? 'l' : 'r'}${dz < 0 ? 'i' : 'a'}`
         components.push({ id: `stair-pfosten-${tag}`, type: 'railing', articleNumber: 'SG-001', name: 'Treppenpfosten', position: [x, y0 + hPfosten / 2, z], rotation: [0, 0, 0], scale: [0.04, hPfosten, 0.04], color: colorRailing, levelId: lv(0).id })
-        components.push({ id: `stair-fuss-${tag}`, type: 'footplate', articleNumber: 'FP-001', name: 'Fußplatte', position: [x, y0 - 0.02, z], rotation: [0, 0, 0], scale: [0.15, 0.04, 0.15], color: colorFoot, levelId: lv(0).id })
+        const extra = Math.max(0, (x < cx ? fussTiefe.l : fussTiefe.r) - dBerg) // Pfosten verlängert bis zum Gelände dieses Fußes
+        if (extra > 0.01) components.push({ id: `stair-ausgleich-${tag}`, type: 'ausgleich', articleNumber: 'FS-060', name: 'Fußspindel (Treppe)', extern: true, position: [x, y0 - extra / 2, z], rotation: [0, 0, 0], scale: [0.04, extra, 0.04], color: colorFoot, levelId: lv(0).id })
+        components.push({ id: `stair-fuss-${tag}`, type: 'footplate', articleNumber: 'FP-001', name: 'Fußplatte', position: [x, y0 - extra - 0.02, z], rotation: [0, 0, 0], scale: [0.15, 0.04, 0.15], color: colorFoot, levelId: lv(0).id })
       }
     }
     for (let ci = erster; ci < components.length; ci++) bauteilInWelt(components[ci], rf)
@@ -1600,6 +1621,23 @@ export function generateCADModel(
     const min = terrain.tiefsteM(sd)!
     hangSeiteM[sd] = min
     gLinieSeite[sd] = { vonM: l[0].hoeheM, bisM: l[l.length - 1].hoeheM }
+  }
+  // Hat nur ein Teil der Seiten ein Geländeprofil (z. B. Nord/Süd aus den Ansichten), folgen die übrigen Seiten der Fläche durch die Eckhöhen –
+  // dieselbe Quelle wie die 3D-Geländefläche (gelaendeHoeheFn). Sonst stünde dort das Gerüst auf ±0,00, obwohl das Gelände schräg verläuft.
+  if (system && !abschnitte && !(building.umriss && building.umriss.length >= 3) && !opt?.gelaendeEckenM && (['front', 'back', 'left', 'right'] as const).some((sd) => terrain.hatLinie(sd))) {
+    const E = eckenGelaendeM(building)
+    const r = (x: number) => Math.round(Math.max(-15, Math.min(15, x)) * 100) / 100
+    const linieOf: Record<SeitenId, { vonM: number; bisM: number }> = {
+      front: { vonM: r(E.fl), bisM: r(E.fr) }, back: { vonM: r(E.bl), bisM: r(E.br) },
+      left: { vonM: r(E.bl), bisM: r(E.fl) }, right: { vonM: r(E.br), bisM: r(E.fr) },
+    }
+    for (const sd of ['front', 'back', 'left', 'right'] as const) {
+      if (terrain.hatLinie(sd) || gLinieSeite[sd]) continue
+      const { vonM, bisM } = linieOf[sd]
+      const min = Math.min(vonM, bisM)
+      if (Math.abs(min) >= 0.01 || Math.abs(vonM - bisM) >= 0.01) hangSeiteM[sd] = min
+      if (Math.abs(vonM - bisM) >= 0.01) gLinieSeite[sd] = { vonM, bisM }
+    }
   }
   const gSeite = (sd: SeitenId): number => hangSeiteM[sd] ?? 0
   /** Geländekote in der Feldmitte (tAlong 0..1 ab Seitenanfang). Schräger Hang: interpoliert; sonst der Seitenwert. */
