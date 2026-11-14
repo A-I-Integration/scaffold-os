@@ -87,3 +87,18 @@ describe('Fassadenausdehnung und Ausreißer', () => {
     expect(ohneAusreisser(p).length).toBe(4)
   })
 })
+
+describe('Ausreißer am Rand', () => {
+  it('entfernt einen springenden Endpunkt, behält einen glatten', () => {
+    const lin = [0, 1, 2, 3, 4, 5].map((x) => ({ posM: x, hoeheM: -x * 0.2 }))
+    expect(ohneAusreisser([...lin.slice(0, 5), { posM: 5, hoeheM: 0.5 }]).length).toBe(5)
+    expect(ohneAusreisser(lin).length).toBe(6)
+  })
+})
+
+describe('Steiler Rand bleibt', () => {
+  it('behält einen steil beginnenden Hang', () => {
+    const p = [{ posM: 0, hoeheM: 0.39 }, { posM: 1, hoeheM: -0.3 }, { posM: 2, hoeheM: -0.48 }, { posM: 3, hoeheM: -0.66 }, { posM: 4, hoeheM: -0.84 }]
+    expect(ohneAusreisser(p).length).toBe(5)
+  })
+})
