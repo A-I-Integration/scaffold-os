@@ -4,6 +4,9 @@ import { describe, it, expect } from 'vitest'
 import { generateCADModel, generateScaffoldComponents, gelaendeHoeheFn, type BuildingParams } from '@/lib/calculations/cad-engine'
 import { Terrain } from '@/lib/calculations/gelaende'
 import { gelaendeProfilAusLinien, seiteVonHimmelsrichtung } from '@/lib/cad/plan-oeffnungen-modell'
+import * as THREE from 'three'
+import { baueHangFlaeche, hangDaten, FUSSPLATTE_UNTERKANTE_REL_M } from '@/lib/cad/hang-geometrie'
+import { gelaendeOptionenAusPlan } from '@/lib/cad/gelaende-optionen-aus-plan'
 import plan from '@/lib/cad/__tests__/fixtures/plan-import-efh-hang.json'
 
 const haupt = plan.geschosse.find((g) => g.ebene === plan.hauptEbene)!
@@ -82,5 +85,56 @@ describe('Alle vier Seiten: jede Fußplatte steht auf der 3D-Geländefläche (Re
       if (sd === 'left') expect(f).toBeGreaterThan(1)
       else expect(f).toBeGreaterThanOrEqual(0)
     }
+  })
+})
+
+describe('Wie die Darstellung: Fußplatten gegen das gezeichnete Geländenetz (Raycast), mit Gruppenversatz und Plattenform', () => {
+  // Import-Ablauf der App: gelaendeOptionenAusPlan wie in BuildingForm, inklusive der Talseiten-Eckhöhen früherer Eingaben
+  const gel = gelaendeOptionenAusPlan(plan as never, 'unten', { gelaendeEckenM: { fl: -2.95, fr: 0, bl: -2.95, br: 0 } }, 'pultdach')
+  const W = haupt.breiteM
+  const b: BuildingParams = {
+    lengthM: haupt.laengeM, widthM: W, heightM: plan.firstKoteM, eavesHeightM: plan.traufKoteM, roofHeightM: plan.firstKoteM - plan.traufKoteM,
+    roofForm: 'pultdach', floors: 2, floorHeightsM: [], windowCount: 0, doorCount: 0, balconyCount: 0, overhangM: 0.3, setbackM: 0,
+    sides: ['front', 'back', 'left', 'right'], geruestOptionen: gel.geruestOptionen,
+  }
+  const m = generateCADModel(b, 'layher-allround')
+  const teile = generateScaffoldComponents(m).filter((c) => c.type === 'footplate')
+  const { hangM } = hangDaten(m.building)
+  // Szene wie Scaffold3D: Gruppe „hangHebung“ (y) enthält das Gelände-Mesh (in Gebäudekoordinaten, z-Versatz −W/2 − 0,5) und die Gerüstteile (Weltkoordinaten)
+  const mesh = new THREE.Mesh(baueHangFlaeche(m.building, haupt.laengeM, W, hangM), new THREE.MeshBasicMaterial({ side: THREE.DoubleSide }))
+  const gelaendeGruppe = new THREE.Group(); gelaendeGruppe.position.set(0, 0, -W / 2 - 0.5); gelaendeGruppe.add(mesh)
+  const hebung = new THREE.Group(); hebung.position.set(0, hangM, 0); hebung.add(gelaendeGruppe); hebung.updateMatrixWorld(true)
+  const rc = new THREE.Raycaster()
+  const abstand = (c: (typeof teile)[number]) => {
+    const unterkante = c.position[1] + FUSSPLATTE_UNTERKANTE_REL_M + hangM // Unterseite der gezeichneten Platte in Weltkoordinaten
+    rc.set(new THREE.Vector3(c.position[0], 100, c.position[2]), new THREE.Vector3(0, -1, 0))
+    const t = rc.intersectObject(mesh, false)[0]
+    return t ? unterkante - t.point.y : NaN
+  }
+  it('die Eckhöhen früherer Eingaben stehen nicht gegen die gelesene Linie (Profil hat Vorrang, Eckwerte aus dem Profil)', () => {
+    expect(gel.geruestOptionen?.gelaendeProfilM?.front).toBeDefined()
+    expect(gel.geruestOptionen?.gelaendeEckenM).toBeUndefined()
+  })
+  it('jede Fußplatte trifft das gezeichnete Gelände: Abstand der Plattenunterseite höchstens 3 cm', () => {
+    expect(teile.length).toBeGreaterThan(60)
+    const abw = teile.map((c) => ({ id: c.id, x: c.position[0], z: c.position[2], d: abstand(c) }))
+    expect(abw.filter((a) => Number.isNaN(a.d))).toEqual([])
+    const schlecht = abw.filter((a) => Math.abs(a.d) > 0.03).map((a) => `${a.id} x=${a.x.toFixed(2)} z=${a.z.toFixed(2)}: ${a.d.toFixed(3)} m`)
+    expect(schlecht).toEqual([])
+  })
+  it('auch mit den alten Talseiten-Eckhöhen NEBEN dem Profil (Stand vor der Korrektur) bleiben alle Füße auf dem Gelände', () => {
+    const alt: BuildingParams = { ...b, geruestOptionen: { ...gel.geruestOptionen, gelaendeEckenM: { fl: -2.95, fr: 0, bl: -2.95, br: 0 } } }
+    const ma = generateCADModel(alt, 'layher-allround')
+    const meshA = new THREE.Mesh(baueHangFlaeche(ma.building, haupt.laengeM, W, hangDaten(ma.building).hangM), new THREE.MeshBasicMaterial({ side: THREE.DoubleSide }))
+    const hA = hangDaten(ma.building).hangM
+    const g = new THREE.Group(); g.position.set(0, 0, -W / 2 - 0.5); g.add(meshA); g.updateMatrixWorld(true)
+    let schlecht = 0
+    for (const c of generateScaffoldComponents(ma).filter((x) => x.type === 'footplate')) {
+      rc.set(new THREE.Vector3(c.position[0], 100, c.position[2]), new THREE.Vector3(0, -1, 0))
+      const t = rc.intersectObject(meshA, false)[0]
+      if (!t || Math.abs(c.position[1] + FUSSPLATTE_UNTERKANTE_REL_M - t.point.y) > 0.03) schlecht++
+    }
+    expect(hA).toBeGreaterThan(0)
+    expect(schlecht).toBe(0)
   })
 })

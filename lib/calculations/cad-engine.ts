@@ -478,9 +478,7 @@ export const BELAG_UEBER_RINNE_M = 1.0
 export function eckenGelaendeM(building: BuildingParams): { fl: number; fr: number; bl: number; br: number } {
   const o = building.geruestOptionen
   const ec = o?.gelaendeEckenM
-  if (ec && (['fl', 'fr', 'bl', 'br'] as const).every((k) => Number.isFinite(ec[k]))) {
-    return { fl: ec.fl, fr: ec.fr, bl: ec.bl, br: ec.br }
-  }
+  const ecGueltig = !!(ec && (['fl', 'fr', 'bl', 'br'] as const).every((k) => Number.isFinite(ec[k])))
   const lm = o?.gelaendeLinieSeiteM ?? {}
   const gm = o?.gelaendeSeiteM ?? {}
   const flach = (sd: 'front' | 'back' | 'left' | 'right'): number => {
@@ -503,11 +501,21 @@ export function eckenGelaendeM(building: BuildingParams): { fl: number; fr: numb
   // Eine Seite ohne Angabe sagt nichts über die Ecke: es zählen nur die Seiten, für die das Gelände bekannt ist (sonst zöge „unbekannt = 0“ die Ecke zur Nulllinie)
   const tief = (a: number, b: number, bekanntA = true, bekanntB = true) => (bekanntA && bekanntB ? Math.min(a, b) : bekanntA ? a : bekanntB ? b : Math.min(a, b))
   const k = (sd: 'front' | 'back' | 'left' | 'right', w: 'von' | 'bis') => endeBekannt(sd, w) !== undefined
-  return {
+  const aus = {
     fl: tief(ende('front', 'von'), ende('left', 'bis'), k('front', 'von'), k('left', 'bis')),
     fr: tief(ende('front', 'bis'), ende('right', 'bis'), k('front', 'bis'), k('right', 'bis')),
     bl: tief(ende('back', 'von'), ende('left', 'von'), k('back', 'von'), k('left', 'von')),
     br: tief(ende('back', 'bis'), ende('right', 'von'), k('back', 'bis'), k('right', 'von')),
+  }
+  if (!ecGueltig) return aus
+  // Vier Eckhöhen sind angegeben: Eine Ecke, an der eine Seite eine Geländelinie (Profil) hat, folgt dieser Linie – sonst gälten an derselben
+  // Ecke zwei Höhen (Linie der Seite und Eckwert), und das Gerüst der Nachbarseite stünde im Boden oder schwebte.
+  const hatP = (sd: 'front' | 'back' | 'left' | 'right') => !!terr.linie(sd)
+  return {
+    fl: hatP('front') || hatP('left') ? aus.fl : ec!.fl,
+    fr: hatP('front') || hatP('right') ? aus.fr : ec!.fr,
+    bl: hatP('back') || hatP('left') ? aus.bl : ec!.bl,
+    br: hatP('back') || hatP('right') ? aus.br : ec!.br,
   }
 }
 

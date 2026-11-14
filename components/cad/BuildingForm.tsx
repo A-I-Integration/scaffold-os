@@ -23,8 +23,8 @@ import { portalAlsTuer } from '@/lib/cad/portal-erkennung'
 import { analysiereDreiecke, schaetzeEinheit, spannweiten, nullpunktUeberTiefstem, abschnitteAusTeilen, abschnitteAusTeileListe, vorgabeAchseEinheit, type GebaeudeTeil } from '@/lib/cad/modell-analyse'
 import { planLesen } from '@/lib/cad/plan-import'
 import { parseGelaendeLinie, formatGelaendeLinie } from '@/lib/calculations/gelaende'
-import { oeffnungenFuerModell, vorbautenFuerModell, seiteVonKante, seiteVonHimmelsrichtung, gelaendeProfilAusLinien } from '@/lib/cad/plan-oeffnungen-modell'
-import { eckenAusTalseite } from '@/lib/cad/koten-je-ansicht'
+import { oeffnungenFuerModell, vorbautenFuerModell } from '@/lib/cad/plan-oeffnungen-modell'
+import { gelaendeOptionenAusPlan } from '@/lib/cad/gelaende-optionen-aus-plan'
 import { umrissBox } from '@/lib/calculations/cad-umriss'
 import { leseDxfUmriss, mitHoehen, DXF_FORM_NAME, type DxfUmrissErgebnis } from '@/lib/cad/dxf-umriss'
 import type { IfcZusatz } from '@/lib/cad/ifc-einleser'
@@ -396,74 +396,10 @@ export default function BuildingForm({ building, systemId, onChange, onSystemCha
                   oeffnungenHinweis += ` ${vb.length === 1 ? 'Ein Vorbau' : `${vb.length} Vorbauten`} (${vb.map((v) => `${String(v.breiteM).replace('.', ',')} × ${String(v.tiefeM).replace('.', ',')} m, ${String(v.hoeheM).replace('.', ',')} m hoch`).join('; ')}) nur in der Ansicht eingezeichnet, das Gerüst führt nicht darum herum.`
                 }
               }
-              // Hang: Geländehöhe an den vier Ecken aus dem Plan → Eckhöhen (Gerüst und Gelände folgen dem Hang)
-              if (vorne && pl.gelaendeEckenPlan && Object.keys(pl.gelaendeEckenPlan).length === 4) {
-                // Plan-Ecke (tl/tr/bl/br) → Modell-Ecke (fl/fr/bl/br) über die Vorderseite
-                const kantenDerEcke: Record<'tl' | 'tr' | 'bl' | 'br', ['links' | 'rechts', 'oben' | 'unten']> = {
-                  tl: ['links', 'oben'], tr: ['rechts', 'oben'], bl: ['links', 'unten'], br: ['rechts', 'unten'],
-                }
-                const modellEcke: Partial<Record<'fl' | 'fr' | 'bl' | 'br', number>> = {}
-                for (const [pe, [k1, k2]] of Object.entries(kantenDerEcke) as ['tl' | 'tr' | 'bl' | 'br', ['links' | 'rechts', 'oben' | 'unten']][]) {
-                  const v = pl.gelaendeEckenPlan[pe]
-                  if (v === undefined) continue
-                  const s1 = seiteVonKante(k1, vorne), s2 = seiteVonKante(k2, vorne)
-                  const fb = [s1, s2].find((s) => s === 'front' || s === 'back')
-                  const lr = [s1, s2].find((s) => s === 'left' || s === 'right')
-                  if (!fb || !lr) continue
-                  modellEcke[`${fb === 'front' ? 'f' : 'b'}${lr === 'left' ? 'l' : 'r'}` as 'fl' | 'fr' | 'bl' | 'br'] = v
-                }
-                if (Object.keys(modellEcke).length === 4) {
-                  const ec = { fl: modellEcke.fl!, fr: modellEcke.fr!, bl: modellEcke.bl!, br: modellEcke.br! }
-                  patch.geruestOptionen = { ...(building.geruestOptionen ?? {}), gelaendeEckenM: ec }
-                  oeffnungenHinweis += ` Hang: Geländehöhe an den vier Ecken aus dem Plan übernommen (hinten ${String(ec.bl).replace(".",",")}/${String(ec.br).replace(".",",")}, vorne ${String(ec.fl).replace(".",",")}/${String(ec.fr).replace(".",",")} m) – bitte prüfen und ggf. drehen.`
-                }
-              }
-              // Weniger als vier Eckkoten im Grundriss: Talseite aus den Ansichten (tiefste Kote) → vier Eckhöhen vorschlagen
-              if (vorne && !(patch.geruestOptionen as { gelaendeEckenM?: unknown } | undefined)?.gelaendeEckenM && pl.gelaendeTiefe?.length) {
-                const tal = pl.gelaendeTiefe[0]
-                const plan = tal.art !== 'schnitt' ? eckenAusTalseite(tal.art, tal.tiefsteM) : null
-                if (plan) {
-                  const kantenDerEcke: Record<'tl' | 'tr' | 'bl' | 'br', ['links' | 'rechts', 'oben' | 'unten']> = {
-                    tl: ['links', 'oben'], tr: ['rechts', 'oben'], bl: ['links', 'unten'], br: ['rechts', 'unten'],
-                  }
-                  const m: Partial<Record<'fl' | 'fr' | 'bl' | 'br', number>> = {}
-                  for (const [pe, [k1, k2]] of Object.entries(kantenDerEcke) as ['tl' | 'tr' | 'bl' | 'br', ['links' | 'rechts', 'oben' | 'unten']][]) {
-                    const s1 = seiteVonKante(k1, vorne), s2 = seiteVonKante(k2, vorne)
-                    const fb = [s1, s2].find((x) => x === 'front' || x === 'back')
-                    const lr = [s1, s2].find((x) => x === 'left' || x === 'right')
-                    if (fb && lr) m[`${fb === 'front' ? 'f' : 'b'}${lr === 'left' ? 'l' : 'r'}` as 'fl' | 'fr' | 'bl' | 'br'] = plan[pe]
-                  }
-                  if (Object.keys(m).length === 4) {
-                    const ec = { fl: m.fl!, fr: m.fr!, bl: m.bl!, br: m.br! }
-                    patch.geruestOptionen = { ...(building.geruestOptionen ?? {}), gelaendeEckenM: ec }
-                    const nm = ({ nord: 'Norden', ost: 'Osten', sued: 'Süden', west: 'Westen' } as Record<string, string>)[tal.art]
-                    oeffnungenHinweis += ` Hang als Vorschlag: Talseite ${nm} (tiefste Kote ${String(tal.tiefsteM).replace('.', ',')} m laut Ansicht), gegenüberliegende Seite auf ±0,00 angenommen, dazwischen gleichmäßiger Verlauf. Ggf. in „Hang über vier Eckhöhen“ nachstellen; Annahme: Plan oben = Norden.`
-                  }
-                }
-              }
-              // Pultdach: Seite mit der niedrigen Traufe aus den Ansichten (Dach fällt nach …) – sonst gälte die Traufe nur „vorsichtig für alle Seiten“
-              if (vorne && pl.pultNiedrigeRichtung && (patch.roofForm ?? building.roofForm) === 'pultdach') {
-                const sd = seiteVonHimmelsrichtung(pl.pultNiedrigeRichtung, vorne)
-                patch.geruestOptionen = { ...(patch.geruestOptionen ?? building.geruestOptionen ?? {}), pultNiedrigeSeite: sd }
-                const nm = ({ nord: 'Norden', ost: 'Osten', sued: 'Süden', west: 'Westen' } as Record<string, string>)[pl.pultNiedrigeRichtung]
-                oeffnungenHinweis += ` Pultdach: niedrige Traufe im ${nm} laut Ansichten (Annahme: Plan oben = Norden) – im Tab Gebäude „Seite mit der niedrigen Traufe“ prüfen.`
-              }
-              // Geländelinie je Ansicht (aus dem Bild gelesen) → Geländeprofil je Seite; die Nullhöhe ist der Fußboden des Erdgeschosses wie in den Koten
-              if (vorne && pl.gelaendeLinien?.length) {
-                const gp = gelaendeProfilAusLinien(pl.gelaendeLinien, vorne)
-                patch.geruestOptionen = { ...(patch.geruestOptionen ?? building.geruestOptionen ?? {}), gelaendeProfilM: gp }
-                const unsicher = pl.gelaendeLinien.some((l) => !l.sicher)
-                oeffnungenHinweis += ` Hang: Geländelinie aus ${pl.gelaendeLinien.length} Ansicht${pl.gelaendeLinien.length === 1 ? '' : 'en'} gelesen (Höhen über die Koten-Dreiecke, ±0,00 = Erdgeschoss-Fußboden)${unsicher ? '; bei mindestens einer Ansicht ist die Lage der Hausecken geschätzt' : ''} – im Tab Gerüst unter „Geländeprofil je Seite“ prüfen.`
-              }
-              // Rückfall: Geländekoten je Kante → tiefster Wert je Seite (nur bei deutlichem Gefälle, wenn keine Eckhöhen)
-              if (vorne && !(patch.geruestOptionen as { gelaendeEckenM?: unknown } | undefined)?.gelaendeEckenM && pl.gelaendeJeKante?.length && pl.gelaende && pl.gelaende.unterschiedM >= 1) {
-                const gm: Partial<Record<'front' | 'back' | 'left' | 'right', number>> = {}
-                for (const k of pl.gelaendeJeKante) { const sd = seiteVonKante(k.kante, vorne); if (Math.abs(k.minM) >= 0.01) gm[sd] = k.minM }
-                if (Object.keys(gm).length) {
-                  patch.geruestOptionen = { ...(building.geruestOptionen ?? {}), gelaendeSeiteM: gm }
-                  oeffnungenHinweis += ` Hang: Gelände je Seite aus den Koten im Plan übernommen (${(Object.entries(gm) as [string, number][]).map(([sd, v]) => `${({ front: 'vorne', back: 'hinten', left: 'links', right: 'rechts' } as Record<string, string>)[sd]} ${String(v).replace('.', ',')} m`).join(', ')}; jeweils der tiefste Wert der Seite) – bitte unter Gerüst-Optionen prüfen.`
-                }
-              }
+              // Gelände (Eckkoten, Geländelinien je Ansicht, Pultdach-Traufseite) → Gerüst-Optionen; Regeln und Vorrang siehe gelaende-optionen-aus-plan.ts
+              const gel = gelaendeOptionenAusPlan(pl, vorne, building.geruestOptionen, patch.roofForm ?? building.roofForm)
+              if (gel.geruestOptionen) patch.geruestOptionen = gel.geruestOptionen
+              oeffnungenHinweis += gel.hinweis
             }
             if (aus.length) planVorspann = `Aus den Zeichenlinien des Plans gelesen (Maßstab 1:${pl.massstab}): ${aus.join(', ')}.${haupt?.vorbauten?.length ? ` Vorbauten (ca. ${String(Math.round(haupt.vorbauten.reduce((a, v) => a + v.flaecheM2, 0) * 10) / 10).replace('.', ',')} m²) sind in Länge/Breite nicht enthalten – bitte prüfen.` : ''}${oeffnungenHinweis} `
           }

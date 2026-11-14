@@ -14,6 +14,7 @@
 
 import { useMemo, useState, useRef, useEffect, useCallback, memo, createContext, useContext } from 'react'
 import { Canvas, useThree, useFrame } from '@react-three/fiber'
+import { FUSSPLATTE_AUFSTANDSVERSATZ_M, hangDaten, baueHangFlaeche } from '@/lib/cad/hang-geometrie'
 import { OrbitControls, Grid, Text, Sky, AdaptiveDpr, AdaptiveEvents, ContactShadows, Edges, Html } from '@react-three/drei'
 import { lazy, Suspense } from 'react'
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js'
@@ -21,7 +22,7 @@ import * as THREE from 'three'
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 import { treppenTeile } from '@/lib/cad/treppen-geometrie'
 import { HAUBEN_PROFIL } from '@/lib/cad/haube'
-import { CADModel, ScaffoldComponent3D, BuildingFeature3D, berechneGebaeudeSegmente, hatGeradeAbschnitte, eckenGelaendeM, gelaendeHoeheFn } from '@/lib/calculations/cad-engine'
+import { CADModel, ScaffoldComponent3D, BuildingFeature3D, berechneGebaeudeSegmente, hatGeradeAbschnitte } from '@/lib/calculations/cad-engine'
 import { CATALOG_ITEMS } from './ComponentCatalog'
 import Umgebung3D from './Umgebung3D'
 import { bauteilFarbe, type FarbModus } from '@/lib/cad/bauteil-farben'
@@ -358,7 +359,7 @@ function getGeometry(type: string, variant: string = 'default', optik: MjOptik =
         if (optik) {
           // MJ-Fußspindel (Platte 150 × 150 mm, Rohrspindel, Griffmutter mit Flügeln); gleiche Ausdehnung wie die Standardform
           const g = baueFussspindel(0.202)
-          g.translate(0, -0.02, 0)
+          g.translate(0, -0.02 + FUSSPLATTE_AUFSTANDSVERSATZ_M, 0)
           g.scale(1 / 0.15, 1 / 0.04, 1 / 0.15)
           geo = g
           break
@@ -375,6 +376,7 @@ function getGeometry(type: string, variant: string = 'default', optik: MjOptik =
         mutter.translate(0, 0.035, 0)
         parts.push(mutter)
         geo = mergeParts(parts)
+        geo.translate(0, FUSSPLATTE_AUFSTANDSVERSATZ_M, 0)
         geo.scale(1 / 0.15, 1 / 0.04, 1 / 0.15)
         break
       }
@@ -1366,22 +1368,6 @@ function GebaeudeAnzeige({ building, features, visible, onSeiteUmschalten }: { b
   )
 }
 
-/**
- * Hanglage für die 3D-Darstellung: tiefste Geländekote (Talseite) und Gelände je Seite.
- * `hangM` ist der Betrag, um den die Talseite unter ±0,00 (Erdgeschoss-Fußboden) liegt.
- * Nur beim einfachen Rechteck-Gebäude; Abschnitte/Umriss bleiben vorerst flach.
- */
-function hangDaten(building: CADModel['building']): { hangM: number; g: Record<'front' | 'back' | 'left' | 'right', number> } {
-  const leer = { front: 0, back: 0, left: 0, right: 0 }
-  if ((building.sections && building.sections.length >= 2) || (building.umriss && building.umriss.length >= 3)) return { hangM: 0, g: leer }
-  // Tiefster Punkt aus demselben Ecken-Modell wie die Gerüstberechnung
-  const e = eckenGelaendeM(building)
-  const prof = building.geruestOptionen?.gelaendeProfilM
-  const profMin = prof ? Object.values(prof).flatMap((l) => (l ?? []).map((q) => q.hoeheM)) : []
-  const min = Math.min(e.fl, e.fr, e.bl, e.br, 0, ...profMin)
-  const g = { front: Math.min(e.fl, e.fr), back: Math.min(e.bl, e.br), left: Math.min(e.bl, e.fl), right: Math.min(e.br, e.fr) }
-  return { hangM: Math.round(Math.max(0, -min) * 100) / 100, g }
-}
 
 /**
  * Schräges Hanggelände (nur Darstellung): eine Fläche durch die vier Eckhöhen des Grundstücks, nach außen verbreitert,
@@ -1389,37 +1375,7 @@ function hangDaten(building: CADModel['building']): { hangM: number; g: Record<'
  * Die Talseite (tiefste Ecke) bleibt offen und zeigt das Untergeschoss.
  */
 function Hanggelaende({ lengthM, widthM, hangM, building }: { lengthM: number; widthM: number; hangM: number; building: CADModel['building'] }) {
-  const geo = useMemo(() => {
-    const hoehe = gelaendeHoeheFn(building)
-    const m = Math.max(2, Math.min(6, hangM * 1.5)) // Auslauf nach außen
-    const hx = lengthM / 2 + m, hz = widthM / 2 + m
-    const unten = -hangM - 0.4 // Erdschürze endet knapp unter der Talsohle
-    const N = 28
-    const pt = (i: number, j: number): [number, number, number] => {
-      const x = -hx + (2 * hx * i) / N, z = -hz + (2 * hz * j) / N
-      return [x, hoehe(x, z), z]
-    }
-    const pos: number[] = []
-    const tri = (a: number[], b: number[], c: number[]) => { pos.push(...a, ...b, ...c) }
-    // Oberfläche als Raster, damit die Geländelinien (Zwischenpunkte) sichtbar werden
-    for (let i = 0; i < N; i++) for (let j = 0; j < N; j++) {
-      const a = pt(i, j), b = pt(i + 1, j), c = pt(i + 1, j + 1), d = pt(i, j + 1)
-      tri(a, d, c); tri(a, c, b)
-    }
-    // Erdschürze an den vier Rändern (von Oberkante bis `unten`)
-    const schuerze = (a: [number, number, number], b: [number, number, number]) => {
-      const a2 = [a[0], unten, a[2]], b2 = [b[0], unten, b[2]]
-      tri(a, b, b2 as number[]); tri(a, b2 as number[], a2 as number[])
-    }
-    for (let k = 0; k < N; k++) {
-      schuerze(pt(k, 0), pt(k + 1, 0)); schuerze(pt(k + 1, N), pt(k, N))
-      schuerze(pt(0, k + 1), pt(0, k)); schuerze(pt(N, k), pt(N, k + 1))
-    }
-    const g = new THREE.BufferGeometry()
-    g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3))
-    g.computeVertexNormals()
-    return g
-  }, [lengthM, widthM, hangM, building])
+  const geo = useMemo(() => baueHangFlaeche(building, lengthM, widthM, hangM), [lengthM, widthM, hangM, building])
   if (!(hangM > 0.05)) return null
   return (
     <mesh geometry={geo} receiveShadow castShadow>
