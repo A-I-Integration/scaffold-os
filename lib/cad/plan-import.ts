@@ -156,7 +156,7 @@ export function planHinweiseFuerAufmass(p: PlanImport): string[] {
   return h
 }
 
-/** Browser: Plan-PDF lesen (erste 3 Seiten), bis Grundrisse gefunden werden. null bei Bildern, Scans und Plänen ohne Geschoss-Überschrift. */
+/** Browser: Plan-PDF lesen: Seite für Seite, bis Grundrisse gefunden werden (keine Seitengrenze). null bei Bildern, Scans und Plänen ohne Geschoss-Überschrift. */
 export async function planLesen(datei: File): Promise<PlanImport | null> {
   if (!/\.pdf$/i.test(datei.name) && datei.type !== 'application/pdf') return null
   const [{ ladePlanQuelle }, { grundrisseFinden }, { massstabAusTexten, meterJePunkt }] = await Promise.all([
@@ -164,7 +164,7 @@ export async function planLesen(datei: File): Promise<PlanImport | null> {
   ])
   const q = await ladePlanQuelle(datei)
   try {
-    for (let nr = 1; nr <= Math.min(q.seiten, 3); nr++) {
+    for (let nr = 1; nr <= q.seiten; nr++) {
       const texte = await q.texte(nr, 0)
       const ms = massstabAusTexten(texte.map((t) => t.s))
       if (!ms) continue

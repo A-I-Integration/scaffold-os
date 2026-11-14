@@ -23,7 +23,7 @@ import { portalAlsTuer } from '@/lib/cad/portal-erkennung'
 import { analysiereDreiecke, schaetzeEinheit, spannweiten, nullpunktUeberTiefstem, abschnitteAusTeilen, abschnitteAusTeileListe, vorgabeAchseEinheit, type GebaeudeTeil } from '@/lib/cad/modell-analyse'
 import { planLesen } from '@/lib/cad/plan-import'
 import { parseGelaendeLinie, formatGelaendeLinie } from '@/lib/calculations/gelaende'
-import { oeffnungenFuerModell, vorbautenFuerModell, seiteVonKante, seiteVonHimmelsrichtung } from '@/lib/cad/plan-oeffnungen-modell'
+import { oeffnungenFuerModell, vorbautenFuerModell, seiteVonKante, seiteVonHimmelsrichtung, gelaendeProfilAusLinien } from '@/lib/cad/plan-oeffnungen-modell'
 import { eckenAusTalseite } from '@/lib/cad/koten-je-ansicht'
 import { umrissBox } from '@/lib/calculations/cad-umriss'
 import { leseDxfUmriss, mitHoehen, DXF_FORM_NAME, type DxfUmrissErgebnis } from '@/lib/cad/dxf-umriss'
@@ -450,14 +450,7 @@ export default function BuildingForm({ building, systemId, onChange, onSystemCha
               }
               // Geländelinie je Ansicht (aus dem Bild gelesen) → Geländeprofil je Seite; die Nullhöhe ist der Fußboden des Erdgeschosses wie in den Koten
               if (vorne && pl.gelaendeLinien?.length) {
-                const gp: NonNullable<NonNullable<typeof building.geruestOptionen>['gelaendeProfilM']> = {}
-                const rund = (v: number) => Math.round(v * 100) / 100
-                for (const l of pl.gelaendeLinien) {
-                  const sd = seiteVonHimmelsrichtung(l.art, vorne)
-                  const ges = l.profil[l.profil.length - 1].posM
-                  // Von außen gesehen läuft die Ansicht links → rechts; vorne und links laufen im Modell genauso, hinten und rechts entgegengesetzt
-                  gp[sd] = sd === 'back' || sd === 'right' ? l.profil.map((q) => ({ posM: rund(ges - q.posM), hoeheM: q.hoeheM })).reverse() : l.profil
-                }
+                const gp = gelaendeProfilAusLinien(pl.gelaendeLinien, vorne)
                 patch.geruestOptionen = { ...(patch.geruestOptionen ?? building.geruestOptionen ?? {}), gelaendeProfilM: gp }
                 const unsicher = pl.gelaendeLinien.some((l) => !l.sicher)
                 oeffnungenHinweis += ` Hang: Geländelinie aus ${pl.gelaendeLinien.length} Ansicht${pl.gelaendeLinien.length === 1 ? '' : 'en'} gelesen (Höhen über die Koten-Dreiecke, ±0,00 = Erdgeschoss-Fußboden)${unsicher ? '; bei mindestens einer Ansicht ist die Lage der Hausecken geschätzt' : ''} – im Tab Gerüst unter „Geländeprofil je Seite“ prüfen.`

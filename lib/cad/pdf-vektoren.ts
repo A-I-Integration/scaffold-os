@@ -33,6 +33,7 @@ const mul = (m: Matrix, n: Matrix): Matrix => [
 ]
 
 // DrawOPS von pdf.js 5 (pdfjs-dist 5.4): 0 moveTo, 1 lineTo, 2 curveTo (6 Zahlen), 3 closePath
+const BEZIER_SCHRITTE = 8
 const DRAW_MOVE = 0, DRAW_LINE = 1, DRAW_CURVE = 2, DRAW_CLOSE = 3
 
 /**
@@ -64,11 +65,20 @@ export function flaechenAusOperatoren(fnArray: ArrayLike<number>, argsArray: Arr
       let ring: number[][] = []
       const punkt = (x: number, y: number) => { ring.push([ctm[0] * x + ctm[2] * y + ctm[4], ctm[1] * x + ctm[3] * y + ctm[5]]) }
       const beenden = () => { if (ring.length >= 2) ringe.push(ring); ring = [] }
+      let ax = 0, ay = 0 // aktueller Punkt im Nutzerraum (Startpunkt der nächsten Kurve)
       for (let k = 0; k < daten.length;) {
         const op = daten[k]
-        if (op === DRAW_MOVE) { beenden(); punkt(daten[k + 1], daten[k + 2]); k += 3 }
-        else if (op === DRAW_LINE) { punkt(daten[k + 1], daten[k + 2]); k += 3 }
-        else if (op === DRAW_CURVE) { punkt(daten[k + 5], daten[k + 6]); k += 7 } // Kurven: Endpunkt genügt für Wandflächen
+        if (op === DRAW_MOVE) { beenden(); ax = daten[k + 1]; ay = daten[k + 2]; punkt(ax, ay); k += 3 }
+        else if (op === DRAW_LINE) { ax = daten[k + 1]; ay = daten[k + 2]; punkt(ax, ay); k += 3 }
+        else if (op === DRAW_CURVE) {
+          // Bézierkurve in Teilstücke zerlegen, damit Rundungen (Erker, Rundbögen, Kreise) nicht auf eine Sehne schrumpfen
+          const x1 = daten[k + 1], y1 = daten[k + 2], x2 = daten[k + 3], y2 = daten[k + 4], x3 = daten[k + 5], y3 = daten[k + 6]
+          for (let j = 1; j <= BEZIER_SCHRITTE; j++) {
+            const t = j / BEZIER_SCHRITTE, u = 1 - t
+            punkt(u * u * u * ax + 3 * u * u * t * x1 + 3 * u * t * t * x2 + t * t * t * x3, u * u * u * ay + 3 * u * u * t * y1 + 3 * u * t * t * y2 + t * t * t * y3)
+          }
+          ax = x3; ay = y3; k += 7
+        }
         else if (op === DRAW_CLOSE) { k += 1 }
         else break // unbekannt: abbrechen statt falsch weiterzulesen
       }

@@ -56,3 +56,17 @@ describe('Vektorflächen aus pdf.js-Operatoren', () => {
     expect(r.every((f) => f.ringe.every((ring) => ring.every((p) => p.every(Number.isFinite))))).toBe(true)
   })
 })
+
+describe('Kurven', () => {
+  it('Bézierkurven werden zerlegt: ein Halbkreis behält seine Wölbung', () => {
+    // Viertelkreis-Näherung Radius 10 von (10,0) nach (0,10), Kontrollpunkte mit k = 0,5523
+    const k = 0.5523 * 10
+    const pfad = new Float32Array([0, 10, 0, 2, 10, k, k, 10, 0, 10, 3])
+    const r = flaechenAusOperatoren([OPS.constructPath], [[OPS.fill, [pfad], null]], OPS, IDENT)
+    const ring = r[0].ringe[0]
+    expect(ring.length).toBeGreaterThan(6)
+    const mittig = ring.find((p) => Math.abs(p[0] - p[1]) < 0.7 && p[0] > 5)
+    expect(mittig).toBeDefined()
+    expect(Math.hypot(mittig![0], mittig![1])).toBeCloseTo(10, 1) // liegt auf dem Kreis, nicht auf der Sehne (7,07)
+  })
+})

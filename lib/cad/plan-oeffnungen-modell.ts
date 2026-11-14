@@ -175,3 +175,22 @@ export function vorbautenFuerModell(geschosse: { ebene: number; vorbauten: PlanV
     return { id: `v${i}`, side, offsetAlongM: r2(v.alongM * entlang), breiteM: v.breiteM, tiefeM: v.tiefeM, hoeheM: r2(anzahl * geschossHoeheM) }
   })
 }
+
+export interface GelaendeLinieEingang { art: 'nord' | 'ost' | 'sued' | 'west'; profil: { posM: number; hoeheM: number }[] }
+
+/**
+ * Geländelinien der Ansichten → Geländeprofil je Modellseite.
+ * Eine Ansicht läuft von außen gesehen links → rechts. Vorne und links laufen im Modell genauso,
+ * hinten und rechts entgegengesetzt (Reihenfolge und Positionen werden gespiegelt).
+ */
+export function gelaendeProfilAusLinien(linien: GelaendeLinieEingang[], vorne: PlanKante): Partial<Record<'front' | 'back' | 'left' | 'right', { posM: number; hoeheM: number }[]>> {
+  const out: Partial<Record<'front' | 'back' | 'left' | 'right', { posM: number; hoeheM: number }[]>> = {}
+  const rund = (v: number) => Math.round(v * 100) / 100
+  for (const l of linien) {
+    if (!l.profil.length) continue
+    const sd = seiteVonHimmelsrichtung(l.art, vorne)
+    const ges = l.profil[l.profil.length - 1].posM
+    out[sd] = sd === 'back' || sd === 'right' ? l.profil.map((q) => ({ posM: rund(ges - q.posM), hoeheM: q.hoeheM })).reverse() : l.profil
+  }
+  return out
+}
