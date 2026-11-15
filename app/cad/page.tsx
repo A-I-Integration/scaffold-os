@@ -64,6 +64,7 @@ import type { CADLayerState, SideVisibility } from '@/types/cad-layers'
 import { createInitialLayerState } from '@/types/cad-layers'
 import type { CustomDimension } from '@/types/cad-dimensions'
 import type { ManualPlacement } from '@/lib/calculations/cad-engine'
+import { KEINE_UEBERLAGERUNG, wendeBauteilAenderungenAn, setzeBauteilLage, dupliziereBauteil, setzeBauteilZurueck, istKopieId, istVonHandVeraendert, type BauteilUeberlagerung } from '@/lib/cad/bauteil-aenderungen'
 import { buildTopologyGraph, pruefeKnotenIsolation } from '@/lib/calculations/topology-graph'
 import { wendeLagerAn, type LagerZeile } from '@/lib/calculations/cad-lager'
 import { platzierungAusTreffer, verschiebePlatzierung, gleicheLage, platzierungIdVon } from '@/lib/calculations/cad-platzierung'
@@ -365,6 +366,12 @@ export default function CADPage() {
   // ist eine Gruppe von Bauteil-IDs (Treppen werden als Ganzes entfernt).
   // Wird bei „Gerüst neu berechnen“ zurückgesetzt, weil sich die IDs dann ändern.
   const [removedGroups, setRemovedGroups] = useState<string[][]>([])
+  // Von Hand verschobene/gedrehte/duplizierte erzeugte Bauteile (Überlagerung über dem berechneten Modell) mit eigenem Rückgängig-Verlauf
+  const [ueberVerlauf, setUeberVerlauf] = useState<{ jetzt: BauteilUeberlagerung; vergangen: BauteilUeberlagerung[]; zukunft: BauteilUeberlagerung[] }>({ jetzt: KEINE_UEBERLAGERUNG, vergangen: [], zukunft: [] })
+  const ueber = ueberVerlauf.jetzt
+  const setzeUeber = useCallback((f: (u: BauteilUeberlagerung) => BauteilUeberlagerung) => setUeberVerlauf((v) => { const n = f(v.jetzt); return n === v.jetzt || JSON.stringify(n) === JSON.stringify(v.jetzt) ? v : { jetzt: n, vergangen: [...v.vergangen.slice(-99), v.jetzt], zukunft: [] } }), [])
+  const [griffModus, setGriffModus] = useState<'verschieben' | 'drehen'>('verschieben')
+  const [einrasten, setEinrasten] = useState(true)
 
   const handleToggleMeasureMode = useCallback(() => {
     setMeasureMode((prev) => {
@@ -453,6 +460,30 @@ export default function CADPage() {
     })
   }, [model])
 
+  // Griff/Zahleneingabe: neue Lage des ausgewählten Bauteils. Von Hand gesetzte Bauteile ändern ihre Platzierung, erzeugte bekommen eine Überlagerung.
+  const handleBauteilLage = useCallback((id: string, position: [number, number, number], drehGrad: number) => {
+    const pid = platzierungIdVon(id, manualPlacements)
+    if (pid) {
+      setManualPlacements((prev) => prev.map((x) => (x.id === pid ? { ...x, positionX: position[0], positionY: position[1], positionZ: position[2], rotationY: (x.rotationY ?? 0) + (drehGrad * Math.PI) / 180 } : x)))
+      return
+    }
+    const angezeigt = modelWithManualRef.current?.components3D.find((c) => c.id === id)
+    if (!angezeigt) return
+    setzeUeber((u) => setzeBauteilLage(u, angezeigt, angezeigt, position, drehGrad))
+  }, [manualPlacements, setzeUeber])
+  const handleBauteilDuplizieren = useCallback((id: string) => {
+    const pid = platzierungIdVon(id, manualPlacements)
+    if (pid) {
+      const quelle = manualPlacements.find((x) => x.id === pid)!
+      const neu: ManualPlacement = { ...quelle, id: `manual-${quelle.type}-${Date.now()}`, positionX: quelle.positionX + 0.5 }
+      setManualPlacements((prev) => [...prev, neu]); setSelectedComponent(neu.id); return
+    }
+    let neueId = ''
+    setzeUeber((u) => { const r = dupliziereBauteil(u, id); neueId = r.neueId; return r.ueberlagerung })
+    setSelectedComponent(neueId)
+  }, [manualPlacements, setzeUeber])
+  const handleBauteilZuruecksetzen = useCallback((id: string) => { setzeUeber((u) => setzeBauteilZurueck(u, id)); if (istKopieId(id)) setSelectedComponent(null) }, [setzeUeber])
+
   const handleRemoveManualPlacement = useCallback((id: string) => {
     setManualPlacements((prev) => prev.filter((p) => p.id !== id))
   }, [])
@@ -461,6 +492,7 @@ export default function CADPage() {
   // erzeugte Bauteile ausgeblendet (rückgängig machbar). Teile eines
   // Treppenturms (Holme, Stufen, Pfosten) gehen immer gemeinsam.
   const handleRemoveComponent = useCallback((id: string) => {
+    if (istKopieId(id)) { setzeUeber((u) => setzeBauteilZurueck(u, id)); setSelectedComponent(null); return }
     const pl = manualPlacements.find((p) => p.id === id || id.startsWith(`${p.id}-`))
     if (pl) {
       handleRemoveManualPlacement(pl.id)
@@ -474,7 +506,7 @@ export default function CADPage() {
       : [id]
     setRemovedGroups((prev) => [...prev, ids])
     setSelectedComponent(null)
-  }, [manualPlacements, handleRemoveManualPlacement, model])
+  }, [manualPlacements, handleRemoveManualPlacement, model, setzeUeber])
 
   // Entf/Backspace entfernt das ausgewählte Bauteil (nicht beim Tippen in Feldern)
   useEffect(() => {
@@ -490,10 +522,17 @@ export default function CADPage() {
     return () => window.removeEventListener('keydown', onKey)
   }, [selectedComponent, handleRemoveComponent])
 
-  const kannZurueck = verlauf.vergangen.length > 0
-  const kannVor = verlauf.zukunft.length > 0
-  const schrittZurueck = useCallback(() => { setAutoGenerate(true); setVerlauf(verlaufZurueck) }, [])
-  const schrittVor = useCallback(() => { setAutoGenerate(true); setVerlauf(verlaufVor) }, [])
+  // Rückgängig: zuerst die letzten manuellen Bauteil-Änderungen am 3D-Modell, danach die Gebäudedaten
+  const kannZurueck = ueberVerlauf.vergangen.length > 0 || verlauf.vergangen.length > 0
+  const kannVor = ueberVerlauf.zukunft.length > 0 || verlauf.zukunft.length > 0
+  const schrittZurueck = useCallback(() => {
+    if (ueberVerlauf.vergangen.length > 0) { setUeberVerlauf((v) => ({ jetzt: v.vergangen[v.vergangen.length - 1], vergangen: v.vergangen.slice(0, -1), zukunft: [v.jetzt, ...v.zukunft] })); return }
+    setAutoGenerate(true); setVerlauf(verlaufZurueck)
+  }, [ueberVerlauf.vergangen.length])
+  const schrittVor = useCallback(() => {
+    if (ueberVerlauf.zukunft.length > 0) { setUeberVerlauf((v) => ({ jetzt: v.zukunft[0], vergangen: [...v.vergangen, v.jetzt], zukunft: v.zukunft.slice(1) })); return }
+    setAutoGenerate(true); setVerlauf(verlaufVor)
+  }, [ueberVerlauf.zukunft.length])
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (!(e.metaKey || e.ctrlKey) || e.altKey) return
@@ -521,6 +560,7 @@ export default function CADPage() {
     setSystemId('layher-allround');
     setModel(null);
     setRemovedGroups([]);
+    setUeberVerlauf({ jetzt: KEINE_UEBERLAGERUNG, vergangen: [], zukunft: [] });
     setSelectedComponent(null);
     setHoursPerSqm(2.0);
     setNotes([]); // Notizen gehören zum verworfenen Modell, sonst "kleben" alte Notizen an neuen Bauteil-IDs
@@ -647,12 +687,13 @@ export default function CADPage() {
     if (!model) return null
     // Von Hand angehängte/aufgestockte Bereiche zuerst (Grundlage für alles Weitere)
     const basis = bereichsListe.length > 0 ? wendeAenderungenAn(model, bereichsListe) : model
-    if (manualPlacements.length === 0 && removedGroups.length === 0) return basis
+    if (manualPlacements.length === 0 && removedGroups.length === 0 && ueber.aenderungen.length === 0 && ueber.kopien.length === 0) return basis
     // Shallow Copy, damit das originale model-Objekt nicht mutiert wird
     let merged: CADModel = { ...basis, components3D: [...basis.components3D], anchors: [...basis.anchors] }
     for (const pl of manualPlacements) {
       merged = addManualPlacement(merged, pl)
     }
+    merged = wendeBauteilAenderungenAn(merged, ueber)
     if (removedGroups.length > 0) {
       const weg = new Set(removedGroups.flat())
       merged = {
@@ -662,7 +703,9 @@ export default function CADPage() {
       }
     }
     return merged
-  }, [model, manualPlacements, removedGroups, bereichsListe])
+  }, [model, manualPlacements, removedGroups, bereichsListe, ueber])
+  const modelWithManualRef = useRef<CADModel | null>(null)
+  modelWithManualRef.current = modelWithManual
   const removedCount = useMemo(() => removedGroups.reduce((n, g) => n + g.length, 0), [removedGroups])
 
   // Auf alle gleichen Bauteile (gleicher Typ + gleicher Standard-Artikel) übertragen
@@ -1227,7 +1270,7 @@ export default function CADPage() {
               </div>
             )}
             {selectedComponent && modelWithManual && viewMode === '3d' && !abbauAktiv && !placementType && !measureMode && (
-              <EigenschaftenLeiste model={modelWithManual} id={selectedComponent} artikelWahl={artikelWahl} manuell={!!platzierungIdVonBauteil(selectedComponent)}
+              <EigenschaftenLeiste model={modelWithManual} id={selectedComponent} griffModus={griffModus} onGriffModus={setGriffModus} einrasten={einrasten} onEinrasten={setEinrasten} veraendert={istVonHandVeraendert(ueber, selectedComponent)} onLage={(p, d) => handleBauteilLage(selectedComponent, p, d)} onDuplizieren={() => handleBauteilDuplizieren(selectedComponent)} onZuruecksetzen={() => handleBauteilZuruecksetzen(selectedComponent)} artikelWahl={artikelWahl} manuell={!!platzierungIdVonBauteil(selectedComponent)}
                 onEntfernen={() => handleRemoveComponent(selectedComponent)} onFeldEntfernen={(ids) => { setRemovedGroups((prev) => [...prev, ids]); setSelectedComponent(null) }}
                 onFeldLaenge={(seite, spalte, laengeM) => setBereichsListe((l) => [...l, { art: 'laenge', seite, spalte, feldlaengeM: laengeM }])}
                 onFeldAnhaengen={(seite, ende, laengeM) => setBereichsListe((l) => [...l, { art: 'erweitern', seite, ende, anzahl: 1, feldlaengeM: laengeM }])}
@@ -1246,7 +1289,7 @@ export default function CADPage() {
               <AbbauEinplanenDialog tage={abbauErgebnis.tage} personen={abbauErgebnis.personen} titel={`Teilabbau: ${abbauErgebnis.anzahlTeile} Bauteile, ${abbauErgebnis.stunden} h`} onClose={() => setAbbauEinplanen(false)} />
             )}
             {viewMode === '3d' && modelWithManual && (
-              <Scaffold3D farbModus={farbModus} model={modelWithManual} features={features} showBuilding={showBuilding} showScaffold={showScaffold} showDimensions={showDimensions} selectedComponent={selectedComponent} onSelectComponent={klickImModell} abbauMarkiert={abbauMarkiert} echtesGebaeude={echtesGebaeude} visibleTypes={visibleTypes} viewMode={viewAngle} onCanvasReady={(c) => { canvasRef.current = c }} notes={notes} onAddNote={handleAddNote} hiddenSides={hiddenSides} hiddenLevels={hiddenLevels} measureMode={measureMode} onMeasurePoint={handleMeasurePoint} customDimensions={customDimensions} pendingMeasurePoint={pendingMeasurePoint?.point ?? null} placementType={placementType} onPlacementClick={handlePlacementClick} showEnvironment={showEnvironment} hoheQualitaet={hoheQualitaet} onRemoveComponent={handleRemoveComponent} onReplaceComponent={handleReplaceComponent} systemId={systemId} artikelWahl={artikelWahl} onArtikelWahl={waehleArtikel} onArtikelWahlGleiche={waehleArtikelGleiche} removedCount={removedCount} platzierungIdVon={platzierungIdVonBauteil} onBauteilZiehen={handleBauteilZiehen} onSeiteUmschalten={(side) => { setAutoGenerate(true); setBuilding((() => { const cur = building.sides ?? ['front']; const has = cur.includes(side); const ns = has ? cur.filter((x) => x !== side) : [...cur, side]; if (ns.length === 0) ns.push('front'); return { ...building, sides: ns } })()) }} />
+              <Scaffold3D farbModus={farbModus} model={modelWithManual} features={features} showBuilding={showBuilding} showScaffold={showScaffold} showDimensions={showDimensions} selectedComponent={selectedComponent} onSelectComponent={klickImModell} abbauMarkiert={abbauMarkiert} echtesGebaeude={echtesGebaeude} visibleTypes={visibleTypes} viewMode={viewAngle} onCanvasReady={(c) => { canvasRef.current = c }} notes={notes} onAddNote={handleAddNote} hiddenSides={hiddenSides} hiddenLevels={hiddenLevels} measureMode={measureMode} onMeasurePoint={handleMeasurePoint} customDimensions={customDimensions} pendingMeasurePoint={pendingMeasurePoint?.point ?? null} placementType={placementType} onPlacementClick={handlePlacementClick} showEnvironment={showEnvironment} hoheQualitaet={hoheQualitaet} onRemoveComponent={handleRemoveComponent} onReplaceComponent={handleReplaceComponent} systemId={systemId} artikelWahl={artikelWahl} onArtikelWahl={waehleArtikel} onArtikelWahlGleiche={waehleArtikelGleiche} removedCount={removedCount} platzierungIdVon={platzierungIdVonBauteil} onBauteilZiehen={handleBauteilZiehen} griff={!abbauAktiv ? { modus: griffModus, einrasten, onAendern: handleBauteilLage } : undefined} onSeiteUmschalten={(side) => { setAutoGenerate(true); setBuilding((() => { const cur = building.sides ?? ['front']; const has = cur.includes(side); const ns = has ? cur.filter((x) => x !== side) : [...cur, side]; if (ns.length === 0) ns.push('front'); return { ...building, sides: ns } })()) }} />
             )}
             {/* Phase 68-G: Leerzustand nach 'Neu starten' */}
             {viewMode === '3d' && !model && (

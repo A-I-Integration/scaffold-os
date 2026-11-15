@@ -15,7 +15,10 @@ const ARTEN: Record<string, string> = {
 const SEITEN: Record<string, string> = { front: 'Vorderseite', back: 'Rückseite', left: 'Links', right: 'Rechts' }
 const m = (v: number) => `${v.toLocaleString('de-DE', { maximumFractionDigits: 2 })} m`
 
-export default function EigenschaftenLeiste({ model, id, artikelWahl, manuell, onEntfernen, onFeldEntfernen, onFeldLaenge, onFeldAnhaengen, onPositionAendern, platzierungPosition, onZu }: {
+export default function EigenschaftenLeiste({ griffModus, onGriffModus, einrasten, onEinrasten, veraendert, onLage, onDuplizieren, onZuruecksetzen, model, id, artikelWahl, manuell, onEntfernen, onFeldEntfernen, onFeldLaenge, onFeldAnhaengen, onPositionAendern, platzierungPosition, onZu }: {
+  griffModus?: 'verschieben' | 'drehen'; onGriffModus?: (m: 'verschieben' | 'drehen') => void; einrasten?: boolean; onEinrasten?: (v: boolean) => void; veraendert?: boolean
+  /** neue Lage des Bauteils: Position (m) und zusätzliche Drehung um die Hochachse (Grad) */
+  onLage?: (position: [number, number, number], drehGrad: number) => void; onDuplizieren?: () => void; onZuruecksetzen?: () => void
   model: CADModel; id: string; artikelWahl: Record<string, string>; manuell: boolean; onEntfernen: () => void; onFeldEntfernen?: (bauteilIds: string[]) => void; onFeldLaenge?: (seite: Seite, spalte: number, laengeM: number) => void; onFeldAnhaengen?: (seite: Seite, ende: 'anfang' | 'ende', laengeM: number) => void; onPositionAendern?: (position: [number, number, number]) => void; platzierungPosition?: [number, number, number]; onZu: () => void
 }) {
   const c = model.components3D.find((x) => x.id === id)
@@ -32,7 +35,7 @@ export default function EigenschaftenLeiste({ model, id, artikelWahl, manuell, o
     ...(lage ? [['Lage', `${lage.index + 1} (${m(lage.bottomY)} bis ${m(lage.topY)})`]] as [string, string][] : []),
     ['Position x / y / z', c.position.map((v) => v.toFixed(2).replace('.', ',')).join(' / ') + ' m'],
     ...(c.extern ? [['Hinweis', 'Fremdleistung, nicht im eigenen Material']] as [string, string][] : []),
-    ...(manuell ? [['Herkunft', 'von Hand gesetzt']] as [string, string][] : []),
+    ...(manuell ? [['Herkunft', 'von Hand gesetzt']] as [string, string][] : veraendert ? [['Herkunft', c.id.startsWith('kopie-') ? 'Kopie' : 'von Hand verändert']] as [string, string][] : []),
   ]
   return (
     <aside className='absolute bottom-3 left-3 z-20 w-[300px] overflow-hidden rounded-md border bg-white shadow-xl' style={{ borderColor: 'var(--os-linie)' }} aria-label='Eigenschaften'>
@@ -47,7 +50,27 @@ export default function EigenschaftenLeiste({ model, id, artikelWahl, manuell, o
           </div>
         ))}
       </dl>
-      {manuell && onPositionAendern && platzierungPosition && <PositionFelder key={platzierungPosition.join(',')} start={platzierungPosition} onUebernehmen={onPositionAendern} />}
+      {onLage && (
+        <div className='space-y-1.5 border-t px-3 py-2' style={{ borderColor: 'var(--os-linie)' }}>
+          <div className='grid grid-cols-2 gap-1' role='group' aria-label='Werkzeug am Bauteil'>
+            {([['verschieben', 'Verschieben'], ['drehen', 'Drehen']] as const).map(([k, name]) => (
+              <button key={k} type='button' aria-pressed={griffModus === k} onClick={() => onGriffModus?.(k)} className='rounded border px-2 py-1.5 text-[12.5px]'
+                style={{ borderColor: griffModus === k ? 'var(--os-akzent)' : 'var(--os-linie)', background: griffModus === k ? 'var(--os-akzent)' : 'white', color: griffModus === k ? '#171b20' : undefined, fontWeight: griffModus === k ? 600 : 400 }}>{name}</button>
+            ))}
+          </div>
+          <label className='flex items-center gap-2 text-[12.5px]'><input type='checkbox' checked={einrasten ?? true} onChange={(e) => onEinrasten?.(e.target.checked)} />Einrasten (5 cm / 15°)</label>
+          <div className='flex flex-wrap items-center gap-1 text-[12.5px]'>
+            <span style={{ color: 'var(--os-text-leise)' }}>Drehen:</span>
+            {[-90, -15, 15, 90].map((g) => <button key={g} type='button' onClick={() => onLage(c.position, g)} className='rounded border px-2 py-1 hover:bg-gray-50' style={{ borderColor: 'var(--os-linie)' }}>{g > 0 ? '+' : ''}{g}°</button>)}
+          </div>
+          <PositionFelder key={c.position.join(',')} start={c.position} onUebernehmen={(p) => onLage(p, 0)} />
+          <div className='grid grid-cols-2 gap-1'>
+            <button type='button' onClick={onDuplizieren} className='rounded border px-2 py-1.5 text-[12.5px] hover:bg-gray-50' style={{ borderColor: 'var(--os-linie)' }}>Duplizieren</button>
+            <button type='button' disabled={!veraendert || manuell} onClick={onZuruecksetzen} className='rounded border px-2 py-1.5 text-[12.5px] hover:bg-gray-50 disabled:opacity-40' style={{ borderColor: 'var(--os-linie)' }}>{c.id.startsWith('kopie-') ? 'Kopie löschen' : 'Zurücksetzen'}</button>
+          </div>
+        </div>
+      )}
+      {!onLage && manuell && onPositionAendern && platzierungPosition && <PositionFelder key={platzierungPosition.join(',')} start={platzierungPosition} onUebernehmen={onPositionAendern} />}
       {spalteInfo && (
         <div className='space-y-1.5 border-t px-3 py-2' style={{ borderColor: 'var(--os-linie)' }}>
           {onFeldLaenge && laengen.length > 0 && (
@@ -107,8 +130,8 @@ function PositionFelder({ start, onUebernehmen }: { start: [number, number, numb
   const gueltig = neu.every((v) => v !== null)
   const geaendert = gueltig && neu.some((v, i) => Math.abs((v as number) - start[i]) > 0.0049)
   return (
-    <div className='border-t px-3 py-2' style={{ borderColor: 'var(--os-linie)' }}>
-      <div className='mb-1 text-[11px] uppercase tracking-wider' style={{ color: 'var(--os-text-leise)' }}>Position ändern (m)</div>
+    <div>
+      <div className='mb-1 text-[11px] uppercase tracking-wider' style={{ color: 'var(--os-text-leise)' }}>Position / Höhe (m)</div>
       <div className='grid grid-cols-3 gap-1'>
         {['x', 'y', 'z'].map((n, i) => (
           <label key={n} className='text-[12px]'>{n}

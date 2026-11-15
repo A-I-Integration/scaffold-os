@@ -1,0 +1,90 @@
+// ============================================================
+// SCAFFOLD OS – Von Hand verschobene, gedrehte oder duplizierte Bauteile des erzeugten Gerüsts.
+//
+// Das erzeugte Modell bleibt unverändert (Berechnung, Gelände, Kataloge). Die manuellen Änderungen liegen als Überlagerung daneben,
+// wie die entfernten Teile und die von Hand gesetzten Bauteile, und werden in `modelWithManual` darübergelegt. So überleben sie
+// eine Neuberechnung, sind rückgängig zu machen, und Stückliste/Kosten (aus den Bauteilen des Modells) stimmen immer mit dem 3D überein.
+// Ein Bauteil wird nie automatisch zurückkorrigiert; was die Prüfung beanstandet, entscheidet die Person.
+// ============================================================
+
+import * as THREE from 'three'
+import type { CADModel, ScaffoldComponent3D } from '@/lib/calculations/cad-engine'
+
+/** Versatz und Drehung (um die Hochachse) eines erzeugten Bauteils gegenüber seiner berechneten Lage. */
+export interface BauteilAenderung { id: string; dx: number; dy: number; dz: number; /** Grad, um die senkrechte Achse */ drehGrad: number }
+/** Kopie eines Bauteils, gegenüber der Quelle versetzt/gedreht. */
+export interface BauteilKopie { id: string; quelleId: string; dx: number; dy: number; dz: number; drehGrad: number }
+export interface BauteilUeberlagerung { aenderungen: BauteilAenderung[]; kopien: BauteilKopie[] }
+export const KEINE_UEBERLAGERUNG: BauteilUeberlagerung = { aenderungen: [], kopien: [] }
+
+/** Rasterschritt beim Ziehen (m) und beim Drehen (Grad); Einrasten ist abschaltbar. */
+export const RASTER_SCHIEBEN_M = 0.05
+export const RASTER_DREHEN_GRAD = 15
+export const rastern = (v: number, schritt: number): number => (schritt > 0 ? Math.round(v / schritt) * schritt : v)
+
+const r4 = (v: number) => Math.round(v * 10000) / 10000
+
+function dreheUmHochachse(rot: [number, number, number], grad: number): [number, number, number] {
+  if (!grad) return rot
+  const q = new THREE.Quaternion().setFromEuler(new THREE.Euler(rot[0], rot[1], rot[2], 'XYZ'))
+  const qy = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), (grad * Math.PI) / 180)
+  const e = new THREE.Euler().setFromQuaternion(qy.multiply(q), 'XYZ')
+  return [r4(e.x), r4(e.y), r4(e.z)]
+}
+
+function verschoben(c: ScaffoldComponent3D, a: { dx: number; dy: number; dz: number; drehGrad: number }): ScaffoldComponent3D {
+  // Drehung um die Mitte des Bauteils: die Position bleibt, nur die Ausrichtung ändert sich
+  return { ...c, position: [r4(c.position[0] + a.dx), r4(c.position[1] + a.dy), r4(c.position[2] + a.dz)], rotation: dreheUmHochachse(c.rotation, a.drehGrad) }
+}
+
+export const istKopieId = (id: string): boolean => id.startsWith('kopie-')
+export const istLeer = (u: BauteilUeberlagerung): boolean => u.aenderungen.length === 0 && u.kopien.length === 0
+
+/** Legt die manuellen Änderungen über das Modell (Kopie; das Eingangsmodell bleibt unverändert). Bauteile, die es nicht mehr gibt, werden übersprungen. */
+export function wendeBauteilAenderungenAn(model: CADModel, u: BauteilUeberlagerung): CADModel {
+  if (istLeer(u)) return model
+  const nach = new Map(u.aenderungen.map((a) => [a.id, a]))
+  const alle = new Map(model.components3D.map((c) => [c.id, c]))
+  const comps = model.components3D.map((c) => { const a = nach.get(c.id); return a ? verschoben(c, a) : c })
+  for (const k of u.kopien) {
+    const quelle = alle.get(k.quelleId) ?? comps.find((c) => c.id === k.quelleId)
+    if (!quelle) continue
+    // Kopie geht von der berechneten Quelle aus (nicht von deren verschobener Lage), damit „Duplizieren, dann Quelle verschieben“ die Kopie nicht mitzieht
+    comps.push({ ...verschoben(quelle, k), id: k.id, name: `${quelle.name} (Kopie)` })
+  }
+  return { ...model, components3D: comps }
+}
+
+/** Setzt Versatz/Drehung eines Bauteils auf die gewünschte absolute Lage (Anzeige-Lage inkl. bisheriger Änderung). */
+export function setzeBauteilLage(u: BauteilUeberlagerung, basis: ScaffoldComponent3D, angezeigt: ScaffoldComponent3D, position: [number, number, number], drehGradNeu = 0): BauteilUeberlagerung {
+  const dx = position[0] - angezeigt.position[0], dy = position[1] - angezeigt.position[1], dz = position[2] - angezeigt.position[2]
+  const addiere = <T extends { dx: number; dy: number; dz: number; drehGrad: number }>(alt: T | undefined, id: string): T => ({
+    ...(alt ?? ({ id, dx: 0, dy: 0, dz: 0, drehGrad: 0 } as unknown as T)),
+    dx: r4((alt?.dx ?? 0) + dx), dy: r4((alt?.dy ?? 0) + dy), dz: r4((alt?.dz ?? 0) + dz), drehGrad: ((((alt?.drehGrad ?? 0) + drehGradNeu) % 360) + 360) % 360,
+  })
+  const kopie = u.kopien.find((k) => k.id === basis.id)
+  if (kopie) return { ...u, kopien: u.kopien.map((k) => (k.id === basis.id ? addiere(k, k.id) : k)) }
+  const alt = u.aenderungen.find((a) => a.id === basis.id)
+  const neu = addiere<BauteilAenderung>(alt, basis.id)
+  const aenderungen = alt ? u.aenderungen.map((a) => (a.id === basis.id ? neu : a)) : [...u.aenderungen, neu]
+  return { ...u, aenderungen: aenderungen.filter((a) => a.dx !== 0 || a.dy !== 0 || a.dz !== 0 || a.drehGrad !== 0) }
+}
+
+/** Dupliziert ein Bauteil, standardmäßig 0,5 m daneben (längs der x-Achse). */
+export function dupliziereBauteil(u: BauteilUeberlagerung, quelleId: string, versatz: [number, number, number] = [0.5, 0, 0]): { ueberlagerung: BauteilUeberlagerung; neueId: string } {
+  const zaehler = u.kopien.reduce((m, k) => Math.max(m, Number(/^kopie-(\d+)-/.exec(k.id)?.[1] ?? 0)), 0) + 1
+  // Kopie einer Kopie geht auf deren Quelle zurück, mit dem bisherigen Versatz
+  const vonKopie = u.kopien.find((k) => k.id === quelleId)
+  const basisId = vonKopie ? vonKopie.quelleId : quelleId
+  const neueId = `kopie-${zaehler}-${basisId}`
+  const k: BauteilKopie = { id: neueId, quelleId: basisId, dx: r4((vonKopie?.dx ?? u.aenderungen.find((a) => a.id === quelleId)?.dx ?? 0) + versatz[0]), dy: r4((vonKopie?.dy ?? u.aenderungen.find((a) => a.id === quelleId)?.dy ?? 0) + versatz[1]), dz: r4((vonKopie?.dz ?? u.aenderungen.find((a) => a.id === quelleId)?.dz ?? 0) + versatz[2]), drehGrad: vonKopie?.drehGrad ?? u.aenderungen.find((a) => a.id === quelleId)?.drehGrad ?? 0 }
+  return { ueberlagerung: { ...u, kopien: [...u.kopien, k] }, neueId }
+}
+
+/** Entfernt die Änderung eines Bauteils (zurück auf die berechnete Lage) bzw. löscht eine Kopie. */
+export function setzeBauteilZurueck(u: BauteilUeberlagerung, id: string): BauteilUeberlagerung {
+  return { aenderungen: u.aenderungen.filter((a) => a.id !== id), kopien: u.kopien.filter((k) => k.id !== id) }
+}
+
+/** Ist das Bauteil gegenüber der Berechnung verändert (oder eine Kopie)? */
+export const istVonHandVeraendert = (u: BauteilUeberlagerung, id: string): boolean => u.aenderungen.some((a) => a.id === id) || u.kopien.some((k) => k.id === id)
