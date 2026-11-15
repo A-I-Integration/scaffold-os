@@ -121,6 +121,28 @@ describe('Referenz EFH-Hang (Eckkoten NW −2,55 / NO +1,55 / SW −0,10 / SO +1
   })
 })
 
+
+describe('Umriss-Hang: Rückseite und Ausgleichsbelag', () => {
+  it('folgt auf der Rückseite den exakten Profilpunkten und ergänzt Bordbretter an Ausgleichsbelägen', () => {
+    const b = haus()
+    b.umriss = [
+      { x: -b.lengthM / 2, z: -b.widthM / 2 },
+      { x: b.lengthM / 2, z: -b.widthM / 2 },
+      { x: b.lengthM / 2, z: b.widthM / 2 },
+      { x: -b.lengthM / 2, z: b.widthM / 2 },
+    ]
+    const model = generateCADModel(b, 'layher-allround')
+    const rueckfelder = model.fields.filter((f) => f.kante === 0 || f.kante === 2)
+    expect(rueckfelder.length).toBeGreaterThan(0)
+    expect(rueckfelder.some((f) => (f.fuss?.stielM ?? 0) + (f.fuss?.spindelM ?? 0) > 0)).toBe(true)
+    const components = generateScaffoldComponents(model)
+    const ausgleichBelagIds = new Set(components.filter((c) => c.id.startsWith('ausgleich-deck-')).map((c) => c.fieldId))
+    const ausgleichBrettIds = new Set(components.filter((c) => c.id.startsWith('ausgleich-board-')).map((c) => c.fieldId))
+    expect(ausgleichBelagIds.size).toBeGreaterThan(0)
+    for (const id of ausgleichBelagIds) expect(ausgleichBrettIds.has(id)).toBe(true)
+  })
+})
+
 describe('Hang-Fußausgleich im Umriss-Modus', () => {
   it('verwendet Geländelinien auch ohne explizite Eckhöhen und verlängert die Ständer bis zum Gelände', () => {
     const b = haus()
