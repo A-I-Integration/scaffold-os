@@ -2288,6 +2288,8 @@ export function generateCADModel(
     : dachRegel || Object.keys(hangSeiteM).length > 0
       ? fields.reduce((sum, f) => sum + f.lengthM * rasterM, 0)
       : preliminaryModel.totalAreaM2 + activeSides.reduce((sum, sd) => sum + seitenLaengeM(sd), 0) * Math.max(0, obersteLageM - building.heightM)
+  // Dieselbe Fassadenanalyse auch im normalen Rechteck-Modus ausführen.
+  Object.assign(preliminaryModel, analysiereBestaetigteFassaden(building, warnings))
   const components3D = generateScaffoldComponents(preliminaryModel)
   return { ...preliminaryModel, components3D }
 }
@@ -2303,6 +2305,30 @@ const hangIgnoriert = (o: GeruestOptionen | undefined): CADWarning | null => {
  * `abstandM` vor der Wand). Zwischen zwei Kanten endet der Strang am Schnittpunkt
  * der beiden Innenlinien. Außenecken werden mit einem Eckbelag geschlossen.
  */
+/** Führt die eigenständige Fassadenanalyse unabhängig vom CAD-/Gerüstmodus aus. */
+function analysiereBestaetigteFassaden(
+  building: BuildingParams,
+  warnings: CADWarning[]
+): Pick<CADModel, 'fassadenFlaechen' | 'fassadenAbschnitte'> {
+  if (!building.fassadenGeschosse?.length) return {}
+  const analyse = fassadenFlaechenAusGeschossen(building.fassadenGeschosse)
+  if (!analyse.ok) {
+    warnings.push({ type: 'warning', code: 'FASSADEN_ANALYSE_FEHLER', message: `Fassadenanalyse nicht möglich: ${analyse.fehler}` })
+    return {}
+  }
+  const abschnitte = erzeugeFassadenAbschnitte(analyse.flaechen)
+  if (!abschnitte.ok) {
+    warnings.push({ type: 'warning', code: 'FASSADEN_ABSCHNITTE_FEHLER', message: `Fassadenabschnitte nicht möglich: ${abschnitte.fehler}` })
+    return { fassadenFlaechen: analyse.flaechen }
+  }
+  warnings.push({
+    type: 'info',
+    code: 'FASSADEN_ANALYSE',
+    message: `${analyse.flaechen.length} sichtbare Fassadenflächen (${abschnitte.abschnitte.length} gerichtete Abschnitte, ${analyse.gesamtFlaecheM2.toFixed(1)} m²) aus bestätigten Geschosskonturen berechnet. Die Gerüstfelder folgen derzeit weiterhin dem bestehenden Gebäudeumriss bzw. Rechteck; Fassaden-Rücksprünge sind noch nicht automatisch eingerüstet.`
+  })
+  return { fassadenFlaechen: analyse.flaechen, fassadenAbschnitte: abschnitte.abschnitte }
+}
+
 function generiereUmrissModell(
   gebaeude: BuildingParams,
   system: GeruestSystem | null,
@@ -2312,24 +2338,8 @@ function generiereUmrissModell(
   teile: (laengeM: number) => { distribution: number[]; fields: number; fieldLengthM: number }
 ): CADModel {
   const warnings: CADWarning[] = [...vorWarnungen]
-  // Geschosskonturen werden zusätzlich als sichtbare Wandflächen analysiert.
-  // Die bisherige Gerüst-Feldberechnung bleibt bis zur separaten Freigabe unverändert.
-  let fassadenFlaechen: CADModel['fassadenFlaechen']
-  let fassadenAbschnitte: CADModel['fassadenAbschnitte']
-  if (gebaeude.fassadenGeschosse?.length) {
-    const analyse = fassadenFlaechenAusGeschossen(gebaeude.fassadenGeschosse)
-    if (!analyse.ok) {
-      warnings.push({ type: 'warning', code: 'FASSADEN_ANALYSE_FEHLER', message: `Fassadenanalyse nicht möglich: ${analyse.fehler}` })
-    } else {
-      const abschnitte = erzeugeFassadenAbschnitte(analyse.flaechen)
-      if (!abschnitte.ok) warnings.push({ type: 'warning', code: 'FASSADEN_ABSCHNITTE_FEHLER', message: `Fassadenabschnitte nicht möglich: ${abschnitte.fehler}` })
-      else {
-        fassadenFlaechen = analyse.flaechen
-        fassadenAbschnitte = abschnitte.abschnitte
-        warnings.push({ type: 'info', code: 'FASSADEN_ANALYSE', message: `${analyse.flaechen.length} sichtbare Fassadenflächen (${abschnitte.abschnitte.length} gerichtete Abschnitte, ${analyse.gesamtFlaecheM2.toFixed(1)} m²) aus bestätigten Geschosskonturen berechnet. Die Gerüstfelder folgen derzeit weiterhin dem bestehenden Gebäudeumriss; Fassaden-Rücksprünge sind noch nicht automatisch eingerüstet.` })
-      }
-    }
-  }
+  // Fassadenanalyse bleibt unabhängig von der bestehenden Gerüst-Feldberechnung.
+  const { fassadenFlaechen, fassadenAbschnitte } = analysiereBestaetigteFassaden(gebaeude, warnings)
   // Hang im Umriss-Modus: wenn Eckhöhen gesetzt sind, steht das Gerüst gleichmäßig auf dem tiefsten Punkt (sicher, über-
   // deckt den ganzen Umriss). Das feldweise Abtreppen entlang der Polygonkanten kommt als nächster Schritt.
   const eckU = eckenGelaendeM(gebaeude)
