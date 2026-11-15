@@ -201,6 +201,10 @@ export interface BuildingParams {
   umriss?: UmrissPunkt[]
   /** Nur Umriss-Modus: eigene Höhe je Kante (m), Eintrag i = Kante von Punkt i zu Punkt i+1 (z. B. Garage/Terrasse niedriger als der Hauptbau). Ohne Angabe gilt heightM. */
   umrissKantenHoeheM?: number[]
+  /** Geschosskonturen aus dem PDF-Aufmaß. Ohne Höhenfreigabe nur Geometrie-Rohdaten. */
+  planGeschossKonturen?: { ebene: number; titel: string; umriss: UmrissPunkt[] }[]
+  /** Explizite OKFF-Koten aus dem PDF; bleiben Vorschläge bis zur manuellen Bestätigung im CAD. */
+  planGeschossHoehenVorschlaege?: { ebene: number; titel: string; obenM: number; text: string; bestaetigungErforderlich: true }[]
   /** Geprüfte Geschosskonturen für die eigenständige Fassadenanalyse. Höhen sind OKFF-/Wandoberkanten in m. */
   fassadenGeschosse?: { name: string; obenM: number; umriss: UmrissPunkt[] }[]
   // NEU: Einstellungen für die automatische Gerüst-Erzeugung (alles optional;
