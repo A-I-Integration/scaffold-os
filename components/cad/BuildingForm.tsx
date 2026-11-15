@@ -83,6 +83,7 @@ export default function BuildingForm({ building, systemId, onChange, onSystemCha
   // Dasselbe Feld trägt auch den IFC-Import (`ifc` gesetzt): gleiche Formerkennung, gleiche Teile, gleicher Prüfschritt
   const [dxfImport, setDxfImport] = useState<{ name: string; inhalt: string; ergebnis: DxfUmrissErgebnis; hoehen: string[]; gezeichnet?: boolean; ifc?: IfcZusatz } | null>(null)
   const [planGeschossHoehen, setPlanGeschossHoehen] = useState<{ name: string; vorschlaege: GeschossHoehenVorschlag[]; werte: string[]; bestaetigt: boolean } | null>(null)
+  const [planFassadenKonturen, setPlanFassadenKonturen] = useState<{ ebene: number; titel: string; umriss: { x: number; z: number }[] }[]>([])
   const ifcSitzung = useRef<string>('')
   const [ifcFortschritt, setIfcFortschritt] = useState<{ anteil: number; text: string } | null>(null)
   // NWD (Navisworks): Konvertierung in der Autodesk-Cloud, gestaffelte Anzeige Upload → Konvertierung → Einlesen
@@ -133,6 +134,7 @@ export default function BuildingForm({ building, systemId, onChange, onSystemCha
 
   async function handlePlanUpload(file: File, weitere: File[] = []) {
     setPlanGeschossHoehen(null)
+    setPlanFassadenKonturen([])
     setAnalyseHinweis(null);
     setModellImport(null);
     void vergissModell(); // neuer Upload ersetzt das gemerkte Modell
@@ -365,6 +367,7 @@ export default function BuildingForm({ building, systemId, onChange, onSystemCha
           const pl = await planLesen(file)
           if (!pl) planVorspann = 'Kein Vektor-Grundriss im PDF lesbar (Raster- oder Kurvenzeichnung): Die Werte stammen aus der KI-Auswertung und sind nicht maßhaltig – Datenqualität gelb bis rot, bitte mit den Maßketten abgleichen. '
           if (pl) {
+            setPlanFassadenKonturen(pl.geschosse.filter((g) => g.ebene >= 0 && g.umriss && g.umriss.length >= 3).map((g) => ({ ebene: g.ebene, titel: g.titel, umriss: g.umriss! })))
             if (pl.geschossHoehenVorschlaege?.length) {
               setPlanGeschossHoehen({ name: file.name, vorschlaege: pl.geschossHoehenVorschlaege, werte: pl.geschossHoehenVorschlaege.map((v) => String(v.obenM).replace('.', ',')), bestaetigt: false })
             }
@@ -726,7 +729,7 @@ export default function BuildingForm({ building, systemId, onChange, onSystemCha
             {planGeschossHoehen && (
               <div className='rounded-lg border border-amber-300 bg-amber-50 p-3 space-y-2 text-[11px] text-[#424245]'>
                 <p className='font-semibold'>Geschosshöhen aus „{planGeschossHoehen.name}“ prüfen</p>
-                <p>Nur ausdrücklich beschriftete OKFF-/OK-FFB-Koten wurden erkannt. Bitte jede Höhe mit dem Plan vergleichen. Diese Werte werden noch nicht für die CAD-Geometrie verwendet.</p>
+                <p>Nur ausdrücklich beschriftete OKFF-/OK-FFB-Koten wurden erkannt. Bitte jede Höhe mit dem Plan vergleichen. Bestätigte Höhen werden mit der passenden Geschosskontur an die Fassadenanalyse übergeben.</p>
                 {planGeschossHoehen.vorschlaege.map((v, i) => (
                   <label key={`${v.ebene}-${i}`} className='flex flex-wrap items-center gap-2'>
                     <span className='min-w-28'>{v.ebene === 0 ? 'Erdgeschoss' : v.ebene === 99 ? 'Dachgeschoss' : v.ebene === -1 ? 'Kellergeschoss' : `${v.ebene}. Obergeschoss`}</span>
@@ -738,8 +741,20 @@ export default function BuildingForm({ building, systemId, onChange, onSystemCha
                   <button type='button' className='rounded-lg bg-[#0071e3] px-3 py-1 font-semibold text-white' onClick={() => {
                     const gueltig = planGeschossHoehen.werte.every((w) => w.trim() !== '' && Number.isFinite(Number(w.replace(',', '.'))))
                     if (!gueltig) { setAnalyseHinweis('❌ Bitte alle vorgeschlagenen Geschosshöhen als Zahlen in Metern eintragen.'); return }
+                    const bestaetigteGeschosse = planGeschossHoehen.vorschlaege.flatMap((v, i) => {
+                      const kontur = planFassadenKonturen.find((g) => g.ebene === v.ebene)
+                      const obenM = Number(planGeschossHoehen.werte[i].replace(',', '.'))
+                      return kontur && kontur.umriss.length >= 3 && Number.isFinite(obenM) && obenM > 0
+                        ? [{ name: kontur.titel || v.titel, obenM, umriss: kontur.umriss }]
+                        : []
+                    })
+                    if (bestaetigteGeschosse.length === 0) {
+                      setAnalyseHinweis('❌ Keine bestätigte Geschosshöhe besitzt eine passende, vollständige Grundrisskontur. Fassadenanalyse bleibt deaktiviert.')
+                      return
+                    }
+                    onChange({ ...building, fassadenGeschosse: bestaetigteGeschosse })
                     setPlanGeschossHoehen((aktuell) => aktuell ? { ...aktuell, bestaetigt: true } : aktuell)
-                    setAnalyseHinweis('Geschosshöhen wurden von dir bestätigt. Die Übernahme in die Geschossvereinigung und CAD-Höhenberechnung ist ein separater nächster Schritt.')
+                    setAnalyseHinweis(`${bestaetigteGeschosse.length} bestätigte Geschosskontur(en) an die CAD-Fassadenanalyse übergeben. Die vorhandene Gerüst-Feldberechnung bleibt unverändert; Rücksprünge werden noch nicht automatisch eingerüstet.`)
                   }}>Höhen bestätigen</button>
                   {planGeschossHoehen.bestaetigt && <span className='text-green-700 font-semibold'>Bestätigt</span>}
                   <button type='button' className='rounded-lg bg-white border border-black/15 px-3 py-1' onClick={() => setPlanGeschossHoehen(null)}>Schließen</button>
