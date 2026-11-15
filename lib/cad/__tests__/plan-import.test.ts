@@ -23,6 +23,38 @@ describe('planImportAus', () => {
     const p = planImportAus('plan.pdf', 100, [g('ERDGESCHOSS', 0, 6, 12)])!
     expect(p.geschosse[0]).toMatchObject({ laengeM: 12, breiteM: 6 })
   })
+  it('bewahrt die vollständige Geschosskontur maßstäblich und zentriert', () => {
+    const mpp = (0.0254 / 72) * 100
+    const pt = (m: number) => m / mpp
+    const kontur = [[0, 0], [10, 0], [10, 6], [7, 6], [7, 8], [0, 8]].map(([x, y]) => ({ x: pt(x), y: pt(y) }))
+    const gefunden = [{ titel: 'ERDGESCHOSS', ebene: 0, kontur, farbe: '#000', breiteM: 10, tiefeM: 8, flaecheM2: 74 }]
+    const p = planImportAus('plan.pdf', 100, gefunden)!
+    const umriss = p.geschosse[0].umriss!
+    expect(umriss).toHaveLength(6)
+    expect(Math.max(...umriss.map((q) => q.x)) - Math.min(...umriss.map((q) => q.x))).toBeCloseTo(10, 1)
+    expect(Math.max(...umriss.map((q) => q.z)) - Math.min(...umriss.map((q) => q.z))).toBeCloseTo(8, 1)
+    expect((Math.max(...umriss.map((q) => q.x)) + Math.min(...umriss.map((q) => q.x)))).toBeCloseTo(0, 2)
+  })
+  it('behält die relative Lage unterschiedlicher Geschosskonturen bei', () => {
+    const mpp = (0.0254 / 72) * 100
+    const pt = (m: number) => m / mpp
+    const polygon = (x: number, y: number, w: number, h: number) => [
+      [x, y], [x + w, y], [x + w, y + h], [x, y + h],
+    ].map(([px, py]) => ({ x: pt(px), y: pt(py) }))
+    const gefunden = [
+      { titel: 'ERDGESCHOSS', ebene: 0, kontur: polygon(0, 0, 12, 8), farbe: '#000', breiteM: 12, tiefeM: 8, flaecheM2: 96 },
+      { titel: '1. OBERGESCHOSS', ebene: 1, kontur: polygon(3, 2, 8, 6), farbe: '#000', breiteM: 8, tiefeM: 6, flaecheM2: 48 },
+    ]
+    const p = planImportAus('plan.pdf', 100, gefunden)!
+    const eg = p.geschosse[0].umriss!
+    const og = p.geschosse[1].umriss!
+    const mitte = (ring: typeof eg) => ({
+      x: (Math.min(...ring.map((q) => q.x)) + Math.max(...ring.map((q) => q.x))) / 2,
+      z: (Math.min(...ring.map((q) => q.z)) + Math.max(...ring.map((q) => q.z))) / 2,
+    })
+    expect(mitte(eg).x).not.toBeCloseTo(mitte(og).x, 1)
+    expect(mitte(eg).z).not.toBeCloseTo(mitte(og).z, 1)
+  })
 })
 
 describe('Dachneigung mit Vorbau', () => {

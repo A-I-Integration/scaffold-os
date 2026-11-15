@@ -9,11 +9,14 @@ import { oeffnungenFinden } from './oeffnungen-aus-plan'
 import type { GelaendeLinieAnsicht } from './gelaende-aus-ansichten'
 import { gelaendeAusPlan, gelaendeJeKante, gelaendeEckenAusPlan, type GelaendeAusPlan, type GelaendeJeKante } from './gelaende-aus-plan'
 import { hauptkoerperAusKontur, type Vorbau } from './hauptkoerper'
+import type { UmrissPunkt } from '@/lib/calculations/cad-umriss'
 import { oeffnungenAnKanten, vorbautenAnKanten, type PlanOeffnungAnKante, type PlanVorbauAnKante } from './plan-oeffnungen-modell'
 import { kotenJeAnsicht, pultNiedrigeRichtung, gelaendeTiefeJeAnsicht, type Himmelsrichtung, type GelaendeTiefe } from './koten-je-ansicht'
 import { dachAusPlan, dachKotenAusPlan, pultdachNeigung, type PlanDachform } from './dachform-aus-plan'
 
 export interface PlanImportGeschoss { titel: string; ebene: number; laengeM: number; breiteM: number; flaecheM2: number; fenster?: number; tueren?: number
+  /** Vollständige erkannte Außenkontur des Geschosses in Metern, auf den Gebäude-Mittelpunkt zentriert. */
+  umriss?: UmrissPunkt[]
   /** Vorsprünge (z. B. WC-Erker), die nicht in Länge/Breite stecken – diese beschreiben den Hauptkörper */
   vorbauten?: Vorbau[]
   /** Fenster und Türen an den Kanten des Hauptkörpers (für das 3D-Modell); fehlt bei Konturen ohne klaren Hauptkörper */
@@ -59,6 +62,11 @@ const runde = (v: number) => Math.round(v * 100) / 100
 export function planImportAus(dateiname: string, massstab: number, gefunden: GefundenerGrundriss[], texte: PlanText[] = [], flaechen: VektorFlaeche[] = []): PlanImport | null {
   if (!gefunden.length) return null
   const mpp = (0.0254 / 72) * massstab
+  // Gemeinsamer Ursprung für alle Geschosse: relative Versätze bleiben erhalten.
+  const alleX = gefunden.flatMap((g) => g.kontur.map((p) => p.x))
+  const alleY = gefunden.flatMap((g) => g.kontur.map((p) => p.y))
+  const mitteX = alleX.length ? (Math.min(...alleX) + Math.max(...alleX)) / 2 : 0
+  const mitteY = alleY.length ? (Math.min(...alleY) + Math.max(...alleY)) / 2 : 0
   const geschosse: PlanImportGeschoss[] = gefunden.map((g) => {
     // Hauptkörper statt umschließendem Rechteck, wenn nur kleine Vorbauten abstehen
     const hk = hauptkoerperAusKontur(g.kontur, mpp)
@@ -70,6 +78,11 @@ export function planImportAus(dateiname: string, massstab: number, gefunden: Gef
       laengeM: runde(laenge),
       breiteM: runde(breite),
       flaecheM2: Math.round(g.flaecheM2 * 10) / 10,
+      // Die vollständige Kontur bleibt zusätzlich zum vereinfachten Hauptkörper erhalten.
+      // Alle Geschosse verwenden dieselbe Seiten-Koordinatenbasis (Meter, z nach unten im Plan).
+      ...(g.kontur.length >= 3 ? {
+        umriss: g.kontur.map((p) => ({ x: runde((p.x - mitteX) * mpp), z: runde((p.y - mitteY) * mpp) })),
+      } : {}),
       ...(hk && hk.vorbauten.length ? { vorbauten: hk.vorbauten.map((v) => ({ laengeM: v.laengeM, tiefeM: v.tiefeM, flaecheM2: v.flaecheM2 })), vorbautenAnKante: vorbautenAnKanten(hk.vorbauten, hk.rechteck, mpp) } : {}),
       ...(flaechen.length ? (() => {
         const o = oeffnungenFinden(flaechen, g, texte, mpp)
