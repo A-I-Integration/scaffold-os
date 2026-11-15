@@ -364,7 +364,21 @@ export default function BuildingForm({ building, systemId, onChange, onSystemCha
           if (pl) {
             const haupt = pl.geschosse.find((g) => g.ebene === pl.hauptEbene)
             const aus: string[] = []
-            if (haupt) { patch.lengthM = haupt.laengeM; patch.widthM = haupt.breiteM; aus.push('Länge/Breite') }
+            if (haupt) {
+              patch.lengthM = haupt.laengeM
+              patch.widthM = haupt.breiteM
+              aus.push('Länge/Breite')
+              // Den vollständigen Außenumriss des Hauptgeschosses an die CAD-Engine
+              // übergeben. Bisher wurden hier nur die Maße des Hauptkörpers gesetzt.
+              if (haupt.umriss && haupt.umriss.length >= 3) {
+                const box = umrissBox(haupt.umriss)
+                patch.umriss = haupt.umriss
+                patch.sections = undefined
+                patch.lengthM = Math.round(box.lengthM * 100) / 100
+                patch.widthM = Math.round(box.widthM * 100) / 100
+                aus.push('vollständiger Gebäudeumriss')
+              }
+            }
             if (pl.firstKoteM) { patch.heightM = pl.firstKoteM; aus.push('Höhe') }
             if (pl.traufKoteM) { patch.eavesHeightM = pl.traufKoteM; aus.push('Traufhöhe') }
             if (pl.dachform) { patch.roofForm = dachMap[pl.dachform]; aus.push('Dachform') }
@@ -404,6 +418,10 @@ export default function BuildingForm({ building, systemId, onChange, onSystemCha
               if (gel.geruestOptionen) patch.geruestOptionen = gel.geruestOptionen
               oeffnungenHinweis += gel.hinweis
             }
+            if (haupt?.umriss?.length) {
+              const weitere = pl.geschosse.filter((g) => g.ebene >= 0 && g.ebene !== pl.hauptEbene && g.umriss?.length).length
+              oeffnungenHinweis += ` Der vollständige Außenumriss des Hauptgeschosses wurde ins CAD übernommen. ${weitere ? `${weitere} weitere Geschosskontur(en) wurden im Import erhalten, aber noch nicht mit eigenen Höhen in das CAD-Polygon vereinigt.` : ''}`
+            }
             { const pb = pruefePlanImport(pl); const auff = pb.befunde.filter((x) => x.ampel !== 'gruen'); oeffnungenHinweis += ` Datenqualität: ${pb.ampel === 'gruen' ? 'grün' : pb.ampel === 'gelb' ? 'gelb' : 'rot'}.${auff.length ? ' ' + auff.map((x) => `${x.titel}: ${x.detail}`).join(' ') : ''}` }
             if (aus.length) planVorspann = `Aus den Zeichenlinien des Plans gelesen (Maßstab 1:${pl.massstab}): ${aus.join(', ')}.${haupt?.vorbauten?.length ? ` Vorbauten (ca. ${String(Math.round(haupt.vorbauten.reduce((a, v) => a + v.flaecheM2, 0) * 10) / 10).replace('.', ',')} m²) sind in Länge/Breite nicht enthalten – bitte prüfen.` : ''}${oeffnungenHinweis} `
           }
@@ -435,6 +453,11 @@ export default function BuildingForm({ building, systemId, onChange, onSystemCha
         const neuesGebaeude: BuildingParams = { ...building, ...zurueck, ...patch }
         // Abschnitte einer frueheren Analyse entfernen, wenn die neue keine liefert
         if (vorherigeAutoFelder.includes('sections') && !('sections' in patch)) delete neuesGebaeude.sections
+        // Einen zuvor automatisch importierten Gebäudeumriss nicht an einen neuen Plan hängen.
+        if (vorherigeAutoFelder.includes('umriss') && !('umriss' in patch)) {
+          delete neuesGebaeude.umriss
+          delete neuesGebaeude.umrissKantenHoeheM
+        }
         // Fenster/Türen aus einem früheren Plan nicht an den neuen hängen
         for (const f of ['tueren', 'fensterFest', 'vorbauten'] as const) if (vorherigeAutoFelder.includes(f) && !(f in patch)) delete neuesGebaeude[f]
         onChange(neuesGebaeude)
