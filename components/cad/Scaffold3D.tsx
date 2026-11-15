@@ -1529,16 +1529,21 @@ function Building3D({
   // Umriss-Modus: Gebäude als Vieleck-Körper (Wände nach oben gezogen) in den
   // Szenen-Koordinaten des Umrisses. Fenster und Türen sitzen an den Kanten.
   if (building.umriss && building.umriss.length >= 3) {
+    const { hangM } = hangDaten(building)
     return (
       <group>
-        <UmrissGebaeude punkte={building.umriss} heightM={heightM} kantenHoeheM={building.umrissKantenHoeheM} />
-        {features.filter((f) => f.umriss).map((f) => {
-          const u = f.umriss!
-          const y = f.bottomY + f.heightM / 2
-          const out = f.type === 'balcony' ? f.depthM / 2 : 0.02
-          const pos: [number, number, number] = [u.weltX + Math.sin(u.yaw) * out, y, u.weltZ + Math.cos(u.yaw) * out]
-          return <FassadenMerkmal key={f.id} f={f} pos={pos} rot={[0, u.yaw, 0]} />
-        })}
+        {/* Bei Hanglage liegt auch der Umriss-Baukörper um hangM tiefer; die gemeinsame Geländeoberfläche sitzt darüber. */}
+        {hangM > 0.05 && <Hanggelaende lengthM={lengthM} widthM={w} hangM={hangM} building={building} />}
+        <group position={[0, -hangM, 0]}>
+          <UmrissGebaeude punkte={building.umriss} heightM={heightM} kantenHoeheM={building.umrissKantenHoeheM} />
+          {features.filter((f) => f.umriss).map((f) => {
+            const u = f.umriss!
+            const y = f.bottomY + f.heightM / 2
+            const out = f.type === 'balcony' ? f.depthM / 2 : 0.02
+            const pos: [number, number, number] = [u.weltX + Math.sin(u.yaw) * out, y, u.weltZ + Math.cos(u.yaw) * out]
+            return <FassadenMerkmal key={f.id} f={f} pos={pos} rot={[0, u.yaw, 0]} />
+          })}
+        </group>
       </group>
     )
   }
