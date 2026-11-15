@@ -2416,7 +2416,7 @@ function generiereUmrissModell(
       { side: 'right' as const, dist: Math.abs(x - box.lengthM / 2), pos: (1 - v) * box.widthM },
     ].sort((a, b) => a.dist - b.dist)
     const naechste = kanten[0]
-    if (naechste.dist < 0.15) {
+    if (naechste.dist < Math.max(0.15, abstandM + 0.2)) {
       const profilHoehe = terrain.heightAt(naechste.side, naechste.pos)
       if (profilHoehe !== undefined) return profilHoehe
     }
