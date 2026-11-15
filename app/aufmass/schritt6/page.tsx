@@ -501,7 +501,12 @@ function Schritt6Content() {
     return () => { weg = true; };
   }, [savedProjectId]);
   function handleImCadOeffnen() {
-    const r = aufmassZuCad({ step2: s2, step3: s3, kiResult: kiResult as object | null });
+    let planImport: PlanImport | null = null
+    try {
+      const roh = localStorage.getItem('scaffold_plan_import')
+      if (roh) planImport = JSON.parse(roh) as PlanImport
+    } catch { /* fehlerhafter/alter Planimport wird nicht übernommen */ }
+    const r = aufmassZuCad({ step2: s2, step3: s3, kiResult: kiResult as object | null, planImport });
     if (!r.ok || !r.building) { setCadFehler('Für das CAD fehlen noch: ' + r.fehlend.join(', ') + '. Bitte in Schritt 2 ergänzen.'); return; }
     setCadFehler(null);
     try {
