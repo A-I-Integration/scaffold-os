@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { generateCADModel, generateScaffoldComponents, type BuildingParams } from '@/lib/calculations/cad-engine'
+import { generateCADModel, generateScaffoldComponents, gelaendeHoeheFn, type BuildingParams } from '@/lib/calculations/cad-engine'
 import { Terrain, parseGelaendeLinie, formatGelaendeLinie } from '@/lib/calculations/gelaende'
 
 describe('Terrain / Geländelinie', () => {
@@ -43,7 +43,6 @@ describe('Gerüst gründet je Feld auf der Geländelinie', () => {
   })
 })
 
-import { gelaendeHoeheFn } from '@/lib/calculations/cad-engine'
 describe('3D-Gelände aus den Seitenlinien', () => {
   it('trifft die Ecken und die Zwischenpunkte der Linie', () => {
     const b = haus()
@@ -166,5 +165,37 @@ describe('Hang-Fußausgleich im Umriss-Modus', () => {
     const teile = generateScaffoldComponents(m)
     expect(teile.some((c) => c.type === 'ausgleich')).toBe(true)
     expect(teile.some((c) => c.type === 'footplate')).toBe(true)
+  })
+})
+
+describe('Umriss-Hang: Fußplatten folgen exakt der dargestellten Geländeoberfläche', () => {
+  it('setzt die hinteren Ausgleichsfußplatten auf dieselbe Geländehöhe wie die 3D-Hangfläche', () => {
+    const b = haus()
+    b.umriss = [
+      { x: -b.lengthM / 2, z: -b.widthM / 2 },
+      { x: b.lengthM / 2, z: -b.widthM / 2 },
+      { x: b.lengthM / 2, z: b.widthM / 2 },
+      { x: -b.lengthM / 2, z: b.widthM / 2 },
+    ]
+    b.geruestOptionen = {
+      gelaendeProfilM: {
+        back: [{ posM: 0, hoeheM: -2.55 }, { posM: b.lengthM, hoeheM: 1.55 }],
+        front: [{ posM: 0, hoeheM: -0.1 }, { posM: b.lengthM, hoeheM: 1.5 }],
+        left: [{ posM: 0, hoeheM: -2.55 }, { posM: b.widthM, hoeheM: -0.1 }],
+        right: [{ posM: 0, hoeheM: 1.55 }, { posM: b.widthM, hoeheM: 1.5 }],
+      },
+    }
+    const model = generateCADModel(b, 'layher-allround')
+    const terrain = gelaendeHoeheFn(model.building)
+    const components = generateScaffoldComponents(model)
+    const hintereAusgleichsFuesse = components.filter((c) =>
+      c.type === 'footplate' &&
+      c.id.startsWith('spindel-') &&
+      c.position[2] < -model.building.widthM / 2 + 0.2
+    )
+    expect(hintereAusgleichsFuesse.length).toBeGreaterThan(0)
+    for (const fuss of hintereAusgleichsFuesse) {
+      expect(fuss.position[1] + 0.02).toBeCloseTo(terrain(fuss.position[0], fuss.position[2]), 1)
+    }
   })
 })
