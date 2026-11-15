@@ -883,6 +883,7 @@ export function generateScaffoldComponents(model: CADModel): ScaffoldComponent3D
         // sonst stünde über dem Boden eine Lücke ohne Arbeitsplatz (Zugang dorthin: Leiter, nicht Teil des Modells)
         if (gapM >= 1.0) {
           components.push({ id: `ausgleich-deck-${field.id}`, type: 'deck', articleNumber: getDeckArticle(lengthM), name: `Arbeitsbühne ${lengthM}m`, position: [positionX, yBottom, positionZ + widthM / 2 - 0.02], rotation: [-Math.PI / 2, 0, 0], scale: [lengthM - 0.05, widthM - 0.05, 0.02], color: colorDeck, fieldId: field.id, levelId: level.id })
+          components.push({ id: `ausgleich-board-${field.id}`, type: 'board', articleNumber: 'BB-001', name: `Bordbrett ${lengthM}m`, position: [positionX, yBottom + 0.105, positionZ + widthM - 0.06], rotation: [0, 0, 0], scale: [lengthM, 0.19, 0.02], color: colorBoard, fieldId: field.id, levelId: level.id })
           components.push({ id: `ausgleich-gelaender-${field.id}`, type: 'railing', articleNumber: getRailingArticle(lengthM), name: `Geländer ${lengthM}m`, position: [positionX, yBottom + 0.5, positionZ + widthM - 0.045], rotation: [0, 0, 0], scale: [lengthM, 1.0, 0.04], color: colorRailing, fieldId: field.id, levelId: level.id })
         }
       }
@@ -2402,9 +2403,23 @@ function generiereUmrissModell(
   aktive.forEach((s) => divs.set(s.k.index, teile(s.laenge)))
 
   // Hang-Gelände über die vier Eck-Höhen bilinear über den Umriss interpolieren (Fuß je Feld folgt dem Hang)
+  const terrain = new Terrain(gebaeude.geruestOptionen?.gelaendeProfilM)
   const terrainAn = (x: number, z: number): number => {
     const u = box.lengthM > 0 ? Math.min(1, Math.max(0, (x + box.lengthM / 2) / box.lengthM)) : 0.5
     const v = box.widthM > 0 ? Math.min(1, Math.max(0, (z + box.widthM / 2) / box.widthM)) : 0.5
+    // Auf einer Umrisskante hat das echte Seitenprofil Vorrang vor der bilinearen Eckinterpolation.
+    // Die Profilrichtung folgt der vorhandenen Konvention: back/left beginnen hinten, front/right vorne.
+    const kanten = [
+      { side: 'back' as const, dist: Math.abs(z + box.widthM / 2), pos: u * box.lengthM },
+      { side: 'front' as const, dist: Math.abs(z - box.widthM / 2), pos: u * box.lengthM },
+      { side: 'left' as const, dist: Math.abs(x + box.lengthM / 2), pos: (1 - v) * box.widthM },
+      { side: 'right' as const, dist: Math.abs(x - box.lengthM / 2), pos: (1 - v) * box.widthM },
+    ].sort((a, b) => a.dist - b.dist)
+    const naechste = kanten[0]
+    if (naechste.dist < 0.15) {
+      const profilHoehe = terrain.heightAt(naechste.side, naechste.pos)
+      if (profilHoehe !== undefined) return profilHoehe
+    }
     return (1 - u) * (1 - v) * eckU.bl + u * (1 - v) * eckU.br + (1 - u) * v * eckU.fl + u * v * eckU.fr
   }
   const abtreppFuesseU: { ausgleichM: number; stielM: number; spindelM: number; spindel80: boolean }[] = []
