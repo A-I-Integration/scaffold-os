@@ -12,6 +12,7 @@ import dynamic from 'next/dynamic';
 import { jsPDF } from 'jspdf';
 import WizardKopf from '@/components/aufmaß/WizardKopf';
 import { aufmassZuCad, CAD_UEBERNAHME_KEY } from '@/lib/cad/aufmass-zu-cad';
+import type { PlanImport } from '@/lib/cad/plan-import';
 import { waehleCadAnsicht, passeBildEin, ladeBild, type GeladenesBild } from '@/lib/angebot-3d-ansicht';
 import autoTable from 'jspdf-autotable';
 import KIMaterialResult from '@/components/aufmaß/KIMaterialResult';
