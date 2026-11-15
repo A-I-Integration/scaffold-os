@@ -21,7 +21,7 @@ export const FUSSPLATTE_UNTERKANTE_REL_M = -0.02 + FUSSPLATTE_AUFSTANDSVERSATZ_M
  */
 export function hangDaten(building: BuildingParams): { hangM: number; g: Record<'front' | 'back' | 'left' | 'right', number> } {
   const leer = { front: 0, back: 0, left: 0, right: 0 }
-  if ((building.sections && building.sections.length >= 2) || (building.umriss && building.umriss.length >= 3)) return { hangM: 0, g: leer }
+  if (building.sections && building.sections.length >= 2) return { hangM: 0, g: leer }
   // Tiefster Punkt aus demselben Ecken-Modell wie die Gerüstberechnung
   const e = eckenGelaendeM(building)
   const prof = building.geruestOptionen?.gelaendeProfilM
