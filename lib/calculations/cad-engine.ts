@@ -203,6 +203,9 @@ export interface BuildingParams {
   umrissKantenHoeheM?: number[]
   /** Geprüfte Geschosskonturen für die eigenständige Fassadenanalyse. Höhen sind OKFF-/Wandoberkanten in m. */
   fassadenGeschosse?: { name: string; obenM: number; umriss: UmrissPunkt[] }[]
+  /** Unbestätigte Konturen aus dem Aufmaß-PDF; Höhenvorschläge müssen im CAD manuell bestätigt werden. */
+  planGeschossKonturen?: { ebene: number; titel: string; umriss: UmrissPunkt[] }[]
+  planGeschossHoehenVorschlaege?: { ebene: number; titel: string; obenM: number; text: string; bestaetigungErforderlich: true }[]
   // NEU: Einstellungen für die automatische Gerüst-Erzeugung (alles optional;
   // ohne Angabe gelten die bisherigen Standardwerte).
   geruestOptionen?: GeruestOptionen
