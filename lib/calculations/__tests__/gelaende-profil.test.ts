@@ -120,3 +120,29 @@ describe('Referenz EFH-Hang (Eckkoten NW −2,55 / NO +1,55 / SW −0,10 / SO +1
     expect(m.levelCount).toBeGreaterThanOrEqual(5)
   })
 })
+
+describe('Hang-Fußausgleich im Umriss-Modus', () => {
+  it('verwendet Geländelinien auch ohne explizite Eckhöhen und verlängert die Ständer bis zum Gelände', () => {
+    const b = haus()
+    b.umriss = [
+      { x: -b.lengthM / 2, z: -b.widthM / 2 },
+      { x: b.lengthM / 2, z: -b.widthM / 2 },
+      { x: b.lengthM / 2, z: b.widthM / 2 },
+      { x: -b.lengthM / 2, z: b.widthM / 2 },
+    ]
+    b.geruestOptionen = {
+      gelaendeProfilM: {
+        back: [{ posM: 0, hoeheM: 1.55 }, { posM: b.lengthM, hoeheM: -2.55 }],
+        front: [{ posM: 0, hoeheM: 1.5 }, { posM: b.lengthM, hoeheM: -0.1 }],
+        left: [{ posM: 0, hoeheM: 1.55 }, { posM: b.widthM, hoeheM: 1.5 }],
+        right: [{ posM: 0, hoeheM: -2.55 }, { posM: b.widthM, hoeheM: -0.1 }],
+      },
+    }
+    const m = generateCADModel(b, 'layher-allround')
+    expect(m.warnings.some((w) => w.code === 'UMRISS_HANG_ABGETREPPT')).toBe(true)
+    expect(m.fields.some((f) => (f.fuss?.stielM ?? 0) > 0 || (f.fuss?.spindelM ?? 0) > 0)).toBe(true)
+    const teile = generateScaffoldComponents(m)
+    expect(teile.some((c) => c.type === 'ausgleich')).toBe(true)
+    expect(teile.some((c) => c.type === 'footplate')).toBe(true)
+  })
+})
