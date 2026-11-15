@@ -18,6 +18,7 @@
 // ============================================================
 
 import type { BuildingParams, BuildingSection } from '@/lib/calculations/cad-engine'
+import type { PlanImport } from '@/lib/cad/plan-import'
 import { GERUEST_SYSTEME } from '@/lib/calculations/geruest-systeme'
 import { breiteVonBreitenklasse } from '@/lib/geruestklassen'
 
@@ -26,6 +27,8 @@ export interface AufmassFuerCad {
   step3?: Record<string, unknown>
   /** Gespeichertes KI-/CAD-Ergebnis des Projekts; nur building und systemId werden gelesen */
   kiResult?: object | null
+  /** Originaler Vektor-PDF-Import mit allen Geschosskonturen und Höhenvorschlägen. */
+  planImport?: PlanImport | null
 }
 
 export interface CadUebernahme {
@@ -70,6 +73,17 @@ export function aufmassZuCad(a: AufmassFuerCad): CadUebernahme {
   const hinweise: string[] = []
   const ki = a.kiResult as { building?: Record<string, unknown>; systemId?: string } | null | undefined
   const sysId = (id: unknown) => (typeof id === 'string' && GERUEST_SYSTEME.some((s) => s.id === id) ? id : '')
+  const planDatenUebernehmen = (b: BuildingParams): void => {
+    const geschosse = a.planImport?.geschosse ?? []
+    b.planGeschossKonturen = geschosse
+      .filter((g) => g.ebene >= 0 && Array.isArray(g.umriss) && g.umriss.length >= 3)
+      .map((g) => ({ ebene: g.ebene, titel: g.titel, umriss: g.umriss! }))
+    b.planGeschossHoehenVorschlaege = (a.planImport?.geschossHoehenVorschlaege ?? [])
+      .filter((v) => geschosse.some((g) => g.ebene === v.ebene && Array.isArray(g.umriss) && g.umriss.length >= 3))
+      .map((v) => ({ ...v, bestaetigungErforderlich: true as const }))
+    if (b.planGeschossKonturen.length) hinweise.push(`${b.planGeschossKonturen.length} PDF-Geschosskontur(en) an CAD übergeben; Höhen bleiben bis zur manuellen Bestätigung Vorschläge.`)
+    else if (a.planImport) hinweise.push('PDF-Import vorhanden, aber keine vollständigen Geschosskonturen für die CAD-Fassadenanalyse gefunden.')
+  }
 
   // 1) Projekt kam aus dem CAD → das gespeicherte Gebäude ist die Grundlage (enthält Umriss, Optionen, Balkone, Türen …).
   //    Wurde das Aufmaß danach geändert, haben die Aufmaß-Werte Vorrang – sonst käme die Änderung nie im CAD an.
@@ -78,6 +92,7 @@ export function aufmassZuCad(a: AufmassFuerCad): CadUebernahme {
     const sid = sysId(ki.systemId) || sysId(a.step3?.system) || 'layher-allround'
     const s2k = (a.step2 || {}) as Record<string, unknown>
     const b: BuildingParams = { ...gespeichert }
+    planDatenUebernehmen(b)
     const hw: string[] = []
     const mitUmriss = (gespeichert.umriss?.length ?? 0) >= 3
     const setze = (feld: 'lengthM' | 'widthM' | 'heightM' | 'eavesHeightM' | 'overhangM', wert: number, name: string) => {
@@ -145,6 +160,7 @@ export function aufmassZuCad(a: AufmassFuerCad): CadUebernahme {
     sides: ['front'],
     ...(sections ? { sections } : {}),
   }
+  planDatenUebernehmen(building)
   klassenUebernehmen(s2, systemId, building, hinweise)
   hinweise.push('Das Gerüst steht wie im Aufmaß auf einer Seite (Länge × Höhe). Weitere Seiten im CAD zuschalten. Fenster sind im Aufmaß nicht erfasst – bei Bedarf im CAD ergänzen.')
   return { ok: true, building, systemId, fehlend: [], hinweise }
