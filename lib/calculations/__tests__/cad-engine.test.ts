@@ -118,3 +118,27 @@ describe('Dachrand-Absturzschutz (Flachdach)', () => {
     expect(b).toEqual(a)
   })
 })
+
+describe('Fassadenanalyse im Rechteck-Modus', () => {
+  it('berechnet bestätigte Geschosskonturen auch ohne Gebäude-Umriss', () => {
+    const rect = (x0: number, z0: number, x1: number, z1: number) => [
+      { x: x0, z: z0 }, { x: x1, z: z0 }, { x: x1, z: z1 }, { x: x0, z: z1 },
+    ]
+    const model = generateCADModel({
+      ...STANDARD_BUILDING,
+      fassadenGeschosse: [
+        { name: 'EG', obenM: 3, umriss: rect(0, 0, 12, 10) },
+        { name: 'OG', obenM: 6, umriss: rect(2, 2, 10, 8) },
+      ],
+    }, 'layher-allround')
+
+    expect(model.fassadenFlaechen).toBeDefined()
+    expect(model.fassadenFlaechen!.length).toBeGreaterThan(0)
+    expect(model.fassadenAbschnitte).toBeDefined()
+    expect(model.fassadenAbschnitte!.length).toBeGreaterThan(0)
+    expect(model.warnings.some((w) => w.code === 'FASSADEN_ANALYSE')).toBe(true)
+    // Die Fassadenanalyse darf die bestehende Gerüst-Feldberechnung nicht verändern.
+    const ohneFassaden = generateCADModel(STANDARD_BUILDING, 'layher-allround')
+    expect(model.fields).toEqual(ohneFassaden.fields)
+  })
+})
