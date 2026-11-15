@@ -43,7 +43,6 @@ describe('Gerüst gründet je Feld auf der Geländelinie', () => {
   })
 })
 
-import { gelaendeHoeheFn } from '@/lib/calculations/cad-engine'
 describe('3D-Gelände aus den Seitenlinien', () => {
   it('trifft die Ecken und die Zwischenpunkte der Linie', () => {
     const b = haus()
