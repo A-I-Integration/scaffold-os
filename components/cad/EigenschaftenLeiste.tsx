@@ -4,6 +4,7 @@
 // Alle Werte kommen aus dem Modell; es wird nichts berechnet oder erfunden.
 
 import { useState } from 'react'
+import { imHoehenraster } from '@/lib/cad/bauteil-aenderungen'
 import type { CADModel } from '@/lib/calculations/cad-engine'
 import { waehleFeld, feldSpalteVonBauteil, type FeldUmfang, type Seite } from '@/lib/cad/bereiche'
 
@@ -15,7 +16,11 @@ const ARTEN: Record<string, string> = {
 const SEITEN: Record<string, string> = { front: 'Vorderseite', back: 'Rückseite', left: 'Links', right: 'Rechts' }
 const m = (v: number) => `${v.toLocaleString('de-DE', { maximumFractionDigits: 2 })} m`
 
-export default function EigenschaftenLeiste({ griffModus, onGriffModus, einrasten, onEinrasten, veraendert, onLage, onDuplizieren, onZuruecksetzen, model, id, artikelWahl, manuell, onEntfernen, onFeldEntfernen, onFeldLaenge, onFeldAnhaengen, onPositionAendern, platzierungPosition, onZu }: {
+export default function EigenschaftenLeiste({ lagenVersatzM = 0, onLageOp, griffModus, onGriffModus, einrasten, onEinrasten, veraendert, onLage, onDuplizieren, onZuruecksetzen, model, id, artikelWahl, manuell, onEntfernen, onFeldEntfernen, onFeldLaenge, onFeldAnhaengen, onPositionAendern, platzierungPosition, onZu }: {
+  /** ganze Lage: verschieben (dyM), kopieren (dyM = Versatz der Kopie) – für die Seite des Feldes oder alle Seiten */
+  /** bisheriger Versatz der Lage durch manuelles Verschieben (gleich dem des gewählten Bauteils) */
+  lagenVersatzM?: number
+  onLageOp?: (op: { art: 'verschieben' | 'kopieren'; levelIndex: number; alleSeiten: boolean; dyM: number }) => void
   griffModus?: 'verschieben' | 'drehen'; onGriffModus?: (m: 'verschieben' | 'drehen') => void; einrasten?: boolean; onEinrasten?: (v: boolean) => void; veraendert?: boolean
   /** neue Lage des Bauteils: Position (m) und zusätzliche Drehung um die Hochachse (Grad) */
   onLage?: (position: [number, number, number], drehGrad: number) => void; onDuplizieren?: () => void; onZuruecksetzen?: () => void
@@ -71,6 +76,7 @@ export default function EigenschaftenLeiste({ griffModus, onGriffModus, einraste
         </div>
       )}
       {!onLage && manuell && onPositionAendern && platzierungPosition && <PositionFelder key={platzierungPosition.join(',')} start={platzierungPosition} onUebernehmen={onPositionAendern} />}
+      {onLageOp && feld && lage && <LagenFelder key={`${lage.index}|${lage.bottomY}|${lagenVersatzM}`} lage={{ ...lage, bottomY: Math.round((lage.bottomY + lagenVersatzM) * 100) / 100 }} onOp={onLageOp} />}
       {spalteInfo && (
         <div className='space-y-1.5 border-t px-3 py-2' style={{ borderColor: 'var(--os-linie)' }}>
           {onFeldLaenge && laengen.length > 0 && (
@@ -142,6 +148,31 @@ function PositionFelder({ start, onUebernehmen }: { start: [number, number, numb
       </div>
       <button type='button' disabled={!geaendert} onClick={() => onUebernehmen(neu as [number, number, number])}
         className='mt-1.5 w-full rounded px-3 py-1.5 text-[13px] font-semibold disabled:opacity-40' style={{ background: 'var(--os-akzent)', color: '#171b20' }}>Position übernehmen</button>
+    </div>
+  )
+}
+
+// Ganze Lage bearbeiten: Beläge, Geländer, Rahmen und Diagonalen der Lage gemeinsam (Raster = Lagenhöhe des Systems).
+function LagenFelder({ lage, onOp }: { lage: { index: number; heightM: number; bottomY: number }; onOp: (op: { art: 'verschieben' | 'kopieren'; levelIndex: number; alleSeiten: boolean; dyM: number }) => void }) {
+  const [alle, setAlle] = useState(false)
+  const [hoehe, setHoehe] = useState(lage.bottomY.toFixed(2).replace('.', ','))
+  const neu = zahl(hoehe)
+  const dy = neu === null ? null : Math.round((neu - lage.bottomY) * 100) / 100
+  const raster = imHoehenraster(dy ?? 0, lage.heightM)
+  return (
+    <div className='space-y-1.5 border-t px-3 py-2' style={{ borderColor: 'var(--os-linie)' }}>
+      <div className='text-[11px] uppercase tracking-wider' style={{ color: 'var(--os-text-leise)' }}>Ganze Lage {lage.index + 1}</div>
+      <label className='flex items-center gap-2 text-[12.5px]'><input type='checkbox' checked={alle} onChange={(e) => setAlle(e.target.checked)} />Alle Seiten (sonst nur diese Seite)</label>
+      <div className='grid grid-cols-2 gap-1'>
+        <button type='button' onClick={() => onOp({ art: 'verschieben', levelIndex: lage.index, alleSeiten: alle, dyM: lage.heightM })} className='rounded border px-2 py-1.5 text-[12.5px] hover:bg-gray-50' style={{ borderColor: 'var(--os-linie)' }}>▲ Lage hoch ({m(lage.heightM)})</button>
+        <button type='button' onClick={() => onOp({ art: 'verschieben', levelIndex: lage.index, alleSeiten: alle, dyM: -lage.heightM })} className='rounded border px-2 py-1.5 text-[12.5px] hover:bg-gray-50' style={{ borderColor: 'var(--os-linie)' }}>▼ Lage runter</button>
+      </div>
+      <button type='button' onClick={() => onOp({ art: 'kopieren', levelIndex: lage.index, alleSeiten: alle, dyM: lage.heightM })} className='w-full rounded border px-2 py-1.5 text-[12.5px] hover:bg-gray-50' style={{ borderColor: 'var(--os-linie)' }}>Lage kopieren (eine Lage darüber)</button>
+      <label className='block text-[12px]'>Unterkante der Lage (m)
+        <input value={hoehe} inputMode='decimal' onChange={(e) => setHoehe(e.target.value)} className='mt-0.5 w-full rounded border bg-white px-1.5 py-1 text-[13px]' style={{ borderColor: neu === null ? '#e7b4b0' : 'var(--os-linie)' }} />
+      </label>
+      {dy !== null && dy !== 0 && !raster && <div className='text-[12px]' style={{ color: '#b45309' }}>Liegt nicht im Raster der Lagenhöhe ({m(lage.heightM)}): Beläge und Rahmen passen dann nicht zu den übrigen Lagen.</div>}
+      <button type='button' disabled={dy === null || dy === 0} onClick={() => onOp({ art: 'verschieben', levelIndex: lage.index, alleSeiten: alle, dyM: dy! })} className='w-full rounded px-3 py-1.5 text-[13px] font-semibold disabled:opacity-40' style={{ background: 'var(--os-akzent)', color: '#171b20' }}>Höhe übernehmen</button>
     </div>
   )
 }

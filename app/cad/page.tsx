@@ -64,7 +64,7 @@ import type { CADLayerState, SideVisibility } from '@/types/cad-layers'
 import { createInitialLayerState } from '@/types/cad-layers'
 import type { CustomDimension } from '@/types/cad-dimensions'
 import type { ManualPlacement } from '@/lib/calculations/cad-engine'
-import { KEINE_UEBERLAGERUNG, wendeBauteilAenderungenAn, setzeBauteilLage, dupliziereBauteil, setzeBauteilZurueck, istKopieId, istVonHandVeraendert, type BauteilUeberlagerung } from '@/lib/cad/bauteil-aenderungen'
+import { KEINE_UEBERLAGERUNG, wendeBauteilAenderungenAn, setzeBauteilLage, dupliziereBauteil, setzeBauteilZurueck, bauteileDerLage, verschiebeBauteile, kopiereBauteile, istKopieId, istVonHandVeraendert, type BauteilUeberlagerung } from '@/lib/cad/bauteil-aenderungen'
 import { buildTopologyGraph, pruefeKnotenIsolation } from '@/lib/calculations/topology-graph'
 import { wendeLagerAn, type LagerZeile } from '@/lib/calculations/cad-lager'
 import { platzierungAusTreffer, verschiebePlatzierung, gleicheLage, platzierungIdVon } from '@/lib/calculations/cad-platzierung'
@@ -482,6 +482,14 @@ export default function CADPage() {
     setzeUeber((u) => { const r = dupliziereBauteil(u, id); neueId = r.neueId; return r.ueberlagerung })
     setSelectedComponent(neueId)
   }, [manualPlacements, setzeUeber])
+  const handleLageOp = useCallback((id: string, op: { art: 'verschieben' | 'kopieren'; levelIndex: number; alleSeiten: boolean; dyM: number }) => {
+    const mdl = modelWithManualRef.current
+    if (!mdl) return
+    const seite = op.alleSeiten ? null : (mdl.components3D.find((c) => c.id === id)?.fieldId ? mdl.fields.find((f) => f.id === mdl.components3D.find((c) => c.id === id)!.fieldId)?.side ?? null : null)
+    const ids = bauteileDerLage(mdl, op.levelIndex, seite)
+    if (ids.length === 0) return
+    setzeUeber((u) => (op.art === 'verschieben' ? verschiebeBauteile(u, mdl, ids, [0, op.dyM, 0]) : kopiereBauteile(u, ids, [0, op.dyM, 0])))
+  }, [setzeUeber])
   const handleBauteilZuruecksetzen = useCallback((id: string) => { setzeUeber((u) => setzeBauteilZurueck(u, id)); if (istKopieId(id)) setSelectedComponent(null) }, [setzeUeber])
 
   const handleRemoveManualPlacement = useCallback((id: string) => {
@@ -1270,7 +1278,7 @@ export default function CADPage() {
               </div>
             )}
             {selectedComponent && modelWithManual && viewMode === '3d' && !abbauAktiv && !placementType && !measureMode && (
-              <EigenschaftenLeiste model={modelWithManual} id={selectedComponent} griffModus={griffModus} onGriffModus={setGriffModus} einrasten={einrasten} onEinrasten={setEinrasten} veraendert={istVonHandVeraendert(ueber, selectedComponent)} onLage={(p, d) => handleBauteilLage(selectedComponent, p, d)} onDuplizieren={() => handleBauteilDuplizieren(selectedComponent)} onZuruecksetzen={() => handleBauteilZuruecksetzen(selectedComponent)} artikelWahl={artikelWahl} manuell={!!platzierungIdVonBauteil(selectedComponent)}
+              <EigenschaftenLeiste model={modelWithManual} id={selectedComponent} lagenVersatzM={ueber.aenderungen.find((a) => a.id === selectedComponent)?.dy ?? ueber.kopien.find((k) => k.id === selectedComponent)?.dy ?? 0} onLageOp={(op) => handleLageOp(selectedComponent, op)} griffModus={griffModus} onGriffModus={setGriffModus} einrasten={einrasten} onEinrasten={setEinrasten} veraendert={istVonHandVeraendert(ueber, selectedComponent)} onLage={(p, d) => handleBauteilLage(selectedComponent, p, d)} onDuplizieren={() => handleBauteilDuplizieren(selectedComponent)} onZuruecksetzen={() => handleBauteilZuruecksetzen(selectedComponent)} artikelWahl={artikelWahl} manuell={!!platzierungIdVonBauteil(selectedComponent)}
                 onEntfernen={() => handleRemoveComponent(selectedComponent)} onFeldEntfernen={(ids) => { setRemovedGroups((prev) => [...prev, ids]); setSelectedComponent(null) }}
                 onFeldLaenge={(seite, spalte, laengeM) => setBereichsListe((l) => [...l, { art: 'laenge', seite, spalte, feldlaengeM: laengeM }])}
                 onFeldAnhaengen={(seite, ende, laengeM) => setBereichsListe((l) => [...l, { art: 'erweitern', seite, ende, anzahl: 1, feldlaengeM: laengeM }])}

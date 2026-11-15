@@ -88,3 +88,32 @@ export function setzeBauteilZurueck(u: BauteilUeberlagerung, id: string): Bautei
 
 /** Ist das Bauteil gegenüber der Berechnung verändert (oder eine Kopie)? */
 export const istVonHandVeraendert = (u: BauteilUeberlagerung, id: string): boolean => u.aenderungen.some((a) => a.id === id) || u.kopien.some((k) => k.id === id)
+
+// ------------------------------------------------------------
+// Lagen als Ganzes (Phase 2): alle Bauteile einer Lage gemeinsam verschieben, kopieren oder entfernen
+// ------------------------------------------------------------
+
+export type SeitenWahl = 'front' | 'back' | 'left' | 'right'
+
+/** IDs aller Bauteile (Rahmen, Beläge, Geländer, Diagonalen, Bordbretter …) einer Lage; `seite` null = alle Seiten. Treppen/Anker ohne Feldbezug gehören nicht dazu. */
+export function bauteileDerLage(model: CADModel, levelIndex: number, seite: SeitenWahl | null): string[] {
+  const felder = new Set(model.fields.filter((f) => f.levelIndex === levelIndex && (seite === null || f.side === seite)).map((f) => f.id))
+  return model.components3D.filter((c) => c.fieldId && felder.has(c.fieldId) && c.type !== 'footplate' && c.type !== 'ausgleich').map((c) => c.id)
+}
+
+/** Verschiebt die Bauteile um denselben Versatz (m). `angezeigt` ist das Modell inklusive bisheriger Änderungen. */
+export function verschiebeBauteile(u: BauteilUeberlagerung, angezeigt: CADModel, ids: string[], versatz: [number, number, number], drehGrad = 0): BauteilUeberlagerung {
+  const nachId = new Map(angezeigt.components3D.map((c) => [c.id, c]))
+  return ids.reduce((acc, id) => {
+    const c = nachId.get(id)
+    return c ? setzeBauteilLage(acc, c, c, [c.position[0] + versatz[0], c.position[1] + versatz[1], c.position[2] + versatz[2]], drehGrad) : acc
+  }, u)
+}
+
+/** Kopiert die Bauteile, die Kopien liegen um `versatz` verschoben (Standard: eine Rasterhöhe nach oben). */
+export function kopiereBauteile(u: BauteilUeberlagerung, ids: string[], versatz: [number, number, number]): BauteilUeberlagerung {
+  return ids.reduce((acc, id) => dupliziereBauteil(acc, id, versatz).ueberlagerung, u)
+}
+
+/** Rasterhöhe, auf die eine Lagenhöhe passt (Vielfaches der Lagenhöhe des Systems) – sonst false. */
+export const imHoehenraster = (hoeheM: number, rasterM: number, tol = 0.005): boolean => rasterM > 0 && Math.abs(hoeheM / rasterM - Math.round(hoeheM / rasterM)) * rasterM <= tol
