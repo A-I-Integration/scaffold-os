@@ -101,7 +101,21 @@ export default function BuildingForm({ building, systemId, onChange, onSystemCha
       })
       setAnalyseHinweis('PDF-Geschosskonturen aus dem Aufmaß übernommen. Bitte jede vorgeschlagene OKFF-Höhe prüfen und ausdrücklich bestätigen.')
     } else {
-      setAnalyseHinweis(`${konturen.length} PDF-Geschosskontur(en) übernommen. Es liegen keine eindeutig zugeordneten OKFF-Höhen vor; Fassadenflächen werden erst nach manueller Höhenfestlegung berechnet.`)
+      // Auch ohne eindeutig erkannte OKFF-Koten muss die manuelle Höhenbestätigung
+      // angeboten werden. Die Konturen bleiben erhalten; Höhen werden nicht geraten.
+      setPlanGeschossHoehen({
+        name: 'PDF-Import aus dem Aufmaß – Höhen manuell festlegen',
+        vorschlaege: konturen.map((g) => ({
+          ebene: g.ebene,
+          titel: g.titel,
+          obenM: 0,
+          text: 'Keine eindeutige OKFF-Kote erkannt – Höhe anhand des Plans manuell eintragen.',
+          bestaetigungErforderlich: true as const,
+        })),
+        werte: konturen.map(() => ''),
+        bestaetigt: false,
+      })
+      setAnalyseHinweis(`${konturen.length} PDF-Geschosskontur(en) übernommen. Bitte die OKFF-/Wandoberkanten anhand des Plans manuell eintragen.`)
     }
   }, [building.planGeschossKonturen, building.planGeschossHoehenVorschlaege])
   const ifcSitzung = useRef<string>('')
