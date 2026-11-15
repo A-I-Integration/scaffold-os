@@ -2344,7 +2344,8 @@ function generiereUmrissModell(
   // deckt den ganzen Umriss). Das feldweise Abtreppen entlang der Polygonkanten kommt als nächster Schritt.
   const eckU = eckenGelaendeM(gebaeude)
   const minEckeU = Math.min(eckU.fl, eckU.fr, eckU.bl, eckU.br, 0)
-  const hangU = system && gebaeude.geruestOptionen?.gelaendeEckenM && minEckeU < -0.3 ? Math.round(minEckeU * 100) / 100 : 0
+  const hatGeländeangaben = !!(gebaeude.geruestOptionen?.gelaendeEckenM || gebaeude.geruestOptionen?.gelaendeProfilM || gebaeude.geruestOptionen?.gelaendeLinieSeiteM || gebaeude.geruestOptionen?.gelaendeSeiteM)
+  const hangU = system && hatGeländeangaben && minEckeU < -0.3 ? Math.round(minEckeU * 100) / 100 : 0
   if (!hangU) { const h = hangIgnoriert(gebaeude.geruestOptionen); if (h) warnings.push(h) }
   const umriss = zentriereUmriss(normalisiereUmriss(gebaeude.umriss!))
   const box = umrissBox(umriss)
