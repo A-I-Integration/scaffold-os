@@ -15,7 +15,7 @@
 import { useMemo, useState, useRef, useEffect, useCallback, memo, createContext, useContext } from 'react'
 import { Canvas, useThree, useFrame } from '@react-three/fiber'
 import { FUSSPLATTE_AUFSTANDSVERSATZ_M, hangDaten, baueHangFlaeche } from '@/lib/cad/hang-geometrie'
-import { OrbitControls, Grid, Text, Sky, AdaptiveDpr, AdaptiveEvents, ContactShadows, Edges, Html } from '@react-three/drei'
+import { OrbitControls, TransformControls, Grid, Text, Sky, AdaptiveDpr, AdaptiveEvents, ContactShadows, Edges, Html } from '@react-three/drei'
 import { lazy, Suspense } from 'react'
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js'
 import * as THREE from 'three'
@@ -38,8 +38,13 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
 import { DRACOLoader } from 'three/examples/jsm/loaders/DRACOLoader.js'
 import type { Aussehen } from '@/lib/cad/modell-aussehen'
 
+/** Transformationsgriff für das ausgewählte Bauteil (Achsen-Pfeile bzw. Drehring); `einrasten`: Raster 5 cm / 15° */
+export interface BauteilGriffProps { modus: 'verschieben' | 'drehen'; einrasten: boolean; onAendern: (id: string, position: [number, number, number], drehGrad: number) => void }
+
 interface Props {
   model: CADModel
+  /** Griff am ausgewählten Bauteil (Verschieben/Höhe/Drehen); ohne Angabe wie bisher */
+  griff?: BauteilGriffProps
   features?: BuildingFeature3D[]
   showBuilding: boolean
   showScaffold: boolean
@@ -890,6 +895,39 @@ function InstancedBauteile({
       castShadow
       receiveShadow
     />
+  )
+}
+
+// Transformationsgriff: sitzt in derselben Gruppe wie die Bauteile (gleiches Koordinatensystem, inkl. Hang-Hebung).
+// Nach dem Loslassen wird die neue Lage gemeldet; die Seite legt sie als Überlagerung über das Modell, danach sitzt der Griff wieder am Bauteil.
+function BauteilGriff({ model, id, griff }: { model: CADModel; id: string; griff: BauteilGriffProps }) {
+  const ref = useRef<THREE.Group>(null)
+  const { invalidate } = useThree()
+  const comp = model.components3D.find((c) => c.id === id)
+  if (!comp) return null
+  const dreh = griff.modus === 'drehen'
+  const schluessel = `${id}|${comp.position.join(',')}|${comp.rotation.join(',')}|${griff.modus}`
+  return (
+    <>
+      <group key={`g-${schluessel}`} ref={ref} position={comp.position} />
+      <TransformControls
+        key={`t-${schluessel}`}
+        object={ref as unknown as React.RefObject<THREE.Object3D>}
+        mode={dreh ? 'rotate' : 'translate'}
+        space='world'
+        size={0.75}
+        showX={!dreh}
+        showZ={!dreh}
+        translationSnap={griff.einrasten ? 0.05 : null}
+        rotationSnap={griff.einrasten ? (15 * Math.PI) / 180 : null}
+        onMouseUp={() => {
+          const g = ref.current
+          if (!g) return
+          griff.onAendern(id, [g.position.x, g.position.y, g.position.z], dreh ? (g.rotation.y * 180) / Math.PI : 0)
+          invalidate()
+        }}
+      />
+    </>
   )
 }
 
@@ -2096,6 +2134,7 @@ function Scene({
   showEnvironment,
   removedCount,
   onSeiteUmschalten,
+  griff,
 }: Props) {
   const praes = useContext(FarbModusKontext) === 'praesentation'
   const statik = useContext(FarbModusKontext) === 'statik'
@@ -2166,6 +2205,7 @@ function Scene({
             onPlacementClick={onPlacementClick}
           />
         )}
+        {showScaffold && !statik && griff && selectedComponent && !measureMode && !placementType && <BauteilGriff model={model} id={selectedComponent} griff={griff} />}
         <DimensionLines model={model} visible={showDimensions} />
       </group>
       <CustomDimensionLines dimensions={customDimensions} pendingPoint={pendingMeasurePoint} />
@@ -2228,6 +2268,7 @@ function Scaffold3D({
   platzierungIdVon,
   onBauteilZiehen,
   onSeiteUmschalten,
+  griff,
 }: Props) {
   // Esc schließt den Bauteil-Kasten
   useEffect(() => {
@@ -2327,6 +2368,7 @@ function Scaffold3D({
             onPlacementClick={onPlacementClick}
             showEnvironment={showEnvironment}
             removedCount={removedCount}
+            griff={griff}
           />
         </group>
         </ZiehKontext.Provider>
