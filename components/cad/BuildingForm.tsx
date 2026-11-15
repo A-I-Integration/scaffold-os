@@ -84,6 +84,26 @@ export default function BuildingForm({ building, systemId, onChange, onSystemCha
   const [dxfImport, setDxfImport] = useState<{ name: string; inhalt: string; ergebnis: DxfUmrissErgebnis; hoehen: string[]; gezeichnet?: boolean; ifc?: IfcZusatz } | null>(null)
   const [planGeschossHoehen, setPlanGeschossHoehen] = useState<{ name: string; vorschlaege: GeschossHoehenVorschlag[]; werte: string[]; bestaetigt: boolean } | null>(null)
   const [planFassadenKonturen, setPlanFassadenKonturen] = useState<{ ebene: number; titel: string; umriss: { x: number; z: number }[] }[]>([])
+  useEffect(() => {
+    // PDF-Konturen aus dem Aufmaß kommen bereits im BuildingParams an.
+    // Höhenvorschläge werden hier angezeigt, aber niemals ohne Klick bestätigt.
+    if (planFassadenKonturen.length || planGeschossHoehen) return
+    const konturen = building.planGeschossKonturen
+    if (!Array.isArray(konturen) || !konturen.length) return
+    setPlanFassadenKonturen(konturen.map((g) => ({ ebene: g.ebene, titel: g.titel, umriss: g.umriss })))
+    const vorschlaege = building.planGeschossHoehenVorschlaege
+    if (Array.isArray(vorschlaege) && vorschlaege.length) {
+      setPlanGeschossHoehen({
+        name: 'PDF-Import aus dem Aufmaß',
+        vorschlaege: vorschlaege as GeschossHoehenVorschlag[],
+        werte: vorschlaege.map((v) => String(v.obenM).replace('.', ',')),
+        bestaetigt: false,
+      })
+      setAnalyseHinweis('PDF-Geschosskonturen aus dem Aufmaß übernommen. Bitte jede vorgeschlagene OKFF-Höhe prüfen und ausdrücklich bestätigen.')
+    } else {
+      setAnalyseHinweis(`${konturen.length} PDF-Geschosskontur(en) übernommen. Es liegen keine eindeutig zugeordneten OKFF-Höhen vor; Fassadenflächen werden erst nach manueller Höhenfestlegung berechnet.`)
+    }
+  }, [building.planGeschossKonturen, building.planGeschossHoehenVorschlaege])
   const ifcSitzung = useRef<string>('')
   const [ifcFortschritt, setIfcFortschritt] = useState<{ anteil: number; text: string } | null>(null)
   // NWD (Navisworks): Konvertierung in der Autodesk-Cloud, gestaffelte Anzeige Upload → Konvertierung → Einlesen
