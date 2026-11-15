@@ -2311,8 +2311,8 @@ function generiereUmrissModell(
   // Die bisherige Gerüst-Feldberechnung bleibt bis zur separaten Freigabe unverändert.
   let fassadenFlaechen: CADModel['fassadenFlaechen']
   let fassadenAbschnitte: CADModel['fassadenAbschnitte']
-  if (building.fassadenGeschosse?.length) {
-    const analyse = fassadenFlaechenAusGeschossen(building.fassadenGeschosse)
+  if (gebaeude.fassadenGeschosse?.length) {
+    const analyse = fassadenFlaechenAusGeschossen(gebaeude.fassadenGeschosse)
     if (!analyse.ok) {
       warnings.push({ type: 'warning', code: 'FASSADEN_ANALYSE_FEHLER', message: `Fassadenanalyse nicht möglich: ${analyse.fehler}` })
     } else {
