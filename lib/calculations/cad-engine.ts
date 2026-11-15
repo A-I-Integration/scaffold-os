@@ -11,6 +11,8 @@ import { MaterialItem } from '@/types/scaffold'
 import { modellHash } from './modell-stand'
 import { type UmrissPunkt, pruefeUmriss, normalisiereUmriss, umrissKanten, umrissEcken, geruestEckpunkt, umrissBox, zentriereUmriss, kantenHoehenNormalisiert } from './cad-umriss'
 import { KONSOLE_BREITE_M, type CadBalkon } from '../balkon'
+import { fassadenFlaechenAusGeschossen } from '../cad/fassaden-flaechen'
+import { erzeugeFassadenAbschnitte } from '../cad/fassaden-abschnitte'
 
 /** Länge der Podeste der Außentreppe an den Turmenden (m) – zugleich Breite des Durchgangs im Gerüstgeländer. */
 export const TREPPEN_PODEST_M = 0.6
@@ -199,6 +201,8 @@ export interface BuildingParams {
   umriss?: UmrissPunkt[]
   /** Nur Umriss-Modus: eigene Höhe je Kante (m), Eintrag i = Kante von Punkt i zu Punkt i+1 (z. B. Garage/Terrasse niedriger als der Hauptbau). Ohne Angabe gilt heightM. */
   umrissKantenHoeheM?: number[]
+  /** Geprüfte Geschosskonturen für die eigenständige Fassadenanalyse. Höhen sind OKFF-/Wandoberkanten in m. */
+  fassadenGeschosse?: { name: string; obenM: number; umriss: UmrissPunkt[] }[]
   // NEU: Einstellungen für die automatische Gerüst-Erzeugung (alles optional;
   // ohne Angabe gelten die bisherigen Standardwerte).
   geruestOptionen?: GeruestOptionen
@@ -420,6 +424,9 @@ export interface CADModel {
   warnings: CADWarning[]
   // Nur Umriss-Modus: Gerüst-Eckpunkte (Schnitt der Innenlinien benachbarter Kanten)
   umrissEcken?: UmrissGeruestEcke[]
+  /** Aus Geschosskonturen abgeleitete Wandflächen; noch keine automatisch eingerüsteten Teilflächen. */
+  fassadenFlaechen?: import('@/lib/cad/fassaden-flaechen').FassadenFlaeche[]
+  fassadenAbschnitte?: import('@/lib/cad/fassaden-abschnitte').FassadenAbschnitt[]
 }
 
 export interface UmrissGeruestEcke {
@@ -2300,6 +2307,24 @@ function generiereUmrissModell(
   teile: (laengeM: number) => { distribution: number[]; fields: number; fieldLengthM: number }
 ): CADModel {
   const warnings: CADWarning[] = [...vorWarnungen]
+  // Geschosskonturen werden zusätzlich als sichtbare Wandflächen analysiert.
+  // Die bisherige Gerüst-Feldberechnung bleibt bis zur separaten Freigabe unverändert.
+  let fassadenFlaechen: CADModel['fassadenFlaechen']
+  let fassadenAbschnitte: CADModel['fassadenAbschnitte']
+  if (gebaeude.fassadenGeschosse?.length) {
+    const analyse = fassadenFlaechenAusGeschossen(gebaeude.fassadenGeschosse)
+    if (!analyse.ok) {
+      warnings.push({ type: 'warning', code: 'FASSADEN_ANALYSE_FEHLER', message: `Fassadenanalyse nicht möglich: ${analyse.fehler}` })
+    } else {
+      const abschnitte = erzeugeFassadenAbschnitte(analyse.flaechen)
+      if (!abschnitte.ok) warnings.push({ type: 'warning', code: 'FASSADEN_ABSCHNITTE_FEHLER', message: `Fassadenabschnitte nicht möglich: ${abschnitte.fehler}` })
+      else {
+        fassadenFlaechen = analyse.flaechen
+        fassadenAbschnitte = abschnitte.abschnitte
+        warnings.push({ type: 'info', code: 'FASSADEN_ANALYSE', message: `${analyse.flaechen.length} sichtbare Fassadenflächen (${abschnitte.abschnitte.length} gerichtete Abschnitte, ${analyse.gesamtFlaecheM2.toFixed(1)} m²) aus bestätigten Geschosskonturen berechnet. Die Gerüstfelder folgen derzeit weiterhin dem bestehenden Gebäudeumriss; Fassaden-Rücksprünge sind noch nicht automatisch eingerüstet.` })
+      }
+    }
+  }
   // Hang im Umriss-Modus: wenn Eckhöhen gesetzt sind, steht das Gerüst gleichmäßig auf dem tiefsten Punkt (sicher, über-
   // deckt den ganzen Umriss). Das feldweise Abtreppen entlang der Polygonkanten kommt als nächster Schritt.
   const eckU = eckenGelaendeM(gebaeude)
@@ -2474,6 +2499,8 @@ function generiereUmrissModell(
     levelCount: levelCalc.levels,
     warnings,
     umrissEcken: umrissEckenModell,
+    fassadenFlaechen,
+    fassadenAbschnitte,
   }
   return { ...modell, components3D: generateScaffoldComponents(modell) }
 }
