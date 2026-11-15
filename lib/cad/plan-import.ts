@@ -13,6 +13,7 @@ import type { UmrissPunkt } from '@/lib/calculations/cad-umriss'
 import { oeffnungenAnKanten, vorbautenAnKanten, type PlanOeffnungAnKante, type PlanVorbauAnKante } from './plan-oeffnungen-modell'
 import { kotenJeAnsicht, pultNiedrigeRichtung, gelaendeTiefeJeAnsicht, type Himmelsrichtung, type GelaendeTiefe } from './koten-je-ansicht'
 import { dachAusPlan, dachKotenAusPlan, pultdachNeigung, type PlanDachform } from './dachform-aus-plan'
+import { geschossHoehenAusPlan, type GeschossHoehenVorschlag } from './geschoss-hoehen-aus-plan'
 
 export interface PlanImportGeschoss { titel: string; ebene: number; laengeM: number; breiteM: number; flaecheM2: number; fenster?: number; tueren?: number
   /** Vollständige erkannte Außenkontur des Geschosses in Metern, auf den Gebäude-Mittelpunkt zentriert. */
@@ -35,6 +36,8 @@ export interface PlanImport {
   geschosse: PlanImportGeschoss[]
   /** Geschoss, dessen Maße als Länge/Breite des Gebäudes gelten: das flächengrößte über dem Gelände (ab Erdgeschoss) */
   hauptEbene: number
+  /** Explizit beschriftete OKFF-Koten je Geschoss; immer nur Vorschläge, manuelle Bestätigung erforderlich. */
+  geschossHoehenVorschlaege: GeschossHoehenVorschlag[]
   /** Aus First-/Traufe-Beschriftungen gelesen; fehlt, wenn der Plan es nicht eindeutig zeigt */
   dachform?: PlanDachform
   /** Kote der First-/Traufkante laut Beschriftung im Schnitt (Meter, bezogen auf ±0,00 = Erdgeschoss-Fußboden) */
@@ -114,7 +117,7 @@ export function planImportAus(dateiname: string, massstab: number, gefunden: Gef
     ? pultNiedrigeRichtung(ansichten, koten.traufeM, koten.firstM) : null
   const gelTiefe = gelaendeTiefeJeAnsicht(ansichten)
   return {
-    dateiname, massstab, geschosse, hauptEbene: haupt.ebene,
+    dateiname, massstab, geschosse, hauptEbene: haupt.ebene, geschossHoehenVorschlaege: geschossHoehenAusPlan(texte),
     ...(dach ? { dachform: dach.dachform } : {}),
     ...(koten.firstM !== undefined ? { firstKoteM: koten.firstM } : {}),
     ...(koten.traufeM !== undefined ? { traufKoteM: koten.traufeM } : {}),
