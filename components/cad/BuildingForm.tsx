@@ -22,6 +22,7 @@ import { erkenneGrundriss, FORM_NAME } from '@/lib/cad/grundriss-erkennung'
 import { portalAlsTuer } from '@/lib/cad/portal-erkennung'
 import { analysiereDreiecke, schaetzeEinheit, spannweiten, nullpunktUeberTiefstem, abschnitteAusTeilen, abschnitteAusTeileListe, vorgabeAchseEinheit, type GebaeudeTeil } from '@/lib/cad/modell-analyse'
 import { planLesen } from '@/lib/cad/plan-import'
+import type { GeschossHoehenVorschlag } from '@/lib/cad/geschoss-hoehen-aus-plan'
 import { pruefePlanImport, formatHinweis } from '@/lib/cad/datenqualitaet'
 import { parseGelaendeLinie, formatGelaendeLinie } from '@/lib/calculations/gelaende'
 import { oeffnungenFuerModell, vorbautenFuerModell } from '@/lib/cad/plan-oeffnungen-modell'
@@ -81,6 +82,7 @@ export default function BuildingForm({ building, systemId, onChange, onSystemCha
   // DXF-Zeichnung: Gebäudeumriss aus den Linien gelesen (lib/cad/dxf-umriss.ts); Höhen trägt die Person ein
   // Dasselbe Feld trägt auch den IFC-Import (`ifc` gesetzt): gleiche Formerkennung, gleiche Teile, gleicher Prüfschritt
   const [dxfImport, setDxfImport] = useState<{ name: string; inhalt: string; ergebnis: DxfUmrissErgebnis; hoehen: string[]; gezeichnet?: boolean; ifc?: IfcZusatz } | null>(null)
+  const [planGeschossHoehen, setPlanGeschossHoehen] = useState<{ name: string; vorschlaege: GeschossHoehenVorschlag[]; werte: string[]; bestaetigt: boolean } | null>(null)
   const ifcSitzung = useRef<string>('')
   const [ifcFortschritt, setIfcFortschritt] = useState<{ anteil: number; text: string } | null>(null)
   // NWD (Navisworks): Konvertierung in der Autodesk-Cloud, gestaffelte Anzeige Upload → Konvertierung → Einlesen
@@ -130,6 +132,7 @@ export default function BuildingForm({ building, systemId, onChange, onSystemCha
   const DXF_ARTEN = ['.dwg', '.dwt', '.step', '.stp', '.igs', '.skp']; // .ifc wird seit dem IFC-Import gelesen (unten)
 
   async function handlePlanUpload(file: File, weitere: File[] = []) {
+    setPlanGeschossHoehen(null)
     setAnalyseHinweis(null);
     setModellImport(null);
     void vergissModell(); // neuer Upload ersetzt das gemerkte Modell
@@ -362,6 +365,9 @@ export default function BuildingForm({ building, systemId, onChange, onSystemCha
           const pl = await planLesen(file)
           if (!pl) planVorspann = 'Kein Vektor-Grundriss im PDF lesbar (Raster- oder Kurvenzeichnung): Die Werte stammen aus der KI-Auswertung und sind nicht maßhaltig – Datenqualität gelb bis rot, bitte mit den Maßketten abgleichen. '
           if (pl) {
+            if (pl.geschossHoehenVorschlaege?.length) {
+              setPlanGeschossHoehen({ name: file.name, vorschlaege: pl.geschossHoehenVorschlaege, werte: pl.geschossHoehenVorschlaege.map((v) => String(v.obenM).replace('.', ',')), bestaetigt: false })
+            }
             const haupt = pl.geschosse.find((g) => g.ebene === pl.hauptEbene)
             const aus: string[] = []
             if (haupt) {
@@ -717,6 +723,30 @@ export default function BuildingForm({ building, systemId, onChange, onSystemCha
               )
             })()}
             {zeichnerOffen && <UmrissZeichner planDatei={letzterPlan} onUebernehmen={zeichnungUebernehmen} onGeschosse={geschosseUebernehmen} onAbbrechen={() => setZeichnerOffen(false)} />}
+            {planGeschossHoehen && (
+              <div className='rounded-lg border border-amber-300 bg-amber-50 p-3 space-y-2 text-[11px] text-[#424245]'>
+                <p className='font-semibold'>Geschosshöhen aus „{planGeschossHoehen.name}“ prüfen</p>
+                <p>Nur ausdrücklich beschriftete OKFF-/OK-FFB-Koten wurden erkannt. Bitte jede Höhe mit dem Plan vergleichen. Diese Werte werden noch nicht für die CAD-Geometrie verwendet.</p>
+                {planGeschossHoehen.vorschlaege.map((v, i) => (
+                  <label key={`${v.ebene}-${i}`} className='flex flex-wrap items-center gap-2'>
+                    <span className='min-w-28'>{v.ebene === 0 ? 'Erdgeschoss' : v.ebene === 99 ? 'Dachgeschoss' : v.ebene === -1 ? 'Kellergeschoss' : `${v.ebene}. Obergeschoss`}</span>
+                    <input aria-label={`Höhe ${v.titel}`} inputMode='decimal' value={planGeschossHoehen.werte[i] ?? ''} onChange={(ev) => setPlanGeschossHoehen((aktuell) => aktuell ? ({ ...aktuell, werte: aktuell.werte.map((w, k) => k === i ? ev.target.value : w), bestaetigt: false }) : aktuell)} className='w-24 rounded-lg border border-black/15 bg-white px-2 py-1' />
+                    <span>m</span><span className='text-[#86868b]'>{v.text}</span>
+                  </label>
+                ))}
+                <div className='flex items-center gap-2'>
+                  <button type='button' className='rounded-lg bg-[#0071e3] px-3 py-1 font-semibold text-white' onClick={() => {
+                    const gueltig = planGeschossHoehen.werte.every((w) => w.trim() !== '' && Number.isFinite(Number(w.replace(',', '.'))))
+                    if (!gueltig) { setAnalyseHinweis('❌ Bitte alle vorgeschlagenen Geschosshöhen als Zahlen in Metern eintragen.'); return }
+                    setPlanGeschossHoehen((aktuell) => aktuell ? { ...aktuell, bestaetigt: true } : aktuell)
+                    setAnalyseHinweis('Geschosshöhen wurden von dir bestätigt. Die Übernahme in die Geschossvereinigung und CAD-Höhenberechnung ist ein separater nächster Schritt.')
+                  }}>Höhen bestätigen</button>
+                  {planGeschossHoehen.bestaetigt && <span className='text-green-700 font-semibold'>Bestätigt</span>}
+                  <button type='button' className='rounded-lg bg-white border border-black/15 px-3 py-1' onClick={() => setPlanGeschossHoehen(null)}>Schließen</button>
+                </div>
+              </div>
+            )}
+
             {dxfImport && (() => {
               const e = dxfImport.ergebnis
               const wahl = 'rounded-lg border border-black/10 bg-white px-2 py-1 text-[11px]'
