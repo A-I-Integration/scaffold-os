@@ -447,6 +447,8 @@ export default function CADPage() {
     setManualPlacements((prev) => [...prev, placement])
     // Rückmeldung: das neue Bauteil ist danach markiert und der Info-Kasten nennt es.
     setSelectedComponent(placement.id)
+    // Eine Treppe wird einmal gesetzt: danach ist das Werkzeug aus, damit man sie sofort anklicken und ziehen kann (im Werkzeugmodus ist Ziehen gesperrt)
+    if (type === 'stair') setPlacementType(null)
   }, [model])
 
   // NEU (Ziehen): manuell gesetzte Bauteile anklicken und an eine andere Stelle

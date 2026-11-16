@@ -2381,9 +2381,9 @@ function Scaffold3D({
   const ziehKontext = useMemo<ZiehKontextWert | null>(
     () =>
       platzierungIdVon && onBauteilZiehen
-        ? { ziehId, platzierungIdVon, start: setZiehId, bewegen: onBauteilZiehen }
+        ? { ziehId, platzierungIdVon, start: setZiehId, bewegen: (pid: string, pos: [number, number, number], sd: string, lv: number) => onBauteilZiehen(pid, [pos[0], pos[1] - (bridgeMode ? 0 : hangDaten(model.building).hangM), pos[2]], sd, lv) } // Zielpunkt aus der Szene (um die Hang-Hebung höher) in Modellkoordinaten
         : null,
-    [ziehId, platzierungIdVon, onBauteilZiehen]
+    [ziehId, platzierungIdVon, onBauteilZiehen, bridgeMode, model.building]
   )
   // Loslassen irgendwo (auch außerhalb des Gerüsts oder des Fensters) beendet das Ziehen.
   useEffect(() => {
