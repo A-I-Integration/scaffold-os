@@ -49,7 +49,9 @@ import CadBand from '@/components/cad/CadBand'
 import BereichePanel, { BEREICHS_START, eingabeZuAenderung, type BereichsEingabe } from '@/components/cad/BereichePanel'
 import { ansichtDateiname } from '@/lib/cad/ansicht-bild'
 import { vergissModell } from '@/lib/cad/modell-speicher'
-import { erzeugeProjektdatei, liesProjektdatei } from '@/lib/cad/projektdatei'
+import { erzeugeProjektdatei, liesProjektdatei, type Projektdatei } from '@/lib/cad/projektdatei'
+import { ladeVersionen, speichereVersionen, fuegeVersionHinzu, loescheVersion, benenneVersion, type Version } from '@/lib/cad/versionen'
+import VersionenDialog from '@/components/cad/VersionenDialog'
 import LvDialog from '@/components/cad/LvDialog'
 import { bereinigeStatikDaten, type StatikDaten } from '@/lib/statik-daten'
 import { useRouter } from 'next/navigation'
@@ -905,21 +907,40 @@ export default function CADPage() {
 
   // Phase 68-J: Statt toter Buttons ohne Modell -> klarer Hinweis beim Klick.
   // Projektdatei: speichern und wieder laden (Gebäude, System, Statik-Angaben, Notizen)
+  const projektdatenJetzt = (name: string): Projektdatei => erzeugeProjektdatei({ name, building, systemId, statikDaten, notizen: notes, artikelWahl, bereiche: bereichsListe, zeichnung: figuren, handarbeit: { platzierungen: manualPlacements, ueberlagerung: ueber, entfernt: removedGroups } })
   const speichereProjektdatei = () => {
-    const daten = erzeugeProjektdatei({ name: `CAD-Projekt ${new Date().toLocaleDateString('de-DE')}`, building, systemId, statikDaten, notizen: notes, artikelWahl, bereiche: bereichsListe, zeichnung: figuren })
+    const daten = projektdatenJetzt(`CAD-Projekt ${new Date().toLocaleDateString('de-DE')}`)
     const a = document.createElement('a')
     a.href = URL.createObjectURL(new Blob([JSON.stringify(daten, null, 2)], { type: 'application/json' }))
     a.download = `CAD-Projekt-${new Date().toISOString().split('T')[0]}.scaffold.json`
     a.click()
     URL.revokeObjectURL(a.href)
   }
+  const wendeProjektdatenAn = (d: Projektdatei) => {
+    setSelectedComponent(null); setMehrfach([]); setBereichsListe(d.bereiche ?? []); setFiguren(d.zeichnung ?? []); setNotes(d.notizen)
+    setManualPlacements(d.handarbeit?.platzierungen ?? []); setRemovedGroups(d.handarbeit?.entfernt ?? [])
+    setUeberVerlauf({ jetzt: d.handarbeit?.ueberlagerung ?? KEINE_UEBERLAGERUNG, vergangen: [], zukunft: [] })
+    setStatikDaten(d.statikDaten); setSystemId(d.systemId); setArtikelWahl(d.artikelWahl ?? {})
+    setAutoGenerate(true); setBuilding(d.building)
+  }
   const uebernehmeProjektdatei = (text: string, name: string) => {
     const e = liesProjektdatei(text)
     if (!e.ok) { window.alert(`„${name}“ konnte nicht geladen werden:\n${e.fehler}`); return }
-    if (!window.confirm(`Projektdatei „${e.daten.name}“ laden?\n\nDas aktuelle Modell, die Notizen und die manuell gesetzten Teile werden ersetzt.${e.daten.testdaten ? '\n\nHinweis: Das sind erfundene Testdaten.' : ''}${e.verworfen.length ? `\n\nNicht übernommen (ungültig oder nicht unterstützt): ${e.verworfen.join(', ')}.` : ''}`)) return
-    setSelectedComponent(null); setManualPlacements([]); setBereichsListe(e.daten.bereiche ?? []); setFiguren(e.daten.zeichnung ?? []); setNotes(e.daten.notizen)
-    setStatikDaten(e.daten.statikDaten); setSystemId(e.daten.systemId); setArtikelWahl(e.daten.artikelWahl ?? {})
-    setAutoGenerate(true); setBuilding(e.daten.building)
+    if (!window.confirm(`Projektdatei „${e.daten.name}“ laden?\n\nDas aktuelle Modell, die Notizen und die von Hand gesetzten, verschobenen und entfernten Teile werden ersetzt.${e.daten.testdaten ? '\n\nHinweis: Das sind erfundene Testdaten.' : ''}${e.verworfen.length ? `\n\nNicht übernommen (ungültig oder nicht unterstützt): ${e.verworfen.join(', ')}.` : ''}`)) return
+    wendeProjektdatenAn(e.daten)
+  }
+  // Versionsverlauf (nur in diesem Browser)
+  const [versionenOffen, setVersionenOffen] = useState(false)
+  const [versionen, setVersionen] = useState<Version[]>([])
+  const [versionenFehler, setVersionenFehler] = useState(false)
+  const speichereListe = (l: Version[]) => { setVersionen(l); setVersionenFehler(!speichereVersionen(l)) }
+  const oeffneVersionen = () => { setVersionen(ladeVersionen()); setVersionenFehler(false); setVersionenOffen(true) }
+  const neueVersion = (name: string) => speichereListe(fuegeVersionHinzu(versionen, projektdatenJetzt(name || 'Version'), name))
+  const stelleVersionWiederHer = (id: string) => {
+    const v = versionen.find((x) => x.id === id); if (!v) return
+    // Sicherheitsstand: der aktuelle Zustand bleibt als Version erhalten
+    speichereListe(fuegeVersionHinzu(versionen, projektdatenJetzt('Vor Wiederherstellung'), `Vor Wiederherstellung von „${v.name}“`))
+    wendeProjektdatenAn(v.daten); setVersionenOffen(false)
   }
   const ladeProjektdatei = (datei: File) => {
     if (datei.size > 2_000_000) { window.alert('Die Datei ist größer als 2 MB und keine Projektdatei.'); return }
@@ -1258,7 +1279,7 @@ export default function CADPage() {
             viewAngle={viewAngle} onViewAngle={(a) => setViewAngle(a)} farbModus={farbModus} onFarbModus={setFarbModus}
             onPdf={model ? handleExportPDF : exportOhneModellHinweis} onMontageplan={model ? handleExportMontageplan : exportOhneModellHinweis}
             onDxf={!model ? exportOhneModellHinweis : handleExportDXF} onIfc={!model ? exportOhneModellHinweis : (ifcExportLaeuft ? undefined : handleExportIFC)}
-            onSpeichern={speichereProjektdatei} onLv={rolle === 'admin' || istStatikerLogin ? (model ? () => setLvOffen(true) : exportOhneModellHinweis) : undefined}
+            onSpeichern={speichereProjektdatei} onVersionen={oeffneVersionen} onLv={rolle === 'admin' || istStatikerLogin ? (model ? () => setLvOffen(true) : exportOhneModellHinweis) : undefined}
             onBild={speichereBild}
             layerState={layerState} onToggleSide={(k) => handleToggleSide(k as keyof SideVisibility)} onToggleLevel={handleToggleLevel}
             onAlleEin={handleShowAllLayers} onAlleAus={handleHideAllLayers} visibleTypes={visibleTypes} onToggleType={toggleType}
@@ -1362,6 +1383,7 @@ export default function CADPage() {
                 onEntfernen={bereichEntfernen} onAnhaengen={bereichHinzufuegen} onAufstocken={bereichHinzufuegen}
                 onLoescheAenderung={(i) => setBereichsListe((l) => l.filter((_, j) => j !== i))} onZu={() => setBereicheOffen(false)} entferntAnzahl={removedCount} />
             )}
+            {versionenOffen && <VersionenDialog versionen={versionen} speicherFehler={versionenFehler} onSpeichern={neueVersion} onWiederherstellen={stelleVersionWiederHer} onLoeschen={(id) => speichereListe(loescheVersion(versionen, id))} onUmbenennen={(id, n) => speichereListe(benenneVersion(versionen, id, n))} onZu={() => setVersionenOffen(false)} />}
             {mehrfach.length > 0 && modelWithManual && viewMode === '3d' && !abbauAktiv && (
               <MehrfachLeiste model={modelWithManual} ids={mehrfach} einrasten={einrasten} rahmenAktiv={rahmenModus} onRahmen={() => setRahmenModus((v) => !v)} onAbwaehlen={() => { setMehrfach([]); setRahmenModus(false) }} onVerschieben={handleGruppeVerschieben} onKopieren={handleGruppeKopieren} onEntfernen={handleGruppeEntfernen} />
             )}

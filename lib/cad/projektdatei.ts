@@ -10,6 +10,8 @@
 import { istHaubenForm } from '@/lib/cad/haube'
 import type { BereichsAenderung } from '@/lib/cad/bereiche'
 import { leseFiguren, type Figur } from '@/lib/cad/zeichnung'
+import type { BauteilUeberlagerung } from '@/lib/cad/bauteil-aenderungen'
+import { FELDBAUTEIL_ARTEN, type ManualPlacement } from '@/lib/calculations/cad-engine'
 import type { BuildingParams, BuildingSection, CadTuer, CadFenster, CadVorbau } from '@/lib/calculations/cad-engine'
 import { findeSystem } from '@/lib/calculations/geruest-systeme'
 import { bereinigeStatikDaten, type StatikDaten } from '@/lib/statik-daten'
@@ -24,6 +26,9 @@ const MAX_NOTIZEN = 500
 const MAX_ARTIKELWAHL = 20000
 const DACHFORMEN = ['flachdach', 'satteldach', 'walmdach', 'pultdach', 'mansardendach', 'kein'] as const
 const SEITEN = ['front', 'back', 'left', 'right'] as const
+
+/** Von Hand gesetzte und geänderte Teile (liegen als Überlagerung über dem berechneten Modell): gesetzte Bauteile, verschobene/kopierte Teile, entfernte Teile. */
+export interface Handarbeit { platzierungen: ManualPlacement[]; ueberlagerung: BauteilUeberlagerung; entfernt: string[][] }
 
 export interface Projektdatei {
   format: typeof PROJEKTDATEI_FORMAT
@@ -42,6 +47,8 @@ export interface Projektdatei {
   bereiche?: BereichsAenderung[]
   /** Freie Zeichnung im Grundriss (Linien, Kreise, Maße) */
   zeichnung?: Figur[]
+  /** Von Hand gesetzte/geänderte Bauteile (Treppen, Anker, verschobene Teile, entfernte Teile) – ältere Dateien haben sie nicht */
+  handarbeit?: Handarbeit
 }
 
 export type LeseErgebnis =
@@ -51,7 +58,7 @@ export type LeseErgebnis =
 const zahl = (v: unknown, min: number, max: number): number | null =>
   typeof v === 'number' && Number.isFinite(v) && v >= min && v <= max ? v : null
 
-export function erzeugeProjektdatei(p: { name?: string; building: BuildingParams; systemId: string; statikDaten: StatikDaten; notizen: CADNote[]; artikelWahl?: Record<string, string>; bereiche?: BereichsAenderung[]; zeichnung?: Figur[]; testdaten?: boolean }): Projektdatei {
+export function erzeugeProjektdatei(p: { name?: string; building: BuildingParams; systemId: string; statikDaten: StatikDaten; notizen: CADNote[]; artikelWahl?: Record<string, string>; bereiche?: BereichsAenderung[]; zeichnung?: Figur[]; handarbeit?: Handarbeit; testdaten?: boolean }): Projektdatei {
   return {
     format: PROJEKTDATEI_FORMAT,
     version: PROJEKTDATEI_VERSION,
@@ -65,7 +72,57 @@ export function erzeugeProjektdatei(p: { name?: string; building: BuildingParams
     ...(p.artikelWahl && Object.keys(p.artikelWahl).length ? { artikelWahl: p.artikelWahl } : {}),
     ...(p.bereiche && p.bereiche.length ? { bereiche: p.bereiche } : {}),
     ...(p.zeichnung && p.zeichnung.length ? { zeichnung: p.zeichnung } : {}),
+    ...(p.handarbeit && !handarbeitLeer(p.handarbeit) ? { handarbeit: p.handarbeit } : {}),
   }
+}
+
+export const handarbeitLeer = (h: Handarbeit): boolean => h.platzierungen.length === 0 && h.ueberlagerung.aenderungen.length === 0 && h.ueberlagerung.kopien.length === 0 && h.entfernt.length === 0
+
+const PLATZIERUNGS_ARTEN: readonly string[] = ['anchor', 'console', 'stair', 'net', 'board', 'protection_roof', 'load_plate', 'ladder', ...FELDBAUTEIL_ARTEN]
+const MAX_HANDARBEIT = 5000
+const text = (v: unknown, max: number): string | null => (typeof v === 'string' && v.length > 0 && v.length <= max ? v : null)
+
+/** Prüft die Handarbeit Eintrag für Eintrag; Ungültiges wird verworfen und gemeldet, nie blind übernommen. */
+export function leseHandarbeit(roh: unknown, verworfen: string[]): Handarbeit | undefined {
+  if (roh === undefined || roh === null) return undefined
+  if (typeof roh !== 'object') { verworfen.push('Handarbeit (unbekanntes Format)'); return undefined }
+  const r = roh as Record<string, unknown>
+  const platzierungen: ManualPlacement[] = []
+  let schlecht = 0
+  for (const e of Array.isArray(r.platzierungen) ? r.platzierungen.slice(0, MAX_HANDARBEIT) : []) {
+    const o = (e ?? {}) as Record<string, unknown>
+    const id = text(o.id, 160), px = zahl(o.positionX, -2000, 2000), py = zahl(o.positionY, -2000, 2000), pz = zahl(o.positionZ, -2000, 2000), lage = zahl(o.levelIndex, -1, 500)
+    if (!id || !PLATZIERUNGS_ARTEN.includes(o.type as string) || px == null || py == null || pz == null || lage == null || !(SEITEN as readonly unknown[]).includes(o.side)) { schlecht++; continue }
+    const fieldId = o.fieldId === undefined ? undefined : text(o.fieldId, 160)
+    const rot = o.rotationY === undefined ? undefined : zahl(o.rotationY, -100, 100)
+    if (fieldId === null || rot === null) { schlecht++; continue }
+    platzierungen.push({ id, type: o.type as ManualPlacement['type'], positionX: px, positionY: py, positionZ: pz, side: o.side as ManualPlacement['side'], levelIndex: Math.floor(lage), ...(fieldId ? { fieldId } : {}), ...(typeof o.notes === 'string' ? { notes: o.notes.slice(0, 500) } : {}), ...(rot !== undefined ? { rotationY: rot } : {}) })
+  }
+  const u = (r.ueberlagerung ?? {}) as Record<string, unknown>
+  const aenderungen: BauteilUeberlagerung['aenderungen'] = []
+  for (const e of Array.isArray(u.aenderungen) ? u.aenderungen.slice(0, MAX_HANDARBEIT) : []) {
+    const o = (e ?? {}) as Record<string, unknown>
+    const id = text(o.id, 160), dx = zahl(o.dx, -500, 500), dy = zahl(o.dy, -500, 500), dz = zahl(o.dz, -500, 500), dg = zahl(o.drehGrad, -3600, 3600)
+    if (!id || dx == null || dy == null || dz == null || dg == null) { schlecht++; continue }
+    aenderungen.push({ id, dx, dy, dz, drehGrad: dg })
+  }
+  const kopien: BauteilUeberlagerung['kopien'] = []
+  for (const e of Array.isArray(u.kopien) ? u.kopien.slice(0, MAX_HANDARBEIT) : []) {
+    const o = (e ?? {}) as Record<string, unknown>
+    const id = text(o.id, 160), q = text(o.quelleId, 160), dx = zahl(o.dx, -500, 500), dy = zahl(o.dy, -500, 500), dz = zahl(o.dz, -500, 500), dg = zahl(o.drehGrad, -3600, 3600)
+    if (!id || !q || dx == null || dy == null || dz == null || dg == null) { schlecht++; continue }
+    kopien.push({ id, quelleId: q, dx, dy, dz, drehGrad: dg })
+  }
+  const entfernt: string[][] = []
+  for (const g of Array.isArray(r.entfernt) ? r.entfernt.slice(0, MAX_HANDARBEIT) : []) {
+    if (!Array.isArray(g)) { schlecht++; continue }
+    const ids = g.slice(0, MAX_HANDARBEIT).filter((x): x is string => typeof x === 'string' && x.length > 0 && x.length <= 160)
+    if (ids.length !== g.length) schlecht++
+    if (ids.length > 0) entfernt.push(ids)
+  }
+  if (schlecht > 0) verworfen.push(`Handarbeit (${schlecht} ungültige Einträge)`)
+  const h: Handarbeit = { platzierungen, ueberlagerung: { aenderungen, kopien }, entfernt }
+  return handarbeitLeer(h) ? undefined : h
 }
 
 export function liesProjektdatei(text: string): LeseErgebnis {
@@ -296,6 +353,7 @@ export function liesProjektdatei(text: string): LeseErgebnis {
       } else verworfen.push('Bereichsänderung (unbekannte Art)')
     }
   }
+  const handarbeit = leseHandarbeit(r.handarbeit, verworfen)
   return {
     ok: true,
     verworfen,
@@ -310,6 +368,7 @@ export function liesProjektdatei(text: string): LeseErgebnis {
       ...(Object.keys(artikelWahl).length ? { artikelWahl } : {}),
       ...(bereiche.length ? { bereiche } : {}),
       ...(leseFiguren(r.zeichnung).length ? { zeichnung: leseFiguren(r.zeichnung) } : {}),
+      ...(handarbeit ? { handarbeit } : {}),
     },
   }
 }
