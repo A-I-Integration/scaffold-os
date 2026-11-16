@@ -5,14 +5,16 @@
 
 import { useMemo, useState } from 'react'
 import type { CADModel, ManualPlacement, ScaffoldField } from '@/lib/calculations/cad-engine'
-import { treppenReihen } from '@/lib/cad/treppe-setzen'
+import { treppenReihen, lagenVon } from '@/lib/cad/treppe-setzen'
 
-export default function TreppePanel({ model, treppe, meldung, onSetzen, onSchieben, onZu }: {
+export default function TreppePanel({ model, treppe, meldung, onSetzen, onLeiter, onSchieben, onZu }: {
   model: Pick<CADModel, 'fields'>
   /** die gerade gewählte, von Hand gesetzte Treppe (sonst null) */
   treppe: ManualPlacement | null
   meldung?: string | null
   onSetzen: (feld: ScaffoldField) => void
+  /** Leiter an das gewählte Feld in der gewählten Lage */
+  onLeiter?: (feld: ScaffoldField, lage: number) => void
   onSchieben: (felder: number) => void
   onZu: () => void
 }) {
@@ -20,13 +22,16 @@ export default function TreppePanel({ model, treppe, meldung, onSetzen, onSchieb
   const [reiheKey, setReiheKey] = useState('')
   const [feldNr, setFeldNr] = useState(1)
   const [anzahl, setAnzahl] = useState(1)
+  const lagen = useMemo(() => lagenVon(model), [model])
+  const [lage, setLage] = useState<number | null>(null)
+  const lageNr = lage !== null && lagen.includes(lage) ? lage : (lagen[0] ?? 0)
   const reihe = reihen.find((r) => r.schluessel === reiheKey) ?? reihen[0]
   if (!reihe) return null
   const feld = reihe.felder[Math.min(Math.max(feldNr, 1), reihe.felder.length) - 1]
   const n = Math.max(1, Math.min(50, Math.round(anzahl) || 1))
   return (
     <div role='region' aria-label='Treppe setzen' className='flex flex-wrap items-end gap-x-4 gap-y-2 border-b border-black/5 bg-[#faf6f1] px-4 py-2 text-[13px]' data-testid='treppe-leiste'>
-      <strong className='self-center'>Treppe</strong>
+      <strong className='self-center'>Treppe und Leiter</strong>
       <label className='flex flex-col text-[11px] text-[#6e6e73]'>Seite
         <select value={reihe.schluessel} onChange={(e) => { setReiheKey(e.target.value); setFeldNr(1) }} aria-label='Seite' className='mt-0.5 rounded border border-black/15 bg-white px-2 py-1 text-[13px] text-[#1d1d1f]'>
           {reihen.map((r) => <option key={r.schluessel} value={r.schluessel}>{r.bezeichnung} ({r.felder.length} Felder)</option>)}
@@ -38,6 +43,16 @@ export default function TreppePanel({ model, treppe, meldung, onSetzen, onSchieb
         </select>
       </label>
       <button type='button' onClick={() => onSetzen(feld)} className='rounded bg-[#e8590c] px-3 py-1.5 text-white'>Treppe hier setzen</button>
+      {onLeiter && (
+        <>
+          <label className='flex flex-col text-[11px] text-[#6e6e73]'>Lage (für Leiter)
+            <select value={lageNr} onChange={(e) => setLage(Number(e.target.value))} aria-label='Lage' className='mt-0.5 rounded border border-black/15 bg-white px-2 py-1 text-[13px] text-[#1d1d1f]'>
+              {lagen.map((l) => <option key={l} value={l}>Lage {l + 1}</option>)}
+            </select>
+          </label>
+          <button type='button' onClick={() => onLeiter(feld, lageNr)} className='rounded border border-[#e8590c] px-3 py-1.5 text-[#e8590c]' data-testid='leiter-setzen'>Leiter hier setzen</button>
+        </>
+      )}
       <span className='mx-1 h-8 w-px self-center bg-black/10' />
       <div className='flex flex-col text-[11px] text-[#6e6e73]'>{treppe ? 'Gewählte Treppe schieben' : 'Zum Schieben erst eine von Hand gesetzte Treppe anklicken'}
         <span className='mt-0.5 flex items-center gap-1.5 text-[13px] text-[#1d1d1f]'>

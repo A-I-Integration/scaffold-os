@@ -53,7 +53,7 @@ import { erzeugeProjektdatei, liesProjektdatei, type Projektdatei } from '@/lib/
 import { ladeVersionen, speichereVersionen, fuegeVersionHinzu, loescheVersion, benenneVersion, type Version } from '@/lib/cad/versionen'
 import VersionenDialog from '@/components/cad/VersionenDialog'
 import TreppePanel from '@/components/cad/TreppePanel'
-import { treppeAufFeld, schiebeUmFelder } from '@/lib/cad/treppe-setzen'
+import { treppeAufFeld, schiebeUmFelder, leiterAufFeld } from '@/lib/cad/treppe-setzen'
 import LvDialog from '@/components/cad/LvDialog'
 import { bereinigeStatikDaten, type StatikDaten } from '@/lib/statik-daten'
 import { useRouter } from 'next/navigation'
@@ -460,6 +460,17 @@ export default function CADPage() {
     if (!model) return
     const placement: ManualPlacement = { id: `manual-stair-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`, ...treppeAufFeld(model, feld) }
     setPlacementType(null); setTreppeMeldung(null)
+    setManualPlacements((prev) => [...prev, placement])
+    setSelectedComponent(placement.id)
+  }, [model])
+
+  const setzeLeiterAufFeld = useCallback((feld: ScaffoldField, lage: number) => {
+    if (!model) return
+    const e = leiterAufFeld(model, feld, lage)
+    setTreppeMeldung(e.grund ?? null)
+    if (!e.placement) return
+    const placement: ManualPlacement = { id: `manual-ladder-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`, ...e.placement }
+    setPlacementType(null)
     setManualPlacements((prev) => [...prev, placement])
     setSelectedComponent(placement.id)
   }, [model])
@@ -1310,7 +1321,7 @@ export default function CADPage() {
             layerState={layerState} onToggleSide={(k) => handleToggleSide(k as keyof SideVisibility)} onToggleLevel={handleToggleLevel}
             onAlleEin={handleShowAllLayers} onAlleAus={handleHideAllLayers} visibleTypes={visibleTypes} onToggleType={toggleType}
           />
-          {treppePanel && model && viewMode === '3d' && <TreppePanel model={model} treppe={gewaehlteTreppe} meldung={treppeMeldung} onSetzen={setzeTreppeAufFeld} onSchieben={schiebeTreppe} onZu={() => setTreppePanel(false)} />}
+          {treppePanel && model && viewMode === '3d' && <TreppePanel model={model} treppe={gewaehlteTreppe} meldung={treppeMeldung} onSetzen={setzeTreppeAufFeld} onLeiter={setzeLeiterAufFeld} onSchieben={schiebeTreppe} onZu={() => setTreppePanel(false)} />}
           {mehrfach.length > 0 && modelWithManual && viewMode === '3d' && !abbauAktiv && (
             <MehrfachLeiste model={modelWithManual} ids={mehrfach} einrasten={einrasten} rahmenAktiv={rahmenModus} onRahmen={() => setRahmenModus((v) => !v)} onAbwaehlen={() => { setMehrfach([]); setRahmenModus(false) }} onVerschieben={handleGruppeVerschieben} onKopieren={handleGruppeKopieren} onEntfernen={handleGruppeEntfernen} />
           )}

@@ -53,3 +53,32 @@ for (const [name, extra] of [['Rechteck', {}], ['L-Form-Umriss', { umriss: lform
     })
   })
 }
+
+describe('Leiter über Auswahl', () => {
+  it('steht an genau dem gewählten Feld und in der gewählten Lage, außen am Feld', async () => {
+    const { generateCADModel } = await import('@/lib/calculations/cad-engine')
+    const { leiterAufFeld, lagenVon } = await import('@/lib/cad/treppe-setzen')
+    const m = generateCADModel({ lengthM: 13.8, widthM: 8.85, heightM: 6.94, floors: 3, floorHeightsM: [], windowCount: 0, doorCount: 0, balconyCount: 0, overhangM: 0.3, setbackM: 0, roofForm: 'satteldach', sides: ['front', 'back', 'left', 'right'], geruestOptionen: { treppe: false } } as never, 'layher-allround')
+    const lagen = lagenVon(m)
+    expect(lagen.length).toBeGreaterThan(1)
+    for (const f of m.fields.filter((x) => !x.isCorner && x.levelIndex === 0)) {
+      for (const lv of lagen) {
+        const e = leiterAufFeld(m, f, lv)
+        expect(e.placement).not.toBeNull()
+        const ziel = m.fields.find((x) => x.side === f.side && x.index === f.index && x.levelIndex === lv)!
+        expect(e.placement!.fieldId).toBe(ziel.id)
+        expect(e.placement!.levelIndex).toBe(lv)
+        expect(e.placement!.type).toBe('ladder')
+        // liegt in der Höhe der gewählten Lage, nicht darunter oder darüber
+        expect(Math.abs(e.placement!.positionY - (ziel.positionY + 1))).toBeLessThan(0.6)
+      }
+    }
+  })
+  it('meldet es, wenn es in der Lage kein Feld gibt', async () => {
+    const { leiterAufFeld } = await import('@/lib/cad/treppe-setzen')
+    const f = { id: 'a', side: 'front', index: 1, levelIndex: 0, positionX: 0, positionY: 0, positionZ: 0, lengthM: 2, widthM: 0.7 } as never
+    const e = leiterAufFeld({ fields: [f] } as never, f, 5)
+    expect(e.placement).toBeNull()
+    expect(e.grund).toMatch(/kein Feld/)
+  })
+})
