@@ -2239,6 +2239,9 @@ function Scene({
   const modelKey = `${model.fieldCount}-${model.levelCount}-${model.totalHeightM}-${(features || []).length}-${removedCount || 0}`
   // Hanglage: Gebäude und Gerüst werden um die Tieflage der Talseite angehoben, so dass die Talsohle auf dem Boden (y=0) sitzt.
   const hangHebung = bridgeMode ? 0 : hangDaten(model.building).hangM
+  // Klickpunkte kommen in Weltkoordinaten; das Gerüst sitzt um hangHebung höher als seine Modellkoordinaten (Hang) → zurückrechnen,
+  // sonst rastet die Treppe/das Bauteil auf eine falsche Lage ein bzw. steht zu hoch
+  const platziereLokal = onPlacementClick ? (t: string, p: [number, number, number], sd: string, lv: number) => onPlacementClick(t, [p[0], p[1] - hangHebung, p[2]], sd, lv) : undefined
   const [lodLevel, setLodLevel] = useState<0 | 1 | 2>(0)
   // Umriss-Modus: jedes Feld gehört zu einer Kante (Schlüssel "k0" …); sonst leer
   const seitenVonFeld = useMemo(() => {
@@ -2280,7 +2283,7 @@ function Scene({
       <BridgeDeck3D building={model.building} visible={showBuilding && !!bridgeMode} />
       <Umgebung3D model={model} visible={!!showEnvironment && !bridgeMode && !weiss} />
       <group position={[0, hangHebung, 0]}>
-        <GebaeudeAnzeige building={model.building} features={features || []} visible={showBuilding && !bridgeMode} onSeiteUmschalten={!measureMode && !placementType ? onSeiteUmschalten : undefined} platziere={placementType && onPlacementClick && !measureMode ? (pt) => onPlacementClick(placementType, pt, '', -1) : undefined} />
+        <GebaeudeAnzeige building={model.building} features={features || []} visible={showBuilding && !bridgeMode} onSeiteUmschalten={!measureMode && !placementType ? onSeiteUmschalten : undefined} platziere={placementType && onPlacementClick && !measureMode ? (pt) => platziereLokal?.(placementType, pt, '', -1) : undefined} />
         {showScaffold && statik && <Stabwerk3D components={model.components3D} visibleTypes={visibleTypes} />}
         {showScaffold && !statik && (
           <AllScaffoldComponents
@@ -2295,7 +2298,7 @@ function Scene({
             measureMode={measureMode}
             onMeasurePoint={onMeasurePoint}
             placementType={placementType}
-            onPlacementClick={onPlacementClick}
+            onPlacementClick={platziereLokal}
           />
         )}
         {showScaffold && !statik && griff && selectedComponent && !measureMode && !placementType && <BauteilGriff model={model} id={selectedComponent} griff={griff} />}
