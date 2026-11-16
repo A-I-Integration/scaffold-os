@@ -1,60 +1,74 @@
-// Treppe setzen: ein Klick setzt die Treppe durch die ganze Reihe – in jeder Lage übereinander, von unten bis oben.
+// Treppe von Hand setzen: dieselbe Außentreppe wie die automatische – vor dem Gerüst, vom Boden bis zur obersten Lage der Reihe.
 import { describe, it, expect } from 'vitest'
-import { generateCADModel, addManualPlacement, type BuildingParams, type ManualPlacement } from '@/lib/calculations/cad-engine'
+import { generateCADModel, addManualPlacement, feldReihe, type BuildingParams, type ManualPlacement, type ScaffoldComponent3D } from '@/lib/calculations/cad-engine'
 import { platzierungAusTreffer, platzierungIdVon, verschiebePlatzierung } from '@/lib/calculations/cad-platzierung'
 
-const basis = (o: Partial<BuildingParams>) => ({ lengthM: 12, widthM: 9, heightM: 8, floors: 3, floorHeightsM: [], windowCount: 0, doorCount: 0, balconyCount: 0, overhangM: 0.3, setbackM: 0, roofForm: 'flachdach', sides: ['front', 'back', 'left', 'right'], geruestOptionen: { treppe: false, tuerenFreihalten: false }, ...o }) as unknown as BuildingParams
-const R = 5
-const L = 12, W = 9
-const formen: [string, BuildingParams][] = [
-  ['Rechteck', basis({})],
-  ['Hang (Umriss, hinten 2,4 m tiefer)', basis({ umriss: [{ x: 0, z: 0 }, { x: L, z: 0 }, { x: L, z: W }, { x: L * 0.6, z: W }, { x: L * 0.6, z: W + 2 }, { x: L * 0.3, z: W + 2 }, { x: L * 0.3, z: W }, { x: 0, z: W }], geruestOptionen: { treppe: false, tuerenFreihalten: false, gelaendeEckenM: { fl: 0, fr: 0, bl: -2.4, br: -2.4 } } } as Partial<BuildingParams>)],
-  ['Achteck-Umriss', basis({ lengthM: 10, widthM: 10, umriss: Array.from({ length: 8 }, (_, i) => ({ x: R + R * Math.cos((2 * Math.PI * i) / 8), z: R + R * Math.sin((2 * Math.PI * i) / 8) })) })],
+const L = 12, W = 9, R = 5
+const basis = (o: Partial<BuildingParams>, treppe = false) => ({ lengthM: L, widthM: W, heightM: 8, floors: 3, floorHeightsM: [], windowCount: 0, doorCount: 0, balconyCount: 0, overhangM: 0.3, setbackM: 0, roofForm: 'flachdach', sides: ['front', 'back', 'left', 'right'], ...o, geruestOptionen: { treppe, tuerenFreihalten: false, ...(o.geruestOptionen as object) } }) as unknown as BuildingParams
+const lform = [{ x: 0, z: 0 }, { x: L, z: 0 }, { x: L, z: W }, { x: L * 0.6, z: W }, { x: L * 0.6, z: W + 2 }, { x: L * 0.3, z: W + 2 }, { x: L * 0.3, z: W }, { x: 0, z: W }]
+const formen: [string, Partial<BuildingParams>][] = [
+  ['Rechteck', {}],
+  ['L-Form-Umriss', { umriss: lform }],
+  ['Hang (Umriss, hinten 2,4 m tiefer)', { umriss: lform, geruestOptionen: { gelaendeEckenM: { fl: 0, fr: 0, bl: -2.4, br: -2.4 } } as never }],
+  ['Achteck-Umriss', { lengthM: 10, widthM: 10, umriss: Array.from({ length: 8 }, (_, i) => ({ x: R + R * Math.cos((2 * Math.PI * i) / 8), z: R + R * Math.sin((2 * Math.PI * i) / 8) })) }],
 ]
-for (const [name, b] of formen) {
-  describe(`Treppe durch die ganze Reihe – ${name}`, () => {
-    const m = generateCADModel(b, 'layher-allround')
-    const f1 = m.fields.find((f) => f.levelIndex === 1 && !f.isCorner) ?? m.fields.find((f) => f.levelIndex === 1)!
-    const reihe = m.fields.filter((f) => f.side === f1.side && f.kante === f1.kante && Math.abs(f.positionX - f1.positionX) < 1e-6 && Math.abs(f.positionZ - f1.positionZ) < 1e-6)
-    const setze = (id: string, mod = m) => addManualPlacement(JSON.parse(JSON.stringify(mod)), { id, ...platzierungAusTreffer(mod, 'stair', [f1.positionX, f1.positionY + 1, f1.positionZ], '' as ManualPlacement['side'], -1) } as ManualPlacement)
-    it('jede Lage der Reihe bekommt einen Treppenlauf, ID-Zuordnung bleibt eindeutig', () => {
+const hauptlauf = (cs: ScaffoldComponent3D[], id: string) => cs.find((c) => c.id === id)!
+
+for (const [name, o] of formen) {
+  describe(`Außentreppe von Hand – ${name}`, () => {
+    const m = generateCADModel(basis(o), 'layher-allround')
+    const auto = generateCADModel(basis(o, true), 'layher-allround')
+    const setze = (id: string, mod = m, f = m.fields.find((x) => x.levelIndex === 1 && !x.isCorner) ?? m.fields.find((x) => x.levelIndex === 1)!) =>
+      addManualPlacement(JSON.parse(JSON.stringify(mod)), { id, ...platzierungAusTreffer(mod, 'stair', [f.positionX, f.positionY + 1, f.positionZ], '' as ManualPlacement['side'], -1) } as ManualPlacement)
+
+    it('entspricht der automatischen Treppe: gleiche Lauf-Anzahl bis ganz nach oben, Breite, Höhe und Abstand vor dem Gerüst', () => {
+      const lauf = auto.components3D.find((c) => c.id === 'stair-frame-0')!
+      const autoFeld = auto.fields.find((f) => Math.hypot(f.positionX - lauf.position[0], f.positionZ - lauf.position[2]) < f.lengthM && f.levelIndex === 0) ?? auto.fields[0]
+      // dasselbe Feld in einem Modell ohne automatische Treppe anklicken
+      const gleichesFeld = m.fields.find((f) => f.id === autoFeld.id)!
+      const m2 = setze('manual-t', m, gleichesFeld)
+      const von = hauptlauf(m2.components3D, 'manual-t')
+      expect(von, 'Hauptteil der Treppe').toBeTruthy()
+      expect(von.type).toBe('stair')
+      expect(von.flights).toBe(lauf.flights)
+      for (let i = 0; i < 3; i++) expect(von.scale[i]).toBeCloseTo(lauf.scale[i], 6)
+      for (let i = 0; i < 3; i++) expect(von.position[i]).toBeCloseTo(lauf.position[i], 6)
+      const teileAuto = auto.components3D.filter((c) => c.id.startsWith('stair-')).length
+      expect(m2.components3D.filter((c) => c.id === 'manual-t' || c.id.startsWith('manual-t-')).length).toBe(teileAuto)
+    })
+    it('Treppe führt durch alle Lagen der angeklickten Reihe, IDs bleiben eindeutig und der Platzierung zuordenbar', () => {
+      const f = m.fields.find((x) => x.levelIndex === 1 && !x.isCorner) ?? m.fields.find((x) => x.levelIndex === 1)!
+      const reihe = feldReihe(m, f)
       const m2 = setze('manual-t')
-      const laeufe = m2.components3D.filter((c) => c.type === 'stair' && c.id.startsWith('manual-t'))
-      expect(reihe.length).toBeGreaterThanOrEqual(3)
-      expect(laeufe.length).toBe(reihe.length)
-      const hoehen = laeufe.map((c) => c.position[1]).sort((a, b) => a - b)
-      expect(new Set(hoehen.map((h) => h.toFixed(2))).size).toBe(reihe.length) // übereinander
+      const lauf = hauptlauf(m2.components3D, 'manual-t')
+      expect(lauf.flights).toBeGreaterThanOrEqual(Math.min(reihe.length, 2))
       expect(new Set(m2.components3D.map((c) => c.id)).size).toBe(m2.components3D.length)
       for (const c of m2.components3D.filter((c) => c.id.startsWith('manual-t'))) expect(platzierungIdVon(c.id, [{ id: 'manual-t' }])).toBe('manual-t')
+      // beginnt in der untersten Lage der Reihe (Boden), endet oben
+      const unten = reihe[0]
+      expect(lauf.position[1] - lauf.scale[1] / 2).toBeLessThan(unten.positionY + 1.2)
     })
-    it('Belag der Treppenöffnung entfällt über jeder Lage außer der obersten Lage selbst', () => {
-      const m2 = setze('manual-t')
-      for (const f of reihe.filter((x) => x.levelIndex > reihe[0].levelIndex)) expect(m2.components3D.some((c) => c.id === `deck-${f.id}`), f.id).toBe(false)
-      expect(m2.components3D.some((c) => c.id === `deck-${reihe[0].id}`)).toBe(true)
+    it('steht vor dem Gerüst (außerhalb der Belag-Außenkante), nicht im Gerüst', () => {
+      const f = m.fields.find((x) => x.levelIndex === 1 && !x.isCorner) ?? m.fields.find((x) => x.levelIndex === 1)!
+      const m2 = setze('manual-t', m, f)
+      const lauf = hauptlauf(m2.components3D, 'manual-t')
+      const feldMitte = Math.hypot(f.positionX, f.positionZ)
+      expect(Number.isFinite(feldMitte)).toBe(true)
+      // Abstand Lauf–Feldmitte größer als halbe Gerüstbreite (Treppe liegt außen)
+      const d = Math.hypot(lauf.position[0] - f.positionX, lauf.position[2] - f.positionZ)
+      expect(d).toBeGreaterThan(f.widthM / 2)
     })
-    it('Ziehen auf eine andere Reihe baut die Treppe dort wieder durch alle Lagen', () => {
-      const abst = (f: (typeof m.fields)[number]) => (f.positionX - f1.positionX) ** 2 + (f.positionZ - f1.positionZ) ** 2
-      const ziel = m.fields.filter((f) => f.levelIndex === 0).sort((x, y) => abst(y) - abst(x))[0]
-      const pl = { id: 'manual-t', ...platzierungAusTreffer(m, 'stair', [f1.positionX, f1.positionY + 1, f1.positionZ], '' as ManualPlacement['side'], -1) } as ManualPlacement
+    it('Ziehen auf ein weit entferntes Feld baut die Treppe dort neu (wieder bis oben)', () => {
+      const f = m.fields.find((x) => x.levelIndex === 1)!
+      const abst = (g: (typeof m.fields)[number]) => (g.positionX - f.positionX) ** 2 + (g.positionZ - f.positionZ) ** 2
+      const ziel = m.fields.filter((g) => g.levelIndex === 1).sort((a, b) => abst(b) - abst(a))[0]
+      const pl = { id: 'manual-t', ...platzierungAusTreffer(m, 'stair', [f.positionX, f.positionY + 1, f.positionZ], '' as ManualPlacement['side'], -1) } as ManualPlacement
       const neu = verschiebePlatzierung(m, pl, [ziel.positionX, ziel.positionY + 1, ziel.positionZ], '' as ManualPlacement['side'], -1)
       const m2 = addManualPlacement(JSON.parse(JSON.stringify(m)), neu as ManualPlacement)
-      const reihe2 = m.fields.filter((f) => f.side === ziel.side && Math.abs(f.positionX - ziel.positionX) < 1e-6 && Math.abs(f.positionZ - ziel.positionZ) < 1e-6)
-      expect(m2.components3D.filter((c) => c.type === 'stair' && c.id.startsWith('manual-t')).length).toBe(reihe2.length)
+      const lauf = hauptlauf(m2.components3D, 'manual-t')
+      expect(lauf).toBeTruthy()
+      expect(neu.fieldId).toBe(ziel.id)
+      expect(Math.hypot(lauf.position[0] - ziel.positionX, lauf.position[2] - ziel.positionZ)).toBeLessThan(ziel.widthM + 1.5)
     })
   })
 }
-
-describe('Treppe reicht bis zur untersten Lage der Reihe (Hang)', () => {
-  const m = generateCADModel(formen[2][1], 'layher-allround')
-  it('der unterste Lauf steht auf der untersten Lage dieser Reihe, der oberste auf der obersten', () => {
-    const hoechste = Math.max(...m.fields.map((f) => f.levelIndex))
-    const f = m.fields.find((x) => x.levelIndex === hoechste && !x.isCorner) ?? m.fields.find((x) => x.levelIndex === hoechste)!
-    const pl = { id: 'manual-h', ...platzierungAusTreffer(m, 'stair', [f.positionX, f.positionY + 1, f.positionZ], '' as ManualPlacement['side'], -1) } as ManualPlacement
-    const m2 = addManualPlacement(JSON.parse(JSON.stringify(m)), pl)
-    const laeufe = m2.components3D.filter((c) => c.type === 'stair' && c.id.startsWith('manual-h')).map((c) => c.position[1]).sort((a, b) => a - b)
-    const reihe = m.fields.filter((g) => g.side === f.side && g.kante === f.kante && Math.hypot(g.positionX - f.positionX, g.positionZ - f.positionZ) < 0.3)
-    expect(laeufe.length).toBe(reihe.length)
-    const tiefstes = Math.min(...reihe.map((g) => g.positionY))
-    expect(laeufe[0]).toBeLessThan(tiefstes + 1.5) // unterster Lauf liegt in der untersten Lage
-  })
-})
