@@ -1935,6 +1935,21 @@ function getPutzTex(): THREE.CanvasTexture | null {
   return putzTexCache
 }
 
+/** Rahmen des Gerüst-Inhalts ohne Bedien-Hilfen: Der Verschiebe-/Dreh-Griff (TransformControls) enthält riesige
+ *  unsichtbare Ebenen – würden sie mitgezählt, springt die Kamera beim Auswählen/Setzen eines Bauteils weit weg
+ *  und das Gerüst verschwindet. */
+function inhaltBox(target: THREE.Object3D): THREE.Box3 {
+  const hilfen: THREE.Object3D[] = []
+  target.traverse((o) => {
+    const a = o as unknown as Record<string, unknown>
+    if (a.isTransformControls || a.isTransformControlsRoot || a.isTransformControlsGizmo || a.isTransformControlsPlane || o.userData?.ohneRahmen) hilfen.push(o)
+  })
+  const gemerkt = hilfen.filter((h) => h.parent).map((h) => ({ eltern: h.parent as THREE.Object3D, kinder: (h.parent as THREE.Object3D).children }))
+  for (const g of gemerkt) g.eltern.children = g.eltern.children.filter((c) => !hilfen.includes(c))
+  try { return new THREE.Box3().setFromObject(target, true) }
+  finally { for (const g of gemerkt) g.eltern.children = g.kinder }
+}
+
 function AutoFraming({ targetRef, modelKey }: { targetRef: { current: THREE.Group | null }; modelKey: string }) {
   const camera = useThree((s) => s.camera)
   const controls = useThree((s) => s.controls) as any
@@ -1943,7 +1958,7 @@ function AutoFraming({ targetRef, modelKey }: { targetRef: { current: THREE.Grou
     const id = requestAnimationFrame(() => {
       const target = targetRef.current
       if (!target) return
-      const box = new THREE.Box3().setFromObject(target, true)
+      const box = inhaltBox(target)
       if (box.isEmpty()) return
       const sphere = box.getBoundingSphere(new THREE.Sphere())
       const center = sphere.center
@@ -1972,7 +1987,7 @@ function GroundingShadow({ targetRef, modelKey }: { targetRef: { current: THREE.
     const id = requestAnimationFrame(() => {
       const target = targetRef.current
       if (!target) return
-      const box = new THREE.Box3().setFromObject(target, true)
+      const box = inhaltBox(target)
       if (box.isEmpty()) return
       const c = box.getCenter(new THREE.Vector3())
       const size = box.getSize(new THREE.Vector3())
