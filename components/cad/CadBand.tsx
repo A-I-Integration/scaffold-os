@@ -71,6 +71,7 @@ export interface CadBandProps {
   onDxf: () => void
   onIfc?: () => void
   onSpeichern: () => void
+  onVersionen?: () => void
   onLv?: () => void
   onBild: () => void
 }
@@ -160,6 +161,7 @@ export default function CadBand(p: CadBandProps) {
             <Gruppe name='Verlauf'>
               <Knopf icon={Undo2} label='Zurück' aus={!p.kannZurueck} onClick={p.onZurueck} titel='Letzte Eingabe zurücknehmen (Strg Z)' />
               <Knopf icon={Redo2} label='Wiederholen' aus={!p.kannVor} onClick={p.onVor} titel='Zurückgenommene Eingabe wiederherstellen (Strg Umschalt Z)' />
+              <Knopf icon={Save} label='Versionen' aus={aus || !p.onVersionen} onClick={() => p.onVersionen?.()} titel='Benannte Stände des Projekts speichern und wiederherstellen (nur in diesem Browser)' />
               <Knopf icon={RotateCcw} label={p.entferntAnzahl > 0 ? `Entferntes zurück (${p.entferntAnzahl})` : 'Entferntes zurück'} aus={p.entferntAnzahl === 0} onClick={p.onEntferntZurueck} titel='Zuletzt entfernte Bauteile zurückholen' />
             </Gruppe>
           </>
