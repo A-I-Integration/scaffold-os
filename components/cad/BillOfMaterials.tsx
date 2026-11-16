@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { sortiereStueckliste, STUECKLISTE_MODI, type StuecklisteModus } from '@/lib/cad/stueckliste-sortierung'
 import { MaterialItem } from '@/types/scaffold'
 import type { LogistikDaten } from '@/lib/calculations/cad-engine'
 import type { CADNote } from '@/types/cad-notes'
@@ -81,11 +82,7 @@ export default function BillOfMaterials({ materials, ohnePreis = [], ohneGewicht
   const [adresseEingabe, setAdresseEingabe] = useState('')
   const [neuerKundeLaeuft, setNeuerKundeLaeuft] = useState(false)
   const [logistikOffen, setLogistikOffen] = useState(true)
-  const grouped = materials.reduce((acc, item) => {
-    if (!acc[item.category]) acc[item.category] = []
-    acc[item.category].push(item)
-    return acc
-  }, {} as Record<string, MaterialItem[]>)
+  const [sortModus, setSortModus] = useState<StuecklisteModus>('gruppen')
 
   return (
     <div className='h-full flex flex-col bg-white border-l border-black/5'>
@@ -272,7 +269,13 @@ export default function BillOfMaterials({ materials, ohnePreis = [], ohneGewicht
           </div>
         )}
         <div className='space-y-3'>
-          {Object.entries(grouped).map(([category, items]) => (
+          <div role='group' aria-label='Sortierung der Stückliste' className='flex gap-1' data-testid='stueckliste-sortierung'>
+            {STUECKLISTE_MODI.map((m) => (
+              <button key={m.modus} type='button' title={m.titel} aria-pressed={sortModus === m.modus} onClick={() => setSortModus(m.modus)}
+                className={`flex-1 rounded-lg border px-2 py-1 text-[11px] ${sortModus === m.modus ? 'border-[#e8590c] bg-[#fff4ec] font-semibold text-[#e8590c]' : 'border-black/10 text-[#6e6e73] hover:bg-black/5'}`}>{m.name}</button>
+            ))}
+          </div>
+          {sortiereStueckliste(materials, sortModus).map(([category, items]) => (
             <div key={category} className='bg-[#f5f5f7] rounded-xl overflow-hidden'>
               <div className='px-3 py-2 bg-black/5'>
                 <span className='text-xs font-semibold text-[#424245] uppercase'>{category}</span>
