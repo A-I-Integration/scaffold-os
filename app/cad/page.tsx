@@ -1310,6 +1310,10 @@ export default function CADPage() {
             layerState={layerState} onToggleSide={(k) => handleToggleSide(k as keyof SideVisibility)} onToggleLevel={handleToggleLevel}
             onAlleEin={handleShowAllLayers} onAlleAus={handleHideAllLayers} visibleTypes={visibleTypes} onToggleType={toggleType}
           />
+          {treppePanel && model && viewMode === '3d' && <TreppePanel model={model} treppe={gewaehlteTreppe} meldung={treppeMeldung} onSetzen={setzeTreppeAufFeld} onSchieben={schiebeTreppe} onZu={() => setTreppePanel(false)} />}
+          {mehrfach.length > 0 && modelWithManual && viewMode === '3d' && !abbauAktiv && (
+            <MehrfachLeiste model={modelWithManual} ids={mehrfach} einrasten={einrasten} rahmenAktiv={rahmenModus} onRahmen={() => setRahmenModus((v) => !v)} onAbwaehlen={() => { setMehrfach([]); setRahmenModus(false) }} onVerschieben={handleGruppeVerschieben} onKopieren={handleGruppeKopieren} onEntfernen={handleGruppeEntfernen} />
+          )}
           <div className='flex flex-wrap gap-2 items-center justify-between px-4 py-2 bg-white/50 border-b border-black/5'>
             {viewMode === '3d' && (
               <span className='inline-flex flex-wrap items-center gap-1'>
@@ -1410,10 +1414,6 @@ export default function CADPage() {
                 onLoescheAenderung={(i) => setBereichsListe((l) => l.filter((_, j) => j !== i))} onZu={() => setBereicheOffen(false)} entferntAnzahl={removedCount} />
             )}
             {versionenOffen && <VersionenDialog versionen={versionen} speicherFehler={versionenFehler} onSpeichern={neueVersion} onWiederherstellen={stelleVersionWiederHer} onLoeschen={(id) => speichereListe(loescheVersion(versionen, id))} onUmbenennen={(id, n) => speichereListe(benenneVersion(versionen, id, n))} onZu={() => setVersionenOffen(false)} />}
-            {treppePanel && model && viewMode === '3d' && <TreppePanel model={model} treppe={gewaehlteTreppe} meldung={treppeMeldung} onSetzen={setzeTreppeAufFeld} onSchieben={schiebeTreppe} onZu={() => setTreppePanel(false)} />}
-            {mehrfach.length > 0 && modelWithManual && viewMode === '3d' && !abbauAktiv && (
-              <MehrfachLeiste model={modelWithManual} ids={mehrfach} einrasten={einrasten} rahmenAktiv={rahmenModus} onRahmen={() => setRahmenModus((v) => !v)} onAbwaehlen={() => { setMehrfach([]); setRahmenModus(false) }} onVerschieben={handleGruppeVerschieben} onKopieren={handleGruppeKopieren} onEntfernen={handleGruppeEntfernen} />
-            )}
             {abbauAktiv && abbauErgebnis && viewMode === '3d' && (
               <TeilabbauPanel ein={abbauEin} onChange={setAbbauEin} ergebnis={abbauErgebnis} onClose={() => setAbbauAktiv(false)} onPlanUebernehmen={() => setAbbauEinplanen(true)} />
             )}

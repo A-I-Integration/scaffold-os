@@ -25,30 +25,30 @@ export default function TreppePanel({ model, treppe, meldung, onSetzen, onSchieb
   const feld = reihe.felder[Math.min(Math.max(feldNr, 1), reihe.felder.length) - 1]
   const n = Math.max(1, Math.min(50, Math.round(anzahl) || 1))
   return (
-    <div role='dialog' aria-label='Treppe setzen' className='absolute left-3 top-3 z-20 w-[300px] rounded-lg border bg-white p-3 text-sm shadow-lg'>
-      <div className='mb-2 flex items-center justify-between'>
-        <strong>Treppe setzen</strong>
-        <button type='button' onClick={onZu} className='text-xs text-gray-500 hover:text-gray-900'>Schließen</button>
+    <div role='region' aria-label='Treppe setzen' className='flex flex-wrap items-end gap-x-4 gap-y-2 border-b border-black/5 bg-[#faf6f1] px-4 py-2 text-[13px]' data-testid='treppe-leiste'>
+      <strong className='self-center'>Treppe</strong>
+      <label className='flex flex-col text-[11px] text-[#6e6e73]'>Seite
+        <select value={reihe.schluessel} onChange={(e) => { setReiheKey(e.target.value); setFeldNr(1) }} aria-label='Seite' className='mt-0.5 rounded border border-black/15 bg-white px-2 py-1 text-[13px] text-[#1d1d1f]'>
+          {reihen.map((r) => <option key={r.schluessel} value={r.schluessel}>{r.bezeichnung} ({r.felder.length} Felder)</option>)}
+        </select>
+      </label>
+      <label className='flex flex-col text-[11px] text-[#6e6e73]' title='Feld 1 = erstes Feld der Seite'>Feld
+        <select value={feldNr} onChange={(e) => setFeldNr(Number(e.target.value))} aria-label='Feld' className='mt-0.5 rounded border border-black/15 bg-white px-2 py-1 text-[13px] text-[#1d1d1f]'>
+          {reihe.felder.map((f, i) => <option key={f.id} value={i + 1}>Feld {i + 1} · {String(f.lengthM).replace('.', ',')} m{f.durchgang ? ' · vor einer Tür' : ''}</option>)}
+        </select>
+      </label>
+      <button type='button' onClick={() => onSetzen(feld)} className='rounded bg-[#e8590c] px-3 py-1.5 text-white'>Treppe hier setzen</button>
+      <span className='mx-1 h-8 w-px self-center bg-black/10' />
+      <div className='flex flex-col text-[11px] text-[#6e6e73]'>{treppe ? 'Gewählte Treppe schieben' : 'Zum Schieben erst eine von Hand gesetzte Treppe anklicken'}
+        <span className='mt-0.5 flex items-center gap-1.5 text-[13px] text-[#1d1d1f]'>
+          <button type='button' disabled={!treppe} onClick={() => onSchieben(-n)} className='rounded border border-black/15 bg-white px-2 py-1 disabled:opacity-40' aria-label='Felder zurück'>◀</button>
+          <input type='number' min={1} max={50} value={anzahl} onChange={(e) => setAnzahl(Number(e.target.value))} aria-label='Anzahl Felder' className='w-14 rounded border border-black/15 px-2 py-1 text-center' />
+          <span>{n === 1 ? 'Feld' : 'Felder'}</span>
+          <button type='button' disabled={!treppe} onClick={() => onSchieben(n)} className='rounded border border-black/15 bg-white px-2 py-1 disabled:opacity-40' aria-label='Felder vor'>▶</button>
+        </span>
       </div>
-      <label className='mb-1 block text-xs text-gray-600'>Seite</label>
-      <select value={reihe.schluessel} onChange={(e) => { setReiheKey(e.target.value); setFeldNr(1) }} aria-label='Seite' className='mb-2 w-full rounded border px-2 py-1'>
-        {reihen.map((r) => <option key={r.schluessel} value={r.schluessel}>{r.bezeichnung} ({r.felder.length} Felder)</option>)}
-      </select>
-      <label className='mb-1 block text-xs text-gray-600'>Feld (Feld 1 = erstes Feld der Seite)</label>
-      <select value={feldNr} onChange={(e) => setFeldNr(Number(e.target.value))} aria-label='Feld' className='mb-2 w-full rounded border px-2 py-1'>
-        {reihe.felder.map((f, i) => <option key={f.id} value={i + 1}>Feld {i + 1} · {String(f.lengthM).replace('.', ',')} m{f.durchgang ? ' · vor einer Tür' : ''}</option>)}
-      </select>
-      <button type='button' onClick={() => onSetzen(feld)} className='mb-3 w-full rounded bg-blue-600 px-3 py-1.5 text-white'>Treppe hier setzen</button>
-      <div className='border-t pt-2'>
-        <div className='mb-1 text-xs text-gray-600'>{treppe ? 'Gewählte Treppe um Felder schieben' : 'Zum Schieben erst eine von Hand gesetzte Treppe anklicken'}</div>
-        <div className='flex items-center gap-2'>
-          <button type='button' disabled={!treppe} onClick={() => onSchieben(-n)} className='rounded border px-2 py-1 disabled:opacity-40' aria-label='Felder zurück'>◀</button>
-          <input type='number' min={1} max={50} value={anzahl} onChange={(e) => setAnzahl(Number(e.target.value))} aria-label='Anzahl Felder' className='w-14 rounded border px-2 py-1 text-center' />
-          <span className='text-xs'>{n === 1 ? 'Feld' : 'Felder'}</span>
-          <button type='button' disabled={!treppe} onClick={() => onSchieben(n)} className='rounded border px-2 py-1 disabled:opacity-40' aria-label='Felder vor'>▶</button>
-        </div>
-        {meldung && <p className='mt-2 text-xs text-amber-700'>{meldung}</p>}
-      </div>
+      {meldung && <span className='self-center text-xs text-amber-700'>{meldung}</span>}
+      <button type='button' onClick={onZu} className='ml-auto self-center text-xs text-[#6e6e73] hover:text-[#1d1d1f]'>Schließen ✕</button>
     </div>
   )
 }

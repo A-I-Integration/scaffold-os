@@ -34,25 +34,18 @@ export default function MehrfachLeiste({ model, ids, einrasten, onVerschieben, o
   const leer = versatz().every((v) => v === 0)
   const feld = 'w-full rounded border border-black/15 px-1.5 py-1 text-[13px]'
   return (
-    <div className='absolute left-3 top-3 z-30 w-[270px] rounded-xl border border-black/10 bg-white p-3 text-[13px] shadow-lg' data-testid='mehrfach-leiste'>
-      <div className='flex items-start justify-between gap-2'>
-        <div><div className='font-semibold'>Mehrfachauswahl</div><div className='text-[12px] text-[#6e6e73]'>{auswahlZusammenfassung(model, ids)}</div></div>
-        <button type='button' onClick={onAbwaehlen} aria-label='Auswahl aufheben' className='px-1 text-[16px] leading-none text-[#6e6e73]'>×</button>
-      </div>
-      <div className='mt-2 grid grid-cols-3 gap-1.5'>
-        {([['x', x, setX], ['y (Höhe)', y, setY], ['z', z, setZ]] as const).map(([name, wert, set]) => (
-          <label key={name} className='text-[11px] text-[#6e6e73]'>{name} (m)<input className={feld} inputMode='decimal' value={wert} onChange={(e) => set(e.target.value)} /></label>
-        ))}
-      </div>
-      <div className='mt-2 flex gap-1.5'>
-        <button type='button' disabled={leer} onClick={() => onVerschieben(versatz())} className='flex-1 rounded bg-[#1d1d1f] px-2 py-1.5 text-white disabled:opacity-35'>Verschieben</button>
-        <button type='button' disabled={leer} onClick={() => onKopieren(versatz())} className='flex-1 rounded border border-black/15 px-2 py-1.5 disabled:opacity-35'>Kopieren</button>
-      </div>
-      <div className='mt-1.5 flex gap-1.5'>
-        <button type='button' onClick={onRahmen} className={`flex-1 rounded border px-2 py-1.5 ${rahmenAktiv ? 'border-[#2563eb] bg-[#2563eb]/10 text-[#2563eb]' : 'border-black/15'}`}>{rahmenAktiv ? 'Rahmen: an' : 'Auswahlrahmen'}</button>
-        <button type='button' onClick={onEntfernen} className='flex-1 rounded border border-red-300 px-2 py-1.5 text-red-700'>Alle entfernen</button>
-      </div>
-      <div className='mt-1.5 text-[11px] text-[#6e6e73]'>Shift+Klick fügt Bauteile hinzu oder nimmt sie heraus. Entf entfernt alle. Esc hebt die Auswahl auf.{einrasten ? ' Versatz rastet auf 5 cm.' : ''}</div>
+    <div className='flex flex-wrap items-end gap-x-4 gap-y-2 border-b border-black/5 bg-[#eef3fe] px-4 py-2 text-[13px]' data-testid='mehrfach-leiste'>
+      <div className='self-center'><div className='font-semibold'>Mehrfachauswahl</div><div className='text-[12px] text-[#6e6e73]'>{auswahlZusammenfassung(model, ids)}</div></div>
+      {([['x', x, setX], ['y (Höhe)', y, setY], ['z', z, setZ]] as const).map(([name, wert, set]) => (
+        <label key={name} className='flex flex-col text-[11px] text-[#6e6e73]'>{name} (m)<input className={feld + ' mt-0.5 !w-20'} inputMode='decimal' value={wert} onChange={(e) => set(e.target.value)} /></label>
+      ))}
+      <button type='button' disabled={leer} onClick={() => onVerschieben(versatz())} className='rounded bg-[#1d1d1f] px-3 py-1.5 text-white disabled:opacity-35'>Verschieben</button>
+      <button type='button' disabled={leer} onClick={() => onKopieren(versatz())} className='rounded border border-black/15 bg-white px-3 py-1.5 disabled:opacity-35'>Kopieren</button>
+      <span className='mx-1 h-8 w-px self-center bg-black/10' />
+      <button type='button' onClick={onRahmen} className={`rounded border px-3 py-1.5 ${rahmenAktiv ? 'border-[#2563eb] bg-[#2563eb]/10 text-[#2563eb]' : 'border-black/15 bg-white'}`}>{rahmenAktiv ? 'Rahmen: an' : 'Auswahlrahmen'}</button>
+      <button type='button' onClick={onEntfernen} className='rounded border border-red-300 bg-white px-3 py-1.5 text-red-700'>Alle entfernen</button>
+      <span className='max-w-[300px] self-center text-[11px] leading-tight text-[#6e6e73]'>Shift+Klick fügt Bauteile hinzu oder nimmt sie heraus. Entf entfernt alle. Esc hebt die Auswahl auf.{einrasten ? ' Versatz rastet auf 5 cm.' : ''}</span>
+      <button type='button' onClick={onAbwaehlen} aria-label='Auswahl aufheben' className='ml-auto self-center text-xs text-[#6e6e73] hover:text-[#1d1d1f]'>Auswahl aufheben ✕</button>
     </div>
   )
 }
