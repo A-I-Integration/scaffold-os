@@ -72,6 +72,9 @@ export interface CadBandProps {
   onIfc?: () => void
   onSpeichern: () => void
   onVersionen?: () => void
+  /** Treppe über Auswahl (Seite + Feld) setzen und um Felder schieben */
+  treppePanelAktiv?: boolean
+  onTreppePanel?: () => void
   onLv?: () => void
   onBild: () => void
 }
@@ -174,6 +177,9 @@ export default function CadBand(p: CadBandProps) {
                 <Knopf key={it.type} glyph={it.icon} label={it.label} aus={aus} aktiv={p.placementType === it.type} titel={it.description}
                   onClick={() => p.onPlacement(p.placementType === it.type ? null : it.type)} />
               ))}
+            </Gruppe>
+            <Gruppe name='Treppe'>
+              <Knopf icon={ChevronsUp} label='Treppe wählen' aus={aus || !p.onTreppePanel} aktiv={!!p.treppePanelAktiv} onClick={() => p.onTreppePanel?.()} titel='Treppe ohne Mausklick setzen: Seite und Feld wählen, danach um ganze Felder schieben' />
             </Gruppe>
             <Gruppe name='Messen'>
               <Knopf icon={Ruler} label='Bemaßen' aus={aus} aktiv={p.measureMode} onClick={p.onMeasure} titel='Zwei Punkte im Modell anklicken: Abstand wird eingetragen' />
