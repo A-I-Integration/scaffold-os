@@ -6,7 +6,7 @@
 
 import { useState, type ReactNode } from 'react'
 import {
-  Scissors, PlusSquare, ChevronsUp, Layers, Undo2, Redo2, RotateCcw, Ruler, Box, Grid2x2, Eye, Home, Building2, Leaf, Sparkles,
+  Scissors, BoxSelect, PlusSquare, ChevronsUp, Layers, Undo2, Redo2, RotateCcw, Ruler, Box, Grid2x2, Eye, Home, Building2, Leaf, Sparkles,
   FileText, FileDown, Printer, Save, Package, CalendarClock, Download, Camera, Minus, Spline, Circle, Trash2, type LucideIcon,
 } from 'lucide-react'
 import { CATALOG_ITEMS } from './ComponentCatalog'
@@ -26,6 +26,10 @@ export interface CadBandProps {
   onBereichWerkzeug: (w: BereichsWerkzeug) => void
   abbauAktiv: boolean
   onAbbau: () => void
+  /** Mehrfachauswahl: Auswahlrahmen aufziehen */
+  rahmenAktiv?: boolean
+  onRahmen?: () => void
+  auswahlAnzahl?: number
   kannZurueck: boolean
   kannVor: boolean
   onZurueck: () => void
@@ -146,6 +150,9 @@ export default function CadBand(p: CadBandProps) {
               <Knopf icon={Scissors} label='Stück entfernen' aus={aus} aktiv={p.bereicheOffen && p.bereichWerkzeug === 'entfernen'} onClick={() => bereich('entfernen')} titel='Ein Stück einer Seite abbauen oder aussparen: von … bis … m, Lagen wählbar' />
               <Knopf icon={PlusSquare} label='Felder anhängen' aus={aus} aktiv={p.bereicheOffen && p.bereichWerkzeug === 'erweitern'} onClick={() => bereich('erweitern')} titel='Seite am Anfang oder Ende um Felder verlängern' />
               <Knopf icon={ChevronsUp} label='Aufstocken' aus={aus} aktiv={p.bereicheOffen && p.bereichWerkzeug === 'aufstocken'} onClick={() => bereich('aufstocken')} titel='Einen Bereich um weitere Lagen erhöhen' />
+            </Gruppe>
+            <Gruppe name='Auswahl'>
+              <Knopf icon={BoxSelect} label={p.auswahlAnzahl && p.auswahlAnzahl > 0 ? `Rahmen (${p.auswahlAnzahl})` : 'Auswahlrahmen'} aus={aus || !p.onRahmen} aktiv={!!p.rahmenAktiv} onClick={() => p.onRahmen?.()} titel='Rahmen aufziehen, um mehrere Bauteile zu wählen (Shift = zur Auswahl hinzufügen). Einzeln: Shift+Klick auf Bauteile.' />
             </Gruppe>
             <Gruppe name='Abbau'>
               <Knopf icon={Layers} label='Teilabbau' aus={aus} aktiv={p.abbauAktiv} onClick={p.onAbbau} titel='Teilabbau planen: Material, Stunden, Tage, Einsatzplan' />
