@@ -100,3 +100,16 @@ describe('Treppe: Klick auf ein Teil bleibt auf der Seite dieses Teils', () => {
     expect(n).toBeGreaterThan(100)
   })
 })
+
+describe('Automatische Treppe fehlt nicht mehr stumm', () => {
+  it('ohne Treppenseite: Warnung TREPPE_FEHLT; mit Treppe oder bewusst ausgeschaltet: keine', () => {
+    const b = basis({}, true)
+    const mit = generateCADModel(b, 'layher-allround')
+    expect(mit.warnings.some((w) => w.code === 'TREPPE_FEHLT')).toBe(false)
+    const aus = generateCADModel({ ...b, geruestOptionen: { treppe: false } } as BuildingParams, 'layher-allround')
+    expect(aus.warnings.some((w) => w.code === 'TREPPE_FEHLT')).toBe(false)
+    const ohneFront = generateCADModel({ ...b, sides: ['back', 'left', 'right'] } as BuildingParams, 'layher-allround')
+    const hatTreppe = ohneFront.components3D.some((c) => c.id.startsWith('stair-'))
+    expect(ohneFront.warnings.some((w) => w.code === 'TREPPE_FEHLT')).toBe(!hatTreppe)
+  })
+})
