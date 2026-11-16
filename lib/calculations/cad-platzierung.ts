@@ -7,7 +7,7 @@
 // am Treffpunkt.
 // ============================================================
 
-import { feldRahmen, type CADModel, type ManualPlacement } from './cad-engine'
+import { feldRahmen, FELDBAUTEIL_ARTEN, type CADModel, type ManualPlacement } from './cad-engine'
 
 type Lage = Pick<ManualPlacement, 'type' | 'positionX' | 'positionY' | 'positionZ' | 'side' | 'levelIndex' | 'fieldId'> & Partial<Pick<ManualPlacement, 'rotationY'>>
 
@@ -48,6 +48,12 @@ export function platzierungAusTreffer(
   if (model && (!side || levelIndex < 0)) {
     const f = naechstesFeld(model, position)
     if (f) { p.side = f.side; p.levelIndex = f.levelIndex }
+  }
+  // Einzelbauteil eines Feldes (Rahmen, Belag, Geländer, Diagonale, Riegel, Kupplung, Fußplatte): gehört zum nächsten Feld der
+  // getroffenen Lage; der Klickpunkt bleibt erhalten (er wählt bei zwei Möglichkeiten das Teil links/rechts, innen/außen)
+  if ((FELDBAUTEIL_ARTEN as string[]).includes(type) && model) {
+    const f = naechstesFeld(model, position, levelIndex)
+    if (f) { p.fieldId = f.id; p.side = f.side; p.levelIndex = f.levelIndex }
   }
   // Treppe: rastet auf das nächste Feld im GANZEN Gerüst ein (jede Seite, jede Lage, auch an Umriss-Kanten),
   // nicht nur auf Felder der getroffenen Seite – so lässt sie sich an beliebige Stellen setzen und ziehen.
