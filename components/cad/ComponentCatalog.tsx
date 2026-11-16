@@ -4,7 +4,7 @@
 // components/cad/ComponentCatalog.tsx
 // SCAFFOLD OS – Klick-Platzierung Bauteil-Katalog (CP-Pro-Marktvergleich)
 //
-// Klickbare Karten der 8 manuell platzierbaren Bauteiltypen.
+// Klickbare Karten der manuell platzierbaren Bauteiltypen (Einzelbauteile eines Feldes kommen aus der Feld-Erzeugung).
 // Auswahl eines Typs aktiviert den Platzierungsmodus: Klick auf
 // das Gerüst in der 3D-Ansicht platziert das Bauteil.
 // ============================================================
@@ -20,6 +20,13 @@ export const CATALOG_ITEMS: { type: string; label: string; icon: string; descrip
   { type: 'board', label: 'Bordbrett', icon: '🪵', description: 'Absturzsicherung am Rand' },
   { type: 'protection_roof', label: 'Schutzdach', icon: '🛡️', description: 'Schutz gegen herabfallende Teile' },
   { type: 'load_plate', label: 'Lastverteilplatte', icon: '⬛', description: 'Druckverteilung am Boden' },
+  { type: 'f_frame', label: 'Rahmen / Vertikalständer', icon: '🏗️', description: 'Rahmen am Feldende (links/rechts nach Klickpunkt), Artikel nach Feldlänge' },
+  { type: 'f_ledger', label: 'Horizontalriegel', icon: '➖', description: 'Querriegel unten/oben im Feld' },
+  { type: 'f_diagonal', label: 'Diagonale', icon: '⟋', description: 'Diagonale im Feld, Artikel nach Feldlänge' },
+  { type: 'f_railing', label: 'Geländer', icon: '🚧', description: 'Geländer im Feld, Artikel nach Feldlänge' },
+  { type: 'f_deck', label: 'Belag', icon: '🟫', description: 'Arbeitsbühne im Feld, Artikel nach Feldlänge' },
+  { type: 'f_coupling', label: 'Kupplung', icon: '🔗', description: 'Kupplung am Feldende (nächste zum Klickpunkt)' },
+  { type: 'f_foot', label: 'Fußplatte / Fußspindel', icon: '⏹️', description: 'Fuß am untersten Feld, mit Ausgleich am Hang' },
   { type: 'ladder', label: 'Leiter', icon: '↕️', description: 'Schematische Leiter (Artikel LE-001 im Lager pflegen)' },
 ]
 

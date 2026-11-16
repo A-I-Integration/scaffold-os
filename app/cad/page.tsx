@@ -754,7 +754,7 @@ export default function CADPage() {
       side,
       levelIndex: Math.max(0, Math.round(src.position[1] / 2)),
       rotationY: seitlich ? src.rotation[1] : 0,
-      fieldId: newType === 'stair' ? src.fieldId : undefined,
+      fieldId: newType === 'stair' || newType.startsWith('f_') ? src.fieldId : undefined,
     }
     handleRemoveComponent(id)
     setManualPlacements((prev) => [...prev, placement])

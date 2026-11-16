@@ -2860,9 +2860,29 @@ export function generateSchnitt(model: CADModel): Projection2D {
 // ============================================================
 
 // --- MANUELLE PLATZIERUNG ---
+/**
+ * Einzelbauteile eines Feldes aus dem Bauteilkatalog (Rahmen/Vertikalständer, Belag, Geländer, Diagonale, Riegel, Kupplung, Fußplatte/-spindel).
+ * Sie entstehen mit derselben Erzeugung wie die automatischen Teile (gleiche Artikel nach Feldlänge und System, gleiche Maße)
+ * – so gibt es keine Abweichung zwischen 3D-Modell und Stückliste.
+ */
+export type FeldBauteilArt = 'f_frame' | 'f_deck' | 'f_railing' | 'f_diagonal' | 'f_ledger' | 'f_coupling' | 'f_foot'
+
+export const FELDBAUTEIL_ARTEN: FeldBauteilArt[] = ['f_frame', 'f_deck', 'f_railing', 'f_diagonal', 'f_ledger', 'f_coupling', 'f_foot']
+
+/** Welche Teile der Feld-Erzeugung gehören zu welcher Katalogart (IDs der Feld-Erzeugung). `einzeln`: nur das Teil nächst dem Klickpunkt (links/rechts, innen/außen). */
+const FELDBAUTEIL_MUSTER: Record<FeldBauteilArt, { muster: RegExp; einzeln: boolean; name: string }> = {
+  f_frame: { muster: /^frame-/, einzeln: true, name: 'Rahmen / Vertikalständer' },
+  f_deck: { muster: /^deck-/, einzeln: false, name: 'Belag' },
+  f_railing: { muster: /^railing-/, einzeln: false, name: 'Geländer' },
+  f_diagonal: { muster: /^diagonal-/, einzeln: false, name: 'Diagonale' },
+  f_ledger: { muster: /^rail-/, einzeln: true, name: 'Horizontalriegel' },
+  f_coupling: { muster: /^coupling-/, einzeln: true, name: 'Kupplung' },
+  f_foot: { muster: /^(foot-|spindel-)/, einzeln: true, name: 'Fußplatte / Fußspindel' },
+}
+
 export interface ManualPlacement {
   id: string
-  type: 'anchor' | 'console' | 'stair' | 'net' | 'board' | 'protection_roof' | 'load_plate' | 'ladder'
+  type: 'anchor' | 'console' | 'stair' | 'net' | 'board' | 'protection_roof' | 'load_plate' | 'ladder' | FeldBauteilArt
   positionX: number
   positionY: number
   positionZ: number
@@ -2891,6 +2911,11 @@ export function addManualPlacement(
   // Füge entsprechendes 3D-Bauteil hinzu
   const component = placementToComponent(newPlacement, model)
   // Treppe in ein Feld gesetzt: richtiger Zickzack-Lauf statt Einzelteil
+  // Einzelbauteil eines Feldes: Teile aus der Feld-Erzeugung übernehmen (nur wenn das Feld bekannt ist)
+  if ((FELDBAUTEIL_ARTEN as string[]).includes(placement.type) && placement.fieldId) {
+    const f = model.fields.find((x) => x.id === placement.fieldId)
+    if (f) { model.components3D.push(...feldBauteile(model, f, placement.type as FeldBauteilArt, newPlacement.id, [placement.positionX, placement.positionY, placement.positionZ])); return model }
+  }
   const feld = placement.type === 'stair' && placement.fieldId ? model.fields.find((f) => f.id === placement.fieldId) : undefined
   const feldLage = feld ? (model.levels.find((l) => l.index === feld.levelIndex && l.id === `level-${feld.side}-${feld.levelIndex}`) ?? model.levels.find((l) => l.index === feld.levelIndex)) : undefined
   if (feld && feldLage) {
@@ -2923,6 +2948,28 @@ export function addManualPlacement(
   }
 
   return model
+}
+
+/** Teile einer Katalogart in einem Feld: aus der Feld-Erzeugung (Hilfsmodell mit nur diesem Feld), umbenannt auf die ID der Platzierung. */
+export function feldBauteile(model: CADModel, field: ScaffoldField, art: FeldBauteilArt, id: string, klick: [number, number, number]): ScaffoldComponent3D[] {
+  const lage = model.levels.find((l) => l.index === field.levelIndex && l.id === `level-${field.side}-${field.levelIndex}`) ?? model.levels.find((l) => l.index === field.levelIndex)
+  if (!lage) return []
+  const hilfs: CADModel = {
+    ...model,
+    fields: [field],
+    levels: [{ ...lage, fields: [field] }],
+    components3D: [],
+    anchors: [],
+    warnings: [],
+    building: { ...model.building, geruestOptionen: { ...model.building.geruestOptionen, treppe: false, tuerenFreihalten: false } },
+  }
+  const def = FELDBAUTEIL_MUSTER[art]
+  let teile = generateScaffoldComponents(hilfs).filter((c) => def.muster.test(c.id) && c.fieldId === field.id)
+  if (def.einzeln && teile.length > 1) {
+    const d = (c: ScaffoldComponent3D) => (c.position[0] - klick[0]) ** 2 + (c.position[1] - klick[1]) ** 2 + (c.position[2] - klick[2]) ** 2
+    teile = [teile.reduce((b, c) => (d(c) < d(b) ? c : b), teile[0])]
+  }
+  return teile.map((c, i) => ({ ...c, id: i === 0 ? id : `${id}-${i}` }))
 }
 
 /**
