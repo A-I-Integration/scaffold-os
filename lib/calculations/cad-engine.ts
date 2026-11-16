@@ -754,6 +754,12 @@ export function generateScaffoldComponents(model: CADModel): ScaffoldComponent3D
     if (lagen === 0) stairSpan = undefined
     else if (lagen < levels.length - treppeUnten) warnEinmal('TREPPE_ENDET', 'info', `Die Treppe führt bis Lage ${lagen}: darüber fehlen die Gerüstfelder an ihrer Stelle. Weiter oben bitte einen Zugang von Hand ergänzen.`)
   }
+  // Die automatische Treppe ist an, es entsteht aber keine: nicht still bleiben, sondern den Grund nennen
+  if (treppeAktiv && !stairSpan) {
+    warnEinmal('TREPPE_FEHLT', 'warning', treppenFelder0.length === 0
+      ? 'Die automatische Treppe fehlt: Auf der Treppenseite gibt es kein Gerüstfeld (Seite nicht eingerüstet oder Feld entfernt). Bitte eine Treppe von Hand setzen oder die Seite einrüsten.'
+      : 'Die automatische Treppe fehlt: An der vorgesehenen Stelle liegt keine durchgehende Lage. Bitte eine Treppe von Hand setzen.')
+  }
   // Durchgänge im Geländer: Feld-ID (in der jeweiligen Lage) → Durchgang am linken und/oder rechten Feldende.
   // Alle Läufe steigen von links nach rechts: auf jeder Lage endet ein Lauf am rechten Podest (Durchgang rechts)
   // und der nächste beginnt am linken Podest (Durchgang links, außer auf der obersten Lage).
