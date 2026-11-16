@@ -1065,6 +1065,24 @@ export default function CADPage() {
     }
   }, [model, modelWithManual, planModus])
 
+  // Präsentationsbogen: ein A3-Blatt mit 3D-Bild, Ansichten, Schnitt, Grundriss und Datentafel
+  const handleExportBogen = useCallback(async () => {
+    if (!model) return
+    try {
+      const { erzeugePraesentationsbogen } = await import('@/lib/export/praesentationsbogen-pdf')
+      let bild: string | undefined
+      try { bild = canvasRef.current ? canvasRef.current.toDataURL('image/jpeg', 0.92) : undefined } catch { bild = undefined }
+      const daten = erzeugePraesentationsbogen(modelWithManual ?? model, { projektName: aufmassProjektName || 'Gerüstprojekt', firma: firmenName, datum: new Date().toLocaleDateString('de-DE') }, bild)
+      const a = document.createElement('a')
+      a.href = URL.createObjectURL(new Blob([daten as BlobPart], { type: 'application/pdf' }))
+      a.download = `Praesentationsbogen-${new Date().toISOString().split('T')[0]}.pdf`
+      a.click()
+      setTimeout(() => URL.revokeObjectURL(a.href), 5000)
+    } catch (err) {
+      alert('Präsentationsbogen fehlgeschlagen: ' + (err instanceof Error ? err.message : String(err)))
+    }
+  }, [model, modelWithManual, aufmassProjektName, firmenName])
+
   // Statiker-Paket: eine ZIP mit Lastannahmen-Blatt, Geometrie (JSON), Stückliste
   // ohne Preise und IFC. Nur Angaben und Geometrie, kein Nachweis.
   const [statikerPaketLaeuft, setStatikerPaketLaeuft] = useState(false)
@@ -1503,6 +1521,7 @@ export default function CADPage() {
             onExportStatikGeometrie={model ? handleExportStatik : exportOhneModellHinweis}
             onExportIFC={!model ? exportOhneModellHinweis : (ifcExportLaeuft ? undefined : handleExportIFC)}
             onExportDXF={!model ? exportOhneModellHinweis : handleExportDXF}
+            onExportBogen={!model ? exportOhneModellHinweis : handleExportBogen}
             onExportStatikerPaket={!model ? exportOhneModellHinweis : (statikerPaketLaeuft ? undefined : handleExportStatikerPaket)}
             planModus={planModus}
             onPlanModusChange={setPlanModus}
