@@ -2919,18 +2919,19 @@ export function addManualPlacement(
   const feld = placement.type === 'stair' && placement.fieldId ? model.fields.find((f) => f.id === placement.fieldId) : undefined
   const feldLage = feld ? (model.levels.find((l) => l.index === feld.levelIndex && l.id === `level-${feld.side}-${feld.levelIndex}`) ?? model.levels.find((l) => l.index === feld.levelIndex)) : undefined
   if (feld && feldLage) {
-    model.components3D.push(...treppenlaufInFeld(model, feld, feldLage, newPlacement.id))
-    // Treppenöffnung: der Belag des Feldes direkt darüber (gleiche Seite und Lage,
-    // nächste Ebene) entfällt, damit der Lauf oben ankommt. Beim Entfernen der
-    // Treppe wird das Modell neu aufgebaut, der Belag ist dann wieder da.
-    // Eckfelder haben eigene Belag-IDs und bleiben unverändert.
-    const darueber = model.fields.find(
-      (f) => f.side === feld.side && f.levelIndex === feld.levelIndex + 1 &&
-        Math.abs(f.positionX - feld.positionX) < 1e-6 && Math.abs(f.positionZ - feld.positionZ) < 1e-6
-    )
-    if (darueber) {
-      const deckId = `deck-${darueber.id}`
-      model.components3D = model.components3D.filter((c) => c.id !== deckId)
+    // Die Treppe läuft durch die ganze Reihe: in jeder Lage übereinander (gleiche Seite, gleiche Stelle) von unten bis oben,
+    // jeder Lauf kehrt die Richtung um (Zickzack). ID: unterste Lage = `${id}`, darüber `${id}-lage-N`.
+    const gleicheStelle = (f: ScaffoldField) => f.side === feld.side && Math.abs(f.positionX - feld.positionX) < 1e-6 && Math.abs(f.positionZ - feld.positionZ) < 1e-6
+    const reihe = model.fields.filter(gleicheStelle).sort((a, b) => a.levelIndex - b.levelIndex)
+    const unterste = reihe[0]?.levelIndex ?? feld.levelIndex
+    for (const f of reihe) {
+      const lage = model.levels.find((l) => l.index === f.levelIndex && l.id === `level-${f.side}-${f.levelIndex}`) ?? model.levels.find((l) => l.index === f.levelIndex)
+      if (!lage) continue
+      model.components3D.push(...treppenlaufInFeld(model, f, lage, f.levelIndex === unterste ? newPlacement.id : `${newPlacement.id}-lage-${f.levelIndex}`))
+      // Treppenöffnung: der Belag des Feldes direkt darüber entfällt, damit der Lauf oben ankommt. Beim Entfernen der
+      // Treppe wird das Modell neu aufgebaut, der Belag ist dann wieder da. Eckfelder haben eigene Belag-IDs.
+      const darueber = reihe.find((x) => x.levelIndex === f.levelIndex + 1)
+      if (darueber) model.components3D = model.components3D.filter((c) => c.id !== `deck-${darueber.id}`)
     }
   } else if (component) {
     model.components3D.push(component)
