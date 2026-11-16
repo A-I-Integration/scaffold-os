@@ -24,6 +24,7 @@ import { analysiereDreiecke, schaetzeEinheit, spannweiten, nullpunktUeberTiefste
 import { planLesen } from '@/lib/cad/plan-import'
 import type { GeschossHoehenVorschlag } from '@/lib/cad/geschoss-hoehen-aus-plan'
 import { pruefePlanImport, formatHinweis, type Pruefbericht } from '@/lib/cad/datenqualitaet'
+import GelaendeEbenenPanel from '@/components/cad/GelaendeEbenenPanel'
 import { bestaetigungAus, darfUebernehmen, type Bestaetigung } from '@/lib/cad/gebaeude-bestaetigung'
 import { parseGelaendeLinie, formatGelaendeLinie } from '@/lib/calculations/gelaende'
 import { oeffnungenFuerModell, vorbautenFuerModell } from '@/lib/cad/plan-oeffnungen-modell'
@@ -1277,6 +1278,12 @@ export default function BuildingForm({ building, systemId, onChange, onSystemCha
                         })}
                         <p className='text-[10px] text-[#86868b]'>Position in m ab Seitenanfang, Höhe in m (±0,00 = EG-Boden, minus = tiefer), dazwischen linear. Jedes Feld gründet auf dieser Linie; die Beläge bleiben waagerecht. Hat je Seite Vorrang vor Eckhöhen und Gelände je Seite.</p>
                       </div>
+                    </details>
+                    <details className='col-span-2'>
+                      <summary className='text-[11px] text-[#424245] cursor-pointer'>Geländeebenen (Flächen mit Höhe)</summary>
+                      <GelaendeEbenenPanel ebenen={opt.gelaendeEbenen ?? []} gebaeude={{ lengthM: building.lengthM, widthM: building.widthM }}
+                        onEbenen={(e) => setzeOpt({ gelaendeEbenen: e.length ? e : undefined })}
+                        onAnwenden={(pr, e) => setzeOpt({ gelaendeProfilM: pr && Object.keys(pr).length ? pr : undefined, gelaendeEbenen: e.length ? e : undefined })} />
                     </details>
                     <label className='flex items-center gap-2 text-xs text-[#424245] self-end pb-1.5'>
                       <input type='checkbox' checked={opt.treppe !== false} onChange={(e) => setzeOpt({ treppe: e.target.checked ? undefined : false })} />
