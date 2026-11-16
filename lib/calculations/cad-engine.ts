@@ -848,7 +848,7 @@ export function generateScaffoldComponents(model: CADModel): ScaffoldComponent3D
       // Ständer links/rechts im lokalen Seitenrahmen → Feldanfang/-ende in Richtung der Geländelinie
       const rfSeite = seitenRahmen(field.side, building)
       const [lwx, lwz] = rfSeite.toWorld(-1, 0), [rwx, rwz] = rfSeite.toWorld(1, 0)
-      const linksIstVon = feldEntlangFassade(field.side, lwx, lwz, building) < feldEntlangFassade(field.side, rwx, rwz, building)
+      const linksIstVon = field.kante !== undefined || feldEntlangFassade(field.side, lwx, lwz, building) < feldEntlangFassade(field.side, rwx, rwz, building)
       const teilFuer = (tag: string): AusgleichTeil => {
         const vonSeite = tag.startsWith('left') === linksIstVon
         const aussen = tag.endsWith('-aussen') ? (vonSeite ? fu.vonAussen : fu.bisAussen) : undefined
@@ -2341,13 +2341,9 @@ function generiereUmrissModell(
   const warnings: CADWarning[] = [...vorWarnungen]
   // Fassadenanalyse bleibt unabhängig von der bestehenden Gerüst-Feldberechnung.
   const { fassadenFlaechen, fassadenAbschnitte } = analysiereBestaetigteFassaden(gebaeude, warnings)
-  // Hang im Umriss-Modus: wenn Eckhöhen gesetzt sind, steht das Gerüst gleichmäßig auf dem tiefsten Punkt (sicher, über-
-  // deckt den ganzen Umriss). Das feldweise Abtreppen entlang der Polygonkanten kommt als nächster Schritt.
-  const eckU = eckenGelaendeM(gebaeude)
-  const minEckeU = Math.min(eckU.fl, eckU.fr, eckU.bl, eckU.br, 0)
-  const hatGeländeangaben = !!(gebaeude.geruestOptionen?.gelaendeEckenM || gebaeude.geruestOptionen?.gelaendeProfilM || gebaeude.geruestOptionen?.gelaendeLinieSeiteM || gebaeude.geruestOptionen?.gelaendeSeiteM)
-  const hangU = system && hatGeländeangaben && minEckeU < -0.3 ? Math.round(minEckeU * 100) / 100 : 0
-  if (!hangU) { const h = hangIgnoriert(gebaeude.geruestOptionen); if (h) warnings.push(h) }
+  // Hang im Umriss-Modus: Gelände folgt derselben Fläche wie die 3D-Darstellung (gelaendeHoeheFn über das umschließende Rechteck);
+  // der Gerüstfuß treppt je Feld ab. hangU (tiefster Punkt unter dem Gerüst) wird nach der Eckenberechnung gesetzt.
+  let hangU = 0
   const umriss = zentriereUmriss(normalisiereUmriss(gebaeude.umriss!))
   const box = umrissBox(umriss)
   const building: BuildingParams = {
@@ -2387,6 +2383,24 @@ function generiereUmrissModell(
     return p ?? { x: k.bis.x + k.n[0] * abstandM, z: k.bis.z + k.n[1] * abstandM }
   })
 
+  const bAussenU = scaffoldWidthM - 0.075
+  // Der zentrierte Umriss liegt in Szenen-Koordinaten (Rückseite bei z = −0,5): die Geländefläche steht über der Boxmitte in Gebäude-Koordinaten
+  const gfRoh = system ? gelaendeHoeheFn({ ...gebaeude, lengthM: building.lengthM, widthM: building.widthM, umriss: undefined, sections: undefined } as BuildingParams) : null
+  const gfU: ((x: number, z: number) => number) | null = gfRoh ? (x, z) => gfRoh(x, z + building.widthM / 2 + GEBAEUDE_SZENEN_VERSATZ_M) : null
+  if (gfU) {
+    let mn = Infinity
+    kanten.forEach((k, ki) => {
+      const st = eckPunkte[(ki - 1 + n) % n], en = eckPunkte[ki]
+      const lg = (en.x - st.x) * k.u[0] + (en.z - st.z) * k.u[1]
+      for (let q = 0; q <= 40; q++) {
+        const px = st.x + k.u[0] * lg * q / 40, pz = st.z + k.u[1] * lg * q / 40
+        for (const d of [0, bAussenU]) { const h = gfU(px + k.n[0] * d, pz + k.n[1] * d); if (Number.isFinite(h)) mn = Math.min(mn, h) }
+      }
+    })
+    if (Number.isFinite(mn) && mn < -0.3) hangU = Math.ceil(Math.max(-15, mn) * 100 - 1e-9) / 100 // nicht unter dem tiefsten Gelände beginnen
+  }
+  if (!hangU) { const h = hangIgnoriert(gebaeude.geruestOptionen); if (h) warnings.push(h) }
+
   const levelCalc = system ? calculateLevels(building.heightM - hangU, system, hangU) : { levels: 1, levelHeightM: 2.0, levelsData: [{ index: 0, bottomY: 0, topY: 2.0 }] }
 
   // Feldstränge je Kante (Länge = Abstand der beiden Gerüst-Eckpunkte entlang der Kante)
@@ -2402,11 +2416,6 @@ function generiereUmrissModell(
   const divs = new Map<number, { distribution: number[]; fields: number; fieldLengthM: number }>()
   aktive.forEach((s) => divs.set(s.k.index, teile(s.laenge)))
 
-  // Hang-Gelände über die vier Eck-Höhen bilinear über den Umriss interpolieren (Fuß je Feld folgt dem Hang)
-  // Dieselbe Höhenfunktion wie die gerenderte Hangfläche verwenden.
-  // So werden Fußausgleich und sichtbare Geländeoberfläche nie aus zwei verschiedenen Modellen berechnet.
-  const terrainHoehe = gelaendeHoeheFn(building)
-  const terrainAn = (x: number, z: number): number => terrainHoehe(x, z)
   const abtreppFuesseU: { ausgleichM: number; stielM: number; spindelM: number; spindel80: boolean }[] = []
 
   const fields: ScaffoldField[] = []
@@ -2422,15 +2431,22 @@ function generiereUmrissModell(
         cum += fl
         const px = parseFloat((s.start.x + s.k.u[0] * t).toFixed(3))
         const pz = parseFloat((s.start.z + s.k.u[1] * t).toFixed(3))
-        let fussTU: AusgleichTeil | null = null
-        if (hangU && system) {
-          // Abtreppung: unterhalb der Geländelinie dieses Feldes kein Belag; am untersten Belag ein Fußausgleich
-          const fuss = terrainAn(px, pz)
-          if (ld.bottomY < fuss - 1e-6) return
-          if (ld.bottomY - levelCalc.levelHeightM < fuss - 1e-6) {
-            const te = ausgleichTeile(ld.bottomY - fuss, system)
-            if (te) fussTU = te
-            if (te) abtreppFuesseU.push({ ausgleichM: Math.round((ld.bottomY - fuss) * 100) / 100, ...te })
+        let fussTU: (AusgleichTeil & { von?: AusgleichTeil; bis?: AusgleichTeil; vonAussen?: AusgleichTeil; bisAussen?: AusgleichTeil }) | null = null
+        if (hangU && system && gfU) {
+          // Abtreppung: unterhalb der Geländelinie dieses Feldes kein Belag; am untersten Belag Ausgleichsstiel + Spindel je Ständer
+          // (innen und außen, Feldanfang = Kantenanfang). Maßgeblich ist das höchste Gelände unter dem Feld.
+          const aX = px - s.k.u[0] * fl / 2, aZ = pz - s.k.u[1] * fl / 2, bX = px + s.k.u[0] * fl / 2, bZ = pz + s.k.u[1] * fl / 2
+          const nx = s.k.n[0] * bAussenU, nz = s.k.n[1] * bAussenU
+          const gM = gfU(px, pz), gA = gfU(aX, aZ), gB = gfU(bX, bZ), gAo = gfU(aX + nx, aZ + nz), gBo = gfU(bX + nx, bZ + nz)
+          const fussHoch = Math.max(gM, gA, gB, gAo, gBo)
+          if (ld.bottomY < fussHoch - 1e-6) return
+          if (ld.bottomY - levelCalc.levelHeightM < fussHoch - 1e-6) {
+            const te = ausgleichTeile(ld.bottomY - gM, system)
+            if (te) {
+              const f2 = (g: number) => ausgleichTeile(Math.max(0, ld.bottomY - g), system) ?? undefined
+              fussTU = { ...te, von: f2(gA), bis: f2(gB), vonAussen: f2(gAo), bisAussen: f2(gBo) }
+              abtreppFuesseU.push({ ausgleichM: Math.round((ld.bottomY - gM) * 100) / 100, ...te })
+            }
           }
         }
         const field: ScaffoldField = {
@@ -2459,7 +2475,7 @@ function generiereUmrissModell(
     let s80 = 0
     for (const f of abtreppFuesseU) { if (f.stielM > 0) stielZahl.set(f.stielM, (stielZahl.get(f.stielM) ?? 0) + 1); if (f.spindel80) s80++ }
     const stielTxt = [...stielZahl.entries()].sort((a, b) => b[0] - a[0]).map(([mM, nn]) => `${nn}× Ausgleichsstiel ${String(mM).replace('.', ',')} m`).join(', ')
-    warnings.push({ type: 'info', code: 'UMRISS_HANG_ABGETREPPT', message: `Hang im Umriss-Modus: Der Gerüstfuß treppt je Feld entlang der Kanten ab (tiefster Punkt ${minEckeU.toFixed(2).replace('.', ',')} m). Fußausgleich: ${stielTxt || 'nur Fußspindel'}.${s80 ? ` ${s80} Fuß(e) mit verstärkter Fußspindel 80.` : ''} Nach Layher-Standardlängen; vor Ort prüfen.` })
+    warnings.push({ type: 'info', code: 'UMRISS_HANG_ABGETREPPT', message: `Hang im Umriss-Modus: Der Gerüstfuß treppt je Feld entlang der Kanten ab (tiefster Punkt ${hangU.toFixed(2).replace('.', ',')} m). Fußausgleich: ${stielTxt || 'nur Fußspindel'}.${s80 ? ` ${s80} Fuß(e) mit verstärkter Fußspindel 80.` : ''} Nach Layher-Standardlängen; vor Ort prüfen.` })
   }
 
   // Eckpunkte für den Eckbelag (nur wenn beide Nachbarkanten ein Gerüst haben)
@@ -2477,7 +2493,7 @@ function generiereUmrissModell(
   if (building.heightM > 6) {
     const anchorLevels = Math.floor(levelCalc.levelsData.length / 2)
     for (let al = 0; al < anchorLevels; al++) {
-      const yAnchor = (al * 2 + 2) * levelCalc.levelHeightM
+      const yAnchor = (al * 2 + 2) * levelCalc.levelHeightM + hangU
       aktive.forEach((s) => {
         const div = divs.get(s.k.index)!
         let cum = 0
@@ -2499,7 +2515,10 @@ function generiereUmrissModell(
     }
   }
 
-  const unten = fields.filter((f) => f.levelIndex === 0)
+  // Am Hang kann die unterste Lage leer sein (Abtreppung): Kennzahlen nach der am stärksten besetzten Lage
+  const jeLage = new Map<number, ScaffoldField[]>()
+  fields.forEach((f) => jeLage.set(f.levelIndex, [...(jeLage.get(f.levelIndex) ?? []), f]))
+  const unten = [...jeLage.values()].reduce<ScaffoldField[]>((m, l) => (l.length > m.length ? l : m), [])
   const modell: CADModel = {
     building,
     system,
@@ -2512,7 +2531,7 @@ function generiereUmrissModell(
     totalAreaM2: kanten.filter((k) => aktiveIdx.has(k.index)).reduce((sum, k) => sum + k.laengeM, 0) * building.heightM,
     gebauteFlaecheM2: kanten.filter((k) => aktiveIdx.has(k.index)).reduce((sum, k) => sum + k.laengeM, 0) * Math.max(building.heightM, levelCalc.levels * levelCalc.levelHeightM),
     fieldCount: unten.length,
-    levelCount: levelCalc.levels,
+    levelCount: hangU ? jeLage.size : levelCalc.levels,
     warnings,
     umrissEcken: umrissEckenModell,
     fassadenFlaechen,
