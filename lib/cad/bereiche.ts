@@ -136,10 +136,17 @@ export type BereichsAenderung =
   | { art: 'erweitern'; seite: Seite; ende: 'anfang' | 'ende'; anzahl: number; feldlaengeM?: number; lagen?: number }
   /** Länge einer Feldspalte (alle Lagen) ändern: `spalte` = Nummer der Spalte in der untersten Lage (0 = erste, nach Lage entlang der Seite). Der Rest der Seite rückt nach. */
   | { art: 'laenge'; seite: Seite; spalte: number; feldlaengeM: number }
+  /** Eine Feldspalte (alle Lagen) in zwei Felder mit den angegebenen Längen teilen; alles dahinter rückt nach. */
+  | { art: 'teilen'; seite: Seite; spalte: number; laengenM: [number, number] }
+  /** Zwei benachbarte Feldspalten (`spalte` und die danach) zu einem Feld mit der angegebenen Länge zusammenführen; alles dahinter rückt nach. */
+  | { art: 'zusammen'; seite: Seite; spalte: number; feldlaengeM: number }
   | { art: 'aufstocken'; seite: Seite; /** Umriss-Modus: Gebäudekante statt Seite */ kante?: number; vonM?: number; bisM?: number; lagen: number }
 
 export function beschreibeAenderung(a: BereichsAenderung): string {
   const seiten: Record<Seite, string> = { front: 'Vorderseite', back: 'Rückseite', left: 'linke Seite', right: 'rechte Seite' }
+  const m2 = (x: number) => String(x).replace('.', ',')
+  if (a.art === 'teilen') return `${seiten[a.seite]}: Feld ${a.spalte + 1} in zwei Felder (${m2(a.laengenM[0])} m + ${m2(a.laengenM[1])} m) geteilt`
+  if (a.art === 'zusammen') return `${seiten[a.seite]}: Feld ${a.spalte + 1} und ${a.spalte + 2} zu einem Feld von ${m2(a.feldlaengeM)} m zusammengeführt`
   if (a.art === 'laenge') return `${seiten[a.seite]}: Feld ${a.spalte + 1} auf ${String(a.feldlaengeM).replace('.', ',')} m Länge`
   if (a.art === 'erweitern') return `${a.anzahl} Feld${a.anzahl > 1 ? 'er' : ''} ${a.ende === 'anfang' ? 'am Anfang' : 'am Ende'} der ${seiten[a.seite]} anhängen${a.lagen ? ` (unterste ${a.lagen} Lagen)` : ''}`
   const bereich = a.vonM !== undefined || a.bisM !== undefined ? ` von ${a.vonM ?? 0} bis ${a.bisM ?? 'Ende'} m` : ''
@@ -379,10 +386,95 @@ export function setzeFeldLaenge(model: CADModel, a: Extract<BereichsAenderung, {
   return m
 }
 
+/**
+ * Spalten der Seite ersetzen: `anzahl` benachbarte Spalten ab `von` (alle Lagen) werden durch Spalten mit den Längen `neu` ersetzt
+ * (Teilen: 1 → 2, Zusammenführen: 2 → 1). Der Anfang bleibt stehen, alles dahinter rückt nach. Bauteile werden neu gebaut.
+ * Geht nur, wenn die Spalten lückenlos aneinander liegen und keine Treppe, kein Durchgang und keine Eckverbindung betroffen sind –
+ * sonst `grund` statt Änderung (keine stille Korrektur).
+ */
+export function pruefeSpaltenOperation(model: CADModel, seite: Seite, von: number, anzahl: number): { ok: true } | { ok: false; grund: string } {
+  const alle = model.fields.filter((f) => f.side === seite && f.kante === undefined && !f.id.includes('-bein'))
+  if (alle.length === 0) return { ok: false, grund: 'Für diese Seite gibt es keine Felder (Umriss-Kanten werden noch nicht unterstützt).' }
+  const quers = [...new Set(alle.map((f) => Math.round(querVon(f) * 100) / 100))]
+  const quer = quers.map((q) => ({ q, n: untereSpalten(model, seite, q).length })).sort((x, y) => y.n - x.n)[0].q
+  const unten = untereSpalten(model, seite, quer)
+  if (von < 0 || von + anzahl > unten.length) return { ok: false, grund: anzahl > 1 ? 'Es gibt kein Nachbarfeld, mit dem zusammengeführt werden kann.' : 'Dieses Feld gibt es nicht.' }
+  const betroffen = unten.slice(von, von + anzahl)
+  for (let i = 1; i < betroffen.length; i++) {
+    const ende = entlang(betroffen[i - 1], model) + betroffen[i - 1].lengthM / 2, anfang = entlang(betroffen[i], model) - betroffen[i].lengthM / 2
+    if (Math.abs(ende - anfang) > 0.02) return { ok: false, grund: 'Zwischen den Feldern liegt eine Lücke (z. B. Balkon oder Durchgang).' }
+  }
+  const ids = new Set(reiheDerSeite(model, seite, quer).filter((f) => betroffen.some((b) => Math.abs(entlang(b, model) - entlang(f, model)) < 0.02)).map((f) => f.id))
+  const felder = model.fields.filter((f) => ids.has(f.id))
+  if (felder.some((f) => f.durchgang || f.durchgangOffen || f.durchgangOben)) return { ok: false, grund: 'Im Feld liegt ein Durchgang – bitte zuerst den Durchgang ändern.' }
+  if (model.components3D.some((c) => c.type === 'stair' && c.fieldId && ids.has(c.fieldId))) return { ok: false, grund: 'Im Feld liegt eine Treppe – bitte die Treppe zuerst versetzen oder entfernen.' }
+  if (anzahl > 1 && felder.some((f) => f.isCorner)) return { ok: false, grund: 'Eckfelder lassen sich nicht zusammenführen (Eckverbindung).' }
+  return { ok: true }
+}
+
+function ersetzeSpalten(model: CADModel, a: { seite: Seite; spalte: number }, anzahl: number, neu: number[], art: 'teilen' | 'zusammen', beschreibung: string): CADModel {
+  if (neu.some((x) => !(x > 0.3)) || !pruefeSpaltenOperation(model, a.seite, a.spalte, anzahl).ok) return model
+  const alle = model.fields.filter((f) => f.side === a.seite && f.kante === undefined && !f.id.includes('-bein'))
+  const quers = [...new Set(alle.map((f) => Math.round(querVon(f) * 100) / 100))]
+  const quer = quers.map((q) => ({ q, n: untereSpalten(model, a.seite, q).length })).sort((x, y) => y.n - x.n)[0].q
+  const unten = untereSpalten(model, a.seite, quer)
+  const betroffen = unten.slice(a.spalte, a.spalte + anzahl)
+  const start = entlang(betroffen[0], model) - betroffen[0].lengthM / 2
+  const alteLaenge = betroffen.reduce((x, f) => x + f.lengthM, 0)
+  const delta = r2(neu.reduce((x, y) => x + y, 0) - alteLaenge)
+  const spalteVon = (f: ScaffoldField): number => betroffen.findIndex((b) => Math.abs(entlang(b, model) - entlang(f, model)) < 0.02)
+  const hinter = start + alteLaenge - 0.02
+  const m = kopiere(model)
+  const reihe = reiheDerSeite(model, a.seite, quer)
+  const entfernt = new Set<string>()
+  const neueFelder: ScaffoldField[] = []
+  const lagen = [...new Set(reihe.filter((f) => spalteVon(f) >= 0).map((f) => f.levelIndex))]
+  for (const li of lagen) {
+    const vorlagen = betroffen.map((b) => reihe.find((f) => f.levelIndex === li && Math.abs(entlang(f, model) - entlang(b, model)) < 0.02))
+    const vorlage = vorlagen.find((x) => !!x)!
+    const erste = vorlagen[0] ?? vorlage, letzte = vorlagen[vorlagen.length - 1] ?? vorlage
+    vorlagen.forEach((v) => v && entfernt.add(v.id))
+    let pos = start
+    neu.forEach((laenge, k) => {
+      const f: ScaffoldField = {
+        ...vorlage,
+        id: k === 0 ? vorlage.id : `${vorlage.id}-${art === 'teilen' ? 't' : 'z'}${k}`,
+        lengthM: laenge,
+        ...(a.seite === 'front' || a.seite === 'back' ? { positionX: r2(pos + laenge / 2) } : { positionZ: r2(pos + laenge / 2) }),
+        isCorner: (k === 0 && erste.isCorner) || (k === neu.length - 1 && letzte.isCorner),
+        durchgang: undefined, durchgangOffen: undefined, durchgangOben: undefined,
+      }
+      pos += laenge
+      neueFelder.push(f)
+    })
+  }
+  const geschoben = new Map<string, ScaffoldField>()
+  for (const f of reihe) if (!entfernt.has(f.id) && spalteVon(f) < 0 && entlang(f, model) - f.lengthM / 2 >= hinter - 0.001) geschoben.set(f.id, { ...f, ...verschiebe(f, delta) })
+  const ersetzt = (f: ScaffoldField) => geschoben.get(f.id) ?? f
+  m.fields = [...m.fields.filter((f) => !entfernt.has(f.id)).map(ersetzt), ...neueFelder]
+  m.levels = m.levels.map((l) => ({ ...l, fields: [...l.fields.filter((f) => !entfernt.has(f.id)).map(ersetzt), ...neueFelder.filter((f) => f.levelIndex === l.index && l.id === (lageDerSeite(m, f.side, f.levelIndex)?.id ?? l.id))] }))
+  const hoehen = lagen.reduce((x, li) => x + (lageDerSeite(m, a.seite, li)?.heightM ?? 0), 0)
+  m.fieldCount = m.fields.filter((f) => f.levelIndex === 0).length
+  m.totalLengthM = r2(m.totalLengthM + delta)
+  m.totalAreaM2 = r2(m.totalAreaM2 + delta * hoehen)
+  if (m.gebauteFlaecheM2 !== undefined) m.gebauteFlaecheM2 = r2(m.gebauteFlaecheM2 + delta * hoehen)
+  m.components3D = generateScaffoldComponents({ ...m, components3D: [] })
+  m.warnings.push({ type: 'info', code: art === 'teilen' ? 'FELD_GETEILT' : 'FELD_ZUSAMMEN', message: `${beschreibung}: Die Felder dahinter rücken nach. Anker bleiben an ihrer Stelle – Verankerung, Diagonalen und Länge der Seite bitte prüfen.` })
+  return m
+}
+
+export function teileFeld(model: CADModel, a: Extract<BereichsAenderung, { art: 'teilen' }>): CADModel {
+  return ersetzeSpalten(model, a, 1, [...a.laengenM], 'teilen', beschreibeAenderung(a))
+}
+
+export function fuehreFelderZusammen(model: CADModel, a: Extract<BereichsAenderung, { art: 'zusammen' }>): CADModel {
+  return ersetzeSpalten(model, a, 2, [a.feldlaengeM], 'zusammen', beschreibeAenderung(a))
+}
+
 export function wendeAenderungenAn(model: CADModel, liste: BereichsAenderung[]): CADModel {
   let m = model
   // feste Kennung je Eintrag der Liste: gleiche Eingaben ergeben immer gleiche Bauteil-IDs (Auswahl und Entfernen bleiben stabil)
-  liste.forEach((a, i) => { m = a.art === 'erweitern' ? erweitereSeite(m, a, `erw${i}`) : a.art === 'laenge' ? setzeFeldLaenge(m, a) : stockeAuf(m, a, `erw${i}`) })
+  liste.forEach((a, i) => { m = a.art === 'erweitern' ? erweitereSeite(m, a, `erw${i}`) : a.art === 'laenge' ? setzeFeldLaenge(m, a) : a.art === 'teilen' ? teileFeld(m, a) : a.art === 'zusammen' ? fuehreFelderZusammen(m, a) : stockeAuf(m, a, `erw${i}`) })
   return m
 }
 
