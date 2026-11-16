@@ -84,3 +84,19 @@ describe('Treppe ohne Feldbezug', () => {
     expect(m2.components3D.filter((c) => c.id.startsWith('manual-x-stair-step')).length).toBeGreaterThan(5)
   })
 })
+
+describe('Treppe: Klick auf ein Teil bleibt auf der Seite dieses Teils', () => {
+  it('Pfosten an Ecken/Feldgrenzen (Rahmen, Fuß, Kupplung) setzen die Treppe an ein Feld derselben Seite und Lage', () => {
+    const m = generateCADModel(basis({ umriss: lform }), 'layher-allround')
+    let n = 0
+    for (const c of m.components3D) {
+      if (!c.fieldId) continue
+      const f = m.fields.find((x) => x.id === c.fieldId); if (!f) continue
+      const t = c.fieldId.split('-')
+      const p = platzierungAusTreffer(m, 'stair', c.position as [number, number, number], t[1] as ManualPlacement['side'], parseInt(t[2], 10) || 0)
+      const g = m.fields.find((x) => x.id === p.fieldId)!
+      if (/^field-(front|back|left|right)-\d+-/.test(c.fieldId)) { expect(g.side, c.id).toBe(f.side); n++ }
+    }
+    expect(n).toBeGreaterThan(100)
+  })
+})

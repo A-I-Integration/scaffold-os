@@ -14,11 +14,14 @@ type Lage = Pick<ManualPlacement, 'type' | 'positionX' | 'positionY' | 'position
 type ModellTeil = Pick<CADModel, 'fields'> & Partial<Pick<CADModel, 'levels' | 'building'>>
 
 /** Nächstes Feld (echter 3D-Abstand zur Feldmitte, Feldmitte = Lagenmitte) zu einem Punkt, im ganzen Gerüst. */
-export function naechstesFeld(model: ModellTeil, position: [number, number, number], levelIndex = -1): ModellTeil['fields'][number] | null {
+export function naechstesFeld(model: ModellTeil, position: [number, number, number], levelIndex = -1, side = ''): ModellTeil['fields'][number] | null {
   let best: ModellTeil['fields'][number] | null = null
   let bestD = Infinity
   // Ist die Lage bekannt (Klick auf ein Teil dieser Lage), kommen nur Felder dieser Lage in Frage – die Klickhöhe kann ungenau sein
-  const kandidaten = levelIndex >= 0 && model.fields.some((x) => x.levelIndex === levelIndex) ? model.fields.filter((x) => x.levelIndex === levelIndex) : model.fields
+  const dieseLage = levelIndex >= 0 && model.fields.some((x) => x.levelIndex === levelIndex) ? model.fields.filter((x) => x.levelIndex === levelIndex) : model.fields
+  // Ist auch die Seite bekannt (Klick auf ein Teil dieser Seite), bleibt die Treppe auf dieser Seite – sonst könnte ein Pfosten an einer Ecke zum Feld der Nachbarseite gehören
+  const dieseSeite = side ? dieseLage.filter((x) => x.side === side) : []
+  const kandidaten = dieseSeite.length > 0 ? dieseSeite : dieseLage
   for (const f of kandidaten) {
     const lage = model.levels?.find((l) => l.index === f.levelIndex)
     const yMitte = f.positionY + (lage ? lage.heightM / 2 : 1)
@@ -58,7 +61,7 @@ export function platzierungAusTreffer(
   // Treppe: rastet auf das nächste Feld im GANZEN Gerüst ein (jede Seite, jede Lage, auch an Umriss-Kanten),
   // nicht nur auf Felder der getroffenen Seite – so lässt sie sich an beliebige Stellen setzen und ziehen.
   if (type === 'stair' && model) {
-    const best = naechstesFeld(model, position, levelIndex)
+    const best = naechstesFeld(model, position, levelIndex, side)
     if (best) {
       p.fieldId = best.id
       p.positionX = best.positionX
