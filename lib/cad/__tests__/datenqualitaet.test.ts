@@ -124,6 +124,10 @@ describe('3D-Prüfung: fehlerhafte Modelle werden erkannt (nichts geht unbemerkt
     const m = basis(); m.fields = m.fields.filter((f) => f.side !== 'left')
     expect(codes(pruefeModell3D(m))).toContain('SEITE_FEHLT')
   })
+  it('Umriss-Modus (Felder an Kanten): Seiten hinten/links/rechts sind kein Fehler', () => {
+    const m = basis(); m.fields = m.fields.map((f) => ({ ...f, side: 'front' as const, kante: 0 }))
+    expect(codes(pruefeModell3D(m))).not.toContain('SEITE_FEHLT')
+  })
   it('Bauteilliste leer → ROT', () => { const m = basis(); m.components3D = []; expect(pruefeModell3D(m).ampel).toBe('rot') })
   it('Gebäudehöhe 0 (fehlender Wert still durch 0 ersetzt) → ROT', () => {
     const m = basis(); m.building = { ...m.building, heightM: 0 }

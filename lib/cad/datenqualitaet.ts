@@ -233,7 +233,9 @@ export function pruefeModell3D(model: CADModel, opt: Pruef3DOptionen = {}): Prue
   // 2: alle Gerüstseiten vorhanden
   if (fields.length === 0) b('KEINE_FELDER', 'rot', 'Gerüst', 'Das Modell enthält keine Felder.')
   else {
-    const fehlend = (bg.sides ?? []).filter((sd) => !fields.some((f) => f.side === sd))
+    // Umriss-Modus: Alle Felder gehören zu Kanten (side 'front' + kante), vorne/hinten/links/rechts gibt es dort nicht – kein Fehler
+    const umrissModus = fields.some((f) => f.kante !== undefined)
+    const fehlend = umrissModus ? [] : (bg.sides ?? []).filter((sd) => !fields.some((f) => f.side === sd))
     if (fehlend.length) b('SEITE_FEHLT', 'rot', 'Gerüstseiten', `Für gewählte Seite(n) ${fehlend.join(', ')} gibt es kein Feld.`)
   }
 
