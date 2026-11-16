@@ -799,8 +799,8 @@ function InstancedBauteile({
         if (placementType && onPlacementClick && e.point) {
           const item = items[e.instanceId]
           // Seite und Ebene aus der fieldId ableiten
-          let side = 'front'
-          let levelIndex = 0
+          let side = '' // unbekannt → die Platzierungsregeln nehmen das nächste Feld
+          let levelIndex = -1
           if (item.fieldId) {
             const parts = item.fieldId.split('-')
             if (parts.length >= 3) {
@@ -866,12 +866,11 @@ function InstancedBauteile({
       if (e.instanceId === undefined || !items[e.instanceId] || !e.point) return
       const item = items[e.instanceId]
       if (zieh.platzierungIdVon(item.id) === zieh.ziehId) return
-      if (!item.fieldId) return
-      const parts = item.fieldId.split('-')
-      if (parts.length < 3) return
-      const side = parts[1]
-      const levelIndex = parseInt(parts[2], 10)
-      if (isNaN(levelIndex)) return
+      // Teile ohne Feldbezug (Fußplatte, Anker, …) zählen auch als Ziel: Seite/Lage kommen dann vom nächsten Feld
+      const parts = item.fieldId ? item.fieldId.split('-') : []
+      let side = parts.length >= 3 ? parts[1] : ''
+      let levelIndex = parts.length >= 3 ? parseInt(parts[2], 10) : -1
+      if (isNaN(levelIndex)) { side = ''; levelIndex = -1 }
       e.stopPropagation()
       zieh.bewegen(zieh.ziehId, [e.point.x, e.point.y, e.point.z], side, levelIndex)
     },
