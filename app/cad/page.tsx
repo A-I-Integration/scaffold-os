@@ -64,6 +64,8 @@ import type { CADLayerState, SideVisibility } from '@/types/cad-layers'
 import { createInitialLayerState } from '@/types/cad-layers'
 import type { CustomDimension } from '@/types/cad-dimensions'
 import type { ManualPlacement } from '@/lib/calculations/cad-engine'
+import { schalteAuswahl, rahmenErgebnis } from '@/lib/cad/mehrfachauswahl'
+import MehrfachLeiste from '@/components/cad/MehrfachLeiste'
 import { KEINE_UEBERLAGERUNG, wendeBauteilAenderungenAn, setzeBauteilLage, dupliziereBauteil, setzeBauteilZurueck, bauteileDerLage, verschiebeBauteile, kopiereBauteile, istKopieId, istVonHandVeraendert, type BauteilUeberlagerung } from '@/lib/cad/bauteil-aenderungen'
 import { buildTopologyGraph, pruefeKnotenIsolation } from '@/lib/calculations/topology-graph'
 import { wendeLagerAn, type LagerZeile } from '@/lib/calculations/cad-lager'
@@ -143,6 +145,10 @@ export default function CADPage() {
     fetch('/api/vehicles', { cache: 'no-store' }).then((r) => r.json()).then((j) => { if (j?.success) setFahrzeuge(fahrzeugeAus(j.vehicles)) }).catch(() => {})
   }, [])
   const [selectedComponent, setSelectedComponent] = useState<string | null>(null)
+  // Mehrfachauswahl (Shift+Klick, Auswahlrahmen)
+  const [mehrfach, setMehrfach] = useState<string[]>([])
+  const [rahmenModus, setRahmenModus] = useState(false)
+  const mehrfachMenge = useMemo(() => new Set(mehrfach), [mehrfach])
   // Teilabbau: Fenster offen? Auswahl/Eingaben
   const [abbauAktiv, setAbbauAktiv] = useState(false)
   const [abbauEinplanen, setAbbauEinplanen] = useState(false)
@@ -498,6 +504,53 @@ export default function CADPage() {
     if (ids.length === 0) return
     setzeUeber((u) => (op.art === 'verschieben' ? verschiebeBauteile(u, mdl, ids, [0, op.dyM, 0]) : kopiereBauteile(u, ids, [0, op.dyM, 0])))
   }, [setzeUeber])
+  // ─── Mehrfachauswahl: Gruppenaktionen (Teile von Hand gesetzter Bauteile gehören über ihre Platzierung zusammen) ───
+  const teileDerAuswahl = useCallback((ids: string[]) => {
+    const pids = new Set<string>(); const rest: string[] = []
+    for (const id of ids) { const pid = platzierungIdVon(id, manualPlacements); if (pid) pids.add(pid); else rest.push(id) }
+    return { pids: [...pids], rest }
+  }, [manualPlacements])
+  const handleGruppeVerschieben = useCallback((v: [number, number, number]) => {
+    const { pids, rest } = teileDerAuswahl(mehrfach)
+    if (pids.length) setManualPlacements((prev) => prev.map((p) => (pids.includes(p.id) ? { ...p, positionX: p.positionX + v[0], positionY: p.positionY + v[1], positionZ: p.positionZ + v[2] } : p)))
+    const mdl = modelWithManualRef.current
+    if (rest.length && mdl) setzeUeber((u) => verschiebeBauteile(u, mdl, rest, v))
+  }, [mehrfach, teileDerAuswahl, setzeUeber])
+  const handleGruppeKopieren = useCallback((v: [number, number, number]) => {
+    const { pids, rest } = teileDerAuswahl(mehrfach)
+    if (pids.length) {
+      const jetzt = Date.now()
+      setManualPlacements((prev) => [...prev, ...prev.filter((p) => pids.includes(p.id)).map((p, i) => ({ ...p, id: `manual-${p.type}-${jetzt}-${i}`, positionX: p.positionX + v[0], positionY: p.positionY + v[1], positionZ: p.positionZ + v[2] }))])
+    }
+    if (rest.length) setzeUeber((u) => kopiereBauteile(u, rest, v))
+  }, [mehrfach, teileDerAuswahl, setzeUeber])
+  const handleGruppeEntfernen = useCallback(() => {
+    const { pids, rest } = teileDerAuswahl(mehrfach)
+    if (pids.length) setManualPlacements((prev) => prev.filter((p) => !pids.includes(p.id)))
+    const kopien = rest.filter(istKopieId)
+    if (kopien.length) setzeUeber((u) => kopien.reduce((acc, id) => setzeBauteilZurueck(acc, id), u))
+    const erzeugt = new Set<string>()
+    for (const id of rest.filter((x) => !istKopieId(x))) {
+      const m = id.match(/^stair-(?:frame|step|rail)-(\d+)(?:-|$)/)
+      if (m && model) model.components3D.filter((c) => new RegExp(`^stair-(?:frame|step|rail)-${m[1]}(?:-|$)`).test(c.id)).forEach((c) => erzeugt.add(c.id))
+      else erzeugt.add(id)
+    }
+    if (erzeugt.size) setRemovedGroups((prev) => [...prev, [...erzeugt]]) // ein Schritt: „Entferntes zurück“ holt die ganze Gruppe wieder
+    setMehrfach([])
+  }, [mehrfach, teileDerAuswahl, model, setzeUeber])
+  const handleRahmen = useCallback((ids: string[], ergaenzen: boolean) => { setMehrfach((prev) => rahmenErgebnis(prev, ids, ergaenzen)); setSelectedComponent(null) }, [])
+  // Entf entfernt die ganze Mehrfachauswahl, Esc hebt sie auf (nicht beim Tippen in Feldern)
+  useEffect(() => {
+    if (mehrfach.length === 0 && !rahmenModus) return
+    const onKey = (e: KeyboardEvent) => {
+      const t = e.target as HTMLElement | null
+      if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable)) return
+      if (e.key === 'Escape') { setMehrfach([]); setRahmenModus(false) }
+      else if (mehrfach.length > 0 && (e.key === 'Delete' || e.key === 'Backspace')) { e.preventDefault(); handleGruppeEntfernen() }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [mehrfach.length, rahmenModus, handleGruppeEntfernen])
   const handleBauteilZuruecksetzen = useCallback((id: string) => { setzeUeber((u) => setzeBauteilZurueck(u, id)); if (istKopieId(id)) setSelectedComponent(null) }, [setzeUeber])
 
   const handleRemoveManualPlacement = useCallback((id: string) => {
@@ -836,13 +889,15 @@ export default function CADPage() {
     setBereichsListe((l) => [...l, a])
   }, [bereichEin, kanteWirksam])
   // Klick im Modell: bei offenem Teilabbau-Fenster Bauteil zur Abbau-Auswahl hinzufügen/entfernen
-  const klickImModell = useCallback((id: string | null) => {
-    if (!abbauAktiv || !id) { setSelectedComponent(id); return }
+  const klickImModell = useCallback((id: string | null, shift?: boolean) => {
+    if (!abbauAktiv && id && shift) { setMehrfach((prev) => schalteAuswahl(prev, selectedComponent, id)); setSelectedComponent(null); return }
+    if (!abbauAktiv && !id && rahmenModus) return // Rahmen-Modus: ein Klick ins Leere hebt die Auswahl nicht auf
+    if (!abbauAktiv || !id) { setMehrfach([]); setSelectedComponent(id); return }
     setAbbauEin((alt) => {
       const basis = alt.art === 'klick' ? alt.ids : (abbauErgebnis?.bauteilIds ?? [])
       return { ...alt, art: 'klick', ids: basis.includes(id) ? basis.filter((x) => x !== id) : [...basis, id] }
     })
-  }, [abbauAktiv, abbauErgebnis])
+  }, [abbauAktiv, abbauErgebnis, selectedComponent, rahmenModus])
 
   const toggleType = useCallback((type: string) => {
     setVisibleTypes((prev) => ({ ...prev, [type]: !prev[type] }))
@@ -1189,6 +1244,7 @@ export default function CADPage() {
         <div className='flex-1 flex flex-col min-w-0'>
           <SystemLeiste systemId={systemId} onSystemChange={aendereSystem} gewaehlteArtikel={Object.keys(artikelWahl).length} />
           <CadBand
+            rahmenAktiv={rahmenModus} onRahmen={() => setRahmenModus((v) => !v)} auswahlAnzahl={mehrfach.length}
             hatModell={!!modelWithManual} viewMode={viewMode} onViewMode={setViewMode}
             zeichenWerkzeug={zeichenWerkzeug} onZeichenWerkzeug={setZeichenWerkzeug} figurenAnzahl={figuren.length} onFigurenLoeschen={() => setFiguren([])}
             bereicheOffen={bereicheOffen} bereichWerkzeug={bereichEin.werkzeug}
@@ -1306,6 +1362,9 @@ export default function CADPage() {
                 onEntfernen={bereichEntfernen} onAnhaengen={bereichHinzufuegen} onAufstocken={bereichHinzufuegen}
                 onLoescheAenderung={(i) => setBereichsListe((l) => l.filter((_, j) => j !== i))} onZu={() => setBereicheOffen(false)} entferntAnzahl={removedCount} />
             )}
+            {mehrfach.length > 0 && modelWithManual && viewMode === '3d' && !abbauAktiv && (
+              <MehrfachLeiste model={modelWithManual} ids={mehrfach} einrasten={einrasten} rahmenAktiv={rahmenModus} onRahmen={() => setRahmenModus((v) => !v)} onAbwaehlen={() => { setMehrfach([]); setRahmenModus(false) }} onVerschieben={handleGruppeVerschieben} onKopieren={handleGruppeKopieren} onEntfernen={handleGruppeEntfernen} />
+            )}
             {abbauAktiv && abbauErgebnis && viewMode === '3d' && (
               <TeilabbauPanel ein={abbauEin} onChange={setAbbauEin} ergebnis={abbauErgebnis} onClose={() => setAbbauAktiv(false)} onPlanUebernehmen={() => setAbbauEinplanen(true)} />
             )}
@@ -1313,7 +1372,7 @@ export default function CADPage() {
               <AbbauEinplanenDialog tage={abbauErgebnis.tage} personen={abbauErgebnis.personen} titel={`Teilabbau: ${abbauErgebnis.anzahlTeile} Bauteile, ${abbauErgebnis.stunden} h`} onClose={() => setAbbauEinplanen(false)} />
             )}
             {viewMode === '3d' && modelWithManual && (
-              <Scaffold3D farbModus={farbModus} model={modelWithManual} features={features} showBuilding={showBuilding} showScaffold={showScaffold} showDimensions={showDimensions} selectedComponent={selectedComponent} onSelectComponent={klickImModell} abbauMarkiert={abbauMarkiert} echtesGebaeude={echtesGebaeude} visibleTypes={visibleTypes} viewMode={viewAngle} onCanvasReady={(c) => { canvasRef.current = c }} notes={notes} onAddNote={handleAddNote} hiddenSides={hiddenSides} hiddenLevels={hiddenLevels} measureMode={measureMode} onMeasurePoint={handleMeasurePoint} customDimensions={customDimensions} pendingMeasurePoint={pendingMeasurePoint?.point ?? null} placementType={placementType} onPlacementClick={handlePlacementClick} showEnvironment={showEnvironment} hoheQualitaet={hoheQualitaet} onRemoveComponent={handleRemoveComponent} onReplaceComponent={handleReplaceComponent} systemId={systemId} artikelWahl={artikelWahl} onArtikelWahl={waehleArtikel} onArtikelWahlGleiche={waehleArtikelGleiche} removedCount={removedCount} platzierungIdVon={platzierungIdVonBauteil} onBauteilZiehen={handleBauteilZiehen} griff={!abbauAktiv ? { modus: griffModus, einrasten, onAendern: handleBauteilLage } : undefined} onSeiteUmschalten={(side) => { setAutoGenerate(true); setBuilding((() => { const cur = building.sides ?? ['front']; const has = cur.includes(side); const ns = has ? cur.filter((x) => x !== side) : [...cur, side]; if (ns.length === 0) ns.push('front'); return { ...building, sides: ns } })()) }} />
+              <Scaffold3D farbModus={farbModus} model={modelWithManual} features={features} showBuilding={showBuilding} showScaffold={showScaffold} showDimensions={showDimensions} selectedComponent={selectedComponent} onSelectComponent={klickImModell} mehrfachAuswahl={mehrfachMenge} rahmenModus={rahmenModus} onRahmen={handleRahmen} abbauMarkiert={abbauMarkiert} echtesGebaeude={echtesGebaeude} visibleTypes={visibleTypes} viewMode={viewAngle} onCanvasReady={(c) => { canvasRef.current = c }} notes={notes} onAddNote={handleAddNote} hiddenSides={hiddenSides} hiddenLevels={hiddenLevels} measureMode={measureMode} onMeasurePoint={handleMeasurePoint} customDimensions={customDimensions} pendingMeasurePoint={pendingMeasurePoint?.point ?? null} placementType={placementType} onPlacementClick={handlePlacementClick} showEnvironment={showEnvironment} hoheQualitaet={hoheQualitaet} onRemoveComponent={handleRemoveComponent} onReplaceComponent={handleReplaceComponent} systemId={systemId} artikelWahl={artikelWahl} onArtikelWahl={waehleArtikel} onArtikelWahlGleiche={waehleArtikelGleiche} removedCount={removedCount} platzierungIdVon={platzierungIdVonBauteil} onBauteilZiehen={handleBauteilZiehen} griff={!abbauAktiv ? { modus: griffModus, einrasten, onAendern: handleBauteilLage } : undefined} onSeiteUmschalten={(side) => { setAutoGenerate(true); setBuilding((() => { const cur = building.sides ?? ['front']; const has = cur.includes(side); const ns = has ? cur.filter((x) => x !== side) : [...cur, side]; if (ns.length === 0) ns.push('front'); return { ...building, sides: ns } })()) }} />
             )}
             {/* Phase 68-G: Leerzustand nach 'Neu starten' */}
             {viewMode === '3d' && !model && (

@@ -12,6 +12,7 @@
 // 7. memo() für Scaffold3D und AllScaffoldComponents (verhindert Re-Render bei Parent-Changes)
 // ============================================================
 
+import { idsImRahmen, istEchterRahmen } from '@/lib/cad/mehrfachauswahl'
 import { useMemo, useState, useRef, useEffect, useCallback, memo, createContext, useContext } from 'react'
 import { Canvas, useThree, useFrame } from '@react-three/fiber'
 import { FUSSPLATTE_AUFSTANDSVERSATZ_M, hangDaten, baueHangFlaeche } from '@/lib/cad/hang-geometrie'
@@ -50,7 +51,13 @@ interface Props {
   showScaffold: boolean
   showDimensions: boolean
   selectedComponent: string | null
-  onSelectComponent: (id: string | null) => void
+  /** `shift` = Shift+Klick (zur Mehrfachauswahl hinzufügen / herausnehmen) */
+  onSelectComponent: (id: string | null, shift?: boolean) => void
+  /** Mehrfachauswahl (Shift+Klick, Auswahlrahmen): diese Bauteile sind blau markiert */
+  mehrfachAuswahl?: ReadonlySet<string>
+  /** Auswahlrahmen aufziehen statt die Ansicht zu drehen */
+  rahmenModus?: boolean
+  onRahmen?: (ids: string[], ergaenzen: boolean) => void
   visibleTypes: Record<string, boolean>
   viewMode: 'perspective' | 'front' | 'back' | 'left' | 'right' | 'top' | 'bottom'
   // NEU (Marktvergleich-Lücke 3): erlaubt der aufrufenden Seite, die
@@ -124,6 +131,8 @@ const HORIZONT_FARBE = '#e9edf2'
 const FarbModusKontext = createContext<FarbModus>('real')
 /** Teilabbau: Bauteile, die abgebaut werden sollen, werden rot markiert */
 const AbbauMarkKontext = createContext<ReadonlySet<string> | null>(null)
+/** Mehrfachauswahl: ausgewählte Bauteile blau */
+const MehrfachKontext = createContext<ReadonlySet<string> | null>(null)
 type EchtesGebaeudeDaten = { aussehen: Aussehen; faktor: number; oben: 'x' | 'y' | 'z'; versatzX?: number; versatzZ?: number; drehungGrad?: number; anker?: { wx: number; wz: number; drehungGrad: number } | null; /** Lage des Turms (höchster Abschnitt) in unserem Gebäude: dorthin kommt die Schaftmitte */ ziel?: { x: number; z: number; drehungGrad: number } }
 const EchtesGebaeudeKontext = createContext<EchtesGebaeudeDaten | null>(null)
 
@@ -713,7 +722,7 @@ function InstancedBauteile({
   items: ScaffoldComponent3D[]
   selectedComponent: string | null
   hoveredId: string | null
-  onSelect: (id: string | null) => void
+  onSelect: (id: string | null, shift?: boolean) => void
   onHover: (id: string | null) => void
   measureMode?: boolean
   onMeasurePoint?: (point: [number, number, number], componentName?: string) => void
@@ -726,6 +735,7 @@ function InstancedBauteile({
   const dummy = useMemo(() => new THREE.Object3D(), [])
   const farbModus = useContext(FarbModusKontext)
   const abbauMarkiert = useContext(AbbauMarkKontext)
+  const mehrfach = useContext(MehrfachKontext)
   const farbTyp = variant === 'tritt' ? 'stair' : type
   const baseColor = useMemo(() => new THREE.Color(farbModus === 'bauteil' ? bauteilFarbe(farbTyp) : farbModus === 'praesentation' && farbTyp !== 'net' && farbTyp !== 'safety_net' ? PRAESENTATION_ROHR : (COLOR_MAP[farbTyp] || '#888888')), [farbTyp, farbModus])
   const optik = useContext(MjOptikKontext)
@@ -782,13 +792,14 @@ function InstancedBauteile({
       const isHovered = hoveredId === item.id
       const col = baseColor.clone()
       if (abbauMarkiert?.has(item.id)) col.set('#dc2626')
+      else if (mehrfach?.has(item.id)) col.set('#2563eb')
       else if (isSelected) col.multiplyScalar(1.5).add(new THREE.Color(0.3, 0.3, 0.3))
       else if (isHovered) col.multiplyScalar(1.2)
       mesh.setColorAt(i, col)
     })
     if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true
     invalidate()
-  }, [items, selectedComponent, hoveredId, baseColor, invalidate, abbauMarkiert])
+  }, [items, selectedComponent, hoveredId, baseColor, invalidate, abbauMarkiert, mehrfach])
 
   const handleClick = useCallback(
     (e: any) => {
@@ -825,7 +836,7 @@ function InstancedBauteile({
           )
           return
         }
-        onSelect(items[e.instanceId].id)
+        onSelect(items[e.instanceId].id, !!(e.shiftKey ?? e.nativeEvent?.shiftKey))
       }
     },
     [items, onSelect, measureMode, onMeasurePoint, placementType, onPlacementClick]
@@ -848,6 +859,7 @@ function InstancedBauteile({
     (e: any) => {
       if (!zieh || placementType || measureMode) return
       if (e.button !== undefined && e.button !== 0) return
+      if (e.shiftKey ?? e.nativeEvent?.shiftKey) return // Shift+Klick = Mehrfachauswahl, nicht ziehen
       if (e.instanceId === undefined || !items[e.instanceId]) return
       const pid = zieh.platzierungIdVon(items[e.instanceId].id)
       if (!pid) return
@@ -992,7 +1004,7 @@ const AllScaffoldComponents = memo(function AllScaffoldComponents({
   components: ScaffoldComponent3D[]
   visibleTypes: Record<string, boolean>
   selectedComponent: string | null
-  onSelectComponent: (id: string | null) => void
+  onSelectComponent: (id: string | null, shift?: boolean) => void
   lodLevel: 0 | 1 | 2
   hiddenSides?: Set<string>
   hiddenLevels?: Set<number>
@@ -1950,6 +1962,62 @@ function inhaltBox(target: THREE.Object3D): THREE.Box3 {
   finally { for (const g of gemerkt) g.eltern.children = g.kinder }
 }
 
+/** Auswahlrahmen: Im Rahmen-Modus zieht man mit der Maus ein Rechteck auf, alle sichtbaren Bauteile darin werden ausgewählt
+ *  (Shift gedrückt = zur bisherigen Auswahl hinzufügen). Die Ansichtssteuerung ruht währenddessen. */
+function RahmenAuswahl({ model, visibleTypes, onRahmen }: { model: CADModel; visibleTypes: Record<string, boolean>; onRahmen: (ids: string[], ergaenzen: boolean) => void }) {
+  const { gl, camera, controls, invalidate } = useThree()
+  const refModel = useRef(model); refModel.current = model
+  const refTypen = useRef(visibleTypes); refTypen.current = visibleTypes
+  const refCb = useRef(onRahmen); refCb.current = onRahmen
+  useEffect(() => {
+    const el = gl.domElement
+    const eltern = el.parentElement
+    if (!eltern) return
+    const c = controls as unknown as { enabled: boolean } | null
+    const vorher = c ? c.enabled : true
+    if (c) c.enabled = false
+    const box = document.createElement('div')
+    box.style.cssText = 'position:absolute;border:1.5px solid #2563eb;background:rgba(37,99,235,.12);pointer-events:none;display:none;z-index:20'
+    eltern.appendChild(box)
+    const altCursor = el.style.cursor
+    el.style.cursor = 'crosshair'
+    let start: { x: number; y: number } | null = null
+    const lokal = (e: PointerEvent) => { const r = el.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top } }
+    const down = (e: PointerEvent) => { if (e.button !== 0) return; start = lokal(e); el.setPointerCapture?.(e.pointerId) }
+    const move = (e: PointerEvent) => {
+      if (!start) return
+      const p = lokal(e)
+      box.style.display = 'block'
+      box.style.left = `${Math.min(start.x, p.x)}px`; box.style.top = `${Math.min(start.y, p.y)}px`
+      box.style.width = `${Math.abs(start.x - p.x)}px`; box.style.height = `${Math.abs(start.y - p.y)}px`
+    }
+    const up = (e: PointerEvent) => {
+      if (!start) return
+      const a = start, b = lokal(e)
+      start = null; box.style.display = 'none'
+      if (!istEchterRahmen(a, b)) return
+      const r = el.getBoundingClientRect()
+      const v = new THREE.Vector3()
+      const punkte: { id: string; x: number; y: number }[] = []
+      for (const comp of refModel.current.components3D) {
+        if (refTypen.current[comp.type] === false) continue
+        v.set(comp.position[0], comp.position[1], comp.position[2]).project(camera)
+        if (v.z > 1 || v.z < -1) continue // hinter der Kamera
+        punkte.push({ id: comp.id, x: ((v.x + 1) / 2) * r.width, y: ((1 - v.y) / 2) * r.height })
+      }
+      refCb.current(idsImRahmen(punkte, a, b), e.shiftKey)
+      invalidate()
+    }
+    el.addEventListener('pointerdown', down); el.addEventListener('pointermove', move); el.addEventListener('pointerup', up)
+    return () => {
+      el.removeEventListener('pointerdown', down); el.removeEventListener('pointermove', move); el.removeEventListener('pointerup', up)
+      box.remove(); el.style.cursor = altCursor
+      if (c) c.enabled = vorher
+    }
+  }, [gl, camera, controls, invalidate])
+  return null
+}
+
 function AutoFraming({ targetRef, modelKey }: { targetRef: { current: THREE.Group | null }; modelKey: string }) {
   const camera = useThree((s) => s.camera)
   const controls = useThree((s) => s.controls) as any
@@ -2281,6 +2349,9 @@ function Scaffold3D({
   hoheQualitaet,
   farbModus = 'real',
   abbauMarkiert,
+  mehrfachAuswahl,
+  rahmenModus,
+  onRahmen,
   echtesGebaeude,
   onRemoveComponent,
   onReplaceComponent,
@@ -2355,7 +2426,7 @@ function Scaffold3D({
     <div className="w-full h-full rounded-xl overflow-hidden border border-black/10 bg-[#dfe7ef] relative">
       <Canvas
         shadows
-        onPointerMissed={() => { if (selectedComponent) onSelectComponent(null) }}
+        onPointerMissed={() => { if (rahmenModus) return; if (selectedComponent || (mehrfachAuswahl && mehrfachAuswahl.size > 0)) onSelectComponent(null) }}
         camera={cameraConfig}
         frameloop="demand"
         dpr={[1, 2]}
@@ -2363,9 +2434,11 @@ function Scaffold3D({
         onCreated={({ gl }) => { onCanvasReady?.(gl.domElement) }}
       >
         <AdaptiveDpr pixelated />
+        {rahmenModus && onRahmen && <RahmenAuswahl model={model} visibleTypes={visibleTypes} onRahmen={onRahmen} />}
         <AdaptiveEvents />
         <FarbModusKontext.Provider value={farbModus}>
         <AbbauMarkKontext.Provider value={abbauMarkiert ?? null}>
+        <MehrfachKontext.Provider value={mehrfachAuswahl ?? null}>
         <EchtesGebaeudeKontext.Provider value={echtesGebaeude ?? null}>
         <MjOptikKontext.Provider value={mjOptikFuerSystem(systemId)}>
         <ZiehKontext.Provider value={ziehKontext}>
@@ -2398,6 +2471,7 @@ function Scaffold3D({
         </ZiehKontext.Provider>
         </MjOptikKontext.Provider>
         </EchtesGebaeudeKontext.Provider>
+        </MehrfachKontext.Provider>
         </AbbauMarkKontext.Provider>
         </FarbModusKontext.Provider>
         {hoheQualitaet && (
