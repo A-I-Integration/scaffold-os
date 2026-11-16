@@ -46,12 +46,12 @@ export default function EigenschaftenLeiste({ lagenVersatzM = 0, onLageOp, griff
     ...(manuell ? [['Herkunft', 'von Hand gesetzt']] as [string, string][] : veraendert ? [['Herkunft', c.id.startsWith('kopie-') ? 'Kopie' : 'von Hand verändert']] as [string, string][] : []),
   ]
   return (
-    <aside className='absolute bottom-3 left-3 z-20 w-[300px] overflow-hidden rounded-md border bg-white shadow-xl' style={{ borderColor: 'var(--os-linie)' }} aria-label='Eigenschaften'>
-      <div className='flex items-center justify-between px-3 py-2 text-white' style={{ background: 'var(--os-nav)' }}>
+    <aside className='flex max-h-[42vh] flex-wrap items-start gap-x-5 gap-y-2 overflow-y-auto border-b bg-white px-4 py-2' style={{ borderColor: 'var(--os-linie)' }} aria-label='Eigenschaften' data-testid='eigenschaften-leiste'>
+      <div className='flex w-full items-center justify-between'>
         <b className='text-[14px]'>Eigenschaften</b>
-        <button type='button' onClick={onZu} aria-label='Schließen' className='rounded px-1.5 hover:bg-white/10'>✕</button>
+        <button type='button' onClick={onZu} aria-label='Schließen' className='rounded px-1.5 hover:bg-black/5'>✕</button>
       </div>
-      <dl className='max-h-[40vh] overflow-y-auto px-3 py-2 text-[13px]'>
+      <dl className='w-[300px] shrink-0 text-[13px]'>
         {zeilen.map(([k, v]) => (
           <div key={k} className='flex gap-2 border-b py-1 last:border-0' style={{ borderColor: '#eef0f3' }}>
             <dt className='w-[110px] shrink-0' style={{ color: 'var(--os-text-leise)' }}>{k}</dt><dd className='min-w-0 flex-1 break-words'>{v}</dd>
@@ -59,7 +59,7 @@ export default function EigenschaftenLeiste({ lagenVersatzM = 0, onLageOp, griff
         ))}
       </dl>
       {onLage && (
-        <div className='space-y-1.5 border-t px-3 py-2' style={{ borderColor: 'var(--os-linie)' }}>
+        <div className='w-[300px] shrink-0 space-y-1.5'>
           <div className='grid grid-cols-2 gap-1' role='group' aria-label='Werkzeug am Bauteil'>
             {([['verschieben', 'Verschieben'], ['drehen', 'Drehen']] as const).map(([k, name]) => (
               <button key={k} type='button' aria-pressed={griffModus === k} onClick={() => onGriffModus?.(k)} className='rounded border px-2 py-1.5 text-[12.5px]'
@@ -81,7 +81,7 @@ export default function EigenschaftenLeiste({ lagenVersatzM = 0, onLageOp, griff
       {!onLage && manuell && onPositionAendern && platzierungPosition && <PositionFelder key={platzierungPosition.join(',')} start={platzierungPosition} onUebernehmen={onPositionAendern} />}
       {onLageOp && feld && lage && <LagenFelder key={`${lage.index}|${lage.bottomY}|${lagenVersatzM}`} lage={{ ...lage, bottomY: Math.round((lage.bottomY + lagenVersatzM) * 100) / 100 }} onOp={onLageOp} />}
       {spalteInfo && (
-        <div className='space-y-1.5 border-t px-3 py-2' style={{ borderColor: 'var(--os-linie)' }}>
+        <div className='w-[300px] shrink-0 space-y-1.5'>
           {onFeldLaenge && laengen.length > 0 && (
             <div>
               <div className='mb-1 text-[11px] uppercase tracking-wider' style={{ color: 'var(--os-text-leise)' }}>Länge dieses Feldes</div>
@@ -109,7 +109,7 @@ export default function EigenschaftenLeiste({ lagenVersatzM = 0, onLageOp, griff
           )}
         </div>
       )}
-      <div className='space-y-1.5 border-t p-2' style={{ borderColor: 'var(--os-linie)' }}>
+      <div className='w-[300px] shrink-0 space-y-1.5'>
         <button type='button' onClick={onEntfernen} className='w-full rounded border px-3 py-1.5 text-[13px] hover:bg-red-50' style={{ borderColor: '#e7b4b0', color: '#b42318' }}>Bauteil entfernen (Entf)</button>
         {feld && onFeldEntfernen && (
           <div>
@@ -166,7 +166,7 @@ function LagenFelder({ lage, onOp }: { lage: { index: number; heightM: number; b
   const dy = neu === null ? null : Math.round((neu - lage.bottomY) * 100) / 100
   const raster = imHoehenraster(dy ?? 0, lage.heightM)
   return (
-    <div className='space-y-1.5 border-t px-3 py-2' style={{ borderColor: 'var(--os-linie)' }}>
+    <div className='w-[300px] shrink-0 space-y-1.5'>
       <div className='text-[11px] uppercase tracking-wider' style={{ color: 'var(--os-text-leise)' }}>Ganze Lage {lage.index + 1}</div>
       <label className='flex items-center gap-2 text-[12.5px]'><input type='checkbox' checked={alle} onChange={(e) => setAlle(e.target.checked)} />Alle Seiten (sonst nur diese Seite)</label>
       <div className='grid grid-cols-2 gap-1'>

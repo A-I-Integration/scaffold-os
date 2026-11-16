@@ -7,7 +7,7 @@ import { useMemo, useState } from 'react'
 import type { CADModel, ManualPlacement, ScaffoldField } from '@/lib/calculations/cad-engine'
 import { treppenReihen, lagenVon } from '@/lib/cad/treppe-setzen'
 
-export default function TreppePanel({ model, treppe, meldung, onSetzen, onLeiter, onSchieben, onZu }: {
+export default function TreppePanel({ model, treppe, meldung, onSetzen, onLeiter, onDurchstieg, onSchieben, onZu }: {
   model: Pick<CADModel, 'fields'>
   /** die gerade gewählte, von Hand gesetzte Treppe (sonst null) */
   treppe: ManualPlacement | null
@@ -15,6 +15,8 @@ export default function TreppePanel({ model, treppe, meldung, onSetzen, onLeiter
   onSetzen: (feld: ScaffoldField) => void
   /** Leiter an das gewählte Feld in der gewählten Lage */
   onLeiter?: (feld: ScaffoldField, lage: number) => void
+  /** Durchstiegsbelag mit Leiter in allen Lagen über dem gewählten Feld */
+  onDurchstieg?: (feld: ScaffoldField) => void
   onSchieben: (felder: number) => void
   onZu: () => void
 }) {
@@ -51,6 +53,7 @@ export default function TreppePanel({ model, treppe, meldung, onSetzen, onLeiter
             </select>
           </label>
           <button type='button' onClick={() => onLeiter(feld, lageNr)} className='rounded border border-[#e8590c] px-3 py-1.5 text-[#e8590c]' data-testid='leiter-setzen'>Leiter hier setzen</button>
+          {onDurchstieg && <button type='button' onClick={() => onDurchstieg(feld)} className='rounded border border-[#e8590c] px-3 py-1.5 text-[#e8590c]' data-testid='durchstieg-setzen' title='Ersetzt in jeder Lage dieses Feldes den Belag durch einen Durchstiegsbelag und setzt je Lage eine Leiter'>Durchstieg (alle Lagen)</button>}
         </>
       )}
       <span className='mx-1 h-8 w-px self-center bg-black/10' />

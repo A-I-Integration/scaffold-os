@@ -53,7 +53,7 @@ import { erzeugeProjektdatei, liesProjektdatei, type Projektdatei } from '@/lib/
 import { ladeVersionen, speichereVersionen, fuegeVersionHinzu, loescheVersion, benenneVersion, type Version } from '@/lib/cad/versionen'
 import VersionenDialog from '@/components/cad/VersionenDialog'
 import TreppePanel from '@/components/cad/TreppePanel'
-import { treppeAufFeld, schiebeUmFelder, leiterAufFeld } from '@/lib/cad/treppe-setzen'
+import { treppeAufFeld, schiebeUmFelder, leiterAufFeld, durchstiegAufFeld } from '@/lib/cad/treppe-setzen'
 import LvDialog from '@/components/cad/LvDialog'
 import { bereinigeStatikDaten, type StatikDaten } from '@/lib/statik-daten'
 import { useRouter } from 'next/navigation'
@@ -473,6 +473,15 @@ export default function CADPage() {
     setPlacementType(null)
     setManualPlacements((prev) => [...prev, placement])
     setSelectedComponent(placement.id)
+  }, [model])
+
+  const setzeDurchstiegAufFeld = useCallback((feld: ScaffoldField) => {
+    if (!model) return
+    const d = durchstiegAufFeld(model, feld)
+    const stamp = `${Date.now()}-${Math.random().toString(36).slice(2, 6)}`
+    setPlacementType(null); setTreppeMeldung(null)
+    setManualPlacements((prev) => [...prev, ...d.platzierungen.map((p, i) => ({ id: `manual-durchstieg-${stamp}-${i}`, ...p }) as ManualPlacement)])
+    if (d.entfernen.length) setRemovedGroups((prev) => [...prev, ...d.entfernen])
   }, [model])
 
   // NEU (Ziehen): manuell gesetzte Bauteile anklicken und an eine andere Stelle
@@ -1321,7 +1330,17 @@ export default function CADPage() {
             layerState={layerState} onToggleSide={(k) => handleToggleSide(k as keyof SideVisibility)} onToggleLevel={handleToggleLevel}
             onAlleEin={handleShowAllLayers} onAlleAus={handleHideAllLayers} visibleTypes={visibleTypes} onToggleType={toggleType}
           />
-          {treppePanel && model && viewMode === '3d' && <TreppePanel model={model} treppe={gewaehlteTreppe} meldung={treppeMeldung} onSetzen={setzeTreppeAufFeld} onLeiter={setzeLeiterAufFeld} onSchieben={schiebeTreppe} onZu={() => setTreppePanel(false)} />}
+          {treppePanel && model && viewMode === '3d' && <TreppePanel model={model} treppe={gewaehlteTreppe} meldung={treppeMeldung} onSetzen={setzeTreppeAufFeld} onLeiter={setzeLeiterAufFeld} onDurchstieg={setzeDurchstiegAufFeld} onSchieben={schiebeTreppe} onZu={() => setTreppePanel(false)} />}
+          {selectedComponent && modelWithManual && viewMode === '3d' && !abbauAktiv && !placementType && !measureMode && (
+              <EigenschaftenLeiste model={modelWithManual} id={selectedComponent} lagenVersatzM={ueber.aenderungen.find((a) => a.id === selectedComponent)?.dy ?? ueber.kopien.find((k) => k.id === selectedComponent)?.dy ?? 0} onLageOp={(op) => handleLageOp(selectedComponent, op)} griffModus={griffModus} onGriffModus={setGriffModus} einrasten={einrasten} onEinrasten={setEinrasten} veraendert={istVonHandVeraendert(ueber, selectedComponent)} onLage={(p, d) => handleBauteilLage(selectedComponent, p, d)} onDuplizieren={() => handleBauteilDuplizieren(selectedComponent)} onZuruecksetzen={() => handleBauteilZuruecksetzen(selectedComponent)} artikelWahl={artikelWahl} manuell={!!platzierungIdVonBauteil(selectedComponent)}
+                onEntfernen={() => handleRemoveComponent(selectedComponent)} onFeldEntfernen={(ids) => { setRemovedGroups((prev) => [...prev, ids]); setSelectedComponent(null) }}
+                onFeldLaenge={(seite, spalte, laengeM) => setBereichsListe((l) => [...l, { art: 'laenge', seite, spalte, feldlaengeM: laengeM }])}
+                onFeldAnhaengen={(seite, ende, laengeM) => setBereichsListe((l) => [...l, { art: 'erweitern', seite, ende, anzahl: 1, feldlaengeM: laengeM }])}
+                onFeldTeilen={(seite, spalte, laengenM) => setBereichsListe((l) => [...l, { art: 'teilen', seite, spalte, laengenM }])}
+                onFeldZusammen={(seite, spalte, laengeM) => setBereichsListe((l) => [...l, { art: 'zusammen', seite, spalte, feldlaengeM: laengeM }])}
+                platzierungPosition={(() => { const pid = platzierungIdVonBauteil(selectedComponent); const pl = manualPlacements.find((x) => x.id === pid); return pl ? [pl.positionX, pl.positionY, pl.positionZ] as [number, number, number] : undefined })()}
+                onPositionAendern={(p) => { const pid = platzierungIdVonBauteil(selectedComponent); if (pid) setManualPlacements((prev) => prev.map((x) => (x.id === pid ? { ...x, positionX: p[0], positionY: p[1], positionZ: p[2] } : x))) }} onZu={() => setSelectedComponent(null)} />
+            )}
           {mehrfach.length > 0 && modelWithManual && viewMode === '3d' && !abbauAktiv && (
             <MehrfachLeiste model={modelWithManual} ids={mehrfach} einrasten={einrasten} rahmenAktiv={rahmenModus} onRahmen={() => setRahmenModus((v) => !v)} onAbwaehlen={() => { setMehrfach([]); setRahmenModus(false) }} onVerschieben={handleGruppeVerschieben} onKopieren={handleGruppeKopieren} onEntfernen={handleGruppeEntfernen} />
           )}
@@ -1408,16 +1427,6 @@ export default function CADPage() {
                 <span>Die Eingaben (z. B. Tür oder System) haben sich geändert – das Gerüst zeigt noch den alten Stand.</span>
                 <button type='button' onClick={() => { setAutoGenerate(true); generate() }} className='rounded-lg bg-[#e8590c] px-3 py-1 font-medium text-white hover:bg-[#d04f0b]'>Gerüst neu berechnen</button>
               </div>
-            )}
-            {selectedComponent && modelWithManual && viewMode === '3d' && !abbauAktiv && !placementType && !measureMode && (
-              <EigenschaftenLeiste model={modelWithManual} id={selectedComponent} lagenVersatzM={ueber.aenderungen.find((a) => a.id === selectedComponent)?.dy ?? ueber.kopien.find((k) => k.id === selectedComponent)?.dy ?? 0} onLageOp={(op) => handleLageOp(selectedComponent, op)} griffModus={griffModus} onGriffModus={setGriffModus} einrasten={einrasten} onEinrasten={setEinrasten} veraendert={istVonHandVeraendert(ueber, selectedComponent)} onLage={(p, d) => handleBauteilLage(selectedComponent, p, d)} onDuplizieren={() => handleBauteilDuplizieren(selectedComponent)} onZuruecksetzen={() => handleBauteilZuruecksetzen(selectedComponent)} artikelWahl={artikelWahl} manuell={!!platzierungIdVonBauteil(selectedComponent)}
-                onEntfernen={() => handleRemoveComponent(selectedComponent)} onFeldEntfernen={(ids) => { setRemovedGroups((prev) => [...prev, ids]); setSelectedComponent(null) }}
-                onFeldLaenge={(seite, spalte, laengeM) => setBereichsListe((l) => [...l, { art: 'laenge', seite, spalte, feldlaengeM: laengeM }])}
-                onFeldAnhaengen={(seite, ende, laengeM) => setBereichsListe((l) => [...l, { art: 'erweitern', seite, ende, anzahl: 1, feldlaengeM: laengeM }])}
-                onFeldTeilen={(seite, spalte, laengenM) => setBereichsListe((l) => [...l, { art: 'teilen', seite, spalte, laengenM }])}
-                onFeldZusammen={(seite, spalte, laengeM) => setBereichsListe((l) => [...l, { art: 'zusammen', seite, spalte, feldlaengeM: laengeM }])}
-                platzierungPosition={(() => { const pid = platzierungIdVonBauteil(selectedComponent); const pl = manualPlacements.find((x) => x.id === pid); return pl ? [pl.positionX, pl.positionY, pl.positionZ] as [number, number, number] : undefined })()}
-                onPositionAendern={(p) => { const pid = platzierungIdVonBauteil(selectedComponent); if (pid) setManualPlacements((prev) => prev.map((x) => (x.id === pid ? { ...x, positionX: p[0], positionY: p[1], positionZ: p[2] } : x))) }} onZu={() => setSelectedComponent(null)} />
             )}
             {bereicheOffen && modelWithManual && viewMode === '3d' && (
               <BereichePanel ein={bereichEin} kanten={kantenImModell} onChange={setBereichEin} vorschau={bereichVorschau} liste={bereichsListe}

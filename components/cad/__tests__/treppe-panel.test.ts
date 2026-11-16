@@ -28,4 +28,8 @@ describe('TreppePanel', () => {
     const ohne = renderToStaticMarkup(createElement(TreppePanel, { model: m, treppe: null, onSetzen: h, onSchieben: h, onZu: h }))
     expect(ohne).not.toContain('Leiter hier setzen')
   })
+  it('bietet „Durchstieg (alle Lagen)“ nur mit übergebener Funktion an', () => {
+    expect(renderToStaticMarkup(createElement(TreppePanel, { model: m, treppe: null, onSetzen: h, onLeiter: h, onDurchstieg: h, onSchieben: h, onZu: h }))).toContain('Durchstieg (alle Lagen)')
+    expect(renderToStaticMarkup(createElement(TreppePanel, { model: m, treppe: null, onSetzen: h, onLeiter: h, onSchieben: h, onZu: h }))).not.toContain('Durchstieg (alle Lagen)')
+  })
 })
