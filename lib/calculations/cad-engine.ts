@@ -559,6 +559,17 @@ export function gelaendeHoeheFn(building: BuildingParams): (x: number, z: number
   }
 }
 
+/** Reserve für die Treppenkante im Umriss-Modus: längste Kante, gemessen an der untersten Lage, die es auf dieser Kante gibt (Hang: Lage 0 kann überall fehlen). */
+export function waehleTreppenKanteReserve(fields: Array<{ kante?: number; levelIndex: number; lengthM: number }>): number | undefined {
+  const unten = new Map<number, number>()
+  fields.forEach((f) => { if (f.kante !== undefined) unten.set(f.kante, Math.min(unten.get(f.kante) ?? Infinity, f.levelIndex)) })
+  const laenge = new Map<number, number>()
+  fields.forEach((f) => { if (f.kante !== undefined && f.levelIndex === unten.get(f.kante)) laenge.set(f.kante, (laenge.get(f.kante) ?? 0) + f.lengthM) })
+  let best: number | undefined
+  laenge.forEach((len, k) => { if (best === undefined || len > (laenge.get(best) ?? 0) + 1e-9) best = k })
+  return best
+}
+
 export function calculateLevels(
   buildingHeightM: number,
   system: GeruestSystem,
@@ -710,6 +721,8 @@ export function generateScaffoldComponents(model: CADModel): ScaffoldComponent3D
   fields.forEach((f) => { if (f.kante !== undefined && f.levelIndex === 0) kantenLaenge.set(f.kante, (kantenLaenge.get(f.kante) ?? 0) + f.lengthM) })
   let treppenKante: number | undefined
   kantenLaenge.forEach((len, k) => { if (treppenKante === undefined || len > (kantenLaenge.get(treppenKante) ?? 0) + 1e-9) treppenKante = k })
+  // Reserve (nur wenn oben keine Kante gefunden wurde): längste Kante nach der jeweils untersten vorhandenen Lage. Greift nicht, wo es heute schon eine Treppe gibt.
+  if (treppenKante === undefined) treppenKante = waehleTreppenKanteReserve(fields)
   const erzwungenesFeld = building.geruestOptionen?.treppeFeldId ? fields.find((f) => f.id === building.geruestOptionen?.treppeFeldId) : undefined
   const istTreppenFeld = (f: ScaffoldField): boolean => erzwungenesFeld ? f.side === erzwungenesFeld.side && f.kante === erzwungenesFeld.kante : f.side === 'front' && (f.kante === undefined || f.kante === treppenKante)
   // Am Hang kann die unterste Lage der Treppenseite fehlen (liegt unter dem Gelände): die Treppe beginnt an der untersten vorhandenen Lage
@@ -759,7 +772,7 @@ export function generateScaffoldComponents(model: CADModel): ScaffoldComponent3D
   // Die automatische Treppe ist an, es entsteht aber keine: nicht still bleiben, sondern den Grund nennen
   if (treppeAktiv && !stairSpan) {
     warnEinmal('TREPPE_FEHLT', 'warning', treppenFelder0.length === 0
-      ? 'Die automatische Treppe fehlt: Auf der Treppenseite gibt es kein Gerüstfeld (Seite nicht eingerüstet oder Feld entfernt). Bitte eine Treppe von Hand setzen oder die Seite einrüsten.'
+      ? `Die automatische Treppe fehlt: Auf der Treppenseite gibt es kein Gerüstfeld (Seite nicht eingerüstet oder Feld entfernt). Bitte eine Treppe von Hand setzen oder die Seite einrüsten. Felder je Kante: ${[...new Set(fields.map((f) => f.kante ?? 'vorne'))].map((k) => `${k === 'vorne' ? 'vorne' : `Kante ${Number(k) + 1}`} ${fields.filter((f) => (f.kante ?? 'vorne') === k).length}`).join(', ') || 'keine'}.`
       : 'Die automatische Treppe fehlt: An der vorgesehenen Stelle liegt keine durchgehende Lage. Bitte eine Treppe von Hand setzen.')
   }
   // Durchgänge im Geländer: Feld-ID (in der jeweiligen Lage) → Durchgang am linken und/oder rechten Feldende.
@@ -1120,17 +1133,21 @@ export function generateScaffoldComponents(model: CADModel): ScaffoldComponent3D
     // Die Treppe ist ein starres Teil mit waagerechten Podesten: Sie steht am bergseitigen (höheren) Ende auf dem Gelände.
     // Die Pfosten am tieferen Ende werden bis zu ihrem Geländepunkt verlängert (Ausgleich), damit nichts im Boden steckt oder schwebt.
     const vonIstLinks = (f: ScaffoldField): boolean => {
+      if (f.kante !== undefined) return true // Umriss: das lokale Feldsystem läuft von Kantenanfang (von) zu Kantenende (bis)
       const r = feldRahmen(f, building)
       const [lx, lz] = r.toWorld(-1, 0), [rx, rz] = r.toWorld(1, 0)
       return feldEntlangFassade(f.side, lx, lz, building) < feldEntlangFassade(f.side, rx, rz, building)
     }
-    const tiefeEnde = (f: ScaffoldField, links: boolean): number => {
+    const tiefeEnde = (f: ScaffoldField, links: boolean, aussen = false): number => {
       if (!f.fuss) return 0
-      const t = (links === vonIstLinks(f) ? f.fuss.von : f.fuss.bis) ?? f.fuss
+      const istVon = links === vonIstLinks(f)
+      const t = (aussen ? (istVon ? f.fuss.vonAussen : f.fuss.bisAussen) : undefined) ?? (istVon ? f.fuss.von : f.fuss.bis) ?? f.fuss
       return tiefe(t)
     }
     const fussTiefe = { l: tiefeEnde(fa, true), r: tiefeEnde(fb, false) }
-    const dBerg = Math.max(0, Math.min(fussTiefe.l, fussTiefe.r))
+    // Die Treppe steht vor dem Gerüst: Ihre äußeren Pfosten stehen auf dem Gelände der Außenreihe (Umriss am Hang: außen liegt es anders als innen)
+    const fussTiefeAussen = { l: tiefeEnde(fa, true, true), r: tiefeEnde(fb, false, true) }
+    const dBerg = Math.max(0, Math.min(fussTiefe.l, fussTiefe.r, fussTiefeAussen.l, fussTiefeAussen.r))
     const y0 = lv(0).bottomY - dBerg
     if (Math.abs(fussTiefe.l - fussTiefe.r) > 0.55 + 1e-6) warnEinmal('TREPPE_FUSS_AUSGLEICH', 'info', `Das Gelände fällt unter der Treppe um ${Math.abs(fussTiefe.l - fussTiefe.r).toFixed(2).replace('.', ',')} m: die Pfosten am tieferen Ende brauchen mehr Ausgleich als eine Fußspindel (Stiel ergänzen).`)
     const hGes = lv(lagen - 1).topY - y0
@@ -1171,7 +1188,8 @@ export function generateScaffoldComponents(model: CADModel): ScaffoldComponent3D
         const z = zS + dz * (W / 2 - 0.03)
         const tag = `${x < cx ? 'l' : 'r'}${dz < 0 ? 'i' : 'a'}`
         components.push({ id: `stair-pfosten-${tag}`, type: 'railing', articleNumber: 'SG-001', name: 'Treppenpfosten', position: [x, y0 + hPfosten / 2, z], rotation: [0, 0, 0], scale: [0.04, hPfosten, 0.04], color: colorRailing, levelId: lv(0).id })
-        const extra = Math.max(0, (x < cx ? fussTiefe.l : fussTiefe.r) - dBerg) // Pfosten verlängert bis zum Gelände dieses Fußes
+        const fussT = dz > 0 ? fussTiefeAussen : fussTiefe
+        const extra = Math.max(0, (x < cx ? fussT.l : fussT.r) - dBerg) // Pfosten verlängert bis zum Gelände dieses Fußes
         if (extra > 0.01) components.push({ id: `stair-ausgleich-${tag}`, type: 'ausgleich', articleNumber: 'FS-060', name: 'Fußspindel (Treppe)', extern: true, position: [x, y0 - extra / 2, z], rotation: [0, 0, 0], scale: [0.04, extra, 0.04], color: colorFoot, levelId: lv(0).id })
         components.push({ id: `stair-fuss-${tag}`, type: 'footplate', articleNumber: 'FP-001', name: 'Fußplatte', position: [x, y0 - extra - 0.02, z], rotation: [0, 0, 0], scale: [0.15, 0.04, 0.15], color: colorFoot, levelId: lv(0).id })
       }

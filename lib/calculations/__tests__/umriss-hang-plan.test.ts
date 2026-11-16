@@ -22,12 +22,21 @@ describe('Umriss am Hang', () => {
     const gfB = gelaendeHoeheFn({ ...b, lengthM: m.building.lengthM, widthM: m.building.widthM, umriss: undefined } as BuildingParams)
     // wie in der 3D-Ansicht: Gelände in Gebäude-Koordinaten (Boxmitte bei 0), der Umriss liegt in Szenen-Koordinaten (Rückseite bei z = −0,5)
     const gf = (x: number, z: number) => gfB(x, z + m.building.widthM / 2 + 0.5)
-    const platten = generateScaffoldComponents(m).filter((c) => c.type === 'footplate')
+    const alle = generateScaffoldComponents(m).filter((c) => c.type === 'footplate')
+    const platten = alle.filter((c) => !c.id.startsWith('stair-')) // Gerüstfüße; die Treppe steht starr vor dem Gerüst und wird unten gesondert geprüft
+    const treppenFuesse = alle.filter((c) => c.id.startsWith('stair-fuss'))
     it(`Drehung ${grad}°: Fußplatten stehen höchstens 1,5 cm neben der Geländefläche, nicht auf einer Ebene`, () => {
       expect(platten.length).toBeGreaterThan(40)
       const abw = platten.map((c) => c.position[1] + 0.02 - gf(c.position[0], c.position[2]))
       expect(Math.max(...abw.map(Math.abs))).toBeLessThan(0.015)
       expect(Math.max(...platten.map((c) => c.position[1])) - Math.min(...platten.map((c) => c.position[1]))).toBeGreaterThan(1.5)
+    })
+    it(`Drehung ${grad}°: die automatische Treppe entsteht (auch wenn keine Kante eine Lage 0 hat); ihre Füße stehen nahe am Gelände`, () => {
+      expect(m.warnings.some((w) => w.code === 'TREPPE_FEHLT')).toBe(false)
+      expect(treppenFuesse.length).toBe(4)
+      const abw = treppenFuesse.map((c) => Math.abs(c.position[1] + 0.02 - gf(c.position[0], c.position[2])))
+      // gerade Kante: wie das Gerüst; schräg zum Hang: die starre Treppe liegt 0,7 m vor der Außenreihe, dort fällt das Gelände weiter ab (Spindelweg 0,41 m gleicht es aus)
+      expect(Math.max(...abw)).toBeLessThan(grad === 0 ? 0.04 : 0.2)
     })
     it(`Drehung ${grad}°: Kennzahlen zählen die belegten Felder und Lagen`, () => {
       expect(m.fieldCount).toBeGreaterThan(10)
