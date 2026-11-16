@@ -275,6 +275,16 @@ export function liesProjektdatei(text: string): LeseErgebnis {
         const fl = zahl(o.feldlaengeM, 0.5, 5)
         if (spalte == null || fl == null) { verworfen.push('Bereichsänderung (ungültige Angaben)'); continue }
         bereiche.push({ art: 'laenge', seite, spalte: Math.floor(spalte), feldlaengeM: fl })
+      } else if (o.art === 'teilen') {
+        const spalte = zahl(o.spalte, 0, 199)
+        const lm = Array.isArray(o.laengenM) && o.laengenM.length === 2 ? [zahl(o.laengenM[0], 0.5, 5), zahl(o.laengenM[1], 0.5, 5)] : null
+        if (spalte == null || !lm || lm[0] == null || lm[1] == null) { verworfen.push('Bereichsänderung (ungültige Angaben)'); continue }
+        bereiche.push({ art: 'teilen', seite, spalte: Math.floor(spalte), laengenM: [lm[0], lm[1]] })
+      } else if (o.art === 'zusammen') {
+        const spalte = zahl(o.spalte, 0, 199)
+        const fl = zahl(o.feldlaengeM, 0.5, 5)
+        if (spalte == null || fl == null) { verworfen.push('Bereichsänderung (ungültige Angaben)'); continue }
+        bereiche.push({ art: 'zusammen', seite, spalte: Math.floor(spalte), feldlaengeM: fl })
       } else if (o.art === 'aufstocken') {
         const lagen = zahl(o.lagen, 1, 10)
         const von = o.vonM === undefined ? undefined : zahl(o.vonM, 0, MAX_MASS_M)

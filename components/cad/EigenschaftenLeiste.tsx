@@ -6,7 +6,7 @@
 import { useState } from 'react'
 import { imHoehenraster } from '@/lib/cad/bauteil-aenderungen'
 import type { CADModel } from '@/lib/calculations/cad-engine'
-import { waehleFeld, feldSpalteVonBauteil, type FeldUmfang, type Seite } from '@/lib/cad/bereiche'
+import { waehleFeld, feldSpalteVonBauteil, pruefeSpaltenOperation, type FeldUmfang, type Seite } from '@/lib/cad/bereiche'
 
 const ARTEN: Record<string, string> = {
   frame: 'Rahmen / Riegel', deck: 'Belag', railing: 'Geländer', diagonal: 'Diagonale', footplate: 'Fußplatte', coupling: 'Kupplung',
@@ -16,7 +16,10 @@ const ARTEN: Record<string, string> = {
 const SEITEN: Record<string, string> = { front: 'Vorderseite', back: 'Rückseite', left: 'Links', right: 'Rechts' }
 const m = (v: number) => `${v.toLocaleString('de-DE', { maximumFractionDigits: 2 })} m`
 
-export default function EigenschaftenLeiste({ lagenVersatzM = 0, onLageOp, griffModus, onGriffModus, einrasten, onEinrasten, veraendert, onLage, onDuplizieren, onZuruecksetzen, model, id, artikelWahl, manuell, onEntfernen, onFeldEntfernen, onFeldLaenge, onFeldAnhaengen, onPositionAendern, platzierungPosition, onZu }: {
+export default function EigenschaftenLeiste({ lagenVersatzM = 0, onLageOp, griffModus, onGriffModus, einrasten, onEinrasten, veraendert, onLage, onDuplizieren, onZuruecksetzen, model, id, artikelWahl, manuell, onEntfernen, onFeldEntfernen, onFeldLaenge, onFeldAnhaengen, onFeldTeilen, onFeldZusammen, onPositionAendern, platzierungPosition, onZu }: {
+  /** Feld in zwei Felder teilen / mit dem Nachbarfeld zusammenführen (Längen aus dem Herstellerkatalog) */
+  onFeldTeilen?: (seite: Seite, spalte: number, laengenM: [number, number]) => void
+  onFeldZusammen?: (seite: Seite, spalte: number, laengeM: number) => void
   /** ganze Lage: verschieben (dyM), kopieren (dyM = Versatz der Kopie) – für die Seite des Feldes oder alle Seiten */
   /** bisheriger Versatz der Lage durch manuelles Verschieben (gleich dem des gewählten Bauteils) */
   lagenVersatzM?: number
@@ -30,7 +33,7 @@ export default function EigenschaftenLeiste({ lagenVersatzM = 0, onLageOp, griff
   if (!c) return null
   const feld = c.fieldId ? model.fields.find((f) => f.id === c.fieldId) : undefined
   const lage = c.levelId ? model.levels.find((l) => l.id === c.levelId) : feld ? model.levels.find((l) => l.index === feld.levelIndex && l.fields.some((f) => f.id === feld.id)) : undefined
-  const spalteInfo = onFeldLaenge || onFeldAnhaengen ? feldSpalteVonBauteil(model, id) : null
+  const spalteInfo = onFeldLaenge || onFeldAnhaengen || onFeldTeilen || onFeldZusammen ? feldSpalteVonBauteil(model, id) : null
   const laengen = model.system?.feldlangenM ?? []
   const zeilen: [string, string][] = [
     ['Art', ARTEN[c.type] ?? c.type],
@@ -94,6 +97,9 @@ export default function EigenschaftenLeiste({ lagenVersatzM = 0, onLageOp, griff
                 })}
               </div>
             </div>
+          )}
+          {(onFeldTeilen || onFeldZusammen) && laengen.length > 0 && (
+            <FeldTeilenZusammen model={model} info={spalteInfo} laengen={laengen} onTeilen={onFeldTeilen} onZusammen={onFeldZusammen} />
           )}
           {onFeldAnhaengen && (
             <div className='grid grid-cols-2 gap-1'>
@@ -173,6 +179,54 @@ function LagenFelder({ lage, onOp }: { lage: { index: number; heightM: number; b
       </label>
       {dy !== null && dy !== 0 && !raster && <div className='text-[12px]' style={{ color: '#b45309' }}>Liegt nicht im Raster der Lagenhöhe ({m(lage.heightM)}): Beläge und Rahmen passen dann nicht zu den übrigen Lagen.</div>}
       <button type='button' disabled={dy === null || dy === 0} onClick={() => onOp({ art: 'verschieben', levelIndex: lage.index, alleSeiten: alle, dyM: dy! })} className='w-full rounded px-3 py-1.5 text-[13px] font-semibold disabled:opacity-40' style={{ background: 'var(--os-akzent)', color: '#171b20' }}>Höhe übernehmen</button>
+    </div>
+  )
+}
+
+/** Feld teilen (zwei Längen aus dem Katalog) und mit dem linken/rechten Nachbarfeld zusammenführen (Länge aus dem Katalog). */
+function FeldTeilenZusammen({ model, info, laengen, onTeilen, onZusammen }: {
+  model: CADModel
+  info: NonNullable<ReturnType<typeof feldSpalteVonBauteil>>
+  laengen: number[]
+  onTeilen?: (seite: Seite, spalte: number, laengenM: [number, number]) => void
+  onZusammen?: (seite: Seite, spalte: number, laengeM: number) => void
+}) {
+  const naechste = (ziel: number) => laengen.reduce((b, l) => (Math.abs(l - ziel) < Math.abs(b - ziel) ? l : b), laengen[0])
+  const [l1, setL1] = useState(() => naechste(info.laengeM / 2))
+  const [l2, setL2] = useState(() => naechste(info.laengeM / 2))
+  const [zl, setZl] = useState(() => naechste(info.laengeM * 2))
+  const fmt = (l: number) => `${l.toLocaleString('de-DE', { minimumFractionDigits: 2 })} m`
+  const teilenOk = pruefeSpaltenOperation(model, info.seite, info.spalte, 1)
+  // „links“/„rechts“ bei Blick von außen: Anfang = kleinere Spaltennummer
+  const nachbarn: [string, number][] = [['linken', info.links === 'anfang' ? info.spalte - 1 : info.spalte], ['rechten', info.rechts === 'anfang' ? info.spalte - 1 : info.spalte]]
+  const select = (wert: number, set: (v: number) => void, label: string) => (
+    <select aria-label={label} value={wert} onChange={(e) => set(Number(e.target.value))} className='rounded border px-1 py-1 text-[12.5px]' style={{ borderColor: 'var(--os-linie)' }}>
+      {laengen.map((l) => <option key={l} value={l}>{fmt(l)}</option>)}
+    </select>
+  )
+  return (
+    <div className='space-y-1.5'>
+      {onTeilen && (
+        <div>
+          <div className='mb-1 text-[11px] uppercase tracking-wider' style={{ color: 'var(--os-text-leise)' }}>Feld teilen</div>
+          <div className='flex flex-wrap items-center gap-1'>
+            {select(l1, setL1, 'Länge erstes Feld')}<span>+</span>{select(l2, setL2, 'Länge zweites Feld')}
+            <button type='button' disabled={!teilenOk.ok} title={teilenOk.ok ? undefined : teilenOk.grund} onClick={() => onTeilen(info.seite, info.spalte, [l1, l2])} className='rounded border px-2 py-1 text-[12.5px] hover:bg-gray-50 disabled:opacity-40' style={{ borderColor: 'var(--os-linie)' }}>Teilen</button>
+          </div>
+        </div>
+      )}
+      {onZusammen && (
+        <div>
+          <div className='mb-1 text-[11px] uppercase tracking-wider' style={{ color: 'var(--os-text-leise)' }}>Mit Nachbarfeld zusammenführen</div>
+          <div className='flex flex-wrap items-center gap-1'>
+            {select(zl, setZl, 'Länge des zusammengeführten Feldes')}
+            {nachbarn.map(([name, von]) => {
+              const ok = pruefeSpaltenOperation(model, info.seite, von, 2)
+              return <button key={name} type='button' disabled={!ok.ok} title={ok.ok ? undefined : ok.grund} onClick={() => onZusammen(info.seite, von, zl)} className='rounded border px-2 py-1 text-[12.5px] hover:bg-gray-50 disabled:opacity-40' style={{ borderColor: 'var(--os-linie)' }}>mit {name}</button>
+            })}
+          </div>
+        </div>
+      )}
     </div>
   )
 }
