@@ -52,6 +52,8 @@ import { vergissModell } from '@/lib/cad/modell-speicher'
 import { erzeugeProjektdatei, liesProjektdatei, type Projektdatei } from '@/lib/cad/projektdatei'
 import { ladeVersionen, speichereVersionen, fuegeVersionHinzu, loescheVersion, benenneVersion, type Version } from '@/lib/cad/versionen'
 import VersionenDialog from '@/components/cad/VersionenDialog'
+import TreppePanel from '@/components/cad/TreppePanel'
+import { treppeAufFeld, schiebeUmFelder } from '@/lib/cad/treppe-setzen'
 import LvDialog from '@/components/cad/LvDialog'
 import { bereinigeStatikDaten, type StatikDaten } from '@/lib/statik-daten'
 import { useRouter } from 'next/navigation'
@@ -65,7 +67,7 @@ import type { CADNote } from '@/types/cad-notes'
 import type { CADLayerState, SideVisibility } from '@/types/cad-layers'
 import { createInitialLayerState } from '@/types/cad-layers'
 import type { CustomDimension } from '@/types/cad-dimensions'
-import type { ManualPlacement } from '@/lib/calculations/cad-engine'
+import type { ManualPlacement, ScaffoldField } from '@/lib/calculations/cad-engine'
 import { schalteAuswahl, rahmenErgebnis } from '@/lib/cad/mehrfachauswahl'
 import MehrfachLeiste from '@/components/cad/MehrfachLeiste'
 import { KEINE_UEBERLAGERUNG, wendeBauteilAenderungenAn, setzeBauteilLage, dupliziereBauteil, setzeBauteilZurueck, bauteileDerLage, verschiebeBauteile, kopiereBauteile, istKopieId, istVonHandVeraendert, type BauteilUeberlagerung } from '@/lib/cad/bauteil-aenderungen'
@@ -451,6 +453,17 @@ export default function CADPage() {
     if (type === 'stair') setPlacementType(null)
   }, [model])
 
+  // Treppe über Auswahl: Seite + Feld wählen, danach um Felder schieben (kein Mausklick im 3D nötig)
+  const [treppePanel, setTreppePanel] = useState(false)
+  const [treppeMeldung, setTreppeMeldung] = useState<string | null>(null)
+  const setzeTreppeAufFeld = useCallback((feld: ScaffoldField) => {
+    if (!model) return
+    const placement: ManualPlacement = { id: `manual-stair-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`, ...treppeAufFeld(model, feld) }
+    setPlacementType(null); setTreppeMeldung(null)
+    setManualPlacements((prev) => [...prev, placement])
+    setSelectedComponent(placement.id)
+  }, [model])
+
   // NEU (Ziehen): manuell gesetzte Bauteile anklicken und an eine andere Stelle
   // ziehen. Erzeugte Bauteile (Rahmen, Beläge, automatischer Treppenturm)
   // bleiben unverändert – sie hängen an der Berechnung.
@@ -458,6 +471,17 @@ export default function CADPage() {
     (componentId: string) => platzierungIdVon(componentId, manualPlacements),
     [manualPlacements],
   )
+  // gerade gewählte, von Hand gesetzte Treppe (für „um Felder schieben“)
+  const gewaehlteTreppe = useMemo(() => {
+    const pid = selectedComponent ? platzierungIdVon(selectedComponent, manualPlacements) : null
+    return manualPlacements.find((x) => x.id === pid && x.type === 'stair') ?? null
+  }, [selectedComponent, manualPlacements])
+  const schiebeTreppe = useCallback((felder: number) => {
+    if (!model || !gewaehlteTreppe) return
+    const e = schiebeUmFelder(model, gewaehlteTreppe, felder)
+    setTreppeMeldung(e.grund ?? null)
+    if (e.placement) setManualPlacements((prev) => prev.map((x) => (x.id === e.placement!.id ? e.placement! : x)))
+  }, [model, gewaehlteTreppe])
   const handleBauteilZiehen = useCallback((platzierungId: string, position: [number, number, number], side: string, levelIndex: number) => {
     setManualPlacements((prev) => {
       const i = prev.findIndex((p) => p.id === platzierungId)
@@ -1281,7 +1305,7 @@ export default function CADPage() {
             viewAngle={viewAngle} onViewAngle={(a) => setViewAngle(a)} farbModus={farbModus} onFarbModus={setFarbModus}
             onPdf={model ? handleExportPDF : exportOhneModellHinweis} onMontageplan={model ? handleExportMontageplan : exportOhneModellHinweis}
             onDxf={!model ? exportOhneModellHinweis : handleExportDXF} onIfc={!model ? exportOhneModellHinweis : (ifcExportLaeuft ? undefined : handleExportIFC)}
-            onSpeichern={speichereProjektdatei} onVersionen={oeffneVersionen} onLv={rolle === 'admin' || istStatikerLogin ? (model ? () => setLvOffen(true) : exportOhneModellHinweis) : undefined}
+            onSpeichern={speichereProjektdatei} onVersionen={oeffneVersionen} treppePanelAktiv={treppePanel} onTreppePanel={model ? () => setTreppePanel((v) => !v) : undefined} onLv={rolle === 'admin' || istStatikerLogin ? (model ? () => setLvOffen(true) : exportOhneModellHinweis) : undefined}
             onBild={speichereBild}
             layerState={layerState} onToggleSide={(k) => handleToggleSide(k as keyof SideVisibility)} onToggleLevel={handleToggleLevel}
             onAlleEin={handleShowAllLayers} onAlleAus={handleHideAllLayers} visibleTypes={visibleTypes} onToggleType={toggleType}
@@ -1386,6 +1410,7 @@ export default function CADPage() {
                 onLoescheAenderung={(i) => setBereichsListe((l) => l.filter((_, j) => j !== i))} onZu={() => setBereicheOffen(false)} entferntAnzahl={removedCount} />
             )}
             {versionenOffen && <VersionenDialog versionen={versionen} speicherFehler={versionenFehler} onSpeichern={neueVersion} onWiederherstellen={stelleVersionWiederHer} onLoeschen={(id) => speichereListe(loescheVersion(versionen, id))} onUmbenennen={(id, n) => speichereListe(benenneVersion(versionen, id, n))} onZu={() => setVersionenOffen(false)} />}
+            {treppePanel && model && viewMode === '3d' && <TreppePanel model={model} treppe={gewaehlteTreppe} meldung={treppeMeldung} onSetzen={setzeTreppeAufFeld} onSchieben={schiebeTreppe} onZu={() => setTreppePanel(false)} />}
             {mehrfach.length > 0 && modelWithManual && viewMode === '3d' && !abbauAktiv && (
               <MehrfachLeiste model={modelWithManual} ids={mehrfach} einrasten={einrasten} rahmenAktiv={rahmenModus} onRahmen={() => setRahmenModus((v) => !v)} onAbwaehlen={() => { setMehrfach([]); setRahmenModus(false) }} onVerschieben={handleGruppeVerschieben} onKopieren={handleGruppeKopieren} onEntfernen={handleGruppeEntfernen} />
             )}
