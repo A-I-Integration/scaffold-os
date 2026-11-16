@@ -78,6 +78,8 @@ export interface GeruestOptionen {
   gelaendeEckenM?: { fl: number; fr: number; bl: number; br: number }
   /** Geländelinie je Seite als Stützpunkte (posM ab Seitenanfang in Feldrichtung: vorne/hinten links→rechts, links hinten→vorne, rechts hinten→vorne; hoeheM bezogen auf ±0,00). Zwischen den Punkten linear. Hat Vorrang vor Eck-, Linien- und Seitenwerten der jeweiligen Seite. */
   gelaendeProfilM?: GelaendeProfil
+  /** Geländeebenen (Flächen mit Höhe) als Quelle des Geländeprofils. Die Engine liest nur gelaendeProfilM; diese Liste hält die Eingabe für die Bearbeitung (siehe lib/cad/gelaende-ebenen.ts). */
+  gelaendeEbenen?: import('@/lib/cad/gelaende-ebenen').GelaendeEbene[]
   /** Pultdach: Seite mit der niedrigen Traufe (dort endet das Dach bei `eavesHeightM`, gegenüber beim First `heightM`, an den Seitenwänden steigt es gleichmäßig). Fehlt die Angabe, gilt die Traufe vorsichtig für alle Seiten. */
   pultNiedrigeSeite?: 'front' | 'back' | 'left' | 'right'
   /** Profil je Gerüstseite aus den Ansichten: Dachkante (und Gelände) in m über ±0,00 an Stützstellen entlang der Wand. `posM` = Lage ab Wandmitte (vorne/hinten: + nach rechts, links/rechts: + Richtung Vorderseite). Hat Vorrang vor Giebel-/Pult-/Traufe-Regeln. Gelände: das Gerüst steht am tiefsten Punkt und wird dort höher. */
