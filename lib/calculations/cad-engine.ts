@@ -60,6 +60,8 @@ export interface GeruestOptionen {
   feldlaengeM?: number
   /** false = keine automatische Treppe */
   treppe?: boolean
+  /** Interne Hilfe für von Hand gesetzte Treppen: genau diese Außentreppe an diesem (untersten) Feld erzeugen, auf jeder Seite/Kante – wie die automatische Treppe */
+  treppeFeldId?: string
   /** Vertikale Bekleidung mit Kederplane an der Außenachse zwischen zwei Höhen (m über Gelände), an allen Gerüstseiten; nur ganze Lagen im Bereich werden bekleidet */
   kederplane?: { vonM: number; bisM: number }
   /** Dachfangwand: Schutzwand auf dem obersten Belag an den Traufseiten geneigter Dächer. `hoeheM` = Wandhöhe, `abTraufeM` = erst ab dieser Traufhöhe (0 = immer). Die Werte legt die Firma selbst fest (Vorschrift/Statik prüfen), es gibt keine festen Vorgaben im Code. */
@@ -706,7 +708,8 @@ export function generateScaffoldComponents(model: CADModel): ScaffoldComponent3D
   fields.forEach((f) => { if (f.kante !== undefined && f.levelIndex === 0) kantenLaenge.set(f.kante, (kantenLaenge.get(f.kante) ?? 0) + f.lengthM) })
   let treppenKante: number | undefined
   kantenLaenge.forEach((len, k) => { if (treppenKante === undefined || len > (kantenLaenge.get(treppenKante) ?? 0) + 1e-9) treppenKante = k })
-  const istTreppenFeld = (f: ScaffoldField): boolean => f.side === 'front' && (f.kante === undefined || f.kante === treppenKante)
+  const erzwungenesFeld = building.geruestOptionen?.treppeFeldId ? fields.find((f) => f.id === building.geruestOptionen?.treppeFeldId) : undefined
+  const istTreppenFeld = (f: ScaffoldField): boolean => erzwungenesFeld ? f.side === erzwungenesFeld.side && f.kante === erzwungenesFeld.kante : f.side === 'front' && (f.kante === undefined || f.kante === treppenKante)
   // Am Hang kann die unterste Lage der Treppenseite fehlen (liegt unter dem Gelände): die Treppe beginnt an der untersten vorhandenen Lage
   const treppeU = fields.reduce((m, f) => (istTreppenFeld(f) ? Math.min(m, f.levelIndex) : m), Infinity)
   const treppeUnten = Number.isFinite(treppeU) ? treppeU : 0
@@ -732,6 +735,8 @@ export function generateScaffoldComponents(model: CADModel): ScaffoldComponent3D
     let feld = reihenfolge[0]
     let bestLagen = lagenAn(feld)
     for (const f of reihenfolge) { const n = lagenAn(f); if (n > bestLagen) { feld = f; bestLagen = n } }
+    // Von Hand gesetzt: genau an dem gewählten Feld (auch vor einer Tür), nicht an der Standardstelle
+    if (erzwungenesFeld) feld = treppenFelder0.find((f) => gleicherPlatz(f, erzwungenesFeld, 0.01)) ?? erzwungenesFeld
     stairSpan = { a: feld, b: feld, lagen: 0 }
     if (treppenFelder0.some((f) => f.durchgang)) {
       const standard = treppenFelder0[1] ?? treppenFelder0[0]
@@ -2919,30 +2924,9 @@ export function addManualPlacement(
   const feld = placement.type === 'stair' && placement.fieldId ? model.fields.find((f) => f.id === placement.fieldId) : undefined
   const feldLage = feld ? (model.levels.find((l) => l.index === feld.levelIndex && l.id === `level-${feld.side}-${feld.levelIndex}`) ?? model.levels.find((l) => l.index === feld.levelIndex)) : undefined
   if (feld && feldLage) {
-    // Die Treppe läuft durch die ganze Reihe: in jeder Lage übereinander (gleiche Seite, gleiche Stelle) von unten bis oben,
-    // jeder Lauf kehrt die Richtung um (Zickzack). ID: unterste Lage = `${id}`, darüber `${id}-lage-N`.
-    // Pro Lage das Feld an derselben Stelle: nächstes Feld (Grundriss) auf derselben Seite/Kante, höchstens eine halbe Feldlänge versetzt –
-    // Felder übereinander sind nicht immer exakt gleich lang (Hang, Umriss, geteilte Felder).
-    const abstand = (f: ScaffoldField) => Math.hypot(f.positionX - feld.positionX, f.positionZ - feld.positionZ)
-    const sameSeite = (f: ScaffoldField) => f.side === feld.side && f.kante === feld.kante
-    const jeLage = new Map<number, ScaffoldField>()
-    for (const f of model.fields.filter(sameSeite)) {
-      if (abstand(f) > Math.max(0.3, Math.min(f.lengthM, feld.lengthM) * 0.5)) continue
-      const bisher = jeLage.get(f.levelIndex)
-      if (!bisher || abstand(f) < abstand(bisher)) jeLage.set(f.levelIndex, f)
-    }
-    jeLage.set(feld.levelIndex, feld)
-    const reihe = [...jeLage.values()].sort((a, b) => a.levelIndex - b.levelIndex)
-    const unterste = reihe[0]?.levelIndex ?? feld.levelIndex
-    for (const f of reihe) {
-      const lage = model.levels.find((l) => l.index === f.levelIndex && l.id === `level-${f.side}-${f.levelIndex}`) ?? model.levels.find((l) => l.index === f.levelIndex)
-      if (!lage) continue
-      model.components3D.push(...treppenlaufInFeld(model, f, lage, f.levelIndex === unterste ? newPlacement.id : `${newPlacement.id}-lage-${f.levelIndex}`))
-      // Treppenöffnung: der Belag des Feldes direkt darüber entfällt, damit der Lauf oben ankommt. Beim Entfernen der
-      // Treppe wird das Modell neu aufgebaut, der Belag ist dann wieder da. Eckfelder haben eigene Belag-IDs.
-      const darueber = reihe.find((x) => x.levelIndex === f.levelIndex + 1)
-      if (darueber) model.components3D = model.components3D.filter((c) => c.id !== `deck-${darueber.id}`)
-    }
+    // Dieselbe Außentreppe wie die automatische: vor dem Gerüst, vom Boden (unterste Lage der Reihe) bis oben, mit Podesten
+    // und Durchgängen im Geländer – auf jeder Seite, auch an Umriss-Kanten und am Hang.
+    model.components3D = aussentreppeInReihe(model, feld, newPlacement.id)
   } else if (component) {
     model.components3D.push(component)
   }
@@ -2981,6 +2965,41 @@ export function feldBauteile(model: CADModel, field: ScaffoldField, art: FeldBau
     teile = [teile.reduce((b, c) => (d(c) < d(b) ? c : b), teile[0])]
   }
   return teile.map((c, i) => ({ ...c, id: i === 0 ? id : `${id}-${i}` }))
+}
+
+/** Reihe von Feldern übereinander an der Stelle des Feldes (je Lage das nächste Feld auf derselben Seite/Kante, höchstens eine halbe Feldlänge versetzt),
+ *  von unten nach oben. Felder übereinander sind bei Hang, Umriss und geteilten Feldern nicht immer exakt gleich lang. */
+export function feldReihe(model: Pick<CADModel, 'fields'>, feld: ScaffoldField): ScaffoldField[] {
+  const abstand = (f: ScaffoldField) => Math.hypot(f.positionX - feld.positionX, f.positionZ - feld.positionZ)
+  const jeLage = new Map<number, ScaffoldField>()
+  for (const f of model.fields.filter((g) => g.side === feld.side && g.kante === feld.kante)) {
+    if (abstand(f) > Math.max(0.3, Math.min(f.lengthM, feld.lengthM) * 0.5)) continue
+    const bisher = jeLage.get(f.levelIndex)
+    if (!bisher || abstand(f) < abstand(bisher)) jeLage.set(f.levelIndex, f)
+  }
+  jeLage.set(feld.levelIndex, feld)
+  return [...jeLage.values()].sort((a, b) => a.levelIndex - b.levelIndex)
+}
+
+/**
+ * Außentreppe von Hand gesetzt: wird mit derselben Erzeugung gebaut wie die automatische Treppe (vor dem Gerüst, vom Boden bis zur
+ * obersten Lage der Reihe, Podeste, Durchgänge im Geländer). Gibt die neue Bauteilliste zurück. IDs: Lauf = `${id}`, übrige Teile `${id}-stair-…`;
+ * die Geländer der Reihe werden durch die Fassung mit Durchgang ersetzt (beim Entfernen der Treppe wird das Modell neu aufgebaut).
+ */
+export function aussentreppeInReihe(model: CADModel, field: ScaffoldField, id: string): ScaffoldComponent3D[] {
+  const reihe = feldReihe(model, field)
+  const hilfs: CADModel = {
+    ...model,
+    components3D: [],
+    anchors: [],
+    warnings: [],
+    building: { ...model.building, geruestOptionen: { ...model.building.geruestOptionen, treppe: true, treppeFeldId: reihe[0].id } },
+  }
+  const erzeugt = generateScaffoldComponents(hilfs)
+  const reihenIds = new Set(reihe.map((f) => f.id))
+  const treppenTeile = erzeugt.filter((c) => c.id.startsWith('stair-')).map((c) => ({ ...c, id: c.id === 'stair-frame-0' ? id : `${id}-${c.id}`, ...(c.id === 'stair-frame-0' ? { name: 'Treppenlauf (manuell)' } : {}) }))
+  const gelaender = (c: ScaffoldComponent3D) => c.type === 'railing' && !!c.fieldId && reihenIds.has(c.fieldId)
+  return [...model.components3D.filter((c) => !gelaender(c)), ...erzeugt.filter(gelaender), ...treppenTeile]
 }
 
 /**
