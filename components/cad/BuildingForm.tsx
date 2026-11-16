@@ -23,7 +23,8 @@ import { portalAlsTuer } from '@/lib/cad/portal-erkennung'
 import { analysiereDreiecke, schaetzeEinheit, spannweiten, nullpunktUeberTiefstem, abschnitteAusTeilen, abschnitteAusTeileListe, vorgabeAchseEinheit, type GebaeudeTeil } from '@/lib/cad/modell-analyse'
 import { planLesen } from '@/lib/cad/plan-import'
 import type { GeschossHoehenVorschlag } from '@/lib/cad/geschoss-hoehen-aus-plan'
-import { pruefePlanImport, formatHinweis } from '@/lib/cad/datenqualitaet'
+import { pruefePlanImport, formatHinweis, type Pruefbericht } from '@/lib/cad/datenqualitaet'
+import { bestaetigungAus, darfUebernehmen, type Bestaetigung } from '@/lib/cad/gebaeude-bestaetigung'
 import { parseGelaendeLinie, formatGelaendeLinie } from '@/lib/calculations/gelaende'
 import { oeffnungenFuerModell, vorbautenFuerModell } from '@/lib/cad/plan-oeffnungen-modell'
 import { gelaendeOptionenAusPlan } from '@/lib/cad/gelaende-optionen-aus-plan'
@@ -54,6 +55,8 @@ export default function BuildingForm({ building, systemId, onChange, onSystemCha
   const [analyseLaeuft, setAnalyseLaeuft] = useState(false)
   const [profilFehler, setProfilFehler] = useState<Partial<Record<'front' | 'back' | 'left' | 'right', boolean>>>({})
   const [analyseHinweis, setAnalyseHinweis] = useState<string | null>(null)
+  // Aus dem Plan gelesenes Gebäude wartet auf Bestätigung; das Gerüst ändert sich erst nach „Übernehmen“
+  const [planWartet, setPlanWartet] = useState<{ gebaeude: BuildingParams; bestaetigung: Bestaetigung; haken: boolean; vorherFelder: string[] } | null>(null)
   // null = Vorgabe der Erkennung (z. B. bei Modellen mit eingebautem Gerüst: nur der Turm), sonst die Wahl der Person
   const [nurTurmWahl, setNurTurm] = useState<boolean | null>(null)
   // Portale aus dem Modell als Türvorschlag übernehmen (Vorgabe: ja, die Person kann abwählen)
@@ -395,6 +398,7 @@ export default function BuildingForm({ building, systemId, onChange, onSystemCha
       // (die KI mischt gern Geschosse und rät die Dachform). Fehlt etwas, bleibt der KI-Wert stehen.
       let planVorspann = ''
       let oeffnungenHinweis = ''
+      let planBericht: Pruefbericht | null = null
       { const fh = formatHinweis(file.name); if (fh && !/\.pdf$/i.test(file.name)) planVorspann = `Format: ${fh} Datenqualität: gelb, bis die Maße bestätigt sind. ` }
       if (/\.pdf$/i.test(file.name)) {
         try {
@@ -465,7 +469,7 @@ export default function BuildingForm({ building, systemId, onChange, onSystemCha
               const weitere = pl.geschosse.filter((g) => g.ebene >= 0 && g.ebene !== pl.hauptEbene && g.umriss?.length).length
               oeffnungenHinweis += ` Der vollständige Außenumriss des Hauptgeschosses wurde ins CAD übernommen. ${weitere ? `${weitere} weitere Geschosskontur(en) wurden im Import erhalten, aber noch nicht mit eigenen Höhen in das CAD-Polygon vereinigt.` : ''}`
             }
-            { const pb = pruefePlanImport(pl); const auff = pb.befunde.filter((x) => x.ampel !== 'gruen'); oeffnungenHinweis += ` Datenqualität: ${pb.ampel === 'gruen' ? 'grün' : pb.ampel === 'gelb' ? 'gelb' : 'rot'}.${auff.length ? ' ' + auff.map((x) => `${x.titel}: ${x.detail}`).join(' ') : ''}` }
+            { const pb = pruefePlanImport(pl); planBericht = pb; const auff = pb.befunde.filter((x) => x.ampel !== 'gruen'); oeffnungenHinweis += ` Datenqualität: ${pb.ampel === 'gruen' ? 'grün' : pb.ampel === 'gelb' ? 'gelb' : 'rot'}.${auff.length ? ' ' + auff.map((x) => `${x.titel}: ${x.detail}`).join(' ') : ''}` }
             if (aus.length) planVorspann = `Aus den Zeichenlinien des Plans gelesen (Maßstab 1:${pl.massstab}): ${aus.join(', ')}.${haupt?.vorbauten?.length ? ` Vorbauten (ca. ${String(Math.round(haupt.vorbauten.reduce((a, v) => a + v.flaecheM2, 0) * 10) / 10).replace('.', ',')} m²) sind in Länge/Breite nicht enthalten – bitte prüfen.` : ''}${oeffnungenHinweis} `
           }
         } catch { /* kein lesbarer Vektor-Plan: es bleibt bei den KI-Werten */ }
@@ -492,6 +496,7 @@ export default function BuildingForm({ building, systemId, onChange, onSystemCha
         for (const f of vorherigeAutoFelder) {
           if (!(f in patch) && f in defaults) zurueck[f] = defaults[f];
         }
+        const vorherFelderMerken = vorherigeAutoFelder
         analyseFelderRef.current = Object.keys(patch);
         const neuesGebaeude: BuildingParams = { ...building, ...zurueck, ...patch }
         // Abschnitte einer frueheren Analyse entfernen, wenn die neue keine liefert
@@ -503,6 +508,13 @@ export default function BuildingForm({ building, systemId, onChange, onSystemCha
         }
         // Fenster/Türen aus einem früheren Plan nicht an den neuen hängen
         for (const f of ['tueren', 'fensterFest', 'vorbauten'] as const) if (vorherigeAutoFelder.includes(f) && !(f in patch)) delete neuesGebaeude[f]
+        if (planBericht) {
+          // Erst zeigen, dann übernehmen: nichts am Gerüst ändern, bis die Person bestätigt
+          setPlanWartet({ gebaeude: neuesGebaeude, bestaetigung: bestaetigungAus(planBericht), haken: false, vorherFelder: vorherFelderMerken })
+          setAnalyseHinweis(`${dxfVorspann}${planVorspann}${oeffnungenHinweis} Noch nicht übernommen: Bitte die Werte unten prüfen und bestätigen.`)
+          setAnalyseLaeuft(false)
+          return
+        }
         onChange(neuesGebaeude)
         const uebernommen = Object.keys(patch).length
         setAnalyseHinweis(`${dxfVorspann}${planVorspann}${ergebnis.ohneKi ? 'Direkt aus dem Plan erkannt (ohne KI)' : 'KI-Vorschlag (aus der Queue)'}: ${uebernommen} Angabe(n) übernommen, bitte prüfen.${!ergebnis.ohneKi && !planVorspann && /\.(pdf|jpe?g|png|webp)$/i.test(file.name) ? ' Aus einem Scan oder Foto gelesen: einzelne Ziffern (z. B. halbe Zentimeter hochgestellt) können um einige Zentimeter abweichen und bei einem zweiten Lauf anders ausfallen – Länge, Breite und Höhen bitte mit den Maßketten im Plan abgleichen.' : ''}${ergebnis.hoeheGeschaetzt ? ' Höhe geschätzt aus Geschosszahl.' : ''}${ergebnis.abschnitte?.length >= 2 ? ` ${ergebnis.abschnitte.length} Höhenabschnitte erkannt (siehe „Mehrteiliges Gebäude“).` : ''}${ergebnis.abschnitte?.some((a: any) => a.spitzeM) ? ' Spitzer Aufbau (z. B. Turmhelm) erkannt und als Walmdach/Pyramide eingetragen – Schafthöhe und Spitze bitte prüfen; welche Abschnitte eingerüstet werden, wählst du unter „Mehrteiliges Gebäude“.' : ''}${Array.isArray(ergebnis.hinweise) && ergebnis.hinweise.length ? ' Hinweise: ' + ergebnis.hinweise.join(' ') : ''}${ergebnis.verworfen?.length ? ' Verworfen (unbelegt): ' + ergebnis.verworfen.join('; ') : ''}`)
@@ -834,6 +846,39 @@ export default function BuildingForm({ building, systemId, onChange, onSystemCha
                 </div>
               )
             })()}
+            {planWartet && (
+              <div className='rounded-xl border border-[#0071e3]/30 bg-white p-3 space-y-2 text-[11px]' data-testid='gebaeude-bestaetigung'>
+                <div className='font-semibold text-[#1d1d1f]'>Gebäude aus dem Plan prüfen</div>
+                <table className='w-full'>
+                  <tbody>
+                    {planWartet.bestaetigung.zeilen.map((z, i) => (
+                      <tr key={i} className='border-t border-black/5'>
+                        <td className='py-0.5 pr-2'>{z.bezeichnung}</td>
+                        <td className='py-0.5 pr-2 font-medium'>{z.anzeige}</td>
+                        <td className='py-0.5 pr-2 text-[#6e6e73]'>{z.quelle}</td>
+                        <td className='py-0.5'><span className={z.ampel === 'gruen' ? 'text-green-600' : z.ampel === 'gelb' ? 'text-amber-600' : 'text-red-600'}>●</span></td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                {planWartet.bestaetigung.befunde.length > 0 && (
+                  <ul className='list-disc pl-4 text-amber-800'>{planWartet.bestaetigung.befunde.map((b, i) => <li key={i}>{b}</li>)}</ul>
+                )}
+                {planWartet.bestaetigung.braucht_haken && (
+                  <label className='flex items-center gap-2 text-red-700'>
+                    <input type='checkbox' checked={planWartet.haken} onChange={(e) => setPlanWartet({ ...planWartet, haken: e.target.checked })} />
+                    Ich habe die Werte geprüft und übernehme sie trotz roter Ampel
+                  </label>
+                )}
+                <div className='flex gap-2'>
+                  <button type='button' data-testid='gebaeude-uebernehmen' disabled={!darfUebernehmen(planWartet.bestaetigung, planWartet.haken)}
+                    className='rounded-lg bg-[#0071e3] px-3 py-1 font-semibold text-white disabled:opacity-40'
+                    onClick={() => { onChange(planWartet.gebaeude); setAnalyseHinweis('Gebäude aus dem Plan übernommen. Die Werte stammen aus der Zeichnung und sind nicht statisch nachgewiesen.'); setPlanWartet(null) }}>Übernehmen</button>
+                  <button type='button' data-testid='gebaeude-verwerfen' className='rounded-lg bg-black/10 px-3 py-1'
+                    onClick={() => { analyseFelderRef.current = planWartet.vorherFelder; setAnalyseHinweis('Verworfen. Das Gerüst wurde nicht verändert.'); setPlanWartet(null) }}>Verwerfen</button>
+                </div>
+              </div>
+            )}
             {analyseHinweis && (
               <p className={`text-[10px] rounded-lg p-2 ${analyseHinweis.startsWith('❌') ? 'bg-red-50 text-red-700' : 'bg-blue-50 text-blue-700'}`}>{analyseHinweis}</p>
             )}
