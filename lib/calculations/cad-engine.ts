@@ -2921,7 +2921,17 @@ export function addManualPlacement(
     const f = model.fields.find((x) => x.id === placement.fieldId)
     if (f) { model.components3D.push(...feldBauteile(model, f, placement.type as FeldBauteilArt, newPlacement.id, [placement.positionX, placement.positionY, placement.positionZ])); return model }
   }
-  const feld = placement.type === 'stair' && placement.fieldId ? model.fields.find((f) => f.id === placement.fieldId) : undefined
+  // Treppe ohne Feldbezug (z. B. aus einem Teil ohne Feld ersetzt): nächstes Feld nach 3D-Abstand, nie die Rückfall-Spindeltreppe (4 Rohre)
+  const naechstes = (): ScaffoldField | undefined => {
+    let best: ScaffoldField | undefined, bestD = Infinity
+    for (const f of model.fields) {
+      const lage = model.levels.find((l) => l.index === f.levelIndex)
+      const d = (placement.positionX - f.positionX) ** 2 + (placement.positionY - (f.positionY + (lage ? lage.heightM / 2 : 1))) ** 2 + (placement.positionZ - f.positionZ) ** 2
+      if (d < bestD) { bestD = d; best = f }
+    }
+    return best
+  }
+  const feld = placement.type === 'stair' ? (placement.fieldId ? model.fields.find((f) => f.id === placement.fieldId) : naechstes()) : undefined
   const feldLage = feld ? (model.levels.find((l) => l.index === feld.levelIndex && l.id === `level-${feld.side}-${feld.levelIndex}`) ?? model.levels.find((l) => l.index === feld.levelIndex)) : undefined
   if (feld && feldLage) {
     // Dieselbe Außentreppe wie die automatische: vor dem Gerüst, vom Boden (unterste Lage der Reihe) bis oben, mit Podesten
