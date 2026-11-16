@@ -86,7 +86,7 @@ export function zeichnungsGrenzen(p: Projection2D): { minX: number; maxX: number
   return { minX: minX - 0.5, maxX: maxX + 0.5, minY: minY - 0.5, maxY: maxY + 0.5 }
 }
 
-function zeichneProjektion(doc: jsPDF, p: Projection2D, x0: number, y0: number, bw: number, bh: number): number {
+export function zeichneProjektion(doc: jsPDF, p: Projection2D, x0: number, y0: number, bw: number, bh: number): number {
   const g = zeichnungsGrenzen(p)
   const vb = { minX: g.minX, minY: g.minY, width: g.maxX - g.minX, height: g.maxY - g.minY }
   const n = waehleMassstab(vb.width, vb.height, bw, bh)
