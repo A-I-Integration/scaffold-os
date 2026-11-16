@@ -72,3 +72,15 @@ for (const [name, o] of formen) {
     })
   })
 }
+
+describe('Treppe ohne Feldbezug', () => {
+  it('wird nie zur Rückfall-Spindeltreppe (4 Rohre), sondern zur vollständigen Außentreppe am nächsten Feld', () => {
+    const m = generateCADModel(basis({}), 'layher-allround')
+    const f = m.fields.find((x) => x.levelIndex === 1)!
+    const m2 = addManualPlacement(JSON.parse(JSON.stringify(m)), { id: 'manual-x', type: 'stair', positionX: f.positionX, positionY: f.positionY + 1, positionZ: f.positionZ, side: f.side, levelIndex: f.levelIndex } as ManualPlacement)
+    const lauf = m2.components3D.find((c) => c.id === 'manual-x')!
+    expect(lauf.flights).toBeGreaterThan(0)
+    expect(m2.components3D.some((c) => c.name === 'Spindeltreppe (manuell)')).toBe(false)
+    expect(m2.components3D.filter((c) => c.id.startsWith('manual-x-stair-step')).length).toBeGreaterThan(5)
+  })
+})
