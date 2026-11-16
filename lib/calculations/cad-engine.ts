@@ -2921,8 +2921,18 @@ export function addManualPlacement(
   if (feld && feldLage) {
     // Die Treppe läuft durch die ganze Reihe: in jeder Lage übereinander (gleiche Seite, gleiche Stelle) von unten bis oben,
     // jeder Lauf kehrt die Richtung um (Zickzack). ID: unterste Lage = `${id}`, darüber `${id}-lage-N`.
-    const gleicheStelle = (f: ScaffoldField) => f.side === feld.side && Math.abs(f.positionX - feld.positionX) < 1e-6 && Math.abs(f.positionZ - feld.positionZ) < 1e-6
-    const reihe = model.fields.filter(gleicheStelle).sort((a, b) => a.levelIndex - b.levelIndex)
+    // Pro Lage das Feld an derselben Stelle: nächstes Feld (Grundriss) auf derselben Seite/Kante, höchstens eine halbe Feldlänge versetzt –
+    // Felder übereinander sind nicht immer exakt gleich lang (Hang, Umriss, geteilte Felder).
+    const abstand = (f: ScaffoldField) => Math.hypot(f.positionX - feld.positionX, f.positionZ - feld.positionZ)
+    const sameSeite = (f: ScaffoldField) => f.side === feld.side && f.kante === feld.kante
+    const jeLage = new Map<number, ScaffoldField>()
+    for (const f of model.fields.filter(sameSeite)) {
+      if (abstand(f) > Math.max(0.3, Math.min(f.lengthM, feld.lengthM) * 0.5)) continue
+      const bisher = jeLage.get(f.levelIndex)
+      if (!bisher || abstand(f) < abstand(bisher)) jeLage.set(f.levelIndex, f)
+    }
+    jeLage.set(feld.levelIndex, feld)
+    const reihe = [...jeLage.values()].sort((a, b) => a.levelIndex - b.levelIndex)
     const unterste = reihe[0]?.levelIndex ?? feld.levelIndex
     for (const f of reihe) {
       const lage = model.levels.find((l) => l.index === f.levelIndex && l.id === `level-${f.side}-${f.levelIndex}`) ?? model.levels.find((l) => l.index === f.levelIndex)

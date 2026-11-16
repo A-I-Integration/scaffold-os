@@ -5,15 +5,17 @@ import { platzierungAusTreffer, platzierungIdVon, verschiebePlatzierung } from '
 
 const basis = (o: Partial<BuildingParams>) => ({ lengthM: 12, widthM: 9, heightM: 8, floors: 3, floorHeightsM: [], windowCount: 0, doorCount: 0, balconyCount: 0, overhangM: 0.3, setbackM: 0, roofForm: 'flachdach', sides: ['front', 'back', 'left', 'right'], geruestOptionen: { treppe: false, tuerenFreihalten: false }, ...o }) as unknown as BuildingParams
 const R = 5
+const L = 12, W = 9
 const formen: [string, BuildingParams][] = [
   ['Rechteck', basis({})],
+  ['Hang (Umriss, hinten 2,4 m tiefer)', basis({ umriss: [{ x: 0, z: 0 }, { x: L, z: 0 }, { x: L, z: W }, { x: L * 0.6, z: W }, { x: L * 0.6, z: W + 2 }, { x: L * 0.3, z: W + 2 }, { x: L * 0.3, z: W }, { x: 0, z: W }], geruestOptionen: { treppe: false, tuerenFreihalten: false, gelaendeEckenM: { fl: 0, fr: 0, bl: -2.4, br: -2.4 } } } as Partial<BuildingParams>)],
   ['Achteck-Umriss', basis({ lengthM: 10, widthM: 10, umriss: Array.from({ length: 8 }, (_, i) => ({ x: R + R * Math.cos((2 * Math.PI * i) / 8), z: R + R * Math.sin((2 * Math.PI * i) / 8) })) })],
 ]
 for (const [name, b] of formen) {
   describe(`Treppe durch die ganze Reihe – ${name}`, () => {
     const m = generateCADModel(b, 'layher-allround')
     const f1 = m.fields.find((f) => f.levelIndex === 1 && !f.isCorner) ?? m.fields.find((f) => f.levelIndex === 1)!
-    const reihe = m.fields.filter((f) => f.side === f1.side && Math.abs(f.positionX - f1.positionX) < 1e-6 && Math.abs(f.positionZ - f1.positionZ) < 1e-6)
+    const reihe = m.fields.filter((f) => f.side === f1.side && f.kante === f1.kante && Math.abs(f.positionX - f1.positionX) < 1e-6 && Math.abs(f.positionZ - f1.positionZ) < 1e-6)
     const setze = (id: string, mod = m) => addManualPlacement(JSON.parse(JSON.stringify(mod)), { id, ...platzierungAusTreffer(mod, 'stair', [f1.positionX, f1.positionY + 1, f1.positionZ], '' as ManualPlacement['side'], -1) } as ManualPlacement)
     it('jede Lage der Reihe bekommt einen Treppenlauf, ID-Zuordnung bleibt eindeutig', () => {
       const m2 = setze('manual-t')
@@ -27,7 +29,7 @@ for (const [name, b] of formen) {
     })
     it('Belag der Treppenöffnung entfällt über jeder Lage außer der obersten Lage selbst', () => {
       const m2 = setze('manual-t')
-      for (const f of reihe.filter((x) => x.levelIndex > 0)) expect(m2.components3D.some((c) => c.id === `deck-${f.id}`), f.id).toBe(false)
+      for (const f of reihe.filter((x) => x.levelIndex > reihe[0].levelIndex)) expect(m2.components3D.some((c) => c.id === `deck-${f.id}`), f.id).toBe(false)
       expect(m2.components3D.some((c) => c.id === `deck-${reihe[0].id}`)).toBe(true)
     })
     it('Ziehen auf eine andere Reihe baut die Treppe dort wieder durch alle Lagen', () => {
@@ -41,3 +43,18 @@ for (const [name, b] of formen) {
     })
   })
 }
+
+describe('Treppe reicht bis zur untersten Lage der Reihe (Hang)', () => {
+  const m = generateCADModel(formen[2][1], 'layher-allround')
+  it('der unterste Lauf steht auf der untersten Lage dieser Reihe, der oberste auf der obersten', () => {
+    const hoechste = Math.max(...m.fields.map((f) => f.levelIndex))
+    const f = m.fields.find((x) => x.levelIndex === hoechste && !x.isCorner) ?? m.fields.find((x) => x.levelIndex === hoechste)!
+    const pl = { id: 'manual-h', ...platzierungAusTreffer(m, 'stair', [f.positionX, f.positionY + 1, f.positionZ], '' as ManualPlacement['side'], -1) } as ManualPlacement
+    const m2 = addManualPlacement(JSON.parse(JSON.stringify(m)), pl)
+    const laeufe = m2.components3D.filter((c) => c.type === 'stair' && c.id.startsWith('manual-h')).map((c) => c.position[1]).sort((a, b) => a - b)
+    const reihe = m.fields.filter((g) => g.side === f.side && g.kante === f.kante && Math.hypot(g.positionX - f.positionX, g.positionZ - f.positionZ) < 0.3)
+    expect(laeufe.length).toBe(reihe.length)
+    const tiefstes = Math.min(...reihe.map((g) => g.positionY))
+    expect(laeufe[0]).toBeLessThan(tiefstes + 1.5) // unterster Lauf liegt in der untersten Lage
+  })
+})

@@ -756,6 +756,12 @@ export default function CADPage() {
       rotationY: seitlich ? src.rotation[1] : 0,
       fieldId: newType === 'stair' || newType.startsWith('f_') ? src.fieldId : undefined,
     }
+    // Treppe und Einzelbauteile: Feld und Lage aus dem nächsten Feld des Gerüsts (nicht aus Schwerpunkt/Raster 2 m abgeleitet) –
+    // sonst landet die Treppe bei Hang, Umriss oder auf der anderen Seite am falschen Feld
+    if (newType === 'stair' || newType.startsWith('f_')) {
+      Object.assign(placement, platzierungAusTreffer(modelWithManual, newType as ManualPlacement['type'], src.position, '' as ManualPlacement['side'], -1))
+      placement.fieldId = placement.fieldId ?? src.fieldId
+    }
     handleRemoveComponent(id)
     setManualPlacements((prev) => [...prev, placement])
     setSelectedComponent(placement.id)
