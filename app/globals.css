@@ -336,3 +336,8 @@ body {
 .os-ui :is(.text-blue-600, .text-blue-500, .text-blue-700) { color: #303944; }
 .os-ui :is(button, a)[class~="bg-[#0071e3]"] { background-color: #171b20; color: #fff; }
 .os-ui :is(button, a)[class~="bg-[#0071e3]"]:hover { background-color: #303944; }
+
+/* Oberfläche insgesamt zwei Stufen größer (≈ +15 %): Schrift, Leisten und Schaltflächen wachsen gemeinsam.
+   Die Höhe wird um denselben Faktor verkleinert, damit die Seite weiter genau in das Fenster passt. */
+.os-shell { --ui-zoom: 1.15; zoom: var(--ui-zoom); }
+.os-shell.h-dvh { height: calc(100dvh / var(--ui-zoom)); }
