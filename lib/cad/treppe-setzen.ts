@@ -44,3 +44,20 @@ export function schiebeUmFelder(model: Modell, p: ManualPlacement, n: number): {
   if (nr < 0 || !ziel) return { placement: null, grund: n > 0 ? 'Am Ende der Seite: weiter geht es nicht.' : 'Am Anfang der Seite: weiter geht es nicht.' }
   return { placement: { ...p, ...treppeAufFeld(model, ziel), id: p.id } }
 }
+
+/** Alle Lagen (Ebenen), in denen es Felder gibt, aufsteigend. */
+export function lagenVon(model: Modell): number[] {
+  return [...new Set(model.fields.map((f) => f.levelIndex))].sort((a, b) => a - b)
+}
+
+/** Das Feld derselben Seite/Kante und Nummer in einer anderen Lage (sonst null, z. B. wenn die Lage dort kürzer ist). */
+export function feldInLage(model: Modell, feld: ScaffoldField, levelIndex: number): ScaffoldField | null {
+  return model.fields.find((x) => schluesselVon(x) === schluesselVon(feld) && x.index === feld.index && x.levelIndex === levelIndex) ?? null
+}
+
+/** Leiter genau an ein benanntes Feld in der gewählten Lage (steht außen am Feld, über die ganze Lagenhöhe – dieselben Regeln wie beim Klick). */
+export function leiterAufFeld(model: Modell, feld: ScaffoldField, levelIndex: number): { placement: Omit<ManualPlacement, 'id'> | null; grund?: string } {
+  const ziel = feldInLage(model, feld, levelIndex)
+  if (!ziel) return { placement: null, grund: 'In dieser Lage gibt es an dieser Stelle kein Feld.' }
+  return { placement: platzierungAusTreffer(model, 'ladder', [ziel.positionX, ziel.positionY + 1, ziel.positionZ], ziel.side, ziel.levelIndex) as Omit<ManualPlacement, 'id'> }
+}

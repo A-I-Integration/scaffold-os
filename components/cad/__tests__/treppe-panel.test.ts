@@ -22,4 +22,10 @@ describe('TreppePanel', () => {
     const html = renderToStaticMarkup(createElement(TreppePanel, { model: m, treppe: null, onSetzen: h, onSchieben: h, onZu: h }))
     expect(html).not.toMatch(/\b(absolute|fixed)\b/); expect(html).toContain('treppe-leiste')
   })
+  it('zeigt Lage und „Leiter hier setzen“ nur, wenn die Leiter-Funktion übergeben wird', () => {
+    const mit = renderToStaticMarkup(createElement(TreppePanel, { model: m, treppe: null, onSetzen: h, onLeiter: h, onSchieben: h, onZu: h }))
+    expect(mit).toContain('Leiter hier setzen'); expect(mit).toContain('Lage 1'); expect(mit).toContain('Lage 3')
+    const ohne = renderToStaticMarkup(createElement(TreppePanel, { model: m, treppe: null, onSetzen: h, onSchieben: h, onZu: h }))
+    expect(ohne).not.toContain('Leiter hier setzen')
+  })
 })
