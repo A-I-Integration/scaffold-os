@@ -7,17 +7,19 @@
 // am Treffpunkt.
 // ============================================================
 
-import type { CADModel, ManualPlacement } from './cad-engine'
+import { feldRahmen, type CADModel, type ManualPlacement } from './cad-engine'
 
 type Lage = Pick<ManualPlacement, 'type' | 'positionX' | 'positionY' | 'positionZ' | 'side' | 'levelIndex' | 'fieldId'> & Partial<Pick<ManualPlacement, 'rotationY'>>
 
-type ModellTeil = Pick<CADModel, 'fields'> & Partial<Pick<CADModel, 'levels'>>
+type ModellTeil = Pick<CADModel, 'fields'> & Partial<Pick<CADModel, 'levels' | 'building'>>
 
 /** Nächstes Feld (echter 3D-Abstand zur Feldmitte, Feldmitte = Lagenmitte) zu einem Punkt, im ganzen Gerüst. */
-export function naechstesFeld(model: ModellTeil, position: [number, number, number]): ModellTeil['fields'][number] | null {
+export function naechstesFeld(model: ModellTeil, position: [number, number, number], levelIndex = -1): ModellTeil['fields'][number] | null {
   let best: ModellTeil['fields'][number] | null = null
   let bestD = Infinity
-  for (const f of model.fields) {
+  // Ist die Lage bekannt (Klick auf ein Teil dieser Lage), kommen nur Felder dieser Lage in Frage – die Klickhöhe kann ungenau sein
+  const kandidaten = levelIndex >= 0 && model.fields.some((x) => x.levelIndex === levelIndex) ? model.fields.filter((x) => x.levelIndex === levelIndex) : model.fields
+  for (const f of kandidaten) {
     const lage = model.levels?.find((l) => l.index === f.levelIndex)
     const yMitte = f.positionY + (lage ? lage.heightM / 2 : 1)
     const d = (position[0] - f.positionX) ** 2 + (position[1] - yMitte) ** 2 + (position[2] - f.positionZ) ** 2
@@ -50,7 +52,7 @@ export function platzierungAusTreffer(
   // Treppe: rastet auf das nächste Feld im GANZEN Gerüst ein (jede Seite, jede Lage, auch an Umriss-Kanten),
   // nicht nur auf Felder der getroffenen Seite – so lässt sie sich an beliebige Stellen setzen und ziehen.
   if (type === 'stair' && model) {
-    const best = naechstesFeld(model, position)
+    const best = naechstesFeld(model, position, levelIndex)
     if (best) {
       p.fieldId = best.id
       p.positionX = best.positionX
@@ -89,9 +91,31 @@ export function platzierungAusTreffer(
       p.positionY = (stufe ? stufe.bottomY : best.positionY) + 1.0
     }
   }
-  // Leiter: steht immer über die ganze Höhe der getroffenen Lage (Mitte der Lage),
-  // nicht in Klickhöhe – so hängt sie nie halb in der Luft.
-  if (type === 'ladder' && model?.levels) {
+  // Leiter (Zugang): steht außen am nächsten Feld im ganzen Gerüst (jede Seite/Lage, auch an Umriss-Kanten), mit der Fläche
+  // parallel zum Feld, an der Klickstelle entlang des Feldes (nicht näher als 25 cm an den Ständern) und über die ganze Höhe
+  // der Lage – so hängt sie nie halb in der Luft und lässt sich an beliebige Felder ziehen.
+  if (type === 'ladder' && model) {
+    const f = naechstesFeld(model, position, levelIndex)
+    if (f) {
+      const lage = model.levels?.find((l) => l.index === f.levelIndex && l.id === `level-${f.side}-${f.levelIndex}`) ?? model.levels?.find((l) => l.index === f.levelIndex)
+      const h = lage && lage.heightM > 0 ? lage.heightM : 2.0
+      p.fieldId = f.id
+      p.side = f.side
+      p.levelIndex = f.levelIndex
+      p.positionY = f.positionY + h / 2
+      if (model.building) {
+        const rf = feldRahmen(f, model.building)
+        const [cx, cz] = rf.toLocal(f.positionX, f.positionZ)
+        const [qx] = rf.toLocal(position[0], position[2])
+        const halb = Math.max(0, f.lengthM / 2 - 0.25)
+        const entlang = Math.max(-halb, Math.min(halb, qx - cx))
+        const [wx, wz] = rf.toWorld(cx + entlang, cz + (f.widthM || 0.73) / 2 + 0.05)
+        p.positionX = wx
+        p.positionZ = wz
+        if (f.kante !== undefined) p.rotationY = rf.yaw // Umriss: Drehung der Kante (Rechteck: Seite bestimmt die Drehung)
+      }
+    }
+  } else if (type === 'ladder' && model?.levels) {
     const lage = model.levels.find((l) => l.index === levelIndex)
     if (lage && lage.heightM > 0) p.positionY = lage.bottomY + lage.heightM / 2
   }
