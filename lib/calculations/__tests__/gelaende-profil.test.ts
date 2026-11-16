@@ -186,16 +186,14 @@ describe('Umriss-Hang: Fußplatten folgen exakt der dargestellten Geländeoberfl
       },
     }
     const model = generateCADModel(b, 'layher-allround')
-    const terrain = gelaendeHoeheFn(model.building)
+    const gelaende = gelaendeHoeheFn(model.building)
+    // Der Umriss liegt in Szenen-Koordinaten (Rückseite bei z = −0,5); die Geländefläche der 3D-Ansicht in Gebäude-Koordinaten
+    const terrain = (x: number, z: number) => gelaende(x, z + model.building.widthM / 2 + 0.5)
     const components = generateScaffoldComponents(model)
-    const hintereAusgleichsFuesse = components.filter((c) =>
-      c.type === 'footplate' &&
-      c.id.startsWith('spindel-') &&
-      c.position[2] < -model.building.widthM / 2 + 0.2
-    )
-    expect(hintereAusgleichsFuesse.length).toBeGreaterThan(0)
-    for (const fuss of hintereAusgleichsFuesse) {
-      expect(fuss.position[1] + 0.02).toBeCloseTo(terrain(fuss.position[0], fuss.position[2]), 1)
+    const ausgleichsFuesse = components.filter((c) => c.type === 'footplate' && c.id.startsWith('spindel-'))
+    expect(ausgleichsFuesse.length).toBeGreaterThan(10)
+    for (const fuss of ausgleichsFuesse) {
+      expect(Math.abs(fuss.position[1] + 0.02 - terrain(fuss.position[0], fuss.position[2]))).toBeLessThan(0.015)
     }
   })
 })

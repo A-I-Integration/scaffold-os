@@ -1198,7 +1198,7 @@ function RoofMesh({ roofForm, laengeM, breiteM, roofH }: { roofForm: string; lae
 }
 
 /** Gebäude mit Umriss: Vieleck-Grundfläche, nach oben gezogen (flaches Dach). */
-function UmrissGebaeude({ punkte, heightM, kantenHoeheM }: { punkte: { x: number; z: number }[]; heightM: number; kantenHoeheM?: number[] }) {
+function UmrissGebaeude({ punkte, heightM, kantenHoeheM, untenM = 0 }: { punkte: { x: number; z: number }[]; heightM: number; kantenHoeheM?: number[]; untenM?: number }) {
   const praes = useContext(FarbModusKontext) === 'praesentation'
   const geometrie = useMemo(() => {
     // Shape liegt in der x/y-Ebene; nach dem Drehen um -90° um x wird shape-y zu -z.
@@ -1207,8 +1207,9 @@ function UmrissGebaeude({ punkte, heightM, kantenHoeheM }: { punkte: { x: number
     // Eigene Höhe je Kante: Körper bis zur niedrigsten Kante, höhere Kanten bekommen eine Wandfläche darüber
     const hat = !!kantenHoeheM && kantenHoeheM.length === punkte.length && kantenHoeheM.every((h) => h > 0)
     const tief = hat ? Math.min(...kantenHoeheM!) : heightM
-    const g = new THREE.ExtrudeGeometry(form, { depth: tief, bevelEnabled: false })
+    const g = new THREE.ExtrudeGeometry(form, { depth: tief + untenM, bevelEnabled: false })
     g.rotateX(-Math.PI / 2)
+    if (untenM) g.translate(0, -untenM, 0) // am Hang bis zur Talsohle hinunter
     if (!hat) return g
     const pos: number[] = []
     punkte.forEach((a, i) => {
@@ -1224,7 +1225,7 @@ function UmrissGebaeude({ punkte, heightM, kantenHoeheM }: { punkte: { x: number
     const alle = mergeGeometries([g.toNonIndexed(), w.toNonIndexed()].map((q) => { q.deleteAttribute('uv'); q.deleteAttribute('normal'); return q }))
     alle?.computeVertexNormals()
     return alle ?? g
-  }, [punkte, heightM, kantenHoeheM])
+  }, [punkte, heightM, kantenHoeheM, untenM])
   useEffect(() => () => geometrie.dispose(), [geometrie])
   return (
     <mesh geometry={geometrie} castShadow receiveShadow>
@@ -1532,10 +1533,14 @@ function Building3D({
     const { hangM } = hangDaten(building)
     return (
       <group>
-        {/* Bei Hanglage liegt auch der Umriss-Baukörper um hangM tiefer; die gemeinsame Geländeoberfläche sitzt darüber. */}
-        {hangM > 0.05 && <Hanggelaende lengthM={lengthM} widthM={w} hangM={hangM} building={building} />}
-        <group position={[0, -hangM, 0]}>
-          <UmrissGebaeude punkte={building.umriss} heightM={heightM} kantenHoeheM={building.umrissKantenHoeheM} />
+        {/* Geländefläche in Gebäude-Koordinaten (Boxmitte bei 0); der Umriss liegt in Szenen-Koordinaten (Rückseite bei z = −0,5) */}
+        {hangM > 0.05 && (
+          <group position={[0, 0, -w / 2 - 0.5]}>
+            <Hanggelaende lengthM={lengthM} widthM={w} hangM={hangM} building={building} />
+          </group>
+        )}
+        <group>
+          <UmrissGebaeude punkte={building.umriss} heightM={heightM} kantenHoeheM={building.umrissKantenHoeheM} untenM={hangM} />
           {features.filter((f) => f.umriss).map((f) => {
             const u = f.umriss!
             const y = f.bottomY + f.heightM / 2
