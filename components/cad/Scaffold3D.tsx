@@ -1408,13 +1408,14 @@ function turmLage(building: CADModel['building']): { x: number; z: number; drehu
 }
 
 /** Zeigt das echte Gebäude (falls geladen), sonst den einfachen Baukörper */
-function GebaeudeAnzeige({ building, features, visible, onSeiteUmschalten }: { building: CADModel['building']; features: BuildingFeature3D[]; visible: boolean; onSeiteUmschalten?: (side: 'front' | 'back' | 'left' | 'right') => void }) {
+function GebaeudeAnzeige({ building, features, visible, onSeiteUmschalten, platziere }: { building: CADModel['building']; features: BuildingFeature3D[]; visible: boolean; onSeiteUmschalten?: (side: 'front' | 'back' | 'left' | 'right') => void; platziere?: (punkt: [number, number, number]) => void }) {
   const echt = useContext(EchtesGebaeudeKontext)
+  // Im Platzierungs-Modus zählt auch ein Klick auf die Wand zwischen den Rohren: der Treffpunkt rastet dann auf das nächste Feld ein
   return (
-    <>
+    <group onClick={platziere ? (e: any) => { e.stopPropagation(); platziere([e.point.x, e.point.y, e.point.z]) } : undefined}>
       <Building3D building={building} features={features} visible={visible && !echt} onSeiteUmschalten={echt ? undefined : onSeiteUmschalten} />
       {visible && echt && <EchtesGebaeude3D {...echt} ziel={turmLage(building)} />}
-    </>
+    </group>
   )
 }
 
@@ -2279,7 +2280,7 @@ function Scene({
       <BridgeDeck3D building={model.building} visible={showBuilding && !!bridgeMode} />
       <Umgebung3D model={model} visible={!!showEnvironment && !bridgeMode && !weiss} />
       <group position={[0, hangHebung, 0]}>
-        <GebaeudeAnzeige building={model.building} features={features || []} visible={showBuilding && !bridgeMode} onSeiteUmschalten={!measureMode && !placementType ? onSeiteUmschalten : undefined} />
+        <GebaeudeAnzeige building={model.building} features={features || []} visible={showBuilding && !bridgeMode} onSeiteUmschalten={!measureMode && !placementType ? onSeiteUmschalten : undefined} platziere={placementType && onPlacementClick && !measureMode ? (pt) => onPlacementClick(placementType, pt, '', -1) : undefined} />
         {showScaffold && statik && <Stabwerk3D components={model.components3D} visibleTypes={visibleTypes} />}
         {showScaffold && !statik && (
           <AllScaffoldComponents
