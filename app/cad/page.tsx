@@ -463,14 +463,22 @@ export default function CADPage() {
   // Griff/Zahleneingabe: neue Lage des ausgewählten Bauteils. Von Hand gesetzte Bauteile ändern ihre Platzierung, erzeugte bekommen eine Überlagerung.
   const handleBauteilLage = useCallback((id: string, position: [number, number, number], drehGrad: number) => {
     const pid = platzierungIdVon(id, manualPlacements)
+    const angezeigt = modelWithManualRef.current?.components3D.find((c) => c.id === id)
     if (pid) {
-      setManualPlacements((prev) => prev.map((x) => (x.id === pid ? { ...x, positionX: position[0], positionY: position[1], positionZ: position[2], rotationY: (x.rotationY ?? 0) + (drehGrad * Math.PI) / 180 } : x)))
+      setManualPlacements((prev) => prev.map((x) => {
+        if (x.id !== pid) return x
+        // Treppe: besteht aus vielen Teilen und sitzt immer in einem Feld → um den Weg des angefassten Teils verschieben und auf das nächste Feld einrasten
+        if (x.type === 'stair' && angezeigt) {
+          const ziel: [number, number, number] = [x.positionX + position[0] - angezeigt.position[0], (angezeigt ? x.positionY + position[1] - angezeigt.position[1] : x.positionY), x.positionZ + position[2] - angezeigt.position[2]]
+          return verschiebePlatzierung(model, x, ziel, '' as ManualPlacement['side'], -1)
+        }
+        return { ...x, positionX: position[0], positionY: position[1], positionZ: position[2], rotationY: (x.rotationY ?? 0) + (drehGrad * Math.PI) / 180 }
+      }))
       return
     }
-    const angezeigt = modelWithManualRef.current?.components3D.find((c) => c.id === id)
     if (!angezeigt) return
     setzeUeber((u) => setzeBauteilLage(u, angezeigt, angezeigt, position, drehGrad))
-  }, [manualPlacements, setzeUeber])
+  }, [manualPlacements, setzeUeber, model])
   const handleBauteilDuplizieren = useCallback((id: string) => {
     const pid = platzierungIdVon(id, manualPlacements)
     if (pid) {

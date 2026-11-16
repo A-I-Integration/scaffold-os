@@ -13,6 +13,19 @@ type Lage = Pick<ManualPlacement, 'type' | 'positionX' | 'positionY' | 'position
 
 type ModellTeil = Pick<CADModel, 'fields'> & Partial<Pick<CADModel, 'levels'>>
 
+/** Nächstes Feld (echter 3D-Abstand zur Feldmitte, Feldmitte = Lagenmitte) zu einem Punkt, im ganzen Gerüst. */
+export function naechstesFeld(model: ModellTeil, position: [number, number, number]): ModellTeil['fields'][number] | null {
+  let best: ModellTeil['fields'][number] | null = null
+  let bestD = Infinity
+  for (const f of model.fields) {
+    const lage = model.levels?.find((l) => l.index === f.levelIndex)
+    const yMitte = f.positionY + (lage ? lage.heightM / 2 : 1)
+    const d = (position[0] - f.positionX) ** 2 + (position[1] - yMitte) ** 2 + (position[2] - f.positionZ) ** 2
+    if (d < bestD) { bestD = d; best = f }
+  }
+  return best
+}
+
 /** Platzierung (ohne ID) für einen Treffpunkt auf dem Gerüst. */
 export function platzierungAusTreffer(
   model: ModellTeil | null,
@@ -29,19 +42,21 @@ export function platzierungAusTreffer(
     side,
     levelIndex,
   }
+  // Seite/Lage unbekannt (Klick auf ein Teil ohne Feldbezug, z. B. Fußplatte, Anker): aus dem nächsten Feld ableiten
+  if (model && (!side || levelIndex < 0)) {
+    const f = naechstesFeld(model, position)
+    if (f) { p.side = f.side; p.levelIndex = f.levelIndex }
+  }
+  // Treppe: rastet auf das nächste Feld im GANZEN Gerüst ein (jede Seite, jede Lage, auch an Umriss-Kanten),
+  // nicht nur auf Felder der getroffenen Seite – so lässt sie sich an beliebige Stellen setzen und ziehen.
   if (type === 'stair' && model) {
-    const lage = model.fields.filter((f) => f.side === side && f.levelIndex === levelIndex)
-    const entlangX = side === 'front' || side === 'back'
-    let best: (typeof lage)[number] | null = null
-    let bestD = Infinity
-    for (const f of lage) {
-      const d = Math.abs(entlangX ? position[0] - f.positionX : position[2] - f.positionZ)
-      if (d < bestD) { bestD = d; best = f }
-    }
+    const best = naechstesFeld(model, position)
     if (best) {
       p.fieldId = best.id
       p.positionX = best.positionX
       p.positionZ = best.positionZ
+      p.side = best.side
+      p.levelIndex = best.levelIndex
     }
   }
   // Fangnetz: hängt außen am nächsten Feld der getroffenen Seite/Lage (Geländerhöhe), an der Seitenwand
