@@ -1,7 +1,7 @@
 // Treppe über Auswahl statt Mausklick setzen und um ganze Felder schieben (wie das exakte „Schieben um Abstand“ in CAD-Programmen).
 // Reine Logik: dieselben Regeln wie Klick und Ziehen (platzierungAusTreffer), nur mit einem benannten Feld als Ziel.
 
-import type { CADModel, ManualPlacement, ScaffoldField } from '@/lib/calculations/cad-engine'
+import { feldReihe, DURCHSTIEG_ARTIKELNUMMER, type CADModel, type ManualPlacement, type ScaffoldField } from '@/lib/calculations/cad-engine'
 import { platzierungAusTreffer } from '@/lib/calculations/cad-platzierung'
 import { seitenBezeichnung } from '@/types/cad-layers'
 
@@ -60,4 +60,23 @@ export function leiterAufFeld(model: Modell, feld: ScaffoldField, levelIndex: nu
   const ziel = feldInLage(model, feld, levelIndex)
   if (!ziel) return { placement: null, grund: 'In dieser Lage gibt es an dieser Stelle kein Feld.' }
   return { placement: platzierungAusTreffer(model, 'ladder', [ziel.positionX, ziel.positionY + 1, ziel.positionZ], ziel.side, ziel.levelIndex) as Omit<ManualPlacement, 'id'> }
+}
+
+/** Durchstiegsbelag mit Leiter in jeder Lage der Reihe über dem gewählten Feld (von unten bis oben).
+ *  Ersetzt dort den Standardbelag (entfernen) und setzt je Lage Durchstiegsbelag (Artikel DB-001) und Leiter (Artikel LE-001).
+ *  Preise und Gewichte stammen aus dem Lager der Firma – es sind keine Herstellermaße hinterlegt. */
+export function durchstiegAufFeld(model: CADModel, feld: ScaffoldField): { entfernen: string[][]; platzierungen: Omit<ManualPlacement, 'id'>[] } {
+  const reihe = feldReihe(model, feld)
+  const entfernen: string[][] = []
+  const platzierungen: Omit<ManualPlacement, 'id'>[] = []
+  for (const f of reihe) {
+    const belag = model.components3D.filter((c) => c.fieldId === f.id && /^deck-/.test(c.id)).map((c) => c.id)
+    if (belag.length) entfernen.push(belag)
+    const lage = model.levels.find((l) => l.index === f.levelIndex)
+    const y = f.positionY + (lage?.heightM ?? 2)
+    platzierungen.push({ ...platzierungAusTreffer(model, 'f_deck', [f.positionX, y, f.positionZ], f.side, f.levelIndex), type: 'f_deck', fieldId: f.id, articleNumber: DURCHSTIEG_ARTIKELNUMMER, anzeigeName: 'Durchstiegsbelag mit Leiter' } as Omit<ManualPlacement, 'id'>)
+    const l = leiterAufFeld(model, f, f.levelIndex).placement
+    if (l) platzierungen.push(l)
+  }
+  return { entfernen, platzierungen }
 }

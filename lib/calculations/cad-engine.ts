@@ -2553,6 +2553,8 @@ function generiereUmrissModell(
 
 /** Feste Artikelnummer der Leiter im Lager (jede Firma pflegt Name, Preis und Gewicht selbst). */
 export const LEITER_ARTIKELNUMMER = 'LE-001'
+/** Feste Artikelnummer des Durchstiegsbelags mit Leiter (Preis, Gewicht und Name pflegt jede Firma im Lager – keine Herstellermaße hinterlegt). */
+export const DURCHSTIEG_ARTIKELNUMMER = 'DB-001'
 
 export function generateBillOfMaterials(model: CADModel): MaterialItem[] {
   const stand = modellHash(model)
@@ -2581,7 +2583,7 @@ function getUnit(type: ScaffoldComponent3D['type']): string {
 function getUnitPrice(articleNumber: string): number {
   const prices: Record<string, number> = { 'RA-001': 45, 'RA-002': 52, 'RA-003': 58, 'AB-001': 85, 'AB-002': 98, 'AB-003': 112, 'DI-001': 28, 'DI-002': 32, 'DI-003': 36, 'GE-001': 35, 'GE-002': 40, 'GE-003': 45, 'FP-001': 18, 'KU-001': 4.5, 'AN-001': 15, 'QR-001': 12, 'KO-001': 32, 'SP-001': 450, 'FN-001': 4.2, 'SD-001': 850, 'BB-001': 22, 'LV-001': 45, 'EW-001': 25, 'ST-001': 15, 'ST-002': 38, 'SG-001': 28 }
   // Leiter: bewusst KEIN Fantasiepreis – Preis kommt aus dem Lager der Firma (Artikel LE-001).
-  if (articleNumber === LEITER_ARTIKELNUMMER || /^(AG|FS)-\d{3}$/.test(articleNumber)) return 0 // Hang-Fußausgleich: Preis kommt aus dem Lager der Firma
+  if (articleNumber === LEITER_ARTIKELNUMMER || articleNumber === DURCHSTIEG_ARTIKELNUMMER || /^(AG|FS)-\d{3}$/.test(articleNumber)) return 0 // Hang-Fußausgleich: Preis kommt aus dem Lager der Firma
   // Kederplane und Aufzug: kein Fantasiepreis – Preis kommt aus dem Lager der Firma (bei gemietetem Aufzug von Hand im LV)
   if (articleNumber === 'KP-001' || articleNumber === 'DF-001' || articleNumber === 'AZ-001' || articleNumber === DURCHGANG_ARTIKELNUMMER) return 0
   return prices[articleNumber] || 10
@@ -2589,13 +2591,13 @@ function getUnitPrice(articleNumber: string): number {
 
 function getWeightKg(articleNumber: string): number {
   const weights: Record<string, number> = { 'RA-001': 12.5, 'RA-002': 15.2, 'RA-003': 18.0, 'AB-001': 22, 'AB-002': 26, 'AB-003': 31, 'DI-001': 8.5, 'DI-002': 9.8, 'DI-003': 11.2, 'GE-001': 7.2, 'GE-002': 8.5, 'GE-003': 9.8, 'FP-001': 5.5, 'KU-001': 0.8, 'AN-001': 2.5, 'QR-001': 3.5, 'KO-001': 9.0, 'SP-001': 85.0, 'FN-001': 0.5, 'SD-001': 120.0, 'BB-001': 6.5, 'LV-001': 18.0, 'EW-001': 4.2, 'ST-001': 2.8, 'ST-002': 7.5, 'SG-001': 5.5 }
-  if (articleNumber === LEITER_ARTIKELNUMMER || /^(AG|FS)-\d{3}$/.test(articleNumber)) return 0
+  if (articleNumber === LEITER_ARTIKELNUMMER || articleNumber === DURCHSTIEG_ARTIKELNUMMER || /^(AG|FS)-\d{3}$/.test(articleNumber)) return 0
   if (articleNumber === 'KP-001' || articleNumber === 'AZ-001' || articleNumber === DURCHGANG_ARTIKELNUMMER) return 0 // Gewicht kommt aus dem Lager
   return weights[articleNumber] || 5
 }
 
 function getRecommendation(articleNumber: string): string {
-  const recs: Record<string, string> = { 'RA-001': 'Standard-Rahmen für Feldlänge 2,07 m', 'RA-002': 'Für breitere Felder', 'RA-003': 'Für große Feldlängen', 'AB-001': 'Standard-Arbeitsbühne', 'AB-002': 'Für 2,50 m Feldlänge', 'AB-003': 'Für 3,00 m Feldlänge', 'DI-001': 'Stabilisierung je Feld', 'DI-002': 'Stabilisierung 2,50 m', 'DI-003': 'Stabilisierung 3,00 m', 'GE-001': 'Brüstungsgeländer', 'GE-002': 'Geländer 2,50 m', 'GE-003': 'Geländer 3,00 m', 'FP-001': 'Grundplatte je Standfuß', 'KU-001': 'Verbindung Rahmen/Diagonale', 'AN-001': 'Standard-Fassadenanker', 'QR-001': 'Querriegel', 'KO-001': 'Für Überstände und Dacharbeiten', 'SP-001': 'Zugang je 3–4 Ebenen', 'FN-001': 'Fangnetz bei Höhe > 12m', 'SD-001': 'Schutzdach öffentlicher Raum', 'BB-001': 'Seitenschutz/Absturzsicherung', 'LV-001': 'Bei weichem Untergrund', 'EW-001': 'Eckverstrebung', 'ST-001': 'Treppenstufe', 'ST-002': 'Treppenpodest', 'SG-001': 'Treppengeländer', 'FS-060': 'Fußspindel am Hang – Preis und Gewicht im Lager pflegen', 'FS-080': 'Verstärkte Fußspindel am Hang – Preis und Gewicht im Lager pflegen', 'LE-001': 'Schematische Leiter – Preis, Gewicht und Name im Lager pflegen' }
+  const recs: Record<string, string> = { 'RA-001': 'Standard-Rahmen für Feldlänge 2,07 m', 'RA-002': 'Für breitere Felder', 'RA-003': 'Für große Feldlängen', 'AB-001': 'Standard-Arbeitsbühne', 'AB-002': 'Für 2,50 m Feldlänge', 'AB-003': 'Für 3,00 m Feldlänge', 'DI-001': 'Stabilisierung je Feld', 'DI-002': 'Stabilisierung 2,50 m', 'DI-003': 'Stabilisierung 3,00 m', 'GE-001': 'Brüstungsgeländer', 'GE-002': 'Geländer 2,50 m', 'GE-003': 'Geländer 3,00 m', 'FP-001': 'Grundplatte je Standfuß', 'KU-001': 'Verbindung Rahmen/Diagonale', 'AN-001': 'Standard-Fassadenanker', 'QR-001': 'Querriegel', 'KO-001': 'Für Überstände und Dacharbeiten', 'SP-001': 'Zugang je 3–4 Ebenen', 'FN-001': 'Fangnetz bei Höhe > 12m', 'SD-001': 'Schutzdach öffentlicher Raum', 'BB-001': 'Seitenschutz/Absturzsicherung', 'LV-001': 'Bei weichem Untergrund', 'EW-001': 'Eckverstrebung', 'ST-001': 'Treppenstufe', 'ST-002': 'Treppenpodest', 'SG-001': 'Treppengeländer', 'FS-060': 'Fußspindel am Hang – Preis und Gewicht im Lager pflegen', 'FS-080': 'Verstärkte Fußspindel am Hang – Preis und Gewicht im Lager pflegen', 'LE-001': 'Schematische Leiter – Preis, Gewicht und Name im Lager pflegen', 'DB-001': 'Durchstiegsbelag mit Leiter – Preis, Gewicht und Name im Lager pflegen' }
   return recs[articleNumber] || 'Standard-Bauteil'
 }
 
@@ -2900,6 +2902,9 @@ export interface ManualPlacement {
   side: 'front' | 'back' | 'left' | 'right'
   levelIndex: number
   fieldId?: string
+  /** Artikelnummer und Name abweichend vom Standard des Bauteils (z. B. Durchstiegsbelag statt Belag) */
+  articleNumber?: string
+  anzeigeName?: string
   notes?: string
   // Optional: Drehung um die Hochachse (Bogenmaß), z. B. beim Ersetzen eines
   // Bauteils an einer Seitenfläche. Ohne Angabe: 0 (wie bisher).
@@ -2925,7 +2930,11 @@ export function addManualPlacement(
   // Einzelbauteil eines Feldes: Teile aus der Feld-Erzeugung übernehmen (nur wenn das Feld bekannt ist)
   if ((FELDBAUTEIL_ARTEN as string[]).includes(placement.type) && placement.fieldId) {
     const f = model.fields.find((x) => x.id === placement.fieldId)
-    if (f) { model.components3D.push(...feldBauteile(model, f, placement.type as FeldBauteilArt, newPlacement.id, [placement.positionX, placement.positionY, placement.positionZ])); return model }
+    if (f) {
+      const teile = feldBauteile(model, f, placement.type as FeldBauteilArt, newPlacement.id, [placement.positionX, placement.positionY, placement.positionZ])
+      model.components3D.push(...(placement.articleNumber ? teile.map((c) => ({ ...c, articleNumber: placement.articleNumber!, name: placement.anzeigeName ?? c.name })) : teile))
+      return model
+    }
   }
   // Treppe ohne Feldbezug (z. B. aus einem Teil ohne Feld ersetzt): nächstes Feld nach 3D-Abstand, nie die Rückfall-Spindeltreppe (4 Rohre)
   const naechstes = (): ScaffoldField | undefined => {

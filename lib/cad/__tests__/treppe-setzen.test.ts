@@ -82,3 +82,31 @@ describe('Leiter über Auswahl', () => {
     expect(e.grund).toMatch(/kein Feld/)
   })
 })
+
+describe('Durchstiegsbelag mit Leiter', () => {
+  it('ersetzt in jeder Lage des Feldes den Belag, setzt Leiter je Lage und verändert nichts anderes', async () => {
+    const { generateCADModel, addManualPlacement, generateBillOfMaterials, feldReihe } = await import('@/lib/calculations/cad-engine')
+    const { durchstiegAufFeld } = await import('@/lib/cad/treppe-setzen')
+    const m = generateCADModel({ lengthM: 13.8, widthM: 8.85, heightM: 6.94, floors: 3, floorHeightsM: [], windowCount: 0, doorCount: 0, balconyCount: 0, overhangM: 0.3, setbackM: 0, roofForm: 'satteldach', sides: ['front', 'back', 'left', 'right'], geruestOptionen: { treppe: false } } as never, 'layher-allround')
+    const f = m.fields.find((x) => x.levelIndex === 0 && !x.isCorner && !x.durchgang && x.side === 'front')!
+    const d = durchstiegAufFeld(m, f)
+    const lagen = feldReihe(m, f).length
+    expect(lagen).toBeGreaterThan(1)
+    expect(d.platzierungen.filter((p) => p.type === 'ladder')).toHaveLength(lagen)
+    expect(d.platzierungen.filter((p) => p.type === 'f_deck')).toHaveLength(lagen)
+    const weg = new Set(d.entfernen.flat())
+    let m2 = { ...m, components3D: m.components3D.filter((c) => !weg.has(c.id)) }
+    d.platzierungen.forEach((p, i) => { m2 = addManualPlacement(m2, { id: `manual-d-${i}`, ...p }) })
+    const menge = (mod: typeof m, nr: string) => generateBillOfMaterials(mod).filter((i) => i.articleNumber === nr).reduce((s, i) => s + i.quantity, 0)
+    expect(menge(m2, 'DB-001')).toBeGreaterThan(0)
+    expect(menge(m2, 'LE-001') - menge(m, 'LE-001')).toBe(lagen)
+    // Belag insgesamt: so viele Standardbeläge weniger, wie Durchstiegsbeläge dazukommen (nichts geht verloren, nichts doppelt)
+    const standardArtikel = [...new Set(m.components3D.filter((c) => weg.has(c.id)).map((c) => c.articleNumber))]
+    const standardWeniger = standardArtikel.reduce((s, nr) => s + menge(m, nr) - menge(m2, nr), 0)
+    expect(standardWeniger).toBe(weg.size)
+    expect(menge(m2, 'DB-001')).toBe(weg.size)
+    // Preis und Gewicht des Durchstiegs kommen aus dem Lager (keine erfundenen Zahlen)
+    const zeile = generateBillOfMaterials(m2).find((i) => i.articleNumber === 'DB-001')!
+    expect(zeile.unitPrice ?? zeile.totalPrice).toBe(0)
+  })
+})
