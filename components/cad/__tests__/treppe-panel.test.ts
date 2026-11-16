@@ -16,6 +16,10 @@ describe('TreppePanel', () => {
   })
   it('mit gewählter Treppe sind die Schiebe-Knöpfe aktiv und die Meldung erscheint', () => {
     const html = renderToStaticMarkup(createElement(TreppePanel, { model: m, treppe: stair, meldung: 'Am Ende der Seite: weiter geht es nicht.', onSetzen: h, onSchieben: h, onZu: h }))
-    expect(html).toContain('um Felder schieben'); expect(html).toContain('Am Ende der Seite'); expect(html).not.toMatch(/disabled=""[^>]*aria-label="Felder vor"/)
+    expect(html).toContain('Gewählte Treppe schieben'); expect(html).toContain('Am Ende der Seite'); expect(html).not.toMatch(/disabled=""[^>]*aria-label="Felder vor"/)
+  })
+  it('liegt als Leiste unter dem Band und schwebt nicht im Bild', () => {
+    const html = renderToStaticMarkup(createElement(TreppePanel, { model: m, treppe: null, onSetzen: h, onSchieben: h, onZu: h }))
+    expect(html).not.toMatch(/\b(absolute|fixed)\b/); expect(html).toContain('treppe-leiste')
   })
 })

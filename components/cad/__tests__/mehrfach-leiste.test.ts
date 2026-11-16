@@ -26,4 +26,8 @@ describe('Mehrfachauswahl-Kasten', () => {
     expect(h).toContain('Rahmen: an')
     expect(h).not.toContain('rastet auf 5 cm')
   })
+  it('liegt als Leiste unter dem Band und schwebt nicht im Bild', () => {
+    const h = renderToStaticMarkup(createElement(MehrfachLeiste, { model: m, ids, einrasten: true, rahmenAktiv: false, onVerschieben: () => {}, onKopieren: () => {}, onEntfernen: () => {}, onAbwaehlen: () => {}, onRahmen: () => {} }))
+    expect(h).not.toMatch(/\b(absolute|fixed)\b/)
+  })
 })
