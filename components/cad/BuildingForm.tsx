@@ -22,6 +22,8 @@ import { erkenneGrundriss, FORM_NAME } from '@/lib/cad/grundriss-erkennung'
 import { portalAlsTuer } from '@/lib/cad/portal-erkennung'
 import { analysiereDreiecke, schaetzeEinheit, spannweiten, nullpunktUeberTiefstem, abschnitteAusTeilen, abschnitteAusTeileListe, vorgabeAchseEinheit, type GebaeudeTeil } from '@/lib/cad/modell-analyse'
 import { planLesen } from '@/lib/cad/plan-import'
+import { bauwerkAusPdfs } from '@/lib/cad/bauwerk-lesen'
+import type { BauwerkAusPlaenen } from '@/lib/cad/bauwerk-aus-plaenen'
 import type { GeschossHoehenVorschlag } from '@/lib/cad/geschoss-hoehen-aus-plan'
 import { pruefePlanImport, formatHinweis, type Pruefbericht } from '@/lib/cad/datenqualitaet'
 import GelaendeEbenenPanel from '@/components/cad/GelaendeEbenenPanel'
@@ -170,8 +172,22 @@ export default function BuildingForm({ building, systemId, onChange, onSystemCha
   const NEU_ERLAUBT = ['.dxf', '.ply'];
   const DXF_ARTEN = ['.dwg', '.dwt', '.step', '.stp', '.igs', '.skp']; // .ifc wird seit dem IFC-Import gelesen (unten)
 
+  const [turmVorschlag, setTurmVorschlag] = useState<{ v: BauwerkAusPlaenen; werte: { laenge: string; breite: string; hoehe: string } } | null>(null)
+  const zahlText = (x?: number) => (x === undefined ? '' : String(x).replace('.', ','))
   async function handlePlanUpload(file: File, weitere: File[] = []) {
     setPlanGeschossHoehen(null)
+    setTurmVorschlag(null)
+    // Mehrere Vektor-PDFs (Grundriss + Ansichten): zuerst gemeinsam lesen und als Vorschlag zur Bestätigung zeigen
+    if (weitere.length > 0 && [file, ...weitere].every((d) => /\.pdf$/i.test(d.name))) {
+      try {
+        const v = await bauwerkAusPdfs([file, ...weitere])
+        if (v && (v.laengeM || v.hoeheM)) {
+          setTurmVorschlag({ v, werte: { laenge: zahlText(v.laengeM), breite: zahlText(v.breiteM), hoehe: zahlText(v.hoeheM) } })
+          setAnalyseHinweis('Aus den Plänen gelesen – bitte die Maße unten prüfen und übernehmen.')
+          return
+        }
+      } catch { /* bisheriger Weg (KI-Auswertung) */ }
+    }
     setPlanFassadenKonturen([])
     setAnalyseHinweis(null);
     setModellImport(null);
@@ -773,6 +789,29 @@ export default function BuildingForm({ building, systemId, onChange, onSystemCha
               )
             })()}
             {zeichnerOffen && <UmrissZeichner planDatei={letzterPlan} onUebernehmen={zeichnungUebernehmen} onGeschosse={geschosseUebernehmen} onAbbrechen={() => setZeichnerOffen(false)} />}
+            {turmVorschlag && (
+              <div className='rounded-lg border border-amber-300 bg-amber-50 p-3 space-y-2 text-[11px] text-[#424245]' data-testid='turm-vorschlag'>
+                <p className='font-semibold'>Bauwerk aus {`${turmVorschlag.v.ansichten?.je.length ?? 0} Ansicht(en)`}{turmVorschlag.v.grundriss ? ' und Grundriss' : ''} – bitte prüfen</p>
+                <ul className='space-y-0.5'>
+                  {turmVorschlag.v.befunde.map((b, i) => <li key={i}>{b.ampel === 'gruen' ? '🟢' : b.ampel === 'gelb' ? '🟡' : '🔴'} {b.text}</li>)}
+                  {turmVorschlag.v.nichtGelesen.map((t, i) => <li key={`n${i}`}>⚪ {t}</li>)}
+                </ul>
+                <div className='grid grid-cols-3 gap-2'>
+                  {([['laenge', 'Länge (m)'], ['breite', 'Breite (m)'], ['hoehe', 'Höhe (m)']] as const).map(([k, l]) => (
+                    <label key={k} className='block'>{l}<input aria-label={l} inputMode='decimal' value={turmVorschlag.werte[k]} onChange={(ev) => setTurmVorschlag((a) => a ? ({ ...a, werte: { ...a.werte, [k]: ev.target.value } }) : a)} className='mt-0.5 w-full rounded-lg border border-black/15 bg-white px-2 py-1' /></label>
+                  ))}
+                </div>
+                <div className='flex gap-2'>
+                  <button type='button' className='rounded-lg bg-[#e8590c] px-3 py-1 font-semibold text-white' onClick={() => {
+                    const n = (t: string) => { const x = Number(t.trim().replace(',', '.')); return t.trim() !== '' && Number.isFinite(x) && x > 0 ? x : null }
+                    const l = n(turmVorschlag.werte.laenge), b = n(turmVorschlag.werte.breite), h = n(turmVorschlag.werte.hoehe)
+                    onChange({ ...building, ...(l !== null ? { lengthM: l } : {}), ...(b !== null ? { widthM: b } : {}), ...(h !== null ? { heightM: h } : {}) })
+                    setTurmVorschlag(null)
+                  }}>Übernehmen</button>
+                  <button type='button' className='rounded-lg bg-black/10 px-3 py-1' onClick={() => setTurmVorschlag(null)}>Verwerfen</button>
+                </div>
+              </div>
+            )}
             {planGeschossHoehen && (
               <div className='rounded-lg border border-amber-300 bg-amber-50 p-3 space-y-2 text-[11px] text-[#424245]'>
                 <p className='font-semibold'>Geschosshöhen aus „{planGeschossHoehen.name}“ prüfen</p>
