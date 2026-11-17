@@ -1235,6 +1235,45 @@ function GeschossKoerper({ geschosse, untenM = 0 }: { geschosse: { name: string;
   )
 }
 
+/** Vieleck um d Meter nach außen versetzt (Gehrung an den Ecken); Orientierung wird erkannt. Nur Darstellung. */
+function versetzterUmriss(punkte: { x: number; z: number }[], d: number): { x: number; z: number }[] {
+  let a2 = 0
+  punkte.forEach((p, i) => { const q = punkte[(i + 1) % punkte.length]; a2 += p.x * q.z - q.x * p.z })
+  const s = a2 > 0 ? 1 : -1 // Vorzeichen so, dass die Normale nach außen zeigt
+  const n = punkte.length
+  return punkte.map((p, i) => {
+    const v = punkte[(i - 1 + n) % n], w = punkte[(i + 1) % n]
+    const nrm = (a: { x: number; z: number }, b: { x: number; z: number }) => { const dx = b.x - a.x, dz = b.z - a.z, l = Math.hypot(dx, dz) || 1; return { x: s * dz / l, z: -s * dx / l } }
+    const n1 = nrm(v, p), n2 = nrm(p, w)
+    const bx = n1.x + n2.x, bz = n1.z + n2.z
+    const k = 1 + n1.x * n2.x + n1.z * n2.z
+    return k < 0.2 ? { x: p.x + n1.x * d, z: p.z + n1.z * d } : { x: p.x + bx * d / k, z: p.z + bz * d / k }
+  })
+}
+
+/** Sockel und Traufgesims entlang des Umrisses (nur Darstellung, keine Mengen). */
+function UmrissGesimse({ punkte, hoeheM }: { punkte: { x: number; z: number }[]; hoeheM: number }) {
+  const geo = useMemo(() => {
+    if (!(hoeheM > 2.5)) return null
+    const ring = (d: number, h: number, y0: number) => {
+      const o = versetzterUmriss(punkte, d)
+      const g = new THREE.ExtrudeGeometry(new THREE.Shape(o.map((q) => new THREE.Vector2(q.x, -q.z))), { depth: h, bevelEnabled: false })
+      g.rotateX(-Math.PI / 2); g.translate(0, y0, 0)
+      return g
+    }
+    const sockelH = Math.min(0.6, hoeheM * 0.08), gesH = Math.min(0.22, hoeheM * 0.03)
+    return { sockel: ring(0.06, sockelH, 0), gesims: ring(0.16, gesH, hoeheM - gesH) }
+  }, [punkte, hoeheM])
+  useEffect(() => () => { geo?.sockel.dispose(); geo?.gesims.dispose() }, [geo])
+  if (!geo) return null
+  return (
+    <group>
+      <mesh geometry={geo.sockel} receiveShadow><meshStandardMaterial color="#8d8679" roughness={0.95} side={THREE.DoubleSide} /></mesh>
+      <mesh geometry={geo.gesims} castShadow><meshStandardMaterial color="#ddd6c8" roughness={0.85} side={THREE.DoubleSide} /></mesh>
+    </group>
+  )
+}
+
 /** Gebäude mit Umriss: Vieleck-Grundfläche, nach oben gezogen (flaches Dach). */
 function UmrissGebaeude({ punkte, heightM, kantenHoeheM, untenM = 0 }: { punkte: { x: number; z: number }[]; heightM: number; kantenHoeheM?: number[]; untenM?: number }) {
   const praes = useContext(FarbModusKontext) === 'praesentation'
@@ -1293,16 +1332,23 @@ function FassadenMerkmal({ f, pos, rot }: { f: BuildingFeature3D; pos: [number, 
   const istTuer = f.type === 'door'
   return (
     <group key={f.id} position={pos} rotation={rot}>
-      {/* Laibung (dunkel, leicht eingesetzt) */}
-      <mesh>
-        <boxGeometry args={[f.widthM, f.heightM, 0.06]} />
-        <meshStandardMaterial color={istTuer ? '#4a3a2c' : '#2b3a4a'} roughness={istTuer ? 0.7 : 0.2} metalness={istTuer ? 0.05 : 0.5} />
+      {/* Scheibe bzw. Türblatt (dunkel, spiegelnd) – vor der Wand, nicht vom Rahmen verdeckt */}
+      <mesh position={[0, 0, 0.03]}>
+        <boxGeometry args={[f.widthM, f.heightM, 0.04]} />
+        <meshStandardMaterial color={istTuer ? '#5a4332' : '#3d5266'} roughness={istTuer ? 0.7 : 0.12} metalness={istTuer ? 0.05 : 0.6} />
       </mesh>
-      {/* Rahmen */}
-      <mesh position={[0, 0, 0.035]}>
-        <boxGeometry args={[f.widthM + 0.08, f.heightM + 0.08, 0.02]} />
-        <meshStandardMaterial color="#f4f1ea" roughness={0.6} />
-      </mesh>
+      {/* Rahmen: vier Leisten um die Scheibe, stehen vor der Scheibe */}
+      {[
+        { p: [0, f.heightM / 2 + 0.04, 0.055], a: [f.widthM + 0.16, 0.08, 0.05] },
+        { p: [0, -f.heightM / 2 - 0.04, 0.055], a: [f.widthM + 0.16, 0.08, 0.05] },
+        { p: [-f.widthM / 2 - 0.04, 0, 0.055], a: [0.08, f.heightM, 0.05] },
+        { p: [f.widthM / 2 + 0.04, 0, 0.055], a: [0.08, f.heightM, 0.05] },
+      ].map((r, i) => (
+        <mesh key={i} position={r.p as [number, number, number]}>
+          <boxGeometry args={r.a as [number, number, number]} />
+          <meshStandardMaterial color="#f4f1ea" roughness={0.6} />
+        </mesh>
+      ))}
       {/* Fensterbank bzw. Türvordach mit Stufe */}
       {!istTuer && (
         <mesh position={[0, -f.heightM / 2 - 0.06, 0.07]} castShadow>
@@ -1325,8 +1371,8 @@ function FassadenMerkmal({ f, pos, rot }: { f: BuildingFeature3D; pos: [number, 
       {/* Fensterkreuz */}
       {!istTuer && (
         <>
-          <mesh position={[0, 0, 0.04]}><boxGeometry args={[0.03, f.heightM, 0.02]} /><meshStandardMaterial color="#f4f1ea" /></mesh>
-          <mesh position={[0, 0, 0.04]}><boxGeometry args={[f.widthM, 0.03, 0.02]} /><meshStandardMaterial color="#f4f1ea" /></mesh>
+          <mesh position={[0, 0, 0.06]}><boxGeometry args={[0.05, f.heightM, 0.03]} /><meshStandardMaterial color="#f4f1ea" /></mesh>
+          <mesh position={[0, 0, 0.06]}><boxGeometry args={[f.widthM, 0.05, 0.03]} /><meshStandardMaterial color="#f4f1ea" /></mesh>
         </>
       )}
     </group>
@@ -1582,6 +1628,7 @@ function Building3D({
           {building.geschossKoerper && building.geschossKoerper.length >= 2
             ? <GeschossKoerper geschosse={building.geschossKoerper} untenM={hangM} />
             : <UmrissGebaeude punkte={building.umriss} heightM={heightM} kantenHoeheM={building.umrissKantenHoeheM} untenM={hangM} />}
+          {!building.umrissKantenHoeheM && !(building.geschossKoerper && building.geschossKoerper.length >= 2) && <UmrissGesimse punkte={building.umriss} hoeheM={heightM} />}
           {features.filter((f) => f.umriss).map((f) => {
             const u = f.umriss!
             const y = f.bottomY + f.heightM / 2
