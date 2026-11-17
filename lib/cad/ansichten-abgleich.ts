@@ -66,7 +66,7 @@ export function gleicheAnsichtenAb(ansichten: AnsichtEingang[]): BauwerkVorschla
     const z = belegt.reduce((a, b) => (b.hauptHoeheM > a.hauptHoeheM ? b : a))
     v.hoeheM = z.hauptHoeheM
     v.hoeheAus = z.name
-    befunde.push({ code: 'HOEHE_BELEGT', ampel: belegt.length > 1 ? 'gruen' : 'gelb', text: `Höhe ${z.hauptHoeheM.toLocaleString('de-DE')} m aus ${belegt.length > 1 ? `${belegt.length} Ansichten mit belegtem Boden` : `der Ansicht ${z.name} (Boden durch Türen belegt, keine zweite Bestätigung)`}.` })
+    befunde.push({ code: 'HOEHE_BELEGT', ampel: belegt.length > 1 ? 'gruen' : 'gelb', text: `Höhe ${z.hauptHoeheM.toLocaleString('de-DE')} m aus ${belegt.length > 1 ? `${belegt.length} Ansichten mit belegtem Boden` : `${z.name} (Boden durch Türen belegt, keine zweite Bestätigung)`}.` })
   } else {
     befunde.push({ code: 'HOEHE_WIDERSPRUCH', ampel: 'rot', text: `Ansichten mit belegtem Boden zeigen verschiedene Höhen (${belegt.map((z) => `${z.name}: ${z.hauptHoeheM.toLocaleString('de-DE')} m`).join(', ')}). Es wird keine Höhe vorgeschlagen.` })
   }
