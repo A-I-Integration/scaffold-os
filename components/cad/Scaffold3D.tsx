@@ -1344,9 +1344,9 @@ function Terrassen3D({ terrassen, umriss }: { terrassen: { ebene: number; x0: nu
         const frei = seiten.filter((s) => abstandZumUmriss(s.mx, s.mz, umriss) > 0.4)
         return (
           <group key={i}>
-            <mesh position={[cx, t.bottomY - 0.1, cz]} castShadow receiveShadow>
-              <boxGeometry args={[w, 0.2, d]} />
-              <meshStandardMaterial color="#b9b3a6" roughness={0.9} />
+            <mesh position={[cx, t.bottomY - 0.17, cz]} castShadow receiveShadow>
+              <boxGeometry args={[w, 0.34, d]} />
+              <meshStandardMaterial color="#c9a46a" roughness={0.85} />
             </mesh>
             {frei.map((s, j) => {
               const pfosten = Math.max(2, Math.round(s.laenge / 1.1) + 1)
