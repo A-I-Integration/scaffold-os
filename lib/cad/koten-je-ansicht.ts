@@ -16,6 +16,9 @@ const TITEL: { re: RegExp; art: AnsichtArt }[] = [
   { re: /^NORDANSICHT$/i, art: 'nord' }, { re: /^OSTANSICHT$/i, art: 'ost' },
   { re: /^S[ÜU]DANSICHT$/i, art: 'sued' }, { re: /^WESTANSICHT$/i, art: 'west' },
   { re: /^SCHNITT\s+[A-Z]-[A-Z]$/i, art: 'schnitt' },
+  // Schreibweise „Ansicht Ost“ (statt „OSTANSICHT“), wie in Plänen des Kirchturm-Projekts
+  { re: /^ANSICHT\s+NORD$/i, art: 'nord' }, { re: /^ANSICHT\s+OST$/i, art: 'ost' },
+  { re: /^ANSICHT\s+S[ÜU]D$/i, art: 'sued' }, { re: /^ANSICHT\s+WEST$/i, art: 'west' },
 ]
 const KOTE = /^([+±-])\s*(\d{1,2}),(\d{2})$/
 const BEZEICHNUNG = /^(traufe|first|ok\s*attika|attika)\b/i
