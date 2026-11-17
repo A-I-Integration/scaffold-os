@@ -1037,11 +1037,15 @@ export default function CADPage() {
   const handleExportMontageplanPdf = useCallback(async () => {
     if (!model) return
     try {
-      const [{ erzeugeMontageplanPdf }, { ladeArtikelBilder }] = await Promise.all([import('@/lib/export/montageplan-pdf'), import('@/lib/export/artikelbilder')])
-      const bilder = await ladeArtikelBilder(materials.map((m) => m.articleNumber))
+      const [{ erzeugeMontageplanPdf }, { ladeArtikelBilder, ladeBildIndex, bildZuordnung }] = await Promise.all([import('@/lib/export/montageplan-pdf'), import('@/lib/export/artikelbilder')])
+      const zuordnung = bildZuordnung(materials, systemId, await ladeBildIndex())
+      const geladen = await ladeArtikelBilder(Object.values(zuordnung).map((z) => z.bildNr))
+      const bilder: Record<string, string> = {}
+      for (const [nr, z] of Object.entries(zuordnung)) if (geladen[z.bildNr]) bilder[nr] = geladen[z.bildNr]
+      const symbolbilder = Object.entries(zuordnung).filter(([nr, z]) => z.symbol && bilder[nr]).map(([nr]) => nr)
       const pdf = erzeugeMontageplanPdf(modelWithManual ?? model, materials, {
         projektName: aufmassProjektName || 'Gerüstprojekt', firma: firmenName || 'Ihr Unternehmen', datum: new Date().toLocaleDateString('de-DE'),
-        systemName: model.system ? `${model.system.hersteller} ${model.system.systemName}` : 'Gerüst', bilder,
+        systemName: model.system ? `${model.system.hersteller} ${model.system.systemName}` : 'Gerüst', bilder, symbolbilder,
       })
       const a = document.createElement('a')
       a.href = URL.createObjectURL(new Blob([pdf as BlobPart], { type: 'application/pdf' }))
@@ -1051,7 +1055,7 @@ export default function CADPage() {
     } catch (err) {
       alert('❌ Montageplan-PDF fehlgeschlagen: ' + (err instanceof Error ? err.message : String(err)))
     }
-  }, [model, modelWithManual, materials, aufmassProjektName, firmenName])
+  }, [model, modelWithManual, materials, aufmassProjektName, firmenName, systemId])
 
   // NEU (Marktvergleich-Lücke 4): reine Geometriedaten für einen externen
   // Statiker – kein eigener Standsicherheitsnachweis.

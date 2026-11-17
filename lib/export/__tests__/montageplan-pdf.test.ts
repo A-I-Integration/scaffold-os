@@ -29,3 +29,14 @@ describe('Montageplan-PDF', () => {
     expect(erzeugeMontageplanPdf(m, [], opt).length).toBeGreaterThan(1000)
   })
 })
+
+import { bildZuordnung } from '../artikelbilder'
+describe('Bildzuordnung', () => {
+  it('eigenes Bild vor Symbolbild; ohne Katalog des Systems kein Bild', () => {
+    const index = { '2678.129': 'x.jpg' }
+    const z = bildZuordnung([mat('Diagonale', 'Diagonalen', 3, '2678.129'), mat('Rahmen', 'Rahmen', 2, 'RA-003')], 'layher-allround', index)
+    expect(z['2678.129']).toEqual({ bildNr: '2678.129', symbol: false })
+    expect(z['RA-003']).toBeUndefined()
+    expect(bildZuordnung([mat('Rahmen', 'Rahmen', 2, 'RA-003')], 'unbekannt', index)).toEqual({})
+  })
+})
