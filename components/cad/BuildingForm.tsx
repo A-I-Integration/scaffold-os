@@ -23,6 +23,7 @@ import { portalAlsTuer } from '@/lib/cad/portal-erkennung'
 import { analysiereDreiecke, schaetzeEinheit, spannweiten, nullpunktUeberTiefstem, abschnitteAusTeilen, abschnitteAusTeileListe, vorgabeAchseEinheit, type GebaeudeTeil } from '@/lib/cad/modell-analyse'
 import { planLesen } from '@/lib/cad/plan-import'
 import { bauwerkAusPdfs } from '@/lib/cad/bauwerk-lesen'
+import { wandOberkantenVorschlag } from '@/lib/cad/wandoberkanten'
 import type { BauwerkAusPlaenen } from '@/lib/cad/bauwerk-aus-plaenen'
 import type { GeschossHoehenVorschlag } from '@/lib/cad/geschoss-hoehen-aus-plan'
 import { pruefePlanImport, formatHinweis, type Pruefbericht } from '@/lib/cad/datenqualitaet'
@@ -102,10 +103,10 @@ export default function BuildingForm({ building, systemId, onChange, onSystemCha
       setPlanGeschossHoehen({
         name: 'PDF-Import aus dem Aufmaß',
         vorschlaege: vorschlaege as GeschossHoehenVorschlag[],
-        werte: vorschlaege.map((v) => String(v.obenM).replace('.', ',')),
+        werte: wandOberkantenVorschlag(vorschlaege, building.eavesHeightM > 0 ? building.eavesHeightM : undefined).map((m) => String(m).replace('.', ',')),
         bestaetigt: false,
       })
-      setAnalyseHinweis('PDF-Geschosskonturen aus dem Aufmaß übernommen. Bitte jede vorgeschlagene OKFF-Höhe prüfen und ausdrücklich bestätigen.')
+      setAnalyseHinweis('PDF-Geschosskonturen aus dem Aufmaß übernommen. Die Oberkanten der Außenwände sind aus den Fußboden-Koten vorbelegt: bitte jede Höhe prüfen und ausdrücklich bestätigen.')
     } else {
       // Auch ohne eindeutig erkannte OKFF-Koten muss die manuelle Höhenbestätigung
       // angeboten werden. Die Konturen bleiben erhalten; Höhen werden nicht geraten.
@@ -118,10 +119,11 @@ export default function BuildingForm({ building, systemId, onChange, onSystemCha
           text: 'Keine eindeutige OKFF-Kote erkannt – Höhe anhand des Plans manuell eintragen.',
           bestaetigungErforderlich: true as const,
         })),
-        werte: konturen.map(() => ''),
+        // Nur das oberste Geschoss über dem Gelände bekommt einen Wert, und nur aus der Traufe, die der Plan nennt; alle anderen bleiben leer
+        werte: konturen.map((g) => (g.ebene === Math.max(...konturen.filter((k) => k.ebene >= 0 && k.ebene < 99).map((k) => k.ebene)) && building.eavesHeightM > 0 ? String(building.eavesHeightM).replace('.', ',') : '')),
         bestaetigt: false,
       })
-      setAnalyseHinweis(`${konturen.length} PDF-Geschosskontur(en) übernommen. Bitte die OKFF-/Wandoberkanten anhand des Plans manuell eintragen.`)
+      setAnalyseHinweis(`${konturen.length} PDF-Geschosskontur(en) übernommen. Bitte die Oberkanten der Außenwände anhand des Plans eintragen (das oberste Geschoss ist mit der Traufe vorbelegt, falls der Plan sie nennt).`)
     }
   }, [building.planGeschossKonturen, building.planGeschossHoehenVorschlaege])
   const ifcSitzung = useRef<string>('')
@@ -424,7 +426,7 @@ export default function BuildingForm({ building, systemId, onChange, onSystemCha
           if (pl) {
             setPlanFassadenKonturen(pl.geschosse.filter((g) => g.ebene >= 0 && g.umriss && g.umriss.length >= 3).map((g) => ({ ebene: g.ebene, titel: g.titel, umriss: g.umriss! })))
             if (pl.geschossHoehenVorschlaege?.length) {
-              setPlanGeschossHoehen({ name: file.name, vorschlaege: pl.geschossHoehenVorschlaege, werte: pl.geschossHoehenVorschlaege.map((v) => String(v.obenM).replace('.', ',')), bestaetigt: false })
+              setPlanGeschossHoehen({ name: file.name, vorschlaege: pl.geschossHoehenVorschlaege, werte: wandOberkantenVorschlag(pl.geschossHoehenVorschlaege, pl.traufKoteM).map((m) => String(m).replace('.', ',')), bestaetigt: false })
             }
             const haupt = pl.geschosse.find((g) => g.ebene === pl.hauptEbene)
             const aus: string[] = []
@@ -823,7 +825,7 @@ export default function BuildingForm({ building, systemId, onChange, onSystemCha
             {planGeschossHoehen && (
               <div className='rounded-lg border border-amber-300 bg-amber-50 p-3 space-y-2 text-[11px] text-[#424245]'>
                 <p className='font-semibold'>Geschosshöhen aus „{planGeschossHoehen.name}“ prüfen</p>
-                <p>Nur ausdrücklich beschriftete OKFF-/OK-FFB-Koten wurden erkannt. Bitte jede Höhe mit dem Plan vergleichen. Bestätigte Höhen werden mit der passenden Geschosskontur an die Fassadenanalyse übergeben und im 3D als gestuftes Gebäude gezeichnet. Die Höhe gilt als Oberkante der Außenwand dieses Geschosses, nicht als Fußboden-Höhe: beim Erdgeschoss also die Fußboden-Höhe des Obergeschosses eintragen, beim obersten Geschoss die Traufe bzw. den oberen Abschluss.</p>
+                <p>Erkannt wurden nur ausdrücklich beschriftete OKFF-/OK-FFB-Koten. Vorbelegt ist die Oberkante der Außenwand: beim Geschoss die Fußboden-Kote des nächsten Geschosses, beim obersten die Traufe (falls im Plan genannt). Bitte jede Höhe mit dem Plan vergleichen. Bestätigte Höhen werden mit der passenden Geschosskontur an die Fassadenanalyse übergeben und im 3D als gestuftes Gebäude gezeichnet. Die Höhe gilt als Oberkante der Außenwand dieses Geschosses, nicht als Fußboden-Höhe.</p>
                 {planGeschossHoehen.vorschlaege.map((v, i) => (
                   <label key={`${v.ebene}-${i}`} className='flex flex-wrap items-center gap-2'>
                     <span className='min-w-28'>{v.ebene === 0 ? 'Erdgeschoss' : v.ebene === 99 ? 'Dachgeschoss' : v.ebene === -1 ? 'Kellergeschoss' : `${v.ebene}. Obergeschoss`}</span>
@@ -833,8 +835,9 @@ export default function BuildingForm({ building, systemId, onChange, onSystemCha
                 ))}
                 <div className='flex items-center gap-2'>
                   <button type='button' className='rounded-lg bg-[#0071e3] px-3 py-1 font-semibold text-white' onClick={() => {
-                    const gueltig = planGeschossHoehen.werte.every((w) => w.trim() !== '' && Number.isFinite(Number(w.replace(',', '.'))))
-                    if (!gueltig) { setAnalyseHinweis('❌ Bitte alle vorgeschlagenen Geschosshöhen als Zahlen in Metern eintragen.'); return }
+                    const befuellt = planGeschossHoehen.werte.filter((w) => w.trim() !== '')
+                    const gueltig = befuellt.length > 0 && befuellt.every((w) => Number.isFinite(Number(w.replace(',', '.'))))
+                    if (!gueltig) { setAnalyseHinweis('❌ Bitte mindestens eine Geschosshöhe als Zahl in Metern eintragen (leere Geschosse, z. B. der Keller, werden ausgelassen).'); return }
                     const bestaetigteGeschosse = planGeschossHoehen.vorschlaege.flatMap((v, i) => {
                       const kontur = planFassadenKonturen.find((g) => g.ebene === v.ebene)
                       const obenM = Number(planGeschossHoehen.werte[i].replace(',', '.'))
