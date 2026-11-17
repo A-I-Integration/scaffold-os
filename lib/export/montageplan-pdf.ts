@@ -17,6 +17,8 @@ export interface MontageplanOptionen extends PlanPdfOptionen {
   systemName: string
   /** Vorschaubilder je Artikelnummer als Data-URL (PNG oder JPEG) */
   bilder?: Record<string, string>
+  /** Artikelnummern, deren Bild nur ein Symbolbild der Artikelgruppe ist */
+  symbolbilder?: string[]
 }
 
 /** Gruppen der Materialliste in Ladereihenfolge; Kategorien der Stückliste → Gruppenname */
@@ -95,7 +97,8 @@ export function erzeugeMontageplanPdf(model: CADModel, materials: MaterialItem[]
       doc.line(SPALTEN.fehlt, y, SPALTEN.fehlt, y + ZEILE)
       const bild = opt.bilder?.[m.articleNumber]
       if (bild) {
-        try { doc.addImage(bild, bild.startsWith('data:image/png') ? 'PNG' : 'JPEG', SPALTEN.vorschau + 1.5, y + 0.8, 21, ZEILE - 1.6, undefined, 'FAST') } catch { /* Bild unlesbar: Feld bleibt leer */ }
+        if (opt.symbolbilder?.includes(m.articleNumber)) { doc.setFontSize(5.5); doc.setTextColor(120); doc.text('Symbolbild', SPALTEN.vorschau + 1.5, y + ZEILE - 0.5) }
+        try { doc.addImage(bild, bild.startsWith('data:image/png') ? 'PNG' : 'JPEG', SPALTEN.vorschau + 1.5, y + 0.8, 21, ZEILE - 3, undefined, 'FAST') } catch { /* Bild unlesbar: Feld bleibt leer */ }
       }
       doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5); doc.setTextColor(0)
       const zeilenText = doc.splitTextToSize(m.name, SPALTEN.geladen - SPALTEN.name - 14) as string[]
