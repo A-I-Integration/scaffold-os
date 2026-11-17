@@ -115,14 +115,13 @@ export function planImportAus(dateiname: string, massstab: number, gefunden: Gef
   if (!ueberGelaende.length) return null // nur Keller gefunden: kein Gerüst-Grundriss
   const haupt = ueberGelaende.reduce((a, b) => (b.flaecheM2 > a.flaecheM2 ? b : a))
   const hauptG = gefunden.find((g) => g.ebene === haupt.ebene)
-  // Die Geschosse liegen auf dem Blatt nebeneinander. Für die 3D-Fassade werden sie übereinandergelegt: Mitte des Rahmens jedes
-  // Geschosses auf die Mitte des Hauptgeschosses (Annahme: gleiche Mitte; ohne weitere Angabe im Plan nicht genauer bestimmbar).
+  // Die Geschosse liegen auf dem Blatt nebeneinander. 
   const mitteVon = (u?: { x: number; z: number }[]) => u && u.length ? { x: (Math.min(...u.map((p) => p.x)) + Math.max(...u.map((p) => p.x))) / 2, z: (Math.min(...u.map((p) => p.z)) + Math.max(...u.map((p) => p.z))) / 2 } : null
   const mHaupt = mitteVon(haupt.umriss)
   const versatzJeEbene = new Map<number, { dx: number; dz: number }>()
   if (mHaupt) for (const g of geschosse) {
     const m = mitteVon(g.umriss)
-    if (m) versatzJeEbene.set(g.ebene, { dx: runde(mHaupt.x - m.x), dz: runde(mHaupt.z - m.z) })
+    if (m) versatzJeEbene.set(g.ebene, { dx: runde(mHaupt.x - m.x), dz: 0 })
   }
   for (const g of geschosse) {
     const v = versatzJeEbene.get(g.ebene)

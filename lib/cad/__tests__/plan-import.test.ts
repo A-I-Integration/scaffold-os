@@ -35,7 +35,7 @@ describe('planImportAus', () => {
     expect(Math.max(...umriss.map((q) => q.z)) - Math.min(...umriss.map((q) => q.z))).toBeCloseTo(8, 1)
     expect((Math.max(...umriss.map((q) => q.x)) + Math.min(...umriss.map((q) => q.x)))).toBeCloseTo(0, 2)
   })
-  it('legt unterschiedlich große Geschosse mit gleicher Mitte übereinander', () => {
+  it('legt Geschosse in Blattrichtung auf gleiche Mitte, behält die Lage nach oben/unten', () => {
     const mpp = (0.0254 / 72) * 100
     const pt = (m: number) => m / mpp
     const polygon = (x: number, y: number, w: number, h: number) => [
@@ -53,7 +53,7 @@ describe('planImportAus', () => {
       z: (Math.min(...ring.map((q) => q.z)) + Math.max(...ring.map((q) => q.z))) / 2,
     })
     expect(mitte(eg).x).toBeCloseTo(mitte(og).x, 1)
-    expect(mitte(eg).z).toBeCloseTo(mitte(og).z, 1)
+    expect(mitte(og).z - mitte(eg).z).toBeCloseTo(1, 1)
   })
 })
 
