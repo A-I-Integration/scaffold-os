@@ -1274,6 +1274,51 @@ function UmrissGesimse({ punkte, hoeheM }: { punkte: { x: number; z: number }[];
   )
 }
 
+/**
+ * Pultdach über einem Gebäude mit Umriss (nur Darstellung): geneigte Dachplatte mit Überstand über dem Umschließenden des Umrisses,
+ * darunter ein Keil in Wandfarbe zwischen Traufe (niedrige Seite) und Dachunterseite. Die Wände enden an der Traufe.
+ * Koordinaten wie der Umriss (Szene). niedrig = Seite mit der niedrigen Traufe.
+ */
+function UmrissPultdach({ punkte, traufeM, firstM, niedrig, ueberstandM = 0.9, dickeM = 0.3 }: {
+  punkte: { x: number; z: number }[]; traufeM: number; firstM: number; niedrig: 'front' | 'back' | 'left' | 'right'; ueberstandM?: number; dickeM?: number
+}) {
+  const praes = useContext(FarbModusKontext) === 'praesentation'
+  const geo = useMemo(() => {
+    const xs = punkte.map((q) => q.x), zs = punkte.map((q) => q.z)
+    const x0 = Math.min(...xs), x1 = Math.max(...xs), z0 = Math.min(...zs), z1 = Math.max(...zs)
+    const laengs = niedrig === 'front' || niedrig === 'back' // Gefälle entlang z
+    const D = laengs ? z1 - z0 : x1 - x0 // Länge des Gefälles
+    const V = laengs ? x1 - x0 : z1 - z0 // Breite quer dazu
+    const rise = firstM - traufeM
+    const top = (u: number) => traufeM + (rise * u) / D
+    // u = 0 an der niedrigen Traufe, wächst zur hohen Seite; v quer dazu
+    const abbilden = (u: number, y: number, v: number): [number, number, number] => {
+      if (niedrig === 'front') return [x0 + v, y, z1 - u]
+      if (niedrig === 'back') return [x0 + v, y, z0 + u]
+      if (niedrig === 'right') return [x1 - u, y, z0 + v]
+      return [x0 + u, y, z0 + v]
+    }
+    const prisma = (profil: [number, number][], v0: number, v1: number) => {
+      const g = new THREE.ExtrudeGeometry(new THREE.Shape(profil.map(([u, y]) => new THREE.Vector2(u, y))), { depth: v1 - v0, bevelEnabled: false })
+      const pos = g.attributes.position
+      for (let i = 0; i < pos.count; i++) { const [a, b, c] = abbilden(pos.getX(i), pos.getY(i), v0 + pos.getZ(i)); pos.setXYZ(i, a, b, c) }
+      g.computeVertexNormals()
+      return g
+    }
+    const o = ueberstandM
+    const platte = prisma([[-o, top(-o) - dickeM], [D + o, top(D + o) - dickeM], [D + o, top(D + o)], [-o, top(-o)]], -o, V + o)
+    const keil = prisma([[0, traufeM], [D, traufeM], [D, top(D) - dickeM], [0, top(0) - dickeM]], 0, V)
+    return { platte, keil }
+  }, [punkte, traufeM, firstM, niedrig, ueberstandM, dickeM])
+  useEffect(() => () => { geo.platte.dispose(); geo.keil.dispose() }, [geo])
+  return (
+    <group>
+      <mesh geometry={geo.keil} castShadow receiveShadow><WandMaterial praes={praes} putz={false} doubleSide /></mesh>
+      <mesh geometry={geo.platte} castShadow receiveShadow><meshStandardMaterial color="#e4e1da" roughness={0.9} side={THREE.DoubleSide} /></mesh>
+    </group>
+  )
+}
+
 /** Gebäude mit Umriss: Vieleck-Grundfläche, nach oben gezogen (flaches Dach). */
 function UmrissGebaeude({ punkte, heightM, kantenHoeheM, untenM = 0 }: { punkte: { x: number; z: number }[]; heightM: number; kantenHoeheM?: number[]; untenM?: number }) {
   const praes = useContext(FarbModusKontext) === 'praesentation'
@@ -1616,6 +1661,10 @@ function Building3D({
   // Szenen-Koordinaten des Umrisses. Fenster und Türen sitzen an den Kanten.
   if (building.umriss && building.umriss.length >= 3) {
     const { hangM } = hangDaten(building)
+    // Pultdach im Umriss-Modus: Wände bis zur Traufe, darüber geneigte Platte (nur wenn Traufe, First und die niedrige Seite bekannt sind)
+    const pult = building.roofForm === 'pultdach' && building.eavesHeightM > 0 && building.eavesHeightM < heightM - 0.3 && building.geruestOptionen?.pultNiedrigeSeite
+      ? { traufeM: building.eavesHeightM, firstM: heightM, niedrig: building.geruestOptionen.pultNiedrigeSeite }
+      : null
     return (
       <group>
         {/* Geländefläche in Gebäude-Koordinaten (Boxmitte bei 0); der Umriss liegt in Szenen-Koordinaten (Rückseite bei z = −0,5) */}
@@ -1627,8 +1676,9 @@ function Building3D({
         <group>
           {building.geschossKoerper && building.geschossKoerper.length >= 2
             ? <GeschossKoerper geschosse={building.geschossKoerper} untenM={hangM} />
-            : <UmrissGebaeude punkte={building.umriss} heightM={heightM} kantenHoeheM={building.umrissKantenHoeheM} untenM={hangM} />}
-          {!building.umrissKantenHoeheM && !(building.geschossKoerper && building.geschossKoerper.length >= 2) && <UmrissGesimse punkte={building.umriss} hoeheM={heightM} />}
+            : <UmrissGebaeude punkte={building.umriss} heightM={pult ? pult.traufeM : heightM} kantenHoeheM={building.umrissKantenHoeheM} untenM={hangM} />}
+          {!building.umrissKantenHoeheM && !(building.geschossKoerper && building.geschossKoerper.length >= 2) && !pult && <UmrissGesimse punkte={building.umriss} hoeheM={heightM} />}
+          {pult && <UmrissPultdach punkte={building.umriss} traufeM={pult.traufeM} firstM={pult.firstM} niedrig={pult.niedrig} />}
           {features.filter((f) => f.umriss).map((f) => {
             const u = f.umriss!
             const y = f.bottomY + f.heightM / 2
