@@ -1034,6 +1034,24 @@ export default function CADPage() {
   }, [model, firmenName, aufmassProjektName])
 
   // Montageplan als PDF: Ansicht mit Maßen + Materialliste (Vorschau, Anzahl, Geladen, Fehlt)
+  const handleExportProjektblatt = useCallback(async () => {
+    if (!model) return
+    try {
+      const { erzeugeProjektblattPdf } = await import('@/lib/export/projektblatt-pdf')
+      const pdf = erzeugeProjektblattPdf(modelWithManual ?? model, materials, {
+        projektName: aufmassProjektName || 'Gerüstprojekt', firma: firmenName || 'Ihr Unternehmen', datum: new Date().toLocaleDateString('de-DE'),
+        systemName: model.system ? `${model.system.hersteller} ${model.system.systemName}` : '',
+      })
+      const a = document.createElement('a')
+      a.href = URL.createObjectURL(new Blob([pdf as BlobPart], { type: 'application/pdf' }))
+      a.download = `Projektblatt-${new Date().toISOString().split('T')[0]}.pdf`
+      a.click()
+      URL.revokeObjectURL(a.href)
+    } catch (err) {
+      alert('❌ Projektblatt fehlgeschlagen: ' + (err instanceof Error ? err.message : String(err)))
+    }
+  }, [model, modelWithManual, materials, aufmassProjektName, firmenName])
+
   const handleExportMontageplanPdf = useCallback(async () => {
     if (!model) return
     try {
@@ -1556,6 +1574,7 @@ export default function CADPage() {
             onExportPDF={model ? handleExportPDF : exportOhneModellHinweis}
             onExportMontageplan={model ? handleExportMontageplan : exportOhneModellHinweis}
             onExportMontageplanPdf={model ? handleExportMontageplanPdf : exportOhneModellHinweis}
+            onExportProjektblatt={model ? handleExportProjektblatt : exportOhneModellHinweis}
             onSpeichereProjektdatei={speichereProjektdatei}
             onOpenLv={rolle === 'admin' || istStatikerLogin ? (model ? () => setLvOffen(true) : exportOhneModellHinweis) : undefined}
             onExportStatikGeometrie={model ? handleExportStatik : exportOhneModellHinweis}
