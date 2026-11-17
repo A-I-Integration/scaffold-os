@@ -23,3 +23,18 @@ describe('geschossHoehenAusPlan', () => {
     expect(geschossHoehenAusPlan([t('OKFF EG'), t('+0,00')])).toEqual([])
   })
 })
+
+import { geschossHoehenAusKotenVorschlag } from '../geschoss-hoehen-aus-plan'
+describe('geschossHoehenAusKotenVorschlag', () => {
+  const k = (s: string) => ({ s, x: 0, y: 0 })
+  it('schlägt die dreimal vorkommende, zur Traufe passende Kote als Fußboden 1. OG vor', () => {
+    const v = geschossHoehenAusKotenVorschlag([k('+2,95'), k('+2,95'), k('+2,95'), k('+2,75'), k('+2,75'), k('+3,95')], 5.92, [-1, 0, 1])
+    expect(v.map((x) => [x.ebene, x.obenM])).toEqual([[0, 0], [1, 2.95]])
+  })
+  it('schlägt nichts vor bei zu seltener, unpassender oder mehrdeutiger Kote', () => {
+    expect(geschossHoehenAusKotenVorschlag([k('+2,95'), k('+2,95')], 5.92, [0, 1])).toEqual([])
+    expect(geschossHoehenAusKotenVorschlag([k('+3,20'), k('+3,20'), k('+3,20')], 5.92, [0, 1])).toEqual([])
+    expect(geschossHoehenAusKotenVorschlag([k('+2,95'), k('+2,95'), k('+2,95')], 5.92, [0, 1, 2])).toEqual([])
+    expect(geschossHoehenAusKotenVorschlag([k('+2,95'), k('+2,95'), k('+2,95')], undefined, [0, 1])).toEqual([])
+  })
+})

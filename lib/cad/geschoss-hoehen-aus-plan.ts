@@ -53,3 +53,28 @@ export function geschossHoehenAusPlan(texte: PlanText[]): GeschossHoehenVorschla
   }
   return out.sort((a, b) => a.ebene - b.ebene)
 }
+
+/**
+ * Vorschlag für Zweigeschosser, wenn der Plan keine beschriftete OKFF-Kote nennt: Eine unbeschriftete positive Kote, die in den Ansichten und
+ * Schnitten mindestens dreimal vorkommt, zwischen 2,3 und 3,6 m liegt und zusammen mit der Traufe passt (zwei Geschosse ≈ Traufkote), gilt als
+ * Fußboden des Obergeschosses. Es bleibt ein Vorschlag mit Hinweis; bestätigt wird weiterhin von Hand.
+ */
+export function geschossHoehenAusKotenVorschlag(texte: PlanText[], traufeM: number | undefined, ebenen: number[]): GeschossHoehenVorschlag[] {
+  const ueber = ebenen.filter((e) => e >= 0 && e < 99).sort((a, b) => a - b)
+  if (ueber.length !== 2 || ueber[0] !== 0 || ueber[1] !== 1 || !(traufeM && traufeM > 0)) return []
+  const anzahl = new Map<number, number>()
+  for (const t of texte) {
+    const m = /^\+\s*(\d{1,2}[,.]\d{2})$/.exec(t.s.trim())
+    if (!m) continue
+    const w = Math.round(Number(m[1].replace(',', '.')) * 100) / 100
+    if (w >= 2.3 && w <= 3.6) anzahl.set(w, (anzahl.get(w) ?? 0) + 1)
+  }
+  const kand = [...anzahl.entries()].filter(([w, n]) => n >= 3 && Math.abs(2 * w - traufeM) <= 0.3)
+  if (kand.length !== 1) return []
+  const [w, n] = kand[0]
+  const k = String(w).replace('.', ',')
+  return [
+    { ebene: 0, titel: 'Erdgeschoss', obenM: 0, text: `Bezugshöhe ±0,00; Oberkante Außenwand = Fußboden 1. OG (Vorschlag +${k}, ${n}× im Plan, passt zur Traufe) – bitte prüfen`, bestaetigungErforderlich: true },
+    { ebene: 1, titel: '1. Obergeschoss', obenM: w, text: `Fußboden 1. OG: +${k} kommt ${n}× unbeschriftet im Plan vor und passt zur Traufe (zwei Geschosse) – bitte prüfen`, bestaetigungErforderlich: true },
+  ]
+}
