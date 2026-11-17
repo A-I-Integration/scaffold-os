@@ -12,6 +12,7 @@ import { modellHash } from './modell-stand'
 import { type UmrissPunkt, pruefeUmriss, normalisiereUmriss, umrissKanten, umrissEcken, geruestEckpunkt, umrissBox, zentriereUmriss, kantenHoehenNormalisiert } from './cad-umriss'
 import { KONSOLE_BREITE_M, type CadBalkon } from '../balkon'
 import { fassadenFlaechenAusGeschossen } from '../cad/fassaden-flaechen'
+import { kantenHoehenAusGeschossen } from '../cad/kanten-hoehen-aus-geschossen'
 import { erzeugeFassadenAbschnitte } from '../cad/fassaden-abschnitte'
 
 /** Länge der Podeste der Außentreppe an den Turmenden (m) – zugleich Breite des Durchgangs im Gerüstgeländer. */
@@ -2448,21 +2449,24 @@ function generiereUmrissModell(
   const n = kanten.length
   // Eigene Höhe je Kante (z. B. niedrigerer Anbau): die Lagen enden dort an der jeweiligen Kantenhöhe
   const kHoeheNorm = kantenHoehenNormalisiert(gebaeude.umriss!, gebaeude.umrissKantenHoeheM)
+  // Keine Eingabe je Kante: Rücksprünge aus den bestätigten Geschossen ableiten (Kante ohne höheres Geschoss darüber endet an ihrem Geschoss)
+  const kHoeheAusGeschossen = !kHoeheNorm && geschossKoerper.length >= 2 ? kantenHoehenAusGeschossen(umriss, geschossKoerper, building.heightM) : null
   if (gebaeude.umrissKantenHoeheM && !kHoeheNorm) warnings.push({ type: 'warning', code: 'UMRISS_KANTENHOEHE_UNGUELTIG', message: 'Die Höhen je Kante passen nicht zum Umriss (Anzahl oder Wert) und werden ignoriert – es gilt die einheitliche Gebäudehöhe.' })
+  const kHoehe = kHoeheNorm ?? kHoeheAusGeschossen
   building.umriss && (building.umrissKantenHoeheM = kHoeheNorm ?? undefined) // ab hier in der Reihenfolge des normalisierten Umrisses
   // Geneigtes Dach (Pult-, Walm-, Mansardendach) mit bekannter Traufe: wie im Rechteck-Modus endet das Gerüst an der Rinne – der oberste Belag liegt
   // höchstens BELAG_UEBER_RINNE_M über der Traufe, nicht erst an der First-Höhe. Eigene Höhen je Kante (Eingabe) gelten unverändert.
-  const rinneRegelUmriss = !kHoeheNorm && !!system && (building.roofForm === 'walmdach' || building.roofForm === 'mansardendach' || building.roofForm === 'pultdach') && building.eavesHeightM > 0 && building.eavesHeightM < building.heightM - 0.3
+  const rinneRegelUmriss = !kHoehe && !!system && (building.roofForm === 'walmdach' || building.roofForm === 'mansardendach' || building.roofForm === 'pultdach') && building.eavesHeightM > 0 && building.eavesHeightM < building.heightM - 0.3
   const hoeheBisRinne = (h: number): number => {
     if (!rinneRegelUmriss || !system) return h
     const r = system.rasterHoeheM
     const n = Math.max(1, Math.floor((building.eavesHeightM + BELAG_UEBER_RINNE_M - hangU) / r + 1e-6))
     return Math.min(h, hangU + n * r)
   }
-  const kanteHoehe = (idx: number): number => kHoeheNorm ? kHoeheNorm[idx] : hoeheBisRinne(building.heightM)
+  const kanteHoehe = (idx: number): number => kHoehe ? kHoehe[idx] : hoeheBisRinne(building.heightM)
   const kanteLagen = (idx: number): number => system ? calculateLevels(kanteHoehe(idx) - hangU, system, hangU).levels : 1
-  if (kHoeheNorm) {
-    const hh = [...new Set(kHoeheNorm.map((h) => String(h).replace('.', ',')))]
+  if (kHoehe) {
+    const hh = [...new Set(kHoehe.map((h) => String(h).replace('.', ',')))]
     if (hh.length > 1) warnings.push({ type: 'info', code: 'UMRISS_KANTENHOEHEN', message: `Gebäudeteile mit unterschiedlicher Höhe (${hh.join(' m, ')} m): Das Gerüst endet je Kante an deren Höhe. Übergänge, Aufstieg und Verankerung an den Höhensprüngen bitte vor Ort prüfen.` })
   }
 
@@ -2517,7 +2521,7 @@ function generiereUmrissModell(
     aktive.forEach((s) => {
       const div = divs.get(s.k.index)!
       let cum = 0
-      if (kHoeheNorm && ld.index >= kanteLagen(s.k.index)) return
+      if (kHoehe && ld.index >= kanteLagen(s.k.index)) return
       div.distribution.forEach((fl, fi) => {
         const t = cum + fl / 2
         cum += fl
@@ -2589,7 +2593,7 @@ function generiereUmrissModell(
       aktive.forEach((s) => {
         const div = divs.get(s.k.index)!
         let cum = 0
-        if (kHoeheNorm && (kanteHoehe(s.k.index) <= 6 || yAnchor > kanteHoehe(s.k.index))) return
+        if (kHoehe && (kanteHoehe(s.k.index) <= 6 || yAnchor > kanteHoehe(s.k.index))) return
         div.distribution.forEach((fl, f) => {
           const t = cum + fl / 2
           cum += fl
