@@ -62,6 +62,8 @@ export interface GeruestOptionen {
   treppe?: boolean
   /** Interne Hilfe für von Hand gesetzte Treppen: genau diese Außentreppe an diesem (untersten) Feld erzeugen, auf jeder Seite/Kante – wie die automatische Treppe */
   treppeFeldId?: string
+  /** Treppe im Gerüstfeld statt davor: Der Belag des Treppenfelds entfällt auf den durchlaufenen Lagen, die Läufe stehen bündig in der Gerüstflucht (Standard: aus = Treppe vor dem Gerüst). */
+  treppeImFeld?: boolean
   /** Vertikale Bekleidung mit Kederplane an der Außenachse zwischen zwei Höhen (m über Gelände), an allen Gerüstseiten; nur ganze Lagen im Bereich werden bekleidet */
   kederplane?: { vonM: number; bisM: number }
   /** Dachfangwand: Schutzwand auf dem obersten Belag an den Traufseiten geneigter Dächer. `hoeheM` = Wandhöhe, `abTraufeM` = erst ab dieser Traufhöhe (0 = immer). Die Werte legt die Firma selbst fest (Vorschrift/Statik prüfen), es gibt keine festen Vorgaben im Code. */
@@ -733,6 +735,7 @@ export function generateScaffoldComponents(model: CADModel): ScaffoldComponent3D
     if (!model.warnings.some((w) => w.code === code)) model.warnings.push({ type, code, message })
   }
   const treppeAktiv = building.geruestOptionen?.treppe !== false
+  const treppeIm = !!building.geruestOptionen?.treppeImFeld
   let stairSpan: { a: ScaffoldField; b: ScaffoldField; lagen: number } | undefined
   if (treppeAktiv && treppenFelder0.length > 0) {
     // bevorzugt etwas von der Ecke weg: das zweite Feld der Kante, sonst das erste.
@@ -784,7 +787,8 @@ export function generateScaffoldComponents(model: CADModel): ScaffoldComponent3D
       const feldJ = fields.find((f) => istTreppenFeld(f) && f.levelIndex === treppeUnten + j && gleicherPlatz(f, stairSpan!.a, 0.01))
       if (feldJ) durchgang.set(feldJ.id, { links: j % 2 === 1, rechts: j % 2 === 0 }) // Zickzack: gerade Läufe enden rechts, ungerade links
     }
-    warnEinmal('TREPPE_AUSSEN', 'info', 'Die Treppe steht als Außentreppe vor dem Gerüst (ein Feld lang, Läufe im Zickzack; auf jeder Lage ein Podest mit Durchgang zum Gerüstbelag am jeweiligen Ende). Anschluss an das Gerüst und Standsicherheit der Treppe sind in der Statik zu prüfen.')
+    if (treppeIm) warnEinmal('TREPPE_IM_FELD', 'info', 'Die Treppe steht im Gerüstfeld: Der Belag des Treppenfelds entfällt auf den Lagen, die sie durchläuft; die Podeste liegen bündig an den Enden. Die Läufe sind dort steiler als bei einer Treppe vor dem Gerüst. Standsicherheit und Aussteifung sind in der Statik zu prüfen.')
+    else warnEinmal('TREPPE_AUSSEN', 'info', 'Die Treppe steht als Außentreppe vor dem Gerüst (ein Feld lang, Läufe im Zickzack; auf jeder Lage ein Podest mit Durchgang zum Gerüstbelag am jeweiligen Ende). Anschluss an das Gerüst und Standsicherheit der Treppe sind in der Statik zu prüfen.')
   }
 
   // Dachrand-Schutz nur bei Flachdach und einheitlicher Gebäudehöhe (keine Stufen)
@@ -838,14 +842,14 @@ export function generateScaffoldComponents(model: CADModel): ScaffoldComponent3D
 
     // Arbeitsbühne – im Treppenfeld entfällt der Belag ganz (der Lauf nimmt das Feld ein,
     // Austritt auf den Belag des Nachbarfelds).
-    {
+    if (!(treppeIm && durchgang.has(field.id))) {
       components.push({ id: `deck-${field.id}`, type: 'deck', articleNumber: getDeckArticle(lengthM), name: `Arbeitsbühne ${lengthM}m`, position: [positionX, yTop, positionZ + widthM / 2 - 0.02], rotation: [-Math.PI / 2, 0, 0], scale: [lengthM - 0.05, widthM - 0.05, 0.02], color: colorDeck, fieldId: field.id, levelId: level.id })
     }
 
     // Geländer
     {
       // Durchgang zur Außentreppe: Geländer am Podest-Ende um die Podestlänge kürzen
-      const dg = durchgang.get(field.id)
+      const dg = treppeIm ? undefined : durchgang.get(field.id) // im Feld liegt der Zugang in Feldlängsrichtung: Außengeländer bleibt geschlossen
       const dgL = dg?.links ? TREPPEN_PODEST_M : 0
       const dgR = dg?.rechts ? TREPPEN_PODEST_M : 0
       const railLen = Math.max(0.3, lengthM - dgL - dgR)
@@ -907,7 +911,7 @@ export function generateScaffoldComponents(model: CADModel): ScaffoldComponent3D
         }
         // Ab 1 m Höhe über dem Gelände ist der Stiel-Abschnitt eine Anfangslage: Belag und Geländer auf Höhe der Rahmenunterkante,
         // sonst stünde über dem Boden eine Lücke ohne Arbeitsplatz (Zugang dorthin: Leiter, nicht Teil des Modells)
-        if (gapM >= 1.0) {
+        if (gapM >= 1.0 && !(treppeIm && durchgang.has(field.id))) {
           components.push({ id: `ausgleich-deck-${field.id}`, type: 'deck', articleNumber: getDeckArticle(lengthM), name: `Arbeitsbühne ${lengthM}m`, position: [positionX, yBottom, positionZ + widthM / 2 - 0.02], rotation: [-Math.PI / 2, 0, 0], scale: [lengthM - 0.05, widthM - 0.05, 0.02], color: colorDeck, fieldId: field.id, levelId: level.id })
           components.push({ id: `ausgleich-board-${field.id}`, type: 'board', articleNumber: 'BB-001', name: `Bordbrett ${lengthM}m`, position: [positionX, yBottom + 0.105, positionZ + widthM - 0.06], rotation: [0, 0, 0], scale: [lengthM, 0.19, 0.02], color: colorBoard, fieldId: field.id, levelId: level.id })
           components.push({ id: `ausgleich-gelaender-${field.id}`, type: 'railing', articleNumber: getRailingArticle(lengthM), name: `Geländer ${lengthM}m`, position: [positionX, yBottom + 0.5, positionZ + widthM - 0.045], rotation: [0, 0, 0], scale: [lengthM, 1.0, 0.04], color: colorRailing, fieldId: field.id, levelId: level.id })
@@ -1124,8 +1128,8 @@ export function generateScaffoldComponents(model: CADModel): ScaffoldComponent3D
     const [bx] = rf.toLocal(fb.positionX, fb.positionZ)
     const xL = ax - fa.lengthM / 2, xR = bx + fb.lengthM / 2
     const L = xR - xL, cx = (xL + xR) / 2
-    const W = TREPPEN_BREITE_M
-    const zS = az + fa.widthM - 0.045 + TREPPEN_ABSTAND_M + W / 2 // Mitte der Treppe, vor der Belag-Außenkante
+    const W = treppeIm ? Math.min(TREPPEN_BREITE_M, fa.widthM - 0.08) : TREPPEN_BREITE_M
+    const zS = treppeIm ? az + fa.widthM / 2 - 0.02 : az + fa.widthM - 0.045 + TREPPEN_ABSTAND_M + W / 2 // Mitte der Treppe: im Feld in der Feldmitte, sonst vor der Belag-Außenkante
     const lv = (j: number) => lage(fa.side, treppeUnten + j)!
     // Am Hang steht der Gerüstfuß unter der untersten Lage (Ausgleichsstiel + Spindel): die Treppe beginnt auf dem Gelände, nicht auf dem Belag
     const tiefe = (t?: { stielM: number; spindelM: number }) => (t ? t.stielM + t.spindelM : 0)
@@ -1147,7 +1151,7 @@ export function generateScaffoldComponents(model: CADModel): ScaffoldComponent3D
     const fussTiefe = { l: tiefeEnde(fa, true), r: tiefeEnde(fb, false) }
     // Die Treppe steht vor dem Gerüst: Ihre äußeren Pfosten stehen auf dem Gelände der Außenreihe (Umriss am Hang: außen liegt es anders als innen)
     const fussTiefeAussen = { l: tiefeEnde(fa, true, true), r: tiefeEnde(fb, false, true) }
-    const dBerg = Math.max(0, Math.min(fussTiefe.l, fussTiefe.r, fussTiefeAussen.l, fussTiefeAussen.r))
+    const dBerg = treppeIm ? 0 : Math.max(0, Math.min(fussTiefe.l, fussTiefe.r, fussTiefeAussen.l, fussTiefeAussen.r))
     const y0 = lv(0).bottomY - dBerg
     if (Math.abs(fussTiefe.l - fussTiefe.r) > 0.55 + 1e-6) warnEinmal('TREPPE_FUSS_AUSGLEICH', 'info', `Das Gelände fällt unter der Treppe um ${Math.abs(fussTiefe.l - fussTiefe.r).toFixed(2).replace('.', ',')} m: die Pfosten am tieferen Ende brauchen mehr Ausgleich als eine Fußspindel (Stiel ergänzen).`)
     const hGes = lv(lagen - 1).topY - y0
@@ -1160,7 +1164,7 @@ export function generateScaffoldComponents(model: CADModel): ScaffoldComponent3D
     let stepNo = 0
     const podest = (id: string, xp: number, yTop: number, xEnde: number, ende: 1 | -1, levelId: string) => {
       components.push({ id: `stair-podest-${id}`, type: 'deck', articleNumber: 'ST-002', name: 'Treppenpodest', position: [xp, yTop - 0.01, zS], rotation: [0, 0, 0], scale: [TREPPEN_PODEST_M, 0.04, W], color: '#a0a0a0', levelId })
-      components.push({ id: `stair-podest-${id}-gel-aussen`, type: 'railing', articleNumber: 'SG-001', name: 'Podestgeländer', position: [xp, yTop + 0.5, zS + W / 2 - 0.02], rotation: [0, 0, 0], scale: [TREPPEN_PODEST_M, 1.0, 0.04], color: colorRailing, levelId })
+      if (!treppeIm) components.push({ id: `stair-podest-${id}-gel-aussen`, type: 'railing', articleNumber: 'SG-001', name: 'Podestgeländer', position: [xp, yTop + 0.5, zS + W / 2 - 0.02], rotation: [0, 0, 0], scale: [TREPPEN_PODEST_M, 1.0, 0.04], color: colorRailing, levelId })
       components.push({ id: `stair-podest-${id}-gel-ende`, type: 'railing', articleNumber: 'SG-001', name: 'Podestgeländer', position: [xEnde - ende * 0.02, yTop + 0.5, zS], rotation: [0, Math.PI / 2, 0], scale: [W, 1.0, 0.04], color: colorRailing, levelId })
     }
     // Zickzack-Läufe (Treppenturm): jeder Lauf steigt eine Lage hoch. Lauf 0 geht von links nach rechts, Lauf 1 zurück
@@ -1183,7 +1187,8 @@ export function generateScaffoldComponents(model: CADModel): ScaffoldComponent3D
     }
     // Pfosten und Fußplatten an den vier Ecken des Turms
     const hPfosten = hGes + 1.0
-    for (const x of [xL + 0.03, xR - 0.03]) {
+    // Im Feld tragen die Ständer des Gerüsts die Treppe: keine eigenen Pfosten und Fußplatten
+    for (const x of treppeIm ? [] : [xL + 0.03, xR - 0.03]) {
       for (const dz of [-1, 1]) {
         const z = zS + dz * (W / 2 - 0.03)
         const tag = `${x < cx ? 'l' : 'r'}${dz < 0 ? 'i' : 'a'}`
