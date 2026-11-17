@@ -1033,6 +1033,26 @@ export default function CADPage() {
     downloadPDF(html, `Montageplan-${new Date().toISOString().split('T')[0]}.html`)
   }, [model, firmenName, aufmassProjektName])
 
+  // Montageplan als PDF: Ansicht mit Maßen + Materialliste (Vorschau, Anzahl, Geladen, Fehlt)
+  const handleExportMontageplanPdf = useCallback(async () => {
+    if (!model) return
+    try {
+      const [{ erzeugeMontageplanPdf }, { ladeArtikelBilder }] = await Promise.all([import('@/lib/export/montageplan-pdf'), import('@/lib/export/artikelbilder')])
+      const bilder = await ladeArtikelBilder(materials.map((m) => m.articleNumber))
+      const pdf = erzeugeMontageplanPdf(modelWithManual ?? model, materials, {
+        projektName: aufmassProjektName || 'Gerüstprojekt', firma: firmenName || 'Ihr Unternehmen', datum: new Date().toLocaleDateString('de-DE'),
+        systemName: model.system ? `${model.system.hersteller} ${model.system.systemName}` : 'Gerüst', bilder,
+      })
+      const a = document.createElement('a')
+      a.href = URL.createObjectURL(new Blob([pdf as BlobPart], { type: 'application/pdf' }))
+      a.download = `Montageplan-${new Date().toISOString().split('T')[0]}.pdf`
+      a.click()
+      URL.revokeObjectURL(a.href)
+    } catch (err) {
+      alert('❌ Montageplan-PDF fehlgeschlagen: ' + (err instanceof Error ? err.message : String(err)))
+    }
+  }, [model, modelWithManual, materials, aufmassProjektName, firmenName])
+
   // NEU (Marktvergleich-Lücke 4): reine Geometriedaten für einen externen
   // Statiker – kein eigener Standsicherheitsnachweis.
   const handleExportStatik = useCallback(() => {
@@ -1356,7 +1376,7 @@ export default function CADPage() {
             showBuilding={showBuilding} onShowBuilding={setShowBuilding} showScaffold={showScaffold} onShowScaffold={setShowScaffold}
             showDimensions={showDimensions} onShowDimensions={setShowDimensions} showEnvironment={showEnvironment} onShowEnvironment={setShowEnvironment} hoheQualitaet={hoheQualitaet} onHoheQualitaet={setHoheQualitaet}
             viewAngle={viewAngle} onViewAngle={(a) => setViewAngle(a)} farbModus={farbModus} onFarbModus={setFarbModus}
-            onPdf={model ? handleExportPDF : exportOhneModellHinweis} onMontageplan={model ? handleExportMontageplan : exportOhneModellHinweis}
+            onPdf={model ? handleExportPDF : exportOhneModellHinweis} onMontageplan={model ? handleExportMontageplan : exportOhneModellHinweis} onMontageplanPdf={model ? handleExportMontageplanPdf : exportOhneModellHinweis}
             onDxf={!model ? exportOhneModellHinweis : handleExportDXF} onIfc={!model ? exportOhneModellHinweis : (ifcExportLaeuft ? undefined : handleExportIFC)}
             onSpeichern={speichereProjektdatei} onVersionen={oeffneVersionen} treppePanelAktiv={treppePanel} onTreppePanel={model ? () => setTreppePanel((v) => !v) : undefined} onLv={rolle === 'admin' || istStatikerLogin ? (model ? () => setLvOffen(true) : exportOhneModellHinweis) : undefined}
             onBild={speichereBild}
