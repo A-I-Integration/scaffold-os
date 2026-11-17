@@ -3537,11 +3537,14 @@ function generiereUmrissMerkmale(building: BuildingParams): BuildingFeature3D[] 
 
   // Fenster: je Geschoss anteilig zur Kantenlänge
   const fensterJeGeschoss = Math.max(0, (building.windowCount || 0) / floors)
+  // Wände enden an der Traufe, wenn darüber ein geneigtes Dach sitzt: kein Fenster darüber oder im Dachbereich
+  const wandOberkanteM = building.roofForm === 'pultdach' && building.eavesHeightM > 0 && building.eavesHeightM < building.heightM - 0.3 ? building.eavesHeightM : building.heightM
   for (const k of nutzbar) {
     const anzahl = Math.round(fensterJeGeschoss * k.laengeM / gesamt)
     if (anzahl === 0) continue
     const abstand = k.laengeM / (anzahl + 1)
     for (let f = 0; f < floors; f++) {
+      if (floorBottom(f) + 0.9 + Math.min(1.4, floorHeights[f] * 0.5) > wandOberkanteM - 0.15) continue
       for (let w = 0; w < anzahl; w++) {
         const offset = -k.laengeM / 2 + abstand * (w + 1)
         out.push({

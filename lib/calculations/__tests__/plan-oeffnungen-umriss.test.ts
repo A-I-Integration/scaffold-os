@@ -31,3 +31,12 @@ describe('Fenster und Türen aus dem Plan im Umriss-Modus (synthetisch)', () => 
     expect(nurMitte.length).toBe(ohne.length)
   })
 })
+
+describe('Verteilte Fenster bleiben unter der Traufe (synthetisch)', () => {
+  it('Pultdach: kein Fenster über der Traufhöhe, auch bei 3 Geschossen auf 6,94 m', () => {
+    const b = { ...basis, heightM: 6.94, eavesHeightM: 5.92, roofHeightM: 1.02, roofForm: 'pultdach', floors: 3, floorHeightsM: [], windowCount: 12, doorCount: 0 } as unknown as BuildingParams
+    const f = generateBuildingFeatures(b).filter((x) => x.type === 'window')
+    expect(f.length).toBeGreaterThan(0)
+    expect(Math.max(...f.map((x) => x.bottomY + x.heightM))).toBeLessThanOrEqual(5.92 - 0.1)
+  })
+})
