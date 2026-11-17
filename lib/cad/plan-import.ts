@@ -15,7 +15,7 @@ import type { UmrissPunkt } from '@/lib/calculations/cad-umriss'
 import { oeffnungenAnKanten, vorbautenAnKanten, type PlanOeffnungAnKante, type PlanVorbauAnKante } from './plan-oeffnungen-modell'
 import { kotenJeAnsicht, pultNiedrigeRichtung, gelaendeTiefeJeAnsicht, type Himmelsrichtung, type GelaendeTiefe } from './koten-je-ansicht'
 import { dachAusPlan, dachKotenAusPlan, pultdachNeigung, type PlanDachform } from './dachform-aus-plan'
-import { geschossHoehenAusPlan, type GeschossHoehenVorschlag } from './geschoss-hoehen-aus-plan'
+import { geschossHoehenAusPlan, geschossHoehenAusKotenVorschlag, type GeschossHoehenVorschlag } from './geschoss-hoehen-aus-plan'
 
 export interface PlanImportGeschoss { titel: string; ebene: number; /** Rahmen der Kontur in Seiten-Punkten [x0, y0, x1, y1]; dient dem Abgleich mit Maßketten neben dem Geschoss */ bboxPt?: [number, number, number, number]; laengeM: number; breiteM: number; flaecheM2: number; fenster?: number; tueren?: number
   /** Vollständige erkannte Außenkontur des Geschosses in Metern, auf den Gebäude-Mittelpunkt zentriert. */
@@ -147,7 +147,7 @@ export function planImportAus(dateiname: string, massstab: number, gefunden: Gef
     ebene: g.ebene, bbox: [Math.min(...g.kontur.map((p) => p.x)), Math.min(...g.kontur.map((p) => p.y)), Math.max(...g.kontur.map((p) => p.x)), Math.max(...g.kontur.map((p) => p.y))] as [number, number, number, number],
   })), mpp, { x: mitteX, y: mitteY }).map((t) => { const v = versatzJeEbene.get(t.ebene); return v ? { ...t, x: runde(t.x + v.dx), z: runde(t.z + v.dz) } : t }) : []
   return {
-    dateiname, massstab, geschosse, hauptEbene: haupt.ebene, geschossHoehenVorschlaege: geschossHoehenAusPlan(texte),
+    dateiname, massstab, geschosse, hauptEbene: haupt.ebene, geschossHoehenVorschlaege: (() => { const ok = geschossHoehenAusPlan(texte); return ok.length ? ok : geschossHoehenAusKotenVorschlag(texte, koten.traufeM, ueberGelaende.map((g) => g.ebene)) })(),
     ...(dach ? { dachform: dach.dachform } : {}),
     ...(koten.firstM !== undefined ? { firstKoteM: koten.firstM } : {}),
     ...(koten.traufeM !== undefined ? { traufKoteM: koten.traufeM } : {}),
