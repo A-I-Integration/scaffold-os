@@ -172,7 +172,7 @@ export default function BuildingForm({ building, systemId, onChange, onSystemCha
   const NEU_ERLAUBT = ['.dxf', '.ply'];
   const DXF_ARTEN = ['.dwg', '.dwt', '.step', '.stp', '.igs', '.skp']; // .ifc wird seit dem IFC-Import gelesen (unten)
 
-  const [turmVorschlag, setTurmVorschlag] = useState<{ v: BauwerkAusPlaenen; werte: { laenge: string; breite: string; hoehe: string } } | null>(null)
+  const [turmVorschlag, setTurmVorschlag] = useState<{ v: BauwerkAusPlaenen; werte: { laenge: string; breite: string; hoehe: string }; helm: boolean } | null>(null)
   const zahlText = (x?: number) => (x === undefined ? '' : String(x).replace('.', ','))
   async function handlePlanUpload(file: File, weitere: File[] = []) {
     setPlanGeschossHoehen(null)
@@ -182,7 +182,7 @@ export default function BuildingForm({ building, systemId, onChange, onSystemCha
       try {
         const v = await bauwerkAusPdfs([file, ...weitere])
         if (v && (v.laengeM || v.hoeheM)) {
-          setTurmVorschlag({ v, werte: { laenge: zahlText(v.laengeM), breite: zahlText(v.breiteM), hoehe: zahlText(v.hoeheM) } })
+          setTurmVorschlag({ v, werte: { laenge: zahlText(v.laengeM), breite: zahlText(v.breiteM), hoehe: zahlText(v.hoeheM) }, helm: false })
           setAnalyseHinweis('Aus den Plänen gelesen – bitte die Maße unten prüfen und übernehmen.')
           return
         }
@@ -801,11 +801,19 @@ export default function BuildingForm({ building, systemId, onChange, onSystemCha
                     <label key={k} className='block'>{l}<input aria-label={l} inputMode='decimal' value={turmVorschlag.werte[k]} onChange={(ev) => setTurmVorschlag((a) => a ? ({ ...a, werte: { ...a.werte, [k]: ev.target.value } }) : a)} className='mt-0.5 w-full rounded-lg border border-black/15 bg-white px-2 py-1' /></label>
                   ))}
                 </div>
+                {!!turmVorschlag.v.turmProfil && turmVorschlag.v.turmProfil.helmHoeheM > 0 && (
+                  <label className='flex items-start gap-2'>
+                    <input type='checkbox' checked={turmVorschlag.helm} onChange={(ev) => setTurmVorschlag((a) => a ? ({ ...a, helm: ev.target.checked }) : a)} className='mt-0.5' />
+                    <span>Turmhelm ({String(turmVorschlag.v.turmProfil.helmHoeheM).replace('.', ',')} m) als Walmdach-Näherung ansetzen; die Höhe oben gilt dann als Gesamthöhe inklusive Helm. Die tatsächliche Helmform (Haube, Laterne) wird nicht abgebildet.</span>
+                  </label>
+                )}
                 <div className='flex gap-2'>
                   <button type='button' className='rounded-lg bg-[#e8590c] px-3 py-1 font-semibold text-white' onClick={() => {
                     const n = (t: string) => { const x = Number(t.trim().replace(',', '.')); return t.trim() !== '' && Number.isFinite(x) && x > 0 ? x : null }
                     const l = n(turmVorschlag.werte.laenge), b = n(turmVorschlag.werte.breite), h = n(turmVorschlag.werte.hoehe)
-                    onChange({ ...building, ...(l !== null ? { lengthM: l } : {}), ...(b !== null ? { widthM: b } : {}), ...(h !== null ? { heightM: h } : {}) })
+                    const helmM = turmVorschlag.helm ? turmVorschlag.v.turmProfil?.helmHoeheM ?? 0 : 0
+                    const schaftHoehe = h !== null && helmM > 0 && h > helmM ? Math.round((h - helmM) * 100) / 100 : h
+                    onChange({ ...building, ...(l !== null ? { lengthM: l } : {}), ...(b !== null ? { widthM: b } : {}), ...(schaftHoehe !== null ? { heightM: schaftHoehe } : {}), ...(helmM > 0 && schaftHoehe !== null && schaftHoehe !== h ? { roofForm: 'walmdach' as const, roofHeightM: helmM, eavesHeightM: schaftHoehe } : {}) })
                     setTurmVorschlag(null)
                   }}>Übernehmen</button>
                   <button type='button' className='rounded-lg bg-black/10 px-3 py-1' onClick={() => setTurmVorschlag(null)}>Verwerfen</button>
