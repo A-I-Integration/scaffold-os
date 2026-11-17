@@ -1319,6 +1319,66 @@ function UmrissPultdach({ punkte, traufeM, firstM, niedrig, ueberstandM = 0.9, d
   )
 }
 
+/** Abstand eines Punktes zum Rand eines Vielecks (Umriss), in m */
+function abstandZumUmriss(px: number, pz: number, punkte: { x: number; z: number }[]): number {
+  let best = Infinity
+  punkte.forEach((a, i) => {
+    const b = punkte[(i + 1) % punkte.length]
+    const dx = b.x - a.x, dz = b.z - a.z, l2 = dx * dx + dz * dz
+    const t = l2 < 1e-9 ? 0 : Math.max(0, Math.min(1, ((px - a.x) * dx + (pz - a.z) * dz) / l2))
+    best = Math.min(best, Math.hypot(px - (a.x + t * dx), pz - (a.z + t * dz)))
+  })
+  return best
+}
+
+/** Terrassen und Balkone aus dem Plan (nur Darstellung): Platte auf Geschosshöhe, Geländer (1,0 m) an den Seiten, die nicht an der Gebäudewand liegen. */
+function Terrassen3D({ terrassen, umriss }: { terrassen: { ebene: number; x0: number; z0: number; x1: number; z1: number; bottomY: number }[]; umriss: { x: number; z: number }[] }) {
+  return (
+    <group>
+      {terrassen.map((t, i) => {
+        const w = t.x1 - t.x0, d = t.z1 - t.z0, cx = (t.x0 + t.x1) / 2, cz = (t.z0 + t.z1) / 2
+        const seiten: { mx: number; mz: number; laenge: number; quer: boolean }[] = [
+          { mx: cx, mz: t.z0, laenge: w, quer: false }, { mx: cx, mz: t.z1, laenge: w, quer: false },
+          { mx: t.x0, mz: cz, laenge: d, quer: true }, { mx: t.x1, mz: cz, laenge: d, quer: true },
+        ]
+        const frei = seiten.filter((s) => abstandZumUmriss(s.mx, s.mz, umriss) > 0.4)
+        return (
+          <group key={i}>
+            <mesh position={[cx, t.bottomY - 0.1, cz]} castShadow receiveShadow>
+              <boxGeometry args={[w, 0.2, d]} />
+              <meshStandardMaterial color="#b9b3a6" roughness={0.9} />
+            </mesh>
+            {frei.map((s, j) => {
+              const pfosten = Math.max(2, Math.round(s.laenge / 1.1) + 1)
+              return (
+                <group key={j}>
+                  <mesh position={[s.mx, t.bottomY + 1.0, s.mz]} castShadow>
+                    <boxGeometry args={s.quer ? [0.06, 0.06, s.laenge] : [s.laenge, 0.06, 0.06]} />
+                    <meshStandardMaterial color="#3d4147" roughness={0.5} metalness={0.4} />
+                  </mesh>
+                  <mesh position={[s.mx, t.bottomY + 0.5, s.mz]}>
+                    <boxGeometry args={s.quer ? [0.02, 0.9, s.laenge] : [s.laenge, 0.9, 0.02]} />
+                    <meshStandardMaterial color="#6e7378" roughness={0.6} transparent opacity={0.35} />
+                  </mesh>
+                  {Array.from({ length: pfosten }, (_, k) => {
+                    const o = -s.laenge / 2 + (s.laenge * k) / (pfosten - 1)
+                    return (
+                      <mesh key={k} position={s.quer ? [s.mx, t.bottomY + 0.5, s.mz + o] : [s.mx + o, t.bottomY + 0.5, s.mz]}>
+                        <boxGeometry args={[0.05, 1.0, 0.05]} />
+                        <meshStandardMaterial color="#3d4147" roughness={0.5} metalness={0.4} />
+                      </mesh>
+                    )
+                  })}
+                </group>
+              )
+            })}
+          </group>
+        )
+      })}
+    </group>
+  )
+}
+
 /** Gebäude mit Umriss: Vieleck-Grundfläche, nach oben gezogen (flaches Dach). */
 function UmrissGebaeude({ punkte, heightM, kantenHoeheM, untenM = 0 }: { punkte: { x: number; z: number }[]; heightM: number; kantenHoeheM?: number[]; untenM?: number }) {
   const praes = useContext(FarbModusKontext) === 'praesentation'
@@ -1678,6 +1738,7 @@ function Building3D({
             ? <GeschossKoerper geschosse={building.geschossKoerper} untenM={hangM} />
             : <UmrissGebaeude punkte={building.umriss} heightM={pult ? pult.traufeM : heightM} kantenHoeheM={building.umrissKantenHoeheM} untenM={hangM} />}
           {!building.umrissKantenHoeheM && !(building.geschossKoerper && building.geschossKoerper.length >= 2) && !pult && <UmrissGesimse punkte={building.umriss} hoeheM={heightM} />}
+          {building.terrassen && building.terrassen.length > 0 && <Terrassen3D terrassen={building.terrassen} umriss={building.umriss} />}
           {pult && <UmrissPultdach punkte={building.umriss} traufeM={pult.traufeM} firstM={pult.firstM} niedrig={pult.niedrig} />}
           {features.filter((f) => f.umriss).map((f) => {
             const u = f.umriss!

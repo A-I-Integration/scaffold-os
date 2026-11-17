@@ -236,6 +236,10 @@ export interface BuildingParams {
   /** Fenster einzeln mit fester Lage (aus dem Plan). Wenn gesetzt, ersetzen sie die gleichmäßig verteilten Fenster aus windowCount (nicht im Umriss-Modus). */
   fensterFest?: CadFenster[]
   /** Fenster/Türen aus dem Plan mit Lage in Metern in der Plan-Basis des Umrisses; gelten im Umriss-Modus (Zuordnung zur nächsten Umrisskante) */
+  /** Terrassen/Balkone aus dem Plan (Lage in Metern in der Plan-Basis des Umrisses); im Umriss-Modus als Platte mit Geländer dargestellt */
+  planTerrassen?: { ebene: number; titel: string; x: number; z: number; laengeM: number; tiefeM: number }[]
+  /** Szenen-Koordinaten der Terrassen (vom Umriss-Modus berechnet) */
+  terrassen?: { ebene: number; x0: number; z0: number; x1: number; z1: number; bottomY: number }[]
   planOeffnungen?: { ebene: number; typ: 'tuer' | 'fenster'; x: number; z: number; breiteM: number; bruestungM?: number; sturzM?: number }[]
   /** Vorbauten (aus dem Plan gelesen), nur zur Ansicht im 3D-Modell */
   vorbauten?: CadVorbau[]
@@ -2434,6 +2438,13 @@ function generiereUmrissModell(
     ...gebaeude,
     umriss,
     ...(geschossKoerper.length >= 2 ? { geschossKoerper } : { geschossKoerper: undefined }),
+    terrassen: (gebaeude.planTerrassen ?? []).map((t) => {
+      const floors = Math.max(1, gebaeude.floors || 1)
+      const hs = gebaeude.floorHeightsM?.length === floors ? gebaeude.floorHeightsM : Array(floors).fill(gebaeude.heightM / floors)
+      const f = Math.min(Math.max(0, Math.round(t.ebene)), floors - 1)
+      const cx = t.x + versatz.x, cz = t.z + versatz.z
+      return { ebene: t.ebene, x0: cx - t.laengeM / 2, z0: cz - t.tiefeM / 2, x1: cx + t.laengeM / 2, z1: cz + t.tiefeM / 2, bottomY: hs.slice(0, f).reduce((a: number, h: number) => a + h, 0) }
+    }),
     lengthM: Math.round(box.lengthM * 100) / 100,
     widthM: Math.round(box.widthM * 100) / 100,
     balconies: undefined,

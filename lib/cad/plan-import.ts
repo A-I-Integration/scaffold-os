@@ -6,6 +6,7 @@
 import type { GefundenerGrundriss, PlanText } from './grundriss-finden'
 import type { VektorFlaeche } from './pdf-vektoren'
 import { oeffnungenFinden } from './oeffnungen-aus-plan'
+import { terrassenFinden, type PlanTerrasse } from './terrassen-aus-plan'
 import { lesMassketten, type MasskettenErgebnis } from './masse-lesen'
 import type { GelaendeLinieAnsicht } from './gelaende-aus-ansichten'
 import { gelaendeAusPlan, gelaendeJeKante, gelaendeEckenAusPlan, type GelaendeAusPlan, type GelaendeJeKante } from './gelaende-aus-plan'
@@ -50,6 +51,8 @@ export interface PlanImport {
   dachneigungGrad?: number
   /** Pultdach: Himmelsrichtung der niedrigen Seite (Traufe), aus den Nord-/Südansichten; fehlt, wenn nicht eindeutig lesbar */
   pultNiedrigeRichtung?: Himmelsrichtung
+  /** Terrassen/Balkone, die an ein Geschoss grenzen (Lage in Metern in der Basis von `umriss`) */
+  terrassen?: PlanTerrasse[]
   /** Hanglage: tiefste Geländekote je Ansicht (freiliegendes Untergeschoss auf der Talseite), aus den Ansichten; leer ohne nennenswerten Abfall */
   gelaendeTiefe?: GelaendeTiefe[]
   /** Geländekoten rund um das Hauptgeschoss (±0,00 = dessen Fußboden); fehlt bei weniger als 2 Punkten */
@@ -112,6 +115,21 @@ export function planImportAus(dateiname: string, massstab: number, gefunden: Gef
   if (!ueberGelaende.length) return null // nur Keller gefunden: kein Gerüst-Grundriss
   const haupt = ueberGelaende.reduce((a, b) => (b.flaecheM2 > a.flaecheM2 ? b : a))
   const hauptG = gefunden.find((g) => g.ebene === haupt.ebene)
+  // Die Geschosse liegen auf dem Blatt nebeneinander. Für die 3D-Fassade werden sie übereinandergelegt: Mitte des Rahmens jedes
+  // Geschosses auf die Mitte des Hauptgeschosses (Annahme: gleiche Mitte; ohne weitere Angabe im Plan nicht genauer bestimmbar).
+  const mitteVon = (u?: { x: number; z: number }[]) => u && u.length ? { x: (Math.min(...u.map((p) => p.x)) + Math.max(...u.map((p) => p.x))) / 2, z: (Math.min(...u.map((p) => p.z)) + Math.max(...u.map((p) => p.z))) / 2 } : null
+  const mHaupt = mitteVon(haupt.umriss)
+  const versatzJeEbene = new Map<number, { dx: number; dz: number }>()
+  if (mHaupt) for (const g of geschosse) {
+    const m = mitteVon(g.umriss)
+    if (m) versatzJeEbene.set(g.ebene, { dx: runde(mHaupt.x - m.x), dz: runde(mHaupt.z - m.z) })
+  }
+  for (const g of geschosse) {
+    const v = versatzJeEbene.get(g.ebene)
+    if (!v || (v.dx === 0 && v.dz === 0)) continue
+    if (g.umriss) g.umriss = g.umriss.map((p) => ({ x: runde(p.x + v.dx), z: runde(p.z + v.dz) }))
+    if (g.oeffnungenPlan) g.oeffnungenPlan = g.oeffnungenPlan.map((q) => ({ ...q, x: runde(q.x + v.dx), z: runde(q.z + v.dz) }))
+  }
   const gelaende = hauptG ? gelaendeAusPlan(hauptG, texte, (0.0254 / 72) * massstab) : null
   const hkHaupt = hauptG ? hauptkoerperAusKontur(hauptG.kontur, mpp) : null
   const jeKante = hkHaupt ? gelaendeJeKante(hkHaupt.rechteck, texte, mpp) : []
@@ -125,6 +143,9 @@ export function planImportAus(dateiname: string, massstab: number, gefunden: Gef
     ? pultNiedrigeRichtung(ansichten, koten.traufeM, koten.firstM) : null
   const gelTiefe = gelaendeTiefeJeAnsicht(ansichten)
   const masse = flaechen.length && texte.length ? lesMassketten(flaechen, texte, massstab) : null
+  const terrassen = flaechen.length ? terrassenFinden(flaechen, texte, gefunden.filter((g) => g.ebene >= 0 && g.kontur.length).map((g) => ({
+    ebene: g.ebene, bbox: [Math.min(...g.kontur.map((p) => p.x)), Math.min(...g.kontur.map((p) => p.y)), Math.max(...g.kontur.map((p) => p.x)), Math.max(...g.kontur.map((p) => p.y))] as [number, number, number, number],
+  })), mpp, { x: mitteX, y: mitteY }).map((t) => { const v = versatzJeEbene.get(t.ebene); return v ? { ...t, x: runde(t.x + v.dx), z: runde(t.z + v.dz) } : t }) : []
   return {
     dateiname, massstab, geschosse, hauptEbene: haupt.ebene, geschossHoehenVorschlaege: geschossHoehenAusPlan(texte),
     ...(dach ? { dachform: dach.dachform } : {}),
@@ -137,6 +158,7 @@ export function planImportAus(dateiname: string, massstab: number, gefunden: Gef
     ...(jeKante.length ? { gelaendeJeKante: jeKante } : {}),
     ...(Object.keys(eckenPlan).length ? { gelaendeEckenPlan: eckenPlan } : {}),
     ...(masse && masse.angaben.length ? { masse } : {}),
+    ...(terrassen.length ? { terrassen } : {}),
   }
 }
 
