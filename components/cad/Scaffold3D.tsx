@@ -1210,6 +1210,31 @@ function RoofMesh({ roofForm, laengeM, breiteM, roofH }: { roofForm: string; lae
   )
 }
 
+/** Gestuftes Gebäude aus bestätigten Geschossen: jedes Geschoss als Körper von der Talsohle bis zu seiner Oberkante (Rücksprünge bleiben sichtbar). */
+function GeschossKoerper({ geschosse, untenM = 0 }: { geschosse: { name: string; obenM: number; umriss: { x: number; z: number }[] }[]; untenM?: number }) {
+  const praes = useContext(FarbModusKontext) === 'praesentation'
+  const geometrie = useMemo(() => {
+    const teile = geschosse.map((g) => {
+      const form = new THREE.Shape(g.umriss.map((p) => new THREE.Vector2(p.x, -p.z)))
+      const q = new THREE.ExtrudeGeometry(form, { depth: g.obenM + untenM, bevelEnabled: false })
+      q.rotateX(-Math.PI / 2)
+      if (untenM) q.translate(0, -untenM, 0)
+      const n = q.toNonIndexed(); n.deleteAttribute('uv'); n.deleteAttribute('normal')
+      return n
+    })
+    const alle = mergeGeometries(teile)
+    alle?.computeVertexNormals()
+    return alle ?? teile[0]
+  }, [geschosse, untenM])
+  useEffect(() => () => geometrie.dispose(), [geometrie])
+  return (
+    <mesh geometry={geometrie} castShadow receiveShadow>
+      <Edges threshold={15} color="#8f8676" />
+      <WandMaterial praes={praes} putz={false} doubleSide />
+    </mesh>
+  )
+}
+
 /** Gebäude mit Umriss: Vieleck-Grundfläche, nach oben gezogen (flaches Dach). */
 function UmrissGebaeude({ punkte, heightM, kantenHoeheM, untenM = 0 }: { punkte: { x: number; z: number }[]; heightM: number; kantenHoeheM?: number[]; untenM?: number }) {
   const praes = useContext(FarbModusKontext) === 'praesentation'
@@ -1554,7 +1579,9 @@ function Building3D({
           </group>
         )}
         <group>
-          <UmrissGebaeude punkte={building.umriss} heightM={heightM} kantenHoeheM={building.umrissKantenHoeheM} untenM={hangM} />
+          {building.geschossKoerper && building.geschossKoerper.length >= 2
+            ? <GeschossKoerper geschosse={building.geschossKoerper} untenM={hangM} />
+            : <UmrissGebaeude punkte={building.umriss} heightM={heightM} kantenHoeheM={building.umrissKantenHoeheM} untenM={hangM} />}
           {features.filter((f) => f.umriss).map((f) => {
             const u = f.umriss!
             const y = f.bottomY + f.heightM / 2

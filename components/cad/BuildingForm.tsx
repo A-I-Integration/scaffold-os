@@ -823,7 +823,7 @@ export default function BuildingForm({ building, systemId, onChange, onSystemCha
             {planGeschossHoehen && (
               <div className='rounded-lg border border-amber-300 bg-amber-50 p-3 space-y-2 text-[11px] text-[#424245]'>
                 <p className='font-semibold'>Geschosshöhen aus „{planGeschossHoehen.name}“ prüfen</p>
-                <p>Nur ausdrücklich beschriftete OKFF-/OK-FFB-Koten wurden erkannt. Bitte jede Höhe mit dem Plan vergleichen. Bestätigte Höhen werden mit der passenden Geschosskontur an die Fassadenanalyse übergeben.</p>
+                <p>Nur ausdrücklich beschriftete OKFF-/OK-FFB-Koten wurden erkannt. Bitte jede Höhe mit dem Plan vergleichen. Bestätigte Höhen werden mit der passenden Geschosskontur an die Fassadenanalyse übergeben und im 3D als gestuftes Gebäude gezeichnet. Die Höhe gilt als Oberkante der Außenwand dieses Geschosses, nicht als Fußboden-Höhe: beim Erdgeschoss also die Fußboden-Höhe des Obergeschosses eintragen, beim obersten Geschoss die Traufe bzw. den oberen Abschluss.</p>
                 {planGeschossHoehen.vorschlaege.map((v, i) => (
                   <label key={`${v.ebene}-${i}`} className='flex flex-wrap items-center gap-2'>
                     <span className='min-w-28'>{v.ebene === 0 ? 'Erdgeschoss' : v.ebene === 99 ? 'Dachgeschoss' : v.ebene === -1 ? 'Kellergeschoss' : `${v.ebene}. Obergeschoss`}</span>
