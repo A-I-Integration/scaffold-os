@@ -213,6 +213,8 @@ export interface BuildingParams {
   planGeschossHoehenVorschlaege?: { ebene: number; titel: string; obenM: number; text: string; bestaetigungErforderlich: true }[]
   /** Geprüfte Geschosskonturen für die eigenständige Fassadenanalyse. Höhen sind OKFF-/Wandoberkanten in m. */
   fassadenGeschosse?: { name: string; obenM: number; umriss: UmrissPunkt[] }[]
+  /** Nur Umriss-Modus, vom CAD-Modell gesetzt (nicht eingeben): bestätigte Geschosse in Szenen-Koordinaten (wie `umriss`), nur für die 3D-Darstellung gestufter Gebäude. */
+  geschossKoerper?: { name: string; obenM: number; umriss: UmrissPunkt[] }[]
   /** Unbestätigte Konturen aus dem Aufmaß-PDF; Höhenvorschläge müssen im CAD manuell bestätigt werden. */
   // NEU: Einstellungen für die automatische Gerüst-Erzeugung (alles optional;
   // ohne Angabe gelten die bisherigen Standardwerte).
@@ -2419,9 +2421,16 @@ function generiereUmrissModell(
   let hangU = 0
   const umriss = zentriereUmriss(normalisiereUmriss(gebaeude.umriss!))
   const box = umrissBox(umriss)
+  // Bestätigte Geschosse liegen in der Plan-Basis des Hauptumrisses: um dieselbe Verschiebung in die Szene legen wie der Hauptumriss
+  const rohUmriss = normalisiereUmriss(gebaeude.umriss!)
+  const versatz = { x: umriss[0].x - rohUmriss[0].x, z: umriss[0].z - rohUmriss[0].z }
+  const geschossKoerper = (gebaeude.fassadenGeschosse ?? []).length >= 2
+    ? gebaeude.fassadenGeschosse!.filter((g) => g.umriss.length >= 3 && g.obenM > 0).map((g) => ({ name: g.name, obenM: g.obenM, umriss: g.umriss.map((q) => ({ x: Math.round((q.x + versatz.x) * 100) / 100, z: Math.round((q.z + versatz.z) * 100) / 100 })) }))
+    : []
   const building: BuildingParams = {
     ...gebaeude,
     umriss,
+    ...(geschossKoerper.length >= 2 ? { geschossKoerper } : { geschossKoerper: undefined }),
     lengthM: Math.round(box.lengthM * 100) / 100,
     widthM: Math.round(box.widthM * 100) / 100,
     balconies: undefined,
