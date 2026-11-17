@@ -30,6 +30,8 @@ interface Props {
   onExportPDF?: () => void
   onExportCSV?: () => void
   onExportMontageplan?: () => void
+  /** Montageplan als PDF: Ansicht mit Maßen + Materialliste mit Vorschau, Anzahl, Geladen, Fehlt */
+  onExportMontageplanPdf?: () => void
   /** Öffnet den Dialog „Leistungsverzeichnis“ (LV mit Einheitspreisen als PDF/Excel) */
   onOpenLv?: () => void
   /** Projekt als Datei speichern / aus Datei laden / Beispiel laden */
@@ -76,7 +78,7 @@ interface Props {
   onSelectPlacementType?: (type: string | null) => void
 }
 
-export default function BillOfMaterials({ materials, ohnePreis = [], ohneGewicht = [], lagerFehler = false, totalWeightKg, totalPrice, logistik, fahrzeuge = [], fahrzeugWahl = 'auto', onFahrzeugWahl, onExportPDF, onExportCSV, onExportMontageplan, onOpenLv, onSpeichereProjektdatei, onExportStatikGeometrie, onExportIFC, onExportDXF, onExportBogen, onExportStatikerPaket, planModus = 'schematisch', onPlanModusChange, customers, kundenLadeFehler, onRetryKunden, onCreateCustomer, onAssignCustomer, zuordnenLaeuft, disabled = false, notes, onDeleteNote, layerState, onToggleSide, onToggleLevel, onShowAllLayers, onHideAllLayers, customDimensions, onDeleteDimension, measureMode, onToggleMeasureMode, manualPlacements, onRemoveManualPlacement, placementType, onSelectPlacementType }: Props) {
+export default function BillOfMaterials({ materials, ohnePreis = [], ohneGewicht = [], lagerFehler = false, totalWeightKg, totalPrice, logistik, fahrzeuge = [], fahrzeugWahl = 'auto', onFahrzeugWahl, onExportPDF, onExportCSV, onExportMontageplan, onExportMontageplanPdf, onOpenLv, onSpeichereProjektdatei, onExportStatikGeometrie, onExportIFC, onExportDXF, onExportBogen, onExportStatikerPaket, planModus = 'schematisch', onPlanModusChange, customers, kundenLadeFehler, onRetryKunden, onCreateCustomer, onAssignCustomer, zuordnenLaeuft, disabled = false, notes, onDeleteNote, layerState, onToggleSide, onToggleLevel, onShowAllLayers, onHideAllLayers, customDimensions, onDeleteDimension, measureMode, onToggleMeasureMode, manualPlacements, onRemoveManualPlacement, placementType, onSelectPlacementType }: Props) {
   const [kundenSuche, setKundenSuche] = useState('')
   const [ausgewaehlterKunde, setAusgewaehlterKunde] = useState<{ id: string; name: string } | null>(null)
   const [zeigeDropdown, setZeigeDropdown] = useState(false)
@@ -302,7 +304,7 @@ export default function BillOfMaterials({ materials, ohnePreis = [], ohneGewicht
           ))}
         </div>
       </div>
-      {(onExportPDF || onExportCSV || onExportMontageplan || onOpenLv || onSpeichereProjektdatei || onExportStatikGeometrie || onExportIFC || onExportDXF || onExportBogen || onExportStatikerPaket) && !disabled && (
+      {(onExportPDF || onExportCSV || onExportMontageplan || onExportMontageplanPdf || onOpenLv || onSpeichereProjektdatei || onExportStatikGeometrie || onExportIFC || onExportDXF || onExportBogen || onExportStatikerPaket) && !disabled && (
         <div className='p-4 border-t border-black/5 grid grid-cols-2 gap-2'>
           {onExportCSV && (
             <button onClick={onExportCSV} className='py-2.5 bg-emerald-600 text-white text-sm font-medium rounded-xl hover:bg-emerald-700 transition-colors'>
@@ -319,9 +321,14 @@ export default function BillOfMaterials({ materials, ohnePreis = [], ohneGewicht
               📋 Leistungsverzeichnis (LV mit Preisen)
             </button>
           )}
+          {onExportMontageplanPdf && (
+            <button onClick={onExportMontageplanPdf} title='Ansicht mit Maßen und Materialliste mit Vorschau, Anzahl, Geladen, Fehlt' className='col-span-2 py-2.5 bg-blue-600 text-white text-sm font-medium rounded-xl hover:bg-blue-700 transition-colors'>
+              🪜 Montageplan (PDF mit Ansicht + Materialliste)
+            </button>
+          )}
           {onExportMontageplan && (
-            <button onClick={onExportMontageplan} className='col-span-2 py-2.5 bg-blue-600 text-white text-sm font-medium rounded-xl hover:bg-blue-700 transition-colors'>
-              🪜 Montageplan (Aufbaureihenfolge)
+            <button onClick={onExportMontageplan} className='col-span-2 py-2 bg-black/5 text-[#1d1d1f] text-xs font-medium rounded-xl hover:bg-black/10 transition-colors'>
+              Aufbaureihenfolge (Schritte je Ebene)
             </button>
           )}
           {onSpeichereProjektdatei && (

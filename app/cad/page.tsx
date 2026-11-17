@@ -1555,6 +1555,7 @@ export default function CADPage() {
             logistik={logistik}
             onExportPDF={model ? handleExportPDF : exportOhneModellHinweis}
             onExportMontageplan={model ? handleExportMontageplan : exportOhneModellHinweis}
+            onExportMontageplanPdf={model ? handleExportMontageplanPdf : exportOhneModellHinweis}
             onSpeichereProjektdatei={speichereProjektdatei}
             onOpenLv={rolle === 'admin' || istStatikerLogin ? (model ? () => setLvOffen(true) : exportOhneModellHinweis) : undefined}
             onExportStatikGeometrie={model ? handleExportStatik : exportOhneModellHinweis}
