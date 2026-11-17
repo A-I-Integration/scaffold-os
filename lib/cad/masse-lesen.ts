@@ -51,7 +51,8 @@ export function massZahl(s: string): number | null {
   return v > 0.05 && v < 200 ? v : null
 }
 
-interface Seg { l: number; cx: number; cy: number; waag: boolean }
+/** a0/a1: Ausdehnung entlang der Achse (Punkte), q: feste Koordinate quer dazu */
+interface Seg { l: number; cx: number; cy: number; waag: boolean; a0: number; a1: number; q: number }
 
 function segmente(fl: VektorFlaeche[], mpp: number): Seg[] {
   const out: Seg[] = []
@@ -64,11 +65,40 @@ function segmente(fl: VektorFlaeche[], mpp: number): Seg[] {
         const l = Math.hypot(dx, dy) * mpp
         if (l < 0.2) continue
         const waag = Math.abs(dy) < Math.abs(dx) * 0.02, senk = Math.abs(dx) < Math.abs(dy) * 0.02
-        if (waag || senk) out.push({ l, cx: (a[0] + b[0]) / 2, cy: (a[1] + b[1]) / 2, waag })
+        if (waag || senk) out.push({ l, cx: (a[0] + b[0]) / 2, cy: (a[1] + b[1]) / 2, waag, a0: Math.min(waag ? a[0] : a[1], waag ? b[0] : b[1]), a1: Math.max(waag ? a[0] : a[1], waag ? b[0] : b[1]), q: waag ? (a[1] + b[1]) / 2 : (a[0] + b[0]) / 2 })
       }
     }
   }
   return out
+}
+
+
+/**
+ * Maßlinien ragen oft über die Maßhilfslinien/Schrägstriche hinaus (Überstand, hier 0,1 m je Seite). Das Maß ist dann der Abstand zweier
+ * Maßhilfslinien (kurze Striche quer zur Maßlinie, die sie kreuzen), nicht die Linienlänge. Geprüft wird, ob zwei solche Hilfslinien um
+ * `pos` (Punkte, Lage der Maßzahl) im Abstand `soll` (m) ± `tol` stehen. Gibt den gemessenen Abstand zurück, sonst null.
+ */
+function hilfslinienAbstand(linie: Seg, pos: number, soll: number, tol: number, alle: Seg[], mpp: number): number | null {
+  if (pos < linie.a0 - 1 || pos > linie.a1 + 1) return null
+  const eps = 0.6
+  const lagen: number[] = []
+  for (const e of alle) {
+    if (e.waag === linie.waag) continue
+    if (e.l < 0.15 || e.l > 1) continue // längere Striche sind Wände, keine Hilfslinien
+    if (e.q < linie.a0 - eps || e.q > linie.a1 + eps) continue
+    if (linie.q < e.a0 - eps || linie.q > e.a1 + eps) continue
+    lagen.push(e.q)
+  }
+  if (lagen.length < 2) return null
+  lagen.sort((x, y) => x - y)
+  const eindeutig = lagen.filter((x, i) => i === 0 || x - lagen[i - 1] > 1)
+  let best: number | null = null
+  for (let i = 0; i < eindeutig.length; i++) for (let j = i + 1; j < eindeutig.length; j++) {
+    if (pos < eindeutig[i] - 1 || pos > eindeutig[j] + 1) continue
+    const ab = (eindeutig[j] - eindeutig[i]) * mpp
+    if (Math.abs(ab - soll) <= tol && (best === null || Math.abs(ab - soll) < Math.abs(best - soll))) best = ab
+  }
+  return best
 }
 
 function auswerten(texte: PlanText[], fl: VektorFlaeche[], nenner: number): MasskettenErgebnis {
@@ -86,8 +116,15 @@ function auswerten(texte: PlanText[], fl: VektorFlaeche[], nenner: number): Mass
     for (let i = -1; i <= 1; i++) for (let j = -1; j <= 1; j++) nah.push(...(raster.get(`${cx + i}|${cy + j}`) ?? []))
     const imKreis = nah.filter((s) => Math.hypot(s.cx - t.x, s.cy - t.y) * mpp <= 3)
     const tol = Math.max(0.006, 0.008 * v)
+    let ueber = false
     const treffer = imKreis.filter((s) => Math.abs(s.l - v) <= tol).sort((a, b) => Math.hypot(a.cx - t.x, a.cy - t.y) - Math.hypot(b.cx - t.x, b.cy - t.y))[0]
     if (treffer) { angaben.push({ text: t.s.trim(), textM: v, linieM: Math.round(treffer.l * 1000) / 1000, richtung: treffer.waag ? 'waagerecht' : 'senkrecht', status: 'bestaetigt', x: t.x, y: t.y }); continue }
+    // Maßlinie mit Überstand: Abstand der Maßhilfslinien statt Linienlänge
+    for (const kand of imKreis.filter((q) => q.l >= v - 0.02 && q.l <= v + 0.6)) {
+      const ab = hilfslinienAbstand(kand, kand.waag ? t.x : t.y, v, tol, segs, mpp)
+      if (ab !== null) { angaben.push({ text: t.s.trim(), textM: v, linieM: Math.round(ab * 1000) / 1000, richtung: kand.waag ? 'waagerecht' : 'senkrecht', status: 'bestaetigt', x: t.x, y: t.y }); ueber = true; break }
+    }
+    if (ueber) continue
     const grob = imKreis.filter((s) => Math.abs(s.l - v) <= 0.05 * v).sort((a, b) => Math.abs(a.l - v) - Math.abs(b.l - v))[0]
     if (grob) angaben.push({ text: t.s.trim(), textM: v, linieM: Math.round(grob.l * 1000) / 1000, richtung: grob.waag ? 'waagerecht' : 'senkrecht', status: 'abweichend', x: t.x, y: t.y })
     else angaben.push({ text: t.s.trim(), textM: v, status: 'ohne_linie', x: t.x, y: t.y })
