@@ -142,3 +142,22 @@ describe('3D-Prüfung: fehlerhafte Modelle werden erkannt (nichts geht unbemerkt
     expect(alsWarnungen(pruefeModell3D(m)).some((w) => w.type === 'error' && w.code.startsWith('PRUEF_'))).toBe(true)
   })
 })
+
+describe('Plan-Import: Maßketten (synthetisch)', () => {
+  const ang = (n: number, status: 'bestaetigt' | 'abweichend' | 'ohne_linie') => Array.from({ length: n }, (_, i) => ({ text: `${i + 1},00`, textM: i + 1, status, x: 0, y: 0 }))
+  const masse = (bestaetigt: number, rest: number, extra: object = {}) => ({ angaben: [...ang(bestaetigt, 'bestaetigt'), ...ang(rest, 'ohne_linie')], bestaetigt, abweichend: 0, ohneLinie: rest, ...extra })
+  it('viele bestätigte Maßketten: Befund grün, Maßstab doppelt belegt', () => {
+    const r = pruefePlanImport(synth({ masse: masse(9, 1) }))
+    expect(r.befunde.find((x) => x.code === 'MASSKETTEN_OK')?.ampel).toBe('gruen')
+  })
+  it('wenige bestätigte: gelb', () => {
+    expect(codes(pruefePlanImport(synth({ masse: masse(2, 8) })))).toContain('MASSKETTEN_TEILWEISE')
+  })
+  it('Maßketten sprechen für anderen Maßstab: gelb mit Hinweis', () => {
+    const r = pruefePlanImport(synth({ masse: masse(0, 8, { besterMassstab: 50, trefferAnteil: 0.9 }) }))
+    expect(r.befunde.find((x) => x.code === 'MASSSTAB_MASSKETTEN')?.ampel).toBe('gelb')
+  })
+  it('ohne Maßketten-Angaben bleibt alles wie bisher', () => {
+    expect(codes(pruefePlanImport(echt)).some((c) => c.startsWith('MASSKETTEN') || c === 'MASSSTAB_MASSKETTEN')).toBe(false)
+  })
+})
