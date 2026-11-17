@@ -16,7 +16,7 @@ import { kotenJeAnsicht, pultNiedrigeRichtung, gelaendeTiefeJeAnsicht, type Himm
 import { dachAusPlan, dachKotenAusPlan, pultdachNeigung, type PlanDachform } from './dachform-aus-plan'
 import { geschossHoehenAusPlan, type GeschossHoehenVorschlag } from './geschoss-hoehen-aus-plan'
 
-export interface PlanImportGeschoss { titel: string; ebene: number; laengeM: number; breiteM: number; flaecheM2: number; fenster?: number; tueren?: number
+export interface PlanImportGeschoss { titel: string; ebene: number; /** Rahmen der Kontur in Seiten-Punkten [x0, y0, x1, y1]; dient dem Abgleich mit Maßketten neben dem Geschoss */ bboxPt?: [number, number, number, number]; laengeM: number; breiteM: number; flaecheM2: number; fenster?: number; tueren?: number
   /** Vollständige erkannte Außenkontur des Geschosses in Metern, auf den Gebäude-Mittelpunkt zentriert. */
   umriss?: UmrissPunkt[]
   /** Vorsprünge (z. B. WC-Erker), die nicht in Länge/Breite stecken – diese beschreiben den Hauptkörper */
@@ -78,9 +78,11 @@ export function planImportAus(dateiname: string, massstab: number, gefunden: Gef
     const hk = hauptkoerperAusKontur(g.kontur, mpp)
     const laenge = hk ? hk.laengeM : Math.max(g.breiteM, g.tiefeM)
     const breite = hk ? hk.breiteM : Math.min(g.breiteM, g.tiefeM)
+    const kx = g.kontur.map((p) => p.x), ky = g.kontur.map((p) => p.y)
     return {
       titel: g.titel,
       ebene: g.ebene,
+      ...(g.kontur.length ? { bboxPt: [Math.min(...kx), Math.min(...ky), Math.max(...kx), Math.max(...ky)] as [number, number, number, number] } : {}),
       laengeM: runde(laenge),
       breiteM: runde(breite),
       flaecheM2: Math.round(g.flaecheM2 * 10) / 10,

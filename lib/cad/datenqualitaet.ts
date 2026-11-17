@@ -85,6 +85,20 @@ export function pruefePlanImport(pl: PlanImport | null | undefined): Pruefberich
     else if (mk.bestaetigt / mk.angaben.length >= 0.6) b('MASSKETTEN_OK', 'gruen', 'Maßketten bestätigt', `${mk.bestaetigt} von ${mk.angaben.length} Maßzahlen haben eine passende gezeichnete Maßlinie bei 1:${m}; der Maßstab ist damit doppelt belegt.`)
     else b('MASSKETTEN_TEILWEISE', 'gelb', 'Maßketten nur teilweise bestätigt', `Nur ${mk.bestaetigt} von ${mk.angaben.length} Maßzahlen haben eine passende Maßlinie (${mk.abweichend} weichen ab, ${mk.ohneLinie} ohne Linie). Maße bitte stichprobenartig prüfen.`)
   }
+  // Maße je Geschoss gegen bestätigte Maßketten NEBEN dem Geschoss: passt eine Seite nicht, aber eine Maßkette liegt knapp daneben, ist das ein Hinweis
+  // (z. B. Dachüberstand oder Attika in der Kontur, Maßkette meint die Wand). Nur Hinweis, die Maße werden nicht geändert.
+  if (mk && m > 0) {
+    const rand = 4 / ((0.0254 / 72) * m)
+    for (const g of pl.geschosse.filter((q) => q.ebene >= 0 && q.bboxPt)) {
+      const [x0, y0, x1, y1] = g.bboxPt!
+      const nah = mk.angaben.filter((a) => a.status === 'bestaetigt' && a.x >= x0 - rand && a.x <= x1 + rand && a.y >= y0 - rand && a.y <= y1 + rand && !(a.x > x0 && a.x < x1 && a.y > y0 && a.y < y1))
+      for (const dim of [g.laengeM, g.breiteM]) {
+        if (nah.some((a) => Math.abs(a.textM - dim) <= 0.005 * dim)) continue
+        const knapp = nah.filter((a) => Math.abs(a.textM - dim) <= 0.06 * dim).sort((p1, p2) => Math.abs(p1.textM - dim) - Math.abs(p2.textM - dim))[0]
+        if (knapp) b('MASS_GESCHOSS_ABWEICHT', 'gelb', `Maß ${g.titel}`, `Gemessen ${de(dim)} m, aber neben dem Grundriss steht die bestätigte Maßkette ${knapp.text} m. Der Grundriss enthält vermutlich mehr als die Wand (z. B. Überstand): bitte im Plan prüfen, welches Maß gilt.`)
+      }
+    }
+  }
   werte.push({ schluessel: 'massstab', bezeichnung: 'Maßstab', wert: m > 0 ? `1:${m}` : undefined, quelle: 'Plankopf/Zeichnung', methode: 'text', konfidenz: m > 0 ? (GAENGIGE_MASSSTAEBE.includes(m) ? 'gelesen' : 'geschaetzt') : 'fehlt', ampel: !(m > 0) ? 'rot' : GAENGIGE_MASSSTAEBE.includes(m) ? 'gruen' : 'gelb' })
 
   // Geschosse und Hauptkörper

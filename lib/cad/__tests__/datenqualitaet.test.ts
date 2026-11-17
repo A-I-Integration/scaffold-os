@@ -169,3 +169,22 @@ describe('Plan-Import: Maßketten (synthetisch)', () => {
     expect(codes(pruefePlanImport(echt)).some((c) => c.startsWith('MASSKETTEN') || c === 'MASSSTAB_MASSKETTEN')).toBe(false)
   })
 })
+
+describe('Plan-Import: Maßkette neben dem Geschoss (synthetisch)', () => {
+  const g0 = echt.geschosse.find((q) => q.ebene >= 0)!
+  const [x0, y0, x1, y1] = [100, 100, 400, 300]
+  const mitMass = (textM: number) => synth({
+    geschosse: [{ ...g0, laengeM: 10, breiteM: 8.85, bboxPt: [x0, y0, x1, y1] as [number, number, number, number] }],
+    masse: { angaben: [{ text: '8,44', textM, linieM: textM, status: 'bestaetigt' as const, x: x1 + 20, y: 200 }], bestaetigt: 1, abweichend: 0, ohneLinie: 0 },
+  })
+  it('Maßkette knapp neben der gemessenen Tiefe → gelber Hinweis, Wert unverändert', () => {
+    const r = pruefePlanImport(mitMass(8.44))
+    expect(r.befunde.some((x) => x.code === 'MASS_GESCHOSS_ABWEICHT' && x.ampel === 'gelb')).toBe(true)
+  })
+  it('Maßkette passt exakt → kein Hinweis', () => {
+    expect(codes(pruefePlanImport(mitMass(8.85)))).not.toContain('MASS_GESCHOSS_ABWEICHT')
+  })
+  it('Maßkette weit entfernt (>6 %) → kein Hinweis', () => {
+    expect(codes(pruefePlanImport(mitMass(5)))).not.toContain('MASS_GESCHOSS_ABWEICHT')
+  })
+})
