@@ -235,6 +235,8 @@ export interface BuildingParams {
   tueren?: CadTuer[]
   /** Fenster einzeln mit fester Lage (aus dem Plan). Wenn gesetzt, ersetzen sie die gleichmäßig verteilten Fenster aus windowCount (nicht im Umriss-Modus). */
   fensterFest?: CadFenster[]
+  /** Fenster/Türen aus dem Plan mit Lage in Metern in der Plan-Basis des Umrisses; gelten im Umriss-Modus (Zuordnung zur nächsten Umrisskante) */
+  planOeffnungen?: { ebene: number; typ: 'tuer' | 'fenster'; x: number; z: number; breiteM: number; bruestungM?: number; sturzM?: number }[]
   /** Vorbauten (aus dem Plan gelesen), nur zur Ansicht im 3D-Modell */
   vorbauten?: CadVorbau[]
 }
@@ -3467,6 +3469,49 @@ export interface BuildingFeature3D {
   umriss?: { kante: number; weltX: number; weltZ: number; yaw: number }
 }
 
+// Fenster und Türen aus dem Plan im Umriss-Modus: jede Öffnung an die nächste Umrisskante legen (höchstens PLAN_OEFFNUNG_MAX_ABSTAND_M entfernt).
+const PLAN_OEFFNUNG_MAX_ABSTAND_M = 0.6
+export function merkmaleAusPlanOeffnungen(
+  building: BuildingParams,
+  kanten: ReturnType<typeof umrissKanten>,
+  floors: number,
+  floorHeights: number[],
+  floorBottom: (i: number) => number,
+): BuildingFeature3D[] {
+  const po = building.planOeffnungen
+  if (!po?.length || !building.umriss) return []
+  const roh = normalisiereUmriss(building.umriss)
+  const zentr = zentriereUmriss(roh)
+  const vx = zentr[0].x - roh[0].x, vz = zentr[0].z - roh[0].z
+  const out: BuildingFeature3D[] = []
+  po.forEach((o, i) => {
+    const px = o.x + vx, pz = o.z + vz
+    let best: { k: (typeof kanten)[number]; d: number; t: number } | null = null
+    for (const k of kanten) {
+      const dx = k.bis.x - k.von.x, dz = k.bis.z - k.von.z, l2 = dx * dx + dz * dz
+      if (l2 < 1e-9) continue
+      const t = Math.max(0, Math.min(1, ((px - k.von.x) * dx + (pz - k.von.z) * dz) / l2))
+      const d = Math.hypot(px - (k.von.x + t * dx), pz - (k.von.z + t * dz))
+      if (!best || d < best.d) best = { k, d, t }
+    }
+    if (!best || best.d > PLAN_OEFFNUNG_MAX_ABSTAND_M) return
+    const k = best.k
+    const f = Math.min(Math.max(0, Math.round(o.ebene)), floors - 1)
+    const offset = (best.t - 0.5) * k.laengeM
+    const weltX = k.von.x + best.t * (k.bis.x - k.von.x), weltZ = k.von.z + best.t * (k.bis.z - k.von.z)
+    const istTuer = o.typ === 'tuer'
+    const bruestung = o.bruestungM ?? 0.9
+    const hoehe = istTuer ? 2.1 : Math.max(0.6, Math.min(2.2, o.sturzM !== undefined && o.sturzM > bruestung ? o.sturzM - bruestung : 1.3))
+    out.push({
+      id: `${istTuer ? 'door' : 'win'}-plan-${i}`, type: istTuer ? 'door' : 'window', side: 'front', offsetAlongM: offset,
+      bottomY: floorBottom(f) + (istTuer ? 0 : bruestung), widthM: Math.min(o.breiteM, k.laengeM - 0.2), heightM: Math.min(hoehe, floorHeights[f] - 0.3),
+      depthM: 0, floorIndex: f,
+      umriss: { kante: k.index, weltX, weltZ, yaw: k.yaw },
+    })
+  })
+  return out
+}
+
 // Fenster und Türen für ein Gebäude mit Umriss: verteilt nach Kantenlänge.
 function generiereUmrissMerkmale(building: BuildingParams): BuildingFeature3D[] {
   const roh = building.umriss!
@@ -3481,6 +3526,8 @@ function generiereUmrissMerkmale(building: BuildingParams): BuildingFeature3D[] 
     : Array(floors).fill(building.heightM / floors)
   const floorBottom = (i: number) => floorHeights.slice(0, i).reduce((s, h) => s + h, 0)
   const out: BuildingFeature3D[] = []
+  const planMerkmale = merkmaleAusPlanOeffnungen(building, kanten, floors, floorHeights, floorBottom)
+  if (planMerkmale.length) return planMerkmale
   const platziere = (k: typeof kanten[number], offset: number) => ({
     kante: k.index,
     weltX: (k.von.x + k.bis.x) / 2 + k.u[0] * offset,

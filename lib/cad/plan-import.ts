@@ -25,6 +25,8 @@ export interface PlanImportGeschoss { titel: string; ebene: number; /** Rahmen d
   oeffnungen?: PlanOeffnungAnKante[]
   /** Öffnungen, die an keiner Kante des Hauptkörpers liegen (z. B. an einem Vorbau) und nicht eingezeichnet werden */
   oeffnungenAbseits?: number
+  /** Fenster und Türen mit Lage in Metern in der Basis von `umriss` (Mitte aller Geschosse = 0, z nach unten im Plan) */
+  oeffnungenPlan?: { typ: 'tuer' | 'fenster'; x: number; z: number; breiteM: number; bruestungM?: number; sturzM?: number }[]
   /** Vorbauten an den Kanten des Hauptkörpers (für das 3D-Modell) */
   vorbautenAnKante?: PlanVorbauAnKante[]
   /** Längere Seite des Hauptkörpers im Plan: 'x' = waagerecht, 'y' = senkrecht */
@@ -97,6 +99,7 @@ export function planImportAus(dateiname: string, massstab: number, gefunden: Gef
         const lage = hk ? oeffnungenAnKanten(o, hk.rechteck, mpp) : null
         return {
           fenster: o.filter((x) => x.typ === 'fenster').length, tueren: o.filter((x) => x.typ === 'tuer').length,
+          ...(o.length ? { oeffnungenPlan: o.map((q) => ({ typ: q.typ, x: runde((q.x - mitteX) * mpp), z: runde((q.y - mitteY) * mpp), breiteM: q.breiteM, ...(q.bruestungM !== undefined ? { bruestungM: q.bruestungM } : {}), ...(q.sturzM !== undefined ? { sturzM: q.sturzM } : {}) })) } : {}),
           ...(hk && lage ? {
             oeffnungen: lage.an, oeffnungenAbseits: lage.abseits,
             langeAchse: (hk.rechteck.x1 - hk.rechteck.x0 >= hk.rechteck.y1 - hk.rechteck.y0 ? 'x' : 'y') as 'x' | 'y',
