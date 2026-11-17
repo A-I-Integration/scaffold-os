@@ -99,8 +99,11 @@ export function pruefePlanImport(pl: PlanImport | null | undefined): Pruefberich
     if (!lOk || !bOk) b('MASSE_UNPLAUSIBEL', 'gelb', 'Gebäudemaße', `${de(haupt.laengeM)} × ${de(haupt.breiteM)} m liegen außerhalb des üblichen Bereichs – Maßstab und Zuordnung prüfen.`)
     // Hüllrechteck gegen echte Fläche: eine Fläche, die größer als das Rechteck ist, kann nicht stimmen; deutlich kleiner heißt: kein Rechteck (L-Form o. Ä.)
     const rechteck = haupt.laengeM * haupt.breiteM
-    if (haupt.flaecheM2 > rechteck * 1.03) b('FLAECHE_WIDERSPRUCH', 'rot', 'Grundrissfläche', `Fläche ${de(haupt.flaecheM2, 1)} m² ist größer als Länge × Breite (${de(rechteck, 1)} m²) – Maße widersprechen sich.`)
-    else if (haupt.flaecheM2 < rechteck * 0.8) b('KEIN_RECHTECK', 'gelb', 'Grundrissform', `Der Grundriss füllt nur ${Math.round((haupt.flaecheM2 / rechteck) * 100)} % des Rechtecks ${de(haupt.laengeM)} × ${de(haupt.breiteM)} m (L-Form, Rücksprung oder offene Kontur). Das Modell nimmt ein Rechteck an – Umriss prüfen.`)
+    // Länge × Breite beschreiben den Hauptkörper OHNE Vorbauten, die Fläche des Geschosses enthält sie: Vorbauflächen vorher abziehen, sonst entsteht ein Scheinwiderspruch
+    const vorbauM2 = (haupt.vorbauten ?? []).reduce((q, v) => q + v.flaecheM2, 0)
+    const flaecheHaupt = haupt.flaecheM2 - vorbauM2
+    if (flaecheHaupt > rechteck * 1.03) b('FLAECHE_WIDERSPRUCH', 'rot', 'Grundrissfläche', `Fläche ${de(flaecheHaupt, 1)} m² ist größer als Länge × Breite (${de(rechteck, 1)} m²) – Maße widersprechen sich.`)
+    else if (flaecheHaupt < rechteck * 0.8) b('KEIN_RECHTECK', 'gelb', 'Grundrissform', `Der Grundriss füllt nur ${Math.round((flaecheHaupt / rechteck) * 100)} % des Rechtecks ${de(haupt.laengeM)} × ${de(haupt.breiteM)} m (L-Form, Rücksprung oder offene Kontur). Das Modell nimmt ein Rechteck an – Umriss prüfen.`)
     // Geschosse
     const ebenen = [...new Set(pl.geschosse.map((g) => g.ebene))].sort((x, y) => x - y)
     const luecke = ebenen.some((e, i) => i > 0 && e - ebenen[i - 1] > 1)

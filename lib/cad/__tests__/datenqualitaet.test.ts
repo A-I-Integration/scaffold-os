@@ -40,6 +40,14 @@ describe('Plan-Import: synthetische Fälle (gekennzeichnet)', () => {
     const g = echt.geschosse.map((x) => (x.ebene === echt.hauptEbene ? { ...x, flaecheM2: x.laengeM * x.breiteM * 1.5 } : x))
     expect(pruefePlanImport(synth({ geschosse: g })).ampel).toBe('rot')
   })
+  it('Fläche mit Vorbau gegen Hauptkörper-Rechteck: Vorbaufläche zählt nicht als Widerspruch', () => {
+    const g = echt.geschosse.map((x) => (x.ebene === echt.hauptEbene ? { ...x, flaecheM2: x.laengeM * x.breiteM + 6.6, vorbauten: [{ laengeM: 4.4, tiefeM: 1.5, flaecheM2: 6.6 }] } : x))
+    expect(codes(pruefePlanImport(synth({ geschosse: g })))).not.toContain('FLAECHE_WIDERSPRUCH')
+    const ohne = echt.geschosse.map((x) => (x.ebene === echt.hauptEbene ? { ...x, flaecheM2: x.laengeM * x.breiteM + 6.6, vorbauten: undefined } : x))
+    expect(codes(pruefePlanImport(synth({ geschosse: ohne })))).not.toContain('KEIN_RECHTECK')
+    const viel = echt.geschosse.map((x) => (x.ebene === echt.hauptEbene ? { ...x, flaecheM2: x.laengeM * x.breiteM * 1.5, vorbauten: [{ laengeM: 4.4, tiefeM: 1.5, flaecheM2: 6.6 }] } : x))
+    expect(pruefePlanImport(synth({ geschosse: viel })).ampel).toBe('rot')
+  })
   it('L-förmiger Grundriss (Fläche deutlich unter dem Rechteck) → GELB', () => {
     const g = echt.geschosse.map((x) => (x.ebene === echt.hauptEbene ? { ...x, flaecheM2: x.laengeM * x.breiteM * 0.6 } : x))
     expect(codes(pruefePlanImport(synth({ geschosse: g })))).toContain('KEIN_RECHTECK')

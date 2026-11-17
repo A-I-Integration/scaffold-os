@@ -45,3 +45,24 @@ describe('lesMassketten', () => {
     expect(lesMassketten([], [], 100).angaben).toEqual([])
   })
 })
+
+describe('Maßlinie mit Überstand', () => {
+  it('Maß = Abstand der Maßhilfslinien, wenn die Linie je 0,1 m darüber hinausragt', () => {
+    const x0 = 100, y = 200
+    const fl = [linieH(x0 - 0.1 / MPP, y, 9.9 + 0.2), linieV(x0, y - 3, 0.4), linieV(x0 + 9.9 / MPP, y - 3, 0.4)]
+    const r = lesMassketten(fl, [{ s: '9,90', x: x0 + 4.9 / MPP, y: y - 4 }], 100)
+    expect(r.angaben[0]).toMatchObject({ status: 'bestaetigt', textM: 9.9 })
+    expect(r.angaben[0].linieM).toBeCloseTo(9.9, 2)
+  })
+  it('ohne Hilfslinien bleibt es bei „abweichend“ (kein Raten)', () => {
+    const fl = [linieH(100, 200, 10.1)]
+    const r = lesMassketten(fl, [{ s: '9,90', x: 100 + 5 / MPP, y: 196 }], 100)
+    expect(r.angaben[0].status).toBe('abweichend')
+  })
+  it('lange Wandlinien zählen nicht als Hilfslinien', () => {
+    const x0 = 100, y = 200
+    const fl = [linieH(x0 - 0.1 / MPP, y, 10.1), linieV(x0, y - 20, 3), linieV(x0 + 9.9 / MPP, y - 20, 3)]
+    const r = lesMassketten(fl, [{ s: '9,90', x: x0 + 4.9 / MPP, y: y - 4 }], 100)
+    expect(r.angaben[0].status).toBe('abweichend')
+  })
+})
