@@ -27,6 +27,15 @@ export function erzeugePlanPdf(zeichnungen: Zeichnung[], opt: PlanPdfOptionen): 
 
   zeichnungen.forEach((z, i) => {
     if (i > 0) doc.addPage('a4', 'landscape')
+    zeichneZeichnungAufSeite(doc, z, opt, `Seite ${i + 1} von ${zeichnungen.length}`)
+  })
+
+  return new Uint8Array(doc.output('arraybuffer'))
+}
+
+/** Eine Zeichnung auf die aktuelle Seite (A4 quer) – auch vom Montageplan genutzt. */
+export function zeichneZeichnungAufSeite(doc: jsPDF, z: Zeichnung, opt: PlanPdfOptionen, seitenText: string): void {
+  {
     const breite = z.grenzen.maxX - z.grenzen.minX
     const hoehe = z.grenzen.maxY - z.grenzen.minY
     const flaecheB = SEITE.b - 2 * RAND
@@ -69,8 +78,6 @@ export function erzeugePlanPdf(zeichnungen: Zeichnung[], opt: PlanPdfOptionen): 
 
     doc.setFontSize(7); doc.setTextColor(110)
     doc.text(`Stand ${opt.datum} · Schematische Darstellung aus SCAFFOLD OS · Kein Standsicherheitsnachweis, keine Abnahme`, RAND, SEITE.h - RAND + 3)
-    doc.text(`Seite ${i + 1} von ${zeichnungen.length}`, SEITE.b - RAND, SEITE.h - RAND + 3, { align: 'right' })
-  })
-
-  return new Uint8Array(doc.output('arraybuffer'))
+    doc.text(seitenText, SEITE.b - RAND, SEITE.h - RAND + 3, { align: 'right' })
+  }
 }

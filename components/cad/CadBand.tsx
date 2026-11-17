@@ -68,6 +68,7 @@ export interface CadBandProps {
   // Ausgabe
   onPdf: () => void
   onMontageplan: () => void
+  onMontageplanPdf?: () => void
   onDxf: () => void
   onIfc?: () => void
   onSpeichern: () => void
@@ -242,6 +243,7 @@ export default function CadBand(p: CadBandProps) {
             <Gruppe name='Dokumente'>
               <Knopf icon={FileText} label='Dokumentation (PDF)' aus={aus} onClick={p.onPdf} />
               <Knopf icon={CalendarClock} label='Montageplan' aus={aus} onClick={p.onMontageplan} />
+              {p.onMontageplanPdf && <Knopf icon={FileDown} label='Montageplan (PDF)' aus={aus} onClick={p.onMontageplanPdf} titel='Ansicht mit Maßen und Materialliste mit Vorschau, Anzahl, Geladen, Fehlt' />}
               {p.onLv && <Knopf icon={Printer} label='Leistungsverzeichnis' aus={aus} onClick={p.onLv} />}
             </Gruppe>
             <Gruppe name='Austausch'>
