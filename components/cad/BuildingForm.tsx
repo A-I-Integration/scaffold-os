@@ -457,6 +457,7 @@ export default function BuildingForm({ building, systemId, onChange, onSystemCha
               patch.doorCount = ueber.reduce((a, g) => a + (g.tueren ?? 0), 0)
               const planOe = ueber.flatMap((g) => (g.oeffnungenPlan ?? []).map((q) => ({ ebene: g.ebene, ...q })))
               if (planOe.length) patch.planOeffnungen = planOe
+              if (pl.terrassen?.length) { patch.planTerrassen = pl.terrassen; aus.push('Terrassen') }
               aus.push('Fenster/Türen')
               // Lage der Öffnungen: an den Kanten des Hauptkörpers, nicht gleichmäßig verteilt
               const mitLage = ueber.filter((g) => g.oeffnungen && g.oeffnungen.length)
@@ -528,7 +529,7 @@ export default function BuildingForm({ building, systemId, onChange, onSystemCha
           delete neuesGebaeude.umrissKantenHoeheM
         }
         // Fenster/Türen aus einem früheren Plan nicht an den neuen hängen
-        for (const f of ['tueren', 'fensterFest', 'vorbauten', 'planOeffnungen'] as const) if (vorherigeAutoFelder.includes(f) && !(f in patch)) delete neuesGebaeude[f]
+        for (const f of ['tueren', 'fensterFest', 'vorbauten', 'planOeffnungen', 'planTerrassen'] as const) if (vorherigeAutoFelder.includes(f) && !(f in patch)) delete neuesGebaeude[f]
         if (planBericht) {
           // Erst zeigen, dann übernehmen: nichts am Gerüst ändern, bis die Person bestätigt
           setPlanWartet({ gebaeude: neuesGebaeude, bestaetigung: bestaetigungAus(planBericht), haken: false, vorherFelder: vorherFelderMerken })
