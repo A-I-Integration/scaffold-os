@@ -572,6 +572,25 @@ export function waehleTreppenKanteReserve(fields: Array<{ kante?: number; levelI
   return best
 }
 
+/** Welche Kante des Umrisses ist „vorne“? Die, deren Außenseite am stärksten nach +z zeigt; bei Gleichstand (±0,25) die weiter rechts liegende, dann die längere. */
+export function waehleVordereKante(teile: Array<{ kante: number; levelIndex: number; lengthM: number; x: number; nz: number }>): number | undefined {
+  if (!teile.length) return undefined
+  // Kantenlänge = längste Lage der Kante (am Hang fehlen unten Felder: die unterste Lage allein sagt nichts über die Kante)
+  const proKante = new Map<number, { nz: number; x: number; n: number; laengeJeLage: Map<number, number> }>()
+  for (const t of teile) {
+    const e = proKante.get(t.kante) ?? { nz: t.nz, x: 0, n: 0, laengeJeLage: new Map<number, number>() }
+    e.x += t.x; e.n += 1; e.laengeJeLage.set(t.levelIndex, (e.laengeJeLage.get(t.levelIndex) ?? 0) + t.lengthM); proKante.set(t.kante, e)
+  }
+  const liste = [...proKante.entries()].map(([k, e]) => ({ k, nz: e.nz, x: e.x / e.n, laenge: Math.max(...e.laengeJeLage.values()) }))
+  const lang = liste.filter((e) => e.laenge >= 3)
+  const pool = lang.length ? lang : liste
+  const maxNz = Math.max(...pool.map((e) => e.nz))
+  if (maxNz < 0.3) return undefined // keine Kante zeigt nach vorne: bisherige Regel (längste Kante)
+  const vorn = pool.filter((e) => e.nz >= maxNz - 0.25)
+  vorn.sort((a, b) => b.x - a.x || b.laenge - a.laenge)
+  return vorn[0].k
+}
+
 export function calculateLevels(
   buildingHeightM: number,
   system: GeruestSystem,
@@ -723,6 +742,16 @@ export function generateScaffoldComponents(model: CADModel): ScaffoldComponent3D
   fields.forEach((f) => { if (f.kante !== undefined && f.levelIndex === 0) kantenLaenge.set(f.kante, (kantenLaenge.get(f.kante) ?? 0) + f.lengthM) })
   let treppenKante: number | undefined
   kantenLaenge.forEach((len, k) => { if (treppenKante === undefined || len > (kantenLaenge.get(treppenKante) ?? 0) + 1e-9) treppenKante = k })
+  // Standardplatz „vorne rechts“: Umriss = die Kante, deren Außenseite nach vorne (+z) zeigt, bei mehreren die am weitesten rechts liegende
+  // (nur Kanten mit mindestens einem Feld an ihrer untersten Lage; kürzere Vorsprünge zählen erst, wenn sonst keine Kante nach vorne zeigt).
+  {
+    const vorne = waehleVordereKante(fields.filter((f) => f.kante !== undefined).map((f) => {
+      const r = feldRahmen(f, building)
+      const [ox, oz] = r.toWorld(0, 0), [nx, nz] = r.toWorld(0, 1)
+      return { kante: f.kante as number, levelIndex: f.levelIndex, lengthM: f.lengthM, x: f.positionX, nz: (nz - oz) / Math.max(1e-9, Math.hypot(nx - ox, nz - oz)) }
+    }))
+    if (vorne !== undefined) treppenKante = vorne
+  }
   // Reserve (nur wenn oben keine Kante gefunden wurde): längste Kante nach der jeweils untersten vorhandenen Lage. Greift nicht, wo es heute schon eine Treppe gibt.
   if (treppenKante === undefined) treppenKante = waehleTreppenKanteReserve(fields)
   const erzwungenesFeld = building.geruestOptionen?.treppeFeldId ? fields.find((f) => f.id === building.geruestOptionen?.treppeFeldId) : undefined
@@ -742,6 +771,10 @@ export function generateScaffoldComponents(model: CADModel): ScaffoldComponent3D
     // Felder vor einer Tür (Durchgang) werden übersprungen – dort wird gegangen, nicht die Treppe gestellt.
     const frei = treppenFelder0.filter((f) => !f.durchgang)
     const kandidaten = frei.length > 0 ? frei : treppenFelder0
+    const entlangRechts = (f: ScaffoldField): number => {
+      // x im Feldrahmen der Treppenseite: je größer, desto weiter rechts (Betrachtung von vorne)
+      return f.kante === undefined ? f.positionX : f.positionX
+    }
     // Die Treppe soll möglichst bis ganz nach oben führen: unter den Kandidaten gewinnt das Feld mit den meisten
     // durchgehenden Lagen; bei Gleichstand gilt die bisherige Vorliebe (zweites Feld, dann erstes, dann die übrigen).
     const lagenAn = (f: ScaffoldField): number => {
@@ -749,7 +782,10 @@ export function generateScaffoldComponents(model: CADModel): ScaffoldComponent3D
       while (n < levels.length - treppeUnten && fields.some((g) => istTreppenFeld(g) && g.levelIndex === treppeUnten + n && gleicherPlatz(g, f, 0.01))) n++
       return n
     }
-    const reihenfolge = [kandidaten[1], kandidaten[0], ...kandidaten.slice(2)].filter((f): f is ScaffoldField => !!f)
+    // Standardplatz vorne rechts: das zweite Feld von rechts (nicht direkt an der Ecke), sonst das rechteste, dann die übrigen von rechts nach links.
+    // Rechts = größeres x der Gerüstseite (Vorderseite) bzw. des Feldrahmens der Kante.
+    const rechtsZuerst = [...kandidaten].sort((a, b) => entlangRechts(b) - entlangRechts(a))
+    const reihenfolge = [rechtsZuerst[1], rechtsZuerst[0], ...rechtsZuerst.slice(2)].filter((f): f is ScaffoldField => !!f)
     let feld = reihenfolge[0]
     let bestLagen = lagenAn(feld)
     for (const f of reihenfolge) { const n = lagenAn(f); if (n > bestLagen) { feld = f; bestLagen = n } }
@@ -757,7 +793,8 @@ export function generateScaffoldComponents(model: CADModel): ScaffoldComponent3D
     if (erzwungenesFeld) feld = treppenFelder0.find((f) => gleicherPlatz(f, erzwungenesFeld, 0.01)) ?? erzwungenesFeld
     stairSpan = { a: feld, b: feld, lagen: 0 }
     if (treppenFelder0.some((f) => f.durchgang)) {
-      const standard = treppenFelder0[1] ?? treppenFelder0[0]
+      const alleRechts = [...treppenFelder0].sort((x, y) => entlangRechts(y) - entlangRechts(x))
+      const standard = alleRechts[1] ?? alleRechts[0]
       if (frei.length === 0) model.warnings.push({ type: 'warning', code: 'TREPPE_VOR_TUER', message: 'Alle Felder der Treppenseite liegen vor einer Tür: die Treppe steht trotzdem dort. Bitte Türen oder Treppenseite prüfen.' })
       else if (standard.durchgang) model.warnings.push({ type: 'info', code: 'TREPPE_VERSETZT', message: 'Die Treppe wurde von ihrer üblichen Stelle weg versetzt, weil dort eine Tür liegt (Durchgang).' })
     }

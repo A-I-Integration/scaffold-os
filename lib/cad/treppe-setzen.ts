@@ -80,3 +80,23 @@ export function durchstiegAufFeld(model: CADModel, feld: ScaffoldField): { entfe
   }
   return { entfernen, platzierungen }
 }
+
+/** Das Feld, vor dem die automatische Treppe steht: das nächste Feld an der untersten Lage in ihrer Nähe. */
+export function feldDerAutoTreppe(model: Modell, stairPos: [number, number, number]): ScaffoldField | null {
+  const nah = model.fields.map((f) => ({ f, d: Math.hypot(f.positionX - stairPos[0], f.positionZ - stairPos[2]) })).filter((e) => e.d < e.f.lengthM + 0.8)
+  if (!nah.length) return null
+  const unten = Math.min(...nah.map((e) => e.f.levelIndex))
+  return nah.filter((e) => e.f.levelIndex === unten).sort((a, b) => a.d - b.d)[0].f
+}
+
+/** Ein Feld nach links (−1) oder rechts (+1) (aus Sicht von vorne: kleineres/größeres x; bei Kanten entlang z zählt die Feldreihenfolge). Am Ende der Reihe: Meldung. */
+export function nachbarFuerTreppe(model: Modell, feld: ScaffoldField, richtung: -1 | 1): { feld: ScaffoldField | null; grund?: string } {
+  const reihe = model.fields.filter((x) => schluesselVon(x) === schluesselVon(feld) && x.levelIndex === feld.levelIndex).sort((a, b) => a.index - b.index)
+  const nr = reihe.findIndex((x) => x.id === feld.id)
+  const vor = reihe[nr + 1], zurueck = reihe[nr - 1]
+  const kandidaten = [vor, zurueck].filter((x): x is ScaffoldField => !!x)
+  const ziel = kandidaten
+    .map((k) => ({ k, dx: k.positionX - feld.positionX }))
+    .filter((e) => (Math.abs(e.dx) > 0.05 ? Math.sign(e.dx) === richtung : (e.k === vor) === (richtung === 1)))[0]?.k ?? null
+  return ziel ? { feld: ziel } : { feld: null, grund: richtung === 1 ? 'Rechts ist kein weiteres Feld.' : 'Links ist kein weiteres Feld.' }
+}

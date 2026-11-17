@@ -90,17 +90,18 @@ describe('Gerüst folgt dem Umriss', () => {
     expect(m.umrissEcken!.filter((e) => e.konvex)).toHaveLength(5)
   })
 
-  it('Außentreppe steht vor der längsten Kante, das Gerüst bleibt vollständig', () => {
+  it('Außentreppe steht vorne rechts: vor der nach vorne zeigenden Kante, die am weitesten rechts liegt; das Gerüst bleibt vollständig', () => {
     const m = generateCADModel({ ...basis, umriss: lFormUmriss(12, 9, 5, 4) }, 'layher-allround')
     const treppe = m.components3D.find((c) => c.type === 'stair')
     expect(treppe).toBeDefined()
     const kanten = umrissKanten(m.building.umriss!)
-    const laengste = kanten.reduce((b, k) => (k.laengeM > b.laengeM ? k : b), kanten[0])
-    const d = (treppe!.position[0] - laengste.von.x) * laengste.n[0] + (treppe!.position[2] - laengste.von.z) * laengste.n[1]
+    const maxNz = Math.max(...kanten.map((k) => k.n[1]))
+    const vorn = kanten.filter((k) => k.n[1] >= maxNz - 0.25).sort((a, b) => (b.von.x + b.bis.x) - (a.von.x + a.bis.x))[0]
+    const d = (treppe!.position[0] - vorn.von.x) * vorn.n[0] + (treppe!.position[2] - vorn.von.z) * vorn.n[1]
     // Wandabstand 0,3 + Belagtiefe 0,73: die Treppe steht außerhalb des Belags
     expect(d).toBeGreaterThan(0.3 + 0.73)
     // kein Belag entfällt
-    const feld0 = m.fields.filter((f) => f.kante === laengste.index && f.levelIndex === 0)
+    const feld0 = m.fields.filter((f) => f.kante === vorn.index && f.levelIndex === 0)
     for (const f of feld0) expect(m.components3D.some((c) => c.id === `deck-${f.id}`)).toBe(true)
   })
 
@@ -138,12 +139,14 @@ describe('Umriss-Modus: Fassadenmerkmale', () => {
 })
 
 describe('Außentreppe vor dem Gerüst', () => {
-  it('Rechteck: Treppe genau ein Feld lang vor dem zweiten Feld, Gerüst vollständig, Podeste, Durchgänge', () => {
+  it('Rechteck: Treppe genau ein Feld lang vor dem zweiten Feld von rechts (vorne rechts), Gerüst vollständig, Podeste, Durchgänge', () => {
     const m = generateCADModel(basis, 'layher-allround')
-    const unten = m.fields.filter((f) => f.side === 'front' && f.levelIndex === 0).sort((a, b) => a.index - b.index)
-    expect(unten.length).toBeGreaterThanOrEqual(3)
+    // vorne rechts: von rechts nach links sortiert; die Treppe steht vor dem zweiten Feld von rechts (nicht direkt an der Ecke)
+    const rechtsLinks = m.fields.filter((f) => f.side === 'front' && f.levelIndex === 0).sort((a, b) => b.positionX - a.positionX)
+    expect(rechtsLinks.length).toBeGreaterThanOrEqual(3)
+    const unten = [rechtsLinks[2], rechtsLinks[1], rechtsLinks[0]] // unten[1] = Treppenfeld, unten[0] = links davon, unten[2] = rechts davon
     const treppe = m.components3D.find((c) => c.type === 'stair')!
-    // Mitte der Treppe = Mitte des zweiten Felds, Länge = genau diese Feldlänge
+    // Mitte der Treppe = Mitte des Treppenfelds, Länge = genau diese Feldlänge
     expect(treppe.position[0]).toBeCloseTo(unten[1].positionX, 2)
     expect(treppe.scale[0]).toBeCloseTo(unten[1].lengthM, 2)
     // vor dem Belag: Belagaußenkante = positionZ + Breite - 0,045
