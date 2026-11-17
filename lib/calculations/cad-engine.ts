@@ -793,7 +793,8 @@ export function generateScaffoldComponents(model: CADModel): ScaffoldComponent3D
     if (erzwungenesFeld) feld = treppenFelder0.find((f) => gleicherPlatz(f, erzwungenesFeld, 0.01)) ?? erzwungenesFeld
     stairSpan = { a: feld, b: feld, lagen: 0 }
     if (treppenFelder0.some((f) => f.durchgang)) {
-      const standard = treppenFelder0[1] ?? treppenFelder0[0]
+      const alleRechts = [...treppenFelder0].sort((x, y) => entlangRechts(y) - entlangRechts(x))
+      const standard = alleRechts[1] ?? alleRechts[0]
       if (frei.length === 0) model.warnings.push({ type: 'warning', code: 'TREPPE_VOR_TUER', message: 'Alle Felder der Treppenseite liegen vor einer Tür: die Treppe steht trotzdem dort. Bitte Türen oder Treppenseite prüfen.' })
       else if (standard.durchgang) model.warnings.push({ type: 'info', code: 'TREPPE_VERSETZT', message: 'Die Treppe wurde von ihrer üblichen Stelle weg versetzt, weil dort eine Tür liegt (Durchgang).' })
     }
