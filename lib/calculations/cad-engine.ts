@@ -237,6 +237,10 @@ export interface BuildingParams {
   fensterFest?: CadFenster[]
   /** Fenster/Türen aus dem Plan mit Lage in Metern in der Plan-Basis des Umrisses; gelten im Umriss-Modus (Zuordnung zur nächsten Umrisskante) */
   /** Terrassen/Balkone aus dem Plan (Lage in Metern in der Plan-Basis des Umrisses); im Umriss-Modus als Platte mit Geländer dargestellt */
+  /** Umriss des Untergeschosses aus dem Plan (Plan-Basis, wie `umriss`); im Umriss-Modus als Holzfassade unter dem Erdgeschoss gezeichnet */
+  untergeschoss?: UmrissPunkt[]
+  /** Szenen-Koordinaten des Untergeschosses (vom Umriss-Modus berechnet) */
+  untergeschossKoerper?: UmrissPunkt[]
   planTerrassen?: { ebene: number; titel: string; x: number; z: number; laengeM: number; tiefeM: number }[]
   /** Szenen-Koordinaten der Terrassen (vom Umriss-Modus berechnet) */
   terrassen?: { ebene: number; x0: number; z0: number; x1: number; z1: number; bottomY: number }[]
@@ -2438,6 +2442,9 @@ function generiereUmrissModell(
     ...gebaeude,
     umriss,
     ...(geschossKoerper.length >= 2 ? { geschossKoerper } : { geschossKoerper: undefined }),
+    untergeschossKoerper: gebaeude.untergeschoss && gebaeude.untergeschoss.length >= 3
+      ? gebaeude.untergeschoss.map((q) => ({ x: Math.round((q.x + versatz.x) * 100) / 100, z: Math.round((q.z + versatz.z) * 100) / 100 }))
+      : undefined,
     terrassen: (gebaeude.planTerrassen ?? []).map((t) => {
       const floors = Math.max(1, gebaeude.floors || 1)
       const hs = gebaeude.floorHeightsM?.length === floors ? gebaeude.floorHeightsM : Array(floors).fill(gebaeude.heightM / floors)

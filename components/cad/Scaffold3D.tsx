@@ -1211,6 +1211,23 @@ function RoofMesh({ roofForm, laengeM, breiteM, roofH }: { roofForm: string; lae
 }
 
 /** Gestuftes Gebäude aus bestätigten Geschossen: jedes Geschoss als Körper von der Talsohle bis zu seiner Oberkante (Rücksprünge bleiben sichtbar). */
+/** Untergeschoss aus dem Plan (nur Darstellung): Holzfassade von der Talsohle bis zur Erdgeschoss-Fußbodenhöhe. */
+function UntergeschossKoerper({ punkte, untenM }: { punkte: { x: number; z: number }[]; untenM: number }) {
+  const geo = useMemo(() => {
+    const form = new THREE.Shape(punkte.map((p) => new THREE.Vector2(p.x, -p.z)))
+    const g = new THREE.ExtrudeGeometry(form, { depth: untenM, bevelEnabled: false })
+    g.rotateX(-Math.PI / 2)
+    g.translate(0, -untenM, 0)
+    return g
+  }, [punkte, untenM])
+  useEffect(() => () => geo.dispose(), [geo])
+  return (
+    <mesh geometry={geo} castShadow receiveShadow>
+      <meshStandardMaterial color="#6b4426" roughness={0.85} />
+    </mesh>
+  )
+}
+
 function GeschossKoerper({ geschosse, untenM = 0 }: { geschosse: { name: string; obenM: number; umriss: { x: number; z: number }[] }[]; untenM?: number }) {
   const praes = useContext(FarbModusKontext) === 'praesentation'
   const geometrie = useMemo(() => {
@@ -1721,6 +1738,7 @@ function Building3D({
   // Szenen-Koordinaten des Umrisses. Fenster und Türen sitzen an den Kanten.
   if (building.umriss && building.umriss.length >= 3) {
     const { hangM } = hangDaten(building)
+    const ug = hangM > 0.05 && !!building.untergeschossKoerper && building.untergeschossKoerper.length >= 3
     // Pultdach im Umriss-Modus: Wände bis zur Traufe, darüber geneigte Platte (nur wenn Traufe, First und die niedrige Seite bekannt sind)
     const pult = building.roofForm === 'pultdach' && building.eavesHeightM > 0 && building.eavesHeightM < heightM - 0.3 && building.geruestOptionen?.pultNiedrigeSeite
       ? { traufeM: building.eavesHeightM, firstM: heightM, niedrig: building.geruestOptionen.pultNiedrigeSeite }
@@ -1735,8 +1753,9 @@ function Building3D({
         )}
         <group>
           {building.geschossKoerper && building.geschossKoerper.length >= 2
-            ? <GeschossKoerper geschosse={building.geschossKoerper} untenM={hangM} />
-            : <UmrissGebaeude punkte={building.umriss} heightM={pult ? pult.traufeM : heightM} kantenHoeheM={building.umrissKantenHoeheM} untenM={hangM} />}
+            ? <GeschossKoerper geschosse={building.geschossKoerper} untenM={ug ? 0 : hangM} />
+            : <UmrissGebaeude punkte={building.umriss} heightM={pult ? pult.traufeM : heightM} kantenHoeheM={building.umrissKantenHoeheM} untenM={ug ? 0 : hangM} />}
+          {ug && <UntergeschossKoerper punkte={building.untergeschossKoerper!} untenM={hangM} />}
           {!building.umrissKantenHoeheM && !(building.geschossKoerper && building.geschossKoerper.length >= 2) && !pult && <UmrissGesimse punkte={building.umriss} hoeheM={heightM} />}
           {building.terrassen && building.terrassen.length > 0 && <Terrassen3D terrassen={building.terrassen} umriss={building.umriss} />}
           {pult && <UmrissPultdach punkte={building.umriss} traufeM={pult.traufeM} firstM={pult.firstM} niedrig={pult.niedrig} />}
