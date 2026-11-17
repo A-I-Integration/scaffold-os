@@ -53,7 +53,7 @@ import { erzeugeProjektdatei, liesProjektdatei, type Projektdatei } from '@/lib/
 import { ladeVersionen, speichereVersionen, fuegeVersionHinzu, loescheVersion, benenneVersion, type Version } from '@/lib/cad/versionen'
 import VersionenDialog from '@/components/cad/VersionenDialog'
 import TreppePanel from '@/components/cad/TreppePanel'
-import { treppeAufFeld, schiebeUmFelder, leiterAufFeld, durchstiegAufFeld } from '@/lib/cad/treppe-setzen'
+import { feldDerAutoTreppe, nachbarFuerTreppe, treppeAufFeld, schiebeUmFelder, leiterAufFeld, durchstiegAufFeld } from '@/lib/cad/treppe-setzen'
 import LvDialog from '@/components/cad/LvDialog'
 import { bereinigeStatikDaten, type StatikDaten } from '@/lib/statik-daten'
 import { useRouter } from 'next/navigation'
@@ -463,6 +463,21 @@ export default function CADPage() {
     setManualPlacements((prev) => [...prev, placement])
     setSelectedComponent(placement.id)
   }, [model])
+
+  // Automatische Treppe mit einem Klick wählen und ein Feld nach links/rechts versetzen (treppeFeldId)
+  const versetzeAutoTreppe = useCallback((richtung: -1 | 1): string | null => {
+    if (!model || !selectedComponent) return null
+    const teil = model.components3D.find((c) => c.id === selectedComponent)
+    if (!teil) return null
+    const feld = feldDerAutoTreppe(model, teil.position as [number, number, number])
+    if (!feld) return 'Zur Treppe wurde kein Feld gefunden.'
+    const n = nachbarFuerTreppe(model, feld, richtung)
+    if (!n.feld) return n.grund ?? null
+    const zielId = n.feld.id
+    setAutoGenerate(true)
+    setBuilding({ ...building, geruestOptionen: { ...(building.geruestOptionen ?? {}), treppeFeldId: zielId } })
+    return null
+  }, [model, selectedComponent, building])
 
   const setzeLeiterAufFeld = useCallback((feld: ScaffoldField, lage: number) => {
     if (!model) return
@@ -1459,7 +1474,7 @@ export default function CADPage() {
               <AbbauEinplanenDialog tage={abbauErgebnis.tage} personen={abbauErgebnis.personen} titel={`Teilabbau: ${abbauErgebnis.anzahlTeile} Bauteile, ${abbauErgebnis.stunden} h`} onClose={() => setAbbauEinplanen(false)} />
             )}
             {viewMode === '3d' && modelWithManual && (
-              <Scaffold3D farbModus={farbModus} model={modelWithManual} features={features} showBuilding={showBuilding} showScaffold={showScaffold} showDimensions={showDimensions} selectedComponent={selectedComponent} onSelectComponent={klickImModell} mehrfachAuswahl={mehrfachMenge} rahmenModus={rahmenModus} onRahmen={handleRahmen} abbauMarkiert={abbauMarkiert} echtesGebaeude={echtesGebaeude} visibleTypes={visibleTypes} viewMode={viewAngle} onCanvasReady={(c) => { canvasRef.current = c }} notes={notes} onAddNote={handleAddNote} hiddenSides={hiddenSides} hiddenLevels={hiddenLevels} measureMode={measureMode} onMeasurePoint={handleMeasurePoint} customDimensions={customDimensions} pendingMeasurePoint={pendingMeasurePoint?.point ?? null} placementType={placementType} onPlacementClick={handlePlacementClick} showEnvironment={showEnvironment} hoheQualitaet={hoheQualitaet} onRemoveComponent={handleRemoveComponent} onReplaceComponent={handleReplaceComponent} systemId={systemId} artikelWahl={artikelWahl} onArtikelWahl={waehleArtikel} onArtikelWahlGleiche={waehleArtikelGleiche} removedCount={removedCount} platzierungIdVon={platzierungIdVonBauteil} onBauteilZiehen={handleBauteilZiehen} griff={!abbauAktiv ? { modus: griffModus, einrasten, onAendern: handleBauteilLage } : undefined} onSeiteUmschalten={(side) => { setAutoGenerate(true); setBuilding((() => { const cur = building.sides ?? ['front']; const has = cur.includes(side); const ns = has ? cur.filter((x) => x !== side) : [...cur, side]; if (ns.length === 0) ns.push('front'); return { ...building, sides: ns } })()) }} />
+              <Scaffold3D farbModus={farbModus} model={modelWithManual} features={features} showBuilding={showBuilding} showScaffold={showScaffold} showDimensions={showDimensions} selectedComponent={selectedComponent} onSelectComponent={klickImModell} mehrfachAuswahl={mehrfachMenge} rahmenModus={rahmenModus} onRahmen={handleRahmen} abbauMarkiert={abbauMarkiert} echtesGebaeude={echtesGebaeude} visibleTypes={visibleTypes} viewMode={viewAngle} onCanvasReady={(c) => { canvasRef.current = c }} notes={notes} onAddNote={handleAddNote} hiddenSides={hiddenSides} hiddenLevels={hiddenLevels} measureMode={measureMode} onMeasurePoint={handleMeasurePoint} customDimensions={customDimensions} pendingMeasurePoint={pendingMeasurePoint?.point ?? null} placementType={placementType} onPlacementClick={handlePlacementClick} showEnvironment={showEnvironment} hoheQualitaet={hoheQualitaet} onRemoveComponent={handleRemoveComponent} onTreppeVerschieben={versetzeAutoTreppe} onReplaceComponent={handleReplaceComponent} systemId={systemId} artikelWahl={artikelWahl} onArtikelWahl={waehleArtikel} onArtikelWahlGleiche={waehleArtikelGleiche} removedCount={removedCount} platzierungIdVon={platzierungIdVonBauteil} onBauteilZiehen={handleBauteilZiehen} griff={!abbauAktiv ? { modus: griffModus, einrasten, onAendern: handleBauteilLage } : undefined} onSeiteUmschalten={(side) => { setAutoGenerate(true); setBuilding((() => { const cur = building.sides ?? ['front']; const has = cur.includes(side); const ns = has ? cur.filter((x) => x !== side) : [...cur, side]; if (ns.length === 0) ns.push('front'); return { ...building, sides: ns } })()) }} />
             )}
             {/* Phase 68-G: Leerzustand nach 'Neu starten' */}
             {viewMode === '3d' && !model && (

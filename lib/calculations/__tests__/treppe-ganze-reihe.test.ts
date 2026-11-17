@@ -23,7 +23,10 @@ for (const [name, o] of formen) {
 
     it('entspricht der automatischen Treppe: gleiche Lauf-Anzahl bis ganz nach oben, Breite, Höhe und Abstand vor dem Gerüst', () => {
       const lauf = auto.components3D.find((c) => c.id === 'stair-frame-0')!
-      const autoFeld = auto.fields.find((f) => Math.hypot(f.positionX - lauf.position[0], f.positionZ - lauf.position[2]) < f.lengthM && f.levelIndex === 0) ?? auto.fields[0]
+      // Feld der Treppe: das nächste Feld an der untersten Lage dort (am Hang beginnt die Reihe nicht bei Lage 0)
+      const nah = auto.fields.filter((f) => Math.hypot(f.positionX - lauf.position[0], f.positionZ - lauf.position[2]) < f.lengthM + 0.8)
+      const untenIdx = Math.min(...nah.map((f) => f.levelIndex))
+      const autoFeld = nah.filter((f) => f.levelIndex === untenIdx).sort((a, b) => Math.hypot(a.positionX - lauf.position[0], a.positionZ - lauf.position[2]) - Math.hypot(b.positionX - lauf.position[0], b.positionZ - lauf.position[2]))[0] ?? auto.fields[0]
       // dasselbe Feld in einem Modell ohne automatische Treppe anklicken
       const gleichesFeld = m.fields.find((f) => f.id === autoFeld.id)!
       const m2 = setze('manual-t', m, gleichesFeld)

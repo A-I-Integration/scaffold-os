@@ -96,6 +96,8 @@ interface Props {
   abbauMarkiert?: ReadonlySet<string>
   // NEU: ausgewähltes Bauteil per Knopf entfernen (Seite blendet es aus bzw. löscht es).
   onRemoveComponent?: (id: string) => void
+  /** Automatische Treppe ein Feld nach links/rechts versetzen; gibt eine Meldung zurück, wenn es nicht geht. */
+  onTreppeVerschieben?: (richtung: -1 | 1) => string | null
   onReplaceComponent?: (id: string, newType: string) => void
   // NEU (Katalogwahl): Hersteller-Artikel pro Bauteil wählen. Optional und rein additiv.
   systemId?: string
@@ -2358,6 +2360,7 @@ function Scaffold3D({
   onRahmen,
   echtesGebaeude,
   onRemoveComponent,
+  onTreppeVerschieben,
   onReplaceComponent,
   systemId,
   artikelWahl,
@@ -2378,6 +2381,7 @@ function Scaffold3D({
   }, [selectedComponent, onSelectComponent])
   // Ziehen: ID der gerade gezogenen Platzierung (null = niemand zieht)
   const [ziehId, setZiehId] = useState<string | null>(null)
+  const [treppeHinweis, setTreppeHinweis] = useState<string | null>(null)
   const ziehKontext = useMemo<ZiehKontextWert | null>(
     () =>
       platzierungIdVon && onBauteilZiehen
@@ -2544,6 +2548,16 @@ function Scaffold3D({
             </button>
             <p className="font-semibold text-[#1d1d1f] pr-6">{comp?.name}</p>
             <p className="text-xs text-[#86868b] mt-1">Art.-Nr.: {comp?.articleNumber}</p>
+            {onTreppeVerschieben && comp?.id.startsWith('stair-') && (
+              <div className="mt-2 pt-2 border-t border-black/10" data-testid="treppe-versetzen">
+                <p className="text-[11px] text-[#86868b] mb-1">Treppe versetzen</p>
+                <div className="flex gap-1">
+                  <button type="button" data-testid="treppe-links" className="flex-1 px-2 py-1.5 text-xs rounded-lg border border-black/10 hover:bg-black/5" onClick={() => setTreppeHinweis(onTreppeVerschieben(-1))}>◀ nach links</button>
+                  <button type="button" data-testid="treppe-rechts" className="flex-1 px-2 py-1.5 text-xs rounded-lg border border-black/10 hover:bg-black/5" onClick={() => setTreppeHinweis(onTreppeVerschieben(1))}>nach rechts ▶</button>
+                </div>
+                {treppeHinweis && <p className="text-[11px] text-amber-700 mt-1">{treppeHinweis}</p>}
+              </div>
+            )}
             {onRemoveComponent && comp && (
               <div className="mt-2 pt-2 border-t border-black/10">
                 <button

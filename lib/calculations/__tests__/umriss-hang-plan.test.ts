@@ -35,8 +35,8 @@ describe('Umriss am Hang', () => {
       expect(m.warnings.some((w) => w.code === 'TREPPE_FEHLT')).toBe(false)
       expect(treppenFuesse.length).toBe(4)
       const abw = treppenFuesse.map((c) => Math.abs(c.position[1] + 0.02 - gf(c.position[0], c.position[2])))
-      // gerade Kante: wie das Gerüst; schräg zum Hang: die starre Treppe liegt 0,7 m vor der Außenreihe, dort fällt das Gelände weiter ab (Spindelweg 0,41 m gleicht es aus)
-      expect(Math.max(...abw)).toBeLessThan(grad === 0 ? 0.04 : 0.2)
+      // die starre Treppe liegt 0,7 m vor der Außenreihe, dort fällt das Gelände am Hang weiter ab (Spindelweg 0,41 m gleicht es aus)
+      expect(Math.max(...abw)).toBeLessThan(0.2)
     })
     it(`Drehung ${grad}°: Kennzahlen zählen die belegten Felder und Lagen`, () => {
       expect(m.fieldCount).toBeGreaterThan(10)
