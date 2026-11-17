@@ -1289,6 +1289,10 @@ export default function BuildingForm({ building, systemId, onChange, onSystemCha
                       <input type='checkbox' checked={opt.treppe !== false} onChange={(e) => setzeOpt({ treppe: e.target.checked ? undefined : false })} />
                       Treppe automatisch
                     </label>
+                    <label className='flex items-center gap-2 text-xs text-[#424245] self-end pb-1.5' title='Der Belag des Treppenfelds entfällt auf den durchlaufenen Lagen; die Podeste liegen bündig in der Gerüstflucht. Die Läufe sind steiler als bei der Treppe vor dem Gerüst.'>
+                      <input type='checkbox' data-testid='treppe-im-feld' checked={!!opt.treppeImFeld} disabled={opt.treppe === false} onChange={(e) => setzeOpt({ treppeImFeld: e.target.checked ? true : undefined })} />
+                      Treppe im Gerüstfeld
+                    </label>
                     <label className='flex items-center gap-2 text-xs text-[#424245] col-span-2' title='Vor jeder Tür im Erdgeschoss entsteht in der untersten Lage ein Durchgang (kein Fuß-Querriegel, keine Diagonale, Durchgangsrahmen-Binder).'>
                       <input type='checkbox' checked={opt.tuerenFreihalten === true} onChange={(e) => setzeOpt({ tuerenFreihalten: e.target.checked ? true : undefined })} />
                       Türen freihalten (Durchgang)

@@ -16,3 +16,11 @@ describe('Geländeebenen in der Gebäude-Eingabe', () => {
     expect(panel).toContain('ebenenZuProfil(ebenen, gebaeude)')
   })
 })
+
+describe('Treppe im Gerüstfeld: Schalter in der Gebäude-Eingabe', () => {
+  it('Checkbox schreibt treppeImFeld und ist nur bei aktiver Treppe bedienbar', () => {
+    expect(form).toContain("data-testid='treppe-im-feld'")
+    expect(form).toContain('setzeOpt({ treppeImFeld: e.target.checked ? true : undefined })')
+    expect(form).toContain('disabled={opt.treppe === false}')
+  })
+})
