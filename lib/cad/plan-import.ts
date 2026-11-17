@@ -6,6 +6,7 @@
 import type { GefundenerGrundriss, PlanText } from './grundriss-finden'
 import type { VektorFlaeche } from './pdf-vektoren'
 import { oeffnungenFinden } from './oeffnungen-aus-plan'
+import { lesMassketten, type MasskettenErgebnis } from './masse-lesen'
 import type { GelaendeLinieAnsicht } from './gelaende-aus-ansichten'
 import { gelaendeAusPlan, gelaendeJeKante, gelaendeEckenAusPlan, type GelaendeAusPlan, type GelaendeJeKante } from './gelaende-aus-plan'
 import { hauptkoerperAusKontur, type Vorbau } from './hauptkoerper'
@@ -57,6 +58,8 @@ export interface PlanImport {
   gelaendeEckenPlan?: { tl?: number; tr?: number; bl?: number; br?: number }
   /** Geländelinie je Ansicht (aus dem Bild gelesen, Höhenbezug über die Koten-Dreiecke); Vorschlag zum Füllen des Geländeprofils je Seite. */
   gelaendeLinien?: GelaendeLinieAnsicht[]
+  /** Maßzahlen der Seite gegen die gezeichneten Maßlinien geprüft (siehe masse-lesen.ts); fehlt, wenn keine Maßzahlen gelesen wurden */
+  masse?: MasskettenErgebnis
 }
 
 const runde = (v: number) => Math.round(v * 100) / 100
@@ -116,6 +119,7 @@ export function planImportAus(dateiname: string, massstab: number, gefunden: Gef
   const pultRichtung = dach?.dachform === 'Pultdach' && koten.firstM !== undefined && koten.traufeM !== undefined
     ? pultNiedrigeRichtung(ansichten, koten.traufeM, koten.firstM) : null
   const gelTiefe = gelaendeTiefeJeAnsicht(ansichten)
+  const masse = flaechen.length && texte.length ? lesMassketten(flaechen, texte, massstab) : null
   return {
     dateiname, massstab, geschosse, hauptEbene: haupt.ebene, geschossHoehenVorschlaege: geschossHoehenAusPlan(texte),
     ...(dach ? { dachform: dach.dachform } : {}),
@@ -127,6 +131,7 @@ export function planImportAus(dateiname: string, massstab: number, gefunden: Gef
     ...(gelaende ? { gelaende } : {}),
     ...(jeKante.length ? { gelaendeJeKante: jeKante } : {}),
     ...(Object.keys(eckenPlan).length ? { gelaendeEckenPlan: eckenPlan } : {}),
+    ...(masse && masse.angaben.length ? { masse } : {}),
   }
 }
 

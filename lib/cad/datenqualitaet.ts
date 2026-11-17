@@ -78,6 +78,13 @@ export function pruefePlanImport(pl: PlanImport | null | undefined): Pruefberich
   const m = pl.massstab
   if (!(m > 0)) b('MASSSTAB', 'rot', 'Maßstab', 'Kein Maßstab erkannt: alle Längen sind unbelegt.')
   else if (!GAENGIGE_MASSSTAEBE.includes(m)) b('MASSSTAB', 'gelb', 'Maßstab', `1:${m} ist kein üblicher Planmaßstab – Längen bitte mit einer Maßkette im Plan abgleichen.`)
+  // Maßzahlen gegen die gezeichneten Maßlinien: bestätigt den Maßstab (oder weist auf einen falschen hin)
+  const mk = pl.masse
+  if (mk && mk.angaben.length >= 5) {
+    if (mk.besterMassstab && mk.besterMassstab !== m) b('MASSSTAB_MASSKETTEN', 'gelb', 'Maßstab laut Maßketten', `Die gezeichneten Maßlinien passen zu den Maßzahlen eher bei 1:${mk.besterMassstab} als bei 1:${m} (${Math.round((mk.trefferAnteil ?? 0) * 100)} % Treffer). Maßstab bitte mit einer Maßkette im Plan abgleichen.`)
+    else if (mk.bestaetigt / mk.angaben.length >= 0.6) b('MASSKETTEN_OK', 'gruen', 'Maßketten bestätigt', `${mk.bestaetigt} von ${mk.angaben.length} Maßzahlen haben eine passende gezeichnete Maßlinie bei 1:${m}; der Maßstab ist damit doppelt belegt.`)
+    else b('MASSKETTEN_TEILWEISE', 'gelb', 'Maßketten nur teilweise bestätigt', `Nur ${mk.bestaetigt} von ${mk.angaben.length} Maßzahlen haben eine passende Maßlinie (${mk.abweichend} weichen ab, ${mk.ohneLinie} ohne Linie). Maße bitte stichprobenartig prüfen.`)
+  }
   werte.push({ schluessel: 'massstab', bezeichnung: 'Maßstab', wert: m > 0 ? `1:${m}` : undefined, quelle: 'Plankopf/Zeichnung', methode: 'text', konfidenz: m > 0 ? (GAENGIGE_MASSSTAEBE.includes(m) ? 'gelesen' : 'geschaetzt') : 'fehlt', ampel: !(m > 0) ? 'rot' : GAENGIGE_MASSSTAEBE.includes(m) ? 'gruen' : 'gelb' })
 
   // Geschosse und Hauptkörper
