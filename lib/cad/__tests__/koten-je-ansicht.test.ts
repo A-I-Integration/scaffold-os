@@ -75,3 +75,12 @@ describe('eckenAusTalseite', () => {
     expect(eckenAusTalseite('nord', -0.1)).toBeNull()
   })
 })
+
+describe('Titel „Ansicht Ost/West/Nord/Süd“', () => {
+  it('erkennt die Schreibweise mit Ansicht davor und ordnet Koten zu', () => {
+    const r = kotenJeAnsicht([t('Ansicht Ost', 100, 100), t('+30,60', 150, 160), t('ANSICHT SÜD', 400, 100), t('+12,00', 450, 160), t('Ansichtsfenster', 10, 10)])
+    expect(r.map((a) => a.art)).toEqual(['ost', 'sued'])
+    expect(r[0].koten.map((k) => k.hoeheM)).toEqual([30.6])
+    expect(r[1].koten.map((k) => k.hoeheM)).toEqual([12])
+  })
+})
