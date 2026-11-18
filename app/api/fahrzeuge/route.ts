@@ -2,16 +2,17 @@ import { NextRequest, NextResponse } from 'next/server'
 import { UUID_MUSTER } from '@/lib/ansicht-link'
 import { importHeaders as headers, importPruefeRolle } from '@/lib/import-auth'
 import { dateiLoeschen } from '@/lib/anhang-storage'
-import { FAHRZEUG_ARTEN, FRIST_ARTEN, pruefeFristEingabe } from '@/lib/fahrzeug-fristen'
+import { FAHRZEUG_ARTEN, FRIST_ARTEN, KATEGORIEN, pruefeFristEingabe } from '@/lib/fahrzeug-fristen'
 
 // ============================================================
 // SCAFFOLD OS – Fahrzeuge und ihre Prüf-/Wartungsfristen (nur Admin/Disposition)
 // GET                                   → Fahrzeuge mit Fristen und Dokumenten
-// POST   { typ:'fahrzeug', kennzeichen, bezeichnung?, art?, gesamtgewicht_kg?, erstzulassung?, notiz? }
+// POST   { typ:'fahrzeug', kategorie?, kennzeichen, bezeichnung?, art?, gesamtgewicht_kg?, erstzulassung?, notiz? }
 // POST   { typ:'frist', fahrzeug_id, art, bezeichnung?, letzte_pruefung?, intervall_monate?, faellig_am, notiz? }
 // PATCH  { typ:'fahrzeug'|'frist', id, …Felder }      (neue Fälligkeit setzt die Erinnerungen zurück)
 // DELETE ?typ=fahrzeug|frist&id=...                    (Dokumente werden mit gelöscht)
-// Vor dem Deploy: supabase/phase-fahrzeuge.sql ausführen.
+// Vor dem Deploy: supabase/phase-fahrzeuge.sql und supabase/phase-fristen-bereiche.sql ausführen.
+// „kennzeichen“ ist bei Geräten, Mitarbeitern usw. die Bezeichnung bzw. der Name.
 // ============================================================
 
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL!
@@ -25,14 +26,17 @@ async function rest(pfad: string, init?: RequestInit) {
   if (!r.ok) throw new Error(await r.text())
   return r
 }
-const tabelleFehlt = (e: unknown) => /fahrzeug|relation|schema cache/i.test(e instanceof Error ? e.message : String(e))
-const sqlHinweis = () => fehler('Die Tabellen fehlen noch – bitte supabase/phase-fahrzeuge.sql im Supabase SQL Editor ausführen.', 500)
+const meldungVon = (e: unknown) => (e instanceof Error ? e.message : String(e))
+const tabelleFehlt = (e: unknown) => /fahrzeug|relation|schema cache|kategorie|check constraint/i.test(meldungVon(e))
+const sqlHinweis = (e?: unknown) => fehler(e && /kategorie|check constraint|violates/i.test(meldungVon(e)) ? 'Die Datenbank ist noch nicht erweitert – bitte supabase/phase-fristen-bereiche.sql im Supabase SQL Editor ausführen.' : 'Die Tabellen fehlen noch – bitte supabase/phase-fahrzeuge.sql im Supabase SQL Editor ausführen.', 500)
 
 function fahrzeugFelder(b: Record<string, unknown>, neu: boolean): { felder?: Record<string, unknown>; fehler?: string } {
   const f: Record<string, unknown> = {}
   if (neu || b.kennzeichen !== undefined) { const k = text(b.kennzeichen, 20); if (!k) return { fehler: 'Bitte das Kennzeichen angeben.' }; f.kennzeichen = k.toUpperCase() }
   if (b.bezeichnung !== undefined) f.bezeichnung = text(b.bezeichnung, 100)
   if (b.art !== undefined) { if (!FAHRZEUG_ARTEN.includes(b.art as never)) return { fehler: 'Unbekannte Fahrzeugart.' }; f.art = b.art }
+  // Kategorie nur mitschicken, wenn sie nicht „fahrzeug“ ist: so läuft alles Bisherige auch ohne die Erweiterungs-SQL
+  if (b.kategorie !== undefined) { if (!KATEGORIEN.includes(b.kategorie as never)) return { fehler: 'Unbekannte Kategorie.' }; if (b.kategorie !== 'fahrzeug') f.kategorie = b.kategorie }
   if (b.gesamtgewicht_kg !== undefined) {
     if (leer(b.gesamtgewicht_kg)) f.gesamtgewicht_kg = null
     else { const n = Number(b.gesamtgewicht_kg); if (!Number.isInteger(n) || n < 1 || n > 100000) return { fehler: 'Gesamtgewicht in kg ist ungültig.' }; f.gesamtgewicht_kg = n }
@@ -52,7 +56,7 @@ export async function GET() {
       rest('fahrzeug_dokumente?select=id,fahrzeug_id,frist_id,file_name,file_type,size_bytes,created_at&bestaetigt_am=not.is.null&order=created_at.asc'),
     ])
     return NextResponse.json({ success: true, fahrzeuge: await f.json(), fristen: await fr.json(), dokumente: await d.json() })
-  } catch (e) { console.error('fahrzeuge GET:', e); return tabelleFehlt(e) ? sqlHinweis() : fehler('Laden fehlgeschlagen', 500) }
+  } catch (e) { console.error('fahrzeuge GET:', e); return tabelleFehlt(e) ? sqlHinweis(e) : fehler('Laden fehlgeschlagen', 500) }
 }
 
 export async function POST(req: NextRequest) {
@@ -73,7 +77,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: true, eintrag: (await r.json())[0] })
     }
     return fehler('Unbekannter Typ.')
-  } catch (e) { console.error('fahrzeuge POST:', e); return tabelleFehlt(e) ? sqlHinweis() : fehler('Speichern fehlgeschlagen', 500) }
+  } catch (e) { console.error('fahrzeuge POST:', e); return tabelleFehlt(e) ? sqlHinweis(e) : fehler('Speichern fehlgeschlagen', 500) }
 }
 
 export async function PATCH(req: NextRequest) {

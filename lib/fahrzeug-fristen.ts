@@ -13,7 +13,19 @@ export const FAHRZEUG_ARTEN = ['lkw', 'transporter', 'pkw', 'anhaenger', 'kran',
 export type FahrzeugArt = typeof FAHRZEUG_ARTEN[number]
 export const FAHRZEUG_ART_LABEL: Record<FahrzeugArt, string> = { lkw: 'LKW', transporter: 'Transporter', pkw: 'PKW', anhaenger: 'Anhänger', kran: 'Kran / Arbeitsmaschine', sonstiges: 'Sonstiges' }
 
-export const FRIST_ARTEN = ['hu', 'sp', 'uvv', 'tacho', 'kran', 'wartung', 'sonstiges'] as const
+export const KATEGORIEN = ['fahrzeug', 'geraet', 'mitarbeiter', 'betrieb', 'material'] as const
+export type Kategorie = typeof KATEGORIEN[number]
+export const KATEGORIE_LABEL: Record<Kategorie, string> = { fahrzeug: 'Fahrzeuge', geraet: 'Geräte & Maschinen', mitarbeiter: 'Mitarbeiter', betrieb: 'Betrieb & Verträge', material: 'Gerüstmaterial' }
+/** Wie ein einzelner Eintrag heißt (Einzahl) und was im Feld „Kennzeichen“ steht */
+export const KATEGORIE_OBJEKT: Record<Kategorie, { einzahl: string; feld: string; platzhalter: string }> = {
+  fahrzeug: { einzahl: 'Fahrzeug', feld: 'Kennzeichen', platzhalter: 'z. B. BOR-AB 123' },
+  geraet: { einzahl: 'Gerät', feld: 'Bezeichnung / Nr.', platzhalter: 'z. B. Hubwagen 2, Leiter L-07' },
+  mitarbeiter: { einzahl: 'Mitarbeiter', feld: 'Name', platzhalter: 'z. B. Max Mustermann' },
+  betrieb: { einzahl: 'Eintrag', feld: 'Bezeichnung', platzhalter: 'z. B. Betriebshaftpflicht, Lager Vreden' },
+  material: { einzahl: 'Materialposten', feld: 'Bezeichnung', platzhalter: 'z. B. Rahmen 2,00 m Charge 1' },
+}
+
+export const FRIST_ARTEN = ['hu', 'sp', 'uvv', 'tacho', 'kran', 'wartung', 'sonstiges', 'dguv_v3', 'sachkundig', 'unterweisung', 'erste_hilfe', 'fuehrerschein', 'untersuchung', 'versicherung', 'zertifikat', 'vertrag', 'feuerloescher', 'material_pruefung'] as const
 export type FristArt = typeof FRIST_ARTEN[number]
 export const FRIST_ART_LABEL: Record<FristArt, string> = {
   hu: 'Hauptuntersuchung (TÜV)',
@@ -23,6 +35,26 @@ export const FRIST_ART_LABEL: Record<FristArt, string> = {
   kran: 'Ladekran / Hebebühne',
   wartung: 'Wartung / Inspektion',
   sonstiges: 'Sonstiges',
+  dguv_v3: 'Elektrische Geräte (DGUV Vorschrift 3)',
+  sachkundig: 'Prüfung durch Sachkundigen / befähigte Person',
+  unterweisung: 'Unterweisung',
+  erste_hilfe: 'Erste-Hilfe-Fortbildung (Ersthelfer)',
+  fuehrerschein: 'Führerschein / Berechtigung',
+  untersuchung: 'Arbeitsmedizinische Vorsorge',
+  versicherung: 'Versicherung',
+  zertifikat: 'Zertifikat / Nachweis',
+  vertrag: 'Vertrag',
+  feuerloescher: 'Feuerlöscher-Prüfung',
+  material_pruefung: 'Prüfung Gerüstmaterial',
+}
+
+/** Welche Prüfarten bei welcher Kategorie zur Auswahl stehen (Reihenfolge = Anzeige) */
+export const KATEGORIE_FRISTEN: Record<Kategorie, FristArt[]> = {
+  fahrzeug: ['hu', 'sp', 'uvv', 'tacho', 'kran', 'wartung', 'versicherung', 'sonstiges'],
+  geraet: ['uvv', 'dguv_v3', 'sachkundig', 'wartung', 'sonstiges'],
+  mitarbeiter: ['unterweisung', 'erste_hilfe', 'fuehrerschein', 'untersuchung', 'zertifikat', 'sonstiges'],
+  betrieb: ['versicherung', 'feuerloescher', 'zertifikat', 'vertrag', 'sonstiges'],
+  material: ['material_pruefung', 'sachkundig', 'sonstiges'],
 }
 
 export interface FahrzeugKurz { art: FahrzeugArt; gesamtgewichtKg?: number | null }
@@ -52,6 +84,25 @@ export function richtwertIntervall(frist: FristArt, f: FahrzeugKurz): Richtwert 
       return { monate: 24, hinweis: 'Richtwert, nicht bestätigt – bitte mit dem Prüfer klären.' }
     case 'kran':
       return { monate: 12, hinweis: 'Richtwert, nicht bestätigt – bitte mit dem Prüfer klären.' }
+    case 'unterweisung':
+      return { monate: 12, hinweis: 'DGUV Vorschrift 1: Unterweisung „mindestens einmal jährlich“ und bei Bedarf.' }
+    case 'erste_hilfe':
+      return { monate: 24, hinweis: 'DGUV Vorschrift 1: Fortbildung der Ersthelfer spätestens alle 2 Jahre.' }
+    case 'feuerloescher':
+      return { monate: 24, hinweis: 'Richtwert, nicht bestätigt (häufig alle 2 Jahre) – bitte beim Prüfer klären.' }
+    case 'dguv_v3':
+      return { monate: null, hinweis: 'Die Frist hängt von Gerät und Einsatz ab – bitte Intervall nach Vorgabe der befähigten Person eintragen.' }
+    case 'sachkundig':
+    case 'material_pruefung':
+      return { monate: null, hinweis: 'Intervall nach Herstellervorgabe, Betriebssicherheitsverordnung bzw. Gefährdungsbeurteilung eintragen.' }
+    case 'fuehrerschein':
+      return { monate: null, hinweis: 'Ablaufdatum aus dem Führerschein bzw. der Berechtigung eintragen (nicht berechnet).' }
+    case 'untersuchung':
+      return { monate: null, hinweis: 'Frist laut Vorsorgebescheinigung des Betriebsarztes eintragen.' }
+    case 'versicherung':
+    case 'zertifikat':
+    case 'vertrag':
+      return { monate: null, hinweis: 'Ablauf- bzw. Kündigungsdatum laut Vertrag oder Zertifikat eintragen.' }
     default:
       return { monate: null, hinweis: 'Intervall selbst eintragen (z. B. nach Herstellervorgabe).' }
   }

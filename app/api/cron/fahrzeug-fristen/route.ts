@@ -4,7 +4,7 @@ import { tageBis } from '@/lib/miete'
 import { erinnerungFuerFrist, FRIST_ART_LABEL, type FristArt } from '@/lib/fahrzeug-fristen'
 
 // ============================================================
-// SCAFFOLD OS – Cron: Erinnerung an Fahrzeug-Fristen (TÜV, SP, UVV, Wartung …) 14 und 7 Tage vorher
+// SCAFFOLD OS – Cron: Erinnerung an Fristen (Fahrzeuge, Geräte, Mitarbeiter, Betrieb, Material)  14 und 7 Tage vorher
 //
 // Läuft täglich (vercel.json). Schickt EINE interne E-Mail an die in den Firmeneinstellungen
 // hinterlegte Adresse (company_settings.email) – NICHT an Kunden. Je Frist und Fälligkeitsdatum wird
@@ -58,15 +58,15 @@ export async function GET(req: NextRequest) {
       .sort((a, b) => tageBis(a.f.faellig_am, heute) - tageBis(b.f.faellig_am, heute))
       .map(({ f }) => {
         const fz1 = fahrzeuge.get(f.fahrzeug_id)!
-        const was = f.art === 'sonstiges' || f.art === 'wartung' ? (f.bezeichnung || FRIST_ART_LABEL[f.art]) : FRIST_ART_LABEL[f.art]
+        const was = ['sonstiges', 'wartung', 'zertifikat', 'versicherung', 'vertrag'].includes(f.art) && f.bezeichnung ? `${FRIST_ART_LABEL[f.art]}: ${f.bezeichnung}` : FRIST_ART_LABEL[f.art]
         return `<li><strong>${esc(fz1.kennzeichen)}</strong>${fz1.bezeichnung ? ` (${esc(fz1.bezeichnung)})` : ''}: ${esc(was)} fällig am <strong>${deutsch(f.faellig_am)}</strong> (in ${tageBis(f.faellig_am, heute)} Tagen)</li>`
       }).join('')
     const { Resend } = await import('resend')
     const { error: mailFehler } = await new Resend(apiKey).emails.send({
       from: 'SCAFFOLD OS <onboarding@resend.dev>',
       to: empfaenger,
-      subject: `Fahrzeug-Termine in Kürze: ${faellig.length} Prüfung${faellig.length === 1 ? '' : 'en'}`,
-      html: `<p>Bitte rechtzeitig einen Termin vereinbaren:</p><ul>${zeilen}</ul><p>Alle Fristen, Prüfberichte und Dokumente: <a href="${appUrl}/fahrzeuge">Fahrzeuge</a>. Nach der Prüfung dort das neue Datum eintragen – die Erinnerung läuft dann wieder von vorn.</p>`,
+      subject: `Prüf-Termine in Kürze: ${faellig.length} Prüfung${faellig.length === 1 ? '' : 'en'}`,
+      html: `<p>Bitte rechtzeitig einen Termin vereinbaren:</p><ul>${zeilen}</ul><p>Alle Fristen, Prüfberichte und Dokumente: <a href="${appUrl}/fahrzeuge">Prüfungen &amp; Fristen</a>. Nach der Prüfung dort das neue Datum eintragen – die Erinnerung läuft dann wieder von vorn.</p>`,
     })
     if (mailFehler) { ergebnis.grund = `Versand fehlgeschlagen: ${mailFehler.message}`; return NextResponse.json({ success: false, ...ergebnis }, { status: 502 }) }
 
