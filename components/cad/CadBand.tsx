@@ -91,8 +91,8 @@ export const BAUTEIL_ARTEN: [string, string][] = [
 
 function Gruppe({ name, children }: { name: string; children: ReactNode }) {
   return (
-    <div className='flex shrink-0 flex-col border-r px-2' style={{ borderColor: 'var(--os-linie)' }}>
-      <div className='flex flex-1 items-start gap-0.5 pt-2'>{children}</div>
+    <div className='flex max-w-full shrink-0 flex-col border-r px-2' style={{ borderColor: 'var(--os-linie)' }}>
+      <div className='flex flex-1 flex-wrap items-start gap-0.5 pt-2'>{children}</div>
       <div className='pb-1 pt-1 text-center text-[11px] uppercase tracking-wider' style={{ color: 'var(--os-text-leise)' }}>{name}</div>
     </div>
   )
@@ -101,7 +101,7 @@ function Gruppe({ name, children }: { name: string; children: ReactNode }) {
 function Knopf({ icon: Icon, label, onClick, aktiv, aus, titel, glyph }: { icon?: LucideIcon; glyph?: string; label: string; onClick?: () => void; aktiv?: boolean; aus?: boolean; titel?: string }) {
   return (
     <button type='button' onClick={onClick} disabled={aus} title={titel ?? label}
-      className={`flex w-[84px] flex-col items-center gap-1 rounded px-1 py-1.5 text-center text-[12.5px] leading-tight transition-colors disabled:pointer-events-none disabled:opacity-40 ${aktiv ? 'font-semibold' : 'hover:bg-black/[0.05]'}`}
+      className={`flex w-[72px] flex-col items-center gap-1 rounded px-0.5 py-1.5 text-center text-[12px] leading-tight transition-colors disabled:pointer-events-none disabled:opacity-40 ${aktiv ? 'font-semibold' : 'hover:bg-black/[0.05]'}`}
       style={aktiv ? { background: '#fff3ea', outline: '1px solid var(--os-akzent)' } : undefined}>
       <span className='flex h-7 items-center justify-center text-[22px] leading-none'>{Icon ? <Icon className='h-[22px] w-[22px]' strokeWidth={1.7} /> : glyph}</span>
       <span>{label}</span>
@@ -119,7 +119,7 @@ export default function CadBand(p: CadBandProps) {
       <div className='flex items-end gap-0.5 px-3 pt-1.5' style={{ background: '#f6f7f9', borderBottom: '1px solid var(--os-linie)' }}>
         {REITER.map(([k, name]) => (
           <button key={k} type='button' onClick={() => setReiter(k)}
-            className='rounded-t border border-b-0 px-3.5 py-1.5 text-[13.5px]'
+            className='whitespace-nowrap rounded-t border border-b-0 px-2.5 py-1.5 text-[13px]'
             style={{ background: reiter === k ? '#fff' : 'transparent', borderColor: reiter === k ? 'var(--os-linie)' : 'transparent', marginBottom: -1, fontWeight: reiter === k ? 600 : 400 }}>{name}</button>
         ))}
         <div className='ml-auto flex items-center gap-1 pb-1'>
@@ -131,7 +131,7 @@ export default function CadBand(p: CadBandProps) {
         </div>
       </div>
 
-      <div className='flex min-h-[104px] overflow-x-auto'>
+      <div className='flex min-h-[104px] max-h-[230px] flex-wrap overflow-y-auto'>
         {reiter === 'zeichnen' && (
           <>
             <Gruppe name='Zeichnen im Grundriss'>

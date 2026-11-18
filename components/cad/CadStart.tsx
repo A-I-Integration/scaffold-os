@@ -24,8 +24,8 @@ export default function CadStart({ onDateien, onZeichnen, onRechteck }: Props) {
   const ok = zahl(l) > 0 && zahl(b) > 0 && zahl(h) > 0
 
   return (
-    <div className='flex h-full items-center justify-center p-4'>
-      <div className='grid w-full max-w-3xl gap-4 sm:grid-cols-2'>
+    <div className='flex h-full items-center justify-center overflow-auto p-4'>
+      <div className='grid w-full max-w-3xl gap-4 [grid-template-columns:repeat(auto-fit,minmax(240px,1fr))]'>
         <section className='flex flex-col gap-3 rounded-2xl border border-black/10 bg-white p-5' aria-label='Datei hochladen'>
           <h2 className='text-base font-semibold'>1 · Datei hochladen</h2>
           <p className='text-xs text-[#424245]'>Plan (PDF), DXF, IFC, 3D-Modell oder Punktwolke. Die Außenhülle wird gelesen und zur Prüfung angezeigt. Alles Unklare steht als „fehlt“ da und wird nicht erfunden.</p>
