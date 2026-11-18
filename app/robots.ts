@@ -26,6 +26,7 @@ export default function robots(): MetadataRoute.Robots {
         '/prognose',
         '/rechnungen',
         '/mitarbeiter',
+        '/fahrzeuge',
         '/zeiterfassung',
         '/datenpflege',
         '/einstellungen',
