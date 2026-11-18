@@ -10,6 +10,7 @@
 // ============================================================
 
 import type { BuildingParams } from '@/lib/calculations/cad-engine'
+import type { MaterialItem } from '@/types/scaffold'
 import { pruefeUmriss, rechteckUmriss, umrissBox, type UmrissPunkt } from '@/lib/calculations/cad-umriss'
 
 export interface BaukastenWand {
@@ -19,8 +20,27 @@ export interface BaukastenWand {
   winkelGrad: number
 }
 
+/** Leistungen und Zusatzmaterial, die in der Maske angeklickt werden. */
+export interface BaukastenZusatz { nr: string; name: string; liste: string; menge: number; preis: number }
+export interface BaukastenLeistungen {
+  /** Gerüstbreite in m (0 = Standard des Systems) */
+  breiteM: number
+  /** Außentreppe automatisch erzeugen */
+  treppe: boolean
+  dachfang: boolean
+  dachfangHoeheM: number
+  kederplane: boolean
+  kederVonM: number
+  kederBisM: number
+  zusatz: BaukastenZusatz[]
+}
+export const LEISTUNGEN_START: BaukastenLeistungen = { breiteM: 0, treppe: true, dachfang: false, dachfangHoeheM: 1, kederplane: false, kederVonM: 0, kederBisM: 0, zusatz: [] }
+
 export interface BaukastenEingaben {
-  form: 'rechteck' | 'wandzug'
+  form: 'rechteck' | 'wandzug' | 'gezeichnet'
+  /** Gezeichneter Umriss (Wandanfänge) mit Höhe je Kante, aus dem Umriss-Zeichner */
+  gezeichnet?: { umriss: UmrissPunkt[]; kantenHoeheM: number[] }
+  leistungen?: BaukastenLeistungen
   laengeM: number
   breiteM: number
   hoeheM: number
@@ -68,7 +88,34 @@ export function wandzugZuUmriss(waende: BaukastenWand[]): { umriss: UmrissPunkt[
   return { umriss: punkte, lueckeM: Math.hypot(x, z) }
 }
 
+/** Gerüst-Optionen aus den angeklickten Leistungen (nur gesetzte Werte; Standard bleibt Standard). */
+export function leistungenZuOptionen(l: BaukastenLeistungen | undefined): NonNullable<BuildingParams['geruestOptionen']> {
+  const o: NonNullable<BuildingParams['geruestOptionen']> = {}
+  if (!l) return o
+  if (l.breiteM > 0) o.breiteM = l.breiteM
+  if (!l.treppe) o.treppe = false
+  if (l.dachfang && l.dachfangHoeheM > 0) o.dachfang = { hoeheM: l.dachfangHoeheM }
+  if (l.kederplane && l.kederBisM > l.kederVonM) o.kederplane = { vonM: l.kederVonM, bisM: l.kederBisM }
+  return o
+}
+
+/** Zusatzmaterial als Stücklistenpositionen für das Angebot. */
+export function zusatzAlsMaterial(zusatz: BaukastenZusatz[] | undefined): MaterialItem[] {
+  return (zusatz ?? []).filter((z) => z.menge > 0).map((z) => ({
+    articleNumber: z.nr, name: z.name, category: 'Zusatzmaterial', quantity: z.menge, unit: 'Stk',
+    unitPrice: z.preis, totalPrice: Math.round(z.menge * z.preis * 100) / 100, weightKg: 0,
+    riskLevel: 'low' as const, aiRecommendation: 'Von Hand gewählt (Baukasten)',
+  }))
+}
+
 export function baukastenZuGebaeude(e: BaukastenEingaben): BaukastenErgebnis {
+  const r = baukastenZuGebaeudeOhneOptionen(e)
+  if (!r.ok || !r.building) return r
+  const o = leistungenZuOptionen(e.leistungen)
+  return Object.keys(o).length ? { ...r, building: { ...r.building, geruestOptionen: o } } : r
+}
+
+function baukastenZuGebaeudeOhneOptionen(e: BaukastenEingaben): BaukastenErgebnis {
   const fehler: string[] = []
   const hinweise: string[] = []
   const gemeinsam = {
@@ -85,6 +132,18 @@ export function baukastenZuGebaeude(e: BaukastenEingaben): BaukastenErgebnis {
     if (fehler.length) return { ok: false, fehler, hinweise }
     const traufe = e.traufhoeheM > 0 ? e.traufhoeheM : e.hoeheM
     return { ok: true, fehler, hinweise, building: { ...gemeinsam, lengthM: rund(e.laengeM), widthM: rund(e.breiteM), heightM: rund(e.hoeheM), eavesHeightM: rund(traufe), roofHeightM: rund(dachH) } }
+  }
+
+  if (e.form === 'gezeichnet') {
+    const g = e.gezeichnet
+    if (!g || g.umriss.length < 3) return { ok: false, fehler: ['Noch kein Umriss gezeichnet.'], hinweise }
+    const hoehen = g.umriss.map((_, i) => g.kantenHoeheM[i] || e.hoeheM)
+    if (hoehen.some((h) => !(h > 0))) return { ok: false, fehler: ['Höhe fehlt: Beim Zeichnen die Oberkante je Figur eintragen oder unter „Rechteck“ die Höhe setzen.'], hinweise }
+    const probleme = pruefeUmriss(g.umriss)
+    if (probleme.length) return { ok: false, fehler: probleme, hinweise }
+    const box = umrissBox(g.umriss)
+    const hoechste = Math.max(...hoehen)
+    return { ok: true, fehler, hinweise, building: { ...gemeinsam, lengthM: rund(box.lengthM), widthM: rund(box.widthM), heightM: rund(hoechste), eavesHeightM: rund(e.traufhoeheM > 0 ? e.traufhoeheM : hoechste), roofHeightM: rund(dachH), umriss: g.umriss, umrissKantenHoeheM: hoehen.map(rund) } }
   }
 
   const w = e.waende
