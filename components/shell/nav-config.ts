@@ -89,6 +89,7 @@ export const NAV_GRUPPEN: NavGruppe[] = [
       { href: '/lager', label: 'Lager', icon: Warehouse, roles: ['admin', 'disponent', 'bauleiter', 'lager'] },
       { href: '/gestell-simulator', label: 'Gestell-Waage (Test)', icon: Scale, roles: ['admin', 'disponent', 'lager'] },
       { href: '/prognose', label: 'Prognose', icon: TrendingUp, roles: ['admin', 'disponent', 'lager'] },
+      { href: '/fahrzeuge', label: 'Fahrzeuge & Prüfungen', icon: Truck, roles: BUERO },
       { href: '/mitarbeiter', label: 'Mitarbeiter & Zugänge', icon: KeyRound, roles: BUERO },
       { href: '/datenimport', label: 'Datenimport', icon: Upload, roles: BUERO },
       { href: '/datenpflege', label: 'Datenpflege', icon: Database, roles: ['admin'] },
