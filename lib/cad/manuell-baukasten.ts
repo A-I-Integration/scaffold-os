@@ -21,7 +21,22 @@ export interface BaukastenWand {
 }
 
 /** Leistungen und Zusatzmaterial, die in der Maske angeklickt werden. */
-export interface BaukastenZusatz { nr: string; name: string; liste: string; menge: number; preis: number }
+export interface BaukastenZusatz {
+  /** Artikelnummer; leer bei Teilen aus dem herstellerunabhängigen Katalog */
+  nr: string
+  name: string
+  /** Herkunft: MJ-Preisliste oder 'katalog' (herstellerunabhängig) */
+  liste: string
+  menge: number
+  /** Einzelpreis netto in € (0 = noch nicht eingetragen) */
+  preis: number
+  /** Hersteller, frei wählbar oder eintragbar */
+  hersteller?: string
+  /** Bauteilgruppe (Kategorie in der Stückliste) */
+  gruppe?: string
+}
+/** Gleiche Position = gleiches Teil vom gleichen Hersteller. */
+export const zusatzSchluessel = (z: Pick<BaukastenZusatz, 'liste' | 'nr' | 'name' | 'hersteller'>) => [z.liste, z.nr, z.name, z.hersteller ?? ''].join('|')
 export interface BaukastenLeistungen {
   /** Gerüstbreite in m (0 = Standard des Systems) */
   breiteM: number
@@ -99,12 +114,12 @@ export function leistungenZuOptionen(l: BaukastenLeistungen | undefined): NonNul
   return o
 }
 
-/** Zusatzmaterial als Stücklistenpositionen für das Angebot. */
+/** Zusatzmaterial als Stücklistenpositionen für das Angebot. Ohne Preis wird die Position markiert, nicht mit 0 € verschwiegen. */
 export function zusatzAlsMaterial(zusatz: BaukastenZusatz[] | undefined): MaterialItem[] {
   return (zusatz ?? []).filter((z) => z.menge > 0).map((z) => ({
-    articleNumber: z.nr, name: z.name, category: 'Zusatzmaterial', quantity: z.menge, unit: 'Stk',
+    articleNumber: z.nr || '–', name: z.hersteller ? `${z.name} (${z.hersteller})` : z.name, category: z.gruppe || 'Zusatzmaterial', quantity: z.menge, unit: 'Stk',
     unitPrice: z.preis, totalPrice: Math.round(z.menge * z.preis * 100) / 100, weightKg: 0,
-    riskLevel: 'low' as const, aiRecommendation: 'Von Hand gewählt (Baukasten)',
+    riskLevel: 'low' as const, aiRecommendation: z.preis > 0 ? 'Von Hand gewählt (Baukasten)' : 'Von Hand gewählt – Preis fehlt, bitte eintragen',
   }))
 }
 

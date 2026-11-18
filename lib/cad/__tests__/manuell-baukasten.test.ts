@@ -74,3 +74,23 @@ describe('Leistungen aus der Auswahl', () => {
     expect(r.building?.umrissKantenHoeheM).toEqual([7, 7, 4, 7])
   })
 })
+
+import { BAUTEIL_KATALOG } from '../bauteil-katalog'
+import { zusatzSchluessel } from '../manuell-baukasten'
+describe('Bauteilkatalog und Hersteller-Auswahl', () => {
+  it('hat 20 Gruppen mit eindeutigen IDs und ohne Artikelnummern/Preise', () => {
+    expect(BAUTEIL_KATALOG).toHaveLength(20)
+    expect(new Set(BAUTEIL_KATALOG.map((g) => g.id)).size).toBe(20)
+    for (const g of BAUTEIL_KATALOG) { expect(g.teile.length).toBeGreaterThan(5); for (const t of g.teile) expect(Object.keys(t).sort()).toEqual(['hinweis', 'name']) }
+  })
+  it('gleiches Teil von anderem Hersteller ist eine eigene Position', () => {
+    const a = { nr: '', liste: 'katalog', name: 'Konsolträger', hersteller: 'Layher' }
+    expect(zusatzSchluessel(a)).not.toBe(zusatzSchluessel({ ...a, hersteller: 'PERI' }))
+  })
+  it('Angebotsposition nennt Hersteller und Gruppe, fehlender Preis wird markiert', () => {
+    const [m] = zusatzAlsMaterial([{ nr: '', liste: 'katalog', name: 'Konsolträger', hersteller: 'Layher', gruppe: 'Konsolen und Auskragungen', menge: 4, preis: 0 }])
+    expect(m.name).toBe('Konsolträger (Layher)')
+    expect(m.category).toBe('Konsolen und Auskragungen')
+    expect(m.aiRecommendation).toMatch(/Preis fehlt/)
+  })
+})
