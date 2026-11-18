@@ -6,6 +6,7 @@ import { rechneLvNeu, LV_ARTEN, LV_ART_LABEL, LV_STATUS, LV_STATUS_LABEL, type L
 import { rechnungAusLv } from '@/lib/lv-zu-rechnung'
 import { erzeugeLvPdf } from '@/lib/export/lv-export'
 import type { Leistungsverzeichnis } from '@/lib/leistungsverzeichnis'
+import LvManuellEditor from '@/components/LvManuellEditor'
 
 // Gespeicherte Leistungsverzeichnisse einer Baustelle: ansehen, ändern, als Version kopieren, abrechnen.
 const eur = (n: number) => n.toLocaleString('de-DE', { style: 'currency', currency: 'EUR' })
@@ -18,6 +19,7 @@ export default function ProjektLvBlock({ projectId, kundeName = '', kundeAdresse
   const [entwurf, setEntwurf] = useState<Leistungsverzeichnis | null>(null)
   const [meldung, setMeldung] = useState('')
   const [laden, setLaden] = useState(false)
+  const [manuell, setManuell] = useState(false)
 
   const lade = useCallback(async () => {
     try {
@@ -73,8 +75,11 @@ export default function ProjektLvBlock({ projectId, kundeName = '', kundeAdresse
   if (liste === null) return <p className="text-sm text-[#86868b]">Lade Leistungsverzeichnisse …</p>
   return (
     <div className="space-y-3">
+      {manuell
+        ? <LvManuellEditor projectId={projectId} kundeName={kundeName} kundeAdresse={kundeAdresse} onClose={() => setManuell(false)} onGespeichert={async (e) => { setManuell(false); await lade(); setOffen(e.id); setEntwurf(structuredClone(e.lv)) }} />
+        : <button type="button" onClick={() => setManuell(true)} className="rounded-full bg-[#e8590c] text-white text-sm font-semibold px-4 py-2">+ Leistungsverzeichnis manuell anlegen</button>}
       {meldung && <p className="rounded-xl bg-red-50 border border-red-200 text-red-700 text-sm px-4 py-2">{meldung}</p>}
-      {liste.length === 0 && <p className="text-sm text-[#6e6e73]">Noch kein Leistungsverzeichnis gespeichert. Im CAD unter „Leistungsverzeichnis“ → „Zur Baustelle speichern“.</p>}
+      {liste.length === 0 && <p className="text-sm text-[#6e6e73]">Noch kein Leistungsverzeichnis gespeichert. Oben von Hand anlegen oder im CAD unter „Leistungsverzeichnis“ → „Zur Baustelle speichern“.</p>}
       {liste.map((v) => {
         const aktiv = offen === v.id
         const lv = aktiv && entwurf ? entwurf : v.lv
