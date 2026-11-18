@@ -5,7 +5,7 @@ import { AlertTriangle, CheckCircle2, Clock, FileText, Paperclip, Plus, Trash2, 
 import { createClient } from '@/lib/supabase/client'
 import { ANHANG_BUCKET, groesseText, pruefeAnhang } from '@/lib/rechnung-anhang'
 import {
-  FAHRZEUG_ARTEN, FAHRZEUG_ART_LABEL, FRIST_ART_LABEL, KATEGORIEN, KATEGORIE_FRISTEN, KATEGORIE_LABEL, KATEGORIE_OBJEKT, fristStatus, fristText, plusMonate, richtwertIntervall,
+  FAHRZEUG_ARTEN, FAHRZEUG_ART_LABEL, FRIST_ART_LABEL, KATEGORIEN, KATEGORIE_FRISTEN, KATEGORIE_LABEL, KATEGORIE_OBJEKT, OBJEKT_VORSCHLAEGE, fristStatus, fristText, plusMonate, richtwertIntervall,
   type FahrzeugArt, type FristArt, type Kategorie,
 } from '@/lib/fahrzeug-fristen'
 
@@ -115,6 +115,20 @@ export default function FahrzeugePage() {
 function FahrzeugFormular({ kategorie, onClose, onGespeichert, setMeldung }: { kategorie: Kategorie; onClose: () => void; onGespeichert: () => void; setMeldung: (m: { ok: boolean; text: string } | null) => void }) {
   const [f, setF] = useState({ kennzeichen: '', bezeichnung: '', art: 'lkw' as FahrzeugArt, gesamtgewicht_kg: '', erstzulassung: '' })
   const [laeuft, setLaeuft] = useState(false)
+  const [auswahl, setAuswahl] = useState('')
+  const [mitarbeiter, setMitarbeiter] = useState<string[] | null>(null)
+  // Mitarbeiter aus der Mitarbeiterliste vorschlagen (Admin/Disposition); ohne Liste bleibt das freie Feld
+  useEffect(() => {
+    if (kategorie !== 'mitarbeiter') return
+    let ok = true
+    fetch('/api/admin/users').then((r) => r.json()).then((j) => {
+      if (!ok || !j?.success) return
+      setMitarbeiter((j.employees as { first_name: string; last_name: string; status?: string }[]).filter((e) => e.status !== 'inactive').map((e) => `${e.first_name} ${e.last_name}`.trim()).filter(Boolean))
+    }).catch(() => undefined)
+    return () => { ok = false }
+  }, [kategorie])
+  const optionen = kategorie === 'mitarbeiter' ? (mitarbeiter ?? []) : kategorie === 'fahrzeug' ? [] : OBJEKT_VORSCHLAEGE[kategorie]
+  const waehle = (v: string) => { setAuswahl(v); setF((x) => ({ ...x, kennzeichen: v === '__eigen__' ? '' : v })) }
   async function speichern() {
     setLaeuft(true); setMeldung(null)
     try {
@@ -137,8 +151,17 @@ function FahrzeugFormular({ kategorie, onClose, onGespeichert, setMeldung }: { k
       </div>
       <p className="text-[11px] text-[#86868b]">Das Gesamtgewicht bestimmt, welche Intervalle als Vorschlag erscheinen (z. B. TÜV bei Lkw über 3,5 t).</p>
       </>) : (
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs">
-        <label>{KATEGORIE_OBJEKT[kategorie].feld}<input className={feld} value={f.kennzeichen} onChange={(e) => setF({ ...f, kennzeichen: e.target.value })} placeholder={KATEGORIE_OBJEKT[kategorie].platzhalter} /></label>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-2 text-xs">
+        {optionen.length > 0 && (
+          <label>{kategorie === 'mitarbeiter' ? 'Mitarbeiter auswählen' : 'Auswahl'}
+            <select aria-label="Auswahl" className={feld} value={auswahl} onChange={(e) => waehle(e.target.value)}>
+              <option value="">Bitte wählen …</option>
+              {optionen.map((o) => <option key={o} value={o}>{o}</option>)}
+              <option value="__eigen__">Anderer Eintrag …</option>
+            </select>
+          </label>
+        )}
+        <label>{optionen.length > 0 ? (kategorie === 'mitarbeiter' ? 'Name' : 'Bezeichnung (hier z. B. Nr. ergänzen)') : KATEGORIE_OBJEKT[kategorie].feld}<input className={feld} value={f.kennzeichen} onChange={(e) => setF({ ...f, kennzeichen: e.target.value })} placeholder={KATEGORIE_OBJEKT[kategorie].platzhalter} /></label>
         <label>Notiz / Zusatz (optional)<input className={feld} value={f.bezeichnung} onChange={(e) => setF({ ...f, bezeichnung: e.target.value })} /></label>
       </div>
       )}
