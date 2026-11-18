@@ -59,3 +59,43 @@ describe('Rechnungsposition aus Bauphase', () => {
     expect(normalisiereBauphasen(neu)[0].rechnungNr).toBe('RE-1')
   })
 })
+
+import { loesePhasenMengen, zeileM2, zeilenM2, normalisiereBauphasen as norm2, baueBauphasenPosition as pos2, berechneBauphasen as ber2 } from '@/lib/bauphasen'
+describe('Aufmaßblatt je Phase: Seite, Startpunkt, Länge × Höhe', () => {
+  const aufbau = { id: 'a', art: 'aufbau' as const, datum: '2026-11-02', flaecheM2: 0, zeilen: [{ seite: 'N' as const, start: 'unten-links' as const, laengeM: 10, hoeheM: 2 }, { seite: 'O' as const, start: 'unten-links' as const, laengeM: 8, hoeheM: 2 }] }
+  it('m² = Summe Länge × Höhe', () => {
+    expect(zeileM2(aufbau.zeilen[0])).toBe(20)
+    expect(zeilenM2(aufbau.zeilen)).toBe(36)
+    expect(loesePhasenMengen([aufbau])[0].flaecheM2).toBe(36)
+  })
+  it('Teilabbau über Zeilen, Gesamtabbau = Rest', () => {
+    const teil = { id: 't', art: 'abbau' as const, datum: '2026-11-10', flaecheM2: 0, zeilen: [{ seite: 'N' as const, start: 'unten-links' as const, laengeM: 10, hoeheM: 2 }] }
+    const gesamt = { id: 'g', art: 'abbau' as const, datum: '2026-11-20', flaecheM2: 0, gesamt: true }
+    const r = loesePhasenMengen([gesamt, teil, aufbau])
+    expect(r.find((p) => p.id === 't')?.flaecheM2).toBe(20)
+    expect(r.find((p) => p.id === 'g')?.flaecheM2).toBe(16) // 36 aufgebaut − 20 zurückgebaut
+  })
+  it('weiterer Aufbau vor dem Gesamtabbau erhöht den Rest; nie negativ', () => {
+    const noch = { id: 'b', art: 'aufbau' as const, datum: '2026-11-12', flaecheM2: 10 }
+    const gesamt = { id: 'g', art: 'abbau' as const, datum: '2026-11-20', flaecheM2: 0, gesamt: true }
+    expect(loesePhasenMengen([aufbau, noch, gesamt]).find((p) => p.id === 'g')?.flaecheM2).toBe(46)
+    expect(loesePhasenMengen([gesamt]).find((p) => p.id === 'g')?.flaecheM2).toBe(0)
+  })
+  it('Betrag je Phase und Rechnungsposition nennen Seite, Start und Maße', () => {
+    const e = { gesamtFlaecheM2: 36, preisJeM2: 10, aufbauAnteilProzent: 65 }
+    const erg = ber2([aufbau], e)
+    expect(erg.phasen[0].betrag).toBe(234) // 36 × 10 × 65 %
+    const { position, fehler } = pos2(aufbau, erg.phasen[0])
+    expect(fehler).toBeNull()
+    expect(position?.bezeichnung).toMatch(/Aufbau am 2\.11\.2026: 36,00 m²/)
+    expect(position?.bezeichnung).toMatch(/Nord unten links 10,00 m × 2,00 m; Ost unten links 8,00 m × 2,00 m/)
+  })
+  it('Gesamtabbau wird als solcher bezeichnet, Zeilen und Flag überstehen Speichern und Lesen', () => {
+    const g = { id: 'g', art: 'abbau' as const, datum: '2026-11-20', flaecheM2: 0, gesamt: true }
+    const gelesen = norm2(JSON.parse(JSON.stringify([aufbau, g])))
+    expect(gelesen[0].zeilen).toHaveLength(2)
+    expect(gelesen[1].gesamt).toBe(true)
+    const erg = ber2(gelesen, { gesamtFlaecheM2: 36, preisJeM2: 10 })
+    expect(pos2(gelesen[1], erg.phasen.find((p) => p.id === 'g')!).position?.bezeichnung).toMatch(/^Gesamtabbau \(Rest\) am 20\.11\.2026: 36,00 m²/)
+  })
+})

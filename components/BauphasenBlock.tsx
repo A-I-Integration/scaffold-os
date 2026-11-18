@@ -5,7 +5,7 @@ import { Plus, Trash2, CalendarRange } from 'lucide-react';
 import { parseBetrag } from '@/lib/nachtrag';
 import { abschnitteAusSchritt2, berechneAufmass } from '@/lib/aufmassblatt-pdf';
 import { lagerCheck, personalVorschlag, type LagerCheckZeile, type PersonalVorschlagTag } from '@/lib/bauphasen-planung';
-import { BAUPHASEN_STANDARD, berechneBauphasen, normalisiereBauphasen, type Bauphase, type BauphasenEinstellung } from '@/lib/bauphasen';
+import { BAUPHASEN_STANDARD, HIMMELSRICHTUNG_NAME, STARTPUNKT_NAME, berechneBauphasen, normalisiereBauphasen, zeileM2, type Bauphase, type BauphasenEinstellung, type Himmelsrichtung, type LeistungsZeile, type Startpunkt } from '@/lib/bauphasen';
 
 // ============================================================
 // SCAFFOLD OS – Bauphasen (Kundenseite, beim Auftrag)
@@ -82,6 +82,9 @@ export default function BauphasenBlock({ project, startOffen = false }: Props) {
   }
 
   const setE = (k: keyof Einst, v: string) => setEinst((e) => ({ ...e, [k]: zahl(v) ?? 0 }));
+  const artWert = (p: Bauphase) => (p.art === 'aufbau' ? 'aufbau' : p.gesamt ? 'gesamtabbau' : 'teilabbau');
+  const setArt = (id: string, v: string) => setPhasen((l) => l.map((p) => (p.id === id ? { ...p, art: v === 'aufbau' ? 'aufbau' : 'abbau', gesamt: v === 'gesamtabbau' ? true : undefined, ...(v === 'gesamtabbau' ? { zeilen: undefined, flaecheM2: 0 } : {}) } : p)));
+  const setZeile = (id: string, i: number, patch: Partial<LeistungsZeile>) => setPhasen((l) => l.map((p) => (p.id === id ? { ...p, zeilen: (p.zeilen ?? []).map((z, j) => (j === i ? { ...z, ...patch } : z)) } : p)));
   const setP = (id: string, patch: Partial<Bauphase>) => setPhasen((l) => l.map((p) => (p.id === id ? { ...p, ...patch } : p)));
 
   async function speichern() {
@@ -102,7 +105,7 @@ export default function BauphasenBlock({ project, startOffen = false }: Props) {
   return (
     <div className='border-t border-black/5 pt-3'>
       <button type='button' onClick={() => setOffen((o) => !o)} className='text-xs font-semibold text-[#1d1d1f] flex items-center gap-1.5'>
-        <CalendarRange className='h-3.5 w-3.5 text-[#e8590c]' /> Bauphasen: Aufbau, Abbau, Teilrückbau {phasen.length ? `(${phasen.length})` : ''} {offen ? '▲' : '▼'}
+        <CalendarRange className='h-3.5 w-3.5 text-[#e8590c]' /> Bauphasen: Aufbau, Teilabbau, Gesamtabbau {phasen.length ? `(${phasen.length})` : ''} {offen ? '▲' : '▼'}
       </button>
       {offen && (
         <div className='mt-2 space-y-3'>
@@ -124,9 +127,12 @@ export default function BauphasenBlock({ project, startOffen = false }: Props) {
                 <div key={p.id} className='rounded-lg border border-black/10 p-2 space-y-1.5'>
                   <div className='grid grid-cols-2 sm:grid-cols-6 gap-1.5 items-end'>
                     <div><label className='block text-[11px] text-[#86868b] mb-1'>Art</label>
-                      <select className={inputCls} value={p.art} onChange={(e) => setP(p.id, { art: e.target.value as 'aufbau' | 'abbau' })}><option value='aufbau'>Aufbau</option><option value='abbau'>Abbau / Teilrückbau</option></select></div>
-                    <div><label className='block text-[11px] text-[#86868b] mb-1'>Beginn</label><input type='date' className={inputCls} value={p.datum} onChange={(e) => setP(p.id, { datum: e.target.value })} /></div>
-                    <div><label className='block text-[11px] text-[#86868b] mb-1'>Menge (m²)</label><input className={inputCls} inputMode='decimal' value={p.flaecheM2 ? String(p.flaecheM2).replace('.', ',') : ''} onChange={(e) => setP(p.id, { flaecheM2: zahl(e.target.value) ?? 0 })} /></div>
+                      <select aria-label='Art der Leistung' className={inputCls} value={artWert(p)} onChange={(e) => setArt(p.id, e.target.value)}><option value='aufbau'>Aufbau</option><option value='teilabbau'>Teilabbau</option><option value='gesamtabbau'>Gesamtabbau (Rest)</option></select></div>
+                    <div><label className='block text-[11px] text-[#86868b] mb-1'>Datum</label><input type='date' className={inputCls} value={p.datum} onChange={(e) => setP(p.id, { datum: e.target.value })} /></div>
+                    <div><label className='block text-[11px] text-[#86868b] mb-1'>Menge (m²)</label>
+                      {p.gesamt || (p.zeilen && p.zeilen.length > 0)
+                        ? <p className='px-2 py-1.5 text-xs font-semibold text-[#1d1d1f]' aria-label='Menge aus Aufmaß'>{fmt(r?.flaecheM2 ?? 0)}{p.gesamt ? ' (Rest)' : ''}</p>
+                        : <input className={inputCls} inputMode='decimal' value={p.flaecheM2 ? String(p.flaecheM2).replace('.', ',') : ''} onChange={(e) => setP(p.id, { flaecheM2: zahl(e.target.value) ?? 0 })} />}</div>
                     <div><label className='block text-[11px] text-[#86868b] mb-1'>Tage (leer = berechnet)</label><input className={inputCls} inputMode='numeric' value={p.tageManuell ?? ''} onChange={(e) => setP(p.id, { tageManuell: zahl(e.target.value) })} /></div>
                     <div><label className='block text-[11px] text-[#86868b] mb-1'>Personen</label><input className={inputCls} inputMode='numeric' value={p.personen ?? ''} placeholder={String(einst.standardPersonen)} onChange={(e) => setP(p.id, { personen: zahl(e.target.value) })} /></div>
                     <div className='flex justify-end'><button type='button' aria-label='Phase entfernen' disabled={!!p.rechnungId} title={p.rechnungId ? 'Schon abgerechnet' : undefined} onClick={() => setPhasen((l) => l.filter((x) => x.id !== p.id))} className='px-2 py-1.5 text-[#86868b] hover:text-red-600 disabled:opacity-30'><Trash2 className='h-3.5 w-3.5' /></button></div>
@@ -135,6 +141,23 @@ export default function BauphasenBlock({ project, startOffen = false }: Props) {
                     <div><label className='block text-[11px] text-[#86868b] mb-1'>Anteil am Preis in % (leer = {p.art === 'aufbau' ? einst.aufbauAnteilProzent : 100 - einst.aufbauAnteilProzent})</label><input className={inputCls} inputMode='decimal' value={p.anteilProzentManuell ?? ''} onChange={(e) => setP(p.id, { anteilProzentManuell: zahl(e.target.value) })} /></div>
                     <div><label className='block text-[11px] text-[#86868b] mb-1'>Fester Betrag € (leer = berechnet)</label><input className={inputCls} inputMode='decimal' value={p.betragManuell ?? ''} onChange={(e) => setP(p.id, { betragManuell: zahl(e.target.value) })} /></div>
                   </div>
+                  {!p.gesamt && (
+                    <div className='rounded-lg bg-[#f5f5f7] p-2 space-y-1.5' aria-label='Aufmaßblatt'>
+                      <p className='text-[11px] font-semibold text-[#424245]'>Aufmaßblatt: wo wurde {p.art === 'aufbau' ? 'aufgebaut' : 'abgebaut'}?</p>
+                      {(p.zeilen ?? []).map((z, i) => (
+                        <div key={i} className='grid grid-cols-[1fr_1.3fr_1fr_1fr_auto_auto] gap-1.5 items-end'>
+                          <select aria-label='Seite' className={inputCls} value={z.seite} onChange={(e) => setZeile(p.id, i, { seite: e.target.value as Himmelsrichtung })}>{(Object.keys(HIMMELSRICHTUNG_NAME) as Himmelsrichtung[]).map((k) => <option key={k} value={k}>{HIMMELSRICHTUNG_NAME[k]}</option>)}</select>
+                          <select aria-label='Startpunkt' className={inputCls} value={z.start} onChange={(e) => setZeile(p.id, i, { start: e.target.value as Startpunkt })}>{(Object.keys(STARTPUNKT_NAME) as Startpunkt[]).map((k) => <option key={k} value={k}>{STARTPUNKT_NAME[k]}</option>)}</select>
+                          <input aria-label='Länge (m)' placeholder='Länge m' className={inputCls} inputMode='decimal' value={z.laengeM ? String(z.laengeM).replace('.', ',') : ''} onChange={(e) => setZeile(p.id, i, { laengeM: zahl(e.target.value) ?? 0 })} />
+                          <input aria-label='Höhe (m)' placeholder='Höhe m' className={inputCls} inputMode='decimal' value={z.hoeheM ? String(z.hoeheM).replace('.', ',') : ''} onChange={(e) => setZeile(p.id, i, { hoeheM: zahl(e.target.value) ?? 0 })} />
+                          <span className='pb-1.5 text-[11px] font-semibold whitespace-nowrap'>{fmt(zeileM2(z))} m²</span>
+                          <button type='button' aria-label='Zeile entfernen' onClick={() => setPhasen((l) => l.map((x) => (x.id === p.id ? { ...x, zeilen: (x.zeilen ?? []).filter((_, j) => j !== i) } : x)))} className='pb-1.5 text-[#86868b] hover:text-red-600'><Trash2 className='h-3.5 w-3.5' /></button>
+                        </div>
+                      ))}
+                      <button type='button' onClick={() => setPhasen((l) => l.map((x) => (x.id === p.id ? { ...x, zeilen: [...(x.zeilen ?? []), { seite: 'N' as Himmelsrichtung, start: 'unten-links' as Startpunkt, laengeM: 0, hoeheM: 0 }] } : x)))} className='text-[11px] font-semibold text-[#e8590c] hover:underline'>+ Zeile (Seite, Start, Länge × Höhe)</button>
+                    </div>
+                  )}
+                  {p.gesamt && <p className='text-[11px] text-[#424245]'>Gesamtabbau: die Menge ist der Rest – alles, was bis zu diesem Tag aufgebaut und noch nicht zurückgebaut wurde.</p>}
                   {r && <p className='text-[11px] text-[#424245]'>{p.rechnungId && <span className='mr-1 rounded bg-green-100 px-1 text-green-800'>abgerechnet {p.rechnungNr}</span>}<b>{fmt(r.betrag)} €</b> netto · {r.stunden ? `${fmt(r.stunden)} h, ` : ''}{r.tage ? `${r.tage} Arbeitstage ab ${datumDe(r.datum)} mit ${r.personen} Pers.` : 'keine Dauer (Stunden oder Tage eingeben)'}</p>}
                 </div>
               );
