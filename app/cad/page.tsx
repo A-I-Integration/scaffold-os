@@ -84,6 +84,7 @@ import SystemLeiste from '@/components/cad/SystemLeiste'
 import KatalogWahlListe from '@/components/cad/KatalogWahlListe'
 import { katalogListeFuerSystem, wendeKatalogwahlAn, uebertrageAufGleiche } from '@/lib/cad/katalog-zuordnung'
 import Scaffold2D from '@/components/cad/Scaffold2D'
+import CadStart from '@/components/cad/CadStart'
 import { eingabeStandGeruest, istGeruestVeraltet } from '@/lib/cad/modell-veraltet'
 
 const Scaffold3D = dynamic(() => import('@/components/cad/Scaffold3D'), {
@@ -168,6 +169,8 @@ export default function CADPage() {
   const [aussehenOben, setAussehenOben] = useState<'x' | 'y' | 'z'>('y')
   const [aussehenHinweis, setAussehenHinweis] = useState('')
   const planUploadRef = useRef<((datei: File) => Promise<void>) | null>(null)
+  const zeichnerOeffnenRef = useRef<(() => void) | null>(null)
+  const registriereZeichner = useCallback((fn: (() => void) | null) => { zeichnerOeffnenRef.current = fn }, [])
   const registrierePlanUpload = useCallback((fn: ((datei: File) => Promise<void>) | null) => { planUploadRef.current = fn }, [])
   const [autoGenerate, setAutoGenerate] = useState(false)
   const [aussehenAnker, setAussehenAnker] = useState<{ wx: number; wz: number; drehungGrad: number } | null>(null)
@@ -1380,7 +1383,7 @@ export default function CADPage() {
               <ul className='mt-1 list-disc pl-4 space-y-0.5'>{aufmassHinweise.map((h, i) => <li key={i}>{h}</li>)}</ul>
             </div>
           )}
-          <BuildingForm building={building} systemId={systemId} onChange={(b) => { setAutoGenerate(true); setBuilding(b); }} onSystemChange={aendereSystem} onGenerate={() => { setAutoGenerate(true); generate(); }} onLadeProjektdatei={ladeProjektdatei} onAussehen={(a, h, v) => { setAussehen(a); setAussehenEin(true); setAussehenEinheit('m'); setAussehenOben('y'); setAussehenAnker(null); setAussehenVersatz(v ?? { x: 0, z: 0, grad: 0 }); setAussehenHinweis(h ?? '') }} onModellUebernehmen={(b) => { setAutoGenerate(true); setBuilding(b); setModel(null) }} registrierePlanUpload={registrierePlanUpload} warnings={allWarnings}
+          <BuildingForm registriereZeichner={registriereZeichner} building={building} systemId={systemId} onChange={(b) => { setAutoGenerate(true); setBuilding(b); }} onSystemChange={aendereSystem} onGenerate={() => { setAutoGenerate(true); generate(); }} onLadeProjektdatei={ladeProjektdatei} onAussehen={(a, h, v) => { setAussehen(a); setAussehenEin(true); setAussehenEinheit('m'); setAussehenOben('y'); setAussehenAnker(null); setAussehenVersatz(v ?? { x: 0, z: 0, grad: 0 }); setAussehenHinweis(h ?? '') }} onModellUebernehmen={(b) => { setAutoGenerate(true); setBuilding(b); setModel(null) }} registrierePlanUpload={registrierePlanUpload} warnings={allWarnings}
             zusatz={<StatikDatenPanel daten={statikDaten} onChange={setStatikDaten} model={modelWithManual} huelle={gebaeudeHuelle} />} />
         </div>
         <div className='flex-1 flex flex-col min-w-0'>
@@ -1518,14 +1521,22 @@ export default function CADPage() {
             {viewMode === '3d' && modelWithManual && (
               <Scaffold3D farbModus={farbModus} model={modelWithManual} features={features} showBuilding={showBuilding} showScaffold={showScaffold} showDimensions={showDimensions} selectedComponent={selectedComponent} onSelectComponent={klickImModell} mehrfachAuswahl={mehrfachMenge} rahmenModus={rahmenModus} onRahmen={handleRahmen} abbauMarkiert={abbauMarkiert} echtesGebaeude={echtesGebaeude} visibleTypes={visibleTypes} viewMode={viewAngle} onCanvasReady={(c) => { canvasRef.current = c }} notes={notes} onAddNote={handleAddNote} hiddenSides={hiddenSides} hiddenLevels={hiddenLevels} measureMode={measureMode} onMeasurePoint={handleMeasurePoint} customDimensions={customDimensions} pendingMeasurePoint={pendingMeasurePoint?.point ?? null} placementType={placementType} onPlacementClick={handlePlacementClick} showEnvironment={showEnvironment} hoheQualitaet={hoheQualitaet} onRemoveComponent={handleRemoveComponent} onTreppeVerschieben={versetzeAutoTreppe} onReplaceComponent={handleReplaceComponent} systemId={systemId} artikelWahl={artikelWahl} onArtikelWahl={waehleArtikel} onArtikelWahlGleiche={waehleArtikelGleiche} removedCount={removedCount} platzierungIdVon={platzierungIdVonBauteil} onBauteilZiehen={handleBauteilZiehen} griff={!abbauAktiv ? { modus: griffModus, einrasten, onAendern: handleBauteilLage } : undefined} onSeiteUmschalten={(side) => { setAutoGenerate(true); setBuilding((() => { const cur = building.sides ?? ['front']; const has = cur.includes(side); const ns = has ? cur.filter((x) => x !== side) : [...cur, side]; if (ns.length === 0) ns.push('front'); return { ...building, sides: ns } })()) }} />
             )}
-            {/* Phase 68-G: Leerzustand nach 'Neu starten' */}
+            {/* Leerzustand: zwei Wege (Datei hochladen / von Hand bauen) */}
             {viewMode === '3d' && !model && (
-              <div className='h-full flex flex-col items-center justify-center gap-3 text-center'>
-                <p className='text-sm text-[#86868b] max-w-xs'>Kein Modell. Maße links eingeben oder Grundriss hochladen – dann „Gerüst neu berechnen“.</p>
-                {fehlendeMasse.length > 0 && (
-                  <p className='text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 max-w-xs'>Es fehlen noch: {fehlendeMasse.join(', ')}. Bitte links eintragen – erst dann kann das Gerüst gezeichnet werden.</p>
+              <div className='h-full flex flex-col'>
+                <div className='flex-1 min-h-0'>
+                  <CadStart
+                    onDateien={(d) => ladeAussehen(d)}
+                    onZeichnen={() => zeichnerOeffnenRef.current?.()}
+                    onRechteck={(l, b, h) => {
+                      setAutoGenerate(true)
+                      setBuilding({ ...building, lengthM: l, widthM: b, heightM: h, eavesHeightM: building.eavesHeightM > 0 ? building.eavesHeightM : h, umriss: undefined, umrissKantenHoeheM: undefined, sides: ['front', 'back', 'left', 'right'] })
+                    }}
+                  />
+                </div>
+                {fehlendeMasse.length > 0 && (building.lengthM > 0 || building.widthM > 0 || building.heightM > 0) && (
+                  <p className='mx-auto mb-3 max-w-md rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-center text-sm text-amber-700'>Es fehlen noch: {fehlendeMasse.join(', ')}.</p>
                 )}
-                <button onClick={() => { setAutoGenerate(true); generate(); }} className='px-4 py-2 text-sm font-medium rounded-xl bg-[#0071e3] text-white hover:bg-[#0077ed]'>Gerüst neu berechnen</button>
               </div>
             )}
             {viewMode === '2d' && modelWithManual && <Scaffold2D model={modelWithManual} projektName={aufmassProjektName} firma={firmenName} zeichnung={{ figuren, werkzeug: zeichenWerkzeug, onNeu: (f) => setFiguren((l) => [...l, f]), onWerkzeug: setZeichenWerkzeug }} />}
