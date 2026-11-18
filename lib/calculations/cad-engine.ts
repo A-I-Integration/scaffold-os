@@ -237,6 +237,8 @@ export interface BuildingParams {
   fensterFest?: CadFenster[]
   /** Fenster/Türen aus dem Plan mit Lage in Metern in der Plan-Basis des Umrisses; gelten im Umriss-Modus (Zuordnung zur nächsten Umrisskante) */
   /** Terrassen/Balkone aus dem Plan (Lage in Metern in der Plan-Basis des Umrisses); im Umriss-Modus als Platte mit Geländer dargestellt */
+  /** Intern (Oberbau): nur diese Kanten des Umrisses werden eingerüstet */
+  geruestNurKanten?: number[]
   /** Umriss des Untergeschosses aus dem Plan (Plan-Basis, wie `umriss`); im Umriss-Modus als Holzfassade unter dem Erdgeschoss gezeichnet */
   untergeschoss?: UmrissPunkt[]
   /** Szenen-Koordinaten des Untergeschosses (vom Umriss-Modus berechnet) */
@@ -2540,7 +2542,7 @@ function generiereUmrissModell(
   })
   const uebersprungen = straenge.filter((s) => s.laenge < 0.5)
   uebersprungen.forEach((s) => warnings.push({ type: 'warning', code: 'UMRISS_KANTE_ZU_KURZ', message: `Kante ${s.k.index + 1}: zwischen den Nachbarkanten bleibt nur ${Math.max(0, s.laenge).toFixed(2)} m Platz – dort wird kein Gerüst erzeugt.` }))
-  const aktive = straenge.filter((s) => s.laenge >= 0.5)
+  const aktive = straenge.filter((s) => s.laenge >= 0.5 && (!building.geruestNurKanten || building.geruestNurKanten.includes(s.k.index)))
   const divs = new Map<number, { distribution: number[]; fields: number; fieldLengthM: number }>()
   aktive.forEach((s) => divs.set(s.k.index, teile(s.laenge)))
 
@@ -2665,7 +2667,85 @@ function generiereUmrissModell(
     fassadenFlaechen,
     fassadenAbschnitte,
   }
-  return { ...modell, components3D: generateScaffoldComponents(modell) }
+  const mitKomponenten: CADModel = { ...modell, components3D: generateScaffoldComponents(modell) }
+  return fuegeOberbauHinzu(mitKomponenten, geschossKoerper, gebaeude, system, scaffoldWidthM, abstandM, teile)
+}
+
+/** Abstand eines Punktes zum Linienzug des Umrisses (m). */
+function abstandZumUmrissM(px: number, pz: number, u: { x: number; z: number }[]): number {
+  let best = Infinity
+  for (let i = 0; i < u.length; i++) {
+    const a = u[i], b = u[(i + 1) % u.length]
+    const dx = b.x - a.x, dz = b.z - a.z
+    const l2 = dx * dx + dz * dz
+    const t = l2 > 0 ? Math.max(0, Math.min(1, ((px - a.x) * dx + (pz - a.z) * dz) / l2)) : 0
+    best = Math.min(best, Math.hypot(px - (a.x + t * dx), pz - (a.z + t * dz)))
+  }
+  return best
+}
+
+/**
+ * Gerüst in zwei Teilen bei zurückspringendem Obergeschoss: Teil 1 ist der Ring um das untere Geschoss (wie bisher), Teil 2 (Oberbau) steht auf
+ * dessen Dach oder Terrasse und umschließt die zurückgesetzten Wände des oberen Geschosses bis zur Rinne. Wände, die bündig mit dem unteren
+ * Geschoss durchlaufen, bleiben im durchgehenden Teil 1. Näherungsmodell: Aufstandsfläche, Verbindung und Statik sind vor Ort zu prüfen.
+ */
+function fuegeOberbauHinzu(
+  modell: CADModel,
+  geschossKoerper: { name: string; obenM: number; umriss: { x: number; z: number }[] }[],
+  gebaeude: BuildingParams,
+  system: GeruestSystem | null,
+  scaffoldWidthM: number,
+  abstandM: number,
+  teile: (laengeM: number) => { distribution: number[]; fields: number; fieldLengthM: number }
+): CADModel {
+  if (!system || geschossKoerper.length !== 2) return modell
+  const [unten, oben] = geschossKoerper
+  const baseY = unten.obenM
+  if (!(baseY > 0.5) || !(modell.building.heightM - baseY > 1)) return modell
+  const oNorm = normalisiereUmriss(oben.umriss)
+  const oKanten = umrissKanten(oNorm)
+  const ruecksprung = oKanten.filter((k) => abstandZumUmrissM((k.von.x + k.bis.x) / 2, (k.von.z + k.bis.z) / 2, unten.umriss) > 0.3)
+  if (ruecksprung.length === 0 || ruecksprung.length === oKanten.length) return modell
+  const platzBrauchtM = scaffoldWidthM + abstandM + 0.1
+  const eng = ruecksprung.filter((k) => abstandZumUmrissM((k.von.x + k.bis.x) / 2, (k.von.z + k.bis.z) / 2, unten.umriss) < platzBrauchtM)
+  const sub: BuildingParams = {
+    ...gebaeude,
+    umriss: oNorm,
+    fassadenGeschosse: undefined,
+    geschossKoerper: undefined,
+    untergeschoss: undefined,
+    untergeschossKoerper: undefined,
+    planTerrassen: undefined,
+    terrassen: undefined,
+    planOeffnungen: undefined,
+    geruestOptionen: undefined,
+    umrissKantenHoeheM: undefined,
+    geruestNurKanten: ruecksprung.map((k) => k.index),
+    heightM: modell.building.heightM - baseY,
+    eavesHeightM: Math.max(0, modell.building.eavesHeightM - baseY),
+  }
+  const teil = generiereUmrissModell(sub, system, scaffoldWidthM, abstandM, [], teile)
+  if (teil.components3D.length === 0) return modell
+  const tb = zentriereUmriss(oNorm)[0]
+  const dx = -(tb.x - oNorm[0].x), dz = -(tb.z - oNorm[0].z)
+  const nL = modell.levels.length
+  const pf = (id?: string) => (id ? `ob-${id}` : id)
+  const comps = teil.components3D.map((c) => ({ ...c, id: `ob-${c.id}`, fieldId: pf(c.fieldId), levelId: pf(c.levelId), position: [c.position[0] + dx, c.position[1] + baseY, c.position[2] + dz] as [number, number, number] }))
+  const felder = teil.fields.map((f) => ({ ...f, id: `ob-${f.id}`, positionX: f.positionX + dx, positionY: f.positionY + baseY, positionZ: f.positionZ + dz, levelIndex: f.levelIndex + nL, kante: f.kante !== undefined ? f.kante + 1000 : f.kante }))
+  const lagen = teil.levels.map((l) => ({ ...l, id: `ob-${l.id}`, index: l.index + nL, bottomY: l.bottomY + baseY, topY: l.topY + baseY, fields: felder.filter((f) => f.levelIndex === l.index + nL) }))
+  const warnings = [...modell.warnings, { type: 'info' as const, code: 'OBERBAU_TEIL2', message: `Gerüst in zwei Teilen: Teil 1 umschließt das ${unten.name}, Teil 2 (Oberbau, ${ruecksprung.length} zurückgesetzte Wand/Wände) steht auf dessen Dach/Terrasse (+${baseY.toFixed(2).replace('.', ',')} m) und endet an der Rinne. Aufstandsfläche, Verbindung der Teile, Aufstieg und Verankerung bitte vor Ort und in der Statik prüfen.` }]
+  if (eng.length) warnings.push({ type: 'warning', code: 'OBERBAU_PLATZ', message: `Oberbau: Bei ${eng.length} Wand/Wänden bleibt auf dem Dach weniger als ${platzBrauchtM.toFixed(2).replace('.', ',')} m Platz – dort sind Konsolen oder ein Auskragen nötig.` })
+  return {
+    ...modell,
+    fields: [...modell.fields, ...felder],
+    levels: [...modell.levels, ...lagen],
+    anchors: [...modell.anchors, ...teil.anchors.map((a) => ({ ...a, id: `ob-${a.id}`, positionX: a.positionX + dx, positionY: a.positionY + baseY, positionZ: a.positionZ + dz }))],
+    components3D: [...modell.components3D, ...comps],
+    totalAreaM2: modell.totalAreaM2 + teil.totalAreaM2,
+    gebauteFlaecheM2: (modell.gebauteFlaecheM2 ?? modell.totalAreaM2) + (teil.gebauteFlaecheM2 ?? teil.totalAreaM2),
+    fieldCount: modell.fieldCount + teil.fieldCount,
+    warnings,
+  }
 }
 
 /** Feste Artikelnummer der Leiter im Lager (jede Firma pflegt Name, Preis und Gewicht selbst). */
@@ -2775,7 +2855,40 @@ export interface Dimension2D {
   offsetY?: number
 }
 
+/** Grundriss eines Umriss-Gebäudes: echte Gebäudekontur, Gerüstfelder gedreht entlang jeder Kante, Kantenlängen als Maß. */
+function generateGrundrissUmriss(model: CADModel): Projection2D | null {
+  const { building, fields } = model
+  if (!building.umriss || building.umriss.length < 3) return null
+  const poly = zentriereUmriss(normalisiereUmriss(building.umriss))
+  const elements: SVGElement2D[] = []
+  const dimensions: Dimension2D[] = []
+  const pfad = (pts: Array<[number, number]>) => `M ${pts.map(([x, z]) => `${x.toFixed(3)},${z.toFixed(3)}`).join(' L ')} Z`
+  elements.push({ id: 'building', type: 'path', x: 0, y: 0, d: pfad(poly.map((q) => [q.x, q.z])), fill: '#e2e8f0', stroke: '#475569', strokeWidth: 2 })
+  const rahmenB = model.system?.rahmenBreitenM[0] || 0.73
+  const alle: Array<[number, number]> = poly.map((q) => [q.x, q.z])
+  fields.filter((f) => f.levelIndex === 0 && f.kante !== undefined && f.yaw !== undefined).forEach((f) => {
+    const ux = Math.cos(f.yaw as number), uz = -Math.sin(f.yaw as number)
+    const nx = -uz, nz = ux
+    const hl = f.lengthM / 2, hb = (f.widthM || rahmenB) / 2
+    const ecken: Array<[number, number]> = [[-hl, -hb], [hl, -hb], [hl, hb], [-hl, hb]].map(([a, b]) => [f.positionX + ux * a + nx * b, f.positionZ + uz * a + nz * b])
+    alle.push(...ecken)
+    elements.push({ id: `field-${f.id}`, type: 'path', x: 0, y: 0, d: pfad(ecken), fill: 'none', stroke: f.durchgang ? '#ea580c' : '#3b82f6', strokeWidth: 1.5 })
+  })
+  // Kantenlängen außen am Gerüst
+  umrissKanten(poly).forEach((k) => {
+    const mx = (k.von.x + k.bis.x) / 2 + k.n[0] * 1.7, mz = (k.von.z + k.bis.z) / 2 + k.n[1] * 1.7
+    const h = building.umrissKantenHoeheM?.[k.index]
+    elements.push({ id: `kantenmass-${k.index}`, type: 'text', x: mx, y: mz, text: `${k.laengeM.toFixed(2).replace('.', ',')} m${h ? ` · H ${h.toFixed(2).replace('.', ',')}` : ''}`, fill: '#b45309' })
+  })
+  const xs = alle.map((a) => a[0]), zs = alle.map((a) => a[1])
+  const margin = 6
+  const minX = Math.min(...xs) - margin, minY = Math.min(...zs) - margin
+  return { type: 'grundriss', viewBox: { minX, minY, width: Math.max(...xs) + margin - minX, height: Math.max(...zs) + margin - minY }, elements, dimensions }
+}
+
 export function generateGrundriss(model: CADModel): Projection2D {
+  const umrissPlan = generateGrundrissUmriss(model)
+  if (umrissPlan) return umrissPlan
   const { building, fields } = model
   const margin = 2
   const width = building.lengthM + margin * 2

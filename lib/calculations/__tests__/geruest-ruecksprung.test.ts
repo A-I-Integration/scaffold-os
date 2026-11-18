@@ -14,7 +14,9 @@ describe('Gerüst folgt dem Rücksprung (synthetisch)', () => {
   it('Schmalseiten ohne OG darüber enden niedriger: weniger Belagteile als bei durchgehend voller Höhe', () => {
     const voll = generateCADModel(basis, 'layher-allround')
     const stufig = generateCADModel(mit, 'layher-allround')
-    expect(stufig.components3D.filter((c) => c.type === 'deck').length).toBeLessThan(voll.components3D.filter((c) => c.type === 'deck').length)
+    // Oberbau-Teile (Präfix ob-) gehören zum zweiten Gerüstteil und zählen hier nicht mit
+    const ring = (m: typeof voll) => m.components3D.filter((c) => c.type === 'deck' && !String(c.id).startsWith('ob-')).length
+    expect(ring(stufig)).toBeLessThan(ring(voll))
     expect(stufig.warnings.some((w) => w.code === 'UMRISS_KANTENHOEHEN')).toBe(true)
     expect(hoechsteOkAn(stufig)).toBeGreaterThan(5) // Längsseiten reichen weiter bis zum OG
   })
