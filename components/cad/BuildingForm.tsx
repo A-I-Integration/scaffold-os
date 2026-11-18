@@ -49,12 +49,14 @@ interface Props {
   onModellUebernehmen?: (building: BuildingParams) => void
   /** Der obere „Echtes Gebäude laden“-Knopf schickt eine einzelne GLB damit durch denselben Import (ein Upload genügt). */
   registrierePlanUpload?: (fn: ((datei: File) => Promise<void>) | null) => void
+  /** Der Startbildschirm der Seite öffnet damit den Umriss-Zeichner. */
+  registriereZeichner?: (fn: (() => void) | null) => void
   warnings: { type: string; message: string }[]
   /** Zusätzlicher Bereich am Ende der scrollenden Liste, also über dem Button „Gerüst neu berechnen“ (z. B. Projektdaten für die Statik) */
   zusatz?: ReactNode
 }
 
-export default function BuildingForm({ building, systemId, onChange, onSystemChange, onGenerate, onLadeProjektdatei, onAussehen, onModellUebernehmen, registrierePlanUpload, warnings, zusatz }: Props) {
+export default function BuildingForm({ building, systemId, onChange, onSystemChange, onGenerate, onLadeProjektdatei, onAussehen, onModellUebernehmen, registrierePlanUpload, registriereZeichner, warnings, zusatz }: Props) {
   const [activeTab, setActiveTab] = useState<'gebaeude' | 'geruest' | 'system'>('gebaeude')
   const [analyseLaeuft, setAnalyseLaeuft] = useState(false)
   const [profilFehler, setProfilFehler] = useState<Partial<Record<'front' | 'back' | 'left' | 'right', boolean>>>({})
@@ -651,6 +653,11 @@ export default function BuildingForm({ building, systemId, onChange, onSystemCha
     registrierePlanUpload(async (datei) => { await planUploadRef.current?.(datei) })
     return () => registrierePlanUpload(null)
   }, [registrierePlanUpload])
+  useEffect(() => {
+    if (!registriereZeichner) return
+    registriereZeichner(() => setZeichnerOffen(true))
+    return () => registriereZeichner(null)
+  }, [registriereZeichner])
   return (
     <div className='h-full flex flex-col bg-white border-r border-black/5'>
       <div className='p-4 border-b border-black/5'>
