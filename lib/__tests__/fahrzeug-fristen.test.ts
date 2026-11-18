@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { plusMonate, fristStatus, fristText, erinnerungFuerFrist, richtwertIntervall, pruefeFristEingabe } from '@/lib/fahrzeug-fristen'
+import { KATEGORIEN, KATEGORIE_FRISTEN, FRIST_ARTEN, plusMonate, fristStatus, fristText, erinnerungFuerFrist, richtwertIntervall, pruefeFristEingabe } from '@/lib/fahrzeug-fristen'
 
 describe('Fahrzeug-Fristen', () => {
   it('plusMonate: gleicher Tag, Monatsende und Jahreswechsel', () => {
@@ -46,5 +46,14 @@ describe('Fahrzeug-Fristen', () => {
     expect(pruefeFristEingabe({ art: 'hu', faellig_am: '02.12.2026' })).not.toBeNull()
     expect(pruefeFristEingabe({ art: 'hu', faellig_am: '2026-12-02', intervall_monate: 0 })).not.toBeNull()
     expect(pruefeFristEingabe({ art: 'hu', faellig_am: '2026-12-02', letzte_pruefung: '2025-12-02', intervall_monate: 12 })).toBeNull()
+  })
+  it('Kategorien: jede Prüfart ist bekannt, jede Kategorie hat Auswahl', () => {
+    for (const k of KATEGORIEN) { expect(KATEGORIE_FRISTEN[k].length).toBeGreaterThan(0); for (const a of KATEGORIE_FRISTEN[k]) expect(FRIST_ARTEN).toContain(a) }
+  })
+  it('Richtwerte Mitarbeiter/Betrieb: Unterweisung 12, Ersthelfer 24, Führerschein ohne Zahl', () => {
+    expect(richtwertIntervall('unterweisung', { art: 'sonstiges' }).monate).toBe(12)
+    expect(richtwertIntervall('erste_hilfe', { art: 'sonstiges' }).monate).toBe(24)
+    expect(richtwertIntervall('fuehrerschein', { art: 'sonstiges' }).monate).toBeNull()
+    expect(richtwertIntervall('dguv_v3', { art: 'sonstiges' }).monate).toBeNull()
   })
 })
