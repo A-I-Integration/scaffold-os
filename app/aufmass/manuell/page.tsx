@@ -9,6 +9,7 @@ import { berechneCadKosten } from '@/lib/calculations/cad-kosten'
 import { GERUEST_SYSTEME } from '@/lib/calculations/geruest-systeme'
 import { vereinigeGeschosse } from '@/lib/cad/geschoss-umriss'
 import { sucheMjArtikel, MJ_LISTEN } from '@/lib/mj-katalog'
+import { baukastenProjekt } from '@/lib/cad/manuell-projekt'
 import { BAUTEIL_KATALOG } from '@/lib/cad/bauteil-katalog'
 import { BAUKASTEN_START, LEISTUNGEN_START, baukastenZuGebaeude, rechteckAlsWandzug, zusatzAlsMaterial, zusatzSchluessel, type BaukastenEingaben, type BaukastenLeistungen, type BaukastenWand, type BaukastenZusatz } from '@/lib/cad/manuell-baukasten'
 
@@ -98,34 +99,13 @@ function Seite() {
     if (!model || !ergebnis.building || !kunde) return
     setSpeichert(true); setMeldung('')
     try {
-      const b = ergebnis.building
       const einstellungen = await fetch('/api/company').then((r) => r.json()).then((j) => j?.company || null).catch(() => null)
       const logistik = calculateLogistics(model, material, 2.0)
       const gewicht = material.reduce((s, m) => s + m.weightKg * m.quantity, 0)
-      const preis = Math.round(summe * 100) / 100
       const kosten = berechneCadKosten(logistik.aufbauStunden || 0, gewicht, einstellungen)
-      const gesamt = Math.round((preis + kosten.laborCost + kosten.transportCost + kosten.tripCost) * 100) / 100
-      const titel = projektName.trim() || `Aufmaß ${kunde.name}`
-      const kiResult = {
-        materialList: material, totalMaterialCost: preis, totalWeightKg: Math.round(gewicht),
-        estimatedLaborHours: logistik.aufbauStunden || 0, laborCost: kosten.laborCost, transportCost: kosten.transportCost, tripCost: kosten.tripCost,
-        totalCost: gesamt, suggestedPrice: gesamt, margin: 0, marginPercent: 0, riskLevel: 'green' as const,
-        warnings: ['Manuell aufgemessen (Baukasten). Preis = Material + Lohn + Transport zu Selbstkosten – vor Versand Marge prüfen.'],
-        tips: [], scaffoldClass: 'Manuelles Aufmaß', requiredAnchorCount: 0, requiredLoadDistributionPlates: 0, totalAreaM2: model.totalAreaM2,
-        building: b, systemId,
-      }
       const res = await fetch('/api/projects', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: titel, adresse, customer_id: kunde.id,
-          data: {
-            step1: { name: kunde.name, adresse, gewerke: ['allgemein'], dauer: '30' },
-            step2: { laenge: String(b.lengthM), breite: String(b.widthM), hoehe: String(b.heightM), traufhoehe: String(b.eavesHeightM), dachform: b.roofForm[0].toUpperCase() + b.roofForm.slice(1), fassade: 'Putz', hindernisse: [], abschnitte: [], dachueberstand: String(b.overhangM), durchfahrt: false },
-            step3: { geruesttyp: 'fassade', system: systemId, customSystem: '', feldlange: '2.5', belag: 'stahl', gelander: true, diagonale: true, fahrbar: false, boden: 'beton' },
-            kiResult, angebotsStatus: 'erstellt',
-          },
-          status: 'active',
-        }),
+        body: JSON.stringify(baukastenProjekt({ kunde, projektName, adresse, building: ergebnis.building, systemId, model, material, aufbauStunden: logistik.aufbauStunden || 0, kosten })),
       })
       const j = await res.json()
       if (!res.ok || !j.id) throw new Error(j.error || 'Anlegen fehlgeschlagen')
@@ -230,8 +210,9 @@ function Seite() {
                       <span className="flex-1 truncate font-medium" title={z.name}>{z.nr ? `${z.nr} ` : ''}{z.name}</span>
                       <button type="button" aria-label={`${z.name} entfernen`} onClick={() => setZusatz((liste) => liste.filter((_, j) => j !== i))} className="text-red-700">✕</button>
                     </div>
-                    <div className="grid grid-cols-[1fr_88px] gap-1.5">
+                    <div className="grid grid-cols-[1fr_70px_80px] gap-1.5">
                       <input aria-label={`Hersteller ${z.name}`} list="hersteller-liste" value={z.hersteller ?? ''} onChange={(ev) => zusatzAendern(i, { hersteller: ev.target.value })} placeholder="Hersteller" className="rounded border border-black/15 px-1.5 py-0.5" />
+                      <input aria-label={`Gewicht ${z.name}`} inputMode="decimal" value={z.gewichtKg ? String(z.gewichtKg).replace('.', ',') : ''} onChange={(ev) => zusatzAendern(i, { gewichtKg: zahl(ev.target.value) })} placeholder="kg/Stk" className="rounded border border-black/15 px-1.5 py-0.5 text-right" />
                       <input aria-label={`Preis ${z.name}`} inputMode="decimal" value={z.preis ? String(z.preis).replace('.', ',') : ''} onChange={(ev) => zusatzAendern(i, { preis: zahl(ev.target.value) })} placeholder="€ netto" className="rounded border border-black/15 px-1.5 py-0.5 text-right" />
                     </div>
                   </li>

@@ -30,6 +30,8 @@ export interface BaukastenZusatz {
   menge: number
   /** Einzelpreis netto in € (0 = noch nicht eingetragen) */
   preis: number
+  /** Gewicht je Stück in kg (0 = noch nicht eingetragen) */
+  gewichtKg?: number
   /** Hersteller, frei wählbar oder eintragbar */
   hersteller?: string
   /** Bauteilgruppe (Kategorie in der Stückliste) */
@@ -118,7 +120,7 @@ export function leistungenZuOptionen(l: BaukastenLeistungen | undefined): NonNul
 export function zusatzAlsMaterial(zusatz: BaukastenZusatz[] | undefined): MaterialItem[] {
   return (zusatz ?? []).filter((z) => z.menge > 0).map((z) => ({
     articleNumber: z.nr || '–', name: z.hersteller ? `${z.name} (${z.hersteller})` : z.name, category: z.gruppe || 'Zusatzmaterial', quantity: z.menge, unit: 'Stk',
-    unitPrice: z.preis, totalPrice: Math.round(z.menge * z.preis * 100) / 100, weightKg: 0,
+    unitPrice: z.preis, totalPrice: Math.round(z.menge * z.preis * 100) / 100, weightKg: Math.max(0, z.gewichtKg ?? 0),
     riskLevel: 'low' as const, aiRecommendation: z.preis > 0 ? 'Von Hand gewählt (Baukasten)' : 'Von Hand gewählt – Preis fehlt, bitte eintragen',
   }))
 }
