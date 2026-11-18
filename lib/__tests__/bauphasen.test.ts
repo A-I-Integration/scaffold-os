@@ -99,3 +99,30 @@ describe('Aufmaßblatt je Phase: Seite, Startpunkt, Länge × Höhe', () => {
     expect(pos2(gelesen[1], erg.phasen.find((p) => p.id === 'g')!).position?.bezeichnung).toMatch(/^Gesamtabbau \(Rest\) am 20\.11\.2026: 36,00 m²/)
   })
 })
+
+import { baueBauphasenAngebot, bauphasenAngebotNr, markiereBauphaseAngebotGesendet, normalisiereBauphasen as normAngebot } from '../bauphasen'
+describe('Angebot je Phase', () => {
+  const phasen = [
+    { id: 'b', art: 'abbau' as const, datum: '2026-11-30', flaecheM2: 0, gesamt: true },
+    { id: 'a', art: 'aufbau' as const, datum: '2026-11-02', flaecheM2: 0, zeilen: [{ seite: 'N' as const, start: 'unten-links' as const, laengeM: 10, hoeheM: 2 }] },
+  ]
+  const einst = { gesamtFlaecheM2: 20, preisJeM2: 25, aufbauAnteilProzent: 65 }
+  it('nummeriert nach Datum', () => {
+    expect(bauphasenAngebotNr(phasen, 'a')).toBe('BP-1')
+    expect(bauphasenAngebotNr(phasen, 'b')).toBe('BP-2')
+  })
+  it('Angebot hat gleiche Position wie die Rechnung, auch nach Abrechnung', () => {
+    const erg = berechneBauphasen(phasen, einst)
+    const pe = erg.phasen.find((x) => x.id === 'a')!
+    const a = baueBauphasenAngebot({ ...phasen[1], rechnungId: 'r1', rechnungNr: 'R-1' }, pe)
+    expect(a.fehler).toBeNull()
+    expect(a.zeile?.bezeichnung).toContain('Aufbau am')
+    expect(a.zeile?.menge).toBe(20)
+  })
+  it('merkt den Versand und behält ihn beim Lesen', () => {
+    const neu = markiereBauphaseAngebotGesendet(phasen, 'a', 'x@y.de', '2026-11-18')
+    const gelesen = normAngebot(JSON.parse(JSON.stringify(neu)))
+    expect(gelesen.find((p) => p.id === 'a')?.angebotAn).toBe('x@y.de')
+    expect(gelesen.find((p) => p.id === 'b')?.angebotGesendetAm).toBeUndefined()
+  })
+})

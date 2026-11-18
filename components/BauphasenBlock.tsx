@@ -4,8 +4,9 @@ import { useMemo, useState } from 'react';
 import { Plus, Trash2, CalendarRange } from 'lucide-react';
 import { parseBetrag } from '@/lib/nachtrag';
 import { abschnitteAusSchritt2, berechneAufmass } from '@/lib/aufmassblatt-pdf';
+import { erzeugeBauphasenAngebotPdf } from '@/lib/bauphasen-angebot-pdf';
 import { lagerCheck, personalVorschlag, type LagerCheckZeile, type PersonalVorschlagTag } from '@/lib/bauphasen-planung';
-import { BAUPHASEN_STANDARD, HIMMELSRICHTUNG_NAME, STARTPUNKT_NAME, berechneBauphasen, normalisiereBauphasen, zeileM2, type Bauphase, type BauphasenEinstellung, type Himmelsrichtung, type LeistungsZeile, type Startpunkt } from '@/lib/bauphasen';
+import { BAUPHASEN_STANDARD, HIMMELSRICHTUNG_NAME, STARTPUNKT_NAME, baueBauphasenAngebot, bauphasenAngebotNr, markiereBauphaseAngebotGesendet, berechneBauphasen, normalisiereBauphasen, zeileM2, type Bauphase, type BauphasenEinstellung, type Himmelsrichtung, type LeistungsZeile, type Startpunkt } from '@/lib/bauphasen';
 
 // ============================================================
 // SCAFFOLD OS – Bauphasen (Kundenseite, beim Auftrag)
@@ -16,7 +17,7 @@ import { BAUPHASEN_STANDARD, HIMMELSRICHTUNG_NAME, STARTPUNKT_NAME, berechneBaup
 
 interface MatZeile { articleNumber?: string | null; name?: string; quantity?: number; unit?: string }
 interface BauData { bauphasen?: { einstellung?: Partial<BauphasenEinstellung>; phasen?: unknown }; step2?: Parameters<typeof abschnitteAusSchritt2>[0]; kiResult?: { materialList?: MatZeile[] } }
-interface Props { project: { id: string; name: string | null; adresse: string | null; data: BauData | null }; /** im eigenen Reiter sofort aufgeklappt */ startOffen?: boolean }
+interface Props { kunde?: { id: string; name: string; email?: string | null }; project: { id: string; name: string | null; adresse: string | null; data: BauData | null }; /** im eigenen Reiter sofort aufgeklappt */ startOffen?: boolean }
 
 const heute = () => new Date().toLocaleDateString('sv-SE');
 const fmt = (n: number) => n.toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -27,7 +28,7 @@ const neueId = () => `bp-${Date.now().toString(36)}${Math.random().toString(36).
 
 type Einst = Omit<BauphasenEinstellung, 'material'>;
 
-export default function BauphasenBlock({ project, startOffen = false }: Props) {
+export default function BauphasenBlock({ kunde, project, startOffen = false }: Props) {
   const gespeichert = project.data?.bauphasen;
   const gesamtAufmass = useMemo(() => berechneAufmass(abschnitteAusSchritt2(project.data?.step2)).gesamtM2, [project.data]);
   const material = useMemo(() => {
@@ -97,6 +98,36 @@ export default function BauphasenBlock({ project, startOffen = false }: Props) {
     } catch (e) { setMeldung({ ok: false, text: e instanceof Error ? e.message : 'Fehler' }); } finally { setLaeuft(false); }
   }
 
+
+  async function angebot(p: Bauphase, senden: boolean) {
+    const r = erg.phasen.find((x) => x.id === p.id);
+    if (!r) return;
+    const a = baueBauphasenAngebot(p, r);
+    if (!a.zeile) { setMeldung({ ok: false, text: a.fehler || 'Kein Betrag für diese Phase.' }); return; }
+    const art = p.art === 'aufbau' ? 'Aufbau' : p.gesamt ? 'Gesamtabbau (Rest)' : 'Teilabbau';
+    const nummer = bauphasenAngebotNr(phasen, p.id);
+    setLaeuft(true); setMeldung(null);
+    try {
+      let firma = null;
+      try { const c = await fetch('/api/company').then((x) => x.json()); if (c?.success) firma = c.company; } catch { /* Firma optional */ }
+      const doc = erzeugeBauphasenAngebotPdf({ nummer, datum: heute(), art, leistungsDatum: p.datum, zeile: a.zeile, kunde: kunde?.name || 'Kunde', adresse: project.adresse || undefined, projektName: project.name || undefined, firma });
+      const name = `Angebot_${nummer}_${art.split(' ')[0]}_${p.datum}.pdf`;
+      if (!senden) { doc.save(name); setMeldung({ ok: true, text: `Angebot ${nummer} als PDF heruntergeladen.` }); return; }
+      if (!kunde?.id) throw new Error('Kunde unbekannt – Versand nur aus der Kundenseite möglich.');
+      const an = (kunde.email || '').trim();
+      if (!an) throw new Error('Beim Kunden ist keine E-Mail-Adresse hinterlegt.');
+      if (!window.confirm(`Angebot ${nummer} (${art} am ${datumDe(p.datum)}) jetzt an ${an} senden?`)) return;
+      const pdfBase64 = doc.output('datauristring').split(',')[1];
+      const res = await fetch(`/api/kunden/${kunde.id}/mail`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ to: an, subject: `Angebot ${nummer}: ${art} am ${datumDe(p.datum)}`, text: `Guten Tag,\n\nanbei erhalten Sie unser Angebot ${nummer} für ${art} am ${datumDe(p.datum)}.\n\nBei Fragen melden Sie sich gerne.\n\nMit freundlichen Grüßen`, pdfBase64, pdfName: name }) });
+      const j = await res.json().catch(() => ({}));
+      if (!res.ok || !j.success) throw new Error(j.error || 'Senden fehlgeschlagen');
+      const neu = markiereBauphaseAngebotGesendet(phasen, p.id, an, heute());
+      setPhasen(neu);
+      await fetch('/api/projects', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: project.id, data: { bauphasen: { einstellung: einst, phasen: neu } } }) });
+      setMeldung({ ok: true, text: `Angebot ${nummer} an ${an} gesendet.` });
+    } catch (e) { setMeldung({ ok: false, text: e instanceof Error ? e.message : 'Fehler' }); } finally { setLaeuft(false); }
+  }
+
   const feld = (label: string, wert: number, k: keyof Einst, einheit?: string) => (
     <div><label className='block text-[11px] text-[#86868b] mb-1'>{label}{einheit ? ` (${einheit})` : ''}</label>
       <input className={inputCls} inputMode='decimal' value={wert ? String(wert).replace('.', ',') : ''} onChange={(e) => setE(k, e.target.value)} /></div>
@@ -158,6 +189,14 @@ export default function BauphasenBlock({ project, startOffen = false }: Props) {
                     </div>
                   )}
                   {p.gesamt && <p className='text-[11px] text-[#424245]'>Gesamtabbau: die Menge ist der Rest – alles, was bis zu diesem Tag aufgebaut und noch nicht zurückgebaut wurde.</p>}
+                  {r && r.betrag > 0 && (
+                    <div className='flex flex-wrap items-center gap-2 text-[11px]'>
+                      <span className='font-semibold text-[#424245]'>Angebot {bauphasenAngebotNr(phasen, p.id)}:</span>
+                      <button type='button' disabled={laeuft} onClick={() => angebot(p, false)} className='px-2 py-1 rounded border border-black/10 font-semibold hover:bg-black/5 disabled:opacity-50'>PDF</button>
+                      <button type='button' disabled={laeuft || !kunde} onClick={() => angebot(p, true)} className='px-2 py-1 rounded bg-[#1d1d1f] text-white font-semibold disabled:opacity-50'>Per E-Mail senden</button>
+                      {p.angebotGesendetAm && <span className='rounded bg-sky-100 px-1 text-sky-800'>gesendet {datumDe(p.angebotGesendetAm)} an {p.angebotAn}</span>}
+                    </div>
+                  )}
                   {r && <p className='text-[11px] text-[#424245]'>{p.rechnungId && <span className='mr-1 rounded bg-green-100 px-1 text-green-800'>abgerechnet {p.rechnungNr}</span>}<b>{fmt(r.betrag)} €</b> netto · {r.stunden ? `${fmt(r.stunden)} h, ` : ''}{r.tage ? `${r.tage} Arbeitstage ab ${datumDe(r.datum)} mit ${r.personen} Pers.` : 'keine Dauer (Stunden oder Tage eingeben)'}</p>}
                 </div>
               );

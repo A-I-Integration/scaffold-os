@@ -51,6 +51,9 @@ export interface Bauphase {
   rechnungId?: string
   rechnungNr?: string
   abgerechnetAm?: string
+  /** gesetzt, sobald das Angebot dieser Phase per E-Mail an den Kunden ging */
+  angebotGesendetAm?: string
+  angebotAn?: string
 }
 
 export interface BauphasenEinstellung {
@@ -237,7 +240,8 @@ export function normalisiereBauphasen(raw: unknown): Bauphase[] {
     const num = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) ? v : undefined)
     const zeilen = Array.isArray(o.zeilen) ? (o.zeilen as unknown[]).flatMap((z): LeistungsZeile[] => { const q = z as Record<string, unknown>; return q && ['N', 'O', 'S', 'W'].includes(q.seite as string) && ['unten-links', 'unten-rechts', 'oben-links', 'oben-rechts'].includes(q.start as string) ? [{ seite: q.seite as Himmelsrichtung, start: q.start as Startpunkt, laengeM: num(q.laengeM) ?? 0, hoeheM: num(q.hoeheM) ?? 0 }] : [] }) : []
     aus.push({ id: o.id, art: o.art, datum: o.datum, flaecheM2: num(o.flaecheM2) ?? 0, ...(zeilen.length ? { zeilen } : {}), ...(o.gesamt === true && o.art === 'abbau' ? { gesamt: true } : {}), tageManuell: num(o.tageManuell), personen: num(o.personen), anteilProzentManuell: num(o.anteilProzentManuell), betragManuell: num(o.betragManuell), notiz: typeof o.notiz === 'string' ? o.notiz : undefined,
-      ...(typeof o.rechnungId === 'string' ? { rechnungId: o.rechnungId } : {}), ...(typeof o.rechnungNr === 'string' ? { rechnungNr: o.rechnungNr } : {}), ...(typeof o.abgerechnetAm === 'string' ? { abgerechnetAm: o.abgerechnetAm } : {}) })
+      ...(typeof o.rechnungId === 'string' ? { rechnungId: o.rechnungId } : {}), ...(typeof o.rechnungNr === 'string' ? { rechnungNr: o.rechnungNr } : {}), ...(typeof o.abgerechnetAm === 'string' ? { abgerechnetAm: o.abgerechnetAm } : {}),
+      ...(typeof o.angebotGesendetAm === 'string' ? { angebotGesendetAm: o.angebotGesendetAm } : {}), ...(typeof o.angebotAn === 'string' ? { angebotAn: o.angebotAn } : {}) })
   }
   return aus
 }
@@ -260,4 +264,20 @@ export function baueBauphasenPosition(phase: Bauphase, erg: PhaseErgebnis): { po
 
 export function markiereBauphaseAbgerechnet(phasen: Bauphase[], id: string, rechnung: { id: string; nummer: string }, heute: string): Bauphase[] {
   return phasen.map((p) => (p.id === id ? { ...p, rechnungId: rechnung.id, rechnungNr: rechnung.nummer, abgerechnetAm: heute } : p))
+}
+
+export function markiereBauphaseAngebotGesendet(phasen: Bauphase[], id: string, an: string, heute: string): Bauphase[] {
+  return phasen.map((p) => (p.id === id ? { ...p, angebotGesendetAm: heute, angebotAn: an } : p))
+}
+
+/** Angebotsnummer je Phase: laufende Nummer in der Reihenfolge der Termine, z. B. BP-2 */
+export function bauphasenAngebotNr(phasen: Bauphase[], id: string): string {
+  const sortiert = [...phasen].sort((a, b) => a.datum.localeCompare(b.datum))
+  return `BP-${sortiert.findIndex((p) => p.id === id) + 1}`
+}
+
+/** Text und Betrag des Phasen-Angebots (gleiche Position wie später in der Rechnung, aber auch vor der Abrechnung nutzbar) */
+export function baueBauphasenAngebot(phase: Bauphase, erg: PhaseErgebnis): { zeile: { bezeichnung: string; menge: number; einheit: string; einzelpreis: number } | null; fehler: string | null } {
+  const r = baueBauphasenPosition({ ...phase, rechnungId: undefined, rechnungNr: undefined }, erg)
+  return { zeile: r.position, fehler: r.fehler }
 }
