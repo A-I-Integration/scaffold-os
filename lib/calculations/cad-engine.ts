@@ -2476,14 +2476,15 @@ function generiereUmrissModell(
   building.umriss && (building.umrissKantenHoeheM = kHoeheNorm ?? undefined) // ab hier in der Reihenfolge des normalisierten Umrisses
   // Geneigtes Dach (Pult-, Walm-, Mansardendach) mit bekannter Traufe: wie im Rechteck-Modus endet das Gerüst an der Rinne – der oberste Belag liegt
   // höchstens BELAG_UEBER_RINNE_M über der Traufe, nicht erst an der First-Höhe. Eigene Höhen je Kante (Eingabe) gelten unverändert.
-  const rinneRegelUmriss = !kHoehe && !!system && (building.roofForm === 'walmdach' || building.roofForm === 'mansardendach' || building.roofForm === 'pultdach') && building.eavesHeightM > 0 && building.eavesHeightM < building.heightM - 0.3
+  const rinneRegelUmriss = !kHoeheNorm && !!system && (building.roofForm === 'walmdach' || building.roofForm === 'mansardendach' || building.roofForm === 'pultdach') && building.eavesHeightM > 0 && building.eavesHeightM < building.heightM - 0.3
   const hoeheBisRinne = (h: number): number => {
     if (!rinneRegelUmriss || !system) return h
     const r = system.rasterHoeheM
     const n = Math.max(1, Math.floor((building.eavesHeightM + BELAG_UEBER_RINNE_M - hangU) / r + 1e-6))
     return Math.min(h, hangU + n * r)
   }
-  const kanteHoehe = (idx: number): number => kHoehe ? kHoehe[idx] : hoeheBisRinne(building.heightM)
+  // Kanten des obersten Geschosses (Höhe = Gebäudehöhe) enden bei geneigtem Dach an der Rinne, niedrigere Teile an ihrer eigenen Höhe
+  const kanteHoehe = (idx: number): number => kHoehe ? (kHoehe[idx] >= building.heightM - 1e-6 ? hoeheBisRinne(kHoehe[idx]) : kHoehe[idx]) : hoeheBisRinne(building.heightM)
   const kanteLagen = (idx: number): number => system ? calculateLevels(kanteHoehe(idx) - hangU, system, hangU).levels : 1
   if (kHoehe) {
     const hh = [...new Set(kHoehe.map((h) => String(h).replace('.', ',')))]
@@ -2501,7 +2502,18 @@ function generiereUmrissModell(
   const bAussenU = scaffoldWidthM - 0.075
   // Der zentrierte Umriss liegt in Szenen-Koordinaten (Rückseite bei z = −0,5): die Geländefläche steht über der Boxmitte in Gebäude-Koordinaten
   const gfRoh = system ? gelaendeHoeheFn({ ...gebaeude, lengthM: building.lengthM, widthM: building.widthM, umriss: undefined, sections: undefined } as BuildingParams) : null
-  const gfU: ((x: number, z: number) => number) | null = gfRoh ? (x, z) => gfRoh(x, z + building.widthM / 2 + GEBAEUDE_SZENEN_VERSATZ_M) : null
+  // Ragt das Untergeschoss (Garage) über das Erdgeschoss hinaus, steht das Gerüst dort auf dessen Dach (±0,00), nicht auf dem Gelände darunter
+  const ugFlaeche = building.untergeschossKoerper && building.untergeschossKoerper.length >= 3 ? building.untergeschossKoerper : null
+  const imUg = (x: number, z: number): boolean => {
+    if (!ugFlaeche) return false
+    let drin = false
+    for (let i = 0, j = ugFlaeche.length - 1; i < ugFlaeche.length; j = i++) {
+      const a = ugFlaeche[i], b = ugFlaeche[j]
+      if ((a.z > z) !== (b.z > z) && x < ((b.x - a.x) * (z - a.z)) / (b.z - a.z) + a.x) drin = !drin
+    }
+    return drin
+  }
+  const gfU: ((x: number, z: number) => number) | null = gfRoh ? (x, z) => { const h = gfRoh(x, z + building.widthM / 2 + GEBAEUDE_SZENEN_VERSATZ_M); return imUg(x, z) ? Math.max(h, 0) : h } : null
   if (gfU) {
     let mn = Infinity
     kanten.forEach((k, ki) => {
