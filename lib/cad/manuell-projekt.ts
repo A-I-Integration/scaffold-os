@@ -5,6 +5,7 @@
 
 import type { BuildingParams, CADModel } from '@/lib/calculations/cad-engine'
 import type { MaterialItem } from '@/types/scaffold'
+import type { BaukastenEingaben } from '@/lib/cad/manuell-baukasten'
 
 export interface ProjektKosten { laborCost: number; transportCost: number; tripCost: number }
 
@@ -18,6 +19,8 @@ export function baukastenProjekt(a: {
   material: MaterialItem[]
   aufbauStunden: number
   kosten: ProjektKosten
+  /** Eingaben der Maske, damit die Baustelle später wieder im Baukasten geöffnet werden kann */
+  eingaben?: BaukastenEingaben
 }) {
   const { building: b, material } = a
   const preis = Math.round(material.reduce((s, m) => s + m.totalPrice, 0) * 100) / 100
@@ -42,7 +45,18 @@ export function baukastenProjekt(a: {
       step2: { laenge: String(b.lengthM), breite: String(b.widthM), hoehe: String(b.heightM), traufhoehe: String(b.eavesHeightM), dachform: b.roofForm[0].toUpperCase() + b.roofForm.slice(1), fassade: 'Putz', hindernisse: [], abschnitte: [], dachueberstand: String(b.overhangM), durchfahrt: false },
       step3: { geruesttyp: 'fassade', system: a.systemId, customSystem: '', feldlange: '2.5', belag: 'stahl', gelander: true, diagonale: true, fahrbar: false, boden: 'beton' },
       kiResult, angebotsStatus: 'erstellt',
+      ...(a.eingaben ? { baukasten: { eingaben: a.eingaben, systemId: a.systemId } } : {}),
     },
     status: 'active',
   }
+}
+
+/** Stände, ab denen das Angebot beim Kunden liegt: der Baukasten ändert dann nichts mehr stillschweigend. */
+export const ANGEBOT_GESPERRT = ['versendet', 'gelesen', 'angenommen', 'korrektur', 'abgelehnt']
+export const angebotAenderbar = (status: unknown): boolean => !ANGEBOT_GESPERRT.includes(String(status ?? 'erstellt'))
+
+/** Gespeicherten Baukasten-Stand aus den Projektdaten lesen (nur wenn die Baustelle aus dem Baukasten stammt). */
+export function leseBaukastenStand(data: unknown): { eingaben: BaukastenEingaben; systemId: string } | null {
+  const b = (data as { baukasten?: { eingaben?: BaukastenEingaben; systemId?: string } } | null)?.baukasten
+  return b?.eingaben && typeof b.eingaben === 'object' && typeof b.systemId === 'string' ? { eingaben: b.eingaben, systemId: b.systemId } : null
 }

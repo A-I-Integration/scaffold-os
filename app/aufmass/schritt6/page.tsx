@@ -1410,6 +1410,23 @@ function Schritt6Content() {
 
               {/* NEU (Phase 13/31): Rechnung erstellen, sobald Angebot angenommen –
                   1 Klick legt die Rechnung direkt an und öffnet den Versand-Dialog hier. */}
+              {/* Nächste Schritte: Baukasten-Aufmaß ändern (solange das Angebot nicht beim Kunden liegt) bzw. nach der Annahme ins Aufmaß vor Ort und ins CAD */}
+              {savedProjectId && (angebotsStatus === 'angenommen' || (angebotsStatus === 'erstellt' && !!(stepData as Record<string, unknown>).baukasten)) && !zeigeVersandDialog && (
+                <div className="pt-2 border-t border-black/10 space-y-2" data-testid="naechste-schritte">
+                  <p className="text-xs font-semibold uppercase text-[#86868b]">{angebotsStatus === 'angenommen' ? 'Nächste Schritte' : 'Aufmaß'}</p>
+                  {angebotsStatus === 'erstellt' && (
+                    <a href={`/aufmass/manuell?id=${savedProjectId}`} className="block w-full rounded-xl border border-[#e8590c] py-2.5 text-center text-sm font-semibold text-[#e8590c] hover:bg-orange-50">Im Baukasten bearbeiten</a>
+                  )}
+                  {angebotsStatus === 'angenommen' && (
+                    <div className="grid grid-cols-2 gap-2">
+                      <a href={`/aufmass/schritt1?id=${savedProjectId}`} className="rounded-xl bg-[#e8590c] py-2.5 text-center text-sm font-semibold text-white hover:bg-[#d9480f]">Aufmaß vor Ort erfassen</a>
+                      <button type="button" onClick={handleImCadOeffnen} className="rounded-xl border border-[#0071e3] py-2.5 text-sm font-semibold text-[#0071e3] hover:bg-[#0071e3]/5">Im CAD planen</button>
+                    </div>
+                  )}
+                  {cadFehler && <p className="text-xs text-red-700">{cadFehler}</p>}
+                </div>
+              )}
+
               {angebotsStatus === 'angenommen' && savedProjectId && kiResult && !zeigeVersandDialog && (
                 <div className="pt-2 border-t border-black/10">
                   <div className="grid grid-cols-2 gap-2 mb-2">

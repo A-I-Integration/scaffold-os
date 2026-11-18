@@ -24,3 +24,21 @@ describe('Baustelle aus dem Baukasten', () => {
     expect(k.totalCost).toBeCloseTo(k.totalMaterialCost + 150, 2)
   })
 })
+
+import { ANGEBOT_GESPERRT, angebotAenderbar, leseBaukastenStand } from '../manuell-projekt'
+describe('Baukasten wieder öffnen', () => {
+  const r = baukastenZuGebaeude({ ...BAUKASTEN_START, laengeM: 12, breiteM: 8, hoeheM: 7 })
+  const model = generateCADModel(r.building!, 'layher-allround')
+  it('speichert den Stand der Maske und liest ihn wieder', () => {
+    const eingaben = { ...BAUKASTEN_START, laengeM: 12, breiteM: 8, hoeheM: 7 }
+    const p = baukastenProjekt({ kunde: { id: 'k', name: 'K' }, projektName: '', adresse: '', building: r.building!, systemId: 'layher-allround', model, material: [], aufbauStunden: 0, kosten: { laborCost: 0, transportCost: 0, tripCost: 0 }, eingaben })
+    expect(leseBaukastenStand(p.data)).toEqual({ eingaben, systemId: 'layher-allround' })
+    expect(leseBaukastenStand({})).toBeNull()
+    expect(leseBaukastenStand(null)).toBeNull()
+  })
+  it('ändern nur, solange das Angebot nicht beim Kunden liegt', () => {
+    expect(angebotAenderbar('erstellt')).toBe(true)
+    expect(angebotAenderbar(undefined)).toBe(true)
+    for (const s of ANGEBOT_GESPERRT) expect(angebotAenderbar(s)).toBe(false)
+  })
+})
