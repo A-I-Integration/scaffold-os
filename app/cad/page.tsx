@@ -85,6 +85,7 @@ import KatalogWahlListe from '@/components/cad/KatalogWahlListe'
 import { katalogListeFuerSystem, wendeKatalogwahlAn, uebertrageAufGleiche } from '@/lib/cad/katalog-zuordnung'
 import Scaffold2D from '@/components/cad/Scaffold2D'
 import CadStart from '@/components/cad/CadStart'
+import HuellePruefung from '@/components/cad/HuellePruefung'
 import { eingabeStandGeruest, istGeruestVeraltet } from '@/lib/cad/modell-veraltet'
 
 const Scaffold3D = dynamic(() => import('@/components/cad/Scaffold3D'), {
@@ -169,6 +170,9 @@ export default function CADPage() {
   const [aussehenOben, setAussehenOben] = useState<'x' | 'y' | 'z'>('y')
   const [aussehenHinweis, setAussehenHinweis] = useState('')
   const planUploadRef = useRef<((datei: File) => Promise<void>) | null>(null)
+  const [huelleBestaetigt, setHuelleBestaetigt] = useState(false)
+  // Ein neuer Umriss (Upload, Zeichner, Laden) will wieder geprüft werden
+  useEffect(() => { setHuelleBestaetigt(false) }, [building.umriss])
   const zeichnerOeffnenRef = useRef<(() => void) | null>(null)
   const registriereZeichner = useCallback((fn: (() => void) | null) => { zeichnerOeffnenRef.current = fn }, [])
   const registrierePlanUpload = useCallback((fn: ((datei: File) => Promise<void>) | null) => { planUploadRef.current = fn }, [])
@@ -1408,6 +1412,16 @@ export default function CADPage() {
             layerState={layerState} onToggleSide={(k) => handleToggleSide(k as keyof SideVisibility)} onToggleLevel={handleToggleLevel}
             onAlleEin={handleShowAllLayers} onAlleAus={handleHideAllLayers} visibleTypes={visibleTypes} onToggleType={toggleType}
           />
+          {building.umriss && building.umriss.length >= 3 && (huelleBestaetigt ? (
+            <div className='flex items-center gap-3 border-b border-black/10 bg-white px-4 py-1.5 text-xs'>
+              <span className='text-green-700'>✓ Hülle bestätigt</span>
+              <button type='button' onClick={() => setHuelleBestaetigt(false)} className='underline'>Hülle ansehen und ändern</button>
+            </div>
+          ) : (
+            <div className='max-h-[55vh] overflow-auto border-b border-black/10 bg-[#f5f5f7] px-3'>
+              <HuellePruefung building={building} onChange={(b) => { setAutoGenerate(true); setBuilding(b) }} onZeichnen={() => zeichnerOeffnenRef.current?.()} onBestaetigen={() => setHuelleBestaetigt(true)} />
+            </div>
+          ))}
           {treppePanel && model && viewMode === '3d' && <TreppePanel model={model} treppe={gewaehlteTreppe} meldung={treppeMeldung} onSetzen={setzeTreppeAufFeld} onLeiter={setzeLeiterAufFeld} onDurchstieg={setzeDurchstiegAufFeld} onSchieben={schiebeTreppe} onZu={() => setTreppePanel(false)} />}
           {selectedComponent && modelWithManual && viewMode === '3d' && !abbauAktiv && !placementType && !measureMode && (
               <EigenschaftenLeiste model={modelWithManual} id={selectedComponent} lagenVersatzM={ueber.aenderungen.find((a) => a.id === selectedComponent)?.dy ?? ueber.kopien.find((k) => k.id === selectedComponent)?.dy ?? 0} onLageOp={(op) => handleLageOp(selectedComponent, op)} griffModus={griffModus} onGriffModus={setGriffModus} einrasten={einrasten} onEinrasten={setEinrasten} veraendert={istVonHandVeraendert(ueber, selectedComponent)} onLage={(p, d) => handleBauteilLage(selectedComponent, p, d)} onDuplizieren={() => handleBauteilDuplizieren(selectedComponent)} onZuruecksetzen={() => handleBauteilZuruecksetzen(selectedComponent)} artikelWahl={artikelWahl} manuell={!!platzierungIdVonBauteil(selectedComponent)}
