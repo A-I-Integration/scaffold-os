@@ -31,6 +31,8 @@ interface Props {
   /** Optional: Rechnungsart und Prozentwert vorbelegen (z. B. Teilrechnung aus der Auftragsübersicht). */
   startArt?: 'schluss' | 'standard' | 'abschlag';
   startProzent?: number;
+  /** Bauphasen-Rechnung direkt für diese Phase vorbelegen (Abschlag, Modus „Nach Bauphase“) */
+  startPhaseId?: string;
   onClose: () => void;
   onCreated: (invoice: Invoice) => void;
   /** Wenn gesetzt, erscheint die Option „Danach Dokumente hinzufügen“; die Seite öffnet dann den Anhänge-Dialog zur neuen Rechnung. */
@@ -40,7 +42,7 @@ interface Props {
 const eur = (n: number) => n.toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' €';
 const inputCls = 'w-full px-3 py-2 bg-white border border-black/10 rounded-lg text-sm text-[#1d1d1f] focus:outline-none focus:border-[#e8590c]';
 
-export default function SchlussrechnungDialog({ projectId, customerName, customerAddress, daten, startArt, startProzent, onClose, onCreated, onAnhaengeHinzufuegen }: Props) {
+export default function SchlussrechnungDialog({ projectId, customerName, customerAddress, daten, startArt, startProzent, startPhaseId, onClose, onCreated, onAnhaengeHinzufuegen }: Props) {
   const [laden, setLaden] = useState(true);
   const [fehlerLaden, setFehlerLaden] = useState('');
   const [projektDaten, setProjektDaten] = useState<any>(null);
@@ -56,7 +58,7 @@ export default function SchlussrechnungDialog({ projectId, customerName, custome
   const [abschlagProzent, setAbschlagProzent] = useState(startProzent ? String(startProzent).replace('.', ',') : '');
   const [abschlagBetrag, setAbschlagBetrag] = useState('');
   const [zwischenaufmasse, setZwischenaufmasse] = useState<Zwischenaufmass[]>([]);
-  const [abschlagModus, setAbschlagModus] = useState<'betrag' | 'zwischenaufmass' | 'bauphase'>('betrag');
+  const [abschlagModus, setAbschlagModus] = useState<'betrag' | 'zwischenaufmass' | 'bauphase'>(startPhaseId ? 'bauphase' : 'betrag');
   const [bauphasen, setBauphasen] = useState<Bauphase[]>([]);
   const [bauphasenEinst, setBauphasenEinst] = useState<Partial<BauphasenEinstellung>>({});
   const [gewaehltePhase, setGewaehltePhase] = useState('');
@@ -102,7 +104,7 @@ export default function SchlussrechnungDialog({ projectId, customerName, custome
         setBauphasen(bp);
         setBauphasenEinst((pRes.project?.data?.bauphasen?.einstellung ?? {}) as Partial<BauphasenEinstellung>);
         const bpOffen = bp.filter((x) => !x.rechnungId);
-        if (bpOffen.length > 0) setGewaehltePhase(bpOffen[0].id);
+        if (startPhaseId && bpOffen.some((x) => x.id === startPhaseId)) setGewaehltePhase(startPhaseId); else if (bpOffen.length > 0) setGewaehltePhase(bpOffen[0].id);
         const offen = za.filter((z) => !z.rechnungId);
         if (offen.length > 0) setGewaehltesZA(offen[offen.length - 1].id);
         setGewaehlteNachtraege(new Set(n.map((x) => x.id)));

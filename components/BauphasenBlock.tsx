@@ -17,7 +17,7 @@ import { BAUPHASEN_STANDARD, HIMMELSRICHTUNG_NAME, STARTPUNKT_NAME, baueBauphase
 
 interface MatZeile { articleNumber?: string | null; name?: string; quantity?: number; unit?: string }
 interface BauData { bauphasen?: { einstellung?: Partial<BauphasenEinstellung>; phasen?: unknown }; step2?: Parameters<typeof abschnitteAusSchritt2>[0]; kiResult?: { materialList?: MatZeile[] } }
-interface Props { kunde?: { id: string; name: string; email?: string | null }; project: { id: string; name: string | null; adresse: string | null; data: BauData | null }; /** im eigenen Reiter sofort aufgeklappt */ startOffen?: boolean }
+interface Props { /** öffnet den Rechnungsdialog für diese Phase (Phasen sind dann gespeichert) */ onRechnungStellen?: (phaseId: string) => void; kunde?: { id: string; name: string; email?: string | null }; project: { id: string; name: string | null; adresse: string | null; data: BauData | null }; /** im eigenen Reiter sofort aufgeklappt */ startOffen?: boolean }
 
 const heute = () => new Date().toLocaleDateString('sv-SE');
 const fmt = (n: number) => n.toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -28,7 +28,7 @@ const neueId = () => `bp-${Date.now().toString(36)}${Math.random().toString(36).
 
 type Einst = Omit<BauphasenEinstellung, 'material'>;
 
-export default function BauphasenBlock({ kunde, project, startOffen = false }: Props) {
+export default function BauphasenBlock({ kunde, onRechnungStellen, project, startOffen = false }: Props) {
   const gespeichert = project.data?.bauphasen;
   const gesamtAufmass = useMemo(() => berechneAufmass(abschnitteAusSchritt2(project.data?.step2)).gesamtM2, [project.data]);
   const material = useMemo(() => {
@@ -98,6 +98,17 @@ export default function BauphasenBlock({ kunde, project, startOffen = false }: P
     } catch (e) { setMeldung({ ok: false, text: e instanceof Error ? e.message : 'Fehler' }); } finally { setLaeuft(false); }
   }
 
+
+  async function rechnungErstellen(p: Bauphase) {
+    if (!onRechnungStellen) return;
+    setLaeuft(true); setMeldung(null);
+    try {
+      const res = await fetch('/api/projects', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: project.id, data: { bauphasen: { einstellung: einst, phasen } } }) });
+      const j = await res.json().catch(() => ({}));
+      if (!res.ok || j.success === false) throw new Error(j.error || 'Speichern fehlgeschlagen');
+      onRechnungStellen(p.id);
+    } catch (e) { setMeldung({ ok: false, text: e instanceof Error ? e.message : 'Fehler' }); } finally { setLaeuft(false); }
+  }
 
   async function angebot(p: Bauphase, senden: boolean) {
     const r = erg.phasen.find((x) => x.id === p.id);
@@ -202,6 +213,7 @@ export default function BauphasenBlock({ kunde, project, startOffen = false }: P
                       <span className='font-semibold text-[#424245]'>Angebot {bauphasenAngebotNr(phasen, p.id)}:</span>
                       <button type='button' disabled={laeuft} onClick={() => angebot(p, false)} className='px-2 py-1 rounded border border-black/10 font-semibold hover:bg-black/5 disabled:opacity-50'>PDF</button>
                       <button type='button' disabled={laeuft || !kunde} onClick={() => angebot(p, true)} className='px-2 py-1 rounded bg-[#1d1d1f] text-white font-semibold disabled:opacity-50'>Per E-Mail senden</button>
+                      {onRechnungStellen && !p.rechnungId && <button type='button' disabled={laeuft} onClick={() => rechnungErstellen(p)} className='px-2 py-1 rounded bg-[#e8590c] text-white font-semibold disabled:opacity-50'>Rechnung erstellen</button>}
                       {p.angebotGesendetAm && <span className='rounded bg-sky-100 px-1 text-sky-800'>gesendet {datumDe(p.angebotGesendetAm)} an {p.angebotAn}</span>}
                     </div>
                   )}
