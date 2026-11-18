@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { KATEGORIEN, KATEGORIE_FRISTEN, FRIST_ARTEN, plusMonate, fristStatus, fristText, erinnerungFuerFrist, richtwertIntervall, pruefeFristEingabe } from '@/lib/fahrzeug-fristen'
+import { OBJEKT_VORSCHLAEGE, KATEGORIEN, KATEGORIE_FRISTEN, FRIST_ARTEN, plusMonate, fristStatus, fristText, erinnerungFuerFrist, richtwertIntervall, pruefeFristEingabe } from '@/lib/fahrzeug-fristen'
 
 describe('Fahrzeug-Fristen', () => {
   it('plusMonate: gleicher Tag, Monatsende und Jahreswechsel', () => {
@@ -55,5 +55,8 @@ describe('Fahrzeug-Fristen', () => {
     expect(richtwertIntervall('erste_hilfe', { art: 'sonstiges' }).monate).toBe(24)
     expect(richtwertIntervall('fuehrerschein', { art: 'sonstiges' }).monate).toBeNull()
     expect(richtwertIntervall('dguv_v3', { art: 'sonstiges' }).monate).toBeNull()
+  })
+  it('Auswahllisten: keine Duplikate, alle befüllt', () => {
+    for (const liste of Object.values(OBJEKT_VORSCHLAEGE)) { expect(liste.length).toBeGreaterThan(3); expect(new Set(liste).size).toBe(liste.length) }
   })
 })

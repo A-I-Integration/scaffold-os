@@ -25,6 +25,13 @@ export const KATEGORIE_OBJEKT: Record<Kategorie, { einzahl: string; feld: string
   material: { einzahl: 'Materialposten', feld: 'Bezeichnung', platzhalter: 'z. B. Rahmen 2,00 m Charge 1' },
 }
 
+/** Auswahl beim Anlegen (frei erweiterbar: „Anderer Eintrag“). Mitarbeiter kommen aus der Mitarbeiterliste. */
+export const OBJEKT_VORSCHLAEGE: Record<Exclude<Kategorie, 'fahrzeug' | 'mitarbeiter'>, string[]> = {
+  geraet: ['Leiter', 'Hubwagen / Stapler', 'Ladekran', 'Hebebühne / Arbeitsbühne', 'Bau- / Materialaufzug', 'Elektrowerkzeug', 'Verlängerungskabel / Kabeltrommel', 'Anschlagmittel (Ketten, Gurte, Seile)', 'Absturzsicherung (PSAgA)', 'Kompressor / Aggregat'],
+  betrieb: ['Betriebshaftpflicht-Versicherung', 'Fahrzeugversicherung', 'Feuerlöscher', 'Elektroprüfung Betriebsstätte', 'Zertifikat / Nachweis', 'Mietvertrag', 'Leasingvertrag', 'Vertrag Betriebsarzt / Sicherheitsfachkraft'],
+  material: ['Rahmen', 'Stiele / Vertikalrahmen', 'Beläge', 'Konsolen', 'Schutzdach', 'Geländer / Seitenschutz', 'Diagonalen', 'Fußplatten / Spindeln', 'Netze / Planen'],
+}
+
 export const FRIST_ARTEN = ['hu', 'sp', 'uvv', 'tacho', 'kran', 'wartung', 'sonstiges', 'dguv_v3', 'sachkundig', 'unterweisung', 'erste_hilfe', 'fuehrerschein', 'untersuchung', 'versicherung', 'zertifikat', 'vertrag', 'feuerloescher', 'material_pruefung'] as const
 export type FristArt = typeof FRIST_ARTEN[number]
 export const FRIST_ART_LABEL: Record<FristArt, string> = {
