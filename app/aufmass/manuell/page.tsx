@@ -9,7 +9,7 @@ import { berechneCadKosten } from '@/lib/calculations/cad-kosten'
 import { GERUEST_SYSTEME } from '@/lib/calculations/geruest-systeme'
 import { vereinigeGeschosse } from '@/lib/cad/geschoss-umriss'
 import { sucheMjArtikel, MJ_LISTEN } from '@/lib/mj-katalog'
-import { baukastenProjekt } from '@/lib/cad/manuell-projekt'
+import { angebotAenderbar, baukastenProjekt, leseBaukastenStand } from '@/lib/cad/manuell-projekt'
 import { BAUTEIL_KATALOG } from '@/lib/cad/bauteil-katalog'
 import { BAUKASTEN_START, LEISTUNGEN_START, baukastenZuGebaeude, rechteckAlsWandzug, zusatzAlsMaterial, zusatzSchluessel, type BaukastenEingaben, type BaukastenLeistungen, type BaukastenWand, type BaukastenZusatz } from '@/lib/cad/manuell-baukasten'
 
@@ -49,7 +49,11 @@ function Haken({ an, onChange, children }: { an: boolean; onChange: (b: boolean)
 
 function Seite() {
   const router = useRouter()
-  const kundeId = useSearchParams().get('kunde') ?? ''
+  const params = useSearchParams()
+  const projektId = params.get('id') ?? ''
+  const [kundeId, setKundeId] = useState(params.get('kunde') ?? '')
+  const [angebotStatus, setAngebotStatus] = useState<string>('erstellt')
+  const [ladeHinweis, setLadeHinweis] = useState('')
   const [kunde, setKunde] = useState<{ id: string; name: string; street?: string; zip?: string; city?: string } | null>(null)
   const [projektName, setProjektName] = useState('')
   const [adresse, setAdresse] = useState('')
@@ -64,6 +68,21 @@ function Seite() {
   const [speichert, setSpeichert] = useState(false)
   const [meldung, setMeldung] = useState('')
 
+  // Gespeicherte Baustelle wieder öffnen (?id=): Eingaben der Maske zurückholen
+  useEffect(() => {
+    if (!projektId) return
+    fetch(`/api/projects?id=${projektId}`).then((r) => r.json()).then((j) => {
+      const pr = j?.project
+      if (!j?.success || !pr) { setLadeHinweis('Die Baustelle konnte nicht geladen werden.'); return }
+      if (pr.customer_id) setKundeId(pr.customer_id)
+      setProjektName(pr.name ?? ''); setAdresse(pr.adresse ?? '')
+      setAngebotStatus(String(pr.data?.angebotsStatus ?? 'erstellt'))
+      const stand = leseBaukastenStand(pr.data)
+      if (!stand) { setLadeHinweis('Diese Baustelle wurde nicht im Baukasten angelegt. Maße und Angebot bitte im Angebot (Schritt 6) ändern.'); return }
+      setE({ ...stand.eingaben, leistungen: stand.eingaben.leistungen ?? LEISTUNGEN_START }); setSystemId(stand.systemId)
+    }).catch(() => setLadeHinweis('Die Baustelle konnte nicht geladen werden.'))
+  }, [projektId])
+
   useEffect(() => {
     if (!kundeId) return
     fetch('/api/kunden').then((r) => r.json()).then((j) => {
@@ -75,6 +94,7 @@ function Seite() {
   const l: BaukastenLeistungen = e.leistungen ?? LEISTUNGEN_START
   const set = (patch: Partial<BaukastenEingaben>) => setE((a) => ({ ...a, ...patch }))
   const setL = (patch: Partial<BaukastenLeistungen>) => setE((a) => ({ ...a, leistungen: { ...(a.leistungen ?? LEISTUNGEN_START), ...patch } }))
+  const gesperrt = !!projektId && !angebotAenderbar(angebotStatus)
   const system = GERUEST_SYSTEME.find((s) => s.id === systemId) ?? GERUEST_SYSTEME[0]
   const ergebnis = useMemo(() => baukastenZuGebaeude(e), [e])
   const model = useMemo(() => {
@@ -103,13 +123,14 @@ function Seite() {
       const logistik = calculateLogistics(model, material, 2.0)
       const gewicht = material.reduce((s, m) => s + m.weightKg * m.quantity, 0)
       const kosten = berechneCadKosten(logistik.aufbauStunden || 0, gewicht, einstellungen)
-      const res = await fetch('/api/projects', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(baukastenProjekt({ kunde, projektName, adresse, building: ergebnis.building, systemId, model, material, aufbauStunden: logistik.aufbauStunden || 0, kosten })),
-      })
+      const daten = baukastenProjekt({ kunde, projektName, adresse, building: ergebnis.building, systemId, model, material, aufbauStunden: logistik.aufbauStunden || 0, kosten, eingaben: e })
+      const res = projektId
+        ? await fetch('/api/projects', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: projektId, name: daten.name, adresse: daten.adresse, data: daten.data }) })
+        : await fetch('/api/projects', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(daten) })
       const j = await res.json()
-      if (!res.ok || !j.id) throw new Error(j.error || 'Anlegen fehlgeschlagen')
-      router.push(`/aufmass/schritt6?id=${j.id}`)
+      const neueId = projektId || j.id
+      if (!res.ok || !neueId || j.success === false) throw new Error(j.error || 'Speichern fehlgeschlagen')
+      router.push(`/aufmass/schritt6?id=${neueId}`)
     } catch (err) {
       setMeldung(err instanceof Error ? err.message : 'Speichern fehlgeschlagen')
     } finally { setSpeichert(false) }
@@ -124,6 +145,8 @@ function Seite() {
         <button onClick={() => router.push(kundeId ? `/kunden/${kundeId}` : '/kunden')} className="text-sm text-[#86868b] hover:text-black">← Zurück</button>
         <h1 className="text-base font-semibold">Aufmaß anlegen{kunde ? ` – ${kunde.name}` : ''}</h1>
       </header>
+      {gesperrt && <p className="m-4 rounded-lg bg-amber-50 p-3 text-sm text-amber-900">Das Angebot ist bereits beim Kunden (Stand: {angebotStatus}). Änderungen am Aufmaß würden es stillschweigend verändern – bitte im Angebot (Schritt 6) eine neue Version anlegen.</p>}
+      {ladeHinweis && <p className="m-4 rounded-lg bg-blue-50 p-3 text-sm text-blue-900">{ladeHinweis}</p>}
       {!kundeId && <p className="m-4 rounded-lg bg-amber-50 p-3 text-sm text-amber-900">Kein Kunde gewählt. Bitte den Kunden öffnen und dort „Aufmaß anlegen“ wählen.</p>}
 
       {/* Baukasten-Leiste */}
@@ -306,7 +329,7 @@ function Seite() {
             {ohnePreis > 0 && <span className="text-amber-800">{ohnePreis} gewählte Position{ohnePreis === 1 ? '' : 'en'} ohne Preis</span>}
           </>
         ) : <span className="text-[#86868b]">Noch kein Gerüst – Umriss oder Maße eintragen.</span>}
-        <button type="button" disabled={!model || speichert || !kunde} onClick={speichern} className="ml-auto rounded-lg bg-[#e8590c] px-5 py-2 text-xs font-semibold text-white disabled:opacity-50">{speichert ? 'Legt an…' : 'Angebot erstellen'}</button>
+        <button type="button" disabled={!model || speichert || !kunde || gesperrt} onClick={speichern} className="ml-auto rounded-lg bg-[#e8590c] px-5 py-2 text-xs font-semibold text-white disabled:opacity-50">{speichert ? 'Speichert…' : projektId ? 'Speichern & Angebot öffnen' : 'Angebot erstellen'}</button>
         {meldung && <p className="w-full text-xs text-red-700">{meldung}</p>}
       </div>
 
