@@ -1380,7 +1380,7 @@ export default function CADPage() {
         </div>
       </div>
       <div className='flex-1 flex flex-col md:flex-row md:overflow-hidden'>
-        <div className='w-full md:w-80 md:shrink-0 md:overflow-y-auto'>
+        <div className='w-full md:w-64 2xl:w-80 md:shrink-0 md:overflow-y-auto'>
           {aufmassHinweise.length > 0 && (
             <div className='mb-3 rounded-xl border border-[#0071e3]/30 bg-[#0071e3]/5 p-3 text-xs text-[#1d1d1f]'>
               <div className='flex justify-between gap-2'><span className='font-semibold'>Aus dem Aufmaß übernommen</span><button type='button' className='text-[#86868b] underline' onClick={() => setAufmassHinweise([])}>schließen</button></div>
@@ -1582,7 +1582,7 @@ export default function CADPage() {
             ))}
           </div>
         </div>
-        <div className='w-full md:w-72 lg:w-80 xl:w-96 md:shrink-0 min-w-0'>
+        <div className='w-full md:w-64 lg:w-72 2xl:w-96 md:shrink-0 min-w-0'>
           {rolle === 'admin' && model && <M2Abrechnung flaecheM2={modelWithManual?.totalAreaM2 ?? model.totalAreaM2} onChange={setM2Wahl} />}
           <KatalogWahlListe artikelWahl={artikelWahl} liste={katalogListeFuerSystem(systemId)} onZuruecksetzen={() => setArtikelWahl({})} />
           <BillOfMaterials
