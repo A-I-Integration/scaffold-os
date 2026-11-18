@@ -2855,7 +2855,40 @@ export interface Dimension2D {
   offsetY?: number
 }
 
+/** Grundriss eines Umriss-Gebäudes: echte Gebäudekontur, Gerüstfelder gedreht entlang jeder Kante, Kantenlängen als Maß. */
+function generateGrundrissUmriss(model: CADModel): Projection2D | null {
+  const { building, fields } = model
+  if (!building.umriss || building.umriss.length < 3) return null
+  const poly = zentriereUmriss(normalisiereUmriss(building.umriss))
+  const elements: SVGElement2D[] = []
+  const dimensions: Dimension2D[] = []
+  const pfad = (pts: Array<[number, number]>) => `M ${pts.map(([x, z]) => `${x.toFixed(3)},${z.toFixed(3)}`).join(' L ')} Z`
+  elements.push({ id: 'building', type: 'path', x: 0, y: 0, d: pfad(poly.map((q) => [q.x, q.z])), fill: '#e2e8f0', stroke: '#475569', strokeWidth: 2 })
+  const rahmenB = model.system?.rahmenBreitenM[0] || 0.73
+  const alle: Array<[number, number]> = poly.map((q) => [q.x, q.z])
+  fields.filter((f) => f.levelIndex === 0 && f.kante !== undefined && f.yaw !== undefined).forEach((f) => {
+    const ux = Math.cos(f.yaw as number), uz = -Math.sin(f.yaw as number)
+    const nx = -uz, nz = ux
+    const hl = f.lengthM / 2, hb = (f.widthM || rahmenB) / 2
+    const ecken: Array<[number, number]> = [[-hl, -hb], [hl, -hb], [hl, hb], [-hl, hb]].map(([a, b]) => [f.positionX + ux * a + nx * b, f.positionZ + uz * a + nz * b])
+    alle.push(...ecken)
+    elements.push({ id: `field-${f.id}`, type: 'path', x: 0, y: 0, d: pfad(ecken), fill: 'none', stroke: f.durchgang ? '#ea580c' : '#3b82f6', strokeWidth: 1.5 })
+  })
+  // Kantenlängen außen am Gerüst
+  umrissKanten(poly).forEach((k) => {
+    const mx = (k.von.x + k.bis.x) / 2 + k.n[0] * 1.7, mz = (k.von.z + k.bis.z) / 2 + k.n[1] * 1.7
+    const h = building.umrissKantenHoeheM?.[k.index]
+    elements.push({ id: `kantenmass-${k.index}`, type: 'text', x: mx, y: mz, text: `${k.laengeM.toFixed(2).replace('.', ',')} m${h ? ` · H ${h.toFixed(2).replace('.', ',')}` : ''}`, fill: '#b45309' })
+  })
+  const xs = alle.map((a) => a[0]), zs = alle.map((a) => a[1])
+  const margin = 6
+  const minX = Math.min(...xs) - margin, minY = Math.min(...zs) - margin
+  return { type: 'grundriss', viewBox: { minX, minY, width: Math.max(...xs) + margin - minX, height: Math.max(...zs) + margin - minY }, elements, dimensions }
+}
+
 export function generateGrundriss(model: CADModel): Projection2D {
+  const umrissPlan = generateGrundrissUmriss(model)
+  if (umrissPlan) return umrissPlan
   const { building, fields } = model
   const margin = 2
   const width = building.lengthM + margin * 2

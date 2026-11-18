@@ -942,10 +942,17 @@ export default function KundenDetailPage() {
           <div className="space-y-3">
             <div className="flex items-center justify-between gap-3">
               <p className="text-sm text-[#86868b]">{projects.length === 0 ? 'Noch keine Baustelle für diesen Kunden.' : `${projects.length} Baustelle${projects.length === 1 ? '' : 'n'} – zum Öffnen anklicken.`}</p>
+              <div className="flex items-center gap-2">
               <button
                 onClick={() => { starteNeuesAufmass(); router.push(`/aufmass/schritt1?kunde=${kunde.id}`) }}
                 className={btnPrimary}
               ><Plus className="inline h-3.5 w-3.5 -mt-0.5 mr-1" />Neue Baustelle</button>
+              <button
+                onClick={() => router.push(`/aufmass/manuell?kunde=${kunde.id}`)}
+                className={btnSecondary}
+                title="Maße und Bauteile von Hand eingeben – der 2D-Plan entsteht live"
+              >Aufmaß manuell</button>
+              </div>
             </div>
             {projects.length > 0 && (
               <table className="w-full border-collapse text-[13px]">
