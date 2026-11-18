@@ -171,6 +171,7 @@ export default function CADPage() {
   const [aussehenHinweis, setAussehenHinweis] = useState('')
   const planUploadRef = useRef<((datei: File) => Promise<void>) | null>(null)
   const [huelleBestaetigt, setHuelleBestaetigt] = useState(false)
+  const [importWartet, setImportWartet] = useState(false)
   // Ein neuer Umriss (Upload, Zeichner, Laden) will wieder geprüft werden
   useEffect(() => { setHuelleBestaetigt(false) }, [building.umriss])
   const zeichnerOeffnenRef = useRef<(() => void) | null>(null)
@@ -815,6 +816,7 @@ export default function CADPage() {
     const results = checkRules({
       building, system: model.system, fieldCount: model.fieldCount,
       levelCount: model.levelCount, totalHeightM: model.totalHeightM, totalLengthM: model.totalLengthM,
+      fieldLengthsM: [...new Set(model.fields.map((f) => Math.round(f.lengthM * 100) / 100))],
     })
     return groupRulesBySeverity(results)
   }, [model, building])
@@ -1387,7 +1389,7 @@ export default function CADPage() {
               <ul className='mt-1 list-disc pl-4 space-y-0.5'>{aufmassHinweise.map((h, i) => <li key={i}>{h}</li>)}</ul>
             </div>
           )}
-          <BuildingForm registriereZeichner={registriereZeichner} building={building} systemId={systemId} onChange={(b) => { setAutoGenerate(true); setBuilding(b); }} onSystemChange={aendereSystem} onGenerate={() => { setAutoGenerate(true); generate(); }} onLadeProjektdatei={ladeProjektdatei} onAussehen={(a, h, v) => { setAussehen(a); setAussehenEin(true); setAussehenEinheit('m'); setAussehenOben('y'); setAussehenAnker(null); setAussehenVersatz(v ?? { x: 0, z: 0, grad: 0 }); setAussehenHinweis(h ?? '') }} onModellUebernehmen={(b) => { setAutoGenerate(true); setBuilding(b); setModel(null) }} registrierePlanUpload={registrierePlanUpload} warnings={allWarnings}
+          <BuildingForm registriereZeichner={registriereZeichner} onImportWartet={setImportWartet} building={building} systemId={systemId} onChange={(b) => { setAutoGenerate(true); setBuilding(b); }} onSystemChange={aendereSystem} onGenerate={() => { setAutoGenerate(true); generate(); }} onLadeProjektdatei={ladeProjektdatei} onAussehen={(a, h, v) => { setAussehen(a); setAussehenEin(true); setAussehenEinheit('m'); setAussehenOben('y'); setAussehenAnker(null); setAussehenVersatz(v ?? { x: 0, z: 0, grad: 0 }); setAussehenHinweis(h ?? '') }} onModellUebernehmen={(b) => { setAutoGenerate(true); setBuilding(b); setModel(null) }} registrierePlanUpload={registrierePlanUpload} warnings={allWarnings}
             zusatz={<StatikDatenPanel daten={statikDaten} onChange={setStatikDaten} model={modelWithManual} huelle={gebaeudeHuelle} />} />
         </div>
         <div className='flex-1 flex flex-col min-w-0'>
@@ -1539,7 +1541,7 @@ export default function CADPage() {
             {viewMode === '3d' && !model && (
               <div className='h-full flex flex-col'>
                 <div className='flex-1 min-h-0'>
-                  <CadStart
+                  <CadStart wartet={importWartet}
                     onDateien={(d) => ladeAussehen(d)}
                     onZeichnen={() => zeichnerOeffnenRef.current?.()}
                     onRechteck={(l, b, h) => {

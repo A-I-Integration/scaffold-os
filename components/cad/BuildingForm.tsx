@@ -51,12 +51,14 @@ interface Props {
   registrierePlanUpload?: (fn: ((datei: File) => Promise<void>) | null) => void
   /** Der Startbildschirm der Seite öffnet damit den Umriss-Zeichner. */
   registriereZeichner?: (fn: (() => void) | null) => void
+  /** Meldet der Seite, dass ein gelesener Import auf Bestätigung wartet (Einheit, Höhen, Werte prüfen). */
+  onImportWartet?: (wartet: boolean) => void
   warnings: { type: string; message: string }[]
   /** Zusätzlicher Bereich am Ende der scrollenden Liste, also über dem Button „Gerüst neu berechnen“ (z. B. Projektdaten für die Statik) */
   zusatz?: ReactNode
 }
 
-export default function BuildingForm({ building, systemId, onChange, onSystemChange, onGenerate, onLadeProjektdatei, onAussehen, onModellUebernehmen, registrierePlanUpload, registriereZeichner, warnings, zusatz }: Props) {
+export default function BuildingForm({ building, systemId, onChange, onSystemChange, onGenerate, onLadeProjektdatei, onAussehen, onModellUebernehmen, registrierePlanUpload, registriereZeichner, onImportWartet, warnings, zusatz }: Props) {
   const [activeTab, setActiveTab] = useState<'gebaeude' | 'geruest' | 'system'>('gebaeude')
   const [analyseLaeuft, setAnalyseLaeuft] = useState(false)
   const [profilFehler, setProfilFehler] = useState<Partial<Record<'front' | 'back' | 'left' | 'right', boolean>>>({})
@@ -653,6 +655,12 @@ export default function BuildingForm({ building, systemId, onChange, onSystemCha
     registrierePlanUpload(async (datei) => { await planUploadRef.current?.(datei) })
     return () => registrierePlanUpload(null)
   }, [registrierePlanUpload])
+  // Wartet ein gelesener Import auf Bestätigung: der Seite melden und den Block ins Bild holen (er steht sonst unten in der schmalen Spalte)
+  const importWartet = !!dxfImport || !!planWartet
+  useEffect(() => {
+    onImportWartet?.(importWartet)
+    if (importWartet) setTimeout(() => document.getElementById('cad-import-wartet')?.scrollIntoView({ block: 'start', behavior: 'smooth' }), 50)
+  }, [importWartet, onImportWartet])
   useEffect(() => {
     if (!registriereZeichner) return
     registriereZeichner(() => setZeichnerOffen(true))
@@ -877,7 +885,7 @@ export default function BuildingForm({ building, systemId, onChange, onSystemCha
               const eingabe = 'w-20 rounded-lg border border-black/10 bg-white px-2 py-1 text-[11px]'
               const setzeHoehe = (i: number, v: string) => setDxfImport({ ...dxfImport, hoehen: dxfImport.hoehen.map((h, k) => (k === i ? v : h)) })
               return (
-                <div className='rounded-lg border border-black/10 bg-white p-2 space-y-2 text-[11px] text-[#424245]'>
+                <div id='cad-import-wartet' className='rounded-lg border-2 border-[#0071e3]/40 bg-white p-2 space-y-2 text-[11px] text-[#424245]'>
                   <p className='font-semibold'>{dxfImport.gezeichnet ? 'Gezeichneter Umriss' : dxfImport.ifc ? <>IFC-Modell „{dxfImport.name}“ gelesen</> : <>DXF-Zeichnung „{dxfImport.name}“ gelesen</>}</p>
                   <p className='rounded-lg bg-[#f0f7ff] p-2'>Umriss {dxfImport.ifc ? 'aus den Geschossen des Modells' : 'aus den Linien'} erkannt: <b>{DXF_FORM_NAME[e.form]}</b> mit <b>{e.ecken} Ecken</b>{e.innenecken > 0 ? ` (${e.innenecken} Innenecke${e.innenecken > 1 ? 'n' : ''})` : ''}, <b>{e.laengeM} × {e.breiteM} m</b>, {e.flaecheM2} m². {e.figuren > 1 ? ` Das Hauptgebäude ist das größte von ${e.figuren} Figuren; alle Figuren werden als Teile angeboten.` : ''} Das ist ein Vorschlag – bitte mit dem Plan vergleichen.</p>
                   {dxfImport.ifc && (
@@ -910,7 +918,7 @@ export default function BuildingForm({ building, systemId, onChange, onSystemCha
               )
             })()}
             {planWartet && (
-              <div className='rounded-xl border border-[#0071e3]/30 bg-white p-3 space-y-2 text-[11px]' data-testid='gebaeude-bestaetigung'>
+              <div id='cad-import-wartet' className='rounded-xl border-2 border-[#0071e3]/40 bg-white p-3 space-y-2 text-[11px]' data-testid='gebaeude-bestaetigung'>
                 <div className='font-semibold text-[#1d1d1f]'>Gebäude aus dem Plan prüfen</div>
                 <table className='w-full'>
                   <tbody>

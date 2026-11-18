@@ -76,7 +76,7 @@ export default function BrueckePage() {
   const totalPrice = materials.reduce((s, m) => s + m.totalPrice, 0)
   const totalWeight = materials.reduce((s, m) => s + m.weightKg * m.quantity, 0)
   const logistik = model ? calculateLogistics(model, materials) : null
-  const rules = model ? checkRules({ building: model.building, system: model.system, fieldCount: model.fieldCount, levelCount: model.levelCount, totalHeightM: model.totalHeightM, totalLengthM: model.totalLengthM }) : []
+  const rules = model ? checkRules({ building: model.building, system: model.system, fieldCount: model.fieldCount, levelCount: model.levelCount, totalHeightM: model.totalHeightM, totalLengthM: model.totalLengthM, fieldLengthsM: [...new Set(model.fields.map((f) => Math.round(f.lengthM * 100) / 100))] }) : []
   const gruppiert = groupRulesBySeverity(rules.filter((r) => r.triggered))
 
   const handleCreateCustomer = useCallback(async (name: string) => {

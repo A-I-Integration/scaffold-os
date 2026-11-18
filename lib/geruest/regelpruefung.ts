@@ -128,7 +128,7 @@ export function pruefeGeruest(model: CADModel, statik: StatikDaten = {}, richtwe
   // 1. Regelausführung der Zulassung (aus cad-rules.ts, dort mit Quelle)
   const regelErgebnisse = checkRules({
     building: model.building, system: model.system, fieldCount: model.fieldCount,
-    levelCount: model.levelCount, totalHeightM: model.totalHeightM, totalLengthM: model.totalLengthM,
+    levelCount: model.levelCount, totalHeightM: model.totalHeightM, totalLengthM: model.totalLengthM, fieldLengthsM: [...new Set(model.fields.map((f) => Math.round(f.lengthM * 100) / 100))],
   })
   const regelAusf = regelErgebnisse.filter((r) => r.rule.id.startsWith('REGELAUSFUEHRUNG_GRENZE_'))
   const belag = regelErgebnisse.filter((r) => r.rule.id.startsWith('BELAG_LASTKLASSE_'))
