@@ -4,8 +4,9 @@ import { useMemo, useState } from 'react';
 import { Plus, Trash2, CalendarRange } from 'lucide-react';
 import { parseBetrag } from '@/lib/nachtrag';
 import { abschnitteAusSchritt2, berechneAufmass } from '@/lib/aufmassblatt-pdf';
+import { erzeugeBauphasenAngebotPdf } from '@/lib/bauphasen-angebot-pdf';
 import { lagerCheck, personalVorschlag, type LagerCheckZeile, type PersonalVorschlagTag } from '@/lib/bauphasen-planung';
-import { BAUPHASEN_STANDARD, HIMMELSRICHTUNG_NAME, STARTPUNKT_NAME, berechneBauphasen, normalisiereBauphasen, zeileM2, type Bauphase, type BauphasenEinstellung, type Himmelsrichtung, type LeistungsZeile, type Startpunkt } from '@/lib/bauphasen';
+import { BAUPHASEN_STANDARD, HIMMELSRICHTUNG_NAME, STARTPUNKT_NAME, baueBauphasenAngebot, bauphasenAngebotNr, markiereBauphaseAngebotGesendet, berechneBauphasen, normalisiereBauphasen, zeileM2, type Bauphase, type BauphasenEinstellung, type Himmelsrichtung, type LeistungsZeile, type Startpunkt } from '@/lib/bauphasen';
 
 // ============================================================
 // SCAFFOLD OS – Bauphasen (Kundenseite, beim Auftrag)
@@ -16,7 +17,7 @@ import { BAUPHASEN_STANDARD, HIMMELSRICHTUNG_NAME, STARTPUNKT_NAME, berechneBaup
 
 interface MatZeile { articleNumber?: string | null; name?: string; quantity?: number; unit?: string }
 interface BauData { bauphasen?: { einstellung?: Partial<BauphasenEinstellung>; phasen?: unknown }; step2?: Parameters<typeof abschnitteAusSchritt2>[0]; kiResult?: { materialList?: MatZeile[] } }
-interface Props { project: { id: string; name: string | null; adresse: string | null; data: BauData | null }; /** im eigenen Reiter sofort aufgeklappt */ startOffen?: boolean }
+interface Props { kunde?: { id: string; name: string; email?: string | null }; project: { id: string; name: string | null; adresse: string | null; data: BauData | null }; /** im eigenen Reiter sofort aufgeklappt */ startOffen?: boolean }
 
 const heute = () => new Date().toLocaleDateString('sv-SE');
 const fmt = (n: number) => n.toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -27,7 +28,7 @@ const neueId = () => `bp-${Date.now().toString(36)}${Math.random().toString(36).
 
 type Einst = Omit<BauphasenEinstellung, 'material'>;
 
-export default function BauphasenBlock({ project, startOffen = false }: Props) {
+export default function BauphasenBlock({ kunde, project, startOffen = false }: Props) {
   const gespeichert = project.data?.bauphasen;
   const gesamtAufmass = useMemo(() => berechneAufmass(abschnitteAusSchritt2(project.data?.step2)).gesamtM2, [project.data]);
   const material = useMemo(() => {
@@ -97,6 +98,36 @@ export default function BauphasenBlock({ project, startOffen = false }: Props) {
     } catch (e) { setMeldung({ ok: false, text: e instanceof Error ? e.message : 'Fehler' }); } finally { setLaeuft(false); }
   }
 
+
+  async function angebot(p: Bauphase, senden: boolean) {
+    const r = erg.phasen.find((x) => x.id === p.id);
+    if (!r) return;
+    const a = baueBauphasenAngebot(p, r);
+    if (!a.zeile) { setMeldung({ ok: false, text: a.fehler || 'Kein Betrag für diese Phase.' }); return; }
+    const art = p.art === 'aufbau' ? 'Aufbau' : p.gesamt ? 'Gesamtabbau (Rest)' : 'Teilabbau';
+    const nummer = bauphasenAngebotNr(phasen, p.id);
+    setLaeuft(true); setMeldung(null);
+    try {
+      let firma = null;
+      try { const c = await fetch('/api/company').then((x) => x.json()); if (c?.success) firma = c.company; } catch { /* Firma optional */ }
+      const doc = erzeugeBauphasenAngebotPdf({ nummer, datum: heute(), art, leistungsDatum: p.datum, zeile: a.zeile, kunde: kunde?.name || 'Kunde', adresse: project.adresse || undefined, projektName: project.name || undefined, firma });
+      const name = `Angebot_${nummer}_${art.split(' ')[0]}_${p.datum}.pdf`;
+      if (!senden) { doc.save(name); setMeldung({ ok: true, text: `Angebot ${nummer} als PDF heruntergeladen.` }); return; }
+      if (!kunde?.id) throw new Error('Kunde unbekannt – Versand nur aus der Kundenseite möglich.');
+      const an = (kunde.email || '').trim();
+      if (!an) throw new Error('Beim Kunden ist keine E-Mail-Adresse hinterlegt.');
+      if (!window.confirm(`Angebot ${nummer} (${art} am ${datumDe(p.datum)}) jetzt an ${an} senden?`)) return;
+      const pdfBase64 = doc.output('datauristring').split(',')[1];
+      const res = await fetch(`/api/kunden/${kunde.id}/mail`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ to: an, subject: `Angebot ${nummer}: ${art} am ${datumDe(p.datum)}`, text: `Guten Tag,\n\nanbei erhalten Sie unser Angebot ${nummer} für ${art} am ${datumDe(p.datum)}.\n\nBei Fragen melden Sie sich gerne.\n\nMit freundlichen Grüßen`, pdfBase64, pdfName: name }) });
+      const j = await res.json().catch(() => ({}));
+      if (!res.ok || !j.success) throw new Error(j.error || 'Senden fehlgeschlagen');
+      const neu = markiereBauphaseAngebotGesendet(phasen, p.id, an, heute());
+      setPhasen(neu);
+      await fetch('/api/projects', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: project.id, data: { bauphasen: { einstellung: einst, phasen: neu } } }) });
+      setMeldung({ ok: true, text: `Angebot ${nummer} an ${an} gesendet.` });
+    } catch (e) { setMeldung({ ok: false, text: e instanceof Error ? e.message : 'Fehler' }); } finally { setLaeuft(false); }
+  }
+
   const feld = (label: string, wert: number, k: keyof Einst, einheit?: string) => (
     <div><label className='block text-[11px] text-[#86868b] mb-1'>{label}{einheit ? ` (${einheit})` : ''}</label>
       <input className={inputCls} inputMode='decimal' value={wert ? String(wert).replace('.', ',') : ''} onChange={(e) => setE(k, e.target.value)} /></div>
@@ -110,14 +141,19 @@ export default function BauphasenBlock({ project, startOffen = false }: Props) {
       {offen && (
         <div className='mt-2 space-y-3'>
           <div className='grid grid-cols-2 sm:grid-cols-4 gap-2'>
-            {feld('Gesamtfläche', einst.gesamtFlaecheM2, 'gesamtFlaecheM2', 'm²')}
             {feld('Preis Montage + Demontage', einst.preisJeM2, 'preisJeM2', '€/m²')}
-            {feld('Anteil Aufbau', einst.aufbauAnteilProzent, 'aufbauAnteilProzent', '%')}
-            {feld('Personen je Phase', einst.standardPersonen, 'standardPersonen')}
-            {feld('Stunden Aufbau gesamt', einst.aufbauStundenGesamt, 'aufbauStundenGesamt', 'h')}
-            {feld('Stunden Abbau gesamt', einst.abbauStundenGesamt, 'abbauStundenGesamt', 'h')}
-            {feld('Stunden je Person/Tag', einst.stundenJeTag, 'stundenJeTag', 'h')}
           </div>
+          <details className='text-xs'>
+            <summary className='cursor-pointer text-[#86868b]'>Weitere Einstellungen (Anteile, Stunden, Personen)</summary>
+            <div className='grid grid-cols-2 sm:grid-cols-4 gap-2 mt-2'>
+              {feld('Gesamtfläche', einst.gesamtFlaecheM2, 'gesamtFlaecheM2', 'm²')}
+              {feld('Anteil Aufbau', einst.aufbauAnteilProzent, 'aufbauAnteilProzent', '%')}
+              {feld('Personen je Phase', einst.standardPersonen, 'standardPersonen')}
+              {feld('Stunden Aufbau gesamt', einst.aufbauStundenGesamt, 'aufbauStundenGesamt', 'h')}
+              {feld('Stunden Abbau gesamt', einst.abbauStundenGesamt, 'abbauStundenGesamt', 'h')}
+              {feld('Stunden je Person/Tag', einst.stundenJeTag, 'stundenJeTag', 'h')}
+            </div>
+          </details>
           <p className='text-[10px] text-[#86868b]'>Abbau-Anteil = 100 % − Aufbau-Anteil ({100 - einst.aufbauAnteilProzent} %). Material: {material.length ? `${material.length} Positionen aus der Stückliste` : 'keine Stückliste im Auftrag – Lagerplanung entfällt'}.</p>
 
           <div className='space-y-1.5'>
@@ -125,7 +161,7 @@ export default function BauphasenBlock({ project, startOffen = false }: Props) {
               const r = erg.phasen.find((x) => x.id === p.id);
               return (
                 <div key={p.id} className='rounded-lg border border-black/10 p-2 space-y-1.5'>
-                  <div className='grid grid-cols-2 sm:grid-cols-6 gap-1.5 items-end'>
+                  <div className='grid grid-cols-2 sm:grid-cols-4 gap-1.5 items-end'>
                     <div><label className='block text-[11px] text-[#86868b] mb-1'>Art</label>
                       <select aria-label='Art der Leistung' className={inputCls} value={artWert(p)} onChange={(e) => setArt(p.id, e.target.value)}><option value='aufbau'>Aufbau</option><option value='teilabbau'>Teilabbau</option><option value='gesamtabbau'>Gesamtabbau (Rest)</option></select></div>
                     <div><label className='block text-[11px] text-[#86868b] mb-1'>Datum</label><input type='date' className={inputCls} value={p.datum} onChange={(e) => setP(p.id, { datum: e.target.value })} /></div>
@@ -133,14 +169,17 @@ export default function BauphasenBlock({ project, startOffen = false }: Props) {
                       {p.gesamt || (p.zeilen && p.zeilen.length > 0)
                         ? <p className='px-2 py-1.5 text-xs font-semibold text-[#1d1d1f]' aria-label='Menge aus Aufmaß'>{fmt(r?.flaecheM2 ?? 0)}{p.gesamt ? ' (Rest)' : ''}</p>
                         : <input className={inputCls} inputMode='decimal' value={p.flaecheM2 ? String(p.flaecheM2).replace('.', ',') : ''} onChange={(e) => setP(p.id, { flaecheM2: zahl(e.target.value) ?? 0 })} />}</div>
-                    <div><label className='block text-[11px] text-[#86868b] mb-1'>Tage (leer = berechnet)</label><input className={inputCls} inputMode='numeric' value={p.tageManuell ?? ''} onChange={(e) => setP(p.id, { tageManuell: zahl(e.target.value) })} /></div>
-                    <div><label className='block text-[11px] text-[#86868b] mb-1'>Personen</label><input className={inputCls} inputMode='numeric' value={p.personen ?? ''} placeholder={String(einst.standardPersonen)} onChange={(e) => setP(p.id, { personen: zahl(e.target.value) })} /></div>
                     <div className='flex justify-end'><button type='button' aria-label='Phase entfernen' disabled={!!p.rechnungId} title={p.rechnungId ? 'Schon abgerechnet' : undefined} onClick={() => setPhasen((l) => l.filter((x) => x.id !== p.id))} className='px-2 py-1.5 text-[#86868b] hover:text-red-600 disabled:opacity-30'><Trash2 className='h-3.5 w-3.5' /></button></div>
                   </div>
-                  <div className='grid grid-cols-2 gap-1.5'>
-                    <div><label className='block text-[11px] text-[#86868b] mb-1'>Anteil am Preis in % (leer = {p.art === 'aufbau' ? einst.aufbauAnteilProzent : 100 - einst.aufbauAnteilProzent})</label><input className={inputCls} inputMode='decimal' value={p.anteilProzentManuell ?? ''} onChange={(e) => setP(p.id, { anteilProzentManuell: zahl(e.target.value) })} /></div>
-                    <div><label className='block text-[11px] text-[#86868b] mb-1'>Fester Betrag € (leer = berechnet)</label><input className={inputCls} inputMode='decimal' value={p.betragManuell ?? ''} onChange={(e) => setP(p.id, { betragManuell: zahl(e.target.value) })} /></div>
-                  </div>
+                  <details className='text-[11px]'>
+                    <summary className='cursor-pointer text-[#86868b]'>Erweitert (Dauer, Personen, Anteil, fester Betrag)</summary>
+                    <div className='grid grid-cols-2 sm:grid-cols-4 gap-1.5 mt-1.5'>
+                      <div><label className='block text-[11px] text-[#86868b] mb-1'>Tage (leer = berechnet)</label><input className={inputCls} inputMode='numeric' value={p.tageManuell ?? ''} onChange={(e) => setP(p.id, { tageManuell: zahl(e.target.value) })} /></div>
+                      <div><label className='block text-[11px] text-[#86868b] mb-1'>Personen</label><input className={inputCls} inputMode='numeric' value={p.personen ?? ''} placeholder={String(einst.standardPersonen)} onChange={(e) => setP(p.id, { personen: zahl(e.target.value) })} /></div>
+                      <div><label className='block text-[11px] text-[#86868b] mb-1'>Anteil in %</label><input className={inputCls} inputMode='decimal' value={p.anteilProzentManuell ?? ''} placeholder={String(p.art === 'aufbau' ? einst.aufbauAnteilProzent : 100 - einst.aufbauAnteilProzent)} onChange={(e) => setP(p.id, { anteilProzentManuell: zahl(e.target.value) })} /></div>
+                      <div><label className='block text-[11px] text-[#86868b] mb-1'>Fester Betrag €</label><input className={inputCls} inputMode='decimal' value={p.betragManuell ?? ''} onChange={(e) => setP(p.id, { betragManuell: zahl(e.target.value) })} /></div>
+                    </div>
+                  </details>
                   {!p.gesamt && (
                     <div className='rounded-lg bg-[#f5f5f7] p-2 space-y-1.5' aria-label='Aufmaßblatt'>
                       <p className='text-[11px] font-semibold text-[#424245]'>Aufmaßblatt: wo wurde {p.art === 'aufbau' ? 'aufgebaut' : 'abgebaut'}?</p>
@@ -158,11 +197,24 @@ export default function BauphasenBlock({ project, startOffen = false }: Props) {
                     </div>
                   )}
                   {p.gesamt && <p className='text-[11px] text-[#424245]'>Gesamtabbau: die Menge ist der Rest – alles, was bis zu diesem Tag aufgebaut und noch nicht zurückgebaut wurde.</p>}
+                  {r && r.betrag > 0 && (
+                    <div className='flex flex-wrap items-center gap-2 text-[11px]'>
+                      <span className='font-semibold text-[#424245]'>Angebot {bauphasenAngebotNr(phasen, p.id)}:</span>
+                      <button type='button' disabled={laeuft} onClick={() => angebot(p, false)} className='px-2 py-1 rounded border border-black/10 font-semibold hover:bg-black/5 disabled:opacity-50'>PDF</button>
+                      <button type='button' disabled={laeuft || !kunde} onClick={() => angebot(p, true)} className='px-2 py-1 rounded bg-[#1d1d1f] text-white font-semibold disabled:opacity-50'>Per E-Mail senden</button>
+                      {p.angebotGesendetAm && <span className='rounded bg-sky-100 px-1 text-sky-800'>gesendet {datumDe(p.angebotGesendetAm)} an {p.angebotAn}</span>}
+                    </div>
+                  )}
                   {r && <p className='text-[11px] text-[#424245]'>{p.rechnungId && <span className='mr-1 rounded bg-green-100 px-1 text-green-800'>abgerechnet {p.rechnungNr}</span>}<b>{fmt(r.betrag)} €</b> netto · {r.stunden ? `${fmt(r.stunden)} h, ` : ''}{r.tage ? `${r.tage} Arbeitstage ab ${datumDe(r.datum)} mit ${r.personen} Pers.` : 'keine Dauer (Stunden oder Tage eingeben)'}</p>}
                 </div>
               );
             })}
-            <button type='button' onClick={() => setPhasen((l) => [...l, { id: neueId(), art: l.some((x) => x.art === 'aufbau') ? 'abbau' : 'aufbau', datum: heute(), flaecheM2: 0 }])} className='text-xs font-semibold text-[#e8590c] hover:underline flex items-center gap-1'><Plus className='h-3 w-3' /> Phase hinzufügen</button>
+            <div className='flex flex-wrap gap-2'>
+              {([['aufbau', 'Aufbau'], ['teilabbau', 'Teilabbau'], ['gesamtabbau', 'Gesamtabbau']] as const).map(([k, t]) => (
+                <button key={k} type='button' onClick={() => setPhasen((l) => [...l, { id: neueId(), art: k === 'aufbau' ? 'aufbau' : 'abbau', datum: heute(), flaecheM2: 0, ...(k === 'gesamtabbau' ? { gesamt: true } : { zeilen: [{ seite: 'N' as Himmelsrichtung, start: 'unten-links' as Startpunkt, laengeM: 0, hoeheM: 0 }] }) }])} className='px-3 py-1.5 rounded-lg border border-[#e8590c] text-[#e8590c] text-xs font-semibold hover:bg-[#e8590c]/5 flex items-center gap-1'><Plus className='h-3 w-3' /> {t}</button>
+              ))}
+            </div>
+            
           </div>
 
           {phasen.length > 0 && (
@@ -171,12 +223,12 @@ export default function BauphasenBlock({ project, startOffen = false }: Props) {
               {erg.bestand.length > 0 && <p><b>Gerüst steht:</b> {erg.bestand.map((b) => `${datumDe(b.datum)}: ${fmt(b.stehendM2)} m²`).join(' → ')}</p>}
               {erg.personal.length > 0 && <p><b>Personal:</b> {erg.personal.length} Einsatztage, höchstens {Math.max(...erg.personal.map((t) => t.koepfe))} Pers. gleichzeitig ({datumDe(erg.personal[0].datum)} bis {datumDe(erg.personal[erg.personal.length - 1].datum)})</p>}
               {erg.lager.length > 0 && <p><b>Lager (draußen nach letzter Phase):</b> {(() => { const l = erg.lager.filter((x) => x.datum === erg.lager[erg.lager.length - 1].datum); return `${l.length} Artikel, ${l.filter((x) => x.draussen > 0).length} noch auf der Baustelle`; })()}</p>}
-              {erg.warnungen.map((w, i) => <p key={i} className='text-red-600'>⚠ {w}</p>)}
+              {erg.warnungen.filter((w) => !(w.startsWith('Gesamtfläche fehlt') && !einst.aufbauStundenGesamt && !einst.abbauStundenGesamt && material.length === 0)).map((w, i) => <p key={i} className='text-red-600'>⚠ {w}</p>)}
               <details><summary className='cursor-pointer text-[#86868b]'>So wird gerechnet</summary><ul className='list-disc pl-4 mt-1'>{erg.annahmen.map((a, i) => <li key={i}>{a}</li>)}</ul></details>
             </div>
           )}
           {phasen.length > 0 && (
-            <div className='rounded-lg border border-black/10 p-2 space-y-2'>
+            <details className='rounded-lg border border-black/10 p-2'><summary className='cursor-pointer text-xs text-[#86868b]'>Lager und Personal planen (optional)</summary><div className='space-y-2 mt-2'>
               <div className='flex flex-wrap items-center gap-2'>
                 <button type='button' disabled={planLaeuft} onClick={planungPruefen} className='px-3 py-1.5 rounded-lg border border-black/10 text-xs font-semibold text-[#1d1d1f] hover:bg-black/5 disabled:opacity-50'>{planLaeuft ? 'Prüft …' : 'Lager und Personal prüfen'}</button>
                 <span className='text-[10px] text-[#86868b]'>Liest den aktuellen Lagerbestand und die Wochenplanung. Es wird nichts gebucht.</span>
@@ -200,7 +252,7 @@ export default function BauphasenBlock({ project, startOffen = false }: Props) {
                   <button type='button' disabled={planLaeuft} onClick={personalEintragen} className='px-3 py-1.5 rounded-lg bg-[#e8590c] text-white text-xs font-semibold disabled:opacity-50'>Vorschlag in die Wochenplanung eintragen</button>
                 </div>
               )}
-            </div>
+            </div></details>
           )}
           <div className='flex items-center gap-2'>
             <button type='button' disabled={laeuft} onClick={speichern} className='px-3 py-1.5 rounded-lg bg-[#1d1d1f] text-white text-xs font-semibold disabled:opacity-50'>{laeuft ? 'Speichert …' : 'Bauphasen speichern'}</button>

@@ -1277,7 +1277,7 @@ export default function KundenDetailPage() {
 
         {tabAktiv === 'zeiten' && !baustelle && baustellenWahl('zeiten')}
         {tabAktiv === 'bauphasen' && !baustelle && baustellenWahl('bauphasen')}
-        {tabAktiv === 'bauphasen' && baustelle && <BauphasenBlock key={baustelle.id} project={baustelle} startOffen />}
+        {tabAktiv === 'bauphasen' && baustelle && <BauphasenBlock key={baustelle.id} kunde={{ id: kunde.id, name: kunde.name, email: kunde.email }} project={baustelle} startOffen />}
 
         {tabAktiv === 'zeiten' && baustelle && <ProjektZeiten projectId={baustelle.id} geplantStunden={baustelle.data?.kiResult?.estimatedLaborHours} />}
 
