@@ -9,7 +9,8 @@ import { berechneCadKosten } from '@/lib/calculations/cad-kosten'
 import { GERUEST_SYSTEME } from '@/lib/calculations/geruest-systeme'
 import { vereinigeGeschosse } from '@/lib/cad/geschoss-umriss'
 import { sucheMjArtikel, MJ_LISTEN } from '@/lib/mj-katalog'
-import { BAUKASTEN_START, LEISTUNGEN_START, baukastenZuGebaeude, rechteckAlsWandzug, zusatzAlsMaterial, type BaukastenEingaben, type BaukastenLeistungen, type BaukastenWand } from '@/lib/cad/manuell-baukasten'
+import { BAUTEIL_KATALOG } from '@/lib/cad/bauteil-katalog'
+import { BAUKASTEN_START, LEISTUNGEN_START, baukastenZuGebaeude, rechteckAlsWandzug, zusatzAlsMaterial, zusatzSchluessel, type BaukastenEingaben, type BaukastenLeistungen, type BaukastenWand, type BaukastenZusatz } from '@/lib/cad/manuell-baukasten'
 
 // Manueller Aufmaß-Baukasten: oben die Werkzeuge, in der Mitte der Plan (live), rechts aufklappbare Gruppen für
 // Leistungen und Material. „Angebot erstellen“ speichert die Baustelle beim Kunden und öffnet das Angebot (Schritt 6).
@@ -57,6 +58,8 @@ function Seite() {
   const [zeichnerOffen, setZeichnerOffen] = useState(false)
   const [zeichnerHinweis, setZeichnerHinweis] = useState('')
   const [suche, setSuche] = useState('')
+  const [katSuche, setKatSuche] = useState('')
+  const [standardHersteller, setStandardHersteller] = useState('')
   const [speichert, setSpeichert] = useState(false)
   const [meldung, setMeldung] = useState('')
 
@@ -79,6 +82,13 @@ function Seite() {
   }, [ergebnis, systemId])
   const material = useMemo(() => [...(model ? generateBillOfMaterials(model) : []), ...zusatzAlsMaterial(l.zusatz)], [model, l.zusatz])
   const summe = useMemo(() => material.reduce((s, m) => s + m.totalPrice, 0), [material])
+  const herstellerListe = useMemo(() => [...new Set([...GERUEST_SYSTEME.map((x) => x.hersteller), 'MJ', 'Sonstige'])].sort((a, b) => a.localeCompare(b, 'de')), [])
+  const katFilter = katSuche.trim().toLowerCase()
+  const katalog = useMemo(() => BAUTEIL_KATALOG.map((g) => ({ ...g, teile: katFilter ? g.teile.filter((t) => `${t.name} ${t.hinweis} ${g.titel}`.toLowerCase().includes(katFilter)) : g.teile })).filter((g) => g.teile.length > 0), [katFilter])
+  const ohnePreis = l.zusatz.filter((z) => z.menge > 0 && !(z.preis > 0)).length
+  const setZusatz = (f: (z: BaukastenZusatz[]) => BaukastenZusatz[]) => setE((a) => { const lz = a.leistungen ?? LEISTUNGEN_START; return { ...a, leistungen: { ...lz, zusatz: f(lz.zusatz) } } })
+  const zusatzHinzu = (neu: BaukastenZusatz) => setZusatz((liste) => (liste.some((z) => zusatzSchluessel(z) === zusatzSchluessel(neu)) ? liste.map((z) => (zusatzSchluessel(z) === zusatzSchluessel(neu) ? { ...z, menge: z.menge + 1 } : z)) : [...liste, neu]))
+  const zusatzAendern = (i: number, patch: Partial<BaukastenZusatz>) => setZusatz((liste) => liste.map((z, j) => (j === i ? { ...z, ...patch } : z)))
   const treffer = useMemo(() => (suche.trim().length >= 2 ? sucheMjArtikel(suche).slice(0, 12) : []), [suche])
 
   const setWand = (i: number, patch: Partial<BaukastenWand>) => set({ waende: e.waende.map((w, j) => (j === i ? { ...w, ...patch } : w)) })
@@ -200,9 +210,78 @@ function Seite() {
         </div>
       </div>
 
-      <div className="grid gap-4 p-4 lg:grid-cols-[1fr_340px]">
+      <div className="grid gap-4 p-4 lg:grid-cols-[330px_1fr_300px]">
+        {/* Bauteilkatalog */}
+        <aside className="space-y-2" aria-label="Bauteilkatalog"><h2 className="text-[11px] font-semibold uppercase text-[#86868b]">Bauteilkatalog – alles anklicken</h2>
+          <label className="block text-xs">Hersteller für neue Teile
+            <input aria-label="Hersteller für neue Teile" list="hersteller-liste" value={standardHersteller} onChange={(ev) => setStandardHersteller(ev.target.value)} placeholder="beliebig wählen oder eintragen" className={`${eingabe} mt-0.5`} />
+          </label>
+          <datalist id="hersteller-liste">{herstellerListe.map((h) => <option key={h} value={h} />)}</datalist>
+          <input aria-label="Bauteil suchen" placeholder="Bauteil suchen, z. B. Konsole, Anker, Treppe" value={katSuche} onChange={(ev) => setKatSuche(ev.target.value)} className={eingabe} />
+
+          {l.zusatz.length > 0 && (
+            <section className="rounded-xl border border-[#e8590c]/40 bg-orange-50/40 p-2 text-xs" aria-label="Gewählte Teile">
+              <h3 className="mb-1 font-semibold">Gewählt ({l.zusatz.length})</h3>
+              <ul className="space-y-2">
+                {l.zusatz.map((z, i) => (
+                  <li key={zusatzSchluessel(z)} className="space-y-1 rounded-lg bg-white p-1.5">
+                    <div className="flex items-center gap-1.5">
+                      <input aria-label={`Menge ${z.name}`} inputMode="numeric" value={z.menge} onChange={(ev) => zusatzAendern(i, { menge: Math.max(0, Math.round(zahl(ev.target.value))) })} className="w-14 rounded border border-black/15 px-1 py-0.5 text-right" />
+                      <span className="flex-1 truncate font-medium" title={z.name}>{z.nr ? `${z.nr} ` : ''}{z.name}</span>
+                      <button type="button" aria-label={`${z.name} entfernen`} onClick={() => setZusatz((liste) => liste.filter((_, j) => j !== i))} className="text-red-700">✕</button>
+                    </div>
+                    <div className="grid grid-cols-[1fr_88px] gap-1.5">
+                      <input aria-label={`Hersteller ${z.name}`} list="hersteller-liste" value={z.hersteller ?? ''} onChange={(ev) => zusatzAendern(i, { hersteller: ev.target.value })} placeholder="Hersteller" className="rounded border border-black/15 px-1.5 py-0.5" />
+                      <input aria-label={`Preis ${z.name}`} inputMode="decimal" value={z.preis ? String(z.preis).replace('.', ',') : ''} onChange={(ev) => zusatzAendern(i, { preis: zahl(ev.target.value) })} placeholder="€ netto" className="rounded border border-black/15 px-1.5 py-0.5 text-right" />
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
+
+          <details className="rounded-xl border border-black/10 bg-white">
+            <summary className="cursor-pointer list-none px-3 py-2 text-sm font-semibold">Artikel aus MJ-Preisliste <span className="text-[11px] font-normal text-[#86868b]">mit Listenpreis</span></summary>
+            <div className="space-y-2 border-t border-black/5 p-3 text-xs">
+              <input aria-label="Artikel suchen" placeholder="z. B. Konsole, Geländer, Spindel" value={suche} onChange={(ev) => setSuche(ev.target.value)} className={eingabe} />
+              {treffer.length > 0 && (
+                <ul className="max-h-48 divide-y divide-black/5 overflow-auto rounded-lg border border-black/10">
+                  {treffer.map((a) => (
+                    <li key={`${a.liste}-${a.nr}`}>
+                      <button type="button" onClick={() => zusatzHinzu({ nr: a.nr, liste: a.liste, hersteller: 'MJ', gruppe: 'Zusatzmaterial', name: [a.gruppe, a.untertitel].filter(Boolean).join(' – '), menge: 1, preis: a.preis })} className="flex w-full items-start justify-between gap-2 px-2 py-1.5 text-left hover:bg-orange-50">
+                        <span><b>{a.nr}</b> {[a.gruppe, a.untertitel].filter(Boolean).join(' – ')}</span><span className="whitespace-nowrap">{eur(a.preis)}</span>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          </details>
+
+          {katalog.map((g) => {
+            const gewaehlt = l.zusatz.filter((z) => z.gruppe === g.titel && z.menge > 0).length
+            return (
+              <details key={g.id} open={!!katFilter} className="rounded-xl border border-black/10 bg-white">
+                <summary className="flex cursor-pointer list-none items-center justify-between gap-2 px-3 py-2 text-sm font-semibold">
+                  <span>{g.titel}</span>
+                  <span className="whitespace-nowrap text-[11px] font-normal text-[#86868b]">{gewaehlt > 0 ? `${gewaehlt} gewählt · ` : ''}{g.teile.length}</span>
+                </summary>
+                <ul className="divide-y divide-black/5 border-t border-black/5 text-xs">
+                  {g.teile.map((t) => (
+                    <li key={t.name}>
+                      <button type="button" onClick={() => zusatzHinzu({ nr: '', liste: 'katalog', hersteller: standardHersteller.trim(), gruppe: g.titel, name: t.name, menge: 1, preis: 0 })} className="flex w-full items-start justify-between gap-2 px-3 py-1.5 text-left hover:bg-orange-50">
+                        <span><b>{t.name}</b><span className="ml-1 text-[#86868b]">{t.hinweis}</span></span><span className="text-[#e8590c]">+</span>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </details>
+            )
+          })}
+          {katalog.length === 0 && <p className="text-xs text-[#86868b]">Kein Bauteil gefunden.</p>}</aside>
+
         {/* Plan */}
-        <div className="space-y-3">
+        <div className="min-w-0 space-y-3">
           {zeichnerHinweis && <p className="rounded-lg bg-blue-50 p-2 text-xs text-blue-900">{zeichnerHinweis}</p>}
           {ergebnis.fehler.length > 0 && (e.laengeM || e.breiteM || e.gezeichnet || e.waende.some((w) => w.laengeM)) && (
             <ul className="rounded-lg bg-amber-50 p-3 text-xs text-amber-900">{ergebnis.fehler.slice(0, 6).map((f, i) => <li key={i}>• {f}</li>)}</ul>
@@ -233,32 +312,6 @@ function Seite() {
             <Haken an={l.kederplane} onChange={(b) => setL({ kederplane: b })}>Kederplane (Bekleidung)</Haken>
             {l.kederplane && <div className="grid grid-cols-2 gap-2"><Zahl label="Von Höhe" wert={l.kederVonM} onChange={(n) => setL({ kederVonM: n })} /><Zahl label="Bis Höhe" wert={l.kederBisM} onChange={(n) => setL({ kederBisM: n })} /></div>}
           </Gruppe>
-          <Gruppe titel="Zusatzmaterial" kurz="aus dem Hersteller-Katalog" offen>
-            <p className="text-[11px] text-[#86868b]">Katalog: MJ-Preislisten ({Object.keys(MJ_LISTEN).length} Listen, Listenpreise netto). Artikel suchen und anklicken.</p>
-            <input aria-label="Artikel suchen" placeholder="z. B. Konsole, Geländer, Spindel" value={suche} onChange={(ev) => setSuche(ev.target.value)} className={eingabe} />
-            {treffer.length > 0 && (
-              <ul className="max-h-48 divide-y divide-black/5 overflow-auto rounded-lg border border-black/10">
-                {treffer.map((a) => (
-                  <li key={`${a.liste}-${a.nr}`}>
-                    <button type="button" onClick={() => setL({ zusatz: l.zusatz.some((z) => z.nr === a.nr && z.liste === a.liste) ? l.zusatz.map((z) => (z.nr === a.nr && z.liste === a.liste ? { ...z, menge: z.menge + 1 } : z)) : [...l.zusatz, { nr: a.nr, liste: a.liste, name: [a.gruppe, a.untertitel].filter(Boolean).join(' – '), menge: 1, preis: a.preis }] })} className="flex w-full items-start justify-between gap-2 px-2 py-1.5 text-left hover:bg-orange-50">
-                      <span><b>{a.nr}</b> {[a.gruppe, a.untertitel].filter(Boolean).join(' – ')}</span><span className="whitespace-nowrap">{eur(a.preis)}</span>
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            )}
-            {l.zusatz.length > 0 && (
-              <ul className="space-y-1">
-                {l.zusatz.map((z, i) => (
-                  <li key={`${z.liste}-${z.nr}`} className="flex items-center gap-2">
-                    <input aria-label={`Menge ${z.nr}`} inputMode="numeric" value={z.menge} onChange={(ev) => setL({ zusatz: l.zusatz.map((x, j) => (j === i ? { ...x, menge: Math.max(0, Math.round(zahl(ev.target.value))) } : x)) })} className="w-14 rounded border border-black/15 px-1 py-0.5 text-right" />
-                    <span className="flex-1 truncate" title={z.name}>{z.nr} {z.name}</span>
-                    <button type="button" aria-label={`${z.nr} entfernen`} onClick={() => setL({ zusatz: l.zusatz.filter((_, j) => j !== i) })} className="text-red-700">✕</button>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </Gruppe>
         </aside>
       </div>
 
@@ -269,6 +322,7 @@ function Seite() {
             <span>Gerüstfläche <b>{model.totalAreaM2.toFixed(1).replace('.', ',')} m²</b></span>
             <span>{material.length} Materialpositionen</span>
             <span>Material netto <b>{eur(summe)}</b></span>
+            {ohnePreis > 0 && <span className="text-amber-800">{ohnePreis} gewählte Position{ohnePreis === 1 ? '' : 'en'} ohne Preis</span>}
           </>
         ) : <span className="text-[#86868b]">Noch kein Gerüst – Umriss oder Maße eintragen.</span>}
         <button type="button" disabled={!model || speichert || !kunde} onClick={speichern} className="ml-auto rounded-lg bg-[#e8590c] px-5 py-2 text-xs font-semibold text-white disabled:opacity-50">{speichert ? 'Legt an…' : 'Angebot erstellen'}</button>
