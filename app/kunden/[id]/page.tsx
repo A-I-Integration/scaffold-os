@@ -183,6 +183,8 @@ export default function KundenDetailPage() {
   const [schlussProjectId, setSchlussProjectId] = useState<string | null>(null)
   const [neueRechnungAnhang, setNeueRechnungAnhang] = useState<{ id: string; invoice_number: string; positions?: any[] } | null>(null)
   const [schlussStart, setSchlussStart] = useState<{ art?: 'abschlag' | 'schluss'; prozent?: number }>({})
+  const [schlussPhaseId, setSchlussPhaseId] = useState<string | undefined>(undefined)
+  const [bauphasenStand, setBauphasenStand] = useState(0)
   const [zusatzProjectId, setZusatzProjectId] = useState<string | null>(null)
   const [zusatzPos, setZusatzPos] = useState({ ...LEER_POSITION })
   const [zusatzNotiz, setZusatzNotiz] = useState('')
@@ -1277,7 +1279,7 @@ export default function KundenDetailPage() {
 
         {tabAktiv === 'zeiten' && !baustelle && baustellenWahl('zeiten')}
         {tabAktiv === 'bauphasen' && !baustelle && baustellenWahl('bauphasen')}
-        {tabAktiv === 'bauphasen' && baustelle && <BauphasenBlock key={baustelle.id} kunde={{ id: kunde.id, name: kunde.name, email: kunde.email }} project={baustelle} startOffen />}
+        {tabAktiv === 'bauphasen' && baustelle && <BauphasenBlock key={`${baustelle.id}-${bauphasenStand}`} onRechnungStellen={(phaseId) => { setSchlussStart({ art: 'abschlag', prozent: undefined }); setSchlussPhaseId(phaseId); setSchlussProjectId(baustelle.id) }} kunde={{ id: kunde.id, name: kunde.name, email: kunde.email }} project={baustelle} startOffen />}
 
         {tabAktiv === 'zeiten' && baustelle && <ProjektZeiten projectId={baustelle.id} geplantStunden={baustelle.data?.kiResult?.estimatedLaborHours} />}
 
@@ -1302,10 +1304,11 @@ export default function KundenDetailPage() {
             projectId={schlussProjectId}
             startArt={schlussStart.art}
             startProzent={schlussStart.prozent}
+            startPhaseId={schlussPhaseId}
             customerName={kunde.name}
             customerAddress={[kunde.street, [kunde.zip, kunde.city].filter(Boolean).join(' ')].filter(Boolean).join(', ') || undefined}
-            onClose={() => setSchlussProjectId(null)}
-            onCreated={() => ladeDaten()}
+            onClose={() => { setSchlussProjectId(null); setSchlussPhaseId(undefined) }}
+            onCreated={() => { Promise.resolve(ladeDaten()).finally(() => setBauphasenStand((n) => n + 1)) }}
             onAnhaengeHinzufuegen={(inv) => setNeueRechnungAnhang(inv as any)}
           />
         )}
