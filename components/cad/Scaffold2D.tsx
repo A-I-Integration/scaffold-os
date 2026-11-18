@@ -89,8 +89,8 @@ export default function Scaffold2D({ model, zeichnung, projektName, objektadress
   return (
     <div className='w-full h-full flex flex-col bg-[#f8fafc]'>
       {/* Toolbar */}
-      <div className='flex items-center justify-between px-4 py-2 bg-white border-b border-black/5'>
-        <div className='flex gap-1'>
+      <div className='flex flex-wrap items-center justify-between gap-x-3 gap-y-2 px-4 py-2 bg-white border-b border-black/5'>
+        <div className='flex flex-wrap gap-1'>
           {viewButtons.map((btn) => (
             <button
               key={btn.key}
@@ -101,7 +101,7 @@ export default function Scaffold2D({ model, zeichnung, projektName, objektadress
             </button>
           ))}
         </div>
-        <div className='flex items-center gap-3'>
+        <div className='flex flex-wrap items-center gap-x-3 gap-y-1.5'>
           <select value={scale} onChange={(e) => setScale(e.target.value as ScaleType)} className='text-xs border rounded-lg px-2 py-1'>
             <option value='1:25'>1:25</option>
             <option value='1:50'>1:50</option>

@@ -31,6 +31,8 @@ export interface RuleCheckParams {
   levelCount: number
   totalHeightM: number
   totalLengthM: number
+  /** Tatsächlich verwendete Feldlängen (m). Fehlt die Angabe, gilt ersatzweise die durchschnittliche Feldlänge. */
+  fieldLengthsM?: number[]
 }
 
 export interface RuleCheckResult {
@@ -121,6 +123,10 @@ export const CAD_RULES: CADRule[] = [
     message: 'Die gewählte Feldlänge ist für dieses System nicht standardmäßig verfügbar.',
     condition: (p) => {
       if (!p.system) return false
+      // Maßgeblich ist jede tatsächlich verwendete Feldlänge. Der Durchschnitt aus 3,07 m und 2,57 m ist keine Systemlänge, beide Felder sind aber Standard.
+      if (p.fieldLengthsM && p.fieldLengthsM.length > 0) {
+        return p.fieldLengthsM.some((l) => l > 0 && !p.system!.feldlangenM.some((fl) => Math.abs(fl - l) < 0.011))
+      }
       const avgFieldLength = p.totalLengthM / Math.max(1, p.fieldCount)
       return !p.system.feldlangenM.some((fl) => Math.abs(fl - avgFieldLength) < 0.01)
     },

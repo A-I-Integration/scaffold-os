@@ -346,7 +346,7 @@ export default function BillOfMaterials({ materials, ohnePreis = [], ohneGewicht
           {onExportStatikerPaket && onPlanModusChange && (
             <label className='col-span-2 flex items-center justify-between gap-2 text-xs text-[#6e6e73]'>
               Gerüstplan im Paket
-              <select value={planModus} onChange={(e) => onPlanModusChange(e.target.value as 'schematisch' | 'komponenten')} className='rounded-lg bg-black/5 px-2 py-1.5 text-xs text-[#1d1d1f]'>
+              <select value={planModus} onChange={(e) => onPlanModusChange(e.target.value as 'schematisch' | 'komponenten')} className='min-w-0 max-w-[60%] rounded-lg bg-black/5 px-2 py-1.5 text-xs text-[#1d1d1f]'>
                 <option value='schematisch'>Schematisch</option>
                 <option value='komponenten'>Mit Bauteilen (Ständer, Diagonalen, Geländer)</option>
               </select>

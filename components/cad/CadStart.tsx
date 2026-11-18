@@ -12,19 +12,26 @@ interface Props {
   onZeichnen: () => void
   /** Rechteckhaus mit Maßen anlegen (Meter) */
   onRechteck: (laengeM: number, breiteM: number, hoeheM: number) => void
+  /** Eine Datei wurde gelesen und wartet links auf Bestätigung */
+  wartet?: boolean
 }
 
 const zahl = (t: string) => { const n = parseFloat(t.replace(',', '.')); return Number.isFinite(n) && n > 0 ? n : 0 }
 const feld = 'w-full rounded-lg border border-black/15 bg-white px-2 py-1.5 text-sm'
 
-export default function CadStart({ onDateien, onZeichnen, onRechteck }: Props) {
+export default function CadStart({ onDateien, onZeichnen, onRechteck, wartet }: Props) {
   const [l, setL] = useState('')
   const [b, setB] = useState('')
   const [h, setH] = useState('')
   const ok = zahl(l) > 0 && zahl(b) > 0 && zahl(h) > 0
 
   return (
-    <div className='flex h-full items-center justify-center overflow-auto p-4'>
+    <div className='flex h-full flex-col items-center justify-center gap-3 overflow-auto p-4'>
+      {wartet && (
+        <p role='status' className='w-full max-w-3xl rounded-xl border border-[#0071e3]/30 bg-[#f0f7ff] px-4 py-3 text-sm text-[#1d1d1f]'>
+          <b>Datei gelesen.</b> Bitte links die Einheit, die Gebäudeteile und die Höhen prüfen und dann „Übernehmen“ wählen. Das Gerüst entsteht erst danach.
+        </p>
+      )}
       <div className='grid w-full max-w-3xl gap-4 [grid-template-columns:repeat(auto-fit,minmax(240px,1fr))]'>
         <section className='flex flex-col gap-3 rounded-2xl border border-black/10 bg-white p-5' aria-label='Datei hochladen'>
           <h2 className='text-base font-semibold'>1 · Datei hochladen</h2>
