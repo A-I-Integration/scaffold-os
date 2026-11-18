@@ -13,13 +13,31 @@ import { arbeitstage } from '@/lib/einsatz-planung'
 
 export type PhasenArt = 'aufbau' | 'abbau'
 
+/** Himmelsrichtung der Fassade und Startpunkt der Leistung (z. B. „Nord, unten links, 10 m breit, 2 m hoch“). */
+export type Himmelsrichtung = 'N' | 'O' | 'S' | 'W'
+export type Startpunkt = 'unten-links' | 'unten-rechts' | 'oben-links' | 'oben-rechts'
+export const HIMMELSRICHTUNG_NAME: Record<Himmelsrichtung, string> = { N: 'Nord', O: 'Ost', S: 'Süd', W: 'West' }
+export const STARTPUNKT_NAME: Record<Startpunkt, string> = { 'unten-links': 'unten links', 'unten-rechts': 'unten rechts', 'oben-links': 'oben links', 'oben-rechts': 'oben rechts' }
+
+/** Eine Zeile des Aufmaßblatts: wo wurde auf-/abgebaut und wie groß. */
+export interface LeistungsZeile {
+  seite: Himmelsrichtung
+  start: Startpunkt
+  laengeM: number
+  hoeheM: number
+}
+
 export interface Bauphase {
   id: string
   art: PhasenArt
   /** erster Arbeitstag (YYYY-MM-DD) */
   datum: string
-  /** Menge dieser Phase in m² (bei Abbau: zurückgebaute Teilfläche) */
+  /** Menge dieser Phase in m² (bei Abbau: zurückgebaute Teilfläche). Mit Aufmaßblatt-Zeilen oder bei Gesamtabbau wird sie daraus berechnet. */
   flaecheM2: number
+  /** Aufmaßblatt: Seite, Startpunkt, Länge × Höhe; die Menge ist die Summe der Zeilen */
+  zeilen?: LeistungsZeile[]
+  /** Gesamtabbau: die Menge ist der Rest (bis dahin aufgebaut minus schon zurückgebaut) */
+  gesamt?: boolean
   /** Dauer in Arbeitstagen; leer = aus Stunden und Personen berechnet */
   tageManuell?: number
   /** Personen auf dieser Phase; leer = Standard */
@@ -115,7 +133,29 @@ function pruefe(phasen: Bauphase[], e: BauphasenEinstellung): string[] {
   return w
 }
 
-export function berechneBauphasen(phasenEin: Bauphase[], einst: Partial<BauphasenEinstellung> = {}): BauphasenErgebnis {
+/** Fläche einer Aufmaßblatt-Zeile in m² (Länge × Höhe, auf 2 Stellen gerundet). */
+export const zeileM2 = (z: LeistungsZeile): number => r2(pos(z.laengeM) * pos(z.hoeheM))
+export const zeilenM2 = (zeilen: LeistungsZeile[] | undefined): number => r2((zeilen ?? []).reduce((s, z) => s + zeileM2(z), 0))
+
+/**
+ * Löst die Menge jeder Phase auf: Aufmaßblatt-Zeilen → Summe Länge × Höhe; Gesamtabbau → Rest
+ * (alle Aufbauten bis zu diesem Tag minus alle Abbauten davor). Reihenfolge: Datum, am selben Tag Aufbau vor Abbau.
+ */
+export function loesePhasenMengen(phasen: Bauphase[]): Bauphase[] {
+  const sortiert = [...phasen].sort((a, b) => a.datum.localeCompare(b.datum) || (a.art === 'aufbau' ? -1 : 1))
+  const menge = new Map<string, number>()
+  let auf = 0, ab = 0
+  for (const p of sortiert) {
+    let m = p.zeilen && p.zeilen.length ? zeilenM2(p.zeilen) : pos(p.flaecheM2)
+    if (p.art === 'abbau' && p.gesamt) m = r2(Math.max(0, auf - ab))
+    menge.set(p.id, m)
+    if (p.art === 'aufbau') auf += m; else ab += m
+  }
+  return phasen.map((p) => ({ ...p, flaecheM2: menge.get(p.id) ?? 0 }))
+}
+
+export function berechneBauphasen(phasenRoh: Bauphase[], einst: Partial<BauphasenEinstellung> = {}): BauphasenErgebnis {
+  const phasenEin = loesePhasenMengen(phasenRoh)
   const e: BauphasenEinstellung = { ...BAUPHASEN_STANDARD, ...einst }
   const gesamt = pos(e.gesamtFlaecheM2)
   const preis = pos(e.preisJeM2)
@@ -195,7 +235,8 @@ export function normalisiereBauphasen(raw: unknown): Bauphase[] {
     const o = r as Record<string, unknown>
     if ((o.art !== 'aufbau' && o.art !== 'abbau') || typeof o.datum !== 'string' || typeof o.id !== 'string') continue
     const num = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) ? v : undefined)
-    aus.push({ id: o.id, art: o.art, datum: o.datum, flaecheM2: num(o.flaecheM2) ?? 0, tageManuell: num(o.tageManuell), personen: num(o.personen), anteilProzentManuell: num(o.anteilProzentManuell), betragManuell: num(o.betragManuell), notiz: typeof o.notiz === 'string' ? o.notiz : undefined,
+    const zeilen = Array.isArray(o.zeilen) ? (o.zeilen as unknown[]).flatMap((z): LeistungsZeile[] => { const q = z as Record<string, unknown>; return q && ['N', 'O', 'S', 'W'].includes(q.seite as string) && ['unten-links', 'unten-rechts', 'oben-links', 'oben-rechts'].includes(q.start as string) ? [{ seite: q.seite as Himmelsrichtung, start: q.start as Startpunkt, laengeM: num(q.laengeM) ?? 0, hoeheM: num(q.hoeheM) ?? 0 }] : [] }) : []
+    aus.push({ id: o.id, art: o.art, datum: o.datum, flaecheM2: num(o.flaecheM2) ?? 0, ...(zeilen.length ? { zeilen } : {}), ...(o.gesamt === true && o.art === 'abbau' ? { gesamt: true } : {}), tageManuell: num(o.tageManuell), personen: num(o.personen), anteilProzentManuell: num(o.anteilProzentManuell), betragManuell: num(o.betragManuell), notiz: typeof o.notiz === 'string' ? o.notiz : undefined,
       ...(typeof o.rechnungId === 'string' ? { rechnungId: o.rechnungId } : {}), ...(typeof o.rechnungNr === 'string' ? { rechnungNr: o.rechnungNr } : {}), ...(typeof o.abgerechnetAm === 'string' ? { abgerechnetAm: o.abgerechnetAm } : {}) })
   }
   return aus
@@ -208,9 +249,10 @@ const datumDe = (iso: string) => { const d = new Date(iso + 'T12:00:00'); return
 export function baueBauphasenPosition(phase: Bauphase, erg: PhaseErgebnis): { position: { bezeichnung: string; menge: number; einheit: string; einzelpreis: number } | null; fehler: string | null } {
   if (phase.rechnungId) return { position: null, fehler: `Diese Phase ist bereits mit Rechnung ${phase.rechnungNr || ''} abgerechnet.`.replace('  ', ' ') }
   if (!(erg.betrag > 0)) return { position: null, fehler: 'Für diese Phase gibt es keinen Betrag (Preis je m², Menge oder Betrag prüfen).' }
-  const art = phase.art === 'aufbau' ? 'Aufbau' : 'Abbau / Teilrückbau'
+  const art = phase.art === 'aufbau' ? 'Aufbau' : phase.gesamt ? 'Gesamtabbau (Rest)' : 'Teilabbau'
   const anteil = erg.anteilProzent === null ? 'fester Betrag' : `${erg.anteilProzent.toLocaleString('de-DE')} % des Preises`
-  const bez = `${art} ab ${datumDe(phase.datum)}: ${fmtDe(erg.flaecheM2)} m² (${anteil})`
+  const detail = (phase.zeilen ?? []).filter((z) => zeileM2(z) > 0).map((z) => `${HIMMELSRICHTUNG_NAME[z.seite]} ${STARTPUNKT_NAME[z.start]} ${fmtDe(z.laengeM)} m × ${fmtDe(z.hoeheM)} m`).join('; ')
+  const bez = `${art} am ${datumDe(phase.datum)}: ${fmtDe(erg.flaecheM2)} m²${detail ? ` (${detail})` : ''} – ${anteil}`
   const einzel = erg.flaecheM2 > 0 ? Math.round((erg.betrag / erg.flaecheM2) * 100) / 100 : 0
   if (erg.flaecheM2 > 0 && Math.abs(Math.round(erg.flaecheM2 * einzel * 100) / 100 - erg.betrag) < 0.005) return { position: { bezeichnung: bez, menge: erg.flaecheM2, einheit: 'm²', einzelpreis: einzel }, fehler: null }
   return { position: { bezeichnung: bez, menge: 1, einheit: 'Pauschale', einzelpreis: erg.betrag }, fehler: null }
