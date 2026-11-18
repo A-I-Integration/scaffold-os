@@ -3,17 +3,21 @@
 import { Suspense, useEffect, useMemo, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Scaffold2D from '@/components/cad/Scaffold2D'
+import UmrissZeichner from '@/components/cad/UmrissZeichner'
 import { generateCADModel, generateBillOfMaterials, calculateLogistics } from '@/lib/calculations/cad-engine'
 import { berechneCadKosten } from '@/lib/calculations/cad-kosten'
 import { GERUEST_SYSTEME } from '@/lib/calculations/geruest-systeme'
-import { BAUKASTEN_START, baukastenZuGebaeude, rechteckAlsWandzug, type BaukastenEingaben, type BaukastenWand } from '@/lib/cad/manuell-baukasten'
+import { vereinigeGeschosse } from '@/lib/cad/geschoss-umriss'
+import { sucheMjArtikel, MJ_LISTEN } from '@/lib/mj-katalog'
+import { BAUKASTEN_START, LEISTUNGEN_START, baukastenZuGebaeude, rechteckAlsWandzug, zusatzAlsMaterial, type BaukastenEingaben, type BaukastenLeistungen, type BaukastenWand } from '@/lib/cad/manuell-baukasten'
 
-// Manueller Aufmaß-Baukasten: Maße und Bauteile anklicken/eintragen, daneben entsteht live der 2D-Plan.
-// „Als Baustelle speichern“ legt die Baustelle beim Kunden an – Angebot und LV laufen dann wie gewohnt (Schritt 6).
+// Manueller Aufmaß-Baukasten: oben die Werkzeuge, in der Mitte der Plan (live), rechts aufklappbare Gruppen für
+// Leistungen und Material. „Angebot erstellen“ speichert die Baustelle beim Kunden und öffnet das Angebot (Schritt 6).
 
+type Werkzeug = 'baustelle' | 'rechteck' | 'wandzug' | 'dach' | 'oeffnungen' | 'system'
 const eingabe = 'w-full rounded-lg border border-black/15 bg-white px-2 py-1 text-sm'
-const karte = 'rounded-xl border border-black/10 bg-white p-3 space-y-2'
 const zahl = (v: string) => { const n = parseFloat(v.replace(',', '.')); return Number.isFinite(n) ? n : 0 }
+const eur = (n: number) => n.toLocaleString('de-DE', { style: 'currency', currency: 'EUR' })
 const DACH = [['satteldach', 'Satteldach'], ['pultdach', 'Pultdach'], ['walmdach', 'Walmdach'], ['flachdach', 'Flachdach'], ['mansardendach', 'Mansarddach'], ['kein', 'Ohne Dach']] as const
 
 function Zahl({ label, wert, onChange, einheit = 'm' }: { label: string; wert: number; onChange: (n: number) => void; einheit?: string }) {
@@ -26,14 +30,33 @@ function Zahl({ label, wert, onChange, einheit = 'm' }: { label: string; wert: n
   )
 }
 
+function Gruppe({ titel, kurz, children, offen = false }: { titel: string; kurz?: string; children: React.ReactNode; offen?: boolean }) {
+  return (
+    <details open={offen} className="group rounded-xl border border-black/10 bg-white">
+      <summary className="flex cursor-pointer list-none items-center justify-between gap-2 px-3 py-2 text-sm font-semibold">
+        <span>{titel}</span><span className="text-[11px] font-normal text-[#86868b]">{kurz}</span>
+      </summary>
+      <div className="space-y-2 border-t border-black/5 p-3 text-xs">{children}</div>
+    </details>
+  )
+}
+
+function Haken({ an, onChange, children }: { an: boolean; onChange: (b: boolean) => void; children: React.ReactNode }) {
+  return <label className="flex items-start gap-2"><input type="checkbox" checked={an} onChange={(e) => onChange(e.target.checked)} className="mt-0.5" /><span>{children}</span></label>
+}
+
 function Seite() {
   const router = useRouter()
   const kundeId = useSearchParams().get('kunde') ?? ''
   const [kunde, setKunde] = useState<{ id: string; name: string; street?: string; zip?: string; city?: string } | null>(null)
   const [projektName, setProjektName] = useState('')
   const [adresse, setAdresse] = useState('')
-  const [e, setE] = useState<BaukastenEingaben>(BAUKASTEN_START)
+  const [e, setE] = useState<BaukastenEingaben>({ ...BAUKASTEN_START, leistungen: LEISTUNGEN_START })
   const [systemId, setSystemId] = useState('layher-allround')
+  const [werkzeug, setWerkzeug] = useState<Werkzeug>('baustelle')
+  const [zeichnerOffen, setZeichnerOffen] = useState(false)
+  const [zeichnerHinweis, setZeichnerHinweis] = useState('')
+  const [suche, setSuche] = useState('')
   const [speichert, setSpeichert] = useState(false)
   const [meldung, setMeldung] = useState('')
 
@@ -45,16 +68,21 @@ function Seite() {
     }).catch(() => {})
   }, [kundeId])
 
+  const l: BaukastenLeistungen = e.leistungen ?? LEISTUNGEN_START
   const set = (patch: Partial<BaukastenEingaben>) => setE((a) => ({ ...a, ...patch }))
+  const setL = (patch: Partial<BaukastenLeistungen>) => setE((a) => ({ ...a, leistungen: { ...(a.leistungen ?? LEISTUNGEN_START), ...patch } }))
+  const system = GERUEST_SYSTEME.find((s) => s.id === systemId) ?? GERUEST_SYSTEME[0]
   const ergebnis = useMemo(() => baukastenZuGebaeude(e), [e])
   const model = useMemo(() => {
     if (!ergebnis.ok || !ergebnis.building) return null
     try { return generateCADModel(ergebnis.building, systemId) } catch { return null }
   }, [ergebnis, systemId])
-  const material = useMemo(() => (model ? generateBillOfMaterials(model) : []), [model])
+  const material = useMemo(() => [...(model ? generateBillOfMaterials(model) : []), ...zusatzAlsMaterial(l.zusatz)], [model, l.zusatz])
+  const summe = useMemo(() => material.reduce((s, m) => s + m.totalPrice, 0), [material])
+  const treffer = useMemo(() => (suche.trim().length >= 2 ? sucheMjArtikel(suche).slice(0, 12) : []), [suche])
 
   const setWand = (i: number, patch: Partial<BaukastenWand>) => set({ waende: e.waende.map((w, j) => (j === i ? { ...w, ...patch } : w)) })
-  const zuWandzug = () => set({ form: 'wandzug', waende: e.laengeM > 0 && e.breiteM > 0 && e.hoeheM > 0 ? rechteckAlsWandzug(e.laengeM, e.breiteM, e.hoeheM) : e.waende })
+  const zuWandzug = () => { set({ form: 'wandzug', waende: e.laengeM > 0 && e.breiteM > 0 && e.hoeheM > 0 ? rechteckAlsWandzug(e.laengeM, e.breiteM, e.hoeheM) : e.waende }); setWerkzeug('wandzug') }
 
   async function speichern() {
     if (!model || !ergebnis.building || !kunde) return
@@ -64,7 +92,7 @@ function Seite() {
       const einstellungen = await fetch('/api/company').then((r) => r.json()).then((j) => j?.company || null).catch(() => null)
       const logistik = calculateLogistics(model, material, 2.0)
       const gewicht = material.reduce((s, m) => s + m.weightKg * m.quantity, 0)
-      const preis = Math.round(material.reduce((s, m) => s + m.totalPrice, 0) * 100) / 100
+      const preis = Math.round(summe * 100) / 100
       const kosten = berechneCadKosten(logistik.aufbauStunden || 0, gewicht, einstellungen)
       const gesamt = Math.round((preis + kosten.laborCost + kosten.transportCost + kosten.tripCost) * 100) / 100
       const titel = projektName.trim() || `Aufmaß ${kunde.name}`
@@ -91,103 +119,184 @@ function Seite() {
       })
       const j = await res.json()
       if (!res.ok || !j.id) throw new Error(j.error || 'Anlegen fehlgeschlagen')
-      router.push(`/kunden/${kunde.id}?baustelle=${j.id}&tab=angebote`)
+      router.push(`/aufmass/schritt6?id=${j.id}`)
     } catch (err) {
       setMeldung(err instanceof Error ? err.message : 'Speichern fehlgeschlagen')
     } finally { setSpeichert(false) }
   }
 
+  const werkzeuge: Array<[Werkzeug | 'zeichnen', string]> = [['baustelle', 'Baustelle'], ['zeichnen', 'Umriss ziehen'], ['rechteck', 'Rechteck'], ['wandzug', 'Wand für Wand'], ['dach', 'Dach'], ['oeffnungen', 'Öffnungen'], ['system', 'System']]
+  const knopf = (aktiv: boolean) => `rounded-lg border px-3 py-1.5 text-xs ${aktiv ? 'border-[#e8590c] bg-orange-50 font-semibold' : 'border-black/15 bg-white hover:bg-black/5'}`
+
   return (
     <div className="min-h-screen bg-[#fbfbfd]">
       <header className="flex items-center gap-3 border-b border-black/10 bg-white px-4 py-3">
         <button onClick={() => router.push(kundeId ? `/kunden/${kundeId}` : '/kunden')} className="text-sm text-[#86868b] hover:text-black">← Zurück</button>
-        <h1 className="text-base font-semibold">Aufmaß manuell anlegen{kunde ? ` – ${kunde.name}` : ''}</h1>
+        <h1 className="text-base font-semibold">Aufmaß anlegen{kunde ? ` – ${kunde.name}` : ''}</h1>
       </header>
-      {!kundeId && <p className="m-4 rounded-lg bg-amber-50 p-3 text-sm text-amber-900">Kein Kunde gewählt. Bitte den Kunden öffnen und dort „Aufmaß manuell“ wählen.</p>}
-      <div className="grid gap-4 p-4 lg:grid-cols-[380px_1fr]">
-        <div className="space-y-3">
-          <section className={karte}>
-            <h2 className="text-sm font-semibold">1 · Baustelle</h2>
-            <label className="block text-xs">Bezeichnung<input aria-label="Bezeichnung" value={projektName} onChange={(ev) => setProjektName(ev.target.value)} placeholder={kunde ? `Aufmaß ${kunde.name}` : ''} className={`${eingabe} mt-0.5`} /></label>
-            <label className="block text-xs">Adresse der Baustelle<input aria-label="Adresse" value={adresse} onChange={(ev) => setAdresse(ev.target.value)} className={`${eingabe} mt-0.5`} /></label>
-          </section>
+      {!kundeId && <p className="m-4 rounded-lg bg-amber-50 p-3 text-sm text-amber-900">Kein Kunde gewählt. Bitte den Kunden öffnen und dort „Aufmaß anlegen“ wählen.</p>}
 
-          <section className={karte}>
-            <h2 className="text-sm font-semibold">2 · Gebäudeform</h2>
-            <div className="flex gap-2">
-              <button type="button" onClick={() => set({ form: 'rechteck' })} className={`rounded-lg border px-3 py-1 text-xs ${e.form === 'rechteck' ? 'border-[#e8590c] bg-orange-50 font-semibold' : 'border-black/15'}`}>Rechteck</button>
-              <button type="button" onClick={zuWandzug} className={`rounded-lg border px-3 py-1 text-xs ${e.form === 'wandzug' ? 'border-[#e8590c] bg-orange-50 font-semibold' : 'border-black/15'}`}>Wand für Wand (L-, U-Form …)</button>
+      {/* Baukasten-Leiste */}
+      <div className="border-b border-black/10 bg-white px-4 py-2">
+        <div className="flex flex-wrap items-center gap-1.5" role="toolbar" aria-label="Baukasten">
+          <span className="mr-1 text-[11px] font-semibold uppercase text-[#86868b]">Baukasten</span>
+          {werkzeuge.map(([k, t]) => (
+            <button key={k} type="button" onClick={() => (k === 'zeichnen' ? setZeichnerOffen(true) : k === 'wandzug' ? zuWandzug() : (setWerkzeug(k), k === 'rechteck' && set({ form: 'rechteck' })))} className={knopf(k !== 'zeichnen' && werkzeug === k)}>{t}</button>
+          ))}
+        </div>
+        <div className="mt-2 text-xs">
+          {werkzeug === 'baustelle' && (
+            <div className="grid max-w-2xl gap-2 sm:grid-cols-2">
+              <label className="block">Bezeichnung<input aria-label="Bezeichnung" value={projektName} onChange={(ev) => setProjektName(ev.target.value)} placeholder={kunde ? `Aufmaß ${kunde.name}` : ''} className={`${eingabe} mt-0.5`} /></label>
+              <label className="block">Adresse der Baustelle<input aria-label="Adresse" value={adresse} onChange={(ev) => setAdresse(ev.target.value)} className={`${eingabe} mt-0.5`} /></label>
             </div>
-            {e.form === 'rechteck' ? (
-              <div className="grid grid-cols-3 gap-2">
-                <Zahl label="Länge" wert={e.laengeM} onChange={(n) => set({ laengeM: n })} />
-                <Zahl label="Breite" wert={e.breiteM} onChange={(n) => set({ breiteM: n })} />
-                <Zahl label="Höhe" wert={e.hoeheM} onChange={(n) => set({ hoeheM: n })} />
-              </div>
-            ) : (
-              <div className="space-y-2">
-                <p className="text-[11px] text-[#86868b]">Gehen Sie das Gebäude außen im Uhrzeigersinn ab: Länge und Höhe der Wand, dann die Abbiegung am Ende (90° = rechter Winkel, −90° = Einsprung nach links).</p>
+          )}
+          {werkzeug === 'rechteck' && (
+            <div className="grid max-w-md grid-cols-3 gap-2">
+              <Zahl label="Länge" wert={e.laengeM} onChange={(n) => set({ form: 'rechteck', laengeM: n })} />
+              <Zahl label="Breite" wert={e.breiteM} onChange={(n) => set({ form: 'rechteck', breiteM: n })} />
+              <Zahl label="Höhe" wert={e.hoeheM} onChange={(n) => set({ form: e.form === 'gezeichnet' ? 'gezeichnet' : 'rechteck', hoeheM: n })} />
+            </div>
+          )}
+          {werkzeug === 'wandzug' && (
+            <div className="space-y-2">
+              <p className="text-[11px] text-[#86868b]">Außen im Uhrzeigersinn abgehen: Länge und Höhe der Wand, dann die Abbiegung am Ende (90° = rechter Winkel, −90° = Einsprung nach links).</p>
+              <div className="flex flex-wrap gap-2">
                 {e.waende.map((w, i) => (
-                  <div key={i} className="grid grid-cols-[auto_1fr_1fr_1fr_auto] items-end gap-1.5">
-                    <span className="pb-1.5 text-xs font-semibold">{i + 1}</span>
+                  <div key={i} className="grid w-[270px] grid-cols-[auto_1fr_1fr_1fr_auto] items-end gap-1.5 rounded-lg border border-black/10 p-2">
+                    <span className="pb-1.5 font-semibold">{i + 1}</span>
                     <Zahl label="Länge" wert={w.laengeM} onChange={(n) => setWand(i, { laengeM: n })} />
                     <Zahl label="Höhe" wert={w.hoeheM} onChange={(n) => setWand(i, { hoeheM: n })} />
                     <Zahl label="Winkel" einheit="°" wert={w.winkelGrad} onChange={(n) => setWand(i, { winkelGrad: n })} />
-                    <button type="button" aria-label={`Wand ${i + 1} entfernen`} onClick={() => set({ waende: e.waende.filter((_, j) => j !== i) })} className="pb-1.5 text-xs text-red-700">✕</button>
+                    <button type="button" aria-label={`Wand ${i + 1} entfernen`} onClick={() => set({ waende: e.waende.filter((_, j) => j !== i) })} className="pb-1.5 text-red-700">✕</button>
                   </div>
                 ))}
-                <button type="button" onClick={() => set({ waende: [...e.waende, { laengeM: 0, hoeheM: e.waende.at(-1)?.hoeheM ?? 0, winkelGrad: 90 }] })} className="rounded-lg border border-black/15 px-3 py-1 text-xs">+ Wand hinzufügen</button>
+                <button type="button" onClick={() => set({ waende: [...e.waende, { laengeM: 0, hoeheM: e.waende.at(-1)?.hoeheM ?? 0, winkelGrad: 90 }] })} className="self-center rounded-lg border border-black/15 px-3 py-1.5">+ Wand</button>
               </div>
-            )}
-          </section>
-
-          <section className={karte}>
-            <h2 className="text-sm font-semibold">3 · Dach</h2>
-            <div className="flex flex-wrap gap-1.5">
-              {DACH.map(([k, l]) => <button key={k} type="button" onClick={() => set({ dach: k })} className={`rounded-lg border px-2.5 py-1 text-xs ${e.dach === k ? 'border-[#e8590c] bg-orange-50 font-semibold' : 'border-black/15'}`}>{l}</button>)}
             </div>
-            <div className="grid grid-cols-3 gap-2">
-              <Zahl label="Traufhöhe" wert={e.traufhoeheM} onChange={(n) => set({ traufhoeheM: n })} />
-              <Zahl label="Dachhöhe" wert={e.dachhoeheM} onChange={(n) => set({ dachhoeheM: n })} />
-              <Zahl label="Überstand" wert={e.ueberstandM} onChange={(n) => set({ ueberstandM: n })} />
+          )}
+          {werkzeug === 'dach' && (
+            <div className="space-y-2">
+              <div className="flex flex-wrap gap-1.5">{DACH.map(([k, t]) => <button key={k} type="button" onClick={() => set({ dach: k })} className={knopf(e.dach === k)}>{t}</button>)}</div>
+              <div className="grid max-w-md grid-cols-3 gap-2">
+                <Zahl label="Traufhöhe" wert={e.traufhoeheM} onChange={(n) => set({ traufhoeheM: n })} />
+                <Zahl label="Dachhöhe" wert={e.dachhoeheM} onChange={(n) => set({ dachhoeheM: n })} />
+                <Zahl label="Überstand" wert={e.ueberstandM} onChange={(n) => set({ ueberstandM: n })} />
+              </div>
             </div>
-          </section>
-
-          <section className={karte}>
-            <h2 className="text-sm font-semibold">4 · Öffnungen</h2>
-            <div className="grid grid-cols-3 gap-2">
+          )}
+          {werkzeug === 'oeffnungen' && (
+            <div className="grid max-w-md grid-cols-3 gap-2">
               <Zahl label="Fenster" einheit="Stk" wert={e.fenster} onChange={(n) => set({ fenster: n })} />
               <Zahl label="Türen" einheit="Stk" wert={e.tueren} onChange={(n) => set({ tueren: n })} />
               <Zahl label="Balkone" einheit="Stk" wert={e.balkone} onChange={(n) => set({ balkone: n })} />
             </div>
-          </section>
-
-          <section className={karte}>
-            <h2 className="text-sm font-semibold">5 · Gerüstsystem</h2>
-            <select aria-label="Gerüstsystem" value={systemId} onChange={(ev) => setSystemId(ev.target.value)} className={eingabe}>
+          )}
+          {werkzeug === 'system' && (
+            <select aria-label="Gerüstsystem" value={systemId} onChange={(ev) => { setSystemId(ev.target.value); setL({ breiteM: 0 }) }} className={`${eingabe} max-w-sm`}>
               {GERUEST_SYSTEME.map((s) => <option key={s.id} value={s.id}>{s.hersteller} {s.systemName}</option>)}
             </select>
-          </section>
-        </div>
-
-        <div className="space-y-3">
-          {ergebnis.fehler.length > 0 && Object.values(e).some((v) => v) && (
-            <ul className="rounded-lg bg-amber-50 p-3 text-xs text-amber-900">{ergebnis.fehler.slice(0, 6).map((f, i) => <li key={i}>• {f}</li>)}</ul>
-          )}
-          {ergebnis.hinweise.map((h, i) => <p key={i} className="rounded-lg bg-blue-50 p-2 text-xs text-blue-900">{h}</p>)}
-          <div className="min-h-[420px] overflow-hidden rounded-xl border border-black/10 bg-white">
-            {model ? <Scaffold2D model={model} projektName={projektName || (kunde ? `Aufmaß ${kunde.name}` : 'Aufmaß')} objektadresse={adresse} /> : <p className="p-6 text-sm text-[#86868b]">Sobald Länge, Breite und Höhe (oder ein geschlossener Wandzug) eingetragen sind, erscheint hier der 2D-Plan.</p>}
-          </div>
-          {model && (
-            <div className="flex flex-wrap items-center gap-3 rounded-xl border border-black/10 bg-white p-3 text-sm">
-              <span>Gerüstfläche <b>{model.totalAreaM2.toFixed(1).replace('.', ',')} m²</b></span>
-              <span>{material.length} Materialpositionen</span>
-              <button type="button" disabled={speichert || !kunde} onClick={speichern} className="ml-auto rounded-lg bg-[#e8590c] px-4 py-1.5 text-xs font-semibold text-white disabled:opacity-50">{speichert ? 'Speichert…' : 'Als Baustelle speichern → Angebot & LV'}</button>
-              {meldung && <p className="w-full text-xs text-red-700">{meldung}</p>}
-            </div>
           )}
         </div>
       </div>
+
+      <div className="grid gap-4 p-4 lg:grid-cols-[1fr_340px]">
+        {/* Plan */}
+        <div className="space-y-3">
+          {zeichnerHinweis && <p className="rounded-lg bg-blue-50 p-2 text-xs text-blue-900">{zeichnerHinweis}</p>}
+          {ergebnis.fehler.length > 0 && (e.laengeM || e.breiteM || e.gezeichnet || e.waende.some((w) => w.laengeM)) && (
+            <ul className="rounded-lg bg-amber-50 p-3 text-xs text-amber-900">{ergebnis.fehler.slice(0, 6).map((f, i) => <li key={i}>• {f}</li>)}</ul>
+          )}
+          {ergebnis.hinweise.map((h, i) => <p key={i} className="rounded-lg bg-blue-50 p-2 text-xs text-blue-900">{h}</p>)}
+          <div className="min-h-[460px] overflow-hidden rounded-xl border border-black/10 bg-white">
+            {model ? <Scaffold2D model={model} projektName={projektName || (kunde ? `Aufmaß ${kunde.name}` : 'Aufmaß')} objektadresse={adresse} /> : <p className="p-6 text-sm text-[#86868b]">Umriss ziehen oder Maße in der Baukasten-Leiste eintragen – dann erscheint hier der 2D-Plan.</p>}
+          </div>
+        </div>
+
+        {/* Leistungen & Material */}
+        <aside className="space-y-2" aria-label="Leistungen und Material">
+          <h2 className="text-[11px] font-semibold uppercase text-[#86868b]">Leistungen &amp; Material</h2>
+          <Gruppe titel="Gerüst" kurz={`${system.hersteller} ${system.systemName}`} offen>
+            <label className="block">Gerüstbreite
+              <select aria-label="Gerüstbreite" value={l.breiteM} onChange={(ev) => setL({ breiteM: Number(ev.target.value) })} className={`${eingabe} mt-0.5`}>
+                <option value={0}>Standard des Systems</option>
+                {system.rahmenBreitenM.map((b) => <option key={b} value={b}>{String(b).replace('.', ',')} m</option>)}
+              </select>
+            </label>
+          </Gruppe>
+          <Gruppe titel="Zugang" kurz="Treppe, Leiter" offen>
+            <Haken an={l.treppe} onChange={(b) => setL({ treppe: b })}>Außentreppe automatisch einplanen</Haken>
+          </Gruppe>
+          <Gruppe titel="Schutz &amp; Wetter" kurz="Dachfang, Plane">
+            <Haken an={l.dachfang} onChange={(b) => setL({ dachfang: b })}>Dachfangwand an den Traufseiten</Haken>
+            {l.dachfang && <Zahl label="Höhe der Dachfangwand" wert={l.dachfangHoeheM} onChange={(n) => setL({ dachfangHoeheM: n })} />}
+            <Haken an={l.kederplane} onChange={(b) => setL({ kederplane: b })}>Kederplane (Bekleidung)</Haken>
+            {l.kederplane && <div className="grid grid-cols-2 gap-2"><Zahl label="Von Höhe" wert={l.kederVonM} onChange={(n) => setL({ kederVonM: n })} /><Zahl label="Bis Höhe" wert={l.kederBisM} onChange={(n) => setL({ kederBisM: n })} /></div>}
+          </Gruppe>
+          <Gruppe titel="Zusatzmaterial" kurz="aus dem Hersteller-Katalog" offen>
+            <p className="text-[11px] text-[#86868b]">Katalog: MJ-Preislisten ({Object.keys(MJ_LISTEN).length} Listen, Listenpreise netto). Artikel suchen und anklicken.</p>
+            <input aria-label="Artikel suchen" placeholder="z. B. Konsole, Geländer, Spindel" value={suche} onChange={(ev) => setSuche(ev.target.value)} className={eingabe} />
+            {treffer.length > 0 && (
+              <ul className="max-h-48 divide-y divide-black/5 overflow-auto rounded-lg border border-black/10">
+                {treffer.map((a) => (
+                  <li key={`${a.liste}-${a.nr}`}>
+                    <button type="button" onClick={() => setL({ zusatz: l.zusatz.some((z) => z.nr === a.nr && z.liste === a.liste) ? l.zusatz.map((z) => (z.nr === a.nr && z.liste === a.liste ? { ...z, menge: z.menge + 1 } : z)) : [...l.zusatz, { nr: a.nr, liste: a.liste, name: [a.gruppe, a.untertitel].filter(Boolean).join(' – '), menge: 1, preis: a.preis }] })} className="flex w-full items-start justify-between gap-2 px-2 py-1.5 text-left hover:bg-orange-50">
+                      <span><b>{a.nr}</b> {[a.gruppe, a.untertitel].filter(Boolean).join(' – ')}</span><span className="whitespace-nowrap">{eur(a.preis)}</span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+            {l.zusatz.length > 0 && (
+              <ul className="space-y-1">
+                {l.zusatz.map((z, i) => (
+                  <li key={`${z.liste}-${z.nr}`} className="flex items-center gap-2">
+                    <input aria-label={`Menge ${z.nr}`} inputMode="numeric" value={z.menge} onChange={(ev) => setL({ zusatz: l.zusatz.map((x, j) => (j === i ? { ...x, menge: Math.max(0, Math.round(zahl(ev.target.value))) } : x)) })} className="w-14 rounded border border-black/15 px-1 py-0.5 text-right" />
+                    <span className="flex-1 truncate" title={z.name}>{z.nr} {z.name}</span>
+                    <button type="button" aria-label={`${z.nr} entfernen`} onClick={() => setL({ zusatz: l.zusatz.filter((_, j) => j !== i) })} className="text-red-700">✕</button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </Gruppe>
+        </aside>
+      </div>
+
+      {/* Angebot */}
+      <div className="sticky bottom-0 flex flex-wrap items-center gap-4 border-t border-black/10 bg-white px-4 py-3 text-sm">
+        {model ? (
+          <>
+            <span>Gerüstfläche <b>{model.totalAreaM2.toFixed(1).replace('.', ',')} m²</b></span>
+            <span>{material.length} Materialpositionen</span>
+            <span>Material netto <b>{eur(summe)}</b></span>
+          </>
+        ) : <span className="text-[#86868b]">Noch kein Gerüst – Umriss oder Maße eintragen.</span>}
+        <button type="button" disabled={!model || speichert || !kunde} onClick={speichern} className="ml-auto rounded-lg bg-[#e8590c] px-5 py-2 text-xs font-semibold text-white disabled:opacity-50">{speichert ? 'Legt an…' : 'Angebot erstellen'}</button>
+        {meldung && <p className="w-full text-xs text-red-700">{meldung}</p>}
+      </div>
+
+      {zeichnerOffen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="max-h-full w-full max-w-5xl overflow-auto rounded-2xl bg-white p-3">
+            <UmrissZeichner
+              onAbbrechen={() => setZeichnerOffen(false)}
+              onUebernehmen={(figuren) => {
+                setZeichnerOffen(false)
+                if (figuren.length !== 1) { setZeichnerHinweis('Mehrere Figuren bitte mit Oberkante je Figur über „Mit Höhen übernehmen“ übernehmen.'); return }
+                set({ form: 'gezeichnet', gezeichnet: { umriss: figuren[0], kantenHoeheM: [] } })
+                setZeichnerHinweis(e.hoeheM > 0 ? `Umriss mit ${figuren[0].length} Ecken übernommen, Höhe ${String(e.hoeheM).replace('.', ',')} m.` : 'Umriss übernommen – bitte unter „Rechteck“ die Höhe eintragen.')
+              }}
+              onGeschosse={(geschosse) => {
+                const v = vereinigeGeschosse(geschosse)
+                setZeichnerOffen(false)
+                if (!v.ok) { setZeichnerHinweis('❌ ' + v.fehler); return }
+                set({ form: 'gezeichnet', gezeichnet: { umriss: v.umriss, kantenHoeheM: v.kantenHoeheM } })
+                setZeichnerHinweis(`Umriss aus ${geschosse.length} Figur(en) übernommen: ${v.umriss.length} Ecken, höchste Kante ${String(v.hoechsteM).replace('.', ',')} m.`)
+              }}
+            />
+          </div>
+        </div>
+      )}
     </div>
   )
 }

@@ -54,3 +54,23 @@ describe('Grundriss des Baukastens', () => {
     expect(g.elements.filter((x) => x.id.startsWith('kantenmass-')).length).toBe(6)
   })
 })
+
+import { LEISTUNGEN_START, leistungenZuOptionen, zusatzAlsMaterial } from '../manuell-baukasten'
+describe('Leistungen aus der Auswahl', () => {
+  it('setzt nur Gewähltes: Standard bleibt leer, Abwahl der Treppe und Dachfang kommen an', () => {
+    expect(leistungenZuOptionen(LEISTUNGEN_START)).toEqual({})
+    expect(leistungenZuOptionen({ ...LEISTUNGEN_START, treppe: false, dachfang: true, dachfangHoeheM: 1.2, breiteM: 0.73 })).toEqual({ treppe: false, dachfang: { hoeheM: 1.2 }, breiteM: 0.73 })
+  })
+  it('Zusatzmaterial wird Angebotsposition mit Summe, Menge 0 entfällt', () => {
+    const m = zusatzAlsMaterial([{ nr: '123456', name: 'Konsole', liste: 'zubehoer', menge: 3, preis: 10.5 }, { nr: '9', name: 'x', liste: 'zubehoer', menge: 0, preis: 1 }])
+    expect(m).toHaveLength(1)
+    expect(m[0]).toMatchObject({ articleNumber: '123456', quantity: 3, totalPrice: 31.5, category: 'Zusatzmaterial' })
+  })
+  it('Gezeichneter Umriss: Höhe je Kante, Fehler ohne Höhe', () => {
+    const umriss = [{ x: 0, z: 0 }, { x: 10, z: 0 }, { x: 10, z: 8 }, { x: 0, z: 8 }]
+    expect(baukastenZuGebaeude({ ...BAUKASTEN_START, form: 'gezeichnet', gezeichnet: { umriss, kantenHoeheM: [] } }).fehler[0]).toMatch(/Höhe fehlt/)
+    const r = baukastenZuGebaeude({ ...BAUKASTEN_START, form: 'gezeichnet', gezeichnet: { umriss, kantenHoeheM: [7, 7, 4, 7] } })
+    expect(r.ok).toBe(true)
+    expect(r.building?.umrissKantenHoeheM).toEqual([7, 7, 4, 7])
+  })
+})

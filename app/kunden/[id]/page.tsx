@@ -951,7 +951,7 @@ export default function KundenDetailPage() {
                 onClick={() => router.push(`/aufmass/manuell?kunde=${kunde.id}`)}
                 className={btnSecondary}
                 title="Maße und Bauteile von Hand eingeben – der 2D-Plan entsteht live"
-              >Aufmaß manuell</button>
+              >Aufmaß anlegen</button>
               </div>
             </div>
             {projects.length > 0 && (
@@ -1116,6 +1116,7 @@ export default function KundenDetailPage() {
                       {ki?.estimatedLaborHours != null && <SollIstStunden projectId={project.id} geplantStunden={ki.estimatedLaborHours} />}
                     </div>
                     <a href={`/aufmass/schritt6?id=${project.id}`} className={btnSecondary}>Aufmaß öffnen</a>
+                    <a href={`/aufmass/manuell?kunde=${kunde.id}`} className={btnSecondary}>Aufmaß anlegen</a>
                   </div>
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
                     <div><p className="text-[10px] text-[#86868b] uppercase">Gewerk</p><p className="text-[#1d1d1f]">{gewerkeVonStep1(s1).join(', ') || '–'}</p></div>
