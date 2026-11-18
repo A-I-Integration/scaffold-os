@@ -116,6 +116,16 @@ function FahrzeugFormular({ kategorie, onClose, onGespeichert, setMeldung }: { k
   const [f, setF] = useState({ kennzeichen: '', bezeichnung: '', art: 'lkw' as FahrzeugArt, gesamtgewicht_kg: '', erstzulassung: '' })
   const [laeuft, setLaeuft] = useState(false)
   const [auswahl, setAuswahl] = useState('')
+  // Erste Prüfung gleich mit anlegen (optional): Art, zuletzt geprüft, Intervall, nächster Termin
+  const [pArt, setPArt] = useState<FristArt>(KATEGORIE_FRISTEN[kategorie][0])
+  const [pBez, setPBez] = useState('')
+  const [pLetzte, setPLetzte] = useState('')
+  const [pIntervall, setPIntervall] = useState('')
+  const [pFaellig, setPFaellig] = useState('')
+  const [pVonHand, setPVonHand] = useState(false)
+  const richt = richtwertIntervall(pArt, { art: kategorie === 'fahrzeug' ? f.art : 'sonstiges', gesamtgewichtKg: f.gesamtgewicht_kg === '' ? null : Number(f.gesamtgewicht_kg) })
+  useEffect(() => { setPIntervall(richt.monate ? String(richt.monate) : '') }, [pArt, richt.monate])
+  useEffect(() => { if (!pVonHand && pLetzte && Number(pIntervall) > 0) setPFaellig(plusMonate(pLetzte, Number(pIntervall))) }, [pLetzte, pIntervall, pVonHand])
   const [mitarbeiter, setMitarbeiter] = useState<string[] | null>(null)
   // Mitarbeiter aus der Mitarbeiterliste vorschlagen (Admin/Disposition); ohne Liste bleibt das freie Feld
   useEffect(() => {
@@ -132,9 +142,14 @@ function FahrzeugFormular({ kategorie, onClose, onGespeichert, setMeldung }: { k
   async function speichern() {
     setLaeuft(true); setMeldung(null)
     try {
-      await api('/api/fahrzeuge', 'POST', kategorie === 'fahrzeug'
+      const angelegt = await api('/api/fahrzeuge', 'POST', kategorie === 'fahrzeug'
         ? { typ: 'fahrzeug', kennzeichen: f.kennzeichen, bezeichnung: f.bezeichnung, art: f.art, gesamtgewicht_kg: f.gesamtgewicht_kg === '' ? null : Number(f.gesamtgewicht_kg), erstzulassung: f.erstzulassung || null }
         : { typ: 'fahrzeug', kategorie, kennzeichen: f.kennzeichen, bezeichnung: f.bezeichnung, art: 'sonstiges' })
+      if (pFaellig) {
+        try {
+          await api('/api/fahrzeuge', 'POST', { typ: 'frist', fahrzeug_id: angelegt.eintrag.id, art: pArt, bezeichnung: pBez, letzte_pruefung: pLetzte || null, intervall_monate: pIntervall === '' ? null : Number(pIntervall), faellig_am: pFaellig })
+        } catch (e) { setMeldung({ ok: false, text: `Eintrag angelegt, aber die Prüfung nicht gespeichert: ${e instanceof Error ? e.message : 'Fehler'}. Bitte unter „+ Prüfung / Frist“ nachtragen.` }); onGespeichert(); return }
+      }
       onGespeichert()
     } catch (e) { setMeldung({ ok: false, text: e instanceof Error ? e.message : 'Fehler' }) } finally { setLaeuft(false) }
   }
@@ -165,6 +180,17 @@ function FahrzeugFormular({ kategorie, onClose, onGespeichert, setMeldung }: { k
         <label>Notiz / Zusatz (optional)<input className={feld} value={f.bezeichnung} onChange={(e) => setF({ ...f, bezeichnung: e.target.value })} /></label>
       </div>
       )}
+      <div className="rounded-lg bg-[#f5f5f7] p-3 space-y-2">
+        <p className="text-xs font-semibold text-[#424245]">Prüfung / Frist gleich eintragen (kann auch später ergänzt werden)</p>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs">
+          <label className="col-span-2">Art der Prüfung<select aria-label="Art der Prüfung" className={feld} value={pArt} onChange={(e) => setPArt(e.target.value as FristArt)}>{KATEGORIE_FRISTEN[kategorie].map((a) => <option key={a} value={a}>{FRIST_ART_LABEL[a]}</option>)}</select></label>
+          {(pArt === 'wartung' || pArt === 'sonstiges' || pArt === 'zertifikat' || pArt === 'versicherung' || pArt === 'vertrag') && <label className="col-span-2">Bezeichnung<input className={feld} value={pBez} onChange={(e) => setPBez(e.target.value)} placeholder="z. B. Ölwechsel, Haftpflicht" /></label>}
+          <label>Zuletzt geprüft / abgeschlossen am<input type="date" aria-label="Zuletzt geprüft am" className={feld} value={pLetzte} onChange={(e) => setPLetzte(e.target.value)} /></label>
+          <label>Intervall (Monate)<input aria-label="Intervall in Monaten" className={feld} inputMode="numeric" value={pIntervall} onChange={(e) => setPIntervall(e.target.value.replace(/\D/g, ''))} /></label>
+          <label className="col-span-2">Nächster Termin / fällig am<input type="date" aria-label="Nächster Termin" className={`${feld} font-semibold`} value={pFaellig} onChange={(e) => { setPFaellig(e.target.value); setPVonHand(true) }} /></label>
+        </div>
+        <p className="text-[11px] text-[#86868b]">{richt.hinweis} Der nächste Termin wird aus „zuletzt geprüft“ + Intervall vorgeschlagen; bitte mit der Plakette bzw. dem Prüfbericht abgleichen. 14 und 7 Tage vorher kommt die E-Mail-Erinnerung.</p>
+      </div>
       <div className="flex justify-end gap-2"><button onClick={onClose} className={`${KNOPF} border border-black/10`}>Abbrechen</button><button disabled={laeuft} onClick={speichern} className={`${KNOPF} bg-[#1d1d1f] text-white disabled:opacity-50`}>{laeuft ? 'Speichert …' : 'Speichern'}</button></div>
     </div>
   )
