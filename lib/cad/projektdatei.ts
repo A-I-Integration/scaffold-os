@@ -49,6 +49,8 @@ export interface Projektdatei {
   zeichnung?: Figur[]
   /** Von Hand gesetzte/geänderte Bauteile (Treppen, Anker, verschobene Teile, entfernte Teile) – ältere Dateien haben sie nicht */
   handarbeit?: Handarbeit
+  /** true = ohne Gerüst gestartet: nur das Haus und die von Hand gesetzten Teile werden gezeigt (die erzeugten Gerüstteile bleiben ausgeblendet) */
+  geruestLeer?: true
 }
 
 export type LeseErgebnis =
@@ -58,7 +60,7 @@ export type LeseErgebnis =
 const zahl = (v: unknown, min: number, max: number): number | null =>
   typeof v === 'number' && Number.isFinite(v) && v >= min && v <= max ? v : null
 
-export function erzeugeProjektdatei(p: { name?: string; building: BuildingParams; systemId: string; statikDaten: StatikDaten; notizen: CADNote[]; artikelWahl?: Record<string, string>; bereiche?: BereichsAenderung[]; zeichnung?: Figur[]; handarbeit?: Handarbeit; testdaten?: boolean }): Projektdatei {
+export function erzeugeProjektdatei(p: { name?: string; building: BuildingParams; systemId: string; statikDaten: StatikDaten; notizen: CADNote[]; artikelWahl?: Record<string, string>; bereiche?: BereichsAenderung[]; zeichnung?: Figur[]; handarbeit?: Handarbeit; geruestLeer?: boolean; testdaten?: boolean }): Projektdatei {
   return {
     format: PROJEKTDATEI_FORMAT,
     version: PROJEKTDATEI_VERSION,
@@ -73,6 +75,7 @@ export function erzeugeProjektdatei(p: { name?: string; building: BuildingParams
     ...(p.bereiche && p.bereiche.length ? { bereiche: p.bereiche } : {}),
     ...(p.zeichnung && p.zeichnung.length ? { zeichnung: p.zeichnung } : {}),
     ...(p.handarbeit && !handarbeitLeer(p.handarbeit) ? { handarbeit: p.handarbeit } : {}),
+    ...(p.geruestLeer ? { geruestLeer: true as const } : {}),
   }
 }
 
@@ -369,6 +372,7 @@ export function liesProjektdatei(text: string): LeseErgebnis {
       ...(bereiche.length ? { bereiche } : {}),
       ...(leseFiguren(r.zeichnung).length ? { zeichnung: leseFiguren(r.zeichnung) } : {}),
       ...(handarbeit ? { handarbeit } : {}),
+      ...(r.geruestLeer === true ? { geruestLeer: true as const } : {}),
     },
   }
 }

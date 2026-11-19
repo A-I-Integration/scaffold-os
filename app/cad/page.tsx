@@ -87,6 +87,7 @@ import { katalogListeFuerSystem, wendeKatalogwahlAn, uebertrageAufGleiche } from
 import Scaffold2D from '@/components/cad/Scaffold2D'
 import CadStart from '@/components/cad/CadStart'
 import HuellePruefung from '@/components/cad/HuellePruefung'
+import CadSchritte, { type GeruestWahl } from '@/components/cad/CadSchritte'
 import { eingabeStandGeruest, istGeruestVeraltet } from '@/lib/cad/modell-veraltet'
 
 const Scaffold3D = dynamic(() => import('@/components/cad/Scaffold3D'), {
@@ -172,6 +173,8 @@ export default function CADPage() {
   const [aussehenHinweis, setAussehenHinweis] = useState('')
   const planUploadRef = useRef<((datei: File) => Promise<void>) | null>(null)
   const [huelleBestaetigt, setHuelleBestaetigt] = useState(false)
+  // Wie das Gerüst entsteht: 'auto' = wird gebaut (Standard, auch beim Datei-Import); 'offen' = Haus von Hand angelegt, Auswahl steht noch aus; 'leer' = ohne Gerüst starten
+  const [geruestWahl, setGeruestWahl] = useState<GeruestWahl>('auto')
   const [importWartet, setImportWartet] = useState(false)
   // Ein neuer Umriss (Upload, Zeichner, Laden) will wieder geprüft werden
   useEffect(() => { setHuelleBestaetigt(false) }, [building.umriss])
@@ -835,7 +838,9 @@ export default function CADPage() {
   const modelWithManual = useMemo(() => {
     if (!model) return null
     // Von Hand angehängte/aufgestockte Bereiche zuerst (Grundlage für alles Weitere)
-    const basis = bereichsListe.length > 0 ? wendeAenderungenAn(model, bereichsListe) : model
+    const basis0 = bereichsListe.length > 0 ? wendeAenderungenAn(model, bereichsListe) : model
+    // Leer-Modus: nur das Haus, die erzeugten Gerüstteile werden nicht gezeigt (Felder bleiben als Raster für Handteile)
+    const basis = geruestWahl === 'auto' ? basis0 : { ...basis0, components3D: [], anchors: [] }
     if (manualPlacements.length === 0 && removedGroups.length === 0 && ueber.aenderungen.length === 0 && ueber.kopien.length === 0) return basis
     // Shallow Copy, damit das originale model-Objekt nicht mutiert wird
     let merged: CADModel = { ...basis, components3D: [...basis.components3D], anchors: [...basis.anchors] }
@@ -852,7 +857,7 @@ export default function CADPage() {
       }
     }
     return merged
-  }, [model, manualPlacements, removedGroups, bereichsListe, ueber])
+  }, [model, manualPlacements, removedGroups, bereichsListe, ueber, geruestWahl])
   const modelWithManualRef = useRef<CADModel | null>(null)
   modelWithManualRef.current = modelWithManual
   const removedCount = useMemo(() => removedGroups.reduce((n, g) => n + g.length, 0), [removedGroups])
@@ -985,7 +990,7 @@ export default function CADPage() {
 
   // Phase 68-J: Statt toter Buttons ohne Modell -> klarer Hinweis beim Klick.
   // Projektdatei: speichern und wieder laden (Gebäude, System, Statik-Angaben, Notizen)
-  const projektdatenJetzt = (name: string): Projektdatei => erzeugeProjektdatei({ name, building, systemId, statikDaten, notizen: notes, artikelWahl, bereiche: bereichsListe, zeichnung: figuren, handarbeit: { platzierungen: manualPlacements, ueberlagerung: ueber, entfernt: removedGroups } })
+  const projektdatenJetzt = (name: string): Projektdatei => erzeugeProjektdatei({ name, building, systemId, statikDaten, notizen: notes, artikelWahl, bereiche: bereichsListe, zeichnung: figuren, handarbeit: { platzierungen: manualPlacements, ueberlagerung: ueber, entfernt: removedGroups }, geruestLeer: geruestWahl === 'leer' })
   const speichereProjektdatei = () => {
     const daten = projektdatenJetzt(`CAD-Projekt ${new Date().toLocaleDateString('de-DE')}`)
     const a = document.createElement('a')
@@ -999,6 +1004,7 @@ export default function CADPage() {
     setManualPlacements(d.handarbeit?.platzierungen ?? []); setRemovedGroups(d.handarbeit?.entfernt ?? [])
     setUeberVerlauf({ jetzt: d.handarbeit?.ueberlagerung ?? KEINE_UEBERLAGERUNG, vergangen: [], zukunft: [] })
     setStatikDaten(d.statikDaten); setSystemId(d.systemId); setArtikelWahl(d.artikelWahl ?? {})
+    setGeruestWahl(d.geruestLeer ? 'leer' : 'auto')
     setAutoGenerate(true); setBuilding(d.building)
   }
   const uebernehmeProjektdatei = (text: string, name: string) => {
@@ -1432,6 +1438,16 @@ export default function CADPage() {
               <HuellePruefung building={building} onChange={(b) => { setAutoGenerate(true); setBuilding(b) }} onZeichnen={() => zeichnerOeffnenRef.current?.()} onBestaetigen={() => setHuelleBestaetigt(true)} />
             </div>
           ))}
+          {model && (
+            <CadSchritte
+              schritt={building.umriss && building.umriss.length >= 3 && !huelleBestaetigt ? 2 : geruestWahl === 'offen' ? 3 : 4}
+              wahl={geruestWahl}
+              seiten={(building.sides ?? ['front']) as ('front' | 'back' | 'left' | 'right')[]}
+              onWand={(seite) => { setGeruestWahl('auto'); setAutoGenerate(true); setBuilding({ ...building, sides: [seite] }); setModel(null) }}
+              onAlle={() => { setGeruestWahl('auto'); setAutoGenerate(true); setBuilding({ ...building, sides: ['front', 'back', 'left', 'right'] }); setModel(null) }}
+              onLeer={() => setGeruestWahl('leer')}
+            />
+          )}
           {treppePanel && model && viewMode === '3d' && <TreppePanel model={model} treppe={gewaehlteTreppe} meldung={treppeMeldung} onSetzen={setzeTreppeAufFeld} onLeiter={setzeLeiterAufFeld} onDurchstieg={setzeDurchstiegAufFeld} onSchieben={schiebeTreppe} onZu={() => setTreppePanel(false)} />}
           {selectedComponent && modelWithManual && viewMode === '3d' && !abbauAktiv && !placementType && !measureMode && (
               <EigenschaftenLeiste model={modelWithManual} id={selectedComponent} lagenVersatzM={ueber.aenderungen.find((a) => a.id === selectedComponent)?.dy ?? ueber.kopien.find((k) => k.id === selectedComponent)?.dy ?? 0} onLageOp={(op) => handleLageOp(selectedComponent, op)} griffModus={griffModus} onGriffModus={setGriffModus} einrasten={einrasten} onEinrasten={setEinrasten} anschlussEinrasten={anschlussEinrasten} onAnschlussEinrasten={setAnschlussEinrasten} veraendert={istVonHandVeraendert(ueber, selectedComponent)} onLage={(p, d) => handleBauteilLage(selectedComponent, p, d)} onDuplizieren={() => handleBauteilDuplizieren(selectedComponent)} onZuruecksetzen={() => handleBauteilZuruecksetzen(selectedComponent)} artikelWahl={artikelWahl} manuell={!!platzierungIdVonBauteil(selectedComponent)}
@@ -1550,10 +1566,12 @@ export default function CADPage() {
               <div className='h-full flex flex-col'>
                 <div className='flex-1 min-h-0'>
                   <CadStart wartet={importWartet}
-                    onDateien={(d) => ladeAussehen(d)}
-                    onZeichnen={() => zeichnerOeffnenRef.current?.()}
+                    onDateien={(d) => { setGeruestWahl('auto'); return ladeAussehen(d) }}
+                    onGrundriss={(d) => { setGeruestWahl('offen'); return ladeAussehen(d) }}
+                    onZeichnen={() => { setGeruestWahl('offen'); zeichnerOeffnenRef.current?.() }}
                     onRechteck={(l, b, h) => {
                       setAutoGenerate(true)
+                      setGeruestWahl('offen')
                       setBuilding({ ...building, lengthM: l, widthM: b, heightM: h, eavesHeightM: building.eavesHeightM > 0 ? building.eavesHeightM : h, umriss: undefined, umrissKantenHoeheM: undefined, sides: ['front', 'back', 'left', 'right'] })
                     }}
                   />
