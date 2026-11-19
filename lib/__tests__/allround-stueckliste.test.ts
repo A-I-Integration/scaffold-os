@@ -38,3 +38,19 @@ describe('Allround-Stückliste: Mengenlogik', () => {
     expect(klein.find((i) => i.articleNumber === ALLROUND_ANFANGSSTUECK)?.weightKg).toBe(1.4)
   })
 })
+
+describe('Allround: Riegel und Diagonalen', () => {
+  it('Standardfelder bekommen Katalogartikel nach Feldlänge, Summen bleiben erhalten', () => {
+    const m = generateCADModel(b, 'layher-allround')
+    const l = generateBillOfMaterials(m)
+    const riegel = l.filter((i) => /^2601\./.test(i.articleNumber)).reduce((s, i) => s + i.quantity, 0)
+    const dia = l.filter((i) => /^2683\./.test(i.articleNumber)).reduce((s, i) => s + i.quantity, 0)
+    const qrAlt = l.filter((i) => i.articleNumber === 'QR-001').reduce((s, i) => s + i.quantity, 0)
+    const diAlt = l.filter((i) => /^DI-/.test(i.articleNumber)).reduce((s, i) => s + i.quantity, 0)
+    expect(riegel).toBeGreaterThan(0)
+    expect(dia).toBeGreaterThan(0)
+    expect(riegel + qrAlt).toBe(m.components3D.filter((c) => c.articleNumber === 'QR-001').length)
+    expect(dia + diAlt).toBe(m.components3D.filter((c) => /^DI-/.test(c.articleNumber)).length)
+    for (const i of l.filter((x) => /^(2601|2683)\./.test(x.articleNumber))) expect((katalog as { n: string }[]).some((e) => e.n === i.articleNumber)).toBe(true)
+  })
+})
