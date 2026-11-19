@@ -31,7 +31,7 @@ describe('Treppe als Baugruppe (automatische Außentreppe)', () => {
     expect(teileDerBaugruppe(m.components3D, rahmen.id)).toEqual([rahmen.id])
   })
   it('Stückliste ist von der Zuordnung unabhängig (Gleichwertigkeit)', () => {
-    const ohne = { ...m, components3D: m.components3D.map(({ assemblyId, ...rest }) => rest) }
+    const ohne = { ...m, components3D: m.components3D.map((c) => { const rest = { ...c }; delete rest.assemblyId; return rest }) }
     expect(generateBillOfMaterials(m)).toEqual(generateBillOfMaterials(ohne as typeof m))
   })
   it('ohne Treppe keine Baugruppe', () => {

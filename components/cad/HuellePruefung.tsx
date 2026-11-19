@@ -20,7 +20,7 @@ const zahl = (t: string) => { const n = parseFloat(t.replace(',', '.')); return 
 const B = 320, H = 240, R = 24
 
 export default function HuellePruefung({ building, onChange, onZeichnen, onBestaetigen }: Props) {
-  const umriss = building.umriss ?? []
+  const umriss = useMemo(() => building.umriss ?? [], [building.umriss])
   const fehler = useMemo(() => pruefeUmriss(umriss), [umriss])
   const kanten = useMemo(() => (fehler.length === 0 ? umrissKanten(umriss) : []), [umriss, fehler])
   const hoehen = kanten.map((_, i) => building.umrissKantenHoeheM?.[i] ?? building.heightM)
