@@ -117,7 +117,7 @@ export default function AppShell({ rolle, name, onLogout, children }: { rolle: R
   )
 
   return (
-    <div className="os-shell flex h-dvh" style={{ background: 'var(--os-grund)' }}>
+    <div className="os-shell flex h-dvh overflow-clip" style={{ background: 'var(--os-grund)' }}>
       {!schmal && <aside className="w-[300px] shrink-0">{navigation}</aside>}
       {schmal && schublade && (
         <>
