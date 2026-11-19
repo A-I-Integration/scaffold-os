@@ -58,7 +58,7 @@ function Seite() {
   const [projektName, setProjektName] = useState('')
   const [adresse, setAdresse] = useState('')
   const [e, setE] = useState<BaukastenEingaben>({ ...BAUKASTEN_START, leistungen: LEISTUNGEN_START })
-  const [systemId, setSystemId] = useState('layher-allround')
+  const [systemId, setSystemId] = useState('mj-uniconnect')
   const [werkzeug, setWerkzeug] = useState<Werkzeug>('baustelle')
   const [zeichnerOffen, setZeichnerOffen] = useState(false)
   const [zeichnerHinweis, setZeichnerHinweis] = useState('')

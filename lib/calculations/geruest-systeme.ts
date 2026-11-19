@@ -38,7 +38,7 @@ export interface GeruestSystem {
   };
 }
 
-export const GERUEST_SYSTEME: GeruestSystem[] = [
+const ALLE_SYSTEME: GeruestSystem[] = [
   // ─── Modulsysteme ───
   {
     id: 'peri-up-flex',
@@ -237,6 +237,10 @@ export const GERUEST_SYSTEME: GeruestSystem[] = [
   },
 ];
 
+/** Auswahllisten zeigen kein Layher-System mehr; ältere Projekte mit Layher-Kennung werden über findeSystem weiter gelesen. */
+export const GERUEST_SYSTEME: GeruestSystem[] = ALLE_SYSTEME.filter((s) => s.hersteller !== 'Layher')
+export const STANDARD_SYSTEM_ID = 'mj-uniconnect'
+
 import { findeKatalogSerie } from '@/lib/data/katalog-serien';
 
 // Eigenes System (Freitext) – wird im Formular separat abgefragt
@@ -244,7 +248,7 @@ export const CUSTOM_SYSTEM_ID = 'custom';
 
 export function findeSystem(id: string | undefined): GeruestSystem | null {
   if (!id || id === CUSTOM_SYSTEM_ID) return null;
-  return GERUEST_SYSTEME.find((s) => s.id === id) ?? null;
+  return ALLE_SYSTEME.find((s) => s.id === id) ?? null;
 }
 
 // Anzeigename für Zusammenfassung / Angebot, z. B. "Layher Allround (Stahl)"

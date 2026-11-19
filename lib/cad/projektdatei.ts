@@ -317,7 +317,7 @@ export function liesProjektdatei(text: string): LeseErgebnis {
   for (const k of ['balconies']) if (g[k] != null) verworfen.push('Balkone')
 
   let systemId = typeof r.systemId === 'string' ? r.systemId : ''
-  if (!findeSystem(systemId)) { if (systemId) verworfen.push('Gerüstsystem (unbekannt, Standard gesetzt)'); systemId = 'layher-allround' }
+  if (!findeSystem(systemId)) { if (systemId) verworfen.push('Gerüstsystem (unbekannt, Standard gesetzt)'); systemId = 'mj-uniconnect' }
 
   const notizen: CADNote[] = Array.isArray(r.notizen)
     ? r.notizen.slice(0, MAX_NOTIZEN).flatMap((n) => {

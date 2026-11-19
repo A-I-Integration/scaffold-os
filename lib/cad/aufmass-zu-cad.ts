@@ -90,7 +90,7 @@ export function aufmassZuCad(a: AufmassFuerCad): CadUebernahme {
   //    Wurde das Aufmaß danach geändert, haben die Aufmaß-Werte Vorrang – sonst käme die Änderung nie im CAD an.
   if (ki?.building && zahl(ki.building.lengthM) > 0 && zahl(ki.building.widthM) > 0 && zahl(ki.building.heightM) > 0) {
     const gespeichert = ki.building as unknown as BuildingParams
-    const sid = sysId(ki.systemId) || sysId(a.step3?.system) || 'layher-allround'
+    const sid = sysId(ki.systemId) || sysId(a.step3?.system) || 'mj-uniconnect'
     const s2k = (a.step2 || {}) as Record<string, unknown>
     const b: BuildingParams = { ...gespeichert }
     planDatenUebernehmen(b)
@@ -131,7 +131,7 @@ export function aufmassZuCad(a: AufmassFuerCad): CadUebernahme {
   if (!breite) fehlend.push('Breite/Tiefe des Gebäudes')
   if (!hoehe) fehlend.push('Höhe')
 
-  const systemId = sysId(a.step3?.system) || 'layher-allround'
+  const systemId = sysId(a.step3?.system) || 'mj-uniconnect'
   if (!sysId(a.step3?.system)) hinweise.push(a.step3?.system ? 'Das Gerüstsystem aus dem Aufmaß ist im CAD nicht hinterlegt – es wurde Layher Allround gesetzt, bitte prüfen.' : 'Im Aufmaß ist kein Gerüstsystem gewählt (herstellerneutral) – im CAD wurde Layher Allround gesetzt, bitte prüfen.')
   if (fehlend.length) return { ok: false, systemId, fehlend, hinweise }
 
@@ -185,6 +185,6 @@ export function leseCadUebergabe(roh: string | null): CadUebergabe | null {
     const j = JSON.parse(roh) as Record<string, unknown> & { building?: BuildingParams }
     const b = j?.building
     if (!b || !(b.lengthM > 0) || !(b.widthM > 0) || !(b.heightM > 0)) return null
-    return { building: b, systemId: typeof j.systemId === 'string' ? j.systemId : 'layher-allround', hinweise: Array.isArray(j.hinweise) ? (j.hinweise as unknown[]).map(String) : [], projektName: typeof j.projektName === 'string' ? j.projektName : undefined, notizen: Array.isArray(j.notizen) ? j.notizen : undefined, statikDaten: j.statikDaten && typeof j.statikDaten === 'object' && !Array.isArray(j.statikDaten) ? (j.statikDaten as Record<string, unknown>) : undefined, aufmassListe: gueltigeStueckliste(j.aufmassListe) }
+    return { building: b, systemId: typeof j.systemId === 'string' ? j.systemId : 'mj-uniconnect', hinweise: Array.isArray(j.hinweise) ? (j.hinweise as unknown[]).map(String) : [], projektName: typeof j.projektName === 'string' ? j.projektName : undefined, notizen: Array.isArray(j.notizen) ? j.notizen : undefined, statikDaten: j.statikDaten && typeof j.statikDaten === 'object' && !Array.isArray(j.statikDaten) ? (j.statikDaten as Record<string, unknown>) : undefined, aufmassListe: gueltigeStueckliste(j.aufmassListe) }
   } catch { return null }
 }

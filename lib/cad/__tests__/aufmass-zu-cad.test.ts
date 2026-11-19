@@ -5,10 +5,10 @@ const s2 = { laenge: '12,5', breite: '9', hoehe: '10', traufhoehe: '7', dachform
 
 describe('Aufmaß → CAD', () => {
   it('baut das Gebäude aus Schritt 2 (Länge × Höhe auf einer Seite wie im Aufmaß)', () => {
-    const r = aufmassZuCad({ step2: s2, step3: { system: 'layher-allround' } })
+    const r = aufmassZuCad({ step2: s2, step3: { system: 'mj-uniconnect' } })
     expect(r.ok).toBe(true)
     expect(r.building).toMatchObject({ lengthM: 12.5, widthM: 9, heightM: 10, eavesHeightM: 7, roofHeightM: 3, roofForm: 'satteldach', sides: ['front'] })
-    expect(r.systemId).toBe('layher-allround')
+    expect(r.systemId).toBe('mj-uniconnect')
   })
   it('meldet fehlende Pflichtmaße statt zu erfinden', () => {
     const r = aufmassZuCad({ step2: { laenge: '10', hoehe: '' } })
@@ -28,7 +28,7 @@ describe('Aufmaß → CAD', () => {
   })
   it('CAD-Projekt: stimmt das Aufmaß überein, bleibt das gespeicherte Gebäude erhalten', () => {
     const b = { lengthM: 12.5, widthM: 9, heightM: 10, eavesHeightM: 7, overhangM: 0.5, roofForm: 'satteldach', sides: ['front', 'left'], tueren: [1] }
-    const r = aufmassZuCad({ step2: s2, kiResult: { building: b, systemId: 'layher-allround' } })
+    const r = aufmassZuCad({ step2: s2, kiResult: { building: b, systemId: 'mj-uniconnect' } })
     expect(r.building).toMatchObject(b)
     expect(r.hinweise[0]).toMatch(/stimmen überein/)
   })
@@ -52,16 +52,21 @@ describe('Aufmaß → CAD', () => {
 })
 
 describe('Aufmaß → CAD: Klassen und Eingänge', () => {
-  const s2 = { laenge: '12', breite: '8', hoehe: '9', lastklasse: 3, breitenklasse: 'W09', hauseingaenge: '2' }
+  const s2 = { laenge: '12', breite: '8', hoehe: '9', lastklasse: 3, breitenklasse: 'W06', hauseingaenge: '2' }
   it('übernimmt Lastklasse, Gerüstbreite und Hauseingänge', () => {
-    const r = aufmassZuCad({ step2: s2, step3: { system: 'layher-allround' } })
+    const r = aufmassZuCad({ step2: s2, step3: { system: 'mj-uniconnect' } })
     expect(r.ok).toBe(true)
     expect(r.building?.lastklasse).toBe(3)
     expect(r.building?.doorCount).toBe(2)
-    expect(r.building?.geruestOptionen?.breiteM).toBeGreaterThanOrEqual(0.9)
+    expect(r.building?.geruestOptionen?.breiteM).toBe(0.73)
+  })
+  it('meldet, wenn das System die verlangte Breitenklasse nicht hat (MJ Uni-Connect nur 0,73 m)', () => {
+    const r = aufmassZuCad({ step2: { ...s2, breitenklasse: 'W09' }, step3: { system: 'mj-uniconnect' } })
+    expect(r.building?.geruestOptionen?.breiteM).toBeUndefined()
+    expect(r.hinweise.join(' ')).toContain('keine passende Gerüstbreite')
   })
   it('Aufmaß-Lastklasse hat bei CAD-Projekten Vorrang', () => {
-    const ki = { building: { lengthM: 12, widthM: 8, heightM: 9, eavesHeightM: 9, roofHeightM: 0, roofForm: 'flachdach', floors: 0, floorHeightsM: [], windowCount: 0, doorCount: 0, balconyCount: 0, overhangM: 0, setbackM: 0, sides: ['front'], lastklasse: 4 }, systemId: 'layher-allround' }
+    const ki = { building: { lengthM: 12, widthM: 8, heightM: 9, eavesHeightM: 9, roofHeightM: 0, roofForm: 'flachdach', floors: 0, floorHeightsM: [], windowCount: 0, doorCount: 0, balconyCount: 0, overhangM: 0, setbackM: 0, sides: ['front'], lastklasse: 4 }, systemId: 'mj-uniconnect' }
     const r = aufmassZuCad({ step2: s2, step3: {}, kiResult: ki })
     expect(r.building?.lastklasse).toBe(3)
     expect(r.hinweise.join(' ')).toContain('Lastklasse: CAD 4 → Aufmaß 3')

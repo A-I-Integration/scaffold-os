@@ -28,7 +28,7 @@ export function pruefeArbeitsstand(roh: string | null): Arbeitsstand | null {
     if (!b || !(b.lengthM > 0) || !(b.widthM > 0) || !(b.heightM > 0)) return null
     return {
       building: b,
-      systemId: typeof j.systemId === 'string' && j.systemId ? j.systemId : 'layher-allround',
+      systemId: typeof j.systemId === 'string' && j.systemId ? j.systemId : 'mj-uniconnect',
       notizen: Array.isArray(j.notizen) ? j.notizen : [],
       statikDaten: j.statikDaten && typeof j.statikDaten === 'object' && !Array.isArray(j.statikDaten) ? j.statikDaten : {},
       artikelWahl: j.artikelWahl && typeof j.artikelWahl === 'object' && !Array.isArray(j.artikelWahl) ? (j.artikelWahl as Record<string, string>) : {},
