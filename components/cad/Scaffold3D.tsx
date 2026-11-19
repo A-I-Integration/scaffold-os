@@ -54,6 +54,8 @@ interface Props {
   selectedComponent: string | null
   /** `shift` = Shift+Klick (zur Mehrfachauswahl hinzufügen / herausnehmen) */
   onSelectComponent: (id: string | null, shift?: boolean) => void
+  /** Rechtsklick auf ein Bauteil (Bildschirmposition für das Kontextmenü) */
+  onKontextmenue?: (id: string, x: number, y: number) => void
   /** Mehrfachauswahl (Shift+Klick, Auswahlrahmen): diese Bauteile sind blau markiert */
   mehrfachAuswahl?: ReadonlySet<string>
   /** Auswahlrahmen aufziehen statt die Ansicht zu drehen */
@@ -714,6 +716,7 @@ function InstancedBauteile({
   selectedComponent,
   hoveredId,
   onSelect,
+  onKontextmenue,
   onHover,
   measureMode,
   onMeasurePoint,
@@ -726,6 +729,7 @@ function InstancedBauteile({
   selectedComponent: string | null
   hoveredId: string | null
   onSelect: (id: string | null, shift?: boolean) => void
+  onKontextmenue?: (id: string, x: number, y: number) => void
   onHover: (id: string | null) => void
   measureMode?: boolean
   onMeasurePoint?: (point: [number, number, number], componentName?: string) => void
@@ -902,6 +906,7 @@ function InstancedBauteile({
       ref={meshRef}
       args={[geometry, material, items.length]}
       onClick={handleClick}
+      onContextMenu={(e: { instanceId?: number; stopPropagation: () => void; nativeEvent?: MouseEvent }) => { if (e.instanceId === undefined || !items[e.instanceId] || !onKontextmenue) return; e.stopPropagation(); e.nativeEvent?.preventDefault?.(); onKontextmenue(items[e.instanceId].id, e.nativeEvent?.clientX ?? 0, e.nativeEvent?.clientY ?? 0) }}
       onPointerOver={handlePointerOver}
       onPointerOut={handlePointerOut}
       onPointerDown={handlePointerDown}
@@ -1018,6 +1023,7 @@ const AllScaffoldComponents = memo(function AllScaffoldComponents({
   visibleTypes,
   selectedComponent,
   onSelectComponent,
+  onKontextmenue,
   lodLevel,
   hiddenSides,
   hiddenLevels,
@@ -1031,6 +1037,7 @@ const AllScaffoldComponents = memo(function AllScaffoldComponents({
   visibleTypes: Record<string, boolean>
   selectedComponent: string | null
   onSelectComponent: (id: string | null, shift?: boolean) => void
+  onKontextmenue?: (id: string, x: number, y: number) => void
   lodLevel: 0 | 1 | 2
   hiddenSides?: Set<string>
   hiddenLevels?: Set<number>
@@ -1107,6 +1114,7 @@ const AllScaffoldComponents = memo(function AllScaffoldComponents({
           selectedComponent={selectedComponent}
           hoveredId={hoveredId}
           onSelect={onSelectComponent}
+          onKontextmenue={onKontextmenue}
           onHover={setHoveredId}
           measureMode={measureMode}
           onMeasurePoint={onMeasurePoint}
@@ -2443,6 +2451,7 @@ function Scene({
   showDimensions,
   selectedComponent,
   onSelectComponent,
+  onKontextmenue,
   visibleTypes,
   viewMode,
   bridgeMode,
@@ -2521,6 +2530,7 @@ function Scene({
             visibleTypes={visibleTypes}
             selectedComponent={selectedComponent}
             onSelectComponent={onSelectComponent}
+            onKontextmenue={onKontextmenue}
             lodLevel={lodLevel}
             hiddenSides={hiddenSides}
             hiddenLevels={hiddenLevels}
@@ -2564,6 +2574,7 @@ function Scaffold3D({
   showDimensions,
   selectedComponent,
   onSelectComponent,
+  onKontextmenue,
   visibleTypes,
   viewMode,
   onCanvasReady,
@@ -2688,6 +2699,7 @@ function Scaffold3D({
             showDimensions={showDimensions}
             selectedComponent={selectedComponent}
             onSelectComponent={onSelectComponent}
+            onKontextmenue={onKontextmenue}
             visibleTypes={visibleTypes}
             viewMode={viewMode}
             bridgeMode={bridgeMode}
