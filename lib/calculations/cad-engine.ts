@@ -421,6 +421,8 @@ export interface ScaffoldComponent3D {
   color: string
   fieldId?: string
   levelId?: string
+  /** Zugehörigkeit zu einer Baugruppe (z. B. Treppe, Feld, Konsole); fehlt bei Einzelteilen und in alten Projekten */
+  assemblyId?: string
   // Nur Treppenturm im Feld (Scaffmax-Stil): Anzahl Läufe (je Lage einer,
   // im Zickzack) und Richtung des ersten Laufs (1 = links→rechts, -1 = umgekehrt).
   flights?: number
@@ -429,6 +431,12 @@ export interface ScaffoldComponent3D {
   podestM?: number
   // Außentreppe: alle Läufe in dieselbe Richtung (true) statt im Zickzack
   gleichlauf?: boolean
+}
+
+export interface ScaffoldAssembly {
+  id: string
+  art: 'treppe' | 'feld' | 'konsole' | 'sonstige'
+  memberIds: string[]
 }
 
 export interface CADModel {
@@ -448,6 +456,8 @@ export interface CADModel {
   fieldCount: number
   levelCount: number
   warnings: CADWarning[]
+  /** Baugruppen aus mehreren Einzelbauteilen (Phase 1: nur Datenmodell, vom Generator noch nicht befüllt) */
+  assemblies?: ScaffoldAssembly[]
   // Nur Umriss-Modus: Gerüst-Eckpunkte (Schnitt der Innenlinien benachbarter Kanten)
   umrissEcken?: UmrissGeruestEcke[]
   /** Aus Geschosskonturen abgeleitete Wandflächen; noch keine automatisch eingerüsteten Teilflächen. */
