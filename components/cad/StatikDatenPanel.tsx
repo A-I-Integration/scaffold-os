@@ -3,6 +3,8 @@
 import { useMemo, useState } from 'react'
 import type { Netz } from '@/lib/cad/netz'
 import type { CADModel } from '@/lib/calculations/cad-engine'
+import { katalogListeFuerSystem } from '@/lib/cad/katalog-zuordnung'
+import { zulassungenFuerListe } from '@/lib/data/zulassung-lastklassen-weitere'
 import { statikPruefpunkte } from '@/lib/statik-pruefpunkte'
 import { pruefeGeruest, type PruefStatus } from '@/lib/geruest/regelpruefung'
 import { WINDZONEN, WINDZONEN_RICHTWERT_HINWEIS, windzonenRichtwertMs, BEKLEIDUNGEN, VERANKERUNGSGRUENDE, SONDERLASTEN, WINDNORMEN, GELAENDEKATEGORIEN, UNTERGRUENDE, NUTZUNGEN, VREF_MIN_MS, VREF_MAX_MS, bereinigeStatikDaten, pruefeStatikDaten, fehlendeStatikAngaben, type StatikDaten } from '@/lib/statik-daten'
@@ -26,6 +28,8 @@ export default function StatikDatenPanel({ daten, onChange, model, huelle }: { d
   const kollisionen = protokoll ? protokoll.ergebnisse.filter((r) => r.id.startsWith('KOLLISION_') && r.status !== 'ok') : []
   const auffaellig = protokoll ? protokoll.ergebnisse.filter((r) => r.art === 'geprueft' && r.status !== 'ok') : []
   const richtwert = windzonenRichtwertMs(daten.windzone)
+  const zulListe = model?.system ? katalogListeFuerSystem(model.system.id) : null
+  const zulassungen = zulassungenFuerListe(zulListe, false)
 
   return (
     <div className='mx-4 mb-4 rounded-xl border border-black/10 bg-white'>
@@ -63,6 +67,12 @@ export default function StatikDatenPanel({ daten, onChange, model, huelle }: { d
             <select className={feld} value={daten.verankerungsgrund ?? ''} onChange={(e) => setze({ verankerungsgrund: e.target.value || undefined })}>
               <option value=''>– wählen –</option>{VERANKERUNGSGRUENDE.map((u) => <option key={u}>{u}</option>)}
             </select></div>
+          {zulassungen.length > 0 && (
+            <div><label className={label}>Zulassung der Beläge</label>
+              <select className={feld} value={daten.zulassung ?? ''} onChange={(e) => setze({ zulassung: e.target.value || undefined })} aria-label='Zulassung der Beläge'>
+                <option value=''>– wählen –</option>{zulassungen.map((z) => <option key={z.zulassung} value={z.zulassung}>{z.system} ({z.zulassung})</option>)}
+              </select></div>
+          )}
           <div><label className={label}>Bekleidung</label>
             <select className={feld} value={daten.bekleidung ?? ''} onChange={(e) => setze({ bekleidung: (e.target.value || undefined) as StatikDaten['bekleidung'] })}>
               <option value=''>– wählen –</option>{BEKLEIDUNGEN.map((b) => <option key={b.id} value={b.id}>{b.text}</option>)}

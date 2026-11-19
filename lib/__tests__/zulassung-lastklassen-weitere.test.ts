@@ -69,3 +69,28 @@ describe('Einbindung in Lastannahmen und Prüfpunkte', () => {
     expect(statikPruefpunkte(m, {}).filter((p) => p.id.startsWith('belag-lk-')).length).toBe(2)
   })
 })
+
+import { bereinigeStatikDaten } from '../statik-daten'
+import { zulassungenFuerProjekt } from '../data/zulassung-lastklassen-weitere'
+
+describe('Gewählte Zulassung', () => {
+  it('bereinigt unbekannte Nummern', () => {
+    expect(bereinigeStatikDaten({ zulassung: 'Z-8.1-872' }).zulassung).toBe('Z-8.1-872')
+    expect(bereinigeStatikDaten({ zulassung: 'Z-0-0' }).zulassung).toBeUndefined()
+  })
+  it('gewählte Zulassung ersetzt die Kandidatenliste, falsche Liste wird ignoriert', () => {
+    expect(zulassungenFuerProjekt('uni-connect', 'Z-8.1-935')).toMatchObject({ gewaehlt: true })
+    expect(zulassungenFuerProjekt('uni-connect', 'Z-8.1-935').tabellen).toHaveLength(1)
+    expect(zulassungenFuerProjekt('uni-connect', 'Z-8.22-960').gewaehlt).toBe(false)
+  })
+  it('Abschnitt 6 und Prüfpunkt nennen die gewählte Zulassung', () => {
+    const m = generateCADModel({ ...basis }, 'mj-uniconnect')
+    const d = baueLastannahmenDaten(m, { zulassung: 'Z-8.1-935' }, { projektName: 'T', firma: 'F', datum: '19.11.2026' })
+    const s = d.sektionen.filter((x) => x.titel.startsWith('6'))
+    expect(s).toHaveLength(1)
+    expect(s[0].zeilen.find((z) => z.label === 'Zuordnung')!.wert).toBe('Vom Planer gewählt.')
+    const p = statikPruefpunkte(m, { zulassung: 'Z-8.1-935' }).filter((x) => x.id.startsWith('belag-lk-'))
+    expect(p).toHaveLength(1)
+    expect(p[0].text).toContain('vom Planer gewählt')
+  })
+})

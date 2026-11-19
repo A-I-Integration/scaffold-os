@@ -15,7 +15,7 @@ import { abschnittsListe } from '@/lib/geruest/regelpruefung'
 import { MJ_LISTEN } from '@/lib/mj-katalog'
 import { katalogListeFuerSystem } from '@/lib/cad/katalog-zuordnung'
 import { pruefeLastklassen, pruefeTabelle, type LkErgebnis, type LkPruefung } from '@/lib/data/zulassung-lastklassen'
-import { LASTKLASSEN_WEITERE, zulassungenFuerListe } from '@/lib/data/zulassung-lastklassen-weitere'
+import { LASTKLASSEN_WEITERE, zulassungenFuerProjekt } from '@/lib/data/zulassung-lastklassen-weitere'
 import { lagenansatz } from '@/lib/lastansatz'
 
 export interface LastannahmenOptionen {
@@ -79,17 +79,17 @@ function zulassungsSektion(model: CADModel): LastSektion | null {
  * Für Preislisten ohne eigene Haupttabelle: je vollständig vorliegender Zulassung ein Abschnitt. Welche Zulassung
  * (System, Rahmenbreite) zum geplanten Gerüst gehört, steht im Modell nicht; das muss der Anwender klären.
  */
-function weitereZulassungsSektionen(model: CADModel): LastSektion[] {
+function weitereZulassungsSektionen(model: CADModel, statik: StatikDaten): LastSektion[] {
   const sys = model.system
   const liste = sys ? katalogListeFuerSystem(sys.id) : null
   if (!liste || pruefeLastklassen(liste, [], null)) return []
   const weiten = model.fields.map((f) => f.lengthM)
-  const kandidaten = zulassungenFuerListe(liste)
+  const { tabellen: kandidaten, gewaehlt } = zulassungenFuerProjekt(liste, statik.zulassung)
   return kandidaten.map((z, i) => {
     const pr = pruefeTabelle(z, weiten, model.building.lastklasse)
     const gesamt = LASTKLASSEN_WEITERE.filter((x) => x.liste === liste && x.umfang !== 'keine-tabelle').length
-    return baueZulassungsSektion(`6.${i + 1} Zulassung ${z.zulassung} (${z.system}): Lastklassen der Beläge`, pr, `${z.zulassung} (${z.system}, gültig bis ${z.gueltigBis})`, [
-      { label: 'Zuordnung', wert: `Für die Preisliste liegen ${gesamt} Zulassungen vor. Welche zu Ihrem Gerüst gehört (System, Rahmenbreite), ist im Modell nicht hinterlegt – bitte prüfen. Zulassungen, aus denen nur Änderungsbescheide vorliegen, sind hier nicht abgeglichen.` },
+    return baueZulassungsSektion(`6${gewaehlt ? '' : `.${i + 1}`} Zulassung ${z.zulassung} (${z.system}): Lastklassen der Beläge`, pr, `${z.zulassung} (${z.system}, gültig bis ${z.gueltigBis})`, [
+      ...(gewaehlt ? [{ label: 'Zuordnung', wert: 'Vom Planer gewählt.' }, ...(z.umfang === 'nur-aenderungen' ? [{ label: 'Umfang', wert: 'Vom Bescheid liegen nur die Änderungs-/Ergänzungsbescheide vor; die Zählung gilt nur für die dort genannten Beläge.' }] : [])] : [{ label: 'Zuordnung', wert: `Für die Preisliste liegen ${gesamt} Zulassungen vor. Welche zu Ihrem Gerüst gehört (System, Rahmenbreite), ist im Modell nicht hinterlegt – bitte prüfen. Zulassungen, aus denen nur Änderungsbescheide vorliegen, sind hier nicht abgeglichen.` }]),
     ])
   })
 }
@@ -190,7 +190,7 @@ export function baueLastannahmenDaten(model: CADModel, statik: StatikDaten, opt:
 
   const zulSektion = zulassungsSektion(model)
   if (zulSektion) sektionen.push(zulSektion)
-  else sektionen.push(...weitereZulassungsSektionen(model))
+  else sektionen.push(...weitereZulassungsSektionen(model, statik))
 
   return {
     titel: 'Lastannahmen und Eingangsdaten für die Statik',
