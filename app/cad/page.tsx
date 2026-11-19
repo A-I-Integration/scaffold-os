@@ -781,7 +781,7 @@ export default function CADPage() {
     fetch('/api/kunden')
       .then(r => r.json())
       .then(j => {
-        if (j.success) setKunden((j.kunden || []).map((k: any) => ({ id: k.id, name: k.name })))
+        if (j.success) setKunden((j.kunden || []).map((k: { id: string; name: string }) => ({ id: k.id, name: k.name })))
         else setKundenLadeFehler(true)
       })
       .catch(() => setKundenLadeFehler(true))
@@ -1234,8 +1234,8 @@ export default function CADPage() {
       const { generateIFC, downloadIFC } = await import('@/lib/export/ifc-export')
       const daten = await generateIFC(modelWithManual ?? model, 'SCAFFOLD OS Gerüstplanung')
       downloadIFC(daten, `Geruest-${new Date().toISOString().split('T')[0]}.ifc`)
-    } catch (err: any) {
-      alert('❌ IFC-Export fehlgeschlagen: ' + err.message)
+    } catch (err: unknown) {
+      alert('❌ IFC-Export fehlgeschlagen: ' + (err instanceof Error ? err.message : String(err)))
     }
     setIfcExportLaeuft(false)
   }, [model])
@@ -1343,8 +1343,8 @@ export default function CADPage() {
       const neu = { id: json.kunde.id, name: json.kunde.name }
       setKunden((prev) => [...prev, neu])
       return neu
-    } catch (err: any) {
-      alert('❌ Kunde konnte nicht angelegt werden: ' + err.message)
+    } catch (err: unknown) {
+      alert('❌ Kunde konnte nicht angelegt werden: ' + (err instanceof Error ? err.message : String(err)))
       return null
     }
   }, [])
@@ -1448,8 +1448,8 @@ export default function CADPage() {
       void vergissAussehen()
       vergissArbeitsstand(); neuerStempel()
       router.push(`/kunden/${customerId}?baustelle=${json.id}&tab=angebote`)
-    } catch (err: any) {
-      alert('❌ ' + err.message)
+    } catch (err: unknown) {
+      alert('❌ ' + (err instanceof Error ? err.message : String(err)))
     }
     setZuordnenLaeuft(false)
   }, [model, materials, aufmassListe, logistik, router, notes, statikDaten, m2Wahl])

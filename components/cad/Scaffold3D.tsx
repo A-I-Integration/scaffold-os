@@ -14,7 +14,7 @@
 
 import { idsImRahmen, istEchterRahmen } from '@/lib/cad/mehrfachauswahl'
 import { useMemo, useState, useRef, useEffect, useCallback, memo, createContext, useContext } from 'react'
-import { Canvas, useThree, useFrame } from '@react-three/fiber'
+import { Canvas, useThree, useFrame, type ThreeEvent } from '@react-three/fiber'
 import { FUSSPLATTE_AUFSTANDSVERSATZ_M, hangDaten, baueHangFlaeche } from '@/lib/cad/hang-geometrie'
 import { OrbitControls, TransformControls, Grid, Text, Sky, AdaptiveDpr, AdaptiveEvents, ContactShadows, Edges, Html } from '@react-three/drei'
 import { lazy, Suspense } from 'react'
@@ -809,7 +809,7 @@ function InstancedBauteile({
   }, [items, selectedComponent, hoveredId, baseColor, invalidate, abbauMarkiert, mehrfach])
 
   const handleClick = useCallback(
-    (e: any) => {
+    (e: ThreeEvent<PointerEvent>) => {
       e.stopPropagation()
       if (e.instanceId !== undefined && items[e.instanceId]) {
         // NEU (Klick-Platzierung): Im Platzierungs-Modus den Klick-Punkt
@@ -850,7 +850,7 @@ function InstancedBauteile({
   )
 
   const handlePointerOver = useCallback(
-    (e: any) => {
+    (e: ThreeEvent<PointerEvent>) => {
       e.stopPropagation()
       if (e.instanceId !== undefined && items[e.instanceId]) {
         onHover(items[e.instanceId].id)
@@ -863,7 +863,7 @@ function InstancedBauteile({
 
   // Ziehen beginnen: linke Maustaste auf einem manuell gesetzten Bauteil.
   const handlePointerDown = useCallback(
-    (e: any) => {
+    (e: ThreeEvent<PointerEvent>) => {
       if (!zieh || placementType || measureMode) return
       if (e.button !== undefined && e.button !== 0) return
       if (e.shiftKey ?? e.nativeEvent?.shiftKey) return // Shift+Klick = Mehrfachauswahl, nicht ziehen
@@ -880,7 +880,7 @@ function InstancedBauteile({
   // Beim Ziehen: Maus über einem anderen Gerüstteil → dorthin verschieben.
   // Treffer auf dem gezogenen Bauteil selbst werden ignoriert (sonst springt es).
   const handlePointerMove = useCallback(
-    (e: any) => {
+    (e: ThreeEvent<PointerEvent>) => {
       if (!zieh?.ziehId) return
       if (e.instanceId === undefined || !items[e.instanceId] || !e.point) return
       const item = items[e.instanceId]
@@ -1639,7 +1639,7 @@ function GebaeudeAnzeige({ building, features, visible, onSeiteUmschalten, platz
   const echt = useContext(EchtesGebaeudeKontext)
   // Im Platzierungs-Modus zählt auch ein Klick auf die Wand zwischen den Rohren: der Treffpunkt rastet dann auf das nächste Feld ein
   return (
-    <group onClick={platziere ? (e: any) => { e.stopPropagation(); platziere([e.point.x, e.point.y, e.point.z]) } : undefined}>
+    <group onClick={platziere ? (e: ThreeEvent<MouseEvent>) => { e.stopPropagation(); platziere([e.point.x, e.point.y, e.point.z]) } : undefined}>
       <Building3D building={building} features={features} visible={visible && !echt} onSeiteUmschalten={echt ? undefined : onSeiteUmschalten} />
       {visible && echt && <EchtesGebaeude3D {...echt} ziel={turmLage(building)} />}
     </group>
@@ -2259,7 +2259,7 @@ function RahmenAuswahl({ model, visibleTypes, onRahmen }: { model: CADModel; vis
 
 function AutoFraming({ targetRef, modelKey }: { targetRef: { current: THREE.Group | null }; modelKey: string }) {
   const camera = useThree((s) => s.camera)
-  const controls = useThree((s) => s.controls) as any
+  const controls = useThree((s) => s.controls) as unknown as { target: THREE.Vector3; update: () => void } | null
   const invalidate = useThree((s) => s.invalidate)
   useEffect(() => {
     const id = requestAnimationFrame(() => {
