@@ -2800,6 +2800,7 @@ export const LEITER_ARTIKELNUMMER = 'LE-001'
 /** Feste Artikelnummer des Durchstiegsbelags mit Leiter (Preis, Gewicht und Name pflegt jede Firma im Lager – keine Herstellermaße hinterlegt). */
 export const DURCHSTIEG_ARTIKELNUMMER = 'DB-001'
 
+import { allroundStuecklisteAnwenden } from '@/lib/cad/allround-stueckliste'
 export function generateBillOfMaterials(model: CADModel): MaterialItem[] {
   const stand = modellHash(model)
   // Querriegel und Bordbretter gibt es in mehreren Längen unter einer Artikelnummer: die Längen werden je Zeile aufgeschlüsselt
@@ -2815,7 +2816,8 @@ export function generateBillOfMaterials(model: CADModel): MaterialItem[] {
     // Treppe: abgerechnet wird je Treppenlauf – eine Außentreppe mit n Läufen zählt n-mal, ein einzelner Lauf einmal
     counts[key].quantity += comp.type === 'stair' && comp.articleNumber === 'SP-001' ? Math.max(1, Math.round(comp.flights ?? 1)) : 1
   })
-  return Object.values(counts).map((item) => ({ ...item, modellHash: stand, totalPrice: Math.round(item.quantity * item.unitPrice * 100) / 100, riskLevel: 'low', ...(laengen[item.articleNumber] ? { name: item.articleNumber === 'QR-001' ? 'Querriegel' : 'Bordbrett', aiRecommendation: `Längen: ${[...laengen[item.articleNumber]].sort((a, b) => b[0] - a[0]).map(([l, n]) => `${n}× ${l.toFixed(2).replace('.', ',')} m`).join(', ')}` } : { aiRecommendation: getRecommendation(item.articleNumber) }) }))
+  const liste = Object.values(counts).map((item) => ({ ...item, modellHash: stand, totalPrice: Math.round(item.quantity * item.unitPrice * 100) / 100, riskLevel: 'low' as const, ...(laengen[item.articleNumber] ? { name: item.articleNumber === 'QR-001' ? 'Querriegel' : 'Bordbrett', aiRecommendation: `Längen: ${[...laengen[item.articleNumber]].sort((a, b) => b[0] - a[0]).map(([l, n]) => `${n}× ${l.toFixed(2).replace('.', ',')} m`).join(', ')}` } : { aiRecommendation: getRecommendation(item.articleNumber) }) }))
+  return model.system?.id === 'layher-allround' ? allroundStuecklisteAnwenden(model, liste, stand) : liste
 }
 
 function getCategoryFromType(type: ScaffoldComponent3D['type']): string {
