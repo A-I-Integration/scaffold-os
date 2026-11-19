@@ -22,6 +22,8 @@ import { alsWarnungen, pruefeModell3D } from '@/lib/cad/datenqualitaet'
 import { fahrzeugeAus, waehleFahrzeug, type LogistikFahrzeug } from '@/lib/logistik-fahrzeug'
 import { BAUTEIL_FARBEN, type FarbModus } from '@/lib/cad/bauteil-farben'
 import BaugruppenBaum from '@/components/cad/BaugruppenBaum'
+import type { BereichsWerkzeug } from '@/components/cad/BereichePanel'
+import CadWerkzeugleiste from '@/components/cad/CadWerkzeugleiste'
 import CadStatusleiste, { statusEintraege } from '@/components/cad/CadStatusleiste'
 import { systemAnzeigename } from '@/lib/calculations/geruest-systeme'
 import { useState, useMemo, useCallback, useEffect, useRef } from 'react'
@@ -1464,6 +1466,20 @@ export default function CADPage() {
     setZuordnenLaeuft(false)
   }, [model, materials, aufmassListe, logistik, router, notes, statikDaten, m2Wahl])
 
+  // Esc beendet den aktiven Werkzeugmodus (nicht beim Tippen in Feldern); Auswahl und Platzieren haben eigene Esc-Behandlung
+  useEffect(() => {
+    if (!(bereicheOffen || abbauAktiv || measureMode || treppePanel || feldPanel)) return
+    const onKey = (e: KeyboardEvent) => {
+      const t = e.target as HTMLElement | null
+      if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable)) return
+      if (e.key !== 'Escape') return
+      setBereicheOffen(false); setAbbauAktiv(false); setTreppePanel(false); setFeldPanel(false)
+      if (measureMode) handleToggleMeasureMode()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [bereicheOffen, abbauAktiv, measureMode, treppePanel, feldPanel, handleToggleMeasureMode])
+  const waehleBereichWerkzeug = (w: BereichsWerkzeug) => { if (w === 'erweitern' && kantenImModell.length > 0) { window.alert('Felder anhängen gibt es nur bei Rechteck-Gebäuden. Im Umriss-Modus bitte „Aufstocken“ oder „Stück entfernen“ nutzen.'); return } setBereichEin((e) => ({ ...e, werkzeug: w })); setBereicheOffen(true); setAbbauAktiv(false); setViewMode('3d') }
   return (
     <div className={`min-h-screen md:h-screen flex flex-col bg-[#fbfbfd]${dunkel ? ' cad-dunkel' : ''}`}>
       {oeffnungen && (
@@ -1531,6 +1547,14 @@ export default function CADPage() {
           <BuildingForm registriereZeichner={registriereZeichner} onImportWartet={setImportWartet} building={building} systemId={systemId} onChange={(b) => { setAutoGenerate(true); setBuilding(b); }} onSystemChange={aendereSystem} onGenerate={() => { setAutoGenerate(true); generate(); }} onLadeProjektdatei={ladeProjektdatei} onAussehen={(a, h, v) => { setAussehen(a); setAussehenEin(true); setAussehenEinheit('m'); setAussehenOben('y'); setAussehenAnker(null); setAussehenVersatz(v ?? { x: 0, z: 0, grad: 0 }); setAussehenHinweis(h ?? '') }} onModellUebernehmen={(b) => { setAutoGenerate(true); setBuilding(b); setModel(null) }} registrierePlanUpload={registrierePlanUpload} warnings={allWarnings}
             zusatz={<StatikDatenPanel daten={statikDaten} onChange={setStatikDaten} model={modelWithManual} huelle={gebaeudeHuelle} />} />
         </div>
+        <div className='flex-1 flex min-w-0'>
+        <CadWerkzeugleiste hatModell={!!modelWithManual} rahmenAktiv={rahmenModus} onRahmen={() => setRahmenModus((v) => !v)} auswahlAnzahl={mehrfach.length}
+          bereicheOffen={bereicheOffen} bereichWerkzeug={bereichEin.werkzeug} onBereichWerkzeug={waehleBereichWerkzeug}
+          abbauAktiv={abbauAktiv} onAbbau={() => { setAbbauAktiv((a) => !a); setBereicheOffen(false); setViewMode('3d') }}
+          measureMode={measureMode} onMeasure={handleToggleMeasureMode}
+          treppePanelAktiv={treppePanel} onTreppePanel={model ? () => setTreppePanel((v) => !v) : undefined}
+          geruestfeldPanelAktiv={feldPanel} onGeruestfeldPanel={model ? () => setFeldPanel((v) => !v) : undefined}
+          onAuswahlAufheben={() => { setMehrfach([]); setSelectedComponent(null); setRahmenModus(false) }} />
         <div className='flex-1 flex flex-col min-w-0'>
           <div className='flex justify-end px-2 pt-1'>
             <button type='button' onClick={dunkelUmschalten} aria-pressed={dunkel} title='Dunkle Darstellung ein/aus'
@@ -1542,7 +1566,7 @@ export default function CADPage() {
             hatModell={!!modelWithManual} viewMode={viewMode} onViewMode={setViewMode}
             zeichenWerkzeug={zeichenWerkzeug} onZeichenWerkzeug={setZeichenWerkzeug} figurenAnzahl={figuren.length} onFigurenLoeschen={() => setFiguren([])}
             bereicheOffen={bereicheOffen} bereichWerkzeug={bereichEin.werkzeug}
-            onBereichWerkzeug={(w) => { if (w === 'erweitern' && kantenImModell.length > 0) { window.alert('Felder anhängen gibt es nur bei Rechteck-Gebäuden. Im Umriss-Modus bitte „Aufstocken“ oder „Stück entfernen“ nutzen.'); return } setBereichEin((e) => ({ ...e, werkzeug: w })); setBereicheOffen(true); setAbbauAktiv(false); setViewMode('3d') }}
+            onBereichWerkzeug={waehleBereichWerkzeug}
             abbauAktiv={abbauAktiv} onAbbau={() => { setAbbauAktiv((a) => !a); setBereicheOffen(false); setViewMode('3d') }}
             kannZurueck={kannZurueck} kannVor={kannVor} onZurueck={schrittZurueck} onVor={schrittVor}
             entferntAnzahl={removedCount} onEntferntZurueck={() => setRemovedGroups((prev) => prev.slice(0, -1))} onEntferntAlleZurueck={() => setRemovedGroups([])}
@@ -1766,6 +1790,7 @@ export default function CADPage() {
             systemName: systemAnzeigename(systemId), ansicht: viewMode, einrasten, anschlussEinrasten, auswahlAnzahl: mehrfach.length,
             bauteilAnzahl: modelWithManual ? modelWithManual.components3D.length : null,
             flaecheM2: modelWithManual ? modelWithManual.totalAreaM2 : null, gewichtKg: totalWeight })} />
+        </div>
         </div>
         <div className='w-full md:w-64 lg:w-72 2xl:w-96 md:shrink-0 min-w-0'>
           {rolle === 'admin' && model && <M2Abrechnung flaecheM2={modelWithManual?.totalAreaM2 ?? model.totalAreaM2} onChange={setM2Wahl} />}
