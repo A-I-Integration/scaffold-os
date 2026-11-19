@@ -341,3 +341,14 @@ body {
    Die Höhe wird um denselben Faktor verkleinert, damit die Seite weiter genau in das Fenster passt. */
 .os-shell { --ui-zoom: 1.15; zoom: var(--ui-zoom); }
 .os-shell.h-dvh { height: calc(100dvh / var(--ui-zoom)); }
+
+/* CAD: dunkle industrielle Darstellung (zuschaltbar, nur Farben) */
+.cad-dunkel { --cd-bg: #101216; --cd-panel: #171b20; --cd-panel2: #1e242b; --cd-linie: #303944; --cd-text: #e6e9ec; --cd-leise: #9aa5b1; background: var(--cd-bg) !important; color: var(--cd-text); }
+.cad-dunkel .bg-white, .cad-dunkel .bg-\[\#fbfbfd\], .cad-dunkel .bg-\[\#fafafa\], .cad-dunkel .bg-gray-50 { background-color: var(--cd-panel) !important; }
+.cad-dunkel .bg-\[\#f5f5f7\], .cad-dunkel .bg-\[\#f0f7ff\] { background-color: var(--cd-panel2) !important; }
+.cad-dunkel .bg-\[\#fff7ed\], .cad-dunkel .bg-\[\#fff3ea\] { background-color: #2a1f17 !important; }
+.cad-dunkel .text-\[\#1d1d1f\], .cad-dunkel .text-gray-900 { color: var(--cd-text) !important; }
+.cad-dunkel .text-\[\#424245\], .cad-dunkel .text-gray-600 { color: #c3cad2 !important; }
+.cad-dunkel .text-\[\#86868b\], .cad-dunkel .text-\[\#6e6e73\], .cad-dunkel .text-gray-500, .cad-dunkel .text-gray-400 { color: var(--cd-leise) !important; }
+.cad-dunkel [class*="border-"] { border-color: var(--cd-linie); }
+.cad-dunkel input, .cad-dunkel select, .cad-dunkel textarea { background-color: var(--cd-panel2); color: var(--cd-text); border-color: var(--cd-linie); }

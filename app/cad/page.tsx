@@ -146,6 +146,10 @@ export default function CADPage() {
   const building = verlauf.aktuell
   const setBuilding = useCallback((b: BuildingParams) => { const jetzt = Date.now(); setVerlauf((v) => verlaufSetze(v, b, jetzt)) }, [])
   const [systemId, setSystemId] = useState<string>('mj-uniconnect')
+  // Dunkle Darstellung (nur Farben, zuschaltbar; Auswahl wird pro Browser gemerkt)
+  const [dunkel, setDunkel] = useState(false)
+  useEffect(() => { try { setDunkel(localStorage.getItem('cad-dunkel') === '1') } catch { /* ohne Speicher: hell */ } }, [])
+  const dunkelUmschalten = () => setDunkel((v) => { const n = !v; try { localStorage.setItem('cad-dunkel', n ? '1' : '0') } catch { /* egal */ } return n })
   const [model, setModel] = useState<CADModel | null>(null)
   const [farbModus, setFarbModus] = useState<FarbModus>('real')
   const [statikDaten, setStatikDaten] = useState<StatikDaten>({})
@@ -1458,7 +1462,7 @@ export default function CADPage() {
   }, [model, materials, aufmassListe, logistik, router, notes, statikDaten, m2Wahl])
 
   return (
-    <div className='min-h-screen md:h-screen flex flex-col bg-[#fbfbfd]'>
+    <div className={`min-h-screen md:h-screen flex flex-col bg-[#fbfbfd]${dunkel ? ' cad-dunkel' : ''}`}>
       {oeffnungen && (
         <OeffnungenFenster ergebnis={oeffnungen} anzahlBestehendeTueren={building.tueren?.length ?? 0}
           onSchliessen={() => setOeffnungen(null)}
@@ -1525,6 +1529,10 @@ export default function CADPage() {
             zusatz={<StatikDatenPanel daten={statikDaten} onChange={setStatikDaten} model={modelWithManual} huelle={gebaeudeHuelle} />} />
         </div>
         <div className='flex-1 flex flex-col min-w-0'>
+          <div className='flex justify-end px-2 pt-1'>
+            <button type='button' onClick={dunkelUmschalten} aria-pressed={dunkel} title='Dunkle Darstellung ein/aus'
+              className='text-[11px] px-2 py-0.5 rounded border border-[#d2d2d7] text-[#424245] hover:bg-[#f5f5f7]'>{dunkel ? 'Hell' : 'Dunkel'}</button>
+          </div>
           <SystemLeiste systemId={systemId} onSystemChange={aendereSystem} gewaehlteArtikel={Object.keys(artikelWahl).length} />
           <CadBand
             rahmenAktiv={rahmenModus} onRahmen={() => setRahmenModus((v) => !v)} auswahlAnzahl={mehrfach.length}
