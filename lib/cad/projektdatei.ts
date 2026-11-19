@@ -86,6 +86,12 @@ const MAX_HANDARBEIT = 5000
 const text = (v: unknown, max: number): string | null => (typeof v === 'string' && v.length > 0 && v.length <= max ? v : null)
 
 /** Prüft die Handarbeit Eintrag für Eintrag; Ungültiges wird verworfen und gemeldet, nie blind übernommen. */
+const dreiZahlen = (v: unknown, min: number, max: number): [number, number, number] | undefined | null => {
+  if (v === undefined) return undefined
+  if (!Array.isArray(v) || v.length !== 3) return null
+  const z = v.map((x) => zahl(x, min, max))
+  return z.every((x) => x != null) ? (z as [number, number, number]) : null
+}
 export function leseHandarbeit(roh: unknown, verworfen: string[]): Handarbeit | undefined {
   if (roh === undefined || roh === null) return undefined
   if (typeof roh !== 'object') { verworfen.push('Handarbeit (unbekanntes Format)'); return undefined }
@@ -114,15 +120,17 @@ export function leseHandarbeit(roh: unknown, verworfen: string[]): Handarbeit | 
   for (const e of Array.isArray(u.aenderungen) ? u.aenderungen.slice(0, MAX_HANDARBEIT) : []) {
     const o = (e ?? {}) as Record<string, unknown>
     const id = text(o.id, 160), dx = zahl(o.dx, -500, 500), dy = zahl(o.dy, -500, 500), dz = zahl(o.dz, -500, 500), dg = zahl(o.drehGrad, -3600, 3600)
-    if (!id || dx == null || dy == null || dz == null || dg == null) { schlecht++; continue }
-    aenderungen.push({ id, dx, dy, dz, drehGrad: dg })
+    const sk = dreiZahlen(o.skala, 0.01, 100), eu = dreiZahlen(o.euler, -3600, 3600)
+    if (!id || dx == null || dy == null || dz == null || dg == null || sk === null || eu === null) { schlecht++; continue }
+    aenderungen.push({ id, dx, dy, dz, drehGrad: dg, ...(sk ? { skala: sk } : {}), ...(eu ? { euler: eu } : {}) })
   }
   const kopien: BauteilUeberlagerung['kopien'] = []
   for (const e of Array.isArray(u.kopien) ? u.kopien.slice(0, MAX_HANDARBEIT) : []) {
     const o = (e ?? {}) as Record<string, unknown>
     const id = text(o.id, 160), q = text(o.quelleId, 160), dx = zahl(o.dx, -500, 500), dy = zahl(o.dy, -500, 500), dz = zahl(o.dz, -500, 500), dg = zahl(o.drehGrad, -3600, 3600)
-    if (!id || !q || dx == null || dy == null || dz == null || dg == null) { schlecht++; continue }
-    kopien.push({ id, quelleId: q, dx, dy, dz, drehGrad: dg })
+    const sk = dreiZahlen(o.skala, 0.01, 100), eu = dreiZahlen(o.euler, -3600, 3600)
+    if (!id || !q || dx == null || dy == null || dz == null || dg == null || sk === null || eu === null) { schlecht++; continue }
+    kopien.push({ id, quelleId: q, dx, dy, dz, drehGrad: dg, ...(sk ? { skala: sk } : {}), ...(eu ? { euler: eu } : {}) })
   }
   const entfernt: string[][] = []
   for (const g of Array.isArray(r.entfernt) ? r.entfernt.slice(0, MAX_HANDARBEIT) : []) {
