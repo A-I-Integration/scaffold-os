@@ -13,7 +13,7 @@ import { offenerBetrag } from '@/lib/mahnung-steuerung';
 
 import type { PositionArt } from './rechnung-position';
 import { positionDetailZeilen, regieSummeText } from './rechnung-position';
-import { leistungsdatumFuer, steuerFall } from './rechnung-steuer';
+import { leistungsdatumFuer, steuerFall, aufbewahrungsHinweis } from './rechnung-steuer';
 
 export interface Position {
   bezeichnung: string;
@@ -61,6 +61,10 @@ export interface Invoice {
   geprueft_am?: string | null;
   geruest_nr?: string | null; // Gerüstnummer zur eindeutigen Zuordnung
   leistungsdatum?: string | null; // Datum der Leistung (sonst Rechnungsdatum)
+  steuerfall?: 'regel' | '13b' | 'kleinunternehmer' | null; // gewählte Steuerbehandlung
+  customer_privat?: boolean; // Kunde ist Privatperson (Hinweis auf Aufbewahrungspflicht)
+  customer_ust_id?: string | null;
+  leitweg_id?: string | null;
 }
 
 // Phase 15: Bezeichnung je Rechnungstyp
@@ -251,9 +255,10 @@ export function generateInvoicePDF(inv: Invoice) {
     `Bitte überweisen Sie den Rechnungsbetrag bis zum ${fmtDate(inv.due_date)}${bankLine} unter Angabe der Rechnungsnummer ${inv.invoice_number}.`,
     14, Math.min(cy + 8, 262), { maxWidth: 120 }
   );
-  if (inv.notes) {
+  const bemerkungText = [inv.notes, aufbewahrungsHinweis(inv)].filter(Boolean).join('\n\n');
+  if (bemerkungText) {
     // Bemerkungen als eigener Block über volle Breite; bei Platzmangel auf neuer Seite
-    const zeilen: string[] = doc.splitTextToSize(inv.notes, 182);
+    const zeilen: string[] = doc.splitTextToSize(bemerkungText, 182);
     let ny = Math.max(cy + 18, 0);
     if (ny + zeilen.length * 4 + 6 > 272) { doc.addPage(); ny = 30; }
     doc.setFont('helvetica', 'bold'); doc.text('Bemerkungen', 14, ny); ny += 5;

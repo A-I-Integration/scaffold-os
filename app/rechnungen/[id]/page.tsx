@@ -7,6 +7,7 @@
 // Alle Änderungen laufen über dieselben Schnittstellen wie in der Kundenakte (Storno + neue Version atomar).
 // ============================================================
 
+import { ladeXrechnung } from '@/lib/xrechnung-download'
 import { useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useParams, useRouter } from 'next/navigation'
@@ -239,6 +240,8 @@ export default function RechnungAktePage() {
     a.click()
   })
 
+  const xrechnung = () => lauf(async () => { if (inv) await ladeXrechnung(inv.id) })
+
   const versenden = () => lauf(async () => {
     if (!inv) return
     let vorschlag = mails.find((m) => m.to_email)?.to_email || ''
@@ -279,6 +282,7 @@ export default function RechnungAktePage() {
         <BandGruppe name="Dokument">
           <BandKnopf icon={<Download className={ic} />} label="PDF speichern" onClick={pdfSpeichern} />
           <BandKnopf icon={<FileText className={ic} />} label="E-Rechnung laden" onClick={zugferd} disabled={busy} titel="PDF mit eingebetteter E-Rechnung (ZUGFeRD)" />
+          <BandKnopf icon={<FileText className={ic} />} label="XRechnung laden" onClick={xrechnung} disabled={busy} titel="Reine XML-Rechnung (XRechnung), z. B. für Behörden" />
           <BandKnopf icon={<Paperclip className={ic} />} label="Anhänge" onClick={() => setAnhangOffen(true)} />
         </BandGruppe>
         <BandGruppe name="Versand">

@@ -26,7 +26,7 @@ const headers = {
 const ROLES = ['admin', 'disponent'];
 
 // Felder, die angelegt / geändert werden dürfen (Whitelist)
-const FELDER = ['name', 'contact_person', 'email', 'phone', 'street', 'zip', 'city', 'notes', 'is_active', 'datev_konto'];
+const FELDER = ['name', 'contact_person', 'email', 'phone', 'street', 'zip', 'city', 'notes', 'is_active', 'datev_konto', 'kundentyp', 'ust_id', 'leitweg_id'];
 
 async function callerRole(): Promise<string | null> {
   try {
@@ -42,6 +42,22 @@ async function callerRole(): Promise<string | null> {
   } catch {
     return null;
   }
+}
+
+// Kundentyp, USt-IdNr. und Leitweg-ID prüfen und normalisieren (ändert `clean` direkt); Rückgabe = Fehlertext oder null
+function steuerFelderPruefen(clean: Record<string, any>): string | null {
+  if (clean.kundentyp !== undefined && !['gewerblich', 'privat'].includes(clean.kundentyp)) return 'Kundentyp muss „gewerblich“ oder „privat“ sein.';
+  if (clean.ust_id !== undefined) {
+    const u = String(clean.ust_id || '').replace(/\s+/g, '').toUpperCase();
+    if (u && !/^[A-Z]{2}[A-Z0-9]{2,12}$/.test(u)) return 'USt-IdNr. ungültig (Beispiel: DE123456789).';
+    clean.ust_id = u || null;
+  }
+  if (clean.leitweg_id !== undefined) {
+    const l = String(clean.leitweg_id || '').trim();
+    if (l.length > 46) return 'Leitweg-ID ist zu lang (höchstens 46 Zeichen).';
+    clean.leitweg_id = l || null;
+  }
+  return null;
 }
 
 function emailOk(email: any): boolean {
@@ -60,8 +76,8 @@ export async function GET(req: NextRequest) {
     const id = searchParams.get('id');
     const sortiert = searchParams.get('sort') === 'neueste' ? 'created_at.desc' : 'name';
     const query = id
-      ? `id=eq.${id}&select=id,name,contact_person,email,phone,street,zip,city,notes,is_active,datev_konto,created_at`
-      : `select=id,name,contact_person,email,phone,street,zip,city,notes,is_active,datev_konto,created_at&order=${sortiert}`;
+      ? `id=eq.${id}&select=id,name,contact_person,email,phone,street,zip,city,notes,is_active,datev_konto,kundentyp,ust_id,leitweg_id,created_at`
+      : `select=id,name,contact_person,email,phone,street,zip,city,notes,is_active,datev_konto,kundentyp,ust_id,leitweg_id,created_at&order=${sortiert}`;
     const res = await fetch(`${url}/rest/v1/customers?${query}`, { headers });
     if (!res.ok) {
       const t = await res.text();
@@ -97,6 +113,8 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: false, error: 'Name ist Pflicht.' }, { status: 400 });
     }
     clean.name = String(clean.name).trim();
+    const steuerFehler = steuerFelderPruefen(clean);
+    if (steuerFehler) return NextResponse.json({ success: false, error: steuerFehler }, { status: 400 });
     if (!emailOk(clean.email)) {
       return NextResponse.json({ success: false, error: 'E-Mail-Adresse ungültig.' }, { status: 400 });
     }
@@ -109,7 +127,7 @@ export async function POST(req: NextRequest) {
     // Kunde mit exakt diesem Namen (Groß-/Kleinschreibung egal), wird
     // dieser zurückgegeben statt ein neuer Datensatz angelegt.
     const dupCheck = await fetch(
-      `${url}/rest/v1/customers?name=ilike.${encodeURIComponent(clean.name)}&select=id,name,contact_person,email,phone,street,zip,city,notes,is_active,datev_konto,created_at&limit=1`,
+      `${url}/rest/v1/customers?name=ilike.${encodeURIComponent(clean.name)}&select=id,name,contact_person,email,phone,street,zip,city,notes,is_active,datev_konto,kundentyp,ust_id,leitweg_id,created_at&limit=1`,
       { headers }
     );
     if (dupCheck.ok) {
@@ -150,6 +168,8 @@ export async function PATCH(req: NextRequest) {
     if (clean.name !== undefined && !String(clean.name).trim()) {
       return NextResponse.json({ success: false, error: 'Name darf nicht leer sein.' }, { status: 400 });
     }
+    const steuerFehler = steuerFelderPruefen(clean);
+    if (steuerFehler) return NextResponse.json({ success: false, error: steuerFehler }, { status: 400 });
     if (!emailOk(clean.email)) {
       return NextResponse.json({ success: false, error: 'E-Mail-Adresse ungültig.' }, { status: 400 });
     }

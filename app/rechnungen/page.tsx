@@ -1,6 +1,5 @@
 'use client';
 
-import { notizMitUstHinweis } from '@/lib/ust-hinweis';
 import { useState, useEffect, useCallback } from 'react';
 import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
@@ -205,7 +204,7 @@ function RechnungenContent() {
     datumPlusTage(14)
   );
   const [notes, setNotes] = useState('');
-  const [reverseCharge, setReverseCharge] = useState(false);
+  const [steuerbehandlung, setSteuerbehandlung] = useState<'regel' | '13b' | 'kleinunternehmer'>('regel');
   const [geruestNr, setGeruestNr] = useState('');
   const [leistungsdatum, setLeistungsdatum] = useState('');
   const [detailOffen, setDetailOffen] = useState<Record<number, boolean>>({});
@@ -309,7 +308,8 @@ function RechnungenContent() {
           tax_rate: taxRate,
           invoice_date: invoiceDate,
           due_date: dueDate,
-          notes: notizMitUstHinweis(notes, taxRate, reverseCharge),
+          notes: notes.trim() || null,
+          steuerfall: taxRate === 0 ? steuerbehandlung : 'regel',
           geruest_nr: geruestNr.trim() || undefined,
           leistungsdatum: leistungsdatum || undefined,
           invoice_type: invoiceType,
@@ -333,7 +333,7 @@ function RechnungenContent() {
         setLvId(null);
       }
       setShowForm(false);
-      setCustomerName(''); setCustomerAddress(''); setNotes(''); setReverseCharge(false); setProjectId(null); setGeruestNr(''); setLeistungsdatum(''); setDetailOffen({});
+      setCustomerName(''); setCustomerAddress(''); setNotes(''); setSteuerbehandlung('regel'); setProjectId(null); setGeruestNr(''); setLeistungsdatum(''); setDetailOffen({});
       setInvoiceType('standard');
       setPositions([{ bezeichnung: '', menge: 1, einheit: 'Stk.', einzelpreis: 0 }]);
       await load();
@@ -733,10 +733,17 @@ function RechnungenContent() {
                   <option value={0}>0 %</option>
                 </select>
                 {taxRate === 0 && (
-                  <label className="flex items-center gap-2 text-xs text-[#1d1d1f] max-w-xs" title="Nur wenn der Kunde selbst Bauleistungen erbringt (USt 1 TG vorliegt). Im Zweifel Steuerberater fragen.">
-                    <input type="checkbox" checked={reverseCharge} onChange={(e) => setReverseCharge(e.target.checked)} />
-                    Steuerschuldner ist der Leistungsempfänger (§ 13b UStG) – Hinweis auf die Rechnung
-                  </label>
+                  <select
+                    aria-label="Steuerbehandlung bei 0 %"
+                    value={steuerbehandlung}
+                    onChange={(e) => setSteuerbehandlung(e.target.value as 'regel' | '13b' | 'kleinunternehmer')}
+                    title="§ 13b nur, wenn der Kunde selbst Bauleistungen erbringt (USt 1 TG liegt vor). Im Zweifel den Steuerberater fragen."
+                    className="px-3 py-2 bg-black/10 border border-black/10 rounded-xl text-sm text-[#1d1d1f] focus:outline-none focus:border-[#e8590c] max-w-xs"
+                  >
+                    <option value="regel">0 % – Grund bitte unter Hinweis angeben</option>
+                    <option value="13b">Steuerschuldner ist der Leistungsempfänger (§ 13b UStG)</option>
+                    <option value="kleinunternehmer">Kleinunternehmer (§ 19 UStG)</option>
+                  </select>
                 )}
                 <input
                   value={notes}

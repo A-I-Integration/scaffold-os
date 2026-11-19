@@ -50,6 +50,7 @@ import StatikerFreigabeBox from '@/components/StatikerFreigabeBox'
 import { FreigabeBadge, useFreigabeStatus } from '@/components/FreigabeBadge'
 import Auftragsstand from '@/components/Auftragsstand'
 import AnhangDialog from '@/components/rechnung/AnhangDialog'
+import { ladeXrechnung } from '@/lib/xrechnung-download'
 
 interface Kunde {
   id: string
@@ -63,6 +64,9 @@ interface Kunde {
   // vergebene Einzeldebitoren-Kontonummer. Leer = Export bucht weiter auf
   // das Sammelkonto (siehe app/rechnungen/page.tsx buildDatevEXTF).
   datev_konto: string | null
+  kundentyp?: 'gewerblich' | 'privat'
+  ust_id?: string | null
+  leitweg_id?: string | null
   created_at: string
 }
 
@@ -1010,6 +1014,23 @@ export default function KundenDetailPage() {
                 className={inputCls}
               />
             </div>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              <div>
+                <label className="block text-xs text-[#86868b] mb-1">Kundentyp</label>
+                <select value={kundeForm.kundentyp || 'gewerblich'} onChange={(e) => setKundeForm({ ...kundeForm, kundentyp: e.target.value as 'gewerblich' | 'privat' })} className={inputCls}>
+                  <option value="gewerblich">Unternehmen / Gewerbe</option>
+                  <option value="privat">Privatperson</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs text-[#86868b] mb-1">USt-IdNr. (optional)</label>
+                <input value={kundeForm.ust_id || ''} onChange={(e) => setKundeForm({ ...kundeForm, ust_id: e.target.value })} placeholder="DE123456789" className={inputCls} />
+              </div>
+              <div>
+                <label className="block text-xs text-[#86868b] mb-1">Leitweg-ID (nur Behörden, optional)</label>
+                <input value={kundeForm.leitweg_id || ''} onChange={(e) => setKundeForm({ ...kundeForm, leitweg_id: e.target.value })} placeholder="z. B. 04011000-12345-67" className={inputCls} />
+              </div>
+            </div>
             <button onClick={saveKunde} disabled={speichern} className={btnPrimary}>{speichern ? 'Speichert…' : 'Speichern'}</button>
             {projects.length === 0 && kundenInvoices.length === 0 && (
               <button onClick={handleKundeLoeschen} className="ml-2 text-xs text-red-600 hover:text-red-700 underline">
@@ -1363,6 +1384,7 @@ export default function KundenDetailPage() {
                                 } : undefined}
                                 onTeilabbau={() => teilabbauVorschlagen(inv)}
                                 onZugferd={() => handleZugferd(inv)}
+                                onXrechnung={() => ladeXrechnung(inv.id).catch((err: Error) => alert('❌ ' + err.message))}
                                 onBezahltToggle={() => toggleStatus(inv)}
                                 onLoeschen={() => deleteInvoice(inv)}
                               />
@@ -1589,6 +1611,7 @@ export default function KundenDetailPage() {
                                   onGutschrift={() => { setGutschriftOffen(project.id); setGutschriftReferenz(inv.invoice_number); setGutschriftGrund('') }}
                                   onTeilabbau={() => teilabbauVorschlagen(inv)}
                                   onZugferd={() => handleZugferd(inv)}
+                                  onXrechnung={() => ladeXrechnung(inv.id).catch((err: Error) => alert('❌ ' + err.message))}
                                   onBezahltToggle={() => toggleStatus(inv)}
                                   onLoeschen={() => deleteInvoice(inv)}
                                 />
