@@ -139,7 +139,8 @@ export function berechneTeilabbau(
     anteil = gesamtFlaeche > 0 ? flaecheM2 / gesamtFlaeche : 0
   }
   anteil = Math.min(1, Math.max(0, anteil))
-  const stundenBerechnet = Math.ceil(opt.gesamtAbbauStunden * anteil)
+  // Rechenrauschen (125,00000000000003) darf nicht auf die nächste volle Stunde aufrunden
+  const stundenBerechnet = Math.ceil(Math.round(opt.gesamtAbbauStunden * anteil * 1e6) / 1e6)
   const stunden = opt.stundenHand !== undefined && opt.stundenHand >= 0 ? opt.stundenHand : stundenBerechnet
   const tage = stunden > 0 ? Math.max(1, Math.ceil(stunden / (personen * stundenJeTag))) : 0
 

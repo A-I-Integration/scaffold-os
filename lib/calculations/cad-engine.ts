@@ -487,8 +487,10 @@ export interface CADWarning {
 export function calculateFieldDivision(
   buildingLengthM: number,
   system: GeruestSystem,
-  preferredFieldLength?: number
-): { fields: number; fieldLengthM: number; remainderM: number; distribution: number[] } {
+  preferredFieldLength?: number,
+  /** true: Die Wand stößt an ein Nachbargerüst – das Passfeld-Paar darf nicht überstehen (Summe = Sollmaß), sonst bleibt das Restfeld ein kürzeres Endfeld */
+  exakt = false
+): { fields: number; fieldLengthM: number; remainderM: number; distribution: number[]; /** Passfeld-Paar am Ende (nur Katalogmaße), wenn die Wand nicht auf Standardfelder aufgeht */ passfeld?: { laengenM: [number, number]; sollM: number; ueberstandM: number } } {
   const available = system.feldlangenM
   const target = preferredFieldLength || system.standardFeldlangeM
   const bestLength = available.reduce((best, curr) => {
@@ -505,8 +507,31 @@ export function calculateFieldDivision(
   const remainder = actualLength - buildingLengthM
   const distribution: number[] = []
   for (let i = 0; i < fields; i++) distribution.push(bestLength)
-  if (remainder > 0.1 && fields > 1) distribution[fields - 1] = parseFloat((bestLength - remainder).toFixed(2))
-  return { fields, fieldLengthM: bestLength, remainderM: remainder, distribution }
+  // Restfeld-Regel (Passfeld mit Teilung): Das Restmaß wird nicht als Sonderlänge gebaut, sondern auf die beiden letzten Felder
+  // verteilt, die nur Katalogmaße haben. Von den Paaren, die mindestens das Restmaß der letzten zwei Felder decken (das Gerüst
+  // endet nie vor der Wand), gilt das mit dem kleinsten Überstand; bei Gleichstand das mit den größeren Einzelfeldern.
+  let passfeld: { laengenM: [number, number]; sollM: number; ueberstandM: number } | undefined
+  if (remainder > 0.1 && fields > 1) {
+    const soll = parseFloat((2 * bestLength - remainder).toFixed(2))
+    let best: [number, number] | null = null
+    for (const a of available) for (const b of available) {
+      if (a + b + 1e-9 < soll) continue
+      if (exakt && a + b - soll > 0.005) continue
+      const x: [number, number] = [Math.max(a, b), Math.min(a, b)]
+      if (!best) { best = x; continue }
+      const d = x[0] + x[1] - soll, db = best[0] + best[1] - soll
+      if (d < db - 1e-9 || (Math.abs(d - db) <= 1e-9 && x[1] > best[1])) best = x
+    }
+    if (best) {
+      distribution[fields - 2] = best[0]
+      distribution[fields - 1] = best[1]
+      passfeld = { laengenM: [best[0], best[1]], sollM: soll, ueberstandM: parseFloat((best[0] + best[1] - soll).toFixed(2)) }
+    } else if (exakt) {
+      // Kein exaktes Katalogpaar: Das Endfeld wird auf das Restmaß gekürzt, damit es nicht in das Nachbargerüst ragt
+      distribution[fields - 1] = parseFloat((bestLength - remainder).toFixed(2))
+    }
+  }
+  return { fields, fieldLengthM: bestLength, remainderM: remainder, distribution, ...(passfeld ? { passfeld } : {}) }
 }
 
 /** Der oberste Belag liegt höchstens so weit ÜBER der Rinne (Traufe) bzw. der Dachkante, in m (Vorgabe: Oberkante Belag = Traufe + 1,00 m; alle Beläge waagerecht). */
@@ -1628,14 +1653,26 @@ export function generateCADModel(
       else warnings.push({ type: 'warning', code: 'OPT_FELDLAENGE_UNGUELTIG', message: `Feldlänge ${opt.feldlaengeM} m gibt es bei diesem System nicht – die Feldlänge wird automatisch gewählt.` })
     }
   }
-  const teile = (laengeM: number) => teilungSystem ? calculateFieldDivision(laengeM, teilungSystem) : { fields: 1, fieldLengthM: 2.07, remainderM: 0, distribution: [2.07] }
+  const passfeldHinweise = new Set<string>()
+  const teile = (laengeM: number, exakt = false) => {
+    if (!teilungSystem) return { fields: 1, fieldLengthM: 2.07, remainderM: 0, distribution: [2.07] }
+    const d = calculateFieldDivision(laengeM, teilungSystem, undefined, exakt)
+    if (d.passfeld) {
+      const text = `Passfeld: Wand ${laengeM.toFixed(2).replace('.', ',')} m geht nicht auf Standardfelder auf – die letzten zwei Felder sind ${d.passfeld.laengenM.map((l) => l.toFixed(2).replace('.', ',')).join(' m und ')} m (Katalogmaße), das Gerüst steht ${d.passfeld.ueberstandM.toFixed(2).replace('.', ',')} m über. Bitte prüfen.`
+      if (!passfeldHinweise.has(text)) { passfeldHinweise.add(text); warnings.push({ type: 'info', code: 'PASSFELD', message: text }) }
+    }
+    return d
+  }
 
   // Umriss-Modus: Gerüst folgt dem Vieleck. Ungültiger Umriss → Fehlermeldung, dann normale Rechteck-Logik.
   if (building.umriss && building.umriss.length > 0) {
     const fehler = pruefeUmriss(building.umriss)
     if (fehler.length === 0) {
       if (opt?.wandabstandSeiteM && Object.values(opt.wandabstandSeiteM).some((v) => v !== undefined)) warnings.push({ type: 'warning', code: 'WANDABSTAND_SEITE_UMRISS', message: 'Der Wandabstand je Seite gilt nur bei Rechteck und abgestuftem Gebäude. Im Umriss-Modus gilt der eine Wandabstand für alle Kanten.' })
-      return generiereUmrissModell(building, system, scaffoldWidthM, distanceToBuildingM, warnings, teile)
+      const umrissModell = generiereUmrissModell(building, system, scaffoldWidthM, distanceToBuildingM, warnings, teile)
+      // Passfeld-Hinweise entstehen erst beim Teilen der Kanten, also nach dem Kopieren der Warnungen
+      for (const w of warnings) if (w.code === 'PASSFELD' && !umrissModell.warnings.includes(w)) umrissModell.warnings.push(w)
+      return umrissModell
     }
     fehler.forEach((m) => warnings.push({ type: 'error', code: 'UMRISS_UNGUELTIG', message: `Umriss ungültig: ${m} Es wird ersatzweise das Rechteck verwendet.` }))
     building = { ...building, umriss: undefined }
@@ -1891,7 +1928,7 @@ export function generateCADModel(
   const seitenLaengeM = (sd: 'front' | 'back' | 'left' | 'right') => (sd === 'front' || sd === 'back' ? building.lengthM : building.widthM || 0)
   const einfachSeitenDivs = activeSides.map((sd) => teile(seitenLaengeM(sd)))
   const abschnittDivs = abschnitte
-    ? abschnitte.map((sec) => teile(sec.laengeM))
+    ? abschnitte.map((sec, si) => teile(sec.laengeM, si < abschnitte.length - 1))
     : null
 
   for (const side of activeSides) {
@@ -2772,7 +2809,8 @@ export function generateBillOfMaterials(model: CADModel): MaterialItem[] {
     if (!counts[key]) {
       counts[key] = { name: comp.name, category: getCategoryFromType(comp.type), quantity: 0, unit: getUnit(comp.type), unitPrice: getUnitPrice(key), weightKg: getWeightKg(key), articleNumber: key }
     }
-    counts[key].quantity += 1
+    // Treppe: abgerechnet wird je Treppenlauf – eine Außentreppe mit n Läufen zählt n-mal, ein einzelner Lauf einmal
+    counts[key].quantity += comp.type === 'stair' && comp.articleNumber === 'SP-001' ? Math.max(1, Math.round(comp.flights ?? 1)) : 1
   })
   return Object.values(counts).map((item) => ({ ...item, modellHash: stand, totalPrice: Math.round(item.quantity * item.unitPrice * 100) / 100, riskLevel: 'low', aiRecommendation: getRecommendation(item.articleNumber) }))
 }

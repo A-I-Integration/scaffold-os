@@ -221,10 +221,13 @@ describe('Feldanordnung', () => {
       const m = generateCADModel({ ...basis, lengthM: laenge, doorCount: 0 }, 'layher-allround')
       const vorn = m.fields.filter((f) => f.side === 'front' && f.levelIndex === 0).sort((a, b) => a.positionX - b.positionX)
       expect(vorn.length).toBeGreaterThan(1)
-      expect(vorn[0].positionX - vorn[0].lengthM / 2).toBeCloseTo(-laenge / 2, 2)
+      // Passfeld: Das Gerüst deckt die Wand ganz ab und steht beidseitig gleich weit über (nie vor der Wand)
+      const anfang = vorn[0].positionX - vorn[0].lengthM / 2
+      expect(anfang).toBeLessThanOrEqual(-laenge / 2 + 0.005)
       for (let i = 1; i < vorn.length; i++) expect(vorn[i].positionX - vorn[i].lengthM / 2).toBeCloseTo(vorn[i - 1].positionX + vorn[i - 1].lengthM / 2, 2)
       const ende = vorn[vorn.length - 1]
-      expect(ende.positionX + ende.lengthM / 2).toBeCloseTo(laenge / 2, 2)
+      expect(ende.positionX + ende.lengthM / 2).toBeGreaterThanOrEqual(laenge / 2 - 0.005)
+      expect(-laenge / 2 - anfang).toBeCloseTo(ende.positionX + ende.lengthM / 2 - laenge / 2, 2)
     }
   })
 })

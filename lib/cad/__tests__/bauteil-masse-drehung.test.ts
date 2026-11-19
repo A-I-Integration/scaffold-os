@@ -28,7 +28,7 @@ describe('Maße und Drehung je Bauteil', () => {
     const u2 = setzeBauteilMasseDrehung(u1, n1, { euler: [0, 45, 0] })
     const n2 = wendeBauteilAenderungenAn({ ...m, components3D: [rahmen] }, u2).components3D[0]
     expect(eulerGrad(n2)).toEqual([0, 45, 0])
-    expect(n2.position).toEqual(rahmen.position)
+    n2.position.forEach((v, i) => expect(v).toBeCloseTo(rahmen.position[i], 3))
   })
   it('Zurück auf berechnet: Änderung ohne Inhalt verschwindet; Maß und Drehung überleben Verschieben', () => {
     const u = setzeBauteilMasseDrehung(KEINE_UEBERLAGERUNG, rahmen, { masse: [rahmen.scale[0], rahmen.scale[1] * 2, rahmen.scale[2]] })

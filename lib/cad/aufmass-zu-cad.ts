@@ -18,6 +18,7 @@
 // ============================================================
 
 import type { BuildingParams, BuildingSection } from '@/lib/calculations/cad-engine'
+import type { MaterialItem } from '@/types/scaffold'
 import type { PlanImport } from '@/lib/cad/plan-import'
 import { GERUEST_SYSTEME } from '@/lib/calculations/geruest-systeme'
 import { breiteVonBreitenklasse } from '@/lib/geruestklassen'
@@ -169,7 +170,14 @@ export function aufmassZuCad(a: AufmassFuerCad): CadUebernahme {
 /** Zwischenablage zwischen Aufmaß-Seite und CAD (nur dieser Browser-Tab). */
 export const CAD_UEBERNAHME_KEY = 'scaffold_cad_aus_aufmass'
 
-export interface CadUebergabe { building: BuildingParams; systemId: string; hinweise: string[]; projektName?: string; notizen?: unknown[]; statikDaten?: Record<string, unknown> }
+export interface CadUebergabe { building: BuildingParams; systemId: string; hinweise: string[]; projektName?: string; notizen?: unknown[]; statikDaten?: Record<string, unknown>; /** Stückliste des Aufmaßes (für die Regel „Größeres von beiden“) */ aufmassListe?: MaterialItem[] }
+
+/** Nur Zeilen mit Artikelnummer, Menge und Stückpreis übernehmen */
+export function gueltigeStueckliste(roh: unknown): MaterialItem[] | undefined {
+  if (!Array.isArray(roh)) return undefined
+  const l = roh.filter((i): i is MaterialItem => !!i && typeof i === 'object' && typeof (i as MaterialItem).articleNumber === 'string' && Number.isFinite((i as MaterialItem).quantity) && (i as MaterialItem).quantity >= 0 && Number.isFinite((i as MaterialItem).unitPrice))
+  return l.length ? l : undefined
+}
 
 export function leseCadUebergabe(roh: string | null): CadUebergabe | null {
   if (!roh) return null
@@ -177,6 +185,6 @@ export function leseCadUebergabe(roh: string | null): CadUebergabe | null {
     const j = JSON.parse(roh) as Record<string, unknown> & { building?: BuildingParams }
     const b = j?.building
     if (!b || !(b.lengthM > 0) || !(b.widthM > 0) || !(b.heightM > 0)) return null
-    return { building: b, systemId: typeof j.systemId === 'string' ? j.systemId : 'layher-allround', hinweise: Array.isArray(j.hinweise) ? (j.hinweise as unknown[]).map(String) : [], projektName: typeof j.projektName === 'string' ? j.projektName : undefined, notizen: Array.isArray(j.notizen) ? j.notizen : undefined, statikDaten: j.statikDaten && typeof j.statikDaten === 'object' && !Array.isArray(j.statikDaten) ? (j.statikDaten as Record<string, unknown>) : undefined }
+    return { building: b, systemId: typeof j.systemId === 'string' ? j.systemId : 'layher-allround', hinweise: Array.isArray(j.hinweise) ? (j.hinweise as unknown[]).map(String) : [], projektName: typeof j.projektName === 'string' ? j.projektName : undefined, notizen: Array.isArray(j.notizen) ? j.notizen : undefined, statikDaten: j.statikDaten && typeof j.statikDaten === 'object' && !Array.isArray(j.statikDaten) ? (j.statikDaten as Record<string, unknown>) : undefined, aufmassListe: gueltigeStueckliste(j.aufmassListe) }
   } catch { return null }
 }

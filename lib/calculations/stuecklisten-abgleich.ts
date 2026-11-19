@@ -40,3 +40,19 @@ export function vergleicheStuecklisten(aufmass: MaterialItem[], cad: MaterialIte
   const summe = (l: MaterialItem[]) => cent(l.reduce((s, i) => s + i.totalPrice, 0))
   return { zeilen, abweichend: zeilen.filter((z) => z.differenz !== 0), summeAufmassEuro: summe(aufmass), summeCadEuro: summe(cad) }
 }
+
+/**
+ * Maßgebliche Stückliste: je Artikelnummer die größere der beiden Mengen (Aufmaß oder CAD).
+ * Name, Stückpreis, Gewicht und weitere Angaben kommen aus der Liste, deren Menge gilt (bei Gleichstand: Aufmaß).
+ * Summen werden aus der gewählten Menge neu gebildet.
+ */
+export function groessereStueckliste(aufmass: MaterialItem[], cad: MaterialItem[]): MaterialItem[] {
+  const zusammen = (l: MaterialItem[]) => { const m = new Map<string, MaterialItem>(); for (const i of l) { const e = m.get(i.articleNumber); if (e) m.set(i.articleNumber, { ...e, quantity: e.quantity + i.quantity }); else m.set(i.articleNumber, { ...i }) } return m }
+  const a = zusammen(aufmass), c = zusammen(cad)
+  const nummern = [...new Set([...a.keys(), ...c.keys()])].sort((x, y) => x.localeCompare(y))
+  return nummern.map((n) => {
+    const x = a.get(n), y = c.get(n)
+    const w = !y || (x && x.quantity >= y.quantity) ? x! : y
+    return { ...w, totalPrice: cent(w.quantity * w.unitPrice) }
+  })
+}

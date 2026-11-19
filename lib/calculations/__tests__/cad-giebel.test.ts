@@ -30,10 +30,10 @@ describe('Satteldach: Traufseiten kürzer, Giebelseiten folgen dem Dreieck', () 
     const trauflagen = bisRinne(6.3, raster)
     expect(lagen(m, 'front')).toBe(trauflagen)
     expect(lagen(m, 'back')).toBe(trauflagen)
-    // das mittlere Feld liegt nicht exakt auf dem First (Feldmitte, 4 Felder à 2,07 m): Höhe dort ≈ 8,5 m
-    expect(lagen(m, 'left')).toBe(bisRinne(8.5, raster))
+    // Restfeld-Regel (nur Katalogmaße): 5 Felder à 2,07 m auf 9 m – das mittlere Feld liegt auf dem First (9,2 m)
+    expect(lagen(m, 'left')).toBe(bisRinne(9.2, raster))
     // Ecken der Giebelseite sind niedriger als die Mitte
-    const links = m.fields.filter((f) => f.side === 'left' && f.levelIndex === bisRinne(8.5, raster) - 1)
+    const links = m.fields.filter((f) => f.side === 'left' && f.levelIndex === bisRinne(9.2, raster) - 1)
     expect(links.length).toBeGreaterThan(0)
     expect(links.length).toBeLessThan(m.fields.filter((f) => f.side === 'left' && f.levelIndex === 0).length)
   })
@@ -51,8 +51,8 @@ describe('Satteldach: Traufseiten kürzer, Giebelseiten folgen dem Dreieck', () 
     const m = generateCADModel(haus({ lengthM: 8, widthM: 11 }), 'layher-allround')
     const raster = m.levels[0].heightM
     expect(lagen(m, 'left')).toBe(bisRinne(6.3, raster))
-    // Feldmitte des mittleren Feldes liegt knapp unter dem First
-    expect(lagen(m, 'front')).toBe(bisRinne(8.5, raster))
+    // Restfeld-Regel (nur Katalogmaße): das mittlere Feld liegt auf dem First
+    expect(lagen(m, 'front')).toBe(bisRinne(9.2, raster))
   })
 })
 
