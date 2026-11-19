@@ -6,7 +6,7 @@ describe('CAD-Arbeitsstand', () => {
   it('liest einen gültigen Stand und füllt Lücken auf', () => {
     const r = pruefeArbeitsstand(JSON.stringify({ building: b }))
     expect(r?.building).toMatchObject(b)
-    expect(r?.systemId).toBe('layher-allround')
+    expect(r?.systemId).toBe('mj-uniconnect')
     expect(r?.notizen).toEqual([])
     expect(r?.artikelWahl).toEqual({})
   })

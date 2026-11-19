@@ -8,11 +8,11 @@ const gebaeude = { lengthM: 10, widthM: 8, heightM: 12, eavesHeightM: 12, roofHe
 
 describe('Projektdatei', () => {
   it('speichern und wieder laden ergibt dasselbe Modell', () => {
-    const d = erzeugeProjektdatei({ building: gebaeude, systemId: 'layher-allround', statikDaten: { vrefMs: 25 }, notizen: [] })
+    const d = erzeugeProjektdatei({ building: gebaeude, systemId: 'mj-uniconnect', statikDaten: { vrefMs: 25 }, notizen: [] })
     const e = liesProjektdatei(JSON.stringify(d))
     expect(e.ok).toBe(true)
     if (!e.ok) return
-    expect(generateCADModel(e.daten.building, e.daten.systemId).totalAreaM2).toBe(generateCADModel(gebaeude, 'layher-allround').totalAreaM2)
+    expect(generateCADModel(e.daten.building, e.daten.systemId).totalAreaM2).toBe(generateCADModel(gebaeude, 'mj-uniconnect').totalAreaM2)
     expect(e.daten.statikDaten.vrefMs).toBe(25)
   })
   it('lehnt fremde, kaputte und zu neue Dateien ab', () => {
@@ -26,7 +26,7 @@ describe('Projektdatei', () => {
     const e = liesProjektdatei(JSON.stringify({ format: 'scaffoldos-cad-projekt', version: 1, systemId: 'gibt-es-nicht', building: { ...gebaeude, roofForm: 'quatsch', umriss: [{ x: 1, z: 'a' }, { x: 2, z: 2 }, { x: 3, z: 3 }], __proto__: { x: 1 } }, statikDaten: { vrefMs: 9999, evil: 1 } }))
     expect(e.ok).toBe(true)
     if (!e.ok) return
-    expect(e.daten.systemId).toBe('layher-allround')
+    expect(e.daten.systemId).toBe('mj-uniconnect')
     expect(e.daten.building.roofForm).toBe('flachdach')
     expect(e.daten.building.umriss).toBeUndefined()
     expect(e.daten.statikDaten).toEqual({})
@@ -59,7 +59,7 @@ describe('Projektdatei', () => {
 
 describe('Projektdatei: Türen, Kederplane, Aufzug', () => {
   const basisGebaeude = { lengthM: 10, widthM: 8, heightM: 12, eavesHeightM: 12, roofHeightM: 0, roofForm: 'flachdach', floors: 3, windowCount: 0, doorCount: 0, balconyCount: 0, overhangM: 0, setbackM: 0, sides: ['front'] }
-  const datei = (building: Record<string, unknown>) => JSON.stringify({ format: PROJEKTDATEI_FORMAT, version: PROJEKTDATEI_VERSION, name: 'x', building, systemId: 'layher-allround', statikDaten: {}, notizen: [] })
+  const datei = (building: Record<string, unknown>) => JSON.stringify({ format: PROJEKTDATEI_FORMAT, version: PROJEKTDATEI_VERSION, name: 'x', building, systemId: 'mj-uniconnect', statikDaten: {}, notizen: [] })
 
   it('behält Türen, Türen-freihalten, Kederplane und Aufzug', () => {
     const r = liesProjektdatei(datei({
@@ -91,7 +91,7 @@ describe('Projektdatei: Türen, Kederplane, Aufzug', () => {
 
 describe('Projektdatei: Fenster mit fester Lage', () => {
   const basis = { lengthM: 10, widthM: 8, heightM: 12, eavesHeightM: 12, roofHeightM: 0, roofForm: 'flachdach', floors: 3, windowCount: 2, doorCount: 0, balconyCount: 0, overhangM: 0, setbackM: 0, sides: ['front'] }
-  const datei = (building: Record<string, unknown>) => JSON.stringify({ format: PROJEKTDATEI_FORMAT, version: PROJEKTDATEI_VERSION, name: 'x', building, systemId: 'layher-allround', statikDaten: {}, notizen: [] })
+  const datei = (building: Record<string, unknown>) => JSON.stringify({ format: PROJEKTDATEI_FORMAT, version: PROJEKTDATEI_VERSION, name: 'x', building, systemId: 'mj-uniconnect', statikDaten: {}, notizen: [] })
   it('behält Fenster mit fester Lage', () => {
     const f = [{ id: 'p0', side: 'back', offsetAlongM: 1.5, bottomY: 3.8, widthM: 1.1, heightM: 1.35, floorIndex: 1 }]
     const r = liesProjektdatei(datei({ ...basis, fensterFest: f }))
@@ -110,7 +110,7 @@ describe('Projektdatei: Fenster mit fester Lage', () => {
 
 describe('Projektdatei: Vorbauten', () => {
   const basis = { lengthM: 10, widthM: 8, heightM: 12, eavesHeightM: 12, roofHeightM: 0, roofForm: 'flachdach', floors: 3, windowCount: 0, doorCount: 0, balconyCount: 0, overhangM: 0, setbackM: 0, sides: ['front'] }
-  const datei = (building: Record<string, unknown>) => JSON.stringify({ format: PROJEKTDATEI_FORMAT, version: PROJEKTDATEI_VERSION, name: 'x', building, systemId: 'layher-allround', statikDaten: {}, notizen: [] })
+  const datei = (building: Record<string, unknown>) => JSON.stringify({ format: PROJEKTDATEI_FORMAT, version: PROJEKTDATEI_VERSION, name: 'x', building, systemId: 'mj-uniconnect', statikDaten: {}, notizen: [] })
   it('behält Vorbauten und verwirft ungültige', () => {
     const v = [{ id: 'v0', side: 'back', offsetAlongM: 2, breiteM: 4.4, tiefeM: 1.5, hoeheM: 5.9 }]
     const r = liesProjektdatei(datei({ ...basis, vorbauten: v }))

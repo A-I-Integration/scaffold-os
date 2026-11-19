@@ -145,7 +145,7 @@ export default function CADPage() {
   const [verlauf, setVerlauf] = useState(() => verlaufNeu<BuildingParams>(LEERES_GEBAEUDE))
   const building = verlauf.aktuell
   const setBuilding = useCallback((b: BuildingParams) => { const jetzt = Date.now(); setVerlauf((v) => verlaufSetze(v, b, jetzt)) }, [])
-  const [systemId, setSystemId] = useState<string>('layher-allround')
+  const [systemId, setSystemId] = useState<string>('mj-uniconnect')
   const [model, setModel] = useState<CADModel | null>(null)
   const [farbModus, setFarbModus] = useState<FarbModus>('real')
   const [statikDaten, setStatikDaten] = useState<StatikDaten>({})
@@ -758,7 +758,7 @@ export default function CADPage() {
     void vergissAussehen(); setAussehen(null); // echtes Gebäude (Aussehen) ebenfalls
     vergissArbeitsstand(); neuerStempel(); // gemerkter CAD-Stand ebenfalls
     setBuilding(LEERES_GEBAEUDE); // Phase 68-H: wirklich leere Felder statt Demo-Werte
-    setSystemId('layher-allround');
+    setSystemId('mj-uniconnect');
     setModel(null);
     setRemovedGroups([]);
     setUeberVerlauf({ jetzt: KEINE_UEBERLAGERUNG, vergangen: [], zukunft: [] });

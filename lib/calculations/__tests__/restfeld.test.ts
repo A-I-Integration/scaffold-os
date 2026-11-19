@@ -17,7 +17,7 @@ describe('Restfeld: Passfeld mit Teilung', () => {
     })
   }
   it('Passfeld-Angaben stimmen mit der Verteilung überein; ohne Rest gibt es keins', () => {
-    const s = GERUEST_SYSTEME.find((x) => x.id === 'layher-allround')!
+    const s = GERUEST_SYSTEME.find((x) => x.id === 'mj-uniconnect')!
     const d = calculateFieldDivision(13.3, s)
     expect(d.passfeld).toBeDefined()
     const n = d.distribution.length
@@ -29,7 +29,7 @@ describe('Restfeld: Passfeld mit Teilung', () => {
   })
   it('das Modell meldet das Passfeld als Hinweis mit Überstand', () => {
     const haus: BuildingParams = { lengthM: 13.3, widthM: 8, heightM: 8, eavesHeightM: 8, roofHeightM: 0, roofForm: 'flachdach', floors: 2, floorHeightsM: [4, 4], windowCount: 0, doorCount: 0, balconyCount: 0, overhangM: 0, setbackM: 0, sides: ['front'] }
-    const m = generateCADModel(haus, 'layher-allround')
+    const m = generateCADModel(haus, 'mj-uniconnect')
     const w = m.warnings.find((x) => x.code === 'PASSFELD')
     expect(w?.type).toBe('info')
     expect(w?.message).toMatch(/Passfeld/)

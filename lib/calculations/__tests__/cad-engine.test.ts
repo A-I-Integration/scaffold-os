@@ -14,7 +14,7 @@ const STANDARD_BUILDING: BuildingParams = {
 }
 
 describe('calculateFieldDivision', () => {
-  const system = GERUEST_SYSTEME.find((s) => s.id === 'layher-allround')!
+  const system = GERUEST_SYSTEME.find((s) => s.id === 'mj-uniconnect')!
 
   it('deckt die volle Gebäudelänge ab (Felder summieren sich mindestens auf die Länge)', () => {
     const { distribution } = calculateFieldDivision(15, system)
@@ -36,7 +36,7 @@ describe('calculateFieldDivision', () => {
 })
 
 describe('calculateLevels', () => {
-  const system = GERUEST_SYSTEME.find((s) => s.id === 'layher-allround')!
+  const system = GERUEST_SYSTEME.find((s) => s.id === 'mj-uniconnect')!
 
   it('deckt die volle Gebäudehöhe ab', () => {
     const { levelsData } = calculateLevels(10, system)
@@ -54,7 +54,7 @@ describe('calculateLevels', () => {
 
 describe('generateCADModel + generateBillOfMaterials (Regelfall)', () => {
   it('erzeugt ein plausibles Modell für ein Standardgebäude', () => {
-    const model = generateCADModel(STANDARD_BUILDING, 'layher-allround')
+    const model = generateCADModel(STANDARD_BUILDING, 'mj-uniconnect')
     expect(model.fieldCount).toBeGreaterThan(0)
     expect(model.levelCount).toBeGreaterThan(0)
     expect(model.components3D.length).toBeGreaterThan(0)
@@ -62,7 +62,7 @@ describe('generateCADModel + generateBillOfMaterials (Regelfall)', () => {
   })
 
   it('erzeugt eine nicht-leere Stückliste mit positiven Preisen', () => {
-    const model = generateCADModel(STANDARD_BUILDING, 'layher-allround')
+    const model = generateCADModel(STANDARD_BUILDING, 'mj-uniconnect')
     const materialien = generateBillOfMaterials(model)
     expect(materialien.length).toBeGreaterThan(0)
     for (const m of materialien) {
@@ -72,8 +72,8 @@ describe('generateCADModel + generateBillOfMaterials (Regelfall)', () => {
   })
 
   it('Gesamtfläche ändert sich sinnvoll mit der Gebäudelänge (doppelte Länge ≈ mehr Fläche)', () => {
-    const klein = generateCADModel({ ...STANDARD_BUILDING, lengthM: 10 }, 'layher-allround')
-    const gross = generateCADModel({ ...STANDARD_BUILDING, lengthM: 20 }, 'layher-allround')
+    const klein = generateCADModel({ ...STANDARD_BUILDING, lengthM: 10 }, 'mj-uniconnect')
+    const gross = generateCADModel({ ...STANDARD_BUILDING, lengthM: 20 }, 'mj-uniconnect')
     expect(gross.totalAreaM2).toBeGreaterThan(klein.totalAreaM2)
   })
 
@@ -89,11 +89,11 @@ describe('Dachrand-Absturzschutz (Flachdach)', () => {
   const dachrand = (m: ReturnType<typeof generateCADModel>) => m.components3D.filter((c) => c.id.startsWith('dachrand-'))
 
   it('ohne Schalter entstehen keine Dachrand-Teile', () => {
-    expect(dachrand(generateCADModel(FLACH, 'layher-allround'))).toHaveLength(0)
+    expect(dachrand(generateCADModel(FLACH, 'mj-uniconnect'))).toHaveLength(0)
   })
 
   it('mit Schalter: nur oberste Lage, Handlauf endet 1,0 m über Dachkante', () => {
-    const m = generateCADModel({ ...FLACH, dachrandSchutz: true }, 'layher-allround')
+    const m = generateCADModel({ ...FLACH, dachrandSchutz: true }, 'mj-uniconnect')
     const teile = dachrand(m)
     expect(teile.length).toBeGreaterThan(0)
     const obersteLage = Math.max(...m.levels.map((l) => l.index))
@@ -108,13 +108,13 @@ describe('Dachrand-Absturzschutz (Flachdach)', () => {
   })
 
   it('nicht bei Satteldach', () => {
-    const m = generateCADModel({ ...FLACH, roofForm: 'satteldach', dachrandSchutz: true }, 'layher-allround')
+    const m = generateCADModel({ ...FLACH, roofForm: 'satteldach', dachrandSchutz: true }, 'mj-uniconnect')
     expect(dachrand(m)).toHaveLength(0)
   })
 
   it('verändert sonst nichts am Modell (alle anderen Bauteile identisch)', () => {
-    const a = generateCADModel(FLACH, 'layher-allround').components3D
-    const b = generateCADModel({ ...FLACH, dachrandSchutz: true }, 'layher-allround').components3D.filter((c) => !c.id.startsWith('dachrand-'))
+    const a = generateCADModel(FLACH, 'mj-uniconnect').components3D
+    const b = generateCADModel({ ...FLACH, dachrandSchutz: true }, 'mj-uniconnect').components3D.filter((c) => !c.id.startsWith('dachrand-'))
     expect(b).toEqual(a)
   })
 })
@@ -130,7 +130,7 @@ describe('Fassadenanalyse im Rechteck-Modus', () => {
         { name: 'EG', obenM: 3, umriss: rect(0, 0, 12, 10) },
         { name: 'OG', obenM: 6, umriss: rect(2, 2, 10, 8) },
       ],
-    }, 'layher-allround')
+    }, 'mj-uniconnect')
 
     expect(model.fassadenFlaechen).toBeDefined()
     expect(model.fassadenFlaechen!.length).toBeGreaterThan(0)
@@ -138,7 +138,7 @@ describe('Fassadenanalyse im Rechteck-Modus', () => {
     expect(model.fassadenAbschnitte!.length).toBeGreaterThan(0)
     expect(model.warnings.some((w) => w.code === 'FASSADEN_ANALYSE')).toBe(true)
     // Die Fassadenanalyse darf die bestehende Gerüst-Feldberechnung nicht verändern.
-    const ohneFassaden = generateCADModel(STANDARD_BUILDING, 'layher-allround')
+    const ohneFassaden = generateCADModel(STANDARD_BUILDING, 'mj-uniconnect')
     expect(model.fields).toEqual(ohneFassaden.fields)
   })
 })
