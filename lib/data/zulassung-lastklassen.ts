@@ -164,7 +164,7 @@ export interface LkZeile {
 }
 
 export interface LkPruefung {
-  tabelle: LastklassenTabelle
+  tabelle: Omit<LastklassenTabelle, 'liste'> & { liste: MjListe | null }
   feldweitenM: number[]
   geplanteLk: number | null
   zeilen: LkZeile[]
@@ -181,6 +181,13 @@ export function pruefeLastklassen(
 ): LkPruefung | null {
   const tabelle = liste ? tabellen[liste] : undefined
   if (!tabelle) return null
+  return pruefeTabelle(tabelle, feldweitenM, geplanteLk)
+}
+
+/** Wie pruefeLastklassen, aber gegen eine bestimmte Tabelle (z. B. eine einzelne Zulassung aus zulassung-lastklassen-weitere). */
+export function pruefeTabelle(
+  tabelle: Omit<LastklassenTabelle, 'liste'> & { liste: MjListe | null }, feldweitenM: number[], geplanteLk: number | null | undefined,
+): LkPruefung {
   const weiten = [...new Set(feldweitenM.map((f) => Math.round(f * 100) / 100))].sort((a, b) => a - b)
   const lk = geplanteLk ?? null
   const zeilen: LkZeile[] = tabelle.belaege.map((b) => {
