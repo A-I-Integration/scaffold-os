@@ -157,7 +157,8 @@ export function gleicheLage(a: Lage, b: Lage, toleranzM = 0.03): boolean {
 }
 
 /** ID der manuellen Platzierung, zu der ein 3D-Bauteil gehört (Treppen bestehen aus vielen Teilen), sonst null. */
-export function platzierungIdVon(componentId: string, placements: { id: string }[]): string | null {
-  const pl = placements.find((p) => p.id === componentId || componentId.startsWith(`${p.id}-`))
+export function platzierungIdVon(componentId: string, placements: { id: string; type?: string }[]): string | null {
+  // Gerüstfelder per Klick: die Teile bleiben einzeln bearbeitbar (Überlagerung), sie gehören nicht als Ganzes zur Platzierung
+  const pl = placements.find((p) => p.type !== 'geruestfeld' && (p.id === componentId || componentId.startsWith(`${p.id}-`)))
   return pl ? pl.id : null
 }

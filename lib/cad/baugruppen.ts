@@ -10,15 +10,18 @@ import type { ScaffoldAssembly, ScaffoldComponent3D } from '@/lib/calculations/c
 type Teil = Pick<ScaffoldComponent3D, 'id' | 'type' | 'articleNumber'> & { assemblyId?: string; flights?: number }
 
 /** Art der Baugruppe aus ihren Teilen: enthält sie ein Treppenlauf-Bauteil (type 'stair'), ist es eine Treppe. */
-function artVon(teile: Teil[]): ScaffoldAssembly['art'] {
-  return teile.some((t) => t.type === 'stair') ? 'treppe' : 'sonstige'
+function artVon(teile: Teil[], id: string): ScaffoldAssembly['art'] {
+  if (teile.some((t) => t.type === 'stair')) return 'treppe'
+  // Gerüstfeld per Klick (lib/cad/geruestfeld.ts): Kennung beginnt mit "feld-" und enthält Rahmen
+  if (id.startsWith('feld-') && teile.some((t) => t.type === 'frame')) return 'feld'
+  return 'sonstige'
 }
 
 /** Alle Baugruppen des Modells (Bauteile ohne assemblyId bleiben Einzelteile). Reihenfolge: erstes Auftreten. */
 export function leiteBaugruppenAb(bauteile: Teil[]): ScaffoldAssembly[] {
   const je = new Map<string, Teil[]>()
   for (const t of bauteile) if (t.assemblyId) { const l = je.get(t.assemblyId); if (l) l.push(t); else je.set(t.assemblyId, [t]) }
-  return [...je.entries()].map(([id, teile]) => ({ id, art: artVon(teile), memberIds: teile.map((t) => t.id) }))
+  return [...je.entries()].map(([id, teile]) => ({ id, art: artVon(teile, id), memberIds: teile.map((t) => t.id) }))
 }
 
 /** Ids aller Teile der Baugruppe, zu der `bauteilId` gehört (nur dieses Teil, wenn es keiner Baugruppe angehört). */

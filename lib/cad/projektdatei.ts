@@ -81,7 +81,7 @@ export function erzeugeProjektdatei(p: { name?: string; building: BuildingParams
 
 export const handarbeitLeer = (h: Handarbeit): boolean => h.platzierungen.length === 0 && h.ueberlagerung.aenderungen.length === 0 && h.ueberlagerung.kopien.length === 0 && h.entfernt.length === 0
 
-const PLATZIERUNGS_ARTEN: readonly string[] = ['anchor', 'console', 'stair', 'net', 'board', 'protection_roof', 'load_plate', 'ladder', ...FELDBAUTEIL_ARTEN]
+const PLATZIERUNGS_ARTEN: readonly string[] = ['anchor', 'console', 'stair', 'net', 'board', 'protection_roof', 'load_plate', 'ladder', 'geruestfeld', ...FELDBAUTEIL_ARTEN]
 const MAX_HANDARBEIT = 5000
 const text = (v: unknown, max: number): string | null => (typeof v === 'string' && v.length > 0 && v.length <= max ? v : null)
 
@@ -99,7 +99,15 @@ export function leseHandarbeit(roh: unknown, verworfen: string[]): Handarbeit | 
     const fieldId = o.fieldId === undefined ? undefined : text(o.fieldId, 160)
     const rot = o.rotationY === undefined ? undefined : zahl(o.rotationY, -100, 100)
     if (fieldId === null || rot === null) { schlecht++; continue }
-    platzierungen.push({ id, type: o.type as ManualPlacement['type'], positionX: px, positionY: py, positionZ: pz, side: o.side as ManualPlacement['side'], levelIndex: Math.floor(lage), ...(fieldId ? { fieldId } : {}), ...(typeof o.notes === 'string' ? { notes: o.notes.slice(0, 500) } : {}), ...(rot !== undefined ? { rotationY: rot } : {}) })
+    let feld: ManualPlacement['feld']
+    if (o.type === 'geruestfeld') {
+      const f = (o.feld ?? {}) as Record<string, unknown>
+      const fl = zahl(f.feldlaengeM, 0.3, 4), br = zahl(f.breiteM, 0.3, 2), la = zahl(f.lagen, 1, 30), gh = zahl(f.geschosshoeheM, 0.5, 3), au = f.aufstandM === undefined ? 0 : zahl(f.aufstandM, -100, 1000)
+      if (fl == null || br == null || la == null || gh == null || au == null || !Number.isInteger(la)) { schlecht++; continue }
+      const konf = Array.isArray(f.konfiguration) ? (f.konfiguration.filter((k) => typeof k === 'string' && /^f_(frame|deck|railing|diagonal|ledger|coupling|foot)$/.test(k)) as NonNullable<ManualPlacement['feld']>['konfiguration']) : undefined
+      feld = { feldlaengeM: fl, breiteM: br, lagen: la, geschosshoeheM: gh, aufstandM: au, ...(typeof f.systemId === 'string' ? { systemId: f.systemId.slice(0, 80) } : {}), ...(konf ? { konfiguration: konf } : {}) }
+    }
+    platzierungen.push({ id, type: o.type as ManualPlacement['type'], positionX: px, positionY: py, positionZ: pz, side: o.side as ManualPlacement['side'], levelIndex: Math.floor(lage), ...(fieldId ? { fieldId } : {}), ...(typeof o.notes === 'string' ? { notes: o.notes.slice(0, 500) } : {}), ...(rot !== undefined ? { rotationY: rot } : {}), ...(feld ? { feld } : {}) })
   }
   const u = (r.ueberlagerung ?? {}) as Record<string, unknown>
   const aenderungen: BauteilUeberlagerung['aenderungen'] = []

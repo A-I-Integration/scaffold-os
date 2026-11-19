@@ -3133,9 +3133,22 @@ const FELDBAUTEIL_MUSTER: Record<FeldBauteilArt, { muster: RegExp; einzeln: bool
   f_foot: { muster: /^(foot-|spindel-)/, einzeln: true, name: 'Fußplatte / Fußspindel' },
 }
 
+/** Parameter eines per Klick gesetzten kompletten Gerüstfeldes (siehe lib/cad/geruestfeld.ts) */
+export interface GeruestfeldAngaben {
+  feldlaengeM: number
+  breiteM: number
+  lagen: number
+  geschosshoeheM: number
+  aufstandM?: number
+  systemId?: string
+  konfiguration?: FeldBauteilArt[]
+}
+
 export interface ManualPlacement {
   id: string
-  type: 'anchor' | 'console' | 'stair' | 'net' | 'board' | 'protection_roof' | 'load_plate' | 'ladder' | FeldBauteilArt
+  type: 'anchor' | 'console' | 'stair' | 'net' | 'board' | 'protection_roof' | 'load_plate' | 'ladder' | 'geruestfeld' | FeldBauteilArt
+  /** nur type 'geruestfeld': Parameter des Feldes; Klickstelle = positionX/positionZ, Aufstandshöhe = positionY */
+  feld?: GeruestfeldAngaben
   positionX: number
   positionY: number
   positionZ: number
@@ -3208,6 +3221,11 @@ export function addManualPlacement(
   }
 
   return model
+}
+
+/** Katalogart eines von der Feld-Erzeugung gelieferten Teils (nach ID-Muster) oder undefined (z. B. Bordbrett, Ausgleich). */
+export function feldBauteilArtVonId(id: string): FeldBauteilArt | undefined {
+  return FELDBAUTEIL_ARTEN.find((a) => FELDBAUTEIL_MUSTER[a].muster.test(id))
 }
 
 /** Teile einer Katalogart in einem Feld: aus der Feld-Erzeugung (Hilfsmodell mit nur diesem Feld), umbenannt auf die ID der Platzierung. */
