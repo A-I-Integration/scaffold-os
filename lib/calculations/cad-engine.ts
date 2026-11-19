@@ -456,7 +456,7 @@ export interface CADModel {
   fieldCount: number
   levelCount: number
   warnings: CADWarning[]
-  /** Baugruppen aus mehreren Einzelbauteilen (Phase 1: nur Datenmodell, vom Generator noch nicht befüllt) */
+  /** Optional gespeicherte Baugruppen. Maßgeblich ist `assemblyId` an den Bauteilen; die Liste wird mit leiteBaugruppenAb (lib/cad/baugruppen.ts) daraus abgeleitet, damit sie nach manuellen Änderungen nicht veraltet. */
   assemblies?: ScaffoldAssembly[]
   // Nur Umriss-Modus: Gerüst-Eckpunkte (Schnitt der Innenlinien benachbarter Kanten)
   umrissEcken?: UmrissGeruestEcke[]
@@ -1261,7 +1261,7 @@ export function generateScaffoldComponents(model: CADModel): ScaffoldComponent3D
         components.push({ id: `stair-fuss-${tag}`, type: 'footplate', articleNumber: 'FP-001', name: 'Fußplatte', position: [x, y0 - extra - 0.02, z], rotation: [0, 0, 0], scale: [0.15, 0.04, 0.15], color: colorFoot, levelId: lv(0).id })
       }
     }
-    for (let ci = erster; ci < components.length; ci++) bauteilInWelt(components[ci], rf)
+    for (let ci = erster; ci < components.length; ci++) { components[ci].assemblyId = 'treppe-auto'; bauteilInWelt(components[ci], rf) }
   }
 
   // === FANGNETZE ===
@@ -3262,7 +3262,7 @@ export function aussentreppeInReihe(model: CADModel, field: ScaffoldField, id: s
   }
   const erzeugt = generateScaffoldComponents(hilfs)
   const reihenIds = new Set(reihe.map((f) => f.id))
-  const treppenTeile = erzeugt.filter((c) => c.id.startsWith('stair-')).map((c) => ({ ...c, id: c.id === 'stair-frame-0' ? id : `${id}-${c.id}`, ...(c.id === 'stair-frame-0' ? { name: 'Treppenlauf (manuell)' } : {}) }))
+  const treppenTeile = erzeugt.filter((c) => c.id.startsWith('stair-')).map((c) => ({ ...c, assemblyId: id, id: c.id === 'stair-frame-0' ? id : `${id}-${c.id}`, ...(c.id === 'stair-frame-0' ? { name: 'Treppenlauf (manuell)' } : {}) }))
   const gelaender = (c: ScaffoldComponent3D) => c.type === 'railing' && !!c.fieldId && reihenIds.has(c.fieldId)
   return [...model.components3D.filter((c) => !gelaender(c)), ...erzeugt.filter(gelaender), ...treppenTeile]
 }
@@ -3293,7 +3293,7 @@ export function treppenlaufInFeld(model: CADModel, field: ScaffoldField, level: 
   // Geländer: Wangen, Handläufe (1,0 m über der Stufenoberkante), Knieleisten und Pfosten
   // gehören zur Läufe-Geometrie des Bauteils 'Treppenlauf' (SP-001) – keine eigenen Rohre mehr,
   // sonst wären sie doppelt gezeichnet (ANNAHME: Geländer ist im Treppenlauf enthalten).
-  out.forEach((c) => bauteilInWelt(c, rahmen))
+  out.forEach((c) => { c.assemblyId = id; bauteilInWelt(c, rahmen) })
   return out
 }
 
