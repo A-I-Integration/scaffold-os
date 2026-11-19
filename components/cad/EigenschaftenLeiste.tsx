@@ -4,7 +4,7 @@
 // Alle Werte kommen aus dem Modell; es wird nichts berechnet oder erfunden.
 
 import { useState } from 'react'
-import { imHoehenraster } from '@/lib/cad/bauteil-aenderungen'
+import { imHoehenraster, masseAnzeige, masseZuBoxAchsen, eulerGrad } from '@/lib/cad/bauteil-aenderungen'
 import type { CADModel } from '@/lib/calculations/cad-engine'
 import { waehleFeld, feldSpalteVonBauteil, pruefeSpaltenOperation, type FeldUmfang, type Seite } from '@/lib/cad/bereiche'
 
@@ -16,7 +16,7 @@ const ARTEN: Record<string, string> = {
 const SEITEN: Record<string, string> = { front: 'Vorderseite', back: 'Rückseite', left: 'Links', right: 'Rechts' }
 const m = (v: number) => `${v.toLocaleString('de-DE', { maximumFractionDigits: 2 })} m`
 
-export default function EigenschaftenLeiste({ lagenVersatzM = 0, onLageOp, griffModus, onGriffModus, einrasten, onEinrasten, anschlussEinrasten, onAnschlussEinrasten, veraendert, onLage, onDuplizieren, onZuruecksetzen, model, id, artikelWahl, manuell, onEntfernen, onFeldEntfernen, onFeldLaenge, onFeldAnhaengen, onFeldTeilen, onFeldZusammen, onPositionAendern, platzierungPosition, onZu }: {
+export default function EigenschaftenLeiste({ onMasseDrehung, lagenVersatzM = 0, onLageOp, griffModus, onGriffModus, einrasten, onEinrasten, anschlussEinrasten, onAnschlussEinrasten, veraendert, onLage, onDuplizieren, onZuruecksetzen, model, id, artikelWahl, manuell, onEntfernen, onFeldEntfernen, onFeldLaenge, onFeldAnhaengen, onFeldTeilen, onFeldZusammen, onPositionAendern, platzierungPosition, onZu }: {
   /** Feld in zwei Felder teilen / mit dem Nachbarfeld zusammenführen (Längen aus dem Herstellerkatalog) */
   onFeldTeilen?: (seite: Seite, spalte: number, laengenM: [number, number]) => void
   onFeldZusammen?: (seite: Seite, spalte: number, laengeM: number) => void
@@ -26,6 +26,8 @@ export default function EigenschaftenLeiste({ lagenVersatzM = 0, onLageOp, griff
   onLageOp?: (op: { art: 'verschieben' | 'kopieren'; levelIndex: number; alleSeiten: boolean; dyM: number }) => void
   griffModus?: 'verschieben' | 'drehen'; onGriffModus?: (m: 'verschieben' | 'drehen') => void; einrasten?: boolean; onEinrasten?: (v: boolean) => void; anschlussEinrasten?: boolean; onAnschlussEinrasten?: (v: boolean) => void; veraendert?: boolean
   /** neue Lage des Bauteils: Position (m) und zusätzliche Drehung um die Hochachse (Grad) */
+  /** genaue Maße (Box des Bauteils je Bauteilachse, m) und/oder absolute Drehung (Grad um x/y/z) */
+  onMasseDrehung?: (a: { masse?: [number, number, number]; euler?: [number, number, number] }) => void
   onLage?: (position: [number, number, number], drehGrad: number) => void; onDuplizieren?: () => void; onZuruecksetzen?: () => void
   model: CADModel; id: string; artikelWahl: Record<string, string>; manuell: boolean; onEntfernen: () => void; onFeldEntfernen?: (bauteilIds: string[]) => void; onFeldLaenge?: (seite: Seite, spalte: number, laengeM: number) => void; onFeldAnhaengen?: (seite: Seite, ende: 'anfang' | 'ende', laengeM: number) => void; onPositionAendern?: (position: [number, number, number]) => void; platzierungPosition?: [number, number, number]; onZu: () => void
 }) {
@@ -73,6 +75,7 @@ export default function EigenschaftenLeiste({ lagenVersatzM = 0, onLageOp, griff
             {[-90, -15, 15, 90].map((g) => <button key={g} type='button' onClick={() => onLage(c.position, g)} className='rounded border px-2 py-1 hover:bg-gray-50' style={{ borderColor: 'var(--os-linie)' }}>{g > 0 ? '+' : ''}{g}°</button>)}
           </div>
           <PositionFelder key={c.position.join(',')} start={c.position} onUebernehmen={(p) => onLage(p, 0)} />
+          {onMasseDrehung && <MasseDrehungFelder key={`${c.scale.join(',')}|${c.rotation.join(',')}`} bauteil={c} onUebernehmen={onMasseDrehung} />}
           <div className='grid grid-cols-2 gap-1'>
             <button type='button' onClick={onDuplizieren} className='rounded border px-2 py-1.5 text-[12.5px] hover:bg-gray-50' style={{ borderColor: 'var(--os-linie)' }}>Duplizieren</button>
             <button type='button' disabled={!veraendert || manuell} onClick={onZuruecksetzen} className='rounded border px-2 py-1.5 text-[12.5px] hover:bg-gray-50 disabled:opacity-40' style={{ borderColor: 'var(--os-linie)' }}>{c.id.startsWith('kopie-') ? 'Kopie löschen' : 'Zurücksetzen'}</button>
@@ -155,6 +158,38 @@ function PositionFelder({ start, onUebernehmen }: { start: [number, number, numb
       </div>
       <button type='button' disabled={!geaendert} onClick={() => onUebernehmen(neu as [number, number, number])}
         className='mt-1.5 w-full rounded px-3 py-1.5 text-[13px] font-semibold disabled:opacity-40' style={{ background: 'var(--os-akzent)', color: '#171b20' }}>Position übernehmen</button>
+    </div>
+  )
+}
+
+// Genaue Maße (Länge x, Breite z, Höhe y) und Drehung um alle drei Achsen (Grad, Euler XYZ) eines Bauteils.
+function MasseDrehungFelder({ bauteil, onUebernehmen }: { bauteil: { scale: [number, number, number]; rotation: [number, number, number] }; onUebernehmen: (a: { masse?: [number, number, number]; euler?: [number, number, number] }) => void }) {
+  const a = masseAnzeige(bauteil)
+  const e0 = eulerGrad(bauteil)
+  const f = (v: number, d = 3) => v.toFixed(d).replace(/\.?0+$/, '').replace('.', ',') || '0'
+  const [mw, setM] = useState([a.laenge, a.breite, a.hoehe].map((v) => f(v)))
+  const [ew, setE] = useState(e0.map((v) => f(v, 2)))
+  const mz = mw.map(zahl), ez = ew.map(zahl)
+  const mOk = mz.every((v) => v !== null && v >= 0.005 && v <= 50), eOk = ez.every((v) => v !== null)
+  const mGeaendert = mOk && mz.some((v, i) => Math.abs((v as number) - [a.laenge, a.breite, a.hoehe][i]) > 0.0004)
+  const eGeaendert = eOk && ez.some((v, i) => Math.abs((v as number) - e0[i]) > 0.004)
+  const feld = (name: string, w: string[], set: (fn: (alt: string[]) => string[]) => void, i: number, ok: boolean, label: string) => (
+    <label key={name} className='text-[12px]'>{name}
+      <input aria-label={label} value={w[i]} inputMode='decimal' onChange={(ev) => set((alt) => alt.map((v, j) => (j === i ? ev.target.value : v)))}
+        className='mt-0.5 w-full rounded border bg-white px-1.5 py-1 text-[13px]' style={{ borderColor: ok ? 'var(--os-linie)' : '#e7b4b0' }} />
+    </label>
+  )
+  return (
+    <div className='space-y-1.5' data-testid='masse-drehung'>
+      <div className='text-[11px] uppercase tracking-wider' style={{ color: 'var(--os-text-leise)' }}>Maße (m){a.welt ? '' : ' – in Achsen des Bauteils'}</div>
+      <div className='grid grid-cols-3 gap-1'>{['Länge', 'Breite', 'Höhe'].map((n, i) => feld(n, mw, setM, i, mOk, `Maß ${n}`))}</div>
+      <button type='button' disabled={!mGeaendert} onClick={() => onUebernehmen({ masse: masseZuBoxAchsen(bauteil, mz[0] as number, mz[1] as number, mz[2] as number) })}
+        className='w-full rounded px-3 py-1.5 text-[13px] font-semibold disabled:opacity-40' style={{ background: 'var(--os-akzent)', color: '#171b20' }}>Maße übernehmen</button>
+      <div className='text-[11px] uppercase tracking-wider' style={{ color: 'var(--os-text-leise)' }}>Drehung (Grad) um x / y / z</div>
+      <div className='grid grid-cols-3 gap-1'>{['x', 'y', 'z'].map((n, i) => feld(n, ew, setE, i, eOk, `Drehung ${n}`))}</div>
+      <button type='button' disabled={!eGeaendert} onClick={() => onUebernehmen({ euler: ez as [number, number, number] })}
+        className='w-full rounded px-3 py-1.5 text-[13px] font-semibold disabled:opacity-40' style={{ background: 'var(--os-akzent)', color: '#171b20' }}>Drehung übernehmen</button>
+      <div className='text-[11.5px]' style={{ color: 'var(--os-text-leise)' }}>Maße ändern nur die Darstellung; Artikel und Stückliste bleiben beim gewählten Artikel – bei anderer Länge den Artikel prüfen.</div>
     </div>
   )
 }
