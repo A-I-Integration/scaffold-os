@@ -893,6 +893,16 @@ export default function CADPage() {
     }
     return merged
   }, [model, manualPlacements, removedGroups, bereichsListe, ueber, geruestWahl])
+  // Kopfzeile: mit automatischem Gerüst die Werte der Berechnung; ohne (leer/von Hand) nur das, was wirklich gesetzt ist
+  const kopfZahlen = useMemo(() => {
+    if (!modelWithManual) return '0 Felder · 0 Lagen · 0.0 m²'
+    if (geruestWahl === 'auto') return `${modelWithManual.fieldCount} Felder · ${modelWithManual.levelCount} Lagen · ${modelWithManual.totalAreaM2.toFixed(1)} m²`
+    const teile = modelWithManual.components3D
+    const felder = new Set(teile.map((c) => c.fieldId).filter(Boolean)).size
+    const lagen = new Set(teile.map((c) => c.levelId).filter(Boolean)).size
+    const belag = teile.filter((c) => c.type === 'deck').reduce((s, c) => s + c.scale[0] * c.scale[1], 0)
+    return `${felder} Felder · ${lagen} Lagen · ${belag.toFixed(1)} m² Belag`
+  }, [modelWithManual, geruestWahl])
   const modelWithManualRef = useRef<CADModel | null>(null)
   modelWithManualRef.current = modelWithManual
   const gewaehltesFeld = useMemo(() => {
@@ -1469,7 +1479,7 @@ export default function CADPage() {
         <div>
           <h1 className='text-lg font-semibold text-[#1d1d1f]'>Gerüstbau-CAD</h1>
           <p className='text-xs text-[#86868b]'>
-            {modelWithManual?.system ? `${modelWithManual.system.hersteller} ${modelWithManual.system.systemName}` : 'Kein System'} · {modelWithManual?.fieldCount} Felder · {modelWithManual?.levelCount} Lagen · {modelWithManual?.totalAreaM2.toFixed(1)} m² · {modelWithManual?.components3D.length || 0} Bauteile · {features.length} Gebäudemerkmale · <span title='3D-Prüfung: Geometrie, Seiten, Füße auf dem Gelände, Feldzahl, Fläche, Bauteilliste' style={{ fontWeight: 600, color: pruefAmpelFarbe(modelWithManual?.warnings) }}>{pruefAmpelText(modelWithManual?.warnings)}</span>
+            {modelWithManual?.system ? `${modelWithManual.system.hersteller} ${modelWithManual.system.systemName}` : 'Kein System'} · {kopfZahlen} · {modelWithManual?.components3D.length || 0} Bauteile · {features.length} Gebäudemerkmale · <span title='3D-Prüfung: Geometrie, Seiten, Füße auf dem Gelände, Feldzahl, Fläche, Bauteilliste' style={{ fontWeight: 600, color: pruefAmpelFarbe(modelWithManual?.warnings) }}>{pruefAmpelText(modelWithManual?.warnings)}</span>
           </p>
         </div>
         <div className='flex items-center gap-2'>
