@@ -199,3 +199,12 @@ export const LASTKLASSEN_WEITERE: ZulassungLastklassen[] = [
 export function lastklassenZulassung(nummer: string): ZulassungLastklassen | undefined {
   return LASTKLASSEN_WEITERE.find((z) => z.zulassung === nummer)
 }
+
+/**
+ * Zulassungen, die zu einer Preisliste gehören. Standardmäßig nur die vollständig vorliegenden Tabellen
+ * (aus Teil-Bescheiden lässt sich nicht sagen, ob ein Belag "abgedeckt" ist).
+ */
+export function zulassungenFuerListe(liste: MjListe | null, nurVollstaendig = true): ZulassungLastklassen[] {
+  if (!liste) return []
+  return LASTKLASSEN_WEITERE.filter((z) => z.liste === liste && (nurVollstaendig ? z.umfang === 'vollstaendig' : z.umfang !== 'keine-tabelle'))
+}
