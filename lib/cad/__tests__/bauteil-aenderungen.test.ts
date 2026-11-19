@@ -5,7 +5,7 @@ import { wendeBauteilAenderungenAn, setzeBauteilLage, dupliziereBauteil, setzeBa
 import { pruefeModell3D } from '@/lib/cad/datenqualitaet'
 
 const b = { lengthM: 12, widthM: 8, heightM: 9, eavesHeightM: 7.5, roofHeightM: 1.5, roofForm: 'satteldach', floors: 3, floorHeightsM: [], windowCount: 0, doorCount: 0, balconyCount: 0, overhangM: 0, setbackM: 0, sides: ['front', 'left'] } as BuildingParams
-const m0 = generateCADModel(b, 'layher-allround')
+const m0 = generateCADModel(b, 'mj-uniconnect')
 const deck = m0.components3D.find((c) => c.type === 'deck')!
 const anz = (m: typeof m0, art: string) => generateBillOfMaterials(m).filter((z) => z.articleNumber === art).reduce((s, z) => s + z.quantity, 0)
 

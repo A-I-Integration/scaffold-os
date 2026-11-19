@@ -106,7 +106,7 @@ describe('Lastannahmen- und Prüfprotokoll-PDF', () => {
 })
 
 describe('Statiker-Paket', () => {
-  const model = generateCADModel(basis, 'layher-allround')
+  const model = generateCADModel(basis, 'mj-uniconnect')
   const materials = generateBillOfMaterials(model)
   const eingabe = { model, materials, statik: {}, ...opt }
 

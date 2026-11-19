@@ -17,7 +17,7 @@ const GEBAEUDE: BuildingParams = {
   overhangM: 0, setbackM: 0, sides: ['front', 'back', 'left', 'right'],
   geruestOptionen: { aufzug: { seite: 'front', gemietet: true } },
 }
-const SYSTEM = 'layher-allround'
+const SYSTEM = 'mj-uniconnect'
 const PREISE: LvEingaben = { ...LV_STANDARD_EINGABEN, stundensatzFach: 60, stundensatzHelfer: 40, mietsatzProzentJeWoche: 2, zuschlagProzent: 10 }
 
 const konsole = (m: CADModel, id?: string): CADModel => {

@@ -53,7 +53,7 @@ describe('CAD – ausgesparte Balkone', () => {
     for (let l = 0; l < lagenVorne(ohne); l++) expect(ohne.fields.filter((f) => f.levelIndex === l).length - mit.fields.filter((f) => f.levelIndex === l).length).toBe(entfernt)
   })
   it('Stückliste, Länge, Fläche und Feldanzahl werden gekürzt', () => {
-    const rahmen = (m: typeof ohne) => generateBillOfMaterials(m).filter((x) => x.articleNumber.startsWith('RA-')).reduce((s, x) => s + x.quantity, 0)
+    const rahmen = (m: typeof ohne) => generateBillOfMaterials(m).filter((x) => /^(RA-|2602\.|2617\.|2619\.)/.test(x.articleNumber)).reduce((s, x) => s + x.quantity, 0)
     expect(rahmen(mit)).toBeLessThan(rahmen(ohne))
     const entferntLaenge = fieldsOf(ohne, 'front').reduce((s, f) => s + f.lengthM, 0) - fieldsOf(mit, 'front').reduce((s, f) => s + f.lengthM, 0)
     expect(mit.totalLengthM).toBeCloseTo(ohne.totalLengthM - entferntLaenge, 5)

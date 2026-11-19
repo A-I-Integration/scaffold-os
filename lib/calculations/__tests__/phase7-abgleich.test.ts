@@ -22,7 +22,7 @@ const mitStair = (m: CADModel, id = 'manual-t') => {
 
 for (const [name, extra] of formen) {
   describe(`Phase 7 – ${name}`, () => {
-    const basis = generateCADModel(bau(extra), 'layher-allround')
+    const basis = generateCADModel(bau(extra), 'mj-uniconnect')
     it('Stückliste zählt genau die Bauteile des Modells (nichts doppelt, nichts verloren)', () => {
       expect(summe(basis)).toBe(stueck(basis))
       const { m2 } = mitStair(basis)
@@ -30,7 +30,7 @@ for (const [name, extra] of formen) {
     })
     it('Treppe von Hand = automatische Treppe: gleiche Stückliste, gleiches Gewicht, gleicher Preis', () => {
       const { f, m2 } = mitStair(basis)
-      const auto = generateCADModel(bau({ ...extra, geruestOptionen: { ...((extra as any).geruestOptionen ?? {}), treppe: true, treppeFeldId: f.id } }, true), 'layher-allround')
+      const auto = generateCADModel(bau({ ...extra, geruestOptionen: { ...((extra as any).geruestOptionen ?? {}), treppe: true, treppeFeldId: f.id } }, true), 'mj-uniconnect')
       const zeilen = (m: CADModel) => generateBillOfMaterials(m).map((i) => `${i.articleNumber}:${i.quantity}`).sort().join('|')
       expect(zeilen(m2)).toBe(zeilen(auto))
       expect(Math.round(gewicht(m2) * 100)).toBe(Math.round(gewicht(auto) * 100))
