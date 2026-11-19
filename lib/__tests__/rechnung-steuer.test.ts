@@ -71,3 +71,28 @@ describe('Steuerbehandlung und Aufbewahrungshinweis', () => {
     expect(aufbewahrungsHinweis({})).toBeNull()
   })
 })
+
+import { pruefe13b, pruefeXrechnungVerkaeufer } from '../rechnung-steuer'
+
+describe('§ 13b-Prüfung, XRechnung-Verkäuferangaben, Grundstücksbezug', () => {
+  it('Privatperson: § 13b ist ausgeschlossen', () => {
+    expect(pruefe13b({ kundentyp: 'privat' }, '2026-11-19').fehler).toContain('Privatperson')
+  })
+  it('Unternehmen: Warnungen bei fehlender oder abgelaufener Bescheinigung und fehlender USt-IdNr.', () => {
+    expect(pruefe13b({ kundentyp: 'gewerblich', ust_id: 'DE1', bauleister_nachweis_bis: '2027-01-31' }, '2026-11-19')).toEqual({ warnungen: [] })
+    expect(pruefe13b({ kundentyp: 'gewerblich', ust_id: 'DE1' }, '2026-11-19').warnungen[0]).toContain('keine Bescheinigung')
+    expect(pruefe13b({ kundentyp: 'gewerblich', ust_id: 'DE1', bauleister_nachweis_bis: '2026-01-01' }, '2026-11-19').warnungen[0]).toContain('abgelaufen')
+    expect(pruefe13b({ kundentyp: 'gewerblich', bauleister_nachweis_bis: '2027-01-31' }, '2026-11-19').warnungen[0]).toContain('USt-IdNr.')
+    expect(pruefe13b(null, '2026-11-19').warnungen).toHaveLength(1)
+  })
+  it('Verkäuferangaben für XRechnung', () => {
+    expect(pruefeXrechnungVerkaeufer({ ansprechpartner: 'M', phone: '1', email: 'a@b.de' })).toEqual([])
+    expect(pruefeXrechnungVerkaeufer({}).map((x) => x.code)).toEqual(['ANSPRECHPARTNER', 'TELEFON', 'EMAIL'])
+    expect(pruefeXrechnungVerkaeufer(null)).toHaveLength(3)
+  })
+  it('Aufbewahrungshinweis entfällt ohne Grundstücksbezug', () => {
+    expect(aufbewahrungsHinweis({ customer_privat: true, grundstuecksbezug: false })).toBeNull()
+    expect(aufbewahrungsHinweis({ customer_privat: true, grundstuecksbezug: true })).toBe(HINWEIS_AUFBEWAHRUNG)
+    expect(aufbewahrungsHinweis({ customer_privat: true })).toBe(HINWEIS_AUFBEWAHRUNG)
+  })
+})

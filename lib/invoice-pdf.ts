@@ -62,6 +62,7 @@ export interface Invoice {
   geruest_nr?: string | null; // Gerüstnummer zur eindeutigen Zuordnung
   leistungsdatum?: string | null; // Datum der Leistung (sonst Rechnungsdatum)
   steuerfall?: 'regel' | '13b' | 'kleinunternehmer' | null; // gewählte Steuerbehandlung
+  grundstuecksbezug?: boolean; // Leistung an einem Grundstück (Standard)
   customer_privat?: boolean; // Kunde ist Privatperson (Hinweis auf Aufbewahrungspflicht)
   customer_ust_id?: string | null;
   leitweg_id?: string | null;

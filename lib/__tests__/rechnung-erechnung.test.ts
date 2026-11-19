@@ -52,11 +52,15 @@ describe('Privatkunde, Käufer-USt-IdNr., Leitweg-ID, XRechnung', () => {
     expect(validateInput(e, Profile.EN16931).valid).toBe(true)
   })
   it('XRechnung: XML mit Leitweg-ID als Käuferreferenz', () => {
-    const e = baueERechnungEingabe(inv({ leitweg_id: '04011000-12345-67', company_snapshot: { ...cs, phone: '02564 1', email: 'a@b.de', contact_name: 'Frau Merola' } }))
+    const e = baueERechnungEingabe(inv({ leitweg_id: '04011000-12345-67', company_snapshot: { ...cs, phone: '02564 1', email: 'a@b.de', ansprechpartner: 'Frau Merola' } }), { kundenEmail: 'k@kunde.de' })
     expect(e.document.buyerReference).toBe('04011000-12345-67')
     const r = toXRechnung(e, { validate: false })
     expect(r.xml).toContain('04011000-12345-67')
     expect(r.xml).toContain('xrechnung')
+    expect(r.xml).toContain('Frau Merola')
+    expect(e.seller.contact).toEqual({ name: 'Frau Merola', phone: '02564 1', email: 'a@b.de' })
+    // vollständige Verkäuferangaben: XRechnung ist ohne Prüfungsfehler erzeugbar
+    expect(() => toXRechnung(e)).not.toThrow()
   })
 })
 

@@ -26,7 +26,7 @@ const headers = {
 const ROLES = ['admin', 'disponent'];
 
 // Felder, die angelegt / geändert werden dürfen (Whitelist)
-const FELDER = ['name', 'contact_person', 'email', 'phone', 'street', 'zip', 'city', 'notes', 'is_active', 'datev_konto', 'kundentyp', 'ust_id', 'leitweg_id'];
+const FELDER = ['name', 'contact_person', 'email', 'phone', 'street', 'zip', 'city', 'notes', 'is_active', 'datev_konto', 'kundentyp', 'ust_id', 'leitweg_id', 'bauleister_nachweis_bis'];
 
 async function callerRole(): Promise<string | null> {
   try {
@@ -52,6 +52,11 @@ function steuerFelderPruefen(clean: Record<string, any>): string | null {
     if (u && !/^[A-Z]{2}[A-Z0-9]{2,12}$/.test(u)) return 'USt-IdNr. ungültig (Beispiel: DE123456789).';
     clean.ust_id = u || null;
   }
+  if (clean.bauleister_nachweis_bis !== undefined) {
+    const d = String(clean.bauleister_nachweis_bis || '').trim();
+    if (d && !/^\d{4}-\d{2}-\d{2}$/.test(d)) return 'Datum der Bescheinigung ungültig.';
+    clean.bauleister_nachweis_bis = d || null;
+  }
   if (clean.leitweg_id !== undefined) {
     const l = String(clean.leitweg_id || '').trim();
     if (l.length > 46) return 'Leitweg-ID ist zu lang (höchstens 46 Zeichen).';
@@ -76,8 +81,8 @@ export async function GET(req: NextRequest) {
     const id = searchParams.get('id');
     const sortiert = searchParams.get('sort') === 'neueste' ? 'created_at.desc' : 'name';
     const query = id
-      ? `id=eq.${id}&select=id,name,contact_person,email,phone,street,zip,city,notes,is_active,datev_konto,kundentyp,ust_id,leitweg_id,created_at`
-      : `select=id,name,contact_person,email,phone,street,zip,city,notes,is_active,datev_konto,kundentyp,ust_id,leitweg_id,created_at&order=${sortiert}`;
+      ? `id=eq.${id}&select=id,name,contact_person,email,phone,street,zip,city,notes,is_active,datev_konto,kundentyp,ust_id,leitweg_id,bauleister_nachweis_bis,created_at`
+      : `select=id,name,contact_person,email,phone,street,zip,city,notes,is_active,datev_konto,kundentyp,ust_id,leitweg_id,bauleister_nachweis_bis,created_at&order=${sortiert}`;
     const res = await fetch(`${url}/rest/v1/customers?${query}`, { headers });
     if (!res.ok) {
       const t = await res.text();
@@ -127,7 +132,7 @@ export async function POST(req: NextRequest) {
     // Kunde mit exakt diesem Namen (Groß-/Kleinschreibung egal), wird
     // dieser zurückgegeben statt ein neuer Datensatz angelegt.
     const dupCheck = await fetch(
-      `${url}/rest/v1/customers?name=ilike.${encodeURIComponent(clean.name)}&select=id,name,contact_person,email,phone,street,zip,city,notes,is_active,datev_konto,kundentyp,ust_id,leitweg_id,created_at&limit=1`,
+      `${url}/rest/v1/customers?name=ilike.${encodeURIComponent(clean.name)}&select=id,name,contact_person,email,phone,street,zip,city,notes,is_active,datev_konto,kundentyp,ust_id,leitweg_id,bauleister_nachweis_bis,created_at&limit=1`,
       { headers }
     );
     if (dupCheck.ok) {

@@ -204,6 +204,7 @@ function RechnungenContent() {
     datumPlusTage(14)
   );
   const [notes, setNotes] = useState('');
+  const [grundstuecksbezug, setGrundstuecksbezug] = useState(true);
   const [steuerbehandlung, setSteuerbehandlung] = useState<'regel' | '13b' | 'kleinunternehmer'>('regel');
   const [geruestNr, setGeruestNr] = useState('');
   const [leistungsdatum, setLeistungsdatum] = useState('');
@@ -310,6 +311,7 @@ function RechnungenContent() {
           due_date: dueDate,
           notes: notes.trim() || null,
           steuerfall: taxRate === 0 ? steuerbehandlung : 'regel',
+          grundstuecksbezug,
           geruest_nr: geruestNr.trim() || undefined,
           leistungsdatum: leistungsdatum || undefined,
           invoice_type: invoiceType,
@@ -337,7 +339,7 @@ function RechnungenContent() {
       setInvoiceType('standard');
       setPositions([{ bezeichnung: '', menge: 1, einheit: 'Stk.', einzelpreis: 0 }]);
       await load();
-      alert('✅ Rechnung ' + json.invoice.invoice_number + ' angelegt!' + (json.warnung ? '\n\n⚠️ ' + json.warnung : ''));
+      alert('✅ Rechnung ' + json.invoice.invoice_number + ' angelegt!' + (json.warnung ? '\n\n⚠️ ' + json.warnung : '') + (json.steuer_warnungen?.length ? '\n\n⚠️ § 13b prüfen:\n• ' + json.steuer_warnungen.join('\n• ') : ''));
     } catch (err: any) {
       alert('❌ ' + err.message);
     } finally {
@@ -745,6 +747,10 @@ function RechnungenContent() {
                     <option value="kleinunternehmer">Kleinunternehmer (§ 19 UStG)</option>
                   </select>
                 )}
+                <label className="flex items-center gap-2 text-xs text-[#1d1d1f] max-w-xs" title="Bei Privatkunden steht dann der Hinweis auf die zweijährige Aufbewahrung auf der Rechnung (§ 14b Abs. 1 Satz 5 UStG).">
+                  <input type="checkbox" checked={grundstuecksbezug} onChange={(e) => setGrundstuecksbezug(e.target.checked)} />
+                  Leistung an einem Grundstück (Aufbewahrungshinweis bei Privatkunden)
+                </label>
                 <input
                   value={notes}
                   onChange={(e) => setNotes(e.target.value)}

@@ -67,6 +67,7 @@ interface Kunde {
   kundentyp?: 'gewerblich' | 'privat'
   ust_id?: string | null
   leitweg_id?: string | null
+  bauleister_nachweis_bis?: string | null
   created_at: string
 }
 
@@ -1029,6 +1030,10 @@ export default function KundenDetailPage() {
               <div>
                 <label className="block text-xs text-[#86868b] mb-1">Leitweg-ID (nur Behörden, optional)</label>
                 <input value={kundeForm.leitweg_id || ''} onChange={(e) => setKundeForm({ ...kundeForm, leitweg_id: e.target.value })} placeholder="z. B. 04011000-12345-67" className={inputCls} />
+              </div>
+              <div>
+                <label className="block text-xs text-[#86868b] mb-1">Bescheinigung USt 1 TG gültig bis (für § 13b)</label>
+                <input type="date" value={kundeForm.bauleister_nachweis_bis || ''} onChange={(e) => setKundeForm({ ...kundeForm, bauleister_nachweis_bis: e.target.value })} className={inputCls} />
               </div>
             </div>
             <button onClick={saveKunde} disabled={speichern} className={btnPrimary}>{speichern ? 'Speichert…' : 'Speichern'}</button>

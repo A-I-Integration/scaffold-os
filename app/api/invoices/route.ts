@@ -4,7 +4,7 @@ import { trackImpact } from '@/lib/impact';
 import { serverErrorResponse } from '@/lib/auth';
 import { bereinigePosition } from '@/lib/rechnung-position';
 import { notizMitSteuerHinweis } from '@/lib/ust-hinweis';
-import { steuerFall } from '@/lib/rechnung-steuer';
+import { steuerFall, pruefe13b } from '@/lib/rechnung-steuer';
 import { abschlagOhneAuftrag, ABSCHLAG_OHNE_AUFTRAG_FEHLER } from '@/lib/rechnung-regeln';
 
 // ============================================================
@@ -59,6 +59,21 @@ async function hatFreigabe(projectId: string): Promise<boolean> {
   return rows.some((r: any) => r.pruefung_details?.freigegeben === true);
 }
 
+// Kundendaten für Steuerprüfung und Rechnungskopf: per Verknüpfung, sonst nur bei genau einem Kunden gleichen Namens.
+// Fehlen die neuen Spalten (Migration noch nicht ausgeführt), wird mit den Grundspalten weitergemacht.
+async function ladeKundeFuerRechnung(customerId: string | null, name: string): Promise<any | null> {
+  const filter = customerId ? `id=eq.${customerId}` : `name=ilike.${encodeURIComponent(name.trim())}&limit=2`;
+  for (const sel of ['kundentyp,ust_id,leitweg_id,bauleister_nachweis_bis', 'kundentyp,ust_id,leitweg_id']) {
+    try {
+      const r = await fetch(`${url}/rest/v1/customers?${filter}&select=${sel}`, { headers });
+      if (!r.ok) continue;
+      const rows = await r.json();
+      return customerId ? rows?.[0] || null : (rows?.length === 1 ? rows[0] : null);
+    } catch { /* nächster Versuch */ }
+  }
+  return null;
+}
+
 // ─── GET: alle Rechnungen laden ───
 export async function GET(req: NextRequest) {
   const { role } = await callerRole();
@@ -111,6 +126,7 @@ export async function POST(req: NextRequest) {
     const gerüstNr = typeof body.geruest_nr === 'string' && body.geruest_nr.trim() ? body.geruest_nr.trim().slice(0, 60) : null;
     const leistungsdatum = typeof body.leistungsdatum === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(body.leistungsdatum) ? body.leistungsdatum : null;
 
+    const grundstuecksbezug = body.grundstuecksbezug !== false; // Gerüste stehen in der Regel an einem Grundstück
     let steuerbehandlung: 'regel' | '13b' | 'kleinunternehmer' = ['13b', 'kleinunternehmer'].includes(body.steuerfall) ? body.steuerfall : 'regel';
     // Gutschrift/Ersatzrechnung ohne eigene Angabe: Steuerbehandlung der Bezugsrechnung übernehmen
     if (body.steuerfall === undefined && reference_invoice_number && Number(tax_rate) === 0) {
@@ -209,6 +225,16 @@ export async function POST(req: NextRequest) {
       } catch { /* optional */ }
     }
 
+    // Kunde einmal laden (Rechnungskopf) und bei § 13b prüfen: Privatpersonen sind ausgeschlossen,
+    // fehlende Bescheinigung (USt 1 TG) oder USt-IdNr. werden als Warnung zurückgemeldet.
+    const kundeRow = await ladeKundeFuerRechnung(customerId, String(customer_name));
+    let steuerWarnungen: string[] = [];
+    if (steuerbehandlung === '13b') {
+      const p13 = pruefe13b(kundeRow, new Date().toISOString().slice(0, 10));
+      if (p13.fehler) return NextResponse.json({ success: false, error: p13.fehler, code: 'STEUER_13B_PRIVAT' }, { status: 400 });
+      steuerWarnungen = p13.warnungen;
+    }
+
     // FIX (Bug-Report, Phase 93): Nummernvergabe UND Insert liefen bisher
     // als zwei getrennte Requests (erst next_invoice_number, dann POST
     // /invoices) - schlug der Insert fehl, war die Nummer schon vergeben:
@@ -301,19 +327,8 @@ export async function POST(req: NextRequest) {
     // Schlägt das fehl, bleibt die Rechnung gültig; die Antwort meldet es, damit die Angaben nachgetragen werden können.
     let kopfWarnung: string | null = null;
     if (rows[0]?.id) {
-      const kopf: Record<string, any> = { geruest_nr: gerüstNr, leistungsdatum, steuerfall: steuerbehandlung };
-      {
-        try {
-          // Ohne Verknüpfung (manuelle Rechnung): nur bei genau einem Kunden gleichen Namens übernehmen
-          const kSel = 'select=kundentyp,ust_id,leitweg_id';
-          const kr0 = await fetch(customerId
-            ? `${url}/rest/v1/customers?id=eq.${customerId}&${kSel}`
-            : `${url}/rest/v1/customers?name=ilike.${encodeURIComponent(String(customer_name).trim())}&${kSel}&limit=2`, { headers });
-          const kRows = kr0.ok ? await kr0.json() : [];
-          const k0 = customerId ? kRows?.[0] : (kRows?.length === 1 ? kRows[0] : null);
-          if (k0) { kopf.customer_privat = k0.kundentyp === 'privat'; kopf.customer_ust_id = k0.ust_id || null; kopf.leitweg_id = k0.leitweg_id || null; }
-        } catch { /* Kundendaten optional */ }
-      }
+      const kopf: Record<string, any> = { geruest_nr: gerüstNr, leistungsdatum, steuerfall: steuerbehandlung, grundstuecksbezug };
+      if (kundeRow) { kopf.customer_privat = kundeRow.kundentyp === 'privat'; kopf.customer_ust_id = kundeRow.ust_id || null; kopf.leitweg_id = kundeRow.leitweg_id || null; }
       try {
         const kr = await fetch(`${url}/rest/v1/invoices?id=eq.${rows[0].id}`, {
           method: 'PATCH', headers: { ...headers, Prefer: 'return=representation' },
@@ -352,7 +367,7 @@ export async function POST(req: NextRequest) {
       invoice_type: rows[0]?.invoice_type || 'standard',
     });
 
-    return NextResponse.json({ success: true, invoice: rows[0], override_verwendet: overrideVerwendet, ...(kopfWarnung ? { warnung: kopfWarnung } : {}) });
+    return NextResponse.json({ success: true, invoice: rows[0], override_verwendet: overrideVerwendet, ...(kopfWarnung ? { warnung: kopfWarnung } : {}), ...(steuerWarnungen.length ? { steuer_warnungen: steuerWarnungen } : {}) });
   } catch (err: any) {
     return serverErrorResponse(err);
   }

@@ -23,6 +23,7 @@ interface Company {
   phone: string;
   email: string;
   website: string;
+  ansprechpartner: string;
   steuer_nr: string;
   ust_id: string;
   bank_name: string;
@@ -45,7 +46,7 @@ interface Company {
 
 const EMPTY: Company = {
   company_name: '', street: '', zip: '', city: '', phone: '', email: '',
-  website: '', steuer_nr: '', ust_id: '', bank_name: '', iban: '', bic: '',
+  website: '', ansprechpartner: '', steuer_nr: '', ust_id: '', bank_name: '', iban: '', bic: '',
   depot_address: '',
   calc_hourly_rate: '', calc_hours_per_sqm: '', calc_transport_per_kg: '',
   calc_transport_min: '', calc_trip_flat: '', calc_permit_low: '',
@@ -82,6 +83,7 @@ const FIELDS: { key: keyof Company; label: string; hint?: string; span?: boolean
   { key: 'city', label: 'Ort' },
   { key: 'phone', label: 'Telefon' },
   { key: 'email', label: 'E-Mail (auf der Rechnung)' },
+  { key: 'ansprechpartner', label: 'Ansprechpartner für Rechnungen', hint: 'Name; wird für XRechnung benötigt' },
   { key: 'website', label: 'Webseite' },
   { key: 'steuer_nr', label: 'Steuernummer', hint: 'Vom Finanzamt – Pflicht auf Rechnungen (§ 14 UStG)' },
   { key: 'ust_id', label: 'USt-IdNr.', hint: 'Alternativ zur Steuernummer (DE…)' },
