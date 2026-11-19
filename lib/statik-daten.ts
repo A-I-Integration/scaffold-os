@@ -8,6 +8,8 @@
 // Gespeichert im Projekt unter data.statikDaten (kein SQL nötig).
 // ============================================================
 
+import { lastklassenZulassung } from '@/lib/data/zulassung-lastklassen-weitere'
+
 export const WINDNORMEN = ['DIN EN 1991-1-4 mit Nationalem Anhang', 'DIN EN 12811-1', 'Andere / nach Vorgabe des Statikers'] as const
 export const GELAENDEKATEGORIEN = [
   { id: 'I', text: 'I – offene See, Seen' },
@@ -61,6 +63,8 @@ export interface StatikDaten {
   verankerungsgrund?: string
   sonderlasten?: SonderlastId[]
   systemmischung?: boolean
+  /** Nummer der MJ-Zulassung, deren Belag-Lastklassen gelten sollen (z. B. 'Z-8.1-872') */
+  zulassung?: string
   notiz?: string
 }
 
@@ -93,6 +97,7 @@ export function bereinigeStatikDaten(roh: unknown): StatikDaten {
     if (ids.length > 0) aus.sonderlasten = ids
   }
   if (r.systemmischung === true) aus.systemmischung = true
+  if (typeof r.zulassung === 'string' && lastklassenZulassung(r.zulassung)) aus.zulassung = r.zulassung
   if (typeof r.notiz === 'string' && r.notiz.trim()) aus.notiz = r.notiz.trim().slice(0, 500)
   return aus
 }

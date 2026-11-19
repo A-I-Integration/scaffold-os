@@ -12,7 +12,7 @@ import type { CADModel } from './calculations/cad-engine'
 import { SONDERLASTEN, windzonenRichtwertMs, type StatikDaten } from './statik-daten'
 import { katalogListeFuerSystem } from './cad/katalog-zuordnung'
 import { pruefeLastklassen, pruefeTabelle } from './data/zulassung-lastklassen'
-import { zulassungenFuerListe } from './data/zulassung-lastklassen-weitere'
+import { zulassungenFuerProjekt } from './data/zulassung-lastklassen-weitere'
 
 export interface Pruefpunkt {
   id: string
@@ -48,10 +48,11 @@ export function statikPruefpunkte(model: CADModel | null, statik: StatikDaten): 
     const lkPr = lkListe && model.building.lastklasse ? pruefeLastklassen(lkListe, model.fields.map((f) => f.lengthM), model.building.lastklasse) : null
     if (!lkPr && lkListe && model.building.lastklasse) {
       const weiten = model.fields.map((f) => f.lengthM)
-      for (const z of zulassungenFuerListe(lkListe)) {
+      const { tabellen, gewaehlt } = zulassungenFuerProjekt(lkListe, statik.zulassung)
+      for (const z of tabellen) {
         const pr = pruefeTabelle(z, weiten, model.building.lastklasse)
         const ok = pr.zeilen.filter((x) => x.ergebnis === 'ok').length
-        p.push({ id: `belag-lk-${z.zulassung}`, thema: 'Beläge und Lastklasse', text: `Laut Zulassung ${z.zulassung} (${z.system}, ${z.tabelle}) decken ${ok} von ${pr.zeilen.length} Belagarten die Lastklasse ${pr.geplanteLk} bei den Feldweiten im Modell ab. Welche Zulassung zu Ihrem Gerüst gehört, ist im Modell nicht hinterlegt: bitte prüfen (Abschnitt 6 im Lastannahmen-Blatt).` })
+        p.push({ id: `belag-lk-${z.zulassung}`, thema: 'Beläge und Lastklasse', text: `Laut Zulassung ${z.zulassung} (${z.system}, ${z.tabelle}) decken ${ok} von ${pr.zeilen.length} Belagarten die Lastklasse ${pr.geplanteLk} bei den Feldweiten im Modell ab. ${gewaehlt ? 'Zulassung vom Planer gewählt' : 'Welche Zulassung zu Ihrem Gerüst gehört, ist nicht gewählt: bitte unter Projektdaten wählen und prüfen'} (Abschnitt 6 im Lastannahmen-Blatt).` })
       }
     }
     if (lkPr) {

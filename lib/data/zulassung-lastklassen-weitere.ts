@@ -208,3 +208,13 @@ export function zulassungenFuerListe(liste: MjListe | null, nurVollstaendig = tr
   if (!liste) return []
   return LASTKLASSEN_WEITERE.filter((z) => z.liste === liste && (nurVollstaendig ? z.umfang === 'vollstaendig' : z.umfang !== 'keine-tabelle'))
 }
+
+/**
+ * Welche Tabellen für ein Projekt gelten: die vom Anwender gewählte Zulassung (wenn sie zur Preisliste gehört),
+ * sonst alle vollständig vorliegenden der Preisliste (Zuordnung offen).
+ */
+export function zulassungenFuerProjekt(liste: MjListe | null, gewaehlt: string | undefined): { tabellen: ZulassungLastklassen[]; gewaehlt: boolean } {
+  const z = gewaehlt ? lastklassenZulassung(gewaehlt) : undefined
+  if (z && z.umfang !== 'keine-tabelle' && z.liste === liste) return { tabellen: [z], gewaehlt: true }
+  return { tabellen: zulassungenFuerListe(liste), gewaehlt: false }
+}
