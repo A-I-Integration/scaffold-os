@@ -11,7 +11,6 @@ import type { ManualPlacement } from '@/lib/calculations/cad-engine'
 import NotesPanel from './NotesPanel'
 import LayersPanel from './LayersPanel'
 import DimensionsPanel from './DimensionsPanel'
-import ComponentCatalog from './ComponentCatalog'
 
 interface Props {
   materials: MaterialItem[]
@@ -76,11 +75,9 @@ interface Props {
   manualPlacements?: ManualPlacement[]
   onRemoveManualPlacement?: (id: string) => void
   // Klick-Platzierung: aktuell gewählter Bauteiltyp + Setter
-  placementType?: string | null
-  onSelectPlacementType?: (type: string | null) => void
 }
 
-export default function BillOfMaterials({ materials, ohnePreis = [], ohneGewicht = [], lagerFehler = false, totalWeightKg, totalPrice, logistik, fahrzeuge = [], fahrzeugWahl = 'auto', onFahrzeugWahl, onExportPDF, onExportCSV, onExportMontageplan, onExportMontageplanPdf, onExportProjektblatt, onOpenLv, onSpeichereProjektdatei, onExportStatikGeometrie, onExportIFC, onExportDXF, onExportBogen, onExportStatikerPaket, planModus = 'schematisch', onPlanModusChange, customers, kundenLadeFehler, onRetryKunden, onCreateCustomer, onAssignCustomer, zuordnenLaeuft, disabled = false, notes, onDeleteNote, layerState, onToggleSide, onToggleLevel, onShowAllLayers, onHideAllLayers, customDimensions, onDeleteDimension, measureMode, onToggleMeasureMode, manualPlacements, onRemoveManualPlacement, placementType, onSelectPlacementType }: Props) {
+export default function BillOfMaterials({ materials, ohnePreis = [], ohneGewicht = [], lagerFehler = false, totalWeightKg, totalPrice, logistik, fahrzeuge = [], fahrzeugWahl = 'auto', onFahrzeugWahl, onExportPDF, onExportCSV, onExportMontageplan, onExportMontageplanPdf, onExportProjektblatt, onOpenLv, onSpeichereProjektdatei, onExportStatikGeometrie, onExportIFC, onExportDXF, onExportBogen, onExportStatikerPaket, planModus = 'schematisch', onPlanModusChange, customers, kundenLadeFehler, onRetryKunden, onCreateCustomer, onAssignCustomer, zuordnenLaeuft, disabled = false, notes, onDeleteNote, layerState, onToggleSide, onToggleLevel, onShowAllLayers, onHideAllLayers, customDimensions, onDeleteDimension, measureMode, onToggleMeasureMode, manualPlacements, onRemoveManualPlacement }: Props) {
   const [kundenSuche, setKundenSuche] = useState('')
   const [ausgewaehlterKunde, setAusgewaehlterKunde] = useState<{ id: string; name: string } | null>(null)
   const [zeigeDropdown, setZeigeDropdown] = useState(false)
@@ -157,9 +154,6 @@ export default function BillOfMaterials({ materials, ohnePreis = [], ohneGewicht
             onToggleMeasureMode={onToggleMeasureMode}
           />
         )}
-
-        {/* Bauteil-Katalog mit Klick-Platzierung (CP-Pro-Marktvergleich) */}
-        <ComponentCatalog disabled={disabled} selectedType={placementType} onSelectType={onSelectPlacementType} />
 
         {/* Manuell platzierte Bauteile (CP-Pro-Marktvergleich) */}
         {manualPlacements && manualPlacements.length > 0 && onRemoveManualPlacement && (

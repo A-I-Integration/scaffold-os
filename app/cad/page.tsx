@@ -96,6 +96,7 @@ import KatalogWahlListe from '@/components/cad/KatalogWahlListe'
 import { katalogListeFuerSystem, wendeKatalogwahlAn, uebertrageAufGleiche } from '@/lib/cad/katalog-zuordnung'
 import Scaffold2D from '@/components/cad/Scaffold2D'
 import CadStart from '@/components/cad/CadStart'
+import BauteilLeiste from '@/components/cad/BauteilLeiste'
 import HuellePruefung from '@/components/cad/HuellePruefung'
 import CadSchritte, { type GeruestWahl } from '@/components/cad/CadSchritte'
 import { eingabeStandGeruest, istGeruestVeraltet } from '@/lib/cad/modell-veraltet'
@@ -1543,6 +1544,7 @@ export default function CADPage() {
             layerState={layerState} onToggleSide={(k) => handleToggleSide(k as keyof SideVisibility)} onToggleLevel={handleToggleLevel}
             onAlleEin={handleShowAllLayers} onAlleAus={handleHideAllLayers} visibleTypes={visibleTypes} onToggleType={toggleType}
           />
+          <BauteilLeiste disabled={!model} selectedType={placementType} onSelectType={handleSelectPlacementType} />
           {building.umriss && building.umriss.length >= 3 && (huelleBestaetigt ? (
             <div className='flex items-center gap-3 border-b border-black/10 bg-white px-4 py-1.5 text-xs'>
               <span className='text-green-700'>✓ Hülle bestätigt</span>
@@ -1797,8 +1799,6 @@ export default function CADPage() {
             onToggleMeasureMode={handleToggleMeasureMode}
             manualPlacements={manualPlacements}
             onRemoveManualPlacement={handleRemoveManualPlacement}
-            placementType={placementType}
-            onSelectPlacementType={handleSelectPlacementType}
           />
         </div>
       </div>
