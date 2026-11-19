@@ -37,12 +37,15 @@ interface Kunde {
   // NEU (Phase 95, DATEV-Sammeldebitor-Fix): optionale, vom Steuerberater
   // vergebene Einzeldebitoren-Kontonummer.
   datev_konto: string | null;
+  kundentyp?: 'gewerblich' | 'privat';
+  ust_id?: string | null;
+  leitweg_id?: string | null;
   created_at: string;
 }
 
 const LEER_FORM = {
   name: '', contact_person: '', email: '', phone: '',
-  street: '', zip: '', city: '', notes: '', datev_konto: '',
+  street: '', zip: '', city: '', notes: '', datev_konto: '', kundentyp: 'gewerblich', ust_id: '', leitweg_id: '',
 };
 
 const STATUS_LABEL: Record<string, string> = {
@@ -439,6 +442,21 @@ export default function KundenPage() {
                     <div>
                       <label className="block text-xs text-[#86868b] mb-1">DATEV-Kontonummer (Einzeldebitor, optional)</label>
                       <input value={form.datev_konto} onChange={(e) => setForm({ ...form, datev_konto: e.target.value })} className={inputCls} placeholder="z. B. 10001 – sonst Sammelkonto" />
+                    </div>
+                    <div>
+                      <label className="block text-xs text-[#86868b] mb-1">Kundentyp</label>
+                      <select value={form.kundentyp} onChange={(e) => setForm({ ...form, kundentyp: e.target.value })} className={inputCls}>
+                        <option value="gewerblich">Unternehmen / Gewerbe</option>
+                        <option value="privat">Privatperson</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-xs text-[#86868b] mb-1">USt-IdNr. (optional)</label>
+                      <input value={form.ust_id} onChange={(e) => setForm({ ...form, ust_id: e.target.value })} className={inputCls} placeholder="DE123456789" />
+                    </div>
+                    <div>
+                      <label className="block text-xs text-[#86868b] mb-1">Leitweg-ID (nur Behörden, optional)</label>
+                      <input value={form.leitweg_id} onChange={(e) => setForm({ ...form, leitweg_id: e.target.value })} className={inputCls} placeholder="z. B. 04011000-12345-67" />
                     </div>
                     <div className="md:col-span-2">
                       <label className="block text-xs text-[#86868b] mb-1">Notizen</label>

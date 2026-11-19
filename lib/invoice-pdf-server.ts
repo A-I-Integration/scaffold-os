@@ -4,7 +4,7 @@ import fontkit from '@pdf-lib/fontkit';
 import { readFile } from 'fs/promises';
 import path from 'path';
 import type { Invoice } from './invoice-pdf';
-import { leistungsdatumFuer, steuerFall } from './rechnung-steuer';
+import { leistungsdatumFuer, steuerFall, aufbewahrungsHinweis } from './rechnung-steuer';
 
 // ============================================================
 // SCAFFOLD OS – Rechnungs-PDF für E-Rechnung (Phase 39, Nachtrag)
@@ -152,7 +152,7 @@ export async function generateInvoicePdfCompliant(inv: Invoice): Promise<Uint8Ar
   y -= hinweisZeilen.length * 10 + 8;
 
   // Bemerkungen (zusätzliche Vereinbarungen). Passt der Block nicht über die Fußzeile, kommt er auf eine Folgeseite.
-  const bemerkung = String(inv.notes || '').replace(/[^\n\u0020-\u007E\u00A0-\u00FF€–—‘’“”•…]/g, '?').trim();
+  const bemerkung = [inv.notes, aufbewahrungsHinweis(inv)].filter(Boolean).join('\n\n').replace(/[^\n\u0020-\u007E\u00A0-\u00FF€–—‘’“”•…]/g, '?').trim();
   if (bemerkung) {
     const zeilen = bemerkung.split('\n').flatMap((z) => (z.trim() ? wrapText(z, 500, 8) : ['']));
     let seite = page;

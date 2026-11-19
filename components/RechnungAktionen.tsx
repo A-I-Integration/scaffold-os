@@ -18,6 +18,7 @@ type Props = {
   onGutschrift?: () => void;
   onTeilabbau?: () => void;
   onZugferd?: () => void;
+  onXrechnung?: () => void;
   onBezahltToggle?: () => void;
   onLoeschen: () => void;
 };
@@ -53,6 +54,7 @@ export default function RechnungAktionen(p: Props) {
   if (!p.storniert && !p.gutschrift && p.onGutschrift) eintraege.push({ key: 'gs', icon: <Receipt className="h-4 w-4" />, titel: 'Gutschrift zu dieser Rechnung', hinweis: 'Einen Betrag gutschreiben (z. B. Rabatt, Korrektur).', onClick: p.onGutschrift });
   if (!p.storniert && !p.gutschrift && p.onTeilabbau) eintraege.push({ key: 'ta', icon: <Scissors className="h-4 w-4" />, titel: 'Teilabbau: Rechnung kürzen', hinweis: 'Rechnung anteilig reduzieren, wenn nur ein Teil abgebaut ist.', onClick: p.onTeilabbau });
   if (p.onZugferd) eintraege.push({ key: 'zf', icon: <FileText className="h-4 w-4" />, titel: p.zugferdLaeuft ? 'E-Rechnung wird erstellt …' : 'E-Rechnung (ZUGFeRD) laden', hinweis: 'PDF mit eingebetteter maschinenlesbarer Rechnung.', onClick: p.onZugferd });
+  if (p.onXrechnung) eintraege.push({ key: 'xr', icon: <FileText className="h-4 w-4" />, titel: 'XRechnung (XML) laden', hinweis: 'Reine XML-Rechnung, z. B. für Behörden (braucht die Leitweg-ID des Kunden).', onClick: p.onXrechnung });
   if (!p.storniert && !p.gutschrift && p.onBezahltToggle) eintraege.push({ key: 'bz', icon: p.bezahlt ? <RotateCcw className="h-4 w-4" /> : <Check className="h-4 w-4" />, titel: p.bezahlt ? 'Wieder auf „offen“ setzen' : 'Als vollständig bezahlt markieren', hinweis: p.bezahlt ? undefined : 'Ohne Zahlung zu erfassen.', onClick: p.onBezahltToggle });
   eintraege.push({ key: 'del', icon: <Trash2 className="h-4 w-4" />, titel: 'Löschen', hinweis: 'Entfernt die Rechnung endgültig.', onClick: p.onLoeschen, rot: true, trenner: true });
 

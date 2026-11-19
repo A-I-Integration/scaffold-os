@@ -7,20 +7,28 @@
 // Steuerberater; die Software setzt nur um, was an der Rechnung gewählt ist.
 // ============================================================
 import { HINWEIS_13B } from './ust-hinweis'
+export { HINWEIS_19 } from './ust-hinweis'
 
 export type SteuerKategorie = 'S' | 'AE' | 'E'
-export const HINWEIS_19 = 'Kein Ausweis von Umsatzsteuer, da Kleinunternehmer gemäß § 19 UStG.'
+export const HINWEIS_AUFBEWAHRUNG = 'Hinweis: Sie sind als Privatperson verpflichtet, diese Rechnung für Leistungen im Zusammenhang mit einem Grundstück zwei Jahre lang aufzubewahren (§ 14b Abs. 1 Satz 5 UStG).'
+export type Steuerbehandlung = 'regel' | '13b' | 'kleinunternehmer'
+
+/** Aufbewahrungshinweis für Privatpersonen als Leistungsempfänger (Gerüste stehen an einem Grundstück). */
+export function aufbewahrungsHinweis(inv: { customer_privat?: boolean | null }): string | null {
+  return inv.customer_privat ? HINWEIS_AUFBEWAHRUNG : null
+}
 
 export interface SteuerFall { kategorie: SteuerKategorie; satz: number; grund?: string }
 
 /** Steuerfall einer Rechnung: Satz > 0 = Regelsteuer; 0 % je nach Hinweis § 13b (Steuerschuldnerschaft) oder § 19 (Kleinunternehmer). */
-export function steuerFall(inv: { tax_rate: unknown; notes?: string | null }): SteuerFall {
+export function steuerFall(inv: { tax_rate: unknown; notes?: string | null; steuerfall?: string | null }): SteuerFall {
   const rate = Number(inv.tax_rate)
   const satz = Number.isFinite(rate) ? rate : 19
   if (satz > 0) return { kategorie: 'S', satz }
   const n = inv.notes || ''
-  if (n.includes('§ 13b')) return { kategorie: 'AE', satz: 0, grund: 'Steuerschuldnerschaft des Leistungsempfängers (§ 13b UStG)' }
-  if (n.includes('§ 19 UStG')) return { kategorie: 'E', satz: 0, grund: 'Kleinunternehmer gemäß § 19 UStG' }
+  // Die gewählte Steuerbehandlung hat Vorrang; ältere Rechnungen ohne Auswahl werden am Hinweistext erkannt
+  if (inv.steuerfall === '13b' || (!inv.steuerfall && n.includes('§ 13b'))) return { kategorie: 'AE', satz: 0, grund: 'Steuerschuldnerschaft des Leistungsempfängers (§ 13b UStG)' }
+  if (inv.steuerfall === 'kleinunternehmer' || (!inv.steuerfall && n.includes('§ 19 UStG'))) return { kategorie: 'E', satz: 0, grund: 'Kleinunternehmer gemäß § 19 UStG' }
   return { kategorie: 'E', satz: 0 }
 }
 

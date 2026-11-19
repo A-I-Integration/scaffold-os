@@ -3,6 +3,8 @@ import { createClient } from '@/lib/supabase/server';
 import { trackImpact } from '@/lib/impact';
 import { serverErrorResponse } from '@/lib/auth';
 import { bereinigePosition } from '@/lib/rechnung-position';
+import { notizMitSteuerHinweis } from '@/lib/ust-hinweis';
+import { steuerFall } from '@/lib/rechnung-steuer';
 import { abschlagOhneAuftrag, ABSCHLAG_OHNE_AUFTRAG_FEHLER } from '@/lib/rechnung-regeln';
 
 // ============================================================
@@ -109,6 +111,20 @@ export async function POST(req: NextRequest) {
     const gerüstNr = typeof body.geruest_nr === 'string' && body.geruest_nr.trim() ? body.geruest_nr.trim().slice(0, 60) : null;
     const leistungsdatum = typeof body.leistungsdatum === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(body.leistungsdatum) ? body.leistungsdatum : null;
 
+    let steuerbehandlung: 'regel' | '13b' | 'kleinunternehmer' = ['13b', 'kleinunternehmer'].includes(body.steuerfall) ? body.steuerfall : 'regel';
+    // Gutschrift/Ersatzrechnung ohne eigene Angabe: Steuerbehandlung der Bezugsrechnung übernehmen
+    if (body.steuerfall === undefined && reference_invoice_number && Number(tax_rate) === 0) {
+      try {
+        const rr = await fetch(`${url}/rest/v1/invoices?invoice_number=eq.${encodeURIComponent(String(reference_invoice_number))}&select=steuerfall,notes&limit=1`, { headers });
+        const ref = rr.ok ? (await rr.json())?.[0] : null;
+        if (ref) steuerbehandlung = steuerFall({ tax_rate: 0, notes: ref.notes, steuerfall: ref.steuerfall }).kategorie === 'AE' ? '13b'
+          : steuerFall({ tax_rate: 0, notes: ref.notes, steuerfall: ref.steuerfall }).grund ? 'kleinunternehmer' : 'regel';
+      } catch { /* ohne Bezug bleibt es bei der Regel */ }
+    }
+    if (steuerbehandlung !== 'regel' && tax_rate != null && Number(tax_rate) !== 0) {
+      return NextResponse.json({ success: false, error: 'Bei § 13b und Kleinunternehmer (§ 19) wird keine Umsatzsteuer ausgewiesen (Satz 0 %).' }, { status: 400 });
+    }
+
     if (!customer_name) {
       return NextResponse.json({ success: false, error: 'Kundenname erforderlich.' }, { status: 400 });
     }
@@ -161,7 +177,7 @@ export async function POST(req: NextRequest) {
       (s: number, p: any) => s + (Number(p.menge) || 0) * (Number(p.einzelpreis) || 0),
       0
     );
-    const rate = tax_rate != null ? Number(tax_rate) : 19;
+    const rate = steuerbehandlung !== 'regel' ? 0 : (tax_rate != null ? Number(tax_rate) : 19);
     // Steuer immer vom Betrag ohne Vorzeichen runden, damit eine Gutschrift genau das Spiegelbild der Rechnung ist
     // (Math.round rundet -0,5 sonst anders als +0,5).
     const tax = vorzeichen * (Math.round(Math.abs(net) * rate) / 100);
@@ -246,7 +262,7 @@ export async function POST(req: NextRequest) {
       p_gross_amount: gross,
       p_invoice_date: resolvedInvoiceDate,
       p_due_date: resolvedDueDate,
-      p_notes: notes || null,
+      p_notes: notizMitSteuerHinweis(notes, rate, steuerbehandlung),
       p_company_snapshot: companySnapshot,
       // Phase 15-Fix: Rechnungstyp wirklich speichern (wurde bisher
       // zwar aus dem Request gelesen, aber nicht in die Datenbank
@@ -280,18 +296,42 @@ export async function POST(req: NextRequest) {
     const rows = [invoiceRow]; // ab hier wie zuvor: rows[0] = angelegte Rechnung
     const invoiceNumber = invoiceRow.invoice_number;
 
-    // Gerüstnummer und Leistungsdatum zur angelegten Rechnung speichern (Spalten geruest_nr, leistungsdatum).
+    // Kopfangaben zur angelegten Rechnung speichern: Gerüstnummer, Leistungsdatum, Steuerbehandlung sowie Kundentyp,
+    // USt-IdNr. und Leitweg-ID des Kunden zum Ausstellungszeitpunkt (aus dem Kundenstamm, nicht vom Browser).
     // Schlägt das fehl, bleibt die Rechnung gültig; die Antwort meldet es, damit die Angaben nachgetragen werden können.
     let kopfWarnung: string | null = null;
-    if ((gerüstNr || leistungsdatum) && rows[0]?.id) {
+    if (rows[0]?.id) {
+      const kopf: Record<string, any> = { geruest_nr: gerüstNr, leistungsdatum, steuerfall: steuerbehandlung };
+      {
+        try {
+          // Ohne Verknüpfung (manuelle Rechnung): nur bei genau einem Kunden gleichen Namens übernehmen
+          const kSel = 'select=kundentyp,ust_id,leitweg_id';
+          const kr0 = await fetch(customerId
+            ? `${url}/rest/v1/customers?id=eq.${customerId}&${kSel}`
+            : `${url}/rest/v1/customers?name=ilike.${encodeURIComponent(String(customer_name).trim())}&${kSel}&limit=2`, { headers });
+          const kRows = kr0.ok ? await kr0.json() : [];
+          const k0 = customerId ? kRows?.[0] : (kRows?.length === 1 ? kRows[0] : null);
+          if (k0) { kopf.customer_privat = k0.kundentyp === 'privat'; kopf.customer_ust_id = k0.ust_id || null; kopf.leitweg_id = k0.leitweg_id || null; }
+        } catch { /* Kundendaten optional */ }
+      }
       try {
         const kr = await fetch(`${url}/rest/v1/invoices?id=eq.${rows[0].id}`, {
           method: 'PATCH', headers: { ...headers, Prefer: 'return=representation' },
-          body: JSON.stringify({ geruest_nr: gerüstNr, leistungsdatum }),
+          body: JSON.stringify(kopf),
         });
         if (kr.ok) { const kj = await kr.json(); if (kj?.[0]) rows[0] = kj[0]; }
-        else kopfWarnung = 'Gerüstnummer/Leistungsdatum konnten nicht gespeichert werden (Datenbank-Migration ausgeführt?).';
-      } catch { kopfWarnung = 'Gerüstnummer/Leistungsdatum konnten nicht gespeichert werden.'; }
+        else {
+          // Neue Spalten fehlen (Migration noch nicht ausgeführt): wenigstens Gerüstnummer und Leistungsdatum sichern
+          kopfWarnung = 'Steuerangaben konnten nicht gespeichert werden (Datenbank-Migration ausführen).';
+          if (gerüstNr || leistungsdatum) {
+            const kr2 = await fetch(`${url}/rest/v1/invoices?id=eq.${rows[0].id}`, {
+              method: 'PATCH', headers: { ...headers, Prefer: 'return=representation' },
+              body: JSON.stringify({ geruest_nr: gerüstNr, leistungsdatum }),
+            });
+            if (kr2.ok) { const kj2 = await kr2.json(); if (kj2?.[0]) rows[0] = kj2[0]; }
+          }
+        }
+      } catch { kopfWarnung = 'Gerüstnummer, Leistungsdatum oder Steuerangaben konnten nicht gespeichert werden.'; }
     }
 
     // Phase 27: Admin-Überschreibung protokollieren

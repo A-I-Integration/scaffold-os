@@ -1,5 +1,5 @@
 import { DocumentTypeCode, VatCategoryCode } from '@stackforge-eu/factur-x';
-import { steuerFall, einheitZuUnitCode, zerlegeAdresse, leistungsdatumFuer } from './rechnung-steuer';
+import { steuerFall, einheitZuUnitCode, zerlegeAdresse, leistungsdatumFuer, aufbewahrungsHinweis } from './rechnung-steuer';
 
 /** Baut aus einer gespeicherten Rechnung die strukturierten Daten der E-Rechnung (EN 16931). Reine Logik, ohne Datenbank. */
 export function baueERechnungEingabe(inv: any) {
@@ -18,6 +18,9 @@ export function baueERechnungEingabe(inv: any) {
         id: inv.invoice_number,
         issueDate: String(inv.invoice_date),
         typeCode: inv.invoice_type === 'gutschrift' ? DocumentTypeCode.CREDIT_NOTE : DocumentTypeCode.COMMERCIAL_INVOICE,
+        // Leitweg-ID (Behörden, XRechnung Pflicht); sonst nicht gesetzt
+        ...(inv.leitweg_id ? { buyerReference: String(inv.leitweg_id) } : {}),
+        ...(aufbewahrungsHinweis(inv) ? { notes: [{ content: aufbewahrungsHinweis(inv)!, subjectCode: 'REG' }] } : {}),
       },
       // Leistungsdatum: das gespeicherte Feld, sonst das Rechnungsdatum
       delivery: { date: String(leistungsdatumFuer(inv).datum) },
@@ -36,6 +39,7 @@ export function baueERechnungEingabe(inv: any) {
         // sie nicht sauber trennen können (nur line1 wird tatsächlich
         // geprüft).
         address: { line1: kaeufer.line1, city: kaeufer.city, postalCode: kaeufer.postalCode, country: 'DE' },
+        ...(inv.customer_ust_id ? { taxRegistrations: [{ id: String(inv.customer_ust_id), schemeId: 'VA' as const }] } : {}),
       },
       lines: (inv.positions || []).map((p: any, i: number) => ({
         id: String(i + 1),

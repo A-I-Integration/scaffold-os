@@ -9,6 +9,7 @@ import { requireAuth, unauthorizedResponse, serverErrorResponse, pruefeRolle } f
 import { ROLLEN } from '@/lib/rollen';
 import { pruefePflichtangaben } from '@/lib/rechnung-steuer';
 import { baueERechnungEingabe } from '@/lib/rechnung-erechnung';
+import { archiviereXml } from '@/lib/rechnung-archiv';
 
 // ============================================================
 // SCAFFOLD OS – E-Rechnung / ZUGFeRD (Phase 39)
@@ -79,7 +80,13 @@ export async function POST(req: NextRequest) {
       pdf: pdfBuffer, input, profile: Profile.EN16931, flavor: Flavor.ZUGFERD, rgbIccProfile: iccProfile,
     });
 
-    return NextResponse.json({ success: true, pdfBase64: Buffer.from(result.pdf).toString('base64') });
+    // Strukturierte Daten im Originalformat unveränderbar archivieren (GoBD, 8 Jahre Aufbewahrung)
+    const archiviert = await archiviereXml({ url, headers }, inv, 'zugferd', result.xml, rollenPruefung.userId);
+
+    return NextResponse.json({
+      success: true, pdfBase64: Buffer.from(result.pdf).toString('base64'), archiviert,
+      ...(archiviert ? {} : { warnung: 'Die E-Rechnung wurde erstellt, konnte aber nicht archiviert werden (Datenbank-Migration ausgeführt?).' }),
+    });
   } catch (err: any) {
     return serverErrorResponse(err);
   }

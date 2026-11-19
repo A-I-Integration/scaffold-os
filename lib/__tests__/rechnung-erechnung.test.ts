@@ -33,3 +33,50 @@ describe('E-Rechnung aus Rechnungsdaten', () => {
     expect(baueERechnungEingabe(inv()).delivery.date).toBe('2026-11-19')
   })
 })
+
+import { toXRechnung } from '@stackforge-eu/factur-x'
+import { HINWEIS_AUFBEWAHRUNG } from '../rechnung-steuer'
+import { archiviereXml, xmlPruefsumme } from '../rechnung-archiv'
+import { vi } from 'vitest'
+
+describe('Privatkunde, Käufer-USt-IdNr., Leitweg-ID, XRechnung', () => {
+  it('Privatperson: Aufbewahrungshinweis steht in den Daten der E-Rechnung', () => {
+    const e = baueERechnungEingabe(inv({ customer_privat: true }))
+    expect(e.document.notes?.[0].content).toBe(HINWEIS_AUFBEWAHRUNG)
+    expect(validateInput(e, Profile.EN16931).valid).toBe(true)
+    expect(baueERechnungEingabe(inv()).document.notes).toBeUndefined()
+  })
+  it('USt-IdNr. des Kunden wird als Käufer-Steuerregistrierung übernommen', () => {
+    const e = baueERechnungEingabe(inv({ tax_rate: 0, tax_amount: 0, gross_amount: 1250, notes: HINWEIS_13B, customer_ust_id: 'DE987654321' }))
+    expect(e.buyer.taxRegistrations).toEqual([{ id: 'DE987654321', schemeId: 'VA' }])
+    expect(validateInput(e, Profile.EN16931).valid).toBe(true)
+  })
+  it('XRechnung: XML mit Leitweg-ID als Käuferreferenz', () => {
+    const e = baueERechnungEingabe(inv({ leitweg_id: '04011000-12345-67', company_snapshot: { ...cs, phone: '02564 1', email: 'a@b.de', contact_name: 'Frau Merola' } }))
+    expect(e.document.buyerReference).toBe('04011000-12345-67')
+    const r = toXRechnung(e, { validate: false })
+    expect(r.xml).toContain('04011000-12345-67')
+    expect(r.xml).toContain('xrechnung')
+  })
+})
+
+describe('Archiv', () => {
+  it('Prüfsumme ist stabil und hängt am Inhalt', () => {
+    expect(xmlPruefsumme('<a/>')).toBe(xmlPruefsumme('<a/>'))
+    expect(xmlPruefsumme('<a/>')).not.toBe(xmlPruefsumme('<b/>'))
+    expect(xmlPruefsumme('<a/>')).toHaveLength(64)
+  })
+  it('legt nur an (POST mit Duplikat-Schutz) und meldet Fehler als false', async () => {
+    const f = vi.fn().mockResolvedValue({ ok: true })
+    vi.stubGlobal('fetch', f)
+    expect(await archiviereXml({ url: 'http://x', headers: {} }, { id: 'i', invoice_number: 'RE-1' }, 'zugferd', '<a/>', 'u')).toBe(true)
+    const [adr, opt] = f.mock.calls[0]
+    expect(adr).toContain('on_conflict=invoice_id,format,sha256')
+    expect(opt.method).toBe('POST')
+    expect(opt.headers.Prefer).toContain('ignore-duplicates')
+    expect(JSON.parse(opt.body)).toMatchObject({ invoice_id: 'i', format: 'zugferd', sha256: xmlPruefsumme('<a/>') })
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('x')))
+    expect(await archiviereXml({ url: 'http://x', headers: {} }, { id: 'i', invoice_number: 'RE-1' }, 'xrechnung', '<a/>')).toBe(false)
+    vi.unstubAllGlobals()
+  })
+})

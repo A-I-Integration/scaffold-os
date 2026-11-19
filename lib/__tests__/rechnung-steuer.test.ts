@@ -47,3 +47,27 @@ describe('Leistungsdatum und Pflichtangaben', () => {
     expect(pruefePflichtangaben({ ...basis, gross_amount: 100, customer_address: '' })).toEqual([])
   })
 })
+
+import { aufbewahrungsHinweis, HINWEIS_AUFBEWAHRUNG, HINWEIS_19 } from '../rechnung-steuer'
+import { notizMitSteuerHinweis } from '../ust-hinweis'
+
+describe('Steuerbehandlung und Aufbewahrungshinweis', () => {
+  it('gewählte Steuerbehandlung hat Vorrang vor dem Hinweistext', () => {
+    expect(steuerFall({ tax_rate: 0, steuerfall: '13b', notes: null }).kategorie).toBe('AE')
+    expect(steuerFall({ tax_rate: 0, steuerfall: 'kleinunternehmer', notes: HINWEIS_13B }).kategorie).toBe('E')
+    expect(steuerFall({ tax_rate: 0, steuerfall: 'regel', notes: HINWEIS_13B }).grund).toBeUndefined()
+    expect(steuerFall({ tax_rate: 19, steuerfall: '13b' }).kategorie).toBe('S')
+  })
+  it('Hinweis zur Steuerbehandlung nur bei 0 %, ohne Doppelung', () => {
+    expect(notizMitSteuerHinweis('x', 0, 'kleinunternehmer')).toBe(`${HINWEIS_19}\nx`)
+    expect(notizMitSteuerHinweis(HINWEIS_19, 0, 'kleinunternehmer')).toBe(HINWEIS_19)
+    expect(notizMitSteuerHinweis('x', 19, 'kleinunternehmer')).toBe('x')
+    expect(notizMitSteuerHinweis(null, 0, '13b')).toContain('§ 13b')
+    expect(notizMitSteuerHinweis('x', 0, 'regel')).toBe('x')
+  })
+  it('Aufbewahrungshinweis nur für Privatpersonen', () => {
+    expect(aufbewahrungsHinweis({ customer_privat: true })).toBe(HINWEIS_AUFBEWAHRUNG)
+    expect(aufbewahrungsHinweis({ customer_privat: false })).toBeNull()
+    expect(aufbewahrungsHinweis({})).toBeNull()
+  })
+})
