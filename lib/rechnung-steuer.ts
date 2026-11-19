@@ -14,8 +14,37 @@ export const HINWEIS_AUFBEWAHRUNG = 'Hinweis: Sie sind als Privatperson verpflic
 export type Steuerbehandlung = 'regel' | '13b' | 'kleinunternehmer'
 
 /** Aufbewahrungshinweis für Privatpersonen als Leistungsempfänger (Gerüste stehen an einem Grundstück). */
-export function aufbewahrungsHinweis(inv: { customer_privat?: boolean | null }): string | null {
-  return inv.customer_privat ? HINWEIS_AUFBEWAHRUNG : null
+export function aufbewahrungsHinweis(inv: { customer_privat?: boolean | null; grundstuecksbezug?: boolean | null }): string | null {
+  // Nur bei Privatpersonen und nur, wenn die Leistung an einem Grundstück erbracht wird (Standard bei Gerüsten)
+  return inv.customer_privat && inv.grundstuecksbezug !== false ? HINWEIS_AUFBEWAHRUNG : null
+}
+
+/**
+ * § 13b bei Bauleistungen: Der Leistungsempfänger muss selbst Bauleistungen erbringen und das nachweisen
+ * (Bescheinigung USt 1 TG). Die Software prüft, was sie prüfen kann: Privatpersonen sind ausgeschlossen (Fehler);
+ * fehlende oder abgelaufene Bescheinigung und fehlende USt-IdNr. des Kunden sind Warnungen. Die Entscheidung im Einzelfall trifft die Firma.
+ */
+export function pruefe13b(
+  kunde: { kundentyp?: string | null; ust_id?: string | null; bauleister_nachweis_bis?: string | null } | null,
+  heute: string,
+): { fehler?: string; warnungen: string[] } {
+  const warnungen: string[] = []
+  if (!kunde) return { warnungen: ['Kunde ist nicht im Kundenstamm gefunden: Bescheinigung (USt 1 TG) und USt-IdNr. bitte vor dem Versand prüfen.'] }
+  if (kunde.kundentyp === 'privat') return { fehler: '§ 13b UStG gilt nur, wenn der Kunde Unternehmer ist. Dieser Kunde ist als Privatperson geführt.', warnungen }
+  if (!kunde.bauleister_nachweis_bis) warnungen.push('Beim Kunden ist keine Bescheinigung (USt 1 TG) hinterlegt. Bitte vor dem Versand klären.')
+  else if (kunde.bauleister_nachweis_bis < heute) warnungen.push('Die hinterlegte Bescheinigung (USt 1 TG) des Kunden ist abgelaufen. Bitte neu anfordern.')
+  if (!kunde.ust_id) warnungen.push('Beim Kunden ist keine USt-IdNr. hinterlegt.')
+  return { warnungen }
+}
+
+/** Zusätzliche Verkäuferangaben, die XRechnung (BR-DE-2) verlangt: Ansprechpartner, Telefon, E-Mail. */
+export function pruefeXrechnungVerkaeufer(cs: { ansprechpartner?: string | null; phone?: string | null; email?: string | null } | null | undefined): PflichtLuecke[] {
+  const c = cs || {}
+  const l: PflichtLuecke[] = []
+  if (!(c.ansprechpartner || '').trim()) l.push({ code: 'ANSPRECHPARTNER', text: 'Ansprechpartner des Ausstellers fehlt (Einstellungen → Firmenprofil).' })
+  if (!(c.phone || '').trim()) l.push({ code: 'TELEFON', text: 'Telefonnummer des Ausstellers fehlt (Einstellungen → Firmenprofil).' })
+  if (!(c.email || '').trim()) l.push({ code: 'EMAIL', text: 'E-Mail des Ausstellers fehlt (Einstellungen → Firmenprofil).' })
+  return l
 }
 
 export interface SteuerFall { kategorie: SteuerKategorie; satz: number; grund?: string }

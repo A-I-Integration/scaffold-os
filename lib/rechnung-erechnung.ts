@@ -2,7 +2,8 @@ import { DocumentTypeCode, VatCategoryCode } from '@stackforge-eu/factur-x';
 import { steuerFall, einheitZuUnitCode, zerlegeAdresse, leistungsdatumFuer, aufbewahrungsHinweis } from './rechnung-steuer';
 
 /** Baut aus einer gespeicherten Rechnung die strukturierten Daten der E-Rechnung (EN 16931). Reine Logik, ohne Datenbank. */
-export function baueERechnungEingabe(inv: any) {
+/** `optionen.kundenEmail`: E-Mail des Kunden als elektronische Adresse des Käufers (XRechnung verlangt sie). */
+export function baueERechnungEingabe(inv: any, optionen: { kundenEmail?: string | null } = {}) {
   const cs = inv.company_snapshot || {};
     const netAmount = Number(inv.net_amount);
     const taxAmount = Number(inv.tax_amount);
@@ -27,6 +28,8 @@ export function baueERechnungEingabe(inv: any) {
       seller: {
         name: cs.company_name,
         address: { line1: cs.street, city: cs.city, postalCode: cs.zip, country: 'DE' },
+        ...(cs.email ? { electronicAddress: { value: String(cs.email), schemeID: 'EM' } } : {}),
+        ...(cs.ansprechpartner || cs.phone || cs.email ? { contact: { ...(cs.ansprechpartner ? { name: cs.ansprechpartner } : {}), ...(cs.phone ? { phone: cs.phone } : {}), ...(cs.email ? { email: cs.email } : {}) } } : {}),
         taxRegistrations: cs.ust_id
           ? [{ id: cs.ust_id, schemeId: 'VA' as const }]
           : [{ id: cs.steuer_nr, schemeId: 'FC' as const }],
@@ -39,6 +42,7 @@ export function baueERechnungEingabe(inv: any) {
         // sie nicht sauber trennen können (nur line1 wird tatsächlich
         // geprüft).
         address: { line1: kaeufer.line1, city: kaeufer.city, postalCode: kaeufer.postalCode, country: 'DE' },
+        ...(optionen.kundenEmail ? { electronicAddress: { value: String(optionen.kundenEmail), schemeID: 'EM' } } : {}),
         ...(inv.customer_ust_id ? { taxRegistrations: [{ id: String(inv.customer_ust_id), schemeId: 'VA' as const }] } : {}),
       },
       lines: (inv.positions || []).map((p: any, i: number) => ({

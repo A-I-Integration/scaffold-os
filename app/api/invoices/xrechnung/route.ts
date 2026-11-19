@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { toXRechnung } from '@stackforge-eu/factur-x';
 import { pruefeRolle, serverErrorResponse } from '@/lib/auth';
 import { ROLLEN } from '@/lib/rollen';
-import { pruefePflichtangaben } from '@/lib/rechnung-steuer';
+import { pruefePflichtangaben, pruefeXrechnungVerkaeufer } from '@/lib/rechnung-steuer';
 import { baueERechnungEingabe } from '@/lib/rechnung-erechnung';
 import { archiviereXml } from '@/lib/rechnung-archiv';
 
@@ -33,6 +33,16 @@ export async function POST(req: NextRequest) {
     if (!inv) return NextResponse.json({ success: false, error: 'Rechnung nicht gefunden.' }, { status: 404 });
 
     const luecken = pruefePflichtangaben(inv);
+    luecken.push(...pruefeXrechnungVerkaeufer(inv.company_snapshot));
+    // E-Mail des Kunden (elektronische Adresse des Käufers) aus dem Kundenstamm
+    let kundenEmail: string | null = null;
+    if (inv.customer_id) {
+      try {
+        const kr = await fetch(`${url}/rest/v1/customers?id=eq.${inv.customer_id}&select=email`, { headers });
+        if (kr.ok) kundenEmail = (await kr.json())?.[0]?.email || null;
+      } catch { /* siehe Prüfung unten */ }
+    }
+    if (!kundenEmail) luecken.push({ code: 'KUNDEN_EMAIL', text: 'Für XRechnung fehlt die E-Mail-Adresse des Kunden (Kundenstamm, Rechnung muss mit dem Kunden verknüpft sein).' });
     if (!inv.leitweg_id) luecken.push({ code: 'LEITWEG_ID', text: 'Für XRechnung fehlt die Leitweg-ID des Kunden (Kundenstamm).' });
     if (luecken.length > 0) {
       return NextResponse.json({
@@ -43,7 +53,7 @@ export async function POST(req: NextRequest) {
 
     let ergebnis;
     try {
-      ergebnis = toXRechnung(baueERechnungEingabe(inv));
+      ergebnis = toXRechnung(baueERechnungEingabe(inv, { kundenEmail }));
     } catch (e: any) {
       return NextResponse.json({ success: false, error: 'Rechnungsdaten sind nicht vollständig für eine XRechnung.', details: String(e?.message || e) }, { status: 400 });
     }

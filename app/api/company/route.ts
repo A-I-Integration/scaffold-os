@@ -70,7 +70,7 @@ export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
     const allowed = [
-      'company_name', 'street', 'zip', 'city', 'phone', 'email', 'website',
+      'company_name', 'street', 'zip', 'city', 'phone', 'email', 'website', 'ansprechpartner',
       'steuer_nr', 'ust_id', 'bank_name', 'iban', 'bic', 'depot_address',
       'onboarding_done',
       // Kalkulations-Grundlagen (Einstellungen → Angebots-Kalkulation)

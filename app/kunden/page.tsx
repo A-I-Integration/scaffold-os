@@ -40,12 +40,13 @@ interface Kunde {
   kundentyp?: 'gewerblich' | 'privat';
   ust_id?: string | null;
   leitweg_id?: string | null;
+  bauleister_nachweis_bis?: string | null;
   created_at: string;
 }
 
 const LEER_FORM = {
   name: '', contact_person: '', email: '', phone: '',
-  street: '', zip: '', city: '', notes: '', datev_konto: '', kundentyp: 'gewerblich', ust_id: '', leitweg_id: '',
+  street: '', zip: '', city: '', notes: '', datev_konto: '', kundentyp: 'gewerblich', ust_id: '', leitweg_id: '', bauleister_nachweis_bis: '',
 };
 
 const STATUS_LABEL: Record<string, string> = {
@@ -457,6 +458,10 @@ export default function KundenPage() {
                     <div>
                       <label className="block text-xs text-[#86868b] mb-1">Leitweg-ID (nur Behörden, optional)</label>
                       <input value={form.leitweg_id} onChange={(e) => setForm({ ...form, leitweg_id: e.target.value })} className={inputCls} placeholder="z. B. 04011000-12345-67" />
+                    </div>
+                    <div>
+                      <label className="block text-xs text-[#86868b] mb-1">Bescheinigung USt 1 TG gültig bis (für § 13b)</label>
+                      <input type="date" value={form.bauleister_nachweis_bis} onChange={(e) => setForm({ ...form, bauleister_nachweis_bis: e.target.value })} className={inputCls} />
                     </div>
                     <div className="md:col-span-2">
                       <label className="block text-xs text-[#86868b] mb-1">Notizen</label>
