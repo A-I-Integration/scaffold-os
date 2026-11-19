@@ -57,7 +57,8 @@ describe('modellHash', () => {
     expect(modellHash(generateCADModel({ ...GEBAEUDE, heightM: 28, eavesHeightM: 28, floorHeightsM: Array(10).fill(2.8) }, SYSTEM))).not.toBe(h)
   })
   it('Rechenrauschen unter 1 mm erzeugt keinen neuen Stand', () => {
-    const mit = { ...modell, components3D: modell.components3D.map((c) => ({ ...c, position: c.position.map((v) => v + 1e-7) as typeof c.position })) }
+    // Werte genau auf der Rundungskante (halbe Millimeter, z. B. −10,6375 m) fallen bei jedem Raster einmal um; sie bleiben ohne Rauschen
+    const mit = { ...modell, components3D: modell.components3D.map((c) => ({ ...c, position: c.position.map((v) => (Math.abs((Math.abs(v) * 1000) % 1 - 0.5) < 1e-3 ? v : v + 1e-7)) as typeof c.position })) }
     expect(modellHash(mit)).toBe(modellHash(modell))
   })
 })

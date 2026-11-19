@@ -36,6 +36,8 @@ import HuelleWerkzeug from '@/components/cad/HuelleWerkzeug'
 import OeffnungenFenster from '@/components/cad/OeffnungenFenster'
 import { glbHatTurmKoerper } from '@/lib/cad/glb-masse'
 import { istTurmKoerperKnoten } from '@/lib/cad/glb-teile'
+import { groessereStueckliste } from '@/lib/calculations/stuecklisten-abgleich'
+import type { MaterialItem } from '@/types/scaffold'
 import { CAD_UEBERNAHME_KEY, leseCadUebergabe } from '@/lib/cad/aufmass-zu-cad'
 import { ladeArbeitsstand, speichereArbeitsstand, vergissArbeitsstand, holeStempel, neuerStempel } from '@/lib/cad/arbeitsstand'
 import { merkeAussehen, ladeGemerktesAussehen, vergissAussehen } from '@/lib/cad/modell-speicher'
@@ -294,6 +296,8 @@ export default function CADPage() {
   // Projektname aus dem Aufmaß (nur für den Kopf der Gerüstplan-PDF; bleibt nicht über ein Neuladen erhalten)
   const [aufmassProjektName, setAufmassProjektName] = useState<string | undefined>(undefined)
   // Firmenname aus den Einstellungen (für Köpfe der Exporte); fehlt er, bleibt der bisherige Platzhalter
+  // Stückliste des Aufmaßes (nur nach Übernahme aus dem Aufmaß): maßgeblich ist je Artikel die größere Menge von Aufmaß und CAD
+  const [aufmassListe, setAufmassListe] = useState<MaterialItem[] | undefined>(undefined)
   const [firmenName, setFirmenName] = useState<string | undefined>(undefined)
   useEffect(() => {
     let roh: string | null = null
@@ -307,6 +311,7 @@ export default function CADPage() {
     try { window.history.replaceState(null, '', '/cad') } catch { /* nur Anzeige */ }
     speichereArbeitsstand({ building: u.building, systemId: u.systemId, notizen: u.notizen ?? [], statikDaten: (u.statikDaten ?? {}) as Record<string, unknown>, artikelWahl: {} })
     setAufmassProjektName(u.projektName)
+    setAufmassListe(u.aufmassListe)
     setAufmassHinweise(['Maße aus dem Aufmaß' + (u.projektName ? ` „${u.projektName}“` : '') + ' übernommen.', ...u.hinweise])
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
@@ -1358,12 +1363,15 @@ export default function CADPage() {
       // Lohn + Transport wie in der normalen Berechnung, mit den Werten aus
       // den Firmeneinstellungen (Standardwerte, falls nichts hinterlegt/erreichbar).
       const einstellungen = await fetch('/api/company').then((r) => r.json()).then((j) => j?.company || null).catch(() => null)
-      const kosten = berechneCadKosten(logistik?.aufbauStunden || 0, totalWeight, einstellungen)
-      const materialKosten = Math.round(totalPrice * 100) / 100
+      // Nach Übernahme aus dem Aufmaß gilt je Artikel die größere Menge von Aufmaß und CAD
+      const stueckliste = aufmassListe ? groessereStueckliste(aufmassListe, materials) : materials
+      const gewichtKg = stueckliste.reduce((sum, i) => sum + i.weightKg * i.quantity, 0)
+      const kosten = berechneCadKosten(logistik?.aufbauStunden || 0, gewichtKg, einstellungen)
+      const materialKosten = Math.round(stueckliste.reduce((sum, i) => sum + i.totalPrice, 0) * 100) / 100
       const gesamtkosten = Math.round((materialKosten + kosten.laborCost + kosten.transportCost + kosten.tripCost) * 100) / 100
       const kiResult = {
-        materialList: materials, totalMaterialCost: materialKosten,
-        totalWeightKg: Math.round(totalWeight), estimatedLaborHours: logistik?.aufbauStunden || 0,
+        materialList: stueckliste, totalMaterialCost: materialKosten,
+        totalWeightKg: Math.round(gewichtKg), estimatedLaborHours: logistik?.aufbauStunden || 0,
         laborCost: kosten.laborCost, transportCost: kosten.transportCost, tripCost: kosten.tripCost,
         totalCost: gesamtkosten, suggestedPrice: gesamtkosten,
         margin: 0, marginPercent: 0, riskLevel: 'green' as const,
@@ -1444,7 +1452,7 @@ export default function CADPage() {
       alert('❌ ' + err.message)
     }
     setZuordnenLaeuft(false)
-  }, [model, materials, totalPrice, totalWeight, logistik, router, notes, statikDaten, m2Wahl])
+  }, [model, materials, aufmassListe, logistik, router, notes, statikDaten, m2Wahl])
 
   return (
     <div className='min-h-screen md:h-screen flex flex-col bg-[#fbfbfd]'>

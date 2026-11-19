@@ -10,7 +10,8 @@ const lform = [{ x: 0, z: 0 }, { x: L, z: 0 }, { x: L, z: W }, { x: L * 0.6, z: 
 const bau = (extra: object = {}, treppe = false) => ({ lengthM: L, widthM: W, heightM: 6.94, floors: 3, floorHeightsM: [], windowCount: 0, doorCount: 0, balconyCount: 0, overhangM: 0.3, setbackM: 0, roofForm: 'satteldach', sides: ['front', 'back', 'left', 'right'], geruestOptionen: { treppe }, ...extra }) as unknown as BuildingParams
 const formen: [string, object][] = [['Rechteck', {}], ['L-Form', { umriss: lform }], ['Hang', { geruestOptionen: { treppe: false, gelaendeEckenM: { fl: 0, fr: 0, bl: -2.4, br: -2.4 } } }]]
 
-const stueck = (m: CADModel) => m.components3D.filter((c) => !c.extern).length
+// Treppe wird je Treppenlauf gezählt (Außentreppe mit n Läufen = n Stück)
+const stueck = (m: CADModel) => m.components3D.filter((c) => !c.extern).reduce((s, c) => s + (c.type === 'stair' && c.articleNumber === 'SP-001' ? Math.max(1, Math.round(c.flights ?? 1)) : 1), 0)
 const summe = (m: CADModel) => generateBillOfMaterials(m).reduce((s, i) => s + i.quantity, 0)
 const gewicht = (m: CADModel) => generateBillOfMaterials(m).reduce((s, i) => s + i.weightKg * i.quantity, 0)
 const preis = (m: CADModel) => generateBillOfMaterials(m).reduce((s, i) => s + i.totalPrice, 0)

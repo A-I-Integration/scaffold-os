@@ -39,10 +39,13 @@ const GEBAEUDE: BuildingParams = {
 const SYSTEM = 'layher-allround'
 const PREISE: LvEingaben = { ...LV_STANDARD_EINGABEN, stundensatzFach: 60, stundensatzHelfer: 40, mietsatzProzentJeWoche: 2, zuschlagProzent: 10 }
 
+/** Stück je Bauteil: Treppe wird je Treppenlauf gezählt, alles andere einzeln. */
+const stueckJeBauteil = (c: ScaffoldComponent3D): number => (c.type === 'stair' && c.articleNumber === 'SP-001' ? Math.max(1, Math.round(c.flights ?? 1)) : 1)
+
 /** Menge je Artikelnummer, unabhängig von der Produktionsfunktion gezählt (extern zählt nicht). */
 function zaehleArtikel(comps: ScaffoldComponent3D[]): Record<string, number> {
   const z: Record<string, number> = {}
-  for (const c of comps) if (!c.extern) z[c.articleNumber] = (z[c.articleNumber] ?? 0) + 1
+  for (const c of comps) if (!c.extern) z[c.articleNumber] = (z[c.articleNumber] ?? 0) + stueckJeBauteil(c)
   return z
 }
 const bomMap = (m: CADModel): Record<string, number> => Object.fromEntries(generateBillOfMaterials(m).map((x) => [x.articleNumber, x.quantity]))
@@ -126,7 +129,7 @@ describe('2. Stückliste: Zählung nach Artikelnummer, extern ausgeschlossen', (
     expect(bomMap(modell)).toEqual(zaehleArtikel(modell.components3D))
   })
   it('Summe der Stückliste = Zahl der internen Bauteile; der gemietete Aufzug fehlt', () => {
-    const intern = modell.components3D.filter((c) => !c.extern).length
+    const intern = modell.components3D.filter((c) => !c.extern).reduce((s, c) => s + stueckJeBauteil(c), 0)
     const summe = generateBillOfMaterials(modell).reduce((s, x) => s + x.quantity, 0)
     expect(summe).toBe(intern)
     expect(bomMap(modell)['AZ-001']).toBeUndefined()
@@ -194,7 +197,7 @@ describe('4. Leistungsverzeichnis: Mengen und Stunden aus demselben Modellstand'
     const materials = generateBillOfMaterials(modell)
     const aus = materials.reduce((s, x) => s + x.totalPrice, 0)
     const je = Object.fromEntries(materials.map((x) => [x.articleNumber, x.unitPrice]))
-    const soll = modell.components3D.filter((c) => !c.extern).reduce((s, c) => s + (je[c.articleNumber] ?? 0), 0)
+    const soll = modell.components3D.filter((c) => !c.extern).reduce((s, c) => s + (je[c.articleNumber] ?? 0) * stueckJeBauteil(c), 0)
     expect(aus).toBeCloseTo(soll, 1)
   })
 })
