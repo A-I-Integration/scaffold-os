@@ -7,7 +7,7 @@
 import { useState, type ReactNode } from 'react'
 import {
   Scissors, BoxSelect, PlusSquare, ChevronsUp, Layers, Undo2, Redo2, RotateCcw, Ruler, Box, Grid2x2, Eye, Home, Building2, Leaf, Sparkles,
-  FileText, FileDown, Printer, Save, Package, CalendarClock, Download, Camera, Minus, Spline, Circle, Trash2, type LucideIcon,
+  FileText, FileDown, Printer, Save, Package, CalendarClock, Download, Cloud, Camera, Minus, Spline, Circle, Trash2, type LucideIcon,
 } from 'lucide-react'
 import { CATALOG_ITEMS } from './ComponentCatalog'
 import type { BereichsWerkzeug } from './BereichePanel'
@@ -73,6 +73,8 @@ export interface CadBandProps {
   onIfc?: () => void
   onSpeichern: () => void
   onVersionen?: () => void
+  /** Projekte im Konto (Server) speichern/laden */
+  onKonto?: () => void
   /** Treppe über Auswahl (Seite + Feld) setzen und um Felder schieben */
   treppePanelAktiv?: boolean
   onTreppePanel?: () => void
@@ -258,6 +260,7 @@ export default function CadBand(p: CadBandProps) {
               <Knopf icon={Camera} label='Bild speichern' aus={aus} onClick={p.onBild} />
             </Gruppe>
             <Gruppe name='Projekt'>
+              <Knopf icon={Cloud} label='Projekte im Konto' aus={aus || !p.onKonto} onClick={() => p.onKonto?.()} titel='Projekt dauerhaft auf dem Server speichern und von jedem Gerät laden' />
               <Knopf icon={Save} label='Projektdatei speichern' aus={aus} onClick={p.onSpeichern} />
               <Knopf icon={Download} label='Alles zurück' aus={p.entferntAnzahl === 0} onClick={p.onEntferntAlleZurueck} titel='Alle entfernten Bauteile zurückholen' />
             </Gruppe>
