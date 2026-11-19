@@ -11,10 +11,8 @@ describe('BauteilLeiste', () => {
     for (const i of CATALOG_ITEMS) expect(h).toContain(i.label)
     expect((h.match(/<button/g) ?? []).length).toBe(CATALOG_ITEMS.length)
   })
-  it('ohne Modell sind die Knöpfe gesperrt und der Hinweis nennt den Grund', () => {
-    const h = html({ disabled: true })
-    expect((h.match(/disabled=""/g) ?? []).length).toBe(CATALOG_ITEMS.length)
-    expect(h).toContain('Erst ein Gebäude anlegen.')
+  it('gesperrt: alle Knöpfe disabled', () => {
+    expect((html({ disabled: true }).match(/disabled=""/g) ?? []).length).toBe(CATALOG_ITEMS.length)
   })
   it('gewähltes Bauteil ist gedrückt markiert', () => {
     const h = html({ selectedType: 'f_railing' })

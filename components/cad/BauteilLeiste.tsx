@@ -9,7 +9,7 @@
 import { CATALOG_ITEMS } from './ComponentCatalog'
 
 interface Props {
-  /** Ohne Modell lässt sich noch nichts setzen */
+  /** Knöpfe sperren (aktuell nicht genutzt: ohne Haus fragt die Fläche die Maße ab) */
   disabled?: boolean
   selectedType?: string | null
   onSelectType: (type: string | null) => void
@@ -32,7 +32,7 @@ export default function BauteilLeiste({ disabled = false, selectedType, onSelect
         })}
       </div>
       <span className='hidden shrink-0 text-[11.5px] lg:block' style={{ color: 'var(--os-text-leise)' }} role='status'>
-        {disabled ? 'Erst ein Gebäude anlegen.' : selectedType ? 'Jetzt ins Modell klicken, um zu setzen.' : 'Bauteil anklicken, dann ins Modell klicken.'}
+        {selectedType ? 'Jetzt ins Modell klicken, um zu setzen.' : 'Bauteil anklicken, dann ins Modell klicken.'}
       </span>
     </div>
   )
