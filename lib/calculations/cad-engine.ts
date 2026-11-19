@@ -2802,6 +2802,8 @@ export const DURCHSTIEG_ARTIKELNUMMER = 'DB-001'
 
 export function generateBillOfMaterials(model: CADModel): MaterialItem[] {
   const stand = modellHash(model)
+  // Querriegel und Bordbretter gibt es in mehreren Längen unter einer Artikelnummer: die Längen werden je Zeile aufgeschlüsselt
+  const laengen: Record<string, Map<number, number>> = {}
   const counts: Record<string, { name: string; category: string; quantity: number; unit: string; unitPrice: number; weightKg: number; articleNumber: string }> = {}
   model.components3D.forEach((comp) => {
     if (comp.extern) return // Fremdleistung (z. B. gemieteter Aufzug): nicht im eigenen Material
@@ -2809,10 +2811,11 @@ export function generateBillOfMaterials(model: CADModel): MaterialItem[] {
     if (!counts[key]) {
       counts[key] = { name: comp.name, category: getCategoryFromType(comp.type), quantity: 0, unit: getUnit(comp.type), unitPrice: getUnitPrice(key), weightKg: getWeightKg(key), articleNumber: key }
     }
+    if (key === 'QR-001' || key === 'BB-001') { const l = Math.round(comp.scale[0] * 100) / 100; const m = (laengen[key] ??= new Map()); m.set(l, (m.get(l) ?? 0) + 1) }
     // Treppe: abgerechnet wird je Treppenlauf – eine Außentreppe mit n Läufen zählt n-mal, ein einzelner Lauf einmal
     counts[key].quantity += comp.type === 'stair' && comp.articleNumber === 'SP-001' ? Math.max(1, Math.round(comp.flights ?? 1)) : 1
   })
-  return Object.values(counts).map((item) => ({ ...item, modellHash: stand, totalPrice: Math.round(item.quantity * item.unitPrice * 100) / 100, riskLevel: 'low', aiRecommendation: getRecommendation(item.articleNumber) }))
+  return Object.values(counts).map((item) => ({ ...item, modellHash: stand, totalPrice: Math.round(item.quantity * item.unitPrice * 100) / 100, riskLevel: 'low', ...(laengen[item.articleNumber] ? { name: item.articleNumber === 'QR-001' ? 'Querriegel' : 'Bordbrett', aiRecommendation: `Längen: ${[...laengen[item.articleNumber]].sort((a, b) => b[0] - a[0]).map(([l, n]) => `${n}× ${l.toFixed(2).replace('.', ',')} m`).join(', ')}` } : { aiRecommendation: getRecommendation(item.articleNumber) }) }))
 }
 
 function getCategoryFromType(type: ScaffoldComponent3D['type']): string {
