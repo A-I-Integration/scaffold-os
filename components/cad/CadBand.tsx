@@ -76,6 +76,9 @@ export interface CadBandProps {
   /** Treppe über Auswahl (Seite + Feld) setzen und um Felder schieben */
   treppePanelAktiv?: boolean
   onTreppePanel?: () => void
+  /** Komplettes Gerüstfeld mit Parametern setzen/ändern */
+  geruestfeldPanelAktiv?: boolean
+  onGeruestfeldPanel?: () => void
   onLv?: () => void
   onBild: () => void
 }
@@ -178,6 +181,9 @@ export default function CadBand(p: CadBandProps) {
                 <Knopf key={it.type} glyph={it.icon} label={it.label} aus={aus} aktiv={p.placementType === it.type} titel={it.description}
                   onClick={() => p.onPlacement(p.placementType === it.type ? null : it.type)} />
               ))}
+            </Gruppe>
+            <Gruppe name='Gerüstfeld'>
+              <Knopf icon={Layers} label='Feld setzen' aus={aus || !p.onGeruestfeldPanel} aktiv={!!p.geruestfeldPanelAktiv} onClick={() => p.onGeruestfeldPanel?.()} titel='Komplettes Gerüstfeld mit Länge, Breite, Lagen, Geschosshöhe und System setzen; danach alle Teile einzeln änderbar' />
             </Gruppe>
             <Gruppe name='Treppe'>
               <Knopf icon={ChevronsUp} label='Treppe wählen' aus={aus || !p.onTreppePanel} aktiv={!!p.treppePanelAktiv} onClick={() => p.onTreppePanel?.()} titel='Treppe ohne Mausklick setzen: Seite und Feld wählen, danach um ganze Felder schieben' />

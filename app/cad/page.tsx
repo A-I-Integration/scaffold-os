@@ -53,6 +53,8 @@ import { erzeugeProjektdatei, liesProjektdatei, type Projektdatei } from '@/lib/
 import { ladeVersionen, speichereVersionen, fuegeVersionHinzu, loescheVersion, benenneVersion, type Version } from '@/lib/cad/versionen'
 import VersionenDialog from '@/components/cad/VersionenDialog'
 import TreppePanel from '@/components/cad/TreppePanel'
+import GeruestfeldPanel from '@/components/cad/GeruestfeldPanel'
+import { wendePlatzierungAn } from '@/lib/cad/geruestfeld'
 import { feldDerAutoTreppe, nachbarFuerTreppe, treppeAufFeld, schiebeUmFelder, leiterAufFeld, durchstiegAufFeld } from '@/lib/cad/treppe-setzen'
 import LvDialog from '@/components/cad/LvDialog'
 import { bereinigeStatikDaten, type StatikDaten } from '@/lib/statik-daten'
@@ -60,7 +62,7 @@ import { useRouter } from 'next/navigation'
 import dynamic from 'next/dynamic'
 import {
   BuildingParams, CADModel, generateCADModel, generateBillOfMaterials, checkCollisions, detectCollisions, generateStatikExport,
-  generateBuildingFeatures, detectFeatureCollisions, calculateLogistics, addManualPlacement,
+  generateBuildingFeatures, detectFeatureCollisions, calculateLogistics, feldRahmen, type GeruestfeldAngaben,
 } from '@/lib/calculations/cad-engine'
 import { checkRules, groupRulesBySeverity } from '@/lib/calculations/cad-rules'
 import type { CADNote } from '@/types/cad-notes'
@@ -455,7 +457,23 @@ export default function CADPage() {
   // im Platzierungsmodus setzt das gewählte Bauteil an die geklickte Position.
   // Der Modus bleibt aktiv (mehrere Bauteile hintereinander setzbar), bis
   // der Typ abgewählt wird oder ESC gedrückt wird.
+  // Komplettes Gerüstfeld (Parameter): per Eingabe oder per Klick auf ein Gerüstteil setzen, danach änderbar/verschiebbar/löschbar
+  const [feldPanel, setFeldPanel] = useState(false)
+  const [feldKlick, setFeldKlick] = useState<GeruestfeldAngaben | null>(null)
+  const [feldMeldung, setFeldMeldung] = useState<string | null>(null)
+  const setzeGeruestfeld = useCallback((pl: Omit<ManualPlacement, 'id'>) => {
+    const placement: ManualPlacement = { id: `feld-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`, ...pl }
+    setManualPlacements((prev) => [...prev, placement])
+    setFeldMeldung('Gerüstfeld gesetzt – ein Teil anklicken, um es zu ändern oder zu verschieben.')
+  }, [])
+
   const handlePlacementClick = useCallback((type: string, position: [number, number, number], side: string, levelIndex: number) => {
+    if (type === 'geruestfeld') {
+      if (!feldKlick) return
+      const l = platzierungAusTreffer(model, 'geruestfeld', position, side as ManualPlacement['side'], levelIndex)
+      setzeGeruestfeld({ ...l, positionY: feldKlick.aufstandM ?? 0, feld: feldKlick })
+      return
+    }
     // Regeln (Treppe rastet auf das nächste Feld ein, sonst genau am Klickpunkt)
     // liegen in lib/calculations/cad-platzierung.ts – dieselben gelten beim Ziehen.
     const placement: ManualPlacement = {
@@ -467,7 +485,7 @@ export default function CADPage() {
     setSelectedComponent(placement.id)
     // Eine Treppe wird einmal gesetzt: danach ist das Werkzeug aus, damit man sie sofort anklicken und ziehen kann (im Werkzeugmodus ist Ziehen gesperrt)
     if (type === 'stair') setPlacementType(null)
-  }, [model])
+  }, [model, feldKlick, setzeGeruestfeld])
 
   // Treppe über Auswahl: Seite + Feld wählen, danach um Felder schieben (kein Mausklick im 3D nötig)
   const [treppePanel, setTreppePanel] = useState(false)
@@ -646,7 +664,8 @@ export default function CADPage() {
   // Treppenturms (Holme, Stufen, Pfosten) gehen immer gemeinsam.
   const handleRemoveComponent = useCallback((id: string) => {
     if (istKopieId(id)) { setzeUeber((u) => setzeBauteilZurueck(u, id)); setSelectedComponent(null); return }
-    const pl = manualPlacements.find((p) => p.id === id || id.startsWith(`${p.id}-`))
+    const plId = platzierungIdVon(id, manualPlacements)
+    const pl = plId ? manualPlacements.find((p) => p.id === plId) : undefined
     if (pl) {
       handleRemoveManualPlacement(pl.id)
       setSelectedComponent(null)
@@ -847,7 +866,7 @@ export default function CADPage() {
     // Shallow Copy, damit das originale model-Objekt nicht mutiert wird
     let merged: CADModel = { ...basis, components3D: [...basis.components3D], anchors: [...basis.anchors] }
     for (const pl of manualPlacements) {
-      merged = addManualPlacement(merged, pl)
+      merged = wendePlatzierungAn(merged, pl)
     }
     merged = wendeBauteilAenderungenAn(merged, ueber)
     if (removedGroups.length > 0) {
@@ -862,6 +881,29 @@ export default function CADPage() {
   }, [model, manualPlacements, removedGroups, bereichsListe, ueber, geruestWahl])
   const modelWithManualRef = useRef<CADModel | null>(null)
   modelWithManualRef.current = modelWithManual
+  const gewaehltesFeld = useMemo(() => {
+    const asm = selectedComponent ? modelWithManual?.components3D.find((c) => c.id === selectedComponent)?.assemblyId : undefined
+    return manualPlacements.find((x) => x.type === 'geruestfeld' && x.id === asm) ?? null
+  }, [selectedComponent, manualPlacements, modelWithManual])
+  const aendereGeruestfeld = useCallback((angaben: GeruestfeldAngaben) => {
+    if (!gewaehltesFeld) return
+    setManualPlacements((prev) => prev.map((x) => (x.id === gewaehltesFeld.id ? { ...x, positionY: angaben.aufstandM ?? 0, feld: angaben } : x)))
+  }, [gewaehltesFeld])
+  const verschiebeGeruestfeld = useCallback((dxM: number) => {
+    if (!gewaehltesFeld || !model) return
+    const vorlage = model.fields.find((f) => f.side === gewaehltesFeld.side)
+    if (!vorlage) return
+    const r = feldRahmen(vorlage, model.building)
+    const [lx, lz] = r.toLocal(gewaehltesFeld.positionX, gewaehltesFeld.positionZ)
+    const [x, z] = r.toWorld(lx + dxM, lz)
+    setManualPlacements((prev) => prev.map((p) => (p.id === gewaehltesFeld.id ? { ...p, positionX: x, positionZ: z } : p)))
+  }, [gewaehltesFeld, model])
+  const loescheGeruestfeld = useCallback(() => {
+    if (!gewaehltesFeld) return
+    setManualPlacements((prev) => prev.filter((p) => p.id !== gewaehltesFeld.id))
+    setSelectedComponent(null)
+  }, [gewaehltesFeld])
+
   const removedCount = useMemo(() => removedGroups.reduce((n, g) => n + g.length, 0), [removedGroups])
 
   // Auf alle gleichen Bauteile (gleicher Typ + gleicher Standard-Artikel) übertragen
@@ -1425,7 +1467,7 @@ export default function CADPage() {
             viewAngle={viewAngle} onViewAngle={(a) => setViewAngle(a)} farbModus={farbModus} onFarbModus={setFarbModus}
             onPdf={model ? handleExportPDF : exportOhneModellHinweis} onMontageplan={model ? handleExportMontageplan : exportOhneModellHinweis} onMontageplanPdf={model ? handleExportMontageplanPdf : exportOhneModellHinweis}
             onDxf={!model ? exportOhneModellHinweis : handleExportDXF} onIfc={!model ? exportOhneModellHinweis : (ifcExportLaeuft ? undefined : handleExportIFC)}
-            onSpeichern={speichereProjektdatei} onVersionen={oeffneVersionen} treppePanelAktiv={treppePanel} onTreppePanel={model ? () => setTreppePanel((v) => !v) : undefined} onLv={rolle === 'admin' || istStatikerLogin ? (model ? () => setLvOffen(true) : exportOhneModellHinweis) : undefined}
+            onSpeichern={speichereProjektdatei} onVersionen={oeffneVersionen} treppePanelAktiv={treppePanel} onTreppePanel={model ? () => setTreppePanel((v) => !v) : undefined} geruestfeldPanelAktiv={feldPanel} onGeruestfeldPanel={model ? () => setFeldPanel((v) => !v) : undefined} onLv={rolle === 'admin' || istStatikerLogin ? (model ? () => setLvOffen(true) : exportOhneModellHinweis) : undefined}
             onBild={speichereBild}
             layerState={layerState} onToggleSide={(k) => handleToggleSide(k as keyof SideVisibility)} onToggleLevel={handleToggleLevel}
             onAlleEin={handleShowAllLayers} onAlleAus={handleHideAllLayers} visibleTypes={visibleTypes} onToggleType={toggleType}
@@ -1449,6 +1491,10 @@ export default function CADPage() {
               onAlle={() => { setGeruestWahl('auto'); setAutoGenerate(true); setBuilding({ ...building, sides: ['front', 'back', 'left', 'right'] }); setModel(null) }}
               onLeer={() => setGeruestWahl('leer')}
             />
+          )}
+          {feldPanel && model && viewMode === '3d' && (
+            <GeruestfeldPanel key={gewaehltesFeld?.id ?? 'neu'} model={model} gewaehlt={gewaehltesFeld} klickAktiv={placementType === 'geruestfeld'} meldung={feldMeldung}
+              onKlick={(a) => { setFeldKlick(a); setPlacementType(a ? 'geruestfeld' : null) }} onSetzen={setzeGeruestfeld} onAendern={aendereGeruestfeld} onVerschieben={verschiebeGeruestfeld} onLoeschen={loescheGeruestfeld} onZu={() => { setFeldPanel(false); if (placementType === 'geruestfeld') setPlacementType(null) }} />
           )}
           {treppePanel && model && viewMode === '3d' && <TreppePanel model={model} treppe={gewaehlteTreppe} meldung={treppeMeldung} onSetzen={setzeTreppeAufFeld} onLeiter={setzeLeiterAufFeld} onDurchstieg={setzeDurchstiegAufFeld} onSchieben={schiebeTreppe} onZu={() => setTreppePanel(false)} />}
           {selectedComponent && modelWithManual && viewMode === '3d' && !abbauAktiv && !placementType && !measureMode && (
