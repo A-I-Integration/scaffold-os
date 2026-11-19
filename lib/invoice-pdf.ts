@@ -13,6 +13,7 @@ import { offenerBetrag } from '@/lib/mahnung-steuerung';
 
 import type { PositionArt } from './rechnung-position';
 import { positionDetailZeilen, regieSummeText } from './rechnung-position';
+import { leistungsdatumFuer, steuerFall } from './rechnung-steuer';
 
 export interface Position {
   bezeichnung: string;
@@ -146,20 +147,22 @@ export function generateInvoicePDF(inv: Invoice) {
     doc.text(doc.splitTextToSize(inv.customer_address, 80), 18, y + 20);
   }
   // Rechnungsdaten-Box
-  doc.setFillColor(248, 250, 252); doc.rect(108, y, 88, (inv.geruest_nr || inv.leistungsdatum) ? 36 : 30, 'F');
+  doc.setFillColor(248, 250, 252); doc.rect(108, y, 88, 36, 'F');
   doc.setTextColor(71, 85, 105); doc.setFontSize(8); doc.setFont('helvetica', 'bold'); doc.text('RECHNUNGSDATEN', 112, y + 6);
   doc.setFont('helvetica', 'normal'); doc.setTextColor(15, 23, 42); doc.setFontSize(9);
   doc.text(`Rechnungs-Nr.: ${inv.invoice_number}`, 112, y + 14);
   doc.text(`Datum: ${fmtDate(inv.invoice_date)}`, 112, y + 20);
   doc.text(`Zahlbar bis: ${fmtDate(inv.due_date)}`, 112, y + 26);
-  if (inv.geruest_nr || inv.leistungsdatum) {
+  {
+    // Leistungsdatum ist Pflichtangabe (§ 14 Abs. 4 Nr. 6 UStG): ohne eigene Angabe gilt das Rechnungsdatum
     doc.setFontSize(8);
-    const extra = [inv.geruest_nr ? `Gerüst-Nr.: ${inv.geruest_nr}` : '', inv.leistungsdatum ? `Leistungsdatum: ${fmtDate(inv.leistungsdatum)}` : ''].filter(Boolean).join('   ');
+    const ld = leistungsdatumFuer(inv);
+    const extra = [inv.geruest_nr ? `Gerüst-Nr.: ${inv.geruest_nr}` : '', `Leistungsdatum: ${fmtDate(ld.datum)}${ld.eigene ? '' : ' (= Rechnungsdatum)'}`].filter(Boolean).join('   ');
     doc.text(extra, 112, y + 32);
     doc.setFontSize(9);
   }
 
-  y = (inv.geruest_nr || inv.leistungsdatum) ? 91 : 85;
+  y = 91;
   doc.setTextColor(30, 58, 138); doc.setFontSize(12); doc.setFont('helvetica', 'bold');
   doc.text('Leistungen', 14, y);
 
@@ -227,7 +230,7 @@ export function generateInvoicePDF(inv: Invoice) {
   doc.setFontSize(9); doc.setTextColor(71, 85, 105); doc.setFont('helvetica', 'normal');
   doc.text('Nettobetrag', 116, cy);
   doc.text(fmtEur(Number(inv.net_amount)) + ' €', 190, cy, { align: 'right' }); cy += 9;
-  doc.text(`zzgl. ${Number(inv.tax_rate)} % Umsatzsteuer`, 116, cy);
+  doc.text(steuerFall(inv).satz > 0 ? `zzgl. ${Number(inv.tax_rate)} % Umsatzsteuer` : 'Umsatzsteuer 0 % (siehe Hinweis)', 116, cy);
   doc.text(fmtEur(Number(inv.tax_amount)) + ' €', 190, cy, { align: 'right' }); cy += 9;
   doc.setDrawColor(203, 213, 225); doc.line(116, cy - 3, 190, cy - 3);
   doc.setTextColor(15, 23, 42); doc.setFont('helvetica', 'bold'); doc.setFontSize(11);
