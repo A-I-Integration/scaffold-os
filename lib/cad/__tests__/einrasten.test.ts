@@ -45,3 +45,22 @@ describe('Winkel', () => {
     expect(rasteWinkel(2)).toBe(0)
   })
 })
+
+import { rasteBauteilAnAnschluesse } from '@/lib/cad/einrasten'
+describe('rasteBauteilAnAnschluesse', () => {
+  const liste = [rahmen('u', 0, 1), rahmen('n', 0.5, 3)]
+  it('rastet den losgelassenen Rahmen auf den unteren auf', () => {
+    const r = rasteBauteilAnAnschluesse(liste, 'n', [0.03, 3.05, 0])
+    expect(r.vorschlag?.anzahl).toBe(2)
+    expect(r.position[0]).toBeCloseTo(0, 6)
+    expect(r.position[1]).toBeCloseTo(3, 6)
+  })
+  it('weit weg: Position bleibt', () => {
+    const r = rasteBauteilAnAnschluesse(liste, 'n', [5, 3, 0])
+    expect(r.vorschlag).toBeNull()
+    expect(r.position).toEqual([5, 3, 0])
+  })
+  it('unbekannte id: Position bleibt', () => {
+    expect(rasteBauteilAnAnschluesse(liste, 'x', [1, 2, 3]).position).toEqual([1, 2, 3])
+  })
+})

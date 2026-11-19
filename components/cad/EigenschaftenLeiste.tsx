@@ -16,7 +16,7 @@ const ARTEN: Record<string, string> = {
 const SEITEN: Record<string, string> = { front: 'Vorderseite', back: 'Rückseite', left: 'Links', right: 'Rechts' }
 const m = (v: number) => `${v.toLocaleString('de-DE', { maximumFractionDigits: 2 })} m`
 
-export default function EigenschaftenLeiste({ lagenVersatzM = 0, onLageOp, griffModus, onGriffModus, einrasten, onEinrasten, veraendert, onLage, onDuplizieren, onZuruecksetzen, model, id, artikelWahl, manuell, onEntfernen, onFeldEntfernen, onFeldLaenge, onFeldAnhaengen, onFeldTeilen, onFeldZusammen, onPositionAendern, platzierungPosition, onZu }: {
+export default function EigenschaftenLeiste({ lagenVersatzM = 0, onLageOp, griffModus, onGriffModus, einrasten, onEinrasten, anschlussEinrasten, onAnschlussEinrasten, veraendert, onLage, onDuplizieren, onZuruecksetzen, model, id, artikelWahl, manuell, onEntfernen, onFeldEntfernen, onFeldLaenge, onFeldAnhaengen, onFeldTeilen, onFeldZusammen, onPositionAendern, platzierungPosition, onZu }: {
   /** Feld in zwei Felder teilen / mit dem Nachbarfeld zusammenführen (Längen aus dem Herstellerkatalog) */
   onFeldTeilen?: (seite: Seite, spalte: number, laengenM: [number, number]) => void
   onFeldZusammen?: (seite: Seite, spalte: number, laengeM: number) => void
@@ -24,7 +24,7 @@ export default function EigenschaftenLeiste({ lagenVersatzM = 0, onLageOp, griff
   /** bisheriger Versatz der Lage durch manuelles Verschieben (gleich dem des gewählten Bauteils) */
   lagenVersatzM?: number
   onLageOp?: (op: { art: 'verschieben' | 'kopieren'; levelIndex: number; alleSeiten: boolean; dyM: number }) => void
-  griffModus?: 'verschieben' | 'drehen'; onGriffModus?: (m: 'verschieben' | 'drehen') => void; einrasten?: boolean; onEinrasten?: (v: boolean) => void; veraendert?: boolean
+  griffModus?: 'verschieben' | 'drehen'; onGriffModus?: (m: 'verschieben' | 'drehen') => void; einrasten?: boolean; onEinrasten?: (v: boolean) => void; anschlussEinrasten?: boolean; onAnschlussEinrasten?: (v: boolean) => void; veraendert?: boolean
   /** neue Lage des Bauteils: Position (m) und zusätzliche Drehung um die Hochachse (Grad) */
   onLage?: (position: [number, number, number], drehGrad: number) => void; onDuplizieren?: () => void; onZuruecksetzen?: () => void
   model: CADModel; id: string; artikelWahl: Record<string, string>; manuell: boolean; onEntfernen: () => void; onFeldEntfernen?: (bauteilIds: string[]) => void; onFeldLaenge?: (seite: Seite, spalte: number, laengeM: number) => void; onFeldAnhaengen?: (seite: Seite, ende: 'anfang' | 'ende', laengeM: number) => void; onPositionAendern?: (position: [number, number, number]) => void; platzierungPosition?: [number, number, number]; onZu: () => void
@@ -67,6 +67,7 @@ export default function EigenschaftenLeiste({ lagenVersatzM = 0, onLageOp, griff
             ))}
           </div>
           <label className='flex items-center gap-2 text-[12.5px]'><input type='checkbox' checked={einrasten ?? true} onChange={(e) => onEinrasten?.(e.target.checked)} />Einrasten (5 cm / 15°)</label>
+          {onAnschlussEinrasten && <label className='flex items-center gap-2 text-[12.5px]'><input type='checkbox' checked={anschlussEinrasten ?? true} onChange={(e) => onAnschlussEinrasten(e.target.checked)} />An Anschlüsse einrasten (bis 15 cm)</label>}
           <div className='flex flex-wrap items-center gap-1 text-[12.5px]'>
             <span style={{ color: 'var(--os-text-leise)' }}>Drehen:</span>
             {[-90, -15, 15, 90].map((g) => <button key={g} type='button' onClick={() => onLage(c.position, g)} className='rounded border px-2 py-1 hover:bg-gray-50' style={{ borderColor: 'var(--os-linie)' }}>{g > 0 ? '+' : ''}{g}°</button>)}
