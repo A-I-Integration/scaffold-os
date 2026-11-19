@@ -30,3 +30,14 @@ describe('Treppe je Treppenlauf', () => {
     expect(sp.quantity).toBe(5)
   })
 })
+
+describe('Längen je Zeile (Querriegel, Bordbrett)', () => {
+  it('schlüsselt die Längen auf, Artikelnummer und Menge bleiben', () => {
+    const c = (id: string, art: string, l: number) => ({ id, type: art === 'QR-001' ? 'frame' : 'board', articleNumber: art, name: 'x', position: [0, 0, 0], rotation: [0, 0, 0], scale: [l, 0.04, 0.04], color: '#000' })
+    const model = { components3D: [c('a', 'QR-001', 3.07), c('b', 'QR-001', 3.07), c('c', 'QR-001', 2.57), c('d', 'BB-001', 2.07)] } as unknown as CADModel
+    const b = generateBillOfMaterials(model)
+    const qr = b.find((i) => i.articleNumber === 'QR-001')!
+    expect(qr.quantity).toBe(3); expect(qr.name).toBe('Querriegel'); expect(qr.aiRecommendation).toBe('Längen: 2× 3,07 m, 1× 2,57 m')
+    expect(b.find((i) => i.articleNumber === 'BB-001')!.aiRecommendation).toBe('Längen: 1× 2,07 m')
+  })
+})
