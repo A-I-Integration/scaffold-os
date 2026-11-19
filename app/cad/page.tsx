@@ -21,6 +21,8 @@
 import { alsWarnungen, pruefeModell3D } from '@/lib/cad/datenqualitaet'
 import { fahrzeugeAus, waehleFahrzeug, type LogistikFahrzeug } from '@/lib/logistik-fahrzeug'
 import { BAUTEIL_FARBEN, type FarbModus } from '@/lib/cad/bauteil-farben'
+import CadStatusleiste, { statusEintraege } from '@/components/cad/CadStatusleiste'
+import { systemAnzeigename } from '@/lib/calculations/geruest-systeme'
 import { useState, useMemo, useCallback, useEffect, useRef } from 'react'
 import StatikDatenPanel from '@/components/cad/StatikDatenPanel'
 import { huelleAusAnzeigePunkten } from '@/lib/cad/huelle'
@@ -1759,6 +1761,10 @@ export default function CADPage() {
               </button>
             ))}
           </div>
+          <CadStatusleiste eintraege={statusEintraege({
+            systemName: systemAnzeigename(systemId), ansicht: viewMode, einrasten, anschlussEinrasten, auswahlAnzahl: mehrfach.length,
+            bauteilAnzahl: modelWithManual ? modelWithManual.components3D.length : null,
+            flaecheM2: modelWithManual ? modelWithManual.totalAreaM2 : null, gewichtKg: totalWeight })} />
         </div>
         <div className='w-full md:w-64 lg:w-72 2xl:w-96 md:shrink-0 min-w-0'>
           {rolle === 'admin' && model && <M2Abrechnung flaecheM2={modelWithManual?.totalAreaM2 ?? model.totalAreaM2} onChange={setM2Wahl} />}
