@@ -60,6 +60,7 @@ import BauteilKontextmenue from '@/components/cad/BauteilKontextmenue'
 import PlatzierKoordinaten from '@/components/cad/PlatzierKoordinaten'
 import { wendePlatzierungAn } from '@/lib/cad/geruestfeld'
 import { rastePlatzierung } from '@/lib/cad/platzieren'
+import { teileDerBaugruppe } from '@/lib/cad/baugruppen'
 import { feldDerAutoTreppe, nachbarFuerTreppe, treppeAufFeld, schiebeUmFelder, leiterAufFeld, durchstiegAufFeld } from '@/lib/cad/treppe-setzen'
 import LvDialog from '@/components/cad/LvDialog'
 import { bereinigeStatikDaten, type StatikDaten } from '@/lib/statik-daten'
@@ -601,6 +602,12 @@ export default function CADPage() {
     if (!angezeigt) return
     setzeUeber((u) => setzeBauteilMasseDrehung(u, angezeigt, a))
   }, [setzeUeber])
+  // Ganze Baugruppe (Treppe, Gerüstfeld …) als Mehrfachauswahl wählen: danach gelten die Gruppenaktionen für alle Teile
+  const handleBaugruppeWaehlen = useCallback((id: string) => {
+    const ids = teileDerBaugruppe(modelWithManualRef.current?.components3D ?? [], id)
+    if (ids.length < 2) return
+    setMehrfach(ids); setSelectedComponent(null)
+  }, [])
   const handleBauteilDuplizieren = useCallback((id: string) => {
     const pid = platzierungIdVon(id, manualPlacements)
     if (pid) {
@@ -1558,6 +1565,7 @@ export default function CADPage() {
             const id = kontext.id
             return (
               <BauteilKontextmenue x={kontext.x} y={kontext.y} titel={c.name} onZu={() => setKontext(null)} aktionen={[
+                ...(teileDerBaugruppe(modelWithManual.components3D, id).length > 1 ? [{ id: 'bg', name: `Ganze Baugruppe wählen (${teileDerBaugruppe(modelWithManual.components3D, id).length})`, onWahl: () => handleBaugruppeWaehlen(id) }] : []),
                 { id: 'dup', name: 'Duplizieren', onWahl: () => handleBauteilDuplizieren(id) },
                 { id: 'r90', name: 'Drehen +90°', onWahl: () => handleBauteilLage(id, c.position as [number, number, number], 90) },
                 { id: 'l90', name: 'Drehen −90°', onWahl: () => handleBauteilLage(id, c.position as [number, number, number], -90) },
@@ -1572,7 +1580,7 @@ export default function CADPage() {
           )}
           {treppePanel && model && viewMode === '3d' && <TreppePanel model={model} treppe={gewaehlteTreppe} meldung={treppeMeldung} onSetzen={setzeTreppeAufFeld} onLeiter={setzeLeiterAufFeld} onDurchstieg={setzeDurchstiegAufFeld} onSchieben={schiebeTreppe} onZu={() => setTreppePanel(false)} />}
           {selectedComponent && modelWithManual && viewMode === '3d' && !abbauAktiv && !placementType && !measureMode && (
-              <EigenschaftenLeiste model={modelWithManual} id={selectedComponent} onMasseDrehung={(a) => handleMasseDrehung(selectedComponent, a)} lagenVersatzM={ueber.aenderungen.find((a) => a.id === selectedComponent)?.dy ?? ueber.kopien.find((k) => k.id === selectedComponent)?.dy ?? 0} onLageOp={(op) => handleLageOp(selectedComponent, op)} griffModus={griffModus} onGriffModus={setGriffModus} einrasten={einrasten} onEinrasten={setEinrasten} anschlussEinrasten={anschlussEinrasten} onAnschlussEinrasten={setAnschlussEinrasten} veraendert={istVonHandVeraendert(ueber, selectedComponent)} onLage={(p, d) => handleBauteilLage(selectedComponent, p, d)} onDuplizieren={() => handleBauteilDuplizieren(selectedComponent)} onZuruecksetzen={() => handleBauteilZuruecksetzen(selectedComponent)} artikelWahl={artikelWahl} manuell={!!platzierungIdVonBauteil(selectedComponent)}
+              <EigenschaftenLeiste model={modelWithManual} id={selectedComponent} baugruppeAnzahl={teileDerBaugruppe(modelWithManual.components3D, selectedComponent).length} onBaugruppe={() => handleBaugruppeWaehlen(selectedComponent)} onMasseDrehung={(a) => handleMasseDrehung(selectedComponent, a)} lagenVersatzM={ueber.aenderungen.find((a) => a.id === selectedComponent)?.dy ?? ueber.kopien.find((k) => k.id === selectedComponent)?.dy ?? 0} onLageOp={(op) => handleLageOp(selectedComponent, op)} griffModus={griffModus} onGriffModus={setGriffModus} einrasten={einrasten} onEinrasten={setEinrasten} anschlussEinrasten={anschlussEinrasten} onAnschlussEinrasten={setAnschlussEinrasten} veraendert={istVonHandVeraendert(ueber, selectedComponent)} onLage={(p, d) => handleBauteilLage(selectedComponent, p, d)} onDuplizieren={() => handleBauteilDuplizieren(selectedComponent)} onZuruecksetzen={() => handleBauteilZuruecksetzen(selectedComponent)} artikelWahl={artikelWahl} manuell={!!platzierungIdVonBauteil(selectedComponent)}
                 onEntfernen={() => handleRemoveComponent(selectedComponent)} onFeldEntfernen={(ids) => { setRemovedGroups((prev) => [...prev, ids]); setSelectedComponent(null) }}
                 onFeldLaenge={(seite, spalte, laengeM) => setBereichsListe((l) => [...l, { art: 'laenge', seite, spalte, feldlaengeM: laengeM }])}
                 onFeldAnhaengen={(seite, ende, laengeM) => setBereichsListe((l) => [...l, { art: 'erweitern', seite, ende, anzahl: 1, feldlaengeM: laengeM }])}
