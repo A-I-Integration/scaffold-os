@@ -43,3 +43,29 @@ describe('Lastklassen weiterer MJ-Zulassungen', () => {
     expect(r.zeilen.find((z) => z.anlage === '06.07.00')!.ergebnis).toBe('ok')
   })
 })
+
+import { generateCADModel, type BuildingParams } from '../calculations/cad-engine'
+import { baueLastannahmenDaten } from '../export/lastannahmen'
+import { statikPruefpunkte } from '../statik-pruefpunkte'
+import { zulassungenFuerListe } from '../data/zulassung-lastklassen-weitere'
+
+const basis: BuildingParams = {
+  lengthM: 12, widthM: 8, heightM: 12, eavesHeightM: 12, roofHeightM: 0, roofForm: 'flachdach',
+  floors: 4, floorHeightsM: Array(4).fill(3), windowCount: 0, doorCount: 0, balconyCount: 0,
+  overhangM: 0, setbackM: 0, sides: ['front'], lastklasse: 4,
+}
+
+describe('Einbindung in Lastannahmen und Prüfpunkte', () => {
+  it('nur vollständig vorliegende Zulassungen werden geprüft', () => {
+    expect(zulassungenFuerListe('uni-connect').map((z) => z.zulassung).sort()).toEqual(['Z-8.1-872', 'Z-8.1-935'])
+    expect(zulassungenFuerListe('combi-metric-top').map((z) => z.zulassung)).toEqual(['Z-8.22-960'])
+  })
+  it('UNI-CONNECT bekommt je Zulassung einen Abschnitt 6.x und Prüfpunkte, mit Hinweis auf offene Zuordnung', () => {
+    const m = generateCADModel({ ...basis }, 'mj-uniconnect')
+    const d = baueLastannahmenDaten(m, {}, { projektName: 'T', firma: 'F', datum: '19.11.2026' })
+    const s = d.sektionen.filter((x) => x.titel.startsWith('6.'))
+    expect(s.length).toBe(2)
+    expect(s[0].zeilen.some((z) => z.label === 'Zuordnung')).toBe(true)
+    expect(statikPruefpunkte(m, {}).filter((p) => p.id.startsWith('belag-lk-')).length).toBe(2)
+  })
+})
