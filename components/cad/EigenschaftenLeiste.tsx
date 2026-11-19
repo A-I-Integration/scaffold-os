@@ -16,7 +16,7 @@ const ARTEN: Record<string, string> = {
 const SEITEN: Record<string, string> = { front: 'Vorderseite', back: 'Rückseite', left: 'Links', right: 'Rechts' }
 const m = (v: number) => `${v.toLocaleString('de-DE', { maximumFractionDigits: 2 })} m`
 
-export default function EigenschaftenLeiste({ onMasseDrehung, lagenVersatzM = 0, onLageOp, griffModus, onGriffModus, einrasten, onEinrasten, anschlussEinrasten, onAnschlussEinrasten, veraendert, onLage, onDuplizieren, onZuruecksetzen, model, id, artikelWahl, manuell, onEntfernen, onFeldEntfernen, onFeldLaenge, onFeldAnhaengen, onFeldTeilen, onFeldZusammen, onPositionAendern, platzierungPosition, onZu }: {
+export default function EigenschaftenLeiste({ baugruppeAnzahl, onBaugruppe, onMasseDrehung, lagenVersatzM = 0, onLageOp, griffModus, onGriffModus, einrasten, onEinrasten, anschlussEinrasten, onAnschlussEinrasten, veraendert, onLage, onDuplizieren, onZuruecksetzen, model, id, artikelWahl, manuell, onEntfernen, onFeldEntfernen, onFeldLaenge, onFeldAnhaengen, onFeldTeilen, onFeldZusammen, onPositionAendern, platzierungPosition, onZu }: {
   /** Feld in zwei Felder teilen / mit dem Nachbarfeld zusammenführen (Längen aus dem Herstellerkatalog) */
   onFeldTeilen?: (seite: Seite, spalte: number, laengenM: [number, number]) => void
   onFeldZusammen?: (seite: Seite, spalte: number, laengeM: number) => void
@@ -27,6 +27,8 @@ export default function EigenschaftenLeiste({ onMasseDrehung, lagenVersatzM = 0,
   griffModus?: 'verschieben' | 'drehen'; onGriffModus?: (m: 'verschieben' | 'drehen') => void; einrasten?: boolean; onEinrasten?: (v: boolean) => void; anschlussEinrasten?: boolean; onAnschlussEinrasten?: (v: boolean) => void; veraendert?: boolean
   /** neue Lage des Bauteils: Position (m) und zusätzliche Drehung um die Hochachse (Grad) */
   /** genaue Maße (Box des Bauteils je Bauteilachse, m) und/oder absolute Drehung (Grad um x/y/z) */
+  /** Bauteil gehört zu einer Baugruppe (Treppe, Gerüstfeld …) mit so vielen Teilen: alle gemeinsam auswählen */
+  baugruppeAnzahl?: number; onBaugruppe?: () => void
   onMasseDrehung?: (a: { masse?: [number, number, number]; euler?: [number, number, number] }) => void
   onLage?: (position: [number, number, number], drehGrad: number) => void; onDuplizieren?: () => void; onZuruecksetzen?: () => void
   model: CADModel; id: string; artikelWahl: Record<string, string>; manuell: boolean; onEntfernen: () => void; onFeldEntfernen?: (bauteilIds: string[]) => void; onFeldLaenge?: (seite: Seite, spalte: number, laengeM: number) => void; onFeldAnhaengen?: (seite: Seite, ende: 'anfang' | 'ende', laengeM: number) => void; onPositionAendern?: (position: [number, number, number]) => void; platzierungPosition?: [number, number, number]; onZu: () => void
@@ -76,6 +78,7 @@ export default function EigenschaftenLeiste({ onMasseDrehung, lagenVersatzM = 0,
           </div>
           <PositionFelder key={c.position.join(',')} start={c.position} onUebernehmen={(p) => onLage(p, 0)} />
           {onMasseDrehung && <MasseDrehungFelder key={`${c.scale.join(',')}|${c.rotation.join(',')}`} bauteil={c} onUebernehmen={onMasseDrehung} />}
+          {onBaugruppe && (baugruppeAnzahl ?? 0) > 1 && <button type='button' onClick={onBaugruppe} className='w-full rounded border px-2 py-1.5 text-[12.5px] hover:bg-gray-50' style={{ borderColor: 'var(--os-linie)' }}>Ganze Baugruppe wählen ({baugruppeAnzahl} Teile)</button>}
           <div className='grid grid-cols-2 gap-1'>
             <button type='button' onClick={onDuplizieren} className='rounded border px-2 py-1.5 text-[12.5px] hover:bg-gray-50' style={{ borderColor: 'var(--os-linie)' }}>Duplizieren</button>
             <button type='button' disabled={!veraendert || manuell} onClick={onZuruecksetzen} className='rounded border px-2 py-1.5 text-[12.5px] hover:bg-gray-50 disabled:opacity-40' style={{ borderColor: 'var(--os-linie)' }}>{c.id.startsWith('kopie-') ? 'Kopie löschen' : 'Zurücksetzen'}</button>
