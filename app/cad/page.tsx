@@ -172,12 +172,14 @@ export default function CADPage() {
   const [aussehenOben, setAussehenOben] = useState<'x' | 'y' | 'z'>('y')
   const [aussehenHinweis, setAussehenHinweis] = useState('')
   const planUploadRef = useRef<((datei: File) => Promise<void>) | null>(null)
-  const [huelleBestaetigt, setHuelleBestaetigt] = useState(false)
+  // Die Hülle gilt nur für genau den Umriss, der bestätigt wurde; ändert sich der Umriss, ist sie automatisch wieder unbestätigt (kein Effekt nötig)
+  const [huelleOkFuer, setHuelleOkFuer] = useState<unknown>(null)
+  const huelleBestaetigt = building.umriss != null && huelleOkFuer === building.umriss
+  const setHuelleBestaetigt = (ok: boolean) => setHuelleOkFuer(ok ? building.umriss ?? null : null)
   // Wie das Gerüst entsteht: 'auto' = wird gebaut (Standard, auch beim Datei-Import); 'offen' = Haus von Hand angelegt, Auswahl steht noch aus; 'leer' = ohne Gerüst starten
   const [geruestWahl, setGeruestWahl] = useState<GeruestWahl>('auto')
   const [importWartet, setImportWartet] = useState(false)
   // Ein neuer Umriss (Upload, Zeichner, Laden) will wieder geprüft werden
-  useEffect(() => { setHuelleBestaetigt(false) }, [building.umriss])
   const zeichnerOeffnenRef = useRef<(() => void) | null>(null)
   const registriereZeichner = useCallback((fn: (() => void) | null) => { zeichnerOeffnenRef.current = fn }, [])
   const registrierePlanUpload = useCallback((fn: ((datei: File) => Promise<void>) | null) => { planUploadRef.current = fn }, [])
