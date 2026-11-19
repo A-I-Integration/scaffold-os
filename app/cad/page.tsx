@@ -21,6 +21,7 @@
 import { alsWarnungen, pruefeModell3D } from '@/lib/cad/datenqualitaet'
 import { fahrzeugeAus, waehleFahrzeug, type LogistikFahrzeug } from '@/lib/logistik-fahrzeug'
 import { BAUTEIL_FARBEN, type FarbModus } from '@/lib/cad/bauteil-farben'
+import BaugruppenBaum from '@/components/cad/BaugruppenBaum'
 import CadStatusleiste, { statusEintraege } from '@/components/cad/CadStatusleiste'
 import { systemAnzeigename } from '@/lib/calculations/geruest-systeme'
 import { useState, useMemo, useCallback, useEffect, useRef } from 'react'
@@ -1768,6 +1769,7 @@ export default function CADPage() {
         </div>
         <div className='w-full md:w-64 lg:w-72 2xl:w-96 md:shrink-0 min-w-0'>
           {rolle === 'admin' && model && <M2Abrechnung flaecheM2={modelWithManual?.totalAreaM2 ?? model.totalAreaM2} onChange={setM2Wahl} />}
+          {modelWithManual && <BaugruppenBaum bauteile={modelWithManual.components3D} onWaehlen={handleBaugruppeWaehlen} />}
           <KatalogWahlListe artikelWahl={artikelWahl} liste={katalogListeFuerSystem(systemId)} onZuruecksetzen={() => setArtikelWahl({})} />
           <BillOfMaterials
             materials={materials}
