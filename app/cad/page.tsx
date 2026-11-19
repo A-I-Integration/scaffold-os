@@ -52,6 +52,8 @@ import { vergissModell } from '@/lib/cad/modell-speicher'
 import { erzeugeProjektdatei, liesProjektdatei, type Projektdatei } from '@/lib/cad/projektdatei'
 import { ladeVersionen, speichereVersionen, fuegeVersionHinzu, loescheVersion, benenneVersion, type Version } from '@/lib/cad/versionen'
 import VersionenDialog from '@/components/cad/VersionenDialog'
+import KontoProjekteDialog from '@/components/cad/KontoProjekteDialog'
+import { legeKontoProjektAn, speichereKontoProjekt, ladeKontoProjekt, loescheKontoProjekt } from '@/lib/cad/projekte-client'
 import TreppePanel from '@/components/cad/TreppePanel'
 import GeruestfeldPanel from '@/components/cad/GeruestfeldPanel'
 import BauteilKontextmenue from '@/components/cad/BauteilKontextmenue'
@@ -1082,6 +1084,38 @@ export default function CADPage() {
     speichereListe(fuegeVersionHinzu(versionen, projektdatenJetzt('Vor Wiederherstellung'), `Vor Wiederherstellung von „${v.name}“`))
     wendeProjektdatenAn(v.daten); setVersionenOffen(false)
   }
+  // Projekte im Konto (Server): geöffnetes Projekt + Revision merken, damit „Speichern“ nur überschreibt, was man geladen hat
+  const [kontoOffen, setKontoOffen] = useState(false)
+  const [kontoMeldung, setKontoMeldung] = useState<string | null>(null)
+  const [kontoProjekt, setKontoProjekt] = useState<{ id: string; name: string; revision: number } | null>(null)
+  const kontoNeu = async (name: string): Promise<boolean> => {
+    const n = name.trim() || `CAD-Projekt ${new Date().toLocaleDateString('de-DE')}`
+    const r = await legeKontoProjektAn(n, projektdatenJetzt(n))
+    if (!r.ok) { setKontoMeldung(r.fehler); return false }
+    setKontoProjekt({ id: r.wert.id, name: r.wert.name, revision: r.wert.revision }); setKontoMeldung(`„${r.wert.name}“ gespeichert.`); return true
+  }
+  const kontoUeberschreiben = async (): Promise<boolean> => {
+    if (!kontoProjekt) return false
+    const r = await speichereKontoProjekt(kontoProjekt.id, kontoProjekt.name, projektdatenJetzt(kontoProjekt.name), kontoProjekt.revision)
+    if (!r.ok) { setKontoMeldung(r.fehler); return false }
+    setKontoProjekt({ id: r.wert.id, name: r.wert.name, revision: r.wert.revision }); setKontoMeldung(`„${r.wert.name}“ gespeichert (Stand ${r.wert.revision}).`); return true
+  }
+  const kontoLaden = async (id: string, revision?: number) => {
+    const r = await ladeKontoProjekt(id, revision)
+    if (!r.ok) { setKontoMeldung(r.fehler); return }
+    if (!window.confirm(`Projekt „${r.wert.name}“${revision ? ` (Stand ${revision})` : ''} laden?\n\nDas aktuelle Modell, die Notizen und die von Hand gesetzten, verschobenen und entfernten Teile werden ersetzt.`)) return
+    wendeProjektdatenAn(r.wert.daten)
+    // ein älterer Stand wird erst beim Speichern zum neuen Stand; die Revision bleibt die aktuelle des Projekts
+    const kopf = revision ? await ladeKontoProjekt(id) : r
+    setKontoProjekt({ id, name: r.wert.name, revision: kopf.ok ? kopf.wert.revision : r.wert.revision })
+    setKontoMeldung(`„${r.wert.name}“ geladen.`)
+  }
+  const kontoLoeschen = async (id: string): Promise<boolean> => {
+    const r = await loescheKontoProjekt(id)
+    if (!r.ok) { setKontoMeldung(r.fehler); return false }
+    if (kontoProjekt?.id === id) setKontoProjekt(null)
+    setKontoMeldung('Projekt gelöscht.'); return true
+  }
   const ladeProjektdatei = (datei: File) => {
     if (datei.size > 2_000_000) { window.alert('Die Datei ist größer als 2 MB und keine Projektdatei.'); return }
     datei.text().then((t) => uebernehmeProjektdatei(t, datei.name)).catch(() => window.alert('Die Datei konnte nicht gelesen werden.'))
@@ -1479,7 +1513,7 @@ export default function CADPage() {
             viewAngle={viewAngle} onViewAngle={(a) => setViewAngle(a)} farbModus={farbModus} onFarbModus={setFarbModus}
             onPdf={model ? handleExportPDF : exportOhneModellHinweis} onMontageplan={model ? handleExportMontageplan : exportOhneModellHinweis} onMontageplanPdf={model ? handleExportMontageplanPdf : exportOhneModellHinweis}
             onDxf={!model ? exportOhneModellHinweis : handleExportDXF} onIfc={!model ? exportOhneModellHinweis : (ifcExportLaeuft ? undefined : handleExportIFC)}
-            onSpeichern={speichereProjektdatei} onVersionen={oeffneVersionen} treppePanelAktiv={treppePanel} onTreppePanel={model ? () => setTreppePanel((v) => !v) : undefined} geruestfeldPanelAktiv={feldPanel} onGeruestfeldPanel={model ? () => setFeldPanel((v) => !v) : undefined} onLv={rolle === 'admin' || istStatikerLogin ? (model ? () => setLvOffen(true) : exportOhneModellHinweis) : undefined}
+            onSpeichern={speichereProjektdatei} onVersionen={oeffneVersionen} onKonto={() => { setKontoMeldung(null); setKontoOffen(true) }} treppePanelAktiv={treppePanel} onTreppePanel={model ? () => setTreppePanel((v) => !v) : undefined} geruestfeldPanelAktiv={feldPanel} onGeruestfeldPanel={model ? () => setFeldPanel((v) => !v) : undefined} onLv={rolle === 'admin' || istStatikerLogin ? (model ? () => setLvOffen(true) : exportOhneModellHinweis) : undefined}
             onBild={speichereBild}
             layerState={layerState} onToggleSide={(k) => handleToggleSide(k as keyof SideVisibility)} onToggleLevel={handleToggleLevel}
             onAlleEin={handleShowAllLayers} onAlleAus={handleHideAllLayers} visibleTypes={visibleTypes} onToggleType={toggleType}
@@ -1629,6 +1663,7 @@ export default function CADPage() {
                 onEntfernen={bereichEntfernen} onAnhaengen={bereichHinzufuegen} onAufstocken={bereichHinzufuegen}
                 onLoescheAenderung={(i) => setBereichsListe((l) => l.filter((_, j) => j !== i))} onZu={() => setBereicheOffen(false)} entferntAnzahl={removedCount} />
             )}
+            {kontoOffen && <KontoProjekteDialog aktuell={kontoProjekt} meldung={kontoMeldung} onNeu={kontoNeu} onUeberschreiben={kontoUeberschreiben} onLaden={(id, rev) => { void kontoLaden(id, rev) }} onLoeschen={kontoLoeschen} onZu={() => setKontoOffen(false)} />}
             {versionenOffen && <VersionenDialog versionen={versionen} speicherFehler={versionenFehler} onSpeichern={neueVersion} onWiederherstellen={stelleVersionWiederHer} onLoeschen={(id) => speichereListe(loescheVersion(versionen, id))} onUmbenennen={(id, n) => speichereListe(benenneVersion(versionen, id, n))} onZu={() => setVersionenOffen(false)} />}
             {abbauAktiv && abbauErgebnis && viewMode === '3d' && (
               <TeilabbauPanel ein={abbauEin} onChange={setAbbauEin} ergebnis={abbauErgebnis} onClose={() => setAbbauAktiv(false)} onPlanUebernehmen={() => setAbbauEinplanen(true)} />
