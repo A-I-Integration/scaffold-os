@@ -38,9 +38,10 @@ import type { CustomDimension } from '@/types/cad-dimensions'
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
 import { DRACOLoader } from 'three/examples/jsm/loaders/DRACOLoader.js'
 import type { Aussehen } from '@/lib/cad/modell-aussehen'
+import { ports as anschlussPunkte } from '@/lib/cad/anschluesse'
 
 /** Transformationsgriff für das ausgewählte Bauteil (Achsen-Pfeile bzw. Drehring); `einrasten`: Raster 5 cm / 15° */
-export interface BauteilGriffProps { modus: 'verschieben' | 'drehen'; einrasten: boolean; onAendern: (id: string, position: [number, number, number], drehGrad: number) => void }
+export interface BauteilGriffProps { modus: 'verschieben' | 'drehen'; einrasten: boolean; /** Anschlusspunkte des Bauteils und seiner Nachbarn als Marker zeigen */ anschlussMarker?: boolean; onAendern: (id: string, position: [number, number, number], drehGrad: number) => void }
 
 interface Props {
   model: CADModel
@@ -941,6 +942,29 @@ function BauteilGriff({ model, id, griff }: { model: CADModel; id: string; griff
         }}
       />
     </>
+  )
+}
+
+// Anschlusspunkte des gewählten Bauteils (orange) und der Bauteile in 3 m Umkreis (grau). Abgeleitete Punkte, keine Herstellerdaten.
+function AnschlussMarker({ model, id }: { model: CADModel; id: string }) {
+  const { invalidate } = useThree()
+  const comp = model.components3D.find((c) => c.id === id)
+  const geo = useMemo(() => {
+    if (!comp) return null
+    const eigene = anschlussPunkte(comp).map((p) => p.pos)
+    const nachbarn = model.components3D
+      .filter((c) => c.id !== id && Math.hypot(c.position[0] - comp.position[0], c.position[1] - comp.position[1], c.position[2] - comp.position[2]) < 3)
+      .flatMap((c) => anschlussPunkte(c).map((p) => p.pos))
+    const mk = (l: number[][]) => { const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(l.flat()), 3)); return g }
+    return { eigene: mk(eigene), nachbarn: mk(nachbarn) }
+  }, [model, id, comp])
+  useEffect(() => { invalidate() }, [geo, invalidate])
+  if (!geo) return null
+  return (
+    <group userData={{ ohneRahmen: true }}>
+      <points geometry={geo.nachbarn}><pointsMaterial color='#6b7280' size={5} sizeAttenuation={false} depthTest={false} /></points>
+      <points geometry={geo.eigene}><pointsMaterial color='#f59e0b' size={8} sizeAttenuation={false} depthTest={false} /></points>
+    </group>
   )
 }
 
@@ -2507,7 +2531,7 @@ function Scene({
             onPlacementClick={platziereLokal}
           />
         )}
-        {showScaffold && !statik && griff && selectedComponent && !measureMode && !placementType && <BauteilGriff model={model} id={selectedComponent} griff={griff} />}
+        {showScaffold && !statik && griff && selectedComponent && !measureMode && !placementType && <><BauteilGriff model={model} id={selectedComponent} griff={griff} />{griff.anschlussMarker && griff.modus === 'verschieben' && <AnschlussMarker model={model} id={selectedComponent} />}</>}
         <DimensionLines model={model} visible={showDimensions} />
       </group>
       <CustomDimensionLines dimensions={customDimensions} pendingPoint={pendingMeasurePoint} />

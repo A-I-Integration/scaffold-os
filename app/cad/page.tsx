@@ -73,6 +73,7 @@ import MehrfachLeiste from '@/components/cad/MehrfachLeiste'
 import { KEINE_UEBERLAGERUNG, wendeBauteilAenderungenAn, setzeBauteilLage, dupliziereBauteil, setzeBauteilZurueck, bauteileDerLage, verschiebeBauteile, kopiereBauteile, istKopieId, istVonHandVeraendert, type BauteilUeberlagerung } from '@/lib/cad/bauteil-aenderungen'
 import { buildTopologyGraph, pruefeKnotenIsolation } from '@/lib/calculations/topology-graph'
 import { wendeLagerAn, type LagerZeile } from '@/lib/calculations/cad-lager'
+import { rasteBauteilAnAnschluesse } from '@/lib/cad/einrasten'
 import { platzierungAusTreffer, verschiebePlatzierung, gleicheLage, platzierungIdVon } from '@/lib/calculations/cad-platzierung'
 import { generatePDFHTML, downloadPDF, generateMontageplanHTML } from '@/lib/export/pdf-export'
 import { uploadVertragsdokument } from '@/lib/vertrag-upload-client'
@@ -390,6 +391,8 @@ export default function CADPage() {
   const setzeUeber = useCallback((f: (u: BauteilUeberlagerung) => BauteilUeberlagerung) => setUeberVerlauf((v) => { const n = f(v.jetzt); return n === v.jetzt || JSON.stringify(n) === JSON.stringify(v.jetzt) ? v : { jetzt: n, vergangen: [...v.vergangen.slice(-99), v.jetzt], zukunft: [] } }), [])
   const [griffModus, setGriffModus] = useState<'verschieben' | 'drehen'>('verschieben')
   const [einrasten, setEinrasten] = useState(true)
+  // Beim Verschieben auf Anschlusspunkte benachbarter Bauteile einrasten (abgeleitete Punkte, siehe lib/cad/anschluesse.ts)
+  const [anschlussEinrasten, setAnschlussEinrasten] = useState(true)
 
   const handleToggleMeasureMode = useCallback(() => {
     setMeasureMode((prev) => {
@@ -538,9 +541,14 @@ export default function CADPage() {
   }, [model])
 
   // Griff/Zahleneingabe: neue Lage des ausgewählten Bauteils. Von Hand gesetzte Bauteile ändern ihre Platzierung, erzeugte bekommen eine Überlagerung.
-  const handleBauteilLage = useCallback((id: string, position: [number, number, number], drehGrad: number) => {
+  const handleBauteilLage = useCallback((id: string, positionGriff: [number, number, number], drehGrad: number) => {
     const pid = platzierungIdVon(id, manualPlacements)
     const angezeigt = modelWithManualRef.current?.components3D.find((c) => c.id === id)
+    // Nur beim Verschieben (nicht beim Drehen) und nur für Einzelteile; Treppen rasten über ihre eigene Feldlogik ein
+    const einzelteil = !(pid && manualPlacements.find((x) => x.id === pid)?.type === 'stair')
+    const position = anschlussEinrasten && drehGrad === 0 && einzelteil && modelWithManualRef.current
+      ? rasteBauteilAnAnschluesse(modelWithManualRef.current.components3D, id, positionGriff).position
+      : positionGriff
     if (pid) {
       setManualPlacements((prev) => prev.map((x) => {
         if (x.id !== pid) return x
@@ -555,7 +563,7 @@ export default function CADPage() {
     }
     if (!angezeigt) return
     setzeUeber((u) => setzeBauteilLage(u, angezeigt, angezeigt, position, drehGrad))
-  }, [manualPlacements, setzeUeber, model])
+  }, [manualPlacements, setzeUeber, model, anschlussEinrasten])
   const handleBauteilDuplizieren = useCallback((id: string) => {
     const pid = platzierungIdVon(id, manualPlacements)
     if (pid) {
@@ -1426,7 +1434,7 @@ export default function CADPage() {
           ))}
           {treppePanel && model && viewMode === '3d' && <TreppePanel model={model} treppe={gewaehlteTreppe} meldung={treppeMeldung} onSetzen={setzeTreppeAufFeld} onLeiter={setzeLeiterAufFeld} onDurchstieg={setzeDurchstiegAufFeld} onSchieben={schiebeTreppe} onZu={() => setTreppePanel(false)} />}
           {selectedComponent && modelWithManual && viewMode === '3d' && !abbauAktiv && !placementType && !measureMode && (
-              <EigenschaftenLeiste model={modelWithManual} id={selectedComponent} lagenVersatzM={ueber.aenderungen.find((a) => a.id === selectedComponent)?.dy ?? ueber.kopien.find((k) => k.id === selectedComponent)?.dy ?? 0} onLageOp={(op) => handleLageOp(selectedComponent, op)} griffModus={griffModus} onGriffModus={setGriffModus} einrasten={einrasten} onEinrasten={setEinrasten} veraendert={istVonHandVeraendert(ueber, selectedComponent)} onLage={(p, d) => handleBauteilLage(selectedComponent, p, d)} onDuplizieren={() => handleBauteilDuplizieren(selectedComponent)} onZuruecksetzen={() => handleBauteilZuruecksetzen(selectedComponent)} artikelWahl={artikelWahl} manuell={!!platzierungIdVonBauteil(selectedComponent)}
+              <EigenschaftenLeiste model={modelWithManual} id={selectedComponent} lagenVersatzM={ueber.aenderungen.find((a) => a.id === selectedComponent)?.dy ?? ueber.kopien.find((k) => k.id === selectedComponent)?.dy ?? 0} onLageOp={(op) => handleLageOp(selectedComponent, op)} griffModus={griffModus} onGriffModus={setGriffModus} einrasten={einrasten} onEinrasten={setEinrasten} anschlussEinrasten={anschlussEinrasten} onAnschlussEinrasten={setAnschlussEinrasten} veraendert={istVonHandVeraendert(ueber, selectedComponent)} onLage={(p, d) => handleBauteilLage(selectedComponent, p, d)} onDuplizieren={() => handleBauteilDuplizieren(selectedComponent)} onZuruecksetzen={() => handleBauteilZuruecksetzen(selectedComponent)} artikelWahl={artikelWahl} manuell={!!platzierungIdVonBauteil(selectedComponent)}
                 onEntfernen={() => handleRemoveComponent(selectedComponent)} onFeldEntfernen={(ids) => { setRemovedGroups((prev) => [...prev, ids]); setSelectedComponent(null) }}
                 onFeldLaenge={(seite, spalte, laengeM) => setBereichsListe((l) => [...l, { art: 'laenge', seite, spalte, feldlaengeM: laengeM }])}
                 onFeldAnhaengen={(seite, ende, laengeM) => setBereichsListe((l) => [...l, { art: 'erweitern', seite, ende, anzahl: 1, feldlaengeM: laengeM }])}
@@ -1535,7 +1543,7 @@ export default function CADPage() {
               <AbbauEinplanenDialog tage={abbauErgebnis.tage} personen={abbauErgebnis.personen} titel={`Teilabbau: ${abbauErgebnis.anzahlTeile} Bauteile, ${abbauErgebnis.stunden} h`} onClose={() => setAbbauEinplanen(false)} />
             )}
             {viewMode === '3d' && modelWithManual && (
-              <Scaffold3D farbModus={farbModus} model={modelWithManual} features={features} showBuilding={showBuilding} showScaffold={showScaffold} showDimensions={showDimensions} selectedComponent={selectedComponent} onSelectComponent={klickImModell} mehrfachAuswahl={mehrfachMenge} rahmenModus={rahmenModus} onRahmen={handleRahmen} abbauMarkiert={abbauMarkiert} echtesGebaeude={echtesGebaeude} visibleTypes={visibleTypes} viewMode={viewAngle} onCanvasReady={(c) => { canvasRef.current = c }} notes={notes} onAddNote={handleAddNote} hiddenSides={hiddenSides} hiddenLevels={hiddenLevels} measureMode={measureMode} onMeasurePoint={handleMeasurePoint} customDimensions={customDimensions} pendingMeasurePoint={pendingMeasurePoint?.point ?? null} placementType={placementType} onPlacementClick={handlePlacementClick} showEnvironment={showEnvironment} hoheQualitaet={hoheQualitaet} onRemoveComponent={handleRemoveComponent} onTreppeVerschieben={versetzeAutoTreppe} onReplaceComponent={handleReplaceComponent} systemId={systemId} artikelWahl={artikelWahl} onArtikelWahl={waehleArtikel} onArtikelWahlGleiche={waehleArtikelGleiche} removedCount={removedCount} platzierungIdVon={platzierungIdVonBauteil} onBauteilZiehen={handleBauteilZiehen} griff={!abbauAktiv ? { modus: griffModus, einrasten, onAendern: handleBauteilLage } : undefined} onSeiteUmschalten={(side) => { setAutoGenerate(true); setBuilding((() => { const cur = building.sides ?? ['front']; const has = cur.includes(side); const ns = has ? cur.filter((x) => x !== side) : [...cur, side]; if (ns.length === 0) ns.push('front'); return { ...building, sides: ns } })()) }} />
+              <Scaffold3D farbModus={farbModus} model={modelWithManual} features={features} showBuilding={showBuilding} showScaffold={showScaffold} showDimensions={showDimensions} selectedComponent={selectedComponent} onSelectComponent={klickImModell} mehrfachAuswahl={mehrfachMenge} rahmenModus={rahmenModus} onRahmen={handleRahmen} abbauMarkiert={abbauMarkiert} echtesGebaeude={echtesGebaeude} visibleTypes={visibleTypes} viewMode={viewAngle} onCanvasReady={(c) => { canvasRef.current = c }} notes={notes} onAddNote={handleAddNote} hiddenSides={hiddenSides} hiddenLevels={hiddenLevels} measureMode={measureMode} onMeasurePoint={handleMeasurePoint} customDimensions={customDimensions} pendingMeasurePoint={pendingMeasurePoint?.point ?? null} placementType={placementType} onPlacementClick={handlePlacementClick} showEnvironment={showEnvironment} hoheQualitaet={hoheQualitaet} onRemoveComponent={handleRemoveComponent} onTreppeVerschieben={versetzeAutoTreppe} onReplaceComponent={handleReplaceComponent} systemId={systemId} artikelWahl={artikelWahl} onArtikelWahl={waehleArtikel} onArtikelWahlGleiche={waehleArtikelGleiche} removedCount={removedCount} platzierungIdVon={platzierungIdVonBauteil} onBauteilZiehen={handleBauteilZiehen} griff={!abbauAktiv ? { modus: griffModus, einrasten, anschlussMarker: anschlussEinrasten, onAendern: handleBauteilLage } : undefined} onSeiteUmschalten={(side) => { setAutoGenerate(true); setBuilding((() => { const cur = building.sides ?? ['front']; const has = cur.includes(side); const ns = has ? cur.filter((x) => x !== side) : [...cur, side]; if (ns.length === 0) ns.push('front'); return { ...building, sides: ns } })()) }} />
             )}
             {/* Leerzustand: zwei Wege (Datei hochladen / von Hand bauen) */}
             {viewMode === '3d' && !model && (

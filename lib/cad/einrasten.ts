@@ -90,3 +90,18 @@ export function rasteWinkel(grad: number, schrittGrad = 90, toleranzGrad = 5): n
   const n = Math.round(grad / schrittGrad) * schrittGrad
   return Math.abs(grad - n) <= toleranzGrad ? n : grad
 }
+
+export interface BauteilEinrastung { position: V3; vorschlag: EinrastVorschlag | null }
+
+/**
+ * Für den Verschiebe-Griff: Position des Bauteils `id` nach dem Loslassen an `zielPosition`, wenn möglich auf Anschlüsse eingerastet.
+ * `bauteile` enthält das Bauteil selbst (es wird als Ziel ignoriert). Unbekannte id oder nichts in Reichweite: Zielposition unverändert.
+ */
+export function rasteBauteilAnAnschluesse(bauteile: PortBauteil[], id: string, zielPosition: V3, radiusM = EINRAST_RADIUS_M): BauteilEinrastung {
+  const c = bauteile.find((b) => b.id === id)
+  if (!c) return { position: zielPosition, vorschlag: null }
+  const index = new PortIndex(bauteile.filter((b) => b.id !== id && Math.hypot(b.position[0] - zielPosition[0], b.position[1] - zielPosition[1], b.position[2] - zielPosition[2]) < 12), radiusM)
+  const v = schlageEinrastenVor({ ...c, position: zielPosition }, index, radiusM)
+  if (!v) return { position: zielPosition, vorschlag: null }
+  return { position: [zielPosition[0] + v.versatz[0], zielPosition[1] + v.versatz[1], zielPosition[2] + v.versatz[2]], vorschlag: v }
+}
