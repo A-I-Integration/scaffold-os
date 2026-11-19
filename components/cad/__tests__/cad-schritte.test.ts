@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from 'vitest'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { createElement } from 'react'
 import CadSchritte from '../CadSchritte'
-import CadStart from '../CadStart'
+import LeerStart from '../LeerStart'
 import { erzeugeProjektdatei, liesProjektdatei } from '@/lib/cad/projektdatei'
 import type { BuildingParams } from '@/lib/calculations/cad-engine'
 
@@ -29,14 +29,20 @@ describe('Schrittleiste', () => {
   })
 })
 
-describe('Startauswahl', () => {
-  it('zwei Wege: KI-basiert und Manuell anlegen, Grundriss im manuellen Weg', () => {
-    const html = renderToStaticMarkup(createElement(CadStart, { onDateien: h, onGrundriss: h, onZeichnen: h, onRechteck: h }))
-    expect(html).toContain('KI-basiert')
-    expect(html).toContain('Manuell anlegen')
-    expect(html).toContain('Plan oder Bild hochladen')
-    expect(html).toContain('Grundriss hochladen')
-    expect(html).toContain('Umriss per Klick zeichnen')
+describe('Leere Fläche', () => {
+  const html = (bauteil: string | null) => renderToStaticMarkup(createElement(LeerStart, { bauteil, onAbbrechen: h, onMasse: h }))
+  it('ohne gewähltes Bauteil: nur ein Hinweis, keine Startkarten', () => {
+    const x = html(null)
+    expect(x).toContain('Oben ein Bauteil anklicken')
+    expect(x).not.toContain('KI-basiert')
+    expect(x).not.toContain('Manuell anlegen')
+    expect(x).not.toContain('Länge')
+  })
+  it('mit gewähltem Bauteil: fragt einmal die Maße des Hauses ab und nennt das Bauteil', () => {
+    const x = html('f_railing')
+    expect(x).toContain('Maße des Hauses')
+    expect(x).toContain('Geländer wird gesetzt')
+    for (const f of ['Länge', 'Breite', 'Höhe']) expect(x).toContain(`aria-label="${f}"`)
   })
 })
 

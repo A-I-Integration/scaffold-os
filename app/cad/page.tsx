@@ -95,7 +95,7 @@ import SystemLeiste from '@/components/cad/SystemLeiste'
 import KatalogWahlListe from '@/components/cad/KatalogWahlListe'
 import { katalogListeFuerSystem, wendeKatalogwahlAn, uebertrageAufGleiche } from '@/lib/cad/katalog-zuordnung'
 import Scaffold2D from '@/components/cad/Scaffold2D'
-import CadStart from '@/components/cad/CadStart'
+import LeerStart from '@/components/cad/LeerStart'
 import BauteilLeiste from '@/components/cad/BauteilLeiste'
 import HuellePruefung from '@/components/cad/HuellePruefung'
 import CadSchritte, { type GeruestWahl } from '@/components/cad/CadSchritte'
@@ -400,6 +400,8 @@ export default function CADPage() {
   const [zeichenWerkzeug, setZeichenWerkzeug] = useState<FigurArt | null>(null)
   // Ausgewählter Bauteiltyp für die Klick-Platzierung (null = Modus aus)
   const [placementType, setPlacementType] = useState<string | null>(null)
+  // Bauteil, das in der Leiste gewählt wurde, solange es noch kein Haus gibt (die Fläche fragt dann die Maße ab)
+  const [startBauteil, setStartBauteil] = useState<string | null>(null)
   // Manuell entfernte Bauteile (z. B. eine Treppe, die weg soll). Jeder Eintrag
   // ist eine Gruppe von Bauteil-IDs (Treppen werden als Ganzes entfernt).
   // Wird bei „Gerüst neu berechnen“ zurückgesetzt, weil sich die IDs dann ändern.
@@ -1544,7 +1546,7 @@ export default function CADPage() {
             layerState={layerState} onToggleSide={(k) => handleToggleSide(k as keyof SideVisibility)} onToggleLevel={handleToggleLevel}
             onAlleEin={handleShowAllLayers} onAlleAus={handleHideAllLayers} visibleTypes={visibleTypes} onToggleType={toggleType}
           />
-          <BauteilLeiste disabled={!model} selectedType={placementType} onSelectType={handleSelectPlacementType} />
+          <BauteilLeiste selectedType={model ? placementType : startBauteil} onSelectType={(t) => (model ? handleSelectPlacementType(t) : setStartBauteil(t))} />
           {building.umriss && building.umriss.length >= 3 && (huelleBestaetigt ? (
             <div className='flex items-center gap-3 border-b border-black/10 bg-white px-4 py-1.5 text-xs'>
               <span className='text-green-700'>✓ Hülle bestätigt</span>
@@ -1706,14 +1708,13 @@ export default function CADPage() {
             {viewMode === '3d' && !model && (
               <div className='h-full flex flex-col'>
                 <div className='flex-1 min-h-0'>
-                  <CadStart wartet={importWartet}
-                    onDateien={(d) => { setGeruestWahl('auto'); return ladeAussehen(d) }}
-                    onGrundriss={(d) => { setGeruestWahl('offen'); return ladeAussehen(d) }}
-                    onZeichnen={() => { setGeruestWahl('offen'); zeichnerOeffnenRef.current?.() }}
-                    onRechteck={(l, b, h) => {
+                  <LeerStart wartet={importWartet} bauteil={startBauteil} onAbbrechen={() => setStartBauteil(null)}
+                    onMasse={(l, b, h) => {
                       setAutoGenerate(true)
-                      setGeruestWahl('offen')
+                      setGeruestWahl('leer')
                       setBuilding({ ...building, lengthM: l, widthM: b, heightM: h, eavesHeightM: building.eavesHeightM > 0 ? building.eavesHeightM : h, umriss: undefined, umrissKantenHoeheM: undefined, sides: ['front', 'back', 'left', 'right'] })
+                      if (startBauteil) handleSelectPlacementType(startBauteil)
+                      setStartBauteil(null)
                     }}
                   />
                 </div>
