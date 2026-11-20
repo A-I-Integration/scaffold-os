@@ -28,6 +28,7 @@ import ObjektInfo from '@/components/cad/ObjektInfo'
 import BaugruppenBaum from '@/components/cad/BaugruppenBaum'
 import type { BereichsWerkzeug } from '@/components/cad/BereichePanel'
 import CadWerkzeugleiste, { CadWerkzeugePanel, type WerkzeugleisteProps } from '@/components/cad/CadWerkzeugleiste'
+import GeruestBaum from '@/components/cad/GeruestBaum'
 import LayersPanel from '@/components/cad/LayersPanel'
 import CadDock from '@/components/cad/CadDock'
 import AnsichtsReiter, { type Ansicht2D } from '@/components/cad/AnsichtsReiter'
@@ -1848,7 +1849,7 @@ export default function CADPage() {
             )}
             <ObjektInfo model={modelWithManual} auswahlId={selectedComponent} projekt={{ systemName: systemAnzeigename(systemId), ansicht: viewMode === '3d' ? '3D' : '2D', flaecheM2: modelWithManual.totalAreaM2, gewichtKg: totalWeight }} />
             </>) : null}
-            baugruppen={modelWithManual ? <BaugruppenBaum bauteile={modelWithManual.components3D} onWaehlen={handleBaugruppeWaehlen} aktiv={selectedComponent ? [selectedComponent, ...mehrfach] : mehrfach} onBauteil={(id) => { setMehrfach([]); setSelectedComponent(id) }} /> : null}
+            baugruppen={modelWithManual ? <><GeruestBaum felder={modelWithManual.fields} teile={modelWithManual.components3D} aktiv={selectedComponent ? [selectedComponent, ...mehrfach] : mehrfach} onWaehlen={(ids) => { setMehrfach(ids); setSelectedComponent(null) }} /><BaugruppenBaum bauteile={modelWithManual.components3D} onWaehlen={handleBaugruppeWaehlen} aktiv={selectedComponent ? [selectedComponent, ...mehrfach] : mehrfach} onBauteil={(id) => { setMehrfach([]); setSelectedComponent(id) }} /> </> : null}
             projekt={<>
           {rolle === 'admin' && model && <M2Abrechnung flaecheM2={modelWithManual?.totalAreaM2 ?? model.totalAreaM2} onChange={setM2Wahl} />}
           <KatalogWahlListe artikelWahl={artikelWahl} liste={katalogListeFuerSystem(systemId)} onZuruecksetzen={() => setArtikelWahl({})} />
