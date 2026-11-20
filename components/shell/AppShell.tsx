@@ -28,6 +28,8 @@ export default function AppShell({ rolle, name, onLogout, children }: { rolle: R
   const pathname = usePathname()
   const router = useRouter()
   const schmal = useSchmal()
+  // CAD ist ein Vollbild-Arbeitsplatz: Menü nur als Schublade, damit die 3D-Fläche die Breite bekommt
+  const nurSchublade = schmal || !!pathname?.startsWith('/cad')
   const [schublade, setSchublade] = useState(false)
   const [offen, setOffen] = useState<Record<string, boolean>>({})
   const [suche, setSuche] = useState(false)
@@ -118,8 +120,8 @@ export default function AppShell({ rolle, name, onLogout, children }: { rolle: R
 
   return (
     <div className="os-shell flex h-dvh overflow-clip" style={{ background: 'var(--os-grund)' }}>
-      {!schmal && <aside className="w-[300px] shrink-0">{navigation}</aside>}
-      {schmal && schublade && (
+      {!nurSchublade && <aside className="w-[300px] shrink-0">{navigation}</aside>}
+      {nurSchublade && schublade && (
         <>
           <div className="fixed inset-0 z-40 bg-black/50" onClick={() => setSchublade(false)} />
           <aside className="fixed inset-y-0 left-0 z-50 w-[300px] max-w-[88vw] shadow-2xl">{navigation}</aside>
@@ -127,8 +129,8 @@ export default function AppShell({ rolle, name, onLogout, children }: { rolle: R
       )}
 
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="flex h-16 shrink-0 items-center gap-3 border-b px-5" style={{ background: '#fff', borderColor: 'var(--os-linie)', paddingTop: 'env(safe-area-inset-top)' }}>
-          {schmal && (
+        <header data-os-kopf className="flex h-16 shrink-0 items-center gap-3 border-b px-5" style={{ background: '#fff', borderColor: 'var(--os-linie)', paddingTop: 'env(safe-area-inset-top)' }}>
+          {nurSchublade && (
             <button type="button" onClick={() => setSchublade(true)} aria-label="Menü öffnen" className="rounded p-2 hover:bg-black/5"><Menu className="h-5 w-5" /></button>
           )}
           <div className="min-w-0 leading-tight">
