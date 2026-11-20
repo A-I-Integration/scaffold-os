@@ -1564,6 +1564,7 @@ export default function CADPage() {
           </p>
         </div>
         <div className='flex items-center gap-2'>
+          <button type='button' onClick={dunkelUmschalten} aria-pressed={dunkel} title='Dunkle Darstellung ein/aus' className='px-3 py-1.5 text-xs font-medium rounded-lg border border-black/10 hover:bg-black/5'>{dunkel ? 'Hell' : 'Dunkel'}</button>
           <button type='button' onClick={oeffneVersionen} title='Gespeicherte Stände ansehen oder wiederherstellen' className='px-3 py-1.5 text-xs font-medium rounded-lg border border-black/10 hover:bg-black/5'>Versionen</button>
           <button type='button' onClick={speichereProjektdatei} disabled={!model} title='Projekt als Datei speichern' className='px-3 py-1.5 text-xs font-medium rounded-lg border border-black/10 hover:bg-black/5 disabled:opacity-40'>Speichern</button>
           <div className='flex rounded-lg border border-black/10 overflow-hidden'>
@@ -1592,10 +1593,6 @@ export default function CADPage() {
         <div className='flex-1 flex min-w-0 min-h-0'>
         <CadWerkzeugleiste {...werkzeugProps} />
         <div className='flex-1 flex flex-col min-w-0 min-h-0 md:overflow-y-auto'>
-          <div className='flex justify-end px-2 pt-1'>
-            <button type='button' onClick={dunkelUmschalten} aria-pressed={dunkel} title='Dunkle Darstellung ein/aus'
-              className='text-[11px] px-2 py-0.5 rounded border border-[#d2d2d7] text-[#424245] bg-white hover:bg-[#f5f5f7]'>{dunkel ? 'Hell' : 'Dunkel'}</button>
-          </div>
           <SystemLeiste systemId={systemId} onSystemChange={aendereSystem} gewaehlteArtikel={Object.keys(artikelWahl).length} />
           <CadBand
             rahmenAktiv={rahmenModus} onRahmen={() => setRahmenModus((v) => !v)} auswahlAnzahl={mehrfach.length}
@@ -1668,7 +1665,7 @@ export default function CADPage() {
           {mehrfach.length > 0 && modelWithManual && viewMode === '3d' && !abbauAktiv && (
             <MehrfachLeiste model={modelWithManual} ids={mehrfach} einrasten={einrasten} rahmenAktiv={rahmenModus} onRahmen={() => setRahmenModus((v) => !v)} onAbwaehlen={() => { setMehrfach([]); setRahmenModus(false) }} onVerschieben={handleGruppeVerschieben} onKopieren={handleGruppeKopieren} onEntfernen={handleGruppeEntfernen} />
           )}
-          <div className='flex flex-wrap gap-2 items-center justify-between px-4 py-2 bg-white/50 border-b border-black/5'>
+          <div className='flex flex-wrap gap-2 items-center justify-between px-4 py-1 bg-white/50 border-b border-black/5'>
             {viewMode === '3d' && (
               <span className='inline-flex flex-wrap items-center gap-1'>
                 <label className='text-xs border rounded-lg px-2 py-1 bg-white text-[#424245] cursor-pointer' title='Zeigt das echte Gebäude (GLB mit Texturen, OBJ mit MTL und Bildern, PLY-Punktwolke mit Farben oder Scan-Dateien E57/PTX/LAS/XYZ) statt des einfachen Baukörpers – nur zur Ansicht, Maße und Gerüst bleiben unverändert'>
@@ -1746,7 +1743,16 @@ export default function CADPage() {
             )}
           </div>
           <AnsichtsReiter viewMode={viewMode} ansicht2d={ansicht2d} hatModell={!!modelWithManual} onWaehle={(id) => { if (id === '3d') setViewMode('3d'); else { setAnsicht2d(id); setViewMode('2d') } }} />
-          <div className='relative h-[65vh] min-h-[320px] md:h-auto md:flex-1 p-4 md:min-h-[360px]'>
+          <div className='relative h-[65vh] min-h-[320px] md:h-auto md:flex-1 p-2 md:min-h-[316px]'>
+            {viewMode === '3d' && modelWithManual && (
+              <div role='toolbar' aria-label='Kameraansicht' className='absolute left-6 top-6 z-10 flex flex-col gap-1 rounded-md border p-1 shadow-lg' style={{ background: 'var(--cad-f0)', borderColor: 'var(--os-linie)' }}>
+                {([['perspective', 'Iso'], ['front', 'Vorne'], ['back', 'Hinten'], ['left', 'Links'], ['right', 'Rechts'], ['top', 'Oben']] as const).map(([a, name]) => (
+                  <button key={a} type='button' aria-pressed={viewAngle === a} title={`Kamera: ${name}`}
+                    onClick={() => { if (viewAngle === a) { setViewAngle(a === 'top' ? 'front' : 'top'); setTimeout(() => setViewAngle(a), 40) } else setViewAngle(a) }}
+                    className='rounded px-2 py-1 text-[11.5px] hover:bg-black/5' style={viewAngle === a ? { background: 'var(--os-akzent)', color: '#fff' } : undefined}>{name}</button>
+                ))}
+              </div>
+            )}
             {geruestVeraltet && (
               <div role='alert' className='absolute top-6 left-1/2 -translate-x-1/2 z-30 max-w-[92%] flex flex-wrap items-center gap-3 rounded-xl border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900 shadow'>
                 <span>Die Eingaben (z. B. Tür oder System) haben sich geändert – das Gerüst zeigt noch den alten Stand.</span>
@@ -1808,7 +1814,7 @@ export default function CADPage() {
               </div>
             )}
           </div>
-          <div className='px-4 py-2 bg-white/50 border-t border-black/5 flex gap-2 flex-wrap max-h-24 overflow-y-auto'>
+          <div className='shrink-0 px-4 py-2 bg-white/50 border-t border-black/5 flex gap-2 overflow-x-auto [&>button]:shrink-0 [&>button]:whitespace-nowrap'>
             {Object.entries(visibleTypes).map(([type, visible]) => (
               <button key={type} onClick={() => toggleType(type)} disabled={!model} title={!model ? 'Erst Gerüst berechnen' : undefined} className={`px-2 py-1 text-[10px] font-medium rounded-full border transition-colors ${visible ? 'bg-blue-50 border-blue-200 text-blue-700' : 'bg-gray-50 border-gray-200 text-gray-400 line-through'} ${!model ? 'opacity-40 cursor-not-allowed' : ''}`}>
                 {farbModus === 'bauteil' && viewMode === '3d' && <span aria-hidden className='inline-block w-2 h-2 rounded-full mr-1 align-middle' style={{ background: BAUTEIL_FARBEN[type] ?? '#888888' }} />}

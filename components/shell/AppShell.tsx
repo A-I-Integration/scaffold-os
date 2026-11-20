@@ -129,7 +129,7 @@ export default function AppShell({ rolle, name, onLogout, children }: { rolle: R
       )}
 
       <div className="flex min-w-0 flex-1 flex-col">
-        <header data-os-kopf className="flex h-16 shrink-0 items-center gap-3 border-b px-5" style={{ background: '#fff', borderColor: 'var(--os-linie)', paddingTop: 'env(safe-area-inset-top)' }}>
+        <header data-os-kopf className={`flex ${nurSchublade && pathname?.startsWith('/cad') ? 'h-12' : 'h-16'} shrink-0 items-center gap-3 border-b px-5`} style={{ background: '#fff', borderColor: 'var(--os-linie)', paddingTop: 'env(safe-area-inset-top)' }}>
           {nurSchublade && (
             <button type="button" onClick={() => setSchublade(true)} aria-label="Menü öffnen" className="rounded p-2 hover:bg-black/5"><Menu className="h-5 w-5" /></button>
           )}
