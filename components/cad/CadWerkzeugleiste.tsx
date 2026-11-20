@@ -1,13 +1,14 @@
 'use client'
 // Schmale Werkzeugleiste links neben der Arbeitsfläche. Enthält nur Schalter auf vorhandene Funktionen der CAD-Seite
 // (gleiche Handler wie das Band oben) – keine eigene Logik, keine eigene Datenhaltung.
-import { BoxSelect, XCircle, PlusSquare, ChevronsUp, Scissors, Layers, Ruler, LayoutGrid, Footprints, type LucideIcon } from 'lucide-react'
+import { BoxSelect, XCircle, PlusSquare, ChevronsUp, Scissors, Layers, Ruler, MoveVertical, Triangle, Square, Crosshair, LayoutGrid, Footprints, type LucideIcon } from 'lucide-react'
+import type { Messart } from '@/lib/cad/messen'
 import type { CadBandProps } from './CadBand'
 
 export type WerkzeugleisteProps = Pick<CadBandProps,
   'hatModell' | 'rahmenAktiv' | 'onRahmen' | 'auswahlAnzahl' | 'bereicheOffen' | 'bereichWerkzeug' | 'onBereichWerkzeug' |
-  'abbauAktiv' | 'onAbbau' | 'measureMode' | 'onMeasure' | 'treppePanelAktiv' | 'onTreppePanel' | 'geruestfeldPanelAktiv' | 'onGeruestfeldPanel'
-> & { onAuswahlAufheben: () => void }
+  'abbauAktiv' | 'onAbbau' | 'measureMode' | 'treppePanelAktiv' | 'onTreppePanel' | 'geruestfeldPanelAktiv' | 'onGeruestfeldPanel'
+> & { onAuswahlAufheben: () => void; messart: Messart; onMessart: (m: Messart) => void }
 
 export interface WerkzeugEintrag { id: string; gruppe: string; label: string; icon: LucideIcon; aktiv: boolean; aus: boolean; onClick: () => void; titel: string }
 
@@ -23,7 +24,13 @@ export function werkzeugEintraege(p: WerkzeugleisteProps): WerkzeugEintrag[] {
   e.push({ id: 'entfernen', gruppe: 'Gerüst', label: 'Stück entfernen', icon: Scissors, aktiv: p.bereicheOffen && p.bereichWerkzeug === 'entfernen', aus: kein, onClick: () => p.onBereichWerkzeug('entfernen'), titel: 'Ein Stück einer Seite abbauen oder aussparen' })
   e.push({ id: 'teilabbau', gruppe: 'Gerüst', label: 'Teilabbau', icon: Layers, aktiv: p.abbauAktiv, aus: kein, onClick: p.onAbbau, titel: 'Teilabbau planen' })
   if (p.onTreppePanel) e.push({ id: 'treppe', gruppe: 'Gerüst', label: 'Treppe setzen', icon: Footprints, aktiv: !!p.treppePanelAktiv, aus: kein, onClick: p.onTreppePanel, titel: 'Treppe über Seite und Feld setzen' })
-  e.push({ id: 'messen', gruppe: 'Messen', label: 'Abstand messen', icon: Ruler, aktiv: p.measureMode, aus: kein, onClick: p.onMeasure, titel: 'Zwei Punkte im 3D-Modell anklicken' })
+  const mess = (art: Messart, label: string, icon: LucideIcon, titel: string) =>
+    e.push({ id: `messen-${art}`, gruppe: 'Messen', label, icon, aktiv: p.measureMode && p.messart === art, aus: kein, onClick: () => p.onMessart(art), titel })
+  mess('abstand', 'Abstand messen', Ruler, 'Zwei Punkte im 3D-Modell anklicken')
+  mess('hoehe', 'Höhe messen', MoveVertical, 'Höhenunterschied zwischen zwei Punkten')
+  mess('winkel', 'Winkel messen', Triangle, 'Drei Punkte: Schenkel, Scheitel, Schenkel')
+  mess('flaeche', 'Fläche messen', Square, 'Mindestens drei Punkte, dann Fläche abschließen')
+  mess('koordinaten', 'Koordinaten anzeigen', Crosshair, 'Einen Punkt anklicken')
   return e
 }
 
