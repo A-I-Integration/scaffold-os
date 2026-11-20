@@ -28,6 +28,7 @@ import ObjektInfo from '@/components/cad/ObjektInfo'
 import BaugruppenBaum from '@/components/cad/BaugruppenBaum'
 import type { BereichsWerkzeug } from '@/components/cad/BereichePanel'
 import CadWerkzeugleiste, { CadWerkzeugePanel, type WerkzeugleisteProps } from '@/components/cad/CadWerkzeugleiste'
+import CadMenueleiste from '@/components/cad/CadMenueleiste'
 import GeruestBaum from '@/components/cad/GeruestBaum'
 import LayersPanel from '@/components/cad/LayersPanel'
 import CadDock from '@/components/cad/CadDock'
@@ -1565,6 +1566,24 @@ export default function CADPage() {
             {modelWithManual?.system ? `${modelWithManual.system.hersteller} ${modelWithManual.system.systemName}` : 'Kein System'} · {kopfZahlen} · {modelWithManual?.components3D.length || 0} Bauteile · {features.length} Gebäudemerkmale · <span title='3D-Prüfung: Geometrie, Seiten, Füße auf dem Gelände, Feldzahl, Fläche, Bauteilliste' style={{ fontWeight: 600, color: pruefAmpelFarbe(modelWithManual?.warnings) }}>{pruefAmpelText(modelWithManual?.warnings)}</span>
           </p>
         </div>
+        <CadMenueleiste gruppen={[
+          { titel: 'Datei', eintraege: [
+            { label: 'Projektdatei speichern', onClick: speichereProjektdatei, aus: !model },
+            { label: 'Versionen …', onClick: oeffneVersionen },
+            { label: 'Neu starten', onClick: handleNeuStarten, trenner: true },
+          ] },
+          { titel: 'Bearbeiten', eintraege: [
+            { label: 'Rückgängig', onClick: schrittZurueck, aus: !kannZurueck },
+            { label: 'Wiederholen', onClick: schrittVor, aus: !kannVor },
+            { label: 'Auswahl aufheben', onClick: () => { setMehrfach([]); setSelectedComponent(null); setRahmenModus(false) }, trenner: true },
+          ] },
+          { titel: 'Ansicht', eintraege: [
+            { label: '3D-Modell', onClick: () => setViewMode('3d'), haken: viewMode === '3d' },
+            ...(['perspective', 'front', 'back', 'left', 'right', 'top'] as const).map((a, i) => ({ label: ['Isometrie', 'Vorne', 'Hinten', 'Links', 'Rechts', 'Oben'][i], onClick: () => { setViewMode('3d'); setViewAngle(a) }, aus: !model, haken: viewMode === '3d' && viewAngle === a, trenner: i === 0 })),
+            { label: dunkel ? 'Helle Darstellung' : 'Dunkle Darstellung', onClick: dunkelUmschalten, trenner: true },
+          ] },
+          { titel: 'Ausgabe', eintraege: (rolle === 'admin' || istStatikerLogin) ? [{ label: 'Leistungsverzeichnis', onClick: model ? () => setLvOffen(true) : exportOhneModellHinweis }] : [] },
+        ]} />
         <div className='flex items-center gap-2'>
           <button type='button' onClick={dunkelUmschalten} aria-pressed={dunkel} title='Dunkle Darstellung ein/aus' className='px-3 py-1.5 text-xs font-medium rounded-lg border border-black/10 hover:bg-black/5'>{dunkel ? 'Hell' : 'Dunkel'}</button>
           <button type='button' onClick={oeffneVersionen} title='Gespeicherte Stände ansehen oder wiederherstellen' className='px-3 py-1.5 text-xs font-medium rounded-lg border border-black/10 hover:bg-black/5'>Versionen</button>
