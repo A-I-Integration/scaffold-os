@@ -282,7 +282,7 @@ export default function Umgebung3D({ model, visible }: { model: CADModel; visibl
 
   if (!visible) return null
   return (
-    <group>
+    <group userData={{ ohneRahmen: true }}>
       {/* Rasen des Grundstücks, Zufahrt, Gehwege, Bordstein, Fahrbahn */}
       <Flaeche r={U.grundstueck} y={-0.0195} farbe="#9aa88f" offset={-0.5} rau={0.98} />
       <Flaeche r={U.pave} y={-0.017} farbe="#cfcbc2" />
