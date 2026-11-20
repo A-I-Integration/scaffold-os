@@ -665,7 +665,7 @@ export default function BuildingForm({ building, systemId, onChange, onSystemCha
   }, [importWartet, onImportWartet])
   useEffect(() => {
     if (!registriereZeichner) return
-    registriereZeichner(() => setZeichnerOffen(true))
+    registriereZeichner(() => { setActiveTab('gebaeude'); setZeichnerOffen(true) })
     return () => registriereZeichner(null)
   }, [registriereZeichner])
   return (
