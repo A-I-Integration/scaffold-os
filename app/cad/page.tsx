@@ -347,8 +347,9 @@ export default function CADPage() {
   // (kein Fehler, keine Auswirkung auf Stückliste/Statik/IFC).
   const [notes, setNotes] = useState<CADNote[]>([])
   // Jede Änderung merken (nur gültige Stände, siehe lib/cad/arbeitsstand.ts)
+  const [gesichertUm, setGesichertUm] = useState<Date | null>(null)
   useEffect(() => {
-    speichereArbeitsstand({ building, systemId, notizen: notes, statikDaten: statikDaten as Record<string, unknown>, artikelWahl })
+    if (speichereArbeitsstand({ building, systemId, notizen: notes, statikDaten: statikDaten as Record<string, unknown>, artikelWahl })) setGesichertUm(new Date())
   }, [building, systemId, notes, statikDaten, artikelWahl])
   const handleAddNote = useCallback((componentId: string, componentName: string, componentType: string, text: string) => {
     setNotes((prev) => [...prev, {
@@ -1563,7 +1564,7 @@ export default function CADPage() {
         <div>
           <h1 className='text-lg font-semibold text-[#1d1d1f]'>Gerüstbau-CAD{(kontoProjekt?.name || aufmassProjektName) ? <span className='ml-3 text-[13px] font-normal text-[#86868b]'>Projekt: {kontoProjekt?.name || aufmassProjektName}</span> : null}</h1>
           <p className='text-xs text-[#86868b]'>
-            {modelWithManual?.system ? `${modelWithManual.system.hersteller} ${modelWithManual.system.systemName}` : 'Kein System'} · {kopfZahlen} · {modelWithManual?.components3D.length || 0} Bauteile · {features.length} Gebäudemerkmale · <span title='3D-Prüfung: Geometrie, Seiten, Füße auf dem Gelände, Feldzahl, Fläche, Bauteilliste' style={{ fontWeight: 600, color: pruefAmpelFarbe(modelWithManual?.warnings) }}>{pruefAmpelText(modelWithManual?.warnings)}</span>
+            {modelWithManual?.system ? `${modelWithManual.system.hersteller} ${modelWithManual.system.systemName}` : 'Kein System'} · {kopfZahlen} · {modelWithManual?.components3D.length || 0} Bauteile · {features.length} Gebäudemerkmale · <span title='3D-Prüfung: Geometrie, Seiten, Füße auf dem Gelände, Feldzahl, Fläche, Bauteilliste' style={{ fontWeight: 600, color: pruefAmpelFarbe(modelWithManual?.warnings) }}>{pruefAmpelText(modelWithManual?.warnings)}</span>{gesichertUm ? <span title='Die Eingaben (Maße, System, Notizen, Statik, Artikelwahl) werden bei jeder Änderung in diesem Browser gesichert. Einzeln verschobene oder ersetzte Bauteile sind darin nicht enthalten – dafür „Speichern“ nutzen.' className='ml-2 text-[#86868b]'> · Eingaben gesichert {gesichertUm.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })}</span> : null}
           </p>
         </div>
         <CadMenueleiste gruppen={[

@@ -36,10 +36,10 @@ export function pruefeArbeitsstand(roh: string | null): Arbeitsstand | null {
   } catch { return null }
 }
 
-/** Speichert nur gültige Stände (Länge, Breite, Höhe > 0) – halbfertige Eingaben überschreiben nichts. */
-export function speichereArbeitsstand(a: Arbeitsstand): void {
-  if (!(a.building.lengthM > 0) || !(a.building.widthM > 0) || !(a.building.heightM > 0)) return
-  try { localStorage.setItem(ARBEITSSTAND_KEY, JSON.stringify(a)) } catch { /* Speicher voll/gesperrt: dann eben ohne Merken */ }
+/** Speichert nur gültige Stände (Länge, Breite, Höhe > 0) – halbfertige Eingaben überschreiben nichts. Rückgabe: ob wirklich gespeichert wurde. */
+export function speichereArbeitsstand(a: Arbeitsstand): boolean {
+  if (!(a.building.lengthM > 0) || !(a.building.widthM > 0) || !(a.building.heightM > 0)) return false
+  try { localStorage.setItem(ARBEITSSTAND_KEY, JSON.stringify(a)); return true } catch { return false /* Speicher voll/gesperrt: dann eben ohne Merken */ }
 }
 
 export function ladeArbeitsstand(): Arbeitsstand | null {
