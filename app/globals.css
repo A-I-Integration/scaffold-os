@@ -352,3 +352,9 @@ body {
 .cad-dunkel .text-\[\#86868b\], .cad-dunkel .text-\[\#6e6e73\], .cad-dunkel .text-gray-500, .cad-dunkel .text-gray-400 { color: var(--cd-leise) !important; }
 .cad-dunkel [class*="border-"] { border-color: var(--cd-linie); }
 .cad-dunkel input, .cad-dunkel select, .cad-dunkel textarea { background-color: var(--cd-panel2); color: var(--cd-text); border-color: var(--cd-linie); }
+.cad-dunkel button:not([class*="text-"]) { color: var(--cd-text); }
+.cad-dunkel [style*="background:#fff;"], .cad-dunkel [style$="background:#fff"], .cad-dunkel [style*="background: #fff;"] { background-color: var(--cd-panel) !important; }
+.cad-dunkel .bg-white\/50 { background-color: transparent !important; }
+.cad-dunkel [style*="#f6f7f9"] { background-color: var(--cd-panel2) !important; }
+.cad-dunkel [style*="#fff3ea"] { background-color: #3a2a1c !important; }
+.cad-dunkel button:not([class*="bg-"]):not([style*="background"]) { background-color: transparent; }

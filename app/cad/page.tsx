@@ -1586,7 +1586,7 @@ export default function CADPage() {
         <div className='flex-1 flex flex-col min-w-0'>
           <div className='flex justify-end px-2 pt-1'>
             <button type='button' onClick={dunkelUmschalten} aria-pressed={dunkel} title='Dunkle Darstellung ein/aus'
-              className='text-[11px] px-2 py-0.5 rounded border border-[#d2d2d7] text-[#424245] hover:bg-[#f5f5f7]'>{dunkel ? 'Hell' : 'Dunkel'}</button>
+              className='text-[11px] px-2 py-0.5 rounded border border-[#d2d2d7] text-[#424245] bg-white hover:bg-[#f5f5f7]'>{dunkel ? 'Hell' : 'Dunkel'}</button>
           </div>
           <SystemLeiste systemId={systemId} onSystemChange={aendereSystem} gewaehlteArtikel={Object.keys(artikelWahl).length} />
           <CadBand
