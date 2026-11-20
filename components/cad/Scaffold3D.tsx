@@ -16,7 +16,7 @@ import { idsImRahmen, istEchterRahmen } from '@/lib/cad/mehrfachauswahl'
 import { useMemo, useState, useRef, useEffect, useCallback, memo, createContext, useContext } from 'react'
 import { Canvas, useThree, useFrame, type ThreeEvent } from '@react-three/fiber'
 import { FUSSPLATTE_AUFSTANDSVERSATZ_M, hangDaten, baueHangFlaeche } from '@/lib/cad/hang-geometrie'
-import { OrbitControls, TransformControls, Grid, Text, Sky, AdaptiveDpr, AdaptiveEvents, ContactShadows, Edges, Html } from '@react-three/drei'
+import { OrbitControls, TransformControls, Grid, Text, Sky, AdaptiveDpr, AdaptiveEvents, ContactShadows, Edges, Html, Line } from '@react-three/drei'
 import { lazy, Suspense } from 'react'
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js'
 import * as THREE from 'three'
@@ -35,6 +35,7 @@ import type { CADNote } from '@/types/cad-notes'
 import { passendeArtikel, artikelLabel, katalogListeFuerSystem } from '@/lib/cad/katalog-zuordnung'
 import { baueLochscheibe, baueFussspindel, baueUniRahmen, baueRiegel } from '@/lib/cad/mj-geometrie'
 import type { CustomDimension } from '@/types/cad-dimensions'
+import type { MessErgebnis } from '@/lib/cad/messen'
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
 import { DRACOLoader } from 'three/examples/jsm/loaders/DRACOLoader.js'
 import type { Aussehen } from '@/lib/cad/modell-aussehen'
@@ -86,6 +87,8 @@ interface Props {
   measureMode?: boolean
   onMeasurePoint?: (point: [number, number, number], componentName?: string) => void
   customDimensions?: CustomDimension[]
+  /** Fertige Messungen (Höhe, Winkel, Fläche); Abstände laufen über customDimensions */
+  messErgebnisse?: MessErgebnis[]
   pendingMeasurePoint?: [number, number, number] | null
   // NEU (Umgebung, Schritt 1): Bäume um das Gebäude. Optional, rein additiv;
   // ohne diese Prop bleibt die Szene exakt wie vorher.
@@ -2088,6 +2091,29 @@ function CustomDimensionLines({
   )
 }
 
+/** Zeichnet fertige Messungen (Höhe, Winkel, Fläche, Koordinaten) als Linienzug mit Punkten und Ergebnistext im Modell. */
+function MessErgebnisLinien({ ergebnisse }: { ergebnisse?: MessErgebnis[] }) {
+  const FARBE = '#f59e0b'
+  return (
+    <group>
+      {(ergebnisse || []).filter((e) => e.art !== 'abstand').map((e) => {
+        const pts = e.punkte
+        const linie = e.art === 'flaeche' && pts.length >= 3 ? [...pts, pts[0]] : e.art === 'koordinaten' ? [] : pts
+        const mitte = pts.reduce((a, p) => [a[0] + p[0] / pts.length, a[1] + p[1] / pts.length, a[2] + p[2] / pts.length], [0, 0, 0])
+        return (
+          <group key={e.id}>
+            {linie.length >= 2 && <Line points={linie} color={FARBE} lineWidth={2.5} depthTest={false} renderOrder={20} />}
+            {pts.map((p, i) => (
+              <mesh key={i} position={p}><sphereGeometry args={[0.08, 12, 12]} /><meshStandardMaterial color={FARBE} /></mesh>
+            ))}
+            <Text position={[mitte[0], mitte[1] + 0.5, mitte[2]]} fontSize={0.35} color={FARBE} anchorX='center' outlineWidth={0.02} outlineColor='#ffffff'>{e.text}</Text>
+          </group>
+        )
+      })}
+    </group>
+  )
+}
+
 // ═══════════════════════════════════════════════════════════
 // KAMERA-CONTROLLER (FIX 3: useEffect statt useMemo)
 // ═══════════════════════════════════════════════════════════
@@ -2474,6 +2500,7 @@ function Scene({
   measureMode,
   onMeasurePoint,
   customDimensions,
+  messErgebnisse,
   pendingMeasurePoint,
   placementType,
   onPlacementClick,
@@ -2559,6 +2586,7 @@ function Scene({
         <DimensionLines model={model} visible={showDimensions} />
       </group>
       <CustomDimensionLines dimensions={customDimensions} pendingPoint={pendingMeasurePoint} />
+      <MessErgebnisLinien ergebnisse={messErgebnisse} />
       {/* Boden. Präsentation: nur der Schattenwurf auf dem weißen Hintergrund (eine beleuchtete weiße Platte wird
           grau und hebt sich mit harter Kante vom weißen Hintergrund ab). Sonst: großer Boden, der am Horizont
           über den Nebel in die Himmelsfarbe übergeht statt an einer sichtbaren Kante zu enden. */}
@@ -2603,6 +2631,7 @@ function Scaffold3D({
   measureMode,
   onMeasurePoint,
   customDimensions,
+  messErgebnisse,
   pendingMeasurePoint,
   showEnvironment,
   hoheQualitaet,
@@ -2723,6 +2752,7 @@ function Scaffold3D({
             measureMode={measureMode}
             onMeasurePoint={onMeasurePoint}
             customDimensions={customDimensions}
+            messErgebnisse={messErgebnisse}
             pendingMeasurePoint={pendingMeasurePoint}
             placementType={placementType}
             onPlacementClick={onPlacementClick}
