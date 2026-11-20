@@ -1509,7 +1509,7 @@ export default function CADPage() {
   useEffect(() => { if (!measureMode) messPunkteLeeren() }, [measureMode, messPunkteLeeren])
   const waehleBereichWerkzeug = (w: BereichsWerkzeug) => { if (w === 'erweitern' && kantenImModell.length > 0) { window.alert('Felder anhängen gibt es nur bei Rechteck-Gebäuden. Im Umriss-Modus bitte „Aufstocken“ oder „Stück entfernen“ nutzen.'); return } setBereichEin((e) => ({ ...e, werkzeug: w })); setBereicheOffen(true); setAbbauAktiv(false); setViewMode('3d') }
   return (
-    <div className={`min-h-full md:h-full md:overflow-hidden flex flex-col bg-[#fbfbfd]${dunkel ? ' cad-dunkel' : ''}`}>
+    <div className={`min-h-full md:h-full md:overflow-clip flex flex-col bg-[#fbfbfd]${dunkel ? ' cad-dunkel' : ''}`}>
       {oeffnungen && (
         <OeffnungenFenster ergebnis={oeffnungen} anzahlBestehendeTueren={building.tueren?.length ?? 0}
           onSchliessen={() => setOeffnungen(null)}
@@ -1564,7 +1564,7 @@ export default function CADPage() {
           </button>
         </div>
       </div>
-      <div className='flex-1 flex flex-col md:flex-row md:overflow-hidden'>
+      <div className='flex-1 flex flex-col md:flex-row md:overflow-clip'>
         <div className='w-full md:w-64 2xl:w-80 md:shrink-0 md:overflow-y-auto'>
           {aufmassHinweise.length > 0 && (
             <div className='mb-3 rounded-xl border border-[#0071e3]/30 bg-[#0071e3]/5 p-3 text-xs text-[#1d1d1f]'>
