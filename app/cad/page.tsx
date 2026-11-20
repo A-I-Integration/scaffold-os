@@ -1509,7 +1509,7 @@ export default function CADPage() {
   useEffect(() => { if (!measureMode) messPunkteLeeren() }, [measureMode, messPunkteLeeren])
   const waehleBereichWerkzeug = (w: BereichsWerkzeug) => { if (w === 'erweitern' && kantenImModell.length > 0) { window.alert('Felder anhängen gibt es nur bei Rechteck-Gebäuden. Im Umriss-Modus bitte „Aufstocken“ oder „Stück entfernen“ nutzen.'); return } setBereichEin((e) => ({ ...e, werkzeug: w })); setBereicheOffen(true); setAbbauAktiv(false); setViewMode('3d') }
   return (
-    <div className={`min-h-screen md:h-screen flex flex-col bg-[#fbfbfd]${dunkel ? ' cad-dunkel' : ''}`}>
+    <div className={`min-h-full md:h-full md:overflow-hidden flex flex-col bg-[#fbfbfd]${dunkel ? ' cad-dunkel' : ''}`}>
       {oeffnungen && (
         <OeffnungenFenster ergebnis={oeffnungen} anzahlBestehendeTueren={building.tueren?.length ?? 0}
           onSchliessen={() => setOeffnungen(null)}
@@ -1583,7 +1583,7 @@ export default function CADPage() {
           treppePanelAktiv={treppePanel} onTreppePanel={model ? () => setTreppePanel((v) => !v) : undefined}
           geruestfeldPanelAktiv={feldPanel} onGeruestfeldPanel={model ? () => setFeldPanel((v) => !v) : undefined}
           onAuswahlAufheben={() => { setMehrfach([]); setSelectedComponent(null); setRahmenModus(false) }} />
-        <div className='flex-1 flex flex-col min-w-0'>
+        <div className='flex-1 flex flex-col min-w-0 md:overflow-y-auto'>
           <div className='flex justify-end px-2 pt-1'>
             <button type='button' onClick={dunkelUmschalten} aria-pressed={dunkel} title='Dunkle Darstellung ein/aus'
               className='text-[11px] px-2 py-0.5 rounded border border-[#d2d2d7] text-[#424245] bg-white hover:bg-[#f5f5f7]'>{dunkel ? 'Hell' : 'Dunkel'}</button>
@@ -1747,7 +1747,7 @@ export default function CADPage() {
               </span>
             )}
           </div>
-          <div className='relative h-[65vh] min-h-[320px] md:h-auto md:flex-1 p-4 md:min-h-0'>
+          <div className='relative h-[65vh] min-h-[320px] md:h-auto md:flex-1 p-4 md:min-h-[360px]'>
             {geruestVeraltet && (
               <div role='alert' className='absolute top-6 left-1/2 -translate-x-1/2 z-30 max-w-[92%] flex flex-wrap items-center gap-3 rounded-xl border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900 shadow'>
                 <span>Die Eingaben (z. B. Tür oder System) haben sich geändert – das Gerüst zeigt noch den alten Stand.</span>
