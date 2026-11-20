@@ -2260,7 +2260,17 @@ function RahmenAuswahl({ model, visibleTypes, onRahmen }: { model: CADModel; vis
   return null
 }
 
-function AutoFraming({ targetRef, modelKey }: { targetRef: { current: THREE.Group | null }; modelKey: string }) {
+/** Rahmen aus den Bauteilpositionen des Modells (plus Rand). Unabhängig davon, was sonst noch in der Szene liegt. */
+export function modellRahmen(teile: { position: [number, number, number] }[], rand = 1.5): THREE.Box3 | null {
+  if (teile.length === 0) return null
+  const b = new THREE.Box3()
+  for (const t of teile) b.expandByPoint(new THREE.Vector3(t.position[0], t.position[1], t.position[2]))
+  b.min.addScalar(-rand); b.max.addScalar(rand)
+  b.min.y = Math.min(b.min.y, 0)
+  return b
+}
+
+function AutoFraming({ targetRef, modelKey, modellBox }: { targetRef: { current: THREE.Group | null }; modelKey: string; modellBox?: THREE.Box3 | null }) {
   const camera = useThree((s) => s.camera)
   const controls = useThree((s) => s.controls) as unknown as { target: THREE.Vector3; update: () => void } | null
   const invalidate = useThree((s) => s.invalidate)
@@ -2268,7 +2278,7 @@ function AutoFraming({ targetRef, modelKey }: { targetRef: { current: THREE.Grou
     const id = requestAnimationFrame(() => {
       const target = targetRef.current
       if (!target) return
-      const box = inhaltBox(target)
+      const box = modellBox && !modellBox.isEmpty() ? modellBox : inhaltBox(target)
       if (box.isEmpty()) return
       const sphere = box.getBoundingSphere(new THREE.Sphere())
       const center = sphere.center
@@ -2286,6 +2296,7 @@ function AutoFraming({ targetRef, modelKey }: { targetRef: { current: THREE.Grou
       invalidate()
     })
     return () => cancelAnimationFrame(id)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [modelKey, targetRef, camera, controls, invalidate])
   return null
 }
@@ -2664,6 +2675,7 @@ function Scaffold3D({
   if (!ziehId) eingefroren.current = null
   else if (eingefroren.current === null) eingefroren.current = modelKeyLive
   const modelKey = ziehId && eingefroren.current !== null ? eingefroren.current : modelKeyLive
+  const modellBox = useMemo(() => modellRahmen(model.components3D.filter((c) => !c.id.startsWith('manual-'))), [model.components3D])
   const cameraConfig = useMemo(
     () => ({
       position: [cameraDistance, cameraDistance * 0.6, cameraDistance] as [number, number, number],
@@ -2730,7 +2742,7 @@ function Scaffold3D({
             <Nachbearbeitung3D />
           </Suspense>
         )}
-        <AutoFraming targetRef={contentRef} modelKey={modelKey} />
+        <AutoFraming targetRef={contentRef} modelKey={modelKey} modellBox={modellBox} />
         <GroundingShadow targetRef={contentRef} modelKey={modelKey} />
         {!(showEnvironment && !bridgeMode) && (
           <Grid
