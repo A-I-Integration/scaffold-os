@@ -4,7 +4,7 @@
 //  Bearbeiten · Bauteile · Anzeige · Ausgabe.
 // Das Band enthält nur Schalter; alle Funktionen und ihr Zustand liegen in der CAD-Seite.
 
-import { useState, type ReactNode } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import {
   Scissors, BoxSelect, PlusSquare, ChevronsUp, Layers, Undo2, Redo2, RotateCcw, Ruler, Box, Grid2x2, Eye, Home, Building2, Leaf, Sparkles,
   FileText, FileDown, Printer, Save, Package, CalendarClock, Download, Cloud, Camera, Minus, Spline, Circle, Trash2, type LucideIcon,
@@ -116,6 +116,9 @@ function Knopf({ icon: Icon, label, onClick, aktiv, aus, titel, glyph }: { icon?
 
 export default function CadBand(p: CadBandProps) {
   const [reiter, setReiter] = useState<Reiter>('bearbeiten')
+  const [zu, setZu] = useState(false)
+  useEffect(() => { try { setZu(localStorage.getItem('cad-band-zu') === '1') } catch { /* ohne Speicher: offen */ } }, [])
+  const zuSetzen = (v: boolean) => { setZu(v); try { localStorage.setItem('cad-band-zu', v ? '1' : '0') } catch { /* egal */ } }
   const aus = !p.hatModell
   const bereich = (w: BereichsWerkzeug) => p.onBereichWerkzeug(w)
 
@@ -123,11 +126,12 @@ export default function CadBand(p: CadBandProps) {
     <div className='border-b' style={{ background: 'var(--cad-f0)', borderColor: 'var(--os-linie)' }} data-testid='cad-band'>
       <div className='flex items-end gap-0.5 px-3 pt-1.5' style={{ background: 'var(--cad-f1)', borderBottom: '1px solid var(--os-linie)' }}>
         {REITER.map(([k, name]) => (
-          <button key={k} type='button' onClick={() => setReiter(k)}
+          <button key={k} type='button' onClick={() => { if (reiter === k) zuSetzen(!zu); else { setReiter(k); if (zu) zuSetzen(false) } }} aria-expanded={!zu && reiter === k}
             className='whitespace-nowrap rounded-t border border-b-0 px-2.5 py-1.5 text-[13px]'
             style={{ background: reiter === k ? 'var(--cad-f0)' : 'transparent', borderColor: reiter === k ? 'var(--os-linie)' : 'transparent', marginBottom: -1, fontWeight: reiter === k ? 600 : 400 }}>{name}</button>
         ))}
         <div className='ml-auto flex items-center gap-1 pb-1'>
+          <button type='button' onClick={() => zuSetzen(!zu)} aria-expanded={!zu} title='Band ein- oder ausklappen (Klick auf den aktiven Reiter geht auch)' className='rounded px-2 py-1 text-[12px] hover:bg-black/5'>{zu ? 'Band ausklappen ⌄' : 'Band einklappen ⌃'}</button>
           <div className='flex rounded border text-[13px]' style={{ borderColor: 'var(--os-linie)' }} role='group' aria-label='Darstellung'>
             {(['3d', '2d'] as const).map((m) => (
               <button key={m} type='button' onClick={() => p.onViewMode(m)} className='px-3 py-1' style={p.viewMode === m ? { background: 'var(--os-nav)', color: '#fff' } : undefined}>{m.toUpperCase()}</button>
@@ -136,7 +140,7 @@ export default function CadBand(p: CadBandProps) {
         </div>
       </div>
 
-      <div className='flex min-h-[104px] flex-nowrap overflow-x-auto overflow-y-hidden'>
+      <div className={`${zu ? 'hidden' : 'flex'} min-h-[104px] flex-nowrap overflow-x-auto overflow-y-hidden`}>
         {reiter === 'zeichnen' && (
           <>
             <Gruppe name='Zeichnen im Grundriss'>
