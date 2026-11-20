@@ -389,3 +389,5 @@ body {
 /* Dock-Tabellen: eigene Farben statt globaler Tabellenfläche */
 .cad-dock table th, .cad-dock table tr, .cad-dock table td { background: transparent !important; color: inherit !important; }
 .cad-dock table th { color: var(--os-text-leise) !important; }
+.cad-dunkel .bg-\[\#eef3fe\], .cad-dunkel .bg-\[\#e8f1fc\], .cad-dunkel .bg-\[\#f1f6fa\], .cad-dunkel .bg-\[\#f4f1fa\], .cad-dunkel .bg-\[\#faf6f1\], .cad-dunkel .bg-\[\#f8fafc\] { background-color: var(--cd-panel2) !important; }
+.cad-dunkel .bg-\[\#fff4ed\], .cad-dunkel .bg-\[\#fff4ec\] { background-color: #3a2a1c !important; }

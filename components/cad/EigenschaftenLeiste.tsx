@@ -50,7 +50,7 @@ export default function EigenschaftenLeiste({ baugruppeAnzahl, onBaugruppe, onMa
     ...(manuell ? [['Herkunft', 'von Hand gesetzt']] as [string, string][] : veraendert ? [['Herkunft', c.id.startsWith('kopie-') ? 'Kopie' : 'von Hand verändert']] as [string, string][] : []),
   ]
   return (
-    <aside className='flex max-h-[42vh] flex-wrap items-start gap-x-5 gap-y-2 overflow-y-auto border-b bg-white px-4 py-2' style={{ borderColor: 'var(--os-linie)' }} aria-label='Eigenschaften' data-testid='eigenschaften-leiste'>
+    <aside className='flex flex-wrap items-start gap-x-5 gap-y-2 border-b bg-white px-4 py-2' style={{ borderColor: 'var(--os-linie)' }} aria-label='Eigenschaften' data-testid='eigenschaften-leiste'>
       <div className='flex w-full items-center justify-between'>
         <b className='text-[14px]'>Eigenschaften</b>
         <button type='button' onClick={onZu} aria-label='Schließen' className='rounded px-1.5 hover:bg-black/5'>✕</button>
@@ -67,7 +67,7 @@ export default function EigenschaftenLeiste({ baugruppeAnzahl, onBaugruppe, onMa
           <div className='grid grid-cols-2 gap-1' role='group' aria-label='Werkzeug am Bauteil'>
             {([['verschieben', 'Verschieben'], ['drehen', 'Drehen']] as const).map(([k, name]) => (
               <button key={k} type='button' aria-pressed={griffModus === k} onClick={() => onGriffModus?.(k)} className='rounded border px-2 py-1.5 text-[12.5px]'
-                style={{ borderColor: griffModus === k ? 'var(--os-akzent)' : 'var(--os-linie)', background: griffModus === k ? 'var(--os-akzent)' : 'white', color: griffModus === k ? '#171b20' : undefined, fontWeight: griffModus === k ? 600 : 400 }}>{name}</button>
+                style={{ borderColor: griffModus === k ? 'var(--os-akzent)' : 'var(--os-linie)', background: griffModus === k ? 'var(--os-akzent)' : 'var(--cad-f0)', color: griffModus === k ? '#171b20' : undefined, fontWeight: griffModus === k ? 600 : 400 }}>{name}</button>
             ))}
           </div>
           <label className='flex items-center gap-2 text-[12.5px]'><input type='checkbox' checked={einrasten ?? true} onChange={(e) => onEinrasten?.(e.target.checked)} />Einrasten (5 cm / 15°)</label>
