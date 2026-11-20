@@ -15,6 +15,9 @@
   --os-linie: #d5dae0;
   --os-text-leise: #5d6873;
   --os-akzent: #f07832;
+  --cad-f0: #fff;
+  --cad-f1: #f6f7f9;
+  --cad-akz: #fff3ea;
 }
 
 @theme inline {
@@ -343,7 +346,7 @@ body {
 .os-shell.h-dvh { height: calc(100dvh / var(--ui-zoom)); }
 
 /* CAD: dunkle industrielle Darstellung (zuschaltbar, nur Farben) */
-.cad-dunkel { --cd-bg: #101216; --cd-panel: #171b20; --cd-panel2: #1e242b; --cd-linie: #303944; --cd-text: #e6e9ec; --cd-leise: #9aa5b1; background: var(--cd-bg) !important; color: var(--cd-text); }
+.cad-dunkel { --os-linie: #303944; --os-text-leise: #9aa5b1; --cad-f0: #171b20; --cad-f1: #1e242b; --cad-akz: #3a2a1c; --cd-bg: #101216; --cd-panel: #171b20; --cd-panel2: #1e242b; --cd-linie: #303944; --cd-text: #e6e9ec; --cd-leise: #9aa5b1; background: var(--cd-bg) !important; color: var(--cd-text); }
 .cad-dunkel .bg-white, .cad-dunkel .bg-\[\#fbfbfd\], .cad-dunkel .bg-\[\#fafafa\], .cad-dunkel .bg-gray-50 { background-color: var(--cd-panel) !important; }
 .cad-dunkel .bg-\[\#f5f5f7\], .cad-dunkel .bg-\[\#f0f7ff\] { background-color: var(--cd-panel2) !important; }
 .cad-dunkel .bg-\[\#fff7ed\], .cad-dunkel .bg-\[\#fff3ea\] { background-color: #2a1f17 !important; }
@@ -358,3 +361,21 @@ body {
 .cad-dunkel [style*="#f6f7f9"] { background-color: var(--cd-panel2) !important; }
 .cad-dunkel [style*="#fff3ea"] { background-color: #3a2a1c !important; }
 .cad-dunkel button:not([class*="bg-"]):not([style*="background"]) { background-color: transparent; }
+
+/* CAD dunkel: Kopfzeile der Shell mit anpassen */
+.os-shell:has(.cad-dunkel) [data-os-kopf] { background: #171b20 !important; border-color: #303944 !important; color: #e6e9ec; }
+.os-shell:has(.cad-dunkel) [data-os-kopf] button { background: #1e242b; }
+.os-shell:has(.cad-dunkel) main { background: #101216; }
+
+/* CAD dunkel: Hinweiskarten in Pastellfarben */
+.cad-dunkel .bg-blue-50, .cad-dunkel .bg-blue-100 { background-color: #14222f !important; }
+.cad-dunkel .bg-red-50, .cad-dunkel .bg-red-100, .cad-dunkel .bg-rose-50 { background-color: #2c1a1c !important; }
+.cad-dunkel .bg-amber-50, .cad-dunkel .bg-yellow-50, .cad-dunkel .bg-orange-50 { background-color: #2a2418 !important; }
+.cad-dunkel .bg-green-50, .cad-dunkel .bg-emerald-50 { background-color: #14261c !important; }
+.cad-dunkel .border-blue-200, .cad-dunkel .border-red-200, .cad-dunkel .border-amber-200, .cad-dunkel .border-green-200 { border-color: #3a4551 !important; }
+.cad-dunkel .text-blue-800, .cad-dunkel .text-blue-700, .cad-dunkel .text-blue-600 { color: #8fc2ff !important; }
+.cad-dunkel .text-red-800, .cad-dunkel .text-red-700, .cad-dunkel .text-red-600 { color: #ff9a9a !important; }
+.cad-dunkel .text-amber-800, .cad-dunkel .text-amber-700, .cad-dunkel .text-yellow-800 { color: #f2c879 !important; }
+.cad-dunkel .text-green-800, .cad-dunkel .text-green-700, .cad-dunkel .text-emerald-700 { color: #7fdc9e !important; }
+.cad-dunkel input::placeholder, .cad-dunkel textarea::placeholder { color: #6f7b88; }
+.cad-dunkel input:not([type="checkbox"]):not([type="radio"]):not([type="range"]), .cad-dunkel select, .cad-dunkel textarea { background-color: #1e242b !important; color: #e6e9ec !important; border-color: #303944 !important; }

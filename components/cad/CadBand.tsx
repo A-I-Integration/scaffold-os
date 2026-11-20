@@ -107,7 +107,7 @@ function Knopf({ icon: Icon, label, onClick, aktiv, aus, titel, glyph }: { icon?
   return (
     <button type='button' onClick={onClick} disabled={aus} title={titel ?? label}
       className={`flex w-[72px] flex-col items-center gap-1 rounded px-0.5 py-1.5 text-center text-[12px] leading-tight transition-colors disabled:pointer-events-none disabled:opacity-40 ${aktiv ? 'font-semibold' : 'hover:bg-black/[0.05]'}`}
-      style={aktiv ? { background: '#fff3ea', outline: '1px solid var(--os-akzent)' } : undefined}>
+      style={aktiv ? { background: 'var(--cad-akz)', outline: '1px solid var(--os-akzent)' } : undefined}>
       <span className='flex h-7 items-center justify-center text-[22px] leading-none'>{Icon ? <Icon className='h-[22px] w-[22px]' strokeWidth={1.7} /> : glyph}</span>
       <span>{label}</span>
     </button>
@@ -120,12 +120,12 @@ export default function CadBand(p: CadBandProps) {
   const bereich = (w: BereichsWerkzeug) => p.onBereichWerkzeug(w)
 
   return (
-    <div className='border-b bg-white' style={{ borderColor: 'var(--os-linie)' }} data-testid='cad-band'>
-      <div className='flex items-end gap-0.5 px-3 pt-1.5' style={{ background: '#f6f7f9', borderBottom: '1px solid var(--os-linie)' }}>
+    <div className='border-b' style={{ background: 'var(--cad-f0)', borderColor: 'var(--os-linie)' }} data-testid='cad-band'>
+      <div className='flex items-end gap-0.5 px-3 pt-1.5' style={{ background: 'var(--cad-f1)', borderBottom: '1px solid var(--os-linie)' }}>
         {REITER.map(([k, name]) => (
           <button key={k} type='button' onClick={() => setReiter(k)}
             className='whitespace-nowrap rounded-t border border-b-0 px-2.5 py-1.5 text-[13px]'
-            style={{ background: reiter === k ? '#fff' : 'transparent', borderColor: reiter === k ? 'var(--os-linie)' : 'transparent', marginBottom: -1, fontWeight: reiter === k ? 600 : 400 }}>{name}</button>
+            style={{ background: reiter === k ? 'var(--cad-f0)' : 'transparent', borderColor: reiter === k ? 'var(--os-linie)' : 'transparent', marginBottom: -1, fontWeight: reiter === k ? 600 : 400 }}>{name}</button>
         ))}
         <div className='ml-auto flex items-center gap-1 pb-1'>
           <div className='flex rounded border text-[13px]' style={{ borderColor: 'var(--os-linie)' }} role='group' aria-label='Darstellung'>
@@ -217,7 +217,7 @@ export default function CadBand(p: CadBandProps) {
                 {BAUTEIL_ARTEN.map(([t, name]) => (
                   <button key={t} type='button' disabled={aus} onClick={() => p.onToggleType(t)} aria-pressed={p.visibleTypes[t] !== false}
                     className={`rounded border px-2 py-1 text-[12.5px] disabled:opacity-40 ${p.visibleTypes[t] !== false ? 'font-medium' : 'line-through opacity-60'}`}
-                    style={{ borderColor: 'var(--os-linie)', background: p.visibleTypes[t] !== false ? '#fff3ea' : '#fff' }}>{name}</button>
+                    style={{ borderColor: 'var(--os-linie)', background: p.visibleTypes[t] !== false ? 'var(--cad-akz)' : 'var(--cad-f0)' }}>{name}</button>
                 ))}
               </div>
             </Gruppe>
