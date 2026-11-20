@@ -28,6 +28,7 @@ import ObjektInfo from '@/components/cad/ObjektInfo'
 import BaugruppenBaum from '@/components/cad/BaugruppenBaum'
 import type { BereichsWerkzeug } from '@/components/cad/BereichePanel'
 import CadWerkzeugleiste, { CadWerkzeugePanel, type WerkzeugleisteProps } from '@/components/cad/CadWerkzeugleiste'
+import LayersPanel from '@/components/cad/LayersPanel'
 import CadDock from '@/components/cad/CadDock'
 import AnsichtsReiter, { type Ansicht2D } from '@/components/cad/AnsichtsReiter'
 import CadStatusleiste, { statusEintraege } from '@/components/cad/CadStatusleiste'
@@ -1588,7 +1589,8 @@ export default function CADPage() {
             </div>
           )}
           <BuildingForm registriereZeichner={registriereZeichner} onImportWartet={setImportWartet} building={building} systemId={systemId} onChange={(b) => { setAutoGenerate(true); setBuilding(b); }} onSystemChange={aendereSystem} onGenerate={() => { setAutoGenerate(true); generate(); }} onLadeProjektdatei={ladeProjektdatei} onAussehen={(a, h, v) => { setAussehen(a); setAussehenEin(true); setAussehenEinheit('m'); setAussehenOben('y'); setAussehenAnker(null); setAussehenVersatz(v ?? { x: 0, z: 0, grad: 0 }); setAussehenHinweis(h ?? '') }} onModellUebernehmen={(b) => { setAutoGenerate(true); setBuilding(b); setModel(null) }} registrierePlanUpload={registrierePlanUpload} warnings={allWarnings}
-            werkzeuge={<CadWerkzeugePanel {...werkzeugProps} bauteilTyp={model ? placementType : startBauteil} onBauteilTyp={(t) => (model ? handleSelectPlacementType(t) : setStartBauteil(t))} onUmriss={() => zeichnerOeffnenRef.current?.()} />}  />
+            werkzeuge={<CadWerkzeugePanel {...werkzeugProps} bauteilTyp={model ? placementType : startBauteil} onBauteilTyp={(t) => (model ? handleSelectPlacementType(t) : setStartBauteil(t))} onUmriss={() => zeichnerOeffnenRef.current?.()}
+              ebenen={layerState ? <LayersPanel layerState={layerState} onToggleSide={handleToggleSide} onToggleLevel={handleToggleLevel} onShowAll={handleShowAllLayers} onHideAll={handleHideAllLayers} /> : null} />}  />
         </div>
         <div className='flex-1 flex min-w-0 min-h-0'>
         <CadWerkzeugleiste {...werkzeugProps} />

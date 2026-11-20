@@ -1,5 +1,5 @@
 'use client'
-import { useState } from 'react'
+import { useState, type ReactNode } from 'react'
 // Schmale Werkzeugleiste links neben der Arbeitsfläche. Enthält nur Schalter auf vorhandene Funktionen der CAD-Seite
 // (gleiche Handler wie das Band oben) – keine eigene Logik, keine eigene Datenhaltung.
 import { BoxSelect, XCircle, PlusSquare, ChevronsUp, Scissors, Layers, Ruler, MoveVertical, Triangle, Square, Crosshair, LayoutGrid, Footprints, type LucideIcon } from 'lucide-react'
@@ -57,7 +57,7 @@ export default function CadWerkzeugleiste(p: WerkzeugleisteProps) {
 }
 
 /** Beschriftetes Werkzeug-Panel (linke Spalte): gleiche Einträge wie die Icon-Leiste, Gruppen einklappbar, aktives Werkzeug orange. */
-export type PanelZusatz = { bauteilTyp?: string | null; onBauteilTyp?: (t: string | null) => void; onUmriss?: () => void }
+export type PanelZusatz = { bauteilTyp?: string | null; onBauteilTyp?: (t: string | null) => void; onUmriss?: () => void; ebenen?: ReactNode }
 export function CadWerkzeugePanel(p: WerkzeugleisteProps & PanelZusatz) {
   const eintraege = werkzeugEintraege(p)
   const gruppen = [...new Set(eintraege.map((x) => x.gruppe))]
@@ -87,6 +87,7 @@ export function CadWerkzeugePanel(p: WerkzeugleisteProps & PanelZusatz) {
           </button>
         </section>
       )}
+      {p.ebenen && <section className='px-2 py-2'>{p.ebenen}</section>}
       {p.onBauteilTyp && (
         <section className='px-2 py-2'>
           <button type='button' onClick={() => setZu((z) => ({ ...z, Bauteile: !z.Bauteile }))} aria-expanded={!zu.Bauteile}
