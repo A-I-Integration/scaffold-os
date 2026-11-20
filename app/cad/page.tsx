@@ -28,6 +28,8 @@ import ObjektInfo from '@/components/cad/ObjektInfo'
 import BaugruppenBaum from '@/components/cad/BaugruppenBaum'
 import type { BereichsWerkzeug } from '@/components/cad/BereichePanel'
 import CadWerkzeugleiste, { CadWerkzeugePanel, type WerkzeugleisteProps } from '@/components/cad/CadWerkzeugleiste'
+import CadDock from '@/components/cad/CadDock'
+import AnsichtsReiter, { type Ansicht2D } from '@/components/cad/AnsichtsReiter'
 import CadStatusleiste, { statusEintraege } from '@/components/cad/CadStatusleiste'
 import { systemAnzeigename } from '@/lib/calculations/geruest-systeme'
 import { useState, useMemo, useCallback, useEffect, useRef } from 'react'
@@ -138,6 +140,7 @@ const pruefAmpelFarbe = (w?: { type: string; code: string }[]) => ({ gruen: '#15
 export default function CADPage() {
   const router = useRouter()
   const [viewMode, setViewMode] = useState<ViewMode>('3d')
+  const [ansicht2d, setAnsicht2d] = useState<Ansicht2D>('grundriss')
   // Phase 68-L: Demo-Gebäude entfernt. Die Seite startet konsistent
   // LEER (wie nach 'Neu starten') - ein Reload bringt nichts mehr
   // zurueck, das der Nutzer bewusst geleert hatte.
@@ -1555,12 +1558,14 @@ export default function CADPage() {
       )}
       <div className='bg-white border-b border-black/5 px-4 py-3 flex flex-wrap gap-2 items-center justify-between'>
         <div>
-          <h1 className='text-lg font-semibold text-[#1d1d1f]'>Gerüstbau-CAD</h1>
+          <h1 className='text-lg font-semibold text-[#1d1d1f]'>Gerüstbau-CAD{(kontoProjekt?.name || aufmassProjektName) ? <span className='ml-3 text-[13px] font-normal text-[#86868b]'>Projekt: {kontoProjekt?.name || aufmassProjektName}</span> : null}</h1>
           <p className='text-xs text-[#86868b]'>
             {modelWithManual?.system ? `${modelWithManual.system.hersteller} ${modelWithManual.system.systemName}` : 'Kein System'} · {kopfZahlen} · {modelWithManual?.components3D.length || 0} Bauteile · {features.length} Gebäudemerkmale · <span title='3D-Prüfung: Geometrie, Seiten, Füße auf dem Gelände, Feldzahl, Fläche, Bauteilliste' style={{ fontWeight: 600, color: pruefAmpelFarbe(modelWithManual?.warnings) }}>{pruefAmpelText(modelWithManual?.warnings)}</span>
           </p>
         </div>
         <div className='flex items-center gap-2'>
+          <button type='button' onClick={oeffneVersionen} title='Gespeicherte Stände ansehen oder wiederherstellen' className='px-3 py-1.5 text-xs font-medium rounded-lg border border-black/10 hover:bg-black/5'>Versionen</button>
+          <button type='button' onClick={speichereProjektdatei} disabled={!model} title='Projekt als Datei speichern' className='px-3 py-1.5 text-xs font-medium rounded-lg border border-black/10 hover:bg-black/5 disabled:opacity-40'>Speichern</button>
           <div className='flex rounded-lg border border-black/10 overflow-hidden'>
             <button type='button' onClick={schrittZurueck} disabled={!kannZurueck} title='Letzte Änderung an den Gebäudedaten rückgängig machen (Strg/Cmd+Z)'
               className='px-3 py-1.5 text-xs font-medium bg-white text-[#1d1d1f] hover:bg-black/5 disabled:opacity-35 disabled:hover:bg-white'>↶ Zurück</button>
@@ -1582,7 +1587,7 @@ export default function CADPage() {
             </div>
           )}
           <BuildingForm registriereZeichner={registriereZeichner} onImportWartet={setImportWartet} building={building} systemId={systemId} onChange={(b) => { setAutoGenerate(true); setBuilding(b); }} onSystemChange={aendereSystem} onGenerate={() => { setAutoGenerate(true); generate(); }} onLadeProjektdatei={ladeProjektdatei} onAussehen={(a, h, v) => { setAussehen(a); setAussehenEin(true); setAussehenEinheit('m'); setAussehenOben('y'); setAussehenAnker(null); setAussehenVersatz(v ?? { x: 0, z: 0, grad: 0 }); setAussehenHinweis(h ?? '') }} onModellUebernehmen={(b) => { setAutoGenerate(true); setBuilding(b); setModel(null) }} registrierePlanUpload={registrierePlanUpload} warnings={allWarnings}
-            werkzeuge={<CadWerkzeugePanel {...werkzeugProps} />} zusatz={<StatikDatenPanel daten={statikDaten} onChange={setStatikDaten} model={modelWithManual} huelle={gebaeudeHuelle} />} />
+            werkzeuge={<CadWerkzeugePanel {...werkzeugProps} />}  />
         </div>
         <div className='flex-1 flex min-w-0 min-h-0'>
         <CadWerkzeugleiste {...werkzeugProps} />
@@ -1660,16 +1665,6 @@ export default function CADPage() {
               onKlick={(a) => { setFeldKlick(a); setPlacementType(a ? 'geruestfeld' : null) }} onSetzen={setzeGeruestfeld} onAendern={aendereGeruestfeld} onVerschieben={verschiebeGeruestfeld} onLoeschen={loescheGeruestfeld} onZu={() => { setFeldPanel(false); if (placementType === 'geruestfeld') setPlacementType(null) }} />
           )}
           {treppePanel && model && viewMode === '3d' && <TreppePanel model={model} treppe={gewaehlteTreppe} meldung={treppeMeldung} onSetzen={setzeTreppeAufFeld} onLeiter={setzeLeiterAufFeld} onDurchstieg={setzeDurchstiegAufFeld} onSchieben={schiebeTreppe} onZu={() => setTreppePanel(false)} />}
-          {selectedComponent && modelWithManual && viewMode === '3d' && !abbauAktiv && !placementType && !measureMode && (
-              <EigenschaftenLeiste model={modelWithManual} id={selectedComponent} baugruppeAnzahl={teileDerBaugruppe(modelWithManual.components3D, selectedComponent).length} onBaugruppe={() => handleBaugruppeWaehlen(selectedComponent)} onMasseDrehung={(a) => handleMasseDrehung(selectedComponent, a)} lagenVersatzM={ueber.aenderungen.find((a) => a.id === selectedComponent)?.dy ?? ueber.kopien.find((k) => k.id === selectedComponent)?.dy ?? 0} onLageOp={(op) => handleLageOp(selectedComponent, op)} griffModus={griffModus} onGriffModus={setGriffModus} einrasten={einrasten} onEinrasten={setEinrasten} anschlussEinrasten={anschlussEinrasten} onAnschlussEinrasten={setAnschlussEinrasten} veraendert={istVonHandVeraendert(ueber, selectedComponent)} onLage={(p, d) => handleBauteilLage(selectedComponent, p, d)} onDuplizieren={() => handleBauteilDuplizieren(selectedComponent)} onZuruecksetzen={() => handleBauteilZuruecksetzen(selectedComponent)} artikelWahl={artikelWahl} manuell={!!platzierungIdVonBauteil(selectedComponent)}
-                onEntfernen={() => handleRemoveComponent(selectedComponent)} onFeldEntfernen={(ids) => { setRemovedGroups((prev) => [...prev, ids]); setSelectedComponent(null) }}
-                onFeldLaenge={(seite, spalte, laengeM) => setBereichsListe((l) => [...l, { art: 'laenge', seite, spalte, feldlaengeM: laengeM }])}
-                onFeldAnhaengen={(seite, ende, laengeM) => setBereichsListe((l) => [...l, { art: 'erweitern', seite, ende, anzahl: 1, feldlaengeM: laengeM }])}
-                onFeldTeilen={(seite, spalte, laengenM) => setBereichsListe((l) => [...l, { art: 'teilen', seite, spalte, laengenM }])}
-                onFeldZusammen={(seite, spalte, laengeM) => setBereichsListe((l) => [...l, { art: 'zusammen', seite, spalte, feldlaengeM: laengeM }])}
-                platzierungPosition={(() => { const pid = platzierungIdVonBauteil(selectedComponent); const pl = manualPlacements.find((x) => x.id === pid); return pl ? [pl.positionX, pl.positionY, pl.positionZ] as [number, number, number] : undefined })()}
-                onPositionAendern={(p) => { const pid = platzierungIdVonBauteil(selectedComponent); if (pid) setManualPlacements((prev) => prev.map((x) => (x.id === pid ? { ...x, positionX: p[0], positionY: p[1], positionZ: p[2] } : x))) }} onZu={() => setSelectedComponent(null)} />
-            )}
           {mehrfach.length > 0 && modelWithManual && viewMode === '3d' && !abbauAktiv && (
             <MehrfachLeiste model={modelWithManual} ids={mehrfach} einrasten={einrasten} rahmenAktiv={rahmenModus} onRahmen={() => setRahmenModus((v) => !v)} onAbwaehlen={() => { setMehrfach([]); setRahmenModus(false) }} onVerschieben={handleGruppeVerschieben} onKopieren={handleGruppeKopieren} onEntfernen={handleGruppeEntfernen} />
           )}
@@ -1750,6 +1745,7 @@ export default function CADPage() {
               </span>
             )}
           </div>
+          <AnsichtsReiter viewMode={viewMode} ansicht2d={ansicht2d} hatModell={!!modelWithManual} onWaehle={(id) => { if (id === '3d') setViewMode('3d'); else { setAnsicht2d(id); setViewMode('2d') } }} />
           <div className='relative h-[65vh] min-h-[320px] md:h-auto md:flex-1 p-4 md:min-h-[360px]'>
             {geruestVeraltet && (
               <div role='alert' className='absolute top-6 left-1/2 -translate-x-1/2 z-30 max-w-[92%] flex flex-wrap items-center gap-3 rounded-xl border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900 shadow'>
@@ -1792,7 +1788,7 @@ export default function CADPage() {
                 )}
               </div>
             )}
-            {viewMode === '2d' && modelWithManual && <Scaffold2D model={modelWithManual} projektName={aufmassProjektName} firma={firmenName} zeichnung={{ figuren, werkzeug: zeichenWerkzeug, onNeu: (f) => setFiguren((l) => [...l, f]), onWerkzeug: setZeichenWerkzeug }} />}
+            {viewMode === '2d' && modelWithManual && <Scaffold2D ansicht={ansicht2d} model={modelWithManual} projektName={aufmassProjektName} firma={firmenName} zeichnung={{ figuren, werkzeug: zeichenWerkzeug, onNeu: (f) => setFiguren((l) => [...l, f]), onWerkzeug: setZeichenWerkzeug }} />}
             {viewMode === '2d' && modelWithManual && figuren.length > 0 && (
               <aside className='absolute right-3 top-3 z-20 w-[300px] max-h-[60%] overflow-hidden rounded-md border bg-white shadow-xl' style={{ borderColor: 'var(--os-linie)' }} aria-label='Zeichnung'>
                 <div className='px-3 py-2 text-[14px] font-bold text-white' style={{ background: 'var(--os-nav)' }}>Zeichnung ({figuren.length})</div>
@@ -1820,6 +1816,9 @@ export default function CADPage() {
               </button>
             ))}
           </div>
+          <CadDock materials={materials} totalWeightKg={totalWeight} totalPrice={totalPrice} warnungen={allWarnings} hatModell={!!modelWithManual}
+            onOpenLv={rolle === 'admin' || istStatikerLogin ? (model ? () => setLvOffen(true) : exportOhneModellHinweis) : undefined}
+            statik={<StatikDatenPanel daten={statikDaten} onChange={setStatikDaten} model={modelWithManual} huelle={gebaeudeHuelle} />} />
           <CadStatusleiste eintraege={statusEintraege({
             systemName: systemAnzeigename(systemId), ansicht: viewMode, einrasten, anschlussEinrasten, auswahlAnzahl: mehrfach.length,
             bauteilAnzahl: modelWithManual ? modelWithManual.components3D.length : null,
@@ -1827,12 +1826,23 @@ export default function CADPage() {
         </div>
         </div>
         <div className='w-full md:w-64 lg:w-72 2xl:w-96 md:shrink-0 min-w-0 min-h-0 md:overflow-y-auto'>
+          <RechteLeiste auswahlId={selectedComponent} hatModell={!!modelWithManual}
+            objekt={modelWithManual ? (<>
+          {selectedComponent && modelWithManual && viewMode === '3d' && !abbauAktiv && !placementType && !measureMode && (
+              <EigenschaftenLeiste model={modelWithManual} id={selectedComponent} baugruppeAnzahl={teileDerBaugruppe(modelWithManual.components3D, selectedComponent).length} onBaugruppe={() => handleBaugruppeWaehlen(selectedComponent)} onMasseDrehung={(a) => handleMasseDrehung(selectedComponent, a)} lagenVersatzM={ueber.aenderungen.find((a) => a.id === selectedComponent)?.dy ?? ueber.kopien.find((k) => k.id === selectedComponent)?.dy ?? 0} onLageOp={(op) => handleLageOp(selectedComponent, op)} griffModus={griffModus} onGriffModus={setGriffModus} einrasten={einrasten} onEinrasten={setEinrasten} anschlussEinrasten={anschlussEinrasten} onAnschlussEinrasten={setAnschlussEinrasten} veraendert={istVonHandVeraendert(ueber, selectedComponent)} onLage={(p, d) => handleBauteilLage(selectedComponent, p, d)} onDuplizieren={() => handleBauteilDuplizieren(selectedComponent)} onZuruecksetzen={() => handleBauteilZuruecksetzen(selectedComponent)} artikelWahl={artikelWahl} manuell={!!platzierungIdVonBauteil(selectedComponent)}
+                onEntfernen={() => handleRemoveComponent(selectedComponent)} onFeldEntfernen={(ids) => { setRemovedGroups((prev) => [...prev, ids]); setSelectedComponent(null) }}
+                onFeldLaenge={(seite, spalte, laengeM) => setBereichsListe((l) => [...l, { art: 'laenge', seite, spalte, feldlaengeM: laengeM }])}
+                onFeldAnhaengen={(seite, ende, laengeM) => setBereichsListe((l) => [...l, { art: 'erweitern', seite, ende, anzahl: 1, feldlaengeM: laengeM }])}
+                onFeldTeilen={(seite, spalte, laengenM) => setBereichsListe((l) => [...l, { art: 'teilen', seite, spalte, laengenM }])}
+                onFeldZusammen={(seite, spalte, laengeM) => setBereichsListe((l) => [...l, { art: 'zusammen', seite, spalte, feldlaengeM: laengeM }])}
+                platzierungPosition={(() => { const pid = platzierungIdVonBauteil(selectedComponent); const pl = manualPlacements.find((x) => x.id === pid); return pl ? [pl.positionX, pl.positionY, pl.positionZ] as [number, number, number] : undefined })()}
+                onPositionAendern={(p) => { const pid = platzierungIdVonBauteil(selectedComponent); if (pid) setManualPlacements((prev) => prev.map((x) => (x.id === pid ? { ...x, positionX: p[0], positionY: p[1], positionZ: p[2] } : x))) }} onZu={() => setSelectedComponent(null)} />
+            )}
+            <ObjektInfo model={modelWithManual} auswahlId={selectedComponent} projekt={{ systemName: systemAnzeigename(systemId), ansicht: viewMode === '3d' ? '3D' : '2D', flaecheM2: modelWithManual.totalAreaM2, gewichtKg: totalWeight }} />
+            </>) : null}
+            baugruppen={modelWithManual ? <BaugruppenBaum bauteile={modelWithManual.components3D} onWaehlen={handleBaugruppeWaehlen} aktiv={selectedComponent ? [selectedComponent, ...mehrfach] : mehrfach} onBauteil={(id) => { setMehrfach([]); setSelectedComponent(id) }} /> : null}
+            projekt={<>
           {rolle === 'admin' && model && <M2Abrechnung flaecheM2={modelWithManual?.totalAreaM2 ?? model.totalAreaM2} onChange={setM2Wahl} />}
-          {modelWithManual && (
-            <RechteLeiste
-              objekt={<ObjektInfo model={modelWithManual} auswahlId={selectedComponent} projekt={{ systemName: systemAnzeigename(systemId), ansicht: viewMode === '3d' ? '3D' : '2D', flaecheM2: modelWithManual.totalAreaM2, gewichtKg: totalWeight }} />}
-              baugruppen={<BaugruppenBaum bauteile={modelWithManual.components3D} onWaehlen={handleBaugruppeWaehlen} aktiv={selectedComponent ? [selectedComponent, ...mehrfach] : mehrfach} onBauteil={(id) => { setMehrfach([]); setSelectedComponent(id) }} />} />
-          )}
           <KatalogWahlListe artikelWahl={artikelWahl} liste={katalogListeFuerSystem(systemId)} onZuruecksetzen={() => setArtikelWahl({})} />
           <BillOfMaterials
             materials={materials}
@@ -1880,6 +1890,7 @@ export default function CADPage() {
             manualPlacements={manualPlacements}
             onRemoveManualPlacement={handleRemoveManualPlacement}
           />
+            </>} />
         </div>
       </div>
     </div>

@@ -5,7 +5,7 @@ import { CADModel, generateGrundriss, generateAnsicht, generateSchnitt } from '@
 import Zeichenschicht from './Zeichenschicht'
 import type { Figur, FigurArt } from '@/lib/cad/zeichnung'
 
-type ViewType = 'grundriss' | 'ansicht-vorne' | 'ansicht-hinten' | 'ansicht-links' | 'ansicht-seite' | 'schnitt-aa' | 'detail-fusspunkt' | 'detail-anker'
+export type ViewType = 'grundriss' | 'ansicht-vorne' | 'ansicht-hinten' | 'ansicht-links' | 'ansicht-seite' | 'schnitt-aa' | 'detail-fusspunkt' | 'detail-anker'
 type ScaleType = '1:25' | '1:50' | '1:100' | '1:200'
 
 interface Props {
@@ -15,6 +15,8 @@ interface Props {
   projektName?: string
   objektadresse?: string
   firma?: string
+  /** Von außen gesteuerte Ansicht (Reiter über der Arbeitsfläche); ohne Angabe gelten die eigenen Knöpfe */
+  ansicht?: ViewType
   zeichnung?: { figuren: Figur[]; werkzeug: FigurArt | null; onNeu: (f: Figur) => void; onWerkzeug: (w: FigurArt | null) => void }
 }
 
@@ -25,8 +27,9 @@ const SCALE_FACTORS: Record<ScaleType, number> = {
   '1:200': 5,
 }
 
-export default function Scaffold2D({ model, zeichnung, projektName, objektadresse, firma }: Props) {
-  const [activeView, setActiveView] = useState<ViewType>('grundriss')
+export default function Scaffold2D({ model, zeichnung, projektName, objektadresse, firma, ansicht }: Props) {
+  const [eigeneAnsicht, setActiveView] = useState<ViewType>('grundriss')
+  const activeView: ViewType = ansicht ?? eigeneAnsicht
   const [scale, setScale] = useState<ScaleType>('1:50')
   const [showDimensions, setShowDimensions] = useState(true)
   const [showBuilding, setShowBuilding] = useState(true)
@@ -91,7 +94,7 @@ export default function Scaffold2D({ model, zeichnung, projektName, objektadress
       {/* Toolbar */}
       <div className='flex flex-wrap items-center justify-between gap-x-3 gap-y-2 px-4 py-2 bg-white border-b border-black/5'>
         <div className='flex flex-wrap gap-1'>
-          {viewButtons.map((btn) => (
+          {!ansicht && viewButtons.map((btn) => (
             <button
               key={btn.key}
               onClick={() => setActiveView(btn.key)}
@@ -131,7 +134,7 @@ export default function Scaffold2D({ model, zeichnung, projektName, objektadress
 
       {/* Zeichnungsbereich */}
       <div className='flex-1 overflow-auto p-4 flex justify-center'>
-        <div className='bg-white rounded-lg shadow-sm border border-black/5' style={{ width: svgWidth + 80, minHeight: svgHeight + 120 }}>
+        <div className='cad-papier bg-white rounded-lg shadow-sm border border-black/5' style={{ width: svgWidth + 80, minHeight: svgHeight + 120 }}>
           {/* Titelblock */}
           <div className='px-4 py-2 border-b border-black/5 flex justify-between items-center'>
             <div>
