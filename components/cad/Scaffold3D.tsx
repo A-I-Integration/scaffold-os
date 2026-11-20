@@ -2551,7 +2551,7 @@ function Scene({
       {/* Boden. Präsentation: nur der Schattenwurf auf dem weißen Hintergrund (eine beleuchtete weiße Platte wird
           grau und hebt sich mit harter Kante vom weißen Hintergrund ab). Sonst: großer Boden, der am Horizont
           über den Nebel in die Himmelsfarbe übergeht statt an einer sichtbaren Kante zu enden. */}
-      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.02, 0]} receiveShadow>
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.02, 0]} receiveShadow userData={{ ohneRahmen: true }}>
         <planeGeometry args={[weiss ? 120 : 600, weiss ? 120 : 600]} />
         {weiss
           ? <shadowMaterial transparent opacity={0.22} />
