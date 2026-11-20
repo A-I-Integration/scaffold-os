@@ -136,7 +136,7 @@ export default function CadBand(p: CadBandProps) {
         </div>
       </div>
 
-      <div className='flex min-h-[104px] max-h-[230px] flex-wrap overflow-y-auto'>
+      <div className='flex min-h-[104px] flex-nowrap overflow-x-auto overflow-y-hidden'>
         {reiter === 'zeichnen' && (
           <>
             <Gruppe name='Zeichnen im Grundriss'>
