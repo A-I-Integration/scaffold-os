@@ -1564,7 +1564,7 @@ export default function CADPage() {
           </button>
         </div>
       </div>
-      <div className='flex-1 flex flex-col md:flex-row md:overflow-clip'>
+      <div className='flex-1 min-h-0 flex flex-col md:flex-row md:overflow-clip'>
         <div className='w-full md:w-64 2xl:w-80 md:shrink-0 md:overflow-y-auto'>
           {aufmassHinweise.length > 0 && (
             <div className='mb-3 rounded-xl border border-[#0071e3]/30 bg-[#0071e3]/5 p-3 text-xs text-[#1d1d1f]'>
@@ -1575,7 +1575,7 @@ export default function CADPage() {
           <BuildingForm registriereZeichner={registriereZeichner} onImportWartet={setImportWartet} building={building} systemId={systemId} onChange={(b) => { setAutoGenerate(true); setBuilding(b); }} onSystemChange={aendereSystem} onGenerate={() => { setAutoGenerate(true); generate(); }} onLadeProjektdatei={ladeProjektdatei} onAussehen={(a, h, v) => { setAussehen(a); setAussehenEin(true); setAussehenEinheit('m'); setAussehenOben('y'); setAussehenAnker(null); setAussehenVersatz(v ?? { x: 0, z: 0, grad: 0 }); setAussehenHinweis(h ?? '') }} onModellUebernehmen={(b) => { setAutoGenerate(true); setBuilding(b); setModel(null) }} registrierePlanUpload={registrierePlanUpload} warnings={allWarnings}
             zusatz={<StatikDatenPanel daten={statikDaten} onChange={setStatikDaten} model={modelWithManual} huelle={gebaeudeHuelle} />} />
         </div>
-        <div className='flex-1 flex min-w-0'>
+        <div className='flex-1 flex min-w-0 min-h-0'>
         <CadWerkzeugleiste hatModell={!!modelWithManual} rahmenAktiv={rahmenModus} onRahmen={() => setRahmenModus((v) => !v)} auswahlAnzahl={mehrfach.length}
           bereicheOffen={bereicheOffen} bereichWerkzeug={bereichEin.werkzeug} onBereichWerkzeug={waehleBereichWerkzeug}
           abbauAktiv={abbauAktiv} onAbbau={() => { setAbbauAktiv((a) => !a); setBereicheOffen(false); setViewMode('3d') }}
@@ -1583,7 +1583,7 @@ export default function CADPage() {
           treppePanelAktiv={treppePanel} onTreppePanel={model ? () => setTreppePanel((v) => !v) : undefined}
           geruestfeldPanelAktiv={feldPanel} onGeruestfeldPanel={model ? () => setFeldPanel((v) => !v) : undefined}
           onAuswahlAufheben={() => { setMehrfach([]); setSelectedComponent(null); setRahmenModus(false) }} />
-        <div className='flex-1 flex flex-col min-w-0 md:overflow-y-auto'>
+        <div className='flex-1 flex flex-col min-w-0 min-h-0 md:overflow-y-auto'>
           <div className='flex justify-end px-2 pt-1'>
             <button type='button' onClick={dunkelUmschalten} aria-pressed={dunkel} title='Dunkle Darstellung ein/aus'
               className='text-[11px] px-2 py-0.5 rounded border border-[#d2d2d7] text-[#424245] bg-white hover:bg-[#f5f5f7]'>{dunkel ? 'Hell' : 'Dunkel'}</button>
@@ -1823,7 +1823,7 @@ export default function CADPage() {
             flaecheM2: modelWithManual ? modelWithManual.totalAreaM2 : null, gewichtKg: totalWeight })} />
         </div>
         </div>
-        <div className='w-full md:w-64 lg:w-72 2xl:w-96 md:shrink-0 min-w-0'>
+        <div className='w-full md:w-64 lg:w-72 2xl:w-96 md:shrink-0 min-w-0 min-h-0 md:overflow-y-auto'>
           {rolle === 'admin' && model && <M2Abrechnung flaecheM2={modelWithManual?.totalAreaM2 ?? model.totalAreaM2} onChange={setM2Wahl} />}
           {modelWithManual && (
             <RechteLeiste
