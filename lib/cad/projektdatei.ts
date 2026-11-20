@@ -16,6 +16,8 @@ import type { BuildingParams, BuildingSection, CadTuer, CadFenster, CadVorbau } 
 import { findeSystem } from '@/lib/calculations/geruest-systeme'
 import { bereinigeStatikDaten, type StatikDaten } from '@/lib/statik-daten'
 import type { CADNote } from '@/types/cad-notes'
+import type { CustomDimension } from '@/types/cad-dimensions'
+import { MESS_PUNKTE, type MessErgebnis, type Messart, type V3 } from '@/lib/cad/messen'
 
 export const PROJEKTDATEI_FORMAT = 'scaffoldos-cad-projekt'
 export const PROJEKTDATEI_VERSION = 1
@@ -29,6 +31,11 @@ const SEITEN = ['front', 'back', 'left', 'right'] as const
 
 /** Von Hand gesetzte und geänderte Teile (liegen als Überlagerung über dem berechneten Modell): gesetzte Bauteile, verschobene/kopierte Teile, entfernte Teile. */
 export interface Handarbeit { platzierungen: ManualPlacement[]; ueberlagerung: BauteilUeberlagerung; entfernt: string[][] }
+
+export interface Messungen { masse: CustomDimension[]; ergebnisse: MessErgebnis[] }
+const MAX_MESSUNGEN = 500
+const MESSARTEN = Object.keys(MESS_PUNKTE) as Messart[]
+export const messungenLeer = (m: Messungen): boolean => m.masse.length === 0 && m.ergebnisse.length === 0
 
 export interface Projektdatei {
   format: typeof PROJEKTDATEI_FORMAT
@@ -49,6 +56,8 @@ export interface Projektdatei {
   zeichnung?: Figur[]
   /** Von Hand gesetzte/geänderte Bauteile (Treppen, Anker, verschobene Teile, entfernte Teile) – ältere Dateien haben sie nicht */
   handarbeit?: Handarbeit
+  /** Gesetzte Maßlinien und Messungen (Abstand, Höhe, Winkel, Fläche) – ältere Dateien haben sie nicht */
+  messungen?: Messungen
   /** true = ohne Gerüst gestartet: nur das Haus und die von Hand gesetzten Teile werden gezeigt (die erzeugten Gerüstteile bleiben ausgeblendet) */
   geruestLeer?: true
 }
@@ -60,7 +69,7 @@ export type LeseErgebnis =
 const zahl = (v: unknown, min: number, max: number): number | null =>
   typeof v === 'number' && Number.isFinite(v) && v >= min && v <= max ? v : null
 
-export function erzeugeProjektdatei(p: { name?: string; building: BuildingParams; systemId: string; statikDaten: StatikDaten; notizen: CADNote[]; artikelWahl?: Record<string, string>; bereiche?: BereichsAenderung[]; zeichnung?: Figur[]; handarbeit?: Handarbeit; geruestLeer?: boolean; testdaten?: boolean }): Projektdatei {
+export function erzeugeProjektdatei(p: { name?: string; building: BuildingParams; systemId: string; statikDaten: StatikDaten; notizen: CADNote[]; artikelWahl?: Record<string, string>; bereiche?: BereichsAenderung[]; zeichnung?: Figur[]; handarbeit?: Handarbeit; geruestLeer?: boolean; testdaten?: boolean; messungen?: Messungen }): Projektdatei {
   return {
     format: PROJEKTDATEI_FORMAT,
     version: PROJEKTDATEI_VERSION,
@@ -75,6 +84,7 @@ export function erzeugeProjektdatei(p: { name?: string; building: BuildingParams
     ...(p.bereiche && p.bereiche.length ? { bereiche: p.bereiche } : {}),
     ...(p.zeichnung && p.zeichnung.length ? { zeichnung: p.zeichnung } : {}),
     ...(p.handarbeit && !handarbeitLeer(p.handarbeit) ? { handarbeit: p.handarbeit } : {}),
+    ...(p.messungen && !messungenLeer(p.messungen) ? { messungen: p.messungen } : {}),
     ...(p.geruestLeer ? { geruestLeer: true as const } : {}),
   }
 }
@@ -142,6 +152,41 @@ export function leseHandarbeit(roh: unknown, verworfen: string[]): Handarbeit | 
   if (schlecht > 0) verworfen.push(`Handarbeit (${schlecht} ungültige Einträge)`)
   const h: Handarbeit = { platzierungen, ueberlagerung: { aenderungen, kopien }, entfernt }
   return handarbeitLeer(h) ? undefined : h
+}
+
+
+const punkt3 = (v: unknown): V3 | null => {
+  if (!Array.isArray(v) || v.length !== 3) return null
+  const a = v.map((x) => zahl(x, -5000, 5000))
+  return a.every((x) => x != null) ? (a as V3) : null
+}
+/** Liest Maßlinien und Messungen; Ungültiges wird verworfen und gemeldet, nie übernommen. */
+export function leseMessungen(roh: unknown, verworfen: string[]): Messungen | undefined {
+  if (roh === undefined || roh === null) return undefined
+  if (typeof roh !== 'object') { verworfen.push('Messungen (unbekanntes Format)'); return undefined }
+  const r = roh as Record<string, unknown>
+  let schlecht = 0
+  const masse: CustomDimension[] = []
+  for (const e of Array.isArray(r.masse) ? r.masse.slice(0, MAX_MESSUNGEN) : []) {
+    const o = (e ?? {}) as Record<string, unknown>
+    const id = text(o.id, 160), a = punkt3(o.start), b = punkt3(o.end), d = zahl(o.distanceM, 0, 20000)
+    if (!id || !a || !b || d == null) { schlecht++; continue }
+    const sl = typeof o.startLabel === 'string' ? o.startLabel.slice(0, 120) : undefined
+    const el = typeof o.endLabel === 'string' ? o.endLabel.slice(0, 120) : undefined
+    masse.push({ id, start: a, end: b, distanceM: d, ...(sl ? { startLabel: sl } : {}), ...(el ? { endLabel: el } : {}) })
+  }
+  const ergebnisse: MessErgebnis[] = []
+  for (const e of Array.isArray(r.ergebnisse) ? r.ergebnisse.slice(0, MAX_MESSUNGEN) : []) {
+    const o = (e ?? {}) as Record<string, unknown>
+    const id = text(o.id, 160), t = text(o.text, 200)
+    const art = MESSARTEN.find((x) => x === o.art)
+    const pts = Array.isArray(o.punkte) ? o.punkte.map(punkt3) : []
+    if (!id || !t || !art || pts.length === 0 || pts.length > 50 || !pts.every((x) => x != null) || pts.length < MESS_PUNKTE[art]) { schlecht++; continue }
+    ergebnisse.push({ id, art, text: t, punkte: pts as V3[] })
+  }
+  if (schlecht > 0) verworfen.push(`Messungen (${schlecht} ungültige Einträge)`)
+  const m: Messungen = { masse, ergebnisse }
+  return messungenLeer(m) ? undefined : m
 }
 
 export function liesProjektdatei(text: string): LeseErgebnis {
@@ -373,6 +418,7 @@ export function liesProjektdatei(text: string): LeseErgebnis {
     }
   }
   const handarbeit = leseHandarbeit(r.handarbeit, verworfen)
+  const messungen = leseMessungen(r.messungen, verworfen)
   return {
     ok: true,
     verworfen,
@@ -388,6 +434,7 @@ export function liesProjektdatei(text: string): LeseErgebnis {
       ...(bereiche.length ? { bereiche } : {}),
       ...(leseFiguren(r.zeichnung).length ? { zeichnung: leseFiguren(r.zeichnung) } : {}),
       ...(handarbeit ? { handarbeit } : {}),
+      ...(messungen ? { messungen } : {}),
       ...(r.geruestLeer === true ? { geruestLeer: true as const } : {}),
     },
   }

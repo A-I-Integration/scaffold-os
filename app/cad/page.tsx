@@ -1111,7 +1111,7 @@ export default function CADPage() {
 
   // Phase 68-J: Statt toter Buttons ohne Modell -> klarer Hinweis beim Klick.
   // Projektdatei: speichern und wieder laden (Gebäude, System, Statik-Angaben, Notizen)
-  const projektdatenJetzt = (name: string): Projektdatei => erzeugeProjektdatei({ name, building, systemId, statikDaten, notizen: notes, artikelWahl, bereiche: bereichsListe, zeichnung: figuren, handarbeit: { platzierungen: manualPlacements, ueberlagerung: ueber, entfernt: removedGroups }, geruestLeer: geruestWahl === 'leer' })
+  const projektdatenJetzt = (name: string): Projektdatei => erzeugeProjektdatei({ name, building, systemId, statikDaten, notizen: notes, artikelWahl, bereiche: bereichsListe, zeichnung: figuren, handarbeit: { platzierungen: manualPlacements, ueberlagerung: ueber, entfernt: removedGroups }, geruestLeer: geruestWahl === 'leer', messungen: { masse: customDimensions, ergebnisse: messErgebnisse } })
   const speichereProjektdatei = () => {
     const daten = projektdatenJetzt(`CAD-Projekt ${new Date().toLocaleDateString('de-DE')}`)
     const a = document.createElement('a')
@@ -1126,6 +1126,7 @@ export default function CADPage() {
     setUeberVerlauf({ jetzt: d.handarbeit?.ueberlagerung ?? KEINE_UEBERLAGERUNG, vergangen: [], zukunft: [] })
     setStatikDaten(d.statikDaten); setSystemId(d.systemId); setArtikelWahl(d.artikelWahl ?? {})
     setGeruestWahl(d.geruestLeer ? 'leer' : 'auto')
+    setCustomDimensions(d.messungen?.masse ?? []); setMessErgebnisse(d.messungen?.ergebnisse ?? [])
     setAutoGenerate(true); setBuilding(d.building)
   }
   const uebernehmeProjektdatei = (text: string, name: string) => {
