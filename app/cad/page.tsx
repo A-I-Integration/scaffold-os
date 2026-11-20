@@ -28,6 +28,8 @@ import ObjektInfo from '@/components/cad/ObjektInfo'
 import BaugruppenBaum from '@/components/cad/BaugruppenBaum'
 import type { BereichsWerkzeug } from '@/components/cad/BereichePanel'
 import CadWerkzeugleiste, { CadWerkzeugePanel, type WerkzeugleisteProps } from '@/components/cad/CadWerkzeugleiste'
+import CadDock from '@/components/cad/CadDock'
+import AnsichtsReiter, { type Ansicht2D } from '@/components/cad/AnsichtsReiter'
 import CadStatusleiste, { statusEintraege } from '@/components/cad/CadStatusleiste'
 import { systemAnzeigename } from '@/lib/calculations/geruest-systeme'
 import { useState, useMemo, useCallback, useEffect, useRef } from 'react'
@@ -138,6 +140,7 @@ const pruefAmpelFarbe = (w?: { type: string; code: string }[]) => ({ gruen: '#15
 export default function CADPage() {
   const router = useRouter()
   const [viewMode, setViewMode] = useState<ViewMode>('3d')
+  const [ansicht2d, setAnsicht2d] = useState<Ansicht2D>('grundriss')
   // Phase 68-L: Demo-Gebäude entfernt. Die Seite startet konsistent
   // LEER (wie nach 'Neu starten') - ein Reload bringt nichts mehr
   // zurueck, das der Nutzer bewusst geleert hatte.
@@ -1582,7 +1585,7 @@ export default function CADPage() {
             </div>
           )}
           <BuildingForm registriereZeichner={registriereZeichner} onImportWartet={setImportWartet} building={building} systemId={systemId} onChange={(b) => { setAutoGenerate(true); setBuilding(b); }} onSystemChange={aendereSystem} onGenerate={() => { setAutoGenerate(true); generate(); }} onLadeProjektdatei={ladeProjektdatei} onAussehen={(a, h, v) => { setAussehen(a); setAussehenEin(true); setAussehenEinheit('m'); setAussehenOben('y'); setAussehenAnker(null); setAussehenVersatz(v ?? { x: 0, z: 0, grad: 0 }); setAussehenHinweis(h ?? '') }} onModellUebernehmen={(b) => { setAutoGenerate(true); setBuilding(b); setModel(null) }} registrierePlanUpload={registrierePlanUpload} warnings={allWarnings}
-            werkzeuge={<CadWerkzeugePanel {...werkzeugProps} />} zusatz={<StatikDatenPanel daten={statikDaten} onChange={setStatikDaten} model={modelWithManual} huelle={gebaeudeHuelle} />} />
+            werkzeuge={<CadWerkzeugePanel {...werkzeugProps} />}  />
         </div>
         <div className='flex-1 flex min-w-0 min-h-0'>
         <CadWerkzeugleiste {...werkzeugProps} />
@@ -1750,6 +1753,7 @@ export default function CADPage() {
               </span>
             )}
           </div>
+          <AnsichtsReiter viewMode={viewMode} ansicht2d={ansicht2d} hatModell={!!modelWithManual} onWaehle={(id) => { if (id === '3d') setViewMode('3d'); else { setAnsicht2d(id); setViewMode('2d') } }} />
           <div className='relative h-[65vh] min-h-[320px] md:h-auto md:flex-1 p-4 md:min-h-[360px]'>
             {geruestVeraltet && (
               <div role='alert' className='absolute top-6 left-1/2 -translate-x-1/2 z-30 max-w-[92%] flex flex-wrap items-center gap-3 rounded-xl border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900 shadow'>
@@ -1792,7 +1796,7 @@ export default function CADPage() {
                 )}
               </div>
             )}
-            {viewMode === '2d' && modelWithManual && <Scaffold2D model={modelWithManual} projektName={aufmassProjektName} firma={firmenName} zeichnung={{ figuren, werkzeug: zeichenWerkzeug, onNeu: (f) => setFiguren((l) => [...l, f]), onWerkzeug: setZeichenWerkzeug }} />}
+            {viewMode === '2d' && modelWithManual && <Scaffold2D ansicht={ansicht2d} model={modelWithManual} projektName={aufmassProjektName} firma={firmenName} zeichnung={{ figuren, werkzeug: zeichenWerkzeug, onNeu: (f) => setFiguren((l) => [...l, f]), onWerkzeug: setZeichenWerkzeug }} />}
             {viewMode === '2d' && modelWithManual && figuren.length > 0 && (
               <aside className='absolute right-3 top-3 z-20 w-[300px] max-h-[60%] overflow-hidden rounded-md border bg-white shadow-xl' style={{ borderColor: 'var(--os-linie)' }} aria-label='Zeichnung'>
                 <div className='px-3 py-2 text-[14px] font-bold text-white' style={{ background: 'var(--os-nav)' }}>Zeichnung ({figuren.length})</div>
@@ -1820,6 +1824,9 @@ export default function CADPage() {
               </button>
             ))}
           </div>
+          <CadDock materials={materials} totalWeightKg={totalWeight} totalPrice={totalPrice} warnungen={allWarnings} hatModell={!!modelWithManual}
+            onOpenLv={rolle === 'admin' || istStatikerLogin ? (model ? () => setLvOffen(true) : exportOhneModellHinweis) : undefined}
+            statik={<StatikDatenPanel daten={statikDaten} onChange={setStatikDaten} model={modelWithManual} huelle={gebaeudeHuelle} />} />
           <CadStatusleiste eintraege={statusEintraege({
             systemName: systemAnzeigename(systemId), ansicht: viewMode, einrasten, anschlussEinrasten, auswahlAnzahl: mehrfach.length,
             bauteilAnzahl: modelWithManual ? modelWithManual.components3D.length : null,

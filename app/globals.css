@@ -379,3 +379,13 @@ body {
 .cad-dunkel .text-green-800, .cad-dunkel .text-green-700, .cad-dunkel .text-emerald-700 { color: #7fdc9e !important; }
 .cad-dunkel input::placeholder, .cad-dunkel textarea::placeholder { color: #6f7b88; }
 .cad-dunkel input:not([type="checkbox"]):not([type="radio"]):not([type="range"]), .cad-dunkel select, .cad-dunkel textarea { background-color: #1e242b !important; color: #e6e9ec !important; border-color: #303944 !important; }
+
+/* Zeichenblatt (Grundriss, Ansichten) bleibt auch im Dunkelmodus ein weißes Blatt */
+.cad-dunkel .cad-papier, .cad-dunkel .cad-papier.bg-white { background-color: #fff !important; color: #1d1d1f; }
+.cad-dunkel .cad-papier .text-\[\#1d1d1f\] { color: #1d1d1f !important; }
+.cad-dunkel .cad-papier .text-\[\#86868b\] { color: #86868b !important; }
+.cad-dunkel .cad-papier [class*="border-"] { border-color: rgba(0,0,0,.08); }
+
+/* Dock-Tabellen: eigene Farben statt globaler Tabellenfläche */
+.cad-dock table th, .cad-dock table tr, .cad-dock table td { background: transparent !important; color: inherit !important; }
+.cad-dock table th { color: var(--os-text-leise) !important; }
