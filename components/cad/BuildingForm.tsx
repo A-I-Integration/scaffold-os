@@ -56,10 +56,12 @@ interface Props {
   warnings: { type: string; message: string }[]
   /** Zusätzlicher Bereich am Ende der scrollenden Liste, also über dem Button „Gerüst neu berechnen“ (z. B. Projektdaten für die Statik) */
   zusatz?: ReactNode
+  /** Werkzeug-Panel als erster Reiter (Auswahl, Gerüst, Messen) */
+  werkzeuge?: ReactNode
 }
 
-export default function BuildingForm({ building, systemId, onChange, onSystemChange, onGenerate, onLadeProjektdatei, onAussehen, onModellUebernehmen, registrierePlanUpload, registriereZeichner, onImportWartet, warnings, zusatz }: Props) {
-  const [activeTab, setActiveTab] = useState<'gebaeude' | 'geruest' | 'system'>('gebaeude')
+export default function BuildingForm({ building, systemId, onChange, onSystemChange, onGenerate, onLadeProjektdatei, onAussehen, onModellUebernehmen, registrierePlanUpload, registriereZeichner, onImportWartet, warnings, zusatz, werkzeuge }: Props) {
+  const [activeTab, setActiveTab] = useState<'werkzeuge' | 'gebaeude' | 'geruest' | 'system'>('gebaeude')
   const [analyseLaeuft, setAnalyseLaeuft] = useState(false)
   const [profilFehler, setProfilFehler] = useState<Partial<Record<'front' | 'back' | 'left' | 'right', boolean>>>({})
   const [analyseHinweis, setAnalyseHinweis] = useState<string | null>(null)
@@ -673,13 +675,14 @@ export default function BuildingForm({ building, systemId, onChange, onSystemCha
         <p className='text-xs text-[#86868b] mt-0.5'>Gebäude & Gerüst definieren</p>
       </div>
       <div className='flex border-b border-black/5'>
-        {(['gebaeude', 'geruest', 'system'] as const).map((tab) => (
+        {((werkzeuge ? ['werkzeuge', 'gebaeude', 'geruest', 'system'] : ['gebaeude', 'geruest', 'system']) as ('werkzeuge' | 'gebaeude' | 'geruest' | 'system')[]).map((tab) => (
           <button key={tab} onClick={() => setActiveTab(tab)} className={`flex-1 py-2 text-xs font-medium capitalize transition-colors ${activeTab === tab ? 'text-[#e8590c] border-b-2 border-[#e8590c]' : 'text-[#86868b] hover:text-[#424245]'}`}>
-            {tab === 'gebaeude' ? 'Gebäude' : tab === 'geruest' ? 'Gerüst' : 'System'}
+            {tab === 'werkzeuge' ? 'Werkzeuge' : tab === 'gebaeude' ? 'Gebäude' : tab === 'geruest' ? 'Gerüst' : 'System'}
           </button>
         ))}
       </div>
       <div className='flex-1 overflow-y-auto p-4 space-y-4'>
+        {activeTab === 'werkzeuge' && werkzeuge}
         {activeTab === 'gebaeude' && (
           <div className='space-y-3'>
             {/* NEU: Grundriss/Foto hochladen und automatisch auswerten */}

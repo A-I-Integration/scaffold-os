@@ -27,7 +27,7 @@ import RechteLeiste from '@/components/cad/RechteLeiste'
 import ObjektInfo from '@/components/cad/ObjektInfo'
 import BaugruppenBaum from '@/components/cad/BaugruppenBaum'
 import type { BereichsWerkzeug } from '@/components/cad/BereichePanel'
-import CadWerkzeugleiste from '@/components/cad/CadWerkzeugleiste'
+import CadWerkzeugleiste, { CadWerkzeugePanel, type WerkzeugleisteProps } from '@/components/cad/CadWerkzeugleiste'
 import CadStatusleiste, { statusEintraege } from '@/components/cad/CadStatusleiste'
 import { systemAnzeigename } from '@/lib/calculations/geruest-systeme'
 import { useState, useMemo, useCallback, useEffect, useRef } from 'react'
@@ -1508,6 +1508,15 @@ export default function CADPage() {
   }
   useEffect(() => { if (!measureMode) messPunkteLeeren() }, [measureMode, messPunkteLeeren])
   const waehleBereichWerkzeug = (w: BereichsWerkzeug) => { if (w === 'erweitern' && kantenImModell.length > 0) { window.alert('Felder anhängen gibt es nur bei Rechteck-Gebäuden. Im Umriss-Modus bitte „Aufstocken“ oder „Stück entfernen“ nutzen.'); return } setBereichEin((e) => ({ ...e, werkzeug: w })); setBereicheOffen(true); setAbbauAktiv(false); setViewMode('3d') }
+  const werkzeugProps: WerkzeugleisteProps = {
+    hatModell: !!modelWithManual, rahmenAktiv: rahmenModus, onRahmen: () => setRahmenModus((v) => !v), auswahlAnzahl: mehrfach.length,
+    bereicheOffen, bereichWerkzeug: bereichEin.werkzeug, onBereichWerkzeug: waehleBereichWerkzeug,
+    abbauAktiv, onAbbau: () => { setAbbauAktiv((a) => !a); setBereicheOffen(false); setViewMode('3d') },
+    measureMode, messart, onMessart: waehleMessart,
+    treppePanelAktiv: treppePanel, onTreppePanel: model ? () => setTreppePanel((v) => !v) : undefined,
+    geruestfeldPanelAktiv: feldPanel, onGeruestfeldPanel: model ? () => setFeldPanel((v) => !v) : undefined,
+    onAuswahlAufheben: () => { setMehrfach([]); setSelectedComponent(null); setRahmenModus(false) },
+  }
   return (
     <div className={`min-h-full md:h-full md:overflow-clip flex flex-col bg-[#fbfbfd]${dunkel ? ' cad-dunkel' : ''}`}>
       {oeffnungen && (
@@ -1573,16 +1582,10 @@ export default function CADPage() {
             </div>
           )}
           <BuildingForm registriereZeichner={registriereZeichner} onImportWartet={setImportWartet} building={building} systemId={systemId} onChange={(b) => { setAutoGenerate(true); setBuilding(b); }} onSystemChange={aendereSystem} onGenerate={() => { setAutoGenerate(true); generate(); }} onLadeProjektdatei={ladeProjektdatei} onAussehen={(a, h, v) => { setAussehen(a); setAussehenEin(true); setAussehenEinheit('m'); setAussehenOben('y'); setAussehenAnker(null); setAussehenVersatz(v ?? { x: 0, z: 0, grad: 0 }); setAussehenHinweis(h ?? '') }} onModellUebernehmen={(b) => { setAutoGenerate(true); setBuilding(b); setModel(null) }} registrierePlanUpload={registrierePlanUpload} warnings={allWarnings}
-            zusatz={<StatikDatenPanel daten={statikDaten} onChange={setStatikDaten} model={modelWithManual} huelle={gebaeudeHuelle} />} />
+            werkzeuge={<CadWerkzeugePanel {...werkzeugProps} />} zusatz={<StatikDatenPanel daten={statikDaten} onChange={setStatikDaten} model={modelWithManual} huelle={gebaeudeHuelle} />} />
         </div>
         <div className='flex-1 flex min-w-0 min-h-0'>
-        <CadWerkzeugleiste hatModell={!!modelWithManual} rahmenAktiv={rahmenModus} onRahmen={() => setRahmenModus((v) => !v)} auswahlAnzahl={mehrfach.length}
-          bereicheOffen={bereicheOffen} bereichWerkzeug={bereichEin.werkzeug} onBereichWerkzeug={waehleBereichWerkzeug}
-          abbauAktiv={abbauAktiv} onAbbau={() => { setAbbauAktiv((a) => !a); setBereicheOffen(false); setViewMode('3d') }}
-          measureMode={measureMode} messart={messart} onMessart={waehleMessart}
-          treppePanelAktiv={treppePanel} onTreppePanel={model ? () => setTreppePanel((v) => !v) : undefined}
-          geruestfeldPanelAktiv={feldPanel} onGeruestfeldPanel={model ? () => setFeldPanel((v) => !v) : undefined}
-          onAuswahlAufheben={() => { setMehrfach([]); setSelectedComponent(null); setRahmenModus(false) }} />
+        <CadWerkzeugleiste {...werkzeugProps} />
         <div className='flex-1 flex flex-col min-w-0 min-h-0 md:overflow-y-auto'>
           <div className='flex justify-end px-2 pt-1'>
             <button type='button' onClick={dunkelUmschalten} aria-pressed={dunkel} title='Dunkle Darstellung ein/aus'
