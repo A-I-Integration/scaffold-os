@@ -21,6 +21,8 @@
 import { alsWarnungen, pruefeModell3D } from '@/lib/cad/datenqualitaet'
 import { fahrzeugeAus, waehleFahrzeug, type LogistikFahrzeug } from '@/lib/logistik-fahrzeug'
 import { BAUTEIL_FARBEN, type FarbModus } from '@/lib/cad/bauteil-farben'
+import MessPanel from '@/components/cad/MessPanel'
+import { messe, MESS_PUNKTE, type Messart, type MessErgebnis, type V3 } from '@/lib/cad/messen'
 import RechteLeiste from '@/components/cad/RechteLeiste'
 import ObjektInfo from '@/components/cad/ObjektInfo'
 import BaugruppenBaum from '@/components/cad/BaugruppenBaum'
@@ -426,6 +428,17 @@ export default function CADPage() {
   // Beim Verschieben auf Anschlusspunkte benachbarter Bauteile einrasten (abgeleitete Punkte, siehe lib/cad/anschluesse.ts)
   const [anschlussEinrasten, setAnschlussEinrasten] = useState(true)
 
+  // Messarten über Abstand hinaus (Höhe, Winkel, Fläche, Koordinaten): Punkte und Ergebnisse nur für die Anzeige
+  const [messart, setMessart] = useState<Messart>('abstand')
+  const messartRef = useRef<Messart>('abstand')
+  const messPunkteRef = useRef<V3[]>([])
+  const [messPunkteAnzahl, setMessPunkteAnzahl] = useState(0)
+  const [messErgebnisse, setMessErgebnisse] = useState<MessErgebnis[]>([])
+  const messPunkteLeeren = useCallback(() => { messPunkteRef.current = []; setMessPunkteAnzahl(0); setPendingMeasurePoint(null) }, [])
+  const messErgebnisAnfuegen = useCallback((art: Messart, punkte: V3[]) => {
+    const r = messe(art, punkte)
+    if (r) setMessErgebnisse((l) => [...l, { id: `mess-${Date.now()}-${l.length}`, art, text: r.text, punkte }])
+  }, [])
   const handleToggleMeasureMode = useCallback(() => {
     setMeasureMode((prev) => {
       if (prev) setPendingMeasurePoint(null) // Beim Deaktivieren den ausstehenden Punkt verwerfen
@@ -451,6 +464,13 @@ export default function CADPage() {
   }, [placementType])
 
   const handleMeasurePoint = useCallback((point: [number, number, number], componentName?: string) => {
+    const art = messartRef.current
+    if (art !== 'abstand') {
+      const punkte = [...messPunkteRef.current, point]
+      if (art !== 'flaeche' && punkte.length >= MESS_PUNKTE[art]) { messErgebnisAnfuegen(art, punkte); messPunkteLeeren(); return }
+      messPunkteRef.current = punkte; setMessPunkteAnzahl(punkte.length); setPendingMeasurePoint({ point })
+      return
+    }
     setPendingMeasurePoint((prev) => {
       if (!prev) {
         // Erster Punkt – merken, noch keine Bemaßung
@@ -472,7 +492,7 @@ export default function CADPage() {
       setCustomDimensions((ds) => [...ds, dim])
       return null // Pending-Punkt zurücksetzen
     })
-  }, [])
+  }, [messErgebnisAnfuegen, messPunkteLeeren])
 
   const handleDeleteDimension = useCallback((id: string) => {
     setCustomDimensions((prev) => prev.filter((d) => d.id !== id))
@@ -778,7 +798,7 @@ export default function CADPage() {
     setNotes([]); // Notizen gehören zum verworfenen Modell, sonst "kleben" alte Notizen an neuen Bauteil-IDs
     setLayerState(null); // Ebenen gehören zum verworfenen Modell
     setMeasureMode(false); // Bemaßungen gehören zum verworfenen Modell
-    setCustomDimensions([]);
+    setCustomDimensions([]); setMessErgebnisse([]);
     setPendingMeasurePoint(null);
     setManualPlacements([]); // Manuelle Bauteile gehören zum verworfenen Modell
     setBereichsListe([]); setFiguren([]); setZeichenWerkzeug(null); setBereicheOffen(false)
@@ -1481,6 +1501,12 @@ export default function CADPage() {
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [bereicheOffen, abbauAktiv, measureMode, treppePanel, feldPanel, handleToggleMeasureMode])
+  const waehleMessart = (m: Messart) => {
+    if (measureMode && messart === m) { handleToggleMeasureMode(); return }
+    messartRef.current = m; setMessart(m); messPunkteLeeren()
+    if (!measureMode) handleToggleMeasureMode()
+  }
+  useEffect(() => { if (!measureMode) messPunkteLeeren() }, [measureMode, messPunkteLeeren])
   const waehleBereichWerkzeug = (w: BereichsWerkzeug) => { if (w === 'erweitern' && kantenImModell.length > 0) { window.alert('Felder anhängen gibt es nur bei Rechteck-Gebäuden. Im Umriss-Modus bitte „Aufstocken“ oder „Stück entfernen“ nutzen.'); return } setBereichEin((e) => ({ ...e, werkzeug: w })); setBereicheOffen(true); setAbbauAktiv(false); setViewMode('3d') }
   return (
     <div className={`min-h-screen md:h-screen flex flex-col bg-[#fbfbfd]${dunkel ? ' cad-dunkel' : ''}`}>
@@ -1553,7 +1579,7 @@ export default function CADPage() {
         <CadWerkzeugleiste hatModell={!!modelWithManual} rahmenAktiv={rahmenModus} onRahmen={() => setRahmenModus((v) => !v)} auswahlAnzahl={mehrfach.length}
           bereicheOffen={bereicheOffen} bereichWerkzeug={bereichEin.werkzeug} onBereichWerkzeug={waehleBereichWerkzeug}
           abbauAktiv={abbauAktiv} onAbbau={() => { setAbbauAktiv((a) => !a); setBereicheOffen(false); setViewMode('3d') }}
-          measureMode={measureMode} onMeasure={handleToggleMeasureMode}
+          measureMode={measureMode} messart={messart} onMessart={waehleMessart}
           treppePanelAktiv={treppePanel} onTreppePanel={model ? () => setTreppePanel((v) => !v) : undefined}
           geruestfeldPanelAktiv={feldPanel} onGeruestfeldPanel={model ? () => setFeldPanel((v) => !v) : undefined}
           onAuswahlAufheben={() => { setMehrfach([]); setSelectedComponent(null); setRahmenModus(false) }} />
@@ -1572,7 +1598,7 @@ export default function CADPage() {
             abbauAktiv={abbauAktiv} onAbbau={() => { setAbbauAktiv((a) => !a); setBereicheOffen(false); setViewMode('3d') }}
             kannZurueck={kannZurueck} kannVor={kannVor} onZurueck={schrittZurueck} onVor={schrittVor}
             entferntAnzahl={removedCount} onEntferntZurueck={() => setRemovedGroups((prev) => prev.slice(0, -1))} onEntferntAlleZurueck={() => setRemovedGroups([])}
-            placementType={placementType} onPlacement={handleSelectPlacementType} measureMode={measureMode} onMeasure={handleToggleMeasureMode}
+            placementType={placementType} onPlacement={handleSelectPlacementType} measureMode={measureMode} onMeasure={() => waehleMessart('abstand')}
             showBuilding={showBuilding} onShowBuilding={setShowBuilding} showScaffold={showScaffold} onShowScaffold={setShowScaffold}
             showDimensions={showDimensions} onShowDimensions={setShowDimensions} showEnvironment={showEnvironment} onShowEnvironment={setShowEnvironment} hoheQualitaet={hoheQualitaet} onHoheQualitaet={setHoheQualitaet}
             viewAngle={viewAngle} onViewAngle={(a) => setViewAngle(a)} farbModus={farbModus} onFarbModus={setFarbModus}
@@ -1604,6 +1630,9 @@ export default function CADPage() {
               onLeer={() => setGeruestWahl('leer')}
             />
           )}
+          <MessPanel art={messart} aktiv={measureMode} punkteAnzahl={messPunkteAnzahl} ergebnisse={messErgebnisse}
+            onFlaecheAbschliessen={() => { messErgebnisAnfuegen('flaeche', messPunkteRef.current); messPunkteLeeren() }}
+            onLoeschen={(id) => setMessErgebnisse((l) => l.filter((x) => x.id !== id))} onLeeren={() => setMessErgebnisse([])} />
           {placementType && placementType !== 'geruestfeld' && model && viewMode === '3d' && (
             <PlatzierKoordinaten name={placementType === 'stair' ? 'Treppe' : 'Bauteil'} einrasten={anschlussEinrasten} onEinrasten={setAnschlussEinrasten}
               onSetzen={(p) => handlePlacementClick(placementType, p, '', -1)} onZu={() => setPlacementType(null)} />
