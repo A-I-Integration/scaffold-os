@@ -2094,9 +2094,12 @@ function CustomDimensionLines({
 function CameraController({
   viewMode,
   target,
+  abstand,
 }: {
   viewMode: string
   target: [number, number, number]
+  /** Grundabstand der Kamera aus der Größe von Gebäude und Gerüst (ohne Umgebung); ohne Angabe gilt der alte Mindestabstand */
+  abstand?: number
 }) {
   const { camera } = useThree()
   const prevViewMode = useRef(viewMode)
@@ -2105,7 +2108,7 @@ function CameraController({
     if (prevViewMode.current === viewMode) return
     prevViewMode.current = viewMode
 
-    const dist = Math.max(25, target[1] * 1.5)
+    const dist = abstand ?? Math.max(25, target[1] * 1.5)
     let pos: [number, number, number] = [dist, dist * 0.6, dist]
     switch (viewMode) {
       case 'front':
@@ -2129,7 +2132,7 @@ function CameraController({
     }
     camera.position.set(...pos)
     camera.lookAt(target[0], target[1], target[2])
-  }, [viewMode, camera, target])
+  }, [viewMode, camera, target, abstand])
 
   return null
 }
@@ -2491,7 +2494,7 @@ function Scene({
   return (
     <group>
       <ShadowFreeze modelKey={modelKey} />
-      <CameraController viewMode={viewMode} target={target} />
+      <CameraController viewMode={viewMode} target={target} abstand={Math.max(6, (Math.hypot(model.building.lengthM + 3, (model.building.widthM || 6) + 3, model.totalHeightM + 2) * 1.35) / 1.536)} />
       <LODController target={target} onLevelChange={setLodLevel} />
       {weiss ? <color attach="background" args={[PRAESENTATION_HINTERGRUND]} /> : <Sky sunPosition={[40, 30, 20]} turbidity={6} rayleigh={2} />}
       {/* NEU (Optik-Überarbeitung): sorgt für echte Umgebungsreflexionen auf
