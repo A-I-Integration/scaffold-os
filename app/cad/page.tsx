@@ -1588,7 +1588,7 @@ export default function CADPage() {
             </div>
           )}
           <BuildingForm registriereZeichner={registriereZeichner} onImportWartet={setImportWartet} building={building} systemId={systemId} onChange={(b) => { setAutoGenerate(true); setBuilding(b); }} onSystemChange={aendereSystem} onGenerate={() => { setAutoGenerate(true); generate(); }} onLadeProjektdatei={ladeProjektdatei} onAussehen={(a, h, v) => { setAussehen(a); setAussehenEin(true); setAussehenEinheit('m'); setAussehenOben('y'); setAussehenAnker(null); setAussehenVersatz(v ?? { x: 0, z: 0, grad: 0 }); setAussehenHinweis(h ?? '') }} onModellUebernehmen={(b) => { setAutoGenerate(true); setBuilding(b); setModel(null) }} registrierePlanUpload={registrierePlanUpload} warnings={allWarnings}
-            werkzeuge={<CadWerkzeugePanel {...werkzeugProps} />}  />
+            werkzeuge={<CadWerkzeugePanel {...werkzeugProps} bauteilTyp={model ? placementType : startBauteil} onBauteilTyp={(t) => (model ? handleSelectPlacementType(t) : setStartBauteil(t))} onUmriss={() => zeichnerOeffnenRef.current?.()} />}  />
         </div>
         <div className='flex-1 flex min-w-0 min-h-0'>
         <CadWerkzeugleiste {...werkzeugProps} />

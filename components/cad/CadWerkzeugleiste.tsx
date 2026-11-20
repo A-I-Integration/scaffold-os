@@ -5,6 +5,7 @@ import { useState } from 'react'
 import { BoxSelect, XCircle, PlusSquare, ChevronsUp, Scissors, Layers, Ruler, MoveVertical, Triangle, Square, Crosshair, LayoutGrid, Footprints, type LucideIcon } from 'lucide-react'
 import type { Messart } from '@/lib/cad/messen'
 import type { CadBandProps } from './CadBand'
+import { CATALOG_ITEMS } from './ComponentCatalog'
 
 export type WerkzeugleisteProps = Pick<CadBandProps,
   'hatModell' | 'rahmenAktiv' | 'onRahmen' | 'auswahlAnzahl' | 'bereicheOffen' | 'bereichWerkzeug' | 'onBereichWerkzeug' |
@@ -56,7 +57,8 @@ export default function CadWerkzeugleiste(p: WerkzeugleisteProps) {
 }
 
 /** Beschriftetes Werkzeug-Panel (linke Spalte): gleiche Einträge wie die Icon-Leiste, Gruppen einklappbar, aktives Werkzeug orange. */
-export function CadWerkzeugePanel(p: WerkzeugleisteProps) {
+export type PanelZusatz = { bauteilTyp?: string | null; onBauteilTyp?: (t: string | null) => void; onUmriss?: () => void }
+export function CadWerkzeugePanel(p: WerkzeugleisteProps & PanelZusatz) {
   const eintraege = werkzeugEintraege(p)
   const gruppen = [...new Set(eintraege.map((x) => x.gruppe))]
   const [zu, setZu] = useState<Record<string, boolean>>({})
@@ -77,6 +79,32 @@ export function CadWerkzeugePanel(p: WerkzeugleisteProps) {
           ))}
         </section>
       ))}
+      {p.onUmriss && (
+        <section className='px-2 py-2'>
+          <div className='px-2 py-1 text-[12px] font-semibold uppercase tracking-wider text-[#86868b]'>Gebäude</div>
+          <button type='button' onClick={p.onUmriss} title='Gebäudeumriss per Klick zeichnen' className='flex w-full items-center gap-2.5 rounded px-2 py-1.5 text-left text-[13.5px] hover:bg-black/5'>
+            <span aria-hidden className='w-4 text-center'>✏️</span>Umriss per Klick zeichnen
+          </button>
+        </section>
+      )}
+      {p.onBauteilTyp && (
+        <section className='px-2 py-2'>
+          <button type='button' onClick={() => setZu((z) => ({ ...z, Bauteile: !z.Bauteile }))} aria-expanded={!zu.Bauteile}
+            className='flex w-full items-center justify-between px-2 py-1 text-left text-[12px] font-semibold uppercase tracking-wider text-[#86868b]'>
+            Bauteile setzen<span aria-hidden>{zu.Bauteile ? '›' : '⌄'}</span>
+          </button>
+          {!zu.Bauteile && CATALOG_ITEMS.map((item) => {
+            const aktiv = p.bauteilTyp === item.type
+            return (
+              <button key={item.type} type='button' aria-pressed={aktiv} title={item.description} onClick={() => p.onBauteilTyp?.(aktiv ? null : item.type)}
+                className={`flex w-full items-center gap-2.5 rounded px-2 py-1.5 text-left text-[13.5px] transition-colors hover:bg-black/5 ${aktiv ? 'font-semibold text-white' : ''}`}
+                style={aktiv ? { background: 'var(--os-akzent)' } : undefined}>
+                <span aria-hidden className='w-4 text-center'>{item.icon}</span>{item.label}
+              </button>
+            )
+          })}
+        </section>
+      )}
     </div>
   )
 }
