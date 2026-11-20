@@ -89,6 +89,8 @@ interface Props {
   customDimensions?: CustomDimension[]
   /** Fertige Messungen (Höhe, Winkel, Fläche); Abstände laufen über customDimensions */
   messErgebnisse?: MessErgebnis[]
+  /** Dunkler Hintergrund statt Himmel (nur in der normalen Ansicht, nicht in Präsentation/Statik) */
+  dunklerHintergrund?: boolean
   pendingMeasurePoint?: [number, number, number] | null
   // NEU (Umgebung, Schritt 1): Bäume um das Gebäude. Optional, rein additiv;
   // ohne diese Prop bleibt die Szene exakt wie vorher.
@@ -136,6 +138,9 @@ interface ZiehKontextWert {
 const ZiehKontext = createContext<ZiehKontextWert | null>(null)
 /** Farbe des Himmels am Horizont (Sky bei turbidity 6): in diese Farbe läuft der Boden in der Ferne aus */
 const HORIZONT_FARBE = '#e9edf2'
+/** Dunkler Ansichts-Hintergrund (statt Himmel): Hintergrund, Nebel und Boden in abgestimmten dunklen Tönen */
+export const NACHT_HINTERGRUND = '#1a2029'
+const NACHT_BODEN = '#2b323c'
 const FarbModusKontext = createContext<FarbModus>('real')
 /** Teilabbau: Bauteile, die abgebaut werden sollen, werden rot markiert */
 const AbbauMarkKontext = createContext<ReadonlySet<string> | null>(null)
@@ -145,13 +150,13 @@ type EchtesGebaeudeDaten = { aussehen: Aussehen; faktor: number; oben: 'x' | 'y'
 const EchtesGebaeudeKontext = createContext<EchtesGebaeudeDaten | null>(null)
 
 /** Nebel in Himmelsfarbe: der Boden läuft in der Ferne aus. Muss an der Szene hängen (ein <fog> in einer Gruppe wirkt nicht). */
-function HorizontNebel({ an }: { an: boolean }) {
+function HorizontNebel({ an, farbe = HORIZONT_FARBE }: { an: boolean; farbe?: string }) {
   const { scene } = useThree()
   useEffect(() => {
     if (!an) return
-    Object.assign(scene, { fog: new THREE.Fog(HORIZONT_FARBE, 100, 150) })
+    Object.assign(scene, { fog: new THREE.Fog(farbe, 100, 150) })
     return () => { Object.assign(scene, { fog: null }) }
-  }, [scene, an])
+  }, [scene, an, farbe])
   // Der Nebel folgt dem aktuellen Kameraabstand: Beim Herauszoomen darf er das Modell nicht verschleiern (früher lag er fest
   // bei 1,6–2-fachem Startabstand, dahinter war alles weiß). Nur der ferne Boden läuft in die Himmelsfarbe aus.
   useFrame(({ scene: sz, camera }) => {
@@ -2501,6 +2506,7 @@ function Scene({
   onMeasurePoint,
   customDimensions,
   messErgebnisse,
+  dunklerHintergrund,
   pendingMeasurePoint,
   placementType,
   onPlacementClick,
@@ -2512,6 +2518,7 @@ function Scene({
   const praes = useContext(FarbModusKontext) === 'praesentation'
   const statik = useContext(FarbModusKontext) === 'statik'
   const weiss = praes || statik // weißer Studio-Hintergrund ohne Himmel, Umgebung und Nebel
+  const nacht = !!dunklerHintergrund && !weiss
   const target: [number, number, number] = [0, model.building.heightM / 2, 0]
   // Schatten-Kamera eng ans Modell anpassen (Standardwerte sind viel zu groß
   // und verschwenden Auflösung).
@@ -2534,7 +2541,7 @@ function Scene({
       <ShadowFreeze modelKey={modelKey} />
       <CameraController viewMode={viewMode} target={target} abstand={Math.max(6, (Math.hypot(model.building.lengthM + 3, (model.building.widthM || 6) + 3, model.totalHeightM + 2) * 1.35) / 1.536)} />
       <LODController target={target} onLevelChange={setLodLevel} />
-      {weiss ? <color attach="background" args={[PRAESENTATION_HINTERGRUND]} /> : <Sky sunPosition={[40, 30, 20]} turbidity={6} rayleigh={2} />}
+      {weiss ? <color attach="background" args={[PRAESENTATION_HINTERGRUND]} /> : nacht ? <color attach="background" args={[NACHT_HINTERGRUND]} /> : <Sky sunPosition={[40, 30, 20]} turbidity={6} rayleigh={2} />}
       {/* NEU (Optik-Überarbeitung): sorgt für echte Umgebungsreflexionen auf
           dem verzinkten Stahl – ohne das sieht Metall matt/plastikartig aus,
           egal wie gut die Grundfarbe gewählt ist. background={false}: nur
@@ -2594,9 +2601,9 @@ function Scene({
         <planeGeometry args={[weiss ? 120 : 600, weiss ? 120 : 600]} />
         {weiss
           ? <shadowMaterial transparent opacity={0.22} />
-          : <meshStandardMaterial color={showEnvironment && !bridgeMode ? '#a3ae9b' : '#b9c0c8'} roughness={0.95} />}
+          : <meshStandardMaterial color={nacht ? NACHT_BODEN : showEnvironment && !bridgeMode ? '#a3ae9b' : '#b9c0c8'} roughness={0.95} />}
       </mesh>
-      <HorizontNebel an={!weiss} />
+      <HorizontNebel an={!weiss} farbe={nacht ? NACHT_HINTERGRUND : HORIZONT_FARBE} />
       {praes && <GrasFlaeche model={model} />}
     </group>
   )
@@ -2632,6 +2639,7 @@ function Scaffold3D({
   onMeasurePoint,
   customDimensions,
   messErgebnisse,
+  dunklerHintergrund,
   pendingMeasurePoint,
   showEnvironment,
   hoheQualitaet,
@@ -2753,6 +2761,7 @@ function Scaffold3D({
             onMeasurePoint={onMeasurePoint}
             customDimensions={customDimensions}
             messErgebnisse={messErgebnisse}
+            dunklerHintergrund={dunklerHintergrund}
             pendingMeasurePoint={pendingMeasurePoint}
             placementType={placementType}
             onPlacementClick={onPlacementClick}
