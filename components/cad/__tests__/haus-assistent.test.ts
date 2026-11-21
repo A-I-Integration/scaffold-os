@@ -15,10 +15,10 @@ describe('Haus-Assistent', () => {
   it('Flachdach hat keine Dachhöhe', () => {
     expect(hausAusEingabe({ ...START_EINGABE, dach: 'flachdach', dachHoehe: 5 }, basis).building.roofHeightM).toBe(0)
   })
-  it('L-Form und rund liefern einen Umriss, Öffnungen entfallen', () => {
-    const l = hausAusEingabe({ ...START_EINGABE, form: 'lform', fenster: 3 }, basis)
+  it('L-Form und rund liefern einen Umriss; Fenster/Türen bleiben, Balkone entfallen', () => {
+    const l = hausAusEingabe({ ...START_EINGABE, form: 'lform', fenster: 3, tueren: 1, balkone: 2 }, basis)
     expect(l.umriss?.length).toBe(6)
-    expect(l.building.windowCount).toBe(0)
+    expect([l.building.windowCount, l.building.doorCount, l.building.balconyCount]).toEqual([3, 1, 0])
     expect(l.building.umriss).toBe(l.umriss)
     const r = hausAusEingabe({ ...START_EINGABE, form: 'rund', durchmesser: 10, kanten: 12 }, basis)
     expect(r.umriss?.length).toBe(12)

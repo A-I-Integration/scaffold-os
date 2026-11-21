@@ -44,7 +44,7 @@ export function pruefeSchritt(schritt: number, e: HausEingabe): string[] {
   return f
 }
 
-/** Aus der Eingabe die Gebäudedaten bilden. Umriss nur bei L-Form/rund; Öffnungen nur beim Rechteck (Umriss-Modus kennt sie noch nicht). */
+/** Aus der Eingabe die Gebäudedaten bilden. Umriss nur bei L-Form/rund. Fenster und Türen verteilt der Rechenkern auch im Umriss-Modus nach Kantenlänge; Balkone kennt er dort noch nicht. */
 export function hausAusEingabe(e: HausEingabe, basis: BuildingParams): { building: BuildingParams; umriss?: UmrissPunkt[] } {
   const flach = e.dach === 'flachdach' || e.dach === 'kein'
   const dachH = flach ? 0 : e.dachHoehe
@@ -59,7 +59,7 @@ export function hausAusEingabe(e: HausEingabe, basis: BuildingParams): { buildin
       ...basis,
       lengthM: laenge, widthM: breite, heightM: e.traufe + dachH, eavesHeightM: e.traufe, roofHeightM: dachH, roofForm: e.dach,
       floors: e.geschosse, floorHeightsM: [],
-      windowCount: rechteck ? e.fenster : 0, doorCount: rechteck ? e.tueren : 0, balconyCount: rechteck ? e.balkone : 0,
+      windowCount: e.fenster, doorCount: e.tueren, balconyCount: rechteck ? e.balkone : 0,
       sections: undefined, umriss, umrissKantenHoeheM: undefined,
       sides: ['front', 'back', 'left', 'right'],
     },
@@ -100,6 +100,7 @@ interface Props {
 
 export default function HausAssistent({ basis, onFertig, onZeichnen, onZurueck }: Props) {
   const [schritt, setSchritt] = useState(1)
+  const [zeichnet, setZeichnet] = useState(false)
   const [e, setE] = useState<HausEingabe>(START_EINGABE)
   const set = (p: Partial<HausEingabe>) => setE((v) => ({ ...v, ...p }))
   const rechteck = e.form === 'rechteck'
@@ -107,12 +108,10 @@ export default function HausAssistent({ basis, onFertig, onZeichnen, onZurueck }
   const letzter = 5
   const weiter = () => {
     if (fehler.length) return
-    if (schritt === 1 && e.form === 'zeichnen') { onZeichnen(); return }
-    // Öffnungen gibt es nur beim Rechteck
-    if (schritt === 3 && !rechteck) { setSchritt(5); return }
+    if (schritt === 1 && e.form === 'zeichnen') { setZeichnet(true); onZeichnen(); return }
     setSchritt(schritt + 1)
   }
-  const zurueck = () => { if (schritt === 1) onZurueck(); else setSchritt(schritt === 5 && !rechteck ? 3 : schritt - 1) }
+  const zurueck = () => { if (schritt === 1) onZurueck(); else setSchritt(schritt - 1) }
 
   return (
     <div className='flex h-full items-center justify-center overflow-auto p-4'>
@@ -126,7 +125,23 @@ export default function HausAssistent({ basis, onFertig, onZeichnen, onZurueck }
           ))}
         </ol>
 
-        {schritt === 1 && (
+        {schritt === 1 && zeichnet && (
+          <div className='space-y-3' role='status'>
+            <h2 className='text-base font-semibold'>Umriss zeichnen</h2>
+            <ol className='list-decimal space-y-1 pl-5 text-sm'>
+              <li>Im Zeichenfenster die Ecken der Reihe nach anklicken, den ersten Punkt erneut anklicken (Figur schließen).</li>
+              <li>„Übernehmen“. Links erscheint das erkannte Gebäude.</li>
+              <li>Links die <b>Höhe</b> eintragen und „Übernehmen“.</li>
+              <li>Hier geht es mit „Hülle prüfen“ weiter, danach Einrüsten oder Teile einzeln setzen.</li>
+            </ol>
+            <div className='flex gap-2'>
+              <button type='button' onClick={onZeichnen} className='rounded-xl bg-[#e8590c] px-4 py-2 text-sm font-medium text-white hover:opacity-90'>Zeichenfenster öffnen</button>
+              <button type='button' onClick={() => setZeichnet(false)} className='rounded-xl border border-black/15 bg-white px-4 py-2 text-sm font-medium hover:bg-black/5'>Andere Form wählen</button>
+            </div>
+          </div>
+        )}
+
+        {schritt === 1 && !zeichnet && (
           <div className='space-y-3'>
             <h2 className='text-base font-semibold'>Welche Form hat das Gebäude?</h2>
             <div className='grid grid-cols-2 gap-2'>
@@ -190,11 +205,11 @@ export default function HausAssistent({ basis, onFertig, onZeichnen, onZurueck }
         {schritt === 4 && (
           <div className='space-y-3'>
             <h2 className='text-base font-semibold'>Fenster, Türen, Balkone</h2>
-            <p className='text-xs text-[#6e6e73]'>Optional. Die Anzahl verteilt sich auf die Fassade und lässt sich danach ändern.</p>
-            <div className='grid grid-cols-3 gap-3'>
+            <p className='text-xs text-[#6e6e73]'>Optional. Die Anzahl verteilt sich auf die Fassade{rechteck ? '' : ' (bei Umrissen nach Länge der Kanten)'} und lässt sich danach ändern.{rechteck ? '' : ' Balkone gibt es bei Umrissen noch nicht.'}</p>
+            <div className={`grid gap-3 ${rechteck ? 'grid-cols-3' : 'grid-cols-2'}`}>
               <Zahl label='Fenster' wert={e.fenster} einheit='' ganz onChange={(n) => set({ fenster: Number.isFinite(n) ? n : 0 })} />
               <Zahl label='Türen' wert={e.tueren} einheit='' ganz onChange={(n) => set({ tueren: Number.isFinite(n) ? n : 0 })} />
-              <Zahl label='Balkone' wert={e.balkone} einheit='' ganz onChange={(n) => set({ balkone: Number.isFinite(n) ? n : 0 })} />
+              {rechteck && <Zahl label='Balkone' wert={e.balkone} einheit='' ganz onChange={(n) => set({ balkone: Number.isFinite(n) ? n : 0 })} />}
             </div>
           </div>
         )}
@@ -205,14 +220,14 @@ export default function HausAssistent({ basis, onFertig, onZeichnen, onZurueck }
             <ul className='space-y-1 text-sm'>
               <li>Form: <b>{FORMEN.find((f) => f.id === e.form)?.name}</b>{e.form === 'rund' ? `, Ø ${e.durchmesser} m` : `, ${e.laenge} × ${e.breite} m`}</li>
               <li>Traufe <b>{e.traufe} m</b>, {e.geschosse} Geschosse, {DACH.find((d) => d.id === e.dach)?.name}{e.dach !== 'flachdach' && e.dach !== 'kein' ? ` (${e.dachHoehe} m hoch)` : ''}</li>
-              {rechteck && <li>{e.fenster} Fenster, {e.tueren} Türen, {e.balkone} Balkone</li>}
+              <li>{e.fenster} Fenster, {e.tueren} Türen{rechteck ? `, ${e.balkone} Balkone` : ''}</li>
             </ul>
             <p className='text-xs text-[#6e6e73]'>Danach wählst du: Gerüst automatisch aufbauen lassen oder leer starten und jedes Teil selbst setzen.</p>
           </div>
         )}
 
         {fehler.length > 0 && <p role='alert' className='mt-3 text-xs text-red-600'>{fehler.join(' ')}</p>}
-        <div className='mt-5 flex gap-2'>
+        <div className={`mt-5 flex gap-2 ${schritt === 1 && zeichnet ? 'hidden' : ''}`}>
           <button type='button' onClick={zurueck} className='rounded-xl border border-black/15 bg-white px-4 py-2 text-sm font-medium hover:bg-black/5'>{schritt === 1 ? 'Zurück zur Auswahl' : 'Zurück'}</button>
           {schritt < letzter
             ? <button type='button' onClick={weiter} disabled={fehler.length > 0} className='flex-1 rounded-xl bg-[#e8590c] px-4 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-40'>{schritt === 1 && e.form === 'zeichnen' ? 'Umriss zeichnen' : 'Weiter'}</button>

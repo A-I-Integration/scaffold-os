@@ -53,7 +53,7 @@ import { istTurmKoerperKnoten } from '@/lib/cad/glb-teile'
 import { groessereStueckliste } from '@/lib/calculations/stuecklisten-abgleich'
 import type { MaterialItem } from '@/types/scaffold'
 import { CAD_UEBERNAHME_KEY, leseCadUebergabe } from '@/lib/cad/aufmass-zu-cad'
-import { ladeArbeitsstand, speichereArbeitsstand, vergissArbeitsstand, holeStempel, neuerStempel } from '@/lib/cad/arbeitsstand'
+import { ladeArbeitsstand, type Arbeitsstand, speichereArbeitsstand, vergissArbeitsstand, holeStempel, neuerStempel } from '@/lib/cad/arbeitsstand'
 import { merkeAussehen, ladeGemerktesAussehen, vergissAussehen } from '@/lib/cad/modell-speicher'
 import AbbauEinplanenDialog from '@/components/cad/AbbauEinplanenDialog'
 import TeilabbauPanel, { TEILABBAU_START, type TeilabbauEingabe } from '@/components/cad/TeilabbauPanel'
@@ -310,10 +310,9 @@ export default function CADPage() {
   // Arbeitsstand wiederherstellen: der CAD-Stand bleibt, bis etwas Neues kommt (neue Datei, Neu starten, Zuordnen, Übernahme aus dem Aufmaß).
   useEffect(() => {
     try { if (sessionStorage.getItem(CAD_UEBERNAHME_KEY)) return } catch { /* Speicher gesperrt */ }
+    // Der gemerkte Stand wird nicht mehr einfach geöffnet: das Startbild bietet ihn als dritte Möglichkeit an
     const a = ladeArbeitsstand()
-    if (!a) return
-    setSystemId(a.systemId); setArtikelWahl(a.artikelWahl); setNotes(a.notizen as CADNote[]); setStatikDaten(a.statikDaten as StatikDaten)
-    setAutoGenerate(true); setBuilding(a.building)
+    if (a) setGemerkterStand(a)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
   // Aufmaß → CAD: Maße und System aus Schritt 6 übernehmen (einmalig, dann aus dem Zwischenspeicher entfernen)
@@ -429,6 +428,7 @@ export default function CADPage() {
   const [startBauteil, setStartBauteil] = useState<string | null>(null)
   // Startbild: 'wahl' = KI/Daten hochladen oder Manuell; 'manuell' = Haus-Assistent
   const [startModus, setStartModus] = useState<'wahl' | 'manuell'>('wahl')
+  const [gemerkterStand, setGemerkterStand] = useState<Arbeitsstand | null>(null)
   // Manuell entfernte Bauteile (z. B. eine Treppe, die weg soll). Jeder Eintrag
   // ist eine Gruppe von Bauteil-IDs (Treppen werden als Ganzes entfernt).
   // Wird bei „Gerüst neu berechnen“ zurückgesetzt, weil sich die IDs dann ändern.
@@ -805,7 +805,7 @@ export default function CADPage() {
     setBuilding(LEERES_GEBAEUDE); // Phase 68-H: wirklich leere Felder statt Demo-Werte
     setSystemId('mj-uniconnect');
     setModel(null);
-    setStartModus('wahl');
+    setStartModus('wahl'); setGemerkterStand(null);
     setRemovedGroups([]);
     setUeberVerlauf({ jetzt: KEINE_UEBERLAGERUNG, vergangen: [], zukunft: [] });
     setSelectedComponent(null);
@@ -1818,7 +1818,15 @@ export default function CADPage() {
               <div className='h-full flex flex-col'>
                 <div className='flex-1 min-h-0'>
                   {!startBauteil && startModus === 'wahl' && (
-                    <StartAuswahl wartet={importWartet} onManuell={() => setStartModus('manuell')} onDatei={(f) => { void planUploadRef.current?.(f) }} />
+                    <StartAuswahl wartet={importWartet} onManuell={() => setStartModus('manuell')} onDatei={(f) => { void planUploadRef.current?.(f) }}
+                      fortsetzen={gemerkterStand ? {
+                        text: `${gemerkterStand.building.lengthM} × ${gemerkterStand.building.widthM} × ${gemerkterStand.building.heightM} m`,
+                        onClick: () => {
+                          const a = gemerkterStand
+                          setSystemId(a.systemId); setArtikelWahl(a.artikelWahl); setNotes(a.notizen as CADNote[]); setStatikDaten(a.statikDaten as StatikDaten)
+                          setAutoGenerate(true); setBuilding(a.building); setGemerkterStand(null)
+                        },
+                      } : undefined} />
                   )}
                   {!startBauteil && startModus === 'manuell' && (
                     <HausAssistent basis={building} onZurueck={() => setStartModus('wahl')}
