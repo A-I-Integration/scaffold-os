@@ -2479,6 +2479,9 @@ function generiereUmrissModell(
   // Hang im Umriss-Modus: Gelände folgt derselben Fläche wie die 3D-Darstellung (gelaendeHoeheFn über das umschließende Rechteck);
   // der Gerüstfuß treppt je Feld ab. hangU (tiefster Punkt unter dem Gerüst) wird nach der Eckenberechnung gesetzt.
   let hangU = 0
+  // Ursprung des Lagenrasters: ohne geneigtes Dach der tiefste Geländepunkt (hangU); mit geneigtem Dach (Rinnen-Regel) so verschoben, dass der oberste Belag
+  // genau auf Traufe + BELAG_UEBER_RINNE_M liegt – wie im Rechteck-Modus führt die Dachkante, nicht das Gelände. Ohne Hang bleibt es 0.
+  let rasterU = 0
   const umriss = zentriereUmriss(normalisiereUmriss(gebaeude.umriss!))
   const box = umrissBox(umriss)
   // Bestätigte Geschosse liegen in der Plan-Basis des Hauptumrisses: um dieselbe Verschiebung in die Szene legen wie der Hauptumriss
@@ -2529,12 +2532,12 @@ function generiereUmrissModell(
   const hoeheBisRinne = (h: number): number => {
     if (!rinneRegelUmriss || !system) return h
     const r = system.rasterHoeheM
-    const n = Math.max(1, Math.floor((building.eavesHeightM + BELAG_UEBER_RINNE_M - hangU) / r + 1e-6))
-    return Math.min(h, hangU + n * r)
+    const n = Math.max(1, Math.floor((building.eavesHeightM + BELAG_UEBER_RINNE_M - rasterU) / r + 1e-6))
+    return Math.min(h, rasterU + n * r)
   }
   // Kanten des obersten Geschosses (Höhe = Gebäudehöhe) enden bei geneigtem Dach an der Rinne, niedrigere Teile an ihrer eigenen Höhe
   const kanteHoehe = (idx: number): number => kHoehe ? (kHoehe[idx] >= building.heightM - 1e-6 ? hoeheBisRinne(kHoehe[idx]) : kHoehe[idx]) : hoeheBisRinne(building.heightM)
-  const kanteLagen = (idx: number): number => system ? calculateLevels(kanteHoehe(idx) - hangU, system, hangU).levels : 1
+  const kanteLagen = (idx: number): number => system ? calculateLevels(kanteHoehe(idx) - rasterU, system, rasterU).levels : 1
   if (kHoehe) {
     const hh = [...new Set(kHoehe.map((h) => String(h).replace('.', ',')))]
     if (hh.length > 1) warnings.push({ type: 'info', code: 'UMRISS_KANTENHOEHEN', message: `Gebäudeteile mit unterschiedlicher Höhe (${hh.join(' m, ')} m): Das Gerüst endet je Kante an deren Höhe. Übergänge, Aufstieg und Verankerung an den Höhensprüngen bitte vor Ort prüfen.` })
@@ -2576,8 +2579,14 @@ function generiereUmrissModell(
     if (Number.isFinite(mn) && mn < -0.3) hangU = Math.ceil(Math.max(-15, mn) * 100 - 1e-9) / 100 // nicht unter dem tiefsten Gelände beginnen
   }
   if (!hangU) { const h = hangIgnoriert(gebaeude.geruestOptionen); if (h) warnings.push(h) }
+  rasterU = hangU
+  if (hangU && system && rinneRegelUmriss) {
+    const ok = building.eavesHeightM + BELAG_UEBER_RINNE_M
+    const n0 = Math.max(1, Math.ceil((ok - hangU) / system.rasterHoeheM - 1e-6))
+    rasterU = Math.round((ok - n0 * system.rasterHoeheM) * 100) / 100
+  }
 
-  const levelCalc = system ? calculateLevels(hoeheBisRinne(building.heightM) - hangU, system, hangU) : { levels: 1, levelHeightM: 2.0, levelsData: [{ index: 0, bottomY: 0, topY: 2.0 }] }
+  const levelCalc = system ? calculateLevels(hoeheBisRinne(building.heightM) - rasterU, system, rasterU) : { levels: 1, levelHeightM: 2.0, levelsData: [{ index: 0, bottomY: 0, topY: 2.0 }] }
   if (rinneRegelUmriss && system && hoeheBisRinne(building.heightM) < building.heightM - 0.01) warnings.push({ type: 'info', code: 'OBERSTER_BELAG_RINNE', message: `Geneigtes Dach: Das Gerüst endet an der Rinne (Traufe ${building.eavesHeightM.toFixed(2).replace('.', ',')} m), der oberste Belag liegt höchstens ${BELAG_UEBER_RINNE_M.toFixed(2).replace('.', ',')} m darüber – nicht an der First-Höhe.` })
 
   // Feldstränge je Kante (Länge = Abstand der beiden Gerüst-Eckpunkte entlang der Kante)
@@ -2594,6 +2603,7 @@ function generiereUmrissModell(
   aktive.forEach((s) => divs.set(s.k.index, teile(s.laenge)))
 
   const abtreppFuesseU: { ausgleichM: number; stielM: number; spindelM: number; spindel80: boolean }[] = []
+  const luecken = { n: 0, maxM: 0 }
 
   const fields: ScaffoldField[] = []
   const levels: ScaffoldLevel[] = []
@@ -2619,6 +2629,7 @@ function generiereUmrissModell(
           if (ld.bottomY < fussHoch - 1e-6) return
           if (ld.bottomY - levelCalc.levelHeightM < fussHoch - 1e-6) {
             const te = ausgleichTeile(ld.bottomY - gM, system)
+            if (!te) { luecken.n++; luecken.maxM = Math.max(luecken.maxM, ld.bottomY - fussHoch) } // keine belegten Ausgleichsdaten: Fuß steht frei über dem Gelände
             if (te) {
               const f2 = (g: number) => ausgleichTeile(Math.max(0, ld.bottomY - g), system) ?? undefined
               fussTU = { ...te, von: f2(gA), bis: f2(gB), vonAussen: f2(gAo), bisAussen: f2(gBo) }
@@ -2647,6 +2658,7 @@ function generiereUmrissModell(
     })
     levels.push({ id: `level-umriss-${ld.index}`, index: ld.index, heightM: levelCalc.levelHeightM, bottomY: ld.bottomY, topY: ld.topY, fields: lageFelder })
   })
+  if (hangU && system && luecken.n > 0) warnings.push({ type: 'warning', code: 'HANG_AUSGLEICH_FEHLT', message: `Hang: Für ${system.hersteller} ${system.systemName} liegen keine belegten Daten zum Höhenausgleich am Fuß (Ausgleichsstiele, Fußspindeln) vor. An ${luecken.n} Feldern steht der Gerüstfuß bis zu ${luecken.maxM.toFixed(2).replace('.', ',')} m über dem Gelände – Fußausgleich bitte vor Ort festlegen (Unterbau/Stiele nach Herstellerangabe).` })
   if (hangU && abtreppFuesseU.length) {
     const stielZahl = new Map<number, number>()
     let s80 = 0
@@ -2670,7 +2682,7 @@ function generiereUmrissModell(
   if (building.heightM > 6) {
     const anchorLevels = Math.floor(levelCalc.levelsData.length / 2)
     for (let al = 0; al < anchorLevels; al++) {
-      const yAnchor = (al * 2 + 2) * levelCalc.levelHeightM + hangU
+      const yAnchor = (al * 2 + 2) * levelCalc.levelHeightM + rasterU
       aktive.forEach((s) => {
         const div = divs.get(s.k.index)!
         let cum = 0
