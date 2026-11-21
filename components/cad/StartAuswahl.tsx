@@ -10,11 +10,13 @@ interface Props {
   onManuell: () => void
   /** Eine Datei wurde gelesen und wartet links auf Bestätigung */
   wartet?: boolean
+  /** Gemerkter Stand aus diesem Browser: dritte Möglichkeit */
+  fortsetzen?: { text: string; onClick: () => void }
 }
 
 const karte = 'group flex flex-1 flex-col items-start gap-3 rounded-2xl border border-black/15 bg-white p-6 text-left transition hover:border-[#e8590c] hover:shadow-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-[#e8590c]'
 
-export default function StartAuswahl({ onDatei, onManuell, wartet }: Props) {
+export default function StartAuswahl({ onDatei, onManuell, wartet, fortsetzen }: Props) {
   return (
     <div className='flex h-full flex-col items-center justify-center gap-5 overflow-auto p-6'>
       <div className='text-center'>
@@ -42,6 +44,13 @@ export default function StartAuswahl({ onDatei, onManuell, wartet }: Props) {
           <span className='mt-auto rounded-lg border border-black/20 px-3 py-1.5 text-sm font-medium'>Gebäude aufbauen</span>
         </button>
       </div>
+      {fortsetzen && (
+        <button type='button' onClick={fortsetzen.onClick}
+          className='w-full max-w-2xl rounded-xl border border-black/15 bg-white px-4 py-3 text-left text-sm hover:border-[#e8590c] hover:shadow'>
+          <span className='font-semibold'>Letzten Stand fortsetzen</span>
+          <span className='ml-2 text-[#6e6e73]'>Zuletzt bearbeitet in diesem Browser: {fortsetzen.text}</span>
+        </button>
+      )}
     </div>
   )
 }
