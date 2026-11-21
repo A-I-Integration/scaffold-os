@@ -109,6 +109,8 @@ import SystemLeiste from '@/components/cad/SystemLeiste'
 import KatalogWahlListe from '@/components/cad/KatalogWahlListe'
 import { katalogListeFuerSystem, wendeKatalogwahlAn, uebertrageAufGleiche } from '@/lib/cad/katalog-zuordnung'
 import Scaffold2D from '@/components/cad/Scaffold2D'
+import StartAuswahl from '@/components/cad/StartAuswahl'
+import HausAssistent from '@/components/cad/HausAssistent'
 import LeerStart from '@/components/cad/LeerStart'
 import BauteilLeiste from '@/components/cad/BauteilLeiste'
 import HuellePruefung from '@/components/cad/HuellePruefung'
@@ -425,6 +427,8 @@ export default function CADPage() {
   const [placementType, setPlacementType] = useState<string | null>(null)
   // Bauteil, das in der Leiste gewählt wurde, solange es noch kein Haus gibt (die Fläche fragt dann die Maße ab)
   const [startBauteil, setStartBauteil] = useState<string | null>(null)
+  // Startbild: 'wahl' = KI/Daten hochladen oder Manuell; 'manuell' = Haus-Assistent
+  const [startModus, setStartModus] = useState<'wahl' | 'manuell'>('wahl')
   // Manuell entfernte Bauteile (z. B. eine Treppe, die weg soll). Jeder Eintrag
   // ist eine Gruppe von Bauteil-IDs (Treppen werden als Ganzes entfernt).
   // Wird bei „Gerüst neu berechnen“ zurückgesetzt, weil sich die IDs dann ändern.
@@ -801,6 +805,7 @@ export default function CADPage() {
     setBuilding(LEERES_GEBAEUDE); // Phase 68-H: wirklich leere Felder statt Demo-Werte
     setSystemId('mj-uniconnect');
     setModel(null);
+    setStartModus('wahl');
     setRemovedGroups([]);
     setUeberVerlauf({ jetzt: KEINE_UEBERLAGERUNG, vergangen: [], zukunft: [] });
     setSelectedComponent(null);
@@ -1651,9 +1656,7 @@ export default function CADPage() {
               <button type='button' onClick={() => setHuelleBestaetigt(false)} className='underline'>Hülle ansehen und ändern</button>
             </div>
           ) : (
-            <div className='max-h-[55vh] overflow-auto border-b border-black/10 bg-[#f5f5f7] px-3'>
-              <HuellePruefung building={building} onChange={(b) => { setAutoGenerate(true); setBuilding(b) }} onZeichnen={() => zeichnerOeffnenRef.current?.()} onBestaetigen={() => setHuelleBestaetigt(true)} />
-            </div>
+            null
           ))}
           {model && (
             <CadSchritte
@@ -1774,6 +1777,11 @@ export default function CADPage() {
           </div>
           <AnsichtsReiter viewMode={viewMode} ansicht2d={ansicht2d} hatModell={!!modelWithManual} onWaehle={(id) => { if (id === '3d') setViewMode('3d'); else { setAnsicht2d(id); setViewMode('2d') } }} />
           <div className='relative h-[65vh] min-h-[320px] md:h-auto md:flex-1 p-2 md:min-h-[316px]'>
+            {building.umriss && building.umriss.length >= 3 && !huelleBestaetigt && viewMode === '3d' && (
+              <div className='absolute right-3 top-3 z-30 max-h-[calc(100%-1.5rem)] w-[min(460px,calc(100%-1.5rem))] overflow-auto rounded-2xl shadow-2xl'>
+                <HuellePruefung building={building} onChange={(b) => { setAutoGenerate(true); setBuilding(b) }} onZeichnen={() => zeichnerOeffnenRef.current?.()} onBestaetigen={() => setHuelleBestaetigt(true)} />
+              </div>
+            )}
             {viewMode === '3d' && modelWithManual && (
               <div role='toolbar' aria-label='Kameraansicht' className='absolute left-6 top-6 z-10 flex flex-col gap-1 rounded-md border p-1 shadow-lg' style={{ background: 'var(--cad-f0)', borderColor: 'var(--os-linie)' }}>
                 {([['perspective', 'Iso'], ['front', 'Vorne'], ['back', 'Hinten'], ['left', 'Links'], ['right', 'Rechts'], ['top', 'Oben']] as const).map(([a, name]) => (
@@ -1809,7 +1817,15 @@ export default function CADPage() {
             {viewMode === '3d' && !model && (
               <div className='h-full flex flex-col'>
                 <div className='flex-1 min-h-0'>
-                  <LeerStart wartet={importWartet} bauteil={startBauteil} onAbbrechen={() => setStartBauteil(null)}
+                  {!startBauteil && startModus === 'wahl' && (
+                    <StartAuswahl wartet={importWartet} onManuell={() => setStartModus('manuell')} onDatei={(f) => { void planUploadRef.current?.(f) }} />
+                  )}
+                  {!startBauteil && startModus === 'manuell' && (
+                    <HausAssistent basis={building} onZurueck={() => setStartModus('wahl')}
+                      onZeichnen={() => { setGeruestWahl('offen'); zeichnerOeffnenRef.current?.() }}
+                      onFertig={({ building: b, umriss }) => { setAutoGenerate(true); setGeruestWahl('offen'); setBuilding(b); setHuelleOkFuer(umriss ?? null); setModel(null) }} />
+                  )}
+                  {startBauteil && <LeerStart wartet={importWartet} bauteil={startBauteil} onAbbrechen={() => setStartBauteil(null)}
                     onMasse={(l, b, h) => {
                       setAutoGenerate(true)
                       setGeruestWahl('leer')
@@ -1817,7 +1833,7 @@ export default function CADPage() {
                       if (startBauteil) handleSelectPlacementType(startBauteil)
                       setStartBauteil(null)
                     }}
-                  />
+                  />}
                 </div>
                 {fehlendeMasse.length > 0 && (building.lengthM > 0 || building.widthM > 0 || building.heightM > 0) && (
                   <p className='mx-auto mb-3 max-w-md rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-center text-sm text-amber-700'>Es fehlen noch: {fehlendeMasse.join(', ')}.</p>

@@ -44,7 +44,7 @@ export default function CadSchritte({ schritt, wahl, seiten, onWand, onAlle, onL
           {SEITEN.map((s) => (
             <button key={s.id} type='button' onClick={() => onWand(s.id)} className='rounded-lg border border-black/15 bg-white px-2.5 py-1 hover:bg-black/5'>{s.name} komplett bauen</button>
           ))}
-          <button type='button' onClick={onAlle} className='rounded-lg bg-[#0071e3] px-2.5 py-1 font-medium text-white hover:bg-[#0062c4]'>Alle Seiten bauen</button>
+          <button type='button' onClick={onAlle} className='rounded-lg bg-[#0071e3] px-2.5 py-1 font-medium text-white hover:bg-[#0062c4]'>Einrüsten (alle Seiten)</button>
           <button type='button' onClick={onLeer} className='rounded-lg border border-black/15 bg-white px-2.5 py-1 hover:bg-black/5'>Leer starten – Teile selbst setzen</button>
         </div>
       )}

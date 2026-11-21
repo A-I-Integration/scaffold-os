@@ -18,7 +18,7 @@ describe('Schrittleiste', () => {
   })
   it('Schritt 3 bietet vier Wände, alle Seiten und leer starten', () => {
     const html = renderToStaticMarkup(createElement(CadSchritte, { ...basis, schritt: 3, wahl: 'offen' }))
-    for (const t of ['Vorderseite komplett bauen', 'Rückseite komplett bauen', 'Links komplett bauen', 'Rechts komplett bauen', 'Alle Seiten bauen', 'Leer starten']) expect(html).toContain(t)
+    for (const t of ['Vorderseite komplett bauen', 'Rückseite komplett bauen', 'Links komplett bauen', 'Rechts komplett bauen', 'Einrüsten (alle Seiten)', 'Leer starten']) expect(html).toContain(t)
   })
   it('Schritt 4 zeigt je nach Wahl den passenden Hinweis, keine Auswahl mehr', () => {
     const leer = renderToStaticMarkup(createElement(CadSchritte, { ...basis, schritt: 4, wahl: 'leer', seiten: [] }))
