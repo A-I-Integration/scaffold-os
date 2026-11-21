@@ -2568,7 +2568,7 @@ function Scene({
           Baustellenfotos durch Streulicht ohnehin nie vorkommt. */}
       <directionalLight position={[-20, 15, -15]} intensity={0.35} color="#dce8f5" />
       <BridgeDeck3D building={model.building} visible={showBuilding && !!bridgeMode} />
-      <Umgebung3D model={model} visible={!!showEnvironment && !bridgeMode && !weiss} />
+      <Umgebung3D model={model} visible={!!showEnvironment && !bridgeMode && !weiss} nacht={nacht} />
       <group position={[0, hangHebung, 0]}>
         <GebaeudeAnzeige building={model.building} features={features || []} visible={showBuilding && !bridgeMode} onSeiteUmschalten={!measureMode && !placementType ? onSeiteUmschalten : undefined} platziere={placementType && onPlacementClick && !measureMode ? (pt) => platziereLokal?.(placementType, pt, '', -1) : undefined} />
         {showScaffold && statik && <Stabwerk3D components={model.components3D} visibleTypes={visibleTypes} />}
