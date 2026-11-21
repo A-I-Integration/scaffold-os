@@ -1564,13 +1564,14 @@ export default function CADPage() {
       {lvOffen && modelWithManual && (
         <LvDialog model={modelWithManual} materials={materials} aufbauStunden={logistik?.aufbauStunden ?? 0} abbauStunden={logistik?.abbauStunden ?? 0} stundenModellHash={logistik?.modellHash} onClose={() => setLvOffen(false)} />
       )}
-      <div className='bg-white border-b border-black/5 px-4 py-3 flex flex-wrap gap-2 items-center justify-between'>
-        <div>
+      <div className='bg-white border-b border-black/5 px-4 py-2 flex flex-wrap gap-x-3 gap-y-1 items-center justify-between'>
+        <div className='min-w-0 flex-1 basis-[360px]'>
           <h1 className='text-lg font-semibold text-[#1d1d1f]'>Gerüstbau-CAD{(kontoProjekt?.name || aufmassProjektName) ? <span className='ml-3 text-[13px] font-normal text-[#86868b]'>Projekt: {kontoProjekt?.name || aufmassProjektName}</span> : null}</h1>
-          <p className='text-xs text-[#86868b]'>
+          <p className='text-xs text-[#86868b] truncate'>
             {modelWithManual?.system ? `${modelWithManual.system.hersteller} ${modelWithManual.system.systemName}` : 'Kein System'} · {kopfZahlen} · {modelWithManual?.components3D.length || 0} Bauteile · {features.length} Gebäudemerkmale · <span title='3D-Prüfung: Geometrie, Seiten, Füße auf dem Gelände, Feldzahl, Fläche, Bauteilliste' style={{ fontWeight: 600, color: pruefAmpelFarbe(modelWithManual?.warnings) }}>{pruefAmpelText(modelWithManual?.warnings)}</span>{gesichertUm ? <span title='Die Eingaben (Maße, System, Notizen, Statik, Artikelwahl) werden bei jeder Änderung in diesem Browser gesichert. Einzeln verschobene oder ersetzte Bauteile sind darin nicht enthalten – dafür „Speichern“ nutzen.' className='ml-2 text-[#86868b]'> · Eingaben gesichert {gesichertUm.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })}</span> : null}
           </p>
         </div>
+        <div className='flex flex-wrap items-center gap-x-3 gap-y-1'>
         <CadMenueleiste gruppen={[
           { titel: 'Datei', eintraege: [
             { label: 'Projektdatei speichern', onClick: speichereProjektdatei, aus: !model },
@@ -1604,6 +1605,7 @@ export default function CADPage() {
             className='px-3 py-1.5 text-xs font-medium rounded-lg border border-red-200 text-red-600 hover:bg-red-50 transition-colors'>
             ↺ Neu starten
           </button>
+        </div>
         </div>
       </div>
       <div className='flex-1 min-h-0 flex flex-col md:flex-row md:overflow-clip'>
