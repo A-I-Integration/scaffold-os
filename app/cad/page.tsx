@@ -164,8 +164,8 @@ export default function CADPage() {
   // Dunkle Darstellung (nur Farben, zuschaltbar; Auswahl wird pro Browser gemerkt)
   const [dunkel, setDunkel] = useState(true)
   useEffect(() => { try { setDunkel(localStorage.getItem('cad-dunkel-v2') !== '0') } catch { /* ohne Speicher: dunkel */ } }, [])
-  const [dunkel3d, setDunkel3d] = useState(false)
-  useEffect(() => { try { setDunkel3d(localStorage.getItem('cad-3d-dunkel') === '1') } catch { /* ohne Speicher: hell */ } }, [])
+  const [dunkel3d, setDunkel3d] = useState(true) // wie die Oberfläche: dunkel als Standard, solange nichts anderes gewählt wurde
+  useEffect(() => { try { setDunkel3d(localStorage.getItem('cad-3d-dunkel') !== '0') } catch { /* ohne Speicher: Standard */ } }, [])
   const dunkel3dUmschalten = () => setDunkel3d((v) => { const n = !v; try { localStorage.setItem('cad-3d-dunkel', n ? '1' : '0') } catch { /* egal */ } return n })
   const dunkelUmschalten = () => setDunkel((v) => { const n = !v; try { localStorage.setItem('cad-dunkel-v2', n ? '1' : '0') } catch { /* egal */ } return n })
   const [model, setModel] = useState<CADModel | null>(null)
