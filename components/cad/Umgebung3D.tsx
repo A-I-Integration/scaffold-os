@@ -254,7 +254,14 @@ function Nachbarhaus({ haus }: { haus: NachbarHaus }) {
   )
 }
 
-export default function Umgebung3D({ model, visible }: { model: CADModel; visible: boolean }) {
+/** Hex-Farbe auf einen Anteil abdunkeln (für die dunkle Ansicht). */
+export function abdunkeln(hex: string, faktor = 0.5): string {
+  const n = parseInt(hex.slice(1), 16)
+  const k = (v: number) => Math.round(Math.max(0, Math.min(255, v * faktor))).toString(16).padStart(2, '0')
+  return `#${k((n >> 16) & 255)}${k((n >> 8) & 255)}${k(n & 255)}`
+}
+
+export default function Umgebung3D({ model, visible, nacht = false }: { model: CADModel; visible: boolean; nacht?: boolean }) {
   const { invalidate, gl } = useThree()
   const U = useMemo(() => berechneUmgebung(model), [model])
   const { geo, mat } = ressourcen()
@@ -281,17 +288,18 @@ export default function Umgebung3D({ model, visible }: { model: CADModel; visibl
   }, [U, visible, gl, invalidate])
 
   if (!visible) return null
+  const F = (c: string) => (nacht ? abdunkeln(c, 0.5) : c)
   return (
     <group userData={{ ohneRahmen: true }}>
       {/* Rasen des Grundstücks, Zufahrt, Gehwege, Bordstein, Fahrbahn */}
-      <Flaeche r={U.grundstueck} y={-0.0195} farbe="#9aa88f" offset={-0.5} rau={0.98} />
-      <Flaeche r={U.pave} y={-0.017} farbe="#cfcbc2" />
-      <Flaeche r={U.weg} y={-0.0165} farbe="#c9c5bb" offset={-2} />
-      <Flaeche r={U.gehweg} y={-0.0165} farbe="#c4bfb5" offset={-2} />
-      <Flaeche r={U.gegenGehweg} y={-0.0165} farbe="#c4bfb5" offset={-2} />
-      <Flaeche r={{ x0: -60, x1: 60, z0: U.gehweg.z1, z1: U.strasse.z0 }} y={-0.0155} farbe="#a8a49b" offset={-3} />
-      <Flaeche r={{ x0: -60, x1: 60, z0: U.strasse.z1, z1: U.gegenGehweg.z0 }} y={-0.0155} farbe="#a8a49b" offset={-3} />
-      <Flaeche r={{ x0: -60, x1: 60, z0: U.strasse.z0, z1: U.strasse.z1 }} y={-0.017} farbe="#5f646b" offset={-2} rau={0.92} />
+      <Flaeche r={U.grundstueck} y={-0.0195} farbe={F("#9aa88f")} offset={-0.5} rau={0.98} />
+      <Flaeche r={U.pave} y={-0.017} farbe={F("#cfcbc2")} />
+      <Flaeche r={U.weg} y={-0.0165} farbe={F("#c9c5bb")} offset={-2} />
+      <Flaeche r={U.gehweg} y={-0.0165} farbe={F("#c4bfb5")} offset={-2} />
+      <Flaeche r={U.gegenGehweg} y={-0.0165} farbe={F("#c4bfb5")} offset={-2} />
+      <Flaeche r={{ x0: -60, x1: 60, z0: U.gehweg.z1, z1: U.strasse.z0 }} y={-0.0155} farbe={F("#a8a49b")} offset={-3} />
+      <Flaeche r={{ x0: -60, x1: 60, z0: U.strasse.z1, z1: U.gegenGehweg.z0 }} y={-0.0155} farbe={F("#a8a49b")} offset={-3} />
+      <Flaeche r={{ x0: -60, x1: 60, z0: U.strasse.z0, z1: U.strasse.z1 }} y={-0.017} farbe={F("#5f646b")} offset={-2} rau={0.92} />
       <Instanziert geo={geo.ebene} mat={mat.fuge} items={fugenItems} schatten={false} />
       <Instanziert geo={geo.ebene} mat={mat.markierung} items={markierung} schatten={false} />
 
