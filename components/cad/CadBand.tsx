@@ -114,10 +114,13 @@ function Knopf({ icon: Icon, label, onClick, aktiv, aus, titel, glyph }: { icon?
   )
 }
 
+/** Ohne gespeicherte Wahl startet das Band auf niedrigen Bildschirmen eingeklappt, damit die 3D-Ansicht Platz behält. */
+export const bandStartZu = (fensterHoehe: number): boolean => fensterHoehe < 1000
+
 export default function CadBand(p: CadBandProps) {
   const [reiter, setReiter] = useState<Reiter>('bearbeiten')
   const [zu, setZu] = useState(false)
-  useEffect(() => { try { setZu(localStorage.getItem('cad-band-zu') === '1') } catch { /* ohne Speicher: offen */ } }, [])
+  useEffect(() => { try { const v = localStorage.getItem('cad-band-zu'); setZu(v === null ? bandStartZu(window.innerHeight) : v === '1') } catch { /* ohne Speicher: offen */ } }, [])
   const zuSetzen = (v: boolean) => { setZu(v); try { localStorage.setItem('cad-band-zu', v ? '1' : '0') } catch { /* egal */ } }
   const aus = !p.hatModell
   const bereich = (w: BereichsWerkzeug) => p.onBereichWerkzeug(w)

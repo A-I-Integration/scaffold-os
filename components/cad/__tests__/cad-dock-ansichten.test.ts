@@ -20,3 +20,11 @@ describe('CAD-Dock und Ansichts-Reiter', () => {
     expect(ANSICHTS_EINTRAEGE.map((e) => e.id)).toEqual(['3d', 'grundriss', 'ansicht-vorne', 'ansicht-hinten', 'ansicht-links', 'ansicht-seite', 'schnitt-aa', 'detail-fusspunkt', 'detail-anker'])
   })
 })
+
+import { bandStartZu } from '../CadBand'
+describe('Band-Startzustand', () => {
+  it('startet auf niedrigen Fenstern eingeklappt, auf hohen offen', () => {
+    expect(bandStartZu(900)).toBe(true)
+    expect(bandStartZu(1080)).toBe(false)
+  })
+})
