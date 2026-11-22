@@ -2126,13 +2126,17 @@ function CameraController({
   viewMode,
   target,
   abstand,
+  mitteZ,
 }: {
   viewMode: string
   target: [number, number, number]
   /** Grundabstand der Kamera aus der Größe von Gebäude und Gerüst (ohne Umgebung); ohne Angabe gilt der alte Mindestabstand */
   abstand?: number
+  /** z-Mitte des Hauses in der Szene (Rückseite liegt bei z = −0,5, das Haus erstreckt sich nach −z); ohne Angabe 0 */
+  mitteZ?: number
 }) {
   const { camera } = useThree()
+  const mz = mitteZ ?? 0
   const prevViewMode = useRef(viewMode)
 
   useEffect(() => {
@@ -2140,30 +2144,30 @@ function CameraController({
     prevViewMode.current = viewMode
 
     const dist = abstand ?? Math.max(25, target[1] * 1.5)
-    let pos: [number, number, number] = [dist, dist * 0.6, dist]
+    let pos: [number, number, number] = [dist, dist * 0.6, mz + dist]
     switch (viewMode) {
       case 'front':
-        pos = [0, target[1] * 0.5, dist]
+        pos = [0, target[1] * 0.5, mz + dist]
         break
       case 'back':
-        pos = [0, target[1] * 0.5, -dist]
+        pos = [0, target[1] * 0.5, mz - dist]
         break
       case 'left':
-        pos = [-dist, target[1] * 0.5, 0]
+        pos = [-dist, target[1] * 0.5, mz]
         break
       case 'right':
-        pos = [dist, target[1] * 0.5, 0]
+        pos = [dist, target[1] * 0.5, mz]
         break
       case 'top':
-        pos = [0, dist, 0]
+        pos = [0, dist, mz]
         break
       case 'bottom':
-        pos = [0, -dist * 0.3, 0]
+        pos = [0, -dist * 0.3, mz]
         break
     }
     camera.position.set(...pos)
-    camera.lookAt(target[0], target[1], target[2])
-  }, [viewMode, camera, target, abstand])
+    camera.lookAt(target[0], target[1], mz)
+  }, [viewMode, camera, target, abstand, mz])
 
   return null
 }
@@ -2539,7 +2543,7 @@ function Scene({
   return (
     <group>
       <ShadowFreeze modelKey={modelKey} />
-      <CameraController viewMode={viewMode} target={target} abstand={Math.max(6, (Math.hypot(model.building.lengthM + 3, (model.building.widthM || 6) + 3, model.totalHeightM + 2) * 1.35) / 1.536)} />
+      <CameraController viewMode={viewMode} target={target} mitteZ={-((model.building.widthM || 0) / 2 + 0.5)} abstand={Math.max(6, (Math.hypot(model.building.lengthM + 3, (model.building.widthM || 6) + 3, model.totalHeightM + 2) * 1.35) / 1.536)} />
       <LODController target={target} onLevelChange={setLodLevel} />
       {weiss ? <color attach="background" args={[PRAESENTATION_HINTERGRUND]} /> : nacht ? <color attach="background" args={[NACHT_HINTERGRUND]} /> : <Sky sunPosition={[40, 30, 20]} turbidity={6} rayleigh={2} />}
       {/* NEU (Optik-Überarbeitung): sorgt für echte Umgebungsreflexionen auf
