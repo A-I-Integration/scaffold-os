@@ -34,14 +34,16 @@ import { aktiverReiter } from '@/components/cad/AnsichtsReiter'
 import { erzeugeAufbauSchritte } from '@/lib/geruest/aufbau-schritte'
 import BaugruppenBaum from '@/components/cad/BaugruppenBaum'
 import type { BereichsWerkzeug } from '@/components/cad/BereichePanel'
-import CadWerkzeugleiste, { CadWerkzeugePanel, type WerkzeugleisteProps } from '@/components/cad/CadWerkzeugleiste'
+import { CadWerkzeugePanel, type WerkzeugleisteProps } from '@/components/cad/CadWerkzeugleiste'
 import GeruestBaum from '@/components/cad/GeruestBaum'
 import LayersPanel from '@/components/cad/LayersPanel'
 import CadDock from '@/components/cad/CadDock'
 import AnsichtsReiter, { type Ansicht2D } from '@/components/cad/AnsichtsReiter'
 import CadStatusleiste, { statusEintraege } from '@/components/cad/CadStatusleiste'
 import { systemAnzeigename } from '@/lib/calculations/geruest-systeme'
-import { useState, useMemo, useCallback, useEffect, useRef } from 'react'
+import { useState, useMemo, useCallback, useEffect, useRef, useSyncExternalStore } from 'react'
+
+function onlineAbo(cb: () => void) { window.addEventListener('online', cb); window.addEventListener('offline', cb); return () => { window.removeEventListener('online', cb); window.removeEventListener('offline', cb) } }
 import StatikDatenPanel from '@/components/cad/StatikDatenPanel'
 import { huelleAusAnzeigePunkten } from '@/lib/cad/huelle'
 import { passeWandabstandAn, passeWandabstandJeSeiteAn } from '@/lib/cad/fassade-anpassung'
@@ -68,6 +70,10 @@ import { kantenListe, istUmrissModell, waehleBereich, wendeAenderungenAn, type B
 import EigenschaftenLeiste from '@/components/cad/EigenschaftenLeiste'
 import { beschreibeFigur, type Figur, type FigurArt } from '@/lib/cad/zeichnung'
 import CadBand from '@/components/cad/CadBand'
+import CadKopfzeile from '@/components/cad/CadKopfzeile'
+import CadWerkzeugBaum from '@/components/cad/CadWerkzeugBaum'
+import { Building2, PenLine, BrickWall, Layers3, House, Zap } from 'lucide-react'
+import { speicherStatus } from '@/lib/cad/speicherstatus'
 import BereichePanel, { BEREICHS_START, eingabeZuAenderung, type BereichsEingabe } from '@/components/cad/BereichePanel'
 import { ansichtDateiname } from '@/lib/cad/ansicht-bild'
 import { vergissModell } from '@/lib/cad/modell-speicher'
@@ -358,8 +364,15 @@ export default function CADPage() {
   const [notes, setNotes] = useState<CADNote[]>([])
   // Jede Änderung merken (nur gültige Stände, siehe lib/cad/arbeitsstand.ts)
   const [gesichertUm, setGesichertUm] = useState<Date | null>(null)
+  // Speicherstatus der Kopfzeile: Verbindung, Konto-Speichern läuft/fehlgeschlagen, Zeitpunkt der letzten Konto-Speicherung
+  const online = useSyncExternalStore(onlineAbo, () => navigator.onLine, () => true)
+  const [kontoLaeuft, setKontoLaeuft] = useState(false)
+  const [speicherFehler, setSpeicherFehler] = useState(false)
+  const [kontoGespeichertUm, setKontoGespeichertUm] = useState<Date | null>(null)
+  const kontoSyncRef = useRef(false)
   useEffect(() => {
-    if (speichereArbeitsstand({ building, systemId, notizen: notes, statikDaten: statikDaten as Record<string, unknown>, artikelWahl })) setGesichertUm(new Date())
+    const ok = speichereArbeitsstand({ building, systemId, notizen: notes, statikDaten: statikDaten as Record<string, unknown>, artikelWahl })
+    if (ok) { const jetzt = new Date(); setGesichertUm(jetzt); setSpeicherFehler(false); if (kontoSyncRef.current) { kontoSyncRef.current = false; setKontoGespeichertUm(jetzt) } }
   }, [building, systemId, notes, statikDaten, artikelWahl])
   const handleAddNote = useCallback((componentId: string, componentName: string, componentType: string, text: string) => {
     setNotes((prev) => [...prev, {
@@ -1213,20 +1226,27 @@ export default function CADPage() {
   const [kontoProjekt, setKontoProjekt] = useState<{ id: string; name: string; revision: number } | null>(null)
   const kontoNeu = async (name: string): Promise<boolean> => {
     const n = name.trim() || `CAD-Projekt ${new Date().toLocaleDateString('de-DE')}`
+    setKontoLaeuft(true)
     const r = await legeKontoProjektAn(n, projektdatenJetzt(n))
-    if (!r.ok) { setKontoMeldung(r.fehler); return false }
+    setKontoLaeuft(false)
+    if (!r.ok) { setSpeicherFehler(true); setKontoMeldung(r.fehler); return false }
+    setSpeicherFehler(false); setKontoGespeichertUm(new Date())
     setKontoProjekt({ id: r.wert.id, name: r.wert.name, revision: r.wert.revision }); setKontoMeldung(`„${r.wert.name}“ gespeichert.`); return true
   }
   const kontoUeberschreiben = async (): Promise<boolean> => {
     if (!kontoProjekt) return false
+    setKontoLaeuft(true)
     const r = await speichereKontoProjekt(kontoProjekt.id, kontoProjekt.name, projektdatenJetzt(kontoProjekt.name), kontoProjekt.revision)
-    if (!r.ok) { setKontoMeldung(r.fehler); return false }
+    setKontoLaeuft(false)
+    if (!r.ok) { setSpeicherFehler(true); setKontoMeldung(r.fehler); return false }
+    setSpeicherFehler(false); setKontoGespeichertUm(new Date())
     setKontoProjekt({ id: r.wert.id, name: r.wert.name, revision: r.wert.revision }); setKontoMeldung(`„${r.wert.name}“ gespeichert (Stand ${r.wert.revision}).`); return true
   }
   const kontoLaden = async (id: string, revision?: number) => {
     const r = await ladeKontoProjekt(id, revision)
     if (!r.ok) { setKontoMeldung(r.fehler); return }
     if (!window.confirm(`Projekt „${r.wert.name}“${revision ? ` (Stand ${revision})` : ''} laden?\n\nDas aktuelle Modell, die Notizen und die von Hand gesetzten, verschobenen und entfernten Teile werden ersetzt.`)) return
+    kontoSyncRef.current = true; setTimeout(() => { kontoSyncRef.current = false }, 2000)
     wendeProjektdatenAn(r.wert.daten)
     // ein älterer Stand wird erst beim Speichern zum neuen Stand; die Revision bleibt die aktuelle des Projekts
     const kopf = revision ? await ladeKontoProjekt(id) : r
@@ -1623,31 +1643,27 @@ export default function CADPage() {
       {lvOffen && modelWithManual && (
         <LvDialog model={modelWithManual} materials={materials} aufbauStunden={logistik?.aufbauStunden ?? 0} abbauStunden={logistik?.abbauStunden ?? 0} stundenModellHash={logistik?.modellHash} onClose={() => setLvOffen(false)} />
       )}
-      <div className='bg-white border-b border-black/5 px-4 py-2 flex flex-wrap gap-x-3 gap-y-1 items-center justify-between'>
-        <div className='min-w-0 flex-1 basis-[360px]'>
-          <h1 className='text-lg font-semibold text-[#1d1d1f]'>Gerüstbau-CAD{(kontoProjekt?.name || aufmassProjektName) ? <span className='ml-3 text-[13px] font-normal text-[#86868b]'>Projekt: {kontoProjekt?.name || aufmassProjektName}</span> : null}</h1>
-          <p className='text-xs text-[#86868b] truncate'>
-            {modelWithManual?.system ? `${modelWithManual.system.hersteller} ${modelWithManual.system.systemName}` : 'Kein System'} · {kopfZahlen} · {modelWithManual?.components3D.length || 0} Bauteile · {features.length} Gebäudemerkmale · <span title='3D-Prüfung: Geometrie, Seiten, Füße auf dem Gelände, Feldzahl, Fläche, Bauteilliste' style={{ fontWeight: 600, color: pruefAmpelFarbe(modelWithManual?.warnings) }}>{pruefAmpelText(modelWithManual?.warnings)}</span>{gesichertUm ? <span title='Die Eingaben (Maße, System, Notizen, Statik, Artikelwahl) werden bei jeder Änderung in diesem Browser gesichert. Einzeln verschobene oder ersetzte Bauteile sind darin nicht enthalten – dafür „Speichern“ nutzen.' className='ml-2 text-[#86868b]'> · Eingaben gesichert {gesichertUm.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })}</span> : null}
-          </p>
-        </div>
-        <div className='flex flex-wrap items-center gap-x-3 gap-y-1'>
-        <div className='flex items-center gap-2'>
-          <button type='button' onClick={dunkelUmschalten} aria-pressed={dunkel} title='Dunkle Darstellung ein/aus' className='px-3 py-1.5 text-xs font-medium rounded-lg border border-black/10 hover:bg-black/5'>{dunkel ? 'Hell' : 'Dunkel'}</button>
-          <button type='button' onClick={oeffneVersionen} title='Gespeicherte Stände ansehen oder wiederherstellen' className='px-3 py-1.5 text-xs font-medium rounded-lg border border-black/10 hover:bg-black/5'>Versionen</button>
-          <button type='button' onClick={speichereProjektdatei} disabled={!model} title='Projekt als Datei speichern' className='px-3 py-1.5 text-xs font-medium rounded-lg border border-black/10 hover:bg-black/5 disabled:opacity-40'>Speichern</button>
-          <div className='flex rounded-lg border border-black/10 overflow-hidden'>
-            <button type='button' onClick={schrittZurueck} disabled={!kannZurueck} title='Letzte Änderung an den Gebäudedaten rückgängig machen (Strg/Cmd+Z)'
-              className='px-3 py-1.5 text-xs font-medium bg-white text-[#1d1d1f] hover:bg-black/5 disabled:opacity-35 disabled:hover:bg-white'>↶ Zurück</button>
-            <button type='button' onClick={schrittVor} disabled={!kannVor} title='Rückgängig gemachte Änderung wiederholen (Strg/Cmd+Umschalt+Z)'
-              className='px-3 py-1.5 text-xs font-medium bg-white text-[#1d1d1f] hover:bg-black/5 border-l border-black/10 disabled:opacity-35 disabled:hover:bg-white'>↷ Wiederholen</button>
-          </div>
-          <button onClick={handleNeuStarten} title='Alle Eingaben zurücksetzen'
-            className='px-3 py-1.5 text-xs font-medium rounded-lg border border-red-200 text-red-600 hover:bg-red-50 transition-colors'>
-            ↺ Neu starten
-          </button>
-        </div>
-        </div>
-      </div>
+      <CadKopfzeile
+        projektName={kontoProjekt?.name || aufmassProjektName || null}
+        systemName={modelWithManual?.system ? `${modelWithManual.system.hersteller} ${modelWithManual.system.systemName}` : null}
+        status={speicherStatus({ online, kontoLaeuft, fehler: speicherFehler, gesichertUm, kontoGespeichertUm })}
+        versionText={kontoProjekt ? `Stand ${kontoProjekt.revision}` : versionen.length > 0 ? `${versionen.length} ${versionen.length === 1 ? 'Version' : 'Versionen'}` : 'Keine Version'}
+        kannZurueck={kannZurueck} kannVor={kannVor} onZurueck={schrittZurueck} onVor={schrittVor}
+        onVersionen={oeffneVersionen} onSpeichern={speichereProjektdatei} speichernAus={!model} onTeilen={speichereProjektdatei} teilenAus={!model}
+        exportEintraege={[
+          { id: 'pdf', label: 'Dokumentation (PDF)', onClick: model ? handleExportPDF : exportOhneModellHinweis },
+          { id: 'montage', label: 'Montageplan', onClick: model ? handleExportMontageplan : exportOhneModellHinweis },
+          { id: 'montage-pdf', label: 'Montageplan (PDF)', onClick: model ? handleExportMontageplanPdf : exportOhneModellHinweis },
+          { id: 'dxf', label: 'Plan für CAD (DXF)', onClick: model ? handleExportDXF : exportOhneModellHinweis },
+          { id: 'ifc', label: 'IFC-Modell', onClick: model ? handleExportIFC : exportOhneModellHinweis, aus: ifcExportLaeuft },
+          { id: 'bild', label: 'Bild speichern', onClick: speichereBild },
+        ]}
+        profilEintraege={[
+          { id: 'dunkel', label: dunkel ? 'Helle Darstellung' : 'Dunkle Darstellung', onClick: dunkelUmschalten },
+          { id: 'konto', label: 'Projekte im Konto', onClick: () => { setKontoMeldung(null); setKontoOffen(true) } },
+          { id: 'neu', label: 'Neu starten', onClick: handleNeuStarten },
+        ]}
+        zusatz={<>{kopfZahlen} · {modelWithManual?.components3D.length || 0} Bauteile · {features.length} Gebäudemerkmale · <span title='3D-Prüfung: Geometrie, Seiten, Füße auf dem Gelände, Feldzahl, Fläche, Bauteilliste' style={{ fontWeight: 600, color: pruefAmpelFarbe(modelWithManual?.warnings) }}>{pruefAmpelText(modelWithManual?.warnings)}</span>{gesichertUm ? <span title='Die Eingaben (Maße, System, Notizen, Statik, Artikelwahl) werden bei jeder Änderung in diesem Browser gesichert. Einzeln verschobene oder ersetzte Bauteile sind darin nicht enthalten – dafür „Speichern“ nutzen.' className='ml-2 text-[#86868b]'> · Eingaben gesichert {gesichertUm.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })}</span> : null}</>} />
       <div className='flex-1 min-h-0 flex flex-col md:flex-row md:overflow-clip'>
         <div className='w-full md:w-64 2xl:w-80 md:shrink-0 md:overflow-y-auto'>
           {aufmassHinweise.length > 0 && (
@@ -1661,7 +1677,17 @@ export default function CADPage() {
               ebenen={layerState ? <LayersPanel layerState={layerState} onToggleSide={handleToggleSide} onToggleLevel={handleToggleLevel} onShowAll={handleShowAllLayers} onHideAll={handleHideAllLayers} /> : null} />}  />
         </div>
         <div className='flex-1 flex min-w-0 min-h-0'>
-        <CadWerkzeugleiste {...werkzeugProps} />
+        <CadWerkzeugBaum {...werkzeugProps} bauteilTyp={model ? placementType : startBauteil} onBauteilTyp={(t) => (model ? handleSelectPlacementType(t) : setStartBauteil(t))}
+          extraGruppen={[{ name: 'Gebäude', eintraege: [
+            { id: 'gebaeude', label: 'Gebäudedaten', icon: Building2, titel: 'Maße, Geschosse und Dach des Gebäudes eingeben', onClick: () => setLinksWunsch((w) => ({ tab: 'gebaeude', n: (w?.n ?? 0) + 1 })) },
+            { id: 'umriss', label: 'Umriss zeichnen', icon: PenLine, titel: 'Gebäudeumriss per Klick zeichnen', onClick: () => zeichnerOeffnenRef.current?.() },
+            { id: 'wand', label: 'Wand', icon: BrickWall, titel: 'Wandhöhen und Maße ändern', onClick: () => setGebaeudeModus('wand') },
+            { id: 'geschoss', label: 'Geschoss', icon: Layers3, titel: 'Anzahl und Höhen der Geschosse ändern', onClick: () => setGebaeudeModus('geschoss') },
+            { id: 'dach', label: 'Dach', icon: House, titel: 'Dachform, Traufe und Dachhöhe ändern', onClick: () => setGebaeudeModus('dach') },
+          ] }, { name: 'Berechnung', eintraege: [
+            { id: 'automatik', label: 'Automatisch berechnen', icon: Zap, titel: 'Gerüst automatisch berechnen', onClick: () => { setAutoGenerate(true); generate() } },
+          ] }]}
+          ebenen={layerState ? <LayersPanel layerState={layerState} onToggleSide={handleToggleSide} onToggleLevel={handleToggleLevel} onShowAll={handleShowAllLayers} onHideAll={handleHideAllLayers} /> : null} />
         <div className='flex-1 flex flex-col min-w-0 min-h-0 md:overflow-y-auto'>
           <SystemLeiste systemId={systemId} onSystemChange={aendereSystem} gewaehlteArtikel={Object.keys(artikelWahl).length} />
           <CadBand

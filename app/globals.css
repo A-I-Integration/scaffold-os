@@ -346,7 +346,8 @@ body {
 .os-shell.h-dvh { height: calc(100dvh / var(--ui-zoom)); }
 
 /* CAD: dunkle industrielle Darstellung (zuschaltbar, nur Farben) */
-.cad-dunkel { --os-linie: #303944; --os-text-leise: #9aa5b1; --cad-f0: #171b20; --cad-f1: #1e242b; --cad-akz: #3a2a1c; --cd-bg: #101216; --cd-panel: #171b20; --cd-panel2: #1e242b; --cd-linie: #303944; --cd-text: #e6e9ec; --cd-leise: #9aa5b1; background: var(--cd-bg) !important; color: var(--cd-text); }
+.cad-dunkel { --os-linie: #303844; --os-text-leise: #a1aab8; --cad-f0: #1d222a; --cad-f1: #252b35; --cad-akz: #3a2f12; --cd-bg: #101216; --cd-panel: #1d222a; --cd-panel2: #252b35; --cd-linie: #303844; --cd-text: #f1f4f8; --cd-leise: #a1aab8;
+  --cad-bg: #101216; --cad-toolbar: #171b21; --cad-panel: #1d222a; --cad-panel-raised: #252b35; --cad-panel-hover: #303844; --cad-border: #303844; --cad-border-active: #485463; --cad-text: #f1f4f8; --cad-text-secondary: #a1aab8; --cad-text-muted: #687383; --cad-accent: #f2a900; --cad-accent-hover: #ffbd24; --cad-success: #22c55e; --cad-warning: #f59e0b; --cad-danger: #ef4444; --cad-info: #3b82f6; --cad-selection: #f2a900; --cad-grid: #39424e; background: var(--cd-bg) !important; color: var(--cd-text); }
 .cad-dunkel .bg-white, .cad-dunkel .bg-\[\#fbfbfd\], .cad-dunkel .bg-\[\#fafafa\], .cad-dunkel .bg-gray-50 { background-color: var(--cd-panel) !important; }
 .cad-dunkel .bg-\[\#f5f5f7\], .cad-dunkel .bg-\[\#f0f7ff\] { background-color: var(--cd-panel2) !important; }
 .cad-dunkel .bg-\[\#fff7ed\], .cad-dunkel .bg-\[\#fff3ea\] { background-color: #2a1f17 !important; }
@@ -391,3 +392,24 @@ body {
 .cad-dock table th { color: var(--os-text-leise) !important; }
 .cad-dunkel .bg-\[\#eef3fe\], .cad-dunkel .bg-\[\#e8f1fc\], .cad-dunkel .bg-\[\#f1f6fa\], .cad-dunkel .bg-\[\#f4f1fa\], .cad-dunkel .bg-\[\#faf6f1\], .cad-dunkel .bg-\[\#f8fafc\] { background-color: var(--cd-panel2) !important; }
 .cad-dunkel .bg-\[\#fff4ed\], .cad-dunkel .bg-\[\#fff4ec\] { background-color: #3a2a1c !important; }
+
+/* CAD-Kopfzeile (hell und dunkel) */
+.cad-kopf { background: #fff; border-color: #d5dae0; color: #1d1d1f; }
+.cad-kopf-leise { color: #6e6e73; }
+.cad-kopf-trenner { background: #d5dae0; }
+.cad-kopf-knopf { color: inherit; }
+.cad-kopf-knopf:hover:not(:disabled) { background: rgba(0,0,0,.06); }
+.cad-kopf-menue { background: #fff; border-color: #d5dae0; color: #1d1d1f; }
+.cad-kopf-menue button:hover:not(:disabled) { background: rgba(0,0,0,.06); }
+.cad-dunkel .cad-kopf { background: var(--cad-toolbar) !important; border-color: var(--cad-border); color: var(--cad-text); }
+.cad-dunkel .cad-kopf-leise { color: var(--cad-text-secondary) !important; }
+.cad-dunkel .cad-kopf-trenner { background: var(--cad-border); }
+.cad-dunkel .cad-kopf-knopf:hover:not(:disabled) { background: var(--cad-panel-hover); }
+.cad-dunkel .cad-kopf-menue { background: var(--cad-panel-raised) !important; border-color: var(--cad-border-active); color: var(--cad-text); }
+.cad-dunkel .cad-kopf-menue button:hover:not(:disabled) { background: var(--cad-panel-hover); }
+/* Aktive Zustände im dunklen CAD in der Akzentfarbe (statt Orange) */
+.cad-dunkel [class*="border-[#e8590c]"] { border-color: var(--cad-accent) !important; }
+.cad-dunkel [class*="outline-[#e8590c]"] { outline-color: var(--cad-accent) !important; }
+.cad-dunkel [class*="bg-[#e8590c]"] { background-color: var(--cad-accent) !important; color: #101216; }
+.cad-dunkel [class*="text-[#e8590c]"] { color: var(--cad-accent) !important; }
+.cad-dunkel [aria-pressed="true"][style*="--os-akzent"] { background: var(--cad-accent) !important; color: #101216 !important; }

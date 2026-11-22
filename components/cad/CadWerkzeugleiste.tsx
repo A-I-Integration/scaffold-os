@@ -57,13 +57,25 @@ export default function CadWerkzeugleiste(p: WerkzeugleisteProps) {
 }
 
 /** Beschriftetes Werkzeug-Panel (linke Spalte): gleiche Einträge wie die Icon-Leiste, Gruppen einklappbar, aktives Werkzeug orange. */
-export type PanelZusatz = { bauteilTyp?: string | null; onBauteilTyp?: (t: string | null) => void; onUmriss?: () => void; ebenen?: ReactNode }
+export interface PanelExtra { id: string; label: string; icon: LucideIcon; titel: string; onClick: () => void; aus?: boolean }
+export type PanelZusatz = { bauteilTyp?: string | null; onBauteilTyp?: (t: string | null) => void; onUmriss?: () => void; ebenen?: ReactNode; /** zusätzliche Gruppen, die vor den Werkzeugen stehen (z. B. Gebäude) */ extraGruppen?: { name: string; eintraege: PanelExtra[] }[] }
 export function CadWerkzeugePanel(p: WerkzeugleisteProps & PanelZusatz) {
   const eintraege = werkzeugEintraege(p)
   const gruppen = [...new Set(eintraege.map((x) => x.gruppe))]
   const [zu, setZu] = useState<Record<string, boolean>>({})
   return (
     <div aria-label='Werkzeugliste' className='-m-4 divide-y divide-black/5'>
+      {(p.extraGruppen ?? []).map((g) => (
+        <section key={g.name} className='px-2 py-2' aria-label={g.name}>
+          <div className='px-2 py-1 text-[12px] font-semibold uppercase tracking-wider text-[#86868b]'>{g.name}</div>
+          {g.eintraege.map((x) => (
+            <button key={x.id} type='button' onClick={x.onClick} disabled={x.aus} title={x.titel}
+              className='flex w-full items-center gap-2.5 rounded px-2 py-1.5 text-left text-[13.5px] transition-colors hover:bg-black/5 disabled:pointer-events-none disabled:opacity-40'>
+              <x.icon className='h-4 w-4 shrink-0' strokeWidth={1.7} />{x.label}
+            </button>
+          ))}
+        </section>
+      ))}
       {gruppen.map((g) => (
         <section key={g} className='px-2 py-2'>
           <button type='button' onClick={() => setZu((z) => ({ ...z, [g]: !z[g] }))} aria-expanded={!zu[g]}
