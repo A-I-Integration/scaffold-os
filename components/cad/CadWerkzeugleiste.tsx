@@ -2,7 +2,8 @@
 import { useState, type ReactNode } from 'react'
 // Schmale Werkzeugleiste links neben der Arbeitsfläche. Enthält nur Schalter auf vorhandene Funktionen der CAD-Seite
 // (gleiche Handler wie das Band oben) – keine eigene Logik, keine eigene Datenhaltung.
-import { BoxSelect, XCircle, PlusSquare, ChevronsUp, Scissors, Layers, Ruler, MoveVertical, Triangle, Square, Crosshair, LayoutGrid, Footprints, type LucideIcon } from 'lucide-react'
+import { CheckSquare, BoxSelect, XCircle, PlusSquare, ChevronsUp, Scissors, Layers, Ruler, MoveVertical, Triangle, Square, Crosshair, LayoutGrid, Footprints, type LucideIcon } from 'lucide-react'
+import { kuerzelText } from '@/lib/cad/tastenkuerzel'
 import type { Messart } from '@/lib/cad/messen'
 import type { CadBandProps } from './CadBand'
 import { CATALOG_ITEMS } from './ComponentCatalog'
@@ -10,7 +11,7 @@ import { CATALOG_ITEMS } from './ComponentCatalog'
 export type WerkzeugleisteProps = Pick<CadBandProps,
   'hatModell' | 'rahmenAktiv' | 'onRahmen' | 'auswahlAnzahl' | 'bereicheOffen' | 'bereichWerkzeug' | 'onBereichWerkzeug' |
   'abbauAktiv' | 'onAbbau' | 'measureMode' | 'treppePanelAktiv' | 'onTreppePanel' | 'geruestfeldPanelAktiv' | 'onGeruestfeldPanel'
-> & { onAuswahlAufheben: () => void; messart: Messart; onMessart: (m: Messart) => void }
+> & { onAlleWaehlen?: () => void; onAuswahlAufheben: () => void; messart: Messart; onMessart: (m: Messart) => void }
 
 export interface WerkzeugEintrag { id: string; gruppe: string; label: string; icon: LucideIcon; aktiv: boolean; aus: boolean; onClick: () => void; titel: string }
 
@@ -19,6 +20,7 @@ export function werkzeugEintraege(p: WerkzeugleisteProps): WerkzeugEintrag[] {
   const kein = !p.hatModell
   const e: WerkzeugEintrag[] = []
   if (p.onRahmen) e.push({ id: 'rahmen', gruppe: 'Auswahl', label: 'Auswahlrahmen', icon: BoxSelect, aktiv: !!p.rahmenAktiv, aus: kein, onClick: p.onRahmen, titel: 'Auswahlrahmen aufziehen (Esc beendet)' })
+  if (p.onAlleWaehlen) e.push({ id: 'alle', gruppe: 'Auswahl', label: 'Alles auswählen', icon: CheckSquare, aktiv: false, aus: kein, onClick: p.onAlleWaehlen, titel: `Alle sichtbaren Bauteile auswählen (${kuerzelText('alles-auswaehlen')})` })
   e.push({ id: 'aufheben', gruppe: 'Auswahl', label: 'Auswahl aufheben', icon: XCircle, aktiv: false, aus: !(p.auswahlAnzahl && p.auswahlAnzahl > 0), onClick: p.onAuswahlAufheben, titel: 'Auswahl aufheben (Esc)' })
   if (p.onGeruestfeldPanel) e.push({ id: 'feld', gruppe: 'Gerüst', label: 'Gerüstfeld setzen', icon: LayoutGrid, aktiv: !!p.geruestfeldPanelAktiv, aus: kein, onClick: p.onGeruestfeldPanel, titel: 'Komplettes Gerüstfeld mit Parametern setzen oder ändern' })
   e.push({ id: 'anhaengen', gruppe: 'Gerüst', label: 'Felder anhängen', icon: PlusSquare, aktiv: p.bereicheOffen && p.bereichWerkzeug === 'erweitern', aus: kein, onClick: () => p.onBereichWerkzeug('erweitern'), titel: 'Seite am Anfang oder Ende um Felder verlängern' })

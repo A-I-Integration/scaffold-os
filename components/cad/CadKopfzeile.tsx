@@ -14,7 +14,7 @@ export interface CadKopfzeileProps {
   versionText: string
   kannZurueck: boolean; kannVor: boolean; onZurueck: () => void; onVor: () => void
   onVersionen: () => void
-  onSpeichern: () => void; speichernAus: boolean
+  onSpeichern: () => void; speichernAus: boolean; speichernTitel?: string
   onTeilen: () => void; teilenAus: boolean
   exportEintraege: MenuEintrag[]
   profilEintraege: MenuEintrag[]
@@ -88,7 +88,7 @@ export default function CadKopfzeile(p: CadKopfzeileProps) {
         <Aktion icon={Redo2} label='Wiederholen' titel='Rückgängig gemachte Änderung wiederholen (Strg/Cmd+Umschalt+Z)' aus={!p.kannVor} onClick={p.onVor} />
         <span aria-hidden className='mx-1 h-5 w-px cad-kopf-trenner' />
         <Aktion icon={History} label='Versionen' titel='Gespeicherte Stände ansehen oder wiederherstellen' onClick={p.onVersionen} />
-        <Aktion icon={Save} label='Speichern' titel='Projekt als Datei speichern' aus={p.speichernAus} onClick={p.onSpeichern} />
+        <Aktion icon={Save} label='Speichern' titel={p.speichernTitel ?? 'Projekt als Datei speichern'} aus={p.speichernAus} onClick={p.onSpeichern} />
         <Aktion icon={Share2} label='Teilen' titel='Projekt als Datei zum Weitergeben speichern' aus={p.teilenAus} onClick={p.onTeilen} />
         <MenuKnopf icon={Download} label='Export' titel='Plan, Montageplan, DXF, IFC oder Bild ausgeben' eintraege={p.exportEintraege} />
         <span aria-hidden className='mx-1 h-5 w-px cad-kopf-trenner' />
