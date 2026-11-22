@@ -59,13 +59,25 @@ interface Props {
   /** Werkzeug-Panel als erster Reiter (Auswahl, Gerüst, Messen) */
   werkzeuge?: ReactNode
   /** Von außen (Menüzeile) einen Reiter der linken Spalte öffnen; n zählt hoch */
-  reiterWunsch?: { tab: 'werkzeuge' | 'gebaeude' | 'geruest' | 'system'; n: number }
+  reiterWunsch?: { tab: 'werkzeuge' | 'gebaeude' | 'geruest' | 'system'; n: number; /** Abschnitt, zu dem gescrollt wird (und der sich öffnet) */ ziel?: 'tueren' | 'balkon' | 'gelaende' }
 }
 
 export default function BuildingForm({ reiterWunsch, building, systemId, onChange, onSystemChange, onGenerate, onLadeProjektdatei, onAussehen, onModellUebernehmen, registrierePlanUpload, registriereZeichner, onImportWartet, warnings, zusatz, werkzeuge }: Props) {
   const [activeTab, setActiveTab] = useState<'werkzeuge' | 'gebaeude' | 'geruest' | 'system'>('gebaeude')
   const [wunschGesehen, setWunschGesehen] = useState<number | undefined>(reiterWunsch?.n)
   if (reiterWunsch && reiterWunsch.n !== wunschGesehen) { setWunschGesehen(reiterWunsch.n); setActiveTab(reiterWunsch.tab) }
+  // Gewünschten Abschnitt öffnen und in Sicht scrollen (erst nach dem Umschalten des Reiters)
+  useEffect(() => {
+    const ziel = reiterWunsch?.ziel
+    if (!ziel) return
+    const t = setTimeout(() => {
+      const el = document.querySelector<HTMLElement>(`[data-cad-ziel="${ziel}"]`)
+      if (!el) return
+      if (el instanceof HTMLDetailsElement) el.open = true
+      el.scrollIntoView({ block: 'center', behavior: 'smooth' })
+    }, 60)
+    return () => clearTimeout(t)
+  }, [reiterWunsch?.n, reiterWunsch?.ziel])
   const [analyseLaeuft, setAnalyseLaeuft] = useState(false)
   const [profilFehler, setProfilFehler] = useState<Partial<Record<'front' | 'back' | 'left' | 'right', boolean>>>({})
   const [analyseHinweis, setAnalyseHinweis] = useState<string | null>(null)
@@ -1175,8 +1187,8 @@ export default function BuildingForm({ reiterWunsch, building, systemId, onChang
             )}
             <div><label className='block text-xs font-medium text-[#424245] mb-1'>Geschosse</label><input type='number' min={1} value={building.floors} onChange={(e) => update('floors', parseInt(e.target.value))} className='w-full px-3 py-2 border rounded-xl text-sm' /></div>
             <div><label className='block text-xs font-medium text-[#424245] mb-1'>Fenster</label><input type='number' min={0} value={building.windowCount} onChange={(e) => update('windowCount', parseInt(e.target.value))} className='w-full px-3 py-2 border rounded-xl text-sm' /></div>
-            <div><label className='block text-xs font-medium text-[#424245] mb-1'>Türen</label><input type='number' min={0} value={building.doorCount} onChange={(e) => update('doorCount', parseInt(e.target.value))} className='w-full px-3 py-2 border rounded-xl text-sm' /></div>
-            <div><label className='block text-xs font-medium text-[#424245] mb-1'>Balkone</label><input type='number' min={0} value={building.balconyCount} onChange={(e) => update('balconyCount', parseInt(e.target.value))} className='w-full px-3 py-2 border rounded-xl text-sm' /></div>
+            <div data-cad-ziel='tueren'><label className='block text-xs font-medium text-[#424245] mb-1'>Türen</label><input type='number' min={0} value={building.doorCount} onChange={(e) => update('doorCount', parseInt(e.target.value))} className='w-full px-3 py-2 border rounded-xl text-sm' /></div>
+            <div data-cad-ziel='balkon'><label className='block text-xs font-medium text-[#424245] mb-1'>Balkone</label><input type='number' min={0} value={building.balconyCount} onChange={(e) => update('balconyCount', parseInt(e.target.value))} className='w-full px-3 py-2 border rounded-xl text-sm' /></div>
             <BalkonEditor building={building} onChange={onChange} />
             <TuerEditor building={building} onChange={onChange} />
           </div>
@@ -1283,7 +1295,7 @@ export default function BuildingForm({ reiterWunsch, building, systemId, onChang
                         ))}
                       </div>
                     </div>
-                    <details className='col-span-2'>
+                    <details className='col-span-2' data-cad-ziel='gelaende'>
                       <summary className='text-[11px] text-[#424245] cursor-pointer'>Schräger Hang: Gelände am Anfang/Ende je Seite (treppt den Fuß ab)</summary>
                       <div className='mt-1 space-y-1'>
                         {(['front', 'back', 'left', 'right'] as const).filter((sd) => building.sides.includes(sd)).map((sd) => {

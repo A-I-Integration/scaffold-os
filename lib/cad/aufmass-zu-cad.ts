@@ -170,7 +170,7 @@ export function aufmassZuCad(a: AufmassFuerCad): CadUebernahme {
 /** Zwischenablage zwischen Aufmaß-Seite und CAD (nur dieser Browser-Tab). */
 export const CAD_UEBERNAHME_KEY = 'scaffold_cad_aus_aufmass'
 
-export interface CadUebergabe { building: BuildingParams; systemId: string; hinweise: string[]; projektName?: string; notizen?: unknown[]; statikDaten?: Record<string, unknown>; /** Stückliste des Aufmaßes (für die Regel „Größeres von beiden“) */ aufmassListe?: MaterialItem[] }
+export interface CadUebergabe { building: BuildingParams; systemId: string; hinweise: string[]; projektName?: string; /** Adresse der Baustelle aus dem Aufmaß */ baustelle?: string; notizen?: unknown[]; statikDaten?: Record<string, unknown>; /** Stückliste des Aufmaßes (für die Regel „Größeres von beiden“) */ aufmassListe?: MaterialItem[] }
 
 /** Nur Zeilen mit Artikelnummer, Menge und Stückpreis übernehmen */
 export function gueltigeStueckliste(roh: unknown): MaterialItem[] | undefined {
@@ -185,6 +185,6 @@ export function leseCadUebergabe(roh: string | null): CadUebergabe | null {
     const j = JSON.parse(roh) as Record<string, unknown> & { building?: BuildingParams }
     const b = j?.building
     if (!b || !(b.lengthM > 0) || !(b.widthM > 0) || !(b.heightM > 0)) return null
-    return { building: b, systemId: typeof j.systemId === 'string' ? j.systemId : 'mj-uniconnect', hinweise: Array.isArray(j.hinweise) ? (j.hinweise as unknown[]).map(String) : [], projektName: typeof j.projektName === 'string' ? j.projektName : undefined, notizen: Array.isArray(j.notizen) ? j.notizen : undefined, statikDaten: j.statikDaten && typeof j.statikDaten === 'object' && !Array.isArray(j.statikDaten) ? (j.statikDaten as Record<string, unknown>) : undefined, aufmassListe: gueltigeStueckliste(j.aufmassListe) }
+    return { building: b, systemId: typeof j.systemId === 'string' ? j.systemId : 'mj-uniconnect', hinweise: Array.isArray(j.hinweise) ? (j.hinweise as unknown[]).map(String) : [], projektName: typeof j.projektName === 'string' ? j.projektName : undefined, baustelle: typeof j.baustelle === 'string' && j.baustelle.trim() ? j.baustelle.trim() : undefined, notizen: Array.isArray(j.notizen) ? j.notizen : undefined, statikDaten: j.statikDaten && typeof j.statikDaten === 'object' && !Array.isArray(j.statikDaten) ? (j.statikDaten as Record<string, unknown>) : undefined, aufmassListe: gueltigeStueckliste(j.aufmassListe) }
   } catch { return null }
 }

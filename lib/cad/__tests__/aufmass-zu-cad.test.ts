@@ -71,4 +71,9 @@ describe('Aufmaß → CAD: Klassen und Eingänge', () => {
     expect(r.building?.lastklasse).toBe(3)
     expect(r.hinweise.join(' ')).toContain('Lastklasse: CAD 4 → Aufmaß 3')
   })
+  it('leseCadUebergabe übernimmt die Baustellenadresse, leere Adresse nicht', () => {
+    const b = { lengthM: 10, widthM: 8, heightM: 6 }
+    expect(leseCadUebergabe(JSON.stringify({ building: b, baustelle: ' Hauptstr. 1 ' }))?.baustelle).toBe('Hauptstr. 1')
+    expect(leseCadUebergabe(JSON.stringify({ building: b, baustelle: '  ' }))?.baustelle).toBeUndefined()
+  })
 })
