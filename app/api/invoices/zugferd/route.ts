@@ -10,7 +10,7 @@ import { ROLLEN } from '@/lib/rollen';
 import { pruefePflichtangaben } from '@/lib/rechnung-steuer';
 import { baueERechnungEingabe } from '@/lib/rechnung-erechnung';
 import { archiviereXml } from '@/lib/rechnung-archiv';
-import { projektnummerZuProjekt } from '@/lib/cad/projektnummer-sperre';
+import { erwarteteProjektnummer, SperreFehler } from '@/lib/cad/projektnummer-sperre';
 
 // ============================================================
 // SCAFFOLD OS – E-Rechnung / ZUGFeRD (Phase 39)
@@ -50,7 +50,8 @@ export async function POST(req: NextRequest) {
     if (!inv) return NextResponse.json({ success: false, error: 'Rechnung nicht gefunden.' }, { status: 404 });
 
     // Projektnummer des verknüpften CAD-Projekts: steht auf dem PDF und wird dem Versand als "im Dokument enthalten" gemeldet
-    inv.projektnummer = await projektnummerZuProjekt(inv.project_id);
+    try { inv.projektnummer = await erwarteteProjektnummer(inv.project_id); }
+    catch (e) { if (e instanceof SperreFehler) return NextResponse.json({ success: false, error: e.message }, { status: e.status }); throw e; }
 
     const cs = inv.company_snapshot || {};
 

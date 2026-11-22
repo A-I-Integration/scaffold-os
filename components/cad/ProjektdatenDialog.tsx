@@ -85,6 +85,14 @@ export default function ProjektdatenDialog({ projekt, kunden, rolle, onSpeichern
             <div>Projektnummer damals: {info.verwendung.projektnummer}{info.verwendung.verwendet_von ? ` · Benutzer ${info.verwendung.verwendet_von}` : ''}</div>
           </section>
         )}
+        {info && info.verknuepfungen.length > 0 && (
+          <details className='mb-3 text-xs'>
+            <summary className='cursor-pointer font-medium'>Verknüpfung mit Kundenprojekt ({info.verknuepfungen.length})</summary>
+            <ul className='mt-1 space-y-1' data-testid='verknuepfungs-protokoll'>
+              {info.verknuepfungen.map((v, i) => <li key={i} className='rounded border p-1.5'>{zeit(v.created_at)} · {v.alt_project_id ? `${v.alt_project_id.slice(0, 8)} → ` : 'neu verknüpft: '}{v.neu_project_id ? v.neu_project_id.slice(0, 8) : 'gelöst'}{v.geaendert_von ? ` · Benutzer ${v.geaendert_von}` : ''}</li>)}
+            </ul>
+          </details>
+        )}
         {info && info.ereignisse.length > 0 && (
           <details className='mb-3 text-xs'>
             <summary className='cursor-pointer font-medium'>Externe Verwendungen ({info.ereignisse.length})</summary>

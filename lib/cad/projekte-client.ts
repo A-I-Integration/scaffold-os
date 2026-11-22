@@ -32,6 +32,7 @@ export const aendereKontoStammdaten = (id: string, a: { customer_id?: string | n
 export interface NummernInfo {
   gesperrt_am: string | null
   verwendung: { ereignis: 'verwendung' | 'versand_fehlgeschlagen'; projektnummer: string; dokumenttyp: string; dokument_id: string | null; verwendet_von: string | null; fehler: string | null; created_at: string } | null
+  verknuepfungen: { alt_project_id: string | null; neu_project_id: string | null; geaendert_von: string | null; created_at: string }[]
   ereignisse: { ereignis: 'verwendung' | 'versand_fehlgeschlagen'; projektnummer: string; dokumenttyp: string; dokument_id: string | null; verwendet_von: string | null; fehler: string | null; created_at: string }[]
   protokoll: { art: string; alt: string | null; neu: string | null; grund: string | null; geaendert_von: string | null; created_at: string }[]
 }

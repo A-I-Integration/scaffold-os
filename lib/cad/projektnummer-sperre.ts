@@ -63,14 +63,17 @@ export async function sperreFuerExterneVerwendung(a: { projectId: string | null 
   throw new SperreFehler()
 }
 
-/** Versand nach erfolgter Sperre fehlgeschlagen: als eigenes Ereignis festhalten. Die Sperre bleibt; wirft nie. */
-export async function markiereVersandFehler(ereignisId: string | null | undefined, fehler: string): Promise<void> {
-  if (!ereignisId || !UUID.test(ereignisId)) return
+export const FEHLVERSAND_NICHT_PROTOKOLLIERT = ' Hinweis: Die Projektnummer wurde bereits gesperrt, der fehlgeschlagene Versand konnte aber nicht im Protokoll vermerkt werden. Bitte einem Admin melden.'
+
+/** Versand nach erfolgter Sperre fehlgeschlagen: als eigenes Ereignis festhalten. Die Sperre bleibt; wirft nie. Rückgabe: false = konnte nicht protokolliert werden. */
+export async function markiereVersandFehler(ereignisId: string | null | undefined, fehler: string): Promise<boolean> {
+  if (!ereignisId || !UUID.test(ereignisId)) return true
   try {
     const { url, headers } = conf()
     const r = await fetch(`${url}/rest/v1/rpc/cad_projektnummer_versand_fehlgeschlagen`, { method: 'POST', headers, body: JSON.stringify({ p_ereignis_id: ereignisId, p_fehler: fehler }) })
-    if (!r.ok) console.error('[projektnummer] Fehlversand nicht protokolliert', await r.text().catch(() => ''))
-  } catch (e) { console.error('[projektnummer] Fehlversand nicht protokolliert', e) }
+    if (!r.ok) { console.error('[projektnummer] Fehlversand nicht protokolliert', await r.text().catch(() => '')); return false }
+    return true
+  } catch (e) { console.error('[projektnummer] Fehlversand nicht protokolliert', e); return false }
 }
 
 /** Projektnummern für mehrere Kundenprojekte: nur wo GENAU EIN CAD-Projekt verknüpft ist (sonst nicht eindeutig, also keine Nummer). */
@@ -95,6 +98,30 @@ export async function projektnummernZuProjekten(projectIds: (string | null | und
 
 export async function projektnummerZuProjekt(projectId: string | null | undefined): Promise<string | null> {
   return projectId ? (await projektnummernZuProjekten([projectId])).get(projectId) ?? null : null
+}
+
+/**
+ * Projektnummer, die ein ausgehendes Dokument dieses Kundenprojekts tragen MUSS (genau ein verknüpftes CAD-Projekt), sonst null.
+ * Streng: Lässt sich das nicht prüfen, wird abgebrochen (nichts wird versendet), statt stillschweigend ohne Nummer weiterzumachen.
+ */
+export async function erwarteteProjektnummer(projectId: string | null | undefined): Promise<string | null> {
+  if (!projectId || !UUID.test(projectId)) return null
+  const { url, headers } = conf()
+  let zeilen: { projektnummer: string | null }[]
+  try {
+    const r = await fetch(`${url}/rest/v1/cad_projekte?project_id=eq.${projectId}&select=projektnummer`, { headers })
+    if (!r.ok) throw new Error(await r.text())
+    zeilen = await r.json()
+  } catch { throw new SperreFehler('Die Projektnummer dieses Projekts konnte nicht geprüft werden. Es wurde nichts versendet. Bitte erneut versuchen.') }
+  return zeilen.length === 1 && zeilen[0].projektnummer ? zeilen[0].projektnummer : null
+}
+
+/** Vor dem Versand: Besitzt das Projekt eine Projektnummer, muss das Dokument sie tragen – sonst wird der Versand blockiert (409). */
+export async function pruefeProjektnummerImDokument(projectId: string | null | undefined, imDokument: string | null | undefined): Promise<void> {
+  const erwartet = await erwarteteProjektnummer(projectId)
+  if (erwartet && !(typeof imDokument === 'string' && imDokument.trim())) {
+    throw new SperreFehler('Dieses Dokument enthält die Projektnummer dieses Projekts nicht. Es wurde nichts versendet. Bitte Seite neu laden und das Dokument neu erzeugen.', 409)
+  }
 }
 
 /** Ergänzt Rechnungszeilen um `projektnummer` (die Nummer, die auf dem Dokument stehen soll). */

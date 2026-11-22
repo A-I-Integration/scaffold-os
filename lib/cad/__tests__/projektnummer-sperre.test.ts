@@ -63,7 +63,7 @@ describe('sperreFuerExterneVerwendung', () => {
     await markiereVersandFehler(null, 'x'); await markiereVersandFehler('kein-uuid', 'x')
     expect(calls.length).toBe(0)
     vi.stubGlobal('fetch', vi.fn(async () => { throw new Error('netz') }))
-    await expect(markiereVersandFehler(EV, 'x')).resolves.toBeUndefined()
+    await expect(markiereVersandFehler(EV, 'x')).resolves.toBe(false)
   })
   it('Projektnummern nur bei genau einem verknüpften CAD-Projekt (sonst nicht eindeutig)', async () => {
     const { projektnummernZuProjekten, ergaenzeProjektnummer } = await import('../projektnummer-sperre')
@@ -84,6 +84,70 @@ describe('sperreFuerExterneVerwendung', () => {
   })
 })
 
+describe('Absicherung: keine Rechnung still ohne Projektnummer', () => {
+  it('erwarteteProjektnummer: genau ein CAD-Projekt, sonst null; Abfragefehler bricht ab (503)', async () => {
+    const { erwarteteProjektnummer } = await import('../projektnummer-sperre')
+    queue = [() => ({ body: [{ projektnummer: 'P-9' }] })]; expect(await erwarteteProjektnummer(P)).toBe('P-9')
+    queue = [() => ({ body: [] })]; expect(await erwarteteProjektnummer(P)).toBeNull()
+    queue = [() => ({ body: [{ projektnummer: 'P-1' }, { projektnummer: 'P-2' }] })]; expect(await erwarteteProjektnummer(P)).toBeNull()
+    calls.length = 0; expect(await erwarteteProjektnummer(null)).toBeNull(); expect(calls.length).toBe(0)
+    queue = [() => ({ status: 500, body: 'boom' })]
+    await expect(erwarteteProjektnummer(P)).rejects.toMatchObject({ status: 503 })
+  })
+  it('pruefeProjektnummerImDokument: Projekt hat Nummer, Dokument nicht → 409; mit Nummer oder ohne Nummer am Projekt → ok', async () => {
+    const { pruefeProjektnummerImDokument } = await import('../projektnummer-sperre')
+    queue = [() => ({ body: [{ projektnummer: 'P-9' }] })]
+    await expect(pruefeProjektnummerImDokument(P, null)).rejects.toMatchObject({ status: 409 })
+    queue = [() => ({ body: [{ projektnummer: 'P-9' }] })]
+    await expect(pruefeProjektnummerImDokument(P, 'P-9')).resolves.toBeUndefined()
+    queue = [() => ({ body: [] })]
+    await expect(pruefeProjektnummerImDokument(P, null)).resolves.toBeUndefined()
+    await expect(pruefeProjektnummerImDokument(null, null)).resolves.toBeUndefined()
+  })
+  it('Fehlversand nicht protokollierbar: Rückgabe false (wird dem Anwender gemeldet)', async () => {
+    const { markiereVersandFehler } = await import('../projektnummer-sperre')
+    const EV = '66666666-6666-4666-8666-666666666666'
+    queue = [() => ({ status: 500, body: 'boom' })]; expect(await markiereVersandFehler(EV, 'x')).toBe(false)
+    vi.stubGlobal('fetch', vi.fn(async () => { throw new Error('netz') })); expect(await markiereVersandFehler(EV, 'x')).toBe(false)
+    queue = [() => ({ body: EV })]; vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true, status: 200, json: async () => EV, text: async () => EV }))); expect(await markiereVersandFehler(EV, 'x')).toBe(true)
+  })
+  it('mitProjektnummer (Rückfall-PDF): vorhanden → unverändert; fehlt → über CAD-Verknüpfung; Prüfung scheitert → Abbruch; ohne Projekt → null', async () => {
+    const { mitProjektnummer } = await import('../../invoice-pdf')
+    const basis = { id: 'i', invoice_number: 'RE-1', project_id: P } as never
+    const fertig = { ...(basis as object), projektnummer: 'P-5' } as never
+    expect(await mitProjektnummer(fertig)).toBe(fertig); expect(calls.length).toBe(0)
+    expect((await mitProjektnummer({ ...(basis as object), project_id: null } as never)).projektnummer).toBeNull(); expect(calls.length).toBe(0)
+    queue = [() => ({ body: { success: true, projektnummer: 'P-7' } })]
+    expect((await mitProjektnummer(basis)).projektnummer).toBe('P-7')
+    expect(calls[0].url).toContain(`/api/cad/projektnummer?project_id=${P}`)
+    queue = [() => ({ status: 503, body: { success: false, error: 'x' } })]
+    await expect(mitProjektnummer(basis)).rejects.toThrow(/nichts versendet/)
+    vi.stubGlobal('fetch', vi.fn(async () => { throw new Error('netz') }))
+    await expect(mitProjektnummer(basis)).rejects.toThrow(/nichts versendet/)
+  })
+  const q = (d: string) => readFileSync(d, 'utf8')
+  it('alle Versandwege prüfen VOR der Sperre, dass das Dokument die Nummer trägt', () => {
+    for (const d of ['app/api/email/route.ts', 'app/api/kunden/[id]/mail/route.ts']) {
+      const t = q(d); const a = t.indexOf('pruefeProjektnummerImDokument('), b = t.indexOf('sperreFuerExterneVerwendung({')
+      expect(a, d).toBeGreaterThan(-1); expect(a, d).toBeLessThan(b)
+    }
+    expect(q('lib/mahnung-versand.ts')).toContain('erwarteteProjektnummer(inv.project_id)')
+    expect(q('app/api/invoices/zugferd/route.ts')).toContain('erwarteteProjektnummer(')
+    expect(q('app/api/cad/projektnummer/route.ts')).toContain('erwarteteProjektnummer(')
+  })
+  it('Rückfall-PDF holt die Nummer vor dem Zeichnen; Mahnung per Knopf zeigt abgelehnten Versand an', () => {
+    const t = q('lib/invoice-pdf.ts'); expect(t.indexOf('await mitProjektnummer(inv)')).toBeLessThan(t.indexOf('generateInvoicePDF(mit)'))
+    expect(q('app/rechnungen/page.tsx')).toContain('Die Mahnung wurde NICHT per E-Mail versendet')
+  })
+  it('nicht protokollierter Fehlversand wird in der Antwort sichtbar', () => {
+    for (const d of ['app/api/email/route.ts', 'app/api/kunden/[id]/mail/route.ts', 'lib/mahnung-versand.ts']) expect(q(d), d).toContain('FEHLVERSAND_NICHT_PROTOKOLLIERT')
+  })
+  it('SQL 120: Verknüpfungsänderungen werden per Datenbank-Trigger unveränderbar protokolliert', () => {
+    const t = q('supabase/phase-120-cad-projekt-verknuepfung-protokoll.sql')
+    expect(t).toContain('after insert or update of project_id on public.cad_projekte'); expect(t).toContain('cad_protokoll_unveraenderbar'); expect(t).toContain('old.project_id')
+  })
+})
+
 describe('Sperre nur bei tatsächlicher Verwendung im Dokument, VOR dem Versand', () => {
   const quelle = (d: string) => readFileSync(d, 'utf8')
   const nach = (datei: string, sperre: string, danach: string) => {
@@ -101,7 +165,7 @@ describe('Sperre nur bei tatsächlicher Verwendung im Dokument, VOR dem Versand'
     expect(quelle('app/api/kunden/[id]/mail/route.ts')).toContain('invoiceNumber && pdfBase64 &&')
   })
   it('Mahnversand (Cron und Knopf): Nummer wird gedruckt, Sperre vor dem Versand, Fehlversand markiert', () => {
-    nach('lib/mahnung-versand.ts', 'projektnummerZuProjekt(inv.project_id)', 'generateMahnungPDF(inv')
+    nach('lib/mahnung-versand.ts', 'erwarteteProjektnummer(inv.project_id)', 'generateMahnungPDF(inv')
     nach('lib/mahnung-versand.ts', 'sperreFuerExterneVerwendung({', 'emails.send')
     expect(quelle('lib/mahnung-versand.ts')).toContain('markiereVersandFehler(ereignisId')
   })
