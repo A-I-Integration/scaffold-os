@@ -33,14 +33,16 @@ describe('Umriss + Hang + Pultdach', () => {
     const tops = m.levels.map((l) => l.topY)
     tops.slice(1).forEach((t, i) => expect(t - tops[i]).toBeCloseTo(2, 2))
   })
-  it('System ohne belegte Ausgleichsdaten (MJ Uni-Connect): Warnung statt stiller Schwebe-Füße', () => {
+  it('System ohne belegte Ausgleichsdaten (MJ Uni-Connect): Fuß erreicht das Gelände mit gekennzeichneter Annahme', () => {
     const { m } = obersterBelag({ ...basis, geruestOptionen: hang })
-    const w = m.warnings.find((x) => x.code === 'HANG_AUSGLEICH_FEHLT')
+    const w = m.warnings.find((x) => x.code === 'HANG_AUSGLEICH_ANNAHME')
     expect(w).toBeDefined()
-    expect(w!.message).toMatch(/keine belegten Daten/)
-  })
-  it('ohne Hang keine solche Warnung', () => {
-    const { m } = obersterBelag({ ...basis, geruestOptionen: { pultNiedrigeSeite: 'right' } })
+    expect(w!.message).toMatch(/Annahme/)
     expect(m.warnings.some((x) => x.code === 'HANG_AUSGLEICH_FEHLT')).toBe(false)
+    expect(m.fields.filter((f) => f.fuss).length).toBeGreaterThan(0)
+  })
+  it('ohne Hang keine Ausgleichs-Warnung', () => {
+    const { m } = obersterBelag({ ...basis, geruestOptionen: { pultNiedrigeSeite: 'right' } })
+    expect(m.warnings.some((x) => x.code === 'HANG_AUSGLEICH_FEHLT' || x.code === 'HANG_AUSGLEICH_ANNAHME')).toBe(false)
   })
 })

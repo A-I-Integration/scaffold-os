@@ -2430,6 +2430,8 @@ export function generateCADModel(
   return { ...preliminaryModel, components3D }
 }
 
+/** Übliche Werte für Rahmengerüste, NUR als gekennzeichnete Annahme, wenn ein System keine belegten Ausgleichsdaten hat (siehe HANG_AUSGLEICH_ANNAHME). */
+const AUSGLEICH_ANNAHME = { fussspindelWegM: 0.4, anschlagRasterM: 0.5, stielLaengenM: [0.5, 1.0, 1.5], quelle: 'Annahme (nicht herstellerbelegt)' }
 const hangIgnoriert = (o: GeruestOptionen | undefined): CADWarning | null => {
   const werte = (['front', 'back', 'left', 'right'] as const).filter((sd) => Math.abs(o?.gelaendeSeiteM?.[sd] ?? 0) >= 0.01)
   return werte.length ? { type: 'warning', code: 'HANG_NICHT_UNTERSTUETZT', message: 'Gelände je Seite (Hang) ist eingetragen, wird aber bei Gebäuden mit Umriss, Höhenabschnitten oder Vorbau noch nicht berücksichtigt: Das Gerüst steht hier auf einheitlichem Gelände (±0,00). Höhen, Lagen und Mengen bitte von Hand prüfen.' } : null
@@ -2604,6 +2606,8 @@ function generiereUmrissModell(
 
   const abtreppFuesseU: { ausgleichM: number; stielM: number; spindelM: number; spindel80: boolean }[] = []
   const luecken = { n: 0, maxM: 0 }
+  const ausgleichAnnahme = !!system && !system.hoehenausgleich
+  const ausgleichSys = system && ausgleichAnnahme ? { ...system, hoehenausgleich: AUSGLEICH_ANNAHME } : system
 
   const fields: ScaffoldField[] = []
   const levels: ScaffoldLevel[] = []
@@ -2628,10 +2632,10 @@ function generiereUmrissModell(
           const fussHoch = Math.max(gM, gA, gB, gAo, gBo)
           if (ld.bottomY < fussHoch - 1e-6) return
           if (ld.bottomY - levelCalc.levelHeightM < fussHoch - 1e-6) {
-            const te = ausgleichTeile(ld.bottomY - gM, system)
+            const te = ausgleichTeile(ld.bottomY - gM, ausgleichSys!)
             if (!te) { luecken.n++; luecken.maxM = Math.max(luecken.maxM, ld.bottomY - fussHoch) } // keine belegten Ausgleichsdaten: Fuß steht frei über dem Gelände
             if (te) {
-              const f2 = (g: number) => ausgleichTeile(Math.max(0, ld.bottomY - g), system) ?? undefined
+              const f2 = (g: number) => ausgleichTeile(Math.max(0, ld.bottomY - g), ausgleichSys!) ?? undefined
               fussTU = { ...te, von: f2(gA), bis: f2(gB), vonAussen: f2(gAo), bisAussen: f2(gBo) }
               abtreppFuesseU.push({ ausgleichM: Math.round((ld.bottomY - gM) * 100) / 100, ...te })
             }
@@ -2658,6 +2662,7 @@ function generiereUmrissModell(
     })
     levels.push({ id: `level-umriss-${ld.index}`, index: ld.index, heightM: levelCalc.levelHeightM, bottomY: ld.bottomY, topY: ld.topY, fields: lageFelder })
   })
+  if (hangU && system && ausgleichAnnahme && abtreppFuesseU.length > 0) warnings.push({ type: 'warning', code: 'HANG_AUSGLEICH_ANNAHME', message: `Hang: Für ${system.hersteller} ${system.systemName} liegen keine belegten Daten zum Höhenausgleich vor. Der Fuß ist mit üblichen Rahmengerüst-Werten gerechnet (Fußspindel bis 0,40 m, Ausgleichsstiele 0,5 / 1,0 / 1,5 m) – das ist eine Annahme, keine Herstellerangabe. Vor dem Einsatz mit dem Hersteller prüfen.` })
   if (hangU && system && luecken.n > 0) warnings.push({ type: 'warning', code: 'HANG_AUSGLEICH_FEHLT', message: `Hang: Für ${system.hersteller} ${system.systemName} liegen keine belegten Daten zum Höhenausgleich am Fuß (Ausgleichsstiele, Fußspindeln) vor. An ${luecken.n} Feldern steht der Gerüstfuß bis zu ${luecken.maxM.toFixed(2).replace('.', ',')} m über dem Gelände – Fußausgleich bitte vor Ort festlegen (Unterbau/Stiele nach Herstellerangabe).` })
   if (hangU && abtreppFuesseU.length) {
     const stielZahl = new Map<number, number>()
