@@ -29,6 +29,7 @@ import { statikPruefpunkte } from '@/lib/statik-pruefpunkte'
 import {
   seitenUndLagen, seitenName, istSichtbar, zaehleMarkierung, ladeMarkierung, speichereMarkierung,
 } from '@/lib/montage-ansicht'
+import { erzeugeAufbauSchritte } from '@/lib/geruest/aufbau-schritte'
 
 export type AnsichtDaten = {
   projektName: string
@@ -74,7 +75,15 @@ export default function AnsichtViewer({ daten, kopfAktion, speicherKey }: { date
   }, [speicherKey, teile])
   const markierungAendern = (neu: Set<string>) => { setMarkiert(neu); if (speicherKey) speichereMarkierung(speicherKey, neu) }
   const hiddenSides = useMemo(() => new Set(seiten.filter((x) => versteckteSeiten.has(x))), [seiten, versteckteSeiten])
-  const hiddenLevels = useMemo(() => new Set(lagen.filter((x) => versteckteLagen.has(x))), [lagen, versteckteLagen])
+  // Aufbau Schritt für Schritt: zeigt das Gerüst bis zur gewählten Lage (null = aus)
+  const [aufbauNr, setAufbauNr] = useState<number | null>(null)
+  const aufbauSchritte = useMemo(() => (modell ? erzeugeAufbauSchritte(modell) : []), [modell])
+  const aufbau = aufbauNr !== null ? aufbauSchritte[Math.min(aufbauNr, aufbauSchritte.length - 1)] ?? null : null
+  const hiddenLevels = useMemo(() => {
+    const n = new Set(lagen.filter((x) => versteckteLagen.has(x)))
+    if (aufbau) aufbau.versteckteLagen.forEach((i) => n.add(i))
+    return n
+  }, [lagen, versteckteLagen, aufbau])
   const zaehlung = useMemo(() => zaehleMarkierung(teile, markiert), [teile, markiert])
   const umschalten = <T,>(menge: ReadonlySet<T>, wert: T): Set<T> => { const n = new Set(menge); if (n.has(wert)) n.delete(wert); else n.add(wert); return n }
 
@@ -136,6 +145,26 @@ export default function AnsichtViewer({ daten, kopfAktion, speicherKey }: { date
         <aside className='space-y-4'>
           <div className='rounded-2xl border border-black/5 bg-white p-4'>
             <h2 className='text-sm font-semibold mb-2'>Montage</h2>
+            {aufbauSchritte.length > 0 && (
+              <div className='mb-3 rounded-xl bg-[#e8590c]/5 p-3'>
+                {!aufbau ? (
+                  <button onClick={() => setAufbauNr(0)} className='min-h-11 w-full px-4 rounded-lg text-sm font-semibold bg-[#e8590c] text-white'>Aufbau Schritt für Schritt</button>
+                ) : (
+                  <div>
+                    <div className='flex items-center justify-between'>
+                      <span className='text-sm font-semibold'>Schritt {aufbau.nr} von {aufbau.von}</span>
+                      <button onClick={() => setAufbauNr(null)} className='text-xs underline'>Beenden</button>
+                    </div>
+                    <ul className='mt-1 text-sm list-disc pl-5'>{aufbau.hinweise.map((h) => <li key={h}>{h}</li>)}</ul>
+                    <div className='mt-2 flex gap-2'>
+                      <button disabled={aufbau.nr <= 1} onClick={() => setAufbauNr(aufbau.nr - 2)} className='min-h-11 flex-1 rounded-lg text-sm font-medium bg-black/5 disabled:opacity-40'>Zurück</button>
+                      <button disabled={aufbau.nr >= aufbau.von} onClick={() => setAufbauNr(aufbau.nr)} className='min-h-11 flex-1 rounded-lg text-sm font-semibold bg-[#e8590c] text-white disabled:opacity-40'>Weiter</button>
+                    </div>
+                    <p className='mt-2 text-[11px] text-[#86868b]'>Schematisch, kein Standsicherheitsnachweis.</p>
+                  </div>
+                )}
+              </div>
+            )}
             {(seiten.length > 1 || lagen.length > 1) && (
               <div className='mb-3'>
                 <div className='flex items-center justify-between mb-1'>
