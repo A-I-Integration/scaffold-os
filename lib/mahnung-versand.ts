@@ -1,5 +1,5 @@
 import { generateMahnungPDF, generateZahlungserinnerungPDF, type Invoice } from '@/lib/invoice-pdf'
-import { sperreFuerExterneVerwendung, markiereVersandFehler, projektnummerZuProjekt, SperreFehler } from '@/lib/cad/projektnummer-sperre'
+import { sperreFuerExterneVerwendung, markiereVersandFehler, erwarteteProjektnummer, FEHLVERSAND_NICHT_PROTOKOLLIERT, SperreFehler } from '@/lib/cad/projektnummer-sperre'
 import { tageUeberfaellig, offenerBetrag, AKTION_LABEL, type MahnAktion } from '@/lib/mahnung-steuerung'
 
 // ============================================================
@@ -70,7 +70,8 @@ export async function sendeMahnschritt(
     if (!email) return { ok: false, error: 'Beim Kunden ist keine E-Mail-Adresse hinterlegt.', ohneEmail: true }
 
     // Projektnummer des verknüpften CAD-Projekts: steht auf dem Schreiben und wird mit dem Versand gesperrt
-    const projektnummer = await projektnummerZuProjekt(inv.project_id)
+    let projektnummer: string | null
+    try { projektnummer = await erwarteteProjektnummer(inv.project_id) } catch (e) { if (e instanceof SperreFehler) return { ok: false, error: e.message }; throw e }
     inv = { ...inv, projektnummer } as Invoice
     const cfg = einstellungen ?? await ladeMahnEinstellungen()
     const tage = tageUeberfaellig(inv.due_date)
@@ -135,7 +136,10 @@ export async function sendeMahnschritt(
       console.error('[mahnung-versand] Versand', e)
       sendefehler = 'E-Mail-Versand fehlgeschlagen.'
     }
-    if (sendefehler) { await markiereVersandFehler(ereignisId, sendefehler); return zuruecksetzen(sendefehler) }
+    if (sendefehler) {
+      const markiert = await markiereVersandFehler(ereignisId, sendefehler)
+      return zuruecksetzen(markiert ? sendefehler : sendefehler + FEHLVERSAND_NICHT_PROTOKOLLIERT)
+    }
 
     // Protokoll (Versand ist raus, deshalb best effort)
     try {

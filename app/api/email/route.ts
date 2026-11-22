@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { requireAuth, unauthorizedResponse, serverErrorResponse, pruefeRolle } from '@/lib/auth';
 import { ROLLEN } from '@/lib/rollen';
 import { sichereAngebotToken } from '@/lib/angebot-link';
-import { sperreFuerExterneVerwendung, markiereVersandFehler, projektIdZuRechnung, SperreFehler } from '@/lib/cad/projektnummer-sperre';
+import { sperreFuerExterneVerwendung, markiereVersandFehler, pruefeProjektnummerImDokument, projektIdZuRechnung, FEHLVERSAND_NICHT_PROTOKOLLIERT, SperreFehler } from '@/lib/cad/projektnummer-sperre';
 
 const esc = (t: string) => t.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c] as string));
 
@@ -36,6 +36,7 @@ export async function POST(req: Request) {
     const nummerImDokument = typeof projektnummer === 'string' && projektnummer.trim() ? projektnummer.trim().slice(0, 40) : null;
     try {
       const sperrProjekt = mailType === 'angebot' ? (projectId || null) : (invoiceNumber ? await projektIdZuRechnung(String(invoiceNumber)) : null);
+      await pruefeProjektnummerImDokument(sperrProjekt, nummerImDokument);
       ereignisId = await sperreFuerExterneVerwendung({ projectId: sperrProjekt, typ: mailType === 'angebot' ? 'angebot' : mailType, dokumentId: mailType === 'angebot' ? (projectId || null) : (invoiceNumber || null), userId: auth.userId, projektnummer: nummerImDokument });
     } catch (e) {
       if (e instanceof SperreFehler) return NextResponse.json({ error: e.message }, { status: e.status });
@@ -206,7 +207,10 @@ export async function POST(req: Request) {
     return NextResponse.json({ success: true, id: data?.id });
   } catch (err: any) {
     // Nach erfolgter Sperre, aber ohne Versand: als fehlgeschlagener Versand festhalten (die Sperre bleibt)
-    if (ereignisId && !gesendet) await markiereVersandFehler(ereignisId, err?.message || 'Versand fehlgeschlagen');
+    // Ist die Projektnummer schon gesperrt, aber der Fehlversand nicht protokollierbar, muss das sichtbar werden (kein stiller Zustand)
+    if (ereignisId && !gesendet && !(await markiereVersandFehler(ereignisId, err?.message || 'Versand fehlgeschlagen'))) {
+      return NextResponse.json({ success: false, error: 'Der Versand ist fehlgeschlagen.' + FEHLVERSAND_NICHT_PROTOKOLLIERT }, { status: 500 });
+    }
     console.error('[Email API] Fehler:', err);
     return serverErrorResponse(err);
   }

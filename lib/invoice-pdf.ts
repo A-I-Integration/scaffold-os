@@ -97,9 +97,25 @@ export const fmtDate = (d: string | null) =>
 // Rechnungsdaten die Validierung nicht bestehen), NICHT den Versand
 // blockieren, sondern mit einem Hinweis auf die bisherige reine PDF
 // zurückfallen - die Rechnung muss in jedem Fall rausgehen können.
+/**
+ * Rechnung für den Versand mit Projektnummer versehen. Fehlt sie im Rechnungsobjekt, wird sie über die eindeutige CAD-Verknüpfung
+ * des Kundenprojekts geholt. Lässt sich das nicht klären, wird abgebrochen: keine Rechnung stillschweigend ohne Projektnummer.
+ */
+export async function mitProjektnummer(inv: Invoice): Promise<Invoice> {
+  if (inv.projektnummer !== undefined) return inv;
+  if (!inv.project_id) return { ...inv, projektnummer: null };
+  try {
+    const res = await fetch(`/api/cad/projektnummer?project_id=${encodeURIComponent(inv.project_id)}`);
+    const json = await res.json();
+    if (res.ok && json.success) return { ...inv, projektnummer: typeof json.projektnummer === 'string' ? json.projektnummer : null };
+  } catch { /* unten */ }
+  throw new Error('Die Projektnummer dieser Rechnung konnte nicht geprüft werden. Es wurde nichts versendet. Bitte Seite neu laden und erneut versuchen.');
+}
+
 export async function holePdfBase64FuerVersand(
   inv: Invoice
 ): Promise<{ pdfBase64: string; istZugferd: boolean; hinweis?: string; projektnummer: string | null }> {
+  let grund: string;
   try {
     const res = await fetch('/api/invoices/zugferd', {
       method: 'POST',
@@ -110,20 +126,13 @@ export async function holePdfBase64FuerVersand(
     if (json.success && json.pdfBase64) {
       return { pdfBase64: json.pdfBase64, istZugferd: true, projektnummer: json.projektnummer ?? null };
     }
-    return {
-      pdfBase64: generateInvoicePDF(inv).output('datauristring'),
-      istZugferd: false,
-      projektnummer: inv.projektnummer ?? null,
-      hinweis: 'Ohne E-Rechnung-Daten gesendet (' + (json.error || 'unbekannter Fehler') + ') - normale PDF verschickt.',
-    };
+    grund = 'Ohne E-Rechnung-Daten gesendet (' + (json.error || 'unbekannter Fehler') + ') - normale PDF verschickt.';
   } catch {
-    return {
-      pdfBase64: generateInvoicePDF(inv).output('datauristring'),
-      istZugferd: false,
-      projektnummer: inv.projektnummer ?? null,
-      hinweis: 'E-Rechnung-Dienst nicht erreichbar - normale PDF verschickt.',
-    };
+    grund = 'E-Rechnung-Dienst nicht erreichbar - normale PDF verschickt.';
   }
+  // Rückfall auf die einfache PDF: auch sie MUSS die Projektnummer tragen, sonst wird nicht versendet (wirft)
+  const mit = await mitProjektnummer(inv);
+  return { pdfBase64: generateInvoicePDF(mit).output('datauristring'), istZugferd: false, projektnummer: mit.projektnummer ?? null, hinweis: grund };
 }
 
 // ─── §14-UStG-Rechnungs-PDF im Angebots-Design ───

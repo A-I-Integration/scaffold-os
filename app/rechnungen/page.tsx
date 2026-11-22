@@ -495,7 +495,7 @@ function RechnungenContent() {
       const to = prompt('Direkt per E-Mail senden? Adresse eingeben – oder Abbrechen für nur PDF:');
       if (to && to.includes('@')) {
         const pdfBase64 = doc.output('datauristring');
-        await fetch('/api/email', {
+        const mailRes = await fetch('/api/email', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -510,6 +510,12 @@ function RechnungenContent() {
             projektnummer: inv.projektnummer ?? undefined,
           }),
         });
+        // Ein abgelehnter oder fehlgeschlagener Versand (z. B. veraltete oder fehlende Projektnummer) darf nicht still bleiben
+        const mailJson = await mailRes.json().catch(() => ({}));
+        if (!mailRes.ok || mailJson.success === false) {
+          alert('❌ Die Mahnung wurde NICHT per E-Mail versendet: ' + (mailJson.error || 'Versand fehlgeschlagen') + '\n\nDie PDF wurde nur lokal gespeichert. Die Mahnstufe wird nicht erhöht.');
+          return;
+        }
       }
 
       // Mahnstufe + Status speichern

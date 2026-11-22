@@ -3,7 +3,7 @@ import { requireAuth, unauthorizedResponse, serverErrorResponse, pruefeRolle } f
 import { ROLLEN } from '@/lib/rollen';
 import { istGueltigeEmail } from '@/lib/email-verlauf';
 import { textZuHtml } from '@/lib/email-kunde';
-import { sperreFuerExterneVerwendung, markiereVersandFehler, SperreFehler } from '@/lib/cad/projektnummer-sperre';
+import { sperreFuerExterneVerwendung, markiereVersandFehler, pruefeProjektnummerImDokument, FEHLVERSAND_NICHT_PROTOKOLLIERT, SperreFehler } from '@/lib/cad/projektnummer-sperre';
 
 // ============================================================
 // SCAFFOLD OS – Neue Mail an einen Kunden (E-Mails-Reiter)
@@ -111,6 +111,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     // Projektnummer sperren, bevor die Rechnung hinausgeht – nur wenn sie im angehängten Dokument steht (`projektnummer` = die gedruckte Nummer)
     const nummerImDokument = invoiceNumber && pdfBase64 && typeof body.projektnummer === 'string' && body.projektnummer.trim() ? body.projektnummer.trim().slice(0, 40) : null;
     try {
+      if (invoiceNumber && pdfBase64) await pruefeProjektnummerImDokument(rechnungProjektId, nummerImDokument);
       ereignisId = await sperreFuerExterneVerwendung({ projectId: rechnungProjektId, typ: 'rechnung', dokumentId: invoiceNumber, userId: auth.userId, projektnummer: nummerImDokument });
     } catch (e) {
       if (e instanceof SperreFehler) return NextResponse.json({ success: false, error: e.message }, { status: e.status });
@@ -159,7 +160,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
     return NextResponse.json({ success: true, id: data?.id, protokolliert });
   } catch (err: any) {
-    if (ereignisId && !gesendet) await markiereVersandFehler(ereignisId, err?.message || 'Versand fehlgeschlagen');
+    if (ereignisId && !gesendet && !(await markiereVersandFehler(ereignisId, err?.message || 'Versand fehlgeschlagen'))) {
+      return NextResponse.json({ success: false, error: 'Der Versand ist fehlgeschlagen.' + FEHLVERSAND_NICHT_PROTOKOLLIERT }, { status: 500 });
+    }
     console.error('[Kunden-Mail] Fehler:', err);
     return serverErrorResponse(err);
   }

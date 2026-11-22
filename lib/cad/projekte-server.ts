@@ -165,18 +165,21 @@ export interface NummernInfo {
   /** alle externen Verwendungen und fehlgeschlagenen Versände, älteste zuerst */
   ereignisse: { ereignis: 'verwendung' | 'versand_fehlgeschlagen'; projektnummer: string; dokumenttyp: string; dokument_id: string | null; verwendet_von: string | null; fehler: string | null; created_at: string }[]
   protokoll: { art: string; alt: string | null; neu: string | null; grund: string | null; geaendert_von: string | null; created_at: string }[]
+  /** Verknüpfungen mit Kundenprojekten (alt → neu), älteste zuerst; leer, solange SQL 120 fehlt */
+  verknuepfungen: { alt_project_id: string | null; neu_project_id: string | null; geaendert_von: string | null; created_at: string }[]
 }
 
 /** Sperrstatus, erste externe Verwendung und das Änderungsprotokoll der Projektnummer */
 export async function holeNummernInfo(id: string): Promise<NummernInfo> {
   const da = (await rest<{ projektnummer_gesperrt_am: string | null }[]>(`cad_projekte?id=eq.${id}&select=projektnummer_gesperrt_am`))[0]
   if (!da) throw new ProjektFehler('Projekt nicht gefunden.', 404)
-  const [v, l] = await Promise.all([
+  const [v, l, vk] = await Promise.all([
     rest<NummernInfo['ereignisse']>(`cad_projektnummer_verwendung?cad_projekt_id=eq.${id}&select=ereignis,projektnummer,dokumenttyp,dokument_id,verwendet_von,fehler,created_at&order=created_at.asc&limit=200`),
     rest<NummernInfo['protokoll']>(`cad_projektnummer_log?cad_projekt_id=eq.${id}&select=art,alt,neu,grund,geaendert_von,created_at&order=created_at.desc&limit=50`),
+    rest<NummernInfo['verknuepfungen']>(`cad_projekt_verknuepfung_log?cad_projekt_id=eq.${id}&select=alt_project_id,neu_project_id,geaendert_von,created_at&order=created_at.asc&limit=100`).catch(() => []),
   ])
   const erste = v.find((e) => e.ereignis === 'verwendung') ?? null
-  return { gesperrt_am: da.projektnummer_gesperrt_am, verwendung: erste, ereignisse: v, protokoll: l }
+  return { gesperrt_am: da.projektnummer_gesperrt_am, verwendung: erste, ereignisse: v, protokoll: l, verknuepfungen: vk }
 }
 
 /** Gesonderter Korrekturprozess für eine bereits gesperrte Projektnummer (Aufrufer prüft: nur Admin). Begründung Pflicht, alles wird protokolliert. */
