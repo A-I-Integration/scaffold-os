@@ -25,6 +25,8 @@ import MessPanel from '@/components/cad/MessPanel'
 import { messe, MESS_PUNKTE, type Messart, type MessErgebnis, type V3 } from '@/lib/cad/messen'
 import RechteLeiste from '@/components/cad/RechteLeiste'
 import ObjektInfo from '@/components/cad/ObjektInfo'
+import AufbauLeiste from '@/components/cad/AufbauLeiste'
+import { erzeugeAufbauSchritte } from '@/lib/geruest/aufbau-schritte'
 import BaugruppenBaum from '@/components/cad/BaugruppenBaum'
 import type { BereichsWerkzeug } from '@/components/cad/BereichePanel'
 import CadWerkzeugleiste, { CadWerkzeugePanel, type WerkzeugleisteProps } from '@/components/cad/CadWerkzeugleiste'
@@ -954,6 +956,45 @@ export default function CADPage() {
     }
     return merged
   }, [model, manualPlacements, removedGroups, bereichsListe, ueber, geruestWahl])
+
+  // Aufbau Schritt für Schritt: Index des aktiven Schritts (null = aus); blendet höhere Lagen im 3D aus
+  const [aufbauNr, setAufbauNr] = useState<number | null>(null)
+  const [aufbauPdfLaeuft, setAufbauPdfLaeuft] = useState(false)
+  const aufbauSchritte = useMemo(() => (modelWithManual ? erzeugeAufbauSchritte(modelWithManual) : []), [modelWithManual])
+  const hiddenLevelsAufbau = useMemo(() => {
+    if (aufbauNr === null || !aufbauSchritte[aufbauNr]) return hiddenLevels
+    const s = new Set<number>(hiddenLevels ?? [])
+    aufbauSchritte[aufbauNr].versteckteLagen.forEach((i) => s.add(i))
+    return s.size > 0 ? s : undefined
+  }, [hiddenLevels, aufbauNr, aufbauSchritte])
+  const handleAufbauPdf = useCallback(async () => {
+    if (!modelWithManual || aufbauSchritte.length === 0) return
+    setAufbauPdfLaeuft(true)
+    const zuvor = aufbauNr
+    try {
+      const warte = (ms: number) => new Promise<void>((r) => setTimeout(r, ms))
+      const bilder: (string | undefined)[] = []
+      for (let i = 0; i < aufbauSchritte.length; i++) {
+        setAufbauNr(i)
+        await warte(700)
+        let bild: string | undefined
+        try { bild = canvasRef.current ? canvasRef.current.toDataURL('image/jpeg', 0.9) : undefined } catch { bild = undefined }
+        bilder.push(bild)
+      }
+      const { erzeugeAufbauplanPdf } = await import('@/lib/export/aufbauplan-pdf')
+      const daten = erzeugeAufbauplanPdf(aufbauSchritte, bilder, { projektName: aufmassProjektName || 'Gerüstprojekt', firma: firmenName, datum: new Date().toLocaleDateString('de-DE') })
+      const a = document.createElement('a')
+      a.href = URL.createObjectURL(new Blob([daten as BlobPart], { type: 'application/pdf' }))
+      a.download = `Aufbauplan-${new Date().toISOString().split('T')[0]}.pdf`
+      a.click()
+      setTimeout(() => URL.revokeObjectURL(a.href), 5000)
+    } catch (err) {
+      alert('Aufbauplan fehlgeschlagen: ' + (err instanceof Error ? err.message : String(err)))
+    } finally {
+      setAufbauNr(zuvor)
+      setAufbauPdfLaeuft(false)
+    }
+  }, [modelWithManual, aufbauSchritte, aufbauNr, aufmassProjektName, firmenName])
   // Kopfzeile: mit automatischem Gerüst die Werte der Berechnung; ohne (leer/von Hand) nur das, was wirklich gesetzt ist
   const kopfZahlen = useMemo(() => {
     if (!modelWithManual) return '0 Felder · 0 Lagen · 0.0 m²'
@@ -1810,8 +1851,10 @@ export default function CADPage() {
             {abbauEinplanen && abbauErgebnis && (
               <AbbauEinplanenDialog tage={abbauErgebnis.tage} personen={abbauErgebnis.personen} titel={`Teilabbau: ${abbauErgebnis.anzahlTeile} Bauteile, ${abbauErgebnis.stunden} h`} onClose={() => setAbbauEinplanen(false)} />
             )}
-            {viewMode === '3d' && modelWithManual && (
-              <Scaffold3D farbModus={farbModus} model={modelWithManual} features={features} showBuilding={showBuilding} showScaffold={showScaffold} showDimensions={showDimensions} selectedComponent={selectedComponent} onSelectComponent={klickImModell} onKontextmenue={(id, x, y) => { if (abbauAktiv || placementType || measureMode) return; setSelectedComponent(id); setKontext({ id, x, y }) }} mehrfachAuswahl={mehrfachMenge} rahmenModus={rahmenModus} onRahmen={handleRahmen} abbauMarkiert={abbauMarkiert} echtesGebaeude={echtesGebaeude} visibleTypes={visibleTypes} viewMode={viewAngle} onCanvasReady={(c) => { canvasRef.current = c }} notes={notes} onAddNote={handleAddNote} hiddenSides={hiddenSides} hiddenLevels={hiddenLevels} measureMode={measureMode} onMeasurePoint={handleMeasurePoint} customDimensions={customDimensions} messErgebnisse={messErgebnisse} dunklerHintergrund={dunkel3d} pendingMeasurePoint={pendingMeasurePoint?.point ?? null} placementType={placementType} onPlacementClick={handlePlacementClick} showEnvironment={showEnvironment} hoheQualitaet={hoheQualitaet} onRemoveComponent={handleRemoveComponent} onTreppeVerschieben={versetzeAutoTreppe} onReplaceComponent={handleReplaceComponent} systemId={systemId} artikelWahl={artikelWahl} onArtikelWahl={waehleArtikel} onArtikelWahlGleiche={waehleArtikelGleiche} removedCount={removedCount} platzierungIdVon={platzierungIdVonBauteil} onBauteilZiehen={handleBauteilZiehen} griff={!abbauAktiv ? { modus: griffModus, einrasten, anschlussMarker: anschlussEinrasten, onAendern: handleBauteilLage } : undefined} onSeiteUmschalten={(side) => { setAutoGenerate(true); setBuilding((() => { const cur = building.sides ?? ['front']; const has = cur.includes(side); const ns = has ? cur.filter((x) => x !== side) : [...cur, side]; if (ns.length === 0) ns.push('front'); return { ...building, sides: ns } })()) }} />
+            {viewMode === '3d' && modelWithManual && (<>
+              <Scaffold3D farbModus={farbModus} model={modelWithManual} features={features} showBuilding={showBuilding} showScaffold={showScaffold} showDimensions={showDimensions} selectedComponent={selectedComponent} onSelectComponent={klickImModell} onKontextmenue={(id, x, y) => { if (abbauAktiv || placementType || measureMode) return; setSelectedComponent(id); setKontext({ id, x, y }) }} mehrfachAuswahl={mehrfachMenge} rahmenModus={rahmenModus} onRahmen={handleRahmen} abbauMarkiert={abbauMarkiert} echtesGebaeude={echtesGebaeude} visibleTypes={visibleTypes} viewMode={viewAngle} onCanvasReady={(c) => { canvasRef.current = c }} notes={notes} onAddNote={handleAddNote} hiddenSides={hiddenSides} hiddenLevels={hiddenLevelsAufbau} measureMode={measureMode} onMeasurePoint={handleMeasurePoint} customDimensions={customDimensions} messErgebnisse={messErgebnisse} dunklerHintergrund={dunkel3d} pendingMeasurePoint={pendingMeasurePoint?.point ?? null} placementType={placementType} onPlacementClick={handlePlacementClick} showEnvironment={showEnvironment} hoheQualitaet={hoheQualitaet} onRemoveComponent={handleRemoveComponent} onTreppeVerschieben={versetzeAutoTreppe} onReplaceComponent={handleReplaceComponent} systemId={systemId} artikelWahl={artikelWahl} onArtikelWahl={waehleArtikel} onArtikelWahlGleiche={waehleArtikelGleiche} removedCount={removedCount} platzierungIdVon={platzierungIdVonBauteil} onBauteilZiehen={handleBauteilZiehen} griff={!abbauAktiv ? { modus: griffModus, einrasten, anschlussMarker: anschlussEinrasten, onAendern: handleBauteilLage } : undefined} onSeiteUmschalten={(side) => { setAutoGenerate(true); setBuilding((() => { const cur = building.sides ?? ['front']; const has = cur.includes(side); const ns = has ? cur.filter((x) => x !== side) : [...cur, side]; if (ns.length === 0) ns.push('front'); return { ...building, sides: ns } })()) }} />
+              <AufbauLeiste schritte={aufbauSchritte} aktiv={aufbauNr} pdfLaeuft={aufbauPdfLaeuft} onStart={() => setAufbauNr(0)} onWeiter={() => setAufbauNr((n) => Math.min((n ?? 0) + 1, aufbauSchritte.length - 1))} onZurueck={() => setAufbauNr((n) => Math.max((n ?? 0) - 1, 0))} onEnde={() => setAufbauNr(null)} onPdf={() => { void handleAufbauPdf() }} />
+            </>
             )}
             {/* Leerzustand: zwei Wege (Datei hochladen / von Hand bauen) */}
             {viewMode === '3d' && !model && (
