@@ -70,6 +70,9 @@ import { kantenListe, istUmrissModell, waehleBereich, wendeAenderungenAn, type B
 import EigenschaftenLeiste from '@/components/cad/EigenschaftenLeiste'
 import { beschreibeFigur, type Figur, type FigurArt } from '@/lib/cad/zeichnung'
 import CadBand from '@/components/cad/CadBand'
+import { findeKuerzel, kuerzelText } from '@/lib/cad/tastenkuerzel'
+import { projektZeilen } from '@/lib/cad/projekt-info'
+import { SPEICHER_TEXT } from '@/lib/cad/speicherstatus'
 import CadKopfzeile from '@/components/cad/CadKopfzeile'
 import CadWerkzeugBaum from '@/components/cad/CadWerkzeugBaum'
 import { Building2, PenLine, BrickWall, Layers3, House, Zap } from 'lucide-react'
@@ -798,19 +801,6 @@ export default function CADPage() {
     if (ueberVerlauf.zukunft.length > 0) { setUeberVerlauf((v) => ({ jetzt: v.zukunft[0], vergangen: [...v.vergangen, v.jetzt], zukunft: v.zukunft.slice(1) })); return }
     setAutoGenerate(true); setVerlauf(verlaufVor)
   }, [ueberVerlauf.zukunft.length])
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (!(e.metaKey || e.ctrlKey) || e.altKey) return
-      const ziel = e.target as HTMLElement | null
-      // In Eingabefeldern gilt das Rückgängig des Browsers für den Text
-      if (ziel && (ziel.tagName === 'INPUT' || ziel.tagName === 'TEXTAREA' || ziel.tagName === 'SELECT' || ziel.isContentEditable)) return
-      const k = e.key.toLowerCase()
-      if (k === 'z' && !e.shiftKey) { e.preventDefault(); schrittZurueck() }
-      else if ((k === 'z' && e.shiftKey) || k === 'y') { e.preventDefault(); schrittVor() }
-    }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [schrittZurueck, schrittVor])
 
   // Phase 68-F: 'Neu starten' — setzt ALLES auf den Anfangszustand
   // zurück (Maße, System, erzeugtes Modell, Auswahl, Stunden).
@@ -1223,7 +1213,7 @@ export default function CADPage() {
   // Projekte im Konto (Server): geöffnetes Projekt + Revision merken, damit „Speichern“ nur überschreibt, was man geladen hat
   const [kontoOffen, setKontoOffen] = useState(false)
   const [kontoMeldung, setKontoMeldung] = useState<string | null>(null)
-  const [kontoProjekt, setKontoProjekt] = useState<{ id: string; name: string; revision: number } | null>(null)
+  const [kontoProjekt, setKontoProjekt] = useState<{ id: string; name: string; revision: number; erstelltAm?: string; geaendertAm?: string } | null>(null)
   const kontoNeu = async (name: string): Promise<boolean> => {
     const n = name.trim() || `CAD-Projekt ${new Date().toLocaleDateString('de-DE')}`
     setKontoLaeuft(true)
@@ -1231,7 +1221,7 @@ export default function CADPage() {
     setKontoLaeuft(false)
     if (!r.ok) { setSpeicherFehler(true); setKontoMeldung(r.fehler); return false }
     setSpeicherFehler(false); setKontoGespeichertUm(new Date())
-    setKontoProjekt({ id: r.wert.id, name: r.wert.name, revision: r.wert.revision }); setKontoMeldung(`„${r.wert.name}“ gespeichert.`); return true
+    setKontoProjekt({ id: r.wert.id, name: r.wert.name, revision: r.wert.revision, erstelltAm: r.wert.created_at, geaendertAm: r.wert.updated_at }); setKontoMeldung(`„${r.wert.name}“ gespeichert.`); return true
   }
   const kontoUeberschreiben = async (): Promise<boolean> => {
     if (!kontoProjekt) return false
@@ -1240,7 +1230,7 @@ export default function CADPage() {
     setKontoLaeuft(false)
     if (!r.ok) { setSpeicherFehler(true); setKontoMeldung(r.fehler); return false }
     setSpeicherFehler(false); setKontoGespeichertUm(new Date())
-    setKontoProjekt({ id: r.wert.id, name: r.wert.name, revision: r.wert.revision }); setKontoMeldung(`„${r.wert.name}“ gespeichert (Stand ${r.wert.revision}).`); return true
+    setKontoProjekt({ id: r.wert.id, name: r.wert.name, revision: r.wert.revision, erstelltAm: r.wert.created_at, geaendertAm: r.wert.updated_at }); setKontoMeldung(`„${r.wert.name}“ gespeichert (Stand ${r.wert.revision}).`); return true
   }
   const kontoLaden = async (id: string, revision?: number) => {
     const r = await ladeKontoProjekt(id, revision)
@@ -1250,7 +1240,7 @@ export default function CADPage() {
     wendeProjektdatenAn(r.wert.daten)
     // ein älterer Stand wird erst beim Speichern zum neuen Stand; die Revision bleibt die aktuelle des Projekts
     const kopf = revision ? await ladeKontoProjekt(id) : r
-    setKontoProjekt({ id, name: r.wert.name, revision: kopf.ok ? kopf.wert.revision : r.wert.revision })
+    setKontoProjekt({ id, name: r.wert.name, revision: kopf.ok ? kopf.wert.revision : r.wert.revision, erstelltAm: kopf.ok ? kopf.wert.created_at : undefined, geaendertAm: kopf.ok ? kopf.wert.updated_at : undefined })
     setKontoMeldung(`„${r.wert.name}“ geladen.`)
   }
   const kontoLoeschen = async (id: string): Promise<boolean> => {
@@ -1595,7 +1585,31 @@ export default function CADPage() {
   }
   useEffect(() => { if (!measureMode) messPunkteLeeren() }, [measureMode, messPunkteLeeren])
   const waehleBereichWerkzeug = (w: BereichsWerkzeug) => { if (w === 'erweitern' && kantenImModell.length > 0) { window.alert('Felder anhängen gibt es nur bei Rechteck-Gebäuden. Im Umriss-Modus bitte „Aufstocken“ oder „Stück entfernen“ nutzen.'); return } setBereichEin((e) => ({ ...e, werkzeug: w })); setBereicheOffen(true); setAbbauAktiv(false); setViewMode('3d') }
+  const speicherZustand = speicherStatus({ online, kontoLaeuft, fehler: speicherFehler, gesichertUm, kontoGespeichertUm })
+  // Alle sichtbaren Bauteile auswählen (Werkzeugleiste und Strg/Cmd+A)
+  const alleWaehlen = useCallback(() => {
+    if (!modelWithManual) return
+    setMehrfach(modelWithManual.components3D.filter((c) => visibleTypes[c.type] !== false).map((c) => c.id)); setSelectedComponent(null)
+  }, [modelWithManual, visibleTypes])
+  // Alle Tastenkürzel laufen über die zentrale Registry (lib/cad/tastenkuerzel.ts); Esc und Entf behandeln die Handler weiter oben
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const id = findeKuerzel({ key: e.key, ctrlKey: e.ctrlKey, metaKey: e.metaKey, shiftKey: e.shiftKey, altKey: e.altKey, target: e.target as HTMLElement | null })
+      if (!id) return
+      if (id === 'rueckgaengig') { e.preventDefault(); schrittZurueck() }
+      else if (id === 'wiederholen') { e.preventDefault(); schrittVor() }
+      else if (id === 'speichern') { e.preventDefault(); if (model) speichereProjektdatei() }
+      else if (id === 'alles-auswaehlen') { if (modelWithManual && viewMode === '3d') { e.preventDefault(); alleWaehlen() } }
+      else if (id === 'ansicht-3d') setViewMode('3d')
+      else if (id === 'ansicht-grundriss' && modelWithManual) { setAnsicht2d('grundriss'); setViewMode('2d') }
+      else if (id === 'ansicht-vorne' && modelWithManual) { setAnsicht2d('ansicht-vorne'); setViewMode('2d') }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- speichereProjektdatei wird pro Render neu gebildet; der Handler liest immer den aktuellen Stand
+  })
   const werkzeugProps: WerkzeugleisteProps = {
+    onAlleWaehlen: model && viewMode === '3d' ? alleWaehlen : undefined,
     hatModell: !!modelWithManual, rahmenAktiv: rahmenModus, onRahmen: () => setRahmenModus((v) => !v), auswahlAnzahl: mehrfach.length,
     bereicheOffen, bereichWerkzeug: bereichEin.werkzeug, onBereichWerkzeug: waehleBereichWerkzeug,
     abbauAktiv, onAbbau: () => { setAbbauAktiv((a) => !a); setBereicheOffen(false); setViewMode('3d') },
@@ -1646,10 +1660,10 @@ export default function CADPage() {
       <CadKopfzeile
         projektName={kontoProjekt?.name || aufmassProjektName || null}
         systemName={modelWithManual?.system ? `${modelWithManual.system.hersteller} ${modelWithManual.system.systemName}` : null}
-        status={speicherStatus({ online, kontoLaeuft, fehler: speicherFehler, gesichertUm, kontoGespeichertUm })}
+        status={speicherZustand}
         versionText={kontoProjekt ? `Stand ${kontoProjekt.revision}` : versionen.length > 0 ? `${versionen.length} ${versionen.length === 1 ? 'Version' : 'Versionen'}` : 'Keine Version'}
         kannZurueck={kannZurueck} kannVor={kannVor} onZurueck={schrittZurueck} onVor={schrittVor}
-        onVersionen={oeffneVersionen} onSpeichern={speichereProjektdatei} speichernAus={!model} onTeilen={speichereProjektdatei} teilenAus={!model}
+        onVersionen={oeffneVersionen} onSpeichern={speichereProjektdatei} speichernAus={!model} speichernTitel={`Projekt als Datei speichern (${kuerzelText('speichern')})`} onTeilen={speichereProjektdatei} teilenAus={!model}
         exportEintraege={[
           { id: 'pdf', label: 'Dokumentation (PDF)', onClick: model ? handleExportPDF : exportOhneModellHinweis },
           { id: 'montage', label: 'Montageplan', onClick: model ? handleExportMontageplan : exportOhneModellHinweis },
@@ -1971,6 +1985,14 @@ export default function CADPage() {
             </>) : null}
             baugruppen={modelWithManual ? <><GeruestBaum felder={modelWithManual.fields} teile={modelWithManual.components3D} aktiv={selectedComponent ? [selectedComponent, ...mehrfach] : mehrfach} onWaehlen={(ids) => { setMehrfach(ids); setSelectedComponent(null) }} /><BaugruppenBaum bauteile={modelWithManual.components3D} onWaehlen={handleBaugruppeWaehlen} aktiv={selectedComponent ? [selectedComponent, ...mehrfach] : mehrfach} onBauteil={(id) => { setMehrfach([]); setSelectedComponent(id) }} /> </> : null}
             projekt={<>
+          <section aria-label='Projektinformationen' className='border-b border-black/5 px-4 py-3'>
+            <h3 className='mb-1.5 text-[12px] font-semibold uppercase tracking-wider text-[#86868b]'>Projektinformationen</h3>
+            <dl className='grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-[12.5px]'>
+              {projektZeilen({ name: kontoProjekt?.name || aufmassProjektName || null, systemName: modelWithManual?.system ? `${modelWithManual.system.hersteller} ${modelWithManual.system.systemName}` : null,
+                speicherText: SPEICHER_TEXT[speicherZustand], versionText: kontoProjekt ? `Stand ${kontoProjekt.revision}` : versionen.length > 0 ? `${versionen.length} ${versionen.length === 1 ? 'Version' : 'Versionen'}` : 'Keine Version',
+                erstelltAm: kontoProjekt?.erstelltAm, geaendertAm: kontoProjekt?.geaendertAm, gesichertUm }).map((z) => (<div key={z.label} className='contents'><dt className='text-[#86868b]'>{z.label}</dt><dd className='min-w-0 break-words text-[#1d1d1f]'>{z.wert}</dd></div>))}
+            </dl>
+          </section>
           {rolle === 'admin' && model && <M2Abrechnung flaecheM2={modelWithManual?.totalAreaM2 ?? model.totalAreaM2} onChange={setM2Wahl} />}
           <KatalogWahlListe artikelWahl={artikelWahl} liste={katalogListeFuerSystem(systemId)} onZuruecksetzen={() => setArtikelWahl({})} />
           <BillOfMaterials

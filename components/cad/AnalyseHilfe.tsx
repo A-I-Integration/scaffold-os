@@ -1,6 +1,7 @@
 'use client'
 // Dialoge „Analyse“ (Kennzahlen aus dem Modell) und „Hilfe“ (Kurzübersicht der Symbolleiste).
 import type { Analyse } from '@/lib/cad/analyse'
+import { KUERZEL } from '@/lib/cad/tastenkuerzel'
 
 function Rahmen({ titel, onZu, children }: { titel: string; onZu: () => void; children: React.ReactNode }) {
   return (
@@ -49,6 +50,10 @@ export function HilfeDialog({ onZu }: { onZu: () => void }) {
   return (
     <Rahmen titel='Hilfe' onZu={onZu}>
       <dl className='space-y-2'>{HILFE.map(([t, x]) => <div key={t}><dt className='font-semibold'>{t}</dt><dd className='text-gray-700'>{x}</dd></div>)}</dl>
+      <h3 className='mt-4 font-semibold'>Tastenkürzel</h3>
+      <table aria-label='Tastenkürzel' className='mt-1 w-full text-[13px]'><tbody>
+        {KUERZEL.map((k) => <tr key={`${k.id}-${k.anzeige}`}><td className='py-0.5 pr-4 font-mono'>{k.anzeige}</td><td>{k.beschreibung}</td></tr>)}
+      </tbody></table>
     </Rahmen>
   )
 }
