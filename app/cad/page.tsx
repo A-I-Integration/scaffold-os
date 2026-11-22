@@ -26,11 +26,15 @@ import { messe, MESS_PUNKTE, type Messart, type MessErgebnis, type V3 } from '@/
 import RechteLeiste from '@/components/cad/RechteLeiste'
 import ObjektInfo from '@/components/cad/ObjektInfo'
 import AufbauLeiste from '@/components/cad/AufbauLeiste'
+import GebaeudeBearbeiten, { type GebaeudeModus } from '@/components/cad/GebaeudeBearbeiten'
+import { AnalyseDialog, HilfeDialog } from '@/components/cad/AnalyseHilfe'
+import { erzeugeAnalyse } from '@/lib/cad/analyse'
+import type { DockReiter } from '@/components/cad/CadDock'
+import { aktiverReiter } from '@/components/cad/AnsichtsReiter'
 import { erzeugeAufbauSchritte } from '@/lib/geruest/aufbau-schritte'
 import BaugruppenBaum from '@/components/cad/BaugruppenBaum'
 import type { BereichsWerkzeug } from '@/components/cad/BereichePanel'
 import CadWerkzeugleiste, { CadWerkzeugePanel, type WerkzeugleisteProps } from '@/components/cad/CadWerkzeugleiste'
-import CadMenueleiste from '@/components/cad/CadMenueleiste'
 import GeruestBaum from '@/components/cad/GeruestBaum'
 import LayersPanel from '@/components/cad/LayersPanel'
 import CadDock from '@/components/cad/CadDock'
@@ -960,6 +964,12 @@ export default function CADPage() {
   // Aufbau Schritt für Schritt: Index des aktiven Schritts (null = aus); blendet höhere Lagen im 3D aus
   const [aufbauNr, setAufbauNr] = useState<number | null>(null)
   const [aufbauPdfLaeuft, setAufbauPdfLaeuft] = useState(false)
+  // Menüzeile oben: Dialoge (Wand, Geschoss, Dach, Analyse, Hilfe) und Sprung in Dock bzw. linke Spalte
+  const [gebaeudeModus, setGebaeudeModus] = useState<GebaeudeModus | null>(null)
+  const [analyseOffen, setAnalyseOffen] = useState(false)
+  const [hilfeOffen, setHilfeOffen] = useState(false)
+  const [dockWunsch, setDockWunsch] = useState<{ tab: DockReiter; n: number } | undefined>(undefined)
+  const [linksWunsch, setLinksWunsch] = useState<{ tab: 'gebaeude'; n: number } | undefined>(undefined)
   const aufbauSchritte = useMemo(() => (modelWithManual ? erzeugeAufbauSchritte(modelWithManual) : []), [modelWithManual])
   const hiddenLevelsAufbau = useMemo(() => {
     if (aufbauNr === null || !aufbauSchritte[aufbauNr]) return hiddenLevels
@@ -1607,6 +1617,9 @@ export default function CADPage() {
             setAussehenHinweis(r.hinweis ?? ''); setScanFensterOffen(false)
           }} />
       )}
+      {gebaeudeModus && <GebaeudeBearbeiten modus={gebaeudeModus} building={building} onChange={(b) => { setAutoGenerate(true); setBuilding(b) }} onZu={() => setGebaeudeModus(null)} />}
+      {analyseOffen && modelWithManual && <AnalyseDialog analyse={erzeugeAnalyse(modelWithManual, totalWeight, totalPrice)} onZu={() => setAnalyseOffen(false)} />}
+      {hilfeOffen && <HilfeDialog onZu={() => setHilfeOffen(false)} />}
       {lvOffen && modelWithManual && (
         <LvDialog model={modelWithManual} materials={materials} aufbauStunden={logistik?.aufbauStunden ?? 0} abbauStunden={logistik?.abbauStunden ?? 0} stundenModellHash={logistik?.modellHash} onClose={() => setLvOffen(false)} />
       )}
@@ -1618,25 +1631,6 @@ export default function CADPage() {
           </p>
         </div>
         <div className='flex flex-wrap items-center gap-x-3 gap-y-1'>
-        <CadMenueleiste gruppen={[
-          { titel: 'Datei', eintraege: [
-            { label: 'Projektdatei speichern', onClick: speichereProjektdatei, aus: !model },
-            { label: 'Versionen …', onClick: oeffneVersionen },
-            { label: 'Neu starten', onClick: handleNeuStarten, trenner: true },
-          ] },
-          { titel: 'Bearbeiten', eintraege: [
-            { label: 'Rückgängig', onClick: schrittZurueck, aus: !kannZurueck },
-            { label: 'Wiederholen', onClick: schrittVor, aus: !kannVor },
-            { label: 'Auswahl aufheben', onClick: () => { setMehrfach([]); setSelectedComponent(null); setRahmenModus(false) }, trenner: true },
-          ] },
-          { titel: 'Ansicht', eintraege: [
-            { label: '3D-Modell', onClick: () => setViewMode('3d'), haken: viewMode === '3d' },
-            ...(['perspective', 'front', 'back', 'left', 'right', 'top'] as const).map((a, i) => ({ label: ['Isometrie', 'Vorne', 'Hinten', 'Links', 'Rechts', 'Oben'][i], onClick: () => { setViewMode('3d'); setViewAngle(a) }, aus: !model, haken: viewMode === '3d' && viewAngle === a, trenner: i === 0 })),
-            { label: dunkel ? 'Helle Darstellung' : 'Dunkle Darstellung', onClick: dunkelUmschalten, trenner: true },
-            { label: 'Dunkler 3D-Hintergrund', onClick: dunkel3dUmschalten, haken: dunkel3d },
-          ] },
-          { titel: 'Ausgabe', eintraege: (rolle === 'admin' || istStatikerLogin) ? [{ label: 'Leistungsverzeichnis', onClick: model ? () => setLvOffen(true) : exportOhneModellHinweis }] : [] },
-        ]} />
         <div className='flex items-center gap-2'>
           <button type='button' onClick={dunkelUmschalten} aria-pressed={dunkel} title='Dunkle Darstellung ein/aus' className='px-3 py-1.5 text-xs font-medium rounded-lg border border-black/10 hover:bg-black/5'>{dunkel ? 'Hell' : 'Dunkel'}</button>
           <button type='button' onClick={oeffneVersionen} title='Gespeicherte Stände ansehen oder wiederherstellen' className='px-3 py-1.5 text-xs font-medium rounded-lg border border-black/10 hover:bg-black/5'>Versionen</button>
@@ -1662,7 +1656,7 @@ export default function CADPage() {
               <ul className='mt-1 list-disc pl-4 space-y-0.5'>{aufmassHinweise.map((h, i) => <li key={i}>{h}</li>)}</ul>
             </div>
           )}
-          <BuildingForm registriereZeichner={registriereZeichner} onImportWartet={setImportWartet} building={building} systemId={systemId} onChange={(b) => { setAutoGenerate(true); setBuilding(b); }} onSystemChange={aendereSystem} onGenerate={() => { setAutoGenerate(true); generate(); }} onLadeProjektdatei={ladeProjektdatei} onAussehen={(a, h, v) => { setAussehen(a); setAussehenEin(true); setAussehenEinheit('m'); setAussehenOben('y'); setAussehenAnker(null); setAussehenVersatz(v ?? { x: 0, z: 0, grad: 0 }); setAussehenHinweis(h ?? '') }} onModellUebernehmen={(b) => { setAutoGenerate(true); setBuilding(b); setModel(null) }} registrierePlanUpload={registrierePlanUpload} warnings={allWarnings}
+          <BuildingForm reiterWunsch={linksWunsch} registriereZeichner={registriereZeichner} onImportWartet={setImportWartet} building={building} systemId={systemId} onChange={(b) => { setAutoGenerate(true); setBuilding(b); }} onSystemChange={aendereSystem} onGenerate={() => { setAutoGenerate(true); generate(); }} onLadeProjektdatei={ladeProjektdatei} onAussehen={(a, h, v) => { setAussehen(a); setAussehenEin(true); setAussehenEinheit('m'); setAussehenOben('y'); setAussehenAnker(null); setAussehenVersatz(v ?? { x: 0, z: 0, grad: 0 }); setAussehenHinweis(h ?? '') }} onModellUebernehmen={(b) => { setAutoGenerate(true); setBuilding(b); setModel(null) }} registrierePlanUpload={registrierePlanUpload} warnings={allWarnings}
             werkzeuge={<CadWerkzeugePanel {...werkzeugProps} bauteilTyp={model ? placementType : startBauteil} onBauteilTyp={(t) => (model ? handleSelectPlacementType(t) : setStartBauteil(t))} onUmriss={() => zeichnerOeffnenRef.current?.()}
               ebenen={layerState ? <LayersPanel layerState={layerState} onToggleSide={handleToggleSide} onToggleLevel={handleToggleLevel} onShowAll={handleShowAllLayers} onHideAll={handleHideAllLayers} /> : null} />}  />
         </div>
@@ -1671,6 +1665,12 @@ export default function CADPage() {
         <div className='flex-1 flex flex-col min-w-0 min-h-0 md:overflow-y-auto'>
           <SystemLeiste systemId={systemId} onSystemChange={aendereSystem} gewaehlteArtikel={Object.keys(artikelWahl).length} />
           <CadBand
+            onNeu={handleNeuStarten} onOeffnen={ladeProjektdatei} onGebaeude={() => setLinksWunsch((w) => ({ tab: 'gebaeude', n: (w?.n ?? 0) + 1 }))}
+            onUmriss={() => zeichnerOeffnenRef.current?.()} onWand={() => setGebaeudeModus('wand')} onGeschoss={() => setGebaeudeModus('geschoss')} onDach={() => setGebaeudeModus('dach')}
+            onAutomatik={() => { setAutoGenerate(true); generate() }} messart={messart} onMessart={waehleMessart}
+            onAnsicht={(id) => { if (id === '3d') setViewMode('3d'); else { setAnsicht2d(id); setViewMode('2d') } }} ansichtAktiv={aktiverReiter(viewMode, ansicht2d)}
+            onAnalyse={model ? () => setAnalyseOffen(true) : exportOhneModellHinweis} onDock={(tab) => setDockWunsch((w) => ({ tab, n: (w?.n ?? 0) + 1 }))} onHilfe={() => setHilfeOffen(true)}
+            onAufbau={model ? () => { setViewMode('3d'); setAufbauNr(0) } : exportOhneModellHinweis} dunkel3d={dunkel3d} onDunkel3d={dunkel3dUmschalten} warnungenAnzahl={allWarnings.length}
             rahmenAktiv={rahmenModus} onRahmen={() => setRahmenModus((v) => !v)} auswahlAnzahl={mehrfach.length}
             hatModell={!!modelWithManual} viewMode={viewMode} onViewMode={setViewMode}
             zeichenWerkzeug={zeichenWerkzeug} onZeichenWerkzeug={setZeichenWerkzeug} figurenAnzahl={figuren.length} onFigurenLoeschen={() => setFiguren([])}
@@ -1919,7 +1919,7 @@ export default function CADPage() {
               </button>
             ))}
           </div>
-          <CadDock materials={materials} totalWeightKg={totalWeight} totalPrice={totalPrice} warnungen={allWarnings} hatModell={!!modelWithManual}
+          <CadDock oeffnen={dockWunsch} materials={materials} totalWeightKg={totalWeight} totalPrice={totalPrice} warnungen={allWarnings} hatModell={!!modelWithManual}
             onOpenLv={rolle === 'admin' || istStatikerLogin ? (model ? () => setLvOffen(true) : exportOhneModellHinweis) : undefined}
             statik={<StatikDatenPanel daten={statikDaten} onChange={setStatikDaten} model={modelWithManual} huelle={gebaeudeHuelle} />} />
           <CadStatusleiste eintraege={statusEintraege({
