@@ -3,6 +3,7 @@
 // Keine eigene Datenhaltung: alles kommt aus der CAD-Seite.
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { Undo2, Redo2, History, Save, Share2, Download, UserCircle, Boxes } from 'lucide-react'
+import { STATUS_TEXT, type ProjektStatus } from '@/lib/cad/projekt-stammdaten'
 import { SPEICHER_HINWEIS, SPEICHER_TEXT, type SpeicherStatus } from '@/lib/cad/speicherstatus'
 
 export interface MenuEintrag { id: string; label: string; onClick: () => void; aus?: boolean; aktiv?: boolean }
@@ -11,6 +12,8 @@ export interface CadKopfzeileProps {
   projektName: string | null
   systemName: string | null
   status: SpeicherStatus
+  /** nur bei einem Projekt im Konto bekannt */
+  projektnummer?: string | null; projektStatus?: ProjektStatus | null; kundeName?: string | null
   versionText: string
   kannZurueck: boolean; kannVor: boolean; onZurueck: () => void; onVor: () => void
   onVersionen: () => void
@@ -71,9 +74,9 @@ export default function CadKopfzeile(p: CadKopfzeileProps) {
       </div>
       <span aria-hidden className='h-6 w-px shrink-0 cad-kopf-trenner' />
       <div className='min-w-0 flex-1 leading-tight'>
-        <div className='truncate text-[13px] font-semibold' data-testid='kopf-projekt'>{p.projektName || 'Unbenanntes Projekt'}</div>
+        <div className='flex min-w-0 items-baseline gap-2'><span className='truncate text-[13px] font-semibold' data-testid='kopf-projekt'>{p.projektName || 'Unbenanntes Projekt'}</span>{p.projektnummer ? <span className='cad-kopf-leise shrink-0 text-[11px]' data-testid='kopf-nummer'>{p.projektnummer}</span> : null}{p.projektStatus ? <span className='shrink-0 rounded border px-1.5 text-[10px] cad-kopf-trenner-rand' data-testid='kopf-projektstatus'>{STATUS_TEXT[p.projektStatus]}</span> : null}</div>
         <div className='cad-kopf-leise flex min-w-0 items-center gap-2 text-[11px]'>
-          <span className='truncate' data-testid='kopf-system'>{p.systemName || 'Kein System'}</span>
+          {p.kundeName ? <><span className='truncate' data-testid='kopf-kunde'>{p.kundeName}</span><span aria-hidden>·</span></> : null}<span className='truncate' data-testid='kopf-system'>{p.systemName || 'Kein System'}</span>
           <span aria-hidden>·</span>
           <span className='inline-flex shrink-0 items-center gap-1' title={SPEICHER_HINWEIS[p.status]} role='status' data-testid='kopf-status' data-status={p.status}>
             <span aria-hidden className='inline-block h-2 w-2 rounded-full' style={{ background: PUNKT[p.status] }} />{SPEICHER_TEXT[p.status]}

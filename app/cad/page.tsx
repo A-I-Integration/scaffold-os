@@ -71,6 +71,8 @@ import EigenschaftenLeiste from '@/components/cad/EigenschaftenLeiste'
 import { beschreibeFigur, type Figur, type FigurArt } from '@/lib/cad/zeichnung'
 import CadBand from '@/components/cad/CadBand'
 import { findeKuerzel, kuerzelText } from '@/lib/cad/tastenkuerzel'
+import { kontoStandAusKopf, type KontoProjektStand } from '@/lib/cad/projekt-stammdaten'
+import ProjektdatenDialog, { type StammdatenEingabe } from '@/components/cad/ProjektdatenDialog'
 import { projektZeilen } from '@/lib/cad/projekt-info'
 import { SPEICHER_TEXT } from '@/lib/cad/speicherstatus'
 import CadKopfzeile from '@/components/cad/CadKopfzeile'
@@ -84,7 +86,7 @@ import { erzeugeProjektdatei, liesProjektdatei, type Projektdatei } from '@/lib/
 import { ladeVersionen, speichereVersionen, fuegeVersionHinzu, loescheVersion, benenneVersion, type Version } from '@/lib/cad/versionen'
 import VersionenDialog from '@/components/cad/VersionenDialog'
 import KontoProjekteDialog from '@/components/cad/KontoProjekteDialog'
-import { legeKontoProjektAn, speichereKontoProjekt, ladeKontoProjekt, loescheKontoProjekt } from '@/lib/cad/projekte-client'
+import { legeKontoProjektAn, speichereKontoProjekt, ladeKontoProjekt, loescheKontoProjekt, aendereKontoStammdaten } from '@/lib/cad/projekte-client'
 import TreppePanel from '@/components/cad/TreppePanel'
 import GeruestfeldPanel from '@/components/cad/GeruestfeldPanel'
 import BauteilKontextmenue from '@/components/cad/BauteilKontextmenue'
@@ -1214,7 +1216,15 @@ export default function CADPage() {
   // Projekte im Konto (Server): geöffnetes Projekt + Revision merken, damit „Speichern“ nur überschreibt, was man geladen hat
   const [kontoOffen, setKontoOffen] = useState(false)
   const [kontoMeldung, setKontoMeldung] = useState<string | null>(null)
-  const [kontoProjekt, setKontoProjekt] = useState<{ id: string; name: string; revision: number; erstelltAm?: string; geaendertAm?: string } | null>(null)
+  const [kontoProjekt, setKontoProjekt] = useState<KontoProjektStand | null>(null)
+  const [projektdatenOffen, setProjektdatenOffen] = useState(false)
+  const speichereStammdaten = async (a: StammdatenEingabe): Promise<string | null> => {
+    if (!kontoProjekt) return 'Erst als Projekt im Konto speichern.'
+    const r = await aendereKontoStammdaten(kontoProjekt.id, a)
+    if (!r.ok) return r.fehler
+    setKontoProjekt((alt) => ({ ...kontoStandAusKopf(r.wert), revision: alt?.revision ?? r.wert.revision }))
+    return null
+  }
   const kontoNeu = async (name: string): Promise<boolean> => {
     const n = name.trim() || `CAD-Projekt ${new Date().toLocaleDateString('de-DE')}`
     setKontoLaeuft(true)
@@ -1222,7 +1232,7 @@ export default function CADPage() {
     setKontoLaeuft(false)
     if (!r.ok) { setSpeicherFehler(true); setKontoMeldung(r.fehler); return false }
     setSpeicherFehler(false); setKontoGespeichertUm(new Date())
-    setKontoProjekt({ id: r.wert.id, name: r.wert.name, revision: r.wert.revision, erstelltAm: r.wert.created_at, geaendertAm: r.wert.updated_at }); setKontoMeldung(`„${r.wert.name}“ gespeichert.`); return true
+    setKontoProjekt(kontoStandAusKopf(r.wert)); setKontoMeldung(`„${r.wert.name}“ gespeichert.`); return true
   }
   const kontoUeberschreiben = async (): Promise<boolean> => {
     if (!kontoProjekt) return false
@@ -1231,7 +1241,7 @@ export default function CADPage() {
     setKontoLaeuft(false)
     if (!r.ok) { setSpeicherFehler(true); setKontoMeldung(r.fehler); return false }
     setSpeicherFehler(false); setKontoGespeichertUm(new Date())
-    setKontoProjekt({ id: r.wert.id, name: r.wert.name, revision: r.wert.revision, erstelltAm: r.wert.created_at, geaendertAm: r.wert.updated_at }); setKontoMeldung(`„${r.wert.name}“ gespeichert (Stand ${r.wert.revision}).`); return true
+    setKontoProjekt(kontoStandAusKopf(r.wert)); setKontoMeldung(`„${r.wert.name}“ gespeichert (Stand ${r.wert.revision}).`); return true
   }
   const kontoLaden = async (id: string, revision?: number) => {
     const r = await ladeKontoProjekt(id, revision)
@@ -1241,7 +1251,7 @@ export default function CADPage() {
     wendeProjektdatenAn(r.wert.daten)
     // ein älterer Stand wird erst beim Speichern zum neuen Stand; die Revision bleibt die aktuelle des Projekts
     const kopf = revision ? await ladeKontoProjekt(id) : r
-    setKontoProjekt({ id, name: r.wert.name, revision: kopf.ok ? kopf.wert.revision : r.wert.revision, erstelltAm: kopf.ok ? kopf.wert.created_at : undefined, geaendertAm: kopf.ok ? kopf.wert.updated_at : undefined })
+    setKontoProjekt(kontoStandAusKopf({ ...(kopf.ok ? kopf.wert : r.wert), id, name: r.wert.name }))
     setKontoMeldung(`„${r.wert.name}“ geladen.`)
   }
   const kontoLoeschen = async (id: string): Promise<boolean> => {
@@ -1662,6 +1672,7 @@ export default function CADPage() {
         projektName={kontoProjekt?.name || aufmassProjektName || null}
         systemName={modelWithManual?.system ? `${modelWithManual.system.hersteller} ${modelWithManual.system.systemName}` : null}
         status={speicherZustand}
+        projektnummer={kontoProjekt?.projektnummer} projektStatus={kontoProjekt?.status} kundeName={kontoProjekt?.kunde?.name}
         versionText={kontoProjekt ? `Stand ${kontoProjekt.revision}` : versionen.length > 0 ? `${versionen.length} ${versionen.length === 1 ? 'Version' : 'Versionen'}` : 'Keine Version'}
         kannZurueck={kannZurueck} kannVor={kannVor} onZurueck={schrittZurueck} onVor={schrittVor}
         onVersionen={oeffneVersionen} onSpeichern={speichereProjektdatei} speichernAus={!model} speichernTitel={`Projekt als Datei speichern (${kuerzelText('speichern')})`} onTeilen={speichereProjektdatei} teilenAus={!model}
@@ -1675,6 +1686,7 @@ export default function CADPage() {
         ]}
         profilEintraege={[
           { id: 'dunkel', label: dunkel ? 'Helle Darstellung' : 'Dunkle Darstellung', onClick: dunkelUmschalten },
+          { id: 'projektdaten', label: 'Projektdaten (Kunde, Nummer, Status)', onClick: () => { if (kontoProjekt) setProjektdatenOffen(true); else { setKontoMeldung('Erst als Projekt im Konto speichern, dann lassen sich Kunde, Projektnummer und Status festlegen.'); setKontoOffen(true) } } },
           { id: 'konto', label: 'Projekte im Konto', onClick: () => { setKontoMeldung(null); setKontoOffen(true) } },
           { id: 'neu', label: 'Neu starten', onClick: handleNeuStarten },
         ]}
@@ -1887,6 +1899,7 @@ export default function CADPage() {
                 onEntfernen={bereichEntfernen} onAnhaengen={bereichHinzufuegen} onAufstocken={bereichHinzufuegen}
                 onLoescheAenderung={(i) => setBereichsListe((l) => l.filter((_, j) => j !== i))} onZu={() => setBereicheOffen(false)} entferntAnzahl={removedCount} />
             )}
+            {projektdatenOffen && kontoProjekt && <ProjektdatenDialog projekt={kontoProjekt} kunden={kunden} rolle={rolle ?? ''} onSpeichern={speichereStammdaten} onZu={() => setProjektdatenOffen(false)} />}
             {kontoOffen && <KontoProjekteDialog aktuell={kontoProjekt} meldung={kontoMeldung} onNeu={kontoNeu} onUeberschreiben={kontoUeberschreiben} onLaden={(id, rev) => { void kontoLaden(id, rev) }} onLoeschen={kontoLoeschen} onZu={() => setKontoOffen(false)} />}
             {versionenOffen && <VersionenDialog versionen={versionen} speicherFehler={versionenFehler} onSpeichern={neueVersion} onWiederherstellen={stelleVersionWiederHer} onLoeschen={(id) => speichereListe(loescheVersion(versionen, id))} onUmbenennen={(id, n) => speichereListe(benenneVersion(versionen, id, n))} onZu={() => setVersionenOffen(false)} />}
             {abbauAktiv && abbauErgebnis && viewMode === '3d' && (
@@ -1994,7 +2007,7 @@ export default function CADPage() {
             <dl className='grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-[12.5px]'>
               {projektZeilen({ name: kontoProjekt?.name || aufmassProjektName || null, systemName: modelWithManual?.system ? `${modelWithManual.system.hersteller} ${modelWithManual.system.systemName}` : null,
                 speicherText: SPEICHER_TEXT[speicherZustand], versionText: kontoProjekt ? `Stand ${kontoProjekt.revision}` : versionen.length > 0 ? `${versionen.length} ${versionen.length === 1 ? 'Version' : 'Versionen'}` : 'Keine Version',
-                baustelle: aufmassBaustelle, erstelltAm: kontoProjekt?.erstelltAm, geaendertAm: kontoProjekt?.geaendertAm, gesichertUm }).map((z) => (<div key={z.label} className='contents'><dt className='text-[#86868b]'>{z.label}</dt><dd className='min-w-0 break-words text-[#1d1d1f]'>{z.wert}</dd></div>))}
+                kunde: kontoProjekt?.kunde?.name, kundenAnschrift: kontoProjekt?.kunde?.anschrift, projektnummer: kontoProjekt?.projektnummer, projektStatus: kontoProjekt?.status, baustelle: aufmassBaustelle, erstelltAm: kontoProjekt?.erstelltAm, geaendertAm: kontoProjekt?.geaendertAm, gesichertUm }).map((z) => (<div key={z.label} className='contents'><dt className='text-[#86868b]'>{z.label}</dt><dd className='min-w-0 break-words text-[#1d1d1f]'>{z.wert}</dd></div>))}
             </dl>
           </section>
           {rolle === 'admin' && model && <M2Abrechnung flaecheM2={modelWithManual?.totalAreaM2 ?? model.totalAreaM2} onChange={setM2Wahl} />}

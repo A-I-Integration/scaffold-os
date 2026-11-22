@@ -1,7 +1,11 @@
 // Browser-Seite der CAD-Projekte im Konto: dünne Aufrufe der Routen unter /api/cad/projekte, Fehler als Text für die Oberfläche.
 import type { Projektdatei } from '@/lib/cad/projektdatei'
+import type { KundeKurz, ProjektStatus } from '@/lib/cad/projekt-stammdaten'
 
-export interface KontoProjektKopf { id: string; name: string; revision: number; updated_at: string; created_at: string }
+export interface KontoProjektKopf {
+  id: string; name: string; revision: number; updated_at: string; created_at: string
+  customer_id: string | null; customer: KundeKurz | null; projektnummer: string; status: ProjektStatus
+}
 export interface KontoProjekt extends KontoProjektKopf { daten: Projektdatei }
 export type Antwort<T> = { ok: true; wert: T } | { ok: false; fehler: string; status: number }
 
@@ -22,3 +26,4 @@ export const listeKontoStaende = (id: string) => aufruf(`/api/cad/projekte/${id}
 export const legeKontoProjektAn = (name: string, daten: Projektdatei) => aufruf('/api/cad/projekte', { method: 'POST', body: JSON.stringify({ name, daten }) }, (j) => j.projekt as KontoProjektKopf)
 export const speichereKontoProjekt = (id: string, name: string, daten: Projektdatei, revision: number) => aufruf(`/api/cad/projekte/${id}`, { method: 'PUT', body: JSON.stringify({ name, daten, revision }) }, (j) => j.projekt as KontoProjektKopf)
 export const loescheKontoProjekt = (id: string) => aufruf(`/api/cad/projekte/${id}`, { method: 'DELETE' }, () => true)
+export const aendereKontoStammdaten = (id: string, a: { customer_id?: string | null; status?: ProjektStatus; projektnummer?: string }) => aufruf(`/api/cad/projekte/${id}`, { method: 'PATCH', body: JSON.stringify(a) }, (j) => j.projekt as KontoProjektKopf)

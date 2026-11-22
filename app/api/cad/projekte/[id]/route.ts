@@ -2,9 +2,9 @@ import { NextRequest, NextResponse } from 'next/server'
 import { pruefeRolle, serverErrorResponse } from '@/lib/auth'
 import { ROLLEN } from '@/lib/rollen'
 import { UUID_MUSTER } from '@/lib/ansicht-link'
-import { ladeProjekt, listeStaende, loescheProjekt, ProjektFehler, speichereProjekt } from '@/lib/cad/projekte-server'
+import { aendereStammdaten, ladeProjekt, listeStaende, loescheProjekt, ProjektFehler, speichereProjekt } from '@/lib/cad/projekte-server'
 
-// Ein CAD-Projekt. GET → Projekt (?revision=N: älterer Stand, ?staende=1: Liste der Stände); PUT { name?, daten, revision } → speichern; DELETE.
+// Ein CAD-Projekt. GET → Projekt (?revision=N: älterer Stand, ?staende=1: Liste der Stände); PUT { name?, daten, revision } → speichern; PATCH { customer_id?, status?, projektnummer? } → Stammdaten (ohne neue Revision); DELETE.
 const kein_cache = { 'Cache-Control': 'no-store' }
 const nf = NextResponse.json({ success: false, error: 'Projekt nicht gefunden.' }, { status: 404 })
 type Ctx = { params: Promise<{ id: string }> }
@@ -39,6 +39,22 @@ export async function PUT(req: NextRequest, { params }: Ctx) {
   } catch (err) {
     if (err instanceof ProjektFehler) return NextResponse.json({ success: false, error: err.message }, { status: err.status })
     return serverErrorResponse(err, 'cad/projekte/[id] PUT')
+  }
+}
+
+export async function PATCH(req: NextRequest, { params }: Ctx) {
+  const r = await pruefeRolle(ROLLEN.ADMIN_DISPO_BAULEITER)
+  if (!r.ok) return r.response
+  const { id } = await params
+  if (!UUID_MUSTER.test(id)) return nf.clone()
+  try {
+    const body = await req.json().catch(() => null)
+    if (!body || typeof body !== 'object') return NextResponse.json({ success: false, error: 'Ungültige Eingabe.' }, { status: 400 })
+    const p = await aendereStammdaten(id, { customerId: body.customer_id, status: body.status, projektnummer: body.projektnummer }, r.role, r.userId)
+    return NextResponse.json({ success: true, projekt: p })
+  } catch (err) {
+    if (err instanceof ProjektFehler) return NextResponse.json({ success: false, error: err.message }, { status: err.status })
+    return serverErrorResponse(err, 'cad/projekte/[id] PATCH')
   }
 }
 
