@@ -3,6 +3,7 @@
 // Tabellen: supabase/phase-116-cad-projekte.sql. Die Routen prüfen Login und Rolle; hier gelten Größe, Format und Revision.
 // ============================================================
 import { liesProjektdatei, type Projektdatei } from '@/lib/cad/projektdatei'
+import { pruefeStammdaten, type KundeKurz, type ProjektStatus, type StammdatenAenderung } from '@/lib/cad/projekt-stammdaten'
 
 export const MAX_PROJEKT_BYTES = 4_000_000
 export const MAX_STAENDE = 20
@@ -17,10 +18,16 @@ const conf = () => {
   return { url, headers: { 'Content-Type': 'application/json', apikey: key, Authorization: `Bearer ${key}` } }
 }
 
-export interface ProjektKopf { id: string; name: string; project_id: string | null; revision: number; updated_at: string; created_at: string }
+export interface ProjektKopf {
+  id: string; name: string; project_id: string | null; revision: number; updated_at: string; created_at: string
+  /** Verknüpfung zum Kundenstamm; Name und Anschrift stehen in `customer` und kommen immer aus dem Stammdatensatz */
+  customer_id: string | null; customer: KundeKurz | null
+  projektnummer: string; status: ProjektStatus
+}
 export interface ProjektVoll extends ProjektKopf { daten: Projektdatei }
 
-const KOPF = 'id,name,project_id,revision,updated_at,created_at'
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+const KOPF = 'id,name,project_id,customer_id,projektnummer,status,revision,updated_at,created_at,customer:customers(id,name,street,zip,city)'
 
 /** Eingehende Daten prüfen: gleiche Regeln wie beim Laden einer Projektdatei (unbekannte/ungültige Teile werden verworfen). */
 export function pruefeDaten(roh: unknown): { daten: Projektdatei; verworfen: string[] } {
@@ -97,4 +104,41 @@ export async function speichereProjekt(id: string, p: { name?: unknown; daten: u
 export async function loescheProjekt(id: string): Promise<void> {
   const weg = await rest<{ id: string }[]>(`cad_projekte?id=eq.${id}&select=id`, { method: 'DELETE', headers: { Prefer: 'return=representation' } })
   if (weg.length === 0) throw new ProjektFehler('Projekt nicht gefunden.', 404)
+}
+
+const UNIQUE_FEHLER = /duplicate key|23505|cad_projekte_projektnummer_uq/i
+
+/**
+ * Kunde, Projektnummer und/oder Status eines Projekts ändern (ohne neue Revision, die Zeichnung bleibt unberührt).
+ * Kunde: muss im Kundenstamm existieren; hängt das Projekt an einem Kundenprojekt mit anderem Kunden, wird abgelehnt.
+ */
+export async function aendereStammdaten(id: string, a: StammdatenAenderung, rolle: string, userId: string): Promise<ProjektKopf> {
+  const g = pruefeStammdaten(rolle, a)
+  if (!g.ok) throw new ProjektFehler(g.fehler, g.status)
+  const da = (await rest<{ id: string; project_id: string | null }[]>(`cad_projekte?id=eq.${id}&select=id,project_id`))[0]
+  if (!da) throw new ProjektFehler('Projekt nicht gefunden.', 404)
+  const patch: Record<string, unknown> = { geaendert_von: userId, updated_at: new Date().toISOString() }
+  if (g.wert.status !== undefined) patch.status = g.wert.status
+  if (g.wert.projektnummer !== undefined) patch.projektnummer = g.wert.projektnummer
+  if (g.wert.customerId !== undefined) {
+    if (g.wert.customerId !== null) {
+      if (!UUID.test(g.wert.customerId)) throw new ProjektFehler('Kunde ist ungültig.', 400)
+      const k = await rest<{ id: string }[]>(`customers?id=eq.${g.wert.customerId}&select=id`)
+      if (k.length === 0) throw new ProjektFehler('Dieser Kunde existiert nicht in der Kundenverwaltung.', 404)
+      if (da.project_id) {
+        const kp = (await rest<{ customer_id: string | null }[]>(`projects?id=eq.${da.project_id}&select=customer_id`))[0]
+        if (kp?.customer_id && kp.customer_id !== g.wert.customerId) throw new ProjektFehler('Das Projekt gehört zu einem Kundenprojekt mit einem anderen Kunden. Der Kunde kann hier nicht abweichen.', 409)
+      }
+    }
+    patch.customer_id = g.wert.customerId
+  }
+  try {
+    const zeilen = await rest<ProjektKopf[]>(`cad_projekte?id=eq.${id}&select=${KOPF}`, { method: 'PATCH', headers: { Prefer: 'return=representation' }, body: JSON.stringify(patch) })
+    if (zeilen.length === 0) throw new ProjektFehler('Projekt nicht gefunden.', 404)
+    return zeilen[0]
+  } catch (e) {
+    if (e instanceof ProjektFehler) throw e
+    if (e instanceof Error && UNIQUE_FEHLER.test(e.message)) throw new ProjektFehler('Diese Projektnummer ist schon vergeben.', 409)
+    throw e
+  }
 }

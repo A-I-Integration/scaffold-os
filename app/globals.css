@@ -413,3 +413,5 @@ body {
 .cad-dunkel [class*="bg-[#e8590c]"] { background-color: var(--cad-accent) !important; color: #101216; }
 .cad-dunkel [class*="text-[#e8590c]"] { color: var(--cad-accent) !important; }
 .cad-dunkel [aria-pressed="true"][style*="--os-akzent"] { background: var(--cad-accent) !important; color: #101216 !important; }
+.cad-kopf-trenner-rand { border-color: #d5dae0; }
+.cad-dunkel .cad-kopf-trenner-rand { border-color: var(--cad-border-active); }
