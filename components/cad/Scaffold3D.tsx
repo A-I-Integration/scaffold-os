@@ -1798,7 +1798,7 @@ function Building3D({
           {ug && <UntergeschossKoerper punkte={building.untergeschossKoerper!} untenM={hangM} />}
           {!building.umrissKantenHoeheM && !(building.geschossKoerper && building.geschossKoerper.length >= 2) && !pult && <UmrissGesimse punkte={building.umriss} hoeheM={heightM} />}
           {building.terrassen && building.terrassen.length > 0 && <Terrassen3D terrassen={building.terrassen} umriss={building.umriss} />}
-          {pult && <UmrissPultdach punkte={building.umriss} traufeM={pult.traufeM} firstM={pult.firstM} niedrig={pult.niedrig} />}
+          {pult && <UmrissPultdach punkte={building.umriss} traufeM={pult.traufeM} firstM={pult.firstM} niedrig={pult.niedrig} ueberstandM={Math.max(0, building.overhangM || 0)} />}
           {features.filter((f) => f.umriss).map((f) => {
             const u = f.umriss!
             const y = f.bottomY + f.heightM / 2
