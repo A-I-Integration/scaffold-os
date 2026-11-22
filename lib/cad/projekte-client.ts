@@ -31,9 +31,12 @@ export const aendereKontoStammdaten = (id: string, a: { customer_id?: string | n
 
 export interface NummernInfo {
   gesperrt_am: string | null
-  verwendung: { projektnummer: string; dokumenttyp: string; dokument_id: string | null; verwendet_von: string | null; created_at: string } | null
+  verwendung: { ereignis: 'verwendung' | 'versand_fehlgeschlagen'; projektnummer: string; dokumenttyp: string; dokument_id: string | null; verwendet_von: string | null; fehler: string | null; created_at: string } | null
+  ereignisse: { ereignis: 'verwendung' | 'versand_fehlgeschlagen'; projektnummer: string; dokumenttyp: string; dokument_id: string | null; verwendet_von: string | null; fehler: string | null; created_at: string }[]
   protokoll: { art: string; alt: string | null; neu: string | null; grund: string | null; geaendert_von: string | null; created_at: string }[]
 }
+export interface KundenprojektKurz { id: string; name: string; adresse: string | null; customer_id: string | null; kunde: string | null; verknuepft: boolean }
+export const listeKundenprojekte = () => aufruf('/api/cad/kundenprojekte', undefined, (j) => j.projekte as KundenprojektKurz[])
 export const holeNummernInfo = (id: string) => aufruf(`/api/cad/projekte/${id}?nummer=1`, undefined, (j) => j.nummer as NummernInfo)
 export const korrigiereKontoProjektnummer = (id: string, projektnummer: string, grund: string) => aufruf(`/api/cad/projekte/${id}/projektnummer-korrektur`, { method: 'POST', body: JSON.stringify({ projektnummer, grund }) }, (j) => j.projektnummer as string)
 export const verknuepfeKontoProjekt = (id: string, projectId: string) => aufruf(`/api/cad/projekte/${id}`, { method: 'PATCH', body: JSON.stringify({ project_id: projectId }) }, (j) => j.projekt as KontoProjektKopf)

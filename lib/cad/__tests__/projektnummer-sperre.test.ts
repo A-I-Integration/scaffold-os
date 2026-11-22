@@ -20,46 +20,105 @@ beforeEach(() => {
 })
 
 describe('sperreFuerExterneVerwendung', () => {
-  it('ohne Kundenprojekt passiert nichts und es gibt keinen Aufruf', async () => {
+  const EV = '66666666-6666-4666-8666-666666666666'
+  it('ohne Projektnummer im Dokument oder ohne Kundenprojekt passiert nichts und es gibt keinen Aufruf', async () => {
     const { sperreFuerExterneVerwendung } = await import('../projektnummer-sperre')
-    expect(await sperreFuerExterneVerwendung({ projectId: null, typ: 'angebot' })).toBe(0)
-    expect(await sperreFuerExterneVerwendung({ projectId: 'kein-uuid', typ: 'angebot' })).toBe(0)
+    expect(await sperreFuerExterneVerwendung({ projectId: P, typ: 'angebot' })).toBeNull()
+    expect(await sperreFuerExterneVerwendung({ projectId: P, typ: 'angebot', projektnummer: '  ' })).toBeNull()
+    expect(await sperreFuerExterneVerwendung({ projectId: null, typ: 'angebot', projektnummer: 'P-1' })).toBeNull()
+    expect(await sperreFuerExterneVerwendung({ projectId: 'kein-uuid', typ: 'angebot', projektnummer: 'P-1' })).toBeNull()
     expect(calls.length).toBe(0)
   })
-  it('ruft die Datenbankfunktion mit Typ, Dokument und Benutzer auf', async () => {
+  it('ruft die Datenbankfunktion mit Typ, Dokument, Benutzer und der gedruckten Nummer auf und gibt die Ereignis-ID zurück', async () => {
     const { sperreFuerExterneVerwendung } = await import('../projektnummer-sperre')
-    queue = [() => ({ body: 1 })]
-    expect(await sperreFuerExterneVerwendung({ projectId: P, typ: 'rechnung', dokumentId: 'RE-2026-0001', userId: 'u1' })).toBe(1)
+    queue = [() => ({ body: EV })]
+    expect(await sperreFuerExterneVerwendung({ projectId: P, typ: 'rechnung', dokumentId: 'RE-2026-0001', userId: 'u1', projektnummer: ' P-100 ' })).toBe(EV)
     expect(calls[0].url).toContain('/rpc/cad_projektnummer_extern_verwenden')
-    expect(JSON.parse(String(calls[0].init!.body))).toEqual({ p_project_id: P, p_typ: 'rechnung', p_dokument_id: 'RE-2026-0001', p_user: 'u1' })
+    expect(JSON.parse(String(calls[0].init!.body))).toEqual({ p_project_id: P, p_typ: 'rechnung', p_dokument_id: 'RE-2026-0001', p_user: 'u1', p_projektnummer: 'P-100' })
   })
-  it('Fehler der Datenbank: SperreFehler (fail-closed)', async () => {
+  it('Fehler der Datenbank: SperreFehler 503 (fail-closed)', async () => {
     const { sperreFuerExterneVerwendung, SperreFehler } = await import('../projektnummer-sperre')
     queue = [() => ({ status: 500, body: 'boom' })]
-    await expect(sperreFuerExterneVerwendung({ projectId: P, typ: 'angebot' })).rejects.toBeInstanceOf(SperreFehler)
+    await expect(sperreFuerExterneVerwendung({ projectId: P, typ: 'angebot', projektnummer: 'P-1' })).rejects.toMatchObject({ status: 503 })
     vi.stubGlobal('fetch', vi.fn(async () => { throw new Error('netz') }))
-    await expect(sperreFuerExterneVerwendung({ projectId: P, typ: 'angebot' })).rejects.toBeInstanceOf(SperreFehler)
+    await expect(sperreFuerExterneVerwendung({ projectId: P, typ: 'angebot', projektnummer: 'P-1' })).rejects.toBeInstanceOf(SperreFehler)
+  })
+  it('Nummer im Dokument stimmt nicht mehr mit dem Projekt überein: 409, nichts wird versendet', async () => {
+    const { sperreFuerExterneVerwendung } = await import('../projektnummer-sperre')
+    queue = [() => ({ status: 400, body: '{"message":"projektnummer_abweichend: x"}' })]
+    await expect(sperreFuerExterneVerwendung({ projectId: P, typ: 'angebot', projektnummer: 'P-ALT' })).rejects.toMatchObject({ status: 409 })
   })
   it('Funktion noch nicht angelegt (SQL fehlt): kein Abbruch', async () => {
     const { sperreFuerExterneVerwendung } = await import('../projektnummer-sperre')
     queue = [() => ({ status: 404, body: { code: 'PGRST202', message: 'Could not find the function public.cad_projektnummer_extern_verwenden' } })]
-    expect(await sperreFuerExterneVerwendung({ projectId: P, typ: 'angebot' })).toBe(0)
+    expect(await sperreFuerExterneVerwendung({ projectId: P, typ: 'angebot', projektnummer: 'P-1' })).toBeNull()
+  })
+  it('Fehlversand wird als eigenes Ereignis gemeldet und wirft nie', async () => {
+    const { markiereVersandFehler } = await import('../projektnummer-sperre')
+    queue = [() => ({ body: EV })]
+    await markiereVersandFehler(EV, 'Resend: Postfach voll')
+    expect(calls[0].url).toContain('/rpc/cad_projektnummer_versand_fehlgeschlagen')
+    expect(JSON.parse(String(calls[0].init!.body))).toEqual({ p_ereignis_id: EV, p_fehler: 'Resend: Postfach voll' })
+    calls.length = 0
+    await markiereVersandFehler(null, 'x'); await markiereVersandFehler('kein-uuid', 'x')
+    expect(calls.length).toBe(0)
+    vi.stubGlobal('fetch', vi.fn(async () => { throw new Error('netz') }))
+    await expect(markiereVersandFehler(EV, 'x')).resolves.toBeUndefined()
+  })
+  it('Projektnummern nur bei genau einem verknüpften CAD-Projekt (sonst nicht eindeutig)', async () => {
+    const { projektnummernZuProjekten, ergaenzeProjektnummer } = await import('../projektnummer-sperre')
+    const P2 = '77777777-7777-4777-8777-777777777777'
+    queue = [() => ({ body: [{ project_id: P, projektnummer: 'P-100' }, { project_id: P2, projektnummer: 'P-200' }, { project_id: P2, projektnummer: 'P-201' }] })]
+    const m = await projektnummernZuProjekten([P, P2, null])
+    expect(m.get(P)).toBe('P-100'); expect(m.has(P2)).toBe(false)
+    queue = [() => ({ body: [{ project_id: P, projektnummer: 'P-100' }] })]
+    expect(await ergaenzeProjektnummer([{ project_id: P }, { project_id: null }])).toEqual([{ project_id: P, projektnummer: 'P-100' }, { project_id: null, projektnummer: null }])
+  })
+  it('viele Projekte: Abfrage in Gruppen, Adresse bleibt kurz', async () => {
+    const { projektnummernZuProjekten } = await import('../projektnummer-sperre')
+    const ids = Array.from({ length: 200 }, (_, i) => `00000000-0000-4000-8000-${String(i).padStart(12, '0')}`)
+    queue = [() => ({ body: [] }), () => ({ body: [] }), () => ({ body: [] })]
+    await projektnummernZuProjekten(ids)
+    expect(calls.length).toBe(3)
+    expect(Math.max(...calls.map((c) => c.url.length))).toBeLessThan(4000)
   })
 })
 
-describe('Reihenfolge: gesperrt wird VOR dem Versand bzw. der Bereitstellung', () => {
+describe('Sperre nur bei tatsächlicher Verwendung im Dokument, VOR dem Versand', () => {
+  const quelle = (d: string) => readFileSync(d, 'utf8')
   const nach = (datei: string, sperre: string, danach: string) => {
-    const t = readFileSync(datei, 'utf8'); const a = t.indexOf(sperre), b = t.indexOf(danach)
+    const t = quelle(datei); const a = t.indexOf(sperre), b = t.indexOf(danach)
     expect(a, `${datei}: Sperre fehlt`).toBeGreaterThan(-1); expect(b, `${datei}: ${danach} fehlt`).toBeGreaterThan(-1); expect(a).toBeLessThan(b)
   }
-  it('E-Mail: vor Angebots-Link und vor dem Versand', () => {
+  it('E-Mail: Sperre vor Angebots-Link und Versand, mit der gedruckten Nummer; Fehlversand wird markiert', () => {
     nach('app/api/email/route.ts', 'sperreFuerExterneVerwendung({', 'sichereAngebotToken(projectId)')
     nach('app/api/email/route.ts', 'sperreFuerExterneVerwendung({', 'resend.emails.send')
+    const t = quelle('app/api/email/route.ts')
+    expect(t).toContain('projektnummer: nummerImDokument'); expect(t).toContain('markiereVersandFehler(ereignisId')
   })
-  it('Angebots-Link, Auftragsstand-Link, Rechnungs-Prüflink', () => {
-    nach('app/api/access-token/route.ts', 'sperreFuerExterneVerwendung({', 'await sichereAngebotToken(id)')
-    nach('app/api/auftrag-link/route.ts', 'sperreFuerExterneVerwendung({', 'rest/v1/project_stand_links`, {\n      method: \'POST\'')
-    nach('app/api/invoices/pruef-link/route.ts', 'sperreFuerExterneVerwendung({', 'rest/v1/invoice_pruef_links`, {\n      method: \'POST\'')
+  it('Kunden-Mail mit Rechnung: Sperre vor dem Versand, nur mit Anhang und Nummer', () => {
+    nach('app/api/kunden/[id]/mail/route.ts', 'sperreFuerExterneVerwendung({', 'resend.emails.send')
+    expect(quelle('app/api/kunden/[id]/mail/route.ts')).toContain('invoiceNumber && pdfBase64 &&')
+  })
+  it('Mahnversand (Cron und Knopf): Nummer wird gedruckt, Sperre vor dem Versand, Fehlversand markiert', () => {
+    nach('lib/mahnung-versand.ts', 'projektnummerZuProjekt(inv.project_id)', 'generateMahnungPDF(inv')
+    nach('lib/mahnung-versand.ts', 'sperreFuerExterneVerwendung({', 'emails.send')
+    expect(quelle('lib/mahnung-versand.ts')).toContain('markiereVersandFehler(ereignisId')
+  })
+  it('Link-Routen sperren nicht (ihre Seiten zeigen die Projektnummer nicht)', () => {
+    for (const d of ['app/api/access-token/route.ts', 'app/api/auftrag-link/route.ts', 'app/api/invoices/pruef-link/route.ts']) expect(quelle(d), d).not.toContain('sperreFuerExterneVerwendung')
+  })
+  it('Vorschau und PDF-Export sperren nie: nur die Versandrouten rufen die Sperre auf', () => {
+    for (const d of ['app/aufmass/schritt6/page.tsx', 'app/rechnungen/page.tsx', 'lib/invoice-pdf.ts', 'app/api/invoices/zugferd/route.ts']) expect(quelle(d), d).not.toContain('sperreFuerExterneVerwendung')
+  })
+  it('Alle Versandstellen melden die gedruckte Projektnummer', () => {
+    for (const d of ['app/kunden/[id]/page.tsx', 'app/kunden/page.tsx', 'app/rechnungen/[id]/page.tsx', 'app/rechnungen/page.tsx', 'components/KundeAuftrag.tsx', 'components/NeueMailDialog.tsx', 'app/aufmass/schritt6/page.tsx']) expect(quelle(d), d).toMatch(/projektnummer/)
+  })
+  it('Dokumente drucken die Projektnummer', () => {
+    const t = quelle('lib/invoice-pdf.ts')
+    expect((t.match(/zeichneProjektnummer\(doc, inv\.projektnummer\)/g) || []).length).toBe(3)
+    expect(quelle('lib/invoice-pdf-server.ts')).toContain('Projektnummer:')
+    expect(quelle('app/aufmass/schritt6/page.tsx')).toContain('zeichneProjektnummer(doc, projektnummer)')
   })
 })
 
@@ -92,17 +151,29 @@ describe('Korrekturprozess und Verknüpfung', () => {
   })
   it('Verknüpfung: anderer Kunde wird abgelehnt, gesperrte Nummer ändert die Verknüpfung nicht', async () => {
     const { verknuepfeKundenprojekt } = await import('../projekte-server')
-    queue = [() => ({ body: [{ project_id: null, customer_id: K1, projektnummer_gesperrt_am: null }] }), () => ({ body: [{ id: P, customer_id: K2 }] })]
+    queue = [() => ({ body: [{ project_id: null, customer_id: K1, projektnummer_gesperrt_am: null }] }), () => ({ body: [{ id: P, customer_id: K2 }] }), () => ({ body: [] })]
     await expect(verknuepfeKundenprojekt(C, P, 'u1')).rejects.toMatchObject({ status: 409 })
     const ANDERES = '55555555-5555-4555-8555-555555555555'
-    queue = [() => ({ body: [{ project_id: ANDERES, customer_id: null, projektnummer_gesperrt_am: '2026-11-22T10:00:00Z' }] }), () => ({ body: [{ id: P, customer_id: null }] })]
+    queue = [() => ({ body: [{ project_id: ANDERES, customer_id: null, projektnummer_gesperrt_am: '2026-11-22T10:00:00Z' }] }), () => ({ body: [{ id: P, customer_id: null }] }), () => ({ body: [] })]
     await expect(verknuepfeKundenprojekt(C, P, 'u1')).rejects.toMatchObject({ status: 409 })
     expect(calls.some((c) => c.init?.method === 'PATCH')).toBe(false)
   })
   it('Verknüpfung übernimmt den Kunden des Kundenprojekts, wenn das CAD-Projekt noch keinen hat', async () => {
     const { verknuepfeKundenprojekt } = await import('../projekte-server')
-    queue = [() => ({ body: [{ project_id: null, customer_id: null, projektnummer_gesperrt_am: null }] }), () => ({ body: [{ id: P, customer_id: K1 }] }), () => ({ body: [{ id: C }] })]
+    queue = [() => ({ body: [{ project_id: null, customer_id: null, projektnummer_gesperrt_am: null }] }), () => ({ body: [{ id: P, customer_id: K1 }] }), () => ({ body: [] }), () => ({ body: [{ id: C }] })]
     await verknuepfeKundenprojekt(C, P, 'u1')
     expect(JSON.parse(String(calls.find((c) => c.init?.method === 'PATCH')!.init!.body))).toMatchObject({ project_id: P, customer_id: K1 })
+  })
+  it('Verknüpfung: ein Kundenprojekt gehört zu höchstens einem CAD-Projekt', async () => {
+    const { verknuepfeKundenprojekt } = await import('../projekte-server')
+    queue = [() => ({ body: [{ project_id: null, customer_id: null, projektnummer_gesperrt_am: null }] }), () => ({ body: [{ id: P, customer_id: null }] }), () => ({ body: [{ id: K2, name: 'Altes CAD' }] })]
+    await expect(verknuepfeKundenprojekt(C, P, 'u1')).rejects.toMatchObject({ status: 409, message: expect.stringContaining('Altes CAD') })
+    expect(calls.some((c) => c.init?.method === 'PATCH')).toBe(false)
+  })
+  it('Kundenprojekt-Liste markiert bereits verknüpfte und fügt nichts automatisch zusammen', async () => {
+    const { listeKundenprojekte } = await import('../projekte-server')
+    queue = [() => ({ body: [{ id: P, name: 'A', adresse: null, customer_id: K1, customer: { name: 'Kunde' } }, { id: K2, name: 'B', adresse: 'x', customer_id: null, customer: null }] }), () => ({ body: [{ project_id: P }] })]
+    expect(await listeKundenprojekte()).toEqual([{ id: P, name: 'A', adresse: null, customer_id: K1, kunde: 'Kunde', verknuepft: true }, { id: K2, name: 'B', adresse: 'x', customer_id: null, kunde: null, verknuepft: false }])
+    expect(calls.every((c) => !c.init?.method || c.init.method === 'GET')).toBe(true)
   })
 })

@@ -4,7 +4,7 @@
 // Daten liegen auf dem Server (Tabelle cad_projekte), nicht nur in diesem Browser; Zugriff für Admin, Disposition und Bauleiter.
 import { useCallback, useEffect, useState } from 'react'
 import { STATUS_TEXT } from '@/lib/cad/projekt-stammdaten'
-import { listeKontoProjekte, listeKontoStaende, type KontoProjektKopf } from '@/lib/cad/projekte-client'
+import { listeKontoProjekte, listeKontoStaende, listeKundenprojekte, verknuepfeKontoProjekt, type KontoProjektKopf, type KundenprojektKurz } from '@/lib/cad/projekte-client'
 
 const zeit = (iso: string) => new Date(iso).toLocaleString('de-DE', { dateStyle: 'short', timeStyle: 'short' })
 
@@ -23,6 +23,8 @@ export default function KontoProjekteDialog({ aktuell, meldung, onNeu, onUebersc
   const [name, setName] = useState('')
   const [stand, setStand] = useState<{ id: string; liste: { revision: number; name: string; created_at: string }[] } | null>(null)
   const [laeuft, setLaeuft] = useState(false)
+  // manuelle Zuordnung zu einem Kundenprojekt (es gibt keine gemeinsame ID, deshalb wird nichts automatisch verknüpft)
+  const [zuordnung, setZuordnung] = useState<{ cadId: string; liste: KundenprojektKurz[]; wahl: string } | null>(null)
   const neuLaden = useCallback(async () => {
     const r = await listeKontoProjekte()
     if (r.ok) { setListe(r.wert); setFehler(null) } else setFehler(r.fehler)
@@ -65,6 +67,30 @@ export default function KontoProjekteDialog({ aktuell, meldung, onNeu, onUebersc
                     <button type='button' disabled={laeuft} className={`${knopf} text-red-700`} onClick={() => { if (window.confirm(`Projekt „${p.name}“ im Konto endgültig löschen? Das kann nicht rückgängig gemacht werden.`)) void lauf(() => onLoeschen(p.id)) }}>Löschen</button>
                   </div>
                 </div>
+                <div className='mt-1 flex items-center gap-2 text-xs' data-testid='kundenprojekt-zeile'>
+                  {p.project_id ? <span className='text-gray-600'>Kundenprojekt: verknüpft</span> : (
+                    <>
+                      <span className='rounded border border-amber-300 bg-amber-50 px-1.5 text-amber-800'>Kundenprojekt: nicht verknüpft</span>
+                      <button type='button' className={knopf} onClick={async () => { const r = await listeKundenprojekte(); if (r.ok) setZuordnung({ cadId: p.id, liste: r.wert, wahl: '' }); else setFehler(r.fehler) }}>Zuordnen …</button>
+                    </>
+                  )}
+                </div>
+                {zuordnung?.cadId === p.id && (
+                  <div className='mt-2 rounded border bg-gray-50 p-2 text-xs' data-testid='zuordnung'>
+                    <label className='mb-1 block font-medium' htmlFor={`kp-${p.id}`}>Kundenprojekt wählen</label>
+                    <select id={`kp-${p.id}`} value={zuordnung.wahl} onChange={(e) => setZuordnung({ ...zuordnung, wahl: e.target.value })} className='mb-2 w-full rounded border px-2 py-1 text-sm'>
+                      <option value=''>– bitte wählen –</option>
+                      {[...zuordnung.liste].sort((a, b) => Number(b.customer_id === p.customer_id && !!p.customer_id) - Number(a.customer_id === p.customer_id && !!p.customer_id)).map((k) => (
+                        <option key={k.id} value={k.id} disabled={k.verknuepft}>{k.name}{k.kunde ? ` · ${k.kunde}` : ''}{k.customer_id && k.customer_id === p.customer_id ? ' · gleicher Kunde' : ''}{k.verknuepft ? ' · bereits verknüpft' : ''}</option>
+                      ))}
+                    </select>
+                    <div className='flex gap-2'>
+                      <button type='button' disabled={!zuordnung.wahl || laeuft} className='rounded bg-blue-600 px-3 py-1 text-white disabled:opacity-40'
+                        onClick={() => void lauf(async () => { const r = await verknuepfeKontoProjekt(p.id, zuordnung.wahl); if (!r.ok) { setFehler(r.fehler); return false } setZuordnung(null); setFehler(null); return true })}>Verknüpfen</button>
+                      <button type='button' className={knopf} onClick={() => setZuordnung(null)}>Abbrechen</button>
+                    </div>
+                  </div>
+                )}
                 {stand?.id === p.id && (
                   <ul className='mt-2 space-y-1 border-t pt-2 text-xs'>
                     {stand.liste.map((s) => <li key={s.revision} className='flex items-center justify-between'><span>Stand {s.revision} · {zeit(s.created_at)} · {s.name}</span><button type='button' className={knopf} onClick={() => onLaden(p.id, s.revision)}>Diesen Stand laden</button></li>)}

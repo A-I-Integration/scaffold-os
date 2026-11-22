@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from 'next/server';
 import { pruefeRolle, serverErrorResponse } from '@/lib/auth';
 import { ROLLEN } from '@/lib/rollen';
 import { UUID_MUSTER } from '@/lib/ansicht-link';
-import { sperreFuerExterneVerwendung, SperreFehler } from '@/lib/cad/projektnummer-sperre';
 import { angebotLinkAnzeige, sichereAngebotToken, widerrufeAngebotLink, ANGEBOT_LINK_TAGE } from '@/lib/angebot-link';
 
 // ============================================================
@@ -35,12 +34,9 @@ export async function POST(req: NextRequest) {
     const body = await req.json().catch(() => ({}));
     const id = String(body?.project_id || '');
     if (!UUID_MUSTER.test(id)) return ungueltig();
-    // Projektnummer sperren, bevor der Link nach außen gegeben wird
-    await sperreFuerExterneVerwendung({ projectId: id, typ: 'angebot_link', dokumentId: id, userId: r.userId });
     const token = await sichereAngebotToken(id);
     return NextResponse.json({ success: true, token });
   } catch (err) {
-    if (err instanceof SperreFehler) return NextResponse.json({ success: false, error: err.message }, { status: 503 });
     return serverErrorResponse(err, 'access-token POST');
   }
 }

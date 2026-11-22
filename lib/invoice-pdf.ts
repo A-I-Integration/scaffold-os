@@ -37,6 +37,8 @@ export interface Invoice {
   id: string;
   invoice_number: string;
   project_id: string | null;
+  /** Projektnummer des verknüpften CAD-Projekts (vom Server ergänzt); steht auf dem Dokument, sofern vorhanden */
+  projektnummer?: string | null;
   customer_name: string;
   customer_address: string | null;
   positions: Position[];
@@ -97,7 +99,7 @@ export const fmtDate = (d: string | null) =>
 // zurückfallen - die Rechnung muss in jedem Fall rausgehen können.
 export async function holePdfBase64FuerVersand(
   inv: Invoice
-): Promise<{ pdfBase64: string; istZugferd: boolean; hinweis?: string }> {
+): Promise<{ pdfBase64: string; istZugferd: boolean; hinweis?: string; projektnummer: string | null }> {
   try {
     const res = await fetch('/api/invoices/zugferd', {
       method: 'POST',
@@ -106,23 +108,33 @@ export async function holePdfBase64FuerVersand(
     });
     const json = await res.json();
     if (json.success && json.pdfBase64) {
-      return { pdfBase64: json.pdfBase64, istZugferd: true };
+      return { pdfBase64: json.pdfBase64, istZugferd: true, projektnummer: json.projektnummer ?? null };
     }
     return {
       pdfBase64: generateInvoicePDF(inv).output('datauristring'),
       istZugferd: false,
+      projektnummer: inv.projektnummer ?? null,
       hinweis: 'Ohne E-Rechnung-Daten gesendet (' + (json.error || 'unbekannter Fehler') + ') - normale PDF verschickt.',
     };
   } catch {
     return {
       pdfBase64: generateInvoicePDF(inv).output('datauristring'),
       istZugferd: false,
+      projektnummer: inv.projektnummer ?? null,
       hinweis: 'E-Rechnung-Dienst nicht erreichbar - normale PDF verschickt.',
     };
   }
 }
 
 // ─── §14-UStG-Rechnungs-PDF im Angebots-Design ───
+/** Projektnummer rechts unter der Kopfleiste, auf allen ausgehenden Dokumenten gleich */
+export function zeichneProjektnummer(doc: jsPDF, projektnummer: string | null | undefined) {
+  if (!projektnummer) return;
+  doc.setFontSize(8); doc.setFont('helvetica', 'bold'); doc.setTextColor(71, 85, 105);
+  doc.text(`Projektnummer: ${projektnummer}`, doc.internal.pageSize.getWidth() - 14, 40, { align: 'right' });
+  doc.setFont('helvetica', 'normal');
+}
+
 export function generateInvoicePDF(inv: Invoice) {
   const doc = new jsPDF();
   const pageWidth = doc.internal.pageSize.getWidth();
@@ -141,6 +153,7 @@ export function generateInvoicePDF(inv: Invoice) {
     doc.setFontSize(7); doc.setTextColor(100, 116, 139);
     doc.text(senderLine, 14, 40);
   }
+  zeichneProjektnummer(doc, inv.projektnummer);
 
   let y = 45;
   // Empfänger-Box
@@ -308,6 +321,7 @@ export function generateMahnungPDF(inv: Invoice, stufe: 1 | 2, mahnkosten?: { pa
 
   const senderLine = [cs.company_name, [cs.street, [cs.zip, cs.city].filter(Boolean).join(' ')].filter(Boolean).join(', ')].filter(Boolean).join(' • ');
   if (senderLine) { doc.setFontSize(7); doc.setTextColor(100, 116, 139); doc.text(senderLine, 14, 40); }
+  zeichneProjektnummer(doc, inv.projektnummer);
 
   let y = 50;
   doc.setFillColor(248, 250, 252); doc.rect(14, y, 90, 30, 'F');
@@ -361,6 +375,7 @@ export function generateZahlungserinnerungPDF(inv: Invoice) {
 
   const senderLine = [cs.company_name, [cs.street, [cs.zip, cs.city].filter(Boolean).join(' ')].filter(Boolean).join(', ')].filter(Boolean).join(' • ');
   if (senderLine) { doc.setFontSize(7); doc.setTextColor(100, 116, 139); doc.text(senderLine, 14, 40); }
+  zeichneProjektnummer(doc, inv.projektnummer);
 
   let y = 50;
   doc.setFillColor(248, 250, 252); doc.rect(14, y, 90, 30, 'F');

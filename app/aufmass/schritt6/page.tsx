@@ -30,7 +30,7 @@ import { DispositionResult as DispositionData } from '@/lib/calculations/disposi
 import { uebernehmeMaterialBearbeitung } from '@/lib/stueckliste-bearbeiten';
 import { passendeArtikelFuerKategorie, setzeKatalogArtikel, stelleStandardWiederHer, katalogListenName, artikelLabel } from '@/lib/cad/katalog-zuordnung';
 import { mjArtikelNachNr } from '@/lib/mj-katalog';
-import { generateInvoicePDF, fmtDate as fmtRechnungsDatum, holePdfBase64FuerVersand, type Invoice } from '@/lib/invoice-pdf';
+import { generateInvoicePDF, zeichneProjektnummer, fmtDate as fmtRechnungsDatum, holePdfBase64FuerVersand, type Invoice } from '@/lib/invoice-pdf';
 import { balkoneFuerAbschnitt } from '@/lib/balkon';
 import { abschnitteAusSchritt2, berechneAufmass, erzeugeAufmassblattPdf, type AufmassFoto, type AufmassZulage } from '@/lib/aufmassblatt-pdf';
 import { Save, FileText, Pencil, Check, Ruler, PenLine, ClipboardList, Sparkles, Mail } from 'lucide-react';
@@ -63,6 +63,8 @@ function Schritt6Content() {
   const [show3D, setShow3D] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [savedProjectId, setSavedProjectId] = useState<string | null>(null);
+  // Projektnummer des verknüpften CAD-Projekts (steht auf dem Angebot; Voraussetzung dafür, dass der Versand sie sperrt)
+  const [projektnummer, setProjektnummer] = useState<string | null>(null);
   const [editMode, setEditMode] = useState(false);
   const [editedMaterials, setEditedMaterials] = useState<any[]>([]);
   // NEU: Sonderteile – frei eintragbare Zusatzpositionen, die es in der
@@ -501,6 +503,18 @@ function Schritt6Content() {
     })();
     return () => { weg = true; };
   }, [savedProjectId]);
+  useEffect(() => {
+    if (!savedProjectId) return;
+    let weg = false;
+    (async () => {
+      try {
+        const r = await fetch(`/api/cad/projektnummer?project_id=${savedProjectId}`);
+        const j = await r.json();
+        if (!weg) setProjektnummer(j?.success && typeof j.projektnummer === 'string' ? j.projektnummer : null);
+      } catch { if (!weg) setProjektnummer(null); }
+    })();
+    return () => { weg = true; };
+  }, [savedProjectId]);
   function handleImCadOeffnen() {
     let planImport: PlanImport | null = null
     try {
@@ -783,6 +797,7 @@ function Schritt6Content() {
     doc.setTextColor(255, 255, 255); doc.setFontSize(18); doc.setFont('helvetica', 'bold'); doc.text('SCAFFOLD OS', 14, 18);
     doc.setFontSize(22); doc.text('ANGEBOT', pageWidth - 14, 18, { align: 'right' });
     doc.setFontSize(9); doc.text('KI-gestützte Gerüstbau-Kalkulation', pageWidth - 14, 26, { align: 'right' });
+    zeichneProjektnummer(doc, projektnummer);
     // Phase 87: Absender in der Kopfleiste (gleiche Daten wie Rechnung)
     if (companyProfile) {
       doc.setFontSize(8); doc.setFont('helvetica', 'normal');
@@ -952,6 +967,7 @@ function Schritt6Content() {
           projectId: savedProjectId,
           customerName: s1.name || 'Kunde',
           pdfBase64: base64,
+          projektnummer: projektnummer || undefined,
         }),
       });
       const json = await res.json();
@@ -1080,7 +1096,7 @@ function Schritt6Content() {
     setRechnungSendenLaeuft(true);
     setRechnungFehler('');
     try {
-      const { pdfBase64, hinweis } = await holePdfBase64FuerVersand(rechnungErstellt);
+      const { pdfBase64, hinweis, projektnummer: rechnungsNummer } = await holePdfBase64FuerVersand(rechnungErstellt);
       const res = await fetch('/api/email', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -1088,7 +1104,7 @@ function Schritt6Content() {
           type: 'rechnung', to: rechnungEmail.trim(), projectId: savedProjectId,
           projectName: s1.name, customerName: s1.name,
           invoiceNumber: rechnungErstellt.invoice_number, grossAmount: Number(rechnungErstellt.gross_amount),
-          dueDate: fmtRechnungsDatum(rechnungErstellt.due_date), pdfBase64,
+          dueDate: fmtRechnungsDatum(rechnungErstellt.due_date), pdfBase64, projektnummer: rechnungsNummer || undefined,
         }),
       });
       const json = await res.json();

@@ -82,4 +82,5 @@ export const DOKUMENTTYP_TEXT: Record<string, string> = {
   angebot: 'Angebot (versendet)', angebot_link: 'Angebot (Link bereitgestellt)', auftragsbestaetigung: 'Auftragsbestätigung', rechnung: 'Rechnung (versendet)',
   rechnung_pruefung: 'Rechnung (zur Prüfung bereitgestellt)', mahnung: 'Mahnung', auftragsstand_link: 'Auftragsstand (Link bereitgestellt)', sonstiges: 'Sonstiges Dokument',
 }
+export const EREIGNIS_TEXT: Record<string, string> = { verwendung: 'Verwendet', versand_fehlgeschlagen: 'Versand fehlgeschlagen' }
 export const PROTOKOLL_ART_TEXT: Record<string, string> = { aenderung: 'Änderung', sperre: 'Gesperrt', korrektur: 'Korrektur' }
