@@ -42,7 +42,7 @@ export default function LayersPanel({ layerState, onToggleSide, onToggleLevel, o
     <div className='mb-4 bg-[#f5f5f7] rounded-xl overflow-hidden'>
       <button onClick={() => setOffen(!offen)} className='w-full px-3 py-2 bg-black/5 flex items-center justify-between'>
         <span className='text-xs font-semibold text-[#424245] uppercase'>
-          🗂️ Ebenen ({sichtbareSeiten} Seiten · {sichtbareLagen}/{levelIndices.length} Lagen)
+          🗂️ Seiten & Gerüstlagen ({sichtbareSeiten} Seiten · {sichtbareLagen}/{levelIndices.length} Lagen)
         </span>
         <span className='text-xs text-[#86868b]'>{offen ? '▾' : '▸'}</span>
       </button>

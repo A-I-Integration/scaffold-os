@@ -37,6 +37,8 @@ import type { BereichsWerkzeug } from '@/components/cad/BereichePanel'
 import { CadWerkzeugePanel, type WerkzeugleisteProps } from '@/components/cad/CadWerkzeugleiste'
 import GeruestBaum from '@/components/cad/GeruestBaum'
 import LayersPanel from '@/components/cad/LayersPanel'
+import ZeichenebenenPanel, { type EbenenObjekt } from '@/components/cad/ZeichenebenenPanel'
+import * as Zeb from '@/lib/cad/zeichenebenen'
 import CadDock from '@/components/cad/CadDock'
 import AnsichtsReiter, { type Ansicht2D } from '@/components/cad/AnsichtsReiter'
 import CadStatusleiste, { statusEintraege } from '@/components/cad/CadStatusleiste'
@@ -368,6 +370,29 @@ export default function CADPage() {
   // geänderte Planung ungültig, bleibt die Notiz einfach ungenutzt
   // (kein Fehler, keine Auswirkung auf Stückliste/Statik/IFC).
   const [notes, setNotes] = useState<CADNote[]>([])
+  // CAD-Zeichenebenen (Maße, Messungen, Hilfslinien, Notizen) – eigener Zustand, getrennt von den Gerüstlagen (layerState)
+  const [zeichenebenen, setZeichenebenen] = useState<Zeb.Zeichenebenen>(Zeb.standardZeichenebenen)
+  const [zebMeldung, setZebMeldung] = useState<string | null>(null)
+  const zebRef = useRef(zeichenebenen)
+  useEffect(() => { zebRef.current = zeichenebenen }, [zeichenebenen])
+  /** Neues Zeichenobjekt in die aktive bzw. Standardebene legen; false = Ebene gesperrt, Objekt nicht anlegen. */
+  const legeObjektAn = useCallback((art: Zeb.ObjektArt, id: string, standard: Zeb.StandardEbenenId): boolean => {
+    const r = Zeb.ebeneFuerNeuesObjekt(zebRef.current, standard)
+    if (!r.ok) { setZebMeldung(`${r.fehler} Das Objekt wurde nicht angelegt.`); return false }
+    setZebMeldung(null)
+    if (r.ebene.id !== standard) setZeichenebenen((z) => Zeb.neuesObjektZuordnen(z, Zeb.objektSchluessel(art, id), r.ebene.id, standard))
+    return true
+  }, [])
+  /** false = Objekt liegt auf einer gesperrten Ebene und darf nicht geändert/gelöscht werden. */
+  const darfAendern = useCallback((art: Zeb.ObjektArt, id: string, standard: Zeb.StandardEbenenId): boolean => {
+    const e = Zeb.ebeneVon(zebRef.current, Zeb.objektSchluessel(art, id), standard)
+    if (e.gesperrt) { setZebMeldung(`Die Ebene „${e.name}“ ist gesperrt – das Objekt wurde nicht geändert.`); return false }
+    return true
+  }, [])
+  const zebAendern = useCallback((f: (z: Zeb.Zeichenebenen) => Zeb.Ergebnis) => {
+    const r = f(zebRef.current)
+    if (r.ok) { setZebMeldung(null); zebRef.current = r.zustand; setZeichenebenen(r.zustand) } else setZebMeldung(r.fehler)
+  }, [])
   // Jede Änderung merken (nur gültige Stände, siehe lib/cad/arbeitsstand.ts)
   const [gesichertUm, setGesichertUm] = useState<Date | null>(null)
   // Speicherstatus der Kopfzeile: Verbindung, Konto-Speichern läuft/fehlgeschlagen, Zeitpunkt der letzten Konto-Speicherung
@@ -381,15 +406,18 @@ export default function CADPage() {
     if (ok) { const jetzt = new Date(); setGesichertUm(jetzt); setSpeicherFehler(false); if (kontoSyncRef.current) { kontoSyncRef.current = false; setKontoGespeichertUm(jetzt) } }
   }, [building, systemId, notes, statikDaten, artikelWahl])
   const handleAddNote = useCallback((componentId: string, componentName: string, componentType: string, text: string) => {
+    const id = `notiz-${Date.now()}-${Math.round(Math.random() * 1000)}`
+    if (!legeObjektAn('notiz', id, 'std-notizen')) return
     setNotes((prev) => [...prev, {
-      id: `notiz-${Date.now()}-${Math.round(Math.random() * 1000)}`,
+      id,
       componentId, componentName, componentType, text,
       createdAt: new Date().toISOString(),
     }])
-  }, [])
+  }, [legeObjektAn])
   const handleDeleteNote = useCallback((id: string) => {
+    if (!darfAendern('notiz', id, 'std-notizen')) return
     setNotes((prev) => prev.filter((n) => n.id !== id))
-  }, [])
+  }, [darfAendern])
 
   // NEU (CP-Pro-Marktvergleich, "Ebenen"-Lücke): Sichtbarkeit nach Seite/Lage.
   // Wird beim Generieren automatisch aus dem erzeugten Modell abgeleitet
@@ -476,8 +504,11 @@ export default function CADPage() {
   const messPunkteLeeren = useCallback(() => { messPunkteRef.current = []; setMessPunkteAnzahl(0); setPendingMeasurePoint(null) }, [])
   const messErgebnisAnfuegen = useCallback((art: Messart, punkte: V3[]) => {
     const r = messe(art, punkte)
-    if (r) setMessErgebnisse((l) => [...l, { id: `mess-${Date.now()}-${l.length}`, art, text: r.text, punkte }])
-  }, [])
+    if (!r) return
+    const id = `mess-${Date.now()}-${Math.round(Math.random() * 100000)}`
+    if (!legeObjektAn('mess', id, 'std-bemassungen')) return
+    setMessErgebnisse((l) => [...l, { id, art, text: r.text, punkte }])
+  }, [legeObjektAn])
   const handleToggleMeasureMode = useCallback(() => {
     setMeasureMode((prev) => {
       if (prev) setPendingMeasurePoint(null) // Beim Deaktivieren den ausstehenden Punkt verwerfen
@@ -528,14 +559,15 @@ export default function CADPage() {
         startLabel: prev.label,
         endLabel: componentName,
       }
-      setCustomDimensions((ds) => [...ds, dim])
+      if (legeObjektAn('mass', dim.id, 'std-bemassungen')) setCustomDimensions((ds) => [...ds, dim])
       return null // Pending-Punkt zurücksetzen
     })
-  }, [messErgebnisAnfuegen, messPunkteLeeren])
+  }, [messErgebnisAnfuegen, messPunkteLeeren, legeObjektAn])
 
   const handleDeleteDimension = useCallback((id: string) => {
+    if (!darfAendern('mass', id, 'std-bemassungen')) return
     setCustomDimensions((prev) => prev.filter((d) => d.id !== id))
-  }, [])
+  }, [darfAendern])
 
   // NEU (CP-Pro-Marktvergleich, "Klick-Platzierung"): Klick auf das Gerüst
   // im Platzierungsmodus setzt das gewählte Bauteil an die geklickte Position.
@@ -825,7 +857,7 @@ export default function CADPage() {
     setNotes([]); // Notizen gehören zum verworfenen Modell, sonst "kleben" alte Notizen an neuen Bauteil-IDs
     setLayerState(null); // Ebenen gehören zum verworfenen Modell
     setMeasureMode(false); // Bemaßungen gehören zum verworfenen Modell
-    setCustomDimensions([]); setMessErgebnisse([]);
+    setCustomDimensions([]); setMessErgebnisse([]); setZeichenebenen(Zeb.standardZeichenebenen()); setZebMeldung(null);
     setPendingMeasurePoint(null);
     setManualPlacements([]); // Manuelle Bauteile gehören zum verworfenen Modell
     setBereichsListe([]); setFiguren([]); setZeichenWerkzeug(null); setBereicheOffen(false)
@@ -1176,7 +1208,7 @@ export default function CADPage() {
 
   // Phase 68-J: Statt toter Buttons ohne Modell -> klarer Hinweis beim Klick.
   // Projektdatei: speichern und wieder laden (Gebäude, System, Statik-Angaben, Notizen)
-  const projektdatenJetzt = (name: string): Projektdatei => erzeugeProjektdatei({ name, building, systemId, statikDaten, notizen: notes, artikelWahl, bereiche: bereichsListe, zeichnung: figuren, handarbeit: { platzierungen: manualPlacements, ueberlagerung: ueber, entfernt: removedGroups }, geruestLeer: geruestWahl === 'leer', messungen: { masse: customDimensions, ergebnisse: messErgebnisse } })
+  const projektdatenJetzt = (name: string): Projektdatei => erzeugeProjektdatei({ name, building, systemId, statikDaten, notizen: notes, artikelWahl, bereiche: bereichsListe, zeichnung: figuren, handarbeit: { platzierungen: manualPlacements, ueberlagerung: ueber, entfernt: removedGroups }, geruestLeer: geruestWahl === 'leer', messungen: { masse: customDimensions, ergebnisse: messErgebnisse }, zeichenebenen: Zeb.zuordnungenBereinigen(zeichenebenen, new Set([...figuren.map((f) => Zeb.objektSchluessel('figur', f.id)), ...customDimensions.map((d) => Zeb.objektSchluessel('mass', d.id)), ...messErgebnisse.map((m) => Zeb.objektSchluessel('mess', m.id)), ...notes.map((n) => Zeb.objektSchluessel('notiz', n.id))])) })
   const speichereProjektdatei = () => {
     const daten = projektdatenJetzt(`CAD-Projekt ${new Date().toLocaleDateString('de-DE')}`)
     const a = document.createElement('a')
@@ -1191,7 +1223,7 @@ export default function CADPage() {
     setUeberVerlauf({ jetzt: d.handarbeit?.ueberlagerung ?? KEINE_UEBERLAGERUNG, vergangen: [], zukunft: [] })
     setStatikDaten(d.statikDaten); setSystemId(d.systemId); setArtikelWahl(d.artikelWahl ?? {})
     setGeruestWahl(d.geruestLeer ? 'leer' : 'auto')
-    setCustomDimensions(d.messungen?.masse ?? []); setMessErgebnisse(d.messungen?.ergebnisse ?? [])
+    setCustomDimensions(d.messungen?.masse ?? []); setMessErgebnisse(d.messungen?.ergebnisse ?? []); setZeichenebenen(d.zeichenebenen ?? Zeb.standardZeichenebenen()); setZebMeldung(null)
     setAutoGenerate(true); setBuilding(d.building)
   }
   const uebernehmeProjektdatei = (text: string, name: string) => {
@@ -1646,6 +1678,30 @@ export default function CADPage() {
     geruestfeldPanelAktiv: feldPanel, onGeruestfeldPanel: model ? () => setFeldPanel((v) => !v) : undefined,
     onAuswahlAufheben: () => { setMehrfach([]); setSelectedComponent(null); setRahmenModus(false) },
   }
+  // ── CAD-Zeichenebenen: abgeleitete Anzeige (nur Sichtbarkeit; Berechnung und Stückliste bleiben unberührt) ──
+  const zebSichtbar = (id: Zeb.StandardEbenenId) => Zeb.findeEbene(zeichenebenen, id)?.sichtbar !== false
+  const sichtbareFiguren = figuren.filter((f) => Zeb.istSichtbar(zeichenebenen, Zeb.objektSchluessel('figur', f.id), Zeb.standardEbeneFuer('figur', f.art)))
+  const sichtbareMasse = customDimensions.filter((d) => Zeb.istSichtbar(zeichenebenen, Zeb.objektSchluessel('mass', d.id), 'std-bemassungen'))
+  const sichtbareMessungen = messErgebnisse.filter((m) => Zeb.istSichtbar(zeichenebenen, Zeb.objektSchluessel('mess', m.id), 'std-bemassungen'))
+  const sichtbareNotizen = notes.filter((n) => Zeb.istSichtbar(zeichenebenen, Zeb.objektSchluessel('notiz', n.id), 'std-notizen'))
+  const visibleTypes3D = zebSichtbar('std-treppen') ? visibleTypes : { ...visibleTypes, stair: false }
+  const ebenenObjekte: EbenenObjekt[] = [
+    ...figuren.map((f) => ({ schluessel: Zeb.objektSchluessel('figur', f.id), label: beschreibeFigur(f), standard: Zeb.standardEbeneFuer('figur', f.art) })),
+    ...customDimensions.map((d) => ({ schluessel: Zeb.objektSchluessel('mass', d.id), label: `Maß ${d.distanceM.toFixed(2).replace('.', ',')} m`, standard: 'std-bemassungen' as const })),
+    ...messErgebnisse.map((m) => ({ schluessel: Zeb.objektSchluessel('mess', m.id), label: m.text, standard: 'std-bemassungen' as const })),
+    ...notes.map((n) => ({ schluessel: Zeb.objektSchluessel('notiz', n.id), label: `Notiz: ${n.text.slice(0, 40)}`, standard: 'std-notizen' as const })),
+  ]
+  const ebenenPanels = (
+    <>
+      <ZeichenebenenPanel zustand={zeichenebenen} objekte={ebenenObjekte} meldung={zebMeldung}
+        onSichtbar={(id, v) => zebAendern((z) => Zeb.setzeSichtbar(z, id, v))} onGesperrt={(id, g) => zebAendern((z) => Zeb.setzeGesperrt(z, id, g))}
+        onUmbenennen={(id, n) => zebAendern((z) => Zeb.ebeneUmbenennen(z, id, n))} onLoeschen={(id) => zebAendern((z) => Zeb.ebeneLoeschen(z, id))}
+        onHinzufuegen={(n) => zebAendern((z) => Zeb.ebeneHinzufuegen(z, n, `eb-${Date.now()}-${Math.round(Math.random() * 1000)}`))}
+        onAktiv={(id) => zebAendern((z) => Zeb.setzeAktiv(z, id))} onZuordnen={(k, st, ziel) => zebAendern((z) => Zeb.objektZuordnen(z, k, st, ziel))} />
+      {layerState ? <LayersPanel layerState={layerState} onToggleSide={handleToggleSide} onToggleLevel={handleToggleLevel} onShowAll={handleShowAllLayers} onHideAll={handleHideAllLayers} /> : null}
+    </>
+  )
+
   return (
     <div className={`min-h-full md:h-full md:overflow-clip flex flex-col bg-[#fbfbfd]${dunkel ? ' cad-dunkel' : ''}`}>
       {oeffnungen && (
@@ -1718,7 +1774,7 @@ export default function CADPage() {
           )}
           <BuildingForm reiterWunsch={linksWunsch} registriereZeichner={registriereZeichner} onImportWartet={setImportWartet} building={building} systemId={systemId} onChange={(b) => { setAutoGenerate(true); setBuilding(b); }} onSystemChange={aendereSystem} onGenerate={() => { setAutoGenerate(true); generate(); }} onLadeProjektdatei={ladeProjektdatei} onAussehen={(a, h, v) => { setAussehen(a); setAussehenEin(true); setAussehenEinheit('m'); setAussehenOben('y'); setAussehenAnker(null); setAussehenVersatz(v ?? { x: 0, z: 0, grad: 0 }); setAussehenHinweis(h ?? '') }} onModellUebernehmen={(b) => { setAutoGenerate(true); setBuilding(b); setModel(null) }} registrierePlanUpload={registrierePlanUpload} warnings={allWarnings}
             werkzeuge={<CadWerkzeugePanel {...werkzeugProps} bauteilTyp={model ? placementType : startBauteil} onBauteilTyp={(t) => (model ? handleSelectPlacementType(t) : setStartBauteil(t))} onUmriss={() => zeichnerOeffnenRef.current?.()}
-              ebenen={layerState ? <LayersPanel layerState={layerState} onToggleSide={handleToggleSide} onToggleLevel={handleToggleLevel} onShowAll={handleShowAllLayers} onHideAll={handleHideAllLayers} /> : null} />}  />
+              ebenen={ebenenPanels} />}  />
         </div>
         <div className='flex-1 flex min-w-0 min-h-0'>
         <CadWerkzeugBaum {...werkzeugProps} bauteilTyp={model ? placementType : startBauteil} onBauteilTyp={(t) => (model ? handleSelectPlacementType(t) : setStartBauteil(t))}
@@ -1734,7 +1790,7 @@ export default function CADPage() {
           ] }, { name: 'Berechnung', eintraege: [
             { id: 'automatik', label: 'Automatisch berechnen', icon: Zap, titel: 'Gerüst automatisch berechnen', onClick: () => { setAutoGenerate(true); generate() } },
           ] }]}
-          ebenen={layerState ? <LayersPanel layerState={layerState} onToggleSide={handleToggleSide} onToggleLevel={handleToggleLevel} onShowAll={handleShowAllLayers} onHideAll={handleHideAllLayers} /> : null} />
+          ebenen={ebenenPanels} />
         <div className='flex-1 flex flex-col min-w-0 min-h-0 md:overflow-y-auto'>
           <SystemLeiste systemId={systemId} onSystemChange={aendereSystem} gewaehlteArtikel={Object.keys(artikelWahl).length} />
           <CadBand
@@ -1746,7 +1802,7 @@ export default function CADPage() {
             onAufbau={model ? () => { setViewMode('3d'); setAufbauNr(0) } : exportOhneModellHinweis} dunkel3d={dunkel3d} onDunkel3d={dunkel3dUmschalten} warnungenAnzahl={allWarnings.length}
             rahmenAktiv={rahmenModus} onRahmen={() => setRahmenModus((v) => !v)} auswahlAnzahl={mehrfach.length}
             hatModell={!!modelWithManual} viewMode={viewMode} onViewMode={setViewMode}
-            zeichenWerkzeug={zeichenWerkzeug} onZeichenWerkzeug={setZeichenWerkzeug} figurenAnzahl={figuren.length} onFigurenLoeschen={() => setFiguren([])}
+            zeichenWerkzeug={zeichenWerkzeug} onZeichenWerkzeug={setZeichenWerkzeug} figurenAnzahl={figuren.length} onFigurenLoeschen={() => { const frei = figuren.filter((f) => darfAendern('figur', f.id, Zeb.standardEbeneFuer('figur', f.art))); setFiguren((l) => l.filter((f) => !frei.some((x) => x.id === f.id))) }}
             bereicheOffen={bereicheOffen} bereichWerkzeug={bereichEin.werkzeug}
             onBereichWerkzeug={waehleBereichWerkzeug}
             abbauAktiv={abbauAktiv} onAbbau={() => { setAbbauAktiv((a) => !a); setBereicheOffen(false); setViewMode('3d') }}
@@ -1784,7 +1840,7 @@ export default function CADPage() {
           )}
           <MessPanel art={messart} aktiv={measureMode} punkteAnzahl={messPunkteAnzahl} ergebnisse={messErgebnisse}
             onFlaecheAbschliessen={() => { messErgebnisAnfuegen('flaeche', messPunkteRef.current); messPunkteLeeren() }}
-            onLoeschen={(id) => setMessErgebnisse((l) => l.filter((x) => x.id !== id))} onLeeren={() => setMessErgebnisse([])} />
+            onLoeschen={(id) => { if (darfAendern('mess', id, 'std-bemassungen')) setMessErgebnisse((l) => l.filter((x) => x.id !== id)) }} onLeeren={() => { const frei = messErgebnisse.filter((m) => darfAendern('mess', m.id, 'std-bemassungen')); setMessErgebnisse((l) => l.filter((m) => !frei.some((x) => x.id === m.id))) }} />
           {placementType && placementType !== 'geruestfeld' && model && viewMode === '3d' && (
             <PlatzierKoordinaten name={placementType === 'stair' ? 'Treppe' : 'Bauteil'} einrasten={anschlussEinrasten} onEinrasten={setAnschlussEinrasten}
               onSetzen={(p) => handlePlacementClick(placementType, p, '', -1)} onZu={() => setPlacementType(null)} />
@@ -1926,7 +1982,7 @@ export default function CADPage() {
               <AbbauEinplanenDialog tage={abbauErgebnis.tage} personen={abbauErgebnis.personen} titel={`Teilabbau: ${abbauErgebnis.anzahlTeile} Bauteile, ${abbauErgebnis.stunden} h`} onClose={() => setAbbauEinplanen(false)} />
             )}
             {viewMode === '3d' && modelWithManual && (<>
-              <Scaffold3D farbModus={farbModus} model={modelWithManual} features={features} showBuilding={showBuilding} showScaffold={showScaffold} showDimensions={showDimensions} selectedComponent={selectedComponent} onSelectComponent={klickImModell} onKontextmenue={(id, x, y) => { if (abbauAktiv || placementType || measureMode) return; setSelectedComponent(id); setKontext({ id, x, y }) }} mehrfachAuswahl={mehrfachMenge} rahmenModus={rahmenModus} onRahmen={handleRahmen} abbauMarkiert={abbauMarkiert} echtesGebaeude={echtesGebaeude} visibleTypes={visibleTypes} viewMode={viewAngle} onCanvasReady={(c) => { canvasRef.current = c }} notes={notes} onAddNote={handleAddNote} hiddenSides={hiddenSides} hiddenLevels={hiddenLevelsAufbau} measureMode={measureMode} onMeasurePoint={handleMeasurePoint} customDimensions={customDimensions} messErgebnisse={messErgebnisse} dunklerHintergrund={dunkel3d} pendingMeasurePoint={pendingMeasurePoint?.point ?? null} placementType={placementType} onPlacementClick={handlePlacementClick} showEnvironment={showEnvironment} hoheQualitaet={hoheQualitaet} onRemoveComponent={handleRemoveComponent} onTreppeVerschieben={versetzeAutoTreppe} onReplaceComponent={handleReplaceComponent} systemId={systemId} artikelWahl={artikelWahl} onArtikelWahl={waehleArtikel} onArtikelWahlGleiche={waehleArtikelGleiche} removedCount={removedCount} platzierungIdVon={platzierungIdVonBauteil} onBauteilZiehen={handleBauteilZiehen} griff={!abbauAktiv ? { modus: griffModus, einrasten, anschlussMarker: anschlussEinrasten, onAendern: handleBauteilLage } : undefined} onSeiteUmschalten={(side) => { setAutoGenerate(true); setBuilding((() => { const cur = building.sides ?? ['front']; const has = cur.includes(side); const ns = has ? cur.filter((x) => x !== side) : [...cur, side]; if (ns.length === 0) ns.push('front'); return { ...building, sides: ns } })()) }} />
+              <Scaffold3D farbModus={farbModus} model={modelWithManual} features={features} showBuilding={showBuilding && zebSichtbar('std-gebaeude')} showScaffold={showScaffold && zebSichtbar('std-geruest')} showDimensions={showDimensions} selectedComponent={selectedComponent} onSelectComponent={klickImModell} onKontextmenue={(id, x, y) => { if (abbauAktiv || placementType || measureMode) return; setSelectedComponent(id); setKontext({ id, x, y }) }} mehrfachAuswahl={mehrfachMenge} rahmenModus={rahmenModus} onRahmen={handleRahmen} abbauMarkiert={abbauMarkiert} echtesGebaeude={echtesGebaeude} visibleTypes={visibleTypes3D} viewMode={viewAngle} onCanvasReady={(c) => { canvasRef.current = c }} notes={sichtbareNotizen} onAddNote={handleAddNote} hiddenSides={hiddenSides} hiddenLevels={hiddenLevelsAufbau} measureMode={measureMode} onMeasurePoint={handleMeasurePoint} customDimensions={sichtbareMasse} messErgebnisse={sichtbareMessungen} dunklerHintergrund={dunkel3d} pendingMeasurePoint={pendingMeasurePoint?.point ?? null} placementType={placementType} onPlacementClick={handlePlacementClick} showEnvironment={showEnvironment} hoheQualitaet={hoheQualitaet} onRemoveComponent={handleRemoveComponent} onTreppeVerschieben={versetzeAutoTreppe} onReplaceComponent={handleReplaceComponent} systemId={systemId} artikelWahl={artikelWahl} onArtikelWahl={waehleArtikel} onArtikelWahlGleiche={waehleArtikelGleiche} removedCount={removedCount} platzierungIdVon={platzierungIdVonBauteil} onBauteilZiehen={handleBauteilZiehen} griff={!abbauAktiv ? { modus: griffModus, einrasten, anschlussMarker: anschlussEinrasten, onAendern: handleBauteilLage } : undefined} onSeiteUmschalten={(side) => { setAutoGenerate(true); setBuilding((() => { const cur = building.sides ?? ['front']; const has = cur.includes(side); const ns = has ? cur.filter((x) => x !== side) : [...cur, side]; if (ns.length === 0) ns.push('front'); return { ...building, sides: ns } })()) }} />
               <AufbauLeiste schritte={aufbauSchritte} aktiv={aufbauNr} pdfLaeuft={aufbauPdfLaeuft} onStart={() => setAufbauNr(0)} onWeiter={() => setAufbauNr((n) => Math.min((n ?? 0) + 1, aufbauSchritte.length - 1))} onZurueck={() => setAufbauNr((n) => Math.max((n ?? 0) - 1, 0))} onEnde={() => setAufbauNr(null)} onPdf={() => { void handleAufbauPdf() }} />
             </>
             )}
@@ -1965,15 +2021,15 @@ export default function CADPage() {
                 )}
               </div>
             )}
-            {viewMode === '2d' && modelWithManual && <Scaffold2D ansicht={ansicht2d} model={modelWithManual} projektName={aufmassProjektName} firma={firmenName} zeichnung={{ figuren, werkzeug: zeichenWerkzeug, onNeu: (f) => setFiguren((l) => [...l, f]), onWerkzeug: setZeichenWerkzeug }} />}
-            {viewMode === '2d' && modelWithManual && figuren.length > 0 && (
+            {viewMode === '2d' && modelWithManual && <Scaffold2D ansicht={ansicht2d} model={modelWithManual} projektName={aufmassProjektName} firma={firmenName} zeichnung={{ figuren: sichtbareFiguren, werkzeug: zeichenWerkzeug, onNeu: (f) => { if (legeObjektAn('figur', f.id, Zeb.standardEbeneFuer('figur', f.art))) setFiguren((l) => [...l, f]) }, onWerkzeug: setZeichenWerkzeug }} />}
+            {viewMode === '2d' && modelWithManual && sichtbareFiguren.length > 0 && (
               <aside className='absolute right-3 top-3 z-20 w-[300px] max-h-[60%] overflow-hidden rounded-md border bg-white shadow-xl' style={{ borderColor: 'var(--os-linie)' }} aria-label='Zeichnung'>
-                <div className='px-3 py-2 text-[14px] font-bold text-white' style={{ background: 'var(--os-nav)' }}>Zeichnung ({figuren.length})</div>
+                <div className='px-3 py-2 text-[14px] font-bold text-white' style={{ background: 'var(--os-nav)' }}>Zeichnung ({sichtbareFiguren.length})</div>
                 <ul className='max-h-[40vh] space-y-1 overflow-y-auto p-2'>
-                  {figuren.map((f) => (
+                  {sichtbareFiguren.map((f) => (
                     <li key={f.id} className='flex items-start gap-2 rounded border px-2 py-1.5 text-[13px]' style={{ borderColor: 'var(--os-linie)' }}>
                       <span className='flex-1'>{beschreibeFigur(f)}</span>
-                      <button type='button' aria-label='Figur löschen' className='rounded px-1 hover:bg-black/5' onClick={() => setFiguren((l) => l.filter((x) => x.id !== f.id))}>✕</button>
+                      <button type='button' aria-label='Figur löschen' className='rounded px-1 hover:bg-black/5' onClick={() => { if (darfAendern('figur', f.id, Zeb.standardEbeneFuer('figur', f.art))) setFiguren((l) => l.filter((x) => x.id !== f.id)) }}>✕</button>
                     </li>
                   ))}
                 </ul>
