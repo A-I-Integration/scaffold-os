@@ -477,7 +477,7 @@ export default function KundenDetailPage() {
     const to = prompt(`An welche E-Mail-Adresse soll ${TYPE_LABEL[inv.invoice_type || 'standard']} ${inv.invoice_number} gesendet werden?`, zuletztAn || kunde?.email || '')
     if (!to || !to.includes('@')) return
     try {
-      const { pdfBase64, istZugferd, hinweis } = await holePdfBase64FuerVersand(inv)
+      const { pdfBase64, istZugferd, hinweis, projektnummer } = await holePdfBase64FuerVersand(inv)
       const res = await fetch('/api/email', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -485,7 +485,7 @@ export default function KundenDetailPage() {
           type: 'rechnung', to, projectId: inv.project_id || undefined,
           projectName: inv.customer_name, customerName: inv.customer_name,
           invoiceNumber: inv.invoice_number, grossAmount: Number(inv.gross_amount),
-          dueDate: fmtDate(inv.due_date), pdfBase64,
+          dueDate: fmtDate(inv.due_date), pdfBase64, projektnummer,
         }),
       })
       const json = await res.json()

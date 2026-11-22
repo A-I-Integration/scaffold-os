@@ -54,6 +54,7 @@ export async function generateInvoicePdfCompliant(inv: Invoice): Promise<Uint8Ar
 
   const senderLine = [cs.company_name, [cs.street, [cs.zip, cs.city].filter(Boolean).join(' ')].filter(Boolean).join(', ')].filter(Boolean).join(' • ');
   if (senderLine) { page.drawText(senderLine, { x: 14, y: y + 5, size: 7, font, color: grauMittel }); }
+  if (inv.projektnummer) { const t = `Projektnummer: ${inv.projektnummer}`; page.drawText(t, { x: W - 14 - fontBold.widthOfTextAtSize(t, 8), y: y + 5, size: 8, font: fontBold, color: grauMittel }); }
 
   // Empfänger- und Rechnungsdaten-Box
   page.drawRectangle({ x: 14, y: y - 46, width: 240, height: 46, color: grauHell });

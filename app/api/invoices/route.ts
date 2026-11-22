@@ -1,3 +1,4 @@
+import { ergaenzeProjektnummer } from '@/lib/cad/projektnummer-sperre';
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { trackImpact } from '@/lib/impact';
@@ -93,7 +94,7 @@ export async function GET(req: NextRequest) {
       if (!r1.ok) throw new Error(await r1.text());
       const eine = await r1.json();
       if (!eine?.length) return NextResponse.json({ success: false, error: 'Rechnung nicht gefunden.' }, { status: 404 });
-      return NextResponse.json({ success: true, invoice: eine[0] });
+      return NextResponse.json({ success: true, invoice: (await ergaenzeProjektnummer([eine[0]]))[0] });
     }
     // Nur die Rechnungen eines Projekts: ?project_id=<uuid>
     const projektId = req.nextUrl.searchParams.get('project_id');
@@ -104,7 +105,7 @@ export async function GET(req: NextRequest) {
     );
     if (!res.ok) throw new Error(await res.text());
     const rows = await res.json();
-    return NextResponse.json({ success: true, invoices: rows });
+    return NextResponse.json({ success: true, invoices: await ergaenzeProjektnummer(rows) });
   } catch (err: any) {
     return serverErrorResponse(err);
   }

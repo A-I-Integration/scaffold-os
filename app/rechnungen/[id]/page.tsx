@@ -250,10 +250,10 @@ export default function RechnungAktePage() {
     }
     const to = prompt(`An welche E-Mail-Adresse soll ${typ} ${inv.invoice_number} gesendet werden?`, vorschlag)
     if (!to || !to.includes('@')) return
-    const { pdfBase64, istZugferd, hinweis } = await holePdfBase64FuerVersand(inv)
+    const { pdfBase64, istZugferd, hinweis, projektnummer } = await holePdfBase64FuerVersand(inv)
     const r = await fetch('/api/email', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({
       type: 'rechnung', to, projectId: inv.project_id || undefined, projectName: inv.customer_name, customerName: inv.customer_name,
-      invoiceNumber: inv.invoice_number, grossAmount: Number(inv.gross_amount), dueDate: fmtDate(inv.due_date), pdfBase64 }) })
+      invoiceNumber: inv.invoice_number, grossAmount: Number(inv.gross_amount), dueDate: fmtDate(inv.due_date), pdfBase64, projektnummer }) })
     const j = await r.json()
     if (!j.success) throw new Error(j.error || 'Versand fehlgeschlagen')
     alert((istZugferd ? '✅ ' : '⚠️ ') + `${inv.invoice_number} an ${to} gesendet${istZugferd ? ' (mit E-Rechnung)' : ''}.` + (hinweis ? '\n\n' + hinweis : ''))

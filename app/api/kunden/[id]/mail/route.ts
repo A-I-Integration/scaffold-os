@@ -3,6 +3,7 @@ import { requireAuth, unauthorizedResponse, serverErrorResponse, pruefeRolle } f
 import { ROLLEN } from '@/lib/rollen';
 import { istGueltigeEmail } from '@/lib/email-verlauf';
 import { textZuHtml } from '@/lib/email-kunde';
+import { sperreFuerExterneVerwendung, markiereVersandFehler, SperreFehler } from '@/lib/cad/projektnummer-sperre';
 
 // ============================================================
 // SCAFFOLD OS – Neue Mail an einen Kunden (E-Mails-Reiter)
@@ -28,6 +29,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   if (!rollenPruefung.ok) return rollenPruefung.response;
   const auth = { userId: rollenPruefung.userId };
   const { id } = await params;
+  let ereignisId: string | null = null;
+  let gesendet = false;
   try {
     if (!UUID.test(id)) return NextResponse.json({ success: false, error: 'Ungültige Kunden-ID.' }, { status: 400 });
     const apiKey = process.env.RESEND_API_KEY;
@@ -57,11 +60,13 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     if (!kunde) return NextResponse.json({ success: false, error: 'Kunde nicht gefunden.' }, { status: 404 });
 
     // Rechnung muss zu DIESEM Kunden gehören (direkt oder über ihr Projekt)
+    let rechnungProjektId: string | null = null;
     if (invoiceNumber) {
       const iRes = await fetch(`${url}/rest/v1/invoices?invoice_number=eq.${encodeURIComponent(invoiceNumber)}&select=customer_id,project_id`, { headers });
       if (!iRes.ok) throw new Error(await iRes.text());
       const inv = (await iRes.json())?.[0];
       if (!inv) return NextResponse.json({ success: false, error: 'Rechnung nicht gefunden.' }, { status: 404 });
+      rechnungProjektId = inv.project_id || null;
       let gehoert = inv.customer_id === id;
       if (!gehoert && inv.project_id) {
         const pRes = await fetch(`${url}/rest/v1/projects?id=eq.${inv.project_id}&select=customer_id`, { headers });
@@ -103,10 +108,20 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       ? [{ filename: altAngebot.attachment_name || 'Angebot.pdf', content: altPdfBase64 }]
       : undefined;
 
+    // Projektnummer sperren, bevor die Rechnung hinausgeht – nur wenn sie im angehängten Dokument steht (`projektnummer` = die gedruckte Nummer)
+    const nummerImDokument = invoiceNumber && pdfBase64 && typeof body.projektnummer === 'string' && body.projektnummer.trim() ? body.projektnummer.trim().slice(0, 40) : null;
+    try {
+      ereignisId = await sperreFuerExterneVerwendung({ projectId: rechnungProjektId, typ: 'rechnung', dokumentId: invoiceNumber, userId: auth.userId, projektnummer: nummerImDokument });
+    } catch (e) {
+      if (e instanceof SperreFehler) return NextResponse.json({ success: false, error: e.message }, { status: e.status });
+      throw e;
+    }
+
     const { Resend } = await import('resend');
     const resend = new Resend(apiKey);
     const { data, error } = await resend.emails.send({ from, to: [to], subject, html: htmlBody, attachments });
     if (error) throw new Error(error.message);
+    gesendet = true;
 
     // Protokoll – Fehler hier machen den erfolgreichen Versand nicht rückgängig
     let protokolliert = true;
@@ -144,6 +159,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
     return NextResponse.json({ success: true, id: data?.id, protokolliert });
   } catch (err: any) {
+    if (ereignisId && !gesendet) await markiereVersandFehler(ereignisId, err?.message || 'Versand fehlgeschlagen');
     console.error('[Kunden-Mail] Fehler:', err);
     return serverErrorResponse(err);
   }

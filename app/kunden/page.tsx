@@ -223,7 +223,7 @@ export default function KundenPage() {
     );
     if (!to || !to.includes('@')) return;
     try {
-      const { pdfBase64, istZugferd, hinweis } = await holePdfBase64FuerVersand(inv);
+      const { pdfBase64, istZugferd, hinweis, projektnummer } = await holePdfBase64FuerVersand(inv);
       const res = await fetch('/api/email', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -237,6 +237,7 @@ export default function KundenPage() {
           grossAmount: Number(inv.gross_amount),
           dueDate: fmtDate(inv.due_date),
           pdfBase64,
+          projektnummer,
         }),
       });
       const json = await res.json();

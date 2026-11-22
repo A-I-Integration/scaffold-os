@@ -161,7 +161,9 @@ export async function aendereStammdaten(id: string, a: StammdatenAenderung, roll
 export interface NummernInfo {
   gesperrt_am: string | null
   /** erste externe Verwendung; Projektnummer steht so, wie sie zu diesem Zeitpunkt war */
-  verwendung: { projektnummer: string; dokumenttyp: string; dokument_id: string | null; verwendet_von: string | null; created_at: string } | null
+  verwendung: { ereignis: 'verwendung' | 'versand_fehlgeschlagen'; projektnummer: string; dokumenttyp: string; dokument_id: string | null; verwendet_von: string | null; fehler: string | null; created_at: string } | null
+  /** alle externen Verwendungen und fehlgeschlagenen Versände, älteste zuerst */
+  ereignisse: { ereignis: 'verwendung' | 'versand_fehlgeschlagen'; projektnummer: string; dokumenttyp: string; dokument_id: string | null; verwendet_von: string | null; fehler: string | null; created_at: string }[]
   protokoll: { art: string; alt: string | null; neu: string | null; grund: string | null; geaendert_von: string | null; created_at: string }[]
 }
 
@@ -170,10 +172,11 @@ export async function holeNummernInfo(id: string): Promise<NummernInfo> {
   const da = (await rest<{ projektnummer_gesperrt_am: string | null }[]>(`cad_projekte?id=eq.${id}&select=projektnummer_gesperrt_am`))[0]
   if (!da) throw new ProjektFehler('Projekt nicht gefunden.', 404)
   const [v, l] = await Promise.all([
-    rest<NonNullable<NummernInfo['verwendung']>[]>(`cad_projektnummer_verwendung?cad_projekt_id=eq.${id}&select=projektnummer,dokumenttyp,dokument_id,verwendet_von,created_at`),
+    rest<NummernInfo['ereignisse']>(`cad_projektnummer_verwendung?cad_projekt_id=eq.${id}&select=ereignis,projektnummer,dokumenttyp,dokument_id,verwendet_von,fehler,created_at&order=created_at.asc&limit=200`),
     rest<NummernInfo['protokoll']>(`cad_projektnummer_log?cad_projekt_id=eq.${id}&select=art,alt,neu,grund,geaendert_von,created_at&order=created_at.desc&limit=50`),
   ])
-  return { gesperrt_am: da.projektnummer_gesperrt_am, verwendung: v[0] ?? null, protokoll: l }
+  const erste = v.find((e) => e.ereignis === 'verwendung') ?? null
+  return { gesperrt_am: da.projektnummer_gesperrt_am, verwendung: erste, ereignisse: v, protokoll: l }
 }
 
 /** Gesonderter Korrekturprozess für eine bereits gesperrte Projektnummer (Aufrufer prüft: nur Admin). Begründung Pflicht, alles wird protokolliert. */
@@ -197,10 +200,28 @@ export async function verknuepfeKundenprojekt(id: string, projectId: string, use
   if (!da) throw new ProjektFehler('Projekt nicht gefunden.', 404)
   const kp = (await rest<{ id: string; customer_id: string | null }[]>(`projects?id=eq.${projectId}&select=id,customer_id`))[0]
   if (!kp) throw new ProjektFehler('Das Kundenprojekt existiert nicht.', 404)
+  // Ein Kundenprojekt darf nur mit EINEM CAD-Projekt verknüpft sein, sonst wäre die Projektnummer auf Dokumenten nicht eindeutig
+  const schon = await rest<{ id: string; name: string }[]>(`cad_projekte?project_id=eq.${projectId}&id=neq.${id}&select=id,name&limit=1`)
+  if (schon.length > 0) throw new ProjektFehler(`Dieses Kundenprojekt ist bereits mit dem CAD-Projekt „${schon[0].name}“ verknüpft.`, 409)
   if (da.customer_id && kp.customer_id && da.customer_id !== kp.customer_id) throw new ProjektFehler('Das Kundenprojekt gehört zu einem anderen Kunden als dieses CAD-Projekt.', 409)
   if (da.project_id && da.project_id !== projectId && da.projektnummer_gesperrt_am) throw new ProjektFehler('Die Projektnummer ist gesperrt; die Verknüpfung mit dem Kundenprojekt kann nicht mehr geändert werden.', 409)
   const patch: Record<string, unknown> = { project_id: projectId, geaendert_von: userId, updated_at: new Date().toISOString() }
   if (!da.customer_id && kp.customer_id) patch.customer_id = kp.customer_id
   const z = await rest<ProjektKopf[]>(`cad_projekte?id=eq.${id}&select=${KOPF}`, { method: 'PATCH', headers: { Prefer: 'return=representation' }, body: JSON.stringify(patch) })
   return z[0]
+}
+
+export interface KundenprojektKurz { id: string; name: string; adresse: string | null; customer_id: string | null; kunde: string | null; verknuepft: boolean }
+
+/**
+ * Kundenprojekte für die manuelle Zuordnung. Es gibt keine gemeinsame ID zwischen Kundenprojekt und CAD-Projekt,
+ * deshalb wird nichts automatisch zusammengeführt: Die Liste zeigt, welche schon verknüpft sind; die Person wählt.
+ */
+export async function listeKundenprojekte(): Promise<KundenprojektKurz[]> {
+  const [projekte, verknuepft] = await Promise.all([
+    rest<{ id: string; name: string; adresse: string | null; customer_id: string | null; customer: { name: string } | null }[]>('projects?select=id,name,adresse,customer_id,customer:customers(name)&order=created_at.desc&limit=500'),
+    rest<{ project_id: string }[]>('cad_projekte?project_id=not.is.null&select=project_id'),
+  ])
+  const belegt = new Set(verknuepft.map((v) => v.project_id))
+  return projekte.map((p) => ({ id: p.id, name: p.name, adresse: p.adresse, customer_id: p.customer_id, kunde: p.customer?.name ?? null, verknuepft: belegt.has(p.id) }))
 }

@@ -456,7 +456,7 @@ function RechnungenContent() {
     const to = prompt(`An welche E-Mail-Adresse soll Rechnung ${inv.invoice_number} gesendet werden?`, vorschlagEmail);
     if (!to || !to.includes('@')) return;
     try {
-      const { pdfBase64, istZugferd, hinweis } = await holePdfBase64FuerVersand(inv);
+      const { pdfBase64, istZugferd, hinweis, projektnummer } = await holePdfBase64FuerVersand(inv);
       const res = await fetch('/api/email', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -470,6 +470,7 @@ function RechnungenContent() {
           grossAmount: Number(inv.gross_amount),
           dueDate: fmtDate(inv.due_date),
           pdfBase64,
+          projektnummer,
         }),
       });
       const json = await res.json();
@@ -506,6 +507,7 @@ function RechnungenContent() {
             invoiceNumber: inv.invoice_number,
             grossAmount: Number(inv.gross_amount),
             pdfBase64,
+            projektnummer: inv.projektnummer ?? undefined,
           }),
         });
       }

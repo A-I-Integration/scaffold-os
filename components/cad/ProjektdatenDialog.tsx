@@ -3,7 +3,7 @@
 // Kundenname und Anschrift kommen immer aus dem Kundenstamm; hier wird nur gewählt, nichts getippt.
 import { useEffect, useState } from 'react'
 import type { NummernInfo } from '@/lib/cad/projekte-client'
-import { DOKUMENTTYP_TEXT, PROTOKOLL_ART_TEXT, STATUS_TEXT, STATUS_WERTE, darfKundeZuordnen, darfProjektnummerAendern, darfStatusSetzen, type KontoProjektStand, type ProjektStatus } from '@/lib/cad/projekt-stammdaten'
+import { DOKUMENTTYP_TEXT, EREIGNIS_TEXT, PROTOKOLL_ART_TEXT, STATUS_TEXT, STATUS_WERTE, darfKundeZuordnen, darfProjektnummerAendern, darfStatusSetzen, type KontoProjektStand, type ProjektStatus } from '@/lib/cad/projekt-stammdaten'
 
 const zeit = (iso: string) => new Date(iso).toLocaleString('de-DE', { dateStyle: 'short', timeStyle: 'short' })
 
@@ -84,6 +84,14 @@ export default function ProjektdatenDialog({ projekt, kunden, rolle, onSpeichern
             <div>{zeit(info.verwendung.created_at)} · {DOKUMENTTYP_TEXT[info.verwendung.dokumenttyp] ?? info.verwendung.dokumenttyp}{info.verwendung.dokument_id ? ` · ${info.verwendung.dokument_id}` : ''}</div>
             <div>Projektnummer damals: {info.verwendung.projektnummer}{info.verwendung.verwendet_von ? ` · Benutzer ${info.verwendung.verwendet_von}` : ''}</div>
           </section>
+        )}
+        {info && info.ereignisse.length > 0 && (
+          <details className='mb-3 text-xs'>
+            <summary className='cursor-pointer font-medium'>Externe Verwendungen ({info.ereignisse.length})</summary>
+            <ul className='mt-1 space-y-1' data-testid='nummer-ereignisse'>
+              {info.ereignisse.map((e, i) => <li key={i} className={`rounded border p-1.5 ${e.ereignis === 'versand_fehlgeschlagen' ? 'border-red-300 bg-red-50 text-red-800' : ''}`}>{zeit(e.created_at)} · {EREIGNIS_TEXT[e.ereignis] ?? e.ereignis} · {DOKUMENTTYP_TEXT[e.dokumenttyp] ?? e.dokumenttyp}{e.dokument_id ? ` · ${e.dokument_id}` : ''} · Nr. {e.projektnummer}{e.fehler ? ` · ${e.fehler}` : ''}</li>)}
+            </ul>
+          </details>
         )}
         {info && info.protokoll.length > 0 && (
           <details className='mb-3 text-xs'>

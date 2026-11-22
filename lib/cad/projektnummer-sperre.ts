@@ -8,7 +8,8 @@ import { createClient } from '@/lib/supabase/server'
 export type DokumentTyp = 'angebot' | 'angebot_link' | 'auftragsbestaetigung' | 'rechnung' | 'rechnung_pruefung' | 'mahnung' | 'auftragsstand_link' | 'sonstiges'
 
 export class SperreFehler extends Error {
-  constructor(message = 'Die Projektnummer konnte nicht gesperrt werden. Es wurde nichts versendet. Bitte erneut versuchen.') { super(message) }
+  /** HTTP-Status für die Antwort: 503 = Sperre nicht möglich, 409 = Projektnummer im Dokument ist veraltet */
+  constructor(message = 'Die Projektnummer konnte nicht gesperrt werden. Es wurde nichts versendet. Bitte erneut versuchen.', public status = 503) { super(message) }
 }
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
@@ -39,23 +40,67 @@ export async function projektIdZuRechnungsId(invoiceId: string): Promise<string 
 }
 
 /**
- * Sperrt die Projektnummer aller CAD-Projekte, die mit diesem Kundenprojekt verknüpft sind (falls noch nicht gesperrt).
- * Rückgabe: Anzahl neu gesperrter Projektnummern. Ohne Kundenprojekt passiert nichts.
+ * Sperrt die Projektnummer, die TATSÄCHLICH im Dokument steht, und legt das Verwendungs-Ereignis an – VOR dem Versand.
+ * Ohne `projektnummer` (Dokument enthält keine) oder ohne verknüpftes CAD-Projekt passiert nichts (Rückgabe null).
+ * Rückgabe: Ereignis-ID, mit der ein späterer Fehlversand markiert wird.
+ * Stimmt die Nummer nicht mehr mit dem Projekt überein, wird abgelehnt (409), damit kein Dokument mit veralteter Nummer hinausgeht.
  */
-export async function sperreFuerExterneVerwendung(a: { projectId: string | null | undefined; typ: DokumentTyp; dokumentId?: string | null; userId?: string | null }): Promise<number> {
-  if (!a.projectId || !UUID.test(a.projectId)) return 0
+export async function sperreFuerExterneVerwendung(a: { projectId: string | null | undefined; typ: DokumentTyp; dokumentId?: string | null; userId?: string | null; projektnummer?: string | null }): Promise<string | null> {
+  const nr = typeof a.projektnummer === 'string' ? a.projektnummer.trim() : ''
+  if (!nr || !a.projectId || !UUID.test(a.projectId)) return null
   const { url, headers } = conf()
   let r: Response
   try {
     r = await fetch(`${url}/rest/v1/rpc/cad_projektnummer_extern_verwenden`, {
       method: 'POST', headers,
-      body: JSON.stringify({ p_project_id: a.projectId, p_typ: a.typ, p_dokument_id: a.dokumentId ?? null, p_user: a.userId ?? null }),
+      body: JSON.stringify({ p_project_id: a.projectId, p_typ: a.typ, p_dokument_id: a.dokumentId ?? null, p_user: a.userId ?? null, p_projektnummer: nr }),
     })
   } catch { throw new SperreFehler() }
-  if (r.ok) { const n = Number(await r.json()); return Number.isFinite(n) ? n : 0 }
+  if (r.ok) { const id = await r.json(); return typeof id === 'string' ? id : null }
   const text = await r.text().catch(() => '')
-  if (/PGRST202|Could not find the function/i.test(text)) return 0
+  if (/projektnummer_abweichend/.test(text)) throw new SperreFehler('Die Projektnummer hat sich seit dem Erstellen des Dokuments geändert. Bitte das Dokument neu erzeugen. Es wurde nichts versendet.', 409)
+  if (/PGRST202|Could not find the function/i.test(text)) return null
   throw new SperreFehler()
+}
+
+/** Versand nach erfolgter Sperre fehlgeschlagen: als eigenes Ereignis festhalten. Die Sperre bleibt; wirft nie. */
+export async function markiereVersandFehler(ereignisId: string | null | undefined, fehler: string): Promise<void> {
+  if (!ereignisId || !UUID.test(ereignisId)) return
+  try {
+    const { url, headers } = conf()
+    const r = await fetch(`${url}/rest/v1/rpc/cad_projektnummer_versand_fehlgeschlagen`, { method: 'POST', headers, body: JSON.stringify({ p_ereignis_id: ereignisId, p_fehler: fehler }) })
+    if (!r.ok) console.error('[projektnummer] Fehlversand nicht protokolliert', await r.text().catch(() => ''))
+  } catch (e) { console.error('[projektnummer] Fehlversand nicht protokolliert', e) }
+}
+
+/** Projektnummern für mehrere Kundenprojekte: nur wo GENAU EIN CAD-Projekt verknüpft ist (sonst nicht eindeutig, also keine Nummer). */
+export async function projektnummernZuProjekten(projectIds: (string | null | undefined)[]): Promise<Map<string, string>> {
+  const ids = [...new Set(projectIds.filter((x): x is string => !!x && UUID.test(x)))]
+  const ergebnis = new Map<string, string>()
+  if (ids.length === 0) return ergebnis
+  try {
+    const { url, headers } = conf()
+    // in Gruppen abfragen, damit die Adresse bei vielen Projekten nicht zu lang wird
+    const gruppen: string[][] = []
+    for (let i = 0; i < ids.length; i += 80) gruppen.push(ids.slice(i, i + 80))
+    const antworten = await Promise.all(gruppen.map((g) => fetch(`${url}/rest/v1/cad_projekte?project_id=in.(${g.join(',')})&select=project_id,projektnummer`, { headers })))
+    if (antworten.some((x) => !x.ok)) return ergebnis
+    const zeilen = (await Promise.all(antworten.map((x) => x.json()))).flat() as { project_id: string; projektnummer: string | null }[]
+    const anzahl = new Map<string, number>()
+    for (const z of zeilen) anzahl.set(z.project_id, (anzahl.get(z.project_id) ?? 0) + 1)
+    for (const z of zeilen) if (anzahl.get(z.project_id) === 1 && z.projektnummer) ergebnis.set(z.project_id, z.projektnummer)
+  } catch { /* ohne Nummer weiter */ }
+  return ergebnis
+}
+
+export async function projektnummerZuProjekt(projectId: string | null | undefined): Promise<string | null> {
+  return projectId ? (await projektnummernZuProjekten([projectId])).get(projectId) ?? null : null
+}
+
+/** Ergänzt Rechnungszeilen um `projektnummer` (die Nummer, die auf dem Dokument stehen soll). */
+export async function ergaenzeProjektnummer<T extends { project_id?: string | null }>(rows: T[]): Promise<(T & { projektnummer: string | null })[]> {
+  const map = await projektnummernZuProjekten(rows.map((x) => x.project_id))
+  return rows.map((x) => ({ ...x, projektnummer: x.project_id ? map.get(x.project_id) ?? null : null }))
 }
 
 /** Angemeldete Person der laufenden Anfrage (für das Protokoll), sonst null */

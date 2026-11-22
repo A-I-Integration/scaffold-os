@@ -1,4 +1,5 @@
 import { generateMahnungPDF, generateZahlungserinnerungPDF, type Invoice } from '@/lib/invoice-pdf'
+import { sperreFuerExterneVerwendung, markiereVersandFehler, projektnummerZuProjekt, SperreFehler } from '@/lib/cad/projektnummer-sperre'
 import { tageUeberfaellig, offenerBetrag, AKTION_LABEL, type MahnAktion } from '@/lib/mahnung-steuerung'
 
 // ============================================================
@@ -68,6 +69,9 @@ export async function sendeMahnschritt(
     const email = await kundenEmail(inv)
     if (!email) return { ok: false, error: 'Beim Kunden ist keine E-Mail-Adresse hinterlegt.', ohneEmail: true }
 
+    // Projektnummer des verknüpften CAD-Projekts: steht auf dem Schreiben und wird mit dem Versand gesperrt
+    const projektnummer = await projektnummerZuProjekt(inv.project_id)
+    inv = { ...inv, projektnummer } as Invoice
     const cfg = einstellungen ?? await ladeMahnEinstellungen()
     const tage = tageUeberfaellig(inv.due_date)
     const doc = aktion === 'erinnerung'
@@ -85,6 +89,7 @@ export async function sendeMahnschritt(
       <p>Hallo ${esc(inv.customer_name || 'Kunde')},</p><p>${text}</p>
       <div style="background: #f8fafc; padding: 20px; border-radius: 8px; margin: 20px 0;">
         <p style="margin: 0;"><strong>Rechnungsnummer:</strong> ${esc(inv.invoice_number)}</p>
+        ${projektnummer ? `<p style="margin: 8px 0 0;"><strong>Projektnummer:</strong> ${esc(projektnummer)}</p>` : ''}
         <p style="margin: 8px 0 0;"><strong>Offener Betrag:</strong> ${eur(offenerBetrag(inv))} €</p></div>
       <p style="color: #64748b; font-size: 12px; margin-top: 30px;">Diese E-Mail wurde automatisch von SCAFFOLD OS versendet. Bei Fragen antworten Sie einfach auf diese E-Mail.</p></div>`
 
@@ -108,6 +113,15 @@ export async function sendeMahnschritt(
       return { ok: false, error: `${grund} Außerdem konnte der Stand nicht zurückgesetzt werden: Die Rechnung gilt jetzt als gemahnt, obwohl nichts gesendet wurde. Bitte den Mahnstand von Hand prüfen.` }
     }
 
+    // Projektnummer sperren, BEVOR das Schreiben hinausgeht. Schlägt das fehl, wird nichts gesendet und der alte Stand zurückgesetzt.
+    let ereignisId: string | null = null
+    try {
+      ereignisId = await sperreFuerExterneVerwendung({ projectId: inv.project_id, typ: 'mahnung', dokumentId: inv.invoice_number, userId: null, projektnummer })
+    } catch (e) {
+      if (e instanceof SperreFehler) return zuruecksetzen(e.message)
+      throw e
+    }
+
     let sendefehler: string | null = null
     try {
       const { Resend } = await import('resend')
@@ -121,7 +135,7 @@ export async function sendeMahnschritt(
       console.error('[mahnung-versand] Versand', e)
       sendefehler = 'E-Mail-Versand fehlgeschlagen.'
     }
-    if (sendefehler) return zuruecksetzen(sendefehler)
+    if (sendefehler) { await markiereVersandFehler(ereignisId, sendefehler); return zuruecksetzen(sendefehler) }
 
     // Protokoll (Versand ist raus, deshalb best effort)
     try {

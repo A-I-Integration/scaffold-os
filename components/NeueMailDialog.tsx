@@ -91,14 +91,16 @@ export default function NeueMailDialog({ kunde, rechnungen, bisherigeAdressen, f
     try {
       let pdfBase64: string | undefined;
       let pdfName: string | undefined;
+      let projektnummer: string | null = null;
       if (inv) {
         const r = await holePdfBase64FuerVersand(inv);
         pdfBase64 = r.pdfBase64;
+        projektnummer = r.projektnummer;
         pdfName = `${TYP[inv.invoice_type || 'standard'] || 'Rechnung'}_${inv.invoice_number}.pdf`;
       }
       const res = await fetch(`/api/kunden/${kunde.id}/mail`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ to: empfaenger, subject: betreff.trim(), text, invoiceNumber: inv?.invoice_number, pdfBase64, pdfName, anhangMailId: angebotMailId || undefined }),
+        body: JSON.stringify({ to: empfaenger, subject: betreff.trim(), text, invoiceNumber: inv?.invoice_number, pdfBase64, pdfName, projektnummer: projektnummer || undefined, anhangMailId: angebotMailId || undefined }),
       });
       const json = await res.json();
       if (!json.success) throw new Error(json.error || 'Senden fehlgeschlagen');

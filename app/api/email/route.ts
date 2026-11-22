@@ -2,12 +2,16 @@ import { NextResponse } from 'next/server';
 import { requireAuth, unauthorizedResponse, serverErrorResponse, pruefeRolle } from '@/lib/auth';
 import { ROLLEN } from '@/lib/rollen';
 import { sichereAngebotToken } from '@/lib/angebot-link';
-import { sperreFuerExterneVerwendung, projektIdZuRechnung, SperreFehler } from '@/lib/cad/projektnummer-sperre';
+import { sperreFuerExterneVerwendung, markiereVersandFehler, projektIdZuRechnung, SperreFehler } from '@/lib/cad/projektnummer-sperre';
+
+const esc = (t: string) => t.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c] as string));
 
 export async function POST(req: Request) {
   const rollenPruefung = await pruefeRolle(ROLLEN.ADMIN_DISPO);
   if (!rollenPruefung.ok) return rollenPruefung.response;
   const auth = { userId: rollenPruefung.userId };
+  let ereignisId: string | null = null;
+  let gesendet = false;
   try {
     const apiKey = process.env.RESEND_API_KEY;
     if (!apiKey) {
@@ -17,7 +21,7 @@ export async function POST(req: Request) {
       }, { status: 503 });
     }
 
-    const { to, projectName, projectId, pdfBase64, customerName, type, invoiceNumber, grossAmount, dueDate } = await req.json();
+    const { to, projectName, projectId, pdfBase64, customerName, type, invoiceNumber, grossAmount, dueDate, projektnummer } = await req.json();
     if (!to || !projectName) {
       return NextResponse.json({ error: 'Empfänger und Projektname erforderlich' }, { status: 400 });
     }
@@ -27,12 +31,14 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Projekt-ID erforderlich' }, { status: 400 });
     }
 
-    // Projektnummer sperren, BEVOR etwas das Haus verlässt (auch der Angebots-Link zählt). Schlägt das fehl, wird nicht versendet.
+    // Projektnummer sperren, BEVOR etwas das Haus verlässt – aber nur, wenn sie im Dokument steht (`projektnummer` = die gedruckte Nummer).
+    // Schlägt das fehl oder ist die Nummer veraltet, wird nicht versendet.
+    const nummerImDokument = typeof projektnummer === 'string' && projektnummer.trim() ? projektnummer.trim().slice(0, 40) : null;
     try {
       const sperrProjekt = mailType === 'angebot' ? (projectId || null) : (invoiceNumber ? await projektIdZuRechnung(String(invoiceNumber)) : null);
-      await sperreFuerExterneVerwendung({ projectId: sperrProjekt, typ: mailType === 'angebot' ? 'angebot' : mailType, dokumentId: mailType === 'angebot' ? (projectId || null) : (invoiceNumber || null), userId: auth.userId });
+      ereignisId = await sperreFuerExterneVerwendung({ projectId: sperrProjekt, typ: mailType === 'angebot' ? 'angebot' : mailType, dokumentId: mailType === 'angebot' ? (projectId || null) : (invoiceNumber || null), userId: auth.userId, projektnummer: nummerImDokument });
     } catch (e) {
-      if (e instanceof SperreFehler) return NextResponse.json({ error: e.message }, { status: 503 });
+      if (e instanceof SperreFehler) return NextResponse.json({ error: e.message }, { status: e.status });
       throw e;
     }
 
@@ -69,6 +75,7 @@ export async function POST(req: Request) {
           <p>vielen Dank für Ihr Interesse. Ihr persönliches Angebot für <strong>${projectName}</strong> ist fertig.</p>
           <div style="background: #f8fafc; padding: 20px; border-radius: 8px; margin: 20px 0;">
             <p style="margin: 0;"><strong>Projekt:</strong> ${projectName}</p>
+            ${nummerImDokument ? `<p style="margin: 8px 0 0;"><strong>Projektnummer:</strong> ${esc(nummerImDokument)}</p>` : ''}
             <p style="margin: 8px 0 0;"><strong>Projekt-ID:</strong> ${projectId}</p>
           </div>
           <p>Das Angebot finden Sie im Anhang dieser E-Mail. Sie können es auch online einsehen:</p>
@@ -81,6 +88,7 @@ export async function POST(req: Request) {
           <p>anbei erhalten Sie Ihre Rechnung für <strong>${projectName}</strong>.</p>
           <div style="background: #f8fafc; padding: 20px; border-radius: 8px; margin: 20px 0;">
             <p style="margin: 0;"><strong>Rechnungsnummer:</strong> ${invoiceNumber || '-'}</p>
+            ${nummerImDokument ? `<p style="margin: 8px 0 0;"><strong>Projektnummer:</strong> ${esc(nummerImDokument)}</p>` : ''}
             ${grossAmount != null ? `<p style="margin: 8px 0 0;"><strong>Betrag:</strong> ${fmtEur(grossAmount)} €</p>` : ''}
             ${dueDate ? `<p style="margin: 8px 0 0;"><strong>Zahlbar bis:</strong> ${dueDate}</p>` : ''}
           </div>
@@ -92,6 +100,7 @@ export async function POST(req: Request) {
           <p>trotz Fälligkeit konnten wir für die Rechnung <strong>${invoiceNumber || '-'}</strong> (${projectName}) noch keinen Zahlungseingang feststellen.</p>
           <div style="background: #fef2f2; padding: 20px; border-radius: 8px; margin: 20px 0;">
             <p style="margin: 0;"><strong>Rechnungsnummer:</strong> ${invoiceNumber || '-'}</p>
+            ${nummerImDokument ? `<p style="margin: 8px 0 0;"><strong>Projektnummer:</strong> ${esc(nummerImDokument)}</p>` : ''}
             ${grossAmount != null ? `<p style="margin: 8px 0 0;"><strong>Offener Betrag:</strong> ${fmtEur(grossAmount)} €</p>` : ''}
           </div>
           <p>Wir bitten um Ausgleich des Betrags innerhalb von 7 Tagen. Die Mahnung finden Sie im Anhang.</p>`;
@@ -124,6 +133,7 @@ export async function POST(req: Request) {
     });
 
     if (error) throw new Error(error.message);
+    gesendet = true;
 
     // Phase 20: Versand protokollieren – Fehler hier dürfen den
     // erfolgreichen Versand nicht rückwirkend als fehlgeschlagen melden.
@@ -195,6 +205,8 @@ export async function POST(req: Request) {
 
     return NextResponse.json({ success: true, id: data?.id });
   } catch (err: any) {
+    // Nach erfolgter Sperre, aber ohne Versand: als fehlgeschlagener Versand festhalten (die Sperre bleibt)
+    if (ereignisId && !gesendet) await markiereVersandFehler(ereignisId, err?.message || 'Versand fehlgeschlagen');
     console.error('[Email API] Fehler:', err);
     return serverErrorResponse(err);
   }
