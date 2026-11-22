@@ -178,6 +178,8 @@ export const WANDABSTAND_MAX_M = 0.6
 export const WANDABSTAND_HINWEIS_AB_M = 0.3
 
 export interface BuildingParams {
+  /** Nordrichtung des Projekts in Grad (0 = Norden, 90 = Osten, 180 = Süden, 270 = Westen): Himmelsrichtung, in die „oben“ im Grundriss (Rückseite) zeigt. Ohne Angabe bleiben vorne/hinten/links/rechts (alte Projekte). Dreht das Modell nicht. */
+  nordrichtungGrad?: number
   lengthM: number
   widthM: number
   heightM: number

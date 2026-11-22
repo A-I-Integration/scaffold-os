@@ -1,3 +1,4 @@
+import { richtungsName } from '@/lib/cad/ausrichtung'
 import { STATUS_TEXT, type ProjektStatus } from '@/lib/cad/projekt-stammdaten'
 // Zeilen für „Projektinformationen“ im Tab Projekt. Es erscheinen nur Angaben, die der CAD-Stand wirklich kennt.
 export interface ProjektInfoEingabe {
@@ -7,6 +8,8 @@ export interface ProjektInfoEingabe {
   versionText: string
   /** Kunde und Anschrift aus dem Kundenstamm, Projektnummer und Status (nur bei Projekten im Konto) */
   kunde?: string | null; kundenAnschrift?: string | null; projektnummer?: string | null; nummerGesperrt?: boolean; projektStatus?: ProjektStatus | null
+  /** Nordrichtung des Projekts in Grad (nur wenn angegeben) */
+  nordrichtungGrad?: number | null
   /** Adresse der Baustelle (nur nach Übernahme aus dem Aufmaß bekannt) */
   baustelle?: string | null
   /** ISO-Zeitpunkte des Konto-Projekts (falls geöffnet) */
@@ -27,6 +30,7 @@ export function projektZeilen(e: ProjektInfoEingabe): { label: string; wert: str
     ...(e.kunde ? [{ label: 'Kunde', wert: e.kunde }] : []),
     ...(e.kunde && e.kundenAnschrift ? [{ label: 'Kundenanschrift', wert: e.kundenAnschrift }] : []),
     ...(e.baustelle ? [{ label: 'Baustelle', wert: e.baustelle }] : []),
+    ...(e.nordrichtungGrad != null ? [{ label: 'Nordrichtung', wert: `${String(e.nordrichtungGrad).replace('.', ',')}° (Rückseite: ${richtungsName(e.nordrichtungGrad)})` }] : []),
     { label: 'Gerüstsystem', wert: e.systemName || 'Kein System' },
     { label: 'Speicherstatus', wert: e.speicherText },
     { label: 'Version', wert: e.versionText },
