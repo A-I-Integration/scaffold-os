@@ -66,12 +66,20 @@ export function pruefeStammdaten(rolle: string, a: StammdatenAenderung): { ok: t
 export interface KontoProjektStand {
   id: string; name: string; revision: number; erstelltAm?: string; geaendertAm?: string
   projektnummer?: string; status?: ProjektStatus; kunde?: { id: string; name: string; anschrift: string } | null
+  /** Zeitpunkt der ersten externen Verwendung; ab dann ist die Projektnummer gesperrt */
+  nummerGesperrtAm?: string | null
 }
 
 /** Zustand des geöffneten Konto-Projekts in der CAD-Seite aus dem Kopfsatz des Servers */
-export function kontoStandAusKopf(k: { id: string; name: string; revision: number; created_at?: string; updated_at?: string; projektnummer?: string; status?: ProjektStatus; customer?: KundeKurz | null }): KontoProjektStand {
+export function kontoStandAusKopf(k: { id: string; name: string; revision: number; created_at?: string; updated_at?: string; projektnummer?: string; projektnummer_gesperrt_am?: string | null; status?: ProjektStatus; customer?: KundeKurz | null }): KontoProjektStand {
   return {
-    id: k.id, name: k.name, revision: k.revision, erstelltAm: k.created_at, geaendertAm: k.updated_at, projektnummer: k.projektnummer, status: k.status,
+    id: k.id, name: k.name, revision: k.revision, erstelltAm: k.created_at, geaendertAm: k.updated_at, projektnummer: k.projektnummer, nummerGesperrtAm: k.projektnummer_gesperrt_am ?? null, status: k.status,
     kunde: k.customer ? { id: k.customer.id, name: k.customer.name, anschrift: kundenAnschrift(k.customer) } : null,
   }
 }
+
+export const DOKUMENTTYP_TEXT: Record<string, string> = {
+  angebot: 'Angebot (versendet)', angebot_link: 'Angebot (Link bereitgestellt)', auftragsbestaetigung: 'Auftragsbestätigung', rechnung: 'Rechnung (versendet)',
+  rechnung_pruefung: 'Rechnung (zur Prüfung bereitgestellt)', mahnung: 'Mahnung', auftragsstand_link: 'Auftragsstand (Link bereitgestellt)', sonstiges: 'Sonstiges Dokument',
+}
+export const PROTOKOLL_ART_TEXT: Record<string, string> = { aenderung: 'Änderung', sperre: 'Gesperrt', korrektur: 'Korrektur' }

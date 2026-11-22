@@ -17,6 +17,9 @@ describe('projektZeilen', () => {
     expect(z.find((x) => x.label === 'Projektstatus')?.wert).toBe('Prüfung erforderlich')
     expect(projektZeilen({ ...basis, kunde: 'Muster GmbH', kundenAnschrift: '' }).some((x) => x.label === 'Kundenanschrift')).toBe(false)
   })
+  it('gesperrte Projektnummer wird als gesperrt angezeigt', () => {
+    expect(projektZeilen({ ...basis, projektnummer: 'CAD-2026-0007', nummerGesperrt: true }).find((x) => x.label === 'Projektnummer')?.wert).toBe('CAD-2026-0007 (gesperrt)')
+  })
   it('Zeitangaben aus dem Konto bzw. der Browser-Sicherung', () => {
     const z = projektZeilen({ ...basis, erstelltAm: '2026-11-01T10:00:00Z', geaendertAm: '2026-11-20T08:30:00Z' })
     expect(z.map((x) => x.label)).toContain('Erstellt')

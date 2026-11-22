@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { serverErrorResponse } from '@/lib/auth';
+import { sperreFuerExterneVerwendung, aktuelleUserId, SperreFehler } from '@/lib/cad/projektnummer-sperre';
 import { UUID_MUSTER, bereinigeText, mappeLinkStatus } from '@/lib/baustellenmappe';
 
 // Auftragsstand-Links verwalten (nur Admin/Disposition)
@@ -45,13 +46,17 @@ export async function POST(req: NextRequest) {
     const body = await req.json().catch(() => ({}));
     const projectId = String(body?.project_id || '');
     if (!UUID_MUSTER.test(projectId)) return ungueltig('project_id fehlt oder ist ungültig.');
+    await sperreFuerExterneVerwendung({ projectId, typ: 'auftragsstand_link', dokumentId: projectId, userId: await aktuelleUserId() });
     const ins = await fetch(`${url}/rest/v1/project_stand_links`, {
       method: 'POST', headers: { ...headers, Prefer: 'return=representation' },
       body: JSON.stringify({ project_id: projectId, label: bereinigeText(body?.label, 80) || null }),
     });
     if (!ins.ok) throw new Error(await ins.text());
     return NextResponse.json({ success: true, link: (await ins.json())?.[0] });
-  } catch (err) { return serverErrorResponse(err, 'auftrag-link POST'); }
+  } catch (err) {
+    if (err instanceof SperreFehler) return NextResponse.json({ success: false, error: err.message }, { status: 503 });
+    return serverErrorResponse(err, 'auftrag-link POST');
+  }
 }
 
 export async function DELETE(req: NextRequest) {

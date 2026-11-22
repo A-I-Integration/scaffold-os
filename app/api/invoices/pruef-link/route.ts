@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { serverErrorResponse } from '@/lib/auth';
+import { sperreFuerExterneVerwendung, projektIdZuRechnungsId, aktuelleUserId, SperreFehler } from '@/lib/cad/projektnummer-sperre';
 import { gueltigkeitTage, linkStatus, UUID_MUSTER } from '@/lib/ansicht-link';
 
 // ============================================================
@@ -44,13 +45,17 @@ export async function POST(req: NextRequest) {
     if (inv.status === 'storniert') return NextResponse.json({ success: false, error: 'Stornierte Rechnungen lassen sich nicht zur Prüfung freigeben.' }, { status: 422 });
     const tage = gueltigkeitTage(body?.tage);
     const label = typeof body?.label === 'string' && body.label.trim() ? body.label.trim().slice(0, 80) : null;
+    await sperreFuerExterneVerwendung({ projectId: await projektIdZuRechnungsId(invoiceId), typ: 'rechnung_pruefung', dokumentId: invoiceId, userId: await aktuelleUserId() });
     const ins = await fetch(`${url}/rest/v1/invoice_pruef_links`, {
       method: 'POST', headers: { ...headers, Prefer: 'return=representation' },
       body: JSON.stringify({ invoice_id: invoiceId, label, expires_at: new Date(Date.now() + tage * 86400000).toISOString() }),
     });
     if (!ins.ok) throw new Error(await ins.text());
     return NextResponse.json({ success: true, link: (await ins.json())?.[0] });
-  } catch (err) { return serverErrorResponse(err, 'invoices/pruef-link POST'); }
+  } catch (err) {
+    if (err instanceof SperreFehler) return NextResponse.json({ success: false, error: err.message }, { status: 503 });
+    return serverErrorResponse(err, 'invoices/pruef-link POST');
+  }
 }
 
 export async function GET(req: NextRequest) {

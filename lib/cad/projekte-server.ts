@@ -3,7 +3,7 @@
 // Tabellen: supabase/phase-116-cad-projekte.sql. Die Routen prüfen Login und Rolle; hier gelten Größe, Format und Revision.
 // ============================================================
 import { liesProjektdatei, type Projektdatei } from '@/lib/cad/projektdatei'
-import { pruefeStammdaten, type KundeKurz, type ProjektStatus, type StammdatenAenderung } from '@/lib/cad/projekt-stammdaten'
+import { pruefeProjektnummer, pruefeStammdaten, type KundeKurz, type ProjektStatus, type StammdatenAenderung } from '@/lib/cad/projekt-stammdaten'
 
 export const MAX_PROJEKT_BYTES = 4_000_000
 export const MAX_STAENDE = 20
@@ -23,11 +23,13 @@ export interface ProjektKopf {
   /** Verknüpfung zum Kundenstamm; Name und Anschrift stehen in `customer` und kommen immer aus dem Stammdatensatz */
   customer_id: string | null; customer: KundeKurz | null
   projektnummer: string; status: ProjektStatus
+  /** gesetzt, sobald die Projektnummer erstmals extern verwendet wurde; danach nicht mehr änderbar */
+  projektnummer_gesperrt_am: string | null
 }
 export interface ProjektVoll extends ProjektKopf { daten: Projektdatei }
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-const KOPF = 'id,name,project_id,customer_id,projektnummer,status,revision,updated_at,created_at,customer:customers(id,name,street,zip,city)'
+const KOPF = 'id,name,project_id,customer_id,projektnummer,projektnummer_gesperrt_am,status,revision,updated_at,created_at,customer:customers(id,name,street,zip,city)'
 
 /** Eingehende Daten prüfen: gleiche Regeln wie beim Laden einer Projektdatei (unbekannte/ungültige Teile werden verworfen). */
 export function pruefeDaten(roh: unknown): { daten: Projektdatei; verworfen: string[] } {
@@ -102,8 +104,21 @@ export async function speichereProjekt(id: string, p: { name?: unknown; daten: u
 }
 
 export async function loescheProjekt(id: string): Promise<void> {
-  const weg = await rest<{ id: string }[]>(`cad_projekte?id=eq.${id}&select=id`, { method: 'DELETE', headers: { Prefer: 'return=representation' } })
+  let weg: { id: string }[]
+  try { weg = await rest<{ id: string }[]>(`cad_projekte?id=eq.${id}&select=id`, { method: 'DELETE', headers: { Prefer: 'return=representation' } }) } catch (e) { throw dbFehler(e) }
   if (weg.length === 0) throw new ProjektFehler('Projekt nicht gefunden.', 404)
+}
+
+/** Fehler der Datenbank-Regeln (Phase 118) in lesbare Meldungen übersetzen; alles andere bleibt unverändert */
+export function dbFehler(e: unknown): unknown {
+  const t = e instanceof Error ? e.message : ''
+  if (/projektnummer_gesperrt/.test(t)) return new ProjektFehler('Die Projektnummer wurde bereits in einem externen Dokument verwendet und ist gesperrt. Eine Korrektur ist nur über den Korrekturprozess (Admin, mit Begründung) möglich.', 409)
+  if (/sperre_nicht_aufhebbar/.test(t)) return new ProjektFehler('Die Sperre der Projektnummer kann nicht aufgehoben werden.', 409)
+  if (/projekt_gesperrt_loeschen/.test(t)) return new ProjektFehler('Die Projektnummer dieses Projekts wurde extern verwendet. Das Projekt kann nicht gelöscht werden, bitte archivieren Sie es.', 409)
+  if (/grund_fehlt/.test(t)) return new ProjektFehler('Bitte eine Begründung mit mindestens 10 Zeichen angeben.', 400)
+  if (/nicht_gesperrt/.test(t)) return new ProjektFehler('Die Projektnummer ist nicht gesperrt und kann normal geändert werden.', 409)
+  if (UNIQUE_FEHLER.test(t)) return new ProjektFehler('Diese Projektnummer ist schon vergeben.', 409)
+  return e
 }
 
 const UNIQUE_FEHLER = /duplicate key|23505|cad_projekte_projektnummer_uq/i
@@ -139,6 +154,53 @@ export async function aendereStammdaten(id: string, a: StammdatenAenderung, roll
   } catch (e) {
     if (e instanceof ProjektFehler) throw e
     if (e instanceof Error && UNIQUE_FEHLER.test(e.message)) throw new ProjektFehler('Diese Projektnummer ist schon vergeben.', 409)
-    throw e
+    throw dbFehler(e)
   }
+}
+
+export interface NummernInfo {
+  gesperrt_am: string | null
+  /** erste externe Verwendung; Projektnummer steht so, wie sie zu diesem Zeitpunkt war */
+  verwendung: { projektnummer: string; dokumenttyp: string; dokument_id: string | null; verwendet_von: string | null; created_at: string } | null
+  protokoll: { art: string; alt: string | null; neu: string | null; grund: string | null; geaendert_von: string | null; created_at: string }[]
+}
+
+/** Sperrstatus, erste externe Verwendung und das Änderungsprotokoll der Projektnummer */
+export async function holeNummernInfo(id: string): Promise<NummernInfo> {
+  const da = (await rest<{ projektnummer_gesperrt_am: string | null }[]>(`cad_projekte?id=eq.${id}&select=projektnummer_gesperrt_am`))[0]
+  if (!da) throw new ProjektFehler('Projekt nicht gefunden.', 404)
+  const [v, l] = await Promise.all([
+    rest<NonNullable<NummernInfo['verwendung']>[]>(`cad_projektnummer_verwendung?cad_projekt_id=eq.${id}&select=projektnummer,dokumenttyp,dokument_id,verwendet_von,created_at`),
+    rest<NummernInfo['protokoll']>(`cad_projektnummer_log?cad_projekt_id=eq.${id}&select=art,alt,neu,grund,geaendert_von,created_at&order=created_at.desc&limit=50`),
+  ])
+  return { gesperrt_am: da.projektnummer_gesperrt_am, verwendung: v[0] ?? null, protokoll: l }
+}
+
+/** Gesonderter Korrekturprozess für eine bereits gesperrte Projektnummer (Aufrufer prüft: nur Admin). Begründung Pflicht, alles wird protokolliert. */
+export async function korrigiereProjektnummer(id: string, neu: unknown, grund: unknown, userId: string): Promise<string> {
+  const p = pruefeProjektnummer(neu)
+  if (!p.ok) throw new ProjektFehler(p.fehler, 400)
+  const g = typeof grund === 'string' ? grund.trim() : ''
+  if (g.length < 10) throw new ProjektFehler('Bitte eine Begründung mit mindestens 10 Zeichen angeben.', 400)
+  try {
+    return await rest<string>('rpc/cad_projektnummer_korrigieren', { method: 'POST', body: JSON.stringify({ p_cad_projekt_id: id, p_neu: p.nummer, p_grund: g, p_user: userId }) })
+  } catch (e) { throw dbFehler(e) }
+}
+
+/**
+ * CAD-Projekt mit einem Kundenprojekt verknüpfen (damit Versand und Links aus diesem Kundenprojekt die Projektnummer sperren).
+ * Gehören beide zu verschiedenen Kunden, wird abgelehnt. Eine bestehende Verknüpfung wird nicht überschrieben, sobald die Nummer gesperrt ist.
+ */
+export async function verknuepfeKundenprojekt(id: string, projectId: string, userId: string): Promise<ProjektKopf> {
+  if (!UUID.test(projectId)) throw new ProjektFehler('Kundenprojekt ist ungültig.', 400)
+  const da = (await rest<{ project_id: string | null; customer_id: string | null; projektnummer_gesperrt_am: string | null }[]>(`cad_projekte?id=eq.${id}&select=project_id,customer_id,projektnummer_gesperrt_am`))[0]
+  if (!da) throw new ProjektFehler('Projekt nicht gefunden.', 404)
+  const kp = (await rest<{ id: string; customer_id: string | null }[]>(`projects?id=eq.${projectId}&select=id,customer_id`))[0]
+  if (!kp) throw new ProjektFehler('Das Kundenprojekt existiert nicht.', 404)
+  if (da.customer_id && kp.customer_id && da.customer_id !== kp.customer_id) throw new ProjektFehler('Das Kundenprojekt gehört zu einem anderen Kunden als dieses CAD-Projekt.', 409)
+  if (da.project_id && da.project_id !== projectId && da.projektnummer_gesperrt_am) throw new ProjektFehler('Die Projektnummer ist gesperrt; die Verknüpfung mit dem Kundenprojekt kann nicht mehr geändert werden.', 409)
+  const patch: Record<string, unknown> = { project_id: projectId, geaendert_von: userId, updated_at: new Date().toISOString() }
+  if (!da.customer_id && kp.customer_id) patch.customer_id = kp.customer_id
+  const z = await rest<ProjektKopf[]>(`cad_projekte?id=eq.${id}&select=${KOPF}`, { method: 'PATCH', headers: { Prefer: 'return=representation' }, body: JSON.stringify(patch) })
+  return z[0]
 }
