@@ -75,7 +75,7 @@ import { projektZeilen } from '@/lib/cad/projekt-info'
 import { SPEICHER_TEXT } from '@/lib/cad/speicherstatus'
 import CadKopfzeile from '@/components/cad/CadKopfzeile'
 import CadWerkzeugBaum from '@/components/cad/CadWerkzeugBaum'
-import { Building2, PenLine, BrickWall, Layers3, House, Zap } from 'lucide-react'
+import { Building2, PenLine, BrickWall, Layers3, House, Zap, DoorOpen, Mountain, PanelTop } from 'lucide-react'
 import { speicherStatus } from '@/lib/cad/speicherstatus'
 import BereichePanel, { BEREICHS_START, eingabeZuAenderung, type BereichsEingabe } from '@/components/cad/BereichePanel'
 import { ansichtDateiname } from '@/lib/cad/ansicht-bild'
@@ -334,6 +334,7 @@ export default function CADPage() {
   const [aufmassHinweise, setAufmassHinweise] = useState<string[]>([])
   // Projektname aus dem Aufmaß (nur für den Kopf der Gerüstplan-PDF; bleibt nicht über ein Neuladen erhalten)
   const [aufmassProjektName, setAufmassProjektName] = useState<string | undefined>(undefined)
+  const [aufmassBaustelle, setAufmassBaustelle] = useState<string | undefined>(undefined)
   // Firmenname aus den Einstellungen (für Köpfe der Exporte); fehlt er, bleibt der bisherige Platzhalter
   // Stückliste des Aufmaßes (nur nach Übernahme aus dem Aufmaß): maßgeblich ist je Artikel die größere Menge von Aufmaß und CAD
   const [aufmassListe, setAufmassListe] = useState<MaterialItem[] | undefined>(undefined)
@@ -349,7 +350,7 @@ export default function CADPage() {
     if (u.statikDaten) setStatikDaten(bereinigeStatikDaten(u.statikDaten as StatikDaten))
     try { window.history.replaceState(null, '', '/cad') } catch { /* nur Anzeige */ }
     speichereArbeitsstand({ building: u.building, systemId: u.systemId, notizen: u.notizen ?? [], statikDaten: (u.statikDaten ?? {}) as Record<string, unknown>, artikelWahl: {} })
-    setAufmassProjektName(u.projektName)
+    setAufmassProjektName(u.projektName); setAufmassBaustelle(u.baustelle)
     setAufmassListe(u.aufmassListe)
     setAufmassHinweise(['Maße aus dem Aufmaß' + (u.projektName ? ` „${u.projektName}“` : '') + ' übernommen.', ...u.hinweise])
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -972,7 +973,7 @@ export default function CADPage() {
   const [analyseOffen, setAnalyseOffen] = useState(false)
   const [hilfeOffen, setHilfeOffen] = useState(false)
   const [dockWunsch, setDockWunsch] = useState<{ tab: DockReiter; n: number } | undefined>(undefined)
-  const [linksWunsch, setLinksWunsch] = useState<{ tab: 'gebaeude'; n: number } | undefined>(undefined)
+  const [linksWunsch, setLinksWunsch] = useState<{ tab: 'gebaeude' | 'geruest'; n: number; ziel?: 'tueren' | 'balkon' | 'gelaende' } | undefined>(undefined)
   const aufbauSchritte = useMemo(() => (modelWithManual ? erzeugeAufbauSchritte(modelWithManual) : []), [modelWithManual])
   const hiddenLevelsAufbau = useMemo(() => {
     if (aufbauNr === null || !aufbauSchritte[aufbauNr]) return hiddenLevels
@@ -1697,6 +1698,9 @@ export default function CADPage() {
             { id: 'umriss', label: 'Umriss zeichnen', icon: PenLine, titel: 'Gebäudeumriss per Klick zeichnen', onClick: () => zeichnerOeffnenRef.current?.() },
             { id: 'wand', label: 'Wand', icon: BrickWall, titel: 'Wandhöhen und Maße ändern', onClick: () => setGebaeudeModus('wand') },
             { id: 'geschoss', label: 'Geschoss', icon: Layers3, titel: 'Anzahl und Höhen der Geschosse ändern', onClick: () => setGebaeudeModus('geschoss') },
+            { id: 'tuer', label: 'Tür / Öffnung', icon: DoorOpen, titel: 'Türen und ihre Lage eingeben', onClick: () => setLinksWunsch((w) => ({ tab: 'gebaeude', ziel: 'tueren', n: (w?.n ?? 0) + 1 })) },
+            { id: 'balkon', label: 'Balkon', icon: PanelTop, titel: 'Balkone und ihre Lage eingeben', onClick: () => setLinksWunsch((w) => ({ tab: 'gebaeude', ziel: 'balkon', n: (w?.n ?? 0) + 1 })) },
+            { id: 'gelaende', label: 'Gelände', icon: Mountain, titel: 'Geländehöhen, Hang und Geländeprofil eingeben', onClick: () => setLinksWunsch((w) => ({ tab: 'geruest', ziel: 'gelaende', n: (w?.n ?? 0) + 1 })) },
             { id: 'dach', label: 'Dach', icon: House, titel: 'Dachform, Traufe und Dachhöhe ändern', onClick: () => setGebaeudeModus('dach') },
           ] }, { name: 'Berechnung', eintraege: [
             { id: 'automatik', label: 'Automatisch berechnen', icon: Zap, titel: 'Gerüst automatisch berechnen', onClick: () => { setAutoGenerate(true); generate() } },
@@ -1990,7 +1994,7 @@ export default function CADPage() {
             <dl className='grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-[12.5px]'>
               {projektZeilen({ name: kontoProjekt?.name || aufmassProjektName || null, systemName: modelWithManual?.system ? `${modelWithManual.system.hersteller} ${modelWithManual.system.systemName}` : null,
                 speicherText: SPEICHER_TEXT[speicherZustand], versionText: kontoProjekt ? `Stand ${kontoProjekt.revision}` : versionen.length > 0 ? `${versionen.length} ${versionen.length === 1 ? 'Version' : 'Versionen'}` : 'Keine Version',
-                erstelltAm: kontoProjekt?.erstelltAm, geaendertAm: kontoProjekt?.geaendertAm, gesichertUm }).map((z) => (<div key={z.label} className='contents'><dt className='text-[#86868b]'>{z.label}</dt><dd className='min-w-0 break-words text-[#1d1d1f]'>{z.wert}</dd></div>))}
+                baustelle: aufmassBaustelle, erstelltAm: kontoProjekt?.erstelltAm, geaendertAm: kontoProjekt?.geaendertAm, gesichertUm }).map((z) => (<div key={z.label} className='contents'><dt className='text-[#86868b]'>{z.label}</dt><dd className='min-w-0 break-words text-[#1d1d1f]'>{z.wert}</dd></div>))}
             </dl>
           </section>
           {rolle === 'admin' && model && <M2Abrechnung flaecheM2={modelWithManual?.totalAreaM2 ?? model.totalAreaM2} onChange={setM2Wahl} />}

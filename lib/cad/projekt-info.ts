@@ -4,6 +4,8 @@ export interface ProjektInfoEingabe {
   systemName: string | null
   speicherText: string
   versionText: string
+  /** Adresse der Baustelle (nur nach Übernahme aus dem Aufmaß bekannt) */
+  baustelle?: string | null
   /** ISO-Zeitpunkte des Konto-Projekts (falls geöffnet) */
   erstelltAm?: string | null
   geaendertAm?: string | null
@@ -17,6 +19,7 @@ const aus = (iso?: string | null): Date | null => { if (!iso) return null; const
 export function projektZeilen(e: ProjektInfoEingabe): { label: string; wert: string }[] {
   const z: { label: string; wert: string }[] = [
     { label: 'Projekt', wert: e.name || 'Unbenanntes Projekt' },
+    ...(e.baustelle ? [{ label: 'Baustelle', wert: e.baustelle }] : []),
     { label: 'Gerüstsystem', wert: e.systemName || 'Kein System' },
     { label: 'Speicherstatus', wert: e.speicherText },
     { label: 'Version', wert: e.versionText },
