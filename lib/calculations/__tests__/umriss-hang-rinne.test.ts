@@ -22,11 +22,10 @@ describe('Umriss + Hang + Pultdach', () => {
     const { top } = obersterBelag({ ...basis, geruestOptionen: { pultNiedrigeSeite: 'right' } })
     expect(top).toBeCloseTo(6, 2)
   })
-  it('mit Hang: oberster Belag trotzdem auf Traufe + 1 m, nicht tiefer als die Traufe', () => {
+  it('mit Hang, Pultdach: oberster Belag mindestens auf der höchsten Dachkante (Geländer überragt sie um 1 m)', () => {
     const { top } = obersterBelag({ ...basis, geruestOptionen: hang })
-    expect(top).toBeGreaterThanOrEqual(basis.eavesHeightM - 1e-6)
-    expect(top).toBeLessThanOrEqual(basis.eavesHeightM + BELAG_UEBER_RINNE_M + 1e-6)
-    expect(top).toBeCloseTo(basis.eavesHeightM + BELAG_UEBER_RINNE_M, 1)
+    expect(top).toBeGreaterThanOrEqual(basis.heightM - 1e-6)
+    expect(top).toBeCloseTo(Math.max(basis.eavesHeightM + BELAG_UEBER_RINNE_M, basis.heightM), 2)
   })
   it('mit Hang: alle Lagen liegen auf demselben Raster (2 m) und enden an der Rinne', () => {
     const { m } = obersterBelag({ ...basis, geruestOptionen: hang })

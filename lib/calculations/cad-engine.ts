@@ -2531,10 +2531,13 @@ function generiereUmrissModell(
   // Geneigtes Dach (Pult-, Walm-, Mansardendach) mit bekannter Traufe: wie im Rechteck-Modus endet das Gerüst an der Rinne – der oberste Belag liegt
   // höchstens BELAG_UEBER_RINNE_M über der Traufe, nicht erst an der First-Höhe. Eigene Höhen je Kante (Eingabe) gelten unverändert.
   const rinneRegelUmriss = !kHoeheNorm && !!system && (building.roofForm === 'walmdach' || building.roofForm === 'mansardendach' || building.roofForm === 'pultdach') && building.eavesHeightM > 0 && building.eavesHeightM < building.heightM - 0.3
+  // Pultdach: Die hohe Seite endet an der höchsten Dachkante (Gebäudehöhe). Der oberste Belag liegt dort mindestens auf dieser Kante, damit das Geländer
+  // (1 m) sie um 1 m überragt; sonst gilt Traufe + BELAG_UEBER_RINNE_M.
+  const obererBelagZielU = building.roofForm === 'pultdach' ? Math.max(building.eavesHeightM + BELAG_UEBER_RINNE_M, building.heightM) : building.eavesHeightM + BELAG_UEBER_RINNE_M
   const hoeheBisRinne = (h: number): number => {
     if (!rinneRegelUmriss || !system) return h
     const r = system.rasterHoeheM
-    const n = Math.max(1, Math.floor((building.eavesHeightM + BELAG_UEBER_RINNE_M - rasterU) / r + 1e-6))
+    const n = Math.max(1, Math.floor((obererBelagZielU - rasterU) / r + 1e-6))
     return Math.min(h, rasterU + n * r)
   }
   // Kanten des obersten Geschosses (Höhe = Gebäudehöhe) enden bei geneigtem Dach an der Rinne, niedrigere Teile an ihrer eigenen Höhe
@@ -2583,13 +2586,13 @@ function generiereUmrissModell(
   if (!hangU) { const h = hangIgnoriert(gebaeude.geruestOptionen); if (h) warnings.push(h) }
   rasterU = hangU
   if (hangU && system && rinneRegelUmriss) {
-    const ok = building.eavesHeightM + BELAG_UEBER_RINNE_M
+    const ok = obererBelagZielU
     const n0 = Math.max(1, Math.ceil((ok - hangU) / system.rasterHoeheM - 1e-6))
     rasterU = Math.round((ok - n0 * system.rasterHoeheM) * 100) / 100
   }
 
   const levelCalc = system ? calculateLevels(hoeheBisRinne(building.heightM) - rasterU, system, rasterU) : { levels: 1, levelHeightM: 2.0, levelsData: [{ index: 0, bottomY: 0, topY: 2.0 }] }
-  if (rinneRegelUmriss && system && hoeheBisRinne(building.heightM) < building.heightM - 0.01) warnings.push({ type: 'info', code: 'OBERSTER_BELAG_RINNE', message: `Geneigtes Dach: Das Gerüst endet an der Rinne (Traufe ${building.eavesHeightM.toFixed(2).replace('.', ',')} m), der oberste Belag liegt höchstens ${BELAG_UEBER_RINNE_M.toFixed(2).replace('.', ',')} m darüber – nicht an der First-Höhe.` })
+  if (rinneRegelUmriss && system && hoeheBisRinne(building.heightM) < building.heightM - 0.01) warnings.push({ type: 'info', code: 'OBERSTER_BELAG_RINNE', message: `Geneigtes Dach: Das Gerüst endet an der Rinne (Traufe ${building.eavesHeightM.toFixed(2).replace('.', ',')} m), der oberste Belag liegt ${building.roofForm === 'pultdach' ? 'mindestens auf der höchsten Dachkante' : `höchstens ${BELAG_UEBER_RINNE_M.toFixed(2).replace('.', ',')} m über der Traufe`}.` })
 
   // Feldstränge je Kante (Länge = Abstand der beiden Gerüst-Eckpunkte entlang der Kante)
   const straenge = kanten.map((k, i) => {
