@@ -1,7 +1,7 @@
 'use client'
 // Unteres Dock unter der Arbeitsfläche: Stückliste, Gewicht & Kosten, Regelprüfung, Statik, Leistungsverzeichnis.
 // Zeigt nur Werte, die die CAD-Seite ohnehin berechnet (keine eigene Rechnung außer Summen je Kategorie).
-import { useRef, useState, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import type { MaterialItem } from '@/types/scaffold'
 
 export type DockReiter = 'stueckliste' | 'kosten' | 'regeln' | 'statik' | 'lv'
@@ -25,13 +25,23 @@ export function summeJeKategorie(m: MaterialItem[]): KategorieSumme[] {
 const eur = (n: number) => n.toLocaleString('de-DE', { style: 'currency', currency: 'EUR' })
 const kg = (n: number) => `${n.toLocaleString('de-DE', { maximumFractionDigits: 1 })} kg`
 
-export default function CadDock({ materials, totalWeightKg, totalPrice, warnungen, hatModell, onOpenLv, statik }: {
+export default function CadDock({ oeffnen, materials, totalWeightKg, totalPrice, warnungen, hatModell, onOpenLv, statik }: {
   materials: MaterialItem[]; totalWeightKg: number; totalPrice: number
   warnungen: { type: string; message: string }[]; hatModell: boolean; onOpenLv?: () => void; statik: ReactNode
+  /** Von außen (Menüzeile) einen Reiter öffnen; n zählt hoch, damit derselbe Reiter erneut öffnet */
+  oeffnen?: { tab: DockReiter; n: number }
 }) {
   const [reiter, setReiter] = useState<DockReiter>('stueckliste')
   const [offen, setOffen] = useState(false)
   const wurzel = useRef<HTMLElement>(null)
+  // Von außen angeforderter Reiter: Zustand beim Rendern angleichen (kein setState im Effekt), danach nur noch ins Bild scrollen
+  const [gesehen, setGesehen] = useState<number | undefined>(oeffnen?.n)
+  if (oeffnen && oeffnen.n !== gesehen) { setGesehen(oeffnen.n); setReiter(oeffnen.tab); setOffen(true) }
+  useEffect(() => {
+    if (!oeffnen) return
+    const t = setTimeout(() => wurzel.current?.scrollIntoView({ block: 'end', behavior: 'smooth' }), 50)
+    return () => clearTimeout(t)
+  }, [oeffnen])
   const fehler = warnungen.filter((w) => w.type === 'error' || w.type === 'fehler' || w.type === 'critical').length
   return (
     <section ref={wurzel} aria-label='Auswertung' className={`cad-dock flex shrink-0 flex-col border-t ${offen ? 'h-[230px]' : ''}`} style={{ borderColor: 'var(--os-linie)', background: 'var(--cad-f0)' }}>

@@ -58,10 +58,14 @@ interface Props {
   zusatz?: ReactNode
   /** Werkzeug-Panel als erster Reiter (Auswahl, Gerüst, Messen) */
   werkzeuge?: ReactNode
+  /** Von außen (Menüzeile) einen Reiter der linken Spalte öffnen; n zählt hoch */
+  reiterWunsch?: { tab: 'werkzeuge' | 'gebaeude' | 'geruest' | 'system'; n: number }
 }
 
-export default function BuildingForm({ building, systemId, onChange, onSystemChange, onGenerate, onLadeProjektdatei, onAussehen, onModellUebernehmen, registrierePlanUpload, registriereZeichner, onImportWartet, warnings, zusatz, werkzeuge }: Props) {
+export default function BuildingForm({ reiterWunsch, building, systemId, onChange, onSystemChange, onGenerate, onLadeProjektdatei, onAussehen, onModellUebernehmen, registrierePlanUpload, registriereZeichner, onImportWartet, warnings, zusatz, werkzeuge }: Props) {
   const [activeTab, setActiveTab] = useState<'werkzeuge' | 'gebaeude' | 'geruest' | 'system'>('gebaeude')
+  const [wunschGesehen, setWunschGesehen] = useState<number | undefined>(reiterWunsch?.n)
+  if (reiterWunsch && reiterWunsch.n !== wunschGesehen) { setWunschGesehen(reiterWunsch.n); setActiveTab(reiterWunsch.tab) }
   const [analyseLaeuft, setAnalyseLaeuft] = useState(false)
   const [profilFehler, setProfilFehler] = useState<Partial<Record<'front' | 'back' | 'left' | 'right', boolean>>>({})
   const [analyseHinweis, setAnalyseHinweis] = useState<string | null>(null)
