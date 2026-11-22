@@ -1889,7 +1889,7 @@ export default function CADPage() {
               </span>
             )}
           </div>
-          <AnsichtsReiter viewMode={viewMode} ansicht2d={ansicht2d} hatModell={!!modelWithManual} onWaehle={(id) => { if (id === '3d') setViewMode('3d'); else { setAnsicht2d(id); setViewMode('2d') } }} />
+          <AnsichtsReiter nordrichtungGrad={building.nordrichtungGrad} viewMode={viewMode} ansicht2d={ansicht2d} hatModell={!!modelWithManual} onWaehle={(id) => { if (id === '3d') setViewMode('3d'); else { setAnsicht2d(id); setViewMode('2d') } }} />
           <div className='relative h-[65vh] min-h-[320px] md:h-auto md:flex-1 p-2 md:min-h-[316px]'>
             {building.umriss && building.umriss.length >= 3 && !huelleBestaetigt && viewMode === '3d' && (
               <div className='absolute right-3 top-3 z-30 max-h-[calc(100%-1.5rem)] w-[min(460px,calc(100%-1.5rem))] overflow-auto rounded-2xl shadow-2xl'>
@@ -2024,7 +2024,7 @@ export default function CADPage() {
             <dl className='grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-[12.5px]'>
               {projektZeilen({ name: kontoProjekt?.name || aufmassProjektName || null, systemName: modelWithManual?.system ? `${modelWithManual.system.hersteller} ${modelWithManual.system.systemName}` : null,
                 speicherText: SPEICHER_TEXT[speicherZustand], versionText: kontoProjekt ? `Stand ${kontoProjekt.revision}` : versionen.length > 0 ? `${versionen.length} ${versionen.length === 1 ? 'Version' : 'Versionen'}` : 'Keine Version',
-                kunde: kontoProjekt?.kunde?.name, kundenAnschrift: kontoProjekt?.kunde?.anschrift, projektnummer: kontoProjekt?.projektnummer, nummerGesperrt: !!kontoProjekt?.nummerGesperrtAm, projektStatus: kontoProjekt?.status, baustelle: aufmassBaustelle, erstelltAm: kontoProjekt?.erstelltAm, geaendertAm: kontoProjekt?.geaendertAm, gesichertUm }).map((z) => (<div key={z.label} className='contents'><dt className='text-[#86868b]'>{z.label}</dt><dd className='min-w-0 break-words text-[#1d1d1f]'>{z.wert}</dd></div>))}
+                kunde: kontoProjekt?.kunde?.name, kundenAnschrift: kontoProjekt?.kunde?.anschrift, projektnummer: kontoProjekt?.projektnummer, nummerGesperrt: !!kontoProjekt?.nummerGesperrtAm, projektStatus: kontoProjekt?.status, baustelle: aufmassBaustelle, nordrichtungGrad: building.nordrichtungGrad ?? null, erstelltAm: kontoProjekt?.erstelltAm, geaendertAm: kontoProjekt?.geaendertAm, gesichertUm }).map((z) => (<div key={z.label} className='contents'><dt className='text-[#86868b]'>{z.label}</dt><dd className='min-w-0 break-words text-[#1d1d1f]'>{z.wert}</dd></div>))}
             </dl>
           </section>
           {rolle === 'admin' && model && <M2Abrechnung flaecheM2={modelWithManual?.totalAreaM2 ?? model.totalAreaM2} onChange={setM2Wahl} />}

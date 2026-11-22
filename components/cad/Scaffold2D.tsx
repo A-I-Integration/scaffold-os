@@ -1,5 +1,7 @@
 'use client'
 
+import Nordpfeil from './Nordpfeil'
+import { ansichtsName } from '@/lib/cad/ausrichtung'
 import { useState, useMemo } from 'react'
 import { CADModel, generateGrundriss, generateAnsicht, generateSchnitt } from '@/lib/calculations/cad-engine'
 import Zeichenschicht from './Zeichenschicht'
@@ -37,6 +39,7 @@ export default function Scaffold2D({ model, zeichnung, projektName, objektadress
   const [showLegend, setShowLegend] = useState(true)
 
   const scaleFactor = SCALE_FACTORS[scale]
+  const nord = model.building.nordrichtungGrad ?? null
   const [pdfFehler, setPdfFehler] = useState<string | null>(null)
   const planPdf = async () => {
     setPdfFehler(null)
@@ -72,10 +75,10 @@ export default function Scaffold2D({ model, zeichnung, projektName, objektadress
 
   const viewButtons: { key: ViewType; label: string }[] = [
     { key: 'grundriss', label: 'Grundriss' },
-    { key: 'ansicht-vorne', label: 'Ansicht vorne' },
-    { key: 'ansicht-hinten', label: 'Ansicht hinten' },
-    { key: 'ansicht-links', label: 'Ansicht links' },
-    { key: 'ansicht-seite', label: 'Ansicht rechts' },
+    { key: 'ansicht-vorne', label: ansichtsName('ansicht-vorne', nord) },
+    { key: 'ansicht-hinten', label: ansichtsName('ansicht-hinten', nord) },
+    { key: 'ansicht-links', label: ansichtsName('ansicht-links', nord) },
+    { key: 'ansicht-seite', label: ansichtsName('ansicht-seite', nord) },
     { key: 'schnitt-aa', label: 'Schnitt A-A' },
     { key: 'detail-fusspunkt', label: 'Detail: Fußpunkt' },
     { key: 'detail-anker', label: 'Detail: Anker' },
@@ -139,7 +142,7 @@ export default function Scaffold2D({ model, zeichnung, projektName, objektadress
           <div className='px-4 py-2 border-b border-black/5 flex justify-between items-center'>
             <div>
               <h3 className='text-sm font-semibold text-[#1d1d1f]'>
-                {activeView === 'grundriss' ? 'Grundriss' : activeView === 'ansicht-vorne' ? 'Ansicht von vorne' : activeView === 'ansicht-hinten' ? 'Ansicht von hinten' : activeView === 'ansicht-links' ? 'Ansicht von links' : activeView === 'ansicht-seite' ? 'Ansicht von rechts' : activeView === 'schnitt-aa' ? 'Schnitt A-A' : activeView === 'detail-fusspunkt' ? 'Detail: Fußpunkt' : 'Detail: Fassadenanker'}
+                {activeView === 'grundriss' ? 'Grundriss' : activeView === 'ansicht-vorne' ? (nord == null ? 'Ansicht von vorne' : `${ansichtsName('ansicht-vorne', nord)} (Seite vorne)`) : activeView === 'ansicht-hinten' ? (nord == null ? 'Ansicht von hinten' : `${ansichtsName('ansicht-hinten', nord)} (Seite hinten)`) : activeView === 'ansicht-links' ? (nord == null ? 'Ansicht von links' : `${ansichtsName('ansicht-links', nord)} (Seite links)`) : activeView === 'ansicht-seite' ? (nord == null ? 'Ansicht von rechts' : `${ansichtsName('ansicht-seite', nord)} (Seite rechts)`) : activeView === 'schnitt-aa' ? 'Schnitt A-A' : activeView === 'detail-fusspunkt' ? 'Detail: Fußpunkt' : 'Detail: Fassadenanker'}
               </h3>
               <p className='text-[10px] text-[#86868b]'>M 1:{scale.split(':')[1]} · SCAFFOLD OS CAD</p>
             </div>
@@ -284,7 +287,9 @@ export default function Scaffold2D({ model, zeichnung, projektName, objektadress
             )}
 
             {/* Nordpfeil (nur Grundriss) */}
-            {activeView === 'grundriss' && (
+            {/* Mit Nordrichtung zeigt der Pfeil die echte Richtung; ohne bleibt der bisherige Pfeil (alte Projekte unverändert) */}
+            {activeView === 'grundriss' && nord != null && <Nordpfeil nordrichtungGrad={nord} x={viewBox.minX * scaleFactor + 30} y={viewBox.minY * scaleFactor + 36} />}
+            {activeView === 'grundriss' && nord == null && (
               <g transform={`translate(${(viewBox.minX + 1) * scaleFactor}, ${(viewBox.minY + 1) * scaleFactor})`}>
                 <polygon points='0,-15 5,5 -5,5' fill='#ef4444' />
                 <text x='0' y='15' fontSize={12} fill='#ef4444' textAnchor='middle' fontWeight='bold'>N</text>

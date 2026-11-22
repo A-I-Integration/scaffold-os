@@ -21,6 +21,7 @@ import { lazy, Suspense } from 'react'
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js'
 import * as THREE from 'three'
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
+import { nordVektor } from '@/lib/cad/ausrichtung'
 import { treppenTeile } from '@/lib/cad/treppen-geometrie'
 import { HAUBEN_PROFIL } from '@/lib/cad/haube'
 import { CADModel, ScaffoldComponent3D, BuildingFeature3D, berechneGebaeudeSegmente, hatGeradeAbschnitte } from '@/lib/calculations/cad-engine'
@@ -1630,6 +1631,26 @@ function EchtesGebaeude3D({ aussehen, faktor, oben, versatzX = 0, versatzZ = 0, 
 }
 
 /** Lage des Turms (höchster Abschnitt) in unserem Gebäude, genau wie Building3D es aufstellt (Weltkoordinaten, Drehung in Grad) */
+/**
+ * Nordpfeil flach auf dem Boden, links neben dem Gebäude (nur mit Nordrichtung). Dreht das Modell nicht.
+ * Szene: vorne = +z, hinten = −z, rechts = +x; Gebäudemitte liegt bei z = −Breite/2 − 0,5 (siehe Building3D).
+ */
+function Nordpfeil3D({ nordrichtungGrad, lengthM, widthM }: { nordrichtungGrad: number; lengthM: number; widthM: number }) {
+  const { x: dx, z: dz } = nordVektor(nordrichtungGrad)
+  const laenge = 3
+  const spitze: [number, number, number] = [dx * laenge, 0, dz * laenge]
+  const quer = { x: -dz, z: dx } // 90° zur Pfeilrichtung
+  const widerhaken = (v: number): [number, number, number] => [dx * (laenge - 0.7) + quer.x * 0.35 * v, 0, dz * (laenge - 0.7) + quer.z * 0.35 * v]
+  const w = widthM || 6
+  return (
+    <group position={[-(lengthM / 2) - 3.5, 0.06, -w / 2 - 0.5]} data-testid='nordpfeil-3d'>
+      <Line points={[[0, 0, 0], spitze]} color='#c0392b' lineWidth={3} />
+      <Line points={[widerhaken(1), spitze, widerhaken(-1)]} color='#c0392b' lineWidth={3} />
+      <Text position={[dx * (laenge + 0.8), 0, dz * (laenge + 0.8)]} rotation={[-Math.PI / 2, 0, 0]} fontSize={0.9} color='#c0392b' anchorX='center' anchorY='middle'>N</Text>
+    </group>
+  )
+}
+
 function turmLage(building: CADModel['building']): { x: number; z: number; drehungGrad: number } {
   const w = building.widthM || 6
   const sections = building.sections
@@ -2573,6 +2594,7 @@ function Scene({
       <directionalLight position={[-20, 15, -15]} intensity={0.35} color="#dce8f5" />
       <BridgeDeck3D building={model.building} visible={showBuilding && !!bridgeMode} />
       <Umgebung3D model={model} visible={!!showEnvironment && !bridgeMode && !weiss} nacht={nacht} />
+      {model.building.nordrichtungGrad != null && showBuilding && !bridgeMode && <Nordpfeil3D nordrichtungGrad={model.building.nordrichtungGrad} lengthM={model.building.lengthM} widthM={model.building.widthM} />}
       <group position={[0, hangHebung, 0]}>
         <GebaeudeAnzeige building={model.building} features={features || []} visible={showBuilding && !bridgeMode} onSeiteUmschalten={!measureMode && !placementType ? onSeiteUmschalten : undefined} platziere={placementType && onPlacementClick && !measureMode ? (pt) => platziereLokal?.(placementType, pt, '', -1) : undefined} />
         {showScaffold && statik && <Stabwerk3D components={model.components3D} visibleTypes={visibleTypes} />}

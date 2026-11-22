@@ -7,6 +7,7 @@
 // übernommen. Die Datei enthält KEINE Berechnung und keinen Standsicherheitsnachweis.
 // ============================================================
 
+import { pruefeNordrichtung } from '@/lib/cad/ausrichtung'
 import { istHaubenForm } from '@/lib/cad/haube'
 import type { BereichsAenderung } from '@/lib/cad/bereiche'
 import { leseFiguren, type Figur } from '@/lib/cad/zeichnung'
@@ -226,6 +227,7 @@ export function liesProjektdatei(text: string): LeseErgebnis {
   const lk = zahl(g.lastklasse, 1, 6)
   if (lk != null) gebaeude.lastklasse = Math.round(lk)
   if (g.dachrandSchutz === true) gebaeude.dachrandSchutz = true
+  if (g.nordrichtungGrad !== undefined) { const nr = pruefeNordrichtung(g.nordrichtungGrad); if (nr != null) gebaeude.nordrichtungGrad = nr; else verworfen.push('Nordrichtung') }
 
   if (Array.isArray(g.umriss) && g.umriss.length >= 3 && g.umriss.length <= MAX_PUNKTE) {
     const pkt = g.umriss.map((p) => {

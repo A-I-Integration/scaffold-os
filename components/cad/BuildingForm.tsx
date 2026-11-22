@@ -1,5 +1,6 @@
 'use client'
 
+import AusrichtungBereich from './AusrichtungBereich'
 import { STANDARD_LASTKLASSE, VERWENDUNGEN, verwendungMitId, breiteVonBreitenklasse } from '@/lib/geruestklassen'
 import { lagenansatz } from '@/lib/lastansatz'
 import Lod2Panel from '@/components/cad/Lod2Panel'
@@ -59,7 +60,7 @@ interface Props {
   /** Werkzeug-Panel als erster Reiter (Auswahl, Gerüst, Messen) */
   werkzeuge?: ReactNode
   /** Von außen (Menüzeile) einen Reiter der linken Spalte öffnen; n zählt hoch */
-  reiterWunsch?: { tab: 'werkzeuge' | 'gebaeude' | 'geruest' | 'system'; n: number; /** Abschnitt, zu dem gescrollt wird (und der sich öffnet) */ ziel?: 'tueren' | 'balkon' | 'gelaende' }
+  reiterWunsch?: { tab: 'werkzeuge' | 'gebaeude' | 'geruest' | 'system'; n: number; /** Abschnitt, zu dem gescrollt wird (und der sich öffnet) */ ziel?: 'tueren' | 'balkon' | 'gelaende' | 'ausrichtung' }
 }
 
 export default function BuildingForm({ reiterWunsch, building, systemId, onChange, onSystemChange, onGenerate, onLadeProjektdatei, onAussehen, onModellUebernehmen, registrierePlanUpload, registriereZeichner, onImportWartet, warnings, zusatz, werkzeuge }: Props) {
@@ -1154,6 +1155,8 @@ export default function BuildingForm({ reiterWunsch, building, systemId, onChang
                 </div>
               )}
             </div>
+
+            <AusrichtungBereich building={building} onChange={onChange} />
 
             <UmrissEditor building={building} onChange={onChange} />
             <div><label className='block text-xs font-medium text-[#424245] mb-1'>Gebäudelänge (m){building.umriss ? ' – folgt dem Umriss' : building.sections && building.sections.length >= 1 ? ' – wird durch Abschnitte oben ersetzt' : ''}</label><input type='number' step='0.01' value={building.lengthM} onChange={(e) => update('lengthM', parseFloat(e.target.value))} disabled={!!building.sections && building.sections.length >= 1} className='w-full px-3 py-2 border rounded-xl text-sm disabled:opacity-40' /></div>
