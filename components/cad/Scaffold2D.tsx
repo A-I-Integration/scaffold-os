@@ -19,6 +19,8 @@ interface Props {
   firma?: string
   /** Von außen gesteuerte Ansicht (Reiter über der Arbeitsfläche); ohne Angabe gelten die eigenen Knöpfe */
   ansicht?: ViewType
+  /** Sichtbarkeit laut CAD-Zeichenebenen (Gebäude, Gerüst, Treppen); fehlt = alles sichtbar. Nur Anzeige, die Plan-PDF bleibt vollständig. */
+  ebenen?: { gebaeude: boolean; geruest: boolean; treppen: boolean }
   zeichnung?: { figuren: Figur[]; werkzeug: FigurArt | null; onNeu: (f: Figur) => void; onWerkzeug: (w: FigurArt | null) => void }
 }
 
@@ -29,7 +31,7 @@ const SCALE_FACTORS: Record<ScaleType, number> = {
   '1:200': 5,
 }
 
-export default function Scaffold2D({ model, zeichnung, projektName, objektadresse, firma, ansicht }: Props) {
+export default function Scaffold2D({ model, zeichnung, projektName, objektadresse, firma, ansicht, ebenen }: Props) {
   const [eigeneAnsicht, setActiveView] = useState<ViewType>('grundriss')
   const activeView: ViewType = ansicht ?? eigeneAnsicht
   const [scale, setScale] = useState<ScaleType>('1:50')
@@ -55,7 +57,11 @@ export default function Scaffold2D({ model, zeichnung, projektName, objektadress
     }
   }
 
+  const zeigeTreppen = ebenen?.treppen !== false
+  // Ausgeblendete Treppenebene: die Treppenteile fallen aus der Teileliste der Ansicht (die Plan-PDF nutzt weiter das vollständige Modell)
+  const anzeigeModell = useMemo(() => (zeigeTreppen ? model : { ...model, components3D: model.components3D.filter((c) => c.type !== 'stair') }), [model, zeigeTreppen])
   const projection = useMemo(() => {
+    const model = anzeigeModell
     switch (activeView) {
       case 'grundriss': return generateGrundriss(model)
       case 'ansicht-vorne': return generateAnsicht(model, 'front')
@@ -67,7 +73,7 @@ export default function Scaffold2D({ model, zeichnung, projektName, objektadress
       case 'detail-anker': return generateAnsicht(model, 'front')
       default: return generateGrundriss(model)
     }
-  }, [activeView, model])
+  }, [activeView, anzeigeModell])
 
   const { viewBox, elements, dimensions } = projection
   const svgWidth = viewBox.width * scaleFactor
@@ -206,8 +212,8 @@ export default function Scaffold2D({ model, zeichnung, projektName, objektadress
 
             {/* Elemente */}
             {elements.map((el) => {
-              if (!showBuilding && el.id.startsWith('building')) return null
-              if (!showScaffold && el.id.startsWith('field')) return null
+              if ((!showBuilding || ebenen?.gebaeude === false) && el.id.startsWith('building')) return null
+              if ((!showScaffold || ebenen?.geruest === false) && el.id.startsWith('field')) return null
 
               const strokeW = (el.strokeWidth || 1) * (scale === '1:50' || scale === '1:25' ? 1.5 : scale === '1:100' ? 1 : 0.8)
 

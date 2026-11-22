@@ -17,9 +17,11 @@ import { CADNote } from '@/types/cad-notes'
 interface Props {
   notes: CADNote[]
   onDeleteNote: (id: string) => void
+  /** Zeichenebenen-Status je Notiz-ID: ausgeblendete/gesperrte Notizen sind in der Liste gekennzeichnet (die Liste ist keine CAD-Ansicht) */
+  status?: Record<string, { ausgeblendet: boolean; gesperrt: boolean }>
 }
 
-export default function NotesPanel({ notes, onDeleteNote }: Props) {
+export default function NotesPanel({ notes, onDeleteNote, status }: Props) {
   const [offen, setOffen] = useState(true)
   if (!notes.length) return null
 
@@ -34,7 +36,7 @@ export default function NotesPanel({ notes, onDeleteNote }: Props) {
           {notes.map((n) => (
             <div key={n.id} className='px-3 py-2'>
               <div className='flex items-start justify-between gap-2'>
-                <span className='text-[10px] font-medium text-[#86868b] uppercase'>{n.componentName}</span>
+                <span className='text-[10px] font-medium text-[#86868b] uppercase'>{n.componentName}{status?.[n.id]?.ausgeblendet ? ' · im CAD ausgeblendet' : ''}{status?.[n.id]?.gesperrt ? ' · gesperrt' : ''}</span>
                 <button
                   type='button'
                   onClick={() => onDeleteNote(n.id)}
