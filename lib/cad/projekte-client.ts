@@ -5,6 +5,7 @@ import type { KundeKurz, ProjektStatus } from '@/lib/cad/projekt-stammdaten'
 export interface KontoProjektKopf {
   id: string; name: string; revision: number; updated_at: string; created_at: string
   customer_id: string | null; customer: KundeKurz | null; projektnummer: string; status: ProjektStatus
+  projektnummer_gesperrt_am: string | null; project_id: string | null
 }
 export interface KontoProjekt extends KontoProjektKopf { daten: Projektdatei }
 export type Antwort<T> = { ok: true; wert: T } | { ok: false; fehler: string; status: number }
@@ -27,3 +28,12 @@ export const legeKontoProjektAn = (name: string, daten: Projektdatei) => aufruf(
 export const speichereKontoProjekt = (id: string, name: string, daten: Projektdatei, revision: number) => aufruf(`/api/cad/projekte/${id}`, { method: 'PUT', body: JSON.stringify({ name, daten, revision }) }, (j) => j.projekt as KontoProjektKopf)
 export const loescheKontoProjekt = (id: string) => aufruf(`/api/cad/projekte/${id}`, { method: 'DELETE' }, () => true)
 export const aendereKontoStammdaten = (id: string, a: { customer_id?: string | null; status?: ProjektStatus; projektnummer?: string }) => aufruf(`/api/cad/projekte/${id}`, { method: 'PATCH', body: JSON.stringify(a) }, (j) => j.projekt as KontoProjektKopf)
+
+export interface NummernInfo {
+  gesperrt_am: string | null
+  verwendung: { projektnummer: string; dokumenttyp: string; dokument_id: string | null; verwendet_von: string | null; created_at: string } | null
+  protokoll: { art: string; alt: string | null; neu: string | null; grund: string | null; geaendert_von: string | null; created_at: string }[]
+}
+export const holeNummernInfo = (id: string) => aufruf(`/api/cad/projekte/${id}?nummer=1`, undefined, (j) => j.nummer as NummernInfo)
+export const korrigiereKontoProjektnummer = (id: string, projektnummer: string, grund: string) => aufruf(`/api/cad/projekte/${id}/projektnummer-korrektur`, { method: 'POST', body: JSON.stringify({ projektnummer, grund }) }, (j) => j.projektnummer as string)
+export const verknuepfeKontoProjekt = (id: string, projectId: string) => aufruf(`/api/cad/projekte/${id}`, { method: 'PATCH', body: JSON.stringify({ project_id: projectId }) }, (j) => j.projekt as KontoProjektKopf)

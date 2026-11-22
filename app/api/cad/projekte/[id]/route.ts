@@ -2,9 +2,9 @@ import { NextRequest, NextResponse } from 'next/server'
 import { pruefeRolle, serverErrorResponse } from '@/lib/auth'
 import { ROLLEN } from '@/lib/rollen'
 import { UUID_MUSTER } from '@/lib/ansicht-link'
-import { aendereStammdaten, ladeProjekt, listeStaende, loescheProjekt, ProjektFehler, speichereProjekt } from '@/lib/cad/projekte-server'
+import { aendereStammdaten, holeNummernInfo, verknuepfeKundenprojekt, ladeProjekt, listeStaende, loescheProjekt, ProjektFehler, speichereProjekt } from '@/lib/cad/projekte-server'
 
-// Ein CAD-Projekt. GET → Projekt (?revision=N: älterer Stand, ?staende=1: Liste der Stände); PUT { name?, daten, revision } → speichern; PATCH { customer_id?, status?, projektnummer? } → Stammdaten (ohne neue Revision); DELETE.
+// Ein CAD-Projekt. GET → Projekt (?revision=N: älterer Stand, ?staende=1: Liste der Stände); PUT { name?, daten, revision } → speichern; PATCH { customer_id?, status?, projektnummer? } → Stammdaten (ohne neue Revision), PATCH { project_id } → Kundenprojekt verknüpfen; GET ?nummer=1 → Sperrstatus und Protokoll der Projektnummer; DELETE.
 const kein_cache = { 'Cache-Control': 'no-store' }
 const nf = NextResponse.json({ success: false, error: 'Projekt nicht gefunden.' }, { status: 404 })
 type Ctx = { params: Promise<{ id: string }> }
@@ -15,6 +15,7 @@ export async function GET(req: NextRequest, { params }: Ctx) {
   const { id } = await params
   if (!UUID_MUSTER.test(id)) return nf.clone()
   try {
+    if (req.nextUrl.searchParams.get('nummer')) return NextResponse.json({ success: true, nummer: await holeNummernInfo(id) }, { headers: kein_cache })
     if (req.nextUrl.searchParams.get('staende')) return NextResponse.json({ success: true, staende: await listeStaende(id) }, { headers: kein_cache })
     const rev = req.nextUrl.searchParams.get('revision')
     const n = rev === null ? undefined : Number(rev)
@@ -50,6 +51,9 @@ export async function PATCH(req: NextRequest, { params }: Ctx) {
   try {
     const body = await req.json().catch(() => null)
     if (!body || typeof body !== 'object') return NextResponse.json({ success: false, error: 'Ungültige Eingabe.' }, { status: 400 })
+    if (typeof body.project_id === 'string' && body.customer_id === undefined && body.status === undefined && body.projektnummer === undefined) {
+      return NextResponse.json({ success: true, projekt: await verknuepfeKundenprojekt(id, body.project_id, r.userId) })
+    }
     const p = await aendereStammdaten(id, { customerId: body.customer_id, status: body.status, projektnummer: body.projektnummer }, r.role, r.userId)
     return NextResponse.json({ success: true, projekt: p })
   } catch (err) {

@@ -86,7 +86,7 @@ import { erzeugeProjektdatei, liesProjektdatei, type Projektdatei } from '@/lib/
 import { ladeVersionen, speichereVersionen, fuegeVersionHinzu, loescheVersion, benenneVersion, type Version } from '@/lib/cad/versionen'
 import VersionenDialog from '@/components/cad/VersionenDialog'
 import KontoProjekteDialog from '@/components/cad/KontoProjekteDialog'
-import { legeKontoProjektAn, speichereKontoProjekt, ladeKontoProjekt, loescheKontoProjekt, aendereKontoStammdaten } from '@/lib/cad/projekte-client'
+import { legeKontoProjektAn, speichereKontoProjekt, ladeKontoProjekt, loescheKontoProjekt, aendereKontoStammdaten, holeNummernInfo, korrigiereKontoProjektnummer, verknuepfeKontoProjekt } from '@/lib/cad/projekte-client'
 import TreppePanel from '@/components/cad/TreppePanel'
 import GeruestfeldPanel from '@/components/cad/GeruestfeldPanel'
 import BauteilKontextmenue from '@/components/cad/BauteilKontextmenue'
@@ -1218,6 +1218,18 @@ export default function CADPage() {
   const [kontoMeldung, setKontoMeldung] = useState<string | null>(null)
   const [kontoProjekt, setKontoProjekt] = useState<KontoProjektStand | null>(null)
   const [projektdatenOffen, setProjektdatenOffen] = useState(false)
+  const ladeNummer = useCallback(async () => {
+    if (!kontoProjekt) return null
+    const r = await holeNummernInfo(kontoProjekt.id)
+    return r.ok ? r.wert : null
+  }, [kontoProjekt])
+  const korrigiereNummer = async (nummer: string, grund: string): Promise<string | null> => {
+    if (!kontoProjekt) return 'Erst als Projekt im Konto speichern.'
+    const r = await korrigiereKontoProjektnummer(kontoProjekt.id, nummer, grund)
+    if (!r.ok) return r.fehler
+    setKontoProjekt((alt) => (alt ? { ...alt, projektnummer: r.wert } : alt))
+    return null
+  }
   const speichereStammdaten = async (a: StammdatenEingabe): Promise<string | null> => {
     if (!kontoProjekt) return 'Erst als Projekt im Konto speichern.'
     const r = await aendereKontoStammdaten(kontoProjekt.id, a)
@@ -1544,6 +1556,11 @@ export default function CADPage() {
       // { success, project } – die alte Prüfung hätte hier IMMER einen
       // Fehler gezeigt, selbst wenn das Projekt korrekt angelegt wurde.
       if (!res.ok || !json.id) throw new Error(json.error || 'Anlegen fehlgeschlagen')
+      // Ist ein Projekt im Konto geöffnet, mit dem neuen Kundenprojekt verknüpfen: Versand und Links dieses Kundenprojekts sperren dann die Projektnummer.
+      if (kontoProjekt) {
+        const v = await verknuepfeKontoProjekt(kontoProjekt.id, json.id)
+        if (!v.ok) alert('Hinweis: Das Angebot wurde angelegt, aber die Verknüpfung mit dem CAD-Projekt im Konto ist fehlgeschlagen: ' + v.fehler)
+      }
 
       // NEU (Marktvergleich-Lücke 3): 3D-Ansicht als Bild erfassen und dem
       // neuen Projekt als Anlage hinzufügen – erscheint danach im
@@ -1574,7 +1591,7 @@ export default function CADPage() {
       alert('❌ ' + (err instanceof Error ? err.message : String(err)))
     }
     setZuordnenLaeuft(false)
-  }, [model, materials, aufmassListe, logistik, router, notes, statikDaten, m2Wahl])
+  }, [model, materials, aufmassListe, logistik, router, notes, statikDaten, m2Wahl, kontoProjekt])
 
   // Esc beendet den aktiven Werkzeugmodus (nicht beim Tippen in Feldern); Auswahl und Platzieren haben eigene Esc-Behandlung
   useEffect(() => {
@@ -1672,7 +1689,7 @@ export default function CADPage() {
         projektName={kontoProjekt?.name || aufmassProjektName || null}
         systemName={modelWithManual?.system ? `${modelWithManual.system.hersteller} ${modelWithManual.system.systemName}` : null}
         status={speicherZustand}
-        projektnummer={kontoProjekt?.projektnummer} projektStatus={kontoProjekt?.status} kundeName={kontoProjekt?.kunde?.name}
+        projektnummer={kontoProjekt?.projektnummer} nummerGesperrt={!!kontoProjekt?.nummerGesperrtAm} projektStatus={kontoProjekt?.status} kundeName={kontoProjekt?.kunde?.name}
         versionText={kontoProjekt ? `Stand ${kontoProjekt.revision}` : versionen.length > 0 ? `${versionen.length} ${versionen.length === 1 ? 'Version' : 'Versionen'}` : 'Keine Version'}
         kannZurueck={kannZurueck} kannVor={kannVor} onZurueck={schrittZurueck} onVor={schrittVor}
         onVersionen={oeffneVersionen} onSpeichern={speichereProjektdatei} speichernAus={!model} speichernTitel={`Projekt als Datei speichern (${kuerzelText('speichern')})`} onTeilen={speichereProjektdatei} teilenAus={!model}
@@ -1899,7 +1916,7 @@ export default function CADPage() {
                 onEntfernen={bereichEntfernen} onAnhaengen={bereichHinzufuegen} onAufstocken={bereichHinzufuegen}
                 onLoescheAenderung={(i) => setBereichsListe((l) => l.filter((_, j) => j !== i))} onZu={() => setBereicheOffen(false)} entferntAnzahl={removedCount} />
             )}
-            {projektdatenOffen && kontoProjekt && <ProjektdatenDialog projekt={kontoProjekt} kunden={kunden} rolle={rolle ?? ''} onSpeichern={speichereStammdaten} onZu={() => setProjektdatenOffen(false)} />}
+            {projektdatenOffen && kontoProjekt && <ProjektdatenDialog projekt={kontoProjekt} kunden={kunden} rolle={rolle ?? ''} onSpeichern={speichereStammdaten} onLadeNummer={ladeNummer} onKorrektur={korrigiereNummer} onZu={() => setProjektdatenOffen(false)} />}
             {kontoOffen && <KontoProjekteDialog aktuell={kontoProjekt} meldung={kontoMeldung} onNeu={kontoNeu} onUeberschreiben={kontoUeberschreiben} onLaden={(id, rev) => { void kontoLaden(id, rev) }} onLoeschen={kontoLoeschen} onZu={() => setKontoOffen(false)} />}
             {versionenOffen && <VersionenDialog versionen={versionen} speicherFehler={versionenFehler} onSpeichern={neueVersion} onWiederherstellen={stelleVersionWiederHer} onLoeschen={(id) => speichereListe(loescheVersion(versionen, id))} onUmbenennen={(id, n) => speichereListe(benenneVersion(versionen, id, n))} onZu={() => setVersionenOffen(false)} />}
             {abbauAktiv && abbauErgebnis && viewMode === '3d' && (
@@ -2007,7 +2024,7 @@ export default function CADPage() {
             <dl className='grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-[12.5px]'>
               {projektZeilen({ name: kontoProjekt?.name || aufmassProjektName || null, systemName: modelWithManual?.system ? `${modelWithManual.system.hersteller} ${modelWithManual.system.systemName}` : null,
                 speicherText: SPEICHER_TEXT[speicherZustand], versionText: kontoProjekt ? `Stand ${kontoProjekt.revision}` : versionen.length > 0 ? `${versionen.length} ${versionen.length === 1 ? 'Version' : 'Versionen'}` : 'Keine Version',
-                kunde: kontoProjekt?.kunde?.name, kundenAnschrift: kontoProjekt?.kunde?.anschrift, projektnummer: kontoProjekt?.projektnummer, projektStatus: kontoProjekt?.status, baustelle: aufmassBaustelle, erstelltAm: kontoProjekt?.erstelltAm, geaendertAm: kontoProjekt?.geaendertAm, gesichertUm }).map((z) => (<div key={z.label} className='contents'><dt className='text-[#86868b]'>{z.label}</dt><dd className='min-w-0 break-words text-[#1d1d1f]'>{z.wert}</dd></div>))}
+                kunde: kontoProjekt?.kunde?.name, kundenAnschrift: kontoProjekt?.kunde?.anschrift, projektnummer: kontoProjekt?.projektnummer, nummerGesperrt: !!kontoProjekt?.nummerGesperrtAm, projektStatus: kontoProjekt?.status, baustelle: aufmassBaustelle, erstelltAm: kontoProjekt?.erstelltAm, geaendertAm: kontoProjekt?.geaendertAm, gesichertUm }).map((z) => (<div key={z.label} className='contents'><dt className='text-[#86868b]'>{z.label}</dt><dd className='min-w-0 break-words text-[#1d1d1f]'>{z.wert}</dd></div>))}
             </dl>
           </section>
           {rolle === 'admin' && model && <M2Abrechnung flaecheM2={modelWithManual?.totalAreaM2 ?? model.totalAreaM2} onChange={setM2Wahl} />}

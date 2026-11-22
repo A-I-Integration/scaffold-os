@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { requireAuth, unauthorizedResponse, serverErrorResponse, pruefeRolle } from '@/lib/auth';
 import { ROLLEN } from '@/lib/rollen';
 import { sichereAngebotToken } from '@/lib/angebot-link';
+import { sperreFuerExterneVerwendung, projektIdZuRechnung, SperreFehler } from '@/lib/cad/projektnummer-sperre';
 
 export async function POST(req: Request) {
   const rollenPruefung = await pruefeRolle(ROLLEN.ADMIN_DISPO);
@@ -24,6 +25,15 @@ export async function POST(req: Request) {
     const mailType = type === 'rechnung' || type === 'mahnung' ? type : 'angebot';
     if (mailType === 'angebot' && !projectId) {
       return NextResponse.json({ error: 'Projekt-ID erforderlich' }, { status: 400 });
+    }
+
+    // Projektnummer sperren, BEVOR etwas das Haus verlässt (auch der Angebots-Link zählt). Schlägt das fehl, wird nicht versendet.
+    try {
+      const sperrProjekt = mailType === 'angebot' ? (projectId || null) : (invoiceNumber ? await projektIdZuRechnung(String(invoiceNumber)) : null);
+      await sperreFuerExterneVerwendung({ projectId: sperrProjekt, typ: mailType === 'angebot' ? 'angebot' : mailType, dokumentId: mailType === 'angebot' ? (projectId || null) : (invoiceNumber || null), userId: auth.userId });
+    } catch (e) {
+      if (e instanceof SperreFehler) return NextResponse.json({ error: e.message }, { status: 503 });
+      throw e;
     }
 
     const { Resend } = await import('resend');
