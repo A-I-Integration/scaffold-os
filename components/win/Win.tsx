@@ -56,7 +56,7 @@ export function BaumKnoten({ ebene, label, aktiv, href, onClick, rechts, symbol 
 
 export function DokumentReiter({ reiter, aktiv, onWahl }: { reiter: { key: string; label: string }[]; aktiv: string; onWahl: (k: string) => void }) {
   return (
-    <div className="flex items-end gap-0.5 px-2 pt-1.5 border-b" style={{ borderColor: WIN.rand, background: WIN.grund }}>
+    <div className="flex flex-wrap items-end gap-0.5 px-2 pt-1.5 border-b" style={{ borderColor: WIN.rand, background: WIN.grund }}>
       {reiter.map((r) => (
         <button key={r.key} type="button" onClick={() => onWahl(r.key)}
           className="px-3 py-1.5 text-[15px] rounded-t border border-b-0"
