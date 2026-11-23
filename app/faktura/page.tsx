@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import { FileText, AlertTriangle, CheckCircle2, BarChart3, Plus, Search, FilePlus2, ClipboardList, Layers, ReceiptText, Undo2, Mail, Eye } from 'lucide-react';
 import { WIN } from '@/components/win/Win';
 import { fmtEur, fmtDate, type Invoice } from '@/lib/invoice-pdf';
+import { ENTWURF_ART_LABEL, type EntwurfArt } from '@/lib/rechnung-entwurf';
 import {
   type FakturaReiter, type FakturaFilter, type ZahlungKurz, REITER_LABEL, berechneKennzahlen, filtereRechnungen, zaehleJeReiter,
   anzeigeStatus, offenerBetrag, rechnungsJahre, monatsGrenzen, heuteIso, type AnzeigeStatus,
@@ -27,6 +28,8 @@ const STATUS_STIL: Record<AnzeigeStatus, { label: string; bg: string; fg: string
 };
 const ART_LABEL: Record<string, string> = { standard: 'Rechnung', abschlag: 'Abschlag', schluss: 'Schlussrechnung', gutschrift: 'Gutschrift' };
 const REITER: FakturaReiter[] = ['alle', 'rechnungen', 'abschlag', 'schluss', 'gutschriften', 'entwuerfe'];
+interface EntwurfKurz { id: string; updated_at: string; customer_name: string; invoice_type: EntwurfArt; netto_vorschau: number | string }
+
 const knopf = 'inline-flex items-center gap-1.5 rounded-lg border px-3 py-2 text-[13px] font-medium hover:bg-black/5';
 
 function Kachel({ icon, titel, wert, unten, ton }: { icon: React.ReactNode; titel: string; wert: string; unten?: React.ReactNode; ton: string }) {
@@ -47,6 +50,8 @@ export default function FakturaPage() {
   const heute = useMemo(() => heuteIso(), []);
   const [rechnungen, setRechnungen] = useState<Invoice[]>([]);
   const [zahlungenMonat, setZahlungenMonat] = useState<ZahlungKurz[]>([]);
+  const [entwuerfe, setEntwuerfe] = useState<EntwurfKurz[]>([]);
+  const [entwurfFehler, setEntwurfFehler] = useState<string | null>(null);
   const [laedt, setLaedt] = useState(true);
   const [fehler, setFehler] = useState<string | null>(null);
   const [filter, setFilter] = useState<FakturaFilter>({ reiter: 'alle', suche: '', status: 'alle', jahr: heute.slice(0, 4) });
@@ -56,14 +61,17 @@ export default function FakturaPage() {
     (async () => {
       try {
         const { von, bis } = monatsGrenzen(heute);
-        const [r, z] = await Promise.all([
+        const [r, z, e] = await Promise.all([
           fetch('/api/invoices').then((x) => x.json()),
           fetch(`/api/invoice-payments?von=${von}&bis=${bis}`).then((x) => x.json()).catch(() => null),
+          fetch('/api/invoice-drafts').then((x) => x.json()).catch(() => null),
         ]);
         if (!aktiv) return;
         if (!r?.success) throw new Error(r?.error || 'Rechnungen konnten nicht geladen werden');
         setRechnungen(r.invoices as Invoice[]);
         setZahlungenMonat(z?.success ? (z.payments as ZahlungKurz[]) : []);
+        if (e?.success) setEntwuerfe(e.entwuerfe as EntwurfKurz[]);
+        else setEntwurfFehler(e?.error || 'Entwürfe konnten nicht geladen werden');
       } catch (e) {
         if (aktiv) setFehler(e instanceof Error ? e.message : 'Fehler beim Laden');
       } finally {
@@ -78,6 +86,19 @@ export default function FakturaPage() {
   const jahre = useMemo(() => rechnungsJahre(rechnungen, heute), [rechnungen, heute]);
   const sichtbar = useMemo(() => filtereRechnungen(rechnungen, filter, heute), [rechnungen, filter, heute]);
   const eur = (n: number) => `${fmtEur(n)} €`;
+  const reiterAnzahl = { ...jeReiter, entwuerfe: entwuerfe.length };
+
+  async function entwurfLoeschen(e: EntwurfKurz) {
+    if (!window.confirm(`Entwurf${e.customer_name ? ` für ${e.customer_name}` : ''} wirklich löschen? Das kann nicht rückgängig gemacht werden.`)) return;
+    try {
+      const res = await fetch('/api/invoice-drafts?id=' + e.id, { method: 'DELETE' });
+      const json = await res.json();
+      if (!json.success) throw new Error(json.error || 'Löschen fehlgeschlagen');
+      setEntwuerfe((l) => l.filter((x) => x.id !== e.id));
+    } catch (err) {
+      setEntwurfFehler(err instanceof Error ? err.message : 'Löschen fehlgeschlagen');
+    }
+  }
 
   return (
     <div className="min-h-full" style={{ background: WIN.grund }}>
@@ -110,7 +131,7 @@ export default function FakturaPage() {
               <button key={k} role="tab" aria-selected={filter.reiter === k} onClick={() => setFilter({ ...filter, reiter: k })}
                 className="px-3 py-2 text-[14px] -mb-px border-b-2"
                 style={{ borderColor: filter.reiter === k ? WIN.akzent : 'transparent', color: filter.reiter === k ? WIN.akzent : WIN.text, fontWeight: filter.reiter === k ? 600 : 400 }}>
-                {REITER_LABEL[k]} <span className="text-[12px] opacity-60">{jeReiter[k]}</span>
+                {REITER_LABEL[k]} <span className="text-[12px] opacity-60">{reiterAnzahl[k]}</span>
               </button>
             ))}
           </div>
@@ -131,9 +152,35 @@ export default function FakturaPage() {
           </div>
 
           {filter.reiter === 'entwuerfe' ? (
-            <p className="px-4 pb-6 pt-2 text-sm" style={{ color: WIN.textGedaempft }} data-testid="entwuerfe-leer">
-              Entwürfe folgen mit dem nächsten Bundle (Rechnung speichern, ohne eine Rechnungsnummer zu vergeben). Heute bekommt jede neue Rechnung sofort ihre endgültige Nummer.
-            </p>
+            <div className="px-3 pb-4" data-testid="entwuerfe-bereich">
+              {entwurfFehler && <p className="mb-2 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">⚠️ {entwurfFehler}</p>}
+              <p className="mb-2 text-[13px]" style={{ color: WIN.textGedaempft }}>Entwürfe haben noch keine Rechnungsnummer. Die Nummer wird erst beim Anlegen der Rechnung vergeben; Rechnungsdatum und Fälligkeit gelten ab diesem Zeitpunkt.</p>
+              {entwuerfe.length === 0 ? (
+                <p className="py-3 text-sm" style={{ color: WIN.textGedaempft }} data-testid="entwuerfe-leer">Keine Entwürfe. Im Formular „Neue Rechnung“ gibt es den Knopf „Als Entwurf speichern“.</p>
+              ) : (
+                <table className="w-full text-[13.5px]" data-testid="entwuerfe-liste">
+                  <thead>
+                    <tr className="text-left text-[12px] uppercase tracking-wide border-y" style={{ color: WIN.textGedaempft, borderColor: WIN.randHell, background: '#fafafa' }}>
+                      <th className="px-3 py-2">Kunde</th><th className="px-3 py-2">Art</th><th className="px-3 py-2 text-right">Netto (Vorschau)</th><th className="px-3 py-2">Zuletzt geändert</th><th className="px-3 py-2" />
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {entwuerfe.map((e) => (
+                      <tr key={e.id} className="border-b" style={{ borderColor: WIN.randHell }}>
+                        <td className="px-3 py-2.5">{e.customer_name || <span style={{ color: WIN.textGedaempft }}>ohne Kunde</span>}</td>
+                        <td className="px-3 py-2.5">{ENTWURF_ART_LABEL[e.invoice_type] || 'Rechnung'}</td>
+                        <td className="px-3 py-2.5 text-right tabular-nums">{eur(Number(e.netto_vorschau))}</td>
+                        <td className="px-3 py-2.5 whitespace-nowrap">{new Date(e.updated_at).toLocaleString('de-DE', { dateStyle: 'short', timeStyle: 'short' })}</td>
+                        <td className="px-3 py-2.5 text-right whitespace-nowrap">
+                          <Link href={`/rechnungen?entwurf=${e.id}`} className={`${knopf} mr-1`} style={{ borderColor: WIN.rand }}>Bearbeiten</Link>
+                          <button onClick={() => entwurfLoeschen(e)} className={knopf} style={{ borderColor: WIN.rand, color: '#b42318' }} aria-label="Entwurf löschen">Löschen</button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
           ) : laedt ? (
             <p className="px-4 pb-6 text-sm" style={{ color: WIN.textGedaempft }}>Lade …</p>
           ) : sichtbar.length === 0 ? (

@@ -69,9 +69,9 @@ describe('Faktura-Kennzahlen', () => {
     expect(filtereRechnungen(liste, { ...f, suche: ' nord ' }, HEUTE).map((x) => x.id)).toEqual(['2']);
     expect(filtereRechnungen(liste, { ...f, suche: 're-2026-0002' }, HEUTE).map((x) => x.id)).toEqual(['2']);
   });
-  it('Entwürfe-Reiter nutzt Status entwurf (für das spätere Bundle)', () => {
+  it('Entwürfe sind keine Rechnungen: der Reiter filtert in der Rechnungsliste nichts heraus', () => {
     const l = [r({ id: '1' }), r({ id: '2', status: 'entwurf' })];
-    expect(filtereRechnungen(l, { reiter: 'entwuerfe', suche: '', status: 'alle', jahr: 'alle' }, HEUTE).map((x) => x.id)).toEqual(['2']);
+    expect(filtereRechnungen(l, { reiter: 'entwuerfe', suche: '', status: 'alle', jahr: 'alle' }, HEUTE)).toEqual([]);
   });
   it('Jahre und Monatsgrenzen', () => {
     expect(rechnungsJahre([r({ invoice_date: '2024-01-01' }), r({ invoice_date: '2025-05-05' })], HEUTE)).toEqual(['2026', '2025', '2024']);

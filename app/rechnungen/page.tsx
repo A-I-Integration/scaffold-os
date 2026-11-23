@@ -211,6 +211,9 @@ function RechnungenContent() {
   const [detailOffen, setDetailOffen] = useState<Record<number, boolean>>({});
   const [projectId, setProjectId] = useState<string | null>(null);
   const [lvId, setLvId] = useState<string | null>(null); // Rechnung aus gespeichertem LV → danach „abgerechnet“
+  const [entwurfId, setEntwurfId] = useState<string | null>(null); // geöffneter Rechnungsentwurf (Faktura), wird beim Festschreiben gelöscht
+  const [kundeId, setKundeId] = useState<string | null>(null);
+  const [entwurfSpeichert, setEntwurfSpeichert] = useState(false);
 
   // Phase 18: E-Mail-Öffnungen (Tracking-Pixel)
   const [opens, setOpens] = useState<Record<string, { anzahl: number; zuletzt: string }>>({});
@@ -269,6 +272,34 @@ function RechnungenContent() {
     }
   }, [searchParams]);
 
+  // Gespeicherten Rechnungsentwurf öffnen (Faktura → Entwürfe → Bearbeiten): /rechnungen?entwurf=<id>
+  const entwurfParam = searchParams.get('entwurf');
+  useEffect(() => {
+    if (!entwurfParam) return;
+    let aktiv = true;
+    (async () => {
+      try {
+        const res = await fetch('/api/invoice-drafts?id=' + encodeURIComponent(entwurfParam));
+        const json = await res.json();
+        if (!aktiv) return;
+        if (!json.success) { alert('❌ ' + (json.error || 'Entwurf konnte nicht geladen werden')); return; }
+        const d = json.entwurf?.payload || {};
+        setEntwurfId(json.entwurf.id);
+        setCustomerName(d.customer_name || ''); setCustomerAddress(d.customer_address || '');
+        setNotes(d.notes || ''); setProjectId(d.project_id || null); setLvId(d.lv_id || null); setKundeId(d.customer_id || null);
+        setInvoiceType(d.invoice_type === 'abschlag' || d.invoice_type === 'schluss' ? d.invoice_type : 'standard');
+        setTaxRate(Number.isFinite(Number(d.tax_rate)) ? Number(d.tax_rate) : 19);
+        setSteuerbehandlung(d.steuerfall === '13b' || d.steuerfall === 'kleinunternehmer' ? d.steuerfall : 'regel');
+        setGrundstuecksbezug(d.grundstuecksbezug !== false);
+        setGeruestNr(d.geruest_nr || ''); setLeistungsdatum(d.leistungsdatum || '');
+        setPositions(Array.isArray(d.positions) && d.positions.length ? d.positions : [{ bezeichnung: '', menge: 1, einheit: 'Stk.', einzelpreis: 0 }]);
+        // Rechnungsdatum und Fälligkeit bleiben auf den heutigen Standardwerten: sie gelten erst beim Festschreiben
+        setShowForm(true);
+      } catch { if (aktiv) alert('❌ Entwurf konnte nicht geladen werden'); }
+    })();
+    return () => { aktiv = false; };
+  }, [entwurfParam]);
+
   // Überfällig automatisch markieren (Anzeige – Statuswechsel bleibt manuell)
   const isOverdue = (inv: Invoice) =>
     inv.status === 'offen' && inv.due_date && new Date(inv.due_date) < new Date();
@@ -292,6 +323,28 @@ function RechnungenContent() {
     );
   }
 
+  async function speichereEntwurf() {
+    setEntwurfSpeichert(true);
+    try {
+      const res = await fetch('/api/invoice-drafts', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: entwurfId || undefined, customer_name: customerName, customer_address: customerAddress, customer_id: kundeId, project_id: projectId, lv_id: lvId,
+          invoice_type: invoiceType, positions, tax_rate: taxRate, steuerfall: taxRate === 0 ? steuerbehandlung : 'regel', grundstuecksbezug,
+          notes, geruest_nr: geruestNr, leistungsdatum: leistungsdatum || undefined,
+        }),
+      });
+      const json = await res.json();
+      if (!json.success) throw new Error(json.error || 'Entwurf konnte nicht gespeichert werden');
+      setEntwurfId(json.entwurf.id);
+      alert('✅ Entwurf gespeichert. Es wurde noch keine Rechnungsnummer vergeben. Du findest ihn unter Faktura → Entwürfe.');
+    } catch (err: any) {
+      alert('❌ ' + err.message);
+    } finally {
+      setEntwurfSpeichert(false);
+    }
+  }
+
   async function handleSave(overrideGrund?: string) {
     if (!customerName.trim()) { alert('Bitte Kundenname eingeben!'); return; }
     const valid = positions.filter((p) => p.bezeichnung.trim() && p.menge > 0);
@@ -303,6 +356,7 @@ function RechnungenContent() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           project_id: projectId,
+          customer_id: kundeId || undefined,
           customer_name: customerName.trim(),
           customer_address: customerAddress.trim() || null,
           positions: valid,
@@ -334,12 +388,20 @@ function RechnungenContent() {
         try { await fetch('/api/projekt-lv', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: lvId, status: 'abgerechnet' }) }); } catch { /* Status lässt sich im LV-Reiter nachtragen */ }
         setLvId(null);
       }
+      let entwurfRest = '';
+      if (entwurfId) {
+        // Entwurf ist jetzt festgeschrieben: löschen. Scheitert das, bleibt die Rechnung gültig, der Entwurf wird nur gemeldet.
+        try { const dr = await fetch('/api/invoice-drafts?id=' + entwurfId, { method: 'DELETE' }); const dj = await dr.json(); if (!dj.success) throw new Error('x'); }
+        catch { entwurfRest = '\n\nHinweis: Der Entwurf konnte nicht gelöscht werden. Bitte unter Faktura → Entwürfe von Hand löschen, damit er nicht doppelt verwendet wird.'; }
+        setEntwurfId(null);
+      }
+      setKundeId(null);
       setShowForm(false);
       setCustomerName(''); setCustomerAddress(''); setNotes(''); setSteuerbehandlung('regel'); setProjectId(null); setGeruestNr(''); setLeistungsdatum(''); setDetailOffen({});
       setInvoiceType('standard');
       setPositions([{ bezeichnung: '', menge: 1, einheit: 'Stk.', einzelpreis: 0 }]);
       await load();
-      alert('✅ Rechnung ' + json.invoice.invoice_number + ' angelegt!' + (json.warnung ? '\n\n⚠️ ' + json.warnung : '') + (json.steuer_warnungen?.length ? '\n\n⚠️ § 13b prüfen:\n• ' + json.steuer_warnungen.join('\n• ') : ''));
+      alert('✅ Rechnung ' + json.invoice.invoice_number + ' angelegt!' + entwurfRest + (json.warnung ? '\n\n⚠️ ' + json.warnung : '') + (json.steuer_warnungen?.length ? '\n\n⚠️ § 13b prüfen:\n• ' + json.steuer_warnungen.join('\n• ') : ''));
     } catch (err: any) {
       alert('❌ ' + err.message);
     } finally {
@@ -580,7 +642,7 @@ function RechnungenContent() {
         <span className="text-xs opacity-80">{invoices.length} Rechnungen · {fmtEur(summeOffen)} € offen</span>
         <span className="ml-auto flex gap-1.5">
           <button onClick={handleDatevExport} className="flex items-center gap-1 rounded px-3 py-1 text-xs font-semibold bg-white/15 hover:bg-white/25"><Download className="h-3.5 w-3.5" /> DATEV-Buchungsstapel</button>
-          <button onClick={() => setShowForm(!showForm)} className="flex items-center gap-1 rounded px-3 py-1 text-xs font-semibold" style={{ background: WIN.akzent }}>{showForm ? <X className="h-3.5 w-3.5" /> : <Plus className="h-3.5 w-3.5" />}{showForm ? 'Abbrechen' : 'Neue Rechnung'}</button>
+          <button onClick={() => { if (!showForm) { setEntwurfId(null); setKundeId(null); } setShowForm(!showForm); }} className="flex items-center gap-1 rounded px-3 py-1 text-xs font-semibold" style={{ background: WIN.akzent }}>{showForm ? <X className="h-3.5 w-3.5" /> : <Plus className="h-3.5 w-3.5" />}{showForm ? 'Abbrechen' : 'Neue Rechnung'}</button>
         </span>
       </div>
       <div className="p-4 space-y-4">
@@ -792,6 +854,15 @@ function RechnungenContent() {
               className="w-full rounded-xl bg-[#e8590c] hover:bg-[#d9480f] disabled:opacity-50 py-3 font-bold text-white transition-colors"
             >
               {saving ? 'Speichert…' : 'Rechnung anlegen (Nummer wird automatisch vergeben)'}
+            </button>
+            <button
+              type="button"
+              onClick={speichereEntwurf}
+              disabled={entwurfSpeichert || saving}
+              data-testid="als-entwurf-speichern"
+              className="w-full rounded-xl border border-black/15 bg-white hover:bg-black/5 disabled:opacity-50 py-2.5 text-sm font-semibold text-[#1d1d1f] transition-colors"
+            >
+              {entwurfSpeichert ? 'Speichert…' : entwurfId ? 'Entwurf aktualisieren (ohne Rechnungsnummer)' : 'Als Entwurf speichern (ohne Rechnungsnummer)'}
             </button>
           </div>
         )}
