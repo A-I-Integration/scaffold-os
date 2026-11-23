@@ -14,7 +14,8 @@ import { aktualisierePosition, bereinigePosition } from '@/lib/rechnung-position
 import { katalogAlsPosition, normalisiereKatalog, type LeistungKatalogEintrag } from '@/lib/leistungskatalog';
 import PositionDetails from '@/components/rechnung/PositionDetails';
 import { normalisiereBauphasen, berechneBauphasen, baueBauphasenPosition, markiereBauphaseAbgerechnet, type Bauphase, type BauphasenEinstellung } from '@/lib/bauphasen';
-import { normalisiereZwischenaufmasse, baueTeilleistungsPosition, baueTeilleistungsPositionen, markiereAbgerechnet, zwischenaufmassNr, neueMengeM2, type Zwischenaufmass } from '@/lib/zwischenaufmass';
+import { aufmassStand } from '@/lib/aufmass-integritaet';
+import { normalisiereZwischenaufmasse, baueTeilleistungsPosition, baueTeilleistungsPositionen, zwischenaufmassNr, neueMengeM2, type Zwischenaufmass } from '@/lib/zwischenaufmass';
 
 // ============================================================
 // SCAFFOLD OS – Schlussrechnung aus Auftrag erstellen
@@ -234,6 +235,8 @@ export default function SchlussrechnungDialog({ projectId, customerName, custome
           leistungsdatum: leistungsdatum || undefined,
           positions: positionen,
           override_grund: overrideGrund || undefined,
+          // Die Menge wird auf dem Server noch einmal geprüft und atomar reserviert (Doppelabrechnung, geändertes Aufmaß)
+          aufmass: zaModus && zaAuswahl ? { za_id: zaAuswahl.id, stand: aufmassStand(zaAuswahl) } : undefined,
         }),
       });
       const json = await res.json().catch(() => ({}));
@@ -241,22 +244,8 @@ export default function SchlussrechnungDialog({ projectId, customerName, custome
         if (json.code === 'FREIGABE_FEHLT_OVERRIDE_MOEGLICH') { setBrauchtBegruendung(json.error); return; }
         throw new Error(json.error || 'Rechnung konnte nicht angelegt werden.');
       }
-      let warnung = '';
-      if (zaModus && zaAuswahl && json.invoice?.id) {
-        // Zwischenaufmaß als abgerechnet markieren (frisch lesen, damit nichts überschrieben wird)
-        try {
-          const fr = await fetch(`/api/projects?id=${projectId}`).then((r) => r.json());
-          const liste = normalisiereZwischenaufmasse(fr?.project?.data?.zwischenaufmasse);
-          const neu = markiereAbgerechnet(liste, zaAuswahl.id, { id: json.invoice.id, nummer: json.invoice.invoice_number || '' }, new Date().toISOString().slice(0, 10));
-          const pr = await fetch('/api/projects', {
-            method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ id: projectId, data: { zwischenaufmasse: neu } }),
-          }).then((r) => r.json());
-          if (!pr?.success) throw new Error(pr?.error || 'unbekannt');
-        } catch (e: any) {
-          warnung = `Die Rechnung ${json.invoice.invoice_number || ''} wurde angelegt, aber ${zwischenaufmassNr(zaAuswahl)} konnte nicht als abgerechnet markiert werden (${e?.message || 'Fehler'}). Bitte NICHT erneut anlegen, sonst wird doppelt berechnet.`;
-        }
-      }
+      let warnung = typeof json.aufmass_warnung === 'string' ? json.aufmass_warnung : '';
+      // Das Zwischenaufmaß wird vom Server der Rechnung zugeordnet (gleiche Transaktionssperre), nicht mehr vom Browser.
       if (bpModus && bpAuswahl && json.invoice?.id) {
         // Bauphase als abgerechnet markieren (frisch lesen, damit nichts überschrieben wird)
         try {

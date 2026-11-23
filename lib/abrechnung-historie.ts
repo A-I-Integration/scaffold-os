@@ -6,7 +6,7 @@
 
 export type HistorieAktion =
   | 'rechnung_angelegt' | 'neue_version' | 'gutschrift_angelegt' | 'zahlung_geaendert' | 'status_geaendert' | 'storniert' | 'geloescht' | 'abweichung_freigegeben'
-  | 'aufmass_erfasst' | 'aufmass_abgerechnet' | 'aufmass_geloescht'
+  | 'aufmass_erfasst' | 'aufmass_abgerechnet' | 'aufmass_geloescht' | 'aufmass_freigegeben'
   | 'auftragswert_geaendert' | 'nachtrag_angelegt' | 'nachtrag_status' | 'nachtrag_betrag' | 'nachtrag_geloescht'
 
 export interface HistorieEintrag {
@@ -46,7 +46,7 @@ export async function schreibeHistorie(e: HistorieEintrag): Promise<boolean> {
 export const AKTION_LABEL: Record<HistorieAktion, string> = {
   rechnung_angelegt: 'Rechnung angelegt', neue_version: 'Neue Version angelegt', gutschrift_angelegt: 'Gutschrift angelegt',
   zahlung_geaendert: 'Zahlung geändert', status_geaendert: 'Status geändert', storniert: 'Storniert', geloescht: 'Gelöscht',
-  aufmass_erfasst: 'Aufmaß erfasst', aufmass_abgerechnet: 'Aufmaß abgerechnet', aufmass_geloescht: 'Aufmaß gelöscht',
+  aufmass_erfasst: 'Aufmaß erfasst', aufmass_abgerechnet: 'Aufmaß abgerechnet', aufmass_geloescht: 'Aufmaß gelöscht', aufmass_freigegeben: 'Aufmaßmenge wieder freigegeben',
   abweichung_freigegeben: 'Abweichung freigegeben', auftragswert_geaendert: 'Auftragswert geändert',
   nachtrag_angelegt: 'Nachtrag angelegt', nachtrag_status: 'Nachtrag-Status geändert', nachtrag_betrag: 'Nachtrag-Betrag geändert', nachtrag_geloescht: 'Nachtrag gelöscht',
 }
