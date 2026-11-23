@@ -10,7 +10,11 @@
 export type VorhaltungIntervall = 'woche' | 'monat'
 export type VorhaltungAbrechnung = 'im_voraus' | 'nachtraeglich'
 
-export interface Teilabbau { datum: string; verbleibendProzent: number; notiz?: string }
+/** preisModus: wie wirkt der Teilabbau auf den Preis? 'anteilig' = Preis × Restbestand, 'voll' = voller Preis bleibt (laut Vereinbarung). Ohne Angabe wird NICHT abgerechnet. */
+export type TeilabbauPreisModus = 'anteilig' | 'voll'
+export interface Teilabbau { datum: string; verbleibendProzent: number; preisModus?: TeilabbauPreisModus; notiz?: string }
+/** Preisänderung, die erst für Intervalle gilt, die an oder nach `ab` beginnen. Bereits berechnete Zeiträume bleiben unberührt. */
+export interface Preisstufe { ab: string; preis: number }
 
 export interface Vorhaltevereinbarung {
   aktiv: boolean
@@ -21,6 +25,8 @@ export interface Vorhaltevereinbarung {
   intervall: VorhaltungIntervall
   /** Einheitspreis netto je Intervall (Woche bzw. Monat) für das vollständige Gerüst */
   preis: number
+  /** spätere Preisänderungen mit ausdrücklichem Datum (ab dem Intervallstart) */
+  preisStufen?: Preisstufe[]
   /** im_voraus: ein angefangenes Intervall wird sofort voll fällig; nachtraeglich: erst nach Ablauf bzw. Abbau */
   abrechnung: VorhaltungAbrechnung
   teilabbauten: Teilabbau[]
@@ -41,7 +47,7 @@ export interface VorhaltePeriode {
   erstelltAm?: string
 }
 
-export interface VorhaltungIntervallZeile { von: string; bis: string; faktorProzent: number; preis: number }
+export interface VorhaltungIntervallZeile { von: string; bis: string; faktorProzent: number; preis: number; preisModus?: TeilabbauPreisModus }
 export interface VorhaltungPosition { bezeichnung: string; menge: number; einheit: string; einzelpreis: number; art: 'miete' }
 
 const ISO = /^\d{4}-\d{2}-\d{2}$/
@@ -77,10 +83,13 @@ export function normalisiereVereinbarung(raw: unknown): Vorhaltevereinbarung | n
     freiTage: Math.min(3650, Math.max(0, Math.round(zahl(r.freiTage)))),
     intervall: r.intervall === 'monat' ? 'monat' : 'woche',
     preis: runde(Math.max(0, zahl(r.preis))),
+    ...(Array.isArray(r.preisStufen) && r.preisStufen.some((x: any) => x && istIso(x.ab))
+      ? { preisStufen: (r.preisStufen as any[]).filter((x) => x && istIso(x.ab) && zahl(x.preis) > 0).map((x): Preisstufe => ({ ab: x.ab, preis: runde(zahl(x.preis)) })).sort((a, b) => a.ab.localeCompare(b.ab)) }
+      : {}),
     abrechnung: r.abrechnung === 'nachtraeglich' ? 'nachtraeglich' : 'im_voraus',
     teilabbauten: teil
       .filter((t: any) => t && istIso(t.datum) && zahl(t.verbleibendProzent) >= 0 && zahl(t.verbleibendProzent) <= 100)
-      .map((t: any): Teilabbau => ({ datum: t.datum, verbleibendProzent: runde(zahl(t.verbleibendProzent)), ...(typeof t.notiz === 'string' && t.notiz.trim() ? { notiz: t.notiz.trim().slice(0, 200) } : {}) }))
+      .map((t: any): Teilabbau => ({ datum: t.datum, verbleibendProzent: runde(zahl(t.verbleibendProzent)), ...(t.preisModus === 'anteilig' || t.preisModus === 'voll' ? { preisModus: t.preisModus as TeilabbauPreisModus } : {}), ...(typeof t.notiz === 'string' && t.notiz.trim() ? { notiz: t.notiz.trim().slice(0, 200) } : {}) }))
       .sort((a, b) => a.datum.localeCompare(b.datum)),
     abbauDatum: istIso(r.abbauDatum) ? r.abbauDatum : undefined,
     notiz: typeof r.notiz === 'string' && r.notiz.trim() ? r.notiz.trim().slice(0, 300) : undefined,
@@ -105,6 +114,7 @@ export function fehlendeAngaben(v: Vorhaltevereinbarung | null): string[] {
   const f: string[] = []
   if (!v.beginn) f.push('Beginn der Vorhaltung')
   if (!(v.preis > 0)) f.push('Preis je Intervall')
+  for (const t of v.teilabbauten) if (!t.preisModus) f.push(`Preisberechnung beim Teilabbau am ${de(t.datum)} (anteilig oder voller Preis)`)
   return f
 }
 
@@ -124,6 +134,17 @@ export function faktorZum(v: Pick<Vorhaltevereinbarung, 'teilabbauten'>, stichta
   let f = 100
   for (const t of v.teilabbauten) if (t.datum <= stichtag) f = t.verbleibendProzent
   return f
+}
+
+/** Preis und Restbestand für das Intervall, das an `von` beginnt: Preisstufe nach Datum, Teilabbau nur nach vereinbarter Berechnungsweise. */
+export function intervallPreis(v: Pick<Vorhaltevereinbarung, 'teilabbauten' | 'preis' | 'preisStufen'>, von: string): { faktorProzent: number; preis: number; preisModus?: TeilabbauPreisModus } {
+  let basis = v.preis
+  for (const s of v.preisStufen || []) if (s.ab <= von) basis = s.preis
+  const faktor = faktorZum(v, von)
+  let teil: Teilabbau | undefined
+  for (const t of v.teilabbauten) if (t.datum <= von) teil = t
+  const anteil = teil && teil.preisModus === 'voll' ? 100 : faktor
+  return { faktorProzent: faktor, preis: runde((basis * anteil) / 100), ...(teil?.preisModus ? { preisModus: teil.preisModus } : {}) }
 }
 
 /** Bis wohin ist bereits berechnet (Ende der letzten gültigen Periode)? */
@@ -146,11 +167,11 @@ export function baueVorhaltungsPositionen(v: Vorhaltevereinbarung, intervalle: V
   const gruppen: VorhaltungIntervallZeile[][] = []
   for (const i of intervalle) {
     const g = gruppen[gruppen.length - 1]
-    if (g && g[0].faktorProzent === i.faktorProzent) g.push(i); else gruppen.push([i])
+    if (g && g[0].faktorProzent === i.faktorProzent && g[0].preis === i.preis) g.push(i); else gruppen.push([i])
   }
   return gruppen.filter((g) => g[0].preis > 0).map((g) => {
     const von = g[0].von, bis = g[g.length - 1].bis
-    const rest = g[0].faktorProzent < 100 ? ` bei ${String(g[0].faktorProzent).replace('.', ',')} % Restbestand` : ''
+    const rest = g[0].faktorProzent < 100 ? ` bei ${String(g[0].faktorProzent).replace('.', ',')} % Restbestand${g[0].preisModus === 'voll' ? ' (Preis unverändert)' : ''}` : ''
     return {
       bezeichnung: `Gerüstvorhaltung ${de(von)} bis ${de(plusTage(bis, -1))}${rest}`,
       menge: g.length, einheit: EINHEIT[v.intervall].s, einzelpreis: g[0].preis, art: 'miete' as const,
@@ -181,8 +202,7 @@ export function faelligeVorhaltung(v: Vorhaltevereinbarung, perioden: VorhaltePe
     if (v.abbauDatum && von >= v.abbauDatum) break
     const faellig = v.abrechnung === 'im_voraus' ? von <= heute : (bis <= heute || (!!v.abbauDatum && v.abbauDatum <= heute && von < v.abbauDatum))
     if (!faellig) break
-    const faktor = faktorZum(v, von)
-    zeilen.push({ von, bis, faktorProzent: faktor, preis: runde((v.preis * faktor) / 100) })
+    zeilen.push({ von, bis, ...intervallPreis(v, von) })
   }
   if (!zeilen.length) return null
   const positionen = baueVorhaltungsPositionen(v, zeilen)
@@ -270,4 +290,41 @@ export function pruefeVorhaltePeriodenAenderung(altRoh: unknown, neuRoh: unknown
 /** Rechnungen, die nur aus Vorhaltung (Miete) bestehen, zählen nicht zum Auftragswert. */
 export function istVorhaltungsRechnung(r: { positions?: { art?: string }[] | null }): boolean {
   return Array.isArray(r.positions) && r.positions.length > 0 && r.positions.every((p) => p?.art === 'miete')
+}
+
+/** Intervalle, die bereits berechnet wurden (Start < abgerechnetBis), mit Preis und Restbestand nach den jeweiligen Bedingungen. */
+function berechneteIntervalle(v: Vorhaltevereinbarung, bisher: string): { von: string; faktorProzent: number; preis: number }[] {
+  const ab = kostenpflichtigAb(v)
+  const r: { von: string; faktorProzent: number; preis: number }[] = []
+  if (!ab) return r
+  for (let k = 0; k < 5000; k++) {
+    const von = intervallStart(v, k)
+    if (von >= bisher) break
+    const { faktorProzent, preis } = intervallPreis(v, von)
+    r.push({ von, faktorProzent, preis })
+  }
+  return r
+}
+
+/**
+ * Server: Eine Änderung der Vereinbarung darf bereits berechnete Zeiträume nicht berühren. Beginn, Frist, Intervall und Abrechnungsart
+ * sind nach dem ersten berechneten Zeitraum festgelegt; Preis und Teilabbau gelten für berechnete Intervalle unverändert weiter.
+ * Neue Preise gelten nur über eine Preisstufe ab einem ausdrücklichen Datum (nach dem berechneten Zeitraum).
+ */
+export function pruefeVorhaltungVereinbarungAenderung(altRoh: unknown, neuRoh: unknown, periodenRoh: unknown): string | null {
+  const alt = normalisiereVereinbarung(altRoh); const neu = normalisiereVereinbarung(neuRoh)
+  const bisher = abgerechnetBis(normalisierePerioden(periodenRoh))
+  if (!alt || !neu || !bisher) return null
+  if (JSON.stringify(alt) === JSON.stringify(neu)) return null
+  const schutz = `Bereits berechnet bis ${de(plusTage(bisher, -1))}.`
+  if (alt.beginn !== neu.beginn || alt.freiTage !== neu.freiTage || alt.intervall !== neu.intervall || alt.abrechnung !== neu.abrechnung) {
+    return `${schutz} Beginn, kostenlose Vorhaltezeit, Intervall und Abrechnungsart können nach der ersten Abrechnung nicht mehr geändert werden. Bei geänderten Vertragsbedingungen bitte den Auftrag mit dem Büro klären.`
+  }
+  const vorher = berechneteIntervalle(alt, bisher); const nachher = berechneteIntervalle(neu, bisher)
+  const gleich = vorher.length === nachher.length && vorher.every((x, i) => x.von === nachher[i].von && x.faktorProzent === nachher[i].faktorProzent && x.preis === nachher[i].preis)
+  const abbauKollidiert = !!neu.abbauDatum && vorher.some((x) => x.von >= neu.abbauDatum!)
+  if (!gleich || abbauKollidiert) {
+    return `${schutz} Diese Änderung würde bereits berechnete Zeiträume verändern. Ein neuer Preis gilt nur als Preisstufe ab einem Datum nach dem berechneten Zeitraum (ab ${de(bisher)}).`
+  }
+  return null
 }

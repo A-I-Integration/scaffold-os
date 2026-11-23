@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
+import { faelligeVorhaltung, vorhaltungStand, normalisiereVereinbarung } from '@/lib/vorhaltung'
 import { baueFakeRest, type Tabellen } from './fake-rest'
 import { aufmassStand } from '@/lib/aufmass-integritaet'
 import { normalisiereZwischenaufmasse } from '@/lib/zwischenaufmass'
@@ -25,6 +26,7 @@ let db: Tabellen
 let createFehler = false
 
 const zaRoh = (o: Record<string, unknown>) => ({ erstelltAm: '', notiz: '', ...o })
+const HEUTE_ISO = new Date().toISOString().slice(0, 10)
 const ZA1 = zaRoh({ id: 'za1', nr: 1, stichtag: '2026-03-01', flaecheM2: 100, positionen: [{ key: 'gerüst süd|m²', bezeichnung: 'Gerüst Süd', einheit: 'm²', einzelpreis: 10, menge: 100 }] })
 
 function zuordnen(p: Record<string, any>): string {
@@ -70,11 +72,34 @@ beforeEach(() => {
     if (!rpc) return rest(eingabe, init)
     const p = JSON.parse(String(init?.body ?? '{}')) as Record<string, any>
     const json = (b: unknown, status = 200) => new Response(JSON.stringify(b), { status, headers: { 'Content-Type': 'application/json' } })
+    if (rpc === 'vorhaltung_zuordnen') {
+      const d = (db.projects[0] as any).data; d.vorhaltePerioden = d.vorhaltePerioden ?? []
+      if (p.p_aktion === 'reservieren') d.vorhaltePerioden.push({ ...p.p_periode, id: p.p_token, reserviertAm: 'x' })
+      else if (p.p_aktion === 'freigeben') d.vorhaltePerioden = d.vorhaltePerioden.filter((e: any) => e.id !== p.p_token)
+      return json('ok')
+    }
     if (rpc === 'aufmass_zuordnen') { await Promise.resolve(); return json(zuordnen(p)) }
     if (createFehler) return json({ message: 'boom' }, 500)
     await Promise.resolve()
+    if (rpc === 'rechnung_anlegen_zugeordnet' && p.p_art === 'vorhaltung') {
+      const q = p.p_params as Record<string, any>
+      const z1 = { id: `inv-${db.invoices.length + 1}`, invoice_number: `RE-2026-${String(db.invoices.length + 1).padStart(4, '0')}`, status: 'offen', paid_amount: 0, net_amount: q.p_net_amount, gross_amount: q.p_gross_amount, invoice_type: q.p_invoice_type, invoice_date: q.p_invoice_date, project_id: q.p_project_id, positions: q.p_positions }
+      db.invoices.push(z1)
+      const per = (db.projects[0] as any).data.vorhaltePerioden.find((e: any) => e.id === p.p_token); delete per.reserviertAm; per.rechnungId = z1.id; per.rechnungNr = z1.invoice_number
+      return json([z1])
+    }
+    if (rpc === 'rechnung_anlegen_zugeordnet') {
+      // wie phase-128: Rechnung anlegen und zuordnen in einer Transaktion – scheitert die Zuordnung, verschwindet auch die Rechnung
+      const q = p.p_params as Record<string, any>
+      const nr0 = String(db.invoices.length + 1).padStart(4, '0')
+      const z0 = { id: `inv-${db.invoices.length + 1}`, invoice_number: `${q.p_prefix}-2026-${nr0}`, status: 'offen', paid_amount: 0, net_amount: q.p_net_amount, gross_amount: q.p_gross_amount, invoice_type: q.p_invoice_type, invoice_date: q.p_invoice_date, project_id: q.p_project_id }
+      db.invoices.push(z0)
+      const erg = zuordnen({ p_project: q.p_project_id, p_za_id: p.p_za_id, p_aktion: 'abschliessen', p_token: p.p_token, p_invoice_id: z0.id, p_invoice_number: z0.invoice_number, p_heute: HEUTE_ISO })
+      if (erg !== 'ok') { db.invoices.pop(); return json({ message: 'zuordnung_fehlgeschlagen:' + erg }, 400) }
+      return json([z0])
+    }
     const nr = String(db.invoices.length + 1).padStart(4, '0')
-    const zeile = { id: `inv-${db.invoices.length + 1}`, invoice_number: `${p.p_prefix}-2026-${nr}`, status: 'offen', paid_amount: 0, net_amount: p.p_net_amount, gross_amount: p.p_gross_amount, invoice_type: p.p_invoice_type, invoice_date: p.p_invoice_date, project_id: p.p_project_id }
+    const zeile = { id: `inv-${db.invoices.length + 1}`, invoice_number: `${p.p_prefix}-2026-${nr}`, status: 'offen', paid_amount: 0, net_amount: p.p_net_amount, gross_amount: p.p_gross_amount, invoice_type: p.p_invoice_type, invoice_date: p.p_invoice_date, project_id: p.p_project_id, reference_invoice_number: p.p_reference_invoice_number ?? null }
     db.invoices.push(zeile)
     if (rpc === 'create_invoice_as_new_version') { const alt = db.invoices.find((i) => i.id === p.p_old_invoice_id); if (alt) alt.status = 'storniert' }
     return json([zeile])
@@ -180,5 +205,33 @@ describe('Kette Aufmaß abrechnen (serverseitig abgesichert)', () => {
     const r = await post(aufmassBody({ invoice_type: 'schluss' }))
     expect(r.status).toBe(409)
     expect(db.invoices).toHaveLength(0)
+  })
+
+  it('Bereits versendete Aufmaß-Rechnung stornieren: das Aufmaß bleibt berechnet, bis eine volle Gutschrift vorliegt', async () => {
+    await post(aufmassBody())
+    ;(db.invoice_dispatches as any[]).push({ id: 'd1', invoice_id: 'inv-1', kind: 'rechnung', status: 'versendet' })
+    const { PATCH } = await import('@/app/api/invoices/route')
+    expect((await PATCH(new Request('http://x', { method: 'PATCH', body: JSON.stringify({ id: 'inv-1', status: 'storniert' }) }) as never)).status).toBe(200)
+    expect(za().rechnungId).toBe('inv-1')
+    expect((await post(aufmassBody())).status).toBe(409)
+    const g = await post({ invoice_type: 'gutschrift', reference_invoice_number: 'RE-2026-0001', positions: [{ bezeichnung: 'Gutschrift', menge: 1, einheit: 'Pauschale', einzelpreis: 1000 }] })
+    expect(g.status).toBe(200)
+    expect(za().rechnungId).toBeUndefined()
+    expect(db.abrechnung_historie.some((h: any) => h.aktion === 'aufmass_freigegeben' && String(h.details?.grund).includes('Gutschrift'))).toBe(true)
+  })
+
+  it('F7 + F8 zusammen: Aufmaß-Abschlag und Vorhaltung sind getrennte Rechnungen, jede Leistung wird nur einmal berechnet, die Schlussrechnung zählt die Vorhaltung nicht zum Auftragswert', async () => {
+    const d = (db.projects[0] as any).data
+    d.kiResult = { suggestedPrice: 5000 }; d.preisModus = 'pauschale'; d.pauschale = '5000'
+    d.vorhaltung = { aktiv: true, beginn: new Date(Date.now() - 40 * 86400000).toISOString().slice(0, 10), freiTage: 28, intervall: 'woche', preis: 100, abrechnung: 'im_voraus', teilabbauten: [] }
+    expect((await post(aufmassBody())).status).toBe(200)                                   // Aufmaß: 100 m² × 10 = 1.000
+    const f = faelligeVorhaltung(normalisiereVereinbarung(d.vorhaltung)!, [], new Date().toISOString().slice(0, 10))!
+    const v = await post({ invoice_type: 'standard', positions: f.positionen, vorhaltung: { von: f.von, bis: f.bis, stand: vorhaltungStand(normalisiereVereinbarung(d.vorhaltung), []) } })
+    expect(v.status).toBe(200)
+    expect(db.invoices).toHaveLength(2)
+    expect((await post(aufmassBody())).status).toBe(409)                                   // Aufmaß nicht ein zweites Mal
+    const schluss = (netto: number) => post({ invoice_type: 'schluss', positions: [{ bezeichnung: 'Restleistung', menge: 1, einheit: 'Pauschale', einzelpreis: netto }] })
+    expect((await schluss(4500)).status).toBe(409)                                          // 1.000 bereits abgerechnet: Rest wären 4.000
+    expect((await schluss(4000)).status).toBe(200)                                          // Vorhaltung zählt nicht zum Auftragswert
   })
 })

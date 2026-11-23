@@ -1,10 +1,10 @@
 // ============================================================
 // SCAFFOLD OS – Zuordnung Zwischenaufmaß ↔ Rechnung, atomar in der Datenbank (nur Server)
-// Ruft die Funktion aufmass_zuordnen (supabase/phase-126-…) auf, die das Projekt sperrt, prüft und genau ein Zwischenaufmaß ändert.
+// Ruft die Funktion aufmass_zuordnen (supabase/phase-126/128) auf, die das Projekt sperrt, prüft und genau ein Zwischenaufmaß ändert.
 // ============================================================
 
 export type ZuordnungAktion = 'reservieren' | 'abschliessen' | 'freigeben' | 'freigeben_rechnung' | 'ersetzen'
-export type ZuordnungErgebnis = 'ok' | 'bereits_abgerechnet' | 'reserviert' | 'geaendert' | 'nicht_gefunden' | 'keine_reservierung' | 'projekt_fehlt' | 'rpc_fehler'
+export type ZuordnungErgebnis = 'ok' | 'rechnung_ungueltig' | 'rechnung_doppelt' | 'bereits_abgerechnet' | 'reserviert' | 'geaendert' | 'nicht_gefunden' | 'keine_reservierung' | 'projekt_fehlt' | 'rpc_fehler'
 
 export async function aufmassZuordnen(a: {
   projectId: string; zaId?: string; aktion: ZuordnungAktion; erwartet?: unknown; token?: string
@@ -23,7 +23,7 @@ export async function aufmassZuordnen(a: {
     })
     if (!res.ok) return 'rpc_fehler'
     const t = await res.json()
-    return (['ok', 'bereits_abgerechnet', 'reserviert', 'geaendert', 'nicht_gefunden', 'keine_reservierung', 'projekt_fehlt'] as string[]).includes(t) ? (t as ZuordnungErgebnis) : 'rpc_fehler'
+    return (['ok', 'rechnung_ungueltig', 'rechnung_doppelt', 'bereits_abgerechnet', 'reserviert', 'geaendert', 'nicht_gefunden', 'keine_reservierung', 'projekt_fehlt'] as string[]).includes(t) ? (t as ZuordnungErgebnis) : 'rpc_fehler'
   } catch { return 'rpc_fehler' }
 }
 
@@ -31,6 +31,8 @@ export async function aufmassZuordnen(a: {
 export function reservierungFehlerText(e: ZuordnungErgebnis): { status: number; code: string; text: string } {
   switch (e) {
     case 'bereits_abgerechnet': return { status: 409, code: 'AUFMASS_BEREITS_ABGERECHNET', text: 'Dieses Zwischenaufmaß ist bereits abgerechnet (vielleicht gerade von jemand anderem). Es wird nicht doppelt berechnet. Bitte die Seite neu laden.' }
+    case 'rechnung_ungueltig': return { status: 409, code: 'AUFMASS_RECHNUNG_UNGUELTIG', text: 'Die Rechnung existiert nicht oder gehört nicht zu diesem Auftrag.' }
+    case 'rechnung_doppelt': return { status: 409, code: 'AUFMASS_RECHNUNG_DOPPELT', text: 'Diese Rechnung ist bereits einem anderen Zwischenaufmaß bzw. Vorhaltezeitraum zugeordnet.' }
     case 'reserviert': return { status: 409, code: 'AUFMASS_IN_BEARBEITUNG', text: 'Dieses Zwischenaufmaß wird gerade von jemand anderem abgerechnet. Bitte kurz warten und die Seite neu laden.' }
     case 'geaendert': return { status: 409, code: 'AUFMASS_GEAENDERT', text: 'Das Zwischenaufmaß wurde gerade geändert. Bitte den Dialog schließen und neu öffnen.' }
     case 'nicht_gefunden': return { status: 409, code: 'AUFMASS_NICHT_GEFUNDEN', text: 'Das Zwischenaufmaß gibt es nicht mehr. Bitte die Seite neu laden.' }
