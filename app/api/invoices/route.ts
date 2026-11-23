@@ -3,7 +3,7 @@ import { vorhaltungZuordnen, vorhaltungFehlerText } from '@/lib/vorhaltung-zuord
 import { pruefeVorhaltungBezug, istVorhaltungsRechnung } from '@/lib/vorhaltung';
 import { aufmassStand, pruefeAufmassBezug, freiePositionenMitAufmassName } from '@/lib/aufmass-integritaet';
 import { aufmassZuordnen, reservierungFehlerText } from '@/lib/aufmass-zuordnung-server';
-import { freigabeNachStorno, freigabeNachGutschrift, gibZuordnungFrei } from '@/lib/zuordnung-freigabe-server';
+import { freigabeNachStorno, freigabeNachGutschrift, gibZuordnungFrei, istVersendet } from '@/lib/zuordnung-freigabe-server';
 import { pruefeAbrechnung, grundGueltig, type Abweichung } from '@/lib/abrechnung-pruefung';
 import { schreibeHistorie } from '@/lib/abrechnung-historie';
 import { angebotNettoAusProjekt } from '@/lib/auftragsstand';
@@ -674,13 +674,11 @@ export async function DELETE(req: NextRequest) {
       );
     }
 
-    // Faktura F6: Eine bereits versendete Rechnung darf nicht gelöscht werden, auch wenn sie noch „offen“ ist (GoBD) – nur stornieren
-    try {
-      const vd = await fetch(`${url}/rest/v1/invoice_dispatches?invoice_id=eq.${id}&kind=eq.rechnung&status=eq.versendet&select=id&limit=1`, { headers });
-      if (vd.ok && (await vd.json())?.length) {
-        return NextResponse.json({ success: false, code: 'BEREITS_VERSENDET', error: 'Diese Rechnung wurde schon versendet und kann nicht mehr gelöscht werden. Bitte stornieren (und bei Bedarf eine neue Version oder Gutschrift anlegen).' }, { status: 409 });
-      }
-    } catch { /* ohne Versandprotokoll gilt die bisherige Regel */ }
+    // Eine bereits versendete Rechnung darf nicht gelöscht werden, auch wenn sie noch „offen“ ist (GoBD) – nur stornieren.
+    // Maßgeblich ist jeder Versandnachweis (Versandprotokoll nach ID und Nummer sowie der ältere Mailverlauf email_log).
+    if (await istVersendet({ url, headers }, String(id), rows[0].invoice_number)) {
+      return NextResponse.json({ success: false, code: 'BEREITS_VERSENDET', error: 'Diese Rechnung wurde schon versendet (oder der Versand lässt sich nicht ausschließen) und kann nicht mehr gelöscht werden. Bitte stornieren (und bei Bedarf eine neue Version oder Gutschrift anlegen).' }, { status: 409 });
+    }
 
     const res = await fetch(`${url}/rest/v1/invoices?id=eq.${id}`, {
       method: 'DELETE',
