@@ -44,6 +44,8 @@ export interface Auftragsstand {
   bezahlt: number                     // brutto
   offenBrutto: number                 // brutto, noch nicht bezahlt
   ueberfaellig: number                // brutto, fällig und unbezahlt
+  guthaben: number                    // brutto, Gutschrift über den offenen Betrag hinaus (Kunde hat Anspruch)
+  ungeklaertGutschrift: number        // brutto, Gutschriften ohne Bezugsrechnung (mindern nichts)
   anzahlGueltig: number
   /** Vorhaltung (Miete), netto – gehört nicht zum Auftragswert und steht nicht in „abgerechnet“ */
   vorhaltungNetto: number
@@ -74,7 +76,7 @@ export function berechneAuftragsstand(args: {
   const abger = runde(gueltig.filter((r) => !istVorh(r)).reduce((s, r) => s + zahl(r.net_amount), 0))
   const vorh = runde(gueltig.filter(istVorh).reduce((s, r) => s + zahl(r.net_amount), 0))
   // Offene Forderung zentral (lib/forderung.ts): Rechnungen − Zahlungen − Gutschriften, stornierte zählen nicht
-  const ford = berechneForderung(args.rechnungen, { heute, unbezogeneVerrechnen: true })
+  const ford = berechneForderung(args.rechnungen, { heute })
   return {
     angebotNetto: angebot,
     nachtraegeBestaetigt: nb,
@@ -86,6 +88,8 @@ export function berechneAuftragsstand(args: {
     bezahlt: ford.bezahlt,
     offenBrutto: ford.offen,
     ueberfaellig: ford.ueberfaellig,
+    guthaben: ford.guthaben,
+    ungeklaertGutschrift: ford.ungeklaert,
     anzahlGueltig: gueltig.length,
     vorhaltungNetto: vorh,
   }

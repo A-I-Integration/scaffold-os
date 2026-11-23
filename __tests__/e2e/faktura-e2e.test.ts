@@ -99,7 +99,7 @@ describe.skipIf(!DB)('Faktura End-to-End (echte PostgreSQL)', () => {
       await c.query(`delete from invoices where project_id in ${ids}`)
       await c.query(`delete from project_events where project_id in ${ids}`)
       await c.query(`delete from projects where name like 'E2E %'`)
-      await c.query(`delete from customers where name='Testkunde E2E'`)
+      await c.query(`delete from customers where name in ('Testkunde E2E','Mehrbaustellen E2E')`)
     } finally { await c.query(`reset session_replication_role`); c.release() }
     await pool.end()
     if (process.env.E2E_BERICHT) (await import('node:fs')).writeFileSync(process.env.E2E_BERICHT, JSON.stringify(bericht, null, 2))
@@ -494,6 +494,41 @@ describe.skipIf(!DB)('Faktura End-to-End (echte PostgreSQL)', () => {
       expect((await storno(g2.id)).status).toBe(200)
       await pruefe('zweite Gutschrift storniert (wird nicht mehr abgezogen)', 1880)
       expect(g1.id).toBeTruthy()
+    })
+    it('OFFEN-2: Kundenebene, mehrere Baustellen, mehrere Kunden, ungeklärte Gutschrift – alle Anzeigen identisch zur zentralen Berechnung und zu unabhängigem SQL', async () => {
+      const { berechneForderung } = await import('@/lib/forderung')
+      const { berechneAuftragsstand } = await import('@/lib/auftragsstand')
+      const { kontrolleBaustelle } = await import('@/lib/abrechnung-pruefung')
+      const { berechneKennzahlen, offenJeRechnung } = await import('@/lib/faktura-kennzahlen')
+      const kunde = (await q(`insert into customers(name,email) values ('Mehrbaustellen E2E','mb@test.invalid') returning id`))[0].id
+      const bau = async (name: string) => { const id = (await q(`insert into projects(name,adresse,status,data,customer_id) values ($1,'Teststr. 2','active','{}',$2) returning id`, [name, kunde]))[0].id; await q(`insert into project_events(project_id,type,pruefung_details) values ($1,'pruefung_freigabe','{"freigegeben":true}')`, [id]).catch(() => {}); return id }
+      const P1 = await bau('E2E MB 1'); const P2 = await bau('E2E MB 2')
+      const re = async (P: string, preis: number) => (await inv('POST', { customer_name: KUNDE, project_id: P, invoice_type: 'standard', positions: [{ bezeichnung: 'Gerüst', menge: 1, einheit: 'Pauschale', einzelpreis: preis }] })).j.invoice
+      const a1 = await re(P1, 1000), a2 = await re(P2, 2000), a3 = await re(P2, 500)     // brutto 1.190 / 2.380 / 595
+      expect((await gutschrift(P1, a1.invoice_number, 200)).status).toBe(200)           // −238
+      expect((await inv('PATCH', { id: a2.id, paid_amount: 1000 })).status).toBe(200)
+      expect((await storno(a3.id)).status).toBe(200)                                     // storniert: zählt nicht
+      // ungeklärte Gutschrift: ohne Bezug auf eine Rechnung der Baustelle (Bezugsnummer existiert nicht)
+      expect((await gutschrift(P2, 'RE-GIBT-ES-NICHT', 100)).status).toBeLessThan(500)
+      const r1 = norm(await rechnungen(P1)) as any[], r2 = norm(await rechnungen(P2)) as any[]; const kundeAlle = [...r1, ...r2]
+      const sqlOffen = async (ids: string[]) => Number((await q(`select coalesce(sum(case when invoice_type='gutschrift' then 0 else gross_amount - least(greatest(paid_amount,0), gross_amount) end),0) - coalesce(sum(case when invoice_type='gutschrift' and reference_invoice_number in (select invoice_number from invoices where project_id = any($1) and status<>'storniert' and invoice_type<>'gutschrift') then -gross_amount else 0 end),0) as o from invoices where project_id = any($1) and status<>'storniert'`, [ids]))[0].o)
+      const erw1 = 952, erw2 = 1380, erwKunde = 2332                                   // 1.190−238 | 2.380−1.000 | Summe
+      const f1 = berechneForderung(r1), f2 = berechneForderung(r2), fk = berechneForderung(kundeAlle)
+      merke('5 Schluss', 'Baustelle 1: Rechnung 1.190 − Gutschrift 238', erw1, f1.offen); merke('5 Schluss', 'Baustelle 2: 2.380 − Teilzahlung 1.000 (stornierte Rechnung zählt nicht)', erw2, f2.offen); merke('5 Schluss', 'Kundenebene (beide Baustellen)', erwKunde, fk.offen)
+      expect([f1.offen, f2.offen, fk.offen]).toEqual([erw1, erw2, erwKunde])
+      expect(Math.round((await sqlOffen([P1])) * 100) / 100).toBe(erw1); expect(Math.round((await sqlOffen([P2])) * 100) / 100).toBe(erw2); expect(Math.round((await sqlOffen([P1, P2])) * 100) / 100).toBe(erwKunde)
+      // ungeklärte Gutschrift wird ausgewiesen und niemandem zugerechnet
+      merke('5 Schluss', 'Ungeklärte Gutschrift (119) separat, mindert nichts', 119, f2.ungeklaert); expect(f2.ungeklaert).toBe(119); expect(fk.ungeklaert).toBe(119)
+      // alle Anzeigen: Auftragsstand, Kontrolle, Faktura-Kennzahlen (alle Kunden zusammen, inkl. Fremdbestand), je-Rechnung-Summe
+      const stand = (r: any[]) => berechneAuftragsstand({ angebotNetto: 0, nachtraege: [], rechnungen: r }).offenBrutto
+      const ko = (r: any[]) => kontrolleBaustelle({ angebotNetto: 0, nachtraegeBestaetigt: 0, nachtraegeAngefragt: 0, rechnungen: r }).offenBrutto
+      expect([stand(r1), ko(r1)]).toEqual([erw1, erw1]); expect([stand(r2), ko(r2)]).toEqual([erw2, erw2]); expect([stand(kundeAlle), ko(kundeAlle)]).toEqual([erwKunde, erwKunde])
+      expect(berechneKennzahlen(kundeAlle, [], HEUTE).offenBetrag).toBe(erwKunde)
+      expect(Math.round([...offenJeRechnung(kundeAlle).values()].reduce((x, y) => x + y, 0) * 100) / 100).toBe(erwKunde)
+      // zweiter Kunde (Mehrere Kunden): Fremdbestand verändert die Werte des ersten Kunden nicht
+      const P3 = await neuesProjekt('E2E MB Fremd', {}); await re(P3, 300)
+      const fremd = norm(await rechnungen(P3)) as any[]
+      expect(berechneForderung([...kundeAlle, ...fremd]).offen).toBe(erwKunde + 357); expect(berechneForderung(kundeAlle).offen).toBe(erwKunde)
     })
     it('OFFEN-2: Gutschrift zu stornierter Rechnung wird nicht doppelt verrechnet; Überhang ist Guthaben, mindert keine andere Rechnung', async () => {
       const { berechneAuftragsstand } = await import('@/lib/auftragsstand')

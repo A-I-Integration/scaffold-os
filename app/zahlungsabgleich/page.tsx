@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useMemo } from 'react';
+import { berechneForderung } from '@/lib/forderung';
 import { Upload, Check, AlertTriangle, FileText } from 'lucide-react';
 
 // ============================================================
@@ -24,7 +25,7 @@ import { Upload, Check, AlertTriangle, FileText } from 'lucide-react';
 
 interface Invoice {
   id: string; invoice_number: string; customer_name: string; gross_amount: number;
-  status: string; due_date: string | null; invoice_type?: string; paid_amount?: number;
+  status: string; due_date: string | null; invoice_type?: string; paid_amount?: number; reference_invoice_number?: string | null;
 }
 interface Zeile { text: string; betraege: number[] }
 interface Vorschlag {
@@ -52,7 +53,14 @@ function findeBetraege(felder: string[]): number[] {
 }
 
 export default function ZahlungsabgleichPage() {
-  const [invoices, setInvoices] = useState<Invoice[]>([]);
+  const [alleRechnungen, setAlleRechnungen] = useState<Invoice[]>([]);
+  // Offener Betrag je Rechnung: zentral (lib/forderung.ts), identisch zu Kundenakte, Auftragsstand und Faktura
+  const forderung = useMemo(() => berechneForderung(alleRechnungen as never[]), [alleRechnungen]);
+  const offenZentral = useCallback((inv: Invoice) => forderung.je.get(String(inv.id)) ?? 0, [forderung]);
+  const invoices = useMemo(
+    () => alleRechnungen.filter((i) => (i.status === 'offen' || i.status === 'ueberfaellig') && i.invoice_type !== 'gutschrift' && offenZentral(i) > 0),
+    [alleRechnungen, offenZentral],
+  );
   const [loading, setLoading] = useState(true);
   const [zeilen, setZeilen] = useState<Zeile[]>([]);
   const [vorschlaege, setVorschlaege] = useState<Vorschlag[]>([]);
@@ -66,7 +74,7 @@ export default function ZahlungsabgleichPage() {
       const res = await fetch('/api/invoices');
       const json = await res.json();
       if (json.success) {
-        setInvoices((json.invoices || []).filter((i: Invoice) => i.status === 'offen' || i.status === 'ueberfaellig'));
+        setAlleRechnungen(json.invoices || []);
       }
     } catch { /* still */ }
     setLoading(false);
@@ -90,7 +98,7 @@ export default function ZahlungsabgleichPage() {
   function abgleichen(parsedZeilen: Zeile[]) {
     const treffer: Vorschlag[] = [];
     for (const inv of invoices) {
-      const offenerBetrag = Math.round((Number(inv.gross_amount) - Number(inv.paid_amount || 0)) * 100) / 100;
+      const offenerBetrag = offenZentral(inv);
       for (const zeile of parsedZeilen) {
         const nummerGefunden = zeile.text.toUpperCase().includes(inv.invoice_number.toUpperCase());
         const betragGefunden = zeile.betraege.some(b => Math.abs(b - offenerBetrag) < 0.01);
@@ -134,6 +142,14 @@ export default function ZahlungsabgleichPage() {
           const res = await fetch('/api/invoice-payments', {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ invoice_id: id, amount: treffer.teilBetrag }),
+          });
+          const json = await res.json();
+          if (json.success) ok++; else fehler++;
+        } else if (treffer && offenZentral(treffer.invoice) + 0.005 < Number(treffer.invoice.gross_amount) - Number(treffer.invoice.paid_amount || 0)) {
+          // Gutschrift mindert die Forderung: nur den tatsächlich überwiesenen (offenen) Betrag buchen, nicht den vollen Rechnungsbetrag
+          const res = await fetch('/api/invoice-payments', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ invoice_id: id, amount: offenZentral(treffer.invoice) }),
           });
           const json = await res.json();
           if (json.success) ok++; else fehler++;

@@ -1,5 +1,6 @@
 'use client';
 
+import { berechneForderung } from '@/lib/forderung';
 import { useState, useCallback } from 'react';
 import { fetchRechnungAnlegen } from '@/lib/rechnung-anlegen-client'
 import { FileText, Download, Mail, Check, RotateCcw, Image as ImageIcon, ClipboardList, Plus, ChevronDown, ChevronUp } from 'lucide-react';
@@ -72,8 +73,7 @@ export default function KundeAuftrag({
   const [schlussOffen, setSchlussOffen] = useState(false);
 
   const rechnungen = invoices.filter((i) => i.project_id === project.id);
-  const offen = rechnungen.filter((i) => i.status === 'offen' || i.status === 'ueberfaellig')
-    .reduce((s, i) => s + Number(i.gross_amount), 0);
+  const offen = berechneForderung(rechnungen as never[]).offen;
   const angebotsStatus = project.data?.angebotsStatus || null;
 
   const ladeMedienUndDoku = useCallback(async () => {

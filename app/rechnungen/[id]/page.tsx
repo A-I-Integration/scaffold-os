@@ -7,6 +7,7 @@
 // Alle Änderungen laufen über dieselben Schnittstellen wie in der Kundenakte (Storno + neue Version atomar).
 // ============================================================
 
+import { berechneForderung } from '@/lib/forderung'
 import { ladeXrechnung } from '@/lib/xrechnung-download'
 import { fetchRechnungAnlegen } from '@/lib/rechnung-anlegen-client'
 import { useCallback, useEffect, useState } from 'react'
@@ -106,6 +107,13 @@ export default function RechnungAktePage() {
   const [zDatum, setZDatum] = useState(lokalesDatumIso())
   const [zNotiz, setZNotiz] = useState('')
 
+  // Vorbelegung der Zahlung: zentral berechneter offener Betrag (mit Gutschriften)
+  useEffect(() => {
+    if (!inv) return
+    const o = berechneForderung((belege.some((b) => b.id === inv.id) ? belege : [inv, ...belege]) as never[]).je.get(String(inv.id)) ?? (Number(inv.gross_amount) - Number(inv.paid_amount || 0))
+    setZBetrag(String(Math.max(0, o)))
+  }, [inv, belege])
+
   const lade = useCallback(async () => {
     try {
       const r = await fetch(`/api/invoices?id=${id}`)
@@ -113,7 +121,6 @@ export default function RechnungAktePage() {
       if (!j.success) throw new Error(j.error)
       const i = j.invoice as Invoice
       setInv(i); setPositionen(structuredClone(i.positions || [])); setFehler('')
-      setZBetrag(String(Math.max(0, Number(i.gross_amount) - Number(i.paid_amount || 0))))
       fetch('/api/invoices').then((x) => x.json()).then((a) => a?.success && setBelege((a.invoices as Invoice[]).filter((b) => i.project_id ? b.project_id === i.project_id : b.id === i.id))).catch(() => {})
       if (i.project_id) fetch('/api/projects?id=' + i.project_id).then((x) => x.json()).then((pj) => setBaustelleName(pj?.project?.name || '')).catch(() => {}); else setBaustelleName('')
       fetch(`/api/invoice-payments?invoice_id=${i.id}`).then((x) => x.json()).then((p) => p?.success && setZahlungen(p.payments)).catch(() => {})
@@ -266,7 +273,8 @@ export default function RechnungAktePage() {
   if (!inv) return <p className="p-6 text-[#6e6e73]">Lade Rechnung …</p>
 
   const zurueck = inv.project_id && inv.customer_id ? `/kunden/${inv.customer_id}?baustelle=${inv.project_id}` : inv.customer_id ? `/kunden/${inv.customer_id}` : '/rechnungen'
-  const offen = Number(inv.gross_amount) - Number(inv.paid_amount || 0)
+  // Offener Betrag zentral (lib/forderung.ts) aus allen Belegen der Baustelle; ohne Belege: Rechnungsbetrag − Zahlungen
+  const offen = berechneForderung((belege.some((b) => b.id === inv.id) ? belege : [inv, ...belege]) as never[]).je.get(String(inv.id)) ?? (Number(inv.gross_amount) - Number(inv.paid_amount || 0))
   const gesperrt = storniert ? 'Diese Rechnung ist storniert – bitte in der aktuellen Version arbeiten.' : ''
   const statusText = storniert ? 'storniert' : inv.status === 'bezahlt' ? 'bezahlt' : Number(inv.paid_amount) > 0 && offen > 0 ? 'teilbezahlt' : inv.status === 'ueberfaellig' ? 'überfällig' : 'offen'
   const ic = 'w-5 h-5'

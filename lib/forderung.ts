@@ -9,8 +9,8 @@
 //     ein Überhang (Rechnung bereits bezahlt) ist ein Guthaben des Kunden und mindert keine andere Rechnung.
 //   • Bezieht sich eine Gutschrift auf eine stornierte Rechnung, wird sie nicht abgezogen (die Rechnung steht schon nicht mehr in der
 //     Forderung; sonst wäre derselbe Betrag doppelt verrechnet).
-//   • Ohne (auffindbare) Bezugsnummer wird sie nur verrechnet, wenn die Berechnung für eine einzelne Baustelle läuft
-//     (`unbezogeneVerrechnen`), und dann vom Gesamtbetrag der offenen Rechnungen, nie darüber hinaus.
+//   • Eine Gutschrift ohne auffindbare Bezugsrechnung wird NIE einer Rechnung, Baustelle oder einem Kunden zugeschlagen. Sie steht
+//     getrennt als „ungeklärte Gutschrift“ (`ungeklaert`) und mindert keine Forderung, bis sie eindeutig zugeordnet ist.
 //   • Gutschriften sind negativ gespeichert; verrechnet wird ihr Betrag.
 //   • Auftragswert, abgerechnet und offene Forderung sind verschiedene Kennzahlen und werden nicht vermischt.
 // ============================================================
@@ -34,6 +34,8 @@ export interface Forderung {
   gutschriftAbzug: number
   /** Guthaben des Kunden: Gutschrift übersteigt den noch offenen Betrag der Rechnung */
   guthaben: number
+  /** Gutschriften ohne auffindbare Bezugsrechnung (brutto): nicht zugeordnet, mindern keine Forderung */
+  ungeklaert: number
   /** Offener Betrag je Rechnung (Schlüssel: id, sonst Rechnungsnummer); nur Rechnungen, keine Gutschriften */
   je: Map<string, number>
 }
@@ -51,7 +53,7 @@ export function bezahltAnteil(r: ForderungRechnung): number {
   return gross >= 0 ? Math.min(Math.max(zahl(r.paid_amount), 0), gross) : 0
 }
 
-export function berechneForderung(rechnungen: ForderungRechnung[], opt: { heute?: string; unbezogeneVerrechnen?: boolean } = {}): Forderung {
+export function berechneForderung(rechnungen: ForderungRechnung[], opt: { heute?: string } = {}): Forderung {
   const heute = opt.heute ?? new Date().toISOString().slice(0, 10)
   const alle = rechnungen
   const gueltig = alle.filter((r) => r.status !== 'storniert')
@@ -61,10 +63,12 @@ export function berechneForderung(rechnungen: ForderungRechnung[], opt: { heute?
   const nummernStorniert = new Set(alle.filter((r) => r.status === 'storniert' && !istGutschriftBeleg(r)).map((r) => String(r.invoice_number ?? '')))
 
   const rest = new Map<string, number>()
-  let bezahlt = 0
+  let bezahlt = 0, ueberzahlung = 0
   for (const r of rechn) {
     const b = bezahltAnteil(r)
     bezahlt += b
+    // Überzahlung (z. B. importierte Daten): der Mehrbetrag ist Guthaben des Kunden, keine negative Forderung
+    if (r.status !== 'bezahlt' && zahl(r.gross_amount) >= 0 && zahl(r.paid_amount) > zahl(r.gross_amount) + 0.005) ueberzahlung += zahl(r.paid_amount) - zahl(r.gross_amount)
     rest.set(schluessel(r), Math.max(0, runde(zahl(r.gross_amount) - b)))
   }
 
@@ -93,24 +97,11 @@ export function berechneForderung(rechnungen: ForderungRechnung[], opt: { heute?
     jeBezug.delete(nr)
   }
 
-  // Gutschriften ohne Bezug: nur bei Einzelbaustelle, nur vom noch Offenen, älteste Fälligkeit zuerst
-  if (opt.unbezogeneVerrechnen && unbezogen > 0) {
-    let uebrig = unbezogen
-    const reihe = rechn.filter((r) => (rest.get(schluessel(r)) ?? 0) > 0).sort((a, b) => String(a.due_date ?? '9999').localeCompare(String(b.due_date ?? '9999')))
-    for (const r of reihe) {
-      if (uebrig <= 0) break
-      const k = schluessel(r); const offen = rest.get(k) ?? 0
-      const v = Math.min(uebrig, offen)
-      rest.set(k, runde(offen - v)); uebrig = runde(uebrig - v); abzug += v
-    }
-    guthaben += uebrig
-  }
-
   let offen = 0, ueber = 0
   for (const r of rechn) {
     const v = rest.get(schluessel(r)) ?? 0
     offen += v
-    if (v > 0 && r.due_date && String(r.due_date).slice(0, 10) < heute) ueber += v
+    if (v > 0 && (r.status === 'ueberfaellig' || (r.due_date && String(r.due_date).slice(0, 10) < heute))) ueber += v
   }
-  return { bezahlt: runde(bezahlt), offen: runde(offen), ueberfaellig: runde(ueber), gutschriftAbzug: runde(abzug), guthaben: runde(guthaben), je: rest }
+  return { bezahlt: runde(bezahlt), offen: runde(offen), ueberfaellig: runde(ueber), gutschriftAbzug: runde(abzug), guthaben: runde(guthaben + ueberzahlung), ungeklaert: runde(unbezogen), je: rest }
 }

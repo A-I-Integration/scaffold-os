@@ -16,21 +16,42 @@ describe('berechneForderung (offener Betrag mit Gutschriften)', () => {
     expect(berechneForderung([R({ invoice_number: 'RE1', gross_amount: 1190 }), G('GS1', 'RE1', 595, 'storniert')]).offen).toBe(1190)
   })
   it('Gutschrift zu stornierter Rechnung wird nicht doppelt verrechnet', () => {
-    const f = berechneForderung([R({ invoice_number: 'RE1', gross_amount: 1190, status: 'storniert' }), R({ invoice_number: 'RE2', gross_amount: 500 }), G('GS1', 'RE1', 1190)], { unbezogeneVerrechnen: true })
+    const f = berechneForderung([R({ invoice_number: 'RE1', gross_amount: 1190, status: 'storniert' }), R({ invoice_number: 'RE2', gross_amount: 500 }), G('GS1', 'RE1', 1190)])
     expect(f.offen).toBe(500)
   })
   it('Überhang auf bezahlter Rechnung ist Guthaben und mindert andere Rechnungen nicht', () => {
     const f = berechneForderung([R({ invoice_number: 'RE1', gross_amount: 1190, status: 'bezahlt' }), R({ invoice_number: 'RE2', gross_amount: 595 }), G('GS1', 'RE1', 595)])
     expect(f.offen).toBe(595); expect(f.guthaben).toBe(595)
   })
-  it('Gutschrift ohne Bezug: nur bei Einzelbaustelle verrechnet, nie über den offenen Betrag', () => {
-    const l = [R({ invoice_number: 'RE1', gross_amount: 1000 }), G('GS1', null, 400)]
-    expect(berechneForderung(l).offen).toBe(1000)
-    expect(berechneForderung(l, { unbezogeneVerrechnen: true }).offen).toBe(600)
-    expect(berechneForderung([R({ invoice_number: 'RE1', gross_amount: 100 }), G('GS1', null, 400)], { unbezogeneVerrechnen: true }).offen).toBe(0)
+  it('Gutschrift ohne Bezug wird nie zugeschlagen, sondern als ungeklärt ausgewiesen', () => {
+    const f = berechneForderung([R({ invoice_number: 'RE1', gross_amount: 1000 }), G('GS1', null, 400), G('GS2', 'GIBTESNICHT', 100)])
+    expect(f.offen).toBe(1000); expect(f.ungeklaert).toBe(500); expect(f.gutschriftAbzug).toBe(0)
   })
   it('überfällig nur vom noch offenen Betrag', () => {
     const f = berechneForderung([R({ invoice_number: 'RE1', gross_amount: 1000, due_date: '2020-01-01' }), G('GS1', 'RE1', 300)], { heute: '2026-01-01' })
     expect(f.ueberfaellig).toBe(700)
+    expect(berechneForderung([R({ invoice_number: 'RE2', gross_amount: 100, status: 'ueberfaellig' })], { heute: '2026-01-01' }).ueberfaellig).toBe(100)
+  })
+  it('Überzahlung wird Guthaben, nicht negative Forderung', () => {
+    const f = berechneForderung([R({ invoice_number: 'RE1', gross_amount: 1000, paid_amount: 1300 })])
+    expect(f.offen).toBe(0); expect(f.guthaben).toBe(300); expect(f.bezahlt).toBe(1000)
+  })
+  it('mehrere Baustellen und mehrere Kunden: Summe über alle = Summe der Einzelberechnungen (Bezug eindeutig über Rechnungsnummer)', () => {
+    const k1b1 = [R({ invoice_number: 'A1', gross_amount: 1000 }), G('GA1', 'A1', 200)]
+    const k1b2 = [R({ invoice_number: 'A2', gross_amount: 500, paid_amount: 100 })]
+    const k2 = [R({ invoice_number: 'B1', gross_amount: 700 }), G('GB1', 'B1', 700)]
+    const einzeln = [k1b1, k1b2, k2].map((l) => berechneForderung(l).offen)
+    expect(einzeln).toEqual([800, 400, 0])
+    expect(berechneForderung([...k1b1, ...k1b2, ...k2]).offen).toBe(1200)
+    // Kundenebene (b1 + b2) = Summe der Baustellen
+    expect(berechneForderung([...k1b1, ...k1b2]).offen).toBe(einzeln[0] + einzeln[1])
+  })
+  it('Gutschrift eines anderen Kunden/einer anderen Baustelle ohne passende Rechnung in der Liste verändert nichts', () => {
+    const f = berechneForderung([R({ invoice_number: 'A1', gross_amount: 1000 }), G('GX', 'FREMD-1', 300)])
+    expect(f.offen).toBe(1000); expect(f.ungeklaert).toBe(300)
+  })
+  it('Teilzahlung + Teilgutschrift gemeinsam, je Rechnung getrennt', () => {
+    const f = berechneForderung([R({ invoice_number: 'RE1', id: 'i1', gross_amount: 1000, paid_amount: 300 }), R({ invoice_number: 'RE2', id: 'i2', gross_amount: 500 }), G('GS1', 'RE1', 200)])
+    expect(f.je.get('i1')).toBe(500); expect(f.je.get('i2')).toBe(500); expect(f.offen).toBe(1000)
   })
 })
