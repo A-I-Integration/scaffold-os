@@ -1582,17 +1582,16 @@ export default function KundenDetailPage() {
                 ? sichtInvoices.filter((i) => !i.project_id)
                 : sichtInvoices.filter((i) => i.project_id === project.id)
               if (project.id === '__ohne__' && projInvoices.length === 0) return null
-              const projOffen = projInvoices.filter((i) => i.status === 'offen' || i.status === 'ueberfaellig').reduce((s, i) => s + (Number(i.gross_amount) - Number(i.paid_amount || 0)), 0)
-
               return (
-                <div key={project.id} className="bg-white rounded-xl border border-black/10 overflow-hidden">
-                  <div className="px-5 py-3 border-b border-black/5 flex items-center justify-between">
-                    <p className="text-sm font-semibold text-[#1d1d1f]">{project.name || (project.id === '__ohne__' ? 'Ohne Auftrag' : 'Unbenanntes Projekt')} ({projInvoices.length})</p>
-                    {projOffen > 0 && <span className="text-xs text-red-600 font-semibold">{fmtEur(projOffen)} € offen</span>}
-                  </div>
+                <div key={project.id} className={projektSicht.length > 1 ? 'bg-white rounded-xl border border-black/10 overflow-hidden' : ''}>
+                  {projektSicht.length > 1 && (
+                    <div className="px-5 py-3 border-b border-black/5">
+                      <p className="text-sm font-semibold text-[#1d1d1f]">{project.name || (project.id === '__ohne__' ? 'Ohne Auftrag' : 'Unbenanntes Projekt')}</p>
+                    </div>
+                  )}
 
 
-                  <div className="px-5 py-3">
+                  <div className={projektSicht.length > 1 ? 'px-5 py-3' : ''}>
                     {projInvoices.length === 0 && project.data?.kiResult && (
                       <div className="mb-2">
                         <button
