@@ -159,3 +159,22 @@ export function monatsGrenzen(heute: string): { von: string; bis: string } {
   const mm = String(m).padStart(2, '0');
   return { von: `${y}-${mm}-01`, bis: `${y}-${mm}-${String(letzter).padStart(2, '0')}` };
 }
+
+/** Offene Posten: Rechnungen mit offenem Betrag, nach Fälligkeit (älteste zuerst; ohne Fälligkeit zuletzt). */
+export function offenePosten<T extends FakturaRechnung>(liste: T[]): T[] {
+  return liste
+    .filter((r) => offenerBetrag(r) > 0)
+    .sort((a, b) => (a.due_date ? a.due_date.slice(0, 10) : '9999-12-31').localeCompare(b.due_date ? b.due_date.slice(0, 10) : '9999-12-31') || a.invoice_number.localeCompare(b.invoice_number));
+}
+
+/** Überfällige Rechnungen (mit offenem Betrag), am längsten überfällig zuerst. */
+export function ueberfaelligeRechnungen<T extends FakturaRechnung>(liste: T[], heute: string): T[] {
+  return offenePosten(liste).filter((r) => istUeberfaellig(r, heute));
+}
+
+/** Rechnungen, die in den nächsten `tage` Tagen fällig werden (inklusive heute), noch nicht überfällig. */
+export function baldFaellig<T extends FakturaRechnung>(liste: T[], heute: string, tage: number): T[] {
+  const [y, m, d] = heute.split('-').map(Number);
+  const grenze = heuteIso(new Date(y, m - 1, d + tage));
+  return offenePosten(liste).filter((r) => !istUeberfaellig(r, heute) && !!r.due_date && r.due_date.slice(0, 10) >= heute && r.due_date.slice(0, 10) <= grenze);
+}
