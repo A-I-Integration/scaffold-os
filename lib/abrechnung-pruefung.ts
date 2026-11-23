@@ -10,6 +10,8 @@ export type AbweichungCode =
 
 export interface Abweichung { code: AbweichungCode; text: string; betrag?: number }
 
+import { berechneForderung } from './forderung'
+
 export interface PruefRechnung {
   id?: string
   invoice_number?: string
@@ -81,7 +83,7 @@ export const grundGueltig = (g: unknown): g is string => typeof g === 'string' &
 
 // ─── Kontrollanzeige je Baustelle ───
 
-export interface KontrollRechnung extends PruefRechnung { gross_amount?: number | null; paid_amount?: number | null; positions?: { art?: string }[] | null }
+export interface KontrollRechnung extends PruefRechnung { reference_invoice_number?: string | null; gross_amount?: number | null; paid_amount?: number | null; positions?: { art?: string }[] | null }
 
 export interface Kontrollstand {
   angebotNetto: number
@@ -114,12 +116,11 @@ export function kontrolleBaustelle(a: { angebotNetto: number; nachtraegeBestaeti
   const sonstige = summe((r) => !['abschlag', 'schluss', 'gutschrift'].includes(r.invoice_type || ''))
   const abgerechnet = runde(abschlaege + schluss + gutschriften + sonstige)
   const auftragswert = runde(zahl(a.angebotNetto) + zahl(a.nachtraegeBestaetigt))
-  let bezahlt = 0, offen = 0
+  // Offene Forderung zentral (lib/forderung.ts), identisch zum Auftragsstand
+  const ford = berechneForderung(a.rechnungen, { unbezogeneVerrechnen: true })
   const abw: Abweichung[] = []
   for (const r of alleGueltig) {
     const brutto = zahl(r.gross_amount)
-    const b = r.status === 'bezahlt' ? brutto : brutto >= 0 ? Math.min(Math.max(zahl(r.paid_amount), 0), brutto) : 0
-    bezahlt += b; offen += Math.max(0, brutto - b)
     if (brutto > 0 && zahl(r.paid_amount) > brutto + 0.005) abw.push({ code: 'ZAHLUNG_UEBER_BETRAG', text: `Bei ${r.invoice_number || 'einer Rechnung'} ist mehr bezahlt (${eur(zahl(r.paid_amount))}) als berechnet (${eur(brutto)}).` })
   }
   const schlussListe = gueltig.filter((r) => r.invoice_type === 'schluss')
@@ -137,7 +138,7 @@ export function kontrolleBaustelle(a: { angebotNetto: number; nachtraegeBestaeti
   return {
     angebotNetto: runde(zahl(a.angebotNetto)), nachtraegeBestaetigt: runde(zahl(a.nachtraegeBestaetigt)), nachtraegeAngefragt: runde(zahl(a.nachtraegeAngefragt)),
     auftragswert, abschlaege, schluss, sonstige, vorhaltung, gutschriften, abgerechnet, noch: auftragswert > 0 ? Math.max(0, runde(auftragswert - abgerechnet)) : 0,
-    bezahltBrutto: runde(bezahlt), offenBrutto: runde(offen), abweichungen: abw,
+    bezahltBrutto: ford.bezahlt, offenBrutto: ford.offen, abweichungen: abw,
   }
 }
 

@@ -10,6 +10,7 @@
 // Stornierte Rechnungen zählen nicht; Gutschriften mindern (Betrag ist dort negativ gespeichert).
 // ============================================================
 
+import { berechneForderung, bezahltAnteil } from './forderung'
 import { baueRechnungsPositionen, eingabeAusProjektData, summeNetto } from './schlussrechnung'
 
 export interface StandRechnung {
@@ -22,6 +23,7 @@ export interface StandRechnung {
   net_amount: number
   gross_amount: number
   paid_amount?: number | null
+  reference_invoice_number?: string | null
   reminder_level?: number | null
   erinnerung_am?: string | null
   mahnung_pausiert?: boolean | null
@@ -54,12 +56,7 @@ export function istGueltig(r: Pick<StandRechnung, 'status'>): boolean {
   return r.status !== 'storniert'
 }
 
-export function bezahltBrutto(r: StandRechnung): number {
-  const gross = zahl(r.gross_amount)
-  if (r.status === 'bezahlt') return gross
-  const p = zahl(r.paid_amount)
-  return gross >= 0 ? Math.min(Math.max(p, 0), gross) : 0
-}
+export function bezahltBrutto(r: StandRechnung): number { return bezahltAnteil(r) }
 
 export function berechneAuftragsstand(args: {
   angebotNetto: number
@@ -76,16 +73,8 @@ export function berechneAuftragsstand(args: {
   const istVorh = (r: StandRechnung) => Array.isArray(r.positions) && r.positions.length > 0 && r.positions.every((p) => p?.art === 'miete')
   const abger = runde(gueltig.filter((r) => !istVorh(r)).reduce((s, r) => s + zahl(r.net_amount), 0))
   const vorh = runde(gueltig.filter(istVorh).reduce((s, r) => s + zahl(r.net_amount), 0))
-  let bezahlt = 0, offen = 0, ueberf = 0
-  for (const r of gueltig) {
-    const b = bezahltBrutto(r)
-    const rest = runde(zahl(r.gross_amount) - b)
-    bezahlt += b
-    if (rest > 0) {
-      offen += rest
-      if (r.due_date && String(r.due_date).slice(0, 10) < heute) ueberf += rest
-    }
-  }
+  // Offene Forderung zentral (lib/forderung.ts): Rechnungen − Zahlungen − Gutschriften, stornierte zählen nicht
+  const ford = berechneForderung(args.rechnungen, { heute, unbezogeneVerrechnen: true })
   return {
     angebotNetto: angebot,
     nachtraegeBestaetigt: nb,
@@ -94,9 +83,9 @@ export function berechneAuftragsstand(args: {
     abgerechnet: abger,
     restZuAbrechnen: wert > 0 ? Math.max(0, runde(wert - abger)) : 0,
     prozentAbgerechnet: wert > 0 ? Math.round((abger / wert) * 1000) / 10 : null,
-    bezahlt: runde(bezahlt),
-    offenBrutto: runde(offen),
-    ueberfaellig: runde(ueberf),
+    bezahlt: ford.bezahlt,
+    offenBrutto: ford.offen,
+    ueberfaellig: ford.ueberfaellig,
     anzahlGueltig: gueltig.length,
     vorhaltungNetto: vorh,
   }

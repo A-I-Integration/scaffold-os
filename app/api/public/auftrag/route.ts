@@ -24,7 +24,7 @@ export async function GET(req: NextRequest) {
 
     const [pRes, iRes, cRes] = await Promise.all([
       fetch(`${url}/rest/v1/projects?id=eq.${link.project_id}&select=name,adresse,data`, { headers }),
-      fetch(`${url}/rest/v1/invoices?project_id=eq.${link.project_id}&select=id,invoice_number,invoice_type,status,invoice_date,due_date,leistungsdatum,geruest_nr,net_amount,tax_rate,tax_amount,gross_amount,paid_amount,positions,notes&order=invoice_date.asc&limit=500`, { headers }),
+      fetch(`${url}/rest/v1/invoices?project_id=eq.${link.project_id}&select=id,invoice_number,invoice_type,status,invoice_date,due_date,leistungsdatum,geruest_nr,net_amount,tax_rate,tax_amount,gross_amount,paid_amount,reference_invoice_number,positions,notes&order=invoice_date.asc&limit=500`, { headers }),
       fetch(`${url}/rest/v1/company_settings?id=eq.00000000-0000-0000-0000-000000000001&select=company_name,phone,email,calc_crane_day`, { headers }),
     ]);
     if (!pRes.ok) throw new Error(await pRes.text());

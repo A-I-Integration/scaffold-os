@@ -3,7 +3,7 @@ import { vorhaltungZuordnen, vorhaltungFehlerText } from '@/lib/vorhaltung-zuord
 import { pruefeVorhaltungBezug, istVorhaltungsRechnung } from '@/lib/vorhaltung';
 import { aufmassStand, pruefeAufmassBezug, freiePositionenMitAufmassName } from '@/lib/aufmass-integritaet';
 import { aufmassZuordnen, reservierungFehlerText } from '@/lib/aufmass-zuordnung-server';
-import { freigabeNachStorno, freigabeNachGutschrift, gibZuordnungFrei, istVersendet } from '@/lib/zuordnung-freigabe-server';
+import { freigabeNachStorno, freigabeNachGutschrift, gibZuordnungFrei, istVersendet, gutschriftEntfernenPruefen } from '@/lib/zuordnung-freigabe-server';
 import { pruefeAbrechnung, grundGueltig, type Abweichung } from '@/lib/abrechnung-pruefung';
 import { schreibeHistorie } from '@/lib/abrechnung-historie';
 import { angebotNettoAusProjekt } from '@/lib/auftragsstand';
@@ -371,6 +371,10 @@ export async function POST(req: NextRequest) {
     // Transaktion storniert - schlägt ein Teil fehl, wird beides zurück-
     // gerollt, nie nur die Hälfte.
     const istNeueVersion = !!replace_invoice_id;
+    if (istNeueVersion) {
+      const ge = await gutschriftEntfernenPruefen({ url, headers }, String(replace_invoice_id));
+      if (!ge.erlaubt) return NextResponse.json({ success: false, code: ge.code, error: ge.text }, { status: 409 });
+    }
     const rpcName = istNeueVersion ? 'create_invoice_as_new_version' : 'create_invoice';
     const rpcParams: Record<string, any> = {
       p_prefix: istGutschrift ? 'GS' : 'RE',
@@ -611,7 +615,24 @@ export async function PATCH(req: NextRequest) {
       return NextResponse.json({ success: false, code: 'STORNIERT_FINAL', error: 'Eine stornierte Rechnung kann nicht wieder geöffnet werden. Bitte eine neue Rechnung anlegen.' }, { status: 409 });
     }
 
-    const res = await fetch(`${url}/rest/v1/invoices?id=eq.${id}`, {
+    // Eine Gutschrift, die eine Leistung freigegeben hat, wird nicht storniert (sonst doppelt abrechenbar; Protokoll mit Benutzer/Zeit/Grund)
+    if (status === 'storniert' && vorher?.status !== 'storniert') {
+      const ge = await gutschriftEntfernenPruefen({ url, headers }, String(id));
+      if (!ge.erlaubt) {
+        await schreibeHistorie({ aktion: 'status_geaendert', invoiceId: id, invoiceNumber: vorher?.invoice_number, projectId: vorher?.project_id, userId, grund: 'Storno der Gutschrift abgelehnt', details: { abgelehnt: ge.code, bezug: ge.bezugNr ?? null } });
+        return NextResponse.json({ success: false, code: ge.code, error: ge.text }, { status: 409 });
+      }
+    }
+
+    // Auf eine stornierte Rechnung wird nichts mehr gebucht (Zahlung/„bezahlt“). Bereits gebuchte Zahlungen bleiben unverändert erhalten.
+    const zahlungsAenderung = patch.paid_amount !== undefined || status === 'bezahlt';
+    const zahlungAufStorniert = { success: false, code: 'ZAHLUNG_AUF_STORNIERT', error: 'Auf eine stornierte Rechnung kann keine Zahlung gebucht werden. Bereits gebuchte Zahlungen bleiben im Verlauf erhalten.' };
+    if (zahlungsAenderung && vorher?.status === 'storniert') {
+      return NextResponse.json(zahlungAufStorniert, { status: 409 });
+    }
+
+    // Bei Zahlungsänderungen zusätzlich in der Abfrage selbst: ein gleichzeitiges Storno kann nicht mehr überschrieben werden.
+    const res = await fetch(`${url}/rest/v1/invoices?id=eq.${id}${zahlungsAenderung ? '&status=neq.storniert' : ''}`, {
       method: 'PATCH',
       headers: { ...headers, 'Prefer': 'return=representation' },
       body: JSON.stringify(patch),
@@ -620,6 +641,7 @@ export async function PATCH(req: NextRequest) {
 
     const rows = await res.json();
     if (!rows?.length) {
+      if (zahlungsAenderung && vorher) return NextResponse.json(zahlungAufStorniert, { status: 409 });
       return NextResponse.json({ success: false, error: 'Rechnung nicht gefunden.' }, { status: 404 });
     }
     let zuordnungHinweis: string | null = null;
@@ -678,6 +700,14 @@ export async function DELETE(req: NextRequest) {
     // Maßgeblich ist jeder Versandnachweis (Versandprotokoll nach ID und Nummer sowie der ältere Mailverlauf email_log).
     if (await istVersendet({ url, headers }, String(id), rows[0].invoice_number)) {
       return NextResponse.json({ success: false, code: 'BEREITS_VERSENDET', error: 'Diese Rechnung wurde schon versendet (oder der Versand lässt sich nicht ausschließen) und kann nicht mehr gelöscht werden. Bitte stornieren (und bei Bedarf eine neue Version oder Gutschrift anlegen).' }, { status: 409 });
+    }
+
+    {
+      const ge = await gutschriftEntfernenPruefen({ url, headers }, String(id));
+      if (!ge.erlaubt) {
+        await schreibeHistorie({ aktion: 'status_geaendert', invoiceId: id, invoiceNumber: rows[0].invoice_number, projectId: rows[0].project_id, userId, grund: 'Löschen der Gutschrift abgelehnt', details: { abgelehnt: ge.code, bezug: ge.bezugNr ?? null } });
+        return NextResponse.json({ success: false, code: ge.code, error: ge.text }, { status: 409 });
+      }
     }
 
     const res = await fetch(`${url}/rest/v1/invoices?id=eq.${id}`, {

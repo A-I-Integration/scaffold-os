@@ -77,7 +77,7 @@ describe('Kette Rechnung: Teilzahlung → Restzahlung → Korrektur', () => {
 
   it('Stornierte Rechnung nimmt keine Zahlung an', async () => {
     rechnung().status = 'storniert'
-    expect((await zahlen(100)).status).toBe(400)
+    expect((await zahlen(100)).status).toBe(409)
     expect(db.invoice_payments).toHaveLength(0)
   })
 
