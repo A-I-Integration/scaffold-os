@@ -59,6 +59,28 @@ export function letzteKumulierteFlaeche(liste: Zwischenaufmass[]): number {
   return liste.reduce((m, z) => Math.max(m, z.flaecheM2), 0);
 }
 
+/** Aktueller Stand = kumulierte Fläche des zuletzt erfassten Zwischenaufmaßes (höchste Nr.), auch nach einem Rückbau. */
+export function aktuellerStandM2(liste: Zwischenaufmass[]): number {
+  if (!liste.length) return 0;
+  return [...liste].sort((a, b) => a.nr - b.nr)[liste.length - 1].flaecheM2;
+}
+
+/** Noch nicht abgerechnete Restmenge: aktueller Stand abzüglich bereits abgerechneter kumulierter Menge (nie negativ). */
+export function restmengeM2(liste: Zwischenaufmass[]): number {
+  return Math.max(0, runde2(aktuellerStandM2(liste) - bisherAbgerechneteM2(liste)));
+}
+
+/** Menge, die bereits über den aktuellen Stand hinaus abgerechnet wurde (nach Rückbau/Korrektur). 0 = alles stimmig. */
+export function ueberabgerechnetM2(liste: Zwischenaufmass[]): number {
+  return Math.max(0, runde2(bisherAbgerechneteM2(liste) - aktuellerStandM2(liste)));
+}
+
+/** True, wenn dieses Zwischenaufmaß weniger ausweist als das vorherige (Rückbau oder Korrektur). */
+export function istRueckgang(z: Zwischenaufmass, liste: Zwischenaufmass[]): boolean {
+  const vorher = liste.filter((x) => x.nr < z.nr).sort((a, b) => a.nr - b.nr).pop();
+  return !!vorher && z.flaecheM2 < vorher.flaecheM2;
+}
+
 /** Kumulierte Fläche, die bereits abgerechnet ist (optional ohne ein bestimmtes Zwischenaufmaß). */
 export function bisherAbgerechneteM2(liste: Zwischenaufmass[], ausserId?: string): number {
   return liste
@@ -82,9 +104,13 @@ export function neuesZwischenaufmass(
   if (!/^\d{4}-\d{2}-\d{2}$/.test(eingabe.stichtag)) return { ok: false, fehler: 'Bitte einen Stichtag angeben.' };
   const flaeche = runde2(eingabe.flaecheM2);
   if (!(flaeche > 0)) return { ok: false, fehler: 'Bitte die bis zum Stichtag gestellte Gesamtfläche (kumuliert) in m² eingeben.' };
-  const letzte = letzteKumulierteFlaeche(liste);
-  if (flaeche <= letzte) {
-    return { ok: false, fehler: `Die kumulierte Fläche muss größer sein als beim letzten Zwischenaufmaß (${fmt(letzte)} m²). Gib die GESAMTE Fläche bis zum Stichtag ein, nicht nur die neue.` };
+  const aktuell = aktuellerStandM2(liste);
+  if (liste.length && flaeche === aktuell) {
+    return { ok: false, fehler: `Die kumulierte Fläche entspricht dem letzten Zwischenaufmaß (${fmt(aktuell)} m²). Es gibt nichts Neues zu erfassen.` };
+  }
+  // Weniger als zuletzt = Rückbau oder Korrektur: erlaubt, aber nur mit Begründung (Nachvollziehbarkeit).
+  if (flaeche < aktuell && !(eingabe.notiz || '').trim()) {
+    return { ok: false, fehler: `Die Fläche ist kleiner als beim letzten Zwischenaufmaß (${fmt(aktuell)} m²). Das ist nur bei Rückbau oder Korrektur sinnvoll – bitte unten eine Notiz als Begründung eintragen. Gib sonst die GESAMTE Fläche bis zum Stichtag ein, nicht nur die neue.` };
   }
   return {
     ok: true,
