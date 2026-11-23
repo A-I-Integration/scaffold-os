@@ -46,6 +46,8 @@ async function api(modul: string, methode: 'GET' | 'POST' | 'PATCH' | 'DELETE', 
 }
 const inv = (m: 'POST' | 'PATCH' | 'DELETE', b?: unknown, q = '') => api('@/app/api/invoices/route', m, b, q)
 const inv_get = (q = '') => api('@/app/api/invoices/route', 'GET', undefined, q)
+// Zahlungen werden über /api/invoice-payments gebucht (seit Phase 130 setzt PATCH /api/invoices keinen Betrag mehr direkt)
+const zahlungBuchen = (invoice_id: string, amount: number) => api('@/app/api/invoice-payments/route', 'POST', { invoice_id, amount, payment_date: HEUTE })
 const prj = (b: unknown) => api('@/app/api/projects/route', 'PATCH', b)
 const nacht = (b: unknown) => api('@/app/api/nachtraege/route', 'POST', b)
 const q = async (sql: string, p: unknown[] = []) => (await pool.query(sql, p)).rows
@@ -493,7 +495,7 @@ describe.skipIf(!DB)('Faktura End-to-End (echte PostgreSQL)', () => {
       await pruefe('Rechnung 3.570, keine Gutschrift', 3570)
       const g1 = (await gutschrift(P, a.invoice_number, 1000)).j.invoice            // −1.190
       await pruefe('Gutschrift 1.190 (Beispiel des Prüfers)', 2380)
-      expect((await inv('PATCH', { id: a.id, paid_amount: 500 })).status).toBe(200)
+      expect((await zahlungBuchen(a.id, 500)).status).toBe(200)
       await pruefe('zusätzlich Teilzahlung 500', 1880)
       const g2 = (await gutschrift(P, a.invoice_number, 500)).j.invoice             // −595
       await pruefe('zweite Gutschrift 595 (mehrere Gutschriften)', 1285)
@@ -512,7 +514,7 @@ describe.skipIf(!DB)('Faktura End-to-End (echte PostgreSQL)', () => {
       const re = async (P: string, preis: number) => (await inv('POST', { customer_name: KUNDE, project_id: P, invoice_type: 'standard', positions: [{ bezeichnung: 'Gerüst', menge: 1, einheit: 'Pauschale', einzelpreis: preis }] })).j.invoice
       const a1 = await re(P1, 1000), a2 = await re(P2, 2000), a3 = await re(P2, 500)     // brutto 1.190 / 2.380 / 595
       expect((await gutschrift(P1, a1.invoice_number, 200)).status).toBe(200)           // −238
-      expect((await inv('PATCH', { id: a2.id, paid_amount: 1000 })).status).toBe(200)
+      expect((await zahlungBuchen(a2.id, 1000)).status).toBe(200)
       expect((await storno(a3.id)).status).toBe(200)                                     // storniert: zählt nicht
       // ungeklärte Gutschrift: ohne Bezug auf eine Rechnung der Baustelle (Bezugsnummer existiert nicht)
       expect((await gutschrift(P2, 'RE-GIBT-ES-NICHT', 100)).status).toBeLessThan(500)
@@ -565,12 +567,12 @@ describe.skipIf(!DB)('Faktura End-to-End (echte PostgreSQL)', () => {
       r1 = (await inv('POST', { customer_name: KUNDE, project_id: P, invoice_type: 'standard', positions: [{ bezeichnung: 'Gerüst', menge: 1, einheit: 'Pauschale', einzelpreis: 1000 }] })).j.invoice
       expect(Number(r1.gross_amount)).toBe(1190)
       const zeile = async () => (await q('select status, paid_amount from invoices where id=$1', [r1.id]))[0]
-      expect((await inv('PATCH', { id: r1.id, paid_amount: 500 })).status).toBe(200)
+      expect((await zahlungBuchen(r1.id, 500)).status).toBe(200)
       let z = await zeile(); merke('8 Zahlung', 'Teilzahlung 500 von 1.190: Status/offen', 'offen / 690', `${z.status} / ${Math.round((1190 - Number(z.paid_amount)) * 100) / 100}`); expect(z.status).toBe('offen')
-      expect((await inv('PATCH', { id: r1.id, paid_amount: 900 })).status).toBe(200)
+      expect((await zahlungBuchen(r1.id, 400)).status).toBe(200)
       z = await zeile(); merke('8 Zahlung', 'Zweite Teilzahlung (gesamt 900): offen', 290, Math.round((1190 - Number(z.paid_amount)) * 100) / 100); expect(z.status).toBe('offen')
-      const ueber = await inv('PATCH', { id: r1.id, paid_amount: 1300 })
-      merke('8 Zahlung', 'Überzahlung (1.300 auf 1.190)', 400, ueber.status); expect(ueber.status).toBe(400)
+      const ueber = await zahlungBuchen(r1.id, 1000)
+      merke('8 Zahlung', 'Überzahlung (1.000 auf offene 290)', 400, ueber.status); expect(ueber.status).toBe(400)
       expect(Number((await zeile()).paid_amount)).toBe(900)
       expect((await inv('PATCH', { id: r1.id, status: 'bezahlt' })).status).toBe(200)
       z = await zeile(); merke('8 Zahlung', 'Voll bezahlt: Status/bezahlt', 'bezahlt / 1190', `${z.status} / ${Number(z.paid_amount)}`); expect(z.status).toBe('bezahlt'); expect(Number(z.paid_amount)).toBe(1190)
@@ -580,17 +582,17 @@ describe.skipIf(!DB)('Faktura End-to-End (echte PostgreSQL)', () => {
       const zahl = (body: unknown) => api('@/app/api/invoice-payments/route', 'POST', body)
       // 1./2. Zahlung und Teilzahlung auf offene Rechnung
       const z1 = await zahl({ invoice_id: r2.id, amount: 200, payment_date: HEUTE }); merke('8 Zahlung', 'Zahlung 200 auf offene Rechnung', 200, z1.status); expect(z1.status).toBe(200)
-      const z2 = await inv('PATCH', { id: r2.id, paid_amount: 300 }); merke('8 Zahlung', 'Teilzahlung (gesamt 300) über PATCH', 200, z2.status); expect(z2.status).toBe(200)
+      const z2 = await zahlungBuchen(r2.id, 100); merke('8 Zahlung', 'Teilzahlung (gesamt 300)', 200, z2.status); expect(z2.status).toBe(200)
       expect((await storno(r2.id)).status).toBe(200)
       const vorher = (await q('select status, paid_amount, updated_at from invoices where id=$1', [r2.id]))[0]
       const nZahlungen = (await q('select count(*)::int n from invoice_payments where invoice_id=$1', [r2.id]))[0].n
       const nHist = (await q('select count(*)::int n from abrechnung_historie where invoice_id=$1', [r2.id]))[0].n
       // 3. Zahlung auf stornierte Rechnung: alle Wege → 409
       const a1 = await zahl({ invoice_id: r2.id, amount: 100, payment_date: HEUTE })
-      const a2 = await inv('PATCH', { id: r2.id, paid_amount: 450 })
+      const a2 = await zahlungBuchen(r2.id, 150)
       const a3 = await inv('PATCH', { id: r2.id, status: 'bezahlt' })
       merke('8 Zahlung', 'Zahlung (invoice-payments) auf stornierte Rechnung', 409, a1.status)
-      merke('8 Zahlung', 'paid_amount-Änderung auf stornierte Rechnung', 409, a2.status)
+      merke('8 Zahlung', 'Zweite Zahlung auf stornierte Rechnung', 409, a2.status)
       merke('8 Zahlung', 'Status „bezahlt“ auf stornierter Rechnung', 409, a3.status)
       expect([a1.status, a2.status, a3.status]).toEqual([409, 409, 409]); expect(a1.j.code).toBe('ZAHLUNG_AUF_STORNIERT'); expect(a2.j.code).toBe('ZAHLUNG_AUF_STORNIERT')
       // 4./5. Vorhandene Zahlung bleibt, kein Statuswechsel, keine neue Buchung
@@ -942,7 +944,7 @@ describe.skipIf(!DB)('Faktura End-to-End (echte PostgreSQL)', () => {
       const P = await neuesProjekt('E2E P130 Manuell', {}); const a = await re(P, 1000)
       const x = await inv('PATCH', { id: a.id, status: 'bezahlt', paid_amount: 5, grund: 'Barzahlung vor Ort' })
       expect(x.status).toBe(200); const z = await zeile(a.id)
-      merke('130 Manuell', 'Als bezahlt auf offener Rechnung: Status / bezahlt / Zahlungszeilen', 'bezahlt / 1190 / 1', `${z.status} / ${z.paid_amount} / ${(await zahlungen(a.id)).length}`)
+      merke('130 Manuell', 'Als bezahlt auf offener Rechnung: Status / bezahlt / Zahlungszeilen', 'bezahlt / 1190 / 1', `${z.status} / ${Number(z.paid_amount)} / ${(await zahlungen(a.id)).length}`)
       expect([z.status, Number(z.paid_amount)]).toEqual(['bezahlt', 1190]); expect(await zahlungen(a.id)).toEqual([{ amount: '1190.00', quelle: 'manuell_bezahlt' }])
       const h = await q(`select user_id, grund from abrechnung_historie where invoice_id=$1 and aktion='zahlung_geaendert'`, [a.id])
       expect(h).toEqual([{ user_id: USER, grund: 'Barzahlung vor Ort' }])
@@ -981,7 +983,7 @@ describe.skipIf(!DB)('Faktura End-to-End (echte PostgreSQL)', () => {
         const P = await neuesProjekt('E2E P130 Gleichzeitig ' + runde, {}); const a = await re(P, 1000)
         const erg = await Promise.all([inv('PATCH', { id: a.id, status: 'bezahlt' }), apiH('@/app/api/invoice-payments/route', 'POST', { invoice_id: a.id, amount: 1190, payment_date: HEUTE }, mitKey('p130-10-' + runde + '-' + Date.now()))])
         const z = await zeile(a.id); const summe = (await zahlungen(a.id)).reduce((t: number, p: any) => t + Number(p.amount), 0)
-        merke('130 Manuell', `Status ∥ Zahlung (Runde ${runde + 1}): Summe Zahlungen / paid_amount / Status`, '1190 / 1190 / bezahlt', `${summe} / ${z.paid_amount} / ${z.status}`)
+        merke('130 Manuell', `Status ∥ Zahlung (Runde ${runde + 1}): Summe Zahlungen / paid_amount / Status`, '1190 / 1190 / bezahlt', `${summe} / ${Number(z.paid_amount)} / ${z.status}`)
         expect(Math.round(summe * 100) / 100).toBe(1190); expect(Number(z.paid_amount)).toBe(1190); expect(z.status).toBe('bezahlt')
         expect(erg.some((x) => x.status === 200)).toBe(true)
       }
@@ -1021,6 +1023,7 @@ describe.skipIf(!DB)('Faktura End-to-End (echte PostgreSQL)', () => {
     it('13. Rechte: Buchungsfunktionen und Schlüsseltabelle sind für anon/authenticated gesperrt, für service_role erlaubt', async () => {
       const c = await pool.connect()
       try {
+        await c.query('grant usage on schema public to anon, authenticated, service_role'); await c.query('grant all on all tables in schema public to service_role')   // wie in Supabase (dort Standardrechte); ohne Schema-Zugriff käme „does not exist“ statt „permission denied“
         for (const rolle of ['anon', 'authenticated']) {
           for (const sql of [`select faktura_zahlung_buchen(gen_random_uuid(), 1::numeric, current_date, null::text, null::text, null::text)`, `select faktura_status_setzen(gen_random_uuid(), 'bezahlt'::text, null::uuid, null::text)`, `select faktura_idempotenz_bereinigen(1, 1)`, `select * from faktura_idempotenz limit 1`]) {
             await c.query(`set role ${rolle}`)
