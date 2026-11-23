@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { requireAuth, unauthorizedResponse, serverErrorResponse, pruefeRolle } from '@/lib/auth';
 import { ROLLEN } from '@/lib/rollen';
 import { sichereAngebotToken } from '@/lib/angebot-link';
+import { protokolliereVersand, type VersandProtokollEingabe } from '@/lib/versand-protokoll';
 import { sperreFuerExterneVerwendung, markiereVersandFehler, pruefeProjektnummerImDokument, projektIdZuRechnung, FEHLVERSAND_NICHT_PROTOKOLLIERT, SperreFehler } from '@/lib/cad/projektnummer-sperre';
 
 const esc = (t: string) => t.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c] as string));
@@ -12,6 +13,9 @@ export async function POST(req: Request) {
   const auth = { userId: rollenPruefung.userId };
   let ereignisId: string | null = null;
   let gesendet = false;
+  // Versandprotokoll (Faktura F4): gilt für Rechnungen und Mahnungen; gefüllt, sobald die Anfrage gelesen und geprüft ist
+  let protokollKontext: Omit<VersandProtokollEingabe, 'status' | 'error' | 'resendId' | 'subject' | 'attachmentName'> | null = null;
+  let protokollBetreff = '';
   try {
     const apiKey = process.env.RESEND_API_KEY;
     if (!apiKey) {
@@ -21,7 +25,7 @@ export async function POST(req: Request) {
       }, { status: 503 });
     }
 
-    const { to, projectName, projectId, pdfBase64, customerName, type, invoiceNumber, grossAmount, dueDate, projektnummer } = await req.json();
+    const { to, projectName, projectId, pdfBase64, customerName, type, invoiceNumber, grossAmount, dueDate, projektnummer, format } = await req.json();
     if (!to || !projectName) {
       return NextResponse.json({ error: 'Empfänger und Projektname erforderlich' }, { status: 400 });
     }
@@ -29,6 +33,10 @@ export async function POST(req: Request) {
     const mailType = type === 'rechnung' || type === 'mahnung' ? type : 'angebot';
     if (mailType === 'angebot' && !projectId) {
       return NextResponse.json({ error: 'Projekt-ID erforderlich' }, { status: 400 });
+    }
+
+    if (mailType !== 'angebot' && invoiceNumber) {
+      protokollKontext = { invoiceNumber: String(invoiceNumber), kind: mailType, to: String(to), format: format === 'zugferd' || format === 'pdf' ? format : null, pdfBase64: typeof pdfBase64 === 'string' ? pdfBase64 : null, sentBy: auth.userId ?? null };
     }
 
     // Projektnummer sperren, BEVOR etwas das Haus verlässt – aber nur, wenn sie im Dokument steht (`projektnummer` = die gedruckte Nummer).
@@ -39,7 +47,11 @@ export async function POST(req: Request) {
       await pruefeProjektnummerImDokument(sperrProjekt, nummerImDokument);
       ereignisId = await sperreFuerExterneVerwendung({ projectId: sperrProjekt, typ: mailType === 'angebot' ? 'angebot' : mailType, dokumentId: mailType === 'angebot' ? (projectId || null) : (invoiceNumber || null), userId: auth.userId, projektnummer: nummerImDokument });
     } catch (e) {
-      if (e instanceof SperreFehler) return NextResponse.json({ error: e.message }, { status: e.status });
+      if (e instanceof SperreFehler) {
+        // Auch ein durch die Sperre verhinderter Versand gehört ins Protokoll (nichts verlässt das Haus, aber der Versuch war da)
+        if (protokollKontext) await protokolliereVersand({ ...protokollKontext, status: 'fehlgeschlagen', error: e.message });
+        return NextResponse.json({ error: e.message }, { status: e.status });
+      }
       throw e;
     }
 
@@ -84,6 +96,7 @@ export async function POST(req: Request) {
 
     if (mailType === 'rechnung') {
       subject = `Ihre Rechnung ${invoiceNumber || ''} – ${projectName}`;
+      protokollBetreff = subject;
       innerHtml = `
           <p>Hallo ${customerName || 'Kunde'},</p>
           <p>anbei erhalten Sie Ihre Rechnung für <strong>${projectName}</strong>.</p>
@@ -96,6 +109,7 @@ export async function POST(req: Request) {
           <p>Die Rechnung finden Sie im Anhang dieser E-Mail.</p>`;
     } else if (mailType === 'mahnung') {
       subject = `Zahlungserinnerung zu Rechnung ${invoiceNumber || ''} – ${projectName}`;
+      protokollBetreff = subject;
       innerHtml = `
           <p>Hallo ${customerName || 'Kunde'},</p>
           <p>trotz Fälligkeit konnten wir für die Rechnung <strong>${invoiceNumber || '-'}</strong> (${projectName}) noch keinen Zahlungseingang feststellen.</p>
@@ -204,8 +218,12 @@ export async function POST(req: Request) {
       console.error('[Email API] Protokollierung fehlgeschlagen (ignoriert):', logErr);
     }
 
+    if (protokollKontext) await protokolliereVersand({ ...protokollKontext, subject, status: 'versendet', resendId: data?.id ?? null, attachmentName: attachments[0]?.filename ?? null });
+
     return NextResponse.json({ success: true, id: data?.id });
   } catch (err: any) {
+    // Fehlgeschlagener Versand ins Protokoll (nie bei bereits gesendeter Mail: dort hat nur das Protokollieren gehakt)
+    if (protokollKontext && !gesendet) await protokolliereVersand({ ...protokollKontext, subject: protokollBetreff, status: 'fehlgeschlagen', error: err?.message || 'Versand fehlgeschlagen' });
     // Nach erfolgter Sperre, aber ohne Versand: als fehlgeschlagener Versand festhalten (die Sperre bleibt)
     // Ist die Projektnummer schon gesperrt, aber der Fehlversand nicht protokollierbar, muss das sichtbar werden (kein stiller Zustand)
     if (ereignisId && !gesendet && !(await markiereVersandFehler(ereignisId, err?.message || 'Versand fehlgeschlagen'))) {

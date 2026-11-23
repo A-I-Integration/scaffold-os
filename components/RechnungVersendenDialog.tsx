@@ -11,8 +11,10 @@ import { versendeRechnung, istGueltigeEmailAdresse, belegBezeichnung, type Versa
 // Ersetzt die Abfragefenster („prompt“) an allen Stellen: Empfänger prüfen, Anhang sehen, Vorschau, Versand, Ergebnis.
 // ============================================================
 
-export function RechnungVersendenDialog({ rechnung, vorschlag, onClose, onVersendet }: {
-  rechnung: Invoice; vorschlag: string; onClose: () => void; onVersendet?: (ergebnis: VersandErgebnis) => void;
+export function RechnungVersendenDialog({ rechnung, vorschlag, onClose, onVersuch }: {
+  rechnung: Invoice; vorschlag: string; onClose: () => void;
+  /** nach jedem Versuch: Ergebnis bei Erfolg, null bei Fehlschlag (der Fehlversuch steht dann im Versandprotokoll) */
+  onVersuch?: (ergebnis: VersandErgebnis | null) => void;
 }) {
   const [an, setAn] = useState(vorschlag);
   const [laeuft, setLaeuft] = useState(false);
@@ -32,9 +34,10 @@ export function RechnungVersendenDialog({ rechnung, vorschlag, onClose, onVersen
     try {
       const erg = await versendeRechnung(rechnung, an);
       setErgebnis(erg);
-      onVersendet?.(erg);
+      onVersuch?.(erg);
     } catch (err) {
       setFehler(err instanceof Error ? err.message : 'Versand fehlgeschlagen');
+      onVersuch?.(null);
     } finally {
       setLaeuft(false);
     }
@@ -79,7 +82,7 @@ export function RechnungVersendenDialog({ rechnung, vorschlag, onClose, onVersen
               <p style={{ color: WIN.textGedaempft }}>Lassen sich die E-Rechnung-Daten nicht erzeugen, geht die normale PDF raus – das siehst du nach dem Versand ausdrücklich.</p>
             </div>
 
-            {fehler && <p className="rounded-lg border border-red-200 bg-red-50 p-3 text-[13px] text-red-700" role="alert">❌ {fehler}</p>}
+            {fehler && <p className="rounded-lg border border-red-200 bg-red-50 p-3 text-[13px] text-red-700" role="alert">❌ {fehler}<br /><span className="text-red-600/80">Der Versuch steht im Versandprotokoll.</span></p>}
 
             <div className="flex gap-2">
               <button onClick={vorschau} className="flex items-center gap-1.5 rounded-lg border px-3 py-2 text-sm font-semibold" style={{ borderColor: WIN.rand }}><Eye className="h-4 w-4" /> Vorschau</button>
@@ -95,12 +98,12 @@ export function RechnungVersendenDialog({ rechnung, vorschlag, onClose, onVersen
 }
 
 /** Für die Oberflächen: `starten(rechnung, vorschlag)` öffnet den Dialog, `dialog` gehört einmal ins Markup. */
-export function useRechnungVersenden(onVersendet?: (rechnung: Invoice, ergebnis: VersandErgebnis) => void): { starten: (rechnung: Invoice, vorschlag?: string) => void; dialog: ReactNode } {
+export function useRechnungVersenden(onVersuch?: (rechnung: Invoice, ergebnis: VersandErgebnis | null) => void): { starten: (rechnung: Invoice, vorschlag?: string) => void; dialog: ReactNode } {
   const [offen, setOffen] = useState<{ rechnung: Invoice; vorschlag: string } | null>(null);
   const starten = useCallback((rechnung: Invoice, vorschlag = '') => setOffen({ rechnung, vorschlag }), []);
   const dialog = offen ? (
     <RechnungVersendenDialog rechnung={offen.rechnung} vorschlag={offen.vorschlag} onClose={() => setOffen(null)}
-      onVersendet={(erg) => onVersendet?.(offen.rechnung, erg)} />
+      onVersuch={(erg) => onVersuch?.(offen.rechnung, erg)} />
   ) : null;
   return { starten, dialog };
 }

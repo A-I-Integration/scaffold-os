@@ -20,6 +20,7 @@ import PositionDetails from '@/components/rechnung/PositionDetails'
 import { aktualisierePosition } from '@/lib/rechnung-position'
 import { lokalesDatumIso, datumPlusTage } from '@/lib/datum'
 import { useRechnungVersenden } from '@/components/RechnungVersendenDialog'
+import { type VersandEintrag } from '@/lib/versand-status'
 
 type Tab = 'rechnung' | 'version' | 'bestellwert' | 'teilabbau' | 'gutschrift' | 'zahlung' | 'verlauf'
 const ANSICHTEN = [
@@ -88,6 +89,8 @@ export default function RechnungAktePage() {
   const [anhangOffen, setAnhangOffen] = useState(false)
   const [zahlungen, setZahlungen] = useState<Zahlung[]>([])
   const [mails, setMails] = useState<Mail[]>([])
+  const [protokoll, setProtokoll] = useState<VersandEintrag[]>([])
+  const [protokollHinweis, setProtokollHinweis] = useState('')
   const [pruefLinks, setPruefLinks] = useState<PruefLink[]>([])
   const [pruefungen, setPruefungen] = useState<Pruefung[]>([])
   // Formularzustände
@@ -112,6 +115,7 @@ export default function RechnungAktePage() {
       if (i.project_id) fetch('/api/projects?id=' + i.project_id).then((x) => x.json()).then((pj) => setBaustelleName(pj?.project?.name || '')).catch(() => {}); else setBaustelleName('')
       fetch(`/api/invoice-payments?invoice_id=${i.id}`).then((x) => x.json()).then((p) => p?.success && setZahlungen(p.payments)).catch(() => {})
       fetch(`/api/invoices/pruef-link?invoice_id=${i.id}`).then((x) => x.json()).then((p) => { if (p?.success) { setPruefLinks(p.links || []); setPruefungen(p.pruefungen || []) } }).catch(() => {})
+      fetch(`/api/invoice-dispatches?invoice_id=${i.id}`).then((x) => x.json()).then((p) => { if (p?.success) { setProtokoll(p.eintraege || []); setProtokollHinweis('') } else setProtokollHinweis(p?.error || '') }).catch(() => {})
       fetch(`/api/email-log?invoice_numbers=${encodeURIComponent(i.invoice_number)}`).then((x) => x.json()).then((m) => m?.success && setMails(m.emails || [])).catch(() => {})
     } catch (e) { setFehler(e instanceof Error ? e.message : 'Laden fehlgeschlagen') }
   }, [id])
@@ -357,6 +361,28 @@ export default function RechnungAktePage() {
             {ansicht === 'verlauf' && (
               <div className="p-4 text-sm space-y-2">
                 <button onClick={() => setAnhangOffen(true)} className="rounded border px-3 py-1.5" style={{ borderColor: WIN.rand }}>📎 Anhänge verwalten (Bilder, Videos, Dateien)</button>
+                <h3 className="font-semibold pt-3">Versandprotokoll</h3>
+                {protokollHinweis && <p className="rounded border border-amber-300 bg-amber-50 p-2 text-xs text-amber-900">⚠️ {protokollHinweis}</p>}
+                <table className="w-full border-collapse" data-testid="versandprotokoll">
+                  <thead><tr className="text-left text-xs" style={{ background: WIN.grund, color: WIN.textGedaempft }}>
+                    <th className="p-2 border" style={{ borderColor: WIN.rand }}>Zeit</th><th className="p-2 border" style={{ borderColor: WIN.rand }}>Art</th><th className="p-2 border" style={{ borderColor: WIN.rand }}>An</th><th className="p-2 border" style={{ borderColor: WIN.rand }}>Format</th><th className="p-2 border" style={{ borderColor: WIN.rand }}>Ergebnis</th><th className="p-2 border" style={{ borderColor: WIN.rand }}>Prüfsumme</th>
+                  </tr></thead>
+                  <tbody>
+                    {protokoll.map((e) => (
+                      <tr key={e.id}>
+                        <td className="p-2 border whitespace-nowrap" style={{ borderColor: WIN.randHell }}>{new Date(e.created_at).toLocaleString('de-DE')}</td>
+                        <td className="p-2 border" style={{ borderColor: WIN.randHell }}>{e.kind === 'mahnung' ? 'Mahnung' : 'Rechnung'}</td>
+                        <td className="p-2 border" style={{ borderColor: WIN.randHell }}>{e.to_email || '–'}</td>
+                        <td className="p-2 border" style={{ borderColor: WIN.randHell }}>{e.format === 'zugferd' ? 'ZUGFeRD (E-Rechnung)' : e.format === 'pdf' ? 'normale PDF' : '–'}</td>
+                        <td className="p-2 border" style={{ borderColor: WIN.randHell, color: e.status === 'versendet' ? '#1a7f37' : '#b42318' }}>{e.status === 'versendet' ? 'Versendet' : 'Fehlgeschlagen'}{e.error ? <span className="block text-xs">{e.error}</span> : null}</td>
+                        <td className="p-2 border font-mono text-[11px]" style={{ borderColor: WIN.randHell }} title={e.dokument_hash || ''}>{e.dokument_hash ? e.dokument_hash.slice(0, 12) + '…' : '–'}</td>
+                      </tr>
+                    ))}
+                    {protokoll.length === 0 && <tr><td colSpan={6} className="p-3" style={{ color: WIN.textGedaempft }}>Kein Versand protokolliert. Versendet vor dem Protokoll oder außerhalb von SCAFFOLD OS? Das ist nicht erkennbar.</td></tr>}
+                  </tbody>
+                </table>
+
+                <h3 className="font-semibold pt-4">Mailverlauf</h3>
                 <table className="w-full border-collapse mt-2">
                   <thead><tr className="text-left text-xs" style={{ background: WIN.grund, color: WIN.textGedaempft }}><th className="p-2 border" style={{ borderColor: WIN.rand }}>Gesendet am</th><th className="p-2 border" style={{ borderColor: WIN.rand }}>An</th></tr></thead>
                   <tbody>

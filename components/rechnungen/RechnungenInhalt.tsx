@@ -5,6 +5,7 @@ import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { WIN } from '@/components/win/Win';
 import { useRechnungVersenden } from '@/components/RechnungVersendenDialog';
+import { versandJeRechnung, versandStandFuer, type VersandEintrag } from '@/lib/versand-status';
 import {
   generateInvoicePDF, generateMahnungPDF, fmtEur, fmtDate,
   type Invoice, type Position,
@@ -159,6 +160,8 @@ export function RechnungenInhalt({ umfang, neuSignal = 0, entwurfId: entwurfVonA
     const ids = new Set(umfangProjektIds ?? []);
     return alleInvoices.filter((i) => (umfangProjekt ? i.project_id === umfangProjekt : i.customer_id === umfangKunde || (!!i.project_id && ids.has(i.project_id))));
   }, [alleInvoices, umfangKunde, umfangProjekt, umfangProjektIds]);
+  const [versandEintraege, setVersandEintraege] = useState<VersandEintrag[]>([]);
+  const versandKarte = useMemo(() => versandJeRechnung(versandEintraege), [versandEintraege]);
   const [showForm, setShowForm] = useState(false);
   const [anhangFuer, setAnhangFuer] = useState<Invoice | null>(null);
   const [saving, setSaving] = useState(false);
@@ -242,6 +245,13 @@ export function RechnungenInhalt({ umfang, neuSignal = 0, entwurfId: entwurfVonA
       setInvoices(json.invoices);
       setError(null);
       if (erstesLaden.current) erstesLaden.current = false; else onGeaendertRef.current?.();
+
+      // Versandprotokoll dazuladen (blockiert die Liste nicht; fehlt die Tabelle noch, bleibt der Versandstand einfach leer)
+      try {
+        const vRes = await fetch('/api/invoice-dispatches' + (umfangKunde ? `?customer_id=${encodeURIComponent(umfangKunde)}` : ''));
+        const vJson = await vRes.json();
+        if (vJson.success) setVersandEintraege(vJson.eintraege as VersandEintrag[]);
+      } catch { /* Versandstand optional */ }
 
       // Öffnungen dazuladen (blockiert die Liste nicht)
       try {
@@ -912,6 +922,17 @@ export function RechnungenInhalt({ umfang, neuSignal = 0, entwurfId: entwurfVonA
                             {inv.reminder_level}. Mahnung
                           </span>
                         )}
+                        {(() => {
+                          const v = versandStandFuer(versandKarte, inv);
+                          if (v.stand === 'keiner') return null;
+                          const ok = v.stand === 'versendet';
+                          return (
+                            <span data-testid="versand-badge" className={`ml-1 text-[10px] font-sans px-1.5 py-0.5 rounded border ${ok ? 'bg-emerald-500/15 text-emerald-700 border-emerald-500/40' : 'bg-red-500/20 text-red-700 border-red-500/40'}`}
+                              title={`${ok ? 'Versendet' : 'Versand fehlgeschlagen'}${v.an ? ' an ' + v.an : ''}${v.zuletzt ? ' am ' + new Date(v.zuletzt).toLocaleString('de-DE') : ''}${v.format ? ' · ' + (v.format === 'zugferd' ? 'mit E-Rechnung' : 'normale PDF') : ''}`}>
+                              {ok ? '✉ versendet' : '✉ Fehler'}
+                            </span>
+                          );
+                        })()}
                         {inv.pruef_status && (
                           <span
                             className={`ml-1 text-[10px] font-sans px-1.5 py-0.5 rounded border ${inv.pruef_status === 'akzeptiert' ? 'bg-emerald-500/15 text-emerald-700 border-emerald-500/40' : 'bg-amber-500/15 text-amber-700 border-amber-500/40'}`}
