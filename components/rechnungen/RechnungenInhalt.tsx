@@ -4,8 +4,9 @@ import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { WIN } from '@/components/win/Win';
+import { useRechnungVersenden } from '@/components/RechnungVersendenDialog';
 import {
-  generateInvoicePDF, generateMahnungPDF, fmtEur, fmtDate, holePdfBase64FuerVersand,
+  generateInvoicePDF, generateMahnungPDF, fmtEur, fmtDate,
   type Invoice, type Position,
 } from '@/lib/invoice-pdf';
 import {
@@ -538,34 +539,10 @@ export function RechnungenInhalt({ umfang, neuSignal = 0, entwurfId: entwurfVonA
     } catch (err: any) { alert('❌ ' + err.message); }
   }
 
+  // Versand über den zentralen Dialog (Empfänger, Anhang, Vorschau, Ergebnis)
+  const versand = useRechnungVersenden(() => { void load(); });
   async function handleSendMail(inv: Invoice) {
-    const vorschlagEmail = await ermittleVorgeschlageneEmail(inv);
-    const to = prompt(`An welche E-Mail-Adresse soll Rechnung ${inv.invoice_number} gesendet werden?`, vorschlagEmail);
-    if (!to || !to.includes('@')) return;
-    try {
-      const { pdfBase64, istZugferd, hinweis, projektnummer } = await holePdfBase64FuerVersand(inv);
-      const res = await fetch('/api/email', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          type: 'rechnung',
-          to,
-          projectId: inv.project_id || undefined,
-          projectName: inv.customer_name,
-          customerName: inv.customer_name,
-          invoiceNumber: inv.invoice_number,
-          grossAmount: Number(inv.gross_amount),
-          dueDate: fmtDate(inv.due_date),
-          pdfBase64,
-          projektnummer,
-        }),
-      });
-      const json = await res.json();
-      if (!json.success) throw new Error(json.error || 'Versand fehlgeschlagen');
-      alert((istZugferd ? '✅ ' : '⚠️ ') + 'Rechnung ' + inv.invoice_number + ' an ' + to + ' gesendet!' + (hinweis ? '\n\n' + hinweis : ''));
-    } catch (err: any) {
-      alert('❌ E-Mail fehlgeschlagen: ' + err.message);
-    }
+    versand.starten(inv, await ermittleVorgeschlageneEmail(inv));
   }
 
   // Phase 15: Mahnung erzeugen (PDF + optional E-Mail), Mahnstufe hochzählen
@@ -1085,6 +1062,7 @@ export function RechnungenInhalt({ umfang, neuSignal = 0, entwurfId: entwurfVonA
             </div>
           </div>
         )}
+        {versand.dialog}
         {anhangFuer && <AnhangDialog invoiceId={anhangFuer.id} rechnungsNr={anhangFuer.invoice_number} positionen={anhangFuer.positions || []} onClose={() => setAnhangFuer(null)} />}
       </div>
     </div>

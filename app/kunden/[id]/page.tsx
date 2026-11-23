@@ -29,7 +29,8 @@ import {
   ClipboardList, Image as ImageIcon, FileSignature, User, LayoutDashboard, Layers, FilePen, Wrench,
 } from 'lucide-react'
 import RechnungAktionen from '@/components/RechnungAktionen'
-import { generateInvoicePDF, generateLieferscheinPDF, fmtEur, fmtDate, holePdfBase64FuerVersand, type Invoice } from '@/lib/invoice-pdf'
+import { useRechnungVersenden } from '@/components/RechnungVersendenDialog'
+import { generateInvoicePDF, generateLieferscheinPDF, fmtEur, fmtDate, type Invoice } from '@/lib/invoice-pdf'
 import { gewerkeVonStep1, starteNeuesAufmass } from '@/lib/aufmass-projekt-session'
 import SignaturePad from '@/components/aufmaß/SignaturePad'
 import { uploadVertragsdokument } from '@/lib/vertrag-upload-client'
@@ -478,30 +479,12 @@ export default function KundenDetailPage() {
     } catch (err: any) { alert('❌ ' + err.message) }
   }
 
-  async function sendInvoice(inv: Invoice) {
-    // Vorschlag: Adresse, an die diese Rechnung zuletzt gesendet wurde (emails ist
-    // nach sent_at absteigend sortiert); sonst die E-Mail aus dem Kundenstamm.
+  // Versand über den zentralen Dialog. Vorschlag: Adresse, an die diese Rechnung zuletzt gesendet wurde
+  // (emails ist nach sent_at absteigend sortiert); sonst die E-Mail aus dem Kundenstamm.
+  const versand = useRechnungVersenden(() => { setMailTick((t) => t + 1); ladeDaten() })
+  function sendInvoice(inv: Invoice) {
     const zuletztAn = alleEmails.find((m) => m.invoice_number === inv.invoice_number && m.to_email)?.to_email
-    const to = prompt(`An welche E-Mail-Adresse soll ${TYPE_LABEL[inv.invoice_type || 'standard']} ${inv.invoice_number} gesendet werden?`, zuletztAn || kunde?.email || '')
-    if (!to || !to.includes('@')) return
-    try {
-      const { pdfBase64, istZugferd, hinweis, projektnummer } = await holePdfBase64FuerVersand(inv)
-      const res = await fetch('/api/email', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          type: 'rechnung', to, projectId: inv.project_id || undefined,
-          projectName: inv.customer_name, customerName: inv.customer_name,
-          invoiceNumber: inv.invoice_number, grossAmount: Number(inv.gross_amount),
-          dueDate: fmtDate(inv.due_date), pdfBase64, projektnummer,
-        }),
-      })
-      const json = await res.json()
-      if (!json.success) throw new Error(json.error)
-      alert((istZugferd ? '✅ ' : '⚠️ ') + inv.invoice_number + ' an ' + to + ' gesendet!' + (hinweis ? '\n\n' + hinweis : ''))
-      setMailTick((t) => t + 1)
-      ladeDaten()
-    } catch (err: any) { alert('❌ ' + err.message) }
+    versand.starten(inv, zuletztAn || kunde?.email || '')
   }
 
   async function toggleStatus(inv: Invoice) {
@@ -1768,6 +1751,7 @@ export default function KundenDetailPage() {
         )}
       </div>
 
+      {versand.dialog}
       {offeneMail && <EmailVerlaufDialog mail={offeneMail} onClose={() => setOffeneMail(null)} />}
       {neueMailOffen && (
         <NeueMailDialog

@@ -176,7 +176,12 @@ describe('Sperre nur bei tatsächlicher Verwendung im Dokument, VOR dem Versand'
     for (const d of ['app/aufmass/schritt6/page.tsx', 'components/rechnungen/RechnungenInhalt.tsx', 'lib/invoice-pdf.ts', 'app/api/invoices/zugferd/route.ts']) expect(quelle(d), d).not.toContain('sperreFuerExterneVerwendung')
   })
   it('Alle Versandstellen melden die gedruckte Projektnummer', () => {
-    for (const d of ['app/kunden/[id]/page.tsx', 'app/kunden/page.tsx', 'app/rechnungen/[id]/page.tsx', 'components/rechnungen/RechnungenInhalt.tsx', 'components/KundeAuftrag.tsx', 'components/NeueMailDialog.tsx', 'app/aufmass/schritt6/page.tsx']) expect(quelle(d), d).toMatch(/projektnummer/)
+    for (const d of ['lib/rechnung-versand-dienst.ts', 'components/rechnungen/RechnungenInhalt.tsx', 'components/NeueMailDialog.tsx', 'app/aufmass/schritt6/page.tsx']) expect(quelle(d), d).toMatch(/projektnummer/)
+  })
+  it('Rechnungsversand läuft über den zentralen Dialog bzw. den gemeinsamen Versandweg (der meldet die Projektnummer)', () => {
+    for (const d of ['app/kunden/[id]/page.tsx', 'app/kunden/page.tsx', 'app/rechnungen/[id]/page.tsx', 'components/rechnungen/RechnungenInhalt.tsx', 'components/KundeAuftrag.tsx']) expect(quelle(d), d).toContain('useRechnungVersenden')
+    expect(quelle('app/aufmass/schritt6/page.tsx')).toContain('versendeRechnung')
+    expect(quelle('lib/rechnung-versand-dienst.ts')).toMatch(/projektnummer: projektnummer/)
   })
   it('Dokumente drucken die Projektnummer', () => {
     const t = quelle('lib/invoice-pdf.ts')

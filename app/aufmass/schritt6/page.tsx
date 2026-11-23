@@ -30,7 +30,8 @@ import { DispositionResult as DispositionData } from '@/lib/calculations/disposi
 import { uebernehmeMaterialBearbeitung } from '@/lib/stueckliste-bearbeiten';
 import { passendeArtikelFuerKategorie, setzeKatalogArtikel, stelleStandardWiederHer, katalogListenName, artikelLabel } from '@/lib/cad/katalog-zuordnung';
 import { mjArtikelNachNr } from '@/lib/mj-katalog';
-import { generateInvoicePDF, zeichneProjektnummer, fmtDate as fmtRechnungsDatum, holePdfBase64FuerVersand, type Invoice } from '@/lib/invoice-pdf';
+import { generateInvoicePDF, zeichneProjektnummer, fmtDate as fmtRechnungsDatum, type Invoice } from '@/lib/invoice-pdf';
+import { versendeRechnung } from '@/lib/rechnung-versand-dienst';
 import { balkoneFuerAbschnitt } from '@/lib/balkon';
 import { abschnitteAusSchritt2, berechneAufmass, erzeugeAufmassblattPdf, type AufmassFoto, type AufmassZulage } from '@/lib/aufmassblatt-pdf';
 import { Save, FileText, Pencil, Check, Ruler, PenLine, ClipboardList, Sparkles, Mail } from 'lucide-react';
@@ -1096,20 +1097,11 @@ function Schritt6Content() {
     setRechnungSendenLaeuft(true);
     setRechnungFehler('');
     try {
-      const { pdfBase64, hinweis, projektnummer: rechnungsNummer } = await holePdfBase64FuerVersand(rechnungErstellt);
-      const res = await fetch('/api/email', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          type: 'rechnung', to: rechnungEmail.trim(), projectId: savedProjectId,
-          projectName: s1.name, customerName: s1.name,
-          invoiceNumber: rechnungErstellt.invoice_number, grossAmount: Number(rechnungErstellt.gross_amount),
-          dueDate: fmtRechnungsDatum(rechnungErstellt.due_date), pdfBase64, projektnummer: rechnungsNummer || undefined,
-        }),
+      // gemeinsamer Versandweg (lib/rechnung-versand-dienst.ts); dieser Assistent behält sein eigenes Eingabefeld
+      const erg = await versendeRechnung(rechnungErstellt, rechnungEmail, {
+        projectId: savedProjectId, projectName: s1.name, customerName: s1.name, faelligText: fmtRechnungsDatum(rechnungErstellt.due_date),
       });
-      const json = await res.json();
-      if (!json.success) throw new Error(json.error || 'Versand fehlgeschlagen.');
-      if (hinweis) setRechnungFehler('Gesendet, aber: ' + hinweis);
+      if (erg.hinweis) setRechnungFehler('Gesendet, aber: ' + erg.hinweis);
       setRechnungVersendet(true);
     } catch (err: any) {
       setRechnungFehler(err.message);

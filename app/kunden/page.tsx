@@ -5,8 +5,9 @@ import { useRouter } from 'next/navigation';
 import {
   Users, Plus, X, Save, Download, Mail, Check, RotateCcw, Search, FileText, Briefcase,
 } from 'lucide-react';
-import { generateInvoicePDF, fmtEur, fmtDate, holePdfBase64FuerVersand, type Invoice } from '@/lib/invoice-pdf';
+import { generateInvoicePDF, fmtEur, fmtDate, type Invoice } from '@/lib/invoice-pdf';
 import KundeAuftrag from '@/components/KundeAuftrag';
+import { useRechnungVersenden } from '@/components/RechnungVersendenDialog';
 import { lokalesDatumIso } from '@/lib/datum'
 import { WIN } from '@/components/win/Win'
 
@@ -216,36 +217,9 @@ export default function KundenPage() {
     doc.save(`Rechnung_${inv.invoice_number}.pdf`);
   }
 
-  async function handleMail(inv: Invoice, kunde: Kunde) {
-    const to = prompt(
-      `An welche E-Mail-Adresse soll Rechnung ${inv.invoice_number} gesendet werden?`,
-      kunde.email || ''
-    );
-    if (!to || !to.includes('@')) return;
-    try {
-      const { pdfBase64, istZugferd, hinweis, projektnummer } = await holePdfBase64FuerVersand(inv);
-      const res = await fetch('/api/email', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          type: 'rechnung',
-          to,
-          projectId: inv.project_id || undefined,
-          projectName: inv.customer_name,
-          customerName: inv.customer_name,
-          invoiceNumber: inv.invoice_number,
-          grossAmount: Number(inv.gross_amount),
-          dueDate: fmtDate(inv.due_date),
-          pdfBase64,
-          projektnummer,
-        }),
-      });
-      const json = await res.json();
-      if (!json.success) throw new Error(json.error || 'Versand fehlgeschlagen');
-      alert((istZugferd ? '✅ ' : '⚠️ ') + 'Rechnung ' + inv.invoice_number + ' an ' + to + ' gesendet!' + (hinweis ? '\n\n' + hinweis : ''));
-    } catch (err: any) {
-      alert('❌ E-Mail fehlgeschlagen: ' + err.message);
-    }
+  const versand = useRechnungVersenden();
+  function handleMail(inv: Invoice, kunde: Kunde) {
+    versand.starten(inv, kunde.email || '');
   }
 
   async function handleBezahlt(inv: Invoice) {
@@ -291,6 +265,7 @@ export default function KundenPage() {
 
   return (
     <div className="min-h-full" style={{ background: WIN.grund }}>
+      {versand.dialog}
       <div className="flex items-center gap-3 px-3 h-9 text-white sticky top-0 z-20" style={{ background: '#171b20' }}>
         <Users className="h-4 w-4" />
         <h1 className="text-[14px] font-bold">Kunden / Adressen</h1>
