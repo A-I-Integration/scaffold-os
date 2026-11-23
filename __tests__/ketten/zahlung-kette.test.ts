@@ -50,6 +50,23 @@ function mitRpc(fake: (e: RequestInfo | URL, i?: RequestInit) => Promise<Respons
       inv.paid_amount = neu
       return json({ ok: true })
     }
+    if (name === 'faktura_status_setzen') {
+      // Regeln von faktura_status_setzen (phase-130); die echte SQL-Funktion prüft der E2E-Test gegen PostgreSQL (Gruppe 8d)
+      const inv = db.invoices.find((x) => x.id === b.p_invoice_id); if (!inv) return json({ ok: false, code: 'NICHT_GEFUNDEN' })
+      if (inv.status === 'storniert') return json({ ok: false, code: b.p_ziel === 'bezahlt' ? 'ZAHLUNG_AUF_STORNIERT' : 'STORNIERT_FINAL' })
+      if (b.p_ziel === 'bezahlt') {
+        const offen = offenVon(inv, Number(inv.paid_amount), String(inv.status))
+        if (offen > 0.01) {
+          db.invoice_payments.push({ id: crypto.randomUUID(), invoice_id: inv.id, amount: offen, quelle: 'manuell_bezahlt' })
+          inv.paid_amount = Math.round((Number(inv.paid_amount) + offen) * 100) / 100; inv.status = 'bezahlt'
+          return json({ ok: true, status: 'bezahlt', gebucht: offen, paid_amount: inv.paid_amount })
+        }
+        return json({ ok: true, status: inv.status, gebucht: 0 })
+      }
+      if (db.invoice_payments.some((x) => x.invoice_id === inv.id && x.quelle !== 'manuell_bezahlt')) return json({ ok: false, code: 'ZAHLUNGEN_VORHANDEN' })
+      db.invoice_payments = db.invoice_payments.filter((x) => x.invoice_id !== inv.id); inv.paid_amount = 0; inv.status = 'offen'
+      return json({ ok: true, status: 'offen' })
+    }
     return new Response('rpc unbekannt', { status: 404 })
   }
 }
@@ -146,15 +163,29 @@ describe('Kette Rechnung: Teilzahlung → Restzahlung → Korrektur', () => {
     expect(rechnung().paid_amount).toBe(summeZahlungen())
   })
 
-  it('Status von Hand auf "bezahlt" verbucht den vollen Rechnungsbetrag (offener Betrag 0)', async () => {
-    await patchRechnung({ status: 'bezahlt' })
-    expect(rechnung().paid_amount).toBe(1000)
+  it('Status von Hand auf "bezahlt" bucht den offenen Rest als echte Zahlung (Betrag = Summe der Historie); ein mitgesendeter Betrag wird ignoriert', async () => {
+    const r = await patchRechnung({ status: 'bezahlt', paid_amount: 5 })
+    expect(r.status).toBe(200)
+    expect(rechnung().paid_amount).toBe(1000); expect(summeZahlungen()).toBe(1000); expect(db.invoice_payments).toHaveLength(1)
   })
 
-  it('bezahlter Betrag per PATCH darf weder negativ noch über dem Rechnungsbetrag liegen', async () => {
-    const a = await patchRechnung({ paid_amount: 5000 })
-    const b = await patchRechnung({ paid_amount: -10 })
-    expect(a.status).toBe(400)
-    expect(b.status).toBe(400)
+  it('bezahlter Betrag per PATCH allein wird nicht mehr gesetzt (400), nichts verändert', async () => {
+    const a = await patchRechnung({ paid_amount: 500 })
+    expect(a.status).toBe(400); expect((await a.json()).code).toBe('PAID_AMOUNT_NICHT_ERLAUBT')
+    expect(rechnung().paid_amount).toBe(0); expect(db.invoice_payments).toHaveLength(0)
+  })
+
+  it('"Zurück auf offen" bei echter Zahlung: 409, Zahlung bleibt', async () => {
+    await zahlen(400)
+    const r = await patchRechnung({ status: 'offen' })
+    expect(r.status).toBe(409); expect((await r.json()).code).toBe('ZAHLUNGEN_VORHANDEN')
+    expect(rechnung().paid_amount).toBe(400)
+  })
+
+  it('Datenbank-Migration phase-130 fehlt: Status-Änderung 503, nichts geändert', async () => {
+    vi.stubGlobal('fetch', async () => new Response(JSON.stringify({ code: 'PGRST202', message: 'Could not find the function public.faktura_status_setzen' }), { status: 404 }))
+    const r = await patchRechnung({ status: 'bezahlt' })
+    expect(r.status).toBe(503); expect((await r.json()).code).toBe('STATUS_MIGRATION_FEHLT')
+    expect(rechnung().paid_amount).toBe(0)
   })
 })

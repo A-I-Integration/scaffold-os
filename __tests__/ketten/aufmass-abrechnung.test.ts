@@ -78,6 +78,8 @@ beforeEach(() => {
       else if (p.p_aktion === 'freigeben') d.vorhaltePerioden = d.vorhaltePerioden.filter((e: any) => e.id !== p.p_token)
       return json('ok')
     }
+    // Regel von faktura_status_setzen (phase-130) für stornierte Rechnungen; die echte Funktion prüft der E2E-Test
+    if (rpc === 'faktura_status_setzen') { const r = db.invoices.find((i) => i.id === p.p_invoice_id); return json(r?.status === 'storniert' ? { ok: false, code: p.p_ziel === 'bezahlt' ? 'ZAHLUNG_AUF_STORNIERT' : 'STORNIERT_FINAL' } : { ok: false, code: 'NICHT_GEFUNDEN' }) }
     if (rpc === 'aufmass_zuordnen') { await Promise.resolve(); return json(zuordnen(p)) }
     if (createFehler) return json({ message: 'boom' }, 500)
     await Promise.resolve()

@@ -3,13 +3,14 @@ import { vorhaltungZuordnen, vorhaltungFehlerText } from '@/lib/vorhaltung-zuord
 import { pruefeVorhaltungBezug, istVorhaltungsRechnung } from '@/lib/vorhaltung';
 import { aufmassStand, pruefeAufmassBezug, freiePositionenMitAufmassName } from '@/lib/aufmass-integritaet';
 import { aufmassZuordnen, reservierungFehlerText } from '@/lib/aufmass-zuordnung-server';
-import { ladeBelegForderung, gleicheStatusNachGutschriftAb, ladeAlleRechnungen, ListeZuGross } from '@/lib/forderung-server';
+import { gleicheStatusNachGutschriftAb, ladeAlleRechnungen, ListeZuGross } from '@/lib/forderung-server';
 import { freigabeNachStorno, freigabeNachGutschrift, gibZuordnungFrei, istVersendet, gutschriftEntfernenPruefen } from '@/lib/zuordnung-freigabe-server';
 import { pruefeAbrechnung, grundGueltig, type Abweichung } from '@/lib/abrechnung-pruefung';
 import { schreibeHistorie } from '@/lib/abrechnung-historie';
 import { angebotNettoAusProjekt } from '@/lib/auftragsstand';
 import { normalisiereNachtraege } from '@/lib/nachtrag';
 import { ergaenzeProjektnummer } from '@/lib/cad/projektnummer-sperre';
+import { createHash } from 'node:crypto';
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { trackImpact } from '@/lib/impact';
@@ -123,7 +124,7 @@ export async function GET(req: NextRequest) {
 }
 
 // ─── POST: Rechnung anlegen ───
-async function anlegen(req: NextRequest) {
+async function anlegen(req: NextRequest, idem?: { key: string; hash: string }) {
   const { role, userId } = await callerRole();
   if (!role || !WRITE_ROLES.includes(role)) {
     return NextResponse.json(
@@ -423,19 +424,25 @@ async function anlegen(req: NextRequest) {
     // Mit Reservierung: Rechnung anlegen UND zuordnen in EINER Datenbank-Transaktion (rechnung_anlegen_zugeordnet, phase-128).
     // Scheitert die Zuordnung, wird auch die Rechnung zurückgerollt – es entsteht keine Rechnung ohne Zuordnung.
     const zugeordnet = !!(aufmassRes || vorhaltungRes);
+    const ziel = zugeordnet ? 'rechnung_anlegen_zugeordnet' : rpcName;
+    const zielArgs: Record<string, any> = zugeordnet
+      ? { p_art: aufmassRes ? 'aufmass' : 'vorhaltung', p_za_id: aufmassRes?.zaId ?? null, p_token: (aufmassRes?.token ?? vorhaltungRes?.token) as string, p_params: rpcParams }
+      : rpcParams;
+    // Mit Idempotenzschlüssel: Rechnung anlegen UND Schlüssel festschreiben in EINER Transaktion (faktura_anlegen_idempotent, phase-130).
     let res: Response;
     try {
-      res = await fetch(`${url}/rest/v1/rpc/${zugeordnet ? 'rechnung_anlegen_zugeordnet' : rpcName}`, {
+      res = await fetch(`${url}/rest/v1/rpc/${idem ? 'faktura_anlegen_idempotent' : ziel}`, {
         method: 'POST',
         headers: { ...headers, 'Prefer': 'return=representation' },
-        body: JSON.stringify(zugeordnet
-          ? { p_art: aufmassRes ? 'aufmass' : 'vorhaltung', p_za_id: aufmassRes?.zaId ?? null, p_token: (aufmassRes?.token ?? vorhaltungRes?.token) as string, p_params: rpcParams }
-          : rpcParams),
+        body: JSON.stringify(idem ? { p_schluessel: idem.key, p_hash: idem.hash, p_ziel: ziel, p_args: zielArgs } : zielArgs),
       });
     } catch (e) { await freigebenBeiFehler(); throw e; }
     if (!res.ok) {
       const fehlerText = await res.text();
       await freigebenBeiFehler();
+      if (idem && /PGRST202/.test(fehlerText)) {
+        return NextResponse.json({ success: false, code: 'IDEMPOTENZ_MIGRATION_FEHLT', error: 'Die Datenbank-Migration phase-130 fehlt. Die Rechnung wurde NICHT angelegt.' }, { status: 503 });
+      }
       if (zugeordnet && /PGRST202|rechnung_anlegen_zugeordnet/.test(fehlerText) && /not find|does not exist|Could not/i.test(fehlerText)) {
         return NextResponse.json({ success: false, code: 'ZUORDNUNG_MIGRATION_FEHLT', error: 'Die Datenbank-Migration phase-128 fehlt. Die Rechnung wurde NICHT angelegt.' }, { status: 503 });
       }
@@ -448,7 +455,21 @@ async function anlegen(req: NextRequest) {
     // Element oder als einzelnes Objekt - beide Formen werden hier
     // akzeptiert, statt eine davon zu erraten.
     const rpcResult = await res.json();
-    const invoiceRow = Array.isArray(rpcResult) ? rpcResult[0] : rpcResult;
+    let invoiceRow = Array.isArray(rpcResult) ? rpcResult[0] : rpcResult;
+    if (idem) {
+      // Antwort von faktura_anlegen_idempotent: { ok, neu, invoice } | { ok: false, code }
+      if (!invoiceRow?.ok) {
+        await freigebenBeiFehler();
+        if (invoiceRow?.code === 'KEY_KONFLIKT') return NextResponse.json({ success: false, code: 'KEY_KONFLIKT', error: 'Dieser Idempotenzschlüssel wurde bereits mit anderen Angaben verwendet.' }, { status: 422 });
+        return NextResponse.json({ success: false, code: invoiceRow?.code || 'UNBEKANNT', error: 'Die zum Schlüssel gehörende Rechnung existiert nicht mehr.' }, { status: 409 });
+      }
+      if (invoiceRow.neu === false) {
+        // Die Rechnung gibt es bereits (Wiederholung): die neu gemachte Reservierung freigeben, nichts erneut anlegen
+        await freigebenBeiFehler();
+        return NextResponse.json({ success: true, invoice: invoiceRow.invoice }, { headers: { 'Idempotent-Replay': 'true' } });
+      }
+      invoiceRow = invoiceRow.invoice;
+    }
     if (!invoiceRow?.id) { await freigebenBeiFehler(); throw new Error('Rechnung wurde angelegt, aber die Antwort der Datenbank hatte ein unerwartetes Format.'); }
     const rows = [invoiceRow]; // ab hier wie zuvor: rows[0] = angelegte Rechnung
     const invoiceNumber = invoiceRow.invoice_number;
@@ -542,20 +563,35 @@ async function anlegen(req: NextRequest) {
 }
 
 // ─── POST mit Wiederholungsschutz ───
-// Idempotency-Key (Header): dieselbe Anfrage liefert das ursprüngliche Ergebnis und legt nichts doppelt an. Ohne Schlüssel (ältere Aufrufer) unverändert.
+// Idempotency-Key (Header): dieselbe Anfrage liefert das ursprüngliche Ergebnis und legt nichts doppelt an.
+// Zustände (Datenbank): neu | laeuft (409) | wiederaufnahme (Frist abgelaufen, noch nichts angelegt) | angelegt (Rechnung existiert, Antwort wird rekonstruiert) | fertig (gespeicherte Antwort) | konflikt (andere Nutzdaten, 422).
+// Ohne Schlüssel (ältere Aufrufer) unverändert.
+function stabil(v: any): any { return Array.isArray(v) ? v.map(stabil) : v && typeof v === 'object' ? Object.fromEntries(Object.keys(v).sort().map((k) => [k, stabil(v[k])])) : v; }
 export async function POST(req: NextRequest) {
   const schluessel = (req.headers.get('idempotency-key') || '').trim().slice(0, 100);
   if (!schluessel) return anlegen(req);
   const key = `rechnung:${schluessel}`;
-  let start: { zustand?: string; antwort?: unknown; http_status?: number } | null = null;
+  let hash = '';
+  try { hash = createHash('sha256').update(JSON.stringify(stabil(await req.clone().json()))).digest('hex'); } catch { hash = ''; }
+  let start: { zustand?: string; antwort?: unknown; http_status?: number; invoice_id?: string } | null = null;
   try {
-    const r = await fetch(`${url}/rest/v1/rpc/faktura_idempotenz_start`, { method: 'POST', headers, body: JSON.stringify({ p_schluessel: key, p_art: 'rechnung_anlegen' }) });
+    const r = await fetch(`${url}/rest/v1/rpc/faktura_idempotenz_start`, { method: 'POST', headers, body: JSON.stringify({ p_schluessel: key, p_art: 'rechnung_anlegen', p_hash: hash || null }) });
     start = r.ok ? await r.json() : null;
   } catch { start = null; }
-  if (!start) return anlegen(req);                       // Schlüsseltabelle nicht erreichbar (Migration fehlt): ohne Schutz weiterarbeiten statt blockieren
+  if (!start) return NextResponse.json({ success: false, code: 'IDEMPOTENZ_MIGRATION_FEHLT', error: 'Die Datenbank-Migration phase-130 fehlt oder die Schlüsseltabelle ist nicht erreichbar. Es wurde nichts angelegt.' }, { status: 503 });
+  if (start.zustand === 'konflikt') return NextResponse.json({ success: false, code: 'KEY_KONFLIKT', error: 'Dieser Idempotenzschlüssel wurde bereits mit anderen Angaben verwendet.' }, { status: 422 });
   if (start.zustand === 'fertig') return NextResponse.json(start.antwort ?? { success: true }, { status: start.http_status || 200, headers: { 'Idempotent-Replay': 'true' } });
   if (start.zustand === 'laeuft') return NextResponse.json({ success: false, code: 'IN_BEARBEITUNG', error: 'Dieselbe Anfrage wird gerade verarbeitet.' }, { status: 409 });
-  const res = await anlegen(req);
+  if (start.zustand === 'angelegt') {
+    // Rechnung existiert (Antwort ging verloren oder der Vorgang brach danach ab): Ergebnis aus der Datenbank rekonstruieren
+    const r = await fetch(`${url}/rest/v1/invoices?id=eq.${encodeURIComponent(String(start.invoice_id))}&select=*`, { headers });
+    const rows = r.ok ? await r.json() : [];
+    if (!rows?.[0]) return NextResponse.json({ success: false, code: 'GELOESCHT', error: 'Die zum Schlüssel gehörende Rechnung existiert nicht mehr.' }, { status: 409 });
+    const antwort = { success: true, invoice: rows[0] };
+    await fetch(`${url}/rest/v1/rpc/faktura_idempotenz_ende`, { method: 'POST', headers, body: JSON.stringify({ p_schluessel: key, p_antwort: antwort, p_http_status: 200 }) }).catch(() => {});
+    return NextResponse.json(antwort, { headers: { 'Idempotent-Replay': 'true' } });
+  }
+  const res = await anlegen(req, { key, hash });
   let antwort: unknown = null;
   try { antwort = await res.clone().json(); } catch { /* keine JSON-Antwort */ }
   await fetch(`${url}/rest/v1/rpc/faktura_idempotenz_ende`, { method: 'POST', headers, body: JSON.stringify({ p_schluessel: key, p_antwort: antwort, p_http_status: res.status }) }).catch(() => {});
@@ -573,7 +609,7 @@ export async function PATCH(req: NextRequest) {
   }
   try {
     const body = await req.json();
-    const { id, status, reminder_level, notes, paid_amount } = body;
+    const { id, status, reminder_level, notes, paid_amount, grund } = body;
 
     if (!id) {
       return NextResponse.json({ success: false, error: 'id erforderlich' }, { status: 400 });
@@ -596,15 +632,12 @@ export async function PATCH(req: NextRequest) {
       patch.reminder_level = rl;
     }
     if (notes !== undefined) patch.notes = notes;
-    // NEU (Phase 38): paid_amount – reflektiert den tatsächlichen Zahlungs-
-    // eingang, kein Eingriff in den ursprünglich ausgestellten Rechnungs-
-    // inhalt (Positionen/Beträge bleiben unveränderbar, siehe oben).
-    if (paid_amount != null) {
-      const pa = Number(paid_amount);
-      if (!Number.isFinite(pa) || pa < 0) {
-        return NextResponse.json({ success: false, error: 'Der bezahlte Betrag muss eine Zahl von 0 oder mehr sein.' }, { status: 400 });
-      }
-      patch.paid_amount = Math.round(pa * 100) / 100;
+    // Phase 130: paid_amount wird NICHT mehr direkt geschrieben. Zahlungen laufen über /api/invoice-payments (Zahlungszeile + Zeilensperre);
+    // „Als bezahlt“/„Zurück auf offen“ über die Datenbankfunktion faktura_status_setzen. Ein mitgesendeter Betrag neben status bezahlt/offen
+    // (ältere Oberflächen) wird ignoriert: gebucht wird immer der zentral berechnete offene Rest.
+    const ueberDb = status === 'bezahlt' || status === 'offen';
+    if (paid_amount != null && !ueberDb) {
+      return NextResponse.json({ success: false, code: 'PAID_AMOUNT_NICHT_ERLAUBT', error: 'Der bezahlte Betrag wird nicht direkt gesetzt. Zahlungen bitte über „Zahlung buchen“ erfassen.' }, { status: 400 });
     }
     if (!status && reminder_level == null && notes === undefined && paid_amount == null) {
       return NextResponse.json({ success: false, error: 'Nichts zu ändern.' }, { status: 400 });
@@ -615,24 +648,31 @@ export async function PATCH(req: NextRequest) {
     // "Neue Version anlegen" (POST einer neuen Rechnung mit Bezug + diese hier
     // auf "storniert" setzen), siehe Kunden-Detail.
 
-    // Zahlung gegen den noch offenen Betrag NACH Gutschriften prüfen (zentral, lib/forderung.ts; Gutschriften per Rechnungsnummer, unabhängig von
-    // Baustelle/Ansicht). „bezahlt“ ohne Betrag verbucht den noch offenen Betrag; eine Gutschrift ist keine Zahlung und wird nicht als solche gebucht.
-    if (patch.paid_amount !== undefined || status === 'bezahlt') {
-      const gr = await fetch(`${url}/rest/v1/invoices?id=eq.${id}&select=id,invoice_number,invoice_type,due_date,gross_amount,paid_amount,status`, { headers });
-      const zeile = gr.ok ? (await gr.json())?.[0] : null;
-      const brutto = zeile ? Number(zeile.gross_amount) : NaN;
-      if (zeile && Number.isFinite(brutto) && zeile.status !== 'storniert') {
-        const f = await ladeBelegForderung({ url, headers }, zeile);
-        if (!f) throw new Error('Gutschriften zur Rechnung nicht lesbar');
-        const maxGesamt = Math.round((brutto - f.gutschrift) * 100) / 100;
-        if (status === 'bezahlt') {
-          // Als „bezahlt“ markieren: bei vorhandenen Gutschriften zählt nur der tatsächlich noch geschuldete Rest als Zahlung
-          if (patch.paid_amount === undefined) patch.paid_amount = Math.round((Number(zeile.paid_amount || 0) + f.offen) * 100) / 100;
-          else if (f.gutschrift > 0 && Math.abs(patch.paid_amount - brutto) <= 0.01) patch.paid_amount = maxGesamt;
-        }
-        if (patch.paid_amount !== undefined && patch.paid_amount - maxGesamt > 0.01) {
-          return NextResponse.json({ success: false, error: `Der bezahlte Betrag (${patch.paid_amount.toFixed(2)} €) liegt über dem Rechnungsbetrag${f.gutschrift > 0 ? ` nach Gutschriften (${maxGesamt.toFixed(2)} €)` : ` (${brutto.toFixed(2)} €)`}.` }, { status: 400 });
-        }
+    // Manuelles „Als bezahlt“/„Zurück auf offen“: atomar in der Datenbank (Zeilensperre, zentrale Berechnung, echte Zahlungszeile, Verlauf mit Benutzer und Grund)
+    if (ueberDb) {
+      const r = await fetch(`${url}/rest/v1/rpc/faktura_status_setzen`, { method: 'POST', headers, body: JSON.stringify({ p_invoice_id: id, p_ziel: status, p_user: userId || null, p_grund: typeof grund === 'string' && grund.trim() ? grund.trim().slice(0, 300) : null }) });
+      if (!r.ok) {
+        const t = await r.text();
+        if (/PGRST202/.test(t)) return NextResponse.json({ success: false, code: 'STATUS_MIGRATION_FEHLT', error: 'Die Datenbank-Migration phase-130 fehlt. Es wurde nichts geändert.' }, { status: 503 });
+        throw new Error(t);
+      }
+      const erg = await r.json();
+      if (!erg?.ok) {
+        const texte: Record<string, [number, string]> = {
+          NICHT_GEFUNDEN: [404, 'Rechnung nicht gefunden.'],
+          ZAHLUNG_AUF_STORNIERT: [409, 'Auf eine stornierte Rechnung kann keine Zahlung gebucht werden. Bereits gebuchte Zahlungen bleiben im Verlauf erhalten.'],
+          STORNIERT_FINAL: [409, 'Eine stornierte Rechnung kann nicht wieder geöffnet werden. Bitte eine neue Rechnung anlegen.'],
+          GUTSCHRIFT_KEINE_ZAHLUNG: [409, 'Eine Gutschrift ist keine Zahlung und kann nicht als bezahlt markiert werden.'],
+          ZAHLUNGEN_VORHANDEN: [409, 'Es sind Zahlungen gebucht. Bitte die jeweilige Zahlung gezielt korrigieren oder löschen, statt die Rechnung auf offen zu setzen.'],
+        };
+        const [st, tx] = texte[erg?.code] || [400, 'Status konnte nicht geändert werden.'];
+        return NextResponse.json({ success: false, code: erg?.code || 'FEHLER', error: tx }, { status: st });
+      }
+      delete patch.status;
+      if (Object.keys(patch).length <= 1) {
+        const ir = await fetch(`${url}/rest/v1/invoices?id=eq.${id}&select=*`, { headers });
+        const zeile = ir.ok ? (await ir.json())?.[0] : null;
+        return NextResponse.json({ success: true, invoice: zeile, status_ergebnis: erg });
       }
     }
 
@@ -657,15 +697,7 @@ export async function PATCH(req: NextRequest) {
       }
     }
 
-    // Auf eine stornierte Rechnung wird nichts mehr gebucht (Zahlung/„bezahlt“). Bereits gebuchte Zahlungen bleiben unverändert erhalten.
-    const zahlungsAenderung = patch.paid_amount !== undefined || status === 'bezahlt';
-    const zahlungAufStorniert = { success: false, code: 'ZAHLUNG_AUF_STORNIERT', error: 'Auf eine stornierte Rechnung kann keine Zahlung gebucht werden. Bereits gebuchte Zahlungen bleiben im Verlauf erhalten.' };
-    if (zahlungsAenderung && vorher?.status === 'storniert') {
-      return NextResponse.json(zahlungAufStorniert, { status: 409 });
-    }
-
-    // Bei Zahlungsänderungen zusätzlich in der Abfrage selbst: ein gleichzeitiges Storno kann nicht mehr überschrieben werden.
-    const res = await fetch(`${url}/rest/v1/invoices?id=eq.${id}${zahlungsAenderung ? '&status=neq.storniert' : ''}`, {
+    const res = await fetch(`${url}/rest/v1/invoices?id=eq.${id}`, {
       method: 'PATCH',
       headers: { ...headers, 'Prefer': 'return=representation' },
       body: JSON.stringify(patch),
@@ -674,7 +706,6 @@ export async function PATCH(req: NextRequest) {
 
     const rows = await res.json();
     if (!rows?.length) {
-      if (zahlungsAenderung && vorher) return NextResponse.json(zahlungAufStorniert, { status: 409 });
       return NextResponse.json({ success: false, error: 'Rechnung nicht gefunden.' }, { status: 404 });
     }
     let zuordnungHinweis: string | null = null;

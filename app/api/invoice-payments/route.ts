@@ -89,7 +89,7 @@ export async function POST(req: NextRequest) {
       switch (erg?.code) {
         case 'NICHT_GEFUNDEN': return NextResponse.json({ success: false, error: 'Rechnung nicht gefunden.' }, { status: 404 });
         case 'ZAHLUNG_AUF_STORNIERT': return NextResponse.json({ success: false, code: 'ZAHLUNG_AUF_STORNIERT', error: 'Auf eine stornierte Rechnung kann keine Zahlung gebucht werden. Bereits gebuchte Zahlungen bleiben im Verlauf erhalten.' }, { status: 409 });
-        case 'KEY_KONFLIKT': return NextResponse.json({ success: false, code: 'KEY_KONFLIKT', error: 'Der Anfrageschlüssel gehört zu einer anderen Rechnung.' }, { status: 409 });
+        case 'KEY_KONFLIKT': return NextResponse.json({ success: false, code: 'KEY_KONFLIKT', error: 'Der Anfrageschlüssel wurde bereits mit anderen Angaben (Rechnung, Betrag oder Datum) verwendet.' }, { status: 422 });
         case 'UEBER_OFFEN': {
           const offen = Number(erg.offen) || 0; const gs = Number(erg.gutschrift) || 0;
           return NextResponse.json({
