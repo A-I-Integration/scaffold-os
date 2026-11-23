@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { serverErrorResponse } from '@/lib/auth';
+import { ladeBelegForderung } from '@/lib/forderung-server';
 
 // ============================================================
 // SCAFFOLD OS – Teilzahlungen (Phase 38)
@@ -71,7 +72,7 @@ export async function POST(req: NextRequest) {
     if (!invoice_id) return NextResponse.json({ success: false, error: 'invoice_id erforderlich' }, { status: 400 });
     if (!betrag || betrag <= 0) return NextResponse.json({ success: false, error: 'Betrag muss größer als 0 sein.' }, { status: 400 });
 
-    const invRes = await fetch(`${url}/rest/v1/invoices?id=eq.${invoice_id}&select=gross_amount,paid_amount,status`, { headers });
+    const invRes = await fetch(`${url}/rest/v1/invoices?id=eq.${invoice_id}&select=id,invoice_number,invoice_type,due_date,gross_amount,paid_amount,status`, { headers });
     if (!invRes.ok) throw new Error(await invRes.text());
     const invRows = await invRes.json();
     const inv = invRows?.[0];
@@ -79,17 +80,20 @@ export async function POST(req: NextRequest) {
     if (inv.status === 'storniert') return NextResponse.json({ success: false, code: 'ZAHLUNG_AUF_STORNIERT', error: 'Auf eine stornierte Rechnung kann keine Zahlung gebucht werden. Bereits gebuchte Zahlungen bleiben im Verlauf erhalten.' }, { status: 409 });
 
     const neuerBezahlterBetrag = Math.round((Number(inv.paid_amount) + betrag) * 100) / 100;
-    if (neuerBezahlterBetrag - Number(inv.gross_amount) > 0.01) {
+    // Zulässig ist höchstens der noch offene Betrag NACH Gutschriften (zentral, unabhängig von Baustelle/Ansicht); Lesefehler → nichts buchen
+    const forderung = await ladeBelegForderung({ url, headers }, inv);
+    if (!forderung) throw new Error('Gutschriften zur Rechnung nicht lesbar');
+    if (betrag - forderung.offen > 0.01) {
       return NextResponse.json({
         success: false,
-        error: `Zahlung würde den Rechnungsbetrag übersteigen (offen: ${(Number(inv.gross_amount) - Number(inv.paid_amount)).toFixed(2)} €). Bei Überzahlung bitte den übersteigenden Betrag separat klären (z. B. Gutschrift oder Rückzahlung).`,
+        error: `Zahlung würde den offenen Betrag übersteigen (offen: ${forderung.offen.toFixed(2)} €${forderung.gutschrift > 0 ? `, nach Gutschriften über ${forderung.gutschrift.toFixed(2)} €` : ''}). Bei Überzahlung bitte den übersteigenden Betrag separat klären (z. B. Rückzahlung).`,
       }, { status: 400 });
     }
 
     // Rechnung zuerst aktualisieren – nur, wenn der bezahlte Betrag seit dem Lesen unverändert ist.
     // So gehen zwei gleichzeitige Zahlungen nicht verloren (die zweite bekommt eine Meldung statt den Betrag zu überschreiben).
     // Status wird nur bei vollständigem Ausgleich auf "bezahlt" gesetzt.
-    const vollstaendigBezahlt = Number(inv.gross_amount) - neuerBezahlterBetrag <= 0.01;
+    const vollstaendigBezahlt = forderung.offen - betrag <= 0.01;
     const invUpdRes = await fetch(`${url}/rest/v1/invoices?id=eq.${invoice_id}&status=neq.storniert&paid_amount=eq.${Number(inv.paid_amount)}`, {
       method: 'PATCH', headers: { ...headers, Prefer: 'return=representation' },
       body: JSON.stringify({
@@ -117,7 +121,21 @@ export async function POST(req: NextRequest) {
       throw new Error(await payRes.text());
     }
 
-    return NextResponse.json({ success: true, paid_amount: neuerBezahlterBetrag, vollstaendig_bezahlt: vollstaendigBezahlt });
+    // Nachprüfung gegen gleichzeitig angelegte Gutschriften: wurde zwischen Lesen und Buchen eine Gutschrift gespeichert, die den Rest deckt,
+    // wird der Status hier nachgezogen (der Gegenpart, das Anlegen einer Gutschrift, gleicht seinerseits nach – wer zuletzt committet, sieht beides).
+    let bezahltStatus = vollstaendigBezahlt;
+    if (!vollstaendigBezahlt && inv.status !== 'storniert') {
+      const nach = await ladeBelegForderung({ url, headers }, inv, neuerBezahlterBetrag);
+      if (nach && nach.offen <= 0.01) {
+        const sr = await fetch(`${url}/rest/v1/invoices?id=eq.${invoice_id}&status=in.(offen,ueberfaellig)`, {
+          method: 'PATCH', headers: { ...headers, Prefer: 'return=representation' },
+          body: JSON.stringify({ status: 'bezahlt', updated_at: new Date().toISOString() }),
+        });
+        bezahltStatus = sr.ok && ((await sr.json()) || []).length > 0;
+      }
+    }
+
+    return NextResponse.json({ success: true, paid_amount: neuerBezahlterBetrag, vollstaendig_bezahlt: bezahltStatus });
   } catch (err: any) {
     return serverErrorResponse(err);
   }
@@ -146,14 +164,17 @@ export async function DELETE(req: NextRequest) {
     // stillschweigend von 'storniert' zurück auf 'offen'/'bezahlt'. Jetzt:
     // status wird mitgeladen, und die PATCH setzt status nur, wenn die
     // Rechnung aktuell NICHT storniert ist - 'storniert' bleibt geschützt.
-    const invRes = await fetch(`${url}/rest/v1/invoices?id=eq.${payment.invoice_id}&select=gross_amount,paid_amount,status`, { headers });
+    const invRes = await fetch(`${url}/rest/v1/invoices?id=eq.${payment.invoice_id}&select=id,invoice_number,invoice_type,due_date,gross_amount,paid_amount,status`, { headers });
     const inv = (await invRes.json())?.[0];
 
     await fetch(`${url}/rest/v1/invoice_payments?id=eq.${id}`, { method: 'DELETE', headers });
 
     if (inv) {
       const neuerBetrag = Math.max(0, Math.round((Number(inv.paid_amount) - Number(payment.amount)) * 100) / 100);
-      const vollstaendig = Number(inv.gross_amount) - neuerBetrag <= 0.01;
+      // Status nach der zentralen Forderung (Gutschriften berücksichtigt); nicht lesbar → Status unverändert lassen statt zu raten
+      // Für die Neuberechnung zählt die verbleibende Zahlungssumme, nicht der bisherige Status „bezahlt“
+      const fNeu = await ladeBelegForderung({ url, headers }, { ...inv, status: inv.status === 'bezahlt' ? 'offen' : inv.status }, neuerBetrag);
+      const vollstaendig = fNeu ? fNeu.offen <= 0.01 : inv.status === 'bezahlt';
       const patchBody: Record<string, any> = { paid_amount: neuerBetrag };
       if (inv.status !== 'storniert') {
         patchBody.status = vollstaendig ? 'bezahlt' : 'offen';

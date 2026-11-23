@@ -1,6 +1,6 @@
 'use client';
 
-import { berechneForderung } from '@/lib/forderung';
+import { berechneForderung, mitBezugsGutschriften } from '@/lib/forderung';
 import { useState, useCallback } from 'react';
 import { fetchRechnungAnlegen } from '@/lib/rechnung-anlegen-client'
 import { FileText, Download, Mail, Check, RotateCcw, Image as ImageIcon, ClipboardList, Plus, ChevronDown, ChevronUp } from 'lucide-react';
@@ -51,12 +51,14 @@ const DOK_TYPE_LABEL: Record<string, string> = {
 const LEER_POSITION = { bezeichnung: '', menge: '1', einheit: 'Stk.', einzelpreis: '' };
 
 export default function KundeAuftrag({
-  project, kunde, invoices, onInvoiceCreated,
+  project, kunde, invoices, onInvoiceCreated, rechnungenBereit = true,
 }: {
   project: Project;
   kunde: Kunde;
   invoices: Invoice[];
   onInvoiceCreated: () => void;
+  /** false, solange Rechnungen laden bzw. das Laden fehlschlug: kein offener Betrag */
+  rechnungenBereit?: boolean;
 }) {
   const [zusatzOffen, setZusatzOffen] = useState(false);
   const [pos, setPos] = useState({ ...LEER_POSITION });
@@ -73,7 +75,8 @@ export default function KundeAuftrag({
   const [schlussOffen, setSchlussOffen] = useState(false);
 
   const rechnungen = invoices.filter((i) => i.project_id === project.id);
-  const offen = berechneForderung(rechnungen as never[]).offen;
+  // Gutschriften gehören zu ihrer Bezugsrechnung, auch wenn sie keiner Baustelle zugeordnet sind
+  const offen = berechneForderung(mitBezugsGutschriften(rechnungen, invoices) as never[]).offen;
   const angebotsStatus = project.data?.angebotsStatus || null;
 
   const ladeMedienUndDoku = useCallback(async () => {
@@ -191,7 +194,7 @@ export default function KundeAuftrag({
           <p className="text-sm font-semibold text-[#1d1d1f] flex items-center gap-1.5">
             <FileText className="h-4 w-4 text-[#e8590c]" /> Rechnungen ({rechnungen.length})
           </p>
-          {offen > 0 && <span className="text-xs text-[#e8590c] font-semibold">{fmtEur(offen)} € offen</span>}
+          {!rechnungenBereit ? <span className="text-xs text-[#86868b]">Offen: …</span> : offen > 0 && <span className="text-xs text-[#e8590c] font-semibold">{fmtEur(offen)} € offen</span>}
         </div>
 
         {rechnungen.length === 0 ? (

@@ -1,6 +1,6 @@
 'use client';
 
-import { berechneForderung } from '@/lib/forderung';
+import { berechneForderung, mitBezugsGutschriften } from '@/lib/forderung';
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import {
@@ -80,6 +80,8 @@ export default function KundenPage() {
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [projects, setProjects] = useState<{ id: string; name: string | null; adresse: string | null; data: any; customer_id?: string | null }[]>([]);
   const [loading, setLoading] = useState(true);
+  // Solange Rechnungen laden oder nicht geladen werden konnten, wird kein offener Betrag gezeigt
+  const [rechnungenLadung, setRechnungenLadung] = useState<'laed' | 'ok' | 'fehler'>('laed');
   const [error, setError] = useState<string | null>(null);
   const [migrationFehlt, setMigrationFehlt] = useState(false);
 
@@ -93,6 +95,7 @@ export default function KundenPage() {
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
+    setRechnungenLadung('laed');
     try {
       const [kRes, rRes, pRes] = await Promise.all([
         fetch('/api/kunden'),
@@ -111,10 +114,12 @@ export default function KundenPage() {
       }
       const rJson = await rRes.json();
       if (rJson.success) setInvoices(rJson.invoices || []);
+      setRechnungenLadung(rJson.success ? 'ok' : 'fehler');
       const pJson = await pRes.json();
       if (pJson.success) setProjects(pJson.projects || []);
     } catch (err: any) {
       setError(err.message);
+      setRechnungenLadung((z) => (z === 'ok' ? z : 'fehler'));
     } finally {
       setLoading(false);
     }
@@ -202,11 +207,13 @@ export default function KundenPage() {
   // dieses Kunden. Namensvergleich nur noch Rückfalloption für alte Daten.
   const rechnungenVon = (k: Kunde) => {
     const eigeneIds = new Set(auftraegeVon(k).map((p) => p.id));
-    return invoices.filter((i) =>
+    const eigene = invoices.filter((i) =>
       i.customer_id === k.id ||
       (i.project_id && eigeneIds.has(i.project_id)) ||
       (!i.customer_id && !i.project_id && nameMatch(i.customer_name, k.name))
     );
+    // Gutschriften gehören zu ihrer Bezugsrechnung, auch wenn sie selbst keiner Baustelle/keinem Kunden zugeordnet sind
+    return mitBezugsGutschriften(eigene, invoices);
   };
 
   // ─── Aufträge (Projekte) des Kunden ───
@@ -343,7 +350,9 @@ export default function KundenPage() {
                               {[k.zip, k.city].filter(Boolean).join(' ') || '–'}
                             </span>
                             <span className="text-xs text-[#86868b] whitespace-nowrap">
-                              {anzahl} RE{offen > 0 && (
+                              {anzahl} RE{rechnungenLadung !== 'ok' ? (
+                                <span data-testid="forderung-ladezustand"> · Offen: {rechnungenLadung === 'laed' ? '…' : 'nicht verfügbar'}</span>
+                              ) : offen > 0 && (
                                 <span className="text-[#e8590c] font-semibold"> · {fmtEur(offen)} € offen</span>
                               )}
                             </span>
@@ -485,6 +494,7 @@ export default function KundenPage() {
                           project={p as any}
                           kunde={selected}
                           invoices={invoices}
+                          rechnungenBereit={rechnungenLadung === 'ok'}
                           onInvoiceCreated={load}
                         />
                       ))}
@@ -495,8 +505,9 @@ export default function KundenPage() {
                 {/* Rechnungen ohne zuordenbaren Auftrag (z.B. abweichende Schreibweise) */}
                 {selected && (() => {
                   const auftraege = auftraegeVon(selected);
-                  const rechnungen = rechnungenVon(selected).filter(
-                    (i) => !auftraege.some((p) => p.id === i.project_id)
+                  const rechnungen = mitBezugsGutschriften(
+                    rechnungenVon(selected).filter((i) => !auftraege.some((p) => p.id === i.project_id)),
+                    invoices,
                   );
                   const offen = berechneForderung(rechnungen as never[]).offen;
                   if (rechnungen.length === 0) return null;
@@ -507,7 +518,9 @@ export default function KundenPage() {
                           <FileText className="h-5 w-5 text-[#e8590c]" /> Weitere Rechnungen (keinem Auftrag zugeordnet)
                         </h2>
                         <p className="text-sm text-[#86868b]">
-                          {rechnungen.length} Stück{offen > 0 && (
+                          {rechnungen.length} Stück{rechnungenLadung !== 'ok' ? (
+                            <span> · Offen: {rechnungenLadung === 'laed' ? '…' : 'nicht verfügbar'}</span>
+                          ) : offen > 0 && (
                             <span className="text-[#e8590c] font-semibold"> · {fmtEur(offen)} € offen</span>
                           )}
                         </p>

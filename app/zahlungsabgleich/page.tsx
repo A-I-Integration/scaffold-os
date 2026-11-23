@@ -54,6 +54,7 @@ function findeBetraege(felder: string[]): number[] {
 
 export default function ZahlungsabgleichPage() {
   const [alleRechnungen, setAlleRechnungen] = useState<Invoice[]>([]);
+  const [ladeFehler, setLadeFehler] = useState(false);
   // Offener Betrag je Rechnung: zentral (lib/forderung.ts), identisch zu Kundenakte, Auftragsstand und Faktura
   const forderung = useMemo(() => berechneForderung(alleRechnungen as never[]), [alleRechnungen]);
   const offenZentral = useCallback((inv: Invoice) => forderung.je.get(String(inv.id)) ?? 0, [forderung]);
@@ -75,8 +76,9 @@ export default function ZahlungsabgleichPage() {
       const json = await res.json();
       if (json.success) {
         setAlleRechnungen(json.invoices || []);
-      }
-    } catch { /* still */ }
+        setLadeFehler(false);
+      } else setLadeFehler(true);
+    } catch { setLadeFehler(true); }
     setLoading(false);
   }, []);
   useEffect(() => { lade(); }, [lade]);
@@ -84,6 +86,12 @@ export default function ZahlungsabgleichPage() {
   function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
+    // Ohne vollständig geladene Rechnungen und Gutschriften gibt es keinen verlässlichen offenen Betrag: nicht abgleichen
+    if (loading || ladeFehler) {
+      setMsg({ ok: false, text: loading ? 'Die Rechnungen werden noch geladen. Bitte einen Moment warten und die Datei dann erneut auswählen.' : 'Die Rechnungen konnten nicht geladen werden. Ohne sie kann kein offener Betrag berechnet werden. Bitte Seite neu laden.' });
+      e.target.value = '';
+      return;
+    }
     const reader = new FileReader();
     reader.onload = () => {
       const rows = parseCsv(String(reader.result || ''));

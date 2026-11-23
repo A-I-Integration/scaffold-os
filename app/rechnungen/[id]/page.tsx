@@ -7,7 +7,7 @@
 // Alle Änderungen laufen über dieselben Schnittstellen wie in der Kundenakte (Storno + neue Version atomar).
 // ============================================================
 
-import { berechneForderung } from '@/lib/forderung'
+import { berechneForderung, mitBezugsGutschriften, forderungsStatus, FORDERUNGSSTATUS_LABEL } from '@/lib/forderung'
 import { ladeXrechnung } from '@/lib/xrechnung-download'
 import { fetchRechnungAnlegen } from '@/lib/rechnung-anlegen-client'
 import { useCallback, useEffect, useState } from 'react'
@@ -85,6 +85,8 @@ export default function RechnungAktePage() {
   const [tab, setTab] = useState<Tab>('rechnung')
   const [ansicht, setAnsicht] = useState('vorschau')
   const [belege, setBelege] = useState<Invoice[]>([])
+  // Offener Betrag erst, wenn Rechnungen UND Gutschriften geladen sind; bei Fehler wird keiner als verlässlich gezeigt
+  const [belegeStatus, setBelegeStatus] = useState<'laed' | 'ok' | 'fehler'>('laed')
   const [baustelleName, setBaustelleName] = useState('')
   const [pdfUrl, setPdfUrl] = useState('')
   const [busy, setBusy] = useState(false)
@@ -109,10 +111,10 @@ export default function RechnungAktePage() {
 
   // Vorbelegung der Zahlung: zentral berechneter offener Betrag (mit Gutschriften)
   useEffect(() => {
-    if (!inv) return
+    if (!inv || belegeStatus !== 'ok') { setZBetrag(''); return }
     const o = berechneForderung((belege.some((b) => b.id === inv.id) ? belege : [inv, ...belege]) as never[]).je.get(String(inv.id)) ?? (Number(inv.gross_amount) - Number(inv.paid_amount || 0))
     setZBetrag(String(Math.max(0, o)))
-  }, [inv, belege])
+  }, [inv, belege, belegeStatus])
 
   const lade = useCallback(async () => {
     try {
@@ -121,7 +123,14 @@ export default function RechnungAktePage() {
       if (!j.success) throw new Error(j.error)
       const i = j.invoice as Invoice
       setInv(i); setPositionen(structuredClone(i.positions || [])); setFehler('')
-      fetch('/api/invoices').then((x) => x.json()).then((a) => a?.success && setBelege((a.invoices as Invoice[]).filter((b) => i.project_id ? b.project_id === i.project_id : b.id === i.id))).catch(() => {})
+      setBelegeStatus('laed')
+      fetch('/api/invoices').then((x) => x.json()).then((a) => {
+        if (!a?.success) { setBelegeStatus('fehler'); return }
+        const alle = a.invoices as Invoice[]
+        // Belege der Baustelle bzw. die Rechnung selbst – plus ALLE Gutschriften, die sich per Rechnungsnummer darauf beziehen (auch ohne Baustelle)
+        const auswahl = alle.filter((b) => i.project_id ? b.project_id === i.project_id : b.id === i.id)
+        setBelege(mitBezugsGutschriften(auswahl, alle)); setBelegeStatus('ok')
+      }).catch(() => setBelegeStatus('fehler'))
       if (i.project_id) fetch('/api/projects?id=' + i.project_id).then((x) => x.json()).then((pj) => setBaustelleName(pj?.project?.name || '')).catch(() => {}); else setBaustelleName('')
       fetch(`/api/invoice-payments?invoice_id=${i.id}`).then((x) => x.json()).then((p) => p?.success && setZahlungen(p.payments)).catch(() => {})
       fetch(`/api/invoices/pruef-link?invoice_id=${i.id}`).then((x) => x.json()).then((p) => { if (p?.success) { setPruefLinks(p.links || []); setPruefungen(p.pruefungen || []) } }).catch(() => {})
@@ -273,10 +282,14 @@ export default function RechnungAktePage() {
   if (!inv) return <p className="p-6 text-[#6e6e73]">Lade Rechnung …</p>
 
   const zurueck = inv.project_id && inv.customer_id ? `/kunden/${inv.customer_id}?baustelle=${inv.project_id}` : inv.customer_id ? `/kunden/${inv.customer_id}` : '/rechnungen'
-  // Offener Betrag zentral (lib/forderung.ts) aus allen Belegen der Baustelle; ohne Belege: Rechnungsbetrag − Zahlungen
-  const offen = berechneForderung((belege.some((b) => b.id === inv.id) ? belege : [inv, ...belege]) as never[]).je.get(String(inv.id)) ?? (Number(inv.gross_amount) - Number(inv.paid_amount || 0))
+  // Offener Betrag zentral (lib/forderung.ts) aus allen Belegen; solange nicht geladen (oder bei Ladefehler): kein Betrag
+  const forderungBereit = belegeStatus === 'ok'
+  const forderungRechnung = forderungBereit ? berechneForderung(belege.some((b) => b.id === inv.id) ? belege : [inv, ...belege]) : null
+  const offenZ: number | null = forderungRechnung ? (forderungRechnung.je.get(String(inv.id)) ?? 0) : null
+  const offen = offenZ ?? 0
+  const offenText = (n: number) => (offenZ === null ? (belegeStatus === 'laed' ? '…' : 'nicht verfügbar') : `${fmtEur(Math.max(0, n))} €`)
   const gesperrt = storniert ? 'Diese Rechnung ist storniert – bitte in der aktuellen Version arbeiten.' : ''
-  const statusText = storniert ? 'storniert' : inv.status === 'bezahlt' ? 'bezahlt' : Number(inv.paid_amount) > 0 && offen > 0 ? 'teilbezahlt' : inv.status === 'ueberfaellig' ? 'überfällig' : 'offen'
+  const statusText = storniert ? 'storniert' : forderungRechnung ? FORDERUNGSSTATUS_LABEL[forderungsStatus(inv as never, offen, forderungRechnung.gutschriftJe.get(String(inv.id)) ?? 0)] : (belegeStatus === 'laed' ? '…' : 'nicht verfügbar')
   const ic = 'w-5 h-5'
   const aufgabe = tab === 'rechnung' ? null : tab
   const waehle = (t: Tab) => { setTab(tab === t ? 'rechnung' : t); if (t === 'version' || t === 'teilabbau') setPositionen(structuredClone(inv.positions || [])) }
@@ -359,7 +372,7 @@ export default function RechnungAktePage() {
 
             {ansicht === 'zahlungen' && (
               <div className="p-4 text-sm space-y-2">
-                <p>Offen: <strong>{fmtEur(Math.max(0, offen))} €</strong> von {fmtEur(Number(inv.gross_amount))} €</p>
+                <p>Offen: <strong data-testid="offen-betrag">{offenText(offen)}</strong> von {fmtEur(Number(inv.gross_amount))} €</p>
                 <table className="w-full border-collapse">
                   <thead><tr className="text-left text-xs" style={{ background: WIN.grund, color: WIN.textGedaempft }}><th className="p-2 border" style={{ borderColor: WIN.rand }}>Datum</th><th className="p-2 border" style={{ borderColor: WIN.rand }}>Notiz</th><th className="p-2 border text-right" style={{ borderColor: WIN.rand }}>Betrag</th></tr></thead>
                   <tbody>
@@ -515,7 +528,7 @@ export default function RechnungAktePage() {
 
             {aufgabe === 'zahlung' && (
               <>
-                <p className="text-sm">Offen: <strong>{fmtEur(Math.max(0, offen))} €</strong></p>
+                <p className="text-sm">Offen: <strong>{offenText(offen)}</strong></p>
                 <input className={eingabe} inputMode="decimal" value={zBetrag} onChange={(e) => setZBetrag(e.target.value)} aria-label="Betrag" />
                 <input className={eingabe} type="date" value={zDatum} onChange={(e) => setZDatum(e.target.value)} aria-label="Zahlungsdatum" />
                 <input className={eingabe} placeholder="Notiz (optional)" value={zNotiz} onChange={(e) => setZNotiz(e.target.value)} />
@@ -528,7 +541,7 @@ export default function RechnungAktePage() {
 
       <Statusleiste
         links={<><span>{typ} {inv.invoice_number}</span><span>Status: <strong>{statusText}</strong></span><span>Fällig: {fmtDate(inv.due_date)}</span></>}
-        rechts={<><span>Netto {fmtEur(Number(inv.net_amount))} €</span><span>Brutto <strong>{fmtEur(Number(inv.gross_amount))} €</strong></span>{offen > 0 && !storniert && <span>Offen {fmtEur(offen)} €</span>}</>}
+        rechts={<><span>Netto {fmtEur(Number(inv.net_amount))} €</span><span>Brutto <strong>{fmtEur(Number(inv.gross_amount))} €</strong></span>{!storniert && (offenZ === null ? <span>Offen {offenText(0)}</span> : offen > 0 && <span>Offen {fmtEur(offen)} €</span>)}</>}
       />
       {anhangOffen && <AnhangDialog invoiceId={inv.id} rechnungsNr={inv.invoice_number} positionen={inv.positions || []} onClose={() => setAnhangOffen(false)} />}
     </div>

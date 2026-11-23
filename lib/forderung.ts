@@ -36,6 +36,8 @@ export interface Forderung {
   guthaben: number
   /** Gutschriften ohne auffindbare Bezugsrechnung (brutto): nicht zugeordnet, mindern keine Forderung */
   ungeklaert: number
+  /** Verrechnete Gutschriften je Rechnung (brutto, Schlüssel wie `je`) */
+  gutschriftJe: Map<string, number>
   /** Offener Betrag je Rechnung (Schlüssel: id, sonst Rechnungsnummer); nur Rechnungen, keine Gutschriften */
   je: Map<string, number>
 }
@@ -49,8 +51,11 @@ export const istGutschriftBeleg = (r: Pick<ForderungRechnung, 'invoice_type'>) =
 /** Bezahlter Betrag brutto einer Rechnung (Status „bezahlt“ = voller Betrag; nie mehr als der Rechnungsbetrag). */
 export function bezahltAnteil(r: ForderungRechnung): number {
   const gross = zahl(r.gross_amount)
-  if (r.status === 'bezahlt') return gross
-  return gross >= 0 ? Math.min(Math.max(zahl(r.paid_amount), 0), gross) : 0
+  if (gross < 0) return 0
+  const p = zahl(r.paid_amount)
+  // „bezahlt“ ohne gebuchte Zahlung (ältere Daten): voller Betrag. Mit gebuchter Zahlung zählt die Zahlung – eine Gutschrift ist keine Zahlung.
+  if (r.status === 'bezahlt') return p > 0 ? Math.min(p, gross) : gross
+  return Math.min(Math.max(p, 0), gross)
 }
 
 export function berechneForderung(rechnungen: ForderungRechnung[], opt: { heute?: string } = {}): Forderung {
@@ -84,6 +89,7 @@ export function berechneForderung(rechnungen: ForderungRechnung[], opt: { heute?
   }
 
   let abzug = 0, guthaben = 0
+  const gutschriftJe = new Map<string, number>()
   for (const r of rechn) {
     const nr = String(r.invoice_number ?? '')
     const g = jeBezug.get(nr)
@@ -92,7 +98,7 @@ export function berechneForderung(rechnungen: ForderungRechnung[], opt: { heute?
     const k = schluessel(r)
     const offen = rest.get(k) ?? 0
     const verrechnet = Math.min(g, offen)
-    rest.set(k, runde(offen - verrechnet)); abzug += verrechnet
+    rest.set(k, runde(offen - verrechnet)); abzug += verrechnet; gutschriftJe.set(k, runde(verrechnet))
     guthaben += runde(g - verrechnet)
     jeBezug.delete(nr)
   }
@@ -103,5 +109,55 @@ export function berechneForderung(rechnungen: ForderungRechnung[], opt: { heute?
     offen += v
     if (v > 0 && (r.status === 'ueberfaellig' || (r.due_date && String(r.due_date).slice(0, 10) < heute))) ueber += v
   }
-  return { bezahlt: runde(bezahlt), offen: runde(offen), ueberfaellig: runde(ueber), gutschriftAbzug: runde(abzug), guthaben: runde(guthaben + ueberzahlung), ungeklaert: runde(unbezogen), je: rest }
+  return { bezahlt: runde(bezahlt), offen: runde(offen), ueberfaellig: runde(ueber), gutschriftAbzug: runde(abzug), guthaben: runde(guthaben + ueberzahlung), ungeklaert: runde(unbezogen), je: rest, gutschriftJe }
+}
+
+// ─── Gutschriften zur Auswahl dazunehmen (unabhängig von Baustelle, Kunde oder geladener Liste) ───
+
+/**
+ * Eine Ansicht zeigt nur einen Ausschnitt der Rechnungen (Baustelle, Kunde, Filter). Eine Gutschrift gehört aber zu ihrer Bezugsrechnung,
+ * egal in welchem Ausschnitt sie selbst liegt. Diese Funktion ergänzt die Auswahl um alle Gutschriften aus `alle`, deren Bezugsnummer zu einer
+ * Rechnung der Auswahl passt. Gutschriften ohne passende Rechnung in der Auswahl werden NICHT ergänzt (sie bleiben dort, wo sie sind).
+ */
+export function mitBezugsGutschriften<T extends ForderungRechnung>(auswahl: T[], alle: T[]): T[] {
+  const nummern = new Set(auswahl.filter((r) => !istGutschriftBeleg(r)).map((r) => String(r.invoice_number ?? '')).filter(Boolean))
+  const drin = new Set(auswahl.map((r) => schluessel(r)))
+  const dazu = alle.filter((g) => istGutschriftBeleg(g) && !drin.has(schluessel(g)) && g.reference_invoice_number && nummern.has(String(g.reference_invoice_number)))
+  return dazu.length ? [...auswahl, ...dazu] : auswahl
+}
+
+// ─── Rechnungsstatus aus der Forderung ───
+
+export type ForderungsStatus = 'storniert' | 'gutschrift' | 'bezahlt' | 'ausgeglichen' | 'teilbezahlt' | 'teilausgeglichen' | 'ueberfaellig' | 'offen'
+
+export const FORDERUNGSSTATUS_LABEL: Record<ForderungsStatus, string> = {
+  storniert: 'storniert', gutschrift: 'Gutschrift', bezahlt: 'bezahlt', ausgeglichen: 'ausgeglichen (Gutschrift)', teilbezahlt: 'teilbezahlt',
+  teilausgeglichen: 'teilweise gutgeschrieben', ueberfaellig: 'überfällig', offen: 'offen',
+}
+
+/**
+ * Status einer Rechnung aus Zahlungen und Gutschriften (nicht aus dem gespeicherten Status allein):
+ *   storniert → nie „bezahlt“; Gutschrift → eigener Beleg, keine Zahlung;
+ *   nichts mehr offen: nur durch Zahlung → bezahlt, mit Gutschrift beteiligt → ausgeglichen;
+ *   noch offen: Zahlung vorhanden → teilbezahlt, nur Gutschrift → teilausgeglichen, sonst überfällig/offen.
+ */
+export function forderungsStatus(r: ForderungRechnung, offen: number, gutschrift: number, heute: string = new Date().toISOString().slice(0, 10)): ForderungsStatus {
+  if (r.status === 'storniert') return 'storniert'
+  if (istGutschriftBeleg(r)) return 'gutschrift'
+  const bezahlt = bezahltAnteil(r)
+  if (offen <= 0.005) return gutschrift > 0.005 ? 'ausgeglichen' : 'bezahlt'
+  if (r.status === 'ueberfaellig' || (r.due_date && String(r.due_date).slice(0, 10) < heute)) return 'ueberfaellig'
+  if (bezahlt > 0.005) return 'teilbezahlt'
+  return gutschrift > 0.005 ? 'teilausgeglichen' : 'offen'
+}
+
+/** Status je Rechnung (Schlüssel id) für eine Liste; Gutschriften und stornierte Belege inklusive. */
+export function statusJe(rechnungen: ForderungRechnung[], heute?: string): Map<string, ForderungsStatus> {
+  const f = berechneForderung(rechnungen, { heute })
+  const out = new Map<string, ForderungsStatus>()
+  for (const r of rechnungen) {
+    const k = schluessel(r)
+    out.set(k, forderungsStatus(r, f.je.get(k) ?? 0, f.gutschriftJe.get(k) ?? 0, heute))
+  }
+  return out
 }

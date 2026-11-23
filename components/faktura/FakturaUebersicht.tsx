@@ -11,11 +11,11 @@ import { type FakturaDaten, eur } from './daten';
 import { Kachel, Karte, BereichLink, type BereichSprung } from './ui';
 
 export default function FakturaUebersicht({ daten, onBereich, imKundenordner = false, onSchnell }: { daten: FakturaDaten; onBereich?: BereichSprung; imKundenordner?: boolean; onSchnell?: (art: 'rechnung' | 'abschlag' | 'schluss' | 'gutschrift') => void }) {
-  const { heute, rechnungen, zahlungenMonat, entwuerfe, versandKarte, versandHinweis } = daten;
+  const { heute, forderungBereit, rechnungen, zahlungenMonat, entwuerfe, versandKarte, versandHinweis } = daten;
   const kz = useMemo(() => berechneKennzahlen(rechnungen, zahlungenMonat, heute), [rechnungen, zahlungenMonat, heute]);
   const offenJe = useMemo(() => offenJeRechnung(rechnungen), [rechnungen]);
-  const ueberfaellig = useMemo(() => ueberfaelligeRechnungen(rechnungen, heute), [rechnungen, heute]);
-  const bald = useMemo(() => baldFaellig(rechnungen, heute, 7), [rechnungen, heute]);
+  const ueberfaellig = useMemo(() => (forderungBereit ? ueberfaelligeRechnungen(rechnungen, heute) : []), [forderungBereit, rechnungen, heute]);
+  const bald = useMemo(() => (forderungBereit ? baldFaellig(rechnungen, heute, 7) : []), [forderungBereit, rechnungen, heute]);
 
   // Versandstand aus dem Versandprotokoll (nur Rechnungen, die noch gelten)
   const versand = useMemo(() => {
@@ -45,8 +45,8 @@ export default function FakturaUebersicht({ daten, onBereich, imKundenordner = f
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3" data-testid="faktura-kennzahlen">
-        <Kachel ton="#2563eb" icon={<FileText className="h-5 w-5" />} titel="Offene Rechnungen" wert={String(kz.offenAnzahl)} unten={eur(kz.offenBetrag) + ' offen'} />
-        <Kachel ton="#d97706" icon={<AlertTriangle className="h-5 w-5" />} titel="Überfällig" wert={String(kz.ueberfaelligAnzahl)} unten={eur(kz.ueberfaelligBetrag)} />
+        <Kachel ton="#2563eb" icon={<FileText className="h-5 w-5" />} titel="Offene Rechnungen" wert={forderungBereit ? String(kz.offenAnzahl) : '…'} unten={forderungBereit ? eur(kz.offenBetrag) + ' offen' : 'wird geladen'} />
+        <Kachel ton="#d97706" icon={<AlertTriangle className="h-5 w-5" />} titel="Überfällig" wert={forderungBereit ? String(kz.ueberfaelligAnzahl) : '…'} unten={forderungBereit ? eur(kz.ueberfaelligBetrag) : 'wird geladen'} />
         <Kachel ton="#16a34a" icon={<CheckCircle2 className="h-5 w-5" />} titel="Zahlungseingänge (Monat)" wert={eur(kz.bezahltMonatBetrag)} unten={`${kz.bezahltMonatAnzahl} Rechnung${kz.bezahltMonatAnzahl === 1 ? '' : 'en'}`} />
         <Kachel ton="#e8590c" icon={<BarChart3 className="h-5 w-5" />} titel={`Umsatz ${heute.slice(0, 4)} (netto)`} wert={eur(kz.umsatzJahr)}
           unten={kz.umsatzVeraenderungProzent === null ? 'kein Vorjahresvergleich' : `${kz.umsatzVeraenderungProzent >= 0 ? '+' : ''}${String(kz.umsatzVeraenderungProzent).replace('.', ',')} % zum Vorjahr`} />
@@ -54,7 +54,8 @@ export default function FakturaUebersicht({ daten, onBereich, imKundenordner = f
 
       <Karte titel="Braucht Aufmerksamkeit" icon={<BellRing className="h-4 w-4" style={{ color: WIN.akzent }} />}>
         <div data-testid="aufmerksamkeit" className="space-y-3">
-          {ueberfaellig.length === 0 && bald.length === 0 && entwuerfe.length === 0 && versand.fehlgeschlagen.length === 0 && (
+          {!forderungBereit && <p data-testid="forderung-ladezustand" className="text-[13px]" style={{ color: WIN.textGedaempft }}>Offene und überfällige Beträge werden geladen …</p>}
+          {forderungBereit && ueberfaellig.length === 0 && bald.length === 0 && entwuerfe.length === 0 && versand.fehlgeschlagen.length === 0 && (
             <p className="text-[13px]" style={{ color: WIN.textGedaempft }}>Nichts Dringendes: keine überfälligen Rechnungen, nichts in den nächsten 7 Tagen fällig, keine offenen Entwürfe.</p>
           )}
           {versand.fehlgeschlagen.length > 0 && (

@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { Invoice } from '@/lib/invoice-pdf';
 import { heuteIso, monatsGrenzen, type ZahlungKurz } from '@/lib/faktura-kennzahlen';
 import type { EntwurfArt } from '@/lib/rechnung-entwurf';
+import { mitBezugsGutschriften } from '@/lib/forderung';
 import { versandJeRechnung, type VersandEintrag } from '@/lib/versand-status';
 
 // Gemeinsame Daten aller Faktura-Bereiche: einmal laden, überall verwenden (keine doppelten Abfragen, keine doppelte Rechnung).
@@ -12,7 +13,7 @@ export interface EntwurfKurz { id: string; updated_at: string; customer_name: st
 
 // Umfang: im Kundenordner nur Rechnungen/Entwürfe/Zahlungen dieses Kunden (und der gewählten Baustelle).
 // `rechnungen` kann die Kundenakte schon geladen mitgeben – dann wird nichts doppelt abgefragt.
-export interface FakturaUmfang { kundeId: string; projektId?: string | null; rechnungen: Invoice[]; /** zählt hoch, wenn von außen neu geladen werden soll (z. B. nach einem Versand) */ nachladen?: number }
+export interface FakturaUmfang { kundeId: string; projektId?: string | null; rechnungen: Invoice[]; /** false, solange die Kundenakte ihre Rechnungen noch lädt oder das Laden fehlschlug */ rechnungenBereit?: boolean; /** zählt hoch, wenn von außen neu geladen werden soll (z. B. nach einem Versand) */ nachladen?: number }
 
 export function useFakturaDaten(umfang?: FakturaUmfang) {
   const hatUmfang = !!umfang;
@@ -63,7 +64,8 @@ export function useFakturaDaten(umfang?: FakturaUmfang) {
   const kundeId = umfang?.kundeId, projektId = umfang?.projektId, mitgegeben = umfang?.rechnungen;
   const rechnungen = useMemo(() => {
     if (!hatUmfang) return alleRechnungen;
-    return projektId ? (mitgegeben ?? []).filter((i) => i.project_id === projektId) : (mitgegeben ?? []);
+    // Gutschriften gehören zu ihrer Bezugsrechnung, auch wenn sie selbst keiner Baustelle zugeordnet sind
+    return projektId ? mitBezugsGutschriften((mitgegeben ?? []).filter((i) => i.project_id === projektId), mitgegeben ?? []) : (mitgegeben ?? []);
   }, [hatUmfang, alleRechnungen, mitgegeben, projektId]);
   const zahlungenMonat = useMemo(() => {
     if (!hatUmfang) return alleZahlungen;
@@ -77,7 +79,9 @@ export function useFakturaDaten(umfang?: FakturaUmfang) {
 
   const versandKarte = useMemo(() => versandJeRechnung(versandEintraege), [versandEintraege]);
 
-  return { heute, rechnungen, zahlungenMonat, entwuerfe, setEntwuerfe, versandKarte, versandHinweis, entwurfFehler, setEntwurfFehler, laedt, fehler, neuLaden };
+  /** Beträge (offen/überfällig) dürfen erst gezeigt werden, wenn Rechnungen UND Gutschriften vollständig geladen sind */
+  const forderungBereit = !laedt && !fehler && (umfang?.rechnungenBereit ?? true);
+  return { heute, forderungBereit, rechnungen, zahlungenMonat, entwuerfe, setEntwuerfe, versandKarte, versandHinweis, entwurfFehler, setEntwurfFehler, laedt, fehler, neuLaden };
 }
 
 export type FakturaDaten = ReturnType<typeof useFakturaDaten>;
