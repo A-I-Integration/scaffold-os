@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { FileText, AlertTriangle, CheckCircle2, BarChart3, FilePlus2, ClipboardList, Layers, ReceiptText, Undo2, Mail, BellRing } from 'lucide-react';
 import { WIN } from '@/components/win/Win';
 import { fmtDate } from '@/lib/invoice-pdf';
-import { berechneKennzahlen, ueberfaelligeRechnungen, baldFaellig, offenerBetrag } from '@/lib/faktura-kennzahlen';
+import { berechneKennzahlen, ueberfaelligeRechnungen, baldFaellig, offenerBetrag, offenJeRechnung } from '@/lib/faktura-kennzahlen';
 import { versandStandFuer } from '@/lib/versand-status';
 import { type FakturaDaten, eur } from './daten';
 import { Kachel, Karte, BereichLink, type BereichSprung } from './ui';
@@ -13,6 +13,7 @@ import { Kachel, Karte, BereichLink, type BereichSprung } from './ui';
 export default function FakturaUebersicht({ daten, onBereich, imKundenordner = false, onSchnell }: { daten: FakturaDaten; onBereich?: BereichSprung; imKundenordner?: boolean; onSchnell?: (art: 'rechnung' | 'abschlag' | 'schluss' | 'gutschrift') => void }) {
   const { heute, rechnungen, zahlungenMonat, entwuerfe, versandKarte, versandHinweis } = daten;
   const kz = useMemo(() => berechneKennzahlen(rechnungen, zahlungenMonat, heute), [rechnungen, zahlungenMonat, heute]);
+  const offenJe = useMemo(() => offenJeRechnung(rechnungen), [rechnungen]);
   const ueberfaellig = useMemo(() => ueberfaelligeRechnungen(rechnungen, heute), [rechnungen, heute]);
   const bald = useMemo(() => baldFaellig(rechnungen, heute, 7), [rechnungen, heute]);
 
@@ -35,7 +36,7 @@ export default function FakturaUebersicht({ daten, onBereich, imKundenordner = f
       <Link href={`/rechnungen/${r.id}`} className="flex items-center gap-2 rounded-lg px-2 py-1.5 text-[13px] hover:bg-black/5">
         <span className="font-medium whitespace-nowrap">{r.invoice_number}</span>
         <span className="truncate" style={{ color: WIN.textGedaempft }}>{r.customer_name}</span>
-        <span className="ml-auto tabular-nums whitespace-nowrap">{eur(offenerBetrag(r))}</span>
+        <span className="ml-auto tabular-nums whitespace-nowrap">{eur(offenJe.get(String(r.id)) ?? offenerBetrag(r))}</span>
         <span className="w-20 text-right whitespace-nowrap" style={{ color: WIN.textGedaempft }}>{r.due_date ? fmtDate(r.due_date) : '–'}</span>
       </Link>
     </li>

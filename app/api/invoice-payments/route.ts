@@ -76,7 +76,7 @@ export async function POST(req: NextRequest) {
     const invRows = await invRes.json();
     const inv = invRows?.[0];
     if (!inv) return NextResponse.json({ success: false, error: 'Rechnung nicht gefunden.' }, { status: 404 });
-    if (inv.status === 'storniert') return NextResponse.json({ success: false, error: 'Stornierte Rechnungen können nicht mit Zahlungen versehen werden.' }, { status: 400 });
+    if (inv.status === 'storniert') return NextResponse.json({ success: false, code: 'ZAHLUNG_AUF_STORNIERT', error: 'Auf eine stornierte Rechnung kann keine Zahlung gebucht werden. Bereits gebuchte Zahlungen bleiben im Verlauf erhalten.' }, { status: 409 });
 
     const neuerBezahlterBetrag = Math.round((Number(inv.paid_amount) + betrag) * 100) / 100;
     if (neuerBezahlterBetrag - Number(inv.gross_amount) > 0.01) {
@@ -90,7 +90,7 @@ export async function POST(req: NextRequest) {
     // So gehen zwei gleichzeitige Zahlungen nicht verloren (die zweite bekommt eine Meldung statt den Betrag zu überschreiben).
     // Status wird nur bei vollständigem Ausgleich auf "bezahlt" gesetzt.
     const vollstaendigBezahlt = Number(inv.gross_amount) - neuerBezahlterBetrag <= 0.01;
-    const invUpdRes = await fetch(`${url}/rest/v1/invoices?id=eq.${invoice_id}&paid_amount=eq.${Number(inv.paid_amount)}`, {
+    const invUpdRes = await fetch(`${url}/rest/v1/invoices?id=eq.${invoice_id}&status=neq.storniert&paid_amount=eq.${Number(inv.paid_amount)}`, {
       method: 'PATCH', headers: { ...headers, Prefer: 'return=representation' },
       body: JSON.stringify({
         paid_amount: neuerBezahlterBetrag,
@@ -100,7 +100,7 @@ export async function POST(req: NextRequest) {
     });
     if (!invUpdRes.ok) throw new Error(await invUpdRes.text());
     if (!(await invUpdRes.json()).length) {
-      return NextResponse.json({ success: false, error: 'Die Rechnung wurde gerade von einer anderen Buchung geändert. Bitte die Seite neu laden und erneut buchen.' }, { status: 409 });
+      return NextResponse.json({ success: false, error: 'Die Rechnung wurde gerade geändert (andere Buchung oder Storno). Bitte die Seite neu laden und erneut prüfen.' }, { status: 409 });
     }
 
     // Zahlung protokollieren; schlägt das fehl, wird der Betrag der Rechnung zurückgesetzt

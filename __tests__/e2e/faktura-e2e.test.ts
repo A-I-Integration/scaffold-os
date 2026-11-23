@@ -50,6 +50,7 @@ const nacht = (b: unknown) => api('@/app/api/nachtraege/route', 'POST', b)
 const q = async (sql: string, p: unknown[] = []) => (await pool.query(sql, p)).rows
 const projektData = async (id: string) => (await q('select data from projects where id=$1', [id]))[0].data
 const rechnungen = (id: string) => q('select * from invoices where project_id=$1 order by created_at, invoice_number', [id])
+const norm = (zeilen: any[]) => zeilen.map((r) => ({ ...r, invoice_date: r.invoice_date instanceof Date ? r.invoice_date.toISOString().slice(0, 10) : r.invoice_date, due_date: r.due_date instanceof Date ? r.due_date.toISOString().slice(0, 10) : r.due_date }))
 const netto = (zeilen: any[]) => Math.round(zeilen.reduce((s, r) => s + Number(r.net_amount), 0) * 100) / 100
 
 async function neuesProjekt(name: string, data: Record<string, unknown>): Promise<string> {
@@ -386,16 +387,61 @@ describe.skipIf(!DB)('Faktura End-to-End (echte PostgreSQL)', () => {
       const h = await q(`select details from abrechnung_historie where project_id=$1 and aktion='aufmass_freigegeben'`, [P]); expect(JSON.stringify(h[0].details)).toContain('Gutschrift')
       expect(await integritaet(P)).toEqual([])
     })
-    it('[OFFEN-1] 7.5 Eine volle Gutschrift wird später selbst storniert: der Zeitraum darf nicht unberechtigt abrechenbar bleiben', async () => {
+    it('7.5 Vorhaltung: versendete Rechnung storniert, volle Gutschrift gibt den Zeitraum frei, Storno der Gutschrift wird abgelehnt (409)', async () => {
       const P = await neuesProjekt('E2E Gutschrift Storno', { vorhaltung: vb() })
-      const v = (await vorhaltungRechnung(P)).j.invoice; expect(v.net_amount).toBeDefined()
+      const v = (await vorhaltungRechnung(P)).j.invoice
       await versende(v.invoice_number); expect((await storno(v.id)).status).toBe(200)
       const g = (await gutschrift(P, v.invoice_number, Number(v.net_amount))).j.invoice
       expect((await projektData(P)).vorhaltePerioden ?? []).toHaveLength(0)           // frei nach voller Gutschrift
-      const r = await storno(g.id)                                                      // Gutschrift wird storniert → Rechnung ist wieder wirksam
-      const neu = await vorhaltungRechnung(P).then((x) => x.status, () => 0)           // derselbe Zeitraum erneut?
-      merke('7 Storno', 'Gutschrift storniert → derselbe Zeitraum erneut abrechenbar?', 'nein (gesperrt oder erneut zugeordnet)', r.status === 409 || neu === 409 || neu === 0 ? 'nein (gesperrt oder erneut zugeordnet)' : `JA – Zeitraum erneut abgerechnet (Storno ${r.status}, neue Rechnung ${neu})`)
-      expect(r.status === 409 || neu === 409 || neu === 0).toBe(true)
+      const r = await storno(g.id)
+      merke('7 Storno', 'Storno der Gutschrift, die einen Vorhaltezeitraum freigab (Rechnung selbst storniert)', 409, r.status)
+      expect(r.status).toBe(409); expect(r.j.code).toBe('GUTSCHRIFT_STORNO_GESPERRT')
+      expect((await q('select status from invoices where id=$1', [g.id]))[0].status).not.toBe('storniert')
+      expect((await projektData(P)).vorhaltePerioden ?? []).toHaveLength(0)           // Zustand unverändert
+      expect(await integritaet(P)).toEqual([])
+    })
+    it('7.5a Aufmaß: Rechnung gültig + volle Gutschrift → frei; Storno/Löschen/Ersetzen der Gutschrift 409; Neuabrechnung nur einmal, kein Doppelbetrag', async () => {
+      const P = await neuesProjekt('E2E Gutschrift Storno Aufmass', {})
+      const a = (await aufmassRechnung(P, 'za-s', 100)).j.invoice                      // 1.000 netto
+      expect((await versende(a.invoice_number)).status).toBe(200)
+      const g = (await gutschrift(P, a.invoice_number, 1000)).j.invoice               // volle Gutschrift, Rechnung selbst NICHT storniert
+      merke('7 Storno', 'Volle Gutschrift auf gültige versendete Rechnung: Aufmaß', 'frei', (await zaVon(P, 'za-s')).rechnungId ? 'zugeordnet' : 'frei'); expect((await zaVon(P, 'za-s')).rechnungId).toBeUndefined()
+      const histVorher = (await q(`select count(*)::int n from abrechnung_historie where project_id=$1`, [P]))[0].n
+      const s1 = await storno(g.id)
+      merke('7 Storno', 'Storno der vollen Gutschrift (Aufmaß war freigegeben)', 409, s1.status); expect(s1.status).toBe(409); expect(s1.j.code).toBe('GUTSCHRIFT_STORNO_GESPERRT')
+      const d1 = await inv('DELETE', undefined, '?id=' + g.id)
+      merke('7 Storno', 'Löschen der vollen Gutschrift', 409, d1.status); expect(d1.status).toBe(409)
+      const nv = await inv('POST', { customer_name: KUNDE, project_id: P, invoice_type: 'gutschrift', reference_invoice_number: a.invoice_number, replace_invoice_id: g.id, positions: [{ bezeichnung: 'Gutschrift', menge: 1, einheit: 'Pauschale', einzelpreis: 10 }] })
+      merke('7 Storno', 'Gutschrift durch kleinere neue Version ersetzen', 409, nv.status); expect(nv.status).toBe(409)
+      const gs = (await q('select status from invoices where id=$1', [g.id]))[0].status; expect(gs).not.toBe('storniert')
+      // jeder abgelehnte Versuch steht mit Benutzer-/Zeitbezug im Verlauf
+      const abgel = await q(`select user_id, created_at, grund, details from abrechnung_historie where project_id=$1 and details->>'abgelehnt'='GUTSCHRIFT_STORNO_GESPERRT' order by created_at`, [P])
+      merke('7 Storno', 'Abgelehnte Versuche im Verlauf (Storno, Löschen)', 2, abgel.length); expect(abgel.length).toBe(2); expect(abgel[0].user_id).toBe(USER); expect(abgel[0].created_at).toBeTruthy(); expect(abgel[0].grund).toMatch(/abgelehnt/)
+      expect((await q(`select count(*)::int n from abrechnung_historie where project_id=$1`, [P]))[0].n).toBe(histVorher + 2)
+      // Neuabrechnung: einmal möglich (Gutschrift hat die Leistung aufgehoben), ein zweites Mal nicht
+      const neu = await aufmassRechnung(P, 'za-s', 100); expect(neu.status).toBe(200)
+      const noch = await aufmassRechnung(P, 'za-s', 100).catch(() => ({ status: 0 }))
+      merke('7 Storno', 'Zweite Neuabrechnung desselben Aufmaßes', 'abgelehnt (4xx)', noch.status >= 400 || noch.status === 0 ? 'abgelehnt (4xx)' : `angenommen (${noch.status})`); expect([409, 0, 400]).toContain(noch.status)
+      const gueltig = (await rechnungen(P)).filter((r: any) => r.status !== 'storniert')
+      merke('7 Storno', 'Summe netto aller gültigen Belege (1.000 − 1.000 + 1.000)', 1000, netto(gueltig)); expect(netto(gueltig)).toBe(1000)
+      expect(await integritaet(P)).toEqual([])
+    })
+    it('7.5b Teilgutschrift und Storno: Teilgutschrift ohne Freigabe bleibt stornierbar; auslösende Gutschriften sind gesperrt', async () => {
+      const P = await neuesProjekt('E2E Teilgutschrift Storno', {})
+      const a = (await aufmassRechnung(P, 'za-t', 100)).j.invoice
+      await versende(a.invoice_number)
+      const g1 = (await gutschrift(P, a.invoice_number, 400)).j.invoice
+      expect((await zaVon(P, 'za-t')).rechnungId).toBe(a.id)
+      const sT = await storno(g1.id)
+      merke('7 Storno', 'Storno einer Teilgutschrift (400 von 1.000, keine Freigabe)', 200, sT.status); expect(sT.status).toBe(200)
+      expect((await zaVon(P, 'za-t')).rechnungId).toBe(a.id)                               // bleibt zugeordnet
+      const g2 = (await gutschrift(P, a.invoice_number, 400)).j.invoice
+      const g3 = (await gutschrift(P, a.invoice_number, 600)).j.invoice                    // 400 + 600 → voll → frei
+      expect((await zaVon(P, 'za-t')).rechnungId).toBeUndefined()
+      const s3 = await storno(g3.id); merke('7 Storno', 'Storno der auslösenden Gutschrift (600)', 409, s3.status); expect(s3.status).toBe(409)
+      const s2 = await storno(g2.id); merke('7 Storno', 'Storno der Teilgutschrift (400), ohne die die Deckung entfiele', 409, s2.status); expect(s2.status).toBe(409)
+      expect((await zaVon(P, 'za-t')).rechnungId).toBeUndefined()
+      expect(await integritaet(P)).toEqual([])
     })
     it('7.6 Vorhaltezeitraum: unversendete Rechnung löschen → frei; versendete + volle Gutschrift → frei', async () => {
       const P = await neuesProjekt('E2E Vorhalt Freigabe', { vorhaltung: vb() })
@@ -409,18 +455,62 @@ describe.skipIf(!DB)('Faktura End-to-End (echte PostgreSQL)', () => {
       await gutschrift(P, v2.invoice_number, Number(v2.net_amount)); expect((await projektData(P)).vorhaltePerioden ?? []).toHaveLength(0)
       expect(await integritaet(P)).toEqual([])
     })
-    it('[OFFEN-2] 5.4/5.6 Auftragsstand mit Gutschrift: Rest steigt, offener Betrag stimmt (unabhängig per SQL gerechnet)', async () => {
+    it('5.4/5.6 Auftragsstand mit Gutschrift: Rest steigt (Auftragswert, abgerechnet, offen sind getrennte Kennzahlen)', async () => {
       const { berechneAuftragsstand } = await import('@/lib/auftragsstand')
       const P = await neuesProjekt('E2E Stand', { kiResult: { suggestedPrice: 5000 }, preisModus: 'pauschale', pauschale: '5000' })
       const a = (await inv('POST', { customer_name: KUNDE, project_id: P, invoice_type: 'abschlag', positions: [{ bezeichnung: 'Abschlag 1', menge: 1, einheit: 'Pauschale', einzelpreis: 3000 }] })).j.invoice
-      const stand = async () => berechneAuftragsstand({ angebotNetto: 5000, nachtraege: [], rechnungen: (await rechnungen(P)) as any })
+      const stand = async () => berechneAuftragsstand({ angebotNetto: 5000, nachtraege: [], rechnungen: norm(await rechnungen(P)) as any })
       expect((await stand()).restZuAbrechnen).toBe(2000)
       await gutschrift(P, a.invoice_number, 1000)
       const nach = await stand()
       merke('5 Schluss', 'Rest zu abrechnen nach Gutschrift 1.000 auf Abschlag 3.000', 3000, nach.restZuAbrechnen)
-      const sql = (await q(`select coalesce(sum(gross_amount),0) - coalesce(sum(case when invoice_type='gutschrift' then 0 else paid_amount end),0) as offen from invoices where project_id=$1 and status<>'storniert'`, [P]))[0].offen
-      merke('5 Schluss', 'Offener Betrag brutto = Rechnungen − Gutschriften − Zahlungen (unabhängige SQL-Summe; Gutschriften sind negativ gespeichert)', Number(sql), nach.offenBrutto)
-      expect(nach.restZuAbrechnen).toBe(3000); expect(Math.round(nach.offenBrutto * 100)).toBe(Math.round(Number(sql) * 100))
+      expect(nach.restZuAbrechnen).toBe(3000); expect(nach.auftragswert).toBe(5000); expect(nach.abgerechnet).toBe(2000)
+    })
+    it('OFFEN-2: offener Forderungsbetrag = Rechnung − Zahlung − Gutschriften (SQL unabhängig gerechnet; alle Anzeigen gleich)', async () => {
+      const { berechneAuftragsstand } = await import('@/lib/auftragsstand')
+      const { kontrolleBaustelle } = await import('@/lib/abrechnung-pruefung')
+      const { berechneKennzahlen } = await import('@/lib/faktura-kennzahlen')
+      const P = await neuesProjekt('E2E Offen', { kiResult: { suggestedPrice: 5000 }, preisModus: 'pauschale', pauschale: '5000' })
+      const a = (await inv('POST', { customer_name: KUNDE, project_id: P, invoice_type: 'abschlag', positions: [{ bezeichnung: 'Abschlag 1', menge: 1, einheit: 'Pauschale', einzelpreis: 3000 }] })).j.invoice
+      expect(Number(a.gross_amount)).toBe(3570)
+      const alle = async () => norm(await rechnungen(P)) as any[]
+      const sqlOffen = async () => Number((await q(`select coalesce(sum(case when invoice_type='gutschrift' then gross_amount else gross_amount - least(greatest(paid_amount,0), gross_amount) end),0) as offen from invoices where project_id=$1 and status<>'storniert'`, [P]))[0].offen)
+      const zentral = async () => {
+        const r = await alle()
+        const st = berechneAuftragsstand({ angebotNetto: 5000, nachtraege: [], rechnungen: r }).offenBrutto
+        const ko = kontrolleBaustelle({ angebotNetto: 5000, nachtraegeBestaetigt: 0, nachtraegeAngefragt: 0, rechnungen: r }).offenBrutto
+        const kz = berechneKennzahlen(r, [], HEUTE).offenBetrag
+        expect([ko, kz]).toEqual([st, st])                                              // überall derselbe Wert
+        return st
+      }
+      const pruefe = async (fall: string, erwartet: number) => { const ist = await zentral(); const sql = await sqlOffen(); merke('5 Schluss', `Offen brutto: ${fall}`, erwartet, ist); merke('5 Schluss', `Offen brutto (unabhängige SQL-Summe): ${fall}`, erwartet, sql); expect(ist).toBe(erwartet); expect(Math.round(sql * 100) / 100).toBe(erwartet) }
+      await pruefe('Rechnung 3.570, keine Gutschrift', 3570)
+      const g1 = (await gutschrift(P, a.invoice_number, 1000)).j.invoice            // −1.190
+      await pruefe('Gutschrift 1.190 (Beispiel des Prüfers)', 2380)
+      expect((await inv('PATCH', { id: a.id, paid_amount: 500 })).status).toBe(200)
+      await pruefe('zusätzlich Teilzahlung 500', 1880)
+      const g2 = (await gutschrift(P, a.invoice_number, 500)).j.invoice             // −595
+      await pruefe('zweite Gutschrift 595 (mehrere Gutschriften)', 1285)
+      expect((await storno(g2.id)).status).toBe(200)
+      await pruefe('zweite Gutschrift storniert (wird nicht mehr abgezogen)', 1880)
+      expect(g1.id).toBeTruthy()
+    })
+    it('OFFEN-2: Gutschrift zu stornierter Rechnung wird nicht doppelt verrechnet; Überhang ist Guthaben, mindert keine andere Rechnung', async () => {
+      const { berechneAuftragsstand } = await import('@/lib/auftragsstand')
+      const P = await neuesProjekt('E2E Offen Doppelt', {})
+      const a = (await aufmassRechnung(P, 'za-o', 100)).j.invoice                    // 1.190 brutto
+      await versende(a.invoice_number); expect((await storno(a.id)).status).toBe(200)
+      await gutschrift(P, a.invoice_number, 1000)
+      const off = (r: any[]) => berechneAuftragsstand({ angebotNetto: 0, nachtraege: [], rechnungen: norm(r) as any }).offenBrutto
+      merke('5 Schluss', 'Stornierte Rechnung + Gutschrift dazu: offen', 0, off(await rechnungen(P))); expect(off(await rechnungen(P))).toBe(0)
+      // bezahlte Rechnung + Gutschrift: nichts offen, die zweite offene Rechnung bleibt unberührt
+      const P2 = await neuesProjekt('E2E Offen Guthaben', {})
+      const r1 = (await inv('POST', { customer_name: KUNDE, project_id: P2, invoice_type: 'standard', positions: [{ bezeichnung: 'A', menge: 1, einheit: 'Pauschale', einzelpreis: 1000 }] })).j.invoice
+      const r2 = (await inv('POST', { customer_name: KUNDE, project_id: P2, invoice_type: 'standard', positions: [{ bezeichnung: 'B', menge: 1, einheit: 'Pauschale', einzelpreis: 500 }] })).j.invoice
+      expect((await inv('PATCH', { id: r1.id, status: 'bezahlt' })).status).toBe(200)
+      await gutschrift(P2, r1.invoice_number, 500)                                      // 595 auf bereits bezahlte Rechnung
+      const o2 = off(await rechnungen(P2)); merke('5 Schluss', 'Gutschrift auf bezahlte Rechnung mindert die andere offene Rechnung nicht (offen = 595)', 595, o2); expect(o2).toBe(595)
+      expect(r2.id).toBeTruthy()
     })
   })
 
@@ -444,13 +534,30 @@ describe.skipIf(!DB)('Faktura End-to-End (echte PostgreSQL)', () => {
       expect((await inv('PATCH', { id: r1.id, status: 'bezahlt' })).status).toBe(200)
       z = await zeile(); merke('8 Zahlung', 'Voll bezahlt: Status/bezahlt', 'bezahlt / 1190', `${z.status} / ${Number(z.paid_amount)}`); expect(z.status).toBe('bezahlt'); expect(Number(z.paid_amount)).toBe(1190)
     })
-    it('[OFFEN-3] Zahlung nach Storno: wird abgelehnt', async () => {
+    it('OFFEN-3: Zahlung auf stornierte Rechnung wird mit 409 abgelehnt; vorhandene Zahlung und Status bleiben unverändert', async () => {
       const r2 = (await inv('POST', { customer_name: KUNDE, project_id: P, invoice_type: 'standard', positions: [{ bezeichnung: 'Gerüst 2', menge: 1, einheit: 'Pauschale', einzelpreis: 500 }] })).j.invoice
+      const zahl = (body: unknown) => api('@/app/api/invoice-payments/route', 'POST', body)
+      // 1./2. Zahlung und Teilzahlung auf offene Rechnung
+      const z1 = await zahl({ invoice_id: r2.id, amount: 200, payment_date: HEUTE }); merke('8 Zahlung', 'Zahlung 200 auf offene Rechnung', 200, z1.status); expect(z1.status).toBe(200)
+      const z2 = await inv('PATCH', { id: r2.id, paid_amount: 300 }); merke('8 Zahlung', 'Teilzahlung (gesamt 300) über PATCH', 200, z2.status); expect(z2.status).toBe(200)
       expect((await storno(r2.id)).status).toBe(200)
-      const z = await inv('PATCH', { id: r2.id, paid_amount: 100 })
-      const st = (await q('select status, paid_amount from invoices where id=$1', [r2.id]))[0]
-      merke('8 Zahlung', 'Zahlung auf stornierte Rechnung', 'abgelehnt (4xx)', z.status >= 400 ? 'abgelehnt (4xx)' : `angenommen (${z.status}): Status ${st.status}, bezahlt ${Number(st.paid_amount)}`)
-      expect(z.status).toBeGreaterThanOrEqual(400)
+      const vorher = (await q('select status, paid_amount, updated_at from invoices where id=$1', [r2.id]))[0]
+      const nZahlungen = (await q('select count(*)::int n from invoice_payments where invoice_id=$1', [r2.id]))[0].n
+      const nHist = (await q('select count(*)::int n from abrechnung_historie where invoice_id=$1', [r2.id]))[0].n
+      // 3. Zahlung auf stornierte Rechnung: alle Wege → 409
+      const a1 = await zahl({ invoice_id: r2.id, amount: 100, payment_date: HEUTE })
+      const a2 = await inv('PATCH', { id: r2.id, paid_amount: 450 })
+      const a3 = await inv('PATCH', { id: r2.id, status: 'bezahlt' })
+      merke('8 Zahlung', 'Zahlung (invoice-payments) auf stornierte Rechnung', 409, a1.status)
+      merke('8 Zahlung', 'paid_amount-Änderung auf stornierte Rechnung', 409, a2.status)
+      merke('8 Zahlung', 'Status „bezahlt“ auf stornierter Rechnung', 409, a3.status)
+      expect([a1.status, a2.status, a3.status]).toEqual([409, 409, 409]); expect(a1.j.code).toBe('ZAHLUNG_AUF_STORNIERT'); expect(a2.j.code).toBe('ZAHLUNG_AUF_STORNIERT')
+      // 4./5. Vorhandene Zahlung bleibt, kein Statuswechsel, keine neue Buchung
+      const nachher = (await q('select status, paid_amount, updated_at from invoices where id=$1', [r2.id]))[0]
+      merke('8 Zahlung', 'Bezahlter Betrag/Status nach abgelehnten Buchungen', `${Number(vorher.paid_amount)} / ${vorher.status}`, `${Number(nachher.paid_amount)} / ${nachher.status}`)
+      expect(Number(nachher.paid_amount)).toBe(300); expect(nachher.status).toBe('storniert'); expect(String(nachher.updated_at)).toBe(String(vorher.updated_at))
+      expect((await q('select count(*)::int n from invoice_payments where invoice_id=$1', [r2.id]))[0].n).toBe(nZahlungen)
+      expect((await q('select count(*)::int n from abrechnung_historie where invoice_id=$1', [r2.id]))[0].n).toBe(nHist)
     })
   })
 

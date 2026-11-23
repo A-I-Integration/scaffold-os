@@ -9,6 +9,8 @@
 //   • Umsatz = Summe netto nach Rechnungsdatum im Kalenderjahr.
 // ============================================================
 
+import { berechneForderung } from './forderung';
+
 export interface FakturaRechnung {
   id: string;
   invoice_number: string;
@@ -20,6 +22,7 @@ export interface FakturaRechnung {
   invoice_date: string;
   due_date: string | null;
   invoice_type?: string | null;
+  reference_invoice_number?: string | null;
   projektnummer?: string | null;
 }
 
@@ -49,6 +52,14 @@ export function istUeberfaellig(r: Pick<FakturaRechnung, 'status' | 'due_date' |
 export function offenerBetrag(r: FakturaRechnung): number {
   if (r.status === 'storniert' || r.status === 'bezahlt' || istGutschrift(r)) return 0;
   return Math.max(0, runde2(zahl(r.gross_amount) - zahl(r.paid_amount)));
+}
+
+/**
+ * Offener Betrag je Rechnung mit Gutschriften (zentral, lib/forderung.ts). Gutschriften mindern die Rechnung, auf die sie sich beziehen.
+ * Schlüssel: Rechnungs-ID. Gutschriften selbst und stornierte Rechnungen stehen nicht darin (0).
+ */
+export function offenJeRechnung(liste: FakturaRechnung[]): Map<string, number> {
+  return berechneForderung(liste as any).je;
 }
 
 export type AnzeigeStatus = 'offen' | 'ueberfaellig' | 'teilbezahlt' | 'bezahlt' | 'storniert' | 'gutschrift';
@@ -81,12 +92,13 @@ export function berechneKennzahlen(rechnungen: FakturaRechnung[], zahlungenImMon
   const jahr = heute.slice(0, 4);
   const vorjahr = String(Number(jahr) - 1);
   let offenAnzahl = 0, offenBetrag = 0, ueAnzahl = 0, ueBetrag = 0, umsatzJahr = 0, umsatzVorjahr = 0;
+  const offenJe = offenJeRechnung(rechnungen);
   for (const r of rechnungen) {
     if (r.status === 'storniert') continue;
     const j = String(r.invoice_date || '').slice(0, 4);
     if (j === jahr) umsatzJahr += zahl(r.net_amount);
     else if (j === vorjahr) umsatzVorjahr += zahl(r.net_amount);
-    const offen = offenerBetrag(r);
+    const offen = r.status === 'bezahlt' || istGutschrift(r) ? 0 : (offenJe.get(String(r.id)) ?? offenerBetrag(r));
     if (offen > 0) {
       offenAnzahl += 1; offenBetrag += offen;
       if (istUeberfaellig(r, heute)) { ueAnzahl += 1; ueBetrag += offen; }
@@ -162,8 +174,9 @@ export function monatsGrenzen(heute: string): { von: string; bis: string } {
 
 /** Offene Posten: Rechnungen mit offenem Betrag, nach Fälligkeit (älteste zuerst; ohne Fälligkeit zuletzt). */
 export function offenePosten<T extends FakturaRechnung>(liste: T[]): T[] {
+  const offenJe = offenJeRechnung(liste);
   return liste
-    .filter((r) => offenerBetrag(r) > 0)
+    .filter((r) => r.status !== 'bezahlt' && !istGutschrift(r) && (offenJe.get(String(r.id)) ?? offenerBetrag(r)) > 0)
     .sort((a, b) => (a.due_date ? a.due_date.slice(0, 10) : '9999-12-31').localeCompare(b.due_date ? b.due_date.slice(0, 10) : '9999-12-31') || a.invoice_number.localeCompare(b.invoice_number));
 }
 
