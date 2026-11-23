@@ -99,3 +99,31 @@ describe('fetchRechnungAnlegen', () => {
     expect(res.status).toBe(409)
   })
 })
+
+import { kontrolleBaustelle, korrekturkette } from '../abrechnung-pruefung'
+describe('kontrolleBaustelle', () => {
+  const r = (o: any) => ({ invoice_number: 'RE-1', invoice_type: 'abschlag', status: 'offen', net_amount: 0, gross_amount: 0, paid_amount: 0, invoice_date: '2026-01-01', ...o })
+  it('summiert nach Art, trennt angefragte Nachträge, storniert zählt nicht', () => {
+    const k = kontrolleBaustelle({ angebotNetto: 10000, nachtraegeBestaetigt: 1000, nachtraegeAngefragt: 500, rechnungen: [
+      r({ net_amount: 7000, gross_amount: 8330, status: 'bezahlt' }), r({ invoice_number: 'RE-2', invoice_type: 'abschlag', net_amount: 999, status: 'storniert' }),
+      r({ invoice_number: 'RE-3', invoice_type: 'gutschrift', net_amount: -100, gross_amount: -119 }) ] })
+    expect(k.auftragswert).toBe(11000); expect(k.abschlaege).toBe(7000); expect(k.gutschriften).toBe(-100)
+    expect(k.abgerechnet).toBe(6900); expect(k.noch).toBe(4100); expect(k.bezahltBrutto).toBe(8330); expect(k.nachtraegeAngefragt).toBe(500)
+    expect(k.abweichungen).toEqual([])
+  })
+  it('meldet Überabrechnung, doppelte Schluss, Zahlung über Betrag', () => {
+    const k = kontrolleBaustelle({ angebotNetto: 1000, nachtraegeBestaetigt: 0, nachtraegeAngefragt: 200, rechnungen: [
+      r({ invoice_type: 'schluss', net_amount: 800, gross_amount: 952, paid_amount: 1000 }), r({ invoice_number: 'RE-2', invoice_type: 'schluss', net_amount: 800, gross_amount: 952 }) ] })
+    const codes = k.abweichungen.map(a => a.code)
+    expect(codes).toContain('UEBER_AUFTRAGSWERT'); expect(codes).toContain('DOPPELTE_SCHLUSSRECHNUNG'); expect(codes).toContain('ZAHLUNG_UEBER_BETRAG')
+  })
+})
+describe('korrekturkette', () => {
+  it('verknüpft Ersatz und Gutschrift', () => {
+    const m = korrekturkette([
+      { id: 'a', invoice_number: 'RE-1', status: 'storniert' }, { id: 'b', invoice_number: 'RE-1-V2', status: 'offen', reference_invoice_number: 'RE-1' },
+      { id: 'c', invoice_number: 'GS-1', invoice_type: 'gutschrift', status: 'offen', reference_invoice_number: 'RE-1-V2' } ])
+    expect(m.get('a')!.ersetztDurch).toEqual(['RE-1-V2']); expect(m.get('b')!.ersetzt).toBe('RE-1')
+    expect(m.get('b')!.gutschriften).toEqual(['GS-1']); expect(m.get('c')!.bezug).toBe('RE-1-V2')
+  })
+})

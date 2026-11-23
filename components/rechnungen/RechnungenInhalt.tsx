@@ -21,6 +21,7 @@ import { manuelleAktionen, mahnStatusText, tageUeberfaellig, AKTION_LABEL } from
 import PositionDetails from '@/components/rechnung/PositionDetails';
 import { ENTSCHEIDUNG_LABEL, type PruefEntscheidung } from '@/lib/rechnung-pruefung';
 import { preisMitFaktor } from '@/lib/rechnung-position';
+import { korrekturkette } from '@/lib/abrechnung-pruefung';
 
 // ============================================================
 // SCAFFOLD OS – Rechnungsmodul (Phase 13)
@@ -341,6 +342,7 @@ export function RechnungenInhalt({ umfang, neuSignal = 0, entwurfId: entwurfVonA
   const isOverdue = (inv: Invoice) =>
     inv.status === 'offen' && inv.due_date && new Date(inv.due_date) < new Date();
 
+  const kette = korrekturkette(invoices as any);
   const sichtbar = invoices.filter((i) => {
     if (filter === 'offen') return i.status === 'offen' || i.status === 'ueberfaellig';
     if (filter === 'bezahlt') return i.status === 'bezahlt';
@@ -929,9 +931,16 @@ export function RechnungenInhalt({ umfang, neuSignal = 0, entwurfId: entwurfVonA
                         {inv.invoice_type === 'gutschrift' && (
                           <span className="ml-2 text-[10px] font-sans px-1.5 py-0.5 rounded bg-purple-500/10 text-purple-700 border border-purple-500/30">Gutschrift</span>
                         )}
-                        {inv.reference_invoice_number && (
-                          <span className="ml-1 text-[10px] font-sans text-[#86868b]">zu {inv.reference_invoice_number}</span>
-                        )}
+                        {(() => { const k = kette.get(inv.id); return (
+                          <>
+                            {inv.status === 'storniert' && k && k.ersetztDurch.length > 0 && <span data-testid="kette" className="ml-1 text-[10px] font-sans text-[#86868b]">storniert, ersetzt durch {k.ersetztDurch.join(', ')}</span>}
+                            {inv.status !== 'storniert' && k && k.ersetztDurch.length > 0 && <span data-testid="kette" className="ml-1 text-[10px] font-sans text-[#86868b]">ersetzt durch {k.ersetztDurch.join(', ')}</span>}
+                            {k?.ersetzt && <span data-testid="kette" className="ml-1 text-[10px] font-sans text-[#86868b]">ersetzt {k.ersetzt}</span>}
+                            {k && k.gutschriften.length > 0 && <span data-testid="kette" className="ml-1 text-[10px] font-sans text-[#86868b]">Gutschrift: {k.gutschriften.join(', ')}</span>}
+                            {k?.bezug ? <span data-testid="kette" className="ml-1 text-[10px] font-sans text-[#86868b]">zu {k.bezug}</span>
+                              : inv.reference_invoice_number && !k?.ersetzt && <span className="ml-1 text-[10px] font-sans text-[#86868b]">zu {inv.reference_invoice_number}</span>}
+                          </>
+                        ) })()}
                         {(inv as any).mahnung_pausiert && (
                           <span className="ml-1 text-[10px] font-sans px-1.5 py-0.5 rounded bg-black/5 text-[#6e6e73] border border-black/10" title={(inv as any).mahnung_pause_grund || undefined}>Mahnung pausiert</span>
                         )}

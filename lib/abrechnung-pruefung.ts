@@ -6,7 +6,7 @@
 // ============================================================
 
 export type AbweichungCode =
-  | 'UEBER_AUFTRAGSWERT' | 'DOPPELTE_SCHLUSSRECHNUNG' | 'ABSCHLAG_NACH_SCHLUSS' | 'SCHLUSS_SCHLIESST_NICHT' | 'GLEICHER_BETRAG'
+  | 'UEBER_AUFTRAGSWERT' | 'DOPPELTE_SCHLUSSRECHNUNG' | 'ABSCHLAG_NACH_SCHLUSS' | 'SCHLUSS_SCHLIESST_NICHT' | 'GLEICHER_BETRAG' | 'ZAHLUNG_UEBER_BETRAG'
 
 export interface Abweichung { code: AbweichungCode; text: string; betrag?: number }
 
@@ -78,3 +78,79 @@ export function pruefeAbrechnung(a: {
 
 /** Begründung ausreichend? (nicht nur Leerzeichen) */
 export const grundGueltig = (g: unknown): g is string => typeof g === 'string' && g.trim().length >= MIN_GRUND_LAENGE
+
+// ─── Kontrollanzeige je Baustelle ───
+
+export interface KontrollRechnung extends PruefRechnung { gross_amount?: number | null; paid_amount?: number | null }
+
+export interface Kontrollstand {
+  angebotNetto: number
+  nachtraegeBestaetigt: number
+  nachtraegeAngefragt: number
+  auftragswert: number
+  abschlaege: number
+  schluss: number
+  sonstige: number
+  gutschriften: number
+  abgerechnet: number
+  noch: number
+  bezahltBrutto: number
+  offenBrutto: number
+  abweichungen: Abweichung[]
+}
+
+/** Bestandsprüfung einer Baustelle: Summen nach Rechnungsart und alle Abweichungen, die jetzt schon bestehen. */
+export function kontrolleBaustelle(a: { angebotNetto: number; nachtraegeBestaetigt: number; nachtraegeAngefragt: number; rechnungen: KontrollRechnung[] }): Kontrollstand {
+  const gueltig = a.rechnungen.filter((r) => r.status !== 'storniert')
+  const summe = (f: (r: KontrollRechnung) => boolean) => runde(gueltig.filter(f).reduce((s, r) => s + zahl(r.net_amount), 0))
+  const abschlaege = summe((r) => r.invoice_type === 'abschlag')
+  const schluss = summe((r) => r.invoice_type === 'schluss')
+  const gutschriften = summe((r) => r.invoice_type === 'gutschrift')
+  const sonstige = summe((r) => !['abschlag', 'schluss', 'gutschrift'].includes(r.invoice_type || ''))
+  const abgerechnet = runde(abschlaege + schluss + gutschriften + sonstige)
+  const auftragswert = runde(zahl(a.angebotNetto) + zahl(a.nachtraegeBestaetigt))
+  let bezahlt = 0, offen = 0
+  const abw: Abweichung[] = []
+  for (const r of gueltig) {
+    const brutto = zahl(r.gross_amount)
+    const b = r.status === 'bezahlt' ? brutto : brutto >= 0 ? Math.min(Math.max(zahl(r.paid_amount), 0), brutto) : 0
+    bezahlt += b; offen += Math.max(0, brutto - b)
+    if (brutto > 0 && zahl(r.paid_amount) > brutto + 0.005) abw.push({ code: 'ZAHLUNG_UEBER_BETRAG', text: `Bei ${r.invoice_number || 'einer Rechnung'} ist mehr bezahlt (${eur(zahl(r.paid_amount))}) als berechnet (${eur(brutto)}).` })
+  }
+  const schlussListe = gueltig.filter((r) => r.invoice_type === 'schluss')
+  if (schlussListe.length > 1) abw.push({ code: 'DOPPELTE_SCHLUSSRECHNUNG', text: `Es gibt ${schlussListe.length} Schlussrechnungen (${schlussListe.map((r) => r.invoice_number).join(', ')}).` })
+  if (schlussListe.length > 0) {
+    const letzte = schlussListe.map((r) => String(r.invoice_date || '').slice(0, 10)).sort().pop() || ''
+    const spaeter = gueltig.filter((r) => r.invoice_type === 'abschlag' && String(r.invoice_date || '').slice(0, 10) > letzte)
+    if (spaeter.length) abw.push({ code: 'ABSCHLAG_NACH_SCHLUSS', text: `Teilrechnung nach der Schlussrechnung: ${spaeter.map((r) => r.invoice_number).join(', ')}.` })
+  }
+  if (auftragswert > 0 && abgerechnet > auftragswert + TOLERANZ) {
+    abw.push({ code: 'UEBER_AUFTRAGSWERT', betrag: runde(abgerechnet - auftragswert), text: `Es ist mehr abgerechnet (${eur(abgerechnet)}) als der Auftragswert (${eur(auftragswert)}).` + (zahl(a.nachtraegeAngefragt) > 0 ? ` Angefragte Nachträge über ${eur(a.nachtraegeAngefragt)} sind noch nicht bestätigt und zählen nicht.` : '') })
+  } else if (schlussListe.length > 0 && auftragswert > 0 && Math.abs(abgerechnet - auftragswert) > TOLERANZ) {
+    abw.push({ code: 'SCHLUSS_SCHLIESST_NICHT', betrag: runde(auftragswert - abgerechnet), text: `Die Schlussrechnung schließt nicht ab: abgerechnet ${eur(abgerechnet)}, Auftragswert ${eur(auftragswert)} (Differenz ${eur(auftragswert - abgerechnet)}).` })
+  }
+  return {
+    angebotNetto: runde(zahl(a.angebotNetto)), nachtraegeBestaetigt: runde(zahl(a.nachtraegeBestaetigt)), nachtraegeAngefragt: runde(zahl(a.nachtraegeAngefragt)),
+    auftragswert, abschlaege, schluss, sonstige, gutschriften, abgerechnet, noch: auftragswert > 0 ? Math.max(0, runde(auftragswert - abgerechnet)) : 0,
+    bezahltBrutto: runde(bezahlt), offenBrutto: runde(offen), abweichungen: abw,
+  }
+}
+
+// ─── Korrekturkette ───
+
+export interface KetteRechnung { id: string; invoice_number: string; invoice_type?: string | null; status: string; reference_invoice_number?: string | null }
+export interface KetteEintrag { ersetzt?: string; ersetztDurch: string[]; gutschriften: string[]; bezug?: string }
+
+/** Je Rechnung: wen sie ersetzt, von wem sie ersetzt wurde, welche Gutschriften sich auf sie beziehen, worauf sich eine Gutschrift bezieht. */
+export function korrekturkette(liste: KetteRechnung[]): Map<string, KetteEintrag> {
+  const nachNr = new Map(liste.map((r) => [r.invoice_number, r]))
+  const m = new Map<string, KetteEintrag>(liste.map((r) => [r.id, { ersetztDurch: [], gutschriften: [] }]))
+  for (const r of liste) {
+    const ref = r.reference_invoice_number
+    if (!ref || !nachNr.has(ref)) continue
+    const ziel = nachNr.get(ref)!
+    if (r.invoice_type === 'gutschrift') { m.get(r.id)!.bezug = ref; m.get(ziel.id)!.gutschriften.push(r.invoice_number) }
+    else { m.get(r.id)!.ersetzt = ref; m.get(ziel.id)!.ersetztDurch.push(r.invoice_number) }
+  }
+  return m
+}
