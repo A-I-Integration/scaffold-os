@@ -7,13 +7,13 @@
 export interface VersandEintrag {
   id: string; created_at: string; invoice_id: string | null; invoice_number: string; kind: 'rechnung' | 'mahnung';
   to_email: string; subject: string; status: 'versendet' | 'fehlgeschlagen'; error?: string | null;
-  format?: 'zugferd' | 'pdf' | null; dokument_hash?: string | null; attachment_name?: string | null;
+  format?: 'zugferd' | 'pdf' | 'xrechnung' | null; dokument_hash?: string | null; attachment_name?: string | null;
 }
 
 /** keiner = nichts protokolliert (Rechnungen vor dem Protokoll oder außerhalb von SCAFFOLD OS verschickt – das wissen wir nicht) */
 export type VersandStand = 'keiner' | 'versendet' | 'fehlgeschlagen';
 
-export interface VersandZusammenfassung { stand: VersandStand; zuletzt: string | null; an: string | null; format: 'zugferd' | 'pdf' | null; versuche: number }
+export interface VersandZusammenfassung { stand: VersandStand; zuletzt: string | null; an: string | null; format: 'zugferd' | 'pdf' | 'xrechnung' | null; versuche: number }
 
 /** Entscheidend ist der jüngste Rechnungsversand: erst fehlgeschlagen, dann erfolgreich = versendet; erst erfolgreich, dann Fehlversuch = weiter versendet. */
 export function versandZusammenfassung(eintraege: VersandEintrag[]): VersandZusammenfassung {

@@ -25,6 +25,7 @@ export default function FakturaUebersicht({ daten, onBereich, imKundenordner = f
       fehlgeschlagen: stand.filter((x) => x.v.stand === 'fehlgeschlagen').map((x) => x.r),
       keiner: stand.filter((x) => x.v.stand === 'keiner').length,
       zugferd: stand.filter((x) => x.v.stand === 'versendet' && x.v.format === 'zugferd').length,
+      xrechnung: stand.filter((x) => x.v.stand === 'versendet' && x.v.format === 'xrechnung').length,
       nurPdf: stand.filter((x) => x.v.stand === 'versendet' && x.v.format === 'pdf').length,
     };
   }, [rechnungen, versandKarte]);
@@ -109,11 +110,10 @@ export default function FakturaUebersicht({ daten, onBereich, imKundenordner = f
         </Karte>
         <Karte className="lg:col-span-2" titel="Versand & E-Rechnung" icon={<Mail className="h-4 w-4" style={{ color: WIN.akzent }} />}>
           <ul className="space-y-1.5 text-[13px]" style={{ color: WIN.text }} data-testid="versand-stand">
-            <li>✅ {versand.versendet} versendet{versand.versendet > 0 ? ` (${versand.zugferd} mit E-Rechnung, ${versand.nurPdf} nur als normale PDF)` : ''}</li>
+            <li>✅ {versand.versendet} versendet{versand.versendet > 0 ? ` (${versand.zugferd} ZUGFeRD, ${versand.xrechnung} XRechnung, ${versand.nurPdf} nur als normale PDF)` : ''}</li>
             <li style={{ color: versand.fehlgeschlagen.length ? '#b42318' : undefined }}>{versand.fehlgeschlagen.length ? '❌' : '✓'} {versand.fehlgeschlagen.length} Versand fehlgeschlagen</li>
             <li style={{ color: WIN.textGedaempft }}>{versand.keiner} ohne Eintrag im Versandprotokoll (vor dem Protokoll oder außerhalb von SCAFFOLD OS verschickt – das ist nicht erkennbar)</li>
-            <li>⬇️ XRechnung als Download im Rechnungsdetail</li>
-            <li style={{ color: WIN.textGedaempft }}>Folgt: XRechnung als Anhang, Vorlagen</li>
+            <li style={{ color: WIN.textGedaempft }}>Format wählst du beim Senden: ZUGFeRD, XRechnung oder nur PDF. Geht die E-Rechnung nicht, wird nichts versendet.</li>
             {versandHinweis && <li className="text-amber-800">⚠️ {versandHinweis}</li>}
           </ul>
         </Karte>

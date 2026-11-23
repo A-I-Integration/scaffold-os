@@ -25,7 +25,7 @@ export async function POST(req: Request) {
       }, { status: 503 });
     }
 
-    const { to, projectName, projectId, pdfBase64, customerName, type, invoiceNumber, grossAmount, dueDate, projektnummer, format } = await req.json();
+    const { to, projectName, projectId, pdfBase64, customerName, type, invoiceNumber, grossAmount, dueDate, projektnummer, format, xmlBase64, vorabFehler } = await req.json();
     if (!to || !projectName) {
       return NextResponse.json({ error: 'Empfänger und Projektname erforderlich' }, { status: 400 });
     }
@@ -36,7 +36,13 @@ export async function POST(req: Request) {
     }
 
     if (mailType !== 'angebot' && invoiceNumber) {
-      protokollKontext = { invoiceNumber: String(invoiceNumber), kind: mailType, to: String(to), format: format === 'zugferd' || format === 'pdf' ? format : null, pdfBase64: typeof pdfBase64 === 'string' ? pdfBase64 : null, sentBy: auth.userId ?? null };
+      protokollKontext = { invoiceNumber: String(invoiceNumber), kind: mailType, to: String(to), format: format === 'zugferd' || format === 'pdf' || format === 'xrechnung' ? format : null, pdfBase64: format === 'xrechnung' && typeof xmlBase64 === 'string' ? xmlBase64 : typeof pdfBase64 === 'string' ? pdfBase64 : null, sentBy: auth.userId ?? null };
+    }
+
+    // F5: Anhang konnte schon im Browser nicht erzeugt werden (E-Rechnung strikt): nur protokollieren, nichts versenden
+    if (typeof vorabFehler === 'string' && vorabFehler && protokollKontext) {
+      await protokolliereVersand({ ...protokollKontext, status: 'fehlgeschlagen', error: vorabFehler });
+      return NextResponse.json({ success: false, error: vorabFehler }, { status: 422 });
     }
 
     // Projektnummer sperren, BEVOR etwas das Haus verlässt – aber nur, wenn sie im Dokument steht (`projektnummer` = die gedruckte Nummer).
@@ -77,7 +83,14 @@ export async function POST(req: Request) {
         mailType === 'rechnung' ? `Rechnung_${(invoiceNumber || projectName).replace(/\s+/g, '_')}.pdf` :
         mailType === 'mahnung' ? `Mahnung_${(invoiceNumber || projectName).replace(/\s+/g, '_')}.pdf` :
         `Angebot_${projectName.replace(/\s+/g, '_')}.pdf`;
-      attachments.push({ filename: fname, content: base64Data });
+      const istXr = mailType === 'rechnung' && format === 'xrechnung' && typeof xmlBase64 === 'string' && xmlBase64;
+      if (istXr) {
+        // XRechnung: die XML ist die Rechnung (zuerst), die PDF liegt als Lesekopie dabei
+        attachments.push({ filename: `Rechnung_${String(invoiceNumber || projectName).replace(/\s+/g, '_')}_xrechnung.xml`, content: xmlBase64 });
+        attachments.push({ filename: fname.replace(/\.pdf$/, '_Lesekopie.pdf'), content: base64Data });
+      } else {
+        attachments.push({ filename: fname, content: base64Data });
+      }
     }
 
     // NEU (Prio-2-Sprint): Inhalte je Typ
@@ -171,9 +184,9 @@ export async function POST(req: Request) {
           const up = await fetch(`${supaUrl}/storage/v1/object/project-media/${path}`, {
             method: 'POST',
             headers: { apikey: serviceKey, Authorization: `Bearer ${serviceKey}`, 'Content-Type': 'application/pdf' },
-            body: Buffer.from(attachments[0].content, 'base64'),
+            body: Buffer.from((attachments.find((a) => a.filename.endsWith('.pdf')) || attachments[0]).content, 'base64'),
           });
-          if (up.ok) { attachmentPath = path; attachmentName = attachments[0].filename; }
+          if (up.ok) { attachmentPath = path; attachmentName = (attachments.find((a) => a.filename.endsWith('.pdf')) || attachments[0]).filename; }
         } catch { /* Anhang nicht gespeichert – Protokoll trotzdem */ }
       }
       const basis = {

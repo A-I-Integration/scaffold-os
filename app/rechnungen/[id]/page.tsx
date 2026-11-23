@@ -373,7 +373,7 @@ export default function RechnungAktePage() {
                         <td className="p-2 border whitespace-nowrap" style={{ borderColor: WIN.randHell }}>{new Date(e.created_at).toLocaleString('de-DE')}</td>
                         <td className="p-2 border" style={{ borderColor: WIN.randHell }}>{e.kind === 'mahnung' ? 'Mahnung' : 'Rechnung'}</td>
                         <td className="p-2 border" style={{ borderColor: WIN.randHell }}>{e.to_email || '–'}</td>
-                        <td className="p-2 border" style={{ borderColor: WIN.randHell }}>{e.format === 'zugferd' ? 'ZUGFeRD (E-Rechnung)' : e.format === 'pdf' ? 'normale PDF' : '–'}</td>
+                        <td className="p-2 border" style={{ borderColor: WIN.randHell }}>{e.format === 'zugferd' ? 'ZUGFeRD (E-Rechnung)' : e.format === 'xrechnung' ? 'XRechnung (XML)' : e.format === 'pdf' ? 'normale PDF' : '–'}</td>
                         <td className="p-2 border" style={{ borderColor: WIN.randHell, color: e.status === 'versendet' ? '#1a7f37' : '#b42318' }}>{e.status === 'versendet' ? 'Versendet' : 'Fehlgeschlagen'}{e.error ? <span className="block text-xs">{e.error}</span> : null}</td>
                         <td className="p-2 border font-mono text-[11px]" style={{ borderColor: WIN.randHell }} title={e.dokument_hash || ''}>{e.dokument_hash ? e.dokument_hash.slice(0, 12) + '…' : '–'}</td>
                       </tr>

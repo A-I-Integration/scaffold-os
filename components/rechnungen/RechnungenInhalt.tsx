@@ -948,7 +948,7 @@ export function RechnungenInhalt({ umfang, neuSignal = 0, entwurfId: entwurfVonA
                           const ok = v.stand === 'versendet';
                           return (
                             <span data-testid="versand-badge" className={`ml-1 text-[10px] font-sans px-1.5 py-0.5 rounded border ${ok ? 'bg-emerald-500/15 text-emerald-700 border-emerald-500/40' : 'bg-red-500/20 text-red-700 border-red-500/40'}`}
-                              title={`${ok ? 'Versendet' : 'Versand fehlgeschlagen'}${v.an ? ' an ' + v.an : ''}${v.zuletzt ? ' am ' + new Date(v.zuletzt).toLocaleString('de-DE') : ''}${v.format ? ' · ' + (v.format === 'zugferd' ? 'mit E-Rechnung' : 'normale PDF') : ''}`}>
+                              title={`${ok ? 'Versendet' : 'Versand fehlgeschlagen'}${v.an ? ' an ' + v.an : ''}${v.zuletzt ? ' am ' + new Date(v.zuletzt).toLocaleString('de-DE') : ''}${v.format ? ' · ' + (v.format === 'zugferd' ? 'mit E-Rechnung (ZUGFeRD)' : v.format === 'xrechnung' ? 'als XRechnung' : 'normale PDF') : ''}`}>
                               {ok ? '✉ versendet' : '✉ Fehler'}
                             </span>
                           );
