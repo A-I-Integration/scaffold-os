@@ -11,7 +11,7 @@ import { Kachel, Karte, STATUS_STIL, kopfZeile, knopf } from './ui';
 
 // Zahlungseingänge: offene Posten und der Monat auf einen Blick. Erfasst wird eine Zahlung im Rechnungsdetail (Reiter „Zahlungen“),
 // mehrere auf einmal über den Zahlungsabgleich mit dem Kontoauszug.
-export default function FakturaZahlungen({ daten }: { daten: FakturaDaten }) {
+export default function FakturaZahlungen({ daten, nurKennzahlen = false }: { daten: FakturaDaten; nurKennzahlen?: boolean }) {
   const { heute, rechnungen, zahlungenMonat } = daten;
   const kz = useMemo(() => berechneKennzahlen(rechnungen, zahlungenMonat, heute), [rechnungen, zahlungenMonat, heute]);
   const posten = useMemo(() => offenePosten(rechnungen), [rechnungen]);
@@ -24,6 +24,8 @@ export default function FakturaZahlungen({ daten }: { daten: FakturaDaten }) {
         <Kachel ton="#d97706" icon={<AlertTriangle className="h-5 w-5" />} titel="davon überfällig" wert={eur(kz.ueberfaelligBetrag)} unten={`${kz.ueberfaelligAnzahl} Rechnung${kz.ueberfaelligAnzahl === 1 ? '' : 'en'}`} />
       </div>
 
+      {!nurKennzahlen && (
+        <>
       <div className="rounded-xl border bg-white" style={{ borderColor: WIN.rand }}>
         <div className="flex flex-wrap items-center gap-2 p-3">
           <p className="font-semibold" style={{ color: WIN.text }}>Offene Posten</p>
@@ -67,6 +69,8 @@ export default function FakturaZahlungen({ daten }: { daten: FakturaDaten }) {
           <li>• Viele auf einmal: Zahlungsabgleich mit dem CSV-Kontoauszug.</li>
         </ul>
       </Karte>
+        </>
+      )}
     </div>
   );
 }

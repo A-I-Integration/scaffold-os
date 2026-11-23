@@ -144,7 +144,6 @@ const LEER_POSITION = { bezeichnung: '', menge: '1', einheit: 'Stk.', einzelprei
 const FAKTURA_BEREICHE = [
   { key: 'uebersicht', label: 'Übersicht' },
   { key: 'rechnungen', label: 'Rechnungen' },
-  { key: 'aufmass', label: 'Abrechnung' },
   { key: 'zahlungen', label: 'Zahlungen' },
 ] as const
 type FakturaBereichKunde = (typeof FAKTURA_BEREICHE)[number]['key']
@@ -923,6 +922,13 @@ export default function KundenDetailPage() {
     if (FAKTURA_BEREICHE.some((x) => x.key === b)) setFakturaBereich(b as FakturaBereichKunde)
     setFakturaReiter((extra?.reiter as FakturaReiter) || 'alle')
   }
+  // Schnellstart aus der Faktura-Übersicht: Abschlag/Schluss öffnet direkt den Rechnungsdialog; ohne eindeutigen Auftrag führt er zu den Auftragskarten.
+  const starteSchnell = (art: 'abschlag' | 'schluss' | 'gutschrift') => {
+    if (art === 'gutschrift') { springeInFaktura('rechnungen'); return }
+    const ziel = baustelle ?? (projects.length === 1 ? projects[0] : null)
+    if (ziel) { setSchlussStart({ art }); setSchlussProjectId(ziel.id) }
+    else document.getElementById('faktura-auftraege')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }
   const sichtOffeneSumme = sichtOffene.reduce((sum, i) => sum + (Number(i.gross_amount) - Number(i.paid_amount || 0)), 0)
   const sichtUeberfaelligSumme = sichtOffene.filter(istUeberfaellig).reduce((sum, i) => sum + (Number(i.gross_amount) - Number(i.paid_amount || 0)), 0)
 
@@ -1418,71 +1424,18 @@ export default function KundenDetailPage() {
               ))}
             </nav>
             {fakturaDaten.fehler && <p className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">❌ {fakturaDaten.fehler}</p>}
-            {fakturaBereich === 'uebersicht' && <FakturaUebersicht daten={fakturaDaten} onBereich={springeInFaktura} imKundenordner />}
-            {fakturaBereich === 'rechnungen' && <FakturaRechnungen key={fakturaReiter} daten={fakturaDaten} startReiter={fakturaReiter} imKundenordner />}
-            {fakturaBereich === 'zahlungen' && <FakturaZahlungen daten={fakturaDaten} />}
-            {fakturaBereich === 'aufmass' && (
-          <div className="space-y-6">
+            {fakturaBereich === 'uebersicht' && (
+              <div className="space-y-6">
+                <FakturaUebersicht daten={fakturaDaten} onBereich={springeInFaktura} imKundenordner onSchnell={starteSchnell} />
+                <div id="faktura-auftraege" className="space-y-6">
             {!baustelle && projects.map((p) => <Auftragsstand key={p.id} project={p} invoices={kundenInvoices.filter((i) => i.project_id === p.id) as unknown as ComponentProps<typeof Auftragsstand>['invoices']} onRechnungStellen={(art, prozent) => { setSchlussStart({ art, prozent }); setSchlussProjectId(p.id) }} onGeaendert={() => ladeDaten()} />)}
             {baustelle && <Auftragsstand project={baustelle} invoices={sichtInvoices as any} onRechnungStellen={(art, prozent) => { setSchlussStart({ art, prozent }); setSchlussProjectId(baustelle.id) }} onGeaendert={() => ladeDaten()} />}
-            {/* Offene Posten */}
-            <div className="bg-white rounded-xl border border-black/10 overflow-hidden">
-              <button onClick={() => setOffenePostenOpen(!offenePostenOpen)} className="w-full px-5 py-3 flex items-center justify-between text-sm font-semibold text-[#1d1d1f] hover:bg-black/5 transition-colors">
-                <span className="flex items-center gap-1.5">
-                  <AlertCircle className="h-4 w-4 text-red-500" /> Offene Posten
-                  {sichtOffeneSumme > 0 && <span className="text-xs font-normal text-red-600">({fmtEur(sichtOffeneSumme)} €{sichtUeberfaelligSumme > 0 ? `, davon ${fmtEur(sichtUeberfaelligSumme)} € überfällig` : ''})</span>}
-                </span>
-                {offenePostenOpen ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-              </button>
-              {offenePostenOpen && (
-                <div className="px-5 pb-4">
-                  {sichtOffene.length === 0 ? <p className="text-xs text-[#86868b]">Keine offenen Posten. 👍</p> : (
-                    <ul className="divide-y divide-black/5">
-                      {sichtOffene.map((inv) => {
-                        const verzug = istUeberfaellig(inv)
-                        const gutschrift = inv.invoice_type === 'gutschrift'
-                        return (
-                          <li key={inv.id} className="py-2 flex flex-wrap items-center gap-2 text-sm">
-                            <a href={`/rechnungen/${inv.id}`} className="font-medium text-[#e8590c] hover:underline">{inv.invoice_number}</a>
-                            <span className={`text-[10px] px-1.5 py-0.5 rounded border ${verzug ? STATUS_COLOR.ueberfaellig : STATUS_COLOR[inv.status]}`}>{verzug ? 'Überfällig' : STATUS_LABEL[inv.status]}</span>
-                            <span className="text-[#86868b]">fällig {fmtDate(inv.due_date)}</span>
-                            {Number(inv.paid_amount) > 0 && <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-700">Teilzahlung {fmtEur(Number(inv.paid_amount))} €</span>}
-                            <span className={`ml-auto font-bold ${verzug ? 'text-red-600' : ''}`}>{fmtEur(Number(inv.gross_amount) - Number(inv.paid_amount || 0))} € offen</span>
-                            {/* NEU: dieselben Bearbeiten-Aktionen wie unten bei "je Auftrag" –
-                                bisher gab es hier nur "Zahlung erfassen", man konnte eine offene
-                                Rechnung aus dieser Schnellübersicht heraus nicht ändern/stornieren/
-                                erneut senden, ohne erst zum passenden Auftrag herunterzuscrollen. */}
-                            <div className="w-full sm:w-auto">
-                              <RechnungAktionen
-                                gutschrift={gutschrift} storniert={inv.status === 'storniert'} bezahlt={inv.status === 'bezahlt'}
-                                zugferdLaeuft={zugferdLaeuft === inv.id}
-                                onPdf={() => { const doc = generateInvoicePDF(inv); doc.save(`${TYPE_LABEL[inv.invoice_type || 'standard']}_${inv.invoice_number}.pdf`) }}
-                                onSenden={() => sendInvoice(inv)}
-                                onZahlung={() => { setZahlungOffen(inv); setZahlungBetrag(String(Number(inv.gross_amount) - Number(inv.paid_amount || 0))); setZahlungDatum(lokalesDatumIso()); setZahlungNotiz('') }}
-                                onNeueVersion={() => { setEditInvoice(inv); setEditPositions(inv.positions || []) }}
-                                // Gutschrift: das Formular sitzt beim zugehörigen Auftrag weiter unten – dorthin scrollen.
-                                // Rechnungen ohne Auftrag (oder zu einem hier nicht gelisteten Auftrag) haben kein Formular → Eintrag entfällt.
-                                onGutschrift={inv.project_id && projects.some((pr) => pr.id === inv.project_id) ? () => {
-                                  const pid = inv.project_id as string
-                                  setGutschriftOffen(pid); setGutschriftReferenz(inv.invoice_number); setGutschriftGrund('')
-                                  setTimeout(() => document.getElementById(`gutschrift-form-${pid}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 80)
-                                } : undefined}
-                                onTeilabbau={() => teilabbauVorschlagen(inv)}
-                                onZugferd={() => handleZugferd(inv)}
-                                onXrechnung={() => ladeXrechnung(inv.id).catch((err: Error) => alert('❌ ' + err.message))}
-                                onBezahltToggle={() => toggleStatus(inv)}
-                                onLoeschen={() => deleteInvoice(inv)}
-                              />
-                            </div>
-                          </li>
-                        )
-                      })}
-                    </ul>
-                  )}
                 </div>
-              )}
-            </div>
-
+              </div>
+            )}
+            {fakturaBereich === 'rechnungen' && (
+              <div className="space-y-6">
+                <FakturaRechnungen key={fakturaReiter} daten={fakturaDaten} startReiter={fakturaReiter} imKundenordner />
             {/* Je Auftrag: Rechnungen + Zusatzrechnung + Gutschrift */}
             {projektSicht.length === 0 && sichtInvoices.length === 0 && <p className="text-sm text-[#86868b]">Noch keine Aufträge oder Rechnungen.</p>}
 
@@ -1775,7 +1728,70 @@ export default function KundenDetailPage() {
               )
             })}
 
-          </div>
+              </div>
+            )}
+            {fakturaBereich === 'zahlungen' && (
+              <div className="space-y-6">
+                <FakturaZahlungen daten={fakturaDaten} nurKennzahlen />
+            {/* Offene Posten */}
+            <div className="bg-white rounded-xl border border-black/10 overflow-hidden">
+              <button onClick={() => setOffenePostenOpen(!offenePostenOpen)} className="w-full px-5 py-3 flex items-center justify-between text-sm font-semibold text-[#1d1d1f] hover:bg-black/5 transition-colors">
+                <span className="flex items-center gap-1.5">
+                  <AlertCircle className="h-4 w-4 text-red-500" /> Offene Posten
+                  {sichtOffeneSumme > 0 && <span className="text-xs font-normal text-red-600">({fmtEur(sichtOffeneSumme)} €{sichtUeberfaelligSumme > 0 ? `, davon ${fmtEur(sichtUeberfaelligSumme)} € überfällig` : ''})</span>}
+                </span>
+                {offenePostenOpen ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+              </button>
+              {offenePostenOpen && (
+                <div className="px-5 pb-4">
+                  {sichtOffene.length === 0 ? <p className="text-xs text-[#86868b]">Keine offenen Posten. 👍</p> : (
+                    <ul className="divide-y divide-black/5">
+                      {sichtOffene.map((inv) => {
+                        const verzug = istUeberfaellig(inv)
+                        const gutschrift = inv.invoice_type === 'gutschrift'
+                        return (
+                          <li key={inv.id} className="py-2 flex flex-wrap items-center gap-2 text-sm">
+                            <a href={`/rechnungen/${inv.id}`} className="font-medium text-[#e8590c] hover:underline">{inv.invoice_number}</a>
+                            <span className={`text-[10px] px-1.5 py-0.5 rounded border ${verzug ? STATUS_COLOR.ueberfaellig : STATUS_COLOR[inv.status]}`}>{verzug ? 'Überfällig' : STATUS_LABEL[inv.status]}</span>
+                            <span className="text-[#86868b]">fällig {fmtDate(inv.due_date)}</span>
+                            {Number(inv.paid_amount) > 0 && <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-700">Teilzahlung {fmtEur(Number(inv.paid_amount))} €</span>}
+                            <span className={`ml-auto font-bold ${verzug ? 'text-red-600' : ''}`}>{fmtEur(Number(inv.gross_amount) - Number(inv.paid_amount || 0))} € offen</span>
+                            {/* NEU: dieselben Bearbeiten-Aktionen wie unten bei "je Auftrag" –
+                                bisher gab es hier nur "Zahlung erfassen", man konnte eine offene
+                                Rechnung aus dieser Schnellübersicht heraus nicht ändern/stornieren/
+                                erneut senden, ohne erst zum passenden Auftrag herunterzuscrollen. */}
+                            <div className="w-full sm:w-auto">
+                              <RechnungAktionen
+                                gutschrift={gutschrift} storniert={inv.status === 'storniert'} bezahlt={inv.status === 'bezahlt'}
+                                zugferdLaeuft={zugferdLaeuft === inv.id}
+                                onPdf={() => { const doc = generateInvoicePDF(inv); doc.save(`${TYPE_LABEL[inv.invoice_type || 'standard']}_${inv.invoice_number}.pdf`) }}
+                                onSenden={() => sendInvoice(inv)}
+                                onZahlung={() => { setZahlungOffen(inv); setZahlungBetrag(String(Number(inv.gross_amount) - Number(inv.paid_amount || 0))); setZahlungDatum(lokalesDatumIso()); setZahlungNotiz('') }}
+                                onNeueVersion={() => { setEditInvoice(inv); setEditPositions(inv.positions || []) }}
+                                // Gutschrift: das Formular sitzt beim zugehörigen Auftrag weiter unten – dorthin scrollen.
+                                // Rechnungen ohne Auftrag (oder zu einem hier nicht gelisteten Auftrag) haben kein Formular → Eintrag entfällt.
+                                onGutschrift={inv.project_id && projects.some((pr) => pr.id === inv.project_id) ? () => {
+                                  const pid = inv.project_id as string
+                                  setGutschriftOffen(pid); setGutschriftReferenz(inv.invoice_number); setGutschriftGrund('')
+                                  setTimeout(() => document.getElementById(`gutschrift-form-${pid}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 80)
+                                } : undefined}
+                                onTeilabbau={() => teilabbauVorschlagen(inv)}
+                                onZugferd={() => handleZugferd(inv)}
+                                onXrechnung={() => ladeXrechnung(inv.id).catch((err: Error) => alert('❌ ' + err.message))}
+                                onBezahltToggle={() => toggleStatus(inv)}
+                                onLoeschen={() => deleteInvoice(inv)}
+                              />
+                            </div>
+                          </li>
+                        )
+                      })}
+                    </ul>
+                  )}
+                </div>
+              )}
+            </div>
+
+              </div>
             )}
           </div>
         )}
