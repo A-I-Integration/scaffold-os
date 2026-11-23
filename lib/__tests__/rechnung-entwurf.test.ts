@@ -67,7 +67,7 @@ describe('Entwurf – Zusammenspiel mit den bestehenden Wegen (Quelltext)', () =
     expect(api).not.toMatch(/create_invoice|next_invoice_number|invoice_number/);
     expect(api).toContain('pruefeRolle(ROLLEN.ADMIN_DISPO)');
     const seite = q('components/rechnungen/RechnungenInhalt.tsx');
-    expect(seite).toMatch(/fetch\('\/api\/invoices', \{\s*method: 'POST'/);
+    expect(seite).toMatch(/fetchRechnungAnlegen\('\/api\/invoices', \{\s*method: 'POST'/);
     expect(seite).toContain("'/api/invoice-drafts?id=' + entwurfId");
   });
   it('SQL legt nur die neue Tabelle an und schaltet RLS ein', () => {

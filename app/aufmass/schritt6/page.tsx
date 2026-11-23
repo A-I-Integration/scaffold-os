@@ -1,6 +1,7 @@
 'use client';
 
 import { zahlAusEingabe } from '@/lib/zahl-eingabe';
+import { fetchRechnungAnlegen } from '@/lib/rechnung-anlegen-client'
 import { angebotsVorbelegung, fahrtSatz, fahrtBetrag, fahrtText, type KundenPreis } from '@/lib/kunden-preis';
 import { merkeBefehl } from '@/lib/offline/nachsenden';
 import type { AngebotStatus } from '@/lib/angebot-rueckmeldung';
@@ -1140,7 +1141,7 @@ function Schritt6Content() {
     setRechnungErstellenLaeuft(true);
     setRechnungFehler('');
     try {
-      const res = await fetch('/api/invoices', {
+      const res = await fetchRechnungAnlegen('/api/invoices', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

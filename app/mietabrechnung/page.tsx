@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
+import { fetchRechnungAnlegen } from '@/lib/rechnung-anlegen-client'
 import { CalendarClock, CheckCircle2, Euro, Loader2, AlertTriangle, Info } from 'lucide-react';
 import { standzeitNachberechnung } from '@/lib/miete';
 
@@ -139,7 +140,7 @@ export default function MietabrechnungPage() {
     const heute = heuteIso();
     try {
       // 1) Rechnung anlegen
-      const res = await fetch('/api/invoices', {
+      const res = await fetchRechnungAnlegen('/api/invoices', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

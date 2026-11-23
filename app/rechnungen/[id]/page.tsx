@@ -8,6 +8,7 @@
 // ============================================================
 
 import { ladeXrechnung } from '@/lib/xrechnung-download'
+import { fetchRechnungAnlegen } from '@/lib/rechnung-anlegen-client'
 import { useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useParams, useRouter } from 'next/navigation'
@@ -90,6 +91,8 @@ export default function RechnungAktePage() {
   const [zahlungen, setZahlungen] = useState<Zahlung[]>([])
   const [mails, setMails] = useState<Mail[]>([])
   const [protokoll, setProtokoll] = useState<VersandEintrag[]>([])
+  const [verlauf, setVerlauf] = useState<{ id: string; created_at: string; aktion: string; benutzer: string; grund: string | null; details: Record<string, unknown> | null }[]>([])
+  const [verlaufHinweis, setVerlaufHinweis] = useState('')
   const [protokollHinweis, setProtokollHinweis] = useState('')
   const [pruefLinks, setPruefLinks] = useState<PruefLink[]>([])
   const [pruefungen, setPruefungen] = useState<Pruefung[]>([])
@@ -116,6 +119,7 @@ export default function RechnungAktePage() {
       fetch(`/api/invoice-payments?invoice_id=${i.id}`).then((x) => x.json()).then((p) => p?.success && setZahlungen(p.payments)).catch(() => {})
       fetch(`/api/invoices/pruef-link?invoice_id=${i.id}`).then((x) => x.json()).then((p) => { if (p?.success) { setPruefLinks(p.links || []); setPruefungen(p.pruefungen || []) } }).catch(() => {})
       fetch(`/api/invoice-dispatches?invoice_id=${i.id}`).then((x) => x.json()).then((p) => { if (p?.success) { setProtokoll(p.eintraege || []); setProtokollHinweis('') } else setProtokollHinweis(p?.error || '') }).catch(() => {})
+      fetch(`/api/abrechnung-historie?invoice_id=${i.id}`).then((x) => x.json()).then((p) => { if (p?.success) { setVerlauf(p.eintraege || []); setVerlaufHinweis('') } else setVerlaufHinweis(p?.error || '') }).catch(() => {})
       fetch(`/api/email-log?invoice_numbers=${encodeURIComponent(i.invoice_number)}`).then((x) => x.json()).then((m) => m?.success && setMails(m.emails || [])).catch(() => {})
     } catch (e) { setFehler(e instanceof Error ? e.message : 'Laden fehlgeschlagen') }
   }, [id])
@@ -135,7 +139,7 @@ export default function RechnungAktePage() {
 
   // Beleg anlegen; bei fehlender Freigabe darf der Admin mit Begründung überschreiben
   async function anlegen(body: Record<string, unknown>, grund?: string): Promise<Invoice | null> {
-    const r = await fetch('/api/invoices', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...body, override_grund: grund || undefined }) })
+    const r = await fetchRechnungAnlegen('/api/invoices', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...body, override_grund: grund || undefined }) })
     const j = await r.json()
     if (j.success) return j.invoice as Invoice
     if (j.code === 'FREIGABE_FEHLT_OVERRIDE_MOEGLICH') {
@@ -379,6 +383,29 @@ export default function RechnungAktePage() {
                       </tr>
                     ))}
                     {protokoll.length === 0 && <tr><td colSpan={6} className="p-3" style={{ color: WIN.textGedaempft }}>Kein Versand protokolliert. Versendet vor dem Protokoll oder außerhalb von SCAFFOLD OS? Das ist nicht erkennbar.</td></tr>}
+                  </tbody>
+                </table>
+
+                <h3 className="font-semibold pt-4">Änderungsverlauf</h3>
+                {verlaufHinweis && <p className="rounded border border-amber-300 bg-amber-50 p-2 text-xs text-amber-900">⚠️ {verlaufHinweis}</p>}
+                <table className="w-full border-collapse mt-2" data-testid="aenderungsverlauf">
+                  <thead><tr className="text-left text-xs" style={{ background: WIN.grund, color: WIN.textGedaempft }}>
+                    <th className="p-2 border" style={{ borderColor: WIN.rand }}>Zeit</th><th className="p-2 border" style={{ borderColor: WIN.rand }}>Benutzer</th><th className="p-2 border" style={{ borderColor: WIN.rand }}>Vorgang</th><th className="p-2 border" style={{ borderColor: WIN.rand }}>Grund / Abweichung</th>
+                  </tr></thead>
+                  <tbody>
+                    {verlauf.map((v) => {
+                      const abw = Array.isArray((v.details as { abweichungen?: { text: string }[] } | null)?.abweichungen) ? ((v.details as { abweichungen: { text: string }[] }).abweichungen) : [];
+                      const st = (v.details as { status?: { von?: string; auf?: string } } | null)?.status;
+                      return (
+                        <tr key={v.id}>
+                          <td className="p-2 border whitespace-nowrap" style={{ borderColor: WIN.randHell }}>{new Date(v.created_at).toLocaleString('de-DE')}</td>
+                          <td className="p-2 border" style={{ borderColor: WIN.randHell }}>{v.benutzer}</td>
+                          <td className="p-2 border" style={{ borderColor: WIN.randHell }}>{({ rechnung_angelegt: 'Rechnung angelegt', neue_version: 'Neue Version angelegt', gutschrift_angelegt: 'Gutschrift angelegt', zahlung_geaendert: 'Zahlung geändert', status_geaendert: 'Status geändert', storniert: 'Storniert', geloescht: 'Gelöscht', abweichung_freigegeben: 'Abweichung freigegeben' } as Record<string, string>)[v.aktion] || v.aktion}{st && st.von !== st.auf ? <span className="block text-xs" style={{ color: WIN.textGedaempft }}>{st.von} → {st.auf}</span> : null}</td>
+                          <td className="p-2 border" style={{ borderColor: WIN.randHell }}>{v.grund ? <strong>{v.grund}</strong> : '–'}{abw.map((a, i) => <span key={i} className="block text-xs text-amber-800">⚠️ {a.text}</span>)}</td>
+                        </tr>
+                      );
+                    })}
+                    {verlauf.length === 0 && <tr><td colSpan={4} className="p-3" style={{ color: WIN.textGedaempft }}>Noch keine Änderungen aufgezeichnet.</td></tr>}
                   </tbody>
                 </table>
 

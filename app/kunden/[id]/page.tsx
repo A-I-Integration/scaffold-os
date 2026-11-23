@@ -13,6 +13,7 @@
 // ============================================================
 
 import AngebotRueckmeldungHinweis from '@/components/AngebotRueckmeldungHinweis'
+import { fetchRechnungAnlegen } from '@/lib/rechnung-anlegen-client'
 import { geruestPositionen } from '@/lib/aufmass-rechnung'
 import { useFakturaDaten } from '@/components/faktura/daten'
 import FakturaUebersicht from '@/components/faktura/FakturaUebersicht'
@@ -407,7 +408,7 @@ export default function KundenDetailPage() {
       // erledigt beides atomar (rpc/create_invoice_as_new_version,
       // supabase/phase-94-storno-neue-version-atomar.sql) - schlägt ein
       // Teil fehl, passiert gar nichts, nie nur die Hälfte.
-      const res = await fetch('/api/invoices', {
+      const res = await fetchRechnungAnlegen('/api/invoices', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -545,7 +546,7 @@ export default function KundenDetailPage() {
     if (!preis) { alert('Für dieses Projekt liegt kein berechneter Preis vor – bitte Position manuell über "Rechnung anlegen" eintragen.'); return }
     setRechnungAusAngebotLaeuft(project.id)
     try {
-      const res = await fetch('/api/invoices', {
+      const res = await fetchRechnungAnlegen('/api/invoices', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           project_id: project.id, customer_name: kunde.name,
@@ -584,7 +585,7 @@ export default function KundenDetailPage() {
 
     setSpeichern(true)
     try {
-      const res = await fetch('/api/invoices', {
+      const res = await fetchRechnungAnlegen('/api/invoices', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           project_id: zusatzProjectId, customer_name: kunde.name,
@@ -680,7 +681,7 @@ export default function KundenDetailPage() {
       const beschreibung = standzeitArt === 'komplett'
         ? `Standzeit-Gutschrift: Gerüst „${project.name}" bereits am ${new Date(standzeitDatum).toLocaleDateString('de-DE')} komplett abgebaut statt geplant am ${new Date(geplantesEnde).toLocaleDateString('de-DE')} (${wochenUngenutzt} Wo. nicht genutzt).`
         : `Standzeit-Gutschrift: Gerüst „${project.name}" ab ${new Date(standzeitDatum).toLocaleDateString('de-DE')} teilweise reduziert (Wochenpreis ${alterPreis}€ → ${neuerPreis}€), ${wochenUngenutzt} Wo. bis geplantem Ende ${new Date(geplantesEnde).toLocaleDateString('de-DE')}.`
-      const res = await fetch('/api/invoices', {
+      const res = await fetchRechnungAnlegen('/api/invoices', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           project_id: standzeitOffen, customer_name: kunde.name,
@@ -794,7 +795,7 @@ export default function KundenDetailPage() {
 
     setSpeichern(true)
     try {
-      const res = await fetch('/api/invoices', {
+      const res = await fetchRechnungAnlegen('/api/invoices', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           project_id: gutschriftOffen, customer_name: kunde.name,

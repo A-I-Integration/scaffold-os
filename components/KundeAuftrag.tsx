@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useCallback } from 'react';
+import { fetchRechnungAnlegen } from '@/lib/rechnung-anlegen-client'
 import { FileText, Download, Mail, Check, RotateCcw, Image as ImageIcon, ClipboardList, Plus, ChevronDown, ChevronUp } from 'lucide-react';
 import NachtraegeBlock from '@/components/NachtraegeBlock';
 import ZwischenaufmassBlock from '@/components/ZwischenaufmassBlock';
@@ -107,7 +108,7 @@ export default function KundeAuftrag({
 
     setSpeichern(true);
     try {
-      const res = await fetch('/api/invoices', {
+      const res = await fetchRechnungAnlegen('/api/invoices', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
