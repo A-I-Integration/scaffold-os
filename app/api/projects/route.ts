@@ -6,6 +6,8 @@ import { beiAngebotsannahmeSicher } from '@/lib/angebot-annahme';
 import { fahrtNachholenSicher } from '@/lib/auto-tour';
 import { projektFuerRolle, schreibdatenFuerRolle } from '@/lib/projekt-sicht';
 import { autosaveGesperrt, filtereAutosaveData, AUTOSAVE_PROJEKT_ABGESCHLOSSEN_FEHLER } from '@/lib/aufmass-autosave-regeln';
+import { schreibeHistorie } from '@/lib/abrechnung-historie';
+import { angebotNettoAusProjekt } from '@/lib/auftragsstand';
 
 // ============================================================
 // SCAFFOLD OS – Projekte API
@@ -238,6 +240,20 @@ export async function PATCH(req: NextRequest) {
       if (bisher.data?.entwurf === true && data.entwurf === false && !status) patch.status = 'active';
 
       patch.data = { ...(bisher.data || {}), ...data };
+
+      // Verlauf: Änderung des Angebotswerts nach der Annahme (best effort, ändert nichts am Speichern)
+      try {
+        if (!autosave && bisher.data?.angebotsStatus === 'angenommen') {
+          const vorher = angebotNettoAusProjekt(bisher.data, 850);
+          const nachher = angebotNettoAusProjekt(patch.data, 850);
+          if (Math.abs(vorher - nachher) > 0.005) {
+            const sb = await createClient();
+            const { data: { user } } = await sb.auth.getUser();
+            await schreibeHistorie({ aktion: 'auftragswert_geaendert', projectId: id, userId: user?.id || null,
+              grund: typeof body?.aenderungsgrund === 'string' ? body.aenderungsgrund : null, details: { von: vorher, auf: nachher } });
+          }
+        }
+      } catch { /* Verlauf ist best effort */ }
 
       // Projektbeginn wurde NEU eingetragen oder geändert, und bei der Annahme
       // ist noch keine Fahrt entstanden (z. B. weil das Datum fehlte) →

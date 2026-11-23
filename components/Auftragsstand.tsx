@@ -3,11 +3,14 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { normalisiereNachtraege, nachtragNummer, NACHTRAG_STATUS_LABEL } from '@/lib/nachtrag'
 import { berechneBaustellenErgebnis, type PersonalZeile } from '@/lib/baustellen-ergebnis'
+import { kontrolleBaustelle, korrekturkette } from '@/lib/abrechnung-pruefung'
+import { AKTION_LABEL, historieKurz } from '@/lib/abrechnung-historie'
 import { berechneAuftragsstand, angebotNettoAusProjekt, auftragUrl, type StandRechnung } from '@/lib/auftragsstand'
 
 // Gesamtübersicht einer Baustelle: Auftragswert, Teilrechnungen (z. B. 70/30), Nachträge/Verlängerungen,
 // bezahlt/offen. Alle Rechnungen sind anklickbar. Die Zahlen kommen aus den vorhandenen Daten; es wird nichts doppelt gepflegt.
 
+const stand0 = (l: { status: string; betrag: number }[], s: string) => l.filter(n => n.status === s).reduce((a, n) => a + (Number(n.betrag) || 0), 0)
 const eur = (n: number) => n.toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' €'
 const datum = (d?: string | null) => { if (!d) return '–'; const x = new Date(String(d).slice(0, 10) + 'T12:00:00'); return Number.isNaN(x.getTime()) ? '–' : x.toLocaleDateString('de-DE') }
 
@@ -60,6 +63,16 @@ export default function Auftragsstand({ project, invoices, onRechnungStellen, on
 
   const nachtraege = useMemo(() => normalisiereNachtraege(project.data?.nachtraege), [project.data])
   const angebotNetto = useMemo(() => angebotNettoAusProjekt(project.data, kranSatz), [project.data, kranSatz])
+
+  const kontrolle = useMemo(() => kontrolleBaustelle({ angebotNetto, nachtraegeBestaetigt: stand0(nachtraege, 'bestaetigt'), nachtraegeAngefragt: stand0(nachtraege, 'offen'), rechnungen: invoices as any }), [angebotNetto, nachtraege, invoices])
+  const [verlauf, setVerlauf] = useState<{ id: string; created_at: string; aktion: string; benutzer: string; grund: string | null; invoice_number: string | null; details: Record<string, any> | null }[] | null>(null)
+  const [verlaufHinweis, setVerlaufHinweis] = useState('')
+  useEffect(() => {
+    if (baustelleAnsicht) return
+    let weg = false
+    fetch(`/api/abrechnung-historie?project_id=${project.id}`).then(r => r.json()).then(j => { if (weg) return; if (j.success) setVerlauf(j.eintraege || j.historie || []); else setVerlaufHinweis(j.error || '') }).catch(() => {})
+    return () => { weg = true }
+  }, [project.id, baustelleAnsicht, invoices])
 
   const stand = useMemo(() => berechneAuftragsstand({ angebotNetto, nachtraege, rechnungen: invoices }), [angebotNetto, nachtraege, invoices])
 
@@ -151,6 +164,45 @@ export default function Auftragsstand({ project, invoices, onRechnungStellen, on
           <button type="button" onClick={() => onRechnungStellen('schluss')} className="px-3 py-1.5 text-sm rounded border border-black/40 bg-white hover:bg-[#f0f0f0]">Schlussrechnung</button>
           <span className="text-xs text-black/70 w-full">Die Prozente beziehen sich auf die Gesamtleistung im Dialog und lassen sich dort ändern. Es wird erst gespeichert, wenn Sie die Rechnung dort anlegen.</span>
         </div>
+      )}
+
+      {!baustelleAnsicht && (
+        <div className="rounded border border-black/30 bg-white p-3 space-y-2" data-testid="kontrollanzeige">
+          <h4 className="font-semibold text-sm">Kontrollanzeige</h4>
+          <table className="w-full text-sm">
+            <tbody className="[&_td]:py-0.5 [&_td:last-child]:text-right [&_td:last-child]:tabular-nums">
+              <tr><td>Auftragswert (Angebot + bestätigte Nachträge)</td><td>{eur(kontrolle.auftragswert)}</td></tr>
+              <tr><td>Abschläge</td><td>{eur(kontrolle.abschlaege)}</td></tr>
+              <tr><td>Schlussrechnung</td><td>{eur(kontrolle.schluss)}</td></tr>
+              {kontrolle.sonstige !== 0 && <tr><td>Weitere Rechnungen</td><td>{eur(kontrolle.sonstige)}</td></tr>}
+              <tr><td>Gutschriften</td><td>{eur(kontrolle.gutschriften)}</td></tr>
+              <tr className="font-semibold border-t border-black/20"><td>Abgerechnet (netto) / noch offen zum Abrechnen</td><td>{eur(kontrolle.abgerechnet)} / {eur(kontrolle.noch)}</td></tr>
+              <tr><td>Bezahlt / offen (brutto)</td><td>{eur(kontrolle.bezahltBrutto)} / {eur(kontrolle.offenBrutto)}</td></tr>
+              <tr className="text-black/70"><td>Nachträge angefragt, nicht bestätigt (zählen nicht)</td><td>{eur(kontrolle.nachtraegeAngefragt)}</td></tr>
+            </tbody>
+          </table>
+          {kontrolle.abweichungen.length === 0
+            ? <p className="text-sm">Keine Abweichungen.</p>
+            : <ul className="text-sm text-red-700 font-medium space-y-0.5">{kontrolle.abweichungen.map((a, i) => <li key={i}>⚠ {a.text}</li>)}</ul>}
+          <p className="text-xs text-black/60">Es werden keine Rechnungen oder Beträge automatisch geändert. Abweichungen müssen Sie selbst klären.</p>
+        </div>
+      )}
+
+      {!baustelleAnsicht && (
+        <details className="text-sm" data-testid="baustellen-verlauf">
+          <summary className="cursor-pointer font-semibold">Verlauf der Baustelle{verlauf ? ` (${verlauf.length})` : ''}</summary>
+          {verlaufHinweis && <p className="mt-1 text-amber-900">{verlaufHinweis}</p>}
+          <ul className="mt-1 space-y-1">
+            {(verlauf || []).map(v => (
+              <li key={v.id} className="rounded border border-black/20 px-3 py-1.5">
+                <span className="tabular-nums">{new Date(v.created_at).toLocaleString('de-DE')}</span> · {v.benutzer} · <b>{(AKTION_LABEL as Record<string, string>)[v.aktion] || v.aktion}</b>{v.invoice_number ? ` (${v.invoice_number})` : ''}
+                {historieKurz(v.aktion, v.details) && <span className="block text-xs">{historieKurz(v.aktion, v.details)}</span>}
+                {v.grund && <span className="block text-xs">Grund: {v.grund}</span>}
+              </li>
+            ))}
+            {verlauf && verlauf.length === 0 && <li className="text-black/60">Noch keine Änderungen aufgezeichnet.</li>}
+          </ul>
+        </details>
       )}
 
       {!baustelleAnsicht && nachtraege.length > 0 && (
