@@ -1,5 +1,7 @@
 'use client';
 
+import { zahlAusEingabe } from '@/lib/zahl-eingabe';
+import { angebotsVorbelegung, fahrtSatz, fahrtBetrag, fahrtText, type KundenPreis } from '@/lib/kunden-preis';
 import { merkeBefehl } from '@/lib/offline/nachsenden';
 import type { AngebotStatus } from '@/lib/angebot-rueckmeldung';
 import { normalisiereKatalog, type LeistungKatalogEintrag } from '@/lib/leistungskatalog';
@@ -131,13 +133,22 @@ function Schritt6Content() {
     // Statik / Standsicherheitsnachweis: Fremdleistung (Statiker/Prüfstatiker), keine Software-Berechnung
     statik: { aktiv: false, text: '', betrag: '' },
     rabatt: { aktiv: false, betrag: '' },
+    // Fahrt nach Kilometern (nur zusammen mit festem Preis): km gesamt (Hin- und Rückfahrt) × Satz
+    fahrt: { aktiv: false, km: '', satzProKm: '' },
     // Gerüstergänzungen fürs Aufmaßblatt (Stück/lfm) – fließen NICHT in den Angebotspreis
     zulagen: [] as { bezeichnung: string; einheit: 'Stk' | 'lfm'; menge: string }[],
   });
 
   // NEU (Phase 30): Preisbasis wählbar – KI-Kalkulation oder Festpreis pro m².
-  const [preisModus, setPreisModus] = useState<'ki' | 'festpreis'>('ki');
+  const [preisModus, setPreisModus] = useState<'ki' | 'festpreis' | 'pauschale'>('ki');
   const [festpreisProM2, setFestpreisProM2] = useState('');
+  const [pauschale, setPauschale] = useState('');
+  // Kunde mit festem Preis: Vorbelegung (Preisart, Preis, Fahrt nach km) – nur für Angebote, die noch nie gespeichert wurden
+  const [kundenPreisRoh, setKundenPreis] = useState<(KundenPreis & { id: string }) | null>(null);
+  const [preisAusProjekt, setPreisAusProjekt] = useState(false);
+  const [vorbelegtVonKunde, setVorbelegtVonKunde] = useState(false);
+  const [fahrtHinweis, setFahrtHinweis] = useState('');
+  const [fahrtLaedt, setFahrtLaedt] = useState(false);
   // NEU (Phase 46): Preisliste je Gerüst-Typ aus den Einstellungen
   const [preisliste, setPreisliste] = useState<{ name: string; preis_pro_m2: number }[]>([])
   // Phase 87: Firmenprofil fuer Angebot-PDF (Absender + Fusszeile, wie Rechnung)
@@ -168,9 +179,13 @@ function Schritt6Content() {
   // Live-Kalkulation: Basis = KI-Verkaufspreis ODER Festpreis/m² × Fläche, dann Zu-/Abschläge
   function calcAngebot() {
     const flaeche = kiResult?.totalAreaM2 ?? 0;
-    const basis = preisModus === 'festpreis'
-      ? (parseFloat(festpreisProM2.replace(',', '.')) || 0) * flaeche
-      : (kiResult?.suggestedPrice ?? 0);
+    const basis = preisModus === 'pauschale'
+      ? zahlAusEingabe(pauschale)
+      : preisModus === 'festpreis'
+        ? (parseFloat(festpreisProM2.replace(',', '.')) || 0) * flaeche
+        : (kiResult?.suggestedPrice ?? 0);
+    // Fahrt nach km nur zusammen mit festem Preis (bei der Kalkulation steckt der Transport schon im Preis)
+    const fahrtBetragNetto = preisModus === 'ki' ? 0 : fahrtBetrag(anpassungen.fahrt);
     const mieteBetrag = anpassungen.miete.aktiv
       ? (parseFloat(anpassungen.miete.wochen) || 0) * (parseFloat(anpassungen.miete.preisProWoche) || 0)
       : 0;
@@ -184,11 +199,69 @@ function Schritt6Content() {
     const kranTagessatz = Number(companyProfile?.calc_crane_day) || 850;
     const kranAktiv = !!((stepData as any)?.step4?.kranErforderlich);
     const kranBetrag = kranAktiv ? Math.round(kranTagessatz * kranTage * 100) / 100 : 0;
-    const endpreis = Math.max(0, basis + mieteBetrag + nachtragBetrag + statikBetrag + kranBetrag - rabattBetrag);
+    const endpreis = Math.max(0, basis + mieteBetrag + nachtragBetrag + statikBetrag + kranBetrag + fahrtBetragNetto - rabattBetrag);
     const skontoBetrag = anpassungen.skonto ? endpreis * 0.02 : 0;
-    return { basis, mieteBetrag, nachtragBetrag, statikBetrag, kranBetrag, kranTage, kranTagessatz, kranAktiv, rabattBetrag, endpreis, skontoBetrag };
+    return { basis, mieteBetrag, nachtragBetrag, statikBetrag, kranBetrag, kranTage, kranTagessatz, kranAktiv, fahrtBetrag: fahrtBetragNetto, rabattBetrag, endpreis, skontoBetrag };
   }
   const eur = (n: number) => n.toFixed(2) + ' €';
+
+  // ── Kunde mit festem Preis ──
+  const schritt1 = (stepData as { step1?: { customerId?: string | null; adresse?: string } } | null)?.step1;
+  const kundeId: string | null = schritt1?.customerId || null;
+  useEffect(() => {
+    if (!kundeId) return;
+    let aktiv = true;
+    (async () => {
+      try {
+        const r = await fetch('/api/kunden?id=' + encodeURIComponent(kundeId));
+        const j = await r.json();
+        if (aktiv && j.success) setKundenPreis(j.kunden?.[0] ?? null);
+      // ohne Kundendaten (z. B. fehlende Berechtigung): Angebot wie bisher
+      } catch { /* ohne Kundendaten: Angebot wie bisher */ }
+    })();
+    return () => { aktiv = false; };
+  }, [kundeId]);
+
+  // Strecke Lager → Baustelle per Google; km gesamt = Hin- und Rückfahrt (einfache Strecke × 2), danach von Hand änderbar
+  async function ermittleFahrtstrecke() {
+    setFahrtLaedt(true); setFahrtHinweis('');
+    try {
+      const r = await fetch('/api/fahrtstrecke', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ adresse: schritt1?.adresse || '' }) });
+      const j = await r.json();
+      if (!j.success) throw new Error(j.error || 'Fehler');
+      if (j.km == null) { setFahrtHinweis(j.grund || 'Strecke nicht ermittelbar – bitte km von Hand eintragen.'); return; }
+      const gesamt = Math.round(j.km * 2 * 10) / 10;
+      setAnpassungen((p) => ({ ...p, fahrt: { ...p.fahrt, km: String(gesamt).replace('.', ',') } }));
+      setFahrtHinweis(`Strecke ${String(j.km).replace('.', ',')} km einfach (Google), Hin- und Rückfahrt = ${String(gesamt).replace('.', ',')} km. Bei Bedarf ändern.`);
+    } catch { setFahrtHinweis('Strecke nicht ermittelbar – bitte km von Hand eintragen.'); }
+    finally { setFahrtLaedt(false); }
+  }
+  // nur Kundendaten des aktuell gewählten Kunden gelten
+  const kundenPreis = kundenPreisRoh && kundenPreisRoh.id === kundeId ? kundenPreisRoh : null;
+  const firmenKmSatz = companyProfile?.calc_km_satz;
+  const satzFuerFahrt = () => { const v = fahrtSatz(zahlAusEingabe(kundenPreis?.fahrt_satz_pro_km) || null, firmenKmSatz); return v === null ? '' : String(v).replace('.', ','); };
+
+  // Vorbelegung aus dem Kunden: nur einmal und nur, wenn das Angebot noch nie gespeichert/versendet wurde
+  const [vorbelegtFuer, setVorbelegtFuer] = useState<string | null>(null);
+  useEffect(() => {
+    if (!kundenPreis || preisAusProjekt || vorbelegtFuer === kundenPreis.id) return;
+    let aktiv = true;
+    void (async () => {
+      await Promise.resolve(); // Zustand erst nach dem Render setzen
+      if (!aktiv) return;
+      setVorbelegtFuer(kundenPreis.id);
+      const v = angebotsVorbelegung(kundenPreis);
+      if (v.preisModus === 'ki') return;
+      setPreisModus(v.preisModus); setFestpreisProM2(v.festpreisProM2); setPauschale(v.pauschale);
+      setVorbelegtVonKunde(true);
+      if (v.fahrtNachKm) {
+        setAnpassungen((p) => ({ ...p, fahrt: { aktiv: true, km: '', satzProKm: satzFuerFahrt() } }));
+        void ermittleFahrtstrecke();
+      }
+    })();
+    return () => { aktiv = false; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [kundenPreis, preisAusProjekt, vorbelegtFuer]);
 
   // NEU: Projekt aus dem Dashboard öffnen (?id=...) → Daten aus der Datenbank laden
   useEffect(() => {
@@ -258,7 +331,7 @@ function Schritt6Content() {
         if (!json.success || !json.project) throw new Error(json.error || 'Projekt nicht gefunden');
         const p = json.project;
         const d = p.data || {};
-        const { angebotAnpassungen, kiResult: savedKi, angebotsStatus: savedStatus, angebotRueckmeldungen: savedRueckmeldungen, preisModus: savedPreisModus, festpreisProM2: savedFestpreis, ...steps } = d;
+        const { angebotAnpassungen, kiResult: savedKi, angebotsStatus: savedStatus, angebotRueckmeldungen: savedRueckmeldungen, preisModus: savedPreisModus, festpreisProM2: savedFestpreis, pauschale: savedPauschale, ...steps } = d;
         // Phase 81 (jetzt zentral in leiteStepsAusKiResultAb, siehe dort):
         // Fehlende step2/step3 aus kiResult ableiten (CAD-Projekte, deren
         // Frontend step2/3 nicht mitschrieb - z. B. veraltetes Bundle).
@@ -284,6 +357,9 @@ function Schritt6Content() {
         // NEU (Phase 30): gewählte Preisbasis wiederherstellen
         if (savedPreisModus) setPreisModus(savedPreisModus);
         if (savedFestpreis) setFestpreisProM2(savedFestpreis);
+        if (savedPauschale) setPauschale(String(savedPauschale));
+        // Ein schon gespeichertes/versendetes Angebot behält seine Preisart – die Vorbelegung aus dem Kunden gilt nur für neue
+        setPreisAusProjekt(!!(savedPreisModus || savedStatus || savedKi));
         setSavedProjectId(p.id);
         // Erst NACH erfolgreichem Laden vermerken – bei einem Fehler (siehe
         // catch unten) soll ein erneuter Versuch weiterhin frisch laden.
@@ -595,7 +671,7 @@ function Schritt6Content() {
       let projektId = savedProjectId;
       if (!projektId) { await speichereEntwurf(); projektId = leseEntwurfId(); }
       // KI-Ergebnis und Angebotsstatus mit ins Projekt speichern (siehe Kommentar weiter unten)
-      const gespeicherteDaten = { ...stepData, angebotAnpassungen: anpassungen, entwurf: false, kiResult, angebotsStatus, ...(angebotRueckmeldungen ? { angebotRueckmeldungen } : {}), preisModus, festpreisProM2 };
+      const gespeicherteDaten = { ...stepData, angebotAnpassungen: anpassungen, entwurf: false, kiResult, angebotsStatus, ...(angebotRueckmeldungen ? { angebotRueckmeldungen } : {}), preisModus, festpreisProM2, pauschale };
       // Offline (Stufe 4): Ist das Projekt schon angelegt, wird der ganze Stand gemerkt und mit Verbindung gesendet (der letzte Stand gewinnt).
       // Einen neuen Kunden legt erst das nächste Speichern mit Netz an; Fotos hängen ebenfalls erst dann am Projekt.
       if (typeof navigator !== 'undefined' && !navigator.onLine) {
@@ -840,16 +916,19 @@ function Schritt6Content() {
     doc.setFillColor(236, 253, 245); doc.rect(110, cy - 5, 86, 20, 'F'); doc.setTextColor(4, 120, 87); doc.setFontSize(8); doc.text('Empfohlener Verkaufspreis', 116, cy + 2); doc.setFontSize(12); doc.text(kiResult.suggestedPrice.toFixed(2) + ' €', 190, cy + 2, { align: 'right' }); doc.setFontSize(8); doc.text(`Marge: ${kiResult.margin.toFixed(2)} € (${kiResult.marginPercent}%)`, 116, cy + 12);
     // NEU: Angebot-Anpassungen (Skonto, Mietverlängerung, Nachtrag, Sonderrabatt)
     const ang = calcAngebot();
-    const hatAnpassungen = anpassungen.skonto || anpassungen.miete.aktiv || anpassungen.nachtrag.aktiv || anpassungen.statik?.aktiv || anpassungen.rabatt.aktiv;
+    const hatAnpassungen = anpassungen.skonto || anpassungen.miete.aktiv || anpassungen.nachtrag.aktiv || anpassungen.statik?.aktiv || anpassungen.rabatt.aktiv || ang.fahrtBetrag > 0 || preisModus !== 'ki';
     if (hatAnpassungen) {
       cy += 22;
       if (cy > 235) { doc.addPage(); cy = 30; } // Platz-Sicherung bei langen Materiallisten
       doc.setTextColor(30, 58, 138); doc.setFontSize(10); doc.setFont('helvetica', 'bold');
       doc.text('Angebots-Anpassungen', 110, cy); cy += 8;
       doc.setFontSize(9); doc.setFont('helvetica', 'normal'); doc.setTextColor(71, 85, 105);
-      doc.text('Basispreis (KI-Kalkulation)', 116, cy); doc.text(ang.basis.toFixed(2) + ' €', 190, cy, { align: 'right' }); cy += 9;
+      doc.text(preisModus === 'pauschale' ? 'Pauschale' : preisModus === 'festpreis' ? 'Festpreis (m² × Preis)' : 'Basispreis (KI-Kalkulation)', 116, cy); doc.text(ang.basis.toFixed(2) + ' €', 190, cy, { align: 'right' }); cy += 9;
       if (ang.kranBetrag > 0) {
         doc.text(`Kran (${ang.kranTage} T. à ${ang.kranTagessatz} €)`, 116, cy); doc.text(ang.kranBetrag.toFixed(2) + ' €', 190, cy, { align: 'right' }); cy += 9;
+      }
+      if (ang.fahrtBetrag > 0) {
+        doc.text(fahrtText(anpassungen.fahrt), 116, cy); doc.text('+' + ang.fahrtBetrag.toFixed(2) + ' €', 190, cy, { align: 'right' }); cy += 9;
       }
       if (anpassungen.miete.aktiv && ang.mieteBetrag > 0) {
         doc.text(`Mietverlängerung (${anpassungen.miete.wochen} Wo.)`, 116, cy);
@@ -1016,7 +1095,7 @@ function Schritt6Content() {
   function handleRechnung() {
     if (!kiResult || !savedProjectId) return;
     // Dialog: Rechnungsart, Abrechnung nach Angebot oder Aufmaß, bestätigte Nachträge
-    setSchlussDaten({ ...stepData, angebotAnpassungen: anpassungen, kiResult, preisModus, festpreisProM2 });
+    setSchlussDaten({ ...stepData, angebotAnpassungen: anpassungen, kiResult, preisModus, festpreisProM2, pauschale });
   }
 
   // NEU (Phase 31): 1 Klick in Schritt 6 → Rechnung wird direkt angelegt UND
@@ -1032,13 +1111,18 @@ function Schritt6Content() {
       flaecheM2: flaeche ?? 0,
       festpreisProM2: preisModus === 'festpreis' ? parseFloat(festpreisProM2.replace(',', '.')) || undefined : undefined,
       abschnitte: kiResult.sectionBreakdown,
-      pauschaleText: preisModus === 'festpreis'
-        ? `Gerüstbau gemäß Angebot (${flaeche ?? '–'} m² × ${festpreisProM2.replace('.', ',')} €/m²)`
-        : 'Gerüstbau gemäß Angebot (Material, Arbeit, Transport)',
+      pauschaleText: preisModus === 'pauschale'
+        ? 'Gerüstbau gemäß Angebot (Pauschale)'
+        : preisModus === 'festpreis'
+          ? `Gerüstbau gemäß Angebot (${flaeche ?? '–'} m² × ${festpreisProM2.replace('.', ',')} €/m²)`
+          : 'Gerüstbau gemäß Angebot (Material, Arbeit, Transport)',
     });
 
     if (ang.kranBetrag > 0) {
       positions.push({ bezeichnung: `Kran (${ang.kranTage} Tage à ${ang.kranTagessatz} €)`, menge: 1, einheit: 'Pauschale', einzelpreis: ang.kranBetrag });
+    }
+    if (ang.fahrtBetrag > 0) {
+      positions.push({ bezeichnung: fahrtText(anpassungen.fahrt), menge: 1, einheit: 'Pauschale', einzelpreis: ang.fahrtBetrag });
     }
     if (anpassungen.miete.aktiv && ang.mieteBetrag > 0) {
       positions.push({ bezeichnung: `Mietverlängerung ${anpassungen.miete.wochen} Wo. à ${anpassungen.miete.preisProWoche} €`, menge: 1, einheit: 'Pauschale', einzelpreis: ang.mieteBetrag });
@@ -1610,14 +1694,47 @@ function Schritt6Content() {
                         <button onClick={() => setPreisModus('festpreis')} className="rounded-lg border border-amber-400 bg-white px-3 py-1 font-semibold hover:bg-amber-100 transition">Auf Festpreis pro m² umstellen</button>
                       </div>
                     )}
-                    <div className="grid grid-cols-2 gap-2 mb-2">
+                    {vorbelegtVonKunde && <p className="text-[11px] text-[#e8590c] mb-2" data-testid="kunden-festpreis-hinweis">Preisart laut Kundenvereinbarung vorbelegt – für dieses Angebot änderbar.</p>}
+                    <div className="grid grid-cols-3 gap-2 mb-2">
                       <button onClick={() => setPreisModus('ki')} className={`rounded-lg border px-3 py-2 text-xs font-semibold transition ${preisModus === 'ki' ? 'bg-[#e8590c]/10 border-[#e8590c] text-[#e8590c]' : 'bg-[#f5f5f7] border-black/10 text-[#86868b]'}`}>
                         🧮 KI-Kalkulation
                       </button>
                       <button onClick={() => setPreisModus('festpreis')} className={`rounded-lg border px-3 py-2 text-xs font-semibold transition ${preisModus === 'festpreis' ? 'bg-[#e8590c]/10 border-[#e8590c] text-[#e8590c]' : 'bg-[#f5f5f7] border-black/10 text-[#86868b]'}`}>
                         📐 Festpreis pro m²
                       </button>
+                      <button onClick={() => setPreisModus('pauschale')} className={`rounded-lg border px-3 py-2 text-xs font-semibold transition ${preisModus === 'pauschale' ? 'bg-[#e8590c]/10 border-[#e8590c] text-[#e8590c]' : 'bg-[#f5f5f7] border-black/10 text-[#86868b]'}`}>
+                        💶 Pauschale
+                      </button>
                     </div>
+                    {preisModus === 'pauschale' && (
+                      <div className="flex items-center gap-2 mb-2">
+                        <input value={pauschale} onChange={(e) => setPauschale(e.target.value)} placeholder="z.B. 2.500,00" aria-label="Pauschalbetrag" className={inputCls + ' w-36'} />
+                        <span className="text-xs text-[#86868b]">€ netto für den ganzen Auftrag</span>
+                      </div>
+                    )}
+                    {preisModus !== 'ki' && (
+                      <div className="rounded-lg border border-black/10 bg-[#f5f5f7] p-2 mb-2" data-testid="fahrt-nach-km">
+                        <label className="flex items-center gap-2 text-xs font-semibold text-[#1d1d1f]">
+                          <input type="checkbox" checked={anpassungen.fahrt.aktiv} onChange={(e) => {
+                            const aktiv = e.target.checked;
+                            setAnpassungen((p) => ({ ...p, fahrt: { ...p.fahrt, aktiv, satzProKm: p.fahrt.satzProKm || satzFuerFahrt() } }));
+                            if (aktiv && !anpassungen.fahrt.km) void ermittleFahrtstrecke();
+                          }} />
+                          Fahrt zusätzlich nach Kilometern abrechnen
+                        </label>
+                        {anpassungen.fahrt.aktiv && (
+                          <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-[#86868b]">
+                            <input value={anpassungen.fahrt.km} onChange={(e) => setAnpassungen((p) => ({ ...p, fahrt: { ...p.fahrt, km: e.target.value } }))} placeholder="km" aria-label="Kilometer gesamt" className={inputCls + ' w-20'} />
+                            <span>km gesamt ×</span>
+                            <input value={anpassungen.fahrt.satzProKm} onChange={(e) => setAnpassungen((p) => ({ ...p, fahrt: { ...p.fahrt, satzProKm: e.target.value } }))} placeholder="€/km" aria-label="Satz je km" className={inputCls + ' w-20'} />
+                            <span>€/km = <strong>{eur(fahrtBetrag(anpassungen.fahrt))}</strong></span>
+                            <button type="button" onClick={() => void ermittleFahrtstrecke()} disabled={fahrtLaedt} className="rounded-lg border border-black/10 bg-white px-2 py-1 text-[11px] text-[#424245]">{fahrtLaedt ? 'Ermittle …' : 'Strecke neu ermitteln'}</button>
+                            {fahrtHinweis && <p className="w-full text-[11px]" data-testid="fahrt-hinweis">{fahrtHinweis}</p>}
+                            {!anpassungen.fahrt.satzProKm && <p className="w-full text-[11px] text-amber-700">Kein Satz je km hinterlegt (Firmeneinstellungen oder Kunde) – bitte hier eintragen, sonst entsteht keine Fahrtposition.</p>}
+                          </div>
+                        )}
+                      </div>
+                    )}
                     {preisModus === 'festpreis' && (
                       <div>
                         {preisliste.length > 0 && (
@@ -1757,6 +1874,7 @@ function Schritt6Content() {
                   {/* ─── Live-Endpreis ─── */}
                   <div className="rounded-xl bg-white/80 border border-black/10 p-4 space-y-1.5 text-sm">
                     <div className="flex justify-between text-[#86868b]"><span>Basispreis (KI)</span><span className="text-[#1d1d1f]">{eur(a.basis)}</span></div>
+                    {a.fahrtBetrag > 0 && <div className="flex justify-between text-[#86868b]" data-testid="summe-fahrt"><span>+ {fahrtText(anpassungen.fahrt)}</span><span className="text-[#1d1d1f]">{eur(a.fahrtBetrag)}</span></div>}
                     {a.kranBetrag > 0 && <div className="flex justify-between text-[#86868b]"><span>+ Kran ({a.kranTage} T. à {eur(a.kranTagessatz)})</span><span className="text-[#1d1d1f]">{eur(a.kranBetrag)}</span></div>}
                     {a.mieteBetrag > 0 && <div className="flex justify-between text-[#86868b]"><span>+ Mietverlängerung</span><span className="text-[#1d1d1f]">{eur(a.mieteBetrag)}</span></div>}
                     {a.nachtragBetrag > 0 && <div className="flex justify-between text-[#86868b]"><span>+ Nachtrag</span><span className="text-[#1d1d1f]">{eur(a.nachtragBetrag)}</span></div>}

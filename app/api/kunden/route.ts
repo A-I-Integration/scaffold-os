@@ -1,3 +1,4 @@
+import { pruefeKundenPreis } from '@/lib/kunden-preis';
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { serverErrorResponse } from '@/lib/auth';
@@ -26,7 +27,7 @@ const headers = {
 const ROLES = ['admin', 'disponent'];
 
 // Felder, die angelegt / geändert werden dürfen (Whitelist)
-const FELDER = ['name', 'contact_person', 'email', 'phone', 'street', 'zip', 'city', 'notes', 'is_active', 'datev_konto', 'kundentyp', 'ust_id', 'leitweg_id', 'bauleister_nachweis_bis'];
+const FELDER = ['name', 'contact_person', 'email', 'phone', 'street', 'zip', 'city', 'notes', 'is_active', 'datev_konto', 'kundentyp', 'ust_id', 'leitweg_id', 'bauleister_nachweis_bis', 'preis_modus', 'festpreis_m2', 'festpreis_pauschale', 'fahrt_nach_km', 'fahrt_satz_pro_km'];
 
 async function callerRole(): Promise<string | null> {
   try {
@@ -81,8 +82,8 @@ export async function GET(req: NextRequest) {
     const id = searchParams.get('id');
     const sortiert = searchParams.get('sort') === 'neueste' ? 'created_at.desc' : 'name';
     const query = id
-      ? `id=eq.${id}&select=id,name,contact_person,email,phone,street,zip,city,notes,is_active,datev_konto,kundentyp,ust_id,leitweg_id,bauleister_nachweis_bis,created_at`
-      : `select=id,name,contact_person,email,phone,street,zip,city,notes,is_active,datev_konto,kundentyp,ust_id,leitweg_id,bauleister_nachweis_bis,created_at&order=${sortiert}`;
+      ? `id=eq.${id}&select=id,name,contact_person,email,phone,street,zip,city,notes,is_active,datev_konto,kundentyp,ust_id,leitweg_id,bauleister_nachweis_bis,preis_modus,festpreis_m2,festpreis_pauschale,fahrt_nach_km,fahrt_satz_pro_km,created_at`
+      : `select=id,name,contact_person,email,phone,street,zip,city,notes,is_active,datev_konto,kundentyp,ust_id,leitweg_id,bauleister_nachweis_bis,preis_modus,festpreis_m2,festpreis_pauschale,fahrt_nach_km,fahrt_satz_pro_km,created_at&order=${sortiert}`;
     const res = await fetch(`${url}/rest/v1/customers?${query}`, { headers });
     if (!res.ok) {
       const t = await res.text();
@@ -120,6 +121,8 @@ export async function POST(req: NextRequest) {
     clean.name = String(clean.name).trim();
     const steuerFehler = steuerFelderPruefen(clean);
     if (steuerFehler) return NextResponse.json({ success: false, error: steuerFehler }, { status: 400 });
+    const preisFehler = pruefeKundenPreis(clean);
+    if (preisFehler) return NextResponse.json({ success: false, error: preisFehler }, { status: 400 });
     if (!emailOk(clean.email)) {
       return NextResponse.json({ success: false, error: 'E-Mail-Adresse ungültig.' }, { status: 400 });
     }
@@ -132,7 +135,7 @@ export async function POST(req: NextRequest) {
     // Kunde mit exakt diesem Namen (Groß-/Kleinschreibung egal), wird
     // dieser zurückgegeben statt ein neuer Datensatz angelegt.
     const dupCheck = await fetch(
-      `${url}/rest/v1/customers?name=ilike.${encodeURIComponent(clean.name)}&select=id,name,contact_person,email,phone,street,zip,city,notes,is_active,datev_konto,kundentyp,ust_id,leitweg_id,bauleister_nachweis_bis,created_at&limit=1`,
+      `${url}/rest/v1/customers?name=ilike.${encodeURIComponent(clean.name)}&select=id,name,contact_person,email,phone,street,zip,city,notes,is_active,datev_konto,kundentyp,ust_id,leitweg_id,bauleister_nachweis_bis,preis_modus,festpreis_m2,festpreis_pauschale,fahrt_nach_km,fahrt_satz_pro_km,created_at&limit=1`,
       { headers }
     );
     if (dupCheck.ok) {
@@ -175,6 +178,8 @@ export async function PATCH(req: NextRequest) {
     }
     const steuerFehler = steuerFelderPruefen(clean);
     if (steuerFehler) return NextResponse.json({ success: false, error: steuerFehler }, { status: 400 });
+    const preisFehler = pruefeKundenPreis(clean);
+    if (preisFehler) return NextResponse.json({ success: false, error: preisFehler }, { status: 400 });
     if (!emailOk(clean.email)) {
       return NextResponse.json({ success: false, error: 'E-Mail-Adresse ungültig.' }, { status: 400 });
     }

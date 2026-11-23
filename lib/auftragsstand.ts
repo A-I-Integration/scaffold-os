@@ -105,7 +105,7 @@ export function sortiereRechnungen<T extends Pick<StandRechnung, 'invoice_date' 
 
 /** Angebotswert netto aus den gespeicherten Projektdaten (0, wenn kein Angebot hinterlegt ist). */
 export function angebotNettoAusProjekt(data: any, kranTagessatz: number): number {
-  if (!data?.kiResult && !data?.festpreisProM2) return 0
+  if (!data?.kiResult && !data?.festpreisProM2 && !data?.pauschale) return 0
   try { return summeNetto(baueRechnungsPositionen({ eingabe: eingabeAusProjektData(data, kranTagessatz), basis: 'angebot' })) } catch { return 0 }
 }
 

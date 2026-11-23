@@ -11,6 +11,7 @@ import { pruefeNordrichtung } from '@/lib/cad/ausrichtung'
 import { istHaubenForm } from '@/lib/cad/haube'
 import type { BereichsAenderung } from '@/lib/cad/bereiche'
 import { leseFiguren, type Figur } from '@/lib/cad/zeichnung'
+import { liesZeichenebenen, istStandardZustand, type Zeichenebenen } from '@/lib/cad/zeichenebenen'
 import type { BauteilUeberlagerung } from '@/lib/cad/bauteil-aenderungen'
 import { FELDBAUTEIL_ARTEN, type ManualPlacement } from '@/lib/calculations/cad-engine'
 import type { BuildingParams, BuildingSection, CadTuer, CadFenster, CadVorbau } from '@/lib/calculations/cad-engine'
@@ -61,6 +62,8 @@ export interface Projektdatei {
   messungen?: Messungen
   /** true = ohne Gerüst gestartet: nur das Haus und die von Hand gesetzten Teile werden gezeigt (die erzeugten Gerüstteile bleiben ausgeblendet) */
   geruestLeer?: true
+  /** CAD-Zeichenebenen (Sichtbarkeit/Sperre/Zuordnung von Zeichenobjekten) – getrennt von den Gerüstlagen; fehlt in älteren Dateien und im Ausgangszustand */
+  zeichenebenen?: Zeichenebenen
 }
 
 export type LeseErgebnis =
@@ -70,7 +73,7 @@ export type LeseErgebnis =
 const zahl = (v: unknown, min: number, max: number): number | null =>
   typeof v === 'number' && Number.isFinite(v) && v >= min && v <= max ? v : null
 
-export function erzeugeProjektdatei(p: { name?: string; building: BuildingParams; systemId: string; statikDaten: StatikDaten; notizen: CADNote[]; artikelWahl?: Record<string, string>; bereiche?: BereichsAenderung[]; zeichnung?: Figur[]; handarbeit?: Handarbeit; geruestLeer?: boolean; testdaten?: boolean; messungen?: Messungen }): Projektdatei {
+export function erzeugeProjektdatei(p: { name?: string; building: BuildingParams; systemId: string; statikDaten: StatikDaten; notizen: CADNote[]; artikelWahl?: Record<string, string>; bereiche?: BereichsAenderung[]; zeichnung?: Figur[]; handarbeit?: Handarbeit; geruestLeer?: boolean; testdaten?: boolean; messungen?: Messungen; zeichenebenen?: Zeichenebenen }): Projektdatei {
   return {
     format: PROJEKTDATEI_FORMAT,
     version: PROJEKTDATEI_VERSION,
@@ -87,6 +90,7 @@ export function erzeugeProjektdatei(p: { name?: string; building: BuildingParams
     ...(p.handarbeit && !handarbeitLeer(p.handarbeit) ? { handarbeit: p.handarbeit } : {}),
     ...(p.messungen && !messungenLeer(p.messungen) ? { messungen: p.messungen } : {}),
     ...(p.geruestLeer ? { geruestLeer: true as const } : {}),
+    ...(p.zeichenebenen && !istStandardZustand(p.zeichenebenen) ? { zeichenebenen: p.zeichenebenen } : {}),
   }
 }
 
@@ -438,6 +442,7 @@ export function liesProjektdatei(text: string): LeseErgebnis {
       ...(handarbeit ? { handarbeit } : {}),
       ...(messungen ? { messungen } : {}),
       ...(r.geruestLeer === true ? { geruestLeer: true as const } : {}),
+      ...(r.zeichenebenen !== undefined && !istStandardZustand(liesZeichenebenen(r.zeichenebenen, verworfen)) ? { zeichenebenen: liesZeichenebenen(r.zeichenebenen) } : {}),
     },
   }
 }

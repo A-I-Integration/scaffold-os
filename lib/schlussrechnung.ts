@@ -1,6 +1,7 @@
 import type { Nachtrag } from './nachtrag';
 import { zahlAusEingabe } from '@/lib/zahl-eingabe';
 import { nachtragPositionen } from './nachtrag';
+import { fahrtBetrag, fahrtText, type FahrtEingabe } from '@/lib/kunden-preis';
 
 // ============================================================
 // SCAFFOLD OS – Schlussrechnung aus Auftrag (reine Logik)
@@ -21,13 +22,17 @@ export interface AnpassungenLike {
   nachtrag?: { aktiv?: boolean; text?: string; betrag?: string };
   statik?: { aktiv?: boolean; text?: string; betrag?: string };
   rabatt?: { aktiv?: boolean; betrag?: string };
+  /** Fahrt nach Kilometern (km × Satz) – nur zusammen mit festem Preis, siehe lib/kunden-preis.ts */
+  fahrt?: FahrtEingabe;
   skonto?: boolean;
 }
 
 export interface RechnungsEingabe {
   kiResult: { totalAreaM2?: number; suggestedPrice?: number } | null;
-  preisModus: 'ki' | 'festpreis';
+  preisModus: 'ki' | 'festpreis' | 'pauschale';
   festpreisProM2: string;
+  /** Pauschalbetrag (nur preisModus 'pauschale'), Eingabetext */
+  pauschale?: string;
   anpassungen: AnpassungenLike;
   kranAktiv: boolean;
   kranTage: number;
@@ -43,15 +48,19 @@ export { zahlAusEingabe };
 export function berechneAngebotBetraege(e: RechnungsEingabe) {
   const a = e.anpassungen || {};
   const flaeche = e.kiResult?.totalAreaM2 ?? 0;
-  const basis = e.preisModus === 'festpreis'
-    ? zahlAusEingabe(e.festpreisProM2) * flaeche
-    : (e.kiResult?.suggestedPrice ?? 0);
+  const basis = e.preisModus === 'pauschale'
+    ? zahlAusEingabe(e.pauschale ?? '')
+    : e.preisModus === 'festpreis'
+      ? zahlAusEingabe(e.festpreisProM2) * flaeche
+      : (e.kiResult?.suggestedPrice ?? 0);
   const mieteBetrag = a.miete?.aktiv ? zahlAusEingabe(a.miete.wochen) * zahlAusEingabe(a.miete.preisProWoche) : 0;
   const nachtragBetrag = a.nachtrag?.aktiv ? zahlAusEingabe(a.nachtrag.betrag) : 0;
   const statikBetrag = a.statik?.aktiv ? zahlAusEingabe(a.statik.betrag) : 0;
   const rabattBetrag = a.rabatt?.aktiv ? zahlAusEingabe(a.rabatt.betrag) : 0;
   const kranBetrag = e.kranAktiv ? runde(e.kranTagessatz * e.kranTage) : 0;
-  return { flaeche, basis, mieteBetrag, nachtragBetrag, statikBetrag, rabattBetrag, kranBetrag };
+  // Fahrt nach km gibt es nur zusammen mit festem Preis (bei der Kalkulation steckt der Transport schon im Preis)
+  const fahrt = e.preisModus === 'ki' ? 0 : fahrtBetrag(a.fahrt);
+  return { flaeche, basis, mieteBetrag, nachtragBetrag, statikBetrag, rabattBetrag, kranBetrag, fahrtBetrag: fahrt };
 }
 
 export function baueRechnungsPositionen(args: {
@@ -78,14 +87,19 @@ export function baueRechnungsPositionen(args: {
     });
   } else {
     pos.push({
-      bezeichnung: e.preisModus === 'festpreis'
-        ? `Gerüstbau gemäß Angebot (${b.flaeche || '–'} m² × ${String(e.festpreisProM2 || '').replace('.', ',')} €/m²)`
-        : 'Gerüstbau gemäß Angebot (Material, Arbeit, Transport)',
+      bezeichnung: e.preisModus === 'pauschale'
+        ? 'Gerüstbau gemäß Angebot (Pauschale)'
+        : e.preisModus === 'festpreis'
+          ? `Gerüstbau gemäß Angebot (${b.flaeche || '–'} m² × ${String(e.festpreisProM2 || '').replace('.', ',')} €/m²)`
+          : 'Gerüstbau gemäß Angebot (Material, Arbeit, Transport)',
       menge: 1, einheit: 'Pauschale', einzelpreis: runde(b.basis),
     });
   }
   if (b.kranBetrag > 0) {
     pos.push({ bezeichnung: `Kran (${e.kranTage} Tage à ${e.kranTagessatz} €)`, menge: 1, einheit: 'Pauschale', einzelpreis: b.kranBetrag });
+  }
+  if (b.fahrtBetrag > 0) {
+    pos.push({ bezeichnung: fahrtText(a.fahrt as FahrtEingabe), menge: 1, einheit: 'Pauschale', einzelpreis: b.fahrtBetrag });
   }
   if (a.miete?.aktiv && b.mieteBetrag > 0) {
     pos.push({ bezeichnung: `Mietverlängerung ${a.miete.wochen} Wo. à ${a.miete.preisProWoche} €`, menge: 1, einheit: 'Pauschale', einzelpreis: b.mieteBetrag });
@@ -114,8 +128,9 @@ export function eingabeAusProjektData(data: any, kranTagessatz: number): Rechnun
   const d = data || {};
   return {
     kiResult: d.kiResult ?? null,
-    preisModus: d.preisModus === 'festpreis' ? 'festpreis' : 'ki',
+    preisModus: d.preisModus === 'festpreis' ? 'festpreis' : d.preisModus === 'pauschale' ? 'pauschale' : 'ki',
     festpreisProM2: String(d.festpreisProM2 ?? ''),
+    pauschale: String(d.pauschale ?? ''),
     anpassungen: d.angebotAnpassungen || {},
     kranAktiv: !!d.step4?.kranErforderlich,
     kranTage: parseInt(String(d.step1?.dauer || '1')) || 1,

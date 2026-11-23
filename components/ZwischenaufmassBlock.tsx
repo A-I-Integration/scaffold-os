@@ -6,7 +6,7 @@ import { parseBetrag } from '@/lib/nachtrag';
 import { abschnitteAusSchritt2, berechneAufmass } from '@/lib/aufmassblatt-pdf';
 import {
   type Zwischenaufmass, normalisiereZwischenaufmasse, neuesZwischenaufmass, loescheZwischenaufmass,
-  zwischenaufmassNr, neueMengeM2, letzteKumulierteFlaeche,
+  zwischenaufmassNr, neueMengeM2, aktuellerStandM2, restmengeM2, ueberabgerechnetM2, istRueckgang, bisherAbgerechneteM2,
 } from '@/lib/zwischenaufmass';
 
 // ============================================================
@@ -34,7 +34,10 @@ export default function ZwischenaufmassBlock({ project }: Props) {
   const [meldung, setMeldung] = useState<{ ok: boolean; text: string } | null>(null);
 
   const gesamtAufmass = useMemo(() => berechneAufmass(abschnitteAusSchritt2(project.data?.step2)).gesamtM2, [project.data]);
-  const letzte = letzteKumulierteFlaeche(liste);
+  const letzte = aktuellerStandM2(liste);
+  const abgerechnet = bisherAbgerechneteM2(liste);
+  const rest = restmengeM2(liste);
+  const ueber = ueberabgerechnetM2(liste);
 
   /** Frischen Stand lesen, ändern, zurückschreiben (ein veralteter Stand überschreibt nichts). */
   async function speichere(aendere: (aktuell: Zwischenaufmass[]) => Zwischenaufmass[]): Promise<Zwischenaufmass[]> {
@@ -92,6 +95,16 @@ export default function ZwischenaufmassBlock({ project }: Props) {
       </div>
       <p className="text-[11px] text-[#86868b]">Trage zum Stichtag die <b>gesamte</b> bis dahin gestellte Fläche ein. Abgerechnet wird nur die neue Menge seit dem letzten abgerechneten Stand. Abrechnung: „Rechnung aus Auftrag“ → Abschlagsrechnung → nach Zwischenaufmaß.</p>
 
+      {liste.length > 0 && (
+        <div className="grid grid-cols-3 gap-2 text-center text-[11px]" data-testid="za-bilanz">
+          <div className="rounded-lg bg-white border border-black/10 p-2"><p className="text-[#86868b]">Aktueller Stand</p><p className="font-semibold text-[#1d1d1f]">{fmt(letzte)} m²</p></div>
+          <div className="rounded-lg bg-white border border-black/10 p-2"><p className="text-[#86868b]">Abgerechnet</p><p className="font-semibold text-[#1d1d1f]">{fmt(abgerechnet)} m²</p></div>
+          <div className="rounded-lg bg-white border border-black/10 p-2"><p className="text-[#86868b]">Noch offen</p><p className="font-semibold text-[#e8590c]">{fmt(rest)} m²</p></div>
+        </div>
+      )}
+      {ueber > 0 && (
+        <p className="text-[11px] text-red-600" data-testid="za-ueberabrechnung">⚠️ Es sind {fmt(ueber)} m² mehr abgerechnet, als aktuell gestellt sind (Rückbau/Korrektur). Bitte Gutschrift oder Korrektur der Abrechnung prüfen.</p>
+      )}
       {liste.length === 0 ? (
         <p className="text-[11px] text-[#86868b]">Noch kein Zwischenaufmaß erfasst.</p>
       ) : (
@@ -99,7 +112,7 @@ export default function ZwischenaufmassBlock({ project }: Props) {
           {liste.map((z) => (
             <li key={z.id} className="flex items-start gap-2 px-3 py-2">
               <div className="flex-1">
-                <p className="font-medium text-[#1d1d1f]">{zwischenaufmassNr(z)} · Stichtag {datumDe(z.stichtag)} · kumuliert {fmt(z.flaecheM2)} m²</p>
+                <p className="font-medium text-[#1d1d1f]">{zwischenaufmassNr(z)} · Stichtag {datumDe(z.stichtag)} · kumuliert {fmt(z.flaecheM2)} m²{istRueckgang(z, liste) ? <span className="ml-1 text-amber-700">(Rückgang)</span> : null}</p>
                 <p className="text-[11px] text-[#86868b]">
                   {z.rechnungId
                     ? `Abgerechnet mit ${z.rechnungNr || 'Rechnung'}${z.abgerechnetAm ? ` am ${datumDe(z.abgerechnetAm)}` : ''}`

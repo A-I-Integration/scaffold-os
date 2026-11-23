@@ -75,6 +75,12 @@ interface Kunde {
   ust_id?: string | null
   leitweg_id?: string | null
   bauleister_nachweis_bis?: string | null
+  // Preisvereinbarung (Phase 121): fester Preis als Vorbelegung des Angebots; Fahrt wird dennoch nach km abgerechnet
+  preis_modus?: 'standard' | 'festpreis_m2' | 'festpreis_pauschale' | null
+  festpreis_m2?: number | string | null
+  festpreis_pauschale?: number | string | null
+  fahrt_nach_km?: boolean | null
+  fahrt_satz_pro_km?: number | string | null
   created_at: string
 }
 
@@ -142,7 +148,7 @@ type Tab = typeof TABS[number]
 // Zwei Ebenen: Kunde (Übersicht aller Baustellen, Stammdaten, alle Rechnungen/Mails) und Baustelle (alles zu genau diesem Projekt)
 // Alle Reiter gibt es auch auf Kundenebene: Reiter, die zu genau einer Baustelle gehören (Leistungsverzeichnis, Mappe, Zeiten), fragen dort die Baustelle ab.
 const KUNDEN_TABS: Tab[] = ['baustellen', 'kunde', 'aufmass', 'bilder', 'dokumente', 'mappe', 'angebote', 'lv', 'zeiten', 'bauphasen', 'nachtraege', 'ausfuehrung', 'rechnungen', 'emails']
-const BAUSTELLEN_TABS: Tab[] = ['aufmass', 'bilder', 'dokumente', 'mappe', 'angebote', 'lv', 'zeiten', 'bauphasen', 'nachtraege', 'ausfuehrung', 'rechnungen', 'emails']
+const BAUSTELLEN_TABS: Tab[] = ['kunde', 'aufmass', 'bilder', 'dokumente', 'mappe', 'angebote', 'lv', 'zeiten', 'bauphasen', 'nachtraege', 'ausfuehrung', 'rechnungen', 'emails']
 const TAB_LABEL: Record<Tab, string> = {
   baustellen: 'Baustellen', ausfuehrung: 'Ausführung', kunde: 'Kunde', aufmass: 'Aufmaß', bilder: 'Bilder', dokumente: 'Dokumente', mappe: 'Baustellenmappe (QR)', angebote: 'Angebote', lv: 'Leistungsverzeichnis', zeiten: 'Zeiten', bauphasen: 'Bauphasen', nachtraege: 'Nachträge / Schluss', rechnungen: 'Faktura', emails: 'E-Mails',
 }
@@ -863,7 +869,7 @@ export default function KundenDetailPage() {
   const freigaben = useFreigabeStatus(projects.map((p) => p.id))
   const projektSicht = baustelle ? [baustelle] : projects
   const aktiveTabs = baustelle ? BAUSTELLEN_TABS : KUNDEN_TABS
-  const tabAktiv: Tab = aktiveTabs.includes(tab) ? tab : aktiveTabs[0]
+  const tabAktiv: Tab = aktiveTabs.includes(tab) ? tab : (baustelle ? 'aufmass' : aktiveTabs[0])
   const waehleBaustelle = (pid: string | null, ziel?: Tab) => {
     setTab(pid ? (ziel ?? 'aufmass') : 'baustellen')
     router.push(pid ? `/kunden/${id}?baustelle=${pid}` : `/kunden/${id}`)
@@ -1057,6 +1063,44 @@ export default function KundenDetailPage() {
                 <label className="block text-xs text-[#86868b] mb-1">Bescheinigung USt 1 TG gültig bis (für § 13b)</label>
                 <input type="date" value={kundeForm.bauleister_nachweis_bis || ''} onChange={(e) => setKundeForm({ ...kundeForm, bauleister_nachweis_bis: e.target.value })} className={inputCls} />
               </div>
+            </div>
+            <div className="rounded-xl border border-black/10 bg-[#f5f5f7] p-3 space-y-2" data-testid="preisvereinbarung">
+              <h4 className="text-xs font-semibold text-[#1d1d1f]">Preisvereinbarung</h4>
+              <p className="text-[11px] text-[#86868b]">Bei diesem Kunden wird der Preis im Angebot automatisch vorbelegt. Im einzelnen Angebot bleibt er änderbar. Die Fahrt wird dennoch nach Kilometern abgerechnet.</p>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                {([['standard', 'Kalkulation wie bisher'], ['festpreis_m2', 'Fester Preis je m²'], ['festpreis_pauschale', 'Pauschale je Auftrag']] as const).map(([wert, text]) => (
+                  <label key={wert} className={`flex items-center gap-2 rounded-lg border px-3 py-2 text-xs cursor-pointer ${(kundeForm.preis_modus || 'standard') === wert ? 'border-[#e8590c] bg-[#e8590c]/10 text-[#e8590c] font-semibold' : 'border-black/10 bg-white text-[#424245]'}`}>
+                    <input type="radio" name="preis_modus" checked={(kundeForm.preis_modus || 'standard') === wert} onChange={() => setKundeForm({ ...kundeForm, preis_modus: wert })} />
+                    {text}
+                  </label>
+                ))}
+              </div>
+              {kundeForm.preis_modus === 'festpreis_m2' && (
+                <div className="flex items-center gap-2">
+                  <input aria-label="Festpreis je m²" value={kundeForm.festpreis_m2 ?? ''} onChange={(e) => setKundeForm({ ...kundeForm, festpreis_m2: e.target.value })} placeholder="z. B. 18,50" className={inputCls + ' w-32'} />
+                  <span className="text-xs text-[#86868b]">€ netto je m² Gerüstfläche</span>
+                </div>
+              )}
+              {kundeForm.preis_modus === 'festpreis_pauschale' && (
+                <div className="flex items-center gap-2">
+                  <input aria-label="Pauschalbetrag" value={kundeForm.festpreis_pauschale ?? ''} onChange={(e) => setKundeForm({ ...kundeForm, festpreis_pauschale: e.target.value })} placeholder="z. B. 2.500,00" className={inputCls + ' w-36'} />
+                  <span className="text-xs text-[#86868b]">€ netto je Auftrag</span>
+                </div>
+              )}
+              {(kundeForm.preis_modus === 'festpreis_m2' || kundeForm.preis_modus === 'festpreis_pauschale') && (
+                <div className="space-y-2 pt-1">
+                  <label className="flex items-center gap-2 text-xs font-semibold text-[#1d1d1f]">
+                    <input type="checkbox" checked={kundeForm.fahrt_nach_km === true} onChange={(e) => setKundeForm({ ...kundeForm, fahrt_nach_km: e.target.checked })} />
+                    Fahrt zusätzlich nach Kilometern abrechnen
+                  </label>
+                  {kundeForm.fahrt_nach_km === true && (
+                    <div className="flex items-center gap-2">
+                      <input aria-label="Satz je km für diesen Kunden" value={kundeForm.fahrt_satz_pro_km ?? ''} onChange={(e) => setKundeForm({ ...kundeForm, fahrt_satz_pro_km: e.target.value })} placeholder="Firmensatz" className={inputCls + ' w-28'} />
+                      <span className="text-xs text-[#86868b]">€ je km (leer = Satz aus den Einstellungen). Die Strecke wird im Angebot automatisch ermittelt.</span>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
             <button onClick={saveKunde} disabled={speichern} className={btnPrimary}>{speichern ? 'Speichert…' : 'Speichern'}</button>
             {projects.length === 0 && kundenInvoices.length === 0 && (

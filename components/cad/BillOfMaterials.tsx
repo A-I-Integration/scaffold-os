@@ -59,6 +59,8 @@ interface Props {
   // ohne diese Props verhält sich die Komponente exakt wie vorher.
   notes?: CADNote[]
   onDeleteNote?: (id: string) => void
+  notizStatus?: Record<string, { ausgeblendet: boolean; gesperrt: boolean }>
+  massStatus?: Record<string, { ausgeblendet: boolean; gesperrt: boolean }>
   // NEU (CP-Pro-Marktvergleich, "Ebenen"-Lücke): optional, rein additiv –
   // ohne diese Props verhält sich die Komponente exakt wie vorher.
   layerState?: CADLayerState | null
@@ -77,7 +79,7 @@ interface Props {
   // Klick-Platzierung: aktuell gewählter Bauteiltyp + Setter
 }
 
-export default function BillOfMaterials({ materials, ohnePreis = [], ohneGewicht = [], lagerFehler = false, totalWeightKg, totalPrice, logistik, fahrzeuge = [], fahrzeugWahl = 'auto', onFahrzeugWahl, onExportPDF, onExportCSV, onExportMontageplan, onExportMontageplanPdf, onExportProjektblatt, onOpenLv, onSpeichereProjektdatei, onExportStatikGeometrie, onExportIFC, onExportDXF, onExportBogen, onExportStatikerPaket, planModus = 'schematisch', onPlanModusChange, customers, kundenLadeFehler, onRetryKunden, onCreateCustomer, onAssignCustomer, zuordnenLaeuft, disabled = false, notes, onDeleteNote, layerState, onToggleSide, onToggleLevel, onShowAllLayers, onHideAllLayers, customDimensions, onDeleteDimension, measureMode, onToggleMeasureMode, manualPlacements, onRemoveManualPlacement }: Props) {
+export default function BillOfMaterials({ materials, ohnePreis = [], ohneGewicht = [], lagerFehler = false, totalWeightKg, totalPrice, logistik, fahrzeuge = [], fahrzeugWahl = 'auto', onFahrzeugWahl, onExportPDF, onExportCSV, onExportMontageplan, onExportMontageplanPdf, onExportProjektblatt, onOpenLv, onSpeichereProjektdatei, onExportStatikGeometrie, onExportIFC, onExportDXF, onExportBogen, onExportStatikerPaket, planModus = 'schematisch', onPlanModusChange, customers, kundenLadeFehler, onRetryKunden, onCreateCustomer, onAssignCustomer, zuordnenLaeuft, disabled = false, notes, onDeleteNote, notizStatus, massStatus, layerState, onToggleSide, onToggleLevel, onShowAllLayers, onHideAllLayers, customDimensions, onDeleteDimension, measureMode, onToggleMeasureMode, manualPlacements, onRemoveManualPlacement }: Props) {
   const [kundenSuche, setKundenSuche] = useState('')
   const [ausgewaehlterKunde, setAusgewaehlterKunde] = useState<{ id: string; name: string } | null>(null)
   const [zeigeDropdown, setZeigeDropdown] = useState(false)
@@ -150,6 +152,7 @@ export default function BillOfMaterials({ materials, ohnePreis = [], ohneGewicht
           <DimensionsPanel
             dimensions={customDimensions}
             onDeleteDimension={onDeleteDimension}
+            status={massStatus}
             measureMode={!!measureMode}
             onToggleMeasureMode={onToggleMeasureMode}
           />
@@ -183,7 +186,7 @@ export default function BillOfMaterials({ materials, ohnePreis = [], ohneGewicht
         )}
 
         {/* Notizen/Anmerkungen an Bauteilen (CP-Pro-Marktvergleich) */}
-        {notes && onDeleteNote && <NotesPanel notes={notes} onDeleteNote={onDeleteNote} />}
+        {notes && onDeleteNote && <NotesPanel notes={notes} onDeleteNote={onDeleteNote} status={notizStatus} />}
 
         {/* Kunden-Zuordnung → direkt als Angebot anlegen (Phase 41) */}
         {customers && onAssignCustomer && (
