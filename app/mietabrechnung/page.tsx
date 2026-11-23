@@ -90,6 +90,7 @@ export default function MietabrechnungPage() {
 
       for (const p of projekte) {
         if (p.status !== 'active') continue;
+        if (p.data?.vorhaltung?.aktiv === true) continue; // Vorhalte-Vereinbarung: Abrechnung nur dort (Auftrag → Vorhaltung), nicht nach Kalender
         const s1 = p.data?.step1 || {};
         const ende: string | undefined = s1.projektende;
         if (!ende || !/^\d{4}-\d{2}-\d{2}$/.test(ende)) continue;

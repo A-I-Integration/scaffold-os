@@ -5,6 +5,7 @@ import { fetchRechnungAnlegen } from '@/lib/rechnung-anlegen-client'
 import { FileText, Download, Mail, Check, RotateCcw, Image as ImageIcon, ClipboardList, Plus, ChevronDown, ChevronUp } from 'lucide-react';
 import NachtraegeBlock from '@/components/NachtraegeBlock';
 import ZwischenaufmassBlock from '@/components/ZwischenaufmassBlock';
+import VorhaltungBlock from '@/components/VorhaltungBlock';
 import LagerAutomatikHinweis from '@/components/LagerAutomatikHinweis';
 import SchlussrechnungDialog from '@/components/SchlussrechnungDialog';
 import EmailVerlaufDialog, { type EmailVerlaufEintrag } from '@/components/EmailVerlaufDialog';
@@ -227,6 +228,9 @@ export default function KundeAuftrag({
 
         {/* ─── Zwischenaufmaß (kumuliert je Stichtag) ─── */}
         <ZwischenaufmassBlock project={project} />
+
+        {/* ─── Vorhaltung nach Vereinbarung ─── */}
+        <VorhaltungBlock project={project} kunde={{ name: kunde.name, adresse: (kunde as any).adresse }} />
 
         {/* ─── Schlussrechnung (Angebotspreis oder Aufmaß, inkl. bestätigter Nachträge) ─── */}
         <button onClick={() => setSchlussOffen(true)} className="flex items-center gap-1.5 text-xs text-[#e8590c] font-semibold hover:underline">

@@ -81,7 +81,7 @@ export const grundGueltig = (g: unknown): g is string => typeof g === 'string' &
 
 // ─── Kontrollanzeige je Baustelle ───
 
-export interface KontrollRechnung extends PruefRechnung { gross_amount?: number | null; paid_amount?: number | null }
+export interface KontrollRechnung extends PruefRechnung { gross_amount?: number | null; paid_amount?: number | null; positions?: { art?: string }[] | null }
 
 export interface Kontrollstand {
   angebotNetto: number
@@ -91,6 +91,8 @@ export interface Kontrollstand {
   abschlaege: number
   schluss: number
   sonstige: number
+  /** Vorhaltung (Miete) – gehört nicht zum Auftragswert */
+  vorhaltung: number
   gutschriften: number
   abgerechnet: number
   noch: number
@@ -101,7 +103,10 @@ export interface Kontrollstand {
 
 /** Bestandsprüfung einer Baustelle: Summen nach Rechnungsart und alle Abweichungen, die jetzt schon bestehen. */
 export function kontrolleBaustelle(a: { angebotNetto: number; nachtraegeBestaetigt: number; nachtraegeAngefragt: number; rechnungen: KontrollRechnung[] }): Kontrollstand {
-  const gueltig = a.rechnungen.filter((r) => r.status !== 'storniert')
+  const istVorh = (r: KontrollRechnung) => Array.isArray(r.positions) && r.positions.length > 0 && r.positions.every((p) => p?.art === 'miete')
+  const alleGueltig = a.rechnungen.filter((r) => r.status !== 'storniert')
+  const gueltig = alleGueltig.filter((r) => !istVorh(r))
+  const vorhaltung = runde(alleGueltig.filter(istVorh).reduce((s, r) => s + zahl(r.net_amount), 0))
   const summe = (f: (r: KontrollRechnung) => boolean) => runde(gueltig.filter(f).reduce((s, r) => s + zahl(r.net_amount), 0))
   const abschlaege = summe((r) => r.invoice_type === 'abschlag')
   const schluss = summe((r) => r.invoice_type === 'schluss')
@@ -111,7 +116,7 @@ export function kontrolleBaustelle(a: { angebotNetto: number; nachtraegeBestaeti
   const auftragswert = runde(zahl(a.angebotNetto) + zahl(a.nachtraegeBestaetigt))
   let bezahlt = 0, offen = 0
   const abw: Abweichung[] = []
-  for (const r of gueltig) {
+  for (const r of alleGueltig) {
     const brutto = zahl(r.gross_amount)
     const b = r.status === 'bezahlt' ? brutto : brutto >= 0 ? Math.min(Math.max(zahl(r.paid_amount), 0), brutto) : 0
     bezahlt += b; offen += Math.max(0, brutto - b)
@@ -131,7 +136,7 @@ export function kontrolleBaustelle(a: { angebotNetto: number; nachtraegeBestaeti
   }
   return {
     angebotNetto: runde(zahl(a.angebotNetto)), nachtraegeBestaetigt: runde(zahl(a.nachtraegeBestaetigt)), nachtraegeAngefragt: runde(zahl(a.nachtraegeAngefragt)),
-    auftragswert, abschlaege, schluss, sonstige, gutschriften, abgerechnet, noch: auftragswert > 0 ? Math.max(0, runde(auftragswert - abgerechnet)) : 0,
+    auftragswert, abschlaege, schluss, sonstige, vorhaltung, gutschriften, abgerechnet, noch: auftragswert > 0 ? Math.max(0, runde(auftragswert - abgerechnet)) : 0,
     bezahltBrutto: runde(bezahlt), offenBrutto: runde(offen), abweichungen: abw,
   }
 }

@@ -62,6 +62,7 @@ export async function GET(req: NextRequest) {
     const heute = heuteIso();
 
     for (const p of projekte) {
+      if (p.data?.vorhaltung?.aktiv === true) continue; // Faktura F8: Vorhalte-Vereinbarung vorhanden → nur nach Vertragsbedingungen und auf Bestätigung, nie automatisch nach Kalender
       const s1 = p.data?.step1 || {};
       const nach = standzeitNachberechnung(s1.projektende, p.data?.mietVerlaengertBis, p.data?.mietAbgerechnetBis, heute);
       if (!nach) continue; // nicht überzogen oder schon abgerechnet

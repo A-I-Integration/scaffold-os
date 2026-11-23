@@ -49,6 +49,7 @@ import BauphasenBlock from '@/components/BauphasenBlock'
 import ProjektLvBlock from '@/components/ProjektLv'
 import NachtraegeBlock from '@/components/NachtraegeBlock'
 import ZwischenaufmassBlock from '@/components/ZwischenaufmassBlock'
+import VorhaltungBlock from '@/components/VorhaltungBlock'
 import SchlussrechnungDialog from '@/components/SchlussrechnungDialog'
 import { lokalesDatumIso, datumPlusTage } from '@/lib/datum'
 import AnsichtLinkBox from '@/components/AnsichtLinkBox'
@@ -1384,6 +1385,7 @@ export default function KundenDetailPage() {
                 <p className="font-semibold text-[#1d1d1f] flex items-center gap-1.5"><FileSignature className="h-4 w-4 text-[#e8590c]" /> {project.name || 'Unbenanntes Projekt'}</p>
                 <NachtraegeBlock project={project} kunde={kunde} />
                 <ZwischenaufmassBlock project={project} />
+                <VorhaltungBlock project={project} kunde={{ name: kunde.name, adresse: (kunde as any).adresse }} />
                 <button onClick={() => { setSchlussStart({}); setSchlussProjectId(project.id) }} className="flex items-center gap-1.5 text-xs text-[#e8590c] font-semibold hover:underline">
                   <FileText className="h-3.5 w-3.5" /> Schlussrechnung erstellen (nach Angebot oder Aufmaß, mit Nachträgen)
                 </button>

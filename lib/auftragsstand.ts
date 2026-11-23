@@ -26,6 +26,7 @@ export interface StandRechnung {
   erinnerung_am?: string | null
   mahnung_pausiert?: boolean | null
   mahnung_pause_grund?: string | null
+  positions?: { art?: string }[] | null
 }
 
 export interface StandNachtrag { betrag: number; status: string }
@@ -42,6 +43,8 @@ export interface Auftragsstand {
   offenBrutto: number                 // brutto, noch nicht bezahlt
   ueberfaellig: number                // brutto, fällig und unbezahlt
   anzahlGueltig: number
+  /** Vorhaltung (Miete), netto – gehört nicht zum Auftragswert und steht nicht in „abgerechnet“ */
+  vorhaltungNetto: number
 }
 
 const runde = (n: number) => Math.round(n * 100) / 100
@@ -70,7 +73,9 @@ export function berechneAuftragsstand(args: {
   const no = runde(args.nachtraege.filter(n => n.status === 'offen').reduce((s, n) => s + zahl(n.betrag), 0))
   const angebot = runde(zahl(args.angebotNetto))
   const wert = runde(angebot + nb)
-  const abger = runde(gueltig.reduce((s, r) => s + zahl(r.net_amount), 0))
+  const istVorh = (r: StandRechnung) => Array.isArray(r.positions) && r.positions.length > 0 && r.positions.every((p) => p?.art === 'miete')
+  const abger = runde(gueltig.filter((r) => !istVorh(r)).reduce((s, r) => s + zahl(r.net_amount), 0))
+  const vorh = runde(gueltig.filter(istVorh).reduce((s, r) => s + zahl(r.net_amount), 0))
   let bezahlt = 0, offen = 0, ueberf = 0
   for (const r of gueltig) {
     const b = bezahltBrutto(r)
@@ -93,6 +98,7 @@ export function berechneAuftragsstand(args: {
     offenBrutto: runde(offen),
     ueberfaellig: runde(ueberf),
     anzahlGueltig: gueltig.length,
+    vorhaltungNetto: vorh,
   }
 }
 

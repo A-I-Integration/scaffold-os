@@ -176,6 +176,7 @@ export default function Auftragsstand({ project, invoices, onRechnungStellen, on
               <tr><td>Schlussrechnung</td><td>{eur(kontrolle.schluss)}</td></tr>
               {kontrolle.sonstige !== 0 && <tr><td>Weitere Rechnungen</td><td>{eur(kontrolle.sonstige)}</td></tr>}
               <tr><td>Gutschriften</td><td>{eur(kontrolle.gutschriften)}</td></tr>
+              {kontrolle.vorhaltung !== 0 && <tr className="text-black/70"><td>Vorhaltung (zusätzlich, nicht im Auftragswert)</td><td>{eur(kontrolle.vorhaltung)}</td></tr>}
               <tr className="font-semibold border-t border-black/20"><td>Abgerechnet (netto) / noch offen zum Abrechnen</td><td>{eur(kontrolle.abgerechnet)} / {eur(kontrolle.noch)}</td></tr>
               <tr><td>Bezahlt / offen (brutto)</td><td>{eur(kontrolle.bezahltBrutto)} / {eur(kontrolle.offenBrutto)}</td></tr>
               <tr className="text-black/70"><td>Nachträge angefragt, nicht bestätigt (zählen nicht)</td><td>{eur(kontrolle.nachtraegeAngefragt)}</td></tr>
