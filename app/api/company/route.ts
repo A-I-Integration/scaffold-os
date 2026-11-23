@@ -76,7 +76,7 @@ export async function POST(req: NextRequest) {
       // Kalkulations-Grundlagen (Einstellungen → Angebots-Kalkulation)
       'calc_hourly_rate', 'calc_hours_per_sqm', 'calc_transport_per_kg',
       'calc_transport_min', 'calc_trip_flat', 'calc_permit_low',
-      'calc_permit_high', 'calc_crane_day', 'calc_festpreis_pro_m2',
+      'calc_permit_high', 'calc_crane_day', 'calc_festpreis_pro_m2', 'calc_km_satz',
       'mahnung_pauschale', 'mahnung_verzugszinssatz', 'mahnung_erinnerung_tage',
       // NEU: Preisliste je Gerüst-Typ (Arbeitsgerüst, Hängegerüst, Fahrgerüst,
       // Traggerüst usw.) – für den schnellen Festpreis-Modus im Aufmaß.

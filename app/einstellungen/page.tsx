@@ -40,6 +40,7 @@ interface Company {
   calc_permit_high: string;
   calc_crane_day: string;
   calc_festpreis_pro_m2: string;
+  calc_km_satz: string;
   mahnung_pauschale: string;
   mahnung_verzugszinssatz: string;
 }
@@ -50,7 +51,7 @@ const EMPTY: Company = {
   depot_address: '',
   calc_hourly_rate: '', calc_hours_per_sqm: '', calc_transport_per_kg: '',
   calc_transport_min: '', calc_trip_flat: '', calc_permit_low: '',
-  calc_permit_high: '', calc_crane_day: '', calc_festpreis_pro_m2: '',
+  calc_permit_high: '', calc_crane_day: '', calc_festpreis_pro_m2: '', calc_km_satz: '',
   mahnung_pauschale: '', mahnung_verzugszinssatz: '',
 };
 
@@ -66,6 +67,7 @@ const KALK_FIELDS: { key: keyof Company; label: string; hint: string }[] = [
   { key: 'calc_permit_high', label: 'Genehmigung über 12 m Höhe (€)', hint: 'Standard: 450' },
   { key: 'calc_crane_day', label: 'Kran-Tagessatz (€)', hint: 'Standard: 850 – wird berechnet, wenn im Aufmaß „Kran nötig" gewählt ist' },
   { key: 'calc_festpreis_pro_m2', label: 'Festpreis pro m² (€, optional)', hint: 'Leer = KI-Kalkulation bleibt Standard. Kann in Aufmaß Schritt 6 als Angebotsbasis gewählt werden.' },
+  { key: 'calc_km_satz', label: 'Fahrt je Kilometer (€/km, optional)', hint: 'Für Kunden mit festem Preis: Die Fahrt wird zusätzlich nach Kilometern abgerechnet (Strecke vom Lager zur Baustelle). Kunden können einen eigenen Satz haben. Leer = keine Fahrt-Berechnung.' },
 ];
 
 // Mahnwesen: Verzugszinsen + Mahnpauschale (§ 288 BGB). Der Zinssatz ändert
