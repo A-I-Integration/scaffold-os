@@ -47,9 +47,9 @@ describe('aktive Seite', () => {
     expect(findeAktuell('admin', '/aufmass/schritt4')?.eintrag.label).toBe('Aufmaß')
     expect(istAktiverPfad('/aufmass/schritt1', '/aufmass/schritt6')).toBe(true)
   })
-  it('Neue Rechnung markiert nie die Seite, Rechnungen schon', () => {
-    expect(findeAktuell('admin', '/rechnungen')?.eintrag.label).toBe('Rechnungen')
-    expect(findeAktuell('admin', '/rechnungen/123')?.gruppe.key).toBe('abrechnung')
+  it('Rechnungen und Faktura stehen nicht mehr im Menü (sie liegen im Kundenordner, Reiter Faktura)', () => {
+    expect(findeAktuell('admin', '/rechnungen')).toBeNull()
+    expect(findeAktuell('admin', '/rechnungen/123')).toBeNull()
   })
   it('unbekannte Seite hat keinen aktiven Punkt', () => {
     expect(findeAktuell('admin', '/gibt-es-nicht')).toBeNull()
