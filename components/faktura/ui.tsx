@@ -1,6 +1,8 @@
 'use client';
 
-import type { ReactNode } from 'react';
+import type { CSSProperties, ReactNode } from 'react';
+import Link from 'next/link';
+import { fakturaUrl, type FakturaBereich } from '@/lib/faktura-bereiche';
 import { WIN } from '@/components/win/Win';
 import type { AnzeigeStatus } from '@/lib/faktura-kennzahlen';
 
@@ -36,4 +38,13 @@ export function Karte({ titel, icon, children, className = '' }: { titel: string
       {children}
     </div>
   );
+}
+
+// Sprung zu einem anderen Bereich: auf der eigenen Seite als Link, im Kundenordner als Knopf (dort gibt es keine eigene Adresse je Bereich).
+export type BereichSprung = (bereich: FakturaBereich, extra?: Record<string, string>) => void;
+export function BereichLink({ bereich, extra, onBereich, className, style, children }: {
+  bereich: FakturaBereich; extra?: Record<string, string>; onBereich?: BereichSprung; className?: string; style?: CSSProperties; children: ReactNode;
+}) {
+  if (onBereich) return <button type="button" onClick={() => onBereich(bereich, extra)} className={className} style={style}>{children}</button>;
+  return <Link href={fakturaUrl(bereich, extra)} className={className} style={style}>{children}</Link>;
 }

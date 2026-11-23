@@ -7,13 +7,18 @@ import type { EntwurfArt } from '@/lib/rechnung-entwurf';
 
 // Gemeinsame Daten aller Faktura-Bereiche: einmal laden, überall verwenden (keine doppelten Abfragen, keine doppelte Rechnung).
 
-export interface EntwurfKurz { id: string; updated_at: string; customer_name: string; invoice_type: EntwurfArt; netto_vorschau: number | string }
+export interface EntwurfKurz { id: string; updated_at: string; customer_name: string; invoice_type: EntwurfArt; netto_vorschau: number | string; customer_id?: string | null; project_id?: string | null }
 
-export function useFakturaDaten() {
+// Umfang: im Kundenordner nur Rechnungen/Entwürfe/Zahlungen dieses Kunden (und der gewählten Baustelle).
+// `rechnungen` kann die Kundenakte schon geladen mitgeben – dann wird nichts doppelt abgefragt.
+export interface FakturaUmfang { kundeId: string; projektId?: string | null; rechnungen: Invoice[] }
+
+export function useFakturaDaten(umfang?: FakturaUmfang) {
+  const hatUmfang = !!umfang;
   const heute = useMemo(() => heuteIso(), []);
-  const [rechnungen, setRechnungen] = useState<Invoice[]>([]);
-  const [zahlungenMonat, setZahlungenMonat] = useState<ZahlungKurz[]>([]);
-  const [entwuerfe, setEntwuerfe] = useState<EntwurfKurz[]>([]);
+  const [alleRechnungen, setRechnungen] = useState<Invoice[]>([]);
+  const [alleZahlungen, setZahlungenMonat] = useState<ZahlungKurz[]>([]);
+  const [alleEntwuerfe, setEntwuerfe] = useState<EntwurfKurz[]>([]);
   const [entwurfFehler, setEntwurfFehler] = useState<string | null>(null);
   const [laedt, setLaedt] = useState(true);
   const [fehler, setFehler] = useState<string | null>(null);
@@ -27,7 +32,7 @@ export function useFakturaDaten() {
       try {
         const { von, bis } = monatsGrenzen(heute);
         const [r, z, e] = await Promise.all([
-          fetch('/api/invoices').then((x) => x.json()),
+          hatUmfang ? Promise.resolve({ success: true, invoices: [] }) : fetch('/api/invoices').then((x) => x.json()),
           fetch(`/api/invoice-payments?von=${von}&bis=${bis}`).then((x) => x.json()).catch(() => null),
           fetch('/api/invoice-drafts').then((x) => x.json()).catch(() => null),
         ]);
@@ -45,7 +50,22 @@ export function useFakturaDaten() {
       }
     })();
     return () => { aktiv = false; };
-  }, [heute, stand]);
+  }, [heute, stand, hatUmfang]);
+
+  const kundeId = umfang?.kundeId, projektId = umfang?.projektId, mitgegeben = umfang?.rechnungen;
+  const rechnungen = useMemo(() => {
+    if (!hatUmfang) return alleRechnungen;
+    return projektId ? (mitgegeben ?? []).filter((i) => i.project_id === projektId) : (mitgegeben ?? []);
+  }, [hatUmfang, alleRechnungen, mitgegeben, projektId]);
+  const zahlungenMonat = useMemo(() => {
+    if (!hatUmfang) return alleZahlungen;
+    const ids = new Set(rechnungen.map((r) => r.id));
+    return alleZahlungen.filter((z) => ids.has(z.invoice_id));
+  }, [hatUmfang, alleZahlungen, rechnungen]);
+  const entwuerfe = useMemo(() => {
+    if (!hatUmfang) return alleEntwuerfe;
+    return alleEntwuerfe.filter((d) => (projektId ? d.project_id === projektId : d.customer_id === kundeId));
+  }, [hatUmfang, alleEntwuerfe, kundeId, projektId]);
 
   return { heute, rechnungen, zahlungenMonat, entwuerfe, setEntwuerfe, entwurfFehler, setEntwurfFehler, laedt, fehler, neuLaden };
 }

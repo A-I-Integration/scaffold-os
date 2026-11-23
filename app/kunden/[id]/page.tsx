@@ -14,6 +14,11 @@
 
 import AngebotRueckmeldungHinweis from '@/components/AngebotRueckmeldungHinweis'
 import { geruestPositionen } from '@/lib/aufmass-rechnung'
+import { useFakturaDaten } from '@/components/faktura/daten'
+import FakturaUebersicht from '@/components/faktura/FakturaUebersicht'
+import FakturaRechnungen from '@/components/faktura/FakturaRechnungen'
+import FakturaZahlungen from '@/components/faktura/FakturaZahlungen'
+import type { FakturaReiter } from '@/lib/faktura-kennzahlen'
 import { useState, useEffect, useCallback, useMemo, type ComponentProps } from 'react'
 import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import {
@@ -135,6 +140,15 @@ const DOK_TYPE_LABEL: Record<string, string> = {
 const fmtTimestamp = (d: string | null) => (d ? new Date(d).toLocaleDateString('de-DE') : '–')
 
 const LEER_POSITION = { bezeichnung: '', menge: '1', einheit: 'Stk.', einzelpreis: '' }
+// Der Reiter heißt jetzt „Faktura“ (Schlüssel bleibt 'rechnungen', damit alte Links ?tab=rechnungen weiter funktionieren).
+const FAKTURA_BEREICHE = [
+  { key: 'uebersicht', label: 'Übersicht' },
+  { key: 'rechnungen', label: 'Rechnungen' },
+  { key: 'aufmass', label: 'Abrechnung' },
+  { key: 'zahlungen', label: 'Zahlungen' },
+] as const
+type FakturaBereichKunde = (typeof FAKTURA_BEREICHE)[number]['key']
+
 const TABS = ['baustellen', 'kunde', 'aufmass', 'bilder', 'dokumente', 'mappe', 'angebote', 'lv', 'zeiten', 'bauphasen', 'nachtraege', 'rechnungen', 'emails'] as const
 type Tab = typeof TABS[number]
 // Zwei Ebenen: Kunde (Übersicht aller Baustellen, Stammdaten, alle Rechnungen/Mails) und Baustelle (alles zu genau diesem Projekt)
@@ -142,7 +156,7 @@ type Tab = typeof TABS[number]
 const KUNDEN_TABS: Tab[] = ['baustellen', 'kunde', 'aufmass', 'bilder', 'dokumente', 'mappe', 'angebote', 'lv', 'zeiten', 'bauphasen', 'nachtraege', 'rechnungen', 'emails']
 const BAUSTELLEN_TABS: Tab[] = ['kunde','aufmass', 'bilder', 'dokumente', 'mappe', 'angebote', 'lv', 'zeiten', 'bauphasen', 'nachtraege', 'rechnungen', 'emails']
 const TAB_LABEL: Record<Tab, string> = {
-  baustellen: 'Baustellen', kunde: 'Kunde', aufmass: 'Aufmaß', bilder: 'Bilder', dokumente: 'Dokumente', mappe: 'Baustellenmappe (QR)', angebote: 'Angebote', lv: 'Leistungsverzeichnis', zeiten: 'Zeiten', bauphasen: 'Bauphasen', nachtraege: 'Nachträge / Schluss', rechnungen: 'Rechnungen', emails: 'E-Mails',
+  baustellen: 'Baustellen', kunde: 'Kunde', aufmass: 'Aufmaß', bilder: 'Bilder', dokumente: 'Dokumente', mappe: 'Baustellenmappe (QR)', angebote: 'Angebote', lv: 'Leistungsverzeichnis', zeiten: 'Zeiten', bauphasen: 'Bauphasen', nachtraege: 'Nachträge / Schluss', rechnungen: 'Faktura', emails: 'E-Mails',
 }
 
 // Gleicher Namensabgleich wie auf der Kunden-Übersicht (app/kunden/page.tsx):
@@ -902,6 +916,13 @@ export default function KundenDetailPage() {
     ? alleEmails.filter((m) => m.project_id === baustelle.id || (!!m.invoice_number && sichtRechnungsNr.has(m.invoice_number)))
     : alleEmails
   const sichtOffene = sichtInvoices.filter((i) => i.status === 'offen' || i.status === 'ueberfaellig')
+  const [fakturaBereich, setFakturaBereich] = useState<FakturaBereichKunde>('uebersicht')
+  const [fakturaReiter, setFakturaReiter] = useState<FakturaReiter>('alle')
+  const fakturaDaten = useFakturaDaten({ kundeId: id, projektId: baustelle?.id ?? null, rechnungen: kundenInvoices })
+  const springeInFaktura = (b: string, extra?: Record<string, string>) => {
+    if (FAKTURA_BEREICHE.some((x) => x.key === b)) setFakturaBereich(b as FakturaBereichKunde)
+    setFakturaReiter((extra?.reiter as FakturaReiter) || 'alle')
+  }
   const sichtOffeneSumme = sichtOffene.reduce((sum, i) => sum + (Number(i.gross_amount) - Number(i.paid_amount || 0)), 0)
   const sichtUeberfaelligSumme = sichtOffene.filter(istUeberfaellig).reduce((sum, i) => sum + (Number(i.gross_amount) - Number(i.paid_amount || 0)), 0)
 
@@ -1386,6 +1407,21 @@ export default function KundenDetailPage() {
 
         {/* ═══════════ TAB: RECHNUNGEN ═══════════ */}
         {tabAktiv === 'rechnungen' && (
+          <div className="space-y-4">
+            <nav className="flex flex-wrap gap-1 border-b" style={{ borderColor: WIN.rand }} role="tablist" aria-label="Faktura-Bereiche">
+              {FAKTURA_BEREICHE.map((b) => (
+                <button key={b.key} role="tab" aria-selected={fakturaBereich === b.key} onClick={() => springeInFaktura(b.key)}
+                  className="px-3 py-2 text-[14px] -mb-px border-b-2"
+                  style={{ borderColor: fakturaBereich === b.key ? WIN.akzent : 'transparent', color: fakturaBereich === b.key ? WIN.akzent : WIN.text, fontWeight: fakturaBereich === b.key ? 600 : 400 }}>
+                  {b.label}
+                </button>
+              ))}
+            </nav>
+            {fakturaDaten.fehler && <p className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">❌ {fakturaDaten.fehler}</p>}
+            {fakturaBereich === 'uebersicht' && <FakturaUebersicht daten={fakturaDaten} onBereich={springeInFaktura} imKundenordner />}
+            {fakturaBereich === 'rechnungen' && <FakturaRechnungen key={fakturaReiter} daten={fakturaDaten} startReiter={fakturaReiter} imKundenordner />}
+            {fakturaBereich === 'zahlungen' && <FakturaZahlungen daten={fakturaDaten} />}
+            {fakturaBereich === 'aufmass' && (
           <div className="space-y-6">
             {!baustelle && projects.map((p) => <Auftragsstand key={p.id} project={p} invoices={kundenInvoices.filter((i) => i.project_id === p.id) as unknown as ComponentProps<typeof Auftragsstand>['invoices']} onRechnungStellen={(art, prozent) => { setSchlussStart({ art, prozent }); setSchlussProjectId(p.id) }} onGeaendert={() => ladeDaten()} />)}
             {baustelle && <Auftragsstand project={baustelle} invoices={sichtInvoices as any} onRechnungStellen={(art, prozent) => { setSchlussStart({ art, prozent }); setSchlussProjectId(baustelle.id) }} onGeaendert={() => ladeDaten()} />}
@@ -1739,6 +1775,8 @@ export default function KundenDetailPage() {
               )
             })}
 
+          </div>
+            )}
           </div>
         )}
       </div>

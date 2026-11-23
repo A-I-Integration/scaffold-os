@@ -30,7 +30,6 @@ const ROLE_ACCESS: Record<string, string[]> = {
   '/cad':              ['admin', 'disponent', 'bauleiter'],
   '/kunden':           ['admin', 'disponent'],
   '/arbeitsschutz':    ['admin', 'disponent'],
-  '/faktura':          ['admin', 'disponent'],
   '/rechnungen':       ['admin', 'disponent'],
   '/zahlungsabgleich': ['admin', 'disponent'],
   '/mietabrechnung':   ['admin', 'disponent'],

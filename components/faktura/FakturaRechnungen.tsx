@@ -15,7 +15,7 @@ import { STATUS_STIL, ART_LABEL, knopf, kopfZeile } from './ui';
 
 const REITER: FakturaReiter[] = ['alle', 'rechnungen', 'abschlag', 'schluss', 'gutschriften', 'entwuerfe'];
 
-export default function FakturaRechnungen({ daten, startReiter = 'alle' }: { daten: FakturaDaten; startReiter?: FakturaReiter }) {
+export default function FakturaRechnungen({ daten, startReiter = 'alle', imKundenordner = false }: { daten: FakturaDaten; startReiter?: FakturaReiter; imKundenordner?: boolean }) {
   const router = useRouter();
   const { heute, rechnungen, entwuerfe, setEntwuerfe, entwurfFehler, setEntwurfFehler, laedt } = daten;
   const [filter, setFilter] = useState<FakturaFilter>({ reiter: startReiter, suche: '', status: 'alle', jahr: heute.slice(0, 4) });
@@ -51,8 +51,8 @@ export default function FakturaRechnungen({ daten, startReiter = 'alle' }: { dat
 
       <div className="flex flex-wrap items-center gap-2 p-3">
         <Link href="/rechnungen?neu=1" className={`${knopf} text-white`} style={{ background: WIN.akzent, borderColor: WIN.akzent }}><Plus className="h-4 w-4" /> Neue Rechnung</Link>
-        <Link href="/aufmass" className={knopf} style={{ borderColor: WIN.rand }}><ClipboardList className="h-4 w-4" /> Aus Aufmaß</Link>
-        <Link href="/kunden" className={knopf} style={{ borderColor: WIN.rand }}><Layers className="h-4 w-4" /> Aus Auftrag</Link>
+        {!imKundenordner && <Link href="/aufmass" className={knopf} style={{ borderColor: WIN.rand }}><ClipboardList className="h-4 w-4" /> Aus Aufmaß</Link>}
+        {!imKundenordner && <Link href="/kunden" className={knopf} style={{ borderColor: WIN.rand }}><Layers className="h-4 w-4" /> Aus Auftrag</Link>}
         <div className="relative ml-auto w-full sm:w-64">
           <Search className="h-4 w-4 absolute left-3 top-1/2 -translate-y-1/2" style={{ color: WIN.textGedaempft }} />
           <input value={filter.suche} onChange={(e) => setFilter({ ...filter, suche: e.target.value })} placeholder="Kunde, Projektnummer, Nr. …"
