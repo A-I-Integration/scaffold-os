@@ -8,7 +8,7 @@ beforeEach(() => { vi.restoreAllMocks(); });
 describe('holeVersandAnhang (F5, strikt)', () => {
   it('ZUGFeRD: bei Fehler wird geworfen, kein Rückfall auf normale PDF', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ json: async () => ({ success: false, error: 'USt-IdNr fehlt' }) }));
-    await expect(holeVersandAnhang(inv, 'zugferd')).rejects.toThrow(/USt-IdNr fehlt.*nichts versendet.*Nur PDF/s);
+    await expect(holeVersandAnhang(inv, 'zugferd')).rejects.toThrow(/USt-IdNr fehlt[\s\S]*nichts versendet[\s\S]*Nur PDF/);
   });
   it('ZUGFeRD: Dienst nicht erreichbar wirft ebenfalls', async () => {
     vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('net')));
