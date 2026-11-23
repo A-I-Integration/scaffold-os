@@ -27,7 +27,7 @@ const knopf = 'inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs f
 
 export default function RechnungAktionen(p: Props) {
   const [offen, setOffen] = useState(false);
-  const [pos, setPos] = useState<{ top: number; right: number } | null>(null);
+  const [pos, setPos] = useState<{ top: number; right: number; maxH: number } | null>(null);
   const btnRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
@@ -41,9 +41,17 @@ export default function RechnungAktionen(p: Props) {
   function oeffne() {
     const r = btnRef.current?.getBoundingClientRect();
     if (r) {
-      // Menü nach oben öffnen, wenn unten kein Platz ist
-      const platzUnten = window.innerHeight - r.bottom;
-      setPos({ top: platzUnten < 340 ? Math.max(8, r.top - 330) : r.bottom + 4, right: Math.max(8, window.innerWidth - r.right) });
+      // Auf der Seite mit mehr Platz öffnen; Höhe auf den freien Platz begrenzen (dann scrollt das Menü), nie aus dem Fenster ragen.
+      const rand = 8;
+      const platzUnten = window.innerHeight - r.bottom - rand;
+      const platzOben = r.top - rand;
+      const gewuenscht = 420;
+      const unten = platzUnten >= Math.min(gewuenscht, platzOben);
+      const maxH = Math.max(160, Math.min(gewuenscht, unten ? platzUnten : platzOben));
+      const top = unten ? r.bottom + 4 : Math.max(rand, r.top - 4 - maxH);
+      // Menü ist 288 px breit: linker Rand bleibt im Fenster
+      const right = Math.min(Math.max(rand, window.innerWidth - r.right), Math.max(rand, window.innerWidth - 288 - rand));
+      setPos({ top, right, maxH });
     }
     setOffen(true);
   }
@@ -69,7 +77,7 @@ export default function RechnungAktionen(p: Props) {
       {offen && pos && (
         <>
           <div className="fixed inset-0 z-40" onClick={() => setOffen(false)} />
-          <div role="menu" style={{ top: pos.top, right: pos.right }} className="fixed z-50 w-72 max-w-[calc(100vw-16px)] rounded-xl border border-black/10 bg-white shadow-xl py-1">
+          <div role="menu" style={{ top: pos.top, right: pos.right, maxHeight: pos.maxH }} className="fixed z-50 w-72 max-w-[calc(100vw-16px)] overflow-y-auto rounded-xl border border-black/10 bg-white shadow-xl py-1">
             {eintraege.map((e) => (
               <div key={e.key} className={e.trenner ? 'border-t border-black/5 mt-1 pt-1' : ''}>
                 <button role="menuitem" onClick={lauf(e.onClick)} className={`w-full text-left px-3 py-2 flex items-start gap-2.5 hover:bg-black/5 ${e.rot ? 'text-red-600' : 'text-[#1d1d1f]'}`}>
