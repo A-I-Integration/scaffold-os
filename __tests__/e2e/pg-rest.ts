@@ -76,9 +76,9 @@ export function baueEchtesRest(pool: Pool) {
       if (methode === 'GET') {
         const w = where(u.searchParams, 0)
         const sel = u.searchParams.get('select'); const spalten = !sel || sel === '*' ? '*' : sel.split(',').map((s) => ident(s.trim().split(':')[0].split('(')[0])).join(', ')
-        const ord = u.searchParams.get('order'); const lim = u.searchParams.get('limit')
+        const ord = u.searchParams.get('order'); const lim = u.searchParams.get('limit'); const off = u.searchParams.get('offset')
         const order = ord ? ' order by ' + ord.split(',').map((o) => { const [c, d] = o.split('.'); return ident(c) + (d === 'desc' ? ' desc' : ' asc') }).join(', ') : ''
-        const r = await pool.query(`select ${spalten} from public.${tabelle}${w.sql}${order}${lim ? ' limit ' + Number(lim) : ''}`, w.werte)
+        const r = await pool.query(`select ${spalten} from public.${tabelle}${w.sql}${order}${lim ? ' limit ' + Number(lim) : ''}${off ? ' offset ' + Number(off) : ''}`, w.werte)
         return json(r.rows)
       }
       if (methode === 'POST') {

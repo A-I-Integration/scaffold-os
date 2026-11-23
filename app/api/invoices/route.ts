@@ -3,7 +3,7 @@ import { vorhaltungZuordnen, vorhaltungFehlerText } from '@/lib/vorhaltung-zuord
 import { pruefeVorhaltungBezug, istVorhaltungsRechnung } from '@/lib/vorhaltung';
 import { aufmassStand, pruefeAufmassBezug, freiePositionenMitAufmassName } from '@/lib/aufmass-integritaet';
 import { aufmassZuordnen, reservierungFehlerText } from '@/lib/aufmass-zuordnung-server';
-import { ladeBelegForderung, gleicheStatusNachGutschriftAb } from '@/lib/forderung-server';
+import { ladeBelegForderung, gleicheStatusNachGutschriftAb, ladeAlleRechnungen, ListeZuGross } from '@/lib/forderung-server';
 import { freigabeNachStorno, freigabeNachGutschrift, gibZuordnungFrei, istVersendet, gutschriftEntfernenPruefen } from '@/lib/zuordnung-freigabe-server';
 import { pruefeAbrechnung, grundGueltig, type Abweichung } from '@/lib/abrechnung-pruefung';
 import { schreibeHistorie } from '@/lib/abrechnung-historie';
@@ -112,12 +112,10 @@ export async function GET(req: NextRequest) {
     // Nur die Rechnungen eines Projekts: ?project_id=<uuid>
     const projektId = req.nextUrl.searchParams.get('project_id');
     if (projektId && !/^[0-9a-f-]{36}$/i.test(projektId)) return NextResponse.json({ success: false, error: 'project_id ungültig' }, { status: 400 });
-    const res = await fetch(
-      `${url}/rest/v1/invoices?select=*${projektId ? `&project_id=eq.${projektId}` : ''}&order=created_at.desc&limit=3000`,
-      { headers }
-    );
-    if (!res.ok) throw new Error(await res.text());
-    const rows = await res.json();
+    // Vollständig, seitenweise (Phase 129): keine feste Obergrenze mehr; Gutschriften zu den gelieferten Rechnungen werden unabhängig vom Filter ergänzt
+    let rows: Record<string, any>[];
+    try { rows = await ladeAlleRechnungen({ url, headers }, projektId ? `&project_id=eq.${projektId}` : ''); }
+    catch (e) { if (e instanceof ListeZuGross) return NextResponse.json({ success: false, code: 'LISTE_ZU_GROSS', error: e.message }, { status: 413 }); throw e; }
     return NextResponse.json({ success: true, invoices: await ergaenzeProjektnummer(rows) });
   } catch (err: any) {
     return serverErrorResponse(err);
@@ -125,7 +123,7 @@ export async function GET(req: NextRequest) {
 }
 
 // ─── POST: Rechnung anlegen ───
-export async function POST(req: NextRequest) {
+async function anlegen(req: NextRequest) {
   const { role, userId } = await callerRole();
   if (!role || !WRITE_ROLES.includes(role)) {
     return NextResponse.json(
@@ -541,6 +539,27 @@ export async function POST(req: NextRequest) {
   } catch (err: any) {
     return serverErrorResponse(err);
   }
+}
+
+// ─── POST mit Wiederholungsschutz ───
+// Idempotency-Key (Header): dieselbe Anfrage liefert das ursprüngliche Ergebnis und legt nichts doppelt an. Ohne Schlüssel (ältere Aufrufer) unverändert.
+export async function POST(req: NextRequest) {
+  const schluessel = (req.headers.get('idempotency-key') || '').trim().slice(0, 100);
+  if (!schluessel) return anlegen(req);
+  const key = `rechnung:${schluessel}`;
+  let start: { zustand?: string; antwort?: unknown; http_status?: number } | null = null;
+  try {
+    const r = await fetch(`${url}/rest/v1/rpc/faktura_idempotenz_start`, { method: 'POST', headers, body: JSON.stringify({ p_schluessel: key, p_art: 'rechnung_anlegen' }) });
+    start = r.ok ? await r.json() : null;
+  } catch { start = null; }
+  if (!start) return anlegen(req);                       // Schlüsseltabelle nicht erreichbar (Migration fehlt): ohne Schutz weiterarbeiten statt blockieren
+  if (start.zustand === 'fertig') return NextResponse.json(start.antwort ?? { success: true }, { status: start.http_status || 200, headers: { 'Idempotent-Replay': 'true' } });
+  if (start.zustand === 'laeuft') return NextResponse.json({ success: false, code: 'IN_BEARBEITUNG', error: 'Dieselbe Anfrage wird gerade verarbeitet.' }, { status: 409 });
+  const res = await anlegen(req);
+  let antwort: unknown = null;
+  try { antwort = await res.clone().json(); } catch { /* keine JSON-Antwort */ }
+  await fetch(`${url}/rest/v1/rpc/faktura_idempotenz_ende`, { method: 'POST', headers, body: JSON.stringify({ p_schluessel: key, p_antwort: antwort, p_http_status: res.status }) }).catch(() => {});
+  return res;
 }
 
 // ─── PATCH: Status ändern ───

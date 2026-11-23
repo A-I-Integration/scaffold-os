@@ -5,9 +5,11 @@
 // ============================================================
 
 import { MIN_GRUND_LAENGE } from '@/lib/abrechnung-pruefung'
+import { fetchMitSchluessel } from '@/lib/idempotenz-client'
 
 export async function fetchRechnungAnlegen(input: string, init: RequestInit): Promise<Response> {
-  const res = await fetch(input, init)
+  // Mit Idempotency-Key: ein erneuter Klick nach Netzwerkfehler legt die Rechnung/Gutschrift nicht doppelt an
+  const res = await fetchMitSchluessel(input, init, 'rechnung')
   if (res.status !== 409) return res
   let json: { code?: string; error?: string } | null = null
   try { json = await res.clone().json() } catch { return res }
@@ -18,5 +20,5 @@ export async function fetchRechnungAnlegen(input: string, init: RequestInit): Pr
   if (!grund || grund.trim().length < MIN_GRUND_LAENGE) return res
   let body: Record<string, unknown> = {}
   try { body = JSON.parse(String(init.body || '{}')) } catch { return res }
-  return fetch(input, { ...init, body: JSON.stringify({ ...body, abrechnung_grund: grund.trim() }) })
+  return fetchMitSchluessel(input, { ...init, body: JSON.stringify({ ...body, abrechnung_grund: grund.trim() }) }, 'rechnung')
 }

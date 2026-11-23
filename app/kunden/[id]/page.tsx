@@ -61,6 +61,7 @@ import Auftragsstand from '@/components/Auftragsstand'
 import { berechneForderung, mitBezugsGutschriften } from '@/lib/forderung'
 import AnhangDialog from '@/components/rechnung/AnhangDialog'
 import { ladeXrechnung } from '@/lib/xrechnung-download'
+import { fetchMitSchluessel } from '@/lib/idempotenz-client'
 
 interface Kunde {
   id: string
@@ -519,7 +520,7 @@ export default function KundenDetailPage() {
     if (!betrag || betrag <= 0) { alert('Bitte einen Betrag > 0 eingeben.'); return }
     setSpeichern(true)
     try {
-      const res = await fetch('/api/invoice-payments', {
+      const res = await fetchMitSchluessel('/api/invoice-payments', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ invoice_id: zahlungOffen.id, amount: betrag, payment_date: zahlungDatum, note: zahlungNotiz.trim() || undefined }),
       })

@@ -23,6 +23,7 @@ import PositionDetails from '@/components/rechnung/PositionDetails';
 import { ENTSCHEIDUNG_LABEL, type PruefEntscheidung } from '@/lib/rechnung-pruefung';
 import { preisMitFaktor } from '@/lib/rechnung-position';
 import { korrekturkette } from '@/lib/abrechnung-pruefung';
+import { fetchMitSchluessel } from '@/lib/idempotenz-client'
 
 // ============================================================
 // SCAFFOLD OS – Rechnungsmodul (Phase 13)
@@ -532,7 +533,7 @@ export function RechnungenInhalt({ umfang, neuSignal = 0, entwurfId: entwurfVonA
     if (!betrag || betrag <= 0) { alert('Bitte einen Betrag > 0 eingeben.'); return; }
     setZahlungLaeuft(true);
     try {
-      const res = await fetch('/api/invoice-payments', {
+      const res = await fetchMitSchluessel('/api/invoice-payments', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ invoice_id: zahlungOffen.id, amount: betrag, payment_date: zahlungDatum }),
       });

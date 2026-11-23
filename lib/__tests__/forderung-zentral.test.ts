@@ -34,4 +34,30 @@ describe('zentrale Forderungsberechnung', () => {
       expect(t, f).not.toMatch(/status === 'offen' \|\| i\.status === 'ueberfaellig'\)\s*\n?\s*\.reduce/)
     }
   })
+  describe('Wächter für lib/, app/api/ und Cronjobs (keine parallele Formel)', () => {
+    const serverDateien = ['lib', 'app/api'].flatMap((d) => alle(join(wurzel, d))).map((f) => f.slice(wurzel.length + 1).replace(/\\/g, '/'))
+    // Dokumentierte, fachlich eigenständige Ausnahmen (kein offener Betrag einer Forderung):
+    //  • lib/forderung.ts: die zentrale Quelle selbst
+    //  • app/api/import/rechnungen/route.ts: Vorschau-Summe beim CSV-Import (Importzeilen, Gutschriftbezug zur Importzeit nicht auflösbar)
+    //  • lib/schlussrechnung.ts: bereits bezahlte Abschläge bei der Anrechnung (Bezahlt-Anteil je Abschlag)
+    //  • lib/abrechnung-pruefung.ts: Plausibilitätsprüfung „mehr bezahlt als berechnet“
+    const ausnahmen = new Set(['lib/forderung.ts', 'app/api/import/rechnungen/route.ts', 'lib/schlussrechnung.ts', 'lib/abrechnung-pruefung.ts'])
+    it('keine Funktion „offenerBetrag“ und keine „brutto − bezahlt“-Formel außerhalb der zentralen Quelle', () => {
+      const parallel = /function\s+offenerBetrag\b|gross_amount\)?\s*-\s*\(?(Number\()?[\w.]*paid_amount|(brutto|gross)\w*\)?\s*-\s*\(?[\w.]*(bezahlt|paid)/i
+      for (const f of serverDateien) {
+        if (ausnahmen.has(f)) continue
+        expect(readFileSync(join(wurzel, f), 'utf8'), `${f} rechnet offene Beträge selbst`).not.toMatch(parallel)
+      }
+    })
+    it('Mahnwesen, Cron und Zahlungsroute beziehen den offenen Betrag aus der zentralen Berechnung', () => {
+      expect(readFileSync(join(wurzel, 'lib/mahnung-versand.ts'), 'utf8')).toMatch(/ladeBelegForderung/)
+      expect(readFileSync(join(wurzel, 'app/api/invoice-payments/route.ts'), 'utf8')).toMatch(/rpc\/faktura_zahlung_buchen/) // atomar in der Datenbank (Spiegel von lib/forderung.ts, Paritätstest)
+      expect(readFileSync(join(wurzel, 'app/api/cron/mahnwesen/route.ts'), 'utf8')).toMatch(/sendeMahnschritt/)
+    })
+    it('Mahn-PDFs haben keinen Rückfall auf eine Eigenberechnung', () => {
+      const t = readFileSync(join(wurzel, 'lib/invoice-pdf.ts'), 'utf8')
+      expect(t).toMatch(/offen_zentral fehlt|Offener Betrag \(zentral\) fehlt/)
+      expect(t).not.toMatch(/gross_amount\)\s*-\s*\(?Number\(inv\.paid_amount/)
+    })
+  })
 })
