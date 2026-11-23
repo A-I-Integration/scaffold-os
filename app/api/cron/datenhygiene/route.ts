@@ -43,6 +43,10 @@ const headers = {
   'Content-Type': 'application/json',
 };
 
+// Faktura: abgeschlossene Idempotenzschlüssel (> 90 Tage) und nie angelegte, abgelaufene Schlüssel (> 7 Tage) entfernen. Laufende und angelegte Vorgänge bleiben.
+// Nur, wenn die Funktion existiert (Migration phase-130).
+const IDEMPOTENZ_SQL = `DO $$ BEGIN IF to_regproc('public.faktura_idempotenz_bereinigen(integer,integer)') IS NOT NULL THEN PERFORM public.faktura_idempotenz_bereinigen(90, 7); END IF; END $$;`;
+
 export async function GET(req: NextRequest) {
   // 1) Nur Master-Instanz darf diesen Job ausführen
   if (process.env.MASTER_INSTANCE !== 'true') {
@@ -101,6 +105,8 @@ export async function GET(req: NextRequest) {
       try {
         await runSqlOnProject(t.supabase_project_ref, GPS_LOESCH_SQL);
         ergebnis.push({ instanz: t.slug, ok: true, info: 'GPS-Daten > 90 Tage gelöscht' });
+        try { await runSqlOnProject(t.supabase_project_ref, IDEMPOTENZ_SQL); ergebnis.push({ instanz: `${t.slug} (Faktura-Schlüssel)`, ok: true, info: 'alte Idempotenzschlüssel bereinigt' }); }
+        catch (errI: any) { ergebnis.push({ instanz: `${t.slug} (Faktura-Schlüssel)`, ok: false, info: errI.message }); }
         try {
           await runSqlOnProject(t.supabase_project_ref, HOF_LOESCH_SQL);
           ergebnis.push({ instanz: `${t.slug} (Tour-Koordinaten)`, ok: true, info: 'Tour-Koordinaten > 90 Tage geleert' });

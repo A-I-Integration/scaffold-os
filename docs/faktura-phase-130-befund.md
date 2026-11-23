@@ -40,3 +40,11 @@ Entscheidung: Eine rein manuelle Statusänderung ohne Buchung ist fachlich nicht
 | 3.5 | Abhängigkeiten: 129 braucht `invoice_payments` (38) und `abrechnung_historie` (125). Phase 126–128 werden zur Laufzeit von `faktura_anlegen_idempotent` (Phase 130) verwendet (`rechnung_anlegen_zugeordnet`, 128; `create_invoice`, 93; `create_invoice_as_new_version`, 94). | in der Migration dokumentiert. |
 | 3.6 | Trigger: INSERT, UPDATE, DELETE nur für `invoice_type = 'gutschrift'`; der Abgleich ändert nur den Status der Bezugsrechnung, nie Zahlungen oder Beträge. Der Verlaufseintrag aus dem Trigger hat keinen Benutzer (die Datenbank kennt ihn nicht). | dokumentiert (Risiko). |
 | 3.7 | Historische Buchungen: Phase 129 schreibt in `invoice_payments` nur die neue Spalte `request_key` (NULL). Keine bestehende Zeile wird verändert. | bestätigt, Test über Prüfsumme. |
+
+## 4. Umsetzung (Phase 130)
+
+- `supabase/phase-130-faktura-idempotenz-status.sql` (eine Transaktion, mehrfach ausführbar): Spalten `nutzdaten_hash`, `lease_bis`, `invoice_id`, `versuche`; `faktura_idempotenz_start(schluessel, art, hash)` mit Zuständen `neu | laeuft | wiederaufnahme | angelegt | fertig | konflikt`; `faktura_anlegen_idempotent` (Advisory-Lock je Schlüssel, Anlegen und Anker in einer Transaktion); `faktura_idempotenz_ende` (löscht nur Schlüssel OHNE Anker); `faktura_idempotenz_bereinigen`; `faktura_zahlung_buchen` mit Konflikterkennung bei anderem Betrag/Datum und `quelle`; `faktura_status_setzen`; Rechte nur für `service_role`.
+- `POST /api/invoices`: Hash der Nutzdaten; Zustand „angelegt“ rekonstruiert die Antwort aus der Datenbank; Wiederholung legt nichts neu an und gibt eine dabei neu gemachte Aufmaß-/Vorhalte-Reservierung wieder frei; ohne Migration 130 Antwort 503 statt stillem Weiterarbeiten ohne Schutz.
+- `PATCH /api/invoices`: `bezahlt`/`offen` laufen über `faktura_status_setzen`; ein mitgesendeter Betrag wird ignoriert; `paid_amount` allein → 400.
+- Cron `datenhygiene`: ruft die Bereinigung je Instanz best effort auf (nur wenn die Funktion existiert).
+- Tests: `__tests__/e2e/faktura-e2e.test.ts`, Gruppe 8d (13 Tests, getrennte Verbindungen).
