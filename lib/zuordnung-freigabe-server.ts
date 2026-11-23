@@ -18,12 +18,25 @@ export function gutschriftDecktAb(originalNetto: number, gutschriften: { net_amo
   return summe + 0.005 >= orig
 }
 
-export async function istVersendet(c: Cfg, invoiceId: string): Promise<boolean> {
-  try {
-    const r = await fetch(`${c.url}/rest/v1/invoice_dispatches?invoice_id=eq.${invoiceId}&kind=eq.rechnung&status=eq.versendet&select=id&limit=1`, { headers: c.headers })
-    if (!r.ok) return true
-    return ((await r.json()) || []).length > 0
-  } catch { return true }
+/**
+ * Wurde die Rechnung versendet? Maßgeblich sind ALLE Nachweise: Versandprotokoll (nach Rechnungs-ID und nach Rechnungsnummer, falls die
+ * Verknüpfung beim Protokollieren fehlschlug) und der ältere Mailverlauf email_log (Versand vor Einführung des Versandprotokolls).
+ * Nicht prüfbar (Fehler beim Lesen) gilt als versendet; eine nicht vorhandene Tabelle zählt als „kein Nachweis“.
+ */
+export async function istVersendet(c: Cfg, invoiceId: string, invoiceNumber?: string | null): Promise<boolean> {
+  const nr = invoiceNumber ? encodeURIComponent(invoiceNumber) : null
+  const quellen = [
+    `invoice_dispatches?invoice_id=eq.${invoiceId}&kind=eq.rechnung&status=eq.versendet&select=id&limit=1`,
+    ...(nr ? [`invoice_dispatches?invoice_number=eq.${nr}&kind=eq.rechnung&status=eq.versendet&select=id&limit=1`, `email_log?invoice_number=eq.${nr}&type=eq.rechnung&select=id&limit=1`] : []),
+  ]
+  for (const q of quellen) {
+    try {
+      const r = await fetch(`${c.url}/rest/v1/${q}`, { headers: c.headers })
+      if (!r.ok) { const t = await r.text().catch(() => ''); if (/does not exist|PGRST205|42P01/i.test(t)) continue; return true }
+      if (((await r.json()) || []).length > 0) return true
+    } catch { return true }
+  }
+  return false
 }
 
 export async function gutschriftenZu(c: Cfg, projectId: string, rechnungsNr: string): Promise<{ net_amount: number; status: string }[] | null> {
@@ -45,7 +58,7 @@ export async function gibZuordnungFrei(a: { projectId: string; invoiceId: string
 
 /** Storno einer Rechnung: nicht versendet → sofort frei; versendet → nur, wenn bereits eine volle Gutschrift vorliegt. */
 export async function freigabeNachStorno(c: Cfg, a: { projectId: string; invoiceId: string; invoiceNumber?: string | null; nettoBetrag?: number | null; userId?: string | null }): Promise<'frei' | 'bleibt_bis_gutschrift'> {
-  if (!(await istVersendet(c, a.invoiceId))) { await gibZuordnungFrei({ ...a, grund: 'Rechnung storniert (nicht versendet)' }); return 'frei' }
+  if (!(await istVersendet(c, a.invoiceId, a.invoiceNumber))) { await gibZuordnungFrei({ ...a, grund: 'Rechnung storniert (nicht versendet)' }); return 'frei' }
   const g = a.invoiceNumber ? await gutschriftenZu(c, a.projectId, a.invoiceNumber) : null
   if (g && gutschriftDecktAb(Number(a.nettoBetrag), g)) { await gibZuordnungFrei({ ...a, grund: 'Rechnung storniert, durch Gutschrift voll gutgeschrieben' }); return 'frei' }
   return 'bleibt_bis_gutschrift'
