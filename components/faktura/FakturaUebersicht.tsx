@@ -6,11 +6,10 @@ import { FileText, AlertTriangle, CheckCircle2, BarChart3, FilePlus2, ClipboardL
 import { WIN } from '@/components/win/Win';
 import { fmtDate } from '@/lib/invoice-pdf';
 import { berechneKennzahlen, ueberfaelligeRechnungen, baldFaellig, offenerBetrag } from '@/lib/faktura-kennzahlen';
-import { fakturaUrl } from '@/lib/faktura-bereiche';
 import { type FakturaDaten, eur } from './daten';
-import { Kachel, Karte } from './ui';
+import { Kachel, Karte, BereichLink, type BereichSprung } from './ui';
 
-export default function FakturaUebersicht({ daten }: { daten: FakturaDaten }) {
+export default function FakturaUebersicht({ daten, onBereich, imKundenordner = false }: { daten: FakturaDaten; onBereich?: BereichSprung; imKundenordner?: boolean }) {
   const { heute, rechnungen, zahlungenMonat, entwuerfe } = daten;
   const kz = useMemo(() => berechneKennzahlen(rechnungen, zahlungenMonat, heute), [rechnungen, zahlungenMonat, heute]);
   const ueberfaellig = useMemo(() => ueberfaelligeRechnungen(rechnungen, heute), [rechnungen, heute]);
@@ -46,7 +45,7 @@ export default function FakturaUebersicht({ daten }: { daten: FakturaDaten }) {
             <div>
               <p className="text-[12px] font-semibold uppercase tracking-wide mb-1" style={{ color: '#b42318' }}>Überfällig ({ueberfaellig.length})</p>
               <ul>{ueberfaellig.slice(0, 5).map(zeile)}</ul>
-              {ueberfaellig.length > 5 && <Link href={fakturaUrl('zahlungen')} className="text-[13px] underline px-2" style={{ color: WIN.akzent }}>alle {ueberfaellig.length} ansehen</Link>}
+              {ueberfaellig.length > 5 && <BereichLink bereich="zahlungen" onBereich={onBereich} className="text-[13px] underline px-2" style={{ color: WIN.akzent }}>alle {ueberfaellig.length} ansehen</BereichLink>}
             </div>
           )}
           {bald.length > 0 && (
@@ -57,7 +56,7 @@ export default function FakturaUebersicht({ daten }: { daten: FakturaDaten }) {
           )}
           {entwuerfe.length > 0 && (
             <p className="text-[13px]">
-              <Link href={fakturaUrl('rechnungen', { reiter: 'entwuerfe' })} className="underline" style={{ color: WIN.akzent }}>{entwuerfe.length} Entwurf{entwuerfe.length === 1 ? '' : 'e'}</Link>
+              <BereichLink bereich="rechnungen" extra={{ reiter: 'entwuerfe' }} onBereich={onBereich} className="underline" style={{ color: WIN.akzent }}>{entwuerfe.length} Entwurf{entwuerfe.length === 1 ? '' : 'e'}</BereichLink>
               {' '}warten auf das Anlegen als Rechnung.
             </p>
           )}
@@ -68,17 +67,23 @@ export default function FakturaUebersicht({ daten }: { daten: FakturaDaten }) {
         <Karte className="lg:col-span-3" titel="Schnell erstellen" icon={<FilePlus2 className="h-4 w-4" style={{ color: WIN.akzent }} />}>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
             {[
-              { href: '/rechnungen?neu=1', icon: <ReceiptText className="h-5 w-5" />, t: 'Rechnung', s: 'frei' },
-              { href: fakturaUrl('aufmass'), icon: <Layers className="h-5 w-5" />, t: 'Abschlag', s: 'Teilleistung, am Auftrag' },
-              { href: fakturaUrl('aufmass'), icon: <ClipboardList className="h-5 w-5" />, t: 'Schlussrechnung', s: 'Gesamtleistung, am Auftrag' },
-              { href: '/kunden', icon: <Undo2 className="h-5 w-5" />, t: 'Gutschrift', s: 'Korrektur, in der Kundenakte' },
-            ].map((a) => (
-              <Link key={a.t} href={a.href} className="rounded-lg border p-3 text-center hover:bg-black/5" style={{ borderColor: WIN.randHell }}>
-                <span className="flex justify-center mb-1" style={{ color: WIN.akzent }}>{a.icon}</span>
-                <span className="block text-[13px] font-semibold">{a.t}</span>
-                <span className="block text-[11.5px]" style={{ color: WIN.textGedaempft }}>{a.s}</span>
-              </Link>
-            ))}
+              { href: '/rechnungen?neu=1', icon: <ReceiptText className="h-5 w-5" />, t: 'Rechnung', s: 'frei', ziel: null },
+              { href: '/kunden', icon: <Layers className="h-5 w-5" />, t: 'Abschlag', s: 'Teilleistung, am Auftrag', ziel: 'aufmass' as const },
+              { href: '/kunden', icon: <ClipboardList className="h-5 w-5" />, t: 'Schlussrechnung', s: 'Gesamtleistung, am Auftrag', ziel: 'aufmass' as const },
+              { href: '/kunden', icon: <Undo2 className="h-5 w-5" />, t: 'Gutschrift', s: 'Korrektur, am Auftrag', ziel: 'aufmass' as const },
+            ].map((a) => {
+              const inhalt = (
+                <>
+                  <span className="flex justify-center mb-1" style={{ color: WIN.akzent }}>{a.icon}</span>
+                  <span className="block text-[13px] font-semibold">{a.t}</span>
+                  <span className="block text-[11.5px]" style={{ color: WIN.textGedaempft }}>{a.s}</span>
+                </>
+              );
+              const kl = 'rounded-lg border p-3 text-center hover:bg-black/5';
+              // Im Kundenordner führen Abschlag, Schlussrechnung und Gutschrift in den Bereich „Abrechnung“ (dort liegen die Knöpfe am Auftrag).
+              if (imKundenordner && a.ziel) return <button key={a.t} type="button" onClick={() => onBereich?.(a.ziel)} className={kl} style={{ borderColor: WIN.randHell }}>{inhalt}</button>;
+              return <Link key={a.t} href={a.ziel ? '/kunden' : a.href} className={kl} style={{ borderColor: WIN.randHell }}>{inhalt}</Link>;
+            })}
           </div>
         </Karte>
         <Karte className="lg:col-span-2" titel="Versand & E-Rechnung" icon={<Mail className="h-4 w-4" style={{ color: WIN.akzent }} />}>
