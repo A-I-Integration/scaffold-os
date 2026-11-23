@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   normalisiereVereinbarung, faelligeVorhaltung, vorhaltungStatus, kostenpflichtigAb, plusMonate, periodenPassen,
-  pruefeVorhaltungBezug, vorhaltungStand, normalisierePerioden, istVorhaltungsRechnung, pruefeVorhaltePeriodenAenderung, type Vorhaltevereinbarung, type VorhaltePeriode,
+  pruefeVorhaltungBezug, vorhaltungStand, normalisierePerioden, istVorhaltungsRechnung, pruefeVorhaltePeriodenAenderung, pruefeVorhaltungVereinbarungAenderung, fehlendeAngaben, type Vorhaltevereinbarung, type VorhaltePeriode,
 } from '../vorhaltung'
 
 const V = (o: Partial<Vorhaltevereinbarung> = {}): Vorhaltevereinbarung => ({ aktiv: true, beginn: '2026-03-02', freiTage: 28, intervall: 'woche', preis: 100, abrechnung: 'im_voraus', teilabbauten: [], ...o })
@@ -33,7 +33,7 @@ describe('Vorhaltung nach Vertragsbedingungen', () => {
     expect(f.positionen[0]).toMatchObject({ menge: 2, einheit: 'Monat', einzelpreis: 800 })
   })
   it('Teilabbau senkt den Preis ab dem Datum (Restbestand), getrennte Positionen', () => {
-    const v = V({ freiTage: 0, beginn: '2026-03-02', teilabbauten: [{ datum: '2026-03-16', verbleibendProzent: 60 }] })
+    const v = V({ freiTage: 0, beginn: '2026-03-02', teilabbauten: [{ datum: '2026-03-16', verbleibendProzent: 60, preisModus: 'anteilig' }] })
     const f = faelligeVorhaltung(v, [], '2026-03-25')!
     expect(f.positionen.map((p) => [p.menge, p.einzelpreis])).toEqual([[2, 100], [2, 60]])
     expect(f.positionen[1].bezeichnung).toContain('60 % Restbestand')
@@ -107,5 +107,59 @@ describe('Vorhaltung gehört nicht zum Auftragswert', () => {
   it('Auftragsstand: Vorhaltung nicht in „abgerechnet“, aber in offen', () => {
     const s = berechneAuftragsstand({ angebotNetto: 1000, nachtraege: [], rechnungen: rechnungen as any })
     expect(s).toMatchObject({ abgerechnet: 1000, restZuAbrechnen: 0, vorhaltungNetto: 500, offenBrutto: 1785 })
+  })
+})
+
+describe('Teilabbau: Preisberechnung nur nach Vereinbarung', () => {
+  const tab = (preisModus?: 'anteilig' | 'voll') => V({ freiTage: 0, beginn: '2026-03-02', teilabbauten: [{ datum: '2026-03-16', verbleibendProzent: 60, ...(preisModus ? { preisModus } : {}) }] })
+  it('anteilig: Preis × Restbestand', () => {
+    const f = faelligeVorhaltung(tab('anteilig'), [], '2026-03-25')!
+    expect(f.positionen.map((p) => [p.menge, p.einzelpreis])).toEqual([[2, 100], [2, 60]]); expect(f.netto).toBe(320)
+  })
+  it('voll: der Teilabbau ändert den Preis nicht (gleiche Zeile, voller Preis), Restbestand steht im Text', () => {
+    const f = faelligeVorhaltung(tab('voll'), [], '2026-03-25')!
+    expect(f.positionen.map((p) => [p.menge, p.einzelpreis])).toEqual([[2, 100], [2, 100]]); expect(f.netto).toBe(400)
+    expect(f.positionen[1].bezeichnung).toContain('Preis unverändert')
+  })
+  it('ohne Angabe wird NICHT abgerechnet und es fehlt ausdrücklich die Preisberechnung', () => {
+    expect(faelligeVorhaltung(tab(undefined), [], '2026-03-25')).toBeNull()
+    expect(fehlendeAngaben(tab(undefined)).join(' ')).toContain('Preisberechnung beim Teilabbau')
+    expect(vorhaltungStatus(tab(undefined), [], '2026-03-25').hinweise.join(' ')).toContain('Es fehlt')
+  })
+  it('unterschiedliche Preisvereinbarungen führen zu unterschiedlichen Beträgen bei gleichem Restbestand', () => {
+    const a = faelligeVorhaltung(tab('anteilig'), [], '2026-03-25')!.netto, b = faelligeVorhaltung(tab('voll'), [], '2026-03-25')!.netto
+    expect([a, b]).toEqual([320, 400])
+  })
+})
+
+describe('Preisstufen und Schutz bereits berechneter Zeiträume', () => {
+  const alt = V({ freiTage: 0, beginn: '2026-03-02' })
+  const bisher = [P('2026-03-02', '2026-03-23', { intervalle: 3, netto: 300 })]
+  it('ohne berechnete Zeiträume ist jede Änderung frei', () => {
+    expect(pruefeVorhaltungVereinbarungAenderung(alt, { ...alt, preis: 150, freiTage: 7 }, [])).toBeNull()
+  })
+  it('Preis, kostenlose Zeit, Beginn, Intervall oder Abrechnungsart nach der Abrechnung ändern wird abgelehnt', () => {
+    for (const neu of [{ preis: 150 }, { freiTage: 7 }, { beginn: '2026-03-09' }, { intervall: 'monat' as const }, { abrechnung: 'nachtraeglich' as const }]) {
+      expect(pruefeVorhaltungVereinbarungAenderung(alt, { ...alt, ...neu }, bisher), JSON.stringify(neu)).toContain('Bereits berechnet bis 22.03.2026')
+    }
+  })
+  it('neuer Preis ab Datum nach dem berechneten Zeitraum ist erlaubt und gilt nur für spätere Intervalle', () => {
+    const neu = { ...alt, preisStufen: [{ ab: '2026-03-23', preis: 150 }] }
+    expect(pruefeVorhaltungVereinbarungAenderung(alt, neu, bisher)).toBeNull()
+    const f = faelligeVorhaltung(V({ ...neu }), bisher, '2026-04-06')!
+    expect(f.positionen.map((p) => [p.menge, p.einzelpreis])).toEqual([[3, 150]])
+    // berechnete Zeiträume bleiben unverändert (Periode behält ihr Netto)
+    expect(bisher[0].netto).toBe(300)
+  })
+  it('Preisstufe, die vor das Ende des berechneten Zeitraums fällt, wird abgelehnt', () => {
+    expect(pruefeVorhaltungVereinbarungAenderung(alt, { ...alt, preisStufen: [{ ab: '2026-03-16', preis: 150 }] }, bisher)).toContain('bereits berechnete Zeiträume')
+  })
+  it('Teilabbau, der berechnete Intervalle träfe, wird abgelehnt; ein späterer ist erlaubt', () => {
+    expect(pruefeVorhaltungVereinbarungAenderung(alt, { ...alt, teilabbauten: [{ datum: '2026-03-09', verbleibendProzent: 50, preisModus: 'anteilig' }] }, bisher)).not.toBeNull()
+    expect(pruefeVorhaltungVereinbarungAenderung(alt, { ...alt, teilabbauten: [{ datum: '2026-03-23', verbleibendProzent: 50, preisModus: 'anteilig' }] }, bisher)).toBeNull()
+  })
+  it('Abbaudatum vor einem berechneten Intervall wird abgelehnt', () => {
+    expect(pruefeVorhaltungVereinbarungAenderung(alt, { ...alt, abbauDatum: '2026-03-10' }, bisher)).not.toBeNull()
+    expect(pruefeVorhaltungVereinbarungAenderung(alt, { ...alt, abbauDatum: '2026-04-10' }, bisher)).toBeNull()
   })
 })

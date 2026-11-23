@@ -101,7 +101,8 @@ describe('Dialog und Server sind verdrahtet', () => {
   it('Rechnungs-Route reserviert vor dem Anlegen und gibt bei Fehler frei', () => {
     const s = readFileSync('app/api/invoices/route.ts', 'utf8')
     expect(s.indexOf("aktion: 'reservieren'")).toBeGreaterThan(0)
-    expect(s.indexOf("aktion: 'reservieren'")).toBeLessThan(s.indexOf('rest/v1/rpc/${rpcName}'))
+    expect(s.indexOf("aktion: 'reservieren'")).toBeLessThan(s.indexOf("'rechnung_anlegen_zugeordnet' : rpcName"))
+    expect(s).toMatch(/p_art: aufmassRes \? 'aufmass' : 'vorhaltung'/)
     expect(s).toMatch(/await freigebenBeiFehler\(\)/)
   })
 })

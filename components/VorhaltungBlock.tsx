@@ -110,7 +110,8 @@ export default function VorhaltungBlock({ project, kunde }: Props) {
       {vereinbarung && (
         <div className="text-[11px] text-[#1d1d1f] space-y-0.5" data-testid="vorhaltung-status">
           <p>Beginn {vereinbarung.beginn ? de(vereinbarung.beginn) : '–'} · {vereinbarung.freiTage} Tage kostenlos · kostenpflichtig ab <b>{status.kostenpflichtigAb ? de(status.kostenpflichtigAb) : '–'}</b> · {eur(vereinbarung.preis)} je {vereinbarung.intervall === 'monat' ? 'Monat' : 'Woche'} ({vereinbarung.abrechnung === 'im_voraus' ? 'angefangenes Intervall voll' : 'nachträglich'}){vereinbarung.abbauDatum ? ` · Abbau ${de(vereinbarung.abbauDatum)}` : ''}{!vereinbarung.aktiv ? ' · inaktiv' : ''}</p>
-          {vereinbarung.teilabbauten.map((t, i) => <p key={i} className="text-[#86868b]">Teilabbau {de(t.datum)}: {t.verbleibendProzent.toLocaleString('de-DE')} % bleiben stehen</p>)}
+          {vereinbarung.teilabbauten.map((t, i) => <p key={i} className="text-[#86868b]">Teilabbau {de(t.datum)}: {t.verbleibendProzent.toLocaleString('de-DE')} % bleiben stehen ({t.preisModus === 'voll' ? 'voller Preis' : t.preisModus === 'anteilig' ? 'Preis anteilig' : 'Preisberechnung fehlt'})</p>)}
+          {(vereinbarung.preisStufen || []).map((st, i) => <p key={'s' + i} className="text-[#86868b]">Ab {de(st.ab)}: {eur(st.preis)} je Intervall</p>)}
           {status.hinweise.map((h, i) => <p key={i} className={/fehlt|passen nicht|endet in/.test(h) ? 'text-red-600' : 'text-[#e8590c]'}>{h}</p>)}
         </div>
       )}
@@ -147,13 +148,25 @@ export default function VorhaltungBlock({ project, kunde }: Props) {
           <div className="space-y-1">
             <p className="text-[11px] text-[#86868b]">Teilabbau (ab dem Datum zählt nur noch der Restbestand):</p>
             {form.teilabbauten.map((t, i) => (
-              <div key={i} className="grid grid-cols-[1fr_90px_24px] gap-1">
+              <div key={i} className="grid grid-cols-[1fr_90px_1fr_24px] gap-1">
                 <input type="date" value={t.datum} onChange={(e) => set('teilabbauten', form.teilabbauten.map((x, k) => (k === i ? { ...x, datum: e.target.value } : x)))} className={inputCls} aria-label="Datum Teilabbau" />
                 <input value={String(t.verbleibendProzent).replace('.', ',')} onChange={(e) => set('teilabbauten', form.teilabbauten.map((x, k) => (k === i ? { ...x, verbleibendProzent: Math.min(100, Math.max(0, num(e.target.value))) } : x)))} inputMode="decimal" className={inputCls} aria-label="Verbleibender Anteil in Prozent" />
+                <select value={t.preisModus || ''} onChange={(e) => set('teilabbauten', form.teilabbauten.map((x, k) => (k === i ? { ...x, preisModus: (e.target.value || undefined) as 'anteilig' | 'voll' | undefined } : x)))} className={inputCls} aria-label="Preisberechnung beim Teilabbau"><option value="">Preis laut Vereinbarung wählen …</option><option value="anteilig">Preis anteilig zum Restbestand</option><option value="voll">Voller Preis bleibt</option></select>
                 <button type="button" onClick={() => set('teilabbauten', form.teilabbauten.filter((_, k) => k !== i))} aria-label="Teilabbau entfernen" className="p-1 rounded hover:bg-black/5"><Trash2 className="h-3.5 w-3.5 text-[#86868b]" /></button>
               </div>
             ))}
             <button type="button" onClick={() => set('teilabbauten', [...form.teilabbauten, { datum: heute(), verbleibendProzent: 50 }])} className="text-[11px] text-[#e8590c] font-semibold hover:underline">+ Teilabbau hinzufügen</button>
+          </div>
+          <div className="space-y-1">
+            <p className="text-[11px] text-[#86868b]">Preisänderung (gilt erst ab dem Datum; bereits berechnete Zeiträume bleiben unverändert):</p>
+            {(form.preisStufen || []).map((st, i) => (
+              <div key={i} className="grid grid-cols-[1fr_90px_24px] gap-1">
+                <input type="date" value={st.ab} onChange={(e) => set('preisStufen', (form.preisStufen || []).map((x, k) => (k === i ? { ...x, ab: e.target.value } : x)))} className={inputCls} aria-label="Preis gilt ab" />
+                <input value={st.preis ? String(st.preis).replace('.', ',') : ''} onChange={(e) => set('preisStufen', (form.preisStufen || []).map((x, k) => (k === i ? { ...x, preis: num(e.target.value) } : x)))} inputMode="decimal" className={inputCls} aria-label="Neuer Preis je Intervall" />
+                <button type="button" onClick={() => set('preisStufen', (form.preisStufen || []).filter((_, k) => k !== i))} aria-label="Preisänderung entfernen" className="p-1 rounded hover:bg-black/5"><Trash2 className="h-3.5 w-3.5 text-[#86868b]" /></button>
+              </div>
+            ))}
+            <button type="button" onClick={() => set('preisStufen', [...(form.preisStufen || []), { ab: heute(), preis: form.preis }])} className="text-[11px] text-[#e8590c] font-semibold hover:underline">+ Preisänderung ab Datum</button>
           </div>
           {vereinbarung && <div><label className="block text-[11px] text-[#86868b] mb-1">Grund der Änderung (Pflicht, steht im Verlauf)</label><input value={grund} onChange={(e) => setGrund(e.target.value)} className={inputCls} aria-label="Grund der Änderung" /></div>}
           <button onClick={speichern} disabled={laeuft} className="rounded-lg bg-[#e8590c] px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-60">{laeuft ? 'Speichert …' : 'Speichern'}</button>

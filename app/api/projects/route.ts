@@ -6,7 +6,7 @@ import { beiAngebotsannahmeSicher } from '@/lib/angebot-annahme';
 import { fahrtNachholenSicher } from '@/lib/auto-tour';
 import { projektFuerRolle, schreibdatenFuerRolle } from '@/lib/projekt-sicht';
 import { autosaveGesperrt, filtereAutosaveData, AUTOSAVE_PROJEKT_ABGESCHLOSSEN_FEHLER } from '@/lib/aufmass-autosave-regeln';
-import { pruefeVorhaltePeriodenAenderung, normalisiereVereinbarung } from '@/lib/vorhaltung';
+import { pruefeVorhaltePeriodenAenderung, pruefeVorhaltungVereinbarungAenderung, normalisiereVereinbarung } from '@/lib/vorhaltung';
 import { pruefeAufmassAenderung } from '@/lib/aufmass-integritaet';
 import { aenderungenZwischenaufmasse } from '@/lib/zwischenaufmass';
 import { schreibeHistorie } from '@/lib/abrechnung-historie';
@@ -256,6 +256,11 @@ export async function PATCH(req: NextRequest) {
       if (data.vorhaltePerioden !== undefined) {
         const sperreV = pruefeVorhaltePeriodenAenderung(bisher.data?.vorhaltePerioden, data.vorhaltePerioden);
         if (sperreV) return NextResponse.json({ success: false, code: 'VORHALTUNG_GESPERRT', error: sperreV }, { status: 409 });
+      }
+      // Faktura F8: Änderungen der Vereinbarung dürfen bereits berechnete Zeiträume nicht verändern (neue Preise nur als Preisstufe ab Datum)
+      if (data.vorhaltung !== undefined && !autosave) {
+        const sperreVv = pruefeVorhaltungVereinbarungAenderung(bisher.data?.vorhaltung, data.vorhaltung, bisher.data?.vorhaltePerioden);
+        if (sperreVv) return NextResponse.json({ success: false, code: 'VORHALTUNG_VEREINBARUNG_GESPERRT', error: sperreVv }, { status: 409 });
       }
       patch.data = { ...(bisher.data || {}), ...data };
 
