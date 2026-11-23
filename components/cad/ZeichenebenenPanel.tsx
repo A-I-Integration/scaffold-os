@@ -15,9 +15,9 @@ export interface EbenenObjekt { schluessel: string; label: string; standard: Sta
 const NICHT_ANGEBUNDEN = new Set<string>(['std-gelaende', 'std-sonderbauteile', 'std-importierte-plaene'])
 /** Standardebenen, die ein ganzes Anzeigeteil im 3D-Modell ein-/ausblenden. */
 const ANZEIGE_HINWEIS: Record<string, string> = {
-  'std-gebaeude': 'blendet das Gebäude im 3D-Modell aus',
-  'std-geruest': 'blendet das Gerüst im 3D-Modell aus',
-  'std-treppen': 'blendet Treppen im 3D-Modell aus',
+  'std-gebaeude': 'blendet das Gebäude in 2D und 3D aus',
+  'std-geruest': 'blendet das Gerüst in 2D und 3D aus',
+  'std-treppen': 'blendet Treppen in 3D aus (in 2D nur in der Teileliste)',
 }
 
 interface Props {
@@ -52,7 +52,7 @@ export default function ZeichenebenenPanel({ zustand, objekte, meldung, onSichtb
       {offen && (
         <div className='px-3 py-2 text-[12px]'>
           <p className='mb-2 text-[11px] text-[#6e6e73]'>
-            Ordnen Zeichenobjekte (Maße, Messungen, Hilfslinien, Notizen). Haben keinen Einfluss auf Gerüstberechnung und Stückliste – getrennt von den Gerüstlagen.
+            Ordnen Zeichenobjekte (Maße, Messungen, Hilfslinien, Notizen). Haben keinen Einfluss auf Gerüstberechnung und Stückliste – getrennt von den Gerüstlagen. Die Gerüstplan-PDF enthält weiterhin alle Ebenen, unabhängig von der Sichtbarkeit.
           </p>
           {meldung && <p role='alert' className='mb-2 rounded bg-amber-50 border border-amber-200 px-2 py-1 text-amber-800' data-testid='zeichenebenen-meldung'>{meldung}</p>}
           <ul className='space-y-1'>
@@ -83,6 +83,7 @@ export default function ZeichenebenenPanel({ zustand, objekte, meldung, onSichtb
                   Neue Objekte hier anlegen
                 </label>
                 {ANZEIGE_HINWEIS[e.id] && <div className='text-[10px] text-[#86868b]'>Aus: {ANZEIGE_HINWEIS[e.id]}.</div>}
+                {e.id === 'std-gebaeude' && <div className='text-[10px] text-amber-700' data-testid='hinweis-gebaeude'>Die Sperre schützt nicht die Gebäudegeometrie: Maße und Form werden weiter über die Gebäudeeinstellungen geändert.</div>}
                 {NICHT_ANGEBUNDEN.has(e.id) && <div className='text-[10px] text-[#86868b]'>Noch keine Objekte oder Anzeige angebunden.</div>}
               </li>
             ))}
