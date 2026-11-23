@@ -1,5 +1,6 @@
 'use client';
 
+import { berechneForderung } from '@/lib/forderung';
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { fetchRechnungAnlegen } from '@/lib/rechnung-anlegen-client'
 import { useSearchParams } from 'next/navigation';
@@ -159,6 +160,9 @@ export function RechnungenInhalt({ umfang, neuSignal = 0, entwurfId: entwurfVonA
   const [filter, setFilter] = useState<'alle' | 'offen' | 'bezahlt' | 'ueberfaellig' | 'entwuerfe'>('alle');
   const searchParams = useSearchParams();
   const [alleInvoices, setInvoices] = useState<Invoice[]>([]);
+  // Offener Betrag je Rechnung zentral (lib/forderung.ts), identisch zu Kundenakte, Auftragsstand, Faktura-Übersicht und Zahlungsabgleich
+  const offenJe = useMemo(() => berechneForderung(alleInvoices as never[]).je, [alleInvoices]);
+  const offenVon = (i: { id: string; gross_amount: number | string; paid_amount?: number | string | null }) => offenJe.get(String(i.id)) ?? (Number(i.gross_amount) - Number(i.paid_amount || 0));
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const umfangKunde = umfang?.kundeId, umfangProjekt = umfang?.projektId, umfangProjektIds = umfang?.projektIds;
@@ -530,7 +534,7 @@ export function RechnungenInhalt({ umfang, neuSignal = 0, entwurfId: entwurfVonA
       });
       const json = await res.json();
       if (!json.success) throw new Error(json.error);
-      alert(json.vollstaendig_bezahlt ? '✅ Vollständig bezahlt.' : `✅ Teilzahlung erfasst. Noch offen: ${(Number(zahlungOffen.gross_amount) - json.paid_amount).toFixed(2)} €`);
+      alert(json.vollstaendig_bezahlt ? '✅ Vollständig bezahlt.' : `✅ Teilzahlung erfasst. Noch offen: ${Math.max(0, offenVon(zahlungOffen) - (json.paid_amount - Number(zahlungOffen.paid_amount || 0))).toFixed(2)} €`);
       setZahlungOffen(null); setZahlungBetrag('');
       await load();
     } catch (err: any) { alert('❌ ' + err.message); }
@@ -631,9 +635,7 @@ export function RechnungenInhalt({ umfang, neuSignal = 0, entwurfId: entwurfVonA
     URL.revokeObjectURL(link.href);
   }
 
-  const summeOffen = invoices
-    .filter((i) => i.status === 'offen' || i.status === 'ueberfaellig')
-    .reduce((s, i) => s + Number(i.gross_amount), 0);
+  const summeOffen = berechneForderung(invoices as never[]).offen;
 
   // Phase 15b: Bei Schlussrechnung die bisherigen Abschläge desselben Kunden zeigen
   const abschlaegeKunde = invoiceType === 'schluss' && customerName.trim()
@@ -985,7 +987,7 @@ export function RechnungenInhalt({ umfang, neuSignal = 0, entwurfId: entwurfVonA
                       <td className="px-3 py-2.5 text-right text-[#1d1d1f]">
                         {fmtEur(Number(inv.gross_amount))} €
                         {Number(inv.paid_amount) > 0 && inv.status !== 'bezahlt' && (
-                          <div className="text-[10px] text-blue-700">Teilzahlung {fmtEur(Number(inv.paid_amount))} € · offen {fmtEur(Number(inv.gross_amount) - Number(inv.paid_amount))} €</div>
+                          <div className="text-[10px] text-blue-700">Teilzahlung {fmtEur(Number(inv.paid_amount))} € · offen {fmtEur(offenVon(inv))} €</div>
                         )}
                       </td>
                       <td className="px-3 py-2.5">
@@ -1012,7 +1014,7 @@ export function RechnungenInhalt({ umfang, neuSignal = 0, entwurfId: entwurfVonA
                                 zugferdLaeuft={z.zugferdLaeuft}
                                 onPdf={() => handlePDF(inv)}
                                 onSenden={() => handleSendMail(inv)}
-                                onZahlung={() => { setZahlungOffen(inv); setZahlungBetrag(String(Number(inv.gross_amount) - Number(inv.paid_amount || 0))); setZahlungDatum(lokalesDatumIso()) }}
+                                onZahlung={() => { setZahlungOffen(inv); setZahlungBetrag(String(offenVon(inv))); setZahlungDatum(lokalesDatumIso()) }}
                                 onNeueVersion={z.onNeueVersion} onGutschrift={z.onGutschrift} onTeilabbau={z.onTeilabbau}
                                 onZugferd={z.onZugferd} onXrechnung={z.onXrechnung}
                                 onBezahltToggle={() => handleStatus(inv, inv.status === 'bezahlt' ? 'offen' : 'bezahlt')}
@@ -1050,7 +1052,7 @@ export function RechnungenInhalt({ umfang, neuSignal = 0, entwurfId: entwurfVonA
                 <button onClick={() => setZahlungOffen(null)} className="p-1 rounded-lg hover:bg-black/5"><X className="h-4 w-4" /></button>
               </div>
               <p className="text-[11px] text-[#86868b]">
-                Rechnungsbetrag {fmtEur(Number(zahlungOffen.gross_amount))} € · bisher eingegangen {fmtEur(Number(zahlungOffen.paid_amount || 0))} € · offen {fmtEur(Number(zahlungOffen.gross_amount) - Number(zahlungOffen.paid_amount || 0))} €
+                Rechnungsbetrag {fmtEur(Number(zahlungOffen.gross_amount))} € · bisher eingegangen {fmtEur(Number(zahlungOffen.paid_amount || 0))} € · offen {fmtEur(offenVon(zahlungOffen))} €
               </p>
               <div>
                 <label className="block text-xs text-[#86868b] mb-1">Betrag (€)</label>

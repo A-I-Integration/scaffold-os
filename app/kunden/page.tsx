@@ -1,5 +1,6 @@
 'use client';
 
+import { berechneForderung } from '@/lib/forderung';
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import {
@@ -256,9 +257,7 @@ export default function KundenPage() {
       : a.name.localeCompare(b.name));
 
   const offenGesamt = (k: Kunde) =>
-    rechnungenVon(k)
-      .filter((i) => i.status === 'offen' || i.status === 'ueberfaellig')
-      .reduce((s, i) => s + Number(i.gross_amount), 0);
+    berechneForderung(rechnungenVon(k) as never[]).offen;
 
   const inputCls =
     'w-full px-3 py-2 bg-black/10 border border-black/10 rounded-xl text-sm text-[#1d1d1f] focus:outline-none focus:border-[#e8590c]';
@@ -499,9 +498,7 @@ export default function KundenPage() {
                   const rechnungen = rechnungenVon(selected).filter(
                     (i) => !auftraege.some((p) => p.id === i.project_id)
                   );
-                  const offen = rechnungen
-                    .filter((i) => i.status === 'offen' || i.status === 'ueberfaellig')
-                    .reduce((s, i) => s + Number(i.gross_amount), 0);
+                  const offen = berechneForderung(rechnungen as never[]).offen;
                   if (rechnungen.length === 0) return null;
                   return (
                     <div className="bg-[#f5f5f7] rounded-xl border border-blue-500/20 overflow-hidden">

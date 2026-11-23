@@ -58,6 +58,7 @@ import StatikDokumente from '@/components/StatikDokumente'
 import StatikerFreigabeBox from '@/components/StatikerFreigabeBox'
 import { FreigabeBadge, useFreigabeStatus } from '@/components/FreigabeBadge'
 import Auftragsstand from '@/components/Auftragsstand'
+import { berechneForderung } from '@/lib/forderung'
 import AnhangDialog from '@/components/rechnung/AnhangDialog'
 import { ladeXrechnung } from '@/lib/xrechnung-download'
 
@@ -159,13 +160,6 @@ const TAB_LABEL: Record<Tab, string> = {
 // "projects" und "email_log" haben keine customer_id-Spalte, die Zuordnung
 // läuft über den exakten Namen (Kunde/Projektname im Aufmaß = Kundenname hier).
 const nameMatch = (a: string, b: string) => a.trim().toLowerCase() === b.trim().toLowerCase()
-
-// Zahlungsverzug wird NICHT in der Datenbank umgeschaltet (kein Cron nötig) –
-// stattdessen live berechnet: offen + Fälligkeitsdatum in der Vergangenheit.
-function istUeberfaellig(inv: Invoice): boolean {
-  if (inv.status !== 'offen' || !inv.due_date) return false
-  return new Date(inv.due_date) < new Date(new Date().toDateString())
-}
 
 export default function KundenDetailPage() {
   const { id } = useParams<{ id: string }>()
@@ -527,7 +521,7 @@ export default function KundenDetailPage() {
       })
       const json = await res.json()
       if (!json.success) throw new Error(json.error)
-      alert(json.vollstaendig_bezahlt ? '✅ Vollständig bezahlt.' : `✅ Teilzahlung erfasst. Noch offen: ${(Number(zahlungOffen.gross_amount) - json.paid_amount).toFixed(2)} €`)
+      alert(json.vollstaendig_bezahlt ? '✅ Vollständig bezahlt.' : `✅ Teilzahlung erfasst. Noch offen: ${Math.max(0, (forderungKunde.je.get(String(zahlungOffen.id)) ?? Number(zahlungOffen.gross_amount) - Number(zahlungOffen.paid_amount || 0)) - (json.paid_amount - Number(zahlungOffen.paid_amount || 0))).toFixed(2)} €`)
       setZahlungOffen(null); setZahlungBetrag(''); setZahlungNotiz('')
       ladeDaten()
     } catch (err: any) { alert('❌ ' + err.message) }
@@ -862,9 +856,8 @@ export default function KundenDetailPage() {
     for (const x of [...emails, ...rechnungsMails, ...kundenMails]) m.set(x.id, x)
     return [...m.values()].sort((a, b) => new Date(b.sent_at).getTime() - new Date(a.sent_at).getTime())
   }, [emails, rechnungsMails, kundenMails])
-  const offeneInvoices = useMemo(() => kundenInvoices.filter((i) => i.status === 'offen' || i.status === 'ueberfaellig'), [kundenInvoices])
-  const offeneSumme = offeneInvoices.reduce((s, i) => s + (Number(i.gross_amount) - Number(i.paid_amount || 0)), 0)
-  const ueberfaelligeSumme = offeneInvoices.filter(istUeberfaellig).reduce((s, i) => s + (Number(i.gross_amount) - Number(i.paid_amount || 0)), 0)
+  // Offene Forderung zentral (lib/forderung.ts): Rechnung − Zahlungen − Gutschriften; identisch zu Auftragsstand, Faktura und Zahlungsabgleich
+  const forderungKunde = useMemo(() => berechneForderung(kundenInvoices as never[]), [kundenInvoices])
 
   // ── Baustellen-Ebene: alles unterhalb gilt nur für das gewählte Projekt ──
   const baustelle = baustelleParam ? projects.find((p) => p.id === baustelleParam) : undefined
@@ -892,7 +885,8 @@ export default function KundenDetailPage() {
   const sichtEmails = baustelle
     ? alleEmails.filter((m) => m.project_id === baustelle.id || (!!m.invoice_number && sichtRechnungsNr.has(m.invoice_number)))
     : alleEmails
-  const sichtOffene = sichtInvoices.filter((i) => i.status === 'offen' || i.status === 'ueberfaellig')
+  const forderungSicht = baustelle ? berechneForderung(sichtInvoices as never[]) : forderungKunde
+  const sichtOffene = sichtInvoices.filter((i) => i.invoice_type !== 'gutschrift' && (forderungSicht.je.get(String(i.id)) ?? 0) > 0)
   // Faktura: aufklappbare Themenbereiche (mehrere gleichzeitig offen). Besuchte Bereiche bleiben im Hintergrund erhalten, damit z. B. ein angefangenes Formular beim Zuklappen nicht verloren geht.
   const [offeneThemen, setOffeneThemen] = useState<string[]>(['uebersicht'])
   const [besuchteThemen, setBesuchteThemen] = useState<string[]>(['uebersicht'])
@@ -926,8 +920,8 @@ export default function KundenDetailPage() {
     if (ziel) { setSchlussStart({ art }); setSchlussProjectId(ziel.id) }
     else themaOeffnen('abrechnen')
   }
-  const sichtOffeneSumme = sichtOffene.reduce((sum, i) => sum + (Number(i.gross_amount) - Number(i.paid_amount || 0)), 0)
-  const sichtUeberfaelligSumme = sichtOffene.filter(istUeberfaellig).reduce((sum, i) => sum + (Number(i.gross_amount) - Number(i.paid_amount || 0)), 0)
+  const sichtOffeneSumme = forderungSicht.offen
+  const sichtUeberfaelligSumme = forderungSicht.ueberfaellig
 
   const inputCls = 'w-full px-3 py-2 bg-white border border-black/10 rounded-lg text-sm text-[#1d1d1f] focus:outline-none focus:border-[#e8590c]'
   const btnPrimary = 'px-3 py-1.5 rounded-lg bg-[#e8590c] hover:bg-[#d9480f] text-white text-xs font-semibold transition-colors disabled:opacity-50'
@@ -961,6 +955,11 @@ export default function KundenDetailPage() {
           {sichtOffeneSumme > 0 && (
             <span className="text-xs px-2 py-0.5 rounded font-semibold" style={{ background: sichtUeberfaelligSumme > 0 ? '#fde2e1' : '#fff1d6', color: sichtUeberfaelligSumme > 0 ? '#b42318' : '#8a5a00' }}>
               {fmtEur(sichtOffeneSumme)} € offen{sichtUeberfaelligSumme > 0 ? ` · ${fmtEur(sichtUeberfaelligSumme)} € überfällig` : ''}
+            </span>
+          )}
+          {(forderungSicht.guthaben > 0 || forderungSicht.ungeklaert > 0) && (
+            <span className="text-xs px-2 py-0.5 rounded font-semibold" style={{ background: '#e7f1ff', color: '#1d4f91' }} data-testid="forderung-guthaben">
+              {forderungSicht.guthaben > 0 ? `Guthaben ${fmtEur(forderungSicht.guthaben)} €` : ''}{forderungSicht.guthaben > 0 && forderungSicht.ungeklaert > 0 ? ' · ' : ''}{forderungSicht.ungeklaert > 0 ? `ungeklärte Gutschrift ${fmtEur(forderungSicht.ungeklaert)} €` : ''}
             </span>
           )}
         </div>
@@ -1001,8 +1000,7 @@ export default function KundenDetailPage() {
                 <tbody>
                   {projects.map((pr) => {
                     const invs = kundenInvoices.filter((i) => i.project_id === pr.id)
-                    const offen = invs.filter((i) => i.status === 'offen' || i.status === 'ueberfaellig')
-                      .reduce((sum, i) => sum + (Number(i.gross_amount) - Number(i.paid_amount || 0)), 0)
+                    const offen = berechneForderung(invs as never[]).offen
                     const status = pr.data?.angebotsStatus as string | undefined
                     const zelle = 'px-2 py-1.5 border'
                     return (
@@ -1706,7 +1704,7 @@ export default function KundenDetailPage() {
               <button onClick={() => setZahlungOffen(null)} className="p-1 rounded-lg hover:bg-black/5"><X className="h-4 w-4" /></button>
             </div>
             <p className="text-[11px] text-[#86868b]">
-              Rechnungsbetrag {fmtEur(Number(zahlungOffen.gross_amount))} € · bisher eingegangen {fmtEur(Number(zahlungOffen.paid_amount || 0))} € · offen {fmtEur(Number(zahlungOffen.gross_amount) - Number(zahlungOffen.paid_amount || 0))} €
+              Rechnungsbetrag {fmtEur(Number(zahlungOffen.gross_amount))} € · bisher eingegangen {fmtEur(Number(zahlungOffen.paid_amount || 0))} € · offen {fmtEur(forderungKunde.je.get(String(zahlungOffen.id)) ?? (Number(zahlungOffen.gross_amount) - Number(zahlungOffen.paid_amount || 0)))} €
             </p>
             <div>
               <label className="block text-xs text-[#86868b] mb-1">Betrag (€)</label>

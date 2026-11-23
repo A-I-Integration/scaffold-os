@@ -100,6 +100,8 @@ export interface Kontrollstand {
   noch: number
   bezahltBrutto: number
   offenBrutto: number
+  guthabenBrutto: number
+  ungeklaertGutschriftBrutto: number
   abweichungen: Abweichung[]
 }
 
@@ -117,7 +119,7 @@ export function kontrolleBaustelle(a: { angebotNetto: number; nachtraegeBestaeti
   const abgerechnet = runde(abschlaege + schluss + gutschriften + sonstige)
   const auftragswert = runde(zahl(a.angebotNetto) + zahl(a.nachtraegeBestaetigt))
   // Offene Forderung zentral (lib/forderung.ts), identisch zum Auftragsstand
-  const ford = berechneForderung(a.rechnungen, { unbezogeneVerrechnen: true })
+  const ford = berechneForderung(a.rechnungen, {})
   const abw: Abweichung[] = []
   for (const r of alleGueltig) {
     const brutto = zahl(r.gross_amount)
@@ -138,7 +140,7 @@ export function kontrolleBaustelle(a: { angebotNetto: number; nachtraegeBestaeti
   return {
     angebotNetto: runde(zahl(a.angebotNetto)), nachtraegeBestaetigt: runde(zahl(a.nachtraegeBestaetigt)), nachtraegeAngefragt: runde(zahl(a.nachtraegeAngefragt)),
     auftragswert, abschlaege, schluss, sonstige, vorhaltung, gutschriften, abgerechnet, noch: auftragswert > 0 ? Math.max(0, runde(auftragswert - abgerechnet)) : 0,
-    bezahltBrutto: ford.bezahlt, offenBrutto: ford.offen, abweichungen: abw,
+    bezahltBrutto: ford.bezahlt, offenBrutto: ford.offen, guthabenBrutto: ford.guthaben, ungeklaertGutschriftBrutto: ford.ungeklaert, abweichungen: abw,
   }
 }
 
