@@ -6,14 +6,28 @@ import { FileText, AlertTriangle, CheckCircle2, BarChart3, FilePlus2, ClipboardL
 import { WIN } from '@/components/win/Win';
 import { fmtDate } from '@/lib/invoice-pdf';
 import { berechneKennzahlen, ueberfaelligeRechnungen, baldFaellig, offenerBetrag } from '@/lib/faktura-kennzahlen';
+import { versandStandFuer } from '@/lib/versand-status';
 import { type FakturaDaten, eur } from './daten';
 import { Kachel, Karte, BereichLink, type BereichSprung } from './ui';
 
 export default function FakturaUebersicht({ daten, onBereich, imKundenordner = false, onSchnell }: { daten: FakturaDaten; onBereich?: BereichSprung; imKundenordner?: boolean; onSchnell?: (art: 'rechnung' | 'abschlag' | 'schluss' | 'gutschrift') => void }) {
-  const { heute, rechnungen, zahlungenMonat, entwuerfe } = daten;
+  const { heute, rechnungen, zahlungenMonat, entwuerfe, versandKarte, versandHinweis } = daten;
   const kz = useMemo(() => berechneKennzahlen(rechnungen, zahlungenMonat, heute), [rechnungen, zahlungenMonat, heute]);
   const ueberfaellig = useMemo(() => ueberfaelligeRechnungen(rechnungen, heute), [rechnungen, heute]);
   const bald = useMemo(() => baldFaellig(rechnungen, heute, 7), [rechnungen, heute]);
+
+  // Versandstand aus dem Versandprotokoll (nur Rechnungen, die noch gelten)
+  const versand = useMemo(() => {
+    const gueltig = rechnungen.filter((r) => r.status !== 'storniert');
+    const stand = gueltig.map((r) => ({ r, v: versandStandFuer(versandKarte, r) }));
+    return {
+      versendet: stand.filter((x) => x.v.stand === 'versendet').length,
+      fehlgeschlagen: stand.filter((x) => x.v.stand === 'fehlgeschlagen').map((x) => x.r),
+      keiner: stand.filter((x) => x.v.stand === 'keiner').length,
+      zugferd: stand.filter((x) => x.v.stand === 'versendet' && x.v.format === 'zugferd').length,
+      nurPdf: stand.filter((x) => x.v.stand === 'versendet' && x.v.format === 'pdf').length,
+    };
+  }, [rechnungen, versandKarte]);
 
   const zeile = (r: (typeof rechnungen)[number]) => (
     <li key={r.id}>
@@ -38,8 +52,15 @@ export default function FakturaUebersicht({ daten, onBereich, imKundenordner = f
 
       <Karte titel="Braucht Aufmerksamkeit" icon={<BellRing className="h-4 w-4" style={{ color: WIN.akzent }} />}>
         <div data-testid="aufmerksamkeit" className="space-y-3">
-          {ueberfaellig.length === 0 && bald.length === 0 && entwuerfe.length === 0 && (
+          {ueberfaellig.length === 0 && bald.length === 0 && entwuerfe.length === 0 && versand.fehlgeschlagen.length === 0 && (
             <p className="text-[13px]" style={{ color: WIN.textGedaempft }}>Nichts Dringendes: keine überfälligen Rechnungen, nichts in den nächsten 7 Tagen fällig, keine offenen Entwürfe.</p>
+          )}
+          {versand.fehlgeschlagen.length > 0 && (
+            <div data-testid="versand-fehlgeschlagen">
+              <p className="text-[12px] font-semibold uppercase tracking-wide mb-1" style={{ color: '#b42318' }}>Versand fehlgeschlagen ({versand.fehlgeschlagen.length})</p>
+              <ul>{versand.fehlgeschlagen.slice(0, 5).map(zeile)}</ul>
+              <p className="px-2 text-[12px]" style={{ color: WIN.textGedaempft }}>Die Rechnung ist nicht beim Kunden angekommen. Im Rechnungsdetail steht der Fehler im Versandprotokoll; dort lässt sich erneut senden.</p>
+            </div>
           )}
           {ueberfaellig.length > 0 && (
             <div>
@@ -87,11 +108,13 @@ export default function FakturaUebersicht({ daten, onBereich, imKundenordner = f
           </div>
         </Karte>
         <Karte className="lg:col-span-2" titel="Versand & E-Rechnung" icon={<Mail className="h-4 w-4" style={{ color: WIN.akzent }} />}>
-          <ul className="space-y-1.5 text-[13px]" style={{ color: WIN.text }}>
-            <li>✅ Versand per E-Mail aus dem Rechnungsdetail</li>
-            <li>✅ ZUGFeRD beim Versand (bei Datenlücken Rückfall auf normale PDF mit Hinweis)</li>
+          <ul className="space-y-1.5 text-[13px]" style={{ color: WIN.text }} data-testid="versand-stand">
+            <li>✅ {versand.versendet} versendet{versand.versendet > 0 ? ` (${versand.zugferd} mit E-Rechnung, ${versand.nurPdf} nur als normale PDF)` : ''}</li>
+            <li style={{ color: versand.fehlgeschlagen.length ? '#b42318' : undefined }}>{versand.fehlgeschlagen.length ? '❌' : '✓'} {versand.fehlgeschlagen.length} Versand fehlgeschlagen</li>
+            <li style={{ color: WIN.textGedaempft }}>{versand.keiner} ohne Eintrag im Versandprotokoll (vor dem Protokoll oder außerhalb von SCAFFOLD OS verschickt – das ist nicht erkennbar)</li>
             <li>⬇️ XRechnung als Download im Rechnungsdetail</li>
-            <li style={{ color: WIN.textGedaempft }}>Folgt: Versandprotokoll, XRechnung als Anhang, Vorlagen</li>
+            <li style={{ color: WIN.textGedaempft }}>Folgt: XRechnung als Anhang, Vorlagen</li>
+            {versandHinweis && <li className="text-amber-800">⚠️ {versandHinweis}</li>}
           </ul>
         </Karte>
       </div>

@@ -49,6 +49,7 @@ export async function versendeRechnung(inv: Invoice, an: string, optionen: Versa
       grossAmount: Number(inv.gross_amount),
       dueDate: optionen.faelligText ?? fmtDate(inv.due_date),
       pdfBase64,
+      format: istZugferd ? 'zugferd' : 'pdf',
       projektnummer: projektnummer || undefined,
     }),
   });

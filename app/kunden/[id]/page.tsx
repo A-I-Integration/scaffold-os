@@ -892,7 +892,7 @@ export default function KundenDetailPage() {
   const [besuchteThemen, setBesuchteThemen] = useState<string[]>(['uebersicht'])
   const [neuSignal, setNeuSignal] = useState(0)
   const [entwurfOffen, setEntwurfOffen] = useState<string | null>(null)
-  const fakturaDaten = useFakturaDaten({ kundeId: id, projektId: baustelle?.id ?? null, rechnungen: kundenInvoices })
+  const fakturaDaten = useFakturaDaten({ kundeId: id, projektId: baustelle?.id ?? null, rechnungen: kundenInvoices, nachladen: mailTick })
   const themaOffen = (k: string) => offeneThemen.includes(k)
   const themaBesucht = (k: string) => besuchteThemen.includes(k)
   const themaUmschalten = (k: string) => {
