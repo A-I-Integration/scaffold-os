@@ -22,7 +22,23 @@ export interface Zwischenaufmass {
   rechnungId?: string;
   rechnungNr?: string;
   abgerechnetAm?: string;
+  /** Aufmaß je Position (kumuliert). Ohne Angabe: altes Aufmaß nur mit Gesamtfläche. */
+  positionen?: ZaPosition[];
 }
+
+/** Eine Position im Zwischenaufmaß: kumulierte Menge bis zum Stichtag, Preis netto je Einheit. */
+export interface ZaPosition {
+  /** stabiler Schlüssel der Position über alle Zwischenaufmaße (aus Bezeichnung und Einheit) */
+  key: string;
+  bezeichnung: string;
+  einheit: string;
+  einzelpreis: number;
+  /** kumulierte Menge bis zum Stichtag */
+  menge: number;
+}
+
+export const positionsKey = (bezeichnung: string, einheit: string): string =>
+  `${bezeichnung.trim().toLowerCase().replace(/\s+/g, ' ')}|${einheit.trim().toLowerCase()}`;
 
 const runde2 = (n: number) => Math.round(n * 100) / 100;
 const fmt = (n: number) => n.toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -33,6 +49,18 @@ export function zwischenaufmassNr(z: Pick<Zwischenaufmass, 'nr'>): string {
 
 export function naechsteZwischenaufmassNr(liste: Pick<Zwischenaufmass, 'nr'>[]): number {
   return liste.reduce((m, z) => Math.max(m, Number(z.nr) || 0), 0) + 1;
+}
+
+function normalisierePositionen(raw: unknown): ZaPosition[] | undefined {
+  if (!Array.isArray(raw) || raw.length === 0) return undefined;
+  const r = raw
+    .filter((p) => p && typeof p === 'object' && String((p as any).bezeichnung || '').trim())
+    .map((p: any): ZaPosition => {
+      const bezeichnung = String(p.bezeichnung).trim().slice(0, 300);
+      const einheit = String(p.einheit || 'm²').trim().slice(0, 20) || 'm²';
+      return { key: positionsKey(bezeichnung, einheit), bezeichnung, einheit, einzelpreis: runde2(Number(p.einzelpreis) || 0), menge: runde2(Number(p.menge) || 0) };
+    });
+  return r.length ? r : undefined;
 }
 
 /** Liest gespeicherte Zwischenaufmaße defensiv (fehlerhafte Daten brechen die Seite nicht). */
@@ -50,6 +78,7 @@ export function normalisiereZwischenaufmasse(raw: unknown): Zwischenaufmass[] {
       rechnungId: x.rechnungId ? String(x.rechnungId) : undefined,
       rechnungNr: x.rechnungNr ? String(x.rechnungNr) : undefined,
       abgerechnetAm: x.abgerechnetAm ? String(x.abgerechnetAm) : undefined,
+      positionen: normalisierePositionen(x.positionen),
     }))
     .sort((a, b) => a.nr - b.nr);
 }
@@ -157,4 +186,121 @@ export function markiereAbgerechnet(
 /** Löschen nur, solange das Zwischenaufmaß nicht abgerechnet ist. */
 export function loescheZwischenaufmass(liste: Zwischenaufmass[], id: string): Zwischenaufmass[] {
   return liste.filter((z) => z.id !== id || !!z.rechnungId);
+}
+
+
+// ─── Kumuliertes Aufmaß je Position ───
+
+/** Bisher abgerechnete kumulierte Menge je Position (höchster abgerechneter Stand), optional ohne ein bestimmtes Zwischenaufmaß. */
+export function bisherAbgerechnetJePosition(liste: Zwischenaufmass[], ausserId?: string): Map<string, number> {
+  const m = new Map<string, number>();
+  for (const z of liste) {
+    if (!z.rechnungId || z.id === ausserId) continue;
+    for (const p of z.positionen || []) m.set(p.key, Math.max(m.get(p.key) ?? 0, p.menge));
+  }
+  return m;
+}
+
+/** Zuletzt erfasster kumulierter Stand je Position (höchste Zwischenaufmaß-Nr. mit dieser Position). */
+export function aktuellerStandJePosition(liste: Zwischenaufmass[], ausserId?: string): Map<string, ZaPosition> {
+  const m = new Map<string, ZaPosition>();
+  for (const z of [...liste].sort((a, b) => a.nr - b.nr)) {
+    if (z.id === ausserId) continue;
+    for (const p of z.positionen || []) m.set(p.key, p);
+  }
+  return m;
+}
+
+export interface ZaZeile extends ZaPosition { bisher: number; neu: number; betragNeu: number; zuViel: number }
+
+/** Je Position: kumuliert, bereits abgerechnet, neue Menge. `zuViel` > 0: es ist mehr abgerechnet als aufgemessen (wird nicht automatisch korrigiert). */
+export function zaZeilen(z: Zwischenaufmass, liste: Zwischenaufmass[]): ZaZeile[] {
+  const bisher = bisherAbgerechnetJePosition(liste, z.id);
+  return (z.positionen || []).map((p) => {
+    const b = bisher.get(p.key) ?? 0;
+    const diff = runde2(p.menge - b);
+    return { ...p, bisher: b, neu: Math.max(0, diff), betragNeu: runde2(Math.max(0, diff) * p.einzelpreis), zuViel: Math.max(0, -diff) };
+  });
+}
+
+export type ZaPositionEingabe = { bezeichnung: string; einheit: string; einzelpreis: number; menge: number };
+
+export function neuesZwischenaufmassJePosition(
+  liste: Zwischenaufmass[],
+  eingabe: { stichtag: string; positionen: ZaPositionEingabe[]; notiz?: string },
+  id: string,
+  jetzt: Date = new Date(),
+): ErfassungsErgebnis {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(eingabe.stichtag)) return { ok: false, fehler: 'Bitte einen Stichtag angeben.' };
+  const rows = eingabe.positionen.filter((p) => p.bezeichnung.trim());
+  if (!rows.length) return { ok: false, fehler: 'Bitte mindestens eine Position mit Bezeichnung erfassen.' };
+  const positionen: ZaPosition[] = [];
+  for (const p of rows) {
+    const bez = p.bezeichnung.trim().slice(0, 300); const einheit = (p.einheit || '').trim() || 'm²';
+    const key = positionsKey(bez, einheit);
+    if (positionen.some((x) => x.key === key)) return { ok: false, fehler: `Die Position „${bez}“ (${einheit}) kommt doppelt vor.` };
+    if (!(p.menge >= 0) || !Number.isFinite(p.menge)) return { ok: false, fehler: `Die Menge von „${bez}“ ist ungültig.` };
+    if (!(p.einzelpreis >= 0) || !Number.isFinite(p.einzelpreis)) return { ok: false, fehler: `Der Preis von „${bez}“ ist ungültig.` };
+    positionen.push({ key, bezeichnung: bez, einheit, einzelpreis: runde2(p.einzelpreis), menge: runde2(p.menge) });
+  }
+  // Vorhandene Positionen dürfen nicht stillschweigend verschwinden: fehlt eine, wird sie mit Menge 0 geführt (sichtbar im Verlauf).
+  const stand = aktuellerStandJePosition(liste);
+  const rueckgaenge = positionen.filter((p) => stand.has(p.key) && p.menge < stand.get(p.key)!.menge);
+  const geaendert = positionen.some((p) => !stand.has(p.key) || p.menge !== stand.get(p.key)!.menge || p.einzelpreis !== stand.get(p.key)!.einzelpreis);
+  if (liste.length && !geaendert) return { ok: false, fehler: 'Es hat sich gegenüber dem letzten Zwischenaufmaß nichts geändert. Es gibt nichts Neues zu erfassen.' };
+  if (rueckgaenge.length && !(eingabe.notiz || '').trim()) {
+    return { ok: false, fehler: `Bei ${rueckgaenge.map((p) => `„${p.bezeichnung}“ (${fmt(p.menge)} statt ${fmt(stand.get(p.key)!.menge)} ${p.einheit})`).join(', ')} ist die Menge kleiner als zuletzt. Das ist nur bei Rückbau oder Korrektur sinnvoll – bitte eine Notiz als Begründung eintragen. Gib sonst die GESAMTE Menge bis zum Stichtag ein, nicht nur die neue.` };
+  }
+  const flaeche = runde2(positionen.filter((p) => p.einheit.toLowerCase() === 'm²' || p.einheit.toLowerCase() === 'm2').reduce((s, p) => s + p.menge, 0));
+  return { ok: true, eintrag: { id, nr: naechsteZwischenaufmassNr(liste), stichtag: eingabe.stichtag, flaecheM2: flaeche, notiz: (eingabe.notiz || '').trim(), erstelltAm: jetzt.toISOString(), positionen } };
+}
+
+/** Rechnungspositionen aus einem Zwischenaufmaß je Position: nur die neue Menge je Position. Mengenrückgänge werden NICHT automatisch verrechnet, sondern als Hinweis geliefert. */
+export function baueTeilleistungsPositionen(z: Zwischenaufmass, liste: Zwischenaufmass[]): {
+  positionen: { bezeichnung: string; menge: number; einheit: string; einzelpreis: number }[]; fehler: string | null; hinweise: string[]
+} {
+  if (z.rechnungId) return { positionen: [], fehler: `${zwischenaufmassNr(z)} ist bereits mit Rechnung ${z.rechnungNr || ''} abgerechnet.`.replace('  ', ' '), hinweise: [] };
+  const zeilen = zaZeilen(z, liste);
+  const d = new Date(z.stichtag + 'T12:00:00');
+  const datum = Number.isNaN(d.getTime()) ? z.stichtag : d.toLocaleDateString('de-DE');
+  const hinweise = zeilen.filter((r) => r.zuViel > 0).map((r) => `„${r.bezeichnung}“: ${fmt(r.zuViel)} ${r.einheit} mehr abgerechnet (${fmt(r.bisher)}) als aufgemessen (${fmt(r.menge)}). Nicht automatisch korrigiert – bitte Gutschrift oder Korrektur prüfen.`);
+  const positionen = zeilen.filter((r) => r.neu > 0 && r.einzelpreis > 0).map((r) => ({
+    bezeichnung: `${r.bezeichnung} – Zwischenaufmaß ${zwischenaufmassNr(z)} vom ${datum}: kumuliert ${fmt(r.menge)} ${r.einheit} abzüglich bereits abgerechnet ${fmt(r.bisher)} ${r.einheit}`.slice(0, 500),
+    menge: r.neu, einheit: r.einheit, einzelpreis: r.einzelpreis,
+  }));
+  const ohnePreis = zeilen.filter((r) => r.neu > 0 && !(r.einzelpreis > 0));
+  if (ohnePreis.length) return { positionen: [], fehler: `Für ${ohnePreis.map((r) => `„${r.bezeichnung}“`).join(', ')} fehlt der Preis.`, hinweise };
+  if (!positionen.length) return { positionen: [], fehler: `Für ${zwischenaufmassNr(z)} gibt es keine neue Menge: alles bis zum Stichtag ist schon abgerechnet.`, hinweise };
+  return { positionen, fehler: null, hinweise };
+}
+
+// ─── Änderungsverlauf (Menge je Position, wer/wann/warum) ───
+
+export interface AufmassAenderung {
+  aktion: 'aufmass_erfasst' | 'aufmass_geloescht' | 'aufmass_abgerechnet'
+  nr: string
+  stichtag: string
+  notiz: string
+  rechnungNr?: string
+  flaecheM2: { von: number | null; auf: number | null }
+  positionen: { bezeichnung: string; einheit: string; von: number | null; auf: number | null }[]
+}
+
+/** Vergleicht zwei Stände der Zwischenaufmaße und liefert, was neu erfasst, gelöscht oder abgerechnet wurde. */
+export function aenderungenZwischenaufmasse(alt: unknown, neu: unknown): AufmassAenderung[] {
+  const a = normalisiereZwischenaufmasse(alt); const n = normalisiereZwischenaufmasse(neu);
+  const out: AufmassAenderung[] = [];
+  const stand = (liste: Zwischenaufmass[], vorNr: number) => { const m = new Map<string, number>(); for (const z of [...liste].sort((x, y) => x.nr - y.nr)) { if (z.nr >= vorNr) break; for (const p of z.positionen || []) m.set(p.key, p.menge); } return m; };
+  const pos = (z: Zwischenaufmass, liste: Zwischenaufmass[], loeschen: boolean) => {
+    const vor = stand(liste, z.nr);
+    return (z.positionen || []).map((p) => ({ bezeichnung: p.bezeichnung, einheit: p.einheit, von: vor.get(p.key) ?? null, auf: loeschen ? null : p.menge }));
+  };
+  const vorFlaeche = (liste: Zwischenaufmass[], nr: number) => [...liste].filter((x) => x.nr < nr).sort((x, y) => x.nr - y.nr).pop()?.flaecheM2 ?? null;
+  for (const z of n) {
+    const o = a.find((x) => x.id === z.id);
+    if (!o) out.push({ aktion: 'aufmass_erfasst', nr: zwischenaufmassNr(z), stichtag: z.stichtag, notiz: z.notiz, flaecheM2: { von: vorFlaeche(n, z.nr), auf: z.flaecheM2 }, positionen: pos(z, n, false) });
+    else if (!o.rechnungId && z.rechnungId) out.push({ aktion: 'aufmass_abgerechnet', nr: zwischenaufmassNr(z), stichtag: z.stichtag, notiz: z.notiz, rechnungNr: z.rechnungNr, flaecheM2: { von: o.flaecheM2, auf: z.flaecheM2 }, positionen: pos(z, n, false) });
+  }
+  for (const o of a) if (!n.some((z) => z.id === o.id)) out.push({ aktion: 'aufmass_geloescht', nr: zwischenaufmassNr(o), stichtag: o.stichtag, notiz: o.notiz, flaecheM2: { von: o.flaecheM2, auf: null }, positionen: pos(o, a, true) });
+  return out;
 }

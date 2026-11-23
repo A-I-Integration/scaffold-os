@@ -14,7 +14,7 @@ import { aktualisierePosition, bereinigePosition } from '@/lib/rechnung-position
 import { katalogAlsPosition, normalisiereKatalog, type LeistungKatalogEintrag } from '@/lib/leistungskatalog';
 import PositionDetails from '@/components/rechnung/PositionDetails';
 import { normalisiereBauphasen, berechneBauphasen, baueBauphasenPosition, markiereBauphaseAbgerechnet, type Bauphase, type BauphasenEinstellung } from '@/lib/bauphasen';
-import { normalisiereZwischenaufmasse, baueTeilleistungsPosition, markiereAbgerechnet, zwischenaufmassNr, neueMengeM2, type Zwischenaufmass } from '@/lib/zwischenaufmass';
+import { normalisiereZwischenaufmasse, baueTeilleistungsPosition, baueTeilleistungsPositionen, markiereAbgerechnet, zwischenaufmassNr, neueMengeM2, type Zwischenaufmass } from '@/lib/zwischenaufmass';
 
 // ============================================================
 // SCAFFOLD OS – Schlussrechnung aus Auftrag erstellen
@@ -175,6 +175,11 @@ export default function SchlussrechnungDialog({ projectId, customerName, custome
     () => (zaModus && zaAuswahl ? baueTeilleistungsPosition({ z: zaAuswahl, liste: zwischenaufmasse, preisProM2: preisM2Zahl }) : { position: null, fehler: null }),
     [zaModus, zaAuswahl, zwischenaufmasse, preisM2Zahl],
   );
+  const zaJePosition = !!zaAuswahl?.positionen?.length;
+  const teilleistungen = useMemo(
+    () => (zaModus && zaAuswahl && zaAuswahl.positionen?.length ? baueTeilleistungsPositionen(zaAuswahl, zwischenaufmasse) : { positionen: [], fehler: null as string | null, hinweise: [] as string[] }),
+    [zaModus, zaAuswahl, zwischenaufmasse],
+  );
   const bpModus = art === 'abschlag' && abschlagModus === 'bauphase';
   const bpErgebnis = useMemo(() => berechneBauphasen(bauphasen, bauphasenEinst), [bauphasen, bauphasenEinst]);
   const bpAuswahl = bauphasen.find((x) => x.id === gewaehltePhase) || null;
@@ -184,12 +189,14 @@ export default function SchlussrechnungDialog({ projectId, customerName, custome
   }, [bpModus, bpAuswahl, bpErgebnis]);
   const abschlagNetto = art !== 'abschlag' ? 0
     : bpModus ? Math.round((bpPosition.position ? bpPosition.position.menge * bpPosition.position.einzelpreis : 0) * 100) / 100
+    : zaModus && zaJePosition ? summeNetto(teilleistungen.positionen)
     : zaModus ? Math.round((teilleistung.position ? teilleistung.position.menge * teilleistung.position.einzelpreis : 0) * 100) / 100
     : zahl(abschlagBetrag) > 0 ? Math.round(zahl(abschlagBetrag) * 100) / 100
     : Math.round(gesamtNetto * zahl(abschlagProzent)) / 100;
   const abschlagZuHoch = art === 'abschlag' && !zaModus && !bpModus && istAbschlagZuHoch(abschlagNetto, gesamtNetto);
   const positionen = useMemo(() => {
     if (bpModus) return bpPosition.position ? [bpPosition.position] : [];
+    if (zaModus && zaJePosition) return teilleistungen.positionen;
     if (zaModus) return teilleistung.position ? [teilleistung.position] : [];
     if (art === 'abschlag') {
       if (abschlagNetto <= 0) return [];
@@ -209,7 +216,7 @@ export default function SchlussrechnungDialog({ projectId, customerName, custome
   const basisOk = basis === 'angebot' ? hatAngebotspreis : aufmassMoeglich && preisM2Zahl > 0;
   // Abschlag mit festem Betrag braucht keine Kalkulationsbasis, mit Prozent schon
   const kannAnlegen = !laeuft && !angelegt && positionen.length > 0 && netto > 0 && !abschlagZuHoch
-    && (zaModus ? !!teilleistung.position : art === 'abschlag' && zahl(abschlagBetrag) > 0 ? true : basisOk || (art !== 'abschlag' && extraGueltig.length > 0));
+    && (zaModus ? (zaJePosition ? teilleistungen.positionen.length > 0 : !!teilleistung.position) : art === 'abschlag' && zahl(abschlagBetrag) > 0 ? true : basisOk || (art !== 'abschlag' && extraGueltig.length > 0));
 
   async function anlegen(overrideGrund?: string) {
     if (!eingabe) return;
@@ -370,6 +377,16 @@ export default function SchlussrechnungDialog({ projectId, customerName, custome
                         ))}
                       </select>
                     </div>
+                    {zaJePosition ? (
+                      <div className="space-y-1" data-testid="za-dialog-positionen">
+                        {teilleistungen.fehler && <p className="text-xs text-red-600">{teilleistungen.fehler}</p>}
+                        {teilleistungen.positionen.map((p, i) => (
+                          <p key={i} className="text-xs text-[#1d1d1f]">{p.bezeichnung.split(' – ')[0]}: {p.menge.toLocaleString('de-DE')} {p.einheit} × {eur(p.einzelpreis)} = <b>{eur(Math.round(p.menge * p.einzelpreis * 100) / 100)}</b></p>
+                        ))}
+                        {teilleistungen.hinweise.map((h, i) => <p key={i} className="text-xs text-red-600">⚠️ {h}</p>)}
+                        {teilleistungen.positionen.length > 0 && <p className="text-xs text-[#1d1d1f]">Summe netto <b>{eur(abschlagNetto)}</b></p>}
+                      </div>
+                    ) : (<>
                     <div>
                       <label className="block text-[11px] text-[#86868b] mb-1">Preis je m² netto (€)</label>
                       <input value={preisM2} onChange={(e) => setPreisM2(e.target.value)} inputMode="decimal" placeholder="z. B. 8,50" className={inputCls} />
@@ -378,6 +395,7 @@ export default function SchlussrechnungDialog({ projectId, customerName, custome
                     {teilleistung.position && (
                       <p className="text-xs text-[#1d1d1f]">{teilleistung.position.menge.toLocaleString('de-DE')} m² × {eur(teilleistung.position.einzelpreis)} = <b>{eur(abschlagNetto)}</b> netto</p>
                     )}
+                    </>)}
                   </div>
                 ) : (<>
                 <p className="text-[11px] text-[#86868b]">Eine Abschlagsrechnung gehört zu diesem Auftrag. In der Schlussrechnung wird sie später automatisch netto abgezogen (§ 14 Abs. 5 UStG). Gib entweder einen Betrag oder Prozent der Gesamtleistung an.</p>

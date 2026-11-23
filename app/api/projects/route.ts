@@ -6,6 +6,7 @@ import { beiAngebotsannahmeSicher } from '@/lib/angebot-annahme';
 import { fahrtNachholenSicher } from '@/lib/auto-tour';
 import { projektFuerRolle, schreibdatenFuerRolle } from '@/lib/projekt-sicht';
 import { autosaveGesperrt, filtereAutosaveData, AUTOSAVE_PROJEKT_ABGESCHLOSSEN_FEHLER } from '@/lib/aufmass-autosave-regeln';
+import { aenderungenZwischenaufmasse } from '@/lib/zwischenaufmass';
 import { schreibeHistorie } from '@/lib/abrechnung-historie';
 import { angebotNettoAusProjekt } from '@/lib/auftragsstand';
 
@@ -251,6 +252,20 @@ export async function PATCH(req: NextRequest) {
             const { data: { user } } = await sb.auth.getUser();
             await schreibeHistorie({ aktion: 'auftragswert_geaendert', projectId: id, userId: user?.id || null,
               grund: typeof body?.aenderungsgrund === 'string' ? body.aenderungsgrund : null, details: { von: vorher, auf: nachher } });
+          }
+        }
+      } catch { /* Verlauf ist best effort */ }
+
+      // Verlauf: Aufmaß je Stichtag (erfasst, abgerechnet, gelöscht) mit Mengen je Position
+      try {
+        if (!autosave && data.zwischenaufmasse !== undefined) {
+          const ereignisse = aenderungenZwischenaufmasse(bisher.data?.zwischenaufmasse, patch.data?.zwischenaufmasse);
+          if (ereignisse.length) {
+            const sb = await createClient();
+            const { data: { user } } = await sb.auth.getUser();
+            for (const e of ereignisse) {
+              await schreibeHistorie({ aktion: e.aktion, projectId: id, userId: user?.id || null, invoiceNumber: e.rechnungNr || null, grund: e.notiz || null, details: { aufmass: e.nr, stichtag: e.stichtag, flaecheM2: e.flaecheM2, positionen: e.positionen } });
+            }
           }
         }
       } catch { /* Verlauf ist best effort */ }
