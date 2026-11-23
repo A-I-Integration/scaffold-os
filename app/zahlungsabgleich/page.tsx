@@ -3,6 +3,7 @@
 import { useState, useCallback, useEffect, useMemo } from 'react';
 import { berechneForderung } from '@/lib/forderung';
 import { Upload, Check, AlertTriangle, FileText } from 'lucide-react';
+import { fetchMitSchluessel } from '@/lib/idempotenz-client'
 
 // ============================================================
 // SCAFFOLD OS – Zahlungsabgleich per Kontoauszug (Phase 26)
@@ -147,7 +148,7 @@ export default function ZahlungsabgleichPage() {
         if (treffer?.teilBetrag) {
           // NEU (Phase 38): Teilbetrag über die Zahlungs-API buchen, statt
           // die Rechnung fälschlich komplett auf "bezahlt" zu setzen.
-          const res = await fetch('/api/invoice-payments', {
+          const res = await fetchMitSchluessel('/api/invoice-payments', {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ invoice_id: id, amount: treffer.teilBetrag }),
           });
@@ -155,7 +156,7 @@ export default function ZahlungsabgleichPage() {
           if (json.success) ok++; else fehler++;
         } else if (treffer && offenZentral(treffer.invoice) + 0.005 < Number(treffer.invoice.gross_amount) - Number(treffer.invoice.paid_amount || 0)) {
           // Gutschrift mindert die Forderung: nur den tatsächlich überwiesenen (offenen) Betrag buchen, nicht den vollen Rechnungsbetrag
-          const res = await fetch('/api/invoice-payments', {
+          const res = await fetchMitSchluessel('/api/invoice-payments', {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ invoice_id: id, amount: offenZentral(treffer.invoice) }),
           });

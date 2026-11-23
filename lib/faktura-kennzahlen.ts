@@ -4,12 +4,12 @@
 // Regeln (alle aus den vorhandenen Rechnungsdaten abgeleitet, nichts erfunden):
 //   • Storniert zählt nirgends mit (die neue Version ersetzt die stornierte Rechnung).
 //   • Gutschriften sind negative Belege (gross/net < 0) und mindern Forderung und Umsatz.
-//   • Offener Betrag je Rechnung = brutto − bereits bezahlt (nie unter 0 bei normalen Rechnungen).
+//   • Offener Betrag je Rechnung: AUSSCHLIESSLICH aus lib/forderung.ts (brutto − bezahlt − Gutschriften). Hier gibt es keine eigene Formel.
 //   • Überfällig = Status „überfällig“ ODER Status „offen“ mit Fälligkeit vor heute (reiner Datumsvergleich, ohne Zeitzone).
 //   • Umsatz = Summe netto nach Rechnungsdatum im Kalenderjahr.
 // ============================================================
 
-import { berechneForderung } from './forderung';
+import { berechneForderung, statusJe, type ForderungsStatus } from './forderung';
 
 export interface FakturaRechnung {
   id: string;
@@ -48,12 +48,6 @@ export function istUeberfaellig(r: Pick<FakturaRechnung, 'status' | 'due_date' |
   return r.status === 'offen' && !!r.due_date && r.due_date.slice(0, 10) < heute;
 }
 
-/** Noch offener Bruttobetrag (Rechnung abzüglich Teilzahlungen). Storno, bezahlt und Gutschriften: 0. */
-export function offenerBetrag(r: FakturaRechnung): number {
-  if (r.status === 'storniert' || r.status === 'bezahlt' || istGutschrift(r)) return 0;
-  return Math.max(0, runde2(zahl(r.gross_amount) - zahl(r.paid_amount)));
-}
-
 /**
  * Offener Betrag je Rechnung mit Gutschriften (zentral, lib/forderung.ts). Gutschriften mindern die Rechnung, auf die sie sich beziehen.
  * Schlüssel: Rechnungs-ID. Gutschriften selbst und stornierte Rechnungen stehen nicht darin (0).
@@ -62,15 +56,14 @@ export function offenJeRechnung(liste: FakturaRechnung[]): Map<string, number> {
   return berechneForderung(liste as any).je;
 }
 
-export type AnzeigeStatus = 'offen' | 'ueberfaellig' | 'teilbezahlt' | 'bezahlt' | 'storniert' | 'gutschrift';
+export type AnzeigeStatus = ForderungsStatus;
 
-export function anzeigeStatus(r: FakturaRechnung, heute: string): AnzeigeStatus {
-  if (r.status === 'storniert') return 'storniert';
-  if (istGutschrift(r)) return 'gutschrift';
-  if (r.status === 'bezahlt') return 'bezahlt';
-  if (istUeberfaellig(r, heute)) return 'ueberfaellig';
-  if (zahl(r.paid_amount) > 0) return 'teilbezahlt';
-  return 'offen';
+/**
+ * Angezeigter Status je Rechnung (Schlüssel: id) – aus Zahlungen UND Gutschriften der übergebenen Liste (lib/forderung.ts),
+ * nicht aus dem gespeicherten Status allein. Eine durch Gutschrift ausgeglichene Rechnung ist „ausgeglichen“, nie „offen“.
+ */
+export function anzeigeStatusJe(liste: FakturaRechnung[], heute: string): Map<string, AnzeigeStatus> {
+  return statusJe(liste as any, heute);
 }
 
 export interface Kennzahlen {
@@ -98,7 +91,7 @@ export function berechneKennzahlen(rechnungen: FakturaRechnung[], zahlungenImMon
     const j = String(r.invoice_date || '').slice(0, 4);
     if (j === jahr) umsatzJahr += zahl(r.net_amount);
     else if (j === vorjahr) umsatzVorjahr += zahl(r.net_amount);
-    const offen = r.status === 'bezahlt' || istGutschrift(r) ? 0 : (offenJe.get(String(r.id)) ?? offenerBetrag(r));
+    const offen = r.status === 'bezahlt' || istGutschrift(r) ? 0 : (offenJe.get(String(r.id)) ?? 0);
     if (offen > 0) {
       offenAnzahl += 1; offenBetrag += offen;
       if (istUeberfaellig(r, heute)) { ueAnzahl += 1; ueBetrag += offen; }
@@ -139,12 +132,16 @@ export interface FakturaFilter {
 
 export function filtereRechnungen(liste: FakturaRechnung[], f: FakturaFilter, heute: string): FakturaRechnung[] {
   const q = f.suche.trim().toLowerCase();
+  const statusMap = f.status !== 'alle' ? anzeigeStatusJe(liste, heute) : null;
   return liste.filter((r) => {
     if (!gehoertZuReiter(r, f.reiter)) return false;
     if (f.jahr !== 'alle' && String(r.invoice_date || '').slice(0, 4) !== f.jahr) return false;
     if (f.status !== 'alle') {
-      const s = anzeigeStatus(r, heute);
-      const passt = f.status === 'offen' ? (s === 'offen' || s === 'teilbezahlt') : s === f.status;
+      const s = statusMap?.get(String(r.id)) ?? 'offen';
+      // „bezahlt“ umfasst auch durch Gutschrift ausgeglichene Rechnungen; „offen“ nur, was wirklich noch offen ist (auch teilweise gutgeschrieben)
+      const passt = f.status === 'offen' ? (s === 'offen' || s === 'teilbezahlt' || s === 'teilausgeglichen')
+        : f.status === 'bezahlt' ? (s === 'bezahlt' || s === 'ausgeglichen')
+        : s === f.status;
       if (!passt) return false;
     }
     if (q && !`${r.invoice_number} ${r.customer_name} ${r.projektnummer || ''}`.toLowerCase().includes(q)) return false;
@@ -176,7 +173,7 @@ export function monatsGrenzen(heute: string): { von: string; bis: string } {
 export function offenePosten<T extends FakturaRechnung>(liste: T[]): T[] {
   const offenJe = offenJeRechnung(liste);
   return liste
-    .filter((r) => r.status !== 'bezahlt' && !istGutschrift(r) && (offenJe.get(String(r.id)) ?? offenerBetrag(r)) > 0)
+    .filter((r) => r.status !== 'bezahlt' && !istGutschrift(r) && (offenJe.get(String(r.id)) ?? 0) > 0)
     .sort((a, b) => (a.due_date ? a.due_date.slice(0, 10) : '9999-12-31').localeCompare(b.due_date ? b.due_date.slice(0, 10) : '9999-12-31') || a.invoice_number.localeCompare(b.invoice_number));
 }
 

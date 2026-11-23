@@ -20,12 +20,46 @@ vi.mock('@/lib/supabase/server', () => ({
 let db: Tabellen
 const RE = 'inv1'
 
+// Die Datenbankfunktionen faktura_zahlung_buchen / faktura_zahlung_loeschen (supabase/phase-129) laufen hier NICHT (kein PostgreSQL im Nachbau).
+// Dieser Nachbau gibt ihre Regeln wieder, gerechnet mit lib/forderung.ts; die echten SQL-Funktionen prüft der E2E-Test gegen PostgreSQL
+// (inkl. Paritätstest SQL = lib/forderung.ts und paralleler Buchungen).
+function mitRpc(fake: (e: RequestInfo | URL, i?: RequestInit) => Promise<Response>) {
+  const json = (b: unknown) => new Response(JSON.stringify(b), { status: 200 })
+  return async (e: RequestInfo | URL, init?: RequestInit) => {
+    const u = String(e)
+    if (!u.includes('/rest/v1/rpc/')) return fake(e, init)
+    const name = u.split('/rpc/')[1]; const b = JSON.parse(String(init?.body ?? '{}'))
+    const { berechneForderung } = await import('@/lib/forderung')
+    const offenVon = (inv: any, paid: number, status: string) => berechneForderung([{ ...inv, paid_amount: paid, status }, ...db.invoices.filter((g) => g.invoice_type === 'gutschrift' && g.reference_invoice_number === inv.invoice_number)] as never).je.get(String(inv.id)) ?? 0
+    if (name === 'faktura_zahlung_buchen') {
+      const inv = db.invoices.find((x) => x.id === b.p_invoice_id); if (!inv) return json({ ok: false, code: 'NICHT_GEFUNDEN' })
+      if (inv.status === 'storniert') return json({ ok: false, code: 'ZAHLUNG_AUF_STORNIERT' })
+      const offen = offenVon(inv, Number(inv.paid_amount), String(inv.status))
+      if (b.p_amount - offen > 0.01) return json({ ok: false, code: 'UEBER_OFFEN', offen, gutschrift: 0 })
+      const neu = Math.round((Number(inv.paid_amount) + b.p_amount) * 100) / 100; const voll = offen - b.p_amount <= 0.01
+      db.invoice_payments.push({ id: crypto.randomUUID(), invoice_id: inv.id, amount: b.p_amount, payment_date: b.p_payment_date, note: b.p_note })
+      inv.paid_amount = neu; inv.status = voll ? 'bezahlt' : inv.status === 'bezahlt' ? 'offen' : inv.status
+      return json({ ok: true, paid_amount: neu, vollstaendig_bezahlt: voll })
+    }
+    if (name === 'faktura_zahlung_loeschen') {
+      const z = db.invoice_payments.find((x) => x.id === b.p_payment_id); if (!z) return json({ ok: false, code: 'NICHT_GEFUNDEN' })
+      const inv = db.invoices.find((x) => x.id === z.invoice_id)!
+      db.invoice_payments = db.invoice_payments.filter((x) => x.id !== z.id)
+      const neu = Math.max(0, Math.round((Number(inv.paid_amount) - Number(z.amount)) * 100) / 100)
+      if (inv.status !== 'storniert') inv.status = neu > 0 && offenVon(inv, neu, inv.status === 'bezahlt' ? 'offen' : String(inv.status)) <= 0.01 ? 'bezahlt' : inv.status === 'bezahlt' ? 'offen' : inv.status
+      inv.paid_amount = neu
+      return json({ ok: true })
+    }
+    return new Response('rpc unbekannt', { status: 404 })
+  }
+}
+
 beforeEach(() => {
   db = {
     invoices: [{ id: RE, invoice_number: 'RE-2026-0001', gross_amount: 1000, paid_amount: 0, status: 'offen' }],
     invoice_payments: [],
   }
-  vi.stubGlobal('fetch', baueFakeRest(db))
+  vi.stubGlobal('fetch', mitRpc(baueFakeRest(db)))
 })
 
 const rechnung = () => db.invoices[0]
@@ -99,6 +133,13 @@ describe('Kette Rechnung: Teilzahlung → Restzahlung → Korrektur', () => {
   })
 
   // --- früher gefundene Lücken (behoben) -------------------------------
+
+  it('Datenbank-Migration phase-129 fehlt: 503 mit klarer Meldung, nichts gebucht', async () => {
+    vi.stubGlobal('fetch', async () => new Response(JSON.stringify({ code: 'PGRST202', message: 'Could not find the function public.faktura_zahlung_buchen' }), { status: 404 }))
+    const r = await zahlen(100)
+    expect(r.status).toBe(503); expect((await r.json()).code).toBe('BUCHUNG_MIGRATION_FEHLT')
+    expect(db.invoice_payments).toHaveLength(0); expect(rechnung().paid_amount).toBe(0)
+  })
 
   it('Zwei gleichzeitige Zahlungen gehen nicht verloren (Betrag = Summe der Historie)', async () => {
     await Promise.all([zahlen(300), zahlen(300)])

@@ -14,6 +14,8 @@ export const STATUS_STIL: Record<AnzeigeStatus, { label: string; bg: string; fg:
   bezahlt: { label: 'Bezahlt', bg: '#e7f6ec', fg: '#1a7f37' },
   storniert: { label: 'Storniert', bg: '#eeeeee', fg: '#605e5c' },
   gutschrift: { label: 'Gutschrift', bg: '#f3e8ff', fg: '#7e22ce' },
+  ausgeglichen: { label: 'Ausgeglichen', bg: '#e7f6ec', fg: '#1a7f37' },
+  teilausgeglichen: { label: 'Teilweise gutgeschrieben', bg: '#eef4ff', fg: '#1d4ed8' },
 };
 export const ART_LABEL: Record<string, string> = { standard: 'Rechnung', abschlag: 'Abschlag', schluss: 'Schlussrechnung', gutschrift: 'Gutschrift' };
 export const knopf = 'inline-flex items-center gap-1.5 rounded-lg border px-3 py-2 text-[13px] font-medium hover:bg-black/5';

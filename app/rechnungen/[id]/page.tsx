@@ -23,6 +23,7 @@ import { aktualisierePosition } from '@/lib/rechnung-position'
 import { lokalesDatumIso, datumPlusTage } from '@/lib/datum'
 import { useRechnungVersenden } from '@/components/RechnungVersendenDialog'
 import { type VersandEintrag } from '@/lib/versand-status'
+import { fetchMitSchluessel } from '@/lib/idempotenz-client'
 
 type Tab = 'rechnung' | 'version' | 'bestellwert' | 'teilabbau' | 'gutschrift' | 'zahlung' | 'verlauf'
 const ANSICHTEN = [
@@ -204,7 +205,7 @@ export default function RechnungAktePage() {
     if (!inv) return
     const betrag = zahl(zBetrag)
     if (betrag <= 0) { alert('Bitte einen Betrag > 0 eingeben.'); return }
-    const r = await fetch('/api/invoice-payments', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+    const r = await fetchMitSchluessel('/api/invoice-payments', { method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ invoice_id: inv.id, amount: betrag, payment_date: zDatum, note: zNotiz.trim() || undefined }) })
     const j = await r.json()
     if (!j.success) throw new Error(j.error)

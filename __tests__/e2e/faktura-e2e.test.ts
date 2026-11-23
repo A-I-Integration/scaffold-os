@@ -45,6 +45,7 @@ async function api(modul: string, methode: 'GET' | 'POST' | 'PATCH' | 'DELETE', 
   return { status: res.status, j }
 }
 const inv = (m: 'POST' | 'PATCH' | 'DELETE', b?: unknown, q = '') => api('@/app/api/invoices/route', m, b, q)
+const inv_get = (q = '') => api('@/app/api/invoices/route', 'GET', undefined, q)
 const prj = (b: unknown) => api('@/app/api/projects/route', 'PATCH', b)
 const nacht = (b: unknown) => api('@/app/api/nachtraege/route', 'POST', b)
 const q = async (sql: string, p: unknown[] = []) => (await pool.query(sql, p)).rows
@@ -93,10 +94,15 @@ describe.skipIf(!DB)('Faktura End-to-End (echte PostgreSQL)', () => {
     try {
       await c.query(`set session_replication_role = replica`)
       const ids = `(select id from projects where name like 'E2E %')`
+      // auch Rechnungen/Gutschriften OHNE Baustelle (Kunde „Testkunde E2E“) und die Massendaten des Limit-Tests
+      const meine = `(select id from invoices where project_id in ${ids} or customer_name in ('Testkunde E2E', 'Masse GmbH'))`
+      await c.query(`delete from invoice_payments where invoice_id in ${meine}`)
+      await c.query(`delete from faktura_idempotenz where art = 'rechnung_anlegen' or schluessel like 'rechnung:%'`)
+      await c.query(`delete from abrechnung_historie where invoice_id in ${meine}`)
       await c.query(`delete from invoice_dispatches where project_id in ${ids}`)
       await c.query(`delete from email_log where project_id in ${ids} or invoice_number in (select invoice_number from invoices where project_id in ${ids})`)
       await c.query(`delete from abrechnung_historie where project_id in ${ids}`)
-      await c.query(`delete from invoices where project_id in ${ids}`)
+      await c.query(`delete from invoices where project_id in ${ids} or customer_name in ('Testkunde E2E', 'Masse GmbH')`)
       await c.query(`delete from project_events where project_id in ${ids}`)
       await c.query(`delete from projects where name like 'E2E %'`)
       await c.query(`delete from customers where name in ('Testkunde E2E','Mehrbaustellen E2E')`)
@@ -692,6 +698,156 @@ describe.skipIf(!DB)('Faktura End-to-End (echte PostgreSQL)', () => {
         expect([s.f.offen, zl.status, Number(zl.paid_amount), s.f.guthaben]).toEqual([0, 'bezahlt', 595, 0]); void g
         expect((await q('select count(*)::int n from invoice_payments where invoice_id=$1', [a.id]))[0].n).toBe(1)
       }
+    })
+  })
+
+  // ──────────────────────────────────────────────────────────
+  // 8c. Integrity Audit: Datenlimit, abgeleiteter Status in Auswertungen, atomare Buchung, Wiederholung, Storno ‖ Buchung
+  // ──────────────────────────────────────────────────────────
+  describe('8c. Integrity Audit (Phase 129)', () => {
+    const apiH = async (modul: string, methode: 'POST' | 'PATCH' | 'DELETE', body: unknown, headers: Record<string, string> = {}, query = '') => {
+      const m = await import(modul)
+      const res = await m[methode](new NextRequest('http://x/api' + query, { method: methode, headers, body: body === undefined ? undefined : JSON.stringify(body) }) as never)
+      const text = await res.text(); let j: any = null; try { j = JSON.parse(text) } catch { /* leer */ }
+      return { status: res.status, j, replay: res.headers.get('Idempotent-Replay') }
+    }
+    const zahle = (invoice_id: string, amount: number, extra: Record<string, unknown> = {}, headers: Record<string, string> = {}) => apiH('@/app/api/invoice-payments/route', 'POST', { invoice_id, amount, payment_date: HEUTE, ...extra }, headers)
+    const zeile = async (id: string) => (await q('select status, paid_amount from invoices where id=$1', [id]))[0]
+    const re = async (P: string | null, preis: number) => (await inv('POST', { customer_name: KUNDE, ...(P ? { project_id: P } : {}), invoice_type: 'standard', positions: [{ bezeichnung: 'Gerüst', menge: 1, einheit: 'Pauschale', einzelpreis: preis }] })).j.invoice
+    const gsBody = (P: string | null, bezug: string, preis: number) => ({ customer_name: KUNDE, ...(P ? { project_id: P } : {}), invoice_type: 'gutschrift', reference_invoice_number: bezug, positions: [{ bezeichnung: 'Gutschrift zu ' + bezug, menge: 1, einheit: 'Pauschale', einzelpreis: preis }] })
+    const gs = async (P: string | null, bezug: string, preis: number) => (await inv('POST', gsBody(P, bezug, preis))).j.invoice
+    const stand = async (ids: string[]) => { const { statusJe, berechneForderung } = await import('@/lib/forderung'); const r = norm(await q('select * from invoices where id = any($1)', [ids])) as any[]; return { st: statusJe(r, HEUTE), f: berechneForderung(r) } }
+    const anzahlZahlungen = async (id: string) => (await q('select count(*)::int n from invoice_payments where invoice_id=$1', [id]))[0].n
+    const summeZahlungen = async (id: string) => Number((await q('select coalesce(sum(amount),0) s from invoice_payments where invoice_id=$1', [id]))[0].s)
+
+    it('mehr als 3.000 Rechnungen: Liste vollständig, Gutschrift der neuen Rechnung bleibt zugeordnet (sehr alt / ohne Baustelle), Beträge stimmen', async () => {
+      const P = await neuesProjekt('E2E Masse', {})
+      const a = await re(P, 1000)                                                              // 1.190, in Baustelle
+      const b = await re(null, 1000)                                                           // 1.190, ohne Baustelle
+      const ga = await gs(null, a.invoice_number, 500)                                         // Gutschrift OHNE Baustelle zur Rechnung IN der Baustelle
+      const gb = await gs(null, b.invoice_number, 1000)                                        // Gutschrift zur Rechnung ohne Baustelle
+      await q(`update invoices set created_at = now() - interval '5 years' where id = any($1)`, [[ga.id, gb.id]])   // älter als 3.500 Füllrechnungen → fiel früher aus der Liste (limit 3000)
+      try {
+        await q(`insert into invoices (invoice_number, customer_name, net_amount, gross_amount, status, invoice_date, created_at)
+                 select 'MASSE-' || g, 'Masse GmbH', 100, 119, 'bezahlt', current_date, now() - (g || ' seconds')::interval from generate_series(1, 3500) g`)
+        const alle = await inv_get('')
+        merke('9 Limit', 'Rechnungsliste bei > 3.000 Rechnungen: Anzahl ≥ 3.504', 'ja', alle.j.invoices?.length >= 3504 ? 'ja' : 'nein')
+        expect(alle.status).toBe(200); expect(alle.j.invoices.length).toBeGreaterThanOrEqual(3504)
+        expect(alle.j.invoices.some((x: any) => x.id === ga.id) && alle.j.invoices.some((x: any) => x.id === gb.id)).toBe(true)
+        const { berechneForderung } = await import('@/lib/forderung')
+        const f = berechneForderung(norm(alle.j.invoices.filter((x: any) => [a.id, b.id, ga.id, gb.id].includes(x.id))) as any)
+        merke('9 Limit', 'Offen nach Gutschriften (alte Gutschriften, > 3.000 Datensätze)', '595 / 0', `${f.je.get(a.id)} / ${f.je.get(b.id)}`)
+        expect([f.je.get(a.id), f.je.get(b.id)]).toEqual([595, 0])
+        // Baustellenansicht: die Gutschrift ohne Baustelle wird serverseitig ergänzt, nicht vom Zufall der Liste abhängig
+        const proj = await inv_get('?project_id=' + P)
+        expect(proj.j.invoices.map((x: any) => x.id).sort()).toEqual([a.id, ga.id].sort())
+        const fp = berechneForderung(norm(proj.j.invoices) as any); expect(fp.offen).toBe(595); expect(fp.ungeklaert).toBe(0)
+      } finally { await q(`delete from invoices where invoice_number like 'MASSE-%'`) }
+    })
+    it('ausgeglichene Rechnung: nicht in Überfälligkeitskennzahlen, offenen Posten, Offen-/Überfällig-Filter; DATEV-Export kennt keinen offenen Betrag', async () => {
+      const P = await neuesProjekt('E2E Auswertung', {})
+      const a = await re(P, 1000); await q('update invoices set due_date=$2 where id=$1', [a.id, plusTage(HEUTE, -40)])
+      const b = await re(P, 1000); await q('update invoices set due_date=$2 where id=$1', [b.id, plusTage(HEUTE, -40)])   // bleibt überfällig
+      await gs(P, a.invoice_number, 1000)
+      const rows = norm(await q('select * from invoices where project_id=$1', [P])) as any[]
+      const K = await import('@/lib/faktura-kennzahlen')
+      const kz = K.berechneKennzahlen(rows, [], HEUTE)
+      merke('9 Status', 'Überfälligkeit: ausgeglichene Rechnung zählt nicht (Anzahl / Betrag)', '1 / 1190', `${kz.ueberfaelligAnzahl} / ${kz.ueberfaelligBetrag}`)
+      expect([kz.ueberfaelligAnzahl, kz.ueberfaelligBetrag, kz.offenAnzahl, kz.offenBetrag]).toEqual([1, 1190, 1, 1190])
+      expect(K.offenePosten(rows).map((r: any) => r.id)).toEqual([b.id]); expect(K.ueberfaelligeRechnungen(rows, HEUTE).map((r: any) => r.id)).toEqual([b.id])
+      const f = (status: any) => K.filtereRechnungen(rows, { suche: '', reiter: 'rechnungen', jahr: 'alle', status } as any, HEUTE).map((r: any) => r.id)
+      expect(f('offen')).not.toContain(a.id); expect(f('ueberfaellig')).toEqual([b.id]); expect(f('bezahlt')).toEqual([a.id])   // b ist überfällig (eigene Gruppe), a ausgeglichen
+      const { readFileSync } = await import('node:fs'); const t = readFileSync('components/rechnungen/RechnungenInhalt.tsx', 'utf8')
+      const datev = t.slice(t.indexOf('function buildDatevEXTF'), t.indexOf('function', t.indexOf('function buildDatevEXTF') + 10))
+      expect(datev).not.toMatch(/paid_amount|offen|ueberfaellig/)   // bucht Belege (Brutto), keinen Zahlungsstand → gespeicherter vs. abgeleiteter Status ohne Einfluss
+    })
+    it('zwei gleichzeitige Zahlungen: nie mehr als offen gebucht, Zahlungssumme = paid_amount', async () => {
+      for (let lauf = 1; lauf <= 4; lauf++) {
+        const P = await neuesProjekt('E2E Zwei Zahlungen ' + lauf, {}); const a = await re(P, 1000)              // 1.190
+        const [x, y] = await Promise.all([zahle(a.id, 1000), zahle(a.id, 1000)])
+        merke('9 Parallel', `Zwei gleichzeitige Zahlungen à 1.000 auf 1.190 (Lauf ${lauf})`, '200 + 400', `${[x.status, y.status].sort().join(' + ')}`)
+        expect([x.status, y.status].sort()).toEqual([200, 400]); const z = await zeile(a.id)
+        expect([Number(z.paid_amount), await summeZahlungen(a.id), await anzahlZahlungen(a.id)]).toEqual([1000, 1000, 1])
+        const [u, v] = await Promise.all([zahle(a.id, 190), zahle(a.id, 190)])                                    // Rest 190: nur eine passt
+        expect([u.status, v.status].sort()).toEqual([200, 400]); expect((await zeile(a.id)).status).toBe('bezahlt')
+        expect(Number((await zeile(a.id)).paid_amount)).toBe(1190)
+      }
+    })
+    it('zwei gleichzeitige Gutschriften: beide gespeichert, Verrechnung begrenzt auf offen, Überhang = Guthaben, Status konsistent', async () => {
+      for (let lauf = 1; lauf <= 3; lauf++) {
+        const P = await neuesProjekt('E2E Zwei Gutschriften ' + lauf, {}); const a = await re(P, 1000)            // 1.190
+        expect((await zahle(a.id, 595)).status).toBe(200)
+        const [g1, g2] = await Promise.all([inv('POST', gsBody(P, a.invoice_number, 500)), inv('POST', gsBody(P, a.invoice_number, 500))])   // 2 × 595 → 595 Überhang
+        const ids = (await q(`select id from invoices where project_id=$1`, [P])).map((r: any) => r.id)
+        const s = await stand(ids); const z = await zeile(a.id)
+        merke('9 Parallel', `Zwei gleichzeitige Gutschriften (Lauf ${lauf}): offen / Guthaben / Status`, '0 / 595 / bezahlt', `${s.f.offen} / ${s.f.guthaben} / ${z.status}`)
+        expect([g1.status, g2.status].every((c) => c === 200 || c === 201)).toBe(true)
+        expect([s.f.offen, s.f.guthaben, z.status]).toEqual([0, 595, 'bezahlt']); expect(Number(z.paid_amount)).toBe(595)
+      }
+    })
+    it('doppelte Wiederholung: gleiche Zahlung mit gleichem Schlüssel wird nur einmal gebucht; Gutschrift/Rechnung mit gleichem Schlüssel nur einmal angelegt', async () => {
+      const P = await neuesProjekt('E2E Wiederholung', {}); const a = await re(P, 1000)
+      const k = 'zahlung-' + Math.random().toString(36).slice(2)
+      const z1 = await zahle(a.id, 500, {}, { 'Idempotency-Key': k }); const z2 = await zahle(a.id, 500, {}, { 'Idempotency-Key': k })
+      merke('9 Wiederholung', 'Zahlung 500 mit gleichem Schlüssel zweimal gesendet: Buchungen / bezahlt', '1 / 500', `${await anzahlZahlungen(a.id)} / ${Number((await zeile(a.id)).paid_amount)}`)
+      expect([z1.status, z2.status]).toEqual([200, 200]); expect(z2.j.wiederholt).toBe(true)
+      expect([await anzahlZahlungen(a.id), Number((await zeile(a.id)).paid_amount)]).toEqual([1, 500])
+      const z3 = await zahle(a.id, 500, {}, { 'Idempotency-Key': k + '-neu' }); expect(z3.status).toBe(200); expect(await anzahlZahlungen(a.id)).toBe(2)   // bewusst zweite Buchung = neuer Schlüssel
+      // gleichzeitig dieselbe Anfrage
+      const k2 = 'parallel-' + Math.random().toString(36).slice(2); const b = await re(P, 1000)
+      const [p1, p2] = await Promise.all([zahle(b.id, 300, {}, { 'Idempotency-Key': k2 }), zahle(b.id, 300, {}, { 'Idempotency-Key': k2 })])
+      expect([p1.status, p2.status]).toEqual([200, 200]); expect(await anzahlZahlungen(b.id)).toBe(1)
+      // Gutschrift: gleicher Schlüssel → eine Gutschrift, identische Antwort
+      const kg = 'gutschrift-' + Math.random().toString(36).slice(2)
+      const g1 = await apiH('@/app/api/invoices/route', 'POST', gsBody(P, b.invoice_number, 100), { 'Idempotency-Key': kg })
+      const g2 = await apiH('@/app/api/invoices/route', 'POST', gsBody(P, b.invoice_number, 100), { 'Idempotency-Key': kg })
+      merke('9 Wiederholung', 'Gutschrift mit gleichem Schlüssel zweimal gesendet: Anzahl / Replay', '1 / true', `${(await q(`select count(*)::int n from invoices where reference_invoice_number=$1`, [b.invoice_number]))[0].n} / ${g2.replay}`)
+      expect([g1.status, g2.status]).toEqual([g1.status, g1.status]); expect(g2.replay).toBe('true'); expect(g2.j.invoice.id).toBe(g1.j.invoice.id)
+      expect((await q(`select count(*)::int n from invoices where reference_invoice_number=$1`, [b.invoice_number]))[0].n).toBe(1)
+    })
+    it('Netzwerkfehler nach erfolgreichem Commit: die Antwort geht verloren, die Wiederholung mit demselben Schlüssel bucht nichts doppelt und liefert das Ergebnis', async () => {
+      const P = await neuesProjekt('E2E Netzwerkfehler', {}); const a = await re(P, 1000)
+      const k = 'netz-' + Math.random().toString(36).slice(2)
+      await zahle(a.id, 400, {}, { 'Idempotency-Key': k })                                     // gebucht, Antwort „verloren“ (Ergebnis wird verworfen)
+      const wieder = await zahle(a.id, 400, {}, { 'Idempotency-Key': k })                      // Wiederholung der Oberfläche
+      expect(wieder.status).toBe(200); expect(wieder.j.wiederholt).toBe(true); expect(Number(wieder.j.paid_amount)).toBe(400)
+      expect([await anzahlZahlungen(a.id), Number((await zeile(a.id)).paid_amount)]).toEqual([1, 400])
+      const kr = 'netz-re-' + Math.random().toString(36).slice(2)
+      const body = { customer_name: KUNDE, project_id: P, invoice_type: 'standard', positions: [{ bezeichnung: 'Gerüst', menge: 1, einheit: 'Pauschale', einzelpreis: 321 }] }
+      const e1 = await apiH('@/app/api/invoices/route', 'POST', body, { 'Idempotency-Key': kr }); const e2 = await apiH('@/app/api/invoices/route', 'POST', body, { 'Idempotency-Key': kr })
+      merke('9 Wiederholung', 'Rechnung anlegen, Antwort verloren, Wiederholung: Anzahl / gleiche Nummer', '1 / true', `${(await q('select count(*)::int n from invoices where project_id=$1 and net_amount=321', [P]))[0].n} / ${e1.j.invoice.invoice_number === e2.j.invoice.invoice_number}`)
+      expect((await q('select count(*)::int n from invoices where project_id=$1 and net_amount=321', [P]))[0].n).toBe(1); expect(e2.j.invoice.invoice_number).toBe(e1.j.invoice.invoice_number)
+    })
+    it('Stornierung während konkurrierender Buchung: entweder Zahlung zuerst (dann gebucht) oder Storno zuerst (dann 409) – nie ein widersprüchlicher Zustand', async () => {
+      const ergebnisse = new Set<string>()
+      for (let lauf = 1; lauf <= 6; lauf++) {
+        const P = await neuesProjekt('E2E Storno parallel ' + lauf, {}); const a = await re(P, 1000)
+        const [z, s] = await Promise.all([zahle(a.id, 1190), inv('PATCH', { id: a.id, status: 'storniert' })])
+        const r = await zeile(a.id); const n = await anzahlZahlungen(a.id); const summe = await summeZahlungen(a.id)
+        expect(Number(r.paid_amount)).toBe(summe)                                           // paid_amount und Zahlungszeilen stimmen immer überein
+        if (z.status === 200) expect(n).toBe(1); else { expect(z.status).toBe(409); expect(n).toBe(0) }
+        if (s.status === 200) expect(r.status).toBe('storniert')
+        if (z.status === 200 && s.status !== 200) expect(r.status).toBe('bezahlt')
+        ergebnisse.add(`${z.status}/${s.status}/${r.status}`)
+      }
+      merke('9 Parallel', 'Zahlung ‖ Storno (6 Läufe): auftretende Ausgänge (Zahlung/Storno/Status)', 'konsistent', [...ergebnisse].join(' | '), true)
+    })
+    it('Paritätstest: SQL-Berechnung (faktura_offen_berechne) = lib/forderung.ts für viele Fälle', async () => {
+      const { berechneForderung } = await import('@/lib/forderung'); let n = 0
+      const brutto = [0, 100, 1190, 3570]; const bezahlt = [0, 50, 100, 1190, 4000]; const status = ['offen', 'ueberfaellig', 'bezahlt']; const gutschr = [0, 20, 595, 1190, 5000]
+      for (const g of brutto) for (const p of bezahlt) for (const st of status) for (const c of gutschr) {
+        const r = { id: 'r', invoice_number: 'RE-1', invoice_type: 'standard', status: st, gross_amount: g, paid_amount: p, due_date: null }
+        const list: any[] = [r]; if (c > 0) list.push({ id: 'g', invoice_number: 'GS-1', invoice_type: 'gutschrift', status: 'offen', gross_amount: -c, paid_amount: 0, reference_invoice_number: 'RE-1' })
+        const ts = berechneForderung(list)
+        const sql = (await q('select * from faktura_offen_berechne($1::numeric,$2::numeric,$3::text,$4::numeric)', [g, p, st, c]))[0]
+        const tsOffen = ts.je.get('r') ?? 0
+        if (Math.abs(Number(sql.offen) - tsOffen) > 0.005 || Math.abs(Number(sql.guthaben) - ts.guthaben) > 0.005 || Math.abs(Number(sql.gutschrift) - (ts.gutschriftJe.get('r') ?? 0)) > 0.005) {
+          throw new Error(`Abweichung bei brutto=${g} bezahlt=${p} status=${st} gutschrift=${c}: SQL ${JSON.stringify(sql)} TS offen=${tsOffen} guthaben=${ts.guthaben}`)
+        }
+        n++
+      }
+      merke('9 Parität', 'SQL-Offenbetrag/Guthaben = lib/forderung.ts (Fälle)', n, n)
+      expect(n).toBe(brutto.length * bezahlt.length * status.length * gutschr.length)
     })
   })
 

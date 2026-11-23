@@ -1,6 +1,5 @@
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
-import { offenerBetrag } from '@/lib/mahnung-steuerung';
 
 // ============================================================
 // SCAFFOLD OS – Rechnungs-PDFs (aus components/rechnungen/RechnungenInhalt.tsx
@@ -352,6 +351,12 @@ export function generateInvoicePDF(inv: Invoice) {
 }
 
 // ─── Phase 15: Mahnungs-PDF (1. / 2. Mahnung) ───
+/** Mahn-PDFs brauchen den zentralen offenen Betrag (lib/forderung.ts). Ohne ihn wird kein PDF erzeugt – eine Eigenberechnung würde Gutschriften übersehen. */
+function offenZentralPflicht(inv: Invoice): number {
+  if (typeof inv.offen_zentral !== 'number' || !Number.isFinite(inv.offen_zentral)) throw new Error('Offener Betrag (zentral) fehlt – Mahn-PDF wird nicht erzeugt.');
+  return inv.offen_zentral;
+}
+
 export function generateMahnungPDF(inv: Invoice, stufe: 1 | 2, mahnkosten?: { pauschale: number; zinssatz: number; tageUeberfaellig: number }) {
   const doc = new jsPDF();
   const pageWidth = doc.internal.pageSize.getWidth();
@@ -364,7 +369,7 @@ export function generateMahnungPDF(inv: Invoice, stufe: 1 | 2, mahnkosten?: { pa
   const zinssatz = mahnkosten?.zinssatz ?? 0;
   const tage = mahnkosten?.tageUeberfaellig ?? 0;
   // Basis ist der noch OFFENE Betrag (nach Teilzahlungen), nicht der volle Rechnungsbetrag.
-  const offen = inv.offen_zentral ?? offenerBetrag(inv);
+  const offen = offenZentralPflicht(inv);
   const zinsen = Math.round(offen * (zinssatz / 100) * (tage / 365) * 100) / 100;
   const gesamtMitZinsen = Math.round((offen + zinsen + pauschale) * 100) / 100;
 
@@ -448,7 +453,7 @@ export function generateZahlungserinnerungPDF(inv: Invoice) {
 
   y = 92;
   doc.setFontSize(10);
-  const offen = inv.offen_zentral ?? Math.round((Number(inv.gross_amount) - (Number(inv.paid_amount) || 0)) * 100) / 100;
+  const offen = offenZentralPflicht(inv);
   const text = `Sehr geehrte Damen und Herren,\n\nfür die oben genannte Rechnung über ${fmtEur(Number(inv.gross_amount))} € haben wir bis heute noch keinen vollständigen Zahlungseingang festgestellt. Möglicherweise hat sich unsere Rechnung mit Ihrer Zahlung überschnitten oder sie ist Ihnen entgangen.\n\nOffener Betrag: ${fmtEur(offen)} €\n\nWir bitten Sie, den offenen Betrag innerhalb von 7 Tagen unter Angabe der Rechnungsnummer zu überweisen.${cs.iban ? `\n\nBankverbindung: ${cs.bank_name || ''}, IBAN ${cs.iban}${cs.bic ? ', BIC ' + cs.bic : ''}` : ''}\n\nSollten Sie die Zahlung bereits veranlasst haben, betrachten Sie dieses Schreiben als gegenstandslos.\n\nMit freundlichen Grüßen\n${cs.company_name || ''}`;
   doc.text(doc.splitTextToSize(text, 180), 14, y);
 

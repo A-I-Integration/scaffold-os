@@ -66,3 +66,42 @@ export async function gleicheStatusNachGutschriftAb(c: Cfg, bezugNummer: string 
     return true
   } catch { return false }
 }
+
+// ─── Rechnungsliste vollständig laden (ohne feste Obergrenze der Oberfläche) ───
+
+export const SEITENGROESSE = 1000          // PostgREST liefert je Anfrage höchstens so viele Zeilen (Standard)
+export const LISTE_OBERGRENZE = 20000      // Schutz vor ungebremstem Speicherverbrauch; darüber wird NICHT abgeschnitten, sondern abgelehnt
+
+export class ListeZuGross extends Error { constructor() { super('Es gibt mehr Rechnungen, als die Liste vollständig laden kann. Bitte nach Kunde oder Baustelle filtern.') } }
+
+/**
+ * Alle Rechnungen zu einem Filter, seitenweise gelesen (stabile Sortierung, Doppelte entfernt). Wird die Obergrenze erreicht, wird ListeZuGross
+ * geworfen – es gibt nie eine stillschweigend unvollständige Liste, auf deren Basis ein offener Betrag falsch berechnet würde.
+ * Zusätzlich werden alle Gutschriften nachgeladen, die sich per Rechnungsnummer auf eine gelieferte Rechnung beziehen, auch wenn sie selbst nicht im
+ * Filter liegen (andere Baustelle, ohne Baustelle): eine Gutschrift gehört zu ihrer Rechnung, nicht zur Ansicht.
+ */
+export async function ladeAlleRechnungen(c: Cfg, filter: string = '', opt: { obergrenze?: number; seite?: number } = {}): Promise<Record<string, any>[]> {
+  const seite = opt.seite ?? SEITENGROESSE
+  const grenze = opt.obergrenze ?? LISTE_OBERGRENZE
+  const gesehen = new Set<string>()
+  const rows: Record<string, any>[] = []
+  for (let offset = 0; ; offset += seite) {
+    const r = await fetch(`${c.url}/rest/v1/invoices?select=*${filter}&order=created_at.desc,id.asc&limit=${seite}&offset=${offset}`, { headers: c.headers })
+    if (!r.ok) throw new Error(await r.text())
+    const teil: Record<string, any>[] = await r.json()
+    for (const x of teil) if (!gesehen.has(String(x.id))) { gesehen.add(String(x.id)); rows.push(x) }
+    if (teil.length < seite) break
+    if (rows.length >= grenze) throw new ListeZuGross()
+  }
+  // Gutschriften zu den gelieferten Rechnungen (unabhängig von Filter und Seite)
+  const nummern = [...new Set(rows.filter((x) => x.invoice_type !== 'gutschrift' && x.invoice_number).map((x) => String(x.invoice_number)))]
+  if (filter) {
+    for (let i = 0; i < nummern.length; i += 100) {
+      const liste = nummern.slice(i, i + 100).map((n) => `"${n.replace(/"/g, '')}"`).join(',')
+      const r = await fetch(`${c.url}/rest/v1/invoices?select=*&invoice_type=eq.gutschrift&reference_invoice_number=in.(${encodeURIComponent(liste)})`, { headers: c.headers })
+      if (!r.ok) throw new Error(await r.text())
+      for (const g of (await r.json()) as Record<string, any>[]) if (!gesehen.has(String(g.id))) { gesehen.add(String(g.id)); rows.push(g) }
+    }
+  }
+  return rows
+}

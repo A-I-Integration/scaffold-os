@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
-  berechneKennzahlen, filtereRechnungen, zaehleJeReiter, anzeigeStatus, istUeberfaellig, offenerBetrag, rechnungsJahre, monatsGrenzen, heuteIso, type FakturaRechnung,
+  berechneKennzahlen, filtereRechnungen, zaehleJeReiter, anzeigeStatusJe, istUeberfaellig, offenJeRechnung, rechnungsJahre, monatsGrenzen, heuteIso, type FakturaRechnung,
 } from '../faktura-kennzahlen';
 
 const HEUTE = '2026-11-23';
@@ -17,19 +17,31 @@ describe('Faktura-Kennzahlen', () => {
     expect(istUeberfaellig(r({ status: 'bezahlt', due_date: '2026-01-01' }), HEUTE)).toBe(false);
     expect(istUeberfaellig(r({ invoice_type: 'gutschrift', status: 'offen', due_date: '2026-01-01' }), HEUTE)).toBe(false);
   });
-  it('Offener Betrag: Brutto minus Teilzahlung, Storno/bezahlt/Gutschrift = 0', () => {
-    expect(offenerBetrag(r({ paid_amount: 190 }))).toBe(1000);
-    expect(offenerBetrag(r({ status: 'bezahlt', paid_amount: 1190 }))).toBe(0);
-    expect(offenerBetrag(r({ status: 'storniert' }))).toBe(0);
-    expect(offenerBetrag(r({ invoice_type: 'gutschrift', gross_amount: -119 }))).toBe(0);
-    expect(offenerBetrag(r({ paid_amount: 5000 }))).toBe(0);
+  it('Offener Betrag (zentral): Brutto minus Teilzahlung, Storno/bezahlt/Gutschrift = 0', () => {
+    const o = (x: Partial<FakturaRechnung>) => offenJeRechnung([r(x)]).get('a') ?? 0;
+    expect(o({ paid_amount: 190 })).toBe(1000);
+    expect(o({ status: 'bezahlt', paid_amount: 1190 })).toBe(0);
+    expect(o({ status: 'storniert' })).toBe(0);
+    expect(o({ invoice_type: 'gutschrift', gross_amount: -119 })).toBe(0);
+    expect(o({ paid_amount: 5000 })).toBe(0);
   });
-  it('Anzeigestatus', () => {
-    expect(anzeigeStatus(r(), HEUTE)).toBe('offen');
-    expect(anzeigeStatus(r({ paid_amount: 100 }), HEUTE)).toBe('teilbezahlt');
-    expect(anzeigeStatus(r({ due_date: '2026-10-01' }), HEUTE)).toBe('ueberfaellig');
-    expect(anzeigeStatus(r({ status: 'storniert' }), HEUTE)).toBe('storniert');
-    expect(anzeigeStatus(r({ invoice_type: 'gutschrift' }), HEUTE)).toBe('gutschrift');
+  it('Anzeigestatus (zentral, mit Gutschriften)', () => {
+    const st = (x: Partial<FakturaRechnung>, extra: FakturaRechnung[] = []) => anzeigeStatusJe([r(x), ...extra], HEUTE).get('a');
+    expect(st({})).toBe('offen');
+    expect(st({ paid_amount: 100 })).toBe('teilbezahlt');
+    expect(st({ due_date: '2026-10-01' })).toBe('ueberfaellig');
+    expect(st({ status: 'storniert' })).toBe('storniert');
+    expect(st({ invoice_type: 'gutschrift' })).toBe('gutschrift');
+    const g = (b: number): FakturaRechnung => r({ id: 'g1', invoice_number: 'GS-1', invoice_type: 'gutschrift', gross_amount: -b, reference_invoice_number: 'RE-2026-0001' });
+    expect(st({}, [g(1190)])).toBe('ausgeglichen');            // nur Gutschrift: nie „bezahlt“, nie „offen“
+    expect(st({}, [g(500)])).toBe('teilausgeglichen');
+    expect(st({ due_date: '2026-10-01' }, [g(1190)])).toBe('ausgeglichen'); // ausgeglichen ist nicht überfällig
+  });
+  it('Statusfilter: ausgeglichene Rechnung ist weder „offen“ noch „überfällig“, sondern „bezahlt“-Gruppe', () => {
+    const g = r({ id: 'g1', invoice_number: 'GS-1', invoice_type: 'gutschrift', gross_amount: -1190, reference_invoice_number: 'RE-2026-0001' });
+    const liste = [r({ due_date: '2026-10-01' }), g];
+    const f = (status: any) => filtereRechnungen(liste, { suche: '', reiter: 'rechnungen', jahr: 'alle', status } as any, HEUTE).length;
+    expect(f('offen')).toBe(0); expect(f('ueberfaellig')).toBe(0); expect(f('bezahlt')).toBe(1);
   });
   it('Kennzahlen: offen, überfällig, Monat, Umsatz mit Vorjahr; Storno zählt nicht', () => {
     const liste = [
