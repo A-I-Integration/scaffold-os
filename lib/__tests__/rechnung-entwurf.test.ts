@@ -66,7 +66,7 @@ describe('Entwurf – Zusammenspiel mit den bestehenden Wegen (Quelltext)', () =
     const api = q('app/api/invoice-drafts/route.ts');
     expect(api).not.toMatch(/create_invoice|next_invoice_number|invoice_number/);
     expect(api).toContain('pruefeRolle(ROLLEN.ADMIN_DISPO)');
-    const seite = q('app/rechnungen/page.tsx');
+    const seite = q('components/rechnungen/RechnungenInhalt.tsx');
     expect(seite).toMatch(/fetch\('\/api\/invoices', \{\s*method: 'POST'/);
     expect(seite).toContain("'/api/invoice-drafts?id=' + entwurfId");
   });

@@ -1,6 +1,7 @@
 'use client';
 
 import type { CSSProperties, ReactNode } from 'react';
+import { ChevronDown } from 'lucide-react';
 import Link from 'next/link';
 import { fakturaUrl, type FakturaBereich } from '@/lib/faktura-bereiche';
 import { WIN } from '@/components/win/Win';
@@ -47,4 +48,26 @@ export function BereichLink({ bereich, extra, onBereich, className, style, child
 }) {
   if (onBereich) return <button type="button" onClick={() => onBereich(bereich, extra)} className={className} style={style}>{children}</button>;
   return <Link href={fakturaUrl(bereich, extra)} className={className} style={style}>{children}</Link>;
+}
+
+// Aufklappbarer Themenbereich: Oberbegriff mit kurzer Zusammenfassung; darunter öffnet sich der Inhalt.
+// Einmal geöffnet, bleibt der Inhalt im Hintergrund erhalten (verborgen), damit angefangene Eingaben nicht verloren gehen.
+export function FakturaThema({ id, titel, untertitel, icon, badge, offen, besucht, onToggle, children }: {
+  id: string; titel: string; untertitel?: string; icon?: ReactNode; badge?: number | null; offen: boolean; besucht: boolean; onToggle: () => void; children: ReactNode;
+}) {
+  return (
+    <section id={id} className="rounded-xl border bg-white overflow-hidden scroll-mt-24" style={{ borderColor: WIN.rand }}>
+      <button type="button" onClick={onToggle} aria-expanded={offen} aria-controls={`${id}-inhalt`}
+        className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-black/[0.03]">
+        <span style={{ color: WIN.akzent }}>{icon}</span>
+        <span className="font-semibold text-[15px]" style={{ color: WIN.text }}>{titel}</span>
+        {badge ? <span className="rounded-full px-2 py-0.5 text-[12px] font-semibold text-white" style={{ background: WIN.akzent }}>{badge}</span> : null}
+        {untertitel && <span className="text-[13px] truncate" style={{ color: WIN.textGedaempft }}>{untertitel}</span>}
+        <ChevronDown className={`ml-auto h-4 w-4 shrink-0 transition-transform ${offen ? 'rotate-180' : ''}`} style={{ color: WIN.textGedaempft }} />
+      </button>
+      {(offen || besucht) && (
+        <div id={`${id}-inhalt`} hidden={!offen} className="px-4 pb-4 pt-1 border-t" style={{ borderColor: WIN.randHell }}>{children}</div>
+      )}
+    </section>
+  );
 }
