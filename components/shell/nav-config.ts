@@ -76,6 +76,7 @@ export const NAV_GRUPPEN: NavGruppe[] = [
   {
     key: 'abrechnung', nummer: 5, label: 'Abrechnung',
     eintraege: [
+      { href: '/faktura', label: 'Faktura', icon: Receipt, roles: BUERO },
       { href: '/rechnungen', label: 'Rechnungen', icon: Receipt, roles: BUERO },
       { href: '/rechnungen?neu=1', label: 'Neue Rechnung', icon: FilePlus2, roles: BUERO },
       { href: '/zahlungsabgleich', label: 'Zahlungsabgleich', icon: CreditCard, roles: BUERO },

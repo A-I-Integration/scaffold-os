@@ -41,6 +41,14 @@ export async function GET(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url);
     const invoiceId = searchParams.get('invoice_id');
+    // Zeitraum-Abfrage (Kennzahl „Bezahlt im Monat“): ?von=YYYY-MM-DD&bis=YYYY-MM-DD, alle Zahlungen des Zeitraums
+    const von = searchParams.get('von'); const bis = searchParams.get('bis');
+    if (!invoiceId && von && bis) {
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(von) || !/^\d{4}-\d{2}-\d{2}$/.test(bis)) return NextResponse.json({ success: false, error: 'von/bis ungültig' }, { status: 400 });
+      const rr = await fetch(`${url}/rest/v1/invoice_payments?payment_date=gte.${von}&payment_date=lte.${bis}&select=invoice_id,amount,payment_date&limit=5000`, { headers });
+      if (!rr.ok) throw new Error(await rr.text());
+      return NextResponse.json({ success: true, payments: await rr.json() });
+    }
     if (!invoiceId) return NextResponse.json({ success: false, error: 'invoice_id erforderlich' }, { status: 400 });
 
     const res = await fetch(`${url}/rest/v1/invoice_payments?invoice_id=eq.${invoiceId}&select=*&order=payment_date.desc`, { headers });
