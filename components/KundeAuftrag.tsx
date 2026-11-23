@@ -7,7 +7,8 @@ import ZwischenaufmassBlock from '@/components/ZwischenaufmassBlock';
 import LagerAutomatikHinweis from '@/components/LagerAutomatikHinweis';
 import SchlussrechnungDialog from '@/components/SchlussrechnungDialog';
 import EmailVerlaufDialog, { type EmailVerlaufEintrag } from '@/components/EmailVerlaufDialog';
-import { generateInvoicePDF, fmtEur, fmtDate, holePdfBase64FuerVersand, type Invoice } from '@/lib/invoice-pdf';
+import { useRechnungVersenden } from '@/components/RechnungVersendenDialog';
+import { generateInvoicePDF, fmtEur, fmtDate, type Invoice } from '@/lib/invoice-pdf';
 
 // ============================================================
 // SCAFFOLD OS – Auftrags-Karte für die Kunden-Seite (Phase 20)
@@ -136,26 +137,9 @@ export default function KundeAuftrag({
     doc.save(`Rechnung_${inv.invoice_number}.pdf`);
   }
 
-  async function handleMail(inv: Invoice) {
-    const to = prompt(`An welche E-Mail-Adresse soll Rechnung ${inv.invoice_number} gesendet werden?`, kunde.email || '');
-    if (!to || !to.includes('@')) return;
-    try {
-      const { pdfBase64, istZugferd, hinweis, projektnummer } = await holePdfBase64FuerVersand(inv);
-      const res = await fetch('/api/email', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          type: 'rechnung', to, projectId: inv.project_id || undefined, projectName: inv.customer_name, customerName: inv.customer_name,
-          invoiceNumber: inv.invoice_number, grossAmount: Number(inv.gross_amount),
-          dueDate: fmtDate(inv.due_date), pdfBase64, projektnummer,
-        }),
-      });
-      const json = await res.json();
-      if (!json.success) throw new Error(json.error || 'Versand fehlgeschlagen');
-      alert((istZugferd ? '✅ ' : '⚠️ ') + 'Rechnung ' + inv.invoice_number + ' an ' + to + ' gesendet!' + (hinweis ? '\n\n' + hinweis : ''));
-    } catch (err: any) {
-      alert('❌ E-Mail fehlgeschlagen: ' + err.message);
-    }
+  const versand = useRechnungVersenden();
+  function handleMail(inv: Invoice) {
+    versand.starten(inv, kunde.email || '');
   }
 
   async function handleBezahlt(inv: Invoice) {
@@ -362,6 +346,7 @@ export default function KundeAuftrag({
         />
       )}
       {offeneMail && <EmailVerlaufDialog mail={offeneMail} onClose={() => setOffeneMail(null)} />}
+      {versand.dialog}
     </div>
   );
 }

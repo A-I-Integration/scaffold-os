@@ -11,7 +11,7 @@ import { ladeXrechnung } from '@/lib/xrechnung-download'
 import { useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useParams, useRouter } from 'next/navigation'
-import { generateInvoicePDF, holePdfBase64FuerVersand, fmtEur, fmtDate, TYPE_LABEL, type Invoice, type Position } from '@/lib/invoice-pdf'
+import { generateInvoicePDF, fmtEur, fmtDate, TYPE_LABEL, type Invoice, type Position } from '@/lib/invoice-pdf'
 import { Download, FileText, Send, Link2, Pencil, PlusCircle, Scissors, ReceiptText, Euro, CheckCircle2, RotateCcw, Trash2, Paperclip } from 'lucide-react'
 import { Titelleiste, Menueband, BandGruppe, BandKnopf, BaumKnoten, DokumentReiter, Statusleiste, Aufgabenbereich, WIN } from '@/components/win/Win'
 import { ENTSCHEIDUNG_LABEL } from '@/lib/rechnung-pruefung'
@@ -19,6 +19,7 @@ import AnhangDialog from '@/components/rechnung/AnhangDialog'
 import PositionDetails from '@/components/rechnung/PositionDetails'
 import { aktualisierePosition } from '@/lib/rechnung-position'
 import { lokalesDatumIso, datumPlusTage } from '@/lib/datum'
+import { useRechnungVersenden } from '@/components/RechnungVersendenDialog'
 
 type Tab = 'rechnung' | 'version' | 'bestellwert' | 'teilabbau' | 'gutschrift' | 'zahlung' | 'verlauf'
 const ANSICHTEN = [
@@ -242,22 +243,15 @@ export default function RechnungAktePage() {
 
   const xrechnung = () => lauf(async () => { if (inv) await ladeXrechnung(inv.id) })
 
+  // Versand über den zentralen Dialog; Vorschlag: zuletzt benutzte Adresse, sonst E-Mail aus dem Kundenstamm
+  const versand = useRechnungVersenden(() => { void lade() })
   const versenden = () => lauf(async () => {
     if (!inv) return
     let vorschlag = mails.find((m) => m.to_email)?.to_email || ''
     if (!vorschlag && inv.customer_id) {
       try { const k = await (await fetch('/api/kunden?id=' + inv.customer_id)).json(); vorschlag = k?.kunden?.[0]?.email || '' } catch { /* keine Vorbelegung */ }
     }
-    const to = prompt(`An welche E-Mail-Adresse soll ${typ} ${inv.invoice_number} gesendet werden?`, vorschlag)
-    if (!to || !to.includes('@')) return
-    const { pdfBase64, istZugferd, hinweis, projektnummer } = await holePdfBase64FuerVersand(inv)
-    const r = await fetch('/api/email', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({
-      type: 'rechnung', to, projectId: inv.project_id || undefined, projectName: inv.customer_name, customerName: inv.customer_name,
-      invoiceNumber: inv.invoice_number, grossAmount: Number(inv.gross_amount), dueDate: fmtDate(inv.due_date), pdfBase64, projektnummer }) })
-    const j = await r.json()
-    if (!j.success) throw new Error(j.error || 'Versand fehlgeschlagen')
-    alert((istZugferd ? '✅ ' : '⚠️ ') + `${inv.invoice_number} an ${to} gesendet${istZugferd ? ' (mit E-Rechnung)' : ''}.` + (hinweis ? '\n\n' + hinweis : ''))
-    await lade()
+    versand.starten(inv, vorschlag)
   })
 
   if (fehler) return <div className="p-6"><p className="rounded-xl bg-red-50 border border-red-200 text-red-700 px-4 py-3">{fehler}</p><Link href="/rechnungen" className="text-sm text-[#e8590c] mt-3 inline-block">← Zur Rechnungsliste</Link></div>
@@ -275,6 +269,7 @@ export default function RechnungAktePage() {
 
   return (
     <div className="flex flex-col h-full min-h-[600px]" style={{ background: WIN.grund, color: WIN.text }}>
+      {versand.dialog}
       <Titelleiste titel="Rechnung" untertitel={`${typ} ${inv.invoice_number} · ${inv.customer_name}`} rechts={<Link href={zurueck} className="text-xs opacity-80 hover:opacity-100">✕ Schließen</Link>} />
 
       {/* Menüband */}
