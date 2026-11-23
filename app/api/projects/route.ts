@@ -6,6 +6,7 @@ import { beiAngebotsannahmeSicher } from '@/lib/angebot-annahme';
 import { fahrtNachholenSicher } from '@/lib/auto-tour';
 import { projektFuerRolle, schreibdatenFuerRolle } from '@/lib/projekt-sicht';
 import { autosaveGesperrt, filtereAutosaveData, AUTOSAVE_PROJEKT_ABGESCHLOSSEN_FEHLER } from '@/lib/aufmass-autosave-regeln';
+import { pruefeAufmassAenderung } from '@/lib/aufmass-integritaet';
 import { aenderungenZwischenaufmasse } from '@/lib/zwischenaufmass';
 import { schreibeHistorie } from '@/lib/abrechnung-historie';
 import { angebotNettoAusProjekt } from '@/lib/auftragsstand';
@@ -195,17 +196,21 @@ export async function PATCH(req: NextRequest) {
     // ist es jetzt) – löst automatisch Lager-Reservierung + Transportauftrag
     // aus (Zusammenspiel Aufmaß→Lager→Tour). Nur bei einem echten Übergang,
     // nicht bei jedem weiteren Speichern eines bereits angenommenen Angebots.
+    let aufmassVersion: number | null = null;
     let solltAutomatikAusloesen = false;
     let solltFahrtNachholen = false;
 
     if (data && typeof data === 'object') {
-      const cur = await fetch(`${url}/rest/v1/projects?id=eq.${id}&select=data,name,adresse,status`, { headers });
+      // aufmass_version (Phase 126) mitlesen: ein veralteter Schreibzugriff darf eine inzwischen gesetzte Reservierung/Abrechnung nicht überschreiben
+      let cur = await fetch(`${url}/rest/v1/projects?id=eq.${id}&select=data,name,adresse,status,aufmass_version`, { headers });
+      if (!cur.ok) cur = await fetch(`${url}/rest/v1/projects?id=eq.${id}&select=data,name,adresse,status`, { headers });
       if (!cur.ok) throw new Error(await cur.text());
       const curRows = await cur.json();
       if (!curRows?.length) {
         return NextResponse.json({ success: false, error: 'Projekt nicht gefunden.' }, { status: 404 });
       }
       const bisher = curRows[0];
+      if (typeof bisher.aufmass_version === 'number') aufmassVersion = bisher.aufmass_version;
 
       if (autosave && autosaveGesperrt(bisher.status)) {
         return NextResponse.json(
@@ -240,6 +245,12 @@ export async function PATCH(req: NextRequest) {
       // erst jetzt wird er ein aktives Projekt.
       if (bisher.data?.entwurf === true && data.entwurf === false && !status) patch.status = 'active';
 
+      // Faktura F7-Sicherung: abgerechnete oder gerade reservierte Zwischenaufmaße sind über diese Route nicht änderbar/löschbar,
+      // und niemand kann sich hier selbst eine Rechnung zuordnen (das macht nur das Anlegen der Rechnung).
+      if (data.zwischenaufmasse !== undefined) {
+        const sperre = pruefeAufmassAenderung(bisher.data?.zwischenaufmasse, data.zwischenaufmasse);
+        if (sperre) return NextResponse.json({ success: false, code: 'AUFMASS_GESPERRT', error: sperre }, { status: 409 });
+      }
       patch.data = { ...(bisher.data || {}), ...data };
 
       // Verlauf: Änderung des Angebotswerts nach der Annahme (best effort, ändert nichts am Speichern)
@@ -286,7 +297,8 @@ export async function PATCH(req: NextRequest) {
       return NextResponse.json({ success: false, error: 'Nichts zu ändern (status, data, name oder adresse fehlt).' }, { status: 400 });
     }
 
-    const res = await fetch(`${url}/rest/v1/projects?id=eq.${id}`, {
+    const bedingung = patch.data !== undefined && aufmassVersion !== null ? `&aufmass_version=eq.${aufmassVersion}` : '';
+    const res = await fetch(`${url}/rest/v1/projects?id=eq.${id}${bedingung}`, {
       method: 'PATCH',
       headers: { ...headers, 'Prefer': 'return=representation' },
       body: JSON.stringify(patch),
@@ -294,6 +306,9 @@ export async function PATCH(req: NextRequest) {
     if (!res.ok) throw new Error(await res.text());
 
     const rows = await res.json();
+    if (!rows?.length && bedingung) {
+      return NextResponse.json({ success: false, code: 'PROJEKT_GEAENDERT', error: 'Der Auftrag wurde gerade von jemand anderem geändert (z. B. eine Rechnung wurde angelegt). Bitte neu laden und noch einmal speichern.' }, { status: 409 });
+    }
     if (!rows?.length) {
       return NextResponse.json({ success: false, error: 'Projekt nicht gefunden.' }, { status: 404 });
     }

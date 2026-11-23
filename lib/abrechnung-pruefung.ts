@@ -6,7 +6,7 @@
 // ============================================================
 
 export type AbweichungCode =
-  | 'UEBER_AUFTRAGSWERT' | 'DOPPELTE_SCHLUSSRECHNUNG' | 'ABSCHLAG_NACH_SCHLUSS' | 'SCHLUSS_SCHLIESST_NICHT' | 'GLEICHER_BETRAG' | 'ZAHLUNG_UEBER_BETRAG'
+  | 'UEBER_AUFTRAGSWERT' | 'DOPPELTE_SCHLUSSRECHNUNG' | 'ABSCHLAG_NACH_SCHLUSS' | 'SCHLUSS_SCHLIESST_NICHT' | 'GLEICHER_BETRAG' | 'ZAHLUNG_UEBER_BETRAG' | 'AUFMASS_POSITION_OHNE_BEZUG'
 
 export interface Abweichung { code: AbweichungCode; text: string; betrag?: number }
 

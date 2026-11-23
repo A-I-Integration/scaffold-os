@@ -1,3 +1,6 @@
+import { normalisiereZwischenaufmasse } from '@/lib/zwischenaufmass';
+import { aufmassStand, pruefeAufmassBezug, freiePositionenMitAufmassName } from '@/lib/aufmass-integritaet';
+import { aufmassZuordnen, reservierungFehlerText } from '@/lib/aufmass-zuordnung-server';
 import { pruefeAbrechnung, grundGueltig, type Abweichung } from '@/lib/abrechnung-pruefung';
 import { schreibeHistorie } from '@/lib/abrechnung-historie';
 import { angebotNettoAusProjekt } from '@/lib/auftragsstand';
@@ -207,6 +210,31 @@ export async function POST(req: NextRequest) {
     const gross = Math.round((net + tax) * 100) / 100;
     const netRounded = Math.round(net * 100) / 100;
 
+    // Faktura F7-Sicherung: Abrechnung eines Zwischenaufmaßes wird SERVERSEITIG geprüft und atomar reserviert.
+    // body.aufmass = { za_id, stand }: die Rechnungspositionen müssen genau der noch offenen Differenz entsprechen.
+    // Freie Positionen ohne Bezug, die wie aufgemessene Positionen heißen, brauchen eine dokumentierte Begründung (siehe Abweichungen).
+    let aufmassPlan: { zaId: string; roh: unknown } | null = null;
+    let aufmassRes: { zaId: string; token: string } | null = null;
+    let aufmassNr: string | null = null;
+    let projektZaRoh: unknown = undefined;
+    if (project_id && !istGutschrift) {
+      try {
+        const pz = await fetch(`${url}/rest/v1/projects?id=eq.${project_id}&select=data`, { headers });
+        if (pz.ok) projektZaRoh = (await pz.json())?.[0]?.data?.zwischenaufmasse;
+      } catch { /* Prüfung unten meldet, wenn nötig */ }
+    }
+    if (body.aufmass && typeof body.aufmass === 'object') {
+      const zaId = String(body.aufmass.za_id || '');
+      const stand = String(body.aufmass.stand || '');
+      if (!project_id || !zaId) return NextResponse.json({ success: false, code: 'AUFMASS_NICHT_GEFUNDEN', error: 'Für die Abrechnung nach Zwischenaufmaß fehlen Auftrag oder Zwischenaufmaß.' }, { status: 400 });
+      if (replace_invoice_id) return NextResponse.json({ success: false, code: 'AUFMASS_NUR_ABSCHLAG', error: 'Eine Aufmaß-Abrechnung kann nicht als neue Version angelegt werden.' }, { status: 400 });
+      if (projektZaRoh === undefined) return NextResponse.json({ success: false, code: 'AUFMASS_SPERRE_NICHT_MOEGLICH', error: 'Das Zwischenaufmaß konnte nicht geprüft werden. Die Rechnung wurde NICHT angelegt.' }, { status: 503 });
+      const pr = pruefeAufmassBezug({ rohListe: projektZaRoh, zaId, stand, positionen: positionen as any, rechnungsart: String(invoice_type) });
+      if (!pr.ok) return NextResponse.json({ success: false, code: pr.fehler.code, error: pr.fehler.text }, { status: 409 });
+      aufmassPlan = { zaId, roh: pr.roh };
+      aufmassNr = 'ZA-' + String(pr.za.nr).padStart(2, '0');
+    }
+
     // Faktura F6: Abrechnungsprüfung. Nichts wird still geändert: bei Abweichung kommt eine Meldung, und die Rechnung geht nur mit
     // dokumentierter Begründung (abrechnung_grund) durch. Die Freigabe steht im Änderungsverlauf.
     let abweichungen: Abweichung[] = [];
@@ -230,6 +258,10 @@ export async function POST(req: NextRequest) {
             art: resolvedArtFuerPruefung(invoice_type), netto: netRounded, auftragswert: angebot > 0 || bestaetigt > 0 ? Math.round((angebot + bestaetigt) * 100) / 100 : 0,
             nachtraegeOffen: offen, bestehende, ersetzteId: replace_invoice_id || null, rechnungsdatum: invoice_date || new Date().toISOString().slice(0, 10),
           });
+        }
+        if (!body.aufmass && projektZaRoh !== undefined) {
+          const namen = freiePositionenMitAufmassName(projektZaRoh, positionen);
+          if (namen.length) abweichungen = [...abweichungen, { code: 'AUFMASS_POSITION_OHNE_BEZUG', text: `Die Position ${namen.map((n) => `„${n}“`).join(', ')} heißt wie eine aufgemessene Position, ist aber nicht mit dem Zwischenaufmaß verknüpft. Bitte über „nach Zwischenaufmaß“ abrechnen, sonst wird die Menge nicht mitgezählt.` }];
         }
       } catch { /* Prüfung nicht möglich: Rechnung nicht blockieren, sonst steht die Abrechnung wegen eines Lesefehlers still */ }
       if (abweichungen.length > 0 && !grundGueltig(abrechnungGrund)) {
@@ -344,12 +376,24 @@ export async function POST(req: NextRequest) {
       rpcParams.p_old_invoice_id = replace_invoice_id;
     }
 
-    const res = await fetch(`${url}/rest/v1/rpc/${rpcName}`, {
-      method: 'POST',
-      headers: { ...headers, 'Prefer': 'return=representation' },
-      body: JSON.stringify(rpcParams),
-    });
-    if (!res.ok) throw new Error(await res.text());
+    // Zwischenaufmaß atomar reservieren (Projektzeile gesperrt): ein zweiter, gleichzeitiger Versuch scheitert hier.
+    if (aufmassPlan) {
+      const token = crypto.randomUUID();
+      const erg = await aufmassZuordnen({ projectId: project_id, zaId: aufmassPlan.zaId, aktion: 'reservieren', erwartet: aufmassPlan.roh, token });
+      if (erg !== 'ok') { const f = reservierungFehlerText(erg); return NextResponse.json({ success: false, code: f.code, error: f.text }, { status: f.status }); }
+      aufmassRes = { zaId: aufmassPlan.zaId, token };
+    }
+    const freigebenBeiFehler = async () => { if (aufmassRes) await aufmassZuordnen({ projectId: project_id, zaId: aufmassRes.zaId, aktion: 'freigeben', token: aufmassRes.token }); };
+
+    let res: Response;
+    try {
+      res = await fetch(`${url}/rest/v1/rpc/${rpcName}`, {
+        method: 'POST',
+        headers: { ...headers, 'Prefer': 'return=representation' },
+        body: JSON.stringify(rpcParams),
+      });
+    } catch (e) { await freigebenBeiFehler(); throw e; }
+    if (!res.ok) { await freigebenBeiFehler(); throw new Error(await res.text()); }
 
     // create_invoice gibt eine einzelne invoices-Zeile zurück. PostgREST
     // liefert das Ergebnis einer RPC, die eine einzelne Tabellenzeile
@@ -358,7 +402,7 @@ export async function POST(req: NextRequest) {
     // akzeptiert, statt eine davon zu erraten.
     const rpcResult = await res.json();
     const invoiceRow = Array.isArray(rpcResult) ? rpcResult[0] : rpcResult;
-    if (!invoiceRow?.id) throw new Error('Rechnung wurde angelegt, aber die Antwort der Datenbank hatte ein unerwartetes Format.');
+    if (!invoiceRow?.id) { await freigebenBeiFehler(); throw new Error('Rechnung wurde angelegt, aber die Antwort der Datenbank hatte ein unerwartetes Format.'); }
     const rows = [invoiceRow]; // ab hier wie zuvor: rows[0] = angelegte Rechnung
     const invoiceNumber = invoiceRow.invoice_number;
 
@@ -389,13 +433,31 @@ export async function POST(req: NextRequest) {
       } catch { kopfWarnung = 'Gerüstnummer, Leistungsdatum oder Steuerangaben konnten nicht gespeichert werden.'; }
     }
 
+    // Zwischenaufmaß der Rechnung zuordnen (gleiche Sperre). Schlägt das trotz Wiederholung fehl, bleibt die Reservierung bestehen
+    // und blockiert eine zweite Abrechnung; die Antwort sagt deutlich, dass NICHT erneut angelegt werden darf.
+    let aufmassWarnung: string | null = null;
+    if (aufmassRes && rows[0]?.id) {
+      let z = await aufmassZuordnen({ projectId: project_id, zaId: aufmassRes.zaId, aktion: 'abschliessen', token: aufmassRes.token, invoiceId: rows[0].id, invoiceNumber: rows[0].invoice_number });
+      if (z !== 'ok') z = await aufmassZuordnen({ projectId: project_id, zaId: aufmassRes.zaId, aktion: 'abschliessen', token: aufmassRes.token, invoiceId: rows[0].id, invoiceNumber: rows[0].invoice_number });
+      if (z === 'ok') {
+        const za = normalisiereZwischenaufmasse(projektZaRoh).find((x) => x.id === aufmassRes!.zaId);
+        await schreibeHistorie({ aktion: 'aufmass_abgerechnet', invoiceId: rows[0].id, invoiceNumber: rows[0].invoice_number, projectId: project_id, userId, details: { aufmass: aufmassNr, stichtag: za?.stichtag, flaecheM2: { von: null, auf: za?.flaecheM2 ?? null }, positionen: (za?.positionen || []).map((p) => ({ bezeichnung: p.bezeichnung, einheit: p.einheit, von: null, auf: p.menge })) } });
+      }
+      if (z !== 'ok') aufmassWarnung = `Die Rechnung ${rows[0].invoice_number || ''} wurde angelegt, aber ${aufmassNr || 'das Zwischenaufmaß'} konnte nicht als abgerechnet gespeichert werden. Bitte NICHT erneut anlegen, sonst wird doppelt berechnet.`;
+    }
+
+    // Neue Version einer Rechnung: das Zwischenaufmaß zeigt künftig auf die neue Rechnung (die alte ist storniert)
+    if (replace_invoice_id && rows[0]?.id && project_id) {
+      await aufmassZuordnen({ projectId: project_id, aktion: 'ersetzen', invoiceId: String(replace_invoice_id), neuInvoiceId: rows[0].id, invoiceNumber: rows[0].invoice_number });
+    }
+
     // Faktura F6: Änderungsverlauf (jede neue Rechnung, mit Freigabegrund bei Abweichung)
     if (rows[0]?.id) {
       await schreibeHistorie({
         aktion: replace_invoice_id ? 'neue_version' : istGutschrift ? 'gutschrift_angelegt' : 'rechnung_angelegt',
         invoiceId: rows[0].id, invoiceNumber: rows[0].invoice_number, projectId: project_id || null, userId,
         grund: abweichungen.length ? abrechnungGrund : null,
-        details: { typ: rows[0].invoice_type || 'standard', netto: netRounded, brutto: gross, ersetzt: replace_invoice_id || null, abweichungen: abweichungen.map((a) => ({ code: a.code, text: a.text })) },
+        details: { aufmass: aufmassNr, typ: rows[0].invoice_type || 'standard', netto: netRounded, brutto: gross, ersetzt: replace_invoice_id || null, abweichungen: abweichungen.map((a) => ({ code: a.code, text: a.text })) },
       });
     }
 
@@ -417,7 +479,7 @@ export async function POST(req: NextRequest) {
       invoice_type: rows[0]?.invoice_type || 'standard',
     });
 
-    return NextResponse.json({ success: true, invoice: rows[0], override_verwendet: overrideVerwendet, ...(kopfWarnung ? { warnung: kopfWarnung } : {}), ...(steuerWarnungen.length ? { steuer_warnungen: steuerWarnungen } : {}) });
+    return NextResponse.json({ success: true, invoice: rows[0], override_verwendet: overrideVerwendet, ...(kopfWarnung ? { warnung: kopfWarnung } : {}), ...(aufmassWarnung ? { aufmass_warnung: aufmassWarnung } : {}), ...(steuerWarnungen.length ? { steuer_warnungen: steuerWarnungen } : {}) });
   } catch (err: any) {
     return serverErrorResponse(err);
   }
@@ -496,6 +558,11 @@ export async function PATCH(req: NextRequest) {
       if (vr.ok) vorher = (await vr.json())?.[0] || null;
     } catch { /* Verlauf ist best effort */ }
 
+    // Eine stornierte Rechnung wird nicht wieder geöffnet (GoBD; ihre Aufmaßmenge kann inzwischen neu abgerechnet sein)
+    if (status && vorher?.status === 'storniert' && status !== 'storniert') {
+      return NextResponse.json({ success: false, code: 'STORNIERT_FINAL', error: 'Eine stornierte Rechnung kann nicht wieder geöffnet werden. Bitte eine neue Rechnung anlegen.' }, { status: 409 });
+    }
+
     const res = await fetch(`${url}/rest/v1/invoices?id=eq.${id}`, {
       method: 'PATCH',
       headers: { ...headers, 'Prefer': 'return=representation' },
@@ -506,6 +573,11 @@ export async function PATCH(req: NextRequest) {
     const rows = await res.json();
     if (!rows?.length) {
       return NextResponse.json({ success: false, error: 'Rechnung nicht gefunden.' }, { status: 404 });
+    }
+    if (vorher && rows[0].status === 'storniert' && vorher.status !== 'storniert' && vorher.project_id) {
+      // Die Menge dieser Rechnung ist wieder abrechenbar – das wird im Verlauf festgehalten, nichts geschieht still
+      const fr = await aufmassZuordnen({ projectId: vorher.project_id, aktion: 'freigeben_rechnung', invoiceId: String(id) });
+      if (fr === 'ok') await schreibeHistorie({ aktion: 'aufmass_freigegeben', invoiceId: id, invoiceNumber: vorher.invoice_number, projectId: vorher.project_id, userId, details: { grund: 'Rechnung storniert' } });
     }
     if (vorher) {
       const statusNeu = rows[0].status, zahlungNeu = Number(rows[0].paid_amount || 0), zahlungAlt = Number(vorher.paid_amount || 0);
@@ -566,6 +638,10 @@ export async function DELETE(req: NextRequest) {
       headers,
     });
     if (!res.ok) throw new Error(await res.text());
+    if (rows[0].project_id) {
+      const fr = await aufmassZuordnen({ projectId: rows[0].project_id, aktion: 'freigeben_rechnung', invoiceId: String(id) });
+      if (fr === 'ok') await schreibeHistorie({ aktion: 'aufmass_freigegeben', invoiceId: id, invoiceNumber: rows[0].invoice_number, projectId: rows[0].project_id, userId, details: { grund: 'Rechnung gelöscht' } });
+    }
     await schreibeHistorie({ aktion: 'geloescht', invoiceId: id, invoiceNumber: rows[0].invoice_number, projectId: rows[0].project_id, userId });
     return NextResponse.json({ success: true });
   } catch (err: any) {
