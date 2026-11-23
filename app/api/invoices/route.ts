@@ -3,6 +3,7 @@ import { vorhaltungZuordnen, vorhaltungFehlerText } from '@/lib/vorhaltung-zuord
 import { pruefeVorhaltungBezug, istVorhaltungsRechnung } from '@/lib/vorhaltung';
 import { aufmassStand, pruefeAufmassBezug, freiePositionenMitAufmassName } from '@/lib/aufmass-integritaet';
 import { aufmassZuordnen, reservierungFehlerText } from '@/lib/aufmass-zuordnung-server';
+import { ladeBelegForderung, gleicheStatusNachGutschriftAb } from '@/lib/forderung-server';
 import { freigabeNachStorno, freigabeNachGutschrift, gibZuordnungFrei, istVersendet, gutschriftEntfernenPruefen } from '@/lib/zuordnung-freigabe-server';
 import { pruefeAbrechnung, grundGueltig, type Abweichung } from '@/lib/abrechnung-pruefung';
 import { schreibeHistorie } from '@/lib/abrechnung-historie';
@@ -513,6 +514,11 @@ export async function POST(req: NextRequest) {
       await freigabeNachGutschrift({ url, headers }, { projectId: project_id, referenzNr: String(reference_invoice_number), gutschriftNr: rows[0].invoice_number, userId });
     }
 
+    // Status der Bezugsrechnung abgleichen (gebuchte Zahlung + Gutschrift gleichen sie aus → „bezahlt“); gilt auch ohne Baustelle
+    if (istGutschrift && rows[0]?.id && reference_invoice_number) {
+      await gleicheStatusNachGutschriftAb({ url, headers }, String(reference_invoice_number), { userId });
+    }
+
     // Phase 27: Admin-Überschreibung protokollieren
     if (overrideVerwendet && rows[0]?.id) {
       try {
@@ -590,16 +596,24 @@ export async function PATCH(req: NextRequest) {
     // "Neue Version anlegen" (POST einer neuen Rechnung mit Bezug + diese hier
     // auf "storniert" setzen), siehe Kunden-Detail.
 
-    // Betrag gegen den Rechnungsbetrag prüfen; "bezahlt" ohne Betrag verbucht den vollen Rechnungsbetrag,
-    // damit Status und offener Betrag zusammenpassen.
+    // Zahlung gegen den noch offenen Betrag NACH Gutschriften prüfen (zentral, lib/forderung.ts; Gutschriften per Rechnungsnummer, unabhängig von
+    // Baustelle/Ansicht). „bezahlt“ ohne Betrag verbucht den noch offenen Betrag; eine Gutschrift ist keine Zahlung und wird nicht als solche gebucht.
     if (patch.paid_amount !== undefined || status === 'bezahlt') {
-      const gr = await fetch(`${url}/rest/v1/invoices?id=eq.${id}&select=gross_amount`, { headers });
-      const brutto = gr.ok ? Number((await gr.json())?.[0]?.gross_amount) : NaN;
-      if (Number.isFinite(brutto)) {
-        if (patch.paid_amount !== undefined && patch.paid_amount - brutto > 0.01) {
-          return NextResponse.json({ success: false, error: `Der bezahlte Betrag (${patch.paid_amount.toFixed(2)} €) liegt über dem Rechnungsbetrag (${brutto.toFixed(2)} €).` }, { status: 400 });
+      const gr = await fetch(`${url}/rest/v1/invoices?id=eq.${id}&select=id,invoice_number,invoice_type,due_date,gross_amount,paid_amount,status`, { headers });
+      const zeile = gr.ok ? (await gr.json())?.[0] : null;
+      const brutto = zeile ? Number(zeile.gross_amount) : NaN;
+      if (zeile && Number.isFinite(brutto) && zeile.status !== 'storniert') {
+        const f = await ladeBelegForderung({ url, headers }, zeile);
+        if (!f) throw new Error('Gutschriften zur Rechnung nicht lesbar');
+        const maxGesamt = Math.round((brutto - f.gutschrift) * 100) / 100;
+        if (status === 'bezahlt') {
+          // Als „bezahlt“ markieren: bei vorhandenen Gutschriften zählt nur der tatsächlich noch geschuldete Rest als Zahlung
+          if (patch.paid_amount === undefined) patch.paid_amount = Math.round((Number(zeile.paid_amount || 0) + f.offen) * 100) / 100;
+          else if (f.gutschrift > 0 && Math.abs(patch.paid_amount - brutto) <= 0.01) patch.paid_amount = maxGesamt;
         }
-        if (patch.paid_amount === undefined && status === 'bezahlt') patch.paid_amount = brutto;
+        if (patch.paid_amount !== undefined && patch.paid_amount - maxGesamt > 0.01) {
+          return NextResponse.json({ success: false, error: `Der bezahlte Betrag (${patch.paid_amount.toFixed(2)} €) liegt über dem Rechnungsbetrag${f.gutschrift > 0 ? ` nach Gutschriften (${maxGesamt.toFixed(2)} €)` : ` (${brutto.toFixed(2)} €)`}.` }, { status: 400 });
+        }
       }
     }
 
@@ -645,6 +659,9 @@ export async function PATCH(req: NextRequest) {
       return NextResponse.json({ success: false, error: 'Rechnung nicht gefunden.' }, { status: 404 });
     }
     let zuordnungHinweis: string | null = null;
+    if (rows[0].invoice_type === 'gutschrift' && rows[0].status === 'storniert' && vorher?.status !== 'storniert') {
+      await gleicheStatusNachGutschriftAb({ url, headers }, rows[0].reference_invoice_number, { userId });
+    }
     if (vorher && rows[0].status === 'storniert' && vorher.status !== 'storniert' && vorher.project_id) {
       // Nicht versendet: Menge/Zeitraum sofort wieder frei. Versendet: erst mit voller Gutschrift (sonst wäre die Leistung doppelt abrechenbar).
       const erg = await freigabeNachStorno({ url, headers }, { projectId: vorher.project_id, invoiceId: String(id), invoiceNumber: vorher.invoice_number, nettoBetrag: Number(rows[0].net_amount), userId });
@@ -683,7 +700,7 @@ export async function DELETE(req: NextRequest) {
     }
 
     // Stornieren statt Löschen, sobald gebucht/versendet (GoBD!)
-    const check = await fetch(`${url}/rest/v1/invoices?id=eq.${id}&select=status,invoice_number,project_id`, { headers });
+    const check = await fetch(`${url}/rest/v1/invoices?id=eq.${id}&select=status,invoice_number,project_id,invoice_type,reference_invoice_number`, { headers });
     if (!check.ok) throw new Error(await check.text());
     const rows = await check.json();
     if (!rows?.length) {
@@ -719,6 +736,7 @@ export async function DELETE(req: NextRequest) {
       // Nur eine nicht versendete, offene Rechnung kommt bis hierher (siehe Prüfungen oben): ihre Zuordnung wird frei und im Verlauf vermerkt
       await gibZuordnungFrei({ projectId: rows[0].project_id, invoiceId: String(id), invoiceNumber: rows[0].invoice_number, userId, grund: 'Rechnung gelöscht (nicht versendet)' });
     }
+    if (rows[0].invoice_type === 'gutschrift') await gleicheStatusNachGutschriftAb({ url, headers }, rows[0].reference_invoice_number, { userId });
     await schreibeHistorie({ aktion: 'geloescht', invoiceId: id, invoiceNumber: rows[0].invoice_number, projectId: rows[0].project_id, userId });
     return NextResponse.json({ success: true });
   } catch (err: any) {

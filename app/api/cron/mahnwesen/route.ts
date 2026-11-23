@@ -82,6 +82,7 @@ export async function GET(req: NextRequest) {
         const name = `${inv.invoice_number} (${AKTION_LABEL[String(aktion)]})`;
         if (e.ok) ergebnis.versendet.push(name);
         else if (e.ohneEmail) ergebnis.ohne_email.push(inv.invoice_number);
+        else if (e.nichtsOffen) ergebnis.uebersprungen++;
         else ergebnis.fehler.push(`${inv.invoice_number}: ${e.error}`);
       }
 

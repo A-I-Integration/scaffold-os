@@ -1,6 +1,7 @@
 import { generateMahnungPDF, generateZahlungserinnerungPDF, type Invoice } from '@/lib/invoice-pdf'
 import { sperreFuerExterneVerwendung, markiereVersandFehler, erwarteteProjektnummer, FEHLVERSAND_NICHT_PROTOKOLLIERT, SperreFehler } from '@/lib/cad/projektnummer-sperre'
-import { tageUeberfaellig, offenerBetrag, AKTION_LABEL, type MahnAktion } from '@/lib/mahnung-steuerung'
+import { ladeBelegForderung } from '@/lib/forderung-server'
+import { tageUeberfaellig, AKTION_LABEL, type MahnAktion } from '@/lib/mahnung-steuerung'
 
 // ============================================================
 // SCAFFOLD OS – Zahlungserinnerung/Mahnung für eine Rechnung versenden (nur Server)
@@ -12,7 +13,7 @@ const url = () => process.env.NEXT_PUBLIC_SUPABASE_URL!
 const key = () => process.env.SUPABASE_SERVICE_ROLE_KEY!
 const hdr = () => ({ 'Content-Type': 'application/json', apikey: key(), Authorization: `Bearer ${key()}` })
 
-export type VersandErgebnis = { ok: true; an: string; nummer: string } | { ok: false; error: string; ohneEmail?: boolean }
+export type VersandErgebnis = { ok: true; an: string; nummer: string } | { ok: false; error: string; ohneEmail?: boolean; nichtsOffen?: boolean }
 
 const eur = (n: number) => Number(n).toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 const esc = (t: string) => t.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c] as string))
@@ -60,7 +61,11 @@ export async function sendeMahnschritt(
     if (inv.invoice_type === 'gutschrift') return { ok: false, error: 'Gutschriften werden nicht gemahnt.' }
     if (inv.status === 'bezahlt' || inv.status === 'storniert') return { ok: false, error: 'Die Rechnung ist bezahlt oder storniert.' }
     if (!inv.due_date) return { ok: false, error: 'Die Rechnung hat kein Fälligkeitsdatum.' }
-    if (offenerBetrag(inv) <= 0.01) return { ok: false, error: 'Es ist nichts mehr offen (Zahlungen decken den Rechnungsbetrag). Bitte den Status der Rechnung prüfen.' }
+    // Gemahnt wird nur, was nach Zahlungen UND Gutschriften wirklich offen ist (zentral, lib/forderung.ts); nicht lesbar → nicht mahnen
+    const bf = await ladeBelegForderung({ url: url(), headers: hdr() }, inv as never)
+    if (!bf) return { ok: false, error: 'Die Gutschriften zur Rechnung sind gerade nicht lesbar. Es wurde nicht gemahnt.' }
+    if (bf.offen <= 0.01) return { ok: false, error: 'Es ist nichts mehr offen (Zahlungen und Gutschriften decken den Rechnungsbetrag).', nichtsOffen: true }
+    inv = { ...inv, offen_zentral: bf.offen }
     if (aktion !== 'erinnerung' && aktion !== ((Number(inv.reminder_level) || 0) + 1)) return { ok: false, error: `Als Nächstes folgt die ${(Number(inv.reminder_level) || 0) + 1}. Mahnung.` }
     if (aktion === 'erinnerung' && ((Number(inv.reminder_level) || 0) > 0 || (inv as any).erinnerung_am)) return { ok: false, error: 'Es wurde bereits eine Erinnerung oder Mahnung gesendet.' }
     if (aktion === 'erinnerung' && !('erinnerung_am' in (inv as object))) return { ok: false, error: 'Die Datenbank-Erweiterung für das Mahnwesen fehlt noch (phase-mahnung-steuerung.sql ausführen).' }
@@ -91,7 +96,7 @@ export async function sendeMahnschritt(
       <div style="background: #f8fafc; padding: 20px; border-radius: 8px; margin: 20px 0;">
         <p style="margin: 0;"><strong>Rechnungsnummer:</strong> ${esc(inv.invoice_number)}</p>
         ${projektnummer ? `<p style="margin: 8px 0 0;"><strong>Projektnummer:</strong> ${esc(projektnummer)}</p>` : ''}
-        <p style="margin: 8px 0 0;"><strong>Offener Betrag:</strong> ${eur(offenerBetrag(inv))} €</p></div>
+        <p style="margin: 8px 0 0;"><strong>Offener Betrag:</strong> ${eur(inv.offen_zentral ?? 0)} €</p></div>
       <p style="color: #64748b; font-size: 12px; margin-top: 30px;">Diese E-Mail wurde automatisch von SCAFFOLD OS versendet. Bei Fragen antworten Sie einfach auf diese E-Mail.</p></div>`
 
     // ERST den Stand sichern (mit Bedingung auf den bisherigen Stand), DANN senden. So kann eine Rechnung auch bei

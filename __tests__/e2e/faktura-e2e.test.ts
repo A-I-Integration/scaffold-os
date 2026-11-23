@@ -597,6 +597,105 @@ describe.skipIf(!DB)('Faktura End-to-End (echte PostgreSQL)', () => {
   })
 
   // ──────────────────────────────────────────────────────────
+  // 8b. Rechnungsstatus, Gutschriften ohne Baustelle, Mahnwesen (Härtungsrunde)
+  // ──────────────────────────────────────────────────────────
+  describe('8b. Status nach Zahlung und Gutschrift (serverseitig), Rechnungen ohne Baustelle, Mahnwesen', () => {
+    const zahle = (invoice_id: string, amount: number) => api('@/app/api/invoice-payments/route', 'POST', { invoice_id, amount, payment_date: HEUTE })
+    const zeile = async (id: string) => (await q('select status, paid_amount from invoices where id=$1', [id]))[0]
+    const re = async (P: string | null, preis: number) => (await inv('POST', { customer_name: KUNDE, ...(P ? { project_id: P } : {}), invoice_type: 'standard', positions: [{ bezeichnung: 'Gerüst', menge: 1, einheit: 'Pauschale', einzelpreis: preis }] })).j.invoice
+    const gs = async (P: string | null, bezug: string, preis: number) => (await inv('POST', { customer_name: KUNDE, ...(P ? { project_id: P } : {}), invoice_type: 'gutschrift', reference_invoice_number: bezug, positions: [{ bezeichnung: 'Gutschrift zu ' + bezug, menge: 1, einheit: 'Pauschale', einzelpreis: preis }] })).j.invoice
+    const stand = async (ids: string[]) => { const { statusJe, berechneForderung } = await import('@/lib/forderung'); const r = norm(await q('select * from invoices where id = any($1)', [ids])) as any[]; return { st: statusJe(r, HEUTE), f: berechneForderung(r) } }
+
+    it('Rechnung 3.570, Gutschrift 1.190, Zahlung 2.380 → offen 0, Status bezahlt (Zahlung 2.380, Gutschrift keine Zahlung); Überzahlung wird abgelehnt', async () => {
+      const P = await neuesProjekt('E2E Status 1', {})
+      const a = await re(P, 3000); const g = await gs(P, a.invoice_number, 1000)
+      expect((await q('select count(*)::int n from invoice_payments where invoice_id = any($1)', [[a.id, g.id]]))[0].n).toBe(0)   // Gutschrift ist keine Zahlung
+      expect(Number((await zeile(a.id)).paid_amount)).toBe(0)
+      const zu = await zahle(a.id, 2400); merke('8 Zahlung', 'Zahlung 2.400 bei offen 2.380 (nach Gutschrift)', 400, zu.status); expect(zu.status).toBe(400)
+      const ok = await zahle(a.id, 2380); expect(ok.status).toBe(200); expect(ok.j.vollstaendig_bezahlt).toBe(true)
+      const z = await zeile(a.id); merke('8 Zahlung', 'Status/bezahlt nach Gutschrift 1.190 + Zahlung 2.380', 'bezahlt / 2380', `${z.status} / ${Number(z.paid_amount)}`); expect(z.status).toBe('bezahlt'); expect(Number(z.paid_amount)).toBe(2380)
+      const s = await stand([a.id, g.id]); merke('8 Zahlung', 'Offen / Guthaben / Anzeigestatus', '0 / 0 / ausgeglichen', `${s.f.offen} / ${s.f.guthaben} / ${s.st.get(a.id)}`)
+      expect([s.f.offen, s.f.guthaben, s.st.get(a.id), s.f.bezahlt]).toEqual([0, 0, 'ausgeglichen', 2380])
+      expect((await q('select count(*)::int n from invoice_payments where invoice_id=$1', [a.id]))[0].n).toBe(1)                  // Zahlungshistorie unverändert
+    })
+    it('Zahlung zuerst, Gutschrift danach: Status wird nach der Gutschrift abgeglichen; Storno der Gutschrift setzt ihn zurück', async () => {
+      const P = await neuesProjekt('E2E Status 2', {})
+      const a = await re(P, 3000)
+      expect((await zahle(a.id, 2380)).status).toBe(200); expect((await zeile(a.id)).status).toBe('offen')
+      const g = await gs(P, a.invoice_number, 1000)                                       // deckt den Rest
+      let z = await zeile(a.id); merke('8 Zahlung', 'Zahlung 2.380, danach Gutschrift 1.190: gespeicherter Status', 'bezahlt', z.status); expect(z.status).toBe('bezahlt')
+      expect((await q(`select count(*)::int n from abrechnung_historie where invoice_id=$1 and aktion='status_geaendert'`, [a.id]))[0].n).toBeGreaterThanOrEqual(1)
+      expect((await storno(g.id)).status).toBe(200)                                       // Teilgutschrift ohne Freigabe: stornierbar
+      z = await zeile(a.id); merke('8 Zahlung', 'Gutschrift storniert: Status/offen', 'offen / 1190', `${z.status} / ${(await stand([a.id])).f.offen}`)
+      expect(z.status).toBe('offen'); expect(Number(z.paid_amount)).toBe(2380)           // Zahlung bleibt unangetastet
+      expect((await stand([a.id])).f.offen).toBe(1190)
+    })
+    it('vollständig nur durch Gutschrift: gespeicherter Status bleibt offen (keine Zahlung), Anzeige „ausgeglichen“, kein Mahnen', async () => {
+      const P = await neuesProjekt('E2E Status 3', {})
+      const a = await re(P, 1000)
+      await q('update invoices set due_date = $2 where id=$1', [a.id, plusTage(HEUTE, -40)])
+      const g = await gs(P, a.invoice_number, 1000)
+      const z = await zeile(a.id); expect(z.status).toBe('offen'); expect(Number(z.paid_amount)).toBe(0)
+      const s = await stand([a.id, g.id]); expect([s.f.offen, s.st.get(a.id)]).toEqual([0, 'ausgeglichen'])
+      const { sendeMahnschritt } = await import('@/lib/mahnung-versand')
+      const m = await sendeMahnschritt(a.id, 1, { pauschale: 0, zinssatz: 0 })
+      merke('8 Zahlung', 'Mahnung für durch Gutschrift ausgeglichene, überfällige Rechnung', 'abgelehnt (nichts offen)', m.ok ? 'GEMAHNT' : (m as any).nichtsOffen ? 'abgelehnt (nichts offen)' : (m as any).error)
+      expect(m.ok).toBe(false); expect((m as any).nichtsOffen).toBe(true)
+      expect((await q('select reminder_level from invoices where id=$1', [a.id]))[0].reminder_level).toBe(0)
+    })
+    it('Gutschrift auf bereits bezahlte Rechnung: Status bleibt bezahlt, Guthaben statt Verrechnung; Teilgutschrift mindert offene Nachbarrechnung nicht', async () => {
+      const P = await neuesProjekt('E2E Status 4', {})
+      const a = await re(P, 1000); const b = await re(P, 500)
+      expect((await inv('PATCH', { id: a.id, status: 'bezahlt' })).status).toBe(200)
+      const g = await gs(P, a.invoice_number, 500)
+      const s = await stand([a.id, b.id, g.id])
+      merke('8 Zahlung', 'Gutschrift 595 auf bezahlte Rechnung: Guthaben / offen (Nachbarrechnung 595)', '595 / 595', `${s.f.guthaben} / ${s.f.offen}`)
+      expect([s.f.guthaben, s.f.offen, s.st.get(a.id)]).toEqual([595, 595, 'bezahlt']); expect((await zeile(a.id)).status).toBe('bezahlt')
+    })
+    it('Rechnung OHNE Baustelle: Gutschrift (mit und ohne Baustelle) wird per Bezugsnummer berücksichtigt – Zahlung, Limit und Status wie mit Baustelle', async () => {
+      const a = await re(null, 3000)                                                      // keine Baustelle
+      expect((await q('select project_id from invoices where id=$1', [a.id]))[0].project_id).toBeNull()
+      const P = await neuesProjekt('E2E Status 5 (Gutschrift auf anderer Baustelle)', {})
+      const g = await gs(null, a.invoice_number, 1000)                                    // ebenfalls ohne Baustelle
+      const zu = await zahle(a.id, 3000); merke('8 Zahlung', 'Rechnung ohne Baustelle: Zahlung 3.000 bei offen 2.380', 400, zu.status); expect(zu.status).toBe(400)
+      expect((await zahle(a.id, 2380)).status).toBe(200); expect((await zeile(a.id)).status).toBe('bezahlt')
+      const s = await stand([a.id, g.id]); expect([s.f.offen, s.st.get(a.id)]).toEqual([0, 'ausgeglichen']); void P
+      // Gutschrift ohne Rechnungsbezug: bleibt ungeklärt, verändert keine Rechnung/keinen Status
+      const b = await re(null, 1000); const ohne = await gs(null, 'RE-GIBT-ES-NICHT', 500)
+      const s2 = await stand([b.id, ohne.id]); expect([s2.f.offen, s2.f.ungeklaert, s2.st.get(b.id)]).toEqual([1190, 595, 'offen'])
+      expect((await zeile(b.id)).status).toBe('offen')
+    })
+    it('PATCH „als bezahlt“ bei vorhandener Gutschrift bucht nur den tatsächlich noch geschuldeten Rest', async () => {
+      const P = await neuesProjekt('E2E Status 6', {})
+      const a = await re(P, 3000); await gs(P, a.invoice_number, 1000)
+      expect((await inv('PATCH', { id: a.id, status: 'bezahlt', paid_amount: 3570 })).status).toBe(200)   // wie der Knopf „Als bezahlt“ (sendet den Rechnungsbetrag)
+      const z = await zeile(a.id); merke('8 Zahlung', '„Als bezahlt“ bei Gutschrift 1.190 auf 3.570', 'bezahlt / 2380', `${z.status} / ${Number(z.paid_amount)}`); expect([z.status, Number(z.paid_amount)]).toEqual(['bezahlt', 2380])
+      const s = await stand([a.id]); expect(s.f.guthaben).toBe(0)
+    })
+    it('Zahlung löschen (Korrektur): Status folgt der zentralen Forderung, Gutschrift bleibt', async () => {
+      const P = await neuesProjekt('E2E Status 7', {})
+      const a = await re(P, 3000); const g7 = await gs(P, a.invoice_number, 1000)
+      expect((await zahle(a.id, 2380)).status).toBe(200); expect((await zeile(a.id)).status).toBe('bezahlt')
+      const pay = (await q('select id from invoice_payments where invoice_id=$1', [a.id]))[0].id
+      expect((await api('@/app/api/invoice-payments/route', 'DELETE', undefined, '?id=' + pay)).status).toBe(200)
+      const z = await zeile(a.id); expect([z.status, Number(z.paid_amount)]).toEqual(['offen', 0])
+      expect((await stand([a.id, g7.id])).f.offen).toBe(2380)
+    })
+    it('Zahlung und Gutschrift gleichzeitig (echte parallele Transaktionen): Endzustand konsistent, nichts doppelt, Status stimmt', async () => {
+      for (let lauf = 1; lauf <= 4; lauf++) {
+        const P = await neuesProjekt('E2E Status Parallel ' + lauf, {})
+        const a = await re(P, 1000)                                                       // 1.190
+        const [z, g] = await Promise.all([zahle(a.id, 595), gs(P, a.invoice_number, 500)]) // 595 Zahlung + 595 Gutschrift = 1.190
+        expect(z.status).toBe(200)
+        const zl = await zeile(a.id); const s = await stand([a.id, ...(await q(`select id from invoices where project_id=$1 and invoice_type='gutschrift'`, [P])).map((r: any) => r.id)])
+        merke('9 Parallel', `Zahlung 595 ‖ Gutschrift 595 (Lauf ${lauf}): offen / Status / Zahlung`, '0 / bezahlt / 595', `${s.f.offen} / ${zl.status} / ${Number(zl.paid_amount)}`)
+        expect([s.f.offen, zl.status, Number(zl.paid_amount), s.f.guthaben]).toEqual([0, 'bezahlt', 595, 0]); void g
+        expect((await q('select count(*)::int n from invoice_payments where invoice_id=$1', [a.id]))[0].n).toBe(1)
+      }
+    })
+  })
+
+  // ──────────────────────────────────────────────────────────
   // 9. Parallelität (echte Transaktionen, getrennte Datenbankverbindungen)
   // ──────────────────────────────────────────────────────────
   describe('9. Parallelität und Datenintegrität', () => {

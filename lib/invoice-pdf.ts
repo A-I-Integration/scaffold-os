@@ -58,6 +58,8 @@ export interface Invoice {
   reference_invoice_number?: string | null; // Phase 22: bei Gutschriften, Bezug auf Original
   customer_id?: string | null; // Phase 34: echte Kunde-Verknüpfung statt Namensvergleich
   paid_amount?: number; // Phase 38: Teilzahlungen
+  /** Offener Betrag nach Zahlungen UND Gutschriften (lib/forderung.ts); fehlt er, gilt Rechnungsbetrag − Zahlungen */
+  offen_zentral?: number;
   pruef_status?: 'akzeptiert' | 'aenderung' | 'abgelehnt' | null; // Prüfung durch den Auftraggeber
   geprueft_von?: string | null;
   geprueft_am?: string | null;
@@ -362,7 +364,7 @@ export function generateMahnungPDF(inv: Invoice, stufe: 1 | 2, mahnkosten?: { pa
   const zinssatz = mahnkosten?.zinssatz ?? 0;
   const tage = mahnkosten?.tageUeberfaellig ?? 0;
   // Basis ist der noch OFFENE Betrag (nach Teilzahlungen), nicht der volle Rechnungsbetrag.
-  const offen = offenerBetrag(inv);
+  const offen = inv.offen_zentral ?? offenerBetrag(inv);
   const zinsen = Math.round(offen * (zinssatz / 100) * (tage / 365) * 100) / 100;
   const gesamtMitZinsen = Math.round((offen + zinsen + pauschale) * 100) / 100;
 
@@ -446,7 +448,7 @@ export function generateZahlungserinnerungPDF(inv: Invoice) {
 
   y = 92;
   doc.setFontSize(10);
-  const offen = Math.round((Number(inv.gross_amount) - (Number(inv.paid_amount) || 0)) * 100) / 100;
+  const offen = inv.offen_zentral ?? Math.round((Number(inv.gross_amount) - (Number(inv.paid_amount) || 0)) * 100) / 100;
   const text = `Sehr geehrte Damen und Herren,\n\nfür die oben genannte Rechnung über ${fmtEur(Number(inv.gross_amount))} € haben wir bis heute noch keinen vollständigen Zahlungseingang festgestellt. Möglicherweise hat sich unsere Rechnung mit Ihrer Zahlung überschnitten oder sie ist Ihnen entgangen.\n\nOffener Betrag: ${fmtEur(offen)} €\n\nWir bitten Sie, den offenen Betrag innerhalb von 7 Tagen unter Angabe der Rechnungsnummer zu überweisen.${cs.iban ? `\n\nBankverbindung: ${cs.bank_name || ''}, IBAN ${cs.iban}${cs.bic ? ', BIC ' + cs.bic : ''}` : ''}\n\nSollten Sie die Zahlung bereits veranlasst haben, betrachten Sie dieses Schreiben als gegenstandslos.\n\nMit freundlichen Grüßen\n${cs.company_name || ''}`;
   doc.text(doc.splitTextToSize(text, 180), 14, y);
 

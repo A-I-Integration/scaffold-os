@@ -58,7 +58,7 @@ import StatikDokumente from '@/components/StatikDokumente'
 import StatikerFreigabeBox from '@/components/StatikerFreigabeBox'
 import { FreigabeBadge, useFreigabeStatus } from '@/components/FreigabeBadge'
 import Auftragsstand from '@/components/Auftragsstand'
-import { berechneForderung } from '@/lib/forderung'
+import { berechneForderung, mitBezugsGutschriften } from '@/lib/forderung'
 import AnhangDialog from '@/components/rechnung/AnhangDialog'
 import { ladeXrechnung } from '@/lib/xrechnung-download'
 
@@ -188,6 +188,8 @@ export default function KundenDetailPage() {
   const [uploadLaeuft, setUploadLaeuft] = useState<string | null>(null) // "<projectId>-bilder" oder "<projectId>-dokumente"
   const [dokEintraege, setDokEintraege] = useState<Record<string, DokEvent[]>>({})
   const [loading, setLoading] = useState(true)
+  // Rechnungsdaten: solange sie laden oder fehlgeschlagen sind, wird KEIN offener Betrag gezeigt
+  const [rechnungsLadung, setRechnungsLadung] = useState<'laed' | 'ok' | 'fehler'>('laed')
   const [speichern, setSpeichern] = useState(false)
 
   // Rechnung bearbeiten
@@ -251,6 +253,7 @@ export default function KundenDetailPage() {
 
   const ladeDaten = useCallback(async () => {
     setLoading(true)
+    setRechnungsLadung('laed')
     try {
       const [kRes, pRes, iRes] = await Promise.all([
         fetch(`/api/kunden?id=${id}`),
@@ -265,6 +268,7 @@ export default function KundenDetailPage() {
       setKunde(gefundenerKunde)
       if (gefundenerKunde) setKundeForm(gefundenerKunde)
       setInvoices(iJson.success ? (iJson.invoices || []) : [])
+      setRechnungsLadung(iJson.success ? 'ok' : 'fehler')
 
       // NEU: „👁 Gesehen"-Tracking wie auf der Rechnungen-Übersicht (bisher
       // fehlte das hier komplett, obwohl die Daten längst erfasst werden).
@@ -311,7 +315,7 @@ export default function KundenDetailPage() {
       } else {
         setEmails([]); setFotos({}); setDokEintraege({})
       }
-    } catch { /* silent */ }
+    } catch { setRechnungsLadung((z) => (z === 'ok' ? z : 'fehler')) }
     setLoading(false)
   }, [id])
 
@@ -823,13 +827,17 @@ export default function KundenDetailPage() {
   // Projekt, das diesem Kunden zugeordnet ist. Namensvergleich bleibt als
   // Rückfalloption für alte Rechnungen ohne diese Verknüpfung.
   const eigeneProjektIds = useMemo(() => new Set(projects.map(p => p.id)), [projects])
-  const kundenInvoices = useMemo(() => invoices.filter((i) =>
-    kunde && (
-      i.customer_id === kunde.id ||
-      (i.project_id && eigeneProjektIds.has(i.project_id)) ||
-      (!i.customer_id && !i.project_id && nameMatch(i.customer_name, kunde.name))
+  const kundenInvoices = useMemo(() => {
+    const eigene = invoices.filter((i) =>
+      kunde && (
+        i.customer_id === kunde.id ||
+        (i.project_id && eigeneProjektIds.has(i.project_id)) ||
+        (!i.customer_id && !i.project_id && nameMatch(i.customer_name, kunde.name))
+      )
     )
-  ), [invoices, kunde, eigeneProjektIds])
+    // Gutschriften gehören zu ihrer Bezugsrechnung – auch wenn sie selbst keiner Baustelle/keinem Kunden zugeordnet sind
+    return mitBezugsGutschriften(eigene, invoices)
+  }, [invoices, kunde, eigeneProjektIds])
   const rechnungsNummernKey = kundenInvoices.map((i) => i.invoice_number).filter(Boolean).sort().join(',')
   useEffect(() => {
     if (!rechnungsNummernKey) { setRechnungsMails([]); return }
@@ -885,14 +893,16 @@ export default function KundenDetailPage() {
   const sichtEmails = baustelle
     ? alleEmails.filter((m) => m.project_id === baustelle.id || (!!m.invoice_number && sichtRechnungsNr.has(m.invoice_number)))
     : alleEmails
-  const forderungSicht = baustelle ? berechneForderung(sichtInvoices as never[]) : forderungKunde
+  // Belege der Baustelle für die Forderung: inkl. aller Gutschriften, die sich auf ihre Rechnungen beziehen (auch ohne Baustelle)
+  const sichtBelege = baustelle ? mitBezugsGutschriften(sichtInvoices, kundenInvoices) : kundenInvoices
+  const forderungSicht = baustelle ? berechneForderung(sichtBelege as never[]) : forderungKunde
   const sichtOffene = sichtInvoices.filter((i) => i.invoice_type !== 'gutschrift' && (forderungSicht.je.get(String(i.id)) ?? 0) > 0)
   // Faktura: aufklappbare Themenbereiche (mehrere gleichzeitig offen). Besuchte Bereiche bleiben im Hintergrund erhalten, damit z. B. ein angefangenes Formular beim Zuklappen nicht verloren geht.
   const [offeneThemen, setOffeneThemen] = useState<string[]>(['uebersicht'])
   const [besuchteThemen, setBesuchteThemen] = useState<string[]>(['uebersicht'])
   const [neuSignal, setNeuSignal] = useState(0)
   const [entwurfOffen, setEntwurfOffen] = useState<string | null>(null)
-  const fakturaDaten = useFakturaDaten({ kundeId: id, projektId: baustelle?.id ?? null, rechnungen: kundenInvoices, nachladen: mailTick })
+  const fakturaDaten = useFakturaDaten({ kundeId: id, projektId: baustelle?.id ?? null, rechnungen: kundenInvoices, rechnungenBereit: rechnungsLadung === 'ok', nachladen: mailTick })
   const themaOffen = (k: string) => offeneThemen.includes(k)
   const themaBesucht = (k: string) => besuchteThemen.includes(k)
   const themaUmschalten = (k: string) => {
@@ -920,8 +930,9 @@ export default function KundenDetailPage() {
     if (ziel) { setSchlussStart({ art }); setSchlussProjectId(ziel.id) }
     else themaOeffnen('abrechnen')
   }
-  const sichtOffeneSumme = forderungSicht.offen
-  const sichtUeberfaelligSumme = forderungSicht.ueberfaellig
+  const forderungBereit = rechnungsLadung === 'ok'
+  const sichtOffeneSumme = forderungBereit ? forderungSicht.offen : 0
+  const sichtUeberfaelligSumme = forderungBereit ? forderungSicht.ueberfaellig : 0
 
   const inputCls = 'w-full px-3 py-2 bg-white border border-black/10 rounded-lg text-sm text-[#1d1d1f] focus:outline-none focus:border-[#e8590c]'
   const btnPrimary = 'px-3 py-1.5 rounded-lg bg-[#e8590c] hover:bg-[#d9480f] text-white text-xs font-semibold transition-colors disabled:opacity-50'
@@ -952,12 +963,17 @@ export default function KundenDetailPage() {
               {baustelle ? `Kunde: ${kunde.name}${baustelle.adresse ? ` · ${baustelle.adresse}` : ''}` : `${kunde.street}${kunde.street ? ', ' : ''}${kunde.zip} ${kunde.city}`}
             </span>
           </div>
+          {rechnungsLadung !== 'ok' && (
+            <span className="text-xs px-2 py-0.5 rounded font-semibold" style={{ background: '#eeeeee', color: '#605e5c' }} data-testid="forderung-ladezustand">
+              {rechnungsLadung === 'laed' ? 'Offener Betrag wird geladen …' : 'Offener Betrag nicht verfügbar (Rechnungen konnten nicht geladen werden)'}
+            </span>
+          )}
           {sichtOffeneSumme > 0 && (
             <span className="text-xs px-2 py-0.5 rounded font-semibold" style={{ background: sichtUeberfaelligSumme > 0 ? '#fde2e1' : '#fff1d6', color: sichtUeberfaelligSumme > 0 ? '#b42318' : '#8a5a00' }}>
               {fmtEur(sichtOffeneSumme)} € offen{sichtUeberfaelligSumme > 0 ? ` · ${fmtEur(sichtUeberfaelligSumme)} € überfällig` : ''}
             </span>
           )}
-          {(forderungSicht.guthaben > 0 || forderungSicht.ungeklaert > 0) && (
+          {forderungBereit && (forderungSicht.guthaben > 0 || forderungSicht.ungeklaert > 0) && (
             <span className="text-xs px-2 py-0.5 rounded font-semibold" style={{ background: '#e7f1ff', color: '#1d4f91' }} data-testid="forderung-guthaben">
               {forderungSicht.guthaben > 0 ? `Guthaben ${fmtEur(forderungSicht.guthaben)} €` : ''}{forderungSicht.guthaben > 0 && forderungSicht.ungeklaert > 0 ? ' · ' : ''}{forderungSicht.ungeklaert > 0 ? `ungeklärte Gutschrift ${fmtEur(forderungSicht.ungeklaert)} €` : ''}
             </span>
@@ -1010,7 +1026,7 @@ export default function KundenDetailPage() {
                         <td className={zelle} style={{ borderColor: WIN.randHell }}>{status ? (ANGEBOT_LABEL[status] || status) : 'Noch kein Angebot'}</td>
                         <td className={zelle} style={{ borderColor: WIN.randHell }}><FreigabeBadge status={freigaben[pr.id]} /></td>
                         <td className={`${zelle} text-right tabular-nums`} style={{ borderColor: WIN.randHell }}>{invs.length}</td>
-                        <td className={`${zelle} text-right tabular-nums font-semibold ${offen > 0 ? 'text-red-600' : ''}`} style={{ borderColor: WIN.randHell }}>{offen > 0 ? `${fmtEur(offen)} €` : ''}</td>
+                        <td className={`${zelle} text-right tabular-nums font-semibold ${offen > 0 ? 'text-red-600' : ''}`} style={{ borderColor: WIN.randHell }}>{rechnungsLadung !== 'ok' ? '…' : offen > 0 ? `${fmtEur(offen)} €` : ''}</td>
                       </tr>
                     )
                   })}
@@ -1558,7 +1574,7 @@ export default function KundenDetailPage() {
                   {project.data?.kiResult?.building && <AnsichtLinkBox projectId={project.id} />}
                   {project.data?.kiResult?.building && <StatikerFreigabeBox projectId={project.id} />}
               </div>
-              <Auftragsstand ansicht="baustelle" project={project} invoices={sichtInvoices as any} onGeaendert={() => ladeDaten()} />
+              <Auftragsstand ansicht="baustelle" project={project} invoices={sichtBelege as any} rechnungenBereit={rechnungsLadung === 'ok'} onGeaendert={() => ladeDaten()} />
             </div>
           )
         })()}
@@ -1572,8 +1588,8 @@ export default function KundenDetailPage() {
             </FakturaThema>
             <FakturaThema offen={themaOffen('abrechnen')} onToggle={() => themaUmschalten('abrechnen')} besucht={themaBesucht('abrechnen')} id="faktura-abrechnen" titel="Aufträge abrechnen" untertitel={'Auftragsstand, Abschlag, Schlussrechnung, Gutschrift'} icon={<Layers className="h-4 w-4" />}>
               <div className="space-y-6">
-            {!baustelle && projects.map((p) => <Auftragsstand key={p.id} project={p} invoices={kundenInvoices.filter((i) => i.project_id === p.id) as unknown as ComponentProps<typeof Auftragsstand>['invoices']} onRechnungStellen={(art, prozent) => { setSchlussStart({ art, prozent }); setSchlussProjectId(p.id) }} onGeaendert={() => ladeDaten()} />)}
-            {baustelle && <Auftragsstand project={baustelle} invoices={sichtInvoices as any} onRechnungStellen={(art, prozent) => { setSchlussStart({ art, prozent }); setSchlussProjectId(baustelle.id) }} onGeaendert={() => ladeDaten()} />}
+            {!baustelle && projects.map((p) => <Auftragsstand key={p.id} project={p} invoices={mitBezugsGutschriften(kundenInvoices.filter((i) => i.project_id === p.id), kundenInvoices) as unknown as ComponentProps<typeof Auftragsstand>['invoices']} rechnungenBereit={rechnungsLadung === 'ok'} onRechnungStellen={(art, prozent) => { setSchlussStart({ art, prozent }); setSchlussProjectId(p.id) }} onGeaendert={() => ladeDaten()} />)}
+            {baustelle && <Auftragsstand project={baustelle} invoices={sichtBelege as any} rechnungenBereit={rechnungsLadung === 'ok'} onRechnungStellen={(art, prozent) => { setSchlussStart({ art, prozent }); setSchlussProjectId(baustelle.id) }} onGeaendert={() => ladeDaten()} />}
 
             {/* Je Auftrag: Rechnungen + Zusatzrechnung + Gutschrift */}
             {projektSicht.length === 0 && sichtInvoices.length === 0 && <p className="text-sm text-[#86868b]">Noch keine Aufträge oder Rechnungen.</p>}

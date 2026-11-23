@@ -1,6 +1,6 @@
 'use client';
 
-import { berechneForderung } from '@/lib/forderung';
+import { berechneForderung, statusJe, FORDERUNGSSTATUS_LABEL, type ForderungsStatus } from '@/lib/forderung';
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { fetchRechnungAnlegen } from '@/lib/rechnung-anlegen-client'
 import { useSearchParams } from 'next/navigation';
@@ -161,8 +161,12 @@ export function RechnungenInhalt({ umfang, neuSignal = 0, entwurfId: entwurfVonA
   const searchParams = useSearchParams();
   const [alleInvoices, setInvoices] = useState<Invoice[]>([]);
   // Offener Betrag je Rechnung zentral (lib/forderung.ts), identisch zu Kundenakte, Auftragsstand, Faktura-Übersicht und Zahlungsabgleich
-  const offenJe = useMemo(() => berechneForderung(alleInvoices as never[]).je, [alleInvoices]);
-  const offenVon = (i: { id: string; gross_amount: number | string; paid_amount?: number | string | null }) => offenJe.get(String(i.id)) ?? (Number(i.gross_amount) - Number(i.paid_amount || 0));
+  // Gutschriften werden über ihre Bezugsnummer über ALLE geladenen Rechnungen aufgelöst, nicht nur über die gerade sichtbaren
+  const forderungAlle = useMemo(() => berechneForderung(alleInvoices as never[]), [alleInvoices]);
+  const offenJe = forderungAlle.je;
+  const statusAbgeleitet = useMemo(() => statusJe(alleInvoices as never[]), [alleInvoices]);
+  const offenVon = (i: { id: string; status?: string; invoice_type?: string; gross_amount: number | string; paid_amount?: number | string | null }) =>
+    i.status === 'storniert' || i.invoice_type === 'gutschrift' ? 0 : (offenJe.get(String(i.id)) ?? (Number(i.gross_amount) - Number(i.paid_amount || 0)));
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const umfangKunde = umfang?.kundeId, umfangProjekt = umfang?.projektId, umfangProjektIds = umfang?.projektIds;
@@ -344,20 +348,20 @@ export function RechnungenInhalt({ umfang, neuSignal = 0, entwurfId: entwurfVonA
 
   // Überfällig automatisch markieren (Anzeige – Statuswechsel bleibt manuell)
   const isOverdue = (inv: Invoice) =>
-    inv.status === 'offen' && inv.due_date && new Date(inv.due_date) < new Date();
+    inv.status === 'offen' && inv.due_date && new Date(inv.due_date) < new Date() && offenVon(inv) > 0.005;
 
   const kette = korrekturkette(invoices as any);
   const sichtbar = invoices.filter((i) => {
-    if (filter === 'offen') return i.status === 'offen' || i.status === 'ueberfaellig';
-    if (filter === 'bezahlt') return i.status === 'bezahlt';
-    if (filter === 'ueberfaellig') return i.status === 'ueberfaellig' || !!isOverdue(i);
+    if (filter === 'offen') return (i.status === 'offen' || i.status === 'ueberfaellig') && i.invoice_type !== 'gutschrift' && offenVon(i) > 0.005;
+    if (filter === 'bezahlt') return i.status === 'bezahlt' || ['bezahlt', 'ausgeglichen'].includes(statusAbgeleitet.get(String(i.id)) ?? '');
+    if (filter === 'ueberfaellig') return (i.status === 'ueberfaellig' && offenVon(i) > 0.005) || !!isOverdue(i);
     return true;
   });
   const anzahlFilter = {
     alle: invoices.length,
-    offen: invoices.filter((i) => i.status === 'offen' || i.status === 'ueberfaellig').length,
-    bezahlt: invoices.filter((i) => i.status === 'bezahlt').length,
-    ueberfaellig: invoices.filter((i) => i.status === 'ueberfaellig' || !!isOverdue(i)).length,
+    offen: invoices.filter((i) => (i.status === 'offen' || i.status === 'ueberfaellig') && i.invoice_type !== 'gutschrift' && offenVon(i) > 0.005).length,
+    bezahlt: invoices.filter((i) => i.status === 'bezahlt' || ['bezahlt', 'ausgeglichen'].includes(statusAbgeleitet.get(String(i.id)) ?? '')).length,
+    ueberfaellig: invoices.filter((i) => (i.status === 'ueberfaellig' && offenVon(i) > 0.005) || !!isOverdue(i)).length,
   };
 
   // Mahnwesen: ein einziger Weg (derselbe wie der automatische Lauf) – Zahlungserinnerung, 1./2. Mahnung, Pause
@@ -635,7 +639,8 @@ export function RechnungenInhalt({ umfang, neuSignal = 0, entwurfId: entwurfVonA
     URL.revokeObjectURL(link.href);
   }
 
-  const summeOffen = berechneForderung(invoices as never[]).offen;
+  // Summe der Ansicht aus den zentral berechneten Beträgen aller Rechnungen (Gutschriften außerhalb der Ansicht zählen mit)
+  const summeOffen = invoices.reduce((x, i) => x + (offenJe.get(String(i.id)) ?? 0), 0);
 
   // Phase 15b: Bei Schlussrechnung die bisherigen Abschläge desselben Kunden zeigen
   const abschlaegeKunde = invoiceType === 'schluss' && customerName.trim()
@@ -653,7 +658,7 @@ export function RechnungenInhalt({ umfang, neuSignal = 0, entwurfId: entwurfVonA
         {!eingebettet && (<>
         <FileText className="h-4 w-4" />
         <h1 className="text-[14px] font-bold">Rechnungen</h1>
-        <span className="text-xs opacity-80">{invoices.length} Rechnungen · {fmtEur(summeOffen)} € offen</span>
+        <span className="text-xs opacity-80">{invoices.length} Rechnungen · {loading || error ? 'Offen: …' : `${fmtEur(summeOffen)} € offen`}</span>
         </>)}
         <span className="ml-auto flex gap-1.5">
           {!eingebettet && <button onClick={handleDatevExport} className="flex items-center gap-1 rounded px-3 py-1 text-xs font-semibold bg-white/15 hover:bg-white/25"><Download className="h-3.5 w-3.5" /> DATEV-Buchungsstapel</button>}
@@ -1002,6 +1007,12 @@ export function RechnungenInhalt({ umfang, neuSignal = 0, entwurfId: entwurfVonA
                             </option>
                           ))}
                         </select>
+                        {(() => {
+                          // Stand nach Zahlungen UND Gutschriften (zentral): zeigt „ausgeglichen“/„teilweise gutgeschrieben“, wo der gespeicherte Status allein täuscht
+                          const st: ForderungsStatus | undefined = statusAbgeleitet.get(String(inv.id));
+                          if (!st || loading || error || !['ausgeglichen', 'teilausgeglichen', 'teilbezahlt', 'bezahlt'].includes(st) || (st === 'bezahlt' && inv.status === 'bezahlt')) return null;
+                          return <div data-testid="status-abgeleitet" className="text-[10px] mt-0.5 text-blue-700">{FORDERUNGSSTATUS_LABEL[st]}</div>;
+                        })()}
                       </td>
                       <td className="px-3 py-2.5">
                         <div className="flex justify-end">

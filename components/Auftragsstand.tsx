@@ -23,9 +23,11 @@ interface Props {
   onGeaendert?: () => void
   /** 'abrechnung': Auftragswert, Rest, Rechnung stellen, Nachträge. 'baustelle': Ergebnis und Link für den Auftraggeber. */
   ansicht?: 'abrechnung' | 'baustelle'
+  /** false, solange die Rechnungen noch laden oder das Laden fehlgeschlagen ist: dann wird kein offener Betrag gezeigt */
+  rechnungenBereit?: boolean
 }
 
-export default function Auftragsstand({ project, invoices, onRechnungStellen, onGeaendert, ansicht = 'abrechnung' }: Props) {
+export default function Auftragsstand({ project, invoices, onRechnungStellen, onGeaendert, ansicht = 'abrechnung', rechnungenBereit = true }: Props) {
   const baustelleAnsicht = ansicht === 'baustelle'
   void onGeaendert
   const [kranSatz, setKranSatz] = useState(850)
@@ -114,10 +116,10 @@ export default function Auftragsstand({ project, invoices, onRechnungStellen, on
         {kachel('Auftragswert (netto)', eur(stand.auftragswert), `Angebot ${eur(stand.angebotNetto)}${stand.nachtraegeBestaetigt ? ` + Nachträge ${eur(stand.nachtraegeBestaetigt)}` : ''}`)}
         {kachel('Abgerechnet (netto)', eur(stand.abgerechnet), stand.prozentAbgerechnet === null ? undefined : `${stand.prozentAbgerechnet.toLocaleString('de-DE')} % des Auftragswerts`)}
         {kachel('Noch abzurechnen (netto)', eur(stand.restZuAbrechnen), stand.nachtraegeOffen > 0 ? `Dazu offene Nachträge: ${eur(stand.nachtraegeOffen)} (noch nicht bestätigt)` : undefined)}
-        {kachel('Offen (brutto)', eur(stand.offenBrutto), `Bezahlt ${eur(stand.bezahlt)}${stand.guthaben > 0 ? ` · Guthaben ${eur(stand.guthaben)}` : ''}${stand.ungeklaertGutschrift > 0 ? ` · ungeklärte Gutschrift ${eur(stand.ungeklaertGutschrift)}` : ''}`, stand.ueberfaellig > 0)}
+        {kachel('Offen (brutto)', rechnungenBereit ? eur(stand.offenBrutto) : '…', rechnungenBereit ? `Bezahlt ${eur(stand.bezahlt)}${stand.guthaben > 0 ? ` · Guthaben ${eur(stand.guthaben)}` : ''}${stand.ungeklaertGutschrift > 0 ? ` · ungeklärte Gutschrift ${eur(stand.ungeklaertGutschrift)}` : ''}` : 'Rechnungen werden geladen oder sind nicht verfügbar', rechnungenBereit && stand.ueberfaellig > 0)}
       </div>
       {stand.auftragswert > 0 && stand.abgerechnet > stand.auftragswert && <p className="text-sm text-red-700">Es ist mehr abgerechnet als der Auftragswert. Bitte prüfen, ob ein Nachtrag fehlt oder eine Rechnung doppelt gestellt wurde.</p>}
-      {stand.ueberfaellig > 0 && <p className="text-sm text-red-700">Davon überfällig: {eur(stand.ueberfaellig)}</p>}
+      {rechnungenBereit && stand.ueberfaellig > 0 && <p className="text-sm text-red-700">Davon überfällig: {eur(stand.ueberfaellig)}</p>}
       </>}
 
       {baustelleAnsicht && (
@@ -178,7 +180,7 @@ export default function Auftragsstand({ project, invoices, onRechnungStellen, on
               <tr><td>Gutschriften</td><td>{eur(kontrolle.gutschriften)}</td></tr>
               {kontrolle.vorhaltung !== 0 && <tr className="text-black/70"><td>Vorhaltung (zusätzlich, nicht im Auftragswert)</td><td>{eur(kontrolle.vorhaltung)}</td></tr>}
               <tr className="font-semibold border-t border-black/20"><td>Abgerechnet (netto) / noch offen zum Abrechnen</td><td>{eur(kontrolle.abgerechnet)} / {eur(kontrolle.noch)}</td></tr>
-              <tr><td>Bezahlt / offen (brutto)</td><td>{eur(kontrolle.bezahltBrutto)} / {eur(kontrolle.offenBrutto)}</td></tr>
+              <tr><td>Bezahlt / offen (brutto)</td><td>{rechnungenBereit ? `${eur(kontrolle.bezahltBrutto)} / ${eur(kontrolle.offenBrutto)}` : '…'}</td></tr>
               {(kontrolle.guthabenBrutto > 0 || kontrolle.ungeklaertGutschriftBrutto > 0) && <tr><td>Guthaben / ungeklärte Gutschriften (brutto)</td><td>{eur(kontrolle.guthabenBrutto)} / {eur(kontrolle.ungeklaertGutschriftBrutto)}</td></tr>}
               <tr className="text-black/70"><td>Nachträge angefragt, nicht bestätigt (zählen nicht)</td><td>{eur(kontrolle.nachtraegeAngefragt)}</td></tr>
             </tbody>
