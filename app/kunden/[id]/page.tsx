@@ -143,14 +143,14 @@ const fmtTimestamp = (d: string | null) => (d ? new Date(d).toLocaleDateString('
 
 const LEER_POSITION = { bezeichnung: '', menge: '1', einheit: 'Stk.', einzelpreis: '' }
 // Der Reiter heißt jetzt „Faktura“ (Schlüssel bleibt 'rechnungen', damit alte Links ?tab=rechnungen weiter funktionieren).
-const TABS = ['baustellen', 'kunde', 'aufmass', 'bilder', 'dokumente', 'mappe', 'angebote', 'lv', 'zeiten', 'bauphasen', 'nachtraege', 'rechnungen', 'emails'] as const
+const TABS = ['baustellen', 'kunde', 'aufmass', 'bilder', 'dokumente', 'mappe', 'angebote', 'lv', 'zeiten', 'bauphasen', 'nachtraege', 'ausfuehrung', 'rechnungen', 'emails'] as const
 type Tab = typeof TABS[number]
 // Zwei Ebenen: Kunde (Übersicht aller Baustellen, Stammdaten, alle Rechnungen/Mails) und Baustelle (alles zu genau diesem Projekt)
 // Alle Reiter gibt es auch auf Kundenebene: Reiter, die zu genau einer Baustelle gehören (Leistungsverzeichnis, Mappe, Zeiten), fragen dort die Baustelle ab.
-const KUNDEN_TABS: Tab[] = ['baustellen', 'kunde', 'aufmass', 'bilder', 'dokumente', 'mappe', 'angebote', 'lv', 'zeiten', 'bauphasen', 'nachtraege', 'rechnungen', 'emails']
-const BAUSTELLEN_TABS: Tab[] = ['kunde','aufmass', 'bilder', 'dokumente', 'mappe', 'angebote', 'lv', 'zeiten', 'bauphasen', 'nachtraege', 'rechnungen', 'emails']
+const KUNDEN_TABS: Tab[] = ['baustellen', 'kunde', 'aufmass', 'bilder', 'dokumente', 'mappe', 'angebote', 'lv', 'zeiten', 'bauphasen', 'nachtraege', 'ausfuehrung', 'rechnungen', 'emails']
+const BAUSTELLEN_TABS: Tab[] = ['kunde', 'aufmass', 'bilder', 'dokumente', 'mappe', 'angebote', 'lv', 'zeiten', 'bauphasen', 'nachtraege', 'ausfuehrung', 'rechnungen', 'emails']
 const TAB_LABEL: Record<Tab, string> = {
-  baustellen: 'Baustellen', kunde: 'Kunde', aufmass: 'Aufmaß', bilder: 'Bilder', dokumente: 'Dokumente', mappe: 'Baustellenmappe (QR)', angebote: 'Angebote', lv: 'Leistungsverzeichnis', zeiten: 'Zeiten', bauphasen: 'Bauphasen', nachtraege: 'Nachträge / Schluss', rechnungen: 'Faktura', emails: 'E-Mails',
+  baustellen: 'Baustellen', ausfuehrung: 'Ausführung', kunde: 'Kunde', aufmass: 'Aufmaß', bilder: 'Bilder', dokumente: 'Dokumente', mappe: 'Baustellenmappe (QR)', angebote: 'Angebote', lv: 'Leistungsverzeichnis', zeiten: 'Zeiten', bauphasen: 'Bauphasen', nachtraege: 'Nachträge / Schluss', rechnungen: 'Faktura', emails: 'E-Mails',
 }
 
 // Gleicher Namensabgleich wie auf der Kunden-Übersicht (app/kunden/page.tsx):
@@ -1406,35 +1406,16 @@ export default function KundenDetailPage() {
         )}
         {neueRechnungAnhang && <AnhangDialog invoiceId={neueRechnungAnhang.id} rechnungsNr={neueRechnungAnhang.invoice_number} positionen={neueRechnungAnhang.positions || []} onClose={() => { setNeueRechnungAnhang(null); ladeDaten() }} />}
 
-        {/* ═══════════ TAB: RECHNUNGEN ═══════════ */}
-        {tabAktiv === 'rechnungen' && (
-          <div className="space-y-3">
-            {fakturaDaten.fehler && <p className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">❌ {fakturaDaten.fehler}</p>}
-            <FakturaThema offen={themaOffen('uebersicht')} onToggle={() => themaUmschalten('uebersicht')} besucht={themaBesucht('uebersicht')} id="faktura-uebersicht" titel="Übersicht" untertitel={'Kennzahlen, was dringend ist, schnell erstellen'} icon={<LayoutDashboard className="h-4 w-4" />}>
-              <FakturaUebersicht daten={fakturaDaten} onBereich={springeInFaktura} imKundenordner onSchnell={starteSchnell} />
-            </FakturaThema>
-            <FakturaThema offen={themaOffen('abrechnen')} onToggle={() => themaUmschalten('abrechnen')} besucht={themaBesucht('abrechnen')} id="faktura-abrechnen" titel="Aufträge abrechnen" untertitel={'Auftragsstand, Abschlag, Schlussrechnung, Gutschrift'} icon={<Layers className="h-4 w-4" />}>
-              <div className="space-y-6">
-            {!baustelle && projects.map((p) => <Auftragsstand key={p.id} project={p} invoices={kundenInvoices.filter((i) => i.project_id === p.id) as unknown as ComponentProps<typeof Auftragsstand>['invoices']} onRechnungStellen={(art, prozent) => { setSchlussStart({ art, prozent }); setSchlussProjectId(p.id) }} onGeaendert={() => ladeDaten()} />)}
-            {baustelle && <Auftragsstand project={baustelle} invoices={sichtInvoices as any} onRechnungStellen={(art, prozent) => { setSchlussStart({ art, prozent }); setSchlussProjectId(baustelle.id) }} onGeaendert={() => ladeDaten()} />}
-
-            {/* Je Auftrag: Rechnungen + Zusatzrechnung + Gutschrift */}
-            {projektSicht.length === 0 && sichtInvoices.length === 0 && <p className="text-sm text-[#86868b]">Noch keine Aufträge oder Rechnungen.</p>}
-
-            {(projektSicht.length > 0 ? projektSicht : [{ id: '__ohne__', name: null } as Project]).map((project) => {
-              const projInvoices = project.id === '__ohne__'
-                ? sichtInvoices.filter((i) => !i.project_id)
-                : sichtInvoices.filter((i) => i.project_id === project.id)
-              if (project.id === '__ohne__' && projInvoices.length === 0) return null
-              const projOffen = projInvoices.filter((i) => i.status === 'offen' || i.status === 'ueberfaellig').reduce((s, i) => s + (Number(i.gross_amount) - Number(i.paid_amount || 0)), 0)
-
-              return (
-                <div key={project.id} className="bg-white rounded-xl border border-black/10 overflow-hidden">
-                  <div className="px-5 py-3 border-b border-black/5 flex items-center justify-between">
-                    <p className="text-sm font-semibold text-[#1d1d1f]">{project.name || (project.id === '__ohne__' ? 'Ohne Auftrag' : 'Unbenanntes Projekt')} ({projInvoices.length})</p>
-                    {projOffen > 0 && <span className="text-xs text-red-600 font-semibold">{fmtEur(projOffen)} € offen</span>}
-                  </div>
-
+        {/* ═══════════ TAB: AUSFÜHRUNG (Baustelle: Ergebnis, Aufbau/Abbau, Lieferschein, Standzeit, Links) ═══════════ */}
+        {tabAktiv === 'ausfuehrung' && !baustelle && baustellenWahl('ausfuehrung')}
+        {tabAktiv === 'ausfuehrung' && baustelle && (() => {
+          const project = baustelle
+          return (
+            <div className="space-y-4">
+              <div className="bg-white rounded-xl border border-black/10 overflow-hidden">
+                <div className="px-5 py-3 border-b border-black/5">
+                  <p className="text-sm font-semibold text-[#1d1d1f]">{project.name || 'Unbenanntes Projekt'}</p>
+                </div>
                   {/* NEU: Bauzeitraum – Aufbau/Abbau, aus dem Dokumentation-Modul abgeleitet */}
                   {project.id !== '__ohne__' && (() => {
                     const { aufbauAm, abbauAm } = bauzeitraum(project.id)
@@ -1575,93 +1556,53 @@ export default function KundenDetailPage() {
                   <AngebotLinkBox projectId={project.id} />
                   {project.data?.kiResult?.building && <AnsichtLinkBox projectId={project.id} />}
                   {project.data?.kiResult?.building && <StatikerFreigabeBox projectId={project.id} />}
+              </div>
+              <Auftragsstand ansicht="baustelle" project={project} invoices={sichtInvoices as any} onGeaendert={() => ladeDaten()} />
+            </div>
+          )
+        })()}
+
+        {/* ═══════════ TAB: RECHNUNGEN ═══════════ */}
+        {tabAktiv === 'rechnungen' && (
+          <div className="space-y-3">
+            {fakturaDaten.fehler && <p className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">❌ {fakturaDaten.fehler}</p>}
+            <FakturaThema offen={themaOffen('uebersicht')} onToggle={() => themaUmschalten('uebersicht')} besucht={themaBesucht('uebersicht')} id="faktura-uebersicht" titel="Übersicht" untertitel={'Kennzahlen, was dringend ist, schnell erstellen'} icon={<LayoutDashboard className="h-4 w-4" />}>
+              <FakturaUebersicht daten={fakturaDaten} onBereich={springeInFaktura} imKundenordner onSchnell={starteSchnell} />
+            </FakturaThema>
+            <FakturaThema offen={themaOffen('abrechnen')} onToggle={() => themaUmschalten('abrechnen')} besucht={themaBesucht('abrechnen')} id="faktura-abrechnen" titel="Aufträge abrechnen" untertitel={'Auftragsstand, Abschlag, Schlussrechnung, Gutschrift'} icon={<Layers className="h-4 w-4" />}>
+              <div className="space-y-6">
+            {!baustelle && projects.map((p) => <Auftragsstand key={p.id} project={p} invoices={kundenInvoices.filter((i) => i.project_id === p.id) as unknown as ComponentProps<typeof Auftragsstand>['invoices']} onRechnungStellen={(art, prozent) => { setSchlussStart({ art, prozent }); setSchlussProjectId(p.id) }} onGeaendert={() => ladeDaten()} />)}
+            {baustelle && <Auftragsstand project={baustelle} invoices={sichtInvoices as any} onRechnungStellen={(art, prozent) => { setSchlussStart({ art, prozent }); setSchlussProjectId(baustelle.id) }} onGeaendert={() => ladeDaten()} />}
+
+            {/* Je Auftrag: Rechnungen + Zusatzrechnung + Gutschrift */}
+            {projektSicht.length === 0 && sichtInvoices.length === 0 && <p className="text-sm text-[#86868b]">Noch keine Aufträge oder Rechnungen.</p>}
+
+            {(projektSicht.length > 0 ? projektSicht : [{ id: '__ohne__', name: null } as Project]).map((project) => {
+              const projInvoices = project.id === '__ohne__'
+                ? sichtInvoices.filter((i) => !i.project_id)
+                : sichtInvoices.filter((i) => i.project_id === project.id)
+              if (project.id === '__ohne__' && projInvoices.length === 0) return null
+              const projOffen = projInvoices.filter((i) => i.status === 'offen' || i.status === 'ueberfaellig').reduce((s, i) => s + (Number(i.gross_amount) - Number(i.paid_amount || 0)), 0)
+
+              return (
+                <div key={project.id} className="bg-white rounded-xl border border-black/10 overflow-hidden">
+                  <div className="px-5 py-3 border-b border-black/5 flex items-center justify-between">
+                    <p className="text-sm font-semibold text-[#1d1d1f]">{project.name || (project.id === '__ohne__' ? 'Ohne Auftrag' : 'Unbenanntes Projekt')} ({projInvoices.length})</p>
+                    {projOffen > 0 && <span className="text-xs text-red-600 font-semibold">{fmtEur(projOffen)} € offen</span>}
+                  </div>
+
 
                   <div className="px-5 py-3">
-                    {projInvoices.length === 0 ? (
+                    {projInvoices.length === 0 && project.data?.kiResult && (
                       <div className="mb-2">
-                        <p className="text-xs text-[#86868b] mb-2">Noch keine Rechnung.</p>
-                        {project.data?.kiResult && (
-                          <button
-                            onClick={() => erstelleRechnungAusAngebot(project)}
-                            disabled={rechnungAusAngebotLaeuft === project.id}
-                            className="text-xs px-3 py-1.5 rounded-lg bg-[#e8590c] text-white font-medium disabled:opacity-50"
-                          >
-                            {rechnungAusAngebotLaeuft === project.id ? 'Wird angelegt…' : '🧾 Rechnung aus Angebot erstellen'}
-                          </button>
-                        )}
+                        <button
+                          onClick={() => erstelleRechnungAusAngebot(project)}
+                          disabled={rechnungAusAngebotLaeuft === project.id}
+                          className="text-xs px-3 py-1.5 rounded-lg bg-[#e8590c] text-white font-medium disabled:opacity-50"
+                        >
+                          {rechnungAusAngebotLaeuft === project.id ? 'Wird angelegt…' : '🧾 Rechnung aus Angebot erstellen'}
+                        </button>
                       </div>
-                    ) : (
-                      <ul className="divide-y divide-black/5 mb-2">
-                        {projInvoices
-                          .filter((inv) => !projInvoices.some((o) => o.id !== inv.id && o.reference_invoice_number === inv.invoice_number))
-                          .map((inv) => {
-                          const verzug = istUeberfaellig(inv)
-                          const gutschrift = inv.invoice_type === 'gutschrift'
-                          // NEU: zugehörige Korrekturen – Gutschriften UND "neue
-                          // Versionen" (Ersatz nach GoBD-Storno) – direkt darunter
-                          // gruppiert, statt verstreut in der chronologischen Liste.
-                          const korrekturen = projInvoices.filter((o) => o.id !== inv.id && o.reference_invoice_number === inv.invoice_number)
-                          return (
-                            <li key={inv.id} className="py-2">
-                            <div className="flex flex-wrap items-center gap-2 text-sm">
-                              <a href={`/rechnungen/${inv.id}`} className="font-medium text-[#e8590c] hover:underline">{inv.invoice_number}</a>
-                              {inv.invoice_type && inv.invoice_type !== 'standard' && (
-                                <span className={`text-[10px] px-1.5 py-0.5 rounded border ${gutschrift ? 'bg-purple-500/10 text-purple-700 border-purple-500/30' : 'bg-blue-500/10 text-blue-700 border-blue-500/30'}`}>{TYPE_LABEL[inv.invoice_type]}</span>
-                              )}
-                              <span className={`text-[10px] px-1.5 py-0.5 rounded border ${verzug ? STATUS_COLOR.ueberfaellig : STATUS_COLOR[inv.status]}`}>{verzug ? 'Überfällig' : STATUS_LABEL[inv.status]}</span>
-                              {/* NEU (Phase 38): Teilzahlungs-Hinweis */}
-                              {inv.status !== 'bezahlt' && inv.status !== 'storniert' && Number(inv.paid_amount) > 0 && (
-                                <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-700 border border-blue-500/30" title={`${fmtEur(Number(inv.paid_amount))} € bereits eingegangen`}>
-                                  Teilzahlung: {fmtEur(Number(inv.paid_amount))} € · offen {fmtEur(Number(inv.gross_amount) - Number(inv.paid_amount))} €
-                                </span>
-                              )}
-                              {opens[inv.invoice_number] && (
-                                <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-700 border border-emerald-500/40" title={`E-Mail geöffnet (${opens[inv.invoice_number].anzahl}×, zuletzt ${new Date(opens[inv.invoice_number].zuletzt).toLocaleString('de-DE')})`}>👁 Gesehen</span>
-                              )}
-                              <span className="text-[#86868b]">{fmtDate(inv.invoice_date)}</span>
-                              <span className={`ml-auto font-bold ${gutschrift ? 'text-purple-700' : verzug ? 'text-red-600' : 'text-[#1d1d1f]'}`}>{fmtEur(Number(inv.gross_amount))} €</span>
-                              <div className="w-full">
-                                <RechnungAktionen
-                                  gutschrift={gutschrift} storniert={inv.status === 'storniert'} bezahlt={inv.status === 'bezahlt'}
-                                  zugferdLaeuft={zugferdLaeuft === inv.id}
-                                  onPdf={() => { const doc = generateInvoicePDF(inv); doc.save(`${TYPE_LABEL[inv.invoice_type || 'standard']}_${inv.invoice_number}.pdf`) }}
-                                  onSenden={() => sendInvoice(inv)}
-                                  onZahlung={() => { setZahlungOffen(inv); setZahlungBetrag(String(Number(inv.gross_amount) - Number(inv.paid_amount || 0))); setZahlungDatum(lokalesDatumIso()); setZahlungNotiz('') }}
-                                  onNeueVersion={() => { setEditInvoice(inv); setEditPositions(inv.positions || []) }}
-                                  onGutschrift={() => { setGutschriftOffen(project.id); setGutschriftReferenz(inv.invoice_number); setGutschriftGrund('') }}
-                                  onTeilabbau={() => teilabbauVorschlagen(inv)}
-                                  onZugferd={() => handleZugferd(inv)}
-                                  onXrechnung={() => ladeXrechnung(inv.id).catch((err: Error) => alert('❌ ' + err.message))}
-                                  onBezahltToggle={() => toggleStatus(inv)}
-                                  onLoeschen={() => deleteInvoice(inv)}
-                                />
-                              </div>
-                            </div>
-
-
-                            {korrekturen.length > 0 && (
-                              <ul className="ml-4 pl-3 mt-1.5 border-l-2 border-purple-200 space-y-1">
-                                {korrekturen.map((k) => {
-                                  const kGutschrift = k.invoice_type === 'gutschrift'
-                                  return (
-                                  <li key={k.id} className="flex flex-wrap items-center gap-2 text-xs bg-purple-50 rounded-lg px-2.5 py-1.5">
-                                    <span className="font-medium text-purple-800">↳ {k.invoice_number}</span>
-                                    <span className="text-[10px] px-1.5 py-0.5 rounded border bg-purple-500/10 text-purple-700 border-purple-500/30">{kGutschrift ? 'Gutschrift' : 'Neue Version'}</span>
-                                    <span className="text-[#86868b]">{fmtDate(k.invoice_date)}</span>
-                                    <span className="ml-auto font-bold text-purple-700">{fmtEur(Number(k.gross_amount))} €</span>
-                                    <div className="flex gap-1">
-                                      <button onClick={() => { const doc = generateInvoicePDF(k); doc.save(`${kGutschrift ? 'Gutschrift' : 'Rechnung'}_${k.invoice_number}.pdf`) }} className="inline-flex items-center gap-1 px-2 py-1 rounded bg-black/5 hover:bg-black/10 text-[#1d1d1f] text-[11px] font-medium"><Download className="h-3 w-3" /> PDF</button>
-                                      <button onClick={() => sendInvoice(k)} className="inline-flex items-center gap-1 px-2 py-1 rounded bg-blue-600/15 hover:bg-blue-600/30 text-blue-700 text-[11px] font-medium"><Send className="h-3 w-3" /> Senden</button>
-                                    </div>
-                                  </li>
-                                  )
-                                })}
-                              </ul>
-                            )}
-                            </li>
-                          )
-                        })}
-                      </ul>
                     )}
 
                     {project.id !== '__ohne__' && (
@@ -1713,13 +1654,22 @@ export default function KundenDetailPage() {
               </div>
             </FakturaThema>
             <FakturaThema offen={themaOffen('rechnungen')} onToggle={() => themaUmschalten('rechnungen')} besucht={themaBesucht('rechnungen')} id="faktura-rechnungen" titel="Rechnungen" untertitel={`${sichtInvoices.length} Rechnung${sichtInvoices.length === 1 ? '' : 'en'}${sichtOffeneSumme > 0 ? ` · ${fmtEur(sichtOffeneSumme)} € offen` : ''}${fakturaDaten.entwuerfe.length > 0 ? ` · ${fakturaDaten.entwuerfe.length} Entwurf${fakturaDaten.entwuerfe.length === 1 ? '' : 'e'}` : ''}`} icon={<FileText className="h-4 w-4" />}>
-              <RechnungenInhalt umfang={rechnungenUmfang} neuSignal={neuSignal} entwurfId={entwurfOffen} onGeaendert={ladeDaten} />
-              {fakturaDaten.entwuerfe.length > 0 && (
-                <div className="mt-4 rounded-lg border border-black/10">
-                  <p className="px-4 pt-3 font-semibold text-sm text-[#1d1d1f]">Entwürfe ({fakturaDaten.entwuerfe.length})</p>
-                  <FakturaEntwuerfe daten={fakturaDaten} onOeffnen={entwurfBearbeiten} />
-                </div>
-              )}
+              <RechnungenInhalt
+                umfang={rechnungenUmfang} neuSignal={neuSignal} entwurfId={entwurfOffen} onGeaendert={ladeDaten}
+                entwuerfe={{ anzahl: fakturaDaten.entwuerfe.length, inhalt: <FakturaEntwuerfe daten={fakturaDaten} onOeffnen={entwurfBearbeiten} /> }}
+                zusatzAktionen={(inv) => {
+                  const full = kundenInvoices.find((k) => k.id === inv.id)
+                  if (!full) return {}
+                  return {
+                    zugferdLaeuft: zugferdLaeuft === full.id,
+                    onNeueVersion: () => { setEditInvoice(full); setEditPositions(full.positions || []) },
+                    onGutschrift: () => { themaOeffnen('abrechnen', false); setGutschriftOffen(full.project_id || (projects[0]?.id ?? null)); setGutschriftReferenz(full.invoice_number); setGutschriftGrund(''); setTimeout(() => document.getElementById(`gutschrift-form-${full.project_id}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 120) },
+                    onTeilabbau: () => teilabbauVorschlagen(full),
+                    onZugferd: () => handleZugferd(full),
+                    onXrechnung: () => ladeXrechnung(full.id).catch((err: Error) => alert('❌ ' + err.message)),
+                  }
+                }}
+              />
             </FakturaThema>
             <FakturaThema offen={themaOffen('werkzeuge')} onToggle={() => themaUmschalten('werkzeuge')} besucht={themaBesucht('werkzeuge')} id="faktura-werkzeuge" titel="Weitere Werkzeuge" untertitel={'Zahlungsabgleich, Mietabrechnung, Dokumente'} icon={<Wrench className="h-4 w-4" />}>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">

@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { Download, Send, Euro, ChevronDown, Pencil, Scissors, FileText, Check, RotateCcw, Trash2, Receipt } from 'lucide-react';
+import { Download, Send, Euro, ChevronDown, Pencil, Scissors, FileText, Check, RotateCcw, Trash2, Receipt, Paperclip, Link2, AlertTriangle } from 'lucide-react';
 
 // Aktionsleiste je Rechnung: die häufigen Schritte als beschriftete Knöpfe,
 // alles Seltene (korrigieren, E-Rechnung, löschen …) beschriftet im Menü „Mehr“.
@@ -20,7 +20,10 @@ type Props = {
   onZugferd?: () => void;
   onXrechnung?: () => void;
   onBezahltToggle?: () => void;
-  onLoeschen: () => void;
+  onLoeschen?: () => void;
+  onAnhang?: () => void;
+  onPruefLink?: () => void;
+  mahnEintraege?: { key: string; titel: string; hinweis?: string; onClick: () => void }[];
 };
 
 const knopf = 'inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors';
@@ -64,7 +67,10 @@ export default function RechnungAktionen(p: Props) {
   if (p.onZugferd) eintraege.push({ key: 'zf', icon: <FileText className="h-4 w-4" />, titel: p.zugferdLaeuft ? 'E-Rechnung wird erstellt …' : 'E-Rechnung (ZUGFeRD) laden', hinweis: 'PDF mit eingebetteter maschinenlesbarer Rechnung.', onClick: p.onZugferd });
   if (p.onXrechnung) eintraege.push({ key: 'xr', icon: <FileText className="h-4 w-4" />, titel: 'XRechnung (XML) laden', hinweis: 'Reine XML-Rechnung, z. B. für Behörden (braucht die Leitweg-ID des Kunden).', onClick: p.onXrechnung });
   if (!p.storniert && !p.gutschrift && p.onBezahltToggle) eintraege.push({ key: 'bz', icon: p.bezahlt ? <RotateCcw className="h-4 w-4" /> : <Check className="h-4 w-4" />, titel: p.bezahlt ? 'Wieder auf „offen“ setzen' : 'Als vollständig bezahlt markieren', hinweis: p.bezahlt ? undefined : 'Ohne Zahlung zu erfassen.', onClick: p.onBezahltToggle });
-  eintraege.push({ key: 'del', icon: <Trash2 className="h-4 w-4" />, titel: 'Löschen', hinweis: 'Entfernt die Rechnung endgültig.', onClick: p.onLoeschen, rot: true, trenner: true });
+  if (p.onAnhang) eintraege.push({ key: 'an', icon: <Paperclip className="h-4 w-4" />, titel: 'Dokumente und Anhänge', hinweis: 'Bilder, PDF, Excel, E-Mails an dieser Rechnung verwalten.', onClick: p.onAnhang });
+  if (!p.storniert && p.onPruefLink) eintraege.push({ key: 'pl', icon: <Link2 className="h-4 w-4" />, titel: 'Prüflink für den Auftraggeber', hinweis: 'Link erstellen und kopieren (30 Tage gültig).', onClick: p.onPruefLink });
+  if (!p.storniert && !p.gutschrift && !p.bezahlt) for (const m of p.mahnEintraege || []) eintraege.push({ key: m.key, icon: <AlertTriangle className="h-4 w-4" />, titel: m.titel, hinweis: m.hinweis, onClick: m.onClick });
+  if (p.onLoeschen) eintraege.push({ key: 'del', icon: <Trash2 className="h-4 w-4" />, titel: 'Löschen', hinweis: 'Entfernt die Rechnung endgültig.', onClick: p.onLoeschen, rot: true, trenner: true });
 
   return (
     <div className="flex flex-wrap items-center gap-1.5">

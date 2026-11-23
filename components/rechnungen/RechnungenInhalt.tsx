@@ -7,7 +7,7 @@ import { WIN } from '@/components/win/Win';
 import { useRechnungVersenden } from '@/components/RechnungVersendenDialog';
 import { versandJeRechnung, versandStandFuer, type VersandEintrag } from '@/lib/versand-status';
 import {
-  generateInvoicePDF, generateMahnungPDF, fmtEur, fmtDate,
+  generateInvoicePDF, fmtEur, fmtDate,
   type Invoice, type Position,
 } from '@/lib/invoice-pdf';
 import {
@@ -15,6 +15,8 @@ import {
 } from 'lucide-react';
 import { lokalesDatumIso, datumPlusTage } from '@/lib/datum';
 import AnhangDialog from '@/components/rechnung/AnhangDialog';
+import RechnungAktionen from '@/components/RechnungAktionen';
+import { manuelleAktionen, mahnStatusText, tageUeberfaellig, AKTION_LABEL } from '@/lib/mahnung-steuerung';
 import PositionDetails from '@/components/rechnung/PositionDetails';
 import { ENTSCHEIDUNG_LABEL, type PruefEntscheidung } from '@/lib/rechnung-pruefung';
 import { preisMitFaktor } from '@/lib/rechnung-position';
@@ -146,10 +148,13 @@ function buildDatevEXTF(invoices: Invoice[], kontenProKunde: Record<string, stri
 
 // Eingebettet im Kundenordner (Reiter „Faktura“): gleiche Liste und gleiches Formular, aber nur für diesen Kunden (und die gewählte Baustelle).
 export interface RechnungenUmfang { kundeId: string; kundeName: string; kundeAdresse: string; projektIds: string[]; projektId?: string | null }
-export interface RechnungenInhaltProps { umfang?: RechnungenUmfang; neuSignal?: number; entwurfId?: string | null; onGeaendert?: () => void }
+/** Zusatzaktionen, die nur die Kundenakte kennt (Neue Version, Gutschrift zur Rechnung, Teilabbau, ZUGFeRD, XRechnung). */
+export interface ZeilenZusatz { onNeueVersion?: () => void; onGutschrift?: () => void; onTeilabbau?: () => void; onZugferd?: () => void; onXrechnung?: () => void; zugferdLaeuft?: boolean }
+export interface RechnungenInhaltProps { umfang?: RechnungenUmfang; neuSignal?: number; entwurfId?: string | null; onGeaendert?: () => void; zusatzAktionen?: (inv: Invoice) => ZeilenZusatz; entwuerfe?: { anzahl: number; inhalt: React.ReactNode } }
 
-export function RechnungenInhalt({ umfang, neuSignal = 0, entwurfId: entwurfVonAussen = null, onGeaendert }: RechnungenInhaltProps = {}) {
+export function RechnungenInhalt({ umfang, neuSignal = 0, entwurfId: entwurfVonAussen = null, onGeaendert, zusatzAktionen, entwuerfe }: RechnungenInhaltProps = {}) {
   const eingebettet = !!umfang;
+  const [filter, setFilter] = useState<'alle' | 'offen' | 'bezahlt' | 'ueberfaellig' | 'entwuerfe'>('alle');
   const searchParams = useSearchParams();
   const [alleInvoices, setInvoices] = useState<Invoice[]>([]);
   const [loading, setLoading] = useState(true);
@@ -166,9 +171,6 @@ export function RechnungenInhalt({ umfang, neuSignal = 0, entwurfId: entwurfVonA
   const [anhangFuer, setAnhangFuer] = useState<Invoice | null>(null);
   const [saving, setSaving] = useState(false);
   const [companyMissing, setCompanyMissing] = useState(false);
-  // NEU (Phase 36): Verzugszinssatz/Mahnpauschale für manuell ausgelöste Mahnungen.
-  const [mahnPauschale, setMahnPauschale] = useState(5.0);
-  const [mahnZinssatz, setMahnZinssatz] = useState(10.52);
   // NEU (Phase 95, DATEV-Sammeldebitor-Fix): customer_id -> optionale
   // Einzeldebitoren-Kontonummer, für den DATEV-Export (siehe buildDatevEXTF).
   const [kundenKonten, setKundenKonten] = useState<Record<string, string>>({});
@@ -180,8 +182,6 @@ export function RechnungenInhalt({ umfang, neuSignal = 0, entwurfId: entwurfVonA
         const res = await fetch('/api/company');
         const json = await res.json();
         if (json.success) setCompanyMissing(!json.company?.company_name);
-        if (json.company?.mahnung_pauschale != null) setMahnPauschale(Number(json.company.mahnung_pauschale));
-        if (json.company?.mahnung_verzugszinssatz != null) setMahnZinssatz(Number(json.company.mahnung_verzugszinssatz));
       } catch { /* Banner optional */ }
     })();
   }, []);
@@ -339,6 +339,54 @@ export function RechnungenInhalt({ umfang, neuSignal = 0, entwurfId: entwurfVonA
   // Überfällig automatisch markieren (Anzeige – Statuswechsel bleibt manuell)
   const isOverdue = (inv: Invoice) =>
     inv.status === 'offen' && inv.due_date && new Date(inv.due_date) < new Date();
+
+  const sichtbar = invoices.filter((i) => {
+    if (filter === 'offen') return i.status === 'offen' || i.status === 'ueberfaellig';
+    if (filter === 'bezahlt') return i.status === 'bezahlt';
+    if (filter === 'ueberfaellig') return i.status === 'ueberfaellig' || !!isOverdue(i);
+    return true;
+  });
+  const anzahlFilter = {
+    alle: invoices.length,
+    offen: invoices.filter((i) => i.status === 'offen' || i.status === 'ueberfaellig').length,
+    bezahlt: invoices.filter((i) => i.status === 'bezahlt').length,
+    ueberfaellig: invoices.filter((i) => i.status === 'ueberfaellig' || !!isOverdue(i)).length,
+  };
+
+  // Mahnwesen: ein einziger Weg (derselbe wie der automatische Lauf) – Zahlungserinnerung, 1./2. Mahnung, Pause
+  const [mahnBusy, setMahnBusy] = useState<string | null>(null);
+  const [mahnMeldung, setMahnMeldung] = useState<{ text: string; fehler: boolean } | null>(null);
+  async function mahnPost(id: string, body: object, ok: (j: any) => string) {
+    setMahnBusy(id); setMahnMeldung(null);
+    try {
+      const res = await fetch('/api/mahnung', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ invoice_id: id, ...body }) });
+      const j = await res.json().catch(() => ({}));
+      if (!j.success) throw new Error(j.error || 'Fehlgeschlagen');
+      setMahnMeldung({ text: ok(j), fehler: false });
+      await load();
+    } catch (e) { setMahnMeldung({ text: e instanceof Error ? e.message : 'Fehlgeschlagen', fehler: true }); }
+    finally { setMahnBusy(null); }
+  }
+  function mahnEintraegeFuer(inv: Invoice) {
+    if (inv.status === 'storniert' || inv.status === 'bezahlt' || inv.invoice_type === 'gutschrift') return [];
+    const e: { key: string; titel: string; hinweis?: string; onClick: () => void }[] = [];
+    if (tageUeberfaellig(inv.due_date) > 0) {
+      for (const a of manuelleAktionen({ stufe: inv.reminder_level || 0, erinnerungAm: (inv as any).erinnerung_am })) {
+        e.push({ key: `mahn-${a}`, titel: `${AKTION_LABEL[String(a)]} senden`, hinweis: 'Geht per E-Mail an den Kunden.', onClick: () => {
+          if (!confirm(`${AKTION_LABEL[String(a)]} für Rechnung ${inv.invoice_number} jetzt per E-Mail an den Kunden senden?`)) return;
+          void mahnPost(inv.id, { aktion: a }, (j) => `${AKTION_LABEL[String(a)]} an ${j.an} gesendet.`);
+        } });
+      }
+    }
+    const pausiert = !!(inv as any).mahnung_pausiert;
+    e.push({ key: 'mahn-pause', titel: pausiert ? 'Mahnung fortsetzen' : 'Mahnung pausieren', hinweis: pausiert ? 'Die automatische Mahnung läuft wieder.' : 'Keine automatische Mahnung für diese Rechnung.', onClick: () => {
+      if (pausiert) { void mahnPost(inv.id, { pause: false }, () => `Mahnung für ${inv.invoice_number} läuft wieder automatisch.`); return; }
+      const grund = prompt('Mahnung für diese Rechnung pausieren. Grund (nur intern sichtbar, optional):');
+      if (grund === null) return;
+      void mahnPost(inv.id, { pause: true, grund }, () => `Mahnung für ${inv.invoice_number} ist pausiert.`);
+    } });
+    return e;
+  }
 
   const net = positions.reduce((s, p) => s + (Number(p.menge) || 0) * (Number(p.einzelpreis) || 0), 0);
   const tax = Math.round(net * taxRate) / 100;
@@ -553,58 +601,6 @@ export function RechnungenInhalt({ umfang, neuSignal = 0, entwurfId: entwurfVonA
   const versand = useRechnungVersenden(() => { void load(); });
   async function handleSendMail(inv: Invoice) {
     versand.starten(inv, await ermittleVorgeschlageneEmail(inv));
-  }
-
-  // Phase 15: Mahnung erzeugen (PDF + optional E-Mail), Mahnstufe hochzählen
-  async function handleMahnung(inv: Invoice) {
-    const stufe = ((inv.reminder_level || 0) + 1) as 1 | 2;
-    if (stufe > 2) { alert('Für diese Rechnung wurden bereits 2 Mahnungen erstellt. Nächster Schritt: Inkasso/Anwalt.'); return; }
-    if (!confirm(`${stufe}. Mahnung für Rechnung ${inv.invoice_number} erstellen?`)) return;
-    try {
-      const tage = inv.due_date ? Math.max(0, Math.floor((new Date(new Date().toDateString()).getTime() - new Date(inv.due_date + 'T00:00:00').getTime()) / 86400000)) : 0;
-      const doc = generateMahnungPDF(inv, stufe, { pauschale: mahnPauschale, zinssatz: mahnZinssatz, tageUeberfaellig: tage });
-      doc.save(`${stufe}_Mahnung_${inv.invoice_number}.pdf`);
-
-      // Optional direkt per E-Mail
-      const to = prompt('Direkt per E-Mail senden? Adresse eingeben – oder Abbrechen für nur PDF:');
-      if (to && to.includes('@')) {
-        const pdfBase64 = doc.output('datauristring');
-        const mailRes = await fetch('/api/email', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            type: 'mahnung',
-            to,
-            projectId: inv.project_id || undefined,
-            projectName: inv.customer_name,
-            customerName: inv.customer_name,
-            invoiceNumber: inv.invoice_number,
-            grossAmount: Number(inv.gross_amount),
-            pdfBase64,
-            projektnummer: inv.projektnummer ?? undefined,
-          }),
-        });
-        // Ein abgelehnter oder fehlgeschlagener Versand (z. B. veraltete oder fehlende Projektnummer) darf nicht still bleiben
-        const mailJson = await mailRes.json().catch(() => ({}));
-        if (!mailRes.ok || mailJson.success === false) {
-          alert('❌ Die Mahnung wurde NICHT per E-Mail versendet: ' + (mailJson.error || 'Versand fehlgeschlagen') + '\n\nDie PDF wurde nur lokal gespeichert. Die Mahnstufe wird nicht erhöht.');
-          return;
-        }
-      }
-
-      // Mahnstufe + Status speichern
-      const res = await fetch('/api/invoices', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: inv.id, status: 'ueberfaellig', reminder_level: stufe }),
-      });
-      const json = await res.json();
-      if (!json.success) throw new Error(json.error);
-      await load();
-      alert(`✅ ${stufe}. Mahnung erstellt und Mahnstufe gespeichert.`);
-    } catch (err: any) {
-      alert('❌ ' + err.message);
-    }
   }
 
   function handleDatevExport() {
@@ -881,7 +877,20 @@ export function RechnungenInhalt({ umfang, neuSignal = 0, entwurfId: entwurfVonA
           </div>
         )}
 
-        {/* Liste */}
+        {/* Filter */}
+        <div className="flex flex-wrap items-center gap-1.5" role="tablist" aria-label="Rechnungen filtern">
+          {([['alle', 'Alle'], ['offen', 'Offen'], ['bezahlt', 'Bezahlt'], ['ueberfaellig', 'Überfällig'], ...(entwuerfe ? [['entwuerfe', 'Entwürfe']] : [])] as [typeof filter, string][]).map(([k, l]) => (
+            <button key={k} role="tab" aria-selected={filter === k} onClick={() => setFilter(k)} className={`px-3 py-1 rounded-full text-xs font-semibold border transition-colors ${filter === k ? 'bg-[#1d1d1f] text-white border-[#1d1d1f]' : 'bg-white text-[#424245] border-black/10 hover:bg-black/5'}`}>
+              {l} <span className="opacity-70">({k === 'entwuerfe' ? (entwuerfe?.anzahl ?? 0) : anzahlFilter[k as keyof typeof anzahlFilter]})</span>
+            </button>
+          ))}
+        </div>
+        {mahnMeldung && <p className={`text-sm ${mahnMeldung.fehler ? 'text-red-700' : 'text-emerald-700'}`} role="status">{mahnMeldung.text}</p>}
+
+        {filter === 'entwuerfe' && entwuerfe ? (
+          <div className="rounded-xl border border-black/10 bg-white">{entwuerfe.anzahl === 0 ? <p className="p-4 text-sm text-[#86868b]">Keine Entwürfe.</p> : entwuerfe.inhalt}</div>
+        ) : (
+        /* Liste */
         <div className="bg-[#f5f5f7] rounded-xl border border-blue-500/20 overflow-hidden">
           {loading ? (
             <p className="p-6 text-[#86868b]">Lade Rechnungen…</p>
@@ -905,16 +914,25 @@ export function RechnungenInhalt({ umfang, neuSignal = 0, entwurfId: entwurfVonA
                 </tr>
               </thead>
               <tbody>
-                {invoices.map((inv) => {
+                {sichtbar.map((inv) => {
                   const effStatus = isOverdue(inv) ? 'ueberfaellig' : inv.status;
                   return (
                     <tr key={inv.id} className="border-b border-black/10/50 hover:bg-black/10/30">
                       <td className="px-3 py-2.5 font-mono text-[#e8590c]">
                         <Link href={`/rechnungen/${inv.id}`} className="hover:underline">{inv.invoice_number}</Link>
-                        {inv.invoice_type && inv.invoice_type !== 'standard' && (
+                        {(inv.invoice_type === 'abschlag' || inv.invoice_type === 'schluss') && (
                           <span className="ml-2 text-[10px] font-sans px-1.5 py-0.5 rounded bg-blue-500/20 text-blue-700 border border-blue-500/40">
                             {inv.invoice_type === 'abschlag' ? 'Abschlag' : 'Schluss'}
                           </span>
+                        )}
+                        {inv.invoice_type === 'gutschrift' && (
+                          <span className="ml-2 text-[10px] font-sans px-1.5 py-0.5 rounded bg-purple-500/10 text-purple-700 border border-purple-500/30">Gutschrift</span>
+                        )}
+                        {inv.reference_invoice_number && (
+                          <span className="ml-1 text-[10px] font-sans text-[#86868b]">zu {inv.reference_invoice_number}</span>
+                        )}
+                        {(inv as any).mahnung_pausiert && (
+                          <span className="ml-1 text-[10px] font-sans px-1.5 py-0.5 rounded bg-black/5 text-[#6e6e73] border border-black/10" title={(inv as any).mahnung_pause_grund || undefined}>Mahnung pausiert</span>
                         )}
                         {inv.importiert && (
                           <span className="ml-2 text-[10px] font-sans px-1.5 py-0.5 rounded bg-black/5 text-[#6e6e73] border border-black/10">Altbestand</span>
@@ -974,73 +992,27 @@ export function RechnungenInhalt({ umfang, neuSignal = 0, entwurfId: entwurfVonA
                         </select>
                       </td>
                       <td className="px-3 py-2.5">
-                        <div className="flex justify-end gap-1.5">
-                          <button
-                            onClick={() => handlePDF(inv)}
-                            title="Rechnungs-PDF herunterladen"
-                            className="rounded border border-[var(--os-linie)] bg-white p-2 text-[#303944] hover:bg-[#eef0f3] transition-colors"
-                          >
-                            <Download className="h-4 w-4" />
-                          </button>
-                          <button
-                            onClick={() => setAnhangFuer(inv)}
-                            title="Anhänge (Bilder, PDF, Excel, E-Mails) verwalten"
-                            className="rounded border border-[var(--os-linie)] bg-white p-2 text-[#303944] hover:bg-[#eef0f3] transition-colors"
-                          >
-                            <Paperclip className="h-4 w-4" />
-                          </button>
-                          {inv.status !== 'storniert' && (
-                            <button
-                              onClick={() => handlePruefLink(inv)}
-                              title="Prüflink für den Auftraggeber erstellen und kopieren"
-                              className="rounded border border-[var(--os-linie)] bg-white p-2 text-[#303944] hover:bg-[#eef0f3] transition-colors"
-                            >
-                              <Link2 className="h-4 w-4" />
-                            </button>
-                          )}
-                          {inv.status !== 'storniert' && (
-                            <button
-                              onClick={() => handleSendMail(inv)}
-                              title="Rechnung per E-Mail versenden"
-                              className="rounded border border-[var(--os-linie)] bg-white p-2 text-[#303944] hover:bg-[#eef0f3] transition-colors"
-                            >
-                              <Mail className="h-4 w-4" />
-                            </button>
-                          )}
-                          {(inv.status === 'ueberfaellig' || isOverdue(inv)) && inv.status !== 'storniert' && (
-                            <button
-                              onClick={() => handleMahnung(inv)}
-                              title="Mahnung erstellen (PDF + optional E-Mail)"
-                              className="rounded border border-[#f0b48f] bg-[#fff3ea] p-2 text-[#b8470a] hover:bg-[#ffe6d4] transition-colors"
-                            >
-                              <AlertTriangle className="h-4 w-4" />
-                            </button>
-                          )}
-                          {inv.status === 'offen' && (
-                            <>
-                              <button
-                                onClick={() => { setZahlungOffen(inv); setZahlungBetrag(String(Number(inv.gross_amount) - Number(inv.paid_amount || 0))); setZahlungDatum(lokalesDatumIso()) }}
-                                title="Zahlung erfassen (auch teilweise)"
-                                className="rounded border border-[var(--os-linie)] bg-white p-2 text-[#303944] hover:bg-[#eef0f3] transition-colors"
-                              >
-                                <Euro className="h-4 w-4" />
-                              </button>
-                              <button
-                                onClick={() => handleStatus(inv, 'bezahlt')}
-                                title="Als bezahlt markieren"
-                                className="rounded border border-[var(--os-linie)] bg-white p-2 text-emerald-700 hover:bg-emerald-50 transition-colors"
-                              >
-                                <Check className="h-4 w-4" />
-                              </button>
-                              <button
-                                onClick={() => handleDelete(inv)}
-                                title="Rechnung löschen"
-                                className="rounded border border-[var(--os-linie)] bg-white p-2 text-red-700 hover:bg-red-50 transition-colors"
-                              >
-                                <Trash2 className="h-4 w-4" />
-                              </button>
-                            </>
-                          )}
+                        <div className="flex justify-end">
+                          {(() => {
+                            const z = zusatzAktionen?.(inv) ?? {};
+                            const gs = inv.invoice_type === 'gutschrift';
+                            return (
+                              <RechnungAktionen
+                                gutschrift={gs} storniert={inv.status === 'storniert'} bezahlt={inv.status === 'bezahlt'}
+                                zugferdLaeuft={z.zugferdLaeuft}
+                                onPdf={() => handlePDF(inv)}
+                                onSenden={() => handleSendMail(inv)}
+                                onZahlung={() => { setZahlungOffen(inv); setZahlungBetrag(String(Number(inv.gross_amount) - Number(inv.paid_amount || 0))); setZahlungDatum(lokalesDatumIso()) }}
+                                onNeueVersion={z.onNeueVersion} onGutschrift={z.onGutschrift} onTeilabbau={z.onTeilabbau}
+                                onZugferd={z.onZugferd} onXrechnung={z.onXrechnung}
+                                onBezahltToggle={() => handleStatus(inv, inv.status === 'bezahlt' ? 'offen' : 'bezahlt')}
+                                onAnhang={() => setAnhangFuer(inv)}
+                                onPruefLink={() => handlePruefLink(inv)}
+                                mahnEintraege={mahnBusy === inv.id ? [] : mahnEintraegeFuer(inv)}
+                                onLoeschen={inv.status === 'offen' ? () => handleDelete(inv) : undefined}
+                              />
+                            );
+                          })()}
                         </div>
                       </td>
                     </tr>
@@ -1051,6 +1023,7 @@ export function RechnungenInhalt({ umfang, neuSignal = 0, entwurfId: entwurfVonA
             </div>
           )}
         </div>
+        )}
 
         <p className="text-xs text-[#86868b]">
           DATEV-Export: Buchungsstapel im EXTF-Format (Formatversion 700, SKR 03, Erlöskonto {DATEV_ERLOESKONTO_19} für 19&nbsp;%, {DATEV_ERLOESKONTO_7} für 7&nbsp;%; 0&nbsp;%-Rechnungen werden nicht mitexportiert).
