@@ -137,7 +137,7 @@ describe('Absicherung: keine Rechnung still ohne Projektnummer', () => {
   })
   it('Rückfall-PDF holt die Nummer vor dem Zeichnen; Mahnung per Knopf zeigt abgelehnten Versand an', () => {
     const t = q('lib/invoice-pdf.ts'); expect(t.indexOf('await mitProjektnummer(inv)')).toBeLessThan(t.indexOf('generateInvoicePDF(mit)'))
-    expect(q('app/rechnungen/page.tsx')).toContain('Die Mahnung wurde NICHT per E-Mail versendet')
+    expect(q('components/rechnungen/RechnungenInhalt.tsx')).toContain('Die Mahnung wurde NICHT per E-Mail versendet')
   })
   it('nicht protokollierter Fehlversand wird in der Antwort sichtbar', () => {
     for (const d of ['app/api/email/route.ts', 'app/api/kunden/[id]/mail/route.ts', 'lib/mahnung-versand.ts']) expect(q(d), d).toContain('FEHLVERSAND_NICHT_PROTOKOLLIERT')
@@ -173,10 +173,10 @@ describe('Sperre nur bei tatsächlicher Verwendung im Dokument, VOR dem Versand'
     for (const d of ['app/api/access-token/route.ts', 'app/api/auftrag-link/route.ts', 'app/api/invoices/pruef-link/route.ts']) expect(quelle(d), d).not.toContain('sperreFuerExterneVerwendung')
   })
   it('Vorschau und PDF-Export sperren nie: nur die Versandrouten rufen die Sperre auf', () => {
-    for (const d of ['app/aufmass/schritt6/page.tsx', 'app/rechnungen/page.tsx', 'lib/invoice-pdf.ts', 'app/api/invoices/zugferd/route.ts']) expect(quelle(d), d).not.toContain('sperreFuerExterneVerwendung')
+    for (const d of ['app/aufmass/schritt6/page.tsx', 'components/rechnungen/RechnungenInhalt.tsx', 'lib/invoice-pdf.ts', 'app/api/invoices/zugferd/route.ts']) expect(quelle(d), d).not.toContain('sperreFuerExterneVerwendung')
   })
   it('Alle Versandstellen melden die gedruckte Projektnummer', () => {
-    for (const d of ['app/kunden/[id]/page.tsx', 'app/kunden/page.tsx', 'app/rechnungen/[id]/page.tsx', 'app/rechnungen/page.tsx', 'components/KundeAuftrag.tsx', 'components/NeueMailDialog.tsx', 'app/aufmass/schritt6/page.tsx']) expect(quelle(d), d).toMatch(/projektnummer/)
+    for (const d of ['app/kunden/[id]/page.tsx', 'app/kunden/page.tsx', 'app/rechnungen/[id]/page.tsx', 'components/rechnungen/RechnungenInhalt.tsx', 'components/KundeAuftrag.tsx', 'components/NeueMailDialog.tsx', 'app/aufmass/schritt6/page.tsx']) expect(quelle(d), d).toMatch(/projektnummer/)
   })
   it('Dokumente drucken die Projektnummer', () => {
     const t = quelle('lib/invoice-pdf.ts')

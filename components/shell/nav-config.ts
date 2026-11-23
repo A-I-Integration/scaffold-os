@@ -6,7 +6,7 @@ import {
 
 // ============================================================
 // SCAFFOLD OS – eine einzige Menüstruktur für alle Rollen und alle Bildschirmgrößen.
-// Gruppiert nach dem Weg eines Auftrags: Anfrage → Aufmaß & Planung → Angebot → Ausführung → Abrechnung,
+// Gruppiert nach dem Weg eines Auftrags: Anfrage → Aufmaß & Planung → Angebot → Ausführung (die Abrechnung liegt im Kundenordner, Reiter Faktura),
 // dazu "Betrieb" für alles, was nicht an einem einzelnen Auftrag hängt.
 // Jede Seite steht in genau einer Gruppe.
 // ============================================================
@@ -71,16 +71,6 @@ export const NAV_GRUPPEN: NavGruppe[] = [
       { href: '/nachunternehmer', label: 'Nachunternehmer', icon: Handshake, roles: BUERO },
       { href: '/arbeitsschutz', label: 'Arbeitsschutz', icon: ShieldCheck, roles: BUERO },
       { href: '/dokumentation', label: 'Baustellendokumentation', icon: ClipboardList },
-    ],
-  },
-  {
-    key: 'abrechnung', nummer: 5, label: 'Abrechnung',
-    eintraege: [
-      { href: '/rechnungen', label: 'Rechnungen', icon: Receipt, roles: BUERO },
-      { href: '/rechnungen?neu=1', label: 'Neue Rechnung', icon: FilePlus2, roles: BUERO },
-      { href: '/zahlungsabgleich', label: 'Zahlungsabgleich', icon: CreditCard, roles: BUERO },
-      { href: '/mietabrechnung', label: 'Mietabrechnung', icon: Euro, roles: BUERO },
-      { href: '/dokumente', label: 'Dokumente', icon: FolderOpen, roles: BUERO },
     ],
   },
   {

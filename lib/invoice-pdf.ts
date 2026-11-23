@@ -3,7 +3,7 @@ import autoTable from 'jspdf-autotable';
 import { offenerBetrag } from '@/lib/mahnung-steuerung';
 
 // ============================================================
-// SCAFFOLD OS – Rechnungs-PDFs (aus app/rechnungen/page.tsx
+// SCAFFOLD OS – Rechnungs-PDFs (aus components/rechnungen/RechnungenInhalt.tsx
 // hierher ausgelagert, damit auch die Kunden-Seite sie nutzen
 // kann – Inhalt und Layout sind UNVERÄNDERT übernommen)
 //

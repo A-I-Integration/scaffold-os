@@ -9,7 +9,7 @@ import { berechneKennzahlen, ueberfaelligeRechnungen, baldFaellig, offenerBetrag
 import { type FakturaDaten, eur } from './daten';
 import { Kachel, Karte, BereichLink, type BereichSprung } from './ui';
 
-export default function FakturaUebersicht({ daten, onBereich, imKundenordner = false, onSchnell }: { daten: FakturaDaten; onBereich?: BereichSprung; imKundenordner?: boolean; onSchnell?: (art: 'abschlag' | 'schluss' | 'gutschrift') => void }) {
+export default function FakturaUebersicht({ daten, onBereich, imKundenordner = false, onSchnell }: { daten: FakturaDaten; onBereich?: BereichSprung; imKundenordner?: boolean; onSchnell?: (art: 'rechnung' | 'abschlag' | 'schluss' | 'gutschrift') => void }) {
   const { heute, rechnungen, zahlungenMonat, entwuerfe } = daten;
   const kz = useMemo(() => berechneKennzahlen(rechnungen, zahlungenMonat, heute), [rechnungen, zahlungenMonat, heute]);
   const ueberfaellig = useMemo(() => ueberfaelligeRechnungen(rechnungen, heute), [rechnungen, heute]);
@@ -67,7 +67,7 @@ export default function FakturaUebersicht({ daten, onBereich, imKundenordner = f
         <Karte className="lg:col-span-3" titel="Schnell erstellen" icon={<FilePlus2 className="h-4 w-4" style={{ color: WIN.akzent }} />}>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
             {[
-              { href: '/rechnungen?neu=1', icon: <ReceiptText className="h-5 w-5" />, t: 'Rechnung', s: 'frei', ziel: null },
+              { href: '/rechnungen?neu=1', icon: <ReceiptText className="h-5 w-5" />, t: 'Rechnung', s: 'frei', ziel: 'rechnung' as const },
               { href: '/kunden', icon: <Layers className="h-5 w-5" />, t: 'Abschlag', s: 'Teilleistung, am Auftrag', ziel: 'abschlag' as const },
               { href: '/kunden', icon: <ClipboardList className="h-5 w-5" />, t: 'Schlussrechnung', s: 'Gesamtleistung, am Auftrag', ziel: 'schluss' as const },
               { href: '/kunden', icon: <Undo2 className="h-5 w-5" />, t: 'Gutschrift', s: 'Korrektur, am Auftrag', ziel: 'gutschrift' as const },
@@ -80,9 +80,9 @@ export default function FakturaUebersicht({ daten, onBereich, imKundenordner = f
                 </>
               );
               const kl = 'rounded-lg border p-3 text-center hover:bg-black/5';
-              // Im Kundenordner starten Abschlag und Schlussrechnung direkt den Rechnungsdialog; die Gutschrift öffnet die Auftragsblöcke im Bereich „Rechnungen“.
+              // Im Kundenordner öffnet sich alles an Ort und Stelle: Rechnung (Formular), Abschlag/Schluss (Dialog), Gutschrift (Aufträge abrechnen).
               if (imKundenordner && a.ziel) return <button key={a.t} type="button" onClick={() => onSchnell?.(a.ziel)} className={kl} style={{ borderColor: WIN.randHell }}>{inhalt}</button>;
-              return <Link key={a.t} href={a.ziel ? '/kunden' : a.href} className={kl} style={{ borderColor: WIN.randHell }}>{inhalt}</Link>;
+              return <Link key={a.t} href={a.ziel === 'rechnung' ? a.href : '/kunden'} className={kl} style={{ borderColor: WIN.randHell }}>{inhalt}</Link>;
             })}
           </div>
         </Karte>
