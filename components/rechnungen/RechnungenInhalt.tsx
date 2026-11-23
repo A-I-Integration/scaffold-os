@@ -648,10 +648,12 @@ export function RechnungenInhalt({ umfang, neuSignal = 0, entwurfId: entwurfVonA
 
   return (
     <div className={eingebettet ? '' : 'min-h-full'} style={eingebettet ? undefined : { background: WIN.grund }}>
-      <div className={eingebettet ? 'flex items-center gap-3 px-3 py-2 mb-3 rounded-lg border bg-white' : 'flex items-center gap-3 px-3 h-9 text-white sticky top-0 z-20'} style={eingebettet ? { borderColor: WIN.rand } : { background: '#171b20' }}>
+      <div className={eingebettet ? 'flex items-center gap-3 mb-3' : 'flex items-center gap-3 px-3 h-9 text-white sticky top-0 z-20'} style={eingebettet ? undefined : { background: '#171b20' }}>
+        {!eingebettet && (<>
         <FileText className="h-4 w-4" />
         <h1 className="text-[14px] font-bold">Rechnungen</h1>
         <span className="text-xs opacity-80">{invoices.length} Rechnungen · {fmtEur(summeOffen)} € offen</span>
+        </>)}
         <span className="ml-auto flex gap-1.5">
           {!eingebettet && <button onClick={handleDatevExport} className="flex items-center gap-1 rounded px-3 py-1 text-xs font-semibold bg-white/15 hover:bg-white/25"><Download className="h-3.5 w-3.5" /> DATEV-Buchungsstapel</button>}
           <button onClick={() => { if (!showForm && eingebettet) { kundeVorbelegen(); return; } if (!showForm) { setEntwurfId(null); setKundeId(null); } setShowForm(!showForm); }} className="flex items-center gap-1 rounded px-3 py-1 text-xs font-semibold text-white" style={{ background: WIN.akzent }}>{showForm ? <X className="h-3.5 w-3.5" /> : <Plus className="h-3.5 w-3.5" />}{showForm ? 'Abbrechen' : 'Neue Rechnung'}</button>
