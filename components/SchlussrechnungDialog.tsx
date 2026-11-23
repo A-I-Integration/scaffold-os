@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import { fetchRechnungAnlegen } from '@/lib/rechnung-anlegen-client'
 import { X, Receipt } from 'lucide-react';
 import { normalisiereNachtraege, nachtragNummer, type Nachtrag } from '@/lib/nachtrag';
 import { abschnitteAusSchritt2, berechneAufmass } from '@/lib/aufmassblatt-pdf';
@@ -214,7 +215,7 @@ export default function SchlussrechnungDialog({ projectId, customerName, custome
     if (!eingabe) return;
     setLaeuft(true); setFehler('');
     try {
-      const res = await fetch('/api/invoices', {
+      const res = await fetchRechnungAnlegen('/api/invoices', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           project_id: projectId,

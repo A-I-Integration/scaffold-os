@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { fetchRechnungAnlegen } from '@/lib/rechnung-anlegen-client'
 import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { WIN } from '@/components/win/Win';
@@ -435,7 +436,7 @@ export function RechnungenInhalt({ umfang, neuSignal = 0, entwurfId: entwurfVonA
     if (!valid.length) { alert('Bitte mindestens eine Position mit Bezeichnung und Menge eintragen!'); return; }
     setSaving(true);
     try {
-      const res = await fetch('/api/invoices', {
+      const res = await fetchRechnungAnlegen('/api/invoices', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

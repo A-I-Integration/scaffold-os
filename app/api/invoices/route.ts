@@ -1,3 +1,7 @@
+import { pruefeAbrechnung, grundGueltig, type Abweichung } from '@/lib/abrechnung-pruefung';
+import { schreibeHistorie } from '@/lib/abrechnung-historie';
+import { angebotNettoAusProjekt } from '@/lib/auftragsstand';
+import { normalisiereNachtraege } from '@/lib/nachtrag';
 import { ergaenzeProjektnummer } from '@/lib/cad/projektnummer-sperre';
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
@@ -20,6 +24,8 @@ import { abschlagOhneAuftrag, ABSCHLAG_OHNE_AUFTRAG_FEHLER } from '@/lib/rechnun
 // Muster wie /api/projects: Session-/Rollenprüfung über createClient,
 // Daten über Supabase REST mit SERVICE_ROLE_KEY.
 // ============================================================
+
+function resolvedArtFuerPruefung(t: unknown): string { return ['standard', 'abschlag', 'schluss', 'gutschrift'].includes(String(t)) ? String(t) : 'standard'; }
 
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const key = process.env.SUPABASE_SERVICE_ROLE_KEY!;
@@ -201,6 +207,39 @@ export async function POST(req: NextRequest) {
     const gross = Math.round((net + tax) * 100) / 100;
     const netRounded = Math.round(net * 100) / 100;
 
+    // Faktura F6: Abrechnungsprüfung. Nichts wird still geändert: bei Abweichung kommt eine Meldung, und die Rechnung geht nur mit
+    // dokumentierter Begründung (abrechnung_grund) durch. Die Freigabe steht im Änderungsverlauf.
+    let abweichungen: Abweichung[] = [];
+    const abrechnungGrund = typeof body.abrechnung_grund === 'string' ? body.abrechnung_grund.trim() : '';
+    if (project_id && !istGutschrift) {
+      try {
+        const [pRes, iRes, cRes2] = await Promise.all([
+          fetch(`${url}/rest/v1/projects?id=eq.${project_id}&select=data`, { headers }),
+          fetch(`${url}/rest/v1/invoices?project_id=eq.${project_id}&select=id,invoice_number,invoice_type,status,net_amount,invoice_date`, { headers }),
+          fetch(`${url}/rest/v1/company_settings?id=eq.00000000-0000-0000-0000-000000000001&select=calc_crane_day`, { headers }),
+        ]);
+        if (pRes.ok && iRes.ok) {
+          const projektData = (await pRes.json())?.[0]?.data;
+          const bestehende = await iRes.json();
+          const kran = cRes2.ok ? Number((await cRes2.json())?.[0]?.calc_crane_day) || 850 : 850;
+          const nachtraege = normalisiereNachtraege(projektData?.nachtraege);
+          const bestaetigt = nachtraege.filter((n) => n.status === 'bestaetigt').reduce((x, n) => x + Number(n.betrag || 0), 0);
+          const offen = nachtraege.filter((n) => n.status === 'offen').reduce((x, n) => x + Number(n.betrag || 0), 0);
+          const angebot = angebotNettoAusProjekt(projektData, kran);
+          abweichungen = pruefeAbrechnung({
+            art: resolvedArtFuerPruefung(invoice_type), netto: netRounded, auftragswert: angebot > 0 || bestaetigt > 0 ? Math.round((angebot + bestaetigt) * 100) / 100 : 0,
+            nachtraegeOffen: offen, bestehende, ersetzteId: replace_invoice_id || null, rechnungsdatum: invoice_date || new Date().toISOString().slice(0, 10),
+          });
+        }
+      } catch { /* Prüfung nicht möglich: Rechnung nicht blockieren, sonst steht die Abrechnung wegen eines Lesefehlers still */ }
+      if (abweichungen.length > 0 && !grundGueltig(abrechnungGrund)) {
+        return NextResponse.json({
+          success: false, code: 'ABRECHNUNG_ABWEICHUNG', abweichungen,
+          error: 'Abweichung in der Abrechnung:\n• ' + abweichungen.map((a) => a.text).join('\n• ') + '\n\nDie Rechnung wird nicht automatisch angepasst. Sie kann mit dokumentierter Begründung trotzdem angelegt werden.',
+        }, { status: 409 });
+      }
+    }
+
     // Phase 14: Firmen-Snapshot für die Rechnung (GoBD – die Rechnung
     // muss die zum Ausstellungszeitpunkt gültigen Firmendaten zeigen)
     let companySnapshot: any = null;
@@ -350,6 +389,16 @@ export async function POST(req: NextRequest) {
       } catch { kopfWarnung = 'Gerüstnummer, Leistungsdatum oder Steuerangaben konnten nicht gespeichert werden.'; }
     }
 
+    // Faktura F6: Änderungsverlauf (jede neue Rechnung, mit Freigabegrund bei Abweichung)
+    if (rows[0]?.id) {
+      await schreibeHistorie({
+        aktion: replace_invoice_id ? 'neue_version' : istGutschrift ? 'gutschrift_angelegt' : 'rechnung_angelegt',
+        invoiceId: rows[0].id, invoiceNumber: rows[0].invoice_number, projectId: project_id || null, userId,
+        grund: abweichungen.length ? abrechnungGrund : null,
+        details: { typ: rows[0].invoice_type || 'standard', netto: netRounded, brutto: gross, ersetzt: replace_invoice_id || null, abweichungen: abweichungen.map((a) => ({ code: a.code, text: a.text })) },
+      });
+    }
+
     // Phase 27: Admin-Überschreibung protokollieren
     if (overrideVerwendet && rows[0]?.id) {
       try {
@@ -376,7 +425,7 @@ export async function POST(req: NextRequest) {
 
 // ─── PATCH: Status ändern ───
 export async function PATCH(req: NextRequest) {
-  const { role } = await callerRole();
+  const { role, userId } = await callerRole();
   if (!role || !WRITE_ROLES.includes(role)) {
     return NextResponse.json(
       { success: false, error: 'Nur Admin und Disposition dürfen Rechnungen ändern.' },
@@ -440,6 +489,13 @@ export async function PATCH(req: NextRequest) {
       }
     }
 
+    // Faktura F6: Stand vor der Änderung merken, damit der Verlauf „von → auf“ zeigen kann
+    let vorher: { invoice_number?: string; project_id?: string | null; status?: string; paid_amount?: number | null } | null = null;
+    try {
+      const vr = await fetch(`${url}/rest/v1/invoices?id=eq.${id}&select=invoice_number,project_id,status,paid_amount`, { headers });
+      if (vr.ok) vorher = (await vr.json())?.[0] || null;
+    } catch { /* Verlauf ist best effort */ }
+
     const res = await fetch(`${url}/rest/v1/invoices?id=eq.${id}`, {
       method: 'PATCH',
       headers: { ...headers, 'Prefer': 'return=representation' },
@@ -451,6 +507,16 @@ export async function PATCH(req: NextRequest) {
     if (!rows?.length) {
       return NextResponse.json({ success: false, error: 'Rechnung nicht gefunden.' }, { status: 404 });
     }
+    if (vorher) {
+      const statusNeu = rows[0].status, zahlungNeu = Number(rows[0].paid_amount || 0), zahlungAlt = Number(vorher.paid_amount || 0);
+      if (statusNeu !== vorher.status || zahlungNeu !== zahlungAlt) {
+        await schreibeHistorie({
+          aktion: statusNeu === 'storniert' && vorher.status !== 'storniert' ? 'storniert' : zahlungNeu !== zahlungAlt ? 'zahlung_geaendert' : 'status_geaendert',
+          invoiceId: id, invoiceNumber: vorher.invoice_number, projectId: vorher.project_id, userId,
+          details: { status: { von: vorher.status, auf: statusNeu }, bezahlt: { von: zahlungAlt, auf: zahlungNeu } },
+        });
+      }
+    }
     return NextResponse.json({ success: true, invoice: rows[0] });
   } catch (err: any) {
     return serverErrorResponse(err);
@@ -459,7 +525,7 @@ export async function PATCH(req: NextRequest) {
 
 // ─── DELETE: Rechnung löschen (nur solange „offen") ───
 export async function DELETE(req: NextRequest) {
-  const { role } = await callerRole();
+  const { role, userId } = await callerRole();
   if (!role || !WRITE_ROLES.includes(role)) {
     return NextResponse.json(
       { success: false, error: 'Nur Admin und Disposition dürfen Rechnungen löschen.' },
@@ -474,7 +540,7 @@ export async function DELETE(req: NextRequest) {
     }
 
     // Stornieren statt Löschen, sobald gebucht/versendet (GoBD!)
-    const check = await fetch(`${url}/rest/v1/invoices?id=eq.${id}&select=status`, { headers });
+    const check = await fetch(`${url}/rest/v1/invoices?id=eq.${id}&select=status,invoice_number,project_id`, { headers });
     if (!check.ok) throw new Error(await check.text());
     const rows = await check.json();
     if (!rows?.length) {
@@ -487,11 +553,20 @@ export async function DELETE(req: NextRequest) {
       );
     }
 
+    // Faktura F6: Eine bereits versendete Rechnung darf nicht gelöscht werden, auch wenn sie noch „offen“ ist (GoBD) – nur stornieren
+    try {
+      const vd = await fetch(`${url}/rest/v1/invoice_dispatches?invoice_id=eq.${id}&kind=eq.rechnung&status=eq.versendet&select=id&limit=1`, { headers });
+      if (vd.ok && (await vd.json())?.length) {
+        return NextResponse.json({ success: false, code: 'BEREITS_VERSENDET', error: 'Diese Rechnung wurde schon versendet und kann nicht mehr gelöscht werden. Bitte stornieren (und bei Bedarf eine neue Version oder Gutschrift anlegen).' }, { status: 409 });
+      }
+    } catch { /* ohne Versandprotokoll gilt die bisherige Regel */ }
+
     const res = await fetch(`${url}/rest/v1/invoices?id=eq.${id}`, {
       method: 'DELETE',
       headers,
     });
     if (!res.ok) throw new Error(await res.text());
+    await schreibeHistorie({ aktion: 'geloescht', invoiceId: id, invoiceNumber: rows[0].invoice_number, projectId: rows[0].project_id, userId });
     return NextResponse.json({ success: true });
   } catch (err: any) {
     return serverErrorResponse(err);
