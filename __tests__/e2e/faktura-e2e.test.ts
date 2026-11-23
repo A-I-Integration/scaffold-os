@@ -2,6 +2,7 @@ import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest'
 import { Pool } from 'pg'
 import { NextRequest } from 'next/server'
 import { baueEchtesRest } from './pg-rest'
+import { nutzdatenHash } from '@/lib/idempotenz-hash'
 import { aufmassStand } from '@/lib/aufmass-integritaet'
 import { neuesZwischenaufmassJePosition, baueTeilleistungsPositionen, normalisiereZwischenaufmasse } from '@/lib/zwischenaufmass'
 import { faelligeVorhaltung, vorhaltungStand, normalisiereVereinbarung, normalisierePerioden, plusTage, kostenpflichtigAb } from '@/lib/vorhaltung'
@@ -930,14 +931,14 @@ describe.skipIf(!DB)('Faktura End-to-End (echte PostgreSQL)', () => {
     })
     it('6. Wiederholung nach Serverabsturz (vor dem Anlegen): genau eine Rechnung, Schlüssel danach abgeschlossen', async () => {
       const P = await neuesProjekt('E2E P130 Absturz', {}); const k = 'p130-6-' + Date.now()
-      await q(`insert into faktura_idempotenz (schluessel, art, status, lease_bis, aktualisiert_am) values ($1, 'rechnung_anlegen', 'laeuft', now() - interval '10 minutes', now() - interval '10 minutes')`, ['rechnung:' + k])
+      await q(`insert into faktura_idempotenz (schluessel, art, status, nutzdaten_hash, lease_bis, aktualisiert_am) values ($1, 'rechnung_anlegen', 'laeuft', $2, now() - interval '10 minutes', now() - interval '10 minutes')`, ['rechnung:' + k, nutzdatenHash(reBody(P, 1000))])
       const x = await apiH('@/app/api/invoices/route', 'POST', reBody(P, 1000), mitKey(k))
       expect(x.status).toBe(200); expect(await rechnungen(P)).toHaveLength(1)
       const z = await keyZeile(k); expect(z.status).toBe('fertig'); expect(z.invoice_id).toBe(x.j.invoice.id)
       expect((await apiH('@/app/api/invoices/route', 'POST', reBody(P, 1000), mitKey(k))).replay).toBe('true'); expect(await rechnungen(P)).toHaveLength(1)
       // Frist noch nicht abgelaufen und kein Anker: wird NICHT übernommen
       const k2 = 'p130-6b-' + Date.now()
-      await q(`insert into faktura_idempotenz (schluessel, art, status, lease_bis) values ($1, 'rechnung_anlegen', 'laeuft', now() + interval '1 minute')`, ['rechnung:' + k2])
+      await q(`insert into faktura_idempotenz (schluessel, art, status, nutzdaten_hash, lease_bis) values ($1, 'rechnung_anlegen', 'laeuft', $2, now() + interval '1 minute')`, ['rechnung:' + k2, nutzdatenHash(reBody(P, 1000))])
       const y = await apiH('@/app/api/invoices/route', 'POST', reBody(P, 1000), mitKey(k2)); expect(y.status).toBe(409); expect(y.j.code).toBe('IN_BEARBEITUNG'); expect(await rechnungen(P)).toHaveLength(1)
     })
     it('7. manuell „Als bezahlt“ auf offener Rechnung: echte Zahlungszeile über den zentralen offenen Betrag, Verlauf mit Benutzer; mitgesendeter Betrag wird ignoriert; „offen“ nimmt nur diese Zahlung zurück', async () => {
@@ -988,13 +989,15 @@ describe.skipIf(!DB)('Faktura End-to-End (echte PostgreSQL)', () => {
         expect(erg.some((x) => x.status === 200)).toBe(true)
       }
     })
-    it('11. Migrationen 129 und 130 wiederholt ausgeführt: keine Fehler, historische Buchungen unverändert, Funktionen vorhanden', async () => {
+    it('11. Migrationen 129, 130 und 131 wiederholt ausgeführt: keine Fehler, historische Buchungen und Schlüssel unverändert, Funktionen vorhanden', async () => {
       const { readFileSync } = await import('node:fs')
-      const pruef = async () => (await q(`select (select md5(coalesce(string_agg(t::text, '|' order by id), '')) from invoices t) i, (select md5(coalesce(string_agg(t::text, '|' order by id), '')) from invoice_payments t) z, (select md5(coalesce(string_agg(t::text, '|' order by id), '')) from abrechnung_historie t) h`))[0]
+      const pruef = async () => (await q(`select (select md5(coalesce(string_agg(t::text, '|' order by id), '')) from invoices t) i, (select md5(coalesce(string_agg(t::text, '|' order by id), '')) from invoice_payments t) z, (select md5(coalesce(string_agg(t::text, '|' order by id), '')) from abrechnung_historie t) h, (select md5(coalesce(string_agg(t::text, '|' order by schluessel), '')) from faktura_idempotenz t) k`))[0]
+      const m129 = 'supabase/phase-129-faktura-atomare-buchung.sql', m130 = 'supabase/phase-130-faktura-idempotenz-status.sql', m131 = 'supabase/phase-131-faktura-sicherheit-altbestand.sql'
+      await pool.query(readFileSync(m131, 'utf8'))                                                // Altbestand einmal markieren; danach darf sich nichts mehr ändern
       const vorher = await pruef()
-      for (const datei of ['supabase/phase-129-faktura-atomare-buchung.sql', 'supabase/phase-130-faktura-idempotenz-status.sql', 'supabase/phase-129-faktura-atomare-buchung.sql', 'supabase/phase-130-faktura-idempotenz-status.sql']) await pool.query(readFileSync(datei, 'utf8'))
+            for (const datei of [m129, m130, m131, m129, m130, m131]) await pool.query(readFileSync(datei, 'utf8'))
       const nachher = await pruef()
-      merke('130 Migration', 'Migration 129/130 zweimal ausgeführt: Prüfsumme Rechnungen, Zahlungen, Verlauf', 'unverändert', JSON.stringify(vorher) === JSON.stringify(nachher) ? 'unverändert' : 'verändert')
+      merke('130 Migration', 'Migration 129/130/131 zweimal ausgeführt: Prüfsumme Rechnungen, Zahlungen, Verlauf, Schlüssel', 'unverändert', JSON.stringify(vorher) === JSON.stringify(nachher) ? 'unverändert' : 'verändert')
       expect(nachher).toEqual(vorher)
       const f = await q(`select proname, count(*)::int n from pg_proc where proname in ('faktura_zahlung_buchen','faktura_idempotenz_start','faktura_status_setzen','faktura_anlegen_idempotent') group by 1 order by 1`)
       expect(f).toEqual([{ proname: 'faktura_anlegen_idempotent', n: 1 }, { proname: 'faktura_idempotenz_start', n: 1 }, { proname: 'faktura_status_setzen', n: 1 }, { proname: 'faktura_zahlung_buchen', n: 1 }])
@@ -1005,7 +1008,7 @@ describe.skipIf(!DB)('Faktura End-to-End (echte PostgreSQL)', () => {
       const lauf = apiH('@/app/api/invoices/route', 'POST', reBody(P, 1000), mitKey(live))     // gleichzeitig laufender Vorgang (Zeile „laeuft“, Frist offen)
       await warte(500)
       const p = 'p130-12-' + Date.now() + '-'
-      const ins = (n: string, status: string, alter: string, lease: string, inv_id: string | null) => q(`insert into faktura_idempotenz (schluessel, art, status, aktualisiert_am, lease_bis, invoice_id) values ($1, 'rechnung_anlegen', $2, now() - $3::interval, ${lease}, $4)`, ['rechnung:' + p + n, status, alter, inv_id])
+      const ins = (n: string, status: string, alter: string, lease: string, inv_id: string | null) => q(`insert into faktura_idempotenz (schluessel, art, status, aktualisiert_am, lease_bis, invoice_id, nutzdaten_hash) values ($1, 'rechnung_anlegen', $2, now() - $3::interval, ${lease}, $4, 'testhash')`, ['rechnung:' + p + n, status, alter, inv_id])
       const anker = (await q(`select id from invoices limit 1`))[0]?.id ?? null
       await ins('fertig-alt', 'fertig', '100 days', 'null', anker); await ins('fertig-neu', 'fertig', '1 day', 'null', anker)
       await ins('angelegt-alt', 'angelegt', '100 days', 'null', anker); await ins('angelegt-neu', 'angelegt', '2 days', 'null', anker)
@@ -1014,7 +1017,7 @@ describe.skipIf(!DB)('Faktura End-to-End (echte PostgreSQL)', () => {
       const erg = (await q(`select faktura_idempotenz_bereinigen(90, 7) r`))[0].r
       const bleibt = (await q(`select schluessel from faktura_idempotenz where schluessel like $1 or schluessel=$2 order by 1`, ['rechnung:' + p + '%', 'rechnung:' + live])).map((r: any) => r.schluessel.replace('rechnung:' + p, ''))
       merke('130 Bereinigung', 'Verbleibende Schlüssel nach Bereinigung', 'aktiv-alt, angelegt-neu, fertig-neu, verwaist-neu, + laufender Vorgang', bleibt.join(', '), bleibt.sort().join(',') === ['aktiv-alt', 'angelegt-neu', 'fertig-neu', 'verwaist-neu', 'rechnung:' + live].sort().join(','))
-      expect(bleibt.sort()).toEqual(['aktiv-alt', 'angelegt-neu', 'fertig-neu', 'verwaist-neu', 'rechnung:' + live].sort()); expect(erg).toEqual({ fertig: 1, angelegt: 1, leer: 1 })
+      expect(bleibt.sort()).toEqual(['aktiv-alt', 'angelegt-neu', 'fertig-neu', 'verwaist-neu', 'rechnung:' + live].sort()); expect(erg).toMatchObject({ fertig: 1, angelegt: 1, leer: 1 })
       await sperre.gib(); const x = await lauf
       expect(x.status).toBe(200); expect(await rechnungen(P)).toHaveLength(1)
       expect((await keyZeile(live)).status).toBe('fertig')
@@ -1036,6 +1039,129 @@ describe.skipIf(!DB)('Faktura End-to-End (echte PostgreSQL)', () => {
         await c.query('set role service_role'); const ok = await c.query(`select faktura_status_setzen(gen_random_uuid(), 'bezahlt'::text, null::uuid, null::text) r`).then((x) => x.rows[0].r, (e) => String(e.message)); await c.query('reset role')
         expect(ok).toEqual({ ok: false, code: 'NICHT_GEFUNDEN' })
       } finally { await c.query('reset role').catch(() => {}); c.release() }
+    })
+  })
+
+  // ──────────────────────────────────────────────────────────
+  // 8e. Phase 131: Altbestand der Schlüssel, „Zurück auf offen“ ohne Datenverlust, Rechte der älteren Funktionen
+  // ──────────────────────────────────────────────────────────
+  describe('8e. Phase 131 Final Security Review', () => {
+    const apiH = async (modul: string, methode: 'POST' | 'PATCH' | 'DELETE', body: unknown, headers: Record<string, string> = {}) => {
+      const m = await import(modul)
+      const res = await m[methode](new NextRequest('http://x/api', { method: methode, headers, body: body === undefined ? undefined : JSON.stringify(body) }) as never)
+      const text = await res.text(); let j: any = null; try { j = JSON.parse(text) } catch { /* leer */ }
+      return { status: res.status, j, replay: res.headers.get('Idempotent-Replay') }
+    }
+    const reBody = (P: string | null, preis: number) => ({ customer_name: KUNDE, ...(P ? { project_id: P } : {}), invoice_type: 'standard', positions: [{ bezeichnung: 'Gerüst', menge: 1, einheit: 'Pauschale', einzelpreis: preis }] })
+    const re = async (P: string | null, preis: number) => (await inv('POST', reBody(P, preis))).j.invoice
+    const zeile = async (id: string) => (await q('select status, paid_amount from invoices where id=$1', [id]))[0]
+    const zahl = (id: string) => q('select id, amount, quelle from invoice_payments where invoice_id=$1 order by amount', [id])
+    const zahlen = (invoice_id: string, amount: number) => apiH('@/app/api/invoice-payments/route', 'POST', { invoice_id, amount, payment_date: HEUTE })
+    const m131 = async () => { const { readFileSync } = await import('node:fs'); await pool.query(readFileSync('supabase/phase-131-faktura-sicherheit-altbestand.sql', 'utf8')) }
+    const key = async (k: string) => (await q('select * from faktura_idempotenz where schluessel=$1', ['rechnung:' + k]))[0]
+    const alt = (k: string, status: string, antwort: unknown, alter = '1 day') => q(`insert into faktura_idempotenz (schluessel, art, status, antwort, http_status, aktualisiert_am) values ($1, 'rechnung_anlegen', $2, $3, $4, now() - $5::interval)`, ['rechnung:' + k, status, antwort === null ? null : JSON.stringify(antwort), status === 'fertig' ? 200 : null, alter])
+
+    it('1. alter Schlüssel (Phase 129, fertig, ohne Hash/Anker): Anker wird nachgetragen, Wiederverwendung mit ANDEREN Nutzdaten und mit gleichen wird nicht als Wiederholung geliefert, nichts neu angelegt', async () => {
+      const P = await neuesProjekt('E2E P131 Altschluessel', {}); const a = await re(P, 1000); const k = 'p131-1-' + Date.now()
+      await alt(k, 'fertig', { success: true, invoice: { id: a.id, invoice_number: a.invoice_number } })
+      await m131()
+      const z = await key(k)
+      merke('131 Altbestand', 'Altschlüssel fertig: Herkunft / Anker nachgetragen', 'phase129 / ja', `${z.herkunft} / ${z.invoice_id === a.id ? 'ja' : 'nein'}`)
+      expect(z.herkunft).toBe('phase129'); expect(z.invoice_id).toBe(a.id)
+      expect(Number((await q(`select (details->>'anker_nachgetragen')::int n from faktura_migration_protokoll where phase='131' and aktion='idempotenz_altbestand' order by id desc limit 1`))[0].n)).toBeGreaterThanOrEqual(1)
+      const anders = await apiH('@/app/api/invoices/route', 'POST', reBody(P, 9999), { 'Idempotency-Key': k })
+      merke('131 Altbestand', 'Altschlüssel, andere Nutzdaten', 'ALTER_SCHLUESSEL (409)', `${anders.j?.code} (${anders.status})`)
+      expect(anders.status).toBe(409); expect(anders.j.code).toBe('ALTER_SCHLUESSEL'); expect(anders.j.error).toContain(a.invoice_number)
+      const gleich = await apiH('@/app/api/invoices/route', 'POST', reBody(P, 1000), { 'Idempotency-Key': k })
+      expect(gleich.status).toBe(409); expect(gleich.replay).toBeNull(); expect(await rechnungen(P)).toHaveLength(1)
+    })
+    it('2. alter fertiger Schlüssel ohne verwertbaren Rechnungsanker, alter laufender Schlüssel: 409, nichts angelegt, nichts gelöscht, Bereinigung lässt ungeklärten Altbestand stehen', async () => {
+      const P = await neuesProjekt('E2E P131 Altschluessel ohne Anker', {}); const k1 = 'p131-2a-' + Date.now(), k2 = 'p131-2b-' + Date.now(), k3 = 'p131-2c-' + Date.now()
+      await alt(k1, 'fertig', { success: true, invoice: { id: '00000000-0000-4000-8000-000000000000' } }, '200 days')   // Rechnung existiert nicht
+      await alt(k2, 'laeuft', null, '200 days')                                                                         // wurde nie abgeschlossen: unklar
+      await alt(k3, 'fertig', { success: true, invoice: { id: 'kein-uuid' } }, '200 days')                              // Antwort nicht auswertbar
+      await m131()
+      for (const k of [k1, k2, k3]) { const z = await key(k); expect(z.herkunft).toBe('phase129'); expect(z.invoice_id).toBeNull() }
+      const x1 = await apiH('@/app/api/invoices/route', 'POST', reBody(P, 1000), { 'Idempotency-Key': k1 }); expect([x1.status, x1.j.code]).toEqual([409, 'ALTER_SCHLUESSEL'])
+      const x2 = await apiH('@/app/api/invoices/route', 'POST', reBody(P, 1000), { 'Idempotency-Key': k2 }); expect([x2.status, x2.j.code]).toEqual([409, 'ALTER_SCHLUESSEL_UNKLAR'])
+      expect(await rechnungen(P)).toHaveLength(0)
+      await q(`select faktura_idempotenz_bereinigen(1, 1)`)
+      merke('131 Altbestand', 'Bereinigung: ungeklärter Altbestand bleibt (fertig ohne Anker, laeuft, nicht auswertbar)', '3 / 3', `${(await q(`select count(*)::int n from faktura_idempotenz where schluessel = any($1)`, [['rechnung:' + k1, 'rechnung:' + k2, 'rechnung:' + k3]]))[0].n} / 3`)
+      expect((await q(`select count(*)::int n from faktura_idempotenz where schluessel = any($1)`, [['rechnung:' + k1, 'rechnung:' + k2, 'rechnung:' + k3]]))[0].n).toBe(3)
+      await q(`delete from faktura_idempotenz where schluessel = any($1)`, [['rechnung:' + k1, 'rechnung:' + k2, 'rechnung:' + k3]])
+    })
+    it('3. geprüfter Altbestand (fertig, Anker auf vorhandene Rechnung) wird nach Ablauf bereinigt, ein neuerer bleibt; Wiederholung mit abweichenden Nutzdaten bei neuem Schlüssel: 422', async () => {
+      const P = await neuesProjekt('E2E P131 Bereinigung Alt', {}); const a = await re(P, 1000); const kA = 'p131-3a-' + Date.now(), kB = 'p131-3b-' + Date.now()
+      await alt(kA, 'fertig', { success: true, invoice: { id: a.id } }, '100 days'); await alt(kB, 'fertig', { success: true, invoice: { id: a.id } }, '2 days')
+      await m131(); await q(`select faktura_idempotenz_bereinigen(90, 7)`)
+      expect(await key(kA)).toBeUndefined(); expect((await key(kB)).herkunft).toBe('phase129')
+      await q(`delete from faktura_idempotenz where schluessel = $1`, ['rechnung:' + kB])
+      const k = 'p131-3c-' + Date.now(); expect((await apiH('@/app/api/invoices/route', 'POST', reBody(P, 1000), { 'Idempotency-Key': k })).status).toBe(200)
+      const y = await apiH('@/app/api/invoices/route', 'POST', reBody(P, 2000), { 'Idempotency-Key': k }); expect([y.status, y.j.code]).toEqual([422, 'KEY_KONFLIKT'])
+    })
+    it('4. historisches paid_amount ohne Zahlungszeile: „Zurück auf offen“ bricht ab, Betrag bleibt, Ablehnung steht im Verlauf', async () => {
+      const P = await neuesProjekt('E2E P131 Historisch', {}); const a = await re(P, 1000)
+      await q(`update invoices set paid_amount = 500 where id=$1`, [a.id])                       // wie von der alten PATCH-Buchung hinterlassen: Betrag, aber keine Zahlungszeile
+      const x = await inv('PATCH', { id: a.id, status: 'offen' })
+      merke('131 Zurücksetzen', 'paid_amount 500 ohne Zahlungszeile: Antwort / Betrag danach', 'ZAHLUNG_ABWEICHUNG / 500', `${x.j?.code} / ${Number((await zeile(a.id)).paid_amount)}`)
+      expect([x.status, x.j.code]).toEqual([409, 'ZAHLUNG_ABWEICHUNG']); expect(Number((await zeile(a.id)).paid_amount)).toBe(500); expect(await zahl(a.id)).toHaveLength(0)
+      const h = await q(`select user_id, grund, details from abrechnung_historie where invoice_id=$1 and grund='Zurücksetzen auf offen abgelehnt'`, [a.id])
+      expect(h).toHaveLength(1); expect(h[0].user_id).toBe(USER); expect(h[0].details.abgelehnt).toBe('ZAHLUNG_ABWEICHUNG')
+    })
+    it('5. manuelle und reguläre Zahlungszeilen gemeinsam: „Zurück auf offen“ abgelehnt, keine Zeile gelöscht oder verändert', async () => {
+      const P = await neuesProjekt('E2E P131 Gemischt', {}); const a = await re(P, 1000)
+      expect((await zahlen(a.id, 100)).status).toBe(200); expect((await inv('PATCH', { id: a.id, status: 'bezahlt' })).status).toBe(200)
+      const vorher = await zahl(a.id); expect(vorher.map((p: any) => p.quelle).sort()).toEqual(['manuell_bezahlt', null].sort())
+      const x = await inv('PATCH', { id: a.id, status: 'offen' }); expect([x.status, x.j.code]).toEqual([409, 'ZAHLUNGEN_VORHANDEN'])
+      expect(await zahl(a.id)).toEqual(vorher); const z = await zeile(a.id); expect([z.status, Number(z.paid_amount)]).toEqual(['bezahlt', 1190])
+      expect(Number((await q(`select count(*)::int n from abrechnung_historie where invoice_id=$1 and details->>'abgelehnt'='ZAHLUNGEN_VORHANDEN'`, [a.id]))[0].n)).toBe(1)
+    })
+    it('6. abweichende Zahlungssumme (manuelle Zeile 1.190, paid_amount 1.000): abgebrochen, Zeile bleibt; passende Summe: Rücknahme protokolliert mit den entfernten Zahlungen', async () => {
+      const P = await neuesProjekt('E2E P131 Abweichung', {}); const a = await re(P, 1000)
+      expect((await inv('PATCH', { id: a.id, status: 'bezahlt' })).status).toBe(200)
+      await q(`update invoices set paid_amount = 1000 where id=$1`, [a.id])
+      const x = await inv('PATCH', { id: a.id, status: 'offen' }); expect([x.status, x.j.code]).toEqual([409, 'ZAHLUNG_ABWEICHUNG'])
+      expect(await zahl(a.id)).toHaveLength(1); expect(Number((await zeile(a.id)).paid_amount)).toBe(1000)
+      await q(`update invoices set paid_amount = 1190 where id=$1`, [a.id])                       // Summe passt wieder
+      const manuellId = (await zahl(a.id))[0].id
+      const y = await inv('PATCH', { id: a.id, status: 'offen', grund: 'Irrtum' }); expect(y.status).toBe(200)
+      const z = await zeile(a.id); expect([z.status, Number(z.paid_amount)]).toEqual(['offen', 0]); expect(await zahl(a.id)).toHaveLength(0)
+      const h = (await q(`select user_id, grund, details from abrechnung_historie where invoice_id=$1 and grund='Irrtum'`, [a.id]))[0]
+      merke('131 Zurücksetzen', 'Rücknahme im Verlauf: Benutzer / Grund / entfernte Zahlung', 'ja / Irrtum / ja', `${h?.user_id === USER ? 'ja' : 'nein'} / ${h?.grund} / ${h?.details?.zahlungen?.[0]?.id === manuellId ? 'ja' : 'nein'}`)
+      expect(h.user_id).toBe(USER); expect(h.details.zahlungen[0].id).toBe(manuellId); expect(Number(h.details.zurueckgenommen)).toBe(1190)
+    })
+    it('7./8./9. alte Buchungsfunktionen: anon und authenticated gesperrt, service_role erlaubt (create_invoice, create_invoice_as_new_version, next_invoice_number)', async () => {
+      const c = await pool.connect()
+      const aufrufe = [
+        `select next_invoice_number('ZZ'::text)`,
+        `select create_invoice('ZZ'::text, null::uuid, null::uuid, 'x'::text, null::text, '[]'::jsonb, 0::numeric, 0::numeric, 0::numeric, 0::numeric, current_date, current_date, null::text, null::jsonb, 'standard'::text, null::text)`,
+        `select create_invoice_as_new_version(gen_random_uuid(), 'ZZ'::text, null::uuid, null::uuid, 'x'::text, null::text, '[]'::jsonb, 0::numeric, 0::numeric, 0::numeric, 0::numeric, current_date, current_date, null::text, null::jsonb, 'standard'::text, null::text)`,
+      ]
+      try {
+        await c.query('grant usage on schema public to anon, authenticated, service_role'); await c.query('grant all on all tables in schema public to service_role'); await c.query('grant all on all sequences in schema public to service_role'); await c.query('alter role service_role bypassrls')   // wie in Supabase
+        for (const rolle of ['anon', 'authenticated']) for (const sql of aufrufe) {
+          await c.query(`set role ${rolle}`); const r = await c.query(sql).then(() => 'erlaubt', (e) => String(e.message)); await c.query('reset role')
+          merke('131 Rechte', `${rolle}: ${sql.slice(7, 40)}…`, 'permission denied', /permission denied/.test(r) ? 'permission denied' : r); expect(r).toMatch(/permission denied/)
+        }
+        for (const sql of aufrufe.slice(0, 2)) {                                                  // service_role: erlaubt (Transaktion wird zurückgerollt, kein Nummernverbrauch)
+          await c.query('begin'); await c.query('set local role service_role'); const r = await c.query(sql).then(() => 'erlaubt', (e) => String(e.message)); await c.query('rollback')
+          merke('131 Rechte', `service_role: ${sql.slice(7, 40)}…`, 'erlaubt', r); expect(r).toBe('erlaubt')
+        }
+        await c.query('begin'); await c.query('set local role service_role'); const rn = await c.query(aufrufe[2]).then(() => 'erlaubt', (e) => String(e.message)); await c.query('rollback')
+        expect(rn).not.toMatch(/permission denied/)                                               // darf an der Fachprüfung scheitern (Rechnung unbekannt), nicht an den Rechten
+      } finally { await c.query('rollback').catch(() => {}); await c.query('reset role').catch(() => {}); c.release() }
+    })
+    it('10. Migration 131 wiederholt ausgeführt: keine Fehler, Altbestand wird nicht erneut markiert/protokolliert, Buchungen unverändert', async () => {
+      const k = 'p131-10-' + Date.now(); await alt(k, 'laeuft', null)
+      await m131()
+      const n1 = (await q(`select count(*)::int n from faktura_migration_protokoll where phase='131'`))[0].n
+      const vorher = (await q(`select (select md5(coalesce(string_agg(t::text,'|' order by id),'')) from invoice_payments t) z, (select md5(coalesce(string_agg(t::text,'|' order by id),'')) from invoices t) i, (select md5(coalesce(string_agg(t::text,'|' order by schluessel),'')) from faktura_idempotenz t) k`))[0]
+      await m131(); await m131()
+      const n2 = (await q(`select count(*)::int n from faktura_migration_protokoll where phase='131'`))[0].n
+      const nachher = (await q(`select (select md5(coalesce(string_agg(t::text,'|' order by id),'')) from invoice_payments t) z, (select md5(coalesce(string_agg(t::text,'|' order by id),'')) from invoices t) i, (select md5(coalesce(string_agg(t::text,'|' order by schluessel),'')) from faktura_idempotenz t) k`))[0]
+      merke('131 Migration', 'Migration 131 dreimal: Protokollzeilen unverändert / Prüfsummen unverändert', 'ja / ja', `${n1 === n2 ? 'ja' : 'nein'} / ${JSON.stringify(vorher) === JSON.stringify(nachher) ? 'ja' : 'nein'}`)
+      expect(n2).toBe(n1); expect(nachher).toEqual(vorher); expect((await key(k)).herkunft).toBe('phase129')
+      await q(`delete from faktura_idempotenz where schluessel = $1`, ['rechnung:' + k])
     })
   })
 

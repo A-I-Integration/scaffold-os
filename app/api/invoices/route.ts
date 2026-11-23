@@ -10,7 +10,7 @@ import { schreibeHistorie } from '@/lib/abrechnung-historie';
 import { angebotNettoAusProjekt } from '@/lib/auftragsstand';
 import { normalisiereNachtraege } from '@/lib/nachtrag';
 import { ergaenzeProjektnummer } from '@/lib/cad/projektnummer-sperre';
-import { createHash } from 'node:crypto';
+import { nutzdatenHash } from '@/lib/idempotenz-hash';
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { trackImpact } from '@/lib/impact';
@@ -460,6 +460,8 @@ async function anlegen(req: NextRequest, idem?: { key: string; hash: string }) {
       // Antwort von faktura_anlegen_idempotent: { ok, neu, invoice } | { ok: false, code }
       if (!invoiceRow?.ok) {
         await freigebenBeiFehler();
+        if (invoiceRow?.code === 'ALTER_SCHLUESSEL') return NextResponse.json({ success: false, code: 'ALTER_SCHLUESSEL', error: 'Diese Anfrage wurde bereits früher verarbeitet. Es wurde nichts neu angelegt. Bitte die Rechnungsliste prüfen.' }, { status: 409 });
+        if (invoiceRow?.code === 'HASH_FEHLT') return NextResponse.json({ success: false, code: 'HASH_FEHLT', error: 'Die Anfrage konnte nicht gelesen werden.' }, { status: 400 });
         if (invoiceRow?.code === 'KEY_KONFLIKT') return NextResponse.json({ success: false, code: 'KEY_KONFLIKT', error: 'Dieser Idempotenzschlüssel wurde bereits mit anderen Angaben verwendet.' }, { status: 422 });
         return NextResponse.json({ success: false, code: invoiceRow?.code || 'UNBEKANNT', error: 'Die zum Schlüssel gehörende Rechnung existiert nicht mehr.' }, { status: 409 });
       }
@@ -566,19 +568,29 @@ async function anlegen(req: NextRequest, idem?: { key: string; hash: string }) {
 // Idempotency-Key (Header): dieselbe Anfrage liefert das ursprüngliche Ergebnis und legt nichts doppelt an.
 // Zustände (Datenbank): neu | laeuft (409) | wiederaufnahme (Frist abgelaufen, noch nichts angelegt) | angelegt (Rechnung existiert, Antwort wird rekonstruiert) | fertig (gespeicherte Antwort) | konflikt (andere Nutzdaten, 422).
 // Ohne Schlüssel (ältere Aufrufer) unverändert.
-function stabil(v: any): any { return Array.isArray(v) ? v.map(stabil) : v && typeof v === 'object' ? Object.fromEntries(Object.keys(v).sort().map((k) => [k, stabil(v[k])])) : v; }
 export async function POST(req: NextRequest) {
   const schluessel = (req.headers.get('idempotency-key') || '').trim().slice(0, 100);
   if (!schluessel) return anlegen(req);
   const key = `rechnung:${schluessel}`;
   let hash = '';
-  try { hash = createHash('sha256').update(JSON.stringify(stabil(await req.clone().json()))).digest('hex'); } catch { hash = ''; }
+  try { hash = nutzdatenHash(await req.clone().json()); } catch { hash = ''; }
+  if (!hash) return NextResponse.json({ success: false, code: 'HASH_FEHLT', error: 'Die Anfrage konnte nicht gelesen werden.' }, { status: 400 });
   let start: { zustand?: string; antwort?: unknown; http_status?: number; invoice_id?: string } | null = null;
   try {
     const r = await fetch(`${url}/rest/v1/rpc/faktura_idempotenz_start`, { method: 'POST', headers, body: JSON.stringify({ p_schluessel: key, p_art: 'rechnung_anlegen', p_hash: hash || null }) });
     start = r.ok ? await r.json() : null;
   } catch { start = null; }
   if (!start) return NextResponse.json({ success: false, code: 'IDEMPOTENZ_MIGRATION_FEHLT', error: 'Die Datenbank-Migration phase-130 fehlt oder die Schlüsseltabelle ist nicht erreichbar. Es wurde nichts angelegt.' }, { status: 503 });
+  if (start.zustand === 'hash_fehlt') return NextResponse.json({ success: false, code: 'HASH_FEHLT', error: 'Die Anfrage konnte nicht gelesen werden.' }, { status: 400 });
+  if (start.zustand === 'alt_fertig' || start.zustand === 'alt_unklar') {
+    // Schlüssel aus einer älteren Version (ohne Nutzdaten-Prüfung): nie als Wiederholung für beliebige neue Angaben akzeptieren, nie automatisch neu ausführen
+    let nummer = '';
+    if (start.invoice_id) { try { const r = await fetch(`${url}/rest/v1/invoices?id=eq.${encodeURIComponent(String(start.invoice_id))}&select=invoice_number`, { headers }); nummer = r.ok ? ((await r.json())?.[0]?.invoice_number || '') : ''; } catch { /* Nummer ist nur ein Hinweis */ } }
+    return NextResponse.json(start.zustand === 'alt_fertig'
+      ? { success: false, code: 'ALTER_SCHLUESSEL', error: `Diese Anfrage wurde bereits früher verarbeitet${nummer ? ` (Rechnung ${nummer})` : ''}. Es wurde nichts neu angelegt. Bitte die Rechnungsliste prüfen.` }
+      : { success: false, code: 'ALTER_SCHLUESSEL_UNKLAR', error: 'Eine frühere Anfrage mit diesem Schlüssel wurde nicht abgeschlossen. Es wurde nichts neu angelegt. Bitte die Rechnungsliste prüfen, bevor die Rechnung erneut angelegt wird.' },
+      { status: 409 });
+  }
   if (start.zustand === 'konflikt') return NextResponse.json({ success: false, code: 'KEY_KONFLIKT', error: 'Dieser Idempotenzschlüssel wurde bereits mit anderen Angaben verwendet.' }, { status: 422 });
   if (start.zustand === 'fertig') return NextResponse.json(start.antwort ?? { success: true }, { status: start.http_status || 200, headers: { 'Idempotent-Replay': 'true' } });
   if (start.zustand === 'laeuft') return NextResponse.json({ success: false, code: 'IN_BEARBEITUNG', error: 'Dieselbe Anfrage wird gerade verarbeitet.' }, { status: 409 });
@@ -663,6 +675,7 @@ export async function PATCH(req: NextRequest) {
           ZAHLUNG_AUF_STORNIERT: [409, 'Auf eine stornierte Rechnung kann keine Zahlung gebucht werden. Bereits gebuchte Zahlungen bleiben im Verlauf erhalten.'],
           STORNIERT_FINAL: [409, 'Eine stornierte Rechnung kann nicht wieder geöffnet werden. Bitte eine neue Rechnung anlegen.'],
           GUTSCHRIFT_KEINE_ZAHLUNG: [409, 'Eine Gutschrift ist keine Zahlung und kann nicht als bezahlt markiert werden.'],
+          ZAHLUNG_ABWEICHUNG: [409, 'Der bezahlte Betrag lässt sich nicht durch gebuchte Zahlungen erklären (ältere Buchung ohne Zahlungszeile). Es wurde nichts geändert. Bitte die Zahlung gezielt erfassen oder korrigieren.'],
           ZAHLUNGEN_VORHANDEN: [409, 'Es sind Zahlungen gebucht. Bitte die jeweilige Zahlung gezielt korrigieren oder löschen, statt die Rechnung auf offen zu setzen.'],
         };
         const [st, tx] = texte[erg?.code] || [400, 'Status konnte nicht geändert werden.'];
