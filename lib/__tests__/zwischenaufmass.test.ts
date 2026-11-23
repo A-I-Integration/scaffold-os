@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   normalisiereZwischenaufmasse, neuesZwischenaufmass, neueMengeM2, bisherAbgerechneteM2, baueTeilleistungsPosition,
-  markiereAbgerechnet, loescheZwischenaufmass, zwischenaufmassNr, naechsteZwischenaufmassNr, letzteKumulierteFlaeche, type Zwischenaufmass,
+  markiereAbgerechnet, loescheZwischenaufmass, zwischenaufmassNr, naechsteZwischenaufmassNr, letzteKumulierteFlaeche, aktuellerStandM2, restmengeM2, ueberabgerechnetM2, istRueckgang, type Zwischenaufmass,
 } from '../zwischenaufmass';
 
 const za = (o: Partial<Zwischenaufmass> = {}): Zwischenaufmass => ({
@@ -69,5 +69,45 @@ describe('Zwischenaufmaß', () => {
     expect(r.map((x) => x.id)).toEqual(['a', 'b']);
     expect(r[1].flaecheM2).toBe(0); // "300,5" als String mit Komma ist keine Zahl → 0, wird nie als Menge abgerechnet
     expect(letzteKumulierteFlaeche(r)).toBe(200);
+  });
+
+  describe('Restmenge und Rückbau', () => {
+    // Beispiel Gerüstbau: 500 → 700 → 850 → 950, davon 700 abgerechnet → 250 offen
+    const reihe = [
+      za({ id: '1', nr: 1, flaecheM2: 500, rechnungId: 'r1' }),
+      za({ id: '2', nr: 2, flaecheM2: 700, rechnungId: 'r2' }),
+      za({ id: '3', nr: 3, flaecheM2: 850 }),
+      za({ id: '4', nr: 4, flaecheM2: 950 }),
+    ];
+    it('Restmenge = aktueller Stand − bereits abgerechnet', () => {
+      expect(aktuellerStandM2(reihe)).toBe(950);
+      expect(restmengeM2(reihe)).toBe(250);
+      expect(ueberabgerechnetM2(reihe)).toBe(0);
+    });
+    it('ohne Zwischenaufmaß: alles 0', () => {
+      expect(aktuellerStandM2([])).toBe(0);
+      expect(restmengeM2([])).toBe(0);
+    });
+    it('Rückbau ohne Begründung wird abgelehnt, mit Begründung erlaubt', () => {
+      expect(neuesZwischenaufmass(reihe, { stichtag: '2026-11-01', flaecheM2: 900 }, 'x').ok).toBe(false);
+      const r = neuesZwischenaufmass(reihe, { stichtag: '2026-11-01', flaecheM2: 900, notiz: 'Nordseite zurückgebaut' }, 'x');
+      expect(r.ok).toBe(true);
+      if (r.ok) {
+        const neu = [...reihe, r.eintrag];
+        expect(aktuellerStandM2(neu)).toBe(900); // aktuell = zuletzt erfasst, nicht das Maximum
+        expect(restmengeM2(neu)).toBe(200);
+        expect(istRueckgang(r.eintrag, neu)).toBe(true);
+        expect(istRueckgang(reihe[3], neu)).toBe(false);
+      }
+    });
+    it('gleicher Stand wie zuletzt wird abgelehnt', () => {
+      expect(neuesZwischenaufmass(reihe, { stichtag: '2026-11-01', flaecheM2: 950, notiz: 'x' }, 'x').ok).toBe(false);
+    });
+    it('Rückbau unter die abgerechnete Menge → Überabrechnung, keine Restmenge', () => {
+      const neu = [...reihe, za({ id: '5', nr: 5, flaecheM2: 600, notiz: 'Rückbau' })];
+      expect(ueberabgerechnetM2(neu)).toBe(100);
+      expect(restmengeM2(neu)).toBe(0);
+      expect(baueTeilleistungsPosition({ z: neu[4], liste: neu, preisProM2: 10 }).position).toBeNull();
+    });
   });
 });
