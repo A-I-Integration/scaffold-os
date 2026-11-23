@@ -24,6 +24,7 @@ export default function robots(): MetadataRoute.Robots {
         '/meine-touren',
         '/planung',
         '/prognose',
+        '/faktura',
         '/rechnungen',
         '/mitarbeiter',
         '/fahrzeuge',
