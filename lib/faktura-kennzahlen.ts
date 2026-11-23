@@ -112,7 +112,7 @@ export function gehoertZuReiter(r: FakturaRechnung, reiter: FakturaReiter): bool
     case 'abschlag': return art === 'abschlag';
     case 'schluss': return art === 'schluss';
     case 'gutschriften': return art === 'gutschrift';
-    case 'entwuerfe': return r.status === 'entwurf';
+    case 'entwuerfe': return false; // Entwürfe sind keine Rechnungen (eigene Tabelle invoice_drafts, ohne Nummer)
   }
 }
 
@@ -140,6 +140,7 @@ export function filtereRechnungen(liste: FakturaRechnung[], f: FakturaFilter, he
   });
 }
 
+/** Entwürfe zählt die Seite selbst (eigene Tabelle); hier ist der Wert immer 0. */
 export function zaehleJeReiter(liste: FakturaRechnung[]): Record<FakturaReiter, number> {
   const alle: FakturaReiter[] = ['alle', 'rechnungen', 'abschlag', 'schluss', 'gutschriften', 'entwuerfe'];
   return Object.fromEntries(alle.map((k) => [k, liste.filter((r) => gehoertZuReiter(r, k)).length])) as Record<FakturaReiter, number>;
