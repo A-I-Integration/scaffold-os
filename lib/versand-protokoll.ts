@@ -12,7 +12,7 @@ export interface VersandProtokollEingabe {
   subject?: string;
   status: 'versendet' | 'fehlgeschlagen';
   error?: string | null;
-  format?: 'zugferd' | 'pdf' | null;
+  format?: 'zugferd' | 'pdf' | 'xrechnung' | null;
   pdfBase64?: string | null;
   attachmentName?: string | null;
   resendId?: string | null;
@@ -28,9 +28,9 @@ export function pdfPruefsumme(pdfBase64: string | null | undefined): string | nu
 }
 
 /** Format nur aus erlaubten Werten; Mahnungen sind immer normale PDF. */
-export function bereinigeFormat(format: unknown, kind: 'rechnung' | 'mahnung'): 'zugferd' | 'pdf' | null {
+export function bereinigeFormat(format: unknown, kind: 'rechnung' | 'mahnung'): 'zugferd' | 'pdf' | 'xrechnung' | null {
   if (kind === 'mahnung') return 'pdf';
-  return format === 'zugferd' || format === 'pdf' ? format : null;
+  return format === 'zugferd' || format === 'pdf' || format === 'xrechnung' ? format : null;
 }
 
 /** Zeile für die Datenbank (ohne die per Nachschlagen ergänzten Verknüpfungen). */

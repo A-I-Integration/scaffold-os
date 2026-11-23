@@ -112,6 +112,50 @@ export async function mitProjektnummer(inv: Invoice): Promise<Invoice> {
   throw new Error('Die Projektnummer dieser Rechnung konnte nicht geprüft werden. Es wurde nichts versendet. Bitte Seite neu laden und erneut versuchen.');
 }
 
+export type VersandFormat = 'zugferd' | 'pdf' | 'xrechnung';
+
+function textZuBase64(text: string): string {
+  const bytes = new TextEncoder().encode(text);
+  let s = '';
+  for (let i = 0; i < bytes.length; i += 8192) s += String.fromCharCode(...bytes.subarray(i, i + 8192));
+  return btoa(s);
+}
+
+/**
+ * Anhang für den Versand im gewählten Format – STRIKT: schlägt die E-Rechnung fehl, wird abgebrochen (wirft), es gibt keinen stillen Rückfall auf eine
+ * normale PDF. Nur wer ausdrücklich „pdf“ wählt, bekommt eine PDF ohne E-Rechnung-Daten.
+ * xrechnung: die XML-Datei ist die Rechnung, die normale PDF liegt als Lesekopie bei.
+ */
+export async function holeVersandAnhang(inv: Invoice, format: VersandFormat): Promise<{ pdfBase64: string; xmlBase64?: string; projektnummer: string | null }> {
+  const keinVersand = ' Es wurde nichts versendet.';
+  if (format === 'pdf') {
+    const mit = await mitProjektnummer(inv);
+    return { pdfBase64: generateInvoicePDF(mit).output('datauristring'), projektnummer: mit.projektnummer ?? null };
+  }
+  if (format === 'zugferd') {
+    let json: { success?: boolean; pdfBase64?: string; projektnummer?: string | null; error?: string; details?: unknown } = {};
+    try {
+      const res = await fetch('/api/invoices/zugferd', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ invoice_id: inv.id }) });
+      json = await res.json();
+    } catch { throw new Error('Der E-Rechnung-Dienst ist nicht erreichbar.' + keinVersand + ' Bitte später erneut versuchen.'); }
+    if (!json.success || !json.pdfBase64) throw new Error('Die E-Rechnung (ZUGFeRD) konnte nicht erstellt werden: ' + (json.error || 'unbekannter Fehler') + detailText(json.details) + '.' + keinVersand + ' Wenn du bewusst ohne E-Rechnung senden willst, wähle „Nur PDF“.');
+    return { pdfBase64: json.pdfBase64, projektnummer: json.projektnummer ?? null };
+  }
+  let json: { success?: boolean; xml?: string; error?: string; details?: unknown } = {};
+  try {
+    const res = await fetch('/api/invoices/xrechnung', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ invoice_id: inv.id }) });
+    json = await res.json();
+  } catch { throw new Error('Der E-Rechnung-Dienst ist nicht erreichbar.' + keinVersand + ' Bitte später erneut versuchen.'); }
+  if (!json.success || !json.xml) throw new Error('Die XRechnung konnte nicht erstellt werden: ' + (json.error || 'unbekannter Fehler') + detailText(json.details) + '.' + keinVersand);
+  const mit = await mitProjektnummer(inv);
+  return { pdfBase64: generateInvoicePDF(mit).output('datauristring'), xmlBase64: textZuBase64(json.xml), projektnummer: mit.projektnummer ?? null };
+}
+
+function detailText(d: unknown): string {
+  if (Array.isArray(d)) return ' (' + d.map((x: { message?: string }) => x?.message).filter(Boolean).join('; ') + ')';
+  return typeof d === 'string' && d ? ' (' + d + ')' : '';
+}
+
 export async function holePdfBase64FuerVersand(
   inv: Invoice
 ): Promise<{ pdfBase64: string; istZugferd: boolean; hinweis?: string; projektnummer: string | null }> {

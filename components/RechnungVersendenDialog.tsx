@@ -4,7 +4,8 @@ import { useState, useCallback, type ReactNode } from 'react';
 import { X, Send, Eye, Paperclip, CheckCircle2, AlertTriangle, Loader2 } from 'lucide-react';
 import { WIN } from '@/components/win/Win';
 import { generateInvoicePDF, fmtDate, fmtEur, type Invoice } from '@/lib/invoice-pdf';
-import { versendeRechnung, istGueltigeEmailAdresse, belegBezeichnung, type VersandErgebnis } from '@/lib/rechnung-versand-dienst';
+import { versendeRechnung, istGueltigeEmailAdresse, belegBezeichnung, FORMAT_LABEL, type VersandErgebnis } from '@/lib/rechnung-versand-dienst';
+import type { VersandFormat } from '@/lib/invoice-pdf';
 
 // ============================================================
 // SCAFFOLD OS – ein Versand-Dialog für Rechnungen (Faktura F3)
@@ -20,6 +21,7 @@ export function RechnungVersendenDialog({ rechnung, vorschlag, onClose, onVersuc
   const [laeuft, setLaeuft] = useState(false);
   const [fehler, setFehler] = useState<string | null>(null);
   const [ergebnis, setErgebnis] = useState<VersandErgebnis | null>(null);
+  const [format, setFormat] = useState<VersandFormat>('zugferd');
   const art = belegBezeichnung(rechnung.invoice_type);
   const gueltig = istGueltigeEmailAdresse(an);
 
@@ -32,7 +34,7 @@ export function RechnungVersendenDialog({ rechnung, vorschlag, onClose, onVersuc
     if (!gueltig || laeuft) return;
     setLaeuft(true); setFehler(null);
     try {
-      const erg = await versendeRechnung(rechnung, an);
+      const erg = await versendeRechnung(rechnung, an, { format });
       setErgebnis(erg);
       onVersuch?.(erg);
     } catch (err) {
@@ -60,9 +62,9 @@ export function RechnungVersendenDialog({ rechnung, vorschlag, onClose, onVersuc
 
         {ergebnis ? (
           <div className="space-y-3" data-testid="versand-erfolg">
-            <p className="flex items-start gap-2 rounded-lg p-3 text-[13px]" style={{ background: ergebnis.istZugferd ? '#e7f6ec' : '#fff4e5', color: ergebnis.istZugferd ? '#1a7f37' : '#a65300' }}>
-              {ergebnis.istZugferd ? <CheckCircle2 className="h-4 w-4 mt-0.5 shrink-0" /> : <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />}
-              <span>{art} {rechnung.invoice_number} wurde an <strong>{ergebnis.an}</strong> gesendet{ergebnis.istZugferd ? ' – mit E-Rechnung (ZUGFeRD).' : '.'}{ergebnis.hinweis ? <><br />{ergebnis.hinweis}</> : null}</span>
+            <p className="flex items-start gap-2 rounded-lg p-3 text-[13px]" style={{ background: ergebnis.format !== 'pdf' ? '#e7f6ec' : '#fff4e5', color: ergebnis.format !== 'pdf' ? '#1a7f37' : '#a65300' }}>
+              {ergebnis.format !== 'pdf' ? <CheckCircle2 className="h-4 w-4 mt-0.5 shrink-0" /> : <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />}
+              <span>{art} {rechnung.invoice_number} wurde an <strong>{ergebnis.an}</strong> gesendet – {FORMAT_LABEL[ergebnis.format]}.{ergebnis.hinweis ? <><br />{ergebnis.hinweis}</> : null}</span>
             </p>
             <button onClick={onClose} className="w-full rounded-lg px-3 py-2 text-sm font-semibold text-white" style={{ background: WIN.akzent }}>Schließen</button>
           </div>
@@ -76,11 +78,20 @@ export function RechnungVersendenDialog({ rechnung, vorschlag, onClose, onVersuc
               {an && !gueltig && <p className="mt-1 text-[12px]" style={{ color: '#b42318' }}>Bitte eine gültige E-Mail-Adresse eingeben.</p>}
             </div>
 
-            <div className="rounded-lg border p-3 text-[13px] space-y-1" style={{ borderColor: WIN.randHell }}>
-              <p className="flex items-center gap-1.5 font-medium"><Paperclip className="h-3.5 w-3.5" /> Anhang</p>
-              <p>{art} {rechnung.invoice_number} als PDF, wenn möglich mit eingebetteten E-Rechnung-Daten (ZUGFeRD).</p>
-              <p style={{ color: WIN.textGedaempft }}>Lassen sich die E-Rechnung-Daten nicht erzeugen, geht die normale PDF raus – das siehst du nach dem Versand ausdrücklich.</p>
-            </div>
+            <fieldset className="rounded-lg border p-3 text-[13px] space-y-2" style={{ borderColor: WIN.randHell }}>
+              <legend className="flex items-center gap-1.5 px-1 font-medium"><Paperclip className="h-3.5 w-3.5" /> Anhang und Format</legend>
+              {([
+                ['zugferd', 'PDF mit eingebetteter E-Rechnung. Für fast alle Kunden die richtige Wahl.'],
+                ['xrechnung', 'Reine XML-Rechnung (Behörden, öffentliche Auftraggeber). Braucht die Leitweg-ID des Kunden; die PDF liegt als Lesekopie bei.'],
+                ['pdf', 'Normale PDF ohne E-Rechnung-Daten. Nur wählen, wenn der Kunde keine E-Rechnung braucht.'],
+              ] as [VersandFormat, string][]).map(([k, t]) => (
+                <label key={k} className="flex items-start gap-2 cursor-pointer">
+                  <input type="radio" name="versand-format" value={k} checked={format === k} onChange={() => setFormat(k)} className="mt-1" />
+                  <span><span className="font-medium">{FORMAT_LABEL[k]}</span><span className="block" style={{ color: WIN.textGedaempft }}>{t}</span></span>
+                </label>
+              ))}
+              <p style={{ color: WIN.textGedaempft }}>Lässt sich die gewählte E-Rechnung nicht erzeugen, wird <strong>nichts</strong> versendet und der Grund steht hier.</p>
+            </fieldset>
 
             {fehler && <p className="rounded-lg border border-red-200 bg-red-50 p-3 text-[13px] text-red-700" role="alert">❌ {fehler}<br /><span className="text-red-600/80">Der Versuch steht im Versandprotokoll.</span></p>}
 
