@@ -6,6 +6,7 @@ import { beiAngebotsannahmeSicher } from '@/lib/angebot-annahme';
 import { fahrtNachholenSicher } from '@/lib/auto-tour';
 import { projektFuerRolle, schreibdatenFuerRolle } from '@/lib/projekt-sicht';
 import { autosaveGesperrt, filtereAutosaveData, AUTOSAVE_PROJEKT_ABGESCHLOSSEN_FEHLER } from '@/lib/aufmass-autosave-regeln';
+import { pruefeVorhaltePeriodenAenderung, normalisiereVereinbarung } from '@/lib/vorhaltung';
 import { pruefeAufmassAenderung } from '@/lib/aufmass-integritaet';
 import { aenderungenZwischenaufmasse } from '@/lib/zwischenaufmass';
 import { schreibeHistorie } from '@/lib/abrechnung-historie';
@@ -251,6 +252,11 @@ export async function PATCH(req: NextRequest) {
         const sperre = pruefeAufmassAenderung(bisher.data?.zwischenaufmasse, data.zwischenaufmasse);
         if (sperre) return NextResponse.json({ success: false, code: 'AUFMASS_GESPERRT', error: sperre }, { status: 409 });
       }
+      // Faktura F8: berechnete Vorhaltezeiträume entstehen nur beim Anlegen der Rechnung
+      if (data.vorhaltePerioden !== undefined) {
+        const sperreV = pruefeVorhaltePeriodenAenderung(bisher.data?.vorhaltePerioden, data.vorhaltePerioden);
+        if (sperreV) return NextResponse.json({ success: false, code: 'VORHALTUNG_GESPERRT', error: sperreV }, { status: 409 });
+      }
       patch.data = { ...(bisher.data || {}), ...data };
 
       // Verlauf: Änderung des Angebotswerts nach der Annahme (best effort, ändert nichts am Speichern)
@@ -263,6 +269,18 @@ export async function PATCH(req: NextRequest) {
             const { data: { user } } = await sb.auth.getUser();
             await schreibeHistorie({ aktion: 'auftragswert_geaendert', projectId: id, userId: user?.id || null,
               grund: typeof body?.aenderungsgrund === 'string' ? body.aenderungsgrund : null, details: { von: vorher, auf: nachher } });
+          }
+        }
+      } catch { /* Verlauf ist best effort */ }
+
+      // Verlauf: Änderung der Vorhalte-Vereinbarung (von → auf, mit Grund)
+      try {
+        if (!autosave && data.vorhaltung !== undefined) {
+          const von = normalisiereVereinbarung(bisher.data?.vorhaltung); const auf = normalisiereVereinbarung(data.vorhaltung);
+          if (JSON.stringify(von) !== JSON.stringify(auf)) {
+            const sb = await createClient();
+            const { data: { user } } = await sb.auth.getUser();
+            await schreibeHistorie({ aktion: 'vorhaltung_vereinbart', projectId: id, userId: user?.id || null, grund: typeof body?.aenderungsgrund === 'string' ? body.aenderungsgrund : null, details: { von, auf } });
           }
         }
       } catch { /* Verlauf ist best effort */ }

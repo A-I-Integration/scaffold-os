@@ -7,6 +7,7 @@
 export type HistorieAktion =
   | 'rechnung_angelegt' | 'neue_version' | 'gutschrift_angelegt' | 'zahlung_geaendert' | 'status_geaendert' | 'storniert' | 'geloescht' | 'abweichung_freigegeben'
   | 'aufmass_erfasst' | 'aufmass_abgerechnet' | 'aufmass_geloescht' | 'aufmass_freigegeben'
+  | 'vorhaltung_vereinbart' | 'vorhaltung_abgerechnet' | 'vorhaltung_freigegeben'
   | 'auftragswert_geaendert' | 'nachtrag_angelegt' | 'nachtrag_status' | 'nachtrag_betrag' | 'nachtrag_geloescht'
 
 export interface HistorieEintrag {
@@ -47,6 +48,7 @@ export const AKTION_LABEL: Record<HistorieAktion, string> = {
   rechnung_angelegt: 'Rechnung angelegt', neue_version: 'Neue Version angelegt', gutschrift_angelegt: 'Gutschrift angelegt',
   zahlung_geaendert: 'Zahlung geändert', status_geaendert: 'Status geändert', storniert: 'Storniert', geloescht: 'Gelöscht',
   aufmass_erfasst: 'Aufmaß erfasst', aufmass_abgerechnet: 'Aufmaß abgerechnet', aufmass_geloescht: 'Aufmaß gelöscht', aufmass_freigegeben: 'Aufmaßmenge wieder freigegeben',
+  vorhaltung_vereinbart: 'Vorhalte-Vereinbarung geändert', vorhaltung_abgerechnet: 'Vorhaltung abgerechnet', vorhaltung_freigegeben: 'Vorhaltezeitraum wieder freigegeben',
   abweichung_freigegeben: 'Abweichung freigegeben', auftragswert_geaendert: 'Auftragswert geändert',
   nachtrag_angelegt: 'Nachtrag angelegt', nachtrag_status: 'Nachtrag-Status geändert', nachtrag_betrag: 'Nachtrag-Betrag geändert', nachtrag_geloescht: 'Nachtrag gelöscht',
 }
@@ -56,6 +58,11 @@ export function historieKurz(aktion: string, d: Record<string, any> | null): str
   if (!d) return ''
   const eur = (n: unknown) => (typeof n === 'number' ? n.toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' €' : '–')
   if (aktion === 'auftragswert_geaendert') return `${eur(d.von)} → ${eur(d.auf)}`
+  if (aktion === 'vorhaltung_vereinbart') {
+    const f = (v: any) => (v ? `${v.aktiv ? '' : 'inaktiv, '}Beginn ${v.beginn ? String(v.beginn).split('-').reverse().join('.') : '–'}, ${v.freiTage ?? 0} Tage frei, ${v.preis ?? 0} € je ${v.intervall === 'monat' ? 'Monat' : 'Woche'}${v.abbauDatum ? `, Abbau ${String(v.abbauDatum).split('-').reverse().join('.')}` : ''}${Array.isArray(v.teilabbauten) && v.teilabbauten.length ? `, ${v.teilabbauten.length} Teilabbau/-abbauten` : ''}` : 'keine')
+    return `${f(d.von)} → ${f(d.auf)}`
+  }
+  if (aktion === 'vorhaltung_abgerechnet') return `${String(d.von ?? '').split('-').reverse().join('.')} bis ${String(d.bis ?? '').split('-').reverse().join('.')} (bis ausschließlich), ${d.intervalle ?? ''} Intervalle, ${typeof d.netto === 'number' ? d.netto.toLocaleString('de-DE', { minimumFractionDigits: 2 }) + ' € netto' : ''}`
   if (aktion.startsWith('aufmass_')) {
     const n = (v: unknown) => (typeof v === 'number' ? v.toLocaleString('de-DE', { maximumFractionDigits: 2 }) : '–')
     const pos = Array.isArray(d.positionen) ? d.positionen as any[] : []
