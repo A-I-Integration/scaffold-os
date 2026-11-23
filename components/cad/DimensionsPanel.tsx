@@ -16,11 +16,13 @@ import type { CustomDimension } from '@/types/cad-dimensions'
 interface Props {
   dimensions: CustomDimension[]
   onDeleteDimension: (id: string) => void
+  /** Zeichenebenen-Status je Maß-ID (Kennzeichnung in der Liste) */
+  status?: Record<string, { ausgeblendet: boolean; gesperrt: boolean }>
   measureMode: boolean
   onToggleMeasureMode: () => void
 }
 
-export default function DimensionsPanel({ dimensions, onDeleteDimension, measureMode, onToggleMeasureMode }: Props) {
+export default function DimensionsPanel({ dimensions, onDeleteDimension, measureMode, onToggleMeasureMode, status }: Props) {
   const [offen, setOffen] = useState(true)
 
   return (
@@ -61,6 +63,9 @@ export default function DimensionsPanel({ dimensions, onDeleteDimension, measure
                     <span className='text-xs font-medium text-[#1d1d1f]'>
                       {dim.distanceM.toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} m
                     </span>
+                    {(status?.[dim.id]?.ausgeblendet || status?.[dim.id]?.gesperrt) && (
+                      <span className='text-[10px] text-amber-700 ml-1'>{status?.[dim.id]?.ausgeblendet ? 'im CAD ausgeblendet' : ''}{status?.[dim.id]?.ausgeblendet && status?.[dim.id]?.gesperrt ? ' · ' : ''}{status?.[dim.id]?.gesperrt ? 'gesperrt' : ''}</span>
+                    )}
                     {(dim.startLabel || dim.endLabel) && (
                       <span className='text-[10px] text-[#86868b] ml-1 truncate'>
                         {dim.startLabel && dim.endLabel

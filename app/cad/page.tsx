@@ -389,6 +389,21 @@ export default function CADPage() {
     if (e.gesperrt) { setZebMeldung(`Die Ebene „${e.name}“ ist gesperrt – das Objekt wurde nicht geändert.`); return false }
     return true
   }, [])
+  // Sperre von Gerüst-/Treppenebene: verhindert jede Bearbeitung der Bauteile (Setzen, Ziehen, Drehen, Kopieren, Ersetzen, Entfernen).
+  // Über ein Ref, damit die vielen Bearbeitungs-Handler nicht alle um Abhängigkeiten erweitert werden müssen.
+  const [sperre] = useState(() => {
+    const fuer = (art: 'treppe' | 'geruest' | 'beide'): boolean => {
+      const z = zebRef.current
+      const t = Zeb.findeEbene(z, 'std-treppen'); const g = Zeb.findeEbene(z, 'std-geruest')
+      const hit = art !== 'geruest' && t?.gesperrt ? t : art !== 'treppe' && g?.gesperrt ? g : null
+      if (hit) { setZebMeldung(`Die Ebene „${hit.name}“ ist gesperrt – das Bauteil wurde nicht geändert.`); return true }
+      return false
+    }
+    return {
+      fuer,
+      fuerId: (id: string): boolean => { const typ = modelWithManualRef.current?.components3D.find((c) => c.id === id)?.type; return fuer(typ === 'stair' || id.startsWith('stair') ? 'treppe' : 'geruest') },
+    }
+  })
   const zebAendern = useCallback((f: (z: Zeb.Zeichenebenen) => Zeb.Ergebnis) => {
     const r = f(zebRef.current)
     if (r.ok) { setZebMeldung(null); zebRef.current = r.zustand; setZeichenebenen(r.zustand) } else setZebMeldung(r.fehler)
@@ -580,12 +595,14 @@ export default function CADPage() {
   const [feldKlick, setFeldKlick] = useState<GeruestfeldAngaben | null>(null)
   const [feldMeldung, setFeldMeldung] = useState<string | null>(null)
   const setzeGeruestfeld = useCallback((pl: Omit<ManualPlacement, 'id'>) => {
+    if (sperre.fuer('geruest')) return
     const placement: ManualPlacement = { id: `feld-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`, ...pl }
     setManualPlacements((prev) => [...prev, placement])
     setFeldMeldung('Gerüstfeld gesetzt – ein Teil anklicken, um es zu ändern oder zu verschieben.')
-  }, [])
+  }, [sperre])
 
   const handlePlacementClick = useCallback((type: string, position: [number, number, number], side: string, levelIndex: number) => {
+    if (sperre.fuer(type === 'stair' ? 'treppe' : 'geruest')) return
     if (type === 'geruestfeld') {
       if (!feldKlick) return
       const l = platzierungAusTreffer(model, 'geruestfeld', position, side as ManualPlacement['side'], levelIndex)
@@ -605,21 +622,23 @@ export default function CADPage() {
     setSelectedComponent(placement.id)
     // Eine Treppe wird einmal gesetzt: danach ist das Werkzeug aus, damit man sie sofort anklicken und ziehen kann (im Werkzeugmodus ist Ziehen gesperrt)
     if (type === 'stair') setPlacementType(null)
-  }, [model, feldKlick, setzeGeruestfeld, anschlussEinrasten])
+  }, [sperre, model, anschlussEinrasten, feldKlick, setzeGeruestfeld])
 
   // Treppe über Auswahl: Seite + Feld wählen, danach um Felder schieben (kein Mausklick im 3D nötig)
   const [treppePanel, setTreppePanel] = useState(false)
   const [treppeMeldung, setTreppeMeldung] = useState<string | null>(null)
   const setzeTreppeAufFeld = useCallback((feld: ScaffoldField) => {
+    if (sperre.fuer('treppe')) return
     if (!model) return
     const placement: ManualPlacement = { id: `manual-stair-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`, ...treppeAufFeld(model, feld) }
     setPlacementType(null); setTreppeMeldung(null)
     setManualPlacements((prev) => [...prev, placement])
     setSelectedComponent(placement.id)
-  }, [model])
+  }, [model, sperre])
 
   // Automatische Treppe mit einem Klick wählen und ein Feld nach links/rechts versetzen (treppeFeldId)
   const versetzeAutoTreppe = useCallback((richtung: -1 | 1): string | null => {
+    if (sperre.fuer('treppe')) return 'Die Ebene Treppen ist gesperrt.'
     if (!model || !selectedComponent) return null
     const teil = model.components3D.find((c) => c.id === selectedComponent)
     if (!teil) return null
@@ -631,9 +650,10 @@ export default function CADPage() {
     setAutoGenerate(true)
     setBuilding({ ...building, geruestOptionen: { ...(building.geruestOptionen ?? {}), treppeFeldId: zielId } })
     return null
-  }, [model, selectedComponent, building])
+  }, [sperre, model, selectedComponent, setBuilding, building])
 
   const setzeLeiterAufFeld = useCallback((feld: ScaffoldField, lage: number) => {
+    if (sperre.fuer('geruest')) return
     if (!model) return
     const e = leiterAufFeld(model, feld, lage)
     setTreppeMeldung(e.grund ?? null)
@@ -642,16 +662,17 @@ export default function CADPage() {
     setPlacementType(null)
     setManualPlacements((prev) => [...prev, placement])
     setSelectedComponent(placement.id)
-  }, [model])
+  }, [model, sperre])
 
   const setzeDurchstiegAufFeld = useCallback((feld: ScaffoldField) => {
+    if (sperre.fuer('geruest')) return
     if (!model) return
     const d = durchstiegAufFeld(model, feld)
     const stamp = `${Date.now()}-${Math.random().toString(36).slice(2, 6)}`
     setPlacementType(null); setTreppeMeldung(null)
     setManualPlacements((prev) => [...prev, ...d.platzierungen.map((p, i) => ({ id: `manual-durchstieg-${stamp}-${i}`, ...p }) as ManualPlacement)])
     if (d.entfernen.length) setRemovedGroups((prev) => [...prev, ...d.entfernen])
-  }, [model])
+  }, [model, sperre])
 
   // NEU (Ziehen): manuell gesetzte Bauteile anklicken und an eine andere Stelle
   // ziehen. Erzeugte Bauteile (Rahmen, Beläge, automatischer Treppenturm)
@@ -666,12 +687,14 @@ export default function CADPage() {
     return manualPlacements.find((x) => x.id === pid && x.type === 'stair') ?? null
   }, [selectedComponent, manualPlacements])
   const schiebeTreppe = useCallback((felder: number) => {
+    if (sperre.fuer('treppe')) return
     if (!model || !gewaehlteTreppe) return
     const e = schiebeUmFelder(model, gewaehlteTreppe, felder)
     setTreppeMeldung(e.grund ?? null)
     if (e.placement) setManualPlacements((prev) => prev.map((x) => (x.id === e.placement!.id ? e.placement! : x)))
-  }, [model, gewaehlteTreppe])
+  }, [sperre, model, gewaehlteTreppe])
   const handleBauteilZiehen = useCallback((platzierungId: string, position: [number, number, number], side: string, levelIndex: number) => {
+    if (sperre.fuer('beide')) return
     setManualPlacements((prev) => {
       const i = prev.findIndex((p) => p.id === platzierungId)
       if (i < 0) return prev
@@ -681,10 +704,11 @@ export default function CADPage() {
       kopie[i] = neu
       return kopie
     })
-  }, [model])
+  }, [model, sperre])
 
   // Griff/Zahleneingabe: neue Lage des ausgewählten Bauteils. Von Hand gesetzte Bauteile ändern ihre Platzierung, erzeugte bekommen eine Überlagerung.
   const handleBauteilLage = useCallback((id: string, positionGriff: [number, number, number], drehGrad: number) => {
+    if (sperre.fuerId(id)) return
     const pid = platzierungIdVon(id, manualPlacements)
     const angezeigt = modelWithManualRef.current?.components3D.find((c) => c.id === id)
     // Nur beim Verschieben (nicht beim Drehen) und nur für Einzelteile; Treppen rasten über ihre eigene Feldlogik ein
@@ -706,12 +730,13 @@ export default function CADPage() {
     }
     if (!angezeigt) return
     setzeUeber((u) => setzeBauteilLage(u, angezeigt, angezeigt, position, drehGrad))
-  }, [manualPlacements, setzeUeber, model, anschlussEinrasten])
+  }, [sperre, manualPlacements, anschlussEinrasten, setzeUeber, model])
   const handleMasseDrehung = useCallback((id: string, a: { masse?: [number, number, number]; euler?: [number, number, number] }) => {
+    if (sperre.fuerId(id)) return
     const angezeigt = modelWithManualRef.current?.components3D.find((c) => c.id === id)
     if (!angezeigt) return
     setzeUeber((u) => setzeBauteilMasseDrehung(u, angezeigt, a))
-  }, [setzeUeber])
+  }, [setzeUeber, sperre])
   // Ganze Baugruppe (Treppe, Gerüstfeld …) als Mehrfachauswahl wählen: danach gelten die Gruppenaktionen für alle Teile
   const handleBaugruppeWaehlen = useCallback((id: string) => {
     const ids = teileDerBaugruppe(modelWithManualRef.current?.components3D ?? [], id)
@@ -719,6 +744,7 @@ export default function CADPage() {
     setMehrfach(ids); setSelectedComponent(null)
   }, [])
   const handleBauteilDuplizieren = useCallback((id: string) => {
+    if (sperre.fuerId(id)) return
     const pid = platzierungIdVon(id, manualPlacements)
     if (pid) {
       const quelle = manualPlacements.find((x) => x.id === pid)!
@@ -728,15 +754,16 @@ export default function CADPage() {
     let neueId = ''
     setzeUeber((u) => { const r = dupliziereBauteil(u, id); neueId = r.neueId; return r.ueberlagerung })
     setSelectedComponent(neueId)
-  }, [manualPlacements, setzeUeber])
+  }, [manualPlacements, setzeUeber, sperre])
   const handleLageOp = useCallback((id: string, op: { art: 'verschieben' | 'kopieren'; levelIndex: number; alleSeiten: boolean; dyM: number }) => {
+    if (sperre.fuerId(id)) return
     const mdl = modelWithManualRef.current
     if (!mdl) return
     const seite = op.alleSeiten ? null : (mdl.components3D.find((c) => c.id === id)?.fieldId ? mdl.fields.find((f) => f.id === mdl.components3D.find((c) => c.id === id)!.fieldId)?.side ?? null : null)
     const ids = bauteileDerLage(mdl, op.levelIndex, seite)
     if (ids.length === 0) return
     setzeUeber((u) => (op.art === 'verschieben' ? verschiebeBauteile(u, mdl, ids, [0, op.dyM, 0]) : kopiereBauteile(u, ids, [0, op.dyM, 0])))
-  }, [setzeUeber])
+  }, [setzeUeber, sperre])
   // ─── Mehrfachauswahl: Gruppenaktionen (Teile von Hand gesetzter Bauteile gehören über ihre Platzierung zusammen) ───
   const teileDerAuswahl = useCallback((ids: string[]) => {
     const pids = new Set<string>(); const rest: string[] = []
@@ -744,20 +771,23 @@ export default function CADPage() {
     return { pids: [...pids], rest }
   }, [manualPlacements])
   const handleGruppeVerschieben = useCallback((v: [number, number, number]) => {
+    if (sperre.fuer('beide')) return
     const { pids, rest } = teileDerAuswahl(mehrfach)
     if (pids.length) setManualPlacements((prev) => prev.map((p) => (pids.includes(p.id) ? { ...p, positionX: p.positionX + v[0], positionY: p.positionY + v[1], positionZ: p.positionZ + v[2] } : p)))
     const mdl = modelWithManualRef.current
     if (rest.length && mdl) setzeUeber((u) => verschiebeBauteile(u, mdl, rest, v))
-  }, [mehrfach, teileDerAuswahl, setzeUeber])
+  }, [sperre, teileDerAuswahl, mehrfach, setzeUeber])
   const handleGruppeKopieren = useCallback((v: [number, number, number]) => {
+    if (sperre.fuer('beide')) return
     const { pids, rest } = teileDerAuswahl(mehrfach)
     if (pids.length) {
       const jetzt = Date.now()
       setManualPlacements((prev) => [...prev, ...prev.filter((p) => pids.includes(p.id)).map((p, i) => ({ ...p, id: `manual-${p.type}-${jetzt}-${i}`, positionX: p.positionX + v[0], positionY: p.positionY + v[1], positionZ: p.positionZ + v[2] }))])
     }
     if (rest.length) setzeUeber((u) => kopiereBauteile(u, rest, v))
-  }, [mehrfach, teileDerAuswahl, setzeUeber])
+  }, [sperre, teileDerAuswahl, mehrfach, setzeUeber])
   const handleGruppeEntfernen = useCallback(() => {
+    if (sperre.fuer('beide')) return
     const { pids, rest } = teileDerAuswahl(mehrfach)
     if (pids.length) setManualPlacements((prev) => prev.filter((p) => !pids.includes(p.id)))
     const kopien = rest.filter(istKopieId)
@@ -770,7 +800,7 @@ export default function CADPage() {
     }
     if (erzeugt.size) setRemovedGroups((prev) => [...prev, [...erzeugt]]) // ein Schritt: „Entferntes zurück“ holt die ganze Gruppe wieder
     setMehrfach([])
-  }, [mehrfach, teileDerAuswahl, model, setzeUeber])
+  }, [sperre, teileDerAuswahl, mehrfach, setzeUeber, model])
   const handleRahmen = useCallback((ids: string[], ergaenzen: boolean) => { setMehrfach((prev) => rahmenErgebnis(prev, ids, ergaenzen)); setSelectedComponent(null) }, [])
   // Entf entfernt die ganze Mehrfachauswahl, Esc hebt sie auf (nicht beim Tippen in Feldern)
   useEffect(() => {
@@ -784,16 +814,18 @@ export default function CADPage() {
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [mehrfach.length, rahmenModus, handleGruppeEntfernen])
-  const handleBauteilZuruecksetzen = useCallback((id: string) => { setzeUeber((u) => setzeBauteilZurueck(u, id)); if (istKopieId(id)) setSelectedComponent(null) }, [setzeUeber])
+  const handleBauteilZuruecksetzen = useCallback((id: string) => { if (sperre.fuerId(id)) return; setzeUeber((u) => setzeBauteilZurueck(u, id)); if (istKopieId(id)) setSelectedComponent(null) }, [setzeUeber, sperre])
 
   const handleRemoveManualPlacement = useCallback((id: string) => {
+    if (sperre.fuer('beide')) return
     setManualPlacements((prev) => prev.filter((p) => p.id !== id))
-  }, [])
+  }, [sperre])
 
   // Bauteil per Klick entfernen: manuell gesetzte Bauteile werden gelöscht,
   // erzeugte Bauteile ausgeblendet (rückgängig machbar). Teile eines
   // Treppenturms (Holme, Stufen, Pfosten) gehen immer gemeinsam.
   const handleRemoveComponent = useCallback((id: string) => {
+    if (sperre.fuerId(id)) return
     if (istKopieId(id)) { setzeUeber((u) => setzeBauteilZurueck(u, id)); setSelectedComponent(null); return }
     const plId = platzierungIdVon(id, manualPlacements)
     const pl = plId ? manualPlacements.find((p) => p.id === plId) : undefined
@@ -809,7 +841,7 @@ export default function CADPage() {
       : [id]
     setRemovedGroups((prev) => [...prev, ids])
     setSelectedComponent(null)
-  }, [manualPlacements, handleRemoveManualPlacement, model, setzeUeber])
+  }, [sperre, manualPlacements, model, setzeUeber, handleRemoveManualPlacement])
 
   // Entf/Backspace entfernt das ausgewählte Bauteil (nicht beim Tippen in Feldern)
   useEffect(() => {
@@ -1060,10 +1092,12 @@ export default function CADPage() {
     return manualPlacements.find((x) => x.type === 'geruestfeld' && x.id === asm) ?? null
   }, [selectedComponent, manualPlacements, modelWithManual])
   const aendereGeruestfeld = useCallback((angaben: GeruestfeldAngaben) => {
+    if (sperre.fuer('geruest')) return
     if (!gewaehltesFeld) return
     setManualPlacements((prev) => prev.map((x) => (x.id === gewaehltesFeld.id ? { ...x, positionY: angaben.aufstandM ?? 0, feld: angaben } : x)))
-  }, [gewaehltesFeld])
+  }, [gewaehltesFeld, sperre])
   const verschiebeGeruestfeld = useCallback((dxM: number) => {
+    if (sperre.fuer('geruest')) return
     if (!gewaehltesFeld || !model) return
     const vorlage = model.fields.find((f) => f.side === gewaehltesFeld.side)
     if (!vorlage) return
@@ -1071,12 +1105,13 @@ export default function CADPage() {
     const [lx, lz] = r.toLocal(gewaehltesFeld.positionX, gewaehltesFeld.positionZ)
     const [x, z] = r.toWorld(lx + dxM, lz)
     setManualPlacements((prev) => prev.map((p) => (p.id === gewaehltesFeld.id ? { ...p, positionX: x, positionZ: z } : p)))
-  }, [gewaehltesFeld, model])
+  }, [gewaehltesFeld, model, sperre])
   const loescheGeruestfeld = useCallback(() => {
+    if (sperre.fuer('geruest')) return
     if (!gewaehltesFeld) return
     setManualPlacements((prev) => prev.filter((p) => p.id !== gewaehltesFeld.id))
     setSelectedComponent(null)
-  }, [gewaehltesFeld])
+  }, [gewaehltesFeld, sperre])
 
   const removedCount = useMemo(() => removedGroups.reduce((n, g) => n + g.length, 0), [removedGroups])
 
@@ -1089,6 +1124,7 @@ export default function CADPage() {
   // Turm) wird entfernt und an derselben Stelle durch den gewählten Typ aus dem
   // Katalog ersetzt. Seite/Ebene werden aus der Lage abgeleitet (Annahme: Raster 2 m).
   const handleReplaceComponent = useCallback((id: string, newType: string) => {
+    if (sperre.fuerId(id)) return
     if (!modelWithManual) return
     const comps = modelWithManual.components3D
     const tm = id.match(/^stair-(?:frame|step|rail)-(\d+)(?:-|$)/)
@@ -1121,7 +1157,7 @@ export default function CADPage() {
     handleRemoveComponent(id)
     setManualPlacements((prev) => [...prev, placement])
     setSelectedComponent(placement.id)
-  }, [modelWithManual, handleRemoveComponent])
+  }, [sperre, modelWithManual, handleRemoveComponent])
 
   const allWarnings = useMemo(() => {
     const rules = [...ruleResults.errors, ...ruleResults.warnings, ...ruleResults.infos]
@@ -1685,6 +1721,9 @@ export default function CADPage() {
   const sichtbareMessungen = messErgebnisse.filter((m) => Zeb.istSichtbar(zeichenebenen, Zeb.objektSchluessel('mess', m.id), 'std-bemassungen'))
   const sichtbareNotizen = notes.filter((n) => Zeb.istSichtbar(zeichenebenen, Zeb.objektSchluessel('notiz', n.id), 'std-notizen'))
   const visibleTypes3D = zebSichtbar('std-treppen') ? visibleTypes : { ...visibleTypes, stair: false }
+  const statusVon = (art: Zeb.ObjektArt, ids: string[], standard: Zeb.StandardEbenenId) => Object.fromEntries(ids.map((id) => { const e = Zeb.ebeneVon(zeichenebenen, Zeb.objektSchluessel(art, id), standard); return [id, { ausgeblendet: !e.sichtbar, gesperrt: e.gesperrt }] }))
+  const notizStatus = statusVon('notiz', notes.map((n) => n.id), 'std-notizen')
+  const massStatus = statusVon('mass', customDimensions.map((d) => d.id), 'std-bemassungen')
   const ebenenObjekte: EbenenObjekt[] = [
     ...figuren.map((f) => ({ schluessel: Zeb.objektSchluessel('figur', f.id), label: beschreibeFigur(f), standard: Zeb.standardEbeneFuer('figur', f.art) })),
     ...customDimensions.map((d) => ({ schluessel: Zeb.objektSchluessel('mass', d.id), label: `Maß ${d.distanceM.toFixed(2).replace('.', ',')} m`, standard: 'std-bemassungen' as const })),
@@ -1693,7 +1732,7 @@ export default function CADPage() {
   ]
   const ebenenPanels = (
     <>
-      <ZeichenebenenPanel zustand={zeichenebenen} objekte={ebenenObjekte} meldung={zebMeldung}
+      <ZeichenebenenPanel zustand={zeichenebenen} objekte={ebenenObjekte} meldung={null}
         onSichtbar={(id, v) => zebAendern((z) => Zeb.setzeSichtbar(z, id, v))} onGesperrt={(id, g) => zebAendern((z) => Zeb.setzeGesperrt(z, id, g))}
         onUmbenennen={(id, n) => zebAendern((z) => Zeb.ebeneUmbenennen(z, id, n))} onLoeschen={(id) => zebAendern((z) => Zeb.ebeneLoeschen(z, id))}
         onHinzufuegen={(n) => zebAendern((z) => Zeb.ebeneHinzufuegen(z, n, `eb-${Date.now()}-${Math.round(Math.random() * 1000)}`))}
@@ -1702,8 +1741,15 @@ export default function CADPage() {
     </>
   )
 
+  const zebToast = zebMeldung ? (
+    <div role='alert' data-testid='zeichenebenen-hinweis' className='fixed bottom-4 left-1/2 z-50 flex -translate-x-1/2 items-center gap-3 rounded-lg border border-amber-300 bg-amber-50 px-4 py-2 text-[13px] text-amber-900 shadow-lg'>
+      <span>{zebMeldung}</span>
+      <button type='button' aria-label='Hinweis schließen' onClick={() => setZebMeldung(null)}>✕</button>
+    </div>
+  ) : null
   return (
     <div className={`min-h-full md:h-full md:overflow-clip flex flex-col bg-[#fbfbfd]${dunkel ? ' cad-dunkel' : ''}`}>
+      {zebToast}
       {oeffnungen && (
         <OeffnungenFenster ergebnis={oeffnungen} anzahlBestehendeTueren={building.tueren?.length ?? 0}
           onSchliessen={() => setOeffnungen(null)}
@@ -2021,7 +2067,7 @@ export default function CADPage() {
                 )}
               </div>
             )}
-            {viewMode === '2d' && modelWithManual && <Scaffold2D ansicht={ansicht2d} model={modelWithManual} projektName={aufmassProjektName} firma={firmenName} zeichnung={{ figuren: sichtbareFiguren, werkzeug: zeichenWerkzeug, onNeu: (f) => { if (legeObjektAn('figur', f.id, Zeb.standardEbeneFuer('figur', f.art))) setFiguren((l) => [...l, f]) }, onWerkzeug: setZeichenWerkzeug }} />}
+            {viewMode === '2d' && modelWithManual && <Scaffold2D ansicht={ansicht2d} ebenen={{ gebaeude: zebSichtbar('std-gebaeude'), geruest: zebSichtbar('std-geruest'), treppen: zebSichtbar('std-treppen') }} model={modelWithManual} projektName={aufmassProjektName} firma={firmenName} zeichnung={{ figuren: sichtbareFiguren, werkzeug: zeichenWerkzeug, onNeu: (f) => { if (legeObjektAn('figur', f.id, Zeb.standardEbeneFuer('figur', f.art))) setFiguren((l) => [...l, f]) }, onWerkzeug: setZeichenWerkzeug }} />}
             {viewMode === '2d' && modelWithManual && sichtbareFiguren.length > 0 && (
               <aside className='absolute right-3 top-3 z-20 w-[300px] max-h-[60%] overflow-hidden rounded-md border bg-white shadow-xl' style={{ borderColor: 'var(--os-linie)' }} aria-label='Zeichnung'>
                 <div className='px-3 py-2 text-[14px] font-bold text-white' style={{ background: 'var(--os-nav)' }}>Zeichnung ({sichtbareFiguren.length})</div>
@@ -2069,7 +2115,7 @@ export default function CADPage() {
                 onFeldTeilen={(seite, spalte, laengenM) => setBereichsListe((l) => [...l, { art: 'teilen', seite, spalte, laengenM }])}
                 onFeldZusammen={(seite, spalte, laengeM) => setBereichsListe((l) => [...l, { art: 'zusammen', seite, spalte, feldlaengeM: laengeM }])}
                 platzierungPosition={(() => { const pid = platzierungIdVonBauteil(selectedComponent); const pl = manualPlacements.find((x) => x.id === pid); return pl ? [pl.positionX, pl.positionY, pl.positionZ] as [number, number, number] : undefined })()}
-                onPositionAendern={(p) => { const pid = platzierungIdVonBauteil(selectedComponent); if (pid) setManualPlacements((prev) => prev.map((x) => (x.id === pid ? { ...x, positionX: p[0], positionY: p[1], positionZ: p[2] } : x))) }} onZu={() => setSelectedComponent(null)} />
+                onPositionAendern={(p) => { if (sperre.fuer('beide')) return; const pid = platzierungIdVonBauteil(selectedComponent); if (pid) setManualPlacements((prev) => prev.map((x) => (x.id === pid ? { ...x, positionX: p[0], positionY: p[1], positionZ: p[2] } : x))) }} onZu={() => setSelectedComponent(null)} />
             )}
             <ObjektInfo model={modelWithManual} auswahlId={selectedComponent} projekt={{ systemName: systemAnzeigename(systemId), ansicht: viewMode === '3d' ? '3D' : '2D', flaecheM2: modelWithManual.totalAreaM2, gewichtKg: totalWeight }} />
             </>) : null}
@@ -2119,6 +2165,8 @@ export default function CADPage() {
             disabled={!model}
             notes={notes}
             onDeleteNote={handleDeleteNote}
+            notizStatus={notizStatus}
+            massStatus={massStatus}
             layerState={layerState}
             onToggleSide={handleToggleSide}
             onToggleLevel={handleToggleLevel}
