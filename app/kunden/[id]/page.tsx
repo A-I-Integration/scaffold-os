@@ -140,7 +140,7 @@ type Tab = typeof TABS[number]
 // Zwei Ebenen: Kunde (Übersicht aller Baustellen, Stammdaten, alle Rechnungen/Mails) und Baustelle (alles zu genau diesem Projekt)
 // Alle Reiter gibt es auch auf Kundenebene: Reiter, die zu genau einer Baustelle gehören (Leistungsverzeichnis, Mappe, Zeiten), fragen dort die Baustelle ab.
 const KUNDEN_TABS: Tab[] = ['baustellen', 'kunde', 'aufmass', 'bilder', 'dokumente', 'mappe', 'angebote', 'lv', 'zeiten', 'bauphasen', 'nachtraege', 'rechnungen', 'emails']
-const BAUSTELLEN_TABS: Tab[] = ['aufmass', 'bilder', 'dokumente', 'mappe', 'angebote', 'lv', 'zeiten', 'bauphasen', 'nachtraege', 'rechnungen', 'emails']
+const BAUSTELLEN_TABS: Tab[] = ['kunde','aufmass', 'bilder', 'dokumente', 'mappe', 'angebote', 'lv', 'zeiten', 'bauphasen', 'nachtraege', 'rechnungen', 'emails']
 const TAB_LABEL: Record<Tab, string> = {
   baustellen: 'Baustellen', kunde: 'Kunde', aufmass: 'Aufmaß', bilder: 'Bilder', dokumente: 'Dokumente', mappe: 'Baustellenmappe (QR)', angebote: 'Angebote', lv: 'Leistungsverzeichnis', zeiten: 'Zeiten', bauphasen: 'Bauphasen', nachtraege: 'Nachträge / Schluss', rechnungen: 'Rechnungen', emails: 'E-Mails',
 }
@@ -880,7 +880,7 @@ export default function KundenDetailPage() {
   const freigaben = useFreigabeStatus(projects.map((p) => p.id))
   const projektSicht = baustelle ? [baustelle] : projects
   const aktiveTabs = baustelle ? BAUSTELLEN_TABS : KUNDEN_TABS
-  const tabAktiv: Tab = aktiveTabs.includes(tab) ? tab : aktiveTabs[0]
+  const tabAktiv: Tab = aktiveTabs.includes(tab) ? tab : (baustelle ? 'aufmass' : aktiveTabs[0])
   const waehleBaustelle = (pid: string | null, ziel?: Tab) => {
     setTab(pid ? (ziel ?? 'aufmass') : 'baustellen')
     router.push(pid ? `/kunden/${id}?baustelle=${pid}` : `/kunden/${id}`)
