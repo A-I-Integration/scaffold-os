@@ -6,7 +6,7 @@
 -- sieht nach dem Warten den festgeschriebenen Stand (READ COMMITTED).
 --
 -- Fachliche Berechnung: faktura_offen_berechne() ist das SQL-Spiegelbild von lib/forderung.ts (berechneForderung für EINE Rechnung mit ihren Gutschriften).
--- Der Test lib/__tests__/forderung-paritaet.test.ts (E2E, echte Datenbank) vergleicht beide über viele Fälle. Änderungen an der Regel immer an BEIDEN Stellen.
+-- Der Paritätstest in __tests__/e2e/faktura-e2e.test.ts (Abschnitt 8c, echte Datenbank) vergleicht beide über 300 Fälle. Änderungen an der Regel immer an BEIDEN Stellen.
 --
 -- Status-Regel (unverändert): gespeichert 'bezahlt' ⇔ es gibt gebuchte Zahlungen (paid_amount > 0) UND nichts ist mehr offen. Eine Gutschrift allein macht
 -- eine Rechnung nicht zu 'bezahlt' (Anzeige: „ausgeglichen“). Stornierte Rechnungen/Gutschriften bleiben unberührt; Buchungen werden nie verändert.
