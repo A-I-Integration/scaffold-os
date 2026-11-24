@@ -289,6 +289,18 @@ describe.skipIf(!DB)('Faktura End-to-End (echte PostgreSQL)', () => {
       const r = await vorhaltungRechnung(P); expect(r.status).toBe(200)
       merke('3 Vorhaltung', 'Teilabbau voller Preis', 1250, r.j.invoice.net_amount); expect(Number(r.j.invoice.net_amount)).toBe(1250)
     })
+    it('3d. Teilabbau in Mengen: 1.000 m², Rest 700 m² → 2 Wochen à 250 + 3 Wochen à 175 = 1.025 €; Menge steht auf der Rechnung', async () => {
+      const mengen = vb({ bezugM2: 1000, teilabbauten: [{ datum: plusTage(HEUTE, -14), verbleibendM2: 700, preisModus: 'anteilig' }] })
+      const P = await neuesProjekt('E2E Teilabbau Menge', { vorhaltung: mengen })
+      const r = await vorhaltungRechnung(P); expect(r.status).toBe(200)
+      merke('3 Vorhaltung', 'Teilabbau in Mengen (700 von 1.000 m²)', 1025, r.j.invoice.net_amount); expect(Number(r.j.invoice.net_amount)).toBe(1025)
+      const pos = JSON.stringify((await q('select positions from invoices where id=$1', [r.j.invoice.id]))[0].positions)
+      expect(pos).toContain('700 m² von 1.000 m² (70 %) Restbestand')
+      // nach der Abrechnung darf die Restmenge der berechneten Zeiträume nicht mehr geändert werden
+      const anders = await prj({ id: P, data: { vorhaltung: vb({ bezugM2: 1000, teilabbauten: [{ datum: plusTage(HEUTE, -14), verbleibendM2: 500, preisModus: 'anteilig' }] }) }, aenderungsgrund: 'Test Änderung' })
+      merke('3 Vorhaltung', 'Restmenge nach Abrechnung ändern', 409, anders.status); expect(anders.status).toBe(409)
+      expect(await integritaet(P)).toEqual([])
+    })
     it('ohne festgelegte Preisart ist keine Abrechnung möglich', async () => {
       const P = await neuesProjekt('E2E Teilabbau offen', { vorhaltung: teil(undefined) })
       const r = await inv('POST', { customer_name: KUNDE, project_id: P, invoice_type: 'standard', positions: [{ bezeichnung: 'Gerüstvorhaltung', menge: 5, einheit: 'Wo.', einzelpreis: 250, art: 'miete' }], vorhaltung: { von: plusTage(HEUTE, -28), bis: plusTage(HEUTE, 7), stand: 'x' } })

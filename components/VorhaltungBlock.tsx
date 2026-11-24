@@ -3,9 +3,10 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Clock, Plus, Trash2 } from 'lucide-react';
 import { fetchRechnungAnlegen } from '@/lib/rechnung-anlegen-client';
+import { normalisiereZwischenaufmasse } from '@/lib/zwischenaufmass';
 import {
   normalisiereVereinbarung, normalisierePerioden, vorhaltungStatus, vorhaltungStand, tageZwischen, plusTage, periodenPassen,
-  type Vorhaltevereinbarung, type VorhaltePeriode,
+  type Vorhaltevereinbarung, type VorhaltePeriode, type Teilabbau,
 } from '@/lib/vorhaltung';
 
 // ============================================================
@@ -23,6 +24,8 @@ interface Props {
 const heute = () => new Date().toLocaleDateString('sv-SE');
 const eur = (n: number) => n.toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' €';
 const de = (iso: string) => iso.split('-').reverse().join('.');
+const m2de = (n: number) => n.toLocaleString('de-DE', { maximumFractionDigits: 2 });
+const runde2 = (n: number) => Math.round(n * 100) / 100;
 const inputCls = 'w-full px-3 py-2 bg-white border border-black/10 rounded-lg text-sm text-[#1d1d1f] focus:outline-none focus:border-[#e8590c]';
 
 function vorbelegung(data: any): Vorhaltevereinbarung {
@@ -56,6 +59,24 @@ export default function VorhaltungBlock({ project, kunde }: Props) {
   const passt = vereinbarung ? periodenPassen(vereinbarung, perioden) : true;
   const set = <K extends keyof Vorhaltevereinbarung>(k: K, v: Vorhaltevereinbarung[K]) => setForm((f) => ({ ...f, [k]: v }));
   const num = (s: string) => Number(String(s).replace(',', '.')) || 0;
+  // Vorschlag für die Gesamtmenge: letzter Stand des Zwischenaufmaßes, sonst Fläche der Kalkulation (nur Vorschlag, wird nicht still übernommen)
+  const vorschlagM2 = useMemo(() => {
+    const za = normalisiereZwischenaufmasse(daten?.zwischenaufmasse);
+    return za.length ? za[za.length - 1].flaecheM2 : Number(daten?.kiResult?.totalAreaM2) || 0;
+  }, [daten]);
+  const bezug = form.bezugM2 && form.bezugM2 > 0 ? form.bezugM2 : 0;
+  /** Gesamtmenge ändern: bestehende Teilabbauten behalten ihre Menge (gedeckelt), reine Prozentwerte werden in Mengen umgerechnet. */
+  function setzeBezug(n: number) {
+    const b = n > 0 ? runde2(n) : undefined;
+    setForm((f) => ({
+      ...f, bezugM2: b,
+      teilabbauten: f.teilabbauten.map((t): Teilabbau => {
+        if (!b) { const { verbleibendM2: _weg, ...rest } = t; return rest; }
+        const m = Math.min(b, t.verbleibendM2 ?? runde2((b * t.verbleibendProzent) / 100));
+        return { ...t, verbleibendM2: m, verbleibendProzent: runde2((m / b) * 100) };
+      }),
+    }));
+  }
   const kostenpflichtigVorschau = form.beginn ? de(plusTage(form.beginn, form.freiTage)) : '–';
 
   async function speichern() {
@@ -110,7 +131,8 @@ export default function VorhaltungBlock({ project, kunde }: Props) {
       {vereinbarung && (
         <div className="text-[11px] text-[#1d1d1f] space-y-0.5" data-testid="vorhaltung-status">
           <p>Beginn {vereinbarung.beginn ? de(vereinbarung.beginn) : '–'} · {vereinbarung.freiTage} Tage kostenlos · kostenpflichtig ab <b>{status.kostenpflichtigAb ? de(status.kostenpflichtigAb) : '–'}</b> · {eur(vereinbarung.preis)} je {vereinbarung.intervall === 'monat' ? 'Monat' : 'Woche'} ({vereinbarung.abrechnung === 'im_voraus' ? 'angefangenes Intervall voll' : 'nachträglich'}){vereinbarung.abbauDatum ? ` · Abbau ${de(vereinbarung.abbauDatum)}` : ''}{!vereinbarung.aktiv ? ' · inaktiv' : ''}</p>
-          {vereinbarung.teilabbauten.map((t, i) => <p key={i} className="text-[#86868b]">Teilabbau {de(t.datum)}: {t.verbleibendProzent.toLocaleString('de-DE')} % bleiben stehen ({t.preisModus === 'voll' ? 'voller Preis' : t.preisModus === 'anteilig' ? 'Preis anteilig' : 'Preisberechnung fehlt'})</p>)}
+          {vereinbarung.bezugM2 ? <p className="text-[#86868b]">Gerüst gesamt: {m2de(vereinbarung.bezugM2)} m²</p> : null}
+          {vereinbarung.teilabbauten.map((t, i) => <p key={i} className="text-[#86868b]">Teilabbau {de(t.datum)}: {vereinbarung.bezugM2 && t.verbleibendM2 !== undefined ? `${m2de(vereinbarung.bezugM2 - t.verbleibendM2)} m² abgebaut, ${m2de(t.verbleibendM2)} m² bleiben stehen (${t.verbleibendProzent.toLocaleString('de-DE')} %)` : `${t.verbleibendProzent.toLocaleString('de-DE')} % bleiben stehen`} ({t.preisModus === 'voll' ? 'voller Preis' : t.preisModus === 'anteilig' ? 'Preis anteilig' : 'Preisberechnung fehlt'})</p>)}
           {(vereinbarung.preisStufen || []).map((st, i) => <p key={'s' + i} className="text-[#86868b]">Ab {de(st.ab)}: {eur(st.preis)} je Intervall</p>)}
           {status.hinweise.map((h, i) => <p key={i} className={/fehlt|passen nicht|endet in/.test(h) ? 'text-red-600' : 'text-[#e8590c]'}>{h}</p>)}
         </div>
@@ -145,17 +167,25 @@ export default function VorhaltungBlock({ project, kunde }: Props) {
             <div><label className="block text-[11px] text-[#86868b] mb-1">Vollständiger Abbau am (optional)</label><input type="date" value={form.abbauDatum || ''} onChange={(e) => set('abbauDatum', e.target.value || undefined)} className={inputCls} aria-label="Datum des vollständigen Abbaus" /></div>
           </div>
           <p className="text-[11px] text-[#86868b]">Kostenpflichtig ab: <b>{kostenpflichtigVorschau}</b></p>
+          <div className="grid grid-cols-[1fr_auto] gap-2 items-end">
+            <div><label className="block text-[11px] text-[#86868b] mb-1">Menge des vollständigen Gerüsts (m², optional – nötig für Teilabbau in Mengen)</label><input value={bezug ? String(bezug).replace('.', ',') : ''} onChange={(e) => setzeBezug(num(e.target.value))} inputMode="decimal" placeholder="z. B. 1000" className={inputCls} aria-label="Gesamtmenge des Gerüsts in Quadratmetern" /></div>
+            {vorschlagM2 > 0 && vorschlagM2 !== bezug && <button type="button" onClick={() => setzeBezug(vorschlagM2)} className="text-[11px] text-[#e8590c] font-semibold hover:underline pb-2" data-testid="vorhaltung-bezug-vorschlag">{m2de(vorschlagM2)} m² aus Aufmaß übernehmen</button>}
+          </div>
           <div className="space-y-1">
-            <p className="text-[11px] text-[#86868b]">Teilabbau (ab dem Datum zählt nur noch der Restbestand):</p>
+            <p className="text-[11px] text-[#86868b]">Teilabbau (ab dem Datum zählt nur noch der Restbestand){bezug ? ' – in m²: so viel bleibt stehen' : ' – in Prozent; mit Gesamtmenge oben in m²'}:</p>
             {form.teilabbauten.map((t, i) => (
               <div key={i} className="grid grid-cols-[1fr_90px_1fr_24px] gap-1">
                 <input type="date" value={t.datum} onChange={(e) => set('teilabbauten', form.teilabbauten.map((x, k) => (k === i ? { ...x, datum: e.target.value } : x)))} className={inputCls} aria-label="Datum Teilabbau" />
-                <input value={String(t.verbleibendProzent).replace('.', ',')} onChange={(e) => set('teilabbauten', form.teilabbauten.map((x, k) => (k === i ? { ...x, verbleibendProzent: Math.min(100, Math.max(0, num(e.target.value))) } : x)))} inputMode="decimal" className={inputCls} aria-label="Verbleibender Anteil in Prozent" />
+                {bezug ? (
+                  <input value={String(t.verbleibendM2 ?? runde2((bezug * t.verbleibendProzent) / 100)).replace('.', ',')} onChange={(e) => { const m = Math.min(bezug, Math.max(0, num(e.target.value))); set('teilabbauten', form.teilabbauten.map((x, k) => (k === i ? { ...x, verbleibendM2: m, verbleibendProzent: runde2((m / bezug) * 100) } : x))); }} inputMode="decimal" className={inputCls} aria-label="Verbleibende Menge in Quadratmetern" title={`${(t.verbleibendM2 !== undefined ? runde2(bezug - t.verbleibendM2) : runde2(bezug - (bezug * t.verbleibendProzent) / 100)).toLocaleString('de-DE')} m² abgebaut (${t.verbleibendProzent.toLocaleString('de-DE')} % bleiben)`} />
+                ) : (
+                  <input value={String(t.verbleibendProzent).replace('.', ',')} onChange={(e) => set('teilabbauten', form.teilabbauten.map((x, k) => (k === i ? { ...x, verbleibendProzent: Math.min(100, Math.max(0, num(e.target.value))) } : x)))} inputMode="decimal" className={inputCls} aria-label="Verbleibender Anteil in Prozent" />
+                )}
                 <select value={t.preisModus || ''} onChange={(e) => set('teilabbauten', form.teilabbauten.map((x, k) => (k === i ? { ...x, preisModus: (e.target.value || undefined) as 'anteilig' | 'voll' | undefined } : x)))} className={inputCls} aria-label="Preisberechnung beim Teilabbau"><option value="">Preis laut Vereinbarung wählen …</option><option value="anteilig">Preis anteilig zum Restbestand</option><option value="voll">Voller Preis bleibt</option></select>
                 <button type="button" onClick={() => set('teilabbauten', form.teilabbauten.filter((_, k) => k !== i))} aria-label="Teilabbau entfernen" className="p-1 rounded hover:bg-black/5"><Trash2 className="h-3.5 w-3.5 text-[#86868b]" /></button>
               </div>
             ))}
-            <button type="button" onClick={() => set('teilabbauten', [...form.teilabbauten, { datum: heute(), verbleibendProzent: 50 }])} className="text-[11px] text-[#e8590c] font-semibold hover:underline">+ Teilabbau hinzufügen</button>
+            <button type="button" onClick={() => set('teilabbauten', [...form.teilabbauten, { datum: heute(), verbleibendProzent: 50, ...(bezug ? { verbleibendM2: runde2(bezug / 2) } : {}) }])} className="text-[11px] text-[#e8590c] font-semibold hover:underline">+ Teilabbau hinzufügen</button>
           </div>
           <div className="space-y-1">
             <p className="text-[11px] text-[#86868b]">Preisänderung (gilt erst ab dem Datum; bereits berechnete Zeiträume bleiben unverändert):</p>

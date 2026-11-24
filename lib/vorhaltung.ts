@@ -12,7 +12,11 @@ export type VorhaltungAbrechnung = 'im_voraus' | 'nachtraeglich'
 
 /** preisModus: wie wirkt der Teilabbau auf den Preis? 'anteilig' = Preis × Restbestand, 'voll' = voller Preis bleibt (laut Vereinbarung). Ohne Angabe wird NICHT abgerechnet. */
 export type TeilabbauPreisModus = 'anteilig' | 'voll'
-export interface Teilabbau { datum: string; verbleibendProzent: number; preisModus?: TeilabbauPreisModus; notiz?: string }
+/**
+ * Teilabbau: ab `datum` bleibt nur der Rest stehen. Führend ist die Menge (`verbleibendM2` bezogen auf `bezugM2` der Vereinbarung);
+ * `verbleibendProzent` wird daraus abgeleitet und treibt die Preisberechnung. Altdaten nur mit Prozent bleiben gültig.
+ */
+export interface Teilabbau { datum: string; verbleibendProzent: number; verbleibendM2?: number; preisModus?: TeilabbauPreisModus; notiz?: string }
 /** Preisänderung, die erst für Intervalle gilt, die an oder nach `ab` beginnen. Bereits berechnete Zeiträume bleiben unberührt. */
 export interface Preisstufe { ab: string; preis: number }
 
@@ -25,6 +29,8 @@ export interface Vorhaltevereinbarung {
   intervall: VorhaltungIntervall
   /** Einheitspreis netto je Intervall (Woche bzw. Monat) für das vollständige Gerüst */
   preis: number
+  /** Menge des vollständigen Gerüsts in m², auf die sich der Preis bezieht (Bezug für Teilabbau in Mengen); optional */
+  bezugM2?: number
   /** spätere Preisänderungen mit ausdrücklichem Datum (ab dem Intervallstart) */
   preisStufen?: Preisstufe[]
   /** im_voraus: ein angefangenes Intervall wird sofort voll fällig; nachtraeglich: erst nach Ablauf bzw. Abbau */
@@ -47,7 +53,7 @@ export interface VorhaltePeriode {
   erstelltAm?: string
 }
 
-export interface VorhaltungIntervallZeile { von: string; bis: string; faktorProzent: number; preis: number; preisModus?: TeilabbauPreisModus }
+export interface VorhaltungIntervallZeile { von: string; bis: string; faktorProzent: number; preis: number; preisModus?: TeilabbauPreisModus; /** Restmenge in m² zum Intervallstart, wenn bekannt */ restM2?: number }
 export interface VorhaltungPosition { bezeichnung: string; menge: number; einheit: string; einzelpreis: number; art: 'miete' }
 
 const ISO = /^\d{4}-\d{2}-\d{2}$/
@@ -77,20 +83,31 @@ export function normalisiereVereinbarung(raw: unknown): Vorhaltevereinbarung | n
   if (!raw || typeof raw !== 'object') return null
   const r = raw as Record<string, unknown>
   const teil = Array.isArray(r.teilabbauten) ? r.teilabbauten : []
+  const bezugM2 = zahl(r.bezugM2) > 0 ? runde(zahl(r.bezugM2)) : undefined
   return {
     aktiv: r.aktiv === true,
     beginn: istIso(r.beginn) ? r.beginn : '',
     freiTage: Math.min(3650, Math.max(0, Math.round(zahl(r.freiTage)))),
     intervall: r.intervall === 'monat' ? 'monat' : 'woche',
     preis: runde(Math.max(0, zahl(r.preis))),
+    ...(bezugM2 !== undefined ? { bezugM2 } : {}),
     ...(Array.isArray(r.preisStufen) && r.preisStufen.some((x: any) => x && istIso(x.ab))
       ? { preisStufen: (r.preisStufen as any[]).filter((x) => x && istIso(x.ab) && zahl(x.preis) > 0).map((x): Preisstufe => ({ ab: x.ab, preis: runde(zahl(x.preis)) })).sort((a, b) => a.ab.localeCompare(b.ab)) }
       : {}),
     abrechnung: r.abrechnung === 'nachtraeglich' ? 'nachtraeglich' : 'im_voraus',
     teilabbauten: teil
-      .filter((t: any) => t && istIso(t.datum) && zahl(t.verbleibendProzent) >= 0 && zahl(t.verbleibendProzent) <= 100)
-      .map((t: any): Teilabbau => ({ datum: t.datum, verbleibendProzent: runde(zahl(t.verbleibendProzent)), ...(t.preisModus === 'anteilig' || t.preisModus === 'voll' ? { preisModus: t.preisModus as TeilabbauPreisModus } : {}), ...(typeof t.notiz === 'string' && t.notiz.trim() ? { notiz: t.notiz.trim().slice(0, 200) } : {}) }))
-      .sort((a, b) => a.datum.localeCompare(b.datum)),
+      .map((t: any): Teilabbau | null => {
+        if (!t || !istIso(t.datum)) return null
+        // Mengenangabe: gilt nur mit Bezugsmenge und innerhalb 0 … Bezugsmenge, sonst wird der Eintrag verworfen (nie still als 0 % gewertet)
+        const hatMenge = t.verbleibendM2 !== undefined && t.verbleibendM2 !== null && String(t.verbleibendM2).trim() !== ''
+        const m2 = hatMenge ? zahl(t.verbleibendM2) : undefined
+        if (hatMenge && (bezugM2 === undefined || !(m2! >= 0 && m2! <= bezugM2))) return null
+        const prozent = hatMenge ? runde((m2! / bezugM2!) * 100) : runde(zahl(t.verbleibendProzent))
+        if (!(prozent >= 0 && prozent <= 100)) return null
+        return { datum: t.datum, verbleibendProzent: prozent, ...(hatMenge ? { verbleibendM2: runde(m2!) } : {}), ...(t.preisModus === 'anteilig' || t.preisModus === 'voll' ? { preisModus: t.preisModus as TeilabbauPreisModus } : {}), ...(typeof t.notiz === 'string' && t.notiz.trim() ? { notiz: t.notiz.trim().slice(0, 200) } : {}) }
+      })
+      .filter((t: Teilabbau | null): t is Teilabbau => t !== null)
+      .sort((a: Teilabbau, b: Teilabbau) => a.datum.localeCompare(b.datum)),
     abbauDatum: istIso(r.abbauDatum) ? r.abbauDatum : undefined,
     notiz: typeof r.notiz === 'string' && r.notiz.trim() ? r.notiz.trim().slice(0, 300) : undefined,
   }
@@ -136,15 +153,25 @@ export function faktorZum(v: Pick<Vorhaltevereinbarung, 'teilabbauten'>, stichta
   return f
 }
 
+/** Restmenge in m² zum Stichtag, falls die Vereinbarung eine Bezugsmenge hat (Teilabbau gilt ab seinem Datum). Ohne Bezugsmenge: undefined. */
+export function restM2Zum(v: Pick<Vorhaltevereinbarung, 'teilabbauten' | 'bezugM2'>, stichtag: string): number | undefined {
+  if (!(v.bezugM2 && v.bezugM2 > 0)) return undefined
+  let t: Teilabbau | undefined
+  for (const x of v.teilabbauten) if (x.datum <= stichtag) t = x
+  if (!t) return v.bezugM2
+  return t.verbleibendM2 ?? runde((v.bezugM2 * t.verbleibendProzent) / 100)
+}
+
 /** Preis und Restbestand für das Intervall, das an `von` beginnt: Preisstufe nach Datum, Teilabbau nur nach vereinbarter Berechnungsweise. */
-export function intervallPreis(v: Pick<Vorhaltevereinbarung, 'teilabbauten' | 'preis' | 'preisStufen'>, von: string): { faktorProzent: number; preis: number; preisModus?: TeilabbauPreisModus } {
+export function intervallPreis(v: Pick<Vorhaltevereinbarung, 'teilabbauten' | 'preis' | 'preisStufen' | 'bezugM2'>, von: string): { faktorProzent: number; preis: number; preisModus?: TeilabbauPreisModus; restM2?: number } {
   let basis = v.preis
   for (const s of v.preisStufen || []) if (s.ab <= von) basis = s.preis
   const faktor = faktorZum(v, von)
   let teil: Teilabbau | undefined
   for (const t of v.teilabbauten) if (t.datum <= von) teil = t
   const anteil = teil && teil.preisModus === 'voll' ? 100 : faktor
-  return { faktorProzent: faktor, preis: runde((basis * anteil) / 100), ...(teil?.preisModus ? { preisModus: teil.preisModus } : {}) }
+  const restM2 = restM2Zum(v, von)
+  return { faktorProzent: faktor, preis: runde((basis * anteil) / 100), ...(teil?.preisModus ? { preisModus: teil.preisModus } : {}), ...(restM2 !== undefined ? { restM2 } : {}) }
 }
 
 /** Bis wohin ist bereits berechnet (Ende der letzten gültigen Periode)? */
@@ -171,7 +198,11 @@ export function baueVorhaltungsPositionen(v: Vorhaltevereinbarung, intervalle: V
   }
   return gruppen.filter((g) => g[0].preis > 0).map((g) => {
     const von = g[0].von, bis = g[g.length - 1].bis
-    const rest = g[0].faktorProzent < 100 ? ` bei ${String(g[0].faktorProzent).replace('.', ',')} % Restbestand${g[0].preisModus === 'voll' ? ' (Preis unverändert)' : ''}` : ''
+    const pct = String(g[0].faktorProzent).replace('.', ',')
+    const m2 = (n: number) => n.toLocaleString('de-DE', { maximumFractionDigits: 2 })
+    // Mit Bezugsmenge steht die Menge im Text (Restvorhaltung 700 m² von 1.000 m²), sonst wie bisher nur der Prozentsatz
+    const restText = g[0].restM2 !== undefined && v.bezugM2 ? `${m2(g[0].restM2)} m² von ${m2(v.bezugM2)} m² (${pct} %)` : `${pct} %`
+    const rest = g[0].faktorProzent < 100 ? ` bei ${restText} Restbestand${g[0].preisModus === 'voll' ? ' (Preis unverändert)' : ''}` : ''
     return {
       bezeichnung: `Gerüstvorhaltung ${de(von)} bis ${de(plusTage(bis, -1))}${rest}`,
       menge: g.length, einheit: EINHEIT[v.intervall].s, einzelpreis: g[0].preis, art: 'miete' as const,
