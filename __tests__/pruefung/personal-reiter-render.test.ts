@@ -3,12 +3,13 @@ import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import PersonalStamm from '@/components/PersonalStamm'
 import PersonalDokumente from '@/components/PersonalDokumente'
+import PersonalKonditionen from '@/components/PersonalKonditionen'
 import MitarbeiterPage from '@/app/mitarbeiter/page'
 
 describe('Personal-Reiter', () => {
-  it('Seite zeigt drei Reiter, zuerst Zugänge & Lohnabrechnung', () => {
+  it('Seite zeigt vier Reiter, zuerst Zugänge & Lohnabrechnung', () => {
     const html = renderToStaticMarkup(createElement(MitarbeiterPage))
-    for (const t of ['reiter-zugaenge', 'reiter-stamm', 'reiter-dokumente']) expect(html).toContain(t)
+    for (const t of ['reiter-zugaenge', 'reiter-stamm', 'reiter-konditionen', 'reiter-dokumente']) expect(html).toContain(t)
     expect(html).toContain('Neuen Zugang anlegen'); expect(html).not.toContain('personal-stamm')
   })
   it('Mitarbeiter-Reiter bietet Auswahl und „Neuen Mitarbeiter anlegen“, Formular erst nach Auswahl', () => {
@@ -22,5 +23,10 @@ describe('Personal-Reiter', () => {
   it('Dokumente-Reiter zeigt Fälligkeitsbereich und Eingabe mit allen Kategorien', () => {
     const html = renderToStaticMarkup(createElement(PersonalDokumente, { employees: [{ id: 'e1', first_name: 'Max', last_name: 'Muster' }] }))
     for (const t of ['Personalien', 'Lehrgänge', 'G-Untersuchungen', 'Führer- und Kranscheine', 'Muster, Max', 'Bald fällig']) expect(html).toContain(t)
+  })
+  it('Lohn-&-Konditionen-Reiter: Mitarbeiterwahl zuerst, Details erst nach Auswahl', () => {
+    const html = renderToStaticMarkup(createElement(PersonalKonditionen, { employees: [{ id: 'e1', first_name: 'Max', last_name: 'Muster' }] }))
+    expect(html).toContain('Muster, Max'); expect(html).toContain('konditionen-mitarbeiter')
+    expect(html).not.toContain('konditionen-sonder'); expect(html).not.toContain('stundenlohn-block')
   })
 })

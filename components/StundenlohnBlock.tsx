@@ -10,15 +10,16 @@ import { stundenlohnAm, type Stundenlohn } from '@/lib/stundenlohn';
 // Es gibt keine vorbelegten Werte, der Betrieb trägt seine Löhne selbst ein.
 // ============================================================
 
-interface Props { employees: { id: string; first_name: string; last_name: string }[] }
+interface Props { employees: { id: string; first_name: string; last_name: string }[]; festerMitarbeiter?: string }
 
 const heute = () => new Date().toLocaleDateString('sv-SE');
 const de = (iso: string) => iso.split('-').reverse().join('.');
 const eur = (n: number) => n.toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' €';
 const inputCls = 'w-full rounded-lg bg-[#f5f5f7] border border-black/10 px-3 py-2 text-sm text-[#1d1d1f] placeholder-[#86868b] focus:border-[#e8590c] focus:outline-none';
 
-export default function StundenlohnBlock({ employees }: Props) {
-  const [empId, setEmpId] = useState('');
+export default function StundenlohnBlock({ employees, festerMitarbeiter }: Props) {
+  const [gewaehlt, setEmpId] = useState('');
+  const empId = festerMitarbeiter !== undefined ? festerMitarbeiter : gewaehlt;
   const [loehne, setLoehne] = useState<Stundenlohn[]>([]);
   const [verboten, setVerboten] = useState(false);
   const [lohn, setLohn] = useState('');
@@ -70,10 +71,12 @@ export default function StundenlohnBlock({ employees }: Props) {
     <section className="bg-white border border-black/5 rounded-2xl p-5 space-y-4" data-testid="stundenlohn-block">
       <h2 className="text-lg font-semibold flex items-center gap-2"><Euro className="w-5 h-5 text-[#e8590c]" /> Stundenlohn</h2>
       <p className="text-sm text-[#86868b]">Aktueller Stundenlohn je Mitarbeiter mit Gültigkeitsdatum. Eine Lohnänderung ist ein neuer Eintrag ab einem Datum, der bisherige Lohn bleibt im Verlauf. Grundlage für die Lohnkosten je Baustelle.</p>
-      <select value={empId} onChange={(e) => setEmpId(e.target.value)} className={inputCls} aria-label="Mitarbeiter für den Stundenlohn" data-testid="stundenlohn-mitarbeiter">
-        <option value="">– Mitarbeiter wählen –</option>
-        {employees.map((e) => <option key={e.id} value={e.id}>{e.first_name} {e.last_name}</option>)}
-      </select>
+      {festerMitarbeiter === undefined && (
+        <select value={empId} onChange={(e) => setEmpId(e.target.value)} className={inputCls} aria-label="Mitarbeiter für den Stundenlohn" data-testid="stundenlohn-mitarbeiter">
+          <option value="">– Mitarbeiter wählen –</option>
+          {employees.map((e) => <option key={e.id} value={e.id}>{e.first_name} {e.last_name}</option>)}
+        </select>
+      )}
       {empId && (
         <>
           <p className="text-sm" data-testid="stundenlohn-aktuell">Aktuell: <strong>{aktuell === null ? 'noch kein Lohn hinterlegt' : eur(aktuell) + ' pro Stunde'}</strong></p>
