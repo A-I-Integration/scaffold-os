@@ -11,7 +11,7 @@ const runde2 = (n: number) => Math.round(n * 100) / 100
 
 /** Fingerabdruck eines Zwischenaufmaßes: ändert sich, sobald Stichtag, Menge, Preis oder Positionen anders sind. */
 export function aufmassStand(z: Zwischenaufmass): string {
-  return JSON.stringify([z.id, z.stichtag, runde2(z.flaecheM2), (z.positionen || []).map((p) => [p.key, runde2(p.menge), runde2(p.einzelpreis)])])
+  return JSON.stringify([z.id, z.stichtag, runde2(z.flaecheM2), (z.positionen || []).map((p) => [p.key, runde2(p.menge), runde2(p.einzelpreis), runde2(p.vertragsmenge ?? 0)])])
 }
 
 export interface RechnungsPos { bezeichnung: string; menge: number; einheit: string; einzelpreis: number }

@@ -39,6 +39,8 @@ export interface ZaPosition {
   einzelpreis: number;
   /** kumulierte Menge bis zum Stichtag */
   menge: number;
+  /** Vertragsmenge (vereinbarte Menge) dieser Position; fehlt = nicht erfasst, dann gibt es keine Mengenprüfung gegen den Vertrag. */
+  vertragsmenge?: number;
 }
 
 export const positionsKey = (bezeichnung: string, einheit: string): string =>
@@ -63,7 +65,8 @@ function normalisierePositionen(raw: unknown): ZaPosition[] | undefined {
       const bezeichnung = String(p.bezeichnung).trim().slice(0, 300);
       const einheit = String(p.einheit || 'm²').trim().slice(0, 20) || 'm²';
       const gespeichert = typeof p.key === 'string' ? p.key.trim().slice(0, 160) : '';
-      return { key: gespeichert || positionsKey(bezeichnung, einheit), bezeichnung, einheit, einzelpreis: runde2(Number(p.einzelpreis) || 0), menge: runde2(Number(p.menge) || 0) };
+      const vm = runde2(Number(p.vertragsmenge) || 0);
+      return { key: gespeichert || positionsKey(bezeichnung, einheit), bezeichnung, einheit, einzelpreis: runde2(Number(p.einzelpreis) || 0), menge: runde2(Number(p.menge) || 0), ...(vm > 0 ? { vertragsmenge: vm } : {}) };
     });
   return r.length ? r : undefined;
 }
@@ -216,7 +219,13 @@ export function aktuellerStandJePosition(liste: Zwischenaufmass[], ausserId?: st
   return m;
 }
 
-export interface ZaZeile extends ZaPosition { bisher: number; neu: number; betragNeu: number; zuViel: number }
+export interface ZaZeile extends ZaPosition {
+  bisher: number; neu: number; betragNeu: number; zuViel: number
+  /** Menge dieser Position kumuliert über der Vertragsmenge (0 ohne Vertragsmenge). */
+  mehrmenge: number
+  /** Teil der neuen Menge, der über die Vertragsmenge hinausgeht (0 ohne Vertragsmenge). */
+  neuMehrmenge: number
+}
 
 /** Je Position: kumuliert, bereits abgerechnet, neue Menge. `zuViel` > 0: es ist mehr abgerechnet als aufgemessen (wird nicht automatisch korrigiert). */
 export function zaZeilen(z: Zwischenaufmass, liste: Zwischenaufmass[]): ZaZeile[] {
@@ -224,12 +233,18 @@ export function zaZeilen(z: Zwischenaufmass, liste: Zwischenaufmass[]): ZaZeile[
   return (z.positionen || []).map((p) => {
     const b = bisher.get(p.key) ?? 0;
     const diff = runde2(p.menge - b);
-    return { ...p, bisher: b, neu: Math.max(0, diff), betragNeu: runde2(Math.max(0, diff) * p.einzelpreis), zuViel: Math.max(0, -diff) };
+    const vm = p.vertragsmenge ?? 0;
+    const neu = Math.max(0, diff);
+    const mehr = vm > 0 ? Math.max(0, runde2(p.menge - vm)) : 0;
+    // Mehrmenge, die in dieser Abrechnung NEU dazukommt: oberhalb von Vertragsmenge und bereits Abgerechnetem
+    const neuMehr = vm > 0 ? Math.max(0, runde2(p.menge - Math.max(vm, b))) : 0;
+    return { ...p, bisher: b, neu, betragNeu: runde2(neu * p.einzelpreis), zuViel: Math.max(0, -diff), mehrmenge: mehr, neuMehrmenge: Math.min(neu, neuMehr) };
   });
 }
 
 /** `key`: Identität der Position aus dem letzten Stand (bei Umbenennung mitgeben). Ohne `key` gilt die Zeile als Position mit diesem Namen. */
-export type ZaPositionEingabe = { bezeichnung: string; einheit: string; einzelpreis: number; menge: number; key?: string };
+/** `vertragsmenge`: leer/undefined = die bisherige Vertragsmenge der Position bleibt erhalten. */
+export type ZaPositionEingabe = { bezeichnung: string; einheit: string; einzelpreis: number; menge: number; key?: string; vertragsmenge?: number };
 
 /**
  * Prüft ein neues Zwischenaufmaß gegen den letzten Stand (gemeinsam für Erfassung im Browser und Speichern auf dem Server):
@@ -241,6 +256,10 @@ export function pruefePositionenGegenStand(stand: Map<string, ZaPosition>, posit
   const rueckgaenge = positionen.filter((p) => stand.has(p.key) && p.menge < stand.get(p.key)!.menge);
   if (rueckgaenge.length && !hatGrund) {
     return `Bei ${rueckgaenge.map((p) => `„${p.bezeichnung}“ (${fmt(p.menge)} statt ${fmt(stand.get(p.key)!.menge)} ${p.einheit})`).join(', ')} ist die Menge kleiner als zuletzt. Das ist nur bei Rückbau oder Korrektur sinnvoll – bitte eine Notiz als Begründung eintragen. Gib sonst die GESAMTE Menge bis zum Stichtag ein, nicht nur die neue.`;
+  }
+  const geaenderteVm = positionen.filter((p) => stand.get(p.key)?.vertragsmenge && p.vertragsmenge !== stand.get(p.key)!.vertragsmenge);
+  if (geaenderteVm.length && !hatGrund) {
+    return `Die Vertragsmenge von ${geaenderteVm.map((p) => `„${p.bezeichnung}“ (${p.vertragsmenge ? fmt(p.vertragsmenge) : 'ohne'} statt ${fmt(stand.get(p.key)!.vertragsmenge!)} ${p.einheit})`).join(', ')} wird geändert. Bitte eine Notiz als Begründung eintragen (z. B. Nachtrag oder Änderung der Vereinbarung).`;
   }
   const fehlend = [...stand.values()].filter((p) => p.menge > 0 && !positionen.some((x) => x.key === p.key));
   if (fehlend.length && !hatGrund) {
@@ -275,9 +294,12 @@ export function neuesZwischenaufmassJePosition(
     if (positionen.some((x) => x.key === key || positionsKey(x.bezeichnung, x.einheit) === name)) return { ok: false, fehler: `Die Position „${bez}“ (${einheit}) kommt doppelt vor.` };
     if (!(p.menge >= 0) || !Number.isFinite(p.menge)) return { ok: false, fehler: `Die Menge von „${bez}“ ist ungültig.` };
     if (!(p.einzelpreis >= 0) || !Number.isFinite(p.einzelpreis)) return { ok: false, fehler: `Der Preis von „${bez}“ ist ungültig.` };
-    positionen.push({ key, bezeichnung: bez, einheit, einzelpreis: runde2(p.einzelpreis), menge: runde2(p.menge) });
+    if (p.vertragsmenge !== undefined && (!Number.isFinite(p.vertragsmenge) || p.vertragsmenge < 0)) return { ok: false, fehler: `Die Vertragsmenge von „${bez}“ ist ungültig.` };
+    // Vertragsmenge: eigene Angabe, sonst die bisherige der Position übernehmen
+    const vm = runde2(p.vertragsmenge !== undefined && p.vertragsmenge > 0 ? p.vertragsmenge : (stand.get(key)?.vertragsmenge ?? 0));
+    positionen.push({ key, bezeichnung: bez, einheit, einzelpreis: runde2(p.einzelpreis), menge: runde2(p.menge), ...(vm > 0 ? { vertragsmenge: vm } : {}) });
   }
-  const geaendert = positionen.some((p) => !stand.has(p.key) || p.menge !== stand.get(p.key)!.menge || p.einzelpreis !== stand.get(p.key)!.einzelpreis || p.bezeichnung !== stand.get(p.key)!.bezeichnung)
+  const geaendert = positionen.some((p) => !stand.has(p.key) || p.menge !== stand.get(p.key)!.menge || p.einzelpreis !== stand.get(p.key)!.einzelpreis || p.bezeichnung !== stand.get(p.key)!.bezeichnung || (p.vertragsmenge ?? 0) !== (stand.get(p.key)!.vertragsmenge ?? 0))
     || [...stand.values()].some((p) => p.menge > 0 && !positionen.some((x) => x.key === p.key));
   if (liste.length && !geaendert) return { ok: false, fehler: 'Es hat sich gegenüber dem letzten Zwischenaufmaß nichts geändert. Es gibt nichts Neues zu erfassen.' };
   const fehler = pruefePositionenGegenStand(stand, positionen, eingabe.notiz || '');
@@ -297,6 +319,9 @@ export function baueTeilleistungsPositionen(z: Zwischenaufmass, liste: Zwischena
   const d = new Date(z.stichtag + 'T12:00:00');
   const datum = Number.isNaN(d.getTime()) ? z.stichtag : d.toLocaleDateString('de-DE');
   const hinweise = zeilen.filter((r) => r.zuViel > 0).map((r) => `„${r.bezeichnung}“: ${fmt(r.zuViel)} ${r.einheit} mehr abgerechnet (${fmt(r.bisher)}) als aufgemessen (${fmt(r.menge)}). Nicht automatisch korrigiert – bitte Gutschrift oder Korrektur prüfen.`);
+  for (const r of zeilen) {
+    if (r.mehrmenge > 0) hinweise.push(`„${r.bezeichnung}“: ${fmt(r.menge)} ${r.einheit} aufgemessen, vereinbart waren ${fmt(r.vertragsmenge!)} ${r.einheit} – Mehrmenge ${fmt(r.mehrmenge)} ${r.einheit}${r.neuMehrmenge > 0 ? `, davon ${fmt(r.neuMehrmenge)} ${r.einheit} in dieser Rechnung` : ''}. Bitte Nachtrag bzw. Vereinbarung mit dem Auftraggeber prüfen.`);
+  }
   const positionen = zeilen.filter((r) => r.neu > 0 && r.einzelpreis > 0).map((r) => ({
     bezeichnung: `${r.bezeichnung} – Zwischenaufmaß ${zwischenaufmassNr(z)} vom ${datum}: kumuliert ${fmt(r.menge)} ${r.einheit} abzüglich bereits abgerechnet ${fmt(r.bisher)} ${r.einheit}`.slice(0, 500),
     menge: r.neu, einheit: r.einheit, einzelpreis: r.einzelpreis,
