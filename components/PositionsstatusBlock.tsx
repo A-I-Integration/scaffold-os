@@ -82,7 +82,7 @@ export default function PositionsstatusBlock({ project }: Props) {
         <table className="w-full text-[11px]" data-testid="positionsstatus-tabelle">
           <thead><tr className="text-left text-[#86868b]">
             <th className="font-normal">Bereich</th><th className="font-normal text-right">Vertrag</th><th className="font-normal text-right">Leistung</th><th className="font-normal text-right">Abgerechnet</th>
-            <th className="font-normal text-right">Noch abrechenbar</th><th className="font-normal">Status</th><th />
+            <th className="font-normal text-right pl-3">Noch abrechenbar</th><th className="font-normal pl-3">Status</th><th />
           </tr></thead>
           <tbody>
             {zeilen.map((z) => (

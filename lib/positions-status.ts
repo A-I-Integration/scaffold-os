@@ -10,7 +10,7 @@
 //   Status           = steht noch / teilweise abgebaut / abgebaut, Restmenge auf der Baustelle
 // Ereignisse sind nur anfügbar (Verlauf): bestehende Einträge werden nie geändert oder gelöscht. Sie ändern keine Beträge.
 // ============================================================
-import { aktuellerStandJePosition, bisherAbgerechnetJePosition, vereinbarteMenge, type Zwischenaufmass, type ZaPosition } from './zwischenaufmass'
+import { aktuellerStandJePosition, positionsTitel, bisherAbgerechnetJePosition, vereinbarteMenge, type Zwischenaufmass, type ZaPosition } from './zwischenaufmass'
 
 export type EreignisArt = 'abmeldung' | 'freigabe' | 'geplanter_abbau' | 'abbau'
 
@@ -181,14 +181,14 @@ export function baueBereichsStand(zaListe: Zwischenaufmass[], ereignisse: Positi
     const hinweise: string[] = []
     const offenAufmass = runde2(Math.max(0, p.menge - abger) * p.einzelpreis)
     if (status === 'abgebaut' && vereinbart > 0 && p.menge + 0.005 < vereinbart) {
-      hinweise.push(`„${p.bezeichnung}“ ist abgebaut, der aufgemessene Stand liegt aber bei ${prozent(p.menge)} % der vereinbarten Menge. Bitte das Aufmaß auf den Endstand aktualisieren (neues Zwischenaufmaß), damit der Rest abrechenbar wird.`)
+      hinweise.push(`„${positionsTitel(p)}“ ist abgebaut, der aufgemessene Stand liegt aber bei ${prozent(p.menge)} % der vereinbarten Menge. Bitte das Aufmaß auf den Endstand aktualisieren (neues Zwischenaufmaß), damit der Rest abrechenbar wird.`)
     }
-    if (status === 'abgebaut' && offenAufmass > 0) hinweise.push(`„${p.bezeichnung}“: ${fmt(offenAufmass)} € netto aus dem Aufmaß sind noch nicht abgerechnet.`)
-    if (abger > p.menge + 0.005) hinweise.push(`„${p.bezeichnung}“: ${fmt(abger)} ${p.einheit} sind abgerechnet, aufgemessen sind nur ${fmt(p.menge)} ${p.einheit}. Bitte Korrektur prüfen.`)
+    if (status === 'abgebaut' && offenAufmass > 0) hinweise.push(`„${positionsTitel(p)}“: ${fmt(offenAufmass)} € netto aus dem Aufmaß sind noch nicht abgerechnet.`)
+    if (abger > p.menge + 0.005) hinweise.push(`„${positionsTitel(p)}“: ${fmt(abger)} ${p.einheit} sind abgerechnet, aufgemessen sind nur ${fmt(p.menge)} ${p.einheit}. Bitte Korrektur prüfen.`)
     if (letzter && abmeldung && abmeldung > letzter) hinweise.push(`„${p.bezeichnung}“: Die Abmeldung (${de(abmeldung)}) liegt nach dem tatsächlichen Abbau (${de(letzter)}). Bitte Daten prüfen.`)
     if (status === 'steht' && geplant && geplant < heute) hinweise.push(`„${p.bezeichnung}“: Der geplante Abbau (${de(geplant)}) liegt in der Vergangenheit, ein tatsächlicher Abbau ist nicht erfasst.`)
     rows.push({
-      key: p.key, bezeichnung: p.bezeichnung, einheit: p.einheit, einzelpreis: p.einzelpreis, vereinbart,
+      key: p.key, bezeichnung: positionsTitel(p), einheit: p.einheit, einzelpreis: p.einzelpreis, vereinbart,
       auftragswert: vereinbart > 0 ? runde2(vereinbart * p.einzelpreis) : null,
       leistungM: p.menge, leistungProzent: prozent(p.menge), abgerechnetM: abger, abgerechnetProzent: prozent(abger),
       offenAusAufmass: offenAufmass,

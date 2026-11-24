@@ -6,7 +6,7 @@ import { parseBetrag, normalisiereNachtraege, nachtragNummer } from '@/lib/nacht
 import { abschnitteAusSchritt2, berechneAufmass } from '@/lib/aufmassblatt-pdf';
 import {
   type Zwischenaufmass, normalisiereZwischenaufmasse, neuesZwischenaufmass, loescheZwischenaufmass,
-  neuesZwischenaufmassJePosition, zaZeilen, aktuellerStandJePosition, type ZaPositionEingabe,
+  neuesZwischenaufmassJePosition, positionsTitel, zaZeilen, aktuellerStandJePosition, type ZaPositionEingabe,
   zwischenaufmassNr, neueMengeM2, aktuellerStandM2, restmengeM2, ueberabgerechnetM2, istRueckgang, bisherAbgerechneteM2,
 } from '@/lib/zwischenaufmass';
 import { erzeugeZwischenaufmassPdf, zwischenaufmassPdfDateiname, type AufmassAnsicht } from '@/lib/zwischenaufmass-pdf';
@@ -38,16 +38,16 @@ export default function ZwischenaufmassBlock({ project }: Props) {
   const aufmassZeilen = useMemo(() => berechneAufmass(abschnitteAusSchritt2(project.data?.step2)).zeilen, [project.data]);
   const gesamtAufmass = useMemo(() => berechneAufmass(abschnitteAusSchritt2(project.data?.step2)).gesamtM2, [project.data]);
   const [modus, setModus] = useState<'flaeche' | 'positionen'>('flaeche');
-  type Zeile = { bezeichnung: string; einheit: string; einzelpreis: string; menge: string; key?: string; vertrag: string; nachtragMenge: string; nachtragId: string };
+  type Zeile = { posNr: string; bezeichnung: string; einheit: string; einzelpreis: string; menge: string; key?: string; vertrag: string; nachtragMenge: string; nachtragId: string };
   const [zeilen, setZeilen] = useState<Zeile[]>([]);
-  const leereZeile = (): Zeile => ({ bezeichnung: '', einheit: 'm²', einzelpreis: '', menge: '', vertrag: '', nachtragMenge: '', nachtragId: '' });
+  const leereZeile = (): Zeile => ({ posNr: '', bezeichnung: '', einheit: 'm²', einzelpreis: '', menge: '', vertrag: '', nachtragMenge: '', nachtragId: '' });
   const bestaetigteNachtraege = useMemo(() => normalisiereNachtraege(project.data?.nachtraege).filter((n) => n.status === 'bestaetigt'), [project.data]);
   /** Vorbelegung: Positionen des letzten Zwischenaufmaßes (mit dem letzten Stand), sonst die Abschnitte des Aufmaßblatts. */
   function vorbelegen() {
     const stand = [...aktuellerStandJePosition(liste).values()];
-    if (stand.length) return stand.filter((p) => p.menge > 0).map((p): Zeile => ({ key: p.key, bezeichnung: p.bezeichnung, einheit: p.einheit, einzelpreis: String(p.einzelpreis).replace('.', ','), menge: String(p.menge).replace('.', ','), vertrag: p.vertragsmenge ? String(p.vertragsmenge).replace('.', ',') : '', nachtragMenge: p.nachtragMenge ? String(p.nachtragMenge).replace('.', ',') : '', nachtragId: p.nachtragId || '' }));
+    if (stand.length) return stand.filter((p) => p.menge > 0).map((p): Zeile => ({ key: p.key, posNr: p.posNr || '', bezeichnung: p.bezeichnung, einheit: p.einheit, einzelpreis: String(p.einzelpreis).replace('.', ','), menge: String(p.menge).replace('.', ','), vertrag: p.vertragsmenge ? String(p.vertragsmenge).replace('.', ',') : '', nachtragMenge: p.nachtragMenge ? String(p.nachtragMenge).replace('.', ',') : '', nachtragId: p.nachtragId || '' }));
     const fp = String(project.data?.festpreisProM2 ?? '').replace('.', ',');
-    const z = aufmassZeilen.map((a): Zeile => ({ bezeichnung: `Gerüst ${a.bezeichnung}`, einheit: 'm²', einzelpreis: project.data?.preisModus === 'festpreis' ? fp : '', menge: '', vertrag: '', nachtragMenge: '', nachtragId: '' }));
+    const z = aufmassZeilen.map((a): Zeile => ({ posNr: '', bezeichnung: `Gerüst ${a.bezeichnung}`, einheit: 'm²', einzelpreis: project.data?.preisModus === 'festpreis' ? fp : '', menge: '', vertrag: '', nachtragMenge: '', nachtragId: '' }));
     return z.length ? z : [leereZeile()];
   }
   function aufPositionen() { setModus('positionen'); setZeilen(vorbelegen()); setOffen(true); }
@@ -98,7 +98,7 @@ export default function ZwischenaufmassBlock({ project }: Props) {
     setLaeuft(true); setMeldung(null);
     try {
       let fehler: string | null = null;
-      const eingabe: ZaPositionEingabe[] = zeilen.map((z) => ({ key: z.key, bezeichnung: z.bezeichnung, einheit: z.einheit, einzelpreis: parseBetrag(z.einzelpreis), menge: parseBetrag(z.menge), vertragsmenge: z.vertrag.trim() ? parseBetrag(z.vertrag) : undefined, nachtragMenge: z.nachtragMenge.trim() ? parseBetrag(z.nachtragMenge) : 0, nachtragId: z.nachtragId || undefined }));
+      const eingabe: ZaPositionEingabe[] = zeilen.map((z) => ({ key: z.key, posNr: z.posNr.trim() || undefined, bezeichnung: z.bezeichnung, einheit: z.einheit, einzelpreis: parseBetrag(z.einzelpreis), menge: parseBetrag(z.menge), vertragsmenge: z.vertrag.trim() ? parseBetrag(z.vertrag) : undefined, nachtragMenge: z.nachtragMenge.trim() ? parseBetrag(z.nachtragMenge) : 0, nachtragId: z.nachtragId || undefined }));
       await speichere((aktuell) => {
         const r = neuesZwischenaufmassJePosition(aktuell, { stichtag: form.stichtag, positionen: eingabe, notiz: form.notiz }, crypto.randomUUID());
         if (!r.ok) { fehler = r.fehler; return aktuell; }
@@ -180,7 +180,7 @@ export default function ZwischenaufmassBlock({ project }: Props) {
                     <tbody>
                       {zaZeilen(z, liste).map((r) => (
                         <tr key={r.key} className={r.zuViel > 0 ? 'text-red-600' : ''}>
-                          <td>{r.bezeichnung}</td><td className="text-right">{r.vertragsmenge ? `${fmt(r.vertragsmenge)} ${r.einheit}` : '–'}{r.nachtragMenge ? <span className="text-[#86868b]" data-testid="za-nachtragmenge"> + {fmt(r.nachtragMenge)} Nachtrag</span> : null}</td><td className="text-right">{fmt(r.menge)} {r.einheit}{r.mehrmenge > 0 ? <span className="text-amber-700" data-testid="za-mehrmenge"> (Mehrmenge {fmt(r.mehrmenge)})</span> : null}</td><td className="text-right">{z.rechnungId ? "–" : fmt(r.bisher)}</td>
+                          <td>{positionsTitel(r)}</td><td className="text-right">{r.vertragsmenge ? `${fmt(r.vertragsmenge)} ${r.einheit}` : '–'}{r.nachtragMenge ? <span className="text-[#86868b]" data-testid="za-nachtragmenge"> + {fmt(r.nachtragMenge)} Nachtrag</span> : null}</td><td className="text-right">{fmt(r.menge)} {r.einheit}{r.mehrmenge > 0 ? <span className="text-amber-700" data-testid="za-mehrmenge"> (Mehrmenge {fmt(r.mehrmenge)})</span> : null}</td><td className="text-right">{z.rechnungId ? "–" : fmt(r.bisher)}</td>
                           <td className="text-right">{z.rechnungId ? '–' : fmt(r.neu)}{r.zuViel > 0 ? ` (${fmt(r.zuViel)} zu viel abgerechnet)` : ''}</td>
                         </tr>
                       ))}
@@ -207,10 +207,11 @@ export default function ZwischenaufmassBlock({ project }: Props) {
           <div className="grid grid-cols-2 gap-2">
             <div><label className="block text-[11px] text-[#86868b] mb-1">Stichtag</label><input type="date" value={form.stichtag} onChange={(e) => setForm({ ...form, stichtag: e.target.value })} className={inputCls} /></div>
           </div>
-          <p className="text-[11px] text-[#86868b]">Trage je Position die <b>gesamte</b> Menge bis zum Stichtag ein (kumuliert). Berechnet wird später nur die Differenz zur bereits abgerechneten Menge. Die <b>Vertragsmenge</b> ist die vereinbarte Menge der Position; wird sie überschritten, erscheint eine Mehrmengen-Warnung. Eine <b>Nachtragsmenge</b> (nur zu einem vom Kunden bestätigten Nachtrag) erweitert die Vertragsmenge und löst keine Mehrmengen-Warnung aus. Eine spätere Änderung von Vertrags- oder Nachtragsmenge braucht eine Notiz. <b>Wichtig:</b> Wird die Menge hier abgerechnet, den zugehörigen Nachtrag nicht zusätzlich als Pauschale in die Schlussrechnung übernehmen.</p>
+          <p className="text-[11px] text-[#86868b]">Kommt dieselbe Leistung (z. B. „Gerüst LK3“) mehrfach mit unterschiedlichen Preisen vor, vergib je Zeile eine eigene <b>Pos.-Nr.</b> aus der Ausschreibung. Trage je Position die <b>gesamte</b> Menge bis zum Stichtag ein (kumuliert). Berechnet wird später nur die Differenz zur bereits abgerechneten Menge. Die <b>Vertragsmenge</b> ist die vereinbarte Menge der Position; wird sie überschritten, erscheint eine Mehrmengen-Warnung. Eine <b>Nachtragsmenge</b> (nur zu einem vom Kunden bestätigten Nachtrag) erweitert die Vertragsmenge und löst keine Mehrmengen-Warnung aus. Eine spätere Änderung von Vertrags- oder Nachtragsmenge braucht eine Notiz. <b>Wichtig:</b> Wird die Menge hier abgerechnet, den zugehörigen Nachtrag nicht zusätzlich als Pauschale in die Schlussrechnung übernehmen.</p>
           <div className="space-y-1">
             {zeilen.map((z, i) => (
-              <div key={i} className="grid grid-cols-[1fr_60px_80px_100px_100px_24px] gap-1">
+              <div key={i} className="grid grid-cols-[70px_1fr_60px_80px_100px_100px_24px] gap-1">
+                <input value={z.posNr} onChange={(e) => setZeile(i, 'posNr', e.target.value)} placeholder="Pos.-Nr." className={inputCls} aria-label="Positionsnummer" data-testid={`za-posnr-${i}`} />
                 <input value={z.bezeichnung} onChange={(e) => setZeile(i, 'bezeichnung', e.target.value)} placeholder="Position" className={inputCls} aria-label="Position" />
                 <input value={z.einheit} onChange={(e) => setZeile(i, 'einheit', e.target.value)} className={inputCls} aria-label="Einheit" />
                 <input value={z.einzelpreis} onChange={(e) => setZeile(i, 'einzelpreis', e.target.value)} inputMode="decimal" placeholder="Preis netto" className={inputCls} aria-label="Preis netto" />
