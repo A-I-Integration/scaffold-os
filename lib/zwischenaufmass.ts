@@ -41,7 +41,14 @@ export interface ZaPosition {
   menge: number;
   /** Vertragsmenge (vereinbarte Menge) dieser Position; fehlt = nicht erfasst, dann gibt es keine Mengenprüfung gegen den Vertrag. */
   vertragsmenge?: number;
+  /** Zusatzmenge, die ein vom Kunden bestätigter Nachtrag (nachtragId) zur Vertragsmenge dazugibt. Sie zählt nicht als ungedeckte Mehrmenge. */
+  nachtragMenge?: number;
+  nachtragId?: string;
 }
+
+/** Vereinbarte Menge insgesamt: Vertragsmenge plus genehmigte Nachtragsmenge (0 = nichts vereinbart, keine Mengenprüfung). */
+export const vereinbarteMenge = (p: Pick<ZaPosition, 'vertragsmenge' | 'nachtragMenge'>): number =>
+  (p.vertragsmenge ?? 0) > 0 ? runde2((p.vertragsmenge ?? 0) + (p.nachtragMenge ?? 0)) : 0;
 
 export const positionsKey = (bezeichnung: string, einheit: string): string =>
   `${bezeichnung.trim().toLowerCase().replace(/\s+/g, ' ')}|${einheit.trim().toLowerCase()}`;
@@ -66,7 +73,9 @@ function normalisierePositionen(raw: unknown): ZaPosition[] | undefined {
       const einheit = String(p.einheit || 'm²').trim().slice(0, 20) || 'm²';
       const gespeichert = typeof p.key === 'string' ? p.key.trim().slice(0, 160) : '';
       const vm = runde2(Number(p.vertragsmenge) || 0);
-      return { key: gespeichert || positionsKey(bezeichnung, einheit), bezeichnung, einheit, einzelpreis: runde2(Number(p.einzelpreis) || 0), menge: runde2(Number(p.menge) || 0), ...(vm > 0 ? { vertragsmenge: vm } : {}) };
+      const nm = runde2(Number(p.nachtragMenge) || 0);
+      const nid = typeof p.nachtragId === 'string' ? p.nachtragId.trim().slice(0, 80) : '';
+      return { key: gespeichert || positionsKey(bezeichnung, einheit), bezeichnung, einheit, einzelpreis: runde2(Number(p.einzelpreis) || 0), menge: runde2(Number(p.menge) || 0), ...(vm > 0 ? { vertragsmenge: vm } : {}), ...(nm > 0 && nid ? { nachtragMenge: nm, nachtragId: nid } : {}) };
     });
   return r.length ? r : undefined;
 }
@@ -233,7 +242,7 @@ export function zaZeilen(z: Zwischenaufmass, liste: Zwischenaufmass[]): ZaZeile[
   return (z.positionen || []).map((p) => {
     const b = bisher.get(p.key) ?? 0;
     const diff = runde2(p.menge - b);
-    const vm = p.vertragsmenge ?? 0;
+    const vm = vereinbarteMenge(p);
     const neu = Math.max(0, diff);
     const mehr = vm > 0 ? Math.max(0, runde2(p.menge - vm)) : 0;
     // Mehrmenge, die in dieser Abrechnung NEU dazukommt: oberhalb von Vertragsmenge und bereits Abgerechnetem
@@ -244,7 +253,7 @@ export function zaZeilen(z: Zwischenaufmass, liste: Zwischenaufmass[]): ZaZeile[
 
 /** `key`: Identität der Position aus dem letzten Stand (bei Umbenennung mitgeben). Ohne `key` gilt die Zeile als Position mit diesem Namen. */
 /** `vertragsmenge`: leer/undefined = die bisherige Vertragsmenge der Position bleibt erhalten. */
-export type ZaPositionEingabe = { bezeichnung: string; einheit: string; einzelpreis: number; menge: number; key?: string; vertragsmenge?: number };
+export type ZaPositionEingabe = { bezeichnung: string; einheit: string; einzelpreis: number; menge: number; key?: string; vertragsmenge?: number; nachtragMenge?: number; nachtragId?: string };
 
 /**
  * Prüft ein neues Zwischenaufmaß gegen den letzten Stand (gemeinsam für Erfassung im Browser und Speichern auf dem Server):
@@ -261,6 +270,12 @@ export function pruefePositionenGegenStand(stand: Map<string, ZaPosition>, posit
   if (geaenderteVm.length && !hatGrund) {
     return `Die Vertragsmenge von ${geaenderteVm.map((p) => `„${p.bezeichnung}“ (${p.vertragsmenge ? fmt(p.vertragsmenge) : 'ohne'} statt ${fmt(stand.get(p.key)!.vertragsmenge!)} ${p.einheit})`).join(', ')} wird geändert. Bitte eine Notiz als Begründung eintragen (z. B. Nachtrag oder Änderung der Vereinbarung).`;
   }
+  const geaenderteNm = positionen.filter((p) => (stand.get(p.key)?.nachtragMenge ?? 0) > 0 && ((p.nachtragMenge ?? 0) !== stand.get(p.key)!.nachtragMenge || (p.nachtragId ?? '') !== (stand.get(p.key)!.nachtragId ?? '')));
+  if (geaenderteNm.length && !hatGrund) {
+    return `Die Nachtragsmenge von ${geaenderteNm.map((p) => `„${p.bezeichnung}“ (${p.nachtragMenge ? fmt(p.nachtragMenge) : 'ohne'} statt ${fmt(stand.get(p.key)!.nachtragMenge!)} ${p.einheit})`).join(', ')} wird geändert. Bitte eine Notiz als Begründung eintragen.`;
+  }
+  const nmOhneVm = positionen.filter((p) => (p.nachtragMenge ?? 0) > 0 && !((p.vertragsmenge ?? 0) > 0));
+  if (nmOhneVm.length) return `Für ${nmOhneVm.map((p) => `„${p.bezeichnung}“`).join(', ')} ist eine Nachtragsmenge angegeben, aber keine Vertragsmenge. Bitte zuerst die Vertragsmenge erfassen.`;
   const fehlend = [...stand.values()].filter((p) => p.menge > 0 && !positionen.some((x) => x.key === p.key));
   if (fehlend.length && !hatGrund) {
     return `${fehlend.map((p) => `„${p.bezeichnung}“ (zuletzt ${fmt(p.menge)} ${p.einheit})`).join(', ')} ${fehlend.length > 1 ? 'fehlen' : 'fehlt'} im neuen Zwischenaufmaß. Wurde die Position umbenannt, übernimm sie in der Zeile (Name ändern statt neue Zeile anlegen). Entfällt sie, trage bitte eine Notiz als Begründung ein.`;
@@ -297,9 +312,15 @@ export function neuesZwischenaufmassJePosition(
     if (p.vertragsmenge !== undefined && (!Number.isFinite(p.vertragsmenge) || p.vertragsmenge < 0)) return { ok: false, fehler: `Die Vertragsmenge von „${bez}“ ist ungültig.` };
     // Vertragsmenge: eigene Angabe, sonst die bisherige der Position übernehmen
     const vm = runde2(p.vertragsmenge !== undefined && p.vertragsmenge > 0 ? p.vertragsmenge : (stand.get(key)?.vertragsmenge ?? 0));
-    positionen.push({ key, bezeichnung: bez, einheit, einzelpreis: runde2(p.einzelpreis), menge: runde2(p.menge), ...(vm > 0 ? { vertragsmenge: vm } : {}) });
+    if (p.nachtragMenge !== undefined && (!Number.isFinite(p.nachtragMenge) || p.nachtragMenge < 0)) return { ok: false, fehler: `Die Nachtragsmenge von „${bez}“ ist ungültig.` };
+    // Nachtragsmenge: eigene Angabe (leer/undefined = bisherige bleibt, 0 = entfernt); sie gehört immer zu einem bestätigten Nachtrag
+    const nmEigen = p.nachtragMenge !== undefined;
+    const nm = runde2(nmEigen ? p.nachtragMenge! : (stand.get(key)?.nachtragMenge ?? 0));
+    const nid = nm > 0 ? ((nmEigen ? p.nachtragId : (p.nachtragId ?? stand.get(key)?.nachtragId)) || '').trim() : '';
+    if (nm > 0 && !nid) return { ok: false, fehler: `Bitte für die Nachtragsmenge von „${bez}“ den Nachtrag auswählen.` };
+    positionen.push({ key, bezeichnung: bez, einheit, einzelpreis: runde2(p.einzelpreis), menge: runde2(p.menge), ...(vm > 0 ? { vertragsmenge: vm } : {}), ...(nm > 0 ? { nachtragMenge: nm, nachtragId: nid } : {}) });
   }
-  const geaendert = positionen.some((p) => !stand.has(p.key) || p.menge !== stand.get(p.key)!.menge || p.einzelpreis !== stand.get(p.key)!.einzelpreis || p.bezeichnung !== stand.get(p.key)!.bezeichnung || (p.vertragsmenge ?? 0) !== (stand.get(p.key)!.vertragsmenge ?? 0))
+  const geaendert = positionen.some((p) => !stand.has(p.key) || p.menge !== stand.get(p.key)!.menge || p.einzelpreis !== stand.get(p.key)!.einzelpreis || p.bezeichnung !== stand.get(p.key)!.bezeichnung || (p.vertragsmenge ?? 0) !== (stand.get(p.key)!.vertragsmenge ?? 0) || (p.nachtragMenge ?? 0) !== (stand.get(p.key)!.nachtragMenge ?? 0))
     || [...stand.values()].some((p) => p.menge > 0 && !positionen.some((x) => x.key === p.key));
   if (liste.length && !geaendert) return { ok: false, fehler: 'Es hat sich gegenüber dem letzten Zwischenaufmaß nichts geändert. Es gibt nichts Neues zu erfassen.' };
   const fehler = pruefePositionenGegenStand(stand, positionen, eingabe.notiz || '');
@@ -320,7 +341,7 @@ export function baueTeilleistungsPositionen(z: Zwischenaufmass, liste: Zwischena
   const datum = Number.isNaN(d.getTime()) ? z.stichtag : d.toLocaleDateString('de-DE');
   const hinweise = zeilen.filter((r) => r.zuViel > 0).map((r) => `„${r.bezeichnung}“: ${fmt(r.zuViel)} ${r.einheit} mehr abgerechnet (${fmt(r.bisher)}) als aufgemessen (${fmt(r.menge)}). Nicht automatisch korrigiert – bitte Gutschrift oder Korrektur prüfen.`);
   for (const r of zeilen) {
-    if (r.mehrmenge > 0) hinweise.push(`„${r.bezeichnung}“: ${fmt(r.menge)} ${r.einheit} aufgemessen, vereinbart waren ${fmt(r.vertragsmenge!)} ${r.einheit} – Mehrmenge ${fmt(r.mehrmenge)} ${r.einheit}${r.neuMehrmenge > 0 ? `, davon ${fmt(r.neuMehrmenge)} ${r.einheit} in dieser Rechnung` : ''}. Bitte Nachtrag bzw. Vereinbarung mit dem Auftraggeber prüfen.`);
+    if (r.mehrmenge > 0) hinweise.push(`„${r.bezeichnung}“: ${fmt(r.menge)} ${r.einheit} aufgemessen, vereinbart waren ${fmt(vereinbarteMenge(r))} ${r.einheit}${r.nachtragMenge ? ` (Vertrag ${fmt(r.vertragsmenge!)} + Nachtrag ${fmt(r.nachtragMenge)})` : ''} – Mehrmenge ${fmt(r.mehrmenge)} ${r.einheit}${r.neuMehrmenge > 0 ? `, davon ${fmt(r.neuMehrmenge)} ${r.einheit} in dieser Rechnung` : ''}. Bitte Nachtrag bzw. Vereinbarung mit dem Auftraggeber prüfen.`);
   }
   const positionen = zeilen.filter((r) => r.neu > 0 && r.einzelpreis > 0).map((r) => ({
     bezeichnung: `${r.bezeichnung} – Zwischenaufmaß ${zwischenaufmassNr(z)} vom ${datum}: kumuliert ${fmt(r.menge)} ${r.einheit} abzüglich bereits abgerechnet ${fmt(r.bisher)} ${r.einheit}`.slice(0, 500),
@@ -371,7 +392,7 @@ export function baueSchlussaufmassPositionen(z: Zwischenaufmass, liste: Zwischen
   }))
   const hinweise: string[] = []
   for (const r of zaZeilen(z, liste)) {
-    if (r.mehrmenge > 0) hinweise.push(`„${r.bezeichnung}“: ${fmt(r.menge)} ${r.einheit} aufgemessen, vereinbart waren ${fmt(r.vertragsmenge!)} ${r.einheit} – Mehrmenge ${fmt(r.mehrmenge)} ${r.einheit}. Bitte Nachtrag bzw. Vereinbarung mit dem Auftraggeber prüfen.`)
+    if (r.mehrmenge > 0) hinweise.push(`„${r.bezeichnung}“: ${fmt(r.menge)} ${r.einheit} aufgemessen, vereinbart waren ${fmt(vereinbarteMenge(r))} ${r.einheit}${r.nachtragMenge ? ` (Vertrag ${fmt(r.vertragsmenge!)} + Nachtrag ${fmt(r.nachtragMenge)})` : ''} – Mehrmenge ${fmt(r.mehrmenge)} ${r.einheit}. Bitte Nachtrag bzw. Vereinbarung mit dem Auftraggeber prüfen.`)
     if (r.zuViel > 0) hinweise.push(`„${r.bezeichnung}“: ${fmt(r.zuViel)} ${r.einheit} mehr abgerechnet (${fmt(r.bisher)}) als aufgemessen (${fmt(r.menge)}). Nicht automatisch korrigiert – bitte Gutschrift oder Korrektur prüfen.`)
   }
   const mengenuebersicht = `Schlussaufmaß ${nr} (Stichtag ${datum}): ` + zeilen.map((r) => `${r.bezeichnung} ${fmt(r.menge)} ${r.einheit} gesamt, davon bereits abgerechnet ${fmt(r.bisher)} ${r.einheit}, Rest ${fmt(r.neu)} ${r.einheit}`).join('; ') + '.'
@@ -411,4 +432,11 @@ export function aenderungenZwischenaufmasse(alt: unknown, neu: unknown): Aufmass
   }
   for (const o of a) if (!n.some((z) => z.id === o.id)) out.push({ aktion: 'aufmass_geloescht', nr: zwischenaufmassNr(o), stichtag: o.stichtag, notiz: o.notiz, flaecheM2: { von: o.flaecheM2, auf: null }, positionen: pos(o, a, true) });
   return out;
+}
+
+/** Nachträge (IDs), deren Menge über ein Zwischenaufmaß abgerechnet wird; ihr Betrag darf nicht zusätzlich als Nachtrags-Pauschale berechnet werden. */
+export function nachtraegeUeberAufmass(liste: Zwischenaufmass[]): Set<string> {
+  const ids = new Set<string>();
+  for (const z of liste) for (const p of z.positionen || []) if ((p.nachtragMenge ?? 0) > 0 && p.nachtragId) ids.add(p.nachtragId);
+  return ids;
 }

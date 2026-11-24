@@ -15,7 +15,7 @@ import { katalogAlsPosition, normalisiereKatalog, type LeistungKatalogEintrag } 
 import PositionDetails from '@/components/rechnung/PositionDetails';
 import { normalisiereBauphasen, berechneBauphasen, baueBauphasenPosition, markiereBauphaseAbgerechnet, type Bauphase, type BauphasenEinstellung } from '@/lib/bauphasen';
 import { aufmassStand } from '@/lib/aufmass-integritaet';
-import { normalisiereZwischenaufmasse, baueTeilleistungsPosition, baueTeilleistungsPositionen, baueSchlussaufmassPositionen, zwischenaufmassNr, neueMengeM2, type Zwischenaufmass } from '@/lib/zwischenaufmass';
+import { normalisiereZwischenaufmasse, baueTeilleistungsPosition, baueTeilleistungsPositionen, baueSchlussaufmassPositionen, zwischenaufmassNr, neueMengeM2, nachtraegeUeberAufmass, type Zwischenaufmass } from '@/lib/zwischenaufmass';
 
 // ============================================================
 // SCAFFOLD OS – Schlussrechnung aus Auftrag erstellen
@@ -111,7 +111,7 @@ export default function SchlussrechnungDialog({ projectId, customerName, custome
         if (startPhaseId && bpOffen.some((x) => x.id === startPhaseId)) setGewaehltePhase(startPhaseId); else if (bpOffen.length > 0) setGewaehltePhase(bpOffen[0].id);
         const offen = za.filter((z) => !z.rechnungId);
         if (offen.length > 0) setGewaehltesZA(offen[offen.length - 1].id);
-        setGewaehlteNachtraege(new Set(n.map((x) => x.id)));
+        { const ueberAufmass = nachtraegeUeberAufmass(za); setGewaehlteNachtraege(new Set(n.filter((x) => !ueberAufmass.has(x.id)).map((x) => x.id))); }
         if (cRes?.success && cRes.company) {
           setKranTagessatz(Number(cRes.company.calc_crane_day) || 850);
           const f = cRes.company.calc_festpreis_pro_m2;
@@ -156,6 +156,7 @@ export default function SchlussrechnungDialog({ projectId, customerName, custome
   const aufmassM2 = useMemo(() => (projektDaten ? berechneAufmass(abschnitteAusSchritt2(projektDaten.step2)).gesamtM2 : 0), [projektDaten]);
   const preisM2Zahl = parseFloat(String(preisM2).replace(',', '.')) || 0;
 
+  const nachtraegeAufmass = useMemo(() => nachtraegeUeberAufmass(zwischenaufmasse), [zwischenaufmasse]);
   const letztesZA = zwischenaufmasse.length ? zwischenaufmasse[zwischenaufmasse.length - 1] : null;
   const schlussModus = art === 'schluss' && schlussAufmass && !!letztesZA;
   const schlussPos = useMemo(() => (schlussModus && letztesZA ? baueSchlussaufmassPositionen(letztesZA, zwischenaufmasse) : null), [schlussModus, letztesZA, zwischenaufmasse]);
@@ -451,6 +452,7 @@ export default function SchlussrechnungDialog({ projectId, customerName, custome
                         <input type="checkbox" checked={gewaehlteNachtraege.has(n.id)}
                           onChange={() => setGewaehlteNachtraege((prev) => { const s = new Set(prev); s.has(n.id) ? s.delete(n.id) : s.add(n.id); return s; })} />
                         <span>{nachtragNummer(n)} · {n.titel}</span>
+                        {nachtraegeAufmass.has(n.id) && <span className="text-[11px] text-amber-700" data-testid={`nachtrag-ueber-aufmass-${n.nr}`}>wird über das Aufmaß abgerechnet{gewaehlteNachtraege.has(n.id) ? ' – nicht zusätzlich berechnen, sonst doppelt!' : ''}</span>}
                         <span className="ml-auto font-medium">{eur(n.betrag)}</span>
                       </label>
                     </li>

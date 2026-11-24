@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import { Plus, Trash2, Ruler, FileText } from 'lucide-react';
-import { parseBetrag } from '@/lib/nachtrag';
+import { parseBetrag, normalisiereNachtraege, nachtragNummer } from '@/lib/nachtrag';
 import { abschnitteAusSchritt2, berechneAufmass } from '@/lib/aufmassblatt-pdf';
 import {
   type Zwischenaufmass, normalisiereZwischenaufmasse, neuesZwischenaufmass, loescheZwischenaufmass,
@@ -38,15 +38,16 @@ export default function ZwischenaufmassBlock({ project }: Props) {
   const aufmassZeilen = useMemo(() => berechneAufmass(abschnitteAusSchritt2(project.data?.step2)).zeilen, [project.data]);
   const gesamtAufmass = useMemo(() => berechneAufmass(abschnitteAusSchritt2(project.data?.step2)).gesamtM2, [project.data]);
   const [modus, setModus] = useState<'flaeche' | 'positionen'>('flaeche');
-  type Zeile = { bezeichnung: string; einheit: string; einzelpreis: string; menge: string; key?: string; vertrag: string };
+  type Zeile = { bezeichnung: string; einheit: string; einzelpreis: string; menge: string; key?: string; vertrag: string; nachtragMenge: string; nachtragId: string };
   const [zeilen, setZeilen] = useState<Zeile[]>([]);
-  const leereZeile = (): Zeile => ({ bezeichnung: '', einheit: 'm²', einzelpreis: '', menge: '', vertrag: '' });
+  const leereZeile = (): Zeile => ({ bezeichnung: '', einheit: 'm²', einzelpreis: '', menge: '', vertrag: '', nachtragMenge: '', nachtragId: '' });
+  const bestaetigteNachtraege = useMemo(() => normalisiereNachtraege(project.data?.nachtraege).filter((n) => n.status === 'bestaetigt'), [project.data]);
   /** Vorbelegung: Positionen des letzten Zwischenaufmaßes (mit dem letzten Stand), sonst die Abschnitte des Aufmaßblatts. */
   function vorbelegen() {
     const stand = [...aktuellerStandJePosition(liste).values()];
-    if (stand.length) return stand.filter((p) => p.menge > 0).map((p): Zeile => ({ key: p.key, bezeichnung: p.bezeichnung, einheit: p.einheit, einzelpreis: String(p.einzelpreis).replace('.', ','), menge: String(p.menge).replace('.', ','), vertrag: p.vertragsmenge ? String(p.vertragsmenge).replace('.', ',') : '' }));
+    if (stand.length) return stand.filter((p) => p.menge > 0).map((p): Zeile => ({ key: p.key, bezeichnung: p.bezeichnung, einheit: p.einheit, einzelpreis: String(p.einzelpreis).replace('.', ','), menge: String(p.menge).replace('.', ','), vertrag: p.vertragsmenge ? String(p.vertragsmenge).replace('.', ',') : '', nachtragMenge: p.nachtragMenge ? String(p.nachtragMenge).replace('.', ',') : '', nachtragId: p.nachtragId || '' }));
     const fp = String(project.data?.festpreisProM2 ?? '').replace('.', ',');
-    const z = aufmassZeilen.map((a): Zeile => ({ bezeichnung: `Gerüst ${a.bezeichnung}`, einheit: 'm²', einzelpreis: project.data?.preisModus === 'festpreis' ? fp : '', menge: '', vertrag: '' }));
+    const z = aufmassZeilen.map((a): Zeile => ({ bezeichnung: `Gerüst ${a.bezeichnung}`, einheit: 'm²', einzelpreis: project.data?.preisModus === 'festpreis' ? fp : '', menge: '', vertrag: '', nachtragMenge: '', nachtragId: '' }));
     return z.length ? z : [leereZeile()];
   }
   function aufPositionen() { setModus('positionen'); setZeilen(vorbelegen()); setOffen(true); }
@@ -97,7 +98,7 @@ export default function ZwischenaufmassBlock({ project }: Props) {
     setLaeuft(true); setMeldung(null);
     try {
       let fehler: string | null = null;
-      const eingabe: ZaPositionEingabe[] = zeilen.map((z) => ({ key: z.key, bezeichnung: z.bezeichnung, einheit: z.einheit, einzelpreis: parseBetrag(z.einzelpreis), menge: parseBetrag(z.menge), vertragsmenge: z.vertrag.trim() ? parseBetrag(z.vertrag) : undefined }));
+      const eingabe: ZaPositionEingabe[] = zeilen.map((z) => ({ key: z.key, bezeichnung: z.bezeichnung, einheit: z.einheit, einzelpreis: parseBetrag(z.einzelpreis), menge: parseBetrag(z.menge), vertragsmenge: z.vertrag.trim() ? parseBetrag(z.vertrag) : undefined, nachtragMenge: z.nachtragMenge.trim() ? parseBetrag(z.nachtragMenge) : 0, nachtragId: z.nachtragId || undefined }));
       await speichere((aktuell) => {
         const r = neuesZwischenaufmassJePosition(aktuell, { stichtag: form.stichtag, positionen: eingabe, notiz: form.notiz }, crypto.randomUUID());
         if (!r.ok) { fehler = r.fehler; return aktuell; }
@@ -179,7 +180,7 @@ export default function ZwischenaufmassBlock({ project }: Props) {
                     <tbody>
                       {zaZeilen(z, liste).map((r) => (
                         <tr key={r.key} className={r.zuViel > 0 ? 'text-red-600' : ''}>
-                          <td>{r.bezeichnung}</td><td className="text-right">{r.vertragsmenge ? `${fmt(r.vertragsmenge)} ${r.einheit}` : '–'}</td><td className="text-right">{fmt(r.menge)} {r.einheit}{r.mehrmenge > 0 ? <span className="text-amber-700" data-testid="za-mehrmenge"> (Mehrmenge {fmt(r.mehrmenge)})</span> : null}</td><td className="text-right">{z.rechnungId ? "–" : fmt(r.bisher)}</td>
+                          <td>{r.bezeichnung}</td><td className="text-right">{r.vertragsmenge ? `${fmt(r.vertragsmenge)} ${r.einheit}` : '–'}{r.nachtragMenge ? <span className="text-[#86868b]" data-testid="za-nachtragmenge"> + {fmt(r.nachtragMenge)} Nachtrag</span> : null}</td><td className="text-right">{fmt(r.menge)} {r.einheit}{r.mehrmenge > 0 ? <span className="text-amber-700" data-testid="za-mehrmenge"> (Mehrmenge {fmt(r.mehrmenge)})</span> : null}</td><td className="text-right">{z.rechnungId ? "–" : fmt(r.bisher)}</td>
                           <td className="text-right">{z.rechnungId ? '–' : fmt(r.neu)}{r.zuViel > 0 ? ` (${fmt(r.zuViel)} zu viel abgerechnet)` : ''}</td>
                         </tr>
                       ))}
@@ -206,7 +207,7 @@ export default function ZwischenaufmassBlock({ project }: Props) {
           <div className="grid grid-cols-2 gap-2">
             <div><label className="block text-[11px] text-[#86868b] mb-1">Stichtag</label><input type="date" value={form.stichtag} onChange={(e) => setForm({ ...form, stichtag: e.target.value })} className={inputCls} /></div>
           </div>
-          <p className="text-[11px] text-[#86868b]">Trage je Position die <b>gesamte</b> Menge bis zum Stichtag ein (kumuliert). Berechnet wird später nur die Differenz zur bereits abgerechneten Menge. Die <b>Vertragsmenge</b> ist die vereinbarte Menge der Position; wird sie überschritten, erscheint eine Mehrmengen-Warnung. Eine spätere Änderung der Vertragsmenge braucht eine Notiz.</p>
+          <p className="text-[11px] text-[#86868b]">Trage je Position die <b>gesamte</b> Menge bis zum Stichtag ein (kumuliert). Berechnet wird später nur die Differenz zur bereits abgerechneten Menge. Die <b>Vertragsmenge</b> ist die vereinbarte Menge der Position; wird sie überschritten, erscheint eine Mehrmengen-Warnung. Eine <b>Nachtragsmenge</b> (nur zu einem vom Kunden bestätigten Nachtrag) erweitert die Vertragsmenge und löst keine Mehrmengen-Warnung aus. Eine spätere Änderung von Vertrags- oder Nachtragsmenge braucht eine Notiz. <b>Wichtig:</b> Wird die Menge hier abgerechnet, den zugehörigen Nachtrag nicht zusätzlich als Pauschale in die Schlussrechnung übernehmen.</p>
           <div className="space-y-1">
             {zeilen.map((z, i) => (
               <div key={i} className="grid grid-cols-[1fr_60px_80px_100px_100px_24px] gap-1">
@@ -216,6 +217,16 @@ export default function ZwischenaufmassBlock({ project }: Props) {
                 <input value={z.vertrag} onChange={(e) => setZeile(i, 'vertrag', e.target.value)} inputMode="decimal" placeholder="Vertragsmenge" className={inputCls} aria-label="Vertragsmenge" />
                 <input value={z.menge} onChange={(e) => setZeile(i, 'menge', e.target.value)} inputMode="decimal" placeholder="Menge kumuliert" className={inputCls} aria-label="Menge kumuliert" />
                 <button type="button" onClick={() => setZeilen((l) => l.filter((_, k) => k !== i))} aria-label="Zeile entfernen" className="p-1 rounded hover:bg-black/5"><Trash2 className="h-3.5 w-3.5 text-[#86868b]" /></button>
+                {(bestaetigteNachtraege.length > 0 || z.nachtragId) && (
+                  <div className="col-span-full flex gap-1 items-center pl-2" data-testid={`za-nachtrag-zeile-${i}`}>
+                    <span className="text-[11px] text-[#86868b]">Nachtragsmenge</span>
+                    <input value={z.nachtragMenge} onChange={(e) => setZeile(i, 'nachtragMenge', e.target.value)} inputMode="decimal" placeholder="0" className={inputCls + ' max-w-[90px]'} aria-label="Nachtragsmenge" />
+                    <select value={z.nachtragId} onChange={(e) => setZeile(i, 'nachtragId', e.target.value)} className={inputCls + ' max-w-[260px]'} aria-label="Nachtrag">
+                      <option value="">Nachtrag wählen …</option>
+                      {bestaetigteNachtraege.map((n) => <option key={n.id} value={n.id}>{nachtragNummer(n)} · {n.titel}</option>)}
+                    </select>
+                  </div>
+                )}
               </div>
             ))}
           </div>
