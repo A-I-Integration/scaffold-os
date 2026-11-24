@@ -74,7 +74,8 @@ export const NAV_GRUPPEN: NavGruppe[] = [
     eintraege: [
       { href: '/mitarbeiter', label: 'Mitarbeiter & Zugänge', icon: KeyRound, roles: BUERO, stichwoerter: 'personal lohn stundenlohn zugang login' },
       { href: '/meine-touren', label: 'Meine Touren', icon: Navigation, stichwoerter: 'stundenzettel stempeln fahrten' },
-      { href: '/zeiterfassung', label: 'Zeiterfassung', icon: Timer, roles: BAU, stichwoerter: 'stunden stundenzettel arbeitszeit pause' },
+      { href: '/zeiterfassung', label: 'Zeiterfassung', icon: Timer, roles: BAU, stichwoerter: 'stunden arbeitszeit pause' },
+      { href: '/stundenzettel', label: 'Stundenzettel', icon: FileText, stichwoerter: 'stunden monat arbeitszeit lohnkosten' },
       { href: '/kolonnen', label: 'Kolonnen', icon: Users, roles: BAU, stichwoerter: 'team einsatz' },
       { href: '/arbeitsschutz', label: 'Arbeitsschutz', icon: ShieldCheck, roles: BUERO, stichwoerter: 'unterweisung gefährdungsbeurteilung' },
     ],

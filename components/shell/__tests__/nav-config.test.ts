@@ -41,13 +41,13 @@ describe('Menüstruktur', () => {
 describe('Rubrik Personal', () => {
   const personal = (r: Rolle) => sichtbareGruppen(r).find((g) => g.key === 'personal')?.eintraege.map((e) => e.href) ?? []
   it('bündelt Mitarbeiter, Touren, Zeiterfassung, Kolonnen und Arbeitsschutz', () => {
-    expect(personal('admin')).toEqual(['/mitarbeiter', '/meine-touren', '/zeiterfassung', '/kolonnen', '/arbeitsschutz'])
+    expect(personal('admin')).toEqual(['/mitarbeiter', '/meine-touren', '/zeiterfassung', '/stundenzettel', '/kolonnen', '/arbeitsschutz'])
   })
   it('Rollen sehen nur ihre Punkte; Meine Touren bleibt für alle da', () => {
-    expect(personal('mitarbeiter')).toEqual(['/meine-touren'])
-    expect(personal('lager')).toEqual(['/meine-touren'])
-    expect(personal('bauleiter')).toEqual(['/meine-touren', '/zeiterfassung', '/kolonnen'])
-    expect(personal('disponent')).toEqual(['/mitarbeiter', '/meine-touren', '/zeiterfassung', '/kolonnen', '/arbeitsschutz'])
+    expect(personal('mitarbeiter')).toEqual(['/meine-touren', '/stundenzettel'])
+    expect(personal('lager')).toEqual(['/meine-touren', '/stundenzettel'])
+    expect(personal('bauleiter')).toEqual(['/meine-touren', '/zeiterfassung', '/stundenzettel', '/kolonnen'])
+    expect(personal('disponent')).toEqual(['/mitarbeiter', '/meine-touren', '/zeiterfassung', '/stundenzettel', '/kolonnen', '/arbeitsschutz'])
   })
   it('die Punkte stehen nicht mehr unter Ausführung oder Betrieb', () => {
     for (const k of ['ausfuehrung', 'betrieb']) {
