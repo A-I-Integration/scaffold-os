@@ -7,8 +7,8 @@ describe('Fälligkeit von Dokumenten', () => {
     expect(faelligkeit(null, HEUTE)).toBe('unbefristet')
     expect(faelligkeit('2026-11-23', HEUTE)).toBe('abgelaufen')
     expect(faelligkeit('2026-11-24', HEUTE)).toBe('bald')
-    expect(faelligkeit('2027-01-23', HEUTE)).toBe('bald') // 60 Tage
-    expect(faelligkeit('2027-01-24', HEUTE)).toBe('gueltig') // 61 Tage
+    expect(faelligkeit('2026-12-24', HEUTE)).toBe('bald') // 30 Tage
+    expect(faelligkeit('2026-12-25', HEUTE)).toBe('gueltig') // 31 Tage
   })
   it('liefert verständliche Texte', () => {
     expect(faelligkeitText('2026-11-20', HEUTE)).toBe('abgelaufen seit 20.11.2026 (4 Tage)')

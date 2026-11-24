@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { pruefeRolle, serverErrorResponse } from '@/lib/auth';
 import { pruefePersonalEingabe } from '@/lib/personalstamm';
+import { sammleStammFristen } from '@/lib/personal-fristen';
 import { FUEHRERSCHEIN_KLASSEN } from '@/lib/touren/fuehrerschein';
 import { istIsoDatum } from '@/lib/personalstamm';
 
@@ -19,28 +20,40 @@ const key = process.env.SUPABASE_SERVICE_ROLE_KEY!;
 const headers = { apikey: key, Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' };
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const fehler = (text: string, status = 400) => NextResponse.json({ success: false, error: text }, { status });
-const MA_FELDER = 'id,first_name,last_name,email,phone,status,weekly_hours,fuehrerschein_klassen,license_expires,user_id';
+const MA_FELDER = 'id,first_name,last_name,email,phone,role,status,weekly_hours,fuehrerschein_klassen,license_expires,user_id';
+const ROLLEN = ['monteur', 'fahrer', 'teamleiter', 'bauleiter'];
+const STATUS = ['active', 'inactive', 'on_leave'];
 
 export async function GET(req: NextRequest) {
   const rolle = await pruefeRolle(['admin']);
   if (!rolle.ok) return rolle.response;
   const id = new URL(req.url).searchParams.get('employee_id');
   try {
+    if (!id && new URL(req.url).searchParams.get('faellig') === '1') {
+      const [m, p] = await Promise.all([
+        fetch(`${url}/rest/v1/employees?select=id,first_name,last_name,status,license_expires`, { headers }),
+        fetch(`${url}/rest/v1/employee_personal?select=employee_id,ausweisart,ausweis_gueltig_bis,reisepass_gueltig_bis`, { headers }),
+      ]);
+      if (!m.ok) throw new Error(await m.text());
+      if (!p.ok) throw new Error(await p.text());
+      return NextResponse.json({ success: true, fristen: sammleStammFristen(await m.json(), await p.json()) });
+    }
     if (!id) {
       const res = await fetch(`${url}/rest/v1/employees?select=${MA_FELDER}&order=last_name.asc`, { headers });
       if (!res.ok) throw new Error(await res.text());
       return NextResponse.json({ success: true, mitarbeiter: await res.json() });
     }
     if (!UUID.test(id)) return fehler('employee_id ungültig');
-    const [m, p] = await Promise.all([
+    const [m, p, sk] = await Promise.all([
       fetch(`${url}/rest/v1/employees?id=eq.${id}&select=${MA_FELDER}`, { headers }),
       fetch(`${url}/rest/v1/employee_personal?employee_id=eq.${id}&select=*`, { headers }),
+      fetch(`${url}/rest/v1/employee_skills?employee_id=eq.${id}&select=id,skill_name,level`, { headers }),
     ]);
     if (!m.ok) throw new Error(await m.text());
     if (!p.ok) throw new Error(await p.text());
     const ma = (await m.json())[0];
     if (!ma) return fehler('Mitarbeiter nicht gefunden', 404);
-    return NextResponse.json({ success: true, mitarbeiter: ma, personal: (await p.json())[0] || null });
+    return NextResponse.json({ success: true, mitarbeiter: ma, personal: (await p.json())[0] || null, skills: sk.ok ? await sk.json() : [] });
   } catch (err) {
     return serverErrorResponse(err, 'mitarbeiter-stamm/GET');
   }
@@ -68,7 +81,18 @@ export async function POST(req: NextRequest) {
     wochenstunden = Math.round(w);
   }
 
+  const rolleMa = b.role ? String(b.role) : undefined;
+  if (rolleMa && !ROLLEN.includes(rolleMa)) return fehler('Unbekannte Rolle.');
+  const statusMa = b.status ? String(b.status) : undefined;
+  if (statusMa && !STATUS.includes(statusMa)) return fehler('Unbekannter Status.');
+  // Wohnadresse für die Routenplanung (employees.home_address) aus der Stammadresse mitführen
+  const d = p.daten;
+  const wohnadresse = d.strasse && d.ort ? `${d.strasse}, ${[d.plz, d.ort].filter(Boolean).join(' ')}` : null;
+
   const maDaten = {
+    ...(rolleMa ? { role: rolleMa } : {}),
+    ...(statusMa ? { status: statusMa } : {}),
+    ...(wohnadresse ? { home_address: wohnadresse } : {}),
     first_name: vorname, last_name: nachname,
     phone: b.phone ? String(b.phone).trim().slice(0, 40) : null,
     fuehrerschein_klassen: klassen, license_expires: ablauf,

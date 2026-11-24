@@ -15,6 +15,10 @@ describe('Personal-Reiter', () => {
     const html = renderToStaticMarkup(createElement(PersonalStamm))
     expect(html).toContain('Neuen Mitarbeiter anlegen'); expect(html).not.toContain('stamm-formular')
   })
+  it('Planung hat keinen Mitarbeiter-Reiter mehr', async () => {
+    const q = await import('node:fs').then(f => f.readFileSync('app/planung/page.tsx', 'utf8'))
+    expect(q).not.toContain("setActiveTab('employees')"); expect(q).not.toContain('setShowAddEmployee')
+  })
   it('Dokumente-Reiter zeigt Fälligkeitsbereich und Eingabe mit allen Kategorien', () => {
     const html = renderToStaticMarkup(createElement(PersonalDokumente, { employees: [{ id: 'e1', first_name: 'Max', last_name: 'Muster' }] }))
     for (const t of ['Personalien', 'Lehrgänge', 'G-Untersuchungen', 'Führer- und Kranscheine', 'Muster, Max', 'Bald fällig']) expect(html).toContain(t)

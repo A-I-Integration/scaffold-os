@@ -58,4 +58,26 @@ describe('Route Personalstamm', () => {
     }
     expect(db.employees).toHaveLength(1)
   })
+  it('speichert Land, Ausweisart, Gültigkeiten, Rolle, Status und führt die Wohnadresse mit', async () => {
+    const r = await post({ employee_id: E1, first_name: 'Max', last_name: 'Muster', land: 'Deutschland', strasse: 'Hauptstr. 1', plz: '48691', ort: 'Vreden', ausweisart: 'aufenthaltstitel', ausweis_gueltig_bis: '2027-05-01', reisepass_gueltig_bis: '2030-01-01', role: 'fahrer', status: 'on_leave' })
+    expect(r.status).toBe(200)
+    expect(db.employee_personal[0]).toMatchObject({ land: 'Deutschland', ausweisart: 'aufenthaltstitel', ausweis_gueltig_bis: '2027-05-01', reisepass_gueltig_bis: '2030-01-01' })
+    expect(db.employees[0]).toMatchObject({ role: 'fahrer', status: 'on_leave', home_address: 'Hauptstr. 1, 48691 Vreden' })
+  })
+  it('lehnt Ausweis-Datum ohne Art, unbekannte Art, Rolle und Status ab', async () => {
+    const b = { employee_id: E1, first_name: 'A', last_name: 'B' }
+    expect((await post({ ...b, ausweis_gueltig_bis: '2027-05-01' })).status).toBe(400)
+    expect((await post({ ...b, ausweisart: 'x' })).status).toBe(400)
+    expect((await post({ ...b, role: 'chefkoch' })).status).toBe(400)
+    expect((await post({ ...b, status: 'weg' })).status).toBe(400)
+    expect(db.employee_personal).toHaveLength(0)
+  })
+  it('liefert die Fristen für „Bald fällig“ (nur aktive) und sperrt die Disposition', async () => {
+    db.employees.push({ id: 'z', first_name: 'Ex', last_name: 'Mitarbeiter', status: 'inactive', license_expires: '2026-12-01' })
+    db.employee_personal.push({ employee_id: E1, ausweisart: 'duldung', ausweis_gueltig_bis: '2026-12-15' })
+    const j = await (await get('?faellig=1')).json()
+    expect(j.fristen.map((f: any) => [f.mitarbeiter, f.was])).toEqual([['Max Muster', 'Duldung']])
+    rolle = 'disponent'
+    expect((await get('?faellig=1')).status).toBe(403)
+  })
 })

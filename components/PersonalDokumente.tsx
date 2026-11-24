@@ -18,6 +18,7 @@ const farbe = { abgelaufen: 'bg-red-50 text-red-700 border-red-200', bald: 'bg-a
 
 export default function PersonalDokumente({ employees }: { employees: Ma[] }) {
   const [alle, setAlle] = useState<Dok[]>([]);
+  const [stammFristen, setStammFristen] = useState<{ schluessel: string; employee_id: string; mitarbeiter: string; was: string; gueltig_bis: string }[]>([]);
   const [empId, setEmpId] = useState('');
   const [kategorie, setKategorie] = useState('lehrgang');
   const [bezeichnung, setBezeichnung] = useState('');
@@ -35,9 +36,17 @@ export default function PersonalDokumente({ employees }: { employees: Ma[] }) {
     else setMeldung({ ok: false, text: j.error || 'Dokumente konnten nicht geladen werden.' });
   }, []);
   useEffect(() => { laden(); }, [laden]);
+  // Ausweis, Reisepass und Führerschein stehen im Personalstamm (nur Chef): für die Disposition kommt hier 403 und die Liste bleibt leer
+  useEffect(() => {
+    fetch('/api/mitarbeiter-stamm?faellig=1', { cache: 'no-store' }).then(r => r.ok ? r.json() : null)
+      .then(j => { if (j?.success) setStammFristen(j.fristen || []); }).catch(() => undefined);
+  }, []);
 
   const tag = heute();
-  const faellig = useMemo(() => sortiereNachFaelligkeit(alle.filter(d => ['abgelaufen', 'bald'].includes(faelligkeit(d.gueltig_bis, tag))), tag), [alle, tag]);
+  const faellig = useMemo(() => {
+    const aus: Dok[] = stammFristen.map(f => ({ id: f.schluessel, employee_id: f.employee_id, kategorie: 'personalien', bezeichnung: f.was, ausgestellt_am: null, gueltig_bis: f.gueltig_bis, file_name: null, notiz: null, mitarbeiter: f.mitarbeiter }));
+    return sortiereNachFaelligkeit([...alle, ...aus].filter(d => ['abgelaufen', 'bald'].includes(faelligkeit(d.gueltig_bis, tag))), tag);
+  }, [alle, stammFristen, tag]);
   const vomMa = useMemo(() => sortiereNachFaelligkeit(alle.filter(d => d.employee_id === empId), tag), [alle, empId, tag]);
   const name = (id: string) => { const e = employees.find(x => x.id === id); return e ? `${e.first_name} ${e.last_name}` : '–'; };
 
@@ -81,7 +90,7 @@ export default function PersonalDokumente({ employees }: { employees: Ma[] }) {
         <span><b>{mitName ? `${d.mitarbeiter || name(d.employee_id)} · ` : ''}{d.bezeichnung}</b> <span className="opacity-70">({kat})</span> – {faelligkeitText(d.gueltig_bis, tag)}{d.notiz ? ` · ${d.notiz}` : ''}</span>
         <span className="flex gap-3 text-xs font-medium">
           {d.file_name && <button onClick={() => oeffnen(d.id)} className="underline">Ansehen</button>}
-          <button onClick={() => loeschen(d.id)} className="text-red-700 underline">Löschen</button>
+          {!d.id.includes(':') && <button onClick={() => loeschen(d.id)} className="text-red-700 underline">Löschen</button>}
         </span>
       </li>
     );
@@ -92,7 +101,7 @@ export default function PersonalDokumente({ employees }: { employees: Ma[] }) {
       <section className="bg-white border border-black/5 rounded-2xl p-5 space-y-3">
         <h2 className="text-lg font-semibold">⏰ Bald fällig oder abgelaufen</h2>
         {faellig.length === 0
-          ? <p className="text-sm text-[#86868b]" data-testid="dok-nichts-faellig">Nichts fällig in den nächsten 60 Tagen.</p>
+          ? <p className="text-sm text-[#86868b]" data-testid="dok-nichts-faellig">Nichts fällig in den nächsten 30 Tagen.</p>
           : <ul className="space-y-1.5" data-testid="dok-faellig">{faellig.map(d => zeile(d, true))}</ul>}
       </section>
 

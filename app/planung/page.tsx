@@ -9,10 +9,6 @@ import {
   getAbsences,
   getTourPlans,
   getEmployeeStats,
-  createEmployee,
-  updateEmployee,
-  deleteEmployee,
-  addEmployeeSkill,
   createAbsence,
   approveAbsence,
   rejectAbsence,
@@ -30,9 +26,8 @@ import {
   EmployeeStats,
   EmployeeRecommendation,
 } from '@/types/employees';
-import { FUEHRERSCHEIN_KLASSEN } from '@/lib/touren/fuehrerschein';
 
-type Tab = 'overview' | 'employees' | 'absences' | 'tours';
+type Tab = 'overview' | 'absences' | 'tours';
 
 function PlanungContent() {
   // FIX (Bug-Report): Dashboard-Alarm "Abwesenheits-Antrag offen" verlinkte
@@ -41,7 +36,7 @@ function PlanungContent() {
   // ?tab=... Parameter und öffnet direkt den passenden Tab.
   const searchParams = useSearchParams();
   const tabParam = searchParams.get('tab');
-  const initialTab: Tab = (tabParam === 'overview' || tabParam === 'employees' || tabParam === 'absences' || tabParam === 'tours')
+  const initialTab: Tab = (tabParam === 'overview' || tabParam === 'absences' || tabParam === 'tours')
     ? tabParam
     : 'overview';
   const [activeTab, setActiveTab] = useState<Tab>(initialTab);
@@ -53,7 +48,6 @@ function PlanungContent() {
   const [error, setError] = useState<string | null>(null);
 
   // Modals
-  const [showAddEmployee, setShowAddEmployee] = useState(false);
   const [showAddAbsence, setShowAddAbsence] = useState(false);
   // NEU: Abwesenheit bearbeiten (Admin/Dispo)
   const [editAbsence, setEditAbsence] = useState<Absence | null>(null);
@@ -71,7 +65,6 @@ function PlanungContent() {
   const projectIdParam = searchParams.get('project_id');
   const [unassignedGeladen, setUnassignedGeladen] = useState(false);
   const [kiTeamVorschlag, setKiTeamVorschlag] = useState<Record<string, { laeuft: boolean; ergebnis?: any; fehler?: string }>>({})
-  const [showEditEmployee, setShowEditEmployee] = useState(false);
 
   // NEU: KI-Umdisposition bei Ausfällen
   const [showUmdispo, setShowUmdispo] = useState(false);
@@ -81,7 +74,6 @@ function PlanungContent() {
   const [umdispoError, setUmdispoError] = useState<string | null>(null);
 
   // Form
-  const [editingEmployee, setEditingEmployee] = useState<EmployeeWithSkills | null>(null);
   const [recommendDate, setRecommendDate] = useState('');
   const [recommendations, setRecommendations] = useState<EmployeeRecommendation[]>([]);
   const [projects, setProjects] = useState<{ id: string; name: string }[]>([]);
@@ -151,49 +143,6 @@ function PlanungContent() {
     } catch (e: any) {
       setKiTeamVorschlag((prev) => ({ ...prev, [projektId]: { laeuft: false, fehler: e.message } }))
     }
-  }
-
-  async function handleAddEmployee(e: React.FormEvent<HTMLFormElement>) {
-    e.preventDefault();
-    setFormError(null);
-    const result = await createEmployee(new FormData(e.currentTarget));
-    if (result.success) {
-      setFormSuccess('Mitarbeiter erstellt!');
-      setShowAddEmployee(false);
-      loadData();
-      setTimeout(() => setFormSuccess(null), 3000);
-    } else {
-      setFormError(result.error || 'Fehler');
-    }
-  }
-
-  async function handleEditEmployee(e: React.FormEvent<HTMLFormElement>) {
-    e.preventDefault();
-    if (!editingEmployee) return;
-    setFormError(null);
-    const result = await updateEmployee(editingEmployee.id, new FormData(e.currentTarget));
-    if (result.success) {
-      setFormSuccess('Mitarbeiter aktualisiert!');
-      setShowEditEmployee(false);
-      setEditingEmployee(null);
-      loadData();
-      setTimeout(() => setFormSuccess(null), 3000);
-    } else {
-      setFormError(result.error || 'Fehler');
-    }
-  }
-
-  async function handleDeleteEmployee(id: string) {
-    if (!confirm('Mitarbeiter wirklich deaktivieren?')) return;
-    const result = await deleteEmployee(id);
-    if (result.success) loadData(); else alert(result.error);
-  }
-
-  async function handleAddSkill(employeeId: string, e: React.FormEvent<HTMLFormElement>) {
-    e.preventDefault();
-    const result = await addEmployeeSkill(employeeId, new FormData(e.currentTarget));
-    if (result.success) { loadData(); (e.target as HTMLFormElement).reset(); }
-    else alert(result.error);
   }
 
   async function handleAddAbsence(e: React.FormEvent<HTMLFormElement>) {
@@ -326,7 +275,6 @@ function PlanungContent() {
               <button onClick={() => { setShowAddTour(true); setFormError(null); }} className="px-4 py-2 bg-green-600 text-white text-sm font-medium rounded-xl hover:bg-green-700">+ Tour</button>
               <button onClick={() => { setShowAddAbsence(true); setFormError(null); }} className="px-4 py-2 bg-yellow-600 text-[#1d1d1f] text-sm font-medium rounded-xl hover:bg-yellow-700">+ Abwesenheit</button>
               <button onClick={() => { setShowUmdispo(true); setUmdispoResult(null); setUmdispoError(null); }} className="px-4 py-2 bg-purple-600 text-white text-sm font-medium rounded-xl hover:bg-purple-700">🔮 KI-Umdisposition</button>
-              <button onClick={() => { setShowAddEmployee(true); setFormError(null); }} className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-xl hover:bg-blue-700">+ Mitarbeiter</button>
             </div>
           </div>
         </div>
@@ -337,7 +285,6 @@ function PlanungContent() {
         <div className="border-b border-gray-200">
           <nav className="-mb-px flex gap-6">
             <button onClick={() => setActiveTab('overview')} className={tabClass('overview')}>Übersicht</button>
-            <button onClick={() => setActiveTab('employees')} className={tabClass('employees')}>Mitarbeiter</button>
             <button onClick={() => setActiveTab('absences')} className={tabClass('absences')}>Abwesenheiten</button>
             <button onClick={() => setActiveTab('tours')} className={tabClass('tours')}>Einsatzpläne</button>
           </nav>
@@ -433,81 +380,6 @@ function PlanungContent() {
               <div className="text-3xl font-bold text-blue-600 mt-2">{stats?.plannedTours || 0}</div>
             </div>
           </div>
-          </div>
-        )}
-
-        {/* MITARBEITER */}
-        {activeTab === 'employees' && (
-          <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm text-left text-gray-900">
-                <thead className="bg-gray-100 font-semibold text-gray-800">
-                  <tr>
-                    <th className="px-6 py-3">Name</th>
-                    <th className="px-6 py-3">Rolle</th>
-                    <th className="px-6 py-3">Status</th>
-                    <th className="px-6 py-3">Verfügbar</th>
-                    <th className="px-6 py-3">Qualifikationen</th>
-                    <th className="px-6 py-3">Führerschein</th>
-                    <th className="px-6 py-3 text-right">Aktionen</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-100">
-                  {employees.map(emp => (
-                    <tr key={emp.id} className="hover:bg-gray-50">
-                      <td className="px-6 py-4 font-medium text-gray-900">
-                        <div>{emp.full_name}</div>
-                        <div className="text-xs text-gray-500">{emp.email}</div>
-                      </td>
-                      <td className="px-6 py-4 text-gray-600 capitalize">{emp.role}</td>
-                      <td className="px-6 py-4">
-                        <span className={`px-2 py-1 rounded-full text-xs font-semibold ${
-                          emp.status === 'active' ? 'bg-green-100 text-green-800' :
-                          emp.status === 'on_leave' ? 'bg-yellow-100 text-yellow-800' :
-                          'bg-gray-100 text-gray-800'
-                        }`}>{emp.status}</span>
-                      </td>
-                      <td className="px-6 py-4">
-                        {emp.is_available_today ? (
-                          <span className="text-green-600 font-semibold text-xs">✓ Verfügbar</span>
-                        ) : (
-                          <span className="text-red-600 font-semibold text-xs">✗ Abwesend</span>
-                        )}
-                      </td>
-                      <td className="px-6 py-4">
-                        <div className="flex flex-wrap gap-1">
-                          {emp.skills.map(s => (
-                            <span key={s.id} className="px-2 py-0.5 bg-blue-100 text-blue-700 text-xs rounded-full">
-                              {s.skill_name} ({s.level})
-                            </span>
-                          ))}
-                          <form onSubmit={(e) => handleAddSkill(emp.id, e)} className="flex gap-1 mt-1">
-                            <input name="skill_name" placeholder="Skill" className="w-20 px-2 py-0.5 text-xs border rounded" required />
-                            <select name="level" className="w-16 text-xs border rounded">
-                              <option value="basic">Basic</option>
-                              <option value="advanced">Adv</option>
-                              <option value="expert">Exp</option>
-                            </select>
-                            <button type="submit" className="text-xs text-blue-600 font-bold">+</button>
-                          </form>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 text-gray-600 text-xs">
-                        {emp.drivers_license || '-'}
-                        {(emp.fuehrerschein_klassen || []).length > 0 && (
-                          <div className="text-[10px] text-gray-400">{(emp.fuehrerschein_klassen || []).join(', ')}</div>
-                        )}
-                      </td>
-                      <td className="px-6 py-4 text-right">
-                        <button onClick={() => { setEditingEmployee(emp); setShowEditEmployee(true); }} className="text-blue-600 text-xs mr-2 hover:underline">Bearbeiten</button>
-                        <button onClick={() => handleDeleteEmployee(emp.id)} className="text-red-600 text-xs hover:underline">Deaktivieren</button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-              {employees.length === 0 && <div className="p-8 text-center text-gray-500 text-sm">Keine Mitarbeiter</div>}
-            </div>
           </div>
         )}
 
@@ -622,111 +494,6 @@ function PlanungContent() {
           </div>
         )}
       </div>
-
-      {/* ADD EMPLOYEE MODAL */}
-      {showAddEmployee && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl shadow-xl max-w-lg w-full max-h-[90vh] overflow-y-auto">
-            <div className="px-6 py-4 border-b border-gray-200 flex justify-between">
-              <h3 className="text-lg font-semibold text-gray-900">Neuer Mitarbeiter</h3>
-              <button onClick={() => setShowAddEmployee(false)} className="text-gray-400 hover:text-gray-600">✕</button>
-            </div>
-            <form onSubmit={handleAddEmployee} className="p-6 space-y-4">
-              {formError && <div className="p-3 bg-red-50 text-red-700 text-sm rounded-xl">{formError}</div>}
-              <div className="grid grid-cols-2 gap-4">
-                <div><label className="block text-sm font-medium text-gray-700 mb-1">Vorname *</label><input name="first_name" required className="w-full px-3 py-2 border rounded-xl text-sm" /></div>
-                <div><label className="block text-sm font-medium text-gray-700 mb-1">Nachname *</label><input name="last_name" required className="w-full px-3 py-2 border rounded-xl text-sm" /></div>
-                <div><label className="block text-sm font-medium text-gray-700 mb-1">E-Mail</label><input name="email" type="email" className="w-full px-3 py-2 border rounded-xl text-sm" /></div>
-                <div><label className="block text-sm font-medium text-gray-700 mb-1">Telefon</label><input name="phone" className="w-full px-3 py-2 border rounded-xl text-sm" /></div>
-                <div><label className="block text-sm font-medium text-gray-700 mb-1">Rolle</label>
-                  <select name="role" className="w-full px-3 py-2 border rounded-xl text-sm">
-                    <option value="monteur">Monteur</option>
-                    <option value="fahrer">Fahrer</option>
-                    <option value="teamleiter">Teamleiter</option>
-                    <option value="bauleiter">Bauleiter</option>
-                  </select>
-                </div>
-                <div><label className="block text-sm font-medium text-gray-700 mb-1">Wochenstunden</label><input name="weekly_hours" type="number" defaultValue="40" className="w-full px-3 py-2 border rounded-xl text-sm" /></div>
-                <div><label className="block text-sm font-medium text-gray-700 mb-1">Stundensatz (€)</label><input name="hourly_rate" type="number" step="0.01" defaultValue="0" className="w-full px-3 py-2 border rounded-xl text-sm" /></div>
-                <div><label className="block text-sm font-medium text-gray-700 mb-1">Führerschein</label><input name="drivers_license" className="w-full px-3 py-2 border rounded-xl text-sm" /></div>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Führerschein-Klassen (für Fahrzeug-Zuweisung)</label>
-                <div className="flex flex-wrap gap-3">
-                  {FUEHRERSCHEIN_KLASSEN.map(k => (
-                    <label key={k} className="flex items-center gap-1.5 text-sm bg-gray-50 border border-gray-200 rounded-lg px-2.5 py-1.5">
-                      <input type="checkbox" name="fuehrerschein_klassen" value={k} />
-                      {k}
-                    </label>
-                  ))}
-                </div>
-              </div>
-              <div><label className="block text-sm font-medium text-gray-700 mb-1">Adresse</label><input name="home_address" className="w-full px-3 py-2 border rounded-xl text-sm" /></div>
-              <div><label className="block text-sm font-medium text-gray-700 mb-1">Notizen</label><textarea name="notes" rows={2} className="w-full px-3 py-2 border rounded-xl text-sm" /></div>
-              <div className="flex justify-end gap-2">
-                <button type="button" onClick={() => setShowAddEmployee(false)} className="px-4 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded-xl">Abbrechen</button>
-                <button type="submit" className="px-4 py-2 text-sm bg-blue-600 text-white rounded-xl hover:bg-blue-700">Speichern</button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* EDIT EMPLOYEE MODAL */}
-      {showEditEmployee && editingEmployee && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl shadow-xl max-w-lg w-full max-h-[90vh] overflow-y-auto">
-            <div className="px-6 py-4 border-b border-gray-200 flex justify-between">
-              <h3 className="text-lg font-semibold text-gray-900">Mitarbeiter bearbeiten</h3>
-              <button onClick={() => { setShowEditEmployee(false); setEditingEmployee(null); }} className="text-gray-400 hover:text-gray-600">✕</button>
-            </div>
-            <form onSubmit={handleEditEmployee} className="p-6 space-y-4">
-              {formError && <div className="p-3 bg-red-50 text-red-700 text-sm rounded-xl">{formError}</div>}
-              <div className="grid grid-cols-2 gap-4">
-                <div><label className="block text-sm font-medium text-gray-700 mb-1">Vorname *</label><input name="first_name" defaultValue={editingEmployee.first_name} required className="w-full px-3 py-2 border rounded-xl text-sm" /></div>
-                <div><label className="block text-sm font-medium text-gray-700 mb-1">Nachname *</label><input name="last_name" defaultValue={editingEmployee.last_name} required className="w-full px-3 py-2 border rounded-xl text-sm" /></div>
-                <div><label className="block text-sm font-medium text-gray-700 mb-1">E-Mail</label><input name="email" type="email" defaultValue={editingEmployee.email || ''} className="w-full px-3 py-2 border rounded-xl text-sm" /></div>
-                <div><label className="block text-sm font-medium text-gray-700 mb-1">Telefon</label><input name="phone" defaultValue={editingEmployee.phone || ''} className="w-full px-3 py-2 border rounded-xl text-sm" /></div>
-                <div><label className="block text-sm font-medium text-gray-700 mb-1">Rolle</label>
-                  <select name="role" defaultValue={editingEmployee.role} className="w-full px-3 py-2 border rounded-xl text-sm">
-                    <option value="monteur">Monteur</option>
-                    <option value="fahrer">Fahrer</option>
-                    <option value="teamleiter">Teamleiter</option>
-                    <option value="bauleiter">Bauleiter</option>
-                  </select>
-                </div>
-                <div><label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
-                  <select name="status" defaultValue={editingEmployee.status} className="w-full px-3 py-2 border rounded-xl text-sm">
-                    <option value="active">Aktiv</option>
-                    <option value="inactive">Inaktiv</option>
-                    <option value="on_leave">Abwesend</option>
-                  </select>
-                </div>
-                <div><label className="block text-sm font-medium text-gray-700 mb-1">Wochenstunden</label><input name="weekly_hours" type="number" defaultValue={editingEmployee.weekly_hours} className="w-full px-3 py-2 border rounded-xl text-sm" /></div>
-                <div><label className="block text-sm font-medium text-gray-700 mb-1">Stundensatz (€)</label><input name="hourly_rate" type="number" step="0.01" defaultValue={editingEmployee.hourly_rate} className="w-full px-3 py-2 border rounded-xl text-sm" /></div>
-                <div><label className="block text-sm font-medium text-gray-700 mb-1">Führerschein</label><input name="drivers_license" defaultValue={editingEmployee.drivers_license || ''} className="w-full px-3 py-2 border rounded-xl text-sm" /></div>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Führerschein-Klassen (für Fahrzeug-Zuweisung)</label>
-                <div className="flex flex-wrap gap-3">
-                  {FUEHRERSCHEIN_KLASSEN.map(k => (
-                    <label key={k} className="flex items-center gap-1.5 text-sm bg-gray-50 border border-gray-200 rounded-lg px-2.5 py-1.5">
-                      <input type="checkbox" name="fuehrerschein_klassen" value={k} defaultChecked={(editingEmployee.fuehrerschein_klassen || []).includes(k)} />
-                      {k}
-                    </label>
-                  ))}
-                </div>
-              </div>
-              <div><label className="block text-sm font-medium text-gray-700 mb-1">Adresse</label><input name="home_address" defaultValue={editingEmployee.home_address || ''} className="w-full px-3 py-2 border rounded-xl text-sm" /></div>
-              <div><label className="block text-sm font-medium text-gray-700 mb-1">Notizen</label><textarea name="notes" defaultValue={editingEmployee.notes || ''} rows={2} className="w-full px-3 py-2 border rounded-xl text-sm" /></div>
-              <div className="flex justify-end gap-2">
-                <button type="button" onClick={() => { setShowEditEmployee(false); setEditingEmployee(null); }} className="px-4 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded-xl">Abbrechen</button>
-                <button type="submit" className="px-4 py-2 text-sm bg-blue-600 text-white rounded-xl hover:bg-blue-700">Speichern</button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
 
       {/* ADD ABSENCE MODAL */}
       {showAddAbsence && (

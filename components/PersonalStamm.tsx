@@ -1,7 +1,9 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { BESCHAEFTIGUNGSARTEN, KONFESSIONEN } from '@/lib/personalstamm';
+import { AUSWEISARTEN, BESCHAEFTIGUNGSARTEN, KONFESSIONEN } from '@/lib/personalstamm';
+import { faelligkeit, faelligkeitText } from '@/lib/personal-dokumente';
+import { addEmployeeSkill, deleteSkill } from '@/lib/actions/employees';
 import { FUEHRERSCHEIN_KLASSEN } from '@/lib/touren/fuehrerschein';
 
 // ============================================================
@@ -12,15 +14,18 @@ import { FUEHRERSCHEIN_KLASSEN } from '@/lib/touren/fuehrerschein';
 interface MaListe { id: string; first_name: string; last_name: string; status: string; fuehrerschein_klassen: string[] | null; license_expires: string | null }
 type Form = Record<string, string> & { fuehrerschein_klassen_liste?: never };
 
-const FELDER = ['geburtsname', 'geburtsdatum', 'geburtsort', 'staatsangehoerigkeit', 'strasse', 'plz', 'ort', 'telefon_privat', 'notfall_name', 'notfall_telefon', 'sv_nummer', 'steuer_id', 'steuerklasse', 'kinderfreibetraege', 'konfession', 'krankenkasse', 'iban', 'bic', 'eintrittsdatum', 'austrittsdatum', 'beschaeftigungsart', 'taetigkeit', 'notiz'] as const;
+const FELDER = ['land', 'ausweisart', 'ausweis_gueltig_bis', 'reisepass_gueltig_bis', 'geburtsname', 'geburtsdatum', 'geburtsort', 'staatsangehoerigkeit', 'strasse', 'plz', 'ort', 'telefon_privat', 'notfall_name', 'notfall_telefon', 'sv_nummer', 'steuer_id', 'steuerklasse', 'kinderfreibetraege', 'konfession', 'krankenkasse', 'iban', 'bic', 'eintrittsdatum', 'austrittsdatum', 'beschaeftigungsart', 'taetigkeit', 'notiz'] as const;
 const inputCls = 'w-full rounded-lg bg-[#f5f5f7] border border-black/10 px-3 py-2 text-sm text-[#1d1d1f] placeholder-[#86868b] focus:border-[#e8590c] focus:outline-none';
-const leereForm = (): Form => Object.fromEntries([['first_name', ''], ['last_name', ''], ['phone', ''], ['weekly_hours', ''], ['license_expires', ''], ...FELDER.map(f => [f, ''])]) as Form;
+const leereForm = (): Form => Object.fromEntries([['first_name', ''], ['last_name', ''], ['phone', ''], ['role', 'monteur'], ['status', 'active'], ['weekly_hours', ''], ['license_expires', ''], ...FELDER.map(f => [f, ''])]) as Form;
 
 export default function PersonalStamm() {
   const [liste, setListe] = useState<MaListe[]>([]);
   const [auswahl, setAuswahl] = useState<string>(''); // '' = nichts, 'neu' = neuer Mitarbeiter
   const [form, setForm] = useState<Form>(leereForm());
   const [klassen, setKlassen] = useState<string[]>([]);
+  const [skills, setSkills] = useState<{ id: string; skill_name: string; level: string }[]>([]);
+  const [neuerSkill, setNeuerSkill] = useState('');
+  const [skillLevel, setSkillLevel] = useState('basic');
   const [verboten, setVerboten] = useState(false);
   const [laeuft, setLaeuft] = useState(false);
   const [meldung, setMeldung] = useState<{ ok: boolean; text: string } | null>(null);
@@ -37,7 +42,7 @@ export default function PersonalStamm() {
   useEffect(() => {
     setMeldung(null);
     if (!auswahl) return;
-    if (auswahl === 'neu') { setForm(leereForm()); setKlassen([]); return; }
+    if (auswahl === 'neu') { setForm(leereForm()); setKlassen([]); setSkills([]); return; }
     (async () => {
       const res = await fetch(`/api/mitarbeiter-stamm?employee_id=${auswahl}`, { cache: 'no-store' });
       const j = await res.json().catch(() => ({}));
@@ -45,8 +50,10 @@ export default function PersonalStamm() {
       const m = j.mitarbeiter, p = j.personal || {};
       const f = leereForm();
       f.first_name = m.first_name || ''; f.last_name = m.last_name || ''; f.phone = m.phone || '';
+      f.role = m.role || 'monteur'; f.status = m.status || 'active';
       f.weekly_hours = m.weekly_hours != null ? String(m.weekly_hours) : ''; f.license_expires = m.license_expires || '';
       for (const k of FELDER) f[k] = p[k] != null ? String(p[k]) : '';
+      setSkills(j.skills || []);
       setForm(f); setKlassen(Array.isArray(m.fuehrerschein_klassen) ? m.fuehrerschein_klassen : []);
     })();
   }, [auswahl]);
@@ -103,8 +110,24 @@ export default function PersonalStamm() {
             {feld('first_name', 'Vorname *', { testid: 'stamm-vorname' })}{feld('last_name', 'Nachname *', { testid: 'stamm-nachname' })}{feld('geburtsname', 'Geburtsname')}
             {feld('geburtsdatum', 'Geburtsdatum', { type: 'date' })}{feld('geburtsort', 'Geburtsort')}{feld('staatsangehoerigkeit', 'Staatsangehörigkeit')}
           </>)}
+          <fieldset className="space-y-3" data-testid="stamm-ausweis">
+            <legend className="text-sm font-semibold text-[#424245] mb-1">Ausweisdokument und Pass</legend>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              <div>
+                <label className="block text-xs text-[#86868b] mb-1">Ausweisdokument</label>
+                <select value={form.ausweisart} onChange={set('ausweisart')} className={inputCls} data-testid="stamm-ausweisart">
+                  <option value="">–</option>{AUSWEISARTEN.map(a => <option key={a.value} value={a.value}>{a.label}</option>)}
+                </select>
+              </div>
+              <div>{feld('ausweis_gueltig_bis', 'Ausweisdokument gültig bis', { type: 'date' })}
+                {form.ausweis_gueltig_bis && <p className="text-xs mt-1" data-testid="stamm-ausweis-status">{faelligkeitText(form.ausweis_gueltig_bis, new Date().toLocaleDateString('sv-SE'))}</p>}</div>
+              <div>{feld('reisepass_gueltig_bis', 'Reisepass gültig bis', { type: 'date' })}
+                {form.reisepass_gueltig_bis && <p className="text-xs mt-1">{faelligkeitText(form.reisepass_gueltig_bis, new Date().toLocaleDateString('sv-SE'))}</p>}</div>
+            </div>
+            <p className="text-xs text-[#86868b]">Einen Monat vor Ablauf kommt eine Erinnerung per E-Mail an die Firmenadresse aus den Einstellungen und der Eintrag erscheint im Reiter „Dokumente“ unter „Bald fällig“.</p>
+          </fieldset>
           {sek('Adresse und Kontakt', <>
-            {feld('strasse', 'Straße und Hausnummer')}{feld('plz', 'PLZ')}{feld('ort', 'Ort')}
+            {feld('strasse', 'Straße und Hausnummer')}{feld('plz', 'PLZ')}{feld('ort', 'Ort')}{feld('land', 'Land', { ph: 'z. B. Deutschland' })}
             {feld('phone', 'Telefon (Arbeit/Mobil)', { testid: 'stamm-telefon' })}{feld('telefon_privat', 'Telefon privat')}<span />
             {feld('notfall_name', 'Notfallkontakt: Name')}{feld('notfall_telefon', 'Notfallkontakt: Telefon')}
           </>)}
@@ -135,6 +158,18 @@ export default function PersonalStamm() {
                 <option value="">–</option>{BESCHAEFTIGUNGSARTEN.map(b => <option key={b.value} value={b.value}>{b.label}</option>)}
               </select>
             </div>
+            <div>
+              <label className="block text-xs text-[#86868b] mb-1">Rolle im Einsatz</label>
+              <select value={form.role} onChange={set('role')} className={inputCls} data-testid="stamm-rolle">
+                <option value="monteur">Monteur</option><option value="fahrer">Fahrer</option><option value="teamleiter">Teamleiter</option><option value="bauleiter">Bauleiter</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs text-[#86868b] mb-1">Status</label>
+              <select value={form.status} onChange={set('status')} className={inputCls} data-testid="stamm-status">
+                <option value="active">Aktiv</option><option value="inactive">Inaktiv</option><option value="on_leave">Abwesend</option>
+              </select>
+            </div>
             {feld('taetigkeit', 'Tätigkeit / Funktion', { ph: 'z. B. Gerüstbauer, Vorarbeiter' })}{feld('weekly_hours', 'Wochenstunden (vertraglich)', { ph: '40' })}
           </>)}
           <fieldset className="space-y-3" data-testid="stamm-fuehrerschein">
@@ -149,6 +184,32 @@ export default function PersonalStamm() {
             </div>
             <p className="text-xs text-[#86868b]">Kranschein, Staplerschein und weitere Bescheinigungen mit Ablaufdatum bitte im Reiter „Dokumente“ eintragen.</p>
           </fieldset>
+          {auswahl !== 'neu' && (
+            <fieldset className="space-y-2" data-testid="stamm-qualifikationen">
+              <legend className="text-sm font-semibold text-[#424245] mb-1">Qualifikationen für die Einsatzplanung</legend>
+              <div className="flex flex-wrap gap-2">
+                {skills.length === 0 && <span className="text-xs text-[#86868b]">Noch keine eingetragen.</span>}
+                {skills.map(sk => (
+                  <span key={sk.id} className="px-2 py-1 bg-blue-50 text-blue-700 text-xs rounded-full">
+                    {sk.skill_name} ({sk.level}) <button type="button" aria-label="Qualifikation entfernen" onClick={async () => { const r = await deleteSkill(sk.id); if (r.success) setSkills(skills.filter(x => x.id !== sk.id)); else setMeldung({ ok: false, text: r.error || 'Entfernen fehlgeschlagen' }); }}>✕</button>
+                  </span>
+                ))}
+              </div>
+              <div className="flex gap-2 max-w-md">
+                <input value={neuerSkill} onChange={e => setNeuerSkill(e.target.value)} placeholder="z. B. Absturzsicherung" className={inputCls} data-testid="stamm-skill-name" />
+                <select value={skillLevel} onChange={e => setSkillLevel(e.target.value)} className={inputCls + ' w-28'}><option value="basic">Basic</option><option value="advanced">Fortgeschritten</option><option value="expert">Experte</option></select>
+                <button type="button" data-testid="stamm-skill-add" className="rounded-lg bg-black/10 hover:bg-black/15 px-3 text-sm" onClick={async () => {
+                  if (!neuerSkill.trim()) return;
+                  const fd = new FormData(); fd.set('skill_name', neuerSkill.trim()); fd.set('level', skillLevel);
+                  const r = await addEmployeeSkill(auswahl, fd);
+                  if (!r.success) { setMeldung({ ok: false, text: r.error || 'Speichern fehlgeschlagen' }); return; }
+                  setNeuerSkill('');
+                  const res = await fetch(`/api/mitarbeiter-stamm?employee_id=${auswahl}`, { cache: 'no-store' }); const j = await res.json().catch(() => ({}));
+                  if (j.success) setSkills(j.skills || []);
+                }}>＋</button>
+              </div>
+            </fieldset>
+          )}
           <div>
             <label className="block text-xs text-[#86868b] mb-1">Notiz</label>
             <textarea value={form.notiz} onChange={set('notiz')} rows={2} className={inputCls} />
