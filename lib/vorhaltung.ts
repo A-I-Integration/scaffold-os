@@ -16,7 +16,20 @@ export type TeilabbauPreisModus = 'anteilig' | 'voll'
  * Teilabbau: ab `datum` bleibt nur der Rest stehen. Führend ist die Menge (`verbleibendM2` bezogen auf `bezugM2` der Vereinbarung);
  * `verbleibendProzent` wird daraus abgeleitet und treibt die Preisberechnung. Altdaten nur mit Prozent bleiben gültig.
  */
-export interface Teilabbau { datum: string; verbleibendProzent: number; verbleibendM2?: number; preisModus?: TeilabbauPreisModus; notiz?: string }
+/**
+ * Teilabbau. `datum` = tatsächlicher Leistungsabbau (Wahrheit der Ausführung). Abmeldung durch den Kunden und Freigabe zum Abbau sind eigene
+ * Ereignisse mit eigenem Datum; welches Datum für die Abrechnung gilt, legt `stichtagModus` der Vereinbarung fest.
+ */
+export interface Teilabbau {
+  datum: string; verbleibendProzent: number; verbleibendM2?: number; preisModus?: TeilabbauPreisModus; notiz?: string
+  abmeldungDatum?: string; freigabeDatum?: string
+  /** Gerüstbereich bzw. -abschnitt (z. B. „Nordfassade“) */
+  bereich?: string
+  /** wer hat abgebaut bzw. freigegeben; Nachweis = Verweis (z. B. Abnahmeprotokoll, Foto-Nr.) */
+  verantwortlich?: string; nachweis?: string
+}
+/** Welches Ereignis das Ende bzw. die Verringerung der Vorhaltung auslöst. Standard: tatsächlicher Abbau. */
+export type VorhaltungStichtag = 'abbau' | 'abmeldung' | 'freigabe'
 /** Preisänderung, die erst für Intervalle gilt, die an oder nach `ab` beginnen. Bereits berechnete Zeiträume bleiben unberührt. */
 export interface Preisstufe { ab: string; preis: number }
 
@@ -36,8 +49,15 @@ export interface Vorhaltevereinbarung {
   /** im_voraus: ein angefangenes Intervall wird sofort voll fällig; nachtraeglich: erst nach Ablauf bzw. Abbau */
   abrechnung: VorhaltungAbrechnung
   teilabbauten: Teilabbau[]
-  /** vollständiger Abbau: ab diesem Tag beginnt kein neues Intervall mehr */
+  /** vollständiger Abbau (tatsächlich): ab diesem Tag beginnt kein neues Intervall mehr – außer der Stichtag ist Abmeldung/Freigabe, siehe stichtagModus */
   abbauDatum?: string
+  /** Welches Datum die Abrechnung bestimmt (Vertrag): tatsächlicher Abbau (Standard), Abmeldung durch den Kunden oder Freigabe zum Abbau. */
+  stichtagModus?: VorhaltungStichtag
+  /** Aufbau fertig / Übergabe des Gerüsts (Beginn der Nutzung); nur Dokumentation */
+  uebergabeDatum?: string
+  /** Ereignisse zum vollständigen Abbau */
+  abbauAbmeldung?: string; abbauFreigabe?: string
+  abbauVerantwortlich?: string; abbauNachweis?: string
   notiz?: string
 }
 
@@ -104,11 +124,22 @@ export function normalisiereVereinbarung(raw: unknown): Vorhaltevereinbarung | n
         if (hatMenge && (bezugM2 === undefined || !(m2! >= 0 && m2! <= bezugM2))) return null
         const prozent = hatMenge ? runde((m2! / bezugM2!) * 100) : runde(zahl(t.verbleibendProzent))
         if (!(prozent >= 0 && prozent <= 100)) return null
-        return { datum: t.datum, verbleibendProzent: prozent, ...(hatMenge ? { verbleibendM2: runde(m2!) } : {}), ...(t.preisModus === 'anteilig' || t.preisModus === 'voll' ? { preisModus: t.preisModus as TeilabbauPreisModus } : {}), ...(typeof t.notiz === 'string' && t.notiz.trim() ? { notiz: t.notiz.trim().slice(0, 200) } : {}) }
+        const txt = (x: unknown, n = 120) => (typeof x === 'string' && x.trim() ? x.trim().slice(0, n) : undefined)
+        const ev = {
+          ...(istIso(t.abmeldungDatum) ? { abmeldungDatum: t.abmeldungDatum } : {}), ...(istIso(t.freigabeDatum) ? { freigabeDatum: t.freigabeDatum } : {}),
+          ...(txt(t.bereich) ? { bereich: txt(t.bereich) } : {}), ...(txt(t.verantwortlich) ? { verantwortlich: txt(t.verantwortlich) } : {}), ...(txt(t.nachweis, 200) ? { nachweis: txt(t.nachweis, 200) } : {}),
+        }
+        return { ...ev, datum: t.datum, verbleibendProzent: prozent, ...(hatMenge ? { verbleibendM2: runde(m2!) } : {}), ...(t.preisModus === 'anteilig' || t.preisModus === 'voll' ? { preisModus: t.preisModus as TeilabbauPreisModus } : {}), ...(typeof t.notiz === 'string' && t.notiz.trim() ? { notiz: t.notiz.trim().slice(0, 200) } : {}) }
       })
       .filter((t: Teilabbau | null): t is Teilabbau => t !== null)
       .sort((a: Teilabbau, b: Teilabbau) => a.datum.localeCompare(b.datum)),
     abbauDatum: istIso(r.abbauDatum) ? r.abbauDatum : undefined,
+    ...(r.stichtagModus === 'abmeldung' || r.stichtagModus === 'freigabe' ? { stichtagModus: r.stichtagModus as VorhaltungStichtag } : {}),
+    ...(istIso(r.uebergabeDatum) ? { uebergabeDatum: r.uebergabeDatum } : {}),
+    ...(istIso(r.abbauAbmeldung) ? { abbauAbmeldung: r.abbauAbmeldung } : {}),
+    ...(istIso(r.abbauFreigabe) ? { abbauFreigabe: r.abbauFreigabe } : {}),
+    ...(typeof r.abbauVerantwortlich === 'string' && r.abbauVerantwortlich.trim() ? { abbauVerantwortlich: r.abbauVerantwortlich.trim().slice(0, 120) } : {}),
+    ...(typeof r.abbauNachweis === 'string' && r.abbauNachweis.trim() ? { abbauNachweis: r.abbauNachweis.trim().slice(0, 200) } : {}),
     notiz: typeof r.notiz === 'string' && r.notiz.trim() ? r.notiz.trim().slice(0, 300) : undefined,
   }
 }
@@ -125,6 +156,24 @@ export function normalisierePerioden(raw: unknown): VorhaltePeriode[] {
     .sort((a, b) => a.von.localeCompare(b.von))
 }
 
+const STICHTAG_FELD = { abmeldung: { teil: 'abmeldungDatum', voll: 'abbauAbmeldung', text: 'Abmeldung durch den Kunden' }, freigabe: { teil: 'freigabeDatum', voll: 'abbauFreigabe', text: 'Freigabe zum Abbau' } } as const
+
+/**
+ * Vereinbarung mit den für die ABRECHNUNG maßgeblichen Daten: bei Stichtag „Abmeldung“ bzw. „Freigabe“ ersetzt dieses Datum das des tatsächlichen Abbaus
+ * (Teilabbauten neu nach diesem Datum sortiert). Das gespeicherte Original bleibt unverändert. Fehlt das gewählte Datum, bleibt der tatsächliche
+ * Abbau stehen – `fehlendeAngaben` verhindert dann die Abrechnung, es wird nie still mit einem anderen Datum gerechnet.
+ */
+export function wirksameVereinbarung(v: Vorhaltevereinbarung): Vorhaltevereinbarung {
+  const m = v.stichtagModus
+  if (m !== 'abmeldung' && m !== 'freigabe') return v
+  const f = STICHTAG_FELD[m]
+  return {
+    ...v,
+    teilabbauten: v.teilabbauten.map((t) => ({ ...t, datum: (t as any)[f.teil] || t.datum })).sort((a, b) => a.datum.localeCompare(b.datum)),
+    abbauDatum: v.abbauDatum ? ((v as any)[f.voll] || v.abbauDatum) : undefined,
+  }
+}
+
 /** Vollständig genug, um abzurechnen? Liefert die fehlenden Angaben. */
 export function fehlendeAngaben(v: Vorhaltevereinbarung | null): string[] {
   if (!v) return ['Vereinbarung']
@@ -132,6 +181,11 @@ export function fehlendeAngaben(v: Vorhaltevereinbarung | null): string[] {
   if (!v.beginn) f.push('Beginn der Vorhaltung')
   if (!(v.preis > 0)) f.push('Preis je Intervall')
   for (const t of v.teilabbauten) if (!t.preisModus) f.push(`Preisberechnung beim Teilabbau am ${de(t.datum)} (anteilig oder voller Preis)`)
+  if (v.stichtagModus === 'abmeldung' || v.stichtagModus === 'freigabe') {
+    const fd = STICHTAG_FELD[v.stichtagModus]
+    for (const t of v.teilabbauten) if (!(t as any)[fd.teil]) f.push(`Datum der ${fd.text} beim Teilabbau am ${de(t.datum)} (laut Vereinbarung maßgeblich)`)
+    if (v.abbauDatum && !(v as any)[fd.voll]) f.push(`Datum der ${fd.text} zum vollständigen Abbau am ${de(v.abbauDatum)} (laut Vereinbarung maßgeblich)`)
+  }
   return f
 }
 
@@ -217,6 +271,7 @@ export function baueVorhaltungsPositionen(v: Vorhaltevereinbarung, intervalle: V
  */
 export function faelligeVorhaltung(v: Vorhaltevereinbarung, perioden: VorhaltePeriode[], heute: string): FaelligeVorhaltung | null {
   if (!v.aktiv || fehlendeAngaben(v).length) return null
+  v = wirksameVereinbarung(v)
   const ab = kostenpflichtigAb(v)!
   const start0 = abgerechnetBis(perioden)
   const zeilen: VorhaltungIntervallZeile[] = []
@@ -257,10 +312,12 @@ export function vorhaltungStatus(v: Vorhaltevereinbarung | null, perioden: Vorha
   if (!v || !v.aktiv || fehlt.length) {
     return { phase: 'unvollstaendig', kostenpflichtigAb: v?.beginn ? kostenpflichtigAb(v) : null, tageBisKostenpflichtig: null, abgerechnetBis: abgerechnetBis(perioden), hinweise: v?.aktiv && fehlt.length ? [`Es fehlt: ${fehlt.join(', ')}.`] : [], faellig: null }
   }
+  const faellig = faelligeVorhaltung(v, perioden, heute)
+  const orig = v
+  v = wirksameVereinbarung(v)
   const ab = kostenpflichtigAb(v)!
   const tage = tageZwischen(heute, ab)
   const hinweise: string[] = []
-  const faellig = faelligeVorhaltung(v, perioden, heute)
   const bisher = abgerechnetBis(perioden)
   if (!periodenPassen(v, perioden)) hinweise.push('Die bereits berechneten Zeiträume passen nicht mehr zu Beginn, Frist oder Intervall der Vereinbarung. Es wird nichts automatisch fortgeschrieben – bitte prüfen.')
   let phase: VorhaltePhase = tage > 0 ? 'frei' : 'kostenpflichtig'
@@ -272,6 +329,13 @@ export function vorhaltungStatus(v: Vorhaltevereinbarung | null, perioden: Vorha
   if (phase === 'kostenpflichtig' && !v.abbauDatum && !faellig) hinweise.push(`Das Gerüst ist kostenpflichtig vorgehalten (seit ${de(ab)}). Bereits berechnet bis ${bisher ? de(plusTage(bisher, -1)) : '–'}.`)
   if (faellig) hinweise.push(`Abrechenbar: ${de(faellig.von)} bis ${de(plusTage(faellig.bis, -1))}, ${faellig.intervalle.length} ${faellig.intervalle.length === 1 ? EINHEIT[v.intervall].s : EINHEIT[v.intervall].p}, ${eur(faellig.netto)} € netto.`)
   if (v.abbauDatum && v.abbauDatum > heute) hinweise.push(`Vollständiger Abbau geplant am ${de(v.abbauDatum)}.`)
+  // Ereignisse getrennt prüfen (nur Hinweis): Abmeldung/Freigabe nach dem tatsächlichen Abbau ist ungewöhnlich
+  if (orig.abbauDatum) {
+    for (const [text, d] of [['Abmeldung durch den Kunden', orig.abbauAbmeldung], ['Freigabe zum Abbau', orig.abbauFreigabe]] as const) {
+      if (d && d > orig.abbauDatum) hinweise.push(`${text} (${de(d)}) liegt nach dem tatsächlichen Abbau (${de(orig.abbauDatum)}). Bitte Daten prüfen.`)
+    }
+  }
+  if (orig.stichtagModus && orig.stichtagModus !== 'abbau') hinweise.push(`Maßgeblich für die Abrechnung: ${STICHTAG_FELD[orig.stichtagModus].text} (nicht der tatsächliche Abbau).`)
   return { phase, kostenpflichtigAb: ab, tageBisKostenpflichtig: tage, abgerechnetBis: bisher, hinweise, faellig }
 }
 
@@ -324,7 +388,8 @@ export function istVorhaltungsRechnung(r: { positions?: { art?: string }[] | nul
 }
 
 /** Intervalle, die bereits berechnet wurden (Start < abgerechnetBis), mit Preis und Restbestand nach den jeweiligen Bedingungen. */
-function berechneteIntervalle(v: Vorhaltevereinbarung, bisher: string): { von: string; faktorProzent: number; preis: number }[] {
+function berechneteIntervalle(vOrig: Vorhaltevereinbarung, bisher: string): { von: string; faktorProzent: number; preis: number }[] {
+  const v = wirksameVereinbarung(vOrig)
   const ab = kostenpflichtigAb(v)
   const r: { von: string; faktorProzent: number; preis: number }[] = []
   if (!ab) return r
@@ -353,7 +418,8 @@ export function pruefeVorhaltungVereinbarungAenderung(altRoh: unknown, neuRoh: u
   }
   const vorher = berechneteIntervalle(alt, bisher); const nachher = berechneteIntervalle(neu, bisher)
   const gleich = vorher.length === nachher.length && vorher.every((x, i) => x.von === nachher[i].von && x.faktorProzent === nachher[i].faktorProzent && x.preis === nachher[i].preis)
-  const abbauKollidiert = !!neu.abbauDatum && vorher.some((x) => x.von >= neu.abbauDatum!)
+  const neuWirksam = wirksameVereinbarung(neu)
+  const abbauKollidiert = !!neuWirksam.abbauDatum && vorher.some((x) => x.von >= neuWirksam.abbauDatum!)
   if (!gleich || abbauKollidiert) {
     return `${schutz} Diese Änderung würde bereits berechnete Zeiträume verändern. Ein neuer Preis gilt nur als Preisstufe ab einem Datum nach dem berechneten Zeitraum (ab ${de(bisher)}).`
   }

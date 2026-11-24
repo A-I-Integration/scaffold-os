@@ -77,6 +77,7 @@ export default function VorhaltungBlock({ project, kunde }: Props) {
       }),
     }));
   }
+  const setTeil = (i: number, patch: Partial<Teilabbau>) => setForm((f) => ({ ...f, teilabbauten: f.teilabbauten.map((x, k) => (k === i ? { ...x, ...patch } : x)) }));
   const kostenpflichtigVorschau = form.beginn ? de(plusTage(form.beginn, form.freiTage)) : '–';
 
   async function speichern() {
@@ -132,7 +133,7 @@ export default function VorhaltungBlock({ project, kunde }: Props) {
         <div className="text-[11px] text-[#1d1d1f] space-y-0.5" data-testid="vorhaltung-status">
           <p>Beginn {vereinbarung.beginn ? de(vereinbarung.beginn) : '–'} · {vereinbarung.freiTage} Tage kostenlos · kostenpflichtig ab <b>{status.kostenpflichtigAb ? de(status.kostenpflichtigAb) : '–'}</b> · {eur(vereinbarung.preis)} je {vereinbarung.intervall === 'monat' ? 'Monat' : 'Woche'} ({vereinbarung.abrechnung === 'im_voraus' ? 'angefangenes Intervall voll' : 'nachträglich'}){vereinbarung.abbauDatum ? ` · Abbau ${de(vereinbarung.abbauDatum)}` : ''}{!vereinbarung.aktiv ? ' · inaktiv' : ''}</p>
           {vereinbarung.bezugM2 ? <p className="text-[#86868b]">Gerüst gesamt: {m2de(vereinbarung.bezugM2)} m²</p> : null}
-          {vereinbarung.teilabbauten.map((t, i) => <p key={i} className="text-[#86868b]">Teilabbau {de(t.datum)}: {vereinbarung.bezugM2 && t.verbleibendM2 !== undefined ? `${m2de(vereinbarung.bezugM2 - t.verbleibendM2)} m² abgebaut, ${m2de(t.verbleibendM2)} m² bleiben stehen (${t.verbleibendProzent.toLocaleString('de-DE')} %)` : `${t.verbleibendProzent.toLocaleString('de-DE')} % bleiben stehen`} ({t.preisModus === 'voll' ? 'voller Preis' : t.preisModus === 'anteilig' ? 'Preis anteilig' : 'Preisberechnung fehlt'})</p>)}
+          {vereinbarung.teilabbauten.map((t, i) => <p key={i} className="text-[#86868b]">Teilabbau {de(t.datum)}{t.bereich ? ` (${t.bereich})` : ''}{t.abmeldungDatum ? `, abgemeldet ${de(t.abmeldungDatum)}` : ''}{t.freigabeDatum ? `, freigegeben ${de(t.freigabeDatum)}` : ''}{t.verantwortlich ? `, ${t.verantwortlich}` : ''}: {vereinbarung.bezugM2 && t.verbleibendM2 !== undefined ? `${m2de(vereinbarung.bezugM2 - t.verbleibendM2)} m² abgebaut, ${m2de(t.verbleibendM2)} m² bleiben stehen (${t.verbleibendProzent.toLocaleString('de-DE')} %)` : `${t.verbleibendProzent.toLocaleString('de-DE')} % bleiben stehen`} ({t.preisModus === 'voll' ? 'voller Preis' : t.preisModus === 'anteilig' ? 'Preis anteilig' : 'Preisberechnung fehlt'})</p>)}
           {(vereinbarung.preisStufen || []).map((st, i) => <p key={'s' + i} className="text-[#86868b]">Ab {de(st.ab)}: {eur(st.preis)} je Intervall</p>)}
           {status.hinweise.map((h, i) => <p key={i} className={/fehlt|passen nicht|endet in/.test(h) ? 'text-red-600' : 'text-[#e8590c]'}>{h}</p>)}
         </div>
@@ -167,12 +168,27 @@ export default function VorhaltungBlock({ project, kunde }: Props) {
             <div><label className="block text-[11px] text-[#86868b] mb-1">Vollständiger Abbau am (optional)</label><input type="date" value={form.abbauDatum || ''} onChange={(e) => set('abbauDatum', e.target.value || undefined)} className={inputCls} aria-label="Datum des vollständigen Abbaus" /></div>
           </div>
           <p className="text-[11px] text-[#86868b]">Kostenpflichtig ab: <b>{kostenpflichtigVorschau}</b></p>
+          <div className="rounded-lg border border-black/10 p-2 space-y-2" data-testid="vorhaltung-ereignisse">
+            <p className="text-[11px] font-semibold text-[#1d1d1f]">Ereignisse getrennt festhalten</p>
+            <p className="text-[11px] text-[#86868b]">Aufbau fertig (Übergabe), Abmeldung durch den Kunden, Freigabe zum Abbau und tatsächlicher Abbau sind verschiedene Ereignisse an verschiedenen Tagen. Hier legst du fest, welches Datum für die Abrechnung gilt (laut Vertrag).</p>
+            <div className="grid grid-cols-2 gap-2">
+              <div><label className="block text-[11px] text-[#86868b] mb-1">Aufbau fertig / Übergabe (Dokumentation)</label><input type="date" value={form.uebergabeDatum || ''} onChange={(e) => set('uebergabeDatum', e.target.value || undefined)} className={inputCls} aria-label="Aufbau fertig, Übergabe" /></div>
+              <div><label className="block text-[11px] text-[#86868b] mb-1">Maßgeblich für Ende bzw. Verringerung der Vorhaltung</label>
+                <select value={form.stichtagModus || 'abbau'} onChange={(e) => set('stichtagModus', e.target.value === 'abbau' ? undefined : (e.target.value as 'abmeldung' | 'freigabe'))} className={inputCls} aria-label="Maßgebliches Datum der Abrechnung" data-testid="vorhaltung-stichtag">
+                  <option value="abbau">Tatsächlicher Abbau</option><option value="abmeldung">Abmeldung durch den Kunden</option><option value="freigabe">Freigabe zum Abbau</option>
+                </select></div>
+              <div><label className="block text-[11px] text-[#86868b] mb-1">Vollständiger Abbau: Abmeldung durch den Kunden am</label><input type="date" value={form.abbauAbmeldung || ''} onChange={(e) => set('abbauAbmeldung', e.target.value || undefined)} className={inputCls} aria-label="Abmeldung durch den Kunden (vollständiger Abbau)" /></div>
+              <div><label className="block text-[11px] text-[#86868b] mb-1">Vollständiger Abbau: Freigabe zum Abbau am</label><input type="date" value={form.abbauFreigabe || ''} onChange={(e) => set('abbauFreigabe', e.target.value || undefined)} className={inputCls} aria-label="Freigabe zum Abbau (vollständiger Abbau)" /></div>
+              <div><label className="block text-[11px] text-[#86868b] mb-1">Abbau ausgeführt / freigegeben von</label><input value={form.abbauVerantwortlich || ''} onChange={(e) => set('abbauVerantwortlich', e.target.value || undefined)} className={inputCls} aria-label="Verantwortlich für den Abbau" /></div>
+              <div><label className="block text-[11px] text-[#86868b] mb-1">Nachweis (z. B. Protokoll-Nr., Foto-Nr.)</label><input value={form.abbauNachweis || ''} onChange={(e) => set('abbauNachweis', e.target.value || undefined)} className={inputCls} aria-label="Nachweis zum Abbau" /></div>
+            </div>
+          </div>
           <div className="grid grid-cols-[1fr_auto] gap-2 items-end">
             <div><label className="block text-[11px] text-[#86868b] mb-1">Menge des vollständigen Gerüsts (m², optional – nötig für Teilabbau in Mengen)</label><input value={bezug ? String(bezug).replace('.', ',') : ''} onChange={(e) => setzeBezug(num(e.target.value))} inputMode="decimal" placeholder="z. B. 1000" className={inputCls} aria-label="Gesamtmenge des Gerüsts in Quadratmetern" /></div>
             {vorschlagM2 > 0 && vorschlagM2 !== bezug && <button type="button" onClick={() => setzeBezug(vorschlagM2)} className="text-[11px] text-[#e8590c] font-semibold hover:underline pb-2" data-testid="vorhaltung-bezug-vorschlag">{m2de(vorschlagM2)} m² aus Aufmaß übernehmen</button>}
           </div>
           <div className="space-y-1">
-            <p className="text-[11px] text-[#86868b]">Teilabbau (ab dem Datum zählt nur noch der Restbestand){bezug ? ' – in m²: so viel bleibt stehen' : ' – in Prozent; mit Gesamtmenge oben in m²'}:</p>
+            <p className="text-[11px] text-[#86868b]">Teilabbau (Datum = tatsächlicher Abbau; darunter Abmeldung, Freigabe, Bereich, Verantwortlicher, Nachweis; ab dem maßgeblichen Datum zählt nur noch der Restbestand){bezug ? ' – in m²: so viel bleibt stehen' : ' – in Prozent; mit Gesamtmenge oben in m²'}:</p>
             {form.teilabbauten.map((t, i) => (
               <div key={i} className="grid grid-cols-[1fr_90px_1fr_24px] gap-1">
                 <input type="date" value={t.datum} onChange={(e) => set('teilabbauten', form.teilabbauten.map((x, k) => (k === i ? { ...x, datum: e.target.value } : x)))} className={inputCls} aria-label="Datum Teilabbau" />
@@ -183,6 +199,13 @@ export default function VorhaltungBlock({ project, kunde }: Props) {
                 )}
                 <select value={t.preisModus || ''} onChange={(e) => set('teilabbauten', form.teilabbauten.map((x, k) => (k === i ? { ...x, preisModus: (e.target.value || undefined) as 'anteilig' | 'voll' | undefined } : x)))} className={inputCls} aria-label="Preisberechnung beim Teilabbau"><option value="">Preis laut Vereinbarung wählen …</option><option value="anteilig">Preis anteilig zum Restbestand</option><option value="voll">Voller Preis bleibt</option></select>
                 <button type="button" onClick={() => set('teilabbauten', form.teilabbauten.filter((_, k) => k !== i))} aria-label="Teilabbau entfernen" className="p-1 rounded hover:bg-black/5"><Trash2 className="h-3.5 w-3.5 text-[#86868b]" /></button>
+                <div className="col-span-full grid grid-cols-2 sm:grid-cols-5 gap-1 pl-2" data-testid={`vorhaltung-teil-ereignisse-${i}`}>
+                  <input type="date" value={t.abmeldungDatum || ''} onChange={(e) => setTeil(i, { abmeldungDatum: e.target.value || undefined })} className={inputCls} aria-label="Abmeldung durch den Kunden am" title="Abmeldung durch den Kunden am" />
+                  <input type="date" value={t.freigabeDatum || ''} onChange={(e) => setTeil(i, { freigabeDatum: e.target.value || undefined })} className={inputCls} aria-label="Freigabe zum Abbau am" title="Freigabe zum Abbau am" />
+                  <input value={t.bereich || ''} onChange={(e) => setTeil(i, { bereich: e.target.value || undefined })} placeholder="Bereich, z. B. Nordfassade" className={inputCls} aria-label="Gerüstbereich" />
+                  <input value={t.verantwortlich || ''} onChange={(e) => setTeil(i, { verantwortlich: e.target.value || undefined })} placeholder="Verantwortlich" className={inputCls} aria-label="Verantwortlich" />
+                  <input value={t.nachweis || ''} onChange={(e) => setTeil(i, { nachweis: e.target.value || undefined })} placeholder="Nachweis" className={inputCls} aria-label="Nachweis" />
+                </div>
               </div>
             ))}
             <button type="button" onClick={() => set('teilabbauten', [...form.teilabbauten, { datum: heute(), verbleibendProzent: 50, ...(bezug ? { verbleibendM2: runde2(bezug / 2) } : {}) }])} className="text-[11px] text-[#e8590c] font-semibold hover:underline">+ Teilabbau hinzufügen</button>
