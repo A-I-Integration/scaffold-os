@@ -7,7 +7,7 @@ import {
 // ============================================================
 // SCAFFOLD OS – eine einzige Menüstruktur für alle Rollen und alle Bildschirmgrößen.
 // Gruppiert nach dem Weg eines Auftrags: Anfrage → Aufmaß & Planung → Angebot → Ausführung (die Abrechnung liegt im Kundenordner, Reiter Faktura),
-// dazu "Betrieb" für alles, was nicht an einem einzelnen Auftrag hängt.
+// dazu "Personal" (Mitarbeiter, Touren, Zeiten, Kolonnen, Arbeitsschutz) und "Betrieb" für alles, was nicht an einem einzelnen Auftrag hängt.
 // Jede Seite steht in genau einer Gruppe.
 // ============================================================
 
@@ -65,12 +65,18 @@ export const NAV_GRUPPEN: NavGruppe[] = [
       { href: '/touren', label: 'Touren', icon: Truck, roles: BUERO },
       { href: '/materialmanager', label: 'Materialmanager', icon: ClipboardList, roles: ['admin', 'disponent', 'bauleiter', 'lager'], stichwoerter: 'verladeliste materialliste bauabschnitt stückliste verladen' },
       { href: '/routenoptimierung', label: 'Routen-KI', icon: Route, roles: BUERO },
-      { href: '/meine-touren', label: 'Meine Touren', icon: Navigation },
-      { href: '/kolonnen', label: 'Kolonnen', icon: Users, roles: BAU },
-      { href: '/zeiterfassung', label: 'Zeiterfassung', icon: Timer, roles: BAU },
       { href: '/nachunternehmer', label: 'Nachunternehmer', icon: Handshake, roles: BUERO },
-      { href: '/arbeitsschutz', label: 'Arbeitsschutz', icon: ShieldCheck, roles: BUERO },
       { href: '/dokumentation', label: 'Baustellendokumentation', icon: ClipboardList },
+    ],
+  },
+  {
+    key: 'personal', label: 'Personal',
+    eintraege: [
+      { href: '/mitarbeiter', label: 'Mitarbeiter & Zugänge', icon: KeyRound, roles: BUERO, stichwoerter: 'personal lohn stundenlohn zugang login' },
+      { href: '/meine-touren', label: 'Meine Touren', icon: Navigation, stichwoerter: 'stundenzettel stempeln fahrten' },
+      { href: '/zeiterfassung', label: 'Zeiterfassung', icon: Timer, roles: BAU, stichwoerter: 'stunden stundenzettel arbeitszeit pause' },
+      { href: '/kolonnen', label: 'Kolonnen', icon: Users, roles: BAU, stichwoerter: 'team einsatz' },
+      { href: '/arbeitsschutz', label: 'Arbeitsschutz', icon: ShieldCheck, roles: BUERO, stichwoerter: 'unterweisung gefährdungsbeurteilung' },
     ],
   },
   {
@@ -80,7 +86,6 @@ export const NAV_GRUPPEN: NavGruppe[] = [
       { href: '/gestell-simulator', label: 'Gestell-Waage (Test)', icon: Scale, roles: ['admin', 'disponent', 'lager'] },
       { href: '/prognose', label: 'Prognose', icon: TrendingUp, roles: ['admin', 'disponent', 'lager'] },
       { href: '/fahrzeuge', label: 'Prüfungen & Fristen', icon: Truck, roles: BUERO },
-      { href: '/mitarbeiter', label: 'Mitarbeiter & Zugänge', icon: KeyRound, roles: BUERO },
       { href: '/datenimport', label: 'Datenimport', icon: Upload, roles: BUERO },
       { href: '/datenpflege', label: 'Datenpflege', icon: Database, roles: ['admin'] },
       { href: '/einstellungen', label: 'Einstellungen', icon: Settings, roles: ['admin'] },
