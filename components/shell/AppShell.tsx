@@ -70,13 +70,14 @@ export default function AppShell({ rolle, name, onLogout, children }: { rolle: R
 
         {gruppen.map((g) => {
           const istAuftragsweg = !!g.nummer
+          const festeGruppe = g.key === 'betrieb' || g.key === 'personal' // eigene Bereiche neben dem Auftragsweg: immer offen, mit eigener Überschrift
           const hatAktiv = aktuell?.gruppe.key === g.key
           const aufgeklappt = offen[g.key] ?? hatAktiv // Gruppe der aktuellen Seite ist standardmäßig offen
           return (
             <div key={g.key} className="mt-0.5">
               {g.key === 'anfrage' && <div className="os-nav-kopf">Auftragsweg</div>}
-              {g.key === 'betrieb' && <div className="os-nav-kopf mt-3 border-t border-[var(--os-nav-linie)] pt-3">Betrieb</div>}
-              {g.key !== 'betrieb' && (
+              {festeGruppe && <div className="os-nav-kopf mt-3 border-t border-[var(--os-nav-linie)] pt-3">{g.label}</div>}
+              {!festeGruppe && (
                 <button type="button" onClick={() => setOffen((o) => ({ ...o, [g.key]: !aufgeklappt }))}
                   aria-expanded={aufgeklappt}
                   className={`os-nav-punkt w-full text-left ${hatAktiv ? 'text-white' : ''}`}
@@ -86,8 +87,8 @@ export default function AppShell({ rolle, name, onLogout, children }: { rolle: R
                   {aufgeklappt ? <ChevronDown className="h-4 w-4 opacity-60" /> : <ChevronRight className="h-4 w-4 opacity-60" />}
                 </button>
               )}
-              {(aufgeklappt || g.key === 'betrieb') && (
-                <div className={g.key === 'betrieb' ? '' : 'ml-[26px] border-l border-[var(--os-nav-linie)] pl-1.5'}>
+              {(aufgeklappt || festeGruppe) && (
+                <div className={festeGruppe ? '' : 'ml-[26px] border-l border-[var(--os-nav-linie)] pl-1.5'}>
                   {g.eintraege.map((e) => {
                     const aktiv = aktuell?.eintrag.href === e.href
                     return (
