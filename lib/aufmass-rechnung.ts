@@ -1,6 +1,7 @@
 // Rechnungspositionen für das Gerüst aus einem Aufmaß/Angebot: nach Abschnitten (Fassaden) mit m² aufgeschlüsselt statt als eine Pauschale.
 // Die Summe bleibt immer exakt der Angebotspreis (basis) – gibt es keine saubere Aufteilung, fällt es auf die eine Pauschale zurück.
 import type { StrukturPosition } from '@/lib/rechnung-position'
+import { baueRechnungsPositionen, berechneAngebotBetraege, eingabeAusProjektData, zahlAusEingabe } from '@/lib/schlussrechnung'
 
 export interface AufmassAbschnitt { bezeichnung: string; areaM2: number }
 
@@ -43,4 +44,31 @@ export function geruestPositionen(p: {
     return [{ bezeichnung: 'Gerüstbau gemäß Angebot', menge: cent(p.flaecheM2), einheit: 'm²', einzelpreis: preis, art: 'geruest' }]
   }
   return pauschale()
+}
+
+/**
+ * Rechnungspositionen aus dem gespeicherten Angebot (projects.data) – gilt die im Angebot (Schritt 6) gewählte
+ * Preisbasis: KI-Kalkulation, Festpreis je m² oder Pauschale, dazu Kran, Fahrt, Miete, Nachtrag, Statik, Rabatt.
+ * Die Summe ist dieselbe wie angebotNettoAusProjekt (lib/auftragsstand.ts) und die Anzeige des Auftragswerts.
+ * Der KI-Preis (kiResult.suggestedPrice) zählt nur, wenn die Preisbasis „KI-Kalkulation“ gewählt ist.
+ */
+export function angebotsRechnungPositionen(data: any, kranTagessatz: number): StrukturPosition[] {
+  const e = eingabeAusProjektData(data, kranTagessatz)
+  const b = berechneAngebotBetraege(e)
+  const ki = data?.kiResult ?? null
+  const festpreis = e.preisModus === 'festpreis' ? zahlAusEingabe(e.festpreisProM2) || undefined : undefined
+  const haupt = geruestPositionen({
+    basis: b.basis,
+    flaecheM2: ki?.totalAreaM2 ?? 0,
+    festpreisProM2: festpreis,
+    abschnitte: ki?.sectionBreakdown,
+    pauschaleText: e.preisModus === 'pauschale'
+      ? 'Gerüstbau gemäß Angebot (Pauschale)'
+      : e.preisModus === 'festpreis'
+        ? `Gerüstbau gemäß Angebot (${ki?.totalAreaM2 ?? '–'} m² × ${String(e.festpreisProM2 || '').replace('.', ',')} €/m²)`
+        : `Gerüstbau gemäß Angebot${ki?.totalAreaM2 ? ` (${ki.totalAreaM2} m²)` : ''}`,
+  })
+  // Position 1 ist die Gerüst-Hauptposition (oben nach Abschnitten aufgeschlüsselt); die übrigen kommen unverändert dazu
+  const rest = baueRechnungsPositionen({ eingabe: e, basis: 'angebot' }).slice(1)
+  return [...haupt, ...rest]
 }

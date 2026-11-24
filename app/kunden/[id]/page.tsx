@@ -14,7 +14,7 @@
 
 import AngebotRueckmeldungHinweis from '@/components/AngebotRueckmeldungHinweis'
 import { fetchRechnungAnlegen } from '@/lib/rechnung-anlegen-client'
-import { geruestPositionen } from '@/lib/aufmass-rechnung'
+import { angebotsRechnungPositionen } from '@/lib/aufmass-rechnung'
 import { useFakturaDaten } from '@/components/faktura/daten'
 import FakturaUebersicht from '@/components/faktura/FakturaUebersicht'
 import FakturaEntwuerfe from '@/components/faktura/FakturaEntwuerfe'
@@ -541,23 +541,23 @@ export default function KundenDetailPage() {
   const [rechnungAusAngebotLaeuft, setRechnungAusAngebotLaeuft] = useState<string | null>(null)
   async function erstelleRechnungAusAngebot(project: Project, overrideGrund?: string) {
     if (!kunde) return
-    const ki = project.data?.kiResult
-    const preis = ki?.suggestedPrice ?? ki?.totalCost
-    if (!preis) { alert('Für dieses Projekt liegt kein berechneter Preis vor – bitte Position manuell über "Rechnung anlegen" eintragen.'); return }
     setRechnungAusAngebotLaeuft(project.id)
     try {
+      // Preis laut Angebot (gewählte Preisbasis aus Schritt 6), nicht der KI-Preis; Kransatz wie im Auftragsstand
+      let kranSatz = 850
+      try { const r = await fetch('/api/company'); const j = await r.json(); if (j.success) kranSatz = Number(j.company?.calc_crane_day) || 850 } catch { /* Standardwert */ }
+      const positionen = angebotsRechnungPositionen(project.data, kranSatz)
+      if (!(positionen.reduce((s, p) => s + p.menge * p.einzelpreis, 0) > 0)) {
+        setRechnungAusAngebotLaeuft(null)
+        alert('Für dieses Projekt liegt kein berechneter Preis vor – bitte Position manuell über "Rechnung anlegen" eintragen.'); return
+      }
       const res = await fetchRechnungAnlegen('/api/invoices', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           project_id: project.id, customer_name: kunde.name,
           customer_address: [kunde.street, [kunde.zip, kunde.city].filter(Boolean).join(', ')].filter(Boolean).join(', ') || undefined,
           due_date: datumPlusTage(14),
-          positions: geruestPositionen({
-            basis: preis, flaecheM2: ki?.totalAreaM2 ?? 0,
-            festpreisProM2: project.data?.preisModus === 'festpreis' ? parseFloat(String(project.data?.festpreisProM2 ?? '').replace(',', '.')) || undefined : undefined,
-            abschnitte: ki?.sectionBreakdown,
-            pauschaleText: `Gerüstbau gemäß Angebot${ki?.totalAreaM2 ? ` (${ki.totalAreaM2} m²)` : ''}`,
-          }),
+          positions: positionen,
           override_grund: overrideGrund || undefined,
         }),
       })

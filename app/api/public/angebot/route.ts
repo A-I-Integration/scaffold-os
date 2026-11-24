@@ -3,6 +3,7 @@ import { serverErrorResponse } from '@/lib/auth';
 import { beiAngebotsannahmeSicher } from '@/lib/angebot-annahme';
 import { notifyAngebotRueckmeldung } from '@/lib/notify';
 import { holeAngebotLink } from '@/lib/angebot-link';
+import { angebotNettoAusProjekt } from '@/lib/auftragsstand';
 import { waehleCadAnsicht } from '@/lib/angebot-3d-ansicht';
 import { ANTWORT_ZU_STATUS, antwortErlaubt, pruefeRueckmeldung, verlaufMit } from '@/lib/angebot-rueckmeldung';
 
@@ -45,14 +46,17 @@ export async function GET(req: NextRequest) {
 
     const [pRes, cRes] = await Promise.all([
       fetch(`${url}/rest/v1/projects?id=eq.${projectId}&select=id,name,adresse,data`, { headers }),
-      fetch(`${url}/rest/v1/company_settings?id=eq.${SINGLETON_ID}&select=company_name,street,zip,city,phone,email`, { headers }),
+      fetch(`${url}/rest/v1/company_settings?id=eq.${SINGLETON_ID}&select=company_name,street,zip,city,phone,email,calc_crane_day`, { headers }),
     ]);
     if (!pRes.ok) throw new Error(await pRes.text());
     const pRows = await pRes.json();
     const projekt = pRows?.[0];
     if (!projekt) return NextResponse.json({ success: false, error: 'Projekt nicht gefunden.' }, { status: 404 });
 
-    const company = cRes.ok ? (await cRes.json())?.[0] || null : null;
+    const firmaRoh = cRes.ok ? (await cRes.json())?.[0] || null : null;
+    // Der Kransatz ist intern: er geht in die Preisberechnung ein, nicht nach außen
+    const { calc_crane_day: kranSatz, ...company } = firmaRoh ?? {};
+    const firmaNachAussen = firmaRoh ? company : null;
     // 3D-Ansicht des Objekts mit Gerüst (neuestes "CAD-Ansicht-…"-Bild dieses Projekts, falls vorhanden)
     let ansichtUrl: string | null = null;
     try {
@@ -76,11 +80,12 @@ export async function GET(req: NextRequest) {
         letzteRueckmeldung: Array.isArray(d.angebotRueckmeldungen) && d.angebotRueckmeldungen.length
           ? (({ art, notiz, am }: any) => ({ art, notiz, am }))(d.angebotRueckmeldungen[d.angebotRueckmeldungen.length - 1])
           : null,
-        endpreis: ki?.suggestedPrice ?? null,
+        // Angebotspreis laut gewählter Preisbasis (Schritt 6) – derselbe Wert wie im Auftragsstand, nicht der KI-Preis
+        endpreis: ki ? angebotNettoAusProjekt(d, Number(kranSatz) || 850) || null : null,
         gerüstklasse: ki?.scaffoldClass ?? null,
         flaecheM2: ki?.totalAreaM2 ?? null,
         ansichtUrl,
-        company,
+        company: firmaNachAussen,
       },
     });
   } catch (err: any) {
