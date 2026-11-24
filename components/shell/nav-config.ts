@@ -7,7 +7,7 @@ import {
 // ============================================================
 // SCAFFOLD OS – eine einzige Menüstruktur für alle Rollen und alle Bildschirmgrößen.
 // Gruppiert nach dem Weg eines Auftrags: Anfrage → Aufmaß & Planung → Angebot → Ausführung (die Abrechnung liegt im Kundenordner, Reiter Faktura),
-// dazu "Personal" (Mitarbeiter, Touren, Zeiten, Kolonnen, Arbeitsschutz) und "Betrieb" für alles, was nicht an einem einzelnen Auftrag hängt.
+// dazu "Personal" (Mitarbeiter, Touren, Zeiten, Arbeitsschutz) und "Betrieb" für alles, was nicht an einem einzelnen Auftrag hängt.
 // Jede Seite steht in genau einer Gruppe.
 // ============================================================
 
@@ -65,6 +65,7 @@ export const NAV_GRUPPEN: NavGruppe[] = [
       { href: '/touren', label: 'Touren', icon: Truck, roles: BUERO },
       { href: '/materialmanager', label: 'Materialmanager', icon: ClipboardList, roles: ['admin', 'disponent', 'bauleiter', 'lager'], stichwoerter: 'verladeliste materialliste bauabschnitt stückliste verladen' },
       { href: '/routenoptimierung', label: 'Routen-KI', icon: Route, roles: BUERO },
+      { href: '/kolonnen', label: 'Kolonnen', icon: Users, roles: BAU, stichwoerter: 'team einsatz' },
       { href: '/nachunternehmer', label: 'Nachunternehmer', icon: Handshake, roles: BUERO },
       { href: '/dokumentation', label: 'Baustellendokumentation', icon: ClipboardList },
     ],
@@ -74,8 +75,8 @@ export const NAV_GRUPPEN: NavGruppe[] = [
     eintraege: [
       { href: '/mitarbeiter', label: 'Mitarbeiter & Zugänge', icon: KeyRound, roles: BUERO, stichwoerter: 'personal lohn stundenlohn zugang login' },
       { href: '/meine-touren', label: 'Meine Touren', icon: Navigation, stichwoerter: 'stundenzettel stempeln fahrten' },
-      { href: '/zeiterfassung', label: 'Zeiterfassung', icon: Timer, roles: BAU, stichwoerter: 'stunden stundenzettel arbeitszeit pause' },
-      { href: '/kolonnen', label: 'Kolonnen', icon: Users, roles: BAU, stichwoerter: 'team einsatz' },
+      { href: '/zeiterfassung', label: 'Zeiterfassung', icon: Timer, roles: BAU, stichwoerter: 'stunden arbeitszeit pause' },
+      { href: '/stundenzettel', label: 'Stundenzettel', icon: FileText, stichwoerter: 'stunden monat arbeitszeit lohnkosten' },
       { href: '/arbeitsschutz', label: 'Arbeitsschutz', icon: ShieldCheck, roles: BUERO, stichwoerter: 'unterweisung gefährdungsbeurteilung' },
     ],
   },

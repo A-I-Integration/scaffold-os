@@ -40,20 +40,22 @@ describe('Menüstruktur', () => {
 
 describe('Rubrik Personal', () => {
   const personal = (r: Rolle) => sichtbareGruppen(r).find((g) => g.key === 'personal')?.eintraege.map((e) => e.href) ?? []
-  it('bündelt Mitarbeiter, Touren, Zeiterfassung, Kolonnen und Arbeitsschutz', () => {
-    expect(personal('admin')).toEqual(['/mitarbeiter', '/meine-touren', '/zeiterfassung', '/kolonnen', '/arbeitsschutz'])
+  it('bündelt Mitarbeiter, Touren, Zeiterfassung, Stundenzettel und Arbeitsschutz', () => {
+    expect(personal('admin')).toEqual(['/mitarbeiter', '/meine-touren', '/zeiterfassung', '/stundenzettel', '/arbeitsschutz'])
   })
   it('Rollen sehen nur ihre Punkte; Meine Touren bleibt für alle da', () => {
-    expect(personal('mitarbeiter')).toEqual(['/meine-touren'])
-    expect(personal('lager')).toEqual(['/meine-touren'])
-    expect(personal('bauleiter')).toEqual(['/meine-touren', '/zeiterfassung', '/kolonnen'])
-    expect(personal('disponent')).toEqual(['/mitarbeiter', '/meine-touren', '/zeiterfassung', '/kolonnen', '/arbeitsschutz'])
+    expect(personal('mitarbeiter')).toEqual(['/meine-touren', '/stundenzettel'])
+    expect(personal('lager')).toEqual(['/meine-touren', '/stundenzettel'])
+    expect(personal('bauleiter')).toEqual(['/meine-touren', '/zeiterfassung', '/stundenzettel'])
+    expect(personal('disponent')).toEqual(['/mitarbeiter', '/meine-touren', '/zeiterfassung', '/stundenzettel', '/arbeitsschutz'])
   })
-  it('die Punkte stehen nicht mehr unter Ausführung oder Betrieb', () => {
+  it('die Punkte stehen nicht mehr unter Ausführung oder Betrieb, Kolonnen bleibt bei der Einsatzplanung in Ausführung', () => {
     for (const k of ['ausfuehrung', 'betrieb']) {
       const h = NAV_GRUPPEN.find((g) => g.key === k)!.eintraege.map((e) => e.href)
-      for (const x of ['/mitarbeiter', '/meine-touren', '/zeiterfassung', '/kolonnen', '/arbeitsschutz']) expect(h).not.toContain(x)
+      for (const x of ['/mitarbeiter', '/meine-touren', '/zeiterfassung', '/stundenzettel', '/arbeitsschutz']) expect(h).not.toContain(x)
     }
+    expect(NAV_GRUPPEN.find((g) => g.key === 'ausfuehrung')!.eintraege.map((e) => e.href)).toContain('/kolonnen')
+    expect(NAV_GRUPPEN.find((g) => g.key === 'personal')!.nummer).toBeUndefined()
   })
 })
 
