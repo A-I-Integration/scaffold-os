@@ -18,7 +18,17 @@ export const BESCHAEFTIGUNGSARTEN = [
   { value: 'azubi', label: 'Auszubildender' },
 ] as const;
 
+export const AUSWEISARTEN = [
+  { value: 'personalausweis', label: 'Personalausweis' },
+  { value: 'reisepass', label: 'Reisepass' },
+  { value: 'aufenthaltstitel', label: 'Aufenthaltstitel' },
+  { value: 'duldung', label: 'Duldung' },
+] as const;
+
+export const AUSWEIS_LABEL: Record<string, string> = Object.fromEntries(AUSWEISARTEN.map(a => [a.value, a.label]));
+
 export interface PersonalEingabe {
+  land?: unknown; ausweisart?: unknown; ausweis_gueltig_bis?: unknown; reisepass_gueltig_bis?: unknown;
   geburtsname?: unknown; geburtsdatum?: unknown; geburtsort?: unknown; staatsangehoerigkeit?: unknown;
   strasse?: unknown; plz?: unknown; ort?: unknown; telefon_privat?: unknown;
   notfall_name?: unknown; notfall_telefon?: unknown;
@@ -29,6 +39,7 @@ export interface PersonalEingabe {
 }
 
 export interface PersonalDaten {
+  land: string | null; ausweisart: string | null; ausweis_gueltig_bis: string | null; reisepass_gueltig_bis: string | null;
   geburtsname: string | null; geburtsdatum: string | null; geburtsort: string | null; staatsangehoerigkeit: string | null;
   strasse: string | null; plz: string | null; ort: string | null; telefon_privat: string | null;
   notfall_name: string | null; notfall_telefon: string | null;
@@ -71,7 +82,7 @@ export type PersonalErgebnis = { ok: true; daten: PersonalDaten } | { ok: false;
 /** Prüft die Eingaben und liefert bereinigte Werte. Leere Felder werden zu null. */
 export function pruefePersonalEingabe(e: PersonalEingabe): PersonalErgebnis {
   const daten: Partial<PersonalDaten> = {};
-  for (const [feld, name] of [['geburtsdatum', 'Geburtsdatum'], ['eintrittsdatum', 'Eintrittsdatum'], ['austrittsdatum', 'Austrittsdatum']] as const) {
+  for (const [feld, name] of [['geburtsdatum', 'Geburtsdatum'], ['eintrittsdatum', 'Eintrittsdatum'], ['austrittsdatum', 'Austrittsdatum'], ['ausweis_gueltig_bis', 'Ausweis gültig bis'], ['reisepass_gueltig_bis', 'Reisepass gültig bis']] as const) {
     const v = (e as Record<string, unknown>)[feld];
     if (leer(v)) { daten[feld] = null; continue; }
     const s = String(v).trim();
@@ -86,6 +97,7 @@ export function pruefePersonalEingabe(e: PersonalEingabe): PersonalErgebnis {
   daten.staatsangehoerigkeit = text(e.staatsangehoerigkeit, 60);
   daten.strasse = text(e.strasse, 120);
   daten.ort = text(e.ort, 80);
+  daten.land = text(e.land, 60);
   daten.telefon_privat = text(e.telefon_privat, 40);
   daten.notfall_name = text(e.notfall_name, 80);
   daten.notfall_telefon = text(e.notfall_telefon, 40);
@@ -128,6 +140,14 @@ export function pruefePersonalEingabe(e: PersonalEingabe): PersonalErgebnis {
     if (!Number.isFinite(z) || z < 0 || z > 20 || Math.round(z * 2) !== z * 2) return { ok: false, fehler: 'Kinderfreibeträge: Zahl in 0,5er-Schritten (z. B. 0 oder 1,5).' };
     daten.kinderfreibetraege = z;
   }
+
+  if (leer(e.ausweisart)) daten.ausweisart = null;
+  else {
+    const a = String(e.ausweisart);
+    if (!AUSWEISARTEN.some(x => x.value === a)) return { ok: false, fehler: 'Unbekannte Ausweisart.' };
+    daten.ausweisart = a;
+  }
+  if (daten.ausweis_gueltig_bis && !daten.ausweisart) return { ok: false, fehler: 'Bitte die Ausweisart wählen (Personalausweis, Aufenthaltstitel, Duldung …).' };
 
   if (leer(e.konfession)) daten.konfession = null;
   else {

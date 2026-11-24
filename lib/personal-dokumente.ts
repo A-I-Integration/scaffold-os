@@ -1,6 +1,6 @@
 // ============================================================
 // SCAFFOLD OS – Mitarbeiter-Dokumente: Kategorien und Fälligkeit
-// Vorwarnzeit: 60 Tage (Annahme, kann je Aufruf anders gesetzt werden).
+// Vorwarnzeit: 30 Tage (ein Monat).
 // ============================================================
 
 export const DOKUMENT_KATEGORIEN = [
@@ -13,7 +13,7 @@ export const DOKUMENT_KATEGORIEN = [
 
 export type DokumentKategorie = typeof DOKUMENT_KATEGORIEN[number]['value'];
 
-export const VORWARN_TAGE = 60;
+export const VORWARN_TAGE = 30;
 
 export type Faelligkeit = 'abgelaufen' | 'bald' | 'gueltig' | 'unbefristet';
 
