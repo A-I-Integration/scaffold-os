@@ -249,7 +249,7 @@ export async function PATCH(req: NextRequest) {
       // Faktura F7-Sicherung: abgerechnete oder gerade reservierte Zwischenaufmaße sind über diese Route nicht änderbar/löschbar,
       // und niemand kann sich hier selbst eine Rechnung zuordnen (das macht nur das Anlegen der Rechnung).
       if (data.zwischenaufmasse !== undefined) {
-        const sperre = pruefeAufmassAenderung(bisher.data?.zwischenaufmasse, data.zwischenaufmasse);
+        const sperre = pruefeAufmassAenderung(bisher.data?.zwischenaufmasse, data.zwischenaufmasse, bisher.data?.nachtraege);
         if (sperre) return NextResponse.json({ success: false, code: 'AUFMASS_GESPERRT', error: sperre }, { status: 409 });
       }
       // Faktura F8: berechnete Vorhaltezeiträume entstehen nur beim Anlegen der Rechnung

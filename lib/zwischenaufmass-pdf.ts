@@ -1,7 +1,7 @@
 import { jsPDF } from 'jspdf'
 import autoTable from 'jspdf-autotable'
 import { fmt, NAVY, GRAU_TEXT, DUNKEL, seitenFuss } from './aufmassblatt-pdf'
-import { bisherAbgerechnetJePosition, zwischenaufmassNr, type Zwischenaufmass } from './zwischenaufmass'
+import { bisherAbgerechnetJePosition, vereinbarteMenge, zwischenaufmassNr, type Zwischenaufmass } from './zwischenaufmass'
 
 // ============================================================
 // SCAFFOLD OS – Aufmaß je Zwischenaufmaß als PDF (Schritt 3 des kumulierten Aufmaßes)
@@ -20,6 +20,8 @@ export interface BelegZeile {
   einheit: string
   /** vereinbarte Menge, falls erfasst */
   vertrag: number | null
+  /** genehmigte Zusatzmenge aus einem bestätigten Nachtrag (erweitert die vereinbarte Menge) */
+  nachtrag?: number
   kumuliert: number
   bisher: number
   /** Menge dieser Periode (nie negativ) */
@@ -71,9 +73,9 @@ export function baueAufmassBeleg(z: Zwischenaufmass, liste: Zwischenaufmass[], a
       const bisher = bisherJe.get(p.key) ?? 0
       const diff = runde2(p.menge - bisher)
       const neu = Math.max(0, diff)
-      const vm = p.vertragsmenge ?? 0
+      const vm = vereinbarteMenge(p)
       return {
-        pos: i + 1, bezeichnung: p.bezeichnung, einheit: p.einheit, vertrag: vm > 0 ? vm : null, kumuliert: p.menge, bisher, neu, zuViel: Math.max(0, -diff),
+        pos: i + 1, bezeichnung: p.bezeichnung, einheit: p.einheit, vertrag: vm > 0 ? (p.vertragsmenge ?? 0) : null, ...((p.nachtragMenge ?? 0) > 0 && vm > 0 ? { nachtrag: p.nachtragMenge } : {}), kumuliert: p.menge, bisher, neu, zuViel: Math.max(0, -diff),
         mehrmenge: vm > 0 ? Math.max(0, runde2(p.menge - vm)) : 0, einzelpreis: p.einzelpreis, betrag: runde2(neu * p.einzelpreis), betragKumuliert: runde2(p.menge * p.einzelpreis),
       }
     })
@@ -82,7 +84,7 @@ export function baueAufmassBeleg(z: Zwischenaufmass, liste: Zwischenaufmass[], a
   if (ansicht === 'einzel') zeilen = zeilen.filter((r) => r.neu > 0).map((r, i) => ({ ...r, pos: i + 1 }))
   const hinweise: string[] = []
   for (const r of zeilen) {
-    if (r.mehrmenge > 0) hinweise.push(`${r.bezeichnung}: Mehrmenge ${fmt(r.mehrmenge)} ${r.einheit} über der vereinbarten Menge von ${fmt(r.vertrag!)} ${r.einheit}.`)
+    if (r.mehrmenge > 0) hinweise.push(`${r.bezeichnung}: Mehrmenge ${fmt(r.mehrmenge)} ${r.einheit} über der vereinbarten Menge von ${fmt(r.vertrag! + (r.nachtrag ?? 0))} ${r.einheit}${r.nachtrag ? ` (Vertrag ${fmt(r.vertrag!)} + Nachtrag ${fmt(r.nachtrag)})` : ''}.`)
     if (r.zuViel > 0) hinweise.push(`${r.bezeichnung}: ${fmt(r.zuViel)} ${r.einheit} mehr abgerechnet (${fmt(r.bisher)}) als aufgemessen (${fmt(r.kumuliert)}); Korrektur wird gesondert geprüft.`)
   }
   return {
@@ -146,7 +148,7 @@ export function erzeugeZwischenaufmassPdf(input: ZwischenaufmassPdfInput): jsPDF
     ? [['Pos.', 'Beschreibung', 'Einheit', 'Vertrag', 'Gesamt kumuliert', 'bereits abgerechnet', 'jetzt abrechenbar', 'Einzelpreis (€)', 'Betrag jetzt (€)']]
     : [['Pos.', 'Beschreibung', 'Einheit', 'Menge', 'Einzelpreis (€)', 'Gesamtpreis (€)']]
   const body = b.zeilen.map((r) => kumuliert
-    ? [String(r.pos), r.bezeichnung, r.einheit, r.vertrag ? fmt(r.vertrag) : '–', fmt(r.kumuliert), fmt(r.bisher), fmt(r.neu), preis(r.einzelpreis), preis(r.betrag)]
+    ? [String(r.pos), r.bezeichnung, r.einheit, r.vertrag ? fmt(r.vertrag) + (r.nachtrag ? ` + ${fmt(r.nachtrag)} N` : '') : '–', fmt(r.kumuliert), fmt(r.bisher), fmt(r.neu), preis(r.einzelpreis), preis(r.betrag)]
     : [String(r.pos), r.bezeichnung, r.einheit, fmt(r.neu), preis(r.einzelpreis), preis(r.betrag)])
   const summenZeile = kumuliert
     ? ['', 'Summe netto', '', '', '', '', '', '', b.nurGesamtflaeche ? '–' : fmt(b.summePeriodeNetto)]

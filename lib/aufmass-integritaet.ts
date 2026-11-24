@@ -2,6 +2,7 @@
 // SCAFFOLD OS – Integrität der Aufmaß-Abrechnung (Faktura F7-Sicherung, reine Logik)
 // Wird vom Server benutzt, damit die Mengenprüfung nicht nur im Dialog stattfindet.
 // ============================================================
+import { normalisiereNachtraege, nachtragNummer } from '@/lib/nachtrag'
 import {
   normalisiereZwischenaufmasse, baueTeilleistungsPositionen, baueTeilleistungsPosition, baueSchlussaufmassPositionen, positionsKey, pruefePositionenGegenStand, aktuellerStandJePosition,
   type Zwischenaufmass,
@@ -11,7 +12,7 @@ const runde2 = (n: number) => Math.round(n * 100) / 100
 
 /** Fingerabdruck eines Zwischenaufmaßes: ändert sich, sobald Stichtag, Menge, Preis oder Positionen anders sind. */
 export function aufmassStand(z: Zwischenaufmass): string {
-  return JSON.stringify([z.id, z.stichtag, runde2(z.flaecheM2), (z.positionen || []).map((p) => [p.key, runde2(p.menge), runde2(p.einzelpreis), runde2(p.vertragsmenge ?? 0)])])
+  return JSON.stringify([z.id, z.stichtag, runde2(z.flaecheM2), (z.positionen || []).map((p) => [p.key, runde2(p.menge), runde2(p.einzelpreis), runde2(p.vertragsmenge ?? 0), runde2(p.nachtragMenge ?? 0), p.nachtragId ?? ''])])
 }
 
 export interface RechnungsPos { bezeichnung: string; menge: number; einheit: string; einzelpreis: number }
@@ -75,7 +76,7 @@ const gesperrt = (raw: any): boolean => !!raw && (!!raw.rechnungId || !!raw.rese
  * Speicherroute weder geändert noch gelöscht werden, und niemand kann sich dort selbst eine Rechnung zuordnen.
  * Korrekturen sind ein NEUES Zwischenaufmaß (mit Begründung), keine Änderung des alten.
  */
-export function pruefeAufmassAenderung(altRoh: unknown, neuRoh: unknown): string | null {
+export function pruefeAufmassAenderung(altRoh: unknown, neuRoh: unknown, nachtraegeRoh?: unknown): string | null {
   const alt = Array.isArray(altRoh) ? (altRoh as any[]) : []
   const neu = Array.isArray(neuRoh) ? (neuRoh as any[]) : []
   const altN = normalisiereZwischenaufmasse(alt); const neuN = normalisiereZwischenaufmasse(neu)
@@ -94,6 +95,20 @@ export function pruefeAufmassAenderung(altRoh: unknown, neuRoh: unknown): string
     const aeltere = altN.filter((z) => z.nr < zNeu.nr)
     const fehler = pruefePositionenGegenStand(aktuellerStandJePosition(aeltere), zNeu.positionen, zNeu.notiz)
     if (fehler) return `ZA-${String(zNeu.nr).padStart(2, '0')}: ${fehler}`
+  }
+  // Nachtragsmengen neuer Zwischenaufmaße müssen zu einem vom Kunden bestätigten Nachtrag dieses Auftrags gehören
+  if (nachtraegeRoh !== undefined) {
+    const nachtraege = normalisiereNachtraege(nachtraegeRoh)
+    for (const zNeu of neuN) {
+      if (altN.some((z) => z.id === zNeu.id)) continue
+      for (const p of zNeu.positionen || []) {
+        if (!(p.nachtragMenge && p.nachtragMenge > 0)) continue
+        const n = nachtraege.find((x) => x.id === p.nachtragId)
+        const nr = `ZA-${String(zNeu.nr).padStart(2, '0')}`
+        if (!n) return `${nr}: Der Nachtrag zur Nachtragsmenge von „${p.bezeichnung}“ existiert nicht.`
+        if (n.status !== 'bestaetigt') return `${nr}: ${nachtragNummer(n)} ist noch nicht vom Kunden bestätigt. Eine Nachtragsmenge von „${p.bezeichnung}“ gibt es erst nach der Bestätigung.`
+      }
+    }
   }
   for (const n of neu) {
     if (!n || typeof n !== 'object') continue
