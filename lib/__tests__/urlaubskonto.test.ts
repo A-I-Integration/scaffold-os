@@ -1,0 +1,89 @@
+import { describe, it, expect } from 'vitest'
+import { feiertageNrw, arbeitstage, anspruchBisMonat, urlaubskonto, urlaubsVorschau } from '../urlaubskonto'
+
+const A30 = [{ tage_pro_jahr: 30, gueltig_ab: '2020-01-01' }]
+describe('Feiertage und Arbeitstage (NRW)', () => {
+  it('kennt die beweglichen und festen Feiertage 2026', () => {
+    const f = feiertageNrw(2026)
+    for (const t of ['2026-01-01', '2026-04-03', '2026-04-06', '2026-05-01', '2026-05-14', '2026-05-25', '2026-06-04', '2026-10-03', '2026-11-01', '2026-12-25', '2026-12-26']) expect(f.has(t), t).toBe(true)
+    expect(f.size).toBe(11)
+    expect(feiertageNrw(2025).has('2025-04-18')).toBe(true) // Karfreitag 2025
+    expect(feiertageNrw(2025).has('2025-06-19')).toBe(true) // Fronleichnam 2025
+  })
+  it('zählt nur Mo–Fr ohne Feiertage', () => {
+    expect(arbeitstage('2026-12-21', '2026-12-31')).toHaveLength(8)
+    expect(arbeitstage('2026-11-14', '2026-11-15')).toHaveLength(0)
+    expect(arbeitstage('2026-11-13', '2026-11-12')).toHaveLength(0)
+    expect(arbeitstage('2026-05-11', '2026-05-15')).toHaveLength(4) // Himmelfahrt
+  })
+})
+
+describe('Anteiliger Anspruch', () => {
+  it('ganzes Jahr: 30 Tage, bis Monat n anteilig', () => {
+    const k = { anspruch: A30, eintritt: '2026-01-01' }
+    expect(anspruchBisMonat(k, 2026, 12)).toBe(30)
+    expect(anspruchBisMonat(k, 2026, 3)).toBe(7.5)
+    expect(anspruchBisMonat(k, 2026, 11)).toBe(27.5)
+  })
+  it('Eintritt mitten im Monat: der Monat zählt noch nicht voll', () => {
+    expect(anspruchBisMonat({ anspruch: A30, eintritt: '2026-03-15' }, 2026, 12)).toBe(22.5)
+    expect(anspruchBisMonat({ anspruch: A30, eintritt: '2026-03-01' }, 2026, 12)).toBe(25)
+    expect(anspruchBisMonat({ anspruch: A30, eintritt: '2026-03-15' }, 2026, 3)).toBe(0)
+  })
+  it('Austritt zum Monatsende zählt, danach nichts mehr; Eintritt in einem früheren Jahr ändert nichts', () => {
+    expect(anspruchBisMonat({ anspruch: A30, eintritt: '2020-05-01', austritt: '2026-06-30' }, 2026, 12)).toBe(15)
+    expect(anspruchBisMonat({ anspruch: A30, eintritt: '2020-05-01' }, 2026, 12)).toBe(30)
+  })
+  it('ohne Eintritt volles Jahr, ohne Anspruch null', () => {
+    expect(anspruchBisMonat({ anspruch: A30 }, 2026, 12)).toBe(30)
+    expect(anspruchBisMonat({ anspruch: [] }, 2026, 12)).toBe(0)
+  })
+  it('Änderung des Anspruchs im Jahr wirkt ab dem Monat', () => {
+    const k = { anspruch: [{ tage_pro_jahr: 24, gueltig_ab: '2025-01-01' }, { tage_pro_jahr: '30', gueltig_ab: '2026-07-01' }], eintritt: '2025-01-01' }
+    expect(anspruchBisMonat(k, 2026, 12)).toBe(27)
+    expect(anspruchBisMonat(k, 2026, 7)).toBe(14.5)
+  })
+})
+
+describe('Urlaubskonto und bezahlt/unbezahlt', () => {
+  const neu = { anspruch: A30, eintritt: '2026-10-01' }
+  it('Antrag über den Anspruch hinaus: Rest wird unbezahlt', () => {
+    // bis Nov zustehend: 5 Tage; 10 Arbeitstage beantragt
+    const v = urlaubsVorschau(neu, [], '2026-11-02', '2026-11-13', '2026-10-15')
+    expect(v).toMatchObject({ tage: 10, bezahlt: 5, unbezahlt: 5 })
+    expect(v.hinweis).toContain('5 Tage davon müssen als unbezahlter Urlaub genommen werden')
+  })
+  it('Antrag innerhalb des Anspruchs ist voll bezahlt; Wochenende zählt nicht', () => {
+    const v = urlaubsVorschau({ anspruch: A30, eintritt: '2026-01-01' }, [], '2026-11-27', '2026-12-01', '2026-11-24')
+    expect(v).toMatchObject({ tage: 3, bezahlt: 3, unbezahlt: 0 })
+    expect(v.hinweis).toBe('3 Tage bezahlter Urlaub.')
+    expect(urlaubsVorschau({ anspruch: A30 }, [], '2026-11-14', '2026-11-15', '2026-11-12').hinweis).toContain('kein Arbeitstag')
+  })
+  it('bereits genommener Urlaub vermindert den Rest; abgelehnter zählt nicht', () => {
+    const k = { anspruch: A30, eintritt: '2026-01-01' }
+    const vorhanden = [
+      { id: 'a', start_date: '2026-03-02', end_date: '2026-03-06', status: 'approved' },
+      { id: 'b', start_date: '2026-06-01', end_date: '2026-06-05', status: 'pending' }, // 4. Juni Fronleichnam: 4 Arbeitstage
+      { id: 'c', start_date: '2026-08-03', end_date: '2026-08-14', status: 'rejected' },
+    ]
+    const konto = urlaubskonto(k, vorhanden, '2026-11-24')
+    expect(konto).toMatchObject({ jahr: 2026, anspruchJahr: 30, anspruchBisHeute: 27.5, genommenBezahlt: 5, beantragtBezahlt: 4, unbezahlt: 0, restBisHeute: 18.5, restJahresende: 21 })
+    expect(konto.zeilen.map(z => z.id)).toEqual(['a', 'b'])
+  })
+  it('spätere Anträge nutzen den Rest: die Reihenfolge entscheidet nach Datum', () => {
+    const k = { anspruch: A30, eintritt: '2026-10-01' }
+    const u = [{ id: 'x', start_date: '2026-11-02', end_date: '2026-11-06', status: 'approved' }, { id: 'y', start_date: '2026-11-09', end_date: '2026-11-13', status: 'pending' }]
+    const konto = urlaubskonto(k, u, '2026-11-24')
+    expect(konto.zeilen.find(z => z.id === 'x')).toMatchObject({ bezahlt: 5, unbezahlt: 0 })
+    expect(konto.zeilen.find(z => z.id === 'y')).toMatchObject({ bezahlt: 0, unbezahlt: 5 })
+    expect(konto.unbezahlt).toBe(5)
+  })
+  it('Urlaub über den Jahreswechsel: jedes Jahr mit eigenem Anspruch', () => {
+    const k = { anspruch: A30, eintritt: '2026-01-01' }
+    const v = urlaubsVorschau(k, [], '2026-12-28', '2027-01-05', '2026-12-01')
+    expect(v).toMatchObject({ tage: 6, bezahlt: 6, unbezahlt: 0 }) // 1.1.2027 ist Feiertag
+  })
+  it('weist auf fehlende Angaben hin', () => {
+    expect(urlaubskonto({ anspruch: [] }, [], '2026-11-24').hinweise).toEqual(['Es ist noch kein Urlaubsanspruch hinterlegt.', 'Der erste Arbeitstag fehlt: es wird das volle Jahr angenommen.'])
+  })
+})

@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { formatUhrzeit, formatDauer, fahrtdauerMinuten, standortErfassungAn } from '@/lib/touren/hof';
 import { getEmployees, createAbsence } from '@/lib/actions/employees';
+import UrlaubskontoKarte from '@/components/UrlaubskontoKarte';
 import type { EmployeeWithSkills } from '@/types/employees';
 import ProjektDokumentation from '@/components/ProjektDokumentation';
 import Link from 'next/link';
@@ -1110,6 +1111,7 @@ export default function MeineTourenPage() {
                   <input type="date" value={absTo} onChange={e => setAbsTo(e.target.value)} className={inputCls} />
                 </div>
               </div>
+              {absType === 'vacation' && meId && <UrlaubskontoKarte key={absMsg} employeeId={meId} von={absFrom} bis={absTo} />}
               <input
                 value={absReason}
                 onChange={e => setAbsReason(e.target.value)}
