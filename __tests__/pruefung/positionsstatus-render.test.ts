@@ -43,3 +43,19 @@ describe('Positionsstatus-Block', () => {
     expect(html).toContain('3.500,00')
   })
 })
+
+describe('Positionsstatus-Block: Vorhaltung je Position', () => {
+  const lk3 = (nr: string, key: string, menge: number) => ({ key, posNr: nr, bezeichnung: 'Gerüst LK3', einheit: 'm²', einzelpreis: 5, menge, vertragsmenge: 100 })
+  const data = {
+    zwischenaufmasse: [{ id: 'a', nr: 1, stichtag: '2026-11-01', flaecheM2: 60, notiz: '', erstelltAm: '2026-11-01T10:00:00Z', positionen: [lk3('01.01', 'k1', 20), lk3('01.02', 'k2', 20), lk3('01.03', 'k3', 20)] }],
+    vorhaltung: { aktiv: true, beginn: '2026-11-01', freiTage: 28, intervall: 'woche', preis: 10, abrechnung: 'nachtraeglich', teilabbauten: [] },
+    positionsMiete: [{ key: 'k2', modus: 'eigen', freiTage: 0 }, { key: 'k3', modus: 'keine', verweisKey: 'k1' }],
+  }
+  it('zeigt je gleichnamiger Position die eigene Regel', () => {
+    const html = renderToStaticMarkup(createElement(PositionsstatusBlock, { project: { id: 'p1', data } }))
+    expect(html).toContain('Pos. 01.01 Gerüst LK3'); expect(html).toContain('Pos. 01.02 Gerüst LK3'); expect(html).toContain('Pos. 01.03 Gerüst LK3')
+    expect(html).toContain('4 Wochen frei · Miete ab 29.11.2026 (wie Baustelle)')
+    expect(html).toContain('sofort Miete · Miete ab 01.11.2026')
+    expect(html).toContain('keine eigene Miete – läuft in Pos. 01.01 Gerüst LK3 weiter')
+  })
+})
