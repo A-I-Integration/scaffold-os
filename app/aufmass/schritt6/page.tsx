@@ -1650,7 +1650,7 @@ function Schritt6Content() {
                     </div>
                   </div>
                 )}
-                <KIMaterialResult result={kiResult} loading={kiLoading} onGeneratePDF={handlePDF} onManualEdit={handleManualEdit} />
+                <KIMaterialResult result={kiResult} loading={kiLoading} onGeneratePDF={handlePDF} onManualEdit={handleManualEdit} preisModus={preisModus} angebotspreis={kiResult ? calcAngebot().endpreis : null} />
               </div>
             )}
 
