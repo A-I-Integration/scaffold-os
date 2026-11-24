@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import StundenlohnBlock from '@/components/StundenlohnBlock';
 import UrlaubskontoKarte from '@/components/UrlaubskontoKarte';
+import BetriebskalenderBlock from '@/components/BetriebskalenderBlock';
 import { SONDERZAHLUNG_ARTEN, SONDERZAHLUNG_LABEL, urlaubsanspruchAm } from '@/lib/konditionen';
 
 // ============================================================
@@ -78,6 +79,7 @@ export default function PersonalKonditionen({ employees }: { employees: Ma[] }) 
   const anspruch = urlaubsanspruchAm(urlaub, heute());
   return (
     <div className="space-y-6" data-testid="personal-konditionen">
+      <BetriebskalenderBlock />
       <section className={kasten}>
         <h2 className="text-lg font-semibold">💶 Lohn & Konditionen</h2>
         <select value={empId} onChange={e => setEmpId(e.target.value)} className={inputCls + ' md:max-w-sm'} data-testid="konditionen-mitarbeiter" aria-label="Mitarbeiter">

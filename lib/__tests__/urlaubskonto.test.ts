@@ -87,3 +87,47 @@ describe('Urlaubskonto und bezahlt/unbezahlt', () => {
     expect(urlaubskonto({ anspruch: [] }, [], '2026-11-24').hinweise).toEqual(['Es ist noch kein Urlaubsanspruch hinterlegt.', 'Der erste Arbeitstag fehlt: es wird das volle Jahr angenommen.'])
   })
 })
+
+describe('Betriebsferien und freie Tage', () => {
+  const bf = { id: 'k1', art: 'betriebsferien', von: '2026-08-03', bis: '2026-08-14' } // 10 Arbeitstage
+  const k = { anspruch: A30, eintritt: '2026-01-01', kalender: [bf] }
+  it('Betriebsferien werden fest abgezogen, erst ab dem Monat, in dem sie liegen', () => {
+    const jul = urlaubskonto(k, [], '2026-07-15')
+    expect(jul).toMatchObject({ anspruchBisHeute: 17.5, betriebsferien: 10, restBisHeute: 17.5, restJahresende: 20 })
+    const nov = urlaubskonto(k, [], '2026-11-24')
+    expect(nov).toMatchObject({ anspruchBisHeute: 27.5, betriebsferien: 10, restBisHeute: 17.5, restJahresende: 20, unbezahlt: 0 })
+    const aug = urlaubskonto(k, [], '2026-08-20')
+    expect(aug.restBisHeute).toBe(20 - 10) // 20 zustehend bis August, 10 Tage Betriebsferien
+  })
+  it('eigener Urlaub in den Betriebsferien zählt nicht doppelt', () => {
+    const u = [{ id: 'a', start_date: '2026-08-10', end_date: '2026-08-14', status: 'approved' }]
+    const konto = urlaubskonto(k, u, '2026-11-24')
+    expect(konto.zeilen[0]).toMatchObject({ tage: 0 })
+    expect(konto.restBisHeute).toBe(17.5)
+    const v = urlaubsVorschau(k, [], '2026-08-10', '2026-08-14', '2026-07-01')
+    expect(v).toMatchObject({ tage: 0, inBetriebsferien: 5 })
+    expect(v.hinweis).toContain('Betriebsferien')
+  })
+  it('ein Antrag, der teilweise in die Betriebsferien reicht, zählt nur die übrigen Tage', () => {
+    const v = urlaubsVorschau(k, [], '2026-08-13', '2026-08-18', '2026-07-01') // Do, Fr (Betriebsferien) + Mo, Di, (Mi 19. nicht)
+    expect(v).toMatchObject({ tage: 2, inBetriebsferien: 2 })
+    expect(v.hinweis).toContain('2 Tage liegen in den Betriebsferien')
+  })
+  it('freier Tag (z. B. Heiligabend) zählt nicht als Urlaubstag', () => {
+    const kf = { anspruch: A30, eintritt: '2026-01-01', kalender: [{ art: 'feiertag', von: '2026-12-24', bis: '2026-12-24' }] }
+    expect(urlaubsVorschau(kf, [], '2026-12-21', '2026-12-24', '2026-12-01')).toMatchObject({ tage: 3 })
+    expect(urlaubsVorschau({ anspruch: A30, eintritt: '2026-01-01' }, [], '2026-12-21', '2026-12-24', '2026-12-01')).toMatchObject({ tage: 4 })
+  })
+  it('Betriebsferien vor dem Eintritt zählen nicht; ohne Anspruch bis dahin sind sie unbezahlt', () => {
+    const spaet = urlaubskonto({ anspruch: A30, eintritt: '2026-08-05', kalender: [bf] }, [], '2026-11-24')
+    expect(spaet).toMatchObject({ betriebsferien: 0, unbezahlt: 8 }) // 5.–14. August: 8 Arbeitstage, Anspruch beginnt im September
+    const frueher = urlaubskonto({ anspruch: A30, eintritt: '2026-09-01', kalender: [bf] }, [], '2026-11-24')
+    expect(frueher).toMatchObject({ betriebsferien: 0, unbezahlt: 0 }) // vor dem Eintritt
+  })
+  it('Betriebsferien über mehrere Wochen: Feiertage darin werden nicht doppelt abgezogen', () => {
+    const w = urlaubskonto({ anspruch: A30, eintritt: '2026-01-01', kalender: [{ art: 'betriebsferien', von: '2026-12-21', bis: '2027-01-08' }] }, [], '2026-12-01')
+    // 2026: 21–24, 28–31 (25. Feiertag) = 8 Tage
+    expect(w.betriebsferien).toBe(8)
+  })
+})
+

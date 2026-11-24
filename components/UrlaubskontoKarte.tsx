@@ -42,7 +42,7 @@ export default function UrlaubskontoKarte({ employeeId, von, bis }: { employeeId
       </p>
       <p className="text-xs text-[#424245]" data-testid="urlaubskonto-details">
         Bis zum Ende dieses Monats zustehend: {tage(konto.anspruchBisHeute)} · genehmigt: {tage(konto.genommenBezahlt)} · beantragt: {tage(konto.beantragtBezahlt)}
-        {konto.unbezahlt > 0 ? ` · unbezahlt: ${tage(konto.unbezahlt)}` : ''} · Anspruch im ganzen Jahr: {tage(konto.anspruchJahr)}
+        {konto.betriebsferien > 0 ? ` · Betriebsferien (fest abgezogen): ${tage(konto.betriebsferien)}` : ''}{konto.unbezahlt > 0 ? ` · unbezahlt: ${tage(konto.unbezahlt)}` : ''} · Anspruch im ganzen Jahr: {tage(konto.anspruchJahr)}
       </p>
       {konto.hinweise.map(h => <p key={h} className="text-xs text-amber-700">{h}</p>)}
       {vorschau && (

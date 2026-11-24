@@ -36,15 +36,16 @@ export async function GET(req: NextRequest) {
       const rolle = await pruefeRolle(['admin', 'disponent']);
       if (!rolle.ok) return rolle.response;
       const heute = heuteBerlin(), jahr = heute.slice(0, 4);
-      const [ma, pers, anspruch, abw] = await Promise.all([
+      const [ma, pers, anspruch, abw, kalender] = await Promise.all([
         lies('employees?status=eq.active&select=id,first_name,last_name&order=last_name.asc'),
         lies('employee_personal?select=employee_id,eintrittsdatum,austrittsdatum'),
         lies('employee_urlaubsanspruch?select=employee_id,tage_pro_jahr,gueltig_ab'),
         lies(`absences?type=eq.vacation&end_date=gte.${jahr}-01-01&start_date=lte.${jahr}-12-31&select=id,employee_id,start_date,end_date,type,status`),
+        lies('betriebskalender?select=id,art,von,bis').catch(() => []), // fehlt die Tabelle noch (SQL Phase 136), läuft das Konto ohne Betriebskalender weiter
       ]);
       const konten = ma.map((m: any) => {
         const p = pers.find((x: any) => x.employee_id === m.id);
-        const k: KontoEingabe = { anspruch: anspruch.filter((a: any) => a.employee_id === m.id), eintritt: p?.eintrittsdatum, austritt: p?.austrittsdatum };
+        const k: KontoEingabe = { anspruch: anspruch.filter((a: any) => a.employee_id === m.id), eintritt: p?.eintrittsdatum, austritt: p?.austrittsdatum, kalender };
         return { employee_id: m.id, name: `${m.first_name} ${m.last_name}`, konto: urlaubskonto(k, urlaubsabwesenheiten(abw.filter((a: any) => a.employee_id === m.id)), heute) };
       });
       return NextResponse.json({ success: true, konten });
@@ -54,12 +55,13 @@ export async function GET(req: NextRequest) {
     if (!UUID.test(id)) return fehler('employee_id erforderlich');
     const auth = await requireOwnEmployeeOrAdmin(id);
     if (!auth.allowed) return forbiddenResponse(auth.error);
-    const [pers, anspruch, abw] = await Promise.all([
+    const [pers, anspruch, abw, kalender] = await Promise.all([
       lies(`employee_personal?employee_id=eq.${id}&select=eintrittsdatum,austrittsdatum`),
       lies(`employee_urlaubsanspruch?employee_id=eq.${id}&select=tage_pro_jahr,gueltig_ab`),
       lies(`absences?employee_id=eq.${id}&type=eq.vacation&select=id,start_date,end_date,type,status`),
+      lies('betriebskalender?select=id,art,von,bis').catch(() => []), // fehlt die Tabelle noch (SQL Phase 136), läuft das Konto ohne Betriebskalender weiter
     ]);
-    const k: KontoEingabe = { anspruch, eintritt: pers[0]?.eintrittsdatum, austritt: pers[0]?.austrittsdatum };
+    const k: KontoEingabe = { anspruch, eintritt: pers[0]?.eintrittsdatum, austritt: pers[0]?.austrittsdatum, kalender };
     const urlaube = urlaubsabwesenheiten(abw), heute = heuteBerlin();
     const von = q.get('von'), bis = q.get('bis');
     let vorschau;
