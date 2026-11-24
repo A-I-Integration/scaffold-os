@@ -11,3 +11,6 @@
 Ein Nachtrag wird bisher als Pauschale/Position in der Schlussrechnung berechnet. Wird seine Menge über das Aufmaß abgerechnet, steht er im Schlussrechnungs-Dialog **nicht vorausgewählt** mit Hinweis „wird über das Aufmaß abgerechnet"; wird er trotzdem angehakt, erscheint eine Warnung. Es ist eine Warnung, keine Sperre.
 
 **Nicht enthalten**: kein SQL, keine automatische Verknüpfung der Nachtragsbeträge mit Mengen, keine harte Sperre gegen doppeltes Abrechnen.
+
+## Nachtrag: Abschläge beim Schlussaufmaß vorausgewählt
+Wird im Schlussrechnungs-Dialog "nach Schlussaufmaß" angehakt, werden die Abschlagsrechnungen, mit denen die früheren Zwischenaufmaße abgerechnet wurden, automatisch für den Abzug vorausgewählt (bereits gewählte bleiben, manuell abwählbar; die Abweichungswarnung bleibt).

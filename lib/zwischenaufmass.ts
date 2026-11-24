@@ -440,3 +440,8 @@ export function nachtraegeUeberAufmass(liste: Zwischenaufmass[]): Set<string> {
   for (const z of liste) for (const p of z.positionen || []) if ((p.nachtragMenge ?? 0) > 0 && p.nachtragId) ids.add(p.nachtragId);
   return ids;
 }
+
+/** IDs der Rechnungen, mit denen Zwischenaufmaße (vor dem Schlussaufmaß) bereits abgerechnet wurden: genau diese Abschläge gehören beim Schlussaufmaß in den Abzug. */
+export function rechnungenAusAufmass(liste: Zwischenaufmass[], schlussId: string): Set<string> {
+  return new Set(liste.filter((z) => z.id !== schlussId && z.rechnungId).map((z) => z.rechnungId!));
+}
