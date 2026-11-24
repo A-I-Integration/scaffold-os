@@ -134,13 +134,13 @@ export function berechneAufmass(abschnitte: AufmassAbschnitt[]): { zeilen: Aufma
   return { zeilen, gesamtM2: runde2(zeilen.reduce((s, z) => s + z.flaecheM2, 0)) };
 }
 
-const fmt = (n: number) => n.toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+export const fmt = (n: number) => n.toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
-const NAVY: [number, number, number] = [30, 58, 138];
-const GRAU_TEXT: [number, number, number] = [71, 85, 105];
-const DUNKEL: [number, number, number] = [15, 23, 42];
+export const NAVY: [number, number, number] = [30, 58, 138];
+export const GRAU_TEXT: [number, number, number] = [71, 85, 105];
+export const DUNKEL: [number, number, number] = [15, 23, 42];
 
-function seitenFuss(doc: jsPDF, firma: AufmassblattInput['firma']): void {
+export function seitenFuss(doc: jsPDF, firma: AufmassblattInput['firma']): void {
   const w = doc.internal.pageSize.getWidth();
   const h = doc.internal.pageSize.getHeight();
   const seiten = doc.getNumberOfPages();

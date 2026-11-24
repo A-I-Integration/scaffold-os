@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { Plus, Trash2, Ruler } from 'lucide-react';
+import { Plus, Trash2, Ruler, FileText } from 'lucide-react';
 import { parseBetrag } from '@/lib/nachtrag';
 import { abschnitteAusSchritt2, berechneAufmass } from '@/lib/aufmassblatt-pdf';
 import {
@@ -9,6 +9,7 @@ import {
   neuesZwischenaufmassJePosition, zaZeilen, aktuellerStandJePosition, type ZaPositionEingabe,
   zwischenaufmassNr, neueMengeM2, aktuellerStandM2, restmengeM2, ueberabgerechnetM2, istRueckgang, bisherAbgerechneteM2,
 } from '@/lib/zwischenaufmass';
+import { erzeugeZwischenaufmassPdf, zwischenaufmassPdfDateiname, type AufmassAnsicht } from '@/lib/zwischenaufmass-pdf';
 
 // ============================================================
 // SCAFFOLD OS – Zwischenaufmaß je Stichtag (Kundenseite, beim Auftrag)
@@ -109,6 +110,21 @@ export default function ZwischenaufmassBlock({ project }: Props) {
     finally { setLaeuft(false); }
   }
 
+  /** PDF je Zwischenaufmaß: Einzelaufmaß (nur diese Periode) oder kumuliertes Aufmaß. Wird heruntergeladen, nichts am Auftrag verändert. */
+  async function pdf(z: Zwischenaufmass, ansicht: AufmassAnsicht) {
+    setLaeuft(true); setMeldung(null);
+    try {
+      let firma: { name?: string; street?: string; zip?: string; city?: string } | null = null;
+      try {
+        const j = await (await fetch('/api/company')).json();
+        if (j?.company) firma = { name: j.company.company_name, street: j.company.street, zip: j.company.zip, city: j.company.city };
+      } catch { /* Firmendaten sind optional, das PDF funktioniert auch ohne */ }
+      const doc = erzeugeZwischenaufmassPdf({ kunde: project.name || '', adresse: project.adresse || '', z, liste, ansicht, firma });
+      doc.save(zwischenaufmassPdfDateiname(zwischenaufmassNr(z), ansicht, z.stichtag));
+    } catch (e: any) { setMeldung({ ok: false, text: e?.message || 'PDF konnte nicht erstellt werden' }); }
+    finally { setLaeuft(false); }
+  }
+
   async function loeschen(z: Zwischenaufmass) {
     if (z.rechnungId) return;
     if (!window.confirm(`Zwischenaufmaß ${zwischenaufmassNr(z)} wirklich löschen?`)) return;
@@ -171,6 +187,10 @@ export default function ZwischenaufmassBlock({ project }: Props) {
                   </table>
                 )}
               </div>
+              <span className="flex flex-col gap-1">
+                <button onClick={() => pdf(z, 'einzel')} disabled={laeuft} data-testid={`za-pdf-einzel-${z.nr}`} className="flex items-center gap-1 text-[11px] text-[#e8590c] font-semibold hover:underline disabled:opacity-50"><FileText className="h-3 w-3" /> PDF Einzel</button>
+                <button onClick={() => pdf(z, 'kumuliert')} disabled={laeuft} data-testid={`za-pdf-kumuliert-${z.nr}`} className="flex items-center gap-1 text-[11px] text-[#e8590c] font-semibold hover:underline disabled:opacity-50"><FileText className="h-3 w-3" /> PDF kumuliert</button>
+              </span>
               {!z.rechnungId && (
                 <button onClick={() => loeschen(z)} disabled={laeuft} aria-label={`${zwischenaufmassNr(z)} löschen`} className="p-1 rounded hover:bg-black/5 disabled:opacity-50">
                   <Trash2 className="h-3.5 w-3.5 text-[#86868b]" />
