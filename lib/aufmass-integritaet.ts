@@ -12,7 +12,7 @@ const runde2 = (n: number) => Math.round(n * 100) / 100
 
 /** Fingerabdruck eines Zwischenaufmaßes: ändert sich, sobald Stichtag, Menge, Preis oder Positionen anders sind. */
 export function aufmassStand(z: Zwischenaufmass): string {
-  return JSON.stringify([z.id, z.stichtag, runde2(z.flaecheM2), (z.positionen || []).map((p) => [p.key, runde2(p.menge), runde2(p.einzelpreis), runde2(p.vertragsmenge ?? 0), runde2(p.nachtragMenge ?? 0), p.nachtragId ?? ''])])
+  return JSON.stringify([z.id, z.stichtag, runde2(z.flaecheM2), (z.positionen || []).map((p) => [p.key, runde2(p.menge), runde2(p.einzelpreis), runde2(p.vertragsmenge ?? 0), runde2(p.nachtragMenge ?? 0), p.nachtragId ?? '', p.posNr ?? '', p.bezeichnung])])
 }
 
 export interface RechnungsPos { bezeichnung: string; menge: number; einheit: string; einzelpreis: number }
@@ -65,7 +65,7 @@ export function pruefeAufmassBezug(args: {
 /** Freie Positionen (ohne Bezug zum Aufmaß), die denselben Namen und dieselbe Einheit wie eine aufgemessene Position tragen. */
 export function freiePositionenMitAufmassName(rohListe: unknown, positionen: { bezeichnung: string; einheit: string }[]): string[] {
   const keys = new Map<string, string>()
-  for (const z of normalisiereZwischenaufmasse(rohListe)) for (const p of z.positionen || []) keys.set(p.key, p.bezeichnung)
+  for (const z of normalisiereZwischenaufmasse(rohListe)) for (const p of z.positionen || []) { keys.set(p.key, p.bezeichnung); keys.set(positionsKey(p.bezeichnung, p.einheit), p.bezeichnung) }
   return positionen.map((p) => keys.get(positionsKey(p.bezeichnung, p.einheit))).filter((x): x is string => !!x)
 }
 

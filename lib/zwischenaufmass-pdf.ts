@@ -1,7 +1,7 @@
 import { jsPDF } from 'jspdf'
 import autoTable from 'jspdf-autotable'
 import { fmt, NAVY, GRAU_TEXT, DUNKEL, seitenFuss } from './aufmassblatt-pdf'
-import { bisherAbgerechnetJePosition, vereinbarteMenge, zwischenaufmassNr, type Zwischenaufmass } from './zwischenaufmass'
+import { bisherAbgerechnetJePosition, positionsTitel, vereinbarteMenge, zwischenaufmassNr, type Zwischenaufmass } from './zwischenaufmass'
 
 // ============================================================
 // SCAFFOLD OS – Aufmaß je Zwischenaufmaß als PDF (Schritt 3 des kumulierten Aufmaßes)
@@ -75,7 +75,7 @@ export function baueAufmassBeleg(z: Zwischenaufmass, liste: Zwischenaufmass[], a
       const neu = Math.max(0, diff)
       const vm = vereinbarteMenge(p)
       return {
-        pos: i + 1, bezeichnung: p.bezeichnung, einheit: p.einheit, vertrag: vm > 0 ? (p.vertragsmenge ?? 0) : null, ...((p.nachtragMenge ?? 0) > 0 && vm > 0 ? { nachtrag: p.nachtragMenge } : {}), kumuliert: p.menge, bisher, neu, zuViel: Math.max(0, -diff),
+        pos: i + 1, bezeichnung: positionsTitel(p), einheit: p.einheit, vertrag: vm > 0 ? (p.vertragsmenge ?? 0) : null, ...((p.nachtragMenge ?? 0) > 0 && vm > 0 ? { nachtrag: p.nachtragMenge } : {}), kumuliert: p.menge, bisher, neu, zuViel: Math.max(0, -diff),
         mehrmenge: vm > 0 ? Math.max(0, runde2(p.menge - vm)) : 0, einzelpreis: p.einzelpreis, betrag: runde2(neu * p.einzelpreis), betragKumuliert: runde2(p.menge * p.einzelpreis),
       }
     })
