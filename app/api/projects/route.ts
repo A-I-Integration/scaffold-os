@@ -7,6 +7,7 @@ import { fahrtNachholenSicher } from '@/lib/auto-tour';
 import { projektFuerRolle, schreibdatenFuerRolle } from '@/lib/projekt-sicht';
 import { autosaveGesperrt, filtereAutosaveData, AUTOSAVE_PROJEKT_ABGESCHLOSSEN_FEHLER } from '@/lib/aufmass-autosave-regeln';
 import { pruefeVorhaltePeriodenAenderung, pruefeVorhaltungVereinbarungAenderung, normalisiereVereinbarung } from '@/lib/vorhaltung';
+import { normalisierePositionsMiete } from '@/lib/positions-miete';
 import { pruefeAufmassAenderung } from '@/lib/aufmass-integritaet';
 import { pruefePositionsEreignisseAenderung } from '@/lib/positions-status';
 import { aenderungenZwischenaufmasse } from '@/lib/zwischenaufmass';
@@ -268,7 +269,7 @@ export async function PATCH(req: NextRequest) {
         const sperreVv = pruefeVorhaltungVereinbarungAenderung(bisher.data?.vorhaltung, data.vorhaltung, bisher.data?.vorhaltePerioden);
         if (sperreVv) return NextResponse.json({ success: false, code: 'VORHALTUNG_VEREINBARUNG_GESPERRT', error: sperreVv }, { status: 409 });
       }
-      patch.data = { ...(bisher.data || {}), ...data };
+      patch.data = { ...(bisher.data || {}), ...data, ...(data.positionsMiete !== undefined ? { positionsMiete: normalisierePositionsMiete(data.positionsMiete) } : {}) };
 
       // Verlauf: Änderung des Angebotswerts nach der Annahme (best effort, ändert nichts am Speichern)
       try {

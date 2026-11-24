@@ -2,7 +2,9 @@
 
 import { Fragment, useCallback, useEffect, useMemo, useState } from 'react';
 import { Layers, Plus } from 'lucide-react';
-import { normalisiereZwischenaufmasse } from '@/lib/zwischenaufmass';
+import { normalisiereZwischenaufmasse, aktuellerStandJePosition } from '@/lib/zwischenaufmass';
+import { normalisiereVereinbarung } from '@/lib/vorhaltung';
+import { normalisierePositionsMiete, setzePositionsMiete, bereinigePositionsMiete, mietStandJePosition, type MietModus } from '@/lib/positions-miete';
 import {
   baueBereichsStand, fuegeEreignisHinzu, normalisierePositionsEreignisse, EREIGNIS_LABEL,
   type EreignisArt, type BereichsStand,
@@ -32,6 +34,8 @@ export default function PositionsstatusBlock({ project }: Props) {
   const [offenKey, setOffenKey] = useState<string | null>(null);
   const [form, setForm] = useState({ art: 'abbau' as EreignisArt, datum: heute(), menge: '', vollstaendig: false, ansprechpartner: '', nachweis: '', notiz: '' });
   const [laeuft, setLaeuft] = useState(false);
+  const [mieteKey, setMieteKey] = useState<string | null>(null);
+  const [mForm, setMForm] = useState<{ modus: MietModus; freiTage: string; beginn: string; verweisKey: string }>({ modus: 'baustelle', freiTage: '', beginn: '', verweisKey: '' });
   const [meldung, setMeldung] = useState<{ ok: boolean; text: string } | null>(null);
 
   const laden = useCallback(async () => {
@@ -46,7 +50,37 @@ export default function PositionsstatusBlock({ project }: Props) {
   const zaListe = useMemo(() => normalisiereZwischenaufmasse(daten?.zwischenaufmasse), [daten]);
   const ereignisse = useMemo(() => normalisierePositionsEreignisse(daten?.positionsEreignisse), [daten]);
   const zeilen: BereichsStand[] = useMemo(() => baueBereichsStand(zaListe, ereignisse, heute()), [zaListe, ereignisse]);
+  const aufmassPositionen = useMemo(() => [...aktuellerStandJePosition(zaListe).values()], [zaListe]);
+  const regeln = useMemo(() => normalisierePositionsMiete(daten?.positionsMiete), [daten]);
+  const mietStaende = useMemo(() => new Map(mietStandJePosition(regeln, aufmassPositionen, normalisiereVereinbarung(daten?.vorhaltung), heute()).map((m) => [m.key, m])), [regeln, aufmassPositionen, daten]);
   if (zeilen.length === 0) return null;
+
+  function oeffneMiete(z: BereichsStand) {
+    if (mieteKey === z.key) { setMieteKey(null); return; }
+    const r = regeln.find((x) => x.key === z.key);
+    setMForm({ modus: r?.modus ?? 'baustelle', freiTage: r?.freiTage !== undefined ? String(r.freiTage) : '', beginn: r?.beginn ?? '', verweisKey: r?.verweisKey ?? '' });
+    setMieteKey(z.key); setMeldung(null);
+  }
+
+  async function speichereMiete(z: BereichsStand) {
+    setLaeuft(true); setMeldung(null);
+    try {
+      const frisch = (await laden()) ?? daten;
+      const za = normalisiereZwischenaufmasse(frisch?.zwischenaufmasse);
+      const pos = [...aktuellerStandJePosition(za).values()];
+      const tage = mForm.freiTage.trim() === '' ? undefined : Number(mForm.freiTage.replace(',', '.'));
+      const r = setzePositionsMiete(bereinigePositionsMiete(normalisierePositionsMiete(frisch?.positionsMiete), pos), pos, {
+        key: z.key, modus: mForm.modus, freiTage: tage, beginn: mForm.beginn || undefined, verweisKey: mForm.verweisKey || undefined,
+      });
+      if (!r.ok) { setMeldung({ ok: false, text: r.fehler }); return; }
+      const res = await fetch('/api/projects', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: project.id, data: { positionsMiete: r.liste } }) });
+      const j = await res.json().catch(() => ({}));
+      if (!res.ok || j.success === false) throw new Error(j.error || 'Speichern fehlgeschlagen');
+      await laden(); setMieteKey(null);
+      setMeldung({ ok: true, text: `Vorhaltung für „${z.bezeichnung}“ gespeichert.` });
+    } catch (e: any) { setMeldung({ ok: false, text: e?.message || 'Fehler beim Speichern' }); }
+    finally { setLaeuft(false); }
+  }
 
   function oeffne(z: BereichsStand) {
     setOffenKey(offenKey === z.key ? null : z.key); setMeldung(null);
@@ -97,6 +131,32 @@ export default function PositionsstatusBlock({ project }: Props) {
                     <span className="block text-[#86868b]">Rest {mg(z.restM)} {z.einheit}{z.geplanterAbbau && z.status !== 'abgebaut' ? ` · geplant ${de(z.geplanterAbbau)}` : ''}</span></td>
                   <td className="py-1 text-right"><button type="button" onClick={() => oeffne(z)} className="flex items-center gap-1 text-[#e8590c] font-semibold hover:underline whitespace-nowrap" data-testid={`positionsstatus-ereignis-${z.bezeichnung}`}><Plus className="h-3 w-3" /> Ereignis</button></td>
                 </tr>
+                <tr data-testid={`positionsstatus-miete-${z.bezeichnung}`}><td colSpan={7} className="pb-1 pl-2 text-[11px] text-[#86868b]">
+                  Vorhaltung: <span className="text-[#1d1d1f]" data-testid="positionsstatus-miete-text">{mietStaende.get(z.key)?.text ?? '–'}</span>{' '}
+                  <button type="button" onClick={() => oeffneMiete(z)} className="text-[#e8590c] font-semibold hover:underline" data-testid={`positionsstatus-miete-aendern-${z.bezeichnung}`}>ändern</button>
+                  {mieteKey === z.key && (
+                    <div className="mt-1 rounded-lg bg-white border border-black/10 p-2 grid grid-cols-2 sm:grid-cols-4 gap-1 text-[#1d1d1f]" data-testid="positionsstatus-miete-form">
+                      <select value={mForm.modus} onChange={(e) => setMForm({ ...mForm, modus: e.target.value as MietModus })} className={inputCls} aria-label="Vorhalte-Regel">
+                        <option value="baustelle">Wie Baustelle</option>
+                        <option value="eigen">Eigene Vorhaltezeit</option>
+                        <option value="keine">Keine Miete (läuft in Hauptposition weiter)</option>
+                      </select>
+                      {mForm.modus === 'eigen' && (
+                        <>
+                          <input value={mForm.freiTage} onChange={(e) => setMForm({ ...mForm, freiTage: e.target.value })} inputMode="numeric" placeholder="freie Tage (0 = sofort Miete, 28 = 4 Wochen)" className={inputCls + ' sm:col-span-2'} aria-label="Freie Vorhaltezeit in Tagen" />
+                          <input type="date" value={mForm.beginn} onChange={(e) => setMForm({ ...mForm, beginn: e.target.value })} className={inputCls} aria-label="Eigener Beginn (leer = wie Baustelle)" />
+                        </>
+                      )}
+                      {mForm.modus === 'keine' && (
+                        <select value={mForm.verweisKey} onChange={(e) => setMForm({ ...mForm, verweisKey: e.target.value })} className={inputCls + ' sm:col-span-2'} aria-label="Hauptposition">
+                          <option value="">Hauptposition wählen …</option>
+                          {zeilen.filter((x) => x.key !== z.key).map((x) => <option key={x.key} value={x.key}>{x.bezeichnung}</option>)}
+                        </select>
+                      )}
+                      <button type="button" onClick={() => speichereMiete(z)} disabled={laeuft} className="rounded-lg bg-[#e8590c] px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-60" data-testid="positionsstatus-miete-speichern">{laeuft ? 'Speichert …' : 'Speichern'}</button>
+                    </div>
+                  )}
+                </td></tr>
                 {(z.ereignisse.length > 0 || offenKey === z.key) && (
                   <tr><td colSpan={7} className="pb-2">
                     {z.ereignisse.length > 0 && (
