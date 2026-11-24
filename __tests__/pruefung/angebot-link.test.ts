@@ -86,3 +86,36 @@ describe('Angebots-Link: öffentliche Route', () => {
     expect((await get('ok')).status).toBe(404)
   })
 })
+
+describe('Angebots-Link: Preis auf der öffentlichen Seite folgt der gewählten Preisbasis', () => {
+  const get = async (token: string) => (await import('@/app/api/public/angebot/route')).GET({ nextUrl: new URL(`http://x/api/public/angebot?token=${token}`) } as never)
+  const ki = { suggestedPrice: 152447, totalCost: 114335, totalAreaM2: 1000 }
+  beforeEach(() => {
+    db.company_settings = [{ id: '00000000-0000-0000-0000-000000000001', company_name: 'Firma', street: 'S', zip: '1', city: 'C', phone: '1', email: 'a@b.de', calc_crane_day: 900 }]
+    db.project_media = []
+    db.project_access_tokens.push({ token: 'ok', project_id: P, expires_at: in1h() })
+  })
+  it('Festpreis 10 €/m² × 1000 m² → 10.000 €, nicht der KI-Preis', async () => {
+    db.projects = [{ id: P, name: 'Haus', adresse: 'Weg', data: { kiResult: ki, preisModus: 'festpreis', festpreisProM2: '10' } }]
+    expect((await (await get('ok')).json()).angebot.endpreis).toBe(10000)
+  })
+  it('Pauschale → Pauschalbetrag', async () => {
+    db.projects = [{ id: P, name: 'Haus', adresse: 'Weg', data: { kiResult: ki, preisModus: 'pauschale', pauschale: '2500' } }]
+    expect((await (await get('ok')).json()).angebot.endpreis).toBe(2500)
+  })
+  it('KI-Kalkulation (und ältere Projekte ohne Preisbasis) → KI-Preis', async () => {
+    db.projects = [{ id: P, name: 'Haus', adresse: 'Weg', data: { kiResult: ki } }]
+    expect((await (await get('ok')).json()).angebot.endpreis).toBe(152447)
+  })
+  it('Kran mit Firmensatz fließt in den Preis ein; der Kransatz selbst geht nicht nach außen', async () => {
+    db.projects = [{ id: P, name: 'Haus', adresse: 'Weg', data: { kiResult: ki, preisModus: 'festpreis', festpreisProM2: '10', step4: { kranErforderlich: true }, step1: { dauer: '2' } } }]
+    const j = await (await get('ok')).json()
+    expect(j.angebot.endpreis).toBe(10000 + 1800)
+    expect(JSON.stringify(j)).not.toMatch(/calc_crane_day|kranSatz/)
+    expect(j.angebot.company.company_name).toBe('Firma')
+  })
+  it('ohne Kalkulation kein Preis', async () => {
+    db.projects = [{ id: P, name: 'Haus', adresse: 'Weg', data: {} }]
+    expect((await (await get('ok')).json()).angebot.endpreis).toBeNull()
+  })
+})
