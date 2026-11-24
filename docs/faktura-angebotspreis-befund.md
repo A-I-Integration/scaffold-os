@@ -21,3 +21,12 @@ Auftragsstand, Schlussrechnung und Schritt 6 rechnen bereits über `angebotNetto
 - Schritt 6 rechnet die Beträge in `calcAngebot` (Komponente) parallel zu `berechneAngebotBetraege`; ein Paritätstest dafür fehlt.
 - Angebots-PDF und Angebots-Mail: nicht im Browser geprüft.
 - Bereits versendete Angebote: der Link zeigt nach dem Update den korrigierten Preis; ein bereits angenommener Fall (Status „angenommen“ bei falschem Preis) muss fachlich geklärt werden.
+
+## Nachtrag: Angebots-PDF (Aufmaß Schritt 6)
+Beobachtung aus der Browserabnahme: Seite 1 des PDFs nannte „Empfohlener Verkaufspreis 152.447 €“ samt Material-, Lohn-, Transport-, Gesamtkosten und Marge,
+Seite 2 den Endpreis 10.000 € (Festpreis). Der Kunde sah zwei Preise und die interne Kalkulation.
+- Kosten-, Gesamtkosten-, Verkaufspreis- und Marge-Block stehen nicht mehr im PDF (und damit auch nicht in der Angebots-Mail); sie bleiben auf dem Bildschirm.
+- Der Preisblock („Angebotspreis“ bzw. „Angebots-Anpassungen“ mit ENDPREIS) erscheint jetzt immer, auch bei der Preisbasis KI-Kalkulation ohne Anpassungen.
+- Bezeichnung der Basis bei KI-Kalkulation: „Gerüstbau gemäß Angebot“ statt „Basispreis (KI-Kalkulation)“.
+- Der rote Risiko-Punkt liegt links neben dem Text statt darüber.
+Nicht geprüft: Aussehen des PDFs im Browser (kein automatischer Test, jsPDF-Ausgabe).
