@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { workdaysInMonth, BREAK_RULE_TEXT } from '@/lib/worktime';
+import ZeitTagesuebersicht from '@/components/ZeitTagesuebersicht';
 import {
   Clock, ChevronDown, ChevronRight, Download, Plus, Pencil, X, Check,
 } from 'lucide-react';
@@ -88,6 +89,7 @@ export default function ZeiterfassungPage() {
   const [addFor, setAddFor] = useState<string | null>(null);
   const [aDatum, setADatum] = useState('');
   const [saving, setSaving] = useState(false);
+  const [ansicht, setAnsicht] = useState<'monat' | 'tag'>('monat');
 
   // Rolle holen → darf korrigieren?
   useEffect(() => {
@@ -376,6 +378,13 @@ export default function ZeiterfassungPage() {
     // ist hell (bg-slate-100), weißer Text wäre sonst unsichtbar.
     <div className="min-h-screen bg-[#fbfbfd] p-4 md:p-8">
     <div className="max-w-6xl mx-auto text-[#1d1d1f]">
+      <div className="flex gap-2 mb-4">
+        {([['monat', 'Monat'], ['tag', 'Tag']] as const).map(([k, l]) => (
+          <button key={k} data-testid={`zeit-reiter-${k}`} onClick={() => setAnsicht(k)}
+            className={`text-sm px-4 py-2 rounded-xl border ${ansicht === k ? 'bg-[#e8590c] text-white border-[#e8590c]' : 'border-black/10 text-[#424245]'}`}>{l}</button>
+        ))}
+      </div>
+      {ansicht === 'tag' ? <ZeitTagesuebersicht canEdit={canEdit} /> : (<>
       {/* Kopf */}
       <div className="flex flex-wrap items-center gap-3 mb-6">
         <Clock className="w-7 h-7 text-[#e8590c]" />
@@ -513,6 +522,7 @@ export default function ZeiterfassungPage() {
           Beim laufenden Monat zählt das Soll nur bis heute. Pause: {BREAK_RULE_TEXT} (automatisch beim Ausstempeln).
         </p>
       )}
+      </>)}
     </div>
     </div>
   );
