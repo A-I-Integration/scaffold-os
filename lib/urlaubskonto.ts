@@ -37,7 +37,7 @@ export function feiertageNrw(jahr: number): Set<Tag> {
 }
 
 /** Arbeitstage (Mo–Fr, ohne Feiertage) von bis einschließlich, als Liste. */
-export function arbeitstage(von: Tag, bis: Tag): Tag[] {
+export function arbeitstage(von: Tag, bis: Tag, extraFrei?: Set<Tag>): Tag[] {
   const aus: Tag[] = []
   if (bis < von) return aus
   const feiertage = new Map<number, Set<Tag>>()
@@ -46,7 +46,7 @@ export function arbeitstage(von: Tag, bis: Tag): Tag[] {
     if (wt === 0 || wt === 6) continue
     const j = Number(t.slice(0, 4))
     if (!feiertage.has(j)) feiertage.set(j, feiertageNrw(j))
-    if (!feiertage.get(j)!.has(t)) aus.push(t)
+    if (!feiertage.get(j)!.has(t) && !extraFrei?.has(t)) aus.push(t)
   }
   return aus
 }
@@ -62,10 +62,37 @@ function anspruchAm(historie: AnspruchEintrag[], tag: Tag): number | null {
   return p ? Number(p.tage_pro_jahr) : null
 }
 
+/** Betriebskalender: 'feiertag' = zusätzlicher freier Tag (kein Urlaubsabzug), 'betriebsferien' = wird bei allen vom Urlaub abgezogen. */
+export interface KalenderEintrag { id?: string; art: string; von: Tag; bis: Tag }
+
 export interface KontoEingabe {
   anspruch: AnspruchEintrag[]
   eintritt?: Tag | null
   austritt?: Tag | null
+  kalender?: KalenderEintrag[]
+}
+
+/** Alle Kalendertage von bis einschließlich. */
+export function tageVonBis(von: Tag, bis: Tag): Tag[] {
+  const aus: Tag[] = []
+  for (let t = von; t <= bis && aus.length < 400; t = plus(t, 1)) aus.push(t)
+  return aus
+}
+
+/** Zusätzliche freie Tage und Betriebsferien-Arbeitstage (nur Tage, an denen der Mitarbeiter beschäftigt ist). */
+export function kalenderTage(k: KontoEingabe): { frei: Set<Tag>; betrieb: Set<Tag> } {
+  const kal = k.kalender ?? []
+  const frei = new Set<Tag>()
+  for (const e of kal.filter(x => x.art === 'feiertag')) for (const t of tageVonBis(e.von, e.bis)) frei.add(t)
+  const betrieb = new Set<Tag>()
+  for (const e of kal.filter(x => x.art === 'betriebsferien')) {
+    for (const t of arbeitstage(e.von, e.bis, frei)) {
+      if (k.eintritt && t < k.eintritt) continue
+      if (k.austritt && t > k.austritt) continue
+      betrieb.add(t)
+    }
+  }
+  return { frei, betrieb }
 }
 
 /** Anteiliger Anspruch eines Jahres bis einschließlich Monat 1–12 (halbe Tage). */
@@ -91,7 +118,8 @@ export interface Urlaubskonto {
   anspruchBisHeute: number
   genommenBezahlt: number      // genehmigt
   beantragtBezahlt: number     // noch offen
-  unbezahlt: number            // genehmigt und beantragt zusammen
+  unbezahlt: number            // genehmigt, beantragt und Betriebsferien zusammen
+  betriebsferien: number       // Betriebsferien-Arbeitstage im Jahr (bezahlt abgezogen)
   restBisHeute: number         // zustehend bis heute minus alle bezahlten Urlaubstage des Jahres
   restJahresende: number
   zeilen: UrlaubZeile[]
@@ -101,12 +129,16 @@ export interface Urlaubskonto {
 const zaehlt = (a: UrlaubAbwesenheit) => a.status === 'approved' || a.status === 'pending'
 
 interface TagErgebnis { tag: Tag; id: string; bezahlt: boolean }
+const BETRIEBSFERIEN = '__betriebsferien__'
 
-/** Urlaubstage nach Datum aufbrauchen: bezahlt, solange der bis zu diesem Monat zustehende Anspruch des Jahres reicht. */
+/** Urlaubstage nach Datum aufbrauchen: bezahlt, solange der bis zu diesem Monat zustehende Anspruch des Jahres reicht.
+ *  Betriebsferien werden bei jedem Mitarbeiter fest abgezogen; liegt ein eigener Urlaub darin, zählt der Tag nur einmal. */
 function verteile(k: KontoEingabe, urlaube: UrlaubAbwesenheit[]): TagErgebnis[] {
+  const { frei, betrieb } = kalenderTage(k)
   const tage: { tag: Tag; id: string }[] = []
-  for (const a of urlaube.filter(zaehlt)) for (const t of arbeitstage(a.start_date, a.end_date)) tage.push({ tag: t, id: a.id })
-  tage.sort((x, y) => (x.tag < y.tag ? -1 : x.tag > y.tag ? 1 : 0))
+  for (const a of urlaube.filter(zaehlt)) for (const t of arbeitstage(a.start_date, a.end_date, frei)) if (!betrieb.has(t)) tage.push({ tag: t, id: a.id })
+  for (const t of betrieb) tage.push({ tag: t, id: BETRIEBSFERIEN })
+  tage.sort((x, y) => (x.tag < y.tag ? -1 : x.tag > y.tag ? 1 : x.id === BETRIEBSFERIEN ? -1 : 1))
   const verbraucht = new Map<number, number>()
   const cache = new Map<string, number>()
   return tage.map(({ tag, id }) => {
@@ -131,9 +163,13 @@ export function urlaubskonto(k: KontoEingabe, urlaube: UrlaubAbwesenheit[], heut
   const tage = verteile(k, urlaube)
   const status = new Map(urlaube.map(a => [a.id, a.status]))
   const imJahr = tage.filter(t => Number(t.tag.slice(0, 4)) === jahr)
-  const genehmigt = imJahr.filter(t => t.bezahlt && status.get(t.id) === 'approved').length
-  const beantragt = imJahr.filter(t => t.bezahlt && status.get(t.id) !== 'approved').length
+  const genehmigt = imJahr.filter(t => t.bezahlt && t.id !== BETRIEBSFERIEN && status.get(t.id) === 'approved').length
+  const beantragt = imJahr.filter(t => t.bezahlt && t.id !== BETRIEBSFERIEN && status.get(t.id) !== 'approved').length
   const unbezahlt = imJahr.filter(t => !t.bezahlt).length
+  const bf = imJahr.filter(t => t.id === BETRIEBSFERIEN)
+  const betriebsferienGanz = bf.filter(t => t.bezahlt).length
+  // „bis heute“ zählen Betriebsferien erst ab dem Monat, in dem sie liegen
+  const betriebsferienBisHeute = bf.filter(t => t.bezahlt && Number(t.tag.slice(5, 7)) <= monat).length
   const zeilen: UrlaubZeile[] = urlaube.filter(zaehlt).sort((x, y) => (x.start_date < y.start_date ? -1 : 1))
     .map(a => ({ id: a.id, von: a.start_date, bis: a.end_date, status: a.status, ...summiere(tage, a.id) }))
   const anspruchJahr = anspruchBisMonat(k, jahr, 12), anspruchBisHeute = anspruchBisMonat(k, jahr, monat)
@@ -141,20 +177,24 @@ export function urlaubskonto(k: KontoEingabe, urlaube: UrlaubAbwesenheit[], heut
   if (!k.anspruch.length) hinweise.push('Es ist noch kein Urlaubsanspruch hinterlegt.')
   if (!k.eintritt) hinweise.push('Der erste Arbeitstag fehlt: es wird das volle Jahr angenommen.')
   return {
-    jahr, anspruchJahr, anspruchBisHeute, genommenBezahlt: genehmigt, beantragtBezahlt: beantragt, unbezahlt,
-    restBisHeute: anspruchBisHeute - genehmigt - beantragt, restJahresende: anspruchJahr - genehmigt - beantragt, zeilen, hinweise,
+    jahr, anspruchJahr, anspruchBisHeute, genommenBezahlt: genehmigt, beantragtBezahlt: beantragt, unbezahlt, betriebsferien: betriebsferienGanz,
+    restBisHeute: anspruchBisHeute - genehmigt - beantragt - betriebsferienBisHeute, restJahresende: anspruchJahr - genehmigt - beantragt - betriebsferienGanz, zeilen, hinweise,
   }
 }
 
-export interface Vorschau { tage: number; bezahlt: number; unbezahlt: number; restBisHeute: number; hinweis: string }
+export interface Vorschau { tage: number; bezahlt: number; unbezahlt: number; inBetriebsferien: number; restBisHeute: number; hinweis: string }
 
 /** Wirkung eines neuen Urlaubsantrags (von–bis) auf das Konto. */
 export function urlaubsVorschau(k: KontoEingabe, urlaube: UrlaubAbwesenheit[], von: Tag, bis: Tag, heute: Tag): Vorschau {
   const alle = [...urlaube.filter(a => a.id !== '__neu__'), { id: '__neu__', start_date: von, end_date: bis, status: 'pending' }]
   const z = summiere(verteile(k, alle), '__neu__')
+  const { frei, betrieb } = kalenderTage(k)
+  const inBf = arbeitstage(von, bis, frei).filter(t => betrieb.has(t)).length
   const t = (n: number) => `${n} ${n === 1 ? 'Tag' : 'Tage'}`
-  const hinweis = z.tage === 0 ? 'In diesem Zeitraum liegt kein Arbeitstag (Wochenende oder Feiertag).'
-    : z.unbezahlt > 0 ? `${t(z.unbezahlt)} davon müssen als unbezahlter Urlaub genommen werden (bezahlt: ${t(z.bezahlt)}).`
-    : `${t(z.tage)} bezahlter Urlaub.`
-  return { ...z, restBisHeute: urlaubskonto(k, alle, heute).restBisHeute, hinweis }
+  const bfText = inBf > 0 ? ` ${t(inBf)} liegen in den Betriebsferien und werden dort schon abgezogen.` : ''
+  const hinweis = (z.tage === 0
+    ? (inBf > 0 ? 'Dieser Zeitraum liegt in den Betriebsferien: Die Tage werden dort schon vom Urlaub abgezogen.' : 'In diesem Zeitraum liegt kein Arbeitstag (Wochenende oder Feiertag).')
+    : z.unbezahlt > 0 ? `${t(z.unbezahlt)} davon müssen als unbezahlter Urlaub genommen werden (bezahlt: ${t(z.bezahlt)}).${bfText}`
+    : `${t(z.tage)} bezahlter Urlaub.${bfText}`)
+  return { ...z, inBetriebsferien: inBf, restBisHeute: urlaubskonto(k, alle, heute).restBisHeute, hinweis }
 }

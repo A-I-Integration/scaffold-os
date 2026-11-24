@@ -4,6 +4,8 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import UrlaubsUebersicht from '@/components/UrlaubsUebersicht'
 import UrlaubskontoKarte from '@/components/UrlaubskontoKarte'
 import { urlaubskonto } from '@/lib/urlaubskonto'
+import BetriebskalenderBlock from '@/components/BetriebskalenderBlock'
+import PersonalKonditionen from '@/components/PersonalKonditionen'
 
 describe('Urlaubskonto-Anzeige', () => {
   it('Übersicht für Dispo/Chef zeigt Anspruch, genehmigt, beantragt, unbezahlt und aktuellen Anspruch', () => {
@@ -19,5 +21,10 @@ describe('Urlaubskonto-Anzeige', () => {
   it('Karte ohne Mitarbeiter rendert nichts, mit Mitarbeiter den Ladezustand', () => {
     expect(renderToStaticMarkup(createElement(UrlaubskontoKarte, { employeeId: '' }))).toBe('')
     expect(renderToStaticMarkup(createElement(UrlaubskontoKarte, { employeeId: 'e1' }))).toContain('Urlaubskonto wird geladen')
+  })
+  it('Betriebskalender: Eingabe für Betriebsferien/freie Tage und Hinweis auf NRW-Feiertage; im Lohn-Reiter oben eingebunden', () => {
+    const html = renderToStaticMarkup(createElement(BetriebskalenderBlock))
+    for (const t of ['Betriebsferien und freie Tage', 'kalender-art', 'Betriebsferien (vom Urlaub abgezogen)', 'Freier Tag / Feiertag (kein Urlaubsabzug)', 'NRW', 'kalender-leer']) expect(html).toContain(t)
+    expect(renderToStaticMarkup(createElement(PersonalKonditionen, { employees: [] }))).toContain('data-testid="betriebskalender"')
   })
 })
