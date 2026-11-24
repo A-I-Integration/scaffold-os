@@ -15,7 +15,7 @@ import { katalogAlsPosition, normalisiereKatalog, type LeistungKatalogEintrag } 
 import PositionDetails from '@/components/rechnung/PositionDetails';
 import { normalisiereBauphasen, berechneBauphasen, baueBauphasenPosition, markiereBauphaseAbgerechnet, type Bauphase, type BauphasenEinstellung } from '@/lib/bauphasen';
 import { aufmassStand } from '@/lib/aufmass-integritaet';
-import { normalisiereZwischenaufmasse, baueTeilleistungsPosition, baueTeilleistungsPositionen, baueSchlussaufmassPositionen, zwischenaufmassNr, neueMengeM2, nachtraegeUeberAufmass, type Zwischenaufmass } from '@/lib/zwischenaufmass';
+import { normalisiereZwischenaufmasse, baueTeilleistungsPosition, baueTeilleistungsPositionen, baueSchlussaufmassPositionen, zwischenaufmassNr, neueMengeM2, nachtraegeUeberAufmass, rechnungenAusAufmass, type Zwischenaufmass } from '@/lib/zwischenaufmass';
 
 // ============================================================
 // SCAFFOLD OS – Schlussrechnung aus Auftrag erstellen
@@ -330,7 +330,14 @@ export default function SchlussrechnungDialog({ projectId, customerName, custome
             {art === 'schluss' && letztesZA && (
               <div className="rounded-lg bg-[#f5f5f7] p-3 space-y-2" data-testid="schluss-aufmass">
                 <label className="flex items-start gap-2 text-xs cursor-pointer text-[#1d1d1f]">
-                  <input type="checkbox" checked={schlussAufmass} onChange={(e) => setSchlussAufmass(e.target.checked)} className="mt-0.5" />
+                  <input type="checkbox" checked={schlussAufmass} onChange={(e) => {
+                    const an = e.target.checked; setSchlussAufmass(an);
+                    // Abschläge, mit denen die Zwischenaufmaße abgerechnet wurden, sind genau der Abzug: vorauswählen (bereits gewählte bleiben)
+                    if (an && letztesZA) {
+                      const ids = rechnungenAusAufmass(zwischenaufmasse, letztesZA.id);
+                      setGewaehlteAbschlaege((prev) => { const s = new Set(prev); abschlagKandidaten.filter((i) => ids.has(i.id) && abschlagAbzug(i).abziehbar).forEach((i) => s.add(i.id)); return s; });
+                    }
+                  }} className="mt-0.5" />
                   <span>Leistung nach <b>Schlussaufmaß {zwischenaufmassNr(letztesZA)}</b> abrechnen (kumuliert je Position). Bereits abgerechnete Mengen werden über den Abzug der Abschläge verrechnet.</span>
                 </label>
                 {schlussModus && schlussPos && (

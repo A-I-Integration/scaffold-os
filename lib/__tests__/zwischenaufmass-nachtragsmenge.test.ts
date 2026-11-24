@@ -92,3 +92,14 @@ describe('Aufmaß-Beleg (PDF-Daten)', () => {
     expect(b.hinweise.join(' ')).toContain('Vertrag 1.000,00 + Nachtrag 200,00')
   })
 })
+
+import { rechnungenAusAufmass } from '../zwischenaufmass'
+describe('Abschläge aus dem Aufmaß', () => {
+  it('liefert die Rechnungen der bereits abgerechneten Zwischenaufmaße ohne das Schlussaufmaß', () => {
+    let l = erfasse([], [P(300)], 'a'); l = ab(l, 'a')
+    l = erfasse(l, [P(600)], 'b'); l = ab(l, 'b')
+    l = erfasse(l, [P(900)], 'c')
+    expect([...rechnungenAusAufmass(l, 'c')].sort()).toEqual(['r-a', 'r-b'])
+    expect(rechnungenAusAufmass(erfasse([], [P(5)], 'x'), 'x').size).toBe(0)
+  })
+})
