@@ -28,7 +28,11 @@ export interface Zwischenaufmass {
 
 /** Eine Position im Zwischenaufmaß: kumulierte Menge bis zum Stichtag, Preis netto je Einheit. */
 export interface ZaPosition {
-  /** stabiler Schlüssel der Position über alle Zwischenaufmaße (aus Bezeichnung und Einheit) */
+  /**
+   * Stabile Identität der Position über alle Zwischenaufmaße. Wird beim Anlegen vergeben (aus Bezeichnung und Einheit, bei Namensgleichheit
+   * mit einer umbenannten Position mit Zusatz) und danach NIE mehr neu gebildet: eine Umbenennung ändert die Bezeichnung, nicht die Identität.
+   * Altdaten ohne gespeicherte Identität behalten die bisherige, aus Bezeichnung und Einheit gebildete.
+   */
   key: string;
   bezeichnung: string;
   einheit: string;
@@ -58,7 +62,8 @@ function normalisierePositionen(raw: unknown): ZaPosition[] | undefined {
     .map((p: any): ZaPosition => {
       const bezeichnung = String(p.bezeichnung).trim().slice(0, 300);
       const einheit = String(p.einheit || 'm²').trim().slice(0, 20) || 'm²';
-      return { key: positionsKey(bezeichnung, einheit), bezeichnung, einheit, einzelpreis: runde2(Number(p.einzelpreis) || 0), menge: runde2(Number(p.menge) || 0) };
+      const gespeichert = typeof p.key === 'string' ? p.key.trim().slice(0, 160) : '';
+      return { key: gespeichert || positionsKey(bezeichnung, einheit), bezeichnung, einheit, einzelpreis: runde2(Number(p.einzelpreis) || 0), menge: runde2(Number(p.menge) || 0) };
     });
   return r.length ? r : undefined;
 }
@@ -223,7 +228,26 @@ export function zaZeilen(z: Zwischenaufmass, liste: Zwischenaufmass[]): ZaZeile[
   });
 }
 
-export type ZaPositionEingabe = { bezeichnung: string; einheit: string; einzelpreis: number; menge: number };
+/** `key`: Identität der Position aus dem letzten Stand (bei Umbenennung mitgeben). Ohne `key` gilt die Zeile als Position mit diesem Namen. */
+export type ZaPositionEingabe = { bezeichnung: string; einheit: string; einzelpreis: number; menge: number; key?: string };
+
+/**
+ * Prüft ein neues Zwischenaufmaß gegen den letzten Stand (gemeinsam für Erfassung im Browser und Speichern auf dem Server):
+ * Eine Position, deren Menge sinkt oder die ganz fehlt (z. B. umbenannt ohne Übernahme der Identität), braucht eine Begründung.
+ * So wird eine bereits abgerechnete Menge nicht still als neue Position erneut abrechenbar.
+ */
+export function pruefePositionenGegenStand(stand: Map<string, ZaPosition>, positionen: ZaPosition[], notiz: string): string | null {
+  const hatGrund = !!(notiz || '').trim();
+  const rueckgaenge = positionen.filter((p) => stand.has(p.key) && p.menge < stand.get(p.key)!.menge);
+  if (rueckgaenge.length && !hatGrund) {
+    return `Bei ${rueckgaenge.map((p) => `„${p.bezeichnung}“ (${fmt(p.menge)} statt ${fmt(stand.get(p.key)!.menge)} ${p.einheit})`).join(', ')} ist die Menge kleiner als zuletzt. Das ist nur bei Rückbau oder Korrektur sinnvoll – bitte eine Notiz als Begründung eintragen. Gib sonst die GESAMTE Menge bis zum Stichtag ein, nicht nur die neue.`;
+  }
+  const fehlend = [...stand.values()].filter((p) => p.menge > 0 && !positionen.some((x) => x.key === p.key));
+  if (fehlend.length && !hatGrund) {
+    return `${fehlend.map((p) => `„${p.bezeichnung}“ (zuletzt ${fmt(p.menge)} ${p.einheit})`).join(', ')} ${fehlend.length > 1 ? 'fehlen' : 'fehlt'} im neuen Zwischenaufmaß. Wurde die Position umbenannt, übernimm sie in der Zeile (Name ändern statt neue Zeile anlegen). Entfällt sie, trage bitte eine Notiz als Begründung ein.`;
+  }
+  return null;
+}
 
 export function neuesZwischenaufmassJePosition(
   liste: Zwischenaufmass[],
@@ -234,23 +258,32 @@ export function neuesZwischenaufmassJePosition(
   if (!/^\d{4}-\d{2}-\d{2}$/.test(eingabe.stichtag)) return { ok: false, fehler: 'Bitte einen Stichtag angeben.' };
   const rows = eingabe.positionen.filter((p) => p.bezeichnung.trim());
   if (!rows.length) return { ok: false, fehler: 'Bitte mindestens eine Position mit Bezeichnung erfassen.' };
+  const stand = aktuellerStandJePosition(liste);
   const positionen: ZaPosition[] = [];
   for (const p of rows) {
     const bez = p.bezeichnung.trim().slice(0, 300); const einheit = (p.einheit || '').trim() || 'm²';
-    const key = positionsKey(bez, einheit);
-    if (positionen.some((x) => x.key === key)) return { ok: false, fehler: `Die Position „${bez}“ (${einheit}) kommt doppelt vor.` };
+    // Identität: übernommen aus dem letzten Stand (auch bei geänderter Bezeichnung); sonst aus dem Namen – außer dieser Name gehörte
+    // früher zu einer inzwischen umbenannten Position, dann bekommt die Zeile eine eigene Identität.
+    let key: string;
+    if (p.key && stand.has(p.key)) key = p.key;
+    else {
+      const k = positionsKey(bez, einheit);
+      const belegt = stand.get(k);
+      key = belegt && positionsKey(belegt.bezeichnung, belegt.einheit) !== k ? `${k}#${id.slice(0, 8)}` : k;
+    }
+    const name = positionsKey(bez, einheit);
+    if (positionen.some((x) => x.key === key || positionsKey(x.bezeichnung, x.einheit) === name)) return { ok: false, fehler: `Die Position „${bez}“ (${einheit}) kommt doppelt vor.` };
     if (!(p.menge >= 0) || !Number.isFinite(p.menge)) return { ok: false, fehler: `Die Menge von „${bez}“ ist ungültig.` };
     if (!(p.einzelpreis >= 0) || !Number.isFinite(p.einzelpreis)) return { ok: false, fehler: `Der Preis von „${bez}“ ist ungültig.` };
     positionen.push({ key, bezeichnung: bez, einheit, einzelpreis: runde2(p.einzelpreis), menge: runde2(p.menge) });
   }
-  // Vorhandene Positionen dürfen nicht stillschweigend verschwinden: fehlt eine, wird sie mit Menge 0 geführt (sichtbar im Verlauf).
-  const stand = aktuellerStandJePosition(liste);
-  const rueckgaenge = positionen.filter((p) => stand.has(p.key) && p.menge < stand.get(p.key)!.menge);
-  const geaendert = positionen.some((p) => !stand.has(p.key) || p.menge !== stand.get(p.key)!.menge || p.einzelpreis !== stand.get(p.key)!.einzelpreis);
+  const geaendert = positionen.some((p) => !stand.has(p.key) || p.menge !== stand.get(p.key)!.menge || p.einzelpreis !== stand.get(p.key)!.einzelpreis || p.bezeichnung !== stand.get(p.key)!.bezeichnung)
+    || [...stand.values()].some((p) => p.menge > 0 && !positionen.some((x) => x.key === p.key));
   if (liste.length && !geaendert) return { ok: false, fehler: 'Es hat sich gegenüber dem letzten Zwischenaufmaß nichts geändert. Es gibt nichts Neues zu erfassen.' };
-  if (rueckgaenge.length && !(eingabe.notiz || '').trim()) {
-    return { ok: false, fehler: `Bei ${rueckgaenge.map((p) => `„${p.bezeichnung}“ (${fmt(p.menge)} statt ${fmt(stand.get(p.key)!.menge)} ${p.einheit})`).join(', ')} ist die Menge kleiner als zuletzt. Das ist nur bei Rückbau oder Korrektur sinnvoll – bitte eine Notiz als Begründung eintragen. Gib sonst die GESAMTE Menge bis zum Stichtag ein, nicht nur die neue.` };
-  }
+  const fehler = pruefePositionenGegenStand(stand, positionen, eingabe.notiz || '');
+  if (fehler) return { ok: false, fehler };
+  // Vorhandene Positionen dürfen nicht stillschweigend verschwinden: fehlt eine (mit Begründung), wird sie mit Menge 0 geführt.
+  for (const p of stand.values()) if (p.menge > 0 && !positionen.some((x) => x.key === p.key)) positionen.push({ ...p, menge: 0 });
   const flaeche = runde2(positionen.filter((p) => p.einheit.toLowerCase() === 'm²' || p.einheit.toLowerCase() === 'm2').reduce((s, p) => s + p.menge, 0));
   return { ok: true, eintrag: { id, nr: naechsteZwischenaufmassNr(liste), stichtag: eingabe.stichtag, flaecheM2: flaeche, notiz: (eingabe.notiz || '').trim(), erstelltAm: jetzt.toISOString(), positionen } };
 }

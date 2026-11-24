@@ -3,7 +3,7 @@
 // Wird vom Server benutzt, damit die Mengenprüfung nicht nur im Dialog stattfindet.
 // ============================================================
 import {
-  normalisiereZwischenaufmasse, baueTeilleistungsPositionen, baueTeilleistungsPosition, positionsKey,
+  normalisiereZwischenaufmasse, baueTeilleistungsPositionen, baueTeilleistungsPosition, positionsKey, pruefePositionenGegenStand, aktuellerStandJePosition,
   type Zwischenaufmass,
 } from '@/lib/zwischenaufmass'
 
@@ -75,6 +75,13 @@ export function pruefeAufmassAenderung(altRoh: unknown, neuRoh: unknown): string
     if (JSON.stringify(altN.find((z) => z.id === a.id)) !== JSON.stringify(neuN.find((z) => z.id === a.id)) || (!!a.reserviertAm !== !!n.reserviertAm)) {
       return `${nr} ist abgerechnet bzw. wird gerade abgerechnet und kann nicht geändert werden. Eine Korrektur erfassen Sie als neues Zwischenaufmaß mit Begründung.`
     }
+  }
+  // Neu gespeicherte Zwischenaufmaße je Position gegen den bisherigen Stand prüfen (nicht nur im Dialog): sinkende oder fehlende Positionen brauchen eine Begründung
+  for (const zNeu of neuN) {
+    if (altN.some((z) => z.id === zNeu.id) || !zNeu.positionen?.length) continue
+    const aeltere = altN.filter((z) => z.nr < zNeu.nr)
+    const fehler = pruefePositionenGegenStand(aktuellerStandJePosition(aeltere), zNeu.positionen, zNeu.notiz)
+    if (fehler) return `ZA-${String(zNeu.nr).padStart(2, '0')}: ${fehler}`
   }
   for (const n of neu) {
     if (!n || typeof n !== 'object') continue
