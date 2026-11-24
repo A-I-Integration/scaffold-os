@@ -36,3 +36,7 @@ Bei Festpreis oder Pauschale heißt der Block unter „Kostenkalkulation“ jetz
 „Angebotspreis an den Kunden“ (gewählte Preisbasis inkl. Anpassungen, `calcAngebot().endpreis`). Bei der Preisbasis KI-Kalkulation bleibt „Empfohlener Verkaufspreis (25% Marge)“.
 Reine Anzeige (`components/aufmaß/KIMaterialResult.tsx`, zwei neue optionale Props); keine Änderung an Berechnung, Rechnungen oder PDF.
 Nicht geprüft: Aussehen im Browser.
+
+## Nachtrag 3: Materialliste im Angebots-PDF
+Bei Festpreis und Pauschale zeigt die Materialliste im PDF keine Einzel- und Gesamtpreise je Artikel mehr (deren Summe lag weit über dem Angebotspreis).
+Bei der Preisbasis KI-Kalkulation bleibt die Liste mit Preisen. Nicht geprüft: Aussehen im Browser.
