@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { requireAuth, unauthorizedResponse, pruefeRolle } from '@/lib/auth';
 import { ROLLEN } from '@/lib/rollen';
+import { angebotNettoAusProjekt } from '@/lib/auftragsstand';
 
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const key = process.env.SUPABASE_SERVICE_ROLE_KEY!;
@@ -32,6 +33,9 @@ export async function GET() {
     // ─── PROJEKTE ───
     const allProjects = await safeFetch('projects?select=*&order=created_at.desc');
     const now = new Date();
+    // Kransatz der Firma: geht wie im Angebot in den Angebotswert ein (Standard 850 €)
+    const firma = await safeFetch('company_settings?id=eq.00000000-0000-0000-0000-000000000001&select=calc_crane_day');
+    const kranSatz = Number(firma?.[0]?.calc_crane_day) || 850;
 
     const enrichedProjects = allProjects.map((p: any) => {
       const data = parseData(p.data);
@@ -41,12 +45,23 @@ export async function GET() {
       // blieben CAD-Projekte im Dashboard bei 0 €. Aufmaß (Schritt 6)
       // schreibt unter step6, deshalb zuerst dort suchen.
       const ki = step6.kiResult || step6.ki_result || data?.kiResult || data?.ki_result || {};
-      const total_value = p.total_value || ki.suggestedPrice || ki.suggested_price || 0;
-      const margin_percent = p.margin_percent || ki.marginPercent || ki.margin_percent || 0;
-      // Geschätzte Kosten = Umsatz * (1 - Marge/100)
-      const estimated_costs = total_value > 0 && margin_percent > 0
-        ? total_value * (1 - margin_percent / 100)
-        : 0;
+      // Wert = gespeicherter Wert, sonst der Angebotswert laut gewählter Preisbasis (Festpreis/Pauschale/Kalkulation, wie im Angebot und im
+      // Auftragsstand), erst zuletzt der reine KI-Preis. Vorher wurde bei Festpreis/Pauschale fälschlich der KI-Preis angezeigt.
+      const datenMitKi = data?.kiResult || !Object.keys(ki).length ? data : { ...data, kiResult: ki };
+      const angebot = p.total_value ? 0 : angebotNettoAusProjekt(datenMitKi, kranSatz);
+      const total_value = p.total_value || angebot || ki.suggestedPrice || ki.suggested_price || 0;
+      const eigenerPreis = !p.total_value && angebot > 0 && (data?.preisModus === 'festpreis' || data?.preisModus === 'pauschale');
+      const kiKosten = Number(ki.totalCost ?? ki.total_cost) || 0;
+      // Bei eigenem Preis (Festpreis/Pauschale) ergibt sich die Marge aus den kalkulierten Kosten, nicht aus der KI-Marge
+      const margin_percent = eigenerPreis && kiKosten > 0
+        ? Math.round(((total_value - kiKosten) / total_value) * 1000) / 10
+        : (p.margin_percent || ki.marginPercent || ki.margin_percent || 0);
+      // Geschätzte Kosten = Umsatz * (1 - Marge/100); bei eigenem Preis die kalkulierten Kosten
+      const estimated_costs = eigenerPreis && kiKosten > 0
+        ? kiKosten
+        : total_value > 0 && margin_percent > 0
+          ? total_value * (1 - margin_percent / 100)
+          : 0;
       const estimated_profit = total_value - estimated_costs;
       return {
         id: p.id,
