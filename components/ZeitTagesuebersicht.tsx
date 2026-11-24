@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { ABSCHNITT_ARTEN, ABSCHNITT_LABEL, tageszeile, fmtMinuten, type Abschnitt } from '@/lib/zeit-abschnitte';
+import { OrtungVorschlag, OrtungImport } from '@/components/OrtungBloecke';
 import { SpesenTag, SpesenMonatBlock, SpesenSaetzeBlock, type SpesenZeile, type SatzZeile } from '@/components/SpesenBloecke';
 
 // ============================================================
@@ -156,6 +157,7 @@ export default function ZeitTagesuebersicht({ canEdit }: { canEdit: boolean }) {
                 ))}
               </ul>
             )}
+            {canEdit && <OrtungVorschlag employeeId={emp.id} datum={datum} onUebernommen={laden} />}
             {spesenAn && !spesenFehlt && (
               <SpesenTag key={emp.id + datum + (spesenTage.find(t => t.employee_id === emp.id)?.id || 'neu') + (spesenTage.find(t => t.employee_id === emp.id)?.betrag_manuell ?? '')}
                 employeeId={emp.id} datum={datum} stempelStunden={Math.round((z.bruttoMinuten / 60) * 100) / 100}
@@ -169,6 +171,7 @@ export default function ZeitTagesuebersicht({ canEdit }: { canEdit: boolean }) {
           </div>
         );
       })}
+      {canEdit && <OrtungImport />}
       {spesenAn && spesenFehlt && <div className="rounded-xl p-3 text-sm mt-4 bg-amber-50 border border-amber-200 text-amber-800" data-testid="spesen-tabelle-fehlt">Die Tabellen für Spesen fehlen noch. Bitte phase-138-spesen.sql in Supabase ausführen.</div>}
       {spesenAn && !spesenFehlt && <SpesenMonatBlock monat={datum.slice(0, 7)} namen={Object.fromEntries(employees.map(e => [e.id, `${e.last_name}, ${e.first_name}`]))} key={datum.slice(0, 7) + spesenTage.length} />}
       {spesenAn && !spesenFehlt && <SpesenSaetzeBlock saetze={saetze} datum={datum} onGeaendert={spesenLaden} />}
