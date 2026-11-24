@@ -4,6 +4,7 @@ import { absenceBadge, absenceLabel } from '@/lib/abwesenheit'
 import { useState, useEffect, useCallback, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import AuftragsTeam from '@/components/AuftragsTeam';
+import UrlaubsUebersicht, { type KontoZeile } from '@/components/UrlaubsUebersicht';
 import {
   getEmployees,
   getAbsences,
@@ -42,6 +43,7 @@ function PlanungContent() {
   const [activeTab, setActiveTab] = useState<Tab>(initialTab);
   const [employees, setEmployees] = useState<EmployeeWithSkills[]>([]);
   const [absences, setAbsences] = useState<Absence[]>([]);
+  const [urlaubKonten, setUrlaubKonten] = useState<KontoZeile[]>([]);
   const [tours, setTours] = useState<TourPlan[]>([]);
   const [stats, setStats] = useState<EmployeeStats | null>(null);
   const [loading, setLoading] = useState(true);
@@ -95,6 +97,12 @@ function PlanungContent() {
       setAbsences(absData);
       setTours(tourData);
       setStats(statsData);
+      // Urlaubskonto (Anspruch, genommen, unbezahlt); ein Fehler hier blockiert die Planung nicht
+      try {
+        const r = await fetch('/api/urlaubskonto?alle=1', { cache: 'no-store' });
+        const j = await r.json();
+        if (j.success) setUrlaubKonten(j.konten || []);
+      } catch { /* Planung bleibt nutzbar */ }
     } catch (err: any) {
       setError(err.message);
     } finally {
@@ -384,7 +392,8 @@ function PlanungContent() {
         )}
 
         {/* ABWESENHEITEN */}
-        {activeTab === 'absences' && (
+        {activeTab === 'absences' && (<>
+          <UrlaubsUebersicht konten={urlaubKonten} />
           <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
             <div className="overflow-x-auto">
               <table className="w-full text-sm text-left text-gray-900">
@@ -409,6 +418,10 @@ function PlanungContent() {
                         <span className={`px-2 py-1 rounded-full text-xs font-semibold ${absenceBadge(abs.type)}`}>
                           {absenceLabel(abs.type)}
                         </span>
+                        {abs.type === 'vacation' && (() => {
+                          const z = urlaubKonten.flatMap(k => k.konto.zeilen).find(x => x.id === abs.id);
+                          return z ? <div className={`mt-1 text-xs ${z.unbezahlt > 0 ? 'text-amber-700 font-semibold' : 'text-gray-500'}`} data-testid="abs-urlaubstage">{z.tage} Arbeitstage{z.unbezahlt > 0 ? ` · davon ${z.unbezahlt} unbezahlt` : ''}</div> : null;
+                        })()}
                       </td>
                       <td className="px-6 py-4 text-gray-600">{new Date(abs.start_date).toLocaleDateString('de-DE')}</td>
                       <td className="px-6 py-4 text-gray-600">{new Date(abs.end_date).toLocaleDateString('de-DE')}</td>
@@ -440,7 +453,7 @@ function PlanungContent() {
               {absences.length === 0 && <div className="p-8 text-center text-gray-500 text-sm">Keine Abwesenheiten</div>}
             </div>
           </div>
-        )}
+        </>)}
 
         {/* TOURS */}
         {activeTab === 'tours' && (

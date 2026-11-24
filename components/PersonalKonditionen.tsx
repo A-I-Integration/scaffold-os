@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import StundenlohnBlock from '@/components/StundenlohnBlock';
+import UrlaubskontoKarte from '@/components/UrlaubskontoKarte';
 import { SONDERZAHLUNG_ARTEN, SONDERZAHLUNG_LABEL, urlaubsanspruchAm } from '@/lib/konditionen';
 
 // ============================================================
@@ -26,6 +27,7 @@ export default function PersonalKonditionen({ employees }: { employees: Ma[] }) 
   const [verboten, setVerboten] = useState(false);
   const [meldung, setMeldung] = useState<{ ok: boolean; text: string } | null>(null);
   const [laeuft, setLaeuft] = useState(false);
+  const [stand, setStand] = useState(0);
 
   const [eintritt, setEintritt] = useState('');
   const [frist, setFrist] = useState('');
@@ -48,7 +50,7 @@ export default function PersonalKonditionen({ employees }: { employees: Ma[] }) 
     const j = await res.json().catch(() => ({}));
     if (!j.success) { setMeldung({ ok: false, text: j.error || 'Laden fehlgeschlagen' }); return; }
     setEintritt(j.eintrittsdatum || ''); setFrist(j.konditionen?.kuendigungsfrist || ''); setProbe(j.konditionen?.probezeit_ende || ''); setKNotiz(j.konditionen?.notiz || '');
-    setUrlaub(j.urlaub || []); setSonder(j.sonderzahlungen || []);
+    setUrlaub(j.urlaub || []); setSonder(j.sonderzahlungen || []); setStand(x => x + 1);
   }, []);
   useEffect(() => { setMeldung(null); setSArt(''); laden(empId); }, [empId, laden]);
 
@@ -93,7 +95,7 @@ export default function PersonalKonditionen({ employees }: { employees: Ma[] }) 
             <div className="grid grid-cols-1 md:grid-cols-4 gap-3 items-end">
               <div><label className="block text-xs text-[#86868b] mb-1">Erster Arbeitstag</label>
                 <input type="date" value={eintritt} onChange={e => setEintritt(e.target.value)} className={inputCls} data-testid="konditionen-eintritt-datum" /></div>
-              <div><label className="block text-xs text-[#86868b] mb-1">Aktueller Urlaubsanspruch</label>
+              <div><label className="block text-xs text-[#86868b] mb-1">Urlaubsanspruch pro Jahr (aktuell)</label>
                 <p className="py-2 text-sm font-semibold" data-testid="konditionen-urlaub-aktuell">{anspruch === null ? 'noch nicht hinterlegt' : `${zahlDe(anspruch)} Tage pro Jahr`}</p></div>
               <div><label className="block text-xs text-[#86868b] mb-1">Ende der Probezeit</label>
                 <input type="date" value={probe} onChange={e => setProbe(e.target.value)} className={inputCls} /></div>
@@ -104,6 +106,7 @@ export default function PersonalKonditionen({ employees }: { employees: Ma[] }) 
             <button type="button" disabled={laeuft} onClick={() => senden({ typ: 'konditionen', eintrittsdatum: eintritt, kuendigungsfrist: frist, probezeit_ende: probe, notiz: kNotiz }, 'Konditionen gespeichert.')}
               className="rounded-lg bg-[#e8590c] px-4 py-2 text-sm font-semibold text-white disabled:opacity-60" data-testid="konditionen-speichern">Speichern</button>
 
+            <UrlaubskontoKarte key={stand} employeeId={empId} />
             <h4 className="text-sm font-semibold pt-2">Urlaubsanspruch ändern</h4>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
               <input value={uTage} onChange={e => setUTage(e.target.value)} inputMode="decimal" placeholder="Tage pro Jahr (z. B. 30)" className={inputCls} data-testid="konditionen-urlaub-tage" />
