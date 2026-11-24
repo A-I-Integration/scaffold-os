@@ -899,32 +899,28 @@ function Schritt6Content() {
     doc.text(`Datum: ${new Date().toLocaleDateString('de-DE')}`, 112, y + 14); doc.text(`Gültig bis: ${new Date(Date.now() + 30 * 86400000).toLocaleDateString('de-DE')}`, 112, y + 20); doc.text(`Gerüstklasse: ${kiResult.scaffoldClass || '-'}`, 112, y + 26);
     y = 82 + (projBoxH - 30);
     const riskColor = kiResult.riskLevel === 'red' ? [239, 68, 68] : kiResult.riskLevel === 'yellow' ? [245, 158, 11] : [16, 185, 129];
-    doc.setFillColor(riskColor[0], riskColor[1], riskColor[2]); doc.circle(pageWidth - 30, y, 5, 'F');
     doc.setTextColor(riskColor[0], riskColor[1], riskColor[2]); doc.setFontSize(9); doc.setFont('helvetica', 'bold');
     const riskText = kiResult.riskLevel === 'red' ? 'HOCHES RISIKO' : kiResult.riskLevel === 'yellow' ? 'MITTLERES RISIKO' : 'NIEDRIGES RISIKO';
+    // Punkt links neben dem Text (vorher lag er über dem Text)
+    doc.setFillColor(riskColor[0], riskColor[1], riskColor[2]); doc.circle(pageWidth - 14 - doc.getTextWidth(riskText) - 4, y - 0.5, 2, 'F');
     doc.text(riskText, pageWidth - 14, y + 1, { align: 'right' });
     y = 95; doc.setTextColor(30, 58, 138); doc.setFontSize(12); doc.setFont('helvetica', 'bold'); doc.text('Materialliste (KI-berechnet)', 14, y);
     const tableBody = kiResult.materialList.map((item, i) => [(i + 1).toString(), item.articleNumber, item.name, item.quantity.toString(), item.unit, item.unitPrice.toFixed(2) + ' €', item.totalPrice.toFixed(2) + ' €']);
     autoTable(doc, { startY: y + 5, head: [['Pos.', 'Art.-Nr.', 'Bezeichnung', 'Menge', 'Einh.', 'Einzel', 'Gesamt']], body: tableBody, theme: 'grid', headStyles: { fillColor: [30, 58, 138], textColor: 255, fontSize: 8, fontStyle: 'bold' }, bodyStyles: { fontSize: 8, textColor: 15 }, alternateRowStyles: { fillColor: [248, 250, 252] }, columnStyles: { 0: { cellWidth: 12 }, 1: { cellWidth: 25 }, 2: { cellWidth: 'auto' }, 3: { cellWidth: 18, halign: 'right' }, 4: { cellWidth: 18, halign: 'center' }, 5: { cellWidth: 25, halign: 'right' }, 6: { cellWidth: 28, halign: 'right' } }, margin: { left: 14, right: 14 } });
     const finalY = (doc as any).lastAutoTable.finalY + 15;
-    doc.setFillColor(248, 250, 252); doc.rect(110, finalY, 86, 75, 'F'); let cy = finalY + 8;
-    doc.setFontSize(9); doc.setTextColor(71, 85, 105); doc.setFont('helvetica', 'normal');
-    doc.text('Materialkosten', 116, cy); doc.text(kiResult.totalMaterialCost.toFixed(2) + ' €', 190, cy, { align: 'right' }); cy += 10;
-    doc.text('Lohnkosten', 116, cy); doc.text(`(${kiResult.estimatedLaborHours} h)`, 116, cy + 5); doc.text(kiResult.laborCost.toFixed(2) + ' €', 190, cy, { align: 'right' }); cy += 14;
-    doc.text('Transport & Logistik', 116, cy); doc.text(kiResult.transportCost.toFixed(2) + ' €', 190, cy, { align: 'right' }); cy += 12;
-    doc.setDrawColor(203, 213, 225); doc.line(116, cy, 190, cy); cy += 8;
-    doc.setTextColor(15, 23, 42); doc.setFont('helvetica', 'bold'); doc.text('GESAMTKOSTEN', 116, cy); doc.text(kiResult.totalCost.toFixed(2) + ' €', 190, cy, { align: 'right' }); cy += 14;
-    doc.setFillColor(236, 253, 245); doc.rect(110, cy - 5, 86, 20, 'F'); doc.setTextColor(4, 120, 87); doc.setFontSize(8); doc.text('Empfohlener Verkaufspreis', 116, cy + 2); doc.setFontSize(12); doc.text(kiResult.suggestedPrice.toFixed(2) + ' €', 190, cy + 2, { align: 'right' }); doc.setFontSize(8); doc.text(`Marge: ${kiResult.margin.toFixed(2)} € (${kiResult.marginPercent}%)`, 116, cy + 12);
+    // Die interne Kalkulation (Material-, Lohn-, Transport- und Gesamtkosten, empfohlener Verkaufspreis, Marge) steht nicht im
+    // Kunden-PDF – sie bleibt auf dem Bildschirm. Im PDF gilt nur der Angebotspreis laut gewählter Preisbasis.
+    let cy = finalY - 14;
     // NEU: Angebot-Anpassungen (Skonto, Mietverlängerung, Nachtrag, Sonderrabatt)
     const ang = calcAngebot();
     const hatAnpassungen = anpassungen.skonto || anpassungen.miete.aktiv || anpassungen.nachtrag.aktiv || anpassungen.statik?.aktiv || anpassungen.rabatt.aktiv || ang.fahrtBetrag > 0 || preisModus !== 'ki';
-    if (hatAnpassungen) {
+    {
       cy += 22;
       if (cy > 235) { doc.addPage(); cy = 30; } // Platz-Sicherung bei langen Materiallisten
       doc.setTextColor(30, 58, 138); doc.setFontSize(10); doc.setFont('helvetica', 'bold');
-      doc.text('Angebots-Anpassungen', 110, cy); cy += 8;
+      doc.text(hatAnpassungen ? 'Angebots-Anpassungen' : 'Angebotspreis', 110, cy); cy += 8;
       doc.setFontSize(9); doc.setFont('helvetica', 'normal'); doc.setTextColor(71, 85, 105);
-      doc.text(preisModus === 'pauschale' ? 'Pauschale' : preisModus === 'festpreis' ? 'Festpreis (m² × Preis)' : 'Basispreis (KI-Kalkulation)', 116, cy); doc.text(ang.basis.toFixed(2) + ' €', 190, cy, { align: 'right' }); cy += 9;
+      doc.text(preisModus === 'pauschale' ? 'Pauschale' : preisModus === 'festpreis' ? 'Festpreis (m² × Preis)' : 'Gerüstbau gemäß Angebot', 116, cy); doc.text(ang.basis.toFixed(2) + ' €', 190, cy, { align: 'right' }); cy += 9;
       if (ang.kranBetrag > 0) {
         doc.text(`Kran (${ang.kranTage} T. à ${ang.kranTagessatz} €)`, 116, cy); doc.text(ang.kranBetrag.toFixed(2) + ' €', 190, cy, { align: 'right' }); cy += 9;
       }
