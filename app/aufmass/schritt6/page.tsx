@@ -1,6 +1,7 @@
 'use client';
 
 import { zahlAusEingabe } from '@/lib/zahl-eingabe';
+import { berechneAngebot } from '@/lib/schlussrechnung';
 import { fetchRechnungAnlegen } from '@/lib/rechnung-anlegen-client'
 import { angebotsVorbelegung, fahrtSatz, fahrtBetrag, fahrtText, type KundenPreis } from '@/lib/kunden-preis';
 import { merkeBefehl } from '@/lib/offline/nachsenden';
@@ -179,30 +180,16 @@ function Schritt6Content() {
 
   // Live-Kalkulation: Basis = KI-Verkaufspreis ODER Festpreis/m² × Fläche, dann Zu-/Abschläge
   function calcAngebot() {
-    const flaeche = kiResult?.totalAreaM2 ?? 0;
-    const basis = preisModus === 'pauschale'
-      ? zahlAusEingabe(pauschale)
-      : preisModus === 'festpreis'
-        ? (parseFloat(festpreisProM2.replace(',', '.')) || 0) * flaeche
-        : (kiResult?.suggestedPrice ?? 0);
-    // Fahrt nach km nur zusammen mit festem Preis (bei der Kalkulation steckt der Transport schon im Preis)
-    const fahrtBetragNetto = preisModus === 'ki' ? 0 : fahrtBetrag(anpassungen.fahrt);
-    const mieteBetrag = anpassungen.miete.aktiv
-      ? (parseFloat(anpassungen.miete.wochen) || 0) * (parseFloat(anpassungen.miete.preisProWoche) || 0)
-      : 0;
-    const nachtragBetrag = anpassungen.nachtrag.aktiv ? parseFloat(anpassungen.nachtrag.betrag) || 0 : 0;
-    const statikBetrag = anpassungen.statik?.aktiv ? parseFloat(String(anpassungen.statik.betrag).replace(',', '.')) || 0 : 0;
-    const rabattBetrag = anpassungen.rabatt.aktiv ? parseFloat(anpassungen.rabatt.betrag) || 0 : 0;
-    // Phase 88: Kran-Position - Tagessatz aus Einstellungen x Bauzeit (Schritt 1),
-    // nur wenn der Haken in Schritt 4 gesetzt ist. Vorher: Haken existierte,
-    // wurde aber nie gelesen UND die Kalkulation kannte keine Kran-Position.
+    // Eine gemeinsame Rechnung (lib/schlussrechnung): Anzeige, PDF, Rechnung und Dashboard dürfen nie auseinanderlaufen
+    // (früher: parseFloat ohne Komma-Behandlung → „1,5 Wochen“ wurde als 1 gerechnet, die Rechnung aber mit 1,5).
     const kranTage = parseInt(String((stepData as any)?.step1?.dauer || '1')) || 1;
     const kranTagessatz = Number(companyProfile?.calc_crane_day) || 850;
     const kranAktiv = !!((stepData as any)?.step4?.kranErforderlich);
-    const kranBetrag = kranAktiv ? Math.round(kranTagessatz * kranTage * 100) / 100 : 0;
-    const endpreis = Math.max(0, basis + mieteBetrag + nachtragBetrag + statikBetrag + kranBetrag + fahrtBetragNetto - rabattBetrag);
-    const skontoBetrag = anpassungen.skonto ? endpreis * 0.02 : 0;
-    return { basis, mieteBetrag, nachtragBetrag, statikBetrag, kranBetrag, kranTage, kranTagessatz, kranAktiv, fahrtBetrag: fahrtBetragNetto, rabattBetrag, endpreis, skontoBetrag };
+    const r = berechneAngebot({
+      kiResult: kiResult ?? null, preisModus, festpreisProM2, pauschale, anpassungen: anpassungen as any,
+      kranAktiv, kranTage, kranTagessatz,
+    });
+    return { basis: r.basis, mieteBetrag: r.mieteBetrag, nachtragBetrag: r.nachtragBetrag, statikBetrag: r.statikBetrag, kranBetrag: r.kranBetrag, kranTage, kranTagessatz, kranAktiv, fahrtBetrag: r.fahrtBetrag, rabattBetrag: r.rabattBetrag, endpreis: r.endpreis, skontoBetrag: r.skontoBetrag };
   }
   const eur = (n: number) => n.toFixed(2) + ' €';
 
