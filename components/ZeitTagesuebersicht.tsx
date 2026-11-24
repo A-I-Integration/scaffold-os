@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { ABSCHNITT_ARTEN, ABSCHNITT_LABEL, tageszeile, fmtMinuten, type Abschnitt } from '@/lib/zeit-abschnitte';
+import { SpesenTag, SpesenMonatBlock, SpesenSaetzeBlock, type SpesenZeile, type SatzZeile } from '@/components/SpesenBloecke';
 
 // ============================================================
 // SCAFFOLD OS – Tagesübersicht der Zeiterfassung
@@ -29,6 +30,10 @@ export default function ZeitTagesuebersicht({ canEdit }: { canEdit: boolean }) {
   const [meldung, setMeldung] = useState('');
   const [form, setForm] = useState<typeof leeresFormular | null>(null);
   const [speichert, setSpeichert] = useState(false);
+  const [spesenTage, setSpesenTage] = useState<SpesenZeile[]>([]);
+  const [saetze, setSaetze] = useState<SatzZeile[]>([]);
+  const [spesenFehlt, setSpesenFehlt] = useState(false);
+  const [spesenAn, setSpesenAn] = useState(false);
 
   const laden = useCallback(async () => {
     setLaedt(true); setMeldung('');
@@ -40,7 +45,16 @@ export default function ZeitTagesuebersicht({ canEdit }: { canEdit: boolean }) {
     } catch (e: any) { setMeldung(e.message || 'Laden fehlgeschlagen.'); }
     finally { setLaedt(false); }
   }, [datum]);
-  useEffect(() => { laden(); }, [laden]);
+  const spesenLaden = useCallback(async () => {
+    if (!canEdit) return;
+    try {
+      const r = await fetch(`/api/spesen?datum=${datum}`, { cache: 'no-store' });
+      const j = await r.json();
+      if (!j.success) { setSpesenAn(false); return; }
+      setSpesenAn(true); setSpesenTage(j.tage); setSaetze(j.saetze); setSpesenFehlt(!!j.tabelleFehlt);
+    } catch { setSpesenAn(false); }
+  }, [datum, canEdit]);
+  useEffect(() => { laden(); spesenLaden(); }, [laden, spesenLaden]);
   useEffect(() => {
     fetch('/api/projects').then(r => r.json()).then(j => { if (j.success) setProjekte((j.projects || []).map((p: any) => ({ id: p.id, name: p.name }))); }).catch(() => {});
   }, []);
@@ -142,6 +156,11 @@ export default function ZeitTagesuebersicht({ canEdit }: { canEdit: boolean }) {
                 ))}
               </ul>
             )}
+            {spesenAn && !spesenFehlt && (
+              <SpesenTag key={emp.id + datum + (spesenTage.find(t => t.employee_id === emp.id)?.id || 'neu') + (spesenTage.find(t => t.employee_id === emp.id)?.betrag_manuell ?? '')}
+                employeeId={emp.id} datum={datum} stempelStunden={Math.round((z.bruttoMinuten / 60) * 100) / 100}
+                fortbildung={(z.minuten.fortbildung || 0) > 0} zeile={spesenTage.find(t => t.employee_id === emp.id)} saetze={saetze} onGespeichert={spesenLaden} />
+            )}
             {meine.length > 0 && (
               <p className="text-xs text-[#86868b] mt-2">
                 {Object.entries(z.minuten).map(([art, m]) => `${ABSCHNITT_LABEL[art] || art}: ${fmtMinuten(m)}`).join(' · ')}
@@ -150,6 +169,9 @@ export default function ZeitTagesuebersicht({ canEdit }: { canEdit: boolean }) {
           </div>
         );
       })}
+      {spesenAn && spesenFehlt && <div className="rounded-xl p-3 text-sm mt-4 bg-amber-50 border border-amber-200 text-amber-800" data-testid="spesen-tabelle-fehlt">Die Tabellen für Spesen fehlen noch. Bitte phase-138-spesen.sql in Supabase ausführen.</div>}
+      {spesenAn && !spesenFehlt && <SpesenMonatBlock monat={datum.slice(0, 7)} namen={Object.fromEntries(employees.map(e => [e.id, `${e.last_name}, ${e.first_name}`]))} key={datum.slice(0, 7) + spesenTage.length} />}
+      {spesenAn && !spesenFehlt && <SpesenSaetzeBlock saetze={saetze} datum={datum} onGeaendert={spesenLaden} />}
       <p className="text-xs text-[#86868b] mt-4">Die Abschnitte gliedern den Tag. Die gebuchten Stunden kommen weiterhin aus der Stempelzeit; Korrekturen dort wie bisher in der Monatsansicht.</p>
     </div>
   );
