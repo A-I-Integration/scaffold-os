@@ -1,353 +1,49 @@
 'use client';
 
-import StundenlohnBlock from '@/components/StundenlohnBlock';
-import { zufallsPasswort } from '@/lib/passwort';
-import { useState, useEffect, useCallback } from 'react';
+import { useEffect, useState } from 'react';
+import MitarbeiterZugaenge from '@/components/MitarbeiterZugaenge';
+import PersonalStamm from '@/components/PersonalStamm';
+import PersonalDokumente from '@/components/PersonalDokumente';
 
 // ============================================================
-// SCAFFOLD OS – Mitarbeiter & Zugänge (nur CEO + Dispo)
-// Phase 6 / Stufe 2
-// • Übersicht: welcher Mitarbeiter hat schon einen Login?
-// • Neuer Mitarbeiter MIT Login anlegen
-// • Bestehenden Mitarbeiter mit neuem Login verknüpfen
+// SCAFFOLD OS – Personal: drei Reiter
+//   Zugänge & Lohnabrechnung | Mitarbeiter (Personalstamm) | Dokumente
 // ============================================================
 
-interface Employee {
-  id: string;
-  first_name: string;
-  last_name: string;
-  email: string | null;
-  status: string;
-  user_id: string | null;
-}
-
-interface PayrollDoc {
-  id: string;
-  month: string;
-  file_name: string;
-  uploaded_at: string;
-  sent_at: string | null;
-}
-
-const ROLES = [
-  { value: 'mitarbeiter', label: 'Mitarbeiter – Stempeln, eigene Fahrten, Krank/Urlaub' },
-  { value: 'lager', label: 'Lager – Lager + Stempeln + Krank/Urlaub' },
-  { value: 'bauleiter', label: 'Bauleiter – Aufmaß, Lager, Übersicht, Stempeln' },
-  { value: 'disponent', label: 'Dispo – Mitarbeiter, Touren, Verwaltung' },
-  { value: 'admin', label: 'CEO/Admin – alles' },
-  { value: 'statiker', label: 'Statiker (extern) – sieht nur freigegebene CAD-Projekte, ohne Preise' },
+type Reiter = 'zugaenge' | 'stamm' | 'dokumente';
+const REITER: { key: Reiter; label: string }[] = [
+  { key: 'zugaenge', label: '🔑 Zugänge & Lohnabrechnung' },
+  { key: 'stamm', label: '👤 Mitarbeiter' },
+  { key: 'dokumente', label: '📎 Dokumente' },
 ];
 
-function randomPassword(): string {
-  return zufallsPasswort(12);
-}
-
 export default function MitarbeiterPage() {
-  const [employees, setEmployees] = useState<Employee[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
+  const [reiter, setReiter] = useState<Reiter>('zugaenge');
+  const [employees, setEmployees] = useState<{ id: string; first_name: string; last_name: string }[]>([]);
 
-  // Formular
-  const [linkExisting, setLinkExisting] = useState('');
-  const [firstName, setFirstName] = useState('');
-  const [lastName, setLastName] = useState('');
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [role, setRole] = useState('mitarbeiter');
-  const [saving, setSaving] = useState(false);
-  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
-
-  const load = useCallback(async () => {
-    setLoading(true);
-    try {
-      const res = await fetch('/api/admin/users?t=' + Date.now(), { cache: 'no-store' });
-      const json = await res.json();
-      if (json.success) setEmployees(json.employees || []);
-      else setError(json.error || 'Fehler beim Laden');
-    } catch (e: any) { setError(e.message); }
-    setLoading(false);
-  }, []);
-
-  useEffect(() => { load(); }, [load]);
-
-  const unlinked = employees.filter(e => !e.user_id);
-
-  // ─── Lohnabrechnungen hochladen (NEU: Mitarbeiter-Bereich) ───
-  const [lohnEmployee, setLohnEmployee] = useState('');
-  const [lohnMonth, setLohnMonth] = useState(currentMonth());
-  const [lohnFile, setLohnFile] = useState<File | null>(null);
-  const [lohnUploading, setLohnUploading] = useState(false);
-  const [lohnMsg, setLohnMsg] = useState<{ ok: boolean; text: string } | null>(null);
-  const [lohnDocs, setLohnDocs] = useState<PayrollDoc[]>([]);
-  const [lohnLoading, setLohnLoading] = useState(false);
-
-  function currentMonth(): string {
-    const n = new Date();
-    return `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, '0')}`;
-  }
-
-  const loadLohnDocs = useCallback(async (employeeId: string) => {
-    if (!employeeId) { setLohnDocs([]); return; }
-    setLohnLoading(true);
-    try {
-      const res = await fetch(`/api/lohnabrechnungen?employee_id=${employeeId}`, { cache: 'no-store' });
-      const json = await res.json();
-      if (json.success) setLohnDocs(json.documents || []);
-    } catch { /* still, wird oben ggf. per Fehlermeldung sichtbar */ }
-    setLohnLoading(false);
-  }, []);
-
-  useEffect(() => { loadLohnDocs(lohnEmployee); }, [lohnEmployee, loadLohnDocs]);
-
-  async function lohnHochladen() {
-    setLohnMsg(null);
-    if (!lohnEmployee || !lohnMonth || !lohnFile) {
-      setLohnMsg({ ok: false, text: 'Mitarbeiter, Monat und PDF sind Pflicht.' });
-      return;
-    }
-    setLohnUploading(true);
-    try {
-      const fd = new FormData();
-      fd.set('employee_id', lohnEmployee);
-      fd.set('month', lohnMonth);
-      fd.set('file', lohnFile);
-      const res = await fetch('/api/lohnabrechnungen', { method: 'POST', body: fd });
-      const json = await res.json();
-      if (!json.success) throw new Error(json.error);
-      setLohnMsg({ ok: true, text: `✅ Lohnabrechnung ${lohnMonth} hochgeladen.` });
-      setLohnFile(null);
-      loadLohnDocs(lohnEmployee);
-    } catch (e: any) {
-      setLohnMsg({ ok: false, text: '❌ ' + e.message });
-    }
-    setLohnUploading(false);
-  }
-
-  async function lohnLoeschen(id: string) {
-    if (!confirm('Diese Lohnabrechnung wirklich löschen?')) return;
-    try {
-      const res = await fetch(`/api/lohnabrechnungen?id=${id}`, { method: 'DELETE' });
-      const json = await res.json();
-      if (!json.success) throw new Error(json.error);
-      loadLohnDocs(lohnEmployee);
-    } catch (e: any) {
-      alert('Fehler beim Löschen: ' + e.message);
-    }
-  }
-
-  async function submit() {
-    setMsg(null);
-    if (!email.trim() || !password) { setMsg({ ok: false, text: 'E-Mail und Passwort sind Pflicht.' }); return; }
-    if (!linkExisting && (!firstName.trim() || !lastName.trim())) {
-      setMsg({ ok: false, text: 'Vor- und Nachname fehlen – oder oben einen bestehenden Mitarbeiter wählen.' });
-      return;
-    }
-    setSaving(true);
-    try {
-      const res = await fetch('/api/admin/users', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          first_name: firstName.trim(),
-          last_name: lastName.trim(),
-          email: email.trim(),
-          password,
-          role,
-          employee_id: role === 'statiker' ? undefined : linkExisting || undefined,
-        }),
-      });
-      const json = await res.json();
-      if (!json.success) throw new Error(json.error);
-      setMsg({
-        ok: true,
-        text: `✅ Zugang angelegt! Bitte an den Mitarbeiter weitergeben:\nE-Mail: ${email.trim()}\nPasswort: ${password}`,
-      });
-      setFirstName(''); setLastName(''); setEmail(''); setPassword(''); setLinkExisting('');
-      load();
-    } catch (e: any) {
-      setMsg({ ok: false, text: '❌ ' + e.message });
-    }
-    setSaving(false);
-  }
-
-  const inputCls = 'w-full rounded-lg bg-[#f5f5f7] border border-black/10 px-3 py-2 text-[#1d1d1f] placeholder-[#86868b] focus:border-[#e8590c] focus:outline-none';
+  useEffect(() => {
+    fetch('/api/admin/users?t=' + Date.now(), { cache: 'no-store' })
+      .then(r => r.json()).then(j => { if (j.success) setEmployees(j.employees || []); }).catch(() => undefined);
+  }, [reiter]);
 
   return (
     <div className="min-h-screen bg-[#fbfbfd] text-[#1d1d1f] p-4 md:p-8">
       <div className="max-w-4xl mx-auto space-y-6">
         <header>
-          <h1 className="text-2xl md:text-3xl font-bold">👥 Mitarbeiter & Zugänge</h1>
-          <p className="text-[#86868b] mt-1">Logins anlegen und Mitarbeiter verknüpfen – nur für CEO und Dispo.</p>
+          <h1 className="text-2xl md:text-3xl font-bold">👥 Personal</h1>
+          <p className="text-[#86868b] mt-1">Zugänge, Personalstamm und Dokumente der Mitarbeiter.</p>
         </header>
-
-        {error && <div className="bg-red-900/40 border border-red-200 rounded-xl p-4 text-red-700">{error}</div>}
-
-        {/* ─── Formular: Neuer Zugang ─── */}
-        <section className="bg-white border border-black/5 rounded-2xl p-5 space-y-4">
-          <h2 className="text-lg font-semibold">🔑 Neuen Zugang anlegen</h2>
-
-          {role !== 'statiker' && (
-          <div>
-            <label className="block text-sm text-[#86868b] mb-1">Bestehenden Mitarbeiter verknüpfen (optional)</label>
-            <select value={linkExisting} onChange={e => setLinkExisting(e.target.value)} className={inputCls}>
-              <option value="">– Neuer Mitarbeiter (unten Name eingeben) –</option>
-              {unlinked.map(e => (
-                <option key={e.id} value={e.id}>{e.first_name} {e.last_name}</option>
-              ))}
-            </select>
-          </div>
-          )}
-
-          {(role === 'statiker' || !linkExisting) && (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm text-[#86868b] mb-1">Vorname *</label>
-                <input value={firstName} onChange={e => setFirstName(e.target.value)} className={inputCls} placeholder="Max" />
-              </div>
-              <div>
-                <label className="block text-sm text-[#86868b] mb-1">Nachname *</label>
-                <input value={lastName} onChange={e => setLastName(e.target.value)} className={inputCls} placeholder="Mustermann" />
-              </div>
-            </div>
-          )}
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm text-[#86868b] mb-1">E-Mail (Login) *</label>
-              <input type="email" value={email} onChange={e => setEmail(e.target.value)} className={inputCls} placeholder="max@firma.de" />
-            </div>
-            <div>
-              <label className="block text-sm text-[#86868b] mb-1">Passwort *</label>
-              <div className="flex gap-2">
-                <input value={password} onChange={e => setPassword(e.target.value)} className={inputCls} placeholder="mind. 6 Zeichen" />
-                <button type="button" onClick={() => setPassword(randomPassword())}
-                  className="shrink-0 rounded-xl bg-black/10 hover:bg-black/15 px-3 text-sm transition">
-                  🎲 Vorschlagen
-                </button>
-              </div>
-            </div>
-          </div>
-
-          <div>
-            <label className="block text-sm text-[#86868b] mb-1">Rolle *</label>
-            <select value={role} onChange={e => setRole(e.target.value)} className={inputCls}>
-              {ROLES.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
-            </select>
-            {role === 'statiker' && (
-              <p className="text-xs text-[#86868b] mt-1">Externer Zugang für Ingenieurbüros: kein Mitarbeiter-Datensatz, sieht nur Projekte, die du ihm freigibst (Kunden → Rechnungen → „Statiker freigeben“).</p>
-            )}
-          </div>
-
-          <button onClick={submit} disabled={saving}
-            className="rounded-xl bg-[#e8590c] hover:bg-[#d9480f] text-white disabled:opacity-50 px-5 py-2.5 font-semibold transition">
-            {saving ? '⏳ Lege an…' : '🔑 Zugang anlegen'}
-          </button>
-
-          {msg && (
-            <div className={`rounded-xl p-4 whitespace-pre-line ${msg.ok ? 'bg-emerald-50 border border-emerald-200 text-emerald-700' : 'bg-red-50 border border-red-200 text-red-700'}`}>
-              {msg.text}
-            </div>
-          )}
-        </section>
-
-        <StundenlohnBlock employees={employees} />
-
-        {/* ─── Lohnabrechnung hochladen (NEU) ─── */}
-        <section className="bg-white border border-black/5 rounded-2xl p-5 space-y-4">
-          <h2 className="text-lg font-semibold">💶 Lohnabrechnung ablegen</h2>
-          <p className="text-sm text-[#86868b]">
-            Fertige Lohnabrechnung (PDF) pro Mitarbeiter und Monat hochladen – der Mitarbeiter sieht sie danach
-            im eigenen Bereich unter „Lohnabrechnungen" (ansehen, versenden, als PDF speichern).
-          </p>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div>
-              <label className="block text-sm text-[#86868b] mb-1">Mitarbeiter *</label>
-              <select value={lohnEmployee} onChange={e => setLohnEmployee(e.target.value)} className={inputCls}>
-                <option value="">– wählen –</option>
-                {employees.map(e => (
-                  <option key={e.id} value={e.id}>{e.first_name} {e.last_name}</option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="block text-sm text-[#86868b] mb-1">Monat *</label>
-              <input type="month" value={lohnMonth} onChange={e => setLohnMonth(e.target.value)} className={inputCls} />
-            </div>
-            <div>
-              <label className="block text-sm text-[#86868b] mb-1">PDF *</label>
-              <input type="file" accept="application/pdf" onChange={e => setLohnFile(e.target.files?.[0] || null)}
-                className="w-full text-sm text-[#424245] file:mr-3 file:py-2 file:px-3 file:rounded-lg file:border-0 file:bg-black/10 file:text-sm file:font-medium hover:file:bg-black/15" />
-            </div>
-          </div>
-          <button onClick={lohnHochladen} disabled={lohnUploading}
-            className="rounded-xl bg-[#e8590c] hover:bg-[#d9480f] text-white disabled:opacity-50 px-5 py-2.5 font-semibold transition">
-            {lohnUploading ? '⏳ Lädt hoch…' : '⬆️ Hochladen'}
-          </button>
-          {lohnMsg && (
-            <div className={`rounded-xl p-4 ${lohnMsg.ok ? 'bg-emerald-50 border border-emerald-200 text-emerald-700' : 'bg-red-50 border border-red-200 text-red-700'}`}>
-              {lohnMsg.text}
-            </div>
-          )}
-
-          {lohnEmployee && (
-            <div className="pt-2">
-              <h3 className="text-sm font-semibold text-[#424245] mb-2">Bereits abgelegt</h3>
-              {lohnLoading ? (
-                <p className="text-sm text-[#86868b]">Lade…</p>
-              ) : lohnDocs.length === 0 ? (
-                <p className="text-sm text-[#86868b]">Noch keine Lohnabrechnung für diesen Mitarbeiter.</p>
-              ) : (
-                <ul className="space-y-1.5">
-                  {lohnDocs.map(d => (
-                    <li key={d.id} className="flex items-center justify-between text-sm bg-[#f5f5f7] rounded-lg px-3 py-2">
-                      <span>{d.month} – {d.file_name}{d.sent_at ? ' · versendet' : ''}</span>
-                      <button onClick={() => lohnLoeschen(d.id)} className="text-red-600 hover:text-red-700 text-xs font-medium">Löschen</button>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
-          )}
-        </section>
-
-        {/* ─── Tabelle: Übersicht ─── */}
-        <section className="bg-white border border-black/5 rounded-2xl p-5">
-          <h2 className="text-lg font-semibold mb-4">📋 Übersicht ({employees.length})</h2>
-          {loading ? (
-            <p className="text-[#86868b]">Lade…</p>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="text-left text-[#86868b] border-b border-black/5">
-                    <th className="py-2 pr-4">Name</th>
-                    <th className="py-2 pr-4">E-Mail</th>
-                    <th className="py-2 pr-4">Status</th>
-                    <th className="py-2">Login</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {employees.map(e => (
-                    <tr key={e.id} className="border-b border-black/5/60">
-                      <td className="py-2.5 pr-4 font-medium">{e.first_name} {e.last_name}</td>
-                      <td className="py-2.5 pr-4 text-[#86868b]">{e.email || '–'}</td>
-                      <td className="py-2.5 pr-4">
-                        <span className={`px-2 py-0.5 rounded-full text-xs ${e.status === 'active' ? 'bg-emerald-700/50 text-emerald-700' : 'bg-black/10 text-[#424245]'}`}>
-                          {e.status === 'active' ? 'Aktiv' : e.status}
-                        </span>
-                      </td>
-                      <td className="py-2.5">
-                        {e.user_id
-                          ? <span className="text-emerald-600">✅ verknüpft</span>
-                          : <span className="text-[#86868b]">❌ kein Login</span>}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </section>
+        <nav className="flex flex-wrap gap-2 border-b border-black/10 pb-2" role="tablist" data-testid="personal-reiter">
+          {REITER.map(r => (
+            <button key={r.key} role="tab" aria-selected={reiter === r.key} onClick={() => setReiter(r.key)} data-testid={`reiter-${r.key}`}
+              className={`rounded-lg px-4 py-2 text-sm font-medium transition ${reiter === r.key ? 'bg-[#e8590c] text-white' : 'bg-black/5 text-[#424245] hover:bg-black/10'}`}>
+              {r.label}
+            </button>
+          ))}
+        </nav>
+        {reiter === 'zugaenge' && <MitarbeiterZugaenge />}
+        {reiter === 'stamm' && <PersonalStamm />}
+        {reiter === 'dokumente' && <PersonalDokumente employees={employees} />}
       </div>
     </div>
   );
