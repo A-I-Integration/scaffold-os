@@ -30,3 +30,9 @@ Seite 2 den Endpreis 10.000 € (Festpreis). Der Kunde sah zwei Preise und die i
 - Bezeichnung der Basis bei KI-Kalkulation: „Gerüstbau gemäß Angebot“ statt „Basispreis (KI-Kalkulation)“.
 - Der rote Risiko-Punkt liegt links neben dem Text statt darüber.
 Nicht geprüft: Aussehen des PDFs im Browser (kein automatischer Test, jsPDF-Ausgabe).
+
+## Nachtrag 2: Anzeige in Schritt 6
+Bei Festpreis oder Pauschale heißt der Block unter „Kostenkalkulation“ jetzt „KI-Kalkulation (nur intern, nicht im Angebot)“ und darunter steht
+„Angebotspreis an den Kunden“ (gewählte Preisbasis inkl. Anpassungen, `calcAngebot().endpreis`). Bei der Preisbasis KI-Kalkulation bleibt „Empfohlener Verkaufspreis (25% Marge)“.
+Reine Anzeige (`components/aufmaß/KIMaterialResult.tsx`, zwei neue optionale Props); keine Änderung an Berechnung, Rechnungen oder PDF.
+Nicht geprüft: Aussehen im Browser.

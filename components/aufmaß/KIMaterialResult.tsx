@@ -12,10 +12,14 @@ interface Props {
   result: KIAnalysis | null;
   loading?: boolean;
   onGeneratePDF?: () => void;
+  /** Gewählte Preisbasis im Angebot; bei Festpreis/Pauschale ist der KI-Preis nur eine interne Kalkulation. */
+  preisModus?: 'ki' | 'festpreis' | 'pauschale';
+  /** Angebotspreis netto an den Kunden laut gewählter Preisbasis (inkl. Anpassungen) */
+  angebotspreis?: number | null;
   onManualEdit?: () => void;
 }
 
-export default function KIMaterialResult({ result, loading, onGeneratePDF, onManualEdit }: Props) {
+export default function KIMaterialResult({ result, loading, onGeneratePDF, onManualEdit, preisModus = 'ki', angebotspreis = null }: Props) {
   const [expandedCategories, setExpandedCategories] = useState<Set<string>>(
     new Set()
   );
@@ -298,7 +302,7 @@ export default function KIMaterialResult({ result, loading, onGeneratePDF, onMan
           <div className="rounded-xl bg-emerald-500/10 p-4">
             <div className="flex justify-between text-emerald-600">
               <span className="font-semibold">
-                Empfohlener Verkaufspreis (25% Marge)
+                {preisModus === 'ki' ? 'Empfohlener Verkaufspreis (25% Marge)' : 'KI-Kalkulation (nur intern, nicht im Angebot)'}
               </span>
               <span className="font-mono text-xl font-bold">
                 {result.suggestedPrice.toLocaleString('de-DE', {
@@ -317,6 +321,14 @@ export default function KIMaterialResult({ result, loading, onGeneratePDF, onMan
                 ({result.marginPercent}%)
               </span>
             </div>
+            {preisModus !== 'ki' && angebotspreis != null && (
+              <div className="mt-3 flex justify-between border-t border-emerald-600/20 pt-3 text-emerald-800">
+                <span className="font-semibold">Angebotspreis an den Kunden ({preisModus === 'festpreis' ? 'Festpreis je m²' : 'Pauschale'})</span>
+                <span className="font-mono text-xl font-bold">
+                  {angebotspreis.toLocaleString('de-DE', { style: 'currency', currency: 'EUR' })}
+                </span>
+              </div>
+            )}
           </div>
         </div>
       </div>
