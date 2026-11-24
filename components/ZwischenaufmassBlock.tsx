@@ -37,13 +37,13 @@ export default function ZwischenaufmassBlock({ project }: Props) {
   const aufmassZeilen = useMemo(() => berechneAufmass(abschnitteAusSchritt2(project.data?.step2)).zeilen, [project.data]);
   const gesamtAufmass = useMemo(() => berechneAufmass(abschnitteAusSchritt2(project.data?.step2)).gesamtM2, [project.data]);
   const [modus, setModus] = useState<'flaeche' | 'positionen'>('flaeche');
-  type Zeile = { bezeichnung: string; einheit: string; einzelpreis: string; menge: string };
+  type Zeile = { bezeichnung: string; einheit: string; einzelpreis: string; menge: string; key?: string };
   const [zeilen, setZeilen] = useState<Zeile[]>([]);
   const leereZeile = (): Zeile => ({ bezeichnung: '', einheit: 'm²', einzelpreis: '', menge: '' });
   /** Vorbelegung: Positionen des letzten Zwischenaufmaßes (mit dem letzten Stand), sonst die Abschnitte des Aufmaßblatts. */
   function vorbelegen() {
     const stand = [...aktuellerStandJePosition(liste).values()];
-    if (stand.length) return stand.map((p): Zeile => ({ bezeichnung: p.bezeichnung, einheit: p.einheit, einzelpreis: String(p.einzelpreis).replace('.', ','), menge: String(p.menge).replace('.', ',') }));
+    if (stand.length) return stand.filter((p) => p.menge > 0).map((p): Zeile => ({ key: p.key, bezeichnung: p.bezeichnung, einheit: p.einheit, einzelpreis: String(p.einzelpreis).replace('.', ','), menge: String(p.menge).replace('.', ',') }));
     const fp = String(project.data?.festpreisProM2 ?? '').replace('.', ',');
     const z = aufmassZeilen.map((a): Zeile => ({ bezeichnung: `Gerüst ${a.bezeichnung}`, einheit: 'm²', einzelpreis: project.data?.preisModus === 'festpreis' ? fp : '', menge: '' }));
     return z.length ? z : [leereZeile()];
@@ -96,7 +96,7 @@ export default function ZwischenaufmassBlock({ project }: Props) {
     setLaeuft(true); setMeldung(null);
     try {
       let fehler: string | null = null;
-      const eingabe: ZaPositionEingabe[] = zeilen.map((z) => ({ bezeichnung: z.bezeichnung, einheit: z.einheit, einzelpreis: parseBetrag(z.einzelpreis), menge: parseBetrag(z.menge) }));
+      const eingabe: ZaPositionEingabe[] = zeilen.map((z) => ({ key: z.key, bezeichnung: z.bezeichnung, einheit: z.einheit, einzelpreis: parseBetrag(z.einzelpreis), menge: parseBetrag(z.menge) }));
       await speichere((aktuell) => {
         const r = neuesZwischenaufmassJePosition(aktuell, { stichtag: form.stichtag, positionen: eingabe, notiz: form.notiz }, crypto.randomUUID());
         if (!r.ok) { fehler = r.fehler; return aktuell; }
