@@ -1,6 +1,5 @@
 'use client';
 
-import StundenlohnBlock from '@/components/StundenlohnBlock';
 import { zufallsPasswort } from '@/lib/passwort';
 import { useState, useEffect, useCallback } from 'react';
 
@@ -243,8 +242,6 @@ export default function MitarbeiterZugaenge() {
             </div>
           )}
         </section>
-
-        <StundenlohnBlock employees={employees} />
 
         {/* ─── Lohnabrechnung hochladen (NEU) ─── */}
         <section className="bg-white border border-black/5 rounded-2xl p-5 space-y-4">

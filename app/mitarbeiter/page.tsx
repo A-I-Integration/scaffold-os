@@ -3,17 +3,19 @@
 import { useEffect, useState } from 'react';
 import MitarbeiterZugaenge from '@/components/MitarbeiterZugaenge';
 import PersonalStamm from '@/components/PersonalStamm';
+import PersonalKonditionen from '@/components/PersonalKonditionen';
 import PersonalDokumente from '@/components/PersonalDokumente';
 
 // ============================================================
-// SCAFFOLD OS – Personal: drei Reiter
-//   Zugänge & Lohnabrechnung | Mitarbeiter (Personalstamm) | Dokumente
+// SCAFFOLD OS – Personal: vier Reiter
+//   Zugänge & Lohnabrechnung | Mitarbeiter (Personalstamm) | Lohn & Konditionen | Dokumente
 // ============================================================
 
-type Reiter = 'zugaenge' | 'stamm' | 'dokumente';
+type Reiter = 'zugaenge' | 'stamm' | 'konditionen' | 'dokumente';
 const REITER: { key: Reiter; label: string }[] = [
   { key: 'zugaenge', label: '🔑 Zugänge & Lohnabrechnung' },
   { key: 'stamm', label: '👤 Mitarbeiter' },
+  { key: 'konditionen', label: '💶 Lohn & Konditionen' },
   { key: 'dokumente', label: '📎 Dokumente' },
 ];
 
@@ -43,6 +45,7 @@ export default function MitarbeiterPage() {
         </nav>
         {reiter === 'zugaenge' && <MitarbeiterZugaenge />}
         {reiter === 'stamm' && <PersonalStamm />}
+        {reiter === 'konditionen' && <PersonalKonditionen employees={employees} />}
         {reiter === 'dokumente' && <PersonalDokumente employees={employees} />}
       </div>
     </div>
