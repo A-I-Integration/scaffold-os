@@ -37,15 +37,15 @@ export default function ZwischenaufmassBlock({ project }: Props) {
   const aufmassZeilen = useMemo(() => berechneAufmass(abschnitteAusSchritt2(project.data?.step2)).zeilen, [project.data]);
   const gesamtAufmass = useMemo(() => berechneAufmass(abschnitteAusSchritt2(project.data?.step2)).gesamtM2, [project.data]);
   const [modus, setModus] = useState<'flaeche' | 'positionen'>('flaeche');
-  type Zeile = { bezeichnung: string; einheit: string; einzelpreis: string; menge: string; key?: string };
+  type Zeile = { bezeichnung: string; einheit: string; einzelpreis: string; menge: string; key?: string; vertrag: string };
   const [zeilen, setZeilen] = useState<Zeile[]>([]);
-  const leereZeile = (): Zeile => ({ bezeichnung: '', einheit: 'm²', einzelpreis: '', menge: '' });
+  const leereZeile = (): Zeile => ({ bezeichnung: '', einheit: 'm²', einzelpreis: '', menge: '', vertrag: '' });
   /** Vorbelegung: Positionen des letzten Zwischenaufmaßes (mit dem letzten Stand), sonst die Abschnitte des Aufmaßblatts. */
   function vorbelegen() {
     const stand = [...aktuellerStandJePosition(liste).values()];
-    if (stand.length) return stand.filter((p) => p.menge > 0).map((p): Zeile => ({ key: p.key, bezeichnung: p.bezeichnung, einheit: p.einheit, einzelpreis: String(p.einzelpreis).replace('.', ','), menge: String(p.menge).replace('.', ',') }));
+    if (stand.length) return stand.filter((p) => p.menge > 0).map((p): Zeile => ({ key: p.key, bezeichnung: p.bezeichnung, einheit: p.einheit, einzelpreis: String(p.einzelpreis).replace('.', ','), menge: String(p.menge).replace('.', ','), vertrag: p.vertragsmenge ? String(p.vertragsmenge).replace('.', ',') : '' }));
     const fp = String(project.data?.festpreisProM2 ?? '').replace('.', ',');
-    const z = aufmassZeilen.map((a): Zeile => ({ bezeichnung: `Gerüst ${a.bezeichnung}`, einheit: 'm²', einzelpreis: project.data?.preisModus === 'festpreis' ? fp : '', menge: '' }));
+    const z = aufmassZeilen.map((a): Zeile => ({ bezeichnung: `Gerüst ${a.bezeichnung}`, einheit: 'm²', einzelpreis: project.data?.preisModus === 'festpreis' ? fp : '', menge: '', vertrag: '' }));
     return z.length ? z : [leereZeile()];
   }
   function aufPositionen() { setModus('positionen'); setZeilen(vorbelegen()); setOffen(true); }
@@ -96,7 +96,7 @@ export default function ZwischenaufmassBlock({ project }: Props) {
     setLaeuft(true); setMeldung(null);
     try {
       let fehler: string | null = null;
-      const eingabe: ZaPositionEingabe[] = zeilen.map((z) => ({ key: z.key, bezeichnung: z.bezeichnung, einheit: z.einheit, einzelpreis: parseBetrag(z.einzelpreis), menge: parseBetrag(z.menge) }));
+      const eingabe: ZaPositionEingabe[] = zeilen.map((z) => ({ key: z.key, bezeichnung: z.bezeichnung, einheit: z.einheit, einzelpreis: parseBetrag(z.einzelpreis), menge: parseBetrag(z.menge), vertragsmenge: z.vertrag.trim() ? parseBetrag(z.vertrag) : undefined }));
       await speichere((aktuell) => {
         const r = neuesZwischenaufmassJePosition(aktuell, { stichtag: form.stichtag, positionen: eingabe, notiz: form.notiz }, crypto.randomUUID());
         if (!r.ok) { fehler = r.fehler; return aktuell; }
@@ -159,11 +159,11 @@ export default function ZwischenaufmassBlock({ project }: Props) {
                 </p>
                 {z.positionen && z.positionen.length > 0 && (
                   <table className="mt-1 w-full text-[11px] tabular-nums" data-testid="za-positionen">
-                    <thead><tr className="text-left text-[#86868b]"><th className="font-normal">Position</th><th className="font-normal text-right">kumuliert</th><th className="font-normal text-right">schon abgerechnet</th><th className="font-normal text-right">neu</th></tr></thead>
+                    <thead><tr className="text-left text-[#86868b]"><th className="font-normal">Position</th><th className="font-normal text-right">Vertrag</th><th className="font-normal text-right">kumuliert</th><th className="font-normal text-right">schon abgerechnet</th><th className="font-normal text-right">neu</th></tr></thead>
                     <tbody>
                       {zaZeilen(z, liste).map((r) => (
                         <tr key={r.key} className={r.zuViel > 0 ? 'text-red-600' : ''}>
-                          <td>{r.bezeichnung}</td><td className="text-right">{fmt(r.menge)} {r.einheit}</td><td className="text-right">{z.rechnungId ? "–" : fmt(r.bisher)}</td>
+                          <td>{r.bezeichnung}</td><td className="text-right">{r.vertragsmenge ? `${fmt(r.vertragsmenge)} ${r.einheit}` : '–'}</td><td className="text-right">{fmt(r.menge)} {r.einheit}{r.mehrmenge > 0 ? <span className="text-amber-700" data-testid="za-mehrmenge"> (Mehrmenge {fmt(r.mehrmenge)})</span> : null}</td><td className="text-right">{z.rechnungId ? "–" : fmt(r.bisher)}</td>
                           <td className="text-right">{z.rechnungId ? '–' : fmt(r.neu)}{r.zuViel > 0 ? ` (${fmt(r.zuViel)} zu viel abgerechnet)` : ''}</td>
                         </tr>
                       ))}
@@ -186,20 +186,21 @@ export default function ZwischenaufmassBlock({ project }: Props) {
           <div className="grid grid-cols-2 gap-2">
             <div><label className="block text-[11px] text-[#86868b] mb-1">Stichtag</label><input type="date" value={form.stichtag} onChange={(e) => setForm({ ...form, stichtag: e.target.value })} className={inputCls} /></div>
           </div>
-          <p className="text-[11px] text-[#86868b]">Trage je Position die <b>gesamte</b> Menge bis zum Stichtag ein (kumuliert). Berechnet wird später nur die Differenz zur bereits abgerechneten Menge.</p>
+          <p className="text-[11px] text-[#86868b]">Trage je Position die <b>gesamte</b> Menge bis zum Stichtag ein (kumuliert). Berechnet wird später nur die Differenz zur bereits abgerechneten Menge. Die <b>Vertragsmenge</b> ist die vereinbarte Menge der Position; wird sie überschritten, erscheint eine Mehrmengen-Warnung. Eine spätere Änderung der Vertragsmenge braucht eine Notiz.</p>
           <div className="space-y-1">
             {zeilen.map((z, i) => (
-              <div key={i} className="grid grid-cols-[1fr_70px_90px_100px_24px] gap-1">
+              <div key={i} className="grid grid-cols-[1fr_60px_80px_100px_100px_24px] gap-1">
                 <input value={z.bezeichnung} onChange={(e) => setZeile(i, 'bezeichnung', e.target.value)} placeholder="Position" className={inputCls} aria-label="Position" />
                 <input value={z.einheit} onChange={(e) => setZeile(i, 'einheit', e.target.value)} className={inputCls} aria-label="Einheit" />
                 <input value={z.einzelpreis} onChange={(e) => setZeile(i, 'einzelpreis', e.target.value)} inputMode="decimal" placeholder="Preis netto" className={inputCls} aria-label="Preis netto" />
+                <input value={z.vertrag} onChange={(e) => setZeile(i, 'vertrag', e.target.value)} inputMode="decimal" placeholder="Vertragsmenge" className={inputCls} aria-label="Vertragsmenge" />
                 <input value={z.menge} onChange={(e) => setZeile(i, 'menge', e.target.value)} inputMode="decimal" placeholder="Menge kumuliert" className={inputCls} aria-label="Menge kumuliert" />
                 <button type="button" onClick={() => setZeilen((l) => l.filter((_, k) => k !== i))} aria-label="Zeile entfernen" className="p-1 rounded hover:bg-black/5"><Trash2 className="h-3.5 w-3.5 text-[#86868b]" /></button>
               </div>
             ))}
           </div>
           <button type="button" onClick={() => setZeilen((l) => [...l, leereZeile()])} className="text-[11px] text-[#e8590c] font-semibold hover:underline">+ Position hinzufügen</button>
-          <div><label className="block text-[11px] text-[#86868b] mb-1">Notiz / Grund (bei Rückgang Pflicht)</label><input value={form.notiz} onChange={(e) => setForm({ ...form, notiz: e.target.value })} placeholder="z. B. Südfassade fertig" className={inputCls} /></div>
+          <div><label className="block text-[11px] text-[#86868b] mb-1">Notiz / Grund (bei Rückgang oder geänderter Vertragsmenge Pflicht)</label><input value={form.notiz} onChange={(e) => setForm({ ...form, notiz: e.target.value })} placeholder="z. B. Südfassade fertig" className={inputCls} /></div>
           <button onClick={anlegenJePosition} disabled={laeuft} className="rounded-lg bg-[#e8590c] px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-60">{laeuft ? 'Speichert …' : 'Speichern'}</button>
         </div>
       )}
