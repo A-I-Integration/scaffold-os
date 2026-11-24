@@ -203,10 +203,15 @@ describe('Kette Aufmaß abrechnen (serverseitig abgesichert)', () => {
     expect(za().rechnungId).toBe('inv-2')
   })
 
-  it('Eine Aufmaß-Abrechnung kann keine Schluss- oder Gutschrift-Rechnung sein', async () => {
-    const r = await post(aufmassBody({ invoice_type: 'schluss' }))
+  it('Eine Aufmaß-Abrechnung kann keine Standardrechnung sein; eine Schlussrechnung nur mit der Gesamtleistung des Schlussaufmaßes', async () => {
+    const r = await post(aufmassBody({ invoice_type: 'standard' }))
     expect(r.status).toBe(409)
     expect(db.invoices).toHaveLength(0)
+    // Schlussrechnung mit falscher Menge: abgelehnt, nichts angelegt, Aufmaß bleibt offen
+    const falsch = await post(aufmassBody({ invoice_type: 'schluss', positions: posZa().map((p: any) => ({ ...p, menge: Number(p.menge) + 1 })) }))
+    expect(falsch.status).toBe(409)
+    expect(db.invoices).toHaveLength(0)
+    expect(za().rechnungId).toBeUndefined()
   })
 
   it('Bereits versendete Aufmaß-Rechnung stornieren: das Aufmaß bleibt berechnet, bis eine volle Gutschrift vorliegt', async () => {

@@ -36,9 +36,9 @@ describe('Serverprüfung: Abrechnung nach Zwischenaufmaß', () => {
     expect(bezug(l, 'a', [{ bezeichnung: 'x', menge: 100, einheit: 'm²', einzelpreis: 99 }])).toMatchObject({ ok: false, fehler: { code: 'AUFMASS_ABWEICHUNG' } })
     expect(bezug(l, 'a', [...baueTeilleistungsPositionen(l[0], l).positionen, { bezeichnung: 'extra', menge: 1, einheit: 'Stk.', einzelpreis: 5 }])).toMatchObject({ ok: false })
   })
-  it('nur als Abschlag, unbekanntes Aufmaß wird abgelehnt', () => {
+  it('nur als Abschlag oder Schlussrechnung (Standardrechnung nicht), unbekanntes Aufmaß wird abgelehnt', () => {
     const l = erst([], [P('A', 100)], 'a')
-    expect(bezug(l, 'a', undefined, undefined, 'schluss')).toMatchObject({ ok: false, fehler: { code: 'AUFMASS_NUR_ABSCHLAG' } })
+    expect(bezug(l, 'a', undefined, undefined, 'standard')).toMatchObject({ ok: false, fehler: { code: 'AUFMASS_NUR_ABSCHLAG' } })
     expect(pruefeAufmassBezug({ rohListe: roh(l), zaId: 'zzz', stand: 'x', positionen: [], rechnungsart: 'abschlag' })).toMatchObject({ ok: false, fehler: { code: 'AUFMASS_NICHT_GEFUNDEN' } })
   })
   it('altes Aufmaß nur mit Gesamtfläche (ohne Positionen) bleibt abrechenbar, Menge fest, Preis aus der Rechnung', () => {

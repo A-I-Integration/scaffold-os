@@ -15,7 +15,7 @@ import { katalogAlsPosition, normalisiereKatalog, type LeistungKatalogEintrag } 
 import PositionDetails from '@/components/rechnung/PositionDetails';
 import { normalisiereBauphasen, berechneBauphasen, baueBauphasenPosition, markiereBauphaseAbgerechnet, type Bauphase, type BauphasenEinstellung } from '@/lib/bauphasen';
 import { aufmassStand } from '@/lib/aufmass-integritaet';
-import { normalisiereZwischenaufmasse, baueTeilleistungsPosition, baueTeilleistungsPositionen, zwischenaufmassNr, neueMengeM2, type Zwischenaufmass } from '@/lib/zwischenaufmass';
+import { normalisiereZwischenaufmasse, baueTeilleistungsPosition, baueTeilleistungsPositionen, baueSchlussaufmassPositionen, zwischenaufmassNr, neueMengeM2, type Zwischenaufmass } from '@/lib/zwischenaufmass';
 
 // ============================================================
 // SCAFFOLD OS – Schlussrechnung aus Auftrag erstellen
@@ -65,6 +65,8 @@ export default function SchlussrechnungDialog({ projectId, customerName, custome
   const [bauphasenEinst, setBauphasenEinst] = useState<Partial<BauphasenEinstellung>>({});
   const [gewaehltePhase, setGewaehltePhase] = useState('');
   const [gewaehltesZA, setGewaehltesZA] = useState('');
+  // Schlussrechnung nach Schlussaufmaß (letztes Zwischenaufmaß je Position, Gesamtleistung abzüglich Abschläge)
+  const [schlussAufmass, setSchlussAufmass] = useState(false);
   const [preisM2, setPreisM2] = useState('');
   const [gewaehlteNachtraege, setGewaehlteNachtraege] = useState<Set<string>>(new Set());
 
@@ -154,13 +156,22 @@ export default function SchlussrechnungDialog({ projectId, customerName, custome
   const aufmassM2 = useMemo(() => (projektDaten ? berechneAufmass(abschnitteAusSchritt2(projektDaten.step2)).gesamtM2 : 0), [projektDaten]);
   const preisM2Zahl = parseFloat(String(preisM2).replace(',', '.')) || 0;
 
+  const letztesZA = zwischenaufmasse.length ? zwischenaufmasse[zwischenaufmasse.length - 1] : null;
+  const schlussModus = art === 'schluss' && schlussAufmass && !!letztesZA;
+  const schlussPos = useMemo(() => (schlussModus && letztesZA ? baueSchlussaufmassPositionen(letztesZA, zwischenaufmasse) : null), [schlussModus, letztesZA, zwischenaufmasse]);
+
   const leistungsPositionen = useMemo(() => {
     if (!eingabe) return [];
+    if (schlussModus) {
+      // Gesamtleistung aus dem Schlussaufmaß; Kran, Nachträge, Statik, Rabatt usw. wie bei der Angebotsbasis (ohne deren Hauptposition)
+      if (!schlussPos || schlussPos.fehler) return [];
+      return [...schlussPos.positionen, ...baueRechnungsPositionen({ eingabe, basis: 'angebot', nachtraege: nachtraege.filter((n) => gewaehlteNachtraege.has(n.id)) }).slice(1)];
+    }
     return baueRechnungsPositionen({
       eingabe, basis, aufmassM2, aufmassPreisProM2: preisM2Zahl,
       nachtraege: nachtraege.filter((n) => gewaehlteNachtraege.has(n.id)),
     });
-  }, [eingabe, basis, aufmassM2, preisM2Zahl, nachtraege, gewaehlteNachtraege]);
+  }, [eingabe, basis, aufmassM2, preisM2Zahl, nachtraege, gewaehlteNachtraege, schlussModus, schlussPos]);
   // Abzug bereits gestellter Abschlagsrechnungen – nur bei der Schlussrechnung
   const abzuege = useMemo(
     () => (art === 'schluss' ? abschlagKandidaten.filter((i) => gewaehlteAbschlaege.has(i.id)).map((i) => abschlagAbzug(i)) : []),
@@ -210,14 +221,16 @@ export default function SchlussrechnungDialog({ projectId, customerName, custome
   const netto = summeNetto(positionen);
   const abzugNetto = Math.round(abzuege.reduce((s, a) => s + a.netto, 0) * 100) / 100;
   const ustRest = Math.round(netto * 19) / 100;
-  const abzugsText = art === 'abschlag' ? 'Abschlagszahlung; die Verrechnung erfolgt in der Schlussrechnung.' : abzugsHinweis(gesamtNetto, abzuege);
+  const abzugsText = art === 'abschlag' ? 'Abschlagszahlung; die Verrechnung erfolgt in der Schlussrechnung.' : [abzugsHinweis(gesamtNetto, abzuege), schlussModus ? schlussPos?.mengenuebersicht : ''].filter(Boolean).join(' ') || undefined;
+  // Vergleich: nach Zwischenaufmaß bereits abgerechneter Wert gegen die abgezogenen Abschläge (nur Hinweis, nichts wird still geändert)
+  const abzugAbweichung = schlussModus && schlussPos && !schlussPos.fehler && Math.abs(schlussPos.bisherNetto - abzugNetto) > 0.01 ? { bisher: schlussPos.bisherNetto, abzug: abzugNetto } : null;
 
   const hatAngebotspreis = !!eingabe?.kiResult;
   const aufmassMoeglich = aufmassM2 > 0;
   const basisOk = basis === 'angebot' ? hatAngebotspreis : aufmassMoeglich && preisM2Zahl > 0;
   // Abschlag mit festem Betrag braucht keine Kalkulationsbasis, mit Prozent schon
   const kannAnlegen = !laeuft && !angelegt && positionen.length > 0 && netto > 0 && !abschlagZuHoch
-    && (zaModus ? (zaJePosition ? teilleistungen.positionen.length > 0 : !!teilleistung.position) : art === 'abschlag' && zahl(abschlagBetrag) > 0 ? true : basisOk || (art !== 'abschlag' && extraGueltig.length > 0));
+    && (schlussModus ? !!schlussPos && !schlussPos.fehler : zaModus ? (zaJePosition ? teilleistungen.positionen.length > 0 : !!teilleistung.position) : art === 'abschlag' && zahl(abschlagBetrag) > 0 ? true : basisOk || (art !== 'abschlag' && extraGueltig.length > 0));
 
   async function anlegen(overrideGrund?: string) {
     if (!eingabe) return;
@@ -236,7 +249,7 @@ export default function SchlussrechnungDialog({ projectId, customerName, custome
           positions: positionen,
           override_grund: overrideGrund || undefined,
           // Die Menge wird auf dem Server noch einmal geprüft und atomar reserviert (Doppelabrechnung, geändertes Aufmaß)
-          aufmass: zaModus && zaAuswahl ? { za_id: zaAuswahl.id, stand: aufmassStand(zaAuswahl) } : undefined,
+          aufmass: zaModus && zaAuswahl ? { za_id: zaAuswahl.id, stand: aufmassStand(zaAuswahl) } : schlussModus && letztesZA ? { za_id: letztesZA.id, stand: aufmassStand(letztesZA) } : undefined,
         }),
       });
       const json = await res.json().catch(() => ({}));
@@ -303,17 +316,35 @@ export default function SchlussrechnungDialog({ projectId, customerName, custome
               </div>
               <div>
                 <label className="block text-[11px] text-[#86868b] mb-1">Abrechnung nach</label>
-                <select value={basis} onChange={(e) => setBasis(e.target.value as RechnungsBasis)} className={inputCls}>
+                <select value={basis} onChange={(e) => setBasis(e.target.value as RechnungsBasis)} disabled={schlussModus} className={inputCls}>
                   <option value="angebot">Angebotspreis</option>
                   <option value="aufmass">Aufmaß (Fläche × Preis/m²)</option>
                 </select>
               </div>
             </div>
 
-            {basis === 'angebot' && !hatAngebotspreis && (
+            {!schlussModus && basis === 'angebot' && !hatAngebotspreis && (
               <p className="text-xs text-red-600">Für diesen Auftrag ist kein berechnetes Angebot gespeichert. Bitte nach Aufmaß abrechnen oder zuerst im Aufmaß (Schritt 6) berechnen.</p>
             )}
-            {basis === 'aufmass' && (
+            {art === 'schluss' && letztesZA && (
+              <div className="rounded-lg bg-[#f5f5f7] p-3 space-y-2" data-testid="schluss-aufmass">
+                <label className="flex items-start gap-2 text-xs cursor-pointer text-[#1d1d1f]">
+                  <input type="checkbox" checked={schlussAufmass} onChange={(e) => setSchlussAufmass(e.target.checked)} className="mt-0.5" />
+                  <span>Leistung nach <b>Schlussaufmaß {zwischenaufmassNr(letztesZA)}</b> abrechnen (kumuliert je Position). Bereits abgerechnete Mengen werden über den Abzug der Abschläge verrechnet.</span>
+                </label>
+                {schlussModus && schlussPos && (
+                  <div className="space-y-1" data-testid="schluss-aufmass-positionen">
+                    {schlussPos.fehler && <p className="text-xs text-red-600">{schlussPos.fehler}</p>}
+                    {schlussPos.positionen.map((p, i) => (
+                      <p key={i} className="text-xs text-[#1d1d1f]">{p.bezeichnung.split(' – ')[0]}: {p.menge.toLocaleString('de-DE')} {p.einheit} × {eur(p.einzelpreis)} = <b>{eur(Math.round(p.menge * p.einzelpreis * 100) / 100)}</b></p>
+                    ))}
+                    {schlussPos.hinweise.map((h, i) => <p key={i} className="text-xs text-red-600">⚠️ {h}</p>)}
+                    {abzugAbweichung && <p className="text-xs text-red-600" data-testid="schluss-abzug-abweichung">⚠️ Nach Zwischenaufmaß sind bisher {eur(abzugAbweichung.bisher)} netto abgerechnet, als Abschläge werden {eur(abzugAbweichung.abzug)} abgezogen. Bitte die ausgewählten Abschläge prüfen.</p>}
+                  </div>
+                )}
+              </div>
+            )}
+            {!schlussModus && basis === 'aufmass' && (
               <div className="rounded-lg bg-[#f5f5f7] p-3 space-y-2">
                 {aufmassMoeglich ? (
                   <p className="text-xs text-[#1d1d1f]">Aufgemessene Fläche (laut Aufmaßblatt, inkl. Mindestlänge): <b>{aufmassM2.toLocaleString('de-DE')} m²</b></p>

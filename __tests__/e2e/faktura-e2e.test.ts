@@ -4,7 +4,8 @@ import { NextRequest } from 'next/server'
 import { baueEchtesRest } from './pg-rest'
 import { nutzdatenHash } from '@/lib/idempotenz-hash'
 import { aufmassStand } from '@/lib/aufmass-integritaet'
-import { neuesZwischenaufmassJePosition, baueTeilleistungsPositionen, normalisiereZwischenaufmasse } from '@/lib/zwischenaufmass'
+import { neuesZwischenaufmassJePosition, baueTeilleistungsPositionen, baueSchlussaufmassPositionen, normalisiereZwischenaufmasse } from '@/lib/zwischenaufmass'
+import { abschlagAbzug, baueAbzugsPositionen } from '@/lib/schlussrechnung'
 import { faelligeVorhaltung, vorhaltungStand, normalisiereVereinbarung, normalisierePerioden, plusTage, kostenpflichtigAb } from '@/lib/vorhaltung'
 
 // ============================================================
@@ -1215,6 +1216,92 @@ describe.skipIf(!DB)('Faktura End-to-End (echte PostgreSQL)', () => {
         for (const ref of refs) expect(rs.some((r) => r.id === ref)).toBe(true)
         expect(await integritaet(P)).toEqual([])
       }
+    })
+  })
+
+  // ──────────────────────────────────────────────────────────
+  // 10. Schlussaufmaß (kumuliertes Aufmaß, Schritt 4): Schlussrechnung = Gesamtleistung − Abschläge
+  // ──────────────────────────────────────────────────────────
+  describe('10. Schlussaufmaß als Differenz', () => {
+    const KUNDE = 'Testkunde E2E'
+    const FASSADE = { bezeichnung: 'Fassadengerüst', einheit: 'm²', einzelpreis: 10 }
+    let P = ''
+    const zas = async () => normalisiereZwischenaufmasse((await projektData(P)).zwischenaufmasse)
+    const neuesZA = async (id: string, menge: number) => {
+      const alt = await zas()
+      const e = neuesZwischenaufmassJePosition(alt, { stichtag: HEUTE, positionen: [{ ...FASSADE, menge }] }, id)
+      if (!e.ok) throw new Error(e.fehler)
+      expect((await prj({ id: P, data: { zwischenaufmasse: [...((await projektData(P)).zwischenaufmasse || []), e.eintrag] } })).status).toBe(200)
+      return (await zas()).find((z) => z.id === id)!
+    }
+    const abschlag = async (za: { id: string }) => {
+      const liste = await zas(); const z = liste.find((x) => x.id === za.id)!
+      return inv('POST', { customer_name: KUNDE, project_id: P, invoice_type: 'abschlag', positions: baueTeilleistungsPositionen(z, liste).positionen, aufmass: { za_id: z.id, stand: aufmassStand(z) } })
+    }
+    let abschlaege: any[] = []
+
+    it('10a. Zwei Abschläge nach Zwischenaufmaß: 800 m² (8.000 €) und 150 m² (1.500 €)', async () => {
+      P = await neuesProjekt('E2E Schlussaufmaß', { kiResult: { suggestedPrice: 10000 }, preisModus: 'pauschale', pauschale: '10000' })
+      expect((await prj({ id: P, data: { zwischenaufmasse: [Z('sa-1', 1, [{ ...FASSADE, menge: 800 }])] } })).status).toBe(200)
+      const r1 = await abschlag({ id: 'sa-1' }); expect(r1.status).toBe(200)
+      await neuesZA('sa-2', 950)
+      const r2 = await abschlag({ id: 'sa-2' }); expect(r2.status).toBe(200)
+      abschlaege = [r1.j.invoice, r2.j.invoice]
+      merke('10 Schlussaufmaß', 'Abschläge netto', 9500, Number(r1.j.invoice.net_amount) + Number(r2.j.invoice.net_amount))
+      expect(Number(r1.j.invoice.net_amount) + Number(r2.j.invoice.net_amount)).toBe(9500)
+    })
+
+    const schlussPositionen = async () => {
+      const liste = await zas(); const z = liste[liste.length - 1]
+      const g = baueSchlussaufmassPositionen(z, liste)
+      const abzug = baueAbzugsPositionen(abschlaege.map((i) => abschlagAbzug({ ...i, net_amount: Number(i.net_amount), tax_rate: Number(i.tax_rate), tax_amount: Number(i.tax_amount), gross_amount: Number(i.gross_amount), status: 'bezahlt' })))
+      return { z, g, positionen: [...g.positionen, ...abzug] }
+    }
+
+    it('10b. Schlussaufmaß 1.000 m²: falsche Positionen (nur Differenz 50 m²) werden vom Server abgelehnt', async () => {
+      await neuesZA('sa-3', 1000)
+      const { z, g, positionen } = await schlussPositionen()
+      void g
+      const nurDifferenz = [{ ...g.positionen[0], menge: 50 }, ...positionen.slice(1)]
+      const r = await inv('POST', { customer_name: KUNDE, project_id: P, invoice_type: 'schluss', positions: nurDifferenz, aufmass: { za_id: z.id, stand: aufmassStand(z) } })
+      merke('10 Schlussaufmaß', 'Schlussrechnung mit nur der Differenz statt der Gesamtleistung', 'AUFMASS_SCHLUSS_ABWEICHUNG', r.j?.code)
+      expect(r.status).toBe(409); expect(r.j.code).toBe('AUFMASS_SCHLUSS_ABWEICHUNG')
+      expect(await rechnungen(P)).toHaveLength(2)
+    })
+
+    it('10c. Schlussrechnung nach Schlussaufmaß: Gesamtleistung 10.000 € − Abschläge 9.500 € = 500 € netto (50 m²), Aufmaß wird zugeordnet', async () => {
+      const { z, positionen } = await schlussPositionen()
+      const r = await inv('POST', { customer_name: KUNDE, project_id: P, invoice_type: 'schluss', positions: positionen, aufmass: { za_id: z.id, stand: aufmassStand(z) } })
+      expect(r.status).toBe(200)
+      merke('10 Schlussaufmaß', 'Schlussrechnung netto (nur die Differenz zahlbar)', 500, r.j.invoice.net_amount)
+      expect(Number(r.j.invoice.net_amount)).toBe(500); expect(r.j.invoice.invoice_type).toBe('schluss')
+      const za = (await zas()).find((x) => x.id === 'sa-3')!
+      expect(za.rechnungId).toBe(r.j.invoice.id)
+      expect(await integritaet(P)).toEqual([])
+    })
+
+    it('10d. Doppelt: dasselbe Schlussaufmaß nochmal wird abgelehnt; es entsteht keine zweite Rechnung', async () => {
+      const { z, positionen } = await schlussPositionen().catch(async () => ({ z: (await zas())[2], positionen: [] as any[] }))
+      const r = await inv('POST', { customer_name: KUNDE, project_id: P, invoice_type: 'schluss', positions: positionen.length ? positionen : [{ bezeichnung: 'x', menge: 1000, einheit: 'm²', einzelpreis: 10 }], aufmass: { za_id: z.id, stand: aufmassStand(z) } })
+      merke('10 Schlussaufmaß', 'Zweite Schlussrechnung für dasselbe Aufmaß', 409, r.status)
+      expect(r.status).toBe(409)
+      expect((await rechnungen(P)).filter((x) => x.invoice_type === 'schluss' && x.status !== 'storniert')).toHaveLength(1)
+    })
+
+    it('10e. Nach der Schlussrechnung: weitere Abrechnung (Abschlag über 100 m² Mehrmenge) wird als Überschreitung des Auftragswerts gemeldet', async () => {
+      await neuesZA('sa-4', 1100)
+      const r = await abschlag({ id: 'sa-4' })
+      merke('10 Schlussaufmaß', 'Abrechnung nach der Schlussrechnung', 409, r.status)
+      expect(r.status).toBe(409); expect(r.j.abweichungen.map((a: any) => a.code)).toContain('UEBER_AUFTRAGSWERT')
+    })
+
+    it('10f. Storno der Schlussrechnung gibt das Schlussaufmaß wieder frei; die Daten bleiben stimmig', async () => {
+      const schluss = (await rechnungen(P)).find((x) => x.invoice_type === 'schluss' && x.status !== 'storniert')
+      expect((await inv('PATCH', { id: schluss.id, status: 'storniert' })).status).toBe(200)
+      const za = (await zas()).find((x) => x.id === 'sa-3')!
+      merke('10 Schlussaufmaß', 'Aufmaß nach Storno der Schlussrechnung wieder offen', 'offen', za.rechnungId ? 'zugeordnet' : 'offen')
+      expect(za.rechnungId).toBeFalsy()
+      expect(await integritaet(P)).toEqual([])
     })
   })
 

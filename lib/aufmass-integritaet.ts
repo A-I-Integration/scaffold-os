@@ -3,7 +3,7 @@
 // Wird vom Server benutzt, damit die Mengenprüfung nicht nur im Dialog stattfindet.
 // ============================================================
 import {
-  normalisiereZwischenaufmasse, baueTeilleistungsPositionen, baueTeilleistungsPosition, positionsKey, pruefePositionenGegenStand, aktuellerStandJePosition,
+  normalisiereZwischenaufmasse, baueTeilleistungsPositionen, baueTeilleistungsPosition, baueSchlussaufmassPositionen, positionsKey, pruefePositionenGegenStand, aktuellerStandJePosition,
   type Zwischenaufmass,
 } from '@/lib/zwischenaufmass'
 
@@ -15,20 +15,32 @@ export function aufmassStand(z: Zwischenaufmass): string {
 }
 
 export interface RechnungsPos { bezeichnung: string; menge: number; einheit: string; einzelpreis: number }
-export type AufmassBezugFehler = { code: 'AUFMASS_NICHT_GEFUNDEN' | 'AUFMASS_GEAENDERT' | 'AUFMASS_ABWEICHUNG' | 'AUFMASS_BEREITS_ABGERECHNET' | 'AUFMASS_NUR_ABSCHLAG'; text: string }
+export type AufmassBezugFehler = { code: 'AUFMASS_NICHT_GEFUNDEN' | 'AUFMASS_GEAENDERT' | 'AUFMASS_ABWEICHUNG' | 'AUFMASS_BEREITS_ABGERECHNET' | 'AUFMASS_NUR_ABSCHLAG' | 'AUFMASS_SCHLUSS_ABWEICHUNG'; text: string }
 
 /** Prüft, ob die angebotenen Rechnungspositionen genau der noch nicht abgerechneten Differenz des Zwischenaufmaßes entsprechen. */
 export function pruefeAufmassBezug(args: {
   rohListe: unknown; zaId: string; stand: string; positionen: RechnungsPos[]; rechnungsart: string
 }): { ok: true; za: Zwischenaufmass; roh: unknown } | { ok: false; fehler: AufmassBezugFehler } {
   const f = (code: AufmassBezugFehler['code'], text: string) => ({ ok: false as const, fehler: { code, text } })
-  if (args.rechnungsart !== 'abschlag') return f('AUFMASS_NUR_ABSCHLAG', 'Ein Zwischenaufmaß kann nur mit einer Abschlagsrechnung abgerechnet werden.')
+  if (args.rechnungsart !== 'abschlag' && args.rechnungsart !== 'schluss') return f('AUFMASS_NUR_ABSCHLAG', 'Ein Zwischenaufmaß kann nur mit einer Abschlags- oder Schlussrechnung abgerechnet werden.')
   const liste = normalisiereZwischenaufmasse(args.rohListe)
   const za = liste.find((z) => z.id === args.zaId)
   const roh = Array.isArray(args.rohListe) ? (args.rohListe as any[]).find((x) => x?.id === args.zaId) : undefined
   if (!za || !roh) return f('AUFMASS_NICHT_GEFUNDEN', 'Das Zwischenaufmaß gibt es nicht mehr. Bitte die Seite neu laden.')
   if (za.rechnungId) return f('AUFMASS_BEREITS_ABGERECHNET', `${'ZA-' + String(za.nr).padStart(2, '0')} ist bereits mit ${za.rechnungNr || 'einer Rechnung'} abgerechnet. Es wird nicht noch einmal berechnet.`)
   if (aufmassStand(za) !== args.stand) return f('AUFMASS_GEAENDERT', 'Das Zwischenaufmaß wurde geändert, seit der Dialog geöffnet wurde. Bitte den Dialog schließen und neu öffnen.')
+  if (args.rechnungsart === 'schluss') {
+    // Schlussaufmaß: die Rechnung beginnt mit der GESAMTLEISTUNG je Position (kumuliert × Preis); danach folgen Zusatzpositionen und der
+    // Abzug der Abschläge, die hier nicht aus dem Aufmaß stammen und von den Abrechnungsprüfungen (Auftragswert, Schluss schließt ab) erfasst werden.
+    const r = baueSchlussaufmassPositionen(za, liste)
+    if (r.fehler) return f('AUFMASS_SCHLUSS_ABWEICHUNG', r.fehler)
+    const ok = r.positionen.every((e, i) => {
+      const p = args.positionen[i]
+      return !!p && p.einheit === e.einheit && Math.abs(Number(p.menge) - e.menge) < 0.005 && Math.abs(Number(p.einzelpreis) - e.einzelpreis) < 0.005
+    })
+    if (!ok) return f('AUFMASS_SCHLUSS_ABWEICHUNG', 'Die Rechnungspositionen stimmen nicht mit der Gesamtleistung des Schlussaufmaßes überein. Bitte den Dialog neu öffnen.')
+    return { ok: true, za, roh }
+  }
   let erwartet: RechnungsPos[]
   if (za.positionen?.length) {
     const r = baueTeilleistungsPositionen(za, liste)

@@ -332,6 +332,56 @@ export function baueTeilleistungsPositionen(z: Zwischenaufmass, liste: Zwischena
   return { positionen, fehler: null, hinweise };
 }
 
+/** True, wenn dieses Zwischenaufmaß der aktuellste Stand ist (höchste Nr.). Nur dann kann es das Schlussaufmaß sein. */
+export function istLetzterStand(z: Zwischenaufmass, liste: Zwischenaufmass[]): boolean {
+  return liste.every((x) => x.nr <= z.nr);
+}
+
+/**
+ * Schlussrechnung aus dem Schlussaufmaß: Die Schlussrechnung weist die GESAMTLEISTUNG aus (kumulierte Menge je Position × Preis); bereits
+ * gestellte Abschläge werden in der Rechnung abgezogen (netto, siehe lib/schlussrechnung.ts). Die Differenz zur schon abgerechneten Menge
+ * ist damit der Zahlbetrag und wird zusätzlich als Mengenübersicht im Rechnungstext ausgewiesen. Bereits abgerechnete Mengen werden
+ * nicht einzeln gekürzt, sondern über den Abzug der Abschläge verrechnet (§ 14 Abs. 5 UStG).
+ */
+export function baueSchlussaufmassPositionen(z: Zwischenaufmass, liste: Zwischenaufmass[]): {
+  positionen: { bezeichnung: string; menge: number; einheit: string; einzelpreis: number }[]
+  fehler: string | null
+  hinweise: string[]
+  /** Text für die Rechnung: je Position Gesamt, bereits abgerechnet, Rest */
+  mengenuebersicht: string
+  /** bereits über Zwischenaufmaße abgerechneter Wert (Menge × Preis), netto – Vergleichswert für den Abzug der Abschläge */
+  bisherNetto: number
+  /** Gesamtleistung dieser Positionen, netto */
+  gesamtNetto: number
+} {
+  const leer = (fehler: string) => ({ positionen: [], fehler, hinweise: [] as string[], mengenuebersicht: '', bisherNetto: 0, gesamtNetto: 0 })
+  const nr = zwischenaufmassNr(z)
+  if (z.rechnungId) return leer(`${nr} ist bereits mit Rechnung ${z.rechnungNr || ''} abgerechnet.`.replace('  ', ' '))
+  if (!z.positionen?.length) return leer(`${nr} wurde nur mit der Gesamtfläche erfasst. Für das Schlussaufmaß je Position bitte ein Zwischenaufmaß je Position erfassen.`)
+  if (!istLetzterStand(z, liste)) return leer(`${nr} ist nicht der letzte Stand. Das Schlussaufmaß muss das aktuellste Zwischenaufmaß sein.`)
+  const zeilen = zaZeilen(z, liste).filter((r) => r.menge > 0)
+  const ohnePreis = zeilen.filter((r) => !(r.einzelpreis > 0))
+  if (ohnePreis.length) return leer(`Für ${ohnePreis.map((r) => `„${r.bezeichnung}“`).join(', ')} fehlt der Preis.`)
+  if (!zeilen.length) return leer(`${nr} enthält keine Menge.`)
+  const d = new Date(z.stichtag + 'T12:00:00')
+  const datum = Number.isNaN(d.getTime()) ? z.stichtag : d.toLocaleDateString('de-DE')
+  const positionen = zeilen.map((r) => ({
+    bezeichnung: `${r.bezeichnung} – Schlussaufmaß ${nr} vom ${datum}: Gesamtleistung ${fmt(r.menge)} ${r.einheit}`.slice(0, 500),
+    menge: r.menge, einheit: r.einheit, einzelpreis: r.einzelpreis,
+  }))
+  const hinweise: string[] = []
+  for (const r of zaZeilen(z, liste)) {
+    if (r.mehrmenge > 0) hinweise.push(`„${r.bezeichnung}“: ${fmt(r.menge)} ${r.einheit} aufgemessen, vereinbart waren ${fmt(r.vertragsmenge!)} ${r.einheit} – Mehrmenge ${fmt(r.mehrmenge)} ${r.einheit}. Bitte Nachtrag bzw. Vereinbarung mit dem Auftraggeber prüfen.`)
+    if (r.zuViel > 0) hinweise.push(`„${r.bezeichnung}“: ${fmt(r.zuViel)} ${r.einheit} mehr abgerechnet (${fmt(r.bisher)}) als aufgemessen (${fmt(r.menge)}). Nicht automatisch korrigiert – bitte Gutschrift oder Korrektur prüfen.`)
+  }
+  const mengenuebersicht = `Schlussaufmaß ${nr} (Stichtag ${datum}): ` + zeilen.map((r) => `${r.bezeichnung} ${fmt(r.menge)} ${r.einheit} gesamt, davon bereits abgerechnet ${fmt(r.bisher)} ${r.einheit}, Rest ${fmt(r.neu)} ${r.einheit}`).join('; ') + '.'
+  return {
+    positionen, fehler: null, hinweise, mengenuebersicht,
+    bisherNetto: runde2(zeilen.reduce((s, r) => s + Math.min(r.bisher, r.menge) * r.einzelpreis, 0)),
+    gesamtNetto: runde2(zeilen.reduce((s, r) => s + r.menge * r.einzelpreis, 0)),
+  }
+}
+
 // ─── Änderungsverlauf (Menge je Position, wer/wann/warum) ───
 
 export interface AufmassAenderung {
