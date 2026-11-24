@@ -8,6 +8,7 @@ import { projektFuerRolle, schreibdatenFuerRolle } from '@/lib/projekt-sicht';
 import { autosaveGesperrt, filtereAutosaveData, AUTOSAVE_PROJEKT_ABGESCHLOSSEN_FEHLER } from '@/lib/aufmass-autosave-regeln';
 import { pruefeVorhaltePeriodenAenderung, pruefeVorhaltungVereinbarungAenderung, normalisiereVereinbarung } from '@/lib/vorhaltung';
 import { pruefeAufmassAenderung } from '@/lib/aufmass-integritaet';
+import { pruefePositionsEreignisseAenderung } from '@/lib/positions-status';
 import { aenderungenZwischenaufmasse } from '@/lib/zwischenaufmass';
 import { schreibeHistorie } from '@/lib/abrechnung-historie';
 import { angebotNettoAusProjekt } from '@/lib/auftragsstand';
@@ -251,6 +252,11 @@ export async function PATCH(req: NextRequest) {
       if (data.zwischenaufmasse !== undefined) {
         const sperre = pruefeAufmassAenderung(bisher.data?.zwischenaufmasse, data.zwischenaufmasse, bisher.data?.nachtraege);
         if (sperre) return NextResponse.json({ success: false, code: 'AUFMASS_GESPERRT', error: sperre }, { status: 409 });
+      }
+      // Faktura Schritt 7: Abbauereignisse je Position sind ein Verlauf (nur anfügen, nie ändern oder löschen)
+      if (data.positionsEreignisse !== undefined) {
+        const sperreE = pruefePositionsEreignisseAenderung(bisher.data?.positionsEreignisse, data.positionsEreignisse)
+        if (sperreE) return NextResponse.json({ success: false, code: 'EREIGNISSE_GESPERRT', error: sperreE }, { status: 409 })
       }
       // Faktura F8: berechnete Vorhaltezeiträume entstehen nur beim Anlegen der Rechnung
       if (data.vorhaltePerioden !== undefined) {
