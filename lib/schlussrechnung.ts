@@ -63,6 +63,17 @@ export function berechneAngebotBetraege(e: RechnungsEingabe) {
   return { flaeche, basis, mieteBetrag, nachtragBetrag, statikBetrag, rabattBetrag, kranBetrag, fahrtBetrag: fahrt };
 }
 
+/**
+ * Angebotswert netto aus der Eingabe – die EINE Rechnung, die Aufmaß Schritt 6 (Anzeige/PDF), Rechnung, Auftragsstand und Dashboard teilen.
+ * Verhalten wie bisher in Schritt 6: Endpreis nie negativ, Skonto 2 % vom Endpreis (nur Anzeige, nicht im Endpreis).
+ */
+export function berechneAngebot(e: RechnungsEingabe) {
+  const b = berechneAngebotBetraege(e);
+  const endpreis = Math.max(0, b.basis + b.mieteBetrag + b.nachtragBetrag + b.statikBetrag + b.kranBetrag + b.fahrtBetrag - b.rabattBetrag);
+  const skontoBetrag = e.anpassungen?.skonto ? endpreis * 0.02 : 0;
+  return { ...b, endpreis, skontoBetrag };
+}
+
 export function baueRechnungsPositionen(args: {
   eingabe: RechnungsEingabe;
   basis: RechnungsBasis;
