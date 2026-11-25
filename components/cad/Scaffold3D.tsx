@@ -13,7 +13,7 @@
 // ============================================================
 
 import { idsImRahmen, istEchterRahmen } from '@/lib/cad/mehrfachauswahl'
-import { baueInstanzIds, loeseInstanz, waehleTreffer, istWiederholterKlick, findeDoppelteIds, nurSichtbare, type Treffer } from '@/lib/cad/auswahl'
+import { baueInstanzIds, loeseInstanz, waehleTreffer, findeDoppelteIds, nurSichtbare, type Treffer } from '@/lib/cad/auswahl'
 import { isTube, instanzMatrix } from '@/lib/cad/instanz-matrix'
 import { useMemo, useState, useRef, useEffect, useCallback, memo, createContext, useContext } from 'react'
 import { Canvas, useThree, useFrame, type ThreeEvent } from '@react-three/fiber'
@@ -699,7 +699,6 @@ function getMaterial(type: string, color: THREE.Color, matt = false, vertexFarbe
 // Hilfsobjekte für die Rohr-Ausrichtung (einmalig, nicht pro Instanz)
 
 /** Letzter Auswahl-Klick (Position, Zeit, Ergebnis) – erneuter Klick an derselben Stelle schaltet zum nächsten Teil darunter. */
-const LETZTER_KLICK: { pos: { x: number; y: number; zeit: number } | null; id: string | null } = { pos: null, id: null }
 
 function InstancedBauteile({
   type,
@@ -831,11 +830,9 @@ function InstancedBauteile({
       treffer.push(...sichtbar)
       if (treffer.length === 0) treffer.push({ id: getroffen.id, typ: type, abstand: e.distance ?? 0 })
       const ne = e.nativeEvent as MouseEvent | undefined
-      const jetzt = { x: ne?.clientX ?? 0, y: ne?.clientY ?? 0, zeit: Date.now() }
-      const weiter = !!ne?.altKey || (!!selectedComponent && istWiederholterKlick(LETZTER_KLICK.pos, jetzt) && LETZTER_KLICK.id === selectedComponent)
-      const id = waehleTreffer(treffer, { aktuell: selectedComponent, weiter }) ?? getroffen.id
-      LETZTER_KLICK.pos = jetzt
-      LETZTER_KLICK.id = id
+      // Normaler Klick = immer das vorderste tatsächlich getroffene Teil (auch bei wiederholtem Klick auf dieselbe Stelle).
+      // Nur Alt+Klick schaltet gezielt zum nächsten dahinterliegenden Teil weiter.
+      const id = waehleTreffer(treffer, { aktuell: selectedComponent, weiter: !!ne?.altKey }) ?? getroffen.id
       onSelect(id, !!(e.shiftKey ?? ne?.shiftKey))
     },
     [itemVon, onSelect, measureMode, onMeasurePoint, placementType, onPlacementClick, selectedComponent, type]
@@ -2858,7 +2855,7 @@ function Scaffold3D({
             <p className="font-semibold text-[#1d1d1f] pr-6">{comp?.name}</p>
             <p className="text-xs text-[#86868b] mt-1">Art.-Nr.: {comp?.articleNumber}</p>
             <p className="text-[11px] text-[#86868b] mt-0.5 break-all" data-testid="bauteil-id">ID: {selectedComponent}</p>
-            <p className="text-[11px] text-[#86868b] mt-0.5">Liegt etwas davor/dahinter? Alt+Klick oder erneut klicken wählt das nächste Teil.</p>
+            <p className="text-[11px] text-[#86868b] mt-0.5">Liegt etwas davor/dahinter? Alt+Klick wählt das nächste Teil.</p>
             {onTreppeVerschieben && comp?.id.startsWith('stair-') && (
               <div className="mt-2 pt-2 border-t border-black/10" data-testid="treppe-versetzen">
                 <p className="text-[11px] text-[#86868b] mb-1">Treppe versetzen</p>

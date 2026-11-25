@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import * as THREE from 'three'
 import { generateCADModel, BuildingParams, ScaffoldComponent3D } from '@/lib/calculations/cad-engine'
-import { baueInstanzIds, loeseInstanz, findeDoppelteIds, ordneTreffer, waehleTreffer, istWiederholterKlick, nurSichtbare, HUELL_TYPEN } from '../auswahl'
+import { baueInstanzIds, loeseInstanz, findeDoppelteIds, ordneTreffer, waehleTreffer, nurSichtbare, HUELL_TYPEN } from '../auswahl'
 import { instanzMatrix, isTube } from '../instanz-matrix'
 
 // Paket 1 – Auswahl-Engine. Die Tests benutzen den ECHTEN three-Raycaster gegen echte InstancedMeshes,
@@ -59,11 +59,19 @@ describe('Auswahl-Engine: reine Regeln', () => {
     const o = ordneTreffer([{ id: 'a', typ: 'frame', abstand: 5 }, { id: 'a', typ: 'frame', abstand: 2 }, { id: 'b', typ: 'frame', abstand: 3 }])
     expect(o.map((x) => [x.id, x.abstand])).toEqual([['a', 2], ['b', 3]])
   })
-  it('Wiederholklick: gleiche Stelle, kurz danach', () => {
-    expect(istWiederholterKlick({ x: 10, y: 10, zeit: 0 }, { x: 12, y: 11, zeit: 1000 })).toBe(true)
-    expect(istWiederholterKlick({ x: 10, y: 10, zeit: 0 }, { x: 40, y: 11, zeit: 1000 })).toBe(false)
-    expect(istWiederholterKlick({ x: 10, y: 10, zeit: 0 }, { x: 10, y: 10, zeit: 9000 })).toBe(false)
-    expect(istWiederholterKlick(null, { x: 0, y: 0, zeit: 0 })).toBe(false)
+  it('normaler Klick wählt immer das vorderste Teil, auch bei 50 Wiederholungen mit bereits gewählter Auswahl', () => {
+    const t = [{ id: 'hinten', typ: 'frame', abstand: 9 }, { id: 'vorn', typ: 'deck', abstand: 3 }, { id: 'mitte', typ: 'frame', abstand: 5 }]
+    let aktuell: string | null = null
+    for (let k = 0; k < 50; k++) { aktuell = waehleTreffer(t, { aktuell }); expect(aktuell).toBe('vorn') }
+  })
+  it('Alt+Klick schaltet weiter und beginnt danach wieder oben; der nächste normale Klick springt zurück nach vorn', () => {
+    const t = [{ id: 'a', typ: 'frame', abstand: 1 }, { id: 'b', typ: 'frame', abstand: 2 }, { id: 'c', typ: 'frame', abstand: 3 }]
+    let a = waehleTreffer(t, { aktuell: null })
+    expect(a).toBe('a')
+    a = waehleTreffer(t, { aktuell: a, weiter: true }); expect(a).toBe('b')
+    a = waehleTreffer(t, { aktuell: a, weiter: true }); expect(a).toBe('c')
+    a = waehleTreffer(t, { aktuell: a, weiter: true }); expect(a).toBe('a')
+    expect(waehleTreffer(t, { aktuell: 'c' })).toBe('a')
   })
   it('Hüll-Typen sind die flächigen Bauteile', () => { expect([...HUELL_TYPEN].sort()).toEqual(['net', 'protection_roof', 'safety_net', 'sheeting']) })
 })
@@ -149,5 +157,22 @@ describe('Auswahl mit echtem Raycaster', () => {
     const t2 = hits2.filter((h) => !h.object.userData.verdecker).map((h) => ({ id: loeseInstanz(h.object.userData.instanzIds, h.instanceId)!, typ: 'frame', abstand: h.distance }))
     expect(nurSichtbare(t2, wand2)).toEqual([])
     expect([...new Set(nurSichtbare(t2, Infinity).map((t) => t.id))]).toEqual(['hinten'])
+  })
+
+  it('mehrere überlappende Bauteile: von 6 Kamerapositionen aus ist ohne Alt der vorderste Treffer stabil, mit Alt die Reihenfolge nach Abstand', () => {
+    const mk = (id: string, z: number): ScaffoldComponent3D => ({ id, type: 'deck', articleNumber: 'X', name: id, position: [0, 1, z], rotation: [0, 0, 0], scale: [1, 1, 0.2] } as unknown as ScaffoldComponent3D)
+    const meshes = baueGruppen([mk('z0', 0), mk('z1', 1), mk('z2', 2)])
+    const kameras: [number, number][] = [[10, 0.2], [-10, -0.2], [6, 0.4], [-6, 0.1], [14, -0.3], [-14, 0.3]]
+    for (const [kz, ky] of kameras) {
+      const o = new THREE.Vector3(0.1, 1 + ky, kz), r = new THREE.Vector3(0, -ky / Math.abs(kz) * 0.2, -Math.sign(kz)).normalize()
+      const hits = new THREE.Raycaster(o, r).intersectObjects(meshes, false)
+      const treffer = hits.map((h) => ({ id: loeseInstanz(h.object.userData.instanzIds, h.instanceId)!, typ: 'deck', abstand: h.distance }))
+      const erwartet = [...new Set(treffer.map((t) => t.id))].sort((a, b) => treffer.find((t) => t.id === a)!.abstand - treffer.find((t) => t.id === b)!.abstand)
+      expect(erwartet.length).toBe(3)
+      const vorn = waehleTreffer(treffer, { aktuell: null })
+      for (let k = 0; k < 10; k++) expect(waehleTreffer(treffer, { aktuell: vorn })).toBe(vorn)
+      expect(vorn).toBe(erwartet[0])
+      expect(waehleTreffer(treffer, { aktuell: vorn, weiter: true })).toBe(erwartet[1])
+    }
   })
 })
