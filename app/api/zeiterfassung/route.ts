@@ -70,26 +70,37 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ success: true, employees, entries });
     }
 
-    if (!month || !/^\d{4}-\d{2}$/.test(month)) {
+    const year = searchParams.get('year'); // 'YYYY' = ganzes Jahr (Auswertung)
+    if (year !== null && !/^\d{4}$/.test(year)) {
+      return NextResponse.json({ success: false, error: 'year=YYYY ungültig' }, { status: 400 });
+    }
+    if (!year && (!month || !/^\d{4}-\d{2}$/.test(month))) {
       return NextResponse.json({ success: false, error: 'month=YYYY-MM erforderlich' }, { status: 400 });
     }
 
-    const [y, m] = month.split('-').map(Number);
-    const from = `${month}-01`;
-    const to = `${month}-${String(new Date(y, m, 0).getDate()).padStart(2, '0')}`;
+    let from: string, to: string;
+    if (year) { from = `${year}-01-01`; to = `${year}-12-31`; }
+    else {
+      const [y, m] = month!.split('-').map(Number);
+      from = `${month}-01`;
+      to = `${month}-${String(new Date(y, m, 0).getDate()).padStart(2, '0')}`;
+    }
 
     let empEndpoint = `${url}/rest/v1/employees?select=id,first_name,last_name,weekly_hours,status`;
     if (employeeId) empEndpoint += `&id=eq.${employeeId}`;
     empEndpoint += '&order=last_name.asc,first_name.asc,id.asc';
 
-    let entEndpoint = `${url}/rest/v1/time_entries?select=*,project:project_id(id,name)&work_date=gte.${from}&work_date=lte.${to}`;
-    if (employeeId) entEndpoint += `&employee_id=eq.${employeeId}`;
-    entEndpoint += '&order=work_date.asc,start_time.asc,id.asc';
+    // Mit Land der Baustelle (Spalte projects.land, SQL phase-139); fehlt sie noch, läuft die Abfrage ohne Land.
+    const entEndpointFuer = (felder: string) => {
+      let e = `${url}/rest/v1/time_entries?select=*,project:project_id(${felder})&work_date=gte.${from}&work_date=lte.${to}`;
+      if (employeeId) e += `&employee_id=eq.${employeeId}`;
+      return e + '&order=work_date.asc,start_time.asc,id.asc';
+    };
 
     // Seitenweise lesen: Die Datenbank liefert je Anfrage höchstens 1000 Zeilen, sonst wären die Monatssummen bei vielen Mitarbeitern zu klein.
     const [employees, entries] = await Promise.all([
       leseAlleZeilen<any>(empEndpoint, headers),
-      leseAlleZeilen<any>(entEndpoint, headers),
+      leseAlleZeilen<any>(entEndpointFuer('id,name,land'), headers).catch(() => leseAlleZeilen<any>(entEndpointFuer('id,name'), headers)),
     ]);
 
     // Einträge pro Mitarbeiter gruppieren + Summen bilden

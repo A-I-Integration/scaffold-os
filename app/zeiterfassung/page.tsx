@@ -4,6 +4,8 @@ import { useState, useEffect, useCallback } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { workdaysInMonth, BREAK_RULE_TEXT } from '@/lib/worktime';
 import ZeitTagesuebersicht from '@/components/ZeitTagesuebersicht';
+import ZeitAuswertung from '@/components/ZeitAuswertung';
+import { ladeExcel } from '@/lib/excel-liste';
 import { spesenJeTag, spesenCsv, type SpesenTagZeile } from '@/lib/spesen-export';
 import { endbetrag } from '@/lib/spesen';
 import {
@@ -93,7 +95,7 @@ export default function ZeiterfassungPage() {
   const [saving, setSaving] = useState(false);
   const [spesenTage, setSpesenTage] = useState<SpesenTagZeile[]>([]);
   const [auszahlung, setAuszahlung] = useState<string | null>(null);
-  const [ansicht, setAnsicht] = useState<'monat' | 'tag'>('monat');
+  const [ansicht, setAnsicht] = useState<'monat' | 'tag' | 'auswertung'>('monat');
 
   // Rolle holen → darf korrigieren?
   useEffect(() => {
@@ -275,6 +277,32 @@ export default function ZeiterfassungPage() {
     a.click();
   }
 
+  // ─── Excel-Liste (.xlsx): gleiche Zeilen wie die CSV, aber mit echten Zahlen ───
+  function exportExcel() {
+    const spesenTag = new Map(spesenJeTag(Object.values(entriesBy).flat(), spesenTage).map(z => [`${z.employee_id}|${z.work_date}`, z.betrag]));
+    const gezeigt = new Set<string>();
+    const zeilen: (string | number | null)[][] = [];
+    for (const emp of employees) {
+      const es = entriesBy[emp.id] || [];
+      if (es.length === 0) continue;
+      const name = `${emp.last_name}, ${emp.first_name}`;
+      for (const e of es) {
+        const k = `${emp.id}|${e.work_date}`;
+        const sp = !gezeigt.has(k) && spesenTag.has(k) ? spesenTag.get(k)! : null;
+        if (sp !== null) gezeigt.add(k);
+        zeilen.push([name, fmtDate(e.work_date), fmtTime(e.start_time), fmtTime(e.end_time), e.break_minutes || 0, e.hours !== null ? e.hours : 'läuft', sp, e.note || '']);
+      }
+      const s = summary[emp.id];
+      if (s) {
+        const soll = sollFor(emp);
+        zeilen.push([`${name} – SUMME`, '', '', '', s.pause_minutes, s.ist_hours, null, '']);
+        zeilen.push([`${name} – SOLL`, '', '', '', null, soll, null, '']);
+        zeilen.push([`${name} – DIFFERENZ`, '', '', '', null, Math.round((s.ist_hours - soll) * 100) / 100, null, '']);
+      }
+    }
+    ladeExcel(`zeiterfassung_${month}.xlsx`, [{ name: 'Zeiterfassung', kopf: ['Mitarbeiter', 'Datum', 'Von', 'Bis', 'Pause (min)', 'Stunden', 'Spesen (EUR)', 'Notiz'], zeilen }]);
+  }
+
   // ─── DATEV-Lohnexport (Stundenerfassungsdaten für den Steuerberater) ───
   // Pragmatisches Importformat: Personalnummer;Name;Vorname;Datum;Stunden;Bemerkung
   // – vom Steuerberater in DATEV Lohn und Gehalt importierbar/zuordenbar.
@@ -405,12 +433,12 @@ export default function ZeiterfassungPage() {
     <div className="min-h-screen bg-[#fbfbfd] p-4 md:p-8">
     <div className="max-w-6xl mx-auto text-[#1d1d1f]">
       <div className="flex gap-2 mb-4">
-        {([['monat', 'Monat'], ['tag', 'Tag']] as const).map(([k, l]) => (
+        {([['monat', 'Monat'], ['tag', 'Tag'], ['auswertung', 'Auswertung']] as const).map(([k, l]) => (
           <button key={k} data-testid={`zeit-reiter-${k}`} onClick={() => setAnsicht(k)}
             className={`text-sm px-4 py-2 rounded-xl border ${ansicht === k ? 'bg-[#e8590c] text-white border-[#e8590c]' : 'border-black/10 text-[#424245]'}`}>{l}</button>
         ))}
       </div>
-      {ansicht === 'tag' ? <ZeitTagesuebersicht canEdit={canEdit} /> : (<>
+      {ansicht === 'auswertung' ? <ZeitAuswertung canEdit={canEdit} /> : ansicht === 'tag' ? <ZeitTagesuebersicht canEdit={canEdit} /> : (<>
       {/* Kopf */}
       <div className="flex flex-wrap items-center gap-3 mb-6">
         <Clock className="w-7 h-7 text-[#e8590c]" />
@@ -428,6 +456,10 @@ export default function ZeiterfassungPage() {
           <button onClick={exportCSV}
             className="inline-flex items-center gap-1.5 border border-black/10 hover:border-[#e8590c] text-[#424245] hover:text-[#e8590c] text-sm px-4 py-2 rounded-xl transition-colors">
             <Download className="w-4 h-4" /> CSV
+          </button>
+          <button onClick={exportExcel} data-testid="export-excel"
+            className="inline-flex items-center gap-1.5 border border-black/10 hover:border-[#e8590c] text-[#424245] hover:text-[#e8590c] text-sm px-4 py-2 rounded-xl transition-colors">
+            <Download className="w-4 h-4" /> Excel
           </button>
           <button onClick={exportDatev}
             title="Stundenerfassung im DATEV-Importformat (für den Steuerberater)"
