@@ -96,6 +96,7 @@ import PlatzierKoordinaten from '@/components/cad/PlatzierKoordinaten'
 import { wendePlatzierungAn } from '@/lib/cad/geruestfeld'
 import { rastePlatzierung } from '@/lib/cad/platzieren'
 import { teileDerBaugruppe } from '@/lib/cad/baugruppen'
+import { KEIN_ZUSTAND, istGesperrt, setzeGesperrt, setzeAusgeblendet, isoliere, hebeIsolierungAuf, zeigeAlle, sichtbaresModell, verborgeneIds, bereinige, type BauteilZustand } from '@/lib/cad/bauteil-zustand'
 import { feldDerAutoTreppe, nachbarFuerTreppe, treppeAufFeld, schiebeUmFelder, leiterAufFeld, durchstiegAufFeld } from '@/lib/cad/treppe-setzen'
 import LvDialog from '@/components/cad/LvDialog'
 import { bereinigeStatikDaten, type StatikDaten } from '@/lib/statik-daten'
@@ -113,6 +114,7 @@ import type { CustomDimension } from '@/types/cad-dimensions'
 import type { ManualPlacement, ScaffoldField } from '@/lib/calculations/cad-engine'
 import { schalteAuswahl, rahmenErgebnis } from '@/lib/cad/mehrfachauswahl'
 import MehrfachLeiste from '@/components/cad/MehrfachLeiste'
+import BauteilZustandHinweis from '@/components/cad/BauteilZustandHinweis'
 import { KEINE_UEBERLAGERUNG, wendeBauteilAenderungenAn, setzeBauteilLage, setzeBauteilMasseDrehung, dupliziereBauteil, setzeBauteilZurueck, bauteileDerLage, verschiebeBauteile, kopiereBauteile, istKopieId, istVonHandVeraendert, type BauteilUeberlagerung } from '@/lib/cad/bauteil-aenderungen'
 import { buildTopologyGraph, pruefeKnotenIsolation } from '@/lib/calculations/topology-graph'
 import { wendeLagerAn, type LagerZeile } from '@/lib/calculations/cad-lager'
@@ -391,7 +393,30 @@ export default function CADPage() {
   }, [])
   // Sperre von Gerüst-/Treppenebene: verhindert jede Bearbeitung der Bauteile (Setzen, Ziehen, Drehen, Kopieren, Ersetzen, Entfernen).
   // Über ein Ref, damit die vielen Bearbeitungs-Handler nicht alle um Abhängigkeiten erweitert werden müssen.
+  // Zustand einzelner Bauteile: gesperrt / ausgeblendet / isoliert (liegt neben dem Modell, siehe lib/cad/bauteil-zustand.ts)
+  const [bauteilZustand, setBauteilZustand] = useState<BauteilZustand>(KEIN_ZUSTAND)
+  const bauteilZustandRef = useRef(bauteilZustand)
+  bauteilZustandRef.current = bauteilZustand
+  const manuellRef = useRef<ManualPlacement[]>([])
   const [sperre] = useState(() => {
+    /** Alle Bauteil-Ids, die mit `id` zusammen bearbeitet werden (Baugruppe, von Hand gesetztes Bauteil, Treppenturm). */
+    const gruppeVon = (id: string): string[] => {
+      const mdl = modelWithManualRef.current
+      if (!mdl) return [id]
+      const ids = new Set<string>([id, ...teileDerBaugruppe(mdl.components3D, id)])
+      const pid = platzierungIdVon(id, manuellRef.current)
+      if (pid) for (const c of mdl.components3D) if (platzierungIdVon(c.id, manuellRef.current) === pid) ids.add(c.id)
+      const m = id.match(/^stair-(?:frame|step|rail)-(\d+)(?:-|$)/)
+      if (m) { const re = new RegExp(`^stair-(?:frame|step|rail)-${m[1]}(?:-|$)`); for (const c of mdl.components3D) if (re.test(c.id)) ids.add(c.id) }
+      return [...ids]
+    }
+    const meldeGesperrt = (): true => { setZebMeldung('Das Bauteil ist gesperrt – es wurde nicht geändert. Zum Bearbeiten im Inspector entsperren.'); return true }
+    const fuerBauteile = (ids: readonly string[]): boolean => {
+      const z = bauteilZustandRef.current
+      if (z.gesperrt.length === 0) return false
+      if (ids.some((i) => istGesperrt(z, i))) return meldeGesperrt()
+      return ids.some((i) => gruppeVon(i).some((g) => istGesperrt(z, g))) ? meldeGesperrt() : false
+    }
     const fuer = (art: 'treppe' | 'geruest' | 'beide'): boolean => {
       const z = zebRef.current
       const t = Zeb.findeEbene(z, 'std-treppen'); const g = Zeb.findeEbene(z, 'std-geruest')
@@ -401,7 +426,16 @@ export default function CADPage() {
     }
     return {
       fuer,
-      fuerId: (id: string): boolean => { const typ = modelWithManualRef.current?.components3D.find((c) => c.id === id)?.type; return fuer(typ === 'stair' || id.startsWith('stair') ? 'treppe' : 'geruest') },
+      /** Auswahl (mehrere Ids): true = mindestens ein Teil (oder seine Baugruppe) ist gesperrt */
+      fuerBauteile,
+      gruppe: gruppeVon,
+      /** von Hand gesetztes Bauteil (Platzierung): true = eines seiner Teile ist gesperrt */
+      fuerPlatzierung: (platzierungId: string): boolean => {
+        const z = bauteilZustandRef.current
+        if (z.gesperrt.length === 0) return false
+        return z.gesperrt.some((i) => platzierungIdVon(i, manuellRef.current) === platzierungId) ? meldeGesperrt() : false
+      },
+      fuerId: (id: string): boolean => { if (fuerBauteile([id])) return true; const typ = modelWithManualRef.current?.components3D.find((c) => c.id === id)?.type; return fuer(typ === 'stair' || id.startsWith('stair') ? 'treppe' : 'geruest') },
     }
   })
   const zebAendern = useCallback((f: (z: Zeb.Zeichenebenen) => Zeb.Ergebnis) => {
@@ -488,6 +522,7 @@ export default function CADPage() {
   const [pendingMeasurePoint, setPendingMeasurePoint] = useState<{ point: [number, number, number]; label?: string } | null>(null)
   // NEU (CP-Pro-Marktvergleich, "Drag & Drop"-Lücke): manuell platzierte Bauteile
   const [manualPlacements, setManualPlacements] = useState<ManualPlacement[]>([])
+  manuellRef.current = manualPlacements
   const [figuren, setFiguren] = useState<Figur[]>([])
   const [zeichenWerkzeug, setZeichenWerkzeug] = useState<FigurArt | null>(null)
   // Ausgewählter Bauteiltyp für die Klick-Platzierung (null = Modus aus)
@@ -639,6 +674,7 @@ export default function CADPage() {
   // Automatische Treppe mit einem Klick wählen und ein Feld nach links/rechts versetzen (treppeFeldId)
   const versetzeAutoTreppe = useCallback((richtung: -1 | 1): string | null => {
     if (sperre.fuer('treppe')) return 'Die Ebene Treppen ist gesperrt.'
+    if (selectedComponent && sperre.fuerBauteile([selectedComponent])) return 'Das Bauteil ist gesperrt.'
     if (!model || !selectedComponent) return null
     const teil = model.components3D.find((c) => c.id === selectedComponent)
     if (!teil) return null
@@ -694,7 +730,7 @@ export default function CADPage() {
     if (e.placement) setManualPlacements((prev) => prev.map((x) => (x.id === e.placement!.id ? e.placement! : x)))
   }, [sperre, model, gewaehlteTreppe])
   const handleBauteilZiehen = useCallback((platzierungId: string, position: [number, number, number], side: string, levelIndex: number) => {
-    if (sperre.fuer('beide')) return
+    if (sperre.fuer('beide') || sperre.fuerPlatzierung(platzierungId)) return
     setManualPlacements((prev) => {
       const i = prev.findIndex((p) => p.id === platzierungId)
       if (i < 0) return prev
@@ -771,14 +807,14 @@ export default function CADPage() {
     return { pids: [...pids], rest }
   }, [manualPlacements])
   const handleGruppeVerschieben = useCallback((v: [number, number, number]) => {
-    if (sperre.fuer('beide')) return
+    if (sperre.fuer('beide') || sperre.fuerBauteile(mehrfach)) return
     const { pids, rest } = teileDerAuswahl(mehrfach)
     if (pids.length) setManualPlacements((prev) => prev.map((p) => (pids.includes(p.id) ? { ...p, positionX: p.positionX + v[0], positionY: p.positionY + v[1], positionZ: p.positionZ + v[2] } : p)))
     const mdl = modelWithManualRef.current
     if (rest.length && mdl) setzeUeber((u) => verschiebeBauteile(u, mdl, rest, v))
   }, [sperre, teileDerAuswahl, mehrfach, setzeUeber])
   const handleGruppeKopieren = useCallback((v: [number, number, number]) => {
-    if (sperre.fuer('beide')) return
+    if (sperre.fuer('beide') || sperre.fuerBauteile(mehrfach)) return
     const { pids, rest } = teileDerAuswahl(mehrfach)
     if (pids.length) {
       const jetzt = Date.now()
@@ -787,7 +823,7 @@ export default function CADPage() {
     if (rest.length) setzeUeber((u) => kopiereBauteile(u, rest, v))
   }, [sperre, teileDerAuswahl, mehrfach, setzeUeber])
   const handleGruppeEntfernen = useCallback(() => {
-    if (sperre.fuer('beide')) return
+    if (sperre.fuer('beide') || sperre.fuerBauteile(mehrfach)) return
     const { pids, rest } = teileDerAuswahl(mehrfach)
     if (pids.length) setManualPlacements((prev) => prev.filter((p) => !pids.includes(p.id)))
     const kopien = rest.filter(istKopieId)
@@ -1087,6 +1123,21 @@ export default function CADPage() {
   }, [modelWithManual, geruestWahl])
   const modelWithManualRef = useRef<CADModel | null>(null)
   modelWithManualRef.current = modelWithManual
+  // Zustand ohne Ids, die es nicht mehr gibt (nach Neuberechnen/Entfernen); sonst könnte eine veraltete Isolierung das ganze Modell verbergen
+  const zustand = useMemo(() => (modelWithManual ? bereinige(bauteilZustand, new Set(modelWithManual.components3D.map((c) => c.id))) : bauteilZustand), [modelWithManual, bauteilZustand])
+  /** Modell nur für die 3D-Anzeige: ohne ausgeblendete/isolierte Bauteile. Stückliste, Kosten und Bearbeitung nutzen weiter das volle Modell. */
+  const anzeigeModell = useMemo(() => (modelWithManual ? sichtbaresModell(modelWithManual, zustand) : modelWithManual), [modelWithManual, zustand])
+  const verborgenAnzahl = useMemo(() => (modelWithManual ? verborgeneIds(modelWithManual, zustand).length : 0), [modelWithManual, zustand])
+  const handleSperren = useCallback((ids: readonly string[], an: boolean) => {
+    const alle = [...new Set(ids.flatMap((i) => sperre.gruppe(i)))]
+    setBauteilZustand((z) => setzeGesperrt(z, alle, an))
+    setZebMeldung(null)
+  }, [sperre])
+  const handleAusblenden = useCallback((ids: readonly string[]) => {
+    setBauteilZustand((z) => setzeAusgeblendet(z, ids, true))
+    setSelectedComponent(null); setMehrfach([])
+  }, [])
+  const handleIsolieren = useCallback((ids: readonly string[]) => setBauteilZustand((z) => isoliere(z, ids)), [])
   const gewaehltesFeld = useMemo(() => {
     const asm = selectedComponent ? modelWithManual?.components3D.find((c) => c.id === selectedComponent)?.assemblyId : undefined
     return manualPlacements.find((x) => x.type === 'geruestfeld' && x.id === asm) ?? null
@@ -1911,8 +1962,11 @@ export default function CADPage() {
               onKlick={(a) => { setFeldKlick(a); setPlacementType(a ? 'geruestfeld' : null) }} onSetzen={setzeGeruestfeld} onAendern={aendereGeruestfeld} onVerschieben={verschiebeGeruestfeld} onLoeschen={loescheGeruestfeld} onZu={() => { setFeldPanel(false); if (placementType === 'geruestfeld') setPlacementType(null) }} />
           )}
           {treppePanel && model && viewMode === '3d' && <TreppePanel model={model} treppe={gewaehlteTreppe} meldung={treppeMeldung} onSetzen={setzeTreppeAufFeld} onLeiter={setzeLeiterAufFeld} onDurchstieg={setzeDurchstiegAufFeld} onSchieben={schiebeTreppe} onZu={() => setTreppePanel(false)} />}
+          {modelWithManual && viewMode === '3d' && (
+            <BauteilZustandHinweis verborgen={verborgenAnzahl} isoliert={zustand.isoliert.length > 0} gesperrt={zustand.gesperrt.length} onAlleZeigen={() => setBauteilZustand((z) => zeigeAlle(z))} onAlleEntsperren={() => setBauteilZustand((z) => ({ ...z, gesperrt: [] }))} />
+          )}
           {mehrfach.length > 0 && modelWithManual && viewMode === '3d' && !abbauAktiv && (
-            <MehrfachLeiste model={modelWithManual} ids={mehrfach} einrasten={einrasten} rahmenAktiv={rahmenModus} onRahmen={() => setRahmenModus((v) => !v)} onAbwaehlen={() => { setMehrfach([]); setRahmenModus(false) }} onVerschieben={handleGruppeVerschieben} onKopieren={handleGruppeKopieren} onEntfernen={handleGruppeEntfernen} />
+            <MehrfachLeiste zustand={{ gesperrt: mehrfach.filter((i) => istGesperrt(zustand, i)).length, onSperren: (an) => handleSperren(mehrfach, an), onAusblenden: () => handleAusblenden(mehrfach), onIsolieren: () => handleIsolieren(mehrfach) }} model={modelWithManual} ids={mehrfach} einrasten={einrasten} rahmenAktiv={rahmenModus} onRahmen={() => setRahmenModus((v) => !v)} onAbwaehlen={() => { setMehrfach([]); setRahmenModus(false) }} onVerschieben={handleGruppeVerschieben} onKopieren={handleGruppeKopieren} onEntfernen={handleGruppeEntfernen} />
           )}
           <div className='flex flex-wrap gap-2 items-center justify-between px-4 py-1 bg-white/50 border-b border-black/5'>
             {viewMode === '3d' && (
@@ -2028,7 +2082,7 @@ export default function CADPage() {
               <AbbauEinplanenDialog tage={abbauErgebnis.tage} personen={abbauErgebnis.personen} titel={`Teilabbau: ${abbauErgebnis.anzahlTeile} Bauteile, ${abbauErgebnis.stunden} h`} onClose={() => setAbbauEinplanen(false)} />
             )}
             {viewMode === '3d' && modelWithManual && (<>
-              <Scaffold3D farbModus={farbModus} model={modelWithManual} features={features} showBuilding={showBuilding && zebSichtbar('std-gebaeude')} showScaffold={showScaffold && zebSichtbar('std-geruest')} showDimensions={showDimensions} selectedComponent={selectedComponent} onSelectComponent={klickImModell} onKontextmenue={(id, x, y) => { if (abbauAktiv || placementType || measureMode) return; setSelectedComponent(id); setKontext({ id, x, y }) }} mehrfachAuswahl={mehrfachMenge} rahmenModus={rahmenModus} onRahmen={handleRahmen} abbauMarkiert={abbauMarkiert} echtesGebaeude={echtesGebaeude} visibleTypes={visibleTypes3D} viewMode={viewAngle} onCanvasReady={(c) => { canvasRef.current = c }} notes={sichtbareNotizen} onAddNote={handleAddNote} hiddenSides={hiddenSides} hiddenLevels={hiddenLevelsAufbau} measureMode={measureMode} onMeasurePoint={handleMeasurePoint} customDimensions={sichtbareMasse} messErgebnisse={sichtbareMessungen} dunklerHintergrund={dunkel3d} pendingMeasurePoint={pendingMeasurePoint?.point ?? null} placementType={placementType} onPlacementClick={handlePlacementClick} showEnvironment={showEnvironment} hoheQualitaet={hoheQualitaet} onRemoveComponent={handleRemoveComponent} onTreppeVerschieben={versetzeAutoTreppe} onReplaceComponent={handleReplaceComponent} systemId={systemId} artikelWahl={artikelWahl} onArtikelWahl={waehleArtikel} onArtikelWahlGleiche={waehleArtikelGleiche} removedCount={removedCount} platzierungIdVon={platzierungIdVonBauteil} onBauteilZiehen={handleBauteilZiehen} griff={!abbauAktiv ? { modus: griffModus, einrasten, anschlussMarker: anschlussEinrasten, onAendern: handleBauteilLage } : undefined} onSeiteUmschalten={(side) => { setAutoGenerate(true); setBuilding((() => { const cur = building.sides ?? ['front']; const has = cur.includes(side); const ns = has ? cur.filter((x) => x !== side) : [...cur, side]; if (ns.length === 0) ns.push('front'); return { ...building, sides: ns } })()) }} />
+              <Scaffold3D farbModus={farbModus} model={anzeigeModell ?? modelWithManual} features={features} showBuilding={showBuilding && zebSichtbar('std-gebaeude')} showScaffold={showScaffold && zebSichtbar('std-geruest')} showDimensions={showDimensions} selectedComponent={selectedComponent} onSelectComponent={klickImModell} onKontextmenue={(id, x, y) => { if (abbauAktiv || placementType || measureMode) return; setSelectedComponent(id); setKontext({ id, x, y }) }} mehrfachAuswahl={mehrfachMenge} rahmenModus={rahmenModus} onRahmen={handleRahmen} abbauMarkiert={abbauMarkiert} echtesGebaeude={echtesGebaeude} visibleTypes={visibleTypes3D} viewMode={viewAngle} onCanvasReady={(c) => { canvasRef.current = c }} notes={sichtbareNotizen} onAddNote={handleAddNote} hiddenSides={hiddenSides} hiddenLevels={hiddenLevelsAufbau} measureMode={measureMode} onMeasurePoint={handleMeasurePoint} customDimensions={sichtbareMasse} messErgebnisse={sichtbareMessungen} dunklerHintergrund={dunkel3d} pendingMeasurePoint={pendingMeasurePoint?.point ?? null} placementType={placementType} onPlacementClick={handlePlacementClick} showEnvironment={showEnvironment} hoheQualitaet={hoheQualitaet} onRemoveComponent={handleRemoveComponent} onTreppeVerschieben={versetzeAutoTreppe} onReplaceComponent={handleReplaceComponent} systemId={systemId} artikelWahl={artikelWahl} onArtikelWahl={waehleArtikel} onArtikelWahlGleiche={waehleArtikelGleiche} removedCount={removedCount} platzierungIdVon={platzierungIdVonBauteil} onBauteilZiehen={handleBauteilZiehen} griff={!abbauAktiv ? { modus: griffModus, einrasten, anschlussMarker: anschlussEinrasten, onAendern: handleBauteilLage } : undefined} onSeiteUmschalten={(side) => { setAutoGenerate(true); setBuilding((() => { const cur = building.sides ?? ['front']; const has = cur.includes(side); const ns = has ? cur.filter((x) => x !== side) : [...cur, side]; if (ns.length === 0) ns.push('front'); return { ...building, sides: ns } })()) }} />
               <AufbauLeiste schritte={aufbauSchritte} aktiv={aufbauNr} pdfLaeuft={aufbauPdfLaeuft} onStart={() => setAufbauNr(0)} onWeiter={() => setAufbauNr((n) => Math.min((n ?? 0) + 1, aufbauSchritte.length - 1))} onZurueck={() => setAufbauNr((n) => Math.max((n ?? 0) - 1, 0))} onEnde={() => setAufbauNr(null)} onPdf={() => { void handleAufbauPdf() }} />
             </>
             )}
@@ -2108,8 +2162,8 @@ export default function CADPage() {
           <RechteLeiste auswahlId={selectedComponent} hatModell={!!modelWithManual}
             objekt={modelWithManual ? (<>
           {selectedComponent && modelWithManual && viewMode === '3d' && !abbauAktiv && !placementType && !measureMode && (
-              <EigenschaftenLeiste model={modelWithManual} id={selectedComponent} baugruppeAnzahl={teileDerBaugruppe(modelWithManual.components3D, selectedComponent).length} onBaugruppe={() => handleBaugruppeWaehlen(selectedComponent)} onMasseDrehung={(a) => handleMasseDrehung(selectedComponent, a)} lagenVersatzM={ueber.aenderungen.find((a) => a.id === selectedComponent)?.dy ?? ueber.kopien.find((k) => k.id === selectedComponent)?.dy ?? 0} onLageOp={(op) => handleLageOp(selectedComponent, op)} griffModus={griffModus} onGriffModus={setGriffModus} einrasten={einrasten} onEinrasten={setEinrasten} anschlussEinrasten={anschlussEinrasten} onAnschlussEinrasten={setAnschlussEinrasten} veraendert={istVonHandVeraendert(ueber, selectedComponent)} onLage={(p, d) => handleBauteilLage(selectedComponent, p, d)} onDuplizieren={() => handleBauteilDuplizieren(selectedComponent)} onZuruecksetzen={() => handleBauteilZuruecksetzen(selectedComponent)} artikelWahl={artikelWahl} manuell={!!platzierungIdVonBauteil(selectedComponent)}
-                onEntfernen={() => handleRemoveComponent(selectedComponent)} onFeldEntfernen={(ids) => { setRemovedGroups((prev) => [...prev, ids]); setSelectedComponent(null) }}
+              <EigenschaftenLeiste zustand={{ gesperrt: istGesperrt(zustand, selectedComponent), isoliert: zustand.isoliert.length > 0, onSperren: (an) => handleSperren([selectedComponent], an), onAusblenden: () => handleAusblenden([selectedComponent]), onIsolieren: () => handleIsolieren([selectedComponent]), onIsolierungAufheben: () => setBauteilZustand((z) => hebeIsolierungAuf(z)) }} model={modelWithManual} id={selectedComponent} baugruppeAnzahl={teileDerBaugruppe(modelWithManual.components3D, selectedComponent).length} onBaugruppe={() => handleBaugruppeWaehlen(selectedComponent)} onMasseDrehung={(a) => handleMasseDrehung(selectedComponent, a)} lagenVersatzM={ueber.aenderungen.find((a) => a.id === selectedComponent)?.dy ?? ueber.kopien.find((k) => k.id === selectedComponent)?.dy ?? 0} onLageOp={(op) => handleLageOp(selectedComponent, op)} griffModus={griffModus} onGriffModus={setGriffModus} einrasten={einrasten} onEinrasten={setEinrasten} anschlussEinrasten={anschlussEinrasten} onAnschlussEinrasten={setAnschlussEinrasten} veraendert={istVonHandVeraendert(ueber, selectedComponent)} onLage={(p, d) => handleBauteilLage(selectedComponent, p, d)} onDuplizieren={() => handleBauteilDuplizieren(selectedComponent)} onZuruecksetzen={() => handleBauteilZuruecksetzen(selectedComponent)} artikelWahl={artikelWahl} manuell={!!platzierungIdVonBauteil(selectedComponent)}
+                onEntfernen={() => handleRemoveComponent(selectedComponent)} onFeldEntfernen={(ids) => { if (sperre.fuerBauteile(ids)) return; setRemovedGroups((prev) => [...prev, ids]); setSelectedComponent(null) }}
                 onFeldLaenge={(seite, spalte, laengeM) => setBereichsListe((l) => [...l, { art: 'laenge', seite, spalte, feldlaengeM: laengeM }])}
                 onFeldAnhaengen={(seite, ende, laengeM) => setBereichsListe((l) => [...l, { art: 'erweitern', seite, ende, anzahl: 1, feldlaengeM: laengeM }])}
                 onFeldTeilen={(seite, spalte, laengenM) => setBereichsListe((l) => [...l, { art: 'teilen', seite, spalte, laengenM }])}

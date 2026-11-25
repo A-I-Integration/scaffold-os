@@ -21,7 +21,9 @@ export function auswahlZusammenfassung(model: CADModel, ids: readonly string[]):
   return `${ids.length} Bauteile${teile.length ? `: ${teile.join(', ')}` : ''}${fehlend > 0 ? ` (${fehlend} nicht mehr vorhanden)` : ''}`
 }
 
-export default function MehrfachLeiste({ model, ids, einrasten, onVerschieben, onKopieren, onEntfernen, onAbwaehlen, onRahmen, rahmenAktiv }: {
+export default function MehrfachLeiste({ zustand, model, ids, einrasten, onVerschieben, onKopieren, onEntfernen, onAbwaehlen, onRahmen, rahmenAktiv }: {
+  /** Sperren / Ausblenden / Isolieren der gewählten Bauteile; gesperrt = wie viele der gewählten gesperrt sind */
+  zustand?: { gesperrt: number; onSperren: (an: boolean) => void; onAusblenden: () => void; onIsolieren: () => void }
   model: CADModel; ids: readonly string[]; einrasten: boolean
   onVerschieben: (versatz: [number, number, number]) => void
   onKopieren: (versatz: [number, number, number]) => void
@@ -41,9 +43,17 @@ export default function MehrfachLeiste({ model, ids, einrasten, onVerschieben, o
       ))}
       <button type='button' disabled={leer} onClick={() => onVerschieben(versatz())} className='rounded bg-[#1d1d1f] px-3 py-1.5 text-white disabled:opacity-35'>Verschieben</button>
       <button type='button' disabled={leer} onClick={() => onKopieren(versatz())} className='rounded border border-black/15 bg-white px-3 py-1.5 disabled:opacity-35'>Kopieren</button>
+      {zustand && (
+        <>
+          <span className='mx-1 h-8 w-px self-center bg-black/10' />
+          <button type='button' onClick={() => zustand.onSperren(zustand.gesperrt < ids.length)} className='rounded border border-black/15 bg-white px-3 py-1.5' data-testid='mehrfach-sperren'>{zustand.gesperrt < ids.length ? 'Sperren' : 'Entsperren'}</button>
+          <button type='button' onClick={zustand.onAusblenden} className='rounded border border-black/15 bg-white px-3 py-1.5' data-testid='mehrfach-ausblenden'>Ausblenden</button>
+          <button type='button' onClick={zustand.onIsolieren} className='rounded border border-black/15 bg-white px-3 py-1.5' data-testid='mehrfach-isolieren'>Isolieren</button>
+        </>
+      )}
       <span className='mx-1 h-8 w-px self-center bg-black/10' />
       <button type='button' onClick={onRahmen} className={`rounded border px-3 py-1.5 ${rahmenAktiv ? 'border-[#2563eb] bg-[#2563eb]/10 text-[#2563eb]' : 'border-black/15 bg-white'}`}>{rahmenAktiv ? 'Rahmen: an' : 'Auswahlrahmen'}</button>
-      <button type='button' onClick={onEntfernen} className='rounded border border-red-300 bg-white px-3 py-1.5 text-red-700'>Alle entfernen</button>
+      <button type='button' disabled={(zustand?.gesperrt ?? 0) > 0} onClick={onEntfernen} className='rounded border border-red-300 bg-white px-3 py-1.5 text-red-700 disabled:opacity-40'>Alle entfernen</button>
       <span className='max-w-[300px] self-center text-[11px] leading-tight text-[#6e6e73]'>Shift+Klick fügt Bauteile hinzu oder nimmt sie heraus. Entf entfernt alle. Esc hebt die Auswahl auf.{einrasten ? ' Versatz rastet auf 5 cm.' : ''}</span>
       <button type='button' onClick={onAbwaehlen} aria-label='Auswahl aufheben' className='ml-auto self-center text-xs text-[#6e6e73] hover:text-[#1d1d1f]'>Auswahl aufheben ✕</button>
     </div>
