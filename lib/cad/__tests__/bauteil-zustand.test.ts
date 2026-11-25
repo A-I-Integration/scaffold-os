@@ -66,3 +66,19 @@ describe('Bauteilzustand: Sperren, Ausblenden, Isolieren', () => {
     expect(bereinige(b, new Set(['a']))).toBe(b)
   })
 })
+
+import { positionNachVersatz } from '../bauteil-aenderungen'
+describe('Versatz global/lokal', () => {
+  it('global: entlang der Weltachsen, unabhängig von der Drehung', () => {
+    expect(positionNachVersatz([1, 2, 3], [0, Math.PI / 2, 0], [0.5, 0, 0], 'global')).toEqual([1.5, 2, 3])
+  })
+  it('lokal ohne Drehung = global', () => {
+    expect(positionNachVersatz([1, 2, 3], [0, 0, 0], [0.5, 0.1, -0.2], 'lokal')).toEqual([1.5, 2.1, 2.8])
+  })
+  it('lokal: um 90° um die Hochachse gedreht läuft die lokale x-Achse in die Welt-(-z)-Richtung', () => {
+    expect(positionNachVersatz([0, 0, 0], [0, Math.PI / 2, 0], [1, 0, 0], 'lokal')).toEqual([0, 0, -1])
+  })
+  it('lokal: Höhe bleibt bei Drehung um die Hochachse die Höhe', () => {
+    expect(positionNachVersatz([0, 1, 0], [0, 1.2, 0], [0, 0.3, 0], 'lokal')).toEqual([0, 1.3, 0])
+  })
+})

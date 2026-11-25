@@ -4,7 +4,7 @@
 // Alle Werte kommen aus dem Modell; es wird nichts berechnet oder erfunden.
 
 import { useState } from 'react'
-import { imHoehenraster, masseAnzeige, masseZuBoxAchsen, eulerGrad } from '@/lib/cad/bauteil-aenderungen'
+import { imHoehenraster, masseAnzeige, masseZuBoxAchsen, eulerGrad, positionNachVersatz } from '@/lib/cad/bauteil-aenderungen'
 import type { CADModel } from '@/lib/calculations/cad-engine'
 import { waehleFeld, feldSpalteVonBauteil, pruefeSpaltenOperation, type FeldUmfang, type Seite } from '@/lib/cad/bereiche'
 
@@ -89,6 +89,7 @@ export default function EigenschaftenLeiste({ zustand, baugruppeAnzahl, onBaugru
             {[-90, -15, 15, 90].map((g) => <button key={g} type='button' onClick={() => onLage(c.position, g)} className='rounded border px-2 py-1 hover:bg-gray-50' style={{ borderColor: 'var(--os-linie)' }}>{g > 0 ? '+' : ''}{g}°</button>)}
           </div>
           <PositionFelder key={c.position.join(',')} start={c.position} onUebernehmen={(p) => onLage(p, 0)} />
+          <VersatzFelder position={c.position} rotation={c.rotation} onUebernehmen={(p) => onLage(p, 0)} />
           {onMasseDrehung && <MasseDrehungFelder key={`${c.scale.join(',')}|${c.rotation.join(',')}`} bauteil={c} onUebernehmen={onMasseDrehung} />}
           {onBaugruppe && (baugruppeAnzahl ?? 0) > 1 && <button type='button' onClick={onBaugruppe} className='w-full rounded border px-2 py-1.5 text-[12.5px] hover:bg-gray-50' style={{ borderColor: 'var(--os-linie)' }}>Ganze Baugruppe wählen ({baugruppeAnzahl} Teile)</button>}
           <div className='grid grid-cols-2 gap-1'>
@@ -173,6 +174,38 @@ function PositionFelder({ start, onUebernehmen }: { start: [number, number, numb
       </div>
       <button type='button' disabled={!geaendert} onClick={() => onUebernehmen(neu as [number, number, number])}
         className='mt-1.5 w-full rounded px-3 py-1.5 text-[13px] font-semibold disabled:opacity-40' style={{ background: 'var(--os-akzent)', color: '#171b20' }}>Position übernehmen</button>
+    </div>
+  )
+}
+
+// Verschieben um einen Versatz – entlang der Weltachsen (global) oder der eigenen Achsen des Bauteils (lokal).
+function VersatzFelder({ position, rotation, onUebernehmen }: { position: [number, number, number]; rotation: [number, number, number]; onUebernehmen: (p: [number, number, number]) => void }) {
+  const [system, setSystem] = useState<'global' | 'lokal'>('global')
+  const [w, setW] = useState(['0', '0', '0'])
+  const v = w.map(zahl)
+  const gueltig = v.every((x) => x !== null)
+  const leer = gueltig && v.every((x) => x === 0)
+  return (
+    <div data-testid='versatz-felder'>
+      <div className='mb-1 flex items-center justify-between'>
+        <span className='text-[11px] uppercase tracking-wider' style={{ color: 'var(--os-text-leise)' }}>Verschieben um (m)</span>
+        <div className='flex gap-1' role='group' aria-label='Koordinatensystem'>
+          {(['global', 'lokal'] as const).map((k) => (
+            <button key={k} type='button' aria-pressed={system === k} onClick={() => setSystem(k)} className='rounded border px-2 py-0.5 text-[11.5px]'
+              style={{ borderColor: system === k ? 'var(--os-akzent)' : 'var(--os-linie)', background: system === k ? 'var(--os-akzent)' : 'white', color: system === k ? '#171b20' : undefined }}>{k === 'global' ? 'Global' : 'Lokal'}</button>
+          ))}
+        </div>
+      </div>
+      <div className='grid grid-cols-3 gap-1'>
+        {['x', 'y (Höhe)', 'z'].map((n, i) => (
+          <label key={n} className='text-[12px]'>{n}
+            <input value={w[i]} inputMode='decimal' onChange={(e) => setW((alt) => alt.map((t, j) => (j === i ? e.target.value : t)))}
+              className='mt-0.5 w-full rounded border bg-white px-1.5 py-1 text-[13px]' style={{ borderColor: gueltig ? 'var(--os-linie)' : '#e7b4b0' }} />
+          </label>
+        ))}
+      </div>
+      <button type='button' disabled={!gueltig || leer} onClick={() => { onUebernehmen(positionNachVersatz(position, rotation, v as [number, number, number], system)); setW(['0', '0', '0']) }}
+        className='mt-1.5 w-full rounded border px-3 py-1.5 text-[13px] hover:bg-gray-50 disabled:opacity-40' style={{ borderColor: 'var(--os-linie)' }}>Verschieben ({system === 'global' ? 'global' : 'lokal'})</button>
     </div>
   )
 }

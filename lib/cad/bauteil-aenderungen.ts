@@ -182,3 +182,13 @@ export function masseZuBoxAchsen(c: Pick<ScaffoldComponent3D, 'rotation' | 'scal
   const w = [laenge, hoehe, breite]
   return [0, 1, 2].map((i) => Math.round([0, 1, 2].reduce((s, a) => s + R[a][i] * w[a], 0) * 1e4) / 1e4) as [number, number, number]
 }
+
+/**
+ * Neue Position nach einem Versatz. `global`: Versatz entlang der Weltachsen (x, y = Höhe, z). `lokal`: Versatz entlang der eigenen
+ * Achsen des Bauteils (mit seiner Drehung, Euler XYZ wie im Modell) – z. B. „20 cm entlang der Bauteillänge“, egal wie das Teil steht.
+ */
+export function positionNachVersatz(position: [number, number, number], rotation: [number, number, number], versatz: [number, number, number], system: 'global' | 'lokal'): [number, number, number] {
+  let d = new THREE.Vector3(versatz[0], versatz[1], versatz[2])
+  if (system === 'lokal') d = d.applyEuler(new THREE.Euler(rotation[0], rotation[1], rotation[2], 'XYZ'))
+  return [r4(position[0] + d.x), r4(position[1] + d.y), r4(position[2] + d.z)]
+}
