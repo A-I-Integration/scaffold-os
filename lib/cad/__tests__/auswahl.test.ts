@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import * as THREE from 'three'
 import { generateCADModel, BuildingParams, ScaffoldComponent3D } from '@/lib/calculations/cad-engine'
-import { baueInstanzIds, loeseInstanz, findeDoppelteIds, ordneTreffer, waehleTreffer, istWiederholterKlick, HUELL_TYPEN } from '../auswahl'
+import { baueInstanzIds, loeseInstanz, findeDoppelteIds, ordneTreffer, waehleTreffer, istWiederholterKlick, nurSichtbare, HUELL_TYPEN } from '../auswahl'
 import { instanzMatrix, isTube } from '../instanz-matrix'
 
 // Paket 1 – Auswahl-Engine. Die Tests benutzen den ECHTEN three-Raycaster gegen echte InstancedMeshes,
@@ -127,5 +127,27 @@ describe('Auswahl mit echtem Raycaster', () => {
     }
     expect(geprueft).toBeGreaterThanOrEqual(100)
     expect(falsch).toEqual([])
+  })
+
+  it('Gebäudewand verdeckt: Klick durch die Wand wählt kein Teil auf der abgewandten Seite, Teile davor bleiben wählbar', () => {
+    const mk = (id: string, x: number): ScaffoldComponent3D => ({ id, type: 'frame', articleNumber: 'X', name: id, position: [x, 1, 0], rotation: [0, 0, 0], scale: [0.2, 2, 0.2] } as unknown as ScaffoldComponent3D)
+    const vorn = mk('vorn', 2), hinten = mk('hinten', -6)
+    const meshes = baueGruppen([vorn, hinten])
+    const wand = new THREE.Mesh(new THREE.BoxGeometry(0.3, 4, 4), new THREE.MeshBasicMaterial({ side: THREE.DoubleSide }))
+    wand.position.set(-2, 1, 0)
+    wand.userData.verdecker = true
+    const alle = [...meshes, wand]
+    // Strahl von x=8 Richtung -x: zuerst "vorn" (x=2), dann die Wand (x=-2), dann "hinten" (x=-6)
+    const hits = new THREE.Raycaster(new THREE.Vector3(8, 1, 0), new THREE.Vector3(-1, 0, 0)).intersectObjects(alle, false)
+    const wandAb = Math.min(...hits.filter((h) => h.object.userData.verdecker).map((h) => h.distance))
+    const treffer = hits.filter((h) => !h.object.userData.verdecker).map((h) => ({ id: loeseInstanz(h.object.userData.instanzIds, h.instanceId)!, typ: 'frame', abstand: h.distance }))
+    expect([...new Set(treffer.map((t) => t.id))].sort()).toEqual(['hinten', 'vorn'])
+    expect([...new Set(nurSichtbare(treffer, wandAb).map((t) => t.id))]).toEqual(['vorn'])
+    // Strahl, der nur die Wand und dahinter "hinten" trifft (Klick auf die Wand zwischen den Rohren):
+    const hits2 = new THREE.Raycaster(new THREE.Vector3(0, 1, 0), new THREE.Vector3(-1, 0, 0)).intersectObjects(alle, false)
+    const wand2 = Math.min(...hits2.filter((h) => h.object.userData.verdecker).map((h) => h.distance))
+    const t2 = hits2.filter((h) => !h.object.userData.verdecker).map((h) => ({ id: loeseInstanz(h.object.userData.instanzIds, h.instanceId)!, typ: 'frame', abstand: h.distance }))
+    expect(nurSichtbare(t2, wand2)).toEqual([])
+    expect([...new Set(nurSichtbare(t2, Infinity).map((t) => t.id))]).toEqual(['hinten'])
   })
 })
