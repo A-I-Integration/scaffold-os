@@ -1,6 +1,7 @@
 'use client';
 
-import { kundenAnschrift } from '@/lib/land';
+import { kundenAnschrift, adresseMitLand } from '@/lib/land';
+import LandAuswahl from '@/components/LandAuswahl';
 import { berechneForderung, mitBezugsGutschriften } from '@/lib/forderung';
 import { useState, useCallback } from 'react';
 import { fetchRechnungAnlegen } from '@/lib/rechnung-anlegen-client'
@@ -29,7 +30,7 @@ import { generateInvoicePDF, fmtEur, fmtDate, type Invoice } from '@/lib/invoice
 //     Demontage, Rücktransport
 // ============================================================
 
-interface Project { id: string; name: string | null; adresse: string | null; data: any; }
+interface Project { id: string; name: string | null; adresse: string | null; land?: string | null; data: any; }
 interface Kunde { id: string; name: string; email: string | null; street: string | null; zip: string | null; city: string | null; land?: string | null; }
 interface Media { id: string; file_name: string; url: string; created_at: string }
 interface DokEvent { id: string; type: string; text_note: string | null; photos: { url: string; file_name: string }[]; status: string; created_at: string }
@@ -63,6 +64,17 @@ export default function KundeAuftrag({
   rechnungenBereit?: boolean;
 }) {
   const [zusatzOffen, setZusatzOffen] = useState(false);
+  // Land der Baustelle: eigene Angabe, unabhängig vom Land des Kunden (z. B. deutscher Kunde, Baustelle in Luxemburg)
+  const [baustellenLand, setBaustellenLand] = useState<string>(project.land || project.data?.step1?.land || 'Deutschland');
+  const [landMeldung, setLandMeldung] = useState('');
+  async function speichereBaustellenLand(l: string) {
+    setBaustellenLand(l); setLandMeldung('');
+    try {
+      const r = await fetch('/api/projekt-land', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ project_id: project.id, land: l }) });
+      const j = await r.json().catch(() => ({}));
+      setLandMeldung(r.ok && j.success ? 'Land gespeichert.' : (j.error || 'Land konnte nicht gespeichert werden (bitte SQL phase-139 ausführen).'));
+    } catch { setLandMeldung('Land konnte nicht gespeichert werden.'); }
+  }
   const [pos, setPos] = useState({ ...LEER_POSITION });
   const [notiz, setNotiz] = useState('');
   const [speichern, setSpeichern] = useState(false);
@@ -170,7 +182,12 @@ export default function KundeAuftrag({
       <div className="px-5 py-4 border-b border-black/5 flex flex-wrap items-center justify-between gap-2">
         <div>
           <p className="font-semibold text-[#1d1d1f]">{project.name || 'Unbenanntes Projekt'}</p>
-          {project.adresse && <p className="text-xs text-[#86868b]">{project.adresse}</p>}
+          {project.adresse && <p className="text-xs text-[#86868b]">{adresseMitLand(project.adresse, baustellenLand)}</p>}
+          <div className="mt-1 max-w-[16rem]">
+            <LandAuswahl label="Land der Baustelle" value={baustellenLand} onChange={(l) => void speichereBaustellenLand(l)} testId="baustelle-land"
+              className="w-full px-2 py-1 bg-white border border-black/10 rounded-lg text-xs text-[#1d1d1f]" />
+            {landMeldung && <p className="text-xs text-[#86868b] mt-0.5">{landMeldung}</p>}
+          </div>
         </div>
         <div className="flex items-center gap-2">
           {angebotsStatus && (

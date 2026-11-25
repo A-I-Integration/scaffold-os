@@ -1,3 +1,4 @@
+import { adresseMitLand } from '@/lib/land';
 import { NextRequest, NextResponse } from 'next/server';
 import { pruefeCronAufruf } from '@/lib/cron-auth';
 import { standzeitNachberechnung } from '@/lib/miete';
@@ -56,7 +57,8 @@ export async function GET(req: NextRequest) {
   const ergebnis = { erstellt: [] as string[], ohne_preis: [] as string[], ohne_freigabe: [] as string[], fehler: [] as string[] };
 
   try {
-    const res = await fetch(`${url}/rest/v1/projects?status=eq.active&select=id,name,adresse,data`, { headers });
+    let res = await fetch(`${url}/rest/v1/projects?status=eq.active&select=id,name,adresse,land,data`, { headers });
+    if (!res.ok) res = await fetch(`${url}/rest/v1/projects?status=eq.active&select=id,name,adresse,data`, { headers });
     if (!res.ok) throw new Error(await res.text());
     const projekte = await res.json();
     const heute = heuteIso();
@@ -110,7 +112,7 @@ export async function GET(req: NextRequest) {
             invoice_number: invoiceNumber,
             project_id: p.id,
             customer_name: kunde,
-            customer_address: p.adresse || null,
+            customer_address: adresseMitLand(p.adresse, p.land ?? p.data?.step1?.land) || null,
             positions: [{
               bezeichnung: `Mietverlängerung ${p.name} – ${wochen} Wo. über Standzeit (ab ${isoNachDeutsch(abgerechnetBis)})`,
               menge: wochen, einheit: 'Wo.', einzelpreis: preis,

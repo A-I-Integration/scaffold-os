@@ -172,6 +172,8 @@ function Schritt1Content() {
               if (typeof parsed.projektbeginn === 'string') parsed.projektbeginn = parsed.projektbeginn.slice(0, 10);
               if (typeof parsed.projektende === 'string') parsed.projektende = parsed.projektende.slice(0, 10);
               localStorage.setItem('scaffold_step1', JSON.stringify(parsed));
+              // Das an der Baustelle gepflegte Land (Kundenansicht) hat Vorrang vor dem alten Stand im Aufmaß
+              if (json.project?.land) parsed.land = json.project.land;
               setForm({ ...LEERES_FORM, ...parsed });
             } else if (json.success && json.project) {
               // Kein step1 in den Daten, aber Projekt existiert – zumindest
