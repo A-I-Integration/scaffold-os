@@ -25,6 +25,8 @@ export interface EntwurfDaten {
   notes: string | null
   geruest_nr: string | null
   leistungsdatum: string | null
+  /** Regieberichte, die in diese Rechnung übernommen wurden (werden erst beim Festschreiben als abgerechnet markiert) */
+  regiebericht_ids: string[]
 }
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
@@ -69,6 +71,7 @@ export function bereinigeEntwurf(eingabe: unknown): EntwurfErgebnis {
     notes: text(raw.notes, 5000),
     geruest_nr: text(raw.geruest_nr, 60),
     leistungsdatum: leistung,
+    regiebericht_ids: Array.isArray(raw.regiebericht_ids) ? [...new Set(raw.regiebericht_ids.filter((x): x is string => typeof x === 'string' && UUID.test(x)))].slice(0, 50) : [],
   }
   return { ok: true, daten, netto: nettoVorschau(positions) }
 }

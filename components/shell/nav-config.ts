@@ -68,6 +68,7 @@ export const NAV_GRUPPEN: NavGruppe[] = [
       { href: '/kolonnen', label: 'Kolonnen', icon: Users, roles: BAU, stichwoerter: 'team einsatz' },
       { href: '/nachunternehmer', label: 'Nachunternehmer', icon: Handshake, roles: BUERO },
       { href: '/dokumentation', label: 'Baustellendokumentation', icon: ClipboardList },
+      { href: '/regiebericht', label: 'Regieberichte', icon: ClipboardList, roles: ['admin', 'disponent', 'bauleiter', 'mitarbeiter'], stichwoerter: 'regie rapport stunden material unterschrift bauherr' },
     ],
   },
   {

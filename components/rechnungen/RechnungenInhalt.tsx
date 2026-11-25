@@ -24,6 +24,7 @@ import { ENTSCHEIDUNG_LABEL, type PruefEntscheidung } from '@/lib/rechnung-pruef
 import { preisMitFaktor } from '@/lib/rechnung-position';
 import { korrekturkette } from '@/lib/abrechnung-pruefung';
 import { steuerVorschlagFuerBaustelle } from '@/lib/land';
+import { RegieUebernahme } from '@/components/RegieberichtBlock';
 import { fetchMitSchluessel } from '@/lib/idempotenz-client'
 
 // ============================================================
@@ -238,6 +239,7 @@ export function RechnungenInhalt({ umfang, neuSignal = 0, entwurfId: entwurfVonA
   const [projectId, setProjectId] = useState<string | null>(null);
   // Steuervorschlag nach dem Land der Baustelle (Luxemburg → 17 % TVA); wird nie über eine Eingabe von Hand gelegt
   const [steuerHinweis, setSteuerHinweis] = useState('');
+  const [regieIds, setRegieIds] = useState<string[]>([]);
   const steuerManuell = useRef(false);
   const entwurfGeladen = useRef(false);
   const [lvId, setLvId] = useState<string | null>(null); // Rechnung aus gespeichertem LV → danach „abgerechnet“
@@ -311,7 +313,7 @@ export function RechnungenInhalt({ umfang, neuSignal = 0, entwurfId: entwurfVonA
   // Eingebettet: „Neue Rechnung“ aus der Faktura-Übersicht öffnet das Formular hier, mit dem Kunden schon eingetragen.
   const kundeVorbelegen = useCallback(() => {
     if (!umfang) return;
-    entwurfGeladen.current = false; steuerManuell.current = false;
+    entwurfGeladen.current = false; steuerManuell.current = false; setRegieIds([]);
     setEntwurfId(null); setKundeId(umfang.kundeId); setCustomerName(umfang.kundeName); setCustomerAddress(umfang.kundeAdresse);
     setProjectId(umfang.projektId ?? null); setShowForm(true);
   }, [umfang]);
@@ -360,7 +362,7 @@ export function RechnungenInhalt({ umfang, neuSignal = 0, entwurfId: entwurfVonA
         setTaxRate(Number.isFinite(Number(d.tax_rate)) ? Number(d.tax_rate) : 19);
         setSteuerbehandlung(d.steuerfall === '13b' || d.steuerfall === 'kleinunternehmer' || d.steuerfall === 'ig_lieferung' ? d.steuerfall : 'regel');
         setGrundstuecksbezug(d.grundstuecksbezug !== false);
-        setGeruestNr(d.geruest_nr || ''); setLeistungsdatum(d.leistungsdatum || '');
+        setGeruestNr(d.geruest_nr || ''); setLeistungsdatum(d.leistungsdatum || ''); setRegieIds(Array.isArray(d.regiebericht_ids) ? d.regiebericht_ids : []);
         setPositions(Array.isArray(d.positions) && d.positions.length ? d.positions : [{ bezeichnung: '', menge: 1, einheit: 'Stk.', einzelpreis: 0 }]);
         // Rechnungsdatum und Fälligkeit bleiben auf den heutigen Standardwerten: sie gelten erst beim Festschreiben
         setShowForm(true);
@@ -449,7 +451,7 @@ export function RechnungenInhalt({ umfang, neuSignal = 0, entwurfId: entwurfVonA
         body: JSON.stringify({
           id: entwurfId || undefined, customer_name: customerName, customer_address: customerAddress, customer_id: kundeId, project_id: projectId, lv_id: lvId,
           invoice_type: invoiceType, positions, tax_rate: taxRate, steuerfall: taxRate === 17 ? 'lu_tva' : taxRate === 0 ? steuerbehandlung : 'regel', grundstuecksbezug,
-          notes, geruest_nr: geruestNr, leistungsdatum: leistungsdatum || undefined,
+          notes, geruest_nr: geruestNr, leistungsdatum: leistungsdatum || undefined, regiebericht_ids: regieIds,
         }),
       });
       const json = await res.json();
@@ -487,11 +489,13 @@ export function RechnungenInhalt({ umfang, neuSignal = 0, entwurfId: entwurfVonA
           geruest_nr: geruestNr.trim() || undefined,
           leistungsdatum: leistungsdatum || undefined,
           invoice_type: invoiceType,
+          regiebericht_ids: regieIds.length ? regieIds : undefined,
           override_grund: overrideGrund || undefined,
         }),
       });
       const json = await res.json();
       if (!json.success) {
+        if (json.code === 'REGIE_NICHT_IN_RECHNUNG') { setRegieIds((prev) => prev.filter((x) => !(json.regie_ids || []).includes(x))); }
         // Phase 27: Pflicht-Verknüpfung Prüfung/Freigabe → Rechnung.
         // Admin bekommt die Möglichkeit, mit Begründung zu überschreiben.
         if (json.code === 'FREIGABE_FEHLT_OVERRIDE_MOEGLICH') {
@@ -515,11 +519,11 @@ export function RechnungenInhalt({ umfang, neuSignal = 0, entwurfId: entwurfVonA
       }
       setKundeId(null);
       setShowForm(false);
-      setCustomerName(''); setCustomerAddress(''); setNotes(''); setSteuerbehandlung('regel'); setProjectId(null); setGeruestNr(''); setLeistungsdatum(''); setDetailOffen({});
+      setCustomerName(''); setCustomerAddress(''); setNotes(''); setSteuerbehandlung('regel'); setProjectId(null); setGeruestNr(''); setLeistungsdatum(''); setDetailOffen({}); setRegieIds([]);
       setInvoiceType('standard');
       setPositions([{ bezeichnung: '', menge: 1, einheit: 'Stk.', einzelpreis: 0 }]);
       await load();
-      alert('✅ Rechnung ' + json.invoice.invoice_number + ' angelegt!' + entwurfRest + (json.warnung ? '\n\n⚠️ ' + json.warnung : '') + (json.steuer_warnungen?.length ? '\n\n⚠️ Steuer prüfen:\n• ' + json.steuer_warnungen.join('\n• ') : ''));
+      alert('✅ Rechnung ' + json.invoice.invoice_number + ' angelegt!' + entwurfRest + (json.warnung ? '\n\n⚠️ ' + json.warnung : '') + (json.regie_warnung ? '\n\n⚠️ ' + json.regie_warnung : '') + (json.regie_hinweis ? '\n\nHinweis: ' + json.regie_hinweis : '') + (json.steuer_warnungen?.length ? '\n\n⚠️ Steuer prüfen:\n• ' + json.steuer_warnungen.join('\n• ') : ''));
     } catch (err: any) {
       alert('❌ ' + err.message);
     } finally {
@@ -760,6 +764,18 @@ export function RechnungenInhalt({ umfang, neuSignal = 0, entwurfId: entwurfVonA
                 />
               </div>
             </div>
+
+            {projectId && (
+              <RegieUebernahme
+                projectId={projectId}
+                uebernommen={regieIds}
+                onUebernehmen={(neu, ids) => {
+                  // Leere Startzeile ersetzen, sonst anhängen
+                  setPositions((prev) => [...prev.filter((p) => p.bezeichnung.trim() || p.einzelpreis > 0), ...neu.map((n) => ({ bezeichnung: n.bezeichnung, menge: n.menge, einheit: n.einheit, einzelpreis: n.einzelpreis }))]);
+                  setRegieIds((prev) => [...new Set([...prev, ...ids])]);
+                }}
+              />
+            )}
 
             {/* Positionen */}
             <div>

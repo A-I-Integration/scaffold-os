@@ -15,6 +15,7 @@ export function baueFakeRest(daten: Tabellen) {
       if (op === 'gt') return Number(z[spalte]) > Number(v)
       if (op === 'gte') return String(z[spalte]) >= v
       if (op === 'lte') return String(z[spalte]) <= v
+      if (op === 'in') return v.replace(/^\(|\)$/g, '').split(',').includes(String(z[spalte]))
       if (op === 'is') return v === 'null' ? z[spalte] === null || z[spalte] === undefined : String(z[spalte]) === v
       return true
     })

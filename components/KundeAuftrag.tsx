@@ -1,5 +1,6 @@
 'use client';
 
+import RegieberichtBlock from '@/components/RegieberichtBlock';
 import { kundenAnschrift, adresseMitLand } from '@/lib/land';
 import LandAuswahl from '@/components/LandAuswahl';
 import { berechneForderung, mitBezugsGutschriften } from '@/lib/forderung';
@@ -254,6 +255,7 @@ export default function KundeAuftrag({
 
         {/* ─── Vorhaltung nach Vereinbarung ─── */}
         <VorhaltungBlock project={project} kunde={{ name: kunde.name, adresse: kundenAnschrift(kunde as any) || (kunde as any).adresse }} />
+        <RegieberichtBlock projectId={project.id} kundeEmail={kunde.email || ''} />
 
         {/* ─── Schlussrechnung (Angebotspreis oder Aufmaß, inkl. bestätigter Nachträge) ─── */}
         <button onClick={() => setSchlussOffen(true)} className="flex items-center gap-1.5 text-xs text-[#e8590c] font-semibold hover:underline">
