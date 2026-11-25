@@ -31,7 +31,7 @@ export function reiterLabel(e: { id: AnsichtsId; label: string }, nordrichtungGr
 export default function AnsichtsReiter({ viewMode, ansicht2d, hatModell, onWaehle, nordrichtungGrad }: { viewMode: '3d' | '2d'; ansicht2d: Ansicht2D; hatModell: boolean; onWaehle: (id: AnsichtsId) => void; nordrichtungGrad?: number | null }) {
   const aktiv = aktiverReiter(viewMode, ansicht2d)
   return (
-    <div role='tablist' aria-label='Ansichten' className='flex shrink-0 gap-1 overflow-x-auto border-b px-3 py-1.5' style={{ borderColor: 'var(--os-linie)', background: 'var(--cad-f1)' }}>
+    <div role='tablist' aria-label='Ansichten' className='flex shrink-0 gap-1 cad-scroll overflow-x-auto border-b px-3 py-1.5' style={{ borderColor: 'var(--os-linie)', background: 'var(--cad-f1)' }}>
       {ANSICHTS_EINTRAEGE.map((e) => {
         const aus = e.id !== '3d' && !hatModell
         return (

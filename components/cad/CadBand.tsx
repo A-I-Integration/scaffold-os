@@ -185,7 +185,7 @@ export default function CadBand(p: CadBandProps) {
 
   return (
     <div className='border-b' style={{ background: 'var(--cad-f0)', borderColor: 'var(--os-linie)' }} data-testid='cad-band'>
-      <div className='flex items-end gap-0.5 overflow-x-auto px-3 pt-1.5' style={{ background: 'var(--cad-f1)', borderBottom: '1px solid var(--os-linie)' }} role='tablist' aria-label='Menü'>
+      <div className='flex items-end gap-0.5 cad-scroll overflow-x-auto px-3 pt-1.5' style={{ background: 'var(--cad-f1)', borderBottom: '1px solid var(--os-linie)' }} role='tablist' aria-label='Menü'>
         {REITER.map(([k, name]) => (
           <button key={k} type='button' role='tab' aria-selected={reiter === k} onClick={() => { if (reiter === k) zuSetzen(!zu); else { setReiter(k); if (zu) zuSetzen(false) } }} aria-expanded={!zu && reiter === k}
             className='whitespace-nowrap rounded-t border border-b-0 px-2.5 py-1.5 text-[13px]'
@@ -199,7 +199,7 @@ export default function CadBand(p: CadBandProps) {
       <input ref={datei} type='file' accept='.json,application/json' className='hidden' data-testid='band-oeffnen'
         onChange={(e) => { const f = e.target.files?.[0]; if (f) p.onOeffnen?.(f); e.target.value = '' }} />
 
-      <div className={`${zu ? 'hidden' : 'flex'} min-h-[104px] flex-nowrap overflow-x-auto overflow-y-hidden`}>
+      <div className={`${zu ? 'hidden' : 'flex'} min-h-[104px] flex-nowrap cad-scroll overflow-x-auto overflow-y-hidden`}>
         {reiter === 'datei' && (
           <>
             <Gruppe name='Projekt'>

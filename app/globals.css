@@ -415,3 +415,9 @@ body {
 .cad-dunkel [aria-pressed="true"][style*="--os-akzent"] { background: var(--cad-accent) !important; color: #101216 !important; }
 .cad-kopf-trenner-rand { border-color: #d5dae0; }
 .cad-dunkel .cad-kopf-trenner-rand { border-color: var(--cad-border-active); }
+
+/* CAD: waagerechte Scrollleisten schlank und im Farbschema der Oberfläche (statt breiter heller Systembalken) */
+.cad-scroll { scrollbar-width: thin; scrollbar-color: var(--os-linie) transparent; }
+.cad-scroll::-webkit-scrollbar { height: 6px; width: 6px; }
+.cad-scroll::-webkit-scrollbar-track { background: transparent; }
+.cad-scroll::-webkit-scrollbar-thumb { background: var(--os-linie); border-radius: 3px; }

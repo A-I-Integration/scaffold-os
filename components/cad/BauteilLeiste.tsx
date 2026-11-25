@@ -19,7 +19,7 @@ export default function BauteilLeiste({ disabled = false, selectedType, onSelect
   return (
     <div role='toolbar' aria-label='Bauteile' className='flex items-center gap-2 border-b bg-white px-3 py-2' style={{ borderColor: 'var(--os-linie)' }}>
       <span className='shrink-0 text-[11px] font-semibold uppercase tracking-wider' style={{ color: 'var(--os-text-leise)' }}>Bauteile</span>
-      <div className='flex min-w-0 flex-1 gap-1.5 overflow-x-auto pb-0.5'>
+      <div className='flex min-w-0 flex-1 gap-1.5 cad-scroll overflow-x-auto pb-0.5'>
         {CATALOG_ITEMS.map((item) => {
           const aktiv = selectedType === item.type
           return (
