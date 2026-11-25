@@ -421,3 +421,9 @@ body {
 .cad-scroll::-webkit-scrollbar { height: 6px; width: 6px; }
 .cad-scroll::-webkit-scrollbar-track { background: transparent; }
 .cad-scroll::-webkit-scrollbar-thumb { background: var(--os-linie); border-radius: 3px; }
+
+/* CAD dunkel: alle Scrollleisten (auch senkrecht in den linken/rechten Spalten) schlank und dunkel */
+.cad-dunkel, .cad-dunkel * { scrollbar-width: thin; scrollbar-color: var(--cd-linie) transparent; }
+.cad-dunkel *::-webkit-scrollbar { height: 6px; width: 6px; }
+.cad-dunkel *::-webkit-scrollbar-track { background: transparent; }
+.cad-dunkel *::-webkit-scrollbar-thumb { background: var(--cd-linie); border-radius: 3px; }
