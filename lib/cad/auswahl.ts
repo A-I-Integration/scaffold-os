@@ -5,8 +5,8 @@
 //    Der Schnappschuss wird im selben Schritt wie die Matrizen gesetzt: Was gezeichnet ist, ist auch das, was angeklickt wird.
 //  - Ungültige Indizes ergeben KEINE Auswahl (kein Fallback auf „irgendein“ Bauteil).
 //  - Mehrere Treffer entlang des Strahls: der nächste Treffer gewinnt; Hüllen (Planen, Netze, Schutzdach) kommen zuletzt,
-//    damit eine davorliegende Plane nicht das Gerüstteil dahinter verdeckt. Mit Alt+Klick oder erneutem Klick an
-//    derselben Stelle wird zum nächsten darunterliegenden Bauteil durchgeschaltet.
+//    damit eine davorliegende Plane nicht das Gerüstteil dahinter verdeckt. Nur mit Alt+Klick wird zum nächsten
+//    darunterliegenden Bauteil durchgeschaltet; ein normaler Klick wählt immer das vorderste getroffene Teil.
 // ============================================================
 
 /** Flächige Hüllen: liegen vor dem Gerüst und würden sonst jeden Klick „schlucken“. */
@@ -51,12 +51,6 @@ export function waehleTreffer(treffer: readonly Treffer[], opt: { aktuell?: stri
     if (i >= 0) return o[(i + 1) % o.length].id
   }
   return o[0].id
-}
-
-/** Gleicher Punkt, kurz nacheinander = Anwender will zum nächsten Teil darunter. */
-export function istWiederholterKlick(vorher: { x: number; y: number; zeit: number } | null, jetzt: { x: number; y: number; zeit: number }, toleranzPx = 4, fensterMs = 2500): boolean {
-  if (!vorher) return false
-  return Math.hypot(jetzt.x - vorher.x, jetzt.y - vorher.y) <= toleranzPx && jetzt.zeit - vorher.zeit <= fensterMs
 }
 
 /** Entfernt Treffer, die hinter einem Verdecker (z. B. der Gebäudewand) liegen. `grenze` = Abstand des nächsten Verdeckers. */
