@@ -4,7 +4,9 @@ import { useCallback, useEffect, useState } from 'react';
 import StundenlohnBlock from '@/components/StundenlohnBlock';
 import UrlaubskontoKarte from '@/components/UrlaubskontoKarte';
 import BetriebskalenderBlock from '@/components/BetriebskalenderBlock';
-import { SONDERZAHLUNG_ARTEN, SONDERZAHLUNG_LABEL, urlaubsanspruchAm } from '@/lib/konditionen';
+import { SONDERZAHLUNG_ARTEN, SONDERZAHLUNG_LABEL, urlaubsanspruchAm, lohnHinweise } from '@/lib/konditionen';
+import { PfaendungBlock, KmSatzBlock, LohnMonatsUebersicht, type PfaendungDaten, type PfaendungMonatDaten } from '@/components/LohnZulagenBloecke';
+import type { Grenze } from '@/lib/pfaendung';
 
 // ============================================================
 // SCAFFOLD OS – Reiter „Lohn & Konditionen“ (nur Chef; die Routen prüfen das)
@@ -13,7 +15,7 @@ import { SONDERZAHLUNG_ARTEN, SONDERZAHLUNG_LABEL, urlaubsanspruchAm } from '@/l
 
 interface Ma { id: string; first_name: string; last_name: string }
 interface Urlaub { id: string; tage_pro_jahr: number; gueltig_ab: string; notiz: string | null }
-interface Sonder { id: string; art: string; bezeichnung: string | null; betrag: number | null; monat: string; notiz: string | null }
+interface Sonder { id: string; art: string; bezeichnung: string | null; betrag: number | null; monat: string; notiz: string | null; menge?: number | null; satz?: number | null }
 
 const heute = () => new Date().toLocaleDateString('sv-SE');
 const de = (iso: string) => iso.split('-').reverse().join('.');
@@ -43,6 +45,12 @@ export default function PersonalKonditionen({ employees }: { employees: Ma[] }) 
   const [sBetrag, setSBetrag] = useState('');
   const [sMonat, setSMonat] = useState(heute().slice(0, 7));
   const [sNotiz, setSNotiz] = useState('');
+  const [sKm, setSKm] = useState('');
+  const [pf, setPf] = useState<PfaendungDaten[]>([]);
+  const [pfm, setPfm] = useState<PfaendungMonatDaten[]>([]);
+  const [grenzen, setGrenzen] = useState<Grenze[]>([]);
+  const [kmSatz, setKmSatz] = useState<{ satz: number; gueltig_ab: string } | null>(null);
+  const [tabellenFehlen, setTabellenFehlen] = useState(false);
 
   const laden = useCallback(async (id: string) => {
     if (!id) return;
@@ -52,6 +60,7 @@ export default function PersonalKonditionen({ employees }: { employees: Ma[] }) 
     if (!j.success) { setMeldung({ ok: false, text: j.error || 'Laden fehlgeschlagen' }); return; }
     setEintritt(j.eintrittsdatum || ''); setFrist(j.konditionen?.kuendigungsfrist || ''); setProbe(j.konditionen?.probezeit_ende || ''); setKNotiz(j.konditionen?.notiz || '');
     setUrlaub(j.urlaub || []); setSonder(j.sonderzahlungen || []); setStand(x => x + 1);
+    setPf(j.pfaendungen || []); setPfm(j.pfaendungMonate || []); setGrenzen(j.grenzen || []); setKmSatz(j.kmSatz || null); setTabellenFehlen(!!j.neueTabellenFehlen);
   }, []);
   useEffect(() => { setMeldung(null); setSArt(''); laden(empId); }, [empId, laden]);
 
@@ -65,7 +74,7 @@ export default function PersonalKonditionen({ employees }: { employees: Ma[] }) 
     } catch (e: any) { setMeldung({ ok: false, text: e?.message || 'Fehler beim Speichern' }); return false; }
     finally { setLaeuft(false); }
   }
-  async function loeschen(typ: 'urlaub' | 'sonderzahlung', id: string) {
+  async function loeschen(typ: 'urlaub' | 'sonderzahlung' | 'pfaendung', id: string) {
     setLaeuft(true); setMeldung(null);
     const res = await fetch(`/api/mitarbeiter-konditionen?typ=${typ}&id=${id}`, { method: 'DELETE' });
     const j = await res.json().catch(() => ({}));
@@ -80,6 +89,7 @@ export default function PersonalKonditionen({ employees }: { employees: Ma[] }) 
   return (
     <div className="space-y-6" data-testid="personal-konditionen">
       <BetriebskalenderBlock />
+      <LohnMonatsUebersicht />
       <section className={kasten}>
         <h2 className="text-lg font-semibold">💶 Lohn & Konditionen</h2>
         <select value={empId} onChange={e => setEmpId(e.target.value)} className={inputCls + ' md:max-w-sm'} data-testid="konditionen-mitarbeiter" aria-label="Mitarbeiter">
@@ -135,15 +145,21 @@ export default function PersonalKonditionen({ employees }: { employees: Ma[] }) 
             {sArt && (
               <div className="grid grid-cols-1 md:grid-cols-4 gap-2">
                 <div><label className="block text-xs text-[#86868b] mb-1">Für Monat</label><input type="month" value={sMonat} onChange={e => setSMonat(e.target.value)} className={inputCls} data-testid="sonder-monat" /></div>
-                <div><label className="block text-xs text-[#86868b] mb-1">Betrag in € (optional)</label><input value={sBetrag} onChange={e => setSBetrag(e.target.value)} inputMode="decimal" className={inputCls} data-testid="sonder-betrag" /></div>
+                {sArt === 'kilometergeld' && (<>
+                  <div><label className="block text-xs text-[#86868b] mb-1">Gefahrene km *</label><input value={sKm} onChange={e => setSKm(e.target.value)} inputMode="decimal" className={inputCls} data-testid="sonder-km" /></div>
+                  <div className="md:col-span-3 text-sm text-[#86868b]">{kmSatz ? `Satz ${kmSatz.satz.toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 4 })} € je km` : 'Kein Satz festgelegt: unten den Kilometersatz speichern.'}{sKm.trim() && kmSatz && Number.isFinite(Number(sKm.replace(',', '.'))) ? ` → ${eur(Math.round(Number(sKm.replace(',', '.')) * kmSatz.satz * 100) / 100)}` : ''}</div>
+                </>)}
+                <div><label className="block text-xs text-[#86868b] mb-1">{sArt === 'kilometergeld' ? 'Betrag von Hand (leer = km mal Satz)' : 'Betrag in € (optional)'}</label><input value={sBetrag} onChange={e => setSBetrag(e.target.value)} inputMode="decimal" className={inputCls} data-testid="sonder-betrag" /></div>
                 <div><label className="block text-xs text-[#86868b] mb-1">{sArt === 'sonstiges' ? 'Bezeichnung *' : 'Bezeichnung (optional)'}</label><input value={sBez} onChange={e => setSBez(e.target.value)} className={inputCls} data-testid="sonder-bezeichnung" /></div>
                 <div><label className="block text-xs text-[#86868b] mb-1">Notiz</label><input value={sNotiz} onChange={e => setSNotiz(e.target.value)} className={inputCls} /></div>
                 <div className="md:col-span-4">
                   <button type="button" disabled={laeuft} data-testid="sonder-speichern" className="rounded-lg bg-[#e8590c] px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
-                    onClick={async () => { if (await senden({ typ: 'sonderzahlung', art: sArt, bezeichnung: sBez, betrag: sBetrag, monat: sMonat, notiz: sNotiz }, 'Sonderzahlung gespeichert.')) { setSBez(''); setSBetrag(''); setSNotiz(''); setSArt(''); } }}>Sonderzahlung speichern</button>
+                    onClick={async () => { if (await senden({ typ: 'sonderzahlung', art: sArt, bezeichnung: sBez, betrag: sBetrag, monat: sMonat, notiz: sNotiz, menge: sKm, satz: kmSatz?.satz ?? '' }, 'Sonderzahlung gespeichert.')) { setSBez(''); setSBetrag(''); setSNotiz(''); setSKm(''); setSArt(''); } }}>Sonderzahlung speichern</button>
                 </div>
               </div>
             )}
+            {lohnHinweise(sonder, sMonat).map(h => <p key={h} className="text-sm text-amber-700" data-testid="sonder-hinweis">{h}</p>)}
+            <KmSatzBlock kmSatz={kmSatz} laeuft={laeuft} senden={senden} />
             {sonder.length > 0 ? (
               <table className="w-full text-sm" data-testid="sonder-liste">
                 <thead><tr className="text-left text-[11px] uppercase text-[#86868b]"><th className="font-normal">Monat</th><th className="font-normal">Art</th><th className="font-normal">Betrag</th><th className="font-normal">Notiz</th><th /></tr></thead>
@@ -151,12 +167,14 @@ export default function PersonalKonditionen({ employees }: { employees: Ma[] }) 
                   <tr key={s.id} className="border-t border-black/5">
                     <td className="py-1.5">{monatDe(s.monat)}</td>
                     <td>{SONDERZAHLUNG_LABEL[s.art] || s.art}{s.bezeichnung ? `: ${s.bezeichnung}` : ''}</td>
-                    <td>{s.betrag != null ? eur(Number(s.betrag)) : '–'}</td><td className="text-[#86868b]">{s.notiz || ''}</td>
+                    <td>{s.betrag != null ? eur(Number(s.betrag)) : '–'}{s.menge ? <span className="text-[#86868b]"> ({Number(s.menge).toLocaleString('de-DE')} km{s.satz ? ` × ${Number(s.satz).toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 4 })} €` : ''})</span> : null}</td><td className="text-[#86868b]">{s.notiz || ''}</td>
                     <td className="text-right"><button type="button" onClick={() => loeschen('sonderzahlung', s.id)} className="text-xs text-red-600 hover:underline">löschen</button></td>
                   </tr>))}</tbody>
               </table>
             ) : <p className="text-sm text-[#86868b]">Noch keine Sonderzahlungen eingetragen.</p>}
           </section>
+          {tabellenFehlen && <p className="text-sm text-red-600" data-testid="lohn-sql-fehlt">Die Tabellen für Pfändung und Kilometersatz fehlen noch. Bitte phase-140-lohn-zulagen.sql in Supabase ausführen.</p>}
+          <PfaendungBlock pfaendungen={pf} monate={pfm} grenzen={grenzen} laeuft={laeuft} senden={senden} loeschen={loeschen} />
         </>
       )}
       {meldung && <p className={`text-sm ${meldung.ok ? 'text-emerald-700' : 'text-red-600'}`} data-testid="konditionen-meldung">{meldung.ok ? '✅' : '❌'} {meldung.text}</p>}

@@ -12,6 +12,12 @@ export const SONDERZAHLUNG_ARTEN = [
   { value: 'zuschlag', label: 'Zuschlag' },
   { value: 'ausloese', label: 'Auslöse / Fahrtkosten' },
   { value: 'sachbezug', label: 'Sachbezug' },
+  { value: 'gutschein', label: 'Gutschein' },
+  { value: 'tankrabatt', label: 'Tankrabatt' },
+  { value: 'kilometergeld', label: 'Kilometergeld' },
+  { value: 'geburt', label: 'Geschenk zur Geburt' },
+  { value: 'geburtstag', label: 'Geschenk zum Geburtstag' },
+  { value: 'zulage', label: 'Zulage' },
   { value: 'vorschuss', label: 'Vorschuss' },
   { value: 'sonstiges', label: 'Sonstiges' },
 ] as const;
@@ -21,10 +27,10 @@ export const SONDERZAHLUNG_LABEL: Record<string, string> = Object.fromEntries(SO
 const leer = (v: unknown) => v === undefined || v === null || String(v).trim() === '';
 
 export type SonderzahlungErgebnis =
-  | { ok: true; art: string; bezeichnung: string | null; betrag: number | null; monat: string; notiz: string | null }
+  | { ok: true; art: string; bezeichnung: string | null; betrag: number | null; monat: string; notiz: string | null; menge: number | null; satz: number | null }
   | { ok: false; fehler: string };
 
-export function pruefeSonderzahlung(e: { art?: unknown; bezeichnung?: unknown; betrag?: unknown; monat?: unknown; notiz?: unknown }): SonderzahlungErgebnis {
+export function pruefeSonderzahlung(e: { art?: unknown; bezeichnung?: unknown; betrag?: unknown; monat?: unknown; notiz?: unknown; menge?: unknown; satz?: unknown }): SonderzahlungErgebnis {
   const art = String(e.art ?? '');
   if (!SONDERZAHLUNG_ARTEN.some(a => a.value === art)) return { ok: false, fehler: 'Bitte die Art der Zahlung wählen.' };
   const bezeichnung = leer(e.bezeichnung) ? null : String(e.bezeichnung).trim().slice(0, 120);
@@ -37,7 +43,31 @@ export function pruefeSonderzahlung(e: { art?: unknown; bezeichnung?: unknown; b
     if (!Number.isFinite(n) || n <= 0 || n > 100000) return { ok: false, fehler: 'Der Betrag muss eine Zahl zwischen 0,01 und 100.000 € sein (z. B. 250 oder 250,50).' };
     betrag = Math.round(n * 100) / 100;
   }
-  return { ok: true, art, bezeichnung, betrag, monat, notiz: leer(e.notiz) ? null : String(e.notiz).trim().slice(0, 300) };
+  // Kilometergeld: gefahrene km mal Satz (EUR je km); ein von Hand eingetragener Betrag hat Vorrang.
+  let menge: number | null = null, satz: number | null = null;
+  if (art === 'kilometergeld') {
+    const km = zahlAusEingabeStreng(e.menge);
+    if (!Number.isFinite(km) || km <= 0 || km > 20000) return { ok: false, fehler: 'Bitte die gefahrenen Kilometer angeben (z. B. 120 oder 120,5).' };
+    menge = Math.round(km * 100) / 100;
+    if (betrag === null) {
+      const sz = zahlAusEingabeStreng(e.satz);
+      if (!Number.isFinite(sz) || sz <= 0 || sz > 5) return { ok: false, fehler: 'Bitte den Satz in € je km angeben (z. B. 0,30).' };
+      satz = Math.round(sz * 10000) / 10000;
+      betrag = Math.round(menge * satz * 100) / 100;
+    }
+  }
+  return { ok: true, art, bezeichnung, betrag, monat, notiz: leer(e.notiz) ? null : String(e.notiz).trim().slice(0, 300), menge, satz };
+}
+
+export interface Sonderzeile { art: string; betrag: number | null; monat: string }
+/** Hinweise zu Freigrenzen (keine Steuerberatung): Sachbezüge bis 50 € im Monat, Geschenke zu Anlässen bis 60 €. */
+export function lohnHinweise(zeilen: Sonderzeile[], monat: string): string[] {
+  const h: string[] = [];
+  const imMonat = zeilen.filter(z => z.monat === monat);
+  const sach = imMonat.filter(z => z.art === 'gutschein' || z.art === 'tankrabatt').reduce((s, z) => s + (z.betrag || 0), 0);
+  if (sach > 50) h.push(`Gutschein und Tankrabatt zusammen ${sach.toFixed(2).replace('.', ',')} € im Monat: über der Sachbezugs-Freigrenze von 50 €. Mit dem Steuerberater klären, ob Steuer und Sozialversicherung anfallen.`);
+  for (const z of imMonat) if ((z.art === 'geburt' || z.art === 'geburtstag') && (z.betrag || 0) > 60) h.push(`Geschenk über 60 € (${(z.betrag || 0).toFixed(2).replace('.', ',')} €): über der Grenze für Aufmerksamkeiten. Mit dem Steuerberater klären.`);
+  return h;
 }
 
 export type UrlaubErgebnis = { ok: true; tage_pro_jahr: number; gueltig_ab: string; notiz: string | null } | { ok: false; fehler: string };
