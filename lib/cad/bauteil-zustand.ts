@@ -53,6 +53,17 @@ export function sichtbaresModell(model: CADModel, z: BauteilZustand): CADModel {
 /** Ids der Auswahl, die gesperrt sind. */
 export const gesperrteIn = (z: BauteilZustand, ids: readonly string[]): string[] => ids.filter((i) => z.gesperrt.includes(i))
 
+/** Gesperrt, wenn eine Id selbst oder ein Teil ihrer Gruppe (Baugruppe/Platzierung) gesperrt ist. `gruppeVon` liefert die Ids der Gruppe. */
+export function istGruppeGesperrt(z: BauteilZustand, ids: readonly string[], gruppeVon: (id: string) => readonly string[]): boolean {
+  if (z.gesperrt.length === 0) return false
+  return ids.some((i) => istGesperrt(z, i) || gruppeVon(i).some((g) => istGesperrt(z, g)))
+}
+
+/** Gesperrt, wenn irgendein Teil der von Hand gesetzten Platzierung gesperrt ist. `platzierungIdVon` ordnet eine Bauteil-Id ihrer Platzierung zu. */
+export function istPlatzierungGesperrt(z: BauteilZustand, platzierungId: string, platzierungIdVon: (bauteilId: string) => string | null): boolean {
+  return z.gesperrt.some((i) => platzierungIdVon(i) === platzierungId)
+}
+
 /** Nur noch Ids, die es im Modell gibt (nach Neuberechnung, Entfernen). Ohne Änderung kommt dasselbe Objekt zurück. */
 export function bereinige(z: BauteilZustand, vorhandene: ReadonlySet<string>): BauteilZustand {
   const g = z.gesperrt.filter((i) => vorhandene.has(i)), a = z.ausgeblendet.filter((i) => vorhandene.has(i)), s = z.isoliert.filter((i) => vorhandene.has(i))

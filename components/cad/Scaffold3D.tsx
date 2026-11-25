@@ -64,6 +64,8 @@ interface Props {
   mehrfachAuswahl?: ReadonlySet<string>
   /** Ids gesperrter Bauteile (werden getönt gezeigt) */
   gesperrteIds?: ReadonlySet<string>
+  /** Hüllen (Netz, Plane, Schutzdach) beim Klick zuerst statt zuletzt wählen */
+  huellenZuerst?: boolean
   /** Auswahlrahmen aufziehen statt die Ansicht zu drehen */
   rahmenModus?: boolean
   onRahmen?: (ids: string[], ergaenzen: boolean) => void
@@ -153,6 +155,7 @@ const AbbauMarkKontext = createContext<ReadonlySet<string> | null>(null)
 const MehrfachKontext = createContext<ReadonlySet<string> | null>(null)
 /** Gesperrte Bauteile: werden grau-bläulich getönt dargestellt (nur Anzeige, ändert nichts am Modell) */
 const GesperrtKontext = createContext<ReadonlySet<string> | null>(null)
+const HuellenZuerstKontext = createContext<boolean>(false)
 const GESPERRT_FARBE = new THREE.Color('#6b7a8c')
 type EchtesGebaeudeDaten = { aussehen: Aussehen; faktor: number; oben: 'x' | 'y' | 'z'; versatzX?: number; versatzZ?: number; drehungGrad?: number; anker?: { wx: number; wz: number; drehungGrad: number } | null; /** Lage des Turms (höchster Abschnitt) in unserem Gebäude: dorthin kommt die Schaftmitte */ ziel?: { x: number; z: number; drehungGrad: number } }
 const EchtesGebaeudeKontext = createContext<EchtesGebaeudeDaten | null>(null)
@@ -794,6 +797,7 @@ function InstancedBauteile({
   const abbauMarkiert = useContext(AbbauMarkKontext)
   const mehrfach = useContext(MehrfachKontext)
   const gesperrt = useContext(GesperrtKontext)
+  const huellenZuerst = useContext(HuellenZuerstKontext)
   const farbTyp = variant === 'tritt' ? 'stair' : type
   const baseColor = useMemo(() => new THREE.Color(farbModus === 'bauteil' ? bauteilFarbe(farbTyp) : farbModus === 'praesentation' && farbTyp !== 'net' && farbTyp !== 'safety_net' ? PRAESENTATION_ROHR : (COLOR_MAP[farbTyp] || '#888888')), [farbTyp, farbModus])
   const optik = useContext(MjOptikKontext)
@@ -893,7 +897,7 @@ function InstancedBauteile({
       const canvasEl = ne?.target instanceof HTMLCanvasElement ? ne.target : (typeof document !== 'undefined' ? document.querySelector('canvas') : null)
       // Normaler Klick = immer das vorderste tatsächlich getroffene Teil (auch bei wiederholtem Klick auf dieselbe Stelle).
       // Nur Alt+Klick schaltet gezielt zum nächsten dahinterliegenden Teil weiter.
-      const id = waehleTreffer(treffer, { aktuell: selectedComponent, weiter: !!ne?.altKey }) ?? getroffen.id
+      const id = waehleTreffer(treffer, { aktuell: selectedComponent, weiter: !!ne?.altKey, huellenZuletzt: !huellenZuerst }) ?? getroffen.id
       protokolliereKlick({
         x: ne?.clientX, y: ne?.clientY,
         zeigerNdc: e.pointer ? { x: Math.round(e.pointer.x * 1000) / 1000, y: Math.round(e.pointer.y * 1000) / 1000 } : null,
@@ -908,7 +912,7 @@ function InstancedBauteile({
       })
       onSelect(id, !!(e.shiftKey ?? ne?.shiftKey))
     },
-    [itemVon, onSelect, measureMode, onMeasurePoint, placementType, onPlacementClick, selectedComponent, type]
+    [itemVon, onSelect, measureMode, onMeasurePoint, placementType, onPlacementClick, selectedComponent, type, huellenZuerst]
   )
 
   const handlePointerOver = useCallback(
@@ -2733,6 +2737,7 @@ function Scaffold3D({
   abbauMarkiert,
   mehrfachAuswahl,
   gesperrteIds,
+  huellenZuerst,
   rahmenModus,
   onRahmen,
   echtesGebaeude,
@@ -2825,6 +2830,7 @@ function Scaffold3D({
         <AdaptiveEvents />
         <FarbModusKontext.Provider value={farbModus}>
         <AbbauMarkKontext.Provider value={abbauMarkiert ?? null}>
+        <HuellenZuerstKontext.Provider value={!!huellenZuerst}>
         <GesperrtKontext.Provider value={gesperrteIds ?? null}>
         <MehrfachKontext.Provider value={mehrfachAuswahl ?? null}>
         <EchtesGebaeudeKontext.Provider value={echtesGebaeude ?? null}>
@@ -2864,6 +2870,7 @@ function Scaffold3D({
         </EchtesGebaeudeKontext.Provider>
         </MehrfachKontext.Provider>
         </GesperrtKontext.Provider>
+        </HuellenZuerstKontext.Provider>
         </AbbauMarkKontext.Provider>
         </FarbModusKontext.Provider>
         {hoheQualitaet && (
