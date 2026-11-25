@@ -698,7 +698,19 @@ function getMaterial(type: string, color: THREE.Color, matt = false, vertexFarbe
 // ═══════════════════════════════════════════════════════════
 // Hilfsobjekte für die Rohr-Ausrichtung (einmalig, nicht pro Instanz)
 
-/** Letzter Auswahl-Klick (Position, Zeit, Ergebnis) – erneuter Klick an derselben Stelle schaltet zum nächsten Teil darunter. */
+/**
+ * Klick-Protokoll zur Ursachenanalyse (nur wenn eingeschaltet, sonst ohne Wirkung):
+ * Im Browser-Konsolenfenster  localStorage.setItem('cadAuswahlProtokoll','1')  ausführen, Seite neu laden, klicken.
+ * Auslesen:  copy(JSON.stringify(window.__auswahlProtokoll, null, 1))
+ */
+function protokolliereKlick(eintrag: Record<string, unknown>) {
+  try {
+    if (typeof window === 'undefined' || window.localStorage.getItem('cadAuswahlProtokoll') !== '1') return
+    const w = window as unknown as { __auswahlProtokoll?: Record<string, unknown>[] }
+    ;(w.__auswahlProtokoll ??= []).push({ zeit: new Date().toISOString(), ...eintrag })
+    console.info('[Auswahl]', eintrag)
+  } catch { /* Protokoll ist optional */ }
+}
 
 function InstancedBauteile({
   type,
@@ -833,6 +845,12 @@ function InstancedBauteile({
       // Normaler Klick = immer das vorderste tatsächlich getroffene Teil (auch bei wiederholtem Klick auf dieselbe Stelle).
       // Nur Alt+Klick schaltet gezielt zum nächsten dahinterliegenden Teil weiter.
       const id = waehleTreffer(treffer, { aktuell: selectedComponent, weiter: !!ne?.altKey }) ?? getroffen.id
+      protokolliereKlick({
+        x: ne?.clientX, y: ne?.clientY, alt: !!ne?.altKey, aktuellVorher: selectedComponent ?? null, gewaehlt: id, verdecktAb,
+        treffer: ((e.intersections ?? []) as { object: THREE.Object3D; instanceId?: number; distance: number }[]).map((h) => ({
+          id: loeseInstanz(h.object?.userData?.instanzIds, h.instanceId), typ: String(h.object?.userData?.bauteilTyp ?? (h.object?.userData?.verdecker ? 'gebaeude' : '')), instanceId: h.instanceId ?? null, abstand: Math.round(h.distance * 1000) / 1000,
+        })),
+      })
       onSelect(id, !!(e.shiftKey ?? ne?.shiftKey))
     },
     [itemVon, onSelect, measureMode, onMeasurePoint, placementType, onPlacementClick, selectedComponent, type]
