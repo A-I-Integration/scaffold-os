@@ -61,7 +61,7 @@ export default function ZeitAuswertung({ canEdit }: { canEdit: boolean }) {
   const schwelleOk = schwelleZahl === null || (Number.isFinite(schwelleZahl) && schwelleZahl >= 0 && schwelleZahl <= 24);
 
   const laenderAuswahl = useMemo(() => {
-    const s = new Set(vorkommendeLaender(eintraege));
+    const s = new Set([...LAENDER_VORSCHLAG, ...vorkommendeLaender(eintraege)]);
     for (const p of projekte) if (p.land) s.add(p.land);
     return [...s].sort((a, b) => a.localeCompare(b, 'de'));
   }, [eintraege, projekte]);

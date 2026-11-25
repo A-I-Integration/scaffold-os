@@ -5,7 +5,7 @@
 // ============================================================
 
 export const STANDARD_LAND = 'Deutschland';
-export const LAENDER_VORSCHLAG = ['Deutschland', 'Österreich', 'Schweiz', 'Niederlande', 'Belgien', 'Luxemburg', 'Frankreich', 'Polen', 'Tschechien', 'Dänemark'];
+export const LAENDER_VORSCHLAG = ['Deutschland', 'Österreich', 'Schweiz', 'Niederlande', 'Belgien', 'Luxemburg', 'Frankreich', 'Polen', 'Tschechien', 'Dänemark', 'Bulgarien'];
 
 export interface AuswertungEintrag {
   employee_id: string; work_date: string; hours: number | null; project_id?: string | null;

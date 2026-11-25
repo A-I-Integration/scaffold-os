@@ -64,3 +64,10 @@ describe('Auswertung', () => {
     expect(typeof z[0]['Stunden']).toBe('number')
   })
 })
+
+describe('Länderauswahl', () => {
+  it('enthält die geforderten Länder', async () => {
+    const { LAENDER_VORSCHLAG } = await import('../auswertung')
+    for (const l of ['Luxemburg', 'Österreich', 'Schweiz', 'Polen', 'Bulgarien', 'Niederlande']) expect(LAENDER_VORSCHLAG).toContain(l)
+  })
+})
