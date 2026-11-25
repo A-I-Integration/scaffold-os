@@ -67,3 +67,37 @@ describe('Route Lohn-Konditionen', () => {
     expect(db.employee_sonderzahlungen).toHaveLength(0)
   })
 })
+
+describe('Route Zulagen, Kilometersatz und Pfändung', () => {
+  it('Kilometergeld wird mit km und Satz gespeichert', async () => {
+    expect((await post({ typ: 'sonderzahlung', employee_id: E1, art: 'kilometergeld', monat: '2026-11', menge: '100', satz: '0,30' })).status).toBe(200)
+    expect(db.employee_sonderzahlungen[0]).toMatchObject({ art: 'kilometergeld', betrag: 30, menge: 100, satz: 0.3 })
+  })
+  it('Kilometersatz mit Gültig-ab; der aktuelle wird geliefert', async () => {
+    expect((await post({ typ: 'kmsatz', employee_id: E1, satz: '0,28', gueltig_ab: '2020-01-01' })).status).toBe(200)
+    expect((await post({ typ: 'kmsatz', employee_id: E1, satz: '0,30', gueltig_ab: '2021-01-01' })).status).toBe(200)
+    expect((await post({ typ: 'kmsatz', employee_id: E1, satz: '9', gueltig_ab: '2021-01-01' })).status).toBe(400)
+    const j = await (await get()).json()
+    expect(j.kmSatz).toEqual({ satz: 0.3, gueltig_ab: '2021-01-01' })
+  })
+  it('Pfändung und Monat speichern; Grenzen kommen mit', async () => {
+    expect((await post({ typ: 'pfaendung', employee_id: E1, glaeubiger: 'Bank A', unterhaltspersonen: '1', gueltig_ab: '2026-01-01' })).status).toBe(200)
+    expect((await post({ typ: 'pfaendung', employee_id: E1, glaeubiger: '', gueltig_ab: '2026-01-01' })).status).toBe(400)
+    expect((await post({ typ: 'pfaendung_monat', employee_id: E1, monat: '2026-08', netto: '2500' })).status).toBe(200)
+    expect((await post({ typ: 'pfaendung_monat', employee_id: E1, monat: '2026-08', netto: '2600' })).status).toBe(200)
+    const j = await (await get()).json()
+    expect(j.pfaendungen).toHaveLength(1)
+    expect(j.pfaendungMonate).toHaveLength(1)
+    expect(j.pfaendungMonate[0].netto).toBe(2600)
+    expect(j.grenzen.at(-1)).toMatchObject({ gueltig_ab: '2026-07-01', grundbetrag: 1587.4 })
+  })
+  it('Pfändung löschen; Nicht-Chef gesperrt', async () => {
+    await post({ typ: 'pfaendung', employee_id: E1, glaeubiger: 'Bank A', gueltig_ab: '2026-01-01' })
+    const id = '66666666-6666-4666-8666-666666666666'
+    ;(db.employee_pfaendungen[0] as any).id = id
+    expect((await (await route()).DELETE(new Request('http://x?typ=pfaendung&id=' + id, { method: 'DELETE' }) as never)).status).toBe(200)
+    expect(db.employee_pfaendungen).toHaveLength(0)
+    rolle = 'disponent'
+    expect((await post({ typ: 'pfaendung', employee_id: E1, glaeubiger: 'X', gueltig_ab: '2026-01-01' })).status).toBe(403)
+  })
+})
