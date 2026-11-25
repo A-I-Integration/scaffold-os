@@ -11,7 +11,7 @@ export function baueERechnungEingabe(inv: any, optionen: { kundenEmail?: string 
     // Steuerfall: 0 % (z. B. § 13b) bleibt 0 % – früher wurde daraus 19 %
     const fall = steuerFall(inv);
     const taxRate = fall.satz;
-    const kategorie = fall.kategorie === 'AE' ? VatCategoryCode.REVERSE_CHARGE : fall.kategorie === 'E' ? VatCategoryCode.EXEMPT : VatCategoryCode.STANDARD_RATE;
+    const kategorie = fall.kategorie === 'AE' ? VatCategoryCode.REVERSE_CHARGE : fall.kategorie === 'K' ? VatCategoryCode.INTRA_COMMUNITY_SUPPLY : fall.kategorie === 'E' ? VatCategoryCode.EXEMPT : VatCategoryCode.STANDARD_RATE;
     const kaeufer = zerlegeAdresse(inv.customer_address, inv.customer_name);
 
     const input = {
@@ -59,7 +59,7 @@ export function baueERechnungEingabe(inv: any, optionen: { kundenEmail?: string 
         taxTotal: Math.abs(taxAmount), grandTotal: Math.abs(grossAmount), duePayableAmount: Math.abs(grossAmount),
         currency: 'EUR' as const,
       },
-      vatBreakdown: [{ categoryCode: kategorie, ratePercent: taxRate, taxableAmount: Math.abs(netAmount), taxAmount: Math.abs(taxAmount), ...(fall.grund ? { exemptionReason: fall.grund } : {}) }],
+      vatBreakdown: [{ categoryCode: kategorie, ratePercent: taxRate, taxableAmount: Math.abs(netAmount), taxAmount: Math.abs(taxAmount), ...(fall.grund ? { exemptionReason: fall.grund } : {}), ...(fall.kategorie === 'K' ? { exemptionReasonCode: 'VATEX-EU-IC' } : {}) }],
       payment: cs.iban ? { meansCode: '58', iban: cs.iban, dueDate: inv.due_date ? String(inv.due_date) : undefined } : undefined,
     };
   return input;

@@ -32,6 +32,11 @@ beforeEach(() => {
     projects: [{ id: P1, customer_id: 'c1' }],
     company_settings: [],
     invoice_freigabe_override: [],
+    customers: [
+      { id: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb', name: 'Lux Bau S.A.', kundentyp: 'gewerblich', ust_id: 'LU12345678' },
+      { id: 'cccccccc-cccc-4ccc-8ccc-cccccccccccc', name: 'Ohne Nummer GmbH', kundentyp: 'gewerblich', ust_id: null },
+      { id: 'dddddddd-dddd-4ddd-8ddd-dddddddddddd', name: 'Deutsche GmbH', kundentyp: 'gewerblich', ust_id: 'DE123456789' },
+    ],
   }
   const rest = baueFakeRest(db)
   vi.stubGlobal('fetch', async (eingabe: RequestInfo | URL, init?: RequestInit) => {
@@ -141,5 +146,35 @@ describe('Kette Rechnung anlegen', () => {
     const gs = rpcAufrufe[1].params
     expect(gs.p_tax_amount).toBe(-(re.p_tax_amount as number))
     expect(gs.p_gross_amount).toBe(-(re.p_gross_amount as number))
+  })
+
+  describe('Luxemburg und innergemeinschaftliche Lieferung', () => {
+    const LUX = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'
+    it('Luxemburg: 17 % TVA wird serverseitig gerechnet', async () => {
+      const r = await anlegen({ positions: [pos(1, 1000)], steuerfall: 'lu_tva', tax_rate: 17, customer_id: LUX })
+      expect(r.status).toBe(200)
+      expect(rpcAufrufe[0].params).toMatchObject({ p_net_amount: 1000, p_tax_amount: 170, p_gross_amount: 1170, p_tax_rate: 17 })
+    })
+    it('Luxemburg mit falschem Satz wird abgelehnt', async () => {
+      expect((await anlegen({ positions: [pos(1, 1000)], steuerfall: 'lu_tva', tax_rate: 19, customer_id: LUX })).status).toBe(400)
+      expect(rpcAufrufe).toHaveLength(0)
+    })
+    it('Steuerfreie Lieferung nach Luxemburg: 0 % mit Hinweistext, TVA-Nr. des Kunden', async () => {
+      const r = await anlegen({ positions: [pos(10, 50)], steuerfall: 'ig_lieferung', tax_rate: 0, customer_id: LUX })
+      expect(r.status).toBe(200)
+      expect(rpcAufrufe[0].params).toMatchObject({ p_tax_amount: 0, p_gross_amount: 500, p_tax_rate: 0 })
+      expect(String(rpcAufrufe[0].params.p_notes)).toContain('§ 6a UStG')
+    })
+    it('Steuerfreie Lieferung ohne TVA-Nr. des Kunden oder mit deutscher USt-IdNr. wird abgelehnt', async () => {
+      const ohne = await anlegen({ positions: [pos(1, 100)], steuerfall: 'ig_lieferung', tax_rate: 0, customer_id: 'cccccccc-cccc-4ccc-8ccc-cccccccccccc' })
+      expect(ohne.status).toBe(400)
+      expect((await ohne.json()).code).toBe('STEUER_IG')
+      const de = await anlegen({ positions: [pos(1, 100)], steuerfall: 'ig_lieferung', tax_rate: 0, customer_id: 'dddddddd-dddd-4ddd-8ddd-dddddddddddd' })
+      expect(de.status).toBe(400)
+      expect(rpcAufrufe).toHaveLength(0)
+    })
+    it('Steuerfreie Lieferung mit Steuersatz ungleich 0 wird abgelehnt', async () => {
+      expect((await anlegen({ positions: [pos(1, 100)], steuerfall: 'ig_lieferung', tax_rate: 19, customer_id: LUX })).status).toBe(400)
+    })
   })
 })

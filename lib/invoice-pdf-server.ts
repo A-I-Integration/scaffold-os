@@ -4,7 +4,7 @@ import fontkit from '@pdf-lib/fontkit';
 import { readFile } from 'fs/promises';
 import path from 'path';
 import type { Invoice } from './invoice-pdf';
-import { leistungsdatumFuer, steuerFall, aufbewahrungsHinweis } from './rechnung-steuer';
+import { leistungsdatumFuer, steuerFall, aufbewahrungsHinweis, kundenUstIdZeile } from './rechnung-steuer';
 
 // ============================================================
 // SCAFFOLD OS – Rechnungs-PDF für E-Rechnung (Phase 39, Nachtrag)
@@ -61,6 +61,7 @@ export async function generateInvoicePdfCompliant(inv: Invoice): Promise<Uint8Ar
   page.drawText('RECHNUNGSEMPFÄNGER', { x: 18, y: y - 8, size: 8, font: fontBold, color: grauMittel });
   page.drawText(inv.customer_name, { x: 18, y: y - 20, size: 9, font, color: grauDunkel });
   if (inv.customer_address) page.drawText(inv.customer_address.slice(0, 60), { x: 18, y: y - 32, size: 9, font, color: grauDunkel });
+  { const ustZeile = kundenUstIdZeile(inv); if (ustZeile) page.drawText(ustZeile, { x: 18, y: y - 42, size: 8, font, color: grauDunkel }); }
 
   const hatKopf = true; // Leistungsdatum ist Pflichtangabe: immer ausweisen
   page.drawRectangle({ x: 288, y: y - (hatKopf ? 56 : 46), width: 235, height: hatKopf ? 56 : 46, color: grauHell });
@@ -122,7 +123,7 @@ export async function generateInvoicePdfCompliant(inv: Invoice): Promise<Uint8Ar
   page.drawRectangle({ x: 310, y: y - 42, width: 195, height: 42, color: grauHell });
   page.drawText('Nettobetrag', { x: 316, y: y - 8, size: 9, font, color: grauMittel });
   page.drawText(fmtEur(Number(inv.net_amount)) + ' €', { x: 495 - font.widthOfTextAtSize(fmtEur(Number(inv.net_amount)) + ' €', 9), y: y - 8, size: 9, font, color: grauMittel });
-  const zzgl = steuerFall(inv).satz > 0 ? `zzgl. ${Number(inv.tax_rate)} % Umsatzsteuer` : 'Umsatzsteuer 0 % (siehe Hinweis)';
+  const zzgl = steuerFall(inv).satz > 0 ? (inv.steuerfall === 'lu_tva' ? `zzgl. ${Number(inv.tax_rate)} % TVA (Luxemburg)` : `zzgl. ${Number(inv.tax_rate)} % Umsatzsteuer`) : 'Umsatzsteuer 0 % (siehe Hinweis)';
   page.drawText(zzgl, { x: 316, y: y - 17, size: 9, font, color: grauMittel });
   page.drawText(fmtEur(Number(inv.tax_amount)) + ' €', { x: 495 - font.widthOfTextAtSize(fmtEur(Number(inv.tax_amount)) + ' €', 9), y: y - 17, size: 9, font, color: grauMittel });
   page.drawLine({ start: { x: 316, y: y - 22 }, end: { x: 495, y: y - 22 }, thickness: 0.5, color: rgb(203 / 255, 213 / 255, 225 / 255) });

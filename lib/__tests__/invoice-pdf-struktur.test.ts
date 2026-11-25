@@ -33,4 +33,29 @@ describe('Rechnungs-PDF mit strukturierten Angaben', () => {
     expect(kurz.length).toBeGreaterThan(ohne.length)
     expect((await PDFDocument.load(lang)).getPageCount()).toBeGreaterThan(1)
   })
+
+  it('druckt die TVA-Nr. des Kunden und beschriftet Luxemburg (17 %) mit TVA', async () => {
+    const { execFileSync, spawnSync } = await import('node:child_process')
+    const { writeFileSync, mkdtempSync } = await import('node:fs')
+    const { tmpdir } = await import('node:os')
+    const { join } = await import('node:path')
+    if (spawnSync('pdftotext', ['-v']).error) return // ohne pdftotext lässt sich der Text nicht lesen
+    const basis = {
+      id: '1', invoice_number: 'RE-2026-0003', project_id: null, customer_name: 'Lux Bau S.A.', customer_address: 'Rue 1',
+      positions: [{ bezeichnung: 'Material', menge: 10, einheit: 'Stk.', einzelpreis: 50 }],
+      status: 'offen', invoice_date: '2026-11-25', due_date: '2026-12-09', created_at: '2026-11-25',
+    }
+    const text = async (inv: object) => {
+      const f = join(mkdtempSync(join(tmpdir(), 'pdf-')), 'r.pdf')
+      writeFileSync(f, await generateInvoicePdfCompliant(inv as any))
+      return execFileSync('pdftotext', ['-layout', f, '-']).toString()
+    }
+    const lu = await text({ ...basis, net_amount: 500, tax_rate: 17, tax_amount: 85, gross_amount: 585, steuerfall: 'lu_tva', customer_ust_id: 'LU12345678', notes: null })
+    expect(lu).toContain('17 % TVA (Luxemburg)')
+    expect(lu).toContain('USt-IdNr. / TVA-Nr.: LU12345678')
+    const ig = await text({ ...basis, net_amount: 500, tax_rate: 0, tax_amount: 0, gross_amount: 500, steuerfall: 'ig_lieferung', customer_ust_id: 'LU12345678', notes: 'Steuerfreie innergemeinschaftliche Lieferung (§ 4 Nr. 1 Buchst. b i. V. m. § 6a UStG).' })
+    expect(ig).toContain('TVA-Nr.: LU12345678')
+    expect(ig).toContain('§ 6a UStG')
+    expect(await text({ ...basis, net_amount: 500, tax_rate: 19, tax_amount: 95, gross_amount: 595, notes: null })).not.toContain('TVA')
+  })
 })
