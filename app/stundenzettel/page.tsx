@@ -13,9 +13,10 @@ import { erzeugeStundenzettelPdf, stundenzettelPdfDateiname, monatDe } from '@/l
 
 interface Buchung extends ZeitBuchung { employee?: { id: string; first_name: string; last_name: string } | null }
 interface LohnkostenAntwort {
-  baustellen: { projectId: string | null; name: string; stunden: number; kosten: number; mitarbeiter: { employeeId: string; name: string; stunden: number; kosten: number }[] }[]
+  baustellen: { projectId: string | null; name: string; stunden: number; kosten: number; spesen?: number; mitarbeiter: { employeeId: string; name: string; stunden: number; kosten: number; spesen?: number }[] }[]
+  spesenOhneZuordnung?: { employee_id: string; name: string; work_date: string; betrag: number; grund: string }[]
   ohneLohn: { stunden: number; mitarbeiter: { employeeId: string; name: string; stunden: number }[] }
-  summe: { stunden: number; kosten: number }
+  summe: { stunden: number; kosten: number; spesen?: number }
 }
 
 const aktuellerMonat = () => new Date().toLocaleDateString('sv-SE').slice(0, 7);
@@ -33,6 +34,7 @@ export default function StundenzettelPage() {
   const [laedt, setLaedt] = useState(true);
   const [kosten, setKosten] = useState<LohnkostenAntwort | null>(null);
   const [meldung, setMeldung] = useState('');
+  const [spesenTage, setSpesenTage] = useState<{ work_date: string; betrag: number }[] | undefined>(undefined);
 
   const laden = useCallback(async () => {
     const g = monatsGrenzen(monat);
@@ -62,7 +64,13 @@ export default function StundenzettelPage() {
   }, [buchungen]);
   useEffect(() => { if (!empId || !mitarbeiter.some(([id]) => id === empId)) setEmpId(mitarbeiter[0]?.[0] ?? ''); }, [mitarbeiter, empId]);
 
-  const zettel = useMemo(() => baueStundenzettel(buchungen.filter((b) => b.employee_id === empId), monat), [buchungen, empId, monat]);
+  // Tages-Spesen (eine Quelle, siehe lib/spesen-zentral.ts); ohne Tagesberechnung zählt die Handeingabe der Buchung wie bisher
+  useEffect(() => {
+    setSpesenTage(undefined);
+    if (!empId) return;
+    fetch(`/api/spesen-monat?monat=${monat}&employee_id=${empId}`, { cache: 'no-store' }).then((r) => r.json()).then((j) => { if (j.success) setSpesenTage(j.tage); }).catch(() => {});
+  }, [empId, monat]);
+  const zettel = useMemo(() => baueStundenzettel(buchungen.filter((b) => b.employee_id === empId), monat, spesenTage), [buchungen, empId, monat, spesenTage]);
   const projektName = (id: string | null) => (id ? projekte[id] || 'Baustelle' : '–');
   const name = mitarbeiter.find(([id]) => id === empId)?.[1] || '';
 
@@ -132,20 +140,23 @@ export default function StundenzettelPage() {
         {kosten && (
           <section className="bg-white border border-black/5 rounded-2xl p-5 space-y-3" data-testid="lohnkosten-block">
             <h2 className="text-lg font-semibold">Lohnkosten je Baustelle · {monatDe(monat)}</h2>
-            <p className="text-sm text-[#86868b]">Netto-Stunden × Stundenlohn, der am Arbeitstag galt. Direkte Lohnkosten ohne Arbeitgeberanteile und Zuschläge. Nur für den Chef sichtbar.</p>
+            <p className="text-sm text-[#86868b]">Netto-Stunden × Stundenlohn, der am Arbeitstag galt. Direkte Lohnkosten ohne Arbeitgeberanteile und Zuschläge, dazu die Spesen (Tagesberechnung vor Handeingabe, nach Stunden auf die Baustellen des Tages verteilt). Nur für den Chef sichtbar.</p>
             {kosten.baustellen.length === 0 ? <p className="text-sm text-[#86868b]">Für diesen Monat sind keine bewerteten Stunden vorhanden.</p> : (
               <table className="w-full text-sm">
-                <thead><tr className="text-left text-[11px] uppercase text-[#86868b]"><th className="font-normal">Baustelle</th><th className="font-normal text-right">Stunden</th><th className="font-normal text-right">Lohnkosten</th></tr></thead>
+                <thead><tr className="text-left text-[11px] uppercase text-[#86868b]"><th className="font-normal">Baustelle</th><th className="font-normal text-right">Stunden</th><th className="font-normal text-right">Lohnkosten</th><th className="font-normal text-right">Spesen</th><th className="font-normal text-right">Personalkosten</th></tr></thead>
                 <tbody>
                   {kosten.baustellen.map((b, i) => (
                     <tr key={i} className="border-t border-black/5 align-top">
                       <td className="py-1.5">{b.name}<span className="block text-[11px] text-[#86868b]">{b.mitarbeiter.map((m) => `${m.name} ${nm(m.stunden)} h`).join(' · ')}</span></td>
-                      <td className="text-right">{nm(b.stunden)}</td><td className="text-right">{nm(b.kosten)} €</td>
+                      <td className="text-right">{nm(b.stunden)}</td><td className="text-right">{nm(b.kosten)} €</td><td className="text-right" data-testid="lohnkosten-spesen">{nm(b.spesen || 0)} €</td><td className="text-right font-medium">{nm(b.kosten + (b.spesen || 0))} €</td>
                     </tr>
                   ))}
                 </tbody>
-                <tfoot><tr className="border-t border-black/20 font-semibold"><td className="py-1.5">Summe bewertet</td><td className="text-right">{nm(kosten.summe.stunden - kosten.ohneLohn.stunden)}</td><td className="text-right">{nm(kosten.summe.kosten)} €</td></tr></tfoot>
+                <tfoot><tr className="border-t border-black/20 font-semibold"><td className="py-1.5">Summe bewertet</td><td className="text-right">{nm(kosten.summe.stunden - kosten.ohneLohn.stunden)}</td><td className="text-right">{nm(kosten.summe.kosten)} €</td><td className="text-right">{nm(kosten.summe.spesen || 0)} €</td><td className="text-right">{nm(kosten.summe.kosten + (kosten.summe.spesen || 0))} €</td></tr></tfoot>
               </table>
+            )}
+            {(kosten.spesenOhneZuordnung?.length ?? 0) > 0 && (
+              <p className="text-sm text-[#e8590c]" data-testid="lohnkosten-spesen-ohne-zuordnung">⚠️ Spesen ohne Baustelle (an dem Tag gibt es keine Buchung mit Stunden): {kosten.spesenOhneZuordnung!.map((o) => `${o.name} ${de(o.work_date)} ${nm(o.betrag)} €`).join(', ')}.</p>
             )}
             {kosten.ohneLohn.stunden > 0 && (
               <p className="text-sm text-[#e8590c]" data-testid="lohnkosten-ohne-lohn">⚠️ {nm(kosten.ohneLohn.stunden)} Stunden sind nicht bewertet, weil kein Stundenlohn hinterlegt ist: {kosten.ohneLohn.mitarbeiter.map((m) => `${m.name} (${nm(m.stunden)} h)`).join(', ')}. Bitte unter Personal → Mitarbeiter & Zugänge den Stundenlohn eintragen.</p>

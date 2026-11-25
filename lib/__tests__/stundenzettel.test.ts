@@ -55,3 +55,22 @@ describe('Lohnkosten je Baustelle', () => {
     expect(k.baustellen[0].kosten).toBe(250.54) // je Buchung 7,33 × 17,09 = 125,2697 → 125,27 €, zweimal = 250,54 €
   })
 })
+
+describe('Stundenzettel mit Tages-Spesen', () => {
+  const buch = [
+    { employee_id: 'e1', work_date: '2026-11-10', hours: 4, spesen_euro: 14, start_time: '2026-11-10T06:00:00Z', end_time: '2026-11-10T10:00:00Z' },
+    { employee_id: 'e1', work_date: '2026-11-10', hours: 4, spesen_euro: 14, start_time: '2026-11-10T11:00:00Z', end_time: '2026-11-10T15:00:00Z' },
+    { employee_id: 'e1', work_date: '2026-11-11', hours: 8, spesen_euro: 6, start_time: '2026-11-11T06:00:00Z', end_time: '2026-11-11T14:00:00Z' },
+  ]
+  it('ohne Tagesberechnung bleibt alles wie bisher', () => {
+    expect(baueStundenzettel(buch, '2026-11').summe.spesen).toBe(34)
+  })
+  it('Tagesberechnung ersetzt die Handeingaben dieses Tages, steht einmal pro Tag; andere Tage bleiben', () => {
+    const z = baueStundenzettel(buch, '2026-11', [{ work_date: '2026-11-10', betrag: 24 }])
+    expect(z.zeilen.map(x => x.spesen)).toEqual([24, 0, 6]); expect(z.summe.spesen).toBe(30)
+  })
+  it('Tag mit Spesen aber ohne Buchung bekommt eine eigene Zeile; andere Monate werden ignoriert', () => {
+    const z = baueStundenzettel(buch, '2026-11', [{ work_date: '2026-11-20', betrag: 12 }, { work_date: '2026-10-31', betrag: 99 }])
+    expect(z.zeilen.at(-1)).toMatchObject({ datum: '2026-11-20', spesen: 12, stunden: 0 }); expect(z.summe.spesen).toBe(46); expect(z.summe.tage).toBe(2)
+  })
+})

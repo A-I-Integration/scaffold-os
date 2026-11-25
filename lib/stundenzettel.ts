@@ -62,7 +62,7 @@ export interface Stundenzettel {
 }
 
 /** Stundenzettel eines Mitarbeiters für einen Monat; Buchungen außerhalb des Monats werden ignoriert. */
-export function baueStundenzettel(buchungen: ZeitBuchung[], monat: string): Stundenzettel {
+export function baueStundenzettel(buchungen: ZeitBuchung[], monat: string, spesenTage?: { work_date: string; betrag: number }[]): Stundenzettel {
   const g = monatsGrenzen(monat)
   const rein = g ? buchungen.filter((b) => b.work_date >= g.von && b.work_date <= g.bis) : []
   const zeilen = rein
@@ -73,6 +73,22 @@ export function baueStundenzettel(buchungen: ZeitBuchung[], monat: string): Stun
       offen: !!b.start_time && !b.end_time && (b.hours === null || b.hours === undefined),
     }))
     .sort((a, b) => (a.datum === b.datum ? a.von.localeCompare(b.von) : a.datum.localeCompare(b.datum)))
+  // Tagesberechnung der Spesen (lib/spesen-zentral.ts): je Tag ein Betrag in der ersten Zeile des Tages; die alten Handeingaben dieses Tages zählen dann nicht mit.
+  // Tage mit Spesen, aber ohne Buchung, bekommen eine eigene Zeile, damit der Betrag nicht fehlt.
+  if (spesenTage && g) {
+    const jeTag = new Map(spesenTage.filter((t) => t.work_date >= g.von && t.work_date <= g.bis).map((t) => [t.work_date, runde2(zahl(t.betrag))]))
+    const gesehen = new Set<string>()
+    for (const z of zeilen) {
+      if (!jeTag.has(z.datum)) continue
+      z.spesen = gesehen.has(z.datum) ? 0 : jeTag.get(z.datum)!
+      gesehen.add(z.datum)
+    }
+    for (const [datum, betrag] of jeTag) {
+      if (gesehen.has(datum) || !(betrag > 0)) continue
+      zeilen.push({ datum, von: '', bis: '', pauseMin: 0, stunden: 0, projektId: null, fahrzeitMin: 0, spesen: betrag, notiz: 'Spesen', offen: false })
+    }
+    zeilen.sort((a, b) => (a.datum === b.datum ? a.von.localeCompare(b.von) : a.datum.localeCompare(b.datum)))
+  }
   return {
     monat, zeilen,
     summe: {

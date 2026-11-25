@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase/client';
 import { workdaysInMonth, BREAK_RULE_TEXT } from '@/lib/worktime';
 import ZeitTagesuebersicht from '@/components/ZeitTagesuebersicht';
 import { spesenJeTag, spesenCsv, type SpesenTagZeile } from '@/lib/spesen-export';
+import { endbetrag } from '@/lib/spesen';
 import {
   Clock, ChevronDown, ChevronRight, Download, Plus, Pencil, X, Check,
 } from 'lucide-react';
@@ -500,7 +501,7 @@ export default function ZeiterfassungPage() {
             {isOpen && (
               <div className="border-t border-black/10 px-4 py-3">
                 {es.length === 0 && <p className="text-sm text-[#86868b]">Keine Einträge in diesem Monat.</p>}
-                {es.map(e => (
+                {es.map((e, idx) => (
                   <div key={e.id} className="py-2 border-b border-black/10/50 last:border-0">
                     <div className="flex flex-wrap items-center gap-3 text-sm">
                       <span className="text-[#86868b] w-14">{fmtDate(e.work_date)}</span>
@@ -511,7 +512,12 @@ export default function ZeiterfassungPage() {
                       </span>
                       {e.note && <span className="text-[#86868b]">· {e.note}</span>}
                       {e.project?.name && <span className="text-blue-600">· 📁 {e.project.name}</span>}
-                      {!!e.spesen_euro && <span className="text-emerald-600">· {Number(e.spesen_euro).toFixed(2)}€ Spesen</span>}
+                      {(() => {
+                        // Spesen: je Mitarbeiter und Tag zählt ein Betrag. Mit Tagesberechnung steht er an der ersten Buchung des Tages, die alte Handeingabe zählt dann nicht.
+                        const tag = spesenTage.find(t => t.employee_id === emp.id && t.work_date === e.work_date);
+                        if (tag) return es.findIndex(x => x.work_date === e.work_date) === idx ? <span className="text-emerald-600" data-testid="spesen-tagesbetrag">· {endbetrag(tag).toFixed(2)}€ Spesen (Tagesberechnung)</span> : null;
+                        return !!e.spesen_euro && <span className="text-emerald-600">· {Number(e.spesen_euro).toFixed(2)}€ Spesen</span>;
+                      })()}
                       {!!e.fahrzeit_minuten && <span className="text-purple-600">· {e.fahrzeit_minuten}min Fahrzeit</span>}
                       {e.uebernachtung && <span className="text-amber-600">· 🛏️ Übernachtung</span>}
                       {canEdit && editId !== e.id && (

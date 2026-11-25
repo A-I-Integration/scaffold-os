@@ -53,6 +53,22 @@ describe('Route Ortungs-Vorschläge', () => {
     const j = await (await getV()).json()
     expect(j.touren[0].vorschlaege).toEqual([]); expect(j.touren[0].hinweise.join(' ')).toContain('keine Positionen')
   })
+  it('mehrere Mitarbeiter in einem Fahrzeug: nur wer in der Tour eingeteilt ist, bekommt Vorschläge', async () => {
+    const E2 = '44444444-4444-4444-8444-444444444444', E3 = '55555555-5555-4555-8555-555555555555'
+    ;(db.tours[0] as any).team_ids = [E1, E2]
+    expect((await (await getV(`datum=2026-11-10&employee_id=${E2}`)).json()).touren[0].vorschlaege).toHaveLength(3)
+    const fremd = await (await getV(`datum=2026-11-10&employee_id=${E3}`)).json()
+    expect(fremd.touren).toEqual([]); expect(fremd.hinweise[0]).toContain('keiner Tour')
+    await postV({ employee_id: E2, work_date: '2026-11-10' })
+    expect(db.zeit_abschnitte.every((a: any) => a.employee_id === E2)).toBe(true)
+  })
+  it('Tour ohne Fahrzeug und Stopps ohne Koordinaten: kein Vorschlag, klare Hinweise', async () => {
+    ;(db.tours[0] as any).vehicle_id = null
+    expect((await (await getV()).json()).touren[0]).toMatchObject({ vorschlaege: [], hinweise: ['Die Tour hat kein Fahrzeug.'] })
+    ;(db.tours[0] as any).vehicle_id = V1; (db.tour_stops[0] as any).lat = null
+    const j = await (await getV()).json()
+    expect(j.touren[0].vorschlaege).toEqual([]); expect(j.touren[0].hinweise.join(' ')).toContain('Koordinaten')
+  })
   it('nur Chef und Dispo; ungültige Eingaben werden abgewiesen', async () => {
     for (const r of ['bauleiter', 'mitarbeiter', 'lager']) { rolle = r; expect((await getV()).status).toBe(403); expect((await postV({ employee_id: E1, work_date: '2026-11-10' })).status).toBe(403) }
     rolle = 'disponent'; expect((await getV()).status).toBe(200)
