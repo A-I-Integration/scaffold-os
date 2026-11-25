@@ -1,3 +1,4 @@
+import { adresseMitLand } from '@/lib/land';
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { serverErrorResponse } from '@/lib/auth';
@@ -34,7 +35,9 @@ export async function GET() {
       return NextResponse.json({ success: false, error: 'Keine Berechtigung.' }, { status: 403 });
     }
 
-    const res = await fetch(`${url}/rest/v1/projects?status=eq.active&select=id,name,adresse,customer_id,data`, { headers });
+    // Land der Baustelle mitlesen; fehlt die Spalte noch (SQL phase-139), ohne Land weiterarbeiten
+    let res = await fetch(`${url}/rest/v1/projects?status=eq.active&select=id,name,adresse,land,customer_id,data`, { headers });
+    if (!res.ok) res = await fetch(`${url}/rest/v1/projects?status=eq.active&select=id,name,adresse,customer_id,data`, { headers });
     if (!res.ok) throw new Error(await res.text());
     const projekte = await res.json();
     const heute = heuteIso();
@@ -50,7 +53,7 @@ export async function GET() {
           id: p.id,
           name: p.name || '–',
           kunde: data?.step1?.name || p.name || '–',
-          adresse: p.adresse || null,
+          adresse: adresseMitLand(p.adresse, p.land ?? data?.step1?.land) || null,
           customer_id: p.customer_id || null,
           wochenpreis: Number(data?.angebotAnpassungen?.miete?.preisProWoche) || 0,
           ende,

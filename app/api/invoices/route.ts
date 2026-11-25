@@ -1,3 +1,4 @@
+import { bereinigeIds, pruefeRegieAuswahl, ordneRegieZu, gibRegieFrei, uebertrageRegie } from '@/lib/regiebericht-abrechnung';
 import { normalisiereZwischenaufmasse } from '@/lib/zwischenaufmass';
 import { vorhaltungZuordnen, vorhaltungFehlerText } from '@/lib/vorhaltung-zuordnung-server';
 import { pruefeVorhaltungBezug, istVorhaltungsRechnung } from '@/lib/vorhaltung';
@@ -167,6 +168,15 @@ async function anlegen(req: NextRequest, idem?: { key: string; hash: string }) {
     }
     // Nur bekannte Positionsfelder mit gültigen Werten werden gespeichert (Art, Maße, Faktor, Stundenlohn-Angaben)
     const positionen = positions.map(bereinigePosition);
+
+    // Regieberichte, die in diese Rechnung übernommen werden: müssen zur Baustelle gehören und noch frei sein
+    const regieIds = bereinigeIds(body.regiebericht_ids);
+    let regieHinweis: string | null = null;
+    if (regieIds.length) {
+      const rp = await pruefeRegieAuswahl({ url, headers }, regieIds, project_id, positionen);
+      if (!rp.ok) return NextResponse.json({ success: false, code: rp.code, error: rp.fehler, ...(rp.ids ? { regie_ids: rp.ids } : {}) }, { status: rp.status });
+      if (rp.ungezeichnet.length) regieHinweis = `Noch ohne Unterschrift übernommen: ${rp.ungezeichnet.join(', ')}.`;
+    }
 
     // Abschlagsrechnungen nur mit Auftrag: sonst würde die Pflicht-Freigabe unten
     // (nur bei project_id) komplett umgangen. Ersatz-Rechnungen (Ändern) ausgenommen.
@@ -487,6 +497,16 @@ async function anlegen(req: NextRequest, idem?: { key: string; hash: string }) {
     const rows = [invoiceRow]; // ab hier wie zuvor: rows[0] = angelegte Rechnung
     const invoiceNumber = invoiceRow.invoice_number;
 
+    // Regieberichte der Rechnung zuordnen (ab jetzt „abgerechnet“); schlägt das fehl, bleibt die Rechnung gültig und die Antwort meldet es
+    let regieWarnung: string | null = null;
+    if (regieIds.length) {
+      try {
+        const n = await ordneRegieZu({ url, headers }, regieIds, { id: invoiceRow.id, invoice_number: invoiceNumber });
+        if (n !== regieIds.length) regieWarnung = 'Nicht alle Regieberichte konnten zugeordnet werden (sie wurden gleichzeitig anderweitig abgerechnet). Bitte die Berichte prüfen.';
+      } catch { regieWarnung = 'Die Regieberichte konnten der Rechnung nicht zugeordnet werden. Bitte im Regiebericht prüfen, ob sie als abgerechnet markiert sind.'; }
+    }
+    if (replace_invoice_id) await uebertrageRegie({ url, headers }, String(replace_invoice_id), { id: invoiceRow.id, invoice_number: invoiceNumber });
+
     // Kopfangaben zur angelegten Rechnung speichern: Gerüstnummer, Leistungsdatum, Steuerbehandlung sowie Kundentyp,
     // USt-IdNr. und Leitweg-ID des Kunden zum Ausstellungszeitpunkt (aus dem Kundenstamm, nicht vom Browser).
     // Schlägt das fehl, bleibt die Rechnung gültig; die Antwort meldet es, damit die Angaben nachgetragen werden können.
@@ -569,7 +589,7 @@ async function anlegen(req: NextRequest, idem?: { key: string; hash: string }) {
       invoice_type: rows[0]?.invoice_type || 'standard',
     });
 
-    return NextResponse.json({ success: true, invoice: rows[0], override_verwendet: overrideVerwendet, ...(kopfWarnung ? { warnung: kopfWarnung } : {}), ...(aufmassWarnung ? { aufmass_warnung: aufmassWarnung } : {}), ...(vorhaltungWarnung ? { vorhaltung_warnung: vorhaltungWarnung } : {}), ...(steuerWarnungen.length ? { steuer_warnungen: steuerWarnungen } : {}) });
+    return NextResponse.json({ success: true, invoice: rows[0], override_verwendet: overrideVerwendet, ...(kopfWarnung ? { warnung: kopfWarnung } : {}), ...(aufmassWarnung ? { aufmass_warnung: aufmassWarnung } : {}), ...(vorhaltungWarnung ? { vorhaltung_warnung: vorhaltungWarnung } : {}), ...(steuerWarnungen.length ? { steuer_warnungen: steuerWarnungen } : {}), ...(regieWarnung ? { regie_warnung: regieWarnung } : {}), ...(regieHinweis ? { regie_hinweis: regieHinweis } : {}) });
   } catch (err: any) {
     return serverErrorResponse(err);
   }
@@ -739,6 +759,7 @@ export async function PATCH(req: NextRequest) {
     if (vorher && rows[0].status === 'storniert' && vorher.status !== 'storniert' && vorher.project_id) {
       // Nicht versendet: Menge/Zeitraum sofort wieder frei. Versendet: erst mit voller Gutschrift (sonst wäre die Leistung doppelt abrechenbar).
       const erg = await freigabeNachStorno({ url, headers }, { projectId: vorher.project_id, invoiceId: String(id), invoiceNumber: vorher.invoice_number, nettoBetrag: Number(rows[0].net_amount), userId });
+      if (erg === 'frei') await gibRegieFrei({ url, headers }, String(id));
       if (erg === 'bleibt_bis_gutschrift') zuordnungHinweis = 'Die Rechnung wurde bereits versendet. Aufmaß bzw. Vorhaltezeitraum bleiben berechnet, bis eine Gutschrift den Betrag voll gutschreibt.';
     }
     if (vorher) {

@@ -1,5 +1,6 @@
 'use client';
 
+import { RegieUebernahme } from '@/components/RegieberichtBlock';
 import { useEffect, useMemo, useState } from 'react';
 import { fetchRechnungAnlegen } from '@/lib/rechnung-anlegen-client'
 import { X, Receipt } from 'lucide-react';
@@ -82,6 +83,7 @@ export default function SchlussrechnungDialog({ projectId, customerName, custome
     fetch('/api/leistungskatalog', { cache: 'no-store' }).then((r) => r.json()).then((j) => { if (j?.success) setKatalog(normalisiereKatalog(j.eintraege).filter((k) => k.is_active !== false)) }).catch(() => {});
   }, []);
   const [extraDetail, setExtraDetail] = useState<Record<number, boolean>>({});
+  const [regieIds, setRegieIds] = useState<string[]>([]);
 
   const [laeuft, setLaeuft] = useState(false);
   const [angelegt, setAngelegt] = useState(false);
@@ -248,6 +250,7 @@ export default function SchlussrechnungDialog({ projectId, customerName, custome
           geruest_nr: geruestNr.trim() || undefined,
           leistungsdatum: leistungsdatum || undefined,
           positions: positionen,
+          regiebericht_ids: regieIds.length && art !== 'abschlag' ? regieIds : undefined,
           override_grund: overrideGrund || undefined,
           // Die Menge wird auf dem Server noch einmal geprüft und atomar reserviert (Doppelabrechnung, geändertes Aufmaß)
           aufmass: zaModus && zaAuswahl ? { za_id: zaAuswahl.id, stand: aufmassStand(zaAuswahl) } : schlussModus && letztesZA ? { za_id: letztesZA.id, stand: aufmassStand(letztesZA) } : undefined,
@@ -255,6 +258,7 @@ export default function SchlussrechnungDialog({ projectId, customerName, custome
       });
       const json = await res.json().catch(() => ({}));
       if (!json.success) {
+        if (json.code === 'REGIE_NICHT_IN_RECHNUNG') setRegieIds((prev) => prev.filter((x) => !(json.regie_ids || []).includes(x)));
         if (json.code === 'FREIGABE_FEHLT_OVERRIDE_MOEGLICH') { setBrauchtBegruendung(json.error); return; }
         throw new Error(json.error || 'Rechnung konnte nicht angelegt werden.');
       }
@@ -522,6 +526,12 @@ export default function SchlussrechnungDialog({ projectId, customerName, custome
                 <textarea value={bemerkung} onChange={(e) => setBemerkung(e.target.value)} rows={3} maxLength={1500} placeholder="z. B. Schultertransport aus Grund X, war nicht vorgesehen. Alu-Podesttreppe unter 5 m aus sicherheitstechnischen Gründen vereinbart." className={inputCls} />
               </div>
             </div>
+
+            {art !== 'abschlag' && (
+              <RegieUebernahme projectId={projectId} uebernommen={regieIds}
+                onUebernehmen={(neu, ids) => { setExtra((prev) => [...prev, ...neu.map((n) => ({ bezeichnung: n.bezeichnung, menge: n.menge, einheit: n.einheit, einzelpreis: n.einzelpreis }))]); setRegieIds((prev) => [...new Set([...prev, ...ids])]); }} />
+            )}
+            {art === 'abschlag' && <p className="text-[11px] text-[#86868b]">Regieberichte lassen sich in einer Abschlagsrechnung unter Rechnungen → Neue Rechnung → Abschlagsrechnung mit ihren Positionen übernehmen.</p>}
 
             <div className="rounded-lg bg-[#f5f5f7] p-3 space-y-2">
               <div className="flex items-center justify-between">

@@ -420,7 +420,7 @@ export default function KundenPage() {
                     </div>
                     <div>
                       <label className="block text-xs text-[#86868b] mb-1">PLZ</label>
-                      <input value={form.zip} onChange={(e) => setForm({ ...form, zip: e.target.value })} className={inputCls} placeholder="12345" />
+                      <input value={form.zip} onChange={(e) => setForm({ ...form, zip: e.target.value })} className={inputCls} placeholder="PLZ (z. B. 12345 oder L-1234)" />
                     </div>
                     <div>
                       <label className="block text-xs text-[#86868b] mb-1">Ort</label>

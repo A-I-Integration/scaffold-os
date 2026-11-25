@@ -42,6 +42,7 @@ const ROLE_ACCESS: Record<string, string[]> = {
   '/datenimport':      ['admin', 'disponent'],
   '/gaeb':             ['admin', 'disponent', 'mitarbeiter'],
   '/gestell-simulator': ['admin', 'disponent', 'lager'],
+  '/regiebericht':     ['admin', 'disponent', 'bauleiter', 'mitarbeiter'],  // Regieberichte auf der Baustelle (Mitarbeiter ohne Preise)
   '/einstellungen':    ['admin'],
   '/admin':            ['admin'],
   // Statiker (extern): nur die eigene Startseite. Alles andere sperrt der Statiker-Block unten.
