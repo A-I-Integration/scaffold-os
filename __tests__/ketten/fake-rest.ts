@@ -12,6 +12,7 @@ export function baueFakeRest(daten: Tabellen) {
       const [op, ...rest] = wert.split('.')
       const v = rest.join('.')
       if (op === 'eq') return String(z[spalte]) === v
+      if (op === 'neq') return String(z[spalte]) !== v
       if (op === 'gt') return Number(z[spalte]) > Number(v)
       if (op === 'gte') return String(z[spalte]) >= v
       if (op === 'lte') return String(z[spalte]) <= v
