@@ -13,6 +13,8 @@
 // ============================================================
 
 import { idsImRahmen, istEchterRahmen } from '@/lib/cad/mehrfachauswahl'
+import { baueInstanzIds, loeseInstanz, waehleTreffer, istWiederholterKlick, findeDoppelteIds, type Treffer } from '@/lib/cad/auswahl'
+import { isTube, instanzMatrix } from '@/lib/cad/instanz-matrix'
 import { useMemo, useState, useRef, useEffect, useCallback, memo, createContext, useContext } from 'react'
 import { Canvas, useThree, useFrame, type ThreeEvent } from '@react-three/fiber'
 import { FUSSPLATTE_AUFSTANDSVERSATZ_M, hangDaten, baueHangFlaeche } from '@/lib/cad/hang-geometrie'
@@ -220,16 +222,6 @@ const GEOMETRY_CACHE = new Map<string, THREE.BufferGeometry>()
 // Achse) – vorher waren sie zusätzlich verkleinert (z. B. Belag 0,02 × 0,02 m
 // = 0,4 mm dick, Diagonale Radius 0,45 mm) und damit praktisch unsichtbar.
 
-/** Rohr-Typen: Zylinder entlang der LÄNGSTEN scale-Achse, Durchmesser fix
- *  (ANNAHME: übliche Gerüstrohr-Durchmesser, rein optisch). */
-const TUBE_DIAMETER_M: Record<string, number> = {
-  frame: 0.048,
-  diagonal: 0.034,
-  corner_brace: 0.034,
-  anchor: 0.03,
-  railing: 0.048, // nur Variante 'post' (Treppengeländer-Pfosten)
-}
-
 /** Variante je Bauteil: gleicher Typ, aber unterschiedliche Bauform. */
 /** Treppenstufen sind technisch 'deck' (Artikel ST-001) – für Farbe und Filter zählen sie zur Treppe. */
 const istTreppenstufe = (item: ScaffoldComponent3D): boolean => item.type === 'deck' && (item.articleNumber === 'ST-001' || item.articleNumber === 'ST-002')
@@ -264,13 +256,6 @@ function getVariant(item: ScaffoldComponent3D, optik: MjOptik = null): string {
     return `zz${item.flights}|${item.flightStartDir === -1 ? 1 : 0}|${Math.round(sx * 100)}|${Math.round(sy * 100)}|${Math.round(sz * 100)}|${Math.round((item.podestM ?? 0) * 100)}|${item.gleichlauf ? 1 : 0}${item.lagenHoehenM ? `|${item.lagenHoehenM.map((h) => Math.round(h * 100)).join(',')}` : ''}`
   }
   return 'default'
-}
-
-function isTube(type: string, variant: string): boolean {
-  if (type === 'railing') return variant === 'post'
-  if (type === 'frame' && variant.startsWith('rahmen')) return false
-  if (type === 'anchor') return false
-  return type in TUBE_DIAMETER_M
 }
 
 function mergeParts(parts: THREE.BufferGeometry[]): THREE.BufferGeometry {
@@ -712,11 +697,9 @@ function getMaterial(type: string, color: THREE.Color, matt = false, vertexFarbe
 // INSTANCED BAUTEILE (Performance-optimiert)
 // ═══════════════════════════════════════════════════════════
 // Hilfsobjekte für die Rohr-Ausrichtung (einmalig, nicht pro Instanz)
-const TUBE_Q_ITEM = new THREE.Quaternion()
-const TUBE_Q_FIX = new THREE.Quaternion()
-const TUBE_EULER = new THREE.Euler()
-const TUBE_Q_Y_TO_X = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, 1), -Math.PI / 2)
-const TUBE_Q_Y_TO_Z = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), Math.PI / 2)
+
+/** Letzter Auswahl-Klick (Position, Zeit, Ergebnis) – erneuter Klick an derselben Stelle schaltet zum nächsten Teil darunter. */
+const LETZTER_KLICK: { pos: { x: number; y: number; zeit: number } | null; id: string | null } = { pos: null, id: null }
 
 function InstancedBauteile({
   type,
@@ -746,6 +729,7 @@ function InstancedBauteile({
   onPlacementClick?: (type: string, position: [number, number, number], side: string, levelIndex: number) => void
 }) {
   const meshRef = useRef<THREE.InstancedMesh>(null)
+  const idsRef = useRef<string[]>([])
   const { invalidate } = useThree()
   const zieh = useContext(ZiehKontext)
   const dummy = useMemo(() => new THREE.Object3D(), [])
@@ -758,37 +742,25 @@ function InstancedBauteile({
   const geometry = useMemo(() => getGeometry(type, variant, optik), [type, variant, optik])
   const material = useMemo(() => getMaterial(type, baseColor, farbModus === 'bauteil', variant.startsWith('mjr|')), [type, variant, baseColor, farbModus])
   const tube = isTube(type, variant)
+  // Instanz → Bauteil NUR über den ID-Schnappschuss der gezeichneten Matrizen (kein direkter Zugriff über items[index]).
+  const itemByIdRef = useRef<Map<string, ScaffoldComponent3D>>(new Map())
+  useEffect(() => { itemByIdRef.current = new Map(items.map((c) => [c.id, c])) }, [items])
+  const itemVon = useCallback((index: number | undefined): ScaffoldComponent3D | null => {
+    const id = loeseInstanz(idsRef.current, index)
+    return id ? itemByIdRef.current.get(id) ?? null : null
+  }, [])
 
   // ─── Matrizen setzen (bei Modell-Änderung neu, nicht pro Frame) ───
   useEffect(() => {
     if (!meshRef.current) return
     const mesh = meshRef.current
+    // Index → ID genau so festhalten, wie die Matrizen gesetzt werden (Auswahl-Engine, lib/cad/auswahl.ts).
+    const ids = baueInstanzIds(items)
+    idsRef.current = ids
+    mesh.userData.instanzIds = ids
+    mesh.userData.bauteilTyp = type
     items.forEach((item, i) => {
-      dummy.position.set(...item.position)
-      if (tube) {
-        // Rohr: Einheitszylinder (Achse Y) entlang der längsten scale-Achse
-        // legen, Durchmesser fix, Länge = Maß dieser Achse. Reihenfolge:
-        // erst Achsen-Korrektur (lokal), dann die Bauteil-Rotation.
-        const [sx, sy, sz] = item.scale
-        const d = TUBE_DIAMETER_M[type] ?? 0.048
-        TUBE_Q_ITEM.setFromEuler(TUBE_EULER.set(item.rotation[0], item.rotation[1], item.rotation[2]))
-        if (sx >= sy && sx >= sz) {
-          TUBE_Q_FIX.copy(TUBE_Q_Y_TO_X)
-          dummy.scale.set(d, sx, d)
-        } else if (sz >= sy) {
-          TUBE_Q_FIX.copy(TUBE_Q_Y_TO_Z)
-          dummy.scale.set(d, sz, d)
-        } else {
-          TUBE_Q_FIX.identity()
-          dummy.scale.set(d, sy, d)
-        }
-        dummy.quaternion.copy(TUBE_Q_ITEM.multiply(TUBE_Q_FIX))
-      } else {
-        dummy.rotation.set(...item.rotation)
-        dummy.scale.set(...item.scale)
-      }
-      dummy.updateMatrix()
-      mesh.setMatrixAt(i, dummy.matrix)
+      mesh.setMatrixAt(i, instanzMatrix(item, type, tube, dummy))
     })
     mesh.instanceMatrix.needsUpdate = true
     // WICHTIG fürs Anklicken: Der Raycaster prüft zuerst die Hüllkugel/-box der
@@ -820,54 +792,58 @@ function InstancedBauteile({
   const handleClick = useCallback(
     (e: ThreeEvent<PointerEvent>) => {
       e.stopPropagation()
-      if (e.instanceId !== undefined && items[e.instanceId]) {
-        // NEU (Klick-Platzierung): Im Platzierungs-Modus den Klick-Punkt
-        // als Position für das Bauteil verwenden
-        if (placementType && onPlacementClick && e.point) {
-          const item = items[e.instanceId]
-          // Seite und Ebene aus der fieldId ableiten
-          let side = '' // unbekannt → die Platzierungsregeln nehmen das nächste Feld
-          let levelIndex = -1
-          if (item.fieldId) {
-            const parts = item.fieldId.split('-')
-            if (parts.length >= 3) {
-              side = parts[1]
-              levelIndex = parseInt(parts[2], 10) || 0
-            }
+      const getroffen = itemVon(e.instanceId)
+      if (!getroffen) return // kein gültiger Treffer: nichts auswählen, nichts raten
+      // Klick-Platzierung: Klick-Punkt als Position für das neue Bauteil
+      if (placementType && onPlacementClick && e.point) {
+        // Seite und Ebene aus der fieldId ableiten
+        let side = '' // unbekannt → die Platzierungsregeln nehmen das nächste Feld
+        let levelIndex = -1
+        if (getroffen.fieldId) {
+          const parts = getroffen.fieldId.split('-')
+          if (parts.length >= 3) {
+            side = parts[1]
+            levelIndex = parseInt(parts[2], 10) || 0
           }
-          onPlacementClick(
-            placementType,
-            [e.point.x, e.point.y, e.point.z],
-            side,
-            levelIndex
-          )
-          return
         }
-        // NEU (Freie Bemaßung): Im Mess-Modus den 3D-Punkt melden
-        // statt den Bauteil zu selektieren
-        if (measureMode && onMeasurePoint && e.point) {
-          onMeasurePoint(
-            [e.point.x, e.point.y, e.point.z],
-            items[e.instanceId].name
-          )
-          return
-        }
-        onSelect(items[e.instanceId].id, !!(e.shiftKey ?? e.nativeEvent?.shiftKey))
+        onPlacementClick(placementType, [e.point.x, e.point.y, e.point.z], side, levelIndex)
+        return
       }
+      // Freie Bemaßung: 3D-Punkt melden statt auswählen
+      if (measureMode && onMeasurePoint && e.point) {
+        onMeasurePoint([e.point.x, e.point.y, e.point.z], getroffen.name)
+        return
+      }
+      // Auswahl: ALLE Treffer entlang des Strahls (auch aus anderen Bauteil-Gruppen) in die Auswahl-Engine geben.
+      const treffer: Treffer[] = []
+      for (const h of (e.intersections ?? []) as { object: THREE.Object3D; instanceId?: number; distance: number }[]) {
+        const ids = h.object?.userData?.instanzIds as string[] | undefined
+        const id = loeseInstanz(ids, h.instanceId)
+        if (id) treffer.push({ id, typ: String(h.object.userData.bauteilTyp ?? ''), abstand: h.distance })
+      }
+      if (treffer.length === 0) treffer.push({ id: getroffen.id, typ: type, abstand: e.distance ?? 0 })
+      const ne = e.nativeEvent as MouseEvent | undefined
+      const jetzt = { x: ne?.clientX ?? 0, y: ne?.clientY ?? 0, zeit: Date.now() }
+      const weiter = !!ne?.altKey || (!!selectedComponent && istWiederholterKlick(LETZTER_KLICK.pos, jetzt) && LETZTER_KLICK.id === selectedComponent)
+      const id = waehleTreffer(treffer, { aktuell: selectedComponent, weiter }) ?? getroffen.id
+      LETZTER_KLICK.pos = jetzt
+      LETZTER_KLICK.id = id
+      onSelect(id, !!(e.shiftKey ?? ne?.shiftKey))
     },
-    [items, onSelect, measureMode, onMeasurePoint, placementType, onPlacementClick]
+    [itemVon, onSelect, measureMode, onMeasurePoint, placementType, onPlacementClick, selectedComponent, type]
   )
 
   const handlePointerOver = useCallback(
     (e: ThreeEvent<PointerEvent>) => {
       e.stopPropagation()
-      if (e.instanceId !== undefined && items[e.instanceId]) {
-        onHover(items[e.instanceId].id)
-        const verschiebbar = !placementType && !measureMode && !!zieh?.platzierungIdVon(items[e.instanceId].id)
+      const it = itemVon(e.instanceId)
+      if (it) {
+        onHover(it.id)
+        const verschiebbar = !placementType && !measureMode && !!zieh?.platzierungIdVon(it.id)
         document.body.style.cursor = zieh?.ziehId ? 'grabbing' : verschiebbar ? 'grab' : placementType ? 'cell' : measureMode ? 'crosshair' : 'pointer'
       }
     },
-    [items, onHover, zieh, placementType, measureMode]
+    [itemVon, onHover, zieh, placementType, measureMode]
   )
 
   // Ziehen beginnen: linke Maustaste auf einem manuell gesetzten Bauteil.
@@ -876,14 +852,15 @@ function InstancedBauteile({
       if (!zieh || placementType || measureMode) return
       if (e.button !== undefined && e.button !== 0) return
       if (e.shiftKey ?? e.nativeEvent?.shiftKey) return // Shift+Klick = Mehrfachauswahl, nicht ziehen
-      if (e.instanceId === undefined || !items[e.instanceId]) return
-      const pid = zieh.platzierungIdVon(items[e.instanceId].id)
+      const it = itemVon(e.instanceId)
+      if (!it) return
+      const pid = zieh.platzierungIdVon(it.id)
       if (!pid) return
       e.stopPropagation()
-      onSelect(items[e.instanceId].id)
+      onSelect(it.id)
       zieh.start(pid)
     },
-    [zieh, placementType, measureMode, items, onSelect]
+    [zieh, placementType, measureMode, itemVon, onSelect]
   )
 
   // Beim Ziehen: Maus über einem anderen Gerüstteil → dorthin verschieben.
@@ -891,8 +868,8 @@ function InstancedBauteile({
   const handlePointerMove = useCallback(
     (e: ThreeEvent<PointerEvent>) => {
       if (!zieh?.ziehId) return
-      if (e.instanceId === undefined || !items[e.instanceId] || !e.point) return
-      const item = items[e.instanceId]
+      const item = itemVon(e.instanceId)
+      if (!item || !e.point) return
       if (zieh.platzierungIdVon(item.id) === zieh.ziehId) return
       // Teile ohne Feldbezug (Fußplatte, Anker, …) zählen auch als Ziel: Seite/Lage kommen dann vom nächsten Feld
       const parts = item.fieldId ? item.fieldId.split('-') : []
@@ -902,7 +879,7 @@ function InstancedBauteile({
       e.stopPropagation()
       zieh.bewegen(zieh.ziehId, [e.point.x, e.point.y, e.point.z], side, levelIndex)
     },
-    [zieh, items]
+    [zieh, itemVon]
   )
 
   const handlePointerOut = useCallback(() => {
@@ -915,7 +892,7 @@ function InstancedBauteile({
       ref={meshRef}
       args={[geometry, material, items.length]}
       onClick={handleClick}
-      onContextMenu={(e: { instanceId?: number; stopPropagation: () => void; nativeEvent?: MouseEvent }) => { if (e.instanceId === undefined || !items[e.instanceId] || !onKontextmenue) return; e.stopPropagation(); e.nativeEvent?.preventDefault?.(); onKontextmenue(items[e.instanceId].id, e.nativeEvent?.clientX ?? 0, e.nativeEvent?.clientY ?? 0) }}
+      onContextMenu={(e: { instanceId?: number; stopPropagation: () => void; nativeEvent?: MouseEvent }) => { const it = itemVon(e.instanceId); if (!it || !onKontextmenue) return; e.stopPropagation(); e.nativeEvent?.preventDefault?.(); onKontextmenue(it.id, e.nativeEvent?.clientX ?? 0, e.nativeEvent?.clientY ?? 0) }}
       onPointerOver={handlePointerOver}
       onPointerOut={handlePointerOut}
       onPointerDown={handlePointerDown}
@@ -1072,6 +1049,8 @@ const AllScaffoldComponents = memo(function AllScaffoldComponents({
   }
 
   const grouped = useMemo(() => {
+    const doppelt = findeDoppelteIds(components)
+    if (doppelt.length) console.error(`[CAD] Doppelte Bauteil-IDs – eindeutige Auswahl nicht möglich: ${doppelt.slice(0, 5).join(', ')}`)
     const ausgeblendet = new Set(LOD_AUSBLENDEN[lodLevel] || [])
     // Gruppiert nach Typ UND Bauform (z. B. Geländer 'rail' vs. 'post'),
     // damit jede Gruppe mit EINER Geometrie als InstancedMesh gezeichnet wird.
@@ -2868,6 +2847,8 @@ function Scaffold3D({
             </button>
             <p className="font-semibold text-[#1d1d1f] pr-6">{comp?.name}</p>
             <p className="text-xs text-[#86868b] mt-1">Art.-Nr.: {comp?.articleNumber}</p>
+            <p className="text-[11px] text-[#86868b] mt-0.5 break-all" data-testid="bauteil-id">ID: {selectedComponent}</p>
+            <p className="text-[11px] text-[#86868b] mt-0.5">Liegt etwas davor/dahinter? Alt+Klick oder erneut klicken wählt das nächste Teil.</p>
             {onTreppeVerschieben && comp?.id.startsWith('stair-') && (
               <div className="mt-2 pt-2 border-t border-black/10" data-testid="treppe-versetzen">
                 <p className="text-[11px] text-[#86868b] mb-1">Treppe versetzen</p>
