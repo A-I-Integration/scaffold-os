@@ -178,12 +178,28 @@ describe('Auswahl mit echtem Raycaster', () => {
 })
 
 describe('Zeiger → NDC (zoomunabhängig)', () => {
-  it('Mitte, Ecken und unabhängig vom Canvas-Versatz', async () => {
+  it('Mitte, Ecken und unabhängig vom Canvas-Versatz (ohne Zoom: Rahmen = Layout)', async () => {
     const { zeigerZuNdc } = await import('@/components/cad/Scaffold3D')
     const rect = { left: 230, top: 120, width: 1000, height: 600 }
     expect(zeigerZuNdc(730, 420, rect)).toMatchObject({ x: 0 })
     expect(zeigerZuNdc(230, 120, rect)).toEqual({ x: -1, y: 1 })
     expect(zeigerZuNdc(1230, 720, rect)).toEqual({ x: 1, y: -1 })
+    expect(zeigerZuNdc(1230, 720, rect, { width: 1000, height: 600 })).toEqual({ x: 1, y: -1 })
     expect(zeigerZuNdc(0, 0, { ...rect, width: 0 })).toBeNull()
+  })
+
+  it('Mit CSS-Zoom 1,15 (gemessen: Rahmen 851,89×795,125, Layout 741×691): Mausposition stimmt mit dem sichtbaren Canvas überein', async () => {
+    const { zeigerZuNdc } = await import('@/components/cad/Scaffold3D')
+    const rect = { left: 625.4375, top: 709.359375, width: 851.890625, height: 795.125 }
+    const layout = { width: 741, height: 691 }
+    // Klick 1 aus dem Protokoll des Browsers: x 975, y 1052 → Anteil (975-625,44)/741 ≈ 0,47 von links, (1052-709,36)/691 ≈ 0,50 von oben
+    const n = zeigerZuNdc(975, 1052, rect, layout)!
+    expect(n.x).toBeCloseTo(-0.056, 2)
+    expect(n.y).toBeCloseTo(0.007, 2)
+    // Mitte und Ecken des sichtbaren Canvas (Layoutgröße ab linker oberer Ecke)
+    expect(zeigerZuNdc(rect.left + 370.5, rect.top + 345.5, rect, layout)).toMatchObject({ x: 0 })
+    expect(zeigerZuNdc(rect.left + 741, rect.top + 691, rect, layout)).toEqual({ x: 1, y: -1 })
+    // Die alte Rechnung über die zu große Rahmenbreite hätte hier -0,179 / 0,138 ergeben (Versatz nach links oben)
+    expect(zeigerZuNdc(975, 1052, rect)!.x).toBeCloseTo(-0.179, 2)
   })
 })
