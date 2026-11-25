@@ -1,3 +1,4 @@
+import { pruefeLand } from '@/lib/land';
 import { pruefeKundenPreis } from '@/lib/kunden-preis';
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
@@ -27,7 +28,7 @@ const headers = {
 const ROLES = ['admin', 'disponent'];
 
 // Felder, die angelegt / geändert werden dürfen (Whitelist)
-const FELDER = ['name', 'contact_person', 'email', 'phone', 'street', 'zip', 'city', 'notes', 'is_active', 'datev_konto', 'kundentyp', 'ust_id', 'leitweg_id', 'bauleister_nachweis_bis', 'preis_modus', 'festpreis_m2', 'festpreis_pauschale', 'fahrt_nach_km', 'fahrt_satz_pro_km'];
+const FELDER = ['name', 'contact_person', 'email', 'phone', 'street', 'zip', 'city', 'notes', 'is_active', 'datev_konto', 'kundentyp', 'ust_id', 'leitweg_id', 'bauleister_nachweis_bis', 'preis_modus', 'festpreis_m2', 'festpreis_pauschale', 'fahrt_nach_km', 'fahrt_satz_pro_km', 'land'];
 
 async function callerRole(): Promise<string | null> {
   try {
@@ -58,6 +59,11 @@ function steuerFelderPruefen(clean: Record<string, any>): string | null {
     if (d && !/^\d{4}-\d{2}-\d{2}$/.test(d)) return 'Datum der Bescheinigung ungültig.';
     clean.bauleister_nachweis_bis = d || null;
   }
+  if (clean.land !== undefined) {
+    const l = pruefeLand(clean.land);
+    if (!l.ok) return l.fehler;
+    clean.land = l.land;
+  }
   if (clean.leitweg_id !== undefined) {
     const l = String(clean.leitweg_id || '').trim();
     if (l.length > 46) return 'Leitweg-ID ist zu lang (höchstens 46 Zeichen).';
@@ -84,7 +90,9 @@ export async function GET(req: NextRequest) {
     const query = id
       ? `id=eq.${id}&select=id,name,contact_person,email,phone,street,zip,city,notes,is_active,datev_konto,kundentyp,ust_id,leitweg_id,bauleister_nachweis_bis,preis_modus,festpreis_m2,festpreis_pauschale,fahrt_nach_km,fahrt_satz_pro_km,created_at`
       : `select=id,name,contact_person,email,phone,street,zip,city,notes,is_active,datev_konto,kundentyp,ust_id,leitweg_id,bauleister_nachweis_bis,preis_modus,festpreis_m2,festpreis_pauschale,fahrt_nach_km,fahrt_satz_pro_km,created_at&order=${sortiert}`;
-    const res = await fetch(`${url}/rest/v1/customers?${query}`, { headers });
+    // Mit Land (SQL phase-142); fehlt die Spalte noch, läuft die Abfrage ohne Land.
+    let res = await fetch(`${url}/rest/v1/customers?${query.replace(',created_at', ',land,created_at')}`, { headers });
+    if (!res.ok) res = await fetch(`${url}/rest/v1/customers?${query}`, { headers });
     if (!res.ok) {
       const t = await res.text();
       // Tabelle fehlt (ältere Instanz ohne Phase-18-Migration)?
@@ -145,14 +153,24 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    const res = await fetch(`${url}/rest/v1/customers`, {
+    // Ohne gesetztes Land (= Deutschland) bleibt die Spalte außen vor; fehlt sie in der Datenbank, wird ohne Land gespeichert und gewarnt.
+    if (!clean.land) delete clean.land;
+    let res = await fetch(`${url}/rest/v1/customers`, {
       method: 'POST',
       headers: { ...headers, 'Prefer': 'return=representation' },
       body: JSON.stringify(clean),
     });
+    let landWarnung: string | undefined;
+    if (!res.ok && clean.land) {
+      const t = await res.text();
+      if (!t.includes('land')) throw new Error(t);
+      const { land: _l, ...ohne } = clean;
+      res = await fetch(`${url}/rest/v1/customers`, { method: 'POST', headers: { ...headers, 'Prefer': 'return=representation' }, body: JSON.stringify(ohne) });
+      landWarnung = 'Das Land konnte nicht gespeichert werden: bitte phase-142-land.sql in Supabase ausführen.';
+    }
     if (!res.ok) throw new Error(await res.text());
     const rows = await res.json();
-    return NextResponse.json({ success: true, kunde: rows[0] });
+    return NextResponse.json({ success: true, kunde: rows[0], ...(landWarnung ? { warnung: landWarnung } : {}) });
   } catch (err: any) {
     return serverErrorResponse(err);
   }
@@ -188,17 +206,25 @@ export async function PATCH(req: NextRequest) {
     }
     clean.updated_at = new Date().toISOString();
 
-    const res = await fetch(`${url}/rest/v1/customers?id=eq.${id}`, {
+    let res = await fetch(`${url}/rest/v1/customers?id=eq.${id}`, {
       method: 'PATCH',
       headers: { ...headers, 'Prefer': 'return=representation' },
       body: JSON.stringify(clean),
     });
+    let landWarnung: string | undefined;
+    if (!res.ok && 'land' in clean) {
+      const t = await res.text();
+      if (!t.includes('land')) throw new Error(t);
+      const { land: _l, ...ohne } = clean;
+      res = await fetch(`${url}/rest/v1/customers?id=eq.${id}`, { method: 'PATCH', headers: { ...headers, 'Prefer': 'return=representation' }, body: JSON.stringify(ohne) });
+      landWarnung = 'Das Land konnte nicht gespeichert werden: bitte phase-142-land.sql in Supabase ausführen.';
+    }
     if (!res.ok) throw new Error(await res.text());
     const rows = await res.json();
     if (!rows?.length) {
       return NextResponse.json({ success: false, error: 'Kunde nicht gefunden.' }, { status: 404 });
     }
-    return NextResponse.json({ success: true, kunde: rows[0] });
+    return NextResponse.json({ success: true, kunde: rows[0], ...(landWarnung ? { warnung: landWarnung } : {}) });
   } catch (err: any) {
     return serverErrorResponse(err);
   }

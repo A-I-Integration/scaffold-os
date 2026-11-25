@@ -1,5 +1,6 @@
 'use client';
 
+import { adresseMitLand } from '@/lib/land';
 import { zahlAusEingabe } from '@/lib/zahl-eingabe';
 import { berechneAngebot } from '@/lib/schlussrechnung';
 import { fetchRechnungAnlegen } from '@/lib/rechnung-anlegen-client'
@@ -818,7 +819,7 @@ function Schritt6Content() {
         : [];
       const doc = erzeugeAufmassblattPdf({
         kunde: s1.name || '',
-        adresse: s1.adresse || '',
+        adresse: adresseMitLand(s1.adresse || '', s1.land),
         gewerk: gewerkeAnzeige(s1),
         system: systemAnzeigename(s3.system, s3.customSystem) || undefined,
         abschnitte,
@@ -877,7 +878,7 @@ function Schritt6Content() {
     doc.setFillColor(248, 250, 252); doc.rect(14, y, 90, projBoxH, 'F');
     doc.setTextColor(71, 85, 105); doc.setFontSize(8); doc.setFont('helvetica', 'bold'); doc.text('PROJEKT', 18, y + 6);
     doc.setFont('helvetica', 'normal'); doc.setTextColor(15, 23, 42); doc.setFontSize(9);
-    doc.text(`Kunde: ${s1.name || '-'}`, 18, y + 14); doc.text(`Adresse: ${s1.adresse || '-'}`, 18, y + 20);
+    doc.text(`Kunde: ${s1.name || '-'}`, 18, y + 14); doc.text(`Adresse: ${adresseMitLand(s1.adresse || '', s1.land) || '-'}`, 18, y + 20);
     doc.text(`Gewerk: ${gewerkeAnzeige(s1)}`, 18, y + 26);
     if (sysName) doc.text(`System: ${sysName}`, 18, y + 32);
     doc.setFillColor(248, 250, 252); doc.rect(108, y, 88, 30, 'F');
@@ -1132,7 +1133,7 @@ function Schritt6Content() {
         body: JSON.stringify({
           project_id: savedProjectId,
           customer_name: s1.name || '',
-          customer_address: s1.adresse || '',
+          customer_address: adresseMitLand(s1.adresse || '', s1.land) || '',
           notes: [rgBemerkungen.trim(), anpassungen.skonto ? '2% Skonto bei Zahlung innerhalb von 8 Tagen.' : ''].filter(Boolean).join('\n') || undefined,
           geruest_nr: rgGeruestNr.trim() || undefined,
           leistungsdatum: rgLeistungsdatum || undefined,
@@ -1189,7 +1190,7 @@ function Schritt6Content() {
           <p className="text-xs font-bold uppercase tracking-wider text-[#e8590c] mb-2">Schritt 1 – Projekt</p>
           <div className="grid grid-cols-2 gap-2 text-sm">
             <div><span className="text-[#86868b]">Kunde:</span> <span className="text-[#1d1d1f]">{s1.name || '–'}</span></div>
-            <div><span className="text-[#86868b]">Adresse:</span> <span className="text-[#1d1d1f]">{s1.adresse || '–'}</span></div>
+            <div><span className="text-[#86868b]">Adresse:</span> <span className="text-[#1d1d1f]">{adresseMitLand(s1.adresse || '', s1.land) || '–'}</span></div>
             <div><span className="text-[#86868b]">Gewerk:</span> <span className="text-[#1d1d1f]">{gewerkeAnzeige(s1)}</span></div>
             <div><span className="text-[#86868b]">Dauer:</span> <span className="text-[#1d1d1f]">{s1.dauer || '–'} Tage</span></div>
             {s1.ansprechpartnerName && <div className="col-span-2"><span className="text-[#86868b]">Ansprechpartner:</span> <span className="text-[#1d1d1f]">{s1.ansprechpartnerName} {s1.ansprechpartnerTelefon} {s1.ansprechpartnerEmail}</span></div>}
@@ -1285,7 +1286,7 @@ function Schritt6Content() {
           <div className="flex flex-wrap items-center gap-x-6 gap-y-2 rounded-t-xl border-b border-black/10 bg-[#f5f5f7] px-4 py-3 text-sm">
             <span className="font-semibold">{s1.name || 'Ohne Kundenname'}</span>
             {s1.baustelle && <span className="font-medium text-[#424245]">{s1.baustelle}</span>}
-            <span className="text-[#86868b]">{s1.adresse || '–'}</span>
+            <span className="text-[#86868b]">{adresseMitLand(s1.adresse || '', s1.land) || '–'}</span>
             <span className="text-[#86868b]">Stand {new Date().toLocaleDateString('de-DE')}</span>
             <span className={`ml-auto rounded-md border px-2 py-0.5 text-xs font-semibold ${zustandCls}`}>{savedProjectId ? zustandText : 'Entwurf – noch nicht gespeichert'}</span>
           </div>
@@ -1474,7 +1475,7 @@ function Schritt6Content() {
                 <SchlussrechnungDialog
                   projectId={savedProjectId}
                   customerName={s1.name || 'Kunde'}
-                  customerAddress={s1.adresse || undefined}
+                  customerAddress={adresseMitLand(s1.adresse || '', s1.land) || undefined}
                   daten={schlussDaten}
                   onClose={() => setSchlussDaten(null)}
                   onCreated={(inv) => {

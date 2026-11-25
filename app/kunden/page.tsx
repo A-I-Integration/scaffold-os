@@ -1,5 +1,6 @@
 'use client';
 
+import LandAuswahl from '@/components/LandAuswahl';
 import { berechneForderung, mitBezugsGutschriften } from '@/lib/forderung';
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
@@ -34,6 +35,7 @@ interface Kunde {
   street: string | null;
   zip: string | null;
   city: string | null;
+  land?: string | null;
   notes: string | null;
   is_active: boolean;
   // NEU (Phase 95, DATEV-Sammeldebitor-Fix): optionale, vom Steuerberater
@@ -48,7 +50,7 @@ interface Kunde {
 
 const LEER_FORM = {
   name: '', contact_person: '', email: '', phone: '',
-  street: '', zip: '', city: '', notes: '', datev_konto: '', kundentyp: 'gewerblich', ust_id: '', leitweg_id: '', bauleister_nachweis_bis: '',
+  street: '', zip: '', city: '', land: 'Deutschland', notes: '', datev_konto: '', kundentyp: 'gewerblich', ust_id: '', leitweg_id: '', bauleister_nachweis_bis: '',
 };
 
 const STATUS_LABEL: Record<string, string> = {
@@ -347,7 +349,7 @@ export default function KundenPage() {
                           </div>
                           <div className="flex items-center justify-between gap-2 mt-0.5">
                             <span className="text-xs text-[#86868b] truncate">
-                              {[k.zip, k.city].filter(Boolean).join(' ') || '–'}
+                              {[[k.zip, k.city].filter(Boolean).join(' '), k.land && k.land !== 'Deutschland' ? k.land : ''].filter(Boolean).join(', ') || '–'}
                             </span>
                             <span className="text-xs text-[#86868b] whitespace-nowrap">
                               {anzahl} RE{rechnungenLadung !== 'ok' ? (
@@ -424,6 +426,7 @@ export default function KundenPage() {
                       <label className="block text-xs text-[#86868b] mb-1">Ort</label>
                       <input value={form.city} onChange={(e) => setForm({ ...form, city: e.target.value })} className={inputCls} placeholder="Musterstadt" />
                     </div>
+                    <LandAuswahl label="Land" value={form.land} onChange={(land) => setForm({ ...form, land })} className={inputCls} testId="kunde-land" />
                     <div>
                       <label className="block text-xs text-[#86868b] mb-1">DATEV-Kontonummer (Einzeldebitor, optional)</label>
                       <input value={form.datev_konto} onChange={(e) => setForm({ ...form, datev_konto: e.target.value })} className={inputCls} placeholder="z. B. 10001 – sonst Sammelkonto" />

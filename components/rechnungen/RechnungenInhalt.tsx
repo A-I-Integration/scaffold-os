@@ -23,6 +23,7 @@ import PositionDetails from '@/components/rechnung/PositionDetails';
 import { ENTSCHEIDUNG_LABEL, type PruefEntscheidung } from '@/lib/rechnung-pruefung';
 import { preisMitFaktor } from '@/lib/rechnung-position';
 import { korrekturkette } from '@/lib/abrechnung-pruefung';
+import { steuerVorschlagFuerBaustelle } from '@/lib/land';
 import { fetchMitSchluessel } from '@/lib/idempotenz-client'
 
 // ============================================================
@@ -235,6 +236,10 @@ export function RechnungenInhalt({ umfang, neuSignal = 0, entwurfId: entwurfVonA
   const [leistungsdatum, setLeistungsdatum] = useState('');
   const [detailOffen, setDetailOffen] = useState<Record<number, boolean>>({});
   const [projectId, setProjectId] = useState<string | null>(null);
+  // Steuervorschlag nach dem Land der Baustelle (Luxemburg → 17 % TVA); wird nie über eine Eingabe von Hand gelegt
+  const [steuerHinweis, setSteuerHinweis] = useState('');
+  const steuerManuell = useRef(false);
+  const entwurfGeladen = useRef(false);
   const [lvId, setLvId] = useState<string | null>(null); // Rechnung aus gespeichertem LV → danach „abgerechnet“
   const [entwurfId, setEntwurfId] = useState<string | null>(null); // geöffneter Rechnungsentwurf (Faktura), wird beim Festschreiben gelöscht
   const [kundeId, setKundeId] = useState<string | null>(null);
@@ -287,9 +292,26 @@ export function RechnungenInhalt({ umfang, neuSignal = 0, entwurfId: entwurfVonA
 
   useEffect(() => { load(); }, [load]);
 
+  useEffect(() => {
+    if (!projectId || entwurfGeladen.current) { setSteuerHinweis(''); return; }
+    let aktiv = true;
+    (async () => {
+      try {
+        const j = await fetch('/api/projects?id=' + encodeURIComponent(projectId)).then((r) => r.json());
+        if (!aktiv || !j?.success) return;
+        const v = steuerVorschlagFuerBaustelle(j.project?.land ?? j.project?.data?.step1?.land);
+        if (!v) { setSteuerHinweis(''); return; }
+        setSteuerHinweis(v.text);
+        if (!steuerManuell.current) setTaxRate(v.taxRate);
+      } catch { /* Vorschlag ist optional */ }
+    })();
+    return () => { aktiv = false; };
+  }, [projectId]);
+
   // Eingebettet: „Neue Rechnung“ aus der Faktura-Übersicht öffnet das Formular hier, mit dem Kunden schon eingetragen.
   const kundeVorbelegen = useCallback(() => {
     if (!umfang) return;
+    entwurfGeladen.current = false; steuerManuell.current = false;
     setEntwurfId(null); setKundeId(umfang.kundeId); setCustomerName(umfang.kundeName); setCustomerAddress(umfang.kundeAdresse);
     setProjectId(umfang.projektId ?? null); setShowForm(true);
   }, [umfang]);
@@ -331,7 +353,7 @@ export function RechnungenInhalt({ umfang, neuSignal = 0, entwurfId: entwurfVonA
         if (!aktiv) return;
         if (!json.success) { alert('❌ ' + (json.error || 'Entwurf konnte nicht geladen werden')); return; }
         const d = json.entwurf?.payload || {};
-        setEntwurfId(json.entwurf.id);
+        setEntwurfId(json.entwurf.id); entwurfGeladen.current = true; steuerManuell.current = true;
         setCustomerName(d.customer_name || ''); setCustomerAddress(d.customer_address || '');
         setNotes(d.notes || ''); setProjectId(d.project_id || null); setLvId(d.lv_id || null); setKundeId(d.customer_id || null);
         setInvoiceType(d.invoice_type === 'abschlag' || d.invoice_type === 'schluss' ? d.invoice_type : 'standard');
@@ -818,7 +840,7 @@ export function RechnungenInhalt({ umfang, neuSignal = 0, entwurfId: entwurfVonA
                 <label className="text-xs text-[#86868b]">USt-Satz</label>
                 <select
                   value={taxRate}
-                  onChange={(e) => setTaxRate(Number(e.target.value))}
+                  onChange={(e) => { steuerManuell.current = true; setTaxRate(Number(e.target.value)); }}
                   className="px-3 py-2 bg-black/10 border border-black/10 rounded-xl text-sm text-[#1d1d1f] focus:outline-none focus:border-[#e8590c]"
                 >
                   <option value={19}>19 %</option>
@@ -826,6 +848,7 @@ export function RechnungenInhalt({ umfang, neuSignal = 0, entwurfId: entwurfVonA
                   <option value={17}>17 % TVA (Luxemburg)</option>
                   <option value={0}>0 %</option>
                 </select>
+                {steuerHinweis && <p data-testid="steuer-vorschlag" className="text-xs text-[#86868b] w-full">{steuerHinweis}</p>}
                 {taxRate === 0 && (
                   <select
                     aria-label="Steuerbehandlung bei 0 %"

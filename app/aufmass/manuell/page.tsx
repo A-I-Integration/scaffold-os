@@ -1,5 +1,6 @@
 'use client'
 
+import LandAuswahl from '@/components/LandAuswahl'
 import { Suspense, useEffect, useMemo, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Scaffold2D from '@/components/cad/Scaffold2D'
@@ -57,6 +58,7 @@ function Seite() {
   const [kunde, setKunde] = useState<{ id: string; name: string; street?: string; zip?: string; city?: string } | null>(null)
   const [projektName, setProjektName] = useState('')
   const [adresse, setAdresse] = useState('')
+  const [land, setLand] = useState('Deutschland')
   const [e, setE] = useState<BaukastenEingaben>({ ...BAUKASTEN_START, leistungen: LEISTUNGEN_START })
   const [systemId, setSystemId] = useState('mj-uniconnect')
   const [werkzeug, setWerkzeug] = useState<Werkzeug>('baustelle')
@@ -75,7 +77,7 @@ function Seite() {
       const pr = j?.project
       if (!j?.success || !pr) { setLadeHinweis('Die Baustelle konnte nicht geladen werden.'); return }
       if (pr.customer_id) setKundeId(pr.customer_id)
-      setProjektName(pr.name ?? ''); setAdresse(pr.adresse ?? '')
+      setProjektName(pr.name ?? ''); setAdresse(pr.adresse ?? ''); setLand(pr.land || pr.data?.step1?.land || 'Deutschland')
       setAngebotStatus(String(pr.data?.angebotsStatus ?? 'erstellt'))
       const stand = leseBaukastenStand(pr.data)
       if (!stand) { setLadeHinweis('Diese Baustelle wurde nicht im Baukasten angelegt. Maße und Angebot bitte im Angebot (Schritt 6) ändern.'); return }
@@ -123,9 +125,9 @@ function Seite() {
       const logistik = calculateLogistics(model, material, 2.0)
       const gewicht = material.reduce((s, m) => s + m.weightKg * m.quantity, 0)
       const kosten = berechneCadKosten(logistik.aufbauStunden || 0, gewicht, einstellungen)
-      const daten = baukastenProjekt({ kunde, projektName, adresse, building: ergebnis.building, systemId, model, material, aufbauStunden: logistik.aufbauStunden || 0, kosten, eingaben: e })
+      const daten = baukastenProjekt({ kunde, projektName, adresse, land, building: ergebnis.building, systemId, model, material, aufbauStunden: logistik.aufbauStunden || 0, kosten, eingaben: e })
       const res = projektId
-        ? await fetch('/api/projects', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: projektId, name: daten.name, adresse: daten.adresse, data: daten.data }) })
+        ? await fetch('/api/projects', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: projektId, name: daten.name, adresse: daten.adresse, land: daten.land, data: daten.data }) })
         : await fetch('/api/projects', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(daten) })
       const j = await res.json()
       const neueId = projektId || j.id
@@ -162,6 +164,7 @@ function Seite() {
             <div className="grid max-w-2xl gap-2 sm:grid-cols-2">
               <label className="block">Bezeichnung<input aria-label="Bezeichnung" value={projektName} onChange={(ev) => setProjektName(ev.target.value)} placeholder={kunde ? `Aufmaß ${kunde.name}` : ''} className={`${eingabe} mt-0.5`} /></label>
               <label className="block">Adresse der Baustelle<input aria-label="Adresse" value={adresse} onChange={(ev) => setAdresse(ev.target.value)} className={`${eingabe} mt-0.5`} /></label>
+              <div className="block"><LandAuswahl label="Land der Baustelle" value={land} onChange={setLand} testId="manuell-land" className={`${eingabe} mt-0.5`} /></div>
             </div>
           )}
           {werkzeug === 'rechteck' && (

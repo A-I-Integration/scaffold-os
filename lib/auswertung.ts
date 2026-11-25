@@ -4,8 +4,8 @@
 // nach Land der Baustelle filtern. Reine Rechenlogik ohne Datenbank.
 // ============================================================
 
-export const STANDARD_LAND = 'Deutschland';
-export const LAENDER_VORSCHLAG = ['Deutschland', 'Österreich', 'Schweiz', 'Niederlande', 'Belgien', 'Luxemburg', 'Frankreich', 'Polen', 'Tschechien', 'Dänemark', 'Bulgarien'];
+import { STANDARD_LAND, LAENDER_VORSCHLAG, pruefeLand } from './land';
+export { STANDARD_LAND, LAENDER_VORSCHLAG, pruefeLand };
 
 export interface AuswertungEintrag {
   employee_id: string; work_date: string; hours: number | null; project_id?: string | null;
@@ -24,16 +24,6 @@ export interface AuswertungSumme { employee_id: string; name: string; tage: numb
 
 const r2 = (n: number) => Math.round(n * 100) / 100;
 export const landVon = (e: AuswertungEintrag): string => (e.project?.land || '').trim() || STANDARD_LAND;
-
-/** Land eingeben: leer = nicht gesetzt (null), sonst bereinigt, höchstens 60 Zeichen. */
-export function pruefeLand(roh: unknown): { ok: true; land: string | null } | { ok: false; fehler: string } {
-  if (roh === null || roh === undefined) return { ok: true, land: null };
-  const s = String(roh).trim().replace(/\s+/g, ' ');
-  if (!s) return { ok: true, land: null };
-  if (s.length > 60) return { ok: false, fehler: 'Das Land ist zu lang (höchstens 60 Zeichen).' };
-  if (/[<>"]/.test(s)) return { ok: false, fehler: 'Das Land enthält ungültige Zeichen.' };
-  return { ok: true, land: s };
-}
 
 /** Tage je Mitarbeiter nach Auswahl, Stundenschwelle (mehr als X Stunden an dem Tag) und Land der Baustelle. */
 export function werteAus(eintraege: AuswertungEintrag[], mitarbeiter: AuswertungMitarbeiter[], opt: AuswertungOptionen): { tage: AuswertungTag[]; summen: AuswertungSumme[] } {

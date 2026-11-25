@@ -13,6 +13,8 @@ export function baukastenProjekt(a: {
   kunde: { id: string; name: string }
   projektName: string
   adresse: string
+  /** Land der Baustelle (leer = Deutschland) */
+  land?: string
   building: BuildingParams
   systemId: string
   model: Pick<CADModel, 'totalAreaM2'>
@@ -39,9 +41,9 @@ export function baukastenProjekt(a: {
     building: b, systemId: a.systemId,
   }
   return {
-    name: a.projektName.trim() || `Aufmaß ${a.kunde.name}`, adresse: a.adresse, customer_id: a.kunde.id,
+    name: a.projektName.trim() || `Aufmaß ${a.kunde.name}`, adresse: a.adresse, land: a.land || 'Deutschland', customer_id: a.kunde.id,
     data: {
-      step1: { name: a.kunde.name, adresse: a.adresse, gewerke: ['allgemein'], dauer: '30' },
+      step1: { name: a.kunde.name, adresse: a.adresse, land: a.land || 'Deutschland', gewerke: ['allgemein'], dauer: '30' },
       step2: { laenge: String(b.lengthM), breite: String(b.widthM), hoehe: String(b.heightM), traufhoehe: String(b.eavesHeightM), dachform: b.roofForm[0].toUpperCase() + b.roofForm.slice(1), fassade: 'Putz', hindernisse: [], abschnitte: [], dachueberstand: String(b.overhangM), durchfahrt: false },
       step3: { geruesttyp: 'fassade', system: a.systemId, customSystem: '', feldlange: '2.5', belag: 'stahl', gelander: true, diagonale: true, fahrbar: false, boden: 'beton' },
       kiResult, angebotsStatus: 'erstellt',

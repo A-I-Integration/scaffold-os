@@ -1,5 +1,6 @@
 'use client'
 
+import LandAuswahl from '@/components/LandAuswahl'
 import { useState } from 'react'
 import { sortiereStueckliste, STUECKLISTE_MODI, type StuecklisteModus } from '@/lib/cad/stueckliste-sortierung'
 import { MaterialItem } from '@/types/scaffold'
@@ -51,7 +52,7 @@ interface Props {
   kundenLadeFehler?: boolean
   onRetryKunden?: () => void
   onCreateCustomer?: (name: string) => Promise<{ id: string; name: string } | null>
-  onAssignCustomer?: (customerId: string, customerName: string, angaben?: { projektName?: string; adresse?: string }) => void
+  onAssignCustomer?: (customerId: string, customerName: string, angaben?: { projektName?: string; adresse?: string; land?: string }) => void
   zuordnenLaeuft?: boolean
   // Phase 68-J: ohne Gerüst-Modell werden Exporte optisch ausgegraut
   disabled?: boolean
@@ -85,6 +86,7 @@ export default function BillOfMaterials({ materials, ohnePreis = [], ohneGewicht
   const [zeigeDropdown, setZeigeDropdown] = useState(false)
   const [projektNameEingabe, setProjektNameEingabe] = useState('')
   const [adresseEingabe, setAdresseEingabe] = useState('')
+  const [landEingabe, setLandEingabe] = useState('Deutschland')
   const [neuerKundeLaeuft, setNeuerKundeLaeuft] = useState(false)
   const [logistikOffen, setLogistikOffen] = useState(true)
   const [sortModus, setSortModus] = useState<StuecklisteModus>('gruppen')
@@ -249,9 +251,10 @@ export default function BillOfMaterials({ materials, ohnePreis = [], ohneGewicht
             <div className='grid grid-cols-1 gap-1.5 mt-2'>
               <input value={projektNameEingabe} onChange={(e) => setProjektNameEingabe(e.target.value)} placeholder='Projektname (optional, sonst „CAD-Planung <Kunde>“)' className='w-full px-2 py-1.5 text-xs border rounded-lg' />
               <input value={adresseEingabe} onChange={(e) => setAdresseEingabe(e.target.value)} placeholder='Objektadresse (optional)' className='w-full px-2 py-1.5 text-xs border rounded-lg' />
+              <LandAuswahl value={landEingabe} onChange={setLandEingabe} label='Land der Baustelle' testId='cad-land' className='w-full px-2 py-1.5 text-xs border rounded-lg' />
             </div>
             <button
-              onClick={() => ausgewaehlterKunde && onAssignCustomer(ausgewaehlterKunde.id, ausgewaehlterKunde.name, { projektName: projektNameEingabe, adresse: adresseEingabe })}
+              onClick={() => ausgewaehlterKunde && onAssignCustomer(ausgewaehlterKunde.id, ausgewaehlterKunde.name, { projektName: projektNameEingabe, adresse: adresseEingabe, land: landEingabe })}
               disabled={!ausgewaehlterKunde || zuordnenLaeuft}
               className='w-full mt-2 py-1.5 bg-blue-600 text-white text-xs font-medium rounded-lg hover:bg-blue-700 disabled:bg-gray-300 transition-colors'
             >
