@@ -709,17 +709,31 @@ function getMaterial(type: string, color: THREE.Color, matt = false, vertexFarbe
  * Auslesen:  copy(JSON.stringify(window.__auswahlProtokoll, null, 1))
  */
 /**
- * Mausposition → Normalized Device Coordinates, nur aus Bildschirmkoordinaten und Canvas-Rahmen.
- * Die r3f-Standardrechnung (offsetX / size.width) stimmt nicht, wenn ein Vorfahr per CSS `zoom` skaliert ist
- * (hier `.os-shell { zoom: 1.15 }`): offsetX und size.width liegen dann in verschiedenen Koordinatenräumen.
- * clientX/Y und getBoundingClientRect() liegen im selben Raum, das Verhältnis ist zoomunabhängig.
+ * Mausposition → Normalized Device Coordinates.
+ * Bei per CSS `zoom` skalierten Vorfahren (hier `.os-shell { zoom: 1.15 }`) liefert getBoundingClientRect() Breite und Höhe um den
+ * Zoomfaktor zu groß, während die Bildschirmposition (clientX/Y, left/top) stimmt und die Zeichenfläche selbst offsetWidth × offsetHeight
+ * groß ist (im Browser gemessen: Rahmen 852×795, offsetWidth/Height 741×691, Verhältnis 1,15). r3f rechnet mit offsetX / size.width und
+ * zielte dadurch rechts unten neben den Mauszeiger; eine Rechnung über rect.width zielt links oben daneben.
+ * Richtig ist: Abstand von der linken oberen Ecke des Rahmens geteilt durch die Layoutgröße der Zeichenfläche.
+ * Ohne Zoom sind Rahmen- und Layoutgröße gleich, dann ändert sich nichts.
  */
-export function zeigerZuNdc(clientX: number, clientY: number, rect: { left: number; top: number; width: number; height: number }) {
-  if (!rect.width || !rect.height) return null
+export function zeigerZuNdc(
+  clientX: number, clientY: number,
+  rect: { left: number; top: number; width: number; height: number },
+  layout?: { width: number; height: number },
+) {
+  const breite = layout && layout.width > 0 ? layout.width : rect.width
+  const hoehe = layout && layout.height > 0 ? layout.height : rect.height
+  if (!breite || !hoehe) return null
   return {
-    x: ((clientX - rect.left) / rect.width) * 2 - 1,
-    y: -((clientY - rect.top) / rect.height) * 2 + 1,
+    x: ((clientX - rect.left) / breite) * 2 - 1,
+    y: -((clientY - rect.top) / hoehe) * 2 + 1,
   }
+}
+
+/** NDC für ein Zeichenflächen-Element (Canvas) aus Bildschirmkoordinaten. */
+export function zeigerZuNdcImCanvas(clientX: number, clientY: number, el: HTMLElement) {
+  return zeigerZuNdc(clientX, clientY, el.getBoundingClientRect(), { width: el.offsetWidth, height: el.offsetHeight })
 }
 
 const zeigerEventsOhneZoomFehler: NonNullable<React.ComponentProps<typeof Canvas>['events']> = (store) => {
@@ -727,8 +741,7 @@ const zeigerEventsOhneZoomFehler: NonNullable<React.ComponentProps<typeof Canvas
   return {
     ...basis,
     compute(event, state) {
-      const rect = (event.target as HTMLElement | null)?.getBoundingClientRect?.() ?? state.gl.domElement.getBoundingClientRect()
-      const ndc = zeigerZuNdc(event.clientX, event.clientY, rect)
+      const ndc = zeigerZuNdcImCanvas(event.clientX, event.clientY, state.gl.domElement)
       if (!ndc) return
       state.pointer.set(ndc.x, ndc.y)
       state.raycaster.setFromCamera(state.pointer, state.camera)
@@ -877,13 +890,15 @@ function InstancedBauteile({
       treffer.push(...sichtbar)
       if (treffer.length === 0) treffer.push({ id: getroffen.id, typ: type, abstand: e.distance ?? 0 })
       const ne = e.nativeEvent as MouseEvent | undefined
+      const canvasEl = ne?.target instanceof HTMLCanvasElement ? ne.target : (typeof document !== 'undefined' ? document.querySelector('canvas') : null)
       // Normaler Klick = immer das vorderste tatsächlich getroffene Teil (auch bei wiederholtem Klick auf dieselbe Stelle).
       // Nur Alt+Klick schaltet gezielt zum nächsten dahinterliegenden Teil weiter.
       const id = waehleTreffer(treffer, { aktuell: selectedComponent, weiter: !!ne?.altKey }) ?? getroffen.id
       protokolliereKlick({
         x: ne?.clientX, y: ne?.clientY,
         zeigerNdc: e.pointer ? { x: Math.round(e.pointer.x * 1000) / 1000, y: Math.round(e.pointer.y * 1000) / 1000 } : null,
-        erwartetNdc: ne && e.target instanceof HTMLElement ? zeigerZuNdc(ne.clientX, ne.clientY, e.target.getBoundingClientRect()) : null,
+        erwartetNdc: ne && canvasEl ? zeigerZuNdcImCanvas(ne.clientX, ne.clientY, canvasEl) : null,
+        canvas: canvasEl ? { rect: (({ left, top, width, height }) => ({ left, top, width, height }))(canvasEl.getBoundingClientRect()), layout: [canvasEl.offsetWidth, canvasEl.offsetHeight] } : null,
         zoom: typeof document !== 'undefined' ? getComputedStyle(document.querySelector('.os-shell') ?? document.body).getPropertyValue('zoom') : null,
         dpr: typeof window !== 'undefined' ? window.devicePixelRatio : null,
         alt: !!ne?.altKey, aktuellVorher: selectedComponent ?? null, gewaehlt: id, verdecktAb,
@@ -2338,14 +2353,15 @@ function RahmenAuswahl({ model, visibleTypes, onRahmen }: { model: CADModel; vis
       const a = start, b = lokal(e)
       start = null; box.style.display = 'none'
       if (!istEchterRahmen(a, b)) return
-      const r = el.getBoundingClientRect()
+      // Layoutgröße statt Rahmengröße: unter CSS-Zoom ist getBoundingClientRect() zu groß (siehe zeigerZuNdc), die Maus liegt in echten Pixeln
+      const breite = el.offsetWidth || el.getBoundingClientRect().width, hoehe = el.offsetHeight || el.getBoundingClientRect().height
       const v = new THREE.Vector3()
       const punkte: { id: string; x: number; y: number }[] = []
       for (const comp of refModel.current.components3D) {
         if (refTypen.current[comp.type] === false) continue
         v.set(comp.position[0], comp.position[1], comp.position[2]).project(camera)
         if (v.z > 1 || v.z < -1) continue // hinter der Kamera
-        punkte.push({ id: comp.id, x: ((v.x + 1) / 2) * r.width, y: ((1 - v.y) / 2) * r.height })
+        punkte.push({ id: comp.id, x: ((v.x + 1) / 2) * breite, y: ((1 - v.y) / 2) * hoehe })
       }
       refCb.current(idsImRahmen(punkte, a, b), e.shiftKey)
       invalidate()
