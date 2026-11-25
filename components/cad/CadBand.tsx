@@ -6,7 +6,7 @@
 
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import {
-  Scissors, BoxSelect, PlusSquare, ChevronsUp, Layers, Undo2, Redo2, RotateCcw, Ruler, Box, Grid2x2, Eye, Home, Building2, Leaf, Sparkles,
+  Scissors, BoxSelect, Frame, PlusSquare, ChevronsUp, Layers, Undo2, Redo2, RotateCcw, Ruler, Box, Grid2x2, Eye, Home, Building2, Leaf, Sparkles,
   FileText, FileDown, Printer, Save, Package, CalendarClock, Download, Cloud, Camera, Minus, Spline, Circle, Trash2,
   FilePlus, FolderOpen, LayoutGrid as LayoutGridIcon, PenTool, BrickWall, Layers3, House, Wand2, Footprints, MoveVertical, ClipboardCheck, BarChart3, ClipboardList, HelpCircle, Scan, Table2, ShieldCheck, Moon, CornerRightDown, Grid3x3, Shield, type LucideIcon,
 } from 'lucide-react'
@@ -33,6 +33,9 @@ export interface CadBandProps {
   /** Mehrfachauswahl: Auswahlrahmen aufziehen */
   rahmenAktiv?: boolean
   onRahmen?: () => void
+  /** Hüllen (Netz, Plane, Schutzdach) beim Klick zuerst wählen statt zuletzt */
+  huellenZuerst?: boolean
+  onHuellenZuerst?: () => void
   auswahlAnzahl?: number
   kannZurueck: boolean
   kannVor: boolean
@@ -318,6 +321,7 @@ export default function CadBand(p: CadBandProps) {
             </Gruppe>
             <Gruppe name='Auswahl'>
               <Knopf icon={BoxSelect} label={p.auswahlAnzahl && p.auswahlAnzahl > 0 ? `Rahmen (${p.auswahlAnzahl})` : 'Auswahlrahmen'} aus={aus || !p.onRahmen} aktiv={!!p.rahmenAktiv} onClick={() => p.onRahmen?.()} titel='Rahmen aufziehen, um mehrere Bauteile zu wählen (Esc beendet)' />
+              <Knopf icon={Frame} label='Hüllen zuerst' aus={aus || !p.onHuellenZuerst} aktiv={!!p.huellenZuerst} onClick={() => p.onHuellenZuerst?.()} titel='Aus: Netz, Plane und Schutzdach werden zuletzt gewählt. An: sie werden zuerst gewählt.' />
             </Gruppe>
           </>
         )}

@@ -97,7 +97,7 @@ import { wendePlatzierungAn } from '@/lib/cad/geruestfeld'
 import { rastePlatzierung } from '@/lib/cad/platzieren'
 import { teileDerBaugruppe } from '@/lib/cad/baugruppen'
 import { waehleFeld } from '@/lib/cad/bereiche'
-import { KEIN_ZUSTAND, istGesperrt, setzeGesperrt, setzeAusgeblendet, isoliere, hebeIsolierungAuf, zeigeAlle, sichtbaresModell, verborgeneIds, bereinige, type BauteilZustand } from '@/lib/cad/bauteil-zustand'
+import { KEIN_ZUSTAND, istGesperrt, istGruppeGesperrt, istPlatzierungGesperrt, setzeGesperrt, setzeAusgeblendet, isoliere, hebeIsolierungAuf, zeigeAlle, sichtbaresModell, verborgeneIds, bereinige, type BauteilZustand } from '@/lib/cad/bauteil-zustand'
 import { feldDerAutoTreppe, nachbarFuerTreppe, treppeAufFeld, schiebeUmFelder, leiterAufFeld, durchstiegAufFeld } from '@/lib/cad/treppe-setzen'
 import LvDialog from '@/components/cad/LvDialog'
 import { bereinigeStatikDaten, type StatikDaten } from '@/lib/statik-daten'
@@ -395,6 +395,7 @@ export default function CADPage() {
   // Sperre von Gerüst-/Treppenebene: verhindert jede Bearbeitung der Bauteile (Setzen, Ziehen, Drehen, Kopieren, Ersetzen, Entfernen).
   // Über ein Ref, damit die vielen Bearbeitungs-Handler nicht alle um Abhängigkeiten erweitert werden müssen.
   // Zustand einzelner Bauteile: gesperrt / ausgeblendet / isoliert (liegt neben dem Modell, siehe lib/cad/bauteil-zustand.ts)
+  const [huellenZuerst, setHuellenZuerst] = useState(false)
   const [bauteilZustand, setBauteilZustand] = useState<BauteilZustand>(KEIN_ZUSTAND)
   const bauteilZustandRef = useRef(bauteilZustand)
   bauteilZustandRef.current = bauteilZustand
@@ -415,8 +416,7 @@ export default function CADPage() {
     const fuerBauteile = (ids: readonly string[]): boolean => {
       const z = bauteilZustandRef.current
       if (z.gesperrt.length === 0) return false
-      if (ids.some((i) => istGesperrt(z, i))) return meldeGesperrt()
-      return ids.some((i) => gruppeVon(i).some((g) => istGesperrt(z, g))) ? meldeGesperrt() : false
+      return istGruppeGesperrt(z, ids, gruppeVon) ? meldeGesperrt() : false
     }
     const fuer = (art: 'treppe' | 'geruest' | 'beide'): boolean => {
       const z = zebRef.current
@@ -434,7 +434,7 @@ export default function CADPage() {
       fuerPlatzierung: (platzierungId: string): boolean => {
         const z = bauteilZustandRef.current
         if (z.gesperrt.length === 0) return false
-        return z.gesperrt.some((i) => platzierungIdVon(i, manuellRef.current) === platzierungId) ? meldeGesperrt() : false
+        return istPlatzierungGesperrt(z, platzierungId, (i) => platzierungIdVon(i, manuellRef.current)) ? meldeGesperrt() : false
       },
       fuerId: (id: string): boolean => { if (fuerBauteile([id])) return true; const typ = modelWithManualRef.current?.components3D.find((c) => c.id === id)?.type; return fuer(typ === 'stair' || id.startsWith('stair') ? 'treppe' : 'geruest') },
     }
@@ -705,6 +705,7 @@ export default function CADPage() {
     if (sperre.fuer('geruest')) return
     if (!model) return
     const d = durchstiegAufFeld(model, feld)
+    if (d.entfernen.length && sperre.fuerBauteile(d.entfernen.flat())) return
     const stamp = `${Date.now()}-${Math.random().toString(36).slice(2, 6)}`
     setPlacementType(null); setTreppeMeldung(null)
     setManualPlacements((prev) => [...prev, ...d.platzierungen.map((p, i) => ({ id: `manual-durchstieg-${stamp}-${i}`, ...p }) as ManualPlacement)])
@@ -1153,11 +1154,13 @@ export default function CADPage() {
   const aendereGeruestfeld = useCallback((angaben: GeruestfeldAngaben) => {
     if (sperre.fuer('geruest')) return
     if (!gewaehltesFeld) return
+    if (sperre.fuerPlatzierung(gewaehltesFeld.id)) return
     setManualPlacements((prev) => prev.map((x) => (x.id === gewaehltesFeld.id ? { ...x, positionY: angaben.aufstandM ?? 0, feld: angaben } : x)))
   }, [gewaehltesFeld, sperre])
   const verschiebeGeruestfeld = useCallback((dxM: number) => {
     if (sperre.fuer('geruest')) return
     if (!gewaehltesFeld || !model) return
+    if (sperre.fuerPlatzierung(gewaehltesFeld.id)) return
     const vorlage = model.fields.find((f) => f.side === gewaehltesFeld.side)
     if (!vorlage) return
     const r = feldRahmen(vorlage, model.building)
@@ -1168,6 +1171,7 @@ export default function CADPage() {
   const loescheGeruestfeld = useCallback(() => {
     if (sperre.fuer('geruest')) return
     if (!gewaehltesFeld) return
+    if (sperre.fuerPlatzierung(gewaehltesFeld.id)) return
     setManualPlacements((prev) => prev.filter((p) => p.id !== gewaehltesFeld.id))
     setSelectedComponent(null)
   }, [gewaehltesFeld, sperre])
@@ -1279,8 +1283,9 @@ export default function CADPage() {
   }, [farbModus])
   const bereichEntfernen = useCallback(() => {
     if (!bereichVorschau || bereichVorschau.bauteilIds.length === 0) return
+    if (sperre.fuerBauteile(bereichVorschau.bauteilIds)) return
     setRemovedGroups((prev) => [...prev, bereichVorschau.bauteilIds])
-  }, [bereichVorschau])
+  }, [bereichVorschau, sperre])
   const bereichHinzufuegen = useCallback(() => {
     const a = eingabeZuAenderung({ ...bereichEin, kante: kanteWirksam ?? null })
     if (!a) { window.alert('Bitte die Angaben prüfen (Anzahl muss mindestens 1 sein).'); return }
@@ -1765,7 +1770,7 @@ export default function CADPage() {
   })
   const werkzeugProps: WerkzeugleisteProps = {
     onAlleWaehlen: model && viewMode === '3d' ? alleWaehlen : undefined,
-    hatModell: !!modelWithManual, rahmenAktiv: rahmenModus, onRahmen: () => setRahmenModus((v) => !v), auswahlAnzahl: mehrfach.length,
+    hatModell: !!modelWithManual, rahmenAktiv: rahmenModus, onRahmen: () => setRahmenModus((v) => !v), huellenZuerst, onHuellenZuerst: () => setHuellenZuerst((v) => !v), auswahlAnzahl: mehrfach.length,
     bereicheOffen, bereichWerkzeug: bereichEin.werkzeug, onBereichWerkzeug: waehleBereichWerkzeug,
     abbauAktiv, onAbbau: () => { setAbbauAktiv((a) => !a); setBereicheOffen(false); setViewMode('3d') },
     measureMode, messart, onMessart: waehleMessart,
@@ -1905,7 +1910,7 @@ export default function CADPage() {
             onAnsicht={(id) => { if (id === '3d') setViewMode('3d'); else { setAnsicht2d(id); setViewMode('2d') } }} ansichtAktiv={aktiverReiter(viewMode, ansicht2d)}
             onAnalyse={model ? () => setAnalyseOffen(true) : exportOhneModellHinweis} onDock={(tab) => setDockWunsch((w) => ({ tab, n: (w?.n ?? 0) + 1 }))} onHilfe={() => setHilfeOffen(true)}
             onAufbau={model ? () => { setViewMode('3d'); setAufbauNr(0) } : exportOhneModellHinweis} dunkel3d={dunkel3d} onDunkel3d={dunkel3dUmschalten} warnungenAnzahl={allWarnings.length}
-            rahmenAktiv={rahmenModus} onRahmen={() => setRahmenModus((v) => !v)} auswahlAnzahl={mehrfach.length}
+            rahmenAktiv={rahmenModus} onRahmen={() => setRahmenModus((v) => !v)} huellenZuerst={huellenZuerst} onHuellenZuerst={() => setHuellenZuerst((v) => !v)} auswahlAnzahl={mehrfach.length}
             hatModell={!!modelWithManual} viewMode={viewMode} onViewMode={setViewMode}
             zeichenWerkzeug={zeichenWerkzeug} onZeichenWerkzeug={setZeichenWerkzeug} figurenAnzahl={figuren.length} onFigurenLoeschen={() => { const frei = figuren.filter((f) => darfAendern('figur', f.id, Zeb.standardEbeneFuer('figur', f.art))); setFiguren((l) => l.filter((f) => !frei.some((x) => x.id === f.id))) }}
             bereicheOffen={bereicheOffen} bereichWerkzeug={bereichEin.werkzeug}
@@ -2090,7 +2095,7 @@ export default function CADPage() {
               <AbbauEinplanenDialog tage={abbauErgebnis.tage} personen={abbauErgebnis.personen} titel={`Teilabbau: ${abbauErgebnis.anzahlTeile} Bauteile, ${abbauErgebnis.stunden} h`} onClose={() => setAbbauEinplanen(false)} />
             )}
             {viewMode === '3d' && modelWithManual && (<>
-              <Scaffold3D farbModus={farbModus} model={anzeigeModell ?? modelWithManual} features={features} showBuilding={showBuilding && zebSichtbar('std-gebaeude')} showScaffold={showScaffold && zebSichtbar('std-geruest')} showDimensions={showDimensions} selectedComponent={selectedComponent} onSelectComponent={klickImModell} onKontextmenue={(id, x, y) => { if (abbauAktiv || placementType || measureMode) return; setSelectedComponent(id); setKontext({ id, x, y }) }} mehrfachAuswahl={mehrfachMenge} gesperrteIds={gesperrteMenge} rahmenModus={rahmenModus} onRahmen={handleRahmen} abbauMarkiert={abbauMarkiert} echtesGebaeude={echtesGebaeude} visibleTypes={visibleTypes3D} viewMode={viewAngle} onCanvasReady={(c) => { canvasRef.current = c }} notes={sichtbareNotizen} onAddNote={handleAddNote} hiddenSides={hiddenSides} hiddenLevels={hiddenLevelsAufbau} measureMode={measureMode} onMeasurePoint={handleMeasurePoint} customDimensions={sichtbareMasse} messErgebnisse={sichtbareMessungen} dunklerHintergrund={dunkel3d} pendingMeasurePoint={pendingMeasurePoint?.point ?? null} placementType={placementType} onPlacementClick={handlePlacementClick} showEnvironment={showEnvironment} hoheQualitaet={hoheQualitaet} onRemoveComponent={handleRemoveComponent} onTreppeVerschieben={versetzeAutoTreppe} onReplaceComponent={handleReplaceComponent} systemId={systemId} artikelWahl={artikelWahl} onArtikelWahl={waehleArtikel} onArtikelWahlGleiche={waehleArtikelGleiche} removedCount={removedCount} platzierungIdVon={platzierungIdVonBauteil} onBauteilZiehen={handleBauteilZiehen} griff={!abbauAktiv ? { modus: griffModus, einrasten, anschlussMarker: anschlussEinrasten, onAendern: handleBauteilLage } : undefined} onSeiteUmschalten={(side) => { setAutoGenerate(true); setBuilding((() => { const cur = building.sides ?? ['front']; const has = cur.includes(side); const ns = has ? cur.filter((x) => x !== side) : [...cur, side]; if (ns.length === 0) ns.push('front'); return { ...building, sides: ns } })()) }} />
+              <Scaffold3D farbModus={farbModus} model={anzeigeModell ?? modelWithManual} features={features} showBuilding={showBuilding && zebSichtbar('std-gebaeude')} showScaffold={showScaffold && zebSichtbar('std-geruest')} showDimensions={showDimensions} selectedComponent={selectedComponent} onSelectComponent={klickImModell} onKontextmenue={(id, x, y) => { if (abbauAktiv || placementType || measureMode) return; setSelectedComponent(id); setKontext({ id, x, y }) }} mehrfachAuswahl={mehrfachMenge} gesperrteIds={gesperrteMenge} huellenZuerst={huellenZuerst} rahmenModus={rahmenModus} onRahmen={handleRahmen} abbauMarkiert={abbauMarkiert} echtesGebaeude={echtesGebaeude} visibleTypes={visibleTypes3D} viewMode={viewAngle} onCanvasReady={(c) => { canvasRef.current = c }} notes={sichtbareNotizen} onAddNote={handleAddNote} hiddenSides={hiddenSides} hiddenLevels={hiddenLevelsAufbau} measureMode={measureMode} onMeasurePoint={handleMeasurePoint} customDimensions={sichtbareMasse} messErgebnisse={sichtbareMessungen} dunklerHintergrund={dunkel3d} pendingMeasurePoint={pendingMeasurePoint?.point ?? null} placementType={placementType} onPlacementClick={handlePlacementClick} showEnvironment={showEnvironment} hoheQualitaet={hoheQualitaet} onRemoveComponent={handleRemoveComponent} onTreppeVerschieben={versetzeAutoTreppe} onReplaceComponent={handleReplaceComponent} systemId={systemId} artikelWahl={artikelWahl} onArtikelWahl={waehleArtikel} onArtikelWahlGleiche={waehleArtikelGleiche} removedCount={removedCount} platzierungIdVon={platzierungIdVonBauteil} onBauteilZiehen={handleBauteilZiehen} griff={!abbauAktiv ? { modus: griffModus, einrasten, anschlussMarker: anschlussEinrasten, onAendern: handleBauteilLage } : undefined} onSeiteUmschalten={(side) => { setAutoGenerate(true); setBuilding((() => { const cur = building.sides ?? ['front']; const has = cur.includes(side); const ns = has ? cur.filter((x) => x !== side) : [...cur, side]; if (ns.length === 0) ns.push('front'); return { ...building, sides: ns } })()) }} />
               <AufbauLeiste schritte={aufbauSchritte} aktiv={aufbauNr} pdfLaeuft={aufbauPdfLaeuft} onStart={() => setAufbauNr(0)} onWeiter={() => setAufbauNr((n) => Math.min((n ?? 0) + 1, aufbauSchritte.length - 1))} onZurueck={() => setAufbauNr((n) => Math.max((n ?? 0) - 1, 0))} onEnde={() => setAufbauNr(null)} onPdf={() => { void handleAufbauPdf() }} />
             </>
             )}
@@ -2177,7 +2182,7 @@ export default function CADPage() {
                 onFeldTeilen={(seite, spalte, laengenM) => feldAendern(selectedComponent, () => setBereichsListe((l) => [...l, { art: 'teilen', seite, spalte, laengenM }]))}
                 onFeldZusammen={(seite, spalte, laengeM) => feldAendern(selectedComponent, () => setBereichsListe((l) => [...l, { art: 'zusammen', seite, spalte, feldlaengeM: laengeM }]))}
                 platzierungPosition={(() => { const pid = platzierungIdVonBauteil(selectedComponent); const pl = manualPlacements.find((x) => x.id === pid); return pl ? [pl.positionX, pl.positionY, pl.positionZ] as [number, number, number] : undefined })()}
-                onPositionAendern={(p) => { if (sperre.fuer('beide')) return; const pid = platzierungIdVonBauteil(selectedComponent); if (pid) setManualPlacements((prev) => prev.map((x) => (x.id === pid ? { ...x, positionX: p[0], positionY: p[1], positionZ: p[2] } : x))) }} onZu={() => setSelectedComponent(null)} />
+                onPositionAendern={(p) => { if (sperre.fuer('beide')) return; const pid = platzierungIdVonBauteil(selectedComponent); if (pid && sperre.fuerPlatzierung(pid)) return; if (pid) setManualPlacements((prev) => prev.map((x) => (x.id === pid ? { ...x, positionX: p[0], positionY: p[1], positionZ: p[2] } : x))) }} onZu={() => setSelectedComponent(null)} />
             )}
             <ObjektInfo model={modelWithManual} auswahlId={selectedComponent} projekt={{ systemName: systemAnzeigename(systemId), ansicht: viewMode === '3d' ? '3D' : '2D', flaecheM2: modelWithManual.totalAreaM2, gewichtKg: totalWeight }} />
             </>) : null}

@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest'
 import type { CADModel } from '@/lib/calculations/cad-engine'
 import {
   KEIN_ZUSTAND, istGesperrt, istSichtbar, setzeGesperrt, setzeAusgeblendet, isoliere, hebeIsolierungAuf, zeigeAlle,
-  sichtbaresModell, verborgeneIds, gesperrteIn, bereinige,
+  sichtbaresModell, verborgeneIds, gesperrteIn, bereinige, istGruppeGesperrt, istPlatzierungGesperrt,
 } from '../bauteil-zustand'
 
 const modell = (ids: string[]) => ({ components3D: ids.map((id) => ({ id, type: 'frame' })), fields: [], levels: [] } as unknown as CADModel)
@@ -80,5 +80,20 @@ describe('Versatz global/lokal', () => {
   })
   it('lokal: Höhe bleibt bei Drehung um die Hochachse die Höhe', () => {
     expect(positionNachVersatz([0, 1, 0], [0, 1.2, 0], [0, 0.3, 0], 'lokal')).toEqual([0, 1.3, 0])
+  })
+})
+
+describe('Sperr-Lücken: Gruppe und Platzierung', () => {
+  const z = setzeGesperrt(KEIN_ZUSTAND, ['feld-1-frame'], true)
+  const gruppe = (id: string) => (id.startsWith('feld-1') ? ['feld-1-frame', 'feld-1-deck'] : [id])
+  it('Gerüstfeld/Durchstieg/Bereich: ein gesperrtes Teil der Gruppe sperrt alle Teile', () => {
+    expect(istGruppeGesperrt(z, ['feld-1-deck'], gruppe)).toBe(true)
+    expect(istGruppeGesperrt(z, ['feld-2-deck'], gruppe)).toBe(false)
+    expect(istGruppeGesperrt(KEIN_ZUSTAND, ['feld-1-deck'], gruppe)).toBe(false)
+  })
+  it('Positionsfelder: Platzierung mit gesperrtem Teil ist gesperrt', () => {
+    const pid = (i: string) => (i === 'feld-1-frame' ? 'p1' : null)
+    expect(istPlatzierungGesperrt(z, 'p1', pid)).toBe(true)
+    expect(istPlatzierungGesperrt(z, 'p2', pid)).toBe(false)
   })
 })
