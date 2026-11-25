@@ -20,8 +20,8 @@ describe('GET /api/baustellen-ergebnis', () => {
   it('summiert je Mitarbeiter, meldet fehlenden Stundensatz und überspringt Einträge ohne Stunden', async () => {
     vi.stubGlobal('fetch', vi.fn(async (u: string) => {
       if (String(u).includes('/time_entries')) return json([
-        { employee_id: E1, hours: 8, spesen_euro: 12.5 }, { employee_id: E1, hours: 4.5, spesen_euro: null },
-        { employee_id: E2, hours: 6 }, { employee_id: E2, hours: null },
+        { employee_id: E1, project_id: PID, work_date: '2026-11-02', hours: 8, spesen_euro: 12.5 }, { employee_id: E1, project_id: PID, work_date: '2026-11-03', hours: 4.5, spesen_euro: null },
+        { employee_id: E2, project_id: PID, work_date: '2026-11-02', hours: 6 }, { employee_id: E2, project_id: PID, work_date: '2026-11-03', hours: null },
       ])
       if (String(u).includes('/employees')) return json([{ id: E1, first_name: 'A.', last_name: 'Muster', hourly_rate: 32 }, { id: E2, first_name: 'B.', last_name: 'Beispiel', hourly_rate: 0 }])
       return json([])
@@ -56,5 +56,24 @@ describe('GET /api/baustellen-ergebnis', () => {
     erlaubt = false
     expect((await GET(req())).status).toBe(403)
     expect(f).not.toHaveBeenCalled()
+  })
+
+  it('Spesen aus der Tagesberechnung: nach Stunden auf die Baustellen des Tages verteilt, Handeingabe dieses Tages zählt nicht mit', async () => {
+    const ANDERE = '99999999-9999-4999-8999-999999999999'
+    vi.stubGlobal('fetch', vi.fn(async (u: string) => {
+      const url = String(u)
+      if (url.includes('/spesen_tage')) return json([{ employee_id: E1, work_date: '2026-11-02', einsatzart: 'auswaerts_voll', vorschlag_tarif: 24, vorschlag_steuer: 28, betrag_manuell: null }])
+      if (url.includes('/time_entries')) return json([
+        { employee_id: E1, project_id: PID, work_date: '2026-11-02', hours: 6, spesen_euro: 14 },
+        { employee_id: E1, project_id: ANDERE, work_date: '2026-11-02', hours: 2, spesen_euro: 7 },
+        { employee_id: E1, project_id: PID, work_date: '2026-11-03', hours: 8, spesen_euro: 6 },
+      ])
+      if (url.includes('/employees')) return json([{ id: E1, first_name: 'A.', last_name: 'Muster', hourly_rate: 32 }])
+      return json([])
+    }))
+    const { GET } = await import('@/app/api/baustellen-ergebnis/route')
+    const j = await (await GET(req())).json()
+    // 02.11.: 24 € × 6/8 = 18 € auf diese Baustelle; 03.11.: Handeingabe 6 € (keine Tagesberechnung)
+    expect(j.zeilen[0].spesen).toBe(24)
   })
 })

@@ -38,7 +38,7 @@ describe('Route Lohnkosten', () => {
     expect(j.baustellen[0]).toMatchObject({ name: 'Haus Müller', stunden: 8, kosten: 160 })
     expect(j.baustellen[0].mitarbeiter[0].name).toBe('Max Muster')
     expect(j.ohneLohn).toMatchObject({ stunden: 6, mitarbeiter: [{ name: 'Eva Ohnelohn', stunden: 6 }] })
-    expect(j.summe).toEqual({ stunden: 14, kosten: 160 })
+    expect(j.summe).toMatchObject({ stunden: 14, kosten: 160, spesen: 0 })
   })
   it('ungültiger Monat wird abgelehnt', async () => {
     expect((await get('?monat=2026-13')).status).toBe(400)
@@ -46,5 +46,26 @@ describe('Route Lohnkosten', () => {
   })
   it('nur der Chef sieht Lohnkosten', async () => {
     for (const r of ['disponent', 'bauleiter', 'mitarbeiter', 'lager']) { rolle = r; expect((await get('?monat=2026-11')).status).toBe(403) }
+  })
+  it('Spesen: Tagesberechnung ersetzt die Handeingabe des Tages, Verteilung nach Stunden auf die Baustellen, nichts doppelt', async () => {
+    const P2 = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'
+    db.projects.push({ id: P2, name: 'Halle Süd' })
+    db.time_entries.length = 0
+    db.time_entries.push(
+      { id: 'a', employee_id: E1, project_id: P1, work_date: '2026-11-10', hours: 6, spesen_euro: 14 },
+      { id: 'b', employee_id: E1, project_id: P2, work_date: '2026-11-10', hours: 2, spesen_euro: 7 },
+      { id: 'c', employee_id: E1, project_id: P1, work_date: '2026-11-11', hours: 8, spesen_euro: 6 })
+    db.spesen_tage = [{ employee_id: E1, work_date: '2026-11-10', einsatzart: 'auswaerts_voll', vorschlag_tarif: 24, vorschlag_steuer: 28, betrag_manuell: null }]
+    const j = await (await get('?monat=2026-11')).json()
+    const m = j.baustellen.find((b: any) => b.projectId === P1), h = j.baustellen.find((b: any) => b.projectId === P2)
+    expect(m.spesen).toBe(24); expect(h.spesen).toBe(6)
+    expect(j.summe.spesen).toBe(30)
+    expect(j.baustellen.find((b: any) => b.projectId === P1).mitarbeiter[0].spesen).toBe(24)
+  })
+  it('Spesen ohne Buchung mit Stunden bleiben sichtbar', async () => {
+    db.time_entries.length = 0
+    db.spesen_tage = [{ employee_id: E1, work_date: '2026-11-12', einsatzart: 'heimfahrt', vorschlag_tarif: 3.5, vorschlag_steuer: 14, betrag_manuell: null }]
+    const j = await (await get('?monat=2026-11')).json()
+    expect(j.spesenOhneZuordnung).toMatchObject([{ work_date: '2026-11-12', betrag: 3.5 }])
   })
 })
