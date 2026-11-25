@@ -16,7 +16,9 @@ const ARTEN: Record<string, string> = {
 const SEITEN: Record<string, string> = { front: 'Vorderseite', back: 'Rückseite', left: 'Links', right: 'Rechts' }
 const m = (v: number) => `${v.toLocaleString('de-DE', { maximumFractionDigits: 2 })} m`
 
-export default function EigenschaftenLeiste({ baugruppeAnzahl, onBaugruppe, onMasseDrehung, lagenVersatzM = 0, onLageOp, griffModus, onGriffModus, einrasten, onEinrasten, anschlussEinrasten, onAnschlussEinrasten, veraendert, onLage, onDuplizieren, onZuruecksetzen, model, id, artikelWahl, manuell, onEntfernen, onFeldEntfernen, onFeldLaenge, onFeldAnhaengen, onFeldTeilen, onFeldZusammen, onPositionAendern, platzierungPosition, onZu }: {
+export default function EigenschaftenLeiste({ zustand, baugruppeAnzahl, onBaugruppe, onMasseDrehung, lagenVersatzM = 0, onLageOp, griffModus, onGriffModus, einrasten, onEinrasten, anschlussEinrasten, onAnschlussEinrasten, veraendert, onLage, onDuplizieren, onZuruecksetzen, model, id, artikelWahl, manuell, onEntfernen, onFeldEntfernen, onFeldLaenge, onFeldAnhaengen, onFeldTeilen, onFeldZusammen, onPositionAendern, platzierungPosition, onZu }: {
+  /** Sperren / Ausblenden / Isolieren dieses Bauteils (Zustand liegt neben dem Modell) */
+  zustand?: { gesperrt: boolean; isoliert: boolean; onSperren: (an: boolean) => void; onAusblenden: () => void; onIsolieren: () => void; onIsolierungAufheben: () => void }
   /** Feld in zwei Felder teilen / mit dem Nachbarfeld zusammenführen (Längen aus dem Herstellerkatalog) */
   onFeldTeilen?: (seite: Seite, spalte: number, laengenM: [number, number]) => void
   onFeldZusammen?: (seite: Seite, spalte: number, laengeM: number) => void
@@ -46,6 +48,7 @@ export default function EigenschaftenLeiste({ baugruppeAnzahl, onBaugruppe, onMa
     ...(feld ? [['Seite', SEITEN[feld.side] ?? feld.side], ['Feldlänge', m(feld.lengthM)], ['Gerüstbreite', m(feld.widthM)]] as [string, string][] : []),
     ...(lage ? [['Lage', `${lage.index + 1} (${m(lage.bottomY)} bis ${m(lage.topY)})`]] as [string, string][] : []),
     ['Position x / y / z', c.position.map((v) => v.toFixed(2).replace('.', ',')).join(' / ') + ' m'],
+    ...(zustand?.gesperrt ? [['Status', 'Gesperrt – nicht bearbeitbar']] as [string, string][] : []),
     ...(c.extern ? [['Hinweis', 'Fremdleistung, nicht im eigenen Material']] as [string, string][] : []),
     ...(manuell ? [['Herkunft', 'von Hand gesetzt']] as [string, string][] : veraendert ? [['Herkunft', c.id.startsWith('kopie-') ? 'Kopie' : 'von Hand verändert']] as [string, string][] : []),
   ]
@@ -62,6 +65,15 @@ export default function EigenschaftenLeiste({ baugruppeAnzahl, onBaugruppe, onMa
           </div>
         ))}
       </dl>
+      {zustand && (
+        <div className='w-[300px] shrink-0 space-y-1.5' role='group' aria-label='Sperren, Ausblenden, Isolieren' data-testid='bauteil-zustand-aktionen'>
+          <div className='grid grid-cols-3 gap-1'>
+            <button type='button' aria-pressed={zustand.gesperrt} onClick={() => zustand.onSperren(!zustand.gesperrt)} className='rounded border px-1 py-1.5 text-[12.5px] hover:bg-gray-50' style={{ borderColor: zustand.gesperrt ? 'var(--os-akzent)' : 'var(--os-linie)', fontWeight: zustand.gesperrt ? 600 : 400 }}>{zustand.gesperrt ? 'Entsperren' : 'Sperren'}</button>
+            <button type='button' onClick={zustand.onAusblenden} className='rounded border px-1 py-1.5 text-[12.5px] hover:bg-gray-50' style={{ borderColor: 'var(--os-linie)' }}>Ausblenden</button>
+            <button type='button' aria-pressed={zustand.isoliert} onClick={zustand.isoliert ? zustand.onIsolierungAufheben : zustand.onIsolieren} className='rounded border px-1 py-1.5 text-[12.5px] hover:bg-gray-50' style={{ borderColor: zustand.isoliert ? 'var(--os-akzent)' : 'var(--os-linie)', fontWeight: zustand.isoliert ? 600 : 400 }}>{zustand.isoliert ? 'Isolierung aus' : 'Isolieren'}</button>
+          </div>
+        </div>
+      )}
       {onLage && (
         <div className='w-[300px] shrink-0 space-y-1.5'>
           <div className='grid grid-cols-2 gap-1' role='group' aria-label='Werkzeug am Bauteil'>
@@ -80,8 +92,8 @@ export default function EigenschaftenLeiste({ baugruppeAnzahl, onBaugruppe, onMa
           {onMasseDrehung && <MasseDrehungFelder key={`${c.scale.join(',')}|${c.rotation.join(',')}`} bauteil={c} onUebernehmen={onMasseDrehung} />}
           {onBaugruppe && (baugruppeAnzahl ?? 0) > 1 && <button type='button' onClick={onBaugruppe} className='w-full rounded border px-2 py-1.5 text-[12.5px] hover:bg-gray-50' style={{ borderColor: 'var(--os-linie)' }}>Ganze Baugruppe wählen ({baugruppeAnzahl} Teile)</button>}
           <div className='grid grid-cols-2 gap-1'>
-            <button type='button' onClick={onDuplizieren} className='rounded border px-2 py-1.5 text-[12.5px] hover:bg-gray-50' style={{ borderColor: 'var(--os-linie)' }}>Duplizieren</button>
-            <button type='button' disabled={!veraendert || manuell} onClick={onZuruecksetzen} className='rounded border px-2 py-1.5 text-[12.5px] hover:bg-gray-50 disabled:opacity-40' style={{ borderColor: 'var(--os-linie)' }}>{c.id.startsWith('kopie-') ? 'Kopie löschen' : 'Zurücksetzen'}</button>
+            <button type='button' disabled={zustand?.gesperrt} onClick={onDuplizieren} className='rounded border px-2 py-1.5 text-[12.5px] hover:bg-gray-50 disabled:opacity-40' style={{ borderColor: 'var(--os-linie)' }}>Duplizieren</button>
+            <button type='button' disabled={!veraendert || manuell || zustand?.gesperrt} onClick={onZuruecksetzen} className='rounded border px-2 py-1.5 text-[12.5px] hover:bg-gray-50 disabled:opacity-40' style={{ borderColor: 'var(--os-linie)' }}>{c.id.startsWith('kopie-') ? 'Kopie löschen' : 'Zurücksetzen'}</button>
           </div>
         </div>
       )}
@@ -117,7 +129,7 @@ export default function EigenschaftenLeiste({ baugruppeAnzahl, onBaugruppe, onMa
         </div>
       )}
       <div className='w-[300px] shrink-0 space-y-1.5'>
-        <button type='button' onClick={onEntfernen} className='w-full rounded border px-3 py-1.5 text-[13px] hover:bg-red-50' style={{ borderColor: '#e7b4b0', color: '#b42318' }}>Bauteil entfernen (Entf)</button>
+        <button type='button' disabled={zustand?.gesperrt} onClick={onEntfernen} className='w-full rounded border px-3 py-1.5 text-[13px] hover:bg-red-50 disabled:opacity-40' style={{ borderColor: '#e7b4b0', color: '#b42318' }}>Bauteil entfernen (Entf)</button>
         {feld && onFeldEntfernen && (
           <div>
             <div className='mb-1 text-[11px] uppercase tracking-wider' style={{ color: 'var(--os-text-leise)' }}>Ganzes Feld entfernen</div>
