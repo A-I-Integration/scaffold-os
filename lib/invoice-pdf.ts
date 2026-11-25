@@ -12,7 +12,7 @@ import autoTable from 'jspdf-autotable';
 
 import type { PositionArt } from './rechnung-position';
 import { positionDetailZeilen, regieSummeText } from './rechnung-position';
-import { leistungsdatumFuer, steuerFall, aufbewahrungsHinweis } from './rechnung-steuer';
+import { leistungsdatumFuer, steuerFall, aufbewahrungsHinweis, kundenUstIdZeile } from './rechnung-steuer';
 
 export interface Position {
   bezeichnung: string;
@@ -64,7 +64,7 @@ export interface Invoice {
   geprueft_am?: string | null;
   geruest_nr?: string | null; // Gerüstnummer zur eindeutigen Zuordnung
   leistungsdatum?: string | null; // Datum der Leistung (sonst Rechnungsdatum)
-  steuerfall?: 'regel' | '13b' | 'kleinunternehmer' | null; // gewählte Steuerbehandlung
+  steuerfall?: 'regel' | '13b' | 'kleinunternehmer' | 'lu_tva' | 'ig_lieferung' | null; // gewählte Steuerbehandlung
   grundstuecksbezug?: boolean; // Leistung an einem Grundstück (Standard)
   customer_privat?: boolean; // Kunde ist Privatperson (Hinweis auf Aufbewahrungspflicht)
   customer_ust_id?: string | null;
@@ -218,6 +218,7 @@ export function generateInvoicePDF(inv: Invoice) {
   if (inv.customer_address) {
     doc.text(doc.splitTextToSize(inv.customer_address, 80), 18, y + 20);
   }
+  { const ustZeile = kundenUstIdZeile(inv); if (ustZeile) { doc.setFontSize(8); doc.text(ustZeile, 18, y + 34); doc.setFontSize(9); } }
   // Rechnungsdaten-Box
   doc.setFillColor(248, 250, 252); doc.rect(108, y, 88, 36, 'F');
   doc.setTextColor(71, 85, 105); doc.setFontSize(8); doc.setFont('helvetica', 'bold'); doc.text('RECHNUNGSDATEN', 112, y + 6);
@@ -302,7 +303,7 @@ export function generateInvoicePDF(inv: Invoice) {
   doc.setFontSize(9); doc.setTextColor(71, 85, 105); doc.setFont('helvetica', 'normal');
   doc.text('Nettobetrag', 116, cy);
   doc.text(fmtEur(Number(inv.net_amount)) + ' €', 190, cy, { align: 'right' }); cy += 9;
-  doc.text(steuerFall(inv).satz > 0 ? `zzgl. ${Number(inv.tax_rate)} % Umsatzsteuer` : 'Umsatzsteuer 0 % (siehe Hinweis)', 116, cy);
+  doc.text(steuerFall(inv).satz > 0 ? (inv.steuerfall === 'lu_tva' ? `zzgl. ${Number(inv.tax_rate)} % TVA (Luxemburg)` : `zzgl. ${Number(inv.tax_rate)} % Umsatzsteuer`) : 'Umsatzsteuer 0 % (siehe Hinweis)', 116, cy);
   doc.text(fmtEur(Number(inv.tax_amount)) + ' €', 190, cy, { align: 'right' }); cy += 9;
   doc.setDrawColor(203, 213, 225); doc.line(116, cy - 3, 190, cy - 3);
   doc.setTextColor(15, 23, 42); doc.setFont('helvetica', 'bold'); doc.setFontSize(11);

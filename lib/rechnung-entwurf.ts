@@ -9,7 +9,7 @@
 import { bereinigePosition } from './rechnung-position'
 
 export type EntwurfArt = 'standard' | 'abschlag' | 'schluss'
-export type EntwurfSteuerfall = 'regel' | '13b' | 'kleinunternehmer'
+export type EntwurfSteuerfall = 'regel' | '13b' | 'kleinunternehmer' | 'lu_tva' | 'ig_lieferung'
 
 export interface EntwurfDaten {
   customer_name: string
@@ -51,7 +51,7 @@ export function bereinigeEntwurf(eingabe: unknown): EntwurfErgebnis {
   const name = text(raw.customer_name, 200) || ''
   if (!name && positions.length === 0) return { ok: false, fehler: 'Ein Entwurf braucht mindestens einen Kundennamen oder eine Position.' }
   const art: EntwurfArt = raw.invoice_type === 'abschlag' || raw.invoice_type === 'schluss' ? raw.invoice_type : 'standard'
-  const steuerfall: EntwurfSteuerfall = raw.steuerfall === '13b' || raw.steuerfall === 'kleinunternehmer' ? raw.steuerfall : 'regel'
+  const steuerfall: EntwurfSteuerfall = raw.steuerfall === '13b' || raw.steuerfall === 'kleinunternehmer' || raw.steuerfall === 'lu_tva' || raw.steuerfall === 'ig_lieferung' ? raw.steuerfall : 'regel'
   const satz = Number(raw.tax_rate)
   const taxRate = Number.isFinite(satz) && satz >= 0 && satz <= 100 ? satz : 19
   const leistung = typeof raw.leistungsdatum === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(raw.leistungsdatum) ? raw.leistungsdatum : null
@@ -63,7 +63,7 @@ export function bereinigeEntwurf(eingabe: unknown): EntwurfErgebnis {
     lv_id: uuid(raw.lv_id),
     invoice_type: art,
     positions,
-    tax_rate: steuerfall !== 'regel' ? 0 : taxRate,
+    tax_rate: steuerfall === 'lu_tva' ? 17 : steuerfall !== 'regel' ? 0 : taxRate,
     steuerfall,
     grundstuecksbezug: raw.grundstuecksbezug !== false,
     notes: text(raw.notes, 5000),

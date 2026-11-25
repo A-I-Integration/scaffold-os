@@ -436,7 +436,7 @@ export default function KundenPage() {
                       </select>
                     </div>
                     <div>
-                      <label className="block text-xs text-[#86868b] mb-1">USt-IdNr. (optional)</label>
+                      <label className="block text-xs text-[#86868b] mb-1">USt-IdNr. / TVA-Nr. (optional, z. B. LU12345678)</label>
                       <input value={form.ust_id} onChange={(e) => setForm({ ...form, ust_id: e.target.value })} className={inputCls} placeholder="DE123456789" />
                     </div>
                     <div>

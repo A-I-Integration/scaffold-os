@@ -230,7 +230,7 @@ export function RechnungenInhalt({ umfang, neuSignal = 0, entwurfId: entwurfVonA
   );
   const [notes, setNotes] = useState('');
   const [grundstuecksbezug, setGrundstuecksbezug] = useState(true);
-  const [steuerbehandlung, setSteuerbehandlung] = useState<'regel' | '13b' | 'kleinunternehmer'>('regel');
+  const [steuerbehandlung, setSteuerbehandlung] = useState<'regel' | '13b' | 'kleinunternehmer' | 'ig_lieferung'>('regel');
   const [geruestNr, setGeruestNr] = useState('');
   const [leistungsdatum, setLeistungsdatum] = useState('');
   const [detailOffen, setDetailOffen] = useState<Record<number, boolean>>({});
@@ -336,7 +336,7 @@ export function RechnungenInhalt({ umfang, neuSignal = 0, entwurfId: entwurfVonA
         setNotes(d.notes || ''); setProjectId(d.project_id || null); setLvId(d.lv_id || null); setKundeId(d.customer_id || null);
         setInvoiceType(d.invoice_type === 'abschlag' || d.invoice_type === 'schluss' ? d.invoice_type : 'standard');
         setTaxRate(Number.isFinite(Number(d.tax_rate)) ? Number(d.tax_rate) : 19);
-        setSteuerbehandlung(d.steuerfall === '13b' || d.steuerfall === 'kleinunternehmer' ? d.steuerfall : 'regel');
+        setSteuerbehandlung(d.steuerfall === '13b' || d.steuerfall === 'kleinunternehmer' || d.steuerfall === 'ig_lieferung' ? d.steuerfall : 'regel');
         setGrundstuecksbezug(d.grundstuecksbezug !== false);
         setGeruestNr(d.geruest_nr || ''); setLeistungsdatum(d.leistungsdatum || '');
         setPositions(Array.isArray(d.positions) && d.positions.length ? d.positions : [{ bezeichnung: '', menge: 1, einheit: 'Stk.', einzelpreis: 0 }]);
@@ -426,7 +426,7 @@ export function RechnungenInhalt({ umfang, neuSignal = 0, entwurfId: entwurfVonA
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           id: entwurfId || undefined, customer_name: customerName, customer_address: customerAddress, customer_id: kundeId, project_id: projectId, lv_id: lvId,
-          invoice_type: invoiceType, positions, tax_rate: taxRate, steuerfall: taxRate === 0 ? steuerbehandlung : 'regel', grundstuecksbezug,
+          invoice_type: invoiceType, positions, tax_rate: taxRate, steuerfall: taxRate === 17 ? 'lu_tva' : taxRate === 0 ? steuerbehandlung : 'regel', grundstuecksbezug,
           notes, geruest_nr: geruestNr, leistungsdatum: leistungsdatum || undefined,
         }),
       });
@@ -460,7 +460,7 @@ export function RechnungenInhalt({ umfang, neuSignal = 0, entwurfId: entwurfVonA
           invoice_date: invoiceDate,
           due_date: dueDate,
           notes: notes.trim() || null,
-          steuerfall: taxRate === 0 ? steuerbehandlung : 'regel',
+          steuerfall: taxRate === 17 ? 'lu_tva' : taxRate === 0 ? steuerbehandlung : 'regel',
           grundstuecksbezug,
           geruest_nr: geruestNr.trim() || undefined,
           leistungsdatum: leistungsdatum || undefined,
@@ -497,7 +497,7 @@ export function RechnungenInhalt({ umfang, neuSignal = 0, entwurfId: entwurfVonA
       setInvoiceType('standard');
       setPositions([{ bezeichnung: '', menge: 1, einheit: 'Stk.', einzelpreis: 0 }]);
       await load();
-      alert('✅ Rechnung ' + json.invoice.invoice_number + ' angelegt!' + entwurfRest + (json.warnung ? '\n\n⚠️ ' + json.warnung : '') + (json.steuer_warnungen?.length ? '\n\n⚠️ § 13b prüfen:\n• ' + json.steuer_warnungen.join('\n• ') : ''));
+      alert('✅ Rechnung ' + json.invoice.invoice_number + ' angelegt!' + entwurfRest + (json.warnung ? '\n\n⚠️ ' + json.warnung : '') + (json.steuer_warnungen?.length ? '\n\n⚠️ Steuer prüfen:\n• ' + json.steuer_warnungen.join('\n• ') : ''));
     } catch (err: any) {
       alert('❌ ' + err.message);
     } finally {
@@ -823,19 +823,21 @@ export function RechnungenInhalt({ umfang, neuSignal = 0, entwurfId: entwurfVonA
                 >
                   <option value={19}>19 %</option>
                   <option value={7}>7 %</option>
+                  <option value={17}>17 % TVA (Luxemburg)</option>
                   <option value={0}>0 %</option>
                 </select>
                 {taxRate === 0 && (
                   <select
                     aria-label="Steuerbehandlung bei 0 %"
                     value={steuerbehandlung}
-                    onChange={(e) => setSteuerbehandlung(e.target.value as 'regel' | '13b' | 'kleinunternehmer')}
+                    onChange={(e) => setSteuerbehandlung(e.target.value as 'regel' | '13b' | 'kleinunternehmer' | 'ig_lieferung')}
                     title="§ 13b nur, wenn der Kunde selbst Bauleistungen erbringt (USt 1 TG liegt vor). Im Zweifel den Steuerberater fragen."
                     className="px-3 py-2 bg-black/10 border border-black/10 rounded-xl text-sm text-[#1d1d1f] focus:outline-none focus:border-[#e8590c] max-w-xs"
                   >
                     <option value="regel">0 % – Grund bitte unter Hinweis angeben</option>
                     <option value="13b">Steuerschuldner ist der Leistungsempfänger (§ 13b UStG)</option>
                     <option value="kleinunternehmer">Kleinunternehmer (§ 19 UStG)</option>
+                    <option value="ig_lieferung">Steuerfreie Lieferung ins EU-Ausland (z. B. Luxemburg, TVA-Nr. des Kunden Pflicht)</option>
                   </select>
                 )}
                 <label className="flex items-center gap-2 text-xs text-[#1d1d1f] max-w-xs" title="Bei Privatkunden steht dann der Hinweis auf die zweijährige Aufbewahrung auf der Rechnung (§ 14b Abs. 1 Satz 5 UStG).">

@@ -6,12 +6,14 @@
 // nach § 14 Abs. 4 UStG. Ob § 13b im Einzelfall greift, klärt die Firma mit dem
 // Steuerberater; die Software setzt nur um, was an der Rechnung gewählt ist.
 // ============================================================
-import { HINWEIS_13B } from './ust-hinweis'
+import { HINWEIS_13B, HINWEIS_IG } from './ust-hinweis'
 export { HINWEIS_19 } from './ust-hinweis'
 
-export type SteuerKategorie = 'S' | 'AE' | 'E'
+export type SteuerKategorie = 'S' | 'AE' | 'E' | 'K'
 export const HINWEIS_AUFBEWAHRUNG = 'Hinweis: Sie sind als Privatperson verpflichtet, diese Rechnung für Leistungen im Zusammenhang mit einem Grundstück zwei Jahre lang aufzubewahren (§ 14b Abs. 1 Satz 5 UStG).'
-export type Steuerbehandlung = 'regel' | '13b' | 'kleinunternehmer'
+export type Steuerbehandlung = 'regel' | '13b' | 'kleinunternehmer' | 'lu_tva' | 'ig_lieferung'
+/** Satz der TVA in Luxemburg für unsere Dienstleistungen (Regelsatz). */
+export const TVA_LUXEMBURG = 17
 
 /** Aufbewahrungshinweis für Privatpersonen als Leistungsempfänger (Gerüste stehen an einem Grundstück). */
 export function aufbewahrungsHinweis(inv: { customer_privat?: boolean | null; grundstuecksbezug?: boolean | null }): string | null {
@@ -37,6 +39,35 @@ export function pruefe13b(
   return { warnungen }
 }
 
+/** Steuerfreie innergemeinschaftliche Lieferung: nur an Unternehmer mit USt-IdNr. eines anderen EU-Landes (z. B. TVA-Nr. Luxemburg). */
+export function pruefeIgLieferung(kunde: { kundentyp?: string | null; ust_id?: string | null } | null): { fehler?: string; warnungen: string[] } {
+  const warnungen: string[] = []
+  const hilfe = 'Bitte beim Kunden im Kundenstamm eintragen (Kunden → USt-IdNr.).'
+  if (!kunde) return { fehler: `Der Kunde ist nicht im Kundenstamm gefunden. Für eine steuerfreie innergemeinschaftliche Lieferung braucht die Rechnung die USt-IdNr./TVA-Nr. des Kunden. ${hilfe}`, warnungen }
+  if (kunde.kundentyp === 'privat') return { fehler: 'Eine steuerfreie innergemeinschaftliche Lieferung gilt nur an Unternehmer. Dieser Kunde ist als Privatperson geführt.', warnungen }
+  const u = (kunde.ust_id || '').replace(/\s+/g, '').toUpperCase()
+  if (!u) return { fehler: `Für eine steuerfreie innergemeinschaftliche Lieferung ist die USt-IdNr./TVA-Nr. des Kunden Pflicht. ${hilfe}`, warnungen }
+  if (u.startsWith('DE')) return { fehler: 'Eine innergemeinschaftliche Lieferung braucht die USt-IdNr. eines anderen EU-Landes (bei Luxemburg: LU und 8 Ziffern). Eine deutsche USt-IdNr. genügt nicht.', warnungen }
+  if (u.startsWith('LU') && !/^LU\d{8}$/.test(u)) warnungen.push('Eine TVA-Nr. aus Luxemburg besteht aus LU und 8 Ziffern. Bitte beim Kunden prüfen.')
+  return { warnungen }
+}
+
+/** Luxemburg mit 17 % TVA: Hinweise zur Kundennummer (die TVA-Nr. des Kunden wird auf die Rechnung gedruckt). */
+export function pruefeLuTva(kunde: { kundentyp?: string | null; ust_id?: string | null } | null): string[] {
+  const w: string[] = []
+  if (!kunde) return ['Kunde ist nicht im Kundenstamm gefunden: die TVA-Nr. des Kunden fehlt auf der Rechnung.']
+  const u = (kunde.ust_id || '').replace(/\s+/g, '').toUpperCase()
+  if (!u && kunde.kundentyp !== 'privat') w.push('Beim Kunden ist keine TVA-Nr. hinterlegt; sie steht dann nicht auf der Rechnung.')
+  if (u.startsWith('LU') && !/^LU\d{8}$/.test(u)) w.push('Eine TVA-Nr. aus Luxemburg besteht aus LU und 8 Ziffern. Bitte beim Kunden prüfen.')
+  return w
+}
+
+/** Zeile mit der USt-IdNr./TVA-Nr. des Kunden für den Beleg (null, wenn keine hinterlegt ist). */
+export function kundenUstIdZeile(inv: { customer_ust_id?: string | null }): string | null {
+  const u = (inv.customer_ust_id || '').trim()
+  return u ? `USt-IdNr. / TVA-Nr.: ${u}` : null
+}
+
 /** Zusätzliche Verkäuferangaben, die XRechnung (BR-DE-2) verlangt: Ansprechpartner, Telefon, E-Mail. */
 export function pruefeXrechnungVerkaeufer(cs: { ansprechpartner?: string | null; phone?: string | null; email?: string | null } | null | undefined): PflichtLuecke[] {
   const c = cs || {}
@@ -56,6 +87,7 @@ export function steuerFall(inv: { tax_rate: unknown; notes?: string | null; steu
   if (satz > 0) return { kategorie: 'S', satz }
   const n = inv.notes || ''
   // Die gewählte Steuerbehandlung hat Vorrang; ältere Rechnungen ohne Auswahl werden am Hinweistext erkannt
+  if (inv.steuerfall === 'ig_lieferung' || (!inv.steuerfall && n.includes('§ 6a UStG'))) return { kategorie: 'K', satz: 0, grund: HINWEIS_IG.replace(/\.$/, '') }
   if (inv.steuerfall === '13b' || (!inv.steuerfall && n.includes('§ 13b'))) return { kategorie: 'AE', satz: 0, grund: 'Steuerschuldnerschaft des Leistungsempfängers (§ 13b UStG)' }
   if (inv.steuerfall === 'kleinunternehmer' || (!inv.steuerfall && n.includes('§ 19 UStG'))) return { kategorie: 'E', satz: 0, grund: 'Kleinunternehmer gemäß § 19 UStG' }
   return { kategorie: 'E', satz: 0 }
@@ -99,6 +131,7 @@ export function pruefePflichtangaben(inv: {
   invoice_number?: string | null; invoice_date?: string | null; customer_name?: string | null; customer_address?: string | null
   positions?: { bezeichnung?: string; menge?: number }[] | null; tax_rate: unknown; notes?: string | null; gross_amount?: unknown
   invoice_type?: string | null; reference_invoice_number?: string | null; company_snapshot?: any
+  steuerfall?: string | null; customer_ust_id?: string | null
 }): PflichtLuecke[] {
   const l: PflichtLuecke[] = []
   const cs = inv.company_snapshot || {}
@@ -115,6 +148,8 @@ export function pruefePflichtangaben(inv: {
   const f = steuerFall(inv)
   if (f.kategorie === 'E' && !f.grund) l.push({ code: 'STEUERBEFREIUNG', text: 'Steuersatz 0 %: Hinweis auf den Grund (z. B. § 13b UStG oder § 19 UStG) fehlt.' })
   if (f.kategorie === 'AE' && !cs.ust_id) l.push({ code: 'USTID_13B', text: 'Bei § 13b UStG ist die USt-IdNr. des Ausstellers anzugeben.' })
+  if (f.kategorie === 'K' && !cs.ust_id) l.push({ code: 'USTID_IG', text: 'Bei einer innergemeinschaftlichen Lieferung ist die USt-IdNr. des Ausstellers anzugeben.' })
+  if (f.kategorie === 'K' && !(inv.customer_ust_id || '').trim()) l.push({ code: 'USTID_KUNDE_IG', text: 'Bei einer innergemeinschaftlichen Lieferung ist die USt-IdNr./TVA-Nr. des Kunden anzugeben.' })
   if (inv.invoice_type === 'gutschrift' && !inv.reference_invoice_number) l.push({ code: 'GUTSCHRIFT_BEZUG', text: 'Gutschrift ohne Bezug auf die ursprüngliche Rechnung.' })
   return l
 }

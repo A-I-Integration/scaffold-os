@@ -17,7 +17,7 @@ import { trackImpact } from '@/lib/impact';
 import { serverErrorResponse } from '@/lib/auth';
 import { bereinigePosition } from '@/lib/rechnung-position';
 import { notizMitSteuerHinweis } from '@/lib/ust-hinweis';
-import { steuerFall, pruefe13b } from '@/lib/rechnung-steuer';
+import { steuerFall, pruefe13b, pruefeIgLieferung, pruefeLuTva, TVA_LUXEMBURG, type Steuerbehandlung } from '@/lib/rechnung-steuer';
 import { abschlagOhneAuftrag, ABSCHLAG_OHNE_AUFTRAG_FEHLER } from '@/lib/rechnung-regeln';
 
 // ============================================================
@@ -140,18 +140,23 @@ async function anlegen(req: NextRequest, idem?: { key: string; hash: string }) {
     const leistungsdatum = typeof body.leistungsdatum === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(body.leistungsdatum) ? body.leistungsdatum : null;
 
     const grundstuecksbezug = body.grundstuecksbezug !== false; // Gerüste stehen in der Regel an einem Grundstück
-    let steuerbehandlung: 'regel' | '13b' | 'kleinunternehmer' = ['13b', 'kleinunternehmer'].includes(body.steuerfall) ? body.steuerfall : 'regel';
+    let steuerbehandlung: Steuerbehandlung = ['13b', 'kleinunternehmer', 'lu_tva', 'ig_lieferung'].includes(body.steuerfall) ? body.steuerfall : 'regel';
     // Gutschrift/Ersatzrechnung ohne eigene Angabe: Steuerbehandlung der Bezugsrechnung übernehmen
-    if (body.steuerfall === undefined && reference_invoice_number && Number(tax_rate) === 0) {
+    if (body.steuerfall === undefined && reference_invoice_number && (Number(tax_rate) === 0 || Number(tax_rate) === TVA_LUXEMBURG)) {
       try {
         const rr = await fetch(`${url}/rest/v1/invoices?invoice_number=eq.${encodeURIComponent(String(reference_invoice_number))}&select=steuerfall,notes&limit=1`, { headers });
         const ref = rr.ok ? (await rr.json())?.[0] : null;
-        if (ref) steuerbehandlung = steuerFall({ tax_rate: 0, notes: ref.notes, steuerfall: ref.steuerfall }).kategorie === 'AE' ? '13b'
-          : steuerFall({ tax_rate: 0, notes: ref.notes, steuerfall: ref.steuerfall }).grund ? 'kleinunternehmer' : 'regel';
+        if (ref && ref.steuerfall === 'lu_tva' && Number(tax_rate) === TVA_LUXEMBURG) steuerbehandlung = 'lu_tva';
+        else if (ref && Number(tax_rate) === 0) {
+          const bf = steuerFall({ tax_rate: 0, notes: ref.notes, steuerfall: ref.steuerfall });
+          steuerbehandlung = bf.kategorie === 'AE' ? '13b' : bf.kategorie === 'K' ? 'ig_lieferung' : bf.grund ? 'kleinunternehmer' : 'regel';
+        }
       } catch { /* ohne Bezug bleibt es bei der Regel */ }
     }
-    if (steuerbehandlung !== 'regel' && tax_rate != null && Number(tax_rate) !== 0) {
-      return NextResponse.json({ success: false, error: 'Bei § 13b und Kleinunternehmer (§ 19) wird keine Umsatzsteuer ausgewiesen (Satz 0 %).' }, { status: 400 });
+    if (steuerbehandlung === 'lu_tva') {
+      if (tax_rate != null && Number(tax_rate) !== TVA_LUXEMBURG) return NextResponse.json({ success: false, error: `Für Luxemburg gilt der Satz ${TVA_LUXEMBURG} % TVA.` }, { status: 400 });
+    } else if (steuerbehandlung !== 'regel' && tax_rate != null && Number(tax_rate) !== 0) {
+      return NextResponse.json({ success: false, error: 'Bei § 13b, Kleinunternehmer (§ 19) und steuerfreier innergemeinschaftlicher Lieferung wird keine Umsatzsteuer ausgewiesen (Satz 0 %).' }, { status: 400 });
     }
 
     if (!customer_name) {
@@ -206,7 +211,7 @@ async function anlegen(req: NextRequest, idem?: { key: string; hash: string }) {
       (s: number, p: any) => s + (Number(p.menge) || 0) * (Number(p.einzelpreis) || 0),
       0
     );
-    const rate = steuerbehandlung !== 'regel' ? 0 : (tax_rate != null ? Number(tax_rate) : 19);
+    const rate = steuerbehandlung === 'lu_tva' ? TVA_LUXEMBURG : steuerbehandlung !== 'regel' ? 0 : (tax_rate != null ? Number(tax_rate) : 19);
     // Steuer immer vom Betrag ohne Vorzeichen runden, damit eine Gutschrift genau das Spiegelbild der Rechnung ist
     // (Math.round rundet -0,5 sonst anders als +0,5).
     const tax = vorzeichen * (Math.round(Math.abs(net) * rate) / 100);
@@ -331,6 +336,12 @@ async function anlegen(req: NextRequest, idem?: { key: string; hash: string }) {
       if (p13.fehler) return NextResponse.json({ success: false, error: p13.fehler, code: 'STEUER_13B_PRIVAT' }, { status: 400 });
       steuerWarnungen = p13.warnungen;
     }
+    if (steuerbehandlung === 'ig_lieferung') {
+      const pig = pruefeIgLieferung(kundeRow);
+      if (pig.fehler) return NextResponse.json({ success: false, error: pig.fehler, code: 'STEUER_IG' }, { status: 400 });
+      steuerWarnungen = pig.warnungen;
+    }
+    if (steuerbehandlung === 'lu_tva') steuerWarnungen = pruefeLuTva(kundeRow);
 
     // FIX (Bug-Report, Phase 93): Nummernvergabe UND Insert liefen bisher
     // als zwei getrennte Requests (erst next_invoice_number, dann POST
