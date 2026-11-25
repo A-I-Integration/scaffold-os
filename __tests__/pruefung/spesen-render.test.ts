@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest'
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { SpesenTag, SpesenSaetzeBlock } from '@/components/SpesenBloecke'
+import ZeiterfassungPage from '@/app/zeiterfassung/page'
 
 const S = (regelwerk: string, schluessel: string, wert: number) => ({ id: schluessel, regelwerk, schluessel, wert, gueltig_ab: '2021-04-01', bemerkung: null })
 const saetze = [S('tarif', 'verpflegung_heimfahrt', 3.5), S('tarif', 'verpflegung_schwelle_stunden', 10), S('tarif', 'ausloesung_voll', 24), S('tarif', 'ausloesung_an_abreise', 12),
@@ -21,5 +22,9 @@ describe('Spesen-Oberfläche', () => {
   it('Sätze-Block ist zunächst eingeklappt', () => {
     const html = renderToStaticMarkup(createElement(SpesenSaetzeBlock, { saetze, datum: '2026-11-10', onGeaendert: () => {} }))
     expect(html).toContain('spesen-saetze-toggle'); expect(html).not.toContain('satz-wert')
+  })
+  it('Monatsansicht bietet den Spesen-Export neben CSV und DATEV', () => {
+    const html = renderToStaticMarkup(createElement(ZeiterfassungPage))
+    expect(html).toContain('export-spesen'); expect(html).toContain('DATEV Lohn')
   })
 })

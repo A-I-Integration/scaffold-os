@@ -27,6 +27,7 @@ export default function ZeitTagesuebersicht({ canEdit }: { canEdit: boolean }) {
   const [abschnitte, setAbschnitte] = useState<Abs[]>([]);
   const [projekte, setProjekte] = useState<{ id: string; name: string }[]>([]);
   const [tabelleFehlt, setTabelleFehlt] = useState(false);
+  const [tourIds, setTourIds] = useState<string[]>([]);
   const [laedt, setLaedt] = useState(true);
   const [meldung, setMeldung] = useState('');
   const [form, setForm] = useState<typeof leeresFormular | null>(null);
@@ -42,7 +43,7 @@ export default function ZeitTagesuebersicht({ canEdit }: { canEdit: boolean }) {
       const r = await fetch(`/api/zeit-abschnitte?datum=${datum}`, { cache: 'no-store' });
       const j = await r.json();
       if (!j.success) throw new Error(j.error);
-      setEmployees(j.employees); setEintraege(j.entries); setAbschnitte(j.abschnitte); setTabelleFehlt(!!j.tabelleFehlt);
+      setEmployees(j.employees); setEintraege(j.entries); setAbschnitte(j.abschnitte); setTabelleFehlt(!!j.tabelleFehlt); setTourIds(j.tourMitarbeiter || []);
     } catch (e: any) { setMeldung(e.message || 'Laden fehlgeschlagen.'); }
     finally { setLaedt(false); }
   }, [datum]);
@@ -85,7 +86,7 @@ export default function ZeitTagesuebersicht({ canEdit }: { canEdit: boolean }) {
     else await laden();
   }
 
-  const ids = new Set([...eintraege.map(e => e.employee_id), ...abschnitte.map(a => a.employee_id)]);
+  const ids = new Set([...eintraege.map(e => e.employee_id), ...abschnitte.map(a => a.employee_id), ...tourIds]);
   const sichtbar = employees.filter(e => ids.has(e.id));
   const aktive = employees.filter(e => e.status === 'active');
   const inp = 'bg-white border border-black/10 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-[#e8590c]';
@@ -126,7 +127,7 @@ export default function ZeitTagesuebersicht({ canEdit }: { canEdit: boolean }) {
       )}
 
       {laedt && <p className="text-[#86868b]">Lade Tag …</p>}
-      {!laedt && sichtbar.length === 0 && <p className="text-sm text-[#86868b]" data-testid="tag-leer">Für diesen Tag gibt es keine Stempelzeiten und keine Abschnitte.</p>}
+      {!laedt && sichtbar.length === 0 && <p className="text-sm text-[#86868b]" data-testid="tag-leer">Für diesen Tag gibt es keine Stempelzeiten, keine Abschnitte und keine Tour-Einteilung.</p>}
 
       {!laedt && sichtbar.map(emp => {
         const z = tageszeile(emp.id, eintraege, abschnitte);

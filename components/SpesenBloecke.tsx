@@ -144,7 +144,7 @@ export function SpesenSaetzeBlock({ saetze, datum, onGeaendert }: { saetze: Satz
             <button onClick={speichern} className="border border-black/10 hover:border-[#e8590c] px-4 py-2 rounded-xl" data-testid="satz-speichern">Neue Fassung speichern</button>
           </div>
           {meldung && <p className="text-xs text-red-700 mt-2">{meldung}</p>}
-          <p className="text-xs text-[#86868b] mt-2">Die Sätze stammen aus dem Rahmentarifvertrag für das Gerüstbauer-Handwerk (§ 7) und den steuerlichen Verpflegungspauschalen. Bitte gegen den aktuell geltenden Tarif prüfen. Eine neue Fassung gilt ab dem eingetragenen Datum; frühere Tage rechnen weiter mit der alten.</p>
+          <p className="text-xs text-[#86868b] mt-2">Die Sätze stammen aus dem Rahmentarifvertrag für das Gerüstbauer-Handwerk (§ 7) und den steuerlichen Verpflegungspauschalen. Der Tarifvertrag (27.02.2020, in Kraft seit 01.04.2021) war erstmals zum 31.12.2024 kündbar; ob die Beträge noch gelten, bitte beim Bundesverband Gerüstbau oder der IG BAU prüfen. Eine neue Fassung gilt ab dem eingetragenen Datum; frühere Tage rechnen weiter mit der alten.</p>
         </div>
       )}
     </div>
