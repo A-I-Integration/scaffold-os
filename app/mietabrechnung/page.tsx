@@ -1,5 +1,6 @@
 'use client';
 
+import { adresseMitLand } from '@/lib/land';
 import { useCallback, useEffect, useState } from 'react';
 import { fetchRechnungAnlegen } from '@/lib/rechnung-anlegen-client'
 import { CalendarClock, CheckCircle2, Euro, Loader2, AlertTriangle, Info } from 'lucide-react';
@@ -147,7 +148,7 @@ export default function MietabrechnungPage() {
         body: JSON.stringify({
           project_id: zeile.projekt.id,
           customer_name: zeile.kunde,
-          customer_address: zeile.projekt.adresse || undefined,
+          customer_address: adresseMitLand(zeile.projekt.adresse || '', (zeile.projekt as any).land ?? (zeile.projekt as any).data?.step1?.land) || undefined,
           due_date: plusTageIso(heute, 14),
           notes: `Miet-Nachberechnung: Standzeit „${zeile.projekt.name}" war am ${isoNachDeutsch(zeile.abgerechnetBis)} überschritten.`,
           positions: [{

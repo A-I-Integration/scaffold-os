@@ -17,11 +17,14 @@ import FotoAnalyse from '@/components/aufmaß/FotoAnalyse';
 import GrundrissUpload from '@/components/aufmaß/GrundrissUpload';
 import DrohnenUpload from '@/components/aufmaß/DrohnenUpload';
 import SprachNotiz from '@/components/aufmaß/SprachNotiz';
+import LandAuswahl from '@/components/LandAuswahl';
 
 const LEERES_FORM = {
   // Projekt
   name: '',
   adresse: '',
+  // Land der Baustelle (Paket 9): bestimmt u. a. den Steuervorschlag in der Rechnung (Luxemburg → 17 % TVA)
+  land: 'Deutschland',
   // NEU: Bezeichnung der Baustelle, damit mehrere Baustellen desselben Kunden
   // unterscheidbar sind (Projektname bleibt der Kundenname).
   baustelle: '',
@@ -75,7 +78,7 @@ function Schritt1Content() {
 
   const [form, setForm] = useState({ ...LEERES_FORM });
   // NEU (Phase 34): echte Kunden-Verknüpfung statt reinem Namensvergleich.
-  const [kundenListe, setKundenListe] = useState<{ id: string; name: string; street?: string; zip?: string; city?: string; contact_person?: string | null; phone?: string | null; email?: string | null }[]>([]);
+  const [kundenListe, setKundenListe] = useState<{ id: string; name: string; street?: string; zip?: string; city?: string; contact_person?: string | null; phone?: string | null; email?: string | null; land?: string | null }[]>([]);
   const [zeigeKundenDropdown, setZeigeKundenDropdown] = useState(false);
   const [neuerKundeLaeuft, setNeuerKundeLaeuft] = useState(false);
 
@@ -417,6 +420,7 @@ function Schritt1Content() {
                             setForm((prev) => ansprechpartnerAusKunde(prev, k));
                             if (!form.adresse && k.street) {
                               handleChange('adresse', [k.street, [k.zip, k.city].filter(Boolean).join(' ')].filter(Boolean).join(', '));
+                              if (k.land) handleChange('land', k.land);
                             }
                             setZeigeKundenDropdown(false);
                           }}
@@ -475,6 +479,15 @@ function Schritt1Content() {
                   className="w-full bg-black/10 border border-black/10 rounded-xl px-4 py-3 text-[#1d1d1f] placeholder-[#86868b] focus:outline-none focus:border-orange-500 transition"
                   placeholder={form.projektart === 'bruecke' ? 'z.B. A1, Rheinbrücke Musterhausen' : 'z.B. Musterstraße 1, 12345 Berlin'}
                 />
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-2 text-[#424245]">Land der Baustelle</label>
+                <LandAuswahl
+                  value={form.land}
+                  onChange={(l) => handleChange('land', l)}
+                  className="w-full bg-black/10 border border-black/10 rounded-xl px-4 py-3 text-[#1d1d1f] focus:outline-none focus:border-orange-500 transition"
+                />
+                <p className="text-xs text-[#86868b] mt-1">Luxemburg: In der Rechnung wird 17 % TVA vorgeschlagen.</p>
               </div>
             </div>
           </div>

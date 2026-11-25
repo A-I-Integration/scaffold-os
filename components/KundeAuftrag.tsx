@@ -1,5 +1,6 @@
 'use client';
 
+import { kundenAnschrift } from '@/lib/land';
 import { berechneForderung, mitBezugsGutschriften } from '@/lib/forderung';
 import { useState, useCallback } from 'react';
 import { fetchRechnungAnlegen } from '@/lib/rechnung-anlegen-client'
@@ -29,7 +30,7 @@ import { generateInvoicePDF, fmtEur, fmtDate, type Invoice } from '@/lib/invoice
 // ============================================================
 
 interface Project { id: string; name: string | null; adresse: string | null; data: any; }
-interface Kunde { id: string; name: string; email: string | null; street: string | null; zip: string | null; city: string | null; }
+interface Kunde { id: string; name: string; email: string | null; street: string | null; zip: string | null; city: string | null; land?: string | null; }
 interface Media { id: string; file_name: string; url: string; created_at: string }
 interface DokEvent { id: string; type: string; text_note: string | null; photos: { url: string; file_name: string }[]; status: string; created_at: string }
 interface EmailLogEintrag { id: string; type: string; to_email: string; subject: string; invoice_number: string | null; sent_at: string; body_html?: string | null; attachment_path?: string | null; attachment_name?: string | null }
@@ -119,7 +120,7 @@ export default function KundeAuftrag({
         body: JSON.stringify({
           project_id: project.id,
           customer_name: kunde.name,
-          customer_address: [kunde.street, [kunde.zip, kunde.city].filter(Boolean).join(' ')].filter(Boolean).join(', ') || undefined,
+          customer_address: kundenAnschrift(kunde) || undefined,
           due_date: new Date(Date.now() + 14 * 86400000).toISOString().slice(0, 10),
           notes: notiz.trim() || undefined,
           positions: [{ bezeichnung: pos.bezeichnung.trim(), menge, einheit: pos.einheit || 'Stk.', einzelpreis }],
@@ -235,7 +236,7 @@ export default function KundeAuftrag({
         <PositionsstatusBlock project={project} />
 
         {/* ─── Vorhaltung nach Vereinbarung ─── */}
-        <VorhaltungBlock project={project} kunde={{ name: kunde.name, adresse: (kunde as any).adresse }} />
+        <VorhaltungBlock project={project} kunde={{ name: kunde.name, adresse: kundenAnschrift(kunde as any) || (kunde as any).adresse }} />
 
         {/* ─── Schlussrechnung (Angebotspreis oder Aufmaß, inkl. bestätigter Nachträge) ─── */}
         <button onClick={() => setSchlussOffen(true)} className="flex items-center gap-1.5 text-xs text-[#e8590c] font-semibold hover:underline">
@@ -350,7 +351,7 @@ export default function KundeAuftrag({
         <SchlussrechnungDialog
           projectId={project.id}
           customerName={kunde.name}
-          customerAddress={[kunde.street, [kunde.zip, kunde.city].filter(Boolean).join(' ')].filter(Boolean).join(', ') || undefined}
+          customerAddress={kundenAnschrift(kunde) || undefined}
           onClose={() => setSchlussOffen(false)}
           onCreated={() => onInvoiceCreated()}
         />

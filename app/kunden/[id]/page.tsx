@@ -12,6 +12,8 @@
 //                         automatische rote Kennzeichnung bei Zahlungsverzug
 // ============================================================
 
+import LandAuswahl from '@/components/LandAuswahl';
+import { kundenAnschrift } from '@/lib/land';
 import AngebotRueckmeldungHinweis from '@/components/AngebotRueckmeldungHinweis'
 import { fetchRechnungAnlegen } from '@/lib/rechnung-anlegen-client'
 import { angebotsRechnungPositionen } from '@/lib/aufmass-rechnung'
@@ -70,6 +72,7 @@ interface Kunde {
   email: string | null
   phone: string | null
   street: string | null
+  land?: string | null
   zip: string | null
   city: string | null
   // NEU (Phase 95, DATEV-Sammeldebitor-Fix): optionale, vom Steuerberater
@@ -556,7 +559,7 @@ export default function KundenDetailPage() {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           project_id: project.id, customer_name: kunde.name,
-          customer_address: [kunde.street, [kunde.zip, kunde.city].filter(Boolean).join(', ')].filter(Boolean).join(', ') || undefined,
+          customer_address: kundenAnschrift(kunde) || undefined,
           due_date: datumPlusTage(14),
           positions: positionen,
           override_grund: overrideGrund || undefined,
@@ -590,7 +593,7 @@ export default function KundenDetailPage() {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           project_id: zusatzProjectId, customer_name: kunde.name,
-          customer_address: [kunde.street, [kunde.zip, kunde.city].filter(Boolean).join(' ')].filter(Boolean).join(', ') || undefined,
+          customer_address: kundenAnschrift(kunde) || undefined,
           due_date: datumPlusTage(14),
           notes: zusatzNotiz.trim() || undefined,
           positions: [{ bezeichnung: zusatzPos.bezeichnung.trim(), menge, einheit: zusatzPos.einheit || 'Stk.', einzelpreis }],
@@ -686,7 +689,7 @@ export default function KundenDetailPage() {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           project_id: standzeitOffen, customer_name: kunde.name,
-          customer_address: [kunde.street, [kunde.zip, kunde.city].filter(Boolean).join(' ')].filter(Boolean).join(', ') || undefined,
+          customer_address: kundenAnschrift(kunde) || undefined,
           due_date: lokalesDatumIso(),
           invoice_type: 'gutschrift',
           notes: (standzeitGrund.trim() ? standzeitGrund.trim() + '. ' : '') + beschreibung,
@@ -748,7 +751,7 @@ export default function KundenDetailPage() {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           project_id: project.id, customer_id: kunde.id, customer_name: kunde.name,
-          customer_address: [kunde.street, [kunde.zip, kunde.city].filter(Boolean).join(' ')].filter(Boolean).join(', ') || undefined,
+          customer_address: kundenAnschrift(kunde) || undefined,
           type: lieferscheinOffen.type, materials,
           signed_by_name: lsUnterschriftName.trim() || undefined,
           signature_data_url: lsSignatur || undefined,
@@ -800,7 +803,7 @@ export default function KundenDetailPage() {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           project_id: gutschriftOffen, customer_name: kunde.name,
-          customer_address: [kunde.street, [kunde.zip, kunde.city].filter(Boolean).join(' ')].filter(Boolean).join(', ') || undefined,
+          customer_address: kundenAnschrift(kunde) || undefined,
           due_date: lokalesDatumIso(),
           invoice_type: 'gutschrift',
           reference_invoice_number: gutschriftReferenz.trim() || undefined,
@@ -921,7 +924,7 @@ export default function KundenDetailPage() {
   }
   const entwurfBearbeiten = (entwurfId: string) => { setEntwurfOffen(entwurfId); themaOeffnen('rechnungen') }
   const rechnungenUmfang = useMemo(
-    () => (kunde ? { kundeId: id, kundeName: kunde.name, kundeAdresse: [kunde.street, [kunde.zip, kunde.city].filter(Boolean).join(' ')].filter(Boolean).join(', '), projektIds: projects.map((p) => p.id), projektId: baustelle?.id ?? null } : undefined),
+    () => (kunde ? { kundeId: id, kundeName: kunde.name, kundeAdresse: kundenAnschrift(kunde), projektIds: projects.map((p) => p.id), projektId: baustelle?.id ?? null } : undefined),
     [kunde, id, projects, baustelle?.id],
   )
   // Schnellstart aus der Übersicht: alles öffnet sich hier im Kundenordner, nichts führt auf eine andere Seite.
@@ -1048,6 +1051,7 @@ export default function KundenDetailPage() {
               <input value={kundeForm.street || ''} onChange={(e) => setKundeForm({ ...kundeForm, street: e.target.value })} placeholder="Straße" className={inputCls} />
               <input value={kundeForm.zip || ''} onChange={(e) => setKundeForm({ ...kundeForm, zip: e.target.value })} placeholder="PLZ" className={inputCls} />
               <input value={kundeForm.city || ''} onChange={(e) => setKundeForm({ ...kundeForm, city: e.target.value })} placeholder="Ort" className={inputCls} />
+              <LandAuswahl label="Land" value={kundeForm.land} onChange={(land) => setKundeForm({ ...kundeForm, land })} className={inputCls} testId="kunde-land" />
             </div>
             {/* NEU (Phase 95): optionale DATEV-Einzeldebitoren-Kontonummer –
                 vom Steuerberater vergeben, leer lassen = weiter Sammelkonto
@@ -1382,7 +1386,7 @@ export default function KundenDetailPage() {
 
         {/* ═══════════ TAB: NACHTRÄGE / SCHLUSSRECHNUNG ═══════════ */}
         {tabAktiv === 'lv' && !baustelle && baustellenWahl('lv')}
-        {tabAktiv === 'lv' && baustelle && <ProjektLvBlock projectId={baustelle.id} kundeName={kunde.name} kundeAdresse={[kunde.street, [kunde.zip, kunde.city].filter(Boolean).join(' ')].filter(Boolean).join(', ')} />}
+        {tabAktiv === 'lv' && baustelle && <ProjektLvBlock projectId={baustelle.id} kundeName={kunde.name} kundeAdresse={kundenAnschrift(kunde)} />}
 
         {tabAktiv === 'mappe' && !baustelle && baustellenWahl('mappe')}
         {tabAktiv === 'mappe' && baustelle && <Baustellenmappe projectId={baustelle.id} projektName={baustelle.name || 'Baustelle'} adresse={baustelle.adresse} />}
@@ -1418,7 +1422,7 @@ export default function KundenDetailPage() {
             startProzent={schlussStart.prozent}
             startPhaseId={schlussPhaseId}
             customerName={kunde.name}
-            customerAddress={[kunde.street, [kunde.zip, kunde.city].filter(Boolean).join(' ')].filter(Boolean).join(', ') || undefined}
+            customerAddress={kundenAnschrift(kunde) || undefined}
             onClose={() => { setSchlussProjectId(null); setSchlussPhaseId(undefined) }}
             onCreated={() => { Promise.resolve(ladeDaten()).finally(() => setBauphasenStand((n) => n + 1)) }}
             onAnhaengeHinzufuegen={(inv) => setNeueRechnungAnhang(inv as any)}

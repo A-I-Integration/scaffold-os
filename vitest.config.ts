@@ -13,7 +13,7 @@ export default defineConfig({
   plugins: [tsconfigPaths()],
   test: {
     environment: 'node',
-    include: ['lib/**/*.test.ts', '__tests__/**/*.test.ts', 'components/**/*.test.ts', 'app/**/*.test.ts'],
+    include: ['lib/**/*.test.ts', '__tests__/**/*.test.ts', '__tests__/**/*.test.tsx', 'components/**/*.test.ts', 'app/**/*.test.ts'],
     exclude: ['node_modules/**', '.next/**'],
   },
 })

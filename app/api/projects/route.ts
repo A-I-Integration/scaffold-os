@@ -13,6 +13,7 @@ import { pruefePositionsEreignisseAenderung } from '@/lib/positions-status';
 import { aenderungenZwischenaufmasse } from '@/lib/zwischenaufmass';
 import { schreibeHistorie } from '@/lib/abrechnung-historie';
 import { angebotNettoAusProjekt } from '@/lib/auftragsstand';
+import { pruefeLand } from '@/lib/land';
 
 // ============================================================
 // SCAFFOLD OS – Projekte API
@@ -117,17 +118,29 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Name erforderlich' }, { status: 400 });
     }
 
-    const response = await fetch(`${url}/rest/v1/projects`, {
+    // Land der Baustelle (Paket 9): aus body.land oder dem Aufmaß-Schritt 1; leer = Deutschland (nicht gesetzt)
+    const landPruefung = pruefeLand(body.land ?? data?.step1?.land);
+    const landWert = landPruefung.ok && landPruefung.land ? landPruefung.land : null;
+    const basis = {
+      name,
+      adresse: adresse || '(Adresse nachtragen)',
+      data: data || {},
+      status: status || 'active',
+      customer_id: customer_id || null,
+    };
+    let response = await fetch(`${url}/rest/v1/projects`, {
       method: 'POST',
       headers: { ...headers, 'Prefer': 'return=representation' },
-      body: JSON.stringify({
-        name,
-        adresse: adresse || '(Adresse nachtragen)',
-        data: data || {},
-        status: status || 'active',
-        customer_id: customer_id || null,
-      }),
+      body: JSON.stringify(landWert ? { ...basis, land: landWert } : basis),
     });
+    // SQL phase-139 (Spalte land) noch nicht ausgeführt: ohne Land speichern, nichts geht verloren (Land steckt in data.step1)
+    if (!response.ok && landWert) {
+      response = await fetch(`${url}/rest/v1/projects`, {
+        method: 'POST',
+        headers: { ...headers, 'Prefer': 'return=representation' },
+        body: JSON.stringify(basis),
+      });
+    }
 
     if (!response.ok) {
       const errorText = await response.text();
@@ -328,11 +341,22 @@ export async function PATCH(req: NextRequest) {
     }
 
     const bedingung = patch.data !== undefined && aufmassVersion !== null ? `&aufmass_version=eq.${aufmassVersion}` : '';
-    const res = await fetch(`${url}/rest/v1/projects?id=eq.${id}${bedingung}`, {
+    // Land der Baustelle mitführen (aus body.land oder data.step1.land). Fehlt die Spalte noch, wird ohne Land gespeichert.
+    const landRoh = body.land !== undefined ? body.land : patch.data?.step1?.land;
+    const landP = landRoh === undefined ? null : pruefeLand(landRoh);
+    const landPatch = landP && landP.ok ? { land: landP.land || null } : {};
+    let res = await fetch(`${url}/rest/v1/projects?id=eq.${id}${bedingung}`, {
       method: 'PATCH',
       headers: { ...headers, 'Prefer': 'return=representation' },
-      body: JSON.stringify(patch),
+      body: JSON.stringify({ ...patch, ...landPatch }),
     });
+    if (!res.ok && 'land' in landPatch) {
+      res = await fetch(`${url}/rest/v1/projects?id=eq.${id}${bedingung}`, {
+        method: 'PATCH',
+        headers: { ...headers, 'Prefer': 'return=representation' },
+        body: JSON.stringify(patch),
+      });
+    }
     if (!res.ok) throw new Error(await res.text());
 
     const rows = await res.json();
