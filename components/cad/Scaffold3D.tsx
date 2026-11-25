@@ -62,6 +62,8 @@ interface Props {
   onKontextmenue?: (id: string, x: number, y: number) => void
   /** Mehrfachauswahl (Shift+Klick, Auswahlrahmen): diese Bauteile sind blau markiert */
   mehrfachAuswahl?: ReadonlySet<string>
+  /** Ids gesperrter Bauteile (werden getönt gezeigt) */
+  gesperrteIds?: ReadonlySet<string>
   /** Auswahlrahmen aufziehen statt die Ansicht zu drehen */
   rahmenModus?: boolean
   onRahmen?: (ids: string[], ergaenzen: boolean) => void
@@ -149,6 +151,9 @@ const FarbModusKontext = createContext<FarbModus>('real')
 const AbbauMarkKontext = createContext<ReadonlySet<string> | null>(null)
 /** Mehrfachauswahl: ausgewählte Bauteile blau */
 const MehrfachKontext = createContext<ReadonlySet<string> | null>(null)
+/** Gesperrte Bauteile: werden grau-bläulich getönt dargestellt (nur Anzeige, ändert nichts am Modell) */
+const GesperrtKontext = createContext<ReadonlySet<string> | null>(null)
+const GESPERRT_FARBE = new THREE.Color('#6b7a8c')
 type EchtesGebaeudeDaten = { aussehen: Aussehen; faktor: number; oben: 'x' | 'y' | 'z'; versatzX?: number; versatzZ?: number; drehungGrad?: number; anker?: { wx: number; wz: number; drehungGrad: number } | null; /** Lage des Turms (höchster Abschnitt) in unserem Gebäude: dorthin kommt die Schaftmitte */ ziel?: { x: number; z: number; drehungGrad: number } }
 const EchtesGebaeudeKontext = createContext<EchtesGebaeudeDaten | null>(null)
 
@@ -775,6 +780,7 @@ function InstancedBauteile({
   const farbModus = useContext(FarbModusKontext)
   const abbauMarkiert = useContext(AbbauMarkKontext)
   const mehrfach = useContext(MehrfachKontext)
+  const gesperrt = useContext(GesperrtKontext)
   const farbTyp = variant === 'tritt' ? 'stair' : type
   const baseColor = useMemo(() => new THREE.Color(farbModus === 'bauteil' ? bauteilFarbe(farbTyp) : farbModus === 'praesentation' && farbTyp !== 'net' && farbTyp !== 'safety_net' ? PRAESENTATION_ROHR : (COLOR_MAP[farbTyp] || '#888888')), [farbTyp, farbModus])
   const optik = useContext(MjOptikKontext)
@@ -818,6 +824,7 @@ function InstancedBauteile({
       const isSelected = selectedComponent === item.id
       const isHovered = hoveredId === item.id
       const col = baseColor.clone()
+      if (gesperrt?.has(item.id)) col.lerp(GESPERRT_FARBE, 0.6)
       if (abbauMarkiert?.has(item.id)) col.set('#dc2626')
       else if (mehrfach?.has(item.id)) col.set('#2563eb')
       else if (isSelected) col.multiplyScalar(1.5).add(new THREE.Color(0.3, 0.3, 0.3))
@@ -826,7 +833,7 @@ function InstancedBauteile({
     })
     if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true
     invalidate()
-  }, [items, selectedComponent, hoveredId, baseColor, invalidate, abbauMarkiert, mehrfach])
+  }, [items, selectedComponent, hoveredId, baseColor, invalidate, abbauMarkiert, mehrfach, gesperrt])
 
   const handleClick = useCallback(
     (e: ThreeEvent<PointerEvent>) => {
@@ -2709,6 +2716,7 @@ function Scaffold3D({
   farbModus = 'real',
   abbauMarkiert,
   mehrfachAuswahl,
+  gesperrteIds,
   rahmenModus,
   onRahmen,
   echtesGebaeude,
@@ -2801,6 +2809,7 @@ function Scaffold3D({
         <AdaptiveEvents />
         <FarbModusKontext.Provider value={farbModus}>
         <AbbauMarkKontext.Provider value={abbauMarkiert ?? null}>
+        <GesperrtKontext.Provider value={gesperrteIds ?? null}>
         <MehrfachKontext.Provider value={mehrfachAuswahl ?? null}>
         <EchtesGebaeudeKontext.Provider value={echtesGebaeude ?? null}>
         <MjOptikKontext.Provider value={mjOptikFuerSystem(systemId)}>
@@ -2838,6 +2847,7 @@ function Scaffold3D({
         </MjOptikKontext.Provider>
         </EchtesGebaeudeKontext.Provider>
         </MehrfachKontext.Provider>
+        </GesperrtKontext.Provider>
         </AbbauMarkKontext.Provider>
         </FarbModusKontext.Provider>
         {hoheQualitaet && (
