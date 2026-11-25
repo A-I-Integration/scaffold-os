@@ -58,3 +58,8 @@ export function istWiederholterKlick(vorher: { x: number; y: number; zeit: numbe
   if (!vorher) return false
   return Math.hypot(jetzt.x - vorher.x, jetzt.y - vorher.y) <= toleranzPx && jetzt.zeit - vorher.zeit <= fensterMs
 }
+
+/** Entfernt Treffer, die hinter einem Verdecker (z. B. der Gebäudewand) liegen. `grenze` = Abstand des nächsten Verdeckers. */
+export function nurSichtbare(treffer: readonly Treffer[], grenze: number): Treffer[] {
+  return treffer.filter((t) => t.abstand < grenze)
+}

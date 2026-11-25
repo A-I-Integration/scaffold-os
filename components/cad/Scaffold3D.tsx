@@ -13,7 +13,7 @@
 // ============================================================
 
 import { idsImRahmen, istEchterRahmen } from '@/lib/cad/mehrfachauswahl'
-import { baueInstanzIds, loeseInstanz, waehleTreffer, istWiederholterKlick, findeDoppelteIds, type Treffer } from '@/lib/cad/auswahl'
+import { baueInstanzIds, loeseInstanz, waehleTreffer, istWiederholterKlick, findeDoppelteIds, nurSichtbare, type Treffer } from '@/lib/cad/auswahl'
 import { isTube, instanzMatrix } from '@/lib/cad/instanz-matrix'
 import { useMemo, useState, useRef, useEffect, useCallback, memo, createContext, useContext } from 'react'
 import { Canvas, useThree, useFrame, type ThreeEvent } from '@react-three/fiber'
@@ -821,6 +821,14 @@ function InstancedBauteile({
         const id = loeseInstanz(ids, h.instanceId)
         if (id) treffer.push({ id, typ: String(h.object.userData.bauteilTyp ?? ''), abstand: h.distance })
       }
+      // Alles, was hinter dem Gebäude liegt, ist verdeckt und nicht wählbar (auch nicht per Alt+Klick)
+      let verdecktAb = Infinity
+      for (const h of (e.intersections ?? []) as { object: THREE.Object3D; distance: number }[]) {
+        for (let o: THREE.Object3D | null = h.object; o; o = o.parent) { if (o.userData?.verdecker) { verdecktAb = Math.min(verdecktAb, h.distance); break } }
+      }
+      const sichtbar = nurSichtbare(treffer, verdecktAb)
+      treffer.length = 0
+      treffer.push(...sichtbar)
       if (treffer.length === 0) treffer.push({ id: getroffen.id, typ: type, abstand: e.distance ?? 0 })
       const ne = e.nativeEvent as MouseEvent | undefined
       const jetzt = { x: ne?.clientX ?? 0, y: ne?.clientY ?? 0, zeit: Date.now() }
@@ -1643,11 +1651,13 @@ function turmLage(building: CADModel['building']): { x: number; z: number; drehu
 }
 
 /** Zeigt das echte Gebäude (falls geladen), sonst den einfachen Baukörper */
-function GebaeudeAnzeige({ building, features, visible, onSeiteUmschalten, platziere }: { building: CADModel['building']; features: BuildingFeature3D[]; visible: boolean; onSeiteUmschalten?: (side: 'front' | 'back' | 'left' | 'right') => void; platziere?: (punkt: [number, number, number]) => void }) {
+function GebaeudeAnzeige({ building, features, visible, onSeiteUmschalten, platziere, onVerdeckt }: { building: CADModel['building']; features: BuildingFeature3D[]; visible: boolean; onSeiteUmschalten?: (side: 'front' | 'back' | 'left' | 'right') => void; platziere?: (punkt: [number, number, number]) => void; onVerdeckt?: () => void }) {
   const echt = useContext(EchtesGebaeudeKontext)
   // Im Platzierungs-Modus zählt auch ein Klick auf die Wand zwischen den Rohren: der Treffpunkt rastet dann auf das nächste Feld ein
   return (
-    <group onClick={platziere ? (e: ThreeEvent<MouseEvent>) => { e.stopPropagation(); platziere([e.point.x, e.point.y, e.point.z]) } : undefined}>
+    // Das Gebäude verdeckt, was dahinter liegt: Ein Klick auf die Wand zwischen den Rohren wählt nie ein Gerüstteil auf der
+    // abgewandten Seite (der Strahl geht sonst durch die Wand hindurch). Gerüstteile VOR der Wand sind näher und kommen zuerst dran.
+    <group userData={{ verdecker: true }} onClick={platziere ? (e: ThreeEvent<MouseEvent>) => { e.stopPropagation(); platziere([e.point.x, e.point.y, e.point.z]) } : (e: ThreeEvent<MouseEvent>) => { e.stopPropagation(); onVerdeckt?.() }}>
       <Building3D building={building} features={features} visible={visible && !echt} onSeiteUmschalten={echt ? undefined : onSeiteUmschalten} />
       {visible && echt && <EchtesGebaeude3D {...echt} ziel={turmLage(building)} />}
     </group>
@@ -2575,7 +2585,7 @@ function Scene({
       <Umgebung3D model={model} visible={!!showEnvironment && !bridgeMode && !weiss} nacht={nacht} />
       {model.building.nordrichtungGrad != null && showBuilding && !bridgeMode && <Nordpfeil3D nordrichtungGrad={model.building.nordrichtungGrad} lengthM={model.building.lengthM} widthM={model.building.widthM} />}
       <group position={[0, hangHebung, 0]}>
-        <GebaeudeAnzeige building={model.building} features={features || []} visible={showBuilding && !bridgeMode} onSeiteUmschalten={!measureMode && !placementType ? onSeiteUmschalten : undefined} platziere={placementType && onPlacementClick && !measureMode ? (pt) => platziereLokal?.(placementType, pt, '', -1) : undefined} />
+        <GebaeudeAnzeige building={model.building} features={features || []} visible={showBuilding && !bridgeMode} onSeiteUmschalten={!measureMode && !placementType ? onSeiteUmschalten : undefined} platziere={placementType && onPlacementClick && !measureMode ? (pt) => platziereLokal?.(placementType, pt, '', -1) : undefined} onVerdeckt={() => { if (selectedComponent) onSelectComponent(null) }} />
         {showScaffold && statik && <Stabwerk3D components={model.components3D} visibleTypes={visibleTypes} />}
         {showScaffold && !statik && (
           <AllScaffoldComponents
