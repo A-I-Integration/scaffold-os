@@ -1,7 +1,7 @@
 import {
   LayoutDashboard, Users, Ruler, Box, FileText, FolderOpen, Handshake, CreditCard, Euro, Mail, CalendarClock,
   Truck, Route, Timer, Navigation, ClipboardList, Warehouse, TrendingUp, BookOpen, KeyRound, Settings, Database,
-  Upload, Scale, HelpCircle, ShieldCheck, Triangle, Receipt, FilePlus2,
+  Upload, Inbox, Scale, HelpCircle, ShieldCheck, Triangle, Receipt, FilePlus2,
 } from 'lucide-react'
 
 // ============================================================
@@ -36,6 +36,7 @@ export const NAV_GRUPPEN: NavGruppe[] = [
   {
     key: 'anfrage', nummer: 1, label: 'Anfrage & Kunden',
     eintraege: [
+      { href: '/externe-anfragen', label: 'Externe Anfragen', icon: Inbox, roles: BUERO, stichwoerter: 'kundenportal anfrage link upload plan eingang' },
       { href: '/kunden', label: 'Kunden & Adressen', icon: Users, roles: BUERO },
       { href: '/meine-email', label: 'Meine E-Mail', icon: Mail, stichwoerter: 'mail postfach nachrichten' },
     ],

@@ -42,6 +42,7 @@ const ROLE_ACCESS: Record<string, string[]> = {
   '/datenimport':      ['admin', 'disponent'],
   '/gaeb':             ['admin', 'disponent', 'mitarbeiter'],
   '/gestell-simulator': ['admin', 'disponent', 'lager'],
+  '/externe-anfragen': ['admin', 'disponent'],  // Kundenportal: Eingang der Anfragen (Zugangslink ohne Konto, öffentlich unter /portal)
   '/regiebericht':     ['admin', 'disponent', 'bauleiter', 'mitarbeiter'],  // Regieberichte auf der Baustelle (Mitarbeiter ohne Preise)
   '/einstellungen':    ['admin'],
   '/admin':            ['admin'],

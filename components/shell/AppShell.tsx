@@ -49,6 +49,17 @@ export default function AppShell({ rolle, name, onLogout, children }: { rolle: R
     return () => window.removeEventListener('keydown', taste)
   }, [])
 
+  // Hinweis in der App: Zahl neuer externer Anfragen am Menüpunkt (nur Büro; ein Fehler blendet den Hinweis einfach aus)
+  const [neueAnfragen, setNeueAnfragen] = useState(0)
+  useEffect(() => {
+    if (rolle !== 'admin' && rolle !== 'disponent') return
+    let weg = false
+    const lade = () => fetch('/api/anfragen?anzahl=1').then((r) => r.json()).then((j) => { if (!weg && j?.success) setNeueAnfragen((j.neu || 0)) }).catch(() => {})
+    lade()
+    const t = setInterval(lade, 60000)
+    return () => { weg = true; clearInterval(t) }
+  }, [rolle, pathname])
+
   const klick = (e: NavEintrag) => () => { setSchublade(false); if (e.neuAufmass) starteNeuesAufmass() }
   const uebersichtAktiv = istAktiverPfad(NAV_UEBERSICHT.href, pathname)
 
@@ -94,6 +105,7 @@ export default function AppShell({ rolle, name, onLogout, children }: { rolle: R
                     return (
                       <Link key={e.href} href={e.href} onClick={klick(e)} className={`os-nav-unterpunkt ${aktiv ? 'os-nav-aktiv' : ''}`}>
                         <e.icon className="h-[18px] w-[18px] shrink-0 opacity-70" />{e.label}
+                        {e.href === '/externe-anfragen' && neueAnfragen > 0 && <span className="ml-auto rounded-full bg-amber-500 px-2 text-[12px] font-semibold text-slate-900" aria-label={`${neueAnfragen} neue Anfragen`}>{neueAnfragen}</span>}
                       </Link>
                     )
                   })}
