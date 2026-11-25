@@ -20,7 +20,7 @@ export function statusEintraege(p: {
 
 export default function CadStatusleiste({ eintraege }: { eintraege: StatusEintrag[] }) {
   return (
-    <div role='status' aria-label='Statusleiste' className='shrink-0 px-4 py-1 bg-white border-t border-black/5 flex gap-4 overflow-x-auto whitespace-nowrap text-[11px] text-[#6e6e73]'>
+    <div role='status' aria-label='Statusleiste' className='shrink-0 px-4 py-1 bg-white border-t border-black/5 flex gap-4 cad-scroll overflow-x-auto whitespace-nowrap text-[11px] text-[#6e6e73]'>
       {eintraege.map((x) => <span key={x.label} className='shrink-0'><span className='text-[#86868b]'>{x.label}:</span> <span className='text-[#1d1d1f]'>{x.wert}</span></span>)}
     </div>
   )
