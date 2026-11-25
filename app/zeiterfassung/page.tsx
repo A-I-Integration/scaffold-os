@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { workdaysInMonth, BREAK_RULE_TEXT } from '@/lib/worktime';
 import ZeitTagesuebersicht from '@/components/ZeitTagesuebersicht';
+import { spesenJeTag, spesenCsv, type SpesenTagZeile } from '@/lib/spesen-export';
 import {
   Clock, ChevronDown, ChevronRight, Download, Plus, Pencil, X, Check,
 } from 'lucide-react';
@@ -89,6 +90,8 @@ export default function ZeiterfassungPage() {
   const [addFor, setAddFor] = useState<string | null>(null);
   const [aDatum, setADatum] = useState('');
   const [saving, setSaving] = useState(false);
+  const [spesenTage, setSpesenTage] = useState<SpesenTagZeile[]>([]);
+  const [auszahlung, setAuszahlung] = useState<string | null>(null);
   const [ansicht, setAnsicht] = useState<'monat' | 'tag'>('monat');
 
   // Rolle holen → darf korrigieren?
@@ -122,6 +125,12 @@ export default function ZeiterfassungPage() {
   }, [month, employeeFilter]);
 
   useEffect(() => { load(); }, [load]);
+
+  // Tages-Spesen des Monats (nur Chef und Dispo; für andere bleibt die Liste leer)
+  useEffect(() => {
+    if (!canEdit) { setSpesenTage([]); return; }
+    fetch(`/api/spesen?monat=${month}`, { cache: 'no-store' }).then(r => r.json()).then(j => { if (j.success) { setSpesenTage(j.tage); setAuszahlung(j.auszahlung); } else setSpesenTage([]); }).catch(() => setSpesenTage([]));
+  }, [month, canEdit]);
 
   // NEU (Phase 52): Projekte für die Soll-Ist-Zuordnung laden
   useEffect(() => {
@@ -232,7 +241,9 @@ export default function ZeiterfassungPage() {
   function exportCSV() {
     const zq = (s: string) => `"${(s || '').replace(/"/g, '""')}"`;
     const zahl = (n: number) => String(n).replace('.', ',');
-    const lines: string[] = ['Mitarbeiter;Datum;Von;Bis;Pause (min);Stunden;Notiz'];
+    const spesenTag = new Map(spesenJeTag(Object.values(entriesBy).flat(), spesenTage).map(z => [`${z.employee_id}|${z.work_date}`, z.betrag]));
+    const spesenGezeigt = new Set<string>();
+    const lines: string[] = ['Mitarbeiter;Datum;Von;Bis;Pause (min);Stunden;Spesen (EUR);Notiz'];
 
     for (const emp of employees) {
       const es = entriesBy[emp.id] || [];
@@ -243,6 +254,7 @@ export default function ZeiterfassungPage() {
           zq(name), fmtDate(e.work_date), fmtTime(e.start_time), fmtTime(e.end_time),
           e.break_minutes || 0,
           e.hours !== null ? zahl(e.hours) : 'läuft',
+          (() => { const k = `${emp.id}|${e.work_date}`; if (spesenGezeigt.has(k) || !spesenTag.has(k)) return ''; spesenGezeigt.add(k); return zahl(spesenTag.get(k)!); })(),
           zq(e.note || ''),
         ].join(';'));
       }
@@ -294,6 +306,19 @@ export default function ZeiterfassungPage() {
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
     a.download = `datev_lohn_${month}.csv`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  }
+
+  // ─── Spesen-Export (eigene Datei, damit das bestehende DATEV-Format unverändert bleibt) ───
+  function exportSpesen() {
+    const ma: Record<string, { nachname: string; vorname: string; pnr: string }> = {};
+    for (const e of employees) ma[e.id] = { nachname: e.last_name || '', vorname: e.first_name || '', pnr: String(e.id).replace(/-/g, '').slice(0, 8).toUpperCase() };
+    const csv = spesenCsv(spesenJeTag(Object.values(entriesBy).flat(), spesenTage), ma, auszahlung);
+    const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `spesen_${month}.csv`;
     a.click();
     URL.revokeObjectURL(a.href);
   }
@@ -407,6 +432,11 @@ export default function ZeiterfassungPage() {
             title="Stundenerfassung im DATEV-Importformat (für den Steuerberater)"
             className="inline-flex items-center gap-1.5 bg-emerald-600/20 hover:bg-emerald-600/30 border border-emerald-600/50 text-emerald-700 text-sm px-4 py-2 rounded-xl transition-colors">
             <Download className="w-4 h-4" /> DATEV Lohn
+          </button>
+          <button onClick={exportSpesen} data-testid="export-spesen"
+            title="Spesen je Mitarbeiter und Tag (Tagesberechnung oder Handeingabe) mit Auszahlungsmonat"
+            className="inline-flex items-center gap-1.5 border border-black/10 hover:border-[#e8590c] text-[#424245] hover:text-[#e8590c] text-sm px-4 py-2 rounded-xl transition-colors">
+            <Download className="w-4 h-4" /> Spesen
           </button>
         </div>
       </div>

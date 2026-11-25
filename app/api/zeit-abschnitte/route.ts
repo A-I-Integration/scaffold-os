@@ -34,7 +34,17 @@ export async function GET(req: NextRequest) {
     if (!emp.ok || !ent.ok) throw new Error(await (emp.ok ? ent : emp).text());
     // Fehlt die Tabelle noch (SQL nicht ausgeführt), bleibt die Tagesansicht ohne Abschnitte nutzbar.
     const abschnitte = abs.ok ? await abs.json() : [];
-    return NextResponse.json({ success: true, employees: await emp.json(), entries: await ent.json(), abschnitte, tabelleFehlt: !abs.ok });
+    // Mitarbeiter, die an dem Tag in einer Tour eingeteilt sind, erscheinen auch ohne Stempel (für die Vorschläge aus der Ortung).
+    let tourMitarbeiter: string[] = [];
+    try {
+      const rt = await fetch(`${url}/rest/v1/tours?select=driver_id,team_ids&planned_date=eq.${datum}`, { headers });
+      if (rt.ok) {
+        const ids = new Set<string>();
+        for (const t of await rt.json()) { if (t.driver_id) ids.add(t.driver_id); if (Array.isArray(t.team_ids)) for (const i of t.team_ids) if (typeof i === 'string') ids.add(i); }
+        tourMitarbeiter = [...ids];
+      }
+    } catch { /* ohne Touren weiter */ }
+    return NextResponse.json({ success: true, employees: await emp.json(), entries: await ent.json(), abschnitte, tabelleFehlt: !abs.ok, tourMitarbeiter });
   } catch (err) {
     return serverErrorResponse(err, 'zeit-abschnitte/GET');
   }

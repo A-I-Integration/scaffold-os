@@ -54,6 +54,12 @@ describe('Route Tagesabschnitte', () => {
     expect((await get()).status).toBe(403)
     expect(db.zeit_abschnitte).toHaveLength(0)
   })
+  it('liefert Mitarbeiter aus Touren des Tages, auch ohne Stempel', async () => {
+    const E2 = '22222222-2222-4222-8222-222222222222', E3 = '33333333-3333-4333-8333-333333333333'
+    db.tours = [{ id: 't1', planned_date: '2026-11-10', driver_id: E1, team_ids: [E1, E2] }, { id: 't2', planned_date: '2026-11-11', driver_id: E3, team_ids: [E3] }]
+    const j = await (await get()).json()
+    expect([...j.tourMitarbeiter].sort()).toEqual([E1, E2].sort())
+  })
   it('Tagesansicht läuft weiter, wenn die Tabelle noch fehlt', async () => {
     const rest = baueFakeRest(db)
     vi.stubGlobal('fetch', async (u: RequestInfo | URL, i?: RequestInit) => String(u).includes('zeit_abschnitte') ? new Response('relation does not exist', { status: 404 }) : rest(u, i))
