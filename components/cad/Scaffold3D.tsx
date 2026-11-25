@@ -16,7 +16,7 @@ import { idsImRahmen, istEchterRahmen } from '@/lib/cad/mehrfachauswahl'
 import { baueInstanzIds, loeseInstanz, waehleTreffer, findeDoppelteIds, nurSichtbare, type Treffer } from '@/lib/cad/auswahl'
 import { isTube, instanzMatrix } from '@/lib/cad/instanz-matrix'
 import { useMemo, useState, useRef, useEffect, useCallback, memo, createContext, useContext } from 'react'
-import { Canvas, useThree, useFrame, type ThreeEvent } from '@react-three/fiber'
+import { Canvas, useThree, useFrame, events as erzeugeZeigerEvents, type ThreeEvent } from '@react-three/fiber'
 import { FUSSPLATTE_AUFSTANDSVERSATZ_M, hangDaten, baueHangFlaeche } from '@/lib/cad/hang-geometrie'
 import { OrbitControls, TransformControls, Grid, Text, Sky, AdaptiveDpr, AdaptiveEvents, ContactShadows, Edges, Html, Line } from '@react-three/drei'
 import { lazy, Suspense } from 'react'
@@ -703,6 +703,34 @@ function getMaterial(type: string, color: THREE.Color, matt = false, vertexFarbe
  * Im Browser-Konsolenfenster  localStorage.setItem('cadAuswahlProtokoll','1')  ausführen, Seite neu laden, klicken.
  * Auslesen:  copy(JSON.stringify(window.__auswahlProtokoll, null, 1))
  */
+/**
+ * Mausposition → Normalized Device Coordinates, nur aus Bildschirmkoordinaten und Canvas-Rahmen.
+ * Die r3f-Standardrechnung (offsetX / size.width) stimmt nicht, wenn ein Vorfahr per CSS `zoom` skaliert ist
+ * (hier `.os-shell { zoom: 1.15 }`): offsetX und size.width liegen dann in verschiedenen Koordinatenräumen.
+ * clientX/Y und getBoundingClientRect() liegen im selben Raum, das Verhältnis ist zoomunabhängig.
+ */
+export function zeigerZuNdc(clientX: number, clientY: number, rect: { left: number; top: number; width: number; height: number }) {
+  if (!rect.width || !rect.height) return null
+  return {
+    x: ((clientX - rect.left) / rect.width) * 2 - 1,
+    y: -((clientY - rect.top) / rect.height) * 2 + 1,
+  }
+}
+
+const zeigerEventsOhneZoomFehler: NonNullable<React.ComponentProps<typeof Canvas>['events']> = (store) => {
+  const basis = erzeugeZeigerEvents(store)
+  return {
+    ...basis,
+    compute(event, state) {
+      const rect = (event.target as HTMLElement | null)?.getBoundingClientRect?.() ?? state.gl.domElement.getBoundingClientRect()
+      const ndc = zeigerZuNdc(event.clientX, event.clientY, rect)
+      if (!ndc) return
+      state.pointer.set(ndc.x, ndc.y)
+      state.raycaster.setFromCamera(state.pointer, state.camera)
+    },
+  }
+}
+
 function protokolliereKlick(eintrag: Record<string, unknown>) {
   try {
     if (typeof window === 'undefined' || window.localStorage.getItem('cadAuswahlProtokoll') !== '1') return
@@ -846,7 +874,12 @@ function InstancedBauteile({
       // Nur Alt+Klick schaltet gezielt zum nächsten dahinterliegenden Teil weiter.
       const id = waehleTreffer(treffer, { aktuell: selectedComponent, weiter: !!ne?.altKey }) ?? getroffen.id
       protokolliereKlick({
-        x: ne?.clientX, y: ne?.clientY, alt: !!ne?.altKey, aktuellVorher: selectedComponent ?? null, gewaehlt: id, verdecktAb,
+        x: ne?.clientX, y: ne?.clientY,
+        zeigerNdc: e.pointer ? { x: Math.round(e.pointer.x * 1000) / 1000, y: Math.round(e.pointer.y * 1000) / 1000 } : null,
+        erwartetNdc: ne && e.target instanceof HTMLElement ? zeigerZuNdc(ne.clientX, ne.clientY, e.target.getBoundingClientRect()) : null,
+        zoom: typeof document !== 'undefined' ? getComputedStyle(document.querySelector('.os-shell') ?? document.body).getPropertyValue('zoom') : null,
+        dpr: typeof window !== 'undefined' ? window.devicePixelRatio : null,
+        alt: !!ne?.altKey, aktuellVorher: selectedComponent ?? null, gewaehlt: id, verdecktAb,
         treffer: ((e.intersections ?? []) as { object: THREE.Object3D; instanceId?: number; distance: number }[]).map((h) => ({
           id: loeseInstanz(h.object?.userData?.instanzIds, h.instanceId), typ: String(h.object?.userData?.bauteilTyp ?? (h.object?.userData?.verdecker ? 'gebaeude' : '')), instanceId: h.instanceId ?? null, abstand: Math.round(h.distance * 1000) / 1000,
         })),
@@ -2758,6 +2791,7 @@ function Scaffold3D({
         onPointerMissed={() => { if (rahmenModus) return; if (selectedComponent || (mehrfachAuswahl && mehrfachAuswahl.size > 0)) onSelectComponent(null) }}
         camera={cameraConfig}
         frameloop="demand"
+        events={zeigerEventsOhneZoomFehler}
         dpr={[1, 2]}
         gl={{ antialias: true, powerPreference: 'high-performance', preserveDrawingBuffer: true }}
         onCreated={({ gl }) => { onCanvasReady?.(gl.domElement) }}

@@ -176,3 +176,14 @@ describe('Auswahl mit echtem Raycaster', () => {
     }
   })
 })
+
+describe('Zeiger → NDC (zoomunabhängig)', () => {
+  it('Mitte, Ecken und unabhängig vom Canvas-Versatz', async () => {
+    const { zeigerZuNdc } = await import('@/components/cad/Scaffold3D')
+    const rect = { left: 230, top: 120, width: 1000, height: 600 }
+    expect(zeigerZuNdc(730, 420, rect)).toMatchObject({ x: 0 })
+    expect(zeigerZuNdc(230, 120, rect)).toEqual({ x: -1, y: 1 })
+    expect(zeigerZuNdc(1230, 720, rect)).toEqual({ x: 1, y: -1 })
+    expect(zeigerZuNdc(0, 0, { ...rect, width: 0 })).toBeNull()
+  })
+})
