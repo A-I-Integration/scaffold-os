@@ -2,6 +2,7 @@
 // SCAFFOLD OS – Prüfen, Korrigieren, Freigeben importierter Gebäude (Paket 8)
 // Jede Änderung wird protokolliert. Freigabe nur, wenn die Pflichtwerte vorhanden und plausibel sind.
 // ============================================================
+import { pruefeUmriss } from '@/lib/calculations/cad-umriss'
 import type { GebaeudeImport } from '@/lib/geodaten/typen'
 
 export type Korrigierbar = 'traufeM' | 'firstM' | 'dachForm'
@@ -24,6 +25,7 @@ export function korrigiere(imp: GebaeudeImport, feld: Korrigierbar, neu: number 
 export function pruefeFreigabe(imp: GebaeudeImport): string[] {
   const p: string[] = []
   if (imp.fussabdruck.length < 3) p.push('Grundfläche fehlt.')
+  else p.push(...pruefeUmriss(imp.fussabdruck))
   const { traufeM, firstM } = imp.hoehen
   if (!(firstM && firstM > 0)) p.push('Gebäudehöhe (First) fehlt.')
   if (traufeM != null && firstM != null && traufeM > firstM + 0.01) p.push('Traufe liegt über dem First.')
