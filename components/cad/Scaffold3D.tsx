@@ -1498,6 +1498,44 @@ function Terrassen3D({ terrassen, umriss }: { terrassen: { ebene: number; x0: nu
   )
 }
 
+/**
+ * Dach und Giebelwände über der Traufe aus Flächenpolygonen (z. B. amtliches 3D-Gebäudemodell), nur Darstellung.
+ * Jede Fläche wird in ihrer Ebene trianguliert (Projektion auf die Achsenebene mit der größten Normalen).
+ */
+function UmrissOberbau({ flaechen }: { flaechen: { art: 'dach' | 'wand'; p: [number, number, number][] }[] }) {
+  const praes = useContext(FarbModusKontext) === 'praesentation'
+  const geo = useMemo(() => {
+    const bau = (art: 'dach' | 'wand') => {
+      const pos: number[] = []
+      for (const f of flaechen) {
+        if (f.art !== art || f.p.length < 3) continue
+        let nx = 0, ny = 0, nz = 0
+        for (let i = 0; i < f.p.length; i++) {
+          const [x1, y1, z1] = f.p[i], [x2, y2, z2] = f.p[(i + 1) % f.p.length]
+          nx += (y1 - y2) * (z1 + z2); ny += (z1 - z2) * (x1 + x2); nz += (x1 - x2) * (y1 + y2)
+        }
+        const ax = Math.abs(nx), ay = Math.abs(ny), az = Math.abs(nz)
+        const proj = (q: [number, number, number]) => (az >= ax && az >= ay ? new THREE.Vector2(q[0], q[1]) : ax >= ay ? new THREE.Vector2(q[1], q[2]) : new THREE.Vector2(q[0], q[2]))
+        const tri = THREE.ShapeUtils.triangulateShape(f.p.map(proj), [])
+        for (const t of tri) for (const i of t) pos.push(...f.p[i])
+      }
+      if (!pos.length) return null
+      const g = new THREE.BufferGeometry()
+      g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3))
+      g.computeVertexNormals()
+      return g
+    }
+    return { dach: bau('dach'), wand: bau('wand') }
+  }, [flaechen])
+  useEffect(() => () => { geo.dach?.dispose(); geo.wand?.dispose() }, [geo])
+  return (
+    <group>
+      {geo.dach && <mesh geometry={geo.dach} castShadow receiveShadow><DachMaterial praes={praes} doubleSide /></mesh>}
+      {geo.wand && <mesh geometry={geo.wand} castShadow receiveShadow><WandMaterial praes={praes} putz={false} doubleSide /></mesh>}
+    </group>
+  )
+}
+
 /** Gebäude mit Umriss: Vieleck-Grundfläche, nach oben gezogen (flaches Dach). */
 function UmrissGebaeude({ punkte, heightM, kantenHoeheM, untenM = 0 }: { punkte: { x: number; z: number }[]; heightM: number; kantenHoeheM?: number[]; untenM?: number }) {
   const praes = useContext(FarbModusKontext) === 'praesentation'
@@ -1867,6 +1905,8 @@ function Building3D({
     const pult = building.roofForm === 'pultdach' && building.eavesHeightM > 0 && building.eavesHeightM < heightM - 0.3 && building.geruestOptionen?.pultNiedrigeSeite
       ? { traufeM: building.eavesHeightM, firstM: heightM, niedrig: building.geruestOptionen.pultNiedrigeSeite }
       : null
+    // Dach und Giebel aus Flächendaten (amtliches 3D-Gebäudemodell): Wände enden an der Traufe, darüber kommen die Flächen
+    const oberbau = !pult && building.oberbau && building.oberbau.length > 0 && building.eavesHeightM > 0 && building.eavesHeightM < heightM - 0.3 ? building.oberbau : null
     return (
       <group>
         {/* Geländefläche in Gebäude-Koordinaten (Boxmitte bei 0); der Umriss liegt in Szenen-Koordinaten (Rückseite bei z = −0,5) */}
@@ -1878,9 +1918,10 @@ function Building3D({
         <group>
           {building.geschossKoerper && building.geschossKoerper.length >= 2
             ? <GeschossKoerper geschosse={building.geschossKoerper} untenM={ug ? 0 : hangM} />
-            : <UmrissGebaeude punkte={building.umriss} heightM={pult ? pult.traufeM : heightM} kantenHoeheM={building.umrissKantenHoeheM} untenM={ug ? 0 : hangM} />}
+            : <UmrissGebaeude punkte={building.umriss} heightM={pult ? pult.traufeM : oberbau ? building.eavesHeightM : heightM} kantenHoeheM={building.umrissKantenHoeheM} untenM={ug ? 0 : hangM} />}
+          {oberbau && <UmrissOberbau flaechen={oberbau} />}
           {ug && <UntergeschossKoerper punkte={building.untergeschossKoerper!} untenM={hangM} />}
-          {!building.umrissKantenHoeheM && !(building.geschossKoerper && building.geschossKoerper.length >= 2) && !pult && <UmrissGesimse punkte={building.umriss} hoeheM={heightM} />}
+          {!building.umrissKantenHoeheM && !(building.geschossKoerper && building.geschossKoerper.length >= 2) && !pult && <UmrissGesimse punkte={building.umriss} hoeheM={oberbau ? building.eavesHeightM : heightM} />}
           {building.terrassen && building.terrassen.length > 0 && <Terrassen3D terrassen={building.terrassen} umriss={building.umriss} />}
           {pult && <UmrissPultdach punkte={building.umriss} traufeM={pult.traufeM} firstM={pult.firstM} niedrig={pult.niedrig} ueberstandM={Math.max(0, building.overhangM || 0)} />}
           {features.filter((f) => f.umriss).map((f) => {

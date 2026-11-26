@@ -218,6 +218,10 @@ export interface BuildingParams {
   fassadenGeschosse?: { name: string; obenM: number; umriss: UmrissPunkt[] }[]
   /** Nur Umriss-Modus, vom CAD-Modell gesetzt (nicht eingeben): bestätigte Geschosse in Szenen-Koordinaten (wie `umriss`), nur für die 3D-Darstellung gestufter Gebäude. */
   geschossKoerper?: { name: string; obenM: number; umriss: UmrissPunkt[] }[]
+  /** Nur Umriss-Modus, nur Darstellung (z. B. aus amtlichem 3D-Gebäudemodell): Dachflächen und Giebelwände über der Traufe. Punkte [x, y, z] in der Plan-Basis des Umrisses (y = Höhe über Gelände); der Umriss-Modus legt sie wie den Umriss in die Szene. Wände des Umrisses enden dann an der Traufe. */
+  oberbau?: { art: 'dach' | 'wand'; p: [number, number, number][] }[]
+  /** Nur Umriss-Modus, Satteldach: Kanten (Index im angegebenen Umriss), an denen die Wand bis zum First reicht (Giebel). Dort läuft das Gerüst bis zum First, an den übrigen Kanten (Traufseiten) bis zur Rinne (Rinnen-Regel). Ohne Angabe gilt wie bisher überall die Gebäudehöhe. */
+  giebelKanten?: number[]
   /** Unbestätigte Konturen aus dem Aufmaß-PDF; Höhenvorschläge müssen im CAD manuell bestätigt werden. */
   // NEU: Einstellungen für die automatische Gerüst-Erzeugung (alles optional;
   // ohne Angabe gelten die bisherigen Standardwerte).
@@ -2506,6 +2510,9 @@ function generiereUmrissModell(
     ...gebaeude,
     umriss,
     ...(geschossKoerper.length >= 2 ? { geschossKoerper } : { geschossKoerper: undefined }),
+    oberbau: gebaeude.oberbau && gebaeude.oberbau.length > 0
+      ? gebaeude.oberbau.map((f) => ({ art: f.art, p: f.p.map(([x, y, z]) => [Math.round((x + versatz.x) * 100) / 100, y, Math.round((z + versatz.z) * 100) / 100] as [number, number, number]) }))
+      : undefined,
     untergeschossKoerper: gebaeude.untergeschoss && gebaeude.untergeschoss.length >= 3
       ? gebaeude.untergeschoss.map((q) => ({ x: Math.round((q.x + versatz.x) * 100) / 100, z: Math.round((q.z + versatz.z) * 100) / 100 }))
       : undefined,
@@ -2536,7 +2543,10 @@ function generiereUmrissModell(
   // Keine Eingabe je Kante: Rücksprünge aus den bestätigten Geschossen ableiten (Kante ohne höheres Geschoss darüber endet an ihrem Geschoss)
   const kHoeheAusGeschossen = !kHoeheNorm && geschossKoerper.length >= 2 ? kantenHoehenAusGeschossen(umriss, geschossKoerper, building.heightM) : null
   if (gebaeude.umrissKantenHoeheM && !kHoeheNorm) warnings.push({ type: 'warning', code: 'UMRISS_KANTENHOEHE_UNGUELTIG', message: 'Die Höhen je Kante passen nicht zum Umriss (Anzahl oder Wert) und werden ignoriert – es gilt die einheitliche Gebäudehöhe.' })
-  const kHoehe = kHoeheNorm ?? kHoeheAusGeschossen
+  // Satteldach mit bekannten Giebelkanten: Giebelkanten bis First, Traufseiten bis Rinne (nur Gerüsthöhe je Kante, die Wände werden dadurch nicht verändert)
+  const giebelAktiv = !kHoeheNorm && !kHoeheAusGeschossen && building.roofForm === 'satteldach' && building.eavesHeightM > 0 && building.eavesHeightM < building.heightM - 0.3 && Array.isArray(gebaeude.giebelKanten)
+  const kHoeheAusGiebel = giebelAktiv ? kantenHoehenNormalisiert(gebaeude.umriss!, gebaeude.umriss!.map((_, i) => (gebaeude.giebelKanten!.includes(i) ? building.heightM : building.eavesHeightM))) : null
+  const kHoehe = kHoeheNorm ?? kHoeheAusGeschossen ?? kHoeheAusGiebel
   building.umriss && (building.umrissKantenHoeheM = kHoeheNorm ?? undefined) // ab hier in der Reihenfolge des normalisierten Umrisses
   // Geneigtes Dach (Pult-, Walm-, Mansardendach) mit bekannter Traufe: wie im Rechteck-Modus endet das Gerüst an der Rinne – der oberste Belag liegt
   // höchstens BELAG_UEBER_RINNE_M über der Traufe, nicht erst an der First-Höhe. Eigene Höhen je Kante (Eingabe) gelten unverändert.
@@ -2551,7 +2561,15 @@ function generiereUmrissModell(
     return Math.min(h, rasterU + n * r)
   }
   // Kanten des obersten Geschosses (Höhe = Gebäudehöhe) enden bei geneigtem Dach an der Rinne, niedrigere Teile an ihrer eigenen Höhe
-  const kanteHoehe = (idx: number): number => kHoehe ? (kHoehe[idx] >= building.heightM - 1e-6 ? hoeheBisRinne(kHoehe[idx]) : kHoehe[idx]) : hoeheBisRinne(building.heightM)
+  const traufeBisRinne = (): number => {
+    const r = system?.rasterHoeheM ?? 2
+    return rasterU + Math.max(1, Math.floor((building.eavesHeightM + BELAG_UEBER_RINNE_M - rasterU) / r + 1e-6)) * r
+  }
+  const kanteHoehe = (idx: number): number => kHoehe
+    ? (kHoeheAusGiebel
+      ? (kHoehe[idx] >= building.heightM - 1e-6 ? building.heightM : Math.min(building.heightM, traufeBisRinne()))
+      : (kHoehe[idx] >= building.heightM - 1e-6 ? hoeheBisRinne(kHoehe[idx]) : kHoehe[idx]))
+    : hoeheBisRinne(building.heightM)
   const kanteLagen = (idx: number): number => system ? calculateLevels(kanteHoehe(idx) - rasterU, system, rasterU).levels : 1
   if (kHoehe) {
     const hh = [...new Set(kHoehe.map((h) => String(h).replace('.', ',')))]
@@ -2601,7 +2619,8 @@ function generiereUmrissModell(
     rasterU = Math.round((ok - n0 * system.rasterHoeheM) * 100) / 100
   }
 
-  const levelCalc = system ? calculateLevels(hoeheBisRinne(building.heightM) - rasterU, system, rasterU) : { levels: 1, levelHeightM: 2.0, levelsData: [{ index: 0, bottomY: 0, topY: 2.0 }] }
+  const levelCalc = system ? calculateLevels((giebelAktiv ? building.heightM : hoeheBisRinne(building.heightM)) - rasterU, system, rasterU) : { levels: 1, levelHeightM: 2.0, levelsData: [{ index: 0, bottomY: 0, topY: 2.0 }] }
+  if (giebelAktiv && system) warnings.push({ type: 'info', code: 'OBERSTER_BELAG_RINNE', message: `Satteldach: An den Traufseiten endet das Gerüst an der Rinne (Traufe ${building.eavesHeightM.toFixed(2).replace('.', ',')} m), an den Giebelseiten reicht es bis zum First (${building.heightM.toFixed(2).replace('.', ',')} m).` })
   if (rinneRegelUmriss && system && hoeheBisRinne(building.heightM) < building.heightM - 0.01) warnings.push({ type: 'info', code: 'OBERSTER_BELAG_RINNE', message: `Geneigtes Dach: Das Gerüst endet an der Rinne (Traufe ${building.eavesHeightM.toFixed(2).replace('.', ',')} m), der oberste Belag liegt ${building.roofForm === 'pultdach' ? 'mindestens auf der höchsten Dachkante' : `höchstens ${BELAG_UEBER_RINNE_M.toFixed(2).replace('.', ',')} m über der Traufe`}.` })
 
   // Feldstränge je Kante (Länge = Abstand der beiden Gerüst-Eckpunkte entlang der Kante)

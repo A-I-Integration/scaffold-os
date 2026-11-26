@@ -36,6 +36,7 @@ export function gradNachUtm(xml: string): { xml: string; epsg: number } | null {
   return { xml: out, epsg: zone === 32 ? 25832 : 25833 }
 }
 import { bereinigeUmriss } from '@/lib/geodaten/umriss-bereinigen'
+import { baueOberbau, erkenneGiebelKanten, leseFlaechen } from '@/lib/geodaten/oberbau'
 import type { GebaeudeImport, Herkunft } from '@/lib/geodaten/typen'
 
 type Ring = [number, number][]
@@ -94,6 +95,8 @@ export function citygmlZuImport(xmlRoh: string, opt: KonverterOptionen): Gebaeud
   const zone = utmZoneAusEpsg(epsg)
   const alleLoD2 = leseLod2Gebaeude(xml)
   const grund = leseGrundflaechen(xml)
+  const dachFl = leseFlaechen(xml, 'RoofSurface')
+  const wandFl = leseFlaechen(xml, 'WallSurface')
   const punkt = opt.suchpunkt && zone ? utmAusWgs84(opt.suchpunkt.lat, opt.suchpunkt.lon, zone) : null
   const out: GebaeudeImport[] = []
   for (const g of alleLoD2) {
@@ -112,6 +115,11 @@ export function citygmlZuImport(xmlRoh: string, opt: KonverterOptionen): Gebaeud
     if (!(firstM > 0)) hinweise.push('Höhe fehlt oder ist nicht plausibel – bitte von Hand eintragen.')
     if (umgerechnet) hinweise.push('Koordinaten wurden aus Grad (WGS84) nach UTM umgerechnet (Abweichung unter ca. 1 m).')
     hinweise.push('LoD2 vereinfacht Dachformen und lässt Türme, Gauben und Anbauten teils weg.')
+    const traufeRel = g.traufeZ - g.bodenZ
+    const ob = firstM > 0 && g.dachForm !== 'flachdach' && (dachFl.get(g.id)?.length ?? 0) > 0
+      ? baueOberbau(dachFl.get(g.id)!, wandFl.get(g.id) ?? [], g.bodenZ, traufeRel, ursprung)
+      : null
+    const giebel = ob && g.dachForm === 'satteldach' && ob.waendeLokal.length > 0 ? erkenneGiebelKanten(fussabdruck, ob.waendeLokal, traufeRel) : undefined
     out.push({
       id: `${opt.herkunft.provider}:${g.id}`,
       providerObjektId: g.id,
@@ -121,6 +129,8 @@ export function citygmlZuImport(xmlRoh: string, opt: KonverterOptionen): Gebaeud
       hoehen: firstM > 0 ? { traufeM: Math.round(traufeM * 100) / 100, firstM: Math.round(firstM * 100) / 100 } : {},
       dachForm: g.dachForm,
       funktion: g.funktion,
+      ...(ob && ob.oberbau.length > 0 ? { oberbau: ob.oberbau } : {}),
+      ...(giebel ? { giebelKanten: giebel } : {}),
       grundflaecheM2: Math.round(g.grundflaecheM2 * 10) / 10,
       abstandM: abstandM != null ? Math.round(abstandM * 10) / 10 : undefined,
       hinweise,

@@ -34,6 +34,9 @@ export interface Georef {
   ursprungNord: number
 }
 
+/** Dach- oder Giebelfläche (lokale Meter: x = Ost, y = Höhe über Gelände, z = −Nord) – nur Darstellung */
+export interface OberbauFlaeche { art: 'dach' | 'wand'; p: [number, number, number][] }
+
 export type ImportStatus = 'vorschlag' | 'geprueft' | 'freigegeben' | 'verworfen'
 
 export interface ImportKorrektur { feld: string; alt: string | null; neu: string | null; am: string }
@@ -48,6 +51,10 @@ export interface GebaeudeImport {
   hoehen: { traufeM?: number; firstM?: number }
   dachForm?: 'flachdach' | 'satteldach' | 'walmdach'
   funktion?: string | null
+  /** Dach und Giebelwände (nur Darstellung); fehlt, wenn der Datensatz keine Flächen enthält */
+  oberbau?: OberbauFlaeche[]
+  /** Kanten (Index in `fussabdruck`), an denen die Wand bis zum First reicht; nur bei Satteldach mit Wanddaten */
+  giebelKanten?: number[]
   grundflaecheM2?: number
   /** Abstand vom gesuchten Punkt zur Grundfläche (m); 0 = Punkt liegt im Gebäude */
   abstandM?: number
