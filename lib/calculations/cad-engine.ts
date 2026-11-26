@@ -222,6 +222,8 @@ export interface BuildingParams {
   oberbau?: { art: 'dach' | 'wand'; p: [number, number, number][] }[]
   /** Nur Umriss-Modus, Satteldach: Kanten (Index im angegebenen Umriss), an denen die Wand bis zum First reicht (Giebel). Dort läuft das Gerüst bis zum First, an den übrigen Kanten (Traufseiten) bis zur Rinne (Rinnen-Regel). Ohne Angabe gilt wie bisher überall die Gebäudehöhe. */
   giebelKanten?: number[]
+  /** Abstand des obersten Belags unter der Dachlinie am Giebel (m); Voreinstellung 1 m */
+  giebelAbstandM?: number
   /** Unbestätigte Konturen aus dem Aufmaß-PDF; Höhenvorschläge müssen im CAD manuell bestätigt werden. */
   // NEU: Einstellungen für die automatische Gerüst-Erzeugung (alles optional;
   // ohne Angabe gelten die bisherigen Standardwerte).
@@ -2547,6 +2549,7 @@ function generiereUmrissModell(
   const giebelAktiv = !kHoeheNorm && !kHoeheAusGeschossen && building.roofForm === 'satteldach' && building.eavesHeightM > 0 && building.eavesHeightM < building.heightM - 0.3 && Array.isArray(gebaeude.giebelKanten)
   const kHoeheAusGiebel = giebelAktiv ? kantenHoehenNormalisiert(gebaeude.umriss!, gebaeude.umriss!.map((_, i) => (gebaeude.giebelKanten!.includes(i) ? building.heightM : building.eavesHeightM))) : null
   const kHoehe = kHoeheNorm ?? kHoeheAusGeschossen ?? kHoeheAusGiebel
+  const giebelD = typeof gebaeude.giebelAbstandM === 'number' && gebaeude.giebelAbstandM >= 0.3 && gebaeude.giebelAbstandM <= 3 ? gebaeude.giebelAbstandM : BELAG_UNTER_FLACHDACHKANTE_M
   building.umriss && (building.umrissKantenHoeheM = kHoeheNorm ?? undefined) // ab hier in der Reihenfolge des normalisierten Umrisses
   // Geneigtes Dach (Pult-, Walm-, Mansardendach) mit bekannter Traufe: wie im Rechteck-Modus endet das Gerüst an der Rinne – der oberste Belag liegt
   // höchstens BELAG_UEBER_RINNE_M über der Traufe, nicht erst an der First-Höhe. Eigene Höhen je Kante (Eingabe) gelten unverändert.
@@ -2572,7 +2575,52 @@ function generiereUmrissModell(
     : hoeheBisRinne(building.heightM)
   // Giebelkante: oberster Belag mindestens BELAG_UNTER_FLACHDACHKANTE_M (1 m) unter dem First, nie darüber
   const giebelKanteIdx = (idx: number): boolean => !!kHoeheAusGiebel && kHoehe![idx] >= building.heightM - 1e-6
-  const kanteLagen = (idx: number): number => system ? calculateLevels(kanteHoehe(idx) - rasterU, system, rasterU, giebelKanteIdx(idx) ? BELAG_UNTER_FLACHDACHKANTE_M : 0).levels : 1
+  const kanteLagen = (idx: number): number => system ? calculateLevels(kanteHoehe(idx) - rasterU, system, rasterU, giebelKanteIdx(idx) ? giebelD : 0).levels : 1
+  // Dachlinie über einer Giebelkante: obere Kontur der Giebelwand-Flächen (aus dem amtlichen Modell); ohne passende Flächen ein symmetrisches Dreieck Traufe → First → Traufe
+  const giebelProfil = new Map<number, (sm: number) => number>()
+  const giebelProfilVon = (k: (typeof kanten)[number]): ((sm: number) => number) => {
+    const L = k.laengeM, eaves = building.eavesHeightM, H = building.heightM
+    const segs: { s0: number; y0: number; s1: number; y1: number }[] = []
+    for (const f of building.oberbau ?? []) {
+      if (f.art !== 'wand') continue
+      const q = f.p.map(([x, y, z]) => ({ sm: (x - k.von.x) * k.u[0] + (z - k.von.z) * k.u[1], nm: (x - k.von.x) * k.n[0] + (z - k.von.z) * k.n[1], y }))
+      if (!q.every((v) => Math.abs(v.nm) < 0.35 && v.sm > -0.35 && v.sm < L + 0.35)) continue
+      for (let i = 0; i < q.length; i++) { const a2 = q[i], b2 = q[(i + 1) % q.length]; segs.push({ s0: Math.min(a2.sm, b2.sm), y0: a2.sm <= b2.sm ? a2.y : b2.y, s1: Math.max(a2.sm, b2.sm), y1: a2.sm <= b2.sm ? b2.y : a2.y }) }
+    }
+    return (sm: number): number => {
+      const x = Math.max(0, Math.min(L, sm))
+      if (segs.length === 0) return eaves + (H - eaves) * (1 - Math.abs((2 * x) / L - 1))
+      let best = eaves
+      for (const g of segs) {
+        if (x < g.s0 - 1e-6 || x > g.s1 + 1e-6) continue
+        const y = g.s1 - g.s0 < 1e-6 ? Math.max(g.y0, g.y1) : g.y0 + ((g.y1 - g.y0) * (x - g.s0)) / (g.s1 - g.s0)
+        if (y > best) best = y
+      }
+      return Math.min(H, best)
+    }
+  }
+  /** Anzahl Lagen eines Feldes an einer Giebelkante: oberster Belag mindestens giebelD unter der niedrigsten Dachlinie im Feld, nie unter den Traufseiten */
+  const giebelProf = (k: (typeof kanten)[number]): ((sm: number) => number) => {
+    if (!giebelProfil.has(k.index)) giebelProfil.set(k.index, giebelProfilVon(k))
+    return giebelProfil.get(k.index)!
+  }
+  /** Mittlere Höhe der Giebelwand über der Kante (Wandfläche = Länge × Mittelwert) */
+  const giebelMittelHoehe = (k: (typeof kanten)[number]): number => {
+    const prof = giebelProf(k)
+    let sum = 0
+    for (let q = 0; q < 40; q++) sum += prof(((q + 0.5) / 40) * k.laengeM)
+    return sum / 40
+  }
+  const giebelFeldLagen = (k: (typeof kanten)[number], von: number, bis: number): number => {
+    if (!system) return 1
+    const prof = giebelProf(k)
+    const r = system.rasterHoeheM
+    let tiefste = Infinity
+    for (let q = 0; q <= 6; q++) tiefste = Math.min(tiefste, prof(von + ((bis - von) * q) / 6))
+    const nDach = Math.floor((tiefste - giebelD - rasterU) / r + 1e-6)
+    const nTraufe = calculateLevels(traufeBisRinne() - rasterU, system, rasterU).levels
+    return Math.min(kanteLagen(k.index), Math.max(nTraufe, nDach))
+  }
   if (kHoehe) {
     const hh = [...new Set(kHoehe.map((h) => String(h).replace('.', ',')))]
     if (hh.length > 1) warnings.push({ type: 'info', code: 'UMRISS_KANTENHOEHEN', message: `Gebäudeteile mit unterschiedlicher Höhe (${hh.join(' m, ')} m): Das Gerüst endet je Kante an deren Höhe. Übergänge, Aufstieg und Verankerung an den Höhensprüngen bitte vor Ort prüfen.` })
@@ -2621,8 +2669,8 @@ function generiereUmrissModell(
     rasterU = Math.round((ok - n0 * system.rasterHoeheM) * 100) / 100
   }
 
-  const levelCalc = system ? calculateLevels((giebelAktiv ? building.heightM : hoeheBisRinne(building.heightM)) - rasterU, system, rasterU, giebelAktiv ? BELAG_UNTER_FLACHDACHKANTE_M : 0) : { levels: 1, levelHeightM: 2.0, levelsData: [{ index: 0, bottomY: 0, topY: 2.0 }] }
-  if (giebelAktiv && system) warnings.push({ type: 'info', code: 'OBERSTER_BELAG_RINNE', message: `Satteldach: An den Traufseiten endet das Gerüst an der Rinne (Traufe ${building.eavesHeightM.toFixed(2).replace('.', ',')} m), an den Giebelseiten bleibt der oberste Belag mindestens 1 m unter dem First (${building.heightM.toFixed(2).replace('.', ',')} m).` })
+  const levelCalc = system ? calculateLevels((giebelAktiv ? building.heightM : hoeheBisRinne(building.heightM)) - rasterU, system, rasterU, giebelAktiv ? giebelD : 0) : { levels: 1, levelHeightM: 2.0, levelsData: [{ index: 0, bottomY: 0, topY: 2.0 }] }
+  if (giebelAktiv && system) warnings.push({ type: 'info', code: 'OBERSTER_BELAG_RINNE', message: `Satteldach: An den Traufseiten endet das Gerüst an der Rinne (Traufe ${building.eavesHeightM.toFixed(2).replace('.', ',')} m), an den Giebelseiten treppt das Gerüst Feld für Feld mit dem Dach ab: der oberste Belag bleibt je Feld mindestens ${giebelD.toFixed(2).replace('.', ',')} m unter der Dachlinie, höchstens bis unter den First (${building.heightM.toFixed(2).replace('.', ',')} m).` })
   if (rinneRegelUmriss && system && hoeheBisRinne(building.heightM) < building.heightM - 0.01) warnings.push({ type: 'info', code: 'OBERSTER_BELAG_RINNE', message: `Geneigtes Dach: Das Gerüst endet an der Rinne (Traufe ${building.eavesHeightM.toFixed(2).replace('.', ',')} m), der oberste Belag liegt ${building.roofForm === 'pultdach' ? 'mindestens auf der höchsten Dachkante' : `höchstens ${BELAG_UEBER_RINNE_M.toFixed(2).replace('.', ',')} m über der Traufe`}.` })
 
   // Feldstränge je Kante (Länge = Abstand der beiden Gerüst-Eckpunkte entlang der Kante)
@@ -2654,6 +2702,11 @@ function generiereUmrissModell(
       div.distribution.forEach((fl, fi) => {
         const t = cum + fl / 2
         cum += fl
+        // Giebel: Lagen je Feld folgen der Dachlinie (Abtreppung); Lage 0 bleibt immer
+        if (giebelAktiv && giebelKanteIdx(s.k.index)) {
+          const off = (s.start.x - s.k.von.x) * s.k.u[0] + (s.start.z - s.k.von.z) * s.k.u[1] // Lage des Strangbeginns auf der Kante (negativ = vor der Wand)
+          if (ld.index >= giebelFeldLagen(s.k, off + cum - fl, off + cum)) return
+        }
         const px = parseFloat((s.start.x + s.k.u[0] * t).toFixed(3))
         const pz = parseFloat((s.start.z + s.k.u[1] * t).toFixed(3))
         let fussTU: (AusgleichTeil & { von?: AusgleichTeil; bis?: AusgleichTeil; vonAussen?: AusgleichTeil; bisAussen?: AusgleichTeil }) | null = null
@@ -2730,6 +2783,10 @@ function generiereUmrissModell(
           const t = cum + fl / 2
           cum += fl
           if (f % 2 !== 0) return
+          if (giebelAktiv && giebelKanteIdx(s.k.index)) {
+            const off = (s.start.x - s.k.von.x) * s.k.u[0] + (s.start.z - s.k.von.z) * s.k.u[1]
+            if (yAnchor > rasterU + giebelFeldLagen(s.k, off + cum - fl, off + cum) * levelCalc.levelHeightM + 1e-6) return
+          }
           anchors.push({
             id: `anchor-k${s.k.index}-${al}-${f}`,
             // Ankerrohr von 10 cm in der Wand bis zur Innenstütze (Innenlinie = Wand + Wandabstand)
@@ -2747,7 +2804,16 @@ function generiereUmrissModell(
   const jeLage = new Map<number, ScaffoldField[]>()
   fields.forEach((f) => jeLage.set(f.levelIndex, [...(jeLage.get(f.levelIndex) ?? []), f]))
   const unten = [...jeLage.values()].reduce<ScaffoldField[]>((m, l) => (l.length > m.length ? l : m), [])
-  const flaechenHoehe = (idx: number): number => (kHoehe ? Math.min(building.heightM, kHoehe[idx]) : building.heightM)
+  const flaechenHoehe = (idx: number): number => (kHoehe ? (giebelAktiv && giebelKanteIdx(idx) ? Math.min(building.heightM, giebelMittelHoehe(kanten[idx])) : Math.min(building.heightM, kHoehe[idx])) : building.heightM)
+  // Gebaute Fläche an Giebelkanten: Summe der Felder × ihre abgetreppten Lagen
+  const giebelGebaut = (idx: number): number => {
+    const sg = aktive.find((x) => x.k.index === idx)
+    if (!sg || !system) return 0
+    const off = (sg.start.x - sg.k.von.x) * sg.k.u[0] + (sg.start.z - sg.k.von.z) * sg.k.u[1]
+    let cum = 0, sum = 0
+    for (const fl of divs.get(idx)!.distribution) { sum += fl * giebelFeldLagen(sg.k, off + cum, off + cum + fl) * levelCalc.levelHeightM; cum += fl }
+    return sum / Math.max(0.01, sg.laenge) * sg.k.laengeM
+  }
   const modell: CADModel = {
     building,
     system,
@@ -2759,7 +2825,7 @@ function generiereUmrissModell(
     totalHeightM: building.heightM,
     // Fläche je Kante: Länge × Höhe dieser Kante (Traufseite bis Traufe, Giebel bis First, Anbau bis eigene Höhe); ohne Höhen je Kante überall die Gebäudehöhe
     totalAreaM2: kanten.filter((k) => aktiveIdx.has(k.index)).reduce((sum, k) => sum + k.laengeM * flaechenHoehe(k.index), 0),
-    gebauteFlaecheM2: kanten.filter((k) => aktiveIdx.has(k.index)).reduce((sum, k) => sum + k.laengeM * Math.max(flaechenHoehe(k.index), kHoehe ? kanteLagen(k.index) * levelCalc.levelHeightM : levelCalc.levels * levelCalc.levelHeightM), 0),
+    gebauteFlaecheM2: kanten.filter((k) => aktiveIdx.has(k.index)).reduce((sum, k) => sum + (giebelAktiv && giebelKanteIdx(k.index) ? Math.max(k.laengeM * flaechenHoehe(k.index), giebelGebaut(k.index)) : k.laengeM * Math.max(flaechenHoehe(k.index), kHoehe ? kanteLagen(k.index) * levelCalc.levelHeightM : levelCalc.levels * levelCalc.levelHeightM)), 0),
     fieldCount: unten.length,
     levelCount: hangU ? jeLage.size : levelCalc.levels,
     warnings,

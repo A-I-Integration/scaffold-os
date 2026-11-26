@@ -252,6 +252,7 @@ export function liesProjektdatei(text: string): LeseErgebnis {
     if (flaechen.every((f) => f != null)) gebaeude.oberbau = flaechen as NonNullable<BuildingParams['oberbau']>
     else verworfen.push('Dach (Darstellung)')
   }
+  { const ga = zahl(g.giebelAbstandM, 0.3, 3); if (ga != null) gebaeude.giebelAbstandM = ga }
   if (Array.isArray(g.giebelKanten)) gebaeude.giebelKanten = g.giebelKanten.filter((i): i is number => Number.isInteger(i) && i >= 0 && i < MAX_PUNKTE).slice(0, MAX_PUNKTE)
   if (Array.isArray(g.sections) && g.sections.length >= 2 && g.sections.length <= MAX_ABSCHNITTE) {
     const abs = g.sections.map((s): BuildingSection | null => {

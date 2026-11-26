@@ -1,6 +1,7 @@
 'use client'
 
 import AusrichtungBereich from './AusrichtungBereich'
+import GiebelBereich from './GiebelBereich'
 import { STANDARD_LASTKLASSE, VERWENDUNGEN, verwendungMitId, breiteVonBreitenklasse } from '@/lib/geruestklassen'
 import { lagenansatz } from '@/lib/lastansatz'
 import Lod2Panel from '@/components/cad/Lod2Panel'
@@ -1159,6 +1160,7 @@ export default function BuildingForm({ reiterWunsch, building, systemId, onChang
             </div>
 
             <AusrichtungBereich building={building} onChange={onChange} />
+            <GiebelBereich building={building} onChange={onChange} />
 
             <UmrissEditor building={building} onChange={onChange} />
             <div><label className='block text-xs font-medium text-[#424245] mb-1'>Gebäudelänge (m){building.umriss ? ' – folgt dem Umriss' : building.sections && building.sections.length >= 1 ? ' – wird durch Abschnitte oben ersetzt' : ''}</label><input type='number' step='0.01' value={building.lengthM} onChange={(e) => update('lengthM', parseFloat(e.target.value))} disabled={!!building.sections && building.sections.length >= 1} className='w-full px-3 py-2 border rounded-xl text-sm disabled:opacity-40' /></div>

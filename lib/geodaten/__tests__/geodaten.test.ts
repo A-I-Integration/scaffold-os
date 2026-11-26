@@ -315,14 +315,14 @@ describe('Übergabe mit Dach: Gerüsthöhe je Kante und Darstellung', () => {
     expect(Math.min(...dx)).toBeGreaterThanOrEqual(Math.min(...xs) - 0.1)
     expect(Math.max(...dx)).toBeLessThanOrEqual(Math.max(...xs) + 0.1)
   })
-  it('Fläche je Kante: Traufseiten bis Traufe (5 m), Giebel bis First (8 m)', () => {
+  it('Fläche je Kante: Traufseiten bis Traufe (5 m), Giebelwand mit mittlerer Höhe (6,5 m)', () => {
     const [g] = citygmlZuImport(`<core:CityModel>${hausMitWaenden('H', 340000, 5680000)}</core:CityModel>`, { herkunft, epsg: 25832 })
     const b = zuBuildingParams(gibFrei(g), BAU)
     const m = generateCADModel(b, 'mj-uniconnect')
     const u = m.building.umriss!, gi = new Set(b.giebelKanten)
     let soll = 0
-    u.forEach((p, i) => { const q = u[(i + 1) % u.length]; soll += Math.hypot(q.x - p.x, q.z - p.z) * (gi.has(i) ? 8 : 5) })
-    expect(m.totalAreaM2).toBeCloseTo(soll, 0)
+    u.forEach((p, i) => { const q = u[(i + 1) % u.length]; soll += Math.hypot(q.x - p.x, q.z - p.z) * (gi.has(i) ? 6.5 : 5) })
+    expect(Math.abs(m.totalAreaM2 - soll)).toBeLessThan(1)
     // früher überall First: deutlich größer
     const umfang = u.reduce((s, p, i) => s + Math.hypot(u[(i + 1) % u.length].x - p.x, u[(i + 1) % u.length].z - p.z), 0)
     expect(m.totalAreaM2).toBeLessThan(umfang * 8 - 1)
@@ -331,6 +331,102 @@ describe('Übergabe mit Dach: Gerüsthöhe je Kante und Darstellung', () => {
     const [g] = citygmlZuImport(doc(25832, haus('A', 340000, 5680000)), { herkunft, epsg: 25832 })
     const m = generateCADModel(zuBuildingParams(gibFrei(g), BAU), 'mj-uniconnect')
     for (const [, n] of lagenJeKante(m)) expect(n).toBe(4)
+  })
+})
+
+describe('Giebelabtreppung: Lagen je Feld folgen der Dachlinie', () => {
+  // 20 m lang (x), 14 m breit (y): Traufe 6 m, First 12 m, Giebel an den kurzen Seiten
+  function hausHoch(id: string, ox: number, oy: number): string {
+    const P = (x: number, y: number, z: number) => [ox + x, oy + y, z]
+    return `<core:cityObjectMember><bldg:Building gml:id="${id}"><bldg:function>31001_1000</bldg:function>`
+      + flaeche('RoofSurface', [P(0, 0, 106), P(20, 0, 106), P(20, 7, 112), P(0, 7, 112)])
+      + flaeche('RoofSurface', [P(0, 14, 106), P(0, 7, 112), P(20, 7, 112), P(20, 14, 106)])
+      + flaeche('GroundSurface', [P(0, 0, 100), P(0, 14, 100), P(20, 14, 100), P(20, 0, 100)])
+      + flaeche('WallSurface', [P(0, 0, 100), P(20, 0, 100), P(20, 0, 106), P(0, 0, 106)])
+      + flaeche('WallSurface', [P(20, 14, 100), P(0, 14, 100), P(0, 14, 106), P(20, 14, 106)])
+      + flaeche('WallSurface', [P(0, 14, 100), P(0, 0, 100), P(0, 0, 106), P(0, 7, 112), P(0, 14, 106)])
+      + flaeche('WallSurface', [P(20, 0, 100), P(20, 14, 100), P(20, 14, 106), P(20, 7, 112), P(20, 0, 106)])
+      + '</bldg:Building></core:cityObjectMember>'
+  }
+  const BAU: BuildingParams = {
+    lengthM: 15, widthM: 6, heightM: 10, eavesHeightM: 10, roofForm: 'satteldach', roofHeightM: 2, floors: 3, floorHeightsM: [3, 3, 3],
+    windowCount: 4, doorCount: 1, balconyCount: 0, overhangM: 0.3, setbackM: 0, sides: ['front', 'back', 'left', 'right'],
+  }
+  const bauen = (extra?: Partial<BuildingParams>) => {
+    const [g] = citygmlZuImport(`<core:CityModel>${hausHoch('H', 340000, 5680000)}</core:CityModel>`, { herkunft, epsg: 25832 })
+    const b = { ...zuBuildingParams(gibFrei(g), BAU), ...extra }
+    return { b, m: generateCADModel(b, 'mj-uniconnect') }
+  }
+  const felderJeLage = (m: ReturnType<typeof generateCADModel>, kante: number) => {
+    const o = new Map<number, number>()
+    for (const f of m.fields) if (f.kante === kante) o.set(f.levelIndex, (o.get(f.levelIndex) ?? 0) + 1)
+    return o
+  }
+  it('Giebel: oben weniger Felder als unten, Mitte am höchsten; Traufseiten 3 Lagen', () => {
+    const { b, m } = bauen()
+    const gi = new Set(b.giebelKanten)
+    expect(gi.size).toBe(2)
+    for (const k of gi) {
+      const o = felderJeLage(m, k)
+      const unten = o.get(0)!, mitte = o.get(2)!, oben = o.get(3)!
+      expect(unten).toBeGreaterThan(0)
+      expect(mitte).toBe(unten) // Lage 3 (Belag bei 6 m) liegt an der Traufe noch an allen Feldern
+      expect(oben).toBeGreaterThan(0)
+      expect(oben).toBeLessThan(unten) // Lage 4 (Belag bei 8 m) nur dort, wo die Dachlinie ≥ 9 m über dem ganzen Feld liegt
+      expect(o.has(4)).toBe(false) // Lage 5 (10 m) würde im Feld neben dem First über die Dachlinie − 1 m ragen
+    }
+    for (let i = 0; i < b.umriss!.length; i++) if (!gi.has(i)) expect(Math.max(...[...felderJeLage(m, i).keys()]) + 1).toBe(3)
+  })
+  it('kein Belag liegt höher als die Dachlinie minus Abstand (außer der Mindesthöhe der Traufseiten)', () => {
+    const { m } = bauen({ giebelAbstandM: 2.5 })
+    const hoechste = Math.max(...m.fields.map((f) => f.positionY + 2))
+    expect(hoechste).toBeLessThanOrEqual(12 - 2.5 + 1e-6) // 4 Lagen = 8 m ≤ 9,5 m
+    expect(Math.max(...m.fields.map((f) => f.levelIndex)) + 1).toBe(4)
+  })
+  it('Dachlinie kommt aus den Giebelflächen: bei versetztem First liegt das höchste Feld nicht in der Mitte', () => {
+    const P = (x: number, y: number, z: number) => [340000 + x, 5680000 + y, z]
+    const xml = `<core:CityModel><core:cityObjectMember><bldg:Building gml:id="A"><bldg:function>31001_1000</bldg:function>`
+      + flaeche('RoofSurface', [P(0, 0, 106), P(20, 0, 106), P(20, 3, 112), P(0, 3, 112)])
+      + flaeche('RoofSurface', [P(0, 14, 106), P(0, 3, 112), P(20, 3, 112), P(20, 14, 106)])
+      + flaeche('GroundSurface', [P(0, 0, 100), P(0, 14, 100), P(20, 14, 100), P(20, 0, 100)])
+      + flaeche('WallSurface', [P(0, 0, 100), P(20, 0, 100), P(20, 0, 106), P(0, 0, 106)])
+      + flaeche('WallSurface', [P(20, 14, 100), P(0, 14, 100), P(0, 14, 106), P(20, 14, 106)])
+      + flaeche('WallSurface', [P(0, 14, 100), P(0, 0, 100), P(0, 0, 106), P(0, 3, 112), P(0, 14, 106)])
+      + flaeche('WallSurface', [P(20, 0, 100), P(20, 14, 100), P(20, 14, 106), P(20, 3, 112), P(20, 0, 106)])
+      + '</bldg:Building></core:cityObjectMember></core:CityModel>'
+    const [g] = citygmlZuImport(xml, { herkunft, epsg: 25832 })
+    const b = zuBuildingParams(gibFrei(g), BAU)
+    const m = generateCADModel(b, 'mj-uniconnect')
+    const k = [...b.giebelKanten!][0]
+    const u = m.building.umriss!, a0 = u[k], a1 = u[(k + 1) % u.length]
+    const L = Math.hypot(a1.x - a0.x, a1.z - a0.z), ux = (a1.x - a0.x) / L, uz = (a1.z - a0.z) / L
+    const fk = m.fields.filter((f) => f.kante === k)
+    const hoechste = Math.max(...fk.map((f) => f.levelIndex))
+    const sm = fk.filter((f) => f.levelIndex === hoechste).map((f) => (f.positionX - a0.x) * ux + (f.positionZ - a0.z) * uz)
+    const mitteSm = sm.reduce((x, y) => x + y, 0) / sm.length
+    expect(Math.min(Math.abs(mitteSm - 3), Math.abs(mitteSm - 11))).toBeLessThan(Math.abs(mitteSm - 7))
+  })
+  it('Anker stehen nur dort, wo ein Feld darunter steht', () => {
+    const { m } = bauen()
+    const oben = Math.max(...m.fields.map((f) => f.positionY + 2))
+    for (const a of m.anchors) expect(a.positionY).toBeLessThanOrEqual(oben + 1e-6)
+  })
+  it('Fläche: Giebelwand = Länge × mittlere Höhe (9 m), Traufseiten bis Traufe (6 m)', () => {
+    const { m } = bauen()
+    const soll = 2 * 20 * 6 + 2 * 14 * 9
+    expect(m.totalAreaM2).toBeGreaterThan(soll - 6)
+    expect(m.totalAreaM2).toBeLessThan(soll + 6)
+    expect(m.gebauteFlaecheM2!).toBeGreaterThanOrEqual(m.totalAreaM2 - 1e-6)
+  })
+  it('Abstand bleibt in der Projektdatei erhalten; ungültige Werte werden ignoriert', () => {
+    const { b } = bauen({ giebelAbstandM: 1.5 })
+    const datei = erzeugeProjektdatei({ building: b, systemId: 'mj-uniconnect', statikDaten: {} as never, notizen: [] })
+    const r = liesProjektdatei(JSON.stringify(datei))
+    expect(r.ok).toBe(true)
+    if (r.ok) expect(r.daten.building.giebelAbstandM).toBe(1.5)
+    const kaputt = liesProjektdatei(JSON.stringify(erzeugeProjektdatei({ building: { ...b, giebelAbstandM: 99 }, systemId: 'mj-uniconnect', statikDaten: {} as never, notizen: [] })))
+    expect(kaputt.ok).toBe(true)
+    if (kaputt.ok) expect(kaputt.daten.building.giebelAbstandM).toBeUndefined()
   })
 })
 
