@@ -142,3 +142,37 @@ describe('Fassadenanalyse im Rechteck-Modus', () => {
     expect(model.fields).toEqual(ohneFassaden.fields)
   })
 })
+
+describe('Flachdach: oberster Belag mindestens 1 m unter der Dachkante', () => {
+  const system = GERUEST_SYSTEME.find((s) => s.id === 'mj-uniconnect')!
+  const FLACH = (h: number): BuildingParams => ({ ...STANDARD_BUILDING, roofForm: 'flachdach', roofHeightM: 0, heightM: h, eavesHeightM: h, floors: 2, floorHeightsM: [h / 2, h / 2], sides: ['front'] })
+  const obenM = (m: ReturnType<typeof generateCADModel>) => Math.max(...m.levels.map((l) => l.topY))
+
+  it('calculateLevels mit Abstand: abrunden, mindestens eine Lage', () => {
+    expect(calculateLevels(7, system, 0, 1).levels).toBe(3)
+    expect(calculateLevels(7, system, 0, 1).levelsData.at(-1)!.topY).toBe(6)
+    expect(calculateLevels(8, system, 0, 1).levels).toBe(3) // 8 − 1 = 7 → 3 Lagen (Belag 6 m)
+    expect(calculateLevels(9, system, 0, 1).levels).toBe(4) // 9 − 1 = 8 → Belag genau 8 m
+    expect(calculateLevels(2.5, system, 0, 1).levels).toBe(1) // nie weniger als eine Lage
+  })
+  it('ohne Abstand bleibt das Aufrunden wie bisher', () => {
+    expect(calculateLevels(7, system).levels).toBe(4)
+    expect(calculateLevels(7, system).levelsData.at(-1)!.topY).toBe(8)
+  })
+  it('Modell Flachdach 7 m: 3 Lagen, oberster Belag 6 m (nicht 8 m)', () => {
+    const m = generateCADModel(FLACH(7), 'mj-uniconnect')
+    expect(m.levelCount).toBe(3)
+    expect(obenM(m)).toBe(6)
+  })
+  it('Allgemeine Regel: oberster Belag liegt bei jeder Flachdach-Höhe höchstens Gebäudehöhe − 1 m', () => {
+    for (const h of [3.2, 4, 5.5, 6, 7, 8, 9.5, 12, 15.3]) {
+      const m = generateCADModel(FLACH(h), 'mj-uniconnect')
+      expect(obenM(m)).toBeLessThanOrEqual(Math.max(system.rasterHoeheM, h - 1) + 1e-6)
+    }
+  })
+  it('Satteldach bleibt unverändert (Rinnen-Regel)', () => {
+    const sattel: BuildingParams = { ...STANDARD_BUILDING, roofForm: 'satteldach', heightM: 10, eavesHeightM: 8, roofHeightM: 2, sides: ['front'] }
+    const m = generateCADModel(sattel, 'mj-uniconnect')
+    expect(obenM(m)).toBeGreaterThanOrEqual(8)
+  })
+})

@@ -131,7 +131,8 @@ describe('2. Bauabschnitt im LV (Stil statiker)', () => {
   it('höhere gewählte Höhe → höherer Preis (monoton)', () => {
     const q = quelle()
     const ep = (h: number) => pos(erzeugeLeistungsverzeichnis(q, { ...eing, hoeheBa2M: h }), 'bis ca. 21,5 m Höhe').ep
+    // 25 m statt 28 m: Das Gerüst endet bei Flachdach mindestens 1 m unter der Gebäudehöhe, eine gewählte Höhe darüber hat nichts zu kappen
     expect(ep(12)).toBeLessThan(ep(21.5))
-    expect(ep(21.5)).toBeLessThan(ep(28))
+    expect(ep(21.5)).toBeLessThan(ep(25))
   })
 })

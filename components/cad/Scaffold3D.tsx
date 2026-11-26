@@ -2764,6 +2764,8 @@ function Scaffold3D({
   // Ziehen: ID der gerade gezogenen Platzierung (null = niemand zieht)
   const [ziehId, setZiehId] = useState<string | null>(null)
   const [treppeHinweis, setTreppeHinweis] = useState<string | null>(null)
+  // Die Bauteil-Infobox liegt über dem 3D und verdeckte dort Bauteile (Klicks gingen an die Box). Standard: kleine Kurzzeile; Details auf Wunsch.
+  const [infoOffen, setInfoOffen] = useState(false)
   const ziehKontext = useMemo<ZiehKontextWert | null>(
     () =>
       platzierungIdVon && onBauteilZiehen
@@ -2926,8 +2928,26 @@ function Scaffold3D({
         // am ausgewählten Bauteil, additiv im bestehenden Info-Kasten –
         // nur sichtbar, wenn die aufrufende Seite notes/onAddNote übergibt.
         const bauteilNotizen = (notes || []).filter((n) => n.componentId === selectedComponent)
+        if (!infoOffen) {
+          return (
+            <div className="absolute top-2 right-2 flex items-center gap-1 bg-white/95 backdrop-blur rounded-full pl-3 pr-1 py-0.5 text-xs border border-black/10 shadow z-50 max-w-[210px]" data-testid="bauteil-kurz">
+              <span className="truncate font-medium text-[#1d1d1f]" title={selectedComponent}>{comp?.name ?? selectedComponent}</span>
+              <button type="button" onClick={() => setInfoOffen(true)} aria-label="Details zum Bauteil anzeigen" data-testid="bauteil-mehr" className="px-2 py-0.5 rounded-full text-[#0071e3] hover:bg-black/5">Details</button>
+              <button type="button" onClick={() => onSelectComponent(null)} aria-label="Schließen" title="Schließen (Esc)" className="w-5 h-5 flex items-center justify-center rounded-full text-[#86868b] hover:bg-black/5">✕</button>
+            </div>
+          )
+        }
         return (
           <div className="absolute top-4 right-4 bg-white/95 backdrop-blur rounded-xl px-4 py-3 text-sm border border-black/10 shadow-lg z-50 max-w-[240px]">
+            <button
+              type="button"
+              onClick={() => setInfoOffen(false)}
+              aria-label="Details einklappen"
+              title="Details einklappen"
+              className="absolute top-1.5 right-8 w-6 h-6 flex items-center justify-center rounded-full text-[#86868b] hover:bg-black/5 hover:text-[#1d1d1f]"
+            >
+              –
+            </button>
             <button
               type="button"
               onClick={() => onSelectComponent(null)}

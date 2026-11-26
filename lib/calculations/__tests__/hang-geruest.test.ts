@@ -21,9 +21,10 @@ describe('Hang: Gelände je Seite', () => {
     expect(unten.positionY).toBeCloseTo(-2.5, 2)
     expect(m.totalAreaM2).toBeCloseTo(a.totalAreaM2 + 12 * 2.5, 1)
     expect(m.warnings.some((w) => w.code === 'HANG_GERUEST')).toBe(true)
-    // oberste Lage der Seite reicht mindestens bis zur Gebäudehöhe
+    // Flachdach: oberster Belag der Seite liegt mindestens 1 m unter der Gebäudehöhe (8 m), aber nicht mehr als eine Lage tiefer als nötig
     const oben = m.levels.filter((l) => l.id.startsWith('level-front-')).reduce((t, l) => Math.max(t, l.topY), 0)
-    expect(oben).toBeGreaterThanOrEqual(8)
+    expect(oben).toBeLessThanOrEqual(8 - 1 + 1e-6)
+    expect(oben).toBeGreaterThan(8 - 1 - 2) // Raster 2 m
   })
   it('Gelände höher: weniger Lagen, Fußpunkt höher', () => {
     const a = generateCADModel(basis(), sys)
