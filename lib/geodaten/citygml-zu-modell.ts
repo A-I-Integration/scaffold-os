@@ -5,6 +5,36 @@
 // ============================================================
 import { leseLod2Gebaeude } from '@/lib/cad/lod2-citygml'
 import { abstandZuPolygon, lokalAusUtm, utmAusWgs84, utmZoneAusEpsg } from '@/lib/geodaten/koordinaten'
+
+/** Anzahl Gebäude im Text (für Diagnose). */
+export const zaehleGebaeude = (xml: string): number => (xml.match(/<bldg:Building[\s>]/g) ?? []).length
+
+/**
+ * Manche Dienste (z. B. NRW OGC API ohne crs-Parameter) liefern CRS84h: Länge, Breite in Grad, Höhe in m.
+ * Dann werden alle posList-Werte nach UTM (Zone nach Länge: 32 bis 12° O, sonst 33) umgerechnet, damit der Leser Meter bekommt.
+ * Die Reihenfolge (Länge/Breite oder Breite/Länge) wird an den Werten erkannt. Abweichung zu ETRS89 unter ca. 1 m.
+ */
+export function gradNachUtm(xml: string): { xml: string; epsg: number } | null {
+  const erste = /<gml:posList[^>]*>\s*([-\d.eE+]+)\s+([-\d.eE+]+)/.exec(xml)
+  if (!erste) return null
+  const a = Number(erste[1]), b = Number(erste[2])
+  const lonLat = a >= 5 && a <= 16 && b >= 47 && b <= 56
+  const latLon = b >= 5 && b <= 16 && a >= 47 && a <= 56
+  if (!lonLat && !latLon) return null
+  const lon0 = lonLat ? a : b
+  const zone: 32 | 33 = lon0 < 12 ? 32 : 33
+  const out = xml.replace(/(<gml:posList[^>]*>)([^<]+)(<\/gml:posList>)/g, (_m, o: string, inhalt: string, c: string) => {
+    const v = inhalt.trim().split(/\s+/).map(Number)
+    const t: string[] = []
+    for (let i = 0; i + 2 < v.length; i += 3) {
+      const lon = lonLat ? v[i] : v[i + 1], lat = lonLat ? v[i + 1] : v[i]
+      const u = utmAusWgs84(lat, lon, zone)
+      t.push(u.ost.toFixed(3), u.nord.toFixed(3), String(v[i + 2]))
+    }
+    return `${o}${t.join(' ')}${c}`
+  })
+  return { xml: out, epsg: zone === 32 ? 25832 : 25833 }
+}
 import type { GebaeudeImport, Herkunft } from '@/lib/geodaten/typen'
 
 type Ring = [number, number][]
@@ -56,8 +86,10 @@ export interface KonverterOptionen {
   radiusM?: number
 }
 
-export function citygmlZuImport(xml: string, opt: KonverterOptionen): GebaeudeImport[] {
-  const epsg = erkenneEpsg(xml, opt.epsg)
+export function citygmlZuImport(xmlRoh: string, opt: KonverterOptionen): GebaeudeImport[] {
+  const umgerechnet = gradNachUtm(xmlRoh)
+  const xml = umgerechnet ? umgerechnet.xml : xmlRoh
+  const epsg = umgerechnet ? umgerechnet.epsg : erkenneEpsg(xml, opt.epsg)
   const zone = utmZoneAusEpsg(epsg)
   const alleLoD2 = leseLod2Gebaeude(xml)
   const grund = leseGrundflaechen(xml)
@@ -75,6 +107,7 @@ export function citygmlZuImport(xml: string, opt: KonverterOptionen): GebaeudeIm
     if (!zone) hinweise.push(`Koordinatensystem EPSG:${epsg} wird für die Abstandsberechnung nicht unterstützt.`)
     const traufeM = g.traufeZ - g.bodenZ, firstM = g.firstZ - g.bodenZ
     if (!(firstM > 0)) hinweise.push('Höhe fehlt oder ist nicht plausibel – bitte von Hand eintragen.')
+    if (umgerechnet) hinweise.push('Koordinaten wurden aus Grad (WGS84) nach UTM umgerechnet (Abweichung unter ca. 1 m).')
     hinweise.push('LoD2 vereinfacht Dachformen und lässt Türme, Gauben und Anbauten teils weg.')
     out.push({
       id: `${opt.herkunft.provider}:${g.id}`,

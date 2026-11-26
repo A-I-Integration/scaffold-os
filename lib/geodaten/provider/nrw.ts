@@ -6,7 +6,7 @@
 // Verwendet werden deshalb nur Standard-Parameter von OGC API Features (bbox, limit) und Inhaltsaushandlung per Accept.
 // Die erste Live-Abnahme gehört in den Browser/Server. Ergebnis bleibt ein Vorschlag mit Freigabe.
 // ============================================================
-import { citygmlZuImport } from '@/lib/geodaten/citygml-zu-modell'
+import { citygmlZuImport, zaehleGebaeude } from '@/lib/geodaten/citygml-zu-modell'
 import type { GebaeudeProvider } from '@/lib/geodaten/typen'
 
 export const NRW_BASIS = 'https://ogc-api.nrw.de/3dg/v1/collections/building/items'
@@ -43,15 +43,20 @@ export function erstelleNrwProvider(fetchFn: typeof fetch = fetch, jetzt: () => 
         if (!res.ok) throw new Error(`Gebäudedienst NRW antwortet mit Fehler ${res.status}.`)
         const text = await res.text()
         if (text.length > MAX_BYTES) throw new Error('Antwort des Gebäudedienstes ist zu groß.')
-        return citygmlZuImport(text, {
+        const alle = citygmlZuImport(text, {
           epsg: 25832,
           suchpunkt: { lat, lon },
-          radiusM: r,
           herkunft: {
             provider: 'nrw', quelle: url, lizenz: NRW_LIZENZ.name, attribution: NRW_LIZENZ.attribution,
             abgerufenAm: jetzt().toISOString(), speichernErlaubt: NRW_LIZENZ.speichernErlaubt,
           },
         })
+        const n = zaehleGebaeude(text)
+        // Gebäude geliefert, aber keines lesbar → Fehler mit Diagnose statt stillem „nichts gefunden“
+        if (n > 0 && alle.length === 0) {
+          throw new Error(`Der Dienst lieferte ${n} Gebäude, aber keines konnte gelesen werden (Koordinatensystem ${res.headers.get('content-crs') ?? 'unbekannt'}, Typ ${res.headers.get('content-type') ?? 'unbekannt'}). Bitte Maße von Hand eintragen und den Fehler melden.`)
+        }
+        return alle.filter((g) => g.abstandM == null || g.abstandM <= r)
       } finally { clearTimeout(timer) }
     },
   }
