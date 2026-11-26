@@ -170,3 +170,45 @@ describe('Fassadengrundlage und Bilder', () => {
     expect(kannBildSpeichern(undefined)).toBe(false)
   })
 })
+
+import { gradNachUtm, zaehleGebaeude } from '../citygml-zu-modell'
+
+describe('Dienst liefert Grad (CRS84h) statt Meter', () => {
+  // Haus 20 × 10 m bei 52,03 N / 6,83 O in Grad; Längengrad-Meter = 111320·cos(Breite)
+  const lat0 = 52.03, lon0 = 6.83
+  const dLat = (m: number) => m / 111_320, dLon = (m: number) => m / (111_320 * Math.cos((lat0 * Math.PI) / 180))
+  const grad = (lonLat: boolean) => {
+    const P = (x: number, y: number, z: number) => (lonLat ? [lon0 + dLon(x), lat0 + dLat(y), z] : [lat0 + dLat(y), lon0 + dLon(x), z])
+    return `<core:CityModel>${'<core:cityObjectMember><bldg:Building gml:id="G1"><bldg:function>31001_1000</bldg:function>'
+      + flaeche('RoofSurface', [P(0, 0, 105), P(20, 0, 105), P(20, 5, 108), P(0, 5, 108)])
+      + flaeche('RoofSurface', [P(0, 10, 105), P(0, 5, 108), P(20, 5, 108), P(20, 10, 105)])
+      + flaeche('GroundSurface', [P(0, 0, 100), P(0, 10, 100), P(20, 10, 100), P(20, 0, 100)])
+      + '</bldg:Building></core:cityObjectMember>'}</core:CityModel>`
+  }
+  for (const lonLat of [true, false]) {
+    it(`rechnet ${lonLat ? 'Länge/Breite' : 'Breite/Länge'} in Meter um und liest das Gebäude`, () => {
+      const xml = grad(lonLat)
+      expect(zaehleGebaeude(xml)).toBe(1)
+      expect(gradNachUtm(xml)?.epsg).toBe(25832)
+      const [g] = citygmlZuImport(xml, { herkunft, epsg: 25832, suchpunkt: { lat: lat0 + dLat(5), lon: lon0 + dLon(10) }, radiusM: 50 })
+      expect(g).toBeDefined()
+      const xs = g.fussabdruck.map((p) => p.x), zs = g.fussabdruck.map((p) => p.z)
+      expect(Math.max(...xs) - Math.min(...xs)).toBeGreaterThan(19.5)
+      expect(Math.max(...xs) - Math.min(...xs)).toBeLessThan(20.5)
+      expect(Math.max(...zs) - Math.min(...zs)).toBeGreaterThan(9.5)
+      // UTM-Gitter ist gegenüber wahrem Norden gedreht (hier ca. 1,7° bei 6,83° O): die Hülle wird bei 20 m Länge ca. 0,6 m tiefer
+      expect(Math.max(...zs) - Math.min(...zs)).toBeLessThan(11)
+      expect(g.hoehen).toEqual({ traufeM: 5, firstM: 8 })
+      expect(g.abstandM).toBe(0)
+      expect(g.hinweise.join(' ')).toContain('umgerechnet')
+    })
+  }
+  it('Meter-Daten bleiben unverändert (keine Umrechnung)', () => {
+    expect(gradNachUtm(doc(25832, haus('A', 340000, 5680000)))).toBeNull()
+  })
+  it('Provider meldet Fehler statt „nichts gefunden“, wenn Gebäude geliefert aber unlesbar sind', async () => {
+    const xml = '<core:CityModel><bldg:Building gml:id="X"></bldg:Building></core:CityModel>'
+    const prov = erstelleNrwProvider((async () => ({ ok: true, status: 200, text: async () => xml, headers: new Headers({ 'content-crs': 'CRS84h' }) })) as unknown as typeof fetch)
+    await expect(prov.sucheGebaeude(52.03, 6.83, 50)).rejects.toThrow(/keines konnte gelesen werden/)
+  })
+})
