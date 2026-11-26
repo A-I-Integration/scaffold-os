@@ -35,6 +35,7 @@ export function gradNachUtm(xml: string): { xml: string; epsg: number } | null {
   })
   return { xml: out, epsg: zone === 32 ? 25832 : 25833 }
 }
+import { bereinigeUmriss } from '@/lib/geodaten/umriss-bereinigen'
 import type { GebaeudeImport, Herkunft } from '@/lib/geodaten/typen'
 
 type Ring = [number, number][]
@@ -101,7 +102,9 @@ export function citygmlZuImport(xmlRoh: string, opt: KonverterOptionen): Gebaeud
     if (!ringe.length) continue
     if (ringe.length > 1) hinweise.push(`Das Gebäude hat ${ringe.length} Grundflächen; angezeigt wird die größte. Bitte prüfen.`)
     const ursprung = { ost: g.mitteOst, nord: g.mitteNord }
-    const fussabdruck = ringe[0].map(([o, n]) => lokalAusUtm(o, n, ursprung))
+    const roh = ringe[0].map(([o, n]) => lokalAusUtm(o, n, ursprung))
+    const { punkte: fussabdruck, entfernt } = bereinigeUmriss(roh)
+    if (entfernt > 0) hinweise.push(`Umriss vereinfacht: ${entfernt} sehr kurze Kanten bzw. Punkte auf Geraden entfernt (CAD verlangt Kanten ab 0,5 m).`)
     const abstandM = punkt ? abstandZuPolygon(punkt.ost - ursprung.ost, -(punkt.nord - ursprung.nord), fussabdruck) : undefined
     if (opt.radiusM != null && abstandM != null && abstandM > opt.radiusM) continue
     if (!zone) hinweise.push(`Koordinatensystem EPSG:${epsg} wird für die Abstandsberechnung nicht unterstützt.`)

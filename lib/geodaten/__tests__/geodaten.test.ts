@@ -212,3 +212,30 @@ describe('Dienst liefert Grad (CRS84h) statt Meter', () => {
     await expect(prov.sucheGebaeude(52.03, 6.83, 50)).rejects.toThrow(/keines konnte gelesen werden/)
   })
 })
+
+import { bereinigeUmriss } from '../umriss-bereinigen'
+import { pruefeUmriss } from '@/lib/calculations/cad-umriss'
+
+describe('Umriss bereinigen (kleine Stufen aus LoD2)', () => {
+  it('zieht eine 0,25-m-Stufe zusammen und entfernt Punkte auf Geraden; Ergebnis besteht die CAD-Prüfung', () => {
+    // Rechteck 14 × 10 m mit 0,25-m-Stufe in der Westwand und einem Mittelpunkt auf der Nordkante
+    const roh = [{ x: 0, z: 0 }, { x: 7, z: 0 }, { x: 14, z: 0 }, { x: 14, z: 10 }, { x: 0.25, z: 10 }, { x: 0.25, z: 9.9 }, { x: 0, z: 9.9 }]
+    expect(pruefeUmriss(roh).length).toBeGreaterThan(0)
+    const { punkte, entfernt } = bereinigeUmriss(roh)
+    expect(entfernt).toBeGreaterThanOrEqual(2)
+    expect(pruefeUmriss(punkte)).toEqual([])
+    const xs = punkte.map((q) => q.x), zs = punkte.map((q) => q.z)
+    expect(Math.max(...xs) - Math.min(...xs)).toBeGreaterThan(13.7)
+    expect(Math.max(...zs) - Math.min(...zs)).toBeGreaterThan(9.8)
+  })
+  it('lässt einen sauberen Umriss unverändert', () => {
+    const q = [{ x: 0, z: 0 }, { x: 10, z: 0 }, { x: 10, z: 5 }, { x: 0, z: 5 }]
+    expect(bereinigeUmriss(q)).toEqual({ punkte: q, entfernt: 0 })
+  })
+  it('Freigabe prüft den Umriss', () => {
+    const k = [{ x: 0, z: 0 }, { x: 10, z: 0 }, { x: 10, z: 0.2 }, { x: 0, z: 5 }]
+    const imp = { id: 'x', providerObjektId: '1', herkunft: { ...herkunft, epsg: 25832 }, georef: { epsg: 25832, ursprungOst: 0, ursprungNord: 0 },
+      fussabdruck: k, hoehen: { firstM: 9 }, dachForm: 'flachdach' as const, hinweise: [], status: 'vorschlag' as const, korrekturen: [] }
+    expect(pruefeFreigabe(imp).some((t) => t.includes('Kante'))).toBe(true)
+  })
+})
