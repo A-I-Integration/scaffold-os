@@ -241,7 +241,7 @@ describe('5. Bauabschnitt und Teilabbau: Mengen entstehen aus dem Modellstand un
   })
   it('Teilabbau (Lagen): Stunden = Gesamtabbau × Flächenanteil; alle Lagen = ganzes Gerüst', () => {
     const teil = berechneTeilabbau(modell, { art: 'lagen', anzahl: 2 }, { gesamtAbbauStunden: 1000 })
-    expect(teil.stundenBerechnet).toBeCloseTo(1000 * teil.anteil, 0)
+    expect(Math.abs(teil.stundenBerechnet - 1000 * teil.anteil)).toBeLessThan(1) // Stunden werden aufgerundet
     expect(teil.anteil).toBeGreaterThan(0); expect(teil.anteil).toBeLessThan(1)
     const alles = berechneTeilabbau(modell, { art: 'lagen', anzahl: modell.levelCount }, { gesamtAbbauStunden: 1000 })
     expect(alles.anteil).toBeCloseTo(1, 2)

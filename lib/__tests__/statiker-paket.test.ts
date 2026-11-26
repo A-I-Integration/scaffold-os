@@ -114,9 +114,10 @@ describe('Statiker-Paket', () => {
     const csv = stuecklisteOhnePreiseCsv(materials)
     expect(csv).toContain('Gewicht gesamt (kg)')
     expect(csv).not.toMatch(/Preis/)
-    for (const m of materials.filter((x) => x.unitPrice > 0).slice(0, 5)) {
-      expect(csv).not.toContain(`;${String(m.unitPrice).replace('.', ',')};`)
-    }
+    // keine Preisspalte: die Kopfzeile hat genau die 7 Spalten ohne Preis (ein Preis als Menge/Gewicht wäre Zufall und kein Fund)
+    const zeilen = csv.replace(/^\ufeff/, '').trim().split(/\r?\n/)
+    const n = zeilen[0].split(';').length
+    expect(n).toBe(7)
   })
 
   it('CSV setzt Felder mit Semikolon oder Anführungszeichen in Anführungszeichen', () => {

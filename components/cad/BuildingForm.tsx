@@ -4,6 +4,7 @@ import AusrichtungBereich from './AusrichtungBereich'
 import { STANDARD_LASTKLASSE, VERWENDUNGEN, verwendungMitId, breiteVonBreitenklasse } from '@/lib/geruestklassen'
 import { lagenansatz } from '@/lib/lastansatz'
 import Lod2Panel from '@/components/cad/Lod2Panel'
+import AdresseImportPanel from '@/components/cad/AdresseImportPanel'
 import { useState, useRef, useMemo, useEffect, type ReactNode } from 'react'
 import { BuildingParams, WANDABSTAND_MIN_M, WANDABSTAND_MAX_M } from '@/lib/calculations/cad-engine'
 import BalkonEditor from './BalkonEditor'
@@ -744,6 +745,7 @@ export default function BuildingForm({ reiterWunsch, building, systemId, onChang
                   onChange={(e) => { const f = e.target.files?.[0]; if (f) onLadeProjektdatei(f); e.target.value = '' }} />
               </label>
             )}
+            <AdresseImportPanel building={building} onChange={onChange} onHinweis={setAnalyseHinweis} />
             <Lod2Panel building={building} onChange={onChange} onHinweis={setAnalyseHinweis} />
             {modellImport && (() => {
               const m0 = masseAusQuader(modellImport.quader, modellImport.einheit, modellImport.oben)
