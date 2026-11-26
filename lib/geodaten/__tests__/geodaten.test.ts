@@ -299,7 +299,7 @@ describe('Übergabe mit Dach: Gerüsthöhe je Kante und Darstellung', () => {
     for (const f of m.fields) o.set(f.kante!, Math.max(o.get(f.kante!) ?? 0, f.levelIndex + 1))
     return o
   }
-  it('Traufseiten bis Rinne (Traufe 5 m + 1 m → 3 Lagen), Giebelseiten bis First (8 m → 4 Lagen)', () => {
+  it('Traufseiten bis Rinne (Traufe 5 m + 1 m → 3 Lagen), Giebelseiten oberster Belag ≥ 1 m unter dem First (8 m → 3 Lagen, oben bei 6 m)', () => {
     const [g] = citygmlZuImport(`<core:CityModel>${hausMitWaenden('H', 340000, 5680000)}</core:CityModel>`, { herkunft, epsg: 25832 })
     const b = zuBuildingParams(gibFrei(g), BAU)
     expect(b.oberbau!.length).toBeGreaterThan(0)
@@ -307,7 +307,7 @@ describe('Übergabe mit Dach: Gerüsthöhe je Kante und Darstellung', () => {
     const lagen = lagenJeKante(m)
     const gi = new Set(b.giebelKanten)
     expect(gi.size).toBe(2)
-    for (const [k, n] of lagen) expect(n).toBe(gi.has(k) ? 4 : 3)
+    for (const [k, n] of lagen) expect(n).toBe(3); void gi
     expect(m.warnings.some((w) => w.code === 'OBERSTER_BELAG_RINNE')).toBe(true)
     // Wände werden an der Traufe gezeichnet, Dach liegt in der Szene (Umriss-Modus verschiebt Dach wie den Umriss)
     expect(m.building.oberbau!.length).toBe(b.oberbau!.length)

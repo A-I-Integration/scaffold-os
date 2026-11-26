@@ -2570,7 +2570,9 @@ function generiereUmrissModell(
       ? (kHoehe[idx] >= building.heightM - 1e-6 ? building.heightM : Math.min(building.heightM, traufeBisRinne()))
       : (kHoehe[idx] >= building.heightM - 1e-6 ? hoeheBisRinne(kHoehe[idx]) : kHoehe[idx]))
     : hoeheBisRinne(building.heightM)
-  const kanteLagen = (idx: number): number => system ? calculateLevels(kanteHoehe(idx) - rasterU, system, rasterU).levels : 1
+  // Giebelkante: oberster Belag mindestens BELAG_UNTER_FLACHDACHKANTE_M (1 m) unter dem First, nie darüber
+  const giebelKanteIdx = (idx: number): boolean => !!kHoeheAusGiebel && kHoehe![idx] >= building.heightM - 1e-6
+  const kanteLagen = (idx: number): number => system ? calculateLevels(kanteHoehe(idx) - rasterU, system, rasterU, giebelKanteIdx(idx) ? BELAG_UNTER_FLACHDACHKANTE_M : 0).levels : 1
   if (kHoehe) {
     const hh = [...new Set(kHoehe.map((h) => String(h).replace('.', ',')))]
     if (hh.length > 1) warnings.push({ type: 'info', code: 'UMRISS_KANTENHOEHEN', message: `Gebäudeteile mit unterschiedlicher Höhe (${hh.join(' m, ')} m): Das Gerüst endet je Kante an deren Höhe. Übergänge, Aufstieg und Verankerung an den Höhensprüngen bitte vor Ort prüfen.` })
@@ -2619,8 +2621,8 @@ function generiereUmrissModell(
     rasterU = Math.round((ok - n0 * system.rasterHoeheM) * 100) / 100
   }
 
-  const levelCalc = system ? calculateLevels((giebelAktiv ? building.heightM : hoeheBisRinne(building.heightM)) - rasterU, system, rasterU) : { levels: 1, levelHeightM: 2.0, levelsData: [{ index: 0, bottomY: 0, topY: 2.0 }] }
-  if (giebelAktiv && system) warnings.push({ type: 'info', code: 'OBERSTER_BELAG_RINNE', message: `Satteldach: An den Traufseiten endet das Gerüst an der Rinne (Traufe ${building.eavesHeightM.toFixed(2).replace('.', ',')} m), an den Giebelseiten reicht es bis zum First (${building.heightM.toFixed(2).replace('.', ',')} m).` })
+  const levelCalc = system ? calculateLevels((giebelAktiv ? building.heightM : hoeheBisRinne(building.heightM)) - rasterU, system, rasterU, giebelAktiv ? BELAG_UNTER_FLACHDACHKANTE_M : 0) : { levels: 1, levelHeightM: 2.0, levelsData: [{ index: 0, bottomY: 0, topY: 2.0 }] }
+  if (giebelAktiv && system) warnings.push({ type: 'info', code: 'OBERSTER_BELAG_RINNE', message: `Satteldach: An den Traufseiten endet das Gerüst an der Rinne (Traufe ${building.eavesHeightM.toFixed(2).replace('.', ',')} m), an den Giebelseiten bleibt der oberste Belag mindestens 1 m unter dem First (${building.heightM.toFixed(2).replace('.', ',')} m).` })
   if (rinneRegelUmriss && system && hoeheBisRinne(building.heightM) < building.heightM - 0.01) warnings.push({ type: 'info', code: 'OBERSTER_BELAG_RINNE', message: `Geneigtes Dach: Das Gerüst endet an der Rinne (Traufe ${building.eavesHeightM.toFixed(2).replace('.', ',')} m), der oberste Belag liegt ${building.roofForm === 'pultdach' ? 'mindestens auf der höchsten Dachkante' : `höchstens ${BELAG_UEBER_RINNE_M.toFixed(2).replace('.', ',')} m über der Traufe`}.` })
 
   // Feldstränge je Kante (Länge = Abstand der beiden Gerüst-Eckpunkte entlang der Kante)
