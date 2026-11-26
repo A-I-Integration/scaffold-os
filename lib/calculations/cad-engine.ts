@@ -538,6 +538,10 @@ export function calculateFieldDivision(
 
 /** Der oberste Belag liegt höchstens so weit ÜBER der Rinne (Traufe) bzw. der Dachkante, in m (Vorgabe: Oberkante Belag = Traufe + 1,00 m; alle Beläge waagerecht). */
 export const BELAG_UEBER_RINNE_M = 1.0
+/** Flachdach: Der oberste Belag liegt mindestens so weit UNTER der Dachkante/Attika (Gebäudehöhe). Vorgabe aus dem Betrieb (Michelle Merola);
+ *  fachlich noch mit Gerüstbauer und Herstellerunterlagen abzugleichen. Keine sicherheitstechnische Freigabe. Mindestens eine Lage. */
+export const BELAG_UNTER_FLACHDACHKANTE_M = 1.0
+export const flachdachBelagUnterKante = (roofForm: string | undefined): number => (roofForm === 'flachdach' ? BELAG_UNTER_FLACHDACHKANTE_M : 0)
 
 /**
  * Geländekote an den vier Gebäudeecken (m, bezogen auf ±0,00; negativ = tiefer), aus „Gelände je Seite“,
@@ -646,10 +650,14 @@ export function waehleVordereKante(teile: Array<{ kante: number; levelIndex: num
 export function calculateLevels(
   buildingHeightM: number,
   system: GeruestSystem,
-  groundOffsetM: number = 0
+  groundOffsetM: number = 0,
+  /** > 0: oberster Belag höchstens so weit unter `buildingHeightM` (abrunden statt aufrunden), mindestens eine Lage */
+  belagUnterKanteM: number = 0
 ): { levels: number; levelHeightM: number; levelsData: { index: number; bottomY: number; topY: number }[] } {
   const rasterH = system.rasterHoeheM
-  const levels = Math.max(1, Math.ceil(buildingHeightM / rasterH))
+  const levels = belagUnterKanteM > 0
+    ? Math.max(1, Math.floor((buildingHeightM - belagUnterKanteM) / rasterH + 1e-6))
+    : Math.max(1, Math.ceil(buildingHeightM / rasterH))
   const levelsData: { index: number; bottomY: number; topY: number }[] = []
   for (let i = 0; i < levels; i++) {
     const bottomY = groundOffsetM + i * rasterH
@@ -1726,7 +1734,7 @@ export function generateCADModel(
 
   const fieldDiv = teile(building.lengthM)
   const fieldDivWidth = teile(building.widthM)
-  const levelCalc = system ? calculateLevels(building.heightM, system) : { levels: 1, levelHeightM: 2.0, levelsData: [{ index: 0, bottomY: 0, topY: 2.0 }] }
+  const levelCalc = system ? calculateLevels(building.heightM, system, 0, abschnitte ? 0 : flachdachBelagUnterKante(building.roofForm)) : { levels: 1, levelHeightM: 2.0, levelsData: [{ index: 0, bottomY: 0, topY: 2.0 }] }
 
   // Satteldach (einfaches Gebäude): Traufseiten enden an der Traufe, Giebelseiten folgen dem Dach-Dreieck.
   // heightM = höchster Punkt (First), eavesHeightM = Traufe. Der First läuft entlang der längeren Gebäudeseite.
@@ -1763,7 +1771,7 @@ export function generateCADModel(
     }
     if (!Number.isFinite(mn) || (mx - mn < 0.01 && Math.abs(mn) < 0.01)) return null
     const off = Math.ceil(Math.max(-15, Math.min(15, mn)) * 100 - 1e-9) / 100 // nicht unter dem tiefsten Gelände beginnen: die unterste Lage liegt sonst im Boden und entfällt
-    return { boden: (x, z) => gf(x, z + Wu / 2 + GEBAEUDE_SZENEN_VERSATZ_M), off, levelCalc: calculateLevels(building.heightM - off, system, off) }
+    return { boden: (x, z) => gf(x, z + Wu / 2 + GEBAEUDE_SZENEN_VERSATZ_M), off, levelCalc: calculateLevels(building.heightM - off, system, off, abschnitte ? 0 : flachdachBelagUnterKante(building.roofForm)) }
   })()
   if (system && !hangA && (abschnitte || (building.umriss && building.umriss.length >= 3))) { const h = hangIgnoriert(opt); if (h) warnings.push(h) }
   // Schräger Hang je Seite (vonM/bisM): der Fuß treppt je Feld ab. Die 3D-Geländefläche nutzt dieselben Ecken.
@@ -1841,7 +1849,7 @@ export function generateCADModel(
       const offset = Math.round((ok - n0 * r) * 100) / 100
       return calculateLevels(building.heightM + BELAG_UEBER_RINNE_M - offset, system, offset)
     }
-    return system && gSeite(sd) !== 0 ? calculateLevels(building.heightM - gSeite(sd), system, gSeite(sd)) : levelCalc
+    return system && gSeite(sd) !== 0 ? calculateLevels(building.heightM - gSeite(sd), system, gSeite(sd), abschnitte ? 0 : flachdachBelagUnterKante(building.roofForm)) : levelCalc
   }
   // Geneigtes Dach ohne Satteldach-Sonderfall (Walm-, Mansardendach/Zelt): alle Seiten sind Traufseiten und enden an der Traufe.
   // Pultdach: gespeichert ist nicht, welche Seite die niedrige Traufe hat – vorsichtig gilt die Traufe für alle Seiten, damit nie ein Belag über das Dach ragt.
