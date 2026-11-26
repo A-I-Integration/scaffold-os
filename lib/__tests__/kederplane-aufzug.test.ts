@@ -15,9 +15,9 @@ describe('Kederplane', () => {
     const m = generateCADModel({ ...basis, geruestOptionen: { kederplane: { vonM: 10, bisM: 20 } } }, 'layher-allround')
     const planen = m.components3D.filter((c) => c.type === 'sheeting')
     expect(planen.length).toBeGreaterThan(0)
-    // Lagen 2 m: 10–20 m = 5 Lagen
+    // Lagen 2 m; Flachdach: oberster Belag mindestens 1 m unter der Dachkante → Gerüst bis 18 m; Bereich 10–20 m = Lagen 10–18 m = 4 Lagen
     const lagen = new Set(planen.map((c) => m.levels.find((l) => l.id === c.levelId)!.index))
-    expect(lagen.size).toBe(5)
+    expect(lagen.size).toBe(4)
     for (const c of planen) {
       const lv = m.levels.find((l) => l.id === c.levelId)!
       expect(lv.bottomY).toBeGreaterThanOrEqual(10 - 0.01)
