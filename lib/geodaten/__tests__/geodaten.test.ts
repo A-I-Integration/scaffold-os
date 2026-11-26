@@ -315,6 +315,18 @@ describe('Übergabe mit Dach: Gerüsthöhe je Kante und Darstellung', () => {
     expect(Math.min(...dx)).toBeGreaterThanOrEqual(Math.min(...xs) - 0.1)
     expect(Math.max(...dx)).toBeLessThanOrEqual(Math.max(...xs) + 0.1)
   })
+  it('Fläche je Kante: Traufseiten bis Traufe (5 m), Giebel bis First (8 m)', () => {
+    const [g] = citygmlZuImport(`<core:CityModel>${hausMitWaenden('H', 340000, 5680000)}</core:CityModel>`, { herkunft, epsg: 25832 })
+    const b = zuBuildingParams(gibFrei(g), BAU)
+    const m = generateCADModel(b, 'mj-uniconnect')
+    const u = m.building.umriss!, gi = new Set(b.giebelKanten)
+    let soll = 0
+    u.forEach((p, i) => { const q = u[(i + 1) % u.length]; soll += Math.hypot(q.x - p.x, q.z - p.z) * (gi.has(i) ? 8 : 5) })
+    expect(m.totalAreaM2).toBeCloseTo(soll, 0)
+    // früher überall First: deutlich größer
+    const umfang = u.reduce((s, p, i) => s + Math.hypot(u[(i + 1) % u.length].x - p.x, u[(i + 1) % u.length].z - p.z), 0)
+    expect(m.totalAreaM2).toBeLessThan(umfang * 8 - 1)
+  })
   it('ohne Giebelkanten bleibt es wie bisher: überall bis First', () => {
     const [g] = citygmlZuImport(doc(25832, haus('A', 340000, 5680000)), { herkunft, epsg: 25832 })
     const m = generateCADModel(zuBuildingParams(gibFrei(g), BAU), 'mj-uniconnect')
