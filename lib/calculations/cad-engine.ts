@@ -2747,6 +2747,7 @@ function generiereUmrissModell(
   const jeLage = new Map<number, ScaffoldField[]>()
   fields.forEach((f) => jeLage.set(f.levelIndex, [...(jeLage.get(f.levelIndex) ?? []), f]))
   const unten = [...jeLage.values()].reduce<ScaffoldField[]>((m, l) => (l.length > m.length ? l : m), [])
+  const flaechenHoehe = (idx: number): number => (kHoehe ? Math.min(building.heightM, kHoehe[idx]) : building.heightM)
   const modell: CADModel = {
     building,
     system,
@@ -2756,8 +2757,9 @@ function generiereUmrissModell(
     components3D: [],
     totalLengthM: unten.reduce((sum, f) => sum + f.lengthM, 0),
     totalHeightM: building.heightM,
-    totalAreaM2: kanten.filter((k) => aktiveIdx.has(k.index)).reduce((sum, k) => sum + k.laengeM, 0) * building.heightM,
-    gebauteFlaecheM2: kanten.filter((k) => aktiveIdx.has(k.index)).reduce((sum, k) => sum + k.laengeM, 0) * Math.max(building.heightM, levelCalc.levels * levelCalc.levelHeightM),
+    // Fläche je Kante: Länge × Höhe dieser Kante (Traufseite bis Traufe, Giebel bis First, Anbau bis eigene Höhe); ohne Höhen je Kante überall die Gebäudehöhe
+    totalAreaM2: kanten.filter((k) => aktiveIdx.has(k.index)).reduce((sum, k) => sum + k.laengeM * flaechenHoehe(k.index), 0),
+    gebauteFlaecheM2: kanten.filter((k) => aktiveIdx.has(k.index)).reduce((sum, k) => sum + k.laengeM * Math.max(flaechenHoehe(k.index), kHoehe ? kanteLagen(k.index) * levelCalc.levelHeightM : levelCalc.levels * levelCalc.levelHeightM), 0),
     fieldCount: unten.length,
     levelCount: hangU ? jeLage.size : levelCalc.levels,
     warnings,
