@@ -239,3 +239,105 @@ describe('Umriss bereinigen (kleine Stufen aus LoD2)', () => {
     expect(pruefeFreigabe(imp).some((t) => t.includes('Kante'))).toBe(true)
   })
 })
+
+import { schneideUnterHoehe } from '../oberbau'
+
+// Satteldach-Haus mit Wänden: First längs x (Ost), Giebel an den kurzen Seiten
+function hausMitWaenden(id: string, ox: number, oy: number): string {
+  const P = (x: number, y: number, z: number) => [ox + x, oy + y, z]
+  return `<core:cityObjectMember><bldg:Building gml:id="${id}"><bldg:function>31001_1000</bldg:function>`
+    + flaeche('RoofSurface', [P(0, 0, 105), P(20, 0, 105), P(20, 5, 108), P(0, 5, 108)])
+    + flaeche('RoofSurface', [P(0, 10, 105), P(0, 5, 108), P(20, 5, 108), P(20, 10, 105)])
+    + flaeche('GroundSurface', [P(0, 0, 100), P(0, 10, 100), P(20, 10, 100), P(20, 0, 100)])
+    + flaeche('WallSurface', [P(0, 0, 100), P(20, 0, 100), P(20, 0, 105), P(0, 0, 105)])
+    + flaeche('WallSurface', [P(20, 10, 100), P(0, 10, 100), P(0, 10, 105), P(20, 10, 105)])
+    + flaeche('WallSurface', [P(0, 10, 100), P(0, 0, 100), P(0, 0, 105), P(0, 5, 108), P(0, 10, 105)])
+    + flaeche('WallSurface', [P(20, 0, 100), P(20, 10, 100), P(20, 10, 105), P(20, 5, 108), P(20, 0, 105)])
+    + '</bldg:Building></core:cityObjectMember>'
+}
+
+describe('Dach und Giebel aus LoD2-Flächen', () => {
+  it('schneidet Wände bei der Traufe ab und behält nur den Giebel darüber', () => {
+    const giebel: [number, number, number][] = [[0, 0, 0], [10, 0, 0], [10, 5, 0], [5, 8, 0], [0, 5, 0]]
+    const oben = schneideUnterHoehe(giebel, 5.02)
+    expect(Math.min(...oben.map((q) => q[1]))).toBeCloseTo(5.02, 6)
+    expect(Math.max(...oben.map((q) => q[1]))).toBe(8)
+    expect(schneideUnterHoehe([[0, 0, 0], [1, 0, 0], [1, 2, 0], [0, 2, 0]], 5)).toEqual([])
+  })
+  it('liefert Dach + Giebelflächen und erkennt die kurzen Seiten als Giebelkanten', () => {
+    const [g] = citygmlZuImport(`<core:CityModel>${hausMitWaenden('H', 340000, 5680000)}</core:CityModel>`, { herkunft, epsg: 25832 })
+    expect(g.oberbau!.filter((f) => f.art === 'dach')).toHaveLength(2)
+    expect(g.oberbau!.filter((f) => f.art === 'wand')).toHaveLength(2) // nur die beiden Giebel ragen über die Traufe
+    expect(Math.max(...g.oberbau!.flatMap((f) => f.p.map((q) => q[1])))).toBeCloseTo(8, 2)
+    expect(g.giebelKanten).toHaveLength(2)
+    for (const i of g.giebelKanten!) {
+      const a = g.fussabdruck[i], b = g.fussabdruck[(i + 1) % g.fussabdruck.length]
+      expect(Math.hypot(b.x - a.x, b.z - a.z)).toBeCloseTo(10, 1)
+    }
+  })
+  it('ohne Wanddaten: Dach ja, keine Giebelkanten (CAD bleibt beim bisherigen Verhalten)', () => {
+    const [g] = citygmlZuImport(doc(25832, haus('A', 340000, 5680000)), { herkunft, epsg: 25832 })
+    expect(g.oberbau!.every((f) => f.art === 'dach')).toBe(true)
+    expect(g.giebelKanten).toBeUndefined()
+  })
+  it('Flachdach bekommt keinen Oberbau', () => {
+    const flach = `<core:CityModel><bldg:Building gml:id="F">${flaeche('RoofSurface', [[340000, 5680000, 105], [340020, 5680000, 105], [340020, 5680010, 105], [340000, 5680010, 105]])}${flaeche('GroundSurface', [[340000, 5680000, 100], [340000, 5680010, 100], [340020, 5680010, 100], [340020, 5680000, 100]])}</bldg:Building></core:CityModel>`
+    const [g] = citygmlZuImport(flach, { herkunft, epsg: 25832 })
+    expect(g.dachForm).toBe('flachdach')
+    expect(g.oberbau).toBeUndefined()
+  })
+})
+
+describe('Übergabe mit Dach: Gerüsthöhe je Kante und Darstellung', () => {
+  const base = (b: BuildingParams) => b
+  const BAU: BuildingParams = base({
+    lengthM: 15, widthM: 6, heightM: 10, eavesHeightM: 10, roofForm: 'satteldach', roofHeightM: 2, floors: 3, floorHeightsM: [3, 3, 3],
+    windowCount: 4, doorCount: 1, balconyCount: 0, overhangM: 0.3, setbackM: 0, sides: ['front', 'back', 'left', 'right'],
+  })
+  const lagenJeKante = (m: ReturnType<typeof generateCADModel>) => {
+    const o = new Map<number, number>()
+    for (const f of m.fields) o.set(f.kante!, Math.max(o.get(f.kante!) ?? 0, f.levelIndex + 1))
+    return o
+  }
+  it('Traufseiten bis Rinne (Traufe 5 m + 1 m → 3 Lagen), Giebelseiten bis First (8 m → 4 Lagen)', () => {
+    const [g] = citygmlZuImport(`<core:CityModel>${hausMitWaenden('H', 340000, 5680000)}</core:CityModel>`, { herkunft, epsg: 25832 })
+    const b = zuBuildingParams(gibFrei(g), BAU)
+    expect(b.oberbau!.length).toBeGreaterThan(0)
+    const m = generateCADModel(b, 'mj-uniconnect')
+    const lagen = lagenJeKante(m)
+    const gi = new Set(b.giebelKanten)
+    expect(gi.size).toBe(2)
+    for (const [k, n] of lagen) expect(n).toBe(gi.has(k) ? 4 : 3)
+    expect(m.warnings.some((w) => w.code === 'OBERSTER_BELAG_RINNE')).toBe(true)
+    // Wände werden an der Traufe gezeichnet, Dach liegt in der Szene (Umriss-Modus verschiebt Dach wie den Umriss)
+    expect(m.building.oberbau!.length).toBe(b.oberbau!.length)
+    const xs = m.building.umriss!.map((q) => q.x), dx = m.building.oberbau!.filter((f) => f.art === 'dach').flatMap((f) => f.p.map((q) => q[0]))
+    expect(Math.min(...dx)).toBeGreaterThanOrEqual(Math.min(...xs) - 0.1)
+    expect(Math.max(...dx)).toBeLessThanOrEqual(Math.max(...xs) + 0.1)
+  })
+  it('ohne Giebelkanten bleibt es wie bisher: überall bis First', () => {
+    const [g] = citygmlZuImport(doc(25832, haus('A', 340000, 5680000)), { herkunft, epsg: 25832 })
+    const m = generateCADModel(zuBuildingParams(gibFrei(g), BAU), 'mj-uniconnect')
+    for (const [, n] of lagenJeKante(m)) expect(n).toBe(4)
+  })
+})
+
+import { erzeugeProjektdatei, liesProjektdatei } from '@/lib/cad/projektdatei'
+
+describe('Dach und Giebelkanten bleiben beim Speichern und Laden erhalten', () => {
+  it('Round-Trip der Projektdatei', () => {
+    const [g] = citygmlZuImport(`<core:CityModel>${hausMitWaenden('H', 340000, 5680000)}</core:CityModel>`, { herkunft, epsg: 25832 })
+    const bau: BuildingParams = {
+      lengthM: 15, widthM: 6, heightM: 10, eavesHeightM: 10, roofForm: 'satteldach', roofHeightM: 2, floors: 3, floorHeightsM: [3, 3, 3],
+      windowCount: 0, doorCount: 0, balconyCount: 0, overhangM: 0, setbackM: 0, sides: ['front'],
+    }
+    const b = zuBuildingParams(gibFrei(g), bau)
+    const datei = erzeugeProjektdatei({ building: b, systemId: 'mj-uniconnect', statikDaten: {} as never, notizen: [] })
+    const r = liesProjektdatei(JSON.stringify(datei))
+    expect(r.ok).toBe(true)
+    if (!r.ok) return
+    expect(r.daten.building.oberbau).toEqual(JSON.parse(JSON.stringify(b.oberbau))) // JSON kennt kein -0
+    expect(r.daten.building.giebelKanten).toEqual(b.giebelKanten)
+    expect(r.verworfen).toEqual([])
+  })
+})

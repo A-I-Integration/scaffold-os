@@ -242,6 +242,17 @@ export function liesProjektdatei(text: string): LeseErgebnis {
     if (pkt.every((p) => p != null)) gebaeude.umriss = pkt as { x: number; z: number }[]
     else verworfen.push('Umriss')
   }
+  if (Array.isArray(g.oberbau) && g.oberbau.length > 0) {
+    const flaechen = g.oberbau.slice(0, 300).map((f) => {
+      const o = f as Record<string, unknown>
+      if ((o?.art !== 'dach' && o?.art !== 'wand') || !Array.isArray(o.p) || o.p.length < 3 || o.p.length > 40) return null
+      const p = o.p.map((q) => (Array.isArray(q) && q.length === 3 ? [zahl(q[0], -MAX_MASS_M, MAX_MASS_M), zahl(q[1], -MAX_MASS_M, MAX_MASS_M), zahl(q[2], -MAX_MASS_M, MAX_MASS_M)] : null))
+      return p.every((q) => q && q.every((v) => v != null)) ? { art: o.art as 'dach' | 'wand', p: p as [number, number, number][] } : null
+    })
+    if (flaechen.every((f) => f != null)) gebaeude.oberbau = flaechen as NonNullable<BuildingParams['oberbau']>
+    else verworfen.push('Dach (Darstellung)')
+  }
+  if (Array.isArray(g.giebelKanten)) gebaeude.giebelKanten = g.giebelKanten.filter((i): i is number => Number.isInteger(i) && i >= 0 && i < MAX_PUNKTE).slice(0, MAX_PUNKTE)
   if (Array.isArray(g.sections) && g.sections.length >= 2 && g.sections.length <= MAX_ABSCHNITTE) {
     const abs = g.sections.map((s): BuildingSection | null => {
       const o = s as Record<string, unknown>
