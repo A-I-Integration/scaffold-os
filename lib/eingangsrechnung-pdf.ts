@@ -65,3 +65,23 @@ export async function leseEingangsDatei(datei: File, fortschritt?: (t: string) =
   fortschritt?.('Texterkennung …')
   return { text: await erkenneBilder(bilder, fortschritt), xml: null, ocr: true }
 }
+
+/** Vorschau-Bilder einer Rechnung für die Anzeige neben dem Formular (Bild: das Bild selbst, PDF: bis zu 4 Seiten). Aufrufer gibt die URLs mit URL.revokeObjectURL frei. */
+export async function erzeugeVorschau(datei: File): Promise<string[]> {
+  if (/\.(jpe?g|png|webp)$/i.test(datei.name)) return [URL.createObjectURL(datei)]
+  if (!/\.pdf$/i.test(datei.name)) return []
+  const pdfjs = await import('pdfjs-dist')
+  pdfjs.GlobalWorkerOptions.workerSrc = new URL('pdfjs-dist/build/pdf.worker.min.mjs', import.meta.url).toString()
+  const dok = await pdfjs.getDocument({ data: new Uint8Array(await datei.arrayBuffer()) }).promise
+  const urls: string[] = []
+  for (let n = 1; n <= Math.min(dok.numPages, 4); n++) {
+    const seite = await dok.getPage(n)
+    const vp = seite.getViewport({ scale: 1.6 })
+    const canvas = document.createElement('canvas')
+    canvas.width = Math.ceil(vp.width); canvas.height = Math.ceil(vp.height)
+    await seite.render({ canvasContext: canvas.getContext('2d')!, viewport: vp, canvas }).promise
+    const blob = await new Promise<Blob | null>((ok) => canvas.toBlob(ok, 'image/jpeg', 0.85))
+    if (blob) urls.push(URL.createObjectURL(blob))
+  }
+  return urls
+}

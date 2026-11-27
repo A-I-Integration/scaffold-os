@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { ANHANG_BUCKET, ERLAUBTE_TYPEN, groesseText, pruefeAnhang } from '@/lib/rechnung-anhang'
 import { ARTEN, ART_LABEL, berechneBrutto, ibanFormat, parseBetrag, summiereEingang, type Eingangsrechnung, type EingangsArt, type EingangsPosition } from '@/lib/eingangsrechnung'
-import { leseEingangsDatei } from '@/lib/eingangsrechnung-pdf'
+import { erzeugeVorschau, leseEingangsDatei } from '@/lib/eingangsrechnung-pdf'
 import { leseRechnung, type LeseErgebnis, type LeseFeld } from '@/lib/eingangsrechnung-lesen'
 import { generateInvoicePDF, fmtEur, fmtDate, TYPE_LABEL, type Invoice } from '@/lib/invoice-pdf'
 
@@ -39,6 +39,8 @@ export default function BaustellenBelege({ projectId, projektName, rechnungen, r
   const [liest, setLiest] = useState(false)
   const [leseStatus, setLeseStatus] = useState('')
   const [positionen, setPositionen] = useState<EingangsPosition[]>([])
+  const [seitenBilder, setSeitenBilder] = useState<string[]>([])
+  useEffect(() => () => { seitenBilder.forEach((u) => URL.revokeObjectURL(u)) }, [seitenBilder])
   const [gelesen, setGelesen] = useState<LeseErgebnis | null>(null)
   const eingabe = useRef<HTMLInputElement>(null)
 
@@ -66,8 +68,9 @@ export default function BaustellenBelege({ projectId, projektName, rechnungen, r
 
   // PDF gewählt: Inhalt im Browser auslesen und das Formular füllen. Gefüllte Werte sind nur Vorschläge, gespeichert wird erst per Klick.
   async function dateiGewaehlt(f: File | null) {
-    setDatei(f); setGelesen(null); setPositionen([])
+    setDatei(f); setGelesen(null); setPositionen([]); setSeitenBilder([])
     if (!f) return
+    erzeugeVorschau(f).then((u) => setSeitenBilder(u)).catch(() => undefined)
     setOffen(true)
     if (!/\.(pdf|jpe?g|png|webp)$/i.test(f.name)) { setGelesen({ quelle: 'leer', felder: {}, pruefen: [], hinweis: 'Nur PDF und Bilder (JPG, PNG, WebP) werden automatisch ausgelesen. Bitte die Felder von Hand ausfüllen.' }); return }
     setLiest(true)
@@ -118,7 +121,7 @@ export default function BaustellenBelege({ projectId, projektName, rechnungen, r
         if (!bj.success) throw new Error(bj.error || 'Upload nicht bestätigt.')
       }
       angelegt = null
-      setForm({ ...LEER }); setDatei(null); setGelesen(null); setPositionen([]); if (eingabe.current) eingabe.current.value = ''; setOffen(false)
+      setForm({ ...LEER }); setDatei(null); setGelesen(null); setPositionen([]); setSeitenBilder([]); if (eingabe.current) eingabe.current.value = ''; setOffen(false)
       await laden(); onGeaendert?.()
     } catch (e: any) {
       setFehler(e.message)
@@ -208,7 +211,8 @@ export default function BaustellenBelege({ projectId, projektName, rechnungen, r
         {hinweis && <p className="px-5 py-3 text-sm text-amber-800 bg-amber-50 border-b border-amber-200">{hinweis}</p>}
 
         {offen && (
-          <div className="px-5 py-4 bg-[#f5f5f7] space-y-2 border-b border-black/5">
+          <div className="px-5 py-4 bg-[#f5f5f7] border-b border-black/5 grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,460px)]">
+          <div className="space-y-2 min-w-0">
             {liest && <p className="text-[12px] text-[#1d1d1f]">{leseStatus || 'Wird gelesen …'} (läuft auf diesem Gerät, es wird nichts versendet)</p>}
             {gelesen && gelesen.quelle !== 'leer' && <p className="rounded-lg border border-green-200 bg-green-50 p-2 text-[12px] text-green-900">{gelesen.quelle === 'ocr' ? 'Per Texterkennung gelesen (Scan/Foto). Texterkennung kann sich irren: ' : 'Aus der PDF gelesen' + (gelesen.quelle === 'xml' ? ' (eingebettete Rechnungsdaten)' : '') + '.'} Bitte kurz prüfen{gelesen.pruefen.length ? `, gelb markiert: ${gelesen.pruefen.map((k) => ({ lieferant: 'Lieferant', rechnungsnummer: 'Rechnungsnummer', rechnungsdatum: 'Datum', faellig_am: 'Fälligkeit', netto: 'Netto', ust_satz: 'USt', brutto: 'Brutto', iban: 'IBAN', leistungsdatum: 'Leistungsdatum', kundennummer: 'Kundennummer' }[k])).join(', ')}` : ''} – dann „Speichern“.</p>}
             {gelesen && gelesen.quelle === 'leer' && gelesen.hinweis && <p className="rounded-lg border border-amber-200 bg-amber-50 p-2 text-[12px] text-amber-900">{gelesen.hinweis}</p>}
@@ -277,8 +281,17 @@ export default function BaustellenBelege({ projectId, projektName, rechnungen, r
             </div>
             <div className="flex gap-2 pt-1">
               <button type="button" className={btnPrimary} disabled={speichert} onClick={speichern}>{speichert ? 'Speichert …' : 'Speichern'}</button>
-              <button type="button" className={btnSecondary} onClick={() => { setOffen(false); setForm({ ...LEER }); setDatei(null); setGelesen(null); setPositionen([]) }}>Abbrechen</button>
+              <button type="button" className={btnSecondary} onClick={() => { setOffen(false); setForm({ ...LEER }); setDatei(null); setGelesen(null); setPositionen([]); setSeitenBilder([]) }}>Abbrechen</button>
             </div>
+          </div>
+          <aside className="min-w-0" aria-label="Vorschau der Rechnung">
+            <div className="lg:sticky lg:top-4 rounded-xl border border-black/10 bg-white overflow-auto max-h-[80vh] p-2 space-y-2">
+              {seitenBilder.length > 0 ? seitenBilder.map((u, i) => (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img key={u} src={u} alt={`Rechnung, Seite ${i + 1}`} className="w-full h-auto rounded border border-black/5" />
+              )) : <p className="p-6 text-center text-[12px] text-[#86868b]">{liest || datei ? 'Vorschau wird erstellt …' : 'Hier erscheint die Rechnung, sobald eine Datei gewählt ist.'}</p>}
+            </div>
+          </aside>
           </div>
         )}
 
