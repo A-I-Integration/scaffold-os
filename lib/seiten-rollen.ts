@@ -6,6 +6,8 @@ export // Welche Rolle darf welchen Bereich sehen? Die Prüfung nimmt den ERSTEN
 const ROLE_ACCESS: Record<string, string[]> = {
   '/dashboard':    ['admin', 'disponent'],
   // Schritt 6 (Angebot, Stückliste mit Preisen): Mitarbeiter sehen keine Preise. MUSS vor '/aufmass' stehen.
+  // KI-Angebot (Anfrage erfassen, Kunde zuordnen): Büro. MUSS vor '/aufmass' stehen.
+  '/aufmass/ki-angebot': ['admin', 'disponent'],
   '/aufmass/schritt6': ['admin', 'bauleiter'],
   '/aufmass':      ['admin', 'bauleiter', 'mitarbeiter'],  // Mitarbeiter messen auf: wie im Menü und in /api/projects (AUFMASS_ROLES)
   '/stueckliste':  ['admin', 'bauleiter'],

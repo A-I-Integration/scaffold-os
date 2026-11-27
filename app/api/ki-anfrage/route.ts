@@ -55,9 +55,10 @@ export async function POST(req: NextRequest) {
     let roh: unknown
     try { roh = JSON.parse(raw) } catch { return NextResponse.json({ success: false, error: 'Die KI-Antwort war nicht lesbar. Bitte noch einmal versuchen.' }, { status: 502 }) }
 
+    const kundeVorgegeben = body?.kundeVorgegeben === true
     const { entwurf, verworfen } = pruefeKiAntwort(roh, text)
     const kRes = await fetch(`${url}/rest/v1/customers?select=id,name&order=name.asc&limit=2000`, { headers })
     const kunden = kRes.ok ? await kRes.json() : []
-    return NextResponse.json({ success: true, entwurf, verworfen, fehlend: fehlendeAngaben(entwurf), treffer: findeKunden(entwurf.kunde, kunden) }, { headers: { 'Cache-Control': 'no-store' } })
+    return NextResponse.json({ success: true, entwurf, verworfen, fehlend: fehlendeAngaben(entwurf, { ohneKunde: kundeVorgegeben }), treffer: kundeVorgegeben ? [] : findeKunden(entwurf.kunde, kunden) }, { headers: { 'Cache-Control': 'no-store' } })
   } catch (err) { return serverErrorResponse(err, 'ki-anfrage POST') }
 }

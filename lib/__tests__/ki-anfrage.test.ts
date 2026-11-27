@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { extrahiereAdresse, fehlendeAngaben, findeKunden, pruefeKiAntwort, zahlImText, baueAnfrageDaten, projektName } from '../ki-anfrage'
+import { baueAufmassDaten, laengeAusFlaeche, extrahiereAdresse, fehlendeAngaben, findeKunden, pruefeKiAntwort, zahlImText, baueAnfrageDaten, projektName } from '../ki-anfrage'
 
 const TEXT = 'Kunde Müller GmbH benötigt ein Fassadengerüst in Vreden, ungefähr 250 m², Arbeitshöhe 8 Meter, sechs Wochen. Aufbau Anfang Januar. Bahnhofstraße 12, 48691 Vreden'
 
@@ -77,5 +77,26 @@ describe('Projektdaten', () => {
     const e = pruefeKiAntwort({ kunde: 'Müller GmbH', ort: 'Vreden', leistung: 'Fassadengerüst' }, TEXT).entwurf
     expect(projektName(e)).toBe('Fassadengerüst Vreden')
     expect(baueAnfrageDaten(e, TEXT, new Date('2026-11-27T12:00:00Z'))).toMatchObject({ quelle: 'ki-chat', erfasst_am: '2026-11-27T12:00:00.000Z', kunde: 'Müller GmbH' })
+  })
+})
+
+describe('Aufmaß-Vorbefüllung', () => {
+  const e = pruefeKiAntwort({ kunde: 'Müller GmbH', ort: 'Vreden', leistung: 'Fassadengerüst', flaeche_m2: 250, arbeitshoehe_m: 8, standzeit_wochen: 6, wunschtermin: 'Anfang Januar' }, TEXT).entwurf
+  it('Länge = Fläche ÷ Höhe', () => {
+    expect(laengeAusFlaeche(250, 8)).toBe(31.25)
+    expect(laengeAusFlaeche(250, null)).toBeNull()
+    expect(laengeAusFlaeche(0, 8)).toBeNull()
+  })
+  it('füllt Schritt 1 und 2, Kundenname bleibt Projektname', () => {
+    const d = baueAufmassDaten(e, { id: 'k1', name: 'Müller GmbH' }, TEXT)
+    expect(d.step1).toMatchObject({ name: 'Müller GmbH', customerId: 'k1', adresse: 'Bahnhofstraße 12, 48691 Vreden', baustelle: 'Fassadengerüst', dauer: '6', notizen: 'Wunschtermin: Anfang Januar' })
+    expect(d.step2).toEqual({ laenge: '31.25', hoehe: '8' })
+    expect(d.anfrage.quelle).toBe('ki-chat')
+  })
+  it('ohne Maße kein Schritt 2, ohne Kunden-Pflicht bei vorgegebenem Kunden', () => {
+    const leer = pruefeKiAntwort({}, 'Hallo Welt, bitte Gerüst').entwurf
+    expect(baueAufmassDaten(leer, { id: 'k', name: 'X' }, 'x').step2).toBeUndefined()
+    expect(fehlendeAngaben(leer, { ohneKunde: true })).not.toContain('Kunde')
+    expect(fehlendeAngaben(leer)).toContain('Kunde')
   })
 })

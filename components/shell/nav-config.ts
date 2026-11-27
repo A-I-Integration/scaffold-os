@@ -1,5 +1,5 @@
 import {
-  LayoutDashboard, Users, Ruler, Box, FileText, FolderOpen, Handshake, CreditCard, Euro, Mail, CalendarClock,
+  LayoutDashboard, Users, Ruler, Sparkles, Box, FileText, FolderOpen, Handshake, CreditCard, Euro, Mail, CalendarClock,
   Truck, Route, Timer, Navigation, ClipboardList, Warehouse, TrendingUp, BookOpen, KeyRound, Settings, Database,
   Upload, Inbox, Scale, HelpCircle, ShieldCheck, Triangle, Receipt, FilePlus2,
 } from 'lucide-react'
@@ -45,6 +45,7 @@ export const NAV_GRUPPEN: NavGruppe[] = [
     key: 'planung', nummer: 2, label: 'Aufmaß & Planung',
     eintraege: [
       { href: '/aufmass/schritt1', label: 'Aufmaß', icon: Ruler, roles: ['admin', 'bauleiter', 'mitarbeiter'], neuAufmass: true, stichwoerter: 'aufmass messen gebäude' },
+      { href: '/aufmass/ki-angebot', label: 'KI-Angebot', icon: Sparkles, roles: BUERO, stichwoerter: 'ki angebot anfrage sprache chat' },
       { href: '/cad', label: 'CAD Gerüstplanung', icon: Box, roles: BAU, stichwoerter: '3d plan gerüst dxf' },
       { href: '/cad/bruecke', label: 'Brücke', icon: Box, roles: BAU },
       { href: '/cad/traggeruest', label: 'Traggerüst-Anfrage', icon: Box, roles: BAU },

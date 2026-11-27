@@ -107,9 +107,9 @@ export function pruefeKiAntwort(roh: unknown, original: string): LeseErgebnis {
 }
 
 /** Was fehlt noch für einen Angebotsentwurf? (als lesbare Rückfragen) */
-export function fehlendeAngaben(e: AnfrageEntwurf): string[] {
+export function fehlendeAngaben(e: AnfrageEntwurf, opt: { ohneKunde?: boolean } = {}): string[] {
   const f: string[] = []
-  for (const k of PFLICHT) if (e[k] === null || e[k] === '') f.push(FELD_LABEL[k])
+  for (const k of PFLICHT) if (!(opt.ohneKunde && k === 'kunde') && (e[k] === null || e[k] === '')) f.push(FELD_LABEL[k])
   if (!e.strasse) f.push(FELD_LABEL.strasse)
   if (e.standzeit_wochen === null) f.push(FELD_LABEL.standzeit_wochen)
   return f
@@ -141,4 +141,26 @@ export function baueAnfrageDaten(e: AnfrageEntwurf, original: string, jetzt = ne
 }
 export function projektName(e: AnfrageEntwurf): string {
   return [e.leistung || 'Gerüst', e.ort].filter(Boolean).join(' ')
+}
+
+/** Länge der Fassade aus Fläche und Höhe (im Aufmaß gilt Fläche = Länge × Höhe, siehe flaecheM2). Nur mit beiden Angaben. */
+export function laengeAusFlaeche(flaeche: number | null, hoehe: number | null): number | null {
+  return flaeche && hoehe && flaeche > 0 && hoehe > 0 ? Math.round((flaeche / hoehe) * 100) / 100 : null
+}
+const zeichenkette = (n: number) => String(n)
+
+/** Vorbefüllte Aufmaß-Daten (Schritt 1 und 2) für die neue Baustelle. Nur Angaben, die da sind; alles Weitere trägt der Mensch im Aufmaß nach. */
+export function baueAufmassDaten(e: AnfrageEntwurf, kunde: { id: string; name: string }, original: string, jetzt = new Date()) {
+  const adresse = [e.strasse, [e.plz, e.ort].filter(Boolean).join(' ')].filter(Boolean).join(', ')
+  const notiz = [e.wunschtermin ? `Wunschtermin: ${e.wunschtermin}` : '', e.bemerkung || ''].filter(Boolean).join('\n')
+  const laenge = laengeAusFlaeche(e.flaeche_m2, e.arbeitshoehe_m)
+  const step1: Record<string, unknown> = { name: kunde.name, customerId: kunde.id }
+  if (adresse) step1.adresse = adresse
+  if (e.leistung) step1.baustelle = e.leistung
+  if (e.standzeit_wochen) step1.dauer = zeichenkette(Math.min(52, Math.max(1, Math.round(e.standzeit_wochen))))
+  if (notiz) step1.notizen = notiz
+  const step2: Record<string, unknown> = {}
+  if (laenge) step2.laenge = zeichenkette(laenge)
+  if (e.arbeitshoehe_m) step2.hoehe = zeichenkette(e.arbeitshoehe_m)
+  return { step1, ...(Object.keys(step2).length ? { step2 } : {}), anfrage: baueAnfrageDaten(e, original, jetzt) }
 }
