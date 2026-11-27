@@ -126,7 +126,7 @@ export function lesePreisangaben(original: string): PreisAngaben {
   const f = t.match(new RegExp(`${BETRAG}\\s*(?:€|euro|eur)\\s*(?:fest(?:preis)?|pauschal\\w*)`)) || t.match(new RegExp(`(?:festpreis|pauschal\\w*)\\s*(?:von|über|:)?\\s*${BETRAG}\\s*(?:€|euro|eur)`))
   if (f) {
     const n = deutscheZahl(f[1], f[2])
-    if (n >= 1 && n <= 10_000_000) { festpreis = n; hinweise.push(`Festpreis ${n.toLocaleString('de-DE', { minimumFractionDigits: 2 })} € aus dem Text gelesen. Ob netto oder brutto, steht nicht im Text; das Angebot rechnet netto zuzüglich USt.`) }
+    if (n >= 1 && n <= 10_000_000) { festpreis = n; hinweise.push(`Festpreis ${n.toLocaleString('de-DE', { minimumFractionDigits: 2 })} € aus dem Text gelesen. Ob netto oder brutto, steht nicht im Text, das Angebot rechnet netto zuzüglich USt`) }
   }
   let satz: number | null = null
   const k = t.match(new RegExp(`${BETRAG}\\s*(?:(€|euro|eur|cent|ct)\\s*(?:pro|je|/)?\\s*|(?:pro|je|/)\\s*)(?:km|kilometer)\\b`))
@@ -134,8 +134,8 @@ export function lesePreisangaben(original: string): PreisAngaben {
     let n = deutscheZahl(k[1], k[2])
     const einheit = k[3]
     if ((einheit === 'cent' || einheit === 'ct') && n >= 10) n = n / 100
-    else if (einheit === 'cent' || einheit === 'ct') hinweise.push(`„cent“ gesagt, aber ${n.toLocaleString('de-DE', { minimumFractionDigits: 2 })} als Euro je km gelesen. Bitte prüfen.`)
-    if (n >= 0.1 && n <= 10) { satz = Math.round(n * 100) / 100; hinweise.push(`Fahrtkosten ${satz.toLocaleString('de-DE', { minimumFractionDigits: 2 })} € je km aus dem Text gelesen. Die Kilometer fehlen noch und werden im Angebot ergänzt.`) }
+    else if (einheit === 'cent' || einheit === 'ct') hinweise.push(`„cent“ gesagt, aber ${n.toLocaleString('de-DE', { minimumFractionDigits: 2 })} als Euro je km gelesen. bitte prüfen`)
+    if (n >= 0.1 && n <= 10) { satz = Math.round(n * 100) / 100; hinweise.push(`Fahrtkosten ${satz.toLocaleString('de-DE', { minimumFractionDigits: 2 })} € je km aus dem Text gelesen. Die Kilometer fehlen noch und werden im Angebot ergänzt`) }
   }
   return { festpreis_eur: festpreis, fahrt_satz_eur_km: satz, hinweise }
 }
