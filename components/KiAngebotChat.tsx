@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Send } from 'lucide-react'
 import SprachNotiz from '@/components/aufmaß/SprachNotiz'
-import { FELD_LABEL, baueAufmassDaten, type AnfrageEntwurf, type KundenTreffer } from '@/lib/ki-anfrage'
+import { FELD_LABEL, baueAufmassDaten, fuehreEntwurfZusammen, type AnfrageEntwurf, type KundenTreffer } from '@/lib/ki-anfrage'
 import { baueVorabEingabe } from '@/lib/ki-vorab'
 import { baueDirektAngebot } from '@/lib/ki-angebot-direkt'
 import { erzeugeAngebotPdf } from '@/lib/angebot-pdf'
@@ -45,7 +45,8 @@ export default function KiAngebotChat({ kunde, onFertig }: {
   const [kundenWahl, setKundenWahl] = useState<string>('neu')
   const [suche, setSuche] = useState('')
   const [speichert, setSpeichert] = useState(false)
-  const [vorab, setVorab] = useState<{ eingabe: ScaffoldInput; annahmen: string[]; result: KIAnalysis; preisHinweis?: string; erstellt_am: string } | null>(null)
+  const [vorab, setVorab] = useState<{ eingabe: ScaffoldInput; annahmen: string[]; result: KIAnalysis; preisHinweis?: string; erstellt_am: string; stand: string } | null>(null)
+  const [kiEntwurf, setKiEntwurf] = useState<AnfrageEntwurf | null>(null) // letzte Auswertung der KI (Vergleichsstand für Ergänzungen)
   const [rechnet, setRechnet] = useState(false)
   const [positionenOffen, setPositionenOffen] = useState(false)
   // Angebot direkt erstellen/versenden (ohne Aufmaß-Schritte)
@@ -95,7 +96,8 @@ export default function KiAngebotChat({ kunde, onFertig }: {
       const r = await fetch('/api/ki-anfrage', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text: alle.join('\n'), kundeVorgegeben: !!kunde }) })
       const j = await r.json()
       if (!j.success) throw new Error(j.error || 'Auslesen fehlgeschlagen.')
-      setVorab(null); setVerlauf(alle); setEntwurf(j.entwurf); setVerworfen(j.verworfen || []); setAbgeleitet(j.abgeleitet || []); setTreffer(j.treffer || [])
+      // Weitere Nachricht: nur ergänzen, was sich geändert hat; Handänderungen und die Vorab-Kalkulation bleiben stehen (sie gilt erst nach Neuberechnung wieder)
+      setVerlauf(alle); setEntwurf(fuehreEntwurfZusammen(kiEntwurf, j.entwurf, entwurf)); setKiEntwurf(j.entwurf); setVerworfen(j.verworfen || []); setAbgeleitet(j.abgeleitet || []); setTreffer(j.treffer || [])
       if (!kunde && kundenWahl === 'neu' && j.treffer?.[0]?.art === 'exakt') setKundenWahl(j.treffer[0].kunde.id)
       const e: AnfrageEntwurf = j.entwurf
       const erkannt = [e.kunde && !kunde ? `Kunde ${e.kunde}${e.ansprechpartner ? ` (${e.ansprechpartner})` : ''}` : '', e.leistung, e.strasse || e.ort ? [e.strasse, [e.plz, e.ort].filter(Boolean).join(' ')].filter(Boolean).join(', ') : '', e.flaeche_m2 ? `${e.flaeche_m2} m²` : '', e.arbeitshoehe_m ? `${e.arbeitshoehe_m} m Arbeitshöhe` : '', e.traufhoehe_m ? `${e.traufhoehe_m} m Traufhöhe` : '', e.standzeit_wochen ? `${e.standzeit_wochen} Wochen` : '', e.wunschtermin].filter(Boolean)
@@ -105,13 +107,15 @@ export default function KiAngebotChat({ kunde, onFertig }: {
 
   const setzeFeld = (k: keyof AnfrageEntwurf, v: string) => {
     if (!entwurf) return
-    setVorab(null) // geänderte Angaben → die alte Rechnung gilt nicht mehr
     if (k === 'umlaufend') { setEntwurf({ ...entwurf, umlaufend: v === 'true' }); return }
     if (ZAHLEN.includes(k)) { const n = v.trim() === '' ? null : parseFloat(v.replace(',', '.')); setEntwurf({ ...entwurf, [k]: Number.isFinite(n as number) ? n : null }) }
     else setEntwurf({ ...entwurf, [k]: v.trim() === '' ? null : v })
   }
 
   const vorabPruefung = useMemo(() => (entwurf ? baueVorabEingabe(entwurf, kunde?.name || entwurf.kunde || '') : null), [entwurf, kunde])
+
+  // Die Vorab-Kalkulation gilt nur für die Angaben, mit denen sie berechnet wurde. Wurde danach etwas geändert, bleibt sie sichtbar, aber ohne Angebot/Mail.
+  const vorabAktuell = !!vorab && vorab.stand === JSON.stringify(vorabPruefung?.eingabe ?? null)
 
   const rechneVorab = async () => {
     if (!entwurf || rechnet) return
@@ -120,7 +124,7 @@ export default function KiAngebotChat({ kunde, onFertig }: {
       const r = await fetch('/api/ki-angebot-vorab', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ entwurf, kundeName: kunde?.name || entwurf.kunde || '' }) })
       const j = await r.json()
       if (!j.success) throw new Error(j.error || 'Berechnung fehlgeschlagen.')
-      setVorab({ eingabe: j.eingabe, annahmen: j.annahmen, result: j.result, preisHinweis: j.preisHinweis, erstellt_am: new Date().toISOString() })
+      setVorab({ eingabe: j.eingabe, annahmen: j.annahmen, result: j.result, preisHinweis: j.preisHinweis, erstellt_am: new Date().toISOString(), stand: JSON.stringify(vorabPruefung?.eingabe ?? null) })
       setPositionenOffen(false)
       setNachrichten((n) => [...n, { rolle: 'ki', text: 'Die vorläufige Vorab-Kalkulation steht unten. Sie ist kein verbindliches Angebot. Mit „Baustelle anlegen und Angebot öffnen“ gehst du zu PDF und Mail.' }])
     } catch (e: any) { setFehler(e.message) } finally { setRechnet(false) }
@@ -144,14 +148,14 @@ export default function KiAngebotChat({ kunde, onFertig }: {
     }
     const daten: any = baueAufmassDaten(entwurf, k, gesamtText)
     // Nur unter anfrage.vorab; das offizielle Ergebnis von Schritt 6 (kiResult) bleibt unberührt, außer auf ausdrücklichen Klick (Angebot).
-    if (mitAngebot && vorab) {
+    if (mitAngebot && vorab && vorabAktuell) {
       daten.kiResult = vorab.result
       if (direktDaten && direkt) {
         daten.preisModus = direkt.preisModus; daten.festpreisProM2 = direkt.festpreisProM2; daten.pauschale = direkt.pauschale
         daten.angebotAnpassungen = direkt.anpassungen
       }
     }
-    if (vorab) daten.anfrage = { ...daten.anfrage, vorab: { erstellt_am: vorab.erstellt_am, eingabe: vorab.eingabe, annahmen: vorab.annahmen, result: vorab.result } }
+    if (vorab && vorabAktuell) daten.anfrage = { ...daten.anfrage, vorab: { erstellt_am: vorab.erstellt_am, eingabe: vorab.eingabe, annahmen: vorab.annahmen, result: vorab.result } }
     if (angelegt && angelegt.kundeId === k.id) {
       // Dieselbe Baustelle: Stand an die aktuellen Angaben anpassen, damit PDF/Mail und Baustelle übereinstimmen
       const pa = await fetch('/api/projects', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: angelegt.projectId, data: daten }) })
@@ -172,7 +176,7 @@ export default function KiAngebotChat({ kunde, onFertig }: {
     setSpeichert(true); setFehler(null)
     try {
       const a = await legeAn(zumAngebot, email.trim() || undefined)
-      onFertig(a.kundeId, a.projectId, zumAngebot && !!vorab)
+      onFertig(a.kundeId, a.projectId, zumAngebot && vorabAktuell)
     } catch (e: any) { setFehler(e.message); setSpeichert(false) }
   }
 
@@ -180,10 +184,10 @@ export default function KiAngebotChat({ kunde, onFertig }: {
 
   // Angebot aus dem Rechenstand der Vorab-Kalkulation plus Preisregeln des Kunden; nur, wenn berechnet
   const direkt = useMemo(() => {
-    if (!vorab || !entwurf) return null
+    if (!vorab || !vorabAktuell || !entwurf) return null
     const d: any = baueAufmassDaten(entwurf, { id: 'x', name: kunde?.name || entwurf.kunde || 'Kunde' }, gesamtText)
     return baueDirektAngebot({ daten: d, ergebnis: vorab.result, kundenPreis, firmaFahrtSatz: firma?.calc_km_satz, kmGesamt })
-  }, [vorab, entwurf, kunde, gesamtText, kundenPreis, firma, kmGesamt])
+  }, [vorab, vorabAktuell, entwurf, kunde, gesamtText, kundenPreis, firma, kmGesamt])
 
   const ermittleKm = async () => {
     const adr = [entwurf?.strasse, [entwurf?.plz, entwurf?.ort].filter(Boolean).join(' ')].filter(Boolean).join(', ')
@@ -309,6 +313,7 @@ export default function KiAngebotChat({ kunde, onFertig }: {
             <p className="text-xs font-semibold text-[#1d1d1f]">Vorab-Kalkulation</p>
             <button type="button" className={btnPrimary} disabled={rechnet || !!vorabPruefung?.fehlt.length} onClick={rechneVorab} data-testid="ki-vorab-rechnen">{rechnet ? 'Rechnet …' : vorab ? 'Neu berechnen' : 'Vorab-Kalkulation berechnen'}</button>
             {!!vorabPruefung?.fehlt.length && <p className="text-xs text-amber-800">Noch nicht möglich. Es fehlt: {vorabPruefung.fehlt.join('; ')}.</p>}
+            {vorab && !vorabAktuell && <p className="rounded bg-amber-50 border border-amber-300 px-2 py-1 text-xs font-semibold text-amber-900" data-testid="ki-vorab-veraltet">Die Angaben wurden geändert. Die Kalkulation unten gilt für die alten Angaben. Bitte „Neu berechnen“ klicken, vorher sind Angebot und Mail gesperrt.</p>}
             {vorab && (
               <div className="space-y-2 text-sm">
                 <p className="rounded bg-amber-50 border border-amber-300 px-2 py-1 text-xs font-semibold text-amber-900">Vorläufig – kein verbindliches Angebot</p>
@@ -341,7 +346,7 @@ export default function KiAngebotChat({ kunde, onFertig }: {
               <label className="block text-xs text-[#86868b] mb-1">E-Mail des Kunden{gewaehlteKundenId ? (email ? ' (aus dem Kundenordner, änderbar)' : ' (im Kundenordner keine hinterlegt, bitte eintragen)') : ' (neuer Kunde: bitte eintragen, wird beim Anlegen gespeichert)'}</label>
               <input className={`${inputCls} ${email && !emailOk ? 'border-red-400' : ''}`} type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="kunde@beispiel.de" data-testid="ki-email" />
             </div>
-            {!vorab && <p className="text-xs text-amber-800">„Angebot erstellen“ und „Per Mail versenden“ gibt es erst nach der Vorab-Kalkulation (oben berechnen).</p>}
+            {!vorabAktuell && <p className="text-xs text-amber-800">{vorab ? 'Die Angaben wurden nach der Berechnung geändert. ' : ''}„Angebot erstellen“ und „Per Mail versenden“ gibt es erst nach (neuer) Vorab-Kalkulation (oben berechnen).</p>}
             {direkt?.hinweise.map((h, i) => <p key={i} className="text-xs text-[#86868b]">{h}</p>)}
             {direkt?.brauchtKm && (
               <div className="space-y-1">
@@ -374,7 +379,7 @@ export default function KiAngebotChat({ kunde, onFertig }: {
               </div>
             )}
           </div>
-          {vorab && (
+          {vorabAktuell && (
             <div className="rounded-lg border border-[#e8590c]/30 bg-orange-50 p-3 space-y-1.5">
               <button type="button" className={btnPrimary} disabled={speichert || (!kunde && kundenWahl === 'neu' && !entwurf.kunde)} onClick={() => anlegen(true)} data-testid="ki-zum-angebot">{speichert ? 'Legt an …' : 'Baustelle anlegen und Angebot öffnen'}</button>
               <p className="text-[11px] text-[#86868b]">Die Vorab-Kalkulation wird als Rechenstand in das Angebot (Schritt 6) übernommen. Dort prüfst du Preis und Positionen und erzeugst Vorschau, PDF und Mail an den Kunden. Erst dort verlässt etwas das Haus.</p>
