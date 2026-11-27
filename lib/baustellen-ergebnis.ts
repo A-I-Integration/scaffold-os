@@ -6,7 +6,9 @@
 //   Spesen         = Spesen aus der Zeiterfassung
 //   Ergebnis       = Erlös − Personalkosten − Spesen
 //
-// NICHT enthalten: Material, Fahrzeuge, Kran, Fremdleistungen, Gemeinkosten. Das Ergebnis ist ein Deckungsbeitrag
+//   Fremdkosten    = externe Rechnungen der Baustelle (netto, Nachunternehmer/Material/Sonstiges), falls übergeben
+//
+// NICHT enthalten: Fahrzeuge, Kran, Gemeinkosten und alles, was nicht als externe Rechnung erfasst ist. Das Ergebnis ist ein Deckungsbeitrag
 // nach Personal, kein Gewinn. Mitarbeiter ohne Stundensatz werden nicht bewertet und gesondert ausgewiesen.
 // ============================================================
 
@@ -23,6 +25,8 @@ export interface BaustellenErgebnis {
   stunden: number
   personalkosten: number
   spesen: number
+  /** Externe Rechnungen (netto) */
+  fremdkosten: number
   kostenGesamt: number
   erloes: number
   ergebnis: number
@@ -44,6 +48,8 @@ export function berechneBaustellenErgebnis(args: {
   zeilen: PersonalZeile[]
   /** Aufschlag auf den Stundensatz für Lohnnebenkosten in %, 0 = keiner */
   zuschlagProzent?: number
+  /** Summe der externen Rechnungen (netto) der Baustelle */
+  fremdkostenNetto?: number
 }): BaustellenErgebnis {
   const faktor = 1 + Math.max(0, zahl(args.zuschlagProzent)) / 100
   let stunden = 0, personal = 0, spesen = 0, ohneStunden = 0
@@ -60,11 +66,12 @@ export function berechneBaustellenErgebnis(args: {
     je.push({ id: z.id, name: z.name, stunden: runde(h), satz, kosten: runde(k) })
   }
   const erloes = runde(zahl(args.erloesNetto))
-  const kosten = runde(personal + spesen)
+  const fremd = runde(Math.max(0, zahl(args.fremdkostenNetto)))
+  const kosten = runde(personal + spesen + fremd)
   const ergebnis = runde(erloes - kosten)
   const aw = zahl(args.auftragswertNetto)
   return {
-    stunden: runde(stunden), personalkosten: runde(personal), spesen: runde(spesen), kostenGesamt: kosten, erloes, ergebnis,
+    stunden: runde(stunden), personalkosten: runde(personal), spesen: runde(spesen), fremdkosten: fremd, kostenGesamt: kosten, erloes, ergebnis,
     margeProzent: erloes > 0 ? Math.round((ergebnis / erloes) * 1000) / 10 : null,
     ergebnisBeiVollerAbrechnung: aw > 0 ? runde(aw - kosten) : null,
     stundenOhneSatz: runde(ohneStunden), ohneSatz, je: je.sort((a, b) => b.stunden - a.stunden),
