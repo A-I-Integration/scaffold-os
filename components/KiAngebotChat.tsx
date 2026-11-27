@@ -5,6 +5,10 @@ import { Send } from 'lucide-react'
 import SprachNotiz from '@/components/aufmaß/SprachNotiz'
 import { FELD_LABEL, baueAufmassDaten, type AnfrageEntwurf, type KundenTreffer } from '@/lib/ki-anfrage'
 import { baueVorabEingabe } from '@/lib/ki-vorab'
+import { baueDirektAngebot } from '@/lib/ki-angebot-direkt'
+import { erzeugeAngebotPdf } from '@/lib/angebot-pdf'
+import type { KundenPreis } from '@/lib/kunden-preis'
+import { unterdeckung } from '@/lib/preis-pruefung'
 import type { KIAnalysis, ScaffoldInput } from '@/types/scaffold'
 
 // KI-Angebot (Chat): Anfrage per Text oder Sprache beschreiben → die KI liest nur Angaben heraus (nichts erfunden, nichts berechnet) →
@@ -44,6 +48,17 @@ export default function KiAngebotChat({ kunde, onFertig }: {
   const [vorab, setVorab] = useState<{ eingabe: ScaffoldInput; annahmen: string[]; result: KIAnalysis; preisHinweis?: string; erstellt_am: string } | null>(null)
   const [rechnet, setRechnet] = useState(false)
   const [positionenOffen, setPositionenOffen] = useState(false)
+  // Angebot direkt erstellen/versenden (ohne Aufmaß-Schritte)
+  const [email, setEmail] = useState('')
+  const [kundenPreis, setKundenPreis] = useState<(KundenPreis & { email?: string | null }) | null>(null)
+  const [firma, setFirma] = useState<any>(null)
+  const [kmGesamt, setKmGesamt] = useState('')
+  const [kmLaedt, setKmLaedt] = useState(false)
+  const [kmHinweis, setKmHinweis] = useState('')
+  const [angelegt, setAngelegt] = useState<{ kundeId: string; projectId: string; name: string } | null>(null)
+  const [aktion, setAktion] = useState<null | 'erstellen' | 'senden'>(null)
+  const [mailFrage, setMailFrage] = useState(false)
+  const [erfolg, setErfolg] = useState<string | null>(null)
   const ende = useRef<HTMLDivElement>(null)
   useEffect(() => { ende.current?.scrollIntoView({ behavior: 'smooth', block: 'end' }) }, [nachrichten, entwurf])
   useEffect(() => {
@@ -52,6 +67,24 @@ export default function KiAngebotChat({ kunde, onFertig }: {
   }, [kunde])
 
   const gesamtText = useMemo(() => verlauf.join('\n'), [verlauf])
+
+  // Kunde, dem das Angebot gilt (vorgegeben oder gewählt); bei „neu“ gibt es noch keinen
+  const gewaehlteKundenId = kunde?.id || (kundenWahl !== 'neu' ? kundenWahl : null)
+  useEffect(() => {
+    fetch('/api/company').then((r) => r.json()).then((j) => setFirma(j.company || null)).catch(() => undefined)
+  }, [])
+  useEffect(() => {
+    let aktiv = true
+    setKundenPreis(null)
+    if (!gewaehlteKundenId) { setEmail(''); return }
+    fetch('/api/kunden?id=' + encodeURIComponent(gewaehlteKundenId)).then((r) => r.json()).then((j) => {
+      if (!aktiv || !j.success) return
+      const k = j.kunden?.[0]
+      setKundenPreis(k || null)
+      setEmail(k?.email || '')
+    }).catch(() => undefined)
+    return () => { aktiv = false }
+  }, [gewaehlteKundenId])
 
   const senden = async () => {
     const neu = eingabe.trim()
@@ -93,31 +126,117 @@ export default function KiAngebotChat({ kunde, onFertig }: {
     } catch (e: any) { setFehler(e.message) } finally { setRechnet(false) }
   }
 
+  /**
+   * Legt Kunde (falls neu) und Baustelle an. Ein zweiter Aufruf nutzt dieselbe Baustelle (kein Doppelanlegen).
+   * mitAngebot: die Vorab-Kalkulation wird zum Rechenstand von Schritt 6; direktDaten: zusätzlich Preisbasis und Fahrt aus dem Direkt-Angebot.
+   */
+  const legeAn = async (mitAngebot: boolean, mail?: string, direktDaten = false): Promise<{ kundeId: string; projectId: string; name: string; daten: any }> => {
+    if (!entwurf) throw new Error('Keine Angaben vorhanden.')
+    let k: KundeKurz | null = kunde || (kundenWahl !== 'neu' ? (treffer.find((t) => t.kunde.id === kundenWahl)?.kunde || alleKunden.find((c) => c.id === kundenWahl) || null) : null)
+    if (!k) {
+      if (!entwurf.kunde?.trim()) throw new Error('Bitte einen Kundennamen angeben.')
+      const kr = await fetch('/api/kunden', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: entwurf.kunde.trim(), ...(entwurf.ansprechpartner ? { contact_person: entwurf.ansprechpartner } : {}), ...(mail ? { email: mail } : {}) }) })
+      const kj = await kr.json()
+      if (!kj.success) throw new Error(kj.error || 'Kunde konnte nicht angelegt werden.')
+      k = { id: kj.kunde.id, name: kj.kunde.name }
+      setKundenWahl(k.id) // bei einem Fehler danach nicht noch einmal anlegen
+      setAlleKunden((l) => [...l, k as KundeKurz])
+    }
+    const daten: any = baueAufmassDaten(entwurf, k, gesamtText)
+    // Nur unter anfrage.vorab; das offizielle Ergebnis von Schritt 6 (kiResult) bleibt unberührt, außer auf ausdrücklichen Klick (Angebot).
+    if (mitAngebot && vorab) {
+      daten.kiResult = vorab.result
+      if (direktDaten && direkt) {
+        daten.preisModus = direkt.preisModus; daten.festpreisProM2 = direkt.festpreisProM2; daten.pauschale = direkt.pauschale
+        daten.angebotAnpassungen = direkt.anpassungen
+      }
+    }
+    if (vorab) daten.anfrage = { ...daten.anfrage, vorab: { erstellt_am: vorab.erstellt_am, eingabe: vorab.eingabe, annahmen: vorab.annahmen, result: vorab.result } }
+    if (angelegt && angelegt.kundeId === k.id) {
+      // Dieselbe Baustelle: Stand an die aktuellen Angaben anpassen, damit PDF/Mail und Baustelle übereinstimmen
+      const pa = await fetch('/api/projects', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: angelegt.projectId, data: daten }) })
+      if (!pa.ok) throw new Error('Die bereits angelegte Baustelle konnte nicht aktualisiert werden.')
+      return { ...angelegt, daten }
+    }
+    const adresse = (daten.step1.adresse as string | undefined) || undefined
+    const pr = await fetch('/api/projects', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: k.name, adresse, customer_id: k.id, data: daten }) })
+    const pj = await pr.json()
+    if (!pr.ok || !pj.id) throw new Error(pj.error || 'Baustelle konnte nicht angelegt werden.')
+    const a = { kundeId: k.id, projectId: pj.id as string, name: k.name }
+    setAngelegt(a)
+    return { ...a, daten }
+  }
+
   const anlegen = async (zumAngebot = false) => {
     if (!entwurf) return
     setSpeichert(true); setFehler(null)
     try {
-      let k: KundeKurz | null = kunde || (kundenWahl !== 'neu' ? (treffer.find((t) => t.kunde.id === kundenWahl)?.kunde || alleKunden.find((c) => c.id === kundenWahl) || null) : null)
-      if (!k) {
-        if (!entwurf.kunde?.trim()) throw new Error('Bitte einen Kundennamen angeben.')
-        const kr = await fetch('/api/kunden', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: entwurf.kunde.trim(), ...(entwurf.ansprechpartner ? { contact_person: entwurf.ansprechpartner } : {}) }) })
-        const kj = await kr.json()
-        if (!kj.success) throw new Error(kj.error || 'Kunde konnte nicht angelegt werden.')
-        k = { id: kj.kunde.id, name: kj.kunde.name }
-        setKundenWahl(k.id) // bei einem Fehler danach nicht noch einmal anlegen
-        setAlleKunden((l) => [...l, k as KundeKurz])
-      }
-      const daten: any = baueAufmassDaten(entwurf, k, gesamtText)
-      // Nur unter anfrage.vorab; das offizielle Ergebnis von Schritt 6 (kiResult) bleibt unberührt.
-      // Nur auf ausdrücklichen Klick "Angebot übernehmen": die Vorab-Kalkulation wird zum Rechenstand von Schritt 6 (dort prüf- und änderbar)
-      if (zumAngebot && vorab) daten.kiResult = vorab.result
-      if (vorab) daten.anfrage = { ...daten.anfrage, vorab: { erstellt_am: vorab.erstellt_am, eingabe: vorab.eingabe, annahmen: vorab.annahmen, result: vorab.result } }
-      const adresse = (daten.step1.adresse as string | undefined) || undefined
-      const pr = await fetch('/api/projects', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: k.name, adresse, customer_id: k.id, data: daten }) })
-      const pj = await pr.json()
-      if (!pr.ok || !pj.id) throw new Error(pj.error || 'Baustelle konnte nicht angelegt werden.')
-      onFertig(k.id, pj.id, zumAngebot && !!vorab)
+      const a = await legeAn(zumAngebot, email.trim() || undefined)
+      onFertig(a.kundeId, a.projectId, zumAngebot && !!vorab)
     } catch (e: any) { setFehler(e.message); setSpeichert(false) }
+  }
+
+  const emailOk = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email.trim())
+
+  // Angebot aus dem Rechenstand der Vorab-Kalkulation plus Preisregeln des Kunden; nur, wenn berechnet
+  const direkt = useMemo(() => {
+    if (!vorab || !entwurf) return null
+    const d: any = baueAufmassDaten(entwurf, { id: 'x', name: kunde?.name || entwurf.kunde || 'Kunde' }, gesamtText)
+    return baueDirektAngebot({ daten: d, ergebnis: vorab.result, kundenPreis, firmaFahrtSatz: firma?.calc_km_satz, kmGesamt })
+  }, [vorab, entwurf, kunde, gesamtText, kundenPreis, firma, kmGesamt])
+
+  const ermittleKm = async () => {
+    const adr = [entwurf?.strasse, [entwurf?.plz, entwurf?.ort].filter(Boolean).join(' ')].filter(Boolean).join(', ')
+    if (!adr) { setKmHinweis('Ohne Adresse nicht ermittelbar. Bitte die Kilometer eintragen.'); return }
+    setKmLaedt(true); setKmHinweis('')
+    try {
+      const r = await fetch('/api/fahrtstrecke', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ adresse: adr }) })
+      const j = await r.json()
+      if (!j.success) throw new Error(j.error || 'Fehler')
+      if (j.km == null) { setKmHinweis(j.grund || 'Strecke nicht ermittelbar. Bitte die Kilometer eintragen.'); return }
+      const gesamt = Math.round(j.km * 2 * 10) / 10
+      setKmGesamt(String(gesamt).replace('.', ','))
+      setKmHinweis(`Strecke ${String(j.km).replace('.', ',')} km einfach (Google), Hin- und Rückfahrt = ${String(gesamt).replace('.', ',')} km. Bei Bedarf ändern.`)
+    } catch { setKmHinweis('Strecke nicht ermittelbar. Bitte die Kilometer eintragen.') }
+    finally { setKmLaedt(false) }
+  }
+
+  const baueDirektPdf = (a: { daten: any }): string => {
+    if (!vorab || !direkt) throw new Error('Keine Vorab-Kalkulation vorhanden.')
+    const pdf = erzeugeAngebotPdf({ kiResult: vorab.result, s1: a.daten.step1 || {}, s2: a.daten.step2 || {}, s3: {}, projektnummer: null, companyProfile: firma, preisModus: direkt.preisModus, anpassungen: direkt.anpassungen, ang: direkt.ang, cadAnsicht: null })
+    if (!pdf) throw new Error('Das PDF konnte nicht erstellt werden.')
+    return pdf
+  }
+
+  const euro = (n: number) => n.toLocaleString('de-DE', { style: 'currency', currency: 'EUR' })
+
+  const angebotErstellen = async () => {
+    if (!direkt || direkt.blocker.length) return
+    setAktion('erstellen'); setFehler(null); setErfolg(null); setMailFrage(false)
+    try {
+      const a = await legeAn(true, emailOk ? email.trim() : undefined, true)
+      const pdf = baueDirektPdf(a)
+      const link = document.createElement('a')
+      link.href = pdf
+      link.download = `Angebot_${a.name.replace(/\s+/g, '_')}_${new Date().toISOString().split('T')[0]}.pdf`
+      link.click()
+      setErfolg(`Angebot erstellt und als PDF geladen (${euro(direkt.ang.endpreis)} netto). Die Baustelle ist angelegt, es wurde nichts versendet.`)
+    } catch (e: any) { setFehler(e.message) } finally { setAktion(null) }
+  }
+
+  const mailSenden = async () => {
+    if (!direkt || direkt.blocker.length || !emailOk) return
+    setAktion('senden'); setFehler(null); setErfolg(null)
+    try {
+      const a = await legeAn(true, email.trim(), true)
+      const pdf = baueDirektPdf(a)
+      const res = await fetch('/api/email', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ to: email.trim(), projectName: a.name, projectId: a.projectId, customerName: a.name, pdfBase64: pdf }) })
+      const j = await res.json().catch(() => ({}))
+      if (!res.ok || !j.success) throw new Error(`${j.error || 'E-Mail konnte nicht versendet werden.'} Die Baustelle ist angelegt, das Angebot wurde nicht versendet.`)
+      await fetch('/api/projects', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: a.projectId, data: { angebotsStatus: 'versendet' } }) }).catch(() => undefined)
+      setMailFrage(false)
+      setErfolg(`Angebot per E-Mail an ${email.trim()} versendet (${euro(direkt.ang.endpreis)} netto).`)
+    } catch (e: any) { setFehler(e.message) } finally { setAktion(null) }
   }
 
   const gefiltert = suche.trim().length >= 2 ? alleKunden.filter((c) => c.name.toLowerCase().includes(suche.trim().toLowerCase())).slice(0, 6) : []
@@ -215,9 +334,46 @@ export default function KiAngebotChat({ kunde, onFertig }: {
             )}
           </div>
 
-          <button type="button" className={btnPrimary} disabled={speichert || (!kunde && kundenWahl === 'neu' && !entwurf.kunde)} onClick={() => anlegen(false)} data-testid="ki-anlegen">
-            {speichert ? 'Legt an …' : kunde ? `Baustelle bei ${kunde.name} anlegen` : kundenWahl === 'neu' ? 'Neuen Kunden und Baustelle anlegen' : 'Neues Projekt beim Kunden anlegen'}
-          </button>
+          {!!angelegt && <p className="rounded-lg border border-black/10 bg-white p-2 text-xs text-[#1d1d1f]">Baustelle ist angelegt ({angelegt.name}). Weitere Aktionen nutzen dieselbe Baustelle.</p>}
+          <div className="rounded-lg border border-black/10 bg-white p-3 space-y-2" data-testid="ki-aktionen">
+            <p className="text-xs font-semibold text-[#1d1d1f]">Angebot</p>
+            <div>
+              <label className="block text-xs text-[#86868b] mb-1">E-Mail des Kunden{gewaehlteKundenId ? (email ? ' (aus dem Kundenordner, änderbar)' : ' (im Kundenordner keine hinterlegt, bitte eintragen)') : ' (neuer Kunde: bitte eintragen, wird beim Anlegen gespeichert)'}</label>
+              <input className={`${inputCls} ${email && !emailOk ? 'border-red-400' : ''}`} type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="kunde@beispiel.de" data-testid="ki-email" />
+            </div>
+            {!vorab && <p className="text-xs text-amber-800">„Angebot erstellen“ und „Per Mail versenden“ gibt es erst nach der Vorab-Kalkulation (oben berechnen).</p>}
+            {direkt?.hinweise.map((h, i) => <p key={i} className="text-xs text-[#86868b]">{h}</p>)}
+            {direkt?.brauchtKm && (
+              <div className="space-y-1">
+                <label className="block text-xs text-[#86868b]">Kilometer gesamt (Hin- und Rückfahrt) für das genannte Fahrtgeld</label>
+                <div className="flex gap-2"><input className={inputCls} value={kmGesamt} onChange={(e) => setKmGesamt(e.target.value)} placeholder="z. B. 84" data-testid="ki-km" /><button type="button" className={btnSecondary} disabled={kmLaedt} onClick={ermittleKm}>{kmLaedt ? 'Ermittelt …' : 'Aus Adresse ermitteln'}</button></div>
+                {kmHinweis && <p className="text-xs text-[#86868b]">{kmHinweis}</p>}
+              </div>
+            )}
+            {direkt && direkt.blocker.length > 0 && <ul className="list-disc pl-4 text-xs text-amber-900">{direkt.blocker.map((b, i) => <li key={i}>{b}</li>)}</ul>}
+            {direkt && direkt.preisModus !== 'ki' && vorab && unterdeckung(direkt.ang.endpreis, vorab.result.totalCost) !== null && (
+              <p className="rounded-lg border border-red-300 bg-red-50 p-2 text-xs font-semibold text-red-800" role="alert" data-testid="ki-unterdeckung">Achtung: Der Angebotspreis liegt {euro(unterdeckung(direkt.ang.endpreis, vorab.result.totalCost) as number)} unter den Selbstkosten ({euro(vorab.result.totalCost)}). Bei diesem Preis machst du Verlust. Prüfe den Preis, bevor du das Angebot erstellst oder versendest.</p>
+            )}
+            {direkt && direkt.blocker.length === 0 && <p className="text-xs text-[#1d1d1f]">Angebotspreis: <strong>{euro(direkt.ang.endpreis)}</strong> netto{direkt.preisModus === 'pauschale' ? ' (Pauschale)' : direkt.preisModus === 'festpreis' ? ' (Festpreis je m²)' : ' (Kalkulationspreis, 25 % Marge)'}{direkt.ang.fahrtBetrag > 0 ? `, inkl. Fahrtgeld ${euro(direkt.ang.fahrtBetrag)}` : ''}.</p>}
+            <div className="flex flex-wrap gap-2">
+              <button type="button" className={btnPrimary} disabled={!direkt || direkt.blocker.length > 0 || !!aktion || speichert} onClick={angebotErstellen} data-testid="ki-angebot-erstellen">{aktion === 'erstellen' ? 'Erstellt …' : 'Angebot erstellen (PDF)'}</button>
+              <button type="button" className={btnSecondary} disabled={speichert || !!aktion || (!kunde && kundenWahl === 'neu' && !entwurf.kunde)} onClick={() => anlegen(false)} data-testid="ki-anlegen">{speichert ? 'Legt an …' : 'Entwurf speichern'}</button>
+              <button type="button" className={btnPrimary} disabled={!direkt || direkt.blocker.length > 0 || !emailOk || !!aktion || speichert} onClick={() => { setMailFrage(true); setErfolg(null) }} data-testid="ki-mail">Per Mail versenden …</button>
+            </div>
+            <p className="text-[11px] text-[#86868b]">Entwurf speichern: legt {kunde ? 'die Baustelle' : kundenWahl === 'neu' ? 'den neuen Kunden und die Baustelle' : 'ein neues Projekt beim Kunden'} an, ohne Angebot. Angebot erstellen: legt dasselbe an und lädt das Angebots-PDF. Per Mail versenden: wie „Angebot erstellen“, schickt das PDF danach an die E-Mail oben. Das Angebot beruht auf der vorläufigen Vorab-Kalkulation, nicht auf einem Aufmaß.</p>
+            {mailFrage && direkt && (
+              <div className="rounded-lg border border-[#e8590c]/40 bg-orange-50 p-3 space-y-2" data-testid="ki-mail-frage">
+                <p className="text-sm text-[#1d1d1f]">Angebot über <strong>{euro(direkt.ang.endpreis)}</strong> netto jetzt an <strong>{email.trim()}</strong> senden? Das lässt sich nicht zurückholen.</p>
+                <div className="flex gap-2"><button type="button" className={btnPrimary} disabled={!!aktion} onClick={mailSenden} data-testid="ki-mail-senden">{aktion === 'senden' ? 'Sendet …' : 'Ja, jetzt senden'}</button><button type="button" className={btnSecondary} disabled={!!aktion} onClick={() => setMailFrage(false)}>Abbrechen</button></div>
+              </div>
+            )}
+            {erfolg && (
+              <div className="rounded-lg border border-green-200 bg-green-50 p-3 text-sm text-green-800" data-testid="ki-erfolg">
+                <p>✅ {erfolg}</p>
+                {angelegt && <button type="button" className={`${btnSecondary} mt-2`} onClick={() => onFertig(angelegt.kundeId, angelegt.projectId, false)}>Zur Baustelle</button>}
+              </div>
+            )}
+          </div>
           {vorab && (
             <div className="rounded-lg border border-[#e8590c]/30 bg-orange-50 p-3 space-y-1.5">
               <button type="button" className={btnPrimary} disabled={speichert || (!kunde && kundenWahl === 'neu' && !entwurf.kunde)} onClick={() => anlegen(true)} data-testid="ki-zum-angebot">{speichert ? 'Legt an …' : 'Baustelle anlegen und Angebot öffnen'}</button>

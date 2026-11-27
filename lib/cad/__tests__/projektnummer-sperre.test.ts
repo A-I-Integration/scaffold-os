@@ -187,7 +187,7 @@ describe('Sperre nur bei tatsächlicher Verwendung im Dokument, VOR dem Versand'
     const t = quelle('lib/invoice-pdf.ts')
     expect((t.match(/zeichneProjektnummer\(doc, inv\.projektnummer\)/g) || []).length).toBe(3)
     expect(quelle('lib/invoice-pdf-server.ts')).toContain('Projektnummer:')
-    expect(quelle('app/aufmass/schritt6/page.tsx')).toContain('zeichneProjektnummer(doc, projektnummer)')
+    expect(quelle('lib/angebot-pdf.ts')).toContain('zeichneProjektnummer(doc, projektnummer)') // Angebots-PDF (Schritt 6 und KI-Angebot nutzen dieselbe Funktion)
   })
 })
 
