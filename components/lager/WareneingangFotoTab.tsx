@@ -46,7 +46,7 @@ export default function WareneingangFotoTab({ onGebucht }: { onGebucht?: () => v
         menge: p.gelesen.menge ? String(p.gelesen.menge) : '',
         einbuchen: p.treffer.sicherheit === 'sicher' && !!p.gelesen.menge, // Vorschläge und fehlende Mengen nie vorausgewählt
       })));
-      if (!j.positionen.length) setMeldung({ ok: false, text: 'Auf dem Foto konnte ich keine Positionen erkennen. Bitte ein schärferes, gerades Foto versuchen.' });
+      if (!j.positionen.length) setMeldung({ ok: false, text: 'Auf dem Foto konnte ich keine Lieferschein-Positionen erkennen. Dieser Reiter liest nur Lieferscheine. Für Stangen, Rahmen usw. von der Baustelle: Baustellen → Abbau / Rücklauf → Mit Foto zählen. Sonst bitte ein schärferes, gerades Foto versuchen.' });
     } catch (e) { setMeldung({ ok: false, text: (e as Error).message }); }
     finally { setLiest(false); }
   };
@@ -74,7 +74,13 @@ export default function WareneingangFotoTab({ onGebucht }: { onGebucht?: () => v
       <div className="bg-white border rounded-2xl p-4 space-y-2">
         <h3 className="text-base font-semibold text-gray-900">Wareneingang per Foto</h3>
         <p className="text-sm text-gray-600">Fotografiere den Lieferschein. Die KI liest die Zeilen heraus und schlägt Artikel vor. Gebucht wird erst, wenn du unten bestätigst. Die KI bucht nie selbst.</p>
-        <input ref={datei} type="file" accept="image/*" capture="environment" onChange={(e) => waehle(e.target.files?.[0])} disabled={liest || bucht} className="text-sm" data-testid="foto-datei" />
+        <label className={`flex flex-col items-center justify-center gap-1 rounded-xl border-2 border-dashed px-4 py-8 text-center cursor-pointer ${liest || bucht ? 'border-gray-200 bg-gray-50 text-gray-400' : 'border-[#0071e3] bg-blue-50 text-[#0071e3] hover:bg-blue-100'}`}>
+          <span className="text-2xl">📷</span>
+          <span className="text-sm font-semibold">{liest ? 'Liest den Beleg …' : 'Foto vom Lieferschein aufnehmen oder auswählen'}</span>
+          <span className="text-xs text-gray-500">Hier tippen. JPEG, PNG oder WebP.</span>
+          <input ref={datei} type="file" accept="image/*" capture="environment" onChange={(e) => waehle(e.target.files?.[0])} disabled={liest || bucht} className="hidden" data-testid="foto-datei" />
+        </label>
+        <p className="text-xs text-gray-500">Dieser Reiter liest nur <strong>Lieferscheine</strong> (Wareneingang). Material, das von der Baustelle zurückkommt, zählst du unter „Baustellen" → „Abbau / Rücklauf" → „📷 Mit Foto zählen".</p>
         <p className="text-[11px] text-gray-500">Das Foto geht zur Auswertung an die KI und wird nicht gespeichert. Bitte nur Lieferscheine ohne Personendaten fotografieren.</p>
       </div>
 
