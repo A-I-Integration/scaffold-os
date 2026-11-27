@@ -196,3 +196,16 @@ describe('Fachliche Trennung (Nachprüfung)', () => {
     expect(leseStandzeitText('keine Angabe')).toBeNull()
   })
 })
+
+describe('Bemerkung, die nur die Besonderheiten wiederholt', () => {
+  it('wird still weggelassen statt als „nicht im Text“ gemeldet', () => {
+    const r = pruefeKiAntwort({ kunde: 'Müller Bau GmbH', bemerkung: 'Einfahrt freihalten, Treppenaufgang' }, ANRUF)
+    expect(r.entwurf.bemerkung).toBeNull()
+    expect(r.verworfen.some((v) => v.includes('Bemerkung'))).toBe(false)
+    expect(r.entwurf.besonderheiten).toHaveLength(2)
+  })
+  it('Erfundenes wird weiter gemeldet', () => {
+    const r = pruefeKiAntwort({ kunde: 'Müller Bau GmbH', bemerkung: 'Kran erforderlich' }, ANRUF)
+    expect(r.verworfen.some((v) => v.includes('Bemerkung'))).toBe(true)
+  })
+})

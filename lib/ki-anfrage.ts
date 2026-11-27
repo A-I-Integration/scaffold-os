@@ -102,6 +102,11 @@ export function leseStandzeitText(original: string): string | null {
   const m = original.match(/(?:\d+(?:[.,]\d+)?|[a-zäöüß]+)\s*(?:bis|-|–|oder)\s*(?:\d+(?:[.,]\d+)?|[a-zäöüß]+)\s*wochen?|\b\d+(?:[.,]\d+)?\s*wochen?/i)
   return m ? m[0].trim() : null
 }
+/** Besteht die Bemerkung nur aus Stichwörtern, die schon als Besonderheit (Einfahrt/Treppenaufgang) erfasst sind? */
+export function nurBesonderheitsWoerter(wert: string): boolean {
+  const woerter = wert.toLowerCase().split(/[^a-zäöüß0-9]+/).filter((w) => w.length > 2)
+  return woerter.length > 0 && woerter.every((w) => /^(einfahrt|durchfahrt|zufahrt|freihalten|freihaltung|frei|bleiben|treppenaufgang|treppenturm|treppe|und|sowie|muss|soll|erforderlich|nötig|benötigt)$/.test(w))
+}
 const RUNDUM = /rund\s*um|rundum|umlaufend|ringsum|allseitig|alle\s+(?:vier\s+)?seiten/i
 
 const STRASSE_RE = /\b[A-ZÄÖÜ][A-Za-zÄÖÜäöüß-]*(?:str(?:aße|asse)?|weg|gasse|allee|platz|ring|damm|chaussee|pfad|steig|ufer|markt|graben|brücke|anger)\.?\s+\d{1,4}\s?[a-z]?\b/
@@ -138,6 +143,8 @@ export function pruefeKiAntwort(roh: unknown, original: string): LeseErgebnis {
   const belegtSinngemaess = (wert: string | null, feld: keyof AnfrageEntwurf): string | null => {
     if (!wert) return null
     if (o.includes(norm(wert)) || sinngemaessBelegt(wert, original)) return wert
+    // Fasst die KI nur zusammen, was ohnehin als Besonderheit aus dem Text gelesen wurde (z. B. „Einfahrt freihalten“), ist das keine Warnung wert
+    if (leseBesonderheiten(original).length > 0 && nurBesonderheitsWoerter(wert)) return null
     verworfen.push(`${FELD_LABEL[feld]}: „${wert}“ steht nicht im Text`)
     return null
   }
