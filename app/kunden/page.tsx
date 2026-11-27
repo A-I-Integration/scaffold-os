@@ -1,5 +1,6 @@
 'use client';
 
+import KiAnfrageAssistent from '@/components/KiAnfrageAssistent';
 import LandAuswahl from '@/components/LandAuswahl';
 import { berechneForderung, mitBezugsGutschriften } from '@/lib/forderung';
 import { useState, useEffect, useCallback } from 'react';
@@ -78,6 +79,7 @@ const nameMatch = (a: string, b: string) =>
 
 export default function KundenPage() {
   const router = useRouter();
+  const [kiAnfrage, setKiAnfrage] = useState(false);
   const [kunden, setKunden] = useState<Kunde[]>([]);
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [projects, setProjects] = useState<{ id: string; name: string | null; adresse: string | null; data: any; customer_id?: string | null }[]>([]);
@@ -274,11 +276,13 @@ export default function KundenPage() {
   return (
     <div className="min-h-full" style={{ background: WIN.grund }}>
       {versand.dialog}
+      {kiAnfrage && <KiAnfrageAssistent onClose={() => setKiAnfrage(false)} />}
       <div className="flex items-center gap-3 px-3 h-9 text-white sticky top-0 z-20" style={{ background: '#171b20' }}>
         <Users className="h-4 w-4" />
         <h1 className="text-[14px] font-bold">Kunden / Adressen</h1>
         <span className="text-xs opacity-80">{kunden.length} Kunden · {invoices.length} Rechnungen im System</span>
         <span className="ml-auto flex gap-1.5">
+          <button onClick={() => setKiAnfrage(true)} className="rounded px-3 py-1 text-xs font-semibold bg-white/15 hover:bg-white/25" data-testid="ki-anfrage-oeffnen">KI-Anfrage</button>
           <a href="/kunden/import" className="rounded px-3 py-1 text-xs font-semibold bg-white/15 hover:bg-white/25">Import</a>
           <button onClick={neuAnlegen} className="flex items-center gap-1 rounded px-3 py-1 text-xs font-semibold" style={{ background: WIN.akzent }}><Plus className="h-3.5 w-3.5" /> Neuer Kunde</button>
         </span>
