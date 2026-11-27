@@ -7,6 +7,7 @@
 
 import { useState } from 'react';
 import { KIAnalysis, MaterialItem } from '@/types/scaffold';
+import { unterdeckung } from '@/lib/preis-pruefung';
 
 interface Props {
   result: KIAnalysis | null;
@@ -321,6 +322,11 @@ export default function KIMaterialResult({ result, loading, onGeneratePDF, onMan
                 ({result.marginPercent}%)
               </span>
             </div>
+            {preisModus !== 'ki' && unterdeckung(angebotspreis, result.totalCost) !== null && (
+              <p className="mt-3 rounded-lg border border-red-300 bg-red-50 p-3 text-sm font-semibold text-red-800" role="alert" data-testid="preis-unterdeckung">
+                Achtung: Der Angebotspreis liegt {unterdeckung(angebotspreis, result.totalCost)!.toLocaleString('de-DE', { style: 'currency', currency: 'EUR' })} unter den Selbstkosten ({result.totalCost.toLocaleString('de-DE', { style: 'currency', currency: 'EUR' })}). Bei diesem Preis machst du Verlust.
+              </p>
+            )}
             {preisModus !== 'ki' && angebotspreis != null && (
               <div className="mt-3 flex justify-between border-t border-emerald-600/20 pt-3 text-emerald-800">
                 <span className="font-semibold">Angebotspreis an den Kunden ({preisModus === 'festpreis' ? 'Festpreis je m²' : 'Pauschale'})</span>
