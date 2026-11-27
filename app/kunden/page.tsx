@@ -276,7 +276,7 @@ export default function KundenPage() {
   return (
     <div className="min-h-full" style={{ background: WIN.grund }}>
       {versand.dialog}
-      {kiAnfrage && <KiAngebotFenster onClose={() => setKiAnfrage(false)} onFertig={(kundeId) => router.push(`/kunden/${kundeId}`)} />}
+      {kiAnfrage && <KiAngebotFenster onClose={() => setKiAnfrage(false)} onFertig={(kundeId, projektId, zumAngebot) => router.push(zumAngebot ? `/aufmass/schritt6?id=${projektId}` : `/kunden/${kundeId}`)} />}
       <div className="flex items-center gap-3 px-3 h-9 text-white sticky top-0 z-20" style={{ background: '#171b20' }}>
         <Users className="h-4 w-4" />
         <h1 className="text-[14px] font-bold">Kunden / Adressen</h1>

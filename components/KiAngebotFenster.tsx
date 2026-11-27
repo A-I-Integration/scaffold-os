@@ -3,7 +3,7 @@
 import KiAngebotChat from '@/components/KiAngebotChat'
 
 /** KI-Angebot als Fenster über der aktuellen Seite (Kundenliste, Kundenordner). */
-export default function KiAngebotFenster({ kunde, onClose, onFertig }: { kunde?: { id: string; name: string }; onClose: () => void; onFertig: (kundeId: string, projectId: string) => void }) {
+export default function KiAngebotFenster({ kunde, onClose, onFertig }: { kunde?: { id: string; name: string }; onClose: () => void; onFertig: (kundeId: string, projectId: string, zumAngebot?: boolean) => void }) {
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/40 p-4" data-testid="ki-angebot-fenster">
       <div className="my-6 w-full max-w-2xl rounded-2xl bg-white p-5 shadow-xl space-y-3">

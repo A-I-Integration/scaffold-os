@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { leseBesonderheiten, leseStandzeitText, zahlInWochenSpanne, baueAufmassDaten, laengeAusFlaeche, extrahiereAdresse, fehlendeAngaben, findeKunden, pruefeKiAntwort, zahlImText, baueAnfrageDaten, projektName } from '../ki-anfrage'
+import { lesePreisangaben, leseBesonderheiten, leseStandzeitText, zahlInWochenSpanne, baueAufmassDaten, laengeAusFlaeche, extrahiereAdresse, fehlendeAngaben, findeKunden, pruefeKiAntwort, zahlImText, baueAnfrageDaten, projektName } from '../ki-anfrage'
 
 const TEXT = 'Kunde Müller GmbH benötigt ein Fassadengerüst in Vreden, ungefähr 250 m², Arbeitshöhe 8 Meter, sechs Wochen. Aufbau Anfang Januar. Bahnhofstraße 12, 48691 Vreden'
 
@@ -207,5 +207,54 @@ describe('Bemerkung, die nur die Besonderheiten wiederholt', () => {
   it('Erfundenes wird weiter gemeldet', () => {
     const r = pruefeKiAntwort({ kunde: 'Müller Bau GmbH', bemerkung: 'Kran erforderlich' }, ANRUF)
     expect(r.verworfen.some((v) => v.includes('Bemerkung'))).toBe(true)
+  })
+})
+
+describe('Diktierter Text: „4m hoch“ und kleingeschriebene Straße', () => {
+  const T = 'Müller GmbH, 250m2 20m breit 4m hoch ölbachstr. 48 in Vreden angebot mit 5.000€ fest und 0,80 cent km geld berechnen'
+  it('liest Straße kleingeschrieben und schreibt sie groß', () => {
+    expect(extrahiereAdresse(T).strasse).toBe('Ölbachstr. 48')
+  })
+  it('„weg 5“ mitten im Satz ist keine Adresse', () => {
+    expect(extrahiereAdresse('auf dem weg 5 Minuten warten').strasse).toBeNull()
+  })
+  it('übernimmt „4m hoch“ als Arbeitshöhe mit Prüfhinweis, aber nicht 5.000 oder 250', () => {
+    const r = pruefeKiAntwort({ kunde: 'Müller GmbH', ort: 'Vreden', flaeche_m2: 250, arbeitshoehe_m: 4, gebaeude_breite_m: 20 }, T)
+    expect(r.entwurf.arbeitshoehe_m).toBe(4)
+    expect(r.entwurf.strasse).toBe('Ölbachstr. 48')
+    expect(r.abgeleitet.join(' ')).toContain('bitte prüfen')
+    expect(pruefeKiAntwort({ arbeitshoehe_m: 250 }, T).entwurf.arbeitshoehe_m).toBeNull()
+  })
+  it('eine Traufhöhe wird weiterhin nie zur Arbeitshöhe', () => {
+    expect(pruefeKiAntwort({ arbeitshoehe_m: 8 }, 'Traufhöhe 8 Meter').entwurf.arbeitshoehe_m).toBeNull()
+  })
+})
+
+describe('Preisangaben aus dem Text', () => {
+  const T = 'Müller GmbH, 250m2 20m breit 4m hoch ölbachstr. 48 in Vreden angebot mit 5.000€ fest und 0,80 cent km geld berechnen'
+  it('liest 5.000 € fest und 0,80 € je km wörtlich', () => {
+    const p = lesePreisangaben(T)
+    expect(p.festpreis_eur).toBe(5000)
+    expect(p.fahrt_satz_eur_km).toBe(0.8)
+    expect(p.hinweise.join(' ')).toContain('cent')
+    expect(p.hinweise.join(' ')).toContain('netto oder brutto')
+  })
+  it('80 cent je km sind 0,80 €', () => { expect(lesePreisangaben('Fahrt 80 cent pro km').fahrt_satz_eur_km).toBe(0.8) })
+  it('Entfernung ohne Preis ist kein Fahrtsatz, Fläche ist kein Festpreis', () => {
+    const p = lesePreisangaben('Baustelle liegt 20 km entfernt, 250 m2 fest montiert')
+    expect(p.fahrt_satz_eur_km).toBeNull()
+    expect(p.festpreis_eur).toBeNull()
+  })
+  it('Festpreis: 2.500,50 Euro', () => { expect(lesePreisangaben('Festpreis von 2.500,50 Euro').festpreis_eur).toBe(2500.5) })
+  it('Ohne Betrag im Text kommt kein Preis in die Aufmaßdaten', () => {
+    const e = pruefeKiAntwort({ kunde: 'A' }, 'A, 100 m2').entwurf
+    const d = baueAufmassDaten(e, { id: 'k1', name: 'A' }, 'A, 100 m2') as any
+    expect(d.preisModus).toBeUndefined(); expect(d.angebotAnpassungen).toBeUndefined()
+  })
+  it('Mit Betrag: Pauschale und Fahrtsatz werden in die Projektdaten übernommen, Fahrt-km bleiben leer', () => {
+    const e = pruefeKiAntwort({ kunde: 'Müller GmbH' }, T).entwurf
+    const d = baueAufmassDaten(e, { id: 'k1', name: 'Müller GmbH' }, T) as any
+    expect(d.preisModus).toBe('pauschale'); expect(d.pauschale).toBe('5000')
+    expect(d.angebotAnpassungen.fahrt).toEqual({ aktiv: true, km: '', satzProKm: '0,80' })
   })
 })

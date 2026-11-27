@@ -18,6 +18,10 @@ export interface AnfrageEntwurf {
   gebaeude_laenge_m: number | null
   gebaeude_breite_m: number | null
   umlaufend: boolean
+  /** Festpreis in Euro, nur wenn wörtlich im Text („5.000 € fest“); lokal gelesen, nicht von der KI */
+  festpreis_eur: number | null
+  /** Fahrtsatz in Euro je km, nur wenn wörtlich im Text („0,80 € pro km“) */
+  fahrt_satz_eur_km: number | null
   /** true = Fläche wurde berechnet (Umfang × Höhe) und ist keine bestätigte Gerüstmenge */
   flaeche_vorlaeufig: boolean
   /** Aus dem Text gelesen (nicht von der KI, nicht berechnet): Besonderheiten der Baustelle */
@@ -27,6 +31,7 @@ export interface AnfrageEntwurf {
 }
 export interface Besonderheit { art: 'einfahrt_frei' | 'treppenaufgang'; text: string }
 export const FELD_LABEL: Record<keyof AnfrageEntwurf, string> = {
+  festpreis_eur: 'Festpreis (€)', fahrt_satz_eur_km: 'Fahrtkosten (€ je km)',
   kunde: 'Kunde (Firma)', ansprechpartner: 'Ansprechpartner', gebaeude_laenge_m: 'Gebäudelänge (m)', gebaeude_breite_m: 'Gebäudebreite (m)', umlaufend: 'Gerüst rundum', strasse: 'Straße und Hausnummer', plz: 'PLZ', ort: 'Ort', leistung: 'Art des Gerüsts',
   flaeche_m2: 'Fläche (m²)', arbeitshoehe_m: 'Arbeitshöhe (m)', traufhoehe_m: 'Traufhöhe (m)', flaeche_vorlaeufig: 'Fläche vorläufig', besonderheiten: 'Besonderheiten', standzeit_text: 'Standzeit laut Text', standzeit_wochen: 'Standzeit (Wochen)', wunschtermin: 'Wunschtermin', bemerkung: 'Bemerkung',
 }
@@ -61,7 +66,7 @@ export function zahlImText(wert: number, original: string, kontext?: { einheit?:
 const KONTEXT = {
   flaeche_m2: { einheit: /m²|m2|qm|quadratmeter|quadrat/ },
   // Arbeits-/Gerüsthöhe nur mit eigenem Stichwort: eine genannte Traufhöhe ist keine Arbeitshöhe
-  arbeitshoehe_m: { einheit: /(?:m|meter|metern)\.?\s*(?:arbeitshöhe|arbeitshoehe|gerüsthöhe|gerüsthoehe)/, stichwort: /(?:arbeits|gerüst|geruest)(?:höhe|hoehe)[^0-9]{0,22}$/ },
+  arbeitshoehe_m: { einheit: /(?:m|meter|metern)\.?\s*(?:arbeitshöhe|arbeitshoehe|gerüsthöhe|gerüsthoehe|hoch\b)/, stichwort: /(?:arbeits|gerüst|geruest)(?:höhe|hoehe)[^0-9]{0,22}$/ },
   traufhoehe_m: { einheit: /(?:m|meter|metern)\.?\s*(?:traufhöhe|traufhoehe)/, stichwort: /(?:traufhöhe|traufhoehe|traufe)[^0-9]{0,22}$/ },
   standzeit_wochen: { einheit: /wochen?|wo\.?/ },
   gebaeude_laenge_m: { einheit: /(?:m|meter|metern)\.?\s*(?:lang|länge|laenge)/ },
@@ -107,16 +112,45 @@ export function nurBesonderheitsWoerter(wert: string): boolean {
   const woerter = wert.toLowerCase().split(/[^a-zäöüß0-9]+/).filter((w) => w.length > 2)
   return woerter.length > 0 && woerter.every((w) => /^(einfahrt|durchfahrt|zufahrt|freihalten|freihaltung|frei|bleiben|treppenaufgang|treppenturm|treppe|und|sowie|muss|soll|erforderlich|nötig|benötigt)$/.test(w))
 }
+/** Deutsche Zahl: „5.000“ (Tausenderpunkt), „0,80“, „1200“. */
+function deutscheZahl(ganz: string, nachkomma?: string): number {
+  return parseFloat(`${ganz.replace(/\./g, '')}${nachkomma ? '.' + nachkomma : ''}`)
+}
+export interface PreisAngaben { festpreis_eur: number | null; fahrt_satz_eur_km: number | null; hinweise: string[] }
+/** Preise nur lokal und nur wörtlich aus dem Text lesen („5.000 € fest“, „0,80 € pro km“). Nichts wird gerechnet oder geschätzt. */
+export function lesePreisangaben(original: string): PreisAngaben {
+  const t = original.toLowerCase()
+  const hinweise: string[] = []
+  const BETRAG = '(\\d{1,3}(?:\\.\\d{3})+|\\d+)(?:,(\\d{1,2}))?'
+  let festpreis: number | null = null
+  const f = t.match(new RegExp(`${BETRAG}\\s*(?:€|euro|eur)\\s*(?:fest(?:preis)?|pauschal\\w*)`)) || t.match(new RegExp(`(?:festpreis|pauschal\\w*)\\s*(?:von|über|:)?\\s*${BETRAG}\\s*(?:€|euro|eur)`))
+  if (f) {
+    const n = deutscheZahl(f[1], f[2])
+    if (n >= 1 && n <= 10_000_000) { festpreis = n; hinweise.push(`Festpreis ${n.toLocaleString('de-DE', { minimumFractionDigits: 2 })} € aus dem Text gelesen. Ob netto oder brutto, steht nicht im Text, das Angebot rechnet netto zuzüglich USt`) }
+  }
+  let satz: number | null = null
+  const k = t.match(new RegExp(`${BETRAG}\\s*(?:(€|euro|eur|cent|ct)\\s*(?:pro|je|/)?\\s*|(?:pro|je|/)\\s*)(?:km|kilometer)\\b`))
+  if (k) {
+    let n = deutscheZahl(k[1], k[2])
+    const einheit = k[3]
+    if ((einheit === 'cent' || einheit === 'ct') && n >= 10) n = n / 100
+    else if (einheit === 'cent' || einheit === 'ct') hinweise.push(`„cent“ gesagt, aber ${n.toLocaleString('de-DE', { minimumFractionDigits: 2 })} als Euro je km gelesen. bitte prüfen`)
+    if (n >= 0.1 && n <= 10) { satz = Math.round(n * 100) / 100; hinweise.push(`Fahrtkosten ${satz.toLocaleString('de-DE', { minimumFractionDigits: 2 })} € je km aus dem Text gelesen. Die Kilometer fehlen noch und werden im Angebot ergänzt`) }
+  }
+  return { festpreis_eur: festpreis, fahrt_satz_eur_km: satz, hinweise }
+}
 const RUNDUM = /rund\s*um|rundum|umlaufend|ringsum|allseitig|alle\s+(?:vier\s+)?seiten/i
 
-const STRASSE_RE = /\b[A-ZÄÖÜ][A-Za-zÄÖÜäöüß-]*(?:str(?:aße|asse)?|weg|gasse|allee|platz|ring|damm|chaussee|pfad|steig|ufer|markt|graben|brücke|anger)\.?\s+\d{1,4}\s?[a-z]?\b/
+const STRASSE_RE = /(?<![A-Za-zÄÖÜäöüß])[A-ZÄÖÜ][A-Za-zÄÖÜäöüß-]*(?:str(?:aße|asse)?|weg|gasse|allee|platz|ring|damm|chaussee|pfad|steig|ufer|markt|graben|brücke|anger)\.?\s+\d{1,4}\s?[a-z]?\b/
+// kleingeschrieben getippt/diktiert („ölbachstr. 48“): mindestens drei Buchstaben davor, damit „weg 5“ im Satz nichts auslöst
+const STRASSE_KLEIN_RE = /(?<![A-Za-zÄÖÜäöüß])[a-zäöüß]{3,}(?:str(?:aße|asse)?|weg|gasse|allee|platz|ring|damm|chaussee|pfad|steig|ufer|markt|graben|anger)\.?\s+\d{1,4}\s?[a-z]?\b/
 const PLZ_ORT_RE = /\b(\d{5})\s+([A-ZÄÖÜ][A-Za-zÄÖÜäöüß-]+(?:[ -][A-ZÄÖÜ][A-Za-zÄÖÜäöüß-]+)*)\b/
 
 /** Adresse lokal aus dem Originaltext lesen. Die KI bekommt Straße und PLZ nie zu sehen (siehe Pseudonymisierung). */
 export function extrahiereAdresse(text: string): { strasse: string | null; plz: string | null; ort: string | null } {
-  const s = text.match(STRASSE_RE)
+  const s = text.match(STRASSE_RE) || text.match(STRASSE_KLEIN_RE)
   const p = text.match(PLZ_ORT_RE)
-  return { strasse: s ? s[0].replace(/\s+/g, ' ').trim() : null, plz: p ? p[1] : null, ort: p ? p[2] : null }
+  return { strasse: s ? s[0].replace(/\s+/g, ' ').trim().replace(/^./, (c) => c.toUpperCase()) : null, plz: p ? p[1] : null, ort: p ? p[2] : null }
 }
 
 const zahl = (v: unknown, min: number, max: number): number | null => {
@@ -155,6 +189,7 @@ export function pruefeKiAntwort(roh: unknown, original: string): LeseErgebnis {
     return n
   }
 
+  const preise = lesePreisangaben(original)
   const ort = adr.ort ?? belegt(text(r.ort, 80), 'ort')
   const entwurf: AnfrageEntwurf = {
     kunde: belegt(text(r.kunde, 120), 'kunde'),
@@ -170,11 +205,15 @@ export function pruefeKiAntwort(roh: unknown, original: string): LeseErgebnis {
     gebaeude_laenge_m: mitZahl(r.gebaeude_laenge_m, 0, 1000, 'gebaeude_laenge_m'),
     gebaeude_breite_m: mitZahl(r.gebaeude_breite_m, 0, 1000, 'gebaeude_breite_m'),
     umlaufend: r.umlaufend === true && RUNDUM.test(original),
+    festpreis_eur: preise.festpreis_eur,
+    fahrt_satz_eur_km: preise.fahrt_satz_eur_km,
     flaeche_vorlaeufig: false,
     besonderheiten: leseBesonderheiten(original),
     standzeit_text: leseStandzeitText(original),
   }
   const abgeleitet = leiteFlaecheAb(entwurf)
+  abgeleitet.push(...preise.hinweise)
+  if (entwurf.arbeitshoehe_m !== null && !/(?:arbeits|gerüst|geruest)(?:höhe|hoehe)/i.test(original)) abgeleitet.push(`Arbeitshöhe ${entwurf.arbeitshoehe_m} m aus einer Angabe wie „m hoch“ gelesen, bitte prüfen (Gebäude oder Gerüst?)`)
   return { entwurf, verworfen, abgeleitet }
 }
 
@@ -255,11 +294,15 @@ export function baueAufmassDaten(e: AnfrageEntwurf, kunde: { id: string; name: s
   if (adresse) step1.adresse = adresse
   if (e.leistung) step1.baustelle = e.leistung
   if (e.ansprechpartner) step1.ansprechpartnerName = e.ansprechpartner
-  if (e.standzeit_wochen) step1.dauer = zeichenkette(Math.min(52, Math.max(1, Math.round(e.standzeit_wochen))))
+  if (e.standzeit_wochen) { step1.dauer = zeichenkette(Math.min(52, Math.max(1, Math.round(e.standzeit_wochen)))); step1.dauerEinheit = 'wochen' }
   if (zeilen.length) step1.notizen = zeilen.join('\n')
   const step2: Record<string, unknown> = {}
   if (laenge) step2.laenge = zeichenkette(laenge)
   if (e.arbeitshoehe_m) step2.hoehe = zeichenkette(e.arbeitshoehe_m)
   if (e.traufhoehe_m) step2.traufhoehe = zeichenkette(e.traufhoehe_m)
-  return { step1, ...(Object.keys(step2).length ? { step2 } : {}), anfrage: baueAnfrageDaten(e, original, jetzt) }
+  // Preisart nur aus ausdrücklich genannten Beträgen; Schritt 6 zeigt sie an und lässt sie ändern
+  const preis: Record<string, unknown> = {}
+  if (e.festpreis_eur) { preis.preisModus = 'pauschale'; preis.pauschale = String(e.festpreis_eur).replace('.', ',') }
+  if (e.fahrt_satz_eur_km) preis.angebotAnpassungen = { fahrt: { aktiv: true, km: '', satzProKm: e.fahrt_satz_eur_km.toFixed(2).replace('.', ',') } }
+  return { step1, ...(Object.keys(step2).length ? { step2 } : {}), ...preis, anfrage: baueAnfrageDaten(e, original, jetzt) }
 }

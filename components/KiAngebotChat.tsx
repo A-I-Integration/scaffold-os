@@ -14,16 +14,19 @@ import type { KIAnalysis, ScaffoldInput } from '@/types/scaffold'
 const inputCls = 'w-full px-3 py-2 bg-white border border-black/10 rounded-lg text-sm text-[#1d1d1f] focus:outline-none focus:border-[#e8590c]'
 const btnPrimary = 'px-3 py-1.5 rounded-lg bg-[#e8590c] hover:bg-[#d9480f] text-white text-xs font-semibold transition-colors disabled:opacity-50'
 const btnSecondary = 'px-3 py-1.5 rounded-lg bg-black/5 hover:bg-black/10 text-[#1d1d1f] text-xs font-medium transition-colors'
-const ZAHLEN: (keyof AnfrageEntwurf)[] = ['gebaeude_laenge_m', 'gebaeude_breite_m', 'traufhoehe_m', 'arbeitshoehe_m', 'flaeche_m2', 'standzeit_wochen']
+const ZAHLEN: (keyof AnfrageEntwurf)[] = ['gebaeude_laenge_m', 'gebaeude_breite_m', 'traufhoehe_m', 'arbeitshoehe_m', 'flaeche_m2', 'standzeit_wochen', 'festpreis_eur', 'fahrt_satz_eur_km']
 const TEXTE: (keyof AnfrageEntwurf)[] = ['kunde', 'ansprechpartner', 'leistung', 'strasse', 'plz', 'ort', 'wunschtermin', 'bemerkung']
 interface Nachricht { rolle: 'du' | 'ki'; text: string }
 interface KundeKurz { id: string; name: string }
+
+/** Rest der Selbstkosten, den die Berechnung nicht einzeln ausweist (Genehmigungen/Sonstiges, ggf. Kran): damit die gezeigten Zeilen zur Summe passen. */
+const sonstKosten = (r: KIAnalysis): number => Math.round((r.totalCost - r.totalMaterialCost - r.laborCost - r.transportCost - (r.tripCost || 0)) * 100) / 100
 
 export default function KiAngebotChat({ kunde, onFertig }: {
   /** Vorgegebener Kunde (Aufruf im Kundenordner): dann entfällt die Kundenwahl */
   kunde?: KundeKurz
   /** Nach dem Anlegen der Baustelle */
-  onFertig: (kundeId: string, projectId: string) => void
+  onFertig: (kundeId: string, projectId: string, zumAngebot?: boolean) => void
 }) {
   const [nachrichten, setNachrichten] = useState<Nachricht[]>([{ rolle: 'ki', text: kunde ? `Beschreibe die Anfrage von ${kunde.name}: Adresse, Art des Gerüsts, Fläche, Arbeitshöhe, Standzeit, Wunschtermin. Du kannst tippen oder eine Sprachnachricht aufnehmen.` : 'Beschreibe die Kundenanfrage: Kunde, Adresse, Art des Gerüsts, Fläche, Arbeitshöhe, Standzeit, Wunschtermin. Du kannst tippen oder eine Sprachnachricht aufnehmen.' }])
   const [eingabe, setEingabe] = useState('')
@@ -86,11 +89,11 @@ export default function KiAngebotChat({ kunde, onFertig }: {
       if (!j.success) throw new Error(j.error || 'Berechnung fehlgeschlagen.')
       setVorab({ eingabe: j.eingabe, annahmen: j.annahmen, result: j.result, preisHinweis: j.preisHinweis, erstellt_am: new Date().toISOString() })
       setPositionenOffen(false)
-      setNachrichten((n) => [...n, { rolle: 'ki', text: 'Die vorläufige Vorab-Kalkulation steht unten. Sie ist kein verbindliches Angebot. PDF und Versand folgen im nächsten Schritt.' }])
+      setNachrichten((n) => [...n, { rolle: 'ki', text: 'Die vorläufige Vorab-Kalkulation steht unten. Sie ist kein verbindliches Angebot. Mit „Baustelle anlegen und Angebot öffnen“ gehst du zu PDF und Mail.' }])
     } catch (e: any) { setFehler(e.message) } finally { setRechnet(false) }
   }
 
-  const anlegen = async () => {
+  const anlegen = async (zumAngebot = false) => {
     if (!entwurf) return
     setSpeichert(true); setFehler(null)
     try {
@@ -106,12 +109,14 @@ export default function KiAngebotChat({ kunde, onFertig }: {
       }
       const daten: any = baueAufmassDaten(entwurf, k, gesamtText)
       // Nur unter anfrage.vorab; das offizielle Ergebnis von Schritt 6 (kiResult) bleibt unberührt.
+      // Nur auf ausdrücklichen Klick "Angebot übernehmen": die Vorab-Kalkulation wird zum Rechenstand von Schritt 6 (dort prüf- und änderbar)
+      if (zumAngebot && vorab) daten.kiResult = vorab.result
       if (vorab) daten.anfrage = { ...daten.anfrage, vorab: { erstellt_am: vorab.erstellt_am, eingabe: vorab.eingabe, annahmen: vorab.annahmen, result: vorab.result } }
       const adresse = (daten.step1.adresse as string | undefined) || undefined
       const pr = await fetch('/api/projects', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: k.name, adresse, customer_id: k.id, data: daten }) })
       const pj = await pr.json()
       if (!pr.ok || !pj.id) throw new Error(pj.error || 'Baustelle konnte nicht angelegt werden.')
-      onFertig(k.id, pj.id)
+      onFertig(k.id, pj.id, zumAngebot && !!vorab)
     } catch (e: any) { setFehler(e.message); setSpeichert(false) }
   }
 
@@ -189,8 +194,9 @@ export default function KiAngebotChat({ kunde, onFertig }: {
               <div className="space-y-2 text-sm">
                 <p className="rounded bg-amber-50 border border-amber-300 px-2 py-1 text-xs font-semibold text-amber-900">Vorläufig – kein verbindliches Angebot</p>
                 {vorab.preisHinweis && <p className="text-xs text-amber-800">{vorab.preisHinweis}</p>}
+                {entwurf?.festpreis_eur ? <p className="rounded bg-blue-50 border border-blue-200 px-2 py-1 text-xs text-blue-900">Genannter Festpreis: <strong>{entwurf.festpreis_eur.toLocaleString('de-DE', { style: 'currency', currency: 'EUR' })}</strong>. Im Angebot gilt dieser Betrag als Pauschale. Die Kalkulation oben dient nur als Vergleich{vorab.result.suggestedPrice > entwurf.festpreis_eur ? ' – der Festpreis liegt unter dem vorgeschlagenen Preis.' : '.'}</p> : null}
                 <table className="w-full text-sm"><tbody>
-                  {([['Material', vorab.result.totalMaterialCost], ['Arbeit', vorab.result.laborCost], ['Transport', vorab.result.transportCost], ...(vorab.result.tripCost ? [['Fahrtkosten', vorab.result.tripCost]] : []), ['Selbstkosten', vorab.result.totalCost]] as [string, number][]).map(([l, v]) => (
+                  {([['Material', vorab.result.totalMaterialCost], ['Arbeit', vorab.result.laborCost], ['Transport', vorab.result.transportCost], ...(vorab.result.tripCost ? [['Fahrtkosten (Pauschale aus Einstellungen)', vorab.result.tripCost]] : []), ...(sonstKosten(vorab.result) > 0.005 ? [['Genehmigungen & Sonstiges (aus Einstellungen)', sonstKosten(vorab.result)]] : []), ['Selbstkosten', vorab.result.totalCost]] as [string, number][]).map(([l, v]) => (
                     <tr key={l}><td className="py-0.5 text-[#86868b]">{l}</td><td className="py-0.5 text-right tabular-nums">{v.toLocaleString('de-DE', { style: 'currency', currency: 'EUR' })}</td></tr>
                   ))}
                   <tr className="border-t border-black/10 font-semibold"><td className="py-1">Vorgeschlagener Preis</td><td className="py-1 text-right tabular-nums">{vorab.result.suggestedPrice.toLocaleString('de-DE', { style: 'currency', currency: 'EUR' })}</td></tr>
@@ -209,10 +215,17 @@ export default function KiAngebotChat({ kunde, onFertig }: {
             )}
           </div>
 
-          <button type="button" className={btnPrimary} disabled={speichert || (!kunde && kundenWahl === 'neu' && !entwurf.kunde)} onClick={anlegen} data-testid="ki-anlegen">
+          <button type="button" className={btnPrimary} disabled={speichert || (!kunde && kundenWahl === 'neu' && !entwurf.kunde)} onClick={() => anlegen(false)} data-testid="ki-anlegen">
             {speichert ? 'Legt an …' : kunde ? `Baustelle bei ${kunde.name} anlegen` : kundenWahl === 'neu' ? 'Neuen Kunden und Baustelle anlegen' : 'Neues Projekt beim Kunden anlegen'}
           </button>
-          <p className="text-[11px] text-[#86868b]">Die Baustelle bekommt Adresse, Standzeit und Maße vorausgefüllt (Länge = Fläche ÷ Höhe). Eine berechnete Vorab-Kalkulation wird mitgespeichert. PDF und Versand folgen im nächsten Schritt.</p>
+          {vorab && (
+            <div className="rounded-lg border border-[#e8590c]/30 bg-orange-50 p-3 space-y-1.5">
+              <button type="button" className={btnPrimary} disabled={speichert || (!kunde && kundenWahl === 'neu' && !entwurf.kunde)} onClick={() => anlegen(true)} data-testid="ki-zum-angebot">{speichert ? 'Legt an …' : 'Baustelle anlegen und Angebot öffnen'}</button>
+              <p className="text-[11px] text-[#86868b]">Die Vorab-Kalkulation wird als Rechenstand in das Angebot (Schritt 6) übernommen. Dort prüfst du Preis und Positionen und erzeugst Vorschau, PDF und Mail an den Kunden. Erst dort verlässt etwas das Haus.</p>
+            </div>
+          )}
+
+          <p className="text-[11px] text-[#86868b]">Die Baustelle bekommt Adresse, Standzeit und Maße vorausgefüllt (Länge = Fläche ÷ Höhe). Eine berechnete Vorab-Kalkulation wird mitgespeichert.</p>
         </div>
       )}
     </div>

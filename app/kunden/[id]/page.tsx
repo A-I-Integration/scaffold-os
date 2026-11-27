@@ -969,7 +969,7 @@ export default function KundenDetailPage() {
             <h1 className="text-[14px] font-bold truncate">{baustelle ? (baustelle.name || 'Unbenannte Baustelle') : kunde.name}</h1>
             {baustelle && freigaben[baustelle.id] && <span className="bg-white rounded"><FreigabeBadge status={freigaben[baustelle.id]} /></span>}
             <span className="text-xs opacity-80 truncate">
-              {baustelle ? `Kunde: ${kunde.name}${baustelle.adresse ? ` · ${baustelle.adresse}` : ''}` : `${kunde.street}${kunde.street ? ', ' : ''}${kunde.zip} ${kunde.city}`}
+              {baustelle ? `Kunde: ${kunde.name}${baustelle.adresse ? ` · ${baustelle.adresse}` : ''}` : [kunde.street, [kunde.zip, kunde.city].filter(Boolean).join(' ')].filter(Boolean).join(', ')}
             </span>
           </div>
           {rechnungsLadung !== 'ok' && (
@@ -1433,7 +1433,7 @@ export default function KundenDetailPage() {
             onAnhaengeHinzufuegen={(inv) => setNeueRechnungAnhang(inv as any)}
           />
         )}
-        {kiAngebotOffen && kunde && <KiAngebotFenster kunde={{ id: kunde.id, name: kunde.name }} onClose={() => setKiAngebotOffen(false)} onFertig={() => { setKiAngebotOffen(false); ladeDaten() }} />}
+        {kiAngebotOffen && kunde && <KiAngebotFenster kunde={{ id: kunde.id, name: kunde.name }} onClose={() => setKiAngebotOffen(false)} onFertig={(_k, projektId, zumAngebot) => { setKiAngebotOffen(false); if (zumAngebot) router.push(`/aufmass/schritt6?id=${projektId}`); else ladeDaten() }} />}
         {neueRechnungAnhang && <AnhangDialog invoiceId={neueRechnungAnhang.id} rechnungsNr={neueRechnungAnhang.invoice_number} positionen={neueRechnungAnhang.positions || []} onClose={() => { setNeueRechnungAnhang(null); ladeDaten() }} />}
 
         {/* ═══════════ TAB: AUSFÜHRUNG (Baustelle: Ergebnis, Aufbau/Abbau, Lieferschein, Standzeit, Links) ═══════════ */}
