@@ -62,6 +62,7 @@ import StatikerFreigabeBox from '@/components/StatikerFreigabeBox'
 import { FreigabeBadge, useFreigabeStatus } from '@/components/FreigabeBadge'
 import Auftragsstand from '@/components/Auftragsstand'
 import BaustellenBelege from '@/components/baustelle/BaustellenBelege'
+import NochAbzurechnen from '@/components/baustelle/NochAbzurechnen'
 import { berechneForderung, mitBezugsGutschriften } from '@/lib/forderung'
 import AnhangDialog from '@/components/rechnung/AnhangDialog'
 import { ladeXrechnung } from '@/lib/xrechnung-download'
@@ -152,14 +153,14 @@ const fmtTimestamp = (d: string | null) => (d ? new Date(d).toLocaleDateString('
 
 const LEER_POSITION = { bezeichnung: '', menge: '1', einheit: 'Stk.', einzelpreis: '' }
 // Der Reiter heißt jetzt „Faktura“ (Schlüssel bleibt 'rechnungen', damit alte Links ?tab=rechnungen weiter funktionieren).
-const TABS = ['baustellen', 'kunde', 'aufmass', 'bilder', 'dokumente', 'mappe', 'angebote', 'lv', 'zeiten', 'bauphasen', 'nachtraege', 'ausfuehrung', 'rechnungen', 'belege', 'emails'] as const
+const TABS = ['baustellen', 'kunde', 'aufmass', 'bilder', 'dokumente', 'mappe', 'angebote', 'lv', 'zeiten', 'bauphasen', 'nachtraege', 'ausfuehrung', 'rechnungen', 'belege', 'abzurechnen', 'emails'] as const
 type Tab = typeof TABS[number]
 // Zwei Ebenen: Kunde (Übersicht aller Baustellen, Stammdaten, alle Rechnungen/Mails) und Baustelle (alles zu genau diesem Projekt)
 // Alle Reiter gibt es auch auf Kundenebene: Reiter, die zu genau einer Baustelle gehören (Leistungsverzeichnis, Mappe, Zeiten), fragen dort die Baustelle ab.
 const KUNDEN_TABS: Tab[] = ['baustellen', 'kunde', 'aufmass', 'bilder', 'dokumente', 'mappe', 'angebote', 'lv', 'zeiten', 'bauphasen', 'nachtraege', 'ausfuehrung', 'rechnungen', 'emails']
-const BAUSTELLEN_TABS: Tab[] = ['kunde', 'aufmass', 'bilder', 'dokumente', 'mappe', 'angebote', 'lv', 'zeiten', 'bauphasen', 'nachtraege', 'ausfuehrung', 'rechnungen', 'belege', 'emails']
+const BAUSTELLEN_TABS: Tab[] = ['kunde', 'aufmass', 'bilder', 'dokumente', 'mappe', 'angebote', 'lv', 'zeiten', 'bauphasen', 'nachtraege', 'ausfuehrung', 'rechnungen', 'belege', 'abzurechnen', 'emails']
 const TAB_LABEL: Record<Tab, string> = {
-  baustellen: 'Baustellen', ausfuehrung: 'Ausführung', kunde: 'Kunde', aufmass: 'Aufmaß', bilder: 'Bilder', dokumente: 'Dokumente', mappe: 'Baustellenmappe (QR)', angebote: 'Angebote', lv: 'Leistungsverzeichnis', zeiten: 'Zeiten', bauphasen: 'Bauphasen', nachtraege: 'Nachträge / Schluss', rechnungen: 'Faktura', belege: 'Belege', emails: 'E-Mails',
+  baustellen: 'Baustellen', ausfuehrung: 'Ausführung', kunde: 'Kunde', aufmass: 'Aufmaß', bilder: 'Bilder', dokumente: 'Dokumente', mappe: 'Baustellenmappe (QR)', angebote: 'Angebote', lv: 'Leistungsverzeichnis', zeiten: 'Zeiten', bauphasen: 'Bauphasen', nachtraege: 'Nachträge / Schluss', rechnungen: 'Faktura', belege: 'Belege', abzurechnen: 'Noch abzurechnen', emails: 'E-Mails',
 }
 
 // Gleicher Namensabgleich wie auf der Kunden-Übersicht (app/kunden/page.tsx):
@@ -1590,6 +1591,11 @@ export default function KundenDetailPage() {
         {/* ═══════════ TAB: BELEGE (nur Baustelle): erstellte Rechnungen + externe Rechnungen ═══════════ */}
         {tabAktiv === 'belege' && baustelle && (
           <BaustellenBelege projectId={baustelle.id} projektName={baustelle.name} rechnungen={sichtBelege as unknown as Invoice[]} rechnungenBereit={rechnungsLadung === 'ok'} />
+        )}
+
+        {/* ═══════════ TAB: NOCH ABZURECHNEN (nur Baustelle): von Hand erfasste Posten, die noch in eine Rechnung gehören ═══════════ */}
+        {tabAktiv === 'abzurechnen' && baustelle && (
+          <NochAbzurechnen projectId={baustelle.id} rechnungen={sichtBelege as unknown as Invoice[]} onRechnungStellen={() => { setTab('rechnungen'); setTimeout(() => setNeuSignal((n) => n + 1), 200) }} />
         )}
 
         {/* ═══════════ TAB: RECHNUNGEN ═══════════ */}
