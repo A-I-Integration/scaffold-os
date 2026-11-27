@@ -1433,7 +1433,7 @@ export default function KundenDetailPage() {
             onAnhaengeHinzufuegen={(inv) => setNeueRechnungAnhang(inv as any)}
           />
         )}
-        {kiAngebotOffen && kunde && <KiAngebotFenster kunde={{ id: kunde.id, name: kunde.name }} onClose={() => setKiAngebotOffen(false)} onFertig={() => { setKiAngebotOffen(false); ladeDaten() }} />}
+        {kiAngebotOffen && kunde && <KiAngebotFenster kunde={{ id: kunde.id, name: kunde.name }} onClose={() => setKiAngebotOffen(false)} onFertig={(_k, projektId, zumAngebot) => { setKiAngebotOffen(false); if (zumAngebot) router.push(`/aufmass/schritt6?id=${projektId}`); else ladeDaten() }} />}
         {neueRechnungAnhang && <AnhangDialog invoiceId={neueRechnungAnhang.id} rechnungsNr={neueRechnungAnhang.invoice_number} positionen={neueRechnungAnhang.positions || []} onClose={() => { setNeueRechnungAnhang(null); ladeDaten() }} />}
 
         {/* ═══════════ TAB: AUSFÜHRUNG (Baustelle: Ergebnis, Aufbau/Abbau, Lieferschein, Standzeit, Links) ═══════════ */}
