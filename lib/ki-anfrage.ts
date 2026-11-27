@@ -11,16 +11,24 @@ export interface AnfrageEntwurf {
   leistung: string | null
   flaeche_m2: number | null
   arbeitshoehe_m: number | null
+  traufhoehe_m: number | null
   standzeit_wochen: number | null
   wunschtermin: string | null
   bemerkung: string | null
   gebaeude_laenge_m: number | null
   gebaeude_breite_m: number | null
   umlaufend: boolean
+  /** true = Fläche wurde berechnet (Umfang × Höhe) und ist keine bestätigte Gerüstmenge */
+  flaeche_vorlaeufig: boolean
+  /** Aus dem Text gelesen (nicht von der KI, nicht berechnet): Besonderheiten der Baustelle */
+  besonderheiten: Besonderheit[]
+  /** Standzeit-Angabe wörtlich, z. B. „sechs bis acht Wochen“ */
+  standzeit_text: string | null
 }
+export interface Besonderheit { art: 'einfahrt_frei' | 'treppenaufgang'; text: string }
 export const FELD_LABEL: Record<keyof AnfrageEntwurf, string> = {
   kunde: 'Kunde (Firma)', ansprechpartner: 'Ansprechpartner', gebaeude_laenge_m: 'Gebäudelänge (m)', gebaeude_breite_m: 'Gebäudebreite (m)', umlaufend: 'Gerüst rundum', strasse: 'Straße und Hausnummer', plz: 'PLZ', ort: 'Ort', leistung: 'Art des Gerüsts',
-  flaeche_m2: 'Fläche (m²)', arbeitshoehe_m: 'Arbeitshöhe (m)', standzeit_wochen: 'Standzeit (Wochen)', wunschtermin: 'Wunschtermin', bemerkung: 'Bemerkung',
+  flaeche_m2: 'Fläche (m²)', arbeitshoehe_m: 'Arbeitshöhe (m)', traufhoehe_m: 'Traufhöhe (m)', flaeche_vorlaeufig: 'Fläche vorläufig', besonderheiten: 'Besonderheiten', standzeit_text: 'Standzeit laut Text', standzeit_wochen: 'Standzeit (Wochen)', wunschtermin: 'Wunschtermin', bemerkung: 'Bemerkung',
 }
 /** Diese Angaben braucht es mindestens, damit sich ein Angebot überhaupt vorbereiten lässt. */
 export const PFLICHT: (keyof AnfrageEntwurf)[] = ['kunde', 'ort', 'flaeche_m2', 'arbeitshoehe_m']
@@ -52,7 +60,9 @@ export function zahlImText(wert: number, original: string, kontext?: { einheit?:
 }
 const KONTEXT = {
   flaeche_m2: { einheit: /m²|m2|qm|quadratmeter|quadrat/ },
-  arbeitshoehe_m: { einheit: /m(?![²2a-zäöüß])|meter|metern/, stichwort: /(?:höhe|hoehe|hoch)[^0-9]{0,12}$/ },
+  // Arbeits-/Gerüsthöhe nur mit eigenem Stichwort: eine genannte Traufhöhe ist keine Arbeitshöhe
+  arbeitshoehe_m: { einheit: /(?:m|meter|metern)\.?\s*(?:arbeitshöhe|arbeitshoehe|gerüsthöhe|gerüsthoehe)/, stichwort: /(?:arbeits|gerüst|geruest)(?:höhe|hoehe)[^0-9]{0,22}$/ },
+  traufhoehe_m: { einheit: /(?:m|meter|metern)\.?\s*(?:traufhöhe|traufhoehe)/, stichwort: /(?:traufhöhe|traufhoehe|traufe)[^0-9]{0,22}$/ },
   standzeit_wochen: { einheit: /wochen?|wo\.?/ },
   gebaeude_laenge_m: { einheit: /(?:m|meter|metern)\.?\s*(?:lang|länge|laenge)/ },
   gebaeude_breite_m: { einheit: /(?:m|meter|metern)\.?\s*(?:breit|breite)/ },
@@ -77,6 +87,20 @@ export function sinngemaessBelegt(wert: string, original: string): boolean {
   if (!woerter.length) return false
   const treffer = woerter.filter((w) => o.includes(w.slice(0, Math.max(4, w.length - 2)))).length
   return treffer / woerter.length >= 0.8
+}
+/** Besonderheiten lokal aus dem Text lesen (satzweise, wörtlich). Es wird nichts angenommen, keine Konstruktion und kein Preis. */
+export function leseBesonderheiten(original: string): Besonderheit[] {
+  const out: Besonderheit[] = []
+  for (const satz of original.split(/(?<=[.!?])\s+|\n+/).map((x) => x.trim()).filter(Boolean)) {
+    if (/einfahrt|durchfahrt|zufahrt/i.test(satz) && /frei/i.test(satz)) out.push({ art: 'einfahrt_frei', text: satz.slice(0, 300) })
+    else if (/treppenaufgang|treppenturm|treppe/i.test(satz)) out.push({ art: 'treppenaufgang', text: satz.slice(0, 300) })
+  }
+  return out
+}
+/** Standzeit-Angabe wörtlich („sechs bis acht Wochen“, „6 Wochen“), damit bei einer Spanne nichts verloren geht. */
+export function leseStandzeitText(original: string): string | null {
+  const m = original.match(/(?:\d+(?:[.,]\d+)?|[a-zäöüß]+)\s*(?:bis|-|–|oder)\s*(?:\d+(?:[.,]\d+)?|[a-zäöüß]+)\s*wochen?|\b\d+(?:[.,]\d+)?\s*wochen?/i)
+  return m ? m[0].trim() : null
 }
 const RUNDUM = /rund\s*um|rundum|umlaufend|ringsum|allseitig|alle\s+(?:vier\s+)?seiten/i
 
@@ -117,7 +141,7 @@ export function pruefeKiAntwort(roh: unknown, original: string): LeseErgebnis {
     verworfen.push(`${FELD_LABEL[feld]}: „${wert}“ steht nicht im Text`)
     return null
   }
-  const mitZahl = (v: unknown, min: number, max: number, feld: 'flaeche_m2' | 'arbeitshoehe_m' | 'standzeit_wochen' | 'gebaeude_laenge_m' | 'gebaeude_breite_m'): number | null => {
+  const mitZahl = (v: unknown, min: number, max: number, feld: 'flaeche_m2' | 'arbeitshoehe_m' | 'traufhoehe_m' | 'standzeit_wochen' | 'gebaeude_laenge_m' | 'gebaeude_breite_m'): number | null => {
     const n = zahl(v, min, max)
     if (n === null) { if (v !== null && v !== undefined && v !== '') verworfen.push(`${FELD_LABEL[feld]}: Wert nicht plausibel`); return null }
     if (!(zahlImText(n, original, KONTEXT[feld]) || (feld === 'standzeit_wochen' && zahlInWochenSpanne(n, original)))) { verworfen.push(`${FELD_LABEL[feld]}: ${n} steht nicht im Text`); return null }
@@ -132,32 +156,41 @@ export function pruefeKiAntwort(roh: unknown, original: string): LeseErgebnis {
     leistung: belegt(text(r.leistung, 80), 'leistung'),
     flaeche_m2: mitZahl(r.flaeche_m2, 0, 100000, 'flaeche_m2'),
     arbeitshoehe_m: mitZahl(r.arbeitshoehe_m, 0, 200, 'arbeitshoehe_m'),
+    traufhoehe_m: mitZahl(r.traufhoehe_m, 0, 200, 'traufhoehe_m'),
     standzeit_wochen: mitZahl(r.standzeit_wochen, 0, 520, 'standzeit_wochen'),
     wunschtermin: belegt(text(r.wunschtermin, 60), 'wunschtermin'),
     bemerkung: belegtSinngemaess(text(r.bemerkung, 300), 'bemerkung'),
     gebaeude_laenge_m: mitZahl(r.gebaeude_laenge_m, 0, 1000, 'gebaeude_laenge_m'),
     gebaeude_breite_m: mitZahl(r.gebaeude_breite_m, 0, 1000, 'gebaeude_breite_m'),
     umlaufend: r.umlaufend === true && RUNDUM.test(original),
+    flaeche_vorlaeufig: false,
+    besonderheiten: leseBesonderheiten(original),
+    standzeit_text: leseStandzeitText(original),
   }
   const abgeleitet = leiteFlaecheAb(entwurf)
   return { entwurf, verworfen, abgeleitet }
 }
 
-/** „Rund um das Gebäude“: Länge des Gerüsts = Umfang 2 × (Länge + Breite), Fläche = Umfang × Höhe. Nur wenn die Fläche nicht selbst genannt wurde.
- *  Annahme: ohne Abzug für Einfahrt oder Lücken; das prüft der Mensch. Verändert den Entwurf und liefert den Rechenweg als Text. */
+/** „Rund um das Gebäude“: Umfang = 2 × (Länge + Breite); vorläufige Fassadenfläche = Umfang × Höhe (Arbeitshöhe, sonst Traufhöhe). Nur wenn die Fläche nicht selbst genannt wurde.
+ *  Das ist eine geometrische Näherung, keine bestätigte Gerüstmenge: ohne Abzug für Einfahrt oder Lücken, ohne Giebel, Dachüberstände und unterschiedliche Höhen. */
 export function leiteFlaecheAb(e: AnfrageEntwurf): string[] {
-  if (e.flaeche_m2 !== null || !e.umlaufend || !e.gebaeude_laenge_m || !e.gebaeude_breite_m || !e.arbeitshoehe_m) return []
-  const umfang = Math.round(2 * (e.gebaeude_laenge_m + e.gebaeude_breite_m) * 100) / 100
-  e.flaeche_m2 = Math.round(umfang * e.arbeitshoehe_m * 100) / 100
+  const hoehe = e.arbeitshoehe_m ?? e.traufhoehe_m
+  if (e.flaeche_m2 !== null || !e.umlaufend || !e.gebaeude_laenge_m || !e.gebaeude_breite_m || !hoehe) return []
+  const umfang = umfangRundum(e) as number
+  e.flaeche_m2 = Math.round(umfang * hoehe * 100) / 100
+  e.flaeche_vorlaeufig = true
   const z = (n: number) => String(n).replace('.', ',')
-  return [`Gerüst rundum: Umfang 2 × (${z(e.gebaeude_laenge_m)} + ${z(e.gebaeude_breite_m)}) = ${z(umfang)} m, Fläche ${z(umfang)} m × ${z(e.arbeitshoehe_m)} m = ${z(e.flaeche_m2)} m² (ohne Abzug für Einfahrt oder Lücken)`]
+  return [`Vorläufige Fassadenfläche (keine bestätigte Gerüstmenge): Umfang 2 × (${z(e.gebaeude_laenge_m)} + ${z(e.gebaeude_breite_m)}) = ${z(umfang)} m, ${z(umfang)} m × ${z(hoehe)} m ${e.arbeitshoehe_m ? 'Arbeitshöhe' : 'Traufhöhe'} = ${z(e.flaeche_m2)} m². Ohne Abzug für Einfahrt oder Lücken, ohne Giebel, Dachüberstände und unterschiedliche Höhen`]
+}
+export function umfangRundum(e: Pick<AnfrageEntwurf, 'umlaufend' | 'gebaeude_laenge_m' | 'gebaeude_breite_m'>): number | null {
+  return e.umlaufend && e.gebaeude_laenge_m && e.gebaeude_breite_m ? Math.round(2 * (e.gebaeude_laenge_m + e.gebaeude_breite_m) * 100) / 100 : null
 }
 
 /** Was fehlt noch für einen Angebotsentwurf? (als lesbare Rückfragen) */
 export function fehlendeAngaben(e: AnfrageEntwurf, opt: { ohneKunde?: boolean } = {}): string[] {
   const f: string[] = []
-  for (const k of PFLICHT) if (!(opt.ohneKunde && k === 'kunde') && (e[k] === null || e[k] === '')) f.push(FELD_LABEL[k])
-  if (!e.strasse) f.push(FELD_LABEL.strasse)
+  for (const k of PFLICHT) if (!(opt.ohneKunde && k === 'kunde') && (e[k] === null || e[k] === '')) f.push(k === 'arbeitshoehe_m' && e.traufhoehe_m !== null ? `${FELD_LABEL[k]} (nur Traufhöhe ${e.traufhoehe_m} m genannt)` : FELD_LABEL[k])
+    if (!e.strasse) f.push(FELD_LABEL.strasse)
   if (e.standzeit_wochen === null) f.push(FELD_LABEL.standzeit_wochen)
   return f
 }
@@ -196,19 +229,30 @@ export function laengeAusFlaeche(flaeche: number | null, hoehe: number | null): 
 }
 const zeichenkette = (n: number) => String(n)
 
-/** Vorbefüllte Aufmaß-Daten (Schritt 1 und 2) für die neue Baustelle. Nur Angaben, die da sind; alles Weitere trägt der Mensch im Aufmaß nach. */
+/** Vorbefüllte Aufmaß-Daten (Schritt 1 und 2) für die neue Baustelle. Nur Angaben, die da sind; alles Weitere trägt der Mensch im Aufmaß nach.
+ *  Traufhöhe und Arbeitshöhe bleiben getrennt: aus einer genannten Traufhöhe wird keine Arbeitshöhe. Alles aus dem Gespräch steht zusätzlich in `anfrage` und in den Notizen. */
 export function baueAufmassDaten(e: AnfrageEntwurf, kunde: { id: string; name: string }, original: string, jetzt = new Date()) {
   const adresse = [e.strasse, [e.plz, e.ort].filter(Boolean).join(' ')].filter(Boolean).join(', ')
-  const notiz = [e.wunschtermin ? `Wunschtermin: ${e.wunschtermin}` : '', e.bemerkung || ''].filter(Boolean).join('\n')
-  const laenge = laengeAusFlaeche(e.flaeche_m2, e.arbeitshoehe_m)
+  const umfang = umfangRundum(e)
+  const laenge = umfang ?? (e.arbeitshoehe_m ? laengeAusFlaeche(e.flaeche_m2, e.arbeitshoehe_m) : null)
+  const z = (n: number) => String(n).replace('.', ',')
+  const zeilen: string[] = []
+  if (e.wunschtermin) zeilen.push(`Wunschtermin: ${e.wunschtermin}`)
+  if (e.standzeit_text) zeilen.push(`Standzeit laut Anruf: ${e.standzeit_text}${e.standzeit_wochen ? ` (eingetragen: ${e.standzeit_wochen} Wochen)` : ''}`)
+  if (e.gebaeude_laenge_m || e.gebaeude_breite_m) zeilen.push(`Gebäude: ${e.gebaeude_laenge_m ? `${z(e.gebaeude_laenge_m)} m lang` : ''}${e.gebaeude_laenge_m && e.gebaeude_breite_m ? ', ' : ''}${e.gebaeude_breite_m ? `${z(e.gebaeude_breite_m)} m breit` : ''}`)
+  if (e.traufhoehe_m) zeilen.push(`Traufhöhe laut Anruf: ${z(e.traufhoehe_m)} m${e.arbeitshoehe_m ? '' : ' (Arbeitshöhe/Gerüsthöhe nicht genannt, im Aufmaß festlegen)'}`)
+  if (umfang && laenge) zeilen.push(`Länge ${z(umfang)} m = Umfang rundum, vorläufig aus den Gebäudemaßen berechnet (ohne Abzug für Einfahrt oder Lücken)`)
+  for (const b of e.besonderheiten) zeilen.push(`${b.art === 'einfahrt_frei' ? 'Einfahrt freihalten' : 'Treppenaufgang'}: ${b.text}`)
+  if (e.bemerkung) zeilen.push(e.bemerkung)
   const step1: Record<string, unknown> = { name: kunde.name, customerId: kunde.id }
   if (adresse) step1.adresse = adresse
   if (e.leistung) step1.baustelle = e.leistung
   if (e.ansprechpartner) step1.ansprechpartnerName = e.ansprechpartner
   if (e.standzeit_wochen) step1.dauer = zeichenkette(Math.min(52, Math.max(1, Math.round(e.standzeit_wochen))))
-  if (notiz) step1.notizen = notiz
+  if (zeilen.length) step1.notizen = zeilen.join('\n')
   const step2: Record<string, unknown> = {}
   if (laenge) step2.laenge = zeichenkette(laenge)
   if (e.arbeitshoehe_m) step2.hoehe = zeichenkette(e.arbeitshoehe_m)
+  if (e.traufhoehe_m) step2.traufhoehe = zeichenkette(e.traufhoehe_m)
   return { step1, ...(Object.keys(step2).length ? { step2 } : {}), anfrage: baueAnfrageDaten(e, original, jetzt) }
 }
