@@ -14,7 +14,7 @@ import type { KIAnalysis, ScaffoldInput } from '@/types/scaffold'
 const inputCls = 'w-full px-3 py-2 bg-white border border-black/10 rounded-lg text-sm text-[#1d1d1f] focus:outline-none focus:border-[#e8590c]'
 const btnPrimary = 'px-3 py-1.5 rounded-lg bg-[#e8590c] hover:bg-[#d9480f] text-white text-xs font-semibold transition-colors disabled:opacity-50'
 const btnSecondary = 'px-3 py-1.5 rounded-lg bg-black/5 hover:bg-black/10 text-[#1d1d1f] text-xs font-medium transition-colors'
-const ZAHLEN: (keyof AnfrageEntwurf)[] = ['gebaeude_laenge_m', 'gebaeude_breite_m', 'traufhoehe_m', 'arbeitshoehe_m', 'flaeche_m2', 'standzeit_wochen']
+const ZAHLEN: (keyof AnfrageEntwurf)[] = ['gebaeude_laenge_m', 'gebaeude_breite_m', 'traufhoehe_m', 'arbeitshoehe_m', 'flaeche_m2', 'standzeit_wochen', 'festpreis_eur', 'fahrt_satz_eur_km']
 const TEXTE: (keyof AnfrageEntwurf)[] = ['kunde', 'ansprechpartner', 'leistung', 'strasse', 'plz', 'ort', 'wunschtermin', 'bemerkung']
 interface Nachricht { rolle: 'du' | 'ki'; text: string }
 interface KundeKurz { id: string; name: string }
@@ -191,6 +191,7 @@ export default function KiAngebotChat({ kunde, onFertig }: {
               <div className="space-y-2 text-sm">
                 <p className="rounded bg-amber-50 border border-amber-300 px-2 py-1 text-xs font-semibold text-amber-900">Vorläufig – kein verbindliches Angebot</p>
                 {vorab.preisHinweis && <p className="text-xs text-amber-800">{vorab.preisHinweis}</p>}
+                {entwurf?.festpreis_eur ? <p className="rounded bg-blue-50 border border-blue-200 px-2 py-1 text-xs text-blue-900">Genannter Festpreis: <strong>{entwurf.festpreis_eur.toLocaleString('de-DE', { style: 'currency', currency: 'EUR' })}</strong>. Im Angebot gilt dieser Betrag als Pauschale. Die Kalkulation oben dient nur als Vergleich{vorab.result.suggestedPrice > entwurf.festpreis_eur ? ' – der Festpreis liegt unter dem vorgeschlagenen Preis.' : '.'}</p> : null}
                 <table className="w-full text-sm"><tbody>
                   {([['Material', vorab.result.totalMaterialCost], ['Arbeit', vorab.result.laborCost], ['Transport', vorab.result.transportCost], ...(vorab.result.tripCost ? [['Fahrtkosten', vorab.result.tripCost]] : []), ['Selbstkosten', vorab.result.totalCost]] as [string, number][]).map(([l, v]) => (
                     <tr key={l}><td className="py-0.5 text-[#86868b]">{l}</td><td className="py-0.5 text-right tabular-nums">{v.toLocaleString('de-DE', { style: 'currency', currency: 'EUR' })}</td></tr>
