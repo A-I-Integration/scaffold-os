@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { normalisiereNachtraege, nachtragNummer, NACHTRAG_STATUS_LABEL } from '@/lib/nachtrag'
 import { berechneBaustellenErgebnis, type PersonalZeile } from '@/lib/baustellen-ergebnis'
+import { summiereEingang } from '@/lib/eingangsrechnung'
 import { kontrolleBaustelle, korrekturkette } from '@/lib/abrechnung-pruefung'
 import { AKTION_LABEL, historieKurz } from '@/lib/abrechnung-historie'
 import { berechneAuftragsstand, angebotNettoAusProjekt, auftragUrl, type StandRechnung } from '@/lib/auftragsstand'
@@ -94,10 +95,22 @@ export default function Auftragsstand({ project, invoices, onRechnungStellen, on
     return () => { aktiv = false }
   }, [project.id, baustelleAnsicht])
 
+  // Externe Rechnungen (Nachunternehmer, Material, Sonstiges) zählen als Fremdkosten; fehlt die Tabelle noch, bleibt es bei 0
+  const [fremd, setFremd] = useState<{ netto: number; anzahl: number } | null>(null)
+  useEffect(() => {
+    if (!baustelleAnsicht) return
+    let aktiv = true
+    fetch(`/api/eingangsrechnungen?project_id=${project.id}`, { cache: 'no-store' }).then(r => r.json()).then(j => {
+      if (!aktiv) return
+      if (j.success && Array.isArray(j.eintraege)) { const s = summiereEingang(j.eintraege); setFremd({ netto: s.netto, anzahl: s.anzahl }) } else setFremd(null)
+    }).catch(() => { if (aktiv) setFremd(null) })
+    return () => { aktiv = false }
+  }, [project.id, baustelleAnsicht])
+
   const ergebnis = useMemo(() => personal ? berechneBaustellenErgebnis({
     erloesNetto: stand.abgerechnet, auftragswertNetto: stand.auftragswert, zeilen: personal.zeilen,
-    zuschlagProzent: parseFloat(zuschlag.replace(',', '.')) || 0,
-  }) : null, [personal, stand, zuschlag])
+    zuschlagProzent: parseFloat(zuschlag.replace(',', '.')) || 0, fremdkostenNetto: fremd?.netto ?? 0,
+  }) : null, [personal, stand, zuschlag, fremd])
 
   const kachel = (titel: string, wert: string, hinweis?: string, rot = false) => (
     <div className="rounded border border-black/30 bg-white p-3">
@@ -124,13 +137,14 @@ export default function Auftragsstand({ project, invoices, onRechnungStellen, on
 
       {baustelleAnsicht && (
         <div className="rounded border border-black/30 bg-white p-3 space-y-2">
-          <h4 className="font-semibold text-sm">Ergebnis der Baustelle (Erlös minus Personalkosten)</h4>
+          <h4 className="font-semibold text-sm">Ergebnis der Baustelle (Erlös minus Personal- und Fremdkosten)</h4>
           {ergebnisFehler && <p className="text-sm text-black/70">{ergebnisFehler}</p>}
           {ergebnis && (
             <>
-              <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+              <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
                 {kachel('Erlös bisher (netto)', eur(ergebnis.erloes))}
                 {kachel('Personalkosten', eur(ergebnis.personalkosten + ergebnis.spesen), `${ergebnis.stunden.toLocaleString('de-DE')} Std.${ergebnis.spesen > 0 ? ` · davon Spesen ${eur(ergebnis.spesen)}` : ''}`)}
+                {kachel('Externe Rechnungen (netto)', eur(ergebnis.fremdkosten), fremd ? `${fremd.anzahl} Beleg${fremd.anzahl === 1 ? '' : 'e'} im Reiter „Belege“` : 'Nicht verfügbar')}
                 {kachel('Ergebnis bisher', eur(ergebnis.ergebnis), ergebnis.margeProzent === null ? 'Noch nichts abgerechnet' : `${ergebnis.margeProzent.toLocaleString('de-DE')} % vom Erlös`, ergebnis.ergebnis < 0)}
                 {kachel('Bei voller Abrechnung', ergebnis.ergebnisBeiVollerAbrechnung === null ? '–' : eur(ergebnis.ergebnisBeiVollerAbrechnung), ergebnis.ergebnisBeiVollerAbrechnung === null ? 'Kein Auftragswert hinterlegt' : 'Auftragswert minus bisherige Kosten', (ergebnis.ergebnisBeiVollerAbrechnung ?? 0) < 0)}
               </div>
@@ -152,7 +166,7 @@ export default function Auftragsstand({ project, invoices, onRechnungStellen, on
                 <input id="lnk-zuschlag" value={zuschlag} onChange={e => setZuschlag(e.target.value)} inputMode="decimal" className="w-20 rounded border border-black/40 px-2 py-1 text-right" />
                 <span className="text-black/70">nur für diese Ansicht, wird nicht gespeichert</span>
               </div>
-              <p className="text-xs text-black/70">Grundlage: gebuchte Stunden mit Projektbezug × Stundensatz aus der Mitarbeiterverwaltung (Annahme: das ist der Kostensatz, nicht der Verrechnungssatz). Nicht enthalten: Material, Fahrzeuge, Kran, Fremdleistungen und Gemeinkosten. Das Ergebnis ist ein Deckungsbeitrag nach Personal, kein Gewinn.</p>
+              <p className="text-xs text-black/70">Grundlage: gebuchte Stunden mit Projektbezug × Stundensatz aus der Mitarbeiterverwaltung (Annahme: das ist der Kostensatz, nicht der Verrechnungssatz). Dazu kommen die externen Rechnungen (netto) aus dem Reiter „Belege“. Nicht enthalten: Fahrzeuge, Kran, Gemeinkosten und alles, was nicht als externe Rechnung erfasst ist. Das Ergebnis ist ein Deckungsbeitrag, kein Gewinn.</p>
             </>
           )}
         </div>
