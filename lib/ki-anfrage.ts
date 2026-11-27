@@ -294,7 +294,7 @@ export function baueAufmassDaten(e: AnfrageEntwurf, kunde: { id: string; name: s
   if (adresse) step1.adresse = adresse
   if (e.leistung) step1.baustelle = e.leistung
   if (e.ansprechpartner) step1.ansprechpartnerName = e.ansprechpartner
-  if (e.standzeit_wochen) step1.dauer = zeichenkette(Math.min(52, Math.max(1, Math.round(e.standzeit_wochen))))
+  if (e.standzeit_wochen) { step1.dauer = zeichenkette(Math.min(52, Math.max(1, Math.round(e.standzeit_wochen)))); step1.dauerEinheit = 'wochen' }
   if (zeilen.length) step1.notizen = zeilen.join('\n')
   const step2: Record<string, unknown> = {}
   if (laenge) step2.laenge = zeichenkette(laenge)

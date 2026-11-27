@@ -3,6 +3,7 @@
 import { adresseMitLand } from '@/lib/land';
 import { zahlAusEingabe } from '@/lib/zahl-eingabe';
 import { berechneAngebot } from '@/lib/schlussrechnung';
+import { dauerTage, dauerText } from '@/lib/projektdauer';
 import { fetchRechnungAnlegen } from '@/lib/rechnung-anlegen-client'
 import { angebotsVorbelegung, fahrtSatz, fahrtBetrag, fahrtText, type KundenPreis } from '@/lib/kunden-preis';
 import { merkeBefehl } from '@/lib/offline/nachsenden';
@@ -495,7 +496,7 @@ function Schritt6Content() {
       const sections = spannweiten.map((sp: any, i: number) => ({ bezeichnung: sp.bezeichnung || `Feld ${i + 1}`, lengthM: parseFloat(sp.spannweiteM), heightM: hoehe }))
       return {
         customer: s1.name || '', address: s1.adresse || '', trade: 'bruecke',
-        projectDurationDays: parseInt(s1.dauer) || 30, lengthM: sections.reduce((s: number, x: any) => s + x.lengthM, 0), heightM: hoehe,
+        projectDurationDays: dauerTage(s1) ?? 30, lengthM: sections.reduce((s: number, x: any) => s + x.lengthM, 0), heightM: hoehe,
         widthM: breite, eavesHeightM: hoehe, roofForm: 'kein' as const,
         roofOverhangM: 0, facadeType: 'putz' as const, obstacles: [],
         sections,
@@ -530,7 +531,7 @@ function Schritt6Content() {
 
     return {
       customer: s1.name || '', address: s1.adresse || '', trade: mapGewerkeZuTrade(gewerkeVonStep1(s1)),
-      projectDurationDays: parseInt(s1.dauer) || 30, lengthM: parseFloat(s2.laenge) || 0, heightM: parseFloat(s2.hoehe) || 0,
+      projectDurationDays: dauerTage(s1) ?? 30, lengthM: parseFloat(s2.laenge) || 0, heightM: parseFloat(s2.hoehe) || 0,
       widthM: parseFloat(s2.breite) || 0, eavesHeightM: parseFloat(s2.traufhoehe) || 0, roofForm: mapDachform(s2.dachform),
       roofOverhangM: parseFloat(s2.dachueberstand) || 0, facadeType: mapFassade(s2.fassade), obstacles: mapHindernisse(s2),
       sections,
@@ -1192,7 +1193,7 @@ function Schritt6Content() {
             <div><span className="text-[#86868b]">Kunde:</span> <span className="text-[#1d1d1f]">{s1.name || '–'}</span></div>
             <div><span className="text-[#86868b]">Adresse:</span> <span className="text-[#1d1d1f]">{adresseMitLand(s1.adresse || '', s1.land) || '–'}</span></div>
             <div><span className="text-[#86868b]">Gewerk:</span> <span className="text-[#1d1d1f]">{gewerkeAnzeige(s1)}</span></div>
-            <div><span className="text-[#86868b]">Dauer:</span> <span className="text-[#1d1d1f]">{s1.dauer || '–'} Tage</span></div>
+            <div><span className="text-[#86868b]">Dauer:</span> <span className="text-[#1d1d1f]">{dauerText(s1)}</span></div>
             {s1.ansprechpartnerName && <div className="col-span-2"><span className="text-[#86868b]">Ansprechpartner:</span> <span className="text-[#1d1d1f]">{s1.ansprechpartnerName} {s1.ansprechpartnerTelefon} {s1.ansprechpartnerEmail}</span></div>}
             {s1.bauleiterName && <div className="col-span-2"><span className="text-[#86868b]">Bauleiter:</span> <span className="text-[#1d1d1f]">{s1.bauleiterName} {s1.bauleiterTelefon} {s1.bauleiterEmail}</span></div>}
             {s1.projektbeginn && <div><span className="text-[#86868b]">Beginn:</span> <span className="text-[#1d1d1f]">{s1.projektbeginn}</span></div>}

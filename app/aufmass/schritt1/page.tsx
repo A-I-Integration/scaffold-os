@@ -309,7 +309,7 @@ function Schritt1Content() {
 
   // Stilles Sichern vor einem Sprung über die Schrittleiste (ohne Pflichtfeld-Meldung)
   function sichereStill() {
-    try { localStorage.setItem('scaffold_step1', JSON.stringify(form)); } catch { /* ignore */ }
+    try { localStorage.setItem('scaffold_step1', JSON.stringify({ ...form, dauerEinheit: 'wochen' })); } catch { /* ignore */ }
     if (projectId) void speichereSchrittAuto(projectId, 'step1', form);
     else if (form.name.trim() && form.adresse.trim() && form.gewerke.length > 0) void speichereEntwurf();
   }
@@ -323,7 +323,7 @@ function Schritt1Content() {
       alert('Bitte wähle mindestens ein Gewerk aus!');
       return;
     }
-    localStorage.setItem('scaffold_step1', JSON.stringify(form));
+    localStorage.setItem('scaffold_step1', JSON.stringify({ ...form, dauerEinheit: 'wochen' }));
     if (!projectId) void speichereEntwurf(); else void speichereSchrittAuto(projectId, 'step1', form);
     router.push(projectId ? `/aufmass/schritt2?id=${projectId}` : '/aufmass/schritt2');
   }
