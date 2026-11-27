@@ -1,22 +1,11 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import { verkleinereBild } from '@/lib/bild-verkleinern';
 import { baueWareneingang, type ArtikelKurz, type ArtikelTreffer, type GelesenePosition } from '@/lib/ki-lager';
 
 interface Ort { id: string; schluessel: string; name: string; typ: string }
 interface Zeile { gelesen: GelesenePosition; treffer: ArtikelTreffer; inventory_id: string; menge: string; einbuchen: boolean }
-
-// Foto vor dem Senden verkleinern (längste Seite 1800 px, JPEG): kleiner Upload, schnellere Auswertung
-async function verkleinere(datei: File): Promise<string> {
-  const url = URL.createObjectURL(datei);
-  try {
-    const img = await new Promise<HTMLImageElement>((ok, fehl) => { const i = new Image(); i.onload = () => ok(i); i.onerror = () => fehl(new Error('Das Bild konnte nicht gelesen werden.')); i.src = url; });
-    const f = Math.min(1, 1800 / Math.max(img.width, img.height));
-    const c = document.createElement('canvas'); c.width = Math.round(img.width * f); c.height = Math.round(img.height * f);
-    c.getContext('2d')!.drawImage(img, 0, 0, c.width, c.height);
-    return c.toDataURL('image/jpeg', 0.85);
-  } finally { URL.revokeObjectURL(url); }
-}
 
 const inputCls = 'w-full px-2 py-1.5 border rounded-lg text-sm';
 
@@ -45,7 +34,7 @@ export default function WareneingangFotoTab({ onGebucht }: { onGebucht?: () => v
     if (!f) return;
     setMeldung(null); setZeilen(null); setLiest(true);
     try {
-      const b = await verkleinere(f);
+      const b = await verkleinereBild(f);
       setBild(b);
       const r = await fetch('/api/ki-lager-lesen', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ bild: b }) });
       const j = await r.json();
