@@ -969,7 +969,7 @@ export default function KundenDetailPage() {
             <h1 className="text-[14px] font-bold truncate">{baustelle ? (baustelle.name || 'Unbenannte Baustelle') : kunde.name}</h1>
             {baustelle && freigaben[baustelle.id] && <span className="bg-white rounded"><FreigabeBadge status={freigaben[baustelle.id]} /></span>}
             <span className="text-xs opacity-80 truncate">
-              {baustelle ? `Kunde: ${kunde.name}${baustelle.adresse ? ` · ${baustelle.adresse}` : ''}` : `${kunde.street}${kunde.street ? ', ' : ''}${kunde.zip} ${kunde.city}`}
+              {baustelle ? `Kunde: ${kunde.name}${baustelle.adresse ? ` · ${baustelle.adresse}` : ''}` : [kunde.street, [kunde.zip, kunde.city].filter(Boolean).join(' ')].filter(Boolean).join(', ')}
             </span>
           </div>
           {rechnungsLadung !== 'ok' && (
