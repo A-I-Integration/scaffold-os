@@ -258,3 +258,21 @@ describe('Preisangaben aus dem Text', () => {
     expect(d.angebotAnpassungen.fahrt).toEqual({ aktiv: true, km: '', satzProKm: '0,80' })
   })
 })
+
+import { fuehreEntwurfZusammen } from '../ki-anfrage'
+describe('fuehreEntwurfZusammen', () => {
+  const basis: any = { kunde: 'Müller GmbH', strasse: 'Ölbachstr. 48', flaeche_m2: 250, arbeitshoehe_m: 4, standzeit_wochen: null, besonderheiten: [] }
+  it('übernimmt nur, was sich durch die neue Nachricht ändert; Handänderungen bleiben', () => {
+    const handGeaendert = { ...basis, strasse: 'Hauptstr. 1' }
+    const neu = { ...basis, standzeit_wochen: 6 }
+    const r: any = fuehreEntwurfZusammen(basis, neu, handGeaendert)
+    expect(r.standzeit_wochen).toBe(6); expect(r.strasse).toBe('Hauptstr. 1'); expect(r.flaeche_m2).toBe(250)
+  })
+  it('Nachricht ändert ein Feld, das von Hand schon geändert war: neue Angabe gilt', () => {
+    const r: any = fuehreEntwurfZusammen(basis, { ...basis, arbeitshoehe_m: 8 }, { ...basis, arbeitshoehe_m: 5 })
+    expect(r.arbeitshoehe_m).toBe(8)
+  })
+  it('erste Auswertung: unverändert übernommen', () => {
+    expect(fuehreEntwurfZusammen(null, basis, null)).toBe(basis)
+  })
+})

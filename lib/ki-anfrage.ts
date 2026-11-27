@@ -306,3 +306,17 @@ export function baueAufmassDaten(e: AnfrageEntwurf, kunde: { id: string; name: s
   if (e.fahrt_satz_eur_km) preis.angebotAnpassungen = { fahrt: { aktiv: true, km: '', satzProKm: e.fahrt_satz_eur_km.toFixed(2).replace('.', ',') } }
   return { step1, ...(Object.keys(step2).length ? { step2 } : {}), ...preis, anfrage: baueAnfrageDaten(e, original, jetzt) }
 }
+
+/**
+ * Neue Nachricht zu einer laufenden Anfrage: nur das ERGÄNZEN, was sich durch die Nachricht geändert hat.
+ * Felder, die die KI-Auswertung gegenüber vorher unverändert lässt, behalten den aktuellen Wert (auch von Hand geänderte).
+ * Felder, die sich in der Auswertung ändern, übernehmen den neuen Wert.
+ */
+export function fuehreEntwurfZusammen(vorherAuswertung: AnfrageEntwurf | null, neueAuswertung: AnfrageEntwurf, aktuell: AnfrageEntwurf | null): AnfrageEntwurf {
+  if (!vorherAuswertung || !aktuell) return neueAuswertung
+  const r: Record<string, unknown> = { ...aktuell }
+  for (const k of Object.keys(neueAuswertung) as (keyof AnfrageEntwurf)[]) {
+    if (JSON.stringify(neueAuswertung[k]) !== JSON.stringify(vorherAuswertung[k])) r[k] = neueAuswertung[k]
+  }
+  return r as unknown as AnfrageEntwurf
+}
