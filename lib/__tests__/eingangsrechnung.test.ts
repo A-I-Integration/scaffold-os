@@ -96,3 +96,19 @@ describe('Fremdkosten im Baustellenergebnis', () => {
     expect(r.fremdkosten).toBe(0); expect(r.ergebnis).toBe(700)
   })
 })
+
+import { ibanGueltig, ibanFormat } from '../eingangsrechnung'
+describe('IBAN und neue Felder', () => {
+  it('prüft die Prüfsumme', () => {
+    expect(ibanGueltig('DE89 3704 0044 0532 0130 00')).toBe(true)
+    expect(ibanGueltig('DE89370400440532013001')).toBe(false)
+    expect(ibanGueltig('abc')).toBe(false)
+    expect(ibanFormat('de89370400440532013000')).toBe('DE89 3704 0044 0532 0130 00')
+  })
+  it('übernimmt IBAN, Leistungsdatum, Kundennummer, Positionen; lehnt falsche IBAN ab', () => {
+    const r = pruefeEingangsrechnung({ lieferant: 'X', art: 'material', netto: 100, iban: 'de89 3704 0044 0532 0130 00', leistungsdatum: '2026-11-20', kundennummer: ' K1 ', positionen: [{ bezeichnung: 'A', menge: 1, einzelpreis: 100, gesamt: 100 }] })
+    expect(r.ok && r.werte).toMatchObject({ iban: 'DE89370400440532013000', leistungsdatum: '2026-11-20', kundennummer: 'K1' })
+    expect(pruefeEingangsrechnung({ lieferant: 'X', art: 'material', netto: 100, iban: 'DE00 1111' }).ok).toBe(false)
+    expect(pruefeEingangsrechnung({ lieferant: 'X', art: 'material', netto: 100, positionen: [{ bezeichnung: '', menge: 1, einzelpreis: 1, gesamt: 1 }] }).ok).toBe(false)
+  })
+})

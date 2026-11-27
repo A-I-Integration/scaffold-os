@@ -27,6 +27,11 @@ CREATE TABLE IF NOT EXISTS public.eingangsrechnungen (
   created_by uuid,
   created_at timestamptz NOT NULL DEFAULT now()
 );
+-- Weitere Angaben aus dem automatischen Auslesen (auch ausführbar, wenn die Tabelle schon besteht)
+ALTER TABLE public.eingangsrechnungen ADD COLUMN IF NOT EXISTS iban text;
+ALTER TABLE public.eingangsrechnungen ADD COLUMN IF NOT EXISTS leistungsdatum date;
+ALTER TABLE public.eingangsrechnungen ADD COLUMN IF NOT EXISTS kundennummer text;
+ALTER TABLE public.eingangsrechnungen ADD COLUMN IF NOT EXISTS positionen jsonb;
 CREATE INDEX IF NOT EXISTS idx_eingangsrechnungen_projekt ON public.eingangsrechnungen (project_id, rechnungsdatum DESC);
 ALTER TABLE public.eingangsrechnungen ENABLE ROW LEVEL SECURITY;
 

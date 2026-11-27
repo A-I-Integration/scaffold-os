@@ -39,3 +39,6 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Texterkennung: wird von scripts/kopiere-tesseract.mjs erzeugt
+/public/tesseract/
