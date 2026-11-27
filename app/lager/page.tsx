@@ -1,6 +1,7 @@
 'use client';
 
 import UmbuchenTab from '@/components/lager/UmbuchenTab';
+import WareneingangFotoTab from '@/components/lager/WareneingangFotoTab';
 import BewegungenTab from '@/components/lager/BewegungenTab';
 import LagerorteTab from '@/components/lager/LagerorteTab';
 import { useState, useEffect, useCallback } from 'react';
@@ -23,7 +24,7 @@ import {
   TransportRecommendation,
 } from '@/types/inventory';
 
-type Tab = 'overview' | 'warehouse' | 'sites' | 'transports' | 'inventur' | 'umbuchen' | 'bewegungen' | 'lagerorte';
+type Tab = 'overview' | 'warehouse' | 'sites' | 'transports' | 'inventur' | 'umbuchen' | 'bewegungen' | 'lagerorte' | 'foto';
 
 interface CountedItem {
   inventory_id: string;
@@ -334,6 +335,7 @@ export default function LagerPage() {
             <button onClick={() => setActiveTab('transports')} className={tabClass('transports')}>Transporte</button>
             {canCount && <button onClick={() => setActiveTab('inventur')} className={tabClass('inventur')}>📋 Inventur</button>}
             {canManage && <button onClick={() => setActiveTab('umbuchen')} className={tabClass('umbuchen')}>Umbuchen</button>}
+            {canManage && <button onClick={() => setActiveTab('foto')} className={tabClass('foto')}>📷 Foto-Wareneingang</button>}
             {canCount && <button onClick={() => setActiveTab('bewegungen')} className={tabClass('bewegungen')}>Bewegungen</button>}
             {canManage && <button onClick={() => setActiveTab('lagerorte')} className={tabClass('lagerorte')}>Lagerorte</button>}
           </nav>
@@ -598,6 +600,7 @@ export default function LagerPage() {
         {/* INVENTUR */}
         {activeTab === 'bewegungen' && canCount && <BewegungenTab darfStornieren={canManage} />}
         {activeTab === 'lagerorte' && canManage && <LagerorteTab />}
+        {activeTab === 'foto' && canManage && <WareneingangFotoTab onGebucht={loadInventory} />}
         {activeTab === 'umbuchen' && canManage && <UmbuchenTab darfVerlust={userRole === 'admin' || userRole === 'disponent'} />}
 
         {activeTab === 'inventur' && canCount && (
