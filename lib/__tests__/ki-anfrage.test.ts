@@ -209,3 +209,23 @@ describe('Bemerkung, die nur die Besonderheiten wiederholt', () => {
     expect(r.verworfen.some((v) => v.includes('Bemerkung'))).toBe(true)
   })
 })
+
+describe('Diktierter Text: „4m hoch“ und kleingeschriebene Straße', () => {
+  const T = 'Müller GmbH, 250m2 20m breit 4m hoch ölbachstr. 48 in Vreden angebot mit 5.000€ fest und 0,80 cent km geld berechnen'
+  it('liest Straße kleingeschrieben und schreibt sie groß', () => {
+    expect(extrahiereAdresse(T).strasse).toBe('Ölbachstr. 48')
+  })
+  it('„weg 5“ mitten im Satz ist keine Adresse', () => {
+    expect(extrahiereAdresse('auf dem weg 5 Minuten warten').strasse).toBeNull()
+  })
+  it('übernimmt „4m hoch“ als Arbeitshöhe mit Prüfhinweis, aber nicht 5.000 oder 250', () => {
+    const r = pruefeKiAntwort({ kunde: 'Müller GmbH', ort: 'Vreden', flaeche_m2: 250, arbeitshoehe_m: 4, gebaeude_breite_m: 20 }, T)
+    expect(r.entwurf.arbeitshoehe_m).toBe(4)
+    expect(r.entwurf.strasse).toBe('Ölbachstr. 48')
+    expect(r.abgeleitet.join(' ')).toContain('bitte prüfen')
+    expect(pruefeKiAntwort({ arbeitshoehe_m: 250 }, T).entwurf.arbeitshoehe_m).toBeNull()
+  })
+  it('eine Traufhöhe wird weiterhin nie zur Arbeitshöhe', () => {
+    expect(pruefeKiAntwort({ arbeitshoehe_m: 8 }, 'Traufhöhe 8 Meter').entwurf.arbeitshoehe_m).toBeNull()
+  })
+})
