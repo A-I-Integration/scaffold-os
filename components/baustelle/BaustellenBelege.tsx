@@ -3,8 +3,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { ANHANG_BUCKET, ERLAUBTE_TYPEN, groesseText, pruefeAnhang } from '@/lib/rechnung-anhang'
-import { ARTEN, ART_LABEL, berechneBrutto, parseBetrag, summiereEingang, type Eingangsrechnung, type EingangsArt } from '@/lib/eingangsrechnung'
-import { leseEingangsPdf } from '@/lib/eingangsrechnung-pdf'
+import { ARTEN, ART_LABEL, berechneBrutto, ibanFormat, parseBetrag, summiereEingang, type Eingangsrechnung, type EingangsArt, type EingangsPosition } from '@/lib/eingangsrechnung'
+import { leseEingangsDatei } from '@/lib/eingangsrechnung-pdf'
 import { leseRechnung, type LeseErgebnis, type LeseFeld } from '@/lib/eingangsrechnung-lesen'
 import { generateInvoicePDF, fmtEur, fmtDate, TYPE_LABEL, type Invoice } from '@/lib/invoice-pdf'
 
@@ -17,7 +17,7 @@ const inputCls = 'w-full px-3 py-2 bg-white border border-black/10 rounded-lg te
 const btnPrimary = 'px-3 py-1.5 rounded-lg bg-[#e8590c] hover:bg-[#d9480f] text-white text-xs font-semibold transition-colors disabled:opacity-50'
 const btnSecondary = 'px-3 py-1.5 rounded-lg bg-black/5 hover:bg-black/10 text-[#1d1d1f] text-xs font-medium transition-colors'
 const heute = () => new Date().toISOString().slice(0, 10)
-const LEER = { lieferant: '', subcontractor_id: '', art: 'material' as EingangsArt, rechnungsnummer: '', rechnungsdatum: heute(), faellig_am: '', netto: '', ust_satz: '19', status: 'offen' as 'offen' | 'bezahlt', bezahlt_am: '', notiz: '' }
+const LEER = { lieferant: '', subcontractor_id: '', art: 'material' as EingangsArt, rechnungsnummer: '', rechnungsdatum: heute(), faellig_am: '', leistungsdatum: '', kundennummer: '', iban: '', netto: '', ust_satz: '19', status: 'offen' as 'offen' | 'bezahlt', bezahlt_am: '', notiz: '' }
 
 export default function BaustellenBelege({ projectId, projektName, rechnungen, rechnungenBereit, onGeaendert }: {
   projectId: string
@@ -37,6 +37,8 @@ export default function BaustellenBelege({ projectId, projektName, rechnungen, r
   const [datei, setDatei] = useState<File | null>(null)
   const [speichert, setSpeichert] = useState(false)
   const [liest, setLiest] = useState(false)
+  const [leseStatus, setLeseStatus] = useState('')
+  const [positionen, setPositionen] = useState<EingangsPosition[]>([])
   const [gelesen, setGelesen] = useState<LeseErgebnis | null>(null)
   const eingabe = useRef<HTMLInputElement>(null)
 
@@ -64,14 +66,15 @@ export default function BaustellenBelege({ projectId, projektName, rechnungen, r
 
   // PDF gewählt: Inhalt im Browser auslesen und das Formular füllen. Gefüllte Werte sind nur Vorschläge, gespeichert wird erst per Klick.
   async function dateiGewaehlt(f: File | null) {
-    setDatei(f); setGelesen(null)
+    setDatei(f); setGelesen(null); setPositionen([])
     if (!f) return
     setOffen(true)
-    if (!/\.pdf$/i.test(f.name)) { setGelesen({ quelle: 'leer', felder: {}, pruefen: [], hinweis: 'Nur PDFs werden automatisch ausgelesen. Bitte die Felder von Hand ausfüllen.' }); return }
+    if (!/\.(pdf|jpe?g|png|webp)$/i.test(f.name)) { setGelesen({ quelle: 'leer', felder: {}, pruefen: [], hinweis: 'Nur PDF und Bilder (JPG, PNG, WebP) werden automatisch ausgelesen. Bitte die Felder von Hand ausfüllen.' }); return }
     setLiest(true)
     try {
-      const e = leseRechnung(await leseEingangsPdf(f))
+      const e = leseRechnung(await leseEingangsDatei(f, setLeseStatus))
       setGelesen(e)
+      setPositionen(e.felder.positionen ?? [])
       const x = e.felder
       const vorschlagNu = x.lieferant ? nu.find((n) => n.firma.trim().toLowerCase() === x.lieferant!.trim().toLowerCase()) : undefined
       setForm((v) => ({
@@ -82,12 +85,15 @@ export default function BaustellenBelege({ projectId, projektName, rechnungen, r
         rechnungsnummer: x.rechnungsnummer ?? v.rechnungsnummer,
         rechnungsdatum: x.rechnungsdatum ?? v.rechnungsdatum,
         faellig_am: x.faellig_am ?? v.faellig_am,
+        leistungsdatum: x.leistungsdatum ?? v.leistungsdatum,
+        kundennummer: x.kundennummer ?? v.kundennummer,
+        iban: x.iban ? ibanFormat(x.iban) : v.iban,
         netto: x.netto !== undefined ? String(x.netto).replace('.', ',') : v.netto,
         ust_satz: x.ust_satz !== undefined ? String(x.ust_satz).replace('.', ',') : v.ust_satz,
       }))
     } catch {
       setGelesen({ quelle: 'leer', felder: {}, pruefen: [], hinweis: 'Die PDF konnte nicht gelesen werden. Bitte die Felder von Hand ausfüllen.' })
-    } finally { setLiest(false) }
+    } finally { setLiest(false); setLeseStatus('') }
   }
   const markiert = (k: LeseFeld) => (gelesen && gelesen.quelle !== 'leer' && gelesen.pruefen.includes(k) ? ' !border-amber-500 !bg-amber-50' : '')
 
@@ -99,7 +105,7 @@ export default function BaustellenBelege({ projectId, projektName, rechnungen, r
     try {
       const r = await fetch('/api/eingangsrechnungen', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ project_id: projectId, ...form, subcontractor_id: form.subcontractor_id || null, ...(datei ? { file_name: datei.name, size: datei.size } : {}) }),
+        body: JSON.stringify({ project_id: projectId, ...form, subcontractor_id: form.subcontractor_id || null, positionen: positionen.length ? positionen : null, ...(datei ? { file_name: datei.name, size: datei.size } : {}) }),
       })
       const j = await r.json()
       if (!j.success) throw new Error(j.error || 'Speichern fehlgeschlagen.')
@@ -112,7 +118,7 @@ export default function BaustellenBelege({ projectId, projektName, rechnungen, r
         if (!bj.success) throw new Error(bj.error || 'Upload nicht bestätigt.')
       }
       angelegt = null
-      setForm({ ...LEER }); setDatei(null); setGelesen(null); if (eingabe.current) eingabe.current.value = ''; setOffen(false)
+      setForm({ ...LEER }); setDatei(null); setGelesen(null); setPositionen([]); if (eingabe.current) eingabe.current.value = ''; setOffen(false)
       await laden(); onGeaendert?.()
     } catch (e: any) {
       setFehler(e.message)
@@ -195,7 +201,7 @@ export default function BaustellenBelege({ projectId, projektName, rechnungen, r
           </div>
           <div className="flex gap-2">
             <input ref={eingabe} type="file" className="hidden" accept={Object.keys(ERLAUBTE_TYPEN).map((e) => '.' + e).join(',')} onChange={(ev) => { dateiGewaehlt(ev.target.files?.[0] || null); ev.target.value = '' }} />
-            <button type="button" className={btnPrimary} onClick={() => eingabe.current?.click()} disabled={liest}>{liest ? 'Liest PDF …' : '📄 PDF hochladen'}</button>
+            <button type="button" className={btnPrimary} onClick={() => eingabe.current?.click()} disabled={liest}>{liest ? 'Liest …' : '📄 PDF / Foto hochladen'}</button>
             <button type="button" className={btnSecondary} onClick={() => setOffen((o) => !o)}>{offen ? 'Schließen' : 'Von Hand erfassen'}</button>
           </div>
         </div>
@@ -203,8 +209,8 @@ export default function BaustellenBelege({ projectId, projektName, rechnungen, r
 
         {offen && (
           <div className="px-5 py-4 bg-[#f5f5f7] space-y-2 border-b border-black/5">
-            {liest && <p className="text-[12px] text-[#1d1d1f]">PDF wird gelesen …</p>}
-            {gelesen && gelesen.quelle !== 'leer' && <p className="rounded-lg border border-green-200 bg-green-50 p-2 text-[12px] text-green-900">Aus der PDF gelesen{gelesen.quelle === 'xml' ? ' (eingebettete Rechnungsdaten)' : ''}. Bitte kurz prüfen{gelesen.pruefen.length ? `, gelb markiert: ${gelesen.pruefen.map((k) => ({ lieferant: 'Lieferant', rechnungsnummer: 'Rechnungsnummer', rechnungsdatum: 'Datum', faellig_am: 'Fälligkeit', netto: 'Netto', ust_satz: 'USt', brutto: 'Brutto' }[k])).join(', ')}` : ''} – dann „Speichern“.</p>}
+            {liest && <p className="text-[12px] text-[#1d1d1f]">{leseStatus || 'Wird gelesen …'} (läuft auf diesem Gerät, es wird nichts versendet)</p>}
+            {gelesen && gelesen.quelle !== 'leer' && <p className="rounded-lg border border-green-200 bg-green-50 p-2 text-[12px] text-green-900">{gelesen.quelle === 'ocr' ? 'Per Texterkennung gelesen (Scan/Foto). Texterkennung kann sich irren: ' : 'Aus der PDF gelesen' + (gelesen.quelle === 'xml' ? ' (eingebettete Rechnungsdaten)' : '') + '.'} Bitte kurz prüfen{gelesen.pruefen.length ? `, gelb markiert: ${gelesen.pruefen.map((k) => ({ lieferant: 'Lieferant', rechnungsnummer: 'Rechnungsnummer', rechnungsdatum: 'Datum', faellig_am: 'Fälligkeit', netto: 'Netto', ust_satz: 'USt', brutto: 'Brutto', iban: 'IBAN', leistungsdatum: 'Leistungsdatum', kundennummer: 'Kundennummer' }[k])).join(', ')}` : ''} – dann „Speichern“.</p>}
             {gelesen && gelesen.quelle === 'leer' && gelesen.hinweis && <p className="rounded-lg border border-amber-200 bg-amber-50 p-2 text-[12px] text-amber-900">{gelesen.hinweis}</p>}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
               <label className="text-[11px] text-[#86868b]">Nachunternehmer aus Stammdaten (optional)
@@ -228,6 +234,15 @@ export default function BaustellenBelege({ projectId, projektName, rechnungen, r
               <label className="text-[11px] text-[#86868b]">Fällig am (optional)
                 <input type="date" value={form.faellig_am} onChange={(e) => setze('faellig_am', e.target.value)} className={inputCls} />
               </label>
+              <label className="text-[11px] text-[#86868b]">Leistungsdatum (optional)
+                <input type="date" value={form.leistungsdatum} onChange={(e) => setze('leistungsdatum', e.target.value)} className={inputCls + markiert('leistungsdatum')} />
+              </label>
+              <label className="text-[11px] text-[#86868b]">Unsere Kundennummer beim Lieferanten (optional)
+                <input value={form.kundennummer} onChange={(e) => setze('kundennummer', e.target.value)} className={inputCls + markiert('kundennummer')} />
+              </label>
+              <label className="text-[11px] text-[#86868b]">IBAN des Lieferanten (optional)
+                <input value={form.iban} onChange={(e) => setze('iban', e.target.value)} className={inputCls + markiert('iban')} placeholder="DE00 0000 0000 0000 0000 00" />
+              </label>
               <label className="text-[11px] text-[#86868b]">Netto in € *
                 <input value={form.netto} onChange={(e) => setze('netto', e.target.value)} inputMode="decimal" className={inputCls + markiert('netto')} placeholder="z. B. 1.234,50" />
               </label>
@@ -243,6 +258,15 @@ export default function BaustellenBelege({ projectId, projektName, rechnungen, r
                 </label>
               )}
             </div>
+            {positionen.length > 0 && (
+              <details className="text-[12px]" open>
+                <summary className="cursor-pointer font-semibold text-[#1d1d1f]">Erkannte Positionen ({positionen.length}) · Summe {fmtEur(positionen.reduce((a, p) => a + p.gesamt, 0))} € = Netto</summary>
+                <table className="w-full mt-1">
+                  <thead><tr className="text-left text-[11px] text-[#86868b]"><th>Bezeichnung</th><th className="text-right">Menge</th><th className="text-right">Einzelpreis</th><th className="text-right">Gesamt</th></tr></thead>
+                  <tbody>{positionen.map((p, i) => <tr key={i}><td>{p.bezeichnung}</td><td className="text-right tabular-nums">{p.menge.toLocaleString('de-DE')}{p.einheit ? ' ' + p.einheit : ''}</td><td className="text-right tabular-nums">{fmtEur(p.einzelpreis)} €</td><td className="text-right tabular-nums">{fmtEur(p.gesamt)} €</td></tr>)}</tbody>
+                </table>
+              </details>
+            )}
             <label className="block text-[11px] text-[#86868b]">Notiz (optional)
               <input value={form.notiz} onChange={(e) => setze('notiz', e.target.value)} className={inputCls} />
             </label>
@@ -253,7 +277,7 @@ export default function BaustellenBelege({ projectId, projektName, rechnungen, r
             </div>
             <div className="flex gap-2 pt-1">
               <button type="button" className={btnPrimary} disabled={speichert} onClick={speichern}>{speichert ? 'Speichert …' : 'Speichern'}</button>
-              <button type="button" className={btnSecondary} onClick={() => { setOffen(false); setForm({ ...LEER }); setDatei(null); setGelesen(null) }}>Abbrechen</button>
+              <button type="button" className={btnSecondary} onClick={() => { setOffen(false); setForm({ ...LEER }); setDatei(null); setGelesen(null); setPositionen([]) }}>Abbrechen</button>
             </div>
           </div>
         )}
@@ -265,7 +289,7 @@ export default function BaustellenBelege({ projectId, projektName, rechnungen, r
               <tbody className="divide-y divide-black/5">
                 {eingang.map((e) => (
                   <tr key={e.id}>
-                    <td className="px-4 py-2 font-medium">{e.lieferant}{e.notiz && <span className="block text-[11px] font-normal text-[#86868b]">{e.notiz}</span>}</td>
+                    <td className="px-4 py-2 font-medium">{e.lieferant}{e.notiz && <span className="block text-[11px] font-normal text-[#86868b]">{e.notiz}</span>}{(e.iban || e.kundennummer || e.positionen?.length) && <span className="block text-[11px] font-normal text-[#86868b]">{[e.iban && `IBAN ${ibanFormat(e.iban)}`, e.kundennummer && `Kunden-Nr. ${e.kundennummer}`, e.positionen?.length ? `${e.positionen.length} Positionen` : ''].filter(Boolean).join(' · ')}</span>}</td>
                     <td className="px-2 py-2">{ART_LABEL[e.art] || e.art}</td>
                     <td className="px-2 py-2">{e.rechnungsnummer || '–'}</td>
                     <td className="px-2 py-2 tabular-nums">{e.rechnungsdatum ? fmtDate(e.rechnungsdatum) : '–'}</td>

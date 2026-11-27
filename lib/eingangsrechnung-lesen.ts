@@ -3,12 +3,12 @@
 // Eingescannte PDFs ohne Textebene liefern nichts (keine Texterkennung).
 
 import { XMLParser } from 'fast-xml-parser'
-import { parseBetrag } from '@/lib/eingangsrechnung'
+import { ibanGueltig, parseBetrag, type EingangsPosition } from '@/lib/eingangsrechnung'
 
-export type LeseFeld = 'lieferant' | 'rechnungsnummer' | 'rechnungsdatum' | 'faellig_am' | 'netto' | 'ust_satz' | 'brutto'
+export type LeseFeld = 'lieferant' | 'rechnungsnummer' | 'rechnungsdatum' | 'faellig_am' | 'netto' | 'ust_satz' | 'brutto' | 'iban' | 'leistungsdatum' | 'kundennummer'
 export interface LeseErgebnis {
-  quelle: 'xml' | 'text' | 'leer'
-  felder: Partial<{ lieferant: string; rechnungsnummer: string; rechnungsdatum: string; faellig_am: string; netto: number; ust_satz: number; brutto: number }>
+  quelle: 'xml' | 'text' | 'ocr' | 'leer'
+  felder: Partial<{ lieferant: string; rechnungsnummer: string; rechnungsdatum: string; faellig_am: string; leistungsdatum: string; netto: number; ust_satz: number; brutto: number; iban: string; kundennummer: string; positionen: EingangsPosition[] }>
   /** Felder, die nicht oder nur als Vermutung gefunden wurden */
   pruefen: LeseFeld[]
   hinweis?: string
@@ -49,6 +49,18 @@ export function leseXml(xml: string): LeseErgebnis | null {
     const netto = parseBetrag(txt(sum.TaxBasisTotalAmount)); if (netto !== null) f.netto = netto
     const brutto = parseBetrag(txt(sum.GrandTotalAmount)); if (brutto !== null) f.brutto = brutto
     const satz = parseBetrag(txt(arr(hs.ApplicableTradeTax)[0]?.RateApplicablePercent)); if (satz !== null) f.ust_satz = satz
+    const iban = txt(arr(hs.SpecifiedTradeSettlementPaymentMeans)[0]?.PayeePartyCreditorFinancialAccount?.IBANID).replace(/\s/g, ''); if (iban && ibanGueltig(iban)) f.iban = iban.toUpperCase()
+    const kn = txt(ha.BuyerTradeParty?.ID); if (kn) f.kundennummer = kn
+    const ld = ymd(txt(ts.ApplicableHeaderTradeDelivery?.ActualDeliverySupplyChainEvent?.OccurrenceDateTime?.DateTimeString)); if (ld) f.leistungsdatum = ld
+    const pos: EingangsPosition[] = []
+    for (const li of arr(ts.IncludedSupplyChainTradeLineItem)) {
+      const b = txt(li.SpecifiedTradeProduct?.Name)
+      const m = parseBetrag(txt(li.SpecifiedLineTradeDelivery?.BilledQuantity))
+      const e = parseBetrag(txt(li.SpecifiedLineTradeAgreement?.NetPriceProductTradePrice?.ChargeAmount))
+      const g = parseBetrag(txt(li.SpecifiedLineTradeSettlement?.SpecifiedTradeSettlementLineMonetarySummation?.LineTotalAmount))
+      if (b && m !== null && e !== null && g !== null) pos.push({ bezeichnung: b, menge: m, einzelpreis: e, gesamt: g })
+    }
+    if (pos.length) f.positionen = pos
   } else if (w?.Invoice) {
     const d = w.Invoice
     f.rechnungsnummer = txt(d.ID) || undefined
@@ -60,8 +72,18 @@ export function leseXml(xml: string): LeseErgebnis | null {
     const netto = parseBetrag(txt(m.TaxExclusiveAmount)); if (netto !== null) f.netto = netto
     const brutto = parseBetrag(txt(m.TaxInclusiveAmount ?? m.PayableAmount)); if (brutto !== null) f.brutto = brutto
     const satz = parseBetrag(txt(arr(arr(d.TaxTotal)[0]?.TaxSubtotal)[0]?.TaxCategory?.Percent)); if (satz !== null) f.ust_satz = satz
+    const iban = txt(arr(d.PaymentMeans)[0]?.PayeeFinancialAccount?.ID).replace(/\s/g, ''); if (iban && ibanGueltig(iban)) f.iban = iban.toUpperCase()
+    const pos: EingangsPosition[] = []
+    for (const li of arr(d.InvoiceLine)) {
+      const b = txt(li.Item?.Name)
+      const m = parseBetrag(txt(li.InvoicedQuantity))
+      const e = parseBetrag(txt(li.Price?.PriceAmount))
+      const g = parseBetrag(txt(li.LineExtensionAmount))
+      if (b && m !== null && e !== null && g !== null) pos.push({ bezeichnung: b, menge: m, einzelpreis: e, gesamt: g })
+    }
+    if (pos.length) f.positionen = pos
   } else return null
-  for (const k of Object.keys(f) as LeseFeld[]) if (f[k] === undefined) delete f[k]
+  for (const k of Object.keys(f) as (keyof LeseErgebnis['felder'])[]) if (f[k] === undefined) delete f[k]
   if (f.netto === undefined && f.brutto === undefined && !f.rechnungsnummer) return null
   const alle: LeseFeld[] = ['lieferant', 'rechnungsnummer', 'rechnungsdatum', 'faellig_am', 'netto', 'ust_satz', 'brutto']
   return { quelle: 'xml', felder: f, pruefen: alle.filter((k) => k !== 'faellig_am' && f[k] === undefined) }
@@ -97,6 +119,34 @@ export function leseText(roh: string): LeseErgebnis {
     const m = text.match(/(?:innerhalb|binnen|within)\s+(?:von\s+)?(\d{1,3})\s*(?:tage|tagen|days)/i)
     if (m && +m[1] <= 120) f.faellig_am = plusTage(f.rechnungsdatum, +m[1])
   }
+
+  // Leistungsdatum, Kundennummer, IBAN
+  for (let i = 0; i < zeilen.length; i++) {
+    const m = zeilen[i].match(/(?:leistungsdatum|lieferdatum|liefertermin|leistungszeitraum|leistung am)\s*[:]?\s*(.*)/i)
+    if (m) { const d = deDatum(m[1]); if (d) { f.leistungsdatum = d; break } }
+  }
+  for (const z of zeilen) {
+    const m = z.match(/kunden-?\s*(?:nummer|nr\.?)\s*[:#]?\s*([A-Za-z0-9][A-Za-z0-9\-\/]{1,20})/i)
+    if (m && /\d/.test(m[1])) { f.kundennummer = m[1]; break }
+  }
+  for (const m of text.matchAll(/\b([A-Z]{2}\d{2}(?:\s?[A-Z0-9]{4}){3,7}(?:\s?[A-Z0-9]{1,4})?)\b/g)) {
+    const kand = m[1].replace(/\s/g, '')
+    if (ibanGueltig(kand)) { f.iban = kand; break }
+  }
+
+  // Positionen: "Bezeichnung Menge [Einheit] Einzelpreis Gesamt", nur wenn Menge × Einzelpreis = Gesamt stimmt
+  const pos: EingangsPosition[] = []
+  const POS = /^(?:\d{1,3}[.)]?\s+)?(.{2,120}?)\s+(\d+(?:,\d+)?)\s*([A-Za-zäöüÄÖÜ²³.]{1,6})?\s+(\d{1,3}(?:\.\d{3})*,\d{2}|\d+,\d{2})\s*(?:€|EUR)?\s+(\d{1,3}(?:\.\d{3})*,\d{2}|\d+,\d{2})\s*(?:€|EUR)?$/
+  for (const z of zeilen) {
+    if (/summe|netto|brutto|mwst|ust\b|umsatzsteuer|gesamt|betrag|skonto|rabatt/i.test(z)) continue
+    const m = z.match(POS)
+    if (!m) continue
+    const menge = parseBetrag(m[2]), ep = parseBetrag(m[4]), ges = parseBetrag(m[5])
+    if (menge === null || ep === null || ges === null || menge <= 0) continue
+    if (Math.abs(menge * ep - ges) > 0.05) continue
+    pos.push({ bezeichnung: m[1].trim(), menge, einheit: m[3] || null, einzelpreis: ep, gesamt: ges })
+  }
+  if (pos.length) f.positionen = pos
 
   // Beträge
   const reverse = /§\s*13b|steuerschuldnerschaft|reverse[- ]charge/i.test(text)
@@ -141,15 +191,24 @@ export function leseText(roh: string): LeseErgebnis {
   if (f.lieferant && (f.lieferant.length < 3 || f.lieferant.length > 80)) delete f.lieferant
 
   const alle: LeseFeld[] = ['lieferant', 'rechnungsnummer', 'rechnungsdatum', 'netto', 'ust_satz', 'brutto']
+  // Passen die Positionen nicht zur Netto-Summe, sind sie unzuverlässig → nicht übernehmen (nichts Falsches stillschweigend)
+  if (f.positionen) {
+    const sum = runde(f.positionen.reduce((a, p) => a + p.gesamt, 0))
+    if (f.netto === undefined || !nahe(sum, f.netto)) delete f.positionen
+  }
   const pruefen = new Set<LeseFeld>([...alle.filter((k) => f[k] === undefined), ...unsicher])
   const gefunden = Object.keys(f).length
   return { quelle: gefunden ? 'text' : 'leer', felder: f, pruefen: [...pruefen], hinweis: gefunden ? undefined : 'Aus dem Text konnten keine Angaben erkannt werden. Bitte von Hand ausfüllen.' }
 }
 
 /** Kombiniert beide Wege: eingebettetes XML hat Vorrang, fehlende Felder ergänzt der Text. */
-export function leseRechnung(eingabe: { text: string; xml?: string | null }): LeseErgebnis {
+export function leseRechnung(eingabe: { text: string; xml?: string | null; ocr?: boolean }): LeseErgebnis {
   const x = eingabe.xml ? leseXml(eingabe.xml) : null
-  const t = leseText(eingabe.text)
+  let t = leseText(eingabe.text)
+  // Texterkennung aus einem Bild ist fehleranfälliger: alles gefundene wird zur Kontrolle markiert
+  if (eingabe.ocr && !x && t.quelle === 'text') {
+    t = { ...t, quelle: 'ocr', pruefen: [...new Set([...t.pruefen, ...(Object.keys(t.felder).filter((k) => k !== 'positionen') as LeseFeld[])])] }
+  }
   if (!x) return t
   const felder = { ...t.felder, ...x.felder }
   const pruefen = (['lieferant', 'rechnungsnummer', 'rechnungsdatum', 'netto', 'ust_satz', 'brutto'] as LeseFeld[]).filter((k) => felder[k] === undefined)

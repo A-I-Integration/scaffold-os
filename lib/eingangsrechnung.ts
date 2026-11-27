@@ -8,6 +8,19 @@ export type EingangsArt = typeof ARTEN[number]
 export const ART_LABEL: Record<EingangsArt, string> = { nachunternehmer: 'Nachunternehmer', material: 'Material', sonstiges: 'Sonstiges' }
 export type EingangsStatus = 'offen' | 'bezahlt'
 
+export interface EingangsPosition { bezeichnung: string; menge: number; einheit?: string | null; einzelpreis: number; gesamt: number }
+
+/** IBAN-Prüfsumme (ISO 13616, Modulo 97). */
+export function ibanGueltig(roh: string): boolean {
+  const i = roh.replace(/\s/g, '').toUpperCase()
+  if (!/^[A-Z]{2}\d{2}[A-Z0-9]{11,30}$/.test(i)) return false
+  const t = (i.slice(4) + i.slice(0, 4)).replace(/[A-Z]/g, (c) => String(c.charCodeAt(0) - 55))
+  let rest = 0
+  for (const ch of t) rest = (rest * 10 + Number(ch)) % 97
+  return rest === 1
+}
+export const ibanFormat = (i: string) => i.replace(/\s/g, '').toUpperCase().replace(/(.{4})/g, '$1 ').trim()
+
 export interface Eingangsrechnung {
   id: string
   project_id: string
@@ -24,6 +37,10 @@ export interface Eingangsrechnung {
   status: EingangsStatus
   bezahlt_am: string | null
   notiz: string | null
+  iban: string | null
+  leistungsdatum: string | null
+  kundennummer: string | null
+  positionen: EingangsPosition[] | null
   file_name: string | null
   file_type: string | null
   size_bytes: number | null
@@ -57,7 +74,7 @@ export function berechneBrutto(netto: number, ustSatz: number): { ust_betrag: nu
 }
 
 export type EingabePruefung =
-  | { ok: true; werte: { lieferant: string; subcontractor_id: string | null; art: EingangsArt; rechnungsnummer: string | null; rechnungsdatum: string | null; faellig_am: string | null; netto: number; ust_satz: number; ust_betrag: number; brutto: number; status: EingangsStatus; bezahlt_am: string | null; notiz: string | null } }
+  | { ok: true; werte: { lieferant: string; subcontractor_id: string | null; art: EingangsArt; rechnungsnummer: string | null; rechnungsdatum: string | null; faellig_am: string | null; netto: number; ust_satz: number; ust_betrag: number; brutto: number; status: EingangsStatus; bezahlt_am: string | null; notiz: string | null; iban: string | null; leistungsdatum: string | null; kundennummer: string | null; positionen: EingangsPosition[] | null } }
   | { ok: false; fehler: string }
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
@@ -83,6 +100,23 @@ export function pruefeEingangsrechnung(roh: Record<string, unknown>): EingabePru
   if (bd !== null && !istDatum(bd)) return { ok: false, fehler: 'Bezahlt-am ist kein gültiges Datum.' }
   const sub = roh.subcontractor_id
   if (sub !== undefined && sub !== null && sub !== '' && !(typeof sub === 'string' && UUID.test(sub))) return { ok: false, fehler: 'Ungültiger Nachunternehmer.' }
+  const ld = datum(roh.leistungsdatum)
+  if (ld === undefined) return { ok: false, fehler: 'Leistungsdatum ist kein gültiges Datum.' }
+  const ibanRoh = typeof roh.iban === 'string' ? roh.iban.replace(/\s/g, '').toUpperCase() : ''
+  if (ibanRoh && !ibanGueltig(ibanRoh)) return { ok: false, fehler: 'Die IBAN ist ungültig (Prüfsumme stimmt nicht). Bitte prüfen.' }
+  const kn = typeof roh.kundennummer === 'string' ? roh.kundennummer.trim().slice(0, 60) : ''
+  let positionen: EingangsPosition[] | null = null
+  if (roh.positionen !== undefined && roh.positionen !== null) {
+    if (!Array.isArray(roh.positionen) || roh.positionen.length > 300) return { ok: false, fehler: 'Die Positionen sind ungültig.' }
+    positionen = []
+    for (const x of roh.positionen as Record<string, unknown>[]) {
+      const m = Number(x?.menge), e = Number(x?.einzelpreis), g = Number(x?.gesamt)
+      const b = typeof x?.bezeichnung === 'string' ? x.bezeichnung.trim().slice(0, 300) : ''
+      if (!b || !Number.isFinite(m) || !Number.isFinite(e) || !Number.isFinite(g)) return { ok: false, fehler: 'Eine Position ist unvollständig.' }
+      positionen.push({ bezeichnung: b, menge: m, einheit: typeof x.einheit === 'string' && x.einheit ? x.einheit.slice(0, 12) : null, einzelpreis: runde(e), gesamt: runde(g) })
+    }
+    if (!positionen.length) positionen = null
+  }
   const nr = typeof roh.rechnungsnummer === 'string' ? roh.rechnungsnummer.trim().slice(0, 80) : ''
   const notiz = typeof roh.notiz === 'string' ? roh.notiz.trim().slice(0, 1000) : ''
   const { ust_betrag, brutto } = berechneBrutto(runde(netto), satzRoh)
@@ -94,6 +128,7 @@ export function pruefeEingangsrechnung(roh: Record<string, unknown>): EingabePru
       netto: runde(netto), ust_satz: satzRoh, ust_betrag, brutto, status,
       bezahlt_am: status === 'bezahlt' ? (bd as string | null) : null,
       notiz: notiz || null,
+      iban: ibanRoh || null, leistungsdatum: ld, kundennummer: kn || null, positionen,
     },
   }
 }

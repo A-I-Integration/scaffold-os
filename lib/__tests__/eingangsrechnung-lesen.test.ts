@@ -72,3 +72,40 @@ describe('leseXml / leseRechnung', () => {
   })
   it('ohne XML gilt der Text', () => { expect(leseRechnung({ text: STANDARD }).felder.netto).toBe(1000) })
 })
+
+describe('weitere Felder', () => {
+  const VOLL = `Muster Gerüstbau GmbH · Weg 2 · 48691 Vreden
+Rechnungsnummer: RE-2026-1048
+Rechnungsdatum: 25.11.2026
+Leistungsdatum: 20.11.2026
+Kundennummer: K-4711
+Pos Bezeichnung Menge Einzelpreis Gesamt
+1 Gerüstmaterial 10 Stk 50,00 500,00
+2 Transport 1 200,00 200,00
+3 Montage 20 h 15,00 300,00
+Nettobetrag 1.000,00 €
+19 % MwSt. 190,00 €
+Gesamtbetrag 1.190,00 €
+Zahlbar bis 10.12.2026
+IBAN: DE89 3704 0044 0532 0130 00`
+  it('liest IBAN (mit Prüfsumme), Leistungsdatum, Kundennummer und Positionen', () => {
+    const r = leseText(VOLL)
+    expect(r.felder).toMatchObject({ iban: 'DE89370400440532013000', leistungsdatum: '2026-11-20', kundennummer: 'K-4711', faellig_am: '2026-12-10', netto: 1000, brutto: 1190 })
+    expect(r.felder.positionen).toEqual([
+      { bezeichnung: 'Gerüstmaterial', menge: 10, einheit: 'Stk', einzelpreis: 50, gesamt: 500 },
+      { bezeichnung: 'Transport', menge: 1, einheit: null, einzelpreis: 200, gesamt: 200 },
+      { bezeichnung: 'Montage', menge: 20, einheit: 'h', einzelpreis: 15, gesamt: 300 },
+    ])
+  })
+  it('lehnt IBAN mit falscher Prüfsumme ab', () => {
+    expect(leseText(VOLL.replace('DE89 3704 0044 0532 0130 00', 'DE89 3704 0044 0532 0130 01')).felder.iban).toBeUndefined()
+  })
+  it('verwirft Positionen, deren Summe nicht zum Netto passt', () => {
+    expect(leseText(VOLL.replace('Montage 20 h 15,00 300,00', 'Montage 20 h 15,00 100,00').replace('300,00','100,00')).felder.positionen).toBeUndefined()
+  })
+  it('OCR-Ergebnis: alles gefundene wird zur Kontrolle markiert', () => {
+    const r = leseRechnung({ text: VOLL, ocr: true })
+    expect(r.quelle).toBe('ocr')
+    expect(r.pruefen).toEqual(expect.arrayContaining(['netto', 'brutto', 'rechnungsnummer', 'iban']))
+  })
+})

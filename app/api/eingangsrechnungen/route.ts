@@ -20,7 +20,7 @@ import { eingangPfad, pruefeEingangsrechnung } from '@/lib/eingangsrechnung'
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL!
 const key = process.env.SUPABASE_SERVICE_ROLE_KEY!
 const headers = { 'Content-Type': 'application/json', apikey: key, Authorization: `Bearer ${key}` }
-const SPALTEN = 'id,project_id,lieferant,subcontractor_id,art,rechnungsnummer,rechnungsdatum,faellig_am,netto,ust_satz,ust_betrag,brutto,status,bezahlt_am,notiz,file_name,file_type,size_bytes,created_at'
+const SPALTEN = 'id,project_id,lieferant,subcontractor_id,art,rechnungsnummer,rechnungsdatum,faellig_am,netto,ust_satz,ust_betrag,brutto,status,bezahlt_am,notiz,iban,leistungsdatum,kundennummer,positionen,file_name,file_type,size_bytes,created_at'
 const fehler = (m: string, status = 400) => NextResponse.json({ success: false, error: m }, { status })
 const TABELLE_FEHLT = 'Die Tabelle für externe Rechnungen fehlt. Bitte zuerst die SQL phase-eingangsrechnungen.sql in Supabase ausführen.'
 
@@ -46,7 +46,7 @@ export async function GET(req: NextRequest) {
     const res = await fetch(`${url}/rest/v1/eingangsrechnungen?project_id=eq.${projectId}&select=${SPALTEN},bestaetigt_am&order=rechnungsdatum.desc.nullslast,created_at.desc&limit=1000`, { headers })
     if (!res.ok) {
       const t = await res.text()
-      if (/eingangsrechnungen/.test(t) && /(does not exist|schema cache|relation)/i.test(t)) return NextResponse.json({ success: true, eintraege: [], tabelleFehlt: true, hinweis: TABELLE_FEHLT }, { headers: { 'Cache-Control': 'no-store' } })
+      if (/(does not exist|schema cache|relation)/i.test(t)) return NextResponse.json({ success: true, eintraege: [], tabelleFehlt: true, hinweis: TABELLE_FEHLT }, { headers: { 'Cache-Control': 'no-store' } })
       throw new Error(t)
     }
     const zeilen: Record<string, unknown>[] = await res.json()
@@ -82,7 +82,7 @@ export async function POST(req: NextRequest) {
     })
     if (!ins.ok) {
       const t = await ins.text()
-      if (/eingangsrechnungen/.test(t) && /(does not exist|schema cache|relation)/i.test(t)) return fehler(TABELLE_FEHLT, 409)
+      if (/(does not exist|schema cache|relation)/i.test(t)) return fehler(TABELLE_FEHLT, 409)
       throw new Error(t)
     }
     if (!datei) return NextResponse.json({ success: true, id })

@@ -3,8 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
+    "predev": "node scripts/kopiere-tesseract.mjs",
     "dev": "next dev",
-    "prebuild": "node scripts/build-kunden-schema.mjs",
+    "prebuild": "node scripts/kopiere-tesseract.mjs && node scripts/build-kunden-schema.mjs",
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
