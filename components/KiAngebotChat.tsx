@@ -12,7 +12,7 @@ import { FELD_LABEL, baueAufmassDaten, type AnfrageEntwurf, type KundenTreffer }
 const inputCls = 'w-full px-3 py-2 bg-white border border-black/10 rounded-lg text-sm text-[#1d1d1f] focus:outline-none focus:border-[#e8590c]'
 const btnPrimary = 'px-3 py-1.5 rounded-lg bg-[#e8590c] hover:bg-[#d9480f] text-white text-xs font-semibold transition-colors disabled:opacity-50'
 const btnSecondary = 'px-3 py-1.5 rounded-lg bg-black/5 hover:bg-black/10 text-[#1d1d1f] text-xs font-medium transition-colors'
-const ZAHLEN: (keyof AnfrageEntwurf)[] = ['gebaeude_laenge_m', 'gebaeude_breite_m', 'flaeche_m2', 'arbeitshoehe_m', 'standzeit_wochen']
+const ZAHLEN: (keyof AnfrageEntwurf)[] = ['gebaeude_laenge_m', 'gebaeude_breite_m', 'traufhoehe_m', 'arbeitshoehe_m', 'flaeche_m2', 'standzeit_wochen']
 const TEXTE: (keyof AnfrageEntwurf)[] = ['kunde', 'ansprechpartner', 'leistung', 'strasse', 'plz', 'ort', 'wunschtermin', 'bemerkung']
 interface Nachricht { rolle: 'du' | 'ki'; text: string }
 interface KundeKurz { id: string; name: string }
@@ -57,7 +57,7 @@ export default function KiAngebotChat({ kunde, onFertig }: {
       setVerlauf(alle); setEntwurf(j.entwurf); setVerworfen(j.verworfen || []); setAbgeleitet(j.abgeleitet || []); setTreffer(j.treffer || [])
       if (!kunde && kundenWahl === 'neu' && j.treffer?.[0]?.art === 'exakt') setKundenWahl(j.treffer[0].kunde.id)
       const e: AnfrageEntwurf = j.entwurf
-      const erkannt = [e.kunde && !kunde ? `Kunde ${e.kunde}${e.ansprechpartner ? ` (${e.ansprechpartner})` : ''}` : '', e.leistung, e.strasse || e.ort ? [e.strasse, [e.plz, e.ort].filter(Boolean).join(' ')].filter(Boolean).join(', ') : '', e.flaeche_m2 ? `${e.flaeche_m2} m²` : '', e.arbeitshoehe_m ? `${e.arbeitshoehe_m} m Höhe` : '', e.standzeit_wochen ? `${e.standzeit_wochen} Wochen` : '', e.wunschtermin].filter(Boolean)
+      const erkannt = [e.kunde && !kunde ? `Kunde ${e.kunde}${e.ansprechpartner ? ` (${e.ansprechpartner})` : ''}` : '', e.leistung, e.strasse || e.ort ? [e.strasse, [e.plz, e.ort].filter(Boolean).join(' ')].filter(Boolean).join(', ') : '', e.flaeche_m2 ? `${e.flaeche_m2} m²` : '', e.arbeitshoehe_m ? `${e.arbeitshoehe_m} m Arbeitshöhe` : '', e.traufhoehe_m ? `${e.traufhoehe_m} m Traufhöhe` : '', e.standzeit_wochen ? `${e.standzeit_wochen} Wochen` : '', e.wunschtermin].filter(Boolean)
       setNachrichten((n) => [...n, { rolle: 'ki', text: `${(j.abgeleitet || []).length ? `Berechnet: ${(j.abgeleitet as string[]).join('; ')}. ` : ''}${erkannt.length ? `Erkannt: ${erkannt.join(' · ')}.` : 'Ich konnte noch keine Angaben erkennen.'}${j.fehlend?.length ? ` Es fehlt noch: ${j.fehlend.join(', ')}. Schreib es einfach dazu.` : ' Die Angaben sind vollständig genug, bitte unten prüfen.'}` }])
     } catch (e: any) { setFehler(e.message) } finally { setLiest(false) }
   }
@@ -126,13 +126,21 @@ export default function KiAngebotChat({ kunde, onFertig }: {
           <div className="grid gap-3 sm:grid-cols-2">
             {[...TEXTE.filter((k) => !(kunde && k === 'kunde')), ...ZAHLEN].map((k) => (
               <div key={k} className={k === 'bemerkung' ? 'sm:col-span-2' : ''}>
-                <label className="block text-xs text-[#86868b] mb-1">{FELD_LABEL[k]}</label>
+                <label className="block text-xs text-[#86868b] mb-1">{FELD_LABEL[k]}{k === 'flaeche_m2' && entwurf.flaeche_vorlaeufig ? ' – vorläufig berechnet, nicht bestätigt' : ''}</label>
                 <input className={`${inputCls} ${entwurf[k] === null ? 'border-amber-400 bg-amber-50' : ''}`} value={entwurf[k] === null ? '' : String(entwurf[k])} onChange={(e) => setzeFeld(k, e.target.value)} placeholder="fehlt" />
               </div>
             ))}
           </div>
           <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={entwurf.umlaufend} onChange={(e) => setzeFeld('umlaufend', String(e.target.checked))} /> {FELD_LABEL.umlaufend} (rund um das Gebäude)</label>
-          {abgeleitet.length > 0 && <p className="rounded-lg border border-blue-200 bg-blue-50 p-3 text-xs text-blue-900"><strong>Aus deinen Angaben berechnet (bitte prüfen):</strong> {abgeleitet.join('; ')}</p>}
+          {abgeleitet.length > 0 && <p className="rounded-lg border border-blue-200 bg-blue-50 p-3 text-xs text-blue-900"><strong>Berechnet, nicht bestätigt (bitte prüfen):</strong> {abgeleitet.join('; ')}</p>}
+          {entwurf.besonderheiten.length > 0 && (
+            <div className="rounded-lg border border-black/10 bg-white p-3 text-xs text-[#1d1d1f]" data-testid="ki-besonderheiten">
+              <p className="font-semibold">Besonderheiten der Baustelle (aus dem Text, nicht berechnet)</p>
+              <ul className="mt-1 list-disc pl-4">{entwurf.besonderheiten.map((b, i) => <li key={i}><strong>{b.art === 'einfahrt_frei' ? 'Einfahrt freihalten' : 'Treppenaufgang'}:</strong> {b.text}</li>)}</ul>
+              <p className="mt-1 text-[#86868b]">Sie werden an der Baustelle gespeichert. Es wird keine Überbrückung, kein Treppenturm und kein Preis angenommen. Das entscheidest du im Aufmaß und im Angebot.</p>
+            </div>
+          )}
+          {entwurf.arbeitshoehe_m === null && entwurf.traufhoehe_m !== null && <p className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-xs text-amber-900">Der Kunde hat nur die Traufhöhe ({entwurf.traufhoehe_m} m) genannt. Die Arbeitshöhe (Gerüsthöhe) ist damit nicht bestätigt und bleibt im Aufmaß offen.</p>}
           {verworfen.length > 0 && <p className="rounded-lg border border-black/10 bg-white p-3 text-xs text-[#86868b]"><strong>Von der KI genannt, aber nicht im Text belegt und deshalb nicht übernommen:</strong> {verworfen.join('; ')}</p>}
 
           {!kunde && (

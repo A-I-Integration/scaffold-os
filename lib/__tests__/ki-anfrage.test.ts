@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { zahlInWochenSpanne, baueAufmassDaten, laengeAusFlaeche, extrahiereAdresse, fehlendeAngaben, findeKunden, pruefeKiAntwort, zahlImText, baueAnfrageDaten, projektName } from '../ki-anfrage'
+import { leseBesonderheiten, leseStandzeitText, zahlInWochenSpanne, baueAufmassDaten, laengeAusFlaeche, extrahiereAdresse, fehlendeAngaben, findeKunden, pruefeKiAntwort, zahlImText, baueAnfrageDaten, projektName } from '../ki-anfrage'
 
 const TEXT = 'Kunde Müller GmbH benötigt ein Fassadengerüst in Vreden, ungefähr 250 m², Arbeitshöhe 8 Meter, sechs Wochen. Aufbau Anfang Januar. Bahnhofstraße 12, 48691 Vreden'
 
@@ -45,7 +45,7 @@ describe('pruefeKiAntwort', () => {
   })
   it('Unbrauchbare Antwort ergibt leeren Entwurf', () => {
     const r = pruefeKiAntwort('quatsch', 'Hallo')
-    expect(Object.values(r.entwurf).every((v) => v === null || v === false)).toBe(true)
+    expect(Object.values(r.entwurf).every((v) => v === null || v === false || (Array.isArray(v) && v.length === 0))).toBe(true)
     expect(fehlendeAngaben(r.entwurf)).toContain('Kunde (Firma)')
   })
   it('Zahlen als Text mit Komma', () => {
@@ -107,16 +107,16 @@ Das Gerüst sollte ungefähr Anfang Januar aufgebaut werden und wird voraussicht
 An einer Seite befindet sich eine Einfahrt, die möglichst frei bleiben muss. Außerdem brauchen wir einen Treppenaufgang, damit unsere Mitarbeiter bequem auf die verschiedenen Gerüstlagen kommen.`
 
 describe('Echter Anruf (Müller Bau GmbH)', () => {
-  const ki = { kunde: 'Müller Bau GmbH', ansprechpartner: 'Thomas Müller', ort: 'Vreden', leistung: 'Fassadengerüst', flaeche_m2: 216, arbeitshoehe_m: 8, standzeit_wochen: 8, wunschtermin: 'Anfang Januar', gebaeude_laenge_m: 18, gebaeude_breite_m: 12, umlaufend: true, bemerkung: 'Einfahrt muss frei bleiben. Treppenaufgang erforderlich' }
+  const ki = { kunde: 'Müller Bau GmbH', ansprechpartner: 'Thomas Müller', ort: 'Vreden', leistung: 'Fassadengerüst', flaeche_m2: 216, arbeitshoehe_m: 8, traufhoehe_m: 8, standzeit_wochen: 8, wunschtermin: 'Anfang Januar', gebaeude_laenge_m: 18, gebaeude_breite_m: 12, umlaufend: true, bemerkung: 'Einfahrt muss frei bleiben. Treppenaufgang erforderlich' }
   it('Spanne, Bemerkung und Rundum werden belegt; die falsche Grundfläche 216 wird verworfen und aus dem Umfang ersetzt', () => {
     const r = pruefeKiAntwort(ki, ANRUF)
-    expect(r.entwurf).toMatchObject({ kunde: 'Müller Bau GmbH', ansprechpartner: 'Thomas Müller', standzeit_wochen: 8, arbeitshoehe_m: 8, gebaeude_laenge_m: 18, gebaeude_breite_m: 12, umlaufend: true, flaeche_m2: 480 })
+    expect(r.entwurf).toMatchObject({ kunde: 'Müller Bau GmbH', ansprechpartner: 'Thomas Müller', standzeit_wochen: 8, arbeitshoehe_m: null, traufhoehe_m: 8, gebaeude_laenge_m: 18, gebaeude_breite_m: 12, umlaufend: true, flaeche_m2: 480, flaeche_vorlaeufig: true })
     expect(r.entwurf.bemerkung).toContain('Treppenaufgang')
     expect(r.verworfen.some((v) => v.includes('216'))).toBe(true)
     expect(r.abgeleitet[0]).toContain('60 m')
     expect(r.abgeleitet[0]).toContain('480')
-    expect(fehlendeAngaben(r.entwurf)).toEqual(['Straße und Hausnummer'])
-    expect(laengeAusFlaeche(r.entwurf.flaeche_m2, r.entwurf.arbeitshoehe_m)).toBe(60)
+    expect(r.abgeleitet[0]).toContain('keine bestätigte Gerüstmenge')
+    expect(fehlendeAngaben(r.entwurf)).toEqual(['Arbeitshöhe (m) (nur Traufhöhe 8 m genannt)', 'Straße und Hausnummer'])
   })
   it('Spanne: beide Werte gelten, ein dritter nicht', () => {
     expect(zahlInWochenSpanne(6, ANRUF)).toBe(true)
@@ -141,6 +141,58 @@ describe('Echter Anruf (Müller Bau GmbH)', () => {
   it('Ansprechpartner landet im Aufmaß', () => {
     const e = pruefeKiAntwort(ki, ANRUF).entwurf
     expect(baueAufmassDaten(e, { id: 'k', name: 'Müller Bau GmbH' }, ANRUF).step1).toMatchObject({ ansprechpartnerName: 'Thomas Müller', dauer: '8' })
-    expect(baueAufmassDaten(e, { id: 'k', name: 'Müller Bau GmbH' }, ANRUF).step2).toEqual({ laenge: '60', hoehe: '8' })
+    expect(baueAufmassDaten(e, { id: 'k', name: 'Müller Bau GmbH' }, ANRUF).step2).toEqual({ laenge: '60', traufhoehe: '8' })
+  })
+})
+
+describe('Fachliche Trennung (Nachprüfung)', () => {
+  const ki = { kunde: 'Müller Bau GmbH', ort: 'Vreden', gebaeude_laenge_m: 18, gebaeude_breite_m: 12, umlaufend: true, traufhoehe_m: 8, standzeit_wochen: 8 }
+  it('1. Traufhöhe ohne Arbeitshöhe: Arbeitshöhe bleibt leer, wird als Rückfrage genannt und nicht ins Aufmaß-Feld Höhe geschrieben', () => {
+    const r = pruefeKiAntwort({ ...ki, arbeitshoehe_m: 8 }, ANRUF)
+    expect(r.entwurf.traufhoehe_m).toBe(8)
+    expect(r.entwurf.arbeitshoehe_m).toBeNull()
+    expect(r.verworfen.some((v) => v.includes('Arbeitshöhe'))).toBe(true)
+    expect(fehlendeAngaben(r.entwurf).some((f) => f.startsWith('Arbeitshöhe'))).toBe(true)
+    const d = baueAufmassDaten(r.entwurf, { id: 'k', name: 'X' }, ANRUF)
+    expect(d.step2).toEqual({ laenge: '60', traufhoehe: '8' })
+    expect((d.step2 as Record<string, unknown>).hoehe).toBeUndefined()
+    expect(d.step1.notizen).toContain('Arbeitshöhe/Gerüsthöhe nicht genannt')
+  })
+  it('2. Unterschiedliche Trauf- und Arbeitshöhe bleiben getrennt', () => {
+    const text = 'Gebäude 18 Meter lang und 12 Meter breit, Traufhöhe 8 Meter, Arbeitshöhe 10 Meter, rund um das Gebäude.'
+    const r = pruefeKiAntwort({ kunde: 'A GmbH', ort: 'Vreden', traufhoehe_m: 8, arbeitshoehe_m: 10, gebaeude_laenge_m: 18, gebaeude_breite_m: 12, umlaufend: true }, text)
+    expect(r.entwurf).toMatchObject({ traufhoehe_m: 8, arbeitshoehe_m: 10, flaeche_m2: 600, flaeche_vorlaeufig: true })
+    expect(r.abgeleitet[0]).toContain('Arbeitshöhe')
+    expect(baueAufmassDaten(r.entwurf, { id: 'k', name: 'A GmbH' }, text).step2).toEqual({ laenge: '60', hoehe: '10', traufhoehe: '8' })
+  })
+  it('3. Einfahrt freihalten und Treppenaufgang werden wörtlich als Besonderheit gelesen, ohne Annahme', () => {
+    const b = leseBesonderheiten(ANRUF)
+    expect(b.map((x) => x.art)).toEqual(['einfahrt_frei', 'treppenaufgang'])
+    expect(b[0].text).toContain('Einfahrt')
+    expect(leseBesonderheiten('Wir brauchen ein Fassadengerüst in Vreden.')).toEqual([])
+    const e = pruefeKiAntwort(ki, ANRUF).entwurf
+    expect(JSON.stringify(e)).not.toMatch(/überbrück|ueberbrueck|treppenturm/i)
+  })
+  it('4. Fläche ist vorläufig, bis der Mensch sie selbst nennt; eine genannte Fläche ist nie „vorläufig“', () => {
+    expect(pruefeKiAntwort(ki, ANRUF).entwurf.flaeche_vorlaeufig).toBe(true)
+    const r = pruefeKiAntwort({ ...ki, flaeche_m2: 450 }, ANRUF + ' Es sind etwa 450 m² Fassade.')
+    expect(r.entwurf.flaeche_m2).toBe(450)
+    expect(r.entwurf.flaeche_vorlaeufig).toBe(false)
+    expect(r.abgeleitet).toEqual([])
+  })
+  it('5. Übergabe: nichts aus dem Gespräch geht verloren', () => {
+    const e = pruefeKiAntwort({ ...ki, ansprechpartner: 'Thomas Müller', leistung: 'Fassadengerüst', wunschtermin: 'Anfang Januar', bemerkung: 'Einfahrt muss frei bleiben. Treppenaufgang erforderlich' }, ANRUF).entwurf
+    const d = baueAufmassDaten(e, { id: 'k1', name: 'Müller Bau GmbH' }, ANRUF)
+    const n = String(d.step1.notizen)
+    expect(d.step1).toMatchObject({ name: 'Müller Bau GmbH', customerId: 'k1', baustelle: 'Fassadengerüst', ansprechpartnerName: 'Thomas Müller', dauer: '8' })
+    for (const teil of ['Wunschtermin: Anfang Januar', 'sechs bis acht Wochen', '18 m lang', '12 m breit', 'Traufhöhe laut Anruf: 8 m', 'Länge 60 m = Umfang rundum, vorläufig', 'Einfahrt freihalten', 'Treppenaufgang']) expect(n).toContain(teil)
+    expect(d.anfrage).toMatchObject({ quelle: 'ki-chat', gebaeude_laenge_m: 18, gebaeude_breite_m: 12, traufhoehe_m: 8, umlaufend: true, flaeche_m2: 480, flaeche_vorlaeufig: true, standzeit_text: 'sechs bis acht Wochen' })
+    expect(d.anfrage.besonderheiten).toHaveLength(2)
+    expect(d.anfrage.eingabetext).toContain('Müller Bau GmbH')
+  })
+  it('Standzeit-Text wörtlich', () => {
+    expect(leseStandzeitText(ANRUF)).toBe('sechs bis acht Wochen')
+    expect(leseStandzeitText('nur 6 Wochen')).toBe('6 Wochen')
+    expect(leseStandzeitText('keine Angabe')).toBeNull()
   })
 })
