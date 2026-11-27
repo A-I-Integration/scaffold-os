@@ -25,6 +25,8 @@ import { preisMitFaktor } from '@/lib/rechnung-position';
 import { korrekturkette } from '@/lib/abrechnung-pruefung';
 import { steuerVorschlagFuerBaustelle } from '@/lib/land';
 import { RegieUebernahme } from '@/components/RegieberichtBlock';
+import AbzurechnenUebernahme, { type UebernommenerPosten } from '@/components/baustelle/AbzurechnenUebernahme';
+import { aufRechnungVorhanden } from '@/lib/abrechnungsposten';
 import { fetchMitSchluessel } from '@/lib/idempotenz-client'
 
 // ============================================================
@@ -240,6 +242,7 @@ export function RechnungenInhalt({ umfang, neuSignal = 0, entwurfId: entwurfVonA
   // Steuervorschlag nach dem Land der Baustelle (Luxemburg → 17 % TVA); wird nie über eine Eingabe von Hand gelegt
   const [steuerHinweis, setSteuerHinweis] = useState('');
   const [regieIds, setRegieIds] = useState<string[]>([]);
+  const [abzPosten, setAbzPosten] = useState<UebernommenerPosten[]>([]); // „Noch abzurechnen“-Posten, die in dieser Rechnung stehen (gelten erst nach dem Anlegen als abgerechnet)
   const steuerManuell = useRef(false);
   const entwurfGeladen = useRef(false);
   const [lvId, setLvId] = useState<string | null>(null); // Rechnung aus gespeichertem LV → danach „abgerechnet“
@@ -313,7 +316,7 @@ export function RechnungenInhalt({ umfang, neuSignal = 0, entwurfId: entwurfVonA
   // Eingebettet: „Neue Rechnung“ aus der Faktura-Übersicht öffnet das Formular hier, mit dem Kunden schon eingetragen.
   const kundeVorbelegen = useCallback(() => {
     if (!umfang) return;
-    entwurfGeladen.current = false; steuerManuell.current = false; setRegieIds([]);
+    entwurfGeladen.current = false; steuerManuell.current = false; setRegieIds([]); setAbzPosten([]);
     setEntwurfId(null); setKundeId(umfang.kundeId); setCustomerName(umfang.kundeName); setCustomerAddress(umfang.kundeAdresse);
     setProjectId(umfang.projektId ?? null); setShowForm(true);
   }, [umfang]);
@@ -510,6 +513,16 @@ export function RechnungenInhalt({ umfang, neuSignal = 0, entwurfId: entwurfVonA
         try { await fetch('/api/projekt-lv', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: lvId, status: 'abgerechnet' }) }); } catch { /* Status lässt sich im LV-Reiter nachtragen */ }
         setLvId(null);
       }
+      let abzRest = '';
+      if (abzPosten.length && json.invoice?.id) {
+        // Nur Posten, die nach dem Bearbeiten wirklich noch als Position auf der Rechnung stehen, gelten als abgerechnet
+        const ids = aufRechnungVorhanden(abzPosten, positions);
+        if (ids.length) {
+          try { const ar = await fetch('/api/abrechnungsposten', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ids, abgerechnet_invoice_id: json.invoice.id }) }); const aj = await ar.json(); if (!aj.success) throw new Error('x'); }
+          catch { abzRest = '\n\nHinweis: Die übernommenen Posten konnten nicht als abgerechnet markiert werden. Bitte im Reiter „Noch abzurechnen“ prüfen, damit sie nicht doppelt abgerechnet werden.'; }
+        }
+        setAbzPosten([]);
+      }
       let entwurfRest = '';
       if (entwurfId) {
         // Entwurf ist jetzt festgeschrieben: löschen. Scheitert das, bleibt die Rechnung gültig, der Entwurf wird nur gemeldet.
@@ -519,11 +532,11 @@ export function RechnungenInhalt({ umfang, neuSignal = 0, entwurfId: entwurfVonA
       }
       setKundeId(null);
       setShowForm(false);
-      setCustomerName(''); setCustomerAddress(''); setNotes(''); setSteuerbehandlung('regel'); setProjectId(null); setGeruestNr(''); setLeistungsdatum(''); setDetailOffen({}); setRegieIds([]);
+      setCustomerName(''); setCustomerAddress(''); setNotes(''); setSteuerbehandlung('regel'); setProjectId(null); setGeruestNr(''); setLeistungsdatum(''); setDetailOffen({}); setRegieIds([]); setAbzPosten([]);
       setInvoiceType('standard');
       setPositions([{ bezeichnung: '', menge: 1, einheit: 'Stk.', einzelpreis: 0 }]);
       await load();
-      alert('✅ Rechnung ' + json.invoice.invoice_number + ' angelegt!' + entwurfRest + (json.warnung ? '\n\n⚠️ ' + json.warnung : '') + (json.regie_warnung ? '\n\n⚠️ ' + json.regie_warnung : '') + (json.regie_hinweis ? '\n\nHinweis: ' + json.regie_hinweis : '') + (json.steuer_warnungen?.length ? '\n\n⚠️ Steuer prüfen:\n• ' + json.steuer_warnungen.join('\n• ') : ''));
+      alert('✅ Rechnung ' + json.invoice.invoice_number + ' angelegt!' + entwurfRest + abzRest + (json.warnung ? '\n\n⚠️ ' + json.warnung : '') + (json.regie_warnung ? '\n\n⚠️ ' + json.regie_warnung : '') + (json.regie_hinweis ? '\n\nHinweis: ' + json.regie_hinweis : '') + (json.steuer_warnungen?.length ? '\n\n⚠️ Steuer prüfen:\n• ' + json.steuer_warnungen.join('\n• ') : ''));
     } catch (err: any) {
       alert('❌ ' + err.message);
     } finally {
@@ -773,6 +786,17 @@ export function RechnungenInhalt({ umfang, neuSignal = 0, entwurfId: entwurfVonA
                   // Leere Startzeile ersetzen, sonst anhängen
                   setPositions((prev) => [...prev.filter((p) => p.bezeichnung.trim() || p.einzelpreis > 0), ...neu.map((n) => ({ bezeichnung: n.bezeichnung, menge: n.menge, einheit: n.einheit, einzelpreis: n.einzelpreis }))]);
                   setRegieIds((prev) => [...new Set([...prev, ...ids])]);
+                }}
+              />
+            )}
+
+            {projectId && (
+              <AbzurechnenUebernahme
+                projectId={projectId}
+                uebernommen={abzPosten.map((x) => x.id)}
+                onUebernehmen={(neu, posten) => {
+                  setPositions((prev) => [...prev.filter((p) => p.bezeichnung.trim() || p.einzelpreis > 0), ...neu]);
+                  setAbzPosten((prev) => [...prev, ...posten]);
                 }}
               />
             )}
