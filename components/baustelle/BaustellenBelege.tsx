@@ -4,6 +4,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { ANHANG_BUCKET, ERLAUBTE_TYPEN, groesseText, pruefeAnhang } from '@/lib/rechnung-anhang'
 import { ARTEN, ART_LABEL, berechneBrutto, parseBetrag, summiereEingang, type Eingangsrechnung, type EingangsArt } from '@/lib/eingangsrechnung'
+import { leseEingangsPdf } from '@/lib/eingangsrechnung-pdf'
+import { leseRechnung, type LeseErgebnis, type LeseFeld } from '@/lib/eingangsrechnung-lesen'
 import { generateInvoicePDF, fmtEur, fmtDate, TYPE_LABEL, type Invoice } from '@/lib/invoice-pdf'
 
 // Reiter „Belege“ einer Baustelle:
@@ -34,6 +36,8 @@ export default function BaustellenBelege({ projectId, projektName, rechnungen, r
   const [form, setForm] = useState(LEER)
   const [datei, setDatei] = useState<File | null>(null)
   const [speichert, setSpeichert] = useState(false)
+  const [liest, setLiest] = useState(false)
+  const [gelesen, setGelesen] = useState<LeseErgebnis | null>(null)
   const eingabe = useRef<HTMLInputElement>(null)
 
   const laden = useCallback(async () => {
@@ -58,6 +62,35 @@ export default function BaustellenBelege({ projectId, projektName, rechnungen, r
   // Ausgang: erstellte Rechnungen, neueste zuerst; stornierte bleiben sichtbar (GoBD), sind aber markiert
   const ausgang = useMemo(() => [...rechnungen].sort((a, b) => String(b.invoice_date).localeCompare(String(a.invoice_date)) || String(b.invoice_number).localeCompare(String(a.invoice_number))), [rechnungen])
 
+  // PDF gewählt: Inhalt im Browser auslesen und das Formular füllen. Gefüllte Werte sind nur Vorschläge, gespeichert wird erst per Klick.
+  async function dateiGewaehlt(f: File | null) {
+    setDatei(f); setGelesen(null)
+    if (!f) return
+    setOffen(true)
+    if (!/\.pdf$/i.test(f.name)) { setGelesen({ quelle: 'leer', felder: {}, pruefen: [], hinweis: 'Nur PDFs werden automatisch ausgelesen. Bitte die Felder von Hand ausfüllen.' }); return }
+    setLiest(true)
+    try {
+      const e = leseRechnung(await leseEingangsPdf(f))
+      setGelesen(e)
+      const x = e.felder
+      const vorschlagNu = x.lieferant ? nu.find((n) => n.firma.trim().toLowerCase() === x.lieferant!.trim().toLowerCase()) : undefined
+      setForm((v) => ({
+        ...v,
+        lieferant: x.lieferant ?? v.lieferant,
+        subcontractor_id: vorschlagNu ? vorschlagNu.id : v.subcontractor_id,
+        art: vorschlagNu ? 'nachunternehmer' : v.art,
+        rechnungsnummer: x.rechnungsnummer ?? v.rechnungsnummer,
+        rechnungsdatum: x.rechnungsdatum ?? v.rechnungsdatum,
+        faellig_am: x.faellig_am ?? v.faellig_am,
+        netto: x.netto !== undefined ? String(x.netto).replace('.', ',') : v.netto,
+        ust_satz: x.ust_satz !== undefined ? String(x.ust_satz).replace('.', ',') : v.ust_satz,
+      }))
+    } catch {
+      setGelesen({ quelle: 'leer', felder: {}, pruefen: [], hinweis: 'Die PDF konnte nicht gelesen werden. Bitte die Felder von Hand ausfüllen.' })
+    } finally { setLiest(false) }
+  }
+  const markiert = (k: LeseFeld) => (gelesen && gelesen.quelle !== 'leer' && gelesen.pruefen.includes(k) ? ' !border-amber-500 !bg-amber-50' : '')
+
   async function speichern() {
     setFehler(null)
     if (datei) { const p = pruefeAnhang({ name: datei.name, size: datei.size }); if (!p.ok) { setFehler(p.fehler); return } }
@@ -79,7 +112,7 @@ export default function BaustellenBelege({ projectId, projektName, rechnungen, r
         if (!bj.success) throw new Error(bj.error || 'Upload nicht bestätigt.')
       }
       angelegt = null
-      setForm({ ...LEER }); setDatei(null); if (eingabe.current) eingabe.current.value = ''; setOffen(false)
+      setForm({ ...LEER }); setDatei(null); setGelesen(null); if (eingabe.current) eingabe.current.value = ''; setOffen(false)
       await laden(); onGeaendert?.()
     } catch (e: any) {
       setFehler(e.message)
@@ -160,12 +193,19 @@ export default function BaustellenBelege({ projectId, projektName, rechnungen, r
             <h3 className="text-sm font-semibold text-[#1d1d1f]">Eingang · externe Rechnungen ({laedt ? '…' : summe.anzahl})</h3>
             <p className="text-[11px] text-[#86868b]">Nachunternehmer, Material, Sonstiges. Summe netto {fmtEur(summe.netto)} € · brutto {fmtEur(summe.brutto)} €{summe.offenBrutto > 0 ? ` · noch zu zahlen ${fmtEur(summe.offenBrutto)} €` : ''}</p>
           </div>
-          <button type="button" className={btnPrimary} onClick={() => setOffen((o) => !o)}>{offen ? 'Schließen' : '＋ Externe Rechnung ablegen'}</button>
+          <div className="flex gap-2">
+            <input ref={eingabe} type="file" className="hidden" accept={Object.keys(ERLAUBTE_TYPEN).map((e) => '.' + e).join(',')} onChange={(ev) => { dateiGewaehlt(ev.target.files?.[0] || null); ev.target.value = '' }} />
+            <button type="button" className={btnPrimary} onClick={() => eingabe.current?.click()} disabled={liest}>{liest ? 'Liest PDF …' : '📄 PDF hochladen'}</button>
+            <button type="button" className={btnSecondary} onClick={() => setOffen((o) => !o)}>{offen ? 'Schließen' : 'Von Hand erfassen'}</button>
+          </div>
         </div>
         {hinweis && <p className="px-5 py-3 text-sm text-amber-800 bg-amber-50 border-b border-amber-200">{hinweis}</p>}
 
         {offen && (
           <div className="px-5 py-4 bg-[#f5f5f7] space-y-2 border-b border-black/5">
+            {liest && <p className="text-[12px] text-[#1d1d1f]">PDF wird gelesen …</p>}
+            {gelesen && gelesen.quelle !== 'leer' && <p className="rounded-lg border border-green-200 bg-green-50 p-2 text-[12px] text-green-900">Aus der PDF gelesen{gelesen.quelle === 'xml' ? ' (eingebettete Rechnungsdaten)' : ''}. Bitte kurz prüfen{gelesen.pruefen.length ? `, gelb markiert: ${gelesen.pruefen.map((k) => ({ lieferant: 'Lieferant', rechnungsnummer: 'Rechnungsnummer', rechnungsdatum: 'Datum', faellig_am: 'Fälligkeit', netto: 'Netto', ust_satz: 'USt', brutto: 'Brutto' }[k])).join(', ')}` : ''} – dann „Speichern“.</p>}
+            {gelesen && gelesen.quelle === 'leer' && gelesen.hinweis && <p className="rounded-lg border border-amber-200 bg-amber-50 p-2 text-[12px] text-amber-900">{gelesen.hinweis}</p>}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
               <label className="text-[11px] text-[#86868b]">Nachunternehmer aus Stammdaten (optional)
                 <select value={form.subcontractor_id} onChange={(e) => wahlNu(e.target.value)} className={inputCls}>
@@ -174,25 +214,25 @@ export default function BaustellenBelege({ projectId, projektName, rechnungen, r
                 </select>
               </label>
               <label className="text-[11px] text-[#86868b]">Lieferant / Firma *
-                <input value={form.lieferant} onChange={(e) => setze('lieferant', e.target.value)} className={inputCls} placeholder="z. B. Baustoff Müller GmbH" />
+                <input value={form.lieferant} onChange={(e) => setze('lieferant', e.target.value)} className={inputCls + markiert('lieferant')} placeholder="z. B. Baustoff Müller GmbH" />
               </label>
               <label className="text-[11px] text-[#86868b]">Art
                 <select value={form.art} onChange={(e) => setze('art', e.target.value)} className={inputCls}>{ARTEN.map((a) => <option key={a} value={a}>{ART_LABEL[a]}</option>)}</select>
               </label>
               <label className="text-[11px] text-[#86868b]">Rechnungsnummer des Lieferanten
-                <input value={form.rechnungsnummer} onChange={(e) => setze('rechnungsnummer', e.target.value)} className={inputCls} />
+                <input value={form.rechnungsnummer} onChange={(e) => setze('rechnungsnummer', e.target.value)} className={inputCls + markiert('rechnungsnummer')} />
               </label>
               <label className="text-[11px] text-[#86868b]">Rechnungsdatum
-                <input type="date" value={form.rechnungsdatum} onChange={(e) => setze('rechnungsdatum', e.target.value)} className={inputCls} />
+                <input type="date" value={form.rechnungsdatum} onChange={(e) => setze('rechnungsdatum', e.target.value)} className={inputCls + markiert('rechnungsdatum')} />
               </label>
               <label className="text-[11px] text-[#86868b]">Fällig am (optional)
                 <input type="date" value={form.faellig_am} onChange={(e) => setze('faellig_am', e.target.value)} className={inputCls} />
               </label>
               <label className="text-[11px] text-[#86868b]">Netto in € *
-                <input value={form.netto} onChange={(e) => setze('netto', e.target.value)} inputMode="decimal" className={inputCls} placeholder="z. B. 1.234,50" />
+                <input value={form.netto} onChange={(e) => setze('netto', e.target.value)} inputMode="decimal" className={inputCls + markiert('netto')} placeholder="z. B. 1.234,50" />
               </label>
               <label className="text-[11px] text-[#86868b]">USt-Satz in % (0 bei §13b / Reverse Charge)
-                <input value={form.ust_satz} onChange={(e) => setze('ust_satz', e.target.value)} inputMode="decimal" className={inputCls} />
+                <input value={form.ust_satz} onChange={(e) => setze('ust_satz', e.target.value)} inputMode="decimal" className={inputCls + markiert('ust_satz')} />
               </label>
               <label className="text-[11px] text-[#86868b]">Status
                 <select value={form.status} onChange={(e) => setze('status', e.target.value)} className={inputCls}><option value="offen">offen</option><option value="bezahlt">bezahlt</option></select>
@@ -208,13 +248,12 @@ export default function BaustellenBelege({ projectId, projektName, rechnungen, r
             </label>
             <p className="text-[12px] text-[#1d1d1f]">{vorschau ? `USt ${fmtEur(vorschau.ust_betrag)} € · Brutto ${fmtEur(vorschau.brutto)} €` : 'Brutto wird aus Netto und USt-Satz berechnet.'}</p>
             <div className="flex flex-wrap items-center gap-2">
-              <input ref={eingabe} type="file" className="hidden" accept={Object.keys(ERLAUBTE_TYPEN).map((e) => '.' + e).join(',')} onChange={(ev) => setDatei(ev.target.files?.[0] || null)} />
               <button type="button" className={btnSecondary} onClick={() => eingabe.current?.click()}>{datei ? 'Andere Datei wählen' : '📎 PDF / Foto der Rechnung wählen'}</button>
               {datei && <span className="text-[12px] text-[#1d1d1f]">{datei.name} · {groesseText(datei.size)}</span>}
             </div>
             <div className="flex gap-2 pt-1">
-              <button type="button" className={btnPrimary} disabled={speichert} onClick={speichern}>{speichert ? 'Speichert …' : 'Ablegen'}</button>
-              <button type="button" className={btnSecondary} onClick={() => { setOffen(false); setForm({ ...LEER }); setDatei(null) }}>Abbrechen</button>
+              <button type="button" className={btnPrimary} disabled={speichert} onClick={speichern}>{speichert ? 'Speichert …' : 'Speichern'}</button>
+              <button type="button" className={btnSecondary} onClick={() => { setOffen(false); setForm({ ...LEER }); setDatei(null); setGelesen(null) }}>Abbrechen</button>
             </div>
           </div>
         )}
