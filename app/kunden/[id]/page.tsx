@@ -63,6 +63,7 @@ import { FreigabeBadge, useFreigabeStatus } from '@/components/FreigabeBadge'
 import Auftragsstand from '@/components/Auftragsstand'
 import BaustellenBelege from '@/components/baustelle/BaustellenBelege'
 import NochAbzurechnen from '@/components/baustelle/NochAbzurechnen'
+import KiAngebotFenster from '@/components/KiAngebotFenster'
 import { berechneForderung, mitBezugsGutschriften } from '@/lib/forderung'
 import AnhangDialog from '@/components/rechnung/AnhangDialog'
 import { ladeXrechnung } from '@/lib/xrechnung-download'
@@ -204,6 +205,7 @@ export default function KundenDetailPage() {
   const [editPositions, setEditPositions] = useState<any[]>([])
 
   // Zusatzrechnung
+  const [kiAngebotOffen, setKiAngebotOffen] = useState(false)
   const [schlussProjectId, setSchlussProjectId] = useState<string | null>(null)
   const [neueRechnungAnhang, setNeueRechnungAnhang] = useState<{ id: string; invoice_number: string; positions?: any[] } | null>(null)
   const [schlussStart, setSchlussStart] = useState<{ art?: 'abschlag' | 'schluss'; prozent?: number }>({})
@@ -1011,6 +1013,7 @@ export default function KundenDetailPage() {
                 className={btnSecondary}
                 title="Maße und Bauteile von Hand eingeben – der 2D-Plan entsteht live"
               >Aufmaß anlegen</button>
+              <button onClick={() => setKiAngebotOffen(true)} className={btnSecondary} data-testid="ki-angebot-oeffnen" title="Anfrage per Text oder Sprachnachricht erfassen">KI-Angebot</button>
               </div>
             </div>
             {projects.length > 0 && (
@@ -1430,6 +1433,7 @@ export default function KundenDetailPage() {
             onAnhaengeHinzufuegen={(inv) => setNeueRechnungAnhang(inv as any)}
           />
         )}
+        {kiAngebotOffen && kunde && <KiAngebotFenster kunde={{ id: kunde.id, name: kunde.name }} onClose={() => setKiAngebotOffen(false)} onFertig={() => { setKiAngebotOffen(false); ladeDaten() }} />}
         {neueRechnungAnhang && <AnhangDialog invoiceId={neueRechnungAnhang.id} rechnungsNr={neueRechnungAnhang.invoice_number} positionen={neueRechnungAnhang.positions || []} onClose={() => { setNeueRechnungAnhang(null); ladeDaten() }} />}
 
         {/* ═══════════ TAB: AUSFÜHRUNG (Baustelle: Ergebnis, Aufbau/Abbau, Lieferschein, Standzeit, Links) ═══════════ */}
