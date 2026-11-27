@@ -61,7 +61,7 @@ export function zahlImText(wert: number, original: string, kontext?: { einheit?:
 const KONTEXT = {
   flaeche_m2: { einheit: /m²|m2|qm|quadratmeter|quadrat/ },
   // Arbeits-/Gerüsthöhe nur mit eigenem Stichwort: eine genannte Traufhöhe ist keine Arbeitshöhe
-  arbeitshoehe_m: { einheit: /(?:m|meter|metern)\.?\s*(?:arbeitshöhe|arbeitshoehe|gerüsthöhe|gerüsthoehe)/, stichwort: /(?:arbeits|gerüst|geruest)(?:höhe|hoehe)[^0-9]{0,22}$/ },
+  arbeitshoehe_m: { einheit: /(?:m|meter|metern)\.?\s*(?:arbeitshöhe|arbeitshoehe|gerüsthöhe|gerüsthoehe|hoch\b)/, stichwort: /(?:arbeits|gerüst|geruest)(?:höhe|hoehe)[^0-9]{0,22}$/ },
   traufhoehe_m: { einheit: /(?:m|meter|metern)\.?\s*(?:traufhöhe|traufhoehe)/, stichwort: /(?:traufhöhe|traufhoehe|traufe)[^0-9]{0,22}$/ },
   standzeit_wochen: { einheit: /wochen?|wo\.?/ },
   gebaeude_laenge_m: { einheit: /(?:m|meter|metern)\.?\s*(?:lang|länge|laenge)/ },
@@ -109,14 +109,16 @@ export function nurBesonderheitsWoerter(wert: string): boolean {
 }
 const RUNDUM = /rund\s*um|rundum|umlaufend|ringsum|allseitig|alle\s+(?:vier\s+)?seiten/i
 
-const STRASSE_RE = /\b[A-ZÄÖÜ][A-Za-zÄÖÜäöüß-]*(?:str(?:aße|asse)?|weg|gasse|allee|platz|ring|damm|chaussee|pfad|steig|ufer|markt|graben|brücke|anger)\.?\s+\d{1,4}\s?[a-z]?\b/
+const STRASSE_RE = /(?<![A-Za-zÄÖÜäöüß])[A-ZÄÖÜ][A-Za-zÄÖÜäöüß-]*(?:str(?:aße|asse)?|weg|gasse|allee|platz|ring|damm|chaussee|pfad|steig|ufer|markt|graben|brücke|anger)\.?\s+\d{1,4}\s?[a-z]?\b/
+// kleingeschrieben getippt/diktiert („ölbachstr. 48“): mindestens drei Buchstaben davor, damit „weg 5“ im Satz nichts auslöst
+const STRASSE_KLEIN_RE = /(?<![A-Za-zÄÖÜäöüß])[a-zäöüß]{3,}(?:str(?:aße|asse)?|weg|gasse|allee|platz|ring|damm|chaussee|pfad|steig|ufer|markt|graben|anger)\.?\s+\d{1,4}\s?[a-z]?\b/
 const PLZ_ORT_RE = /\b(\d{5})\s+([A-ZÄÖÜ][A-Za-zÄÖÜäöüß-]+(?:[ -][A-ZÄÖÜ][A-Za-zÄÖÜäöüß-]+)*)\b/
 
 /** Adresse lokal aus dem Originaltext lesen. Die KI bekommt Straße und PLZ nie zu sehen (siehe Pseudonymisierung). */
 export function extrahiereAdresse(text: string): { strasse: string | null; plz: string | null; ort: string | null } {
-  const s = text.match(STRASSE_RE)
+  const s = text.match(STRASSE_RE) || text.match(STRASSE_KLEIN_RE)
   const p = text.match(PLZ_ORT_RE)
-  return { strasse: s ? s[0].replace(/\s+/g, ' ').trim() : null, plz: p ? p[1] : null, ort: p ? p[2] : null }
+  return { strasse: s ? s[0].replace(/\s+/g, ' ').trim().replace(/^./, (c) => c.toUpperCase()) : null, plz: p ? p[1] : null, ort: p ? p[2] : null }
 }
 
 const zahl = (v: unknown, min: number, max: number): number | null => {
@@ -175,6 +177,7 @@ export function pruefeKiAntwort(roh: unknown, original: string): LeseErgebnis {
     standzeit_text: leseStandzeitText(original),
   }
   const abgeleitet = leiteFlaecheAb(entwurf)
+  if (entwurf.arbeitshoehe_m !== null && !/(?:arbeits|gerüst|geruest)(?:höhe|hoehe)/i.test(original)) abgeleitet.push(`Arbeitshöhe ${entwurf.arbeitshoehe_m} m aus einer Angabe wie „m hoch“ gelesen, bitte prüfen (Gebäude oder Gerüst?)`)
   return { entwurf, verworfen, abgeleitet }
 }
 
