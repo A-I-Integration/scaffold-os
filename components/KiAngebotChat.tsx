@@ -19,6 +19,9 @@ const TEXTE: (keyof AnfrageEntwurf)[] = ['kunde', 'ansprechpartner', 'leistung',
 interface Nachricht { rolle: 'du' | 'ki'; text: string }
 interface KundeKurz { id: string; name: string }
 
+/** Rest der Selbstkosten, den die Berechnung nicht einzeln ausweist (Genehmigungen/Sonstiges, ggf. Kran): damit die gezeigten Zeilen zur Summe passen. */
+const sonstKosten = (r: KIAnalysis): number => Math.round((r.totalCost - r.totalMaterialCost - r.laborCost - r.transportCost - (r.tripCost || 0)) * 100) / 100
+
 export default function KiAngebotChat({ kunde, onFertig }: {
   /** Vorgegebener Kunde (Aufruf im Kundenordner): dann entfällt die Kundenwahl */
   kunde?: KundeKurz
@@ -193,7 +196,7 @@ export default function KiAngebotChat({ kunde, onFertig }: {
                 {vorab.preisHinweis && <p className="text-xs text-amber-800">{vorab.preisHinweis}</p>}
                 {entwurf?.festpreis_eur ? <p className="rounded bg-blue-50 border border-blue-200 px-2 py-1 text-xs text-blue-900">Genannter Festpreis: <strong>{entwurf.festpreis_eur.toLocaleString('de-DE', { style: 'currency', currency: 'EUR' })}</strong>. Im Angebot gilt dieser Betrag als Pauschale. Die Kalkulation oben dient nur als Vergleich{vorab.result.suggestedPrice > entwurf.festpreis_eur ? ' – der Festpreis liegt unter dem vorgeschlagenen Preis.' : '.'}</p> : null}
                 <table className="w-full text-sm"><tbody>
-                  {([['Material', vorab.result.totalMaterialCost], ['Arbeit', vorab.result.laborCost], ['Transport', vorab.result.transportCost], ...(vorab.result.tripCost ? [['Fahrtkosten', vorab.result.tripCost]] : []), ['Selbstkosten', vorab.result.totalCost]] as [string, number][]).map(([l, v]) => (
+                  {([['Material', vorab.result.totalMaterialCost], ['Arbeit', vorab.result.laborCost], ['Transport', vorab.result.transportCost], ...(vorab.result.tripCost ? [['Fahrtkosten (Pauschale aus Einstellungen)', vorab.result.tripCost]] : []), ...(sonstKosten(vorab.result) > 0.005 ? [['Genehmigungen & Sonstiges (aus Einstellungen)', sonstKosten(vorab.result)]] : []), ['Selbstkosten', vorab.result.totalCost]] as [string, number][]).map(([l, v]) => (
                     <tr key={l}><td className="py-0.5 text-[#86868b]">{l}</td><td className="py-0.5 text-right tabular-nums">{v.toLocaleString('de-DE', { style: 'currency', currency: 'EUR' })}</td></tr>
                   ))}
                   <tr className="border-t border-black/10 font-semibold"><td className="py-1">Vorgeschlagener Preis</td><td className="py-1 text-right tabular-nums">{vorab.result.suggestedPrice.toLocaleString('de-DE', { style: 'currency', currency: 'EUR' })}</td></tr>
