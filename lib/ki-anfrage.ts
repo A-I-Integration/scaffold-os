@@ -4,6 +4,7 @@
 
 export interface AnfrageEntwurf {
   kunde: string | null
+  ansprechpartner: string | null
   strasse: string | null
   plz: string | null
   ort: string | null
@@ -13,9 +14,12 @@ export interface AnfrageEntwurf {
   standzeit_wochen: number | null
   wunschtermin: string | null
   bemerkung: string | null
+  gebaeude_laenge_m: number | null
+  gebaeude_breite_m: number | null
+  umlaufend: boolean
 }
 export const FELD_LABEL: Record<keyof AnfrageEntwurf, string> = {
-  kunde: 'Kunde', strasse: 'Straße und Hausnummer', plz: 'PLZ', ort: 'Ort', leistung: 'Art des Gerüsts',
+  kunde: 'Kunde (Firma)', ansprechpartner: 'Ansprechpartner', gebaeude_laenge_m: 'Gebäudelänge (m)', gebaeude_breite_m: 'Gebäudebreite (m)', umlaufend: 'Gerüst rundum', strasse: 'Straße und Hausnummer', plz: 'PLZ', ort: 'Ort', leistung: 'Art des Gerüsts',
   flaeche_m2: 'Fläche (m²)', arbeitshoehe_m: 'Arbeitshöhe (m)', standzeit_wochen: 'Standzeit (Wochen)', wunschtermin: 'Wunschtermin', bemerkung: 'Bemerkung',
 }
 /** Diese Angaben braucht es mindestens, damit sich ein Angebot überhaupt vorbereiten lässt. */
@@ -50,7 +54,31 @@ const KONTEXT = {
   flaeche_m2: { einheit: /m²|m2|qm|quadratmeter|quadrat/ },
   arbeitshoehe_m: { einheit: /m(?![²2a-zäöüß])|meter|metern/, stichwort: /(?:höhe|hoehe|hoch)[^0-9]{0,12}$/ },
   standzeit_wochen: { einheit: /wochen?|wo\.?/ },
+  gebaeude_laenge_m: { einheit: /(?:m|meter|metern)\.?\s*(?:lang|länge|laenge)/ },
+  gebaeude_breite_m: { einheit: /(?:m|meter|metern)\.?\s*(?:breit|breite)/ },
 } as const
+
+/** „sechs bis acht Wochen“: beide Werte der Spanne gelten als im Text belegt. */
+export function zahlInWochenSpanne(wert: number, original: string): boolean {
+  const t = original.toLowerCase()
+  const tok = '(\\d+(?:[.,]\\d+)?|[a-zäöüß]+)'
+  for (const m of t.matchAll(new RegExp(`${tok}\\s*(?:bis|-|–|oder)\\s*${tok}\\s*wochen?`, 'g'))) {
+    for (const x of [m[1], m[2]]) {
+      const n = /^\d/.test(x) ? parseFloat(x.replace(',', '.')) : WORTZAHLEN[x]
+      if (n !== undefined && Math.abs(n - wert) < 1e-9) return true
+    }
+  }
+  return false
+}
+/** Bemerkung sinngemäß belegt: fast alle längeren Wörter stehen im Text (Satzzeichen und Reihenfolge egal). */
+export function sinngemaessBelegt(wert: string, original: string): boolean {
+  const o = original.toLowerCase()
+  const woerter = wert.toLowerCase().split(/[^a-zäöüß0-9]+/).filter((w) => w.length > 3)
+  if (!woerter.length) return false
+  const treffer = woerter.filter((w) => o.includes(w.slice(0, Math.max(4, w.length - 2)))).length
+  return treffer / woerter.length >= 0.8
+}
+const RUNDUM = /rund\s*um|rundum|umlaufend|ringsum|allseitig|alle\s+(?:vier\s+)?seiten/i
 
 const STRASSE_RE = /\b[A-ZÄÖÜ][A-Za-zÄÖÜäöüß-]*(?:str(?:aße|asse)?|weg|gasse|allee|platz|ring|damm|chaussee|pfad|steig|ufer|markt|graben|brücke|anger)\.?\s+\d{1,4}\s?[a-z]?\b/
 const PLZ_ORT_RE = /\b(\d{5})\s+([A-ZÄÖÜ][A-Za-zÄÖÜäöüß-]+(?:[ -][A-ZÄÖÜ][A-Za-zÄÖÜäöüß-]+)*)\b/
@@ -68,7 +96,7 @@ const zahl = (v: unknown, min: number, max: number): number | null => {
 }
 const text = (v: unknown, max: number): string | null => (typeof v === 'string' && v.trim() ? v.trim().slice(0, max) : null)
 
-export interface LeseErgebnis { entwurf: AnfrageEntwurf; verworfen: string[] }
+export interface LeseErgebnis { entwurf: AnfrageEntwurf; verworfen: string[]; abgeleitet: string[] }
 
 /** Rohantwort der KI prüfen: nur Belegtes bleibt stehen; Adresse kommt aus dem Originaltext. */
 export function pruefeKiAntwort(roh: unknown, original: string): LeseErgebnis {
@@ -83,27 +111,46 @@ export function pruefeKiAntwort(roh: unknown, original: string): LeseErgebnis {
     verworfen.push(`${FELD_LABEL[feld]}: „${wert}“ steht nicht im Text`)
     return null
   }
-  const mitZahl = (v: unknown, min: number, max: number, feld: 'flaeche_m2' | 'arbeitshoehe_m' | 'standzeit_wochen'): number | null => {
+  const belegtSinngemaess = (wert: string | null, feld: keyof AnfrageEntwurf): string | null => {
+    if (!wert) return null
+    if (o.includes(norm(wert)) || sinngemaessBelegt(wert, original)) return wert
+    verworfen.push(`${FELD_LABEL[feld]}: „${wert}“ steht nicht im Text`)
+    return null
+  }
+  const mitZahl = (v: unknown, min: number, max: number, feld: 'flaeche_m2' | 'arbeitshoehe_m' | 'standzeit_wochen' | 'gebaeude_laenge_m' | 'gebaeude_breite_m'): number | null => {
     const n = zahl(v, min, max)
     if (n === null) { if (v !== null && v !== undefined && v !== '') verworfen.push(`${FELD_LABEL[feld]}: Wert nicht plausibel`); return null }
-    if (!zahlImText(n, original, KONTEXT[feld])) { verworfen.push(`${FELD_LABEL[feld]}: ${n} steht nicht im Text`); return null }
+    if (!(zahlImText(n, original, KONTEXT[feld]) || (feld === 'standzeit_wochen' && zahlInWochenSpanne(n, original)))) { verworfen.push(`${FELD_LABEL[feld]}: ${n} steht nicht im Text`); return null }
     return n
   }
 
   const ort = adr.ort ?? belegt(text(r.ort, 80), 'ort')
-  return {
-    verworfen,
-    entwurf: {
-      kunde: belegt(text(r.kunde, 120), 'kunde'),
-      strasse: adr.strasse, plz: adr.plz, ort,
-      leistung: belegt(text(r.leistung, 80), 'leistung'),
-      flaeche_m2: mitZahl(r.flaeche_m2, 0, 100000, 'flaeche_m2'),
-      arbeitshoehe_m: mitZahl(r.arbeitshoehe_m, 0, 200, 'arbeitshoehe_m'),
-      standzeit_wochen: mitZahl(r.standzeit_wochen, 0, 520, 'standzeit_wochen'),
-      wunschtermin: belegt(text(r.wunschtermin, 60), 'wunschtermin'),
-      bemerkung: belegt(text(r.bemerkung, 300), 'bemerkung'),
-    },
+  const entwurf: AnfrageEntwurf = {
+    kunde: belegt(text(r.kunde, 120), 'kunde'),
+    ansprechpartner: belegt(text(r.ansprechpartner, 80), 'ansprechpartner'),
+    strasse: adr.strasse, plz: adr.plz, ort,
+    leistung: belegt(text(r.leistung, 80), 'leistung'),
+    flaeche_m2: mitZahl(r.flaeche_m2, 0, 100000, 'flaeche_m2'),
+    arbeitshoehe_m: mitZahl(r.arbeitshoehe_m, 0, 200, 'arbeitshoehe_m'),
+    standzeit_wochen: mitZahl(r.standzeit_wochen, 0, 520, 'standzeit_wochen'),
+    wunschtermin: belegt(text(r.wunschtermin, 60), 'wunschtermin'),
+    bemerkung: belegtSinngemaess(text(r.bemerkung, 300), 'bemerkung'),
+    gebaeude_laenge_m: mitZahl(r.gebaeude_laenge_m, 0, 1000, 'gebaeude_laenge_m'),
+    gebaeude_breite_m: mitZahl(r.gebaeude_breite_m, 0, 1000, 'gebaeude_breite_m'),
+    umlaufend: r.umlaufend === true && RUNDUM.test(original),
   }
+  const abgeleitet = leiteFlaecheAb(entwurf)
+  return { entwurf, verworfen, abgeleitet }
+}
+
+/** „Rund um das Gebäude“: Länge des Gerüsts = Umfang 2 × (Länge + Breite), Fläche = Umfang × Höhe. Nur wenn die Fläche nicht selbst genannt wurde.
+ *  Annahme: ohne Abzug für Einfahrt oder Lücken; das prüft der Mensch. Verändert den Entwurf und liefert den Rechenweg als Text. */
+export function leiteFlaecheAb(e: AnfrageEntwurf): string[] {
+  if (e.flaeche_m2 !== null || !e.umlaufend || !e.gebaeude_laenge_m || !e.gebaeude_breite_m || !e.arbeitshoehe_m) return []
+  const umfang = Math.round(2 * (e.gebaeude_laenge_m + e.gebaeude_breite_m) * 100) / 100
+  e.flaeche_m2 = Math.round(umfang * e.arbeitshoehe_m * 100) / 100
+  const z = (n: number) => String(n).replace('.', ',')
+  return [`Gerüst rundum: Umfang 2 × (${z(e.gebaeude_laenge_m)} + ${z(e.gebaeude_breite_m)}) = ${z(umfang)} m, Fläche ${z(umfang)} m × ${z(e.arbeitshoehe_m)} m = ${z(e.flaeche_m2)} m² (ohne Abzug für Einfahrt oder Lücken)`]
 }
 
 /** Was fehlt noch für einen Angebotsentwurf? (als lesbare Rückfragen) */
@@ -157,6 +204,7 @@ export function baueAufmassDaten(e: AnfrageEntwurf, kunde: { id: string; name: s
   const step1: Record<string, unknown> = { name: kunde.name, customerId: kunde.id }
   if (adresse) step1.adresse = adresse
   if (e.leistung) step1.baustelle = e.leistung
+  if (e.ansprechpartner) step1.ansprechpartnerName = e.ansprechpartner
   if (e.standzeit_wochen) step1.dauer = zeichenkette(Math.min(52, Math.max(1, Math.round(e.standzeit_wochen))))
   if (notiz) step1.notizen = notiz
   const step2: Record<string, unknown> = {}

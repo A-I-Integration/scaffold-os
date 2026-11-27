@@ -12,8 +12,8 @@ import { FELD_LABEL, baueAufmassDaten, type AnfrageEntwurf, type KundenTreffer }
 const inputCls = 'w-full px-3 py-2 bg-white border border-black/10 rounded-lg text-sm text-[#1d1d1f] focus:outline-none focus:border-[#e8590c]'
 const btnPrimary = 'px-3 py-1.5 rounded-lg bg-[#e8590c] hover:bg-[#d9480f] text-white text-xs font-semibold transition-colors disabled:opacity-50'
 const btnSecondary = 'px-3 py-1.5 rounded-lg bg-black/5 hover:bg-black/10 text-[#1d1d1f] text-xs font-medium transition-colors'
-const ZAHLEN: (keyof AnfrageEntwurf)[] = ['flaeche_m2', 'arbeitshoehe_m', 'standzeit_wochen']
-const TEXTE: (keyof AnfrageEntwurf)[] = ['kunde', 'leistung', 'strasse', 'plz', 'ort', 'wunschtermin', 'bemerkung']
+const ZAHLEN: (keyof AnfrageEntwurf)[] = ['gebaeude_laenge_m', 'gebaeude_breite_m', 'flaeche_m2', 'arbeitshoehe_m', 'standzeit_wochen']
+const TEXTE: (keyof AnfrageEntwurf)[] = ['kunde', 'ansprechpartner', 'leistung', 'strasse', 'plz', 'ort', 'wunschtermin', 'bemerkung']
 interface Nachricht { rolle: 'du' | 'ki'; text: string }
 interface KundeKurz { id: string; name: string }
 
@@ -30,6 +30,7 @@ export default function KiAngebotChat({ kunde, onFertig }: {
   const [fehler, setFehler] = useState<string | null>(null)
   const [entwurf, setEntwurf] = useState<AnfrageEntwurf | null>(null)
   const [verworfen, setVerworfen] = useState<string[]>([])
+  const [abgeleitet, setAbgeleitet] = useState<string[]>([])
   const [treffer, setTreffer] = useState<KundenTreffer[]>([])
   const [alleKunden, setAlleKunden] = useState<KundeKurz[]>([])
   const [kundenWahl, setKundenWahl] = useState<string>('neu')
@@ -53,16 +54,17 @@ export default function KiAngebotChat({ kunde, onFertig }: {
       const r = await fetch('/api/ki-anfrage', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text: alle.join('\n'), kundeVorgegeben: !!kunde }) })
       const j = await r.json()
       if (!j.success) throw new Error(j.error || 'Auslesen fehlgeschlagen.')
-      setVerlauf(alle); setEntwurf(j.entwurf); setVerworfen(j.verworfen || []); setTreffer(j.treffer || [])
+      setVerlauf(alle); setEntwurf(j.entwurf); setVerworfen(j.verworfen || []); setAbgeleitet(j.abgeleitet || []); setTreffer(j.treffer || [])
       if (!kunde && kundenWahl === 'neu' && j.treffer?.[0]?.art === 'exakt') setKundenWahl(j.treffer[0].kunde.id)
       const e: AnfrageEntwurf = j.entwurf
-      const erkannt = [e.kunde && !kunde ? `Kunde ${e.kunde}` : '', e.leistung, e.strasse || e.ort ? [e.strasse, [e.plz, e.ort].filter(Boolean).join(' ')].filter(Boolean).join(', ') : '', e.flaeche_m2 ? `${e.flaeche_m2} m²` : '', e.arbeitshoehe_m ? `${e.arbeitshoehe_m} m Höhe` : '', e.standzeit_wochen ? `${e.standzeit_wochen} Wochen` : '', e.wunschtermin].filter(Boolean)
-      setNachrichten((n) => [...n, { rolle: 'ki', text: `${erkannt.length ? `Erkannt: ${erkannt.join(' · ')}.` : 'Ich konnte noch keine Angaben erkennen.'}${j.fehlend?.length ? ` Es fehlt noch: ${j.fehlend.join(', ')}. Schreib es einfach dazu.` : ' Die Angaben sind vollständig genug, bitte unten prüfen.'}` }])
+      const erkannt = [e.kunde && !kunde ? `Kunde ${e.kunde}${e.ansprechpartner ? ` (${e.ansprechpartner})` : ''}` : '', e.leistung, e.strasse || e.ort ? [e.strasse, [e.plz, e.ort].filter(Boolean).join(' ')].filter(Boolean).join(', ') : '', e.flaeche_m2 ? `${e.flaeche_m2} m²` : '', e.arbeitshoehe_m ? `${e.arbeitshoehe_m} m Höhe` : '', e.standzeit_wochen ? `${e.standzeit_wochen} Wochen` : '', e.wunschtermin].filter(Boolean)
+      setNachrichten((n) => [...n, { rolle: 'ki', text: `${(j.abgeleitet || []).length ? `Berechnet: ${(j.abgeleitet as string[]).join('; ')}. ` : ''}${erkannt.length ? `Erkannt: ${erkannt.join(' · ')}.` : 'Ich konnte noch keine Angaben erkennen.'}${j.fehlend?.length ? ` Es fehlt noch: ${j.fehlend.join(', ')}. Schreib es einfach dazu.` : ' Die Angaben sind vollständig genug, bitte unten prüfen.'}` }])
     } catch (e: any) { setFehler(e.message) } finally { setLiest(false) }
   }
 
   const setzeFeld = (k: keyof AnfrageEntwurf, v: string) => {
     if (!entwurf) return
+    if (k === 'umlaufend') { setEntwurf({ ...entwurf, umlaufend: v === 'true' }); return }
     if (ZAHLEN.includes(k)) { const n = v.trim() === '' ? null : parseFloat(v.replace(',', '.')); setEntwurf({ ...entwurf, [k]: Number.isFinite(n as number) ? n : null }) }
     else setEntwurf({ ...entwurf, [k]: v.trim() === '' ? null : v })
   }
@@ -74,7 +76,7 @@ export default function KiAngebotChat({ kunde, onFertig }: {
       let k: KundeKurz | null = kunde || (kundenWahl !== 'neu' ? (treffer.find((t) => t.kunde.id === kundenWahl)?.kunde || alleKunden.find((c) => c.id === kundenWahl) || null) : null)
       if (!k) {
         if (!entwurf.kunde?.trim()) throw new Error('Bitte einen Kundennamen angeben.')
-        const kr = await fetch('/api/kunden', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: entwurf.kunde.trim() }) })
+        const kr = await fetch('/api/kunden', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: entwurf.kunde.trim(), ...(entwurf.ansprechpartner ? { contact_person: entwurf.ansprechpartner } : {}) }) })
         const kj = await kr.json()
         if (!kj.success) throw new Error(kj.error || 'Kunde konnte nicht angelegt werden.')
         k = { id: kj.kunde.id, name: kj.kunde.name }
@@ -129,13 +131,15 @@ export default function KiAngebotChat({ kunde, onFertig }: {
               </div>
             ))}
           </div>
+          <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={entwurf.umlaufend} onChange={(e) => setzeFeld('umlaufend', String(e.target.checked))} /> {FELD_LABEL.umlaufend} (rund um das Gebäude)</label>
+          {abgeleitet.length > 0 && <p className="rounded-lg border border-blue-200 bg-blue-50 p-3 text-xs text-blue-900"><strong>Aus deinen Angaben berechnet (bitte prüfen):</strong> {abgeleitet.join('; ')}</p>}
           {verworfen.length > 0 && <p className="rounded-lg border border-black/10 bg-white p-3 text-xs text-[#86868b]"><strong>Von der KI genannt, aber nicht im Text belegt und deshalb nicht übernommen:</strong> {verworfen.join('; ')}</p>}
 
           {!kunde && (
             <div className="rounded-lg border border-black/10 bg-white p-3 space-y-1.5">
               <p className="text-xs font-semibold text-[#1d1d1f]">Zuordnung</p>
               {treffer.map((t) => (
-                <label key={t.kunde.id} className="flex items-center gap-2 text-sm"><input type="radio" name="kw" checked={kundenWahl === t.kunde.id} onChange={() => setKundenWahl(t.kunde.id)} /> Neues Projekt bei bestehendem Kunden <strong>{t.kunde.name}</strong> <span className="text-xs text-[#86868b]">({t.art === 'exakt' ? 'gleicher Name' : 'ähnlicher Name'})</span></label>
+                <label key={t.kunde.id} className="flex flex-wrap items-center gap-x-2 text-sm"><input type="radio" name="kw" checked={kundenWahl === t.kunde.id} onChange={() => setKundenWahl(t.kunde.id)} /> Neues Projekt bei bestehendem Kunden <strong>{t.kunde.name}</strong> <span className="text-xs text-[#86868b]">({t.art === 'exakt' ? 'gleicher Name' : 'ähnlicher Name'})</span></label>
               ))}
               <label className="flex items-center gap-2 text-sm"><input type="radio" name="kw" checked={kundenWahl === 'neu'} onChange={() => setKundenWahl('neu')} /> Neuer Kunde{entwurf.kunde ? <>: <strong>{entwurf.kunde}</strong></> : ''}</label>
               <div>

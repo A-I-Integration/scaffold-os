@@ -19,8 +19,8 @@ const key = process.env.SUPABASE_SERVICE_ROLE_KEY!
 const headers = { apikey: key, Authorization: `Bearer ${key}` }
 
 const PROMPT = `Du liest aus einer Gerüstbau-Kundenanfrage (Telefonnotiz oder Chat) nur Angaben heraus. Antworte ausschließlich mit einem JSON-Objekt mit diesen Schlüsseln:
-kunde (Name der Firma oder Person, wörtlich aus dem Text), ort (Ortsname der Baustelle, wörtlich), leistung (Art des Gerüsts, z. B. "Fassadengerüst", wörtlich), flaeche_m2 (Zahl), arbeitshoehe_m (Zahl), standzeit_wochen (Zahl, nur wenn im Text in Wochen genannt), wunschtermin (wörtlich, z. B. "Anfang Januar"), bemerkung (wichtige Zusatzangaben, wörtlich, sonst null).
-Regeln: Nichts schätzen, nichts berechnen, nichts ergänzen. Steht eine Angabe nicht im Text, setze null. Platzhalter wie [STRASSE], [PLZ-ORT], [TELEFON], [E-MAIL] sind absichtlich geschwärzt und werden ignoriert.
+kunde (Name der FIRMA, z. B. "Müller Bau GmbH"; ohne den Namen der anrufenden Person; ist keine Firma genannt, der Name der Person), ansprechpartner (Name der anrufenden Person, wörtlich), ort (Ortsname der Baustelle, wörtlich), leistung (Art des Gerüsts, z. B. "Fassadengerüst", wörtlich), flaeche_m2 (Zahl, nur wenn im Text als Fläche in m² genannt), arbeitshoehe_m (Zahl, Höhe bzw. Traufhöhe in Metern), standzeit_wochen (Zahl in Wochen; bei einer Spanne wie "sechs bis acht Wochen" der höhere Wert), wunschtermin (wörtlich, z. B. "Anfang Januar"), gebaeude_laenge_m (Zahl, nur wenn das Gebäude als "x Meter lang" beschrieben ist), gebaeude_breite_m (Zahl, nur wenn "x Meter breit"), umlaufend (true, wenn das Gerüst rund um das ganze Gebäude gewünscht ist, sonst false), bemerkung (besondere Anforderungen aus dem Text, kurz, mit Wörtern aus dem Text, z. B. Zufahrt freihalten, Treppenaufgang; sonst null).
+Regeln: Nichts schätzen, nichts berechnen, nichts ergänzen. Steht eine Angabe nicht im Text, setze null (umlaufend: false). Platzhalter wie [STRASSE], [PLZ-ORT], [TELEFON], [E-MAIL] sind absichtlich geschwärzt und werden ignoriert.
 
 Text:
 `
@@ -56,9 +56,9 @@ export async function POST(req: NextRequest) {
     try { roh = JSON.parse(raw) } catch { return NextResponse.json({ success: false, error: 'Die KI-Antwort war nicht lesbar. Bitte noch einmal versuchen.' }, { status: 502 }) }
 
     const kundeVorgegeben = body?.kundeVorgegeben === true
-    const { entwurf, verworfen } = pruefeKiAntwort(roh, text)
+    const { entwurf, verworfen, abgeleitet } = pruefeKiAntwort(roh, text)
     const kRes = await fetch(`${url}/rest/v1/customers?select=id,name&order=name.asc&limit=2000`, { headers })
     const kunden = kRes.ok ? await kRes.json() : []
-    return NextResponse.json({ success: true, entwurf, verworfen, fehlend: fehlendeAngaben(entwurf, { ohneKunde: kundeVorgegeben }), treffer: kundeVorgegeben ? [] : findeKunden(entwurf.kunde, kunden) }, { headers: { 'Cache-Control': 'no-store' } })
+    return NextResponse.json({ success: true, entwurf, verworfen, abgeleitet, fehlend: fehlendeAngaben(entwurf, { ohneKunde: kundeVorgegeben }), treffer: kundeVorgegeben ? [] : findeKunden(entwurf.kunde, kunden) }, { headers: { 'Cache-Control': 'no-store' } })
   } catch (err) { return serverErrorResponse(err, 'ki-anfrage POST') }
 }
