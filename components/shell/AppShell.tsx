@@ -1,5 +1,6 @@
 'use client'
 
+import HilfeAssistent from '@/components/HilfeAssistent'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from 'react'
@@ -159,6 +160,7 @@ export default function AppShell({ rolle, name, onLogout, children }: { rolle: R
         </header>
 
         <main ref={inhaltRef} className="os-ui min-w-0 flex-1 overflow-auto">{children}</main>
+        {!pathname?.startsWith('/cad') && <HilfeAssistent />}
       </div>
 
       {suche && (
