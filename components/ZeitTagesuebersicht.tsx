@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { ABSCHNITT_ARTEN, ABSCHNITT_LABEL, tageszeile, fmtMinuten, type Abschnitt } from '@/lib/zeit-abschnitte';
+import { ABSCHNITT_ARTEN, ABSCHNITT_LABEL, tageszeile, zusammenfassung, fmtMinuten, berlinDatum, type Abschnitt } from '@/lib/zeit-abschnitte';
 import { OrtungVorschlag, OrtungImport } from '@/components/OrtungBloecke';
 import { SpesenTag, SpesenMonatBlock, SpesenSaetzeBlock, type SpesenZeile, type SatzZeile } from '@/components/SpesenBloecke';
 
@@ -14,6 +14,8 @@ import { SpesenTag, SpesenMonatBlock, SpesenSaetzeBlock, type SpesenZeile, type 
 interface Emp { id: string; first_name: string; last_name: string; status: string }
 interface Eintrag { id: string; employee_id: string; start_time: string | null; end_time: string | null; hours: number | null; break_minutes: number | null; project?: { name: string } | null }
 interface Abs extends Abschnitt { id: string; project?: { name: string } | null }
+interface Lauf { employee_id: string; art: string; start_time: string; project?: { name: string } | null }
+const QUELLE_TEXT: Record<string, string> = { knopf: 'per Knopf erfasst', mitarbeiter: 'vom Mitarbeiter nachgetragen', ortung: 'aus der Ortung' };
 
 const heute = () => new Date().toLocaleDateString('en-CA');
 const uhr = (ts: string | null) => (ts ? new Date(ts).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' }) : '–');
@@ -28,6 +30,7 @@ export default function ZeitTagesuebersicht({ canEdit }: { canEdit: boolean }) {
   const [projekte, setProjekte] = useState<{ id: string; name: string }[]>([]);
   const [tabelleFehlt, setTabelleFehlt] = useState(false);
   const [tourIds, setTourIds] = useState<string[]>([]);
+  const [laufend, setLaufend] = useState<Lauf[]>([]);
   const [laedt, setLaedt] = useState(true);
   const [meldung, setMeldung] = useState('');
   const [form, setForm] = useState<typeof leeresFormular | null>(null);
@@ -43,7 +46,7 @@ export default function ZeitTagesuebersicht({ canEdit }: { canEdit: boolean }) {
       const r = await fetch(`/api/zeit-abschnitte?datum=${datum}`, { cache: 'no-store' });
       const j = await r.json();
       if (!j.success) throw new Error(j.error);
-      setEmployees(j.employees); setEintraege(j.entries); setAbschnitte(j.abschnitte); setTabelleFehlt(!!j.tabelleFehlt); setTourIds(j.tourMitarbeiter || []);
+      setEmployees(j.employees); setEintraege(j.entries); setAbschnitte(j.abschnitte); setTabelleFehlt(!!j.tabelleFehlt); setTourIds(j.tourMitarbeiter || []); setLaufend(j.laufend || []);
     } catch (e: any) { setMeldung(e.message || 'Laden fehlgeschlagen.'); }
     finally { setLaedt(false); }
   }, [datum]);
@@ -86,7 +89,8 @@ export default function ZeitTagesuebersicht({ canEdit }: { canEdit: boolean }) {
     else await laden();
   }
 
-  const ids = new Set([...eintraege.map(e => e.employee_id), ...abschnitte.map(a => a.employee_id), ...tourIds]);
+  const laufHeute = laufend.filter(l => berlinDatum(l.start_time) === datum || datum === heute());
+  const ids = new Set([...eintraege.map(e => e.employee_id), ...abschnitte.map(a => a.employee_id), ...tourIds, ...laufHeute.map(l => l.employee_id)]);
   const sichtbar = employees.filter(e => ids.has(e.id));
   const aktive = employees.filter(e => e.status === 'active');
   const inp = 'bg-white border border-black/10 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-[#e8590c]';
@@ -129,9 +133,13 @@ export default function ZeitTagesuebersicht({ canEdit }: { canEdit: boolean }) {
       {laedt && <p className="text-[#86868b]">Lade Tag …</p>}
       {!laedt && sichtbar.length === 0 && <p className="text-sm text-[#86868b]" data-testid="tag-leer">Für diesen Tag gibt es keine Stempelzeiten, keine Abschnitte und keine Tour-Einteilung.</p>}
 
+      {!laedt && sichtbar.length > 1 && <Gesamt abschnitte={abschnitte} laufend={laufHeute} />}
+
       {!laedt && sichtbar.map(emp => {
         const z = tageszeile(emp.id, eintraege, abschnitte);
         const meine = abschnitte.filter(a => a.employee_id === emp.id);
+        const lauf = laufHeute.find(l => l.employee_id === emp.id) || null;
+        const zus = zusammenfassung(meine, lauf);
         return (
           <div key={emp.id} className="bg-white border border-black/10 rounded-xl mb-3 p-4" data-testid={`tag-mitarbeiter-${emp.id}`}>
             <div className="flex flex-wrap items-center gap-3 text-sm">
@@ -140,6 +148,7 @@ export default function ZeitTagesuebersicht({ canEdit }: { canEdit: boolean }) {
               <span className="text-[#86868b]">gebucht {z.gebuchtStunden.toLocaleString('de-DE', { minimumFractionDigits: 2 })} h · Pause laut Stempelzeit {z.pauseGebucht} min</span>
             </div>
             {z.hinweise.map(h => <p key={h} className="text-xs text-amber-700 mt-1" data-testid="tag-hinweis">⚠ {h}</p>)}
+            {(meine.length > 0 || lauf) && <Zusammen z={zus} lauf={lauf} />}
             {meine.length > 0 && (
               <ul className="mt-2 text-sm">
                 {meine.map(a => (
@@ -148,6 +157,7 @@ export default function ZeitTagesuebersicht({ canEdit }: { canEdit: boolean }) {
                     <span>{hhmm(a.start_time)} – {hhmm(a.end_time)}</span>
                     {a.project?.name && <span className="text-blue-600">📁 {a.project.name}</span>}
                     {a.note && <span className="text-[#86868b]">{a.note}</span>}
+                    {a.quelle && QUELLE_TEXT[a.quelle] && <span className="text-xs text-[#86868b]" data-testid="tag-quelle">{QUELLE_TEXT[a.quelle]}</span>}
                     {canEdit && (
                       <span className="ml-auto flex gap-2">
                         <button className="text-xs border border-black/10 rounded-md px-2 py-1" onClick={() => setForm({ id: a.id, employee_id: a.employee_id, art: a.art, von: hhmm(a.start_time), bis: hhmm(a.end_time), project_id: a.project_id || '', note: a.note || '' })}>Bearbeiten</button>
@@ -176,7 +186,36 @@ export default function ZeitTagesuebersicht({ canEdit }: { canEdit: boolean }) {
       {spesenAn && spesenFehlt && <div className="rounded-xl p-3 text-sm mt-4 bg-amber-50 border border-amber-200 text-amber-800" data-testid="spesen-tabelle-fehlt">Die Tabellen für Spesen fehlen noch. Bitte phase-138-spesen.sql in Supabase ausführen.</div>}
       {spesenAn && !spesenFehlt && <SpesenMonatBlock monat={datum.slice(0, 7)} namen={Object.fromEntries(employees.map(e => [e.id, `${e.last_name}, ${e.first_name}`]))} key={datum.slice(0, 7) + spesenTage.length} />}
       {spesenAn && !spesenFehlt && <SpesenSaetzeBlock saetze={saetze} datum={datum} onGeaendert={spesenLaden} />}
-      <p className="text-xs text-[#86868b] mt-4">Die Abschnitte gliedern den Tag. Die gebuchten Stunden kommen weiterhin aus der Stempelzeit; Korrekturen dort wie bisher in der Monatsansicht.</p>
+      <p className="text-xs text-[#86868b] mt-4">Die Abschnitte gliedern den Tag. „Aktiv gearbeitet“ zählt Baustelle und Fahrten zusammen, Pausen stehen getrennt daneben. Die gebuchten Stunden für Lohn und DATEV kommen weiterhin aus der Stempelzeit; Korrekturen dort wie bisher in der Monatsansicht.</p>
+    </div>
+  );
+}
+
+function Zusammen({ z, lauf }: { z: ReturnType<typeof zusammenfassung>; lauf: Lauf | null }) {
+  return (
+    <div className="mt-2 grid gap-2 rounded-lg bg-[#f5f5f7] p-3 text-sm md:grid-cols-2" data-testid="tag-zusammen">
+      <div>
+        <div className="text-xs font-semibold text-[#424245]">Aktiv gearbeitet</div>
+        <div className="text-base font-semibold" data-testid="tag-aktiv">{fmtMinuten(z.aktivMinuten)}</div>
+        <div className="text-xs text-[#86868b]">Baustelle {fmtMinuten(z.baustelleMinuten)} · Fahrten {fmtMinuten(z.fahrtMinuten)}{z.fortbildungMinuten > 0 ? ` · Fortbildung ${fmtMinuten(z.fortbildungMinuten)}` : ''}</div>
+      </div>
+      <div>
+        <div className="text-xs font-semibold text-[#424245]">Pausen</div>
+        <div className="text-base font-semibold" data-testid="tag-pausen">{fmtMinuten(z.pauseMinuten)}</div>
+        <div className="text-xs text-[#86868b]">{z.pauseAnzahl} {z.pauseAnzahl === 1 ? 'Pause' : 'Pausen'}{z.schlechtwetterMinuten > 0 ? ` · Schlechtwetter ${fmtMinuten(z.schlechtwetterMinuten)} (nicht aktiv gezählt)` : ''}</div>
+      </div>
+      {lauf && <div className="md:col-span-2 text-xs text-blue-700" data-testid="tag-laeuft">Läuft gerade: {ABSCHNITT_LABEL[lauf.art] || lauf.art} seit {hhmm(lauf.start_time)} Uhr{lauf.project?.name ? ` (${lauf.project.name})` : ''}. Die Zeit bis jetzt ist enthalten.</div>}
+    </div>
+  );
+}
+
+function Gesamt({ abschnitte, laufend }: { abschnitte: Abs[]; laufend: Lauf[] }) {
+  const alle = zusammenfassung(abschnitte, null);
+  const lauf = laufend.reduce((s, l) => { const z = zusammenfassung([], l); return { aktiv: s.aktiv + z.aktivMinuten, pause: s.pause + z.pauseMinuten }; }, { aktiv: 0, pause: 0 });
+  return (
+    <div className="mb-3 rounded-xl border border-black/10 bg-white p-4 text-sm" data-testid="tag-gesamt">
+      <span className="font-semibold">Alle Mitarbeiter zusammen: </span>
+      aktiv gearbeitet <b>{fmtMinuten(alle.aktivMinuten + lauf.aktiv)}</b> · Pausen <b>{fmtMinuten(alle.pauseMinuten + lauf.pause)}</b>
     </div>
   );
 }
