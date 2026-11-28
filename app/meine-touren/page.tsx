@@ -767,7 +767,7 @@ export default function MeineTourenPage() {
               </div>
             )}
 
-            <ZeitKnoepfe />
+            <ZeitKnoepfe employeeId={meId || undefined} />
 
             {/* NEU (Phase 54): heutiger Einsatz aus der Wochenplanung – zeigt
                 automatisch, wenn der Bauleiter/Disponent per Drag & Drop

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { pruefeRolle, serverErrorResponse } from '@/lib/auth';
+import { pruefeRolle, serverErrorResponse, requireOwnEmployeeOrAdmin } from '@/lib/auth';
 import { ROLLEN } from '@/lib/rollen';
 import { berlinDatum, ueberschneidet, pruefeAbschnitt } from '@/lib/zeit-abschnitte';
 import { uebergang, verfuegbareKnoepfe, pruefeNachtrag, type Aktion, type Lauf } from '@/lib/zeit-knoepfe';
@@ -10,6 +10,7 @@ import { uebergang, verfuegbareKnoepfe, pruefeNachtrag, type Aktion, type Lauf }
 // GET → { employee, lauf, knoepfe, abschnitte (heute) }
 // POST { aktion, zeit?, project_id? }                          → Knopf drücken
 // POST { aktion: 'nachtragen', art, start_time, end_time, project_id?, note? } → Abschnitt nachtragen
+// Optional employee_id (Auswahl „Wer bist du?“): Chef/Disposition für jeden, alle anderen nur für sich selbst.
 // DELETE ?id=…  → eigenen, selbst erfassten Abschnitt der letzten 7 Tage löschen
 // ============================================================
 
@@ -26,9 +27,19 @@ async function lesen(pfad: string): Promise<any[]> {
   return r.json();
 }
 
-async function meinMitarbeiter(userId: string): Promise<{ id: string; first_name: string; last_name: string } | null> {
+type Mitarbeiter = { id: string; first_name: string; last_name: string };
+
+/** Der Mitarbeiter, für den gestempelt wird: der in „Wer bist du?“ gewählte (Chef/Disposition für jeden, alle anderen nur für sich), sonst der zum Login verknüpfte. */
+async function meinMitarbeiter(userId: string, gewaehlt?: unknown): Promise<{ emp: Mitarbeiter | null; verboten?: string }> {
+  if (typeof gewaehlt === 'string' && gewaehlt) {
+    if (!UUID.test(gewaehlt)) return { emp: null, verboten: 'Der Mitarbeiter ist ungültig.' };
+    const a = await requireOwnEmployeeOrAdmin(gewaehlt);
+    if (!a.allowed) return { emp: null, verboten: a.error || 'Keine Berechtigung.' };
+    const z = await lesen(`employees?select=id,first_name,last_name&id=eq.${gewaehlt}&limit=1`);
+    return { emp: z[0] ?? null };
+  }
   const z = await lesen(`employees?select=id,first_name,last_name&user_id=eq.${userId}&limit=1`);
-  return z[0] ?? null;
+  return { emp: z[0] ?? null };
 }
 
 async function laufHolen(employeeId: string): Promise<Lauf | null> {
@@ -40,11 +51,13 @@ async function heutigeAbschnitte(employeeId: string, tag: string) {
   return lesen(`zeit_abschnitte?select=id,art,start_time,end_time,project_id,note,quelle,project:project_id(id,name)&employee_id=eq.${employeeId}&work_date=eq.${tag}&order=start_time.asc`);
 }
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   const rolle = await pruefeRolle(ROLLEN.ALLE);
   if (!rolle.ok) return rolle.response;
   try {
-    const emp = await meinMitarbeiter(rolle.userId);
+    const m = await meinMitarbeiter(rolle.userId, new URL(req.url).searchParams.get('employee_id'));
+    if (m.verboten) return fehler(m.verboten, 403);
+    const emp = m.emp;
     if (!emp) return NextResponse.json({ success: true, employee: null });
     let lauf: Lauf | null = null; let abschnitte: any[] = []; let tabelleFehlt = false;
     try {
@@ -61,8 +74,10 @@ export async function POST(req: NextRequest) {
   let b: any;
   try { b = await req.json(); } catch { return fehler('Ungültige Anfrage'); }
   try {
-    const emp = await meinMitarbeiter(rolle.userId);
-    if (!emp) return fehler('Zu deinem Zugang gibt es keinen Mitarbeiter. Bitte den Chef fragen.', 403);
+    const m = await meinMitarbeiter(rolle.userId, b?.employee_id);
+    if (m.verboten) return fehler(m.verboten, 403);
+    const emp = m.emp;
+    if (!emp) return fehler('Zu deinem Zugang gibt es keinen Mitarbeiter. Bitte oben „Wer bist du?“ wählen.', 403);
     const jetzt = new Date();
     const projekt = b?.project_id && UUID.test(String(b.project_id)) ? String(b.project_id) : null;
 
@@ -110,8 +125,10 @@ export async function DELETE(req: NextRequest) {
   const id = new URL(req.url).searchParams.get('id') || '';
   if (!UUID.test(id)) return fehler('id erforderlich');
   try {
-    const emp = await meinMitarbeiter(rolle.userId);
-    if (!emp) return fehler('Kein Mitarbeiter zu deinem Zugang.', 403);
+    const m = await meinMitarbeiter(rolle.userId, new URL(req.url).searchParams.get('employee_id'));
+    if (m.verboten) return fehler(m.verboten, 403);
+    const emp = m.emp;
+    if (!emp) return fehler('Kein Mitarbeiter gewählt.', 403);
     const z = await lesen(`zeit_abschnitte?select=id,quelle,start_time&id=eq.${id}&employee_id=eq.${emp.id}&limit=1`);
     if (!z[0]) return fehler('Abschnitt nicht gefunden.', 404);
     if (!['knopf', 'mitarbeiter'].includes(z[0].quelle)) return fehler('Diesen Abschnitt haben Chef oder Disposition eingetragen. Bitte dort ändern lassen.', 403);
