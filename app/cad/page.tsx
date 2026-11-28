@@ -115,6 +115,8 @@ import type { CustomDimension } from '@/types/cad-dimensions'
 import type { ManualPlacement, ScaffoldField } from '@/lib/calculations/cad-engine'
 import { schalteAuswahl, rahmenErgebnis } from '@/lib/cad/mehrfachauswahl'
 import MehrfachLeiste from '@/components/cad/MehrfachLeiste'
+import BefehlsLeiste from '@/components/cad/BefehlsLeiste'
+import { planeBefehl, type CadBefehl, type Plan } from '@/lib/cad/befehle'
 import BauteilZustandHinweis from '@/components/cad/BauteilZustandHinweis'
 import { KEINE_UEBERLAGERUNG, wendeBauteilAenderungenAn, setzeBauteilLage, setzeBauteilMasseDrehung, dupliziereBauteil, setzeBauteilZurueck, bauteileDerLage, verschiebeBauteile, kopiereBauteile, istKopieId, istVonHandVeraendert, type BauteilUeberlagerung } from '@/lib/cad/bauteil-aenderungen'
 import { buildTopologyGraph, pruefeKnotenIsolation } from '@/lib/calculations/topology-graph'
@@ -894,6 +896,38 @@ export default function CADPage() {
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [selectedComponent, handleRemoveComponent])
+
+  // ─── Befehlsleiste (Text → Befehl → Vorschau → Bestätigen): Planung und Ausführung laufen über dieselben Funktionen wie die Handarbeit ───
+  const [befehlOffen, setBefehlOffen] = useState(false)
+  const planeCadBefehl = useCallback((b: CadBefehl): Plan => planeBefehl(b, modelWithManualRef.current, { auswahlIds: mehrfach.length > 0 ? mehrfach : selectedComponent ? [selectedComponent] : [], gebaeude: building }), [mehrfach, selectedComponent, building])
+  const fuehreCadBefehlAus = useCallback((plan: Extract<Plan, { ok: true }>): string | null => {
+    const a = plan.aktion
+    const mdl = modelWithManualRef.current
+    switch (a.art) {
+      case 'verschieben': {
+        if (sperre.fuer('beide') || sperre.fuerBauteile(a.ids)) return 'Die Auswahl ist gesperrt. Bitte zuerst entsperren.'
+        const { pids, rest } = teileDerAuswahl(a.ids)
+        const v = a.versatz
+        if (pids.length) setManualPlacements((prev) => prev.map((p) => (pids.includes(p.id) ? { ...p, positionX: p.positionX + v[0], positionY: p.positionY + v[1], positionZ: p.positionZ + v[2] } : p)))
+        if (rest.length && mdl) setzeUeber((u) => verschiebeBauteile(u, mdl, rest, v))
+        return null
+      }
+      case 'feld_entfernen':
+        if (sperre.fuer('geruest') || sperre.fuerBauteile(a.ids)) return 'Das Feld ist gesperrt. Bitte zuerst entsperren.'
+        setRemovedGroups((prev) => [...prev, a.ids])
+        return null
+      case 'treppe_setzen': {
+        if (sperre.fuer('treppe')) return 'Die Ebene Treppen ist gesperrt.'
+        const feld = mdl?.fields.find((f) => f.id === a.feldId)
+        if (!feld) return 'Das Feld gibt es nicht mehr. Bitte den Befehl neu eingeben.'
+        setzeTreppeAufFeld(feld)
+        return null
+      }
+      case 'hoehe_aendern':
+        setAutoGenerate(true); setBuilding(a.gebaeude)
+        return null
+    }
+  }, [sperre, teileDerAuswahl, setzeUeber, setzeTreppeAufFeld, setBuilding])
 
   // Rückgängig: zuerst die letzten manuellen Bauteil-Änderungen am 3D-Modell, danach die Gebäudedaten
   const kannZurueck = ueberVerlauf.vergangen.length > 0 || verlauf.vergangen.length > 0
@@ -1978,10 +2012,12 @@ export default function CADPage() {
           {modelWithManual && viewMode === '3d' && (
             <BauteilZustandHinweis verborgen={verborgenAnzahl} isoliert={zustand.isoliert.length > 0} gesperrt={zustand.gesperrt.length} onAlleZeigen={() => setBauteilZustand((z) => zeigeAlle(z))} onAlleEntsperren={() => setBauteilZustand((z) => ({ ...z, gesperrt: [] }))} />
           )}
+          {befehlOffen && model && viewMode === '3d' && <BefehlsLeiste plane={planeCadBefehl} fuehreAus={fuehreCadBefehlAus} onZu={() => setBefehlOffen(false)} />}
           {mehrfach.length > 0 && modelWithManual && viewMode === '3d' && !abbauAktiv && (
             <MehrfachLeiste zustand={{ gesperrt: mehrfach.filter((i) => istGesperrt(zustand, i)).length, onSperren: (an) => handleSperren(mehrfach, an), onAusblenden: () => handleAusblenden(mehrfach), onIsolieren: () => handleIsolieren(mehrfach) }} model={modelWithManual} ids={mehrfach} einrasten={einrasten} rahmenAktiv={rahmenModus} onRahmen={() => setRahmenModus((v) => !v)} onAbwaehlen={() => { setMehrfach([]); setRahmenModus(false) }} onVerschieben={handleGruppeVerschieben} onKopieren={handleGruppeKopieren} onEntfernen={handleGruppeEntfernen} />
           )}
           <div className='flex flex-wrap gap-2 items-center justify-between px-4 py-1 bg-white/50 border-b border-black/5'>
+            {model && viewMode === '3d' && <button type='button' className={`rounded border px-2 py-1 text-[12px] ${befehlOffen ? 'border-[#e8590c] bg-orange-50' : 'border-black/15 bg-white'}`} onClick={() => setBefehlOffen((v) => !v)} data-testid='befehl-knopf'>⌨ Befehl</button>}
             {viewMode === '3d' && (
               <span className='inline-flex flex-wrap items-center gap-1'>
                 <label className='text-xs border rounded-lg px-2 py-1 bg-white text-[#424245] cursor-pointer' title='Zeigt das echte Gebäude (GLB mit Texturen, OBJ mit MTL und Bildern, PLY-Punktwolke mit Farben oder Scan-Dateien E57/PTX/LAS/XYZ) statt des einfachen Baukörpers – nur zur Ansicht, Maße und Gerüst bleiben unverändert'>
