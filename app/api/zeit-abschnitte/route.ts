@@ -4,7 +4,7 @@ import { pruefeAbschnitt, ueberschneidet } from '@/lib/zeit-abschnitte';
 
 // ============================================================
 // SCAFFOLD OS – Tagesabschnitte (Baustelle, Fahrt vom Hof, Pause, Schlechtwetter, Fortbildung)
-// GET ?datum=JJJJ-MM-TT: Chef, Dispo, Bauleiter (nur lesen) · POST/PATCH/DELETE: Chef und Dispo
+// GET ?datum=JJJJ-MM-TT (inkl. gerade laufende Abschnitte der Mitarbeiter): Chef, Dispo, Bauleiter (nur lesen) · POST/PATCH/DELETE: Chef und Dispo
 // Die Abschnitte ändern die gebuchten Stunden nicht (siehe lib/zeit-abschnitte.ts).
 // ============================================================
 
@@ -26,10 +26,11 @@ export async function GET(req: NextRequest) {
   const datum = new URL(req.url).searchParams.get('datum') || '';
   if (!/^\d{4}-\d{2}-\d{2}$/.test(datum)) return fehler('datum=JJJJ-MM-TT erforderlich');
   try {
-    const [emp, ent, abs] = await Promise.all([
+    const [emp, ent, abs, lauf] = await Promise.all([
       fetch(`${url}/rest/v1/employees?select=id,first_name,last_name,status&order=last_name.asc,first_name.asc`, { headers }),
       fetch(`${url}/rest/v1/time_entries?select=id,employee_id,project_id,start_time,end_time,hours,break_minutes,note,project:project_id(id,name)&work_date=eq.${datum}&order=start_time.asc`, { headers }),
       fetch(`${url}/rest/v1/zeit_abschnitte?select=*,project:project_id(id,name)&work_date=eq.${datum}&order=start_time.asc`, { headers }),
+      fetch(`${url}/rest/v1/zeit_lauf?select=employee_id,art,start_time,project_id,project:project_id(id,name)`, { headers }),
     ]);
     if (!emp.ok || !ent.ok) throw new Error(await (emp.ok ? ent : emp).text());
     // Fehlt die Tabelle noch (SQL nicht ausgeführt), bleibt die Tagesansicht ohne Abschnitte nutzbar.
@@ -44,7 +45,7 @@ export async function GET(req: NextRequest) {
         tourMitarbeiter = [...ids];
       }
     } catch { /* ohne Touren weiter */ }
-    return NextResponse.json({ success: true, employees: await emp.json(), entries: await ent.json(), abschnitte, tabelleFehlt: !abs.ok, tourMitarbeiter });
+    return NextResponse.json({ success: true, employees: await emp.json(), entries: await ent.json(), abschnitte, tabelleFehlt: !abs.ok, tourMitarbeiter, laufend: lauf.ok ? await lauf.json() : [] });
   } catch (err) {
     return serverErrorResponse(err, 'zeit-abschnitte/GET');
   }

@@ -1,5 +1,6 @@
 'use client';
 
+import ZeitKnoepfe from '@/components/ZeitKnoepfe';
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { formatUhrzeit, formatDauer, fahrtdauerMinuten, standortErfassungAn } from '@/lib/touren/hof';
 import { getEmployees, createAbsence } from '@/lib/actions/employees';
@@ -765,6 +766,8 @@ export default function MeineTourenPage() {
                 ℹ️ Für dich ist aktuell keine eigene Tour zugeordnet – du siehst die Übersicht aller Touren.
               </div>
             )}
+
+            <ZeitKnoepfe />
 
             {/* NEU (Phase 54): heutiger Einsatz aus der Wochenplanung – zeigt
                 automatisch, wenn der Bauleiter/Disponent per Drag & Drop

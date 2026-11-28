@@ -8,6 +8,7 @@
 export const ABSCHNITT_ARTEN = [
   { value: 'baustelle', label: 'Zeit auf der Baustelle', arbeit: true, zulagen: true },
   { value: 'fahrt_hof', label: 'Fahrt vom Hof', arbeit: true, zulagen: true },
+  { value: 'fahrt_zum_hof', label: 'Fahrt zum Hof', arbeit: true, zulagen: true },
   { value: 'pause', label: 'Pause', arbeit: false, zulagen: true },
   { value: 'schlechtwetter', label: 'Schlechtwetter', arbeit: false, zulagen: true },
   { value: 'fortbildung', label: 'Fortbildung (ohne Zulagen)', arbeit: true, zulagen: false },
@@ -105,3 +106,35 @@ export function tageszeile(employeeId: string, eintraege: TagesEintrag[], abschn
 }
 
 export const fmtMinuten = (m: number) => `${Math.floor(m / 60)}:${String(m % 60).padStart(2, '0')} h`;
+
+// ---------- Zusammengeführte Stunden (nur Auswertung) ----------
+
+export interface Zusammenfassung {
+  /** aktiv gearbeitet: Baustelle, Fahrten, Fortbildung (alle Arten mit arbeit = true) */
+  aktivMinuten: number;
+  baustelleMinuten: number; fahrtMinuten: number; fortbildungMinuten: number;
+  pauseMinuten: number; pauseAnzahl: number;
+  schlechtwetterMinuten: number;
+  /** ein Abschnitt läuft noch; seine Zeit bis jetzt ist enthalten */
+  laeuft: boolean;
+}
+
+export interface LaufenderAbschnitt { art: string; start_time: string }
+
+/** Zählt die aktiv gearbeiteten Minuten und die Pausen getrennt zusammen. Ein laufender Abschnitt zählt bis „jetzt“. */
+export function zusammenfassung(abschnitte: { art: string; start_time: string; end_time: string }[], lauf: LaufenderAbschnitt | null, jetzt: Date = new Date()): Zusammenfassung {
+  const teile = abschnitte.map(a => ({ art: a.art, min: Math.max(0, minutenZwischen(a.start_time, a.end_time)) }));
+  if (lauf) teile.push({ art: lauf.art, min: Math.max(0, minutenZwischen(lauf.start_time, jetzt.toISOString())) });
+  const summe = (f: (art: string) => boolean) => teile.filter(t => f(t.art)).reduce((s, t) => s + t.min, 0);
+  const arbeitsArt = (art: string) => ABSCHNITT_ARTEN.some(a => a.value === art && a.arbeit);
+  return {
+    aktivMinuten: summe(arbeitsArt),
+    baustelleMinuten: summe(a => a === 'baustelle'),
+    fahrtMinuten: summe(a => a === 'fahrt_hof' || a === 'fahrt_zum_hof'),
+    fortbildungMinuten: summe(a => a === 'fortbildung'),
+    pauseMinuten: summe(a => a === 'pause'),
+    pauseAnzahl: teile.filter(t => t.art === 'pause').length,
+    schlechtwetterMinuten: summe(a => a === 'schlechtwetter'),
+    laeuft: !!lauf,
+  };
+}
