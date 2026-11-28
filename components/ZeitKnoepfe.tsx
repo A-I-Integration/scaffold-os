@@ -18,7 +18,7 @@ const lokalJetzt = () => { const d = new Date(); d.setMinutes(d.getMinutes() - d
 const heute = () => new Date().toLocaleDateString('en-CA');
 const inp = 'bg-white border border-black/10 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-[#e8590c]';
 
-export default function ZeitKnoepfe() {
+export default function ZeitKnoepfe({ employeeId }: { employeeId?: string }) {
   const [geladen, setGeladen] = useState(false);
   const [vorhanden, setVorhanden] = useState(true);
   const [tabelleFehlt, setTabelleFehlt] = useState(false);
@@ -36,21 +36,21 @@ export default function ZeitKnoepfe() {
 
   const laden = useCallback(async () => {
     try {
-      const r = await fetch('/api/zeit-knoepfe', { cache: 'no-store' });
+      const r = await fetch(`/api/zeit-knoepfe${employeeId ? `?employee_id=${employeeId}` : ''}`, { cache: 'no-store' });
       const j = await r.json();
       if (!j.success) throw new Error(j.error);
       setVorhanden(!!j.employee); setLauf(j.lauf ?? null); setKnoepfe(j.knoepfe ?? []); setAbschnitte(j.abschnitte ?? []); setTabelleFehlt(!!j.tabelleFehlt);
     } catch (e: any) { setMeldung({ art: 'fehler', text: e.message || 'Laden fehlgeschlagen.' }); }
     finally { setGeladen(true); }
-  }, []);
-  useEffect(() => { laden(); }, [laden]);
+  }, [employeeId]);
+  useEffect(() => { setGeladen(false); setMeldung(null); laden(); }, [laden]);
   useEffect(() => { const t = setInterval(() => setTick((x) => x + 1), 30000); return () => clearInterval(t); }, []);
   useEffect(() => { fetch('/api/projects').then((r) => r.json()).then((j) => { if (j.success) setProjekte((j.projects || []).map((p: any) => ({ id: p.id, name: p.name }))); }).catch(() => {}); }, []);
 
   async function druecken(aktion: string) {
     setLaeuft(true); setMeldung(null);
     try {
-      const body: any = { aktion, project_id: projekt || undefined };
+      const body: any = { aktion, project_id: projekt || undefined, employee_id: employeeId || undefined };
       if (zeitAn && zeit) body.zeit = new Date(zeit).toISOString();
       const r = await fetch('/api/zeit-knoepfe', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
       const j = await r.json();
@@ -66,7 +66,7 @@ export default function ZeitKnoepfe() {
     if (!nachtrag.von || !nachtrag.bis) { setMeldung({ art: 'fehler', text: 'Bitte Von und Bis angeben.' }); return; }
     setLaeuft(true); setMeldung(null);
     try {
-      const body = { aktion: 'nachtragen', art: nachtrag.art, start_time: new Date(`${nachtrag.datum}T${nachtrag.von}`).toISOString(), end_time: new Date(`${nachtrag.datum}T${nachtrag.bis}`).toISOString(), project_id: nachtrag.project_id || undefined, note: nachtrag.note || undefined };
+      const body = { aktion: 'nachtragen', employee_id: employeeId || undefined, art: nachtrag.art, start_time: new Date(`${nachtrag.datum}T${nachtrag.von}`).toISOString(), end_time: new Date(`${nachtrag.datum}T${nachtrag.bis}`).toISOString(), project_id: nachtrag.project_id || undefined, note: nachtrag.note || undefined };
       const r = await fetch('/api/zeit-knoepfe', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
       const j = await r.json();
       if (!j.success) throw new Error(j.error);
@@ -77,13 +77,14 @@ export default function ZeitKnoepfe() {
 
   async function loeschen(id: string) {
     setMeldung(null);
-    const r = await fetch(`/api/zeit-knoepfe?id=${id}`, { method: 'DELETE' });
+    const r = await fetch(`/api/zeit-knoepfe?id=${id}${employeeId ? `&employee_id=${employeeId}` : ''}`, { method: 'DELETE' });
     const j = await r.json().catch(() => ({}));
     if (!j.success) setMeldung({ art: 'fehler', text: j.error || 'Löschen fehlgeschlagen.' });
     else await laden();
   }
 
-  if (!geladen || !vorhanden) return null;
+  if (!geladen) return null;
+  if (!vorhanden) return <p className="rounded-xl border border-black/10 bg-white p-4 text-sm text-[#424245]" data-testid="zeit-kein-mitarbeiter">„Mein Tag“: Für diesen Zugang ist kein Mitarbeiter hinterlegt. Bitte oben bei „Wer bist du?“ einen Mitarbeiter wählen.</p>;
   void tick;
   const seit = lauf ? minutenZwischen(lauf.start_time, new Date().toISOString()) : 0;
 
